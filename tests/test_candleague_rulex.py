@@ -109,9 +109,9 @@ def acct(rule, exit_="tp3R|2", tf="1h", size=1.0, role=RX.ROLE_RULE, aid="t"):
             "size": size, "rule": RX.parse_rule(rule) if rule else dict(RX.NO_RULE), "source": {}}
 
 
-def sig(close=C0, side=1, rx0=None, lev="normal", aid="t"):
+def sig(close=C0, side=1, rx0=None, lev="normal", aid="t", **extra):
     return Signal(ts=close - 1, symbol=SYM, timeframe="1h", strategy_id="S2_ST_ROC", side=side, stop_price=0.0,
-                  tier="best", atr=ATR, meta={"stop_dist": R, "lev_group": lev, "rx0": rx0 or {}, "account": aid})
+                  tier="best", atr=ATR, meta={"stop_dist": R, "lev_group": lev, "rx0": rx0 or {}, "account": aid, **extra})
 
 
 def rec(t, side, off, k="p", **kw):
@@ -940,78 +940,261 @@ def test_q15_gets_15m_records_on_a_1h_pick_and_a_structure_rule_gets_its_seed():
                 assert (got is None and math.isnan(want)) or got == want
 
 
-# ---------------------------------------------------------------- F11 plug-in
-def test_f11_plug_in_fires_on_the_strategys_own_exit_flags_and_may_carry_a_target():
-    a = acct("F11.b")
-    assert RX.parse_rule("F11.a")["family"] == "F11" and RX.parse_rule("F11.a")["use_target"] is False
-    e = run(a, Path(), 1, recs=[rec(chk(1), 1, 0, xl=False, xs=True), rec(chk(2), 1, 0, xl=True, xs=False)])
-    exits_at(e, J0 + 120)                                                       # the long's flag, not the short's
-    e = run(a, Path(), -1, recs=[rec(chk(1), -1, 0, xl=True, xs=False), rec(chk(2), -1, 0, xl=False, xs=True)])
-    exits_at(e, J0 + 120)
-    # no definition registered: refused by the config check and by the chunk
-    cfg = RX.normalize_config({"variants": ["F11.a"], "picks": ["core-S2-15m-1"]})
-    cands = _rule_cands("15m")
-    assert any("F11" in x for x in RX.check(cands, cfg))
-    with pytest.raises(RX.RuleConfigError):
-        RX.chunk_rule(LIB, PS.FrameSource(DATA), RX.accounts(cands, cfg), TP.SYMS, START, START + DAY, START,
-                      StubStrategies())
-    calls = []
+# ---------------------------------------------------------------- F11 / F12: the strategy's own exit (PREREG 5.2, Appendix A)
+def nrec(t, side, off, nl=(), ns=(), **kw):
+    """A pick-timeframe record with the tri-state values (1 true, 0 false, 2 unknown) of the long / short side's components."""
+    return rec(t, side, off, nl=list(nl), ns=list(ns), **kw)
 
-    def provider(df, tf, combo):
-        n = len(df)
-        calls.append((tf, n))
-        return {"long_exit": np.arange(n) % 5 == 0, "short_exit": np.arange(n) % 5 == 1,
-                "target_long": np.full(n, 1e9), "target_short": np.full(n, 1.0)}
-    RX.register_f11("S2_ST_ROC", provider)
+
+def nsig(side, ck, nv, inv=None, tgt=None, s0=None, c0px=P0, close=C0, aid="t"):
+    """A signal of a strategy with components of kinds ``ck`` whose values at the signal bar are ``nv`` (the position's side)."""
+    return sig(close, side, {"ck": list(ck), "nv": list(nv), "c0px": c0px}, aid=aid, native_inv=inv, native_tgt=tgt, native_s=s0 or side)
+
+
+def key_of(side):
+    return "nl" if side > 0 else "ns"
+
+
+@SIDES
+def test_f11_event_component_fires_where_true_and_a_state_component_after_it_has_been_false(side):
+    k = key_of(side)
+    # an event component: no arm, it fires at the first check where it is true
+    a = acct("F11.a")
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0])),),
+            recs=[nrec(chk(1), side, 0, **{k: [0]}), nrec(chk(2), side, 0, **{k: [1]}), nrec(chk(3), side, 0, **{k: [1]})])
+    exits_at(e, J0 + 120)
+    # a state component true at the signal bar is not armed (rule C3): true at the first check does not fire; it arms on the first false
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["state"], [1])),),
+            recs=[nrec(chk(1), side, 0, **{k: [1]}), nrec(chk(2), side, 0, **{k: [0]}), nrec(chk(3), side, 0, **{k: [1]})])
+    exits_at(e, J0 + 180)
+    # false at the signal bar: armed at once, fires at the first check where it is true
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["state"], [0])),),
+            recs=[nrec(chk(1), side, 0, **{k: [0]}), nrec(chk(2), side, 0, **{k: [1]})])
+    exits_at(e, J0 + 120)
+    # an unknown value (2) neither fires nor arms (rule C7): true after only unknowns, with an unarmed start, never fires
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["state"], [1])),),
+            recs=[nrec(chk(1), side, 0, **{k: [2]}), nrec(chk(2), side, 0, **{k: [1]}), nrec(chk(3), side, 0, **{k: [2]})])
+    assert not e.trades and e.position is not None
+    # the other side's components are not read
+    other = "ns" if side > 0 else "nl"
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0])),),
+            recs=[nrec(chk(1), side, 0, **{k: [0], other: [1]}), nrec(chk(2), side, 0, **{k: [0], other: [1]})])
+    assert not e.trades
+    # two components: any one fires, each with its own arm
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["state", "state"], [0, 1])),),
+            recs=[nrec(chk(1), side, 0, **{k: [0, 1]}), nrec(chk(2), side, 0, **{k: [0, 0]}), nrec(chk(3), side, 0, **{k: [0, 1]})])
+    exits_at(e, J0 + 180)                                                        # the second component armed at check 2, fires at 3
+
+
+@SIDES
+def test_f11_merged_checks_walk_the_bars_in_time_order_and_fire_on_any_bar(side):
+    """Two chart closes that reach one minute (a minute missing) are one check: arming and testing in time order, any bar fires."""
+    k = key_of(side)
+    path = Path()
+    path.missing = set(range(J0 + 59, J0 + 120))                                 # no minute from the first close to the second: the checks merge
+    a = acct("F11.a")
+    e = run(a, path, side, sigs=((C0, nsig(side, ["state"], [1])),),
+            recs=[nrec(chk(1), side, 0, **{k: [0]}), nrec(chk(2), side, 0, **{k: [1]})])
+    assert e.trades and e.trades[0].exit_reason == "RULE"                       # false (arms) then true (fires) inside one check
+    # the reverse order does not fire: true while unarmed, then false
+    e = run(a, path, side, sigs=((C0, nsig(side, ["state"], [1])),),
+            recs=[nrec(chk(1), side, 0, **{k: [1]}), nrec(chk(2), side, 0, **{k: [0]})])
+    assert not e.trades
+
+
+@SIDES
+def test_f11_level_is_fixed_at_the_signal_bar_armed_by_a_close_not_beyond_it_and_tested_at_every_close(side):
+    k = key_of(side)
+    inv = P0 - side * 300
+    a = acct("F11.a")
+    # armed at the signal bar (its close is not beyond the level): the first close beyond it fires
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0], inv=inv)),),
+            recs=[rec(chk(1), side, -200, **{k: [0]}), rec(chk(2), side, -400, **{k: [0]})])
+    exits_at(e, J0 + 120)
+    # a signal bar that already closed beyond the level does not arm it: it arms on the first close not beyond it
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0], inv=inv, c0px=P0 - side * 500)),),
+            recs=[rec(chk(1), side, -400, **{k: [0]}), rec(chk(2), side, 0, **{k: [0]}), rec(chk(3), side, -400, **{k: [0]})])
+    exits_at(e, J0 + 180)
+    # a NaN level (None) is no level (rule C7)
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0], inv=None)),), recs=[rec(chk(1), side, -9000, **{k: [0]})])
+    assert not e.trades
+
+
+@SIDES
+def test_f11_coin_flip_position_on_the_other_side_gets_the_mirrored_level_and_target(side):
+    """The strategy is on side ``side``; the flip takes the other side: level and target mirrored around the flip's own fill."""
+    flip = -side
+    s_inv, s_tgt = P0 - side * 300, P0 + side * 900
+    a = acct({"family": "F11", "mode": "b"})
+    e = run(a, Path(), flip, sigs=((C0, nsig(flip, ["event"], [0], inv=s_inv, tgt=s_tgt, s0=side)),))
+    rx, p = e.position.signal.meta["rx"], e.position
+    f = p.entry_price
+    inv2, tgt2 = RX.flip_levels(side, flip, f, s_inv, s_tgt)
+    assert rx["lvl"] == pytest.approx(inv2) and rx["tgt"] == pytest.approx(tgt2)
+    assert (rx["lvl"] - f) * flip < 0 and (rx["tgt"] - f) * flip > 0               # the level is against the flip, the target ahead of it
+    assert p.tp_price == pytest.approx(tgt2)                                        # F11.b: a take-profit limit at the mirrored target
+    # on the strategy's own side the values stand
+    e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0], inv=s_inv, tgt=s_tgt)),))
+    assert e.position.signal.meta["rx"]["lvl"] == s_inv and e.position.tp_price == s_tgt
+    # a flip's own-side state component that is true at the signal bar waits for a false close (rule C3)
+    k = key_of(flip)
+    e = run(acct("F11.a"), Path(), flip, sigs=((C0, nsig(flip, ["state"], [1], s0=side)),),
+            recs=[nrec(chk(1), flip, 0, **{k: [1]})])
+    assert not e.trades
+
+
+def test_flip_levels_are_the_kernels():
+    assert RX.flip_levels(1, 1, 99.98, 99.0, 102.0) == (99.0, 102.0)
+    inv, tgt = RX.flip_levels(1, -1, 99.98, 99.0, 102.0)
+    assert inv == pytest.approx(99.98 + abs(99.98 - 99.0)) and tgt == pytest.approx(99.98 - (102.0 - 99.98))
+    assert math.isnan(RX.flip_levels(1, -1, 99.98, 99.0, 99.5)[1])                  # a target at or behind the fill is no target
+    inv, tgt = RX.flip_levels(1, -1, 99.98, float("nan"), float("nan"))
+    assert math.isnan(inv) and math.isnan(tgt)
+    inv, tgt = RX.flip_levels(-1, 1, 100.02, 101.0, 98.0)
+    assert inv == pytest.approx(100.02 - abs(100.02 - 101.0)) and tgt == pytest.approx(100.02 + (98.0 - 100.02) * -1.0)
+
+
+@SIDES
+def test_f11_modes_a_keeps_the_picks_take_profit_and_b_the_strategys_native_target_beyond_the_fill(side):
+    tgt = P0 + side * 900
+    ea = run(acct("F11.a"), Path(), side, sigs=((C0, nsig(side, ["event"], [0], tgt=tgt)),))
+    assert ea.position.tp_price == pytest.approx(P0 + side * 3 * R)                 # tp3R|2: the pick's own
+    eb = run(acct("F11.b"), Path(), side, sigs=((C0, nsig(side, ["event"], [0], tgt=tgt)),))
+    assert eb.position.tp_price == pytest.approx(tgt)
+    for bad in (P0 - side * 50, P0 + side * 1, None):                               # behind the fill, at it (almost), or none
+        eb = run(acct("F11.b"), Path(), side, sigs=((C0, nsig(side, ["event"], [0], tgt=bad)),))
+        assert math.isnan(eb.position.tp_price)
+    # the target is a maker limit: a minute that reaches it exits there at the maker fee; one that touches stop and target is the stop
+    path = Path().bar(130, o=0, c=1000)
+    eb = run(acct("F11.b"), path, side, sigs=((C0, nsig(side, ["event"], [0], tgt=tgt)),))
+    assert eb.trades and eb.trades[0].exit_reason == "TP" and eb.trades[0].exit_price == pytest.approx(tgt)
+    assert eb.trades[0].fees == pytest.approx(eb.trades[0].qty * eb.trades[0].entry_price * TAKER + eb.trades[0].qty * tgt * 0.0002)
+
+
+@SIDES
+def test_f12_records_every_component_that_fired_and_one_exit(side):
+    a = acct("F12.b")
+    assert a["rule"]["family"] == "F12" and (a["rule"]["w"], a["rule"]["n"], a["rule"]["H"], a["rule"]["N"]) == (3, 20, 8, 12)
+    k = key_of(side)
+    # F3 alone (the opposite flag), F11 alone (an event), and both at one check: one exit, the mask holds both bits
+    opp = "sf" if side > 0 else "lf"
+    for extra, want in (({opp: True}, RX.CB["F3"]), ({k: [1]}, RX.CB["F11"]), ({opp: True, k: [1]}, RX.CB["F3"] | RX.CB["F11"])):
+        recs = [dict(nrec(chk(1), side, 0, lf=False, sf=False, atr=ATR, ema={"20": P0 + side * 0}, sl={"3": None}, sh={"3": None},
+                          **{k: [0]}), **extra)]
+        e = run(a, Path(), side, sigs=((C0, nsig(side, ["event"], [0])),), recs=recs)
+        t = exits_at(e, J0 + 60)
+        assert t.context["rx_comp"] == want, (extra, t.context.get("rx_comp"))
+    # F7h at 8 hours alone ends a hold that nothing else ended: the first check at or after C0 + 8 h
+    recs = [nrec(chk(h), side, 0, lf=False, sf=False, atr=ATR, ema={"20": None}, sl={"3": None}, sh={"3": None}, **{k: [0]})
+            for h in range(1, 10)]
+    e = run(a, Path(1200), side, sigs=((C0, nsig(side, ["event"], [0])),), recs=recs)
+    t = exits_at(e, J0 + 480)
+    assert t.context["rx_comp"] == RX.CB["F7h"]
+    # a plain family writes no mask
+    e = run(acct("F7.N2.a"), Path(), side, recs=[rec(chk(k_), side, 0) for k_ in (1, 2, 3)])
+    assert "rx_comp" not in e.trades[0].context
+
+
+def test_f11_and_f12_ids_and_the_study_ids():
+    assert RX.native_ids() == ["F11.a", "F11.b", "F12.a", "F12.b"] and len(RX.study_ids()) + len(RX.native_ids()) == 86
+    for i in RX.native_ids():
+        r = RX.parse_rule(i)
+        assert r["id"] == i and RX.parse_rule(r)["id"] == i and r["family"] in RX.NATIVE_FAMILIES
+    assert RX.parse_rule("F12.a") == {"id": "F12.a", "family": "F12", "mode": "a", "q15": False, **RX.F12_PARAMS}
+    assert "use_target" not in RX.parse_rule("F11.b")
+    for bad in ("F11.a.q15", "F12.a.q15", "F12", "F11.c"):
+        with pytest.raises(RX.RuleConfigError):
+            RX.parse_rule(bad)
+    assert RX.rule_needs(RX.parse_rule("F12.a")) == {"atr": True, "ema": [20], "sw": [3], "flags": True, "nat": True}
+    assert RX.rule_needs(RX.parse_rule("F11.a"))["nat"] is True and RX.rule_needs(RX.parse_rule("F3.a"))["nat"] is False
+    assert RX.rule_ko(RX.parse_rule("F12.b")) and RX.rule_ko(RX.parse_rule("F11.a"))
+    # the pre-registered native bits are the kernel's
+    sys.path.insert(0, os.path.join(ROOT, "research", "exitflex"))
+    import kernel_x as KX
+    assert RX.F12_PARAMS == KX.F12_PARAMS and RX.CB == {n: b for n, b in KX.COMP_NAMES}
+
+
+def test_the_native_provider_is_checked_normalized_and_loaded_from_the_study_modules():
+    saved = RX.NATIVE["provider"]
     try:
+        RX.register_native(None)
+        cfg = cfg_of("F11.a")
+        cands = _rule_cands("15m")
+        # no provider registered: the production one is loaded from research/exitflex (native.py, native_ds.py)
+        try:
+            prov = RX.native_provider()
+        except RX.RuleConfigError as exc:
+            pytest.skip(f"native exit modules not importable here: {exc}")
+        assert callable(prov) and RX.native_hash() not in ("absent", "")
         assert RX.check(cands, cfg) == []
-        by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), RX.accounts(cands, cfg), TP.SYMS, START, START + DAY, START,
-                              StubStrategies())
-        ds = [o.d for items in by.values() for aid, o in items if aid == "core-S2-15m-1-nq" and isinstance(o, RX.RuleClose)]
-        assert calls and all("xl" in d and "xs" in d for d in ds) and {d["xl"] for d in ds} == {True, False}
-        seeds = [o.meta["rx0"] for items in by.values() for aid, o in items if isinstance(o, Signal) and aid == "core-S2-15m-1-nq"]
-        assert seeds and all("target" in s for s in seeds)
+        n = 7
+        ok = {"comp_long": [("state", np.array([1, 0, np.nan, 1, 0, 0, 1.0])), ("event", np.zeros(n, bool))], "comp_short": [],
+              "lvl_long": np.full(n, 5.0), "lvl_short": None, "tgt_long": None, "tgt_short": None}
+        nat = RX.normalize_native(ok, n)
+        assert nat["kinds"] == {"l": ["state", "event"], "s": []} and [list(t) for t in nat["tri"]["l"]] == [[1, 0, 2, 1, 0, 0, 1], [0] * 7]
+        assert np.isnan(nat["lvl"]["s"]).all() and (nat["lvl"]["l"] == 5.0).all()
+        for bad in ({**ok, "comp_long": [("state", np.zeros(3))]}, {**ok, "comp_long": [("maybe", np.zeros(n))]},
+                    {**ok, "comp_long": [("state", np.zeros(n))] * 7}, {**ok, "lvl_long": np.zeros(3)}):
+            with pytest.raises(RX.RuleConfigError):
+                RX.normalize_native(bad, n)
+        a = RX.accounts(cands, cfg)[1]
+        RX.register_native(lambda *args: ok)
+        v = RN.fingerprint([a])
+        assert RX.code_version(a["rule"]) == f"{RX.RULEX_VERSION}|{RX.native_hash()}" and len(v) == 64
+        assert RX.code_version(RX.parse_rule("F3.a")) == str(RX.RULEX_VERSION)
     finally:
-        RX.F11_PROVIDERS.pop("S2_ST_ROC", None)
-    # the target becomes the take-profit only when asked and only beyond the fill
-    for use, side, tgt, want in ((True, 1, P0 + 900, P0 + 900), (False, 1, P0 + 900, None), (True, 1, P0 - 50, None),
-                                 (True, -1, P0 - 900, P0 - 900)):
-        a2 = acct({"family": "F11", "mode": "b", "use_target": use})
-        e = run(a2, Path(), side, sigs=((C0, sig(C0, side, {"target": tgt})),))
-        assert (e.position.tp_price == want) if want is not None else math.isnan(e.position.tp_price)
+        RX.NATIVE["provider"] = saved
 
 
 # ---------------------------------------------------------------- the config file and the accounts
-def test_accounts_exist_only_with_a_config_and_follow_the_prereg(tmp_path):
+def test_accounts_exist_only_with_an_enabled_config_and_follow_the_prereg(tmp_path):
     assert RX.load_config(str(tmp_path / "none.json")) is None
     assert RX.load_accounts(str(tmp_path / "none.json"), C.load()) is None
     cands = C.load()
     path = tmp_path / "rules.json"
-    path.write_text(json.dumps({"variants": [{"rule": "F7.N24.b", "label_ko": "24봉 시간 청산"}]}))
+    doc = {"pools": {"core": {"rule": "F7.N24.b", "label_ko": "24봉 시간 청산"}, "ds": None}}
+    path.write_text(json.dumps(doc))                                               # a file alone starts nothing: it is not enabled
+    assert RX.load_config(str(path))["enabled"] is False and RX.load_accounts(str(path), cands) is None
+    path.write_text(json.dumps({**doc, "enabled": True}))
     accts = RX.load_accounts(str(path), cands)
-    core = [c for c in cands if c["kind"] == "core"]
-    assert len(core) == 23 and len(accts) == 23 * 5 and len({a["id"] for a in accts}) == len(accts)
-    assert not any(a["kind"] == "ds" for a in accts) and all(C.ID_RE.match(a["id"]) for a in accts)
+    core, ds = [c for c in cands if c["kind"] == "core"], [c for c in cands if c["kind"] == "ds"]
+    assert (len(core), len(ds)) == (23, 15) and len(accts) == 23 * 5 + 15 * 3 and len({a["id"] for a in accts}) == len(accts)
+    assert all(C.ID_RE.match(a["id"]) for a in accts)
     by = {a["id"]: a for a in accts}
     pid = core[0]["id"]
-    f, live, flip, f0, f0l = (by[pid + s] for s in ("-nq", "-n", "-nflip", "-eq", "-e"))
-    assert (f["size"], live["size"], flip["size"], f0["size"], f0l["size"]) == (0.25, 1.0, 0.25, 0.25, 1.0)
-    assert [x["role"] for x in (f, live, flip, f0, f0l)] == list(RX.ROLES)
-    assert f["rule"]["id"] == "F7.N24.b" and f0["rule"]["family"] is None and flip["of"] == f["id"]
-    assert all(x[k] == core[0][k] for x in (f, live, flip, f0, f0l) for k in ("name", "tf", "combo", "exit"))
-    assert f["source"]["label_ko"] == "24봉 시간 청산" and "variants" not in f
-    # two rules: f1, f2 and one twin pair
-    path.write_text(json.dumps({"variants": ["F1.w3.a", "F5.P1.g50.a"], "picks": [pid]}))
-    two = RX.load_accounts(str(path), cands)
-    assert sorted(a["id"] for a in two) == sorted(pid + s for s in ("-f1", "-f1-live", "-f1-flip", "-f2", "-f2-live",
-                                                                    "-f2-flip", "-eq", "-e"))
+    nq, n, flip, eq, e = (by[pid + s] for s in ("-nq", "-n", "-nflip", "-eq", "-e"))        # PREREG 11.2
+    assert (nq["size"], n["size"], flip["size"], eq["size"], e["size"]) == (0.25, 1.0, 0.25, 0.25, 1.0)
+    assert [x["role"] for x in (nq, n, flip, eq, e)] == [RX.ROLE_RULE, RX.ROLE_LIVE, RX.ROLE_FLIP, RX.ROLE_BASE, RX.ROLE_BASE_LIVE]
+    assert nq["rule"]["id"] == "F7.N24.b" and n["rule"]["id"] == "F7.N24.b" and flip["rule"]["id"] == "F7.N24.b"
+    assert eq["rule"]["family"] is None and e["rule"]["family"] is None and flip["of"] == nq["id"]
+    assert all(x[k] == core[0][k] for x in (nq, n, flip, eq, e) for k in ("name", "tf", "combo", "exit"))
+    assert nq["source"]["label_ko"] == "24봉 시간 청산" and "-f" not in "".join(a["id"] for a in accts if a["id"].endswith("-f"))
+    # a pool with no new exit: its current exit only, with its own coin flip at live size
+    did = ds[0]["id"]
+    assert sorted(a["id"] for a in accts if a["pick"] == did) == sorted(did + s for s in ("-e", "-eq", "-eflip"))
+    ef = by[did + "-eflip"]
+    assert (ef["size"], ef["role"], ef["rule"]["family"], ef["of"]) == (1.0, RX.ROLE_FLIP, None, did + "-e")
+    # both pools pass: 38 x 5; only DeepSeek passes: 15 x 5 + 23 x 3; the new exit may differ per pool
+    both = RX.accounts(cands, RX.normalize_config({"pools": {"core": "F7.N24.b", "ds": "F5.P1.g50.a"}}))
+    assert len(both) == 38 * 5 and {a["rule"]["id"] for a in both if a["kind"] == "ds" and a["role"] == RX.ROLE_RULE} == {"F5.P1.g50.a"}
+    only_ds = RX.accounts(cands, RX.normalize_config({"pools": {"ds": "F9.a"}}))
+    assert len(only_ds) == 15 * 5 + 23 * 3
+    one = RX.accounts(cands, RX.normalize_config({"pools": {"core": "F1.w3.a"}, "picks": [pid]}))
+    assert sorted(a["id"] for a in one) == sorted(pid + s for s in ("-n", "-nq", "-e", "-eq", "-nflip"))
+    # no_entry_from_ms (the C1 script's output): only on the accounts of the new exit of that pool
+    stop = 1_800_000_000_000
+    cut = RX.accounts(cands, RX.normalize_config({"pools": {"core": "F1.w3.a", "ds": "F9.a"}, "no_entry_from_ms": {"ds": stop}}))
+    assert {a["id"].rsplit("-", 1)[1] for a in cut if a.get("no_entry_from_ms")} == {"n", "nq", "nflip"}
+    assert all(a["kind"] == "ds" and a["no_entry_from_ms"] == stop for a in cut if a.get("no_entry_from_ms"))
+    assert RN.fingerprint(cut) != RN.fingerprint(RX.accounts(cands, RX.normalize_config({"pools": {"core": "F1.w3.a", "ds": "F9.a"}})))
     # refusals: a config that cannot be run says why
-    for doc in ({"variants": []}, {"variants": ["F1.w3.a", "F1.w3.b", "F2.n10.a"]}, {"variants": ["F9.a", "F9.a"]},
-                {"variants": ["F2.n10.a.q15"]}, {"variants": ["F1.w3.a"], "picks": ["nope"]}, {"variants": ["F1.w3.a"], "picks": 3},
-                {"variants": ["F1.w3.a"], "picks": [next(c["id"] for c in cands if c["kind"] == "ds")]}):
-        path.write_text(json.dumps(doc))
+    for bad in ({"pools": {}}, {"pools": {"core": "F9.x"}}, {"pools": {"fx": "F9.a"}}, {"pools": {"core": "F2.n10.a.q15"}},
+                {"pools": {"core": "F1.w3.a"}, "picks": ["nope"]}, {"pools": {"core": "F1.w3.a"}, "picks": 3},
+                {"pools": {"core": "F1.w3.a"}, "enabled": "yes"}, {"pools": {"core": "F1.w3.a"}, "no_entry_from_ms": {"core": -5}},
+                {"pools": {"core": "F1.w3.a"}, "no_entry_from_ms": {"x": 5}}, {"variants": ["F1.w3.a"]}, [1]):
+        path.write_text(json.dumps(bad))
         with pytest.raises(RX.RuleConfigError):
-            RX.load_accounts(str(path), cands)
+            RX.load_config(str(path))
     path.write_text("not json")
     with pytest.raises(RX.RuleConfigError):
         RX.load_config(str(path))
@@ -1021,11 +1204,14 @@ def test_accounts_exist_only_with_a_config_and_follow_the_prereg(tmp_path):
 def test_the_command_line_checks_the_config(tmp_path, capsys):
     p = tmp_path / "r.json"
     p.write_text(rules_doc("F3.a"))
-    assert RX.main(["check", "--rules", str(p)]) == 0 and "115 rule accounts" in capsys.readouterr().out
+    assert RX.main(["check", "--rules", str(p)]) == 0 and "160 rule accounts" in capsys.readouterr().out
     assert RX.main(["check", "--rules", str(tmp_path / "none.json")]) == 0 and "no rule config" in capsys.readouterr().out
+    p.write_text(json.dumps({"pools": {"core": "F3.a"}}))
+    assert RX.main(["check", "--rules", str(p)]) == 0 and "not enabled" in capsys.readouterr().out
     p.write_text(rules_doc("F3.z"))
     assert RX.main(["check", "--rules", str(p)]) == 2
     assert RX.main(["ids"]) == 0 and capsys.readouterr().out.count("\n") == 82
+    assert RX.main(["ids", "--all"]) == 0 and capsys.readouterr().out.count("\n") == 86
 
 
 # ---------------------------------------------------------------- the league, end to end, on the shadow's synthetic bars
