@@ -2501,6 +2501,22 @@ def test_runner_select_writes_the_documented_files_and_keeps_deepseek_money_priv
     assert RX.audit_a8_file(cfg.lay.out_file("SELECT_KO.md")) == [] and RX.audit_a8_file(cfg.lay.out_file("select.json")) == []
 
 
+def test_select_report_tells_the_owners_about_the_hunt_read_before_they_choose(syn_select):
+    """17 item 4a (pin-blocker): SELECT_KO.md carries the fixed line HUNT_READ_KO near the top, before any table: that the main session
+    opened the round-1 hunt results (with test-period outcomes of chandelier-exit trend systems) before the pre-registration was hashed, and
+    what the dated addendum of section 15 says. The line holds no number of any result and passes audit A8."""
+    cfg, doc = syn_select
+    txt = open(cfg.lay.out_file("SELECT_KO.md"), encoding="utf-8").read()
+    assert RX.HUNT_READ_KO in txt and txt.count(RX.HUNT_READ_KO) == 1
+    assert txt.index(RX.HUNT_READ_KO) < txt.index("## 코어") and txt.index(RX.HUNT_READ_KO) < txt.index("지금 청산(E0): 보유시간 중앙값")
+    line = RX.HUNT_READ_KO
+    for must in ("사냥 시험", "2026-10-12", "06:38 UTC", "샹들리에", "2024-01~2026-09", "4번", "12번", "01:48 UTC", "어떤 선택에도 쓰지 않았고"):
+        assert must in line, must
+    assert "딥시크" not in line and "%" not in line and "배" not in line.replace("검증을 맡은", "")
+    assert MT.audit_text(line) == [] and RX.audit_a8_file(cfg.lay.out_file("SELECT_KO.md")) == []
+    assert RX.select_report_ko(doc) == txt                                                       # the report is a function of the json
+
+
 def test_runner_step2_runs_exactly_the_placebos_that_pass_gates_1_2_4(syn_select):
     cfg, doc = syn_select
     gates = forced_gates(cfg, RX.step1_gates)
@@ -3057,6 +3073,7 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
     import re
     assert sec.index("보유시간 중앙값") < re.search(r"\*\*(PASS|FAIL)\*\*", sec).start()                  # hold hours before the verdict
     assert rep.count("장세별 보유시간") == 2
+    assert RX.HUNT_READ_KO in rep and rep.index(RX.HUNT_READ_KO) < rep.index("## 코어")         # 17 item 4a: the hunt read is told in the confirm report too
     # Holm over the four pairs is applied as written in 9, DeepSeek p values included
     ps = {k: (r["p_block"] if r["pool"] == "core" else priv["pairs"][k]["p_block"]) for k, r in doc["pairs"].items()}
     assert {k: r["holm_significant"] for k, r in doc["pairs"].items()} == MT.holm(ps, 0.05)
@@ -3657,3 +3674,24 @@ def test_t7_the_default_of_8_4_can_take_f13_and_ranks_it_by_hold_like_any_set_d_
     rows[2]["in_default_set"] = True
     rows[3]["in_default_set"] = False                                   # F1 is L2: outside set D, whatever its hold
     assert MT.default_choice(rows) == ["F13.a", "F5.P1.g25.a"]          # F13.b is the same group as F13.a: skipped for the second place
+
+
+def test_runner_counts_of_the_prereg_follow_from_the_code(f11_on):
+    """5.3's counts, recomputed from the code: 88 variants, 89 arms, 6,764 step-1 accounts, 74 variants with a placebo and 562,400 placebo accounts at
+    most, 228 + 15,200 for the confirm, 37 variants in the default set D; and the PREREG text says the same numbers."""
+    vs = KX.variants()
+    picks = DX.picks()
+    core, ds = [p for p in picks if p["kind"] == "core"], [p for p in picks if p["kind"] == "ds"]
+    assert (len(core), len(ds), len(vs), len(vs) + 1) == (23, 15, 88, 89)
+    assert (len(vs) + 1) * len(picks) * len(RX.SIZES) == 6764
+    n_plc = sum(PL.has_placebo(v) for v in vs)
+    assert n_plc == 74 and n_plc * len(core) * 200 == 340_400 and n_plc * len(ds) * 200 == 222_000 and n_plc * len(picks) * 200 == 562_400
+    assert (1 + 2) * len(picks) * 2 == 228 and 2 * len(picks) * 200 == 15_200
+    assert sum(MT.in_default_set(v) for v in vs) == 37
+    assert [v.id for v in vs if not PL.has_placebo(v)] == [v.id for v in vs if v.famname in ("F7", "F7h", "F13")]
+    text = open(os.path.join(HERE, "PREREG_EXITFLEX.md"), encoding="utf-8").read()
+    for must in ("| **total** | | | | **88** |", "89 x 38 x 2 = 6,764 accounts", "562,400", "37\n    variants", "(E0 and 88 variants = 89 arms)",
+                 "228 accounts", "15,200"):
+        assert must in text, must
+    readme = open(os.path.join(HERE, "README_KO.md"), encoding="utf-8").read()
+    assert "88가지" in readme and "1~13번" in readme and "13번" in readme and "86가지" not in readme
