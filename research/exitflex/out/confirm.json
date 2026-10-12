@@ -1,0 +1,253 @@
+{
+ "study": "exitflex v1",
+ "stage": "confirm",
+ "pin": "4856adbe4509c0e803f2972cfef32f060442088b901f646c753c439bdfd8695c",
+ "commit": "288041fe17981b0dd8be5f004f3946ea64fb4ddc",
+ "versions": {
+  "python": "3.11.15",
+  "numpy": "2.0.2",
+  "pandas": "2.3.3",
+  "numba": "0.60.0"
+ },
+ "modules": {
+  "research/library/lib.py": "5c3e1083c734e8079df64d3a501ef7c7b0fbb8819c7c67087ba01ff213a999ce",
+  "research/library/lib_b.py": "984eff5130713d274084d7f6e799e619872458a478ca448c07c6865e6648f5e8",
+  "research/search/search.py": "06920240b6f56e954e1896c16fed7c58b8fb8b3d95d73109efa0d1dcced43ce3",
+  "third_party/sweep/harness/vendor/doge_strategy.py": "800660e7b4113996c74168caac8b225c70ccf7d821a3b22fa068a2fb24fec01e",
+  "third_party/sweep/harness/vendor/engine.py": "916c8981e088e83d68a20173ce50bde1c6acdf92f04d135bf7a9863abc40cfcc",
+  "third_party/sweep/harness/vendor/fg_fast.py": "491504bb7a122f304252d1988c27b8c55a83c36d6507871cfb513eb18f099f54",
+  "third_party/sweep/harness/vendor/fg_indicators.py": "bf43c1b805463a012c76dec0114adff027a06e23dfc7268e092c496ff35fdb8d",
+  "third_party/sweep/harness/vendor/pine_indicators.py": "938c954509ced6c9bf869512efc60233bd510fe76bb1e49b41f75ab08e41b2ff",
+  "third_party/sweep/harness/vendor/poc_fast.py": "a8c5ff8157d62032f57c9a45f2a864c1cae6bf742c1986f5153a66dca8cdef19",
+  "third_party/sweep/harness/vendor/ports12.py": "5ef003717798a5d9dadff5f72d1d641a69de2ac33307966f3a16f9365399123b",
+  "third_party/sweep/harness/vendor/strategies.py": "109c6797ddc564469171b9fc4882d425a3aca9d3603be60f990edd2cbe01b131"
+ },
+ "choice_sha256": "fcf2fe02285179ea1863c373b81a16044976d0ebd0eb535d76825e6d2badd5b3",
+ "select_sha256": "58d848442389ecb035fe6d882462f4e2306964785049c442a1e098ce40880171",
+ "n_seeds": 200,
+ "holm_alpha": 0.05,
+ "e0": {
+  "ds": {
+   "hold": {
+    "median": 35.425,
+    "p90": 199.69666666666666,
+    "share_gt4": 0.9076704545454546,
+    "share_gt8": 0.8210227272727273,
+    "share_gt18": 0.6633522727272727
+   },
+   "hold_by_state": {
+    "추세장": {
+     "median": 50.96666666666667,
+     "p90": 221.92,
+     "share_gt4": 0.9409221902017291,
+     "share_gt8": 0.8818443804034583,
+     "share_gt18": 0.7348703170028819,
+     "n": 694,
+     "few": false
+    },
+    "횡보장": {
+     "median": 23.366666666666667,
+     "p90": 158.1466666666667,
+     "share_gt4": 0.8593103448275862,
+     "share_gt8": 0.7393103448275862,
+     "share_gt18": 0.5627586206896552,
+     "n": 725,
+     "few": false
+    },
+    "급변장": {
+     "median": 42.35,
+     "p90": 211.06000000000031,
+     "share_gt4": 0.9289940828402367,
+     "share_gt8": 0.8520710059171598,
+     "share_gt18": 0.7218934911242604,
+     "n": 169,
+     "few": false
+    },
+    "보통": {
+     "median": 35.775000000000006,
+     "p90": 186.60166666666657,
+     "share_gt4": 0.9236641221374046,
+     "share_gt8": 0.8435114503816794,
+     "share_gt18": 0.6889312977099237,
+     "n": 524,
+     "few": false
+    },
+    "모름": {
+     "median": NaN,
+     "p90": NaN,
+     "share_gt4": NaN,
+     "share_gt8": NaN,
+     "share_gt18": NaN,
+     "n": 0,
+     "few": true
+    }
+   },
+   "entered": 2112,
+   "skipped": 28676,
+   "closed": 2112,
+   "win_share": 0.2779356060606061,
+   "reasons": {
+    "NONE": 0,
+    "SL": 1523,
+    "LOCK": 0,
+    "LIQ": 0,
+    "OPEN": 0,
+    "REJECT": 0,
+    "NOFILL": 0,
+    "NOATR": 0,
+    "TP": 577,
+    "RULE": 0,
+    "RAND": 0,
+    "END": 12
+   }
+  }
+ },
+ "pairs": {
+  "F2.n50.b|ds": {
+   "id": "F2.n50.b",
+   "pool": "ds",
+   "holm_significant": false,
+   "beats_placebo_p95": false,
+   "entries_ok": true,
+   "pass": false,
+   "label": "FAIL",
+   "hold": {
+    "median": 13.0,
+    "p90": 69.81999999999996,
+    "share_gt4": 0.7684449489216799,
+    "share_gt8": 0.6108967082860386,
+    "share_gt18": 0.41248581157775255
+   },
+   "hold_e0": {
+    "median": 35.425,
+    "p90": 199.69666666666666,
+    "share_gt4": 0.9076704545454546,
+    "share_gt8": 0.8210227272727273,
+    "share_gt18": 0.6633522727272727
+   },
+   "hold_by_state": {
+    "추세장": {
+     "median": 18.5,
+     "p90": 73.20000000000005,
+     "share_gt4": 0.8361809045226131,
+     "share_gt8": 0.7075376884422111,
+     "share_gt18": 0.5005025125628141,
+     "n": 995,
+     "few": false
+    },
+    "횡보장": {
+     "median": 10.0,
+     "p90": 61.40000000000009,
+     "share_gt4": 0.7183629509962305,
+     "share_gt8": 0.5449649973074852,
+     "share_gt18": 0.3511039310716209,
+     "n": 1857,
+     "few": false
+    },
+    "급변장": {
+     "median": 16.5,
+     "p90": 53.900000000000034,
+     "share_gt4": 0.8245614035087719,
+     "share_gt8": 0.6842105263157895,
+     "share_gt18": 0.4780701754385965,
+     "n": 228,
+     "few": false
+    },
+    "보통": {
+     "median": 14.0,
+     "p90": 78.0,
+     "share_gt4": 0.7781132075471698,
+     "share_gt8": 0.6181132075471698,
+     "share_gt18": 0.4211320754716981,
+     "n": 1325,
+     "few": false
+    },
+    "모름": {
+     "median": NaN,
+     "p90": NaN,
+     "share_gt4": NaN,
+     "share_gt8": NaN,
+     "share_gt18": NaN,
+     "n": 0,
+     "few": true
+    }
+   },
+   "hold_by_state_e0": {
+    "추세장": {
+     "median": 50.96666666666667,
+     "p90": 221.92,
+     "share_gt4": 0.9409221902017291,
+     "share_gt8": 0.8818443804034583,
+     "share_gt18": 0.7348703170028819,
+     "n": 694,
+     "few": false
+    },
+    "횡보장": {
+     "median": 23.366666666666667,
+     "p90": 158.1466666666667,
+     "share_gt4": 0.8593103448275862,
+     "share_gt8": 0.7393103448275862,
+     "share_gt18": 0.5627586206896552,
+     "n": 725,
+     "few": false
+    },
+    "급변장": {
+     "median": 42.35,
+     "p90": 211.06000000000031,
+     "share_gt4": 0.9289940828402367,
+     "share_gt8": 0.8520710059171598,
+     "share_gt18": 0.7218934911242604,
+     "n": 169,
+     "few": false
+    },
+    "보통": {
+     "median": 35.775000000000006,
+     "p90": 186.60166666666657,
+     "share_gt4": 0.9236641221374046,
+     "share_gt8": 0.8435114503816794,
+     "share_gt18": 0.6889312977099237,
+     "n": 524,
+     "few": false
+    },
+    "모름": {
+     "median": NaN,
+     "p90": NaN,
+     "share_gt4": NaN,
+     "share_gt8": NaN,
+     "share_gt18": NaN,
+     "n": 0,
+     "few": true
+    }
+   },
+   "entered": 4405,
+   "entered_e0": 2112,
+   "skipped": 24191,
+   "skipped_e0": 28676,
+   "closed": 4405,
+   "rejected": 25910,
+   "win_share": 0.31509648127128265,
+   "reasons": {
+    "NONE": 0,
+    "SL": 736,
+    "LOCK": 0,
+    "LIQ": 0,
+    "OPEN": 0,
+    "REJECT": 0,
+    "NOFILL": 0,
+    "NOATR": 0,
+    "TP": 0,
+    "RULE": 3665,
+    "RAND": 0,
+    "END": 4
+   },
+   "claim": "beats E0 and beats a random exit with its timing profile",
+   "chosen_by": "owners",
+   "default_would_take": false
+  }
+ },
+ "ds_private_sha256": "6a2c5deed2d0b6942a5e7bae4aec0300a061122547e6d1802e8472b6010c3eb6",
+ "ds_owner_report_sha256": "77130f424b42812be34a449e514ce00c2a44afb3c6dd8900fbaadd3b5bc71009",
+ "freeze_breaches": [],
+ "late_messages": [],
+ "line": "this confirm uses the same 33 months as the full grid, the hunt (v1, wide, round 2) and track 2"
+}
