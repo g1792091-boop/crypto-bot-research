@@ -217,10 +217,11 @@ def eligibility(M: float, Mp: list, entered: int, entered_e0: int, placebo_poole
 
 
 def loss_class(v) -> str:
-    """5.3: what a variant can cut a loss on before the hard stop. L0 no early loss cut before a gain (F5, F8, F10); L1 structure
-    break at a loss of at least 0.5R (F6.d0.5, F9, F9 q15); L2 structure break at any loss (F1, F1 q15, F6.d0); L3 not only a
-    structure break (F2, F3, F4, F4 q15, F7, F7h, F11, and F12 which holds all of them)."""
-    if v.fam in (KX.F5, KX.F8, KX.F10):
+    """5.3: what a variant can cut a loss on before the hard stop. L0 no early loss cut before a gain (F5, F8, F10, and F13: the
+    stepped lock exists only after the best price has reached +12% net ROE); L1 structure break at a loss deeper than 0.5R (F6.d0.5,
+    F9, F9 q15); L2 structure break at any loss (F1, F1 q15, F6.d0); L3 not only a structure break (F2, F3, F4, F4 q15, F7, F7h, F11,
+    and F12 which holds all of them)."""
+    if v.fam in (KX.F5, KX.F8, KX.F10, KX.F13):
         return "L0"
     if v.fam == KX.F9 or (v.fam == KX.F6 and v.params.get("d", 0) >= 0.5):
         return "L1"
@@ -230,7 +231,7 @@ def loss_class(v) -> str:
 
 
 def in_default_set(v) -> bool:
-    """The default set D of 8.4: L0 and L1 (35 variants)."""
+    """The default set D of 8.4: L0 and L1 (37 variants: the 35 of F5, F6.d0.5, F8, F9, F9 q15, F10 and the 2 of F13)."""
     return loss_class(v) in ("L0", "L1")
 
 
@@ -238,6 +239,9 @@ CLAIM_F12 = ("this fixed combination of the nine exits, of which at most seven c
              "15m or 30m pick (F6 never moves the exit, F10 acts only on 15m and 30m picks), beats E0 and a random exit with the same "
              "8-hour clock and timing profile")
 CLAIM_F12_LIMITS = "No claim that stacking beats a single rule, that all nine act on every pick, or that F12 is the best exit"
+# prereg 8.5 (F13): what the lock is, and nothing more; it has no placebo gate, so there is no random-exit claim either
+CLAIM_F13 = ("closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%; it reads no structure and "
+             "makes no claim beyond that")
 
 
 def claim_of(variant_id: str) -> str:
@@ -249,6 +253,8 @@ def claim_of(variant_id: str) -> str:
         return "the strategy's own exit beats E0 and a random exit with its timing profile"
     if variant_id.startswith("F12."):
         return CLAIM_F12
+    if variant_id.startswith("F13."):
+        return CLAIM_F13
     return "beats E0 and beats a random exit with its timing profile"
 
 

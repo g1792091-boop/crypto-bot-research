@@ -673,7 +673,7 @@ class PickData:
     def chart(self, v) -> tuple:
         """(rp, PT, PF, QT, cst, cen, qst, qen) the kernel reads for variant ``v`` (a Variant; E0 reads none)."""
         n_c = self._n_coins
-        if v.fam == KX.F_NONE:
+        if v.fam in (KX.F_NONE, KX.F13):                    # no chart data: E0, and F13 (the stepped lock, an exit tuple)
             PT, PF, QT = KX.empty_chart()
             z = np.zeros(n_c, np.int64)
             return KX.rp_vector(), PT, PF, QT, z, z, z, z

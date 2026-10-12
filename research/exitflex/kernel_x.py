@@ -29,6 +29,9 @@ each coin's rows):
                       then F11's own long / short 'can fire here' flags (placebo stratum only).
   QT  float64 (nq, 4): the 15m bars of a q15 variant: close ms, close, minute index of the close, index of the latest
                       pick-timeframe bar closed at or before it (rows of ``qst``/``qen`` per coin).
+F13 (the engine's stepped profit lock, prereg 5.2) is not a rule of this kernel: it makes no decision at a check and reads no chart
+data. Its variants run with ``rp[RP_FAM] == 0`` and differ from E0 only in the exit tuple of ``exit_of_pick`` (the pick's hard stop,
+``ladder=True`` with ``F13_LOCK``, and the pick's take-profit in mode a, none in mode b): the lock is ``kernel._trade``'s own.
 Rule parameters ``rp`` (float64 vector, indices RP_*): family, swing width w, chandelier multiple m, arm level P (R), give-
 back g, loss depth d (R), count N (bars), pick timeframe (ms), q15 flag, clock hours H (F7h and F12's F7h leg). F12 (all nine
 components at once, prereg 5.2) reads its fixed values from the same vector (``F12_PARAMS``) and records every component that
@@ -70,8 +73,12 @@ R_RULE, R_RAND, R_END = 9, 10, 11
 REASON_NAMES = dict(K.REASON_NAMES)
 REASON_NAMES.update({R_RULE: "RULE", R_RAND: "RAND", R_END: "END", R_NONE: "NONE"})
 
-# families (prereg 5.2); 11 is the plug-in point of the native exit; F12 stacks nine of them (all at once)
-F_NONE, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F7H, F12 = range(14)
+# families (prereg 5.2); 11 is the plug-in point of the native exit; F12 stacks nine of them (all at once); F13 is the engine's
+# stepped profit lock (no rule decision: an intrabar stop that tightens, so it is only an exit tuple, ``exit_of_pick``)
+F_NONE, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F7H, F12, F13 = range(15)
+# F13: the rule bot's own stepped lock (prereg 5.2): first lock 10% net ROE, 5% steps, a step arms at lock + 2%; the kernel's
+# TP_RULES "ladder" (paperbot/ladder.py LadderSpec defaults); asserted equal to the kernel's below
+F13_LOCK = (0.10, 0.05, 0.02)
 # F12 component bits of the exit mask ``tr_comp`` (prereg 5.2)
 CB_F1, CB_F2, CB_F3, CB_F4, CB_F5, CB_F6, CB_F7H, CB_F10, CB_F11 = 1, 2, 4, 8, 16, 32, 64, 128, 256
 COMP_NAMES = (("F1", CB_F1), ("F2", CB_F2), ("F3", CB_F3), ("F4", CB_F4), ("F5", CB_F5), ("F6", CB_F6), ("F7h", CB_F7H),
@@ -650,6 +657,8 @@ class Variant:
         return f"Variant({self.id})"
 
     def rp(self, tf_ms: int, q15_effective: bool) -> np.ndarray:
+        if self.fam == F13:                         # no rule decision and no chart data: F13 is the exit tuple of ``exit_of_pick``
+            return rp_vector()
         p = self.params
         return rp_vector(self.fam, p.get("w", 0), p.get("m", 0.0), p.get("P", 0.0), p.get("g", 0.0), p.get("d", 0.0),
                          p.get("N", 0), tf_ms, q15_effective, p.get("H", 0.0), p.get("cmask"))
@@ -657,7 +666,9 @@ class Variant:
 
 E0 = Variant("E0", F_NONE, "E0", "-", "a", False, {}, 0, 0)
 GROUP_OF = {"F1": "S", "F2": "M", "F3": "O", "F4": "C", "F5": "G", "F6": "S", "F7": "T", "F7h": "T", "F8": "S", "F9": "S", "F10": "L",
-            "F11": "N", "F12": "A"}
+            "F11": "N", "F12": "A", "F13": "P"}
+_LADDER = next(r for r in K.TP_RULES if r[0] == "ladder")
+assert F13_LOCK == (_LADDER[4], _LADDER[5], _LADDER[6]) and _LADDER[3] is True and _LADDER[1] == TP_NONE      # the engine's own lock
 F11_REGISTRY: dict = {"provider": None, "modes": ("a", "b")}
 
 
@@ -710,20 +721,25 @@ SEEN_ON_SELECT = ()          # the first revision's 'seen on select' marks were 
 
 def variants(include_f11: bool = True) -> list:
     """The 82 rule variants in canonical order (F1 ... F10, F7h included), followed by the two F11 variants and the two F12
-    variants once ``register_f11`` has been called: the 86 of prereg 5.3. (F12 holds F11 as one of its nine components, so it
-    exists only where the strategies' own exits do.)"""
+    variants once ``register_f11`` has been called, then the two F13 variants (the stepped lock; they need no provider): the 88 of
+    prereg 5.3. (F12 holds F11 as one of its nine components, so it exists only where the strategies' own exits do; F13 is not a
+    component of F12.) ``include_f11=False`` leaves out F11 and F12 only."""
     out = list(_VARIANTS)
     if include_f11 and F11_REGISTRY["provider"] is not None:
         for m in F11_REGISTRY["modes"]:
             out.append(Variant(f"F11.{m}", F11, "F11", GROUP_OF["F11"], m, False, {}, 0, len(out) + 1, True))
         for m in F11_REGISTRY["modes"]:
             out.append(Variant(f"F12.{m}", F12, "F12", GROUP_OF["F12"], m, False, dict(F12_PARAMS), 8, len(out) + 1, True))
+    for m in ("a", "b"):
+        out.append(Variant(f"F13.{m}", F13, "F13", GROUP_OF["F13"], m, False, {}, 0, len(out) + 1))
     return out
 
 
 def has_placebo(v: Variant) -> bool:
-    """F7 and F7h read only the clock and have no placebo (prereg 6); E0 has none."""
-    return v.fam not in (F_NONE, F7, F7H)
+    """F7 and F7h read only the clock and have no placebo (prereg 6); F13 reads nothing from the chart either: its exit is an
+    intrabar price-level stop like the hard stop, not a decision at a chart close, so a random exit with its timing profile
+    would be a different rule (prereg 6); E0 has none."""
+    return v.fam not in (F_NONE, F7, F7H, F13)
 
 
 def variant_by_id(vid: str) -> Variant:
@@ -771,8 +787,14 @@ def flip_levels(side_strategy: int, side_flip: int, fill_flip: float, inv: float
 
 def exit_of_pick(pick: dict, variant: Variant) -> tuple:
     """(stop x ATR, tp kind, tp value, ladder, first lock, lock step, gap) of the pick under the variant: the pick's own
-    exit (E0, mode a) or its stop alone (mode b: no take-profit and no lock)."""
+    exit (E0, mode a) or its stop alone (mode b: no take-profit and no lock). F13 (prereg 5.2): the pick's hard stop and the
+    engine's stepped lock (``F13_LOCK``: 10%, 5% steps, gap 2%), with the pick's own take-profit kept in mode a and none in mode b;
+    the pick's own lock, if it had one, is replaced by this one."""
     stop_atr, tp_kind, tp_val, ladder, first_lock, step, gap = K.exit_args(pick["exit_index"])
+    if variant.fam == F13:
+        if variant.mode == "b":
+            return (stop_atr, TP_NONE, 0.0, True) + F13_LOCK
+        return (stop_atr, tp_kind, tp_val, True) + F13_LOCK
     if variant.fam in (F11, F12) and variant.mode == "b":
         return stop_atr, TP_STRUCT, 0.0, False, first_lock, step, gap     # the strategy's target (NaN: none), never the pick's
     if variant.mode == "b":
