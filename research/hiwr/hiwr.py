@@ -6,7 +6,8 @@ Binance prices in, files out. No key of any kind, no order, no database of the b
     python -m research.hiwr.hiwr pinlist
     python -m research.hiwr.hiwr select    --kit KIT --work DIR [--procs N] [--private DIR] [--eligibility all|lazy]
     python -m research.hiwr.hiwr test      --kit KIT --kit-test DIR --work DIR [--procs N] [--private DIR]
-    python -m research.hiwr.hiwr reads     --kit KIT --kit-test DIR --work DIR [--private DIR]
+    python -m research.hiwr.hiwr reads     --kit KIT --kit-test DIR --work DIR [--private DIR] [--reads-hours H]
+    python -m research.hiwr.hiwr ledger    [--private DIR] [--ledger-extra FILE] [--hunt-private FILE]
     python -m research.hiwr.hiwr report    [--private DIR]
 
 Steps (section numbers are PREREG_HIWR.md's):
@@ -29,7 +30,12 @@ Steps (section numbers are PREREG_HIWR.md's):
   without that marker is refused); its manifest line and the reads module line are appended to the pin before
   test.json exists. Per pick, once: T0-T6 with both controls (100,000 seeds each), p_boot, BH over all picks, the
   verdict, the program-wide ledger (13). Then the reads.
-* reads (14): research/hiwr/reads.py ``run(ctx)``, only after test.json; reported, never a pass.
+* reads (14): research/hiwr/reads.py ``run(ctx)``, only after test.json; reported, never a pass. The picks run in
+  parallel, one file each in the work folder (a restart skips the picks done); ``--reads-hours`` stops starting new
+  picks after that long and writes reads.json with the picks done (the rest listed as missing).
+* ledger (13): the program-wide ledger again from test_private.json (its sha256 checked against test.json), the hunt's
+  published test files and the list of the program's other hypotheses; never touches test.json or a verdict. It is
+  'incomplete' (no BH / Holm count published) while any hypothesis or source is missing.
 * report: out/RESULTS_KO.md in plain Korean (DeepSeek rows: labels and counts only, D11).
 
 DeepSeek (D11, section 18): every repository output shows DeepSeek rows as counts, shares and labels only; their other
@@ -98,7 +104,7 @@ TIME_MIN_BARS = 20                   # 11 (b): fewer takeable bars -> the at-lea
 SUM_COLS = (W.S_N, W.S_WIN, W.S_SUM, W.S_N2, W.S_SUM2, W.S_WIN2)
 SUM_NAMES = ("n", "wins", "sum_r", "n_x2", "sum_r_x2", "wins_x2")
 GRID_WEIGHT = {"15m": 16, "30m": 8, "1h": 4, "4h": 1}
-ELIG_CHUNK = 40                      # combos per eligibility task (mode "all")
+ELIG_PAIRS = {"15m": 8, "30m": 16, "1h": 32, "4h": 64}      # pairs per eligibility task (mode "all")
 MIN_FREE = 1024 ** 3                 # stop below 1 GB free (as the hunt)
 
 CHOICES = [
@@ -141,7 +147,11 @@ FG_FILES = tuple(f"research/fullgrid/{f}" for f in ("grid.py", "ds_defs.py", "ke
                                                       "data.py", "exchange.json"))
 FIXED_FILES = ("research/entry_study/DEFS_BC.sha256", "research/hunt/universe30.json", "research/hunt/exchange30.json")
 HUNT_MANIFEST_REL = "research/hunt/data_manifest.json"
-HUNT_TESTS = (("hunt v1", "research/hunt/out/v1/test.json"), ("hunt wide", "research/hunt/out/wide/test.json"))
+# The hunt's test files: where its push publishes them (research/hunt/bootstrap.sh pack/push: results.tgz unpacked
+# under research/hunt/results/ on the hunt-results branch), then where its own server writes them.
+HUNT_TESTS = (("hunt v1", ("research/hunt/results/hunt/v1/test.json", "research/hunt/out/v1/test.json")),
+              ("hunt wide", ("research/hunt/results/hunt/wide/test.json", "research/hunt/out/wide/test.json")))
+LEDGER_EXTRA_REL = "research/hiwr/ledger_extra.json"       # the program's other test-period hypotheses (13), if given
 TEST_KIT_MARK = "hiwr_test_kit.json"
 
 

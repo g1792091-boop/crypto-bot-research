@@ -74,14 +74,14 @@ def ref_trade(a, e, end, coin_end, side, P0, Dst, t, fill, L, liq_d, cm=1, pierc
     def done(kind, j, X, fee):
         g = side * (X / F - 1)
         if g < -1.0 / L:
-            return "LIQ", j, -1.0 / L - tk
+            return "LIQ", j, -1.0 / L - tk - paid          # the margin, the entry fee and the funding paid (7.5)
         return kind, j, g - tk - fee * X / F - paid
 
     for j in range(e, end):
         if j > e:
             paid += side * a["mo"][j] * a["fund"][j] / F
             if side * (a["mo"][j] - Lq) <= 0:
-                return "LIQ", j, -1.0 / L - tk
+                return "LIQ", j, -1.0 / L - tk - paid
             if side * (a["o"][j] - S) <= 0:
                 return done("SL", j, a["o"][j] * (1 - side * slip), tk)
             if fill == 0 and side * (a["o"][j] - T) >= 0:
@@ -91,7 +91,7 @@ def ref_trade(a, e, end, coin_end, side, P0, Dst, t, fill, L, liq_d, cm=1, pierc
         if (a["l"][j] <= S) if side > 0 else (a["h"][j] >= S):
             return done("SL", j, S * (1 - side * slip), tk)
         if (a["ml"][j] <= Lq) if side > 0 else (a["mh"][j] >= Lq):
-            return "LIQ", j, -1.0 / L - tk
+            return "LIQ", j, -1.0 / L - tk - paid
         if fill == 0 and ((a["h"][j] >= T) if side > 0 else (a["l"][j] <= T)):
             return done("TP", j, T * (1 - side * slip), tk)
         if fill == 1 and ((a["h"][j] > Tp) if side > 0 else (a["l"][j] < Tp)):

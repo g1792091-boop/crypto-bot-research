@@ -21,11 +21,13 @@ One trade (section 7, long shown, a short is the mirror):
 - coin end (7.6): a coin whose tradable span ends inside the period closes a still-open position at its last bar's
   close as a stop-market order (phase 6). Period end: no event (code -1), "open at end" in the trade list;
 - costs and the net result (7.7): r = side x (X / F - 1) - taker - fee_exit x X / F - funding / notional, funding =
-  every funding event while open (minutes e+1 .. exit) on mark open x quantity. Liquidation: r = -1/L - taker (the
-  whole isolated margin and the entry fee). As kernel._trade, a stop or coin-end fill whose loss is beyond the margin
-  (side x (X / F - 1) < -1/L) counts as a liquidation. The liquidation level does not move with funding (funding is
-  paid from the wallet, 7.6); kernel._trade moves it with the margin. Cost x2 (``cost=2`` tables): taker 0.10%,
-  slippage 0.04% (so F and with it T and Lq move), maker 0.04%, funding unchanged, t unchanged (7.7).
+  every funding event while open (minutes e+1 .. exit) on mark open x quantity. Liquidation: r = -1/L - taker -
+  funding / notional (the whole isolated margin, the entry fee, and the funding already paid from the wallet). As
+  kernel._trade, a stop or coin-end fill whose loss is beyond the margin (side x (X / F - 1) < -1/L) counts as a
+  liquidation. The liquidation level does not move with funding (funding is paid from the wallet, 7.6); kernel._trade
+  moves it with the margin. Cost x2 (``cost=2`` tables): taker 0.10%, slippage 0.04%, maker 0.04%, funding unchanged;
+  the TP's price move t from the fill is unchanged, so F, the TP price T = F x (1 +- t) and Lq follow the cost-x2
+  fill; the two skips are judged at cost x1 (7.7).
 - skips (7.3, 7.4): stop not wider than the TP (|F - S| / F <= t: "stop inside TP"); stop room at the tier with the
   house buffer: |F - S| + max(0.2% F, ATR14) <= |F - Lq| ("no stop room"); both judged at cost x1.
 """
@@ -342,9 +344,12 @@ def _outcome(ent, fc, F, sc, sx, tct, txt, tcm, txm, lc, ec, exr, row, s, k, fil
         first = ce
     if first == inf:
         return 2, X_OPEN, np.int64(-1), 0.0
-    if first == cl:
-        return 1, X_LIQ, first, -1.0 / L - tk
     sg = 1.0 if s == 0 else -1.0
+    f = F[row, s]
+    x = first // 8
+    fund = -sg * (fc[x] - fc[ent[row]]) / f             # funding paid from the wallet while open (7.6)
+    if first == cl:
+        return 1, X_LIQ, first, -1.0 / L - tk + fund
     if first == cs:
         g = sx[row, s, k]
         kind = X_STOP
@@ -355,10 +360,7 @@ def _outcome(ent, fc, F, sc, sx, tct, txt, tcm, txm, lc, ec, exr, row, s, k, fil
         g = exr[row, s]
         kind = X_COIN_END
     if g < -1.0 / L:                                  # a fill beyond the margin is a liquidation (kernel._trade)
-        return 1, X_LIQ, first, -1.0 / L - tk
-    f = F[row, s]
-    x = first // 8
-    fund = -sg * (fc[x] - fc[ent[row]]) / f
+        return 1, X_LIQ, first, -1.0 / L - tk + fund
     fee = mk if (kind == X_TP and fill == 1) else tk
     return 0, kind, first, g - tk - fee * (1.0 + sg * g) + fund
 

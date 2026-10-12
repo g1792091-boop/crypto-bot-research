@@ -8,25 +8,34 @@
   among the brackets whose initialLeverage >= L; counted), skipped below the coin's minimum notional; the bracket
   holding N gives the liquidation price (kernel._bracket, kernel._liq) and the stop-room check is redone there.
   Coin end closes at the coin's last bar; a position open at the period end is marked at the last 1m close (flagged).
-  Bust: wallet below 10% of the start, the account stops.
+  Bust: the wallet after a close below 10% of the start; the account stops.
 - Drawdown (8.3): on every 1m bar of an open position the equity is marked at the bar's adverse last-price extreme
   (against the peak of the closes before that minute) and at its close, both less a market exit (slippage + taker
-  fee) and less the funding paid so far. Exit minute: its adverse extreme counts only for a TP filled inside the
-  minute (and for a coin-end close); a stop or liquidation counts at its fill; an exit on the open has no mark. Peak =
-  max(start, every close mark, every wallet after a close). The realized-only DD (wallets after closes) is beside it.
-- Size (8.4): f_path (SEL path max DD <= cap, worst account trade <= 15% of the equity before it, f <= L^2 / 100) and
-  f* (also the 95th percentile of the week-block bootstrap max DD <= cap) by 40 bisection steps, rounded down to
-  0.01; the realized-only DD brackets the search. The bootstrap regroups the account's trades (taken at the SEL path at
-  that f) by the UTC week (Monday) of their fill minute, draws the period's weeks with replacement and runs their
-  trades in draw order, each with its own SEL-path notional fraction N / wallet and its own minute marks
-  (decomposed per trade so that a path is a sum over trades; ``boot_dd_slow`` is the plain loop).
+  fee) and less the funding paid so far. Exit minute: its adverse extreme counts for a TP filled inside the minute, a
+  coin-end close and the period-end mark; a stop or liquidation counts at its fill; an exit on the open has no mark.
+  Peak = max(start, every close mark, every wallet after a close). The realized-only DD (wallets after closes) is
+  beside it.
+- Size (8.4): on the 0.01 grid, f_path = the largest f such that EVERY grid size from 0.01 to f meets (i) SEL path max
+  DD <= cap and (ii) worst account trade <= 15% of the equity before it, with (iii) f <= L^2 / 100; i.e. 0.01 below the
+  first failing size, found by an upward scan (``first_fail_scan``). f* = the same with (i') the 95th percentile of
+  the week-block bootstrap max DD <= cap added, scanned on [0.01, f_path]. Why a scan: the stop room judged at the
+  bracket of N, the notional-cap cut and the minimum notional make the taken trades depend on f, so the drawdown is not
+  monotone in f and a bisection can land on a feasible island above a failing size. Exact speed-up of the f* scan: on
+  consecutive grid sizes whose accounts take the same trades with the same per-notional results, exits and phases, and
+  cut none (N / wallet = f), every path's mark-to-market DD is nondecreasing in f (``bootstrap_scan``), so inside such a
+  run the first failing size is found by bisection; elsewhere every size is evaluated.
+  The bootstrap regroups the account's trades (taken at the SEL path at that f) by the UTC week (Monday) of their fill
+  minute, draws the period's weeks (empty ones included) with replacement and runs their trades in draw order, each
+  with its own SEL-path notional fraction N / wallet and its own result and minute marks (caps, stop room and the
+  minimum notional are not redone in a resample; decomposed per trade so that a path is a sum over trades;
+  ``boot_dd_slow`` is the plain loop).
 - Monthly return (8.5): equity at each UTC month end (an open position marked at its last close before the month
   boundary) over the equity at its start.
-Choices PREREG_HIWR leaves open, made here: a resampled trade keeps its SEL-path N / wallet (so the notional cap of
-the SEL path carries over) and its SEL-path result; the f95 draws use sha256("hiwr|f95|<period>|<pick id>|f95");
-a period-end mark is less a market exit, as every other mark. Because the stop room is judged at the bracket of N,
-the taken trades (and so the drawdown) can change with f: the bisection then finds a boundary of the feasible sizes,
-not always the largest feasible f.
+Choices written into PREREG_HIWR 8.3 / 8.4: a resampled trade keeps its SEL-path N / wallet and result; the f95 draws
+use sha256("hiwr|f95|<period>|<pick id>|f95"); a period-end mark is less a market exit, as every other mark; the exit
+minute's adverse extreme also counts for a coin-end close and the period-end mark; bust is the wallet after a close
+below 10% of the start; a liquidation loses the isolated margin and the entry fee, and the funding paid while it was
+open stays paid (funding is paid from the wallet, 7.6).
 """
 
 from __future__ import annotations
@@ -68,7 +77,6 @@ BUST = 0.10                                                  # 8.3: equity below
 MAX_LOSS = 0.15                                              # 8.4 (ii)
 MIN_N, MIN_WIN = 150, 0.70                                   # 10.2
 N_BOOT = 10_000                                              # 8.4
-BISECT_STEPS = 40
 Q_BOOT = 0.95
 # candidate status in the account
 A_TAKEN, A_BUSY, A_NO_ROOM, A_MIN_NOTIONAL, A_AFTER_BUST, A_STOP_INSIDE, A_NO_TIER, A_WINDOW = 1, 2, 3, 4, 5, 6, 7, 8
@@ -274,7 +282,7 @@ def _account(ts, o, h, l, c, mo, mh, ml, fc, seg_off, seg_kind,
             x = code // 8
             ph = code % 8
         if ph == 0 or ph == 4 or g < -1.0 / L:
-            r = -1.0 / L - tk
+            r = -1.0 / L - tk - sg * (fc[x] - fc[e]) / F      # the margin, the entry fee and the funding paid
             kind = 2
         else:
             fee = mk if (maker and (ph == 2 or ph == 5)) else tk
@@ -502,62 +510,96 @@ def path_dd(res: dict, order=None) -> float:
 
 
 # ------------------------------------------------------------------ f_path and f* (8.4)
-def bisect_max(ok, hi: float, steps: int = BISECT_STEPS) -> float:
-    """The largest f in [0, hi] with ok(f), assuming ok holds below it: hi itself when ok(hi), else 40 bisection
-    steps; rounded down to 0.01 (and stepped down by 0.01 while the rounded value fails, against float rounding)."""
-    if hi <= 0:
-        return 0.0
-    if ok(hi):
-        x = hi
-    else:
-        lo = 0.0
-        for _ in range(steps):
-            mid = 0.5 * (lo + hi)
-            if ok(mid):
+def first_fail_scan(ok, top: int) -> int:
+    """The largest k in [0, top] such that ok(j) holds for EVERY j in 1 .. k (grid sizes in hundredths): an upward
+    scan that stops at the first failure (0 when ok(1) fails, ``top`` when nothing fails)."""
+    for k in range(1, int(top) + 1):
+        if not ok(k):
+            return k - 1
+    return int(top)
+
+
+def structure(res: dict):
+    """The account's structure at one size: which candidates it took and their per-notional results, exit phases and
+    exit minutes. None when a taken trade was cut (its N / wallet is not f) or the account busted. Two sizes with the
+    same structure differ only by f: every path's mark-to-market DD is then nondecreasing in f (8.3 marks are
+    wallet x (1 + f x m) with the same m; a peak-to-trough ratio is a product of steps (1 + f a) / (1 + f b) and
+    f d/df ln(ratio) <= ln(ratio) < 0 for a drawdown, since y / (1 + y) <= ln(1 + y))."""
+    if res["bust"] or bool(np.asarray(res["cut"])[res["taken"]].any()):
+        return None
+    h = hashlib.sha256()
+    for k in ("taken", "r", "phase", "exit_ms", "kind"):
+        h.update(np.ascontiguousarray(res[k]).tobytes())
+    return h.digest()
+
+
+def bootstrap_scan(boot_ok, sig: dict, top: int) -> int:
+    """The largest k in [0, top] such that boot_ok(j) for every j in 1 .. k, given ``sig`` (k -> ``structure`` of the
+    account at k / 100). Inside a run of consecutive k with one structure (not None) boot_ok can only turn from true to
+    false (``structure``), so the run's last k is checked first and, when it fails, the first failure inside the run is
+    found by bisection; a k without a structure is checked alone. Equal to ``first_fail_scan(boot_ok, top)``."""
+    k = 1
+    while k <= top:
+        end = k
+        if sig.get(k) is not None:
+            while end + 1 <= top and sig.get(end + 1) == sig[k]:
+                end += 1
+        if boot_ok(end):
+            k = end + 1
+            continue
+        lo, hi = k - 1, end                 # boot_ok holds at lo (k - 1 passed, or lo = 0), fails at hi
+        while hi - lo > 1:
+            mid = (lo + hi) // 2
+            if boot_ok(mid):
                 lo = mid
             else:
                 hi = mid
-        x = lo
-    f = math.floor(x * 100.0 + 1e-7) / 100.0
-    while f > 0 and not ok(f):
-        f = round(f - 0.01, 2)
-    return max(f, 0.0)
+        return hi - 1
+    return int(top)
 
 
 def sizes(run_at, cap: float, L: float, period: tuple, draws: np.ndarray, q: float = Q_BOOT,
-          max_loss: float = MAX_LOSS) -> dict:
-    """f_path and f* of one pair: ``run_at(f)`` returns the SEL ``account`` at size f."""
-    memo: dict = {}
+          max_loss: float = MAX_LOSS, exact_boot: bool = False) -> dict:
+    """f_path and f* of one pair (8.4) on the 0.01 grid: ``run_at(f)`` returns the SEL ``account`` at size f.
+    f_path = 0.01 below the first grid size that breaks (i) or (ii) (or L^2 / 100, iii); f* = 0.01 below the first grid
+    size up to f_path whose bootstrap 95th percentile is above the cap (i'). ``exact_boot``: evaluate the bootstrap at
+    every grid size (the plain scan; tests compare it with the run-and-bisect speed-up)."""
+    top = int(round(L * L))                                # (iii) margin at most L% of the wallet: f <= L^2 / 100
+    sig: dict = {}
+    n_acc = [0]
+    last: dict = {}
 
-    def acc(f):
-        if f not in memo:
-            memo[f] = run_at(f)
-        return memo[f]
+    def acc(k):
+        if k not in last:
+            last.clear()                                   # one result kept: the scans move forward
+            n_acc[0] += 1
+            last[k] = run_at(k / 100.0)
+        return last[k]
 
-    bq: dict = {}
-
-    def boot(f):
-        if f not in bq:
-            d = boot_dd(acc(f), period, draws) if f > 0 else np.zeros(len(draws))
-            bq[f] = (float(np.quantile(d, q)), float((d > cap).mean()))
-        return bq[f]
-
-    def ok_real(f):
-        a = acc(f)
-        return a["dd_real"] <= cap and a["worst_loss"] <= max_loss
-
-    def ok_path(f):
-        a = acc(f)
+    def ok_path(k):
+        a = acc(k)
+        sig[k] = structure(a)
         return a["dd"] <= cap and a["worst_loss"] <= max_loss
 
-    hi = L * L / 100.0                                    # (iii) margin at most L% of the wallet
-    f_real = bisect_max(ok_real, hi)
-    f_path = bisect_max(ok_path, f_real)
-    f_star = bisect_max(lambda f: ok_path(f) and boot(f)[0] <= cap, f_path)
-    out = {"cap": cap, "L": L, "f_ceiling": hi, "f_realized": f_real}
-    for name, f in (("f_path", f_path), ("f_star", f_star)):
-        a = acc(f) if f > 0 else None
-        q95, share = boot(f) if f > 0 else (0.0, 0.0)
+    kp = first_fail_scan(ok_path, top)
+    bq: dict = {}
+
+    def boot(k):
+        if k not in bq:
+            d = boot_dd(acc(k), period, draws)
+            bq[k] = (float(np.quantile(d, q)), float((d > cap).mean()))
+        return bq[k]
+
+    def boot_ok(k):
+        return boot(k)[0] <= cap
+
+    ks = first_fail_scan(boot_ok, kp) if exact_boot else bootstrap_scan(boot_ok, sig, kp)
+    out = {"cap": cap, "L": L, "f_ceiling": top / 100.0,
+           "scan": {"account_runs": n_acc[0], "bootstraps": len(bq), "grid_sizes_path": min(kp + 1, top)}}
+    for name, k in (("f_path", kp), ("f_star", ks)):
+        f = k / 100.0
+        a = acc(k) if k > 0 else None
+        q95, share = boot(k) if k > 0 else (0.0, 0.0)
         out[name] = {"f": f, "margin_pct": f / L * 100.0, "notional_x": f, "dd": a["dd"] if a else 0.0,
                      "dd_real": a["dd_real"] if a else 0.0, "boot_q95": q95, "boot_share_over_cap": share,
                      "trades": a["n"] if a else 0, "worst_loss": a["worst_loss"] if a else 0.0,

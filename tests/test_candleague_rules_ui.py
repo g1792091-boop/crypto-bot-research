@@ -414,3 +414,207 @@ def test_static_rules_for_the_new_files():
             with open(os.path.join(STATIC, "js", f)) as fh:
                 r = subprocess.run([node, "--input-type=module", "--check"], stdin=fh, capture_output=True, text=True)
             assert r.returncode == 0, (f, r.stderr[:400])
+
+
+# ---------------------------------------------------------------- review fixes (2026-10-12, second pass)
+def test_rule_card_words_follow_the_pick(tmp_path):
+    """The 기본값 note follows the stop widths (the leverage comes from the stop alone); a lock exit's box says the stop
+    moves; equal leverages read as one word; the ROE tile says which leverage its take-profit distance assumes; the
+    chips carry 번 and an empty account keeps the chips' place."""
+    now = int(time.time() * 1000)
+    lg, routes = _world(now)
+    o = _run(tmp_path, {"routes": routes}, r"""
+const R = cfg.routes["/api/rules"];
+const base = {id: "base-x", exit: "ladder|2", exit_ko: "계단 잠금 10%부터 · 손절 2 ATR"};
+const pk = (k) => ({id: "x", exit: `tp3R|${k}`, stop_atr: k, tf: "1h", tp: {kind: "R", val: 3}, roles: {base}});
+out.notes = [4, 2, 1.5].map((k) => RK.baseNote(pk(k), R));
+out.noBase = RK.baseNote({...pk(4), roles: {}}, R);
+out.pairs = [RK.levPair({best: 0, normal: 0}, true), RK.levPair({best: 30, normal: 30}, true), RK.levPair({best: 40, normal: 0}, true)];
+const lock = {id: "core-DOGE-15m-1", tf: "15m", tp: {kind: "ladder", val: null, first_lock: 0.1}, stop_atr: 2, best_ok: true, breakeven: null, roles: {}};
+out.lockBox = txt(RK.ruleBox({id: "core-DOGE-15m-1", exit_ko: "x"}, {...R, picks: {"core-DOGE-15m-1": lock}}));
+const roe = {...R.picks["ds-F10_OTE-1h-1"], tp: {kind: "roe", val: 0.5}};
+out.roeTiles = RK.pickRuleBody(roe, R).querySelectorAll(".rl-coin").map(txt);
+const ln = R.picks["ds-F10_OTE-1h-1"].now.BTCUSD.lev.cand.normal;
+out.ln = ln;
+out.emptyCls = RK.usedChips({}).getAttribute("class");
+out.hidCls = RK.usedChips(null).getAttribute("class");
+""")
+    assert "손절이 2 ATR로 이 후보(4 ATR)보다 좁아서, 같은 자리라면 배수가 더 높게" in o["notes"][0]
+    assert "손절이 이 후보와 같은 2 ATR이라 같은 자리라면 배수도 같습니다" in o["notes"][1] and "더 높게" not in o["notes"][1]
+    assert "손절이 2 ATR로 이 후보(1.5 ATR)보다 넓어서, 같은 자리라면 배수가 같거나 더 낮게" in o["notes"][2]
+    assert o["noBase"] is None
+    assert o["pairs"] == ["둘 다 못 들어감", "둘 다 30배", "40배 / 못 들어감"]
+    assert "수익이 나면 계단 잠금으로 올라감" in o["lockBox"] and "움직이지 않음" not in o["lockBox"] and "미리 셀 수 없음" in o["lockBox"]
+    assert o["ln"] in (20, 30) and f"익절 거리 ({o['ln']}배면)" in o["roeTiles"][0]
+    assert all("익절 거리 (" in t and "배면)" in t for t in o["roeTiles"] if "후보못 들어감" not in t)
+    assert "rl-used" in o["emptyCls"] and "rl-used" in o["hidCls"]
+
+
+def test_rules_list_header_divider_fold_and_pick_choice(tmp_path):
+    """The list has its column names (a PC), a divider per kind, the order of steps in full and 배수에 따라 for an ROE
+    take-profit; a ?pick= of another account means its pick, a pick the filters leave out falls back to the first row,
+    a junk id too; on a phone the rows past LIST_FOLD fold behind "나머지 N개 보기" (the chosen one stays)."""
+    now = int(time.time() * 1000)
+    lg, routes = _world(now)
+    o = _run(tmp_path, {"routes": routes}, r"""
+const M = await import(`file://${S}/js/screens/rules.js`);
+const R = cfg.routes["/api/rules"];
+const el = await mount("rules", {pick: "base-core-DOGE-15m"});
+out.hd = txt(el.querySelector(".rl-listhd"));
+out.div = el.querySelectorAll(".rl-divider").map(txt);
+out.pressedBase = el.querySelectorAll(".rl-row").filter((b) => b.getAttribute("aria-pressed") === "true").map(txt);
+out.cardBase = txt(el.querySelector(".rl-pickcard"));
+const el2 = await mount("rules", {kind: "core", pick: "ds-F10_OTE-1h-1"});
+out.pressedKind = el2.querySelectorAll(".rl-row").filter((b) => b.getAttribute("aria-pressed") === "true").map(txt);
+out.cardKind = txt(el2.querySelector(".rl-pickcard"));
+out.rowsKind = el2.querySelectorAll(".rl-row").length;
+const ix = LK.index(doc);
+const rows = ix.cands;
+out.choose = [M.choosePick("core-DOGE-15m-1-q", ix, rows), M.choosePick("base-core-DOGE-15m", ix, rows), M.choosePick("nope", ix, rows),
+  M.choosePick("ds-F10_OTE-1h-1", ix, rows.filter((c) => c.kind === "core")), M.choosePick(null, ix, [])];
+out.first = rows[0].id;
+out.firstCore = rows.filter((c) => c.kind === "core")[0].id;
+// twelve rows: four fold behind the button on a phone, the chosen one (the last) stays
+const many = Array.from({length: 12}, (_, i) => ({...rows[0], id: `fake-${i}`}));
+const L = M.pickList(many, R, "fake-11", () => {}, {});
+out.extra = L.querySelectorAll(".rl-row.rl-extra").length;
+out.more = txt(L.querySelector(".rl-more"));
+out.lastOn = L.querySelectorAll(".rl-row").at(-1).getAttribute("class");
+out.openCls = M.pickList(many, R, "fake-0", () => {}, {more: true}).getAttribute("class");
+const roe = {...R, picks: {x: {tp: {kind: "roe", val: 0.5}, stop_atr: 4, breakeven: null, best_ok: false, roles: {}}}};
+out.roeRow = txt(M.pickRow({id: "x", tf: "1h", name: "OBV_S", kind: "core"}, roe, false, () => {}));
+""")
+    assert o["hd"] == "매매법 · 봉익절손절본전 승률 (비용 전)배수 순서후보 계좌가 쓴 배수"
+    assert len(o["div"]) == 2 and o["div"][0].startswith("기존 36") and "좋은 자리면 50배부터" in o["div"][0]
+    assert "딥시크" in o["div"][1] and "늘 보통 자리 (30배부터)" in o["div"][1]
+    assert len(o["pressedBase"]) == 1 and "도지 봇" in o["pressedBase"][0] and "도지 봇 · 15분" in o["cardBase"]
+    assert "이 후보의 규칙을 찾지 못했습니다" not in o["cardBase"]
+    assert len(o["pressedKind"]) == 1 and "ICT OTE" not in o["pressedKind"][0] and "ICT OTE" not in o["cardKind"] and o["rowsKind"] == 3
+    assert o["choose"] == ["core-DOGE-15m-1", "core-DOGE-15m-1", o["first"], o["firstCore"], None]
+    assert o["extra"] == 4 and o["more"] == "나머지 4개 보기" and "rl-extra" in o["lastOn"] and "on" in o["lastOn"].split()
+    assert "open" in o["openCls"].split()
+    assert "배수에 따라" in o["roeRow"] and "증거금 대비 +50%" in o["roeRow"] and "배수따라" not in o["roeRow"]
+
+
+def test_account_page_of_a_base_account_leads_with_its_own_exit(tmp_path):
+    now = int(time.time() * 1000)
+    lg, routes = _world(now)
+    o = _run(tmp_path, {"routes": routes}, r"""
+const el = await mount("account", {}, "base-core-DOGE-15m");
+const card = el.querySelector(".rl-pickcard");
+out.card = txt(card);
+out.own = card.querySelector(".rl-own") ? txt(card.querySelector(".rl-own")) : null;
+const c2 = (await mount("account", {}, "core-DOGE-15m-1")).querySelector(".rl-pickcard");
+out.candOwn = !!c2.querySelector(".rl-own");
+out.candCard = txt(c2);
+""")
+    own = o["own"]
+    assert own and own.startswith("기본값 이 계좌의 익절·손절: 계단 잠금 10%부터 · 손절 2 ATR")
+    assert "+12%가 되면 손절선을 +10% 자리로" in own and "2 ATR" in own and "계단 잠금으로 손절선이 올라갑니다" in own
+    assert "아래는 이 후보(후보 계좌)의 익절·손절입니다" in own
+    assert o["card"].index("이 계좌의 익절·손절") < o["card"].index("고정 익절 3R")
+    assert "이 후보의 익절·손절과 계좌 5개 공통 배수 규칙" in o["card"] and "이 후보의 계좌 5개 공통 규칙" not in o["card"]
+    assert o["candOwn"] is False and "이 후보의 익절·손절과 계좌 5개 공통 배수 규칙" in o["candCard"]
+
+
+def test_why_card_notes_follow_the_exit(tmp_path):
+    """연패 맥락 speaks of the account's own exit; a money break-even far above the rule's says why; three or fewer
+    losses carry no share; without a pick the leverage link goes to the rules screen."""
+    now = int(time.time() * 1000)
+    lg, routes = _world(now)
+    o = _run(tmp_path, {"routes": routes}, r"""
+out.notes = ["tp3R|4", "tp2R|2", "roe50|4", "ladder|2", null].map((e) => WK.streakNote(e));
+const ins = cfg.routes["/api/insight"].accounts;
+const ix = LK.index(doc);
+const a = ix.byId["core-DOGE-15m-1"];
+const R = cfg.routes["/api/rules"];
+const skew = {...ins[a.id], breakeven: 0.52};
+out.skew = txt(WK.whyCard(a, skew, {rule: R.picks[a.id], pick: a}));
+out.plain = txt(WK.whyCard(a, ins[a.id], {rule: R.picks[a.id], pick: a}));
+const b = ix.byId["base-core-DOGE-15m"];
+out.base = txt(WK.whyCard(b, ins[b.id], {}));
+const few = {...ins[a.id], losses: 2, big: ins[a.id].big.slice(0, 2), big_share: 1};
+out.few = txt(WK.whyCard(a, few, {pick: a}));
+out.links = WK.whyCard(b, ins[b.id], {}).querySelectorAll("a").map((x) => x.getAttribute("href"));
+""")
+    n3, n2, nroe, nlock, nnone = o["notes"]
+    assert "3R은 4번 중 1번만 이겨도 본전" in n3 and "(보통 30~35%)" in n3
+    assert "2R은 3번 중 1번만 이겨도 본전" in n2 and "30~35%" not in n2
+    assert "증거금 대비 익절" in nroe and "3R" not in nroe
+    assert "계단 잠금은 작게 자주 이기는 방식" in nlock and "3R" not in nlock
+    assert "3R" not in nnone and "보통 범위 안의 연패로 매매법을 판단하지 않습니다" in nnone
+    assert "규칙보다 높은 이유" in o["skew"] and "돈으로는 3배가 안 됩니다" in o["skew"]
+    assert "규칙보다 높은 이유" not in o["plain"]
+    assert "3R" not in o["base"].split("연패 맥락")[1] and "계단 잠금은 작게 자주" in o["base"]
+    assert "손실 2번 (큰 순서)" in o["few"] and "전체 손실의" not in o["few"]
+    assert "#/rules" in o["links"] and not any(x.startswith("#/rules?pick=base-") for x in o["links"])
+
+
+def test_pace_is_an_upper_bound(tmp_path):
+    """The 5-year pace counted every signal; a league account holds one position: the numbers read 많아야 / 빨라도, no
+    '꽤 느림' warning, a past 30-trade date says so, and a phone gets one stacked row per pick."""
+    now = int(time.time() * 1000)
+    lg, routes = _world(now)
+    o = _run(tmp_path, {"routes": routes}, r"""
+const ix = LK.index(doc);
+const c = {...ix.byId["core-DOGE-15m-1"], trades: 4};
+const old = {...doc, start_ms: doc.done_ms - 200 * 86400000};
+const p = WK.pace5y(c, old);
+out.past = p.past30;
+out.ratio = p.ratio;
+out.line = txt(WK.paceLine5y(c, old));
+out.fresh = WK.pace5y(c, doc).past30;
+const C = await import(`file://${S}/js/screens/check.js`);
+const t = C.paceTable(old, cfg.routes["/api/insight"]);
+out.heads = t.querySelectorAll("th").map(txt);
+out.cells = t.querySelectorAll(".pc-tbl tbody tr").map(txt);
+out.phone = t.querySelectorAll(".pc-ph .pc-prow").map(txt);
+out.notes = t.querySelectorAll("p.note").map(txt);
+""")
+    assert o["past"] is True and o["ratio"] < 0.5 and o["fresh"] is False
+    assert "꽤 느림" not in o["line"] and "30번은 빨라도" in o["line"] and "(지남)" in o["line"] and "많아야" in o["line"]
+    assert "5년 속도면 지금쯤 (많아야)" in o["heads"] and "30번 되는 날 (빨라도)" in o["heads"]
+    assert any(h.startswith("5년 속도면 ") and h.endswith("까지 (많아야)") for h in o["heads"])
+    assert any("지남" in r and "실제 " in r for r in o["cells"])
+    assert len(o["phone"]) == 5 and all("5년 속도면 많아야" in r and "최장 연패" in r for r in o["phone"])
+    assert o["notes"][0].startswith("5년 시험은 여섯 코인의 신호를 모두 셌고") and "한 번에 포지션 하나만" in o["notes"][0]
+
+
+def test_glossary_luck_line_and_position_rule_line(tmp_path):
+    """The glossary's fees (a limit take-profit is 0.02%), the lock's ROE, the new check terms the rules card links to;
+    요약's luck line says the range once; the position card's rule is one short line with the link (the full sentence
+    stays its tooltip)."""
+    now = int(time.time() * 1000)
+    lg, routes = _world(now)
+    o = _run(tmp_path, {"routes": routes}, r"""
+const H = await import(`file://${S}/js/screens/howto.js`);
+out.gl = ["포지션 크기", "계단 잠금", "청산 검사", "손실 검사", "손절 거리 한도", "거래소 한도", "좋은 자리"].map((q) => { const g = H.glossaryOf(q); return g ? g[2] : null; });
+const R = cfg.routes["/api/rules"];
+out.terms = RK.levRuleBody(R).querySelectorAll(".rl-term").map((a) => decodeURIComponent(a.getAttribute("href")));
+out.luck = txt(WK.luckShort(doc));
+const C = await import(`file://${S}/js/screens/positions-card.js`);
+const box = C.whyBox({lev: 30, margin_pct: 0.3, liq_dist_entry: 0.03, pick: "core-DOGE-15m-1",
+  why: {group_ko: null, lev_ko: "x", sub_ko: "y", rule_ko: "규칙: 긴 문장", rule_short_ko: "좋은 자리 50→40→30→20배 · 보통 30→20배 · 거래소 한도와 안전 검사를 통과한 첫 배수"}});
+out.rule = txt(box.querySelector(".ps-rule"));
+out.title = box.getAttribute("title");
+""")
+    pos, lock, liq, loss, lim, ex, best = o["gl"]
+    assert "지정가 익절로 나올 때 0.02%" in pos and "손절로 나올 때 0.05%" in pos
+    assert "증거금 대비 순수익(수수료 뺀 ROE)이 +12%" in lock
+    assert liq and "1 ATR 이상" in liq and loss and "15% 이하" in loss and lim and "0.48%" in lim and ex and "LTC · BCH" in ex
+    assert "40배 → 30배 → 20배" in best
+    for t in ("#/howto?q=거래소 한도", "#/howto?q=청산 검사", "#/howto?q=손실 검사", "#/howto?q=손절 거리 한도"):
+        assert t in o["terms"], t
+    assert o["luck"].count("운만으로") == 1 and "(그 범위 안)" in o["luck"]
+    assert o["rule"] == "좋은 자리 50→40→30→20배 · 보통 30→20배 · 거래소 한도와 안전 검사를 통과한 첫 배수 · 배수 규칙 자세히"
+    assert o["title"] == "규칙: 긴 문장"
+
+
+def test_coin_tiles_can_wrap():
+    """A tile value ("둘 다 못 들어감") wraps or drops under its label instead of pushing a phone sideways."""
+    css = open(os.path.join(STATIC, "insight.css")).read()
+    rule = re.search(r"\.rl-cdl dd \{([^}]*)\}", css).group(1)
+    assert "white-space: normal" in rule and "min-width: 0" in rule and "nowrap" not in rule
+    assert "flex-wrap: wrap" in re.search(r"\.rl-cdl > div \{([^}]*)\}", css).group(1)
+    assert re.search(r"\.rl-list:not\(\.open\) \.rl-row\.rl-extra:not\(\.on\)", css)
+    assert re.search(r"@media \(max-width: 759px\) \{[^@]*\.tbl-wrap\.pc-pc \{ display: none; \}", css)

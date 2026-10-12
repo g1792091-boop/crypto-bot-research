@@ -98,11 +98,12 @@ def outcome_r(fc: np.ndarray, e: int, code: int, g: float, sg: float, F: float, 
     if code < 0:
         return None
     ph = code % 8
-    if ph in (0, 4) or g < -1.0 / L:
-        return -1.0 / L - tk
     x = code // 8
+    fund = -sg * (fc[x] - fc[e]) / F
+    if ph in (0, 4) or g < -1.0 / L:
+        return -1.0 / L - tk + fund
     fee = mk if (maker and ph in (2, 5)) else tk
-    return g - tk - fee * (1.0 + sg * g) - sg * (fc[x] - fc[e]) / F
+    return g - tk - fee * (1.0 + sg * g) + fund
 
 
 # ------------------------------------------------------------------ the pick's candidates on one period
