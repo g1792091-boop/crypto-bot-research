@@ -272,6 +272,10 @@ def sec_ledger(test) -> list:
     names = {"A": "시험한 것", "A+": "시험한 것 + 풀그리드 711개 + F4 관찰 38개", "L": "실제 돈 문턱(아직 안 돈 시험을 최대 개수로)"}
     for k in ("A", "A+", "L"):
         pr = lg["prints"][k]
+        if pr.get("bh_rejections") is None:
+            miss = ", ".join(m.get("file", "?") for m in pr.get("missing") or [])
+            out.append(f"* ({k}) {names[k]}: 가설 {pr['m']}개, 미완성 (등록 안 된 사전 등록: {miss or '-'}; 통과 판단 보류)")
+            continue
         out.append(f"* ({k}) {names[k]}: 가설 {pr['m']}개, BH 통과 {len(pr['bh_rejections'])}개, Holm 통과 "
                    f"{len(pr['holm_rejections'])}개")
     out += [f"* 같은 시험 기간을 본 횟수(looks): {lg.get('looks_count')}", f"* {lg.get('line', '')}", ""]

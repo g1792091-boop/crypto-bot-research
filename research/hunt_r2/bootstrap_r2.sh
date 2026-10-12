@@ -243,7 +243,7 @@ sel_left() {                 # select: the running part's remaining time at its 
 ko_part() {
   case "$1" in
     "event store (name, timeframe, coin)") echo "사건 저장(신호 계산)" ;;
-    "(a′) event histograms") echo "가짜 탐색 (a′) 준비" ;;
+    "pretest Stage A at every slot") echo "시험 전 표: 모든 자리의 거친 격자" ;;
     "real Stage 0 + A") echo "실제 탐색 (기준 자리 + 거친 격자)" ;;
     "null (b′) units") echo "가짜 탐색 (b′) 동전 200번" ;;
     "null (a′) units") echo "가짜 탐색 (a′) 시간 밀기 200번" ;;
@@ -949,6 +949,9 @@ reads_stage() {
   for f in reads_rows.json reads_weekend.json reads_goal.json; do
     [ -s "$OUT/$f" ] || warn "참고 분석 $f 없음 (시간 또는 실패; run.log 참고)"
   done
+  if grep -q '"complete": false' "$OUT/reads_goal.json" 2>/dev/null; then
+    warn "목표판(reads_goal.json)은 끝난 행만 담았습니다 (12시간 벽; 못 한 행은 그 파일의 rows_not_run)"
+  fi
   return 0
 }
 stage 10 "참고 분석 (고른 것들의 r = 1%·고르는 기간 대조·주말 포함/제외·목표판·20/30/40배; 통과 기준이 아님, 최대 ${READS_HOURS}시간)"

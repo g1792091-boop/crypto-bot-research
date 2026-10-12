@@ -196,6 +196,8 @@ def test_ledger_three_prints_on_a_temporary_tree(tmp_path):
     os.makedirs(priv)
     for rel in (LG.R1_PIN["v1"], LG.R1_PIN["wide"], LG.T2_PIN, LG.R2_PIN):
         _write(root, rel, {})
+    _write(root, LG.REGISTRY, {"files": {rel: {"study": rel, "ledger": "A", "first_line_sha256": None}
+                                         for rel in (LG.R1_PIN["v1"], LG.R1_PIN["wide"], LG.T2_PIN, LG.R2_PIN)}})
     _write(root, LG.R1_V1_TEST, {"pick": {"id": "v1:E1:1h"}, "result": {"checks": {"p": 0.003}},
                                  "reads": {"r1": {"checks": {"p": 0.02}}}})
     wide_priv = {"results": {"F3:DSX:1h:G1": {"checks": {"p": 0.0004}}}}
@@ -230,7 +232,9 @@ def test_ledger_three_prints_on_a_temporary_tree(tmp_path):
     assert ids["R2:F1:E1:1h:G1:abc tune"]["p"] == 0.3
     assert Ap["m"] == A["m"] + 711 + 38
     assert sum(1 for r in Ap["rows"] if r["study"] == "full grid" and r["p"] == 1.0) == 1   # n < 100 -> p = 1
-    assert Lp["m"] == Ap["m"] and snap["pending_looks_in_L"] == []        # every hashed look has run here
+    pend0 = {x["study"]: x["hypotheses"] for x in snap["pending_looks_in_L"]}
+    assert pend0 == {"hunt-r2 v1 reads reads_rows.json": 3, "hunt-r2 v1 reads reads_weekend.json": 3}   # 2 picks + basket
+    assert Lp["m"] == Ap["m"] + 6 and Lp["status"] == "complete"     # every other hashed look has run here
     assert snap["listed_not_counted"][0]["id"] == "F2:BBB:4h:G1"
     assert "R2:F1:E1:1h:G1:abc" in snap["round2_live_gate"]
     pub = LG.public_of(snap)
@@ -254,8 +258,9 @@ def test_ledger_three_prints_on_a_temporary_tree(tmp_path):
     _write(root, LG.R2_PICKS, {"picks": [{"id": "a"}, {"id": "b"}, {"id": "c"}]})
     snap2 = LG.snapshot(root, priv, None, None)
     pend = {x["study"]: x["hypotheses"] for x in snap2["pending_looks_in_L"]}
-    assert pend == {"hunt-r2 v1": 6, "track 2 (hiwr v1)": LG.T2_MAX, "hunt wide reads O4": 2 + 3}
-    assert snap2["prints"]["L"]["m"] == snap2["prints"]["A+"]["m"] + 6 + LG.T2_MAX + 5
+    # round 2: 3 picks x (p, p_tune) + 4 rows (3 picks + the batch-1 basket ... none here: no batches) x 2 reads
+    assert pend == {"hunt-r2 v1": 2 * 3 + 2 * (3 + 1), "track 2 (hiwr v1)": LG.T2_MAX, "hunt wide reads O4": 2 + 3}
+    assert snap2["prints"]["L"]["m"] == snap2["prints"]["A+"]["m"] + sum(pend.values())
     assert snap2["prints"]["A+"]["m"] == snap2["prints"]["A"]["m"] + 711 + 38       # full grid without a file: p = 1
 
 
@@ -356,7 +361,9 @@ def _cut_coin(c, end_ms):
 
 def _tree(repo):
     """A temporary repository: the design (first pin line), counts, bench, the reads modules round 2 runs."""
-    files = {PN.DESIGN: b"synthetic design\n", PN.COUNTS: b"{}\n", PN.BENCH: b"{}\n"}
+    files = {PN.DESIGN: b"synthetic design\n", PN.COUNTS: b"{}\n", PN.BENCH: b"{}\n",
+             LG.REGISTRY: json.dumps({"files": {PN.R2_PIN: {"study": "hunt-r2 v1", "ledger": "A",
+                                                            "first_line_sha256": None}}}).encode()}
     for rel in (RR.MODULES["rows"]["rel"], RR.MODULES["reads_o"]["rel"], RR.MODULES["reads_a"]["rel"]):
         with open(os.path.join(ROOT, rel), "rb") as fh:
             files[rel] = fh.read()
@@ -522,7 +529,8 @@ def test_e2e_pretest_reads(e2e):
                 assert set(x) == {"base", "O1", "O1b"}
                 assert x["O1"]["positions"] <= x["base"]["positions"] or x["O1"]["skipped"] > 0
     assert pre["null_summary"]["nulls"]["a"]["replicates"] == SR.N_REP if "a" in pre["null_summary"]["nulls"] else True
-    assert pre["cscv"]["strict"]["splits"] == 2
+    assert pre["cscv"]["splits"] == 2 and pre["cscv"]["anchors"].startswith("re-chosen")
+    assert not pre["cscv"]["slots_missing"]
     assert isinstance(pre["near_miss"], list) and "momentum_c_prime" in pre and "weekend_map" in pre
     board = pre["owner_board"]
     assert board and all(k.endswith(("|peak", "|default")) for k in board)
@@ -545,7 +553,16 @@ def test_e2e_reads_written_under_the_guard(e2e):
                                                         "reads_a": "written"}
     rr = _out(e2e, "reads_rows.json")["out"]["rows"]
     test = _out(e2e, "test.json")
-    assert set(rr) == {f"pick:{p['id']}" for p in test["picks"]}
+    want = {f"pick:{p['id']}" for p in test["picks"]}
+    if sum(1 for p in test["picks"] if int(p.get("batch", 1)) == 1) >= 2:
+        want.add("basket_batch1")                                        # 9.1 ROWS: the batch-1 basket too
+    assert set(rr) == want
+    if "basket_batch1" in rr and "note" not in rr["basket_batch1"]:
+        b = rr["basket_batch1"]
+        assert {"new24", "extra2020", "test_plain", "r1_line", "select_controls", "corr_with_anchor_default"} <= set(b)
+        assert b["r1_line"]["checks"]["n_a"] > 0 and b["labels"] == ["not a candidate"]
+    goal = _out(e2e, "reads_goal.json")
+    assert goal["complete"] is True and set(goal["rows_done"]) == want and goal["cross_row_pass"] is True
 
 
 def test_e2e_controls_do_not_depend_on_the_worker_count(e2e):
@@ -693,7 +710,9 @@ def test_lift_2023_and_leave_one_year_out_on_hand_made_units():
     strong = next(i for i in range(len(lat)) if i != lat.default)
     units = {"E1": _unit36("E1", rng, strong=strong), "N20_EMA9_CHOP": _unit36("N20_EMA9_CHOP", rng),
              "F3_BOS": _unit36("F3_BOS", rng)}
-    lf = PT.lift_2023(units, order, "fixed")
+    slots = {nm: {u["anchor"]: u} | {a: dict(u, anchor=a) for a in range(len(u["stage0"])) if a != u["anchor"]}
+             for nm, u in units.items()}
+    lf = PT.lift_2023(units, order, slots)
     assert lf["per_name"]["E1"]["peak"] == lat.combos[strong] and lf["per_name"]["E1"]["lift"] > 0.01
     assert lf["median_lift"] is not None and 0.0 <= lf["share_above_0"] <= 1.0
     full_peaks = {}
@@ -703,9 +722,9 @@ def test_lift_2023_and_leave_one_year_out_on_hand_made_units():
                                     np.zeros(npt, bool), u["exists"],
                                     S2=np.asarray([np.mean(x) for x in u["lnM2"]]))["peak"]
     assert full_peaks["E1"] == strong
-    lo = PT.leave_one_year_out(units, order, full_peaks, "fixed")
+    lo = PT.leave_one_year_out(units, order, full_peaks, slots)
     assert lo["per_name"]["E1"]["returns"] == 3 and set(lo["per_name"]["E1"]["pairs"]) == set(PT.year_masks())
-    st = PT.leave_one_year_out(units, order, full_peaks, "strict")
+    st = PT.leave_one_year_out(units, order, full_peaks)          # only the real anchors: a moved anchor is listed
     assert all(0 <= v["returns"] <= 3 for v in st["per_name"].values())
 
 

@@ -94,16 +94,23 @@ def regime_module():
 _STATE_CACHE: dict = {}
 
 
-def regime_codes(sym: str, tf: str, high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
-    """The 장세 code (int8, ST_*) of every chart bar of one coin and timeframe, from bars 0..t only
-    (``regime5y.regimes(high, low, close, TF_MIN[tf])["code"]``). Cached in this process by the arrays' identity."""
+def regime_arrays(sym: str, tf: str, high: np.ndarray, low: np.ndarray, close: np.ndarray) -> dict:
+    """``regime5y.regimes(high, low, close, TF_MIN[tf])`` of every chart bar of one coin and timeframe, each value from bars 0..t only:
+    {code (int8, ST_*), adx, slope, atrp, vol_q}. Cached in this process by the arrays' identity."""
     key = (sym, tf, len(close), float(close[-1]) if len(close) else 0.0, float(np.sum(close)), float(np.sum(high)), float(np.sum(low)))
     if key not in _STATE_CACHE:
         if len(_STATE_CACHE) > 64:
             _STATE_CACHE.clear()
-        code = regime_module().regimes(np.asarray(high, float), np.asarray(low, float), np.asarray(close, float), TF_MIN[tf])["code"]
-        _STATE_CACHE[key] = np.ascontiguousarray(code, np.int8)
+        r = regime_module().regimes(np.asarray(high, float), np.asarray(low, float), np.asarray(close, float), TF_MIN[tf])
+        _STATE_CACHE[key] = {"code": np.ascontiguousarray(r["code"], np.int8),
+                             **{k: np.ascontiguousarray(r[k], float) for k in ("adx", "slope", "atrp", "vol_q")}}
     return _STATE_CACHE[key]
+
+
+def regime_codes(sym: str, tf: str, high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
+    """The 장세 code (int8, ST_*) of every chart bar of one coin and timeframe, from bars 0..t only
+    (``regime5y.regimes(high, low, close, TF_MIN[tf])["code"]``). Cached in this process by the arrays' identity."""
+    return regime_arrays(sym, tf, high, low, close)["code"]
 
 
 # ------------------------------------------------------------------ hashes and the pin
@@ -170,12 +177,15 @@ def verify_data(pin: dict, data_dir: str | None = None) -> None:
 
 
 # ------------------------------------------------------------------ cut data folder, stage folders
-def cut_name(cut_ms: int) -> str:
-    return "cut-" + dt.datetime.fromtimestamp(cut_ms / 1000, dt.timezone.utc).strftime("%Y%m%d%H%M")
+CUT_PREFIX = "cut"            # the select run's own cut folder; test T3 uses "t3cut" so that it never touches it
 
 
-def cut_dir(work: str, pin_hash: str, cut_ms: int) -> str:
-    return os.path.join(work, pin8(pin_hash), cut_name(cut_ms))
+def cut_name(cut_ms: int, prefix: str = CUT_PREFIX) -> str:
+    return prefix + "-" + dt.datetime.fromtimestamp(cut_ms / 1000, dt.timezone.utc).strftime("%Y%m%d%H%M")
+
+
+def cut_dir(work: str, pin_hash: str, cut_ms: int, prefix: str = CUT_PREFIX) -> str:
+    return os.path.join(work, pin8(pin_hash), cut_name(cut_ms, prefix))
 
 
 def stage_dir(work: str, pin_hash: str, stage: str) -> str:
@@ -195,11 +205,14 @@ def _load_npz(path: str) -> dict:
         return {k: z[k] for k in z.files}
 
 
-def write_cut(src_dir: str, work: str, pin_hash: str, cut_ms: int, symbols=SYMBOLS, min_free_mb: int = 250) -> str:
+def write_cut(src_dir: str, work: str, pin_hash: str, cut_ms: int, symbols=SYMBOLS, min_free_mb: int = 250,
+              prefix: str = CUT_PREFIX) -> str:
     """Write the arrays of ``src_dir`` cut at ``cut_ms`` (minutes that open before it) as their own data folder and return
     it. An existing folder with the same pin, cut and digests is reused. The arrays are stored compressed (disk is tight).
-    Fails before writing when less than the expected size plus ``min_free_mb`` is free."""
-    out = cut_dir(work, pin_hash, cut_ms)
+    Fails before writing when less than the expected size plus ``min_free_mb`` is free. This is the only function that reads the
+    full arrays for a cut; the select process never calls it (it calls ``open_cut``; the folder is made by the separate
+    ``make-cut`` step, audit A5)."""
+    out = cut_dir(work, pin_hash, cut_ms, prefix)
     meta_path = os.path.join(out, "cut.json")
     if os.path.exists(meta_path):
         meta = json.load(open(meta_path))
@@ -228,6 +241,25 @@ def write_cut(src_dir: str, work: str, pin_hash: str, cut_ms: int, symbols=SYMBO
     with open(meta_path + ".tmp", "w") as fh:
         json.dump({"pin": pin_hash, "cut_ms": int(cut_ms), "coins": coins}, fh, indent=1)
     os.replace(meta_path + ".tmp", meta_path)
+    return out
+
+
+class CutMissing(PinError):
+    """The cut folder does not exist (or is not the one of this pin and cut): run the ``make-cut`` step first."""
+
+
+def open_cut(work: str, pin_hash: str, cut_ms: int, symbols=SYMBOLS, prefix: str = CUT_PREFIX) -> str:
+    """The existing cut folder of this pin and cut time, verified (digests; no minute at or after the cut). It reads only the cut
+    arrays, never the full ones: a select process that opens a cut has not loaded a minute at or after the cut (audit A5)."""
+    out = cut_dir(work, pin_hash, cut_ms, prefix)
+    meta_path = os.path.join(out, "cut.json")
+    if not os.path.exists(meta_path):
+        raise CutMissing(f"cut data folder missing: {out} (run the make-cut step first)")
+    meta = json.load(open(meta_path))
+    if meta.get("pin") != pin_hash or meta.get("cut_ms") != cut_ms or sorted(meta["coins"]) != sorted(symbols):
+        raise CutMissing(f"cut data folder {out} belongs to another pin, cut or coin set (run the make-cut step)")
+    if not verify_cut(out, symbols):
+        raise PinError(f"cut data folder {out} does not match its digests")
     return out
 
 
@@ -401,6 +433,29 @@ def ref_path(swl, swh, lo, hi, start, w, side, i0, i_end):
 
 
 # ------------------------------------------------------------------ the market: minutes of all coins, exchange numbers
+def exchange_numbers(ex: dict) -> tuple:
+    """(bracket arrays per coin, quantity steps, minimum notionals) from ``run.exchange``'s dict, in run.SYMBOLS order."""
+    R = fg()
+    brs = np.stack([ex[s][0] for s in R.SYMBOLS]) if R._same_shape(ex) else R._pad(ex)
+    return brs, np.array([ex[s][1] for s in R.SYMBOLS]), np.array([ex[s][2] for s in R.SYMBOLS])
+
+
+def engine_fingerprint(market=None, exchange_path: str = EXCHANGE) -> dict:
+    """The numbers that fix every account and that live in files outside the pinned arrays: the settings vector ``S`` of both sizes
+    (``config.v3_settings`` through ``kernel.settings_vector``, margin fractions times the scale) and a digest of the bracket,
+    quantity-step and minimum-notional arrays (``exchange.json`` through ``paperbot.margin.Brackets``). The select run writes it
+    into select.json; the confirm stage refuses on any difference. With ``market`` None it is rebuilt from the files, which gives the
+    same document byte for byte. No performance figure is in it."""
+    if market is None:
+        brs, qty, mn = exchange_numbers(fg().exchange(exchange_path, False))
+        S = {s: sizing().size_vector(s) for s in (0.25, 1.0)}
+    else:
+        brs, qty, mn = market.brs, market.qty_steps, market.min_notionals
+        S = {s: market.S(s) for s in (0.25, 1.0)}
+    return {"S": {str(s): [float(x) for x in np.asarray(v, float)] for s, v in S.items()},
+            "brackets_sha256": array_digest({"brs": np.asarray(brs, float), "qty": np.asarray(qty, float), "min_notional": np.asarray(mn, float)})}
+
+
 class Market:
     """The coins' 1m arrays concatenated (kernel.account's layout), the exchange numbers and the period ends."""
 
@@ -416,9 +471,7 @@ class Market:
         self.starts = np.asarray(starts, np.int64)
         self.ends = np.asarray(ends, np.int64)
         ex = exchange if exchange is not None else R.exchange(exchange_path, False)
-        self.brs = np.stack([ex[s][0] for s in R.SYMBOLS]) if R._same_shape(ex) else R._pad(ex)
-        self.qty_steps = np.array([ex[s][1] for s in R.SYMBOLS])
-        self.min_notionals = np.array([ex[s][2] for s in R.SYMBOLS])
+        self.brs, self.qty_steps, self.min_notionals = exchange_numbers(ex)
         self._S = {}
         self._pend = {}
         self.bar_ms = MIN                       # bar length of the minute arrays (the study runs 1m bars only)
@@ -735,8 +788,10 @@ def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50,
             for col in ("open", "high", "low", "close"):
                 out[key + col] = df[col].to_numpy(float)[idx]
             out[key + "atr"] = provider.atr(df)[idx]
-            out[key + "state"] = regime_codes(sym, tf, df["high"].to_numpy(float), df["low"].to_numpy(float),
-                                              df["close"].to_numpy(float))[idx]
+            rg = regime_arrays(sym, tf, df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float))
+            out[key + "state"] = rg["code"][idx]
+            for name in ("adx", "slope", "atrp", "vol_q"):          # prereg 13 T3: ADX14, EMA50 slope, ATR% and its threshold at every bar
+                out[key + name] = rg[name][idx]
             for n in emas:
                 out[key + f"ema{n}"] = provider.ema(df, n)[idx]
             h, l, c = df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float)
@@ -767,6 +822,8 @@ def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50,
             key = f"{p['id']}|{sym}|"
             out[key + "close_ms"] = close[idx]
             out[key + "sig_long"], out[key + "sig_short"] = np.asarray(lo, bool)[idx], np.asarray(sh, bool)[idx]
+            code = regime_codes(sym, p["tf"], df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float))
+            out[key + "state"] = np.where(np.asarray(lo, bool)[idx] | np.asarray(sh, bool)[idx], code[idx], -1).astype(np.int8)   # at every signal bar
             out[key + "best_long"], out[key + "best_short"] = np.asarray(bl, bool)[idx], np.asarray(bs, bool)[idx]
             if f11 is not None:
                 r = normalize_f11(f11(p, sym, df, close, np.asarray(lo, bool), np.asarray(sh, bool)), len(df))

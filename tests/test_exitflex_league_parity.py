@@ -14,11 +14,15 @@ The two sides, fed the same bars and the same signals:
           restart and must find the stored rule state equal to its recomputation).
 
 World: six coins, 62 days of 1m bars (a 52-day warm-up, then the 10 judged days), a seeded random walk with jumps, open
-gaps, wick spikes, a mark price that differs from the last price, 8-hourly funding, and missing minutes of ONE coin
-while the others trade (random ones, the last minute of a bin, the minute at a chart close, short outages). Signals are
-a fixed function of (coin, timeframe, bar open time), long or short, never both on one bar, with a "best"/"normal"
-leverage group. Every family F1-F10 of the 82 study ids (F7h included) runs in both modes (and with q15) at quarter and live size, with
-the E0 twins, on a 1h pick; subsets run on 15m, 30m and 4h picks, on a stepped-lock exit and as coin-flip accounts.
+gaps, wick spikes, crashes of 3-8% at an open, a mark price that differs from the last price, 8-hourly funding, and what a real
+feed does to ONE coin while the others trade: missing minutes (random ones, the last minute of a bin, the minute at a chart
+close), short outages, an outage that swallows a whole bar after a signal, and halts (flat bars without volume in the league's
+feed, no minute in the study's data, one of them on a funding settlement). Signals are a fixed function of (coin, timeframe,
+bar open time), long or short, never both on one bar, with a "best"/"normal" leverage group. Every family F1-F10 of the 82
+study ids (F7h included) runs in both modes (and with q15) at quarter and live size, with the E0 twins, on a 1h pick; subsets run
+on 15m, 30m and 4h picks (one with a stop so wide that signals are rejected), on a stepped-lock exit, and as coin-flip accounts.
+Negative controls run the same data through a league as it was before this test (the union of the coins' minutes, checks dropped
+while a signal waits, halts kept as minutes, no memory of each coin's last minute across a restart) and must show a difference.
 
 Compared per trade: coin, side, entry time and price, exit time and price (not a liquidation's), reason, leverage,
 the wallet change (equity after the trade) to 1e-9 of the wallet; per account: the number of trades, the final wallet
@@ -38,6 +42,7 @@ import json
 import os
 import shutil
 import sys
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -148,6 +153,13 @@ def build_coins(seed=7):
         for _ in range(3):
             a = base + int(rng.integers(600, SPAN_DAYS * 1440 - 600))
             halts.extend(range(a, a + int(rng.integers(8, 23))))
+        for tf, tfm in L.TF_MS.items():                         # a halt around two signal bars' closes of each timeframe
+            opens = np.arange(T_START + 3 * HOUR, LAST_SIGNAL_CLOSE - 2 * tfm, tfm)
+            lo, sh = flags(s, tf, opens)
+            closes = (opens + tfm)[lo | sh]
+            for c in rng.choice(closes, size=min(2, len(closes)), replace=False):
+                a = (int(c) - D_START) // MIN
+                halts.extend(range(a - 2, a + 4))
         if i in (0, 3):                                         # a halt that starts at a funding settlement
             a = base + 480 * int(rng.integers(3, SPAN_DAYS * 3 - 3))
             halts.extend(range(a, a + int(rng.integers(3, 7))))
@@ -491,8 +503,7 @@ def compare_account(w, res, off, played, aid, label):
             assert close_to(b["exit_price"], a["xpx"]), (label, i, "exit price", b["exit_price"], a["xpx"])
         change = b["equity_after"] - wallet
         assert abs(change - a["pnl"]) <= WALLET_TOL * wallet, (label, i, "wallet change", change, a["pnl"])
-        if a["reason"] != "LIQ":
-            assert abs(b["pnl"] - a["pnl"]) <= WALLET_TOL * wallet, (label, i, "pnl", b["pnl"], a["pnl"])
+        assert abs(b["pnl"] - a["pnl"]) <= WALLET_TOL * wallet, (label, i, "pnl", b["pnl"], a["pnl"])
         wallet = b["equity_after"]
     assert abs(played.wallet[aid] - float(res.wallet)) <= WALLET_TOL * max(wallet, 1.0), (label, "final wallet", played.wallet[aid], float(res.wallet))
     opened = [r for r in rows if r["reason"] == "OPEN"]
@@ -576,16 +587,26 @@ def test_the_world_exercises_what_the_comparison_is_for(world):
     """Harness sanity (a pass here says the parity runs above were not vacuous): trades of every family close by a RULE exit,
     the take-profit, stop and rule reasons occur, longs and shorts, several leverages, signals that no size fits are rejected;
     fills and checks are moved by a minute that is missing for one coin only, in each of the two ways (the close minute
-    itself, the minute before it), and entries are delayed past the first check close of their position."""
+    itself, the minute before it), entries are delayed past the first check close of their position, and positions are held
+    across a funding settlement that falls on a halted minute of their coin."""
     fam_rule = {}
     reasons, sides, levs = set(), set(), set()
-    shifted_fill = shifted_check = delayed = rejected = 0
+    shifted_fill = shifted_check = delayed = rejected = carried = 0
+    # settlements that fall on a minute the coin has no trades in: data.py pays them at the coin's next minute present
+    due = {}
+    for sym, d in world.coins.items():
+        halted = set(d["halts"].tolist())
+        for t, rate in d["rawf"]:
+            if int(t) in halted and rate != 0.0 and T_START <= t < T_END:
+                due.setdefault(sym, []).append(int(d["ts"][int(np.searchsorted(d["ts"], t))]))
+    assert sum(len(v) for v in due.values()) >= 2, due
     for name, (tf, exit_, ids, _f) in COMBOS.items():
         tfm = L.TF_MS[tf]
         for rid in ids:
             res, off = world.study(name, rid, 0.25)
             rejected += int((res.status == 2).sum())
             for r in world.study_rows(res, off):
+                carried += any(r["entry_time"] < t <= r["exit_time"] for t in due.get(r["sym"], ()))
                 reasons.add(r["reason"])
                 sides.add(r["side"])
                 levs.add(r["lev"])
@@ -596,7 +617,7 @@ def test_the_world_exercises_what_the_comparison_is_for(world):
                 delayed += r["entry_time"] - r["close"] >= tfm
     assert set(fam_rule) == {f"F{i}" for i in range(1, 11)} | {"F7h"}, fam_rule
     assert {"RULE", "SL", "TP"} <= reasons and sides == {-1, 1} and len(levs) >= 3 and rejected >= 5, (reasons, sides, levs, rejected)
-    assert shifted_fill >= 3 and shifted_check >= 3 and delayed >= 3, (shifted_fill, shifted_check, delayed)
+    assert shifted_fill >= 3 and shifted_check >= 3 and delayed >= 3 and carried >= 3, (shifted_fill, shifted_check, delayed, carried)
     # missing minutes of one coin while the others trade, in both ways
     a_only = b_only = 0
     pd, off = world.offered("1h", "tp1.5R|2")
@@ -629,7 +650,7 @@ def test_negative_control_the_comparison_catches_a_league_that_reads_the_union_o
     """paramshadow.replay_day (the union of the coins' minutes: a signal whose coin has no bar at its minute is rejected, one whose
     close minute is the coin's first goes a minute early, a check likewise) is the league as it was: the same data must now
     show a difference, or the parity test above could not tell the two replays apart."""
-    def union_of_minutes(engines, active, by_close, steps, brackets, seen):
+    def union_of_minutes(engines, active, by_close, steps, brackets, seen, fund_wait=None):
         PS.replay_day(engines, active, by_close, steps, brackets)
     with pytest.MonkeyPatch.context() as m:
         m.setattr(RX, "replay_day", union_of_minutes)
@@ -653,6 +674,21 @@ def test_negative_control_the_comparison_catches_checks_dropped_while_a_signal_w
     with pytest.MonkeyPatch.context() as m:
         m.setattr(RX.RuleMixin, "submit", submit_dropping_early_records)
         played = world.league_run("1h", rules=CONTROL_RULES, sizes=(0.25,), flips=(), tag="-ctl-early")
+    bad = accounts_that_differ(world, "1h", played, CONTROL_RULES)
+    assert len(bad) >= 1, bad
+
+
+def test_negative_control_the_comparison_catches_halted_minutes_kept_as_minutes(world):
+    """The exchange's flat bars without volume (a halt) are no minutes for the study (data.py drops them). A league that stepped on
+    them, still on each coin's own minutes, must show a difference on the same data."""
+    real = RX.replay_day
+
+    def halted_minutes_kept(engines, active, by_close, steps, brackets, seen, fund_wait=None):
+        steps = [(t, {s: replace(b, volume=None) for s, b in bars.items()}, fund) for t, bars, fund in steps]
+        real(engines, active, by_close, steps, brackets, seen, fund_wait)
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(RX, "replay_day", halted_minutes_kept)
+        played = world.league_run("1h", rules=CONTROL_RULES, sizes=(0.25,), flips=(), tag="-ctl-flat")
     bad = accounts_that_differ(world, "1h", played, CONTROL_RULES)
     assert len(bad) >= 1, bad
 

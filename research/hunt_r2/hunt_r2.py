@@ -52,6 +52,7 @@ from research.hunt_r2 import select_r2 as SR  # noqa: E402
 
 OUT_REL = "research/hunt_r2/out"
 SELFCHECK_TESTS = ("tests/test_hunt_r2_core.py", "tests/test_hunt_r2_cli.py", "tests/test_hunt_r2_kit.py",
+                   "tests/test_hunt_r2_fixes.py",
                    "tests/test_hunt.py", "tests/test_hunt_entries.py", "tests/test_data_hunt.py",
                    "tests/test_altpump.py", "tests/test_hunt_reads_a.py", "tests/test_hunt_reads_o.py")
 
@@ -113,7 +114,8 @@ def cmd_counts(args) -> int:
 
 def cmd_pinlist(args) -> int:
     print("\n".join(PN.pinlist(ROOT)))
-    bad = PN.pinlist_problems(ROOT)
+    bad = PN.pinlist_problems(ROOT) + [f"ledger registry (8 L): {m['file']}: {m['why']}"
+                                       for m in LG.unregistered(ROOT, set())]
     for b in bad:
         print(f"problem: {b}", file=sys.stderr)
     return 2 if bad else 0

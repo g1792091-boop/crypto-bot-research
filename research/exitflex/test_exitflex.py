@@ -2075,8 +2075,8 @@ def test_t3_cut_folder_digest_and_pin(tmp_path):
 
 # ====================================================================================================== T5: causality of decisions
 def rewrite_after(coin, idx, seed, vol=0.004):
-    """The same coin with every minute from index ``idx`` on replaced by another random path (OHLC and mark); the
-    timestamps, the minutes before and the funding stay."""
+    """The same coin with every minute from index ``idx`` on replaced by another random path (OHLC, mark and funding); the
+    timestamps and the minutes before stay."""
     rng = np.random.default_rng(seed)
     c = {k: v.copy() for k, v in coin.items()}
     n = len(c["ts"]) - idx
@@ -2087,6 +2087,8 @@ def rewrite_after(coin, idx, seed, vol=0.004):
     hh, ll = np.maximum(oo, cc) * (1 + span), np.minimum(oo, cc) * (1 - span)
     c["o"][idx:], c["c"][idx:], c["h"][idx:], c["l"][idx:] = oo, cc, hh, ll
     c["mo"][idx:], c["mc"][idx:], c["mh"][idx:], c["ml"][idx:] = oo, cc, hh, ll
+    fm = c["fund"][idx:] != 0
+    c["fund"][idx:] = np.where(fm, rng.normal(3e-4, 2e-4, n), 0.0)                  # the funding of minute j and later changes too (step 0)
     return c
 
 
@@ -2846,7 +2848,7 @@ def test_t7_stage_choice_writes_choice_json_from_the_pinned_chain(tmp_path):
     figure_text = "딥시크 F9.a 월 3.5%라서 그걸로 하고 싶었는데, 지갑 2배도 보여서요. 코어는 F8.w2.P1.a 로 갈게요"
     inp = {"messages": [dict(msg(5, core=["F8.w2.P1.a"], ds="없음"), text=figure_text)],
            "questions": [{"time_utc": when(2), "text": "정말요? F9.a 와 F5.P1.g25.a 중에서요", "pools": ["ds"]}],
-           "material_received": ["ANALYSIS_KO.md"], "freeze_breaches": []}
+           "material_received": ["ANALYSIS_KO.md", "STRATEGIES_KO.md", "STRATEGY_EVAL_KO.md"], "freeze_breaches": []}
     doc = RX.stage_choice(lay, inp, now_utc=when(10))
     j = json.load(open(lay.out_file("choice.json")))
     # the DeepSeek money figures of the owners' words are replaced by the marker before the file is written; the rest is verbatim; the hash of the original is private
@@ -2856,11 +2858,22 @@ def test_t7_stage_choice_writes_choice_json_from_the_pinned_chain(tmp_path):
     assert om["items"][0]["sha256_unredacted"] == __import__("hashlib").sha256(figure_text.encode("utf-8")).hexdigest() and "3.5" not in json.dumps(om)
     assert j["core"] == ["F8.w2.P1.a"] and j["ds"] == [] and j["sent_utc"] == SENT["sent_utc"] and j["sent_kst"] == SENT["sent_kst"]
     assert j["select_sha256"] == DX.sha256_file(lay.out_file("select.json")) and j["sent_sha256"] == DX.sha256_file(lay.out_file("sent.json"))
-    assert j["questions"] == inp["questions"] and j["material_received"] == ["ANALYSIS_KO.md"] and len(j["messages"]) == 1
+    assert j["questions"] == inp["questions"] and j["material_received"] == ["ANALYSIS_KO.md", "STRATEGIES_KO.md", "STRATEGY_EVAL_KO.md"] and len(j["messages"]) == 1
     assert j["pools"]["ds"]["deadline_utc"] == when(48) and j["pools"]["core"]["answer"] == ["F8.w2.P1.a"]
     # an id that is not choosable is refused; so is an input file that changed select.json after it was pinned
     with pytest.raises(RX.StageRefused, match="not choosable"):
         RX.stage_choice(lay, {"messages": [msg(5, core=["F9.a"], ds="없음")]}, now_utc=when(10))
+    # 8.3: material_received names, at least, the three files of the full grid's per-trade results
+    for lacking in ([], ["ANALYSIS_KO.md"], ["ANALYSIS_KO.md", "STRATEGIES_KO.md"]):
+        with pytest.raises(RX.StageRefused, match="material_received"):
+            RX.stage_choice(lay, dict(inp, material_received=lacking), now_utc=when(10))
+    assert MT.material_problems({"material_received": ["x/ANALYSIS_KO.md (2024-2026 trades)", "STRATEGIES_KO.md", "STRATEGY_EVAL_KO.md", "more"]}) == []
+    # a choice that is already pinned is not written again
+    pin_add(lay, lay.out_file("choice.json"))
+    with pytest.raises(RX.StageRefused, match="already pinned|hash mismatch"):
+        RX.stage_choice(lay, inp, now_utc=when(10))
+    lines = [ln for ln in open(lay.sha_file).read().splitlines() if not ln.endswith("choice.json")]
+    open(lay.sha_file, "w").write("\n".join(lines) + "\n")
     RX.write_json(lay.out_file("select.json"), dict(sel, extra=1))
     with pytest.raises(RX.StageRefused, match="hash mismatch"):
         RX.stage_choice(lay, inp, now_utc=when(10))
@@ -2967,9 +2980,16 @@ def test_t7_a8_and_a9_run_on_each_file_before_it_is_sent(tmp_path):
 def test_t7_claims_and_the_loss_categories(f11_on):
     assert MT.claim_of("F7.N24.a") == MT.claim_of("F7h.H8.b") == "beats E0 by holding less; no claim about reading the market"
     assert MT.claim_of("F11.a") == "the strategy's own exit beats E0 and a random exit with its timing profile"
-    assert MT.claim_of("F12.b") == "all nine exits at once beat E0 and a random exit with its timing profile"
+    assert MT.claim_of("F12.b") == MT.claim_of("F12.a") == (
+        "this fixed combination of the nine exits, of which at most seven can end a trade on a 1h or 4h pick and at most eight on a 15m or 30m pick "
+        "(F6 never moves the exit, F10 acts only on 15m and 30m picks), beats E0 and a random exit with the same 8-hour clock and timing profile")
+    assert "all nine exits at once" not in MT.claim_of("F12.a") and MT.CLAIM_F12_LIMITS.startswith("No claim that stacking beats a single rule")
     assert MT.claim_of("F9.a") == MT.claim_of("F1.w3.a") == "beats E0 and beats a random exit with its timing profile"
     assert [RX.claim_key(KX.variant_by_id(v)) for v in ("F7.N12.a", "F7h.H4.a", "F11.a", "F12.a", "F3.a")] == ["f7", "f7", "f11", "f12", "rule"]
+    # the runner's English claims are the metrics' (one source), and the Korean F12 claim keeps the 7 / 8 legs, the 8-hour clock and the three limits
+    assert RX.CLAIM_EN == {"rule": MT.claim_of("F9.a"), "f11": MT.claim_of("F11.b"), "f12": MT.claim_of("F12.b"), "f7": MT.claim_of("F7h.H8.a")}
+    ko = RX.CLAIM_KO["f12"]
+    assert all(x in ko for x in ("최대 7개", "최대 8개", "F6", "F10", "8시간", "단일 규칙", "모든 매매법", "최고의 청산"))
 
 
 def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(tmp_path_factory, syn_select, vendor):
@@ -2981,7 +3001,8 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
               "pools": {"core": {"default_used": False}, "ds": {"default_used": True}},
               "freeze_breaches": ["테스트용 위반 기록"], "late_messages": [{"pool": "core", "time_utc": "2026-10-20T00:00:00Z", "answer": ["F5.P1.g25.a"]}]}
     RX.write_json(cfg.lay.out_file("choice.json"), {**choice, "pin": cfg.pin_hash})
-    sel0 = {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(cfg.lay.root), "pools": {"core": {"default_ids": ["F1.w3.a"]}, "ds": {"default_ids": ["F3.a"]}}}
+    sel0 = {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(cfg.lay.root), "engine": DX.engine_fingerprint(cfg.market),
+            "pools": {"core": {"default_ids": ["F1.w3.a"]}, "ds": {"default_ids": ["F3.a"]}}}
     RX.write_json(cfg.lay.out_file("select.json"), sel0)
     sel = json.load(open(cfg.lay.out_file("select.json")))
     doc = RX.finish_confirm(cfg, sel, choice)
@@ -2998,7 +3019,7 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
     assert f7["beats_placebo_p95"] is True and f7["claim"].startswith("beats E0 by holding less")      # F7: no placebo gate
     assert "interval95" in core1 and "qa" in core1 and core1["qa"]["p95"] == core1["p95_gate"] and f7["qa"] is None
     f12 = doc["pairs"]["F12.b|ds"]
-    assert set(f12["comp_fired"]) == set(MT.COMP_LABELS) and f12["claim"].startswith("all nine exits at once beat E0")
+    assert set(f12["comp_fired"]) == set(MT.COMP_LABELS) and f12["claim"] == MT.claim_of("F12.b")
     for k in ("F3.a|ds", "F12.b|ds"):                                                                   # D11: labels, counts, win share, hold hours only
         ds = doc["pairs"][k]
         assert MT.ds_whitelist_ok(ds) and not any(x in ds for x in ("M", "M_pct_month", "interval95", "D", "live", "qa", "p95_gate", "p_block", "p_iid"))
@@ -3006,9 +3027,14 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
                            report_md=open(cfg.lay.out_file("REPORT_KO.md"), encoding="utf-8").read()) == []
     priv = json.load(open(os.path.join(cfg.store.private_dir(), "confirm_ds.json")))
     assert "M" in priv["pairs"]["F3.a|ds"] and "p_block" in priv["pairs"]["F3.a|ds"]
+    e0p = priv["e0"]["ds"]                                                       # prereg 3: E0's own DeepSeek figures, private only
+    assert set(e0p) == {"max_dd_median", "final_multiple_median", "growth_per_month_log", "growth_pct_month", "live_growth_pct_month", "live_busts"}
+    assert "e0" not in doc["pairs"] and "growth_pct_month" not in json.dumps(doc)
     assert doc["ds_private_sha256"] == DX.sha256_file(os.path.join(cfg.store.private_dir(), "confirm_ds.json"))
     rp = os.path.join(cfg.store.private_dir(), "owner_report_confirm.md")
     assert doc["ds_owner_report_sha256"] == DX.sha256_file(rp) and "p값" not in open(rp, encoding="utf-8").read()
+    rtxt = open(rp, encoding="utf-8").read()
+    assert rtxt.index("지금 청산(E0), ds") < rtxt.index("F3.a|ds") and f"{e0p['growth_pct_month']:+.2f}%" in rtxt
     assert RX.audit_a8(cfg.lay, "confirm", cfg.pin["work"], cfg.pin_hash)
     # the report: hold hours first, PASS/FAIL, the chooser, the freeze breach and the late message; no DeepSeek money
     rep = open(cfg.lay.out_file("REPORT_KO.md"), encoding="utf-8").read()
@@ -3029,4 +3055,256 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
         RX.finish_confirm(cfg, sel2, choice)
     real = RX.loaded_module_hashes(ROOT)
     assert "research/library/lib.py" in real and "research/search/search.py" in real and len(real) >= 8
+    KX.clear_f11()
+
+
+# ====================================================================================================== review fixes: report, guards, pins, cut, T8, confirm checks
+def test_review_report_is_read_only_byte_stable_and_computes_nothing(syn_select, monkeypatch):
+    """'report' rewrites select.json / SELECT_KO.md from the finished files: byte for byte the same (no commit hash or time in the
+    document), never a run, and a missing result file is a refusal that leaves the folder as it was."""
+    cfg, doc = syn_select
+    orig = RX.step1_gates
+    monkeypatch.setattr(RX, "step1_gates", lambda c: forced_gates(c, orig))
+    monkeypatch.setattr(RX, "run_tasks", lambda *a, **k: (_ for _ in ()).throw(AssertionError("report must not run tasks")))
+    paths = [cfg.lay.out_file("select.json"), cfg.lay.out_file("SELECT_KO.md")]
+    before = [open(p, "rb").read() for p in paths]
+    assert b'"commit"' not in before[0]
+    info = os.path.join(cfg.store.work, cfg.store.pin8, "results", "select", "run_info.json")
+    assert "commit" in json.load(open(info))                                      # the commit goes to a side file
+    RX.report_select(cfg, {"n_seeds": 20})
+    assert [open(p, "rb").read() for p in paths] == before
+    # a missing result file: refused, nothing is computed or created
+    p = cfg.picks[2]
+    gone = cfg.store.path(p, "F4.m2.b", "q100")
+    held = gone + ".held"
+    os.rename(gone, held)
+    try:
+        with pytest.raises(RX.StageRefused, match="step 1 is incomplete"):
+            RX.report_select(cfg, {"n_seeds": 20})
+        assert not os.path.exists(gone)
+    finally:
+        os.rename(held, gone)
+    assert [open(p_, "rb").read() for p_ in paths] == before
+    # the report configuration has no market and cannot compute a pick
+    lay = cfg.lay
+    try:
+        rc = RX.report_config(lay, "select", cfg.pin, cfg.pin_hash, 20)
+        assert rc.market is None and len(rc.variants) == 86
+        with pytest.raises(RuntimeError, match="read-only"):
+            rc.make_pickdata(rc.picks[0])
+    finally:
+        KX.register_f11(lambda *a, **k: None)
+
+
+def test_review_report_and_select_refuse_over_a_pinned_or_existing_output(tmp_path):
+    lay, pin = pin_layout(tmp_path)
+    RX.write_json(lay.out_file("timing.json"), {"n_seeds": 20})
+    pin_add(lay, lay.out_file("timing.json"))
+    RX.guard_select_outputs(lay, False)                                          # nothing there yet: allowed
+    RX.write_json(lay.out_file("select.json"), {"pools": {}})
+    with pytest.raises(RX.StageRefused, match="select.json already exists or is pinned"):
+        RX.guard_select_outputs(lay, False)                                      # the select stage runs once
+    pin_add(lay, lay.out_file("select.json"))
+    with pytest.raises(RX.StageRefused, match="already pinned"):                 # 'report' does not rewrite a pinned file
+        RX.stage_report(lay)
+    # a section 14 rerun: needs select.json, a DEVIATIONS entry naming select_r2, no select_r2.json and no confirm.json
+    lay2, _ = pin_layout(tmp_path / "r")
+    with pytest.raises(RX.StageRefused, match="needs the first select.json"):
+        RX.guard_select_outputs(lay2, True)
+    RX.write_json(lay2.out_file("select.json"), {"pools": {}})
+    with pytest.raises(RX.StageRefused, match="select_r2"):
+        RX.guard_select_outputs(lay2, True)
+    open(os.path.join(lay2.base, "DEVIATIONS.md"), "w").write("2026-10-13 bug in x; select_r2 follows\n")
+    RX.guard_select_outputs(lay2, True)
+    RX.write_json(lay2.out_file("confirm.json"), {})
+    with pytest.raises(RX.StageRefused, match="before any confirm"):
+        RX.guard_select_outputs(lay2, True)
+    os.remove(lay2.out_file("confirm.json"))
+    RX.write_json(lay2.out_file("select_r2.json"), {})
+    with pytest.raises(RX.StageRefused, match="select_r2.json already exists"):
+        RX.guard_select_outputs(lay2, True)
+    with pytest.raises(RX.StageRefused, match="confirm_r2"):
+        RX.require_deviation_entry(lay2, "confirm_r2")
+
+
+def test_review_make_pin_is_refused_over_a_pinned_data_pin(tmp_path, monkeypatch):
+    lay, pin = pin_layout(tmp_path)
+    monkeypatch.setattr(RX, "Layout", lambda *a, **k: lay)
+    data = tmp_path / "fg"
+    with pytest.raises(RX.StageRefused, match="already listed"):
+        RX.main(["make-pin", "--data-dir", str(data), "--work", str(tmp_path / "work")])
+    assert json.load(open(lay.pin_file)) == pin                                  # untouched
+
+
+def test_review_unknown_stage_names_are_refused_and_the_periods_are_explicit():
+    assert RX.STAGE_PERIOD == {"timing": "select", "select": "select", "select_r2": "select", "check": "select", "confirm": "confirm",
+                               "confirm_r2": "confirm"}
+    with pytest.raises(ValueError, match="unknown stage"):
+        RX.real_config(None, "selct", {}, "", 1, 1)
+    with pytest.raises(ValueError, match="unknown stage"):
+        RX.real_config(None, "t3-202201010000", {}, "", 1, 1)
+
+
+def test_review_pins_cover_the_engine_inputs_and_every_code_file_of_the_folder(tmp_path):
+    for f in ("paperbot/config.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/levrule.py", "paperbot/entry_marks.py",
+              "paperbot/sweepsig.py", "research/fullgrid/grid.py", "research/fullgrid/memo.py"):
+        assert f in RX.REQUIRED_PINS and os.path.exists(os.path.join(ROOT, f))
+    lines = RX.pin_lines(RX.Layout())
+    assert all(any(x.endswith("  " + f) for x in lines) for f in ("paperbot/config.py", "research/fullgrid/memo.py", "research/exitflex/runner_x.py"))
+    lay, pin = pin_layout(tmp_path)
+    RX.gate_pin(lay, verify_data=False)
+    open(os.path.join(lay.base, "helper.py"), "w").write("x = 1\n")             # a code file of the folder that is not pinned
+    with pytest.raises(RX.StageRefused, match=r"not pinned \(code of this folder\): .*helper.py"):
+        RX.gate_pin(lay, verify_data=False)
+    pin_add(lay, "helper.py")
+    RX.gate_pin(lay, verify_data=False)
+
+
+def test_review_cut_folder_is_opened_by_the_select_process_and_made_elsewhere(tmp_path, monkeypatch):
+    import inspect
+    import shutil
+    src = write_folder(str(tmp_path / "src"), {SYMS[0]: synth_coin(61, 5, 100.0)})
+    work, ph, cut = str(tmp_path / "work"), "cd" * 32, START + 2 * 1440 * MIN
+    assert "src_dir" not in inspect.signature(DX.open_cut).parameters         # it cannot read the full arrays
+    with pytest.raises(DX.CutMissing):
+        DX.open_cut(work, ph, cut, symbols=(SYMS[0],))
+    d = DX.write_cut(src, work, ph, cut, symbols=(SYMS[0],))
+    assert DX.open_cut(work, ph, cut, symbols=(SYMS[0],)) == d
+    t3 = DX.write_cut(src, work, ph, cut, symbols=(SYMS[0],), prefix="t3cut")      # test T3's folder has its own name
+    assert t3 != d and os.path.basename(t3).startswith("t3cut-") and os.path.basename(d).startswith("cut-")
+    shutil.rmtree(t3)
+    assert DX.open_cut(work, ph, cut, symbols=(SYMS[0],)) == d                      # removing T3's folder never touches the select cut
+    with pytest.raises(DX.CutMissing):
+        DX.open_cut(work, "ef" * 32, cut, symbols=(SYMS[0],))
+    with np.load(os.path.join(d, "1m", f"{SYMS[0]}.npz")) as z:
+        arrays = {k: z[k] for k in z.files}
+    arrays["o"] = arrays["o"].copy()
+    arrays["o"][3] += 1e-9
+    np.savez_compressed(os.path.join(d, "1m", f"{SYMS[0]}.npz"), **arrays)
+    with pytest.raises(DX.PinError):
+        DX.open_cut(work, ph, cut, symbols=(SYMS[0],))
+    # the runner makes a missing cut in a separate make-cut process, and refuses when that process fails
+    calls = []
+    lay = RX.Layout(base=str(tmp_path / "e"), root=str(tmp_path))
+    pin = {"work": work}
+
+    class Done:
+        def __init__(self, rc):
+            self.returncode, self.stdout, self.stderr = rc, "", "boom"
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        return Done(1)
+    monkeypatch.setattr(RX.subprocess, "run", fake_run)
+    with pytest.raises(RX.StageRefused, match="make-cut failed"):
+        RX.ensure_cut(lay, pin, ph)
+    assert calls and calls[0][1].endswith("runner_x.py") and calls[0][2] == "make-cut"
+
+
+def test_review_a5_checks_the_cut_folder_and_the_arrays_the_select_process_loaded(tmp_path):
+    import types
+    coins = {s: synth_coin(70 + i, 3, 100.0 + i) for i, s in enumerate(SYMS)}
+    src = write_folder(str(tmp_path / "src"), coins)
+    ph = "ab" * 32
+    d = DX.write_cut(src, str(tmp_path / "work"), ph, DX.SELECT_CUT_MS)
+    mk = types.SimpleNamespace(data_dir=d, symbols=SYMS, ts=lambda i: coins[SYMS[i]]["ts"])
+    cfg = types.SimpleNamespace(market=mk)
+    pin = {"work": str(tmp_path / "work")}
+    assert RX.audit_a5(cfg, pin, ph, "select") is True and RX.audit_a5(cfg, pin, ph, "confirm") is True
+    late = types.SimpleNamespace(data_dir=d, symbols=SYMS, ts=lambda i: np.array([DX.SELECT_CUT_MS]))
+    assert RX.audit_a5(types.SimpleNamespace(market=late), pin, ph, "select") is False       # a minute at the cut was loaded
+    other = types.SimpleNamespace(data_dir=str(tmp_path / "src"), symbols=SYMS, ts=mk.ts)
+    assert RX.audit_a5(types.SimpleNamespace(market=other), pin, ph, "select") is False      # not the cut folder
+    assert RX.audit_a5(cfg, pin, "cd" * 32, "select") is False                              # no cut folder of that pin
+    shutil_rm(str(tmp_path / "work"))
+
+
+def test_review_engine_fingerprint_is_byte_stable_and_the_confirm_refuses_a_difference(syn_select):
+    cfg, doc = syn_select
+    fp = DX.engine_fingerprint(cfg.market)
+    assert set(fp) == {"S", "brackets_sha256"} and set(fp["S"]) == {"0.25", "1.0"} and len(fp["S"]["0.25"]) == 20
+    assert json.loads(json.dumps(fp)) == fp and doc["engine"] == fp
+    mk2 = DX.Market.from_arrays([synth_coin(5, 2, 100.0)], R.exchange(DX.EXCHANGE, False), symbols=SYMS[:1])
+    assert DX.engine_fingerprint(None) == DX.engine_fingerprint(mk2)                  # rebuilt from the files: the same document
+    RX.check_engine_unchanged(cfg, {"engine": fp})
+    bad = json.loads(json.dumps(fp))
+    bad["S"]["1.0"][3] += 1e-9
+    with pytest.raises(RX.StageRefused, match="engine inputs changed since the select run: S"):
+        RX.check_engine_unchanged(cfg, {"engine": bad})
+    with pytest.raises(RX.StageRefused, match="brackets_sha256"):
+        RX.check_engine_unchanged(cfg, {"engine": dict(fp, brackets_sha256="0" * 64)})
+    with pytest.raises(RX.StageRefused, match="no engine fingerprint"):
+        RX.check_engine_unchanged(cfg, {})
+
+
+def test_review_select_rows_carry_live_size_hazard_and_the_placebo_beside_the_growth(syn_select):
+    cfg, doc = syn_select
+    for pool in ("core", "ds"):
+        for r in doc["pools"][pool]["variants"]:
+            assert {"median", "p90", "share_gt4", "share_gt8", "share_gt18"} <= set(r["hold_live"]) and r["entered_live"] >= 0
+            assert set(r["hazard"]) == {"num", "den"} and np.array(r["hazard"]["num"]).shape == (KX.N_AGE, 2, 2)
+            assert np.array(r["hazard"]["num"]).sum() <= np.array(r["hazard"]["den"]).sum()
+            if pool == "ds":
+                assert MT.ds_whitelist_ok(r) and "placebo" not in r and "p95_gate" not in r and "Mp" not in r
+    with_plc = [r for r in doc["pools"]["core"]["variants"] if r["eligible"] and r["step2"]]
+    for r in with_plc:                                                             # prereg 7: the placebo's 5th, 50th, 95th beside the growth
+        assert r["placebo"]["p05"] <= r["placebo"]["p50"] <= r["placebo"]["p95"] and r["p95_gate"] == pytest.approx(r["placebo"]["p95"])
+        assert len(r["Mp"]) == 2
+    txt = open(cfg.lay.out_file("SELECT_KO.md"), encoding="utf-8").read()
+    if with_plc:
+        assert "무작위 청산 5/50/95%" in txt
+    assert MT.d11_problems(select_doc=doc, select_md=txt) == []
+    assert RX.audit_a8_file(cfg.lay.out_file("select.json")) == []
+
+
+def test_review_t8_real_check_has_teeth_and_passes_on_the_synthetic_universe(syn_select):
+    cfg, doc = syn_select
+    res = RX.check_t8(cfg, per_pool=20)
+    assert set(res) == {"core", "ds"} and all(n >= 10 and bad == 0 for n, bad in res.values())
+    rng = np.random.default_rng(5)
+    n = 1500
+    c = 100.0 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    h, lo = c * (1 + np.abs(rng.normal(0, 0.004, n))), c * (1 - np.abs(rng.normal(0, 0.004, n)))
+    reg = DX.regime_module()
+    code = reg.regimes(h, lo, c, 240)["code"]
+    assert len(set(code[1100:].tolist())) >= 2                                      # the series reaches states other than 모름
+    assert all(RX.label_causal_pair(reg, h, lo, c, i0, 240, int(code[i0]), rng) for i0 in (1090, 1200, 1300, 1400, 1499))
+
+    class LookAhead:                                                                # a label that reads the next bar: must be caught
+        @staticmethod
+        def regimes(h_, l_, c_, tf):
+            out = np.zeros(len(c_), np.int8)
+            out[:-1] = (c_[1:] > c_[:-1]).astype(np.int8)
+            return {"code": out}
+    la = LookAhead.regimes(h, lo, c, 240)["code"]
+    assert any(not RX.label_causal_pair(LookAhead, h, lo, c, i0, 240, int(la[i0]), rng) for i0 in range(100, 400))
+
+
+def test_review_t3_snapshot_carries_the_market_state_arrays_at_every_bar_and_signal_bar(tmp_path, vendor):
+    syms = SYMS[:1]
+    coins = {SYMS[0]: synth_coin(51, 30, 100.0, vol=0.0007, drop=0.003, outages=2)}
+    src = write_folder(str(tmp_path / "src"), coins)
+    snap = run_side(src, START + 25 * 1440 * MIN, str(tmp_path / "full.npz"), syms)
+    for tf in DX.TFS:
+        for name in ("state", "adx", "slope", "atrp", "vol_q"):
+            assert f"{SYMS[0]}|{tf}|{name}" in snap
+    sigs = [k for k in snap if k.endswith("|state") and k.startswith("core-")]
+    assert sigs and all(set(np.unique(snap[k]).tolist()) <= {-1, 0, 1, 2, 3, 4} for k in sigs)
+
+
+def test_review_confirm_refuses_before_computing_on_a_changed_module_or_engine(tmp_path_factory, syn_select, vendor):
+    scfg, sdoc = syn_select
+    tmp = tmp_path_factory.mktemp("conf2")
+    cfg = syn_cfg(tmp, period="confirm", n_seeds=20, seed=93, days=70)
+    cfg.variants = [KX.variant_by_id(v) for v in SYN_VARIANTS]
+    choice = {"core": ["F1.w3.a"], "ds": ["F3.a"], "pools": {"core": {"default_used": False}, "ds": {"default_used": False}}}
+    fp = DX.engine_fingerprint(cfg.market)
+    ok_sel = {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(cfg.lay.root), "engine": fp, "pools": {"core": {}, "ds": {}}}
+    results = os.path.join(cfg.store.work, cfg.store.pin8, "results")
+    for bad_sel, msg_ in ((dict(ok_sel, modules={"research/library/lib.py": "0" * 64}), "module files changed"),
+                          (dict(ok_sel, engine=dict(fp, brackets_sha256="0" * 64)), "engine inputs changed"),
+                          ({k: v for k, v in ok_sel.items() if k != "engine"}, "no engine fingerprint")):
+        with pytest.raises(RX.StageRefused, match=msg_):
+            RX.finish_confirm(cfg, bad_sel, choice)
+        assert not os.path.exists(results) and not os.path.exists(os.path.join(cfg.store.private_dir(), "results"))     # nothing was computed
     KX.clear_f11()

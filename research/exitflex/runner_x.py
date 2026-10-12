@@ -1,14 +1,15 @@
 """exitflex runner (research/exitflex/PREREG_EXITFLEX.md sections 5.3, 8, 9, 13, 14): the stages as command-line steps.
 
-    python research/exitflex/runner_x.py make-pin  --data-dir DIR --work DIR        # writes data_pin.json (then pin it)
+    python research/exitflex/runner_x.py make-pin  --data-dir DIR --work DIR        # writes data_pin.json (then pin it; refused once it is pinned)
     python research/exitflex/runner_x.py pin-lines                                   # the sha256 lines to put in the pin file
+    python research/exitflex/runner_x.py make-cut                                    # the select cut data folder, in its own process (audit A5)
     python research/exitflex/runner_x.py timing                                      # seconds only -> out/timing.json
-    python research/exitflex/runner_x.py select   [--procs N]                        # step 1, step 2, select.json, SELECT_KO.md
-    python research/exitflex/runner_x.py report                                      # rewrite select.json / SELECT_KO.md from the files
+    python research/exitflex/runner_x.py select   [--procs N] [--rerun]              # step 1, step 2, select.json, SELECT_KO.md (once; --rerun = section 14)
+    python research/exitflex/runner_x.py report                                      # READ-ONLY rewrite of select.json / SELECT_KO.md from the finished files
     python research/exitflex/runner_x.py choice   --input F [--now-utc T] [--rerun]    # out/choice.json from the owners' messages (8.3, 8.4)
     python research/exitflex/runner_x.py confirm  [--procs N]                        # once: confirm.json, REPORT_KO.md
     python research/exitflex/runner_x.py confirm-report [--extra-messages F]          # rewrite REPORT_KO.md from confirm.json
-    python research/exitflex/runner_x.py check    [--which t1,t3,t5]                 # the real-data parts of T1, T3, T5
+    python research/exitflex/runner_x.py check    [--which t1,t3,t5,t8]              # the real-data parts of T1, T3, T5, T8
     python research/exitflex/runner_x.py audit    --stage select|confirm             # A1-A9, pass / fail only
     python research/exitflex/runner_x.py audit-file --path F [--path F2 ...] [--after MARK]   # A8 + A9 on files before they are sent or committed
 
@@ -71,7 +72,11 @@ REQUIRED_PINS = (
     "candleague/data/candidates.json", "paperbot/quality_edges.json",
     "third_party/sweep/harness/vendor/fg_indicators.py", "third_party/sweep/harness/vendor/pine_indicators.py",
     "research/deepseek200/lib_c.py", "research/library/lib.py", "research/search/search.py",
-    "research/entry_study/DEFS_BC.sha256")
+    "research/entry_study/DEFS_BC.sha256",
+    # the numbers that fix every account but live outside the files above (review): settings (config, ladder), brackets (margin),
+    # the leverage group (levrule, entry_marks, sweepsig) and the grid code run.py loads (grid, memo)
+    "paperbot/config.py", "paperbot/ladder.py", "paperbot/margin.py", "paperbot/levrule.py", "paperbot/entry_marks.py",
+    "paperbot/sweepsig.py", "research/fullgrid/grid.py", "research/fullgrid/memo.py")
 MODULE_DIRS = ("research/library", "research/search", "third_party/sweep/harness/vendor")
 
 
@@ -143,6 +148,10 @@ def gate_pin(lay: Layout, verify_data: bool = True) -> tuple:
     missing = [os.path.relpath(r, lay.root) for r in lay.required if r not in pins]
     if missing:
         refuse("not pinned: " + ", ".join(missing[:6]))
+    code = [os.path.normpath(os.path.join(lay.base, f)) for f in sorted(os.listdir(lay.base)) if f.endswith(".py")]
+    loose = [os.path.relpath(c, lay.root) for c in code if c not in pins]           # prereg 13: every .py file of this folder is pinned
+    if loose:
+        refuse("not pinned (code of this folder): " + ", ".join(loose[:6]))
     pin = DX.load_pin(lay.pin_file)
     ph = DX.pin_sha(lay.pin_file)
     if verify_data:
@@ -312,14 +321,44 @@ def try_load_native():
         return None, None
 
 
+STAGE_PERIOD = {"timing": "select", "select": "select", "select_r2": "select", "check": "select",
+                "confirm": "confirm", "confirm_r2": "confirm"}
+
+
+def stage_make_cut(lay: Layout) -> str:
+    """The select cut data folder ($WORK/<pin8>/cut-<cut time>/1m/, prereg 2 and 13), made in its own process: this is the one place that
+    reads the full arrays for the select period. The select process only opens and verifies the folder (audit A5)."""
+    pin, ph = gate_pin(lay)
+    out = DX.write_cut(pin["data_dir"], pin["work"], ph, DX.SELECT_CUT_MS)
+    if not DX.verify_cut(out):
+        refuse("the cut data folder does not match its digests")
+    progress(f"[make-cut] {os.path.basename(out)} ready, digests verified, no minute at or after the cut")
+    return out
+
+
+def ensure_cut(lay: Layout, pin: dict, pin_hash: str) -> str:
+    """The verified cut folder of the pin; when it does not exist yet it is made by a separate ``make-cut`` process (the select process
+    itself never loads the full arrays)."""
+    try:
+        return DX.open_cut(pin["work"], pin_hash, DX.SELECT_CUT_MS)
+    except DX.CutMissing:
+        r = subprocess.run([sys.executable, os.path.join(HERE, "runner_x.py"), "make-cut"], capture_output=True, text=True)
+        if r.returncode != 0:
+            refuse("make-cut failed: " + (r.stdout + r.stderr)[-300:])
+        return DX.open_cut(pin["work"], pin_hash, DX.SELECT_CUT_MS)
+
+
 def real_config(lay: Layout, stage: str, pin: dict, pin_hash: str, procs: int, n_seeds: int, allow_no_f11: bool = False,
                 variants=None) -> Config:
-    """The real data of a stage: select -> the pinned arrays cut at 2024-01-01 (written as their own folder), confirm -> the
-    full pinned arrays. The stage's cache folder is deleted first."""
-    period = "select" if stage in ("select", "select_r2", "timing", "check") else "confirm"
+    """The real data of a stage: select -> the pinned arrays cut at 2024-01-01 (their own folder, made by ``make-cut``), confirm -> the
+    full pinned arrays. The stage's cache folder is deleted first. An unknown stage name is refused (it would silently load the
+    confirm arrays)."""
+    if stage not in STAGE_PERIOD:
+        raise ValueError(f"unknown stage {stage!r}: {sorted(STAGE_PERIOD)}")
+    period = STAGE_PERIOD[stage]
     cache = DX.fresh_stage(pin["work"], pin_hash, stage)
     if period == "select":
-        data_dir = DX.write_cut(pin["data_dir"], pin["work"], pin_hash, DX.SELECT_CUT_MS)
+        data_dir = ensure_cut(lay, pin, pin_hash)
     else:
         data_dir = pin["data_dir"]
     rprov = DX.RealProvider(data_dir, cache)
@@ -335,6 +374,19 @@ def real_config(lay: Layout, stage: str, pin: dict, pin_hash: str, procs: int, n
     KX.warm_up(market)                                       # compile before the workers fork
     return Config(lay, pin, pin_hash, stage, period, market, DX.picks(), vs,
                   lambda pick: DX.PickData(market, pick, rprov, f11=KX.F11_REGISTRY["provider"]), n_seeds, procs)
+
+
+def report_config(lay: Layout, stage: str, pin: dict, pin_hash: str, n_seeds: int) -> Config:
+    """A read-only configuration for the 'report' command: the picks, the variants and the result store, no market data, no cache folder
+    and no way to compute a pick (``make_pickdata`` raises)."""
+    prov11 = f11_provider_from_modules(None, *try_load_native())
+    if prov11 is None:
+        refuse("native.py / native_ds.py (families F11 and F12) are not available: the pre-registered menu has 86 variants")
+    KX.register_f11(prov11)
+
+    def no_compute(_pick):
+        raise RuntimeError("report is read-only: it computes nothing")
+    return Config(lay, pin, pin_hash, stage, STAGE_PERIOD[stage], None, DX.picks(), KX.variants(), no_compute, n_seeds, 1)
 
 
 # ------------------------------------------------------------------ workers
@@ -458,12 +510,13 @@ FAMILY_KO = {"F1": "구조 무너짐", "F2": "이동평균 이탈", "F3": "반�
              "F9": "두 분 규칙 그대로", "F10": "멈춤(새 고점 없음)", "F11": "매매법 자체 청산", "F12": "9가지 청산 동시 적용"}
 LOSS_CLASS_KO = {"L0": "L0 손실은 못 끊음(수익이 난 뒤에만 / 수익 중일 때만)", "L1": "L1 손실 0.5R 이상일 때 구조 무너짐",
                  "L2": "L2 작은 손실에도 구조 무너짐(진입가 근처 손절 가능)", "L3": "L3 구조 말고 다른 이유로도(이동평균·반대 신호·고점 대비·시간·매매법 자체)"}
-CLAIM_EN = {"rule": "beats E0 and beats a random exit with its timing profile",
-            "f11": "the strategy's own exit beats E0 and a random exit with its timing profile",
-            "f12": "all nine exits at once beat E0 and a random exit with its timing profile",
-            "f7": "beats E0 by holding less; no claim about reading the market"}
+CLAIM_EN = {"rule": MT.claim_of("F1.w3.a"), "f11": MT.claim_of("F11.a"), "f12": MT.claim_of("F12.a"), "f7": MT.claim_of("F7.N12.a")}
+# prereg 8.5 (F12): the fixed combination, the 7 / 8 legs, the 8-hour clock, and the three things it does not claim
 CLAIM_KO = {"rule": "지금 청산(E0)과, 같은 패턴의 무작위 청산보다 낫다", "f11": "매매법 자체 청산이 지금 청산과 같은 패턴의 무작위 청산보다 낫다",
-            "f12": "아홉 가지 청산을 한꺼번에 쓰면 지금 청산과 같은 패턴의 무작위 청산보다 낫다(쌓으면 더 좋다거나 최고의 청산이라는 뜻은 아님)",
+            "f12": ("아홉 가지 청산을 이 고정된 조합 그대로 쓰면(1시간·4시간 매매법에서는 아홉 중 최대 7개, 15분·30분 매매법에서는 최대 8개가 "
+                    "매매를 끝낼 수 있음: F6은 청산 시점을 바꾸지 않고 F10은 15분·30분 매매법에서만 작동) 지금 청산(E0)과, 같은 8시간 시계와 "
+                    "같은 패턴의 무작위 청산보다 낫다. 쌓으면 단일 규칙보다 낫다거나, 아홉 개가 모든 매매법에서 다 작동한다거나, "
+                    "F12가 최고의 청산이라는 뜻은 아님"),
             "f7": "오래 안 들고 있는 것만으로 낫다(차트를 읽는다는 뜻은 아님)"}
 DS_ALLOWED = MT.DS_ALLOWED
 GATE_KO = {"pass": "통과", "fail": "탈락", "not_run": "안 돌림", "n/a": "해당 없음"}
@@ -509,7 +562,10 @@ def variant_row(cfg: Config, v, pool: str, e0q: dict, e0live: dict, gates: dict,
            "reasons": dict(zip(MT.REASONS, ps["reasons"])), "changed": ps["changed"], "changed_share": ps["changed_share"],
            "both_touched": ps["both_touched"], "claim": CLAIM_EN[claim_key(v)], "claim_ko": CLAIM_KO[claim_key(v)], "n_picks": ps["n_picks"],
            "same_as_f3": ("F3." + v.mode) if (v.fam == KX.F11 and pool == "ds") else None,
-           "hold_by_state": ps["hold_by_state"]}
+           "hold_by_state": ps["hold_by_state"],
+           # prereg 7, reported beside (counts and hold hours only, so a DeepSeek row may carry them): live size, the realised hazard table h
+           "hold_live": live["hold"], "entered_live": live["entered"], "skipped_live": live["skipped"], "rejected_live": live["rejected"],
+           "hazard": {"num": np.sum([sv[i]["num"] for i in sorted(sv)], axis=0).tolist(), "den": np.sum([sv[i]["den"] for i in sorted(sv)], axis=0).tolist()}}
     if v.fam == KX.F12:                                                  # exits by component: fired, and fired alone (counts)
         row["comp_fired"] = dict(zip(MT.COMP_LABELS, ps["comp_fired"]))
         row["comp_alone"] = dict(zip(MT.COMP_LABELS, ps["comp_alone"]))
@@ -549,7 +605,7 @@ def build_select_summary(cfg: Config, gates: dict, pairs: list) -> tuple:
         if pool == "core":
             for r in ordered:
                 if r["eligible"]:
-                    r.update({k: money[r["id"]][k] for k in ("M", "M_pct_month", "median_Mp", "n_pos", "live")})
+                    r.update({k: money[r["id"]][k] for k in ("M", "M_pct_month", "median_Mp", "n_pos", "live", "placebo", "p95_gate", "Mp")})
                 else:
                     core_hidden[r["id"]] = money[r["id"]]
             entry["qa"] = [{"id": r["id"], "median_pooled_mean_vs_e0": money[r["id"]]["placebo"]["p50"],
@@ -630,7 +686,9 @@ def select_report_ko(doc: dict) -> str:
         for r in P["variants"]:
             gm = "/".join(GATE_KO[r["gates"][k]] for k in ("g1", "g2", "g3", "g4"))
             if pool == "core":
-                gr = (f"월 {r['M_pct_month']:+.2f}% (로그 {r['M']:+.4f}); 참고: 지금 크기 월 {r['live']['M_pct_month']:+.2f}%" if r["eligible"] else "")
+                gr = (f"월 {r['M_pct_month']:+.2f}% (로그 {r['M']:+.4f}); 참고: 지금 크기 월 {r['live']['M_pct_month']:+.2f}%"
+                      + (f"; 무작위 청산 5/50/95% (월 로그) {r['placebo']['p05']:+.4f}/{r['placebo']['p50']:+.4f}/{r['placebo']['p95']:+.4f}"
+                         if r.get("placebo") else "") if r["eligible"] else "")
             else:
                 gr = "통과" if r["eligible"] else ""
             marks = [m for m, on in (("기본값이 고르는 방식", r["mark_default"]),
@@ -682,6 +740,10 @@ def owner_report_md(stage: str, private: dict, order: dict, labels: dict | None 
                     L.append(f"| {vid} | 선택 불가 | | | | | | |")
             L.append("")
     else:
+        for pool, e0 in (private.get("e0") or {}).items():             # prereg 3: the same for E0 as for the chosen variants
+            L += [f"## 지금 청산(E0), {pool}", "", f"월 로그성장 {e0['growth_per_month_log']:+.5f} (월 {e0['growth_pct_month']:+.2f}%), 지금 크기 월 "
+                  f"{e0['live_growth_pct_month']:+.2f}%, 계좌 최종 배수 중앙값 {e0['final_multiple_median']:.2f}, 최대 낙폭 중앙값 "
+                  f"{100 * e0['max_dd_median']:.0f}%, 지금 크기 파산 {e0['live_busts']}개.", ""]
         for key, m in private.get("pairs", {}).items():
             L += [f"## {key}", "", f"풀 합산 월 로그성장 차이 {m['M']:+.5f} (월 {m['M_pct_month']:+.2f}%), 95% 구간 [{m['interval95'][0]:+.5f}, {m['interval95'][1]:+.5f}], "
                   f"지금 크기 월 로그 {m['live']['M']:+.5f}, 파산(지금 크기) {m['live']['busts']}, 최종 배수 중앙값 {m['final_multiple_median']:.2f}, "
@@ -747,21 +809,30 @@ def write_owner_report(cfg: Config, stage: str, private: dict, suffix: str = "")
     return sha256_file(path)
 
 
-def finish_select(cfg: Config, timing: dict | None = None, quiet: bool = False) -> dict:
-    """Run step 1 (every pick, every arm, both sizes), then step 2 (the placebos that passed gates 1, 2 and 4), then the
-    summary once. Returns the select document."""
+def select_plan(cfg: Config, run: bool) -> tuple:
+    """(picks, {pick: all variant ids}, gates, step-2 pairs, {pick: step-2 variant ids}). ``run`` True: compute what is missing (step 1,
+    then step 2). ``run`` False: read-only, and a missing result file is a refusal (the 'report' command)."""
     picks = cost_order(cfg.picks)
     vids_all = [v.id for v in cfg.variants]
     pv = {p["id"]: vids_all for p in picks}
-    run_tasks(cfg, [(1, p["id"], None) for p in picks], "select step 1")
+    if run:
+        run_tasks(cfg, [(1, p["id"], None) for p in picks], "select step 1")
     if not all_present(cfg, expected_files(cfg, pv)):
         refuse("step 1 is incomplete")
     gates = step1_gates(cfg)
     pairs = step2_pairs(cfg, gates)
     s2 = {p["id"]: [vid for vid, pool in pairs if pool == p["pool"]] for p in picks}
-    run_tasks(cfg, [(2, pid, vids) for pid, vids in s2.items() if vids], "select step 2")
+    if run:
+        run_tasks(cfg, [(2, pid, vids) for pid, vids in s2.items() if vids], "select step 2")
     if not all_present(cfg, expected_files(cfg, pv, s2)):
         refuse("step 2 is incomplete")
+    return picks, pv, gates, pairs, s2
+
+
+def write_select_outputs(cfg: Config, timing: dict | None, gates: dict, pairs: list) -> dict:
+    """select.json, SELECT_KO.md, the private DeepSeek files and the table csv from the finished result files. The committed documents
+    carry no run-dependent field (no commit hash, no time), so writing them again from the same files gives the same bytes."""
+    vids_all = [v.id for v in cfg.variants]
     doc_pools, private, hidden = build_select_summary(cfg, gates, pairs)
     ds_path = os.path.join(cfg.store.private_dir(), "select_ds.json" if cfg.stage == "select" else "select_ds_r2.json")
     sfx = "_r2" if cfg.stage == "select_r2" else ""
@@ -772,8 +843,8 @@ def finish_select(cfg: Config, timing: dict | None = None, quiet: bool = False) 
         ds_report_sha = write_owner_report(cfg, "select", private, sfx)
     if hidden:                                               # growth of the not-choosable core rows: kept out of the committed report
         write_json(os.path.join(cfg.store.work, cfg.store.pin8, "results", cfg.stage, "core_not_choosable.json"), hidden)
-    doc = {"study": "exitflex v1", "stage": "select", "pin": cfg.pin_hash, "commit": git_head(cfg.lay.root), "versions": versions(),
-           "modules": loaded_module_hashes(cfg.lay.root), "n_seeds": cfg.n_seeds, "variants": vids_all,
+    doc = {"study": "exitflex v1", "stage": "select", "pin": cfg.pin_hash, "versions": versions(),
+           "modules": loaded_module_hashes(cfg.lay.root), "engine": DX.engine_fingerprint(cfg.market), "n_seeds": cfg.n_seeds, "variants": vids_all,
            "f11": any(v.fam == KX.F11 for v in cfg.variants), "complete_menu": len(vids_all) == 86,
            "timing_sha256": sha256_file(cfg.lay.out_file("timing.json")) if os.path.exists(cfg.lay.out_file("timing.json")) else None,
            "ds_private_sha256": ds_sha, "ds_owner_report_sha256": ds_report_sha, "step2_pairs": {f"{vid}|{pool}": True for vid, pool in pairs}, "pools": doc_pools,
@@ -785,6 +856,24 @@ def finish_select(cfg: Config, timing: dict | None = None, quiet: bool = False) 
     with open(os.path.join(cfg.store.work, cfg.store.pin8, "results", cfg.stage, "SELECT_TABLE.csv"), "w") as fh:
         fh.write(select_table_csv(doc))
     return doc
+
+
+def finish_select(cfg: Config, timing: dict | None = None, quiet: bool = False) -> dict:
+    """Run step 1 (every pick, every arm, both sizes), then step 2 (the placebos that passed gates 1, 2 and 4), then the
+    summary once. Returns the select document. The commit of the run goes to a side file of the stage's results folder (not into the
+    committed document)."""
+    _picks, _pv, gates, pairs, _s2 = select_plan(cfg, True)
+    doc = write_select_outputs(cfg, timing, gates, pairs)
+    write_json(os.path.join(cfg.store.work, cfg.store.pin8, "results", cfg.stage, "run_info.json"),
+               {"stage": cfg.stage, "commit": git_head(cfg.lay.root), "versions": versions()})
+    return doc
+
+
+def report_select(cfg: Config, timing: dict | None = None) -> dict:
+    """Read-only: rewrite select.json and SELECT_KO.md from result files that all exist. It never computes a missing file (a missing one
+    is a refusal)."""
+    _picks, _pv, gates, pairs, _s2 = select_plan(cfg, False)
+    return write_select_outputs(cfg, timing, gates, pairs)
 
 
 def stage_timing(lay: Layout, procs: int = CPUS_ASSUMED) -> dict:
@@ -826,25 +915,59 @@ def run_timing(cfg: Config) -> dict:
     return doc
 
 
+def require_deviation_entry(lay: Layout, tag: str) -> None:
+    """Prereg 14: a rerun is allowed once a bug is recorded in this folder's DEVIATIONS.md before the rerun's output is read. The entry
+    must name the rerun by its stage name (``select_r2`` / ``confirm_r2``)."""
+    path = os.path.join(lay.base, "DEVIATIONS.md")
+    if not os.path.exists(path) or tag not in open(path, encoding="utf-8").read():
+        refuse(f"a {tag} rerun needs an entry naming {tag} in {os.path.relpath(path, lay.root)} (section 14), written before the rerun")
+
+
+def guard_select_outputs(lay: Layout, rerun: bool) -> None:
+    """The select stage runs once: it refuses when select.json or SELECT_KO.md exists or is listed in the pin file (use 'report' to rewrite
+    an unpinned one). A rerun (section 14, a bug found before any confirm) needs select.json, no select_r2.json, no confirm.json and a
+    DEVIATIONS entry."""
+    sfx = "_r2" if rerun else ""
+    pins = read_sha_file(lay)
+    for name in (f"select{sfx}.json", f"SELECT_KO{sfx}.md"):
+        path = lay.out_file(name)
+        if os.path.exists(path) or os.path.normpath(path) in pins:
+            refuse(f"{name} already exists or is pinned: the select stage runs once (a section 14 rerun is 'select --rerun'; "
+                   f"an unpinned file is rewritten by 'report')")
+    if rerun:
+        if not os.path.exists(lay.out_file("select.json")):
+            refuse("select --rerun needs the first select.json (section 14)")
+        if os.path.exists(lay.out_file("confirm.json")):
+            refuse("a select rerun is allowed before any confirm only (section 14)")
+        require_deviation_entry(lay, "select_r2")
+
+
 def stage_select(lay: Layout, procs: int, rerun: bool = False) -> dict:
     """Select, step 1 then step 2 (writes select.json, SELECT_KO.md and the private DeepSeek files). ``rerun`` (section 14, a bug found
     before any confirm): a fresh stage 'select_r2' that writes select_r2.json / SELECT_KO_r2.md / *_r2 private files."""
     pin, ph = gate_pin(lay)
     tpath = lay.out_file("timing.json")
     require_pinned_file(lay, tpath, "timing.json")
+    guard_select_outputs(lay, rerun)
     timing = json.load(open(tpath))
     cfg = real_config(lay, "select_r2" if rerun else "select", pin, ph, procs, int(timing["n_seeds"]))
     return finish_select(cfg, timing)
 
 
 def stage_report(lay: Layout, procs: int = 1) -> dict:
-    """Rewrite select.json and SELECT_KO.md from the existing result files (computes nothing that is missing)."""
-    pin, ph = gate_pin(lay)
+    """Rewrite select.json and SELECT_KO.md from the existing result files. Read-only: it computes nothing (a missing result file is a
+    refusal, never a second way to start the select run), it loads no market data, and it refuses once select.json or SELECT_KO.md is
+    listed in the pin file (a pinned report is changed only by a section 14 rerun)."""
+    pin, ph = gate_pin(lay, verify_data=False)
     tpath = lay.out_file("timing.json")
     require_pinned_file(lay, tpath, "timing.json")
+    pins = read_sha_file(lay)
+    for name in ("select.json", "SELECT_KO.md"):
+        if os.path.normpath(lay.out_file(name)) in pins:
+            refuse(f"{name} is already pinned: 'report' does not rewrite a pinned file (section 14: select --rerun)")
     timing = json.load(open(tpath))
-    cfg = real_config(lay, "select", pin, ph, procs, int(timing["n_seeds"]))
-    return finish_select(cfg, timing)
+    cfg = report_config(lay, "select", pin, ph, int(timing["n_seeds"]))
+    return report_select(cfg, timing)
 
 
 # ------------------------------------------------------------------ stage: choice (prereg 8.3, 8.4 and 14)
@@ -1009,20 +1132,54 @@ def stage_choice(lay: Layout, inp: dict | str, now_utc: str | None = None, rerun
     bad_text = [ln for ln in MT.audit_text("\n".join(MT.json_strings(doc))) if True]
     if bad_text:
         refuse("choice text still holds a possible DeepSeek money figure (audit A8): " + bad_text[0][:60])
-    bad = MT.validate_choice_doc(sel, doc, sent, prev)
+    bad = MT.validate_choice_doc(sel, doc, sent, prev) + MT.material_problems(doc)
     if bad:
         refuse("choice does not validate: " + "; ".join(bad))
-    write_json(lay.out_file("choice_r2.json" if rerun else "choice.json"), doc)
+    out_name = "choice_r2.json" if rerun else "choice.json"
+    if os.path.normpath(lay.out_file(out_name)) in read_sha_file(lay):
+        refuse(f"{out_name} is already pinned: a choice is final once hashed (8.3)")
+    write_json(lay.out_file(out_name), doc)
     progress(f"[choice] core {doc['core']} ds {doc['ds']} default used: "
              + ", ".join(f"{p} {i['default_used']}" for p, i in doc["pools"].items()))
     return doc
 
 
 # ------------------------------------------------------------------ stage: confirm (prereg 9)
+def check_modules_unchanged(lay: Layout, sel: dict) -> None:
+    """Prereg 13: the module files the select run recorded (research/library, research/search, the vendor folder) are the same now.
+    Refuses before the confirm computes anything."""
+    modules = loaded_module_hashes(lay.root)
+    diff = [k for k, h in sel.get("modules", {}).items() if modules.get(k) != h]
+    if diff:
+        refuse("module files changed since the select run: " + ", ".join(diff[:5]))
+
+
+def check_engine_unchanged(cfg: Config, sel: dict) -> None:
+    """The settings vectors and the bracket digest the select run wrote into select.json equal the confirm run's (they come from
+    paperbot/config.py, margin.py and exchange.json, outside the pinned arrays). A select.json without them is refused."""
+    want = sel.get("engine")
+    if not want:
+        refuse("select.json has no engine fingerprint (settings vectors and bracket digest)")
+    got = DX.engine_fingerprint(cfg.market)
+    if got != want:
+        refuse("engine inputs changed since the select run: " + ", ".join(k for k in ("S", "brackets_sha256") if got.get(k) != want.get(k)))
+
+
+def e0_private_row(e0q: dict, e0l: dict, e0_ps: dict, e0_live: dict) -> dict:
+    """E0's own DeepSeek money figures for the private confirm report (prereg 3): growth per month, live-size growth, median final
+    multiple, median drawdown, busts at live size. Private only (ds_private/confirm_ds.json and the owner report)."""
+    m = float(np.mean([np.mean(e0q[i]["g"]) for i in e0q]))
+    ml = float(np.mean([np.mean(e0l[i]["g"]) for i in e0l]))
+    return {"max_dd_median": e0_ps["max_dd_median"], "final_multiple_median": e0_ps["final_multiple_median"], "growth_per_month_log": m,
+            "growth_pct_month": 100.0 * (math.exp(m) - 1.0), "live_growth_pct_month": 100.0 * (math.exp(ml) - 1.0), "live_busts": e0_live["busts"]}
+
+
 def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
     pairs = [(vid, "core") for vid in choice["core"]] + [(vid, "ds") for vid in choice["ds"]]
     if not pairs:
         refuse("no variant was chosen: nothing runs on the confirm period (8.6)")
+    check_modules_unchanged(cfg.lay, sel)                               # before any account is computed
+    check_engine_unchanged(cfg, sel)
     chosen = {pool: [vid for vid, p in pairs if p == pool] for pool in POOLS}
     picks = cost_order([p for p in cfg.picks if chosen.get(p["pool"])])
     s2_vids = {p["id"]: [vid for vid in chosen[p["pool"]] if PL.has_placebo(KX.variant_by_id(vid))] for p in picks}
@@ -1088,12 +1245,13 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
             private.setdefault("pairs", {})[key] = money
         res[key] = row
     modules = loaded_module_hashes(cfg.lay.root)
-    diff = [k for k, h in sel.get("modules", {}).items() if modules.get(k) != h]
-    if diff:
-        refuse("module files changed since the select run: " + ", ".join(diff[:5]))
+    check_modules_unchanged(cfg.lay, sel)                              # again after the run: nothing moved while it ran
     csfx = "_r2" if cfg.stage == "confirm_r2" else ""                      # a confirm rerun (section 14) writes the *_r2 names
     ds_sha = ds_report_sha = None
     if private:
+        e0l_ds = _pool_load(cfg, "ds", "E0", SIZE_TAG[1.0])
+        private["e0"] = {"ds": e0_private_row(_pool_load(cfg, "ds", "E0", SIZE_TAG[0.25]), e0l_ds, e0_ps["ds"],
+                                              MT.pool_summary(e0l_ds, e0l_ds, cfg.pools)["ds"])}
         ds_path = os.path.join(cfg.store.private_dir(), f"confirm_ds{csfx}.json")
         write_json(ds_path, {"note": "DeepSeek money figures and p values (D11): read only by the runner", **private})
         ds_sha = sha256_file(ds_path)
@@ -1174,12 +1332,14 @@ def stage_confirm(lay: Layout, procs: int, rerun: bool = False) -> dict:
     if not sel.get("complete_menu"):
         refuse("select.json was made without the complete menu of 86 variants")
     first = json.load(open(lay.out_file("choice.json")))
-    bad = MT.validate_choice_doc(sel, choice, sent, first if r2 else None)
+    bad = MT.validate_choice_doc(sel, choice, sent, first if r2 else None) + MT.material_problems(first)
     if bad:
         refuse("choice does not validate: " + "; ".join(bad))
+    check_modules_unchanged(lay, sel)                                   # prereg 13: refuse before the confirm loads or computes anything
     if rerun:
         if not os.path.exists(lay.out_file("confirm.json")) or os.path.exists(lay.out_file("confirm_r2.json")):
             refuse("a confirm rerun needs confirm.json and runs once (confirm_r2.json exists or confirm.json is missing)")
+        require_deviation_entry(lay, "confirm_r2")
     elif os.path.exists(lay.out_file("confirm.json")):
         refuse("confirm.json exists: the confirm runs once; a rerun is a section 14 matter (--rerun)")
     cfg = real_config(lay, "confirm_r2" if rerun else "confirm", pin, ph, procs, N_SEEDS_FULL)
@@ -1222,14 +1382,17 @@ def check_t1(cfg: Config, picks: list | None = None) -> list:
     return out
 
 
+T3_CUT_PREFIX = "t3cut"
+
+
 def t3_snapshot_side(pin_path: str, side: str, cut_ms: int, out_path: str) -> None:
     """One side of one T3 comparison, in its own process and with its own cache folder."""
     pin = DX.load_pin(pin_path)
     ph = DX.pin_sha(pin_path)
-    name = f"t3-{DX.cut_name(cut_ms)[4:]}-{side}"
+    name = f"t3-{DX.cut_name(cut_ms, T3_CUT_PREFIX)[len(T3_CUT_PREFIX) + 1:]}-{side}"
     cache = DX.fresh_stage(pin["work"], ph, name)
-    if side == "cut":
-        data_dir = DX.write_cut(pin["data_dir"], pin["work"], ph, cut_ms)
+    if side == "cut":                                           # its own folder name (t3cut-...): never the select run's cut folder
+        data_dir = DX.write_cut(pin["data_dir"], pin["work"], ph, cut_ms, prefix=T3_CUT_PREFIX)
     else:
         data_dir = pin["data_dir"]
     rprov = DX.RealProvider(data_dir, cache)
@@ -1246,6 +1409,7 @@ def t3_snapshot_side(pin_path: str, side: str, cut_ms: int, out_path: str) -> No
     import shutil
     shutil.rmtree(cache, ignore_errors=True)
     if side == "cut":
+        assert os.path.basename(data_dir).startswith(T3_CUT_PREFIX + "-")
         shutil.rmtree(data_dir, ignore_errors=True)
 
 
@@ -1287,6 +1451,7 @@ def perturbed_inputs(cfg: Config, pdata, v, off: dict, q: int, C: float, j: int,
     mins = {k: m.cat[k][a:b].copy() for k in ("o", "h", "l", "mo", "mh", "ml", "fund")}
     for k in ("o", "h", "l", "mo", "mh", "ml"):
         mins[k][j:] = mins[k][j:] * np.exp(rng.normal(0.0, 0.05, len(mins[k]) - j))
+    mins["fund"][j:] = rng.normal(0.0, 5e-4, len(mins["fund"]) - j)         # step 0: nothing of minute j, its funding included, may enter the decision
     rp, PT, PF, QT, cst, cen, qst, qen = pdata.chart(v)
     PT_c, PF_c, QT_c = PT[cst[c]:cen[c]].copy(), PF[cst[c]:cen[c]].copy(), QT[qst[c]:qen[c]].copy()
     late = PT_c[:, KX.C_CMS] > C
@@ -1351,16 +1516,70 @@ def check_t5(cfg: Config, per_pool: int = 500, seed: int = 11) -> dict:
     return res
 
 
+def label_causal_pair(reg, h: np.ndarray, l: np.ndarray, c: np.ndarray, i0: int, tf_min: int, label: int, rng) -> bool:
+    """T8 causality on one signal bar: the label at bar ``i0`` is the same (a) from the arrays truncated at the signal bar, (b) when every
+    bar after it is replaced by random values and (c) by extreme values. Booleans only."""
+    n = len(c)
+    ok = int(reg.regimes(h[:i0 + 1], l[:i0 + 1], c[:i0 + 1], tf_min)["code"][-1]) == label
+    m = n - i0 - 1
+    if m > 0:
+        for kind in ("random", "extreme"):
+            h2, l2, c2 = h.copy(), l.copy(), c.copy()
+            if kind == "random":
+                fac = np.exp(rng.normal(0.0, 0.3, m))
+                c2[i0 + 1:] = c[i0 + 1:] * fac
+                h2[i0 + 1:] = np.maximum(h[i0 + 1:] * fac, c2[i0 + 1:]) * (1 + np.abs(rng.normal(0.0, 0.05, m)))
+                l2[i0 + 1:] = np.minimum(l[i0 + 1:] * fac, c2[i0 + 1:]) * (1 - np.abs(rng.normal(0.0, 0.05, m)))
+            else:
+                big = rng.random(m) < 0.5
+                c2[i0 + 1:] = np.where(big, c[i0] * 50.0, c[i0] / 50.0)
+                h2[i0 + 1:] = c2[i0 + 1:] * 1.5
+                l2[i0 + 1:] = c2[i0 + 1:] / 1.5
+            ok &= int(reg.regimes(h2, l2, c2, tf_min)["code"][i0]) == label
+    return bool(ok)
+
+
+def check_t8(cfg: Config, per_pool: int = 500, seed: int = 17) -> dict:
+    """T8 (prereg 13) on the real arrays: ``per_pool`` sampled offered signals per pool; the market-state label of the signal does not change
+    when every chart bar after the signal bar is replaced (random and extreme values), and the label from the arrays truncated at
+    the signal bar equals the label from the full arrays. Returns {pool: (signals checked, signals failed)}; counts only."""
+    rng = np.random.default_rng(seed)
+    reg = DX.regime_module()
+    res = {}
+    for pool in cfg.pool_names():
+        picks = cfg.pool_picks(pool)
+        per = max(1, math.ceil(per_pool / len(picks)))
+        n = bad = 0
+        for p in picks:
+            pdata = cfg.make_pickdata(p)
+            off = pdata.offered(cfg.period)
+            if not len(off["coin"]):
+                continue
+            for _ in range(per):
+                q = int(rng.integers(0, len(off["coin"])))
+                c, i0 = int(off["coin"][q]), int(off["i0"][q])
+                df = pdata.frames[c][0]
+                ok = label_causal_pair(reg, df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float), i0,
+                                       DX.TF_MIN[pdata.tf], int(off["state"][q]), rng)
+                n += 1
+                bad += (not ok)
+        res[pool] = (n, bad)
+        progress(f"[T8] {pool}: {n} signals, {'pass' if bad == 0 and n > 0 else 'FAIL'}")
+    return res
+
+
 def stage_check(lay: Layout, which: list, picks_filter=None) -> bool:
     pin, ph = gate_pin(lay)
     ok = True
     cfg = None
-    if "t1" in which or "t5" in which:
+    if any(x in which for x in ("t1", "t5", "t8")):
         cfg = real_config(lay, "check", pin, ph, 1, N_SEEDS_FULL, allow_no_f11=True)
     if "t1" in which:
         ok &= all(r for _p, r in check_t1(cfg, picks_filter))
     if "t5" in which:
         ok &= all(b == 0 and n > 0 for n, b in check_t5(cfg).values())
+    if "t8" in which:
+        ok &= all(b == 0 and n > 0 for n, b in check_t8(cfg).values())
     if "t3" in which:
         ok &= all(r for _c, r in check_t3(lay, pin, ph))
     progress(f"[check] {'pass' if ok else 'FAIL'}")
@@ -1589,6 +1808,20 @@ def audit_a9(cfg: Config, picks_vids: dict) -> bool:
     return bool(ok)
 
 
+def audit_a5(cfg: Config, pin: dict, pin_hash: str, stage: str) -> bool:
+    """A5 (select only): no array the select process loaded holds a minute at or after 2024-01-01: the cut folder's digests match, none of
+    its arrays holds such a minute, and the market loaded from it holds none (the cut folder is made by a separate process, ``make-cut``).
+    Not applicable to the confirm."""
+    if stage != "select":
+        return True
+    try:
+        folder = DX.open_cut(pin["work"], pin_hash, DX.SELECT_CUT_MS)
+        DX.assert_no_minute_at_or_after({s: {"ts": cfg.market.ts(i)} for i, s in enumerate(cfg.market.symbols)}, DX.SELECT_CUT_MS)
+    except (DX.PinError, AssertionError):
+        return False
+    return os.path.abspath(cfg.market.data_dir or "") == os.path.abspath(folder)
+
+
 def stage_audit(lay: Layout, stage: str, procs: int = 1) -> bool:
     """A1-A9 after a select or confirm run, pass or fail only."""
     pin, ph = gate_pin(lay)
@@ -1603,7 +1836,7 @@ def stage_audit(lay: Layout, stage: str, procs: int = 1) -> bool:
         pv = {p["id"]: ch[p["pool"]] for p in cfg.picks if ch.get(p["pool"])}
     a2, a4, n = audit_counts_and_wallet(cfg, pv)
     res["A2"], res["A4"] = a2, a4
-    res["A5"] = True                                  # (select) real_config asserted it while loading the arrays; (confirm) not applicable
+    res["A5"] = audit_a5(cfg, pin, ph, stage)
     res["A6"] = audit_e0_against_kernel(cfg, [p for p in cfg.picks if p["id"] in pv][:])
     res["A7"] = audit_placebo_rates(cfg, [p for p in cfg.picks if p["id"] in pv], sorted({v for vs in pv.values() for v in vs}))
     a3 = True
@@ -1631,6 +1864,7 @@ def main(argv=None) -> int:
     mp.add_argument("--work", required=True)
     mp.add_argument("--out", default=None)
     sub.add_parser("pin-lines")
+    sub.add_parser("make-cut", help="write the select cut data folder (in its own process; the select process only opens it)")
     sub.add_parser("timing")
     for name in ("select", "report", "confirm"):
         sp = sub.add_parser(name)
@@ -1645,7 +1879,7 @@ def main(argv=None) -> int:
     cr = sub.add_parser("confirm-report", help="rewrite out/REPORT_KO.md from confirm.json (no recomputation)")
     cr.add_argument("--extra-messages", default=None, help="JSON list of owner messages received after choice.json was hashed")
     ck = sub.add_parser("check")
-    ck.add_argument("--which", default="t1,t3,t5")
+    ck.add_argument("--which", default="t1,t3,t5,t8")
     af = sub.add_parser("audit-file", help="A8 and A9 on files before they are sent or committed (pass / fail only)")
     af.add_argument("--path", action="append", required=True)
     af.add_argument("--after", default=None, help="read only the text after this marker (the entries of this study in a shared DEVIATIONS.md)")
@@ -1659,12 +1893,17 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     lay = Layout()
     if a.cmd == "make-pin":
+        target = a.out or lay.pin_file
+        if os.path.exists(lay.sha_file) and os.path.normpath(os.path.abspath(target)) in read_sha_file(lay):
+            refuse(f"{os.path.basename(target)} is already listed in {os.path.basename(lay.sha_file)}: a pinned data pin is not overwritten")
         doc = DX.make_pin(a.data_dir, a.work)
-        write_json(a.out or lay.pin_file, doc)
+        write_json(target, doc)
         progress(f"[make-pin] wrote {a.out or lay.pin_file}; build.json {doc['build_json_sha256'][:8]}, coins "
                  + ", ".join(f"{k[:3]} {v[:8]}" for k, v in doc["coins"].items()))
     elif a.cmd == "pin-lines":
         print("\n".join(pin_lines(lay)))
+    elif a.cmd == "make-cut":
+        stage_make_cut(lay)
     elif a.cmd == "timing":
         stage_timing(lay)
     elif a.cmd == "select":

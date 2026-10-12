@@ -234,15 +234,33 @@ def in_default_set(v) -> bool:
     return loss_class(v) in ("L0", "L1")
 
 
+CLAIM_F12 = ("this fixed combination of the nine exits, of which at most seven can end a trade on a 1h or 4h pick and at most eight on a "
+             "15m or 30m pick (F6 never moves the exit, F10 acts only on 15m and 30m picks), beats E0 and a random exit with the same "
+             "8-hour clock and timing profile")
+CLAIM_F12_LIMITS = "No claim that stacking beats a single rule, that all nine act on every pick, or that F12 is the best exit"
+
+
 def claim_of(variant_id: str) -> str:
-    """8.5: what a chosen variant may claim."""
+    """8.5: what a chosen variant may claim (the quoted wording of the pre-registration; for F12 the limits that go with it are
+    ``CLAIM_F12_LIMITS``)."""
     if variant_id.startswith("F7.") or variant_id.startswith("F7h."):
         return "beats E0 by holding less; no claim about reading the market"
     if variant_id.startswith("F11."):
         return "the strategy's own exit beats E0 and a random exit with its timing profile"
     if variant_id.startswith("F12."):
-        return "all nine exits at once beat E0 and a random exit with its timing profile"
+        return CLAIM_F12
     return "beats E0 and beats a random exit with its timing profile"
+
+
+# prereg 8.3: choice.json lists, at least, the 2024-2026 material the owners had before the report was sent
+REQUIRED_MATERIAL = ("ANALYSIS_KO.md", "STRATEGIES_KO.md", "STRATEGY_EVAL_KO.md")
+
+
+def material_problems(choice: dict) -> list:
+    """Problems in the 'material_received' list of a choice document: each of ``REQUIRED_MATERIAL`` must be named in some entry."""
+    got = [str(x) for x in (choice.get("material_received") or [])]
+    return [f"material_received does not name {m} (8.3: the full grid's per-trade results of the 84 exits)"
+            for m in REQUIRED_MATERIAL if not any(m in g for g in got)]
 
 
 def default_choice(rows: list, standing: list | None = None) -> list:
@@ -337,10 +355,12 @@ DS_ALLOWED = {"id", "name_ko", "family", "group", "mode", "q15", "nparams", "ord
               "rejected", "closed", "win_share", "entries_at_rule_minute", "reasons", "changed", "changed_share", "both_touched",
               "claim", "claim_ko", "mark_default", "same_as_f3", "n_picks", "pool", "holm_significant", "beats_placebo_p95",
               "entries_ok", "pass", "hold_e0", "chosen_by", "default_would_take", "ledger_label", "reasons_e0",
-              "hold_by_state", "hold_by_state_e0", "comp_fired", "comp_alone", "comp_by_tf"}
+              "hold_by_state", "hold_by_state_e0", "comp_fired", "comp_alone", "comp_by_tf",
+              "hold_live", "entered_live", "skipped_live", "rejected_live", "hazard"}
 
 
 DS_NESTED_ALLOWED = ({"median", "p90", "share_gt4", "share_gt8", "share_gt18", "n", "few", "g1", "g2", "g3", "g4", "fired", "alone", "n_picks",
+                      "num", "den",
                       "15m", "30m", "1h", "4h"} | set(REASONS) | set(DX.STATE_KO.values()) | set(COMP_LABELS))
 DS_E0_ALLOWED = {"hold", "entered", "skipped", "win_share", "rejected", "closed", "reasons", "both_touched", "n_picks", "hold_by_state"}
 DS_POOL_ALLOWED = {"n_picks", "e0", "variants", "eligible_ids", "default_ids", "gate_fail_counts"}

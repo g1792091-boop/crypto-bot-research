@@ -489,27 +489,28 @@ def test_eligibility_peak_and_candidate_rules():
     assert r["eligible"][7]                                # 2 of 3 fine: at least half
     r = _st(lat, S, None)                                  # null: no S2 conditions, ties by S
     assert r["P2"] is None and r["peak"] >= 0
-    # default excluded from the peak; candidate only when P(peak) > P(default)
+    # 4.2: the default stays in the peak search; when it is the peak the name is no candidate
     S4 = np.full(9, 0.3)
     S4[4] = 0.9
     r = _st(lat, S4, np.full(9, 0.1))
-    assert r["peak"] != 4 and not r["candidate"] and r["P_default"] >= r["P_peak"]
-    # default in effect and a foreign point are never the peak
+    assert r["peak"] == 4 and r["peak_is"] == "the default" and not r["candidate"]
+    # a default in effect that is the best plateau blocks the name (4.2), it is not skipped for the next point
     deff = np.zeros(9, bool)
     deff[7] = True
     r = _st(lat, S, S2, default_eff=deff)
-    assert r["peak"] != 7
+    assert r["peak"] == 7 and r["peak_is"] == "a default in effect" and not r["candidate"]
+    # a point another name owns (3.6 two names) is never this name's peak: the next point is
     r = _st(lat, S, S2, foreign=deff)
-    assert r["peak"] != 7
+    assert r["peak"] != 7 and r["peak_is"] is None
     # ties: P, then P2, then S, then lattice order
     lat1 = _grid([5])
     S5 = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
     r = _st(lat1, S5, np.array([0.1, 0.1, 0.3, 0.3, 0.3]))
-    assert r["peak"] == 3                                  # every P = .2; P2 .3 at points 3 and 4; then lattice order
+    assert r["peak"] == 2 and r["peak_is"] == "the default" and not r["candidate"]   # P equal; P2 .3 at 2-4: order
     r = _st(lat1, np.array([0.2, 0.25, 0.2, 0.2, 0.2]), np.full(5, 0.1))
     assert r["peak"] == 1                                  # P and P2 equal; the higher S
     r = _st(lat1, S5, np.full(5, 0.1))
-    assert r["peak"] == 0                                  # P, P2, S equal: the earlier lattice point (default 2 out)
+    assert r["peak"] == 0                                  # P, P2, S equal: the earlier lattice point
 
 
 def test_one_or_two_number_rule_only_for_small_k():
@@ -611,11 +612,34 @@ def test_a_shift_formula_range_and_redraws(world, monkeypatch):
     u = int.from_bytes(hashlib.sha256(b"hunt-r2-null|a|5|2").digest()[:8], "little")
     assert SR.delta_days(5, 2) == 7 * (9 + u % 140)
     assert len(set(days)) > 100
+    assert SR.redraw_needed({"events": 100, "dropped": 10}) == (0.10, False)       # "more than 10%"
+    assert SR.redraw_needed({"events": 100, "dropped": 11})[1]
+    # 4.3: the share is the replicate's own (every system its search ran, all coins); a replicate above 10% is
+    # replayed whole at the next draw, the others are not
     ctx = world
-    shares = iter([0.5, 0.11, 0.02])
-    monkeypatch.setattr(SR, "drop_share", lambda c, h, d: (next(shares), 1, 10))
-    ch = SR.choose_delta(ctx, {}, 5)
-    assert ch["j"] == 2 and ch["days"] == SR.delta_days(5, 2) and [d["j"] for d in ch["draws"]] == [0, 1, 2]
+    calls = []
+    drops = {(5, 0): 50, (5, 1): 12, (5, 2): 2, (6, 0): 3}
+
+    def fake_units(null, todo, order, procs, parts):
+        calls.append(dict(todo))
+        out = {}
+        for i, j in todo.items():
+            out[i] = {nm: {"name": nm, "family": L.family_of(nm), "anchor_tf": "1h", "anchor_gate": "G1",
+                           "counts": {"events": 50, "dropped": drops[(i, j)] // 2, "collided": 0, "flipped": 0},
+                           "runs": 1, "S": np.zeros(len(L.coarse(nm))), "n": np.zeros(len(L.coarse(nm))),
+                           "bust": np.zeros(len(L.coarse(nm)), bool), "exists": np.ones(len(L.coarse(nm)), bool),
+                           "default_eff": np.zeros(len(L.coarse(nm)), bool), "anchor": 0, "stage0": []}
+                     for nm in order}
+        return out
+    monkeypatch.setattr(SR, "_null_units", fake_units)
+    monkeypatch.setitem(SR._RUN, "ctx", ctx)
+    res = SR.null_replicates("a", [5, 6], ["E1", "TSMOM7"], 1, None)
+    assert calls == [{5: 0, 6: 0}, {5: 1}, {5: 2}]
+    sh = res[5]["shift"]
+    assert sh["j"] == 2 and sh["days"] == SR.delta_days(5, 2) and [d["j"] for d in sh["draws"]] == [0, 1, 2]
+    assert sh["draws"][0]["share_dropped"] == pytest.approx(0.5) and res[6]["shift"]["j"] == 0
+    assert SR.null_part("/p", "a", 5, "E1", 2).endswith("null_a/005_j2/E1.json")
+    assert SR.null_part("/p", "a", 5, "E1", 0).endswith("null_a/005/E1.json")
 
 
 def test_a_shift_whole_weeks_per_coin_wrap(world):
@@ -665,19 +689,15 @@ def test_a_shift_whole_weeks_per_coin_wrap(world):
     assert len(o4["j"]) == 0 and c4["collided"] == 2
 
 
-def test_drop_share_and_near_zero_listing(world):
+def test_near_zero_listing(world):
     ctx = world
     tf, k = "1h", 2
     sp = ctx.span(tf, k)
-    bars = np.flatnonzero(sp["land"])[:40]
-    hist = {(tf, k): (bars, np.ones(len(bars), np.int64))}
-    share, drop, tot = SR.drop_share(ctx, hist, 0)
-    assert tot == 40 and drop == 0 and share == 0.0          # a zero shift lands on the same valid bars
-    ch = SR.choose_delta(ctx, hist, 1)
-    assert ch["draws"][-1]["share_dropped"] <= SR.DROP_MAX
-    eff = (ch["days"] * DAY) % sp["L"]
-    listed = SYMS[k] in ch["near_zero"].get(tf, [])
-    assert listed == (eff < 8 * SR.WEEK_MS or sp["L"] - eff < 8 * SR.WEEK_MS)
+    for days in (SR.delta_days(1), 7, sp["L"] // DAY - 7):
+        near = SR.near_zero(ctx, days)
+        eff = (days * DAY) % sp["L"]
+        listed = SYMS[k] in near.get(tf, [])
+        assert listed == (eff < 8 * SR.WEEK_MS or sp["L"] - eff < 8 * SR.WEEK_MS)
 
 
 # ------------------------------------------------------------------ Stage 0 + A on the store, nulls replayed, determinism
@@ -727,12 +747,43 @@ def test_default_in_effect_shares_the_default_run(world, monkeypatch):
 
     def same(c, units, ci, gate, tf):                     # every combo gives the default's events
         return orig(c, units, lat.default, gate, tf)
+    og = SR.gated_hash
     monkeypatch.setattr(SR, "store_sig", same)
+    monkeypatch.setattr(SR, "gated_hash", lambda units, ci, gate: og(units, lat.default, gate))
     u = SR.name_unit(ctx, name, real=True)
     assert u["default_eff"].sum() == len(lat) - 1 and not u["default_eff"][lat.default]
     assert np.all(u["S"] == u["S"][lat.default])
     st = SR.stage_a(lat, u["S"], u["n"], u["bust"], u["exists"], S2=u["S2"], default_eff=u["default_eff"])
-    assert st["peak"] == -1 and not st["candidate"]
+    assert not st["candidate"] and (st["peak"] == -1 or st["peak_is"] in ("the default", "a default in effect"))
+
+
+def test_default_in_effect_is_the_gated_list_before_the_atr_and_fill_filters(world):
+    """3.6: identity = the gated event list (coin, bar, side); a list that differs only at a bar without ATR14 or a fill
+    bar is another list."""
+    ctx = world
+    name, tf, gate = "E1", "1h", "NONE"
+    lat = L.coarse(name)
+    units = SR.load_units(ctx.root, ctx.part, name, tf, ctx.syms)
+    g0 = SR.gated_hash(units, lat.default, gate)
+    assert g0 == SR.gated_hash(units, lat.default, gate)
+    u0 = units[0]
+    j, side, g1 = u0.events(lat.default)
+    bad = np.flatnonzero(~ctx.ok(tf, 0))                    # a bar the engine never sees (no ATR14 / no fill)
+    assert len(bad)
+
+    class Fake:
+        def __init__(self, base, extra):
+            self.base, self.extra = base, extra
+
+        def events(self, ci):
+            jj, ss, gg = self.base.events(ci)
+            return (np.r_[jj, self.extra].astype(np.int32), np.r_[ss, 1].astype(np.int8),
+                    np.r_[gg, 1].astype(np.int8))
+    fake = [Fake(units[0], int(bad[-1]))] + list(units[1:])
+    assert SR.gated_hash(fake, lat.default, gate) != g0       # another gated list
+    s1 = SR.store_sig(ctx, fake, lat.default, gate, tf)
+    s0 = SR.store_sig(ctx, units, lat.default, gate, tf)
+    assert SR.sig_hash(s1) == SR.sig_hash(s0)                 # the same signal list after the filters
 
 
 def test_search_and_results_do_not_depend_on_worker_count(world):
@@ -779,26 +830,58 @@ def _fake_unit(name, rng, anchor, edge=0.0):
             "pos_month": [[5] * 36] * npt, "bust_month": np.full(npt, -1)}
 
 
+def _fake_slots(name, u, rng, edge=0.0):
+    """Stage A at every slot of a hand-made unit (the real anchor's slot is the unit itself)."""
+    lat = L.coarse(name)
+    out = {u["anchor"]: u}
+    for a in range(len(u["stage0"])):
+        if a != u["anchor"]:
+            lnM = [list(rng.normal(edge, 0.02, 36)) for _ in range(len(lat))]
+            out[a] = dict(u, anchor=a, lnM=lnM, lnM2=[list(np.asarray(x) - 0.001) for x in lnM])
+    return out
+
+
 def test_cscv_on_hand_made_units():
     rng = np.random.default_rng(4)
     order = ["E1", "N20_EMA9_CHOP", "F3_BOS"]
     units = {n: _fake_unit(n, rng, 5) for n in order}
-    a = PT.cscv(units, order, mode="fixed")
-    b = PT.cscv(units, order, mode="fixed")
+    slots = {n: _fake_slots(n, units[n], rng) for n in order}
+    a = PT.cscv(units, order, slots)
+    b = PT.cscv(units, order, slots)
     assert a["pbo"] == b["pbo"] and a["splits"] == 924
     assert a["systems"] == sum(len(u["stage0"]) + len(L.coarse(n)) - 1 for n, u in units.items())
-    assert 0.0 <= a["pbo"] <= 1.0 and a["splits_with_candidate"] > 0
-    s = PT.cscv(units, order, mode="strict")
-    assert s["splits_with_candidate"] <= a["splits_with_candidate"]
-    assert sum(s["anchor_moved"].values()) == sum(a["anchor_moved"].values()) > 0
-    # a lattice with a strong real edge on every month: the IS-best is also good OOS (PBO low)
+    assert 0.0 <= a["pbo"] <= 1.0 and a["splits_with_candidate"] > 0 and not a["slots_missing"]
+    assert sum(a["anchor_moved"].values()) > 0                # the IS anchor moves in some splits ...
+    assert a["rank1_at_another_slot"] >= 0                     # ... and Stage A then runs at that IS anchor
+    only = PT.cscv(units, order)                               # without the other slots: those splits are listed
+    assert sum(only["slots_missing"].values()) == sum(only["anchor_moved"].values()) > 0
+    # a lattice with a strong real edge on every month at its anchor: the IS-best is also good OOS (PBO low)
     units2 = {n: _fake_unit(n, np.random.default_rng(9), 5) for n in order}
     lat = L.coarse("E1")
     for i in range(len(lat)):
         units2["E1"]["lnM"][i] = list(np.full(36, 0.05) + np.random.default_rng(i).normal(0, 0.001, 36))
     units2["E1"]["lnM2"] = [list(np.asarray(x) - 0.001) for x in units2["E1"]["lnM"]]
-    c = PT.cscv(units2, order, mode="fixed")
+    units2["E1"]["stage0"][5]["lnM"] = list(np.full(36, 0.04))
+    c = PT.cscv(units2, order, {n: _fake_slots(n, units2[n], np.random.default_rng(3)) for n in order})
     assert c["pbo"] is not None and c["pbo"] < 0.2
+
+
+def test_cscv_replay_rechooses_the_anchor_in_sample():
+    """6: an IS half whose best default slot is another one runs Stage A at that slot (not at the full-period
+    anchor)."""
+    rng = np.random.default_rng(12)
+    order = ["E1"]
+    u = _fake_unit("E1", rng, 5)
+    lnm = np.full(36, -0.01)
+    lnm[:18] = 0.03                                            # slot 2's default is best in the first half only
+    u["stage0"][2]["lnM"] = list(lnm)
+    u["stage0"][5]["lnM"] = list(np.r_[np.full(18, 0.0), np.full(18, 0.05)])
+    slots = _fake_slots("E1", u, rng)
+    IS = np.zeros((1, 36), bool)
+    IS[0, :18] = True
+    prep, _ = PT._prep({"E1": u}, order, IS, {"E1": slots})
+    rp = PT.replay(prep, order, 0, 3)
+    assert rp["per"]["E1"]["slot"] == 2 and rp["moved"] == ["E1"] and not rp["missing"]
 
 
 # ------------------------------------------------------------------ the engine pin (2, 11): a temporary tree only
