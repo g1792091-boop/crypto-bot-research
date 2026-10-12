@@ -51,9 +51,10 @@ EX = R.exchange(DX.EXCHANGE, False)
 
 # ====================================================================================================== harness
 def synth_coin(seed, n_days=40, price0=100.0, vol=0.0012, drop=0.004, start_ms=DX.PERIOD_MS["select"][0], jump_p=0.002,
-               funding=True):
-    """A seeded random walk of 1m bars: gaps (missing minutes), jumps, a mark price that differs from the last price and
-    8-hourly funding, in the layout of data.py's npz."""
+               funding=True, open_gap_p=0.0, outages=0):
+    """A seeded random walk of 1m bars: gaps (missing minutes, and ``outages`` runs of 15-120 missing minutes), jumps, open
+    gaps (an open far from the previous close), a mark price that differs from the last price and 8-hourly funding, in the
+    layout of data.py's npz."""
     rng = np.random.default_rng(seed)
     n = int(n_days * 1440)
     ts = start_ms + np.arange(n, dtype=np.int64) * MIN
@@ -61,6 +62,8 @@ def synth_coin(seed, n_days=40, price0=100.0, vol=0.0012, drop=0.004, start_ms=D
     ret = np.where(rng.random(n) < jump_p, rng.normal(0, 10 * vol, n), ret)
     c = price0 * np.exp(np.cumsum(ret))
     o = np.r_[price0, c[:-1]]
+    if open_gap_p:
+        o = np.where(rng.random(n) < open_gap_p, o * (1 + rng.normal(0, 0.05, n)), o)
     span = np.abs(rng.normal(0, vol, n))
     h, lo = np.maximum(o, c) * (1 + span), np.minimum(o, c) * (1 - span)
     mo, mc = o * (1 + rng.normal(0, 1e-4, n)), c * (1 + rng.normal(0, 1e-4, n))
@@ -72,6 +75,9 @@ def synth_coin(seed, n_days=40, price0=100.0, vol=0.0012, drop=0.004, start_ms=D
         fund[fm] = rng.normal(1e-4, 8e-5, int(fm.sum()))
     v = rng.uniform(1, 5, n)
     keep = rng.random(n) > drop
+    for _ in range(outages):
+        a = int(rng.integers(500, n - 500))
+        keep[a:a + int(rng.integers(15, 120))] = False
     keep[0] = True
     return {"ts": ts[keep], "o": o[keep], "h": h[keep], "l": lo[keep], "c": c[keep], "v": v[keep], "mo": mo[keep],
             "mh": mh[keep], "ml": ml[keep], "mc": mc[keep], "fund": fund[keep]}
@@ -972,9 +978,9 @@ def test_t2_only_rule_and_placebo_exits_free_their_minute(tmp_path, vendor, mir)
 
 
 # ====================================================================================================== T1: parity
-def acct_world(seed, ncoins=2, days=25, nsig=140, vol=0.0009):
+def acct_world(seed, ncoins=2, days=25, nsig=140, vol=0.0009, open_gap_p=0.0):
     prices = [100.0, 3000.0, 60.0, 0.1, 80.0, 250.0]
-    coins = [synth_coin(seed * 10 + i, days, prices[i], vol=vol, drop=0.006) for i in range(ncoins)]
+    coins = [synth_coin(seed * 10 + i, days, prices[i], vol=vol, drop=0.006, open_gap_p=open_gap_p) for i in range(ncoins)]
     mk = DX.Market.from_arrays(coins, EX)
     rng = np.random.default_rng(seed)
     rows = []
@@ -1013,8 +1019,8 @@ def kx_account(mk, sig, S, ex_args, force_end=False, rp=None, chart=None, plc=Fa
 @pytest.mark.parametrize("scale", [0.25, 1.0])
 def test_t1_account_parity_all_84_exits(scale):
     kinds = set()
-    for seed, vol in ((3, 0.0009), (4, 0.004)):                    # a calm world and a wild one (liquidations, locks)
-        mk, sig = acct_world(seed, vol=vol)
+    for seed, vol, gp in ((3, 0.0009, 0.0), (4, 0.004, 0.003)):     # a calm world and a wild one (open gaps, liquidations, locks)
+        mk, sig = acct_world(seed, vol=vol, open_gap_p=gp)
         S = mk.S(scale)
         for e in range(len(K.EXITS)):
             ex_args = K.exit_args(e)

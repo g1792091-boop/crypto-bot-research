@@ -12,6 +12,7 @@ import math
 import os
 import sqlite3
 import sys
+import types
 from dataclasses import asdict, replace
 
 import numpy as np
@@ -1183,7 +1184,6 @@ def test_the_shared_fetch_asks_once_for_the_same_minutes():
 
 # ---------------------------------------------------------------- the service loop: both leagues, one failing never stops the other
 def _main_env(monkeypatch, tmp_path, cands, now_ms):
-    import types
     import paperbot.binance as BN
 
     class NoRest:
@@ -1195,7 +1195,6 @@ def _main_env(monkeypatch, tmp_path, cands, now_ms):
     monkeypatch.setattr(RN.C, "load", lambda path=None: cands)
     monkeypatch.setattr(RN, "load_exchange", lambda path, syms: (TP.BRACKETS, TP.SPECS, "test"))
     monkeypatch.setattr(sweepsig, "lib", lambda: LIB)
-    monkeypatch.setattr(RN, "V3_SYMBOLS", TP.SYMS, raising=False)
     import paperbot.config as PC
     monkeypatch.setattr(PC, "V3_SYMBOLS", TP.SYMS)
     real = RN.time
@@ -1229,7 +1228,6 @@ def test_the_service_runs_the_rule_league_next_to_the_main_one(tmp_path, monkeyp
     assert _trades_of(db) == only
     # a config that cannot be run never stops the main league
     rules.write_text(json.dumps({"variants": ["F2.n10.a.q15"]}))
-    monkeypatch.setattr(RN, "time", RN.time)                                    # (same clock)
     assert RN.main(args) == 0
     out = capsys.readouterr().out
     assert "규칙 리그를 열지 못했습니다" in out and _trades_of(db) == only
@@ -1242,11 +1240,10 @@ def test_the_service_runs_the_rule_league_next_to_the_main_one(tmp_path, monkeyp
         boom["n"] += 1
         raise RuntimeError("boom")
     monkeypatch.setattr(RX, "chunk_rule", flaky)
-    monkeypatch.setattr(RN, "time", RN.time.__class__(**{}) if False else RN.time)
-    later = START + 2 * DAY + 1_200_000 + 95_000
-    import types
+    later = START + 2 * DAY + 1_200_000 + 95_000                                 # ten minutes on
     monkeypatch.setattr(RN, "time", types.SimpleNamespace(time=lambda: later / 1000, monotonic=RN.time.monotonic,
-                                                          strftime=RN.time.strftime, gmtime=RN.time.gmtime, sleep=lambda s: None))
+                                                          strftime=RN.time.strftime, gmtime=RN.time.gmtime,
+                                                          sleep=lambda s: None))
     assert RN.main(args) == 0
     out = capsys.readouterr().out
     assert boom["n"] >= 1 and "규칙 리그 처리 실패" in out
