@@ -324,3 +324,177 @@ def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = F
         checkpoints.append({**c, "ms": ms, "days_left": (ms - now_ms) / 86_400_000})
     return {"checkpoints": checkpoints, "pools": pools, "strategies": strategies, "picks": picks,
             "min_trades": POOL_MIN_TRADES, "min_weeks_p": MIN_WEEKS_P}
+
+
+# ---------------------------------------------------------------- dashboard reads (dash.py /api/insight, /api/race)
+# The dashboard computes these from the snapshot's trades.json (each account's newest LAST_TRADES trades and its whole
+# equity line). The engine never calls them; watch_summary above is unchanged by them.
+LAST_TRADES = 200                     # runner.LAST_TRADES: trades.json keeps each account's newest 200 trades
+HOUR_MS = 3_600_000
+
+
+def longest_run_p(n: int, q: Optional[float], run: int) -> Optional[float]:
+    """P(``run`` or more losses in a row somewhere in ``n`` independent trades that each lose with probability q):
+    1 - a_n, a_k = P(no such run in k trades) = 1 for k < run, 1 - q^run for k = run, and a_{k-1} - (1 - q) q^run
+    a_{k-run-1} after (the first such run ends at trade k). None without a trade, a run or a rate."""
+    if not n or n <= 0 or not run or run <= 0 or q is None or not 0.0 <= q <= 1.0:
+        return None
+    if run > n:
+        return 0.0
+    qr = q ** run
+    a = [1.0] * (n + 1)
+    a[run] = 1.0 - qr
+    for k in range(run + 1, n + 1):
+        a[k] = a[k - 1] - (1.0 - q) * qr * a[k - run - 1]
+    return min(1.0, max(0.0, 1.0 - a[n]))
+
+
+def run_quantile(n: int, q: Optional[float], prob: float) -> Optional[int]:
+    """The longest losing run that ``n`` trades losing with probability q stay at or under with probability ``prob``
+    (0.5: the usual longest run; 0.9: nine times in ten no longer). None without a trade or a rate."""
+    if not n or n <= 0 or q is None:
+        return None
+    run = 0
+    while run < n and (longest_run_p(n, q, run + 1) or 0.0) > 1.0 - prob:
+        run += 1
+    return run
+
+
+def losing_runs(wins: Iterable[bool]) -> tuple[int, int]:
+    """(longest, current) run of losses of trades in time order (oldest first)."""
+    best = cur = 0
+    for w in wins:
+        cur = 0 if w else cur + 1
+        best = max(best, cur)
+    return best, cur
+
+
+def won(t: dict) -> bool:
+    """A closed trade's win: its P&L above 0, or the win label a trade without money keeps (DeepSeek money hidden)."""
+    p = t.get("pnl")
+    return float(p) > 0 if p is not None else bool(t.get("win"))
+
+
+def cost_of(t: dict) -> Optional[float]:
+    """Fees + funding of one closed trade in USDT (paid > 0). The margin is qty x entry / leverage, so the price move
+    times the leverage is the ROE before costs (a liquidation's is -100%: it loses the margin); the costs are that
+    minus the trade's net ROE, times its margin (P&L / ROE). None when a number is missing or the ROE is 0."""
+    try:
+        pnl, roe, lev = float(t["pnl"]), float(t["roe"]), float(t["leverage"])
+        e, x, side = float(t["entry_price"]), float(t["exit_price"]), int(t["side"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (abs(roe) > 1e-12 and e > 0 and lev > 0 and np.isfinite(pnl) and np.isfinite(roe)):
+        return None
+    gross = -1.0 if t.get("exit_reason") == "LIQ" else side * (x / e - 1.0) * lev
+    return (gross - roe) * (pnl / roe)
+
+
+def account_insight(trades: Optional[list], total: Optional[int] = None, hidden: bool = False) -> dict:
+    """One account's closed trades as the 계좌 자세히 '왜 이 성적인가' card and the 연패 lines read them. ``trades``: the
+    snapshot's newest-first list (at most LAST_TRADES); ``total``: the account's real trade count (``capped`` when the
+    list holds fewer); ``hidden``: the account's money must not leave the server (dash.ds_hidden): then only counts,
+    exit reasons, wins and losing runs (labels), never P&L, costs or leverage.
+
+    Keys: n, total, capped, wins, losses, reasons {SL: n, ...}, streak {max, cur, p, usual, rare} (p: the chance of a
+    run as long as ``max`` at this win rate and n; usual / rare: the longest run half / nine in ten of such accounts stay
+    at or under), hidden; with money: lev {"30": n, ...}, reason_pnl, avg_win, avg_loss (> 0), breakeven (the win rate the
+    average win and loss need to break even), net, costs, gross (net + costs, over the cost_n trades whose costs are
+    known), cost_n, big (the three largest losses), big_share (their share of all losses)."""
+    rows = [t for t in (trades or []) if isinstance(t, dict)][::-1]                  # oldest first
+    n = len(rows)
+    wl = [won(t) for t in rows]
+    wins = sum(wl)
+    reasons: dict = {}
+    for t in rows:
+        r = str(t.get("exit_reason") or "?")
+        reasons[r] = reasons.get(r, 0) + 1
+    longest, cur = losing_runs(wl)
+    q = (n - wins) / n if n else None
+    streak = {"max": longest, "cur": cur, "p": longest_run_p(n, q, longest) if longest else None,
+              "usual": run_quantile(n, q, 0.5), "rare": run_quantile(n, q, 0.9)}
+    tot = int(total) if total is not None else n
+    out = {"n": n, "total": max(tot, n), "capped": tot > n, "wins": wins, "losses": n - wins, "reasons": reasons,
+           "streak": streak, "hidden": bool(hidden)}
+    if hidden:
+        out.update(lev=None, reason_pnl=None, avg_win=None, avg_loss=None, breakeven=None, net=None, costs=None,
+                   gross=None, cost_n=0, big=None, big_share=None)
+        return out
+    lev: dict = {}
+    rpnl: dict = {}
+    gains, falls, net, costs, cost_n = [], [], 0.0, 0.0, 0
+    for t in rows:
+        if t.get("leverage"):
+            k = str(int(t["leverage"]))
+            lev[k] = lev.get(k, 0) + 1
+        if t.get("pnl") is None:
+            continue
+        p = float(t["pnl"])
+        r = str(t.get("exit_reason") or "?")
+        rpnl[r] = rpnl.get(r, 0.0) + p
+        net += p
+        if p > 0:
+            gains.append(p)
+        elif p < 0:
+            falls.append(p)
+        c = cost_of(t)
+        if c is not None:
+            costs += c
+            cost_n += 1
+    avg_win = sum(gains) / len(gains) if gains else None
+    avg_loss = -sum(falls) / len(falls) if falls else None
+    big = sorted((t for t in rows if t.get("pnl") is not None and float(t["pnl"]) < 0), key=lambda t: float(t["pnl"]))[:3]
+    keep = ("symbol", "side", "entry_time", "exit_time", "exit_reason", "leverage", "pnl", "roe")
+    out.update(lev=lev, reason_pnl={k: round(v, 2) for k, v in rpnl.items()}, avg_win=avg_win, avg_loss=avg_loss,
+               breakeven=avg_loss / (avg_win + avg_loss) if avg_win and avg_loss else None, net=round(net, 2),
+               costs=round(costs, 2) if cost_n else None, gross=round(net + costs, 2) if cost_n else None, cost_n=cost_n,
+               big=[{k: t.get(k) for k in keep} for t in big],
+               big_share=(sum(float(t["pnl"]) for t in big) / sum(falls)) if falls else None)
+    return out
+
+
+def _pct(xs: list, q: float) -> float:
+    """The q-th percentile (0..100) of a non-empty list, numpy's linear rule."""
+    return float(np.percentile(np.asarray(xs, float), q))
+
+
+def race(accts: list[dict], book: dict, start_ms: int, end_ms: int, max_points: int = 300) -> dict:
+    """묶음 레이스: per pool (core / ds) and role, the median wallet of its accounts at each step from the start to
+    ``end_ms`` (hourly; wider steps when the span holds more than max_points hours), from the complete equity lines
+    of trades.json (the wallet after each closed trade; open positions are not counted). The 동전 accounts also carry
+    their 25th and 75th percentiles (the band luck alone draws). An account without an equity line (DeepSeek money
+    hidden) is left out; a pool with none carries money False and no lines."""
+    import bisect
+    start, end = int(start_ms), max(int(start_ms), int(end_ms))
+    step = HOUR_MS * max(1, -(-(end - start) // HOUR_MS // max(1, max_points)))
+    grid = list(range(start, end, step)) + [end]
+    pools = {}
+    for pool in POOLS:
+        roles = {}
+        for role in ROLES:
+            lines = []
+            for a in accts:
+                if a.get("kind") != pool or a.get("role") != role:
+                    continue
+                eq = ((book or {}).get(a.get("id")) or {}).get("equity")
+                if not eq:
+                    continue
+                ts = [int(p[0]) for p in eq]
+                ws = [float(p[1]) for p in eq]
+                lines.append((ts, ws))
+            if not lines:
+                continue
+            cols = []
+            for t in grid:
+                vals = []
+                for ts, ws in lines:
+                    i = bisect.bisect_right(ts, t) - 1
+                    vals.append(ws[i] if i >= 0 else EQUITY)
+                cols.append(vals)
+            row = {"n": len(lines), "median": [round(_pct(v, 50), 2) for v in cols]}
+            if role == "flip":
+                row["p25"] = [round(_pct(v, 25), 2) for v in cols]
+                row["p75"] = [round(_pct(v, 75), 2) for v in cols]
+            roles[role] = row
+        pools[pool] = {"money": bool(roles), "roles": roles}
+    return {"t": grid, "step_ms": step, "start_ms": start, "end_ms": end, "pools": pools}

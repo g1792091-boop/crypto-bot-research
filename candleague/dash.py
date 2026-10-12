@@ -426,6 +426,229 @@ def pnl_doc(league: Optional[dict], book: Optional[dict], role: str, kind: str, 
             "trades": len(steps), "wins": wins, "losses": len(steps) - wins, "max_dd": round(dd, 2)}
 
 
+# ---------------------------------------------------------------- 익절·손절·배수 (/api/rules), owners 2026-10-12
+# "각 매매법마다 익절구조 손절구조를 어떻게 잡았는지 ... 레버리지는 어떻게 적용되는거고": every pick's exit in plain
+# numbers, the leverage rule's steps with the two safety checks worked out (paperbot.sizing.size_position under
+# config.V3_QUALITY_TIERS, the margin fraction times the account's size: exits.settings_for), and what that rule gives
+# today: each coin's ATR14 on the pick's timeframe from the live klines (closed bars, Wilder's average of the true range
+# as the engine's lib.fg.atr), the stop and take-profit distances, the break-even win rate with costs and the leverage
+# each account would get for a long entered at the last close with a $5,000 wallet. Read-only: nothing here sizes a
+# trade; the engine's own rule is the one in paperbot.
+QUARTER = 0.25                                              # candidates.QUARTER: the 1/4 account's size
+RULE_TFS = ("15m", "30m", "1h", "4h")
+RULE_COINS = ("BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD")
+ATR_BARS = 200                                              # bars asked per coin and timeframe (Wilder warm-up)
+ATR_TTL_S = 300.0                                           # the ATRs are fetched again at most every 5 minutes
+RULE_EQUITY = 5000.0
+LIVE_EXIT = "ladder|2"                                      # exits.LIVE_EXIT: the 기본값 accounts' (the rule bot's) exit
+_SETTINGS: dict = {}
+
+
+def atr14(h: list, lo: list, c: list, n: int = 14) -> Optional[float]:
+    """The last value of lib.fg.atr (Wilder's moving average of the true range: ewm alpha 1/n, adjust False, the first
+    true range high - low) over closed bars; None with fewer than n + 1 bars."""
+    if len(c) < n + 1 or len(h) != len(c) or len(lo) != len(c):
+        return None
+    a = 1.0 / n
+    y = None
+    for i in range(len(c)):
+        tr = h[i] - lo[i] if i == 0 else max(h[i] - lo[i], abs(h[i] - c[i - 1]), abs(lo[i] - c[i - 1]))
+        y = tr if y is None else (1 - a) * y + a * tr
+    return y if y is not None and math.isfinite(y) and y > 0 else None
+
+
+def _settings(exit_name: str, size: float):
+    key = (exit_name, size)
+    if key not in _SETTINGS:
+        from .exits import settings_for
+        _SETTINGS[key] = settings_for(exit_name, size=size)
+    return _SETTINGS[key]
+
+
+def max_stop(margin_frac: float, lev: int) -> float:
+    """The widest stop (a share of the entry) whose loss, with the entry fee, the exit fee and the stop's slippage,
+    stays within max_loss_frac of the wallet at this margin share and leverage (paperbot.sizing.size_position's loss
+    check, without the order-size rounding): frac x lev x (d + (1 - d) slip + fee + (1 - d)(1 - slip) fee) = max."""
+    st = _settings(LIVE_EXIT, 1.0)
+    fee, slip = st.taker_fee, st.slippage_frac
+    a, b = 1 - slip - (1 - slip) * fee, slip + fee + (1 - slip) * fee
+    return max(0.0, (st.max_loss_frac / (margin_frac * lev) - b) / a)
+
+
+def rule_steps(ex: Optional[dict], equity: float = RULE_EQUITY) -> list[dict]:
+    """The leverage steps in the order the engine tries them: leverage, group (best = 좋은 자리, normal = 보통), the
+    margin share (후보 and the 1/4 account), the widest stop the 15% loss check lets through, and per coin the distance
+    from the entry to the liquidation price of a long at that leverage (the coin's bracket at the order's size)."""
+    from paperbot.config import V3_QUALITY_TIERS
+    from paperbot.margin import liquidation_price
+    out = []
+    for t in V3_QUALITY_TIERS:
+        for lev in t.leverages:
+            row = {"lev": int(lev), "group": t.name, "margin": t.margin_frac, "q_margin": round(t.margin_frac * QUARTER, 6),
+                   "max_stop": max_stop(t.margin_frac, lev), "q_max_stop": max_stop(t.margin_frac * QUARTER, lev), "liq": {}}
+            for sym, br in sorted(((ex or {}).get("brackets") or {}).items()):
+                notional = equity * t.margin_frac * lev
+                qty = notional / 100.0
+                liq = liquidation_price(1, qty, 100.0, notional / lev, br.for_notional(notional))
+                row["liq"][sym[:-1] if sym.endswith("USDT") else sym] = (100.0 - liq) / 100.0
+            out.append(row)
+    return out
+
+
+def tp_info(exit_name: str) -> dict:
+    """{kind, val, first_lock, stop_atr} of an exit: kind R (fixed take-profit at val x the stop distance), roe (at a net
+    ROE of val), ladder (the stepped lock from first_lock, no take-profit), ladder_R (the lock plus a take-profit at val
+    x R), struct (the lock plus a take-profit at the last swing of val bars)."""
+    from . import exits as X
+    s = X.spec(exit_name)
+    kind = {X.TP_R: "ladder_R" if s["ladder"] else "R", X.TP_ROE: "roe", X.TP_STRUCT: "struct"}.get(s["tp_kind"], "ladder")
+    return {"kind": kind, "val": s["tp_val"] if kind != "ladder" else None, "first_lock": s["first_lock"] if s["ladder"] else None,
+            "stop_atr": s["stop_atr"]}
+
+
+def breakeven(tp: dict, stop_pct: Optional[float] = None, tp_pct: Optional[float] = None, cost: float = 0.0) -> Optional[float]:
+    """The win rate a fixed take-profit needs to break even: before costs 1 / (1 + m) for a take-profit at m x R; with
+    the stop and take-profit distances (shares of the entry) and the round-trip cost (fees and slippage, a share of the
+    position) (d + cost) / (d + tp). None for a lock exit (its winners have no fixed size)."""
+    if stop_pct is not None and tp_pct is not None and stop_pct > 0 and tp_pct > 0:
+        return min(1.0, (stop_pct + cost) / (stop_pct + tp_pct))
+    if tp["kind"] == "R" and tp["val"]:
+        return 1.0 / (1.0 + float(tp["val"]))
+    return None
+
+
+def lev_now(exit_name: str, size: float, group: str, price: float, atr: float, sym: str, ex: Optional[dict],
+            equity: float = RULE_EQUITY) -> Optional[int]:
+    """The leverage the engine's rule gives a long entered now at ``price`` with this exit's stop (k x ATR) on a
+    ``equity`` wallet in ``group`` (best / normal); 0 when no step passes the checks (no entry), None without the
+    coin's bracket."""
+    if not ex or sym not in (ex.get("brackets") or {}) or not (price > 0 and atr > 0):
+        return None
+    from paperbot.sizing import size_position
+    from .exits import stop_dist
+    stop = price - stop_dist(exit_name, atr)
+    if stop <= 0:
+        return 0
+    dec = size_position(_settings(exit_name, size), equity, 1, price, stop, group, ex["brackets"][sym], atr=atr,
+                        qty_step=(ex.get("steps") or {}).get(sym, 0.0))
+    return int(dec.leverage) if dec.ok else 0
+
+
+def best_ok(a: dict) -> bool:
+    """The account's entries can be a 좋은 자리 (best): a core strategy whose timeframe has entry-strength edges
+    (paperbot/quality_edges.json). DeepSeek strategies and core cells without edges are always 보통."""
+    if a.get("kind") != "core":
+        return False
+    try:
+        from paperbot.levrule import edges
+        return f"{a.get('name')}|{a.get('tf')}" in edges()
+    except (ImportError, OSError, ValueError):
+        return False
+
+
+def atr_table(klines, now_ms: int, coins=RULE_COINS, tfs=RULE_TFS) -> dict:
+    """{tf: {coin: {price, atr, pct}}} from klines(coin, tf, limit) answers (dash's live feed): the last closed bar's
+    close and ATR14; a coin whose bars did not come is left out."""
+    from .live import TF_MS
+    out: dict = {}
+    for tf in tfs:
+        row = {}
+        for coin in coins:
+            try:
+                k = klines(coin, tf, ATR_BARS) or {}
+                b = k.get("bars") or {}
+                keep = [i for i, t in enumerate(b.get("t") or []) if t + TF_MS[tf] <= now_ms]
+                h, lo, c = ([float(b[x][i]) for i in keep] for x in ("h", "l", "c"))
+            except (KeyError, TypeError, ValueError, IndexError, AttributeError):
+                continue
+            a = atr14(h, lo, c)
+            if a is None or not c or not c[-1] > 0:
+                continue
+            row[coin] = {"price": c[-1], "atr": a, "pct": a / c[-1]}
+        out[tf] = row
+    return out
+
+
+def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr: Optional[dict],
+              strict: bool = DS_MONEY_STRICT) -> dict:
+    """/api/rules without its ATR timing fields: the general rule (costs, steps), each pick's exit and its five
+    accounts (exit, size, whether a 좋은 자리 is possible, the leverages they actually used in their closed trades: none
+    for a hidden DeepSeek account) and, with ``atr`` ({tf: {coin: {price, atr, pct}}}), what the rule gives today."""
+    if not doc or not isinstance(doc.get("accounts"), list):
+        return {"status": "준비 중", "picks": {}}
+    from . import exits as X
+    from paperbot.config import V3_P_BEST
+    st = _settings(LIVE_EXIT, 1.0)
+    rt = st.round_trip_cost
+    accts = doc["accounts"]
+    by_id = {a.get("id"): a for a in accts}
+    cands = [a for a in accts if a.get("role") == "cand"]
+    # the leverages each account used in its closed trades (the snapshot's newest 200), every account once
+    used_of: dict = {}
+    used_all: dict = {}
+    hidden_n = 0
+    for a in accts:
+        if ds_hidden(a, doc, strict):
+            hidden_n += 1
+            used_of[a.get("id")] = None
+            continue
+        u: dict = {}
+        for t in ((book or {}).get(a.get("id")) or {}).get("trades") or []:
+            if t.get("leverage"):
+                k = str(int(t["leverage"]))
+                u[k] = u.get(k, 0) + 1
+        used_of[a.get("id")] = u
+        tot = used_all.setdefault(a.get("role"), {})
+        for k, v in u.items():
+            tot[k] = tot.get(k, 0) + v
+
+    picks = {}
+    for c in cands:
+        ids = {"cand": c.get("id"), "quarter": f"{c.get('id')}-q", "exitonly": f"{c.get('id')}-x",
+               "base": f"base-{c.get('kind')}-{c.get('name')}-{c.get('tf')}", "flip": f"{c.get('id')}-flip"}
+        roles = {}
+        for role, aid in ids.items():
+            a = by_id.get(aid)
+            if a is not None:
+                roles[role] = {"id": aid, "exit": a.get("exit"), "exit_ko": a.get("exit_ko"), "size": a.get("size", 1.0),
+                               "trades": a.get("trades"), "used": used_of.get(aid)}
+        tp = tp_info(c["exit"])
+        row = {"id": c.get("id"), "kind": c.get("kind"), "name": c.get("name"), "tf": c.get("tf"), "exit": c.get("exit"),
+               "exit_ko": c.get("exit_ko"), "tp": tp, "stop_atr": tp["stop_atr"], "breakeven": breakeven(tp),
+               "best_ok": best_ok(c), "p_best": V3_P_BEST.get(c.get("tf")) if best_ok(c) else 0.0, "roles": roles,
+               "now": None}
+        tfa = (atr or {}).get(c.get("tf")) or {}
+        if tfa:
+            now = {}
+            groups = ("best", "normal") if row["best_ok"] else ("normal",)
+            for coin, x in tfa.items():
+                sym = coin + "T"
+                stop_pct = X.stop_dist(c["exit"], x["atr"]) / x["price"]
+                lev = {r: {g: lev_now(e, z, g, x["price"], x["atr"], sym, ex) for g in groups}
+                       for r, e, z in (("cand", c["exit"], 1.0), ("quarter", c["exit"], QUARTER), ("base", LIVE_EXIT, 1.0))}
+                ln = lev["cand"].get("normal")
+                if tp["kind"] in ("R", "ladder_R"):
+                    tp_pct = tp["val"] * stop_pct
+                elif tp["kind"] == "roe" and ln:
+                    tp_pct = tp["val"] / ln + rt                     # policy.tp_from_roe: net ROE at that leverage
+                else:
+                    tp_pct = None
+                now[coin] = {"price": x["price"], "atr_pct": x["pct"], "stop_pct": stop_pct, "tp_pct": tp_pct,
+                             "be_cost": breakeven(tp, stop_pct, tp_pct, rt) if tp["kind"] in ("R", "roe") else None,
+                             "base_stop_pct": X.stop_dist(LIVE_EXIT, x["atr"]) / x["price"], "lev": lev}
+            row["now"] = now
+        picks[c["id"]] = row
+    exits: dict = {}
+    for c in cands:
+        exits[c.get("exit")] = exits.get(c.get("exit"), 0) + 1
+    return {"generated_ms": doc.get("generated_ms"), "start_ms": doc.get("start_ms"), "done_ms": doc.get("done_ms"),
+            "ds_money": bool(doc.get("ds_money")) and not strict,
+            "costs": {"taker": st.taker_fee, "slip": st.slippage_frac, "round_trip": rt, "max_loss": st.max_loss_frac,
+                      "buffer_atr": st.liq_buffer_atr_mult, "buffer_min": st.liq_buffer_min_frac},
+            "steps": rule_steps(ex), "p_best": dict(V3_P_BEST), "base_exit": LIVE_EXIT, "base_exit_ko": X.exit_ko(LIVE_EXIT),
+            "exits": exits, "used_all": used_all, "hidden_accounts": hidden_n, "picks": picks}
+
+
 def _static_files() -> frozenset:
     """Every .js / .css / .svg file under static/ (relative paths): the only files /static/ serves."""
     out = []
@@ -792,6 +1015,99 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
             return JSONResponse({"error": "login"}, status_code=401)
         book = (read_book() or (None, None, None))[0] or {}
         return JSONResponse(book.get(aid) or {"equity": None, "trades": []})
+
+    insight_cache: dict = {}
+    insight_lock = threading.Lock()
+
+    @app.get("/api/insight")
+    def insight(req: Request):
+        """Per account, what its closed trades say (summary.account_insight: exit reasons, wins, losing runs and how
+        likely such a run is; with money: the leverages used, the average win and loss with the win rate they need,
+        fees + funding, the three largest losses), from the snapshot's newest 200 trades per account (``capped`` when
+        the account has more). A hidden DeepSeek account (ds_hidden) keeps counts and labels only. Cached per snapshot."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        from . import summary as SM
+        key = (file_key("trades.json"), file_key("league.json"))
+        with insight_lock:
+            if insight_cache.get("key") != key:
+                bk, lg = read_book(), read_league()
+                if bk is None or not lg or not isinstance(lg.get("accounts"), list):
+                    return JSONResponse({"status": "준비 중", "accounts": {}})
+                book = bk[0] or {}
+                out = {a.get("id"): SM.account_insight((book.get(a.get("id")) or {}).get("trades"), a.get("trades"),
+                                                       ds_hidden(a, lg, strict)) for a in lg["accounts"]}
+                insight_cache.update(key=key, doc=finite_json({"generated_ms": lg.get("generated_ms"), "last_n": SM.LAST_TRADES,
+                                                               "ds_money": bool(lg.get("ds_money")) and not strict,
+                                                               "accounts": out}))
+            return JSONResponse(insight_cache["doc"])
+
+    race_cache: dict = {}
+    race_lock = threading.Lock()
+
+    @app.get("/api/race")
+    def api_race(req: Request):
+        """묶음 레이스 (summary.race): per pool and role the median wallet over time from the start, the 동전 accounts'
+        middle half as the band. Hidden DeepSeek accounts are left out (their pool then has no lines). Cached per
+        snapshot."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        from . import summary as SM
+        key = (file_key("trades.json"), file_key("league.json"))
+        with race_lock:
+            if race_cache.get("key") != key:
+                bk, lg = read_book(), read_league()
+                if bk is None or not lg or not isinstance(lg.get("accounts"), list) or not lg.get("start_ms"):
+                    return JSONResponse({"status": "준비 중", "pools": {}})
+                book = {a.get("id"): (bk[0] or {}).get(a.get("id")) for a in lg["accounts"] if not ds_hidden(a, lg, strict)}
+                doc = SM.race(lg["accounts"], book, int(lg["start_ms"]), int(lg.get("done_ms") or lg["start_ms"]))
+                race_cache.update(key=key, doc=finite_json({**doc, "generated_ms": lg.get("generated_ms"),
+                                                            "ds_money": bool(lg.get("ds_money")) and not strict}))
+            return JSONResponse(race_cache["doc"])
+
+    atr_state: dict = {"at": None, "doc": None, "thread": None}
+    atr_lock = threading.Lock()
+    rules_cache: dict = {}
+
+    def atr_refresh():
+        try:
+            tab = atr_table(live.klines, now_ms())
+            atr_state.update(doc={"ms": now_ms(), "source": getattr(live, "mode", None), "tfs": tab}, at=clock())
+        except Exception as exc:  # noqa: BLE001  the rule card then shows no 'today' numbers, never an error page
+            atr_state.update(at=clock(), err=type(exc).__name__)
+
+    def atr_now(wait: bool):
+        """(the ATR table or None, still loading): fetched in the background at most every ATR_TTL_S (24 klines at
+        the live feed's rate limit take a few seconds); ``wait`` waits for a running fetch (at most 15 s)."""
+        if getattr(live, "mode", "on") == "off":
+            return None, False
+        with atr_lock:
+            fresh = atr_state["at"] is not None and clock() - atr_state["at"] < ATR_TTL_S
+            th = atr_state["thread"]
+            if not fresh and (th is None or not th.is_alive()):
+                th = threading.Thread(target=atr_refresh, name="candleague-atr", daemon=True)
+                atr_state["thread"] = th
+                th.start()
+        if wait and th is not None and th.is_alive():
+            th.join(timeout=15)
+        return atr_state["doc"], bool(th is not None and th.is_alive())
+
+    @app.get("/api/rules")
+    def api_rules(req: Request):
+        """익절·손절·배수 (rules_doc): the leverage rule's steps and checks, every pick's exit and five accounts, the
+        leverages they used, and with the live ATRs what the rule gives today (``atr_ms`` when they were read,
+        ``atr_loading`` while the first read runs: ``?wait=1`` waits for it)."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        atr, loading = atr_now(req.query_params.get("wait") == "1")
+        key = (file_key("league.json"), file_key("trades.json"), (atr or {}).get("ms"))
+        if rules_cache.get("key") != key:
+            lg = read_league()
+            bk = read_book()
+            doc = rules_doc(lg, (bk or (None,))[0], load_exchange(ex_path), (atr or {}).get("tfs"), strict)
+            rules_cache.update(key=key, doc=finite_json(doc))
+        return JSONResponse({**rules_cache["doc"], "atr_ms": (atr or {}).get("ms"), "atr_source": (atr or {}).get("source"),
+                             "atr_loading": loading, "atr": (atr or {}).get("tfs"), "server_ms": now_ms()})
 
     return app
 

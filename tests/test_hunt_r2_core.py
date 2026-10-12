@@ -830,3 +830,110 @@ def test_engine_pin_check_on_a_temporary_tree(tmp_path):
     (tmp_path / "research/hunt/hunt.py").write_bytes(b"changed")
     with pytest.raises(RuntimeError, match="changed since round 1's pin: research/hunt/hunt.py"):
         PN.check_engine(list(files), root=str(tmp_path))
+
+
+# ------------------------------------------------------------------ the whole select step on synthetic bars
+def test_select_step_end_to_end_and_resume(world, tmp_path):
+    ctx = world
+    order = [n for _f, n in L.names() if n in NAMES]
+    parts = str(tmp_path / "parts")
+    res = SR.select_run(ctx.mk, ctx.root, parts, 2, names_order=order, n_rep=3)
+    assert set(res["real_units"]) == set(order)
+    for nm in order:
+        u = res["real_units"][nm]
+        assert (u["anchor_tf"], u["anchor_gate"]) == (u["stage0"][u["anchor"]]["tf"], u["stage0"][u["anchor"]]["gate"])
+    for null in ("a", "b"):
+        assert sorted(res["nulls"][null]) == [1, 2, 3]
+        for v in res["nulls"][null].values():
+            assert v["P"] == sorted(v["P"], reverse=True) and v["runs"] > 0
+    assert sum(v["counts"]["flipped"] for v in res["nulls"]["b"].values()) > 0
+    assert sum(v["counts"]["events"] for v in res["nulls"]["a"].values()) > 0
+    assert len(res["hurdle"]["steps"]) == len(res["real"]["ranked"])
+    assert set(res["box"]["boxes"]) == {c["name"] for c, s in zip(res["real"]["ranked"], res["hurdle"]["steps"])
+                                        if s["taken"]}
+    pub, priv = SR.picks_doc(order, res["real_units"], res["real"], res["hurdle"], res["box"], res["nulls"])
+    assert [r["name"] for r in pub["names"]] == order and SR.d11_problems(pub) == []
+    f3 = next(r for r in pub["names"] if r["name"] == "F3_BOS")
+    assert "P_c_peak" not in f3 and any(r["name"] == "F3_BOS" for r in priv["rows"])
+    e1 = next(r for r in pub["names"] if r["name"] == "E1")
+    assert "P_c_default" in e1 and e1["default"] == L.default_combo("E1")
+    assert "old six not blind" in e1["labels"]
+    json.dumps(pub)
+    res2 = SR.select_run(ctx.mk, ctx.root, parts, 1, names_order=order, n_rep=3)        # resumes from the parts
+    for nm in order:
+        assert np.array_equal(res2["real_units"][nm]["S"], res["real_units"][nm]["S"], equal_nan=True)
+    assert res2["nulls"]["a"] == res["nulls"]["a"] or all(
+        res2["nulls"]["a"][i]["P"] == res["nulls"]["a"][i]["P"] for i in (1, 2, 3))
+
+
+def test_box_stage_runs_the_box_at_the_anchor(world):
+    ctx = world
+    real = SR.name_unit(ctx, "E1", real=True)
+    lat = L.coarse("E1")
+    peak = int(np.flatnonzero(np.arange(len(lat)) != lat.default)[0])
+    out = SR.box_stage(ctx, {"E1": real}, [{"name": "E1", "peak": peak}], [{"taken": True}], 1)
+    b = out["boxes"]["E1"]
+    bx = L.box("E1", lat.combos[peak])
+    assert b["points"] == int(b["exists"].sum()) <= len(bx) and b["centre"] == bx.index(lat.combos[peak])
+    assert out["picks"] == (["E1"] if b["plateau"] else [])
+    S_centre = SR.run_sig(ctx.mk, SR.store_sig(ctx, SR.load_units(ctx.root, "coarse", "E1", real["anchor_tf"], ctx.syms),
+                                               peak, real["anchor_gate"], real["anchor_tf"]))["S"]
+    assert b["S"][b["centre"]] == S_centre                  # the centre is the coarse peak's own run
+
+
+def test_d11_writer_refuses_a_float_under_a_deepseek_row():
+    ok = {"names": [{"family": "F3", "name": "X", "rank": 1, "peak": {"swing_k": 2, "disp_atr": 2.4},
+                     "default": {"disp_atr": 1.2}, "box": {"box_best": {"numbers": {"disp_atr": 1.5}}}}]}
+    assert SR.d11_problems(ok) == []                       # numbers (combos) are public, also floats
+    bad = SR.d11_problems({"names": [{"family": "F3", "name": "X", "box": {"median_S": 0.1}}]})
+    assert bad == ["picks.names[0].box.median_S"]
+    assert SR.d11_problems({"names": [{"family": "F2", "name": "Y", "P_c_peak": 0.1}]}) == []
+
+
+# ------------------------------------------------------------------ round 2's own pin (11): a temporary tree only
+def _r2_tree(tmp_path):
+    files = {PN.DESIGN: b"design", PN.COUNTS: b"{}", PN.BENCH: b"{}", "research/hunt_r2/lattice.py": b"code",
+             "tests/test_hunt_r2_core.py": b"tests", "research/hunt/hunt.py": b"engine"}
+    for rel, data in files.items():
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+    sha = {rel: hashlib.sha256(d).hexdigest() for rel, d in files.items()}
+    (tmp_path / PN.R1_PIN).write_text(f"{sha['research/hunt/hunt.py']}  research/hunt/hunt.py\n")
+    order = [PN.DESIGN] + [r for r in files if r != PN.DESIGN]
+    (tmp_path / PN.R2_PIN).write_text("".join(f"{sha[r]}  {r}\n" for r in order))
+    return sha
+
+
+def test_round_two_pin_check_and_refusals(tmp_path):
+    root = str(tmp_path)
+    eng = ["research/hunt/hunt.py"]
+    sha = _r2_tree(tmp_path)
+    assert PN.check_pin("select", root, eng)["files"] == 6
+    lines = PN.pinlist(root, eng)
+    assert f"{sha['research/hunt/hunt.py']}  research/hunt/hunt.py" in lines and \
+        f"{sha['research/hunt_r2/lattice.py']}  research/hunt_r2/lattice.py" in lines
+    with pytest.raises(RuntimeError, match="not pinned"):
+        PN.check_pin("test", root, eng)                     # test needs the picks line
+    (tmp_path / "research/hunt_r2/out").mkdir(parents=True)
+    (tmp_path / PN.PICKS).write_text("{}")
+    PN.append_line(PN.PICKS, root)
+    assert PN.check_pin("test", root, eng)
+    with pytest.raises(RuntimeError, match="already pinned"):
+        PN.check_pin("select", root, eng)
+    (tmp_path / "research/hunt_r2/new.py").write_text("x")
+    with pytest.raises(RuntimeError, match="not pinned research/hunt_r2/new.py"):
+        PN.check_pin("test", root, eng)
+    os.remove(tmp_path / "research/hunt_r2/new.py")
+    (tmp_path / "research/hunt/hunt.py").write_bytes(b"engine2")
+    with pytest.raises(RuntimeError, match="changed"):
+        PN.check_pin("test", root, eng)
+    sha2 = _r2_tree(tmp_path)
+    txt = (tmp_path / PN.R2_PIN).read_text().splitlines()
+    (tmp_path / PN.R2_PIN).write_text("\n".join(txt[1:] + txt[:1]) + "\n")
+    with pytest.raises(RuntimeError, match="first line is not the design hash"):
+        PN.check_pin("select", root, eng)
+    (tmp_path / PN.R2_PIN).write_text("\n".join(t for t in txt if PN.BENCH not in t) + "\n")
+    with pytest.raises(RuntimeError, match="bench_r2.json"):
+        PN.check_pin("select", root, eng)
+    assert sha2 == sha

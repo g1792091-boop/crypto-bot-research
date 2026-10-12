@@ -11,16 +11,19 @@ Pure rules (tested on hand-made tables): ``anchor_slot`` (4.1), ``plateau`` / ``
 (3.6 two names), ``rank_candidates`` (4.2), ``null_rank_scores`` / ``step_down`` (4.3), ``box_check`` / ``box_best``
 (4.4). Null constructions (4.3): ``FlipTable`` ((b′): one coin per signal-bar close shared by every coin and system),
 ``delta_days`` / ``Spans`` / ``shift_sig`` / ``choose_delta`` ((a′): whole-week common shift, per-coin circular wrap,
-drops counted, redraw above 10%).
+drops counted, redraw above 10%). ``select_run`` runs the whole step on an installed market: the event store, the
+(a′) shifts, the real search, 200 replicates of each null, the hurdle, the box stage and ``picks.json``.
 
-CHOICES (where the text leaves room; each also in ``CHOICES`` of the output):
+Where the text leaves room, the reading taken is listed in ``CHOICES`` (also written into picks.json).
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
+import pickle
 import sys
 import time
 from collections import OrderedDict
@@ -617,3 +620,372 @@ def box_unit(ctx: Ctx, name: str, tf: str, gate: str, bx, removed: dict) -> dict
     chk["best"] = box_best(bx, S, n, exists)
     chk.update({"S": S, "S2": S2, "n": n, "bust": bust, "exists": exists})
     return chk
+
+
+# ------------------------------------------------------------------ the select step: event histograms for (a′) redraws
+def unit_hist(ctx: Ctx, name: str, tf: str) -> dict:
+    """{(tf, k): (bars, counts)}: the signal bars of every system of one (name, timeframe) the search can run (every
+    coarse combo not removed under 3.7, both gates; after the gate, ATR14 and fill filters), with multiplicity."""
+    lat = L.coarse(name)
+    units = load_units(ctx.root, ctx.part, name, tf, ctx.syms)
+    rem = ST.removed_of(units)
+    out = {}
+    for k, u in enumerate(units):
+        ok = ctx.ok(tf, k)
+        acc = []
+        for ci in range(len(lat)):
+            if ci in rem:
+                continue
+            j, _side, g1 = u.events(ci)
+            keep = ok[j]
+            acc.append(j[keep])
+            acc.append(j[keep & (g1 == 1)])
+        allj = np.concatenate(acc).astype(np.int64) if acc else np.zeros(0, np.int64)
+        bars, cnt = np.unique(allj, return_counts=True)
+        out[(tf, k)] = (bars, cnt.astype(np.int64))
+    return out
+
+
+def merge_hist(parts: list) -> dict:
+    acc: dict = {}
+    for h in parts:
+        for key, (b, c) in h.items():
+            acc.setdefault(key, []).append((b, c))
+    out = {}
+    for key, lst in acc.items():
+        b = np.concatenate([x for x, _ in lst])
+        c = np.concatenate([y for _, y in lst])
+        ub, inv = np.unique(b, return_inverse=True)
+        out[key] = (ub, np.bincount(inv, weights=c, minlength=len(ub)).astype(np.int64))
+    return out
+
+
+# ------------------------------------------------------------------ the select step: units in forked workers
+_RUN: dict = {}          # set by the parent before a pmap: ctx, flip tables, shifts (workers inherit them by fork)
+
+
+def compact(u: dict) -> dict:
+    """What a replicate needs of a name's unit (lists, JSON-ready)."""
+    f = lambda a: [None if (isinstance(x, float) and math.isnan(x)) else x for x in np.asarray(a, float).tolist()]  # noqa: E731
+    return {"name": u["name"], "family": u["family"], "anchor": u["anchor"], "anchor_tf": u["anchor_tf"],
+            "anchor_gate": u["anchor_gate"], "S": f(u["S"]), "n": f(u["n"]), "bust": [bool(x) for x in u["bust"]],
+            "exists": [bool(x) for x in u["exists"]], "default_eff": [bool(x) for x in u["default_eff"]],
+            "stage0": [{k: r[k] for k in ("tf", "gate", "S", "n", "bust", "median_M")} for r in u["stage0"]],
+            "counts": u["counts"], "runs": u["runs"], "seconds": u["seconds"]}
+
+
+def expand(c: dict) -> dict:
+    """compact() back to arrays."""
+    u = dict(c)
+    for k in ("S", "n"):
+        u[k] = np.asarray([np.nan if x is None else x for x in c[k]], float)
+    for k in ("bust", "exists", "default_eff"):
+        u[k] = np.asarray(c[k], bool)
+    return u
+
+
+def write_json(path: str, obj) -> str:
+    """Atomic JSON write (numpy arrays as lists); returns the file's sha256."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as fh:
+        json.dump(obj, fh, indent=1, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o))
+        fh.write("\n")
+    os.replace(tmp, path)
+    return H.sha256_file(path)
+
+
+def _null_task(task) -> dict:
+    null, i, name, part = task
+    if part and os.path.exists(part):
+        with open(part) as fh:
+            return json.load(fh)
+    ctx = _RUN["ctx"]
+    tr = FlipTable(i, ctx.start, ctx.end) if null == "b" else ShiftA(i, _RUN["shift"][i])
+    if null == "b" and _RUN.get("flip", {}).get(i) is not None:
+        tr = _RUN["flip"][i]
+    out = compact(name_unit(ctx, name, transform=tr))
+    if part:
+        H.disk_check(part)
+        write_json(part, out)
+    return out
+
+
+def _real_task(task) -> dict:
+    name, part = task
+    if part and os.path.exists(part):
+        with open(part, "rb") as fh:
+            return pickle.load(fh)
+    u = name_unit(_RUN["ctx"], name, real=True)
+    if part:
+        H.disk_check(part)
+        os.makedirs(os.path.dirname(part), exist_ok=True)
+        with open(part + ".tmp", "wb") as fh:
+            pickle.dump(u, fh)
+        os.replace(part + ".tmp", part)
+    return u
+
+
+def unit_weight(name: str) -> int:
+    """Heaviest first (11): coarse points, then names whose signals cost most (N05, V45, V39 at 15m)."""
+    heavy = {"V45_AMB": 3, "V39_ALL": 3, "N05_PSAR_POC": 2, "DOGE": 1}
+    return len(L.coarse(name)) * (1 + heavy.get(name, 0))
+
+
+def null_replicates(null: str, reps: list, names_order: list, procs: int, parts: str | None) -> dict:
+    """Every (replicate, name) unit of one null, heaviest first; then each replicate's search (4.3, base cost only).
+    Returns {i: {"P": candidate P_c list, "candidates": n, "runs": ..., "counts": ...}}."""
+    tasks = []
+    for i in reps:
+        for nm in names_order:
+            p = os.path.join(parts, f"null_{null}", f"{i:03d}", f"{nm}.json") if parts else None
+            tasks.append((null, i, nm, p))
+    order = sorted(range(len(tasks)), key=lambda t: (-unit_weight(tasks[t][2]), tasks[t][1], tasks[t][2]))
+    res = H.pmap(_null_task, [tasks[t] for t in order], procs, label=f"null ({null}′) units")
+    by = {}
+    for t, r in zip(order, res):
+        by.setdefault(tasks[t][1], {})[tasks[t][2]] = expand(r)
+    out = {}
+    for i in reps:
+        s = search(by[i], names_order, real=False)
+        cnt = {"events": 0, "dropped": 0, "collided": 0, "flipped": 0}
+        for u in by[i].values():
+            for k, v in u["counts"].items():
+                cnt[k] = cnt.get(k, 0) + v
+        out[i] = {"P": [c["P"] for c in s["ranked"]], "candidates": len(s["ranked"]),
+                  "names": [c["name"] for c in s["ranked"]], "counts": cnt,
+                  "runs": int(sum(u["runs"] for u in by[i].values())),
+                  "anchors": {nm: [u["anchor_tf"], u["anchor_gate"]] for nm, u in by[i].items()}}
+    return out
+
+
+def hurdle(real: dict, null_a: dict, null_b: dict) -> dict:
+    """4.3: the step-down walk of the real ranked candidates against both nulls' rank-r scores."""
+    R = max(1, len(real["ranked"]))
+    sa = null_rank_scores([null_a[i]["P"] for i in sorted(null_a)], R)
+    sb = null_rank_scores([null_b[i]["P"] for i in sorted(null_b)], R)
+    steps = step_down([c["P"] for c in real["ranked"]], sa, sb)
+    q = {}
+    for r in range(1, R + 1):
+        q[r] = {nm: {f"q{int(p)}": float(np.percentile(s[:, r - 1], p)) for p in (50, 75, 90, 95)}
+                for nm, s in (("a", sa), ("b", sb))}
+    return {"steps": steps, "percentiles": q, "scores_a": sa, "scores_b": sb}
+
+
+# ------------------------------------------------------------------ the box stage (4.4)
+def _box_store_task(task):
+    name, tf, sym, combos, root = task
+    ctx = _RUN["ctx"]
+    return ST.build(root, "box", name, tf, sym, combos, ctx.start, ctx.end)
+
+
+def _box_task(task):
+    name, tf, gate, peak_idx = task
+    ctx = _RUN["ctx"]
+    lat = L.coarse(name)
+    bx = L.box(name, lat.combos[peak_idx])
+    units = load_units(ctx.root, "box", name, tf, ctx.syms)
+    rem = ST.removed_of(units)
+    res = box_unit(ctx, name, tf, gate, bx, rem)
+    res["removed"] = {str(k): v for k, v in rem.items()}
+    res["centre"] = bx.index(lat.combos[peak_idx])
+    return res
+
+
+def box_stage(ctx: Ctx, real_units: dict, ranked: list, steps: list, procs: int) -> dict:
+    """Taken names in their order until 30 picks: each box (3.5) at the anchor, base and cost x2, must be a plateau;
+    the pick is the coarse peak (the box centre)."""
+    taken = [c for c, s in zip(ranked, steps) if s["taken"]]
+    if not taken:
+        return {"picks": [], "boxes": {}}
+    jobs = []
+    for c in taken:
+        u = real_units[c["name"]]
+        bx = L.box(c["name"], L.coarse(c["name"]).combos[c["peak"]])
+        for s in ctx.syms:
+            jobs.append((c["name"], u["anchor_tf"], s, bx.combos, ctx.root))
+    _RUN["ctx"] = ctx
+    H.pmap(_box_store_task, jobs, procs, label="box store")
+    tasks = [(c["name"], real_units[c["name"]]["anchor_tf"], real_units[c["name"]]["anchor_gate"], c["peak"])
+             for c in taken]
+    res = H.pmap(_box_task, tasks, procs, label="box checks")
+    boxes = {t[0]: r for t, r in zip(tasks, res)}
+    picks = []
+    for c in taken:
+        if len(picks) == MAX_PICKS:
+            break
+        if boxes[c["name"]]["plateau"]:
+            picks.append(c["name"])
+    return {"picks": picks, "boxes": boxes}
+
+
+# ------------------------------------------------------------------ picks.json (5) and D11 (10.4)
+NUMBER_KEYS = ("default", "peak", "numbers", "combo")      # 10.4: a DeepSeek row's numbers (combos) are public
+
+
+def d11_problems(doc, path: str = "picks", under: bool = False) -> list:
+    """10.4: no float under a DeepSeek row (a dict with family F3), anywhere below it, except its numbers (combos)."""
+    bad = []
+    if isinstance(doc, dict):
+        here = under or doc.get("family") == "F3"
+        for k, v in doc.items():
+            if here and k in NUMBER_KEYS:
+                continue
+            bad += d11_problems(v, f"{path}.{k}", here)
+    elif isinstance(doc, (list, tuple)):
+        for i, v in enumerate(doc):
+            bad += d11_problems(v, f"{path}[{i}]", under)
+    elif under and isinstance(doc, float):
+        bad.append(path)
+    elif under and isinstance(doc, np.floating):
+        bad.append(path)
+    return bad
+
+
+def labels_of(name: str, u: dict, peak: int) -> list:
+    lat = L.coarse(name)
+    out = []
+    if peak >= 0:
+        if lat.edge[peak]:
+            out.append("edge of the coarse lattice")
+        nb = lat.nb[peak]
+        ex = [i for i in nb if i >= 0 and u["exists"][i]]
+        allpos = all(u["S"][i] > 0 for i in ex)
+        out.append("every coarse neighbour positive: " + ("yes" if allpos else "no"))
+        if any(peak in g for g in u.get("dup_groups", [])):
+            out.append("same event list as another coarse point")
+        combo = lat.combos[peak]
+        if any(p["name"] == name and L.canon({k: p["combo"][k] for k in combo}) == L.canon(combo)
+               for p in _watch_picks()):
+            out.append("same numbers as an F4 watch pick")
+    out.append("old six not blind")
+    return out
+
+
+def _watch_picks() -> list:
+    if "watch" not in _RUN:
+        try:
+            _RUN["watch"] = ST.E.EW.watch_picks()
+        except Exception:  # noqa: BLE001  the label is a read; a missing file leaves it out
+            _RUN["watch"] = []
+    return _RUN["watch"]
+
+
+def _f(x):
+    return None if x is None or (isinstance(x, float) and not math.isfinite(x)) else float(x)
+
+
+def picks_doc(names_order: list, real_units: dict, real: dict, hz: dict, box: dict, nulls: dict) -> tuple:
+    """(public, private) picks.json documents (5); DeepSeek rows: numbers, ranks and labels only in public."""
+    rank_of = {c["name"]: r for r, c in enumerate(real["ranked"], start=1)}
+    step_of = {c["name"]: hz["steps"][r - 1] for c in real["ranked"] for r in [rank_of[c["name"]]]}
+    pick_no = {nm: i + 1 for i, nm in enumerate(box["picks"])}
+    rows_pub, rows_priv = [], []
+    for nm in names_order:
+        u = real_units[nm]
+        lat = L.coarse(nm)
+        st = real["per_name"][nm]
+        pk = st["peak"]
+        row = {"family": u["family"], "name": nm, "anchor": {"tf": u["anchor_tf"], "gate": u["anchor_gate"]},
+               "default": lat.combos[lat.default], "peak": lat.combos[pk] if pk >= 0 else "no peak",
+               "candidate": bool(st["candidate"]), "rank": rank_of.get(nm),
+               "hurdle": step_of[nm]["label"] if nm in step_of else None,
+               "labels": labels_of(nm, u, pk)}
+        money = {"name": nm, "P_c_peak": _f(st["P_peak"]), "P_c_default": _f(st["P_default"]),
+                 "P_c2_peak": _f(st["P2_peak"]), "S_peak": _f(st["S_peak"])}
+        if nm in box["boxes"]:
+            b = box["boxes"][nm]
+            bx = L.box(nm, lat.combos[pk])
+            row["box"] = {"plateau": b["plateau"], "label": b["label"], "points": b["points"],
+                          "box_best": {"numbers": bx.combos[b["best"]] if b["best"] >= 0 else None,
+                                       "label": "box best, never tested, inflated by the within-box choice"}}
+            money["box"] = {"median_S": _f(b["median_S"]), "median_S2": _f(b["median_S2"]), "good": b["good"]}
+        if nm in pick_no:
+            no = pick_no[nm]
+            row.update({"pick_no": no, "batch": (no - 1) // 10 + 1,
+                        "id": L.system_id(u["family"], nm, u["anchor_tf"], u["anchor_gate"], lat.combos[pk])})
+        if u["family"] == "F3":
+            rows_priv.append(money)
+        else:
+            row.update({k: v for k, v in money.items() if k != "name"})
+            rows_priv.append(money)
+        rows_pub.append(row)
+    ds_ranks = {rank_of[c["name"]] for c in real["ranked"] if real_units[c["name"]]["family"] == "F3"}
+    pct_pub = {str(r): q for r, q in hz["percentiles"].items() if r not in ds_ranks}
+    pct_priv = {str(r): q for r, q in hz["percentiles"].items()}
+    picks = [r for r in rows_pub if "pick_no" in r]
+    batches = [[p["pick_no"] for p in picks if p["batch"] == b] for b in (1, 2, 3)]
+    stage_counts = {"names": len(names_order),
+                    "stage0_systems": int(sum(len(real_units[nm]["stage0"]) for nm in names_order)),
+                    "stage_a_points": int(sum(int(np.asarray(real_units[nm]["exists"]).sum()) for nm in names_order)),
+                    "with_peak": int(sum(1 for nm in names_order if real["per_name"][nm]["peak"] >= 0)),
+                    "candidates": len(real["ranked"]), "taken": int(sum(1 for s_ in hz["steps"] if s_["taken"])),
+                    "boxes_checked": len(box["boxes"]),
+                    "boxes_failed": int(sum(1 for b in box["boxes"].values() if not b["plateau"])),
+                    "picks": len(picks)}
+    public = {"names": rows_pub, "picks": picks, "stage_counts": stage_counts, "batches": [b for b in batches if b], "batch_size": 10,
+              "batch_trigger": 5, "batch_labels": ["1군", "2군", "3군"],
+              "label": "picks" if picks else "round 2 fails at selection (no name taken or every box failed)",
+              "stage0": {nm: [real_units[nm]["anchor_tf"], real_units[nm]["anchor_gate"]] for nm in names_order},
+              "removed": {nm: real_units[nm]["removed"] for nm in names_order if real_units[nm]["removed"]},
+              "null_counts": {k: {str(i): {"candidates": v["candidates"], "counts": v["counts"]} for i, v in d.items()}
+                              for k, d in nulls.items() if k in ("a", "b")},
+              "null_shifts": nulls.get("shifts"), "null_percentiles": pct_pub, "choices": CHOICES}
+    private = {"rows": rows_priv, "null_percentiles": pct_priv}
+    bad = d11_problems(public)
+    if bad:
+        raise RuntimeError(f"D11: a float under a DeepSeek row in picks.json: {bad[:5]}")
+    return public, private
+
+
+# ------------------------------------------------------------------ the whole select step on an installed market
+def _store_task(task):
+    name, tf, sym = task
+    ctx = _RUN["ctx"]
+    ST.build(ctx.root, "coarse", name, tf, sym, L.coarse(name).combos, ctx.start, ctx.end)
+    return 0
+
+
+def _hist_task(task):
+    name, tf = task
+    return unit_hist(_RUN["ctx"], name, tf)
+
+
+def select_run(mk, root: str, parts: str | None, procs: int, names_order: list | None = None,
+               n_rep: int = N_REP) -> dict:
+    """Section 4 on the installed market ``mk`` (the select period): store, real search, nulls, hurdle, box stage.
+    ``names_order`` / ``n_rep`` other than the defaults are for tests only. Returns everything picks_doc needs and
+    the real units (the private run folder keeps them for the select-only reads of section 6)."""
+    names_order = names_order or [n for _f, n in L.names()]
+    ctx = Ctx(mk, root)
+    _RUN.clear()
+    _RUN["ctx"] = ctx
+    t0 = time.time()
+    run_sig(mk, {"tf": "4h", "k": np.zeros(0, np.int64), "j": np.zeros(0, np.int64), "side": np.zeros(0, np.int64)})
+    tasks = [(nm, tf, s) for nm in sorted(names_order, key=lambda x: -unit_weight(x))
+             for tf in L.tfs_of(nm) for s in ctx.syms]
+    H.pmap(_store_task, tasks, procs, label="event store (name, timeframe, coin)")
+    t_store = time.time() - t0
+    hist = merge_hist(H.pmap(_hist_task, [(nm, tf) for nm in names_order for tf in L.tfs_of(nm)], procs,
+                             label="(a′) event histograms"))
+    reps = list(range(1, n_rep + 1))
+    shifts = {i: choose_delta(ctx, hist, i) for i in reps}
+    _RUN["shift"] = {i: shifts[i]["days"] for i in reps}
+    for i, sh in shifts.items():
+        if sh["j"]:
+            print(f"(a′) replicate {i}: redrawn {sh['j']} time(s), {sh['days']} days", flush=True)
+    _RUN["flip"] = {i: FlipTable(i, ctx.start, ctx.end) for i in reps}
+    rp = os.path.join(parts, "real") if parts else None
+    real_list = H.pmap(_real_task, [(nm, os.path.join(rp, f"{nm}.pkl") if rp else None)
+                                    for nm in sorted(names_order, key=lambda x: -unit_weight(x))], procs,
+                       label="real Stage 0 + A")
+    real_units = {u["name"]: u for u in real_list}
+    real = search(real_units, names_order, real=True)
+    null_b = null_replicates("b", reps, names_order, procs, parts)
+    null_a = null_replicates("a", reps, names_order, procs, parts)
+    hz = hurdle(real, null_a, null_b)
+    box = box_stage(ctx, real_units, real["ranked"], hz["steps"], procs)
+    nulls = {"a": null_a, "b": null_b,
+             "shifts": {str(i): {k: v for k, v in sh.items() if k != "i"} for i, sh in shifts.items()}}
+    return {"real_units": real_units, "real": real, "hurdle": hz, "box": box, "nulls": nulls,
+            "seconds": {"store": round(t_store, 1), "total": round(time.time() - t0, 1)}}
