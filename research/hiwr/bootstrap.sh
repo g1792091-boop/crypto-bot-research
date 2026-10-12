@@ -310,8 +310,8 @@ case "$MODE" in
         exit 0 ;;              # the printed restart line starts with this guard: a paste during a run changes nothing
 esac
 
-for k in 1 2 3 4 5; do running || break; sleep 2; done      # a restart: let the old run finish dying
 waiting && { echo "$WAIT_MSG"; exit 1; }
+for k in 1 2 3 4 5; do running || break; sleep 2; done      # a restart: let the old run finish dying
 running && { echo "이미 돌고 있습니다. 화면 보기: $TM attach -t hiwr   (진행: bash $SELF status)"; exit 1; }
 if [ -f "$BASE/DONE" ]; then
   echo "이미 끝났습니다: $BASE/results.tgz  (보내기: bash $SELF push; 처음부터 다시 묶으려면 rm $BASE/DONE)"

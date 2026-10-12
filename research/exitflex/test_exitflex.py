@@ -195,6 +195,11 @@ def build_world(coins: dict, tmp, prov_kw=None, pick=None, f11=None):
 
 
 # ----------------------------------------------------------------------------------- the reference simulator
+def entry_index_py(ts, close):
+    j0 = int(np.searchsorted(ts, close - MIN, side="left"))
+    return -1 if j0 + 1 >= len(ts) else j0 + 1
+
+
 class RefChart:
     """The raw per-bar lists of one coin's pick-timeframe bars (and 15m bars), straight from the frames."""
 
@@ -205,10 +210,10 @@ class RefChart:
         self.atr = list(pdata.b_atr[a:b])
         self.sigl, self.sigs = list(pdata.b_sl[a:b]), list(pdata.b_ss[a:b])
         self.xl, self.xs = list(pdata.b_xl[a:b]), list(pdata.b_xs[a:b])
-        self.minute = list(pdata.b_min[a:b].astype(np.int64))
         self.ema = {}
         self.pdata, self.c = pdata, c
         self.ts = pdata.market.ts(c)
+        self.minute = [entry_index_py(self.ts, int(x)) for x in self.cms]       # independent of PickData
         n = len(self.cl)
         self.n = n
 
@@ -250,11 +255,6 @@ class RefChart:
             if side < 0 and self.swing_high(p, w) and (ref is None or self.hi[p] < ref):
                 ref = self.hi[p]
         return ref
-
-
-def entry_index_py(ts, close):
-    j0 = int(np.searchsorted(ts, close - MIN, side="left"))
-    return -1 if j0 + 1 >= len(ts) else j0 + 1
 
 
 def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
@@ -454,3 +454,81 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
             wallet -= margin
             return wallet - equity, j, KX.R_LIQ, lev, 0.0, records
     return wallet - equity, end - 1, KX.R_OPEN, lev, 0.0, records
+
+
+def ref_q15(prov, pdata, c):
+    """The 15m bars of coin c for the reference: close ms, close, minute index (independent), latest pick bar closed."""
+    sym = pdata.market.symbols[c]
+    df, close = prov.frame(sym, "15m")
+    close = np.asarray(close, np.int64)
+    ts = pdata.market.ts(c)
+    pcl = np.asarray(pdata.frames[c][1], np.int64)
+    return {"cms": list(close), "cl": list(df["close"].to_numpy(float)),
+            "minute": [entry_index_py(ts, int(x)) for x in close],
+            "pt": [int(np.searchsorted(pcl, x, side="right")) - 1 for x in close]}
+
+
+def trade_args(mk, pdata, v, off, q, scale=0.25, period="select", force_end=True):
+    """The arguments of one _trade_x call for offered signal q (what account_x passes), plus its pieces."""
+    c = int(off["coin"][q])
+    a, b = int(mk.starts[c]), int(mk.period_end(period)[c]) if force_end else int(mk.ends[c])
+    tsc = mk.cat["ts"][a:b]
+    e = K._entry_index(tsc, off["close"][q])
+    stop_atr, tp_kind, tp_val, ladder, fl, step, gap = KX.exit_of_pick(pdata.pick, v)
+    return dict(c=c, a=a, b=b, tsc=tsc, e=int(e), side=int(off["side"][q]), atr=float(off["atr"][q]), best=bool(off["best"][q]),
+                stop_atr=stop_atr, tp_kind=tp_kind, tp_val=tp_val, ladder=ladder, fl=fl, step=step, gap=gap, S=mk.S(scale),
+                i0=int(off["i0"][q]))
+
+
+def call_trade_x(mk, pdata, v, off, q, scale=0.25, force_end=True, plc=False, hz=None, seed=0, trace_rows=0, equity=5000.0,
+                 tp_price=np.nan, period="select"):
+    t = trade_args(mk, pdata, v, off, q, scale, period, force_end)
+    c, a, b = t["c"], t["a"], t["b"]
+    rp, PT, PF, QT, cst, cen, qst, qen = pdata.chart(v)
+    num, den = KX.new_counts()
+    trace = KX.new_trace(trace_rows)
+    hz = np.zeros((KX.N_AGE, 2, 2)) if hz is None else np.ascontiguousarray(hz, dtype=np.float64)
+    out = KX._trade_x(t["S"], mk.brs[c], t["tsc"], mk.cat["o"][a:b], mk.cat["h"][a:b], mk.cat["l"][a:b], mk.cat["mo"][a:b],
+                      mk.cat["mh"][a:b], mk.cat["ml"][a:b], mk.cat["fund"][a:b], t["e"], b - a, t["side"],
+                      t["stop_atr"] * t["atr"], t["atr"], t["best"], equity, mk.qty_steps[c], mk.min_notionals[c],
+                      t["tp_kind"], t["tp_val"], t["ladder"], t["fl"], t["step"], t["gap"], tp_price, force_end, rp, t["i0"],
+                      PT[cst[c]:cen[c]], PF[cst[c]:cen[c]], QT[qst[c]:qen[c]], plc, hz, int(seed), c, num, den, trace)
+    return out, num, den, trace
+
+
+def call_ref(mk, prov, pdata, v, off, q, scale=0.25, force_end=True, plc=False, hz=None, seed=0, equity=5000.0,
+             tp_price=np.nan, period="select"):
+    t = trade_args(mk, pdata, v, off, q, scale, period, force_end)
+    c, a, b = t["c"], t["a"], t["b"]
+    ch = RefChart(pdata, c)
+    q15 = bool(v.q15) and pdata.tf in ("1h", "4h")
+    q15bars = ref_q15(prov, pdata, c) if q15 else None
+    if v.fam == KX.F2:
+        ch.ema_of(v.params["n"])
+    hzd = None
+    if plc:
+        hzd = {(i, j, k): hz[i, j, k] for i in range(KX.N_AGE) for j in range(2) for k in range(2)}
+    return ref_trade(t["S"], mk.brs[c], t["tsc"], mk.cat["o"][a:b], mk.cat["h"][a:b], mk.cat["l"][a:b], mk.cat["mo"][a:b],
+                     mk.cat["mh"][a:b], mk.cat["ml"][a:b], mk.cat["fund"][a:b], t["e"], b - a, t["side"],
+                     t["stop_atr"] * t["atr"], t["atr"], t["best"], equity, mk.qty_steps[c], mk.min_notionals[c], t["tp_kind"],
+                     t["tp_val"], tp_price, force_end, v, ch, t["i0"], pdata.tf_ms, q15, q15bars, plc, seed, c, hzd)
+
+
+def compare_trade(mk, prov, pdata, v, off, q, **kw):
+    """Run both and return a list of mismatch strings (empty = identical, including every check's frozen decision state)."""
+    out, num, den, trace = call_trade_x(mk, pdata, v, off, q, trace_rows=2000, **kw)
+    rd, rj, rr, rl, rp_, rrec = call_ref(mk, prov, pdata, v, off, q, **{k: val for k, val in kw.items() if k != "trace_rows"})
+    bad = []
+    d, j, r, lev, px, nk, both = out
+    if not (abs(d - rd) <= 1e-9 * max(1.0, abs(rd)) and j == rj and r == rr and lev == rl and abs(px - rp_) <= 1e-9 * max(1.0, abs(rp_))):
+        bad.append(f"trade: kernel {(d, j, r, lev, px)} ref {(rd, rj, rr, rl, rp_)}")
+    for rec in rrec:                                        # every check that the position lived to see
+        kk = rec["k"]
+        row = trace[kk - 1]
+        mine = (int(row[0]), int(row[2]), int(row[3]), int(row[4]), int(row[5]), int(row[11]))
+        want = (rec["j"], int(rec["rule_fire"]), *rec["strat"], int(rec["fire"]))
+        if mine != want:
+            bad.append(f"check {kk}: kernel {mine} ref {want}")
+        if rec["ref"] is not None and not (math.isnan(row[7]) and False) and abs(row[7] - rec["ref"]) > 1e-9 * max(1, abs(rec["ref"])):
+            bad.append(f"check {kk}: ref level kernel {row[7]} ref {rec['ref']}")
+    return bad

@@ -116,12 +116,12 @@
 .rl-rx { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 759px) {
   .rl-listhd { display: none; }
-  .rl-row { grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start; gap: 4px 12px; padding: 10px 8px; }
-  .rl-rn { grid-column: 1 / -1; }
+  /* a phone: the name, the take-profit and the chips on their own lines; 손절 · 본전 · 배수 flow and wrap whole */
+  .rl-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 8px; }
+  .rl-rn, .rl-rtp, .rl-ru { flex: 1 0 100%; }
   .rl-rx[data-k]::before { content: attr(data-k) " "; color: var(--muted); font-size: var(--t-2xs); }
-  .rl-rx { white-space: normal; overflow: visible; }
-  .rl-rtp { grid-column: 1 / -1; }
-  .rl-ru { grid-column: 1 / -1; white-space: normal; }
+  .rl-rx { overflow: visible; }
+  .rl-rtp, .rl-ru { white-space: normal; }
   /* the first rows only, until "나머지 N개 보기" (the chosen pick always shows) */
   .rl-list:not(.open) .rl-row.rl-extra:not(.on), .rl-list:not(.open) .rl-divider.rl-extra { display: none; }
   .rl-list:not(.open) .rl-more { display: inline-flex; justify-self: start; margin-top: 6px; }

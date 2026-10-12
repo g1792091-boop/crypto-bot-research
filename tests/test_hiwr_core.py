@@ -291,6 +291,32 @@ def test_liquidation_fires_on_the_mark_low_at_the_level():
     assert code == 8 * 255 + W.PH_OPEN_LIQ
 
 
+def test_funding_paid_before_a_liquidation_stays_paid():
+    """7.5 / 7.6: funding is paid from the wallet while the position is open, so a liquidation loses the margin, the
+    entry fee AND the funding already paid (before the fix the funding came back at the liquidation). The trade list,
+    the account and the reads' plain loop agree."""
+    from research.hiwr import reads as RD
+    n = 400
+    a = _flat_coin(n)
+    a["fund"][[210, 220, 230]] = 0.003                       # three +0.3% events: a long pays 0.9% of notional
+    F = 100.0 * (1 + W.SLIP)
+    lq = F * (1 - W.first_tier_liqd(BTC["br"])[0, 0])
+    a["ml"][250] = lq                                         # a mark wick through Lq; last price stays above the stop
+    paid = 3 * 100.0 * 0.003 / F
+    want = -1.0 / 30 - W.TAKER - paid
+    T = W.Tables(a, np.array([a["ts"][200]]), np.array([0.1]), np.array([0]), int(a["ts"][-1]) + MIN, False,
+                 W.first_tier_liqd(BTC["br"]), np.array([MAKER30["t"] + 0.0005]), np.array([MAKER30["t"]]))
+    x = W.trade_list(T, [0], [0], MAKER30)
+    assert x["skip"][0] == 0 and x["kind"][0] == W.X_LIQ and int(x["code"][0]) == 8 * 250 + W.PH_LIQ
+    assert abs(x["r"][0] - want) < 1e-15
+    res = A.account(A.Store.from_coins([a], [False]), _cand([(0, 200, 1, 1.0, 0.1)]), [BTC], MAKER30, 2.0,
+                    (T0, T0 + n * MIN))
+    assert res["kind"][0] == W.X_LIQ and abs(res["r"][0] - want) < 1e-15
+    assert abs(res["final"] - (1000.0 + 2000.0 * want)) < 1e-9
+    fc = np.cumsum(a["mo"] * a["fund"])
+    assert abs(RD.outcome_r(fc, 200, 8 * 250 + 4, 0.0, 1.0, F, 30.0, True, W.TAKER, W.MAKER) - want) < 1e-15
+
+
 # ------------------------------------------------------------------ candidates
 @pytest.mark.parametrize("tf", ["15m", "30m", "1h", "4h"])
 def test_weekend_mask_boundaries(tf):

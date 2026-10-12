@@ -98,7 +98,7 @@ def chunk_signals(lib, source, accts: list[dict], symbols: Iterable[str], start:
             cache: dict = {}
             strength: dict = {}
             for a in group:
-                if a["role"] == "flip":
+                if a["role"] == "flip" or a.get("rule"):          # rule accounts: rulex.chunk_rule
                     continue
                 key = (a["kind"], a["name"], repr(sorted(a["combo"].items())))
                 if key not in cache:
@@ -137,6 +137,14 @@ def chunk_signals(lib, source, accts: list[dict], symbols: Iterable[str], start:
 
 
 def make_engines(accts: list[dict], brackets: dict, specs: dict) -> dict:
-    """{account id: engine}: each account's exit rule on the paper bot's engine."""
-    return {a["id"]: X.make_engine(a["exit"], brackets, specs, book=a["id"], size=a.get("size", 1.0)) for a in accts}
+    """{account id: engine}: each account's exit rule on the paper bot's engine (a rule account, one with a ``rule``:
+    candleague.rulex.make_engine)."""
+    out = {}
+    for a in accts:
+        if a.get("rule"):
+            from . import rulex as RX
+            out[a["id"]] = RX.make_engine(a, brackets, specs)
+        else:
+            out[a["id"]] = X.make_engine(a["exit"], brackets, specs, book=a["id"], size=a.get("size", 1.0))
+    return out
 

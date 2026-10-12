@@ -174,8 +174,9 @@ est_min() {
 }
 left_from() { local s=0 k; for k in $(seq "$1" "$NST"); do s=$(( s + $(est_min "$k") )); done; echo "$s"; }
 hm() { local m=$1; if [ "$m" -ge 120 ]; then echo "약 $(( m / 60 ))시간 $(( m % 60 ))분"; else echo "약 ${m}분"; fi; }
-last_prog() {                # the last "[part] done/n done, Xs" line of the log
-  grep -aoE '^\[[^]]+\] [0-9]+/[0-9]+ done, [0-9]+s' "$LOG" 2>/dev/null | tail -1
+last_prog() {                # the last "[part] done/n done, Xs" line the current stage wrote to the log
+  local pos; pos=$(cat "$BASE/STAGE_POS" 2>/dev/null); pos=${pos:-0}
+  tail -c +$(( pos + 1 )) "$LOG" 2>/dev/null | grep -aoE '^\[[^]]+\] [0-9]+/[0-9]+ done, [0-9]+s' | tail -1
 }
 sel_left() {                 # select: the running part's remaining time at its own pace + the planned later parts
   local p label dn n sec i=0 k part left
@@ -212,6 +213,7 @@ stage() {                    # stage <n> <name>
   local now; now=$(date +%s)
   echo "$1|$2|$now" > "$BASE/STAGE"
   echo "$1|$2|$now" >> "$BASE/STAGES"
+  { wc -c < "$LOG" || echo 0; } 2>/dev/null | tr -dc '0-9' > "$BASE/STAGE_POS"
   say "$1/$NST $2  (남은 시간 $(hm "$(left_from "$1")"), 어림)"
 }
 
@@ -601,7 +603,7 @@ stage 3 "고정 확인 (설계 해시 첫 줄, 2차 코드·시험·서버 키�
 if grep -q "  $PICKS_REL\$" "$PIN_REL" && [ ! -f "$BASE/SELECT_RAN" ]; then
   die_fix "고정 파일에 이미 고른 것(picks) 줄이 있습니다. 이 서버에서 고르기 전이므로 있으면 안 됩니다 (받은 커밋 확인)"
 fi
-if pinned "$TEST_REL"; then step=reads; elif pinned "$PICKS_REL"; then step=test; else step=select; fi
+if pinned "$TEST_REL"; then step="reads"; elif pinned "$PICKS_REL"; then step="test"; else step="select"; fi
 pin_check "$step"
 sub "고정 일치 (다음 단계: $step; $(tail -1 "$LOG" | cut -c1-120))"
 
@@ -810,42 +812,51 @@ fi
 vline=$(helper verdict 2>>"$LOG") && { echo "$vline" > "$BASE/verdict_line.txt"; sub "$vline"; }
 
 # ------------------------------------------------------------------ 10 reads (never a pass; 12 hours wall over restarts)
-reads_stage() {
-  local used left rc=0 to t0 tick
-  if [ "$P" = 0 ]; then sub "고른 것이 없어 참고 분석도 없습니다 (9.1: 행이 없음)"; return 0; fi
-  if [ -s "$OUT/reads_status.json" ] && [ -f "$BASE/READS_DONE" ]; then sub "건너뜀: 참고 분석 (이미 끝남)"; return 0; fi
+stop_tree() {                # stop_tree <pid>: the step and its pool workers (forked children)
+  pkill -TERM -P "$1" 2>/dev/null; kill -TERM "$1" 2>/dev/null
+}
+reads_once() {               # reads_once <procs>: one reads run within the wall left; 0 done, 1 failed, 124 wall
+  local procs=$1 used left rc=0 to t0 timed=""
   used=$(cat "$BASE/READS_USED_S" 2>/dev/null || echo 0)
   left=$(( READS_HOURS * 3600 - used ))
-  if [ "$left" -le 60 ]; then
-    warn "참고 분석: ${READS_HOURS}시간을 다 써서 멈췄습니다 (끝난 모듈만 묶음)"
-    return 0
-  fi
-  sub "참고 분석 (rows → 주말 → 목표판; 끝난 모듈은 건너뜀, 남은 시간 $(( left / 60 ))분)"
-  "${R2[@]}" reads --data "$DATA" --private "$PRIV" --procs "$PROCS" >>"$LOG" 2>&1 &
+  [ "$left" -le 60 ] && return 124
+  sub "참고 분석 (r=1%·대조 → 주말 → 목표판 순서; 끝난 모듈은 건너뜀; ${READS_HOURS}시간 중 $(( left / 60 ))분 남음, 작업 ${procs}개)"
+  "${R2[@]}" reads --data "$DATA" --private "$PRIV" --procs "$procs" >>"$LOG" 2>&1 &
   to=$!
   t0=$(date +%s)
-  ( while kill -0 "$to" 2>/dev/null; do echo $(( used + $(date +%s) - t0 )) > "$BASE/READS_USED_S"; sleep 30; done ) &
-  tick=$!
-  trap 'kill -TERM "$to" 2>/dev/null; kill "$tick" 2>/dev/null; exit 1' HUP INT TERM
-  ( sleep "$left"; kill -TERM "$to" 2>/dev/null; echo timeout > "$BASE/READS_TIMEOUT" ) &
-  local wd=$!
+  trap 'stop_tree "$to"; exit 1' HUP INT TERM      # a pane kill or Ctrl+C stops the read with the run
+  while kill -0 "$to" 2>/dev/null; do              # the wall counts running time only, over restarts
+    echo $(( used + $(date +%s) - t0 )) > "$BASE/READS_USED_S"
+    if [ $(( used + $(date +%s) - t0 )) -ge $(( READS_HOURS * 3600 )) ]; then
+      timed=1; stop_tree "$to"; sleep 5; pkill -KILL -P "$to" 2>/dev/null; kill -KILL "$to" 2>/dev/null
+      break
+    fi
+    sleep 20
+  done
   wait "$to" || rc=$?
-  kill "$wd" "$tick" 2>/dev/null
   trap - HUP INT TERM
   echo $(( used + $(date +%s) - t0 )) > "$BASE/READS_USED_S"
-  if [ -f "$BASE/READS_TIMEOUT" ]; then
-    rm -f "$BASE/READS_TIMEOUT"
-    warn "참고 분석이 ${READS_HOURS}시간에 닿아 멈췄습니다 (판정은 그대로; 끝난 모듈만 묶음)"
-    touch "$BASE/READS_DONE"
-  elif [ "$rc" != 0 ]; then
-    warn "참고 분석 실패 (종료 코드 $rc, run.log의 [reads r2] 줄 참고; 판정은 그대로)"
-    touch "$BASE/READS_DONE"
-  else
-    touch "$BASE/READS_DONE"
+  [ -n "$timed" ] && return 124
+  [ "$rc" = 0 ] && return 0
+  return 1
+}
+reads_stage() {
+  local rc=0 f
+  if [ "$P" = 0 ]; then sub "고른 것이 없어 참고 분석도 없습니다 (9.1: 행이 없음)"; return 0; fi
+  if [ -f "$BASE/READS_DONE" ]; then sub "건너뜀: 참고 분석 (이미 끝남)"; return 0; fi
+  reads_once "$PROCS" || rc=$?
+  if [ "$rc" = 1 ] && tail -60 "$LOG" | grep -qE "workers keep dying|a worker died|MemoryError|Killed"; then
+    sub "참고 분석 작업 일부가 끝나지 않아 작업 ${HALF}개로 한 번 더 합니다 (끝난 모듈은 건너뜀)"
+    rc=0; reads_once "$HALF" || rc=$?
   fi
-  local f
+  case "$rc" in
+    0) ;;
+    124) warn "참고 분석이 ${READS_HOURS}시간에 닿아 멈췄습니다 (판정은 그대로; 끝난 모듈만 묶음)" ;;
+    *) warn "참고 분석 실패 (run.log의 [reads r2] 줄 참고; 판정은 그대로, 끝난 모듈만 묶음)" ;;
+  esac
+  touch "$BASE/READS_DONE"   # one try per run: a kill of the whole run (pane, reboot) leaves this unset and resumes
   for f in reads_rows.json reads_weekend.json reads_goal.json; do
-    [ -s "$OUT/$f" ] || warn "참고 분석 $f 없음 (시간 또는 실패; reads_status.json 참고)"
+    [ -s "$OUT/$f" ] || warn "참고 분석 $f 없음 (시간 또는 실패; run.log 참고)"
   done
   return 0
 }
