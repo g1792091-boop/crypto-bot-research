@@ -60,6 +60,49 @@ class PinError(RuntimeError):
     pass
 
 
+# ------------------------------------------------------------------ market state at the signal bar (prereg 7)
+REGIME_PATH = os.path.join(ROOT, "paperbot", "dash", "tools", "regime5y.py")
+REGIMES_DEF_PATH = os.path.join(FG, "regimes.py")        # pinned as the definition of the labels; never imported
+ST_UNKNOWN, ST_TREND, ST_RANGE, ST_SHOCK, ST_NORMAL = 0, 1, 2, 3, 4
+STATE_KO = {ST_TREND: "추세장", ST_RANGE: "횡보장", ST_SHOCK: "급변장", ST_NORMAL: "보통", ST_UNKNOWN: "모름"}
+STATE_ORDER = (ST_TREND, ST_RANGE, ST_SHOCK, ST_NORMAL, ST_UNKNOWN)
+TF_MIN = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}
+_REGIME_MOD = None
+
+
+def regime_module():
+    """paperbot/dash/tools/regime5y.py loaded by path (the label code of the dashboard's 장세 switch), with its thresholds
+    asserted equal to the values of prereg section 7 at load."""
+    global _REGIME_MOD
+    if _REGIME_MOD is None:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("regime5y_x", REGIME_PATH)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        want = dict(ADX_N=14, EMA_N=50, SLOPE_BARS=10, ADX_TREND=25.0, ADX_RANGE=20.0, SLOPE_MIN=0.5, VOL_Q=0.80, VOL_DAYS=365,
+                    VOL_MIN_DAYS=180, UNKNOWN=0, TREND=1, RANGE=2, SHOCK=3, NORMAL=4)
+        for k, v in want.items():
+            if getattr(mod, k) != v:
+                raise AssertionError(f"regime5y.{k} = {getattr(mod, k)!r}, prereg 7 says {v!r}")
+        _REGIME_MOD = mod
+    return _REGIME_MOD
+
+
+_STATE_CACHE: dict = {}
+
+
+def regime_codes(sym: str, tf: str, high: np.ndarray, low: np.ndarray, close: np.ndarray) -> np.ndarray:
+    """The 장세 code (int8, ST_*) of every chart bar of one coin and timeframe, from bars 0..t only
+    (``regime5y.regimes(high, low, close, TF_MIN[tf])["code"]``). Cached in this process by the arrays' identity."""
+    key = (sym, tf, len(close), float(close[-1]) if len(close) else 0.0, float(np.sum(close)), float(np.sum(high)), float(np.sum(low)))
+    if key not in _STATE_CACHE:
+        if len(_STATE_CACHE) > 64:
+            _STATE_CACHE.clear()
+        code = regime_module().regimes(np.asarray(high, float), np.asarray(low, float), np.asarray(close, float), TF_MIN[tf])["code"]
+        _STATE_CACHE[key] = np.ascontiguousarray(code, np.int8)
+    return _STATE_CACHE[key]
+
+
 # ------------------------------------------------------------------ hashes and the pin
 def sha256_file(path: str) -> str:
     h = hashlib.sha256()
@@ -428,6 +471,8 @@ def normalize_f11(ret, n: int) -> dict:
                "tgt_long": tl, "tgt_short": ts_}
     for k in ("lvl_long", "lvl_short", "tgt_long", "tgt_short"):
         out[k] = nan if out[k] is None else np.asarray(out[k], float)
+    for k in ("z_long", "z_short"):                          # optional: the strategy's own 'can fire at this bar' flag
+        out[k] = np.ones(n, np.int8) if not isinstance(ret, dict) or ret.get(k) is None else (np.asarray(ret[k]) != 0).astype(np.int8)
     for k in ("comp_long", "comp_short"):
         if len(out[k]) > KX.NC:
             raise ValueError(f"F11: at most {KX.NC} components per side")
@@ -441,12 +486,13 @@ class PickData:
     """A pick's chart data over all coins (concatenated) and the arrays each variant's kernel run reads. ``f11`` = the
     provider of the strategy's own exit (kernel_x.register_f11), or None."""
 
-    def __init__(self, market: Market, pick: dict, provider, f11=None):
+    def __init__(self, market: Market, pick: dict, provider, f11=None, strict_flags: bool = True):
         self.market, self.pick, self.provider = market, pick, provider
+        self.strict_flags = strict_flags
         self.tf = pick["tf"]
         self.tf_ms = TF_MS[self.tf]
         n_c = len(market.symbols)
-        cl_ms, cl, hi, lo, atr, mn, sl, ss, bl, bs, pid, tl, ts_, ll, ls = ([] for _ in range(15))
+        cl_ms, cl, hi, lo, atr, mn, sl, ss, bl, bs, pid, tl, ts_, ll, ls, zl, zs, stt = ([] for _ in range(18))
         comps = []
         self.frames = []
         for c, sym in enumerate(market.symbols):
@@ -460,6 +506,7 @@ class PickData:
             hi.append(df["high"].to_numpy(float))
             lo.append(df["low"].to_numpy(float))
             atr.append(provider.atr(df))
+            stt.append(regime_codes(sym, self.tf, df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float)))
             mn.append(self._minute_of(market.ts(c), np.asarray(close, np.int64), market.bar_ms))
             sl.append(np.asarray(lo_s, np.int8))
             ss.append(np.asarray(sh_s, np.int8))
@@ -473,8 +520,12 @@ class PickData:
                 ts_.append(r["tgt_short"])
                 ll.append(r["lvl_long"])
                 ls.append(r["lvl_short"])
+                zl.append(r["z_long"])
+                zs.append(r["z_short"])
             else:
                 nan = np.full(n, np.nan)
+                zl.append(np.ones(n, np.int8))
+                zs.append(np.ones(n, np.int8))
                 comps.append(None)
                 tl.append(nan)
                 ts_.append(nan)
@@ -488,6 +539,8 @@ class PickData:
                                                                               cat(mn).astype(np.float64))
         self.b_sl, self.b_ss = cat(sl), cat(ss)
         self.b_tl, self.b_ts, self.b_ll, self.b_ls = cat(tl), cat(ts_), cat(ll), cat(ls)
+        self.b_zl, self.b_zs = cat(zl), cat(zs)
+        self.b_state = cat(stt).astype(np.int8)
         self.best_l, self.best_s, self.pid = cat(bl), cat(bs), cat(pid)
         # F11 component columns (0 false, 1 true, 2 NaN) and kinds
         self.b_comp = np.zeros((len(self.b_cl), 2 * KX.NC), np.int8)
@@ -569,8 +622,9 @@ class PickData:
             z = np.zeros(n_c, np.int64)
             return KX.rp_vector(), PT, PF, QT, z, z, z, z
         q15 = bool(v.q15) and self.tf in ("1h", "4h")
-        key = (v.params.get("w", 0) if v.fam in (KX.F1, KX.F6, KX.F8, KX.F9) else 0,
-               v.params.get("n", 0) if v.fam == KX.F2 else 0, q15, v.fam in (KX.F3, KX.F11), v.fam == KX.F11)
+        key = (v.params.get("w", 0) if v.fam in (KX.F1, KX.F6, KX.F8, KX.F9, KX.F12) else 0,
+               v.params.get("n", 0) if v.fam in (KX.F2, KX.F12) else 0, q15, v.fam in (KX.F3, KX.F11, KX.F12),
+               v.fam in (KX.F11, KX.F12))
         if key not in self._chart:
             self._chart.clear()                                # keep one set: a chart is up to ~100 MB
             n = len(self.b_cl)
@@ -587,8 +641,10 @@ class PickData:
                 PT[:, KX.C_SLO] = np.nan
                 PT[:, KX.C_SHI] = np.nan
             PF[:, KX.P_SIGL], PF[:, KX.P_SIGS] = self.b_sl, self.b_ss
+            PF[:, KX.P_ZL], PF[:, KX.P_ZS] = 1, 1
             if key[4]:
                 PF[:, KX.P_CL0:KX.P_CL0 + 2 * KX.NC] = self.b_comp
+                PF[:, KX.P_ZL], PF[:, KX.P_ZS] = self.b_zl, self.b_zs
             if q15:
                 QT, qst, qen = self.q15()
             else:
@@ -607,12 +663,14 @@ class PickData:
         market = market or self.market
         pend = market.period_end(period)
         code = period_code(period)
-        cols = {k: [] for k in ("coin", "close", "side", "atr", "best", "i0", "fill")}
+        cols = {k: [] for k in ("coin", "close", "side", "atr", "best", "i0", "fill", "state")}
         for c in range(len(market.symbols)):
             a, b = self.cst[c], self.cen[c]
             sel = self.pid[a:b] == code
             il = np.flatnonzero((self.b_sl[a:b] == 1) & sel)
             is_ = np.flatnonzero((self.b_ss[a:b] == 1) & sel)
+            if self.strict_flags and np.intersect1d(il, is_).size:         # prereg 3: no pick carries both flags on one bar
+                raise AssertionError(f"{self.pick['id']}: a bar carries both a long and a short flag")
             idx = np.r_[il, is_]
             side = np.r_[np.ones(len(il), np.int64), -np.ones(len(is_), np.int64)]
             o = np.argsort(idx, kind="stable")                    # run.per_trade order
@@ -631,6 +689,7 @@ class PickData:
             cols["best"].append(np.where(side > 0, self.best_l[a:b][idx], self.best_s[a:b][idx]).astype(np.bool_))
             cols["i0"].append(idx.astype(np.int64))
             cols["fill"].append(tsp[e] if len(e) else np.zeros(0, np.int64))
+            cols["state"].append(self.b_state[a:b][idx].astype(np.int8))
         out = {k: (np.concatenate(v) if v else np.zeros(0)) for k, v in cols.items()}
         order = np.lexsort((out["coin"], out["fill"])) if len(out["coin"]) else np.zeros(0, np.int64)
         out = {k: np.ascontiguousarray(v[order]) for k, v in out.items()}
@@ -639,6 +698,7 @@ class PickData:
         out["side"] = out["side"].astype(np.int64)
         out["i0"] = out["i0"].astype(np.int64)
         out["best"] = out["best"].astype(np.bool_)
+        out["state"] = out["state"].astype(np.int8)
         ix = (self.cst[out["coin"]] + out["i0"]) if len(order) else np.zeros(0, np.int64)
         out["tp_idx"] = ix
         out["lvl"] = np.where(out["side"] > 0, self.b_ll[ix], self.b_ls[ix]) if len(ix) else np.zeros(0)
@@ -672,6 +732,8 @@ def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50,
             for col in ("open", "high", "low", "close"):
                 out[key + col] = df[col].to_numpy(float)[idx]
             out[key + "atr"] = provider.atr(df)[idx]
+            out[key + "state"] = regime_codes(sym, tf, df["high"].to_numpy(float), df["low"].to_numpy(float),
+                                              df["close"].to_numpy(float))[idx]
             for n in emas:
                 out[key + f"ema{n}"] = provider.ema(df, n)[idx]
             h, l, c = df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float)

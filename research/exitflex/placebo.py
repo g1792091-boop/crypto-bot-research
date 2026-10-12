@@ -6,12 +6,16 @@ sizing, period-end close and free fill minute; instead of V's rule it exits at a
 (a, s, z) is the stratum of its own position at that check:
   a  age bucket of the check index k: {1}, {2}, {3-4}, {5-8}, {9-16}, {17-32}, {33-64}, {65 and more}
   s  1 when Rc >= 0 (the check close is not at a net loss), else 0
-  z  V's precondition (F1, F1 q15, F6: a reference exists; F2: armed before the check; F5, F8, F9: armed; F3, F4, F10, F11: 0)
+  z  V's precondition, 1 where V could fire at this check on some close: F1, F1 q15 a reference exists; F6.w.d a reference
+     exists and Rc < -d; F2 armed before the check; F5 armed; F8 armed and a reference; F9 a reference and (armed or Rc <
+     -0.5R); F11 a finite invalidation level or an armed / event component (and the strategy's own 'can fire here' flag);
+     F3, F4, F4 q15, F10 always 0
 all computed from the state frozen at the end of the previous minute (the kernel's step 0), as the rule's own decision is.
 h comes from V's own quarter-size account of the same pick and period: RULE exits at checks of the stratum over the checks of
 the stratum at which the position was still open after steps 1-5 of the check's minute (kernel_x counts both).
-The draw of a check depends only on (seed, coin, check close time): u = (splitmix64(splitmix64(base) XOR key) >> 11) / 2^53,
-key = coin x 2^36 + close ms // 60,000, base = run._seed("exitflex", "placebo", pick id, V, period, s).
+The draw of a check depends only on (V, period, seed, coin, check close time), not on the pick: u = (splitmix64(
+splitmix64(base) XOR key) >> 11) / 2^53, key = coin x 2^36 + close ms // 60,000, base = run._seed("exitflex", "placebo", V,
+period, s).
 
 The numba pieces (draw, age bucket, the check itself) live in kernel_x; this file holds the plain-Python references that the
 tests compare them with, the hazard tables, the seeds and the block runner.
@@ -52,8 +56,10 @@ def draw_u_py(base: int, coin: int, close_ms: int) -> float:
     return (splitmix64_py(splitmix64_py(int(base)) ^ key) >> 11) / float(1 << 53)
 
 
-def seed_base(pick_id: str, variant_id: str, period: str, s: int) -> int:
-    return DX.seed_of("exitflex", "placebo", pick_id, variant_id, period, s)
+def seed_base(variant_id: str, period: str, s: int) -> int:
+    """run._seed("exitflex", "placebo", V, period, s): the pick is not part of the seed, so that two picks holding the same
+    coin at the same check close draw the same u (prereg 6)."""
+    return DX.seed_of("exitflex", "placebo", variant_id, period, s)
 
 
 def hazard(num: np.ndarray, den: np.ndarray) -> np.ndarray:
@@ -64,7 +70,7 @@ def hazard(num: np.ndarray, den: np.ndarray) -> np.ndarray:
 
 
 def has_placebo(variant) -> bool:
-    return variant.fam != KX.F7 and variant.fam != KX.F_NONE
+    return KX.has_placebo(variant)
 
 
 def run_block(market, pdata, variant, hz: np.ndarray, period: str, s0: int, s1: int, reduce_fn, scale: float = 0.25) -> list:
@@ -74,7 +80,7 @@ def run_block(market, pdata, variant, hz: np.ndarray, period: str, s0: int, s1: 
         raise ValueError(f"{variant.id} has no placebo")
     out = []
     for s in range(s0, s1):
-        r = KX.simulate(market, pdata, variant, scale, period, hz=hz, seed_base=seed_base(pdata.pick["id"], variant.id, period, s),
+        r = KX.simulate(market, pdata, variant, scale, period, hz=hz, seed_base=seed_base(variant.id, period, s),
                         placebo=True)
         out.append(reduce_fn(r))
     return out

@@ -9,8 +9,9 @@ Primary metric for pick p, variant V: M_p(V) = mean over the period's months of 
 the picks of [g_m(V) - g_m(E0)].
 
 ``summarize`` turns one ``kernel_x.Result`` into a flat dict of numpy arrays (the content of one result file); the other
-functions combine summaries of the picks: pooled and per pool (``core`` 23 picks, ``ds`` 15 picks; this study runs the core
-pool only, the DeepSeek rule D11 excludes the other).
+functions combine summaries of the picks: pooled and per pool (``core`` 23 picks, ``ds`` 15 picks). The DeepSeek rule D11
+keeps every DeepSeek money figure out of committed files: the callers send those figures to the private folder and write only
+the fields of ``DS_ALLOWED`` into a committed file; ``ds_whitelist_ok`` checks that.
 """
 
 from __future__ import annotations
@@ -27,6 +28,10 @@ HOLD_HOURS = (4, 8, 18)
 MIN_PICK_SHARE = 0.6
 N_BOOT = 2000
 BLOCK = 3
+N_STATE = 5
+COMP_BITS = tuple(b for _n, b in KX.COMP_NAMES)
+COMP_LABELS = tuple(n for n, _b in KX.COMP_NAMES)
+MIN_STATE_TRADES = 100         # a state-table cell under 100 trades is marked 건수 적음 (prereg 7)
 REASONS = ("NONE", "SL", "LOCK", "LIQ", "OPEN", "REJECT", "NOFILL", "NOATR", "TP", "RULE", "RAND", "END")
 
 
@@ -76,6 +81,10 @@ def summarize(res, edges: np.ndarray) -> dict:
         prev_rule = (rsn[:-1] == KX.R_RULE) | (rsn[:-1] == KX.R_RAND)
         at_rule = int(((en[1:] == ex[:-1]) & prev_rule).sum())
     sig = res.sig
+    cm = res.comp[ent].astype(np.int64)
+    rule = rsn == KX.R_RULE
+    comp_fired = np.array([int((rule & ((cm & b) != 0)).sum()) for b in COMP_BITS], np.int64)
+    comp_alone = np.array([int((rule & (cm == b)).sum()) for b in COMP_BITS], np.int64)
     return {
         "g": g, "W": W, "w0": np.float64(res.w0), "w_end": np.float64(res.wallet),
         "counts": np.array([len(st), len(ent), len(closed), int((st == 0).sum()), int((st == 2).sum()), int((st == 3).sum()),
@@ -84,7 +93,8 @@ def summarize(res, edges: np.ndarray) -> dict:
         "reasons": np.bincount(rsn, minlength=12).astype(np.int64),
         "hold_h": (ex - en) / 3_600_000.0, "max_dd": np.float64(dd),
         "tr_coin": sig["coin"][ent], "tr_side": sig["side"][ent], "tr_fill": en, "tr_exit": ex, "tr_reason": rsn.astype(np.int64),
-        "tr_pnl": pnl, "num": res.num, "den": res.den}
+        "tr_pnl": pnl, "num": res.num, "den": res.den,
+        "tr_state": sig["state"][ent].astype(np.int64), "tr_comp": cm, "comp_fired": comp_fired, "comp_alone": comp_alone}
 
 
 COUNT_NAMES = ("offered", "entered", "closed", "skipped", "rejected", "no_fill", "after_bust", "bust", "both_touched",
@@ -115,6 +125,21 @@ def hold_stats(hold_h: np.ndarray) -> dict:
             **{f"share_gt{h}": float((hold_h > h).mean()) for h in HOLD_HOURS}}
 
 
+def hold_by_state(hold_h: np.ndarray, tr_state: np.ndarray) -> dict:
+    """Prereg 7: per market state at entry (keys: the Korean labels of data_x.STATE_KO, in STATE_ORDER), the number of trades, the median and 90th-percentile hold and
+    the shares held over 4 h, 8 h and 18 h; ``few`` marks a cell under 100 trades (건수 적음), which is shown, not hidden."""
+    hold_h = np.asarray(hold_h, float)
+    tr_state = np.asarray(tr_state)
+    out = {}
+    for code in DX.STATE_ORDER:
+        sel = hold_h[tr_state == code]
+        d = hold_stats(sel)
+        d["n"] = int(len(sel))
+        d["few"] = bool(len(sel) < MIN_STATE_TRADES)
+        out[DX.STATE_KO[code]] = d
+    return out
+
+
 # ------------------------------------------------------------------ the picks together
 def pool_of(pick: dict) -> str:
     return "ds" if pick.get("kind") == "ds" else "core"
@@ -137,6 +162,8 @@ def pool_summary(sv: dict, se: dict, pools: dict | None = None) -> dict:
         mp = np.array([pick_Mp(sv[i], se[i]) for i in sel])
         holds = np.concatenate([sv[i]["hold_h"] for i in sel])
         holds0 = np.concatenate([se[i]["hold_h"] for i in sel])
+        states = np.concatenate([sv[i]["tr_state"] for i in sel])
+        states0 = np.concatenate([se[i]["tr_state"] for i in sel])
         ch = sum(changed_trades(sv[i], se[i]) for i in sel)
         ent = sum(count(sv[i], "entered") for i in sel)
         out[name] = {
@@ -150,6 +177,9 @@ def pool_summary(sv: dict, se: dict, pools: dict | None = None) -> dict:
             "reasons": np.sum([sv[i]["reasons"] for i in sel], axis=0).tolist(),
             "both_touched": sum(count(sv[i], "both_touched") for i in sel),
             "hold": hold_stats(holds), "hold_e0": hold_stats(holds0),
+            "hold_by_state": hold_by_state(holds, states), "hold_by_state_e0": hold_by_state(holds0, states0),
+            "comp_fired": np.sum([sv[i]["comp_fired"] for i in sel], axis=0).tolist(),
+            "comp_alone": np.sum([sv[i]["comp_alone"] for i in sel], axis=0).tolist(),
             "win_share": (sum(count(sv[i], "wins") for i in sel) / max(1, sum(count(sv[i], "closed") for i in sel))),
             "busts": sum(count(sv[i], "bust") for i in sel),
             "max_dd_median": float(np.median([float(sv[i]["max_dd"]) for i in sel])),
@@ -160,8 +190,9 @@ def pool_summary(sv: dict, se: dict, pools: dict | None = None) -> dict:
 # ------------------------------------------------------------------ selection (section 8)
 def eligibility(M: float, Mp: list, entered: int, entered_e0: int, placebo_pooled: np.ndarray | None, is_f7: bool,
                 min_share: float = MIN_PICK_SHARE) -> dict:
-    """Section 8: M(V) > 0; M_p(V) > 0 on at least 60% of the picks; except F7, M(V) above the 95th percentile (numpy linear)
-    of V's placebo pooled means; trades entered at quarter size >= E0's."""
+    """8.1, per pool (``Mp`` = the pool's M_p list): M_P(V) > 0; M_p(V) > 0 on at least 60% of the pool's picks (14 of 23, 9
+    of 15); except F7 and F7h, M_P(V) above the 95th percentile (numpy linear) of V's placebo pooled means; trades entered at
+    quarter size >= E0's. ``is_f7`` = the clock families, which have no placebo gate."""
     need = math.ceil(min_share * len(Mp) - 1e-9)
     c1 = M > 0
     c2 = int(sum(1 for m in Mp if m > 0)) >= need
@@ -172,25 +203,182 @@ def eligibility(M: float, Mp: list, entered: int, entered_e0: int, placebo_poole
             "eligible": bool(c1 and c2 and c3 and c4), "p95": p95, "need_picks": need}
 
 
-def choose_variants(rows: list, by: str = "M") -> list:
-    """Section 8.4 (the default): per pool, at most 2 eligible variants: the highest M_P(V) (``by`` = 'M'; 'median_Mp'
-    ranks by the median over the picks of M_p instead), then the highest from a different group. Ties go to fewer
-    parameters, then to the canonical order. ``rows``: dicts with id, group, nparams, order, eligible and the ranking key."""
-    el = [r for r in rows if r["eligible"]]
-    key = lambda r: (-r[by], r["nparams"], r["order"])   # noqa: E731
-    el.sort(key=key)
-    if not el:
-        return []
-    first = el[0]
-    other = [r for r in el if r["group"] != first["group"]]
-    return [first["id"]] + ([other[0]["id"]] if other else [])
+def loss_class(v) -> str:
+    """5.3: what a variant can cut a loss on before the hard stop. L0 no early loss cut before a gain (F5, F8, F10); L1 structure
+    break at a loss of at least 0.5R (F6.d0.5, F9, F9 q15); L2 structure break at any loss (F1, F1 q15, F6.d0); L3 not only a
+    structure break (F2, F3, F4, F4 q15, F7, F7h, F11, and F12 which holds all of them)."""
+    if v.fam in (KX.F5, KX.F8, KX.F10):
+        return "L0"
+    if v.fam == KX.F9 or (v.fam == KX.F6 and v.params.get("d", 0) >= 0.5):
+        return "L1"
+    if v.fam in (KX.F1, KX.F6):
+        return "L2"
+    return "L3"
+
+
+def in_default_set(v) -> bool:
+    """The default set D of 8.4: L0 and L1 (35 variants)."""
+    return loss_class(v) in ("L0", "L1")
 
 
 def claim_of(variant_id: str) -> str:
-    """What a chosen variant may claim (section 8)."""
-    if variant_id.startswith("F7."):
+    """8.5: what a chosen variant may claim."""
+    if variant_id.startswith("F7.") or variant_id.startswith("F7h."):
         return "beats E0 by holding less; no claim about reading the market"
+    if variant_id.startswith("F11."):
+        return "the strategy's own exit beats E0 and a random exit with its timing profile"
+    if variant_id.startswith("F12."):
+        return "all nine exits at once beat E0 and a random exit with its timing profile"
     return "beats E0 and beats a random exit with its timing profile"
+
+
+def default_choice(rows: list, standing: list | None = None) -> list:
+    """8.4, for one pool without an answer: among the choosable variants of the default set D, the one with the shortest median
+    hold (quarter size, over all closed trades of the pool's accounts), then the shortest among those of a different group;
+    ties go to fewer parameters, then to the canonical order. At most 2; [] when no candidate. ``rows``: dicts with id, group,
+    nparams, order, eligible, default_set (or in_default_set) and hold (a dict with 'median'). ``standing`` (section 14, a rerun
+    that voided some ids): ids that stand; the default only fills the free places, from groups the standing ids do not use."""
+    standing = list(standing or [])
+    taken_groups = {r["group"] for r in rows if r["id"] in standing}
+    cand = [r for r in rows if r["eligible"] and r.get("default_set", r.get("in_default_set")) and not math.isnan(r["hold"]["median"])
+            and r["id"] not in standing and r["group"] not in taken_groups]
+    key = lambda r: (r["hold"]["median"], r["nparams"], r["order"])   # noqa: E731
+    cand.sort(key=key)
+    if not cand or len(standing) >= 2:
+        return []
+    out = [cand[0]]
+    if len(standing) == 0:
+        other = [r for r in cand if r["group"] != cand[0]["group"]]
+        if other:
+            out.append(other[0])
+    return [r["id"] for r in out]
+
+
+choose_variants = default_choice          # the name the earlier revisions used: the ranking is now the default of 8.4
+
+
+def gate_failure_counts(rows: list) -> dict:
+    """8.2: gate failures counted in sequence: gate 1; gate 2 among those passing 1; gate 4 among those passing 1 and 2; gate 3
+    among those that reached step 2 (F7 and F7h have no gate 3). ``rows`` carry gates 'g1', 'g2', 'g3', 'g4' as 'pass' / 'fail'
+    / 'not_run' / 'n/a'."""
+    g1 = [r for r in rows if r["gates"]["g1"] == "fail"]
+    p1 = [r for r in rows if r["gates"]["g1"] == "pass"]
+    g2 = [r for r in p1 if r["gates"]["g2"] == "fail"]
+    p2 = [r for r in p1 if r["gates"]["g2"] == "pass"]
+    g4 = [r for r in p2 if r["gates"]["g4"] == "fail"]
+    p4 = [r for r in p2 if r["gates"]["g4"] == "pass"]
+    g3 = [r for r in p4 if r["gates"]["g3"] == "fail"]
+    return {"gate1": len(g1), "gate2": len(g2), "gate4": len(g4), "gate3": len(g3)}
+
+
+def validate_choice_doc(select_doc: dict, choice: dict, sent: dict | None = None, prev_choice: dict | None = None) -> list:
+    """8.3 and 14: problems in a ``choice.json`` (or ``choice_r2.json``) against ``select.json`` (and ``sent.json``); [] = valid.
+    Each id must be choosable in its pool, a pool has at most 2 ids from different groups, the send time equals sent.json, a
+    pool marked 'default used' has no answer timed before its deadline and holds the ids that 8.4 gives on select.json, a pool
+    not marked 'default used' has an answer, and (rerun, ``prev_choice`` = the first choice.json) every id of the first choice
+    that is still choosable stands and a pool answered 'none' stays none."""
+    bad = []
+    for pool in ("core", "ds"):
+        ids = list(choice.get(pool) or [])
+        P = (select_doc.get("pools") or {}).get(pool)
+        info = (choice.get("pools") or {}).get(pool, {})
+        if ids and P is None:
+            bad.append(f"{pool}: no such pool in select.json")
+            continue
+        if len(ids) > 2 or len(set(ids)) != len(ids):
+            bad.append(f"{pool}: at most 2 different variants")
+        groups = []
+        for i in ids:
+            row = next((r for r in (P or {}).get("variants", []) if r["id"] == i), None)
+            if row is None or not row["eligible"]:
+                bad.append(f"{pool}: {i} is not choosable")
+            else:
+                groups.append(row["group"])
+        if len(set(groups)) != len(groups):
+            bad.append(f"{pool}: the chosen variants must be from different groups")
+        standing = []
+        if prev_choice is not None and P is not None:
+            pinfo = (prev_choice.get("pools") or {}).get(pool, {})
+            if pinfo.get("answer") == "없음" and ids:
+                bad.append(f"{pool}: a pool answered 없음 stays none")
+            standing = [i for i in (prev_choice.get(pool) or []) if any(r["id"] == i and r["eligible"] for r in P.get("variants", []))]
+            dropped = [i for i in standing if i not in ids]
+            if dropped:
+                bad.append(f"{pool}: still-choosable ids cannot be swapped or dropped: {dropped}")
+        times = list(info.get("answer_times_utc") or ([info["answer_time_utc"]] if info.get("answer_time_utc") else []))
+        if info.get("default_used"):
+            if info.get("deadline_utc") and any(t < info["deadline_utc"] for t in times):
+                bad.append(f"{pool}: marked 'default used' but an answer was timed before the deadline")
+            want = standing + default_choice((P or {}).get("variants", []), standing)
+            if ids != want:
+                bad.append(f"{pool}: the default's ids differ from 8.4's output")
+        elif P is not None and not info.get("answer"):
+            bad.append(f"{pool}: no answer recorded and the default was not used")
+    if sent is not None and choice.get("sent_utc") != sent.get("sent_utc"):
+        bad.append("the send time differs from sent.json")
+    return bad
+
+
+DS_ALLOWED = {"id", "name_ko", "family", "group", "mode", "q15", "nparams", "order", "loss_class", "in_default_set", "gates",
+              "step2", "eligible", "label", "hold", "entered", "entered_e0", "entered_change_pct", "skipped", "skipped_e0",
+              "rejected", "closed", "win_share", "entries_at_rule_minute", "reasons", "changed", "changed_share", "both_touched",
+              "claim", "claim_ko", "mark_default", "same_as_f3", "n_picks", "pool", "holm_significant", "beats_placebo_p95",
+              "entries_ok", "pass", "hold_e0", "chosen_by", "default_would_take", "ledger_label", "reasons_e0",
+              "hold_by_state", "hold_by_state_e0", "comp_fired", "comp_alone"}
+
+
+DS_NESTED_ALLOWED = ({"median", "p90", "share_gt4", "share_gt8", "share_gt18", "n", "few", "g1", "g2", "g3", "g4"} | set(REASONS)
+                     | set(DX.STATE_KO.values()) | set(COMP_LABELS))
+DS_E0_ALLOWED = {"hold", "entered", "skipped", "win_share", "rejected", "closed", "reasons", "both_touched", "n_picks", "hold_by_state"}
+DS_POOL_ALLOWED = {"n_picks", "e0", "variants", "eligible_ids", "default_ids", "gate_fail_counts"}
+DS_TEXT_MONEY = None
+
+
+def ds_whitelist_ok(row: dict) -> bool:
+    """D11: a DeepSeek row of a committed file carries only counts, win shares, hold times, exit reasons and labels (nested
+    dictionaries only hold hold-time statistics, exit-reason and market-state keys, gate labels and F12 component names)."""
+    def nested(v):
+        if isinstance(v, dict):
+            return all(k in DS_NESTED_ALLOWED and nested(x) for k, x in v.items())
+        return True
+    return all(k in DS_ALLOWED and nested(v) for k, v in row.items())
+
+
+def ds_text_problems(md: str) -> list:
+    """Lines of a Korean report that sit in a DeepSeek section (a heading with 딥시크, or a table row of a ds pair) and show a money
+    figure or a p value: a growth percentage per month, a log growth, a wallet multiple, a drawdown, a bust, an interval, a dollar
+    amount or a p."""
+    import re
+    pat = re.compile(r"(월\s*[+-]?\d)|로그|배수|낙폭|파산|\bp\s*[=<>]|p값|구간\s*\[|\$\s?\d|M_P|\bM\s*=")
+    bad, inside = [], False
+    for ln in md.splitlines():
+        if ln.startswith("#"):
+            inside = "딥시크" in ln or (inside and not ln.startswith("## "))
+            if ln.startswith("## "):
+                inside = "딥시크" in ln
+        if inside and pat.search(ln):
+            bad.append(ln.strip())
+    return bad
+
+
+def d11_problems(select_doc: dict | None = None, confirm_doc: dict | None = None, select_md: str | None = None,
+                 report_md: str | None = None) -> list:
+    """Audit A8 on the committed files' content (pure): problems found in the DeepSeek rows of select.json and confirm.json and in the
+    DeepSeek sections of SELECT_KO.md and REPORT_KO.md; [] = none."""
+    bad = []
+    if select_doc:
+        ds = (select_doc.get("pools") or {}).get("ds")
+        if ds:
+            bad += [f"select.json ds pool key {k}" for k in ds if k not in DS_POOL_ALLOWED]
+            bad += [f"select.json ds e0 key {k}" for k in ds.get("e0", {}) if k not in DS_E0_ALLOWED]
+            bad += [f"select.json ds row {r.get('id')}" for r in ds.get("variants", []) if not ds_whitelist_ok(r)]
+    if confirm_doc:
+        bad += [f"confirm.json ds pair {k}" for k, r in (confirm_doc.get("pairs") or {}).items() if k.endswith("|ds") and not ds_whitelist_ok(r)]
+        bad += [f"confirm.json ds e0 key {k}" for k in ((confirm_doc.get("e0") or {}).get("ds") or {}) if k not in DS_E0_ALLOWED]
+    for name, md in (("SELECT_KO.md", select_md), ("REPORT_KO.md", report_md)):
+        if md:
+            bad += [f"{name}: {ln[:60]}" for ln in ds_text_problems(md)]
+    return bad
 
 
 # ------------------------------------------------------------------ confirm (section 9)

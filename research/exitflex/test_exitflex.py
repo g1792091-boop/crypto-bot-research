@@ -204,7 +204,7 @@ def vendor():
     return True
 
 
-def build_world(coins: dict, tmp, prov_kw=None, pick=None, f11=None):
+def build_world(coins: dict, tmp, prov_kw=None, pick=None, f11=None, strict_flags=True):
     """Market + provider + PickData for a dict of coins {sym: arrays} (the first ones of SYMBOLS)."""
     syms = tuple(coins)
     assert syms == SYMS[:len(syms)]
@@ -212,7 +212,7 @@ def build_world(coins: dict, tmp, prov_kw=None, pick=None, f11=None):
     prov = Prov(folder, syms, **(prov_kw or {}))
     mk = DX.Market.from_arrays([coins[s] for s in syms], EX, symbols=syms)
     pick = pick or make_pick()
-    pd_ = DX.PickData(mk, pick, prov, f11=f11)
+    pd_ = DX.PickData(mk, pick, prov, f11=f11, strict_flags=strict_flags)
     return mk, prov, pd_
 
 
@@ -278,6 +278,12 @@ class RefChart:
             if side < 0 and self.swing_high(p, w) and (ref is None or self.hi[p] < ref):
                 ref = self.hi[p]
         return ref
+
+
+def pdata_zflag(ch, bi, side) -> bool:
+    """F11's own 'can fire at this bar' flag of the chart bar bi (default 1)."""
+    arr = ch.pdata.b_zl if side > 0 else ch.pdata.b_zs
+    return bool(arr[ch.pdata.cst[ch.c] + bi] != 0)
 
 
 def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
@@ -362,32 +368,31 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
     def evaluate(kk):
         ci = check_info(kk)
         bi, px, rc, rpk, X = ci["bi"], ci["px"], ci["rc"], ci["rpk"], ci["X"]
-        ref = None
-        w = prm.get("w", 0)
-        if fam in (KX.F1, KX.F6, KX.F8, KX.F9):
+        P12 = KX.F12_PARAMS
+
+        def pm(name, default=0):
+            return P12[name] if fam == KX.F12 else prm.get(name, default)
+
+        def prev_bi():
+            return i0 if kk == 1 else check_info(kk - 1)["bi"]
+
+        def c_ref(w):
             ref = ch.ref_at(i0, bi, w, side)
-        brk = ref is not None and side * (ref - px) > 0
-        z = 0
-        armed = False
-        ema_before = False
-        if fam == KX.F1:
-            fire = brk
-            z = ref is not None
-        elif fam == KX.F2:
-            em = ch.ema_of(prm["n"])
-            ema_before = side * (ch.cl[i0] - em[i0]) > 0 or any(side * (ch.cl[i] - em[i]) > 0 for i in range(i0 + 1, bi))
-            fire = ema_before and side * (em[bi] - ch.cl[bi]) > 0
-            z = ema_before
-        elif fam == KX.F3:
-            # the bars of this check: those after the previous check's latest bar (all of them for the first check)
-            lo_bar = i0 + 1 if kk == 1 else check_info(kk - 1)["bi"] + 1
+            return ref, (ref is not None and side * (ref - px) > 0)
+
+        def c_ema(n):
+            em = ch.ema_of(n)
+            before = side * (ch.cl[i0] - em[i0]) > 0 or any(side * (ch.cl[i] - em[i]) > 0 for i in range(i0 + 1, bi))
+            return before, bool(before and side * (em[bi] - ch.cl[bi]) > 0)
+
+        def c_f3():
             flags = ch.sigs if side > 0 else ch.sigl
-            fire = any(flags[i] for i in range(lo_bar, bi + 1))
-        elif fam == KX.F11:
-            lo_bar = i0 + 1 if kk == 1 else check_info(kk - 1)["bi"] + 1
+            return any(flags[i] for i in range(prev_bi() + 1, bi + 1))
+
+        def c_f11():
             base_c = 0 if side > 0 else KX.NC
             fire = False
-            for i in range(lo_bar, bi + 1):
+            for i in range(prev_bi() + 1, bi + 1):
                 for c in range(KX.NC):
                     kd = ch.ckind[base_c + c]
                     val = ch.comp[i, base_c + c]
@@ -400,33 +405,72 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
                 if not math.isnan(lvl) and not math.isnan(ch.cl[i]) and side * (lvl - ch.cl[i]) > 0:
                     if any((not math.isnan(ch.cl[t])) and side * (lvl - ch.cl[t]) <= 0 for t in range(i0, i)):
                         fire = True
+            # the precondition: a finite level, an event component, or a state component armed before the check bar
+            zf = not math.isnan(lvl)
+            for c in range(KX.NC):
+                kd = ch.ckind[base_c + c]
+                if kd == KX.CK_EVENT or (kd == KX.CK_STATE and any(ch.comp[t, base_c + c] == 0 for t in range(i0, bi))):
+                    zf = True
+            zflag = pdata_zflag(ch, bi, side)
+            return fire, bool(zf and zflag)
+
+        def c_f4(m):
+            return side * ((X - side * m * ch.atr[bi]) - px) > 0
+
+        def c_f10(N):
+            return rc > 0 and ci["cc"] - ci["TX"] >= N * tf_ms
+
+        armed15 = lambda P: armed_at(kk, P)   # noqa: E731
+        fire, z, comp = False, 0, 0
+        armed, ema_before, ref_out = False, False, None
+        if fam == KX.F1:
+            ref_out, brk = c_ref(prm["w"])
+            fire, z = brk, ref_out is not None
+        elif fam == KX.F2:
+            ema_before, fire = c_ema(prm["n"])
+            z = ema_before
+        elif fam == KX.F3:
+            fire = c_f3()
+        elif fam == KX.F11:
+            fire, z = c_f11()
         elif fam == KX.F4:
-            lvl_f4 = X - side * prm["m"] * ch.atr[bi]
-            fire = side * (lvl_f4 - px) > 0
+            fire = c_f4(prm["m"])
         elif fam == KX.F5:
-            armed = armed_at(kk, prm["P"])
-            fire = armed and rc <= (1 - prm["g"]) * rpk
-            z = armed
+            armed = armed15(prm["P"])
+            fire, z = armed and rc <= (1 - prm["g"]) * rpk, armed
         elif fam == KX.F6:
-            fire = brk and rc < -prm["d"]
-            z = ref is not None
+            ref_out, brk = c_ref(prm["w"])
+            fire, z = brk and rc < -prm["d"], ref_out is not None and rc < -prm["d"]
         elif fam == KX.F7:
             fire = ci["cc"] >= ch.cms[i0] + prm["N"] * tf_ms
+        elif fam == KX.F7H:
+            fire = ci["cc"] >= ch.cms[i0] + prm["H"] * 3_600_000
         elif fam == KX.F8:
-            armed = armed_at(kk, prm["P"])
-            fire = armed and brk
-            z = armed
+            ref_out, brk = c_ref(prm["w"])
+            armed = armed15(prm["P"])
+            fire, z = armed and brk, armed and ref_out is not None
         elif fam == KX.F9:
-            armed = armed_at(kk, prm["P"])
-            fire = brk and (armed or rc < -prm["d"])
-            z = armed
+            ref_out, brk = c_ref(prm["w"])
+            armed = armed15(prm["P"])
+            fire, z = brk and (armed or rc < -prm["d"]), ref_out is not None and (armed or rc < -prm["d"])
         elif fam == KX.F10:
-            fire = rc > 0 and ci["cc"] - ci["TX"] >= prm["N"] * tf_ms
+            fire = c_f10(prm["N"])
+        elif fam == KX.F12:
+            ref_out, brk = c_ref(P12["w"])
+            ema_before, e_fire = c_ema(P12["n"])
+            armed = armed15(P12["P"])
+            f11_fire, z11 = c_f11()
+            bits = {KX.CB_F1: brk, KX.CB_F2: e_fire, KX.CB_F3: c_f3(), KX.CB_F4: c_f4(P12["m"]),
+                    KX.CB_F5: armed and rc <= (1 - P12["g"]) * rpk, KX.CB_F6: brk and rc < -P12["d"],
+                    KX.CB_F7H: ci["cc"] >= ch.cms[i0] + P12["H"] * 3_600_000, KX.CB_F10: c_f10(P12["N"]), KX.CB_F11: f11_fire}
+            comp = sum(b for b, on in bits.items() if on)
+            fire = comp != 0
+            z = ref_out is not None or ema_before or armed or z11
         else:
             raise AssertionError(fam)
         a = PL.age_bucket_py(kk)
         s = 1 if rc >= 0 else 0
-        return bool(fire), (a, s, int(bool(z))), dict(ref=ref, armed=bool(armed), ema_before=bool(ema_before), **ci)
+        return bool(fire), (a, s, int(bool(z))), dict(ref=ref_out, armed=bool(armed), ema_before=bool(ema_before), comp=comp, **ci)
 
     mfe = fill
     fpaid = 0.0
@@ -521,7 +565,7 @@ def trade_args(mk, pdata, v, off, q, scale=0.25, period="select", force_end=True
 
 def call_trade_x(mk, pdata, v, off, q, scale=0.25, force_end=True, plc=False, hz=None, seed=0, trace_rows=0, equity=5000.0,
                  tp_price=np.nan, period="select"):
-    if v.fam == KX.F11 and v.mode == "b":
+    if v.fam in (KX.F11, KX.F12) and v.mode == "b":
         tp_price = float(pdata.targets(off)[q])
     return KX.simulate_trade(mk, pdata, v, off, q, scale, period, force_end, plc, hz, seed, trace_rows, equity, tp_price)
 
@@ -529,14 +573,14 @@ def call_trade_x(mk, pdata, v, off, q, scale=0.25, force_end=True, plc=False, hz
 def call_ref(mk, prov, pdata, v, off, q, scale=0.25, force_end=True, plc=False, hz=None, seed=0, equity=5000.0,
              tp_price=np.nan, period="select"):
     t = trade_args(mk, pdata, v, off, q, scale, period, force_end)
-    if v.fam == KX.F11 and v.mode == "b":
+    if v.fam in (KX.F11, KX.F12) and v.mode == "b":
         tp_price = float(pdata.targets(off)[q])
     c, a, b = t["c"], t["a"], t["b"]
     ch = RefChart(pdata, c)
     q15 = bool(v.q15) and pdata.tf in ("1h", "4h")
     q15bars = ref_q15(prov, pdata, c) if q15 else None
-    if v.fam == KX.F2:
-        ch.ema_of(v.params["n"])
+    if v.fam in (KX.F2, KX.F12):
+        ch.ema_of(KX.F12_PARAMS["n"] if v.fam == KX.F12 else v.params["n"])
     hzd = None
     if plc:
         hzd = {(i, j, k): hz[i, j, k] for i in range(KX.N_AGE) for j in range(2) for k in range(2)}
@@ -544,7 +588,7 @@ def call_ref(mk, prov, pdata, v, off, q, scale=0.25, force_end=True, plc=False, 
                      mk.cat["mh"][a:b], mk.cat["ml"][a:b], mk.cat["fund"][a:b], t["e"], b - a, t["side"],
                      t["stop_atr"] * t["atr"], t["atr"], t["best"], equity, mk.qty_steps[c], mk.min_notionals[c], t["tp_kind"],
                      t["tp_val"], tp_price, force_end, v, ch, t["i0"], pdata.tf_ms, q15, q15bars, plc, seed, c, hzd,
-                     float(off["lvl"][q]) if v.fam == KX.F11 else float("nan"))
+                     float(off["lvl"][q]) if v.fam in (KX.F11, KX.F12) else float("nan"))
 
 
 def compare_trade(mk, prov, pdata, v, off, q, **kw):
@@ -552,9 +596,12 @@ def compare_trade(mk, prov, pdata, v, off, q, **kw):
     out, num, den, trace = call_trade_x(mk, pdata, v, off, q, trace_rows=2000, **kw)
     rd, rj, rr, rl, rp_, rrec = call_ref(mk, prov, pdata, v, off, q, **{k: val for k, val in kw.items() if k != "trace_rows"})
     bad = []
-    d, j, r, lev, px, nk, both = out
+    d, j, r, lev, px, nk, both, cm = out
     if not (abs(d - rd) <= 1e-9 * max(1.0, abs(rd)) and j == rj and r == rr and lev == rl and abs(px - rp_) <= 1e-9 * max(1.0, abs(rp_))):
         bad.append(f"trade: kernel {(d, j, r, lev, px)} ref {(rd, rj, rr, rl, rp_)}")
+    want_cm = int(rrec[-1]["comp"]) if (rr == KX.R_RULE and rrec) else 0
+    if cm != want_cm:
+        bad.append(f"component mask: kernel {cm} ref {want_cm}")
     for rec in rrec:                                        # every check that the position lived to see
         kk = rec["k"]
         row = trace[kk - 1]
@@ -598,7 +645,7 @@ class Scen:
 
     def __init__(self, tmp, segments, p0=100.0, tf="1h", exit_name="tp3R|4", longs=(), shorts=(), atr=0.3, ema=None, gaps=(),
                  fund_at=None, best=False, scale=0.25, sig_fn=None, side_mirror=False, opens=None, highs=None, lows=None,
-                 pad=True, f11=None):
+                 pad=True, f11=None, strict_flags=True):
         if side_mirror:
             segments, p0 = mirror(segments, p0)
             longs, shorts = shorts, longs
@@ -626,7 +673,7 @@ class Scen:
         self.mk, self.prov, self.pd = build_world({"BTCUSDT": self.coin}, tmp, pick=make_pick(tf, exit_name),
                                                   prov_kw=dict(sig=sig_fn or sig, atr_const=atr, ema_fn=ema_fn, warm=False,
                                                                best_fn=(lambda s, df: (np.full(len(df), best), np.full(len(df), best)))),
-                                                  f11=f11)
+                                                  f11=f11, strict_flags=strict_flags)
         self.scale = scale
         self.off = self.pd.offered("select", self.mk)
 
@@ -755,7 +802,7 @@ def test_t2_f3_reversal_and_both_flags(tmp_path, vendor, mir):
     r, a = acct(s, "E0")                              # without the rule the second signal finds the account busy
     assert [x["status"] for x in a] == [1, 0]
     # both flags on one bar: the long is offered first
-    s2 = Scen(tmp_path / "b", seg, longs=[2, 5], shorts=[5], side_mirror=mir)
+    s2 = Scen(tmp_path / "b", seg, longs=[2, 5], shorts=[5], side_mirror=mir, strict_flags=False)
     r, a = acct(s2, "F3.a")
     assert [x["status"] for x in a] == [1, 1, 0]
     assert a[0]["exit"] == 360 and a[0]["reason"] == KX.R_RULE and a[1]["entry"] == 360 and a[1]["side"] == 1
@@ -1166,7 +1213,7 @@ def test_t2_kernel_equals_the_plain_python_reference_on_random_paths(tmp_path, v
             n_checks += out[5]
             if KX.has_placebo(v) if hasattr(KX, "has_placebo") else PL.has_placebo(v):
                 hz = random_hz(int(q) + 7)
-                bad = compare_trade(mk, prov, pd_, v, off, int(q), plc=True, hz=hz, seed=PL.seed_base("p", v.id, "select", int(q)))
+                bad = compare_trade(mk, prov, pd_, v, off, int(q), plc=True, hz=hz, seed=PL.seed_base(v.id, "select", int(q)))
                 assert not bad, (tf, v.id, int(q), "placebo", bad[:3])
     assert n_cmp >= 200 and n_rule >= 40 and n_checks >= 400
 
@@ -1262,7 +1309,7 @@ def test_t4_draws_depend_only_on_seed_coin_and_time():
     assert KX.draw_u(42, 3, 1_700_000_000_000) != KX.draw_u(43, 3, 1_700_000_000_000)
     assert KX.draw_u(42, 3, 1_700_000_000_000) != KX.draw_u(42, 4, 1_700_000_000_000)
     assert KX.draw_u(42, 3, 1_700_000_000_000) != KX.draw_u(42, 3, 1_700_000_060_000)
-    assert PL.seed_base("core-X-1h-1", "F1.w3.a", "select", 7) == R._seed("exitflex", "placebo", "core-X-1h-1", "F1.w3.a", "select", 7)
+    assert PL.seed_base("F1.w3.a", "select", 7) == R._seed("exitflex", "placebo", "F1.w3.a", "select", 7)     # no pick id in the seed
     assert [KX.age_bucket(k) for k in (1, 2, 3, 4, 5, 8, 9, 16, 17, 32, 33, 64, 65, 1000)] == [0, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7]
     assert all(KX.age_bucket(k) == PL.age_bucket_py(k) for k in range(1, 300))
 
@@ -1339,7 +1386,7 @@ def test_t4_realised_rates_audit_a7(world_1h):
     num = np.zeros((KX.N_AGE, 2, 2), np.int64)
     den = np.zeros((KX.N_AGE, 2, 2), np.int64)
     for s_ in range(40):
-        r = KX.simulate(mk, pd_, v, 0.25, "select", placebo=True, hz=hz, seed_base=PL.seed_base("p", v.id, "select", s_))
+        r = KX.simulate(mk, pd_, v, 0.25, "select", placebo=True, hz=hz, seed_base=PL.seed_base(v.id, "select", s_))
         num += r.num
         den += r.den
     assert den.sum() > 2000 and num.sum() > 100
@@ -1489,17 +1536,24 @@ def test_t2_f11_differential_against_the_reference(tmp_path, vendor, f11_on):
         coins = {k: carve_merge_holes(v, 30 if tf == "30m" else 60, 8, 7 + i) for i, (k, v) in enumerate(coins.items())}
         mk, prov_, pd_ = build_world(coins, tmp_path / tf, pick=make_pick(tf, w["exit"]), prov_kw=dict(warm=False), f11=prov)
         off = pd_.offered("select", mk)
-        n_rule = n_tp = 0
-        for vid in ("F11.a", "F11.b"):
+        n_rule = n_tp = n_multi = n_f12 = 0
+        for vid in ("F11.a", "F11.b", "F12.a", "F12.b"):
             v = KX.variant_by_id(vid)
             for q in range(0, len(off["coin"]), max(1, len(off["coin"]) // 25)):
                 assert not compare_trade(mk, prov_, pd_, v, off, q), (tf, vid, q)
                 out = call_trade_x(mk, pd_, v, off, q)[0]
                 n_rule += out[2] == KX.R_RULE
                 n_tp += out[2] == KX.R_TP
+                if v.fam == KX.F12 and out[2] == KX.R_RULE:
+                    n_f12 += 1
+                    n_multi += bin(int(out[7])).count("1") >= 2
+                    assert 0 < out[7] < 512
+                else:
+                    assert out[7] == 0
                 hz = random_hz(q + 3)
                 assert not compare_trade(mk, prov_, pd_, v, off, q, plc=True, hz=hz, seed=q + 99), (tf, vid, q, "placebo")
-        assert n_rule >= 5 and n_tp >= 1
+                assert call_trade_x(mk, pd_, v, off, q, plc=True, hz=hz, seed=q + 99)[0][7] == 0        # a placebo exit has no component
+        assert n_rule >= 5 and n_tp >= 1 and n_f12 >= 3
 
 
 # ====================================================================================================== T3: cut against full
@@ -1683,25 +1737,38 @@ import runner_x as RX  # noqa: E402
 
 def test_variants_registry_matches_the_prereg_list(f11_on):
     vs = KX.variants()
-    assert len(vs) == 78 and len({v.id for v in vs}) == 78
+    assert len(vs) == 86 and len({v.id for v in vs}) == 86
     ids = [v.id for v in vs]
     for must in ("F1.w3.a", "F1.w3.b.q15", "F2.n20.b", "F3.a", "F4.m1.5.a", "F4.m2.b.q15", "F5.P1.5.g25.a", "F6.w2.d0", "F6.w2.d0.5",
-                 "F7.N24.b", "F8.w3.P1.a", "F9.a", "F9.b.q15", "F10.N6.a", "F11.a", "F11.b", "F5.P1.g50.b"):
+                 "F7.N24.b", "F7h.H8.a", "F7h.H4.b", "F7h.H16.a", "F8.w3.P1.a", "F9.a", "F9.b.q15", "F10.N6.a", "F11.a", "F11.b",
+                 "F12.a", "F12.b", "F5.P1.g50.b"):
         assert must in ids
     assert ids[:6] == ["F1.w2.a", "F1.w2.b", "F1.w3.a", "F1.w3.b", "F1.w5.a", "F1.w5.b"]
+    assert ids[-4:] == ["F11.a", "F11.b", "F12.a", "F12.b"]
     by = {}
     for v in vs:
         by.setdefault(v.famname + (".q15" if v.q15 else ""), []).append(v)
     assert {k: len(x) for k, x in by.items()} == {"F1": 6, "F1.q15": 6, "F2": 6, "F3": 2, "F4": 6, "F4.q15": 6, "F5": 12, "F6": 6, "F7": 6,
-                                                  "F8": 12, "F9": 2, "F9.q15": 2, "F10": 4, "F11": 2}
+                                                  "F7h": 6, "F8": 12, "F9": 2, "F9.q15": 2, "F10": 4, "F11": 2, "F12": 2}
     assert all(v.mode == "a" for v in by["F6"])
-    assert {v.famname: v.group for v in vs} == {"F1": "S", "F2": "M", "F3": "O", "F4": "C", "F5": "G", "F6": "S", "F7": "T", "F8": "S",
-                                                "F9": "S", "F10": "L", "F11": "N"}
+    assert {v.famname: v.group for v in vs} == {"F1": "S", "F2": "M", "F3": "O", "F4": "C", "F5": "G", "F6": "S", "F7": "T", "F7h": "T",
+                                                "F8": "S", "F9": "S", "F10": "L", "F11": "N", "F12": "A"}
     npar = {k: {v.nparams for v in x} for k, x in by.items()}
     assert npar["F3"] == {0} and npar["F11"] == {0} and npar["F9"] == {3} and npar["F9.q15"] == {4} and npar["F1"] == {1}
     assert npar["F1.q15"] == {2} and npar["F5"] == {2} and npar["F6"] == {2} and npar["F8"] == {2} and npar["F4.q15"] == {2}
-    assert [v.order for v in vs] == list(range(1, 79))
-    assert KX.F11_REGISTRY["modes"] == ("a", "b") and len(KX.variants(include_f11=False)) == 76
+    assert npar["F7h"] == {1} and npar["F12"] == {8}
+    assert [v.order for v in vs] == list(range(1, 87))
+    assert KX.F11_REGISTRY["modes"] == ("a", "b") and len(KX.variants(include_f11=False)) == 82
+    # 5.3: 74 variants outside F7 and F7h reach the placebo step (F12 has one); the loss-cut categories; the default set D has 35
+    assert sum(PL.has_placebo(v) for v in vs) == 74 and not any(PL.has_placebo(v) for v in by["F7"] + by["F7h"])
+    cls = {k: {MT.loss_class(v) for v in x} for k, x in by.items()}
+    assert cls["F5"] == {"L0"} and cls["F8"] == {"L0"} and cls["F10"] == {"L0"} and cls["F9"] == {"L1"} and cls["F9.q15"] == {"L1"}
+    assert cls["F1"] == {"L2"} and cls["F1.q15"] == {"L2"} and cls["F11"] == {"L3"} and cls["F12"] == {"L3"} and cls["F7h"] == {"L3"}
+    assert {MT.loss_class(v) for v in by["F6"] if v.params["d"] == 0.5} == {"L1"} and {MT.loss_class(v) for v in by["F6"] if v.params["d"] == 0} == {"L2"}
+    assert sum(MT.in_default_set(v) for v in vs) == 35 and not any(MT.in_default_set(v) for v in by["F12"])
+    # F12's fixed values are the middle of each grid (5.2), the larger of a two-value grid
+    assert KX.F12_PARAMS == {"w": 3, "n": 20, "m": 2.0, "P": 1.5, "g": 0.5, "d": 0.5, "H": 8, "N": 12}
+    assert [b for _n, b in KX.COMP_NAMES] == [1, 2, 4, 8, 16, 32, 64, 128, 256]
 
 
 def test_metrics_monthly_growth_and_Mp_identity():
@@ -1829,8 +1896,11 @@ def test_data_offered_signals_are_ordered_filtered_and_in_the_period(world_1h):
 
 
 def test_data_both_flags_on_one_bar_offer_the_long_first(tmp_path, vendor):
-    s = Scen(tmp_path, H(*([100] * 8)), longs=[3], shorts=[3])
+    s = Scen(tmp_path, H(*([100] * 8)), longs=[3], shorts=[3], strict_flags=False)
     assert s.off["side"].tolist() == [1, -1] and s.off["i0"].tolist() == [3, 3]
+    # prereg 3: a bar with both flags stops the run when the assertion is on (the default)
+    with pytest.raises(AssertionError, match="both a long and a short"):
+        Scen(tmp_path / "strict", H(*([100] * 8)), longs=[3], shorts=[3])
 
 
 def test_data_picks_are_the_38_of_the_prereg():
@@ -2139,6 +2209,9 @@ def test_runner_chain_each_stage_needs_the_previous_stages_file_with_its_pinned_
     RX.write_json(t, {"n_seeds": 100})                                          # changed after it was pinned
     with pytest.raises(RX.StageRefused, match="not pinned"):
         RX.require_pinned_file(lay, t, "timing.json")
+    with pytest.raises(RX.StageRefused, match="hash mismatch"):                  # and every stage's gate sees that a pinned file changed
+        RX.gate_pin(lay, verify_data=False)
+    RX.write_json(t, {"n_seeds": 200})
     # choice needs select.json pinned; confirm needs select.json and choice.json
     with pytest.raises(RX.StageRefused, match="select.json missing"):
         RX.stage_choice(lay, [], [])
@@ -2165,7 +2238,7 @@ def edited_select(syn_select_doc, tmp, eligible):
             r["eligible"] = r["id"] in want
             r["mark_default"] = r["id"] in eligible.get(pool + "_default", want[:2])
         P["eligible_ids"] = list(want)
-        P["default_ids"] = [r["id"] for r in P["variants"] if r["mark_default"]]
+        P["default_ids"] = eligible.get(pool + "_default", want[:2])           # in rank order
     RX.write_json(lay.out_file("select.json"), doc)
     pin_add(lay, lay.out_file("select.json"))
     return lay, doc, ph
@@ -2173,7 +2246,8 @@ def edited_select(syn_select_doc, tmp, eligible):
 
 def test_runner_choice_validates_eligibility_pool_size_and_groups(syn_select, tmp_path):
     cfg, sdoc = syn_select
-    lay, doc, ph = edited_select(sdoc, tmp_path, {"core": ["F1.w3.a", "F4.m2.b", "F11.a", "F6.w2.d0"], "ds": ["F3.a", "F1.w3.a"]})
+    lay, doc, ph = edited_select(sdoc, tmp_path, {"core": ["F1.w3.a", "F4.m2.b", "F11.a", "F6.w2.d0"], "ds": ["F3.a", "F1.w3.a"],
+                                                  "ds_default": ["F3.a", "F1.w3.a"], "core_default": ["F4.m2.b", "F1.w3.a"]})
     out = RX.stage_choice(lay, ["F1.w3.a", "F4.m2.b"], ["F3.a"], "두 개 골랐습니다", "2026-10-13T01:00:00Z", "2026-10-13T10:00:00+09:00",
                           "2026-10-12T12:00:00Z")
     j = json.load(open(lay.out_file("choice.json")))
@@ -2191,7 +2265,7 @@ def test_runner_choice_validates_eligibility_pool_size_and_groups(syn_select, tm
     with pytest.raises(RX.StageRefused, match="48 h"):
         RX.stage_choice(lay, [], [], use_default=True, report_sent_utc="2026-10-12T12:00:00Z", now_utc="2026-10-14T11:59:00Z")
     d = RX.stage_choice(lay, [], [], use_default=True, report_sent_utc="2026-10-12T12:00:00Z", now_utc="2026-10-14T12:00:00Z")
-    assert d["default_used"] is True and d["core"] == ["F1.w3.a", "F4.m2.b"] and d["ds"] == ["F3.a", "F1.w3.a"]
+    assert d["default_used"] is True and d["core"] == ["F4.m2.b", "F1.w3.a"] and d["ds"] == ["F3.a", "F1.w3.a"]
     with pytest.raises(RX.StageRefused, match="48 h|report"):
         RX.stage_choice(lay, [], [], use_default=True)
 
@@ -2203,7 +2277,7 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
     cfg.variants = [KX.variant_by_id(v) for v in SYN_VARIANTS]
     choice = {"core": ["F1.w3.a", "F7.N12.a"], "ds": ["F3.a"]}
     RX.write_json(cfg.lay.out_file("choice.json"), {**choice, "pin": cfg.pin_hash})
-    RX.write_json(cfg.lay.out_file("select.json"), {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(ROOT)})
+    RX.write_json(cfg.lay.out_file("select.json"), {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(cfg.lay.root)})
     sel = json.load(open(cfg.lay.out_file("select.json")))
     doc = RX.finish_confirm(cfg, sel, choice)
     assert sorted(doc["pairs"]) == ["F1.w3.a|core", "F3.a|ds", "F7.N12.a|core"]
@@ -2227,8 +2301,9 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
     assert first["p_block"] == MT.block_bootstrap_p(np.array(first["D"]), DX.seed_of("exitflex", "confirm", "F1.w3.a", "core"))
     assert len(first["D"]) == 33
     # a module file that changed since the select run is refused
-    sel2 = dict(sel, modules={k: "0" * 64 for k in sel["modules"]})
-    if sel2["modules"]:
-        with pytest.raises(RX.StageRefused, match="module files changed"):
-            RX.finish_confirm(cfg, sel2, choice)
+    sel2 = dict(sel, modules={"research/library/lib.py": "0" * 64})
+    with pytest.raises(RX.StageRefused, match="module files changed"):
+        RX.finish_confirm(cfg, sel2, choice)
+    real = RX.loaded_module_hashes(ROOT)
+    assert "research/library/lib.py" in real and "research/search/search.py" in real and len(real) >= 8
     KX.clear_f11()

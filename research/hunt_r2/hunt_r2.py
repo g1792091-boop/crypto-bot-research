@@ -49,8 +49,9 @@ from research.hunt_r2 import report_r2 as RP  # noqa: E402
 from research.hunt_r2 import select_r2 as SR  # noqa: E402
 
 OUT_REL = "research/hunt_r2/out"
-SELFCHECK_TESTS = ("tests/test_hunt_r2_core.py", "tests/test_hunt_r2_cli.py", "tests/test_hunt.py",
-                   "tests/test_hunt_entries.py", "tests/test_data_hunt.py", "tests/test_altpump.py")
+SELFCHECK_TESTS = ("tests/test_hunt_r2_core.py", "tests/test_hunt_r2_cli.py", "tests/test_hunt_r2_kit.py",
+                   "tests/test_hunt.py", "tests/test_hunt_entries.py", "tests/test_data_hunt.py",
+                   "tests/test_altpump.py")
 
 
 class Refused(RuntimeError):

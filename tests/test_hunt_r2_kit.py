@@ -100,7 +100,8 @@ def test_dry_run_status_and_idle_before_the_go_commit(tmp_path):
     r = _dry(tmp_path, "status")
     assert r.returncode == 0
     assert "아직 고정 전인데 기다리기가 멈춰 있습니다" in r.stdout
-    assert r.stdout.strip().splitlines()[-1].startswith(f"HUNT_R2_DRYENV={tmp_path / 'dryenv.sh'} bash {BOOT} --dry-run idle")
+    last = r.stdout.strip().splitlines()[-1]
+    assert last.startswith(f"HUNT_R2_DRYENV={tmp_path / 'dryenv.sh'} bash {BOOT} --dry-run idle")
     assert _dry(tmp_path, "idle").returncode == 0                  # nothing runs: the restart line goes on
     u = _dry(tmp_path, "update", "not-a-commit")
     assert u.returncode == 2 and "사용법" in u.stdout

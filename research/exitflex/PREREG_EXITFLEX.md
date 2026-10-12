@@ -4,11 +4,13 @@
 `PREREG_EXITFLEX.sha256` together with the code and inputs of section 13. Changes after the pin go to `DEVIATIONS.md`
 in this folder, dated and with the reason, never into this file. Select-period numbers of E0 on the core picks have been
 seen by the main session; section 15 lists them and says what follows. Section 16 lists what changed in each revision
-and why. Appendix A writes out each strategy's own exit (family F11).
+and why. Appendix A writes out each strategy's own exit (family F11). Section 17, after Appendix A, is the main
+session's checklist of what must hold before this file is hashed.
 
 First draft 2026-10-12 01:41 UTC; revised 2026-10-12 (UTC) after two design reviews; revised again 2026-10-12 (about
 02:40 UTC) after the owners' four later messages below; revised a third time 2026-10-12 after two reviews of the second
-revision (section 16.3). Owners' first request, about the 후보 리그 ("커스텀값 봇"),
+revision (section 16.3); revised a fourth time 2026-10-12 (after about 12:20 KST) for the main session's decisions and
+the owners' three latest messages below (section 16.4). Owners' first request, about the 후보 리그 ("커스텀값 봇"),
 where a SOL long had been held about 18 h at +43% ROE under a fixed 3R take-profit and a 4 ATR stop:
 "익절구조를 과거 백테스트를 돌려서 좋게 잡은건 좋은데 포지션 보유시간이 길어지면 진입횟수에도 영향을 끼치잖아 ... 18시간씩
 보유하고있으면 솔직히 좀 그래 예를들어 롱을 잡아서 +60%까지 갔다가 롱구조가 무너지거나 더이상 안오를꺼 같으면 빠르게
@@ -29,26 +31,40 @@ take-profit and had been held 16-18 h):
    놓친다고 해야되나? 스윙 느낌이 나잖아 ... 우린 단타느낌을 원하는건데"
 4. "왜 7개 전부다 고정익절이냐고 매매법이 다 다른데 익절구간도 다를꺼 아니야"
 
+**Owners' latest messages, 2026-10-12** (after the third revision; verbatim):
+
+5. "딥시크 금액 알려주고 청산방식 9가지를 동시에 다 적용하는방식이 제일 좋은 청산방식 아니야?" (They ask for the
+   DeepSeek money figures, and whether applying all the exit kinds at once is the best exit. Sections 1, 3 and 5.2,
+   family F12.)
+6. "60% 간 뒤 구조가 깨지면 익절 / −40%에서 구조가 깨지면 손절 - 60%랑 -40%는 예를든거지 고정 익절 고정 손절을 하라는말은
+   아니야 유도리있게" (Their numbers were examples, not fixed values. Section 1.)
+7. "기준은 정확히 못정하겠어 장에 따라 다르잖아 솔직히" (They cannot fix a hold-time target; it depends on the market.
+   Section 7, hold hours by market state.)
+
 **What the main session promised them** (in Korean, before this revision), and where this file carries it out:
 
 * (a) nine kinds of exit: structure break, moving-average break, opposite signal, chandelier trail, profit giveback,
   early loss cut, time stop, stall, and each strategy's own exit. They are numbered F1-F11 because F8 and F9 combine
-  the structure break with a gain or a loss; the time stop has a bar-count form (F7) and a clock-hour form (F7h).
-  Section 5 and Appendix A.
+  the structure break with a gain or a loss; the time stop has a bar-count form (F7) and a clock-hour form (F7h). F12
+  applies the nine at once (message 5). Section 5 and Appendix A.
 * (b) as given: "the hard stop stays as a backstop, early cuts only on a confirmed structure break at a bar close".
   Every variant keeps the hard stop unmoved and decides every early exit at a bar close (sections 4 and 5.1). Not
-  every variant's early loss cut is a structure break: F2, F3, F4, F4 q15, F7, F7h and F11 can also cut a loss on a
+  every variant's early loss cut is a structure break: F2, F3, F4, F4 q15, F7, F7h, F11 and F12 can also cut a loss on a
   moving average, an opposite signal, a trail, the clock or a strategy's non-structure condition. Section 5.3 sorts
   every variant by what it can cut a loss on; the select report shows that category on every row (8.2); and the
   default of 8.4 takes only variants that cut a loss before the hard stop on a structure break at a loss of at least
   0.5R, or not at all before a gain. Variants outside that set can be run only when the owners choose them by name.
 * (c) a select-period (2021-2023) table by hold time in hours and by entries, from which the owners choose; then one
   confirm on 2024-2026. Sections 8 and 9. The table lists every variant, choosable or not (8.2).
-* (d) all 38 league picks, DeepSeek included, DeepSeek shown without money. Section 3.
+* (d) all 38 league picks, DeepSeek included, DeepSeek shown without money in every committed file and committed
+  report. The owners' request of 2026-10-12 ("딥시크 금액 알려주고") is met by a private report outside the repository
+  (section 3).
 * (e) after a PASS and their OK, the league is stopped and restarted cleanly from the new install time, with, per
   pick, a new-exit account and a current-exit account side by side plus a coin-flip account; the old record kept as a
   backup; a checkpoint one month after the restart. Section 11.
 * (f) if nothing passes, they are told plainly and decide with us. Sections 8.6 and 11.1.
+* (g) hold hours overall and by market state at entry as information columns, because the owners cannot fix one
+  hold-time target ("장에 따라 다르잖아", message 7). Sections 7, 8.2 and 9. They decide nothing.
 
 ## 1. Questions
 
@@ -70,13 +86,42 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
   chandelier trail, a profit giveback, an early loss cut, a structure break after a gain, the owners' two-sided rule,
   a stall and each strategy's own exit. Only a Q-B variant that beats its random exit may be described as reading the
   market. A passing F7 or F7h shows only that shorter holds pay.
+* **Q-C (the owners' question of message 5): is applying all nine kinds of exit at once the best exit?** F12 (5.2)
+  closes the position at the first trigger of nine components. It is a candidate like every other variant: same
+  gates, same placebo, same choice and same single confirm. Stacking is not assumed to help. We expect F12 to leave
+  very early on small wobbles, because the first of nine triggers ends the trade and any one of them, a close below the
+  last swing low, below the 20-bar average or 2 ATR under the peak, is enough. That expectation comes from how the rule
+  is built, not from any number; the table decides. The answer is the table: F12.a and F12.b stand in the select table
+  beside the single rules, hold hours and entries first, and for core a reader may compare their pooled growth with the
+  single rules' rows (descriptive: the select period ranks 86 rows, so the best row is flattered by chance, Known limit
+  2). A pass of F12 shows that F12 beat E0 and its own placebo; it does not make F12 "the best exit", and this study
+  does not claim that. F12 cuts a loss on any structure break, so it is outside the default set D (5.3).
+* **No fixed percent anywhere (owners' message 6).** The "+60%" and "-40%" in the owners' first request were examples,
+  and the "+60% ROE ... -40% ROE" figures in this file are always examples of R, never rule values. No rule of this
+  study fires on a fixed percent of price or of ROE. Every threshold is read per trade: R (the net R of the trade's own
+  stop distance, which is k x ATR14 of its own signal bar, section 4), an ATR multiple (F4), a count of bars or hours
+  (F7, F7h, F10), the trade's own swing structure (F1, F6, F8, F9) or a level fixed at that trade's signal bar (F11).
+  The only fixed percent left is not a rule of this study: the net ROE 50% take-profit of core-OBV_S-1h-3, which is
+  part of that pick's E0 and stays in mode (a). The grids are checked for arms like this:
+  * **Arm in R**: F5 (P = 1, 1.5, 2 R; 12 variants), F8 (P = 1, 2 R; 12), F6.d0.5 (a loss of at least 0.5R; 3), F9 and
+    F9 q15 (P = 1R and d = 0.5R; 4).
+  * **No arm** (the rule adapts to each trade with no threshold): F1 and F1 q15 (a structure break at any profit or any
+    loss; 12 variants), F6.d0 (any net loss after costs; 3) and F10 (any profit, no R value; 4). F2, F3, F4, F7, F7h
+    and F11 have no profit or loss arm at all.
+  * F1 is the no-arm structure break on both sides; F8 is F1 with an arm on the profit side, F6.d0.5 with an arm on the
+    loss side, F9 with both. F5 and F8 have **no no-arm cell**: their smallest arm is 1R, and a giveback from any
+    profit (F5 with P = 0) is not in the grid, so it is not tested (Known limit 16). The count of variants is not
+    changed for it.
 * **Hold time comes first in every table.** The owners want a day-trading feel ("단타"), not swing holds. A shorter
   hold pays only when the extra entries earn more than their costs (section 7 gives the engine's cost of one round
   trip). The study decides on account growth. Hold hours and entries lead every table so that the owners choose with
-  them in view (section 8).
-* **Naming.** F1 to F11 in this file are exit families. Several DeepSeek strategies have names that also start with F
+  them in view (section 8). The owners cannot fix one hold-time target because it depends on the market (message 7), so
+  the reports also show hold hours by market state at entry (section 7). That split is information: not a gate, not a
+  default, not a choice per state.
+* **Naming.** F1 to F12 in this file are exit families. Several DeepSeek strategies have names that also start with F
   (F1_PVT_DIV, F5_BOX, F7_RF_ONLY, F7_RF_TRIPLE, F9_FVG, F10_OTE, F11_TSOUP, F12_MSS_DISP). These are lib_c's names and
-  have nothing to do with the families. A strategy is always written with its full name.
+  have nothing to do with the families, F12 (all at once) and F12_MSS_DISP (a DeepSeek strategy) included. A strategy
+  is always written with its full name.
 
 ## 2. Data
 
@@ -112,8 +157,9 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
   limit 3). The confirm run loads the full arrays.
 * **Bars and the stop-first rule.** The study, the league and this study all step on 1m bars. The order of high and
   low inside one minute is unknown, so a minute that touches both the stop and the take-profit counts as a stop (the
-  kernel's rule). This rule only affects arms that have a take-profit: E0, every mode (a), and F11.b on the picks whose
-  own exit has a target (Appendix A). The number of such minutes is reported per arm (section 7). Rule exits happen at
+  kernel's rule). This rule only affects arms that have a take-profit: E0, every mode (a) (F12.a included), and F11.b
+  and F12.b on the picks whose own exit has a target (Appendix A). The number of such minutes is reported per arm
+  (section 7). Rule exits happen at
   minute opens and do not depend on it.
 
 ## 3. Entries
@@ -174,18 +220,44 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
 
   DeepSeek timeframes: 1 pick on 15m, 1 on 30m, 6 on 1h and 7 on 4h. No pick of either pool uses the stepped lock.
 * **D11 (owners' rule), for DeepSeek.** DeepSeek picks are computed exactly like the core picks. No DeepSeek money figure
-  appears in any committed file or owner report of this study: no P&L, wallet, growth, log growth or difference of log
-  growth, drawdown in money or multiples, or interval of any of these.
-  * DeepSeek rows show trade counts (offered, entered, skipped, rejected, closed), win shares, hold times, exit-reason
-    counts (LIQ included) and pass / fail labels, nothing else.
+  appears in any committed file or committed report of this study (`select.json`, `SELECT_KO.md`, `confirm.json`,
+  `REPORT_KO.md`, `sent.json`, `choice.json`, the ledger print, the weekly notes, the league checks), in any Telegram
+  message, dashboard or agent packet: no P&L, wallet, growth, log growth or difference of log growth, drawdown in money
+  or multiples, or interval of any of these. The one exception is the private owner report below.
+  * DeepSeek rows show trade counts (offered, entered, skipped, rejected, closed), win shares, hold times (overall and
+    by market state, section 7), exit-reason counts (LIQ included) and pass / fail labels, nothing else.
   * Private, like money: DeepSeek p values of any test (they rank money differences), busts and bust counts, final
     wallet multiples, and any rank of DeepSeek variants by a money figure. The confirm's Holm label and the ledger's
-    BH label of a DeepSeek pair are labels and may be shown; its p value is not (sections 9 and 10).
+    BH label of a DeepSeek pair are labels and may be shown; its p value is not (sections 9 and 10). Busts and final
+    wallet multiples reach the owners only through the private owner report below, never a p value.
   * The DeepSeek money figures and p values that the gates, the placebo gate, the confirm test and the ledger need are
-    written only to `$WORK/<pin8>/ds_private/` outside the repository (section 13), read only by the runner and the
-    ledger print. This includes the per-account result files of DeepSeek picks
+    written only to `$WORK/<pin8>/ds_private/` outside the repository (section 13), read only by the runner, the
+    ledger print and the owner-report writer. This includes the per-account result files of DeepSeek picks
     (`$WORK/<pin8>/ds_private/results/<stage>/`). Their sha256 values are committed with `select.json` and
-    `confirm.json`. No person or agent opens them.
+    `confirm.json`. No person or agent opens them (`select_ds.json`, `confirm_ds.json`, `results/`); the owner
+    reports below are the only DeepSeek money files that anyone opens.
+  * **Owners' relaxation of D11, 2026-10-12, limited to one private report per step.** The owners asked to see the
+    DeepSeek money ("딥시크 금액 알려주고"). The select step and the confirm step each write one **private owner
+    report**: `$WORK/<pin8>/ds_private/owner_report_select.md` and `owner_report_confirm.md` (a select or confirm rerun
+    of section 14 writes `owner_report_select_r2.md` or `owner_report_confirm_r2.md` next to them). It holds the
+    DeepSeek wallet and growth figures: per DeepSeek variant the pooled monthly log growth difference against E0,
+    also as a percent per month, at quarter size and, reported only, at live size; E0's own growth; the median over
+    the pool's picks of the final wallet multiple and of the maximum drawdown; busts. The confirm report holds the same
+    for E0 and the chosen DeepSeek variants and the 95% interval of M_P(V) of each chosen DeepSeek pair (section 9).
+    The select report applies the row rule of 8.2 item 6: money only on choosable rows, none on a row marked
+    "선택 불가". Rows follow the committed table's order; the report ranks nothing by money. It holds no p value.
+    * The main session shows the file to the owners in the conversation with them and does nothing else with it: it
+      never commits or pushes it and never copies it into a committed file, `out/`, a Telegram message, a dashboard,
+      an agent packet or a note to another session.
+    * The sha256 of the file is committed (field `ds_owner_report_sha256` of `select.json` and `confirm.json`), not the
+      file. It is written before the report is hashed and sent (8.7), so the main session can check that the file it
+      shows is the file the runner wrote (audit A8).
+    * Every rule stays as it was. The gates, the placebo gate and the confirm test compute from `ds_private/` as
+      before, the default of 8.4 uses hold hours and no DeepSeek money, and the ledger keeps DeepSeek labels only. The
+      owners' view of the report therefore cannot change what any rule does. It can change what the owners choose, as
+      the core growth column can.
+    * The relaxation covers these two reports. It does not reach the weekly notes, the league's checkpoint reports
+      or the dashboard, which keep DeepSeek as labels, counts, win shares and hold hours (section 11.5).
   * The league dashboard's own DeepSeek money setting (research/fullgrid/DEVIATIONS.md, 2026-10-11) is outside this
     file. This study's notes, weekly notes, checkpoint reports and committed files carry no DeepSeek money figure.
 * **Signals**: `run.signals(data_dir, kind, name, sym, tf, combo)` with the pick's combo, on the chart bars of section 2,
@@ -328,10 +400,11 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
   acts inside a bar.
 * **Mode (a)**: the pick's own take-profit stays (3R for 21 core picks and all 15 DeepSeek picks, 2R for
   core-S4_BB_BBP-30m-1, net ROE 50% for core-OBV_S-1h-3). **Mode (b)**: no fixed take-profit and no lock, so the rule,
-  the hard stop, liquidation or the period end closes the trade. The one exception is F11.b, which keeps the strategy's
-  own target where Appendix A defines one.
+  the hard stop, liquidation or the period end closes the trade. The two exceptions are F11.b and F12.b, which keep the
+  strategy's own target where Appendix A defines one.
 * Each rule of F1-F10 is written below for a long. The short is mirrored: high and low swap, above and below swap, max
-  and min swap. F11's short side is written out per strategy in Appendix A.
+  and min swap. F11's short side is written out per strategy in Appendix A. F12 stacks F1, F2, F3, F4, F5, F6, F7h, F10
+  and F11 and adds no rule of its own.
 
 ### 5.2 Families (owners' words in brackets)
 
@@ -425,6 +498,63 @@ parameter; modes (a) and (b).
 * On the three F7_RF_ONLY picks the strategy's own exit is its opposite signal, so F11.a equals F3.a and F11.b equals
   F3.b there; the select report marks both pairs (Known limit 11).
 
+**F12 all at once** ["청산방식 9가지를 동시에 다 적용하는방식", message 5], group A, modes (a) and (b), no parameter to
+choose, no q15.
+* **Rule.** At every check close of the pick's own timeframe (5.1), nine components are tested on the same frozen state
+  of step 0: F1 structure break, F2 EMA break (armed), F3 opposite signal, F4 chandelier trail, F5 profit giveback,
+  F6 early loss cut, F7h clock-hour stop, F10 stall and F11 the strategy's own exit. Each is exactly the rule written
+  above, with its own arm, reference and state, at the value below. No component reads another's result. The first check
+  at which any component fires closes the whole position: one RULE exit at that check's minute (section 4). Nothing
+  is voted, averaged or ranked. F8 and F9 are not components: F8 is F1 behind an arm, and F1 already fires with and
+  without a gain.
+* **Values, fixed now at the middle of each component's own grid in 5.2** (no number is tuned on any result and none is
+  chosen again):
+
+  | component | grid in 5.2 | F12 value | how it was taken |
+  |---|---|---|---|
+  | F1 structure break | w = 2, 3, 5 | w = 3 | middle |
+  | F2 EMA break | n = 10, 20, 50 | n = 20 | middle |
+  | F3 opposite signal | none | none | none |
+  | F4 chandelier | m = 1.5, 2, 3 | m = 2 | middle |
+  | F5 giveback | P = 1, 1.5, 2 R; g = 0.25, 0.5 | P = 1.5 R, g = 0.5 | middle; larger of two |
+  | F6 early loss cut | w = 2, 3, 5; d = 0, 0.5 R | w = 3 (the same swing reference as F1), d = 0.5 R | middle; larger of two |
+  | F7h clock-hour stop | H = 4, 8, 16 hours | H = 8 hours | middle |
+  | F10 stall | N = 6, 12 pick bars | N = 12 bars | larger of two |
+  | F11 own exit | one definition per strategy | Appendix A, unchanged | none |
+
+  A grid of two values has no middle, so F12 takes its larger value. That value lies on the grid, so every component
+  runs a path that its own family also runs, and it is the less trigger-happy of the two (a deeper giveback is needed,
+  a deeper loss, more bars of stall). Resulting thresholds, for a long: close under the last swing low confirmed with
+  3 bars on each side (F1); close under the EMA 20 once the close has been above it (F2); the pick's own short signal
+  (F3); close
+  under the best price since entry minus 2 x ATR14 (F4); a close at or under half the peak after the peak reached
+  +1.5R (F5); a structure break at a loss of at least 0.5R (F6); the first pick close at or after 8 hours (F7h);
+  12 bars without a new extreme while in profit (F10); the strategy's own invalidation (F11). Shorts mirror.
+* **Modes.** F12.a keeps the pick's own take-profit (as every mode (a)); its F11 component is the invalidation of
+  F11.a. F12.b has no fixed take-profit; its F11 component is F11.b, whose native target stays where Appendix A
+  defines one. The hard stop stays in both. F7h at 8 hours caps every F12 hold at about 8 hours on every pick, in both
+  modes.
+* **Checks** only at the pick's own closes. F12 has no 15m checks and no q15 version, because F2, F3, F5, F7h, F10 and
+  F11 have none (section 12). Merged checks (5.4.2): every component follows its own merged-check rule there, and F12
+  fires when any component fires.
+* **One exit, every reason recorded.** Two or more components can fire at the same check, on the same bar or on
+  different bars merged into one check. The exit is still one: one price, one fee, one minute. The first trigger in time
+  wins; among triggers at one check no order changes the trade, so none is defined. `tr_reason` is RULE and a second
+  field, `tr_comp`, records **every** component that fired at that check as a bit mask (F1 = 1, F2 = 2, F3 = 4,
+  F4 = 8, F5 = 16, F6 = 32, F7h = 64, F10 = 128, F11 = 256). The list order only orders the label shown. The select and
+  confirm reports give for F12, per component, the number of exits where it fired and where it fired alone (counts, also
+  for DeepSeek).
+* **Stops come first.** As for every rule, a liquidation, hard stop or take-profit that happens before the check's
+  minute has already closed the trade, and at the check's minute the order is liquidation, stop gap, take-profit gap,
+  then the rule (5.4.6). F3's reversal at the freed minute works as under F3 (5.4.8).
+* **F6 adds no exit time.** F6 at w = 3 fires only where F1 at w = 3 fires (the same reference and update), at a loss of
+  at least 0.5R, so it never moves F12's exit. It stays so that F12 holds all nine kinds the owners named, and so that
+  the reason code says when the break came at a deep loss.
+* **What we expect, not a result.** The first of nine triggers ends the trade, and F1, F2, F4 and F11 can each fire on
+  an ordinary pullback, so we expect F12 to leave early on small wobbles, to make many round trips, and in mode (a) to
+  cut some trades that would have reached the take-profit. Whether the extra entries pay for the costs of section 7 is
+  what the table shows. F12 is not in the default set D (5.3) because it cuts a loss on any structure break.
+
 ### 5.3 The list (count)
 
 | family | group | parameters | modes | variants |
@@ -444,12 +574,15 @@ parameter; modes (a) and (b).
 | F9 q15 | S | fixed | a, b | 2 |
 | F10 | L | N = 6, 12 | a, b | 4 |
 | F11 | N | one definition per strategy (Appendix A) | a, b | 2 |
-| **total** | | | | **84** |
+| F12 | A | all nine at once, values fixed in 5.2 | a, b | 2 |
+| **total** | | | | **86** |
 
-Plus the reference E0. Every variant runs on every pick of both pools.
+Plus the reference E0. Every variant runs on every pick of both pools. (The 86 are the 82 of F1-F10, the 2 of F11 and
+the 2 of F12.)
 
 * **Ids**: `F1.w3.a`, `F1.w3.b.q15`, `F2.n20.b`, `F3.a`, `F4.m1.5.a`, `F4.m2.b.q15`, `F5.P1.5.g25.a`, `F6.w2.d0`,
-  `F6.w2.d0.5`, `F7.N24.b`, `F7h.H8.a`, `F8.w3.P1.a`, `F9.a`, `F9.b.q15`, `F10.N6.a`, `F11.a`, `F11.b`.
+  `F6.w2.d0.5`, `F7.N24.b`, `F7h.H8.a`, `F8.w3.P1.a`, `F9.a`, `F9.b.q15`, `F10.N6.a`, `F11.a`, `F11.b`, `F12.a`,
+  `F12.b`.
 * **Groups** (used in section 8 so that two variants chosen in one pool are not near copies):
   * S, structure: F1, F1 q15, F6, F8, F9, F9 q15;
   * M, moving average: F2;
@@ -458,7 +591,9 @@ Plus the reference E0. Every variant runs on every pick of both pools.
   * G, giveback: F5;
   * T, time: F7, F7h;
   * L, stall: F10;
-  * N, the strategy's own exit: F11.
+  * N, the strategy's own exit: F11;
+  * A, all at once: F12 (its own group, so the owners can choose F12 with a variant of any other group, and so that
+    F12, which holds an F7h leg, is not counted as a time stop).
 * **Canonical order**, used for ties, tables and seeds: the table's rows in order. Inside a row, parameters ascending in
   the order written (F5 by P then g, F6 by w then d, F8 by w then P), then mode a before b.
 * **Parameter count**: the numeric parameters plus one for q15. Modes are not counted.
@@ -466,6 +601,7 @@ Plus the reference E0. Every variant runs on every pick of both pools.
   * 1: F1, F2, F4, F7, F7h, F10.
   * 2: F1 q15, F4 q15, F5, F6, F8.
   * 3: F9. 4: F9 q15.
+  * 8: F12 (its fixed numbers, counted as for F9: w, n, m, P, g, d, H, N; F6's w is F1's w).
 * **What each variant can cut a loss on** before the hard stop (promise (b); shown on every row of the select report,
   8.2). Four categories:
   * **L0, no early loss cut before a gain**: F5 and F8 act only after Rpk has reached +P R (a later exit can still
@@ -477,23 +613,23 @@ Plus the reference E0. Every variant runs on every pick of both pools.
   * **L3, not only a structure break**: F2 (moving average), F3 (opposite signal), F4 and F4 q15 (chandelier trail;
     m = 1.5 on a 4 ATR stop can cut near -0.4R), F7 and F7h (the clock), F11 (each strategy's own invalidation, which
     for DOGE, N03_ADX_GC, N09_ALLIG_AROON, N10_HA_PSAR, OBV_S, S4_BB_BBP and the two range-filter strategies is not a
-    structure level; Appendix A).
+    structure level; Appendix A), and F12 (all of these at once: it includes F1 at any loss, F2, F3, F4, F7h and F11).
   * The **default set D** of 8.4 is L0 and L1: F5 (12), F6.w*.d0.5 (3), F8 (12), F9 (2), F9 q15 (2), F10 (4); 35
-    variants. L2 and L3 variants run only when the owners name them.
-* **Runs**:
-  * Select, step 1: E0 plus 84 variants, x 38 picks x 2 sizes = 6,460 accounts.
+    variants. L2 and L3 variants, F12 included, run only when the owners name them.
+* **Runs** (E0 and 86 variants = 87 arms):
+  * Select, step 1: E0 plus 86 variants, x 38 picks x 2 sizes = 87 x 38 x 2 = 6,612 accounts.
   * Select, step 2 (placebos, section 6): only for the (variant, pool) pairs outside F7 and F7h that pass gates 1, 2
-    and 4 of 8.1 in step 1. At most 72 variants x 23 core picks x 200 seeds = 331,200 and 72 x 15 x 200 = 216,000
-    DeepSeek placebo accounts, 547,200 in all, at quarter size.
+    and 4 of 8.1 in step 1. At most 74 variants (86 less the 12 of F7 and F7h; F12 has a placebo) x 23 core picks x 200
+    seeds = 340,400 and 74 x 15 x 200 = 222,000 DeepSeek placebo accounts, 562,400 in all, at quarter size.
   * Confirm: at most (1 + 2) x 38 x 2 = 228 accounts (E0 and up to two chosen variants per pool), plus at most
-    2 x 38 x 200 = 15,200 placebo accounts.
+    2 x 38 x 200 = 15,200 placebo accounts. (Unchanged by F12: a chosen F12 is one of the two.)
 * **Compute and the seed count (fixed now).**
   * Everything runs on 1m bars. Step 1 is cheap; step 2 is the cost.
   * Before the select run the runner's timing stage runs, in one process on the select-period cut arrays, E0 and one
-    placebo seed of each of the 72 variants outside F7 and F7h on one pick, `core-DOGE-15m-1` (a 15m pick: the most check
+    placebo seed of each of the 74 variants outside F7 and F7h on one pick, `core-DOGE-15m-1` (a 15m pick: the most check
     closes per hold). Each placebo uses the hazard table of its variant's own account on that pick, which is computed
     and discarded. The stage writes only seconds.
-  * Projected step-2 wall time = (the sum of the 72 one-seed times) x 38 picks x 200 seeds / 4 CPUs. This is the worst
+  * Projected step-2 wall time = (the sum of the 74 one-seed times) x 38 picks x 200 seeds / 4 CPUs. This is the worst
     case (every variant reaching step 2 on every pick, every pick as costly as a 15m pick).
   * If the projection is more than 8 hours, the select placebos use 100 seeds (s = 0 .. 99) instead of 200, and the
     95th percentile comes from 100 pooled means. Otherwise 200. The confirm always uses 200.
@@ -515,7 +651,8 @@ Plus the reference E0. Every variant runs on every pick of both pools.
    * F4, F5 and F10 use X and T_X over every minute before j;
    * F7 and F7h use time;
    * F11 walks the bars in between in time order, arming and testing each component; the check fires if any bar fires
-     (A.0, rule C4).
+     (A.0, rule C4);
+   * F12 applies the rule of each of its nine components as listed here, and fires when any of them fires.
 3. **A swing that does not exist yet.** F1, F6, F8 and F9 do nothing until a reference exists. The hard stop and, in mode
    (a), the take-profit keep working. An undefined EMA or ATR (NaN, impossible after the 300-bar warm-up with n <= 50)
    means no arm and no fire. For F11, a NaN input means that component neither fires nor arms at that bar, and a NaN
@@ -534,17 +671,27 @@ Plus the reference E0. Every variant runs on every pick of both pools.
 8. **Reversals and both-flag bars.** No pick carries both flags on one bar (section 3), so a bar that fires F3 carries
    only the opposite side's signal. After the RULE exit that signal is offered at the freed minute and, when it ranks
    first and can be sized, the position reverses. The same holds for F11 where a strategy's own exit includes its
-   opposite signal (N13_3OUTSIDE, F7_RF_ONLY). A both-flag bar would stop the run (the assertion of section 3).
+   opposite signal (N13_3OUTSIDE, F7_RF_ONLY), and for F12, whose F3 and F11 components are such exits. A both-flag bar
+   would stop the run (the assertion of section 3).
 9. **After a bust** no signal is taken, as in the kernel.
 10. **F11 levels and targets** are per position, fixed at the signal bar i0 from bars <= i0, and never move (rule C5).
     A native target at or behind the fill is no target (rule C6); then the invalidation, the hard stop and the period
     end act alone.
+11. **F12, several components at one check.** All nine components are tested on the frozen state of step 0 and none
+    depends on another's result. When two or more fire at one check, whether on the same bar or on different bars
+    merged into one check (item 2), there is one exit: the same minute, price, fee and reason RULE as if one had fired,
+    and `tr_comp` records every component that fired (5.2). A component that fires at a check where a gap beyond the
+    stop, take-profit or liquidation applies is subject to item 1 like any rule. F7h and the hard stop on the same
+    minute: item 6 applies. A bar that fires F3 and F11 of a reversing strategy at once gives one exit and one
+    reversal entry (item 8).
 
 ## 6. Placebo
 
 * **Purpose.** A rule that only shortens holds frees the account more often. A random exit with the same timing profile
   shortens holds in the same way. A Q-B rule must beat it to be described as reading the market. F7 and F7h have no
-  placebo: they read nothing by design, and a placebo with their timing profile would be the time stop itself.
+  placebo: they read nothing by design, and a placebo with their timing profile would be the time stop itself. F12 does
+  have one: although it holds an F7h leg, eight of its nine components read the market, and Q-C asks whether stacking
+  them does more than leaving at random with F12's timing profile.
 * **State at a check.** For a variant V and an open position at a check of V's schedule, the stratum is (a, s, z):
   * a, the age bucket of the check index k: {1}, {2}, {3-4}, {5-8}, {9-16}, {17-32}, {33-64}, {65 and more};
   * s = 1 when Rc >= 0, else 0;
@@ -562,6 +709,11 @@ Plus the reference E0. Every variant runs on every pick of both pools.
       (short) exists in the strategy's structure at that close (A.11), since its flags can fire only then. For the
       other strategies z is 1 at every check by construction (each has a component armed at i0 or a finite level;
       Appendix A edge cases), so the placebo matches age and profit sign only (Known limit 9);
+    * F12, the family (the general rule: any component with a precondition is armed or has its reference): z = 1 when at least one
+      of these holds at the check, else 0: a swing reference exists (F1 and F6 share it), F2 is armed, F5 is armed, or
+      F11's z above is 1. F3, F4, F7h and F10 set no precondition (as above, z = 0 for them alone), so a check where
+      only they could fire has z = 0. Because F11's z is 1 at nearly every check, F12's z is 1 at nearly every check
+      and its placebo matches age and profit sign only (Known limit 9);
     * F3, F4, F4 q15, F10: z = 0 always.
 
   All of it uses the frozen state of step 0, so the placebo, like the rule, sees nothing of minute j.
@@ -572,8 +724,8 @@ Plus the reference E0. Every variant runs on every pick of both pools.
   * The numerator counts RULE exits, the RULE + END case included.
   * A check whose minute's open closed the position (LIQ, SL or TP at steps 3-5) counts in neither.
   * h = 0 where the denominator is 0.
-* **Placebo account**: V's mode (the pick's take-profit kept in (a); in (b) none, except F11.b, which keeps the
-  strategy's own target), V's check schedule (q15 included), and the same hard stop, sizing, period-end close and free
+* **Placebo account**: V's mode (the pick's take-profit kept in (a); in (b) none, except F11.b and F12.b, which keep
+  the strategy's own target), V's check schedule (q15 included), and the same hard stop, sizing, period-end close and free
   fill minute. Instead of V's rule, at each check it computes its own position's stratum and exits when u < h[a, s, z]
   (RAND). The draw u depends only on (V, period, seed, coin, check close time), not on the pick, so two picks that
   hold the same coin at the same check close draw the same u (this carries part of the cross-pick correlation that V's
@@ -611,11 +763,37 @@ Plus the reference E0. Every variant runs on every pick of both pools.
   * trades entered (status 1) and trades closed; signals skipped while a position was open (status 0) and signals
     rejected (status 2);
   * entries made at the open of a rule-exit minute.
+* **Hold hours by market state at entry** (message 7; descriptive; a column of information, not a gate, not in the
+  default of 8.4, not a placebo stratum, not a choice per state):
+  * **State.** The label "장세" of `research/fullgrid/regimes.py`, which takes it from
+    `paperbot/dash/tools/regime5y.py` (`regimes`, `label_codes`; docs/regime5y.md), on the pick's own chart (its coin and
+    timeframe), at the signal bar whose close is the entry. Order and thresholds as `label_codes` computes them, none
+    changed: **급변장** when ATR% (Wilder ATR14 / close) is at or above the 80th percentile of its own trailing 365 days
+    of bars, this bar included, with at least 180 days of history; otherwise **추세장** when ADX14 >= 25 and
+    |EMA50 slope over 10 bars| >= 0.5 ATR14; otherwise **횡보장** when ADX14 < 20; otherwise **보통**. Where an input is
+    missing (a coin with less than 180 days of history, for example SOL in early 2021) the label is **모름**, reported as
+    a fifth column. (The docstring of `regimes.py` writes the slope without the absolute value; the code and
+    docs/regime5y.md use it, and the code is followed.)
+  * **No look-ahead.** Every value of `regimes` at bar t uses bars 0..t only. A trade's label is the value at its signal
+    bar; the fill is the open of the next minute, so no bar after the signal bar enters the label. The same trade has
+    the same label under E0 and every variant. The select report labels select-period trades from the select-cut
+    arrays only; the confirm report labels confirm-period trades from the full arrays, with the same code.
+  * **Table.** Per pool, for E0 and each variant, at quarter size, over all closed trades of the pool's accounts
+    together, per state: the number of trades, the median hold in hours and the shares held over 4 h, 8 h and 18 h.
+    A cell with fewer than 100 trades is marked 건수 적음 (the caution of `regimes.py`) and is not hidden. A state can
+    have few or no entered trades (`regimes.py` notes that 급변장 had none in the full grid because the engine refuses an
+    entry whose stop is not inside the liquidation price); the count is shown and an empty cell stays empty.
+  * No growth or money figure is in this table, for either pool, so DeepSeek rows are allowed in it (counts and hold
+    hours only). It sits in a second table after the main one (8.2) and has no weight in any gate. It answers the
+    owners' remark that the hold they want "depends on the market"; it cannot create a rule per market state (section
+    12): a rule for one state is a new pre-registration.
+  * Where it is produced is in section 13 (code) and tested by T8.
 * Reported beside it, deciding nothing, per pick and pooled, for E0, V and the placebo median:
   * the same metric at live size, and busts at live size;
   * trades changed: V's trades with no E0 trade of the same (coin, side, fill minute, exit minute, exit reason),
     count and share;
-  * exit reasons (TP, SL, RULE, RAND, LIQ, END);
+  * exit reasons (TP, SL, RULE, RAND, LIQ, END); for F12 also, per component, the exits where it fired and where it
+    fired alone (`tr_comp`, 5.2);
   * win share (closed trades with a wallet change > 0);
   * the maximum drawdown of the wallet at closes, busts and the final wallet multiple;
   * the minutes where the stop and the take-profit were both touched (decided stop-first), per arm;
@@ -640,8 +818,10 @@ Plus the reference E0. Every variant runs on every pick of both pools.
   timing profile, beat E0. Pairs that did not reach step 2 have no Q-A row.
 * **DeepSeek (D11)**: every money-based figure above (M_p, M_P, D_m, g_m, wallets, drawdowns, multiples, busts,
   placebo percentiles and Q-A of the DeepSeek pool) is computed into `$WORK/<pin8>/ds_private/` only (section 3).
-  DeepSeek rows in committed files and reports carry hold times, counts, win shares, exit reasons (LIQ included) and
-  labels.
+  DeepSeek rows in committed files and committed reports carry hold times (overall and by market state), counts, win
+  shares, exit reasons (LIQ included; for F12 the component counts of 5.2) and labels. The owners' private report
+  (section 3) is the one place where the DeepSeek M_P, its live-size version, wallet multiples, drawdowns and busts are
+  shown, and only to the owners.
 
 ## 8. Select step (select period only): eligibility, the report, the owners' choice
 
@@ -656,18 +836,23 @@ A variant V is **eligible in pool P** when all of these hold on the pool's picks
 4. The trades entered at quarter size, summed over the pool's picks, are >= E0's.
 
 The gates are filters: only eligible variants can be shown as choosable, chosen or confirmed. They are not relaxed after
-any number is seen.
+any number is seen. F12.a and F12.b are judged on the same four gates as every other variant; F12 has a placebo (6), so
+gate 3 applies to it.
 
 ### 8.2 The select report
 
-The runner writes `out/select.json` and the Korean report `out/SELECT_KO.md`. For each pool, the report shows:
+The runner writes `out/select.json` and the Korean report `out/SELECT_KO.md`. For each pool (core and DeepSeek, each
+with its own table), hold hours and entries come before any growth figure, in the table and in the report's text. The
+report shows:
 * first, E0's row: median hold hours, the shares of trades held over 4 h, 8 h and 18 h, trades entered, signals
   skipped while holding, win share;
-* then **every one of the 84 variants**: the choosable (eligible) ones first, then the others marked "선택 불가", each
-  part in canonical order, with, in this column order:
+* then **every one of the 86 variants**: the choosable (eligible) ones first, then the others marked "선택 불가", each
+  part in canonical order, with, in this column order (growth is column 6, after hold hours and entries):
   1. id, plain Korean name, group, parameter count;
-  2. median hold in hours and the shares of trades held over 4 h, 8 h and 18 h;
-  3. trades entered against E0's (both counts and the change in percent), and signals skipped while holding;
+  2. **hold**: median hold in hours and the shares of trades held over 4 h, 8 h and 18 h (quarter size, over all closed
+     trades of the pool's accounts together, as in section 7);
+  3. **entries**: trades entered against E0's (both counts and the change in percent), and signals skipped while
+     holding, E0's skipped count beside it;
   4. what it can cut a loss on before the hard stop: its category L0-L3 (5.3), and whether it is in the default set D;
   5. a pass or fail mark for each gate of 8.1 (gate 3: "안 돌림" when the pair failed gate 1, 2 or 4 and so never
      reached step 2; "해당 없음" for F7 and F7h), and the label "선택 가능" or "선택 불가";
@@ -678,10 +863,19 @@ The runner writes `out/select.json` and the Korean report `out/SELECT_KO.md`. Fo
   8. choosable rows: the claim it may carry (8.5); "= F3.a" on F11.a and "= F3.b" on F11.b for the F7_RF_ONLY picks;
      and a mark on the variants the default of 8.4 would take in that pool (the default ranks by hold hours, so the
      mark carries no money figure in either pool);
+* **a second table per pool, directly after the first**, with no growth column: hold hours by market state at entry
+  (section 7) for E0 and each of the 86 variants, in the same order, per state (추세장, 횡보장, 급변장, 보통, 모름) the
+  number of trades, the median hold in hours and the shares held over 4 h, 8 h and 18 h; cells under 100 trades marked
+  건수 적음. Select-period trades only. It is information (section 7), and the report says so in one line;
+* for F12 rows, the exits by component (5.2) as counts;
 * the number of variants failing the gates per pool, counted in sequence: gate 1; gate 2 among those passing 1; gate
   4 among those passing 1 and 2; gate 3 among those that reached step 2. No figure of a failing variant beyond the
-  columns above.
+  columns above and the second table (which splits column 2 by market state).
 * for the core pool, the Q-A rows of section 7 (DeepSeek Q-A stays private).
+
+DeepSeek tables in `SELECT_KO.md` carry no money (columns 1-5, 7, 8, the second table and the counts). The owners'
+request to see the DeepSeek money is met by the private owner report of section 3, which is written with the select
+run, whose sha256 is in `select.json`, and which the main session shows in the conversation next to the report.
 
 No confirm-period figure exists when the report is written. The main session sends the report to the owners and asks
 for one answer per pool: up to two choosable ids from different groups, or "없음" (none). It does not recommend a
@@ -704,7 +898,12 @@ variant; it explains the columns and the default rule when asked.
   exit is sent to the owners or opened by the main session: no hunt test-period read (PREREG_HUNT_WIDE, round 2), no
   ledger print, no track-2 result, no full-grid extract and no other file that shows 2024-2026 trades or accounts by
   exit. Questions about such material are answered after the hash. A breach is written into `DEVIATIONS.md` with what
-  was sent or opened, and the confirm report names it in its headline.
+  was sent or opened, and the confirm report names it in its headline. The freeze covers the hunt's test-period
+  results (round 1 and round 2) and track 2 in full. The main session therefore times the select report around the
+  hunt: it sends the report at a time when no hunt, track-2 or ledger test-period result is due or needed before the
+  hash, or it leaves those outputs unread until the hash; it does not stop the hunt's run. The plan is written into
+  `sent.json` (field `freeze_note`). The private DeepSeek owner report holds select-period money only, so it is not
+  2024-2026 material.
 * **`out/choice.json`** holds: the report's sending time (UTC and KST, equal to `sent.json`); every owner message about
   the choice, verbatim (Korean) with its time; every question the main session sent, verbatim with its time; per pool
   the answer (ids or "없음"), the deadline that applied and whether the default was used; and the list of 2024-2026
@@ -724,7 +923,9 @@ variant; it explains the columns and the default rule when asked.
 Applied only to a pool that got no answer before its deadline (8.3):
 * The candidates are the variants choosable in that pool **and** in the default set D (5.3: categories L0 and L1,
   which cut a loss before the hard stop only on a structure break at a loss of at least 0.5R, or not at all before a
-  gain). Variants of L2 and L3 are never taken by default.
+  gain). Variants of L2 and L3 are never taken by default; F12 (L3, group A) is never taken by default. The default
+  uses hold hours and no money figure, DeepSeek included, and the owners' view of the private report (section 3) does
+  not change it.
 * First: the candidate with the shortest median hold in hours (quarter size, over all closed trades of the pool's
   accounts, as in section 7). Second: the candidate with the shortest median hold among those of a different group
   from the first. At most 2. Ties go to fewer parameters, then to the canonical order. No candidate: "none" for that
@@ -739,25 +940,30 @@ Applied only to a pool that got no answer before its deadline (8.3):
 
 Written into `select.json` and the Korean report:
 * outside F7 and F7h: "beats E0 and beats a random exit with its timing profile" (for F11: "the strategy's own exit
-  beats E0 and a random exit with its timing profile");
+  beats E0 and a random exit with its timing profile"; for F12: "all nine exits at once beat E0 and a random exit with
+  its timing profile". No claim that stacking beats a single rule or that F12 is the best exit);
 * F7 and F7h: "beats E0 by holding less; no claim about reading the market".
 
 ### 8.6 No eligible variant
 
 With no choosable variant in a pool the result for that pool is "none". The owners still get the full table of 8.2
-(hold hours, entries and gate marks of all 84 variants), so they can see where each variant fell short and decide with
+(hold hours, entries and gate marks of all 86 variants), so they can see where each variant fell short and decide with
 the main session (promise (f)). With none in both pools, or "없음" or no variant in either, the study ends: nothing
 runs on the confirm period and nothing enters the ledger. The owners are told plainly. The criteria are not relaxed
 and no variant is re-tuned on this result. A new idea is a new pre-registration with its own select step.
 
 ### 8.7 Files
 
-Every select-period figure of the core pool and every label and count of both pools go to `out/select.json`. The
-DeepSeek money figures go to `$WORK/<pin8>/ds_private/select_ds.json`, whose sha256 is written into `select.json`. The
-sha256 of `select.json`, of `SELECT_KO.md` and of `timing.json` are appended to `PREREG_EXITFLEX.sha256`, committed
-and pushed before the report goes to the owners, so the menu they see is the one that was hashed. Right after sending,
-and before reading any answer, the main session writes the sending time (UTC and KST) and the channel to
-`out/sent.json`, appends its sha256, commits and pushes it. A select rerun is possible only under section 14.
+Every select-period figure of the core pool and every label and count of both pools (hold hours by market state
+included) go to `out/select.json`. The DeepSeek money figures go to `$WORK/<pin8>/ds_private/select_ds.json`, whose
+sha256 is written into `select.json`. The private DeepSeek owner report (section 3) is written to
+`$WORK/<pin8>/ds_private/owner_report_select.md` in the same run, and its sha256 is written into `select.json`
+(`ds_owner_report_sha256`); the file itself is never committed. The sha256 of `select.json`, of `SELECT_KO.md` and of
+`timing.json` are appended to `PREREG_EXITFLEX.sha256`, committed and pushed before the report goes to the owners, so
+the menu they see is the one that was hashed. Before showing the private report, the main session checks that its
+sha256 equals the committed one. Right after sending, and before reading any answer, the main session writes the
+sending time (UTC and KST), the channel and the freeze note of 8.3 to `out/sent.json`, appends its sha256, commits
+and pushes it. A select rerun is possible only under section 14.
 
 ## 9. Confirm rule (2024-01-01 .. 2026-10-01, once)
 
@@ -772,7 +978,8 @@ and before reading any answer, the main session writes the sending time (UTC and
   DeepSeek p values enter Holm from `ds_private/` and are not written to any committed file (D11); a core pair's Holm
   label can depend on how DeepSeek p values rank, which is a label, not a figure.
 * Reported beside it, deciding nothing: the iid bootstrap p of the same series, and a 95% percentile interval for
-  M_P(V) from the block bootstrap (core only; for DeepSeek neither p, the interval nor M is shown, D11).
+  M_P(V) from the block bootstrap (core only; for DeepSeek neither p, the interval nor M is shown in any committed
+  file, D11; M and the interval, not p, are in the private owner report of section 3).
 * **PASS** for (V, P) needs all three:
   1. (V, P) is Holm-significant.
   2. Except F7 and F7h: M_P(V) is above the 95th percentile of V's 200 confirm-period placebo pooled means in P.
@@ -784,12 +991,19 @@ and before reading any answer, the main session writes the sending time (UTC and
   and entries against E0, then PASS or FAIL, then for core M_P(V), p and the interval. DeepSeek rows: PASS or FAIL,
   the Holm and ledger labels, hold hours, entries, trade counts, win share. For each chosen pair it says whether the
   owners chose it or the default did, and whether it is also what the default would have taken (8.4); and it lists
-  any freeze breach (8.3) and any owner message received after `choice.json` was hashed.
+  any freeze breach (8.3) and any owner message received after `choice.json` was hashed. After the PASS or FAIL block it
+  gives, per pool, the hold hours by market state at entry (section 7) for E0 and each chosen V: confirm-period trades,
+  labelled from the full arrays with the same code, information only and no part of PASS or FAIL. For a chosen F12 it
+  gives the exits by component (5.2).
 * Q-A on confirm, descriptive and outside the ledger: for each chosen V outside F7 and F7h, the placebo's median pooled
   mean against E0 (core), with the block-bootstrap p of the placebo's seed-mean D_m.
-* It runs once. Bugs are handled by section 14. No other cut (a pick, a coin, a side, a year, a size) is a pass.
-* Files: `out/confirm.json` (core figures and p values; DeepSeek labels, counts, win shares and hold times),
-  `$WORK/<pin8>/ds_private/confirm_ds.json` (DeepSeek money figures and p values; its sha256 in `confirm.json`).
+* It runs once. Bugs are handled by section 14. No other cut (a pick, a coin, a side, a year, a size, a market state)
+  is a pass.
+* Files: `out/confirm.json` (core figures and p values; DeepSeek labels, counts, win shares and hold times, also by
+  market state), `$WORK/<pin8>/ds_private/confirm_ds.json` (DeepSeek money figures and p values; its sha256 in
+  `confirm.json`), and the private DeepSeek owner report `$WORK/<pin8>/ds_private/owner_report_confirm.md` (section 3;
+  its sha256 in `confirm.json` as `ds_owner_report_sha256`; never committed; the main session shows it to the owners in
+  the conversation).
 
 ## 10. Ledger
 
@@ -799,7 +1013,8 @@ and before reading any answer, the main session writes the sending time (UTC and
   with its block-bootstrap p from section 9. A DeepSeek pair's p is read by the ledger print from
   `ds_private/confirm_ds.json` and enters the BH and Holm computations; the print shows for that pair its BH and Holm
   labels only, never its p (D11). If the ledger print cannot omit a p, the DeepSeek pair's row is printed to the
-  private folder and the committed print carries the labels only.
+  private folder and the committed print carries the labels only. The ledger keeps DeepSeek as labels only, and the
+  private owner reports of section 3 are not an input to it.
 * From the hash of this file until `choice.json` is hashed, the ledger's print counts this study at its maximum, 4
   hypotheses at p = 1. After the choice it counts the number of chosen pairs; with none chosen, it counts none. A
   confirm rerun under section 14 adds its p values as further looks.
@@ -842,7 +1057,9 @@ Per pick of a pool with a PASS, five accounts:
 * Quarter size is every margin fraction x 1/4 with leverages kept, as the current `quarter` accounts and section 4.
 * **The coin flip `-nflip`** takes the pick's signal times, its side from `league.flip_side(account id, signal close)`,
   and the pool's new exit with the same exit kinds as `-nq`: the same rule, the same mode, the same kind of
-  take-profit. It runs at quarter size because C1 and C2 compare it with `-nq`.
+  take-profit. It runs at quarter size because C1 and C2 compare it with `-nq`. Under F12 the flip runs the same nine
+  components at the same values; its F3 is the pick's signal of the side opposite to the flip's side, and its F11 part
+  follows the F11 rules below.
   * For F11, let s be the strategy's side at the signal bar, side' the flip's side and f' the flip's fill. When side'
     = s, the flip uses the strategy's own level and target unchanged. When side' = -s, it uses the bar components of
     its own side under rule C3 (a state component that is true at i0 waits until it has been false at a close), and a
@@ -915,7 +1132,9 @@ item 13 must pass. Each item is a change to the draft where the draft differs.
    stay blocked, as in `kernel_x`.
 7. **Rule state** (F1 reference, F2 arm, F5, F8 and F9 arms, F7 and F7h deadlines, F11 component arms and fixed
    levels, X and T_X) is kept in the position's signal meta (`meta['rx']`). `engine_state` and `restore_engine` save
-   and restore it, and `audit_restored` checks it against a recomputation from the bars.
+   and restore it, and `audit_restored` checks it against a recomputation from the bars. If F12 is the pool's new exit,
+   the state of all nine of its components (items 3 and 7 together) is kept, and the engine records every component
+   that fired (`tr_comp`, 5.2) next to the RULE reason.
 8. **Native target**: the LadderTP-style `tp_price` assignment, set only when the level lies beyond `entry_price`,
    without the lock.
 9. **No new entry from a time.** Per pool, a field `no_entry_from_ms` on the `-n`, `-nq` and `-nflip` accounts of that
@@ -934,8 +1153,8 @@ item 13 must pass. Each item is a change to the draft where the draft differs.
     shares held over 4 h, 8 h and 18 h) and the counters of item 10 are added to the snapshot. The last-200 trade list
     (`runner.LAST_TRADES`) is not used for any check.
 13. **End-to-end parity test, before the start**: `League.advance` and `paramshadow.replay_day` against `kernel_x` on
-    the same 1m bars, for every pick of both pools and every account kind of 11.2 (`-nflip` under F11.a and F11.b
-    included), over at least 60 days of archive data before 2026-10-01. Trade for trade: fill minute, exit minute,
+    the same 1m bars, for every pick of both pools and every account kind of 11.2 (`-nflip` under F11.a, F11.b, F12.a
+    and F12.b included), over at least 60 days of archive data before 2026-10-01. Trade for trade: fill minute, exit minute,
     reason, leverage, P&L to 1e-9 of the wallet. One run restarts the engine in the middle of an open position.
     * The DeepSeek signals and the native arrays computed from the league's `chart_frame` window must equal the
       study's from the full history at every bar used (the range filter, Heikin-Ashi open, PSAR and higher-timeframe
@@ -1012,8 +1231,9 @@ Real money is not decided by this study. That stays the owners' decision under t
 * **Not in scope**:
   * a "판단" (judgement) exit by a person or an AI;
   * partial exits (the owners asked for 전량, the whole position);
-  * combinations of families other than F9;
-  * q15 versions of F2, F3, F5, F6, F8, F10 and F11: on 1h and 4h picks these react only at the pick's own closes.
+  * combinations of families other than F9 and F12 (F12 is the owners' "all at once", at the one fixed set of values of
+    5.2; no other mix, no F12 with other values, no F12 with F8, F9 or the q15 versions);
+  * q15 versions of F2, F3, F5, F6, F8, F10, F11 and F12: on 1h and 4h picks these react only at the pick's own closes.
     Inside one 4h bar only F1 q15, F4 q15 and F9 q15 can react; on a 4h pick F7h.H4 caps a hold at one bar;
   * a per-strategy choice among families (each strategy's own exit is F11, one global variant);
   * F11 with both the strategy's target and the pick's R take-profit (F11.a uses only the pick's, F11.b only the
@@ -1021,8 +1241,11 @@ Real money is not decided by this study. That stays the owners' decision under t
   * moving the hard stop (breakeven or lock), and intrabar moving stops (the trailing stops of the DOGE and S4_BB_BBP
     sources);
   * changes to entries, numbers, timeframes, leverage or size rules;
-  * per-pick, per-coin, per-side or per-regime choices;
-  * DeepSeek money figures in any committed file or owner report (D11);
+  * per-pick, per-coin, per-side or per-regime choices (the hold hours by market state of section 7 are information
+    and choose nothing);
+  * a fixed percent of price or ROE as a trigger anywhere (section 1);
+  * DeepSeek money figures in any committed file or committed report (D11); the owners' private reports of section 3
+    are the one exception;
   * the rule bot;
   * the hunt's systems and other coins;
   * rule exits by maker limit orders.
@@ -1032,7 +1255,7 @@ Real money is not decided by this study. That stays the owners' decision under t
      confirm against the variants. The main session states that it opened no hunt result (section 15), so F4's confirm
      is not knowingly a second look at chandelier exits on 2024-2026. The clean check is the league's forward record.
   2. **2021-2023 was used for both, parts of it were looked at, and the owners' choice is not blind to 2024-2026.** E0
-     was chosen on 2021-2023 (the plateau rule), which tilts the select step against the variants. The best of 84
+     was chosen on 2021-2023 (the plateau rule), which tilts the select step against the variants. The best of 86
      variants on 2021-2023 also looks better there than it is (the winner's curse); the single confirm and Holm address
      that, and Holm counts the pairs chosen, not the menu. The owners choose by hand, and a hand choice can carry what
      its maker knows of 2024-2026, which an automatic rule cannot: the owners have seen the full grid's 2024-2026
@@ -1064,6 +1287,9 @@ Real money is not decided by this study. That stays the owners' decision under t
      their legs is armed. The placebo's draws are shared by picks that hold the same coin at the same check close, but
      not across coins, while one market move can fire V on several coins at once; the placebo's pooled mean may
      therefore still spread a little less than V's would under the null, which makes gate 3 slightly easier to pass.
+     For the family F12, z is 1 at nearly every check (F11's z is), so its placebo matches age and profit sign only; and F12's
+     clock leg (F7h at 8 hours) fires at one exact age per pick while the age buckets of the placebo spread the same
+     exits over a bucket, so the placebo's timing near that age differs a little from F12's.
   10. **Each strategy's own exit is a reading.** For N03_ADX_GC, N09_ALLIG_AROON, N10_HA_PSAR, OBV_S, N19_FIB_CHOP and
       the eight DeepSeek strategies no exit by the strategy's author exists in the repository; their exits were derived
       from the entry logic and the pattern (Appendix A). DOGE and S4_BB_BBP use their source's own signal exit, and
@@ -1087,28 +1313,63 @@ Real money is not decided by this study. That stays the owners' decision under t
       F11 the comparison of `-nq` with `-nflip` in C1 and C2 is therefore a check of direction with a somewhat
       different hold profile; `-nflip`'s hold hours are reported beside `-nq`'s.
   15. **Bar-close checks on 4h picks.** Apart from F1 q15, F4 q15 and F9 q15, no rule reacts inside a 4h bar; on the
-      13 picks on 4h (6 core, 7 DeepSeek), only F7h caps a hold below 2 days (at 4, 8 or 16 h).
+      13 picks on 4h (6 core, 7 DeepSeek), only F7h (at 4, 8 or 16 h) and F12 (through its 8 h F7h leg) cap a hold
+      below 2 days.
+  16. **No giveback without an arm is tested.** Every F5 and F8 cell has an arm of at least 1R (section 1); a giveback
+      from any profit (F5 with P = 0) is not in the grid and the study cannot say what it would do. F1 is the only
+      structure break with no arm, and F10 the only stall with no R arm. Adding a cell would change the counts and is a
+      new pre-registration.
+  17. **F12 is one fixed reading of "all at once".** Its values are the grid middles (the larger value for two-value
+      grids), fixed before any number (5.2). Other values, or another way to combine the nine, could do better or
+      worse and are not tested. A pass of F12 shows only that this F12 passed. Its F6 leg adds no exit time (5.2); the
+      other eight can each fire on an ordinary pullback, so F12 can leave early on small wobbles (Q-C).
+  18. **The market state is the state at entry.** The market can change during a hold, and a trade is counted in the
+      state of its signal bar for its whole hold. The split is descriptive: with five states, 86 variants and two
+      pools it contains many cells, some with few trades (marked 건수 적음), and a difference between states can be
+      chance. 모름 collects the trades of a coin with less than 180 days of history. The split chooses nothing, and
+      "the hold depends on the market" is not tested as a claim.
 
 ## 13. Reproducibility
 
 * Code lives in `research/exitflex/`:
   * `data_x.py`: loading through `research/fullgrid/data.py` `load` (the `hc.py` "1m" path, shift 0), the cut and the
-    cache rules below;
-  * `kernel_x.py`;
+    cache rules below; the offered-signal table (`offered`) with the market-state code of each signal bar (below);
+  * `kernel_x.py`: the engine, the 86 variants including F7h and F12;
   * `native.py` (the eight core strategies' own exits) and `native_ds.py` (the eight DeepSeek strategies'), Appendix A;
-  * `run_x.py`: the timing, select (steps 1 and 2), confirm, audit and report stages;
+  * `runner_x.py`: the timing, select (steps 1 and 2), confirm, audit and report stages, the private owner reports and
+    the pins (earlier drafts of this file wrote `run_x.py`; the file is `runner_x.py`);
   * `test_exitflex.py`;
   * any helper module the coder adds (for example `metrics.py`, `placebo.py`).
 
+  **Where the market-state columns are produced (section 7).**
+  * `data_x.py`, `offered`: for each offered signal, the regime code at its signal bar, from
+    `paperbot.dash.tools.regime5y.regimes(high, low, close, TF_MIN[tf])["code"]` on the pick's own chart arrays of that
+    coin (the cut arrays in the select run, the full arrays in the confirm run), added as a column `state` (int8:
+    UNKNOWN 0, TREND 1, RANGE 2, SHOCK 3, NORMAL 4) next to `atr`. The module's thresholds are asserted equal to the
+    values of section 7 at import.
+  * `kernel_x.py`: the result carries `tr_state`, the `state` of each closed trade's signal, next to `hold_h`'s inputs
+    (`tr_fill`, `tr_exit`).
+  * `metrics.py`: `summarize` keeps `tr_state` with `hold_h`; a new function `hold_by_state(hold_h, tr_state)` returns,
+    per state, the count, median hold and the shares over 4 h, 8 h and 18 h (`hold_stats` per state); `pool_summary`
+    adds `hold_by_state` and `hold_by_state_e0` beside `hold` and `hold_e0`, from all closed trades of the pool's
+    accounts at quarter size.
+  * `runner_x.py`: `variant_row` and `build_select_summary` carry it into `select.json`, `select_report_ko` prints the
+    second table of 8.2, `finish_confirm` and the confirm report do the same for 9. The private owner reports are
+    written by one function of `runner_x.py` from `ds_private/` files, with their sha256 written into `select.json` and
+    `confirm.json`.
+  * The code does not import `research/fullgrid/regimes.py` (it needs the whole `run`/`demobot` machinery); that file
+    is pinned as the definition of the labels, and T8 checks the labels against `regime5y` directly.
+
   **Code must match this revision before the pin.** The modules already in the folder were written against earlier
-  revisions. Before the pin: `kernel_x.py` carries F7h (82 rule variants + the 2 F11 variants = 84) and the F11
-  mechanics of Appendix A (component kinds, C3 arming from i0, per-position levels and targets); `placebo.py` uses the
-  seed base without the pick id and the strata z of section 6; `metrics.py` drops its header line "this study runs
-  the core pool only", applies the gates per pool (14 of 23, 9 of 15), replaces `choose_variants`' "median_Mp" ranking
-  with the default of 8.4 (set D, shortest pooled median hold, ties by parameter count then canonical order, at most
-  2 from different groups, per pool, only for a pool with no answer) and gives `claim_of` the F7h and F11 wording of
-  8.5. T7 below checks this. The league side (`candleague/rulex.py` and its test) is not pinned here; it must meet
-  11.4 and its parity test before the restart.
+  revisions. Section 17 lists every item as a checklist. In short: `kernel_x.py` carries the 86 variants (the 82 of
+  F1-F10, the 2 of F11, the 2 of F12; F7h; the F11 mechanics of Appendix A, component kinds, C3 arming from i0,
+  per-position levels and targets; F12 with a component mask for tests, `tr_comp` and `tr_state`); `placebo.py` uses the
+  seed base without the pick id and the strata z of section 6 including F12's; `metrics.py` drops its header line "this
+  study runs the core pool only", applies the gates per pool (14 of 23, 9 of 15), replaces `choose_variants`'
+  "median_Mp" ranking with the default of 8.4 (set D, shortest pooled median hold, ties by parameter count then
+  canonical order, at most 2 from different groups, per pool, only for a pool with no answer), gives `claim_of` the F7h,
+  F11 and F12 wording of 8.5, knows group A, and adds `hold_by_state`. T7 and T8 below check this. The league side
+  (`candleague/rulex.py` and its test) is not pinned here; it must meet 11.4 and its parity test before the restart.
 
   Every `.py` file in `research/exitflex/` is pinned in `PREREG_EXITFLEX.sha256` together with this file,
   `data_pin.json` and the sha256 of each input:
@@ -1129,13 +1390,19 @@ Real money is not decided by this study. That stays the owners' decision under t
   | `paperbot/quality_edges.json` | `8b4fc48d…` |
   | `third_party/sweep/harness/vendor/fg_indicators.py` | `bf43c1b8…` |
   | `third_party/sweep/harness/vendor/pine_indicators.py` | `938c9545…` |
+  | `paperbot/dash/tools/regime5y.py` (the market-state labels, section 7) | `b055a412…` |
+  | `research/fullgrid/regimes.py` (the definition the labels follow) | `934578ba…` |
   | `fg1m/build.json` | `824c9d1a…` |
   | the `param_defs` | `research/entry_study/DEFS_BC.sha256` |
 
+  The two regime files are new in this revision; their hashes are as computed on 2026-10-12 and are recomputed at the
+  hashing commit (section 17).
+
   The runner also records the sha256 of every module file it loads from `research/library`, `research/search` and
   `third_party/sweep/harness/vendor` at the select run, and the confirm stage refuses on any difference. Repo HEAD when
-  this revision was written: `20ae99e`. Versions: Python 3.11, numpy 2.0.2, pandas 2.3.3, numba 0.60.0. The runner
-  records the versions it runs with.
+  the first three revisions were written: `20ae99e`; when the fourth was written: `bcc2278` (with uncommitted
+  changes in the working tree; the pin commit is the one that counts, section 17). Versions: Python 3.11, numpy 2.0.2,
+  pandas 2.3.3, numba 0.60.0. The runner records the versions it runs with.
 * **Caches.**
   * exitflex uses no disk cache it does not own. `hc.py`'s frame pickles (`frames_5m`, `frames_1m`) and signal cache
     (`cache/sig_*`) are not read. `run.FRAME_DIR` points into the stage's own folder.
@@ -1149,7 +1416,9 @@ Real money is not decided by this study. That stays the owners' decision under t
     stage, and each side of each T3 comparison, runs in its own fresh process.
   * Per-account result files of the core picks live under `$WORK/<pin8>/results/<stage>/`; those of the DeepSeek picks,
     and every DeepSeek money figure and p value, under `$WORK/<pin8>/ds_private/` (its `results/<stage>/` included);
-    all outside the repository, never committed. Only `timing.json`, `select.json`, `SELECT_KO.md`, `sent.json`,
+    the private owner reports `owner_report_select.md` and `owner_report_confirm.md` (section 3) lie there too, and so
+    does the `_r2` file of a rerun; all outside the repository, never committed. Only `timing.json`, `select.json`,
+    `SELECT_KO.md`, `sent.json`,
     `choice.json` (and `choice_r2.json` under section 14), `confirm.json` and `REPORT_KO.md` go into
     `research/exitflex/out/`.
 * **Tests that must pass before any select run.** They print only pass or fail and counts of cases, never a
@@ -1182,6 +1451,22 @@ Real money is not decided by this study. That stays the owners' decision under t
     * F11 coin-flip positions (11.2), under F11.a and F11.b: a flipped trade on a level-only DeepSeek strategy gets the
       mirrored level and target and fires on them; a flipped trade whose own-side state component is true at i0 waits
       under C3; a flip on the strategy's own side equals the strategy's trade;
+    * F12, F12.a and F12.b, both sides, with the fixed values of 5.2:
+      * each of the nine components alone, with the other eight silent on the path, closes the position at its own
+        check, with the right reason set in `tr_comp`;
+      * **first trigger wins**: on a path where component A would fire at check 3 and component B at check 5, the exit
+        is at check 3, `tr_comp` holds A (and any other component that fired at check 3) and not B;
+      * **ties**: with two, three and all nine components firing at one check (same bar), there is one exit, at the
+        same minute, price and fee as one component alone, `tr_reason` is RULE and `tr_comp` holds every component
+        that fired; the same when the components fire on different bars merged into one check by a missing bin;
+      * F6 never fires without F1 (the `tr_comp` bit of F6 implies the bit of F1) and never changes the exit time;
+      * single-component parity: with a component mask that switches on one component only, F12 equals the family
+        variant at the F12 value trade for trade (F1.w3, F2.n20, F3, F4.m2, F5.P1.5.g50, F7h.H8, F10.N12, F11; F6 has
+        no mode (b) family and is checked by hand paths) in the mode of the test;
+      * F12.a keeps the pick's take-profit and F12.b has none, with F12.b keeping the native target where Appendix A
+        defines one; the hard stop, liquidation, a gap at the check minute and END behave as in 5.4.1 and 5.4.6;
+      * F7h at 8 hours ends a hold that no other component ended, on 15m, 30m, 1h and 4h picks;
+      * an F3 reversal under F12 enters the reversing signal at the freed minute (5.4.8);
     * a path where minute j's high (or low) alone would change F4's level, F5's or F8's arm or F10's stall leaves the
       decision at j unchanged;
     * the q15 mapping works, with 15m and 30m picks equal to the base variant;
@@ -1196,8 +1481,9 @@ Real money is not decided by this study. That stays the owners' decision under t
     * cut times: the first day, 00:00, of every second month from 2021-02 to 2023-12 (18 cuts), 2022-06-15 13:37,
       2023-03-17 07:05 and 2024-01-01 00:00;
     * compared: every pick's signals (both sides, both pools) and core leverage groups, ATR14, EMA(10, 20, 50), the
-      swings (w = 2, 3, 5) with their confirmation bars, F1's reference series, the 15m bars, and every F11 array of
-      Appendix A (components of both sides, levels and targets at the signal bars);
+      swings (w = 2, 3, 5) with their confirmation bars, F1's reference series, the 15m bars, every F11 array of
+      Appendix A (components of both sides, levels and targets at the signal bars), and the market-state code of
+      section 7 (`regimes` code, ADX14, EMA50 slope, ATR% and its threshold) at every bar and at every signal bar;
     * each side of each cut runs in its own fresh process with its own cache folder;
     * it also asserts that the cut arrays hold no minute at or after the cut, and that the cut frames' last bar closes
       at or before the cut.
@@ -1215,17 +1501,23 @@ Real money is not decided by this study. That stays the owners' decision under t
       after the arm), F8 (armed and a reference), F11 for F12_MSS_DISP (z = 0 while no live swing level exists) and
       for a level-only DeepSeek strategy with a NaN level (z = 0).
     * The placebo's own stratum uses the frozen state of step 0.
-    * F11.b's placebo keeps the native target.
+    * F11.b's placebo keeps the native target, and so does F12.b's.
+    * F12's stratum z (section 6) on built paths: z = 0 when no swing reference exists, F2 and F5 are unarmed and F11's z
+      is 0; z = 1 when any one of the four holds alone; a check where only F3, F4, F7h or F10 could fire has z = 0.
+      F12's hazard table counts RULE exits whichever component fired (the denominator counts every check of its
+      schedule, the numerator every RULE exit, a gapped check in neither), and a placebo exit carries no `tr_comp`.
     * Two steps: on a small built case, running every placebo and running only those of step 2 give the same
-      eligible set.
-  * **T5 causality of the decisions.** For every family at its middle parameter, and F11 in both modes for every
-    strategy, on synthetic paths and on 500 sampled (trade, check) pairs per pool from the select-period cut arrays:
-    change the OHLC and mark of minute j and of every later minute, and of every chart bar closing after the check
-    close. The rule decision at j, the placebo stratum at j and every arm flag must stay identical. Only decisions are
-    compared; no P&L is kept.
+      eligible set (F12 included, F7 and F7h excluded).
+  * **T5 causality of the decisions.** For every family at its middle parameter, F12 in both modes at its fixed
+    values, and F11 in both modes for every strategy, on synthetic paths and on 500 sampled (trade, check) pairs per pool
+    from the select-period cut arrays: change the OHLC and mark of minute j and of every later minute, and of every
+    chart bar closing after the check close. The rule decision at j (for F12 the decision and the `tr_comp` set), the
+    placebo stratum at j and every arm flag must stay identical. Only decisions are compared; no P&L is kept.
   * **T6 native parity.** `native.py`, where it re-derives an entry (N13_3OUTSIDE), and `native_ds.py` reproduce
     `run.signals` bar for bar; DOGE's components reproduce the source's `long_exit` and `short_exit`; every final
-    DeepSeek signal bar receives its levels (Appendix A).
+    DeepSeek signal bar receives its levels (Appendix A). F12's F11 component reads the same arrays, levels and
+    targets as F11 (the same objects): with the other eight components switched off, F12.a equals F11.a and F12.b equals
+    F11.b trade for trade on sampled picks of all 16 strategies.
   * **T7 selection logic**, on synthetic `select.json`-shaped inputs with no real figure:
     * the gates per pool (14 of 23 core picks, 9 of 15 DeepSeek picks; a zero M_p does not count), F7 and F7h exempt
       from gate 3, and the gate-failure counts in sequence (8.2);
@@ -1238,20 +1530,42 @@ Real money is not decided by this study. That stays the owners' decision under t
       `sent.json`, a default that differs from 8.4's output, and a swapped id that was still choosable after a rerun
       are each refused;
     * a D11 whitelist: a synthetic `select.json`, `confirm.json`, `SELECT_KO.md` and `REPORT_KO.md` with a DeepSeek
-      money figure or p value planted in any DeepSeek row are refused; the allowed fields pass;
-    * `claim_of` gives the 8.5 wording for F7, F7h, F11 and the rest.
+      money figure or p value planted in any DeepSeek row are refused; the allowed fields pass (hold hours by market
+      state and F12 component counts included); a synthetic private owner report written anywhere but
+      `$WORK/<pin8>/ds_private/` (or inside the repository) is refused, one under `ds_private/` passes, its sha256 is
+      the one written into the json, and it holds no p value and, in the select report, no money on a "선택 불가" row;
+    * the 86 variants and their groups: group A holds F12 alone, F12 is outside set D, the default never returns F12,
+      F12 (not F7, F7h) reaches step 2 of the placebo, and the counts of 5.3 (86 variants, 74 with a placebo, 35 in D);
+    * `claim_of` gives the 8.5 wording for F7, F7h, F11, F12 and the rest.
+  * **T8 market-state labels** (section 7), on built paths and on the select-period cut arrays, printing counts only:
+    * **causality**: for 500 sampled offered signals per pool and for built series, replace the OHLCV of every chart bar
+      after the signal bar and every 1m minute from the entry minute on by other values (random and extreme); the
+      label of the signal must not change. The label from arrays truncated at the signal bar equals the label from the
+      full arrays. (T3 adds the cut against full comparison.)
+    * **definition**: the label equals `regime5y.regimes(...)["code"]` at the signal bar on the pick's own chart, maps
+      to 추세장 / 횡보장 / 급변장 / 보통 / 모름 as `regime5y.RKO` does, and the constants read from the module equal
+      those of section 7 (14, 50, 10, 25, 20, 0.5, 0.80, 365, 180); the precedence 급변장 > 추세장 > 횡보장 > 보통 holds on
+      built bars where two conditions are true; a coin with less than 180 days of history gets 모름.
+    * **bookkeeping**: every closed trade has exactly one label; the per-state counts sum to the pool's closed trades;
+      E0 and V give the same label to the same signal; `hold_by_state` equals hand-computed medians and shares on a
+      built set, including an empty state (count 0, no median) and a state under 100 trades (marked); the labels
+      enter no gate, no default, no placebo stratum (changing every label leaves the gates, the default and the
+      placebo draws unchanged).
 * Seeds use `run._seed`: the first 8 hex digits of the sha256 of the "|"-joined parts.
 * **Order of work**:
   1. Code, tests and `data_pin.json`, then the pin, commit and push.
   2. The timing stage (seconds only), the seed count of 5.3, `out/timing.json`, commit and push.
-  3. The select run, in fresh processes: step 1, then step 2. It writes `out/select.json` and `out/SELECT_KO.md`; the
-     post-run audits of section 14 run; the hashes of `select.json`, `SELECT_KO.md` and `timing.json` are appended,
-     then commit and push. The main session sends the report to the owners, then writes, hashes, commits and pushes
-     `out/sent.json` before reading any answer (8.7). The freeze of 8.3 starts.
+  3. The select run, in fresh processes: step 1, then step 2. It writes `out/select.json` and `out/SELECT_KO.md` and
+     the private owner report `$WORK/<pin8>/ds_private/owner_report_select.md`; the post-run audits of section 14 run;
+     the hashes of `select.json`, `SELECT_KO.md` and `timing.json` are appended, then commit and push. The main session
+     sends the report to the owners and shows them the private report (after checking its sha256 against
+     `select.json`), then writes, hashes, commits and pushes `out/sent.json` before reading any answer (8.7). The
+     freeze of 8.3 starts.
   4. The owners' answers per pool (or the default for a pool with none by its deadline), `out/choice.json`, its hash
      appended, commit and push. The freeze ends.
-  5. The confirm run, once, in a fresh process, writes `out/confirm.json`; the audits run; then `out/REPORT_KO.md` and
-     the ledger print.
+  5. The confirm run, once, in a fresh process, writes `out/confirm.json` and the private owner report
+     `owner_report_confirm.md`; the audits run; then `out/REPORT_KO.md` and the ledger print; the main session shows the
+     private report to the owners in the conversation.
   6. After a PASS and the owners' OK: the league changes of 11.4 with their parity test, the DEVIATIONS entry, the
      restart, then C1 and C2 (11.5).
 
@@ -1261,9 +1575,11 @@ Real money is not decided by this study. That stays the owners' decision under t
 
 * **A look** is any performance figure (P&L, growth, wallet, win share, hold time, exit-reason count, trades entered or
   skipped per arm) written to a file or a screen that a person or an agent reads. Tests and audits print only pass or
-  fail and counts of cases; the timing stage prints only times. DeepSeek money figures are never a look: nobody reads
-  them (section 3).
-* **Tests.** If T1-T7 cannot pass without changing a rule of this file, nothing runs. The change is filed in
+  fail and counts of cases; the timing stage prints only times. DeepSeek money figures are a look only through the two
+  private owner reports of section 3 (the main session and the owners read them); nobody reads the other files of
+  `ds_private/` (section 3). Hold hours by market state are figures like any hold time: they are looks once the
+  report is written.
+* **Tests.** If T1-T8 cannot pass without changing a rule of this file, nothing runs. The change is filed in
   `DEVIATIONS.md`, with the reason, before any run.
 * **Crash and resume.** Each stage writes one result file per (pick, arm, size, seed block) under
   `$WORK/<pin8>/results/<stage>/` (DeepSeek picks: `$WORK/<pin8>/ds_private/results/<stage>/`), atomically. A resume computes only the missing files. Nothing is read, summarised or
@@ -1274,7 +1590,7 @@ Real money is not decided by this study. That stays the owners' decision under t
   placebos alike.
 * **Post-run audits**, run after the select run and after the confirm run whatever the outcome. They print pass or
   fail only.
-  * A1: T1-T7 rerun at the run's commit.
+  * A1: T1-T8 rerun at the run's commit.
   * A2: for every account, signals offered = entered + skipped + rejected + no fill + after bust.
   * A3: every RULE and RAND exit lies at the check minute of one of the position's checks, at that minute's open
     with slippage.
@@ -1283,9 +1599,15 @@ Real money is not decided by this study. That stays the owners' decision under t
   * A6: E0 through `kernel_x` equals `kernel.account` on the same signals and period end.
   * A7: each placebo's realised exit rate per stratum lies within a 99.9% binomial band around h.
   * A8: no committed file of this study holds a DeepSeek money figure or p value: every DeepSeek row of `select.json`,
-    `confirm.json`, `SELECT_KO.md` and `REPORT_KO.md` carries only the allowed fields (counts, win shares, hold times,
-    exit reasons, labels).
-* **A bug found by an audit or by T1-T7.** It is fixed and recorded in `DEVIATIONS.md` before the rerun's output is
+    `confirm.json`, `SELECT_KO.md` and `REPORT_KO.md` carries only the allowed fields (counts, win shares, hold times
+    overall and by market state, exit reasons, F12 component counts, labels). The private owner report of the stage
+    exists at `$WORK/<pin8>/ds_private/owner_report_<stage>.md`, its sha256 equals `ds_owner_report_sha256` in the
+    stage's json, it lies outside the repository (`git ls-files` lists no `owner_report_*` file and no committed file
+    contains a line of it), and it holds no p value.
+  * A9: the market-state columns are consistent: every closed trade has exactly one state; per pool and arm the state
+    counts sum to the closed trades; E0 and each variant give the same label to the same signal; no label differs from
+    a recomputation of `regime5y.regimes` on the stage's arrays at the signal bar.
+* **A bug found by an audit or by T1-T8.** It is fixed and recorded in `DEVIATIONS.md` before the rerun's output is
   read, and the stage is rerun once.
   * Select stage: allowed once, before any confirm. The rerun's eligible sets decide; both reports are kept, and the
     rerun's `select.json` and `SELECT_KO.md` are hashed and sent as in 8.7. If `choice.json` was already hashed, the
@@ -1374,6 +1696,21 @@ Real money is not decided by this study. That stays the owners' decision under t
   `short &= ~long` lines of the eight core `param_defs`; the C1, C2 and pool-mean lines of
   `research/fullgrid/WATCH_PREREG.md`; `git log` and `git status` names. It opened no performance figure of any period,
   no `holdcost` output, no hunt, autopsy or league result, and no DeepSeek money figure.
+* **The fourth revision** (2026-10-12, after the main session's decisions of about 12:20 KST and the owners' three
+  latest messages) was written by a further sub-session, under the rules that it edits only this file and
+  `README_KO.md`, edits no code, commits and pushes nothing, and opens no performance figure. It read: this file and
+  `README_KO.md` in full; `research/fullgrid/regimes.py` in full; `paperbot/dash/tools/regime5y.py` lines 1-215 (header,
+  constants, `rma`, `adx_atr`, `ema`, `vol_threshold`, `indicators`, `label_codes`, `regimes`, then `windows`,
+  `period_windows`, `bounds_for`, `window_pnl` and the start of `summary`); `docs/regime5y.md` lines 1-60 (the regime definitions and the account design, not its results section);
+  `research/exitflex/metrics.py` lines 1-35 and 105-200 (header, constants, `hold_stats`, `pool_of`, `pooled_series`,
+  `pool_summary`, `eligibility`, `choose_variants`, `claim_of`) and its function list; `research/exitflex/runner_x.py`
+  lines 1-72 (header, constants, the required-pin list) and its function and class names; the variant-class lines of
+  `research/exitflex/kernel_x.py` (the `_VARIANTS` assertion and slots) and the column names of
+  `research/exitflex/data_x.py` `offered`; `git status` and `git log -1` names; the sha256 of `regime5y.py` and
+  `regimes.py`. It did not open `regimes.json` or `regimes_KO.md` (outputs of `regimes.py`),
+  `paperbot/dash/data/regime5y.json`, the `holdcost` outputs, `out/` files, `diag/*.json`, `STRATEGIES_KO.md`,
+  `STRATEGY_EVAL_KO.md`, `ANALYSIS_KO.md`, any hunt, autopsy, league or track-2 result, or any DeepSeek money figure,
+  and it opened no performance figure of any period.
 * **Main session's statement**, inserted verbatim (line breaks added only):
 
   ```text
@@ -1449,6 +1786,15 @@ Real money is not decided by this study. That stays the owners' decision under t
   12. F11's common rules C1-C8 and its per-strategy readings (Appendix A).
   13. F7h's hours {4, 8, 16} (taken from a review of the second revision, from the owners' "16시간" and "단타", not from
       any number), the loss-cut categories L0-L3, the default set D and the hold-ranked default (section 16.3).
+  14. F12 (section 5.2): the rule for the two-value grids (the larger value), the reading that F6 adds no exit time, the
+      bit mask `tr_comp`, group A with parameter count 8, z for the placebo, and "no q15 version". The nine components
+      and the middle values are the main session's instruction; these choices are the drafter's.
+  15. The reading of "no fixed percent" (section 1): which cells have an arm and which have none, and that F5 and F8 have
+      no no-arm cell.
+  16. The market-state columns (section 7): the fifth column 모름, the mark 건수 적음 under 100 trades, quarter size
+      only, the choice to follow `label_codes` where the docstring of `regimes.py` omits the absolute value of the slope.
+  17. The private owner reports (section 3): which figures they hold (no p value; the confirm adds the interval), the
+      row rule copied from 8.2 item 6, the `_r2` file names, `ds_owner_report_sha256`, the `freeze_note` field.
 
 ## 16. Changes
 
@@ -1650,6 +1996,70 @@ Each change answers a finding. Items 3, 7, 9 and 11 of 16.2 are changed by the i
 * "Check F7h at 15m closes": not needed; C0 + H hours is always a pick-timeframe close (item 6).
 * "Get the DeepSeek drafter's explicit statement" (one alternative offered): this sub-session cannot obtain it; the
   readings are marked "blindness not stated" instead. The main session may still obtain and insert it before the hash.
+
+### 16.4 Final additions (fourth revision: the main session's decisions of about 12:20 KST and the owners' messages 5-7)
+
+1. **New family F12, "all at once"** (1 Q-C, 5.2, 5.3, 6, 7, 8, 9, 12, 13, 14; message 5). The first trigger wins among
+   F1, F2, F3, F4, F5, F6, F7h, F10 and F11, with the hard stop kept; every component at the middle of its own grid
+   (the larger value for a two-value grid), listed in a table in 5.2; modes a and b; pick-timeframe checks only; own
+   group A; outside the default set D (it cuts a loss on any structure break; category L3); placebo by the general
+   stratified rule (z = 1 when any component with a precondition is armed or has its reference); one exit when several
+   components fire at one check, with every component recorded in `tr_comp`. Tests T2, T4, T5, T6, T7 cover it.
+   Counts: variants 84 + 2 = **86** (E0 plus 86 = 87 arms); select step 1 87 x 38 x 2 = **6,612** accounts (was 6,460);
+   variants with a placebo 72 + 2 = **74**; step-2 placebo accounts 74 x 23 x 200 = 340,400 and 74 x 15 x 200 = 222,000,
+   **562,400** in all (was 547,200); the timing stage and its projection use the 74; the confirm is unchanged (228
+   accounts, 15,200 placebo accounts); the default set D stays 35 variants. "84" in this file still means the full
+   grid's 84 exits where it says so.
+2. **No fixed percent** (1, 12, Known limit 16; message 6). The owners' +60% and -40% were examples. The file states
+   that no rule fires on a fixed percent, that arms are in R of the trade's own stop distance, and which cells have an
+   arm (F5, F8, F6.d0.5, F9) and which have none (F1, F6.d0, F10; the others have no profit or loss arm). F5 and F8 have
+   no no-arm cell; none was added, so the counts are unchanged, and Known limit 16 says the gap is untested.
+3. **Hold hours by market state at entry** (7, 8.2, 9, 12 and Known limit 18, 13, 14 A9, T3, T8; message 7). The
+   labels of `research/fullgrid/regimes.py` (via `regime5y`), taken at the signal bar with no bar after it, per pool and
+   variant: count, median hold and the shares over 4 h, 8 h and 18 h in a second table, select-period trades in the
+   select report and confirm-period trades in the confirm report. Information only. Section 13 says where the code
+   produces it; T8 tests the labels (causality, definition, bookkeeping); `regime5y.py` and `regimes.py` join the pins.
+4. **The hold-hours table of 8.2** now says outright that hold hours (median and the shares over 4 h, 8 h and 18 h) and
+   entries against E0 with skipped signals come before the growth column, per pool, for E0 and all 86 variants.
+5. **Private DeepSeek owner reports** (3, 7, 8.2, 8.7, 9, 10, 12, 13, 14 A8; the owners' "딥시크 금액 알려주고").
+   An owners' relaxation of D11, limited to one private report per step outside the repository, shown by the main
+   session in the conversation only, with its sha256 committed in `select.json` and `confirm.json`. Committed files and
+   committed reports, the ledger, weekly notes and league checks keep DeepSeek as labels, counts, win shares and hold
+   hours. The default of 8.4 uses no DeepSeek money; the gates and the confirm test compute as before; nothing the
+   owners see changes what a rule does.
+6. **The main session's decisions recorded, not reopened**: the stricter default set D and the hold-based default of
+   8.4 are accepted; the freeze of 8.3 is accepted, hunt test-period results and track 2 included, and the main
+   session times the select report around the hunt (8.3, `sent.json` `freeze_note`).
+7. **Consistency pass** over the whole file: variant counts and run counts (above); F1-F11 became F1-F12 in the promises
+   and the naming note (the name clash with the DeepSeek strategy F12_MSS_DISP is stated); `run_x.py` became
+   `runner_x.py` (the file in the folder); T1-T7 became T1-T8 in 14; A1 and A8 reworded and A9 added; "DeepSeek money
+   figures are never a look" corrected (the owner reports are looks); 5.4.2 and 5.4.8 name F12 and 5.4.11 is new;
+   section 12's not-in-scope lines and Known limits 2, 9 and 15 updated and 16-18 added; the stop-first sentence of
+   section 2, the mode sentence of 5.1, the claims of 8.5 and the files of 8.7 and 9 name F12 and the owner reports; the
+   pin table gains the two regime files and the repo-HEAD sentence names this revision; 11.2 and 11.4 items 7 and 13 name
+   F12; the order of work names the private reports.
+8. **Section 15** gains this revision's reading list and definitions 14-17 (the main session's statement is unchanged).
+   **Section 17** is new: the checklist before the hash.
+
+**Not done, and why:**
+
+* F12 with q15 checks, with F8 or F9 as components, or at other values: the owners asked for the nine kinds at once,
+  and a second F12 at other values would be a tuned variant. Not done (section 12).
+* A no-arm F5 cell (giveback from any profit): the grids were fixed before this revision and the owners did not ask for
+  it by name; named as Known limit 16.
+* A choice, gate, default or placebo stratum by market state: the owners' remark was that the hold they want depends on
+  the market; the columns inform them, and a per-state rule is a new pre-registration.
+* DeepSeek p values in the owner report: the owners asked for the money; p values stay private (3).
+* Reopening decisions (1) and (2) of the main session: not reopened.
+
+**Choices of this revision that the main session may change before the hash** (each is stated in the text it touches):
+
+* the larger value for a two-value grid in F12 (g = 0.5, d = 0.5 R, N = 12 bars; 5.2);
+* the instruction that "every gate still uses no DeepSeek money": in this file the DeepSeek gates 1-3 and the confirm
+  test still compute from the private DeepSeek money files as before (D11 had always said so), and only the default of
+  8.4 is money-free; the text says the owners' view cannot change what a rule does (3);
+* the private reports hold no p value and, in the select report, show money only on choosable rows (3);
+* 건수 적음 under 100 trades for the state cells, and quarter size only (7).
 
 ## Appendix A. Each strategy's own exit (family F11)
 
@@ -2267,3 +2677,66 @@ Each change answers a finding. Items 3, 7, 9 and 11 of 16.2 are changed by the i
   through it, and the 2 ATR hard stop is unchanged. When several gaps fire at once, the largest b is used.
 * **Korean**: 롱이면 가격 틈(FVG)의 아래 끝 밑으로 봉이 마감하면(틈이 무너짐) 전량 청산하고, 틈이 생긴 뒤 되돌아오기 전에 만든
   고점에 닿으면 익절합니다. 숏은 반대입니다.
+
+## 17. Before the hash: checklist
+
+For the main session. This file is hashed, and the pin commit made, only when every line below is true. Each line is
+checked by a command, a test or a read. Names of functions and fields are those of this file (section 13 is the
+contract); if the coder used other names, section 13 is edited first.
+
+**A. Text**
+
+1. The counts read 86 variants, 87 arms, 6,612 step-1 accounts, 74 placebo variants and 340,400 + 222,000 = 562,400
+   placebo accounts (5.3). `grep -n "84 variants\|E0 plus 84\|6,460\|547,200" PREREG_EXITFLEX.md` prints only lines of
+   16.4 and of this item. The other "84" in the file are the full grid's 84 exits or the kernel's (sections 1, 13 T1,
+   15, 16).
+2. `grep -n "run_x\|T1-T7\|F1-F11" PREREG_EXITFLEX.md` prints only explanatory and history lines (promise (a), the file
+   name note in section 13, sections 16 and 17).
+3. Section 15 carries the fourth revision's reading list, and the main session's statement in it is unchanged
+   (`git diff` shows no change inside that block).
+4. The DeepSeek drafter's blindness is still **not stated** (Known limit 10, section 15, README_KO). If the main session
+   obtains an explicit statement, it goes into all three places in one edit before the hash; otherwise nothing changes.
+5. `README_KO.md` agrees with sections 1, 3, 5.2, 7 and 8: 86 variants, number 12, no fixed percent, the market-state
+   table, the private DeepSeek report. (It is not pinned.)
+
+**B. Code in `research/exitflex/`** (all pinned)
+
+6. `kernel_x.py`: `len(_VARIANTS) == 86` with the ids of 5.3 (the file asserts 76 today); F7h; the F11 mechanics of
+   Appendix A; F12 as in 5.2 (nine components at the table's values, one RULE exit at the first firing check,
+   `tr_comp` bit mask, a component mask for tests, pick-close checks only, F12.b keeps the native target); the result
+   carries `tr_state`.
+7. `placebo.py`: seed base without the pick id; strata z of section 6 including F12's; no placebo for F7 and F7h;
+   F11.b and F12.b keep the native target.
+8. `metrics.py`: no "core pool only" header; gates per pool (14 of 23, 9 of 15); `choose_variants` replaced by the
+   default of 8.4 (set D of 35 variants, shortest pooled median hold, ties by parameter count then canonical order, at
+   most 2 from different groups, only for a pool with no answer, F12 never); group A; `claim_of` for F7, F7h, F11 and
+   F12; `hold_by_state` used by `pool_summary`.
+9. `data_x.py`: `offered` has the `state` column from `regime5y.regimes`; the module's constants are asserted equal to
+   section 7's.
+10. `native.py` and `native_ds.py` exist and follow Appendix A.
+11. `runner_x.py`: the required pins include `native.py`, `native_ds.py`, `paperbot/dash/tools/regime5y.py` and
+    `research/fullgrid/regimes.py`; the second table of 8.2 and the F12 component counts are printed; the private owner
+    reports are written under `ds_private/` with `ds_owner_report_sha256` in `select.json` and `confirm.json`; the seed
+    rule of 5.3 counts the 74; audits A1-A9; it prints the git commit and refuses a hash mismatch.
+12. `test_exitflex.py` has T1-T8 and all pass at the pin commit: T2 (F12: each component alone, first trigger wins,
+    ties, F6 within F1, single-component parity, modes), T3 (with the regime codes), T4 (F12 strata), T5 (F12), T6
+    (F12 equals F11 with the other eight off), T7 (gates per pool, the default, the group rule, `choice.json` checks,
+    the D11 whitelist with the owner-report rules, the 86 / 74 / 35 counts, `claim_of`) and T8 (state labels). They
+    print pass or fail and counts only.
+
+**C. Pins to compute**
+
+13. `runner_x.py make-pin` has written `data_pin.json` (the seven data hashes and the `$WORK` path). The full sha256 of
+    every input in the table of section 13 (the two regime rows included) and of every `.py` in the folder and of this
+    file is computed at the pin commit and agrees with the abbreviated values in the table. `PREREG_EXITFLEX.sha256` is
+    created and committed and pushed together with the files it lists. The "Repo HEAD" sentence of section 13 names the
+    pin commit's parent. The machine runs Python 3.11, numpy 2.0.2, pandas 2.3.3, numba 0.60.0.
+
+**D. The pin time**
+
+14. The main session has chosen the pin time (UTC and KST) and writes it in the pin commit message. It is after items
+    1-13 are true; before the hold-cost workflow resumes (section 15); and such that the select report, about a day
+    later (README_KO schedule), does not fall in a window where a hunt (round 1 or 2), track-2 or ledger test-period
+    result is due or needed before the choice is hashed (8.3 freeze).
+15. No output of this study exists yet: `out/` holds no `timing.json`, `select.json` or `confirm.json`. Changes after
+    the pin go to `DEVIATIONS.md` only.
