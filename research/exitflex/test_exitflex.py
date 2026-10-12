@@ -40,6 +40,7 @@ import data_x as DX  # noqa: E402
 import kernel_x as KX  # noqa: E402
 import metrics as MT  # noqa: E402
 import placebo as PL  # noqa: E402
+from paperbot import ladder as LD  # noqa: E402  (the engine's stepped lock: the reference and the F13 tests read it, not the kernel)
 
 K = KX.K
 MIN = 60_000
@@ -288,9 +289,11 @@ def pdata_zflag(ch, bi, side) -> bool:
 
 def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr, best, equity, qty_step, min_notional,
               tp_kind, tp_val, tp_price, force_end, v, ch, i0, tf_ms, q15, q15bars=None, plc=None, seed_base=0, coin=0,
-              hz=None, lvl=float("nan")):
-    """Sections 4-6 in plain Python, stateless: every rule input is recomputed from the raw bars at each check. No stepped
-    lock (the picks use none). Returns (d, j, reason, lev, price, [per-check records])."""
+              hz=None, lvl=float("nan"), lock=(False, 0.10, 0.05, 0.02)):
+    """Sections 4-6 in plain Python, stateless: every rule input is recomputed from the raw bars at each check. The stepped lock
+    (``lock`` = (on, first lock, step, gap); the picks use none, F13 does) is written with the engine's own paperbot/ladder.py
+    (LadderSpec, net_roe, roe_price, tighten), not with the kernel's inline formulas. Returns (d, j, reason, lev, price,
+    [per-check records])."""
     taker, slip, rt, maker = S[0], S[1], S[5], S[19]
     raw = o[e]
     fill = raw * (1 + side * slip)
@@ -311,9 +314,12 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
     kb = K._bracket.py_func(br, qty * fill)
     fam = v.fam
     prm = v.params
+    ruled = fam not in (KX.F_NONE, KX.F13)                     # F13 (the stepped lock) makes no decision at a chart close
+    spec_ = LD.LadderSpec(first_lock=lock[1], step=lock[2], trigger_gap=lock[3])
+    lock_roe = None
     # ---- the check schedule: (minute, last schedule bar), merged when minutes coincide
     checks = []
-    if fam:
+    if ruled:
         if q15:
             bars = [(k, m) for k, m in enumerate(zip(q15bars["cms"], q15bars["minute"])) if m[0] > ch.cms[i0]]
             sched = [(k, m[1]) for k, m in bars]
@@ -479,7 +485,7 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
         entry_bar = j == e
         fire = False
         info = None
-        if fam and not entry_bar and j in by_j:
+        if ruled and not entry_bar and j in by_j:
             kk, _last = by_j[j]
             rule_fire, strat, info = evaluate(kk)
             fire = rule_fire
@@ -529,13 +535,19 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
                 liquidate = True
             elif hit_tp:
                 price, at_tp = tp, True
+            elif lock[0] and not entry_bar:                  # the stepped lock: from the next minute, only tightens (paperbot/ladder.py)
+                fr = fpaid / notional
+                armed_roe = spec_.lock_for(LD.net_roe(side, fill, mfe, lev, rt, fr))
+                if armed_roe is not None and (lock_roe is None or armed_roe > lock_roe + 1e-12):
+                    stop = LD.tighten(side, stop, LD.roe_price(side, fill, lev, armed_roe, rt, fr))
+                    lock_roe = armed_roe
         if price >= 0:
             gross = side * qty * (price - fill)
             if gross < -margin:
                 liquidate = True
             else:
                 wallet += gross - qty * price * (maker if at_tp else taker)
-                rc_ = KX.R_TP if at_tp else (code if code is not None else KX.R_SL)
+                rc_ = KX.R_TP if at_tp else (code if code is not None else (KX.R_LOCK if lock_roe is not None else KX.R_SL))
                 return wallet - equity, j, rc_, lev, price, records
         if liquidate:
             wallet -= margin
@@ -592,7 +604,7 @@ def call_ref(mk, prov, pdata, v, off, q, scale=0.25, force_end=True, plc=False, 
                      mk.cat["mh"][a:b], mk.cat["ml"][a:b], mk.cat["fund"][a:b], t["e"], b - a, t["side"],
                      t["stop_atr"] * t["atr"], t["atr"], t["best"], equity, mk.qty_steps[c], mk.min_notionals[c], t["tp_kind"],
                      t["tp_val"], tp_price, force_end, v, ch, t["i0"], pdata.tf_ms, q15, q15bars, plc, seed, c, hzd,
-                     float(off["lvl"][q]) if v.fam in (KX.F11, KX.F12) else float("nan"))
+                     float(off["lvl"][q]) if v.fam in (KX.F11, KX.F12) else float("nan"), (t["ladder"], t["fl"], t["step"], t["gap"]))
 
 
 def compare_trade(mk, prov, pdata, v, off, q, **kw):
