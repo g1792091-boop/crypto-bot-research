@@ -2157,8 +2157,8 @@ Real money is not decided by this study. That stays the owners' decision under t
      A8 flags is read only after it; the hashes of `select.json` and `SELECT_KO.md` are appended, then commit and push.
      The extra reads and twins of 16.7 item 4 then run, and each of their outputs that is committed or sent passes
      `audit-file` first. The main session checks the private report's sha256 against `select.json`, shows the private
-     report and the private extra report (section 3) in the chat with the owners and sends the extra reads and twins,
-     in the same turn as or before it sends `SELECT_KO.md` (never over a logged channel, section 3), then writes
+     report and the private extra report in the chat with the owners (never over a logged channel, section 3) and sends
+     the extra reads and twins, in the same turn as or before it sends `SELECT_KO.md`, then writes
      `out/sent.json` (sending time, channel, the time the private report was shown, freeze note, `extra_note`,
      `extra_shown_utc`, `ds_owner_report_extra_sha256`), runs audit A8 on it, and hashes, commits and pushes it before
      reading any answer (8.7). The freeze of 8.3 starts.
@@ -2403,10 +2403,11 @@ Real money is not decided by this study. That stays the owners' decision under t
   and `README_KO.md`, `git diff` of the working tree and `git diff fe7a34f` of the study folder, `git show --stat` of the
   pass's commits, in `runner_x.py` the `progress` and `print` lines, `MIDDLE_VARIANTS`, `check_t5`, `audit_a8_file`,
   `audit_a9_file`, `A8_SCOPE`, the `check` and `audit-file` lines of the command dispatch, the lines that read `sent.json`
-  and the lines that name `owner_report`; `git worktree list`; file names in the scratchpad, with the sizes and times of
-  its `exdry_*` and `ext5_*` files; and the names of running processes. It opened no log, no performance figure of any
-  period, no `holdcost`, hunt, autopsy, league or track-2 result, no `out/` file and no DeepSeek money figure, and it did
-  not touch the main session's statement or the dated addendum below it.
+  and the lines that name `owner_report` or write `SELECT_TABLE.csv`; `git log`, `git status` and `git worktree list`;
+  file names in the scratchpad, with the sizes and times of its `exdry_*` and `ext5_*` files; and the names of running
+  processes. It opened no log, no performance figure of any period, no `holdcost`, hunt, autopsy, league or track-2
+  result, no `out/` file and no DeepSeek money figure, and it did not touch the main session's statement or the dated
+  addendum below it.
 * **Main session's statement**, inserted verbatim (line breaks added only):
 
   ```text
@@ -3187,7 +3188,8 @@ E0 or of a variant was changed; `check` now needs at least 500 per pool for T5 a
      DeepSeek money goes only to the private extra report; `select_r2/` after a select rerun) and may show per-pick and other split
      tables of the select period; a per-pick table marks F11.a = F3.a and F11.b = F3.b on the F7_RF_ONLY picks (Known limit 11);
    * uses this file's pinned kernel, data and cut unchanged (the cut folder through `open_cut`, with the check of A5), runs under its own
-     stage name and folders below `$WORK/<pin8>/` and writes nothing into the select stage's folders or into `research/exitflex/out/`; it
+     stage name and folders below `$WORK/<pin8>/` (a file of it that holds a DeepSeek money figure lies under `ds_private/`, section 3)
+     and writes nothing into the select stage's folders or into `research/exitflex/out/`; it
      opens no minute and no result of 2024-2026 and no file of the confirm stage: every read, the forward bands included, is built from
      select-period trades only (the league's bands, built from the full grid's 2024-2026 trades by `research/fullgrid/checks.py`, are
      not used), so nothing of it is 2024-2026 material under 8.3;
@@ -3199,10 +3201,10 @@ E0 or of a variant was changed; `check` now needs at least 500 per pool for T5 a
 
    This file's select report, gates, placebo, default, confirm and choice rules are unchanged; sections 3 (the private extra report), 7,
    8.2, 8.7, 12 (with Known limits 2 and 11), 13, 14 and 17 only name the extra file, its private report and its place in the order of
-   work. A bug of this file's code that the extra reads find before the confirm is handled under 14 as one found by an audit. The owners are told that the extra reads and the
-   twins were defined after this file was hashed and before the select stage was started (their code before any of its outputs was
-   opened), and are information only. A later study of these exits on default-number strategies cannot treat 2021-2023 as unseen for the
-   38 cells of the twins.
+   work. A bug of this file's code that the extra reads find before the confirm is handled under 14 as one found by an audit. The owners
+   are told that the extra reads and the twins were defined after this file was hashed and before the select stage was started (their
+   code before any of its outputs was opened), and are information only. A later study of these exits on default-number strategies
+   cannot treat 2021-2023 as unseen for the 38 cells of the twins.
 5. **Test results of the eighth pass** (working tree at commit `fd070f8`, 2026-10-12; counts only): `test_exitflex.py` [EXITFLEX] passed
    (was 212 after the seventh pass: two tests added, `test_t5_draws_go_on_until_each_pick_and_variant_has_its_pairs_and_stop_at_the_cap`
    and `test_placebo_steps_print_no_pick_and_no_file_count`, and the summary test extended; synthetic data);
