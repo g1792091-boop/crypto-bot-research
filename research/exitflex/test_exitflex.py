@@ -3606,7 +3606,7 @@ def test_t5_f13_the_stop_in_force_at_minute_j_depends_only_on_minutes_before_j(t
     """Causality of the lock: replace every minute from the exit minute x on (OHLC, mark and funding) by another path: no exit before x is
     possible and the minutes up to x - 1 are unchanged; replace every minute from x + 1 on: the trade is identical."""
     w = DIFF_WORLDS["1h"]
-    coins = {SYMS[i]: synth_coin(71 + i, w["days"], (100.0, 3000.0)[i], vol=0.0012, drop=0.003, outages=2) for i in range(2)}
+    coins = {SYMS[i]: synth_coin(71 + i, w["days"], (100.0, 3000.0)[i], vol=w["vol"], drop=0.003, outages=2) for i in range(2)}
     mk, prov, pd_ = build_world(coins, tmp_path / "a", pick=make_pick("1h", w["exit"]), prov_kw=dict(warm=False))
     off = pd_.offered("select", mk)
     rng = np.random.default_rng(9)

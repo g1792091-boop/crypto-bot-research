@@ -30,6 +30,11 @@ and the position still open at the end. The test prints only pass or fail: the d
 result. Readings the league follows because the pre-registration says so are in ``rulex.replay_day`` (the coin's own
 minutes: a minute missing for one coin does not move that coin's fills and checks).
 
+F13 (the rule bot's stepped profit lock, PREREG 5.2: the pick's hard stop and the lock, with the pick's own take-profit kept in mode a, none in
+mode b) runs in every combination below at both sizes and as a coin flip: the study's kernel with the F13 exit tuple against the league's plain
+engine of ``candleague.exits.lock_exit`` of the pick's exit ("lock+tp1.5R|2", "lock+roe50|4", "ladder_tp2R|3", "ladder|2" ...), including restarts in the
+middle of positions whose lock has been raised, and a negative control (a restore that forgets the raised lock).
+
 F11 (each strategy's own exit) and F12 (all nine at once) run through a SYNTHETIC native provider, the same function for the study
 (``kernel_x.register_f11``) and the league (``rulex.register_native``): per strategy two state components and one event component on the
 long side, one state and one event on the short side, with unknown (NaN) values, a per-signal invalidation level and target; the real
@@ -358,11 +363,12 @@ def with_leverage_group(orig):
 
 # ====================================================================================================== combos
 NATIVE = RX.native_ids()                                                                    # F11.a, F11.b, F12.a, F12.b
-ALL_IDS = RX.study_ids() + NATIVE                                                           # the 82 ids of F1-F10 (F7h included) and the 4 native ones
+LOCK = RX.lock_ids()                                                                        # F13.a, F13.b: the stepped lock
+ALL_IDS = RX.study_ids() + NATIVE + LOCK                                                    # the 82 ids of F1-F10 (F7h included), the 4 native ones, F13
 SUBSET = ["F1.w2.a", "F1.w3.b", "F1.w5.a.q15", "F1.w2.b.q15", "F2.n10.a", "F2.n20.b", "F3.a", "F3.b", "F4.m1.5.a", "F4.m2.b",
           "F4.m3.a.q15", "F4.m1.5.b.q15", "F5.P1.g50.a", "F5.P1.5.g25.b", "F5.P2.g25.a", "F6.w2.d0", "F6.w3.d0.5", "F7.N12.a",
-          "F7.N24.b", "F7h.H4.a", "F7h.H8.b", "F7h.H16.a", "F8.w2.P1.a", "F8.w3.P2.b", "F9.a", "F9.b.q15", "F10.N6.a", "F10.N12.b"] + NATIVE
-FLIPS = ["F1.w3.a", "F2.n20.a", "F3.a", "F4.m2.a", "F5.P1.g50.b", "F7.N12.b", "F9.a.q15", "F10.N6.a"] + NATIVE
+          "F7.N24.b", "F7h.H4.a", "F7h.H8.b", "F7h.H16.a", "F8.w2.P1.a", "F8.w3.P2.b", "F9.a", "F9.b.q15", "F10.N6.a", "F10.N12.b"] + NATIVE + LOCK
+FLIPS = ["F1.w3.a", "F2.n20.a", "F3.a", "F4.m2.a", "F5.P1.g50.b", "F7.N12.b", "F9.a.q15", "F10.N6.a"] + NATIVE + LOCK
 SIZES = (0.25, 1.0)
 # name: (timeframe, the pick's own exit, rule ids, coin-flip rule ids)
 COMBOS = {
@@ -374,8 +380,8 @@ COMBOS = {
     "1h-ladder": ("1h", "ladder_tp2R|2", SUBSET, ()),
 }
 RESTORE_RULES = ["F1.w3.a", "F1.w2.b.q15", "F2.n20.b", "F3.a", "F4.m2.a", "F4.m1.5.b.q15", "F5.P1.g50.a", "F6.w3.d0.5", "F7.N12.a",
-                 "F8.w3.P1.b", "F9.a.q15", "F10.N6.b", "F11.a", "F11.b", "F12.a", "F12.b"]
-RESTORE_FLIPS = ("F7.N12.b", "F9.a.q15", "F11.b", "F12.a")
+                 "F8.w3.P1.b", "F9.a.q15", "F10.N6.b", "F11.a", "F11.b", "F12.a", "F12.b", "F13.a", "F13.b"]
+RESTORE_FLIPS = ("F7.N12.b", "F9.a.q15", "F11.b", "F12.a", "F13.a", "F13.b")
 # restarts: some at an hour boundary (a record or a signal is waiting in the engine), some in the middle of an hour
 RESTART_AT = [T_START + x for x in (5 * HOUR, 27 * HOUR + 10 * 60_000, 2 * DAY + 19 * HOUR, 3 * DAY + 7 * HOUR + 35 * 60_000,
                                     5 * DAY, 7 * DAY + 13 * HOUR + 55 * 60_000, 9 * DAY + 2 * HOUR)]
@@ -395,6 +401,7 @@ class Played:
     def __init__(self):
         self.trades, self.open, self.wallet, self.restarts, self.open_at_restart, self.queued_at_restart = {}, {}, {}, 0, 0, 0
         self.pending_at_restart = 0
+        self.locked_at_restart = 0           # positions of F13 accounts open at a restart with their lock already raised
 
 
 class World:
@@ -510,6 +517,7 @@ class World:
                 if e.position is not None:
                     out.open_at_restart += 1
                     out.queued_at_restart += bool(e.position.signal.meta.get("rx", {}).get("q"))
+                    out.locked_at_restart += a["rule"].get("family") == "F13" and e.position.lock_roe is not None
                 out.pending_at_restart += bool(e.pending)
         lg.advance(T_END)
         for aid, d in lg.conn.execute("SELECT account, data FROM trades ORDER BY account, exit_time, rowid"):
@@ -623,17 +631,33 @@ def restarts_at_a_missing_minute(world, n=3):
     return sorted(out)[:n]
 
 
+def restarts_in_locked_positions(world, n=5):
+    """5-minute marks shortly before the exit of a trade that the study closed by its lock (F13.a at quarter size on the 1h pick, at least 30 minutes
+    held): the position is open then, and its lock is usually raised already, so a restart there has to keep the raised stop and the lock."""
+    res, off = world.study("1h", "F13.a", 0.25)
+    rows = [r for r in world.study_rows(res, off) if r["reason"] == "LOCK" and r["exit_time"] - r["entry_time"] >= 30 * MIN]
+    marks = sorted({(r["exit_time"] // (5 * MIN)) * 5 * MIN - 5 * MIN for r in rows if T_START + 6 * HOUR < r["exit_time"] < T_END - 12 * HOUR})
+    out = []
+    for m in marks:
+        if all(abs(m - x) > 3 * HOUR for x in out + RESTART_AT):
+            out.append(m)
+    return out[:n]
+
+
 def test_the_run_stops_and_restores_in_the_middle_of_open_positions_and_gives_the_same_trades(world):
-    """The league stopped and reopened from its database ten times (the rule state of each open position is checked against
+    """The league stopped and reopened from its database many times (ten at awkward times, a few more in positions whose lock was raised) (the rule state of each open position is checked against
     its recomputation from the bars by audit_restored, which must find nothing to correct; three restarts sit at a minute that
     a coin with a waiting signal is missing) equals the study's accounts."""
     at_gap = restarts_at_a_missing_minute(world)
     assert len(at_gap) == 3, at_gap
-    restarts = sorted(set(RESTART_AT) | set(at_gap))
+    at_lock = restarts_in_locked_positions(world)
+    assert len(at_lock) >= 3, at_lock
+    restarts = sorted(set(RESTART_AT) | set(at_gap) | set(at_lock))
     played = world.league_run("1h", rules=RESTORE_RULES, sizes=(0.25,), flips=RESTORE_FLIPS, restarts=restarts, tag="-restore")
-    assert played.restarts == len(restarts) == 10
+    assert played.restarts == len(restarts) >= 13
     assert played.open_at_restart >= 40 and played.queued_at_restart >= 15 and played.pending_at_restart >= 10, \
         (played.open_at_restart, played.queued_at_restart, played.pending_at_restart)
+    assert played.locked_at_restart >= 3, played.locked_at_restart          # F13 positions with their lock raised were stopped and restored
     tf, exit_ = COMBOS["1h"][:2]
     n = 0
     for rid in RESTORE_RULES + ["E0"]:
@@ -844,3 +868,64 @@ def test_negative_control_the_comparison_catches_a_coin_flip_that_keeps_the_stra
         except AssertionError:
             bad += 1
     assert bad >= 1
+
+
+# ====================================================================================================== F13: the stepped lock has teeth
+def test_the_world_exercises_the_stepped_lock(world):
+    """Harness sanity for F13 (a pass here says the F13 parity runs above were not vacuous): trades close by the lock in both modes and in every
+    combination, the lock steps beyond the first (locked ROE of 20% and more), F13.a closes some trades by the pick's take-profit with the lock
+    already raised behind it, F13.b has no take-profit exit, and the hard stop still closes trades before any lock exists."""
+    n = {"lock": 0, "lock_hi": 0, "tp_with_lock": 0, "tp_b": 0, "sl_no_lock": 0, "combos_with_lock": 0}
+    for name in COMBOS:
+        got_lock = False
+        for vid in LOCK:
+            played = world.league_run(name)
+            for size in SIZES:
+                for t in played.trades.get(account(vid, size, COMBOS[name][0], COMBOS[name][1])["id"], []):
+                    if t["exit_reason"] == "LOCK":
+                        n["lock"] += 1
+                        n["lock_hi"] += t["lock_roe"] is not None and t["lock_roe"] >= 0.20 - 1e-9
+                        got_lock = True
+                    if t["exit_reason"] == "TP":
+                        n["tp_with_lock"] += t["lock_roe"] is not None
+                        n["tp_b"] += vid == "F13.b"
+                    n["sl_no_lock"] += t["exit_reason"] == "SL" and t["lock_roe"] is None
+        n["combos_with_lock"] += got_lock
+    assert n["lock"] >= 40 and n["lock_hi"] >= 3 and n["sl_no_lock"] >= 10 and n["tp_b"] == 0 and n["combos_with_lock"] == len(COMBOS), n
+    assert n["tp_with_lock"] >= 1, n
+
+
+def test_negative_control_the_restart_test_catches_a_restore_that_forgets_the_raised_lock(world):
+    """The engine state holds the raised stop and ``lock_roe``. A restore that put the hard stop back would let a locked position sit through the
+    fall that its lock was made for: the restarts in locked positions must then show a difference from the study."""
+    restarts = sorted(set(RESTART_AT) | set(restarts_in_locked_positions(world)))
+    real = RN.restore_engine
+
+    def forgetful(e, st):
+        real(e, st)
+        p = e.position
+        if p is not None and p.lock_roe is not None:
+            p.stop_price, p.lock_roe = p.stop_initial, None
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(RN, "restore_engine", forgetful)
+        played = world.league_run("1h", rules=["F13.a", "F13.b"], sizes=(0.25,), flips=(), restarts=restarts, tag="-ctl-lock")
+    bad = accounts_that_differ(world, "1h", played, ["F13.a", "F13.b"])
+    assert len(bad) >= 1, bad
+
+
+def test_f13_accounts_are_the_plain_engines_in_the_league_and_the_twins_are_still_the_studys_e0(world):
+    """A league that holds F13 accounts builds them with the lock exit (no rule engine, no chart record) and the E0 twins beside them are the study's
+    E0: trade for trade at both sizes."""
+    played = world.league_run("30m")                      # a net-ROE 50% pick: the lock with a take-profit at net ROE
+    tf, exit_ = COMBOS["30m"][:2]
+    assert exit_ == "roe50|4"
+    n = 0
+    for vid in LOCK:
+        for size in SIZES:
+            res, off = world.study("30m", vid, size)
+            n += compare_account(world, res, off, played, account(vid, size, tf, exit_)["id"], f"30m {vid} {size:g}")
+    for size in SIZES:
+        res, off = world.study("30m", "E0", size)
+        n += compare_account(world, res, off, played, account("E0", size, tf, exit_)["id"], f"30m E0 {size:g}")
+    assert n >= 20
+    assert RX.exit_name(account("F13.a", 1.0, tf, exit_)) == "lock+roe50|4" and RX.exit_name(account("F13.b", 1.0, tf, exit_)) == "ladder|4"

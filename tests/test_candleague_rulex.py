@@ -27,6 +27,7 @@ from candleague import exits as X  # noqa: E402
 from candleague import league as L  # noqa: E402
 from candleague import rulex as RX  # noqa: E402
 from candleague import runner as RN  # noqa: E402
+from paperbot import ladder as LD  # noqa: E402  (the engine's stepped lock: the F13 tests read their expected prices from it)
 from paperbot import paramshadow as PS  # noqa: E402
 from paperbot import sweepsig  # noqa: E402
 from paperbot.engine import PaperEngine, engine_state, restore_engine  # noqa: E402
@@ -170,7 +171,7 @@ def test_every_study_id_round_trips():
     assert RX.parse_rule("F7h.H8.b") == {"id": "F7h.H8.b", "family": "F7h", "mode": "b", "q15": False, "H": 8}
     d = RX.parse_rule({"family": "F4", "m": 2, "mode": "b", "q15": True})
     assert d["id"] == "F4.m2.b.q15" and d["m"] == 2.0
-    for bad in ("F2.n20.b.q15", "F6.w2.d0.b", "F13.a", "F1.w3", "F1.w0.a", "F9.a.q16", "X", "F4.m0.a", "F5.P1.g100.a", "F7h.H8",
+    for bad in ("F2.n20.b.q15", "F6.w2.d0.b", "F13.c", "F13.a.q15", "F13", "F14.a", "F1.w3", "F1.w0.a", "F9.a.q16", "X", "F4.m0.a", "F5.P1.g100.a", "F7h.H8",
                 "F7h.N8.a", "F7h.H0.a", "F7h.H8.a.q15"):
         with pytest.raises(RX.RuleConfigError):
             RX.parse_rule(bad)
@@ -1097,6 +1098,7 @@ def test_f12_records_every_component_that_fired_and_one_exit(side):
 
 def test_f11_and_f12_ids_and_the_study_ids():
     assert RX.native_ids() == ["F11.a", "F11.b", "F12.a", "F12.b"] and len(RX.study_ids()) + len(RX.native_ids()) == 86
+    assert RX.lock_ids() == ["F13.a", "F13.b"] and len(RX.study_ids()) + len(RX.native_ids()) + len(RX.lock_ids()) == 88
     for i in RX.native_ids():
         r = RX.parse_rule(i)
         assert r["id"] == i and RX.parse_rule(r)["id"] == i and r["family"] in RX.NATIVE_FAMILIES
@@ -1211,7 +1213,7 @@ def test_the_command_line_checks_the_config(tmp_path, capsys):
     p.write_text(rules_doc("F3.z"))
     assert RX.main(["check", "--rules", str(p)]) == 2
     assert RX.main(["ids"]) == 0 and capsys.readouterr().out.count("\n") == 82
-    assert RX.main(["ids", "--all"]) == 0 and capsys.readouterr().out.count("\n") == 86
+    assert RX.main(["ids", "--all"]) == 0 and capsys.readouterr().out.count("\n") == 88
 
 
 # ---------------------------------------------------------------- the league, end to end, on the shadow's synthetic bars
@@ -1884,3 +1886,240 @@ def test_the_public_view_keeps_deepseek_to_labels_counts_win_shares_and_hold_hou
     assert "shown ahead" in capsys.readouterr().out
     rules.write_text(json.dumps({"pools": {"core": "F9.a"}}))
     assert RX.main(["checks", "c1", "--db", str(db), "--install", iso, "--rules", str(rules)]) == 2             # not enabled: nothing to check
+
+
+# ====================================================================================================== F13: the rule bot's stepped lock
+# PREREG_EXITFLEX 5.2 and 11.2: "F13.a" (the pick's own take-profit kept and the lock added) and "F13.b" (the lock alone). The three accounts
+# of the new exit (-n, -nq, -nflip) run another exit of candleague.exits on the plain engine; nothing else about the accounts changes.
+def test_f13_ids_parse_and_are_not_a_chart_rule():
+    for i in ("F13.a", "F13.b"):
+        r = RX.parse_rule(i)
+        assert r == {"id": i, "family": "F13", "mode": i[-1], "q15": False} and RX.parse_rule(r)["id"] == i
+        assert RX.rule_needs(r) == {"atr": False, "ema": [], "sw": [], "flags": False, "nat": False}          # no chart record is asked for
+        assert r["family"] in RX.LOCK_FAMILIES and r["family"] not in RX.NATIVE_FAMILIES and "계단" in RX.rule_ko(r)
+    assert RX.parse_rule({"family": "F13", "mode": "b"})["id"] == "F13.b"
+    for bad in ({"family": "F13", "mode": "a", "q15": True}, {"family": "F13", "mode": "c"}, "F13.a.q15", "F13.w3.a"):
+        with pytest.raises(RX.RuleConfigError):
+            RX.parse_rule(bad)
+    assert RX.code_version(RX.parse_rule("F13.a")) == f"{RX.RULEX_VERSION}|lock0.1,0.05,0.02" and RX.code_version(RX.parse_rule("F3.a")) == str(RX.RULEX_VERSION)
+
+
+def test_f13_accounts_are_the_same_ids_and_counts_with_the_lock_exit_on_the_new_exit_accounts():
+    cands = C.load()
+    base = RX.accounts(cands, cfg_of("F3.a"))
+    for rid in ("F13.a", "F13.b"):
+        cfg = cfg_of(rid)
+        accts = RX.accounts(cands, cfg)
+        assert [a["id"] for a in accts] == [a["id"] for a in base] and len(accts) == 23 * 5 + 15 * 3          # ids and counts unchanged (11.2)
+        assert RX.check(cands, cfg) == []
+        both_cfg = RX.normalize_config({"pools": {"core": rid, "ds": rid}})
+        both = RX.accounts(cands, both_cfg)
+        assert len(both) == 38 * 5 and RX.check(cands, both_cfg) == []
+        for a, b in zip(accts, base):
+            assert a["exit"] == b["exit"] and a["size"] == b["size"] and a["role"] == b["role"]           # a["exit"] is still the pick's own
+            new = a["rule"]["family"] == "F13"
+            assert new == (a["id"].rsplit("-", 1)[1] in ("n", "nq", "nflip") and a["kind"] == "core")
+            if new:
+                want, k = X.lock_exit(a["exit"], rid[-1]), a["exit"].split("|")[1]
+                assert RX.exit_name(a) == want and X.known(want)
+                assert X.spec(want)["ladder"] and X.spec(want)["stop_atr"] == X.spec(a["exit"])["stop_atr"]
+                assert (want == f"ladder|{k}") == (rid == "F13.b")
+            else:
+                assert RX.exit_name(a) == a["exit"]                                                            # the twins and the other pool: E0
+    # the picks of the real list: 3R, 2R and the net-ROE 50% take-profit all have a lock form
+    exits = {c["exit"] for c in cands if c["kind"] == "core"}
+    assert {"tp3R|4", "tp2R|2", "roe50|4"} <= exits
+    assert {X.lock_exit(e, "a") for e in ("tp3R|4", "tp2R|2", "roe50|4")} == {"lock+tp3R|4", "ladder_tp2R|2", "lock+roe50|4"}
+    # a different fingerprint per rule (the league starts over when the exit of the new accounts changes)
+    fps = {RN.fingerprint(RX.accounts(cands, cfg_of(r))) for r in ("F13.a", "F13.b", "F3.a")}
+    assert len(fps) == 3
+
+
+def test_f13_account_engines_are_the_plain_engines_of_the_lock_exit():
+    cands = C.load()
+    by = {a["id"]: a for a in RX.accounts(cands, cfg_of("F13.a"))}
+    for pid, want_exit in (("core-DOGE-15m-1", "lock+tp3R|4"), ("core-OBV_S-1h-3", "lock+roe50|4"), ("core-S4_BB_BBP-30m-1", "ladder_tp2R|2")):
+        for suffix in ("-n", "-nq", "-nflip"):
+            a = by[pid + suffix]
+            e = RX.make_engine(a, BR, SP)
+            ref = X.make_engine(want_exit, BR, SP, book=a["id"], size=a["size"])
+            assert type(e) is type(ref) is X.LadderTP and not isinstance(e, RX.RuleMixin)
+            assert e.s == ref.s and e.s.tp_mode == "ladder" and (e.m, e.roe, e.struct) == (ref.m, ref.roe, ref.struct)
+            assert RX.exit_name(a) == want_exit
+    # mode b: the rule bot's exit, 'ladder|k'
+    bb = {a["id"]: a for a in RX.accounts(cands, cfg_of("F13.b"))}
+    a = bb["core-DOGE-15m-1-nq"]
+    e = RX.make_engine(a, BR, SP)
+    assert RX.exit_name(a) == "ladder|4" and type(e) is PaperEngine and e.s.tp_mode == "ladder" and e.s.ladder.first_lock == 0.10
+    twin = RX.make_engine(bb["core-DOGE-15m-1-eq"], BR, SP)
+    assert twin.s.tp_mode == "fixed" and type(twin) is not RX.RuleEngine                            # the twin keeps the pick's own fixed take-profit
+    # the engines of the other families are unchanged (a rule account is still a RuleMixin engine)
+    f3 = {x["id"]: x for x in RX.accounts(cands, cfg_of("F3.a"))}["core-DOGE-15m-1-nq"]
+    assert isinstance(RX.make_engine(f3, BR, SP), RX.RuleMixin)
+
+
+def _probe_leverage(a, side):
+    e = run(a, Path().hold(0, 0), side)
+    assert e.position is not None
+    return e.position.leverage
+
+
+def _lock_path(lev, side, n, fall_to=0.0):
+    """A path in the favourable direction: flat, then a one-minute climb into the band of lock step ``n`` (best net ROE between 12% + 5% x n and
+    12% + 5% x (n + 1)), five flat minutes there, then a one-minute fall to ``fall_to``."""
+    fl = fill_of(side)
+    arm = lambda k: LD.roe_price(side, fl, lev, 0.12 + 0.05 * k, RT)      # noqa: E731
+    top = side * (0.5 * (arm(n) + arm(n + 1)) - P0)                         # the favourable offset
+    j = J0 + 10
+    return Path().hold(0, 0).bar(j, o=0, c=top, b=top, w=0).hold(j + 1, top, j + 6).bar(j + 6, o=top, c=fall_to, b=top, w=fall_to).hold(j + 7, fall_to), top, j + 6
+
+
+@SIDES
+@pytest.mark.parametrize("mode", ["a", "b"])
+@pytest.mark.parametrize("n", [0, 1, 3])
+def test_f13_the_lock_exits_at_the_locked_net_roe_on_a_hand_path(side, mode, n):
+    a = acct(f"F13.{mode}", exit_="tp3R|2")
+    lev = _probe_leverage(a, side)
+    path, top, jx = _lock_path(lev, side, n)
+    e = run(a, path, side)
+    assert len(e.trades) == 1
+    t = e.trades[0]
+    assert (t.exit_reason, t.exit_time) == ("LOCK", at(jx) + MIN - 1)                    # an intrabar stop: stamped at the minute's close
+    lock = 0.10 + 0.05 * n
+    want = LD.roe_price(side, fill_of(side), lev, lock, RT)
+    assert t.lock_roe == pytest.approx(lock) and t.exit_price == pytest.approx(want * (1 - side * SLIP), rel=1e-12)
+    assert t.pnl > 0 and t.leverage == lev
+    twin = run(acct(None, exit_="tp3R|2", role=RX.ROLE_BASE), path, side)
+    assert not twin.trades                                                                       # E0 sits through the same fall
+    # below the first trigger there is no lock: the same path one band lower than +12% leaves the position open
+    low, _t, _j = _lock_path(lev, side, -1)                    # the band below +12% + 5% x 0 is [+7%, +12%)
+    assert not run(a, low, side).trades
+
+
+@SIDES
+def test_f13_a_keeps_the_picks_take_profit_and_the_lock_does_not_pre_empt_it(side):
+    """F13.a on a 3R pick: a climb through +3R exits at the take-profit (maker) after the lock stepped up behind it, never as a LOCK; F13.b has
+    no take-profit and stays in the position with its lock far up."""
+    path = Path().hold(0, 0)
+    for dj, a_, b_ in ((10, 0, R), (20, R, 2 * R), (30, 2 * R, 2.5 * R), (40, 2.5 * R, 4 * R)):
+        path.bar(J0 + dj, o=a_, c=b_, b=b_, w=a_).hold(J0 + dj + 1, b_)
+    ea = run(acct("F13.a", exit_="tp3R|2"), path, side)
+    assert len(ea.trades) == 1 and ea.trades[0].exit_reason == "TP" and ea.trades[0].exit_price == pytest.approx(P0 + side * 3 * R)
+    assert ea.trades[0].exit_time == at(J0 + 40) + MIN - 1
+    eb = run(acct("F13.b", exit_="tp3R|2"), path, side)
+    assert not eb.trades and eb.position is not None and eb.position.lock_roe is not None and eb.position.lock_roe >= 0.25
+
+
+@SIDES
+def test_f13_a_restart_in_the_middle_of_a_locked_position_gives_the_same_trade(side):
+    """Engine state through json (the league's database) after the lock was raised: the restored position keeps its stop, its lock and its funding,
+    and exits exactly as the uninterrupted run does."""
+    for mode in ("a", "b"):
+        a = acct(f"F13.{mode}", exit_="tp3R|2")
+        lev = _probe_leverage(a, side)
+        path, top, jx = _lock_path(lev, side, 2)
+        path.fund[J0 + 11] = 0.0004                          # funding paid while locked
+        want = run(a, path, side).trades
+        assert len(want) == 1
+        steps = path.steps(side)
+        cut = next(k for k, (t, _b, _f) in enumerate(steps) if t == at(J0 + 12))
+        e = RX.make_engine(a, BR, SP)
+        PS.replay_day({a["id"]: e}, set(), {C0: [(a["id"], sig(C0, side, aid=a["id"]))]}, steps[:cut], BR)
+        assert e.position is not None and e.position.lock_roe is not None and e.position.stop_price != e.position.stop_initial
+        snap = json.loads(json.dumps(engine_state(e)))
+        e2 = RX.make_engine(a, BR, SP)
+        restore_engine(e2, snap)
+        assert e2.position.lock_roe == e.position.lock_roe and e2.position.stop_price == e.position.stop_price
+        PS.replay_day({a["id"]: e2}, {a["id"]}, {}, steps[cut:], BR)
+        got = e2.trades
+        assert len(got) == 1 and (got[0].exit_time, got[0].exit_reason, got[0].exit_price, got[0].pnl, got[0].lock_roe) == (
+            want[0].exit_time, want[0].exit_reason, want[0].exit_price, want[0].pnl, want[0].lock_roe)
+
+
+def test_f13_chunk_rule_hands_in_signals_only_with_the_lock_exits_stop_and_no_chart_record():
+    """No ``RuleClose`` and no rule seed for F13: the signals of the three accounts carry the pick's stop distance and the style label; the twins'
+    signals are those of the other rule leagues."""
+    accts = RX.accounts(_rule_cands("15m", "tp3R|2"), cfg_of("F13.a"))
+    by, notes = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, START, START + 2 * DAY, START)
+    items = [(aid, o) for v in by.values() for aid, o in v]
+    assert items and not any(isinstance(o, RX.RuleClose) for _a, o in items)
+    new = [(aid, o) for aid, o in items if aid.rsplit("-", 1)[1] in ("n", "nq", "nflip")]
+    twin = [(aid, o) for aid, o in items if aid.rsplit("-", 1)[1] in ("e", "eq")]
+    assert new and twin
+    for aid, o in new:
+        assert o.meta["style"] == "rule:F13.a" and "rx0" not in o.meta and o.meta["stop_dist"] == pytest.approx(2.0 * o.atr)
+    assert all("style" not in o.meta for _a, o in twin)
+    flat = lambda rows: sorted((c, o.symbol, o.side, o.meta["stop_dist"]) for c, o in rows)         # noqa: E731
+    base_n = [(c, o) for c, v in by.items() for aid, o in v if aid.endswith("-nq")]
+    base_e = [(c, o) for c, v in by.items() for aid, o in v if aid.endswith("-eq")]
+    assert flat(base_n) == flat(base_e) and base_n                    # the lock account is offered the pick's signals, at the pick's stop distance
+
+
+@pytest.fixture(scope="module")
+def lock_whole(tmp_path_factory):
+    lg = _league(tmp_path_factory.mktemp("lk") / "a.db", rule="F13.a", exit_="tp3R|2")
+    lg.advance(START + 3 * DAY)
+    return lg
+
+
+def test_f13_in_the_league_trades_by_lock_and_leaves_the_twins_alone(lock_whole):
+    rows = _trades(lock_whole)
+    by = {}
+    for a, _e, _x, reason, _p in rows:
+        by.setdefault(a, set()).add(reason)
+    pid = "core-S2-15m-1"
+    for suffix in ("-n", "-nq", "-nflip"):
+        assert "RULE" not in by.get(pid + suffix, set()) and by.get(pid + suffix)
+    assert any("LOCK" in by.get(pid + s, set()) for s in ("-n", "-nq", "-nflip"))
+    assert "LOCK" not in by.get(pid + "-eq", set()) and "LOCK" not in by.get(pid + "-e", set())
+    assert all(type(lock_whole.engines[pid + s]) is X.LadderTP for s in ("-n", "-nq", "-nflip"))
+    assert lock_whole.engines[pid + "-nq"].s.tiers[0].margin_frac == pytest.approx(0.125) and lock_whole.engines[pid + "-n"].s.tiers[0].margin_frac == 0.5
+    t = next(json.loads(d) for a, d in lock_whole.conn.execute("SELECT account, data FROM trades") if a == pid + "-nq")
+    assert t["strategy_style"] == "rule:F13.a"
+    snap_rows = {r["id"]: r for r in RN.account_rows(lock_whole.conn, lock_whole.accts, lock_whole.engines)}
+    assert snap_rows[pid + "-nq"]["rule"] == "F13.a" and "계단" in snap_rows[pid + "-nq"]["rule_ko"] and snap_rows[pid + "-nq"]["exit"] == "tp3R|2"
+    # F13.a changes the trades against E0 (the lock exits where E0 sits on)
+    assert [(r[1], r[2], r[3]) for r in rows if r[0] == pid + "-nq"] != [(r[1], r[2], r[3]) for r in rows if r[0] == pid + "-eq"]
+
+
+def test_f13_a_day_at_once_equals_pieces_and_restarts_between_them(tmp_path, lock_whole):
+    many = _league(tmp_path / "b.db", rule="F13.a", exit_="tp3R|2")
+    for t in range(START + RN.FIVE, START + 3 * DAY + 1, 11 * RN.FIVE):
+        many.advance(t)
+    many.advance(START + 3 * DAY)
+    assert _trades(many) == _trades(lock_whole) and len(_trades(lock_whole)) > 20
+    # restarts at awkward times, and at the 5-minute mark before the exit of a trade that closed by its lock: the position is open then, with its lock raised
+    locks = sorted({(r[2] // RN.FIVE) * RN.FIVE - RN.FIVE for r in _trades(lock_whole)
+                    if r[3] == "LOCK" and r[0].rsplit("-", 1)[1] in ("n", "nq", "nflip") and r[2] - r[1] > 6 * RN.FIVE})
+    assert len(locks) >= 4
+    cum, times = START, set(locks[:: max(1, len(locks) // 8)][:8])
+    for step in (7, 3, 25, 1, 40, 13, 90, 5, 60, 31, 17, 44):
+        cum += step * RN.FIVE
+        times.add(cum)
+    lg = _league(tmp_path / "c.db", rule="F13.a", exit_="tp3R|2")
+    locked_open = 0
+    for t in sorted(times):
+        lg.advance(t)
+        locked_open += sum(1 for e in lg.engines.values() if e.position is not None and e.position.lock_roe is not None)
+        lg = _league(tmp_path / "c.db", rule="F13.a", exit_="tp3R|2")
+        assert lg.done == t and lg.restore_notes == []                  # audit_restored finds no rule state to recompute and nothing to correct
+    lg.advance(START + 3 * DAY)
+    assert _trades(lg) == _trades(lock_whole)
+    assert locked_open >= 3                                              # restarts came while locked positions were open, and the trades are the same
+
+
+def test_f13_b_in_the_league_is_the_rule_bots_exit(tmp_path):
+    """F13.b through the whole league (signals from chunk_rule, 1m steps, the database) equals the plain 'ladder|2' engine of candleague.exits fed the
+    same signals: the rule bot's own exit."""
+    lg = _league(tmp_path / "d.db", rule="F13.b", exit_="tp3R|2")
+    lg.advance(START + 2 * DAY)
+    pid = "core-S2-15m-1"
+    reasons = {r[3] for r in _trades(lg) if r[0] == pid + "-nq"}
+    assert reasons <= {"LOCK", "SL", "LIQ"} and "TP" not in reasons
+    by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), lg.rule_accts, TP.SYMS, START, START + 2 * DAY, START)
+    only = {c: [(aid, o) for aid, o in items if aid == pid + "-nq" and isinstance(o, Signal)] for c, items in by.items()}
+    ref = X.make_engine("ladder|2", TP.BRACKETS, TP.SPECS, book=pid + "-nq", size=0.25)
+    steps = TP._steps_from(DATA)(None, list(TP.SYMS), START, START + 2 * DAY)
+    PS.replay_day({pid + "-nq": ref}, set(), {c: v for c, v in only.items() if v}, steps, TP.BRACKETS)
+    got = [(w[1], w[2], w[3], w[4]) for w in _trades(lg, {pid + "-nq"})]
+    assert got == [(t.entry_time, t.exit_time, t.exit_reason, round(t.pnl, 8)) for t in ref.trades] and got
