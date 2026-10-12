@@ -119,12 +119,13 @@ export function pace5y(c, d) {
 }
 /** Why the league trades fewer than the 5-year pace (one sentence, every place the pace shows). */
 export const PACE_WHY = "5년 시험은 여섯 코인의 신호를 모두 셌고(동시에 여러 개도), 리그 계좌는 한 번에 포지션 하나만 들고 있어서 그동안 온 신호는 건너뜁니다. 그래서 이 속도는 ‘많아야’ 숫자이고, 실제가 더 적은 게 보통입니다.";
-/** "5년 시험 속도(최대): 하루 약 0.3번 · 지금쯤 많아야 약 3번 (실제 2번) · 11/11까지 많아야 약 10번 · 30번은 빨라도 01/15쯤". */
+/** "하루 약 0.3번 → 지금쯤 많아야 약 3번 (실제 2번) · 11/11까지 많아야 약 10번 · 30번은 빨라도 01/15쯤" (after a
+ *  "5년 시험 속도(많아야) vs 지금" label). */
 export function paceLine5y(c, d) {
   const p = pace5y(c, d);
   if (!p) return h("span", {class: "muted"}, "5년 시험 거래 수 없음");
   const first = p.at[0];
-  return h("span", {class: "pc-line", title: PACE_WHY}, `5년 시험 속도(최대) 하루 약 ${fmt.num(p.rate, 2)}번 → 지금쯤 많아야 약 ${fmt.num(p.expect, p.expect < 10 ? 1 : 0)}번 (실제 ${fmt.int(p.actual)}번)`,
+  return h("span", {class: "pc-line", title: PACE_WHY}, `하루 약 ${fmt.num(p.rate, 2)}번 → 지금쯤 많아야 약 ${fmt.num(p.expect, p.expect < 10 ? 1 : 0)}번 (실제 ${fmt.int(p.actual)}번)`,
     first ? ` · ${fmt.mmdd(first.ms)}까지 많아야 약 ${fmt.int(Math.round(first.n))}번` : "",
     p.actual >= 30 ? " · 30번 넘음" : p.past30 ? ` · 30번은 빨라도 ${fmt.mmdd(p.day30)}쯤이었음 (지남)` : ` · 30번은 빨라도 ${fmt.mmdd(p.day30)}쯤`,
     p.ratio != null && p.ratio > 2 ? h("b", {class: "warn"}, " · 시험 때보다 꽤 빠름") : null,
