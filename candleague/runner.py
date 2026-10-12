@@ -524,7 +524,7 @@ def judge(rows: list[dict]) -> dict:
         extra = {"band": band} if band else {}
         base = by_id.get(f"base-{r['kind']}-{r['name']}-{r['tf']}")
         flip = by_id.get(f"{r['id']}-flip")
-        if base is None and flip is None:   # a league without 기본값 and 동전 accounts (the owner-exit league): no CONTRACT 2 verdict
+        if r.get("role_ko") and base is None and flip is None:   # the owner-exit league (no 기본값, no 동전): no CONTRACT 2 verdict
             out[r["id"]] = {"verdict": "na", "trades": r["trades"], **extra}
             continue
         if r["trades"] < MIN_TRADES or r["mean_ret"] is None:
