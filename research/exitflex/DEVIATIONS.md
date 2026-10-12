@@ -48,3 +48,17 @@ E.0 item 2 and TW.10).
   `require_check` skips that entry. A test in `test_twins.py` covers a rerun of check whose file carries the earlier
   line. Extra tests: 183 passed. No rule and no twin computation changes, and no twin output was opened.
 * Then: the new lines of `twins.py` and `test_twins.py` under this entry, `check` again, its line, `report`, `audit`.
+
+## [look] 2026-10-12 21:45 UTC 2026-10-13 06:45 KST
+
+* After the confirm (commit 80729e7: choice.json and confirm.json hashed, DeepSeek F2.n50.b FAIL), the owners asked
+  which strategy had the best month (x4.30 at live size in X-014) and for its full record. That needs the per-account
+  result files, which sections 7 and 14 say nobody opens.
+* The main session opens only the core picks' E0 files (`E0__q25.npz`, `E0__q100.npz`, select period 2021-2023)
+  to build a per-pick table for the owners. No variant file, no DeepSeek file, no placebo file and no confirm-period
+  file is opened.
+* Every decision of this study is already hashed: the choice, the confirm and its report. This look changes no rule,
+  gate, choice or result of the study. It is recorded as a look under section 14.
+* What it can still influence is later work. The conditional-rules study now being designed (research/condrules) uses
+  2021-2023 as its select period on these picks. That study's pre-registration records this look, and its menu and
+  portfolio rules may not use per-pick results.
