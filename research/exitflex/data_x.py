@@ -590,14 +590,14 @@ class PickData:
 
 
 # ------------------------------------------------------------------ test T3: the last 50 chart bars before a cut
-def snapshot(provider, market: Market, cut_ms: int, picks_list: list, n_last: int = 50, widths=(2, 3, 5), emas=(10, 20, 50)) -> dict:
+def snapshot(provider, symbols, cut_ms: int, picks_list: list, n_last: int = 50, widths=(2, 3, 5), emas=(10, 20, 50)) -> dict:
     """The arrays test T3 compares between cut and full data: for every coin and timeframe the last ``n_last`` chart bars
     that close at or before ``cut_ms``: close ms, OHLC, ATR14, EMA(10, 20, 50), the swing flags with their confirmation bar
     (bars whose swing is not confirmed by the last bar read -1), the starting references of F1, F1's reference path from
     each of these bars to the last bar (long and short), the 15m bars, and for every pick its two signal flags and its two
     leverage groups on those bars. Returned as a flat dict of numpy arrays."""
     out = {}
-    for sym in market.symbols:
+    for sym in symbols:
         for tf in TFS:
             df, close = provider.frame(sym, tf)
             close = np.asarray(close, np.int64)
@@ -628,7 +628,7 @@ def snapshot(provider, market: Market, cut_ms: int, picks_list: list, n_last: in
                 out[key + f"ref_long{w}"] = rl
                 out[key + f"ref_short{w}"] = rs
     for p in picks_list:
-        for c, sym in enumerate(market.symbols):
+        for c, sym in enumerate(symbols):
             df, close = provider.frame(sym, p["tf"])
             close = np.asarray(close, np.int64)
             i_last = int(np.searchsorted(close, cut_ms, side="right")) - 1

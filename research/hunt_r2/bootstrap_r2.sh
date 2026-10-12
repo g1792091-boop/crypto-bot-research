@@ -22,7 +22,7 @@
 #   HUNT_R2_DRYENV=<file> bash bootstrap_r2.sh --dry-run [run|status|idle|update <commit>|push]
 # The file sets HUNT_R2_BASE, HUNT_R2_REPO (scratch) and any of: HUNT_R2_PY, HUNT_R2_CMD (the hunt_r2 command line),
 # HUNT_R2_DATA_CMD (data_hunt), HUNT_R2_DATA, HUNT_R2_SELFCHECK_TESTS, HUNT_R2_TMUX (e.g. "tmux -L r2reh"),
-# HUNT_R2_RETRY_SLEEP, HUNT_R2_READS_HOURS, HUNT_R2_INBOX, HUNT_R2_GO, HUNT_R2_DRY_WAIT (no go commit: hand over to
+# HUNT_R2_RETRY_SLEEP, HUNT_R2_READS_WALL_S (a short reads wall), HUNT_R2_INBOX, HUNT_R2_GO, HUNT_R2_DRY_WAIT (no go commit: hand over to
 # wait_go_r2.sh as a real run does), HUNT_R2_PUSH_REHEARSAL (push to the scratch clone's origin).
 set -uo pipefail
 
@@ -82,8 +82,11 @@ LOG=$BASE/run.log
 GO=${HUNT_R2_GO:-}
 WORKERS=${HUNT_R2_WORKERS:-8}         # download threads
 RSLEEP=${HUNT_R2_RETRY_SLEEP:-30}
+TICK=20                               # seconds between the reads wall checks
+[ "$DRYRUN" = 1 ] && TICK=${HUNT_R2_TICK:-$TICK}
 READS_HOURS=12                        # PREREG 9.1: the reads stop at 12 hours wall
-[ "$DRYRUN" = 1 ] && READS_HOURS=${HUNT_R2_READS_HOURS:-12}
+READS_WALL_S=$(( READS_HOURS * 3600 ))
+[ "$DRYRUN" = 1 ] && READS_WALL_S=${HUNT_R2_READS_WALL_S:-$READS_WALL_S}      # rehearsal only: a short wall
 PIN_REL=research/hunt_r2/PREREG_HUNT_R2.sha256
 OUT=research/hunt_r2/out
 PICKS_REL=$OUT/picks.json
@@ -818,8 +821,8 @@ stop_tree() {                # stop_tree <pid>: the step and its pool workers (f
 reads_once() {               # reads_once <procs>: one reads run within the wall left; 0 done, 1 failed, 124 wall
   local procs=$1 used left rc=0 to t0 timed=""
   used=$(cat "$BASE/READS_USED_S" 2>/dev/null || echo 0)
-  left=$(( READS_HOURS * 3600 - used ))
-  [ "$left" -le 60 ] && return 124
+  left=$(( READS_WALL_S - used ))
+  [ "$left" -le 5 ] && return 124
   sub "참고 분석 (r=1%·대조 → 주말 → 목표판 순서; 끝난 모듈은 건너뜀; ${READS_HOURS}시간 중 $(( left / 60 ))분 남음, 작업 ${procs}개)"
   "${R2[@]}" reads --data "$DATA" --private "$PRIV" --procs "$procs" >>"$LOG" 2>&1 &
   to=$!
@@ -827,11 +830,11 @@ reads_once() {               # reads_once <procs>: one reads run within the wall
   trap 'stop_tree "$to"; exit 1' HUP INT TERM      # a pane kill or Ctrl+C stops the read with the run
   while kill -0 "$to" 2>/dev/null; do              # the wall counts running time only, over restarts
     echo $(( used + $(date +%s) - t0 )) > "$BASE/READS_USED_S"
-    if [ $(( used + $(date +%s) - t0 )) -ge $(( READS_HOURS * 3600 )) ]; then
+    if [ $(( used + $(date +%s) - t0 )) -ge "$READS_WALL_S" ]; then
       timed=1; stop_tree "$to"; sleep 5; pkill -KILL -P "$to" 2>/dev/null; kill -KILL "$to" 2>/dev/null
       break
     fi
-    sleep 20
+    sleep "$TICK"
   done
   wait "$to" || rc=$?
   trap - HUP INT TERM

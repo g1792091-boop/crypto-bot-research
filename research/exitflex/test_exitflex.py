@@ -84,10 +84,12 @@ def write_folder(path, coins: dict):
     return path
 
 
-def path_coin(segments, p0=100.0, start_ms=DX.PERIOD_MS["select"][0], gaps=(), spread=0.0, fund_at=None):
+def path_coin(segments, p0=100.0, start_ms=DX.PERIOD_MS["select"][0], gaps=(), spread=0.0, fund_at=None, opens=None,
+              highs=None, lows=None):
     """A hand-built path: ``segments`` = [(minutes, target price), ...] linear in the last price from the previous
     close; open = the previous close; high / low = the extremes of open and close widened by ``spread``. ``gaps`` = minute
-    offsets to delete. ``fund_at`` = {minute offset: funding rate}. Mark = last price."""
+    offsets to delete. ``fund_at`` = {minute offset: funding rate}. ``opens`` / ``highs`` / ``lows`` = {minute offset: price}
+    overrides (an open gap, a spike up, a spike down). Mark = last price."""
     cl, prev = [], p0
     for n, tgt in segments:
         for k in range(1, n + 1):
@@ -96,7 +98,13 @@ def path_coin(segments, p0=100.0, start_ms=DX.PERIOD_MS["select"][0], gaps=(), s
     cl = np.array(cl)
     n = len(cl)
     o = np.r_[p0, cl[:-1]]
+    for m, v in (opens or {}).items():
+        o[m] = v
     h, lo = np.maximum(o, cl) + spread, np.minimum(o, cl) - spread
+    for m, v in (highs or {}).items():
+        h[m] = max(h[m], v)
+    for m, v in (lows or {}).items():
+        lo[m] = min(lo[m], v)
     ts = start_ms + np.arange(n, dtype=np.int64) * MIN
     fund = np.zeros(n)
     for k, r in (fund_at or {}).items():
@@ -532,3 +540,531 @@ def compare_trade(mk, prov, pdata, v, off, q, **kw):
         if rec["ref"] is not None and not (math.isnan(row[7]) and False) and abs(row[7] - rec["ref"]) > 1e-9 * max(1, abs(rec["ref"])):
             bad.append(f"check {kk}: ref level kernel {row[7]} ref {rec['ref']}")
     return bad
+
+
+# ====================================================================================================== scenarios
+START = DX.PERIOD_MS["select"][0]
+FILL_SLIP = 0.0002
+
+
+def mirror(segments, p0):
+    """The mirror image of a hand-built path around 100 (long scenarios become short ones)."""
+    return [(n, 200.0 - t) for n, t in segments], 200.0 - p0
+
+
+def hours(*knots, p0=100.0, hour=60):
+    """Segments that end hour b at knots[b] (linear inside the hour)."""
+    return [(hour, k) for k in knots], p0
+
+
+def pad_to(segments, minutes_multiple=240, extra_hours=6, price=None, hour=60):
+    n = sum(m for m, _ in segments)
+    last = segments[-1][1] if price is None else price
+    out = list(segments) + [(hour * extra_hours, last)]
+    n += hour * extra_hours
+    rest = (-n) % minutes_multiple
+    if rest:
+        out.append((rest, last))
+    return out
+
+
+class Scen:
+    """A one-coin world with hand-built prices and signals; the pick's timeframe tf; ATR14 = ``atr`` on every bar."""
+
+    def __init__(self, tmp, segments, p0=100.0, tf="1h", exit_name="tp3R|4", longs=(), shorts=(), atr=0.3, ema=None, gaps=(),
+                 fund_at=None, best=False, scale=0.25, sig_fn=None, side_mirror=False, opens=None, highs=None, lows=None,
+                 pad=True):
+        if side_mirror:
+            segments, p0 = mirror(segments, p0)
+            longs, shorts = shorts, longs
+            if ema is not None:
+                ema = 200.0 - np.asarray(ema, float)
+            opens = {m: 200.0 - v for m, v in (opens or {}).items()}
+            highs, lows = ({m: 200.0 - v for m, v in (lows or {}).items()}, {m: 200.0 - v for m, v in (highs or {}).items()})
+        seg = pad_to(segments, {"15m": 15, "30m": 30, "1h": 60, "4h": 240}[tf]) if pad else list(segments)
+        self.coin = path_coin(seg, p0, gaps=gaps, fund_at=fund_at, opens=opens, highs=highs, lows=lows)
+        self.p0 = p0
+        lb, sb = set(longs), set(shorts)
+
+        def sig(sym, df, lb=lb, sb=sb):
+            n = len(df)
+            a, b = np.zeros(n, bool), np.zeros(n, bool)
+            for i in lb:
+                a[i] = True
+            for i in sb:
+                b[i] = True
+            return a, b
+        ema_fn = None
+        if ema is not None:
+            ema_arr = np.asarray(ema, float)
+            ema_fn = lambda df, n, ea=ema_arr: np.resize(ea, len(df)) if len(ea) < len(df) else ea[:len(df)]  # noqa: E731
+        self.mk, self.prov, self.pd = build_world({"BTCUSDT": self.coin}, tmp, pick=make_pick(tf, exit_name),
+                                                  prov_kw=dict(sig=sig_fn or sig, atr_const=atr, ema_fn=ema_fn, warm=False,
+                                                               best_fn=(lambda s, df: (np.full(len(df), best), np.full(len(df), best)))))
+        self.scale = scale
+        self.off = self.pd.offered("select", self.mk)
+
+    def offset(self, ts_ms):
+        return int((ts_ms - START) // MIN)
+
+    def trade(self, vid, q=0, trace_rows=64, **kw):
+        v = KX.variant_by_id(vid)
+        out, num, den, trace = call_trade_x(self.mk, self.pd, v, self.off, q, scale=self.scale, trace_rows=trace_rows, **kw)
+        j = out[1]
+        return {"d": out[0], "j": j, "off": self.offset(self.mk.cat["ts"][j]), "reason": out[2], "lev": out[3], "px": out[4],
+                "checks": out[5], "both": out[6], "num": num, "den": den, "trace": trace, "v": v}
+
+    def account(self, vid, **kw):
+        v = KX.variant_by_id(vid)
+        r = KX.simulate(self.mk, self.pd, v, self.scale, "select", **kw)
+        return r
+
+    def open_at(self, offset):
+        i = int(np.searchsorted(self.mk.cat["ts"], START + offset * MIN))
+        return float(self.mk.cat["o"][i])
+
+
+def expect_exit(s, t, offset, reason=KX.R_RULE, side=1):
+    """The trade left at minute ``offset`` (minutes after the data start) by ``reason`` at that open with slippage."""
+    assert t["reason"] == reason, (KX.REASON_NAMES[t["reason"]], t["off"])
+    assert t["off"] == offset, (t["off"], offset)
+    if reason in (KX.R_RULE, KX.R_RAND, KX.R_END):
+        assert t["px"] == pytest.approx(s.open_at(offset) * (1 - side * FILL_SLIP), rel=1e-12)
+
+
+def costs(S):
+    return S[0], S[1], S[5], S[19]
+
+
+# ====================================================================================================== T2: rule paths
+MIR = [False, True]
+H = lambda *knots: [(60, k) for k in knots]            # noqa: E731  hour b ends at knots[b]
+FLAT = 100.0
+
+
+def side_of(mir):
+    return -1 if mir else 1
+
+
+def last_offset(s):
+    return s.offset(s.mk.cat["ts"][-1])
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f4_chandelier_level_and_timing(tmp_path, vendor, mir):
+    seg = H(100, 100, 100, 101.0, 101.2, 100.6)
+    s = Scen(tmp_path, seg, longs=[2], side_mirror=mir)
+    assert len(s.off["coin"]) == 1 and s.off["side"][0] == side_of(mir)
+    t = s.trade("F4.m1.5.a")                       # X = 101.2, level = 101.2 - 1.5 x 0.3 = 100.75; closes 101.0, 101.2, 100.6
+    expect_exit(s, t, 360, side=side_of(mir))
+    assert t["checks"] == 3 and t["trace"][2, 0] > 0
+    assert t["trace"][0, 2] == 0 and t["trace"][1, 2] == 0 and t["trace"][2, 2] == 1      # not before the third check
+    t = s.trade("F4.m3.a")                         # level 100.3: never reached; the hard stop and take-profit are far
+    expect_exit(s, t, last_offset(s), KX.R_END, side=side_of(mir))
+    # q15: the same drop inside an hour is seen at the first 15m close after it, levels still from the hour chart
+    seg2 = H(100, 100, 100, 101.0, 101.2) + [(15, 100.6), (45, 100.6)]
+    s2 = Scen(tmp_path / "q", seg2, longs=[2], side_mirror=mir)
+    expect_exit(s2, s2.trade("F4.m1.5.a"), 360, side=side_of(mir))
+    t = s2.trade("F4.m1.5.a.q15")
+    expect_exit(s2, t, 315, side=side_of(mir))
+    assert t["checks"] == 9
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f1_start_reference_ratchet_and_no_reference(tmp_path, vendor, mir):
+    seg = ([(60, 100), (60, 100), (30, 99.5), (30, 100), (60, 101.0)] + H(101, 101, 101) + H(101, 101)
+           + [(20, 100.7), (40, 101.0)] + H(101, 101) + H(101, 101) + [(20, 100.5), (40, 101.0)] + H(101, 101)
+           + [(5, 100.65), (55, 100.65)])
+    s = Scen(tmp_path, seg, longs=[6], side_mirror=mir)
+    assert s.off["i0"][0] == 6
+    sd = side_of(mir)
+    t = s.trade("F1.w2.a")
+    expect_exit(s, t, 1080, side=sd)                # 100.65 < 100.7: the swing at bar 9 raised the reference from 99.5
+    tr = t["trace"]
+    c = lambda x: 200.0 - x if mir else x             # noqa: E731
+    assert tr[3, 7] == pytest.approx(c(99.5))         # k = 4 (bar 10): still the reference at entry (highest swing low)
+    assert tr[4, 7] == pytest.approx(c(100.7))        # k = 5 (bar 11): the swing at bar 9 is confirmed and higher
+    assert tr[9, 7] == pytest.approx(c(100.7))        # k = 10 (bar 16): a lower swing (100.5) does not lower it
+    assert t["checks"] == 11
+    t = s.trade("F1.w3.a")                            # no swing before entry; the swing at bar 9 is known at bar 12
+    expect_exit(s, t, 1080, side=sd)
+    t = s.trade("F1.w5.a")                            # no reference until bar 19: nothing to break
+    expect_exit(s, t, last_offset(s), KX.R_END, side=sd)
+    assert np.isnan(t["trace"][0, 7])
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f2_arm(tmp_path, vendor, mir):
+    ema = np.full(40, 101.0)
+    seg = H(100, 100, 100, 100.5, 100.6, 101.5, 100.8)
+    s = Scen(tmp_path, seg, longs=[2], ema=ema, side_mirror=mir)
+    t = s.trade("F2.n20.a")                           # bought below the average: closes below it do not fire until armed
+    expect_exit(s, t, 420, side=side_of(mir))
+    assert t["checks"] == 4
+    ema2 = np.full(40, 99.0)
+    s2 = Scen(tmp_path / "b", H(100, 100, 100, 98.9), longs=[2], ema=ema2, side_mirror=mir)
+    expect_exit(s2, s2.trade("F2.n20.a"), 240, side=side_of(mir))      # armed at entry (above the average): first close below
+
+
+def acct(s, vid, **kw):
+    r = s.account(vid, **kw)
+    out = []
+    for q in range(len(r.status)):
+        out.append(dict(status=int(r.status[q]), side=int(s.off["side"][q]), reason=int(r.reason[q]),
+                        entry=s.offset(r.entry_ts[q]) if r.status[q] == 1 else None,
+                        exit=s.offset(r.exit_ts[q]) if r.status[q] == 1 else None, bar=int(s.off["i0"][q])))
+    return r, out
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f3_reversal_and_both_flags(tmp_path, vendor, mir):
+    seg = H(100, 100, 100, 100.5, 100.8, 100.6, 100.0, 100.0)
+    sd = side_of(mir)
+    s = Scen(tmp_path, seg, longs=[2], shorts=[5], side_mirror=mir)
+    r, a = acct(s, "F3.a")                            # the opposite signal closes the position and is entered at that open
+    assert [x["status"] for x in a] == [1, 1]
+    assert a[0]["reason"] == KX.R_RULE and a[0]["exit"] == 360 and a[1]["entry"] == 360
+    assert a[0]["side"] == sd and a[1]["side"] == -sd
+    assert MT.summarize(r, MT.month_edges("select"))["counts"][MT.COUNT_NAMES.index("entries_at_rule_minute")] == 1
+    r, a = acct(s, "E0")                              # without the rule the second signal finds the account busy
+    assert [x["status"] for x in a] == [1, 0]
+    # both flags on one bar: the long is offered first
+    s2 = Scen(tmp_path / "b", seg, longs=[2, 5], shorts=[5], side_mirror=mir)
+    r, a = acct(s2, "F3.a")
+    assert [x["status"] for x in a] == [1, 1, 0]
+    assert a[0]["exit"] == 360 and a[0]["reason"] == KX.R_RULE and a[1]["entry"] == 360 and a[1]["side"] == 1
+    assert a[2]["side"] == -1 and a[2]["bar"] == 5
+    # the long that re-enters after a long closed is "no reversal"; after a short closed it is the reversal
+    assert (a[0]["side"] == 1) == (not mir)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f5_f8_arms_and_giveback_net_r(tmp_path, vendor, mir):
+    seg = H(100, 100, 100, 101.5, 101.0, 100.7)
+    s = Scen(tmp_path, seg, longs=[2], side_mirror=mir)
+    sd = side_of(mir)
+    S = s.mk.S(0.25)
+    rt = S[5]
+    raw = 100.0 if not mir else 100.0
+    fill = raw * (1 + sd * FILL_SLIP)
+    R_ = 4 * 0.3
+
+    def rn(p):                                         # net R of the long path (the mirror has the same numbers)
+        p = 200 - p if mir else p
+        return (sd * (p - fill) - fill * rt) / R_
+    P_hi = 101.5
+    rpk, rc2, rc3 = rn(P_hi), rn(101.0), rn(100.7)
+    assert rpk >= 1 and rc2 > 0.5 * rpk and rc3 <= 0.5 * rpk and rc2 <= 0.75 * rpk       # the hand-computed numbers
+    t = s.trade("F5.P1.g50.a")                         # armed at the first close (Rpk 1.12 >= 1), fires at 0.45 <= 0.56
+    expect_exit(s, t, 360, side=sd)
+    assert t["trace"][0, 9] == pytest.approx(rpk) and t["trace"][1, 8] == pytest.approx(rc2) and t["trace"][2, 8] == pytest.approx(rc3)
+    t = s.trade("F5.P1.g25.a")                         # keeps 75%: 0.70 <= 0.84 at the second close
+    expect_exit(s, t, 300, side=sd)
+    t = s.trade("F5.P1.5.g50.a")                       # never armed: Rpk 1.12 < 1.5
+    expect_exit(s, t, last_offset(s), KX.R_END, side=sd)
+    t = s.trade("F5.P2.g25.a")
+    expect_exit(s, t, last_offset(s), KX.R_END, side=sd)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f8_arm_then_break(tmp_path, vendor, mir):
+    base = ([(60, 100), (60, 100), (30, 99.5), (30, 100), (60, 101.0)] + H(101, 101, 101) + H(101, 101)
+            + [(20, 100.7), (40, 101.0)] + H(101, 101))
+    # the break at bar 12 comes before any gain: F1 fires there, F8 (needs a 1R gain first) does not
+    seg = base + [(5, 100.6), (55, 100.6)] + H(102.8) + [(5, 100.5), (55, 100.5)]
+    s = Scen(tmp_path, seg, longs=[6], side_mirror=mir)
+    sd = side_of(mir)
+    expect_exit(s, s.trade("F1.w2.a"), 780, side=sd)
+    t = s.trade("F8.w2.P1.a")                          # armed at bar 13 (X = 102.8 >= 101.02 + 1.2 + costs), fires at bar 14
+    expect_exit(s, t, 15 * 60, side=sd)
+    t = s.trade("F8.w2.P2.a")                          # 2R needs X >= 103.6: never armed
+    expect_exit(s, t, last_offset(s), KX.R_END, side=sd)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f6_loss_cut_only_below_minus_d(tmp_path, vendor, mir):
+    pre = ([(60, 100), (60, 100), (30, 99.5), (30, 100), (60, 101.0)] + H(101, 101, 101) + H(101, 101)
+           + [(20, 100.7), (40, 101.0)] + H(101, 101))
+    sd = side_of(mir)
+    sA = Scen(tmp_path / "a", pre + [(5, 100.6), (55, 100.6)], longs=[6], side_mirror=mir)    # Rc = -0.47: a small loss
+    expect_exit(sA, sA.trade("F6.w2.d0"), 780, side=sd)
+    expect_exit(sA, sA.trade("F6.w2.d0.5"), last_offset(sA), KX.R_END, side=sd)               # not below -0.5
+    sB = Scen(tmp_path / "b", pre + [(5, 100.35), (55, 100.35)], longs=[6], side_mirror=mir)  # Rc = -0.68
+    expect_exit(sB, sB.trade("F6.w2.d0"), 780, side=sd)
+    expect_exit(sB, sB.trade("F6.w2.d0.5"), 780, side=sd)
+    t = sA.trade("F6.w2.d0")
+    raw = 200.0 - 101.0 if mir else 101.0
+    fill = raw * (1 + sd * FILL_SLIP)
+    px = 200.0 - 100.6 if mir else 100.6
+    assert t["trace"][5, 8] == pytest.approx((sd * (px - fill) - fill * sA.mk.S(0.25)[5]) / 1.2, rel=1e-9)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f7_time_stop_is_time_not_bars(tmp_path, vendor, mir):
+    seg = H(*([100] * 18))
+    s = Scen(tmp_path, seg, longs=[2], side_mirror=mir)
+    expect_exit(s, s.trade("F7.N12.a"), 900, side=side_of(mir))                  # C0 + 12 bars = 180 + 720
+    s2 = Scen(tmp_path / "g", seg, longs=[2], gaps=list(range(480, 540)), side_mirror=mir)   # bar 8 does not exist
+    t = s2.trade("F7.N12.a")
+    expect_exit(s2, t, 900, side=side_of(mir))                                   # still 12 hours later, not the 12th existing bar
+    t = s.trade("F7.N48.b")                                                      # never: the period end closes it
+    expect_exit(s, t, last_offset(s), KX.R_END, side=side_of(mir))
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f9_either_side_and_not_otherwise(tmp_path, vendor, mir):
+    sd = side_of(mir)
+    pre = [(60, 100)] * 4 + [(30, 99.8), (30, 100)] + [(60, 100)] * 4        # swing low 99.8 at bar 4 (w = 3), i0 = 8
+    # (i) a gain of >= 1R, then a close below the reference: F8 part
+    sA = Scen(tmp_path / "a", pre + H(101.5) + H(99.7), longs=[8], side_mirror=mir)
+    t = sA.trade("F9.a")
+    expect_exit(sA, t, 11 * 60, side=sd)
+    # (ii) a small loss below the reference (-0.3R) and unarmed: nothing; then a loss deeper than 0.5R: the F6 part
+    sB = Scen(tmp_path / "b", pre + H(99.7) + H(99.5), longs=[8], side_mirror=mir)
+    t = sB.trade("F9.a")
+    expect_exit(sB, t, 11 * 60, side=sd)
+    assert t["trace"][0, 2] == 0 and t["trace"][0, 7] == pytest.approx(200 - 99.8 if mir else 99.8)
+    # (iii) a gain of less than 1R and then a small loss below the reference: nothing
+    sC = Scen(tmp_path / "c", pre + H(100.5) + H(99.7), longs=[8], side_mirror=mir)
+    expect_exit(sC, sC.trade("F9.a"), last_offset(sC), KX.R_END, side=sd)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f10_stall_only_in_profit(tmp_path, vendor, mir):
+    sd = side_of(mir)
+    s = Scen(tmp_path, H(100, 100, 100, 101.0) + H(*([101.0] * 12)), longs=[2], side_mirror=mir)
+    t = s.trade("F10.N6.a")                           # the last new extreme is the minute 239; 600 - 239 >= 360 at bar 9's close
+    expect_exit(s, t, 600, side=sd)
+    assert t["checks"] == 7
+    expect_exit(s, s.trade("F10.N12.a"), 960, side=sd)
+    s2 = Scen(tmp_path / "l", H(100, 100, 100) + H(*([99.9] * 14)), longs=[2], side_mirror=mir)    # a loss after costs
+    expect_exit(s2, s2.trade("F10.N6.a"), last_offset(s2), KX.R_END, side=sd)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_minute_j_never_enters_its_own_decision(tmp_path, vendor, mir):
+    sd = side_of(mir)
+    # F4: X = 101.2, level 100.75, the close 100.8 is above it; a spike high at the check minute 360 would raise X to 103
+    seg = H(100, 100, 100, 101.0, 101.2, 100.8, 100.8, 100.8)
+    s = Scen(tmp_path / "a", seg, longs=[2], highs={360: 103.0}, side_mirror=mir)
+    t = s.trade("F4.m1.5.a")
+    expect_exit(s, t, 420, side=sd)                   # the spike counts from the next check on (103 - 0.45 = 102.55 > 100.8)
+    assert t["trace"][2, 2] == 0 and t["checks"] == 4
+    # F5: Rpk = 0.53 < 1 at the check; a spike to 102 at minute 360 would arm it and 0.03 <= 0.5 x Rpk would fire
+    seg = H(100, 100, 100, 100.8, 100.8, 100.2, 100.3, 100.3)
+    s = Scen(tmp_path / "b", seg, longs=[2], highs={360: 102.0}, side_mirror=mir)
+    expect_exit(s, s.trade("F5.P1.g50.a"), 420, side=sd)
+    # F10: stalled since minute 239; at the check minute 600 a new high would reset the clock
+    s = Scen(tmp_path / "c", H(100, 100, 100, 101.0) + H(*([101.0] * 12)), longs=[2], highs={600: 101.5}, side_mirror=mir)
+    expect_exit(s, s.trade("F10.N6.a"), 600, side=sd)
+
+
+F3_SEG = H(100, 100, 100, 100.5, 100.8, 100.6, 100.0, 100.0)        # the F3 check is at bar 5's close = minute 360
+
+
+@pytest.mark.parametrize("mir", MIR)
+@pytest.mark.parametrize("kind", ["stop_gap", "tp_gap", "liquidation"])
+def test_t2_gaps_at_the_check_minute_beat_the_rule_and_do_not_free_the_minute(tmp_path, vendor, mir, kind):
+    sd = side_of(mir)
+    opens = {"stop_gap": {360: 98.0}, "tp_gap": {360: 104.0}, "liquidation": {360: 90.0}}[kind]
+    s = Scen(tmp_path, F3_SEG, longs=[2], shorts=[5], opens=opens, side_mirror=mir)
+    t = s.trade("F3.a")
+    o360 = s.open_at(360)
+    if kind == "stop_gap":
+        assert t["reason"] == KX.R_SL and t["off"] == 360
+        assert t["px"] == pytest.approx(o360 * (1 - sd * FILL_SLIP), rel=1e-12)
+    elif kind == "tp_gap":
+        assert t["reason"] == KX.R_TP and t["off"] == 360 and t["px"] == pytest.approx(o360, rel=1e-12)
+    else:
+        assert t["reason"] == KX.R_LIQ and t["off"] == 360 and t["px"] == 0.0
+    # the check is in neither the numerator nor the denominator of the hazard
+    assert t["den"].sum() == 2 and t["num"].sum() == 0            # only the checks of bars 3 and 4 (the position was open)
+    r, a = acct(s, "F3.a")
+    assert [x["status"] for x in a] == [1, 0]                      # the opposite signal fills at 360 and is skipped
+    assert a[0]["exit"] == 360 and a[0]["reason"] != KX.R_RULE
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_rule_comes_before_the_range_of_its_own_minute(tmp_path, vendor, mir):
+    sd = side_of(mir)
+    s = Scen(tmp_path, F3_SEG, longs=[2], shorts=[5], lows={360: 97.0}, side_mirror=mir)     # touches the stop (98.8) later in 360
+    t = s.trade("F3.a")
+    expect_exit(s, t, 360, KX.R_RULE, side=sd)                   # a rule exit at the open, not an SL at the stop
+    s = Scen(tmp_path / "e", F3_SEG, longs=[2], shorts=[5], lows={359: 98.0}, side_mirror=mir)   # touched in the minute before the check
+    t = s.trade("F3.a")
+    assert t["reason"] == KX.R_SL and t["off"] == 359
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_funding_is_paid_at_the_exit_minute_and_costs(tmp_path, vendor, mir):
+    sd = side_of(mir)
+    s = Scen(tmp_path, F3_SEG, longs=[2], shorts=[5], fund_at={360: 0.01}, side_mirror=mir)
+    t = s.trade("F3.a")
+    expect_exit(s, t, 360, KX.R_RULE, side=sd)
+    S = s.mk.S(0.25)
+    taker, slip = S[0], S[1]
+    raw = s.open_at(180)
+    fill = raw * (1 + sd * slip)
+    stop = raw - sd * 4 * 0.3
+    ok, lev, margin, qty, liq = K._size.py_func(S, s.mk.brs[0], 5000.0, sd, fill, stop, 0.3, False, s.mk.qty_steps[0],
+                                                 s.mk.min_notionals[0])
+    assert ok
+    pay = sd * qty * s.open_at(360) * 0.01                        # the mark open of the exit minute
+    price = t["px"]
+    want = sd * qty * (price - fill) - qty * price * taker - qty * fill * taker - pay
+    assert t["d"] == pytest.approx(want, rel=1e-9)
+
+
+def test_t2_period_end_closes_and_rule_wins_the_same_minute(tmp_path, vendor):
+    seg = H(*([100] * 15)) + [(1, 100)]                             # 901 minutes: the last minute is the open of bar 15
+    s = Scen(tmp_path, seg, longs=[2], pad=False)
+    assert s.mk.ts(0)[-1] == START + 900 * MIN
+    t = s.trade("F7.N12.a")                                          # the check of bar 14's close is on the last minute
+    expect_exit(s, t, 900, KX.R_RULE)
+    t = s.trade("F7.N24.a")
+    expect_exit(s, t, 900, KX.R_END)
+    t = s.trade("E0")
+    expect_exit(s, t, 900, KX.R_END)
+    # a signal that fills on the last minute is not offered
+    s2 = Scen(tmp_path / "x", seg, longs=[2, 14], pad=False)
+    assert len(s2.off["coin"]) == 1
+
+
+def test_t2_merged_checks_missing_minutes_and_same_minute_entry(tmp_path, vendor):
+    seg = [(15 * 30, 100)]
+    gaps = list(range(119, 134))                                     # bar 7's last minute and bar 8's first 14 minutes
+    s = Scen(tmp_path, seg, tf="15m", longs=[4], shorts=[7], gaps=gaps, pad=False)
+    assert [int(x) for x in s.off["fill"]] == [START + 75 * MIN, START + 135 * MIN]
+    r, a = acct(s, "F3.a")
+    # closes of bars 7 (120) and 8 (135) map to one minute (the one after the lone minute 134): one check, on bar 8
+    assert a[0]["reason"] == KX.R_RULE and a[0]["exit"] == 135 and a[1]["entry"] == 135 and a[1]["status"] == 1
+    t = s.trade("F3.a")
+    assert t["checks"] == 3
+    # the same path without the gap: the opposite signal is seen at its own close
+    s2 = Scen(tmp_path / "n", seg, tf="15m", longs=[4], shorts=[7], pad=False)
+    r, a = acct(s2, "F3.a")
+    assert a[0]["exit"] == 120 and a[1]["entry"] == 120
+
+
+def test_t2_q15_on_15m_and_30m_picks_equals_the_base_variant(tmp_path, vendor):
+    for tf in ("15m", "30m"):
+        coins = {"BTCUSDT": synth_coin(31, 12, 100.0, vol=0.0006, drop=0.01)}
+        mk, prov, pd_ = build_world(coins, tmp_path / tf, pick=make_pick(tf), prov_kw=dict(warm=False))
+        off = pd_.offered("select", mk)
+        assert len(off["coin"]) > 10
+        for base, q in (("F1.w3.a", "F1.w3.a.q15"), ("F4.m2.b", "F4.m2.b.q15"), ("F9.a", "F9.a.q15")):
+            for qq in range(0, len(off["coin"]), 3):
+                a = call_trade_x(mk, pd_, KX.variant_by_id(base), off, qq)[0]
+                b = call_trade_x(mk, pd_, KX.variant_by_id(q), off, qq)[0]
+                assert a == b
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_only_rule_and_placebo_exits_free_their_minute(tmp_path, vendor, mir):
+    # an ordinary intrabar stop at minute 360 does not free the fill at 360's open; the rule exit does
+    seg = H(100, 100, 100, 100.5, 100.8, 100.6, 100.0, 100.0)
+    s = Scen(tmp_path / "a", seg, longs=[2], shorts=[5], lows={360: 97.0}, side_mirror=mir)
+    r, a = acct(s, "F3.a")
+    assert a[0]["reason"] == KX.R_RULE and a[1]["status"] == 1
+    s = Scen(tmp_path / "b", seg, longs=[2], shorts=[5], opens={359: 100.6}, lows={359: 97.0}, side_mirror=mir)
+    r, a = acct(s, "F3.a")
+    assert a[0]["reason"] == KX.R_SL and a[0]["exit"] == 359 and a[1]["status"] == 1
+
+
+# ====================================================================================================== T1: parity
+def acct_world(seed, ncoins=2, days=25, nsig=140, vol=0.0009):
+    prices = [100.0, 3000.0, 60.0, 0.1, 80.0, 250.0]
+    coins = [synth_coin(seed * 10 + i, days, prices[i], vol=vol, drop=0.006) for i in range(ncoins)]
+    mk = DX.Market.from_arrays(coins, EX)
+    rng = np.random.default_rng(seed)
+    rows = []
+    for c in range(ncoins):
+        ts = coins[c]["ts"]
+        for _ in range(nsig):
+            j = int(rng.integers(50, len(ts) - 300))
+            side = int(rng.choice([-1, 1]))
+            px = float(coins[c]["o"][j])
+            tp = px * (1 + side * rng.uniform(0.004, 0.03)) if rng.random() < 0.7 else np.nan
+            rows.append((int(ts[j]) + int(rng.integers(0, 3)) * MIN, c, side, px * rng.uniform(0.001, 0.008), bool(rng.random() < 0.5), tp))
+    rows.sort(key=lambda r: (r[0], r[1]))
+    sig = dict(close=np.array([r[0] for r in rows], np.int64), coin=np.array([r[1] for r in rows], np.int64),
+               side=np.array([r[2] for r in rows], np.int64), atr=np.array([r[3] for r in rows]),
+               best=np.array([r[4] for r in rows]), tp=np.array([r[5] for r in rows]))
+    return mk, sig
+
+
+def kernel_account(mk, sig, S, ex_args):
+    return K.account(S, mk.brs, mk.cat["ts"], mk.cat["o"], mk.cat["h"], mk.cat["l"], mk.cat["mo"], mk.cat["mh"], mk.cat["ml"],
+                     mk.cat["fund"], mk.starts, mk.ends, sig["coin"], sig["close"], sig["side"], sig["atr"], sig["best"],
+                     mk.qty_steps, mk.min_notionals, *ex_args, sig["tp"])
+
+
+def kx_account(mk, sig, S, ex_args, force_end=False, rp=None, chart=None, plc=False, hz=None, seed=0, ends=None):
+    PT, PF, QT = chart or KX.empty_chart()
+    z = np.zeros(len(mk.symbols), np.int64)
+    num, den = KX.new_counts()
+    return KX.account_x(S, mk.brs, mk.cat["ts"], mk.cat["o"], mk.cat["h"], mk.cat["l"], mk.cat["mo"], mk.cat["mh"], mk.cat["ml"],
+                        mk.cat["fund"], mk.starts, mk.ends if ends is None else ends, sig["coin"], sig["close"], sig["side"],
+                        sig["atr"], sig["best"], np.zeros(len(sig["coin"]), np.int64), mk.qty_steps, mk.min_notionals, *ex_args,
+                        sig["tp"], force_end, KX.rp_vector() if rp is None else rp, PT, PF, z, z, QT, z, z, plc,
+                        np.zeros((KX.N_AGE, 2, 2)) if hz is None else hz, seed, num, den)
+
+
+@pytest.mark.parametrize("scale", [0.25, 1.0])
+def test_t1_account_parity_all_84_exits(scale):
+    kinds = set()
+    for seed, vol in ((3, 0.0009), (4, 0.004)):                    # a calm world and a wild one (liquidations, locks)
+        mk, sig = acct_world(seed, vol=vol)
+        S = mk.S(scale)
+        for e in range(len(K.EXITS)):
+            ex_args = K.exit_args(e)
+            st, pnl, ext, rs, lv, w = kernel_account(mk, sig, S, ex_args)
+            o = kx_account(mk, sig, S, ex_args)
+            assert np.array_equal(st, o[0]) and np.array_equal(pnl, o[1]) and np.array_equal(ext, o[3])
+            assert np.array_equal(rs, o[4]) and np.array_equal(lv, o[5]) and w == o[7], K.EXITS[e][0]
+            kinds |= set(rs[st == 1].tolist())
+            assert o[0].dtype == st.dtype and o[4].dtype == rs.dtype
+    assert {K.R_SL, K.R_TP, K.R_LIQ, K.R_LOCK} <= kinds                # the kernel's own reasons were exercised
+
+
+def test_t1_trade_parity_both_sides_both_groups_with_gaps_and_funding():
+    mk, sig = acct_world(7, ncoins=2, days=30, nsig=60)
+    n, nonrej = 0, 0
+    for scale in (0.25, 1.0):
+        S = mk.S(scale)
+        for e in range(0, len(K.EXITS), 3):
+            a = K.exit_args(e)
+            for q in range(0, len(sig["coin"]), 5):
+                c = int(sig["coin"][q])
+                s0, s1 = int(mk.starts[c]), int(mk.ends[c])
+                tsc = mk.cat["ts"][s0:s1]
+                ei = K._entry_index(tsc, sig["close"][q])
+                if ei < 0:
+                    continue
+                x = sig["atr"][q]
+                args = (S, mk.brs[c], mk.cat["o"][s0:s1], mk.cat["h"][s0:s1], mk.cat["l"][s0:s1], mk.cat["mo"][s0:s1],
+                        mk.cat["mh"][s0:s1], mk.cat["ml"][s0:s1], mk.cat["fund"][s0:s1], ei, s1 - s0, int(sig["side"][q]),
+                        a[0] * x, x, bool(sig["best"][q]), 5000.0, mk.qty_steps[c], mk.min_notionals[c], *a[1:], sig["tp"][q])
+                ref = K._trade(*args)
+                PT, PF, QT = KX.empty_chart()
+                got = KX._trade_x(S, mk.brs[c], tsc, *args[2:9], ei, s1 - s0, int(sig["side"][q]), a[0] * x, x, bool(sig["best"][q]),
+                                  5000.0, mk.qty_steps[c], mk.min_notionals[c], *a[1:], sig["tp"][q], False, KX.rp_vector(), 0, PT,
+                                  PF, QT, False, np.zeros((KX.N_AGE, 2, 2)), 0, c, *KX.new_counts(), KX.new_trace(0))
+                assert tuple(got[:4]) == tuple(ref)
+                n += 1
+                nonrej += ref[2] != K.R_REJECT
+    assert n > 500 and nonrej > 300
+
+
+def test_t1_period_end_after_data_end_changes_nothing_and_force_end_only_adds_end():
+    mk, sig = acct_world(5)
+    S = mk.S(0.25)
+    ex_args = K.exit_args([e[0] for e in K.EXITS].index("tp3R|3"))
+    a = kx_account(mk, sig, S, ex_args, force_end=False)
+    b = kx_account(mk, sig, S, ex_args, force_end=True, ends=mk.ends)
+    still_open = a[4] == K.R_OPEN
+    assert still_open.any()
+    # the first entered trade is identical until the first one that was open at the data end
+    first_open = int(np.flatnonzero(still_open)[0])
+    assert np.array_equal(a[1][:first_open], b[1][:first_open]) and np.array_equal(a[4][:first_open], b[4][:first_open])
+    assert b[4][first_open] == KX.R_END and b[3][first_open] == mk.ts(int(sig["coin"][first_open]))[-1]

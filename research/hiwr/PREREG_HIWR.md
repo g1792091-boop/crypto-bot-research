@@ -552,6 +552,12 @@ with n < 150 counts as 0.
 * `picks.json` holds each pick's full definition and its SEL f*.
 * The sha256 of `picks.json` is appended to the pin before any TEST data is downloaded. The confirm stage refuses
   otherwise.
+* The append is local to the compute server, which goes straight on to the confirm stage (17.4). That is enough
+  because the pinned code itself enforces the order: it refuses the confirm stage without the picks line, writes a
+  marker holding the picks' hash into the confirm-kit folder before its first download, and refuses a folder that
+  already holds files. The pin with the picks line, `picks.json`, the marker, the stage times and the code stamp are
+  pushed together with the results and made public there, as in the hunt. `select` never runs again once
+  `data_manifest_test.json` or `test.json` exists.
 * **Pairs that are not picks are never run on TEST.**
 
 ## 11. Controls (100,000 seeds each, through the same exits)
@@ -597,8 +603,11 @@ signal bar, and S5's p moved from 0.0012 to 0.0025 (`feas/B_control_clustering.c
 
 How T6 works:
 * p_boot is the one-sided week-block bootstrap p of mean r > 0. Trades are grouped by the UTC week (starting Monday)
-  of their signal-bar close. 100,000 resamples; p = (1 + resamples with mean <= 0) / 100,001; seeded as in section 11
-  with "boot" in place of s. Its floor, like p_a's and p_b's, is about 1.0e-5 (section 11, why 100,000).
+  of their signal-bar close; the resample draws, with replacement, as many weeks as hold trades, from those weeks only
+  (as the full grid's `run.boot_mean_p`). 100,000 resamples; p = (1 + resamples with mean <= 0) / 100,001; numpy
+  PCG64 seeded with the first 8 bytes of sha256("hiwr|boot|<period>|<pick id>|boot"). Its floor, like p_a's and
+  p_b's, is about 1.0e-5 (section 11, why 100,000).
+* A pick without a TEST trade has no mean: p_a = p_b = p_boot = 1 and T5 fails (it fails T0 anyway).
 * Core and DeepSeek picks form one family.
 * A pick that fails T0 stays in the family with p = 1.
 * Taking the largest of the three p-values is an intersection-union test: a pick passes only if it passes all three
@@ -617,6 +626,15 @@ How T6 works:
     printed. This is how the hunt handles them (`PREREG_HUNT_WIDE.md` §11).
   - The p floor is about 1.0e-5 (section 11), so Holm at 0.05 can reject a hypothesis of this study while the ledger
     holds up to 5,000.
+  - **Never over a smaller family.** The hunt's test files are read where its push publishes them
+    (`research/hunt/results/hunt/{v1,wide}/test.json`, its server's `research/hunt/out/...` as a fallback; every tested
+    pick is a row); the hunt's DeepSeek p-values come from its private `wide_test_private.json`; the program's other
+    hypotheses (the O1-O4 reads, later rounds) from a list, `research/hiwr/ledger_extra.json` or `--ledger-extra` (an
+    empty list states that there is none). While any source is missing or any row has no p, the ledger is printed as
+    **incomplete**: it lists what is missing and gives no BH or Holm count or label. A missing hypothesis is never
+    dropped or set to a p. Every input file's sha256 is printed.
+  - The ledger never changes a verdict, so `hiwr ledger` recomputes it whenever a missing source or a later round
+    arrives (from the stored p-values; no test-period data is read). Each version is kept (`ledger_v<k>.json`).
 * **Two tracks, one test period.** Track 1 and track 2 use the same 33 months, so the chance that at least one pick of
   either passes by luck is larger than for either alone. The results page says so beside both verdicts and never merges
   them into one "track 2 passed".
@@ -637,7 +655,7 @@ How T6 works:
 | **R8 goal board** | monthly multiples at f* by the month bootstrap of `research/fullgrid/sizing.py` (4 weekly blocks drawn, 10,000 draws): P(month >= x2, x5, x10, x100), median month; the 33-month compounding |
 | **R9 DD bootstrap** | the 95th percentile of the week-block bootstrap max DD (8.4) and the share of paths over the cap, at f* and at f_path, on SEL and on TEST; the TEST account at f_path (the Q8 alternative) |
 | **R10 flat by Saturday** | open positions closed at Saturday 00:00 UTC |
-| **R11 splits and counts** | per year, per side, per coin; hold times; liquidations; skipped candidates by reason (weekend, stop inside TP, no stop room, minimum notional, bracket cut, busy, open at end) |
+| **R11 splits and counts** | per year, per side, per coin; hold times; liquidations; skipped candidates by reason (weekend, no entry or ATR, no stop room, stop inside TP, minimum notional, bracket cut, busy, open at end) |
 | **R12 live sizes** | the effect of quantity steps at $100, $300 and $500 wallets |
 | **R13 streaks** | the distribution of losing streaks (for `max_consecutive_losses` live) |
 | **R14 forward band** | the 5th..95th percentile of TEST rolling windows of 50, 100 and 200 trades (win rate, mean r) and of 30-day account multiples. Computed once with the verdict, hashed before any paper account uses it |
@@ -830,7 +848,10 @@ The loss autopsy measured the rule bot's chosen side beating a coin flip in exac
 Rules after the result:
 * **Nothing is tuned after TEST is seen.**
 * **A bug** (the code not doing what this file says) found after the test run is fixed in `DEVIATIONS.md`, citing the
-  line it breaks. The test is rerun once, both results are shown, and the rerun's verdict is the verdict.
+  line it breaks. The test is rerun once, both results are shown, and the rerun's verdict is the verdict. The pinned v1
+  code has no rerun path on purpose (it refuses a changed module and a second `test`): the fix and a rerun step that
+  writes `test_rerun.json` beside `test.json` are a reviewed change under a new pin, `DEVIATIONS.md` listed in it,
+  with the picks and the confirm kit unchanged.
 * **Any changed rule is a v2.** That covers the TP reading, grids, buffer, size rule, entry conditions and K. A v2 is
   designed and selected on 2021-2023 only and judged as section 13 says.
 
@@ -854,8 +875,8 @@ Rules after the result:
   - half-size twin (f* / 2).
 
   An account that reaches its DD cap stops and is marked failed.
-* **Forward criteria before any real money** (all must hold). Data count only from the day this file's pin and the
-  picks' hash exist.
+* **Forward criteria before any real money** (all must hold). Data count only from the day the results, with the pin
+  holding the picks line, are pushed (10.6).
   - (a) At least 100 forward trades.
   - (b) A replay of the same days from the archive reproduces at least 99% of the paper trades (entry, exit kind, exit
     minute).
@@ -892,17 +913,18 @@ Rules after the result:
 
 ## 17. Code, compute plan, reproducibility
 
-### 17.1 Code (none written yet)
+### 17.1 Code (written 2026-10-12, under review)
 
-The code is written now that the questions are closed (section 21), then reviewed, then pinned. It lives in
-`research/hiwr/`:
-* `data.py`: a copy of the full grid's `data.py` for the 30 symbols, with month bounds.
+The code lives in `research/hiwr/`:
+* `data.py`: a copy of the full grid's `data.py` for the 30 symbols, with month bounds, the span check (3) and the
+  one-coin-at-a-time `kit` step.
 * `walk.py`: numba exit-event tables per coin and timeframe. One 1m pass finds the first event of every stop, every TP
   (both fills) and every liquidation level. It is taken from the scratch prototype.
-* `acct.py`: trade-list statistics; the one-at-a-time account with brackets and caps; the 1m mark-to-market DD; the f*
-  bisection.
-* `hiwr.py`: the command line (`datapin`, `datacheck`, `select`, `test`, `report`, `reads`, `pinlist`).
-* `bootstrap.sh` and `SERVER_KO.md`.
+* `acct.py`: trade-list statistics; the one-at-a-time account with brackets and caps; the 1m mark-to-market DD; the
+  f_path and f* scans (8.4).
+* `hiwr.py`: the command line (`datapin`, `datacheck`, `select`, `test`, `reads`, `ledger`, `report`, `pinlist`).
+* `reads.py`: R1-R14, imported only after `test.json` exists.
+* `bootstrap.sh`, `wait_go.sh` and `SERVER_KO.md`: the server kit (17.4).
 
 **Tests** (`tests/test_hiwr_*.py`):
 * walk against an independent per-minute loop;
@@ -916,13 +938,21 @@ The code is written now that the questions are closed (section 21), then reviewe
 * the mark-to-market DD on synthetic paths (the exit-minute rule and the peak-before-the-minute rule of 8.3), that the
   realized DD never exceeds it, and that f_path and f* fall as DD rises;
 * the week-block bootstrap of 8.4 against a slow per-path loop;
-* the control groups of section 11 (joint flips per bar and side; clusters moved whole), the seeds and the bootstrap.
+* the f_path / f* scans on accounts whose drawdown is not monotone in f, and the scan speed-up against the plain scan;
+* the control groups of section 11 (joint flips per bar and side; clusters moved whole), the seeds and the bootstrap;
+* the ledger's incomplete rule, the eligibility files per mode, the data spans and the one-coin kit;
+* the server kit in a scratch folder (`tests/test_hiwr_kit.py`: the waiter, the restart line, `update`).
 
-**Imported read-only from `research/fullgrid`:**
-* from `run.py`: `frame`/`build_frame`, `core_module`, `default_combo`, `cell_grid`, `signals`, `ds_module`,
-  `_vendor_fg().atr`, `run_pool`, `combo_neighbours`, `WARMUP_BARS`;
-* `grid.py` and `memo.py`;
-* from `kernel.py`: `_entry_index`, `_liq`, `_bracket`, `bracket_arrays`.
+**Imported read-only from `research/fullgrid`** (`run.py` loaded once under its own module name):
+* from `run.py`: `frame`/`build_frame`, `core_module`, `default_combo`, `cell_grid`, `cells`, `signals`, `ds_module`,
+  `_vendor_fg().atr`, `run_pool`, `combo_neighbours`, `bh`, `WARMUP_BARS`, `TF_MS`, `CHUNK`, `CHUNK_OF`, `COST`, and
+  the caches `_LAST_SERIES` / `_DS_CACHE` (cleared when the frame folder changes);
+* `run.minute_data` and `run.FRAME_DIR` are swapped at run time, never edited: `data.build_frame` points
+  `minute_data` at the period-cut arrays for one call, and `data.use_frames` points `FRAME_DIR` at hiwr's own frame
+  folder with a `minute_data` that refuses (a missing frame is never built from the full grid's data);
+* `grid.py` and `memo.py` (through `run.py`);
+* from `kernel.py`: `_entry_index`, `_liq`, `_bracket`, `bracket_arrays`;
+* from `paperbot/margin.py`: `Brackets.from_binance` (the bracket tables of exchange30.json).
 
 **No pinned file of another study is edited.** Three traps to avoid:
 * `run.SYMBOLS` and `run.exchange()` know only the six coins, so hiwr passes its own symbol list and brackets.
@@ -932,8 +962,13 @@ The code is written now that the questions are closed (section 21), then reviewe
 ### 17.2 Storage layout
 
 A per-coin, per-config stats file, as the full grid used, would come to about 190 GB at 30 coins. Instead:
-* A task is a (cell, combo chunk); coins are the outer loop and combos the inner loop, so the memo still works per coin.
-* Per pair, only float64 sums are stored: n, wins, sum r, sum r at cost x2, wins at cost x2. That is about 6-13 GB.
+* A task is a (cell, combo chunk); coins are the outer loop and combos the inner loop, so the indicator memo works
+  per coin over the whole chunk. A chunk is the whole cell, except the cells the full grid splits (`run.CHUNK_OF`) and
+  three whose indicators the memo barely reuses (`hiwr.GRID_CHUNK_OF`: N22_VORTEX_PSAR in 729-combo chunks,
+  N04_ST_KLINGER and N10_HA_PSAR in 2,187), so that no task runs far longer than the rest (17.4). Splitting a
+  memo-heavy cell by combos would only cost more: each chunk starts its memo cold. Results do not depend on the split.
+* Per pair, only float64 sums are stored, six of them: n, wins, sum r, and at cost x2 n, sum r and wins (a trade that
+  resolves at cost x1 can be open at the end at cost x2, so the cost-x2 mean is sum r x2 / n x2). That is about 6-15 GB.
 * Disk stays under 30 GB, and RAM is about 1.8 GB per worker.
 
 ### 17.3 Pin
@@ -947,7 +982,8 @@ The pin lists exactly what `python -m research.hiwr.hiwr pinlist` prints:
   hold them;
 * `research/entry_study/DEFS_BC.sha256`;
 * `research/hunt/universe30.json` and `research/hunt/exchange30.json`;
-* `research/hiwr/data_manifest_sel.json` and `research/hiwr/data_check_sel.json`.
+* `research/hiwr/data_manifest_sel.json` and `research/hiwr/data_check_sel.json` (made on the development machine,
+  section 3).
 
 Later lines are appended in this order: `picks.json`, then `data_manifest_test.json`, then the reads modules (listed
 before `test.json` exists).
