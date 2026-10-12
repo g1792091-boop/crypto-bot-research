@@ -21,7 +21,7 @@ import {h, put} from "./dom.js";
 import {getJSON} from "./api.js";
 import * as fmt from "./fmt.js";
 import {markOf, liveState, serverNow, noteServerMs} from "./live.js";
-import {ROLE_SHORT, KIND_KO, sideKo, coinShort} from "./labels.js";
+import {ROLES, ROLE_SHORT, KIND_KO, sideKo, coinShort, onLineup} from "./labels.js";
 
 export const POS_MS = 30000;
 export const SNAP_WARN_S = 12 * 60;                // older than this: the freshness line turns orange
@@ -148,6 +148,12 @@ export const POS_GROUPS = [
   {id: "all", ko: "전체"}, {id: "cand", ko: "후보"}, {id: "quarter", ko: "1/4"}, {id: "exitonly", ko: "청산만"},
   {id: "base", ko: "기본값"}, {id: "flip", ko: "동전"}, {id: "core", ko: KIND_KO.core}, {id: "ds", ko: KIND_KO.ds},
 ];
+const POS_DEFAULT = POS_GROUPS.slice();
+// the owner-exit league (labels.js applyLineup): its own account kinds instead of 후보 · 1/4 · 청산만 · 기본값 · 동전
+onLineup((lu) => {
+  POS_GROUPS.splice(0, POS_GROUPS.length, ...(lu ? [{id: "all", ko: "전체"}, ...ROLES.map((r) => ({id: r, ko: ROLE_SHORT[r]})),
+    {id: "core", ko: KIND_KO.core}, {id: "ds", ko: KIND_KO.ds}] : POS_DEFAULT));
+});
 export function inGroup(p, id) {
   if (!id || id === "all") return true;
   if (id === "core" || id === "ds") return p.kind === id;

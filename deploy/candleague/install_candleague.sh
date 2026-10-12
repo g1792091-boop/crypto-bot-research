@@ -141,9 +141,14 @@ chmod -R u+rwX,g+rX,g-w,o-rwx "$APP.new"
 echo "== selfcheck of the new code (before the swap; as user candleague)"
 CANDS=0
 [ -f "$APP.new/candleague/data/candidates.json" ] && CANDS=1
+# the league's rules file (owners 2026-10-12: the owner-exit accounts) and the install time the restart wrote down: the selfcheck
+# reads the accounts the engine will run (a rules file that cannot be run stops here, before the swap) and the backup step checks the start
+RULES_VAL="$(envval CANDLEAGUE_RULES)"
+EXPECT_VAL="$(envval CANDLEAGUE_EXPECT_START)"
 set +e
 SC_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LIB" \
-  PYTHONDONTWRITEBYTECODE=1 "$VENV/bin/python" -c '
+  PYTHONDONTWRITEBYTECODE=1 ${RULES_VAL:+CANDLEAGUE_RULES="$RULES_VAL"} "$VENV/bin/python" -c '
+import os
 import sys
 from paperbot import sweepsig
 sweepsig.lib()                                     # the locked signal library loads (hash-checked)
@@ -154,6 +159,8 @@ print(len(candidates.ds_defs().DEFS), "DeepSeek definitions load")
 if sys.argv[1] == "1":
     c = candidates.load()
     print(f"{len(c)} candidates ok")
+    accts = runner.league_accounts(os.environ.get("CANDLEAGUE_RULES", ""), c)     # refuses a rules file that cannot be run
+    print(f"{len(accts)} accounts" + (" (rules file)" if any(a.get("rule") for a in accts) else ""))
 print("selfcheck ok")
 ' "$CANDS" 2>&1)"
 SC_RC=$?
@@ -193,7 +200,8 @@ if [ -f "$LEAGUE_DB" ] && [ "$CANDS" = 1 ]; then
   set +e
   BK_OUT="$(cd "$APP.new" && runuser -u candleague -- env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME="$LIB" \
     PYTHONDONTWRITEBYTECODE=1 CANDLEAGUE_DB="$LEAGUE_DB" ${CAND_FILE:+CANDLEAGUE_CANDIDATES="$CAND_FILE"} \
-    ${START_VAL:+CANDLEAGUE_START="$START_VAL"} "$VENV/bin/python" -m candleague backup 2>&1)"
+    ${START_VAL:+CANDLEAGUE_START="$START_VAL"} ${RULES_VAL:+CANDLEAGUE_RULES="$RULES_VAL"} \
+    ${EXPECT_VAL:+CANDLEAGUE_EXPECT_START="$EXPECT_VAL"} "$VENV/bin/python" -m candleague backup 2>&1)"
   BK_RC=$?
   set -e
   printf '%s\n' "$BK_OUT" | tail -n 8

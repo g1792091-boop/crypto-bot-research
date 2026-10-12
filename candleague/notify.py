@@ -7,7 +7,10 @@ is caught up (a catch-up finds them in past prices: they wait for it), and after
 from the league's start (2026-10-12: from the install time) one '🔄 새로 시작' notice once it has caught up, with the new
 record's bust and warning counts in it instead of separate bust and warning notices for that span. Token and chat from
 the environment (CANDLEAGUE_TG_TOKEN, CANDLEAGUE_TG_CHAT: 1-4 chat ids, comma separated); without them nothing is sent.
-DeepSeek money follows the snapshot (CANDLEAGUE_DS_MONEY, shown by default since the owners' 2026-10-11 request)."""
+DeepSeek money follows the snapshot (CANDLEAGUE_DS_MONEY, shown by default since the owners' 2026-10-11 request).
+The owner-exit league (owners 2026-10-12, the snapshot's ``lineup``) says in the summary, per pool, each exit's trades, win share,
+mean per trade and median hold, and how many picks each exit leads by wallet; a bust names the account's kind in the owners' words
+('도지 봇 15분 이동평균 이탈')."""
 
 from __future__ import annotations
 
@@ -47,9 +50,63 @@ def strat_ko(name: str) -> str:
 
 
 def pick_ko(r: dict) -> str:
-    """'도지 봇 15분' (+ the role when it is not the pick itself)."""
+    """'도지 봇 15분' (+ the role when it is not the pick itself; in the owner-exit league always its kind: '도지 봇 15분 이동평균 이탈')."""
     s = f"{strat_ko(r['name'])} {TF_KO.get(r['tf'], r['tf'])}"
+    if r.get("role_ko"):
+        return f"{s} {r['role_ko']}"
     return s if r.get("role", "cand") == "cand" else f"{s} {ROLE_KO.get(r['role'], r['role'])}"
+
+
+def best_counts(doc: dict) -> tuple:
+    """Owner-exit league: per pick, which of its accounts has the largest wallet (closed trades; a pick none of whose accounts has
+    closed a trade, or with a hidden or tied wallet, is left out): ({role: picks where it leads}, picks counted, picks left out
+    for hidden money)."""
+    by: dict = {}
+    for a in doc.get("accounts") or []:
+        if a.get("pick") and a.get("role_ko"):
+            by.setdefault(a["pick"], []).append(a)
+    lead, n, hidden = {}, 0, 0
+    for rows in by.values():
+        if any(r.get("wallet") is None for r in rows):
+            hidden += any(r.get("trades") for r in rows)
+            continue
+        if not any(r.get("trades") for r in rows):
+            continue
+        top = max(r["wallet"] for r in rows)
+        win = [r for r in rows if abs(r["wallet"] - top) < 1e-9]
+        if len(win) != 1:
+            continue
+        n += 1
+        lead[win[0]["role"]] = lead.get(win[0]["role"], 0) + 1
+    return lead, n, hidden
+
+
+def owner_lines(doc: dict) -> list[str]:
+    """The owner-exit league's part of the 09:00 summary: per pool every exit's trades, win share, mean per trade (hidden for
+    DeepSeek unless its money is shown) and median hold hours, then how many picks each exit leads by wallet."""
+    lu = doc.get("lineup") or []
+    w = doc.get("watch") or {}
+    lines = ["", "청산 비교 (같은 신호 · 계좌마다 $5,000에서 시작)"]
+    for kind, ko in (("core", "기존 36"), ("ds", "딥시크")):
+        p = (w.get("pools") or {}).get(kind)
+        if not p or not p.get("picks"):
+            continue
+        lines += ["", f"{ko} 묶음 (후보 {p['picks']}개)"]
+        for x in lu:
+            st = (p.get("roles") or {}).get(x["role"]) or {}
+            hold = (p.get("hold") or {}).get(x["role"]) or {}
+            n, wins = int(st.get("n") or 0), int(st.get("wins") or 0)
+            mean = "금액 숨김" if not p.get("money") else f"한 번 평균 {_pct(st.get('mean'))}"
+            win = f"승률 {round(100 * wins / n)}%" if n else "승률 -"
+            held = "" if hold.get("median_h") is None else f" · 보유 중앙 {hold['median_h']:.1f}시간"
+            lines.append(f"  {x['label_ko']}: 거래 {n:,}번 · {win} · {mean}{held}")
+    lead, n, hidden = best_counts(doc)
+    if n:
+        lines += ["", f"후보마다 잔고 1등 ({n}개 후보, 닫힌 거래 기준)",
+                  "  " + " · ".join(f"{x['label_ko']} {lead.get(x['role'], 0)}" for x in lu)]
+    if hidden:
+        lines.append(f"(딥시크 후보 {hidden}개는 금액 숨김 설정이라 1등 세기에서 빠짐)")
+    return lines
 
 
 def _pct(x: Optional[float], dec: int = 2) -> str:
@@ -90,6 +147,17 @@ def summary_text(doc: dict, now_ms: Optional[int] = None) -> str:
     nxt = next((c for c in w.get("checkpoints", []) if c.get("days_left", 0) > 0), None)
     if nxt:
         lines.append(f"다음 점검: {nxt['ko'].replace(' 점검', '')} {_kst(nxt['ms'], '%m/%d')} · {int(-(-nxt['days_left'] // 1))}일 남음")
+    if doc.get("lineup"):                                     # the owner-exit league (owners 2026-10-12): the exits side by side
+        lines += owner_lines(doc)
+        busts = sum(1 for r in acc if r["bust"])
+        open_ = sum(1 for r in acc if r.get("open"))
+        warn = sum(1 for j in (doc.get("judge") or {}).values() if (j.get("band") or {}).get("below"))
+        lines += ["", f"경고등 {warn} · 파산 {busts} · 열린 포지션 {open_} (계좌 {len(acc)}개)",
+                  "후보마다 계좌 비교는 대시보드 '5계좌 비교'"]
+        if doc.get("lag_s", 0) > 3600:
+            lines.append(f"⚠ 자료가 {doc['lag_s'] // 3600}시간 늦습니다 (바이낸스 연결 확인)")
+        lines += [f"{NAME} · 종이 매매 (실제 돈 아님)", "", f"{_kst(now_ms)} KST"]
+        return "\n".join(lines)
     for kind, ko in (("core", "기존 36"), ("ds", "딥시크")):
         p = (w.get("pools") or {}).get(kind)
         if not p:

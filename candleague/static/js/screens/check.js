@@ -8,7 +8,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {ROLES, KIND_LONG, tfKo} from "../labels.js";
+import {ROLES, ROLE_KO, KIND_LONG, tfKo, lineupOn} from "../labels.js";
 import * as WK from "../whykit.js";
 
 export async function mount(el, ctx) {
@@ -27,9 +27,24 @@ export async function mount(el, ctx) {
     ui.card({plate: "후보마다 속도 · 연패", sub: "5년 시험(2024-01~2026-09) 속도로 본 ‘많아야’ 거래 수와 지금 · 가장 길게 연달아 진 횟수와 그 승률에서 보통인 길이"}, pace),
     ui.card({plate: "매매법별 묶음", sub: "2차 점검부터: 매매법마다 후보를 모아 2차와 같은 세 조건(평균 > 0 · p < 0.05, 기본값 · 동전보다, 거래 300번) + 16개 BH 10%"}, strat));
 
+  // the owner-exit league (owners 10/12) has no 기본값 or 동전 accounts: WATCH_PREREG's checks do not apply to it; the
+  // warning lights (the pick's own exit against its backtest band) and the paces still do
+  const only = [basis, luck, strat].map((x) => x.closest("section")).filter(Boolean);
   ctx.onLeague((d) => {
     if (!d.accounts || !d.watch) { put(time, ui.none("준비 중")); return; }
     const w = d.watch;
+    const owner = lineupOn();
+    for (const sec of only) sec.hidden = owner;
+    if (owner) {
+      put(time, h("p", null, "지금 리그는 청산 비교 리그입니다 (두 분 2026-10-12): 후보마다 ",
+        ROLES.map((r) => ROLE_KO[r]).join(" · "), " 계좌를 같은 신호로 나란히 돌립니다. 기본값 · 동전 계좌가 없어서 미리 정한 점검(11/11 · 12/11 · 1/11)은 이 리그에 하지 않습니다."),
+      h("p", {class: "note"}, "계좌끼리 비교는 ", h("a", {href: "#/compare"}, "5계좌 비교"), " 화면에 있습니다. 아래 경고등(기존 36 후보의 지금 청산이 백테스트 예상 범위 아래인지)과 속도 · 연패는 그대로 봅니다."));
+      put(core, null); put(ds, null);
+      paintLights(d);
+      put(pace, paceTable(d, INS));
+      WK.loadInsight(ctx).then((x) => { if (x !== INS && ctx.alive()) { INS = x; put(pace, paceTable(LK.league(), INS)); } }).catch(() => { /* streaks stay "—" */ });
+      return;
+    }
     put(time, timeline(w.checkpoints));
     put(core, poolCard("core", w));
     put(ds, poolCard("ds", w));

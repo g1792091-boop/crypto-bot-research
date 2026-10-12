@@ -14,7 +14,7 @@ import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {serverNow} from "../live.js";
-import {ROLES, ROLE_KO, KIND_LONG, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, KIND_LONG, sideKo, reasonKo, coinOf, coinShort, lineupOn} from "../labels.js";
 import {afterBar, afterFills, afterOn, afterSuffix, afterEmpty, openAfter} from "../after.js";
 import {luckShort} from "../whykit.js";
 
@@ -104,6 +104,7 @@ export async function mount(el, ctx) {
   loadAwayTrades();
 
   function paintHero(d) {
+    if (lineupOn()) { paintHeroOwner(d); return; }
     const w = d.watch || {};
     const cps = w.checkpoints || [];
     const next = cps.find((c) => c.days_left > 0) || null;
@@ -130,6 +131,38 @@ export async function mount(el, ctx) {
         h("a", {class: "btn-line", href: "#/custom"}, "커스텀값 보기"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법")));
   }
 
+  /** The owner-exit league (owners 10/12): no pre-registered checkpoint; per pool how many picks each exit leads by wallet. */
+  function paintHeroOwner(d) {
+    const ix = LK.index(d);
+    const H = LK.health(d);
+    const line = (kind) => {
+      const picks = ix.cands.filter((c) => c.kind === kind);
+      if (!picks.length) return null;
+      const lead = {}; let n = 0, hid = 0;
+      for (const c of picks) {
+        const set = ix.sets[c.id];
+        const rows = ROLES.map((r) => set[r]).filter(Boolean);
+        if (rows.some((a) => LK.dsHidden(a))) { hid += 1; continue; }
+        if (!rows.some((a) => a.trades)) continue;
+        const top = Math.max(...rows.map((a) => Number(a.wallet)));
+        const win = rows.filter((a) => Number(a.wallet) === top);
+        if (win.length !== 1) continue;
+        n += 1; lead[win[0].role] = (lead[win[0].role] || 0) + 1;
+      }
+      return h("p", {class: "dl-vline"}, h("b", null, kind === "core" ? "기존 36" : "딥시크"), ` · 후보 ${fmt.int(picks.length)}개 · 잔고 1등 `,
+        n ? ROLES.map((r, i) => h("span", null, i ? " · " : "", LK.roleChip(r, ROLE_SHORT[r]), ` ${fmt.int(lead[r] || 0)}`)) : h("span", {class: "muted"}, "아직 비교할 거래 없음"),
+        hid ? h("span", {class: "muted"}, ` (금액 숨김 ${fmt.int(hid)}개 빼고)`) : null);
+    };
+    put(hero,
+      h("div", {class: "s2a-hrow"}, ui.plate("청산 비교"), h("span", {class: "muted s2a-small"}, H.ko)),
+      h("p", {class: "dl-vbig ok"}, `청산 ${fmt.int(ROLES.length)}가지 `, h("em", null, "나란히")),
+      h("p", {class: "note"}, `후보마다 ${ROLES.map((r) => ROLE_KO[r]).join(" · ")} 계좌를 같은 신호 · 같은 손절로 돌립니다.`),
+      line("core"), line("ds"),
+      h("p", {class: "note"}, "잔고 1등 = 같은 후보의 계좌들 중 닫힌 거래까지 잔고가 가장 많은 계좌 (참고, 판정 아님). 거래가 적은 동안은 운이 큽니다."),
+      h("div", {class: "row wrap"}, h("a", {class: "btn-y", href: "#/compare"}, "후보마다 계좌 비교"),
+        h("a", {class: "btn-line", href: "#/rules"}, "익절·손절·배수"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법")));
+  }
+
   function paintGoal(d) {
     const w = d.watch || {};
     const cps = w.checkpoints || [];
@@ -145,6 +178,17 @@ export async function mount(el, ctx) {
       return h("div", {class: "cl-prog"}, h("div", {class: "cl-progh"}, h("b", null, kind === "core" ? "기존 36 후보 거래" : "딥시크 후보 거래"),
         h("span", {class: "num"}, `${fmt.int(n)} / ${fmt.int(min)}번`)), ui.progress(n / min, null), LK.paceLine(d, n, min));
     };
+    if (lineupOn()) {                    // the owner-exit league: its start, no pre-registered checkpoint
+      put(goal,
+        h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
+          ` (${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
+        h("p", {class: "s2a-goalline"}, `청산 비교 리그를 켠 때(${LK.startKo(d)})부터 모든 계좌 $5,000으로 시작해 5분마다 이어 갑니다.`,
+          h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
+        h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, first.map((x) => h("li", {class: "done"},
+          h("span", {class: "s2a-sn"}, fmt.mmdd(x.ms)), x.ko))),
+        h("p", {class: "note"}, "이 리그에는 미리 정한 점검 날짜가 없습니다. 두 분이 계좌들의 기록을 보고 정합니다."));
+      return;
+    }
     put(goal,
       h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
         ` (${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
@@ -170,8 +214,12 @@ export async function mount(el, ctx) {
       return ui.card({plate: KIND_LONG[kind], sub: `후보 ${fmt.int(p.picks)}개 · 계좌 ${fmt.int(p.accounts)}개`},
         h("div", {class: "cl-prow hd"}, h("span", null, "계좌"), h("span", null, "거래"), h("span", null, "승률"), h("span", null, "한 번 평균")),
         rows,
-        h("div", {class: "row wrap cl-marks"}, h("span", {class: "muted"}, "후보가"), LK.vsMark(p.c2.positive, "0보다"),
-          LK.vsMark(p.c2.beats_base, "기본값보다"), LK.vsMark(p.c2.beats_flip, "동전보다")),
+        lineupOn() ? h("p", {class: "note"}, "보유 시간 중앙값: ", ROLES.map((r, i) => {
+          const x = (p.hold || {})[r] || {};
+          return `${i ? " · " : ""}${ROLE_SHORT[r]} ${x.median_h == null ? "—" : `${fmt.num(x.median_h, 1)}시간`}`;
+        }).join(""))
+          : h("div", {class: "row wrap cl-marks"}, h("span", {class: "muted"}, "후보가"), LK.vsMark(p.c2.positive, "0보다"),
+            LK.vsMark(p.c2.beats_base, "기본값보다"), LK.vsMark(p.c2.beats_flip, "동전보다")),
         h("p", {class: "note"}, "묶음 평균 = 그 묶음 모든 계좌의 닫힌 거래를 한데 모은 거래 한 번 평균 (지갑 대비 %)."));
     }));
   }
@@ -290,12 +338,13 @@ function ledBar() {
     const ok = Object.values(d.judge || {}).filter((j) => j.verdict === "ok").length;
     const warn = Object.values(d.judge || {}).filter((j) => j.band && j.band.below).length;
     cell("시작부터", `${LK.fromKo(d)} 처리한 날 수 (시작한 날 = 1일째)`).textContent = `${fmt.int(LK.leagueDay(d))}일째`;
-    cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션${afterOn() ? " (설치 뒤에 들어간 것만)" : ""} (190계좌 전체: ${fmt.int(d.accounts.filter((a) => openAfter(a)).length)}개)`,
+    cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션${afterOn() ? " (설치 뒤에 들어간 것만)" : ""} (${fmt.int(d.accounts.length)}계좌 전체: ${fmt.int(d.accounts.filter((a) => openAfter(a)).length)}개)`,
       `후보 열린 포지션${afterOn() ? " (설치 뒤만)" : ""}`).textContent = fmt.int(open);
-    cell("후보 닫힌 거래", `후보 ${ix.cands.length}개 계좌의 닫힌 거래 (190계좌 전체: ${fmt.int(d.accounts.reduce((a, x) => a + (x.trades || 0), 0))}번)`).textContent = fmt.int(closed);
-    cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
+    cell("후보 닫힌 거래", `후보 ${ix.cands.length}개 계좌의 닫힌 거래 (${fmt.int(d.accounts.length)}계좌 전체: ${fmt.int(d.accounts.reduce((a, x) => a + (x.trades || 0), 0))}번)`).textContent = fmt.int(closed);
+    if (lineupOn()) cell("기준 통과", "이 리그(청산 비교)에는 기본값 · 동전 계좌가 없어 기준 판정을 하지 않습니다", "판정").textContent = "없음";
+    else cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
     cell("경고등", "기존 36 후보 중 백테스트 예상 범위(하위 5%) 아래").textContent = fmt.int(warn);
-    cell("파산 (190계좌)", "190개 계좌 중 파산한 계좌").textContent = fmt.int(d.accounts.filter((a) => a.bust).length);
+    cell("파산", `${fmt.int(d.accounts.length)}개 계좌 중 파산한 계좌`, `파산 (${fmt.int(d.accounts.length)}계좌)`).textContent = fmt.int(d.accounts.filter((a) => a.bust).length);
     cap.textContent = shown.length < ix.cands.length
       ? `합계는 금액이 보이는 후보 ${shown.length}개만 (딥시크 금액 숨김) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)`
       : "후보 38개 계좌의 지갑 합계 (닫힌 거래까지) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)";

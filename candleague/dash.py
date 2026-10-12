@@ -265,7 +265,9 @@ def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[f
         group = "보통 자리" if ds else None
         lev_ko = "30배가 안전 검사(손절선이 청산가에 너무 가까움 / 손절 손실이 잔고 15% 초과)에 걸려 20배"
     role = a.get("role")
-    if role == "quarter":
+    if a.get("role_ko") and role != "cand":            # the owner-exit league: another exit on the 후보's signals
+        sub = f"{a['role_ko']}: 후보와 같은 신호 · 같은 크기 · 같은 배수 규칙 (익절·손절이나 진입 요일만 다름)"
+    elif role == "quarter":
         sub = "1/4 계좌: 같은 신호, 증거금 비율만 1/4 (배수는 같은 규칙으로 다시 골라 후보보다 높을 수도 있음)"
     elif role == "flip":
         sub = "동전 계좌: 후보와 같은 신호 · 같은 배수 규칙, 방향만 동전으로 정함"
@@ -634,9 +636,13 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
             tot[k] = tot.get(k, 0) + v
 
     picks = {}
+    lineup = doc.get("lineup") or None                  # the owner-exit league: the pick's accounts are <pick><suffix>
     for c in cands:
-        ids = {"cand": c.get("id"), "quarter": f"{c.get('id')}-q", "exitonly": f"{c.get('id')}-x",
-               "base": f"base-{c.get('kind')}-{c.get('name')}-{c.get('tf')}", "flip": f"{c.get('id')}-flip"}
+        if lineup and c.get("pick"):
+            ids = {x["role"]: f"{c['pick']}{x['suffix']}" for x in lineup}
+        else:
+            ids = {"cand": c.get("id"), "quarter": f"{c.get('id')}-q", "exitonly": f"{c.get('id')}-x",
+                   "base": f"base-{c.get('kind')}-{c.get('name')}-{c.get('tf')}", "flip": f"{c.get('id')}-flip"}
         roles = {}
         for role, aid in ids.items():
             a = by_id.get(aid)
@@ -1021,10 +1027,11 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
             return JSONResponse({"error": "login"}, status_code=401)
         role = req.query_params.get("role", "cand")
         kind = req.query_params.get("kind", "all")
-        if role not in ("cand", "quarter", "exitonly", "base", "flip") or kind not in ("all", "core", "ds"):
-            return JSONResponse({"error": "role / kind"}, status_code=400)
         bk = read_book()
         lg = read_league()
+        roles = ("cand", "quarter", "exitonly", "base", "flip") + tuple(x.get("role") for x in (lg or {}).get("lineup") or [])
+        if role not in roles or kind not in ("all", "core", "ds"):
+            return JSONResponse({"error": "role / kind"}, status_code=400)
         if bk is None or not lg:
             return JSONResponse({"status": "준비 중", "server_ms": now_ms(), "role": role, "kind": kind})
         key = (file_key("trades.json"), file_key("league.json"), role, kind)

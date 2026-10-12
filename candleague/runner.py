@@ -32,6 +32,9 @@ the start before anything is deleted or written (``check_expected_start``): a lo
 league at 'now' without a word and move every C1 / C2 date (PREREG 11.3). A fresh database says loudly where its start came from.
 Per commit the league also writes ``acct_day`` (signals decided, trades closed, per account and UTC day) and, at every 00:00 UTC,
 ``acct_mark`` (the realised wallet and the mark value of an open position): PREREG 11.4 items 10-11; the C1 / C2 script reads them.
+The rules file may instead hold the owners' exits (2026-10-12, ``"owner_exits"``, rulex.owner_accounts): per pick its current exit
+(role ``cand``, id <pick>-e) and the other exits side by side on the same signals, by the same mechanism; the snapshot then carries
+``lineup`` (the account kinds in the owners' words) and the judging of CONTRACT 2 says ``na`` (no 기본값 or 동전 accounts).
 Catching up (the snapshot's ``catching``) is said only by a snapshot written right after the league started over or
 after a committed chunk, while the processed time is more than 30 minutes behind: a restart that makes no progress (a
 crash loop, Binance down) writes nothing, so the dashboard shows the engine as stopped, not as catching up.
@@ -103,7 +106,9 @@ def fingerprint(accts: list[dict]) -> str:
     import hashlib
     body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"], a.get("size", 1.0)]
                        + ([a["rule"], RX.code_version(a["rule"]), a.get("no_entry_from_ms")] if a.get("rule") else [])
-                       for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time
+                       + (["weekend_off"] if a.get("weekend_off") else [])
+                       for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time;
+    #                                                         the owner-exit league's weekend switch (an account without it: as before)
     return hashlib.sha256(f"{VERSION}|{body}".encode()).hexdigest()
 
 
@@ -485,6 +490,8 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False,
             row.update(rule=a["rule"].get("id"), rule_ko=RX.rule_ko(a["rule"]), pick=a.get("pick"), hold=hold_stats(book[a["id"]]),
                        counts=counts.get(a["id"]) or dict(offered=0, entered=0, skipped=0, rejected=0, closed=0),
                        no_entry_from_ms=a.get("no_entry_from_ms"))
+        if a.get("ox"):                       # the owner-exit league: which of the pick's accounts this is, in the owners' words
+            row.update(role_ko=a["ox"]["label_ko"], role_short=a["ox"]["short_ko"], weekend_off=bool(a.get("weekend_off")))
         if a["kind"] == "ds" and not ds_money:
             for k in ("mean_ret", "wallet", "max_dd"):
                 row[k] = None
@@ -517,6 +524,9 @@ def judge(rows: list[dict]) -> dict:
         extra = {"band": band} if band else {}
         base = by_id.get(f"base-{r['kind']}-{r['name']}-{r['tf']}")
         flip = by_id.get(f"{r['id']}-flip")
+        if base is None and flip is None:   # a league without 기본값 and 동전 accounts (the owner-exit league): no CONTRACT 2 verdict
+            out[r["id"]] = {"verdict": "na", "trades": r["trades"], **extra}
+            continue
         if r["trades"] < MIN_TRADES or r["mean_ret"] is None:
             out[r["id"]] = {"verdict": "early", "trades": r["trades"], **extra}
             continue
@@ -597,6 +607,9 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
            "catching": catching(league, now_ms), "start_ms": league.start_ms, "started_ms": league.meta.get("started_ms"), "accounts": rows,
            "judge": verdicts, "notes": league.meta.get("notes", []), "ds_money": ds_money,
            "watch": SM.watch_summary(league.accts, book, now_ms, ds_money), "server": server_info(pass_s)}
+    lu = RX.lineup(league.accts)
+    if lu:                                    # the owner-exit league: its account kinds, in order, for the dashboard and Telegram
+        doc["lineup"] = lu
     os.makedirs(snap, exist_ok=True)
     _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms, book))
     _write(snap, "league.json", doc)
@@ -695,7 +708,8 @@ def backup_if_reset(db: str, accts: list[dict], now_ms: Optional[int] = None) ->
 def league_accounts(rules_path: Optional[str], cands: list[dict]) -> list[dict]:
     """The accounts the league runs: the restarted league's (candleague/rulex.py, PREREG_EXITFLEX 11.2, both pools) when a rule config
     file exists and is enabled ("enabled": true is the owners' OK), else the candidate accounts as before. A file that exists, is
-    enabled and cannot be run raises RX.RuleConfigError (the league never starts on the old accounts in its place)."""
+    enabled and cannot be run raises RX.RuleConfigError (the league never starts on the old accounts in its place). A file of the
+    owner-exit form gives the owners' exit accounts (RX.owner_accounts) the same way."""
     accts = RX.load_accounts(rules_path or None, cands)
     return C.accounts(cands) if accts is None else accts
 

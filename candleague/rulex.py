@@ -36,6 +36,14 @@ What this module is
   skipped while holding, rejected) and ``League.advance`` the trades closed (table ``acct_day``); at every 00:00 UTC it writes each
   account's realised wallet and its mark value (table ``acct_mark``); all in the commit of the chunk. ``no_entry_from_ms`` on an
   account of the new exit stops its new entries from that time (the C1 script sets it; it is part of the fingerprint).
+* **Owner exits** (owners 2026-10-12, "익절기준이랑 손절기준을 좀 바꾸고 싶어서"; ``owner_accounts``): a second form of the config
+  file, ``{"enabled": true, "owner_exits": [...]}`` instead of ``"pools"``. Per pick one account per entry, side by side on the same
+  signals (all from ``chunk_rule``): the pick's current exit (the entry with no rule, no exit and no weekend switch: role ``cand``,
+  the pick's own source and band), a study rule on top (``"rule": "F2.n50.b"``: the ``RuleEngine`` as above), another take-profit
+  with the pick's own stop multiple (``"exit": "roe50"`` -> "roe50|<k>": the plain engine of that exit; skipped for a pick whose
+  own exit is already that one), or the current exit with no new entry from a signal bar that closes Saturday 00:00 to Monday 00:00
+  UTC (``"weekend_off": true``: the plain engine with the ``RuleMixin`` gate, ``is_weekend``). Every entry is at the live size
+  unless it says ``size``. Each account carries ``ox`` (its entry's role, suffix and Korean words) for the snapshot's ``lineup``.
 
 F13 (the rule bot's stepped profit lock; PREREG 5.2, ``exits.lock_exit``)
 ------------------------------------------------------------------------
@@ -373,6 +381,8 @@ def load_config(path: Optional[str] = None) -> Optional[dict]:
 
 
 def normalize_config(doc) -> dict:
+    if isinstance(doc, dict) and "owner_exits" in doc:
+        return normalize_owner(doc)
     if not isinstance(doc, dict) or not isinstance(doc.get("pools"), dict) or not doc["pools"]:
         raise RuleConfigError("rule config: 'pools' must say, per pool (core, ds), the new exit or null")
     bad = [k for k in doc["pools"] if k not in POOLS]
@@ -414,7 +424,10 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
     """The restarted league's accounts (PREREG 11.2; see the module docstring). Each is {id, kind, name, tf, combo, exit, source, role,
     of, pick, size, rule}; ``rule`` is the normalized rule, or NO_RULE for the pick's own exit (E0). A pool with a new exit: ``-n``,
     ``-nq``, ``-e``, ``-eq``, ``-nflip``; a pool without: ``-e``, ``-eq``, ``-eflip``. The accounts of the new exit carry
-    ``no_entry_from_ms`` when the config sets it (the C1 script's output, PREREG 11.4 item 9)."""
+    ``no_entry_from_ms`` when the config sets it (the C1 script's output, PREREG 11.4 item 9). A config of the owner-exit form
+    (``"owner_exits"``) gives ``owner_accounts`` instead."""
+    if cfg.get("mode") == "owner":
+        return owner_accounts(cands, cfg)
     out = []
     for c in pick_list(cands, cfg):
         base = {k: c[k] for k in ("kind", "name", "tf", "combo", "exit")}
@@ -443,6 +456,178 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
             out.append(acct("-eq", ROLE_BASE, C.QUARTER, dict(NO_RULE), pid, twin))
             out.append(acct("-eflip", ROLE_FLIP, 1.0, dict(NO_RULE), pid + "-e", twin))
     return out
+
+
+# ====================================================================== owner exits (owners 2026-10-12)
+# "솔라나 롱으로 70%~80% 먹고 있던 수익률이 결국 익절가가 너무 길어서 ... 커스텀값봇들을 익절기준이랑 손절기준을 좀 바꾸고
+# 싶어서": per pick, the current-exit account and, next to it on the same signals, accounts with other exits. The file says
+# which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
+# rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
+# new entries only.
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size"))
+OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
+OWNER_MAX = 8
+_SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
+TP_NAMES = tuple(r[0] for r in X.TP_RULES)
+WEEKEND_KO = "토 00:00 ~ 월 00:00 UTC (한국 토 09:00 ~ 월 09:00)"
+WEEKEND_REASON = "weekend off: no new entry from a signal bar closing Sat 00:00 - Mon 00:00 UTC"
+
+
+def is_weekend(ms: int) -> bool:
+    """Saturday 00:00 <= t < Monday 00:00 UTC (1970-01-01 was a Thursday, so (day + 3) % 7 is 0 on a Monday); the owners' weekend,
+    as research/exitflex/extra/common.is_weekend and research/hunt/reads_o.is_weekend_close read it."""
+    return (int(ms) // DAY + 3) % 7 >= 5
+
+
+def _owner_words(e: dict) -> tuple:
+    """(short label, what it does, what it is for) in plain Korean for an owner-exit entry the file does not describe itself."""
+    r, tp = e["rule"], e["tp"]
+    if e["kind"] == "own":
+        return "지금", "후보의 지금 익절·손절 그대로 (비교 기준)", "다른 계좌들이 이보다 나은가를 보는 기준"
+    if r is not None and r["family"] == "F2":
+        tail = "고정 익절 없음" if r["mode"] == "b" else "후보의 익절은 그대로"
+        return ("이동평균", f"그 후보 봉의 EMA({r['n']})를 반대로 넘어 마감하면 다음 분 시장가로 청산 (먼저 EMA 바른 쪽에서 한 번 마감해야 켜짐) · "
+                f"{tail} · 손절은 그대로", "추세가 꺾일 때 나와서 크게 번 수익을 지키나")
+    if r is not None and r["family"] == "F5":
+        tail = "후보의 익절과 손절은 그대로" if r["mode"] == "a" else "고정 익절 없음 · 손절은 그대로"
+        return ("반납 보호", f"수익이 +{_fmt(r['P'])}R(손절 거리 {_fmt(r['P'])}배)에 닿은 뒤, 봉 마감 때 최고 수익의 "
+                f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
+    if r is not None:
+        return KO[r["family"]], f"{rule_ko(r)} · 손절은 그대로", "이 청산 규칙이 지금 청산보다 나은가"
+    if tp is not None:
+        ko = X.TP_KO[tp]
+        kind, val = {x[0]: (x[1], x[2]) for x in X.TP_RULES}[tp]
+        short = ko.replace("고정 익절 수익 ", "ROE ").replace("고정 익절 ", "익절 ")
+        what = (f"증거금 대비 순수익 +{int(round(val * 100))}%(수수료 뺀 뒤)에 미리 걸어 둔 지정가로 익절 · 손절은 그대로"
+                if kind == X.TP_ROE else f"{ko} · 손절은 그대로")
+        return short, what, "짧게 확실히 먹고 나오면 나은가" if kind == X.TP_ROE else "이 익절이 지금 청산보다 나은가"
+    return "주말 쉼", f"지금 청산과 같음 · {WEEKEND_KO}에 마감한 봉의 신호로는 새로 들어가지 않음 · 열린 포지션은 그대로 관리", "주말 신호를 거르면 나은가"
+
+
+def _owner_entry(x, i: int) -> dict:
+    """One normalized entry of ``owner_exits``: {suffix, role, kind (own / rule / exit / weekend), label_ko, short_ko, desc_ko, why_ko,
+    rule (normalized or None), tp (a take-profit rule name or None), weekend_off, size}. RuleConfigError when it cannot be run."""
+    where = f"owner_exits[{i}]"
+    if not isinstance(x, dict):
+        raise RuleConfigError(f"rule config: {where} must be an object")
+    bad = sorted(set(x) - OWNER_KEYS)
+    if bad:
+        raise RuleConfigError(f"rule config: {where} has unknown keys {bad} (allowed: {sorted(OWNER_KEYS)})")
+    suffix = x.get("suffix")
+    if not isinstance(suffix, str) or not _SUFFIX_RE.match(suffix):
+        raise RuleConfigError(f"rule config: {where} suffix {suffix!r} must look like '-ma' (a dash, then 1-8 small letters or digits)")
+    label = x.get("label_ko")
+    if not isinstance(label, str) or not label.strip() or len(label) > 40:
+        raise RuleConfigError(f"rule config: {where} needs a Korean label 'label_ko' (1-40 characters)")
+    for k in ("short_ko", "desc_ko", "why_ko"):
+        if k in x and (not isinstance(x[k], str) or not x[k].strip() or len(x[k]) > 300):
+            raise RuleConfigError(f"rule config: {where} {k} must be a short text")
+    rule = parse_rule(x["rule"]) if x.get("rule") is not None else None
+    tp = x.get("exit")
+    if tp is not None:
+        if rule is not None:
+            raise RuleConfigError(f"rule config: {where} has both a rule and an exit (one or the other)")
+        if not isinstance(tp, str) or tp not in TP_NAMES:
+            raise RuleConfigError(f"rule config: {where} exit {tp!r} is not a take-profit rule of candleague.exits ({', '.join(TP_NAMES)}); "
+                                  "the pick's own stop multiple is kept, so name the take-profit only (e.g. 'roe50')")
+        if {r[0]: r[1] for r in X.TP_RULES}[tp] == X.TP_STRUCT:
+            raise RuleConfigError(f"rule config: {where} exit {tp!r} needs a structure level the league does not hand in here")
+    wk = x.get("weekend_off", False)
+    if not isinstance(wk, bool):
+        raise RuleConfigError(f"rule config: {where} weekend_off must be true or false")
+    size = x.get("size", 1.0)
+    if isinstance(size, bool) or not isinstance(size, (int, float)) or not 0 < float(size) <= 1:
+        raise RuleConfigError(f"rule config: {where} size must be a number in (0, 1] (1 = the league's live size)")
+    kind = "rule" if rule is not None else "exit" if tp is not None else "weekend" if wk else "own"
+    role = "cand" if kind == "own" and float(size) == 1.0 else suffix[1:]
+    if role != "cand" and role in OWNER_RESERVED:
+        raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
+    e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
+         "size": float(size)}
+    short, desc, why = _owner_words(e)
+    e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
+             why_ko=str(x.get("why_ko") or why).strip())
+    return e
+
+
+def normalize_owner(doc: dict) -> dict:
+    """The owner-exit form of the config: {"enabled": bool, "owner_exits": [entries], "picks": [ids] (optional)}. Exactly one
+    entry is the pick's current exit at the live size (no rule, no exit, no weekend switch: role ``cand``); suffixes and roles are
+    unique. ``pools`` and ``no_entry_from_ms`` belong to the study's form and are refused here (no pool rule, no C1 stop)."""
+    if "pools" in doc:
+        raise RuleConfigError("rule config: either 'pools' (the exit study's restart) or 'owner_exits', not both")
+    if doc.get("no_entry_from_ms"):
+        raise RuleConfigError("rule config: 'no_entry_from_ms' is the exit study's C1 stop and has no meaning with 'owner_exits'")
+    ents = doc.get("owner_exits")
+    if not isinstance(ents, list) or not ents or len(ents) > OWNER_MAX:
+        raise RuleConfigError(f"rule config: 'owner_exits' must list 1-{OWNER_MAX} accounts per pick")
+    out = [_owner_entry(x, i) for i, x in enumerate(ents)]
+    for key in ("suffix", "role"):
+        seen = [e[key] for e in out]
+        if len(set(seen)) != len(seen):
+            raise RuleConfigError(f"rule config: owner_exits repeat a {key} ({seen})")
+    own = [e for e in out if e["role"] == "cand"]
+    if len(own) != 1:
+        raise RuleConfigError("rule config: owner_exits must hold the pick's current exit once (an entry with no rule, no exit, no "
+                              "weekend switch and the live size): the others are compared with it")
+    picks = doc.get("picks")
+    if picks is not None and (not isinstance(picks, list) or not all(isinstance(p, str) for p in picks)):
+        raise RuleConfigError("rule config: 'picks' must be a list of candidate ids")
+    enabled = doc.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise RuleConfigError("rule config: 'enabled' must be true or false")
+    return {"enabled": enabled, "mode": "owner", "owner_exits": out, "picks": picks, "pools": {p: None for p in POOLS},
+            "no_entry_from_ms": {p: None for p in POOLS}}
+
+
+def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
+    """The owner-exit league's accounts: per pick (the listed ones, else every candidate) one account per entry of
+    ``cfg["owner_exits"]``, id ``<pick id><suffix>``, in the file's order. The current-exit account (role ``cand``) keeps the pick's
+    source (its backtest band and rank) and is the ``of`` of the others. A take-profit entry runs "<take-profit>|<the pick's own
+    stop multiple>"; a pick whose own exit is already that one gets no such account (its current-exit account is it). Each carries
+    ``ox`` (the entry's role, suffix and Korean words) and ``weekend_off`` when the entry has the weekend switch."""
+    ents = cfg["owner_exits"]
+    own = next(e for e in ents if e["role"] == "cand")
+    out = []
+    for c in pick_list(cands, cfg):
+        pid = c["id"]
+        k = c["exit"].split("|", 1)[1]
+        cand_id = pid + own["suffix"]
+        for e in ents:
+            exit_ = f"{e['tp']}|{k}" if e["tp"] else c["exit"]
+            if e["tp"] and exit_ == c["exit"]:
+                continue                                      # the pick's own exit already: no duplicate account
+            src = {"pick": pid, "owner_exit": e["suffix"], "label_ko": e["label_ko"]}
+            if e["role"] == "cand":
+                src = {**(c.get("source") or {}), **src}
+            elif e["rule"] is not None:
+                src["rule"] = e["rule"]["id"]
+            elif e["tp"]:
+                src["exit_of"] = c["exit"]
+            a = {**{q: c[q] for q in ("kind", "name", "tf", "combo")}, "exit": exit_, "id": pid + e["suffix"], "role": e["role"],
+                 "of": pid if e["role"] == "cand" else cand_id, "pick": pid, "size": e["size"],
+                 "rule": dict(e["rule"]) if e["rule"] is not None else dict(NO_RULE), "source": src,
+                 "ox": {q: e[q] for q in ("role", "suffix", "kind", "label_ko", "short_ko", "desc_ko", "why_ko", "tp", "weekend_off", "size")}}
+            a["ox"]["rule"] = e["rule"]["id"] if e["rule"] is not None else None
+            if e["weekend_off"]:
+                a["weekend_off"] = True
+            out.append(a)
+    return out
+
+
+def lineup(accts: list[dict]) -> Optional[list[dict]]:
+    """The owner-exit league's account kinds in the file's order, for the dashboard and the Telegram summary: [{role, suffix, kind,
+    label_ko, short_ko, desc_ko, why_ko, rule, tp, weekend_off, size, accounts}]; None for any other league."""
+    out, by = [], {}
+    for a in accts:
+        ox = a.get("ox")
+        if not ox:
+            continue
+        if ox["role"] not in by:
+            by[ox["role"]] = {**ox, "accounts": 0}
+            out.append(by[ox["role"]])
+        by[ox["role"]]["accounts"] += 1
+    return out or None
 
 
 def check(cands: list[dict], cfg: dict) -> list[str]:
@@ -956,6 +1141,7 @@ class RuleMixin:
     rx_tf_ms: int = 0
     rx_seen: Optional[dict] = None       # {coin: its previous minute present} (the league's, see replay_day); None = no gating
     rx_no_entry_from: Optional[int] = None   # PREREG 11.4 item 9: from this time (ms) the account takes no new entry
+    rx_weekend_off: bool = False             # owners 2026-10-12: no new entry from a signal bar closing Sat 00:00 - Mon 00:00 UTC
 
     def submit(self, signal) -> None:
         if isinstance(signal, RuleClose):
@@ -979,6 +1165,9 @@ class RuleMixin:
     def _try_enter(self, sig, bar) -> bool:
         if self.rx_no_entry_from is not None and bar.open_time >= self.rx_no_entry_from:
             self._record(sig, "REJECTED", "no new entry from the C1 time", bar.open_time)       # an open position closes by its own rules
+            return False
+        if self.rx_weekend_off and is_weekend(sig.ts + 1):                # the signal bar's close (Signal.ts = close - 1)
+            self._record(sig, "REJECTED", WEEKEND_REASON, bar.open_time)                       # an open position is managed as usual
             return False
         ok = super()._try_enter(sig, bar)
         if ok and self.rx_rule is not None:
@@ -1055,7 +1244,8 @@ class LockLadderEngine(RuleLadderEngine):
 
 def _lock_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     """``exits.make_engine`` of ``exit_name(a)``, built as the same class with the ``RuleMixin`` gate and no rule: the same branches, the same
-    settings, take-profit and policy (a test compares every field with ``exits.make_engine``)."""
+    settings, take-profit and policy (a test compares every field with ``exits.make_engine``). F13's engine, and the owner-exit league's
+    weekend-off account (the pick's own exit with the weekend gate, ``rx_weekend_off``)."""
     name, size = exit_name(a), a.get("size", 1.0)
     s, st = X.spec(name), X.settings_for(name, size=size)
     if s["ladder"] and s["tp_kind"] == X.TP_STRUCT:
@@ -1075,11 +1265,17 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     take-profit, mode b has none and no lock. An F13 account (the stepped lock) is the plain engine of the exit with the lock added, with the
     C1 gate (``rx_no_entry_from``) and no rule."""
     rule, name, size = a.get("rule") or NO_RULE, a["exit"], a.get("size", 1.0)
+    weekend = bool(a.get("weekend_off"))
     if rule.get("family") is None:
-        return X.make_engine(name, brackets, specs, book=a["id"], size=size)
+        if not weekend:
+            return X.make_engine(name, brackets, specs, book=a["id"], size=size)
+        e = _lock_engine(a, brackets, specs)                               # the plain engine of the exit, with the weekend gate
+        e.rx_weekend_off = True
+        return e
     if rule["family"] in LOCK_FAMILIES:                                    # F13: another exit of candleague.exits, the plain engine with the C1 gate
         e = _lock_engine(a, brackets, specs)
         e.rx_no_entry_from = int(a["no_entry_from_ms"]) if a.get("no_entry_from_ms") else None
+        e.rx_weekend_off = weekend
         return e
     s, st = X.spec(name), X.settings_for(name, size=size)
     if rule["mode"] == "b":
@@ -1095,6 +1291,7 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
         e = RuleEngine(st, brackets, symbol_specs=specs, policy=X.RPolicy(st, s["tp_val"]), book=a["id"])
     e.rx_rule, e.rx_sched, e.rx_tf_ms = rule, sched_of(a), TF_MS[a["tf"]]
     e.rx_no_entry_from = int(a["no_entry_from_ms"]) if a.get("no_entry_from_ms") else None
+    e.rx_weekend_off = weekend
     return e
 
 

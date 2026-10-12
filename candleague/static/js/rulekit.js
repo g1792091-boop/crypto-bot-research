@@ -7,7 +7,7 @@ import {h} from "./dom.js";
 import * as fmt from "./fmt.js";
 import * as ui from "./ui.js";
 import * as LK from "./lk.js";
-import {ROLES, ROLE_KO, ROLE_SHORT, tfKo} from "./labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, ROLE_INFO, tfKo, lineupOn} from "./labels.js";
 
 export const LEVS = [50, 40, 30, 20];
 export const COINS6 = ["BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD"];
@@ -140,14 +140,20 @@ export const ROLE_RULE = {
   flip: {nums: "후보와 같은 시각 (숫자로 고르지 않음)", exit: "후보 것", size: "규칙봇과 같음", dir: "동전 던지기 (좋은 자리 여부도 동전 방향으로 다시 봄)",
     why: "방향을 맞힌 건가 운인가"},
 };
+const NO_RULE = {nums: "—", exit: "—", size: "—", dir: "—", why: "—"};
+/** What an account kind changes: the owner-exit league's own words (labels ROLE_INFO from the snapshot's lineup) while it
+ *  runs, else the candidate league's table above. */
+export const roleRule = (r) => (lineupOn() && ROLE_INFO[r]) || ROLE_RULE[r] || NO_RULE;
 /** The five accounts side by side: numbers, exit, size, direction, what it is for (rows on a phone, a table on a PC). */
 export function rolesTable() {
   const cols = [["nums", "진입"], ["exit", "익절·손절"], ["size", "크기 · 배수"], ["dir", "방향"], ["why", "보려는 것"]];
   return h("div", {class: "rl-roles", role: "table", "aria-label": "계좌 5개가 다른 점"},
     h("div", {class: "rl-rrow rl-rhd", role: "row"}, h("span", {role: "columnheader"}, "계좌"), cols.map(([, k]) => h("span", {role: "columnheader"}, k))),
     ROLES.map((r) => h("div", {class: ["rl-rrow", `r-${r}`], role: "row"}, h("span", {class: "rl-rname", role: "rowheader"}, LK.roleChip(r)),
-      cols.map(([key, k]) => h("span", {role: "cell", dataset: {k}}, ROLE_RULE[r][key])))),
-    h("p", {class: "note"}, "배수 규칙은 다섯 계좌 모두 같습니다 (아래). 같은 규칙이라도 손절 폭과 증거금이 다르면 고르는 배수가 달라집니다."));
+      cols.map(([key, k]) => h("span", {role: "cell", dataset: {k}}, roleRule(r)[key])))),
+    h("p", {class: "note"}, lineupOn()
+      ? "모든 계좌가 같은 신호 · 같은 크기 · 같은 배수 규칙(아래)입니다. 손절 거리도 후보의 것 그대로라 고르는 배수가 같고, 익절·청산만 다릅니다."
+      : "배수 규칙은 다섯 계좌 모두 같습니다 (아래). 같은 규칙이라도 손절 폭과 증거금이 다르면 고르는 배수가 달라집니다."));
 }
 
 // ---------------------------------------------------------------- the leverage rule (one card)
@@ -279,12 +285,13 @@ export function pickRuleBody(p, r, o = {}) {
       h("div", null, h("dt", null, "배수"), h("dd", null, levWords(p))),
       h("div", null, h("dt", null, "증거금"), h("dd", null, "잔고 × 배수%: 50배면 잔고의 50%, 40배 40%, 30배 30%, 20배 20%. 1/4 계좌는 그 1/4."))),
     h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, "지금 이 숫자면"), nowBox(p, r)),
-    h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, "계좌 5개의 익절·손절과 실제로 쓴 배수"),
+    h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, `계좌 ${ROLES.length}개의 익절·손절과 실제로 쓴 배수`),
       h("div", {class: "rl-five"}, ROLES.map((role) => {
         const a = roles[role];
         if (!a) return null;
         return h("a", {class: ["rl-frow", `r-${role}`], href: `#/account/${encodeURIComponent(a.id)}`, title: `${ROLE_KO[role]} 계좌 자세히`},
-          LK.roleChip(role, ROLE_SHORT[role]), h("span", {class: "rl-fexit"}, role === "base" ? (a.exit_ko || (r && r.base_exit_ko)) : a.exit_ko,
+          LK.roleChip(role, ROLE_SHORT[role]), h("span", {class: "rl-fexit"}, lineupOn() && role !== "cand" ? roleRule(role).exit
+            : role === "base" ? (a.exit_ko || (r && r.base_exit_ko)) : a.exit_ko,
             role === "quarter" ? h("small", {class: "muted"}, " · 증거금 1/4") : null, role === "flip" ? h("small", {class: "muted"}, " · 방향은 동전") : null),
           h("span", {class: "num muted rl-fn"}, `거래 ${fmt.int(a.trades || 0)}번`),
           h("span", {class: "rl-fused"}, h("small", {class: "muted"}, "쓴 배수 "), usedChips(a.used)));

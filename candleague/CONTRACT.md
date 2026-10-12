@@ -16,6 +16,16 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
   the 38 watch picks (`python -m candleague.candidates watch`, each `passed: false`, `watch: true`). A watch candidate
   also gets `quarter` (`<id>-q`: its numbers and exit, every margin fraction x 1/4, leverages kept) and `exitonly`
   (`<id>-x`: the cell's default numbers with its exit). 38 x 5 = 190 accounts.
+* **Owner-exit league** (owners 2026-10-12, "익절기준이랑 손절기준을 좀 바꾸고 싶어서"; candleague/rulex.py `owner_accounts`):
+  when the rules file (`CANDLEAGUE_RULES`, default `candleague/data/rules.json`) holds `"owner_exits"` and `"enabled": true`,
+  the league runs, per pick and on the same signals (`rulex.chunk_rule`), `<id>-e` (its current exit, role `cand`, its own
+  backtest band), `<id>-ma` (F2.n50.b: the EMA(50) break of the pick's own timeframe, no fixed take-profit), `<id>-tp50`
+  (`roe50|<k>`: a fixed take-profit at net ROE +50%, the pick's stop multiple k; none for a pick whose exit is already that),
+  `<id>-gb` (F5.P1.g50.a: after +1R, exit on giving back half of the peak; the pick's take-profit kept) and `<id>-wk` (the
+  current exit, no new entry from a signal bar closing Saturday 00:00 to Monday 00:00 UTC). All at the live size; stops
+  unchanged; no quarter, 기본값, 청산만 or 동전 accounts (38 x 5 - 1 = 189 accounts). The snapshot carries `lineup` (the kinds
+  in the owners' words) and the dashboard / Telegram name them; CONTRACT 2's verdict reads `na` (nothing to compare with) and
+  WATCH_PREREG's checkpoints do not apply to this league. Without the file, or with the exit study's form, nothing changes.
 * **Engine**: paperbot.engine.PaperEngine through `candleague.exits.make_engine` (parity with the study's kernel is
   tests/test_candleague_exits.py): v3_settings (quality_v1 sizing, $5,000, taker 0.05%, slippage 0.02%, maker 0.02% on
   take-profits, funding, mark-price liquidation, bust below $10), one position at a time per account, six coins

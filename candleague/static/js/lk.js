@@ -8,14 +8,14 @@ import {getJSON} from "./api.js";
 import {pill} from "./ui.js";
 import {acctFig} from "./v4kit.js";
 import {serverNow} from "./live.js";
-import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO} from "./labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO, applyLineup} from "./labels.js";
 
 export const EQUITY = 5000;
 const DAY = 86400000;
 
 // ---------------------------------------------------------------- the snapshot and the meta file
 let LEAGUE = null, IDX = null, META = null, metaP = null;
-export function setLeague(d) { LEAGUE = d; IDX = null; }
+export function setLeague(d) { applyLineup(d && d.lineup); LEAGUE = d; IDX = null; }
 export const league = () => LEAGUE;
 export async function getMeta() {
   if (META) return META;
@@ -119,7 +119,14 @@ export function pickOf(a, ix = index()) {
 // ---------------------------------------------------------------- names
 export const stratKo = (name, meta = META) => (meta && meta.strategies && meta.strategies[name] ? meta.strategies[name].ko : name);
 export const stratMeta = (name, meta = META) => (meta && meta.strategies ? meta.strategies[name] : null) || null;
-export const pickMeta = (id, meta = META) => (meta && meta.picks ? meta.picks[id] : null) || null;
+/** A pick's entry of strategies_ko.json by its id, or by an account's id (the owner-exit league's <pick>-e: its ``pick``). */
+export function pickMeta(id, meta = META) {
+  const m = meta && meta.picks;
+  if (!m) return null;
+  if (m[id]) return m[id];
+  const a = LEAGUE ? index().byId[id] : null;
+  return (a && a.pick && m[a.pick]) || null;
+}
 /** "도지 봇 · 15분" */
 export const pickKo = (a, meta = META) => (a ? `${stratKo(a.name, meta)} · ${tfKo(a.tf)}` : "—");
 /** The pick's name for a list: the 15분 chip, the Korean name, the code in small print. */
@@ -192,7 +199,9 @@ export const better = (a, b) => (a && b && a.mean_ret != null && b.mean_ret != n
 export function verdictPill(j) {
   const v = (j && j.verdict) || "early";
   return pill(v === "early" ? "아직" : VERDICT_KO[v] || v, VERDICT_CLS[v] || "thin",
-    v === "early" ? "닫힌 거래 30번 전: 판단하지 않습니다" : "평균 > 0 · 기본값보다 · 동전보다 (세 가지 다면 통과)");
+    v === "early" ? "닫힌 거래 30번 전: 판단하지 않습니다" : v === "na"
+      ? "이 리그에는 기본값 · 동전 계좌가 없어 기준 판정을 하지 않습니다 (청산끼리 나란히 비교만)"
+      : "평균 > 0 · 기본값보다 · 동전보다 (세 가지 다면 통과)");
 }
 /** The warning light of a core pick (its own backtest band, WATCH_PREREG 3.1): null when there is no band yet. */
 export function bandMark(j) {

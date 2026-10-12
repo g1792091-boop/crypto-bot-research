@@ -8,6 +8,12 @@
 :root[data-skin="classic"] { --r-cand: var(--term-cyan); }
 .r-cand { --rc: var(--r-cand); } .r-quarter { --rc: var(--r-quarter); } .r-exitonly { --rc: var(--r-exitonly); }
 .r-base { --rc: var(--r-base); } .r-flip { --rc: var(--r-flip); }
+/* the owner-exit league (owners 10/12; its accounts come from the snapshot's lineup): 이동평균 이탈 · 고정 익절 ROE 50% · 큰 수익
+   반납 보호 · 주말 쉬는 계좌 next to 지금 청산 (r-cand) */
+:root { --r-ma: var(--smc-bos); --r-tp50: var(--pick-3); --r-gb: var(--term-yellow); --r-wk: var(--ink-2); }
+.r-ma { --rc: var(--r-ma); } .r-tp50 { --rc: var(--r-tp50); } .r-gb { --rc: var(--r-gb); } .r-wk { --rc: var(--r-wk); }
+.cl-cmppool { margin-top: 10px; }
+.cl-cmppool > b { display: block; margin-bottom: 4px; font-size: var(--t-sm); }
 
 /* the brand mark */
 .cl-ic1 { fill: var(--accent); } .cl-ic2 { fill: var(--series-core); } .cl-ic3 { fill: var(--term-cyan); }

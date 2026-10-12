@@ -4,7 +4,7 @@
 import {h} from "../dom.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {ROLES, ROLE_DESC, STYLE_KO, STYLE_DESC} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_DESC, STYLE_KO, STYLE_DESC, lineupOn} from "../labels.js";
 
 const SCREENS = [
   ["요약", "다음 점검까지 며칠, 묶음 두 개(기존 36 · 딥시크)의 지금, 후보 합계 잔고, 상위 · 하위 5, 최근 체결"],
@@ -64,8 +64,10 @@ export async function mount(el, ctx) {
       h("p", null, d && d.start_ms ? `규칙봇처럼 봇을 켠 때(설치 ${LK.startKo(d)})부터 시작했습니다: 모든 계좌가 그때 $5,000이고, 거래 · 잔고 · 순위 · 날짜(시작한 날 = D+0)는 모두 그때부터입니다.`
         : "규칙봇처럼 봇을 켠 때(설치)부터 시작합니다: 모든 계좌가 그때 $5,000이고, 거래 · 잔고 · 순위 · 날짜는 모두 그때부터입니다."),
       h("p", {class: "note"}, "목록은 시작 전에 고정했습니다. 6일, 2주 성적으로 바꾸지 않습니다. 짧은 기간 성적은 운이 큽니다.")),
-    ui.card({plate: "후보마다 계좌 5개"}, h("dl", {class: "kv"}, ROLES.map((r) => h("div", null, h("dt", null, LK.roleChip(r)), h("dd", null, ROLE_DESC[r])))),
-      h("p", {class: "note"}, "다섯 계좌는 같은 시세 · 같은 기간이라 바로 비교됩니다. 후보 > 청산만이면 숫자(커스텀값) 덕, 청산만 > 기본값이면 익절 · 손절 덕, 동전보다 못하면 방향을 맞힌 게 아닐 수 있습니다.")),
+    ui.card({plate: lineupOn() ? `후보마다 계좌 ${ROLES.length}개 (청산 비교)` : "후보마다 계좌 5개"}, h("dl", {class: "kv"}, ROLES.map((r) => h("div", null, h("dt", null, LK.roleChip(r)), h("dd", null, ROLE_DESC[r])))),
+      h("p", {class: "note"}, lineupOn()
+        ? `모든 계좌가 같은 신호 · 같은 손절 · 같은 크기 · 같은 시세라 바로 비교됩니다. ${ROLE_KO.cand}보다 잔고가 많으면 그 청산이 이 기간에 나았던 것입니다 (거래가 적으면 운).`
+        : "다섯 계좌는 같은 시세 · 같은 기간이라 바로 비교됩니다. 후보 > 청산만이면 숫자(커스텀값) 덕, 청산만 > 기본값이면 익절 · 손절 덕, 동전보다 못하면 방향을 맞힌 게 아닐 수 있습니다.")),
     ui.card({plate: "숫자 읽는 법"}, h("dl", {class: "kv"},
       h("div", null, h("dt", null, "한 번 평균"), h("dd", null, "닫힌 거래마다 (손익 ÷ 그 직전 지갑)의 평균. +0.10%면 거래 한 번에 지갑이 평균 0.1% 늘었다는 뜻. 점검도 이 단위로 합니다.")),
       h("div", null, h("dt", null, "묶음 평균"), h("dd", null, "그 묶음 모든 계좌의 거래를 한데 모은 한 번 평균 (계좌 평균의 평균이 아님).")),

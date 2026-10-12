@@ -10,10 +10,11 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {KIND_LONG, ROLE_KO} from "../labels.js";
+import {KIND_LONG, ROLE_KO, ROLES, lineupOn} from "../labels.js";
 
-const ROLES3 = ["cand", "base", "flip"];
-const RACE = ["cand", "exitonly", "base", "flip"];
+// the roles of the race and of the weeks; the owner-exit league (labels.js applyLineup): every one of its accounts per pick
+const roles3 = () => (lineupOn() ? ROLES.slice() : ["cand", "base", "flip"]);
+const race = () => (lineupOn() ? ROLES.slice() : ["cand", "exitonly", "base", "flip"]);
 
 export async function mount(el, ctx) {
   const core = h("div"), ds = h("div"), race = h("div", {class: "rc-pools"});
@@ -50,6 +51,7 @@ export function racePool(kind, r, d) {
   const t = r.t || [];
   const last = t.length - 1;
   const ro = p.roles || {};
+  const RACE = race();
   const series = RACE.filter((x) => ro[x]).map((x) => ({role: x, label: ROLE_KO[x], points: t.map((ms, i) => [ms, ro[x].median[i]])}));
   const fl = ro.flip;
   const band = fl && fl.p25 ? {label: "동전 계좌 가운데 50%", points: t.map((ms, i) => [ms, fl.p25[i], fl.p75[i]])} : null;
@@ -63,6 +65,7 @@ export function racePool(kind, r, d) {
       h("span", {class: "num"}, fmt.money(ro[x].median[last])))),
     fl && fl.p25 ? h("span", null, "동전 계좌 가운데 50% ", h("span", {class: "num"}, `${fmt.money(fl.p25[last])} ~ ${fmt.money(fl.p75[last])}`)) : null),
     LK.equityLines(series, {band, label: `${KIND_LONG[kind]} 묶음 레이스`, h: 240, empty: "아직 닫힌 거래가 없습니다"}),
+    lineupOn() ? h("p", {class: "note"}, `계좌 종류마다 후보 계좌들의 잔고 중앙값입니다 (닫힌 거래까지, 참고). 같은 신호 · 같은 손절에서 청산만 다르니 선끼리의 차이가 청산의 차이입니다.${nTr != null && nTr < 300 ? ` ${ROLE_KO.cand} 거래 ${fmt.int(nTr)}번: 아직 적어서 하루하루 크게 흔들립니다.` : ""}`) :
     h("p", {class: "note"}, where == null ? "아직 비교할 거래가 없습니다." : where === "above"
       ? "지금은 후보 중앙값이 동전 계좌 가운데 50%보다 위입니다 (참고)."
       : where === "below" ? "지금은 후보 중앙값이 동전 계좌 가운데 50%보다 아래입니다 (참고)."
@@ -73,12 +76,13 @@ export function racePool(kind, r, d) {
 
 function poolWeeks(kind, p) {
   if (!p) return ui.card({plate: KIND_LONG[kind]}, ui.none("준비 중"));
+  const ROLES3 = roles3();
   const weeks = p.weeks || [];
   if (!weeks.length) return ui.card({plate: KIND_LONG[kind]}, ui.empty("아직 닫힌 거래가 없습니다"));
   // the headline is the week's mean per trade (sum / trades): a sum of per-trade percentages is not a wallet change
   const mean = (x) => (x && x.n && x.sum != null ? x.sum / x.n : null);
   const max = Math.max(0.0001, ...weeks.flatMap((w) => ROLES3.map((r) => Math.abs(mean(w[r]) || 0))));
-  const run = {cand: [0, 0], base: [0, 0], flip: [0, 0]};
+  const run = Object.fromEntries(ROLES3.map((r) => [r, [0, 0]]));
   const rows = weeks.map((w) => {
     for (const r of ROLES3) { run[r][0] += (w[r] && w[r].sum) || 0; run[r][1] += (w[r] && w[r].n) || 0; }
     return {w, run: Object.fromEntries(ROLES3.map((r) => [r, run[r][1] ? run[r][0] / run[r][1] : null]))};

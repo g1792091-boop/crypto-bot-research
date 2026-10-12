@@ -23,8 +23,8 @@ import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {serverNow, liveState as priceState} from "../live.js";
 import {posPill, staleBanner, pricesLive, pxAgeKo} from "../poskit.js";
-import {ROLES} from "../labels.js";
-import {okGroup, okSub, groupKo, groupRows, ranking, hidden, walletRet, rankCards, rankTiles} from "./rank-cards.js";
+import {ROLES, ROLE_SHORT, lineupOn} from "../labels.js";
+import {okGroup, okSub, groupKo, groupRows, ranking, hidden, walletRet, rankCards, rankTiles, CMP_ROLES} from "./rank-cards.js";
 import {rankRow, topBottom, listFilters, filterRows, sortRows, rankMemo, rankDeltas, motionNote} from "./rank-rows.js";
 import {rankTable, tfSummary, csvRows, CSV_HEAD} from "./rank-table.js";
 import {afterBar, openAfter, openBefore, beforeChip} from "../after.js";
@@ -79,7 +79,8 @@ export async function mount(el, ctx) {
   const cards = rankCards({onPick: (id) => pick(id)});
   const tiles = rankTiles();
   const subSeg = h("div", {class: "seg rk-sub", role: "tablist", "aria-label": "비교 계좌 고르기"},
-    [{id: "all", label: "셋 다"}, {id: "quarter", label: "1/4 크기"}, {id: "exitonly", label: "청산만"}, {id: "base", label: "기본값"}].map((x) =>
+    (lineupOn() ? [{id: "all", label: "모두"}, ...CMP_ROLES.map((r) => ({id: r, label: ROLE_SHORT[r]}))]       // the owner-exit league's other exits
+      : [{id: "all", label: "셋 다"}, {id: "quarter", label: "1/4 크기"}, {id: "exitonly", label: "청산만"}, {id: "base", label: "기본값"}]).map((x) =>
       h("button", {type: "button", role: "tab", dataset: {id: x.id}, "aria-selected": String(x.id === st.sub), onclick: () => { st.sub = x.id; save(); render(true); }}, x.label)));
   const tb = topBottom();
   const moNote = h("div");

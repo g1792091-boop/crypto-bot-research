@@ -212,8 +212,30 @@ def _weekly(rets: list[tuple[int, float]]) -> dict:
     return out
 
 
-def _pool(rets_by_role: dict, pool: str, now_ms: int, show_money: bool) -> dict:
-    st = {role: _stats(rets_by_role.get(role, [])) for role in ROLES}
+def roles_of(accts: list[dict]) -> tuple:
+    """ROLES, then any other role the league's accounts have, in the order they first appear (the owner-exit league's kinds, the
+    exit study's rule roles): every pool lists them all, so a screen that iterates the league's own roles finds each one."""
+    extra = []
+    for a in accts:
+        r = a.get("role")
+        if r not in ROLES and r not in extra:
+            extra.append(r)
+    return ROLES + tuple(extra)
+
+
+def hold_of(trades: Iterable[dict]) -> dict:
+    """Hold hours of closed trades: {n, median_h, share_gt8, share_gt18} (counts and hours only, so a DeepSeek pool keeps them, D11)."""
+    h = sorted((int(t["exit_time"]) - int(t["entry_time"])) / 3_600_000.0 for t in trades
+               if t.get("entry_time") is not None and t.get("exit_time") is not None)
+    if not h:
+        return {"n": 0, "median_h": None, "share_gt8": None, "share_gt18": None}
+    return {"n": len(h), "median_h": round(_median(h), 3), "share_gt8": round(sum(x > 8 for x in h) / len(h), 4),
+            "share_gt18": round(sum(x > 18 for x in h) / len(h), 4)}
+
+
+def _pool(rets_by_role: dict, pool: str, now_ms: int, show_money: bool, roles: tuple = ROLES,
+          week_roles: tuple = ("cand", "base", "flip")) -> dict:
+    st = {role: _stats(rets_by_role.get(role, [])) for role in roles}
     cand, base, flip = st["cand"]["mean"], st["base"]["mean"], st["flip"]["mean"]
     have = cand is not None and base is not None and flip is not None
     c1_stop = (cand < base and cand < flip) if have else None
@@ -230,7 +252,7 @@ def _pool(rets_by_role: dict, pool: str, now_ms: int, show_money: bool) -> dict:
           "p_ok": None if p is None else p < 0.05, "weeks": len(weeks)}
     c2["all"] = bool(all(c2[k] for k in ("positive", "beats_base", "beats_flip", "enough", "p_ok")))
     week_rows = []
-    by_role_weeks = {role: _weekly(rets_by_role.get(role, [])) for role in ("cand", "base", "flip")}
+    by_role_weeks = {role: _weekly(rets_by_role.get(role, [])) for role in week_roles}
     for w in sorted(set().union(*[set(v) for v in by_role_weeks.values()])):
         row = {"week_ms": w}
         for role, wk in by_role_weeks.items():
@@ -241,23 +263,31 @@ def _pool(rets_by_role: dict, pool: str, now_ms: int, show_money: bool) -> dict:
     if show_money:
         c2["p"] = p
     else:
-        for role in ROLES:
+        for role in roles:
             st[role]["mean"] = None
     return {"roles": st, "c1_stop": c1_stop, "c2": c2, "weeks": week_rows, "money": show_money}
 
 
 def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = False) -> dict:
-    """The dashboard's 점검 진행 data. ``book``: {account id: closed trades in exit order (dicts with exit_time, pnl)}."""
+    """The dashboard's 점검 진행 data. ``book``: {account id: closed trades in exit order (dicts with exit_time, pnl)}.
+    The owner-exit league (accounts with ``ox``, rulex.owner_accounts) has no 기본값 or 동전 accounts, so WATCH_PREREG's checkpoints
+    do not apply to it: its ``checkpoints`` list is empty and ``owner`` is True; every pool lists every role of the league with its
+    trades' hold hours (``hold``)."""
     rets = {a["id"]: returns(book.get(a["id"], [])) for a in accts}
+    roles = roles_of(accts)
+    owner = any(a.get("ox") for a in accts)
+    present = {a["role"] for a in accts}
+    week_roles = tuple(r for r in roles if r in present) if owner else ("cand", "base", "flip")
     pools, strategies = {}, {}
     for pool in POOLS:
         mine = [a for a in accts if a["kind"] == pool]
-        by_role = {role: [r for a in mine if a["role"] == role for r in rets[a["id"]]] for role in ROLES}
+        by_role = {role: [r for a in mine if a["role"] == role for r in rets[a["id"]]] for role in roles}
         for v in by_role.values():
             v.sort()
         show = pool == "core" or ds_money
         pools[pool] = {"accounts": len(mine), "picks": sum(a["role"] == "cand" for a in mine),
-                       **_pool(by_role, pool, now_ms, show)}
+                       **_pool(by_role, pool, now_ms, show, roles, week_roles),
+                       "hold": {role: hold_of([t for a in mine if a["role"] == role for t in book.get(a["id"], [])]) for role in roles}}
         for name in sorted({a["name"] for a in mine}):
             per = {role: sorted(r for a in mine if a["name"] == name and a["role"] == role for r in rets[a["id"]])
                    for role in ROLES}
@@ -319,11 +349,11 @@ def watch_summary(accts: list[dict], book: dict, now_ms: int, ds_money: bool = F
                                 for k, v in both.items()}
         pools[pool]["paired"] = {k: _agg(x, show) for k, x in zip(("both", "cand_only", "default_only"), pooled_pairs[pool])}
     checkpoints = []
-    for c in CHECKPOINTS:
+    for c in () if owner else CHECKPOINTS:
         ms = day_ms(c["date"])
         checkpoints.append({**c, "ms": ms, "days_left": (ms - now_ms) / 86_400_000})
     return {"checkpoints": checkpoints, "pools": pools, "strategies": strategies, "picks": picks,
-            "min_trades": POOL_MIN_TRADES, "min_weeks_p": MIN_WEEKS_P}
+            "min_trades": POOL_MIN_TRADES, "min_weeks_p": MIN_WEEKS_P, "owner": owner, "roles": list(roles)}
 
 
 # ---------------------------------------------------------------- dashboard reads (dash.py /api/insight, /api/race)
@@ -470,9 +500,10 @@ def race(accts: list[dict], book: dict, start_ms: int, end_ms: int, max_points: 
     step = HOUR_MS * max(1, -(-(end - start) // HOUR_MS // max(1, max_points)))
     grid = list(range(start, end, step)) + [end]
     pools = {}
+    every = roles_of(accts)                     # ROLES, then the owner-exit league's own kinds
     for pool in POOLS:
         roles = {}
-        for role in ROLES:
+        for role in every:
             lines = []
             for a in accts:
                 if a.get("kind") != pool or a.get("role") != role:

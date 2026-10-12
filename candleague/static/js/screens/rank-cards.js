@@ -11,7 +11,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
-import {ROLE_KO, ROLE_SHORT, KIND_KO, tfKo} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, KIND_KO, tfKo, onLineup, lineupOn} from "../labels.js";
 import {openAfter, afterOn} from "../after.js";
 
 export const EQUITY = 5000;
@@ -23,6 +23,18 @@ export const GROUPS = [
   {id: "cmp", ko: "비교 계좌", short: "비교 계좌", title: "같은 후보에서 갈라진 1/4 크기 · 청산만 바꾼 기본값 · 기본값 계좌"},
   {id: "flip", ko: "동전 던지기", short: "동전", title: "후보와 같은 시각에 들어가되 방향만 동전으로 고른 계좌 (비교 기준, 판정 안 함)"},
 ];
+const CMP_DEFAULT = CMP_ROLES.slice(), GROUPS_DEFAULT = GROUPS.map((g) => ({...g}));
+// the owner-exit league (labels.js applyLineup): 비교 계좌 = the pick's other exits; the 후보 cards hold its 지금 청산 accounts
+onLineup((lu) => {
+  CMP_ROLES.splice(0, CMP_ROLES.length, ...(lu ? ROLES.filter((r) => r !== "cand") : CMP_DEFAULT));
+  GROUPS.forEach((g, i) => Object.assign(g, GROUPS_DEFAULT[i]));
+  if (lu) {
+    const core = GROUPS.find((g) => g.id === "core"), ds = GROUPS.find((g) => g.id === "ds"), cmp = GROUPS.find((g) => g.id === "cmp");
+    core.title = `기존 36 매매법의 ${ROLE_KO.cand} 계좌 (커스텀값 + 지금 익절·손절)`;
+    ds.title = `딥시크 매매법의 ${ROLE_KO.cand} 계좌 (커스텀값 + 지금 익절·손절)`;
+    Object.assign(cmp, {ko: "다른 청산", short: "다른 청산", title: `같은 후보 · 같은 신호에서 청산만 다른 계좌: ${CMP_ROLES.map((r) => ROLE_KO[r]).join(" · ")}`});
+  }
+});
 export const GROUP_IDS = [...GROUPS.map((g) => g.id), "all"];
 export const okGroup = (g) => (GROUP_IDS.includes(g) ? g : null);
 export const okSub = (s) => (CMP_ROLES.includes(s) ? s : "all");
@@ -199,6 +211,13 @@ export function rankCards(o = {}) {
         }
         put(c.pool, h("span", null, `묶음 한 번 평균 ${allHidden ? "숨김" : retTxt(x.pool)}`), glyph(x.poolFlip, "동전"), glyph(x.poolBase, "기본값"));
         c.pool.title = "이 묶음 후보 계좌들의 모든 거래를 모은 한 번 평균 (점검과 같은 계산) · ▲▼ = 같은 묶음의 동전·기본값 계좌보다 위·아래";
+      } else if (g.id === "cmp" && lineupOn()) {     // the owner-exit league: the pick's other exits against its 지금 청산
+        const r = x.byRole;
+        c.cnt.textContent = `${fmt.int(x.n)}계좌 · ${CMP_ROLES.map((k) => `${ROLE_SHORT[k]} ${fmt.int(r[k].n)}`).join(" · ")}${hidNote}`;
+        c.vs.textContent = `${ROLE_SHORT.cand}보다 나음 · ${CMP_ROLES.map((k) => `${ROLE_SHORT[k]} ${fmt.int(r[k].vs.up)}/${fmt.int(r[k].vs.n)}`).join(" · ")}`;
+        c.vs2.textContent = "";
+        put(c.pool, `한 번 평균 · ${CMP_ROLES.map((k) => `${ROLE_SHORT[k]} ${retTxt(r[k].pool)}`).join(" · ")}`);
+        c.pool.title = "청산마다 모든 거래를 모은 한 번 평균 (숨긴 딥시크 계좌는 뺌)";
       } else if (g.id === "cmp") {
         const r = x.byRole;
         c.cnt.textContent = `${fmt.int(x.n)}계좌 · 1/4 ${fmt.int(r.quarter.n)} · 청산만 ${fmt.int(r.exitonly.n)} · 기본값 ${fmt.int(r.base.n)}${hidNote}`;
