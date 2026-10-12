@@ -1,0 +1,4115 @@
+{
+ "what": "PREREG_HUNT_R2 3.4-3.6 and appendix A, from code only (no data read)",
+ "names": 85,
+ "totals": {
+  "coarse": 3784,
+  "defaults": 85,
+  "grid_valid_only": 3950,
+  "cells": 15121,
+  "largest_box": 4032,
+  "tries": 8316,
+  "selectable": 4369,
+  "stage0": 670,
+  "new_coarse": 3699,
+  "order_rule_removed": 166
+ },
+ "rows": [
+  {
+   "family": "F1",
+   "name": "E1",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "channel",
+     "kind": "length",
+     "default": 55,
+     "coarse": [
+      28,
+      55,
+      110
+     ]
+    },
+    {
+     "name": "vol_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "vol_mult",
+     "kind": "threshold_neutral",
+     "default": 2.0,
+     "coarse": [
+      1.5,
+      2.0,
+      2.5
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F1",
+   "name": "E2",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "window",
+     "kind": "length",
+     "default": 120,
+     "coarse": [
+      60,
+      120,
+      240
+     ]
+    },
+    {
+     "name": "pct",
+     "kind": "threshold_abs",
+     "default": 20.0,
+     "coarse": [
+      10.0,
+      20.0,
+      40.0
+     ]
+    },
+    {
+     "name": "bb_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "bb_k",
+     "kind": "mult",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F1",
+   "name": "E3",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "threshold",
+     "kind": "threshold_neutral",
+     "default": 1.5,
+     "coarse": [
+      1.25,
+      1.5,
+      1.75
+     ]
+    },
+    {
+     "name": "fast",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "slow",
+     "kind": "length",
+     "default": 100,
+     "coarse": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "name": "side_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "DOGE",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_slow",
+     "kind": "length",
+     "default": 156,
+     "coarse": [
+      78,
+      156,
+      312
+     ]
+    },
+    {
+     "name": "stoch_len",
+     "kind": "length",
+     "default": 70,
+     "coarse": [
+      35,
+      70,
+      140
+     ]
+    },
+    {
+     "name": "spread_min",
+     "kind": "threshold_abs",
+     "default": 0.15,
+     "coarse": [
+      0.075,
+      0.15,
+      0.3
+     ]
+    },
+    {
+     "name": "chop_max",
+     "kind": "threshold_abs",
+     "default": 61.8,
+     "coarse": [
+      30.9,
+      61.8
+     ]
+    }
+   ],
+   "coarse_points": 54,
+   "grid_valid_only": 54,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 61,
+   "tries": 141
+  },
+  {
+   "family": "F2",
+   "name": "N01_ST_EMA",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_fast",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    },
+    {
+     "name": "ema_slow",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "st_atr_len",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    },
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N02_ST_KST",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_atr_len",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    },
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "kst_roc_lens",
+     "kind": "length",
+     "default": [
+      10,
+      15,
+      20,
+      30
+     ],
+     "coarse": [
+      [
+       5,
+       8,
+       10,
+       15
+      ],
+      [
+       10,
+       15,
+       20,
+       30
+      ],
+      [
+       20,
+       30,
+       40,
+       60
+      ]
+     ]
+    },
+    {
+     "name": "kst_signal_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N03_ADX_GC",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_fast",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    },
+    {
+     "name": "ema_slow",
+     "kind": "length",
+     "default": 200,
+     "coarse": [
+      100,
+      200,
+      400
+     ]
+    },
+    {
+     "name": "adx_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_level",
+     "kind": "threshold_abs",
+     "default": 25.0,
+     "coarse": [
+      12.5,
+      25.0,
+      50.0
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N04_ST_KLINGER",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_atr_len",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    },
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "kvo_lens",
+     "kind": "length",
+     "default": [
+      34,
+      55
+     ],
+     "coarse": [
+      [
+       17,
+       28
+      ],
+      [
+       34,
+       55
+      ],
+      [
+       68,
+       110
+      ]
+     ]
+    },
+    {
+     "name": "kvo_signal_len",
+     "kind": "length",
+     "default": 13,
+     "coarse": [
+      7,
+      13,
+      26
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N05_PSAR_POC",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "poc_lookback",
+     "kind": "length",
+     "default": 100,
+     "coarse": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "name": "poc_tol",
+     "kind": "threshold_abs",
+     "default": 0.2,
+     "coarse": [
+      0.1,
+      0.2,
+      0.4
+     ]
+    },
+    {
+     "name": "pierce_frac",
+     "kind": "threshold_abs",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    },
+    {
+     "name": "sar_af",
+     "kind": "mult",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N06_MACD_ORB",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "macd_fast",
+     "kind": "length",
+     "default": 12,
+     "coarse": [
+      6,
+      12,
+      24
+     ]
+    },
+    {
+     "name": "macd_slow",
+     "kind": "length",
+     "default": 26,
+     "coarse": [
+      13,
+      26,
+      52
+     ]
+    },
+    {
+     "name": "macd_signal",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "ext_cap",
+     "kind": "mult",
+     "default": 1.5,
+     "coarse": [
+      0.75,
+      1.5,
+      3.0
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N07_ICHI_CMO",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "tenkan_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "kijun_len",
+     "kind": "length",
+     "default": 26,
+     "coarse": [
+      13,
+      26,
+      52
+     ]
+    },
+    {
+     "name": "senkou_b_len",
+     "kind": "length",
+     "default": 52,
+     "coarse": [
+      26,
+      52,
+      104
+     ]
+    },
+    {
+     "name": "cmo_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    }
+   ],
+   "coarse_points": 45,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 52,
+   "tries": 132
+  },
+  {
+   "family": "F2",
+   "name": "N08_ICHI_WR",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "tenkan_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "kijun_len",
+     "kind": "length",
+     "default": 26,
+     "coarse": [
+      13,
+      26,
+      52
+     ]
+    },
+    {
+     "name": "wr_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "wr_oversold",
+     "kind": "threshold_neutral",
+     "default": -80.0,
+     "coarse": [
+      -95.0,
+      -80.0,
+      -65.0
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N09_ALLIG_AROON",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "lips_len",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    },
+    {
+     "name": "teeth_len",
+     "kind": "length",
+     "default": 8,
+     "coarse": [
+      4,
+      8,
+      16
+     ]
+    },
+    {
+     "name": "jaw_len",
+     "kind": "length",
+     "default": 13,
+     "coarse": [
+      7,
+      13,
+      26
+     ]
+    },
+    {
+     "name": "aroon_len",
+     "kind": "length",
+     "default": 25,
+     "coarse": [
+      13,
+      25,
+      50
+     ]
+    }
+   ],
+   "coarse_points": 30,
+   "grid_valid_only": 81,
+   "largest_box": 72,
+   "stage0_systems": 8,
+   "selectable": 37,
+   "tries": 108
+  },
+  {
+   "family": "F2",
+   "name": "N10_HA_PSAR",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "sar_af_start",
+     "kind": "mult",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    },
+    {
+     "name": "sar_af_step",
+     "kind": "mult",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    },
+    {
+     "name": "sar_af_max",
+     "kind": "mult",
+     "default": 0.2,
+     "coarse": [
+      0.1,
+      0.2,
+      0.4
+     ]
+    },
+    {
+     "name": "wick_tol",
+     "kind": "threshold_abs",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N11_BREAKAWAY",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "big_body",
+     "kind": "threshold_abs",
+     "default": 0.8,
+     "coarse": [
+      0.4,
+      0.8
+     ]
+    },
+    {
+     "name": "small_body",
+     "kind": "threshold_abs",
+     "default": 0.4,
+     "coarse": [
+      0.2,
+      0.4,
+      0.8
+     ]
+    },
+    {
+     "name": "gap_tol",
+     "kind": "threshold_abs",
+     "default": 0.05,
+     "coarse": [
+      0.025,
+      0.05,
+      0.1
+     ]
+    },
+    {
+     "name": "prior_n",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 114
+  },
+  {
+   "family": "F2",
+   "name": "N12_ICHI_AO",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "tenkan_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "kijun_len",
+     "kind": "length",
+     "default": 26,
+     "coarse": [
+      13,
+      26,
+      52
+     ]
+    },
+    {
+     "name": "ao_fast_len",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    },
+    {
+     "name": "ao_slow_len",
+     "kind": "length",
+     "default": 34,
+     "coarse": [
+      17,
+      34,
+      68
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N13_3OUTSIDE",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "engulf_min",
+     "kind": "threshold_abs",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    },
+    {
+     "name": "prior_n",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    },
+    {
+     "name": "atr_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F2",
+   "name": "N14_ICHI_RSI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "tenkan_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "kijun_len",
+     "kind": "length",
+     "default": 26,
+     "coarse": [
+      13,
+      26,
+      52
+     ]
+    },
+    {
+     "name": "rsi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "rsi_oversold",
+     "kind": "threshold_neutral",
+     "default": 30.0,
+     "coarse": [
+      20.0,
+      30.0,
+      40.0
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N15_KC_AO",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "kc_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "kc_mult",
+     "kind": "mult",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    },
+    {
+     "name": "ao_fast",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    },
+    {
+     "name": "ao_slow",
+     "kind": "length",
+     "default": 34,
+     "coarse": [
+      17,
+      34,
+      68
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N16_BBRSI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "bb_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "rsi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "map_scale",
+     "kind": "mult",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    },
+    {
+     "name": "pivot_len",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N17_KC_RSI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "kc_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "kc_mult",
+     "kind": "mult",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    },
+    {
+     "name": "rsi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "rsi_level",
+     "kind": "threshold_neutral",
+     "default": 30.0,
+     "coarse": [
+      20.0,
+      30.0,
+      40.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N18_VWMA_MACD",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "vwma_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "macd_fast",
+     "kind": "length",
+     "default": 12,
+     "coarse": [
+      6,
+      12,
+      24
+     ]
+    },
+    {
+     "name": "macd_slow",
+     "kind": "length",
+     "default": 26,
+     "coarse": [
+      13,
+      26,
+      52
+     ]
+    },
+    {
+     "name": "macd_signal",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F2",
+   "name": "N19_FIB_CHOP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "range_len",
+     "kind": "length",
+     "default": 34,
+     "coarse": [
+      17,
+      34,
+      68
+     ]
+    },
+    {
+     "name": "fib_level",
+     "kind": "mult",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    },
+    {
+     "name": "touch_atr",
+     "kind": "mult",
+     "default": 0.2,
+     "coarse": [
+      0.1,
+      0.2,
+      0.4
+     ]
+    },
+    {
+     "name": "slope_thr",
+     "kind": "threshold_abs",
+     "default": 0.2,
+     "coarse": [
+      0.1,
+      0.2,
+      0.4
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N20_EMA9_CHOP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "adx_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_thr",
+     "kind": "threshold_abs",
+     "default": 20.0,
+     "coarse": [
+      10.0,
+      20.0,
+      40.0
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F2",
+   "name": "N21_ST_RSI_ADX",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "adx_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_level",
+     "kind": "threshold_abs",
+     "default": 25.0,
+     "coarse": [
+      12.5,
+      25.0,
+      50.0
+     ]
+    },
+    {
+     "name": "rsi_level",
+     "kind": "threshold_neutral",
+     "default": 30.0,
+     "coarse": [
+      20.0,
+      30.0,
+      40.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N22_VORTEX_PSAR",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "vi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "psar_start",
+     "kind": "mult",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    },
+    {
+     "name": "psar_step",
+     "kind": "mult",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    },
+    {
+     "name": "psar_max",
+     "kind": "mult",
+     "default": 0.2,
+     "coarse": [
+      0.1,
+      0.2,
+      0.4
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N23_HA_ST",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_atr_len",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    },
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "wick_tol",
+     "kind": "threshold_abs",
+     "default": 0.02,
+     "coarse": [
+      0.01,
+      0.02,
+      0.04
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F2",
+   "name": "N24_DMI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "di_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_long_min",
+     "kind": "threshold_abs",
+     "default": 25.0,
+     "coarse": [
+      12.5,
+      25.0,
+      50.0
+     ]
+    },
+    {
+     "name": "adx_short_max",
+     "kind": "threshold_abs",
+     "default": 25.0,
+     "coarse": [
+      12.5,
+      25.0,
+      50.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "N25_DST_CCI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "cci_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "cci_level",
+     "kind": "threshold_neutral",
+     "default": 100.0,
+     "coarse": [
+      50.0,
+      100.0,
+      150.0
+     ]
+    },
+    {
+     "name": "st_fast_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "st_slow_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "OBV_B",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "break_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "ao_fast",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    },
+    {
+     "name": "ao_slow",
+     "kind": "length",
+     "default": 34,
+     "coarse": [
+      17,
+      34,
+      68
+     ]
+    },
+    {
+     "name": "ac_len",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "OBV_S",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "obv_ma_len",
+     "kind": "length",
+     "default": 30,
+     "coarse": [
+      15,
+      30,
+      60
+     ]
+    },
+    {
+     "name": "stc_level",
+     "kind": "threshold_neutral",
+     "default": 70.0,
+     "coarse": [
+      60.0,
+      70.0,
+      80.0
+     ]
+    },
+    {
+     "name": "stoch_k_smooth",
+     "kind": "length",
+     "default": 4,
+     "coarse": [
+      2,
+      4,
+      8
+     ]
+    },
+    {
+     "name": "ao_slow_len",
+     "kind": "length",
+     "default": 34,
+     "coarse": [
+      17,
+      34,
+      68
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "S1_EMA_RSI_CHOP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_slow",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "rsi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "rsi_level",
+     "kind": "threshold_neutral",
+     "default": 30.0,
+     "coarse": [
+      20.0,
+      30.0,
+      40.0
+     ]
+    },
+    {
+     "name": "chop_len",
+     "kind": "length",
+     "default": 34,
+     "coarse": [
+      17,
+      34,
+      68
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "S2_ST_ROC",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_atr_len",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    },
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "roc_len",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F2",
+   "name": "S3_CMO_SANDWICH",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "cmo_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "body_min",
+     "kind": "mult",
+     "default": 0.08,
+     "coarse": [
+      0.04,
+      0.08,
+      0.16
+     ]
+    },
+    {
+     "name": "match_tol",
+     "kind": "mult",
+     "default": 0.3,
+     "coarse": [
+      0.15,
+      0.3,
+      0.6
+     ]
+    },
+    {
+     "name": "prior_n",
+     "kind": "length",
+     "default": 5,
+     "coarse": [
+      3,
+      5,
+      10
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "S4_BB_BBP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "bb_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "bb_mult",
+     "kind": "mult",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    },
+    {
+     "name": "sq_lookback",
+     "kind": "length",
+     "default": 100,
+     "coarse": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "name": "sq_pct",
+     "kind": "threshold_abs",
+     "default": 0.2,
+     "coarse": [
+      0.1,
+      0.2,
+      0.4
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "S5_DONCHIAN_MFI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "dc_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "mfi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "mfi_level",
+     "kind": "threshold_neutral",
+     "default": 30.0,
+     "coarse": [
+      20.0,
+      30.0,
+      40.0
+     ]
+    },
+    {
+     "name": "sync",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "S6_EMA_DMI_ADX",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "di_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "adx_min",
+     "kind": "threshold_abs",
+     "default": 25.0,
+     "coarse": [
+      12.5,
+      25.0,
+      50.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "V39_ALL",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_mult",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "dmi_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "dmi_gap",
+     "kind": "threshold_abs",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    },
+    {
+     "name": "stoch_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F2",
+   "name": "V45_AMB",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "st_mult_main",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "st_mult_strict",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "htf_st_mult",
+     "kind": "mult",
+     "default": 6.0,
+     "coarse": [
+      3.0,
+      6.0,
+      12.0
+     ]
+    },
+    {
+     "name": "stoch_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F1_RSI_DIV",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "div_max_bars",
+     "kind": "length",
+     "default": 60,
+     "coarse": [
+      30,
+      60,
+      120
+     ]
+    },
+    {
+     "name": "rsi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F3",
+   "name": "F1_MOM_DIV",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "div_max_bars",
+     "kind": "length",
+     "default": 60,
+     "coarse": [
+      30,
+      60,
+      120
+     ]
+    },
+    {
+     "name": "mom_len",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F3",
+   "name": "F1_PVT_DIV",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "div_max_bars",
+     "kind": "length",
+     "default": 60,
+     "coarse": [
+      30,
+      60,
+      120
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F3_BOS",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F3_BOS_ZONE",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    },
+    {
+     "name": "ema_len",
+     "kind": "length",
+     "default": 200,
+     "coarse": [
+      100,
+      200,
+      400
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F3",
+   "name": "F3_HHHL",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F4_PULL",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_fast",
+     "kind": "length",
+     "default": 9,
+     "coarse": [
+      5,
+      9,
+      18
+     ]
+    },
+    {
+     "name": "ema_mid",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    },
+    {
+     "name": "ema_slow",
+     "kind": "length",
+     "default": 200,
+     "coarse": [
+      100,
+      200,
+      400
+     ]
+    }
+   ],
+   "coarse_points": 24,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 31,
+   "tries": 57
+  },
+  {
+   "family": "F3",
+   "name": "F4_PULL_RSI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "ema_fast",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "ema_slow",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    },
+    {
+     "name": "rsi_len",
+     "kind": "length",
+     "default": 14,
+     "coarse": [
+      7,
+      14,
+      28
+     ]
+    },
+    {
+     "name": "rsi_level",
+     "kind": "threshold_neutral",
+     "default": 40.0,
+     "coarse": [
+      35.0,
+      40.0,
+      45.0
+     ]
+    }
+   ],
+   "coarse_points": 72,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 79,
+   "tries": 159
+  },
+  {
+   "family": "F3",
+   "name": "F4_FAN",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "fan_lens",
+     "kind": "length",
+     "default": [
+      8,
+      13,
+      21,
+      34,
+      55
+     ],
+     "coarse": [
+      [
+       4,
+       7,
+       11,
+       17,
+       28
+      ],
+      [
+       8,
+       13,
+       21,
+       34,
+       55
+      ],
+      [
+       16,
+       26,
+       42,
+       68,
+       110
+      ]
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F5_BOX",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "box_len",
+     "kind": "length",
+     "default": 48,
+     "coarse": [
+      24,
+      48,
+      96
+     ]
+    },
+    {
+     "name": "adx_max",
+     "kind": "threshold_abs",
+     "default": 20.0,
+     "coarse": [
+      10.0,
+      20.0,
+      40.0
+     ]
+    },
+    {
+     "name": "edge",
+     "kind": "mult",
+     "default": 0.15,
+     "coarse": [
+      0.075,
+      0.15,
+      0.3
+     ]
+    },
+    {
+     "name": "width_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F5_BOX_RSI",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "box_len",
+     "kind": "length",
+     "default": 48,
+     "coarse": [
+      24,
+      48,
+      96
+     ]
+    },
+    {
+     "name": "adx_max",
+     "kind": "threshold_abs",
+     "default": 20.0,
+     "coarse": [
+      10.0,
+      20.0,
+      40.0
+     ]
+    },
+    {
+     "name": "edge",
+     "kind": "mult",
+     "default": 0.15,
+     "coarse": [
+      0.075,
+      0.15,
+      0.3
+     ]
+    },
+    {
+     "name": "rsi_level",
+     "kind": "threshold_neutral",
+     "default": 30.0,
+     "coarse": [
+      20.0,
+      30.0,
+      40.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F5_BOX_HTF",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "box_len",
+     "kind": "length",
+     "default": 48,
+     "coarse": [
+      24,
+      48,
+      96
+     ]
+    },
+    {
+     "name": "adx_max",
+     "kind": "threshold_abs",
+     "default": 20.0,
+     "coarse": [
+      10.0,
+      20.0,
+      40.0
+     ]
+    },
+    {
+     "name": "edge",
+     "kind": "mult",
+     "default": 0.15,
+     "coarse": [
+      0.075,
+      0.15,
+      0.3
+     ]
+    },
+    {
+     "name": "width_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F6_VWAP_FAIL",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "fail_bars",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F7_RF_TRIPLE",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "rf_period",
+     "kind": "length",
+     "default": 100,
+     "coarse": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "name": "rf_mult",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F7_RF_ONLY",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "rf_period",
+     "kind": "length",
+     "default": 100,
+     "coarse": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "name": "rf_mult",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F8_VWICK",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "body_frac",
+     "kind": "mult",
+     "default": 0.7,
+     "coarse": [
+      0.35,
+      0.7
+     ]
+    },
+    {
+     "name": "body_atr",
+     "kind": "mult",
+     "default": 1.3,
+     "coarse": [
+      0.65,
+      1.3,
+      2.6
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 18,
+   "grid_valid_only": 18,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 25,
+   "tries": 51
+  },
+  {
+   "family": "F3",
+   "name": "F9_FVG",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "fvg_min_atr",
+     "kind": "mult",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F9_IFVG",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "fvg_min_atr",
+     "kind": "mult",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F9_OB",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F9_BREAKER",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F10_M2022",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "disp_atr",
+     "kind": "mult",
+     "default": 1.2,
+     "coarse": [
+      0.6,
+      1.2,
+      2.4
+     ]
+    },
+    {
+     "name": "sweep_bars",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "fvg_min_atr",
+     "kind": "mult",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F10_OTE",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "leg_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "leg_max_bars",
+     "kind": "length",
+     "default": 30,
+     "coarse": [
+      15,
+      30,
+      60
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F3",
+   "name": "F11_TSOUP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "tsoup_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "min_age",
+     "kind": "length",
+     "default": 4,
+     "coarse": [
+      2,
+      4,
+      8
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F11_RAID",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F11_PO3",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "po3_range_h",
+     "kind": "length",
+     "default": 8,
+     "coarse": [
+      4,
+      8,
+      16
+     ]
+    },
+    {
+     "name": "po3_rev_bars",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F12_MSS",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F12_MSS_DISP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "disp_atr",
+     "kind": "mult",
+     "default": 1.2,
+     "coarse": [
+      0.6,
+      1.2,
+      2.4
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F13_FVG_PD",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "fvg_min_atr",
+     "kind": "mult",
+     "default": 0.5,
+     "coarse": [
+      0.25,
+      0.5,
+      1.0
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 27,
+   "grid_valid_only": 27,
+   "largest_box": 27,
+   "stage0_systems": 8,
+   "selectable": 34,
+   "tries": 60
+  },
+  {
+   "family": "F3",
+   "name": "F13_RAID_PD",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F14_SMT",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "smt_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F3",
+   "name": "F15_ASIA_BRK",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "numbers": [
+    {
+     "name": "asia_win_h",
+     "kind": "length",
+     "default": 8,
+     "coarse": [
+      4,
+      8,
+      16
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 6,
+   "selectable": 8,
+   "tries": 10
+  },
+  {
+   "family": "F3",
+   "name": "F15_ASIA_SWEEP",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "numbers": [
+    {
+     "name": "asia_win_h",
+     "kind": "length",
+     "default": 8,
+     "coarse": [
+      4,
+      8,
+      16
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 6,
+   "selectable": 8,
+   "tries": 10
+  },
+  {
+   "family": "F3",
+   "name": "F15_LON_BRK",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "numbers": [
+    {
+     "name": "lon_win_h",
+     "kind": "length",
+     "default": 7,
+     "coarse": [
+      4,
+      7,
+      14
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 6,
+   "selectable": 8,
+   "tries": 10
+  },
+  {
+   "family": "F3",
+   "name": "F15_OPEN0930",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "numbers": [
+    {
+     "name": "judge_min",
+     "kind": "length",
+     "default": 60,
+     "coarse": [
+      30,
+      60,
+      120
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 6,
+   "selectable": 8,
+   "tries": 10
+  },
+  {
+   "family": "F3",
+   "name": "F15_OPEN0000",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h"
+   ],
+   "numbers": [
+    {
+     "name": "judge_min",
+     "kind": "length",
+     "default": 60,
+     "coarse": [
+      30,
+      60,
+      120
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 6,
+   "selectable": 8,
+   "tries": 10
+  },
+  {
+   "family": "F3",
+   "name": "F15_ORB",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "orb_bars",
+     "kind": "length",
+     "default": 2,
+     "coarse": [
+      2,
+      4
+     ]
+    }
+   ],
+   "coarse_points": 2,
+   "grid_valid_only": 2,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 9,
+   "tries": 11
+  },
+  {
+   "family": "F3",
+   "name": "F16_FIB382",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "leg_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "leg_max_bars",
+     "kind": "length",
+     "default": 30,
+     "coarse": [
+      15,
+      30,
+      60
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F16_FIB500",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "leg_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "leg_max_bars",
+     "kind": "length",
+     "default": 30,
+     "coarse": [
+      15,
+      30,
+      60
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F16_FIB618",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "leg_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "leg_max_bars",
+     "kind": "length",
+     "default": 30,
+     "coarse": [
+      15,
+      30,
+      60
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F16_FIB764",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "swing_k",
+     "kind": "length",
+     "default": 3,
+     "coarse": [
+      2,
+      3,
+      6
+     ]
+    },
+    {
+     "name": "leg_atr",
+     "kind": "mult",
+     "default": 3.0,
+     "coarse": [
+      1.5,
+      3.0,
+      6.0
+     ]
+    },
+    {
+     "name": "leg_max_bars",
+     "kind": "length",
+     "default": 30,
+     "coarse": [
+      15,
+      30,
+      60
+     ]
+    },
+    {
+     "name": "zone_life",
+     "kind": "length",
+     "default": 50,
+     "coarse": [
+      25,
+      50,
+      100
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F3",
+   "name": "F17_Z",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "z_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "z_level",
+     "kind": "threshold_abs",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    }
+   ],
+   "coarse_points": 9,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 16,
+   "tries": 24
+  },
+  {
+   "family": "F3",
+   "name": "F17_Z_HL",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "z_len",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "z_level",
+     "kind": "threshold_abs",
+     "default": 2.0,
+     "coarse": [
+      1.0,
+      2.0,
+      4.0
+     ]
+    },
+    {
+     "name": "hl_len",
+     "kind": "length",
+     "default": 100,
+     "coarse": [
+      50,
+      100,
+      200
+     ]
+    },
+    {
+     "name": "half_life",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    }
+   ],
+   "coarse_points": 81,
+   "grid_valid_only": 81,
+   "largest_box": 81,
+   "stage0_systems": 8,
+   "selectable": 88,
+   "tries": 168
+  },
+  {
+   "family": "F5",
+   "name": "TURTLE20",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "entry_days",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    },
+    {
+     "name": "exit_days",
+     "kind": "length",
+     "default": 10,
+     "coarse": [
+      5,
+      10,
+      20
+     ]
+    }
+   ],
+   "coarse_points": 6,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 13,
+   "tries": 21
+  },
+  {
+   "family": "F5",
+   "name": "TURTLE55",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "entry_days",
+     "kind": "length",
+     "default": 55,
+     "coarse": [
+      28,
+      55,
+      110
+     ]
+    },
+    {
+     "name": "exit_days",
+     "kind": "length",
+     "default": 20,
+     "coarse": [
+      10,
+      20,
+      40
+     ]
+    }
+   ],
+   "coarse_points": 8,
+   "grid_valid_only": 9,
+   "largest_box": 9,
+   "stage0_systems": 8,
+   "selectable": 15,
+   "tries": 23
+  },
+  {
+   "family": "F5",
+   "name": "TSMOM7",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "lookback_days",
+     "kind": "length",
+     "default": 7,
+     "coarse": [
+      4,
+      7,
+      14
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  },
+  {
+   "family": "F5",
+   "name": "TSMOM28",
+   "timeframes": [
+    "15m",
+    "30m",
+    "1h",
+    "4h"
+   ],
+   "numbers": [
+    {
+     "name": "lookback_days",
+     "kind": "length",
+     "default": 28,
+     "coarse": [
+      14,
+      28,
+      56
+     ]
+    }
+   ],
+   "coarse_points": 3,
+   "grid_valid_only": 3,
+   "largest_box": 3,
+   "stage0_systems": 8,
+   "selectable": 10,
+   "tries": 12
+  }
+ ]
+}
