@@ -1949,8 +1949,8 @@ def test_bar_ms_parameter_reproduces_the_replica_close_shift(tmp_path):
 
 
 # ====================================================================================================== runner: stages on a synthetic universe
-SYN_VARIANTS = ["F1.w3.a", "F2.n20.b", "F3.a", "F4.m2.b", "F4.m2.a.q15", "F5.P1.g50.a", "F6.w2.d0", "F7.N12.a", "F8.w3.P1.a", "F9.a",
-                "F10.N6.a", "F11.a", "F11.b"]
+SYN_VARIANTS = ["F1.w3.a", "F2.n20.b", "F3.a", "F4.m2.b", "F4.m2.a.q15", "F5.P1.g50.a", "F6.w2.d0", "F7.N12.a", "F7h.H8.a", "F8.w3.P1.a",
+                "F9.a", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b"]
 
 
 def syn_pick(kind, tf, exit_name, n=1):
@@ -1976,8 +1976,8 @@ def syn_cfg(tmp, period="select", stage=None, n_seeds=20, procs=1, variants=SYN_
     return cfg
 
 
-FORCED_PAIRS = {("F1.w3.a", "core"), ("F4.m2.b", "core"), ("F11.a", "core"), ("F7.N12.a", "core"), ("F1.w3.a", "ds"), ("F4.m2.b", "ds"),
-                ("F3.a", "ds")}
+FORCED_PAIRS = {("F1.w3.a", "core"), ("F4.m2.b", "core"), ("F11.a", "core"), ("F7.N12.a", "core"), ("F7h.H8.a", "core"), ("F12.a", "core"),
+                ("F1.w3.a", "ds"), ("F4.m2.b", "ds"), ("F3.a", "ds"), ("F12.b", "ds"), ("F7h.H8.a", "ds")}
 
 
 def forced_gates(cfg, orig):
@@ -2014,23 +2014,49 @@ def test_runner_select_writes_the_documented_files_and_keeps_deepseek_money_priv
     j = json.load(open(os.path.join(out, "select.json")))
     assert j["pin"] == "cd" * 32 and j["n_seeds"] == 20 and j["f11"] is True and j["complete_menu"] is False
     assert j["ds_private_sha256"] == DX.sha256_file(os.path.join(work, "ds_private", "select_ds.json"))
+    rp = os.path.join(work, "ds_private", "owner_report_select.md")
+    assert j["ds_owner_report_sha256"] == DX.sha256_file(rp)                       # the private owner report: outside out/, hashed in select.json
     core, ds = j["pools"]["core"], j["pools"]["ds"]
     assert len(core["variants"]) == len(ds["variants"]) == len(SYN_VARIANTS)
-    for r in core["variants"]:
-        assert {"M", "M_pct_month", "median_Mp", "n_pos", "live", "hold", "entered"} <= set(r)
-    assert RX.audit_a8([os.path.join(out, "select.json")])
+    for pool in (core, ds):                                                         # choosable rows first, then the rest; canonical order inside each part
+        flags = [r["eligible"] for r in pool["variants"]]
+        assert flags == sorted(flags, reverse=True)
+        for part in (True, False):
+            orders = [r["order"] for r in pool["variants"] if r["eligible"] is part]
+            assert orders == sorted(orders)
+        for r in pool["variants"]:
+            assert r["label"] == ("선택 가능" if r["eligible"] else "선택 불가") and r["loss_class"] in ("L0", "L1", "L2", "L3")
+            assert set(r["gates"]) == {"g1", "g2", "g3", "g4"} and set(r["hold_by_state"]) == {"추세장", "횡보장", "급변장", "보통", "모름"}
+            assert {"median", "p90", "share_gt4", "share_gt8", "share_gt18"} <= set(r["hold"])
+            assert (r["gates"]["g3"] == "n/a") == (r["family"] in ("F7", "F7h"))
+            assert r["gates"]["g3"] != "not_run" or not r["step2"]
+        assert set(pool["e0"]["hold_by_state"]) == {"추세장", "횡보장", "급변장", "보통", "모름"}
+    f12 = [r for r in core["variants"] if r["family"] == "F12"]
+    assert f12 and all(set(r["comp_fired"]) == set(MT.COMP_LABELS) and set(r["comp_alone"]) == set(MT.COMP_LABELS) for r in f12)
+    for r in core["variants"]:                                                      # growth only on choosable core rows (8.2 item 6)
+        assert ("M" in r and "live" in r) == r["eligible"]
+    assert os.path.exists(os.path.join(work, "results", "select", "core_not_choosable.json")) == any(not r["eligible"] for r in core["variants"])
+    assert MT.d11_problems(select_doc=j, select_md=open(os.path.join(out, "SELECT_KO.md"), encoding="utf-8").read()) == []
     for r in ds["variants"]:                                    # D11: no money in a DeepSeek row
-        assert set(r) <= RX.DS_ALLOWED and "M" not in r and "live" not in r and "placebo" not in r
-    assert "M" not in ds["e0"] and "max_dd_median" not in ds["e0"]
+        assert set(r) <= RX.DS_ALLOWED and MT.ds_whitelist_ok(r) and "M" not in r and "live" not in r and "placebo" not in r
+    assert set(ds["e0"]) <= MT.DS_E0_ALLOWED and set(ds) <= MT.DS_POOL_ALLOWED
     txt = open(os.path.join(out, "SELECT_KO.md"), encoding="utf-8").read()
-    assert "코어 23개" in txt and "딥시크 15개" in txt
+    assert "코어 23개" in txt and "딥시크 15개" in txt and txt.count("장세별 보유시간") == 2 and "F12(아홉 가지 동시)" in txt
     priv = json.load(open(os.path.join(work, "ds_private", "select_ds.json")))
     assert "M" in next(iter(priv["pools"]["ds"]["variants"].values()))
-    # the report text carries no DeepSeek money: the deepseek section has no '월 +x%' growth
     ds_part = txt.split("## 딥시크 15개")[1]
-    assert "월 +" not in ds_part and "로그" not in ds_part
-    # E0 row first: hold hours and entries lead
-    assert "지금 청산(E0): 보유시간 중앙값" in txt
+    assert "월 +" not in ds_part and "로그" not in ds_part and "월 -" not in ds_part
+    assert "지금 청산(E0): 보유시간 중앙값" in txt                              # E0 row first: hold hours and entries lead
+    # the private owner report: DeepSeek money on choosable rows only, in the committed table's order, no p value, never in a committed file
+    rtxt = open(rp, encoding="utf-8").read()
+    P = priv["pools"]["ds"]
+    assert [ln.split("|")[1].strip() for ln in rtxt.splitlines() if ln.startswith("| F")] == [r["id"] for r in ds["variants"]]
+    for r in ds["variants"]:
+        line = next(ln for ln in rtxt.splitlines() if ln.startswith(f"| {r['id']} |"))
+        assert (("선택 가능" in line) == r["eligible"]) and (("%" in line) == r["eligible"])
+    assert "p값" not in rtxt and not any(ln.strip() in txt or ln.strip() in json.dumps(j) for ln in rtxt.splitlines() if len(ln.strip()) >= 20)
+    assert RX.audit_a8(cfg.lay, "select", cfg.pin["work"], cfg.pin_hash)
+    assert RX.audit_a9(cfg, {p["id"]: [v.id for v in cfg.variants] for p in cfg.picks})
 
 
 def test_runner_step2_runs_exactly_the_placebos_that_pass_gates_1_2_4(syn_select):
@@ -2047,9 +2073,9 @@ def test_runner_step2_runs_exactly_the_placebos_that_pass_gates_1_2_4(syn_select
                 have = all(cfg.store.has(p, r["id"], RX.plc_tag(a, b)) for a, b in RX.seed_blocks(20))
                 assert have == r["step2"]
             if not PL.has_placebo(v):
-                assert r["gates"]["g3_beats_placebo_p95"] is None
+                assert r["gates"]["g3"] == "n/a"
             elif not r["step2"]:
-                assert r["eligible"] is False
+                assert r["eligible"] is False and r["gates"]["g3"] == "not_run"
     assert len(pairs) >= 1                                                           # the synthetic universe exercised step 2
 
 
@@ -2132,7 +2158,7 @@ def test_runner_real_data_checks_run_on_the_synthetic_universe(syn_select):
 def test_runner_timing_writes_seconds_and_applies_the_seed_rule(tmp_path, vendor, monkeypatch):
     cfg = syn_cfg(tmp_path)
     doc = RX.run_timing(cfg)
-    assert doc["n_variants_timed"] == len([v for v in cfg.variants if PL.has_placebo(v)]) == 12
+    assert doc["n_variants_timed"] == len([v for v in cfg.variants if PL.has_placebo(v)]) == 14
     assert doc["n_seeds"] == 200 and doc["projected_step2_hours"] == pytest.approx(doc["sum_placebo_one_seed_seconds"] * 4 * 200 / 4 / 3600)
     assert json.load(open(cfg.lay.out_file("timing.json")))["pick"] == cfg.picks[0]["id"]
     monkeypatch.setattr(RX, "TIMING_LIMIT_HOURS", 1e-9)
