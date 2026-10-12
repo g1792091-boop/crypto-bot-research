@@ -1,13 +1,21 @@
-"""Hunt round 2 engine identity (PREREG_HUNT_R2.md section 2, 0.3, 11): the read-only inputs round 2 imports, each
-with the sha256 round 1 pinned for it.
+"""Hunt round 2 pin (PREREG_HUNT_R2.md section 2, 0.3, 11): the read-only inputs round 2 imports, each with the sha256
+round 1 pinned for it, and round 2's own code pin.
 
 ``engine_files()`` = hunt.py, entries_wide.py, universe30.json, exchange30.json, data_manifest.json, regime5y.py,
 fullgrid/memo.py, deepseek200/lib_c.py, the pin files fullgrid/PREREG.sha256, entry_study/DEFS_BC.sha256 and
 third_party/sweep/PREREG.sha256, and every file ``hunt.signal_path_files("wide")`` returns (round 2's own modules
-excluded: they are pinned by round 2's own lines). ``round1_lines()`` reads round 1's pin lines for those files from
+excluded: they are pinned by round 2's own lines). ``READ_INPUTS`` = the other round-1 files round 2 reads: the reads
+modules reads_a.py / reads_o.py (section 9, "as round 1"), the synthetic window timing bench_window.json and the F4
+watch list (labels, ledger count). ``round1_lines()`` reads round 1's pin lines for those files from
 ``research/hunt/PREREG_HUNT_WIDE.sha256`` (never hashing that file itself, which round 1 appends to, and never a line
 under ``research/hunt/out/``); the last line of a path counts (an engine fix inherited under 0.3 appends a line there
-and replaces the line in round 2's pin). ``engine_problems`` lists every difference; select and test refuse on any.
+and replaces the line in round 2's pin). ``engine_problems`` lists every difference; every step refuses on any.
+
+``pinlist()`` prints the code pin's lines, each file by its own sha256 (11): this design, the code, the tests, the
+server kit, counts.json, bench_r2.json and the read-only inputs. ``check_pin(step)`` refuses unless the design hash is
+the first line, every listed file matches, every file of the pin list is listed, the inputs equal round 1's pinned
+hashes, and the step's own lines are (not) there: select before picks.json; pretest and test after it; reads after
+test.json.
 """
 
 from __future__ import annotations
@@ -27,6 +35,9 @@ FIXED = ("research/hunt/hunt.py", "research/hunt/entries_wide.py", "research/hun
          "research/hunt/exchange30.json", "research/hunt/data_manifest.json", "paperbot/dash/tools/regime5y.py",
          "research/fullgrid/memo.py", "research/deepseek200/lib_c.py", "research/fullgrid/PREREG.sha256",
          "research/entry_study/DEFS_BC.sha256", "third_party/sweep/PREREG.sha256")
+READ_INPUTS = ("research/hunt/reads_a.py", "research/hunt/reads_o.py", "research/hunt/bench_window.json",
+               "research/fullgrid/diag/watch_sel.json")
+NEVER = (R1_PIN,)                          # 2: never hashed (round 1 appends to it)
 
 
 def sha256_file(path: str) -> str:
@@ -35,9 +46,14 @@ def sha256_file(path: str) -> str:
 
 
 def engine_files() -> list:
+    """Section 2's list plus the read inputs (each must equal round 1's pinned hash)."""
     from research.hunt import hunt as H
     sp = [p for p in H.signal_path_files("wide") if not p.startswith("research/hunt_r2/")]
-    return sorted(set(FIXED) | set(sp))
+    out = sorted(set(FIXED) | set(sp) | set(READ_INPUTS))
+    bad = [p for p in out if p in NEVER or p.startswith(R1_OUT)]
+    if bad:
+        raise RuntimeError(f"round 2 never pins {bad} (section 2)")
+    return out
 
 
 def read_lines(path: str) -> list:
@@ -93,6 +109,9 @@ def check_engine(files: list | None = None, r2_lines: dict | None = None, root: 
 # ------------------------------------------------------------------ round 2's own pin (11)
 DESIGN = "research/hunt_r2/PREREG_HUNT_R2.md"
 PICKS = "research/hunt_r2/out/picks.json"
+PRETEST = "research/hunt_r2/out/pretest_reads.json"
+TEST = "research/hunt_r2/out/test.json"
+STEPS = ("select", "pretest", "test", "reads", "report")
 COUNTS = "research/hunt_r2/counts.json"
 BENCH = "research/hunt_r2/bench_r2.json"
 KIT = ("research/hunt_r2/bootstrap_r2.sh", "research/hunt_r2/wait_go_r2.sh", "research/hunt_r2/SERVER_R2_KO.md")
@@ -111,17 +130,24 @@ def own_files(root: str = ROOT) -> list:
 
 
 def pinlist(root: str = ROOT, files: list | None = None) -> list:
-    """'<sha256>  <path>' lines of the code pin: round 2's own files by their current hash, the engine files by the
-    hash round 1 pinned for them (section 2)."""
-    r1 = round1_lines(root)
+    """'<sha256>  <path>' lines of the code pin (11), each file by its own sha256: round 2's own files, then the
+    read-only inputs (section 2; ``pinlist_problems`` says whether each equals round 1's pinned hash). Never
+    PREREG_HUNT_WIDE.sha256, never a file under research/hunt/out/."""
     lines = []
-    for f in own_files(root):
+    seen = set()
+    for f in own_files(root) + sorted(engine_files() if files is None else files):
+        if f in seen or f in NEVER or f.startswith(R1_OUT) or f.startswith("research/hunt_r2/out/"):
+            continue
+        seen.add(f)
         full = os.path.join(root, f)
         if os.path.exists(full):
             lines.append(f"{sha256_file(full)}  {f}")
-    for f in (engine_files() if files is None else files):
-        lines.append(f"{r1.get(f, '?' * 64)}  {f}")
     return lines
+
+
+def pinlist_problems(root: str = ROOT, files: list | None = None) -> list:
+    """The inputs whose own hash differs from round 1's pinned hash (or that round 1 never pinned)."""
+    return engine_problems(files, None, root)
 
 
 def check_pin(step: str, root: str = ROOT, files: list | None = None) -> dict:
@@ -151,13 +177,35 @@ def check_pin(step: str, root: str = ROOT, files: list | None = None) -> dict:
     eng = engine_files() if files is None else files
     eng_lines = {f: listed.get(f) for f in eng}
     bad += engine_problems(eng, eng_lines, root)
+    if step not in STEPS:
+        raise ValueError(f"step {step!r}")
     if step == "select" and PICKS in listed:
         bad.append(f"{PICKS} is already pinned: select ran; the picks do not change")
-    if step == "test" and PICKS not in listed:
+    if step in ("pretest", "test", "reads") and PICKS not in listed:
         bad.append(f"{PICKS} is not pinned: run select first")
+    if step == "test" and TEST in listed:
+        bad.append(f"{TEST} is already pinned: the confirm look happened (one look, 7)")
+    if step == "reads" and TEST not in listed:
+        bad.append(f"{TEST} is not pinned: reads run only after the test step (9.1)")
     if bad:
         raise RuntimeError(f"{R2_PIN} does not match: " + "; ".join(bad))
-    return {"pin_file": R2_PIN, "pin_sha256": sha256_file(path), "files": len(rows)}
+    return {"pin_file": R2_PIN, "pin_sha256": sha256_file(path), "files": len(rows),
+            "lines": {p: h for h, p in rows if p in (PICKS, PRETEST, TEST) or p.startswith("research/hunt_r2/")
+                      or p in READ_INPUTS}}
+
+
+def listed_now(root: str = ROOT) -> dict:
+    """{path: sha256} of round 2's pin file right now ({} without one)."""
+    path = os.path.join(root, R2_PIN)
+    if not os.path.exists(path):
+        return {}
+    return {p: h for h, p in read_lines(path)}
+
+
+def is_pinned(rel: str, root: str = ROOT) -> bool:
+    """The file exists and its current sha256 is the last line of that path in round 2's pin."""
+    full = os.path.join(root, rel)
+    return bool(os.path.exists(full) and listed_now(root).get(rel) == sha256_file(full))
 
 
 def append_line(rel: str, root: str = ROOT) -> str:
