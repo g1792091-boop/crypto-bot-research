@@ -3,7 +3,9 @@
 **Status.** Pin commit: see the commit message of the commit that adds `PREREG_EXITFLEX.sha256`. That commit hashes this
 file; the pin time (UTC and KST) is written in its message and not in this file.
 
-(한국어 요약: `README_KO.md`.) This file is fixed before this study's own runs produce any number. It is pinned by
+(한국어 요약: `README_KO.md`.) This file is fixed before this study's own runs at the pin produce any number (a dry run on
+a scratch pin printed hashes, pass or fail, counts of cases and seconds, and one probe printed E0's offered and entered
+counts on one core pick: 16.7 item 1). It is pinned by
 `PREREG_EXITFLEX.sha256` together with the code and inputs of section 13. Changes after the pin go to `DEVIATIONS.md`
 in this folder, dated and with the reason, never into this file. Select-period numbers of E0 on the core picks have been
 seen by the main session, and so have the round-1 trend-hunt results (the dated addendum in section 15, which changes
@@ -61,8 +63,8 @@ take-profit and had been held 16-18 h):
    their examples: a best net ROE of 12% locks 10%; 20% lies in [17%, 22%) and locks 15%; 30% lies in [27%, 32%) and locks 25%.
    The triggers are 12%, 17%, 22%, 27%, 32% ... and the locks 10%, 15%, 20%, 25%, 30% ... in 5% steps, without end.)
 
-**Owners' messages of the evening of 2026-10-12** (verbatim; four messages given as one item; sent between about 17:30 and
-19:00 KST, the times approximate because the chat carries no timestamps):
+**Owners' messages of the evening of 2026-10-12** (verbatim; four messages given as one item, sent 2026-10-12 between about
+17:30 and 19:00 KST; times approximate: the chat carries no timestamps):
 
 10. (a) "코인별로도 백테스트 분석해줘야지 아니 이번에 커스텀값봇 매매법 청산 백테스트 다시 할꺼잖아 추가로 분석하면 좋을 부분들
     없어? 엄청 많을꺼 같은데 내 목표 수익률 매매법을 위해 좀 노력좀 해주라 이왕 백테스트 돌리는 김에 분석하면 좋을부분들 싹 다
@@ -288,10 +290,10 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
     wallet multiples reach the owners only through the private owner report below, never a p value.
   * The DeepSeek money figures and p values that the gates, the placebo gate, the confirm test and the ledger need are
     written only to `$WORK/<pin8>/ds_private/` outside the repository (section 13), read only by the runner, the
-    ledger print, the owner-report writer and, for `ds_private/results/select/` only, the modules of the extra reads of
-    16.7 item 4 (as a program; the DeepSeek money they compute goes only to the private extra report below). This
-    includes the per-account result files of DeepSeek picks (`$WORK/<pin8>/ds_private/results/<stage>/`). Their sha256
-    values are committed with `select.json` and
+    ledger print, the owner-report writer and, for `ds_private/results/select/` only (`select_r2/` after a select rerun,
+    14), the modules of the extra reads of 16.7 item 4 (as a program; the DeepSeek money they compute goes only to the
+    private extra report below). This includes the per-account result files of DeepSeek picks
+    (`$WORK/<pin8>/ds_private/results/<stage>/`). Their sha256 values are committed with `select.json` and
     `confirm.json`. No person or agent opens them (`select_ds.json`, `confirm_ds.json`, `results/`); the owner
     reports below are the only DeepSeek money files that anyone opens.
   * **Owners' relaxation of D11, 2026-10-12, limited to one private report per step** (and one more, for the extra reads of
@@ -343,11 +345,12 @@ asked, decided and reported per pool. DeepSeek results follow the owners' rule D
       in the same turn as or before the sending of `SELECT_KO.md`, and is never committed or copied anywhere (above); it
       holds no p value; it shows money only for E0, the house exit and the variants choosable in their pool (the row rule
       of 8.2 item 6; 16.7 item 4), on the picks and on their twins; owners' words that quote it are redacted as above;
-      before it is shown it passes the checks that A8 makes on a stage's private report (outside the repository and not
-      tracked by git, no p value, the last line asking the owners to name variants by id; 14); and the time it was shown
-      and its sha256 go to `sent.json` (`extra_shown_utc`, `ds_owner_report_extra_sha256`, 8.7), because `select.json` is
-      hashed before the extra report exists. This is an explicit extension of the owners' relaxation, not a change of any
-      rule: it changes no gate, test, default or choice.
+      before it is shown it passes the checks that A8 (3) makes on a stage's private report (outside the repository and
+      not tracked by git, no line of it in a committed file, no p value, the last line asking the owners to name variants
+      by id; 14), made by the extra file's code, because `audit` makes them only for the stages' own reports and
+      `audit-file` does not make them; and the time it was shown and its sha256 go to `sent.json` (`extra_shown_utc`,
+      `ds_owner_report_extra_sha256`, 8.7), because `select.json` is hashed before the extra report exists. This is an
+      explicit extension of the owners' relaxation, not a change of any rule: it changes no gate, test, default or choice.
   * **The league's own screens.** On the owners' request of 2026-10-11 ("딥시크 쪽은 왜 금액없이야 똑같이 해야지";
     `research/fullgrid/DEVIATIONS.md`) the league's dashboard, its snapshots and its Telegram notices show DeepSeek
     money, and `CANDLEAGUE_DS_MONEY` is on by default. That is the league's own setting. This study neither changes it
@@ -1055,9 +1058,10 @@ F12 and the 2 of F13.)
 * **DeepSeek (D11)**: every money-based figure above (M_p, M_P, D_m, g_m, wallets, drawdowns, multiples, busts,
   placebo percentiles and Q-A of the DeepSeek pool) is computed into `$WORK/<pin8>/ds_private/` only (section 3).
   DeepSeek rows in committed files and committed reports carry hold times (overall and by market state), counts, win
-  shares, exit reasons (LIQ included; for F12 the component counts of 5.2) and labels. The owners' private report
-  (section 3) is the one place where the DeepSeek M_P, its live-size version, wallet multiples, drawdowns and busts are
-  shown, and only to the owners.
+  shares, exit reasons (LIQ included; for F12 the component counts of 5.2) and labels. The owners' private reports
+  (section 3: the select and confirm stages' reports and, for the extra reads of 16.7 item 4, the private extra report)
+  are the only places where the DeepSeek M_P, its live-size version, wallet multiples, drawdowns and busts are shown,
+  and only to the owners.
 
 ## 8. Select step (select period only): eligibility, the report, the owners' choice
 
@@ -1083,7 +1087,8 @@ with its own table), hold hours and entries come before any growth figure, in th
 **As built, every row of `select.json` and every row of the table is a pool row**: hold hours, entries, skipped and
 rejected signals, win share, exit reasons and the other counts are summed over the pool's picks. There is no per-pick
 table of hold, entries or counts in `select.json` or `SELECT_KO.md`; those numbers stay in the per-account result
-files, which nobody opens (section 7, which also names the one per-pick number, M_p on choosable core rows). The report
+files, which nobody opens (section 7, which also names the one per-pick number, M_p on choosable core rows; the modules
+of the extra reads of 16.7 item 4 read the select stage's files as a program). The report
 shows:
 * first, E0's row: median hold hours, the shares of trades held over 4 h, 8 h and 18 h, trades entered, signals
   skipped while holding, win share;
@@ -1114,7 +1119,8 @@ shows:
   on a choosable row. Its exit reasons in `select.json` (section 7) show LOCK beside TP and SL (mode b has no TP);
 * the number of variants failing the gates per pool, counted in sequence: gate 1; gate 2 among those passing 1; gate
   4 among those passing 1 and 2; gate 3 among those that reached step 2. No figure of a failing variant beyond the
-  columns above and the second table (which splits column 2 by market state).
+  columns above and the second table (which splits column 2 by market state) is in the report; the extra reads of 16.7
+  item 4 may split its counts and hold hours further, never its money.
 * for the core pool, the Q-A rows of section 7 (DeepSeek Q-A stays private).
 
 DeepSeek tables in `SELECT_KO.md` carry no money (columns 1-5, 7, 8, the second table and the counts). The owners'
@@ -1226,8 +1232,8 @@ menu they see is the one that was hashed. Before showing the private report, the
 sha256 equals the committed one. It shows the private report and the private extra report in the chat with the owners
 (section 3), and sends the extra reads and twins of 16.7 item 4, in the same turn as or before it sends `SELECT_KO.md` by
 its channel; the 48 h clock of 8.3 starts at that sending. Right after sending, and before reading any answer, the main
-session writes the sending time (UTC and KST), the channel, the time at which
-the private report was shown (`ds_report_shown_utc`, `ds_report_shown_kst`; the place is the chat and nothing else),
+session writes the sending time (UTC and KST), the channel, the time at which the private report was shown
+(`ds_report_shown_utc`, `ds_report_shown_kst`; the place is the chat and nothing else),
 the freeze note of 8.3, and for 16.7 item 4 `extra_note` (the commits O7 and O8 of section 17, each with its hash and UTC
 time, and the UTC time and HEAD of the select stage's `[pin ok]` line), `extra_shown_utc` (when the extra reads and twins
 were sent and the private extra report shown) and `ds_owner_report_extra_sha256` (the sha256 of the private extra
@@ -1615,8 +1621,8 @@ Real money is not decided by this study. That stays the owners' decision under t
     5% or at 20%, other steps or gaps, a breakeven stop) is in the study;
   * changes to entries, numbers, timeframes, leverage or size rules (the default-number and coin-flip twins of 16.7 item 4
     are information, not variants);
-  * per-pick, per-coin, per-side or per-regime choices (the hold hours by market state of section 7 are information
-    and choose nothing);
+  * per-pick, per-coin, per-timeframe, per-side, per-weekday, per-session or per-regime choices (the hold hours by market
+    state of section 7 and the extra reads of 16.7 item 4 are information and choose nothing);
   * a fixed percent of price or ROE as a trigger anywhere, except the engine's stepped lock of F13 (section 1);
   * DeepSeek money figures in any committed file or committed report (D11); the owners' private reports of section 3
     are the one exception;
@@ -2173,10 +2179,11 @@ Real money is not decided by this study. That stays the owners' decision under t
 
 * **A look** is any performance figure (P&L, growth, wallet, win share, hold time, exit-reason count, trades entered or
   skipped per arm) written to a file or a screen that a person or an agent reads. Tests and audits print only pass or
-  fail and counts of cases; the timing stage prints only times. DeepSeek money figures are a look only through the two
-  private owner reports of section 3 (the main session and the owners read them); nobody reads the other files of
-  `ds_private/` (section 3). Hold hours by market state are figures like any hold time: they are looks once the
-  report is written.
+  fail and counts of cases; the timing stage prints only times. DeepSeek money figures are a look only through the
+  private owner reports of section 3 (the select and confirm stages' reports and the private extra report of 16.7 item
+  4; the main session and the owners read them); nobody reads the other files of `ds_private/` (section 3; the modules
+  of the extra reads read the select stage's result files there as a program). Hold hours by market state are figures
+  like any hold time: they are looks once the report is written.
 * **Tests.** If T1-T8 cannot pass without changing a rule of this file, nothing runs. The change is filed in
   `DEVIATIONS.md`, with the reason, before any run.
 * **Crash and resume.** Each stage writes one result file per (pick, arm, size, seed block) under
@@ -2391,7 +2398,15 @@ Real money is not decided by this study. That stays the owners' decision under t
   that read `sent.json`; the names of `metrics.py`'s D11 whitelists; the commit times of `git log` for the study folder; `git
   worktree list`; and file names only in the scratchpad (`exdry_*.log`, `ext5`, `ext5_work`) and `git status` of `ext5`. It opened
   no log, no performance figure of any period, no `holdcost`, hunt, autopsy, league or track-2 result, no `out/` file and no
-  DeepSeek money figure. It did not touch the main session's statement or the dated addendum below it.
+  DeepSeek money figure. It did not touch the main session's statement or the dated addendum below it. A second sub-session
+  then checked and completed these fixes under the same rules. It read the same review reports (findings only), this file
+  and `README_KO.md`, `git diff` of the working tree and `git diff fe7a34f` of the study folder, `git show --stat` of the
+  pass's commits, in `runner_x.py` the `progress` and `print` lines, `MIDDLE_VARIANTS`, `check_t5`, `audit_a8_file`,
+  `audit_a9_file`, `A8_SCOPE`, the `check` and `audit-file` lines of the command dispatch, the lines that read `sent.json`
+  and the lines that name `owner_report`; `git worktree list`; file names in the scratchpad, with the sizes and times of
+  its `exdry_*` and `ext5_*` files; and the names of running processes. It opened no log, no performance figure of any
+  period, no `holdcost`, hunt, autopsy, league or track-2 result, no `out/` file and no DeepSeek money figure, and it did
+  not touch the main session's statement or the dated addendum below it.
 * **Main session's statement**, inserted verbatim (line breaks added only):
 
   ```text
@@ -3082,7 +3097,9 @@ results and item 22 what it did not take.
 
 Drafted by the main session after a dry run on a scratch pin and the owners' evening messages (message 10), then fixed after two
 reviews of the draft, one of the text and one of the code: the code fixes by the main session (commit `fd070f8`), the text fixes by a
-further sub-session (section 15). No rule that decides a result of E0 or of a variant was changed.
+further sub-session (section 15). No gate, placebo, default, Holm, confirm or choice rule and no rule that computes a result of
+E0 or of a variant was changed; `check` now needs at least 500 per pool for T5 and T8 (item 2), and section 14 gains one bullet
+(item 4).
 
 1. **Dry run.** In a scratch git worktree of commit `fe7a34f` with a scratch pin (a `data_pin.json` and a 36-line pin file that were never
    committed; the work folder in the session scratchpad), `make-pin` printed `build.json` 824c9d1a and the six coin hashes of section 2,
@@ -3140,23 +3157,25 @@ further sub-session (section 15). No rule that decides a result of E0 or of a va
      empty one makes no file; test `test_placebo_steps_print_no_pick_and_no_file_count`). Before, each line of step 2 named its pick and
      its number of new placebo files, which showed how many variants of its pool had passed gates 1, 2 and 4, so a commit made after the
      start would not have been blind. Now the select stage's console shows nothing of step 1's gates, and section 14's sentence "nothing
-     of step 1 is printed before step 2 ends" holds again (the seconds show only how long the step ran).
+     of step 1 is printed before step 2 ends" holds again (the seconds show how long the step ran, which grows with the number of
+     (variant, pool) pairs that reached it; they name no pick, variant or count, 14).
    * **The record.** The O7 and O8 commits (hash and UTC time) and the UTC time and HEAD of the select stage's `[pin ok]` line (its
      start) are written into `sent.json` (field `extra_note`, 8.7), not into the extra file, which cannot hold the time of the commit that
      adds it.
 
    The extra file:
-   * carries a status line that points to its own pin commits; defines every read and twin exactly (combos, exits, sizes, the coin-flip
-     seed, how the fill price, the funding share and the favourable extreme are recomputed, the F11 = F3 marks); has its own tests; and a
-     change of one of its pinned files after its pin commit goes to this folder's `DEVIATIONS.md`, dated, with the reason;
+   * carries a status line that points to its own pin commits (O7 and O8); defines every read and twin exactly (combos, exits, sizes, the
+     coin-flip seed, how the fill price, the funding share and the favourable extreme are recomputed, the F11 = F3 marks); has its own
+     tests; and a change of one of its pinned files after the commit that pins it (O7 for the extra file, O8 for its modules and tests)
+     goes to this folder's `DEVIATIONS.md`, dated, with the reason;
    * defines **reads** that are descriptive only: they choose nothing and change no gate, placebo, Holm, default, ledger, report or
      choice rule of this file; per-pick, per-coin, per-timeframe, per-side, per-weekday, per-session and per-state choices stay out of
      scope (8.3, 12);
    * defines **twin accounts** for each pick: the **default-number twin** (the cell's default combo; under E0, which is the pick's own
      exit as in the league's `exitonly` account, under the house exit `ladder|2` as in the league's `base` account, and under the 88
      variants) and the **coin-flip twin** (the pick's numbers and signal times, the side from a seeded coin as the league's flip); select
-     period only, no placebo, no gate, not choosable; a twin is shown under E0, the house exit and the variants choosable in its pool
-     only, and under the other variants with counts that are not money only;
+     period only, no placebo, no gate, not choosable; a twin's money figures are shown under E0, the house exit and the variants
+     choosable in its pool only, and under the other variants it shows counts that are not money and nothing else;
    * shows no figure that this file keeps from the owners: no growth, wallet, drawdown or other money figure of a variant in a pool
      where it is 선택 불가 (8.2 item 6, 8.7), on the picks or on their twins, and no DeepSeek money figure or p value in any committed file
      or sent message (D11). The DeepSeek money of the extra reads and twins goes only to the private report
@@ -3165,8 +3184,8 @@ further sub-session (section 15). No rule that decides a result of E0 or of a va
      the owners asked to see the DeepSeek money privately. It never reads `core_not_choosable.json`, `select_ds.json`, the stages' owner
      reports or any file of the confirm stage;
    * may read, as a program, the select stage's per-account result files (`results/select/`, and `ds_private/results/select/`, whose
-     DeepSeek money goes only to the private extra report) and may show per-pick and other split tables of the select period; a per-pick
-     table marks F11.a = F3.a and F11.b = F3.b on the F7_RF_ONLY picks (Known limit 11);
+     DeepSeek money goes only to the private extra report; `select_r2/` after a select rerun) and may show per-pick and other split
+     tables of the select period; a per-pick table marks F11.a = F3.a and F11.b = F3.b on the F7_RF_ONLY picks (Known limit 11);
    * uses this file's pinned kernel, data and cut unchanged (the cut folder through `open_cut`, with the check of A5), runs under its own
      stage name and folders below `$WORK/<pin8>/` and writes nothing into the select stage's folders or into `research/exitflex/out/`; it
      opens no minute and no result of 2024-2026 and no file of the confirm stage: every read, the forward bands included, is built from
@@ -3179,8 +3198,8 @@ further sub-session (section 15). No rule that decides a result of E0 or of a va
    * says what happens after a select rerun (14): it is rerun on the `_r2` result files under the same rules, or not at all.
 
    This file's select report, gates, placebo, default, confirm and choice rules are unchanged; sections 3 (the private extra report), 7,
-   8.7, 12, 13, 14 and 17 only name the extra file, its private report and its place in the order of work. A bug of this file's code that
-   the extra reads find before the confirm is handled under 14 as one found by an audit. The owners are told that the extra reads and the
+   8.2, 8.7, 12 (with Known limits 2 and 11), 13, 14 and 17 only name the extra file, its private report and its place in the order of
+   work. A bug of this file's code that the extra reads find before the confirm is handled under 14 as one found by an audit. The owners are told that the extra reads and the
    twins were defined after this file was hashed and before the select stage was started (their code before any of its outputs was
    opened), and are information only. A later study of these exits on default-number strategies cannot treat 2021-2023 as unseen for the
    38 cells of the twins.
@@ -3966,7 +3985,7 @@ real-data checks at the pin are open items (O6).
     money figures replaced by `[딥시크 금액 삭제]` before it is written to a committed file; the main session's own
     questions quote no figure; A8 and A9 run before every commit and every send of a file listed in 14. (8th) The same
     holds for the private extra report of the extra reads (section 3, 16.7 item 4); its time and sha256 go to `sent.json`
-    with `extra_note`.
+    (`extra_shown_utc`, `ds_owner_report_extra_sha256`) beside `extra_note` (8.7).
 
 **F. Open for the main session** (16.5; O7 and O8 added in 16.7; in this order)
 
