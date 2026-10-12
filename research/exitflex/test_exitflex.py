@@ -470,7 +470,8 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
             raise AssertionError(fam)
         a = PL.age_bucket_py(kk)
         s = 1 if rc >= 0 else 0
-        return bool(fire), (a, s, int(bool(z))), dict(ref=ref_out, armed=bool(armed), ema_before=bool(ema_before), comp=comp, **ci)
+        clock = fam == KX.F12 and ci["cc"] >= ch.cms[i0] + P12["H"] * 3_600_000          # F12's own 8-hour clock check (prereg 6)
+        return bool(fire), (a, s, int(bool(z))), dict(ref=ref_out, armed=bool(armed), ema_before=bool(ema_before), comp=comp, clock=bool(clock), **ci)
 
     mfe = fill
     fpaid = 0.0
@@ -483,8 +484,11 @@ def ref_trade(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr
             rule_fire, strat, info = evaluate(kk)
             fire = rule_fire
             if plc:
-                u = PL.draw_u_py(seed_base, coin, info["cc"])
-                fire = u < hz[strat]
+                if info["clock"]:
+                    fire = True                                    # probability 1 at the clock check, no draw
+                else:
+                    u = PL.draw_u_py(seed_base, coin, info["cc"])
+                    fire = u < hz[strat]
             info["fire"] = fire
             info["rule_fire"] = rule_fire
             info["strat"] = strat
@@ -602,6 +606,13 @@ def compare_trade(mk, prov, pdata, v, off, q, **kw):
     want_cm = int(rrec[-1]["comp"]) if (rr == KX.R_RULE and rrec) else 0
     if cm != want_cm:
         bad.append(f"component mask: kernel {cm} ref {want_cm}")
+    rnum, rden = np.zeros((KX.N_AGE, 2, 2), np.int64), np.zeros((KX.N_AGE, 2, 2), np.int64)   # the hazard counts, from the reference's records
+    for rec in rrec:
+        if rec.get("survived") and not rec["clock"]:
+            rden[rec["strat"]] += 1
+            rnum[rec["strat"]] += int(rec["fire"])
+    if not (np.array_equal(num, rnum) and np.array_equal(den, rden)):
+        bad.append("hazard counts differ")
     for rec in rrec:                                        # every check that the position lived to see
         kk = rec["k"]
         row = trace[kk - 1]
@@ -685,7 +696,7 @@ class Scen:
         out, num, den, trace = call_trade_x(self.mk, self.pd, v, self.off, q, scale=self.scale, trace_rows=trace_rows, **kw)
         j = out[1]
         return {"d": out[0], "j": j, "off": self.offset(self.mk.cat["ts"][j]), "reason": out[2], "lev": out[3], "px": out[4],
-                "checks": out[5], "both": out[6], "num": num, "den": den, "trace": trace, "v": v}
+                "checks": out[5], "both": out[6], "comp": out[7], "num": num, "den": den, "trace": trace, "v": v}
 
     def account(self, vid, **kw):
         v = KX.variant_by_id(vid)
@@ -1396,6 +1407,162 @@ def test_t4_realised_rates_audit_a7(world_1h):
     assert PL.binom_band_ok(500, 10000, 0.05, 1e-3) and not PL.binom_band_ok(700, 10000, 0.05, 1e-3)
 
 
+def test_t4_two_picks_with_identical_inputs_give_identical_placebo_exits(world_1h):
+    """The draw depends on (V, period, seed, coin, check close), not on the pick: two picks with the same coin, signals and hazard table
+    (different ids) exit at the same checks."""
+    mk, prov, pd_ = world_1h
+    pd2 = DX.PickData(mk, dict(pd_.pick, id="core-OTHER-1h-9"), prov)
+    for vid in ("F4.m2.b", "F1.w3.a", "F10.N6.a"):
+        v = KX.variant_by_id(vid)
+        hz = random_hz(5)
+        a = KX.simulate(mk, pd_, v, 0.25, "select", placebo=True, hz=hz, seed_base=PL.seed_base(v.id, "select", 3))
+        b = KX.simulate(mk, pd2, v, 0.25, "select", placebo=True, hz=hz, seed_base=PL.seed_base(v.id, "select", 3))
+        assert same_account(a, b) and (a.reason == KX.R_RAND).sum() >= 3
+    assert PL.seed_base("F1.w3.a", "select", 3) != PL.seed_base("F1.w3.a", "confirm", 3) != PL.seed_base("F1.w3.b", "confirm", 3)
+
+
+# ====================================================================================================== T4: F12's clock, the draw key; T6: F12 against its components
+def f12_variant(cmask, mode="a"):
+    """F12 with only the components of ``cmask`` enabled (the component mask for tests, prereg 13)."""
+    return KX.Variant(f"F12.mask{cmask}.{mode}", KX.F12, "F12", "A", mode, False, dict(KX.F12_PARAMS, cmask=cmask), 8, 0, True)
+
+
+def splitmix64_by_hand(x):
+    M = (1 << 64) - 1
+    z = (x + 0x9E3779B97F4A7C15) & M
+    z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & M
+    z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & M
+    return z ^ (z >> 31)
+
+
+def test_t4_the_draw_key_is_the_coin_priority_index_and_the_latest_closed_bar_of_the_check(tmp_path, vendor):
+    # a hand-computed example: base 12345, DOGE (index 3 in the priority order BTC, ETH, SOL, DOGE, LTC, BCH), close 2024-01-02 03:15 UTC
+    close_ms = 1_704_165_300_000
+    key = 3 * 2 ** 36 + close_ms // 60_000
+    want = (splitmix64_by_hand(splitmix64_by_hand(12345) ^ key) >> 11) / 2 ** 53
+    assert KX.draw_u(12345, 3, close_ms) == want == PL.draw_u_py(12345, 3, close_ms) and SYMS.index("DOGEUSDT") == 3
+    assert KX.draw_u(12345, 3, close_ms) != KX.draw_u(12345, 4, close_ms)                       # another coin index draws another u
+    # on a built trade: the u of check k is the draw for (coin index, close of the check's latest closed chart bar)
+    mk, prov, pd_ = diff_world(tmp_path, "1h")
+    off = pd_.offered("select", mk)
+    v = KX.variant_by_id("F4.m2.b")
+    hz = np.zeros((KX.N_AGE, 2, 2))
+    n_checked = 0
+    for q in range(len(off["coin"])):
+        c = int(off["coin"][q])
+        out, _n, _d, tr = KX.simulate_trade(mk, pd_, v, off, q, 0.25, "select", True, True, hz, 777, 40)
+        for k in range(min(int(out[5]), 5)):
+            bar = int(np.searchsorted(pd_.b_cms[pd_.cst[c]:pd_.cen[c]], tr[k, 1]))
+            assert pd_.b_cms[pd_.cst[c] + bar] == tr[k, 1]                                      # the check close is a chart bar's close
+            want = (splitmix64_by_hand(splitmix64_by_hand(777) ^ (c * 2 ** 36 + int(tr[k, 1]) // 60_000)) >> 11) / 2 ** 53
+            assert tr[k, 10] == want
+            n_checked += 1
+        if n_checked >= 40:
+            break
+    assert n_checked >= 20
+
+
+@pytest.mark.parametrize("tf,tfm", [("15m", 15), ("30m", 30), ("1h", 60), ("4h", 240)])
+def test_t4_the_f12_placebo_carries_f12s_eight_hour_clock(tmp_path, vendor, f11_on, tf, tfm):
+    i0 = 3
+    c0 = (i0 + 1) * tfm
+    flat = [(c0 + 8 * 60 + 600, 100.0)]
+    s = Scen(tmp_path / "a", flat, tf=tf, longs=[i0], f11=f11_provider([]), ema=np.full(40, 101.0))
+    zero = np.zeros((KX.N_AGE, 2, 2))
+    # h = 0 everywhere: it leaves at the clock check, with probability 1 and no draw (u = -1 in the trace); the rule leaves there too
+    for vid in ("F12.a", "F12.b"):
+        t = s.trade(vid, plc=True, hz=zero, seed=1)
+        expect_exit(s, t, c0 + 8 * 60, KX.R_RAND)
+        assert t["trace"][t["checks"] - 1, 10] == -1.0 and (t["trace"][:t["checks"] - 1, 10] >= 0).all()
+        r = s.trade(vid)
+        expect_exit(s, r, c0 + 8 * 60)
+        assert r["comp"] == KX.CB_F7H
+        # the hazard counts exclude the clock check: every check before it is in the denominator, none in the numerator
+        assert r["den"].sum() == r["checks"] - 1 and r["num"].sum() == 0
+        assert t["den"].sum() == t["checks"] - 1 and t["num"].sum() == 0
+    # with h = 1 above it, nothing changes at the clock; with h = 1 everywhere it leaves at the first check (before the clock)
+    t = s.trade("F12.a", plc=True, hz=np.ones((KX.N_AGE, 2, 2)), seed=1)
+    assert t["off"] == c0 + tfm and t["checks"] == 1
+    # a placebo of another family has no clock: with h = 0 it never leaves
+    f = Scen(tmp_path / "b", flat, tf=tf, longs=[i0], ema=np.full(40, 101.0))
+    assert f.trade("F4.m2.a", plc=True, hz=zero, seed=1)["reason"] == KX.R_END
+    # a merged check is the clock check when any merged close is at or after C0 + 8 h
+    if tf != "4h":
+        gaps = list(range(c0 + 8 * 60 - 1, c0 + 8 * 60 + tfm - 1))                 # the closes at C0 + 8 h and the next one map to one minute
+        m = Scen(tmp_path / "c", flat, tf=tf, longs=[i0], f11=f11_provider([]), ema=np.full(40, 101.0), gaps=gaps, pad=True)
+        tm = m.trade("F12.a", plc=True, hz=zero, seed=1)
+        assert tm["reason"] == KX.R_RAND and tm["off"] >= c0 + 8 * 60
+
+
+def test_t4_no_f12_placebo_position_is_held_past_its_clock_check_on_random_worlds(tmp_path, vendor, f11_on):
+    for tf in ("30m", "1h"):
+        w = DIFF_WORLDS[tf]
+        coins = {SYMS[i]: synth_coin(51 + i, w["days"], (100.0, 3000.0)[i], vol=w["vol"], drop=0.003, outages=2) for i in range(2)}
+        mk, prov, pd_ = build_world(coins, tmp_path / tf, pick=make_pick(tf, w["exit"]), prov_kw=dict(warm=False), f11=causal_f11)
+        for vid in ("F12.a", "F12.b"):
+            v = KX.variant_by_id(vid)
+            hz = random_hz(11) * 0.2
+            for sd in range(3):
+                r = KX.simulate(mk, pd_, v, 0.25, "select", placebo=True, hz=hz, seed_base=PL.seed_base(v.id, "select", sd))
+                assert RX.audit_f12_clock(mk, pd_, r)
+            r = KX.simulate(mk, pd_, v, 0.25, "select")
+            assert RX.audit_f12_clock(mk, pd_, r) and (r.reason == KX.R_RULE).sum() > 3
+            # the audit has teeth: a position held a day past its clock fails it
+            k = int(np.flatnonzero(r.status == 1)[0])
+            r.exit_ts = r.exit_ts.copy()
+            r.exit_ts[k] = r.entry_ts[k] + 30 * 3_600_000
+            assert not RX.audit_f12_clock(mk, pd_, r)
+
+
+def test_t6_f12_with_one_component_enabled_equals_that_family_and_with_only_f11_equals_f11(tmp_path, vendor, f11_on):
+    """The component mask of the tests: F12 at its fixed values with one component on gives the exits of that family at the same value
+    (rule and placebo, both modes); F12 with only F11 on equals F11. F6 lies within F1."""
+    def prov(pick, sym, df, close, sl, ss):
+        n = len(df)
+        rng = np.random.default_rng(len(df) + 5)
+        c = df["close"].to_numpy(float)
+        ema = df["close"].ewm(span=12, adjust=False).mean().to_numpy(float)
+        lvl_l, lvl_s, tg_l, tg_s = (np.full(n, np.nan) for _ in range(4))
+        lvl_l[sl], lvl_s[ss] = c[sl] * 0.99, c[ss] * 1.01
+        tg_l[sl], tg_s[ss] = c[sl] * 1.012, c[ss] * 0.988
+        return {"comp_long": [("state", (c < ema).astype(float)), ("event", (rng.random(n) < 0.04).astype(float))],
+                "comp_short": [("state", (c > ema).astype(float)), ("event", (rng.random(n) < 0.04).astype(float))],
+                "lvl_long": lvl_l, "lvl_short": lvl_s, "tgt_long": tg_l, "tgt_short": tg_s}
+    pairs = [(KX.CB_F1, "F1.w3"), (KX.CB_F2, "F2.n20"), (KX.CB_F3, "F3"), (KX.CB_F4, "F4.m2"), (KX.CB_F5, "F5.P1.5.g50"),
+             (KX.CB_F6, "F6.w3.d0.5"), (KX.CB_F7H, "F7h.H8"), (KX.CB_F10, "F10.N12"), (KX.CB_F11, "F11")]
+    n_cmp = n_exit = 0
+    for tf in ("30m", "1h"):
+        w = DIFF_WORLDS[tf]
+        coins = {SYMS[i]: synth_coin(61 + i, w["days"], (100.0, 3000.0)[i], vol=w["vol"], drop=0.003, open_gap_p=0.0004, outages=2) for i in range(2)}
+        mk, prov_, pd_ = build_world(coins, tmp_path / tf, pick=make_pick(tf, w["exit"]), prov_kw=dict(warm=False), f11=prov)
+        off = pd_.offered("select", mk)
+        for bit, fid in pairs:
+            for mode in ("a", "b"):
+                if fid.startswith("F6") and mode == "b":
+                    continue
+                fam = KX.variant_by_id(fid if fid.startswith("F6") else f"{fid}.{mode}")
+                v12 = f12_variant(bit, mode)
+                for q in range(0, len(off["coin"]), max(1, len(off["coin"]) // 18)):
+                    a = call_trade_x(mk, pd_, fam, off, q)[0]
+                    b = call_trade_x(mk, pd_, v12, off, q)[0]
+                    assert a[:7] == b[:7], (tf, fid, mode, q, a, b)
+                    assert b[7] in (0, bit) and (b[7] == bit) == (b[2] == KX.R_RULE)
+                    n_cmp += 1
+                    n_exit += b[2] == KX.R_RULE
+                    if KX.has_placebo(fam) and bit not in (KX.CB_F6, KX.CB_F7H):
+                        hz = random_hz(q + 1)
+                        pa = call_trade_x(mk, pd_, fam, off, q, plc=True, hz=hz, seed=q + 5)[0]
+                        pb = call_trade_x(mk, pd_, v12, off, q, plc=True, hz=hz, seed=q + 5)[0]
+                        assert pa[:7] == pb[:7] and pb[7] == 0, (tf, fid, mode, q, "placebo")
+        # F6 lies within F1: whenever the full F12 fires F6, it fires F1 too
+        for vid in ("F12.a", "F12.b"):
+            for q in range(0, len(off["coin"]), max(1, len(off["coin"]) // 40)):
+                out = call_trade_x(mk, pd_, KX.variant_by_id(vid), off, q)[0]
+                if out[2] == KX.R_RULE and out[7] & KX.CB_F6:
+                    assert out[7] & KX.CB_F1
+    assert n_cmp >= 250 and n_exit >= 40
+
+
 # ====================================================================================================== T2: F11 (the mechanics)
 @pytest.fixture()
 def f11_on():
@@ -1503,7 +1670,7 @@ def test_t2_f11_merged_checks_fire_on_any_bar_and_placebo_has_no_precondition(tm
     t = s.trade("F11.a")                                  # bars 7 and 8 share the check; the event is on bar 7 only
     assert t["reason"] == KX.R_RULE and t["off"] == 135 and t["checks"] == 3
     t = s.trade("F11.a", plc=True, hz=np.zeros((KX.N_AGE, 2, 2)), seed=1)
-    assert t["trace"][:3, 5].tolist() == [0.0, 0.0, 0.0]  # z = 0 always
+    assert t["trace"][:3, 5].tolist() == [1.0, 1.0, 1.0]  # an event component can fire at every check: z = 1 (6)
     s2 = Scen(tmp_path / "s", seg, tf="15m", longs=[4], shorts=[], pad=False, f11=f11_provider([("state", dict(true_bars=(5, 6, 7, 8)))]))
     t = s2.trade("F11.a")                                 # armed at the signal bar (false there), true at 5: fires at the first check
     assert t["off"] == 90
@@ -1554,6 +1721,226 @@ def test_t2_f11_differential_against_the_reference(tmp_path, vendor, f11_on):
                 assert not compare_trade(mk, prov_, pd_, v, off, q, plc=True, hz=hz, seed=q + 99), (tf, vid, q, "placebo")
                 assert call_trade_x(mk, pd_, v, off, q, plc=True, hz=hz, seed=q + 99)[0][7] == 0        # a placebo exit has no component
         assert n_rule >= 5 and n_tp >= 1 and n_f12 >= 3
+
+
+# ====================================================================================================== T8: market-state labels (prereg 7)
+def test_t8_market_state_labels_follow_regime5y_look_only_backwards_and_are_the_same_for_every_arm(tmp_path, vendor, monkeypatch):
+    reg = DX.regime_module()
+    assert (reg.ADX_TREND, reg.ADX_RANGE, reg.SLOPE_MIN, reg.VOL_Q, reg.VOL_DAYS, reg.VOL_MIN_DAYS) == (25.0, 20.0, 0.5, 0.80, 365, 180)
+    assert DX.STATE_KO == {1: "추세장", 2: "횡보장", 3: "급변장", 4: "보통", 0: "모름"} and DX.STATE_ORDER == (1, 2, 3, 4, 0)
+    coins = {SYMS[i]: synth_coin(131 + i, 420, (100.0, 3000.0)[i], vol=0.0006, drop=0.0, jump_p=0.0005) for i in range(2)}
+    mk, prov, pd_ = build_world(coins, tmp_path, pick=make_pick("1h"), prov_kw=dict(warm=False))
+    off = pd_.offered("select", mk)
+    assert len(off["coin"]) > 200 and off["state"].dtype == np.int8
+    seen = set()
+    for c in range(2):
+        df = pd_.frames[c][0]
+        h, l, cl = df["high"].to_numpy(float), df["low"].to_numpy(float), df["close"].to_numpy(float)
+        full = reg.regimes(h, l, cl, 60)["code"]
+        a, b = pd_.cst[c], pd_.cen[c]
+        assert np.array_equal(pd_.b_state[a:b], full)                                      # the labels are regime5y's own
+        sel = off["coin"] == c
+        assert np.array_equal(off["state"][sel], full[off["i0"][sel]])                        # a trade's label is its signal bar's
+        seen |= set(off["state"][sel].tolist())
+        cut = int(len(cl) * 0.6)                                                           # no look-ahead: bars 0..t only
+        assert np.array_equal(reg.regimes(h[:cut], l[:cut], cl[:cut], 60)["code"], full[:cut])
+        h2, l2, c2 = h.copy(), l.copy(), cl.copy()                                         # changing every bar after t changes nothing at t
+        h2[cut:], l2[cut:], c2[cut:] = h[cut:] * 1.3, l[cut:] * 0.7, cl[cut:] * 1.1
+        assert np.array_equal(reg.regimes(h2, l2, c2, 60)["code"][:cut], full[:cut])
+    assert 0 in seen and len(seen) >= 3                                                    # 모름 (under 180 days of history) and several states occur
+    # every arm labels the same signal the same way; the state table counts the closed trades once each
+    edges = MT.month_edges("select")
+    e0 = MT.summarize(KX.simulate(mk, pd_, KX.E0, 0.25, "select"), edges)
+    key0 = dict(zip(zip(e0["tr_coin"].tolist(), e0["tr_side"].tolist(), e0["tr_fill"].tolist()), e0["tr_state"].tolist()))
+    for vid in ("F3.a", "F4.m2.b", "F7h.H4.a"):
+        sv = MT.summarize(KX.simulate(mk, pd_, KX.variant_by_id(vid), 0.25, "select"), edges)
+        assert all(key0[k] == st for k, st in zip(zip(sv["tr_coin"].tolist(), sv["tr_side"].tolist(), sv["tr_fill"].tolist()), sv["tr_state"].tolist()) if k in key0)
+        hs = MT.hold_by_state(sv["hold_h"], sv["tr_state"])
+        assert list(hs) == ["추세장", "횡보장", "급변장", "보통", "모름"] and sum(x["n"] for x in hs.values()) == len(sv["hold_h"]) == sv["counts"][2]
+        for code, name in DX.STATE_KO.items():
+            m = sv["tr_state"] == code
+            assert hs[name]["n"] == int(m.sum()) and hs[name]["few"] == (int(m.sum()) < 100)
+            if m.any():
+                assert hs[name]["median"] == float(np.median(sv["hold_h"][m])) and hs[name]["share_gt4"] == float((sv["hold_h"][m] > 4).mean())
+    # pool_summary carries it, for the variant and for E0
+    ps = MT.pool_summary({"p": sv}, {"p": e0})["all"]
+    assert set(ps["hold_by_state"]) == set(ps["hold_by_state_e0"]) == {"추세장", "횡보장", "급변장", "보통", "모름"}
+    # the thresholds are asserted at load: a copy of regime5y.py with another threshold is refused
+    src = open(DX.REGIME_PATH, encoding="utf-8").read().replace("ADX_TREND, ADX_RANGE, SLOPE_MIN = 25.0, 20.0, 0.5", "ADX_TREND, ADX_RANGE, SLOPE_MIN = 26.0, 20.0, 0.5")
+    assert src != open(DX.REGIME_PATH, encoding="utf-8").read()
+    (tmp_path / "regime5y_changed.py").write_text(src)
+    monkeypatch.setattr(DX, "REGIME_PATH", str(tmp_path / "regime5y_changed.py"))
+    monkeypatch.setattr(DX, "_REGIME_MOD", None)
+    with pytest.raises(AssertionError, match="ADX_TREND"):
+        DX.regime_module()
+
+
+# ====================================================================================================== T2: F7h, F12, the F11 coin flip; T4: strata z
+@pytest.mark.parametrize("tf,tfm", [("15m", 15), ("30m", 30), ("1h", 60), ("4h", 240)])
+@pytest.mark.parametrize("hrs", [4, 8, 16])
+def test_t2_f7h_fires_at_the_first_close_at_or_after_c0_plus_h_also_when_that_bin_is_missing(tmp_path, vendor, tf, tfm, hrs):
+    i0 = 3
+    c0 = (i0 + 1) * tfm                                         # the signal bar's close (minutes after the data start)
+    seg = [(c0 + hrs * 60 + 10 * 60, 100.0)]
+    s = Scen(tmp_path / "a", seg, tf=tf, longs=[i0], pad=True)
+    t = s.trade(f"F7h.H{hrs}.a")
+    expect_exit(s, t, c0 + hrs * 60)                            # C0 + H is a close of every pick timeframe
+    assert t["checks"] == hrs * 60 // tfm and t["d"] != 0
+    # in bars: 4H on 15m, 2H on 30m, H on 1h, H / 4 on 4h
+    assert hrs * 60 // tfm == {"15m": 4 * hrs, "30m": 2 * hrs, "1h": hrs, "4h": hrs // 4}[tf]
+    # the bin that closes at C0 + H does not exist: the next close that exists acts
+    gaps = list(range(c0 + hrs * 60 - tfm, c0 + hrs * 60))
+    s2 = Scen(tmp_path / "b", seg, tf=tf, longs=[i0], pad=True, gaps=gaps)
+    t2 = s2.trade(f"F7h.H{hrs}.b")
+    expect_exit(s2, t2, c0 + hrs * 60 + tfm)
+    # the stop and the take-profit still end it sooner; mode b has no take-profit: a rise through 3R does not end it
+    s3 = Scen(tmp_path / "c", [(c0 + 60, 100.0), (60, 110.0), (hrs * 60 + 600, 110.0)], tf=tf, longs=[i0], pad=True)
+    assert s3.trade(f"F7h.H{hrs}.a")["reason"] == KX.R_TP
+    t3 = s3.trade(f"F7h.H{hrs}.b")
+    assert t3["reason"] == KX.R_RULE and t3["off"] == c0 + hrs * 60
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t4_strata_z_of_section_6_on_built_paths(tmp_path, vendor, mir, f11_on):
+    sd = side_of(mir)
+    pre = ([(60, 100), (60, 100), (30, 99.5), (30, 100), (60, 101.0)] + H(101, 101, 101) + H(101, 101) + [(20, 100.7), (40, 101.0)] + H(101, 101))
+    sA = Scen(tmp_path / "a", pre + [(5, 100.6), (55, 100.6)], longs=[6], side_mirror=mir)        # a reference exists; Rc = -0.47 at the last check
+    sB = Scen(tmp_path / "b", pre + [(5, 100.35), (55, 100.35)], longs=[6], side_mirror=mir)      # Rc = -0.68
+    z = lambda t: t["trace"][:t["checks"], 5].tolist()                                            # noqa: E731
+    tA1, tA0, tA5 = sA.trade("F6.w2.d0"), sA.trade("F6.w2.d0.5"), sA.trade("F1.w2.a")
+    assert z(tA1)[-1] == 1 and z(tA0)[-1] == 0 and z(tA5)[-1] == 1                                # F6.d0.5 needs Rc < -0.5; F6.d0 any loss
+    assert sB.trade("F6.w2.d0.5")["trace"][sB.trade("F6.w2.d0.5")["checks"] - 1, 5] == 1
+    assert sum(z(sA.trade("F6.w2.d0.5"))) == 0                                                    # never below -0.5R: z = 0 at every check
+    # F8: armed AND a reference; F9: a reference and (armed or Rc < -0.5)
+    seg = ([(60, 100), (60, 100), (30, 99.5), (30, 100), (60, 101.0)] + H(101, 101, 101) + H(101, 101) + [(20, 100.7), (40, 101.0)] + H(101, 101)
+           + [(5, 100.6), (55, 100.6)] + H(102.8) + [(5, 100.5), (55, 100.5)])
+    s8 = Scen(tmp_path / "c", seg, longs=[6], side_mirror=mir)
+    t8 = s8.trade("F8.w2.P1.a")
+    k8 = t8["checks"]
+    assert z(t8)[k8 - 1] == 1 and z(t8)[k8 - 2] == 1 and sum(z(t8)[:k8 - 2]) == 0                    # armed at bar 13, fires at bar 14
+    assert sum(z(s8.trade("F8.w2.P2.a"))) == 0                                                    # never armed
+    pre9 = [(60, 100)] * 4 + [(30, 99.8), (30, 100)] + [(60, 100)] * 4
+    sa = Scen(tmp_path / "d", pre9 + H(101.5) + H(99.7), longs=[8], side_mirror=mir)
+    ta = sa.trade("F9.a")
+    assert z(ta) == [1, 1]                                                                         # armed at the first check (a gain of 1R)
+    sb = Scen(tmp_path / "e", pre9 + H(99.7) + H(99.5), longs=[8], side_mirror=mir)
+    tb = sb.trade("F9.a")
+    assert z(tb) == [0, 1]                                                                         # unarmed and a small loss: z = 0; then below -0.5R
+    sc = Scen(tmp_path / "f", pre9 + H(100.5) + H(99.7), longs=[8], side_mirror=mir)
+    assert sum(z(sc.trade("F9.a"))) == 0                                                           # a gain under 1R is no arm; a loss over -0.5R never comes
+    # F11: a state component counts only once armed (C3); an event component always; a finite level; the strategy's own flag
+    seg11 = H(*([100] * 10))
+    s11 = scen11(tmp_path / "g", seg11, [("state", dict(true_bars=(2, 3, 5)))], mir=mir)
+    assert z(s11.trade("F11.a")) == [0, 0, 1]                                                      # true at i0 and 3: unarmed; false at 4; true at 5
+    s11b = scen11(tmp_path / "h", seg11, [], lvl=None, mir=mir)                                    # a level-only strategy with a NaN level: no component
+    assert sum(z(s11b.trade("F11.a"))) == 0
+    s11c = scen11(tmp_path / "i", seg11, [], lvl=90.0, mir=mir)
+    assert z(s11c.trade("F11.a")) == [1] * s11c.trade("F11.a")["checks"]
+    def prov_flag(pick, sym, df, close, sl, ss):                                                   # F12_MSS_DISP style: its own flag false on bars 3 and 4
+        out = f11_provider([("event", dict(true_bars=()))])(pick, sym, df, close, sl, ss)
+        zf = np.ones(len(df), np.int8)
+        zf[[3, 4]] = 0
+        out["z_long"], out["z_short"] = zf, zf
+        return out
+    s11d = Scen(tmp_path / "j", seg11, longs=[2], side_mirror=mir, f11=prov_flag)
+    assert z(s11d.trade("F11.a"))[:4] == [0, 0, 1, 1]
+    # F12: z = 1 when a swing reference exists, F2 is armed, F5 is armed, or F11's z is 1; F3, F4, F7h and F10 set none
+    ema_lo = np.full(40, 90.0)
+    flat = H(*([100] * 14))
+    s12 = Scen(tmp_path / "k", flat, longs=[2], side_mirror=mir, ema=np.full(40, 101.0), f11=f11_provider([]))     # no reference, F2 unarmed, nothing armed, no F11
+    t12 = s12.trade("F12.a")
+    expect_exit(s12, t12, 11 * 60, side=sd)                                                        # only the 8-hour clock fires: C0 = 3 h
+    assert sum(z(t12)) == 0 and t12["comp"] == KX.CB_F7H
+    s12b = Scen(tmp_path / "l", pre9 + H(100, 100, 100, 100, 100, 100, 100, 100), longs=[8], side_mirror=mir, ema=np.full(40, 101.0), f11=f11_provider([]))
+    t12b = s12b.trade("F12.a")
+    assert set(z(t12b)) == {1}                                                                     # the swing reference at 99.8 exists
+    s12c = Scen(tmp_path / "m", flat, longs=[2], side_mirror=mir, ema=ema_lo, f11=f11_provider([]))
+    assert set(z(s12c.trade("F12.a"))) == {1}                                                      # F2 armed (the close is above its average)
+    s12d = Scen(tmp_path / "n", flat, longs=[2], side_mirror=mir, ema=np.full(40, 101.0), f11=f11_provider([], lvl=90.0))
+    assert set(z(s12d.trade("F12.a"))) == {1}                                                      # F11's finite level
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f12_nine_components_one_exit_every_firing_component_recorded(tmp_path, vendor, mir, f11_on):
+    sd = side_of(mir)
+    pre9 = [(60, 100)] * 4 + [(30, 99.8), (30, 100)] + [(60, 100)] * 4
+    no_f11 = f11_provider([])
+    ema_lo = np.full(40, 90.0)
+    # a close below the reference by a small loss: F1 alone; by more than 0.5R: F1 and F6 (the reference is shared)
+    s1 = Scen(tmp_path / "a", pre9 + H(99.7) + H(99.7), longs=[8], side_mirror=mir, ema=ema_lo, f11=no_f11)
+    t = s1.trade("F12.a")
+    expect_exit(s1, t, 10 * 60, side=sd)
+    assert t["comp"] == KX.CB_F1 and t["reason"] == KX.R_RULE
+    s2 = Scen(tmp_path / "b", pre9 + H(99.5) + H(99.5), longs=[8], side_mirror=mir, ema=ema_lo, f11=no_f11)
+    t = s2.trade("F12.a")
+    expect_exit(s2, t, 10 * 60, side=sd)
+    assert t["comp"] == KX.CB_F1 | KX.CB_F6 == 33
+    # the mask is a record of the check, not an order: the same exit, price, minute and reason as F1 alone
+    tf1 = s2.trade("F1.w3.a")
+    assert tf1["off"] == t["off"] and tf1["px"] == t["px"] and tf1["reason"] == t["reason"] and tf1["comp"] == 0
+    # the trade's wallet change is the one of a single rule exit: one fee, one slippage
+    assert tf1["d"] == pytest.approx(t["d"], rel=1e-12)
+    # F12.b has no fixed take-profit (the target of F11.b stays where there is one); F12.a keeps the pick's 3R
+    s3 = Scen(tmp_path / "c", H(100, 100, 100, 104.0, 104.0, 104.0, 104.0, 104.0, 104.0, 104.0, 104.0, 104.0, 104.0), longs=[2], side_mirror=mir,
+              ema=ema_lo, f11=no_f11)
+    assert s3.trade("F12.a")["reason"] == KX.R_TP
+    tb = s3.trade("F12.b")
+    assert tb["reason"] == KX.R_RULE and tb["comp"] & KX.CB_F7H                                    # the 8-hour clock ends it
+    # the account records the mask per signal; a RAND exit has none
+    r = s2.account("F12.a")
+    k = int(np.flatnonzero(r.reason == KX.R_RULE)[0])
+    assert int(r.comp[k]) == 33
+    r = s2.account("F12.a", placebo=True, hz=np.ones((KX.N_AGE, 2, 2)), seed_base=1)
+    assert (r.reason == KX.R_RAND).any() and int(r.comp.sum()) == 0
+    # metrics: components fired and fired alone, counted over the RULE exits
+    s = MT.summarize(s2.account("F12.a"), MT.month_edges("select"))
+    assert s["comp_fired"][0] == 1 and s["comp_alone"][0] == 0 and s["comp_fired"][5] == 1 and s["comp_alone"][5] == 0
+    assert MT.COMP_LABELS == ("F1", "F2", "F3", "F4", "F5", "F6", "F7h", "F10", "F11")
+
+
+def test_t2_f11_coin_flip_positions_use_mirrored_levels_and_targets():
+    f = 99.98                                                    # the flip's fill (a short at 100 minus slippage)
+    # the strategy is long with level 99.0 and target 102.0: a short flip gets 100.96 and 97.96 (mirrored around its own fill)
+    inv, tgt = KX.flip_levels(1, -1, f, 99.0, 102.0)
+    assert inv == pytest.approx(f + abs(f - 99.0)) and tgt == pytest.approx(f - (102.0 - f)) and inv > f > tgt
+    assert KX.flip_levels(1, 1, f, 99.0, 102.0) == (99.0, 102.0)                                # a flip on the strategy's own side is the strategy's trade
+    inv, tgt = KX.flip_levels(-1, 1, 100.02, 101.0, 98.0)                                       # a short strategy, a long flip
+    assert inv == pytest.approx(100.02 - abs(100.02 - 101.0)) and tgt == pytest.approx(100.02 + (98.0 - 100.02) * -1.0 * 1)
+    inv, tgt = KX.flip_levels(1, -1, f, 99.0, 99.5)                                             # a target at or behind the fill is no target
+    assert math.isnan(tgt) and inv > f
+    inv, tgt = KX.flip_levels(1, -1, f, float("nan"), float("nan"))
+    assert math.isnan(inv) and math.isnan(tgt)                                                  # NaN in, none out (rule C7)
+
+
+@pytest.mark.parametrize("mir", MIR)
+def test_t2_f11_coin_flip_trade_fires_on_the_mirrored_level_and_target(tmp_path, vendor, f11_on, mir):
+    sd = side_of(mir)
+    flip_side = -sd
+    f_flip = 100.0 * (1 + FILL_SLIP * flip_side)
+    inv, tgt = KX.flip_levels(sd, flip_side, f_flip, 99.0 if not mir else 101.0, 102.0 if not mir else 98.0)
+    # the flipped position is entered on the signal of the flip's side; its per-signal level and target are the mirrored ones
+    def prov(pick, sym, df, close, sl, ss):
+        n = len(df)
+        lvl, tg = np.full(n, np.nan), np.full(n, np.nan)
+        for i in np.flatnonzero(ss if flip_side < 0 else sl):
+            lvl[i], tg[i] = inv, tgt
+        key = "short" if flip_side < 0 else "long"
+        return {"comp_long": [], "comp_short": [], "lvl_long": None, "lvl_short": None, "tgt_long": None, "tgt_short": None,
+                f"lvl_{key}": lvl, f"tgt_{key}": tg}
+    # (a) the price moves against the flip through its mirrored level: a rule exit at the first close beyond it
+    seg = H(100, 100, 100, 100.5, 101.0, 101.0, 101.0, 101.0, 101.0, 101.0)
+    if flip_side > 0:
+        seg = H(100, 100, 100, 99.5, 99.0, 99.0, 99.0, 99.0, 99.0, 99.0)
+    s = Scen(tmp_path / "a", seg, longs=[2] if flip_side > 0 else [], shorts=[2] if flip_side < 0 else [], f11=prov)
+    t = s.trade("F11.a")
+    assert t["reason"] == KX.R_RULE and t["off"] == 300                                         # the close of bar 4 (beyond the level) fires; bar 3 does not
+    # (b) F11.b: the mirrored target is a maker limit at its level
+    seg = H(100, 100, 100, 99.0, 97.5, 97.5, 97.5, 97.5, 97.5, 97.5)
+    if flip_side > 0:
+        seg = H(100, 100, 100, 101.0, 102.5, 102.5, 102.5, 102.5, 102.5, 102.5)
+    s = Scen(tmp_path / "b", seg, longs=[2] if flip_side > 0 else [], shorts=[2] if flip_side < 0 else [], f11=prov)
+    t = s.trade("F11.b")
+    assert t["reason"] == KX.R_TP and t["px"] == pytest.approx(tgt, rel=1e-12)
 
 
 # ====================================================================================================== T3: cut against full
@@ -1669,7 +2056,7 @@ def rewrite_after(coin, idx, seed, vol=0.004):
 
 
 MIDDLE = ["F1.w3.a", "F1.w3.a.q15", "F2.n20.a", "F3.a", "F4.m2.a", "F4.m2.a.q15", "F5.P1.5.g25.a", "F6.w3.d0.5", "F7.N24.a",
-          "F8.w3.P1.a", "F9.a", "F9.a.q15", "F10.N6.a", "F11.a", "F11.b"]
+          "F7h.H8.a", "F8.w3.P1.a", "F9.a", "F9.a.q15", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b"]
 
 
 def causal_f11(pick, sym, df, close, sl, ss):
@@ -1811,10 +2198,7 @@ def test_metrics_bootstrap_holm_and_selection_rule():
     assert not MT.eligibility(0.005, [0.01] * 20, 100, 100, pl, False)["eligible"]               # below the placebo's 95th percentile
     assert MT.eligibility(0.005, [0.01] * 20, 100, 100, None, True)["eligible"]                    # F7 has no placebo gate
     assert MT.eligibility(0.01, [0.01] * 9 + [-0.01] * 6, 10, 10, pl, True)["need_picks"] == 9
-    rows = [dict(id="A", group="S", nparams=2, order=3, eligible=True, M=0.02), dict(id="B", group="S", nparams=1, order=2, eligible=True, M=0.02),
-            dict(id="C", group="C", nparams=3, order=9, eligible=True, M=0.01), dict(id="D", group="T", nparams=0, order=20, eligible=False, M=0.5)]
-    assert MT.choose_variants(rows) == ["B", "C"]                                  # ties: fewer parameters; second from another group
-    assert MT.choose_variants([dict(r, eligible=False) for r in rows]) == []
+    # (the choice by hand and the default of 8.4 are tested in the T7 tests below)
     v = MT.confirm_verdict(True, 0.02, np.linspace(-0.01, 0.01, 200), False, 100, 100)
     assert v["pass"] and not MT.confirm_verdict(False, 0.02, np.linspace(-0.01, 0.01, 200), False, 100, 100)["pass"]
     assert not MT.confirm_verdict(True, 0.02, np.linspace(-0.01, 0.01, 200), False, 99, 100)["pass"]
@@ -1968,7 +2352,7 @@ def syn_cfg(tmp, period="select", stage=None, n_seeds=20, procs=1, variants=SYN_
     mk = DX.Market.from_arrays([coins[s] for s in SYMS[:2]], EX, symbols=SYMS[:2])
     picks = [syn_pick("core", "1h", "tp3R|4"), syn_pick("core", "4h", "tp3R|2"), syn_pick("ds", "1h", "tp3R|4"), syn_pick("ds", "4h", "tp3R|2")]
     KX.register_f11(lambda *a, **k: None)
-    lay = RX.Layout(base=str(tmp / "exitflex"), root=str(tmp), required=())
+    lay = RX.Layout(base=str(tmp / "repo" / "exitflex"), root=str(tmp / "repo"), required=())      # $WORK lies outside the 'repository'
     os.makedirs(lay.out, exist_ok=True)
     pin = {"work": str(tmp / "work"), "data_dir": folder}
     cfg = RX.Config(lay, pin, "cd" * 32, stage or period, period, mk, picks, [KX.variant_by_id(v) for v in variants],
@@ -2054,7 +2438,8 @@ def test_runner_select_writes_the_documented_files_and_keeps_deepseek_money_priv
     for r in ds["variants"]:
         line = next(ln for ln in rtxt.splitlines() if ln.startswith(f"| {r['id']} |"))
         assert (("선택 가능" in line) == r["eligible"]) and (("%" in line) == r["eligible"])
-    assert "p값" not in rtxt and not any(ln.strip() in txt or ln.strip() in json.dumps(j) for ln in rtxt.splitlines() if len(ln.strip()) >= 20)
+    committed_lines = {x.strip() for x in txt.splitlines()} | {x.strip() for x in open(os.path.join(out, "select.json"), encoding="utf-8").read().splitlines()}
+    assert "p값" not in rtxt and not any(ln.strip() in committed_lines for ln in rtxt.splitlines() if len(ln.strip()) >= 20 and any(ch.isalnum() for ch in ln))
     assert RX.audit_a8(cfg.lay, "select", cfg.pin["work"], cfg.pin_hash)
     assert RX.audit_a9(cfg, {p["id"]: [v.id for v in cfg.variants] for p in cfg.picks})
 
@@ -2238,62 +2623,234 @@ def test_runner_chain_each_stage_needs_the_previous_stages_file_with_its_pinned_
     with pytest.raises(RX.StageRefused, match="hash mismatch"):                  # and every stage's gate sees that a pinned file changed
         RX.gate_pin(lay, verify_data=False)
     RX.write_json(t, {"n_seeds": 200})
-    # choice needs select.json pinned; confirm needs select.json and choice.json
+    # choice needs select.json, SELECT_KO.md, timing.json and sent.json pinned; confirm needs those and choice.json
     with pytest.raises(RX.StageRefused, match="select.json missing"):
-        RX.stage_choice(lay, [], [])
+        RX.stage_choice(lay, {})
     with pytest.raises(RX.StageRefused, match="select.json missing"):
         RX.stage_confirm(lay, 1)
     RX.write_json(lay.out_file("select.json"), {"pin": "x", "pools": {}})
     with pytest.raises(RX.StageRefused, match="select.json is not pinned"):
-        RX.stage_choice(lay, [], [])
+        RX.stage_choice(lay, {})
     pin_add(lay, lay.out_file("select.json"))
+    for name, body in (("SELECT_KO.md", "report"), ("sent.json", None)):
+        with pytest.raises(RX.StageRefused, match=f"{name} missing"):
+            RX.stage_choice(lay, {})
+        if body:
+            open(lay.out_file(name), "w").write(body)
+        else:
+            RX.write_json(lay.out_file(name), {"sent_utc": "2026-10-12T12:00:00Z"})
+        with pytest.raises(RX.StageRefused, match=f"{name} is not pinned"):
+            RX.stage_choice(lay, {})
+        pin_add(lay, lay.out_file(name))
     with pytest.raises(RX.StageRefused, match="choice.json missing"):
         RX.stage_confirm(lay, 1)
 
 
-def edited_select(syn_select_doc, tmp, eligible):
-    """A copy of the synthetic select.json with chosen ids marked eligible (core and ds), written to a pinned layout."""
-    lay, pin = pin_layout(tmp)
+# ====================================================================================================== T7: selection logic
+def fake_row(vid, group, nparams, order, eligible, med, dset=True, step2=True, g=("pass", "pass", "pass", "pass")):
+    return {"id": vid, "group": group, "nparams": nparams, "order": order, "eligible": eligible, "in_default_set": dset,
+            "hold": {"median": med, "p90": med * 2, "share_gt4": 0.5, "share_gt8": 0.3, "share_gt18": 0.1}, "step2": step2,
+            "gates": dict(zip(("g1", "g2", "g3", "g4"), g))}
+
+
+def fake_select(pin="ab" * 32):
+    """A select.json-shaped document with no real figure: hold medians chosen to exercise the default of 8.4."""
+    core = [fake_row("F5.P1.g25.a", "G", 2, 5, True, 6.0), fake_row("F5.P1.g25.b", "G", 2, 6, True, 6.0),
+            fake_row("F8.w2.P1.a", "S", 2, 20, True, 7.0), fake_row("F10.N6.a", "L", 1, 60, True, 9.0),
+            fake_row("F4.m2.a", "C", 1, 40, True, 2.0, dset=False),                  # shortest hold but L3: never by default
+            fake_row("F9.a", "S", 3, 70, False, 1.0, g=("pass", "pass", "pass", "fail")), fake_row("F2.n20.a", "M", 1, 30, True, 3.0, dset=False)]
+    ds = [fake_row("F5.P1.g25.a", "G", 2, 5, True, 6.0), fake_row("F8.w2.P1.a", "S", 2, 20, True, 5.0), fake_row("F9.a", "S", 3, 70, True, 5.0)]
+    doc = {"pin": pin, "complete_menu": True, "pools": {}}
+    for pool, rows in (("core", core), ("ds", ds)):
+        doc["pools"][pool] = {"variants": rows, "eligible_ids": [r["id"] for r in rows if r["eligible"]],
+                              "default_ids": MT.default_choice(rows)}
+    return doc
+
+
+SENT = {"sent_utc": "2026-10-12T12:00:00Z", "sent_kst": "2026-10-12T21:00:00+09:00", "channel": "chat", "freeze_note": "x"}
+
+
+def when(hours):
+    return RX._utc(RX._parse_utc(SENT["sent_utc"]) + __import__("datetime").timedelta(hours=hours))
+
+
+def msg(hours, **answers):
+    return {"time_utc": when(hours), "text": "답", "answers": answers}
+
+
+def test_t7_gates_per_pool_and_the_clock_families_have_no_placebo_gate():
+    pl = np.linspace(-0.01, 0.01, 200)
+    ok = lambda n_pos, n, **kw: MT.eligibility(0.02, [0.01] * n_pos + [-0.01] * (n - n_pos), 100, 100, pl, False)   # noqa: E731
+    assert ok(14, 23)["eligible"] and not ok(13, 23)["eligible"] and ok(14, 23)["need_picks"] == 14
+    assert ok(9, 15)["eligible"] and not ok(8, 15)["eligible"] and ok(9, 15)["need_picks"] == 9
+    assert not MT.eligibility(0.02, [0.01] * 13 + [0.0] * 10, 100, 100, pl, False)["eligible"]       # a zero M_p does not count
+    assert MT.eligibility(0.005, [0.01] * 20, 100, 100, None, True)["eligible"]                         # F7, F7h: no gate 3
+    assert not MT.eligibility(0.005, [0.01] * 20, 100, 100, None, False)["eligible"]
+    assert not MT.eligibility(-0.001, [0.01] * 20, 100, 100, None, True)["eligible"] and not MT.eligibility(0.02, [0.01] * 20, 99, 100, None, True)["eligible"]
+    rows = [dict(gates=dict(zip(("g1", "g2", "g3", "g4"), g))) for g in (
+        ("fail", "pass", "not_run", "pass"), ("fail", "fail", "not_run", "fail"), ("pass", "fail", "not_run", "pass"), ("pass", "pass", "not_run", "fail"),
+        ("pass", "pass", "fail", "pass"), ("pass", "pass", "pass", "pass"), ("pass", "pass", "n/a", "pass"), ("pass", "fail", "not_run", "fail"))]
+    assert MT.gate_failure_counts(rows) == {"gate1": 2, "gate2": 2, "gate4": 1, "gate3": 1}          # counted in sequence
+
+
+def test_t7_default_of_8_4_uses_set_d_hold_hours_the_group_rule_and_none():
+    doc = fake_select()
+    core, ds = doc["pools"]["core"]["variants"], doc["pools"]["ds"]["variants"]
+    # F4.m2.a (2 h) and F2 (3 h) are L3 outside D; F9 is not choosable; F5.P1.g25.a and .b tie at 6 h: fewer parameters tie, then canonical order
+    assert MT.default_choice(core) == ["F5.P1.g25.a", "F8.w2.P1.a"]                 # shortest hold; the second from a different group
+    assert MT.default_choice(ds) == ["F8.w2.P1.a", "F5.P1.g25.a"]                   # F8 and F9 tie at 5 h: fewer parameters first
+    assert MT.default_choice([dict(r, eligible=False) for r in core]) == []
+    assert MT.default_choice([r for r in core if r["id"].startswith("F5")]) == ["F5.P1.g25.a"]       # one group only: one variant
+    only_l3 = [r for r in core if not r["in_default_set"]]
+    assert MT.default_choice(only_l3) == []                                         # L2 and L3 are never taken by default
+    tie = [fake_row("A", "S", 2, 9, True, 4.0), fake_row("B", "S", 1, 8, True, 4.0), fake_row("C", "G", 0, 7, True, 4.0)]
+    assert MT.default_choice(tie) == ["C", "B"]                                      # ties: fewer parameters, then the canonical order
+    assert MT.default_choice(core, standing=["F5.P1.g25.a"]) == ["F8.w2.P1.a"]       # a rerun that voided one id: the standing id's group is skipped
+    assert MT.default_choice(core, standing=["F5.P1.g25.a", "F8.w2.P1.a"]) == []
+    # the default ranks by hold only: no money field is read
+    assert all("M" not in r for r in core)
+
+
+def test_t7_choice_flow_deadlines_defaults_none_and_late_messages():
+    sel = fake_select()
+    now = RX._parse_utc(when(10))
+    # an answer before the deadline in each pool: kept; the default is not used
+    c = RX.build_choice(sel, SENT, {"messages": [msg(5, core=["F8.w2.P1.a", "F4.m2.a"], ds="없음")]}, now)
+    assert c["core"] == ["F8.w2.P1.a", "F4.m2.a"] and c["ds"] == [] and c["pools"]["core"]["default_used"] is False
+    assert c["pools"]["ds"]["answer"] == "없음" and c["pools"]["ds"]["deadline_utc"] == when(48)
+    # no answer before the deadline passes: refused; after it the default applies, but 없음 stays none
+    with pytest.raises(RX.StageRefused, match="deadline"):
+        RX.build_choice(sel, SENT, {"messages": []}, RX._parse_utc(when(47.9)))
+    c = RX.build_choice(sel, SENT, {"messages": [msg(5, ds="없음")]}, RX._parse_utc(when(48)))
+    assert c["core"] == sel["pools"]["core"]["default_ids"] and c["pools"]["core"]["default_used"] is True
+    assert c["ds"] == [] and c["pools"]["ds"]["default_used"] is False
+    # an answer timed at or after the deadline does not count (and is quoted); before the sending it is no answer either
+    c = RX.build_choice(sel, SENT, {"messages": [msg(48, core=["F4.m2.a"]), msg(-1, core=["F2.n20.a"]), msg(60, ds=["F9.a"])]}, RX._parse_utc(when(100)))
+    assert c["core"] == sel["pools"]["core"]["default_ids"] and c["ds"] == sel["pools"]["ds"]["default_ids"]
+    assert [x["pool"] for x in c["late_messages"]] == ["core", "ds"] and all(c["pools"][p]["default_used"] for p in ("core", "ds"))
+    # a question moves the deadline of the pools it concerns to at least 24 h after the question
+    qs = [{"time_utc": when(47), "text": "어느 것?", "pools": ["core"]}]
+    with pytest.raises(RX.StageRefused, match="core: no answer yet"):
+        RX.build_choice(sel, SENT, {"messages": [], "questions": qs}, RX._parse_utc(when(70.9)))
+    c = RX.build_choice(sel, SENT, {"messages": [msg(5, ds=["F9.a"])], "questions": qs}, RX._parse_utc(when(71)))
+    assert c["pools"]["core"]["deadline_utc"] == when(71) and c["pools"]["ds"]["deadline_utc"] == when(48) and c["ds"] == ["F9.a"]
+    c = RX.build_choice(sel, SENT, {"messages": [msg(60, core=["F4.m2.a"])], "questions": qs}, RX._parse_utc(when(71)))
+    assert c["core"] == ["F4.m2.a"] and c["pools"]["core"]["default_used"] is False             # received before the moved deadline
+    # an unclear answer is refused; the latest answer before the deadline counts
+    with pytest.raises(RX.StageRefused, match="unclear"):
+        RX.build_choice(sel, SENT, {"messages": [msg(5, core=[])]}, now)
+    c = RX.build_choice(sel, SENT, {"messages": [msg(5, core=["F4.m2.a"], ds=["F9.a"]), msg(9, core=["F2.n20.a"])]}, now)
+    assert c["core"] == ["F2.n20.a"] and c["pools"]["core"]["answer_time_utc"] == when(9)
+    # sent_kst must be sent_utc + 9 h
+    with pytest.raises(RX.StageRefused, match="sent_kst"):
+        RX.build_choice(sel, dict(SENT, sent_kst="2026-10-12T20:00:00+09:00"), {"messages": []}, now)
+
+
+def test_t7_choice_validation_refuses_each_kind_of_wrong_choice():
+    sel = fake_select()
+    base = RX.build_choice(sel, SENT, {"messages": [msg(5, core=["F8.w2.P1.a", "F4.m2.a"], ds=["F9.a"])]}, RX._parse_utc(when(10)))
+    doc = dict(base, sent_utc=SENT["sent_utc"])
+    assert MT.validate_choice_doc(sel, doc, SENT) == []
+    def bad(**ch):
+        d = json.loads(json.dumps(doc))
+        for k, v in ch.items():
+            d[k] = v
+        return MT.validate_choice_doc(sel, d, SENT)
+    assert any("not choosable" in b for b in bad(core=["NOPE.a"]))                                      # unknown id
+    assert any("not choosable" in b for b in bad(core=["F9.a"]))                                         # not choosable in core
+    assert any("at most 2" in b for b in bad(core=["F8.w2.P1.a", "F4.m2.a", "F2.n20.a"]))               # three ids
+    assert any("different groups" in b for b in bad(core=["F5.P1.g25.a", "F5.P1.g25.b"]))                # two ids of one group
+    assert any("send time" in b for b in bad(sent_utc="2026-10-12T13:00:00Z"))                           # not sent.json's time
+    d = json.loads(json.dumps(doc))                                                                      # 'default used' with an answer before the deadline
+    d["pools"]["core"].update(default_used=True, answer_times_utc=[when(5)])
+    assert any("answer was timed before the deadline" in b for b in MT.validate_choice_doc(sel, d, SENT))
+    d = json.loads(json.dumps(doc))                                                                      # a default that differs from 8.4's output
+    d["pools"]["core"].update(default_used=True, answer_times_utc=[], answer_time_utc=None, answer=None)
+    d["core"] = ["F10.N6.a"]
+    assert any("differ from 8.4" in b for b in MT.validate_choice_doc(sel, d, SENT))
+    d["core"] = sel["pools"]["core"]["default_ids"]
+    assert MT.validate_choice_doc(sel, d, SENT) == []
+    d = json.loads(json.dumps(doc))
+    d["pools"]["core"].update(answer=None)                                                               # no answer and no default
+    assert any("no answer recorded" in b for b in MT.validate_choice_doc(sel, d, SENT))
+    # a rerun (section 14): ids that are still choosable stand; a swapped or dropped one is refused; a pool answered 없음 stays none
+    first = json.loads(json.dumps(doc))
+    sel2 = json.loads(json.dumps(sel))
+    for r in sel2["pools"]["core"]["variants"]:
+        r["eligible"] = r["id"] != "F4.m2.a" and r["eligible"]
+    sel2["pools"]["core"]["eligible_ids"] = [r["id"] for r in sel2["pools"]["core"]["variants"] if r["eligible"]]
+    r2 = RX.build_choice(sel2, SENT, {"messages": [msg(5, core=["F2.n20.a"])]}, RX._parse_utc(when(10)), first)
+    assert r2["core"] == ["F8.w2.P1.a", "F2.n20.a"] and r2["ds"] == ["F9.a"]                           # F8 stands, the voided F4 is replaced
+    assert MT.validate_choice_doc(sel2, dict(r2, sent_utc=SENT["sent_utc"]), SENT, first) == []
+    swapped = dict(r2, core=["F10.N6.a", "F2.n20.a"], sent_utc=SENT["sent_utc"])
+    assert any("cannot be swapped or dropped" in b for b in MT.validate_choice_doc(sel2, swapped, SENT, first))
+    none_first = dict(first, core=[], pools=dict(first["pools"], core=dict(first["pools"]["core"], answer="없음")))
+    assert any("stays none" in b for b in MT.validate_choice_doc(sel2, dict(r2, core=["F2.n20.a"], sent_utc=SENT["sent_utc"]), SENT, none_first))
+    r2d = RX.build_choice(sel2, SENT, {"messages": []}, RX._parse_utc(when(48)), first)               # no replacement by the new deadline: the default fills the free place
+    assert r2d["core"][0] == "F8.w2.P1.a" and len(r2d["core"]) == 2 and r2d["core"][1] != "F8.w2.P1.a" and r2d["ds"] == ["F9.a"]
+    assert MT.validate_choice_doc(sel2, dict(r2d, sent_utc=SENT["sent_utc"]), SENT, first) == []
+
+
+def test_t7_stage_choice_writes_choice_json_from_the_pinned_chain(tmp_path):
+    lay, pin = pin_layout(tmp_path)
     ph = DX.sha256_file(lay.pin_file)
-    doc = json.loads(json.dumps(syn_select_doc, default=RX._json_default))
-    doc["pin"] = ph
-    for pool in ("core", "ds"):
-        P = doc["pools"][pool]
-        want = eligible.get(pool, [])
-        for r in P["variants"]:
-            r["eligible"] = r["id"] in want
-            r["mark_default"] = r["id"] in eligible.get(pool + "_default", want[:2])
-        P["eligible_ids"] = list(want)
-        P["default_ids"] = eligible.get(pool + "_default", want[:2])           # in rank order
-    RX.write_json(lay.out_file("select.json"), doc)
-    pin_add(lay, lay.out_file("select.json"))
-    return lay, doc, ph
-
-
-def test_runner_choice_validates_eligibility_pool_size_and_groups(syn_select, tmp_path):
-    cfg, sdoc = syn_select
-    lay, doc, ph = edited_select(sdoc, tmp_path, {"core": ["F1.w3.a", "F4.m2.b", "F11.a", "F6.w2.d0"], "ds": ["F3.a", "F1.w3.a"],
-                                                  "ds_default": ["F3.a", "F1.w3.a"], "core_default": ["F4.m2.b", "F1.w3.a"]})
-    out = RX.stage_choice(lay, ["F1.w3.a", "F4.m2.b"], ["F3.a"], "두 개 골랐습니다", "2026-10-13T01:00:00Z", "2026-10-13T10:00:00+09:00",
-                          "2026-10-12T12:00:00Z")
+    sel = fake_select(ph)
+    RX.write_json(lay.out_file("select.json"), sel)
+    open(lay.out_file("SELECT_KO.md"), "w").write("report")
+    RX.write_json(lay.out_file("timing.json"), {"n_seeds": 200})
+    RX.write_json(lay.out_file("sent.json"), SENT)
+    for n in ("select.json", "SELECT_KO.md", "timing.json", "sent.json"):
+        pin_add(lay, lay.out_file(n))
+    inp = {"messages": [msg(5, core=["F8.w2.P1.a"], ds="없음")], "questions": [{"time_utc": when(2), "text": "정말요?", "pools": ["ds"]}],
+           "material_received": ["ANALYSIS_KO.md"], "freeze_breaches": []}
+    doc = RX.stage_choice(lay, inp, now_utc=when(10))
     j = json.load(open(lay.out_file("choice.json")))
-    assert j["core"] == ["F1.w3.a", "F4.m2.b"] and j["ds"] == ["F3.a"] and j["message"] == "두 개 골랐습니다" and j["default_used"] is False
-    assert j["select_sha256"] == DX.sha256_file(lay.out_file("select.json")) and j["pin"] == ph
-    with pytest.raises(RX.StageRefused, match="different groups"):
-        RX.stage_choice(lay, ["F1.w3.a", "F11.a"] if False else ["F1.w3.a", "F6.w2.d0"], [])        # both structure (S)
-    with pytest.raises(RX.StageRefused, match="not eligible"):
-        RX.stage_choice(lay, ["F5.P1.g50.a"], [])
-    with pytest.raises(RX.StageRefused, match="at most 2"):
-        RX.stage_choice(lay, ["F1.w3.a", "F4.m2.b", "F11.a"], [])
-    with pytest.raises(RX.StageRefused, match="not eligible"):
-        RX.stage_choice(lay, [], ["F11.a"])                                         # eligible in core only
-    # the default: 48 h after the report was sent, and then the marks of select.json
-    with pytest.raises(RX.StageRefused, match="48 h"):
-        RX.stage_choice(lay, [], [], use_default=True, report_sent_utc="2026-10-12T12:00:00Z", now_utc="2026-10-14T11:59:00Z")
-    d = RX.stage_choice(lay, [], [], use_default=True, report_sent_utc="2026-10-12T12:00:00Z", now_utc="2026-10-14T12:00:00Z")
-    assert d["default_used"] is True and d["core"] == ["F4.m2.b", "F1.w3.a"] and d["ds"] == ["F3.a", "F1.w3.a"]
-    with pytest.raises(RX.StageRefused, match="48 h|report"):
-        RX.stage_choice(lay, [], [], use_default=True)
+    assert j["core"] == ["F8.w2.P1.a"] and j["ds"] == [] and j["sent_utc"] == SENT["sent_utc"] and j["sent_kst"] == SENT["sent_kst"]
+    assert j["select_sha256"] == DX.sha256_file(lay.out_file("select.json")) and j["sent_sha256"] == DX.sha256_file(lay.out_file("sent.json"))
+    assert j["messages"] == inp["messages"] and j["questions"] == inp["questions"] and j["material_received"] == ["ANALYSIS_KO.md"]
+    assert j["pools"]["ds"]["deadline_utc"] == when(48) and j["pools"]["core"]["answer"] == ["F8.w2.P1.a"]
+    # an id that is not choosable is refused; so is an input file that changed select.json after it was pinned
+    with pytest.raises(RX.StageRefused, match="not choosable"):
+        RX.stage_choice(lay, {"messages": [msg(5, core=["F9.a"], ds="없음")]}, now_utc=when(10))
+    RX.write_json(lay.out_file("select.json"), dict(sel, extra=1))
+    with pytest.raises(RX.StageRefused, match="hash mismatch"):
+        RX.stage_choice(lay, inp, now_utc=when(10))
+
+
+def test_t7_d11_whitelist_refuses_a_planted_deepseek_money_figure_or_p_value():
+    row = {"id": "F1.w3.a", "family": "F1", "group": "S", "hold": {"median": 5.0, "p90": 9.0, "share_gt4": 0.5, "share_gt8": 0.2, "share_gt18": 0.0},
+           "entered": 100, "entered_e0": 90, "win_share": 0.4, "reasons": {"SL": 3, "RULE": 50}, "gates": {"g1": "pass", "g2": "pass", "g3": "pass", "g4": "pass"},
+           "hold_by_state": {"추세장": {"n": 4, "median": 3.0, "p90": 4.0, "share_gt4": 0.0, "share_gt8": 0.0, "share_gt18": 0.0, "few": True}},
+           "comp_fired": {"F1": 3}, "label": "선택 가능", "eligible": True, "claim": "x"}
+    sel = {"pools": {"core": {"variants": [dict(row, M=0.01)]}, "ds": {"n_picks": 15, "e0": {"hold": row["hold"], "entered": 1, "skipped": 0, "win_share": 0.4},
+                                                                         "variants": [row], "eligible_ids": [], "default_ids": [], "gate_fail_counts": {}}}}
+    conf = {"e0": {"ds": {"hold": row["hold"], "entered": 10}}, "pairs": {"F1.w3.a|core": dict(row, M=0.01, p_block=0.01),
+                                                                           "F1.w3.a|ds": {k: v for k, v in row.items() if k != "gates"} | {"pass": True, "label": "PASS"}}}
+    md = "## 코어 23개\n월 +1.20% 로그 0.01\n## 딥시크 15개\n| F1.w3.a | 5.0 | 선택 가능 |\n"
+    assert MT.d11_problems(sel, conf, md, md) == []                                   # the allowed fields pass (core may show money)
+    for planted in ({"M": 0.01}, {"M_pct_month": 1.2}, {"live": {"M": 0.1}}, {"p_block": 0.03}, {"interval95": [0, 1]}, {"final_multiple_median": 2.0},
+                    {"max_dd_median": 0.3}, {"busts": 1}, {"D": [0.1]}, {"qa": {}}, {"hold": {"median": 1, "M": 0.5}}):
+        s2 = json.loads(json.dumps(sel))
+        s2["pools"]["ds"]["variants"][0].update(planted)
+        assert MT.d11_problems(s2, None, None, None), planted
+        c2 = json.loads(json.dumps(conf))
+        c2["pairs"]["F1.w3.a|ds"].update(planted)
+        assert MT.d11_problems(None, c2, None, None), planted
+    s3 = json.loads(json.dumps(sel))
+    s3["pools"]["ds"]["e0"]["M"] = 0.1
+    assert MT.d11_problems(s3, None, None, None)
+    for line in ("월 +1.20%", "p = 0.03", "로그 성장 0.01", "최종 배수 2.1", "최대 낙폭 30%", "파산 2개", "구간 [0.1, 0.2]", "$5,200"):
+        assert MT.d11_problems(None, None, f"## 딥시크 15개\n{line}\n", None), line
+        assert MT.d11_problems(None, None, None, f"### F1 (딥시크)\n## 딥시크\n{line}\n"), line
+        assert not MT.d11_problems(None, None, f"## 코어 23개\n{line}\n## 딥시크 15개\nok\n", None), line      # core text may show money
+
+
+def test_t7_claims_and_the_loss_categories(f11_on):
+    assert MT.claim_of("F7.N24.a") == MT.claim_of("F7h.H8.b") == "beats E0 by holding less; no claim about reading the market"
+    assert MT.claim_of("F11.a") == "the strategy's own exit beats E0 and a random exit with its timing profile"
+    assert MT.claim_of("F12.b") == "all nine exits at once beat E0 and a random exit with its timing profile"
+    assert MT.claim_of("F9.a") == MT.claim_of("F1.w3.a") == "beats E0 and beats a random exit with its timing profile"
+    assert [RX.claim_key(KX.variant_by_id(v)) for v in ("F7.N12.a", "F7h.H4.a", "F11.a", "F12.a", "F3.a")] == ["f7", "f7", "f11", "f12", "rule"]
 
 
 def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(tmp_path_factory, syn_select, vendor):
@@ -2301,31 +2858,52 @@ def test_runner_confirm_runs_the_chosen_pairs_and_keeps_deepseek_money_private(t
     tmp = tmp_path_factory.mktemp("conf")
     cfg = syn_cfg(tmp, period="confirm", n_seeds=20, seed=91, days=70)
     cfg.variants = [KX.variant_by_id(v) for v in SYN_VARIANTS]
-    choice = {"core": ["F1.w3.a", "F7.N12.a"], "ds": ["F3.a"]}
+    choice = {"core": ["F1.w3.a", "F7.N12.a", "F12.a"][:2], "ds": ["F3.a", "F12.b"],
+              "pools": {"core": {"default_used": False}, "ds": {"default_used": True}},
+              "freeze_breaches": ["테스트용 위반 기록"], "late_messages": [{"pool": "core", "time_utc": "2026-10-20T00:00:00Z", "answer": ["F5.P1.g25.a"]}]}
     RX.write_json(cfg.lay.out_file("choice.json"), {**choice, "pin": cfg.pin_hash})
-    RX.write_json(cfg.lay.out_file("select.json"), {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(cfg.lay.root)})
+    sel0 = {"pin": cfg.pin_hash, "modules": RX.loaded_module_hashes(cfg.lay.root), "pools": {"core": {"default_ids": ["F1.w3.a"]}, "ds": {"default_ids": ["F3.a"]}}}
+    RX.write_json(cfg.lay.out_file("select.json"), sel0)
     sel = json.load(open(cfg.lay.out_file("select.json")))
     doc = RX.finish_confirm(cfg, sel, choice)
-    assert sorted(doc["pairs"]) == ["F1.w3.a|core", "F3.a|ds", "F7.N12.a|core"]
+    assert sorted(doc["pairs"]) == ["F1.w3.a|core", "F12.b|ds", "F3.a|ds", "F7.N12.a|core"]
     for key, r in doc["pairs"].items():
-        assert 0.0 < r["p_block"] <= 1.0 and 0.0 < r["p_iid"] <= 1.0
         assert r["pass"] == (r["holm_significant"] and r["beats_placebo_p95"] and r["entries_ok"]) and r["label"] in ("PASS", "FAIL")
+        assert set(r["hold_by_state"]) == {"추세장", "횡보장", "급변장", "보통", "모름"} and "hold_by_state_e0" in r
+        assert r["chosen_by"] == ("default" if r["pool"] == "ds" else "owners")
+        assert r["default_would_take"] == (key in ("F1.w3.a|core", "F3.a|ds"))
+    assert set(doc["e0"]) == {"core", "ds"} and doc["freeze_breaches"] == choice["freeze_breaches"] and len(doc["late_messages"]) == 1
+    core1 = doc["pairs"]["F1.w3.a|core"]
+    assert 0.0 < core1["p_block"] <= 1.0 and 0.0 < core1["p_iid"] <= 1.0
     f7 = doc["pairs"]["F7.N12.a|core"]
     assert f7["beats_placebo_p95"] is True and f7["claim"].startswith("beats E0 by holding less")      # F7: no placebo gate
-    assert "interval95" in doc["pairs"]["F1.w3.a|core"] and "qa" in doc["pairs"]["F1.w3.a|core"] and doc["pairs"]["F1.w3.a|core"]["qa"]["p95"] == doc["pairs"]["F1.w3.a|core"]["p95_gate"]
-    assert doc["pairs"]["F7.N12.a|core"]["qa"] is None
-    ds = doc["pairs"]["F3.a|ds"]
-    assert not any(k in ds for k in ("M", "M_pct_month", "interval95", "D", "live", "qa", "p95_gate", "max_dd_median", "final_multiple_median"))
-    assert RX.audit_a8([cfg.lay.out_file("confirm.json")])
+    assert "interval95" in core1 and "qa" in core1 and core1["qa"]["p95"] == core1["p95_gate"] and f7["qa"] is None
+    f12 = doc["pairs"]["F12.b|ds"]
+    assert set(f12["comp_fired"]) == set(MT.COMP_LABELS) and f12["claim"].startswith("all nine exits at once beat E0")
+    for k in ("F3.a|ds", "F12.b|ds"):                                                                   # D11: labels, counts, win share, hold hours only
+        ds = doc["pairs"][k]
+        assert MT.ds_whitelist_ok(ds) and not any(x in ds for x in ("M", "M_pct_month", "interval95", "D", "live", "qa", "p95_gate", "p_block", "p_iid"))
+    assert MT.d11_problems(confirm_doc=json.load(open(cfg.lay.out_file("confirm.json"))),
+                           report_md=open(cfg.lay.out_file("REPORT_KO.md"), encoding="utf-8").read()) == []
     priv = json.load(open(os.path.join(cfg.store.private_dir(), "confirm_ds.json")))
-    assert "M" in priv["pairs"]["F3.a|ds"] and doc["ds_private_sha256"] == DX.sha256_file(os.path.join(cfg.store.private_dir(), "confirm_ds.json"))
-    # Holm over the three pairs is applied as written in 9
-    ps = {k: r["p_block"] for k, r in doc["pairs"].items()}
+    assert "M" in priv["pairs"]["F3.a|ds"] and "p_block" in priv["pairs"]["F3.a|ds"]
+    assert doc["ds_private_sha256"] == DX.sha256_file(os.path.join(cfg.store.private_dir(), "confirm_ds.json"))
+    rp = os.path.join(cfg.store.private_dir(), "owner_report_confirm.md")
+    assert doc["ds_owner_report_sha256"] == DX.sha256_file(rp) and "p값" not in open(rp, encoding="utf-8").read()
+    assert RX.audit_a8(cfg.lay, "confirm", cfg.pin["work"], cfg.pin_hash)
+    # the report: hold hours first, PASS/FAIL, the chooser, the freeze breach and the late message; no DeepSeek money
+    rep = open(cfg.lay.out_file("REPORT_KO.md"), encoding="utf-8").read()
+    assert "동결 위반" in rep and "테스트용 위반 기록" in rep and "choice.json 해시 뒤에 받은 소유자 메시지" in rep and "기본값이 고름" in rep and "두 분이 고름" in rep
+    sec = rep.split("### F1.w3.a")[1]
+    import re
+    assert sec.index("보유시간 중앙값") < re.search(r"\*\*(PASS|FAIL)\*\*", sec).start()                  # hold hours before the verdict
+    assert rep.count("장세별 보유시간") == 2
+    # Holm over the four pairs is applied as written in 9, DeepSeek p values included
+    ps = {k: (r["p_block"] if r["pool"] == "core" else priv["pairs"][k]["p_block"]) for k, r in doc["pairs"].items()}
     assert {k: r["holm_significant"] for k, r in doc["pairs"].items()} == MT.holm(ps, 0.05)
     # the block bootstrap of the first pair reproduces from its seed and its monthly series
-    first = doc["pairs"]["F1.w3.a|core"]
-    assert first["p_block"] == MT.block_bootstrap_p(np.array(first["D"]), DX.seed_of("exitflex", "confirm", "F1.w3.a", "core"))
-    assert len(first["D"]) == 33
+    assert core1["p_block"] == MT.block_bootstrap_p(np.array(core1["D"]), DX.seed_of("exitflex", "confirm", "F1.w3.a", "core"))
+    assert len(core1["D"]) == 33
     # a module file that changed since the select run is refused
     sel2 = dict(sel, modules={"research/library/lib.py": "0" * 64})
     with pytest.raises(RX.StageRefused, match="module files changed"):

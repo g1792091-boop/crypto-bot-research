@@ -30,7 +30,9 @@ each coin's rows):
   QT  float64 (nq, 4): the 15m bars of a q15 variant: close ms, close, minute index of the close, index of the latest
                       pick-timeframe bar closed at or before it (rows of ``qst``/``qen`` per coin).
 Rule parameters ``rp`` (float64 vector, indices RP_*): family, swing width w, chandelier multiple m, arm level P (R), give-
-back g, loss depth d (R), count N (bars), pick timeframe (ms), q15 flag.
+back g, loss depth d (R), count N (bars), pick timeframe (ms), q15 flag, clock hours H (F7h and F12's F7h leg). F12 (all nine
+components at once, prereg 5.2) reads its fixed values from the same vector (``F12_PARAMS``) and records every component that
+fired at the exit's check as a bit mask (CB_*), returned as the 8th value of ``_trade_x`` and per signal by ``account_x``.
 """
 
 from __future__ import annotations
@@ -88,8 +90,9 @@ CK_NONE, CK_STATE, CK_EVENT = 0, 1, 2          # component kinds (prereg A.0 rul
 Q_CMS, Q_CL, Q_MIN, Q_PT = range(4)
 NQT = 4
 # rule parameter vector
-RP_FAM, RP_W, RP_M, RP_P, RP_G, RP_D, RP_N, RP_TF, RP_Q15, RP_H = range(10)
-NRP = 10
+RP_FAM, RP_W, RP_M, RP_P, RP_G, RP_D, RP_N, RP_TF, RP_Q15, RP_H, RP_CMASK = range(11)
+NRP = 11
+CB_ALL = 511                                   # F12: all nine components enabled (a smaller mask exists for tests only)
 # placebo strata (prereg 6): age bucket of the check index, profit sign, precondition
 N_AGE = 8
 TRACE_COLS = 12      # j, check close ms, rule fires, a, s, z, armed, reference, Rc, Rpk, u, exits
@@ -101,11 +104,12 @@ def empty_chart() -> tuple:
     return (np.zeros((0, NPT)), np.zeros((0, NPF), np.int8), np.zeros((0, NQT)))
 
 
-def rp_vector(fam=0, w=0, m=0.0, P=0.0, g=0.0, d=0.0, N=0, tf_ms=0, q15=False, H=0.0) -> np.ndarray:
-    """N: bars (F7, F10, F12's F10 leg); H: clock hours (F7h, F12's F7h leg)."""
+def rp_vector(fam=0, w=0, m=0.0, P=0.0, g=0.0, d=0.0, N=0, tf_ms=0, q15=False, H=0.0, cmask=None) -> np.ndarray:
+    """N: bars (F7, F10, F12's F10 leg); H: clock hours (F7h, F12's F7h leg); cmask: the F12 components that are enabled (bit mask
+    CB_*; all nine in production, fewer in tests of one component alone)."""
     v = np.zeros(NRP)
-    v[RP_FAM], v[RP_W], v[RP_M], v[RP_P], v[RP_G], v[RP_D], v[RP_N], v[RP_TF], v[RP_Q15], v[RP_H] = (
-        fam, w, m, P, g, d, N, tf_ms, 1.0 if q15 else 0.0, H)
+    v[RP_FAM], v[RP_W], v[RP_M], v[RP_P], v[RP_G], v[RP_D], v[RP_N], v[RP_TF], v[RP_Q15], v[RP_H], v[RP_CMASK] = (
+        fam, w, m, P, g, d, N, tf_ms, 1.0 if q15 else 0.0, H, float(CB_ALL if cmask is None else cmask))
     return v
 
 
@@ -236,6 +240,7 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
     use_f11 = fam == F11 or fam == F12
     use_arm = fam == F5 or fam == F8 or fam == F9 or fam == F12
     comp = 0
+    cmk = int(rp[RP_CMASK])                    # F12: the enabled components (all nine in production)
     if use_f11:
         for c in range(NC):
             if ckind[kbase + c] == CK_STATE:
@@ -258,6 +263,7 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
         rule_fire = False
         chk = False
         comp_now = 0
+        clock_now = False
         ca = 0
         cs = 0
         cz = 0
@@ -402,8 +408,10 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
                     cm |= CB_F10
                 if f11_any:
                     cm |= CB_F11
+                cm &= cmk
                 comp_now = cm
                 rule_fire = cm != 0
+                clock_now = ((cmk & CB_F7H) != 0) and (cc >= PT[i0, C_CMS] + rp[RP_H] * 3600000.0)
             # the placebo stratum (age bucket, profit sign, precondition) of the frozen state
             ca = age_bucket(k)
             cs = 1 if rc >= 0.0 else 0
@@ -425,12 +433,16 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
                     cz = 1 if z11 else 0
                 else:
                     # F12: a swing reference exists, F2 is armed, F5 is armed, or F11's own z (prereg 6)
-                    cz = 1 if (have_ref or ema_before or armed or z11) else 0
+                    cz = 1 if (((cmk & CB_F1) != 0 and have_ref) or ((cmk & CB_F2) != 0 and ema_before) or ((cmk & CB_F5) != 0 and armed)
+                               or ((cmk & CB_F11) != 0 and z11)) else 0
             u = 0.0
             if plc:
-                cz_h = cz
-                u = draw_u(seed_base, coin, int(cc))
-                fire = u < hz[ca, cs, cz_h]
+                if clock_now:                      # F12 placebo: it exits with probability 1 at F12's clock check, no draw (prereg 6)
+                    u = -1.0
+                    fire = True
+                else:
+                    u = draw_u(seed_base, coin, int(cc))
+                    fire = u < hz[ca, cs, cz]
             else:
                 fire = rule_fire
             if k <= trace.shape[0]:
@@ -477,7 +489,7 @@ def _trade_x(S, br, ts, o, h, l, mo, mh, ml, fund, e, end, side, stop_dist, atr,
                 price = o[j]
                 at_tp = True
             # the check counts in the hazard only when the position is still open after steps 1-5
-            if chk and (not liquidate) and price < 0:
+            if chk and (not liquidate) and price < 0 and not clock_now:      # F12: the clock check is outside the table (prereg 6)
                 den[ca, cs, cz] += 1
                 if fire:
                     num[ca, cs, cz] += 1
@@ -640,7 +652,7 @@ class Variant:
     def rp(self, tf_ms: int, q15_effective: bool) -> np.ndarray:
         p = self.params
         return rp_vector(self.fam, p.get("w", 0), p.get("m", 0.0), p.get("P", 0.0), p.get("g", 0.0), p.get("d", 0.0),
-                         p.get("N", 0), tf_ms, q15_effective, p.get("H", 0.0))
+                         p.get("N", 0), tf_ms, q15_effective, p.get("H", 0.0), p.get("cmask"))
 
 
 E0 = Variant("E0", F_NONE, "E0", "-", "a", False, {}, 0, 0)
@@ -742,6 +754,19 @@ def register_f11(provider, modes=("a", "b")) -> None:
 
 def clear_f11() -> None:
     F11_REGISTRY["provider"] = None
+
+
+def flip_levels(side_strategy: int, side_flip: int, fill_flip: float, inv: float, tgt: float) -> tuple:
+    """Prereg 11.2 (the F11 coin flip): the invalidation level and target of a position on side ``side_flip`` whose signal bar belongs to
+    a strategy trade on side ``side_strategy`` (level ``inv``, target ``tgt``; NaN = none). On the strategy's own side the values
+    stand. On the other side they are mirrored around the flip's fill f' at the strategy's distances: inv' = f' - side' x |f' -
+    inv| and tgt' = f' + side' x (tgt - f') x s, the target only where (tgt - f') x s > 0. A NaN input gives no level / target."""
+    if side_flip == side_strategy:
+        return inv, tgt
+    inv2 = fill_flip - side_flip * abs(fill_flip - inv) if math.isfinite(inv) else float("nan")
+    ok = math.isfinite(tgt) and (tgt - fill_flip) * side_strategy > 0
+    tgt2 = fill_flip + side_flip * (tgt - fill_flip) * side_strategy if ok else float("nan")
+    return inv2, tgt2
 
 
 def exit_of_pick(pick: dict, variant: Variant) -> tuple:

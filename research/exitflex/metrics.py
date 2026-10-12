@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import re
 
 import numpy as np
 
@@ -150,9 +151,20 @@ def pooled_series(sv: dict, se: dict, ids: list) -> np.ndarray:
     return np.mean([sv[i]["g"] - se[i]["g"] for i in ids], axis=0)
 
 
-def pool_summary(sv: dict, se: dict, pools: dict | None = None) -> dict:
+def comp_by_tf(sv: dict, ids: list, tfs: dict) -> dict:
+    """F12 component counts (fired, fired alone) split by the pick's timeframe: {tf: {fired: {component: n}, alone: {...}, n_picks}}."""
+    out = {}
+    for tf in sorted({tfs[i] for i in ids}, key=lambda x: ("15m", "30m", "1h", "4h").index(x)):
+        sel = [i for i in ids if tfs[i] == tf]
+        out[tf] = {"fired": dict(zip(COMP_LABELS, np.sum([sv[i]["comp_fired"] for i in sel], axis=0).tolist())),
+                   "alone": dict(zip(COMP_LABELS, np.sum([sv[i]["comp_alone"] for i in sel], axis=0).tolist())), "n_picks": len(sel)}
+    return out
+
+
+def pool_summary(sv: dict, se: dict, pools: dict | None = None, tfs: dict | None = None) -> dict:
     """V against E0 over the picks of ``sv`` / ``se`` ({pick id: summary}), pooled (key 'all') and per pool
-    (``pools`` = {pick id: 'core'|'ds'}; default 'core' for all)."""
+    (``pools`` = {pick id: 'core'|'ds'}; default 'core' for all). ``tfs`` = {pick id: timeframe}: adds F12's component counts split
+    by the pick's timeframe."""
     ids = sorted(sv)
     pools = pools or {i: "core" for i in ids}
     out = {}
@@ -180,6 +192,7 @@ def pool_summary(sv: dict, se: dict, pools: dict | None = None) -> dict:
             "hold_by_state": hold_by_state(holds, states), "hold_by_state_e0": hold_by_state(holds0, states0),
             "comp_fired": np.sum([sv[i]["comp_fired"] for i in sel], axis=0).tolist(),
             "comp_alone": np.sum([sv[i]["comp_alone"] for i in sel], axis=0).tolist(),
+            "comp_by_tf": comp_by_tf(sv, sel, tfs) if tfs else {},
             "win_share": (sum(count(sv[i], "wins") for i in sel) / max(1, sum(count(sv[i], "closed") for i in sel))),
             "busts": sum(count(sv[i], "bust") for i in sel),
             "max_dd_median": float(np.median([float(sv[i]["max_dd"]) for i in sel])),
@@ -324,11 +337,11 @@ DS_ALLOWED = {"id", "name_ko", "family", "group", "mode", "q15", "nparams", "ord
               "rejected", "closed", "win_share", "entries_at_rule_minute", "reasons", "changed", "changed_share", "both_touched",
               "claim", "claim_ko", "mark_default", "same_as_f3", "n_picks", "pool", "holm_significant", "beats_placebo_p95",
               "entries_ok", "pass", "hold_e0", "chosen_by", "default_would_take", "ledger_label", "reasons_e0",
-              "hold_by_state", "hold_by_state_e0", "comp_fired", "comp_alone"}
+              "hold_by_state", "hold_by_state_e0", "comp_fired", "comp_alone", "comp_by_tf"}
 
 
-DS_NESTED_ALLOWED = ({"median", "p90", "share_gt4", "share_gt8", "share_gt18", "n", "few", "g1", "g2", "g3", "g4"} | set(REASONS)
-                     | set(DX.STATE_KO.values()) | set(COMP_LABELS))
+DS_NESTED_ALLOWED = ({"median", "p90", "share_gt4", "share_gt8", "share_gt18", "n", "few", "g1", "g2", "g3", "g4", "fired", "alone", "n_picks",
+                      "15m", "30m", "1h", "4h"} | set(REASONS) | set(DX.STATE_KO.values()) | set(COMP_LABELS))
 DS_E0_ALLOWED = {"hold", "entered", "skipped", "win_share", "rejected", "closed", "reasons", "both_touched", "n_picks", "hold_by_state"}
 DS_POOL_ALLOWED = {"n_picks", "e0", "variants", "eligible_ids", "default_ids", "gate_fail_counts"}
 DS_TEXT_MONEY = None
@@ -359,6 +372,64 @@ def ds_text_problems(md: str) -> list:
         if inside and pat.search(ln):
             bad.append(ln.strip())
     return bad
+
+
+DS_MARKER = "[딥시크 금액 삭제]"
+_DS_WORD = re.compile(r"ds-|딥시크|deepseek", re.I)
+_UNIT_NUM = re.compile(r"[+-]?\$?\d[\d,]*(?:\.\d+)?\s*(?:%|퍼센트|percent|배|x|×)", re.I)
+_MONEY_WORD = re.compile(r"성장|낙폭|파산|수익|손실|지갑|growth|drawdown|bust|wallet|multiple|p값|p-value", re.I)
+_NUM_TOKEN = re.compile(r"(?<![A-Za-z0-9_.\-])[+-]?\$?\d[\d,]*(?:\.\d+)?(?:\s*(?:%|퍼센트|percent|배|x|×|달러|원|만원))?(?![A-Za-z0-9_])", re.I)
+_COUNTER = re.compile(r"\s*(?:개|번|시간|등|위|가지|곳|명|일|분|년|달|주)")
+
+
+_IDENT = re.compile(r"[A-Za-z][A-Za-z0-9_.\-]*\d[A-Za-z0-9_.\-]*")
+_COUNTED = re.compile(r"\d[\d,]*(?:\.\d+)?\s*(?:개|번|시간|등|위|가지|곳|명|일|분|년|달|주)")
+
+
+def _tripwire(line: str) -> bool:
+    """A8 (2): a line that holds a ds- id, 딥시크 or DeepSeek and also a number followed by %, 퍼센트, percent, 배, x or ×, or a money word
+    and a digit. Identifier digits (F9.a, ds-F10_OTE-1h-1), numbers that count things (2개, 4시간) and the redaction marker are not
+    figures: a line where the figures were replaced by the marker passes."""
+    if not _DS_WORD.search(line):
+        return False
+    x = _COUNTED.sub(" ", _IDENT.sub(" ", line.replace(DS_MARKER, " ")))
+    return bool(_UNIT_NUM.search(x) or (_MONEY_WORD.search(x) and re.search(r"\d", x)))
+
+
+def audit_text(text: str) -> list:
+    """The free-text tripwire of audit A8 (prereg 14): the lines of ``text`` that may hold a DeepSeek money figure or p value. A tripwire, not
+    a proof: the main session reads each flagged line. [] = nothing flagged."""
+    return [ln.strip() for ln in text.splitlines() if _tripwire(ln)]
+
+
+def redact_ds_money(text: str) -> tuple:
+    """Replace the DeepSeek money figures of an owner message or a main-session question by ``DS_MARKER`` (prereg 3, 8.3). Only lines that
+    the tripwire flags are touched; in them every number is replaced except identifier digits (F9.a, ds-F10_OTE-1h-1) and numbers
+    that count things (2개, 4시간). Returns (redacted text, number of figures replaced)."""
+    out, n = [], 0
+    for ln in text.splitlines(keepends=True):
+        if _tripwire(ln):
+            def repl(m, ln=ln):
+                nonlocal n
+                if _COUNTER.match(ln[m.end():]) and not m.group(0).strip().endswith(("%", "퍼센트", "percent", "배", "x", "×")):
+                    return m.group(0)
+                n += 1
+                return DS_MARKER
+            ln = _NUM_TOKEN.sub(repl, ln)
+        out.append(ln)
+    return "".join(out), n
+
+
+def json_strings(obj):
+    """Every string value of a JSON document (for the free-text tripwire)."""
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from json_strings(v)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            yield from json_strings(v)
 
 
 def d11_problems(select_doc: dict | None = None, confirm_doc: dict | None = None, select_md: str | None = None,

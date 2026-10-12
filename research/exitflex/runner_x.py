@@ -270,6 +270,7 @@ class Config:
         self.edges = MT.month_edges(period)
         self.store = Store(pin["work"], pin_hash, stage)
         self.pools = {p["id"]: p["pool"] for p in picks}
+        self.tfs = {p["id"]: p["tf"] for p in picks}
         self.by_id = {p["id"]: p for p in picks}
 
     def pool_picks(self, pool: str) -> list:
@@ -479,7 +480,7 @@ def variant_row(cfg: Config, v, pool: str, e0q: dict, e0live: dict, gates: dict,
     """(row without money, money dict, placebo pooled means or None) of one variant in one pool. The row has the labels, counts,
     win share and hold times that may be committed; the money dict has every figure."""
     sv = _pool_load(cfg, pool, v.id, SIZE_TAG[0.25])
-    ps = MT.pool_summary(sv, e0q, cfg.pools)[pool]
+    ps = MT.pool_summary(sv, e0q, cfg.pools, cfg.tfs)[pool]
     live = MT.pool_summary(_pool_load(cfg, pool, v.id, SIZE_TAG[1.0]), e0live, cfg.pools)[pool]
     g = gates[(v.id, pool)]
     in2 = (v.id, pool) in pairs
@@ -511,6 +512,7 @@ def variant_row(cfg: Config, v, pool: str, e0q: dict, e0live: dict, gates: dict,
     if v.fam == KX.F12:                                                  # exits by component: fired, and fired alone (counts)
         row["comp_fired"] = dict(zip(MT.COMP_LABELS, ps["comp_fired"]))
         row["comp_alone"] = dict(zip(MT.COMP_LABELS, ps["comp_alone"]))
+        row["comp_by_tf"] = ps["comp_by_tf"]
     money = {"M": ps["M"], "M_pct_month": 100.0 * (math.exp(ps["M"]) - 1.0), "median_Mp": ps["median_Mp"], "n_pos": ps["n_pos"],
              "Mp": dict(zip(ps["ids"], ps["Mp"])), "D": ps["D"].tolist(), "p95_gate": el["p95"], "placebo": plc,
              "live": {"M": live["M"], "M_pct_month": 100.0 * (math.exp(live["M"]) - 1.0), "busts": live["busts"], "entered": live["entered"]},
@@ -595,10 +597,12 @@ def comp_table_ko(P: dict) -> list:
     if not rows:
         return []
     names = list(MT.COMP_LABELS)
-    out = ["F12(아홉 가지 동시)의 청산 이유별 횟수: 그 요소가 발동한 청산 수 / 그 요소 혼자 발동한 청산 수", "",
-           "| 방식 | " + " | ".join(names) + " |", "|" + "---|" * (len(names) + 1)]
+    out = ["F12(아홉 가지 동시)의 청산 이유별 횟수: 그 요소가 발동한 청산 수 / 그 요소 혼자 발동한 청산 수 (요소 이름은 비트 순서로 적었습니다)", "",
+           "| 방식 | 봉 | " + " | ".join(names) + " |", "|" + "---|" * (len(names) + 2)]
     for r in rows:
-        out.append(f"| {r['id']} | " + " | ".join(f"{r['comp_fired'][n]} / {r['comp_alone'][n]}" for n in names) + " |")
+        out.append(f"| {r['id']} | 전체 | " + " | ".join(f"{r['comp_fired'][n]} / {r['comp_alone'][n]}" for n in names) + " |")
+        for tf, c in (r.get("comp_by_tf") or {}).items():
+            out.append(f"| {r['id']} | {tf} ({c['n_picks']}개) | " + " | ".join(f"{c['fired'][n]} / {c['alone'][n]}" for n in names) + " |")
     return out + [""]
 
 
@@ -641,7 +645,7 @@ def select_report_ko(doc: dict) -> str:
         L += [f"관문을 못 넘은 방식 수(순서대로 셈): 1번 {f['gate1']}, 2번(1번 통과 중) {f['gate2']}, 4번(1·2번 통과 중) {f['gate4']}, "
               f"3번(무작위 비교까지 간 것 중) {f['gate3']}.", ""]
         L += comp_table_ko(P)
-        L += [f"### {name}: 장세별 보유시간 (참고용 정보입니다. 관문·기본값·고르기에는 쓰이지 않고, 성장 숫자는 없습니다)", "",
+        L += [f"### {name}: 장세별 보유시간 (참고용 정보입니다. 관문·기본값·고르기에는 쓰이지 않습니다)", "",
               "진입한 신호 봉의 장세(추세장·횡보장·급변장·보통, 자료가 모자라면 모름)별로 본 2021~2023 매매의 보유시간입니다. 건수 100 미만 칸은 건수 적음으로 표시했습니다.", ""]
         L += state_table_ko(P)
         if pool == "core" and P.get("qa"):
@@ -651,12 +655,16 @@ def select_report_ko(doc: dict) -> str:
     return "\n".join(L)
 
 
+OWNER_REPORT_LAST_LINE = ("답하실 때는 방식을 id로 적어 주세요(예: F9.a). 딥시크 금액 숫자는 따라 적지 말아 주세요. "
+                          "보내 주신 글에 그 숫자가 있으면 저장하기 전에 [딥시크 금액 삭제]로 바꿉니다.")
+
+
 def owner_report_md(stage: str, private: dict, order: dict, labels: dict | None = None) -> str:
     """The private owner report of prereg 3 (select or confirm): the DeepSeek money figures, shown to the owners in the conversation
     and never committed. Rows follow the committed table's order; nothing is ranked by money; no p value. ``private`` is the
     stage's ds_private document."""
     L = [f"# 딥시크 금액 보고서 ({'고르기' if stage == 'select' else '확인'}), 비공개: 저장소에 올리지 않음", "",
-         "이 파일은 소유자 두 분께 대화로만 보여 주는 파일입니다. 순위는 매기지 않았고 p값은 없습니다.", ""]
+         "이 파일은 소유자 두 분께 대화로만 보여 주는 파일입니다. 금액 기준 순위는 매기지 않았고, 검정 수치는 넣지 않았습니다.", ""]
     if stage == "select":
         for pool, P in private.items():
             e0 = P["e0"]
@@ -677,6 +685,7 @@ def owner_report_md(stage: str, private: dict, order: dict, labels: dict | None 
             L += [f"## {key}", "", f"풀 합산 월 로그성장 차이 {m['M']:+.5f} (월 {m['M_pct_month']:+.2f}%), 95% 구간 [{m['interval95'][0]:+.5f}, {m['interval95'][1]:+.5f}], "
                   f"지금 크기 월 로그 {m['live']['M']:+.5f}, 파산(지금 크기) {m['live']['busts']}, 최종 배수 중앙값 {m['final_multiple_median']:.2f}, "
                   f"최대 낙폭 중앙값 {100 * m['max_dd_median']:.0f}%.", ""]
+    L += [OWNER_REPORT_LAST_LINE]
     return "\n".join(L) + "\n"
 
 
@@ -882,6 +891,14 @@ def build_choice(sel: dict, sent: dict, inp: dict, now: dt.datetime, prev: dict 
     sent_t = _parse_utc(sent["sent_utc"])
     if sent.get("sent_kst") and sent["sent_kst"] != _kst(sent_t):
         refuse("sent.json: sent_kst is not sent_utc + 9 h")
+    if (sel.get("pools") or {}).get("ds") is not None:                  # 8.3 / 8.7: the private report was shown at or before the sending
+        shown = sent.get("ds_report_shown_utc")
+        if not shown:
+            refuse("sent.json: ds_report_shown_utc missing (the private DeepSeek report must be shown at or before the sending of SELECT_KO.md)")
+        if _parse_utc(shown) > sent_t:
+            refuse("sent.json: the private DeepSeek report was shown after SELECT_KO.md was sent")
+        if sent.get("ds_report_shown_kst") and sent["ds_report_shown_kst"] != _kst(_parse_utc(shown)):
+            refuse("sent.json: ds_report_shown_kst is not ds_report_shown_utc + 9 h")
     msgs, qs = list(inp.get("messages") or []), list(inp.get("questions") or [])
     out = {"core": [], "ds": [], "pools": {}}
     late = []
@@ -908,7 +925,10 @@ def build_choice(sel: dict, sent: dict, inp: dict, now: dt.datetime, prev: dict 
             t = _parse_utc(m["time_utc"])
             if t < sent_t:
                 continue
-            answers.append((t, parse_answer(a), "없음" if isinstance(a, str) else list(a)))
+            try:
+                answers.append((t, parse_answer(a), "없음" if isinstance(a, str) else list(a)))
+            except ValueError as exc:
+                refuse(f"{pool}: {exc}")
         counting = [x for x in answers if x[0] < deadline]
         late += [{"pool": pool, "time_utc": _utc(x[0]), "answer": x[2]} for x in answers if x[0] >= deadline]
         info = {"deadline_utc": _utc(deadline), "answer_times_utc": [_utc(x[0]) for x in answers], "default_used": False,
@@ -928,6 +948,32 @@ def build_choice(sel: dict, sent: dict, inp: dict, now: dt.datetime, prev: dict 
         out[pool], out["pools"][pool] = ids, info
     out["late_messages"] = late
     return out
+
+
+def redact_input(inp: dict, private_path: str) -> tuple:
+    """Prereg 3 / 8.3: every DeepSeek money figure in an owner message, a main-session question, a freeze breach note or a material entry
+    is replaced by the marker before it is written to a committed file; the rest stays verbatim. The sha256 of each unredacted text that
+    changed goes to ``private_path`` (ds_private/owner_messages.json). Returns (the redacted input, the number of figures replaced)."""
+    out = json.loads(json.dumps(inp))
+    total, items = 0, []
+    for kind in ("messages", "questions"):
+        for i, m in enumerate(out.get(kind) or []):
+            new, n = MT.redact_ds_money(m.get("text", ""))
+            if n:
+                items.append({"kind": kind, "index": i, "time_utc": m.get("time_utc"), "figures": n,
+                              "sha256_unredacted": hashlib.sha256(m["text"].encode("utf-8")).hexdigest()})
+                m["text"] = new
+                total += n
+    for kind in ("material_received", "freeze_breaches"):
+        for i, t in enumerate(out.get(kind) or []):
+            new, n = MT.redact_ds_money(t)
+            if n:
+                items.append({"kind": kind, "index": i, "figures": n, "sha256_unredacted": hashlib.sha256(t.encode("utf-8")).hexdigest()})
+                out[kind][i] = new
+                total += n
+    if items:
+        write_json(private_path, {"note": "sha256 of the unredacted owner texts (D11); never committed", "items": items})
+    return out, total
 
 
 def stage_choice(lay: Layout, inp: dict | str, now_utc: str | None = None, rerun: bool = False) -> dict:
@@ -950,13 +996,18 @@ def stage_choice(lay: Layout, inp: dict | str, now_utc: str | None = None, rerun
         inp = json.load(open(inp, encoding="utf-8"))
     now = _parse_utc(now_utc) if now_utc else dt.datetime.now(dt.timezone.utc)
     body = build_choice(sel, sent, inp, now, prev)
+    inp, redacted = redact_input(inp, os.path.join(pin["work"], DX.pin8(ph), "ds_private", "owner_messages.json" if not rerun else "owner_messages_r2.json"))
     doc = {"study": "exitflex v1", "stage": "choice_r2" if rerun else "choice", "pin": ph, "commit": git_head(lay.root),
            "select_sha256": shas[sel_name], "sent_sha256": shas[sent_name], "timing_sha256": shas["timing.json"],
            "sent_utc": sent["sent_utc"], "sent_kst": sent.get("sent_kst") or _kst(_parse_utc(sent["sent_utc"])),
            "channel": sent.get("channel"), "freeze_note": sent.get("freeze_note"),
+           "ds_report_shown_utc": sent.get("ds_report_shown_utc"), "ds_report_shown_kst": sent.get("ds_report_shown_kst"),
            "messages": list(inp.get("messages") or []), "questions": list(inp.get("questions") or []),
            "material_received": list(inp.get("material_received") or []), "freeze_breaches": list(inp.get("freeze_breaches") or []),
-           **body}
+           "redacted_figures": redacted, **body}
+    bad_text = [ln for ln in MT.audit_text("\n".join(MT.json_strings(doc))) if True]
+    if bad_text:
+        refuse("choice text still holds a possible DeepSeek money figure (audit A8): " + bad_text[0][:60])
     bad = MT.validate_choice_doc(sel, doc, sent, prev)
     if bad:
         refuse("choice does not validate: " + "; ".join(bad))
@@ -990,7 +1041,7 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
         v = KX.variant_by_id(vid)
         e0q = _pool_load(cfg, pool, "E0", SIZE_TAG[0.25])
         e0l = _pool_load(cfg, pool, "E0", SIZE_TAG[1.0])
-        s = MT.pool_summary(_pool_load(cfg, pool, vid, SIZE_TAG[0.25]), e0q, cfg.pools)[pool]
+        s = MT.pool_summary(_pool_load(cfg, pool, vid, SIZE_TAG[0.25]), e0q, cfg.pools, cfg.tfs)[pool]
         live = MT.pool_summary(_pool_load(cfg, pool, vid, SIZE_TAG[1.0]), e0l, cfg.pools)[pool]
         seed = DX.seed_of("exitflex", "confirm", vid, pool)
         D = s["D"]
@@ -1021,10 +1072,11 @@ def finish_confirm(cfg: Config, sel: dict, choice: dict) -> dict:
                "entered": s["entered"], "entered_e0": s["entered_e0"], "skipped": s["skipped"], "skipped_e0": s["skipped_e0"],
                "closed": s["closed"], "rejected": s["rejected"], "win_share": s["win_share"], "reasons": dict(zip(MT.REASONS, s["reasons"])),
                "claim": CLAIM_EN[claim_key(x["v"])], "chosen_by": "default" if info.get("default_used") else "owners",
-               "default_would_take": vid in ((sel["pools"].get(pool) or {}).get("default_ids") or [])}
+               "default_would_take": vid in (((sel.get("pools") or {}).get(pool) or {}).get("default_ids") or [])}
         if x["v"].fam == KX.F12:
             row["comp_fired"] = dict(zip(MT.COMP_LABELS, s["comp_fired"]))
             row["comp_alone"] = dict(zip(MT.COMP_LABELS, s["comp_alone"]))
+            row["comp_by_tf"] = s["comp_by_tf"]
         money = {"M": s["M"], "M_pct_month": 100.0 * (math.exp(s["M"]) - 1.0), "interval95": list(x["ci"]), "D": s["D"].tolist(),
                  "live": {"M": x["live"]["M"], "busts": x["live"]["busts"]}, "qa": x["qa"], "p95_gate": verdict["p95"],
                  "max_dd_median": s["max_dd_median"], "final_multiple_median": s["final_multiple_median"],
@@ -1355,8 +1407,27 @@ def audit_counts_and_wallet(cfg: Config, picks_vids: dict) -> tuple:
     return a2, a4, n
 
 
+def audit_f12_clock(market, pdata, res) -> bool:
+    """A7 (F12): no F12 position is held past its clock check: the first pick-timeframe check at or after C0 + 8 hours (a check moves to e + 1
+    when its minute is not after the fill). ``res`` = a rule or placebo account of an F12 variant."""
+    hrs = KX.F12_PARAMS["H"] * 3_600_000
+    for q in res.trades():
+        c = int(res.sig["coin"][q])
+        a, b = int(pdata.cst[c]), int(pdata.cen[c])
+        closes = pdata.b_cms[a:b]
+        k = int(np.searchsorted(closes, closes[int(res.sig["i0"][q])] + hrs, side="left"))
+        if k >= len(closes) or pdata.b_min[a + k] < 0:
+            continue                                                      # the clock check does not exist: the period end or the stops decide
+        tsc = market.ts(c)
+        e = int(np.searchsorted(tsc, res.entry_ts[q]))
+        if int(np.searchsorted(tsc, res.exit_ts[q])) > max(int(pdata.b_min[a + k]), e + 1):
+            return False
+    return True
+
+
 def audit_placebo_rates(cfg: Config, picks: list, vids: list) -> bool:
-    """A7: each placebo's realised exit rate per stratum lies within a 99.9% binomial band around h."""
+    """A7: each placebo's realised exit rate per stratum lies within a 99.9% binomial band around h (for F12 over the checks before its
+    clock check: the kernel's counts leave the clock check out); no F12 placebo position is held past its clock check."""
     ok = True
     for p in picks:
         for vid in vids:
@@ -1366,6 +1437,12 @@ def audit_placebo_rates(cfg: Config, picks: list, vids: list) -> bool:
             hz = PL.hazard(own["num"], own["den"])
             parts = [cfg.store.load(p, vid, plc_tag(s0, s1)) for s0, s1 in seed_blocks(cfg.n_seeds)]
             ok &= PL.audit_realised_rates(np.sum([x["num"] for x in parts], axis=0), np.sum([x["den"] for x in parts], axis=0), hz)
+            v = KX.variant_by_id(vid)
+            if v.fam == KX.F12:                                          # re-run two seeds of the placebo and look at the holds
+                pdata = cfg.make_pickdata(p)
+                for sd in range(2):
+                    r = KX.simulate(cfg.market, pdata, v, 0.25, cfg.period, placebo=True, hz=hz, seed_base=PL.seed_base(vid, cfg.period, sd))
+                    ok &= audit_f12_clock(cfg.market, pdata, r)
     return bool(ok)
 
 
@@ -1408,8 +1485,8 @@ def audit_a8(lay: Layout, stage: str, work: str, pin_hash: str) -> bool:
             text = open(rp, encoding="utf-8").read()
             ok &= re.search(r"\bp\s*[=<>]|p값|p-value", text, re.I) is None
             committed = [lay.out_file(n) for n in ("select.json", "SELECT_KO.md", "confirm.json", "REPORT_KO.md", "sent.json", "choice.json")]
-            blob = "\n".join(open(c, encoding="utf-8").read() for c in committed if os.path.exists(c))
-            ok &= not any(len(ln.strip()) >= 20 and ln.strip() in blob for ln in text.splitlines())
+            lines = {ln.strip() for c in committed if os.path.exists(c) for ln in open(c, encoding="utf-8").read().splitlines()}
+            ok &= not any(len(ln.strip()) >= 20 and re.search(r"[0-9A-Za-z가-힣]", ln) and ln.strip() in lines for ln in text.splitlines())
     try:
         tracked = subprocess.run(["git", "-C", lay.root, "ls-files"], capture_output=True, text=True, timeout=60).stdout.split("\n")
         ok &= not any("owner_report_" in t for t in tracked)
