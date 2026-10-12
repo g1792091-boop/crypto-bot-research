@@ -828,3 +828,13 @@ def test_appendix_has_every_read_both_pools_tags_and_warnings(results):
         if ln.startswith("| ") and "| 1/1 크기 |" in ln and ln not in dsl:
             assert "파산 " in ln, ln[:80]
     assert XC.CONTRIB_NOTE_KO in md and RB.R_DEF_KO in md
+
+
+def test_x028_deepseek_label_holds_no_figure_and_core_label_is_unchanged():
+    for v in [KX.E0] + KX.variants():
+        lab = RB._label_rule("ds", v)
+        XC.ds_row_check({"label_rule": lab})          # C8: no figure in a DeepSeek row
+        assert RB._label_rule("core", v) == (RX.FAMILY_KO.get(v.famname, "") if v.famname != "E0" else "")
+    f13 = KX.variant_by_id("F13.a")
+    assert RB._label_rule("ds", f13) == "규칙봇 계단 잠금"
+    assert RB._label_rule("ds", KX.variant_by_id("F4.m2.a")) == RX.FAMILY_KO["F4"]      # a parenthesis without a digit stays

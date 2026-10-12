@@ -869,3 +869,16 @@ def test_checks_on_the_synthetic_universe(syn):
     assert chk["pass"] and chk["TW-C1"] == {"pass": True, "accounts": 16} and chk["TW-C3"]["pass"]
     assert chk["TW-C3"]["accounts"] == 4 * 15 and chk["TW-C3"]["signals"] > 100 and chk["need_gb"] == 0.8
     assert TW.account_counts(syn["ctx"])["total"] == syn["doc"]["meta"]["accounts"]["total"]
+
+
+def test_same_arrays_counts_nan_hold_stats_as_equal_and_still_catches_a_difference():
+    nan5 = np.full(5, np.nan)
+    a = {"hold": nan5.copy(), "w_end": np.float64(5000.0), "counts": np.zeros(7, np.int64), "hold_min": np.zeros(0, np.int32)}
+    b = {k: np.array(v, copy=True) for k, v in a.items()}
+    assert TW.same_arrays(a, b)                        # an account with no trade: NaN hold stats on both sides
+    b["counts"][1] = 1
+    assert not TW.same_arrays(a, b)
+    c = {k: np.array(v, copy=True) for k, v in a.items()}
+    c["hold"][0] = 1.0
+    assert not TW.same_arrays(a, c)
+    assert not TW.same_arrays(a, {k: v for k, v in a.items() if k != "hold_min"})

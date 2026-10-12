@@ -1328,6 +1328,12 @@ def disk_need(ctx: Ctx, offered_n: dict) -> float:
 
 
 # ------------------------------------------------------------------ audits (TW-A1 .. TW-A9)
+def same_arrays(a: dict, b: dict) -> bool:
+    """Two loaded result files hold the same keys and arrays; NaN equals NaN in float arrays (the hold statistics of an account with
+    no trade are NaN; DEVIATIONS.md, [extra/twins] 2026-10-12)."""
+    return a.keys() == b.keys() and all(np.array_equal(a[k], b[k], equal_nan=np.asarray(a[k]).dtype.kind == "f") for k in a)
+
+
 def run_audits(ctx: Ctx, sel: dict, a3=None) -> dict:
     """TW-A1 .. TW-A6 and TW-A8 on a finished run and report (A7 is the command's own listing; A9 is ``audit_private``)."""
     tl, sfx = ctx.tl, ("_r2" if ctx.rerun else "")
@@ -1372,7 +1378,7 @@ def run_audits(ctx: Ctx, sel: dict, a3=None) -> dict:
         if K.exit_args(p["exit_index"])[0] == 2.0 and any(v.id == "F13.b" for v in ctx.variants):
             for s in SIZES:
                 a, b = load(twin_file(ctx, p, "x", "F13.b", TAG[s])), load(twin_file(ctx, p, "house", "E0", TAG[s]))
-                a5 &= a.keys() == b.keys() and all(np.array_equal(a[k], b[k]) for k in a)
+                a5 &= same_arrays(a, b)
     doc_path = tl.out_file(f"twins{sfx}.json")
     doc = json.load(open(doc_path, encoding="utf-8")) if os.path.exists(doc_path) else None
     if doc:

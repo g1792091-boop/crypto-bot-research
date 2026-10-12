@@ -31,6 +31,7 @@ from __future__ import annotations
 import datetime as dt
 import math
 import os
+import re
 import sys
 from collections import OrderedDict
 
@@ -1209,7 +1210,7 @@ def _r_x028(st: _State) -> dict:
                 counts["label_select"] = "select.json과 같음"
                 n_checked += 1
             v = KX.variant_by_id(arm)
-            counts["label_rule"] = RX.FAMILY_KO.get(v.famname, "") if v.famname != "E0" else ""
+            counts["label_rule"] = _label_rule(pool, v)
             if arm.startswith("F12."):
                 counts.update(_comp_by(recs, [np.ones(len(r["reason"]), bool) for r in recs]))
             coins = [np.asarray(r["coin"], np.int64) for r in recs]
@@ -1225,6 +1226,15 @@ def _r_x028(st: _State) -> dict:
             _put(st, res, pool, arm, counts, money)
     res["notes"].append(f"rows checked against select.json reasons: {n_checked}")
     return res
+
+
+def _label_rule(pool: str, v) -> str:
+    """The family name of X-028's row. A DeepSeek row drops a parenthesis that holds a digit (F13's ladder steps), since C8's whitelist
+    refuses a string with a figure in a DeepSeek row (DEVIATIONS.md, [extra/reads] 2026-10-12)."""
+    lab = RX.FAMILY_KO.get(v.famname, "") if v.famname != "E0" else ""
+    if pool == "ds" and re.search(r"\d", lab):
+        lab = re.sub(r"\s*\([^)]*\d[^)]*\)", "", lab).strip()
+    return lab
 
 
 # ====================================================================================================== X-029 one trade's result
