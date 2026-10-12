@@ -286,10 +286,12 @@ class League:
         while self.done < end:
             a = self.done
             b = min(end, (a // DAY + 1) * DAY)
-            by_close, notes = L.chunk_signals(self.lib, self.source, self.plain_accts if self.rule_accts else self.accts,
-                                              self.symbols, a, b, self.start_ms, self.strategies) \
-                if (self.plain_accts or not self.rule_accts) else ({}, [])
-            if self.rule_accts:
+            if not self.rule_accts:
+                by_close, notes = L.chunk_signals(self.lib, self.source, self.accts, self.symbols, a, b, self.start_ms,
+                                                  self.strategies)
+            else:                       # rule accounts: their own signals and chart records (rulex), the others as before
+                by_close, notes = (L.chunk_signals(self.lib, self.source, self.plain_accts, self.symbols, a, b,
+                                                   self.start_ms, self.strategies) if self.plain_accts else ({}, []))
                 rule_close, rule_notes = RX.chunk_rule(self.lib, self.source, self.rule_accts, self.symbols, a, b,
                                                        self.start_ms, self.strategies)
                 for close, items in rule_close.items():
@@ -313,6 +315,43 @@ class League:
             if on_chunk is not None:
                 on_chunk()
         return n
+
+
+def make_rule_league(rules_path: Optional[str], cands: list[dict], db_path: str, brackets: dict, specs: dict, lib,
+                     source, fetch_steps: Callable, symbols, start_text: Optional[str] = "",
+                     log: Callable[[str], None] = print, clock: Optional[Callable[[], int]] = None) -> Optional[League]:
+    """The rule league (candleague/rulex.py, PREREG_EXITFLEX 11): a second League over its own database ``db_path``
+    (own start, own fingerprint, so the existing record is neither reset nor replayed), with the accounts of the rule
+    config file ``rules_path`` (default candleague/data/rules.json, CANDLEAGUE_RULES). None when there is no such file:
+    no rule account is created. A file that exists but cannot be run raises RX.RuleConfigError. The start is the first
+    run of a fresh database (floored to the 5-minute grid), the recorded start after that (league_start); when the
+    rules change, the old database is copied next to it first (backup_db) and the league starts over from its start."""
+    accts = RX.load_accounts(rules_path, cands)
+    if accts is None:
+        return None
+    conn = open_db(db_path)
+    explicit = explicit_start(start_text, conn, db_path, log)         # a bad value raises, as for the main league
+    return League(conn, accts, brackets, specs, lib, source, fetch_steps, symbols, start_ms=explicit, log=log,
+                  db_path=db_path, clock=clock)
+
+
+class SharedFetch:
+    """fetch_steps for two leagues: ``fresh`` (the main league's) always asks Binance and remembers its answer, ``reuse``
+    (the rule league's) takes that answer when it asks for the same minutes, so a caught-up pass asks Binance once."""
+
+    def __init__(self, fetch: Callable):
+        self.fetch, self.key, self.val = fetch, None, None
+
+    def fresh(self, rest, syms, s, e):
+        self.key, self.val = None, None
+        val = self.fetch(rest, syms, s, e)
+        self.key, self.val = (tuple(syms), s, e), val
+        return val
+
+    def reuse(self, rest, syms, s, e):
+        if self.key == (tuple(syms), s, e):
+            return self.val
+        return self.fetch(rest, syms, s, e)
 
 
 EXCHANGE_FILE = os.path.join(C.ROOT, "research", "fullgrid", "exchange.json")
@@ -591,7 +630,18 @@ def main(argv: Optional[list] = None) -> int:
                     help="start of a league with no recorded start only (rebuild a lost league.db and its start file), "
                          "with its time zone, e.g. 2026-10-11T12:00+09:00")
     ap.add_argument("--every", type=int, default=300, help="seconds between passes (run)")
+    ap.add_argument("--rules", default=os.environ.get(RX.RULES_ENV, ""),
+                    help=f"rule config (default {RX.DEFAULT_FILE}); the rule league (candleague/rulex.py) exists only "
+                         "when this file does")
+    ap.add_argument("--rule-db", default=os.environ.get("CANDLEAGUE_RULE_DB", ""),
+                    help=f"the rule league's database (default {RX.DB_NAME} next to --db)")
+    ap.add_argument("--rule-snap", default=os.environ.get("CANDLEAGUE_RULE_SNAP", ""),
+                    help="the rule league's snapshots (default rule/ inside --snap)")
+    ap.add_argument("--rule-start", default=os.environ.get("CANDLEAGUE_RULE_START", ""),
+                    help="start of a rule league with no recorded start only, with its time zone")
     a = ap.parse_args(argv)
+    rule_db = a.rule_db or os.path.join(os.path.dirname(os.path.abspath(a.db)), RX.DB_NAME)
+    rule_snap = a.rule_snap or os.path.join(a.snap, "rule")
     if a.cmd == "status":
         with open(os.path.join(a.snap, "league.json")) as fh:
             d = json.load(fh)
@@ -623,6 +673,17 @@ def main(argv: Optional[list] = None) -> int:
             print(f"[후보 리그] {'새 시작' if reset else '시작 그대로'}: {_kst(st)} KST"
                   f" (설치한 때 {_kst(started)} KST)" + (" · 모든 계좌 $5,000으로 이 시각부터 다시 계산" if reset else ""),
                   flush=True)
+        try:
+            rule_accts = RX.load_accounts(a.rules or None, C.load(a.candidates))
+        except RX.RuleConfigError as exc:
+            print(f"[후보 리그] 규칙 계좌 설정을 읽지 못했습니다: {exc}", flush=True)
+            rule_accts = None
+        if rule_accts and os.path.exists(rule_db):                 # the rule league keeps its own copy, the same way
+            had = set(glob.glob(os.path.join(os.path.dirname(os.path.abspath(rule_db)), "*.db")))
+            path = backup_if_reset(rule_db, rule_accts)
+            print("[후보 리그] 규칙 리그: 기록 복사 필요 없음 (이어서 계산)" if not path else
+                  f"[후보 리그] 규칙 리그: 새로 시작하기 전 기록을 이미 복사해 두었습니다: {path}" if path in had else
+                  f"[후보 리그] 규칙 리그: 새로 시작하기 전 기록 복사: {path}", flush=True)
         return 0
     from paperbot import sweepsig
     from paperbot.binance import BinanceREST
@@ -630,20 +691,41 @@ def main(argv: Optional[list] = None) -> int:
     from paperbot.paramshadow import RestSource, make_fetcher
     rest = BinanceREST()
     brackets, specs, src = load_exchange(os.environ.get("CANDLEAGUE_EXCHANGE", EXCHANGE_FILE), V3_SYMBOLS)
-    accts = C.accounts(C.load(a.candidates))
+    cands = C.load(a.candidates)
+    accts = C.accounts(cands)
     conn = open_db(a.db)
     source = RestSource(os.path.join(os.path.dirname(a.db), "bars5m.db"), rest=rest)
 
     def fetch(_rest, syms, s, e):
         return make_fetcher(rest, syms, s, e)(rest, syms, s, e)
+    shared = SharedFetch(fetch)
     # owners 2026-10-11: DeepSeek money shown like core; 0 / off / false / no hides it again
     ds_money = os.environ.get("CANDLEAGUE_DS_MONEY", "1").strip().lower() not in ("0", "off", "false", "no")
     try:
         explicit = explicit_start(a.start, conn, a.db, log=lambda s: print(s, flush=True))
     except ValueError as exc:            # only for a league with no recorded start: refuse rather than record a wrong one
         raise SystemExit(f"[후보 리그] {exc}") from None
-    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS, start_ms=explicit,
+    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, shared.fresh, V3_SYMBOLS, start_ms=explicit,
                 db_path=a.db)
+    rl = [None]
+
+    def open_rule_league() -> None:
+        """The rule league (only when a rule config file exists); a file that cannot be run, or a failure while opening
+        it, never stops the main league: it is said here and tried again on the next pass."""
+        try:
+            rl[0] = make_rule_league(a.rules or None, cands, rule_db, brackets, specs, sweepsig.lib(), source,
+                                     shared.reuse, V3_SYMBOLS, start_text=a.rule_start,
+                                     log=lambda s: print(s, flush=True))
+        except Exception as exc:  # noqa: BLE001
+            rl[0] = None
+            print(f"[후보 리그] 규칙 리그를 열지 못했습니다 ({type(exc).__name__}: {exc})", flush=True)
+        else:
+            if rl[0] is not None:
+                print(f"[후보 리그] 규칙 리그: {len(rl[0].accts)} accounts, start {_utc(rl[0].start_ms, '%Y-%m-%d %H:%M')} UTC, "
+                      f"done {_utc(rl[0].done, '%Y-%m-%d %H:%M')} UTC", flush=True)
+                if rl[0].reset:
+                    write_snapshots(rule_snap, rl[0], int(time.time() * 1000), ds_money)
+    open_rule_league()
     from .notify import Notifier
     notifier = Notifier(conn)
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, start {_utc(lg.start_ms, '%Y-%m-%d %H:%M')} UTC, "
@@ -662,6 +744,19 @@ def main(argv: Optional[list] = None) -> int:
         if n:
             print(f"[후보 리그] {n} chunk(s), done {time.strftime('%m-%d %H:%M', time.gmtime(lg.done / 1000))} UTC",
                   flush=True)
+        if rl[0] is None and os.path.exists(a.rules or RX.DEFAULT_FILE):
+            open_rule_league()
+        if rl[0] is not None:
+            try:
+                rn = rl[0].advance(final_end(now), on_chunk=(lambda: write_snapshots(
+                    rule_snap, rl[0], int(time.time() * 1000), ds_money)) if final_end(now) - rl[0].done > 3 * FIVE else None)
+                write_snapshots(rule_snap, rl[0], int(time.time() * 1000), ds_money)
+                if rn:
+                    print(f"[후보 리그] 규칙 리그 {rn} chunk(s), done "
+                          f"{time.strftime('%m-%d %H:%M', time.gmtime(rl[0].done / 1000))} UTC", flush=True)
+            except Exception as exc:  # noqa: BLE001  the engines of a failed chunk may be half-stepped: reopen from the database
+                print(f"[후보 리그] 규칙 리그 처리 실패 ({type(exc).__name__}: {exc}), 데이터베이스에서 다시 엽니다", flush=True)
+                open_rule_league()
         if a.cmd == "once":
             return 0
         time.sleep(a.every)

@@ -3,16 +3,16 @@
 (한국어 설명: `README_KO.md`. 이 파일은 계산 전에 고정하는 규칙입니다. 결과를 본 뒤에는 바꾸지 않고, 바꿀 일이 생기면
 `DEVIATIONS.md`에 따로 적습니다.)
 
-**Status: DRAFT, written 2026-10-11 (about 15:50 UTC), revised about 16:40 UTC after two reviews (section 22.4) and
-about 21:30 UTC after the owners' answers (section 22.5). Not pinned.** No code for this study exists in the repository
-yet. The only computations behind this draft are the practice-period feasibility runs and re-runs of section 22. They
-used signals whose bar closed before 2024-01-01 only. Nothing from 2024-01-01 on was read, computed or printed, and 2020
-was not used.
+**Status: DRAFT, written 2026-10-11 (about 15:50 UTC), revised about 16:40 UTC after two reviews (section 22.4), about
+21:30 UTC after the owners' answers (section 22.5) and on 2026-10-12 after the code review (section 22.6). Not
+pinned.** The code (section 17.1) is written and under review. The computations behind this draft are the
+practice-period feasibility runs and re-runs of section 22 and the code's parity and timing runs. They used signals
+whose bar closed before 2024-01-01 only. Nothing from 2024-01-01 on was read, computed or printed, and no outcome of
+2020 was used.
 
 **All questions are closed** (section 21, a decision log since 2026-10-12 KST). The owners answered three: the ROE is
 read after fees (Q1), the 4h cap is 30% (Q2), and track 2 runs on its own server after the hunt server is Destroyed
-(Q15). Every other question closed at its default. The status stays DRAFT until the code is written, reviewed and
-pinned.
+(Q15). Every other question closed at its default. The status stays DRAFT until the code is reviewed and pinned.
 
 Pinning means `research/hiwr/PREREG_HIWR.sha256` over this file, the study's code and the files of section 17.3. The
 code refuses `select` without a matching pin. It refuses the confirm stage until the picks' hash is appended to the pin
@@ -133,17 +133,26 @@ In Korea that is Saturday 09:00 to Monday 09:00 KST. This holds on all four time
 * **Source.** The Binance USD-M public archive (data.binance.vision), every file checked against its `.CHECKSUM`. It
   holds monthly 1m klines, 1m markPriceKlines and fundingRate files for the 30 coins of section 4, from each coin's
   first archived month (2020-01 at the earliest). Days a monthly kline file lacks come from the daily files
-  (checksummed; absent minutes only).
+  (checksummed; absent minutes only: a monthly value is never overwritten, as the hunt's builder; the full grid let the
+  daily file win, so cross-check (i) may see a few differing minutes).
 * **Build.** A copy of `research/fullgrid/data.py` with the symbol list taken from `research/hunt/universe30.json` and
   month bounds as arguments. The layout is the same:
-  - int64 open time; float64 OHLC, quote volume and mark OHLC;
+  - int64 open time; float64 OHLC, base volume `v` (the chart frames and every signal use it, exactly as the full
+    grid's signals did), quote volume `qv` (as the hunt) and mark OHLC;
   - funding on its calc minute;
   - zero-volume minutes dropped;
   - a missing mark minute takes the last-price bar.
+* **Spans, checked at every build.** A coin has ended inside a kit when its last bar with volume is more than 3 days
+  before the kit's end. Every build compares the spans with section 4: a coin that ends in another month than section 4
+  lists, ends although section 4 lists no end (a missing last monthly file looks like that), or is missing, stops the
+  build. So does a hole of more than 3 days, or fewer than 60 funding events in a month strictly inside a coin's span.
+  On the confirm kit such a stop ends the confirm stage before any outcome is computed; the cause goes to
+  `DEVIATIONS.md` before a rerun, and no rule changes.
 * **Two downloads, by construction.**
   - The **practice kit** downloads 2020-01 .. 2023-12 only.
   - The 2024-01 .. 2026-09 files are fetched by the separate **confirm stage**. It refuses to run until `picks.json`
-    is hashed into the pin (10.6).
+    is hashed into the pin (10.6). The data command line (`python -m research.hiwr.data`) refuses any month after
+    2023-12.
 * **Identity.** Per coin and per array, a content sha256 computed by the hunt's method (`research/hunt/PREREG_HUNT.md`
   §2). They go to `research/hiwr/data_manifest_sel.json` (pinned) and later to `data_manifest_test.json` (appended at
   the confirm stage). Every stage recomputes the hashes of what it loads and stops on any difference.
@@ -152,9 +161,18 @@ In Korea that is Saturday 09:00 to Monday 09:00 KST. This holds on all four time
     minute both have. They come from the same source. A mismatch beyond 1e-9 relative on more than 0.01% of minutes
     stops the pin.
   - (ii) All 30 coins' 1m bars, resampled to 5m before 2024-01-01, must match the hunt's pinned 5m data
-    (`research/hunt/data_manifest.json`) within the hunt's tolerance (OHLC 1e-6 relative, volume 0.1%) on at least
-    99.9% of the 5m bars. Where the hunt's 5m files are not on the machine, three random months per coin are rebuilt
-    from the archive's 5m files and compared instead (seeded as in section 11).
+    (`research/hunt/data_manifest.json`) within the hunt's tolerance (OHLC 1e-6 relative, base volume 0.1%) on at least
+    99.9% of the 5m bars. Each hunt file's content hash is checked against that manifest first; the hash covers the
+    whole file (2020-01 .. 2026-09), so its later bars are read into the hash only and cut at 2024-01-01 before the
+    comparison (no outcome is computed). Where the hunt's 5m files are not on the machine, three months per coin are
+    rebuilt from the archive's 5m files and compared instead, drawn by numpy PCG64 seeded with the first 8 bytes of
+    sha256("hiwr|datacheck|SEL|<symbol>|months").
+* **Where the data pin is made.** On the development machine, before the pin: `python -m research.hiwr.data kit
+  --dir /dev/shm/hiwrkit --drop-raw` builds the practice kit one coin at a time in RAM (download, build, delete the
+  coin's zips; peak about 5 GB of RAM, no disk), then `hiwr datapin` writes `data_manifest_sel.json` and `hiwr
+  datacheck` (i) and (ii) write `data_check_sel.json`, and the kit is deleted. Both files are pinned (17.3). The server
+  downloads and builds the same months and re-hashes every array against the pinned manifest before any computation
+  (17.4); one differing array stops the run.
 * **Mark price.** Liquidation is checked on mark price (the full grid's kernel convention). Stops trigger on last
   price.
 
@@ -178,8 +196,21 @@ In Korea that is Saturday 09:00 to Monday 09:00 KST. This holds on all four time
   labelled in every output. Minimum notional and quantity steps come from the exchange30.json specs; proxy coins use
   SANDUSDT's.
 * **Notional cap per tier.** At tier L, a position's notional can reach the largest notionalCap among the tiers whose
-  initialLeverage >= L: BTC and ETH $12M, the small alts $10,000, TRB $5,000. A larger planned notional is cut to that
-  cap (counted).
+  initialLeverage >= L. A larger planned notional is cut to that cap (counted). From exchange30.json:
+
+| cap at 30x and 40x | coins | at 50x |
+|---|---|---|
+| $12M | BTC, ETH | the same |
+| $1M | SOL | the same |
+| $750,000 | DOGE | $150,000 (as XRP) |
+| $400,000 | XRP, BNB, LINK | XRP $150,000; BNB, LINK $200,000 |
+| $200,000 | ADA, FIL, NEAR | ADA $50,000; FIL, NEAR $200,000 |
+| $160,000 | LTC, BCH, AVAX | LTC $50,000; BCH $100,000; AVAX $80,000 |
+| $100,000 | DOT | $50,000 |
+| $80,000 | ETC, CRV, ATOM | $50,000 |
+| $10,000 | SAND, COMP, AXS, RUNE and the 8 proxy coins (12) | the same |
+| $5,000 | TRB | the same |
+
 * **Liquidation distance from the fill** (long, first tier, isolated, one-way):
 
 | coins (first-tier mmr from exchange30.json) | first-tier mmr | 30x | 40x | 50x |
@@ -250,7 +281,12 @@ TP lies 0.05% further from the fill than a maker TP.
 
 ### 7.1 Entry
 
-* Market order at the open of the first 1m bar after the signal-bar close (`kernel._entry_index`).
+* Market order at the open of the entry minute of `kernel._entry_index`: the minute after the first 1m bar at or
+  after (close - 1 minute). That is the first 1m bar after the signal-bar close, except when the signal bar's last
+  minute had no trades (dropped, section 3): the entry is then one minute later (on the old six's SEL bars: about 10 of
+  105,000 15m closes per coin, 2 of 26,000 1h closes, none of 6,600 4h closes). Kept for kernel parity.
+* A candidate without an entry minute inside the period, or whose signal bar has no ATR14 > 0, is skipped ("no entry
+  or ATR").
 * Reference price P0 = that open.
 * Fill F = P0 x (1 + 0.0002) for a long, P0 x (1 - 0.0002) for a short.
 * Taker fee 0.05% of the fill notional.
@@ -287,12 +323,14 @@ The level is T = F x (1 + t) for a long (F x (1 - t) for a short), where t is th
 * It fills at S x (1 - 0.0002) for a long when the 1m low touches S, or at a gapped open x (1 - 0.0002). Taker fee.
 * **The stop must be wider than the take-profit.** A candidate whose stop distance from the fill, |F - S| / F, is not
   greater than t is skipped and counted as "stop inside TP". Only ATR stops on calm bars can hit this: the narrowest
-  price stop (0.60%, about 0.62% from the fill) is wider than the widest TP (+0.54%).
+  price stop (0.60%, about 0.62% from the fill) is wider than the widest TP (+0.54%). When a candidate also lacks stop
+  room (7.4), it is counted as "no stop room" (checked first).
 
 ### 7.4 Stop room at the tier (isolated liquidation)
 
 * Lq is the liquidation price at L for the planned notional, by Binance's isolated one-way formula with the mmr and cum
-  of the tier that holds the notional (`kernel._liq`). It is checked on mark price.
+  of the tier that holds the notional (`kernel._liq`). It is checked on mark price. It is fixed at the entry: funding
+  is paid from the wallet (7.6), so it does not move Lq (`kernel._trade` moves Lq with the margin instead).
 * **House buffer.** At tier L a candidate is taken only when the stop lies inside liquidation by at least
   max(0.2% of F, 1 x ATR14): |F - S| + max(0.002 F, ATR14) <= |F - Lq|. This is the rule bot's own quality_v1
   condition.
@@ -315,17 +353,21 @@ Long shown; a short is the mirror. This is the order of the prototype and of the
    * TP touched (taker) or traded through (maker): TP.
 
 So a minute that touches both S and T counts as a stop. A liquidation loses the whole isolated margin: the net result
-is minus the margin minus the entry fee.
+is minus the margin minus the entry fee, and the funding paid while the position was open stays paid (7.6). A stop or
+coin-end fill whose price loss is larger than the margin (side x (X / F - 1) < -1 / L) counts as a liquidation (the
+kernel's rule).
 
 ### 7.6 Funding, coin end, period end
 
 * **Funding.** Every funding event while the position is open is charged on mark open x quantity at the calc minute
   (the kernel), and paid from or to the wallet. A long pays a positive rate.
 * **Coin end.** A position still open at the coin's last bar with volume closes at that bar's close as a stop-market
-  order (slippage plus taker fee).
+  order (slippage plus taker fee). A coin has ended when that bar is more than 3 days before the period end (section
+  3); otherwise the position is open at the period end.
 * **Period end** (SEL: 2024-01-01 00:00 UTC; TEST: 2026-10-01 00:00 UTC).
   - In the trade list, a candidate not resolved before the period end is dropped and counted as "open at end".
-  - The account marks such a position at the last 1m close before the period end and flags it.
+  - The account marks such a position at the last 1m close before the period end, less a market exit's slippage and
+    taker fee, and flags it.
   - No price at or after the period end is read.
 
 ### 7.7 Costs and the net result
@@ -335,7 +377,8 @@ is minus the margin minus the entry fee.
   - Maker 0.02% on maker TP fills.
   - Funding as charged.
 * **Round trip:** 0.14% with a taker TP or a stop; 0.09% with a maker TP. These are the costs the ROE reading adds to
-  the TP price (2.1). They stay fixed in the TP price when costs are doubled for the cost-x2 test.
+  the TP's price move t (2.1). At cost x2, t is unchanged: the cost-x2 fill F2 has twice the slippage, the TP price
+  T = F2 x (1 +- t) and Lq follow F2, and the stop-room and stop-inside-TP skips stay as judged at cost x1.
 * **Cost x2:** taker 0.10%, slippage 0.04%, maker 0.04%; funding unchanged.
 * **Net result r.** Per notional: the price return from F to the exit price, minus fees and funding per notional (the
   prototype's `trade_r`).
@@ -373,16 +416,19 @@ The account is the unit for drawdown, size and monthly returns.
 * **Peak(t)** = the maximum of the starting wallet, every E_close before t, and every wallet value after a close. A
   minute's adverse extreme is measured against the peak of the closes before that minute (the close is the minute's
   last price, so its own close cannot come before its extreme).
-* **Exit minute.** Its adverse extreme counts only when the exit is a TP filled inside the minute (worst case: the dip
-  came first). A stop or liquidation counts at its fill; an exit on the open has no further mark.
+* **Exit minute.** Its adverse extreme counts when the exit is a TP filled inside the minute (worst case: the dip came
+  first), a coin-end close or the period-end mark (the position is held through that whole minute). A stop or
+  liquidation counts at its fill; an exit on the open has no further mark.
 * **Max DD** = the maximum over t of 1 - E_adverse(t) / Peak(t), together with 1 - wallet / Peak after every close. The
   peak includes open-trade highs, because a trade can rise to just under T and then fall to its stop.
 * The realized-only DD (closed trades only) is reported beside it. It is never larger than the mark-to-market DD.
-* **Bust** = equity below 10% of the start. The account stops there.
+* **Bust** = the wallet after a close below 10% of the start. The account stops there. (A bust implies a DD above 90%,
+  far beyond every cap.)
 
 ### 8.4 Size f*, fixed on SEL
 
-For a pair at its tier L, **f* (the registered size)** is the largest f that meets all four of these:
+For a pair at its tier L, sizes are on the 0.01 grid. **f* (the registered size)** is the largest grid size f such that
+**every** grid size from 0.01 to f meets all four of these (0.01 below the first grid size that breaks one):
 * (i) the SEL path's max DD (8.3) is at most the cap of its timeframe;
 * (i') the 95th percentile of the SEL week-block bootstrap max DD (below) is at most the cap (Q8);
 * (ii) the worst single SEL account trade loses at most 15% of the equity before it. This is the paper rules' per-trade
@@ -390,8 +436,14 @@ For a pair at its tier L, **f* (the registered size)** is the largest f that mee
 * (iii) f <= L^2 / 100, i.e. the margin is at most L% of the wallet. That is the rule bot's own margin: f is at most 9,
   16 and 25 at 30x, 40x and 50x.
 
-**f_path** is the same without (i'): the size at which the SEL path itself touches the cap. It is reported beside f*
-(R9) and is the Q8 alternative.
+**f_path** is the same without (i'): 0.01 below the first grid size at which the SEL path itself breaks the cap or
+(ii). It is reported beside f* (R9) and is the Q8 alternative. f* <= f_path by construction.
+
+**Why "every smaller size".** The taken trades depend on f: the stop room is judged at the bracket that holds N (8.2),
+the notional-cap cut lowers N / wallet as the wallet grows, and the minimum notional drops small trades. So the
+drawdown and the worst loss are not monotone in f, and a size above a failing one can pass again only because
+particular SEL losers are dropped at a larger N. Such an island is not a safe size, so the first failure from below
+ends the search.
 
 **Why (i').** If the size is fitted so that the SEL path sits exactly at the cap, a genuine edge that does not change
 between the periods still breaks the cap on TEST about half the time, because the TEST path is a new draw of the same
@@ -399,16 +451,21 @@ luck (iid simulation, `review_stats/t2_sim.py`: 0.45-0.49; 0.29 when the 30x cei
 drawdown-path luck. At the bootstrap 95% size the breach is about 0.10. The SEL re-run shows the same: at f_path,
 13-45% of the resampled SEL paths of the eight net-reading 4h B-passers break the cap (15.4).
 
-**The bootstrap.** The pair's SEL account trades (8.2, taken at the SEL path) are grouped by the UTC week (Monday) of
-their fill minute; SEL has 157 such weeks, empty ones included. A resample draws 157 weeks with replacement and runs
-their trades in draw order. 10,000 resamples, the same draws for every f, seeded as in section 11 with "f95" in place of
-s. Each resample recomputes the 1m mark-to-market DD (8.3) from each trade's own minute marks.
+**The bootstrap.** The pair's SEL account trades (8.2, taken at the SEL path at that f) are grouped by the UTC week
+(Monday) of their fill minute; SEL has 157 such weeks, empty ones included. A resample draws 157 weeks with replacement
+and runs their trades in draw order. 10,000 resamples, the same draws for every f: numpy PCG64 seeded with the first 8
+bytes of sha256("hiwr|f95|<period>|<pick id>|f95"). Each resample recomputes the 1m mark-to-market DD (8.3) from each
+trade's own minute marks. A resampled trade keeps its SEL-path notional / wallet and its SEL-path result: the notional
+cap, the stop room at the bracket and the minimum notional are not redone in a resample (measured on synthetic capped
+accounts, redoing the cap moved the 95th percentile by 0.005-0.02, in both directions).
 
-**Method.**
-* The realized-only DD gives an upper bound on f_path, because the realized DD is never larger than the mark-to-market
-  DD. It only brackets the search.
-* f_path and f* are found by bisection on the exact 1m mark-to-market DD (and, for f*, its bootstrap 95th percentile),
-  40 steps, rounded down to 0.01.
+**Method.** An upward scan of the grid that stops at the first failure: the SEL account at every grid size from 0.01
+(for f_path), then the bootstrap 95th percentile from 0.01 to f_path (for f*). Exact speed-up of the f* scan: on
+consecutive grid sizes whose accounts take the same trades with the same per-notional results, exits and phases, and
+cut none (so N / wallet = f), every path's mark-to-market DD is nondecreasing in f (a peak-to-trough ratio is a product
+of steps (1 + f a) / (1 + f b), and f d/df ln(ratio) <= ln(ratio) < 0 for a drawdown). Inside such a run the first
+failing size is therefore found by bisection; every other size is evaluated. The tests compare it with the plain scan
+of every grid size.
 
 **Reported:** f*, the margin % of the wallet (f* / L), and the notional as a multiple of the wallet, at the pick's tier;
 f_path the same; the share of bootstrap paths over the cap at each. R2 gives the same at the other tiers whose ROE range
