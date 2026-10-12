@@ -277,13 +277,12 @@ class League:
                 log(f"후보 목록이나 계산 방식이 바뀌어 시작 시각({_utc(start, '%m-%d %H:%M')} UTC)부터 새로 계산합니다"
                     + (f" (이전 기록 복사: {os.path.basename(backup)})" if backup else ""))
             else:                                                     # a fresh database: say where its start came from, loudly (11.3)
-                src = ("데이터베이스에 기록된 시작" if meta.get("start_ms") is not None else
-                       "시작 시각 파일" if saved else "CANDLEAGUE_START" if start_ms is not None else "지금(기록된 시작 없음)")
+                src = "시작 시각 파일" if saved else "CANDLEAGUE_START" if start_ms is not None else "지금(기록된 시작 없음)"
                 old = sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(db_path)),
                                                     os.path.splitext(os.path.basename(db_path))[0] + "_*.db"))) if db_path else []
                 log(f"[후보 리그] 새 데이터베이스를 만듭니다: 시작 {_utc(start, '%Y-%m-%d %H:%M')} UTC ({src})"
                     + (f"; 같은 폴더에 이전 기록 복사 {len(old)}개가 있습니다 ({os.path.basename(old[-1])})" if old else ""))
-                if src.startswith("지금") and (saved is None and old or expect_start_ms is None and db_path):
+                if src.startswith("지금") and expect_start_ms is None:
                     log("[후보 리그] 경고: 시작 시각이 지금으로 정해졌습니다. 설치 시각과 다르면 CANDLEAGUE_EXPECT_START를 주어 막으세요")
             keep = {k: _get(conn, k) for k in CARRY_KEYS}
             conn.execute("DELETE FROM kv")
@@ -321,6 +320,7 @@ class League:
         # the database with the engines
         self.seen: dict = {k: int(v) for k, v in (_get(conn, "seen") or {}).items()} if self.rule_accts else {}
         self.fund_wait: dict = {k: float(v) for k, v in (_get(conn, "fund_wait") or {}).items()} if self.rule_accts else {}
+        self.last_close: dict = {k: float(v) for k, v in (_get(conn, "last_close") or {}).items()} if self.rule_accts else {}
         if self.rule_accts:
             for e in self.engines.values():
                 e.rx_seen = self.seen
@@ -352,21 +352,38 @@ class League:
                 notes = self.restore_notes + notes + rule_notes
                 self.restore_notes = []
             steps = self.fetch_steps(None, self.symbols, a, b)
+            stats: dict = {}
             if self.rule_accts:
-                RX.replay_day(self.engines, self.active, by_close, steps, self.brackets, self.seen, self.fund_wait)
+                RX.replay_day(self.engines, self.active, by_close, steps, self.brackets, self.seen, self.fund_wait, stats,
+                              self.last_close)
             else:
                 replay_day(self.engines, self.active, by_close, steps, self.brackets)
             rows = []
             for aid, e in self.engines.items():
                 rows += [(aid, int(t.exit_time), json.dumps(asdict(t))) for t in e.trades]
+                for t in e.trades:                                  # PREREG 11.4 item 10: trades closed per account and UTC day
+                    stats.setdefault((aid, int(t.exit_time) // DAY * DAY), [0, 0, 0])
                 e.trades.clear()
             self.conn.executemany("INSERT INTO trades VALUES (?, ?, ?)", rows)
+            if self.rule_accts:
+                closed: dict = {}
+                for aid, exit_time, _d in rows:
+                    closed[(aid, exit_time // DAY * DAY)] = closed.get((aid, exit_time // DAY * DAY), 0) + 1
+                self.conn.executemany(
+                    "INSERT INTO acct_day VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(account, day) DO UPDATE SET "
+                    "offered = offered + excluded.offered, entered = entered + excluded.entered, skipped = skipped + excluded.skipped, "
+                    "rejected = rejected + excluded.rejected, closed = closed + excluded.closed",
+                    [(aid, day, sum(c), c[0], c[1], c[2], closed.get((aid, day), 0)) for (aid, day), c in sorted(stats.items())])
+                if b % DAY == 0:                                    # 00:00 UTC (PREREG 11.4 item 11): the realised wallet and the mark
+                    self.conn.executemany("INSERT OR REPLACE INTO acct_mark VALUES (?, ?, ?, ?)",
+                                          [(aid, b, e.wallet, RX.mark_value(e, self.last_close)) for aid, e in self.engines.items()])
             self.meta["done"] = b
             self.meta["notes"] = notes[-20:]
             _put(self.conn, "engines", {aid: engine_state(e) for aid, e in self.engines.items()})
             if self.rule_accts:
                 _put(self.conn, "seen", self.seen)
                 _put(self.conn, "fund_wait", self.fund_wait)
+                _put(self.conn, "last_close", self.last_close)
             _put(self.conn, "meta", self.meta)
             self.conn.commit()
             self.advanced_ms = self.clock()
@@ -374,43 +391,6 @@ class League:
             if on_chunk is not None:
                 on_chunk()
         return n
-
-
-def make_rule_league(rules_path: Optional[str], cands: list[dict], db_path: str, brackets: dict, specs: dict, lib,
-                     source, fetch_steps: Callable, symbols, start_text: Optional[str] = "",
-                     log: Callable[[str], None] = print, clock: Optional[Callable[[], int]] = None) -> Optional[League]:
-    """The rule league (candleague/rulex.py, PREREG_EXITFLEX 11): a second League over its own database ``db_path``
-    (own start, own fingerprint, so the existing record is neither reset nor replayed), with the accounts of the rule
-    config file ``rules_path`` (default candleague/data/rules.json, CANDLEAGUE_RULES). None when there is no such file:
-    no rule account is created. A file that exists but cannot be run raises RX.RuleConfigError. The start is the first
-    run of a fresh database (floored to the 5-minute grid), the recorded start after that (league_start); when the
-    rules change, the old database is copied next to it first (backup_db) and the league starts over from its start."""
-    accts = RX.load_accounts(rules_path, cands)
-    if accts is None:
-        return None
-    conn = open_db(db_path)
-    explicit = explicit_start(start_text, conn, db_path, log)         # a bad value raises, as for the main league
-    return League(conn, accts, brackets, specs, lib, source, fetch_steps, symbols, start_ms=explicit, log=log,
-                  db_path=db_path, clock=clock)
-
-
-class SharedFetch:
-    """fetch_steps for two leagues: ``fresh`` (the main league's) always asks Binance and remembers its answer, ``reuse``
-    (the rule league's) takes that answer when it asks for the same minutes, so a caught-up pass asks Binance once."""
-
-    def __init__(self, fetch: Callable):
-        self.fetch, self.key, self.val = fetch, None, None
-
-    def fresh(self, rest, syms, s, e):
-        self.key, self.val = None, None
-        val = self.fetch(rest, syms, s, e)
-        self.key, self.val = (tuple(syms), s, e), val
-        return val
-
-    def reuse(self, rest, syms, s, e):
-        if self.key == (tuple(syms), s, e):
-            return self.val
-        return self.fetch(rest, syms, s, e)
 
 
 EXCHANGE_FILE = os.path.join(C.ROOT, "research", "fullgrid", "exchange.json")
@@ -445,10 +425,33 @@ def closed_trades(conn, accts: list[dict]) -> dict:
     return book
 
 
+HOLD_HOURS = (4, 8, 18)
+
+
+def hold_stats(trades: list[dict]) -> dict:
+    """PREREG_EXITFLEX 11.4 item 12: hold-time aggregates over every closed trade since the start: count, median hold hours and the
+    shares held more than 4 h, 8 h and 18 h (hold hours and counts only, so a DeepSeek row may carry them, D11)."""
+    import statistics
+    h = [(t["exit_time"] - t["entry_time"]) / 3_600_000.0 for t in trades if t.get("entry_time") is not None and t.get("exit_time") is not None]
+    if not h:
+        return {"n": 0, "median": None, **{f"share_gt{x}": None for x in HOLD_HOURS}}
+    return {"n": len(h), "median": round(statistics.median(h), 3), **{f"share_gt{x}": round(sum(v > x for v in h) / len(h), 4) for x in HOLD_HOURS}}
+
+
+def day_counts(conn) -> dict:
+    """{account: {offered, entered, skipped, rejected, closed}} summed over the days of ``acct_day`` (PREREG 11.4 item 10)."""
+    try:
+        rows = conn.execute("SELECT account, SUM(offered), SUM(entered), SUM(skipped), SUM(rejected), SUM(closed) FROM acct_day GROUP BY account")
+        return {r[0]: dict(zip(("offered", "entered", "skipped", "rejected", "closed"), (int(x or 0) for x in r[1:]))) for r in rows}
+    except sqlite3.Error:
+        return {}
+
+
 def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False, book: Optional[dict] = None) -> list[dict]:
     """Per account: trades, wins, mean P&L per trade as a fraction of the wallet before it, closed-trade drawdown,
     wallet, the open position; DeepSeek money hidden unless ``ds_money`` (D11)."""
     book = closed_trades(conn, accts) if book is None else book
+    counts = day_counts(conn) if any(a.get("rule") for a in accts) else {}
     out = []
     for a in accts:
         pnl = [t["pnl"] for t in book[a["id"]]]
@@ -470,7 +473,9 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False,
                                                  "stop": pos.stop_price, "tp": None if math.isnan(pos.tp_price)
                                                  else pos.tp_price, "since": pos.entry_time, "lev": pos.leverage}}
         if a.get("rule"):
-            row.update(rule=a["rule"].get("id"), rule_ko=RX.rule_ko(a["rule"]), pick=a.get("pick"))
+            row.update(rule=a["rule"].get("id"), rule_ko=RX.rule_ko(a["rule"]), pick=a.get("pick"), hold=hold_stats(book[a["id"]]),
+                       counts=counts.get(a["id"]) or dict(offered=0, entered=0, skipped=0, rejected=0, closed=0),
+                       no_entry_from_ms=a.get("no_entry_from_ms"))
         if a["kind"] == "ds" and not ds_money:
             for k in ("mean_ret", "wallet", "max_dd"):
                 row[k] = None
@@ -678,6 +683,14 @@ def backup_if_reset(db: str, accts: list[dict], now_ms: Optional[int] = None) ->
         conn.close()
 
 
+def league_accounts(rules_path: Optional[str], cands: list[dict]) -> list[dict]:
+    """The accounts the league runs: the restarted league's (candleague/rulex.py, PREREG_EXITFLEX 11.2, both pools) when a rule config
+    file exists and is enabled ("enabled": true is the owners' OK), else the candidate accounts as before. A file that exists, is
+    enabled and cannot be run raises RX.RuleConfigError (the league never starts on the old accounts in its place)."""
+    accts = RX.load_accounts(rules_path or None, cands)
+    return C.accounts(cands) if accts is None else accts
+
+
 def main(argv: Optional[list] = None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -688,19 +701,14 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("--start", default=os.environ.get("CANDLEAGUE_START", ""),
                     help="start of a league with no recorded start only (rebuild a lost league.db and its start file), "
                          "with its time zone, e.g. 2026-10-11T12:00+09:00")
+    ap.add_argument("--expect-start", default=os.environ.get("CANDLEAGUE_EXPECT_START", ""),
+                    help="the install time the restart script wrote down (with its time zone, or epoch ms): the league refuses to run "
+                         "when its start is not this time floored to 5 minutes (PREREG_EXITFLEX 11.3)")
     ap.add_argument("--every", type=int, default=300, help="seconds between passes (run)")
     ap.add_argument("--rules", default=os.environ.get(RX.RULES_ENV, ""),
-                    help=f"rule config (default {RX.DEFAULT_FILE}); the rule league (candleague/rulex.py) exists only "
-                         "when this file does")
-    ap.add_argument("--rule-db", default=os.environ.get("CANDLEAGUE_RULE_DB", ""),
-                    help=f"the rule league's database (default {RX.DB_NAME} next to --db)")
-    ap.add_argument("--rule-snap", default=os.environ.get("CANDLEAGUE_RULE_SNAP", ""),
-                    help="the rule league's snapshots (default rule/ inside --snap)")
-    ap.add_argument("--rule-start", default=os.environ.get("CANDLEAGUE_RULE_START", ""),
-                    help="start of a rule league with no recorded start only, with its time zone")
+                    help=f"rule config (default {RX.DEFAULT_FILE}): when it exists and is enabled, the league IS the restarted league "
+                         "of PREREG_EXITFLEX 11 (its accounts are candleague/rulex.py's, in the database given by --db)")
     a = ap.parse_args(argv)
-    rule_db = a.rule_db or os.path.join(os.path.dirname(os.path.abspath(a.db)), RX.DB_NAME)
-    rule_snap = a.rule_snap or os.path.join(a.snap, "rule")
     if a.cmd == "status":
         with open(os.path.join(a.snap, "league.json")) as fh:
             d = json.load(fh)
@@ -709,8 +717,19 @@ def main(argv: Optional[list] = None) -> int:
               f"done {time.strftime('%Y-%m-%d %H:%M', time.gmtime(d['done_ms'] / 1000))} UTC, "
               f"lag {d['lag_s']}s, accounts {len(d['accounts'])}")
         return 0
+    try:
+        expect = parse_start(a.expect_start)
+    except ValueError as exc:
+        raise SystemExit(f"[후보 리그] {exc}") from None
+    cands = C.load(a.candidates)
+    try:
+        accts = league_accounts(a.rules, cands)
+    except RX.RuleConfigError as exc:
+        if a.cmd == "backup":
+            print(f"[후보 리그] 규칙 계좌 설정을 읽지 못했습니다: {exc}", flush=True)
+            return 1
+        raise SystemExit(f"[후보 리그] 규칙 계좌 설정을 쓸 수 없어 멈춥니다 (옛 계좌로 대신 돌리지 않습니다): {exc}") from None
     if a.cmd == "backup":
-        accts = C.accounts(C.load(a.candidates))
         explicit = None
         if os.path.exists(a.db):
             c = sqlite3.connect(a.db, timeout=30)
@@ -732,17 +751,11 @@ def main(argv: Optional[list] = None) -> int:
             print(f"[후보 리그] {'새 시작' if reset else '시작 그대로'}: {_kst(st)} KST"
                   f" (설치한 때 {_kst(started)} KST)" + (" · 모든 계좌 $5,000으로 이 시각부터 다시 계산" if reset else ""),
                   flush=True)
-        try:
-            rule_accts = RX.load_accounts(a.rules or None, C.load(a.candidates))
-        except RX.RuleConfigError as exc:
-            print(f"[후보 리그] 규칙 계좌 설정을 읽지 못했습니다: {exc}", flush=True)
-            rule_accts = None
-        if rule_accts and os.path.exists(rule_db):                 # the rule league keeps its own copy, the same way
-            had = set(glob.glob(os.path.join(os.path.dirname(os.path.abspath(rule_db)), "*.db")))
-            path = backup_if_reset(rule_db, rule_accts)
-            print("[후보 리그] 규칙 리그: 기록 복사 필요 없음 (이어서 계산)" if not path else
-                  f"[후보 리그] 규칙 리그: 새로 시작하기 전 기록을 이미 복사해 두었습니다: {path}" if path in had else
-                  f"[후보 리그] 규칙 리그: 새로 시작하기 전 기록 복사: {path}", flush=True)
+            try:
+                check_expected_start(st, expect)
+            except StartMismatch as exc:
+                print(f"[후보 리그] {exc}", flush=True)
+                return 1
         return 0
     from paperbot import sweepsig
     from paperbot.binance import BinanceREST
@@ -750,41 +763,22 @@ def main(argv: Optional[list] = None) -> int:
     from paperbot.paramshadow import RestSource, make_fetcher
     rest = BinanceREST()
     brackets, specs, src = load_exchange(os.environ.get("CANDLEAGUE_EXCHANGE", EXCHANGE_FILE), V3_SYMBOLS)
-    cands = C.load(a.candidates)
-    accts = C.accounts(cands)
     conn = open_db(a.db)
     source = RestSource(os.path.join(os.path.dirname(a.db), "bars5m.db"), rest=rest)
 
     def fetch(_rest, syms, s, e):
         return make_fetcher(rest, syms, s, e)(rest, syms, s, e)
-    shared = SharedFetch(fetch)
     # owners 2026-10-11: DeepSeek money shown like core; 0 / off / false / no hides it again
     ds_money = os.environ.get("CANDLEAGUE_DS_MONEY", "1").strip().lower() not in ("0", "off", "false", "no")
     try:
         explicit = explicit_start(a.start, conn, a.db, log=lambda s: print(s, flush=True))
     except ValueError as exc:            # only for a league with no recorded start: refuse rather than record a wrong one
         raise SystemExit(f"[후보 리그] {exc}") from None
-    lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, shared.fresh, V3_SYMBOLS, start_ms=explicit,
-                db_path=a.db)
-    rl = [None]
-
-    def open_rule_league() -> None:
-        """The rule league (only when a rule config file exists); a file that cannot be run, or a failure while opening
-        it, never stops the main league: it is said here and tried again on the next pass."""
-        try:
-            rl[0] = make_rule_league(a.rules or None, cands, rule_db, brackets, specs, sweepsig.lib(), source,
-                                     shared.reuse, V3_SYMBOLS, start_text=a.rule_start,
-                                     log=lambda s: print(s, flush=True))
-        except Exception as exc:  # noqa: BLE001
-            rl[0] = None
-            print(f"[후보 리그] 규칙 리그를 열지 못했습니다 ({type(exc).__name__}: {exc})", flush=True)
-        else:
-            if rl[0] is not None:
-                print(f"[후보 리그] 규칙 리그: {len(rl[0].accts)} accounts, start {_utc(rl[0].start_ms, '%Y-%m-%d %H:%M')} UTC, "
-                      f"done {_utc(rl[0].done, '%Y-%m-%d %H:%M')} UTC", flush=True)
-                if rl[0].reset:
-                    write_snapshots(rule_snap, rl[0], int(time.time() * 1000), ds_money)
-    open_rule_league()
+    try:
+        lg = League(conn, accts, brackets, specs, sweepsig.lib(), source, fetch, V3_SYMBOLS, start_ms=explicit, db_path=a.db,
+                    expect_start_ms=expect, log=lambda s: print(s, flush=True))
+    except StartMismatch as exc:         # before any trade is shown (11.3)
+        raise SystemExit(f"[후보 리그] {exc}") from None
     from .notify import Notifier
     notifier = Notifier(conn)
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, start {_utc(lg.start_ms, '%Y-%m-%d %H:%M')} UTC, "
@@ -803,19 +797,6 @@ def main(argv: Optional[list] = None) -> int:
         if n:
             print(f"[후보 리그] {n} chunk(s), done {time.strftime('%m-%d %H:%M', time.gmtime(lg.done / 1000))} UTC",
                   flush=True)
-        if rl[0] is None and os.path.exists(a.rules or RX.DEFAULT_FILE):
-            open_rule_league()
-        if rl[0] is not None:
-            try:
-                rn = rl[0].advance(final_end(now), on_chunk=(lambda: write_snapshots(
-                    rule_snap, rl[0], int(time.time() * 1000), ds_money)) if final_end(now) - rl[0].done > 3 * FIVE else None)
-                write_snapshots(rule_snap, rl[0], int(time.time() * 1000), ds_money)
-                if rn:
-                    print(f"[후보 리그] 규칙 리그 {rn} chunk(s), done "
-                          f"{time.strftime('%m-%d %H:%M', time.gmtime(rl[0].done / 1000))} UTC", flush=True)
-            except Exception as exc:  # noqa: BLE001  the engines of a failed chunk may be half-stepped: reopen from the database
-                print(f"[후보 리그] 규칙 리그 처리 실패 ({type(exc).__name__}: {exc}), 데이터베이스에서 다시 엽니다", flush=True)
-                open_rule_league()
         if a.cmd == "once":
             return 0
         time.sleep(a.every)

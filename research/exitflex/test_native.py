@@ -50,6 +50,7 @@ Layout, DeepSeek part (after the banner "native_ds.py")
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import os
 import pickle
@@ -1408,6 +1409,45 @@ def test_core_n13_masks_equal_run_signals_on_synthetic_bars(pid, name, tf, combo
             assert np.array_equal(np.isfinite(r["lvl_long"]), lo) and np.array_equal(np.isfinite(r["lvl_short"]), sh)
 
 
+# ====================================================================================================== expect, safeguards
+@pytest.mark.parametrize("pid,name,tf,combo", [next(p for p in PICKS if p[1] == nm) for nm in NAMES], ids=list(NAMES))
+def test_core_expect_is_checked_against_the_modules_entry_flags(pid, name, tf, combo):
+    """native_arrays(expect=(long, short)): what the runner passes (run.signals on the same frame) is asserted equal to the module's
+    own entry flags, for all eight strategies (D12). A wrong flag or a wrong length raises."""
+    M = R.core_module(name)
+    for cb in [combo] + ([LOOSE[name]] if name in LOOSE else []):
+        df = rand_frame(21, 900, tf, sigma=0.012)
+        lo, sh = (np.asarray(x, bool) for x in M.signals(df, tf, **cb))
+        ref = arrays_of(N.native_arrays(name, df, tf, cb))
+        got = arrays_of(N.native_arrays(name, df, tf, cb, expect=(lo, sh)))
+        assert ref.keys() == got.keys() and all(same(ref[k], got[k]) for k in ref)
+        for bad in ((~lo, sh), (lo, ~sh)):
+            with pytest.raises(AssertionError):
+                N.native_arrays(name, df, tf, cb, expect=bad)
+        with pytest.raises(AssertionError):
+            N.native_arrays(name, df, tf, cb, expect=(lo[:-1], sh[:-1]))
+    N.native_arrays(name, df.iloc[:0], tf, combo, expect=(np.zeros(0, bool), np.zeros(0, bool)))       # an empty frame is fine
+
+
+@pytest.mark.parametrize("mod", ("native.py", "native_ds.py"))
+def test_core_the_native_modules_have_no_bare_assert_statements(mod):
+    """A bare ``assert`` is removed by ``python -O``; every safeguard of the two modules is an explicit raise."""
+    with open(os.path.join(HERE, mod)) as fh:
+        tree = ast.parse(fh.read())
+    assert [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Assert)] == []
+
+
+def test_core_require_real_turns_a_skip_into_a_failure(monkeypatch):
+    """EXITFLEX_REQUIRE_REAL (the pin and the A1 rerun): a real-data test that cannot run FAILS instead of being skipped."""
+    me = sys.modules[__name__]
+    monkeypatch.setattr(me, "REQUIRE_REAL", False)
+    with pytest.raises(pytest.skip.Exception):
+        skip_or_fail("no data")
+    monkeypatch.setattr(me, "REQUIRE_REAL", True)
+    with pytest.raises(pytest.fail.Exception):
+        skip_or_fail("no data")
+
+
 # ====================================================================================================== real select-period bars
 @pytest.fixture(scope="module")
 def real():
@@ -1489,8 +1529,8 @@ def test_core_n13_masks_equal_run_signals_on_real_select_bars(real, pid, name, t
 @pytest.mark.parametrize("pid,name,tf,combo", PICKS, ids=PICK_IDS)
 def test_core_every_pick_on_real_select_bars_runs_and_is_armed_at_the_signal(real, pid, name, tf, combo):
     df = real.frame("DOGEUSDT", tf)
-    r = N.native_arrays(name, df, tf, combo)
     lo, sh = real.signals(name, "DOGEUSDT", tf, combo)
+    r = N.native_arrays(name, df, tf, combo, expect=(lo, sh))                   # the runner passes run.signals: asserted equal
     n = len(df)
     assert all(len(a) == n for a in arrays_of(r).values())
     cl = df["close"].to_numpy(float)
@@ -1894,6 +1934,104 @@ def test_ds_hand_f12_no_target_when_there_is_no_earlier_swing_high(side):
     assert (lg if side > 0 else sh)[s]
     r = calc(df, "1h", "F12_MSS_DISP", combo)
     assert np.isnan(r.tgt_l[s]) and np.isnan(r.tgt_s[s])            # NaN = none (C7): the hard stop and the structure act
+
+
+# ---------------------------------------------------------------- the z flags (PREREG 6; native_ds DECISIONS 14)
+def engine_latches(df, k):
+    """(live swing low, live swing high) per bar from a test-owned copy of the loop of ``ds_defs.structure`` on the raw bars (the
+    pivots from the library, then the engine's latches ``lo_bos`` / ``hi_bos``, each recorded after the bar's own confirmation
+    and before its break test). Independent of ``native_ds.live_swing``, which replays them from the arrays the engine exports."""
+    h, l, c = (df[x].to_numpy(float) for x in ("high", "low", "close"))
+    ph, pl = D.C.pivots_conf(h, l, k)
+    n = len(c)
+    hi_lvl = lo_lvl = np.nan
+    hi_bos = lo_bos = False
+    z_l, z_s = np.zeros(n, bool), np.zeros(n, bool)
+    for t in range(n):
+        if ph[t]:
+            hi_lvl, hi_bos = h[t - k], True
+        if pl[t]:
+            lo_lvl, lo_bos = l[t - k], True
+        z_l[t], z_s[t] = lo_bos, hi_bos
+        up = hi_bos and c[t] > hi_lvl
+        dn = lo_bos and c[t] < lo_lvl
+        if up and not dn:
+            hi_bos = False
+        elif dn and not up:
+            lo_bos = False
+    return z_l, z_s
+
+
+@pytest.mark.parametrize("side", (1, -1))
+def test_ds_f12_z_hand_path_a_live_level_exists_between_its_confirmation_and_its_break(side):
+    """path_mss, swing_k 2, derived by hand. Swing lows turn at bars 13, 23, 31, 43 (confirmed 2 bars later: 15, 25, 33, 45); the
+    first leg is flat, so the first swing high is the turn at 17 (confirmed 19); the others turn at 27, 39, 46 (confirmed 29, 41, 48);
+    bar 35 is not a turn (the rise goes on).
+    Long side, z_l (a live swing low): none before bar 15; the low of bar 13 (89.1) is broken by the close of bar 22 (87.67), which
+    is the FIRST break of the series (state 0: no bos / mss flag); nothing is live at 23 and 24; the low of bar 23 is confirmed at 25
+    and stays live (the next ones, 87.1 and 93.1, are confirmed at 33 and 45); the close of bar 50 (91.6) breaks 93.1 (mss_dn, the
+    exit of the long entered by the MSS at bar 34); nothing is live at bar 51.
+    z_s (a live swing high): none before 19; the high of bar 27 (93.9, in force from 29) is broken by the close of bar 34 (94.75,
+    the MSS = the entry); nothing is live at 35 to 40; the high of bar 39 is confirmed at 41 and is never broken."""
+    combo = dict(swing_k=2, disp_atr=0.5)
+    base = path_mss()
+    df = base if side > 0 else ds_mirror(base)
+    r = calc(df, "1h", "F12_MSS_DISP", combo)
+    no_low = sorted(set(range(0, 15)) | {23, 24, 51})
+    no_high = sorted(set(range(0, 19)) | set(range(35, 41)))
+    zl, zs = (r.z_l, r.z_s) if side > 0 else (r.z_s, r.z_l)               # the mirror turns lows into highs
+    fl, fs = (r.lx, r.sx) if side > 0 else (r.sx, r.lx)
+    assert np.flatnonzero(~zl).tolist() == no_low
+    assert np.flatnonzero(~zs).tolist() == no_high
+    assert r.z_l.dtype == bool and r.z_s.dtype == bool and len(r.z_l) == len(df)
+    # the flags can be true only where z is: the break of bar 50 (exit of the long), the MSS of bar 34 (the short side's flag)
+    assert np.flatnonzero(fl).tolist() == [50] and not fl[22] and zl[22]             # bar 22: the state-0 break has no flag
+    assert 34 in np.flatnonzero(fs).tolist() and zs[34]
+    assert not (fl & ~zl).any() and not (fs & ~zs).any()
+    # a shortcut "latch = confirmation | (previous latch and not a flagged break)" misses the state-0 break of bar 22: bars 23 and 24
+    # would stay live although the level is broken (the reason live_swing replays the engine's rule instead)
+    S = D.structure(base["open"].to_numpy(), base["high"].to_numpy(), base["low"].to_numpy(), base["close"].to_numpy(), 2)
+    naive = np.zeros(len(base), bool)
+    for t in range(len(base)):
+        naive[t] = S["pl_conf"][t] or (t > 0 and naive[t - 1] and not (S["bos_dn"][t - 1] or S["mss_dn"][t - 1]))
+    assert naive[23] and naive[24] and not naive[:15].any()
+
+
+@pytest.mark.parametrize("k", (2, 3, 5))
+@pytest.mark.parametrize("seed", (1, 2, 3))
+def test_ds_f12_z_equals_an_independent_replay_of_the_engine(k, seed):
+    tf = "1h"
+    df = rand_df(seed, 2500, tf, vol=0.012)
+    r = calc(df, tf, "F12_MSS_DISP", dict(swing_k=k, disp_atr=0.3))
+    z_l, z_s = engine_latches(df, k)
+    assert ds_same(r.z_l, z_l) and ds_same(r.z_s, z_s)
+    assert z_l.any() and (~z_l).sum() > k and z_s.any() and (~z_s).sum() > k       # both values occur on both sides
+    assert r.lx.any() and r.sx.any()
+    assert not (r.lx & ~r.z_l).any() and not (r.sx & ~r.z_s).any()                # a flag is true only where z is
+    # the warm-up: no swing is confirmed before bar 2k, so nothing is live before it
+    assert not r.z_l[:2 * k].any() and not r.z_s[:2 * k].any()
+
+
+@pytest.mark.parametrize("name", ND.NAMES)
+def test_ds_z_flags_are_attributes_not_tuple_elements(name):
+    tf, combo = DENSE[name]
+    df = rand_df(3, 900, tf)
+    r = calc(df, tf, name, combo)
+    n = len(df)
+    for z in (r.z_l, r.z_s):
+        assert z.dtype == bool and z.shape == (n,)
+    assert len(r) == 6 and tuple(r.keys()) == ("lx", "sx", "inv_l", "inv_s", "tgt_l", "tgt_s")       # the unpacking of A.0 is unchanged
+    assert r["z_l"] is r.z_l and r.get("z_s") is r.z_s and r.get("z_x", 7) == 7
+    for clone in (pickle.loads(pickle.dumps(r)), copy.copy(r), copy.deepcopy(r)):
+        assert isinstance(clone, ND.NativeDS) and ds_same(clone.z_l, r.z_l) and ds_same(clone.z_s, r.z_s)
+        assert all(ds_same(a, b) for a, b in zip(r, clone))
+    assert ND.NativeDS._make(tuple(r)).z_l is None                    # a bare six-array tuple: None = "True everywhere" for normalize_f11
+    if name != "F12_MSS_DISP":                                         # every other strategy can fire at every bar (DECISIONS 14)
+        assert r.z_l.all() and r.z_s.all()
+    r.z_l[:] = False                                                   # fresh arrays: changing a result does not touch the next call
+    r.z_s[:] = False
+    r2 = calc(df, tf, name, combo)
+    assert r2.z_l.any() and r2.z_s.any()
 
 
 def path_pvt():
@@ -2556,6 +2694,66 @@ def test_ds_f7_rf_triple_is_not_the_opposite_signal_exit():
     assert earlier >= 10 and later == 0
 
 
+# ====================================================================================================== python -O
+_DASH_O_SCRIPT = r"""
+import sys
+if __debug__:
+    print("NOT-DASH-O")
+    sys.exit(3)
+import numpy as np, pandas as pd
+sys.path[:0] = [%(here)r, %(root)r]
+import native, native_ds
+rng = np.random.default_rng(5)
+n = 700
+c = 100.0 * np.exp(np.cumsum(rng.normal(0, 0.012, n)))
+o = np.r_[c[0], c[:-1]]
+h = np.maximum(o, c) * (1 + np.abs(rng.normal(0, 0.006, n)))
+l = np.minimum(o, c) * (1 - np.abs(rng.normal(0, 0.006, n)))
+ts = pd.to_datetime(1640995200000 + np.arange(n) * 3600000, unit="ms", utc=True)
+df = pd.DataFrame(dict(ts=ts, open=o, high=h, low=l, close=c, volume=rng.uniform(1, 5, n)))
+df.attrs["tf"] = "1h"
+D = native_ds.ds_module()
+combo = dict(swing_k=2, disp_atr=0.3)
+lg, sh = (np.asarray(x, bool) for x in D.signals(df, "1h", "F12_MSS_DISP", ctx=None, coin="BTCUSD", cache={}, **combo))
+r = native_ds.native(df, "1h", "F12_MSS_DISP", combo, None, "BTCUSD", expect=(lg, sh))
+assert_ok = r.z_l.any() and lg.any()
+if not assert_ok:
+    print("VACUOUS")
+    sys.exit(4)
+for bad in ((~lg, sh), (lg, ~sh)):
+    try:
+        native_ds.native(df, "1h", "F12_MSS_DISP", combo, None, "BTCUSD", expect=bad)
+    except AssertionError:
+        print("DS-RAISED")
+    else:
+        print("DS-SILENT")
+try:
+    native_ds._need(False, "x")
+except AssertionError:
+    print("NEED-RAISED")
+M = native.strategy_module("OBV_S")
+cb = dict(obv_ma_len=5)
+lo, sh2 = (np.asarray(x, bool) for x in M.signals(df, "1h", **cb))
+native.native_arrays("OBV_S", df, "1h", cb, expect=(lo, sh2))
+try:
+    native.native_arrays("OBV_S", df, "1h", cb, expect=(~lo, sh2))
+except AssertionError:
+    print("CORE-RAISED")
+else:
+    print("CORE-SILENT")
+"""
+
+
+def test_ds_safeguards_survive_python_dash_O():
+    """Under ``python -O`` a bare assert disappears; the explicit raises of the two modules (``expect``, the recovery checks) must not."""
+    out = subprocess.run([sys.executable, "-O", "-c", _DASH_O_SCRIPT % dict(here=HERE, root=ROOT)], capture_output=True, text=True,
+                         timeout=300)
+    assert out.returncode == 0, out.stderr[-2000:]
+    lines = out.stdout.split()
+    assert lines.count("DS-RAISED") == 2 and "DS-SILENT" not in lines
+    assert "NEED-RAISED" in lines and "CORE-RAISED" in lines and "CORE-SILENT" not in lines
+
+
 # ====================================================================================================== real data (select period)
 def real_inputs(real, sym, tf):
     """(chart frame, ctx, coin) of the select-period bars; ``real`` is the module's ``real`` fixture."""
@@ -2584,6 +2782,9 @@ def test_ds_real_parity_with_run_signals_levels_and_quiet_own_side(real, pick, s
     elif name == "F12_MSS_DISP":
         assert not fin(r.inv_l).any() and not fin(r.inv_s).any()
         assert ((~fin(r.tgt_l)) | lg).all() and ((~fin(r.tgt_s)) | sh).all()
+        zl, zs = engine_latches(df, D._resolve(name, combo)["swing_k"])           # the live-level flags, replayed from the raw bars
+        assert ds_same(r.z_l, zl) and ds_same(r.z_s, zs)
+        assert not (r.lx & ~r.z_l).any() and not (r.sx & ~r.z_s).any()
     else:
         assert not any(fin(a).any() for a in (r.inv_l, r.inv_s, r.tgt_l, r.tgt_s))
     if name == "F7_RF_ONLY":                                                   # Known limit 11 on the real picks

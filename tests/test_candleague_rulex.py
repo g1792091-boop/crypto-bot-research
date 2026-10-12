@@ -46,6 +46,16 @@ J0 = 120                                    # the signal bar closes at minute 12
 C0 = T0 + J0 * MIN
 
 
+def cfg_of(rule, **kw):
+    """A rule config for the core pool only (the DeepSeek pool runs its current exit): PREREG 11.2's accounts."""
+    return RX.normalize_config({"pools": {"core": rule}, **kw})
+
+
+def rules_doc(rule, **kw):
+    """The text of an enabled rules.json for the core pool."""
+    return json.dumps({"enabled": True, "pools": {"core": rule}, **kw})
+
+
 def at(j: int) -> int:
     return T0 + j * MIN
 
@@ -575,9 +585,9 @@ def test_the_fingerprint_of_existing_accounts_is_what_it_was():
     body = json.dumps([[a["id"], a["kind"], a["name"], a["tf"], a["combo"], a["exit"], a["role"], a.get("size", 1.0)]
                        for a in accts], sort_keys=True)
     assert RN.fingerprint(accts) == hashlib.sha256(f"{RN.VERSION}|{body}".encode()).hexdigest()
-    cfg = RX.normalize_config({"variants": ["F7.N12.a"]})
+    cfg = cfg_of("F7.N12.a")
     r1 = RX.accounts(C.load(), cfg)
-    r2 = RX.accounts(C.load(), RX.normalize_config({"variants": ["F7.N24.a"]}))
+    r2 = RX.accounts(C.load(), cfg_of("F7.N24.a"))
     assert RN.fingerprint(r1) != RN.fingerprint(r2) != RN.fingerprint(accts) and len(RN.fingerprint(r1)) == 64
 
 
@@ -839,15 +849,17 @@ def test_records_are_known_at_the_close_and_equal_a_frame_cut_there():
 
 # ---------------------------------------------------------------- signals and records per chunk
 class StubStrategies:
-    """Flags by bar number: longs every 9th bar, shorts every 6th, both on the bars in common."""
+    """Flags by bar number: longs every 9th bar, shorts every 6th except where a long is (no pick carries both flags, PREREG 3);
+    ``both=True`` keeps the bars in common with both flags (the guard test)."""
 
-    def __init__(self):
-        self.calls = 0
+    def __init__(self, both=False):
+        self.calls, self.both = 0, both
 
     def signals(self, acct_, df, sym, frames_btc):
         self.calls += 1
         n = (df["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) // L.TF_MS[acct_["tf"]]
-        return (n % 9 == 3), (n % 6 == 3)
+        lo, sh = (n % 9 == 3), (n % 6 == 3)
+        return lo, (sh if self.both else sh & ~lo)
 
     def strength(self, name):
         return None
@@ -859,8 +871,18 @@ def _rule_cands(tf="15m", exit_="tp3R|2"):
     return [c]
 
 
-def test_rule_accounts_are_offered_both_sides_and_a_coin_flip_one_seeded_side():
-    cfg = RX.normalize_config({"variants": ["F3.a"]})
+def test_a_bar_with_both_flags_stops_the_run_and_a_coin_flip_takes_one_seeded_side():
+    accts = RX.accounts(_rule_cands("15m"), cfg_of("F3.a"))
+    with pytest.raises(RX.BothFlags):
+        RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, START, START + DAY, START, StubStrategies(both=True))
+    # the twins alone (no rule family) are guarded the same way: they are the study's E0
+    twins = [a for a in accts if a["rule"]["family"] is None]
+    with pytest.raises(RX.BothFlags):
+        RX.chunk_rule(LIB, PS.FrameSource(DATA), twins, TP.SYMS, START, START + DAY, START, StubStrategies(both=True))
+
+
+def test_rule_accounts_are_offered_every_flag_and_a_coin_flip_one_seeded_side():
+    cfg = cfg_of("F3.a")
     accts = RX.accounts(_rule_cands("15m"), cfg)
     by, notes = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, START, START + DAY, START,
                               StubStrategies())
@@ -869,29 +891,28 @@ def test_rule_accounts_are_offered_both_sides_and_a_coin_flip_one_seeded_side():
         for aid, o in items:
             if isinstance(o, Signal):
                 sigs.setdefault((aid, o.symbol, close), []).append(o.side)
-    rule_id = "core-S2-15m-1-f"
-    both = [k for k in sigs if k[0] == rule_id and len(sigs[k]) == 2]
-    assert both and all(sigs[k] == [1, -1] for k in both)                       # long first
-    for aid in (rule_id, rule_id + "-live", "core-S2-15m-1-f0", "core-S2-15m-1-f0-live"):
+    rule_id = "core-S2-15m-1-nq"
+    assert sigs and all(len(v) == 1 for v in sigs.values()) and {v[0] for v in sigs.values()} == {1, -1}      # one side per bar
+    for aid in (rule_id, "core-S2-15m-1-n", "core-S2-15m-1-eq", "core-S2-15m-1-e"):
         assert {k[1:]: v for k, v in sigs.items() if k[0] == aid} == {k[1:]: v for k, v in sigs.items() if k[0] == rule_id}
-    flip = {k[1:]: v for k, v in sigs.items() if k[0] == rule_id + "-flip"}
+    flip = {k[1:]: v for k, v in sigs.items() if k[0] == "core-S2-15m-1-nflip"}
     assert set(flip) == {k[1:] for k in sigs if k[0] == rule_id} and all(len(v) == 1 for v in flip.values())
     for (sym, close), v in flip.items():
-        assert v == [L.flip_side(rule_id + "-flip", close)]
+        assert v == [L.flip_side("core-S2-15m-1-nflip", close)]
     # the stop is the pick's exit (2 ATR) and a rule account's signal carries its seed and its style
     some = next(o for c, items in by.items() for aid, o in items if aid == rule_id and isinstance(o, Signal))
     assert some.meta["stop_dist"] == pytest.approx(2 * some.atr) and some.meta["rx0"] == {} and some.meta["style"] == "rule:F3.a"
     # a record for every chart close of every coin, for the rule accounts only (the twins get none)
     recs = [(aid, o.d) for items in by.values() for aid, o in items if isinstance(o, RX.RuleClose)]
-    assert {aid for aid, _ in recs} == {rule_id, rule_id + "-live", rule_id + "-flip"}
+    assert {aid for aid, _ in recs} == {rule_id, "core-S2-15m-1-n", "core-S2-15m-1-nflip"}
     mine = [d for aid, d in recs if aid == rule_id]
     assert {d["sym"] for d in mine} == set(TP.SYMS) and len(mine) == 2 * 96 and all(d["k"] == "p" and "lf" in d for d in mine)
     assert all(START < d["t"] <= START + DAY for d in mine) and not notes
 
 
 def test_q15_gets_15m_records_on_a_1h_pick_and_a_structure_rule_gets_its_seed():
-    cfg = RX.normalize_config({"variants": ["F1.w3.a.q15"]})
-    accts = [a for a in RX.accounts(_rule_cands("1h"), cfg) if a["id"].endswith("-f")]
+    cfg = cfg_of("F1.w3.a.q15")
+    accts = [a for a in RX.accounts(_rule_cands("1h"), cfg) if a["id"].endswith("-nq")]
     by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, START, START + DAY, START, StubStrategies())
     recs = [o.d for items in by.values() for aid, o in items if isinstance(o, RX.RuleClose) and o.d["sym"] == "BTCUSDT"]
     p, q = [d for d in recs if d["k"] == "p"], [d for d in recs if d["k"] == "q"]
@@ -946,9 +967,9 @@ def test_f11_plug_in_fires_on_the_strategys_own_exit_flags_and_may_carry_a_targe
         assert RX.check(cands, cfg) == []
         by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), RX.accounts(cands, cfg), TP.SYMS, START, START + DAY, START,
                               StubStrategies())
-        ds = [o.d for items in by.values() for aid, o in items if aid == "core-S2-15m-1-f" and isinstance(o, RX.RuleClose)]
+        ds = [o.d for items in by.values() for aid, o in items if aid == "core-S2-15m-1-nq" and isinstance(o, RX.RuleClose)]
         assert calls and all("xl" in d and "xs" in d for d in ds) and {d["xl"] for d in ds} == {True, False}
-        seeds = [o.meta["rx0"] for items in by.values() for aid, o in items if isinstance(o, Signal) and aid == "core-S2-15m-1-f"]
+        seeds = [o.meta["rx0"] for items in by.values() for aid, o in items if isinstance(o, Signal) and aid == "core-S2-15m-1-nq"]
         assert seeds and all("target" in s for s in seeds)
     finally:
         RX.F11_PROVIDERS.pop("S2_ST_ROC", None)
@@ -973,7 +994,7 @@ def test_accounts_exist_only_with_a_config_and_follow_the_prereg(tmp_path):
     assert not any(a["kind"] == "ds" for a in accts) and all(C.ID_RE.match(a["id"]) for a in accts)
     by = {a["id"]: a for a in accts}
     pid = core[0]["id"]
-    f, live, flip, f0, f0l = (by[pid + s] for s in ("-f", "-f-live", "-f-flip", "-f0", "-f0-live"))
+    f, live, flip, f0, f0l = (by[pid + s] for s in ("-nq", "-n", "-nflip", "-eq", "-e"))
     assert (f["size"], live["size"], flip["size"], f0["size"], f0l["size"]) == (0.25, 1.0, 0.25, 0.25, 1.0)
     assert [x["role"] for x in (f, live, flip, f0, f0l)] == list(RX.ROLES)
     assert f["rule"]["id"] == "F7.N24.b" and f0["rule"]["family"] is None and flip["of"] == f["id"]
@@ -983,7 +1004,7 @@ def test_accounts_exist_only_with_a_config_and_follow_the_prereg(tmp_path):
     path.write_text(json.dumps({"variants": ["F1.w3.a", "F5.P1.g50.a"], "picks": [pid]}))
     two = RX.load_accounts(str(path), cands)
     assert sorted(a["id"] for a in two) == sorted(pid + s for s in ("-f1", "-f1-live", "-f1-flip", "-f2", "-f2-live",
-                                                                    "-f2-flip", "-f0", "-f0-live"))
+                                                                    "-f2-flip", "-eq", "-e"))
     # refusals: a config that cannot be run says why
     for doc in ({"variants": []}, {"variants": ["F1.w3.a", "F1.w3.b", "F2.n10.a"]}, {"variants": ["F9.a", "F9.a"]},
                 {"variants": ["F2.n10.a.q15"]}, {"variants": ["F1.w3.a"], "picks": ["nope"]}, {"variants": ["F1.w3.a"], "picks": 3},
@@ -999,10 +1020,10 @@ def test_accounts_exist_only_with_a_config_and_follow_the_prereg(tmp_path):
 
 def test_the_command_line_checks_the_config(tmp_path, capsys):
     p = tmp_path / "r.json"
-    p.write_text(json.dumps({"variants": ["F3.a"]}))
+    p.write_text(rules_doc("F3.a"))
     assert RX.main(["check", "--rules", str(p)]) == 0 and "115 rule accounts" in capsys.readouterr().out
     assert RX.main(["check", "--rules", str(tmp_path / "none.json")]) == 0 and "no rule config" in capsys.readouterr().out
-    p.write_text(json.dumps({"variants": ["F3.z"]}))
+    p.write_text(rules_doc("F3.z"))
     assert RX.main(["check", "--rules", str(p)]) == 2
     assert RX.main(["ids"]) == 0 and capsys.readouterr().out.count("\n") == 82
 
@@ -1013,7 +1034,7 @@ RULE = "F1.w2.a"
 
 def _league(db, rule=RULE, tf="15m", exit_="tp1R|1", extra=(), start=START, cands=None, **kw):
     cands = cands or _rule_cands(tf, exit_)
-    accts = list(extra) + RX.accounts(cands, RX.normalize_config({"variants": [rule]}))
+    accts = list(extra) + RX.accounts(cands, cfg_of(rule))
     return RN.League(RN.open_db(str(db)), accts, TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA),
                      TP._steps_from(DATA), TP.SYMS, start_ms=start, log=lambda s: None, **kw)
 
@@ -1037,13 +1058,13 @@ def test_rule_exits_happen_in_the_league_and_the_twin_has_none(whole):
     for a, _e, _x, reason, _p in rows:
         by.setdefault(a, set()).add(reason)
     pid = "core-S2-15m-1"
-    assert "RULE" in by[pid + "-f"] and "RULE" in by[pid + "-f-live"] and "RULE" in by[pid + "-f-flip"]
-    assert "RULE" not in by.get(pid + "-f0", set()) and "RULE" not in by.get(pid + "-f0-live", set())
+    assert "RULE" in by[pid + "-nq"] and "RULE" in by[pid + "-n"] and "RULE" in by[pid + "-nflip"]
+    assert "RULE" not in by.get(pid + "-eq", set()) and "RULE" not in by.get(pid + "-e", set())
     n = lambda a: sum(1 for r in rows if r[0] == a)  # noqa: E731
-    assert n(pid + "-f0") > 0 and n(pid + "-f") >= n(pid + "-f0") - 3                # leaving earlier frees the account
+    assert n(pid + "-eq") > 0 and n(pid + "-nq") >= n(pid + "-eq") - 3                # leaving earlier frees the account
     # the rule accounts run at the sizes of the plan
-    assert whole.engines[pid + "-f"].s.tiers[0].margin_frac == pytest.approx(0.125) and whole.engines[pid + "-f-live"].s.tiers[0].margin_frac == 0.5
-    t = next(json.loads(d) for a, d in whole.conn.execute("SELECT account, data FROM trades") if a == pid + "-f")
+    assert whole.engines[pid + "-nq"].s.tiers[0].margin_frac == pytest.approx(0.125) and whole.engines[pid + "-n"].s.tiers[0].margin_frac == 0.5
+    t = next(json.loads(d) for a, d in whole.conn.execute("SELECT account, data FROM trades") if a == pid + "-nq")
     assert t["strategy_style"] == "rule:F7.N2.a"
 
 
@@ -1119,7 +1140,7 @@ def test_existing_accounts_are_unchanged_by_a_rule_league_next_to_them(tmp_path)
     assert flat(a1) == flat(a2) and flat(a1)
     # the twin is the plain engine: replaying its own signals through candleague.exits.make_engine gives its trades
     by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), mixed.rule_accts, TP.SYMS, START, START + 2 * DAY, START)
-    twin = "core-S2-15m-1-f0"
+    twin = "core-S2-15m-1-eq"
     only = {c: [(aid, o) for aid, o in items if aid == twin and isinstance(o, Signal)] for c, items in by.items()}
     ref = X.make_engine("tp1R|1", TP.BRACKETS, TP.SPECS, book=twin, size=0.25)
     steps = TP._steps_from(DATA)(None, list(TP.SYMS), START, START + 2 * DAY)
@@ -1131,11 +1152,11 @@ def test_existing_accounts_are_unchanged_by_a_rule_league_next_to_them(tmp_path)
 def test_snapshots_of_the_rule_league(tmp_path, whole):
     doc = RN.write_snapshots(str(tmp_path / "snap"), whole, START + 3 * DAY + 60_000)
     rows = {r["id"]: r for r in doc["accounts"]}
-    f = rows["core-S2-15m-1-f"]
+    f = rows["core-S2-15m-1-nq"]
     assert f["rule"] == "F7.N2.a" and "시간 청산" in f["rule_ko"] and f["pick"] == "core-S2-15m-1" and f["size"] == 0.25
-    assert f["exit_ko"] and rows["core-S2-15m-1-f0"]["rule"] == "E0" and "규칙 없음" in rows["core-S2-15m-1-f0"]["rule_ko"]
+    assert f["exit_ko"] and rows["core-S2-15m-1-eq"]["rule"] == "E0" and "규칙 없음" in rows["core-S2-15m-1-eq"]["rule_ko"]
     book = json.load(open(tmp_path / "snap" / "trades.json"))
-    assert any(t["exit_reason"] == "RULE" for t in book["core-S2-15m-1-f"]["trades"])
+    assert any(t["exit_reason"] == "RULE" for t in book["core-S2-15m-1-nq"]["trades"])
     assert doc["judge"] == {}                                                    # the per-trade rule is for the cand accounts
 
 
@@ -1152,7 +1173,7 @@ def test_a_rule_league_starts_at_its_install_and_a_change_keeps_the_old_database
                 symbols=TP.SYMS, log=lambda s: None, clock=lambda: NOW)
     assert RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args) is None
     assert not (tmp_path / RX.DB_NAME).exists()                                    # no config file: no rule league
-    rules.write_text(json.dumps({"variants": ["F7.N2.a"]}))
+    rules.write_text(rules_doc("F7.N2.a"))
     rl = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
     assert rl.reset and rl.start_ms == NOW // RN.FIVE * RN.FIVE and rl.done == rl.start_ms
     assert os.path.exists(tmp_path / "rule_league_start.json") and not list(tmp_path.glob("rule_league_from_*.db"))
@@ -1160,7 +1181,7 @@ def test_a_rule_league_starts_at_its_install_and_a_change_keeps_the_old_database
     rows = _trades(rl)
     assert rows and min(r[1] for r in rows) > rl.start_ms                          # nothing before the install
     # the rules change: the old database is copied next to it first, the league starts over from the same start
-    rules.write_text(json.dumps({"variants": ["F7.N3.a"]}))
+    rules.write_text(rules_doc("F7.N3.a"))
     rl2 = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
     assert rl2.reset and rl2.start_ms == rl.start_ms and _trades(rl2) == []
     copies = list(tmp_path.glob("rule_league_from_*.db"))
@@ -1173,7 +1194,7 @@ def test_a_rule_league_starts_at_its_install_and_a_change_keeps_the_old_database
     again = RN.make_rule_league(str(rules), _rule_cands("15m", "tp1R|1"), str(tmp_path / RX.DB_NAME), **args)
     assert not again.reset and again.start_ms == rl.start_ms                       # a plain restart continues
     # backup_if_reset for the install script works on the rule database too
-    rules.write_text(json.dumps({"variants": ["F7.N4.a"]}))
+    rules.write_text(rules_doc("F7.N4.a"))
     accts = RX.load_accounts(str(rules), _rule_cands("15m", "tp1R|1"))
     assert RN.plan_start(str(tmp_path / RX.DB_NAME), accts)[0] is True
 
@@ -1228,21 +1249,21 @@ def test_the_service_runs_the_rule_league_next_to_the_main_one(tmp_path, monkeyp
     assert not (tmp_path / RX.DB_NAME).exists() and not (snap / "rule").exists() and main_doc["done_ms"] == START + 2 * DAY + 600_000
     only = _trades_of(db)
     # a config file: the rule league appears, with its own database, start file and snapshots
-    rules.write_text(json.dumps({"variants": ["F7.N2.a"]}))
+    rules.write_text(rules_doc("F7.N2.a"))
     assert RN.main(args) == 0
     assert (tmp_path / RX.DB_NAME).exists() and (tmp_path / "rule_league_start.json").exists()
     rdoc = json.load(open(snap / "rule" / "league.json"))
     assert rdoc["start_ms"] == START and rdoc["done_ms"] == main_doc["done_ms"] and len(rdoc["accounts"]) == 5
-    assert any(t["exit_reason"] == "RULE" for t in json.load(open(snap / "rule" / "trades.json"))["core-S2-15m-1-f"]["trades"])
+    assert any(t["exit_reason"] == "RULE" for t in json.load(open(snap / "rule" / "trades.json"))["core-S2-15m-1-nq"]["trades"])
     assert json.load(open(snap / "league.json"))["accounts"] == main_doc["accounts"]          # the main league did not move
     assert _trades_of(db) == only
     # a config that cannot be run never stops the main league
-    rules.write_text(json.dumps({"variants": ["F2.n10.a.q15"]}))
+    rules.write_text(rules_doc("F2.n10.a.q15"))
     assert RN.main(args) == 0
     out = capsys.readouterr().out
     assert "규칙 리그를 열지 못했습니다" in out and _trades_of(db) == only
     # a rule league that fails in a pass is reopened from its database and the main league goes on
-    rules.write_text(json.dumps({"variants": ["F7.N2.a"]}))
+    rules.write_text(rules_doc("F7.N2.a"))
     boom = {"n": 0}
     orig = RX.chunk_rule
 
@@ -1273,7 +1294,7 @@ def test_the_backup_command_copies_the_rule_database_before_a_change(tmp_path, m
     cands = _rule_cands("15m", "tp1R|1")
     _main_env(monkeypatch, tmp_path, cands, START + DAY)
     db, rules = tmp_path / "league.db", tmp_path / "rules.json"
-    rules.write_text(json.dumps({"variants": ["F7.N2.a"]}))
+    rules.write_text(rules_doc("F7.N2.a"))
     rl = RN.make_rule_league(str(rules), cands, str(tmp_path / RX.DB_NAME), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA),
                              TP._steps_from(DATA), TP.SYMS, log=lambda s: None, clock=lambda: START)
     rl.advance(START + 6 * 3_600_000)
@@ -1281,7 +1302,7 @@ def test_the_backup_command_copies_the_rule_database_before_a_change(tmp_path, m
     capsys.readouterr()
     assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0
     assert "규칙 리그: 기록 복사 필요 없음" in capsys.readouterr().out and not list(tmp_path.glob("rule_league_from_*.db"))
-    rules.write_text(json.dumps({"variants": ["F7.N3.a"]}))                        # the install changes the rules
+    rules.write_text(rules_doc("F7.N3.a"))                        # the install changes the rules
     assert RN.main(["backup", "--db", str(db), "--rules", str(rules)]) == 0
     out = capsys.readouterr().out
     assert "규칙 리그: 새로 시작하기 전 기록 복사" in out and len(list(tmp_path.glob("rule_league_from_*.db"))) == 1
@@ -1296,7 +1317,7 @@ def test_q15_on_a_1h_pick_in_the_league_checks_on_15m_closes_and_survives_restar
     full = mk(tmp_path / "f.db")
     full.advance(START + 3 * DAY)
     rows = _trades(full)
-    pid = "core-S2-1h-1-f"
+    pid = "core-S2-1h-1-nq"
     rule_exits = [r for r in rows if r[0] == pid and r[3] == "RULE"]
     assert len(rows) > 20 and rule_exits
     off_hour = [r for r in rule_exits if (r[2] // 60_000) % 60 != 0]
@@ -1331,8 +1352,8 @@ def test_q15_on_a_1h_pick_in_the_league_checks_on_15m_closes_and_survives_restar
 
 def test_a_chunk_without_a_pick_close_still_gets_its_15m_records(monkeypatch):
     """The live pass is 5 minutes long: most chunks hold no hourly close, and q15 needs the 15m ones all the same."""
-    cfg = RX.normalize_config({"variants": ["F1.w3.a.q15"]})
-    accts = [a for a in RX.accounts(_rule_cands("1h"), cfg) if a["id"].endswith("-f")]
+    cfg = cfg_of("F1.w3.a.q15")
+    accts = [a for a in RX.accounts(_rule_cands("1h"), cfg) if a["id"].endswith("-nq")]
     lo, hi = START + 3 * HOUR + 5 * MIN, START + 3 * HOUR + 20 * MIN                  # one 15m close (03:15), no hourly one
     by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, lo, hi, START, StubStrategies())
     recs = [(c, o.d["k"], o.d["sym"]) for c, items in by.items() for _a, o in items if isinstance(o, RX.RuleClose)]
@@ -1340,7 +1361,7 @@ def test_a_chunk_without_a_pick_close_still_gets_its_15m_records(monkeypatch):
     # a chunk with neither gives nothing, and the base variant gets no 15m record
     by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), accts, TP.SYMS, lo, lo + 5 * MIN, START, StubStrategies())
     assert not by
-    base = [a for a in RX.accounts(_rule_cands("1h"), RX.normalize_config({"variants": ["F1.w3.a"]})) if a["id"].endswith("-f")]
+    base = [a for a in RX.accounts(_rule_cands("1h"), cfg_of("F1.w3.a")) if a["id"].endswith("-nq")]
     by, _ = RX.chunk_rule(LIB, PS.FrameSource(DATA), base, TP.SYMS, lo, hi, START, StubStrategies())
     assert not by
 
@@ -1352,7 +1373,7 @@ def test_five_minute_pieces_equal_one_run_for_q15(tmp_path, monkeypatch):
     mk = lambda db: _league(db, rule="F1.w2.b.q15", tf="1h", exit_="tp1R|1", cands=cands)  # noqa: E731
     scout = mk(tmp_path / "s.db")
     scout.advance(START + 3 * DAY)
-    first = min(r[2] for r in _trades(scout) if r[0] == "core-S2-1h-1-f" and r[3] == "RULE" and (r[2] // MIN) % 60 != 0)
+    first = min(r[2] for r in _trades(scout) if r[0] == "core-S2-1h-1-nq" and r[3] == "RULE" and (r[2] // MIN) % 60 != 0)
     a = (first - 4 * HOUR) // RN.FIVE * RN.FIVE                                       # four hours before it
     whole, pieces = mk(tmp_path / "w.db"), mk(tmp_path / "p.db")
     whole.advance(a)
