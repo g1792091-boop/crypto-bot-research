@@ -632,12 +632,14 @@ def restarts_at_a_missing_minute(world, n=3):
 
 
 def restarts_in_locked_positions(world, n=9):
-    """The minute before the exit of a trade that the study closed by its lock (F13.a at quarter size on the 1h pick, at least 30 minutes held): the
-    position is open then and its lock is raised already, so a restart there has to keep the raised stop and the lock, or the exit minute is
-    missed (a restore that put the hard stop back is caught by test_negative_control_the_restart_test_catches_a_restore_that_forgets_the_raised_lock)."""
+    """The instant before the exit minute of a trade that the study closed by its lock (F13.a at quarter size on the 1h pick, at least 30 minutes
+    held; the study's exit time is the open of the exit minute, the league's bars are stamped by their close, so the last bar processed is the one
+    before): the position is open then and its lock is raised already, so a restart there has to keep the raised stop and the lock, or the exit
+    minute is missed (a restore that put the hard stop back is caught by
+    test_negative_control_the_restart_test_catches_a_restore_that_forgets_the_raised_lock)."""
     res, off = world.study("1h", "F13.a", 0.25)
     rows = [r for r in world.study_rows(res, off) if r["reason"] == "LOCK" and r["exit_time"] - r["entry_time"] >= 30 * MIN]
-    marks = sorted({r["exit_time"] - MIN for r in rows if T_START + 6 * HOUR < r["exit_time"] < T_END - 12 * HOUR})
+    marks = sorted({r["exit_time"] - 1 for r in rows if T_START + 6 * HOUR < r["exit_time"] < T_END - 12 * HOUR})
     out = []
     for m in marks:
         if all(abs(m - x) > 3 * HOUR for x in out + RESTART_AT):
