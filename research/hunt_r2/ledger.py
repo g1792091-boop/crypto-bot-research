@@ -177,9 +177,9 @@ def round1_rows(root: str, priv_dir: str | None) -> tuple:
 
 
 # ------------------------------------------------------------------ track 2
-def track2_rows(root: str, priv_dir: str | None) -> tuple:
+def track2_rows(root: str, priv_dir: str | None, pub_root: str | None = None) -> tuple:
     rows, listed, inputs, looks, pending = [], [], [], [], []
-    pt = os.path.join(root, T2_TEST)
+    pt = os.path.join(pub_root or root, T2_TEST)
     doc = _load(pt)
     inputs.append({"file": T2_TEST, "sha256": sha256_or_none(pt)})
     hashed = os.path.exists(os.path.join(root, T2_PIN))
@@ -198,7 +198,7 @@ def track2_rows(root: str, priv_dir: str | None) -> tuple:
             rows.append(_row(pid, "track 2 (hiwr v1)", "confirm", pv, ds, T2_TEST, st))
         looks.append({"study": "track 2 (hiwr v1)", "look": "confirm", "status": "run"})
     elif hashed:
-        pk = _load(os.path.join(root, T2_PICKS))
+        pk = _load(os.path.join(pub_root or root, T2_PICKS)) or _load(os.path.join(root, T2_PICKS))
         n = len(pk) if isinstance(pk, list) else len((pk or {}).get("picks") or []) if pk else None
         for i in range(n or 0):
             listed.append({"id": f"track 2 pick {i + 1}", "study": "track 2 (hiwr v1)",
@@ -296,11 +296,14 @@ def one_print(rows: list) -> dict:
 
 
 def snapshot(root: str = ROOT, priv_dir: str | None = None, r2_full: dict | None = None,
-             fullgrid_confirm: str | None = None, extra: str | None = None, when: dt.datetime | None = None) -> dict:
-    """The dated ledger (full: every p). ``r2_full`` = round 2's full test document (None before its test)."""
+             fullgrid_confirm: str | None = None, extra: str | None = None, when: dt.datetime | None = None,
+             public_root: str | None = None) -> dict:
+    """The dated ledger (full: every p). ``r2_full`` = round 2's full test document (None before its test).
+    ``public_root`` = where the other studies' public outputs lie under their repository paths (default: the
+    repository; on the round-2 server, the folder the server kit fetches the results branches into)."""
     when = when or dt.datetime.now(dt.timezone.utc)
-    r1, listed, inputs, looks = round1_rows(root, priv_dir)
-    t2, l2, in2, lk2, pend2 = track2_rows(root, priv_dir)
+    r1, listed, inputs, looks = round1_rows(public_root or root, priv_dir)
+    t2, l2, in2, lk2, pend2 = track2_rows(root, priv_dir, public_root)
     r2 = round2_rows(r2_full)
     ex, pend_x, in_x = extra_rows(extra)
     have = {r["study"] for r in r1}

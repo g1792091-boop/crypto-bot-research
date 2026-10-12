@@ -825,13 +825,24 @@ def box_stage(ctx: Ctx, real_units: dict, ranked: list, steps: list, procs: int)
 NUMBER_KEYS = ("default", "peak", "numbers", "combo")      # 10.4: a DeepSeek row's numbers (combos) are public
 
 
+def _combo_like(v) -> bool:
+    """10.4: only a combo (a dict of numbers or lists of numbers) is a DeepSeek row's public 'numbers'."""
+    if not isinstance(v, dict) or not v:
+        return False
+    for x in v.values():
+        xs = x if isinstance(x, (list, tuple)) else [x]
+        if not all(isinstance(y, (int, float, np.integer, np.floating)) and not isinstance(y, bool) for y in xs):
+            return False
+    return True
+
+
 def d11_problems(doc, path: str = "picks", under: bool = False) -> list:
     """10.4: no float under a DeepSeek row (a dict with family F3), anywhere below it, except its numbers (combos)."""
     bad = []
     if isinstance(doc, dict):
         here = under or doc.get("family") == "F3"
         for k, v in doc.items():
-            if here and k in NUMBER_KEYS:
+            if here and k in NUMBER_KEYS and _combo_like(v):
                 continue
             bad += d11_problems(v, f"{path}.{k}", here)
     elif isinstance(doc, (list, tuple)):

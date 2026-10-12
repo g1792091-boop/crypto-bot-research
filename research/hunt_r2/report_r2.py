@@ -293,12 +293,12 @@ def sec_reference(pre) -> list:
     for nm, t in (t4.get("rows") or {}).items():
         ds = t.get("family") == "F3"
         for tf, by in (t.get("timeframes") or {}).items():
-            for which in ("default", "peak"):
+            for which in ("at_default", "at_peak"):
                 x = by.get(which)
                 if x is None:
                     continue
                 anchor = " (기준)" if tf == t.get("anchor_tf") else ""
-                out.append(f"| {nm} | {tf}{anchor} | {'기본값' if which == 'default' else '찾은 값'} | "
+                out.append(f"| {nm} | {tf}{anchor} | {'기본값' if which == 'at_default' else '찾은 값'} | "
                            f"{_cell(x.get('base'), ds)} | {_cell(x.get('O1'), ds)} | {_cell(x.get('O1b'), ds)} |")
     agg = t4.get("aggregates_F1_F2_F5") or {}
     if agg:
@@ -312,7 +312,7 @@ def sec_reference(pre) -> list:
                     for v in ("base", "O1", "O1b"):
                         a = by_v.get(v)
                         cells.append("-" if not a else f"{a['names']}개 / {mult(a['median_S'])} / {pct(a['share_S_above_0'])}")
-                    out.append(f"| {FAM_KO.get(fam, fam)} | {tf} | {'기본값' if which == 'default' else '찾은 값'} | "
+                    out.append(f"| {FAM_KO.get(fam, fam)} | {tf} | {'기본값' if which == 'at_default' else '찾은 값'} | "
                                + " | ".join(cells) + " |")
     board = pre.get("owner_board") or {}
     if board:

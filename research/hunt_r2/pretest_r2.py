@@ -564,7 +564,7 @@ def four_tf_table(ctx, real_units: dict, peaks: dict, names_order: list, procs: 
     for nm in names_order:
         u = real_units[nm]
         lat = L.coarse(nm)
-        combos = [("default", lat.default)] + ([("peak", peaks[nm])] if peaks.get(nm, -1) >= 0 else [])
+        combos = [("at_default", lat.default)] + ([("at_peak", peaks[nm])] if peaks.get(nm, -1) >= 0 else [])
         for tf in L.tfs_of(nm):
             tasks.append((nm, tf, u["anchor_gate"], combos))
     res = H.pmap(_four_tf_task, tasks, procs, label="pretest four-timeframe weekend table")
@@ -575,7 +575,7 @@ def four_tf_table(ctx, real_units: dict, peaks: dict, names_order: list, procs: 
     agg = {}
     for fam in ("F1", "F2", "F5"):
         for tf in H.TF_ORDER:
-            for which in ("default", "peak"):
+            for which in ("at_default", "at_peak"):
                 for v in VARIANTS:
                     xs = [t["timeframes"][tf][which][v] for nm, t in table.items() if t["family"] == fam
                           and tf in t["timeframes"] and v in (t["timeframes"][tf].get(which) or {})]
@@ -593,12 +593,24 @@ def four_tf_table(ctx, real_units: dict, peaks: dict, names_order: list, procs: 
 NUMBER_KEYS = ("peak", "default", "numbers", "combo")
 
 
+def combo_like(v) -> bool:
+    """A combo (numbers of an entry): a dict of numbers or lists of numbers, nothing nested deeper."""
+    if not isinstance(v, dict) or not v:
+        return False
+    for x in v.values():
+        xs = x if isinstance(x, (list, tuple)) else [x]
+        if not all(isinstance(y, (int, float)) and not isinstance(y, bool) for y in xs):
+            return False
+    return True
+
+
 def _ds_redact(obj):
     """A DeepSeek row in public: labels, counts and its numbers (combos) only (D11)."""
     if not isinstance(obj, dict):
         return RO.redact(obj)
-    r = RO.redact({k: v for k, v in obj.items() if k not in NUMBER_KEYS})
-    r.update({k: obj[k] for k in NUMBER_KEYS if k in obj})
+    keep = {k: obj[k] for k in NUMBER_KEYS if k in obj and combo_like(obj[k])}
+    r = RO.redact({k: v for k, v in obj.items() if k not in keep})
+    r.update(keep)
     r["note"] = DS_NOTE
     return r
 

@@ -235,14 +235,15 @@ def first_test_start(priv: str) -> dict:
 
 def ledger_snapshot(args, priv: str, full: dict | None) -> tuple:
     lp = args.ledger_private or os.path.join(priv, "ledger_inputs")
-    snap = LG.snapshot(ROOT, lp, full, args.fullgrid_confirm, args.ledger_extra)
+    snap = LG.snapshot(ROOT, lp, full, args.fullgrid_confirm, args.ledger_extra, public_root=args.ledger_public)
     return LG.public_of(snap), snap
 
 
 def cmd_test(args) -> int:
     pin = check_pin("test")
     if os.path.exists(rp(PN.TEST)):
-        raise Refused(f"{PN.TEST} exists: the confirm look happened (one look, 7)")
+        raise Refused(f"{PN.TEST} exists but its line is not in the pin (the step stopped between writing and "
+                      "pinning): delete it and run test again; every pick resumes from its part file (same results)")
     priv = private_dir(args)
     pk, _ = load_picks()
     marker = first_test_start(priv)
@@ -378,6 +379,9 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--no-reads", action="store_true", help="test: do not run the section-9 reads after test.json")
     ap.add_argument("--ledger-private", default=None, help="test / ledger: the folder the owners copied the other "
                                                            "studies' private files to (8)")
+    ap.add_argument("--ledger-public", default=None, help="test / ledger: the folder holding the other studies' "
+                                                          "public outputs under their repository paths (8; default: "
+                                                          "the repository)")
     ap.add_argument("--fullgrid-confirm", default=None, help="test / ledger: the full grid's confirm.json (8, A+)")
     ap.add_argument("--ledger-extra", default=None, help="test / ledger: JSON list of further hypotheses (8)")
     ap.add_argument("--coins", type=int, default=30, help="bench: synthetic coins")

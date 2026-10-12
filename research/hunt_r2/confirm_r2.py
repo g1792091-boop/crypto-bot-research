@@ -473,6 +473,17 @@ DS_PUBLIC_TUNE = ("bh_significant", "TUNED_BETTER", "label")
 DS_NOTE = "DeepSeek pick: figures in the private file (D11)"
 
 
+def combo_like(v) -> bool:
+    """A combo (the numbers of an entry): a dict of numbers or lists of numbers, nothing nested deeper."""
+    if not isinstance(v, dict) or not v:
+        return False
+    for x in v.values():
+        xs = x if isinstance(x, (list, tuple)) else [x]
+        if not all(isinstance(y, (int, float, np.integer, np.floating)) and not isinstance(y, bool) for y in xs):
+            return False
+    return True
+
+
 def d11_problems(doc, ds_ids: set, path: str = "test", under: bool = False) -> list:
     """10.4: no float under a DeepSeek row (a dict with family F3 / kind ds, or whose id / row names a DeepSeek
     system, or under a key that names one), except its numbers (combos) and win shares."""
@@ -483,7 +494,7 @@ def d11_problems(doc, ds_ids: set, path: str = "test", under: bool = False) -> l
         for k, v in doc.items():
             if k in ("win_share", "win_shares"):
                 continue
-            if here and k in NUMBER_KEYS:
+            if here and k in NUMBER_KEYS and combo_like(v):
                 continue
             hit = here or any(i in str(k) for i in ds_ids)
             bad += d11_problems(v, ds_ids, f"{path}.{k}", hit)

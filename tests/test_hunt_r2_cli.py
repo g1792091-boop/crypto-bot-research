@@ -175,6 +175,11 @@ def test_redaction_and_d11_of_test_json():
     assert CF.d11_problems({"results": {s["id"]: {"x": 0.5}}}, {s["id"]}) == ["test.results.R2:F3:F3_BOS:1h:G1:"
                                                                               f"{L.combo_sha(r['peak'])}.x"]
     assert CF.d11_problems({"picks": [{"family": "F3", "combo": {"a": 0.5}}]}, set()) == []
+    # a number key is exempt only when it holds a combo: money nested under 'default' / 'peak' is caught
+    assert CF.d11_problems({"rows": {"X": {"family": "F3", "default": {"base": {"S": 0.1}}}}}, set())
+    assert SR.d11_problems({"names": [{"family": "F3", "peak": {"S": 0.1, "runs": {"x": 1.0}}}]})
+    assert PT._ds_redact({"default": {"base": {"S": 0.1, "positions": 3}}, "peak": {"a": 2.5}}) == {
+        "default": {"base": {"positions": 3}}, "peak": {"a": 2.5}, "note": PT.DS_NOTE}
 
 
 # ------------------------------------------------------------------ 8: the ledger on a temporary tree
@@ -511,7 +516,7 @@ def test_e2e_pretest_reads(e2e):
     for nm, t in t4.items():
         assert set(t["timeframes"]) == set(L.tfs_of(nm))
         for tf, by in t["timeframes"].items():
-            x = by["default"]
+            x = by["at_default"]
             if t["family"] != "F3" and "removed" not in x:
                 assert set(x) == {"base", "O1", "O1b"}
                 assert x["O1"]["positions"] <= x["base"]["positions"] or x["O1"]["skipped"] > 0
@@ -655,3 +660,64 @@ def test_e2e_deepseek_pick_through_test_reads_and_report(tmp_path, monkeypatch):
         rep = fh.read()
     lines = [ln for ln in rep.splitlines() if "| F3_BOS |" in ln]
     assert lines and all("×" not in ln and "%" not in ln for ln in lines)
+
+
+# ------------------------------------------------------------------ 6: the 24-month reads and N_eff on hand-made units
+def _unit36(name, rng, anchor=5, strong=None):
+    lat = L.coarse(name)
+    rows = [{"tf": tf, "gate": g, "lnM": list(rng.normal(0.0, 0.02, 36)), "pos_month": [5] * 36, "bust_month": -1}
+            for tf in L.tfs_of(name) for g in ("G1", "NONE")]
+    rows[anchor]["lnM"] = list(rng.normal(0.02, 0.005, 36))
+    lnM = [list(rng.normal(0.0, 0.02, 36)) for _ in range(len(lat))]
+    if strong is not None:
+        for i in [strong] + [int(x) for x in lat.nb[strong] if x >= 0]:
+            lnM[i] = list(np.full(36, 0.03 if i == strong else 0.02) + rng.normal(0, 0.001, 36))
+    return {"name": name, "family": lat.family, "anchor": anchor, "anchor_tf": rows[anchor]["tf"],
+            "anchor_gate": rows[anchor]["gate"], "stage0": rows, "exists": np.ones(len(lat), bool),
+            "default_eff": np.zeros(len(lat), bool), "lnM": lnM, "lnM2": [list(np.asarray(x) - 0.001) for x in lnM],
+            "pos_month": [[5] * 36] * len(lat), "bust_month": np.full(len(lat), -1)}
+
+
+def test_lift_2023_and_leave_one_year_out_on_hand_made_units():
+    rng = np.random.default_rng(11)
+    order = ["E1", "N20_EMA9_CHOP", "F3_BOS"]
+    lat = L.coarse("E1")
+    strong = next(i for i in range(len(lat)) if i != lat.default)
+    units = {"E1": _unit36("E1", rng, strong=strong), "N20_EMA9_CHOP": _unit36("N20_EMA9_CHOP", rng),
+             "F3_BOS": _unit36("F3_BOS", rng)}
+    lf = PT.lift_2023(units, order, "fixed")
+    assert lf["per_name"]["E1"]["peak"] == lat.combos[strong] and lf["per_name"]["E1"]["lift"] > 0.01
+    assert lf["median_lift"] is not None and 0.0 <= lf["share_above_0"] <= 1.0
+    full_peaks = {}
+    for nm, u in units.items():
+        npt = len(L.coarse(nm))
+        full_peaks[nm] = SR.stage_a(L.coarse(nm), np.asarray([np.mean(x) for x in u["lnM"]]), np.full(npt, 180.0),
+                                    np.zeros(npt, bool), u["exists"],
+                                    S2=np.asarray([np.mean(x) for x in u["lnM2"]]))["peak"]
+    assert full_peaks["E1"] == strong
+    lo = PT.leave_one_year_out(units, order, full_peaks, "fixed")
+    assert lo["per_name"]["E1"]["returns"] == 3 and set(lo["per_name"]["E1"]["pairs"]) == set(PT.year_masks())
+    st = PT.leave_one_year_out(units, order, full_peaks, "strict")
+    assert all(0 <= v["returns"] <= 3 for v in st["per_name"].values())
+
+
+def test_n_eff_by_the_expected_maximum():
+    x = np.sort(np.random.default_rng(3).normal(0, 1, 5000))
+    assert PT.expected_max(x, 1.0) == pytest.approx(x.mean())
+    assert PT.expected_max(x, 50.0) < PT.expected_max(x, 500.0) < x[-1]
+    assert PT.n_eff(x, x.mean() - 1) == 1.0 and PT.n_eff(x, x[-1] + 1) is None
+    n = PT.n_eff(x, PT.expected_max(x, 300.0))
+    assert n == pytest.approx(300.0, rel=1e-3)
+
+
+def test_bench_writes_its_file_on_synthetic_bars(tmp_path):
+    from research.hunt_r2 import bench_r2 as BR
+    out = str(tmp_path / "bench_r2.json")
+    res = BR.bench(out, n_coins=3, months=2, combos=1, names=("E1", "TSMOM7"), engine_reps=1)
+    with open(out) as fh:
+        doc = json.load(fh)
+    assert doc["coins"] == 3 and set(doc["signal_s_per_combo_per_coin_15m"]) == {"E1", "TSMOM7"}
+    assert len(doc["engine_s_per_run"]) == len(BR.DENSITIES) * len(BR.TF_SCALE)
+    ex = res["extrapolation"]
+    assert ex["cpu_h"]["select_total"] > 0 and set(ex["select_wall_h_at_effective_cores"]) == {"18", "27"}
+    assert isinstance(ex["above_the_line"], bool)
