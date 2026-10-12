@@ -39,21 +39,23 @@ const MENU = [
   {id: "rank", ko: "순위표", group: "home", also: ["account"]},
   {id: "check", ko: "점검 진행", group: "home"},
   {id: "compare", ko: "5계좌 비교", group: "home"},
-  {id: "weekly", ko: "주간 흐름", group: "home"},
+  {id: "weekly", ko: "흐름", group: "home"},
   {id: "strategies", ko: "매매법", group: "method"},
   {id: "custom", ko: "커스텀값", group: "method"},
+  {id: "rules", ko: "익절·손절·배수", group: "method"},
   {id: "status", ko: "서버 상태", group: "info"},
   {id: "howto", ko: "읽는 법", group: "info"},
 ];
 const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 · 수익)", positions: "포지션 (모의 계좌의 열린 포지션, 실시간 손익)",
   entries: "진입 차트 (매매법마다 따로, 후보가 들어간 자리)", fills: "체결 기록 (모든 계좌의 닫힌 거래)", home: "요약",
   check: "점검 진행 (11/11 · 12/11 · 1/11 기준이 지금 어떤지)", rank: "순위표 (후보 38개와 비교 계좌 190개)",
-  compare: "5계좌 비교 (후보 · 1/4 · 청산만 · 기본값 · 동전)", weekly: "주간 흐름 (주마다 후보 · 기본값 · 동전)",
+  compare: "5계좌 비교 (후보 · 1/4 · 청산만 · 기본값 · 동전)", weekly: "흐름 (묶음 레이스: 시간에 따른 잔고 · 주마다 후보 · 기본값 · 동전)",
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
+  rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
 const SCREENS = {home: "home", check: "check", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
-  account: "account"};
+  account: "account", rules: "rules"};
 const TITLE = "후보 리그";
 const WIDE_PX = 1100;                         // the rule bot opens its 터미널 on a PC window, 요약 here on a phone
 

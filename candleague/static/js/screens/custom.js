@@ -9,6 +9,8 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {TFS, tfKo, STYLE_KO, STYLE_DESC} from "../labels.js";
+import * as RK from "../rulekit.js";
+import * as WK from "../whykit.js";
 
 const LIVE_EXIT_KO = "계단 잠금 10%부터 · 손절 2 ATR";
 const STATE_ORDER = ["추세장", "횡보장", "급변장", "보통"];
@@ -52,6 +54,7 @@ export function originBox(c, meta) {
       h("div", null, h("dt", null, "시험 기간 한 번 평균"), h("dd", null, src.test_mean != null ? LK.ret(src.test_mean)
         : h("span", {class: "muted"}, c.kind === "ds" ? "저장소에 없음 (딥시크 백테스트 금액은 파일에 안 넣음)" : "—"))),
       src.band ? h("div", null, h("dt", null, "경고등 기준 (100번)"), h("dd", null, "하위 5% ", LK.ret(src.band["100"] && src.band["100"].p5))) : null,
+      src.test_n != null ? h("div", null, h("dt", null, "5년 시험 속도 vs 지금"), h("dd", null, WK.paceLine5y(c, LK.league()))) : null,
       h("div", null, h("dt", null, "성격"), h("dd", null, LK.styleChip(pm.style), pm.trend_ratio != null ? h("span", {class: "muted"},
         ` 추세 비율 ${fmt.num(pm.trend_ratio, 2)} (${STYLE_DESC[pm.style] || ""})`) : null))),
     h("p", {class: "note cl-caveat"}, "위 백테스트 숫자는 이 후보를 고를 때 이미 본 기간의 것이라 실제보다 좋게 나옵니다. 맞는지는 후보 리그를 켠 뒤(설치한 때부터)의 성적으로만 확인합니다."),
@@ -75,9 +78,11 @@ export async function mount(el, ctx) {
       ui.field("봉", ui.seg([{id: "all", label: "전체"}, ...TFS.map((t) => ({id: t, label: tfKo(t)}))], st.tf, (v) => { st.tf = v; save(); paint(); }, {label: "봉"})),
       ui.field("매매법", stratSel)),
     h("p", {class: "note"}, "기본값 = 규칙봇이 지금 쓰는 숫자. 커스텀값 = 5년 탐색(기본의 ⅓배~3배, 9단계)에서 고른 숫자. 색 글씨(커스텀값 칸)가 바뀐 값, 배수는 노랑 = 키움 · 파랑 = 줄임, '범위 끝' = 5년 탐색이 시도한 가장 작은(↓)·큰(↑) 값. ",
-      "익절·손절도 후보마다 84가지 중에서 골랐고, 기본값 계좌는 지금 규칙봇 청산(", LIVE_EXIT_KO, ")을 씁니다."),
+      "익절·손절도 후보마다 84가지 중에서 골랐고, 기본값 계좌는 지금 규칙봇 청산(", LIVE_EXIT_KO, ")을 씁니다. 배수(레버리지) 규칙과 코인별로 지금 몇 배가 되는지는 ",
+      h("a", {href: "#/rules"}, "익절·손절·배수"), " 화면에 있습니다."),
     list);
 
+  let R = RK.rulesNow();
   function paint() {
     const d = LK.league();
     if (!d || !d.accounts) { put(list, ui.none("준비 중")); return; }
@@ -100,15 +105,14 @@ export async function mount(el, ctx) {
           h("a", {class: "btn-line", href: `#/account/${encodeURIComponent(c.id)}`}, "계좌 자세히"))},
       h("div", {class: "cl-pickgrid"},
         h("div", {class: "stack tight"}, h("h3", {class: "cl-h3"}, "숫자"), paramTable(c, set.base, meta),
-          h("h3", {class: "cl-h3"}, "익절 · 손절"),
-          h("div", {class: "cl-exits"}, h("div", null, LK.roleChip("cand"), h("b", null, c.exit_ko)),
-            h("div", null, LK.roleChip("base"), h("span", null, set.base ? set.base.exit_ko : LIVE_EXIT_KO)))),
+          h("h3", {class: "cl-h3"}, "익절 · 손절 · 배수"), RK.ruleBox(c, R)),
         h("div", {class: "stack tight"}, h("h3", {class: "cl-h3"}, "어디서 왔나 · 성격"), originBox(c, meta),
           h("h3", {class: "cl-h3"}, "지금 계좌 5개"), LK.fiveRows(set),
           LK.pairedBox((((LK.league() || {}).watch || {}).picks || {})[c.id]?.paired, {hidden: LK.dsHidden(c)}))));
     }));
   }
   ctx.onLeague(paint);
+  RK.loadRules(ctx, (doc) => { R = doc; paint(); }).catch(() => { /* the boxes keep the exit's name and the link */ });
 }
 
 export {STYLE_KO};

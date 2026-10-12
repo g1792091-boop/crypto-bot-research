@@ -1,0 +1,182 @@
+/* 후보 리그: 익절·손절·배수 (js/rulekit.js, screens/rules.js), 왜 이 성적인가 · 연패 · 운 vs 실력 · 5년 속도 (js/whykit.js) and
+   the 묶음 레이스 (screens/weekly.js). The rule bot's v4 look (screens/account.css acw-*, analysis luck / streak kits),
+   copied and adapted. Tokens only (both skins: ai and classic), font sizes only var(--t-*). Class names: rl- (rules),
+   wy- (why), lu- (luck), sk- (streak), pc- (pace), rc- (race). Loaded after kit.css. */
+
+/* ---------------------------------------------------------------- shared */
+.rl-term { color: inherit; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+.rl-term:hover { color: var(--accent-hi); }
+.rl-used { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.rl-lev { display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--line-2);
+  font: 600 var(--t-2xs)/1 var(--f-body); color: var(--ink-2); white-space: nowrap; }
+.rl-lev b { color: var(--ink); }
+.rl-lev.l50, .rl-lev.l40 { border-color: var(--accent-line); color: var(--accent); }
+
+/* ---------------------------------------------------------------- the five accounts (a table on a PC, blocks on a phone) */
+.rl-roles { display: grid; gap: 2px; }
+.rl-rrow { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.3fr) minmax(0, .9fr) minmax(0, 1.3fr);
+  gap: 10px; align-items: start; padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); color: var(--ink-2); line-height: 1.5; }
+.rl-rrow:last-of-type { border-bottom: 0; }
+.rl-rrow.rl-rhd { color: var(--muted); font-size: var(--t-2xs); padding-block: 2px; border-bottom: 1px solid var(--line-2); }
+.rl-rname { padding-top: 2px; }
+@media (max-width: 899px) {
+  .rl-rrow { grid-template-columns: minmax(0, 1fr); gap: 3px; padding: 10px 4px; }
+  .rl-rrow.rl-rhd { display: none; }
+  .rl-rrow > [data-k]::before { content: attr(data-k) " · "; color: var(--muted); font-size: var(--t-xs); }
+}
+
+/* ---------------------------------------------------------------- the leverage rule */
+.rl-levrule p { margin: 0; line-height: 1.65; font-size: var(--t-sm); color: var(--ink-2); }
+.rl-levrule p b { color: var(--ink); }
+.rl-steps { display: grid; gap: 2px; padding: 6px 8px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
+.rl-step { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.4fr); gap: 10px; align-items: center;
+  padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); color: var(--ink-2); }
+.rl-step:last-child { border-bottom: 0; }
+.rl-step.rl-stephd { color: var(--muted); font-size: var(--t-2xs); padding-block: 2px; }
+.rl-steplev { font: 800 var(--t-md)/1 var(--f-term); color: var(--ink); }
+.rl-step.l50 .rl-steplev, .rl-step.l40 .rl-steplev { color: var(--accent); }
+@media (max-width: 759px) {
+  .rl-step { grid-template-columns: 56px minmax(0, 1fr); gap: 2px 10px; }
+  .rl-step.rl-stephd { display: none; }
+  .rl-steplev { grid-row: span 4; align-self: start; padding-top: 3px; }
+  .rl-step > [data-k]::before { content: attr(data-k) " · "; color: var(--muted); font-size: var(--t-xs); }
+}
+.rl-checks { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.6; }
+.rl-checks b { color: var(--ink); }
+.rl-usedall { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--t-xs); }
+.rl-urow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 26px; }
+.rl-urow .cl-role { min-width: 120px; }
+
+/* ---------------------------------------------------------------- a pick's rule card */
+.rl-pick { gap: 14px; }
+.rl-kv { margin: 0; display: grid; gap: 0; }
+.rl-kv > div { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--line); }
+.rl-kv > div:last-child { border-bottom: 0; }
+.rl-kv dt { color: var(--muted); font-size: var(--t-xs); font-weight: 700; padding-top: 2px; }
+.rl-kv dd { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.65; min-width: 0; }
+.rl-kv dd b { color: var(--ink); }
+@media (max-width: 559px) { .rl-kv > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.rl-sub { display: grid; gap: 8px; }
+.rl-coins { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+@media (max-width: 420px) { .rl-coins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rl-coin { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+.rl-coinh { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: var(--t-sm); }
+.rl-coinh b { font-family: var(--f-term); color: var(--ink); }
+.rl-coinh span { font-size: var(--t-2xs); }
+.rl-cdl { margin: 0; display: grid; gap: 1px; }
+.rl-cdl > div { display: flex; justify-content: space-between; gap: 6px; font-size: var(--t-xs); }
+.rl-cdl dt { color: var(--muted); white-space: nowrap; }
+.rl-cdl dd { margin: 0; color: var(--ink); text-align: right; white-space: nowrap; }
+.rl-five { display: grid; gap: 2px; }
+.rl-frow { display: grid; grid-template-columns: minmax(84px, .6fr) minmax(0, 1.6fr) 54px minmax(0, 1.2fr); gap: 10px; align-items: center; padding: 6px;
+  border-radius: var(--r-sm); color: inherit; text-decoration: none; font-size: var(--t-sm); }
+.rl-frow:hover { background: var(--surface-2); }
+.rl-fexit { color: var(--ink-2); min-width: 0; }
+@media (max-width: 559px) {
+  .rl-frow { grid-template-columns: minmax(0, 1fr) auto; }
+  .rl-frow .rl-fexit { grid-column: 1 / -1; order: 3; font-size: var(--t-xs); }
+  .rl-frow .rl-used { grid-column: 1 / -1; order: 4; }
+}
+/* the compact box (커스텀값, 계좌 자세히) */
+.rl-box { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
+.rl-bl { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.55; }
+.rl-bl b { color: var(--ink); font-size: var(--t-xs); padding-top: 2px; }
+.rl-box .btn-line { justify-self: start; margin-top: 4px; }
+
+/* ---------------------------------------------------------------- 익절·손절·배수 screen */
+.rl-qa { margin: 0; display: grid; gap: 0; }
+.rl-qa > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.rl-qa > div:last-child { border-bottom: 0; }
+.rl-qa dt { font-weight: 800; color: var(--ink); font-size: var(--t-sm); }
+.rl-qa dd { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.7; min-width: 0; }
+.rl-qa dd b { color: var(--ink); }
+@media (max-width: 599px) { .rl-qa > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.rl-list { display: grid; gap: 2px; margin-top: 8px; }
+.rl-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 70px 64px 76px minmax(0, 1.2fr);
+  gap: 10px; align-items: center; padding: 8px 8px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--t-sm); color: var(--ink-2);
+  border: 1px solid transparent; }
+.rl-row:hover { background: var(--surface-2); }
+.rl-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rl-row.on { background: var(--accent-soft); border-color: var(--accent-line); }
+.rl-rn { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+.rl-rn b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-rx { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 759px) {
+  .rl-row { grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start; gap: 4px 12px; padding: 10px 8px; }
+  .rl-rn { grid-column: 1 / -1; }
+  .rl-rx[data-k]::before { content: attr(data-k) " "; color: var(--muted); font-size: var(--t-2xs); }
+  .rl-ru { grid-column: 1 / -1; }
+}
+.rl-pickcard { scroll-margin-top: 96px; }
+
+/* ---------------------------------------------------------------- 왜 이 성적인가 */
+.wy { gap: 12px; }
+.wy-head { display: grid; gap: 4px; }
+.wy-big { margin: 0; font-size: var(--t-lg); font-weight: 700; color: var(--ink); }
+.wy-big .up, .wy-line b.up, .wy-fv.up, .wy-chip b.up { color: var(--up); }
+.wy-big .down, .wy-line b.down, .wy-fv.down, .wy-chip b.down { color: var(--down); }
+.wy-line { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.wy-line b { color: var(--ink); }
+.wy-body { display: grid; gap: 14px 20px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1000px) { .wy-body { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.wy-sec { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); }
+.wy-k { margin: 0; color: var(--ink); font-size: var(--t-sm); font-weight: 700; }
+.wy-fall { display: grid; gap: 6px; }
+.wy-frow { display: grid; grid-template-columns: minmax(84px, 112px) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--ink-2); }
+.wy-ftrack { position: relative; height: 14px; border-radius: 4px; background: var(--surface-3); }
+.wy-fbar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; background: var(--muted); }
+.wy-fbar.up { background: var(--up); }
+.wy-fbar.down { background: var(--down); }
+.wy-fbar.cost { background: var(--warn); }
+.wy-fzero { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink-2); }
+.wy-fv { min-width: 84px; text-align: right; color: var(--ink); font-size: var(--t-xs); }
+.wy-reasons, .wy-levs { display: flex; flex-wrap: wrap; gap: 6px; }
+.wy-chip { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--ink-2); font-size: var(--t-xs); white-space: nowrap; }
+.wy-chip.bad { border-color: var(--down-line); }
+.wy-wr { position: relative; height: 12px; border-radius: 4px; background: var(--surface-3); }
+.wy-wrbar { position: absolute; left: 0; top: 2px; bottom: 2px; border-radius: 3px; background: var(--muted); }
+.wy-wrbar.up { background: var(--up); }
+.wy-wrbar.down { background: var(--down); }
+.wy-wrmark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--ink); }
+.wy-big3 { display: grid; gap: 4px; }
+.wy-brow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 32px; font-size: var(--t-xs); color: var(--ink-2); }
+.wy-replay { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 700; text-decoration: none; }
+.wy-replay:hover { text-decoration: underline; }
+.wy-short { display: block; margin-top: 2px; font-size: var(--t-2xs); }
+
+/* ---------------------------------------------------------------- 운 vs 실력 · 연패 · 5년 속도 */
+.lu { gap: 10px; }
+.lu-row { display: grid; grid-template-columns: minmax(130px, .9fr) 70px minmax(120px, 1fr) minmax(0, 2fr); gap: 10px; align-items: center;
+  padding: 6px 2px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); color: var(--ink-2); }
+.lu-row b { color: var(--ink); }
+.lu-k { text-align: right; color: var(--ink); font-weight: 700; }
+.lu-bar { position: relative; display: block; height: 12px; border-radius: 4px; background: var(--surface-3); }
+.lu-band { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: color-mix(in srgb, var(--ink-2) 28%, transparent); }
+.lu-mark { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--ink); }
+.lu-row.t-above .lu-mark { background: var(--up); } .lu-row.t-below .lu-mark { background: var(--down); }
+.lu-row.t-above .lu-t b { color: var(--up); }
+.lu-t { font-size: var(--t-xs); line-height: 1.5; }
+@media (max-width: 759px) {
+  .lu-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .lu-bar, .lu-t { grid-column: 1 / -1; }
+}
+.lu-short { margin: 8px 0 0; }
+.sk-line { font-size: var(--t-sm); color: var(--ink-2); line-height: 1.6; }
+.sk-line b { color: var(--ink); }
+.sk-line .warn, .pc-line .pc-line { font-size: var(--t-xs); color: var(--ink-2); line-height: 1.6; }
+.tbl.pc-tbl td { vertical-align: top; }
+.tbl.pc-tbl td small { display: block; margin-top: 2px; }
+.pc-slow { color: var(--warn); font-weight: 700; }
+
+/* ---------------------------------------------------------------- 묶음 레이스 */
+.rc-pools { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1200px) { .rc-pools { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rc-pool { display: grid; gap: 6px; min-width: 0; }
+.rc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.rc-head b { font-size: var(--t-md); color: var(--ink); }
+.rc-now { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: var(--t-xs); color: var(--ink-2); }
+.rc-now .num { color: var(--ink); font-weight: 700; }
+.cl-eqsvg .band { fill: color-mix(in srgb, var(--r-flip) 22%, transparent); stroke: none; }
+.cl-bandkey { display: inline-flex; align-items: center; gap: 5px; font: 700 var(--t-2xs)/1.2 var(--f-body); color: var(--ink-2); white-space: nowrap; }
+.cl-bandkey i { width: 14px; height: 9px; border-radius: 2px; background: color-mix(in srgb, var(--r-flip) 22%, transparent); border: 1px dashed var(--r-flip); }

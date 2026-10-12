@@ -34,7 +34,8 @@ export async function mount(el, ctx) {
       const w = ws[n];
       return ui.card({plate: sm.ko, sub: `${n} · ${sm.family}`, id: `s-${n}`, cls: "cl-stratcard",
         acts: h("span", {class: "row wrap"}, LK.kindChip(sm.kind), h("a", {class: "btn-line", href: `#/custom?s=${encodeURIComponent(n)}`}, "커스텀값 보기"),
-          h("a", {class: "btn-line", href: `#/entries?s=${encodeURIComponent(n)}`}, "진입 차트"))},
+          h("a", {class: "btn-line", href: `#/entries?s=${encodeURIComponent(n)}`}, "진입 차트"),
+          h("a", {class: "btn-line", href: `#/rules?s=${encodeURIComponent(n)}`}, "익절·손절·배수"))},
       h("div", {class: "cl-pickgrid"},
         h("div", {class: "stack tight"},
           h("h3", {class: "cl-h3"}, "어떻게 들어가나"),
@@ -45,7 +46,7 @@ export async function mount(el, ctx) {
           h("ul", {class: "cl-plist"}, sm.params.map((p) => h("li", null, h("b", null, p.ko), h("span", {class: "muted"}, ` · ${p.kind_ko} · 기본 `),
             h("span", {class: "num"}, Array.isArray(p.default) ? p.default.join("/") : String(p.default)), h("small", {class: "cl-code"}, p.name))))),
         h("div", {class: "stack tight"},
-          h("h3", {class: "cl-h3"}, `후보 ${picks.length}개`),
+          h("h3", {class: "cl-h3"}, `후보 ${picks.length}개`, h("small", {class: "muted"}, " · 봉 · 성격 · 익절·손절 · 거래 · 한 번 평균")),
           picks.length ? h("div", {class: "cl-plist2"}, picks.map((c) => {
             const pm = LK.pickMeta(c.id, meta) || {};
             return h("a", {class: "cl-pickrow", href: `#/account/${encodeURIComponent(c.id)}`},

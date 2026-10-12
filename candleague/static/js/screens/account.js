@@ -14,6 +14,8 @@ import {paramTable, originBox} from "./custom.js";
 import {posPill, pricesLive} from "../poskit.js";
 import {serverNow} from "../live.js";
 import {afterBar, afterOn, afterBook, openAfter, openBefore, beforeChip, afterEmpty} from "../after.js";
+import * as RK from "../rulekit.js";
+import * as WK from "../whykit.js";
 
 /** Live ROE may be shown: the engine is not catching up, wrote its record in the last 15 minutes, and the prices
  *  are live (poskit pricesLive). */
@@ -24,18 +26,36 @@ export async function mount(el, ctx) {
   try { meta = await ctx.meta(); } catch (e) { /* codes */ }
   const id = ctx.params.arg;
   const head = h("div"), stats = h("div"), chart = h("div"), five = h("div"), params = h("div"), trades = h("div"), split = h("div");
-  const body = h("div", {class: "stack"}, stats,
+  const why = h("div"), rule = h("div");
+  const body = h("div", {class: "stack"}, stats, why,
     ui.card({plate: "잔고 흐름", sub: "같은 후보의 계좌 5개 · 닫힌 거래마다 · $5,000에서 시작"}, chart),
+    rule,
     ui.card({plate: "롱 · 숏 · 코인별 · 커스텀값이 바꾼 거래", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split),
     ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five),
     params,
     ui.card({plate: "거래 기록", sub: "이 계좌 · 최신 200번까지 · 코인을 누르면 터미널"}, trades));
   const afterEl = afterBar({cls: "cl-actafter"});
   el.append(head, afterEl, body);
-  let seen = null, pill = null, doc = null;
+  let seen = null, pill = null, doc = null, R = RK.rulesNow(), INS = null;
   ctx.onLive(() => { if (pill) pill.update({allowed: liveOk(doc)}); });
+  /** 왜 이 성적인가 (whykit) and the pick's 익절·손절·배수 card (rulekit), painted again when their data arrives. */
+  function paintWhy(d) {
+    const ix = LK.index(d);
+    const a = ix.byId[id];
+    if (!a) { put(why, null); put(rule, null); return; }
+    const c = LK.pickOf(a, ix) || a;
+    const set = ix.sets[c.id] || {};
+    const p = R && R.picks ? R.picks[c.id] : null;
+    put(why, INS ? WK.whyCard(a, (INS.accounts || {})[a.id], {flip: set.flip, rule: p, pick: c,
+      href: (t) => `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${coinOf(t.symbol)}&at=${t.entry_time}`}) : null);
+    put(rule, c.role === "cand" ? ui.card({plate: "익절 · 손절 · 배수", sub: `${LK.pickKo(c, meta)} · 이 후보의 계좌 5개 공통 규칙과 지금 코인별로 몇 배가 되나`, cls: "rl-pickcard"},
+      p ? RK.pickRuleBody(p, R) : RK.ruleBox(c, R)) : null);
+  }
+  RK.loadRules(ctx, (x) => { R = x; if (ctx.alive() && LK.league()) paintWhy(LK.league()); }).catch(() => { /* the exit's name stays */ });
   ctx.onLeague(async (d) => {
     doc = d;
+    paintWhy(d);
+    WK.loadInsight(ctx).then((x) => { if (x !== INS && ctx.alive()) { INS = x; paintWhy(LK.league()); } }).catch(() => { /* the card stays away */ });
     const ix = LK.index(d);
     const a = ix.byId[id];
     body.hidden = !a;
@@ -71,9 +91,7 @@ export async function mount(el, ctx) {
     put(split, LK.sideSplit(((d.watch || {}).picks || {})[c.id], {hidden: LK.dsHidden(c)}),
       LK.pairedBox((((d.watch || {}).picks || {})[c.id] || {}).paired, {hidden: LK.dsHidden(c)}));
     put(params, c.role === "cand" ? ui.card({plate: "커스텀값", sub: `${c.name} · ${tfKo(c.tf)} · 색 글씨 = 기본값에서 바뀐 값 · 범위 끝 = 탐색한 가장 끝 값`},
-      h("div", {class: "cl-pickgrid"}, h("div", {class: "stack tight"}, paramTable(c, set.base, meta),
-        h("div", {class: "cl-exits"}, h("div", null, LK.roleChip("cand"), h("b", null, c.exit_ko)),
-          h("div", null, LK.roleChip("base"), h("span", null, set.base ? set.base.exit_ko : "—")))),
+      h("div", {class: "cl-pickgrid"}, h("div", {class: "stack tight"}, paramTable(c, set.base, meta)),
       originBox(c, meta))) : null);
     if (seen === d.done_ms) return;
     seen = d.done_ms;

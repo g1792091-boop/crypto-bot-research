@@ -9,17 +9,22 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {ROLES, KIND_LONG, tfKo} from "../labels.js";
+import * as WK from "../whykit.js";
 
 export async function mount(el, ctx) {
   try { await ctx.meta(); } catch (e) { /* codes instead of names */ }
   const time = h("div"), core = h("div"), ds = h("div"), basis = h("div"), lights = h("div"), strat = h("div"), done = h("div");
+  const luck = h("div"), pace = h("div");
+  let INS = null;
   el.append(
     ui.screenHead("점검 진행", "미리 정한 기준이 오늘 숫자로는 어떤지 (참고) · 판정은 점검 날 한 번"),
     done,
     ui.card({plate: "점검 일정", sub: "시작 전에 고정 (WATCH_PREREG.md) · 바꾸면 DEVIATIONS.md에 이유와 함께 기록"}, time),
     core, ds,
     ui.card({plate: "후보마다 기준", sub: "30번 이상 거래한 후보: 평균 > 0 · 같은 기간 기본값보다 · 동전보다 (셋 다면 기준 통과)"}, basis),
+    ui.card({plate: "운 vs 실력", sub: "후보 여러 개 중 몇 개가 나은지, 운만으로 나오는 범위와 대 보기 (참고)"}, luck),
     ui.card({plate: "경고등", sub: "기존 36 후보: 백테스트로 본 예상 범위의 하위 5%보다 낮으면 켜짐 · 알림일 뿐 판정 아님"}, lights),
+    ui.card({plate: "후보마다 속도 · 연패", sub: "5년 시험(2024-01~2026-09) 때의 거래 속도와 지금 · 가장 길게 연달아 진 횟수와 그 승률에서 보통인 길이"}, pace),
     ui.card({plate: "매매법별 묶음", sub: "2차 점검부터: 매매법마다 후보를 모아 2차와 같은 세 조건(평균 > 0 · p < 0.05, 기본값 · 동전보다, 거래 300번) + 16개 BH 10%"}, strat));
 
   ctx.onLeague((d) => {
@@ -29,8 +34,11 @@ export async function mount(el, ctx) {
     put(core, poolCard("core", w));
     put(ds, poolCard("ds", w));
     paintBasis(d);
+    put(luck, WK.luckBody(d));
     paintLights(d);
+    put(pace, paceTable(d, INS));
     put(strat, stratTable(w));
+    WK.loadInsight(ctx).then((x) => { if (x !== INS && ctx.alive()) { INS = x; put(pace, paceTable(LK.league(), INS)); } }).catch(() => { /* streaks stay "—" */ });
   });
 
   async function loadConfirmed() {
@@ -72,6 +80,53 @@ export async function mount(el, ctx) {
       {label: "예상 중간값", get: (c) => LK.ret(ix.judge[c.id].band.median)},
     ], on, {onRow: (c) => { location.hash = `#/account/${encodeURIComponent(c.id)}`; }}) : null);
   }
+}
+
+/** 후보마다 속도 · 연패: each pick's trades against the 5-year test pace (whykit pace5y) and its losing runs against what
+ *  its own win rate makes usual (/api/insight), with its 동전 account's longest run beside it. */
+export function paceTable(d, ins) {
+  const ix = LK.index(d);
+  const rows = ix.cands.slice().sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "core" ? -1 : 1)
+    || LK.stratKo(a.name).localeCompare(LK.stratKo(b.name), "ko") || ["15m", "30m", "1h", "4h"].indexOf(a.tf) - ["15m", "30m", "1h", "4h"].indexOf(b.tf));
+  if (!rows.length) return ui.none("준비 중");
+  const I = (ins && ins.accounts) || {};
+  const cps = ((d.watch || {}).checkpoints || []).slice(0, 2);
+  const runCell = (x) => {
+    if (!x || !x.n) return h("span", {class: "muted"}, "—");
+    const st = x.streak || {};
+    const rare = st.rare != null && x.n >= 10 && st.max > st.rare;
+    return h("span", null, h("b", {class: ["num", rare ? "pc-slow" : ""]}, `${fmt.int(st.max)}번`),
+      x.n >= 10 ? h("small", {class: "muted"}, `보통 ${fmt.int(st.usual)} · 드묾 ${fmt.int(st.rare)}↑`) : h("small", {class: "muted"}, "10번 전"));
+  };
+  return h("div", {class: "stack tight"}, ui.table([
+    {label: "후보", l: true, get: (c) => LK.pickName(c, {code: false})},
+    {label: "거래", get: (c) => `${fmt.int(c.trades)}번`},
+    {label: "5년 속도면 지금쯤", title: "5년 시험 기간의 거래 수 ÷ 1,004일 × 시작부터 지난 날", get: (c) => {
+      const p = WK.pace5y(c, d);
+      if (!p) return "—";
+      const off = p.ratio != null && (p.ratio < 0.5 || p.ratio > 2);
+      return h("span", null, h("span", {class: ["num", off ? "pc-slow" : ""]}, `약 ${fmt.num(p.expect, p.expect < 10 ? 1 : 0)}번`),
+        h("small", {class: "muted"}, `하루 ${fmt.num(p.rate, 2)}번`));
+    }},
+    ...cps.map((cp) => ({label: `${fmt.mmdd(cp.ms)}까지`, title: `5년 시험 속도라면 ${cp.ko}(${fmt.mmdd(cp.ms)})까지 쌓일 후보 거래 수`, get: (c) => {
+      const p = WK.pace5y(c, d);
+      const x = p && p.at.find((a) => a.ms === cp.ms);
+      return x ? `약 ${fmt.int(Math.round(x.n))}번` : "—";
+    }})),
+    {label: "30번 되는 날", title: "5년 시험 속도라면 닫힌 거래 30번(후보 하나를 판단하기 시작하는 수)이 되는 날", get: (c) => {
+      const p = WK.pace5y(c, d);
+      return p ? (c.trades >= 30 ? "넘음" : fmt.mmdd(p.day30)) : "—";
+    }},
+    {label: "최장 연패", title: "가장 길게 연달아 진 횟수 · 보통 = 이 승률과 거래 수에서 흔한 최장 길이 · 드묾 = 10번 중 1번만 이보다 김", get: (c) => runCell(I[c.id])},
+    {label: "지금 연패", get: (c) => { const x = I[c.id]; return x && x.n ? `${fmt.int((x.streak || {}).cur || 0)}번` : "—"; }},
+    {label: "동전 최장", title: "같은 후보의 동전 계좌가 가장 길게 연달아 진 횟수 (같은 시각 · 같은 익절·손절)", get: (c) => {
+      const x = I[`${c.id}-flip`];
+      return x && x.n ? `${fmt.int((x.streak || {}).max || 0)}번` : "—";
+    }},
+  ], rows, {cls: "pc-tbl", onRow: (c) => { location.hash = `#/account/${encodeURIComponent(c.id)}`; }}),
+  h("p", {class: "note"}, "5년 시험 속도와 지금 속도가 크게 다르면(색 글씨) 신호가 덜 나오거나, 손절이 넓어 배수 검사에서 건너뛴 진입이 많을 수 있습니다. ",
+    "3R 후보는 보통 3번에 1번쯤 이겨서 6~10번 연달아 지는 일이 흔합니다: ‘보통’ 안의 연패는 이상한 일이 아닙니다. 연패는 계좌마다 최근 200번 기준."),
+  h("p", {class: "note"}, "후보 하나가 1차 점검까지 쌓는 거래는 5년 시험 속도로 대부분 5~20번이라 후보 하나의 숫자는 아직 운이 큽니다. 후보를 모은 묶음으로 판정하는 이유입니다."));
 }
 
 /** A checkpoint's confirmed result (WATCH_PREREG 3, computed like research/fullgrid/diag/watch_check.py on the trades

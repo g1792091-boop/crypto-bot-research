@@ -7,6 +7,8 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {ROLES, ROLE_KO, ROLE_DESC, TFS, tfKo} from "../labels.js";
+import * as WK from "../whykit.js";
+import {ROLE_RULE} from "../rulekit.js";
 
 export async function mount(el, ctx) {
   try { await ctx.meta(); } catch (e) { /* codes */ }
@@ -21,12 +23,15 @@ export async function mount(el, ctx) {
       ui.field("봉", ui.seg([{id: "all", label: "전체"}, ...TFS.map((t) => ({id: t, label: tfKo(t)}))], st.tf, (v) => { st.tf = v; save(); paint(); }, {label: "봉"})),
       ui.field("순서", ui.seg([{id: "name", label: "매매법"}, {id: "cand", label: "후보 평균"}, {id: "gap", label: "기본값과 차이"}], st.sort, (v) => { st.sort = v; save(); paint(); }, {label: "순서"}))),
     ui.card({plate: "한눈에", sub: "같은 기간 · 같은 시세 · 거래 한 번 평균으로 비교 (참고)"}, sum),
-    ui.card({plate: "후보마다 5계좌", sub: "칸 = 거래 한 번 평균 · 거래 수 · 승률 · ★ = 같은 크기 넷(1/4 빼고) 중 가장 좋음 · 칸을 누르면 그 계좌"}, grid),
-    ui.card({plate: "계좌 5개가 뭔가요"}, h("dl", {class: "kv"}, ROLES.map((r) => h("div", null, h("dt", null, LK.roleChip(r)), h("dd", null, ROLE_DESC[r]))))));
+    ui.card({plate: "후보마다 5계좌", sub: "칸 = 거래 한 번 평균 · 거래 수 · 승률 · ★ = 같은 크기 넷(1/4 빼고) 중 가장 좋음 · 칸을 누르면 그 계좌 · 후보 아래 작은 줄 = 후보 계좌가 나간 이유 · 수수료·펀딩 · 최장 연패 (최근 200번까지)"}, grid),
+    ui.card({plate: "계좌 5개가 뭔가요", acts: h("a", {class: "btn-line", href: "#/rules"}, "익절·손절·배수 →")}, h("dl", {class: "kv"}, ROLES.map((r) => h("div", null, h("dt", null, LK.roleChip(r)),
+      h("dd", null, ROLE_DESC[r], h("br"), h("small", {class: "muted"}, `숫자 ${ROLE_RULE[r].nums} · 익절·손절 ${ROLE_RULE[r].exit} · 크기 ${ROLE_RULE[r].size} · 방향 ${ROLE_RULE[r].dir}`)))))));
 
+  let INS = null;
   function paint() {
     const d = LK.league();
     if (!d || !d.accounts) { put(grid, ui.none("준비 중")); return; }
+    WK.loadInsight(ctx).then((x) => { if (x !== INS && ctx.alive()) { INS = x; paint(); } }).catch(() => { /* no short line */ });
     const ix = LK.index(d);
     let picks = ix.cands.filter((c) => (st.kind === "all" || c.kind === st.kind) && (st.tf === "all" || c.tf === st.tf));
     const gap = (c) => { const b = ix.sets[c.id].base; return c.mean_ret != null && b && b.mean_ret != null ? c.mean_ret - b.mean_ret : null; };
@@ -57,7 +62,8 @@ export async function mount(el, ctx) {
         const real = means.filter((m) => m != null);
         const best = real.length >= 2 ? Math.max(...real) : null;           // a lone account is never "the best"
         return h("tr", null, h("td", {class: "l"}, h("a", {href: `#/account/${encodeURIComponent(c.id)}`, class: "cl-plain"}, LK.pickName(c)),
-          h("div", {class: "cl-exit muted"}, c.exit_ko)),
+          h("div", {class: "cl-exit muted"}, h("a", {class: "cl-plain", href: `#/rules?pick=${encodeURIComponent(c.id)}`, title: "익절·손절·배수 자세히"}, c.exit_ko)),
+          WK.whyShort(INS && INS.accounts ? INS.accounts[c.id] : null)),
         ROLES.map((r, i) => {
           const a = set[r];
           if (!a) return h("td", {class: "muted"}, "—");

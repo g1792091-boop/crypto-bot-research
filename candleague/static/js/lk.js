@@ -235,6 +235,8 @@ export const smallN = (n, min = 30) => (n != null && n < min ? h("span", {class:
 /**
  * equityLines([{role, label, points: [[ms, $]...]}], {h}) -> an svg chart: one axis ($), the $5,000 start dashed, each
  * line named at its end and in the legend (never colour alone), a crosshair with every line's value at that time.
+ * o.band = {label, points: [[ms, low $, high $]...]}: a shaded range behind the lines (the 묶음 레이스's 동전 middle
+ * half), named in the legend and in the crosshair's list.
  */
 export function equityLines(series, o = {}) {
   if (o.until) {
@@ -244,8 +246,10 @@ export function equityLines(series, o = {}) {
     });
   }
   const box = h("div", {class: "cl-eq"});
-  const legend = h("div", {class: "cl-legend"}, series.map((x) => h("span", null, roleChip(x.role, ROLE_KO[x.role] || x.label))));
-  const all = series.flatMap((x) => x.points || []);
+  const band = o.band && (o.band.points || []).length > 1 ? o.band : null;
+  const legend = h("div", {class: "cl-legend"}, series.map((x) => h("span", null, roleChip(x.role, ROLE_KO[x.role] || x.label))),
+    band ? h("span", {class: "cl-bandkey"}, h("i", {"aria-hidden": "true"}), band.label) : null);
+  const all = series.flatMap((x) => x.points || []).concat(band ? band.points.flatMap((p) => [[p[0], p[1]], [p[0], p[2]]]) : []);
   if (all.length < 3) { box.append(legend, h("p", {class: "empty"}, o.empty || "아직 끝난 거래가 없습니다")); return box; }
   // drawn at the box's real width (text stays its size on a phone); redrawn when the width changes
   const H = o.h || 260, T = 12, B = 26;
@@ -264,6 +268,11 @@ export function equityLines(series, o = {}) {
     for (let i = 0; i <= 4; i++) {
       const v = y0 + ((y1 - y0) * i) / 4;
       kids.push(s("line", {x1: L, x2: W - R, y1: Y(v), y2: Y(v), class: "gl"}), s("text", {x: L - 6, y: Y(v) + 4, "text-anchor": "end", class: "ax"}, fmt.money(v).replace(/\.\d+$/, "")));
+    }
+    if (band) {
+      const up = band.points.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[2]).toFixed(1)}`).join("");
+      const dn = band.points.slice().reverse().map((p) => `L${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+      kids.push(s("path", {class: "band", d: `${up}${dn}Z`}));
     }
     kids.push(s("line", {x1: L, x2: W - R, y1: Y(EQUITY), y2: Y(EQUITY), class: "base"}));
     kids.push(s("text", {x: L, y: H - 6, class: "ax"}, fmt.mmdd(t0)), s("text", {x: W - R, y: H - 6, "text-anchor": "end", class: "ax"}, fmt.mmdd(t1)));
@@ -292,6 +301,11 @@ export function equityLines(series, o = {}) {
         for (const p of q.points || []) { if (p[0] <= t) v = p[1]; else break; }
         return h("div", null, roleChip(q.role, q.label), " ", h("b", {class: "num"}, v == null ? "—" : fmt.money(v)));
       });
+      if (band) {
+        let b = null;
+        for (const p of band.points) { if (p[0] <= t) b = p; else break; }
+        rows.push(h("div", {class: "muted"}, `${band.label} `, h("b", {class: "num"}, b ? `${fmt.money(b[1])} ~ ${fmt.money(b[2])}` : "—")));
+      }
       tip.replaceChildren(h("div", {class: "muted"}, `${fmt.kst(t)} KST`), ...rows);
       tip.hidden = false;
       const left = Math.min(ev.clientX - r.left + 12, r.width - 220);

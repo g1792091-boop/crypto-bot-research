@@ -16,6 +16,7 @@ import * as LK from "../lk.js";
 import {serverNow} from "../live.js";
 import {ROLES, ROLE_KO, KIND_LONG, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
 import {afterBar, afterFills, afterOn, afterSuffix, afterEmpty, openAfter} from "../after.js";
+import {luckShort} from "../whykit.js";
 
 const SHOW = 5;
 
@@ -183,7 +184,8 @@ export async function mount(el, ctx) {
       rows.length ? h("div", {role: "list"}, rows.map((c, i) => rankRow(c, off(i), ix))) : ui.empty("아직 끝난 거래가 없습니다"));
     const top = ranked.slice(0, SHOW), bot = ranked.slice(-SHOW).reverse().filter((c) => !top.includes(c));
     put(tb, col("한 번 평균 높은 후보", early ? "상위 5 · 거래가 적어 아직 운이 큼" : "상위 5", top, (i) => i + 1),
-      col("한 번 평균 낮은 후보", early ? "하위 5 · 30번 전에는 판단하지 않음" : "하위 5", bot, (i) => ranked.length - i));
+      col("한 번 평균 낮은 후보", early ? "하위 5 · 30번 전에는 판단하지 않음" : "하위 5", bot, (i) => ranked.length - i),
+      luckShort(d));
   }
 
   async function loadFills() {
