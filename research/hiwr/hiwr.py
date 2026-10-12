@@ -108,28 +108,32 @@ ELIG_PAIRS = {"15m": 8, "30m": 16, "1h": 32, "4h": 64}      # pairs per eligibil
 MIN_FREE = 1024 ** 3                 # stop below 1 GB free (as the hunt)
 
 CHOICES = [
-    "17.2 lists five per-pair sums; six are kept (n, wins, sum r, n at cost x2, sum r at cost x2, wins at cost x2): "
-    "the cost-x2 mean is sum r x2 / n x2 (acct.stats_from_sums), and a trade resolved at cost x1 can be open at the end "
-    "at cost x2.",
+    "17.2: six per-pair sums (n, wins, sum r, n at cost x2, sum r at cost x2, wins at cost x2); the cost-x2 mean is "
+    "sum r x2 / n x2 (acct.stats_from_sums): a trade resolved at cost x1 can be open at the end at cost x2.",
     "A combo whose signal code raises on any coin is recorded as failed for the whole cell: it has no trades, passes "
-    "nothing, and as a number neighbour (10.3 c) it exists and fails B.",
+    "nothing, and as a number neighbour (10.3 c) it exists and fails B. Out of memory and operating-system errors are "
+    "never recorded as a failed combo: the task stops and is redone.",
     "10.3 (b) and 10.4: an exit neighbour with fewer than 50 trades counts as not existing for the plateau score too; "
     "one with 50-149 trades counts as 0 in the score.",
-    "Seeds: f95 draws sha256('hiwr|f95|<period>|<pick id>|f95') (acct.py), p_boot sha256('hiwr|boot|<period>|<pick "
-    "id>|boot'), the (ii) data-check months sha256('hiwr|datacheck|SEL|<symbol>|months'): 8.4, 12 and 3 name 's' "
-    "only, so the control-letter slot holds the same word.",
+    "Seeds (8.4, 12, 3): f95 draws sha256('hiwr|f95|<period>|<pick id>|f95') (acct.py), p_boot sha256('hiwr|boot|"
+    "<period>|<pick id>|boot'), the (ii) data-check months sha256('hiwr|datacheck|SEL|<symbol>|months').",
     "p_boot (12) resamples the weeks that hold trades (as research/fullgrid/run.boot_mean_p); a resample whose mean is "
     "<= 0 counts against the pick.",
     "Coin-flip control (11 a): heads (0) keeps the group's side, tails (1) reverses it; a seed's mean is over the trades "
-    "its sides take (the trade-list rules decide), NaN when it takes none (never counted as >= the pick).",
+    "its sides take (the trade-list rules decide), NaN when it takes none (never counted as >= the pick); a pick "
+    "without a TEST trade gets p = 1 and T5 false.",
     "Random-time control (11 b): clusters are drawn in time order of their original close; 'without replacement' is "
     "per seed across its clusters (rejection sampling from a seeded uniform stream, an explicit scan after 32 "
     "rejections); a cluster with no unused bar left is dropped for that seed (counted).",
     "10.6: select.json counts the pairs passing (d) and (e) among the pairs that pass (a)-(c); with --eligibility lazy "
-    "only the plateau groups down to the pick are evaluated (the pick is the same; the counts are then marked partial).",
+    "only the plateau groups down to the pick are evaluated (the pick is the same; the counts are then marked partial). "
+    "The eligibility files of the two modes live in separate folders.",
+    "8.4: f_path and f* are 0.01 below the first failing grid size (an upward scan, acct.sizes), not a bisection.",
     "The account of a pick (8.2) walks the 1m bars of its period from one day before the period start (so the entry "
     "minute of a signal closing at the period start is the kernel's), and no minute at or after the period end.",
     "Coins whose practice-kit data ended inside SEL (TOMO) are not downloaded for the confirm kit.",
+    "13: the program-wide ledger publishes BH / Holm counts only when every hypothesis of the program has a p; "
+    "otherwise it is 'incomplete' and lists what is missing (``hiwr ledger`` completes it later; no verdict changes).",
 ]
 
 
