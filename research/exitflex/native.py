@@ -1,7 +1,7 @@
 """exitflex F11: the strategy's own exit, eight CORE strategies (research/exitflex/PREREG_EXITFLEX.md, Appendix A.1-A.8,
 common rules C1-C8 of A.0).
 
-    native_arrays(name, df, tf, combo) -> {
+    native_arrays(name, df, tf, combo=None, expect=None) -> {
         "comp_long":  [(kind, array), ...],   # kind 'state' or 'event'; one array value per chart bar of ``df``
         "comp_short": [(kind, array), ...],
         "lvl_long", "lvl_short":  float arrays, the per-signal invalidation level, indexed by the signal bar, NaN elsewhere
@@ -31,7 +31,12 @@ D1  Component arrays are float64 with 1.0 = true, 0.0 = false and NaN = unknown,
     (False arms a state component under C3). kernel_x.register_f11 and data_x._tri take exactly this ("booleans, or floats
     with NaN for 'neither fires nor arms'"). ``as_bool(array)`` is the plain boolean view (NaN -> False) and equals
     the boolean formulas written in Appendix A (for example N09's ``fin & ~long_state``, where the Appendix's fin guard
-    gives False at a non-finite bar and C7 adds that such a bar does not arm). A bar is unknown for a component when any
+    gives False at a non-finite bar and C7 adds that such a bar does not arm).
+    CONSUMERS: never ``bool(x)`` / ``astype(bool)`` / ``np.asarray(x, bool)`` a component array (NaN becomes True, i.e. "fires").
+    Read it as ``data_x._tri`` does (NaN -> "unknown": neither fires nor arms) or take ``as_bool`` where unknown may count as
+    False and no arming is involved. The league adapter (PREREG 11.4, ``candleague/rulex.py``) must do the same.
+    A.0 says "bool array"; this float64 tri-state is the one deviation from its wording (the pre-registration is not edited).
+    A bar is unknown for a component when any
     input series of that component is not finite there:
         DOGE    state: ema_fast, ema_slow; event: K, D and their values one bar earlier
         N03     EMA leg: both EMAs; ADX leg: ADX
@@ -70,11 +75,21 @@ D8  N10_HA_PSAR: ``tol``, ``body_min`` and ``body_max`` are built as in ``M.sign
 D9  Frame handling: modules that call ``df.reset_index(drop=True)`` (N13, N19, S4) are given the reset frame; for the
     others the frame is used as it comes (positional arrays either way). An empty frame returns empty arrays. ``combo``
     None means the module's default combo. The chart frames start where the study's frames start; HA open, PSAR and the
-    EMAs depend on the first bar, as the entries do (A.4), so the league computes them on the same frames.
+    EMAs depend on the first bar, as the entries do (A.4), so the league computes them on the same frames. Start dependence
+    is real: a recursion (EMA, ADX, PSAR, Heikin-Ashi open) forgets its first bar only slowly, and rolling means can flip on
+    a single bar at an exact tie when the window starts elsewhere. Measured by the review on real select-period bars: every
+    pick matched the full-history arrays over the last 300 bars with a window of at most 800 bars, except
+    core-N03_ADX_GC-1h-1 (EMA 33 / 250, ADX 5, level 50), which needed about 2,000 1h bars at one end date. The league's
+    chart window (11.4 items 7 and 13) must be at least that long and be tested per pick, not only on the study's own frames.
 D10 ``run`` is imported from research/fullgrid/run.py under the module name ``run`` (as data_x.fg() does), so that
     ``run.core_module`` and the memo are the objects the study uses.
 D11 No new tunable number is added anywhere; the only constants are the Appendix's (the measured-move projection 1 x the
     pattern height of N13).
+D12 ``expect`` (optional): the entry flags ``(long, short)`` the caller trades, i.e. what ``run.signals`` returned on the same
+    frame. When given, native_arrays asserts that the strategy module's own ``signals`` (what ``run.signals`` calls) gives the
+    same flags bar for bar, for all eight strategies, so that a level or target can never sit on bars other than the
+    ones the kernel trades (the runner's glue has ``sl, ss`` at hand and should pass them). The checks are explicit
+    ``raise AssertionError``, not bare ``assert`` (they survive ``python -O``).
 """
 
 from __future__ import annotations
@@ -408,12 +423,23 @@ _IMPL = {"DOGE": _doge, "N03_ADX_GC": _n03, "N09_ALLIG_AROON": _n09, "N10_HA_PSA
          "N19_FIB_CHOP": _n19, "OBV_S": _obv, "S4_BB_BBP": _s4}
 
 
-def native_arrays(name: str, df: pd.DataFrame, tf: str, combo: dict | None = None) -> dict:
+def native_arrays(name: str, df: pd.DataFrame, tf: str, combo: dict | None = None, expect=None) -> dict:
     """The own-exit arrays of the core strategy ``name`` on the chart frame ``df`` of timeframe ``tf`` with the pick's
-    ``combo`` (module docstring). Every array has len(df) entries; everything at bar i reads bars <= i only."""
+    ``combo`` (module docstring). Every array has len(df) entries; everything at bar i reads bars <= i only.
+
+    ``expect`` = (long, short) as returned by ``run.signals`` on the same frame (D12): asserted equal to the module's own
+    entry flags."""
     M = strategy_module(name)
     combo = dict(combo or {})
     n = len(df)
+    if expect is not None:
+        el, es = np.asarray(expect[0], dtype=bool), np.asarray(expect[1], dtype=bool)
+        if el.shape != (n,) or es.shape != (n,):
+            raise AssertionError(f"{name}: expect has the wrong length")
+        if n:
+            lo, sh = _entry_flags(M, df, tf, combo)
+            if not (np.array_equal(lo, el) and np.array_equal(sh, es)):
+                raise AssertionError(f"{name}: the module's entry flags differ from run.signals (expect)")
     if n == 0:
         return _out(name, 0, [(k, np.zeros(0)) for k, _ in SPEC[name]["long"]],
                     [(k, np.zeros(0)) for k, _ in SPEC[name]["short"]])

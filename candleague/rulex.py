@@ -5,8 +5,9 @@ What this module is
 -------------------
 * **Rule interface** (``parse_rule``): the study's ids, "F1.w3.a", "F1.w3.b.q15", "F2.n20.b", "F3.a", "F4.m1.5.a",
   "F5.P1.5.g25.a", "F6.w2.d0.5", "F7.N24.b", "F8.w3.P1.a", "F9.b.q15", "F10.N6.a" (or a dict with ``family`` and the
-  parameters), plus a plug-in family "F11" for the strategy's own exit arrays (below). Mode "a" keeps the pick's own
-  take-profit, mode "b" has no take-profit and no lock; q15 checks on 15m closes for picks on 1h and 4h.
+  parameters), plus "F11.a" / "F11.b" (the strategy's own exit) and "F12.a" / "F12.b" (all nine at once), both below. Mode "a"
+  keeps the pick's own take-profit, mode "b" has no take-profit and no lock (F11.b and F12.b: the strategy's own target where it
+  has one); q15 checks on 15m closes for picks on 1h and 4h.
 * **Engine** (``RuleMixin``, ``RuleEngine``, ``RuleLadderEngine``, ``make_engine``): a PaperEngine whose ``step`` runs
   funding -> RULE exit -> entries -> the engine's normal exit handling (stop, liquidation, take-profit, range checks).
   A rule decided from the chart closes handed in since the last minute is a market order at this minute's open
@@ -20,16 +21,33 @@ What this module is
   position, so a restart in the middle of a position continues exactly (tests/test_candleague_rulex.py). On a restore
   ``audit_restored`` recomputes it from the bars and corrects it where it differs (a Korean note says so).
 * **Inputs** (``chunk_rule``): for every rule account, a ``RuleClose`` for every chart close of every coin (close,
-  ATR14, EMA(n), the swings confirmed at that close, both raw signal flags, the strategy's exit flags for F11), and
-  the 15m closes for q15. They are handed to ``engine.submit`` like signals (``paramshadow.replay_day`` is used as it
-  is); the engine keeps only those of its held coin after the signal bar. Both sides are offered when both flags are
-  true, long first (PREREG 3 and 11.3); a coin flip takes one signal per signal bar with a seeded side.
-* **Accounts** (``accounts``): only when a rule config file exists (``DEFAULT_FILE``, ``CANDLEAGUE_RULES``). Per core
-  pick and chosen rule ``<id>-f`` (the rule at quarter size, the judged account), ``<id>-f-live`` (live size),
-  ``<id>-f-flip`` (a coin flip with the rule, quarter size), and per pick ``<id>-f0`` / ``<id>-f0-live`` (the pick's
-  own exit at quarter / live size, the same-day twins). With two rules the tags are f1 and f2. They run in a league of
-  their own (own database, own start, own fingerprint, ``runner.make_rule_league``), so the existing record is
-  neither reset nor replayed.
+  ATR14, EMA(n), the swings confirmed at that close, both raw signal flags, the strategy's component values for F11 and F12),
+  and the 15m closes for q15. They are handed to ``engine.submit`` like signals (``replay_day``); the engine keeps only those of
+  its held coin after the signal bar. No bar carries both flags (PREREG 3): ``chunk_rule`` stops with ``BothFlags`` when one
+  does; a coin flip takes one signal per signal bar with a seeded side.
+* **Accounts** (``accounts``, PREREG 11.2): only when a rule config file exists and is enabled (``DEFAULT_FILE``,
+  ``CANDLEAGUE_RULES``; ``"enabled": true`` is the owners' OK). Per pick, both pools: in a pool with a new exit ``<id>-n``
+  (the new exit, live size), ``<id>-nq`` (quarter size, the judged account), ``<id>-e`` and ``<id>-eq`` (E0, the pick's own
+  exit, live and quarter size: the same-day twins) and ``<id>-nflip`` (the new exit at quarter size, a seeded coin at the pick's
+  signal times); in a pool with no new exit ``<id>-e``, ``<id>-eq`` and ``<id>-eflip`` (E0, live size, a seeded coin). The
+  league that runs them is the restarted league itself (its own database and start, PREREG 11.3 and 11.4 item 1), not a side
+  league: ``runner.main`` takes these accounts instead of the candidate accounts when the file is enabled.
+* **Counters and marks** (PREREG 11.4 items 10-12): ``replay_day`` counts, per account and UTC day, the signals decided (entered,
+  skipped while holding, rejected) and ``League.advance`` the trades closed (table ``acct_day``); at every 00:00 UTC it writes each
+  account's realised wallet and its mark value (table ``acct_mark``); all in the commit of the chunk. ``no_entry_from_ms`` on an
+  account of the new exit stops its new entries from that time (the C1 script sets it; it is part of the fingerprint).
+
+F11 and F12 (the strategy's own exit; all nine at once; PREREG 5.2 and Appendix A)
+----------------------------------------------------------------------------------
+The strategy's component arrays, levels and targets come from a provider (``register_native``; production:
+``load_native_provider`` = research/exitflex/native.py and native_ds.py, the code the study runs) with the signature of
+``kernel_x.register_f11``. Per chart close the record carries the tri-state values (1 true, 0 false, 2 unknown) of both sides'
+components; the entry seed carries the position side's component kinds and the values at the signal bar (rule C3: a state
+component is armed once it has been false at a close), the strategy's invalidation level and target (``meta['native_inv']``,
+``meta['native_tgt']``, mirrored around the fill for a coin flip on the other side) and the strategy's side. F11.b has a
+take-profit limit at the target when it lies beyond the fill (the engine's ``tp_price``, without the lock); F11.a keeps the pick's
+own. F12 tests F1, F2, F3, F4, F5, F6, F7h, F10 and F11 on the same frozen state at the fixed values (``F12_PARAMS``) and records
+every component that fired at the exit's check (``rx['comp']``, in the trade's ``context['rx_comp']``).
 
 Readings of the pre-registration that the code fixes (change them here, in ``decide``, if section 5 says otherwise)
 ----------------------------------------------------------------------------------------------------------------
@@ -51,15 +69,6 @@ Readings of the pre-registration that the code fixes (change them here, in ``dec
 * Chart bars come from the 5m klines up to the chunk's end (``rule_frame``): a bin that closes at or before the end is kept even
   when its last 5m klines are missing ("a bin with minutes missing inside is kept as built", PREREG 2); ``chart_frame`` would drop
   it and, as the next chunk starts after its close, lose that close for good.
-
-F11 plug-in (the strategy's own exit; its definition arrives later, nothing is invented here)
----------------------------------------------------------------------------------------------
-``register_f11(strategy name, fn)`` with ``fn(df, tf, combo) -> {"long_exit": bool[n], "short_exit": bool[n],
-"target_long": float[n] | None, "target_short": float[n] | None}`` computed per chart bar from the strategy's own
-module on the pick-timeframe frame. The rule "F11.a" / "F11.b" fires at a pick-timeframe check close when the exit
-flag of the position's side is true on a bar closed since the last check. An optional target level is carried on the
-signal (``meta["rx0"]["target"]``) and becomes the take-profit price only when the rule has ``"use_target": true`` and
-the level lies beyond the fill. Both points are provisional until the appendix fixes them.
 """
 
 from __future__ import annotations
@@ -89,9 +98,11 @@ Q15_TFS = ("1h", "4h")                       # the picks on which a q15 variant 
 LOOKBACK = X.STRUCT_LOOKBACK
 RULES_ENV = "CANDLEAGUE_RULES"
 DEFAULT_FILE = os.path.join(C.ROOT, "candleague", "data", "rules.json")
-DB_NAME = "rule_league.db"
-MAX_VARIANTS = 2
+DB_NAME = "rule_league.db"             # the side league of the first draft (kept as a name for the backup helpers; the restarted league has its own db)
 REL_TOL = 1e-7
+RULEX_VERSION = 2                      # the meaning of a rule account: part of the fingerprint of rule accounts only (runner.fingerprint)
+POOLS = ("core", "ds")
+DAY = 86_400_000
 
 # roles of the rule league's accounts
 ROLE_RULE, ROLE_LIVE, ROLE_FLIP, ROLE_BASE, ROLE_BASE_LIVE = "rule", "rulelive", "ruleflip", "rulebase", "rulebaselive"
@@ -104,7 +115,8 @@ class RuleConfigError(ValueError):
 
 
 # ====================================================================== the rule interface
-FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F7h", "F8", "F9", "F10", "F11")
+FAMILIES = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F7h", "F8", "F9", "F10", "F11", "F12")
+NATIVE_FAMILIES = ("F11", "F12")       # the families that read the strategy's own exit arrays
 Q15_FAMILIES = ("F1", "F4", "F9")
 _N = r"\d+(?:\.\d+)?"
 _PAT = {
@@ -120,10 +132,15 @@ _PAT = {
     "F9": r"F9\.(?P<mode>[ab])(?P<q>\.q15)?",
     "F10": r"F10\.N(?P<N>\d+)\.(?P<mode>[ab])",
     "F11": r"F11\.(?P<mode>[ab])",
+    "F12": r"F12\.(?P<mode>[ab])",
 }
 F9_FIXED = {"w": 3, "P": 1.0, "d": 0.5}
+# F12's fixed values (PREREG 5.2: the middle of each component's grid, the larger of a two-value grid); equal to kernel_x.F12_PARAMS
+F12_PARAMS = {"w": 3, "n": 20, "m": 2.0, "P": 1.5, "g": 0.5, "d": 0.5, "H": 8, "N": 12}
+# F12 component bits of the exit mask (PREREG 5.2), the order of kernel_x.COMP_NAMES
+CB = {"F1": 1, "F2": 2, "F3": 4, "F4": 8, "F5": 16, "F6": 32, "F7h": 64, "F10": 128, "F11": 256}
 KO = {"F1": "구조 이탈", "F2": "이동평균 이탈", "F3": "반대 신호", "F4": "샹들리에 추적", "F5": "수익 반납",
-      "F6": "조기 손절", "F7": "시간 청산", "F7h": "시계 시간 청산", "F8": "수익 뒤 구조 이탈", "F9": "두 갈래 규칙", "F10": "정체", "F11": "전략 자체 청산"}
+      "F6": "조기 손절", "F7": "시간 청산", "F7h": "시계 시간 청산", "F8": "수익 뒤 구조 이탈", "F9": "두 갈래 규칙", "F10": "정체", "F11": "전략 자체 청산", "F12": "아홉 가지 동시"}
 
 
 def _num(x) -> float:
@@ -159,6 +176,8 @@ def rule_id(r: dict) -> str:
         return f"F9.{m}{q}"
     if f == "F10":
         return f"F10.N{r['N']}.{m}"
+    if f == "F12":
+        return f"F12.{m}"
     return f"F11.{m}"
 
 
@@ -240,15 +259,14 @@ def _normalize(d: dict, src) -> dict:
         need("H", int, 1)
     if fam == "F9":
         out.update(F9_FIXED)
-    if fam == "F11":
-        out["use_target"] = bool(d.get("use_target", False))
+    if fam == "F12":
+        out.update(F12_PARAMS)
     out["id"] = rule_id(out)
     return {"id": out.pop("id"), **out}
 
 
 def study_ids() -> list[str]:
-    """The study's 82 rule variant ids of F1-F10 (F7h included) in its canonical order (PREREG 5.3; F11 and F12 are the strategies'
-    own exits and come with them)."""
+    """The study's 82 rule variant ids of F1-F10 (F7h included) in its canonical order (PREREG 5.3); ``native_ids`` are the other four."""
     out = []
     modes = ("a", "b")
     out += [f"F1.w{w}.{m}" for w in (2, 3, 5) for m in modes]
@@ -267,6 +285,11 @@ def study_ids() -> list[str]:
     return out
 
 
+def native_ids() -> list[str]:
+    """F11 and F12, the 4 variants that read the strategy's own exit (86 with ``study_ids``)."""
+    return ["F11.a", "F11.b", "F12.a", "F12.b"]
+
+
 def effective_q15(rule: dict, tf: str) -> bool:
     """q15 means 15m checks only on picks of 1h and 4h; on 15m and 30m picks it equals the base variant (PREREG 5.1)."""
     return bool(rule.get("q15")) and tf in Q15_TFS
@@ -280,8 +303,10 @@ def sched_of(a: dict) -> str:
 def rule_needs(rule: dict) -> dict:
     """What the chart side must hand in per close for this rule."""
     f = rule.get("family")
+    if f == "F12":
+        return {"atr": True, "ema": [rule["n"]], "sw": [rule["w"]], "flags": True, "nat": True}
     return {"atr": f == "F4", "ema": [rule["n"]] if f == "F2" else [],
-            "sw": [rule["w"]] if f in ("F1", "F6", "F8", "F9") else [], "flags": f == "F3", "xf": f == "F11"}
+            "sw": [rule["w"]] if f in ("F1", "F6", "F8", "F9") else [], "flags": f == "F3", "nat": f == "F11"}
 
 
 def rule_ko(rule: Optional[dict]) -> str:
@@ -293,7 +318,7 @@ def rule_ko(rule: Optional[dict]) -> str:
             "F5": f"{_fmt(rule.get('P', 0))}R 뒤 {int(round(rule.get('g', 0) * 100))}% 반납",
             "F6": f"스윙 {rule.get('w')}봉, 손실 {_fmt(rule.get('d', 0))}R 이상",
             "F7": f"{rule.get('N')}봉", "F7h": f"{rule.get('H')}시간", "F8": f"스윙 {rule.get('w')}봉, {_fmt(rule.get('P', 0))}R 뒤",
-            "F9": "", "F10": f"{rule.get('N')}봉", "F11": ""}[f]
+            "F9": "", "F10": f"{rule.get('N')}봉", "F11": "", "F12": ""}[f]
     mode = "익절 유지" if rule["mode"] == "a" else "익절 없음"
     return f"{KO[f]}{' (' + bits + ')' if bits else ''} · {mode}" + (" · 15분 확인" if rule.get("q15") else "")
 
@@ -301,8 +326,10 @@ def rule_ko(rule: Optional[dict]) -> str:
 # ====================================================================== the config file and the accounts
 def load_config(path: Optional[str] = None) -> Optional[dict]:
     """The rule config (None when the file does not exist: then the league creates no rule account):
-    {"variants": [{"rule": <id or dict>, "label_ko": "..."}] (one or two), "picks": [candidate ids] (optional: every
-    core candidate)}. Raises RuleConfigError for a file that exists but cannot be run."""
+    {"enabled": bool, "pools": {"core": <rule id or dict or null>, "ds": ...}, "picks": [candidate ids] (optional: every
+    candidate of the pools), "no_entry_from_ms": {"core": ms or null, "ds": ...}}. A pool with a rule runs that new exit (the
+    pool's PASS, PREREG 11.1); a pool with null runs its current exit only. Raises RuleConfigError for a file that exists but
+    cannot be run."""
     path = path or os.environ.get(RULES_ENV) or DEFAULT_FILE
     if not os.path.exists(path):
         return None
@@ -315,61 +342,75 @@ def load_config(path: Optional[str] = None) -> Optional[dict]:
 
 
 def normalize_config(doc) -> dict:
-    if not isinstance(doc, dict) or not isinstance(doc.get("variants"), list) or not doc["variants"]:
-        raise RuleConfigError("rule config: 'variants' must be a list of one or two rules")
-    if len(doc["variants"]) > MAX_VARIANTS:
-        raise RuleConfigError(f"rule config: at most {MAX_VARIANTS} rules (PREREG 8: at most two are chosen)")
-    variants, seen = [], set()
-    for v in doc["variants"]:
+    if not isinstance(doc, dict) or not isinstance(doc.get("pools"), dict) or not doc["pools"]:
+        raise RuleConfigError("rule config: 'pools' must say, per pool (core, ds), the new exit or null")
+    bad = [k for k in doc["pools"] if k not in POOLS]
+    if bad:
+        raise RuleConfigError(f"rule config: unknown pools {bad} (core, ds)")
+    pools = {}
+    for pool in POOLS:
+        v = doc["pools"].get(pool)
+        if v is None:
+            pools[pool] = None
+            continue
         rule = parse_rule(v["rule"] if isinstance(v, dict) and "rule" in v else v)
-        if rule["id"] in seen:
-            raise RuleConfigError(f"rule config: {rule['id']} listed twice")
-        seen.add(rule["id"])
-        variants.append({"rule": rule, "label_ko": str(v.get("label_ko", "")) if isinstance(v, dict) else ""})
+        pools[pool] = {"rule": rule, "label_ko": str(v.get("label_ko", "")) if isinstance(v, dict) else ""}
     picks = doc.get("picks")
     if picks is not None and (not isinstance(picks, list) or not all(isinstance(p, str) for p in picks)):
         raise RuleConfigError("rule config: 'picks' must be a list of candidate ids")
-    return {"variants": variants, "picks": picks}
+    nef = doc.get("no_entry_from_ms") or {}
+    if not isinstance(nef, dict) or any(k not in POOLS for k in nef) or any(
+            v is not None and (isinstance(v, bool) or not isinstance(v, int) or v <= 0) for v in nef.values()):
+        raise RuleConfigError("rule config: 'no_entry_from_ms' must map core / ds to a time in ms or null")
+    enabled = doc.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise RuleConfigError("rule config: 'enabled' must be true or false")
+    return {"enabled": enabled, "pools": pools, "picks": picks, "no_entry_from_ms": {p: nef.get(p) for p in POOLS}}
 
 
 def pick_list(cands: list[dict], cfg: dict) -> list[dict]:
-    """The picks that get rule accounts: the listed ids, else every core candidate (DeepSeek never: D11)."""
+    """The picks that get accounts: the listed ids, else every candidate of both pools (D11 governs what is shown, not what runs)."""
     if cfg.get("picks") is None:
-        return [c for c in cands if c["kind"] == "core"]
+        return list(cands)
     by_id = {c["id"]: c for c in cands}
     missing = [p for p in cfg["picks"] if p not in by_id]
     if missing:
         raise RuleConfigError(f"rule config: picks {missing} are not in the candidate list")
-    bad = [p for p in cfg["picks"] if by_id[p]["kind"] != "core"]
-    if bad:
-        raise RuleConfigError(f"rule config: {bad} are not core picks (DeepSeek never gets rule accounts, D11)")
     return [by_id[p] for p in cfg["picks"]]
 
 
 def accounts(cands: list[dict], cfg: dict) -> list[dict]:
-    """The rule league's accounts (see the module docstring). Each is {id, kind, name, tf, combo, exit, source, role,
-    of, pick, size, rule}; ``rule`` is the normalized rule, or NO_RULE for the pick's own exit (the twins)."""
+    """The restarted league's accounts (PREREG 11.2; see the module docstring). Each is {id, kind, name, tf, combo, exit, source, role,
+    of, pick, size, rule}; ``rule`` is the normalized rule, or NO_RULE for the pick's own exit (E0). A pool with a new exit: ``-n``,
+    ``-nq``, ``-e``, ``-eq``, ``-nflip``; a pool without: ``-e``, ``-eq``, ``-eflip``. The accounts of the new exit carry
+    ``no_entry_from_ms`` when the config sets it (the C1 script's output, PREREG 11.4 item 9)."""
     out = []
-    many = len(cfg["variants"]) > 1
     for c in pick_list(cands, cfg):
         base = {k: c[k] for k in ("kind", "name", "tf", "combo", "exit")}
-        for n, v in enumerate(cfg["variants"], 1):
-            tag, rule = (f"f{n}" if many else "f"), v["rule"]
-            src = {"rule": rule["id"], "rule_of": c["id"]}
-            if v["label_ko"]:
-                src["label_ko"] = v["label_ko"]
-            fid = f"{c['id']}-{tag}"
-            out.append({**base, "id": fid, "role": ROLE_RULE, "of": c["id"], "pick": c["id"], "size": C.QUARTER,
-                        "rule": rule, "source": dict(src)})
-            out.append({**base, "id": f"{fid}-live", "role": ROLE_LIVE, "of": c["id"], "pick": c["id"], "size": 1.0,
-                        "rule": rule, "source": dict(src)})
-            out.append({**base, "id": f"{fid}-flip", "role": ROLE_FLIP, "of": fid, "pick": c["id"], "size": C.QUARTER,
-                        "rule": rule, "source": dict(src)})
-        twin = {"rule_of": c["id"], "rule": "E0"}
-        out.append({**base, "id": f"{c['id']}-f0", "role": ROLE_BASE, "of": c["id"], "pick": c["id"],
-                    "size": C.QUARTER, "rule": dict(NO_RULE), "source": dict(twin)})
-        out.append({**base, "id": f"{c['id']}-f0-live", "role": ROLE_BASE_LIVE, "of": c["id"], "pick": c["id"],
-                    "size": 1.0, "rule": dict(NO_RULE), "source": dict(twin)})
+        pid, pool = c["id"], c["kind"]
+        new = (cfg.get("pools") or {}).get(pool)
+        nef = (cfg.get("no_entry_from_ms") or {}).get(pool)
+
+        def acct(suffix, role, size, rule, of, src, with_nef=False):
+            a = {**base, "id": pid + suffix, "role": role, "of": of, "pick": pid, "size": size, "rule": rule, "source": dict(src)}
+            if with_nef and nef:
+                a["no_entry_from_ms"] = int(nef)
+            return a
+        twin = {"rule_of": pid, "rule": "E0"}
+        if new:
+            rule = new["rule"]
+            src = {"rule": rule["id"], "rule_of": pid}
+            if new["label_ko"]:
+                src["label_ko"] = new["label_ko"]
+            out.append(acct("-n", ROLE_LIVE, 1.0, rule, pid, src, True))
+            out.append(acct("-nq", ROLE_RULE, C.QUARTER, rule, pid, src, True))
+            out.append(acct("-e", ROLE_BASE_LIVE, 1.0, dict(NO_RULE), pid, twin))
+            out.append(acct("-eq", ROLE_BASE, C.QUARTER, dict(NO_RULE), pid, twin))
+            out.append(acct("-nflip", ROLE_FLIP, C.QUARTER, rule, pid + "-nq", src, True))
+        else:
+            out.append(acct("-e", ROLE_BASE_LIVE, 1.0, dict(NO_RULE), pid, twin))
+            out.append(acct("-eq", ROLE_BASE, C.QUARTER, dict(NO_RULE), pid, twin))
+            out.append(acct("-eflip", ROLE_FLIP, 1.0, dict(NO_RULE), pid + "-e", twin))
     return out
 
 
@@ -387,15 +428,19 @@ def check(cands: list[dict], cfg: dict) -> list[str]:
         seen.add(a["id"])
         if a["exit"] not in X.BY_NAME:
             bad.append(f"{a['id']}: exit {a['exit']!r} unknown")
-        if a["rule"]["family"] == "F11" and a["name"] not in F11_PROVIDERS:
-            bad.append(f"{a['id']}: no F11 definition registered for {a['name']!r}")
+    if any(a["rule"]["family"] in NATIVE_FAMILIES for a in accts):
+        try:
+            native_provider()
+        except RuleConfigError as exc:
+            bad.append(str(exc))
     return bad
 
 
 def load_accounts(path: Optional[str], cands: list[dict]) -> Optional[list[dict]]:
-    """The rule league's accounts from the config file; None when there is no file (no rule account is created)."""
+    """The restarted league's accounts from the config file; None when there is no file or it is not enabled (``"enabled": true`` is
+    the owners' OK, PREREG 11.1: committing the file alone starts nothing)."""
     cfg = load_config(path)
-    if cfg is None:
+    if cfg is None or not cfg["enabled"]:
         return None
     bad = check(cands, cfg)
     if bad:
@@ -403,26 +448,126 @@ def load_accounts(path: Optional[str], cands: list[dict]) -> Optional[list[dict]
     return accounts(cands, cfg)
 
 
-# ====================================================================== F11 plug-in
-F11_PROVIDERS: dict[str, Callable] = {}
+def code_version(rule: dict) -> str:
+    """What a rule account's meaning depends on besides its own definition (runner.fingerprint of rule accounts only): this module's
+    RULEX_VERSION and, for F11 and F12, the sha256 of the native exit modules the study runs (so a changed definition starts the
+    league over instead of mixing two code versions in one record)."""
+    v = str(RULEX_VERSION)
+    if rule.get("family") in NATIVE_FAMILIES:
+        v += "|" + native_hash()
+    return v
 
 
-def register_f11(strategy: str, fn: Callable) -> None:
-    """Register the strategy's own exit arrays (module docstring): fn(df, tf, combo) -> dict."""
-    F11_PROVIDERS[strategy] = fn
+# ====================================================================== F11 / F12: the strategy's own exit
+NATIVE: dict = {"provider": None}
+NATIVE_FILES = ("native.py", "native_ds.py")
 
 
-def _f11_arrays(a: dict, df, tf: str) -> tuple:
-    fn = F11_PROVIDERS.get(a["name"])
-    if fn is None:
-        raise RuleConfigError(f"F11: no definition registered for {a['name']!r}")
-    d = fn(df, tf, {k: (tuple(v) if isinstance(v, list) else v) for k, v in a["combo"].items()})
-    n = len(df)
-    xl, xs = np.asarray(d["long_exit"], bool), np.asarray(d["short_exit"], bool)
-    if len(xl) != n or len(xs) != n:
-        raise RuleConfigError(f"F11 arrays of {a['name']!r} do not match the {n} chart bars")
-    tl, ts = d.get("target_long"), d.get("target_short")
-    return (xl, xs, None if tl is None else np.asarray(tl, float), None if ts is None else np.asarray(ts, float))
+def register_native(fn: Optional[Callable]) -> None:
+    """Register the provider of the strategy's own exit: ``fn(account, sym, df, close_ms, long_flags, short_flags, btc_frame) ->
+    {"comp_long": [(kind, array)...], "comp_short": [...], "lvl_long": array|None, "lvl_short": ..., "tgt_long": ..., "tgt_short": ...}``
+    (``kernel_x.register_f11``'s contract: kind 'state' or 'event', one array value per chart bar, booleans or floats with NaN for
+    'neither fires nor arms'; levels and targets indexed by the signal bar, NaN elsewhere)."""
+    NATIVE["provider"] = fn
+
+
+def native_dir() -> str:
+    return os.path.join(C.ROOT, "research", "exitflex")
+
+
+def native_hash() -> str:
+    """sha256 over native.py and native_ds.py (research/exitflex), the code that defines the strategies' own exits; 'absent' when missing."""
+    import hashlib
+    h = hashlib.sha256()
+    for f in NATIVE_FILES:
+        path = os.path.join(native_dir(), f)
+        if not os.path.exists(path):
+            return "absent"
+        with open(path, "rb") as fh:
+            h.update(fh.read())
+    return h.hexdigest()[:16]
+
+
+def load_native_provider() -> Callable:
+    """The production provider: research/exitflex/native.py (core strategies) and native_ds.py (DeepSeek), the code the study runs
+    (PREREG 11.4 item 4). RuleConfigError when they cannot be imported."""
+    import importlib
+    import sys
+    d = native_dir()
+    try:
+        if d not in sys.path:
+            sys.path.insert(0, d)
+        native, native_ds = importlib.import_module("native"), importlib.import_module("native_ds")
+    except Exception as exc:  # noqa: BLE001
+        raise RuleConfigError(f"F11 / F12: the native exit modules cannot be imported ({type(exc).__name__}: {exc})") from None
+
+    def prov(a, sym, df, close_ms, lo, sh, btc):
+        if a["kind"] == "core":
+            r = native.native_arrays(a["name"], df, a["tf"], a["combo"])
+            return {k: r.get(k) for k in ("comp_long", "comp_short", "lvl_long", "lvl_short", "tgt_long", "tgt_short")}
+        ctx = None if sym == "BTCUSDT" else {"BTCUSD": btc}
+        r = native_ds.native(df, a["tf"], a["name"], a["combo"], ctx, sym[:-1])
+        if isinstance(r, dict):
+            lx, sx, inv_l, inv_s, tgt_l, tgt_s = (r[k] for k in ("lx", "sx", "inv_l", "inv_s", "tgt_l", "tgt_s"))
+        else:
+            lx, sx, inv_l, inv_s, tgt_l, tgt_s = r
+        return {"comp_long": [("state", lx)], "comp_short": [("state", sx)], "lvl_long": inv_l, "lvl_short": inv_s,
+                "tgt_long": tgt_l, "tgt_short": tgt_s}
+    return prov
+
+
+def native_provider() -> Callable:
+    """The registered provider, else the production one (loaded once)."""
+    if NATIVE["provider"] is None:
+        NATIVE["provider"] = load_native_provider()
+    return NATIVE["provider"]
+
+
+NC = 6                                   # components per side (kernel_x.NC)
+
+
+def _tri(a) -> list:
+    """0 / 1 / 2 (unknown: NaN) per bar of a component array (booleans, or floats with NaN)."""
+    a = np.asarray(a)
+    if a.dtype == bool:
+        return a.astype(np.int8)
+    a = a.astype(float)
+    return np.where(np.isnan(a), 2, (a != 0)).astype(np.int8)
+
+
+def normalize_native(ret: dict, n: int) -> dict:
+    """The provider's return value as {"kinds": {"l": [...], "s": [...]}, "tri": {"l": [arrays], "s": [...]}, "lvl": {"l": array,
+    "s": array}, "tgt": {...}} for ``n`` chart bars; refuses a component that is not (kind, array of n values) or more than NC."""
+    nan = np.full(n, np.nan)
+    out = {"kinds": {}, "tri": {}, "lvl": {}, "tgt": {}}
+    for key, side in (("long", "l"), ("short", "s")):
+        comps = list(ret.get("comp_" + key) or [])
+        if len(comps) > NC:
+            raise RuleConfigError(f"F11: at most {NC} components per side")
+        for kind, arr in comps:
+            if kind not in ("state", "event") or len(arr) != n:
+                raise RuleConfigError("F11: a component is (kind in 'state' / 'event', one value per chart bar)")
+        out["kinds"][side] = [k for k, _ in comps]
+        out["tri"][side] = [_tri(arr) for _, arr in comps]
+        for what in ("lvl", "tgt"):
+            v = ret.get(f"{what}_{key}")
+            if v is not None and len(v) != n:
+                raise RuleConfigError(f"F11: the {what}_{key} array does not match the {n} chart bars")
+            out[what][side] = nan if v is None else np.asarray(v, float)
+    return out
+
+
+def flip_levels(side_strategy: int, side_flip: int, fill_flip: float, inv: float, tgt: float) -> tuple:
+    """PREREG 11.2 (the F11 coin flip; kernel_x.flip_levels): the invalidation level and target of a position on side ``side_flip``
+    whose signal bar belongs to a strategy trade on side ``side_strategy`` (level ``inv``, target ``tgt``; NaN = none). On the
+    strategy's own side the values stand. On the other side they are mirrored around the flip's fill: inv' = f' - side' x |f' - inv|,
+    tgt' = f' + side' x (tgt - f') x s, the target only where (tgt - f') x s > 0. A NaN input gives no level / target."""
+    if side_flip == side_strategy:
+        return inv, tgt
+    inv2 = fill_flip - side_flip * abs(fill_flip - inv) if math.isfinite(inv) else float("nan")
+    ok = math.isfinite(tgt) and (tgt - fill_flip) * side_strategy > 0
+    tgt2 = fill_flip + side_flip * (tgt - fill_flip) * side_strategy if ok else float("nan")
+    return inv2, tgt2
 
 
 # ====================================================================== chart side: swings, seeds, records
@@ -518,10 +663,11 @@ class FramePack:
         return self._sw[w]
 
 
-def close_record(pack: FramePack, i: int, sym: str, close_ms: int, needs: dict, lo=None, sh=None, f11=None) -> dict:
+def close_record(pack: FramePack, i: int, sym: str, close_ms: int, needs: dict, lo=None, sh=None, nat=None) -> dict:
     """The record of chart bar i's close for a rule with ``needs`` (rule_needs): {"k": "p", "sym", "t": close ms,
     "c": close} plus "atr", "ema" {n}, "sl"/"sh" {w: the swing low / high confirmed at this close, or None}, "lf"/"sf"
-    (the pick's long / short flag), "xl"/"xs" (F11 exit flags). Everything is known at the bar's close."""
+    (the pick's long / short flag), "nl"/"ns" (F11 / F12: the values, 1 true, 0 false, 2 unknown, of the long / short side's
+    components at this bar). Everything is known at the bar's close."""
     d = {"k": "p", "sym": sym, "t": int(close_ms), "c": float(pack.c[i])}
     if needs["atr"]:
         d["atr"] = _fin(pack.atr()[i])
@@ -537,14 +683,17 @@ def close_record(pack: FramePack, i: int, sym: str, close_ms: int, needs: dict, 
         d["sl"], d["sh"] = sl, sh_
     if needs["flags"]:
         d["lf"], d["sf"] = bool(lo[i]), bool(sh[i])
-    if needs["xf"]:
-        d["xl"], d["xs"] = bool(f11[0][i]), bool(f11[1][i])
+    if needs["nat"]:
+        d["nl"] = [int(t[i]) for t in nat["tri"]["l"]]
+        d["ns"] = [int(t[i]) for t in nat["tri"]["s"]]
     return d
 
 
-def entry_seed(pack: FramePack, rule: dict, i: int, side: int, f11=None) -> dict:
-    """What the position needs from the signal bar: F1-type reference (``ref``), F2's arm at entry (``above``: the
-    signal bar's close is on the right side of its EMA), F11's target level."""
+def entry_seed(pack: FramePack, rule: dict, i: int, side: int, nat=None) -> dict:
+    """What the position needs from the signal bar: F1-type reference (``ref``), F2's arm at entry (``above``: the signal bar's close
+    is on the right side of its EMA), and for F11 / F12 the position side's component kinds (``ck``) and values at the signal bar
+    (``nv``: 1 true, 0 false, 2 unknown; rule C3 arms a state component that is false there) and the signal bar's close (``c0px``,
+    which arms the level test)."""
     seed = {}
     nd = rule_needs(rule)
     for w in nd["sw"]:
@@ -553,54 +702,99 @@ def entry_seed(pack: FramePack, rule: dict, i: int, side: int, f11=None) -> dict
     for n in nd["ema"]:
         e = pack.ema(n)[i]
         seed["above"] = bool(math.isfinite(e) and (pack.c[i] - e) * side > 0)
-    if nd["xf"] and f11 is not None:
-        t = f11[2] if side > 0 else f11[3]
-        if t is not None and math.isfinite(t[i]):
-            seed["target"] = float(t[i])
+    if nd["nat"] and nat is not None:
+        key = "l" if side > 0 else "s"
+        seed["ck"] = list(nat["kinds"][key])
+        seed["nv"] = [int(t[i]) for t in nat["tri"][key]]
+        seed["c0px"] = _fin(pack.c[i])
     return seed
 
 
 # ====================================================================== rule state and decision (pure)
-def new_rx(rule: dict, tf_ms: int, c0: int, seed: dict, atr: Optional[float], fill: float, open_time: int) -> dict:
-    """The rule state of a new position (kept in the signal meta; plain JSON). ``c0``: the signal bar's close."""
+def new_rx(rule: dict, tf_ms: int, c0: int, seed: dict, atr: Optional[float], fill: float, open_time: int, side: int = 1) -> dict:
+    """The rule state of a new position (kept in the signal meta; plain JSON). ``c0``: the signal bar's close; ``side``: the
+    position's side. For F11 and F12 the seed also holds the strategy's level ``inv``, target ``tgt`` and side ``s0`` (the signal's
+    ``native_*`` meta): a position on the other side gets them mirrored around its fill (``flip_levels``)."""
     f = rule["family"]
     rx = {"c0": int(c0), "k": 0, "x": float(fill), "tx": int(open_time), "q": []}
-    if f in ("F1", "F6", "F8", "F9"):
+    if f in ("F1", "F6", "F8", "F9", "F12"):
         rx["ref"] = seed.get("ref")
-    if f == "F2":
+    if f in ("F2", "F12"):
         rx["arm"] = bool(seed.get("above"))
-    if f in ("F5", "F8", "F9"):
+    if f in ("F5", "F8", "F9", "F12"):
         rx["armed"] = False
     if f == "F7":
         rx["dl"] = int(c0) + int(rule["N"]) * int(tf_ms)
-    if f == "F7h":                                                  # clock hours from the signal bar's close (PREREG 5.2)
+    if f in ("F7h", "F12"):                                         # clock hours from the signal bar's close (PREREG 5.2)
         rx["dl"] = int(c0) + int(rule["H"]) * 3_600_000
-    if f == "F4":
+    if f in ("F4", "F12"):
         rx["atr"] = None if atr is None else float(atr)
+    if f in NATIVE_FAMILIES:
+        ck = list(seed.get("ck") or [])
+        nv = list(seed.get("nv") or [])
+        rx["ck"] = ck
+        rx["car"] = [bool(k == "state" and i < len(nv) and nv[i] == 0) for i, k in enumerate(ck)]      # rule C3
+        inv, tgt = seed.get("inv"), seed.get("tgt")
+        s0 = seed.get("s0") or side
+        inv2, tgt2 = flip_levels(int(s0), int(side), float(fill), float("nan") if inv is None else float(inv),
+                                 float("nan") if tgt is None else float(tgt))
+        rx["lvl"] = inv2 if math.isfinite(inv2) else None
+        rx["tgt"] = tgt2 if math.isfinite(tgt2) else None
+        c0px = seed.get("c0px")
+        rx["carl"] = bool(rx["lvl"] is not None and c0px is not None and side * (rx["lvl"] - c0px) <= 0)
     return rx
 
 
 def _update_levels(rule: dict, rx: dict, side: int, r: dict) -> None:
     f = rule["family"]
-    if f == "F4" and r.get("atr") is not None:
+    if f in ("F4", "F12") and r.get("atr") is not None:
         rx["atr"] = r["atr"]
-    if f in ("F1", "F6", "F8", "F9"):
+    if f in ("F1", "F6", "F8", "F9", "F12"):
         v = ((r.get("sl") if side > 0 else r.get("sh")) or {}).get(str(rule["w"]))
         if v is not None and (rx.get("ref") is None or (v - rx["ref"]) * side > 0):
             rx["ref"] = v
-    if f == "F2":
+    if f in ("F2", "F12"):
         e = (r.get("ema") or {}).get(str(rule["n"]))
         if e is not None and (r["c"] - e) * side > 0:
             rx["arm"] = True
 
 
+def _native_bar(rx: dict, side: int, r: dict) -> bool:
+    """One chart close of F11 (PREREG A.0, rules C3 and C7): True when a component of the position's side fires at this bar. A state
+    component (and the level test: the close is beyond the invalidation level) fires where it is true once it has been false at an
+    earlier close; an event component fires where it is true; an unknown value (2, NaN) neither fires nor arms."""
+    any_ = False
+    vals = r.get("nl" if side > 0 else "ns") or []
+    for c, kind in enumerate(rx["ck"]):
+        vv = vals[c] if c < len(vals) else 2
+        if vv == 2:
+            continue
+        if kind == "event":
+            if vv == 1:
+                any_ = True
+        elif vv == 1:
+            if rx["car"][c]:
+                any_ = True
+        else:
+            rx["car"][c] = True
+    lvl = rx.get("lvl")
+    if lvl is not None and math.isfinite(r["c"]):
+        if side * (lvl - r["c"]) > 0:
+            if rx.get("carl"):
+                any_ = True
+        else:
+            rx["carl"] = True
+    return any_
+
+
 def decide(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, rt: float, f: float, X_: float,
            tf_ms: int) -> bool:
     """One check at a minute: the queued chart records (rx["q"], consumed here) are read in order, the pick-timeframe
-    ones update the levels (F1 reference, F2 arm, F4 ATR), and the latest record of the schedule is the check close.
-    ``side`` +1 / -1; ``fill`` the entry price with slippage; ``R`` the stop distance; ``rt`` the round-trip cost;
-    ``f`` the funding paid per unit of notional before this minute; ``X_`` the favourable extreme before it; rx["tx"]
-    is T_X. Returns True when the rule fires. Nothing of the minute being decided enters."""
+    ones update the levels (F1 reference, F2 arm, F4 ATR, F11's component arms), and the latest record of the schedule is the check
+    close. ``side`` +1 / -1; ``fill`` the entry price with slippage; ``R`` the stop distance; ``rt`` the round-trip cost; ``f`` the
+    funding paid per unit of notional before this minute; ``X_`` the favourable extreme before it; rx["tx"] is T_X. Returns True when
+    the rule fires (F12: ``rx["comp"]`` = the bit mask of every component that fired, ``CB``). Nothing of the minute being decided
+    enters."""
     queue = sorted(rx["q"], key=lambda r: (r["t"], 0 if r["k"] == "p" else 1))
     rx["q"] = []
     fam = rule["family"]
@@ -611,7 +805,8 @@ def decide(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, r
         if r["k"] == "p":
             _update_levels(rule, rx, side, r)
             opp = opp or bool(r.get("sf") if side > 0 else r.get("lf"))
-            xit = xit or bool(r.get("xl") if side > 0 else r.get("xs"))
+            if fam in NATIVE_FAMILIES and _native_bar(rx, side, r):
+                xit = True
         if r["k"] == sched:
             chk = r
     if chk is None:
@@ -653,6 +848,34 @@ def decide(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, r
         return bool(brk and (rx["armed"] or rc < -rule["d"]))
     if fam == "F10":
         return bool(rc > 0 and chk["t"] - rx["tx"] >= rule["N"] * tf_ms)
+    if fam == "F12":
+        # nine components on the same frozen state; none reads another's result (PREREG 5.2). The F2 arm is read as it was before the
+        # check bar (a bar cannot arm and fire: arming needs the close above the EMA, firing below it).
+        if rpk >= rule["P"]:
+            rx["armed"] = True
+        e = (chk.get("ema") or {}).get(str(rule["n"]))
+        a = rx.get("atr")
+        cm = 0
+        if brk:
+            cm |= CB["F1"]
+        if rx["arm"] and e is not None and (c - e) * side < 0:
+            cm |= CB["F2"]
+        if opp:
+            cm |= CB["F3"]
+        if a is not None and (c - (X_ - side * rule["m"] * a)) * side < 0:
+            cm |= CB["F4"]
+        if rx["armed"] and rc <= (1 - rule["g"]) * rpk:
+            cm |= CB["F5"]
+        if brk and rc < -rule["d"]:
+            cm |= CB["F6"]
+        if chk["t"] >= rx["dl"]:
+            cm |= CB["F7h"]
+        if rc > 0 and chk["t"] - rx["tx"] >= rule["N"] * tf_ms:
+            cm |= CB["F10"]
+        if xit:
+            cm |= CB["F11"]
+        rx["comp"] = cm
+        return cm != 0
     return xit                                                     # F11
 
 
@@ -693,6 +916,7 @@ class RuleMixin:
     rx_sched: str = "p"
     rx_tf_ms: int = 0
     rx_seen: Optional[dict] = None       # {coin: its previous minute present} (the league's, see replay_day); None = no gating
+    rx_no_entry_from: Optional[int] = None   # PREREG 11.4 item 9: from this time (ms) the account takes no new entry
 
     def submit(self, signal) -> None:
         if isinstance(signal, RuleClose):
@@ -714,16 +938,22 @@ class RuleMixin:
         super().submit(signal)
 
     def _try_enter(self, sig, bar) -> bool:
+        if self.rx_no_entry_from is not None and bar.open_time >= self.rx_no_entry_from:
+            self._record(sig, "REJECTED", "no new entry from the C1 time", bar.open_time)       # an open position closes by its own rules
+            return False
         ok = super()._try_enter(sig, bar)
         if ok and self.rx_rule is not None:
             p = self.position
-            seed = p.signal.meta.get("rx0") or {}
-            rx = new_rx(self.rx_rule, self.rx_tf_ms, p.signal.ts + 1, seed, p.signal.atr, p.entry_price, bar.open_time)
-            rx["q"] = [dict(r) for r in p.signal.meta.pop("rx_early", ()) if r["t"] > rx["c0"]]
-            p.signal.meta["rx"] = rx
-            t = seed.get("target")
-            if self.rx_rule.get("use_target") and t is not None and math.isfinite(t) and (t - p.entry_price) * p.side > 0:
-                p.tp_price = float(t)
+            meta = p.signal.meta
+            seed = dict(meta.get("rx0") or {})
+            seed.update(inv=meta.get("native_inv"), tgt=meta.get("native_tgt"), s0=meta.get("native_s"))      # the strategy's level, target, side
+            rx = new_rx(self.rx_rule, self.rx_tf_ms, p.signal.ts + 1, seed, p.signal.atr, p.entry_price, bar.open_time, p.side)
+            rx["q"] = [dict(r) for r in meta.pop("rx_early", ()) if r["t"] > rx["c0"]]
+            meta["rx"] = rx
+            t = rx.get("tgt")
+            if (self.rx_rule["family"] in NATIVE_FAMILIES and self.rx_rule["mode"] == "b" and t is not None
+                    and (t - p.entry_price) * p.side > 0):
+                p.tp_price = float(t)               # F11.b / F12.b: the strategy's own target as a limit, without the lock (PREREG C6, C8)
         return ok
 
     def _rx_decide(self, p, rx) -> bool:
@@ -755,6 +985,9 @@ class RuleMixin:
         if fire and self.position is not None:
             bar = bars[self.position.symbol]
             if not self._gapped(self.position, bar):
+                comp = (self.position.signal.meta.get("rx") or {}).get("comp")
+                if comp is not None:                                  # F12: every component that fired at this check (PREREG 5.2, tr_comp)
+                    self.position.signal.meta.setdefault("ctx", {})["rx_comp"] = int(comp)
                 self._close_market(bar.open, bar.open_time, "RULE")   # taker fee, slippage, at the open
         super().step(bars, None)                                      # entries, then the normal exit handling
         p = self.position
@@ -792,6 +1025,7 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     else:
         e = RuleEngine(st, brackets, symbol_specs=specs, policy=X.RPolicy(st, s["tp_val"]), book=a["id"])
     e.rx_rule, e.rx_sched, e.rx_tf_ms = rule, sched_of(a), TF_MS[a["tf"]]
+    e.rx_no_entry_from = int(a["no_entry_from_ms"]) if a.get("no_entry_from_ms") else None
     return e
 
 
