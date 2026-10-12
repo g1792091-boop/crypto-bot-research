@@ -68,7 +68,7 @@ export function luckRows(d) {
 const toneKo = {above: "운으로 나오는 범위보다 많음", inside: "운만으로도 나오는 범위 안", below: "운으로 나오는 범위보다 적음"};
 /** "동전보다 나은 후보 12 / 20 · 운만으로도 6~14개" as a row with a small bar (the range shaded, the count marked). */
 export function luckLine(label, r, o = {}) {
-  if (!r.n) return h("div", {class: "lu-row"}, h("b", null, label), h("span", {class: "muted"}, o.empty || "아직 비교할 후보가 없습니다"));
+  if (!r.n) return h("div", {class: ["lu-row", "empty"]}, h("b", null, label), h("span", {class: "muted"}, o.empty || "아직 비교할 후보가 없습니다"));
   const pos = (x) => `${((100 * x) / r.n).toFixed(1)}%`;
   return h("div", {class: ["lu-row", r.tone ? `t-${r.tone}` : ""]},
     h("b", null, label),

@@ -194,3 +194,8 @@
 @media (max-width: 599px) { .gl-list > div { grid-template-columns: minmax(0, 1fr); gap: 3px; } }
 .rl-sel { flex: 1 1 auto; min-width: 0; display: flex; }
 .rl-sel .select { width: 100%; max-width: 100%; min-width: 0; }
+.pc-box { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); font-size: var(--t-xs); line-height: 1.6; color: var(--ink-2); }
+.pc-box b { color: var(--ink); }
+.lu-row.empty > span { grid-column: 2 / -1; }
+.rl-step > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.cl-exit a.cl-plain { color: inherit; font-weight: 400; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }

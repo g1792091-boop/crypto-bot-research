@@ -46,7 +46,9 @@ export async function mount(el, ctx) {
     const c = LK.pickOf(a, ix) || a;
     const set = ix.sets[c.id] || {};
     const p = R && R.picks ? R.picks[c.id] : null;
-    put(why, INS ? WK.whyCard(a, (INS.accounts || {})[a.id], {flip: set.flip, rule: p, pick: c,
+    // the 동전 account shares the 후보's signal times and exit (a fair yardstick for the 후보 only); the rule's own
+    // break-even only for an account with the pick's exit (not the 기본값's lock)
+    put(why, INS ? WK.whyCard(a, (INS.accounts || {})[a.id], {flip: a.role === "cand" ? set.flip : null, rule: p && a.exit === p.exit ? p : null, pick: c,
       href: (t) => `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${coinOf(t.symbol)}&at=${t.entry_time}`}) : null);
     put(rule, c.role === "cand" ? ui.card({plate: "익절 · 손절 · 배수", sub: `${LK.pickKo(c, meta)} · 이 후보의 계좌 5개 공통 규칙과 지금 코인별로 몇 배가 되나`, cls: "rl-pickcard"},
       p ? RK.pickRuleBody(p, R) : RK.ruleBox(c, R)) : null);

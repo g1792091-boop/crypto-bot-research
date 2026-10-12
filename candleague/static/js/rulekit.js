@@ -15,7 +15,7 @@ const TF_BAR = {"15m": "15분봉", "30m": "30분봉", "1h": "1시간봉", "4h": 
 const LADDER_GAP = 0.02, LADDER_STEP = 0.05;                     // config ladder_trigger_gap / ladder_step
 /** A share as a percent ("0.53%"); "—" without a number. */
 export const share = (x, dec = 1) => (x == null || !Number.isFinite(Number(x)) ? "—" : fmt.pct(Number(x) * 100, false, dec));
-const num1 = (x) => fmt.num(x, Number(x) % 1 ? 1 : 0);
+const num1 = (x) => { const v = Math.round(Number(x) * 1000) / 1000; return fmt.num(v, v % 1 ? 1 : 0); };
 const coinKo = (c) => String(c || "").replace(/USDT?$/, "");
 /** A link to a term of 읽는 법's 용어 사전 (#/howto?q=ATR). */
 export const term = (word, label) => h("a", {class: "rl-term", href: `#/howto?q=${encodeURIComponent(word)}`, title: `${word}: 읽는 법 › 용어 사전`}, label || word);
@@ -54,10 +54,10 @@ export function tpShort(tp) {
 /** The take-profit in plain words (round_trip: the fees and slippage of a round trip, a share of the position). */
 export function tpWords(tp, o = {}) {
   if (!tp) return "—";
-  const rt = o.round_trip ?? 0.0014;
+  const rt = (o && o.round_trip) ?? 0.0014;
   const lock = (first) => `증거금 대비 순수익(수수료 뺀 ROE)이 +${num1((first + LADDER_GAP) * 100)}%가 되면 손절선을 +${num1(first * 100)}% 자리로 올려 수익을 잠그고, 그 뒤로 ${num1(LADDER_STEP * 100)}%씩 따라 올립니다 (계단 잠금). 잠금선에 닿으면 수익으로 끝납니다.`;
   if (tp.kind === "R") {
-    return `진입가에서 손절선까지의 거리를 1R이라 부릅니다. 가격이 유리한 쪽으로 ${num1(tp.val)}R(손절 거리의 ${num1(tp.val)}배) 가면, 들어갈 때 미리 걸어 둔 지정가 주문으로 익절합니다. 예: 손절이 1% 아래면 익절은 ${num1(tp.val)}% 위.`;
+    return `진입가에서 손절선까지의 거리를 1R이라 부릅니다. 가격이 유리한 쪽으로 ${num1(tp.val)}R(손절 거리의 ${num1(tp.val)}배) 가면, 들어갈 때 미리 걸어 둔 지정가 주문으로 익절합니다. 예: 손절이 1% 아래면 익절은 ${num1(tp.val)}% 위 (숏은 반대).`;
   }
   if (tp.kind === "roe") {
     const at = (lev) => share(tp.val / lev + rt, 1);
