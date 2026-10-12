@@ -360,7 +360,7 @@ def c4_trade_frame(ctx, pick, acc: dict) -> dict:
     p = ctx.pick(pick)
     arm, size = acc["arm"], float(acc["size"])
     key = (p["id"], arm, size)
-    cache = _cache(ctx, "_xr_c4", 2048)
+    cache = _cache(ctx, "_xr_c4", 1024)
     if key in cache:
         return cache[key]
     st = c5_status(ctx, p, arm, size)
@@ -714,6 +714,23 @@ def c9_split(ctx, pool: str, arm: str, key_fn, size: float = XC.SIZE_Q, buckets=
 
 
 # ====================================================================================================== results, guards
+def jsonable(obj):
+    """Plain JSON values: numpy scalars and arrays to Python, NaN and inf to None, tuples to lists, keys to str."""
+    if isinstance(obj, dict):
+        return {str(k): jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [jsonable(v) for v in obj]
+    if isinstance(obj, np.ndarray):
+        return jsonable(obj.tolist())
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        return float(obj) if math.isfinite(float(obj)) else None
+    return obj
+
+
 def new_result(read_id: str, tier: str, title: str | None = None) -> dict:
     """The dict every read returns (see the module docstring)."""
     return {"id": read_id, "tier": tier, "title": title or TITLE_KO.get(read_id, read_id), "public": {"core": {}, "ds": {"pool": "ds"}},
@@ -730,6 +747,21 @@ def _strip(obj):
     if isinstance(obj, (list, tuple)):
         return [_strip(v) for v in obj]
     return obj
+
+
+def ds_strip_problems(obj, where: str = "", ds: bool = False) -> list:
+    """Decision (a) on a committed object: no dict tagged pool 'ds' (or inside one) holds a non-empty offered / no_fill / after_bust key."""
+    bad = []
+    if isinstance(obj, dict):
+        ds = ds or obj.get("pool") == "ds"
+        for k, x in obj.items():
+            if ds and isinstance(k, str) and DS_STRIP.search(k) and x not in (None, ""):
+                bad.append(f"{where}{k}")
+            bad += ds_strip_problems(x, f"{where}{k}.", ds)
+    elif isinstance(obj, (list, tuple)):
+        for i, x in enumerate(obj):
+            bad += ds_strip_problems(x, f"{where}[{i}].", ds)
+    return bad
 
 
 def ds_public(obj: dict) -> dict:
@@ -757,7 +789,7 @@ def row_rule_problems(ctx, obj, path: str = "") -> list:
         out = []
         if isinstance(v, dict):
             for k, x in v.items():
-                if _is_money_key(k) and x is not None:
+                if _is_money_key(k) and x not in (None, ""):
                     out.append(f"{where}{k}")
                 out += money_inside(x, f"{where}{k}.")
         elif isinstance(v, (list, tuple)):
@@ -816,7 +848,7 @@ W_KO = dict(XC.W)
 W_KO.update({
     "W1": "이 문서의 표는 모두 참고용입니다. 픽·코인·봉·롱숏·요일·시간대·장세·변동성·크기·비용 수준별로 청산을 따로 고르지 않으며, "
           "고르는 기준은 고르기 표(SELECT_KO)의 기준뿐입니다.",
-    "W18": "이 풀의 돈 숫자(성장, 지갑, 하락, 파산 등)는 이 문서에 적지 않습니다. 소유자 두 분께 대화로만 보여 드리는 비공개 보고서에 있습니다. "
+    "W18": "이 풀의 돈과 관련된 숫자는 이 문서에 적지 않습니다. 소유자 두 분께 대화로만 보여 드리는 비공개 보고서에 있습니다. "
            "아래 주의 문장은 그대로 적용됩니다.",
     "W22": "88개 중에서 기준을 넘은 방식은 실력이 아니라 운이 좋아서 넘었을 수도 있습니다(승자의 저주). 같은 방식이 앞으로는 2021~2023년보다 "
            "낮게 나오는 것이 보통입니다.",
@@ -843,9 +875,14 @@ def fmt_f(x, nd: int = 2) -> str:
     return EMPTY if _bad(x) else f"{float(x):.{nd}f}"
 
 
+def _z(v: float, nd: int) -> float:
+    """No negative zero in print."""
+    return 0.0 if round(v, nd) == 0 else v
+
+
 def fmt_share(x, nd: int = 1) -> str:
     """A share as a percent (core pages only; C14: DeepSeek prints k/n)."""
-    return EMPTY if _bad(x) else f"{100.0 * float(x):.{nd}f}%"
+    return EMPTY if _bad(x) else f"{_z(100.0 * float(x), nd):.{nd}f}%"
 
 
 def fmt_kn(k, n) -> str:
@@ -857,13 +894,13 @@ def fmt_growth(M, sign: bool = True) -> str:
     """C12: a monthly log level or difference as '%/월' = 100 (e^M - 1)."""
     if _bad(M):
         return EMPTY
-    v = XC.pct_month(float(M))
+    v = _z(XC.pct_month(float(M)), 2)
     return (f"{v:+.2f}" if sign else f"{v:.2f}") + XC.U_GROWTH
 
 
 def fmt_contrib(logpart) -> str:
     """C12: an additive contribution '%/월 기여(근사)' (100 x the log part); the unit is printed in the column head."""
-    return EMPTY if _bad(logpart) else f"{XC.contrib_pct(float(logpart)):+.2f}"
+    return EMPTY if _bad(logpart) else f"{_z(XC.contrib_pct(float(logpart)), 2):+.2f}"
 
 
 def fmt_x(m, nd: int = 2) -> str:
@@ -877,7 +914,7 @@ def fmt_h(h) -> str:
 
 def fmt_roe(r) -> str:
     """C12: ROE in % per trade."""
-    return EMPTY if _bad(r) else f"{100.0 * float(r):+.1f}%"
+    return EMPTY if _bad(r) else f"{_z(100.0 * float(r), 1):+.1f}%"
 
 
 def mark(n, n_picks=None, min_n: int = XC.THIN_MIN) -> str:
