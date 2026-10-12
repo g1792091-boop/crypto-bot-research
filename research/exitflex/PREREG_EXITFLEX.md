@@ -1057,9 +1057,10 @@ runner writes them to `$WORK/<pin8>/results/select/core_not_choosable.json` (wit
 the commit and versions of the run, beside it), outside the repository and not opened. The DeepSeek money figures go
 to `$WORK/<pin8>/ds_private/select_ds.json`, whose sha256 is written into `select.json`. The private DeepSeek owner report (section 3) is written to
 `$WORK/<pin8>/ds_private/owner_report_select.md` in the same run, and its sha256 is written into `select.json`
-(`ds_owner_report_sha256`); the file itself is never committed. The sha256 of `select.json`, of `SELECT_KO.md` and of
-`timing.json` are appended to `PREREG_EXITFLEX.sha256`, committed and pushed before the report goes to the owners, so
-the menu they see is the one that was hashed. Before showing the private report, the main session checks that its
+(`ds_owner_report_sha256`); the file itself is never committed. The sha256 of `timing.json` was appended to
+`PREREG_EXITFLEX.sha256` before the select run (the select stage refuses without it, 13); the sha256 of `select.json` and
+of `SELECT_KO.md` are appended, committed and pushed before the report goes to the owners, so the menu they see is the
+one that was hashed. Before showing the private report, the main session checks that its
 sha256 equals the committed one. It shows the private report in the chat with the owners (section 3), in the same turn
 as or before it sends `SELECT_KO.md` by its channel; the 48 h clock of 8.3 starts at that sending. Right after sending,
 and before reading any answer, the main session writes the sending time (UTC and KST), the channel, the time at which
@@ -2520,6 +2521,89 @@ before the hash is section 17.
   the main session's duty at run time (section 17, item 20), and the audit is the second line.
 * Nothing in the reviews' "consistent" list (counts, hashes, cross-references, F12's tie rule) was changed.
 
+### 16.5 Pin-time alignment
+
+Made on 2026-10-12 (UTC), after the code was built and before the pin, by a sub-session that edited only this file and
+`README_KO.md`, committed and pushed nothing, ran no stage on real data and opened no performance figure. It read
+`runner_x.py`, `data_x.py`, `kernel_x.py`, `placebo.py`, `metrics.py`, `native.py`, `native_ds.py`, both test files of
+the folder, `tests/test_exitflex_league_parity.py` and the headers and relevant functions of `candleague/rulex.py` and
+`candleague/runner.py`; ran `runner_x.py pin-lines` and `--help`; and ran the tests on synthetic data (156 passed in
+`test_exitflex.py`; 288 passed and 83 skipped in `test_native.py`, run without the 1m folder so that its real-bar tests
+skip; 380 passed in `tests/test_candleague_rulex.py` plus `tests/test_exitflex_league_parity.py`). No rule of sections
+1-10 was changed; every item below makes the text say what the code does. The main session's statement in section 15 is
+unchanged.
+
+1. **Section 13: the pins, `make-pin`, `make-cut`, the stage chain.** The pinned-files paragraph and the table now
+   match `REQUIRED_PINS` of `runner_x.py` and what `pin-lines` prints: this file, `data_pin.json`, all nine `.py` files
+   of `research/exitflex/` (`test_native.py` through the rule for the folder's `.py` files, the other eight in
+   `REQUIRED_PINS`), and 25 inputs. The table gains eight inputs that fix every account and were not listed
+   (`research/fullgrid/grid.py`, `memo.py`, `paperbot/config.py`, `ladder.py`, `margin.py`, `levrule.py`,
+   `entry_marks.py`, `sweepsig.py`) and the file `research/entry_study/DEFS_BC.sha256` as a row of its own;
+   `fg1m/build.json` and the coin files are said to be pinned through `data_pin.json`. The pin file has 35 lines now and
+   36 once `make-pin` has written `data_pin.json`; it does not list itself or `README_KO.md`. New "The stages as built":
+   `make-pin` (and its refusal to overwrite a pinned `data_pin.json`), `pin-lines`, the gate every later stage passes,
+   `make-cut` as a separate step (the select and timing processes only open and verify the cut folder, and start
+   `make-cut` as a child process when it is missing), and for `timing`, `select`, `report`, `choice`, `confirm`,
+   `confirm-report`, `check`, `audit` and `audit-file` the stage order and each refusal as built (report is read-only;
+   `--rerun` needs a `DEVIATIONS.md` entry naming `select_r2` or `confirm_r2`; `choice` refuses when `choice.json` is
+   pinned; `confirm` refuses on a changed module hash or engine fingerprint, on an incomplete menu, on an existing
+   `confirm.json`). The paragraph "Code must match this revision before the pin" became "Code and this revision". The
+   tests paragraph says where the tests live (A1 reruns `test_exitflex.py` only; `test_native.py`'s real-bar tests skip
+   without the 1m folder and need `EXITFLEX_REQUIRE_REAL=1` at the pin; the league parity test is separate). The cache
+   stage list gains `check`; the order of work gains `make-pin`, `pin-lines`, `make-cut`, and puts the `timing.json` hash
+   before the select run (8.7 follows).
+2. **Sections 7, 8.2, 8.7, Known limit 11: pooled rows, not per-pick tables.** The sentences that promised hold time,
+   entries, skipped and rejected signals "per pick and pooled", and the live-size, changed-trade, reason, win-share,
+   drawdown, hazard and placebo lines "per pick", now say what `select.json` and `confirm.json` carry: pooled numbers per
+   pool in every row; per-pick numbers only in the per-account result files, which nobody opens. The one per-pick
+   number in a committed file is M_p of each core pick on a choosable core row (`Mp`). A variant's drawdown and final
+   multiple are in no committed select file (E0's median is in `select.json`, the core pairs' medians in
+   `confirm.json`); the placebo's hold statistics per seed stay in its result files. 8.7 now says that the growth of the
+   "선택 불가" core rows goes to `results/select/core_not_choosable.json`, outside the repository, not into
+   `select.json`. Known limit 11 no longer speaks of a "pick table".
+3. **Section 11: the league restart as built.** 11.1 names the `enabled` field of `candleague/data/rules.json` as the
+   switch. 11.2 gives the account counts recomputed from `rulex.accounts` on the 38 picks: 190 with a new exit in both
+   pools (`-n`, `-nq`, `-e`, `-eq`, `-nflip` per pick), 160 core only, 144 DeepSeek only, 114 with neither; one league,
+   one database, no side league. 11.3 says that the start is guarded by `CANDLEAGUE_EXPECT_START` before anything is
+   written (the text said "after the first pass"), that no code switch sets aside the kept start (the old database and
+   start file are moved away), and the name of the database copy `candleague backup` makes. 11.4: the "draft" paragraph
+   is replaced by what is built (module and function names, the first draft's `rule_league.db`, `-f` accounts and
+   `register_f11` gone), the items say "first draft" where they described it, a status table gives each of the 14 items
+   as built (item 13 built on synthetic data only, the archive run open; item 9: the C1 command prints
+   `no_entry_from_ms` and does not edit the rules file), and a **restart to-do** list names the pin-file, install-script,
+   unit-file, environment-file and backup-environment changes that are made at restart time and are not pinned here.
+   11.5 names the command `python -m candleague.rulex checks c1|c2|repeat` and says that C1's output is copied into the
+   rules file by hand.
+4. **Section 15: the hunt read.** A dated addendum (2026-10-12 ~06:38 UTC, 15:38 KST) stands below the main session's
+   statement, verbatim as given to this sub-session; the statement block itself is unchanged. Known limit 1 is rewritten
+   (the chandelier sentence applies; F4's confirm and F12's chandelier leg are knowingly a second look at chandelier
+   exits on 2024-2026; no hunt number was used for any choice; the owners are told in the select report); two sentences
+   of section 15 outside the block that said "no hunt result opened" now say "at the time of the statement"; the front
+   matter names the addendum; README_KO's disclosure carries it. `runner_x.py`'s `select_report_ko` has no line for it:
+   17 item 4a.
+5. **Status and calendar.** A status line at the top of this file reads: pin commit, see the commit message of the commit
+   that adds `PREREG_EXITFLEX.sha256` (no placeholder; no "draft" or "under review" wording was left that would be false
+   at the hash; the first-draft and revision history lines stay as history). README_KO's calendar of days and dates is
+   replaced by hours: rule fixed, calculation about 8 hours, results table, the owners' choice, one confirm, new bot
+   start; the 8 is the limit of the timing rule of 5.3 (above 8 hours projected, the placebos run 100 seeds instead of
+   200), no new measurement.
+6. **Section 17.** Every item that is now true is ticked, partly true items are marked and point to the list "Open for
+   the main session" (O1-O6: the text decisions 4a, 6 and 7, the pin time, the tests on the files to be pinned, `make-pin`,
+   the pin file and the pin commit, then `check`, `make-cut`, `timing` and the `timing.json` hash). Item 1's grep text
+   names 16.5; item 9 is rewritten for the hours; item 10 says that `variants()` returns 86 (the module holds 82 and
+   adds 4 when the F11 provider is registered); item 15 gains the built `make-cut` step and the refusals; new item 4a.
+7. **Counts and grep sanity.** The code gives 86 variants, 87 arms, 6,612 step-1 accounts, 74 with a placebo, 35 in D,
+   340,400 + 222,000 = 562,400 placebo accounts at most. `grep -n "84 variants\|E0 plus 84\|6,460\|547,200"` prints
+   lines of 16.4, 16.5 and 17 item 1 only; "76", "78" and "72" appear only in history lines or mean something else; "6,004"
+   appears nowhere; the other "84" are the full grid's 84 exits.
+
+**Found while aligning and left as it is:** the install script's `CODE_PATHS` and `backup` environment (11.4, restart
+to-do); the parity test over 60 days of archive data (11.4 item 13); `select_report_ko` without a hunt line (17 item
+4a); the C1 command that prints rather than writes `no_entry_from_ms` (11.4 item 9, restart to-do). The addendum of
+section 15 says Verification sub-agents read files "between about 06:40 and 07:30 UTC"; this sub-session's machine clock
+read 07:14-07:25 UTC while it worked, so the end time of that sentence is later than the clock it saw. The sentence is the
+main session's own and is not edited here; the main session may check it before the hash.
+
 ## Appendix A. Each strategy's own exit (family F11)
 
 ### A.0 Common rules and code (all 16 strategies)
@@ -3140,104 +3224,152 @@ before the hash is section 17.
 
 ## 17. Before the hash: checklist
 
-For the main session and the coders. This file is hashed, and the pin commit made, only when every line below is true.
-Each line is checked by a command, a test or a read. Names of functions and fields are those of this file (section 13 is
-the contract); if the coder used other names, section 13 is edited first. Items marked (5th) were added or changed by
-the fifth pass (16.4, items 9 on).
+For the main session and the coders. This file is hashed, and the pin commit made, only when every line of parts A and B
+below is true; parts C and D are the pin itself. Each line is checked by a command, a test or a read. Names of functions
+and fields are those of this file (section 13 is the contract); if the coder used other names, section 13 is edited
+first. Items marked (5th) were added or changed by the fifth pass (16.4, items 9 on). **Marks (16.5, 2026-10-12):**
+`[x]` true now; `[~]` true in part, the rest being in the list "Open for the main session" at the end of this section;
+`[ ]` open. Everything marked true was checked on the working tree by a read, a grep or a test on synthetic data. No
+stage was run on real market data: the real-data checks are open items.
 
 **A. Text** (the main session)
 
-1. The counts read 86 variants, 87 arms, 6,612 step-1 accounts, 74 placebo variants and 340,400 + 222,000 = 562,400
-   placebo accounts (5.3). `grep -n "84 variants\|E0 plus 84\|6,460\|547,200" PREREG_EXITFLEX.md` prints only lines of
-   16.4 and of this item. The other "84" in the file are the full grid's 84 exits or the kernel's (sections 1, 8.3, 12,
-   13 T1, 15, 16).
-2. `grep -n "run_x\|T1-T7\|F1-F11" PREREG_EXITFLEX.md` prints only explanatory and history lines (promise (a), the file
-   name note in section 13, sections 16 and 17).
-3. Section 15 carries the fourth and fifth revisions' reading lists, and the main session's statement in it is
-   unchanged (`git diff` shows no change inside that block).
-4. The DeepSeek drafter's blindness is still **not stated** (Known limit 10, section 15, README_KO). If the main session
-   obtains an explicit statement, it goes into all three places in one edit before the hash; otherwise nothing changes.
-5. `README_KO.md` agrees with sections 1, 3, 5.2, 7 and 8 (it is not pinned): 86 variants; number 12 and which of its
-   legs can act; no fixed percent; the market-state table; the private DeepSeek report with its confirm interval and
+1. [x] The counts read 86 variants, 87 arms, 6,612 step-1 accounts, 74 placebo variants and 340,400 + 222,000 = 562,400
+   placebo accounts (5.3). They were recomputed from the code: `kernel_x.variants()` with the F11 provider registered
+   gives 86 variants (74 with a placebo, 35 in the default set D). `grep -n "84 variants\|E0 plus 84\|6,460\|547,200"
+   PREREG_EXITFLEX.md` prints only lines of 16.4, 16.5 and this item. The other "84" in the file are the full grid's 84
+   exits or the kernel's (sections 1, 8.3, 12, 13 T1, 15, 16); "76", "78" and "72" appear only in history lines
+   (16.2-16.4, section 15) or mean something else (18 h as 72 bars, F5_BOX's `box_len`, a line range in section 15);
+   "6,004" appears nowhere.
+2. [x] `grep -n "run_x\|T1-T7\|F1-F11" PREREG_EXITFLEX.md` prints only explanatory and history lines (promise (a), the
+   file name note in section 13, sections 16 and 17).
+3. [x] Section 15 carries the fourth and fifth revisions' reading lists, and the main session's statement in it is
+   unchanged (`git diff` shows no change inside that block). The dated addendum (2026-10-12 ~06:38 UTC) stands below the
+   block and does not touch it.
+4. [x] The DeepSeek drafter's blindness is still **not stated** (Known limit 10, section 15, README_KO). If the main
+   session obtains an explicit statement, it goes into all three places in one edit before the hash; otherwise nothing
+   changes.
+4a. [ ] **The select report and the hunt read (16.5).** The addendum in section 15 and Known limit 1 say that the owners
+   are told, in the select report, that the main session read round-1 hunt results with test-period outcomes of
+   chandelier-exit trend systems. `select_report_ko` in `runner_x.py` writes `SELECT_KO.md` from fixed text and has no
+   such line. Decide before the pin: either add the line there (a code change: rerun `test_exitflex.py`, recompute the
+   pin lines) or put it in the message that sends the report and write it in the `freeze_note` of `sent.json`; in the
+   second case change "in the select report" to "with the select report" in Known limit 1 in the same edit (the
+   addendum is the main session's own wording and is not edited). README_KO's disclosure line already says it.
+5. [x] `README_KO.md` agrees with sections 1, 3, 5.2, 7 and 8 (it is not pinned): 86 variants; number 12 and which of
+   its legs can act; no fixed percent; the market-state table; the private DeepSeek report with its confirm interval and
    the redaction of figures in the owners' words; the answer format (id, 계열, `.a` and `.b`, a sample reply); the
-   dashboard sentence; quarter size against live size; the winner's curse; the restart cost. (5th)
-6. **Main session's decision, F12's placebo (5th).** Section 6 gives the F12 placebo F12's own clock (16.4 item 11).
-   Confirm it, or choose (b) h = 1 above F12's cap or (c) no F12 placebo, and in one edit change 6, 8.1, 8.5, Known
-   limits 9 and 17, T4, 5.3's placebo counts if (c), 16.4 item 11 and item 10 of this list to match.
-7. **Main session's decision, the league dashboard (5th).** The text says the league's dashboard, snapshots and
+   dashboard sentence; quarter size against live size; the winner's curse; the restart cost; the pooled tables (it
+   promises no per-pick table); the hunt read in its disclosure; the schedule in hours. (5th, rechecked in 16.5)
+6. [ ] **Main session's decision, F12's placebo (5th).** Section 6 gives the F12 placebo F12's own clock (16.4 item 11),
+   and the code and its tests are built that way. Confirm it, or choose (b) h = 1 above F12's cap or (c) no F12 placebo,
+   and in one edit change 6, 8.1, 8.5, Known limits 9 and 17, T4, 5.3's placebo counts if (c), 16.4 item 11 and item 10
+   of this list to match (and the code and its tests: (b) and (c) are code changes).
+7. [ ] **Main session's decision, the league dashboard (5th).** The text says the league's dashboard, snapshots and
    Telegram notices follow the league's own DeepSeek-money setting (on by default since 2026-10-11) and that this
    study's files carry none (3, 11.4 item 2, 11.5). Confirm that. If the owners are to be asked whether the restarted
    league hides DeepSeek money, ask them first and edit 3, 11.4 item 2, 11.5 and README_KO to the answer. The setting
    itself is not changed by this file.
-8. The Korean line of A.1 and README_KO's DOGE bullet agree: only the signal exit is used, not the trailing stop. They do
-   after the fifth pass; check by a read. (5th)
-9. README_KO's calendar is an estimate from 2026-10-12 (about 7-9 days to the restart). At the pin the main session
-   replaces it with the real pin time and the dates that follow from it (select report about one day later, the 48 h
-   clock, the restart, C1, C2). (5th)
+8. [x] The Korean line of A.1 and README_KO's DOGE bullet agree: only the signal exit is used, not the trailing stop.
+   (5th; read again in 16.5)
+9. [x] README_KO's schedule is in hours, not days (16.5): "규칙 고정 → 계산 약 8시간 → 결과 표 → 두 분 선택 → 한 번 확인 → 새
+   봇 시작", with the 8 hours taken from the timing rule of 5.3 (no new measurement). It has no calendar dates. At the pin
+   the main session may add the real clock times, and after the timing stage it may replace the 8 by the projected
+   hours of `out/timing.json` (seconds and hours only). (5th)
 
 **B. Code in `research/exitflex/`** (the coders; all pinned)
 
-10. `kernel_x.py`: `len(_VARIANTS) == 86` with the ids of 5.3; F7h; the F11 mechanics of Appendix A; F12 as in 5.2 (nine
-    components at the table's values, one RULE exit at the first firing check, `tr_comp` bit mask, a component mask for
-    tests, pick-close checks only, F12.b keeps the native target); the result carries `tr_state`. (5th) **The F12
-    placebo clock (6):** in a placebo run of F12 the position exits at its clock check, the first pick close at or after
-    C0 + 8 hours (a merged check counts when any merged close is at or after it), with probability 1 and no draw; the
-    hazard numerator and denominator it returns exclude the clock check and every later one. (5th) The result also
-    gives what the runner needs to split F12's component counts by the pick's timeframe.
-11. `placebo.py`: seed base without the pick id; (5th) key = coin index (the position in `SYMBOLS`, which is the
+10. [x] `kernel_x.py`: `variants()` returns the 86 ids of 5.3 (`_VARIANTS` holds the 82 of F1-F10 and asserts it; the 2
+    of F11 and the 2 of F12 are added when the F11 provider is registered, which the runner does and requires); F7h; the
+    F11 mechanics of Appendix A; F12 as in 5.2 (nine components at the table's values, one RULE exit at the first firing
+    check, `tr_comp` bit mask, a component mask for tests, pick-close checks only, F12.b keeps the native target); the
+    result carries `tr_state`. (5th) **The F12 placebo clock (6):** in a placebo run of F12 the position exits at its
+    clock check, the first pick close at or after C0 + 8 hours (a merged check counts when any merged close is at or after
+    it), with probability 1 and no draw; the hazard numerator and denominator it returns exclude the clock check and every
+    later one. (5th) The result also gives what the runner needs to split F12's component counts by the pick's
+    timeframe.
+11. [x] `placebo.py`: seed base without the pick id; (5th) key = coin index (the position in `SYMBOLS`, which is the
     priority order BTC, ETH, SOL, DOGE, LTC, BCH) x 2^36 + the millisecond close of the latest closed chart bar of the
     check // 60,000, as the code has it today (T4 pins it on a hand-computed example); strata z of section 6 including
     F12's (F6 adds nothing); no placebo for F7 and F7h; F11.b and F12.b keep the native target; (5th) the F12 clock of
     item 10 in the table builder and the runner.
-12. `metrics.py`: no "core pool only" header; gates per pool (14 of 23, 9 of 15); `choose_variants` replaced by the
+12. [x] `metrics.py`: no "core pool only" header; gates per pool (14 of 23, 9 of 15); `choose_variants` replaced by the
     default of 8.4 (set D of 35 variants, shortest pooled median hold, ties by parameter count then canonical order, at
     most 2 from different groups, only for a pool with no answer, F12 never); group A; `claim_of` for F7, F7h, F11 and
     F12 with the F12 wording of 8.5 (5th); `hold_by_state` used by `pool_summary`.
-13. `data_x.py`: `offered` has the `state` column from `regime5y.regimes`; the module's constants are asserted equal to
-    section 7's.
-14. `native.py` and `native_ds.py` exist and follow Appendix A.
-15. `runner_x.py`: the required pins include `native.py`, `native_ds.py`, `paperbot/dash/tools/regime5y.py` and
-    `research/fullgrid/regimes.py`; the second table of 8.2 and the F12 component counts, in total and split by pick
-    timeframe (5th), are printed; the private owner reports are written under `ds_private/` with
-    `ds_owner_report_sha256` in `select.json` and `confirm.json` (and the `_r2` files, 5th) and a last line asking the
-    owners to name variants by id (5th); the seed rule of 5.3 counts the 74; audits A1-A9 with **A8 as rewritten in 14
-    (5th)**: the file scope (including `sent.json`, `choice.json`, the `_r2` files, the ledger print and the
-    `DEVIATIONS.md` entries), the free-text tripwire (`audit_text` or the coder's name) and the marker
-    `[딥시크 금액 삭제]`; **A8 and A9 callable on each file before it is sent or committed** (select, sent, choice,
+13. [x] `data_x.py`: `offered` has the `state` column from `regime5y.regimes`; the module's constants are asserted equal
+    to section 7's.
+14. [~] `native.py` and `native_ds.py` exist and follow Appendix A. Their synthetic tests pass (`test_native.py`, run
+    without the 1m folder: 288 passed, 83 skipped); the 83 skipped are the real-bar tests (O3).
+15. [x] `runner_x.py`: the required pins include `native.py`, `native_ds.py`, `paperbot/dash/tools/regime5y.py` and
+    `research/fullgrid/regimes.py` (and, as built, the eight further inputs of section 13); the second table of 8.2 and
+    the F12 component counts, in total and split by pick timeframe (5th), are printed; the private owner reports are
+    written under `ds_private/` with `ds_owner_report_sha256` in `select.json` and `confirm.json` (and the `_r2` files,
+    5th) and a last line asking the owners to name variants by id (5th); the seed rule of 5.3 counts the 74; audits A1-A9
+    with **A8 as rewritten in 14 (5th)**: the file scope (including `sent.json`, `choice.json`, the `_r2` files, the
+    ledger print and the `DEVIATIONS.md` entries), the free-text tripwire (`audit_text` or the coder's name) and the
+    marker `[딥시크 금액 삭제]`; **A8 and A9 callable on each file before it is sent or committed** (select, sent, choice,
     confirm, report and ledger print, rerun files, DEVIATIONS entries) so that the order of work of 13 can run them
-    (5th); a redaction helper that replaces DeepSeek money figures in an owner message or question by the marker and
-    writes the sha256 of the unredacted text to `ds_private/owner_messages.json` (5th); `sent.json` carries
+    (5th): `audit-file`; a redaction helper that replaces DeepSeek money figures in an owner message or question by the
+    marker and writes the sha256 of the unredacted text to `ds_private/owner_messages.json` (5th); `sent.json` carries
     `ds_report_shown_utc` and `ds_report_shown_kst` and the choice validation reads `sent.json` as 8.3 says (5th); the
     names `confirm_r2.json`, `REPORT_KO_r2.md`, `owner_report_confirm_r2.md` and `confirm_ds_r2.json` for a confirm
-    rerun (5th); it prints the git commit and refuses a hash mismatch.
-16. `test_exitflex.py` has T1-T8 and all pass at the pin commit: T2 (F12: each component alone, first trigger wins,
+    rerun (5th); it prints the git commit and refuses a hash mismatch; the `make-cut` step, the stage chain and the
+    refusals of 13 ("The stages as built").
+16. [~] `test_exitflex.py` has T1-T8 and all pass at the pin commit: T2 (F12: each component alone, first trigger wins,
     ties, F6 within F1, single-component parity, modes), T3 (with the regime codes), T4 (F12 strata; **F12's clock and
     the key example, 5th**), T5 (F12), T6 (F12 equals F11 with the other eight off), T7 (gates per pool, the default,
     the group rule, `choice.json` checks, the D11 whitelist with the owner-report rules, **the free-text tripwire and
     the redaction, 5th**, the 86 / 74 / 35 counts, `claim_of`) and T8 (state labels). They print pass or fail and
-    counts only.
+    counts only. In the working tree on 2026-10-12: 156 passed (synthetic data, about 2.3 minutes). The pass "at the pin
+    commit" is O3. The league side, which is not pinned: `tests/test_candleague_rulex.py` and
+    `tests/test_exitflex_league_parity.py` gave 380 passed in the working tree.
 
-**C. Pins to compute** (the main session)
+**C. Pins to compute** (the main session; this is the pin commit itself)
 
-17. `runner_x.py make-pin` has written `data_pin.json` (the seven data hashes and the `$WORK` path). The pin is the
+17. [~] `runner_x.py make-pin` has written `data_pin.json` (the seven data hashes and the `$WORK` path). The pin is the
     sha256 of that file and `<pin8>` its first 8 hex digits (13, 5th). The full sha256 of every input in the table of
-    section 13 (the two regime rows included) and of every `.py` in the folder and of this file is computed at the pin
-    commit and agrees with the abbreviated values in the table. `PREREG_EXITFLEX.sha256` is created and committed and
-    pushed together with the files it lists. The "Repo HEAD" sentence of section 13 names the pin commit's parent. The
-    machine runs Python 3.11, numpy 2.0.2, pandas 2.3.3, numba 0.60.0.
+    section 13 and of every `.py` in the folder and of this file is computed at the pin commit and agrees with the
+    abbreviated values in the table. `PREREG_EXITFLEX.sha256` is created and committed and pushed together with the
+    files it lists. The "Repo HEAD" sentence of section 13 names the pin commit's parent. The machine runs Python 3.11,
+    numpy 2.0.2, pandas 2.3.3, numba 0.60.0. **True now:** the 25 inputs of the table agree with `pin-lines` (the
+    abbreviated values were compared on 2026-10-12), `fg1m/build.json` has `824c9d1a…`, and the machine runs Python
+    3.11.15, numpy 2.0.2, pandas 2.3.3, numba 0.60.0. **Open:** `make-pin`, the pin file, the commit and the "Repo HEAD"
+    sentence (O1, O4, O5).
 
 **D. The pin time** (the main session)
 
-18. The main session has chosen the pin time (UTC and KST) and writes it in the pin commit message. It is after items
-    1-17 are true; before the hold-cost workflow resumes (section 15); and such that the select report, about a day
-    later (README_KO schedule), does not fall in a window where a hunt (round 1 or 2), track-2 or ledger test-period
-    result is due or needed before the choice is hashed (8.3 freeze).
-19. No output of this study exists yet: `out/` holds no `timing.json`, `select.json` or `confirm.json`. Changes after
-    the pin go to `DEVIATIONS.md` only.
+18. [ ] The main session has chosen the pin time (UTC and KST) and writes it in the pin commit message (the status line
+    at the top of this file points to it). It is after items 1-17 are true; before the hold-cost workflow resumes
+    (section 15); and such that the select report, about 8 hours of calculation (5.3) plus the audits and commits later,
+    does not fall in a window where a hunt (round 1 or 2), track-2 or ledger test-period result is due or needed
+    before the choice is hashed (8.3 freeze).
+19. [x] No output of this study exists yet: `out/` does not exist in the folder, so there is no `timing.json`,
+    `select.json` or `confirm.json`. Changes after the pin go to `DEVIATIONS.md` only.
 
-**E. Duties at run time** (not before the hash; listed so that the main session has them in one place) (5th)
+**E. Duties at run time** (not before the hash; listed so that the main session has them in one place; no box) (5th)
 
 20. The private DeepSeek report is shown only in the chat with the owners, in the same turn as or before `SELECT_KO.md`
     is sent, and the time is written to `sent.json`. Every owner message or question about the DeepSeek pool has its
     money figures replaced by `[딥시크 금액 삭제]` before it is written to a committed file; the main session's own
     questions quote no figure; A8 and A9 run before every commit and every send of a file listed in 14.
+
+**F. Open for the main session** (16.5; in this order)
+
+* **O1. Finish the text.** Decide items 4a, 6 and 7 (and 4 only if a statement arrives). Write the "Repo HEAD" sentence
+  of section 13 (the pin commit's parent). After this the file is final: its sha256 is the first line of `pin-lines`, so
+  it is not edited again before the pin commit. `README_KO.md` is not pinned and can still change.
+* **O2. Choose the pin time** (item 18), UTC and KST.
+* **O3. Run the tests on the files that will be pinned:** `python -m pytest -q research/exitflex/test_exitflex.py`
+  (T1-T8), and `EXITFLEX_REQUIRE_REAL=1 python -m pytest -q research/exitflex/test_native.py` with `EXITFLEX_FG1M`
+  pointing at the 1m folder (0 skipped), which closes items 14 and 16. They print pass or fail and counts only.
+* **O4. `python research/exitflex/runner_x.py make-pin --data-dir <fg1m folder> --work <$WORK folder>`**, which writes
+  `data_pin.json`; compare the printed `build.json` and coin hashes with section 2.
+* **O5. The pin file and the pin commit.** `python research/exitflex/runner_x.py pin-lines` prints 36 lines (35 plus
+  `data_pin.json`); write them to `research/exitflex/PREREG_EXITFLEX.sha256`; commit and push the file together with
+  every file it lists, with the pin time (O2) in the commit message. This commit is what the status line at the top
+  of this file points to.
+* **O6. After the pin commit, before the select run:** `python research/exitflex/runner_x.py check` (the real-data parts
+  of T1, T3, T5 and T8; pass or fail), `make-cut`, then `timing` (seconds only, `out/timing.json`), append the sha256
+  of `out/timing.json` to the pin file, commit and push. The select run (13, order of work, step 3) follows.
+* Not before the pin: the owners' choice and the confirm (13), and everything in the restart to-do of 11.4.
