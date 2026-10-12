@@ -1935,7 +1935,9 @@ def test_f13_accounts_are_the_same_ids_and_counts_with_the_lock_exit_on_the_new_
     assert len(fps) == 3
 
 
-def test_f13_account_engines_are_the_plain_engines_of_the_lock_exit():
+def test_f13_account_engines_are_the_plain_engines_of_the_lock_exit_with_the_c1_gate_and_no_rule():
+    """An F13 account is the engine of ``exits.make_engine`` (same class family, settings, policy and take-profit) with the ``RuleMixin`` gate and no rule:
+    ``rx_rule`` None, so its ``step`` and ``submit`` are the plain engine's, and ``rx_no_entry_from`` is set from the account (PREREG 11.4 item 9)."""
     cands = C.load()
     by = {a["id"]: a for a in RX.accounts(cands, cfg_of("F13.a"))}
     for pid, want_exit in (("core-DOGE-15m-1", "lock+tp3R|4"), ("core-OBV_S-1h-3", "lock+roe50|4"), ("core-S4_BB_BBP-30m-1", "ladder_tp2R|2")):
@@ -1943,14 +1945,19 @@ def test_f13_account_engines_are_the_plain_engines_of_the_lock_exit():
             a = by[pid + suffix]
             e = RX.make_engine(a, BR, SP)
             ref = X.make_engine(want_exit, BR, SP, book=a["id"], size=a["size"])
-            assert type(e) is type(ref) is X.LadderTP and not isinstance(e, RX.RuleMixin)
+            assert type(e) is RX.LockLadderEngine and type(ref) is X.LadderTP and isinstance(e, X.LadderTP) and isinstance(e, RX.RuleMixin)
+            assert e.rx_rule is None and e.rx_no_entry_from is None
             assert e.s == ref.s and e.s.tp_mode == "ladder" and (e.m, e.roe, e.struct) == (ref.m, ref.roe, ref.struct)
+            assert type(e.policy) is type(ref.policy) and e.book == ref.book
             assert RX.exit_name(a) == want_exit
     # mode b: the rule bot's exit, 'ladder|k'
     bb = {a["id"]: a for a in RX.accounts(cands, cfg_of("F13.b"))}
     a = bb["core-DOGE-15m-1-nq"]
     e = RX.make_engine(a, BR, SP)
-    assert RX.exit_name(a) == "ladder|4" and type(e) is PaperEngine and e.s.tp_mode == "ladder" and e.s.ladder.first_lock == 0.10
+    ref = X.make_engine("ladder|4", BR, SP, book=a["id"], size=a["size"])
+    assert RX.exit_name(a) == "ladder|4" and type(e) is RX.LockEngine and type(ref) is PaperEngine and not isinstance(e, X.LadderTP)
+    assert e.rx_rule is None and e.s == ref.s and type(e.policy) is type(ref.policy)
+    assert e.s.tp_mode == "ladder" and e.s.ladder.first_lock == 0.10
     twin = RX.make_engine(bb["core-DOGE-15m-1-eq"], BR, SP)
     assert twin.s.tp_mode == "fixed" and type(twin) is not RX.RuleEngine                            # the twin keeps the pick's own fixed take-profit
     # the engines of the other families are unchanged (a rule account is still a RuleMixin engine)
@@ -2072,7 +2079,7 @@ def test_f13_in_the_league_trades_by_lock_and_leaves_the_twins_alone(lock_whole)
         assert "RULE" not in by.get(pid + suffix, set()) and by.get(pid + suffix)
     assert any("LOCK" in by.get(pid + s, set()) for s in ("-n", "-nq", "-nflip"))
     assert "LOCK" not in by.get(pid + "-eq", set()) and "LOCK" not in by.get(pid + "-e", set())
-    assert all(type(lock_whole.engines[pid + s]) is X.LadderTP for s in ("-n", "-nq", "-nflip"))
+    assert all(type(lock_whole.engines[pid + s]) is RX.LockLadderEngine for s in ("-n", "-nq", "-nflip"))
     assert lock_whole.engines[pid + "-nq"].s.tiers[0].margin_frac == pytest.approx(0.125) and lock_whole.engines[pid + "-n"].s.tiers[0].margin_frac == 0.5
     t = next(json.loads(d) for a, d in lock_whole.conn.execute("SELECT account, data FROM trades") if a == pid + "-nq")
     assert t["strategy_style"] == "rule:F13.a"

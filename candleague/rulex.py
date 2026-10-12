@@ -8,7 +8,7 @@ What this module is
   parameters), plus "F11.a" / "F11.b" (the strategy's own exit) and "F12.a" / "F12.b" (all nine at once), both below. Mode "a"
   keeps the pick's own take-profit, mode "b" has no take-profit and no lock (F11.b and F12.b: the strategy's own target where it
   has one); q15 checks on 15m closes for picks on 1h and 4h.
-* **Engine** (``RuleMixin``, ``RuleEngine``, ``RuleLadderEngine``, ``make_engine``): a PaperEngine whose ``step`` runs
+* **Engine** (``RuleMixin``, ``RuleEngine``, ``RuleLadderEngine``, ``LockEngine``, ``LockLadderEngine``, ``make_engine``): a PaperEngine whose ``step`` runs
   funding -> RULE exit -> entries -> the engine's normal exit handling (stop, liquidation, take-profit, range checks).
   A rule decided from the chart closes handed in since the last minute is a market order at this minute's open
   (slippage, taker fee, reason "RULE"). The decision is computed from state frozen before the minute (the favourable
@@ -43,8 +43,10 @@ F13 (the rule bot's stepped profit lock; PREREG 5.2, ``exits.lock_exit``)
 exit) make no decision at a chart close and read no chart data. The pick's hard stop (k x ATR14) stays. The three accounts of the new exit
 (``-n``, ``-nq``, ``-nflip``) simply run another exit of ``candleague.exits`` on the plain engine: ``exit_name(a)`` = ``exits.lock_exit`` of the
 pick's own exit ("tp3R|4" -> "lock+tp3R|4", mode b "ladder|4"). Their signals carry the same stop distance; no ``RuleClose`` is handed in, no
-``meta['rx']`` exists, a restart restores the position, its stop and its lock (``lock_roe``) with the engine state. The twins (``-e``, ``-eq``)
-and every account id and count are unchanged.
+``meta['rx']`` exists, a restart restores the position, its stop and its lock (``lock_roe``) with the engine state. The engine is the plain
+engine of that exit with the ``RuleMixin`` gate and no rule (``LockEngine`` / ``LockLadderEngine``, ``rx_rule`` None: ``step`` and ``submit``
+are the plain engine's), so that ``no_entry_from_ms`` (the C1 stop, PREREG 11.4 item 9) refuses a new entry from that time as it does for every
+other rule account. The twins (``-e``, ``-eq``) and every account id and count are unchanged.
 
 F11 and F12 (the strategy's own exit; all nine at once; PREREG 5.2 and Appendix A)
 ----------------------------------------------------------------------------------
@@ -1042,15 +1044,43 @@ class RuleLadderEngine(RuleMixin, X.LadderTP):
     pass
 
 
+class LockEngine(RuleEngine):
+    """F13 on a PaperEngine exit ("ladder|k", or a fixed take-profit with the lock): ``rx_rule`` stays None, so ``step`` and ``submit`` are the plain
+    engine's; the engine carries only the C1 gate (``rx_no_entry_from``, PREREG 11.4 item 9) of ``RuleMixin._try_enter``."""
+
+
+class LockLadderEngine(RuleLadderEngine):
+    """The same on a ``candleague.exits.LadderTP`` exit (the lock with a take-profit at m x R, at a net ROE or at a structure level)."""
+
+
+def _lock_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
+    """``exits.make_engine`` of ``exit_name(a)``, built as the same class with the ``RuleMixin`` gate and no rule: the same branches, the same
+    settings, take-profit and policy (a test compares every field with ``exits.make_engine``)."""
+    name, size = exit_name(a), a.get("size", 1.0)
+    s, st = X.spec(name), X.settings_for(name, size=size)
+    if s["ladder"] and s["tp_kind"] == X.TP_STRUCT:
+        return LockLadderEngine(st, brackets, symbol_specs=specs, struct=True, book=a["id"])
+    if s["ladder"] and s["tp_kind"] == X.TP_R:
+        return LockLadderEngine(st, brackets, symbol_specs=specs, m=s["tp_val"], book=a["id"])
+    if s["ladder"] and s["tp_kind"] == X.TP_ROE:
+        return LockLadderEngine(st, brackets, symbol_specs=specs, roe=s["tp_val"], book=a["id"])
+    if s["ladder"] or s["tp_kind"] == X.TP_ROE:
+        return LockEngine(st, brackets, symbol_specs=specs, book=a["id"])
+    return LockEngine(st, brackets, symbol_specs=specs, policy=X.RPolicy(st, s["tp_val"]), book=a["id"])
+
+
 def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     """The engine of a rule-league account. The twins (no rule) are the plain engines of candleague.exits; a rule
     account is the same set-up (the pick's exit, ``size``) as a RuleMixin engine: mode a keeps the exit's own
-    take-profit, mode b has none and no lock. An F13 account (the stepped lock) is the plain engine of the exit with the lock added."""
+    take-profit, mode b has none and no lock. An F13 account (the stepped lock) is the plain engine of the exit with the lock added, with the
+    C1 gate (``rx_no_entry_from``) and no rule."""
     rule, name, size = a.get("rule") or NO_RULE, a["exit"], a.get("size", 1.0)
     if rule.get("family") is None:
         return X.make_engine(name, brackets, specs, book=a["id"], size=size)
-    if rule["family"] in LOCK_FAMILIES:                                    # F13: another exit of candleague.exits on the plain engine
-        return X.make_engine(exit_name(a), brackets, specs, book=a["id"], size=size)
+    if rule["family"] in LOCK_FAMILIES:                                    # F13: another exit of candleague.exits, the plain engine with the C1 gate
+        e = _lock_engine(a, brackets, specs)
+        e.rx_no_entry_from = int(a["no_entry_from_ms"]) if a.get("no_entry_from_ms") else None
+        return e
     s, st = X.spec(name), X.settings_for(name, size=size)
     if rule["mode"] == "b":
         st = replace(st, tp_mode="fixed")                  # no take-profit and no stepped lock
