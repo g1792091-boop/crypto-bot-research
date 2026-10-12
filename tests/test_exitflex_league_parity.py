@@ -30,7 +30,12 @@ and the position still open at the end. The test prints only pass or fail: the d
 result. Readings the league follows because the pre-registration says so are in ``rulex.replay_day`` (the coin's own
 minutes: a minute missing for one coin does not move that coin's fills and checks).
 
-Not covered, because the league side has no such rule yet: F11 (the strategies' own exits) and F12 (all at once).
+F11 (each strategy's own exit) and F12 (all nine at once) run through a SYNTHETIC native provider, the same function for the study
+(``kernel_x.register_f11``) and the league (``rulex.register_native``): per strategy two state components and one event component on the
+long side, one state and one event on the short side, with unknown (NaN) values, a per-signal invalidation level and target; the real
+strategies' arrays (research/exitflex/native.py, native_ds.py) are the other job's code and are not run here (they need real data to
+agree on a window, PREREG 11.4 item 13). Coin-flip accounts under F11 / F12 take the study's kernel with the levels and targets
+mirrored around their own fill (``kernel_x.flip_levels``); F12's exit mask (``tr_comp``) is compared too.
 """
 
 from __future__ import annotations
@@ -290,6 +295,38 @@ class Prov:
         return pid
 
 
+def uh(sym: str, tf_ms: int, open_ms, salt: int):
+    """Like ``u01`` with a larger key space (salts 0-63): a uniform in [0, 1) that is a function of (coin, timeframe, bar open, salt)."""
+    key = (np.asarray(open_ms, np.int64) // MIN).astype(np.uint64) * np.uint64(512) + np.uint64(SYMS.index(sym) * 64 + salt)
+    base = _mix(np.uint64(tf_ms) * np.uint64(7_000_003) + np.uint64(777))
+    return (_mix(key ^ base) >> np.uint64(11)).astype(float) / 9007199254740992.0
+
+
+def native_syn(tf: str, sym: str, df, sl, ss) -> dict:
+    """The synthetic strategy's own exit (the kernel's ``register_f11`` contract): long side a state component (true 25% of the bars),
+    an event component (6%) and a second state component (20%), short side a state component (25%) and an event component (6%);
+    each value unknown (NaN) on 3% of the bars; a per-signal invalidation level (10% none) and target (25% none) on the signal bars,
+    functions of (coin, timeframe, bar open) and the bar's close only, so that the 1m-built and the 5m-built frames agree."""
+    om, tfm = open_ms_of(df), L.TF_MS[tf]
+    close = df["close"].to_numpy(float)
+
+    def comp(salt, p):
+        v = (uh(sym, tfm, om, salt) < p).astype(float)
+        v[uh(sym, tfm, om, salt + 20) < 0.03] = np.nan
+        return v
+
+    def per_signal(flag, up_salt, kmin, kspan, none_p, sign):
+        out = np.full(len(df), np.nan)
+        val = close * (1 + sign * (kmin + kspan * uh(sym, tfm, om, up_salt)))
+        out[flag & (uh(sym, tfm, om, up_salt + 10) >= none_p)] = val[flag & (uh(sym, tfm, om, up_salt + 10) >= none_p)]
+        return out
+    sl, ss = np.asarray(sl, bool), np.asarray(ss, bool)
+    return {"comp_long": [("state", comp(3, 0.25)), ("event", comp(4, 0.06)), ("state", comp(5, 0.20))],
+            "comp_short": [("state", comp(6, 0.25)), ("event", comp(7, 0.06))],
+            "lvl_long": per_signal(sl, 30, 0.002, 0.02, 0.10, -1), "lvl_short": per_signal(ss, 32, 0.002, 0.02, 0.10, +1),
+            "tgt_long": per_signal(sl, 34, 0.004, 0.03, 0.25, +1), "tgt_short": per_signal(ss, 36, 0.004, 0.03, 0.25, -1)}
+
+
 def make_pick(tf, exit_name):
     return {"id": f"core-SYN-{tf}-1", "kind": "core", "pool": "core", "name": "SYN", "tf": tf, "combo": {}, "exit": exit_name,
             "exit_index": [e[0] for e in K.EXITS].index(exit_name), "rank": 1}
@@ -320,11 +357,12 @@ def with_leverage_group(orig):
 
 
 # ====================================================================================================== combos
-ALL_IDS = RX.study_ids()                                                                    # the 82 ids of F1-F10 (F7h included)
+NATIVE = RX.native_ids()                                                                    # F11.a, F11.b, F12.a, F12.b
+ALL_IDS = RX.study_ids() + NATIVE                                                           # the 82 ids of F1-F10 (F7h included) and the 4 native ones
 SUBSET = ["F1.w2.a", "F1.w3.b", "F1.w5.a.q15", "F1.w2.b.q15", "F2.n10.a", "F2.n20.b", "F3.a", "F3.b", "F4.m1.5.a", "F4.m2.b",
           "F4.m3.a.q15", "F4.m1.5.b.q15", "F5.P1.g50.a", "F5.P1.5.g25.b", "F5.P2.g25.a", "F6.w2.d0", "F6.w3.d0.5", "F7.N12.a",
-          "F7.N24.b", "F7h.H4.a", "F7h.H8.b", "F7h.H16.a", "F8.w2.P1.a", "F8.w3.P2.b", "F9.a", "F9.b.q15", "F10.N6.a", "F10.N12.b"]
-FLIPS = ["F1.w3.a", "F2.n20.a", "F3.a", "F4.m2.a", "F5.P1.g50.b", "F7.N12.b", "F9.a.q15", "F10.N6.a"]
+          "F7.N24.b", "F7h.H4.a", "F7h.H8.b", "F7h.H16.a", "F8.w2.P1.a", "F8.w3.P2.b", "F9.a", "F9.b.q15", "F10.N6.a", "F10.N12.b"] + NATIVE
+FLIPS = ["F1.w3.a", "F2.n20.a", "F3.a", "F4.m2.a", "F5.P1.g50.b", "F7.N12.b", "F9.a.q15", "F10.N6.a"] + NATIVE
 SIZES = (0.25, 1.0)
 # name: (timeframe, the pick's own exit, rule ids, coin-flip rule ids)
 COMBOS = {
@@ -336,7 +374,8 @@ COMBOS = {
     "1h-ladder": ("1h", "ladder_tp2R|2", SUBSET, ()),
 }
 RESTORE_RULES = ["F1.w3.a", "F1.w2.b.q15", "F2.n20.b", "F3.a", "F4.m2.a", "F4.m1.5.b.q15", "F5.P1.g50.a", "F6.w3.d0.5", "F7.N12.a",
-                 "F8.w3.P1.b", "F9.a.q15", "F10.N6.b"]
+                 "F8.w3.P1.b", "F9.a.q15", "F10.N6.b", "F11.a", "F11.b", "F12.a", "F12.b"]
+RESTORE_FLIPS = ("F7.N12.b", "F9.a.q15", "F11.b", "F12.a")
 # restarts: some at an hour boundary (a record or a signal is waiting in the engine), some in the middle of an hour
 RESTART_AT = [T_START + x for x in (5 * HOUR, 27 * HOUR + 10 * 60_000, 2 * DAY + 19 * HOUR, 3 * DAY + 7 * HOUR + 35 * 60_000,
                                     5 * DAY, 7 * DAY + 13 * HOUR + 55 * 60_000, 9 * DAY + 2 * HOUR)]
@@ -374,12 +413,15 @@ class World:
         self._pd, self._study, self._league = {}, {}, {}
         mp.setattr(L, "Strategies", Stub)
         mp.setattr(RX, "chunk_rule", with_leverage_group(RX.chunk_rule))
+        self.f11 = lambda pick, sym, df, close, sl, ss: native_syn(pick["tf"], sym, df, sl, ss)       # the study's provider
+        KX.register_f11(self.f11)
+        RX.register_native(lambda a, sym, df, close, lo, sh, btc: native_syn(a["tf"], sym, df, lo, sh))     # the league's provider
         KX.warm_up(self.mk)
 
     # ---- the study
     def pdata(self, tf, exit_):
         if tf not in self._pd:
-            self._pd[tf] = DX.PickData(self.mk, make_pick(tf, exit_), self.prov)
+            self._pd[tf] = DX.PickData(self.mk, make_pick(tf, exit_), self.prov, f11=self.f11)
         pd = copy.copy(self._pd[tf])                  # same chart arrays and offered signals, this combo's exit
         pd.pick = make_pick(tf, exit_)
         return pd
@@ -394,6 +436,16 @@ class World:
         off2 = dict(off)
         off2["side"] = side
         off2["best"] = np.where(side > 0, pd.best_l[ix], pd.best_s[ix]).astype(np.bool_)
+        # F11 / F12 (PREREG 11.2): the flip's level and target are the strategy's, mirrored around the flip's own fill
+        inv0, tgt0, s0 = off["lvl"], pd.targets(off), off["side"]
+        inv2, tgt2 = np.full(len(side), np.nan), np.full(len(side), np.nan)
+        for q in range(len(side)):
+            c = int(off["coin"][q])
+            ts = self.mk.ts(c)
+            j = int(np.searchsorted(ts, off["fill"][q]))
+            f = float(self.mk.cat["o"][self.mk.starts[c] + j]) * (1 + int(side[q]) * SLIP)
+            inv2[q], tgt2[q] = KX.flip_levels(int(s0[q]), int(side[q]), f, float(inv0[q]), float(tgt0[q]))
+        off2["lvl"], off2["tgt_mirror"] = inv2, tgt2
         return pd, off2
 
     def study(self, name, rid, size, flip=False):
@@ -403,6 +455,9 @@ class World:
             aid = account(rid, size, tf, exit_, flip)["id"]
             pd, off = self.offered(tf, exit_, aid if flip else None)
             v = KX.E0 if rid == "E0" else KX.variant_by_id(rid)
+            if flip and "tgt_mirror" in off:                      # the flip's mirrored targets instead of the strategy's own
+                pd = copy.copy(pd)
+                pd.targets = lambda _off, tg=off["tgt_mirror"]: tg
             res = KX.simulate(self.mk, pd, v, scale=size, period="select", force_end=False, offered=off)
             self._study[key] = (res, off)
         return self._study[key]
@@ -420,7 +475,8 @@ class World:
             rows.append({"sym": SYMS[c], "coin": c, "side": side, "close": int(off["close"][k]), "entry_time": int(res.entry_ts[k]),
                          "exit_time": int(res.exit_ts[k]),
                          "reason": KX.REASON_NAMES[int(res.reason[k])], "lev": int(res.lev[k]), "pnl": float(res.pnl[k]),
-                         "xpx": float(res.xpx[k]), "entry_price": self.fill_price(c, int(res.entry_ts[k]), side)})
+                         "xpx": float(res.xpx[k]), "entry_price": self.fill_price(c, int(res.entry_ts[k]), side),
+                         "comp": int(res.comp[k])})
         return rows
 
     # ---- the league
@@ -478,6 +534,8 @@ def world(tmp_path_factory):
     yield w
     w.close()
     mp.undo()
+    KX.clear_f11()
+    RX.register_native(None)
 
 
 # ====================================================================================================== the comparison
@@ -486,7 +544,9 @@ def close_to(a, b, rel=PRICE_TOL):
 
 
 def compare_account(w, res, off, played, aid, label):
-    """Every trade of the study's account equals the league account's; returns the number of trades compared."""
+    """Every trade of the study's account equals the league account's (F12: the exit's component mask too); returns the number of trades
+    compared."""
+    label_f12 = "F12" in label
     rows = w.study_rows(res, off)
     closed = [r for r in rows if r["reason"] != "OPEN"]
     trades = played.trades.get(aid, [])
@@ -501,6 +561,8 @@ def compare_account(w, res, off, played, aid, label):
         assert close_to(b["entry_price"], a["entry_price"]), (label, i, "entry price", b["entry_price"], a["entry_price"])
         if a["reason"] != "LIQ":
             assert close_to(b["exit_price"], a["xpx"]), (label, i, "exit price", b["exit_price"], a["xpx"])
+        if label_f12 and a["reason"] == "RULE":                      # F12: every component that fired at the exit's check
+            assert b["context"].get("rx_comp") == a["comp"], (label, i, "F12 components", b["context"].get("rx_comp"), a["comp"])
         change = b["equity_after"] - wallet
         assert abs(change - a["pnl"]) <= WALLET_TOL * wallet, (label, i, "wallet change", change, a["pnl"])
         assert abs(b["pnl"] - a["pnl"]) <= WALLET_TOL * wallet, (label, i, "pnl", b["pnl"], a["pnl"])
@@ -568,7 +630,7 @@ def test_the_run_stops_and_restores_in_the_middle_of_open_positions_and_gives_th
     at_gap = restarts_at_a_missing_minute(world)
     assert len(at_gap) == 3, at_gap
     restarts = sorted(set(RESTART_AT) | set(at_gap))
-    played = world.league_run("1h", rules=RESTORE_RULES, sizes=(0.25,), flips=("F7.N12.b", "F9.a.q15"), restarts=restarts, tag="-restore")
+    played = world.league_run("1h", rules=RESTORE_RULES, sizes=(0.25,), flips=RESTORE_FLIPS, restarts=restarts, tag="-restore")
     assert played.restarts == len(restarts) == 10
     assert played.open_at_restart >= 40 and played.queued_at_restart >= 15 and played.pending_at_restart >= 10, \
         (played.open_at_restart, played.queued_at_restart, played.pending_at_restart)
@@ -577,7 +639,7 @@ def test_the_run_stops_and_restores_in_the_middle_of_open_positions_and_gives_th
     for rid in RESTORE_RULES + ["E0"]:
         res, off = world.study("1h", rid, 0.25)
         n += compare_account(world, res, off, played, account(rid, 0.25, tf, exit_)["id"], f"restore {rid}")
-    for rid in ("F7.N12.b", "F9.a.q15"):
+    for rid in RESTORE_FLIPS:
         res, off = world.study("1h", rid, 0.25, flip=True)
         n += compare_account(world, res, off, played, account(rid, 0.25, tf, exit_, True)["id"], f"restore flip {rid}")
     assert n >= 100, n
@@ -615,7 +677,7 @@ def test_the_world_exercises_what_the_comparison_is_for(world):
                     shifted_check += r["exit_time"] % tfm != 0 and tf in ("1h", "4h") and not rid.endswith("q15")
                 shifted_fill += r["entry_time"] % tfm != 0
                 delayed += r["entry_time"] - r["close"] >= tfm
-    assert set(fam_rule) == {f"F{i}" for i in range(1, 11)} | {"F7h"}, fam_rule
+    assert set(fam_rule) == {f"F{i}" for i in range(1, 13)} | {"F7h"}, fam_rule
     assert {"RULE", "SL", "TP"} <= reasons and sides == {-1, 1} and len(levs) >= 3 and rejected >= 5, (reasons, sides, levs, rejected)
     assert shifted_fill >= 3 and shifted_check >= 3 and delayed >= 3 and carried >= 3, (shifted_fill, shifted_check, delayed, carried)
     # missing minutes of one coin while the others trade, in both ways
