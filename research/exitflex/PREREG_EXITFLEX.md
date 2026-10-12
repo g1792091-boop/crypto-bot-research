@@ -2883,6 +2883,14 @@ files; it committed and pushed nothing, created no `data_pin.json` and ran none 
    section 13 (`paperbot/ladder.py`, `research/fullgrid/kernel.py` ...) was edited, and `pin-lines` was recomputed for the changed files of the
    folder only.
 
+10. **Test results of this pass** (working tree, 2026-10-12, synthetic data; counts only): `test_exitflex.py` 211 passed;
+   `test_native.py` with `EXITFLEX_REQUIRE_REAL=1` 371 passed, 0 skipped; `tests/test_exitflex_league_parity.py` 291 passed;
+   `tests/test_candleague_*.py` 335 passed. `runner_x.py pin-lines` prints 35 lines; the 25 first-8-hex entries of the table in
+   13 are unchanged (none of the 25 input files was edited). The stale-number greps of 17 item 1 print history lines only.
+   The restarts of the parity test that sit in locked positions are put one millisecond before the exit minute of a lock exit
+   (the study stamps a minute by its open, the league's bars by their close); the negative control for a restore that forgets
+   the raised lock fails the comparison there, which restarts five minutes earlier did not.
+
 **Not done, and why (sixth pass):**
 
 * A 5% or 20% lock start, other steps or trigger gaps, a lock on the structure rules, F13 inside F12, a tenth component of F12, a q15
@@ -3592,7 +3600,9 @@ stage was run on real market data: the real-data checks are open items.
 13. [x] `data_x.py`: `offered` has the `state` column from `regime5y.regimes`; the module's constants are asserted equal
     to section 7's.
 14. [~] `native.py` and `native_ds.py` exist and follow Appendix A. Their synthetic tests pass (`test_native.py`, run
-    without the 1m folder: 288 passed, 83 skipped); the 83 skipped are the real-bar tests (O3).
+    without the 1m folder: 288 passed, 83 skipped); the 83 skipped are the real-bar tests (O3). (6th) Run again in the
+   working tree on 2026-10-12 with the 1m folder and `EXITFLEX_REQUIRE_REAL=1`: 371 passed, 0 skipped (booleans only, no
+   figure printed); the pass at the pin commit is still O3.
 15. [x] `runner_x.py`: the required pins include `native.py`, `native_ds.py`, `paperbot/dash/tools/regime5y.py` and
     `research/fullgrid/regimes.py` (and, as built, the eight further inputs of section 13); the second table of 8.2 and
     the F12 component counts, in total and split by pick timeframe (5th), are printed; the private owner reports are
@@ -3613,9 +3623,10 @@ stage was run on real market data: the real-data checks are open items.
     the key example, 5th**), T5 (F12), T6 (F12 equals F11 with the other eight off), T7 (gates per pool, the default,
     the group rule, `choice.json` checks, the D11 whitelist with the owner-report rules, **the free-text tripwire and
     the redaction, 5th**, the 88 / 74 / 37 counts, `claim_of`, F13 (6th)) and T8 (state labels). They print pass or fail and
-    counts only. In the working tree on 2026-10-12: 156 passed (synthetic data, about 2.3 minutes). The pass "at the pin
-    commit" is O3. The league side, which is not pinned: `tests/test_candleague_rulex.py` and
-    `tests/test_exitflex_league_parity.py` gave 380 passed in the working tree.
+    counts only. In the working tree on 2026-10-12: (6th) 211 passed (was 156; synthetic data, about 2.3 minutes). The pass
+    "at the pin commit" is O3. The league side, which is not pinned: (6th) `tests/test_candleague_rulex.py` (129 tests) and
+    `tests/test_exitflex_league_parity.py` (291 tests) gave 420 passed in the working tree (was 380), `tests/test_candleague_*.py`
+    as a whole 335 passed, `tests/test_candleague_exits.py` among them with the 84 rules byte-identical.
 
 **C. Pins to compute** (the main session; this is the pin commit itself)
 
