@@ -72,7 +72,10 @@ def read_lines(path: str) -> list:
 def round1_lines(root: str = ROOT) -> dict:
     """{path: sha256} of round 1's pin lines (last line per path), lines under research/hunt/out/ skipped unread."""
     out = {}
-    for h, p in read_lines(os.path.join(root, R1_PIN)):
+    path = os.path.join(root, R1_PIN)
+    if not os.path.exists(path):
+        return out                                 # every input then reads "not pinned by round 1"
+    for h, p in read_lines(path):
         if p.startswith(R1_OUT):
             continue
         out[p] = h
