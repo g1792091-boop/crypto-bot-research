@@ -378,6 +378,7 @@ COMBOS = {
     "4h": ("4h", "tp2R|1", SUBSET, ()),
     "4h-wide": ("4h", "tp3R|1.5", SUBSET, ()),                  # a wide stop: signals that no size fits are rejected
     "1h-ladder": ("1h", "ladder_tp2R|2", SUBSET, ()),
+    "30m-roe20": ("30m", "roe20|2", LOCK, ()),                  # F13 only: a net-ROE 20% take-profit that the lock (12% -> 10%, 17% -> 15%) reaches before it
 }
 RESTORE_RULES = ["F1.w3.a", "F1.w2.b.q15", "F2.n20.b", "F3.a", "F4.m2.a", "F4.m1.5.b.q15", "F5.P1.g50.a", "F6.w3.d0.5", "F7.N12.a",
                  "F8.w3.P1.b", "F9.a.q15", "F10.N6.b", "F11.a", "F11.b", "F12.a", "F12.b", "F13.a", "F13.b"]
@@ -920,7 +921,7 @@ def test_negative_control_the_restart_test_catches_a_restore_that_forgets_the_ra
 def test_f13_accounts_are_the_plain_engines_in_the_league_and_the_twins_are_still_the_studys_e0(world):
     """A league that holds F13 accounts builds them with the lock exit (no rule engine, no chart record) and the E0 twins beside them are the study's
     E0: trade for trade at both sizes."""
-    played = world.league_run("30m")                      # a net-ROE 50% pick: the lock with a take-profit at net ROE
+    played = world.league_run("30m")                      # a net-ROE 50% pick: the lock with a take-profit at net ROE (its price: the "30m-roe20" test at the end of this file)
     tf, exit_ = COMBOS["30m"][:2]
     assert exit_ == "roe50|4"
     n = 0
@@ -933,3 +934,22 @@ def test_f13_accounts_are_the_plain_engines_in_the_league_and_the_twins_are_stil
         n += compare_account(world, res, off, played, account("E0", size, tf, exit_)["id"], f"30m E0 {size:g}")
     assert n >= 20
     assert RX.exit_name(account("F13.a", 1.0, tf, exit_)) == "lock+roe50|4" and RX.exit_name(account("F13.b", 1.0, tf, exit_)) == "ladder|4"
+
+
+def test_f13_a_with_a_net_roe_take_profit_closes_at_the_studys_price_and_the_lock_was_raised_before_it(world):
+    """"lock+roe20|2" is the lock plus the pick's take-profit at net ROE 20% (the league's ``LadderTP(roe=...)``, the engine's own ``tp_from_roe`` on the fill and
+    the leverage). In the combination "30m-roe20" several F13.a trades close at that take-profit at both sizes, most of them after the lock stepped up behind it
+    (12% -> 10%, 17% -> 15%), and each is compared with the study's kernel (entry, exit minute, reason, leverage, exit price, pnl, wallet), so a wrong
+    take-profit price of the league's engine cannot pass. (The 30m "roe50|4" combination has one such trade per size, which does not carry it.)"""
+    tf, exit_ = COMBOS["30m-roe20"][:2]
+    played = world.league_run("30m-roe20")
+    n_tp = n_tp_locked = n_lock = n_b_tp = 0
+    for size in SIZES:
+        res, off = world.study("30m-roe20", "F13.a", size)
+        compare_account(world, res, off, played, account("F13.a", size, tf, exit_)["id"], f"30m-roe20 F13.a {size:g}")
+        for t in played.trades.get(account("F13.a", size, tf, exit_)["id"], []):
+            n_tp += t["exit_reason"] == "TP"
+            n_tp_locked += t["exit_reason"] == "TP" and t["lock_roe"] is not None
+            n_lock += t["exit_reason"] == "LOCK"
+        n_b_tp += sum(1 for t in played.trades.get(account("F13.b", size, tf, exit_)["id"], []) if t["exit_reason"] == "TP")
+    assert n_tp >= 12 and n_tp_locked >= 8 and n_lock >= 30 and n_b_tp == 0, (n_tp, n_tp_locked, n_lock, n_b_tp)

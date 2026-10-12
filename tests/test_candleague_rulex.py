@@ -2043,6 +2043,59 @@ def test_f13_a_restart_in_the_middle_of_a_locked_position_gives_the_same_trade(s
             want[0].exit_time, want[0].exit_reason, want[0].exit_price, want[0].pnl, want[0].lock_roe)
 
 
+@SIDES
+@pytest.mark.parametrize("mode", ["a", "b"])
+def test_f13_no_entry_from_a_time_refuses_new_entries_and_lets_an_open_position_close_by_its_lock(side, mode):
+    """PREREG 11.4 item 9 holds for F13 too: the C1 stop time (``no_entry_from_ms``) is on the three accounts of the new exit, and the engine of the lock
+    exit refuses a new entry from that time on (the gate sits in ``RuleMixin._try_enter``, which the lock engines carry with no rule), while a position
+    entered before it closes by the lock as always."""
+    a0 = acct(f"F13.{mode}", exit_="tp3R|2")
+    lev = _probe_leverage(a0, side)
+    path, _top, jx = _lock_path(lev, side, 0)
+    a = dict(a0, no_entry_from_ms=at(J0))
+    e = RX.make_engine(a, BR, SP)
+    assert e.rx_no_entry_from == at(J0) and e.rx_rule is None
+    e = run(a, path, side, engine=e)
+    assert e.position is None and not e.trades and not e.pending                        # the entry minute is the stop time: refused
+    assert run(a0, path, side).trades                                                   # control: the same account without the field takes it
+    b = dict(a0, no_entry_from_ms=at(J0) + 1)                                           # the entry minute is before the stop time
+    e2 = run(b, path, side)
+    assert len(e2.trades) == 1 and e2.trades[0].entry_time == at(J0) and e2.trades[0].exit_reason == "LOCK"
+    assert e2.trades[0].exit_time == at(jx) + MIN - 1                                   # an open position closes by its own lock
+    # a second signal after the stop time is refused while the first position was entered before it and closed by the lock
+    late = chk(4)
+    c = dict(a0, no_entry_from_ms=late - MIN)
+    e3 = run(c, path, side, sigs=((C0, None), (late, None)))
+    assert len(e3.trades) == 1 and e3.position is None and not e3.pending
+    free = run(a0, path, side, sigs=((C0, None), (late, None)))
+    assert len(free.trades) == 1 and free.position is not None and free.position.entry_time == late        # control: without the field it is entered
+
+
+def test_f13_a_start_over_after_the_stop_time_is_set_gives_the_same_trades_as_the_run_that_set_it(tmp_path):
+    """The league level of the test above: with a stop time the three accounts of the new exit take no entry from it, the twins go on, and the same field
+    set on a database that already holds the run starts over (fingerprint) and reproduces the run (PREREG 11.4 item 9, F13.a)."""
+    cands = _rule_cands("15m", "tp3R|2")
+    mk = lambda db, **kw: RN.League(RN.open_db(str(db)), RX.accounts(cands, RX.normalize_config(  # noqa: E731
+        {"pools": {"core": "F13.a"}, **kw})), TP.BRACKETS, TP.SPECS, LIB, PS.FrameSource(DATA), TP._steps_from(DATA), TP.SYMS,
+        start_ms=START, log=lambda s: None, db_path=str(db))
+    plain = mk(tmp_path / "a.db")
+    plain.advance(START + 3 * DAY)
+    stop = START + DAY + 7 * 3_600_000
+    cut = mk(tmp_path / "b.db", no_entry_from_ms={"core": stop})
+    cut.advance(START + 3 * DAY)
+    p, c = _trades(plain), _trades(cut)
+    new = {"core-S2-15m-1-n", "core-S2-15m-1-nq", "core-S2-15m-1-nflip"}
+    assert all(r[1] < stop for r in c if r[0] in new) and any(r[1] < stop for r in c if r[0] in new)
+    assert any(r[1] >= stop for r in p if r[0] in new)                                                   # the plain run did enter after the stop time
+    assert [r for r in c if r[0] in new] == [r for r in p if r[0] in new and r[1] < stop]
+    assert [r for r in c if r[0] not in new] == [r for r in p if r[0] not in new]                    # the E0 accounts go on
+    assert all(type(cut.engines[i]) is RX.LockLadderEngine and cut.engines[i].rx_no_entry_from == stop for i in new)
+    start_over = mk(tmp_path / "a.db", no_entry_from_ms={"core": stop})
+    assert start_over.reset and start_over.start_ms == START
+    start_over.advance(START + 3 * DAY)
+    assert _trades(start_over) == c
+
+
 def test_f13_chunk_rule_hands_in_signals_only_with_the_lock_exits_stop_and_no_chart_record():
     """No ``RuleClose`` and no rule seed for F13: the signals of the three accounts carry the pick's stop distance and the style label; the twins'
     signals are those of the other rule leagues."""
