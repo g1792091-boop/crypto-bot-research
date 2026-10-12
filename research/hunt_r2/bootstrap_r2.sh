@@ -23,7 +23,8 @@
 # The file sets HUNT_R2_BASE, HUNT_R2_REPO (scratch) and any of: HUNT_R2_PY, HUNT_R2_CMD (the hunt_r2 command line),
 # HUNT_R2_DATA_CMD (data_hunt), HUNT_R2_DATA, HUNT_R2_SELFCHECK_TESTS, HUNT_R2_TMUX (e.g. "tmux -L r2reh"),
 # HUNT_R2_RETRY_SLEEP, HUNT_R2_READS_WALL_S (a short reads wall), HUNT_R2_INBOX, HUNT_R2_GO, HUNT_R2_DRY_WAIT (no go commit: hand over to
-# wait_go_r2.sh as a real run does), HUNT_R2_PUSH_REHEARSAL (push to the scratch clone's origin).
+# wait_go_r2.sh as a real run does), HUNT_R2_PUSH_REHEARSAL (push to the scratch clone's origin), HUNT_R2_GIT_REHEARSAL (update fetches and checks out
+# from the scratch clone's origin).
 set -uo pipefail
 
 MODE=run
@@ -341,7 +342,7 @@ update() {                   # update <commit>: the developer's fix, only while 
   if computed; then
     echo "이미 계산을 시작해서(6/$NST 이후) 코드를 바꾸지 않습니다. 이 화면을 개발자에게 보내 주세요."; return 1
   fi
-  if [ "$DRYRUN" = 1 ]; then
+  if [ "$DRYRUN" = 1 ] && [ -z "${HUNT_R2_GIT_REHEARSAL:-}" ]; then
     echo "연습: git 내려받기·바꾸기는 건너뜀"
   else
     git -C "$REPO" fetch -q origin || { echo "코드 내려받기 실패 (인터넷). 잠시 뒤 같은 줄을 다시 붙여 넣으세요."; return 1; }
