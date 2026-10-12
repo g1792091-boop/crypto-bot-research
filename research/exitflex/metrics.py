@@ -95,7 +95,9 @@ def summarize(res, edges: np.ndarray) -> dict:
         "hold_h": (ex - en) / 3_600_000.0, "max_dd": np.float64(dd),
         "tr_coin": sig["coin"][ent], "tr_side": sig["side"][ent], "tr_fill": en, "tr_exit": ex, "tr_reason": rsn.astype(np.int64),
         "tr_pnl": pnl, "num": res.num, "den": res.den,
-        "tr_state": sig["state"][ent].astype(np.int64), "tr_comp": cm, "comp_fired": comp_fired, "comp_alone": comp_alone}
+        "tr_state": sig["state"][ent].astype(np.int64), "tr_comp": cm, "comp_fired": comp_fired, "comp_alone": comp_alone,
+        # the leverage and exit price of every entered trade (the extra reads' ROE per trade and lock-level touches; read only)
+        "tr_lev": np.asarray(res.lev)[ent].astype(np.float64), "tr_xpx": np.asarray(res.xpx)[ent].astype(np.float64)}
 
 
 COUNT_NAMES = ("offered", "entered", "closed", "skipped", "rejected", "no_fill", "after_bust", "bust", "both_touched",

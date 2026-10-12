@@ -2983,6 +2983,44 @@ results and item 22 what it did not take.
 * The parity test of the league over 60 days of archive data, `make-pin`, the pin file and the pin commit: unchanged open items (section
   17, part F).
 
+### 16.7 Eighth pass (2026-10-12, by the main session, after a dry run)
+
+1. **Dry run.** In a scratch git worktree of commit `fe7a34f` with a scratch pin (a `data_pin.json` and a 36-line pin file that were never
+   committed; the work folder in the session scratchpad), `make-pin` printed `build.json` 824c9d1a and the six coin hashes of section 2,
+   and `pin-lines` printed 36 lines. `check` gave: T1 pass on all 38 picks; T5 core 750 pairs, 0 failed, and DeepSeek 285 pairs, 0 failed;
+   T8 core 506 and DeepSeek 510 signals, 0 failed; T3 pass at all 21 cut times (about 55 minutes). `make-cut` passed its digest check
+   and `timing` ran (E0 about 0.01 s on the timing pick; the projected step 2 lies far under 8 hours, so 200 seeds). Only pass or fail,
+   counts and seconds were printed. To explain a timing of 0.00 s, one probe printed, for the timing pick only, its number of offered
+   signals (1,542) and of entered trades (92) in the select period, and the seconds of one account; no P&L, wallet, growth or other
+   result figure was printed or kept, and no other pick was probed. The scratch worktree and its work folder are deleted before the pin.
+2. **T5 sampling (code).** The DeepSeek pool reached 285 pairs, not the 500 of the T5 bullet in 13: a drawn trade with no check (it ends
+   before its first check, or no size fits it) gives no pair, and one round of `per` draws per pick and variant was not enough.
+   `check_t5` now draws, for each pick and variant, until `per` pairs are found, at most 20 x `per` draws (`T5_DRAW_CAP`); `check`
+   passes only with at least 500 pairs per pool and none failed (before, more than 0 sufficed, against the 500 of 13). T8 likewise needs
+   at least 500 signals per pool. A test is added (`test_t5_draws_go_on_until_each_pick_and_variant_has_its_pairs_and_stop_at_the_cap`).
+3. **Two saved fields (code).** `metrics.summarize` also keeps `tr_lev` and `tr_xpx`, the leverage and the exit price of every entered
+   trade, in the order of the other `tr_` arrays, for the extra reads of item 4. No decision, table, gate or number of this file reads
+   them. The summary test is extended.
+4. **Extra reads and twin accounts, in a separate file.** The owners asked on 2026-10-12 for every analysis that helps them (per coin,
+   weekday and weekend and session, market state, their goal and risk, the exit mechanics, robustness, timeframe and character, funding,
+   sizing, baskets, loss clustering, ROE per trade, figures, the hindsight ceiling, forward bands and sample sizes), and for the
+   default-number versions of the 38 picks and the coin flip to be seen **before** they choose. These are defined in
+   `research/exitflex/PREREG_EXITFLEX_EXTRA.md`, with their code in their own modules and their own pin file
+   (`PREREG_EXITFLEX_EXTRA.sha256`). That file and its pin are committed **before any output of the select stage is opened**
+   (`select.json`, `SELECT_KO.md`, any per-account result file, the private DeepSeek report); the select stage prints progress only.
+   Its commit time and the select files' times are listed in it. The extra file:
+   * defines **reads** that are descriptive only: they choose nothing and change no gate, placebo, Holm, default, ledger, report or
+     choice rule of this file; per-coin, per-side, per-session and per-state choices stay out of scope (12);
+   * defines **twin accounts** for each pick: the **default-number twin** (the cell's default combo; under E0, which is the pick's own
+     exit as in the league's `exitonly` account, under the house exit `ladder|2` as in the league's `base` account, and under the 88
+     variants) and the **coin-flip twin** (the pick's numbers and signal times, the side from a seeded coin as the league's flip), select
+     period only, no placebo, no gate, not choosable, shown next to the select table before the owners choose;
+   * uses this file's pinned kernel, data and cut unchanged and opens no minute of 2024-2026; DeepSeek figures follow D11.
+   This file's select report and its rules are unchanged. The owners are told that the extra reads and the twins were defined after this
+   file was hashed and are information only.
+5. **Test results of the eighth pass** (working tree, 2026-10-12, synthetic data and the real 1m folder for `test_native.py`; counts only):
+   see section 17, item 10.
+
 ## Appendix A. Each strategy's own exit (family F11)
 
 ### A.0 Common rules and code (all 16 strategies)

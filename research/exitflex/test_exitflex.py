@@ -2270,6 +2270,11 @@ def test_metrics_summary_counts_and_changed_trades(world_1h):
     assert MT.pick_Mp(sv, s0) == pytest.approx((math.log(float(sv["w_end"])) - math.log(float(s0["w_end"]))) / 36)
     ps = MT.pool_summary({"x": sv, "y": sv}, {"x": s0, "y": s0})
     assert set(ps) == {"all", "core"} and ps["all"]["M"] == pytest.approx(MT.pick_Mp(sv, s0))
+    # the eighth pass: every entered trade also keeps its leverage and exit price (the extra reads), in the order of the other tr_ arrays
+    ent = np.flatnonzero(v.status == 1)
+    assert len(sv["tr_lev"]) == len(sv["tr_xpx"]) == len(sv["tr_pnl"]) == len(ent) > 0
+    assert np.array_equal(sv["tr_lev"], v.lev[ent].astype(np.float64)) and np.array_equal(sv["tr_xpx"], v.xpx[ent].astype(np.float64), equal_nan=True)
+    assert (sv["tr_lev"] > 0).all()
     ps2 = MT.pool_summary({"x": sv, "y": sv}, {"x": s0, "y": s0}, {"x": "core", "y": "ds"})
     assert set(ps2) == {"all", "core", "ds"} and ps2["core"]["n_picks"] == 1
     assert ps["all"]["hold"]["median"] == pytest.approx(float(np.median(sv["hold_h"])))
