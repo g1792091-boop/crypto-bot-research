@@ -1227,29 +1227,37 @@ Per pick of a pool with a PASS, five accounts:
 
 ### 11.4 League changes
 
-Part of this exists as a draft written from the first revision of this file (core only, a separate league):
-`candleague/rulex.py` (`RuleMixin`, `RuleEngine`, `RuleLadderEngine`, `make_engine`, `chunk_rule`, `accounts`,
-`pick_list`, `register_f11`, `audit_restored`), `runner.make_rule_league` and `tests/test_candleague_rulex.py`, with
-its own `rule_league.db` and accounts `-f`, `-f-live`, `-f-flip`, `-f0` and `-f0-live`. The study side is
-`research/exitflex/kernel_x.py`. Before the restart, the league code must carry the following, and the parity test of
-item 13 must pass. Each item is a change to the draft where the draft differs.
+**As built (2026-10-12, before the pin).** The league code is in the repository and is not pinned here. It is
+`candleague/rulex.py` (`parse_rule`, `load_config`, `accounts`, `load_accounts`, `RuleMixin`, `RuleEngine`,
+`RuleLadderEngine`, `make_engine`, `chunk_rule`, `replay_day`, `audit_restored`, `register_native`,
+`load_native_provider`, `forward_check`, `public_view`, `checks_main`), `candleague/runner.py` (`league_accounts`,
+`check_expected_start`, the tables `acct_day` and `acct_mark`, `hold_stats`) and the tests
+`tests/test_candleague_rulex.py` and `tests/test_exitflex_league_parity.py`; the study side is
+`research/exitflex/kernel_x.py`. The first draft's names are gone. There is **no side league**: no `rule_league.db`
+(`rulex.DB_NAME` stays in the module as history and no file of that name is created), no `-f`, `-f-live`, `-f-flip`,
+`-f0`, `-f0-live` accounts and no `runner.make_rule_league`; the draft's `register_f11` is `register_native`. The
+restarted league is the league itself: `runner.main` takes the accounts of `rulex.accounts` instead of the candidate
+accounts when the rules file is enabled (11.1), in the database given by `--db`. The 14 items below are the contract.
+The table after them gives the status of each item as built (read from the code and the tests, not run on real data),
+and the list after the table is what is still to do at the restart. The parity test of item 13 must pass before the
+league starts.
 
 1. **Database and accounts.** A fresh database and start (11.3) for the restarted league itself, not a side
-   `rule_league.db`. The accounts and ids of 11.2 (`-n`, `-nq`, `-e`, `-eq`, `-nflip`, `-eflip`) replace the draft's
-   `-f` family. `runner.fingerprint` covers every account of the new database.
-2. **Both pools.** The draft's `pick_list` refuses every DeepSeek pick ("DeepSeek never gets rule accounts, D11"); that
-   refusal is removed. D11 governs what is shown, not what runs: DeepSeek rule accounts run like the current league's
+   `rule_league.db`. The accounts and ids of 11.2 (`-n`, `-nq`, `-e`, `-eq`, `-nflip`, `-eflip`) replace the first
+   draft's `-f` family. `runner.fingerprint` covers every account of the new database.
+2. **Both pools.** The first draft's `pick_list` refused every DeepSeek pick ("DeepSeek never gets rule accounts,
+   D11"); that refusal is removed. D11 governs what is shown, not what runs: DeepSeek rule accounts run like the current league's
    DeepSeek accounts, and their money on the league's own screens follows the league's dashboard setting (section 3);
    this study's committed notes and reports carry none.
 3. **Per-close rule inputs** (`chunk_rule`): for every account whose exit has a rule (`-n`, `-nq`, `-nflip`), every
    chart close of every coin: close, ATR14, EMA(n), swing confirmations, both raw signal flags, the strategy's own
    component booleans of both sides (Appendix A), plus the 15m closes for q15. `league.chunk_signals` today sends only
    bars that carry a signal.
-4. **F11 as Appendix A defines it**, not the draft's plug-in. The draft fires F11 on any true per-bar
-   `long_exit` / `short_exit` flag, has no arming, no per-position level test, and a target only when the rule carries
-   `use_target`. Run as it is, it would fire at the first check on an N03_ADX_GC long entered after an EMA whipsaw
-   (rule C3 forbids that), and it cannot express the level tests of N13_3OUTSIDE, N19_FIB_CHOP and five DeepSeek
-   strategies. Required: each component carries its kind (state or event) with C3 arming from i0; per-position levels
+4. **F11 as Appendix A defines it**, not the first draft's plug-in. The first draft fired F11 on any true per-bar
+   `long_exit` / `short_exit` flag, had no arming, no per-position level test, and a target only when the rule carried
+   `use_target`. Run as it was, it would have fired at the first check on an N03_ADX_GC long entered after an EMA
+   whipsaw (rule C3 forbids that), and it could not express the level tests of N13_3OUTSIDE, N19_FIB_CHOP and five
+   DeepSeek strategies. Required: each component carries its kind (state or event) with C3 arming from i0; per-position levels
    and targets, fixed at i0, travel in the signal's meta (`meta['native_inv']`, `meta['native_tgt']`) and the level
    is tested at every close; F11.a and F11.b are the mode (5.2, rule C8), not a `use_target` flag; flipped positions follow
    11.2; the arrays come from `research/exitflex/native.py` and `native_ds.py`, the same code the study runs.
@@ -1302,6 +1310,55 @@ item 13 must pass. Each item is a change to the draft where the draft differs.
     `acct_day`, `acct_mark`) for both pools, whatever `CANDLEAGUE_DS_MONEY` is set to. It prints DeepSeek labels,
     counts, win shares and hold hours only; any DeepSeek money figure it needs stays in a private folder on the server.
 
+**Status of the 14 items as built** (2026-10-12; read from the code and its tests, nothing run on real data):
+
+| item | status |
+|---|---|
+| 1 database and accounts | built. `rulex.accounts` makes `-n`, `-nq`, `-e`, `-eq`, `-nflip` (`-e`, `-eq`, `-eflip` in a pool without a new exit); `runner.fingerprint` covers each account, its rule, `RULEX_VERSION`, for F11 and F12 the hash of `native.py` and `native_ds.py`, and `no_entry_from_ms`; the start is the install time (11.3) |
+| 2 both pools | built. `pick_list` has no DeepSeek refusal |
+| 3 per-close rule inputs | built. `chunk_rule` hands every rule account one `RuleClose` per chart close of every coin (15m closes for q15) |
+| 4 F11 as Appendix A | built. Component kinds, C3 arming, levels and targets in `meta['native_inv']` and `meta['native_tgt']`, flips mirrored (`flip_levels`); the arrays come from `native.py` and `native_ds.py` through `load_native_provider` |
+| 5 guard | built. `chunk_rule` stops with `BothFlags` when a bar carries both flags |
+| 6 step order | built in `RuleMixin.step` |
+| 7 rule state | built. `meta['rx']` is saved and restored with the engine state and recomputed by `audit_restored`; F12 keeps all nine components and `rx['comp']` |
+| 8 native target | built. `tp_price` is set only beyond `entry_price`, without the lock |
+| 9 no new entry from a time | built. The field `no_entry_from_ms` per pool of the rules file goes onto the pool's `-n`, `-nq` and `-nflip` accounts and into the fingerprint. The C1 command **prints** the value (11.5) and does not edit the rules file: it is copied into `rules.json` by hand (restart to-do), and the changed fingerprint starts the league over from the same recorded start, with a copy of the old record first |
+| 10 counters | built. Table `acct_day`, written in the chunk's commit |
+| 11 daily marks | built. Table `acct_mark`, written at every 00:00 UTC in the same commit |
+| 12 snapshot | built. Per account `hold_stats` (count, median hold, shares over 4 h, 8 h and 18 h) over every closed trade since the start, and the `acct_day` counts; the checks do not use `LAST_TRADES` |
+| 13 end-to-end parity | built on **synthetic data only**: `tests/test_exitflex_league_parity.py` (six coins, 62 days of 1m bars of which the first 52 are warm-up and the last 10 judged; missing minutes, halts, gaps, a restart in the middle of open positions; F1-F10 with F7h in both modes and q15, F11 and F12 through a synthetic native provider, coin-flip accounts, negative controls). **Open**: the run over at least 60 days of archive data before 2026-10-01 with the real arrays of `native.py` and `native_ds.py`, and the window-length check of the sub-bullets above |
+| 14 check data | built. `forward_check` reads `trades`, `acct_day` and `acct_mark`; `public_view` keeps DeepSeek to labels, counts, win shares and hold hours; the command is `python -m candleague.rulex checks c1|c2|repeat` (11.5) |
+
+**Restart to-do.** All of this is done at restart time, after the owners' OK. None of it is pinned here, and none of it
+changes a rule of this file.
+
+* The owners' OK, verbatim except the redaction of section 3, and the restart's deviation entry go into
+  `research/fullgrid/DEVIATIONS.md` (11.1, 11.3), with audit A8 run on the entry first.
+* **Rules file.** Write `candleague/data/rules.json` with the passing rule per pool (null for a pool with no PASS) and
+  `"enabled": true`, and commit it. The install script refuses uncommitted changes in the league's paths.
+* **Pin file.** `PREREG_EXITFLEX.sha256` lists none of the league side (`candleague/rulex.py`, `runner.py`,
+  `rules.json`, the parity test). At the restart the main session records their sha256 and the commit in the deviation
+  entry, and the parity test is run on exactly those files.
+* **Old record.** Stop the engine; copy the old database and its start file next to them and move the originals out of
+  the way, or point `CANDLEAGUE_DB` to a new file (11.3). `python -m candleague backup` makes the database copy.
+* **Environment file** (`/etc/candleague/candleague.env`, read by `candleague-live.service`): remove `CANDLEAGUE_START`;
+  set `CANDLEAGUE_EXPECT_START` to the install time the restart script wrote down; set `CANDLEAGUE_RULES` only when the
+  rules file is not at its default path; leave `CANDLEAGUE_DS_MONEY` as it is (section 3).
+* **Install script** (`deploy/candleague/install_candleague.sh`). Its `CODE_PATHS` lists neither
+  `research/exitflex/native.py` and `native_ds.py`, which `rulex.load_native_provider` imports when a pool's new exit is
+  F11 or F12, nor `research/fullgrid/run.py`, which both modules import when they run (`fg()`), nor what `run.py`
+  itself imports. Add the paths the league server needs and run the parity test with them. Its `backup` step runs under
+  `env -i` and passes only `CANDLEAGUE_DB`, `CANDLEAGUE_CANDIDATES` and `CANDLEAGUE_START`: pass
+  `CANDLEAGUE_EXPECT_START` (and `CANDLEAGUE_RULES` when it is not the default path) so that the step also checks the
+  start (11.3).
+* **Unit file** (`deploy/candleague/candleague-live.service`). The settings above come from its environment file, so it
+  needs no new line for them. Check its caps (`CPUQuota=30%`, `MemoryMax=1300M`) against the account count of 11.2 (up
+  to 190) in the rehearsal, and keep `ReadWritePaths` covering the new database path.
+* **Parity test on archive data** (item 13, the open part).
+* **After C1** (11.5): copy the printed `no_entry_from_ms` into `rules.json` for each stopped pool, commit it, and let
+  the engine start over from the recorded start (the old record is copied first). C2 and the repeat are run from the
+  same command with `--skip` for a pool already shown ahead.
+
 ### 11.5 Forward checks (pre-registered here)
 
 * Days count from the restart's install time. All accounts start together, so every comparison is over identical days.
@@ -1312,8 +1369,9 @@ item 13 must pass. Each item is a change to the draft where the draft differs.
 * For an account, G = ln(W_T / 5,000) / months, months = days / (365.25 / 12). A pool's G for a role (`-nq`, `-eq`,
   `-nflip`, ...) is the mean of G over the pool's picks: the **pooled monthly log growth**.
 * **C1** (install + 30 days). In each pool where a new exit runs: if G(`-nq`) < G(`-eq`) and G(`-nq`) < G(`-nflip`),
-  the new exit **stops** in that pool: the committed C1 script writes `no_entry_from_ms` = the C1 time on that pool's
-  `-n`, `-nq` and `-nflip` accounts (11.4 item 9); open positions close by their own rules; the record is kept. The E0
+  the new exit **stops** in that pool: the committed C1 script gives `no_entry_from_ms` = the C1 time for that pool's
+  `-n`, `-nq` and `-nflip` accounts (11.4 item 9; as built it prints the value and the main session copies it into the
+  rules file); open positions close by their own rules; the record is kept. The E0
   accounts continue. A pool stopped at C1 is "not shown ahead" and has no C2. Otherwise the new exit continues.
 * **C2** (install + 61 days). The new exit is **shown ahead** in a pool when all four hold:
   1. G(`-nq`) > G(`-eq`), with a one-sided exact sign-flip test p < 0.03 on the weekly differences:
@@ -1381,8 +1439,14 @@ Real money is not decided by this study. That stays the owners' decision under t
 * **Known limits**:
   1. **2024-2026 is not blind.** The 38 picks were chosen after the full grid's 2024-2026 results had been seen
      (WATCH_PREREG 0), and E0 is part of each pick. On the confirm period E0 carries that selection, which tilts the
-     confirm against the variants. The main session states that it opened no hunt result (section 15), so F4's confirm
-     is not knowingly a second look at chandelier exits on 2024-2026. The clean check is the league's forward record.
+     confirm against the variants. The main session's statement in section 15 says that it opened no hunt result, which
+     would have made F4's confirm not knowingly a second look at chandelier exits on 2024-2026. That no longer holds:
+     the dated addendum in section 15 (2026-10-12 ~06:38 UTC, before the hash) says that the round-1 trend-hunt results
+     were then opened and that they contain test-period (2024-01..2026-09) outcomes of chandelier-exit trend systems.
+     F4's confirm (and the chandelier leg of F12) is therefore knowingly a second look at chandelier exits on
+     2024-2026. No hunt number was used for any choice in this study: the variant menu, F4 included, is in git history
+     before those results existed. The owners are told so in the select report (section 17, item 4a). The clean check
+     is the league's forward record.
   2. **2021-2023 was used for both, parts of it were looked at, and the owners' choice is not blind to 2024-2026.** E0
      was chosen on 2021-2023 (the plateau rule), which tilts the select step against the variants. The best of 86
      variants on 2021-2023 also looks better there than it is (the winner's curse); the single confirm and Holm address
@@ -1471,15 +1535,18 @@ Real money is not decided by this study. That stays the owners' decision under t
 
 ## 13. Reproducibility
 
-* Code lives in `research/exitflex/`:
+* Code lives in `research/exitflex/` (nine `.py` files, all pinned):
   * `data_x.py`: loading through `research/fullgrid/data.py` `load` (the `hc.py` "1m" path, shift 0), the cut and the
     cache rules below; the offered-signal table (`offered`) with the market-state code of each signal bar (below);
-  * `kernel_x.py`: the engine, the 86 variants including F7h and F12;
+  * `kernel_x.py`: the engine, the 86 variants including F7h and F12 (the module lists the 82 of F1-F10 and adds the 2 of
+    F11 and the 2 of F12 once the F11 provider of `native.py` and `native_ds.py` is registered, which the runner does);
   * `native.py` (the eight core strategies' own exits) and `native_ds.py` (the eight DeepSeek strategies'), Appendix A;
-  * `runner_x.py`: the timing, select (steps 1 and 2), confirm, audit and report stages, the private owner reports and
-    the pins (earlier drafts of this file wrote `run_x.py`; the file is `runner_x.py`);
-  * `test_exitflex.py`;
-  * any helper module the coder adds (for example `metrics.py`, `placebo.py`).
+  * `runner_x.py`: the stages as command-line steps (`make-pin`, `pin-lines`, `make-cut`, `timing`, `select`,
+    `report`, `choice`, `confirm`, `confirm-report`, `check`, `audit`, `audit-file`; `t3-side` is internal), the private
+    owner reports and the pins (earlier drafts of this file wrote `run_x.py`; the file is `runner_x.py`);
+  * `metrics.py` and `placebo.py`, the helper modules;
+  * `test_exitflex.py` (T1-T8 and the runner's stages, on synthetic data) and `test_native.py` (the native modules of
+    Appendix A; see the tests below for its real-bar tests).
 
   **Where the market-state columns are produced (section 7).**
   * `data_x.py`, `offered`: for each offered signal, the regime code at its signal bar, from
@@ -1500,21 +1567,31 @@ Real money is not decided by this study. That stays the owners' decision under t
   * The code does not import `research/fullgrid/regimes.py` (it needs the whole `run`/`demobot` machinery); that file
     is pinned as the definition of the labels, and T8 checks the labels against `regime5y` directly.
 
-  **Code must match this revision before the pin.** The modules already in the folder were written against earlier
-  revisions. Section 17 lists every item as a checklist. In short: `kernel_x.py` carries the 86 variants (the 82 of
-  F1-F10, the 2 of F11, the 2 of F12; F7h; the F11 mechanics of Appendix A, component kinds, C3 arming from i0,
-  per-position levels and targets; F12 with a component mask for tests, `tr_comp` and `tr_state`, and the F12 placebo
-  clock of section 6); `placebo.py` uses the seed base without the pick id, the coin index and check close of the key
-  in section 6, the strata z of section 6 including F12's, and F12's clock (a hazard table without the clock check, a
-  certain exit at it); `metrics.py` drops its header line "this
-  study runs the core pool only", applies the gates per pool (14 of 23, 9 of 15), replaces `choose_variants`'
-  "median_Mp" ranking with the default of 8.4 (set D, shortest pooled median hold, ties by parameter count then
-  canonical order, at most 2 from different groups, per pool, only for a pool with no answer), gives `claim_of` the F7h,
-  F11 and F12 wording of 8.5, knows group A, and adds `hold_by_state`. T7 and T8 below check this. The league side
-  (`candleague/rulex.py` and its test) is not pinned here; it must meet 11.4 and its parity test before the restart.
+  **Code and this revision.** The code in the folder follows this revision; section 17, part B, lists what is checked.
+  In short: `kernel_x.py` carries the 86 variants (the 82 of F1-F10, the 2 of F11, the 2 of F12; F7h; the F11 mechanics
+  of Appendix A, component kinds, C3 arming from i0, per-position levels and targets; F12 with a component mask for
+  tests, `tr_comp` and `tr_state`, and the F12 placebo clock of section 6); `placebo.py` uses the seed base without the
+  pick id, the coin index and check close of the key in section 6, the strata z of section 6 including F12's, and F12's
+  clock (a hazard table without the clock check, a certain exit at it); `metrics.py` applies the gates per pool (14 of
+  23, 9 of 15), the default of 8.4 (set D, shortest pooled median hold, ties by parameter count then canonical order,
+  at most 2 from different groups, per pool, only for a pool with no answer), the F7h, F11 and F12 wording of 8.5,
+  group A and `hold_by_state`. T7 and T8 below check this. The runner refuses to build the menu without the native
+  modules (it would be fewer than 86 variants), and the confirm refuses a `select.json` that was not made with the
+  complete menu. The league side (`candleague/rulex.py`, `candleague/runner.py` and their tests) is not pinned here; it
+  must meet 11.4 and its parity test before the restart.
 
-  Every `.py` file in `research/exitflex/` is pinned in `PREREG_EXITFLEX.sha256` together with this file,
-  `data_pin.json` and the sha256 of each input:
+  **What is pinned, as built.** `PREREG_EXITFLEX.sha256` has one line `<sha256>  <path from the repo root>` per file.
+  The files are the constant `REQUIRED_PINS` of `runner_x.py`, plus every `.py` file of `research/exitflex/` that it
+  does not already name, and `python research/exitflex/runner_x.py pin-lines` prints exactly those lines (35 now; 36
+  once `make-pin` has written `data_pin.json`). The runner refuses every stage after `make-pin` unless each is listed
+  and still has its hash. The pin file does not list itself or `README_KO.md` (which is not pinned), and its later
+  lines are the stage files of the stages as built (below).
+  * In `research/exitflex/`: this file, `data_pin.json`, and all nine `.py` files: `data_x.py`, `kernel_x.py`,
+    `placebo.py`, `metrics.py`, `runner_x.py`, `test_exitflex.py`, `native.py`, `native_ds.py` (all in
+    `REQUIRED_PINS`) and `test_native.py` (named by the rule for the folder's `.py` files). Their hashes are those of
+    the pin commit and are in the pin file, not in this table.
+  * The inputs, 25 files in `REQUIRED_PINS`, with the beginning of their sha256 as computed on 2026-10-12 (recomputed
+    at the hashing commit, section 17):
 
   | input | sha256 |
   |---|---|
@@ -1523,6 +1600,8 @@ Real money is not decided by this study. That stays the owners' decision under t
   | `research/fullgrid/sizing.py` | `3dc00c24…` |
   | `research/fullgrid/data.py` | `6691424b…` |
   | `research/fullgrid/ds_defs.py` | `40a752cc…` |
+  | `research/fullgrid/grid.py` (grid code that `run.py` loads) | `522cfb2e…` |
+  | `research/fullgrid/memo.py` (grid code that `run.py` loads) | `30b5a25d…` |
   | `research/deepseek200/lib_c.py` | `3210c602…` |
   | `research/library/lib.py` | `5c3e1083…` |
   | `research/search/search.py` | `06920240…` |
@@ -1534,26 +1613,92 @@ Real money is not decided by this study. That stays the owners' decision under t
   | `third_party/sweep/harness/vendor/pine_indicators.py` | `938c9545…` |
   | `paperbot/dash/tools/regime5y.py` (the market-state labels, section 7) | `b055a412…` |
   | `research/fullgrid/regimes.py` (the definition the labels follow) | `934578ba…` |
-  | `fg1m/build.json` | `824c9d1a…` |
-  | the `param_defs` | `research/entry_study/DEFS_BC.sha256` |
+  | `paperbot/config.py` (settings) | `a5b64e3c…` |
+  | `paperbot/ladder.py` (settings) | `6bd36810…` |
+  | `paperbot/margin.py` (brackets) | `005db5e7…` |
+  | `paperbot/levrule.py` (the leverage group) | `79b77d5f…` |
+  | `paperbot/entry_marks.py` (the leverage group) | `01b2d918…` |
+  | `paperbot/sweepsig.py` (the leverage group) | `422fd374…` |
+  | `research/entry_study/DEFS_BC.sha256` (the file that hashes the `param_defs`) | `185dbcf8…` |
 
-  The two regime files are new in this revision; their hashes are as computed on 2026-10-12 and are recomputed at the
-  hashing commit (section 17).
+  Eight rows, `grid.py`, `memo.py`, `config.py`, `ladder.py`, `margin.py`, `levrule.py`, `entry_marks.py` and
+  `sweepsig.py`, hold numbers that fix every account but lie outside the other files (the grid code that `run.py`
+  loads, the settings, the brackets, the leverage group). They and the two regime files were added to the pin list
+  after the first revisions (the regime files in the fourth, the eight in 16.5). `fg1m/build.json` (`824c9d1a…`) and the
+  six coin files (section 2) are pinned through `data_pin.json`, not as lines of their own: the runner checks them
+  against it at every stage with a data check.
 
   The runner also records the sha256 of every module file it loads from `research/library`, `research/search` and
-  `third_party/sweep/harness/vendor` at the select run, and the confirm stage refuses on any difference. Repo HEAD when
+  `third_party/sweep/harness/vendor` at the select run (all their `.py` files, a superset), and the confirm stage
+  refuses on any difference; it also writes into `select.json` the engine fingerprint (the settings vectors of both
+  sizes and the digest of the bracket arrays) and the confirm refuses on a difference there. Repo HEAD when
   the first three revisions were written: `20ae99e`; when the fourth was written: `bcc2278` (with uncommitted
   changes in the working tree; the pin commit is the one that counts, section 17). Versions: Python 3.11, numpy 2.0.2,
   pandas 2.3.3, numba 0.60.0. The runner records the versions it runs with.
+* **The stages as built** (`python research/exitflex/runner_x.py --help` lists them; the order of work below runs them in
+  this order).
+  * `make-pin --data-dir DIR --work DIR [--out F]` writes `data_pin.json` (the absolute data and work folders, the sha256
+    of `build.json` and of each of the six coin files). It needs no pin file, and it **refuses to overwrite** a
+    `data_pin.json` that is already listed in `PREREG_EXITFLEX.sha256`.
+  * `pin-lines` prints the lines for the pin file (above). It prints hashes of code and inputs only. The main session
+    writes `PREREG_EXITFLEX.sha256` from its output.
+  * **The gate.** Every stage after `make-pin` (`make-cut`, `timing`, `select`, `report`, `choice`, `confirm`, `check`,
+    `audit`) first refuses unless: `data_pin.json` exists; the pin file exists and every file it lists has its hash
+    ("hash mismatch"); every file of `REQUIRED_PINS` is listed ("not pinned"); every `.py` file of `research/exitflex/` is
+    listed ("not pinned (code of this folder)"); and, for every stage except `report` and `choice`, `build.json` and the
+    coin files still match `data_pin.json`. It then prints `[pin ok]` with the git commit and `<pin8>`. `confirm-report`
+    and `audit-file` run no gate: they only rewrite or read committed files.
+  * **`make-cut` is a separate step.** In its own process it reads the full pinned arrays once and writes the select
+    cut data folder `$WORK/<pin8>/cut-202401010000/1m/<SYM>.npz` with `cut.json` (the pin hash, the cut time and a digest
+    of every array), then verifies the digests and that no array holds a minute at or after 2024-01-01 00:00 UTC. The
+    `select` and `timing` processes **only open and verify** that folder (`open_cut`: digests, no minute at or after
+    the cut); when it is missing they start `make-cut` as a child process and open its result. No select or timing
+    process loads a full array (audit A5).
+  * `timing` writes `out/timing.json` (5.3: seconds, the projection, the seed count). Its hash is appended to the pin
+    file before `select` can run.
+  * `select [--procs N]` needs the gate and `timing.json` listed in the pin file with its present hash. It **refuses**
+    when `out/select.json` or `out/SELECT_KO.md` exists or is listed in the pin file: it runs once. It refuses without
+    the native modules (the menu would be fewer than 86 variants). Step 2 starts only when every step-1 file exists, and
+    the summary runs once when every file exists. `select --rerun` (section 14) needs `select.json`, no `confirm.json`, no
+    `select_r2.json` or `SELECT_KO_r2.md` (existing or pinned), and an entry naming `select_r2` in this folder's
+    `DEVIATIONS.md`, written before the rerun; it writes the `_r2` files.
+  * `report` is **read-only**. It rewrites `select.json` and `SELECT_KO.md` from the finished result files, computes
+    nothing, loads no market data, and refuses when any result file is missing, when `timing.json` is not pinned, or
+    when `select.json` or `SELECT_KO.md` is already listed in the pin file (a pinned report changes only by a section 14
+    rerun).
+  * `choice --input F [--now-utc T] [--rerun]` needs `select.json`, `SELECT_KO.md`, `timing.json` and `sent.json`, each
+    listed in the pin file with its present hash (with `--rerun`: the `_r2` set and `choice.json`). It **refuses when
+    `choice.json` is already listed in the pin file** (`choice_r2.json` for a rerun: a choice is final once hashed, 8.3);
+    when `select.json` was made under another pin; when a pool has no answer and its deadline has not passed; and when
+    the document does not validate (8.3: choosable ids, at most 2 from different groups, the send time equal to
+    `sent.json`, the private report shown at or before the sending, the default's ids, the list of 2024-2026 material
+    naming `ANALYSIS_KO.md`, `STRATEGIES_KO.md` and `STRATEGY_EVAL_KO.md`) or the free-text tripwire (A8) still finds a
+    DeepSeek money figure after the redaction.
+  * `confirm [--procs N] [--rerun]` needs the gate and `select.json`, `SELECT_KO.md`, `timing.json`, `sent.json` and
+    `choice.json` listed in the pin file with their present hashes (and the `_r2` set when `choice_r2.json` exists). It
+    **refuses**: when `select.json` was not made with the complete menu of 86 variants; when the choice does not
+    validate; when `confirm.json` exists (it runs once; `--rerun` needs `confirm.json`, no `confirm_r2.json` and an entry
+    naming `confirm_r2` in `DEVIATIONS.md`); when no variant was chosen in either pool; **when a module file changed**
+    since the select run (the sha256 of every `.py` file of `research/library`, `research/search` and the vendor
+    folder, recorded in `select.json`; checked before anything is loaded and again before and after the accounts are
+    computed); and **when the engine fingerprint changed** (the settings vectors of both sizes and the digest of the
+    bracket, quantity-step and minimum-notional arrays, which come from `paperbot/config.py`, `margin.py` and
+    `exchange.json`; a `select.json` without it is refused).
+  * `confirm-report [--extra-messages F]` rewrites `out/REPORT_KO.md` from `confirm.json` without any recomputation.
+  * `check [--which t1,t3,t5,t8]` runs the real-data parts of T1, T3, T5 and T8 (pass or fail and counts only);
+    `audit --stage select|confirm` runs A1-A9 (pass or fail); `audit-file --path F [--path F2 ...] [--after MARK]` runs
+    A8 and A9 on files before they are sent or committed (section 14).
+  * The pin file grows as the stages finish: `timing.json` (before `select`), then `select.json` and `SELECT_KO.md`,
+    then `sent.json`, then `choice.json` (and the `_r2` files of a rerun). The runner never writes it.
 * **Caches.**
   * exitflex uses no disk cache it does not own. `hc.py`'s frame pickles (`frames_5m`, `frames_1m`) and signal cache
     (`cache/sig_*`) are not read. `run.FRAME_DIR` points into the stage's own folder.
   * exitflex's own disk caches live under `$WORK/<pin8>/<stage>/`, where `$WORK` is a folder outside the repo named in
     `data_pin.json`, `<pin8>` the first 8 hex digits of the pin, and `<stage>` one of `timing`, `select`, `select_r2`,
-    `confirm`, `confirm_r2`, `t3-<cut>`. **The pin is the sha256 of the file `data_pin.json`** (`data_x.pin_sha`) and
-    nothing else. `PREREG_EXITFLEX.sha256` grows after the pin (select.json, SELECT_KO.md, timing.json, sent.json,
-    choice.json) and is not the pin, so `<pin8>` and the `ds_private` folder do not move between stages. A stage deletes
-    its folder before it starts. Cache keys include the pin hash and the cut time.
+    `check`, `confirm`, `confirm_r2`, `t3-<cut>`. **The pin is the sha256 of the file `data_pin.json`**
+    (`data_x.pin_sha`) and nothing else. `PREREG_EXITFLEX.sha256` grows after the pin (timing.json, select.json,
+    SELECT_KO.md, sent.json, choice.json) and is not the pin, so `<pin8>` and the `ds_private` folder do not move between
+    stages. A stage deletes its own cache folder before it starts. Cache keys include the pin hash and the cut time.
   * The cut arrays are written as their own data folder, `$WORK/<pin8>/cut-<cut time>/1m/<SYM>.npz`. Every `run.py`
     cache keyed by the data folder (`frame`, `best_flags`, `struct_levels`, `all_minutes`) therefore sees a different
     key for cut and full data. The `ds_defs` cache dicts are per process and per series.
@@ -1568,6 +1713,13 @@ Real money is not decided by this study. That stays the owners' decision under t
     `choice_r2.json`, `confirm_r2.json` and `REPORT_KO_r2.md`.
 * **Tests that must pass before any select run.** They print only pass or fail and counts of cases, never a
   performance figure.
+  * **Where they live, as built.** T1-T8 and the runner's stages are in `research/exitflex/test_exitflex.py` (synthetic
+    data only); audit A1 reruns that file and no other. The native modules' tests (T2, T3, T5 and T6 for Appendix A) are
+    in `research/exitflex/test_native.py`. Its real-bar tests compare booleans on the select-period 1m arrays of the folder
+    named by `EXITFLEX_FG1M` and are **skipped** when the folder is missing; a skip is not a pass, so at the pin the file
+    is run with `EXITFLEX_REQUIRE_REAL=1` (a missing folder then fails the run) and the summary must say 0 skipped. The
+    league's parity test is `tests/test_exitflex_league_parity.py` (11.4 item 13), on synthetic data; it is not pinned and
+    A1 does not run it.
   * **T1 parity.** With no rule, no placebo and the period end after the data end, `_trade_x` must equal
     `kernel._trade`: wallet change to 1e-9, exit index, reason and leverage. `account_x` must equal `kernel.account`:
     statuses, P&L, exit times, reasons, leverages and the final wallet. Test inputs:
@@ -1713,11 +1865,16 @@ Real money is not decided by this study. That stays the owners' decision under t
       placebo draws unchanged).
 * Seeds use `run._seed`: the first 8 hex digits of the sha256 of the "|"-joined parts.
 * **Order of work**:
-  1. Code, tests and `data_pin.json`, then the pin, commit and push.
-  2. The timing stage (seconds only), the seed count of 5.3, `out/timing.json`, commit and push.
+  1. Code and tests (T1-T8, the native tests with `EXITFLEX_REQUIRE_REAL=1`, the league parity test); `make-pin`
+     writes `data_pin.json`; `pin-lines` prints the lines; the main session writes `PREREG_EXITFLEX.sha256` from them,
+     then commit and push: the pin commit, whose message carries the pin time (the status line at the top of this file
+     points to it).
+  2. `make-cut` (the cut data folder, in its own process), then the timing stage (seconds only), the seed count of 5.3,
+     `out/timing.json`; the hash of `timing.json` is appended to the pin file (the select stage refuses without it),
+     commit and push.
   3. The select run, in fresh processes: step 1, then step 2. It writes `out/select.json` and `out/SELECT_KO.md` and
      the private owner report `$WORK/<pin8>/ds_private/owner_report_select.md`; the post-run audits of section 14 run;
-     the hashes of `select.json`, `SELECT_KO.md` and `timing.json` are appended, then commit and push. The main session
+     the hashes of `select.json` and `SELECT_KO.md` are appended, then commit and push. The main session
      checks the private report's sha256 against `select.json`, shows the private report in the chat with the owners, in
      the same turn as or before it sends `SELECT_KO.md` (never over a logged channel, section 3), then writes
      `out/sent.json` (sending time, channel, the time the private report was shown, freeze note), runs audit A8 on it,
@@ -1732,7 +1889,8 @@ Real money is not decided by this study. That stays the owners' decision under t
   6. After a PASS and the owners' OK: the league changes of 11.4 with their parity test, the DEVIATIONS entry (audit A8
      on it before it is committed), the restart, then C1 and C2 (11.5).
 
-  The runner prints the git commit and refuses to run on a hash mismatch.
+  The runner prints the git commit (`[pin ok] commit ... pin ...`) and refuses to run on a hash mismatch; the other
+  refusals of each stage are listed under "The stages as built" above.
 
 ## 14. Failure handling, bugs and looks
 
@@ -1919,6 +2077,21 @@ Real money is not decided by this study. That stays the owners' decision under t
   of E0 (the watch list was chosen after the test period; WATCH_PREREG 0).
   ```
 
+* **Addendum to the main session's statement** (dated; the statement above is unchanged), inserted verbatim (line breaks
+  added only):
+
+  ```text
+  Addendum, 2026-10-12 ~06:38 UTC (15:38 KST), before the hash: the round-1 trend-hunt results (branch hunt-results,
+  pushed 06:32 UTC) were opened. The main session read hunt/wide/RESULTS_KO.md (the wide verdict table: 13 picks, 10
+  tested in group 1, none passed), results/README_KO.md and the tail of run.log. Verification sub-agents then read the
+  other result files (v1, wide test and select, reads_a, reads_o, fidelity, parity, data and pin manifests) between
+  about 06:40 and 07:30 UTC; their summaries were seen by the main session. No hunt number was used for any choice in
+  this study. The variant menu, including the chandelier family F4 (a chandelier trail was in the first draft committed
+  as eda4740 at 2026-10-12T01:48Z, 4 h before the results existed), is in git history before these results existed.
+  The round-1 results contain test-period (2024-01..2026-09) outcomes of chandelier-exit trend systems; Known limit 1's
+  chandelier sentence therefore applies and the owners are told so in the select report.
+  ```
+
 * **Outputs under `scratchpad/holdcost/`** (names and file times UTC, 2026-10-12, as listed at about 01:56), with their
   status under the statement above. The first revision's default, "unless the main session strikes a line, that file
   counts as read", is **struck for every file marked "not opened"**:
@@ -1940,7 +2113,8 @@ Real money is not decided by this study. That stays the owners' decision under t
 
   Also opened by the main session: the 'basket' select line of `research/fullgrid/diag/combo_sum.json` (E0 basket at
   live size). No hunt result file is in `research/hunt/` or `research/hunt_r2/` (by name: inputs, texts and
-  `out/wide/parity.json` only), and the main session states it opened no hunt result. `research/autopsy/LOSS_AUTOPSY.md`
+  `out/wide/parity.json` only), and the main session stated, at the time of its statement, that it opened no hunt
+  result (the addendum above changes that, for the round-1 results). `research/autopsy/LOSS_AUTOPSY.md`
   holds select-period loss-cause tests; whether it covers early exits is not known to the drafters.
 * **What follows, applied now**:
   * The first revision's "seen on select" marks on **F3.a** and **F7.N12.a, F7.N24.a, F7.N48.a** are dropped: the
@@ -1950,7 +2124,9 @@ Real money is not decided by this study. That stays the owners' decision under t
     live-size account multiples, and the E0 basket at live size, were seen. They show the size of E0's select-period
     growth at live size and nothing of any variant. The deciding size is quarter. Nothing of the DeepSeek pool was
     seen from `holdcost`.
-  * Known limit 1's chandelier sentence does not apply (no hunt result opened).
+  * At the time of the statement, Known limit 1's chandelier sentence did not apply (no hunt result opened). **It applies
+    from the addendum above** (the round-1 hunt results were opened before the hash); Known limit 1 is rewritten to say so
+    and the owners are told in the select report.
   * The hold-cost workflow resumes only after this file is hashed. Its outputs are select-period numbers; reading them
     later changes no rule of this file. The families, grids and modes of section 5 and Appendix A are not changed after
     anyone reads them.
