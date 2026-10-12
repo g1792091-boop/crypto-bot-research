@@ -438,15 +438,17 @@ def _worker(task):
 
 def run_tasks(cfg: Config, tasks: list, label: str, quiet: bool = False) -> None:
     """Run (kind, pick id, arg) tasks on ``cfg.procs`` processes (forked: the loaded arrays are shared); progress lines only.
-    ``quiet`` (the placebo steps, prereg 14 and 16.7): a line gives the count done and the seconds only, no pick and no number of
-    files, since a pick's number of placebo files would show how many variants of its pool passed gates 1, 2 and 4."""
+    ``quiet`` (the placebo steps, prereg 14 and 16.7): no line per task, only one line when the step ends (tasks and seconds),
+    since a pick's number of placebo files, or the timing of its line, would show how many variants of its pool passed gates
+    1, 2 and 4."""
     _CFG["cfg"] = cfg
     done = 0
     t0 = time.time()
 
     def line(pid, n):
         if quiet:
-            progress(f"[{label}] {done}/{len(tasks)} ({time.time() - t0:.0f}s)")
+            if done == len(tasks):
+                progress(f"[{label}] {done}/{len(tasks)} done ({time.time() - t0:.0f}s)")
         else:
             progress(f"[{label}] {done}/{len(tasks)} {pid} ({n} new files, {time.time() - t0:.0f}s)")
 

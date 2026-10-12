@@ -1,0 +1,14 @@
+{
+ "version": 1,
+ "data_dir": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/fg1m",
+ "work": "/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/exwork",
+ "build_json_sha256": "824c9d1ad327a4466d560c7b214bc1b89ff95ad0969eb2565b8fe698227a1779",
+ "coins": {
+  "BTCUSDT": "cdb50d97cd517417001e2590e13189349afb3b6f95a9af81638ec5601c04c178",
+  "ETHUSDT": "270ad01f816b200905408f78988b0eb5de481bd87dc2205ec6f92c79abdd4667",
+  "SOLUSDT": "994e424a40250aec39ee274f3ec684c88ac03c18cee3a182ef68afcac3ae0bf2",
+  "DOGEUSDT": "a92ff7d69e8ca5b8eca0e7d40d9e1d60540c4fb305d43430d8f96ae74f294201",
+  "LTCUSDT": "9b10e25e2fdcd21193400b161b26e08935cbe7d50253a20969b5bd07f15df4b7",
+  "BCHUSDT": "fd6f2d416f7e4be9ce66626e81f91be8e17628f290966c8cab3b6bb981c06e42"
+ }
+}

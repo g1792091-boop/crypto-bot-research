@@ -2623,7 +2623,7 @@ def test_runner_real_data_checks_run_on_the_synthetic_universe(syn_select):
 
 def test_t5_draws_go_on_until_each_pick_and_variant_has_its_pairs_and_stop_at_the_cap(syn_select, monkeypatch):
     """The dry run of 2026-10-12 found 285 DeepSeek pairs with one round of draws: a drawn trade without a check gives no pair. The draws
-    for one (pick, variant) go on until ``per`` pairs are found, at most ``T5_DRAW_CAP`` x ``per`` draws, so a pool reaches its 500
+    for one (pick, variant) go on until ``per`` drawn trades with a check are found, at most ``T5_DRAW_CAP`` x ``per`` draws, so a pool reaches its 500
     (here 40) pairs when its trades often have no check, and a pick whose trades never have one cannot loop forever."""
     cfg, _doc = syn_select
     real = RX.causality_pair
@@ -2654,8 +2654,8 @@ def test_t5_draws_go_on_until_each_pick_and_variant_has_its_pairs_and_stop_at_th
 
 
 def test_placebo_steps_print_no_pick_and_no_file_count(tmp_path, capsys):
-    """Prereg 14 and 16.7: while a placebo step runs, a pick's number of new placebo files would show how many variants of its pool passed
-    gates 1, 2 and 4, so the quiet lines give the count done and the seconds only; the step-1 lines keep the pick and the count."""
+    """Prereg 14 and 16.7: while a placebo step runs, a pick's number of new placebo files, or when its line arrives, would show how many
+    variants of its pool passed gates 1, 2 and 4, so a quiet step prints one line when it ends; the step-1 lines keep the pick and count."""
     class C:
         procs = 1
     tasks = [(2, "core-X-15m-1", ["F1.w3.a"]), (2, "core-Y-1h-1", [])]
@@ -2665,7 +2665,8 @@ def test_placebo_steps_print_no_pick_and_no_file_count(tmp_path, capsys):
         RX.run_tasks(C(), tasks, "select step 2", quiet=True)
         out = capsys.readouterr()
         text = out.out + out.err
-        assert "core-X" not in text and "new files" not in text and "[select step 2] 2/2" in text
+        assert "core-X" not in text and "new files" not in text and "[select step 2] 2/2 done" in text
+        assert "[select step 2] 1/2" not in text                          # no line per task: one line when the step ends
         RX.run_tasks(C(), tasks, "select step 1")
         out = capsys.readouterr()
         assert "core-X-15m-1 (7 new files" in out.out + out.err
