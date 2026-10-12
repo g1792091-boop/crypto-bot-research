@@ -123,18 +123,25 @@ def read_markets(syms: list) -> dict:
     return mks
 
 
-def window_seconds() -> tuple:
+def window_seconds(root: str = ROOT) -> tuple:
     """W 7.1's 0.03 s rule input: research/hunt/bench_window.json when round 2's pin lists it with its sha256."""
     rel = H.BENCH_WINDOW_REL
-    if PN.is_pinned(rel):
-        d = H._load_json_rel(rel) or {}
+    if PN.is_pinned(rel, root):
+        d = SR_load(os.path.join(root, rel))
         if d.get("window_run_30d_s") is not None:
             return float(d["window_run_30d_s"]), f"{rel} (synthetic bars, pinned)"
     return None, f"no pinned {rel}: rolling control seeds 1-100"
 
 
+def SR_load(path: str) -> dict:
+    try:
+        return CF.load_json(path) or {}
+    except (OSError, ValueError):
+        return {}
+
+
 def make_ctx(*, args, pin, mks: dict, syms: list, test_doc: dict, full: dict, reads_pin: dict,
-             private_path: str) -> dict:
+             private_path: str, root: str = ROOT) -> dict:
     """Reads interface api 1 for round 1's modules, on round 2's rows and signals."""
     tested = list(full["picks"])
     passing = list(full["verdict"]["passing"])
@@ -166,7 +173,7 @@ def make_ctx(*, args, pin, mks: dict, syms: list, test_doc: dict, full: dict, re
             raise ValueError("round 2 never passes a spec dict to round 1's engine path (11)")
         return H.run_engine(what, start_ms, end_ms, mks=mks, universe=syms, **kw)
 
-    sec, sec_src = window_seconds()
+    sec, sec_src = window_seconds(root)
     machine = {"defaults": {n: float(v) for n, v in zip(H.PR_NAMES, H.params())}, "index": dict(H.PR_INDEX)}
     return {"api": 1, "study": STUDY, "pin": pin, "reads_pin": reads_pin, "periods": periods, "syms": list(syms),
             "old_six": [s for s in H.OLD_SIX if s in syms], "new": [s for s in syms if s not in H.OLD_SIX],
@@ -315,7 +322,7 @@ def run_reads(*, args, pin, mks: dict, syms: list, test_doc: dict, full: dict, p
             continue
         priv_path = os.path.join(private_dir, f"r2_{name}_private.json")
         ctx = make_ctx(args=args, pin=pin, mks=mks, syms=syms, test_doc=test_doc, full=full, reads_pin=rp,
-                       private_path=priv_path)
+                       private_path=priv_path, root=root)
         before = guard_snapshot(root)
         t0 = time.time()
         if name == "rows":
