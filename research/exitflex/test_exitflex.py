@@ -2616,6 +2616,26 @@ def test_runner_real_data_checks_run_on_the_synthetic_universe(syn_select):
     assert set(t5) == {"core", "ds"} and all(n >= 40 and bad == 0 for n, bad in t5.values())
 
 
+def test_t5_draws_go_on_until_each_pick_and_variant_has_its_pairs_and_stop_at_the_cap(syn_select, monkeypatch):
+    """The dry run of 2026-10-12 found 285 DeepSeek pairs with one round of draws: a drawn trade without a check gives no pair. The draws
+    for one (pick, variant) go on until ``per`` pairs are found, at most ``T5_DRAW_CAP`` x ``per`` draws, so a pool reaches its 500
+    (here 40) pairs when its trades often have no check, and a pick whose trades never have one cannot loop forever."""
+    cfg, _doc = syn_select
+    real = RX.causality_pair
+    calls = {"n": 0}
+
+    def sparse(*a, **k):
+        calls["n"] += 1
+        return None if calls["n"] % 3 else real(*a, **k)
+
+    monkeypatch.setattr(RX, "causality_pair", sparse)
+    t5 = RX.check_t5(cfg, per_pool=40)
+    assert all(n >= 40 and bad == 0 for n, bad in t5.values())
+    monkeypatch.setattr(RX, "causality_pair", lambda *a, **k: None)
+    t5 = RX.check_t5(cfg, per_pool=40)
+    assert all(n == 0 and bad == 0 for n, bad in t5.values())
+
+
 def test_runner_timing_writes_seconds_and_applies_the_seed_rule(tmp_path, vendor, monkeypatch):
     cfg = syn_cfg(tmp_path)
     doc = RX.run_timing(cfg)

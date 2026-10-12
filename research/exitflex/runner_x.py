@@ -1514,9 +1514,16 @@ def causality_pair(cfg: Config, pdata, v, off: dict, q: int, k: int | None, rng,
     return bool(out2[5] >= kk and np.array_equal(tr[:kk], tr2[:kk], equal_nan=True))
 
 
-def check_t5(cfg: Config, per_pool: int = 500, seed: int = 11) -> dict:
+T5_PER_POOL = 500
+T5_DRAW_CAP = 20     # at most T5_DRAW_CAP x per draws for one (pick, variant)
+
+
+def check_t5(cfg: Config, per_pool: int = T5_PER_POOL, seed: int = 11) -> dict:
     """T5 on the real arrays: ``per_pool`` sampled (trade, check) pairs per pool over the families at their middle parameter
-    and F11 in both modes. Returns {pool: (pairs checked, pairs failed)}."""
+    and F11 in both modes. A drawn signal whose trade has no check (it ends before its first check, or no size fits it) gives
+    no pair, so for each pick and variant the draws go on until ``per`` pairs are found, at most ``T5_DRAW_CAP`` x ``per``
+    draws (the dry run of 2026-10-12 found 285 pairs in the DeepSeek pool with one round of ``per`` draws). Returns
+    {pool: (pairs checked, pairs failed)}."""
     rng = np.random.default_rng(seed)
     vs = [v for v in (KX.variant_by_id(i) for i in MIDDLE_VARIANTS if i in {x.id for x in cfg.variants})]
     res = {}
@@ -1530,7 +1537,9 @@ def check_t5(cfg: Config, per_pool: int = 500, seed: int = 11) -> dict:
             if not len(off["coin"]):
                 continue
             for v in vs:
-                for _ in range(per):
+                got = draws = 0
+                while got < per and draws < T5_DRAW_CAP * per:
+                    draws += 1
                     q = int(rng.integers(0, len(off["coin"])))
                     for plc in ((False, True) if PL.has_placebo(v) else (False,)):
                         hz = np.where(rng.random((KX.N_AGE, 2, 2)) < 0.3, 0.0, rng.uniform(0.0, 0.2, (KX.N_AGE, 2, 2)))
@@ -1538,6 +1547,7 @@ def check_t5(cfg: Config, per_pool: int = 500, seed: int = 11) -> dict:
                         r = causality_pair(cfg, pdata, v, off, q, kk, rng, plc, hz)
                         if r is not None:
                             n += 1
+                            got += 1
                             bad += (not r)
         res[pool] = (n, bad)
         progress(f"[T5] {pool}: {n} pairs, {'pass' if bad == 0 and n >= per_pool else 'FAIL'}")
@@ -1605,9 +1615,9 @@ def stage_check(lay: Layout, which: list, picks_filter=None) -> bool:
     if "t1" in which:
         ok &= all(r for _p, r in check_t1(cfg, picks_filter))
     if "t5" in which:
-        ok &= all(b == 0 and n > 0 for n, b in check_t5(cfg).values())
+        ok &= all(b == 0 and n >= T5_PER_POOL for n, b in check_t5(cfg).values())
     if "t8" in which:
-        ok &= all(b == 0 and n > 0 for n, b in check_t8(cfg).values())
+        ok &= all(b == 0 and n >= T5_PER_POOL for n, b in check_t8(cfg).values())   # 500 signals per pool, as T5
     if "t3" in which:
         ok &= all(r for _c, r in check_t3(lay, pin, ph))
     progress(f"[check] {'pass' if ok else 'FAIL'}")
