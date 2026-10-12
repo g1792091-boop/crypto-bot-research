@@ -520,8 +520,8 @@ CLAIM_KO = {"rule": "지금 청산(E0)과, 같은 패턴의 무작위 청산보�
                     "같은 패턴의 무작위 청산보다 낫다. 쌓으면 단일 규칙보다 낫다거나, 아홉 개가 모든 매매법에서 다 작동한다거나, "
                     "F12가 최고의 청산이라는 뜻은 아님"),
             "f7": "오래 안 들고 있는 것만으로 낫다(차트를 읽는다는 뜻은 아님)",
-            "f13": ("규칙봇의 계단 잠금으로 나온다: 순수익률이 12%를 찍은 뒤에는 10% 아래로 내려오지 않게 잠그고, 17%면 15%, 22%면 20%로 올린다. "
-                    "차트의 구조는 읽지 않고, 그 이상은 말하지 않는다")}
+            "f13": ("규칙봇의 계단 잠금으로 나온다: 순수익률이 12%를 찍은 뒤에는 10% 아래로 내려오지 않게 잠그고(손절이 체결될 때의 미끄러짐과, "
+                    "다음 봉이 잠금선 아래에서 갭으로 시작하는 경우는 예외), 17%면 15%, 22%면 20%로 올린다. 차트의 구조는 읽지 않고, 그 이상은 말하지 않는다")}
 DS_ALLOWED = MT.DS_ALLOWED
 GATE_KO = {"pass": "통과", "fail": "탈락", "not_run": "안 돌림", "n/a": "해당 없음"}
 
@@ -676,14 +676,17 @@ def comp_table_ko(P: dict) -> list:
 
 # prereg 17 item 4a, section 15 (the dated addendum) and Known limit 1: a fixed line of the select report and of the confirm report. The
 # main session read the round-1 hunt results (with test-period outcomes of chandelier-exit trend systems) before this file was hashed;
-# the owners are told so in the report itself. It carries no number of any result.
+# the owners are told so in the report itself. It carries no number of any result. The exit menu was in git before the results existed, except
+# F13 (the stepped lock): it was added at about 07:51 UTC, after the hunt read, at the owners' request from the rule bot's own ladder; the line says so.
 HUNT_READ_KO = ("**미리 밝혀 둘 점 (고르시기 전에 읽어 주세요)**: 이 시험의 규칙을 잠그기 전인 2026-10-12 약 06:38 UTC(한국 시각 15:38)에 "
                 "메인 세션이 사냥 시험 1차 결과(넓은 시험의 판정표, 결과 요약 문서, 실행 기록의 끝부분)를 열어 봤고, 검증을 맡은 보조 에이전트들이 "
                 "나머지 결과 파일을 약 06:40~07:30 UTC에 읽어 그 요약을 메인 세션이 봤습니다. 그 결과에는 샹들리에 청산을 쓰는 추세 시스템의 "
                 "2024-01~2026-09 기간 결과가 들어 있습니다. 그래서 4번(샹들리에)과 12번 안의 샹들리에 부분을 2024~2026으로 확인하는 것은 "
                 "저희에게 이미 한 번 본 종류의 청산을 다시 보는 셈입니다(영문 사전 등록 15절의 날짜 붙은 추가 기록과 한계 1). 사냥 시험의 숫자는 "
-                "이 시험의 어떤 선택에도 쓰지 않았고, 샹들리에를 포함한 청산 후보 목록은 그 결과가 나오기 약 4시간 전(2026-10-12 01:48 UTC)에 "
-                "이미 깃에 올라가 있었습니다. 가장 깨끗한 확인은 새 리그의 앞으로 쌓이는 기록입니다.")
+                "이 시험의 어떤 선택에도 쓰지 않았고, 샹들리에를 포함한 청산 후보 목록은 13번(계단 잠금)을 뺀 나머지가 그 결과가 나오기 약 4시간 전"
+                "(2026-10-12 01:48 UTC)에 이미 깃에 올라가 있었습니다. 13번은 그 결과를 읽은 뒤인 약 07:51 UTC에 두 분의 요청(메시지 8, 9)으로 "
+                "추가했고, 숫자는 규칙봇 자신의 계단(paperbot/ladder.py)에서 가져왔으며 사냥 시험의 숫자는 쓰지 않았습니다. "
+                "가장 깨끗한 확인은 새 리그의 앞으로 쌓이는 기록입니다.")
 
 
 def select_report_ko(doc: dict) -> str:
@@ -1372,8 +1375,10 @@ def stage_confirm(lay: Layout, procs: int, rerun: bool = False) -> dict:
 
 
 # ------------------------------------------------------------------ real-data checks T1, T3, T5 (pass / fail and counts only)
+# The variants that have checks. F13 (the stepped lock) has none: ``causality_pair`` would skip every F13 sample, so it is not listed; its causality
+# (the stop in force at minute j depends only on minutes before j) is checked on synthetic paths only (test_exitflex.py, T5; prereg T5).
 MIDDLE_VARIANTS = ("F1.w3.a", "F1.w3.a.q15", "F2.n20.a", "F3.a", "F4.m2.a", "F4.m2.a.q15", "F5.P1.5.g25.a", "F6.w3.d0.5", "F7.N24.a",
-                   "F7h.H8.a", "F8.w3.P1.a", "F9.a", "F9.a.q15", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b", "F13.a", "F13.b")
+                   "F7h.H8.a", "F8.w3.P1.a", "F9.a", "F9.a.q15", "F10.N6.a", "F11.a", "F11.b", "F12.a", "F12.b")
 T3_CUTS = tuple(dt.datetime(y, m, 1, tzinfo=dt.timezone.utc) for y in (2021, 2022, 2023) for m in (2, 4, 6, 8, 10, 12)) + (
     dt.datetime(2022, 6, 15, 13, 37, tzinfo=dt.timezone.utc), dt.datetime(2023, 3, 17, 7, 5, tzinfo=dt.timezone.utc),
     dt.datetime(2024, 1, 1, tzinfo=dt.timezone.utc))

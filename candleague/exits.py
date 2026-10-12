@@ -172,7 +172,7 @@ class LadderTP(PaperEngine):
                 if lvl is not None and np.isfinite(lvl) and (lvl - p.entry_price) * p.side > 0:
                     p.tp_price = lvl
             elif self.roe is not None:                # the engine's own fixed-mode price (policy.tp_from_roe on the fill and the leverage)
-                p.tp_price = tp_from_roe(p.side, p.entry_price, p.leverage, self.roe, round_trip=0.0)
+                p.tp_price = tp_from_roe(p.side, p.entry_price, p.leverage, self.roe, round_trip=self.s.round_trip_cost)
             else:
                 p.tp_price = p.signal.meta["ref_price"] + p.side * self.m * p.signal.meta["stop_dist"]
         return ok

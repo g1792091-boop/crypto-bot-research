@@ -2512,6 +2512,9 @@ def test_select_report_tells_the_owners_about_the_hunt_read_before_they_choose(s
     line = RX.HUNT_READ_KO
     for must in ("사냥 시험", "2026-10-12", "06:38 UTC", "샹들리에", "2024-01~2026-09", "4번", "12번", "01:48 UTC", "어떤 선택에도 쓰지 않았고"):
         assert must in line, must
+    # the exit menu was in git before the results existed, except F13 (added about 07:51 UTC at the owners' request from the rule bot's own ladder)
+    for must in ("13번(계단 잠금)을 뺀 나머지", "약 07:51 UTC", "요청(메시지 8, 9)", "paperbot/ladder.py", "숫자는 쓰지 않았습니다"):
+        assert must in line, must
     assert "딥시크" not in line and "%" not in line and "배" not in line.replace("검증을 맡은", "")
     assert MT.audit_text(line) == [] and RX.audit_a8_file(cfg.lay.out_file("SELECT_KO.md")) == []
     assert RX.select_report_ko(doc) == txt                                                       # the report is a function of the json
@@ -3607,7 +3610,7 @@ def test_t4_f13_has_no_placebo_and_is_never_a_step_2_pair():
         v = KX.variant_by_id(vid)
         assert not PL.has_placebo(v) and not KX.has_placebo(v)
     assert not any(PL.has_placebo(v) for v in KX.variants() if v.famname == "F13") and PL.has_placebo(KX.variant_by_id("F5.P1.g50.a"))
-    # gate 3 does not apply to it: the same eligibility path as F7 and F7h (is_f7), M > 0, 60% of the picks, entries
+    # gate 3 does not apply to it: the same eligibility path as F7 and F7h (no_gate3), M > 0, 60% of the picks, entries
     pl = np.linspace(-0.01, 0.01, 200)
     assert MT.eligibility(0.005, [0.01] * 14 + [-0.01] * 9, 100, 100, None, RX.no_placebo_gate(KX.variant_by_id("F13.a")))["eligible"]
     assert not MT.eligibility(0.005, [0.01] * 14 + [-0.01] * 9, 100, 100, None, RX.no_placebo_gate(KX.variant_by_id("F3.a")))["eligible"]
@@ -3619,6 +3622,14 @@ def test_t4_f13_refuses_a_placebo_run(tmp_path, vendor):
     s = Scen(tmp_path, H(100, 100, 100, 100.5, 100.8, 100.6, 100.0, 100.0), longs=[2])
     with pytest.raises(ValueError, match="no placebo"):
         s.account("F13.a", placebo=True)
+
+
+def test_t5_the_real_data_list_holds_only_variants_with_checks_and_f13_is_checked_on_synthetic_paths_only(f11_on):
+    """``check_t5`` samples (trade, check) pairs and ``causality_pair`` skips a trade without a check, which is every F13 trade: F13 is not in the list
+    (a sample of it would count nothing), and its causality is the synthetic-path test below (prereg T5)."""
+    ids = {v.id for v in KX.variants()}
+    assert all(i in ids for i in RX.MIDDLE_VARIANTS) and len(set(RX.MIDDLE_VARIANTS)) == len(RX.MIDDLE_VARIANTS) == 18
+    assert not any(i.startswith("F13.") for i in RX.MIDDLE_VARIANTS) and {"F12.a", "F12.b", "F11.a", "F11.b"} <= set(RX.MIDDLE_VARIANTS)
 
 
 def test_t5_f13_the_stop_in_force_at_minute_j_depends_only_on_minutes_before_j(tmp_path, vendor):
@@ -3660,8 +3671,8 @@ def test_t7_f13_is_group_p_l0_in_set_d_and_the_claim_is_the_locks(f11_on):
     assert all(not any(MT.in_default_set(v) for v in vs if v.famname == "F12") for _ in (0,))
     assert sum(MT.in_default_set(v) for v in vs) == 37 and len(vs) == 88 and sum(PL.has_placebo(v) for v in vs) == 74
     assert [v.id for v in vs][-2:] == ["F13.a", "F13.b"] and [v.order for v in vs] == list(range(1, 89))
-    want = ("closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%; it reads no structure and makes "
-            "no claim beyond that")
+    want = ("closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%, except by the slippage of a "
+            "stop and at a gapped open, which can lie anywhere; it reads no structure and makes no claim beyond that")
     assert MT.claim_of("F13.a") == MT.claim_of("F13.b") == MT.CLAIM_F13 == want == RX.CLAIM_EN["f13"]
     assert RX.claim_key(KX.variant_by_id("F13.b")) == "f13" and "10%" in RX.CLAIM_KO["f13"] and "12%" in RX.CLAIM_KO["f13"]
     assert RX.FAMILY_KO["F13"] and "계단" in RX.FAMILY_KO["F13"]

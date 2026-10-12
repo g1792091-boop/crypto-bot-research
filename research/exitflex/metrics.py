@@ -201,16 +201,16 @@ def pool_summary(sv: dict, se: dict, pools: dict | None = None, tfs: dict | None
 
 
 # ------------------------------------------------------------------ selection (section 8)
-def eligibility(M: float, Mp: list, entered: int, entered_e0: int, placebo_pooled: np.ndarray | None, is_f7: bool,
+def eligibility(M: float, Mp: list, entered: int, entered_e0: int, placebo_pooled: np.ndarray | None, no_gate3: bool,
                 min_share: float = MIN_PICK_SHARE) -> dict:
     """8.1, per pool (``Mp`` = the pool's M_p list): M_P(V) > 0; M_p(V) > 0 on at least 60% of the pool's picks (14 of 23, 9
-    of 15); except F7 and F7h, M_P(V) above the 95th percentile (numpy linear) of V's placebo pooled means; trades entered at
-    quarter size >= E0's. ``is_f7`` = the clock families, which have no placebo gate."""
+    of 15); except F7, F7h and F13, M_P(V) above the 95th percentile (numpy linear) of V's placebo pooled means; trades entered at
+    quarter size >= E0's. ``no_gate3`` = the families without a placebo (F7, F7h and F13: ``runner_x.no_placebo_gate``), which have no gate 3."""
     need = math.ceil(min_share * len(Mp) - 1e-9)
     c1 = M > 0
     c2 = int(sum(1 for m in Mp if m > 0)) >= need
     p95 = float(np.percentile(placebo_pooled, 95)) if placebo_pooled is not None and len(placebo_pooled) else float("nan")
-    c3 = True if is_f7 else bool(placebo_pooled is not None and len(placebo_pooled) and M > p95)
+    c3 = True if no_gate3 else bool(placebo_pooled is not None and len(placebo_pooled) and M > p95)
     c4 = entered >= entered_e0
     return {"c1_M_positive": bool(c1), "c2_picks_positive": bool(c2), "c3_beats_placebo_p95": bool(c3), "c4_entries": bool(c4),
             "eligible": bool(c1 and c2 and c3 and c4), "p95": p95, "need_picks": need}
@@ -240,8 +240,8 @@ CLAIM_F12 = ("this fixed combination of the nine exits, of which at most seven c
              "8-hour clock and timing profile")
 CLAIM_F12_LIMITS = "No claim that stacking beats a single rule, that all nine act on every pick, or that F12 is the best exit"
 # prereg 8.5 (F13): what the lock is, and nothing more; it has no placebo gate, so there is no random-exit claim either
-CLAIM_F13 = ("closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%; it reads no structure and "
-             "makes no claim beyond that")
+CLAIM_F13 = ("closes by the engine's stepped profit lock: after +12% net ROE it never gives back below +10%, except by the slippage of a "
+             "stop and at a gapped open, which can lie anywhere; it reads no structure and makes no claim beyond that")
 
 
 def claim_of(variant_id: str) -> str:
@@ -296,7 +296,7 @@ choose_variants = default_choice          # the name the earlier revisions used:
 
 def gate_failure_counts(rows: list) -> dict:
     """8.2: gate failures counted in sequence: gate 1; gate 2 among those passing 1; gate 4 among those passing 1 and 2; gate 3
-    among those that reached step 2 (F7 and F7h have no gate 3). ``rows`` carry gates 'g1', 'g2', 'g3', 'g4' as 'pass' / 'fail'
+    among those that reached step 2 (F7, F7h and F13 have no gate 3). ``rows`` carry gates 'g1', 'g2', 'g3', 'g4' as 'pass' / 'fail'
     / 'not_run' / 'n/a'."""
     g1 = [r for r in rows if r["gates"]["g1"] == "fail"]
     p1 = [r for r in rows if r["gates"]["g1"] == "pass"]
@@ -525,11 +525,11 @@ def holm(ps: dict, alpha: float = 0.05) -> dict:
     return out
 
 
-def confirm_verdict(sig: bool, M: float, placebo_pooled: np.ndarray | None, is_f7: bool, entered: int, entered_e0: int) -> dict:
-    """PASS needs all three: Holm-significant; except F7, M(V) above the 95th percentile of the confirm-period placebo pooled
+def confirm_verdict(sig: bool, M: float, placebo_pooled: np.ndarray | None, no_gate3: bool, entered: int, entered_e0: int) -> dict:
+    """PASS needs all three: Holm-significant; except F7, F7h and F13 (``no_gate3``), M(V) above the 95th percentile of the confirm-period placebo pooled
     means; trades entered at quarter size >= E0's."""
     p95 = float(np.percentile(placebo_pooled, 95)) if placebo_pooled is not None and len(placebo_pooled) else float("nan")
-    c2 = True if is_f7 else bool(placebo_pooled is not None and len(placebo_pooled) and M > p95)
+    c2 = True if no_gate3 else bool(placebo_pooled is not None and len(placebo_pooled) and M > p95)
     c3 = entered >= entered_e0
     return {"holm": bool(sig), "beats_placebo_p95": bool(c2), "entries": bool(c3), "p95": p95,
             "pass": bool(sig and c2 and c3)}
