@@ -928,8 +928,11 @@ with F12's own 8-hour clock, so gate 3 applies to it.
 ### 8.2 The select report
 
 The runner writes `out/select.json` and the Korean report `out/SELECT_KO.md`. For each pool (core and DeepSeek, each
-with its own table), hold hours and entries come before any growth figure, in the table and in the report's text. The
-report shows:
+with its own table), hold hours and entries come before any growth figure, in the table and in the report's text.
+**As built, every row of `select.json` and every row of the table is a pool row**: hold hours, entries, skipped and
+rejected signals, win share, exit reasons and the other counts are summed over the pool's picks. There is no per-pick
+table in `select.json` or `SELECT_KO.md`; the per-pick numbers stay in the per-account result files, which nobody opens
+(section 7). The report shows:
 * first, E0's row: median hold hours, the shares of trades held over 4 h, 8 h and 18 h, trades entered, signals
   skipped while holding, win share;
 * then **every one of the 86 variants**: the choosable (eligible) ones first, then the others marked "선택 불가", each
@@ -1048,9 +1051,11 @@ and no variant is re-tuned on this result. A new idea is a new pre-registration 
 
 ### 8.7 Files
 
-Every select-period figure of the core pool and every label and count of both pools (hold hours by market state
-included) go to `out/select.json`. The DeepSeek money figures go to `$WORK/<pin8>/ds_private/select_ds.json`, whose
-sha256 is written into `select.json`. The private DeepSeek owner report (section 3) is written to
+The growth figures of the choosable core rows and every pooled label and count of both pools (hold hours by market
+state included) go to `out/select.json`. The growth figures of the core rows marked "선택 불가" are not in it: the
+runner writes them to `$WORK/<pin8>/results/select/core_not_choosable.json` (with `SELECT_TABLE.csv` and `run_info.json`,
+the commit and versions of the run, beside it), outside the repository and not opened. The DeepSeek money figures go
+to `$WORK/<pin8>/ds_private/select_ds.json`, whose sha256 is written into `select.json`. The private DeepSeek owner report (section 3) is written to
 `$WORK/<pin8>/ds_private/owner_report_select.md` in the same run, and its sha256 is written into `select.json`
 (`ds_owner_report_sha256`); the file itself is never committed. The sha256 of `select.json`, of `SELECT_KO.md` and of
 `timing.json` are appended to `PREREG_EXITFLEX.sha256`, committed and pushed before the report goes to the owners, so
@@ -1133,7 +1138,11 @@ and, privately, `select_ds_r2.json` and `owner_report_select_r2.md`, with its ow
   the redaction of section 3, with its time, written into `research/fullgrid/DEVIATIONS.md` before the restart, after
   audit A8 has run on the entry), the current league (the WATCH_PREREG run,
   started 2026-10-11) is stopped and a fresh league starts at the new install time (11.2-11.4). Without their OK
-  nothing changes.
+  nothing changes. **As built, the switch is the field `enabled` of the rules file** `candleague/data/rules.json`
+  (another path in `CANDLEAGUE_RULES`): `"enabled": true` is the owners' OK, and a file with `"enabled": false` (or no
+  file) makes the league create no rule account and run its candidate accounts as before, so committing the file
+  starts nothing. The file names, per pool, the passing rule or null (`"pools": {"core": "F9.a", "ds": null}`), may
+  list the picks, and holds the field `no_entry_from_ms` per pool (11.4 item 9). The file does not exist yet.
 * **Which new exit runs.** Per pool, the passing variant. If two variants passed in one pool, the league runs one of
   them: the owners name it; with no answer within 48 h of the confirm report, the one with the smaller confirm p (for
   DeepSeek the runner compares the private p values and prints only the id). The choice is recorded in the same
@@ -1157,7 +1166,10 @@ Per pick of a pool with a PASS, five accounts:
 
 * Per pick of a pool with no PASS: `<id>-e`, `<id>-eq` and `<id>-eflip` (E0, live size, seeded coin, as the current
   league's `flip`). So 38 x 5 = 190 accounts only when both pools pass; 23 x 5 + 15 x 3 = 160 when only core passes;
-  15 x 5 + 23 x 3 = 144 when only DeepSeek passes.
+  15 x 5 + 23 x 3 = 144 when only DeepSeek passes. These counts were recomputed from the code (`rulex.accounts` on
+  the 38 picks of `candidates.json`, with a new exit in both pools, in core only and in DeepSeek only: 190, 160, 144).
+  With a new exit in neither pool (the owners restart the league with the current exits only, 11.1) the same function
+  gives 38 x 3 = 114 accounts. The accounts of both pools are in one league, one database, no side league.
 * Quarter size is every margin fraction x 1/4 with leverages kept, as the current `quarter` accounts and section 4.
 * **The coin flip `-nflip`** takes the pick's signal times, its side from `league.flip_side(account id, signal close)`,
   and the pool's new exit with the same exit kinds as `-nq`: the same rule, the same mode, the same kind of
@@ -1186,12 +1198,23 @@ Per pick of a pool with a PASS, five accounts:
   read-only. The dashboard may show them as an archive.
 * The restarted league uses a new database file with its own `meta.start_ms` = the new install time, floored to 5
   minutes, and its own start file. `runner.league_start`'s rule that a start-over keeps the recorded start is set aside
-  for this one restart: the old start file moves with the copy, so it cannot be picked up. This is recorded as a
-  deviation in `research/fullgrid/DEVIATIONS.md` at the restart, with the time, the commit and the owners' OK.
+  for this one restart: the old start file moves with the copy, so it cannot be picked up. **As built, no code switch
+  does this**: `league_start` keeps a start that the database or its start file records, so the restart gives the
+  engine a database path that records none (the old `league.db` and its start file copied and moved away, or
+  `CANDLEAGUE_DB` pointing to a new file), and the guard below refuses a start that is not the install time. This is
+  recorded as a deviation in `research/fullgrid/DEVIATIONS.md` at the restart, with the time, the commit and the
+  owners' OK. The copy of the old database made by `python -m candleague backup` is named
+  `<stem>_from_<MMDD>_<UTC date>.db` (MMDD: its start), not with the name above; a copy made by hand may use either.
 * `runner.league_start` uses an explicit `CANDLEAGUE_START` before "now" for a fresh database. The restart steps
   therefore unset `CANDLEAGUE_START` in the shell and remove it from the service's environment file before the first
-  pass. After the first pass, `meta.start_ms` is checked against the install time floored to 5 minutes; a mismatch
-  stops the league before any trade is shown.
+  pass. **As built, the start is checked before the first pass, not after it**: the restart script writes down the
+  install time and gives it to the engine as `CANDLEAGUE_EXPECT_START` (or `--expect-start`, with its time zone or in
+  epoch ms). `League.__init__` compares the league's start (the recorded one, or the one it is about to record) with
+  that time floored to 5 minutes (`runner.check_expected_start`) before it copies, deletes or writes anything, and a
+  mismatch raises `StartMismatch`: the engine exits with the reason in Korean, before any trade is shown. The
+  `backup` command (the install script's step) runs the same check when it is given the time; the install script does
+  not pass it yet (restart to-do, 11.4). Without `CANDLEAGUE_EXPECT_START` a fresh database starts at "now" and says so
+  in the log with a warning.
 * **Dates move.** The restart replaces WATCH_PREREG's checkpoints of 2026-11-11 and 2026-12-11 on this league with the
   restart's own checks at install + 30 and + 61 days (11.5). Any real-money step that waits for a forward checkpoint
   therefore waits for those later dates.
@@ -1409,8 +1432,9 @@ Real money is not decided by this study. That stays the owners' decision under t
       used (rule C2). The core drafter listed what it opened and disclosed one grep print (section 15). The DeepSeek
       drafter cited only code but gave no explicit statement that it saw no performance figure: for the eight DeepSeek
       readings, blindness is **not stated**.
-  11. F11.a equals F3.a and F11.b equals F3.b on the three F7_RF_ONLY picks. The select report marks both pairs; they
-      are not counted twice in any pick table.
+  11. F11.a equals F3.a and F11.b equals F3.b on the three F7_RF_ONLY picks. The select report marks both pairs (the
+      DeepSeek rows of F11 carry "= F3.a" / "= F3.b"); no per-pick table is committed (section 7), so there is no
+      pick table in which they could be counted twice.
   12. **League checks.** Each pool's C2 splits 0.05 over its two looks (0.03, then 0.02) with an exact sign-flip test on
       about 9, then 13 weekly differences, so a false "shown ahead" in one pool is at most about 5%, and in at least one
       of the two pools at most about 10%. With so few weeks only a large difference can pass; a real but modest gain
