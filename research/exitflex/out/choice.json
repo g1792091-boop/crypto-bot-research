@@ -1,0 +1,79 @@
+{
+ "study": "exitflex v1",
+ "stage": "choice",
+ "pin": "4856adbe4509c0e803f2972cfef32f060442088b901f646c753c439bdfd8695c",
+ "commit": "09f3e6211f1f78fb2967ef0515afb1f488288ad7",
+ "select_sha256": "58d848442389ecb035fe6d882462f4e2306964785049c442a1e098ce40880171",
+ "sent_sha256": "3f1c3f183a5039f4690b7503338b94bce0cfa0c91889dce67dcdb12eee27f8a7",
+ "timing_sha256": "3651db07b5f428aa8f2bf78bcf77d5a58c81182ed57f7c4b43294797bcacb98f",
+ "sent_utc": "2026-10-12T15:44:55Z",
+ "sent_kst": "2026-10-13T00:44:55+09:00",
+ "channel": "this Claude Code session's chat with the owners: SELECT_KO.md, EXTRA_READS_KO.md, EXTRA_READS_APPENDIX_KO.md and TWINS_KO.md as file cards in one message, with the Korean explanation",
+ "freeze_note": "From this sending until choice.json is hashed and pushed, the main session opens and sends no 2024-2026 exit result: no hunt test-period read (round 1 or round 2), no track-2 result, no ledger print, no full-grid extract, no other file with 2024-2026 trades or accounts by exit. Hunt round 2 and track 2 are not run before the hash. The main session also opens no candidate-league record during the freeze. Questions about such material are answered after the hash.",
+ "ds_report_shown_utc": "2026-10-12T15:44:55Z",
+ "ds_report_shown_kst": "2026-10-13T00:44:55+09:00",
+ "messages": [
+  {
+   "time_utc": "2026-10-12T21:21:00Z",
+   "text": "딥시크 청산은 고르는걸로 하고 레버리지는 [딥시크 금액 삭제]~[딥시크 금액 삭제]로 솔직히 고정으로 가고싶어 그리고 진짜 내가 원하는 목표를 이룰수 있을까? 빠르게 성공시켜야 하는데 미치겠네",
+   "answers": {
+    "ds": [
+     "F2.n50.b"
+    ]
+   }
+  },
+  {
+   "time_utc": "2026-10-12T21:36:00Z",
+   "text": "코어 없음으로 가고 그러면 3R청산방식 밖에 안쓸꺼야?",
+   "answers": {
+    "core": "없음"
+   }
+  }
+ ],
+ "questions": [
+  {
+   "time_utc": "2026-10-12T21:23:00Z",
+   "text": "코어는 고를 수 있는 청산이 없어서 '없음'만 가능해요. '코어 없음'이라고 한마디만 주시면 바로 저장할게요.",
+   "pools": [
+    "core"
+   ]
+  }
+ ],
+ "material_received": [
+  "Before SELECT_KO.md was sent: the full grid's per-trade results of the 84 exits on 2021-2023, 2024-2026 and 2020 in research/fullgrid/ANALYSIS_KO.md, research/fullgrid/STRATEGIES_KO.md and research/fullgrid/STRATEGY_EVAL_KO.md (DeepSeek without money for the owners).",
+  "Before SELECT_KO.md was sent: the trend hunt round-1 owner reports research/hunt/RESULTS_R1_KO.md, research/hunt/RESULTS_R1_SELECT_KO.md and research/hunt/POWER_R1_KO.md (2026-10-12 07:11-08:27 UTC), whose test period is 2024-01 to 2026-09.",
+  "The candidate league's live record from 2026-10-11 on (dashboard and Telegram), including positions held 16-18 h under a fixed 3R take-profit.",
+  "After SELECT_KO.md was sent: more select-period (2021-2023) detail from the committed extra reads and twins, and the private DeepSeek select-period figures in the chat; no 2024-2026 material."
+ ],
+ "freeze_breaches": [],
+ "redacted_figures": 2,
+ "core": [],
+ "ds": [
+  "F2.n50.b"
+ ],
+ "pools": {
+  "core": {
+   "deadline_utc": "2026-10-14T15:44:55Z",
+   "answer_times_utc": [
+    "2026-10-12T21:36:00Z"
+   ],
+   "default_used": false,
+   "default_ids": [],
+   "answer": "없음",
+   "answer_time_utc": "2026-10-12T21:36:00Z"
+  },
+  "ds": {
+   "deadline_utc": "2026-10-14T15:44:55Z",
+   "answer_times_utc": [
+    "2026-10-12T21:21:00Z"
+   ],
+   "default_used": false,
+   "default_ids": [],
+   "answer": [
+    "F2.n50.b"
+   ],
+   "answer_time_utc": "2026-10-12T21:21:00Z"
+  }
+ },
+ "late_messages": []
+}
