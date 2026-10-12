@@ -3,7 +3,9 @@
 // after fees + funding, by exit reason, the win rate against the one the average win / loss needs, the leverages used,
 // the three largest losses), 연패 맥락 (analysis-streak.js: the longest losing run against what the account's own win
 // rate makes usual), 운 vs 실력 (luck-kit: how many picks beat their 동전 / 기본값 against the range luck alone gives),
-// and 5년 시험 vs 지금 (vs5y-kit: the trade pace of the 5-year test period against the league's).
+// and 5년 시험 vs 지금 (vs5y-kit: the trade pace of the 5-year test period against the league's; an upper bound: the
+// test counted every signal of the six coins (research/fullgrid/PREREG.md 5, no position limit) while a league account
+// holds one position at a time (paperbot Settings.single_position), so the league trades fewer by design).
 // Data: /api/insight (dash.py, summary.account_insight: each account's newest 200 trades) and the shared snapshot.
 // HONESTY: small samples say so; a hidden DeepSeek account shows counts and labels only (ds_hidden).
 import {h} from "./dom.js";
@@ -66,6 +68,7 @@ export function luckRows(d) {
   return {flip: cmp("flip"), base: cmp("base"), light: luckRow(lit.filter((c) => ix.judge[c.id].band.below).length, lit.length, 0.05)};
 }
 const toneKo = {above: "운으로 나오는 범위보다 많음", inside: "운만으로도 나오는 범위 안", below: "운으로 나오는 범위보다 적음"};
+const toneShort = {above: "그 범위보다 많음", inside: "그 범위 안", below: "그 범위보다 적음"};
 /** "동전보다 나은 후보 12 / 20 · 운만으로도 6~14개" as a row with a small bar (the range shaded, the count marked). */
 export function luckLine(label, r, o = {}) {
   if (!r.n) return h("div", {class: ["lu-row", "empty"]}, h("b", null, label), h("span", {class: "muted"}, o.empty || "아직 비교할 후보가 없습니다"));
@@ -92,14 +95,17 @@ export function luckBody(d) {
 export function luckShort(d) {
   const r = luckRows(d).flip;
   if (!r.n) return null;
-  return h("p", {class: ["note", "lu-short", r.tone === "above" ? "" : "muted"]}, `동전보다 나은 후보 ${fmt.int(r.k)} / ${fmt.int(r.n)} · 운만으로도 ${fmt.int(r.lo)}~${fmt.int(r.hi)}개는 나옵니다 (`,
-    toneKo[r.tone], ") · ", h("a", {href: "#/check"}, "운 vs 실력"));
+  return h("p", {class: ["note", "lu-short", r.tone === "above" ? "" : "muted"]}, `동전보다 나은 후보 ${fmt.int(r.k)} / ${fmt.int(r.n)} · 운만으로도 ${fmt.int(r.lo)}~${fmt.int(r.hi)}개 (`,
+    toneShort[r.tone], ") · ", h("a", {href: "#/check"}, "운 vs 실력"));
 }
 
 // ---------------------------------------------------------------- 5년 시험 vs 지금
 /** The trade pace of a pick: the 5-year test period's (test_n over TEST_DAYS) against the league's since its start.
- *  {rate, days, expect (trades the test pace gives by now), actual, ratio, at: [{ko, ms, n}] (the test pace at each
- *  checkpoint), day30 (the date the test pace reaches 30 trades), actualRate}; null without a test count. */
+ *  The test pace is an UPPER BOUND for the league: the test counted every signal on every coin at once (PREREG 5, no
+ *  position limit), a league account holds one position at a time, so fewer trades are normal (never a warning).
+ *  {rate, days, expect (most trades by now), actual, ratio, at: [{ko, ms, n}] (the most at each checkpoint), day30
+ *  (the earliest date 30 trades can come), past30 (that date is past and the pick has fewer), actualRate}; null
+ *  without a test count. */
 export function pace5y(c, d) {
   const n5 = c && c.source && c.source.test_n;
   if (!n5 || !d || !d.start_ms) return null;
@@ -107,17 +113,22 @@ export function pace5y(c, d) {
   const days = Math.max(0, (d.done_ms - d.start_ms) / DAY);
   const expect = rate * days;
   const cps = ((d.watch || {}).checkpoints || []).map((cp) => ({ko: cp.ko, ms: cp.ms, n: rate * Math.max(0, (cp.ms - d.start_ms) / DAY)}));
+  const day30 = d.start_ms + (30 / rate) * DAY;
   return {rate, days, expect, actual: c.trades || 0, ratio: expect >= 1 ? (c.trades || 0) / expect : null, at: cps,
-    day30: d.start_ms + (30 / rate) * DAY, actualRate: days >= 1 ? (c.trades || 0) / days : null};
+    day30, past30: (c.trades || 0) < 30 && day30 <= d.done_ms, actualRate: days >= 1 ? (c.trades || 0) / days : null};
 }
-/** "5년 시험 속도: 하루 약 0.3번 · 지금쯤 약 3번 (실제 2번) · 11/11까지 약 10번 · 30번은 01/15쯤". */
+/** Why the league trades fewer than the 5-year pace (one sentence, every place the pace shows). */
+export const PACE_WHY = "5년 시험은 여섯 코인의 신호를 모두 셌고(동시에 여러 개도), 리그 계좌는 한 번에 포지션 하나만 들고 있어서 그동안 온 신호는 건너뜁니다. 그래서 이 속도는 ‘많아야’ 숫자이고, 실제가 더 적은 게 보통입니다.";
+/** "5년 시험 속도(최대): 하루 약 0.3번 · 지금쯤 많아야 약 3번 (실제 2번) · 11/11까지 많아야 약 10번 · 30번은 빨라도 01/15쯤". */
 export function paceLine5y(c, d) {
   const p = pace5y(c, d);
   if (!p) return h("span", {class: "muted"}, "5년 시험 거래 수 없음");
   const first = p.at[0];
-  return h("span", {class: "pc-line"}, `5년 시험 속도 하루 약 ${fmt.num(p.rate, 2)}번 → 지금쯤 약 ${fmt.num(p.expect, p.expect < 10 ? 1 : 0)}번 (실제 ${fmt.int(p.actual)}번)`,
-    first ? ` · ${fmt.mmdd(first.ms)}까지 약 ${fmt.int(Math.round(first.n))}번` : "", ` · 30번은 ${fmt.mmdd(p.day30)}쯤`,
-    p.ratio != null && (p.ratio < 0.5 || p.ratio > 2) ? h("b", {class: "warn"}, p.ratio < 0.5 ? " · 시험 때보다 꽤 느림" : " · 시험 때보다 꽤 빠름") : null);
+  return h("span", {class: "pc-line", title: PACE_WHY}, `5년 시험 속도(최대) 하루 약 ${fmt.num(p.rate, 2)}번 → 지금쯤 많아야 약 ${fmt.num(p.expect, p.expect < 10 ? 1 : 0)}번 (실제 ${fmt.int(p.actual)}번)`,
+    first ? ` · ${fmt.mmdd(first.ms)}까지 많아야 약 ${fmt.int(Math.round(first.n))}번` : "",
+    p.actual >= 30 ? " · 30번 넘음" : p.past30 ? ` · 30번은 빨라도 ${fmt.mmdd(p.day30)}쯤이었음 (지남)` : ` · 30번은 빨라도 ${fmt.mmdd(p.day30)}쯤`,
+    p.ratio != null && p.ratio > 2 ? h("b", {class: "warn"}, " · 시험 때보다 꽤 빠름") : null,
+    h("small", {class: "muted pc-why"}, ` · 한 번에 포지션 하나라 실제는 더 적은 게 보통`));
 }
 
 // ---------------------------------------------------------------- 연패 맥락
@@ -132,6 +143,21 @@ export function streakLine(ins, o = {}) {
     ins.n >= 10 && wr != null && wr > 0 ? [` · 이 승률(${share(wr)})로 ${fmt.int(ins.n)}번이면 보통 최장 ${fmt.int(st.usual)}번, 10번 중 9번은 ${fmt.int(st.rare)}번 이하`,
       rare ? h("b", {class: "warn"}, " · 드문 연패") : " · 흔한 범위"] : ins.n < 10 ? h("small", {class: "muted"}, " · 10번 전이라 맥락은 아직") : null,
     ins.capped ? h("small", {class: "muted"}, ` · 최근 ${fmt.int(ins.n)}번 기준`) : null);
+}
+
+/** The 연패 맥락 note for an account's exit (engine exit name: "tp3R|4", "tp2R|2", "roe50|4", "ladder|2", ...). */
+export function streakNote(exit) {
+  const tail = " 보통 범위 안의 연패로 매매법을 판단하지 않습니다.";
+  const m = /^tp(\d+(?:\.\d+)?)R\|/.exec(String(exit || ""));
+  if (m) {
+    const r = Number(m[1]);
+    const k = 1 + r;
+    const one = Math.abs(k - Math.round(k)) < 1e-9 ? `${Math.round(k)}번 중 1번만` : `${share(1 / k)}만`;
+    return `익절이 손절의 ${fmt.num(r, r % 1 ? 1 : 0)}배인 ${fmt.num(r, r % 1 ? 1 : 0)}R은 ${one} 이겨도 본전(비용 전)이라 이기는 비율이 낮고${r === 3 ? "(보통 30~35%)" : ""}, 연달아 지는 일이 흔합니다.${tail}`;
+  }
+  if (/^roe/.test(String(exit || ""))) return `증거금 대비 익절은 이길 때 버는 폭이 배수에 따라 달라서, 본전은 위의 ‘본전에 필요한 비율’로 봅니다. 연패가 ‘보통’ 범위 안이면 이상한 일이 아닙니다.${tail}`;
+  if (/^(ladder|swing)/.test(String(exit || ""))) return `계단 잠금은 작게 자주 이기는 방식이라 이기는 비율이 높아야 본전이고, 그만큼 긴 연패는 드문 편입니다. 연패가 ‘보통’ 범위 안이면 이상한 일이 아닙니다.${tail}`;
+  return `연패가 ‘보통’ 범위 안이면 이상한 일이 아닙니다.${tail}`;
 }
 
 // ---------------------------------------------------------------- 왜 이 성적인가 (계좌 자세히)
@@ -152,6 +178,12 @@ function fallRow(st, lo, hi) {
       lo < 0 && hi > 0 ? h("i", {class: "wy-fzero", style: {left: `${((-lo / span) * 100).toFixed(2)}%`}}) : null),
     h("b", {class: ["num", "wy-fv", st.key === "cost" ? "down" : fmt.tone(st.to)]}, val));
 }
+/** Why the money's break-even sits above the rule's: the size comes from the leverage and the margin, not from the
+ *  stop, so a win on a narrow-stop coin can be smaller in dollars than a loss on a wide-stop coin. */
+export function sizeNote(tp) {
+  const m = tp && tp.kind === "R" && tp.val ? `${fmt.num(tp.val, tp.val % 1 ? 1 : 0)}배` : "규칙만큼";
+  return `규칙보다 높은 이유: 포지션 크기는 손절 폭이 아니라 배수·증거금으로 정해져서, 손절이 좁은 코인에서 이기고 넓은 코인에서 지면 돈으로는 ${m}가 안 됩니다 (거래가 적을 때 흔함).`;
+}
 /**
  * The card. a: the account row; ins: its /api/insight row; o: {flip: the pick's 동전 account row, rule: the pick's
  * /api/rules row (the rule's own break-even), href(trade): a chart link for a trade}.
@@ -166,7 +198,7 @@ export function whyCard(a, ins, o = {}) {
     title: ins.reason_pnl && ins.reason_pnl[k] != null ? `${reasonKo(k)} ${n}번 합계 ${fmt.money(ins.reason_pnl[k], true)}` : null},
   `${reasonKo(k)} ${fmt.int(n)}번`, ins.reason_pnl && ins.reason_pnl[k] != null ? [" ", h("b", {class: ["num", fmt.tone(ins.reason_pnl[k])]}, fmt.money(ins.reason_pnl[k], true))] : null)));
   const streak = h("div", {class: "wy-sec"}, h("p", {class: "wy-k"}, "연패 맥락"), h("p", {class: "wy-line"}, streakLine(ins)),
-    h("p", {class: "note"}, "이기는 비율이 낮은 매매법(익절이 손절의 3배인 3R은 보통 30~35%)은 연달아 지는 일이 흔합니다. 보통 범위 안의 연패로 매매법을 판단하지 않습니다."));
+    h("p", {class: "note"}, streakNote(a.exit)));
   if (ins.hidden) {
     return ui.card({plate: "나간 이유", cls: "wy", sub: `닫힌 거래 ${fmt.int(ins.n)}번 · 딥시크 금액 숨김 설정이라 개수만`},
       h("div", {class: "wy-body"}, h("div", {class: "wy-sec"}, chips), streak), cap);
@@ -201,14 +233,17 @@ export function whyCard(a, ins, o = {}) {
       h("i", {class: "wy-wrmark", style: {left: `${(Math.max(0, Math.min(1, be)) * 100).toFixed(1)}%`}, title: "본전에 필요한 비율"})) : null,
     h("p", {class: "note"}, ins.avg_win != null && ins.avg_loss != null
       ? `평균 이익 ${fmt.money(ins.avg_win, true)} · 평균 손실 ${fmt.money(-ins.avg_loss, true)}: 질 때 잃는 돈이 이길 때 버는 돈의 ${fmt.num(ins.avg_loss / (ins.avg_win || 1), 2)}배라 ${share(be)}는 이겨야 본전입니다.`
-      : ins.wins ? "아직 진 거래가 없습니다." : "아직 이긴 거래가 없습니다.")));
+      : ins.wins ? "아직 진 거래가 없습니다." : "아직 이긴 거래가 없습니다."),
+    be != null && rb != null && be > rb + 0.1 ? h("p", {class: "note"}, sizeNote(o.rule && o.rule.tp)) : null));
   // ⑤ leverages used
   secs.push(h("div", {class: "wy-sec"}, h("p", {class: "wy-k"}, "실제로 쓴 배수"), h("div", {class: "wy-levs"},
     Object.entries(ins.lev || {}).sort((x, y) => Number(y[0]) - Number(x[0])).map(([l, n]) => h("span", {class: "wy-chip"}, `${l}배 `, h("b", {class: "num"}, `${fmt.int(n)}번`)))),
-  h("a", {class: "linkish", href: `#/rules?pick=${encodeURIComponent((o.pick && o.pick.id) || a.id)}`}, "왜 이 배수인가 (배수 규칙)")));
+  h("a", {class: "linkish", href: o.pick && o.pick.id ? `#/rules?pick=${encodeURIComponent(o.pick.id)}` : "#/rules"}, "왜 이 배수인가 (배수 규칙)")));
   // ⑥ the largest losses
   if (ins.big && ins.big.length) {
-    secs.push(h("div", {class: "wy-sec"}, h("p", {class: "wy-k"}, `가장 큰 손실 ${fmt.int(ins.big.length)}번이 전체 손실의 `, h("b", {class: "num"}, share(ins.big_share))),
+    const all = (ins.losses != null && ins.losses <= 3) || ins.big.length < 3;
+    secs.push(h("div", {class: "wy-sec"}, h("p", {class: "wy-k"}, all ? `손실 ${fmt.int(ins.big.length)}번 (큰 순서)`
+      : [`가장 큰 손실 ${fmt.int(ins.big.length)}번이 전체 손실의 `, h("b", {class: "num"}, share(ins.big_share))]),
       h("div", {class: "wy-big3", role: "list"}, ins.big.map((t) => h("div", {class: "wy-brow", role: "listitem"},
         h("span", {class: "num muted"}, fmt.kst(t.exit_time)), h("span", null, `${coinShort(coinOf(t.symbol))} ${sideKo(t.side)} · ${reasonKo(t.exit_reason)} · ${fmt.int(t.leverage)}배`),
         h("b", {class: "num down"}, fmt.money(t.pnl, true)),

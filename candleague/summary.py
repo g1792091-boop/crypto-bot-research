@@ -462,8 +462,9 @@ def race(accts: list[dict], book: dict, start_ms: int, end_ms: int, max_points: 
     """묶음 레이스: per pool (core / ds) and role, the median wallet of its accounts at each step from the start to
     ``end_ms`` (hourly; wider steps when the span holds more than max_points hours), from the complete equity lines
     of trades.json (the wallet after each closed trade; open positions are not counted). The 동전 accounts also carry
-    their 25th and 75th percentiles (the band luck alone draws). An account without an equity line (DeepSeek money
-    hidden) is left out; a pool with none carries money False and no lines."""
+    their 25th and 75th percentiles (the spread of single 동전 accounts: a reference band, not a luck range for a
+    median). An account without an equity line (DeepSeek money hidden) is left out; a pool with none carries money
+    False and no lines."""
     import bisect
     start, end = int(start_ms), max(int(start_ms), int(end_ms))
     step = HOUR_MS * max(1, -(-(end - start) // HOUR_MS // max(1, max_points)))

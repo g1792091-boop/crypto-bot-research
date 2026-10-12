@@ -77,8 +77,8 @@ export function exitPlain(p) {
 }
 
 /** "왜 N배": the server's words (dash.py why_lev) from the leverage the engine chose, the account's margin share and the
- *  entry-time liquidation distance; the rule itself on its own line (a phone has no tooltip) with a link to the
- *  익절·손절·배수 screen. */
+ *  entry-time liquidation distance; the rule in one short line (a phone has no tooltip; the full sentence is the
+ *  tooltip) with a link to the 익절·손절·배수 screen. */
 export function whyBox(p) {
   const w = p.why || null;
   const lev = fin(p.lev), mp = fin(p.margin_pct), ld = fin(p.liq_dist_entry);
@@ -88,7 +88,8 @@ export function whyBox(p) {
     h("span", null, K4.plate(lev ? `왜 ${fmt.lev(lev)}` : "왜 이 배수")),
     h("p", null, head.filter(Boolean).join(" · ")),
     w ? h("small", null, [w.lev_ko, w.sub_ko].filter(Boolean).join(" · ")) : null,
-    w && w.rule_ko ? h("small", {class: "ps-rule"}, w.rule_ko, " · ", h("a", {href: p.pick ? `#/rules?pick=${encodeURIComponent(p.pick)}` : "#/rules"}, "배수 규칙 자세히")) : null);
+    w && w.rule_ko ? h("small", {class: "ps-rule"}, w.rule_short_ko || "좋은 자리 50→40→30→20배 · 보통 30→20배", " · ",
+      h("a", {href: p.pick ? `#/rules?pick=${encodeURIComponent(p.pick)}` : "#/rules"}, "배수 규칙 자세히")) : null);
 }
 
 /** What touching the stop (or the lock line) pays, before the exit fee, and whether it comes before the liquidation. */

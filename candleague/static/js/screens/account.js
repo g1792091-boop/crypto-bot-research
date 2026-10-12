@@ -50,8 +50,9 @@ export async function mount(el, ctx) {
     // break-even only for an account with the pick's exit (not the 기본값's lock)
     put(why, INS ? WK.whyCard(a, (INS.accounts || {})[a.id], {flip: a.role === "cand" ? set.flip : null, rule: p && a.exit === p.exit ? p : null, pick: c,
       href: (t) => `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${coinOf(t.symbol)}&at=${t.entry_time}`}) : null);
-    put(rule, c.role === "cand" ? ui.card({plate: "익절 · 손절 · 배수", sub: `${LK.pickKo(c, meta)} · 이 후보의 계좌 5개 공통 규칙과 지금 코인별로 몇 배가 되나`, cls: "rl-pickcard"},
-      p ? RK.pickRuleBody(p, R) : RK.ruleBox(c, R)) : null);
+    // an account whose exit is not the pick's (the 기본값's lock) reads its own exit first (rulekit ownExitBox)
+    put(rule, c.role === "cand" ? ui.card({plate: "익절 · 손절 · 배수", sub: `${LK.pickKo(c, meta)} · 이 후보의 익절·손절과 계좌 5개 공통 배수 규칙 · 지금 코인별로 몇 배가 되나`, cls: "rl-pickcard"},
+      p ? RK.pickRuleBody(p, R, {account: a}) : RK.ruleBox(c, R)) : null);
   }
   RK.loadRules(ctx, (x) => { R = x; if (ctx.alive() && LK.league()) paintWhy(LK.league()); }).catch(() => { /* the exit's name stays */ });
   ctx.onLeague(async (d) => {
