@@ -250,8 +250,8 @@ out.terms = body.querySelectorAll(".rl-term").map((a) => a.getAttribute("href"))
                    "잔고 $5,000에서 30배면 증거금 $1,500, 포지션 $45,000", "지금까지 실제로 쓴 배수"):
         assert needle in r, needle
     assert "지금 이 숫자면" in o["pick"] and "‘좋은 자리 / 보통 자리’" in o["pick"]
-    assert len(o["tiles"]) == 6 and o["tiles"][0].startswith("BTCATR 0.13%") and "후보 (좋은/보통)40배 / 30배" in o["tiles"][0]
-    assert "1/4 (좋은/보통)50배 / 30배" in o["tiles"][0] and "본전 (비용 포함)" in o["tiles"][0]
+    assert len(o["tiles"]) == 6 and o["tiles"][0].startswith("BTCATR 0.13%") and "배수좋은 / 보통후보40배 / 30배" in o["tiles"][0]
+    assert "1/450배 / 30배" in o["tiles"][0] and "본전 (비용 포함)" in o["tiles"][0]
     assert [h for h, _ in o["rows"]] == ["#/account/core-DOGE-15m-1", "#/account/core-DOGE-15m-1-q", "#/account/core-DOGE-15m-1-x",
                                          "#/account/base-core-DOGE-15m", "#/account/core-DOGE-15m-1-flip"]
     assert "계단 잠금 10%부터 · 손절 2 ATR" in o["rows"][3][1] and "증거금 1/4" in o["rows"][1][1] and "방향은 동전" in o["rows"][4][1]

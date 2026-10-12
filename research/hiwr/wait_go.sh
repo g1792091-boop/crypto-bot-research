@@ -10,12 +10,17 @@
 # Run it from a copy outside the clone (the checkout replaces the clone's files while this script runs):
 #   cp /root/hiwr/crypto-bot-research/research/hiwr/wait_go.sh /root/hiwr/wait_go.sh && bash /root/hiwr/wait_go.sh
 #
-# WAIT_HOURS (default 12): give up after this long with a message; the server then sits idle until Destroy.
+# While it waits it keeps its pid in $HIWR_BASE/WAITING (default /root/hiwr), so 'bootstrap.sh status' says "waiting"
+# and a pasted restart line changes nothing. bootstrap.sh started without a go commit (the restart line after a reboot,
+# or after the 12 hours below) hands over to this script again.
+#
+# WAIT_HOURS (default 12): give up after this long with a message; the restart line of SERVER_KO 3 waits again.
 # Rehearsal: HIWR_REPO (a scratch clone), HIWR_BRANCH, WAIT_POLL (seconds), WAIT_HOURS, HIWR_WAIT_EXEC (a command run in
 # place of bootstrap.sh; it gets HIWR_GO in its environment).
 
 set -u
 REPO=${HIWR_REPO:-/root/hiwr/crypto-bot-research}
+BASE=${HIWR_BASE:-$(dirname "$REPO")}
 BR=${HIWR_BRANCH:-claude/keen-pasteur-wav02u}
 MARK=research/hiwr/GO_COMMIT
 POLL=${WAIT_POLL:-120}
@@ -30,6 +35,11 @@ if [ -z "${HIWR_WAIT_EXEC:-}" ] && [ -d /root/hunt ]; then
   exit 1
 fi
 [ -d "$REPO/.git" ] || { echo "코드 폴더가 없습니다: $REPO (SERVER_KO의 한 줄을 그대로 붙여 넣으세요)"; exit 1; }
+mkdir -p "$BASE"
+echo $$ > "$BASE/WAITING"
+gone() { [ "$(cat "$BASE/WAITING" 2>/dev/null)" = "$$" ] && rm -f "$BASE/WAITING"; }
+trap gone EXIT
+trap 'exit 1' HUP INT TERM
 echo "고정된 커밋을 기다립니다. 2분마다 확인합니다. 이 창은 닫아도 됩니다 (Ctrl+B 다음 D)."
 c=""
 while :; do
@@ -44,6 +54,7 @@ while :; do
   fi
   if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "${WAIT_HOURS:-12}시간 동안 고정된 커밋이 오지 않았습니다. 개발자에게 이 화면을 보내 주세요 (서버는 Destroy해도 잃는 것 없음)."
+    echo "다시 기다리려면 SERVER_KO 3번의 '이어서 하기' 줄을 붙여 넣으세요."
     exit 1
   fi
   echo "$(date -u +%H:%M) UTC 아직 고정 전입니다. 기다리는 중..."
@@ -52,9 +63,11 @@ done
 
 echo "고정된 커밋 ${c:0:10} 이 왔습니다. 계산을 시작합니다."
 git -C "$REPO" checkout -q "$c" || { echo "그 커밋으로 바꾸지 못했습니다: $c (이 화면을 개발자에게 보내 주세요)"; exit 1; }
+trap - EXIT HUP INT TERM
+rm -f "$BASE/WAITING"                # bootstrap (the same pid after exec) writes RUNNING
 if [ -n "${HIWR_WAIT_EXEC:-}" ]; then
   export HIWR_GO=$c
   read -r -a EX <<<"$HIWR_WAIT_EXEC"
   exec "${EX[@]}"
 fi
-HIWR_GO=$c exec bash "$REPO/research/hiwr/bootstrap.sh"
+HIWR_GO=$c HIWR_BASE=$BASE exec bash "$REPO/research/hiwr/bootstrap.sh"

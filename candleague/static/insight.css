@@ -57,7 +57,7 @@
 .rl-kv dd b { color: var(--ink); }
 @media (max-width: 559px) { .rl-kv > div { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
 .rl-sub { display: grid; gap: 8px; }
-.rl-coins { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+.rl-coins { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 @media (max-width: 420px) { .rl-coins { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .rl-coin { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
 .rl-coinh { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; font-size: var(--t-sm); }
@@ -66,6 +66,8 @@
 .rl-cdl { margin: 0; display: grid; gap: 1px; }
 .rl-cdl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 6px; font-size: var(--t-xs); min-width: 0; }
 .rl-cdl dt { color: var(--muted); white-space: nowrap; }
+.rl-cdl > .rl-cdh { margin-top: 3px; padding-top: 3px; border-top: 1px solid var(--line); font-size: var(--t-2xs); }
+.rl-cdl > .rl-cdh dd { color: var(--muted); }
 /* a long value ("둘 다 못 들어감") wraps, or drops under its label, instead of pushing the page sideways */
 .rl-cdl dd { margin: 0 0 0 auto; color: var(--ink); text-align: right; white-space: normal; min-width: 0; overflow-wrap: anywhere; }
 .rl-five { display: grid; gap: 2px; }
@@ -100,10 +102,10 @@
 .rl-qa dd b { color: var(--ink); }
 @media (max-width: 599px) { .rl-qa > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 .rl-list { display: grid; gap: 2px; margin-top: 8px; }
-.rl-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) 64px 76px 112px minmax(0, 1.1fr);
+.rl-row { all: unset; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) 64px 76px 136px minmax(0, 1.1fr);
   gap: 10px; align-items: center; padding: 8px 8px; border-radius: var(--r-sm); cursor: pointer; font-size: var(--t-sm); color: var(--ink-2);
   border: 1px solid transparent; }
-.rl-listhd { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) 64px 76px 112px minmax(0, 1.1fr); gap: 10px; align-items: end; padding: 2px 9px 4px; color: var(--muted); font-size: var(--t-2xs); line-height: 1.3; border-bottom: 1px solid var(--line-2); }
+.rl-listhd { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) 64px 76px 136px minmax(0, 1.1fr); gap: 10px; align-items: end; padding: 2px 9px 4px; color: var(--muted); font-size: var(--t-2xs); line-height: 1.3; border-bottom: 1px solid var(--line-2); }
 .rl-divider { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 10px 8px 4px; font-size: var(--t-xs); border-bottom: 1px solid var(--line); }
 .rl-more { display: none; }
 .rl-row:hover { background: var(--surface-2); }
@@ -117,7 +119,8 @@
   .rl-row { grid-template-columns: repeat(3, minmax(0, auto)); justify-content: start; gap: 4px 12px; padding: 10px 8px; }
   .rl-rn { grid-column: 1 / -1; }
   .rl-rx[data-k]::before { content: attr(data-k) " "; color: var(--muted); font-size: var(--t-2xs); }
-  .rl-rtp { grid-column: 1 / -1; white-space: normal; }
+  .rl-rx { white-space: normal; overflow: visible; }
+  .rl-rtp { grid-column: 1 / -1; }
   .rl-ru { grid-column: 1 / -1; white-space: normal; }
   /* the first rows only, until "나머지 N개 보기" (the chosen pick always shows) */
   .rl-list:not(.open) .rl-row.rl-extra:not(.on), .rl-list:not(.open) .rl-divider.rl-extra { display: none; }

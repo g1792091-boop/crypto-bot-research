@@ -226,6 +226,18 @@ def test_rule_steps_carry_the_exchanges_limit():
     assert D.rule_steps(None)[0]["blocked"] == [] and D.rule_steps(None)[0]["cap"] == {}
 
 
+def test_why_40x_names_the_exchanges_limit():
+    """A 40x LTC entry of a 후보 account ($5,000 wallet): the 50x order is $125,000 and the bracket allows 40x there,
+    so the card says the exchange skipped 50x; BTC (150x there) keeps the safety-check wording; the 1/4 account's
+    smaller order is not capped."""
+    core = {"kind": "core", "role": "cand"}
+    assert D._cap50(EX, "LTCUSDT", 5000.0, 1.0) == 40 and D._cap50(EX, "LTCUSDT", 5000.0, 0.25) == 50
+    assert D._cap50(EX, "BTCUSDT", 5000.0, 1.0) >= 50 and D._cap50(None, "LTCUSDT", 5000.0, 1.0) is None
+    w = D.why_lev(core, 40, 0.4, 0.014, cap50=D._cap50(EX, "LTCUSDT", 5000.0, 1.0))
+    assert "거래소가 40배까지만 허용해 50배를 건너뛰고 40배" in w["lev_ko"] and w["group_ko"] == "좋은 자리"
+    assert "50배가 안전 검사에 걸려 40배" in D.why_lev(core, 40, 0.4, 0.02, cap50=D._cap50(EX, "BTCUSDT", 5000.0, 1.0))["lev_ko"]
+
+
 def test_rule_words_of_the_position_card():
     """The position card's rule (why_lev): all four steps of a 좋은 자리, the exchange's limit and the two checks; a
     short line for the card face."""

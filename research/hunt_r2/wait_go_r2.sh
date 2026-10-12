@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# Wait on the round-2 compute server until the developer publishes the pinned commit, then run bootstrap_r2.sh at it.
+#
+# The owners create a new server only after track 2's server is Destroyed (PREREG_HUNT_R2 12), paste one line from
+# SERVER_R2_KO.md and may leave. The developer pushes research/hunt_r2/GO_COMMIT (one line: the full 40-hex commit of
+# the code pin) to the branch. This script polls the branch every 2 minutes; when that file names a commit that is on the
+# branch, it checks the commit out and runs bootstrap_r2.sh with HUNT_R2_GO set to it (the same safety checks as a
+# hand-pasted line: bootstrap stops if the code is not that commit, if the pins do not match, or if the data differ).
+# If GO_COMMIT is already there, it starts at once.
+#
+# Run it from a copy outside the clone (the checkout replaces the clone's files while this script runs):
+#   cp /root/hunt_r2/crypto-bot-research/research/hunt_r2/wait_go_r2.sh /root/hunt_r2/wait_go_r2.sh \
+#     && bash /root/hunt_r2/wait_go_r2.sh
+#
+# While it waits it keeps its pid in $HUNT_R2_BASE/WAITING (default /root/hunt_r2), so 'bootstrap_r2.sh status' says
+# "waiting" and a pasted restart line changes nothing. bootstrap_r2.sh started without a go commit (the restart line
+# after a reboot, or after the hours below) hands over to this script again.
+#
+# WAIT_HOURS (default 24): give up after this long with a message; the restart line of SERVER_R2_KO 3 waits again.
+# Rehearsal: HUNT_R2_REPO (a scratch clone), HUNT_R2_BASE, HUNT_R2_BRANCH, WAIT_POLL (seconds), WAIT_HOURS,
+# HUNT_R2_WAIT_EXEC (a command run in place of bootstrap_r2.sh; it gets HUNT_R2_GO and HUNT_R2_BASE in its environment).
+
+set -u
+REPO=${HUNT_R2_REPO:-/root/hunt_r2/crypto-bot-research}
+BASE=${HUNT_R2_BASE:-$(dirname "$REPO")}
+BR=${HUNT_R2_BRANCH:-claude/keen-pasteur-wav02u}
+MARK=research/hunt_r2/GO_COMMIT
+POLL=${WAIT_POLL:-120}
+deadline=$(( $(date +%s) + ${WAIT_HOURS:-24} * 3600 ))
+
+case "$REPO" in
+  /root/hunt|/root/hunt/*|/root/hiwr|/root/hiwr/*) echo "2차는 1차·2번 트랙 폴더를 쓰지 않습니다: $REPO"; exit 1 ;;
+esac
+if [ -z "${HUNT_R2_WAIT_EXEC:-}" ] && { [ -d /root/hunt ] || [ -d /root/hiwr ]; }; then
+  echo "이 서버에는 1차(/root/hunt) 또는 2번 트랙(/root/hiwr) 폴더가 있습니다. 2차는 그 서버를 Destroy한 뒤 새 서버에서 돌립니다."
+  echo "이 화면을 개발자에게 보내 주세요."
+  exit 1
+fi
+[ -d "$REPO/.git" ] || { echo "코드 폴더가 없습니다: $REPO (SERVER_R2_KO의 한 줄을 그대로 붙여 넣으세요)"; exit 1; }
+mkdir -p "$BASE"
+echo $$ > "$BASE/WAITING"
+gone() { [ "$(cat "$BASE/WAITING" 2>/dev/null)" = "$$" ] && rm -f "$BASE/WAITING"; }
+trap gone EXIT
+trap 'exit 1' HUP INT TERM
+echo "고정된 커밋을 기다립니다. 2분마다 확인합니다. 이 창은 닫아도 됩니다 (Ctrl+B 다음 D)."
+c=""
+while :; do
+  if git -C "$REPO" fetch -q origin "$BR" 2>/dev/null; then
+    c=$(git -C "$REPO" show "origin/$BR:$MARK" 2>/dev/null | tr -d '[:space:]')
+    if [[ $c =~ ^[0-9a-f]{40}$ ]] && git -C "$REPO" cat-file -e "$c^{commit}" 2>/dev/null \
+        && git -C "$REPO" merge-base --is-ancestor "$c" "origin/$BR"; then
+      break
+    fi
+  else
+    echo "$(date -u +%H:%M) UTC 인터넷 확인 실패, 잠시 뒤 다시 시도합니다"
+  fi
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "${WAIT_HOURS:-24}시간 동안 고정된 커밋이 오지 않았습니다. 개발자에게 이 화면을 보내 주세요 (서버는 Destroy해도 잃는 것 없음)."
+    echo "다시 기다리려면 SERVER_R2_KO 3번의 '이어서 하기' 줄을 붙여 넣으세요."
+    exit 1
+  fi
+  echo "$(date -u +%H:%M) UTC 아직 고정 전입니다. 기다리는 중..."
+  sleep "$POLL"
+done
+
+echo "고정된 커밋 ${c:0:10} 이 왔습니다. 계산을 시작합니다."
+git -C "$REPO" checkout -q "$c" || { echo "그 커밋으로 바꾸지 못했습니다: $c (이 화면을 개발자에게 보내 주세요)"; exit 1; }
+trap - EXIT HUP INT TERM
+rm -f "$BASE/WAITING"                # bootstrap (the same pid after exec) writes RUNNING
+if [ -n "${HUNT_R2_WAIT_EXEC:-}" ]; then
+  export HUNT_R2_GO=$c HUNT_R2_BASE=$BASE
+  read -r -a EX <<<"$HUNT_R2_WAIT_EXEC"
+  exec "${EX[@]}"
+fi
+HUNT_R2_GO=$c HUNT_R2_BASE=$BASE exec bash "$REPO/research/hunt_r2/bootstrap_r2.sh"

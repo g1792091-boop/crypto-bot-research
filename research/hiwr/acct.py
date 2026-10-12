@@ -525,11 +525,16 @@ def structure(res: dict):
     same structure differ only by f: every path's mark-to-market DD is then nondecreasing in f (8.3 marks are
     wallet x (1 + f x m) with the same m; a peak-to-trough ratio is a product of steps (1 + f a) / (1 + f b) and
     f d/df ln(ratio) <= ln(ratio) < 0 for a drawdown, since y / (1 + y) <= ln(1 + y))."""
-    if res["bust"] or bool(np.asarray(res["cut"])[res["taken"]].any()):
+    if res.get("bust"):
+        return None
+    if "cut" in res and "taken" in res and bool(np.asarray(res["cut"])[res["taken"]].any()):
+        return None
+    if not np.allclose(np.asarray(res["feff"], float), res.get("f", np.nan), rtol=1e-12, atol=0.0):
         return None
     h = hashlib.sha256()
-    for k in ("taken", "r", "phase", "exit_ms", "kind"):
-        h.update(np.ascontiguousarray(res[k]).tobytes())
+    for k in ("taken", "r", "phase", "exit_ms", "kind", "fill_ms"):
+        if k in res:
+            h.update(k.encode() + np.ascontiguousarray(res[k]).tobytes())
     return h.digest()
 
 

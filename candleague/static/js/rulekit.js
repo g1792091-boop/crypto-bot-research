@@ -218,7 +218,6 @@ export function levRuleBody(r) {
 /** One coin's tile of "지금 이 숫자면": ATR, stop and take-profit distances, the break-even with costs, the leverage
  *  each account would get (좋은 자리 / 보통 자리). */
 function coinTile(coin, x, p) {
-  const pair = p.best_ok ? " (좋은/보통)" : "";
   const ln = x.lev && x.lev.cand ? x.lev.cand.normal : null;
   return h("div", {class: "rl-coin"},
     h("div", {class: "rl-coinh"}, h("b", null, coinKo(coin)), h("span", {class: "muted num"}, `ATR ${share(x.atr_pct, 2)}`)),
@@ -226,9 +225,10 @@ function coinTile(coin, x, p) {
       h("div", null, h("dt", null, "손절 거리"), h("dd", {class: "num"}, share(x.stop_pct, 2))),
       h("div", null, h("dt", null, p.tp && p.tp.kind === "roe" ? (ln ? `익절 거리 (${ln}배면)` : "익절 거리") : "익절 거리"), h("dd", {class: "num"}, share(x.tp_pct, 2))),
       x.be_cost != null ? h("div", null, h("dt", null, "본전 (비용 포함)"), h("dd", {class: "num"}, share(x.be_cost, 0))) : null,
-      h("div", null, h("dt", null, `후보${pair}`), h("dd", {class: "num"}, levPair(x.lev.cand, p.best_ok))),
-      h("div", null, h("dt", null, `1/4${pair}`), h("dd", {class: "num"}, levPair(x.lev.quarter, p.best_ok))),
-      h("div", null, h("dt", null, `기본값${pair}`), h("dd", {class: "num", title: `기본값 계좌의 손절 2 ATR = ${share(x.base_stop_pct, 2)}`}, levPair(x.lev.base, p.best_ok)))));
+      h("div", {class: "rl-cdh"}, h("dt", null, "배수"), h("dd", null, p.best_ok ? "좋은 / 보통" : "보통 자리")),
+      h("div", null, h("dt", null, "후보"), h("dd", {class: "num"}, levPair(x.lev.cand, p.best_ok))),
+      h("div", null, h("dt", null, "1/4"), h("dd", {class: "num"}, levPair(x.lev.quarter, p.best_ok))),
+      h("div", null, h("dt", null, "기본값"), h("dd", {class: "num", title: `기본값 계좌의 손절 2 ATR = ${share(x.base_stop_pct, 2)}`}, levPair(x.lev.base, p.best_ok)))));
 }
 /** "지금 이 숫자면": the six coins today (or why there is nothing). */
 export function nowBox(p, r) {

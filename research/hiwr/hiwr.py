@@ -260,6 +260,14 @@ def CX() -> dict:
     return A.exchange30()
 
 
+def coin_labels(syms) -> dict:
+    """Section 4: the proxy coins (the 8 that stopped trading use SANDUSDT's bracket table, Q3), labelled in every
+    output, with the bracket file's sha256."""
+    return {"proxy_coins": [s for s in syms if CX()[s]["proxy"]], "proxy_table_of": A.PROXY_OF_STOPPED,
+            "brackets_file": os.path.relpath(A.EXCHANGE30, ROOT).replace(os.sep, "/"),
+            "brackets_sha256": sha256_file(A.EXCHANGE30)}
+
+
 # ------------------------------------------------------------------ pin (17.3)
 class PinError(RuntimeError):
     pass
@@ -407,6 +415,10 @@ def check_pin(step: str) -> dict:
     bad += content_problems()
     if step == "select" and PICKS_REL in listed:
         bad.append(f"{PICKS_REL} is already pinned: select ran; the picks do not change")
+    if step == "select" and (MANIFEST_TEST_REL in listed or os.path.exists(rpath(MANIFEST_TEST_REL))
+                             or os.path.exists(out_path("test.json"))):
+        bad.append("the confirm look happened (data_manifest_test.json or out/test.json exists): select never runs "
+                   "after it")
     if step in ("test", "reads") and PICKS_REL not in listed:
         bad.append(f"{PICKS_REL} is not pinned: run select first")
     if bad:
@@ -732,14 +744,28 @@ def candidates_of(parts: list) -> dict:
 
 
 # ------------------------------------------------------------------ grid (17.2)
+# A task is a (cell, combo chunk) over all coins, coins outer and combos inner, so the indicator memo serves the whole
+# chunk per coin: a whole cell per task, except the cells listed here. The full grid's split cells (run.CHUNK_OF) stay
+# split; GRID_CHUNK_OF also splits the cells whose indicators the memo barely reuses, so that no task runs much longer
+# than the rest (whole-cell timings on SEL-cut BTC, 2026-10-12; PREREG_HIWR 17.4). Results do not depend on the split.
+GRID_CHUNK_OF = {**R.CHUNK_OF, "N22_VORTEX_PSAR": 729, "N04_ST_KLINGER": 2187, "N10_HA_PSAR": 2187}
+
+
+def grid_chunk(name: str) -> int:
+    return GRID_CHUNK_OF.get(name, R.CHUNK)
+
+
 def grid_tasks(cells: list) -> list:
     tasks = []
     for kind, name, tf in cells:
         n = len(cell_grid(kind, name)[2])
-        ch = R.CHUNK_OF.get(name, R.CHUNK)
+        ch = grid_chunk(name)
         for c0 in range(0, n, ch):
             tasks.append((kind, name, tf, c0, min(n, c0 + ch)))
     return sorted(tasks, key=lambda t: (-(t[4] - t[3]) * GRID_WEIGHT[t[2]] * R.COST.get(t[1], 1.0), t))
+
+
+NOT_A_COMBO_FAILURE = (MemoryError, OSError)      # never recorded as a failed combo (CHOICES)
 
 
 def sums_path(work: str, t: tuple) -> str:
@@ -783,6 +809,8 @@ def _grid_job(args) -> str:
                     continue
                 try:
                     lo, sh = raw_signals(kind, name, sym, tf, combo)
+                except NOT_A_COMBO_FAILURE:
+                    raise                                 # the machine, not the rule: the task stops and is redone
                 except Exception as exc:  # noqa: BLE001  a combination the rule cannot compute: no trades
                     fails[k] = f"{sym}: {type(exc).__name__}: {exc}"[:200]
                     continue
@@ -970,7 +998,9 @@ def flip_control(r_keep, r_rev, grp, G: int, period_name: str, pid: str, seeds) 
 
 
 def p_seeds(seed_means: np.ndarray, obs: float) -> float:
-    """11: (1 + seeds whose mean r is at least the pick's) / (seeds + 1)."""
+    """11: (1 + seeds whose mean r is at least the pick's) / (seeds + 1); 1.0 when the pick has no mean (no trade)."""
+    if obs is None or not np.isfinite(obs):
+        return 1.0
     m = np.asarray(seed_means, float)
     return float((1 + int(np.sum(np.isfinite(m) & (m >= obs)))) / (len(m) + 1))
 
@@ -1211,6 +1241,8 @@ def eval_pairs(kind: str, name: str, tf: str, pairs: list) -> list:
                 continue
             try:
                 lo, sh = raw_signals(kind, name, sym, tf, combos[row])
+            except NOT_A_COMBO_FAILURE:
+                raise
             except Exception:  # noqa: BLE001
                 failed.add(row)
                 continue
@@ -1231,8 +1263,9 @@ def eval_pairs(kind: str, name: str, tf: str, pairs: list) -> list:
         st = list_stats(tr)
         res["list_check"] = abs(st["mean"] - p["mean"]) if st["n"] else None
         if st["n"] != p["n"] or (st["n"] and abs(st["mean"] - p["mean"]) > 1e-9):
-            raise RuntimeError(f"{pid}: trade list ({st['n']}, {st['mean']}) differs from the stored sums "
-                               f"({p['n']}, {p['mean']})")
+            # counts only: this line reaches run.log, which is published (D11)
+            raise RuntimeError(f"{pid}: the trade list ({st['n']} trades) does not reproduce the stored sums "
+                               f"({p['n']} trades, or another mean)")
         cand = candidates_of(tr["acct"])
         sz = size_pair(mk, cand, cfg, tf, pid)
         fs = sz["f_star"]
@@ -1242,7 +1275,7 @@ def eval_pairs(kind: str, name: str, tf: str, pairs: list) -> list:
         fl = flip_control(tr["r"], tr["rv"], grp, G, "SEL", pid, range(1, N_FLIP_SEL + 1))
         q95 = float(np.nanquantile(fl["mean"], Q_FLIP)) if np.isfinite(fl["mean"]).any() else math.inf
         e_ok = bool(np.isfinite(q95) and fl["obs"] > q95)
-        res.update(d={"ok": d_ok, "f_star": fs["f"], "f_path": sz["f_path"]["f"], "f_realized": sz["f_realized"],
+        res.update(d={"ok": d_ok, "f_star": fs["f"], "f_path": sz["f_path"]["f"], "scan": sz["scan"],
                       "trades": fs["trades"], "mean_ln": mean_ln, "sizes": sz},
                    e={"ok": e_ok, "obs": fl["obs"], "q95": q95, "seed_mean": float(np.nanmean(fl["mean"]))},
                    eligible=bool(d_ok and e_ok), list_stats=st)
@@ -1250,9 +1283,18 @@ def eval_pairs(kind: str, name: str, tf: str, pairs: list) -> list:
     return out
 
 
+def elig_file(work: str, kind: str, name: str, tf: str, k: int, mode: str) -> str:
+    """One eligibility task's file. The mode names the folder: a select resumed in the other mode never reads these."""
+    return os.path.join(work, f"elig_{mode}", f"{cell_key(kind, name, tf)}_{k:04d}.json")
+
+
+def elig_key(pairs: list) -> list:
+    return sorted([int(p["row"]), int(p["ci"])] for p in pairs)
+
+
 def _elig_job(args) -> str:
     work, kind, name, tf, k, pairs, mode = args
-    path = os.path.join(work, "elig", f"{cell_key(kind, name, tf)}_{k:04d}.json")
+    path = elig_file(work, kind, name, tf, k, mode)
     if os.path.exists(path):
         return ""
     t0 = time.time()
@@ -1272,13 +1314,16 @@ def _elig_job(args) -> str:
                     break
                 i = j
         disk_check(path)
-        write_json(path, {"results": res, "seconds": round(time.time() - t0, 1), "mode": mode})
+        write_json(path, {"results": res, "seconds": round(time.time() - t0, 1), "mode": mode,
+                          "pairs": elig_key(pairs)})
         return f"{kind} {name} {tf} part {k}: {len(res)} pairs, {time.time() - t0:.0f}s"
     except Exception:  # noqa: BLE001
         return f"ERROR {kind} {name} {tf} part {k}: " + traceback.format_exc()[-1500:]
 
 
 def elig_tasks(work: str, cell_rows: list, mode: str) -> list:
+    """Mode 'all': every pair passing (a)-(c), in tasks of at most ELIG_PAIRS[tf] pairs (pairs of one combo kept
+    together where they fit, so a combo's signals are mostly computed once). Mode 'lazy': one task per cell."""
     tasks = []
     for (kind, name, tf), pr in cell_rows:
         if not pr["abc"]:
@@ -1286,16 +1331,24 @@ def elig_tasks(work: str, cell_rows: list, mode: str) -> list:
         if mode == "lazy":
             tasks.append((work, kind, name, tf, 0, pr["abc"], mode))
             continue
-        rows = sorted({p["row"] for p in pr["abc"]})
-        for k, a in enumerate(range(0, len(rows), ELIG_CHUNK)):
-            keep = set(rows[a:a + ELIG_CHUNK])
-            tasks.append((work, kind, name, tf, k, [p for p in pr["abc"] if p["row"] in keep], mode))
+        prs = sorted(pr["abc"], key=lambda p: (p["row"], p["ci"]))
+        ch = int(ELIG_PAIRS[tf])
+        for k, a in enumerate(range(0, len(prs), ch)):
+            tasks.append((work, kind, name, tf, k, prs[a:a + ch], mode))
     return sorted(tasks, key=lambda t: -len(t[5]) * GRID_WEIGHT[t[3]])
 
 
 def elig_path(t: tuple) -> str:
-    work, kind, name, tf, k = t[:5]
-    return os.path.join(work, "elig", f"{cell_key(kind, name, tf)}_{k:04d}.json")
+    work, kind, name, tf, k, _pairs, mode = t
+    return elig_file(work, kind, name, tf, k, mode)
+
+
+def elig_load(t: tuple) -> list:
+    """A finished eligibility task's results; refused when the file was made in another mode or for other pairs."""
+    doc = load_json(elig_path(t))
+    if doc.get("mode") != t[6] or doc.get("pairs") != elig_key(t[5]):
+        raise SystemExit(f"{elig_path(t)} was made for another eligibility mode or other pairs: refused")
+    return doc["results"]
 
 
 # ------------------------------------------------------------------ select (9, 10)
@@ -1366,14 +1419,19 @@ def cmd_select(args) -> int:
         f"{sum(1 for _c, p in cell_rows if p['abc'])} cells")
     tasks = elig_tasks(work, cell_rows, args.eligibility)
     todo = [t for t in tasks if not os.path.exists(elig_path(t))]
+    log(f"[eligibility] {len(todo)} of {len(tasks)} tasks to do ({args.eligibility}, "
+        f"{sum(len(t[5]) for t in todo)} pairs)")
+    t1, k = time.time(), 0
     for msg in R.run_pool(_elig_job, todo, procs, "eligibility", done=lambda t: os.path.exists(elig_path(t))):
+        k += 1
         if msg:
-            log(f"[eligibility] {msg}")
+            el = time.time() - t1
+            log(f"[eligibility {k}/{len(todo)} {el / 3600:.2f}h, ~{el / k * (len(todo) - k) / 3600:.1f}h left] {msg}")
     if [t for t in tasks if not os.path.exists(elig_path(t))]:
         raise SystemExit("[eligibility] tasks missing (see the ERROR lines); run select again to resume")
     res_of: dict = {}
     for t in tasks:
-        res_of.setdefault((t[1], t[2], t[3]), []).extend(load_json(elig_path(t))["results"])
+        res_of.setdefault((t[1], t[2], t[3]), []).extend(elig_load(t))
     doc, picks, priv_rows, priv_picks = finish_select(cell_rows, res_of, args.eligibility, cfgs)
     ds_ids = {p["id"] for p in picks if is_ds(p)}
     priv_sha = write_private(args, "select_private.json", {"cells": priv_rows})
@@ -1382,10 +1440,11 @@ def cmd_select(args) -> int:
     sel = {"stamp": st, "what": "PREREG_HIWR 10: per cell the pairs passing each test and the pick (SEL only)",
            "period": {"SEL": [iso(x) for x in PER("SEL")]}, "rule": rule_text(), "cells": doc,
            "picks": [p["id"] for p in picks], "eligibility_mode": args.eligibility,
-           "data": {"coins": CTX["SEL"].syms, "minutes": CTX["SEL"].minutes()},
+           "data": {"coins": CTX["SEL"].syms, "minutes": CTX["SEL"].minutes(), **coin_labels(CTX["SEL"].syms)},
            "private_sha256": priv_sha, "seconds": round(time.time() - t0, 1)}
     write_public(out_path("select.json"), sel, ds_ids)
     write_public(rpath(PICKS_REL), {"stamp": st, "picks": picks, "private_sha256": picks_priv_sha,
+                                    "data": coin_labels(CTX["SEL"].syms),
                                     "what": "PREREG_HIWR 10.6: each pick's full definition and its SEL f* "
                                             "(DeepSeek: f* in the private file, D11)"}, ds_ids)
     append_pin(PICKS_REL)
@@ -1433,7 +1492,8 @@ def finish_select(cell_rows: list, res_of: dict, mode: str, cfgs: list) -> tuple
             sz = pk["d"]["sizes"]
             nums = {"plateau": pk["plateau"], "n": pk["n"], "win": pk["win"], "mean": pk["mean"],
                     "mean_x2": pk["mean_x2"], "mean_R": pk["list_stats"].get("mean_R"),
-                    "f_star": sz["f_star"]["f"], "f_path": sz["f_path"]["f"], "f_realized": sz["f_realized"],
+                    "mean_wallet_at_f_star": sz["f_star"]["f"] * pk["mean"],          # 8.1: f* x r
+                    "f_star": sz["f_star"]["f"], "f_path": sz["f_path"]["f"], "size_scan": sz["scan"],
                     "margin_pct_f_star": sz["f_star"]["margin_pct"], "margin_pct_f_path": sz["f_path"]["margin_pct"],
                     "boot_q95_f_star": sz["f_star"]["boot_q95"], "boot_share_over_cap_f_star":
                         sz["f_star"]["boot_share_over_cap"], "boot_share_over_cap_f_path":
@@ -1574,10 +1634,12 @@ def test_pick(pick: dict) -> dict:
     t0_ok = st["n"] >= MIN_TEST
     checks = {"T0": bool(t0_ok), "T1": bool(st["n"] and st["win"] >= A.MIN_WIN),
               "T2": bool(acc["dd"] <= cap and not acc["bust"]), "T3": bool(st["n"] and st["mean"] > 0),
-              "T4": bool(st["n"] and st.get("mean_x2", -1) > 0), "T5": bool(p_a < T5_ALPHA and p_b < T5_ALPHA)}
+              "T4": bool(st["n"] and st.get("mean_x2", -1) > 0),
+              "T5": bool(st["n"] and p_a < T5_ALPHA and p_b < T5_ALPHA)}
+    st["mean_wallet_at_f_star"] = f * st["mean"] if st["n"] else None                  # 8.1: f* x r
     p = float(max(pb, p_a, p_b)) if t0_ok else 1.0
     return {"id": pid, "kind": pick["kind"], "name": pick["name"], "tf": tf, "test": st,
-            "account": account_summary(acc), "cap": cap,
+            "account": account_summary(acc), "cap": cap, "f_star": f,
             "controls": {"a": control_summary(fl["mean"], fl["win"], fl["n"], p_a, acc_a, cap) | {
                          "groups": G, "obs": fl["obs"]},
                          "b": control_summary(tc["mean"], tc["win"], tc["n"], p_b, acc_b, cap) | {
@@ -1708,55 +1770,128 @@ def redact_block(b: dict) -> dict:
             "note": "DeepSeek pick: figures in the private file (D11)"}
 
 
-def ledger_external(extra_path: str | None = None, hunt_private: str | None = None) -> list:
-    """The other test-period hypotheses of the program (13): the hunt's v1 and wide test.json where they exist (the
-    hunt's DeepSeek p-values from its private file when given), plus rows of ``--ledger-extra`` (a JSON list of
-    {id, source, p, deepseek}). A row without a p is listed as missing."""
+def _hunt_rows(src: str, rel: str, doc: dict, priv: dict | None) -> list:
     rows = []
-    priv = load_json(hunt_private) if hunt_private and os.path.exists(hunt_private) else None
-    for src, rel in HUNT_TESTS:
-        p = os.path.join(ROOT, rel)
-        if not os.path.exists(p):
-            rows.append({"id": f"{src} (not run yet)", "source": rel, "p": None, "deepseek": False,
-                         "status": "file missing"})
-            continue
-        doc = load_json(p)
-        if "pick" in doc and "result" in doc:
-            rows.append({"id": doc["pick"].get("id", src), "source": rel, "deepseek": False,
-                         "p": (doc["result"].get("checks") or {}).get("p")})
-        for pid, blk in (doc.get("results") or {}).items():
-            chk = blk.get("checks") or {}
-            pp = chk.get("p")
-            ds = "p" not in chk                # the hunt's public file leaves the p of a DeepSeek pick out (D11)
-            if pp is None and priv is not None:
-                pp = (((priv.get("results") or {}).get(pid) or {}).get("checks") or {}).get("p")
-            rows.append({"id": pid, "source": rel, "p": pp, "deepseek": bool(ds)})
-    if extra_path:
-        for r in load_json(extra_path):
-            rows.append({"id": str(r["id"]), "source": r.get("source", extra_path), "p": r.get("p"),
-                         "deepseek": bool(r.get("deepseek", False))})
+    if "pick" in doc and "result" in doc:
+        rows.append({"id": (doc.get("pick") or {}).get("id", src), "source": rel, "deepseek": False,
+                     "p": ((doc.get("result") or {}).get("checks") or {}).get("p")})
+    for pid, blk in (doc.get("results") or {}).items():
+        chk = blk.get("checks") or {}
+        pp = chk.get("p")
+        ds = "p" not in chk                    # the hunt's public file leaves the p of a DeepSeek pick out (D11)
+        if pp is None and priv is not None:
+            pp = (((priv.get("results") or {}).get(pid) or {}).get("checks") or {}).get("p")
+        rows.append({"id": pid, "source": rel, "p": pp, "deepseek": bool(ds)})
     return rows
+
+
+def ledger_external(extra_path: str | None = None, hunt_private: str | None = None) -> tuple:
+    """The other test-period hypotheses of the program (13): (rows, missing sources, input files with sha256).
+    The hunt's v1 and wide test.json where its push publishes them (research/hunt/results/hunt/...; its own server's
+    research/hunt/out/... as a fallback), every tested pick a row (the hunt's DeepSeek p-values from its private
+    file, wide_test_private.json, when given); then the list of the program's other hypotheses (the hunt's O1-O4 reads,
+    later rounds): ``extra_path`` or research/hiwr/ledger_extra.json, a JSON list of {id, source, p, deepseek} (an
+    empty list states that there is none). A missing source or a row without a p makes the ledger incomplete."""
+    rows, missing, inputs = [], [], {}
+    priv = None
+    if hunt_private:
+        if os.path.exists(hunt_private):
+            priv = load_json(hunt_private)
+            inputs["hunt_private"] = sha256_file(hunt_private)
+        else:
+            missing.append(f"the hunt's private test file {hunt_private} is not there")
+    for src, rels in HUNT_TESTS:
+        rels = (rels,) if isinstance(rels, str) else tuple(rels)
+        found = next((r for r in rels if os.path.exists(os.path.join(ROOT, r))), None)
+        if found is None:
+            missing.append(f"{src}: test.json is not in this commit (looked at {', '.join(rels)})")
+            continue
+        path = os.path.join(ROOT, found)
+        inputs[found] = sha256_file(path)
+        got = _hunt_rows(src, found, load_json(path), priv)
+        if not got:
+            missing.append(f"{src}: {found} holds no tested pick")
+        rows += got
+    extra = extra_path or (os.path.join(ROOT, LEDGER_EXTRA_REL) if os.path.exists(os.path.join(ROOT, LEDGER_EXTRA_REL))
+                           else None)
+    if extra and os.path.exists(extra):
+        inputs[extra if extra_path else LEDGER_EXTRA_REL] = sha256_file(extra)
+        doc = load_json(extra)
+        for r in (doc.get("hypotheses", []) if isinstance(doc, dict) else doc):
+            rows.append({"id": str(r["id"]), "source": r.get("source", "ledger extra"), "p": r.get("p"),
+                         "deepseek": bool(r.get("deepseek", False))})
+    else:
+        missing.append("no list of the program's other test-period hypotheses (the hunt's O1-O4 reads, later rounds):"
+                       f" {LEDGER_EXTRA_REL} or --ledger-extra")
+    return rows, missing, inputs
 
 
 def ledger(own: list, extra_path=None, hunt_private=None) -> tuple:
     """13: a global BH at q = 0.10 and Holm at 0.05 over every test-period hypothesis of the program. Returns (public,
-    private): public DeepSeek rows show labels only."""
+    private): public DeepSeek rows show labels only. Never over a smaller family: while any source is missing or any
+    row has no p, the ledger is 'incomplete' and no rejection count or label is given (the verdict is unaffected)."""
+    ext, missing_src, inputs = ledger_external(extra_path, hunt_private)
     rows = [{"id": b["id"], "source": "hiwr v1 (this study)", "p": b["p"] if b["checks"]["T0"] else 1.0,
-             "deepseek": is_ds(b)} for b in own] + ledger_external(extra_path, hunt_private)
-    pv = [r["p"] for r in rows]
-    sig_bh, sig_holm = bh(pv, BH_Q), holm(pv, HOLM_ALPHA)
-    for r, a, b in zip(rows, sig_bh, sig_holm):
-        r["bh_q10"] = bool(a) if r["p"] is not None else None
-        r["holm_005"] = bool(b) if r["p"] is not None else None
+             "deepseek": is_ds(b)} for b in own] + ext
     missing = [r["id"] for r in rows if r["p"] is None]
+    complete = not missing and not missing_src
+    if complete:
+        pv = [r["p"] for r in rows]
+        for r, x, y in zip(rows, bh(pv, BH_Q), holm(pv, HOLM_ALPHA)):
+            r["bh_q10"], r["holm_005"] = bool(x), bool(y)
+    else:
+        for r in rows:
+            r["bh_q10"] = r["holm_005"] = None
     head = {"what": "PREREG_HIWR 13: program-wide ledger (global BH q = 0.10, Holm 0.05)",
-            "hypotheses": len(rows), "with_p": len(rows) - len(missing), "missing_p": missing,
-            "bh_rejections": int(sum(1 for r in rows if r["bh_q10"])),
-            "holm_rejections": int(sum(1 for r in rows if r["holm_005"])),
+            "status": "complete" if complete else "incomplete", "hypotheses": len(rows),
+            "with_p": len(rows) - len(missing), "missing_p": missing, "missing_sources": missing_src,
+            "bh_rejections": int(sum(1 for r in rows if r["bh_q10"])) if complete else None,
+            "holm_rejections": int(sum(1 for r in rows if r["holm_005"])) if complete else None,
+            "inputs_sha256": inputs, "written_utc": now_utc(),
+            "rule": "BH and Holm are computed only over the whole family; a missing hypothesis is never dropped or "
+                    "set to a p. 'incomplete': nothing is rejected or passed here; `hiwr ledger` completes it once "
+                    "every source exists. The ledger never changes a verdict.",
             "note": "Track 1 and track 2 use the same 33 test months: the chance that at least one pick of either passes "
                     "by luck is larger than for either alone. The verdicts are shown side by side and never merged."}
     public = dict(head, rows=[{k: v for k, v in r.items() if not (r["deepseek"] and k == "p")} for r in rows])
     return public, dict(head, rows=rows)
+
+
+def write_ledger(args, blocks: list, ds_ids: set) -> dict:
+    """out/ledger.json (public) and ledger_private.json; an earlier ledger is kept as ledger_v<k>.json beside it."""
+    pub_path, priv_path = out_path("ledger.json"), os.path.join(private_dir(args), "ledger_private.json")
+    version = 1
+    if os.path.exists(pub_path):
+        old = load_json(pub_path).get("version", 1)
+        version = int(old) + 1
+        os.replace(pub_path, out_path(f"ledger_v{old}.json"))
+        if os.path.exists(priv_path):
+            os.replace(priv_path, os.path.join(private_dir(args), f"ledger_private_v{old}.json"))
+    lpub, lpriv = ledger(blocks, getattr(args, "ledger_extra", None), getattr(args, "hunt_private", None))
+    lpriv_sha = write_private(args, "ledger_private.json", dict(lpriv, version=version))
+    doc = dict(lpub, version=version, private_sha256=lpriv_sha,
+               test_json_sha256=sha256_file(out_path("test.json")) if os.path.exists(out_path("test.json")) else None)
+    write_public(pub_path, doc, ds_ids)
+    log(f"ledger v{version}: {doc['status']}, {doc['hypotheses']} hypotheses"
+        + (f", BH {doc['bh_rejections']}, Holm {doc['holm_rejections']}" if doc["status"] == "complete" else
+           f", missing {len(doc['missing_p'])} p-values and {len(doc['missing_sources'])} sources"))
+    return doc
+
+
+def cmd_ledger(args) -> int:
+    """13: the program-wide ledger again, after test.json: from test_private.json (checked against test.json), the
+    hunt's published test files and the list of other hypotheses. No test-period data is read; no verdict changes."""
+    check_pin("test")
+    if not os.path.exists(out_path("test.json")):
+        raise SystemExit("the ledger needs test.json (run test first)")
+    test_doc = load_json(out_path("test.json"))
+    pp = os.path.join(private_dir(args), "test_private.json")
+    if not os.path.exists(pp) or sha256_file(pp) != test_doc["private_sha256"]:
+        raise PinError(f"{pp} is missing or not the file test.json names")
+    blocks = load_json(pp)["results"]
+    order = [blocks[pid] for pid in test_doc["picks"]]
+    write_ledger(args, order, {b["id"] for b in order if is_ds(b)})
+    return 0
 
 
 def cmd_test(args) -> int:
@@ -1800,8 +1935,6 @@ def cmd_test(args) -> int:
     order = [blocks[p["id"]] for p in picks]
     vd = verdict(order)
     ds_ids = {p["id"] for p in picks if is_ds(p)}
-    lpub, lpriv = ledger(order, args.ledger_extra, args.hunt_private)
-    lpriv_sha = write_private(args, "ledger_private.json", lpriv)
     priv_sha = write_private(args, "test_private.json", {"results": blocks, "verdict": vd})
     st = stamp(pin)
     public = {"stamp": st, "what": "PREREG_HIWR 12: each pick once on TEST (2024-01-01 .. 2026-10-01)",
@@ -1810,11 +1943,16 @@ def cmd_test(args) -> int:
               "rule": {"T0": f">= {MIN_TEST} trades", "T1": "win rate >= 70.0%", "T2": "account at SEL f*: max DD "
                        "within the cap, no bust", "T3": "mean r > 0", "T4": "cost-x2 mean r > 0",
                        "T5": "p_a < 0.05 and p_b < 0.05", "T6": "BH q = 0.10 on max(p_boot, p_a, p_b)"},
-              "seeds": N_SEEDS, "private_sha256": priv_sha, "ledger_private_sha256": lpriv_sha,
-              "data": {"coins": CTX["TEST"].syms if picks else [], "minutes": CTX["TEST"].minutes() if picks else 0},
+              "seeds": N_SEEDS, "private_sha256": priv_sha,
+              "data": {"coins": CTX["TEST"].syms if picks else [], "minutes": CTX["TEST"].minutes() if picks else 0,
+                       **coin_labels(CTX["TEST"].syms if picks else [])},
               "seconds": round(time.time() - t0, 1)}
     write_public(out_path("test.json"), public, ds_ids)
-    write_public(out_path("ledger.json"), dict(lpub, private_sha256=lpriv_sha), ds_ids)
+    try:                                       # the ledger never changes a verdict; `hiwr ledger` can redo it
+        write_ledger(args, order, ds_ids)
+    except Exception as e:  # noqa: BLE001
+        traceback.print_exc()
+        log(f"[ledger] FAILED: {type(e).__name__}: {e}. test.json is written and unchanged; run `hiwr ledger` later.")
     log(f"test done: {len(vd['passing'])} PASS, {len(vd['reference'])} 참고 of {len(picks)} picks, "
         f"{time.time() - t0:.0f}s")
     if not args.no_reads:
@@ -1851,7 +1989,8 @@ def run_reads(args, pin, picks, kits) -> dict:
     public, private = mod.run(ctx)
     ds_ids = {p["id"] for p in picks if is_ds(p)}
     psha = write_private(args, "reads_private.json", private)
-    write_public(out_path("reads.json"), dict(public, stamp=stamp(pin), private_sha256=psha), ds_ids)
+    write_public(out_path("reads.json"), dict(public, stamp=stamp(pin), private_sha256=psha,
+                                              data=coin_labels(SYMBOLS)), ds_ids)
     return public
 
 
@@ -1868,7 +2007,7 @@ TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 
 
 def _pct(x, d=1) -> str:
-    return "-" if x is None else f"{x * 100:.{d}f}%"
+    return "-" if x is None or not np.isfinite(x) else f"{x * 100:.{d}f}%"
 
 
 def report_text(sel: dict | None, test: dict | None, led: dict | None, reads: dict | None) -> str:
@@ -1907,12 +2046,21 @@ def report_text(sel: dict | None, test: dict | None, led: dict | None, reads: di
                          f"{_pct(b['test']['mean'], 3)} | {_pct(b['account']['dd'])} | "
                          f"{'넘음' if c['T5'] else '못 넘음'} |")
         L.append("")
+    prox = (test.get("data") or {}).get("proxy_coins") or []
+    if prox:
+        L += [f"* 거래가 끝난 코인 {len(prox)}개({', '.join(x.replace('USDT', '') for x in prox)})는 SAND·COMP의 구간표를 "
+              "빌려 계산했습니다(대체 구간표).", ""]
     L += ["* 1번 트랙(추세 사냥)과 **같은 확인 기간**을 씁니다. 그래서 둘 중 하나라도 운으로 통과할 확률이 하나만 볼 때보다 큽니다. "
           "두 결과는 나란히만 보여 드리고 합치지 않습니다.", "* 딥시크 매매법은 규칙(D11)대로 통과 여부·건수·승률만 적습니다.", ""]
-    if led:
+    if led and led.get("status") == "complete":
         L += ["## 프로그램 전체 장부", "",
-              f"* 확인 기간 가설 {led['hypotheses']}개 (p값 있는 것 {led['with_p']}개): BH(q 0.10) 통과 {led['bh_rejections']}개, "
+              f"* 확인 기간 가설 {led['hypotheses']}개: BH(q 0.10) 통과 {led['bh_rejections']}개, "
               f"Holm(0.05) 통과 {led['holm_rejections']}개", ""]
+    elif led:
+        L += ["## 프로그램 전체 장부", "",
+              f"* **장부 미완성**: 빠진 결과가 있어(p값 없는 것 {len(led.get('missing_p') or [])}개, 빠진 자료 "
+              f"{len(led.get('missing_sources') or [])}개) BH·Holm은 계산하지 않았습니다. 판정과는 관계없고, 빠진 것이 "
+              "들어오면 개발자가 장부만 다시 계산합니다.", ""]
     if reads and reads.get("summary_ko"):
         L += ["## 참고로 본 것 (통과 기준 아님)", ""] + [f"* {x}" for x in reads["summary_ko"]] + [""]
     return "\n".join(L)
@@ -1951,6 +2099,9 @@ def cmd_datapin(args) -> int:
     m = D.manifest(kit)
     if list(m["months"]) != list(D.KIT_SEL):
         raise SystemExit(f"{kit} holds months {m['months']}, not the practice kit {D.KIT_SEL}")
+    bad = D.span_problems(m["coins"], *D.KIT_SEL, symbols=SYMBOLS)
+    if bad:
+        raise SystemExit("the practice kit does not have the spans of PREREG_HIWR section 4: " + "; ".join(bad))
     for s, v in m["coins"].items():
         a = D.load(kit, s)
         if len(a["ts"]) and a["ts"][-1] >= PER("SEL")[1]:
@@ -2045,7 +2196,7 @@ def cmd_pinlist(args) -> int:
 # ------------------------------------------------------------------ main
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("cmd", choices=("datapin", "datacheck", "select", "test", "report", "reads", "pinlist"))
+    ap.add_argument("cmd", choices=("datapin", "datacheck", "select", "test", "report", "reads", "pinlist", "ledger"))
     ap.add_argument("--kit", help="the practice kit folder (data.py build output)")
     ap.add_argument("--kit-test", help="the confirm kit folder (made by test, after the picks line)")
     ap.add_argument("--fg1m", help="the full grid's 1m data folder (datacheck i)")
@@ -2057,10 +2208,12 @@ def main(argv=None) -> int:
     ap.add_argument("--ledger-extra", default=None, help="JSON list of other test-period hypotheses {id, source, p}")
     ap.add_argument("--hunt-private", default=None, help="the hunt's private test file (its DeepSeek p-values)")
     ap.add_argument("--no-reads", action="store_true")
+    ap.add_argument("--reads-hours", type=float, default=None,
+                    help="reads: start no new pick after this many hours; reads.json then lists the rest as missing")
     a = ap.parse_args(argv)
     try:
         return {"datapin": cmd_datapin, "datacheck": cmd_datacheck, "select": cmd_select, "test": cmd_test,
-                "report": cmd_report, "reads": cmd_reads, "pinlist": cmd_pinlist}[a.cmd](a)
+                "report": cmd_report, "reads": cmd_reads, "pinlist": cmd_pinlist, "ledger": cmd_ledger}[a.cmd](a)
     except PinError as e:
         print(f"REFUSED: {e}", file=sys.stderr, flush=True)
         return 2

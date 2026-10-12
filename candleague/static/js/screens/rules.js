@@ -63,7 +63,8 @@ export async function mount(el, ctx) {
     }, {more, onMore: () => { more = true; paint(); }}) : ui.empty("맞는 후보가 없습니다"));
     const c = st.pick ? ix.byId[st.pick] : null;
     const p = c && R && R.picks ? R.picks[c.id] : null;
-    put(card, c ? ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.exit_ko} · 매매법 코드 ${c.name}`, cls: "rl-pickcard",
+    const exitKo = p ? `${RK.tpShort(p.tp)} · 손절 ${fmt.num(p.stop_atr, p.stop_atr % 1 ? 1 : 0)} ATR` : c.exit_ko;
+    put(card, c ? ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${exitKo} · 매매법 코드 ${c.name}`, cls: "rl-pickcard",
       acts: h("span", {class: "row wrap"}, LK.kindChip(c.kind), p ? h("span", {class: ["pp", "thin", p.best_ok ? "accent" : ""]}, p.best_ok ? "좋은 자리 가능" : "늘 보통 자리") : null)},
     p ? RK.pickRuleBody(p, R) : ui.none(R ? "이 후보의 규칙을 찾지 못했습니다" : "불러오는 중")) : null);
   }

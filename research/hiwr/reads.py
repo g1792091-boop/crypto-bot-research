@@ -423,9 +423,38 @@ def labels_only(obj, H):
 
 
 # ------------------------------------------------------------------ run
+_RUN: dict = {}                      # the reads' markets and folders (inherited by the forked workers)
+
+
+def pick_file(pdir: str, i: int, pid: str) -> str:
+    return os.path.join(pdir, f"{i:04d}_{hashlib.sha256(pid.encode()).hexdigest()[:12]}.json")
+
+
+def _pick_job(i: int) -> str:
+    """One pick's reads, written to its own file in the work folder (a restart skips the picks done)."""
+    import traceback
+    c = _RUN
+    pick = c["picks"][i]
+    path = pick_file(c["pdir"], i, pick["id"])
+    if os.path.exists(path):
+        return ""
+    try:
+        out = one_pick(c["H"], c["mks"], c["fdir"], c["groups"], pick)
+        c["H"].write_json(path, out)
+        return f"{pick['id']} done"
+    except Exception:  # noqa: BLE001  one pick's failure does not stop the others; it is listed as missing
+        return f"ERROR {pick['id']}: " + traceback.format_exc()[-1500:]
+
+
 def run(ctx: dict) -> tuple:
+    """Every pick's reads, in parallel (``args.procs``), one file per pick in the work folder; picks already done are
+    skipped. ``args.reads_hours``: no pick is started after that many hours; reads.json then lists the picks not done
+    as missing (the verdict is unaffected)."""
+    import concurrent.futures as cf
+    import multiprocessing as mp
+    import time
     H = ctx["H"]
-    W, A, D = H.W, H.A, H.D
+    D = H.D
     args, kits, log = ctx["args"], ctx["kits"], ctx["log"]
     picks = ctx["picks"]
     picks_sha = H.sha256_file(H.rpath(H.PICKS_REL))
@@ -435,148 +464,187 @@ def run(ctx: dict) -> tuple:
     ftest = os.path.join(args.work, f"test_{picks_sha[:16]}", "frames_test")
     if not os.path.isdir(ftest):
         ftest = os.path.join(work, "frames_test")
-    procs = max(1, getattr(args, "procs", 1))
+    procs = max(1, getattr(args, "procs", 1) or 1)
     H.frames_stage("SEL", kits, fsel, tfs, procs)
     H.frames_stage("TEST", kits, ftest, tfs, procs)
     mks = {"SEL": H.CTX.get("SEL") or H.market("SEL", kits), "TEST": H.CTX.get("TEST") or H.market("TEST", kits),
            "EXTRA": H.market("EXTRA", kits)}
-    fdir = {"SEL": fsel, "TEST": ftest, "EXTRA": fsel}
-    cfgs = H.exit_configs()
     cx = H.CX()
     old6, proxy = set(D.OLD_SIX), {s for s in H.SYMBOLS if cx[s]["proxy"]}
     groups = {"old_six": old6, "new_24": set(H.SYMBOLS) - old6, "still_listed_22": set(H.SYMBOLS) - proxy,
               "proxy_8": proxy}
-    full, summary = {}, []
-    for pick in picks:
-        pid, tf = pick["id"], pick["tf"]
-        cfg = cfgs[pick["ci"]]
-        cap = A.CAP[tf]
-        f = float(pick["f_star"])
-        out = {"id": pid, "kind": pick["kind"], "name": pick["name"], "tf": tf}
-        base = {p: pick_list(H, mks[p], fdir[p], pick, cfg, details=(p == "TEST")) for p in ("SEL", "TEST", "EXTRA")}
-        acc_base = {p: acct(H, mks[p], base[p], cfg, f) for p in ("SEL", "TEST", "EXTRA")}
-        # R9 (and the f* recheck)
-        sz = H.size_pair(mks["SEL"], base["SEL"]["cand"], cfg, tf, pid)
-        fp = sz["f_path"]["f"]
-        r9 = {"f_star_recomputed": sz["f_star"]["f"], "f_star_registered": f,
-              "f_star_same": bool(abs(sz["f_star"]["f"] - f) < 1e-9), "f_path": fp}
-        for p in ("SEL", "TEST"):
-            draws = A.boot_draws(mks[p].period, pid, p, H.N_F95)
-            for lab, ff in (("f_star", f), ("f_path", fp)):
-                res = acc_base[p] if lab == "f_star" else acct(H, mks[p], base[p], cfg, ff)
-                bd = A.boot_dd(res, mks[p].period, draws) if ff > 0 and res["n"] else np.zeros(1)
-                r9[f"{p}_{lab}"] = {"boot_q95": float(np.quantile(bd, 0.95)), "share_over_cap": float((bd > cap).mean()),
-                                    "dd": res["dd"]}
-                if p == "TEST" and lab == "f_path":
-                    r9["TEST_account_f_path"] = acct_short(H, res)
-        out["R9"] = r9
-        # R1 with weekends
-        we = {p: pick_list(H, mks[p], fdir[p], pick, cfg, weekend_rule=False) for p in ("SEL", "TEST")}
-        szw = H.size_pair(mks["SEL"], we["SEL"]["cand"], cfg, tf, f"{pid}|R1")
-        fw = szw["f_star"]["f"]
-        out["R1"] = {"f_star": fw, "margin_pct": szw["f_star"]["margin_pct"],
-                     **{p: {"list": H.list_stats(we[p]), "account": acct_short(H, acct(H, mks[p], we[p], cfg, fw))
-                            if fw > 0 else None} for p in ("SEL", "TEST")}}
-        # R2 other tiers whose after-fee ROE range contains the TP price (same fill)
-        rt = W.RT_TAKER if cfg["fill"] == 0 else W.RT_MAKER
-        r2 = {}
-        for L2 in W.LEVS:
-            if L2 == cfg["L"]:
-                continue
-            roe = (cfg["t"] - rt) * L2
-            lo_, hi_ = W.ROE_STEPS[L2][0], W.ROE_STEPS[L2][-1]
-            if not (lo_ - 1e-9 <= roe <= hi_ + 1e-9):
-                r2[f"L{L2}"] = {"in_range": False, "roe": roe}
-                continue
-            c2 = variant_cfg(W, cfg, L=L2, roe=roe)
-            s2 = pick_list(H, mks["SEL"], fsel, pick, c2)
-            z2 = H.size_pair(mks["SEL"], s2["cand"], c2, tf, f"{pid}|R2|L{L2}")
-            f2 = z2["f_star"]["f"]
-            t2 = pick_list(H, mks["TEST"], ftest, pick, c2)
-            r2[f"L{L2}"] = {"in_range": True, "roe": roe, "SEL": H.list_stats(s2), "f_star": f2,
-                            "margin_pct": z2["f_star"]["margin_pct"], "TEST": H.list_stats(t2),
-                            "TEST_account": acct_short(H, acct(H, mks["TEST"], t2, c2, f2)) if f2 > 0 else None}
-        out["R2"] = r2
-        # R3 loose buffer
-        with loose_buffer(W):
-            l3 = {p: pick_list(H, mks[p], fdir[p], pick, cfg) for p in ("SEL", "TEST")}
-            a3 = acct(H, mks["TEST"], l3["TEST"], cfg, f)
-        out["R3"] = {"SEL": H.list_stats(l3["SEL"]), "TEST": H.list_stats(l3["TEST"]),
-                     "TEST_account": acct_short(H, a3), "TEST_account_liquidations": int((a3["kind"] == W.X_LIQ).sum())}
-        # R4 gross reading
-        cg = variant_cfg(W, cfg, t=W.tp_move(cfg["L"], cfg["roe"], cfg["fill"], "gross"), reading="gross")
-        g4 = {p: pick_list(H, mks[p], fdir[p], pick, cg) for p in ("SEL", "TEST")}
-        z4 = H.size_pair(mks["SEL"], g4["SEL"]["cand"], cg, tf, f"{pid}|R4")
-        f4 = z4["f_star"]["f"]
-        out["R4"] = {"t": cg["t"], "f_star": f4, **{p: {"list": H.list_stats(g4[p]), "account": acct_short(
-            H, acct(H, mks[p], g4[p], cg, f4)) if f4 > 0 else None} for p in ("SEL", "TEST")}}
-        # R5 coins
-        r5 = {}
-        for p in ("SEL", "TEST"):
-            names = np.asarray(mks[p].syms)
-            ok = base[p]["skip"] == 0
-            for gname, members in groups.items():
-                m = ok & np.isin(names[base[p]["coin"].astype(int)] if len(base[p]["coin"]) else np.zeros(0, bool),
-                                 list(members))
-                x = base[p]["r"][m]
-                r5.setdefault(gname, {})[p] = {"n": int(len(x)), "win": float((x > 0).mean()) if len(x) else None,
-                                               "mean": float(x.mean()) if len(x) else None}
-        nt = r5["new_24"]["TEST"]["mean"]
-        r5["carried_by_old_six"] = bool(nt is None or nt <= 0)
-        out["R5"] = r5
-        # R6 extra 2020
-        out["R6"] = {"list": H.list_stats(base["EXTRA"]), "account": acct_short(H, acc_base["EXTRA"])}
-        # R7 maker realism
-        out["R7"] = maker_realism(H, mks["TEST"], ftest, pick, cfg, base["TEST"])
-        # R8 goal board
-        out["R8"] = {p: goal_board(H, acc_base[p], mks[p].period) for p in ("SEL", "TEST")}
-        # R10 flat by Saturday
-        out["R10"] = flat_by_saturday(H, mks["TEST"], base["TEST"], cfg, f)
-        # R11 splits and counts
-        out["R11"] = {p: dict(splits(H, mks[p], base[p]), skipped=dict(
-            {k: v for k, v in H.list_stats(base[p]).items() if k.startswith("skip_")},
-            weekend=int(base[p]["weekend_dropped"]), **{f"account_{k}": v for k, v in acc_base[p]["counts"].items()},
-            account_bracket_cut=int(acc_base[p]["n_cut"]))) for p in ("SEL", "TEST")}
-        # R12 live sizes
-        r12 = {}
-        for w0 in LIVE_WALLETS:
-            res = acct(H, mks["TEST"], base["TEST"], cfg, f, w0=w0)
-            cand = base["TEST"]["cand"]
-            errs, below = [], 0
-            st_ = mks["TEST"].store
-            for i, q in enumerate(res["taken"]):
-                c = int(cand["coin"][q])
-                sg = 1.0 if cand["side"][q] > 0 else -1.0
-                F = st_.o[st_.off[c] + cand["e"][q]] * (1.0 + sg * W.SLIP)
-                step = cx[mks["TEST"].syms[c]]["qty_step"]
-                qty = res["N"][i] / F
-                rq = math.floor(qty / step + 1e-9) * step
-                errs.append(rq / qty - 1.0)
-                if rq * F < cx[mks["TEST"].syms[c]]["min_notional"]:
-                    below += 1
-            errs = np.asarray(errs)
-            r12[f"wallet_{int(w0)}"] = {"trades": res["n"], "mean_size_error": float(errs.mean()) if len(errs) else None,
-                                        "worst_size_error": float(errs.min()) if len(errs) else None,
-                                        "below_min_notional_after_rounding": int(below),
-                                        "minimum_notional_skips": res["counts"].get("minimum notional", 0)}
-        out["R12"] = r12
-        # R13 streaks
-        okt = base["TEST"]["skip"] == 0
-        order = np.lexsort((base["TEST"]["side"][okt], base["TEST"]["coin"][okt], base["TEST"]["entry_ms"][okt]))
-        out["R13"] = {"trade_list": streaks(base["TEST"]["r"][okt][order]), "account": streaks(acc_base["TEST"]["r"])}
-        # R14 forward band
-        r14 = band(H, base["TEST"], acc_base["TEST"], mks["TEST"].period)
-        out["R14"] = r14
-        out["R14_sha256"] = hashlib.sha256(json.dumps(H._jsonable(r14), sort_keys=True).encode()).hexdigest()
-        full[pid] = H._jsonable(out)
+    pdir = os.path.join(work, "picks")
+    os.makedirs(pdir, exist_ok=True)
+    _RUN.clear()
+    _RUN.update(H=H, mks=mks, fdir={"SEL": fsel, "TEST": ftest, "EXTRA": fsel}, groups=groups, picks=picks, pdir=pdir)
+    hours = getattr(args, "reads_hours", None)
+    deadline = time.time() + float(hours) * 3600 if hours else None
+    todo = [i for i, p in enumerate(picks) if not os.path.exists(pick_file(pdir, i, p["id"]))]
+    log(f"[reads] {len(todo)} of {len(picks)} picks to do, {procs} at once"
+        + (f", no new pick after {hours} h" if hours else ""))
+    stopped = 0
+    with cf.ProcessPoolExecutor(min(procs, max(1, len(todo))), mp_context=mp.get_context("fork")) as ex:
+        pending, nxt = set(), 0
+        while nxt < len(todo) or pending:
+            while nxt < len(todo) and len(pending) < procs and (deadline is None or time.time() < deadline):
+                pending.add(ex.submit(_pick_job, todo[nxt]))
+                nxt += 1
+            if not pending:
+                stopped = len(todo) - nxt
+                break
+            done, pending = cf.wait(pending, return_when=cf.FIRST_COMPLETED)
+            for f in done:
+                msg = f.result()
+                if msg:
+                    log(f"[reads] {msg}")
+    full, summary, missing = {}, [], []
+    for i, pick in enumerate(picks):
+        path = pick_file(pdir, i, pick["id"])
+        if not os.path.exists(path):
+            missing.append(pick["id"])
+            continue
+        out = H.load_json(path)
+        full[pick["id"]] = out
+        tf = pick["tf"]
         if not H.is_ds(pick):
             l1 = out["R1"]["TEST"]["list"]
             summary.append(f"{pick['name']} {H.TF_KO[tf]}: 주말 포함(R1) 확인 기간 승률 {H._pct(l1.get('win'))}, "
                            f"매매당 평균 {H._pct(l1.get('mean'), 3)}")
         else:
             summary.append(f"{pick['name']} (딥시크) {H.TF_KO[tf]}: 참고 계산 끝 (숫자는 비공개)")
-        log(f"[reads] {pid} done")
+    if missing:
+        summary.append(f"참고 계산이 끝나지 않은 것 {len(missing)}개 (시간 한도 또는 오류; 판정과 관계없음)")
     public = {"what": "PREREG_HIWR 14: reads, reported beside the verdict, never a pass",
               "picks": {pid: (labels_only(v, H) if v["kind"] == "ds" else v) for pid, v in full.items()},
-              "R14_sha256": {pid: v["R14_sha256"] for pid, v in full.items()}, "summary_ko": summary}
-    return public, {"picks": full}
+              "R14_sha256": {pid: v["R14_sha256"] for pid, v in full.items()}, "summary_ko": summary,
+              "missing": missing, "not_started_after_deadline": stopped}
+    return public, {"picks": full, "missing": missing}
+
+
+def one_pick(H, mks: dict, fdir: dict, groups: dict, pick: dict) -> dict:
+    """All reads of one pick (section 14), as a JSON-ready dict."""
+    W, A = H.W, H.A
+    cfgs = H.exit_configs()
+    cx = H.CX()
+    fsel, ftest = fdir["SEL"], fdir["TEST"]
+    pid, tf = pick["id"], pick["tf"]
+    cfg = cfgs[pick["ci"]]
+    cap = A.CAP[tf]
+    f = float(pick["f_star"])
+    out = {"id": pid, "kind": pick["kind"], "name": pick["name"], "tf": tf}
+    base = {p: pick_list(H, mks[p], fdir[p], pick, cfg, details=(p == "TEST")) for p in ("SEL", "TEST", "EXTRA")}
+    acc_base = {p: acct(H, mks[p], base[p], cfg, f) for p in ("SEL", "TEST", "EXTRA")}
+    # R9 (and the f* recheck)
+    sz = H.size_pair(mks["SEL"], base["SEL"]["cand"], cfg, tf, pid)
+    fp = sz["f_path"]["f"]
+    r9 = {"f_star_recomputed": sz["f_star"]["f"], "f_star_registered": f,
+          "f_star_same": bool(abs(sz["f_star"]["f"] - f) < 1e-9), "f_path": fp}
+    for p in ("SEL", "TEST"):
+        draws = A.boot_draws(mks[p].period, pid, p, H.N_F95)
+        for lab, ff in (("f_star", f), ("f_path", fp)):
+            res = acc_base[p] if lab == "f_star" else acct(H, mks[p], base[p], cfg, ff)
+            bd = A.boot_dd(res, mks[p].period, draws) if ff > 0 and res["n"] else np.zeros(1)
+            r9[f"{p}_{lab}"] = {"boot_q95": float(np.quantile(bd, 0.95)), "share_over_cap": float((bd > cap).mean()),
+                                "dd": res["dd"]}
+            if p == "TEST" and lab == "f_path":
+                r9["TEST_account_f_path"] = acct_short(H, res)
+    out["R9"] = r9
+    # R1 with weekends
+    we = {p: pick_list(H, mks[p], fdir[p], pick, cfg, weekend_rule=False) for p in ("SEL", "TEST")}
+    szw = H.size_pair(mks["SEL"], we["SEL"]["cand"], cfg, tf, f"{pid}|R1")
+    fw = szw["f_star"]["f"]
+    out["R1"] = {"f_star": fw, "margin_pct": szw["f_star"]["margin_pct"],
+                 **{p: {"list": H.list_stats(we[p]), "account": acct_short(H, acct(H, mks[p], we[p], cfg, fw))
+                        if fw > 0 else None} for p in ("SEL", "TEST")}}
+    # R2 other tiers whose after-fee ROE range contains the TP price (same fill)
+    rt = W.RT_TAKER if cfg["fill"] == 0 else W.RT_MAKER
+    r2 = {}
+    for L2 in W.LEVS:
+        if L2 == cfg["L"]:
+            continue
+        roe = (cfg["t"] - rt) * L2
+        lo_, hi_ = W.ROE_STEPS[L2][0], W.ROE_STEPS[L2][-1]
+        if not (lo_ - 1e-9 <= roe <= hi_ + 1e-9):
+            r2[f"L{L2}"] = {"in_range": False, "roe": roe}
+            continue
+        c2 = variant_cfg(W, cfg, L=L2, roe=roe)
+        s2 = pick_list(H, mks["SEL"], fsel, pick, c2)
+        z2 = H.size_pair(mks["SEL"], s2["cand"], c2, tf, f"{pid}|R2|L{L2}")
+        f2 = z2["f_star"]["f"]
+        t2 = pick_list(H, mks["TEST"], ftest, pick, c2)
+        r2[f"L{L2}"] = {"in_range": True, "roe": roe, "SEL": H.list_stats(s2), "f_star": f2,
+                        "margin_pct": z2["f_star"]["margin_pct"], "TEST": H.list_stats(t2),
+                        "TEST_account": acct_short(H, acct(H, mks["TEST"], t2, c2, f2)) if f2 > 0 else None}
+    out["R2"] = r2
+    # R3 loose buffer
+    with loose_buffer(W):
+        l3 = {p: pick_list(H, mks[p], fdir[p], pick, cfg) for p in ("SEL", "TEST")}
+        a3 = acct(H, mks["TEST"], l3["TEST"], cfg, f)
+    out["R3"] = {"SEL": H.list_stats(l3["SEL"]), "TEST": H.list_stats(l3["TEST"]),
+                 "TEST_account": acct_short(H, a3), "TEST_account_liquidations": int((a3["kind"] == W.X_LIQ).sum())}
+    # R4 gross reading
+    cg = variant_cfg(W, cfg, t=W.tp_move(cfg["L"], cfg["roe"], cfg["fill"], "gross"), reading="gross")
+    g4 = {p: pick_list(H, mks[p], fdir[p], pick, cg) for p in ("SEL", "TEST")}
+    z4 = H.size_pair(mks["SEL"], g4["SEL"]["cand"], cg, tf, f"{pid}|R4")
+    f4 = z4["f_star"]["f"]
+    out["R4"] = {"t": cg["t"], "f_star": f4, **{p: {"list": H.list_stats(g4[p]), "account": acct_short(
+        H, acct(H, mks[p], g4[p], cg, f4)) if f4 > 0 else None} for p in ("SEL", "TEST")}}
+    # R5 coins
+    r5 = {}
+    for p in ("SEL", "TEST"):
+        names = np.asarray(mks[p].syms)
+        ok = base[p]["skip"] == 0
+        for gname, members in groups.items():
+            m = ok & np.isin(names[base[p]["coin"].astype(int)] if len(base[p]["coin"]) else np.zeros(0, bool),
+                             list(members))
+            x = base[p]["r"][m]
+            r5.setdefault(gname, {})[p] = {"n": int(len(x)), "win": float((x > 0).mean()) if len(x) else None,
+                                           "mean": float(x.mean()) if len(x) else None}
+    nt = r5["new_24"]["TEST"]["mean"]
+    r5["carried_by_old_six"] = bool(nt is None or nt <= 0)
+    out["R5"] = r5
+    # R6 extra 2020
+    out["R6"] = {"list": H.list_stats(base["EXTRA"]), "account": acct_short(H, acc_base["EXTRA"])}
+    # R7 maker realism
+    out["R7"] = maker_realism(H, mks["TEST"], ftest, pick, cfg, base["TEST"])
+    # R8 goal board
+    out["R8"] = {p: goal_board(H, acc_base[p], mks[p].period) for p in ("SEL", "TEST")}
+    # R10 flat by Saturday
+    out["R10"] = flat_by_saturday(H, mks["TEST"], base["TEST"], cfg, f)
+    # R11 splits and counts
+    out["R11"] = {p: dict(splits(H, mks[p], base[p]), skipped=dict(
+        {k: v for k, v in H.list_stats(base[p]).items() if k.startswith("skip_")},
+        weekend=int(base[p]["weekend_dropped"]), **{f"account_{k}": v for k, v in acc_base[p]["counts"].items()},
+        account_bracket_cut=int(acc_base[p]["n_cut"]))) for p in ("SEL", "TEST")}
+    # R12 live sizes
+    r12 = {}
+    for w0 in LIVE_WALLETS:
+        res = acct(H, mks["TEST"], base["TEST"], cfg, f, w0=w0)
+        cand = base["TEST"]["cand"]
+        errs, below = [], 0
+        st_ = mks["TEST"].store
+        for i, q in enumerate(res["taken"]):
+            c = int(cand["coin"][q])
+            sg = 1.0 if cand["side"][q] > 0 else -1.0
+            F = st_.o[st_.off[c] + cand["e"][q]] * (1.0 + sg * W.SLIP)
+            step = cx[mks["TEST"].syms[c]]["qty_step"]
+            qty = res["N"][i] / F
+            rq = math.floor(qty / step + 1e-9) * step
+            errs.append(rq / qty - 1.0)
+            if rq * F < cx[mks["TEST"].syms[c]]["min_notional"]:
+                below += 1
+        errs = np.asarray(errs)
+        r12[f"wallet_{int(w0)}"] = {"trades": res["n"], "mean_size_error": float(errs.mean()) if len(errs) else None,
+                                    "worst_size_error": float(errs.min()) if len(errs) else None,
+                                    "below_min_notional_after_rounding": int(below),
+                                    "minimum_notional_skips": res["counts"].get("minimum notional", 0)}
+    out["R12"] = r12
+    # R13 streaks
+    okt = base["TEST"]["skip"] == 0
+    order = np.lexsort((base["TEST"]["side"][okt], base["TEST"]["coin"][okt], base["TEST"]["entry_ms"][okt]))
+    out["R13"] = {"trade_list": streaks(base["TEST"]["r"][okt][order]), "account": streaks(acc_base["TEST"]["r"])}
+    # R14 forward band
+    r14 = band(H, base["TEST"], acc_base["TEST"], mks["TEST"].period)
+    out["R14"] = r14
+    out["R14_sha256"] = hashlib.sha256(json.dumps(H._jsonable(r14), sort_keys=True).encode()).hexdigest()
+    return H._jsonable(out)

@@ -4,8 +4,18 @@ coins, with month bounds. Public price data only, no key of any kind.
     python -m research.hiwr.data download --dir KIT --first 2020-01 --last 2023-12 [--procs 8]   # the practice kit
     python -m research.hiwr.data build    --dir KIT --first 2020-01 --last 2023-12
     python -m research.hiwr.data all      --dir KIT --first 2020-01 --last 2023-12
+    python -m research.hiwr.data kit      --dir KIT [--drop-raw]     # one coin at a time (download, build, delete)
 
-A copy of research/fullgrid/data.py (not imported: 17.1 imports only run/grid/memo/kernel) with these changes:
+The command line fetches practice-kit months only (2020-01 .. 2023-12): the confirm kit (2024-01 .. 2026-09) is fetched
+only by ``hiwr test`` after the picks line is in the pin (section 3, 10.6).
+
+``kit`` builds the practice kit one coin at a time: download that coin's files, build it, and with ``--drop-raw``
+delete its zips before the next coin, then write the same build.json as ``build`` (and as bootstrap.sh's per-coin
+build). Peak space: every coin's npz (about 5 GB) plus one coin's zips. This is how the data pin of section 3 is made
+on the development machine (in RAM: /dev/shm), before the pin.
+
+A copy of research/fullgrid/data.py (not imported: hiwr imports research/fullgrid/run.py, which loads grid, memo and
+kernel) with these changes:
 - symbols from research/hunt/universe30.json; month bounds are arguments, so a kit downloads only the months it needs
   (practice kit 2020-01 .. 2023-12; the confirm stage fetches 2024-01 .. 2026-09 into its own kit);
 - the kline columns kept are open time, OHLC, base volume ``v`` (as the full grid; the chart frames and every signal
@@ -14,7 +24,9 @@ A copy of research/fullgrid/data.py (not imported: 17.1 imports only run/grid/me
   builder; section 3 "absent minutes only"). A day is read from the daily archive when its monthly file holds fewer
   than 1,440 minutes;
 - a coin may end inside the kit (TOMO 2023-11-14 in the practice kit): its span ends at its last bar with volume,
-  which the build reports (``ended``) instead of refusing;
+  which the build reports (``ended``: the last bar is more than 3 days before the kit end) instead of refusing; every
+  build compares the spans with section 4 (``span_problems``: a coin of the universe that ends in another month than
+  section 4 lists, or ends although section 4 lists no end, or is missing, stops the build);
 - the identity of the data: per coin and per array the hunt's content sha256 (``content_sha``), recomputed by every
   stage on load (``load_kit``);
 - chart frames are built from the period-cut arrays by research/fullgrid/run.build_frame (imported read-only) and kept
@@ -68,6 +80,10 @@ KIT_SEL = ("2020-01", "2023-12")                 # the practice kit: the only mo
 KIT_TEST = ("2024-01", "2026-09")                # the confirm stage's kit (after the picks' hash, 10.6)
 ARRAYS = ("ts", "o", "h", "l", "c", "v", "qv", "mo", "mh", "ml", "mc", "fund")
 END_GAP = 3 * DAY                                # last bar with volume this far before the kit end: the coin ended
+# Section 4: the coins whose tradable span ends inside the study, by the month of their last bar with volume. Every
+# other coin of the universe trades to the end of each kit.
+ENDS = {"TOMOUSDT": "2023-11", "WAVESUSDT": "2024-06", "MATICUSDT": "2024-09", "BLZUSDT": "2024-12",
+        "FTMUSDT": "2025-01", "EOSUSDT": "2025-05", "MKRUSDT": "2025-09", "STORJUSDT": "2026-08"}
 
 
 def ms(day: str) -> int:
@@ -199,7 +215,9 @@ def download(d: str, first: str, last: str, symbols=SYMBOLS, procs: int = 8, get
     keys = sorted({f"{s}|{day}" for s in symbols for day in gap_days(d, s, man, first, last)}
                   | set(man.get("gap_days", [])))
     man["gap_days"] = keys
-    rels = [rel_daily(k, *key.split("|")) for key in keys for k in ("klines", "markPriceKlines")]
+    want = set(symbols)
+    rels = [rel_daily(k, *key.split("|")) for key in keys if key.split("|")[0] in want
+            for k in ("klines", "markPriceKlines")]
     _fetch_all(d, rels, procs, man, "gap-fill days", get)
 
 
@@ -364,17 +382,75 @@ def _iso(t: int) -> str:
     return dt.datetime.fromtimestamp(int(t) / 1000, dt.timezone.utc).strftime("%Y-%m-%d %H:%M")
 
 
+def span_problems(coins, first: str, last: str, symbols=SYMBOLS) -> list[str]:
+    """Section 4 spans against a kit of months [first, last]: ``coins`` = build rows (list) or a manifest's coins
+    (dict) with last_ms and ended. A universe coin of ``symbols`` that section 4 lets trade past the kit must not end
+    inside it; one that section 4 ends inside the kit must end in that month; one that ends before the kit is not in
+    it. Coins outside the universe (tests) are not checked."""
+    rows = {r["symbol"]: r for r in coins} if isinstance(coins, list) else dict(coins)
+    out = []
+    for s in symbols:
+        if s not in SYMBOLS:
+            continue
+        end = ENDS.get(s)
+        r = rows.get(s)
+        if end is not None and end < first:
+            continue                                         # ended before this kit (TOMO for the confirm kit)
+        if r is None or not r.get("minutes", 1):
+            out.append(f"{s}: no data in the kit {first} .. {last}")
+            continue
+        got = _iso(int(r["last_ms"]))[:7]
+        if end is None or end > last:
+            if r["ended"]:
+                out.append(f"{s}: ends {_iso(int(r['last_ms']))}, inside the kit; section 4 lists no end before {last}")
+        elif got != end:
+            out.append(f"{s}: last bar with volume in {got}; section 4 says {end}")
+    return out
+
+
+def build_report(d: str, first: str, last: str, reps: list, symbols) -> dict:
+    """build.json of a kit from per-coin build rows (``build``, ``kit`` and bootstrap.sh write the same file)."""
+    man = _manifest(d)
+    rep = {"months": [first, last], "symbols": reps, "gap_days": len(man.get("gap_days", [])),
+           "missing_files": len(man["missing"])}
+    rep["problems"] = [p for r in reps for p in r["problems"]] + span_problems(reps, first, last, symbols)
+    _save_json(os.path.join(d, "build.json"), rep)
+    return rep
+
+
 def build(d: str, first: str, last: str, symbols=SYMBOLS) -> dict:
     man = _manifest(d)
-    rep = {"months": [first, last], "symbols": [build_symbol(d, s, man, first, last) for s in symbols],
-           "gap_days": len(man.get("gap_days", [])), "missing_files": len(man["missing"])}
-    rep["problems"] = [p for r in rep["symbols"] for p in r["problems"]]
-    _save_json(os.path.join(d, "build.json"), rep)
+    rep = build_report(d, first, last, [build_symbol(d, s, man, first, last) for s in symbols], symbols)
     for r in rep["symbols"]:
         if r["minutes"]:
             print(f"{r['symbol']}: {r['minutes']:,} minutes {r['first']} .. {r['last']}{' (ended)' if r['ended'] else ''}"
                   f", mark filled {r['mark_filled_from_last']}, missing minutes {r['missing_minutes']:,}, "
                   f"funding {r['funding_events']}", flush=True)
+    if rep["problems"]:
+        raise SystemExit("data incomplete: " + "; ".join(rep["problems"]))
+    return rep
+
+
+def drop_raw(d: str, sym: str) -> None:
+    """Delete one coin's downloaded zips (its 404s stay remembered in manifest.json)."""
+    raw = os.path.join(d, "raw", "futures", "um")
+    for kind in ("monthly", "daily"):
+        for sub in ("klines", "markPriceKlines", "fundingRate"):
+            shutil.rmtree(os.path.join(raw, kind, sub, sym), ignore_errors=True)
+
+
+def kit(d: str, first: str, last: str, symbols=SYMBOLS, procs: int = 8, drop: bool = False, get=_get) -> dict:
+    """The kit one coin at a time: download, build, and with ``drop`` delete the coin's zips before the next coin;
+    then build.json as ``build`` writes it (the coins' arrays do not depend on the order: a coin reads only its own
+    files). Raises SystemExit on any problem, as ``build``."""
+    reps = []
+    for s in symbols:
+        download(d, first, last, (s,), procs, get)
+        reps.append(build_symbol(d, s, _manifest(d), first, last))
+        if drop:
+            drop_raw(d, s)
+        print(f"[kit] {s}: {reps[-1]['minutes']:,} minutes", flush=True)
+    rep = build_report(d, first, last, reps, symbols)
     if rep["problems"]:
         raise SystemExit("data incomplete: " + "; ".join(rep["problems"]))
     return rep
@@ -575,14 +651,22 @@ def check_5m(mine_1m: dict, hunt5: dict, end_ms: int, rel_px: float = 1e-6, rel_
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("step", choices=("download", "build", "all"))
+    ap.add_argument("step", choices=("download", "build", "all", "kit"))
     ap.add_argument("--dir", required=True)
     ap.add_argument("--first", default=KIT_SEL[0])
     ap.add_argument("--last", default=KIT_SEL[1])
     ap.add_argument("--procs", type=int, default=8)
     ap.add_argument("--symbols", default=",".join(SYMBOLS))
+    ap.add_argument("--drop-raw", action="store_true", help="kit: delete each coin's zips once it is built")
     a = ap.parse_args(argv)
     syms = tuple(a.symbols.split(","))
+    if a.last > KIT_SEL[1] or a.first > KIT_SEL[1]:
+        print(f"refused: months after {KIT_SEL[1]} are the confirm period; only 'hiwr test' fetches them, after the "
+              "picks line is in the pin (PREREG_HIWR 3, 10.6)", file=sys.stderr)
+        return 2
+    if a.step == "kit":
+        kit(a.dir, a.first, a.last, syms, a.procs, a.drop_raw)
+        return 0
     if a.step in ("download", "all"):
         download(a.dir, a.first, a.last, syms, a.procs)
     if a.step in ("build", "all"):

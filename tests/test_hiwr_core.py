@@ -568,7 +568,7 @@ def _fake_res(r, marks, f, fill_ms):
                 M = max(M, v)
                 u[i] = max(u[i], v)
     res = {"n": n, "r": np.asarray(r, float), "feff": np.full(n, f), "u": u, "d1": d1, "d2": d2,
-           "fill_ms": np.asarray(fill_ms, np.int64), "w0": 1.0}
+           "fill_ms": np.asarray(fill_ms, np.int64), "w0": 1.0, "f": float(f), "bust": False}
     order = np.arange(n, dtype=np.int64)
     w = 1 + f * res["r"]
     res["dd"] = A._path_dd(order, w, u, d1, d2, A.BUST)
@@ -600,13 +600,14 @@ def test_sizes_fall_as_the_drawdown_rises():
     for out in (worse, dip):
         assert out["f_path"]["f"] <= base["f_path"]["f"] and out["f_star"]["f"] <= base["f_star"]["f"]
     assert worse["f_path"]["f"] < base["f_path"]["f"] and dip["f_path"]["f"] < base["f_path"]["f"]
-    for out in (base, worse, dip):
-        assert out["f_star"]["f"] <= out["f_path"]["f"] <= out["f_realized"] <= 9.0
+    for out, rr, mm in ((base, r, marks), (worse, worse_r, worse_marks), (dip, r, deeper)):
+        assert out["f_star"]["f"] <= out["f_path"]["f"] <= 9.0
         assert out["f_path"]["dd"] <= 0.30 and out["f_star"]["boot_q95"] <= 0.30
-        # one step above f_path breaks the cap or the 15% rule
-        up = _fake_res(r if out is base else (worse_r if out is worse else r),
-                       marks if out is base else (worse_marks if out is worse else deeper),
-                       out["f_path"]["f"] + 0.01, fill)
+        # every grid size up to f_path meets (i) and (ii); one step above breaks one of them (8.4)
+        for k in range(1, int(round(out["f_path"]["f"] * 100)) + 1, 7):
+            x = _fake_res(rr, mm, k / 100, fill)
+            assert x["dd"] <= 0.30 and x["worst_loss"] <= 0.15
+        up = _fake_res(rr, mm, out["f_path"]["f"] + 0.01, fill)
         assert up["dd"] > 0.30 or up["worst_loss"] > 0.15 or out["f_path"]["f"] >= 9.0
     # a tighter cap gives a smaller size
     tight = A.sizes(lambda f: _fake_res(r, marks, f, fill), 0.15, 30, period, draws)
@@ -622,6 +623,130 @@ def test_size_search_on_an_account():
     hi = A.account(store, cand, [BTC], cfg, fp + 0.01, period)
     assert fp >= 9.0 or hi["dd"] > 0.30 or hi["worst_loss"] > 0.15
     assert out["f_path"]["dd"] <= 0.30
+
+
+def test_first_fail_scan_and_no_feasible_island_above_a_failure():
+    """8.4: f_path is 0.01 below the FIRST failing grid size, never a feasible size above a failing one (a bisection
+    returned 9.0 here, or a size inside an island)."""
+    assert A.first_fail_scan(lambda k: k <= 300 or k > 500, 900) == 300
+    assert A.first_fail_scan(lambda k: True, 900) == 900
+    assert A.first_fail_scan(lambda k: False, 900) == 0
+    rng = np.random.default_rng(4)
+    n = 120
+    period = (A.D.PERIODS["SEL"][0], A.D.PERIODS["SEL"][1])
+    fill = np.sort(rng.integers(period[0], period[1] - 86_400_000, n))
+    r = np.where(rng.random(n) < 0.85, 0.003, -0.006)
+    marks = [[("adv", -0.002), ("close", x)] for x in r]
+    draws = A.boot_draws(period, "test|island", n_boot=200)
+
+    def run_at(f):                                 # a drawdown above the cap only on (3.00, 5.00]: an island above
+        res = _fake_res(r, marks, f, fill)
+        if 3.0 + 1e-9 < f <= 5.0 + 1e-9:
+            res["dd"] = 0.5
+        return res
+    out = A.sizes(run_at, 0.30, 30, period, draws)
+    assert out["f_path"]["f"] == 3.00 and run_at(9.0)["dd"] <= 0.30          # ok at the ceiling, failing below
+    assert out["f_star"]["f"] <= 3.00
+    # the same for (i'): a bootstrap failure, then a pass again, is the end of f*
+    calls = []
+
+    def boot_ok(k):
+        calls.append(k)
+        return k <= 120 or k > 200
+    assert A.bootstrap_scan(boot_ok, {}, 300) == 120
+
+
+def _hand_account(plan, d_btc=1.0, d_sand=2.1, gap=300):
+    """A hand-built BTC + SAND account (synthetic): one long every ``gap`` minutes that wins (TP) or loses (stop)
+    20 minutes after entry. At a larger f the SAND notional moves to its second bracket, whose stop room drops the
+    SAND losses: the drawdown falls although f rises."""
+    n = gap * (len(plan) + 2)
+    a = [_flat_coin(n), _flat_coin(n)]
+    ent = []
+    for i, (c, wl) in enumerate(plan):
+        e = gap * (i + 1)
+        Dd = d_btc if c == 0 else d_sand
+        if wl == "W":
+            a[c]["h"][e + 20] = 101.0
+        else:
+            a[c]["l"][e + 20] = 100.0 - Dd - 0.5
+        ent.append((c, e, 1, Dd, 0.1))
+    c = np.array([x[0] for x in ent])
+    e = np.array([x[1] for x in ent])
+    cand = A.candidates(c, c, e, np.ones(len(ent), np.int64), np.array([x[3] for x in ent], float),
+                        np.array([x[4] for x in ent], float), T0 + e * MIN)
+    return A.Store.from_coins(a, [False, False]), cand, (T0, T0 + n * MIN)
+
+
+def test_sizes_on_a_non_monotone_bracket_account():
+    """The reviewers' case: ok on 0.01-3.03, fails on 3.04-3.97 (DD over the cap), ok again from 3.98 because SAND's
+    losers get no stop room at its second bracket. f_path must be 3.03 (the old bisection returned 9.0)."""
+    plan = [(0, "W")] * 30 + [(0, "L"), (1, "L"), (1, "L"), (1, "L"), (1, "L"), (0, "L")] + [(0, "W")] * 5
+    store, cand, period = _hand_account(plan)
+    run = lambda f: A.account(store, cand, [BTC, SAND], MAKER30, f, period)    # noqa: E731
+    ok = [(lambda x: x["dd"] <= 0.30 and x["worst_loss"] <= 0.15)(run(k / 100)) for k in range(1, 901)]
+    first_bad = ok.index(False) + 1
+    assert any(ok[first_bad:])                                # a feasible island above the first failure
+    nw = A.week_ids([], period)[1]
+    draws = np.random.default_rng(1).integers(0, nw, (200, nw))
+    out = A.sizes(run, 0.30, 30.0, period, draws)
+    assert out["f_path"]["f"] == (first_bad - 1) / 100
+    assert all(ok[:first_bad - 1])
+    assert out["f_star"]["f"] <= out["f_path"]["f"]
+
+
+@pytest.mark.parametrize("seed", [24, 54, 31])
+def test_bootstrap_scan_equals_the_plain_scan_on_capped_alt_accounts(seed):
+    """f* by the run-and-bisect scan equals the plain scan of every grid size, on synthetic LTC / SAND / ADA accounts
+    whose notional cap ($10,000) and brackets bind as f grows (cut trades: no shortcut there)."""
+    syms = ["LTCUSDT", "SANDUSDT", "ADAUSDT"]
+    coins = [synth(25_000, 300 + seed + i, price=(80.0, 0.8, 0.4)[i], vol=0.0005, spike_p=0.0) for i in range(3)]
+    rng = np.random.default_rng(seed)
+    L = (30, 40, 50)[seed % 3]
+    cfg = next(c for c in W.exit_configs() if c["L"] == L and c["step"] == 0 and c["k"] == 6 and c["fill"] == 1)
+    cand = []
+    for _ in range(260):
+        c = int(rng.integers(3))
+        a = coins[c]
+        e = int(rng.integers(1, len(a["ts"]) - 300))
+        side = 1 if (a["c"][e + 120] > a["o"][e]) == (rng.random() < 0.8) else -1
+        P0 = a["o"][e]
+        cand.append((c, e, side, 0.01 * P0, P0 * rng.uniform(0.001, 0.003), int(a["ts"][e])))
+    ca = A.candidates(*[[x[i] for x in cand] for i in (0, 0, 1, 2, 3, 4, 5)])
+    store = A.Store.from_coins(coins, [False] * 3)
+    cx = [CX[s] for s in syms]
+    period = (T0, int(coins[0]["ts"][-1]) + MIN)
+    nw = A.week_ids([], period)[1]
+    draws = np.random.default_rng(seed).integers(0, nw, (300, nw))
+    run = lambda f: A.account(store, ca, cx, cfg, f, period)    # noqa: E731
+    for cap in (0.30, 0.15):
+        fast = A.sizes(run, cap, float(L), period, draws)
+        slow = A.sizes(run, cap, float(L), period, draws, exact_boot=True)
+        assert fast["f_path"]["f"] == slow["f_path"]["f"] and fast["f_star"]["f"] == slow["f_star"]["f"]
+        assert fast["scan"]["bootstraps"] <= slow["scan"]["bootstraps"]
+        kp = int(round(fast["f_path"]["f"] * 100))
+        for k in range(1, kp + 1, 3):
+            x = run(k / 100)
+            assert x["dd"] <= cap and x["worst_loss"] <= 0.15
+
+
+def test_structure_runs_share_one_monotone_drawdown():
+    """Inside one structure (same taken trades, results and exits, nothing cut) every resampled path's DD is
+    nondecreasing in f: the speed-up of the f* scan rests on it."""
+    a, T, cfg, cand, store, period, _res = _random_account(21, 1.0)
+    nw = A.week_ids([], period)[1]
+    draws = np.random.default_rng(9).integers(0, nw, (200, nw))
+    prev_sig, prev_dd = None, None
+    seen = 0
+    for k in range(50, 400, 5):
+        res = A.account(store, cand, [BTC], cfg, k / 100, period)
+        sig = A.structure(res)
+        d = A.boot_dd(res, period, draws)
+        if sig is not None and sig == prev_sig:
+            assert (d >= prev_dd - 1e-12).all() and res["dd"] >= prev_res_dd - 1e-12
+            seen += 1
+        prev_sig, prev_dd, prev_res_dd = sig, d, res["dd"]
+    assert seen > 10
 
 
 # ------------------------------------------------------------------ the bootstrap (8.4)

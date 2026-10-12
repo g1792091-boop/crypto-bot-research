@@ -4,7 +4,8 @@
 #
 #   HIWR_GO=<커밋> bash bootstrap.sh   설치 → 자체 점검 → 고정 확인 → 연습 기간 자료 받기 → 자료 확인 → 고르기
 #                                      → 고른 것 고정 확인 → 확인 기간 시험 → 참고 분석 → 결과 묶기 (tmux 안에서 돌리세요).
-#                                      첫 실행에는 검토를 마친 커밋(HIWR_GO)이 꼭 있어야 하고, 코드가 그 커밋이 아니면 멈춥니다.
+#                                      코드가 검토를 마친 커밋(HIWR_GO)이 아니면 멈춥니다. 아직 커밋이 정해지지 않았으면
+#                                      (고정 전) wait_go.sh 로 넘어가 고정된 커밋을 기다립니다.
 #   bash bootstrap.sh status           지금 단계와 남은 시간(어림)
 #   bash bootstrap.sh push             결과를 GitHub(브랜치 hiwr-results)로 보냄. 올리기가 되면 토큰을 다시 묻지 않음
 #   bash bootstrap.sh update <커밋>    개발자가 고친 커밋으로 코드를 바꿈 (계산 시작 전에만: 6/10 전)
@@ -19,7 +20,8 @@
 #   HIWR_DRYENV=<file> bash bootstrap.sh --dry-run [run|status|idle|update <commit>|push]
 # The file sets HIWR_BASE and HIWR_REPO (scratch folders) and any of: HIWR_PY, HIWR_CMD (the hiwr command line),
 # HIWR_DATA_CMD (data.py), HIWR_HELPER_STUB + HIWR_HELPER_STUB_SUBS (helper sub-commands to replace), HIWR_PIN_REL,
-# HIWR_SELFCHECK_TESTS, HIWR_TMUX (e.g. "tmux -L rehearsal"), HIWR_RETRY_SLEEP, HIWR_READS_HOURS, HIWR_GO.
+# HIWR_SELFCHECK_TESTS, HIWR_TMUX (e.g. "tmux -L rehearsal"), HIWR_RETRY_SLEEP, HIWR_READS_HOURS, HIWR_GO,
+# HIWR_DRY_WAIT (a rehearsal without a go commit hands over to wait_go.sh, as a real run does).
 set -uo pipefail
 
 MODE=run
@@ -82,7 +84,7 @@ RSLEEP=${HIWR_RETRY_SLEEP:-30}
 PIN_REL=${HIWR_PIN_REL:-research/hiwr/PREREG_HIWR.sha256}
 PICKS_REL=research/hiwr/picks.json
 OUT=research/hiwr/out
-TESTS=${HIWR_SELFCHECK_TESTS:-tests/test_hiwr_core.py tests/test_hiwr_data.py tests/test_hiwr_cli.py tests/test_hiwr_reads.py tests/test_fullgrid_kernel.py tests/test_fullgrid_run.py tests/test_fullgrid_memo.py}
+TESTS=${HIWR_SELFCHECK_TESTS:-tests/test_hiwr_core.py tests/test_hiwr_data.py tests/test_hiwr_cli.py tests/test_hiwr_reads.py tests/test_hiwr_kit.py tests/test_fullgrid_kernel.py tests/test_fullgrid_run.py tests/test_fullgrid_memo.py}
 if [ "$DRYRUN" = 1 ]; then PY=${HIWR_PY:-python3}; else PY=${HIWR_PY:-$VENV/bin/python}; fi
 if [ -n "${HIWR_CMD:-}" ]; then read -r -a HIWR <<<"$HIWR_CMD"; else HIWR=("$PY" -m research.hiwr.hiwr); fi
 if [ -n "${HIWR_DATA_CMD:-}" ]; then read -r -a DATA <<<"$HIWR_DATA_CMD"; else DATA=("$PY" -m research.hiwr.data); fi
@@ -102,9 +104,10 @@ warn() {                     # something skipped that does not stop the run (lis
   say "  · 참고: $*"
   grep -qxF "$*" "$BASE/WARNINGS" 2>/dev/null || echo "$*" >> "$BASE/WARNINGS"
 }
-computed() {                 # anything computed on this server: stage 6 started, or select ran here
-  grep -qE '^([6-9]|10)\|' "$BASE/STAGES" 2>/dev/null && return 0
-  [ -f "$BASE/SELECT_RAN" ]
+computed() {                 # anything computed from prices on this server: select's exit tables, or a later stage
+  [ -f "$BASE/SELECT_RAN" ] && return 0
+  [ -f "$BASE/PICKS_N" ] && return 0
+  compgen -G "$WORK/select_*/tables/*" >/dev/null 2>&1
 }
 keep_server() { say "계산한 것이 이 서버에 있으니, 개발자 답이 올 때까지 서버를 지우지(Destroy) 마세요."; }
 die() {                      # a stop: send the screen
@@ -132,19 +135,19 @@ die_retry() {                # a stop that a later restart can get past (network
 }
 
 # ------------------------------------------------------------------ time estimates (32 vCPU basis, see SERVER_KO)
-# Measured 2026-10-12 on SEL-cut data of the old six (3 coins, 2 processes), scaled to 30 coins: the select grid is about
-# 430 CPU-hours (15m 222, 30m 123, 1h 64, 4h about 20); x1.3 margin. Its wall time is the larger of that spread over the
-# workers and the longest single task: with whole-cell tasks (about 390 tasks) the longest is N01_ST_EMA 15m, about 33 h
-# (x1.3 = 43 h); with combo chunks (over 1,000 tasks) it is a few hours.
+# Select grid (PREREG_HIWR 17.4): whole-cell tasks keep the indicator memo per coin. Measured 2026-10-12 on SEL-cut
+# BTC (every 1h cell as one whole-cell task; 15m and 30m scaled per cell by the measured bar-count ratio), times 30
+# coins: GRID_CPU_MIN CPU-minutes in all, x1.3 margin included; the longest task after GRID_CHUNK_OF about
+# GRID_LONG_MIN minutes. The wall time is the larger of the total over the workers and the longest task.
+GRID_CPU_MIN=@@GRID_CPU_MIN@@
+GRID_LONG_MIN=@@GRID_LONG_MIN@@
 picks_n() { cat "$BASE/PICKS_N" 2>/dev/null; }
-grid_total() { grep -oE "\[grid\] [0-9]+ of [0-9]+ tasks" "$LOG" 2>/dev/null | tail -1 | awk '{print $4}'; }
 select_est() {
-  local t par lp
-  t=$(grid_total)
-  par=$(( 560 * 60 / NCPU ))
-  if [ -z "$t" ] || [ "$t" -lt 1000 ]; then lp=2580; elif [ "$t" -lt 3000 ]; then lp=330; else lp=120; fi
+  local par lp
+  par=$(( GRID_CPU_MIN / NCPU ))
+  lp=$GRID_LONG_MIN
   [ "$par" -gt "$lp" ] && lp=$par
-  echo $(( lp + 100 ))       # + frames, tables, eligibility and the picks
+  echo $(( lp + 150 ))       # + frames, tables, the eligibility checks (f* scans) and the picks
 }
 reads_est() {
   local p cap; p=$(picks_n); cap=$(awk -v h="$READS_HOURS" 'BEGIN{printf "%d", h * 60}')
@@ -174,14 +177,20 @@ stage() {                    # stage <n> <name>
   say "$1/$NST $2  (남은 시간 $(hm "$(left_from "$1")"), 어림)"
 }
 
-running() {                  # the run's own process (RUNNING holds its pid), or a step it left behind
+waiting() {                  # wait_go.sh polling for the go commit (WAITING holds its pid)
+  local p; p=$(cat "$BASE/WAITING" 2>/dev/null)
+  [ -n "$p" ] && [ "$p" != "$$" ] && kill -0 "$p" 2>/dev/null && grep -qa "wait_go.sh" "/proc/$p/cmdline" 2>/dev/null
+}
+running() {                  # the run's own process (RUNNING holds its pid), the waiter, or a step the run left behind
   local p; p=$(cat "$BASE/RUNNING" 2>/dev/null)
-  if [ -n "$p" ] && kill -0 "$p" 2>/dev/null && grep -qa "hiwr/bootstrap.sh" "/proc/$p/cmdline" 2>/dev/null; then
+  if [ -n "$p" ] && [ "$p" != "$$" ] && kill -0 "$p" 2>/dev/null && grep -qa "hiwr/bootstrap.sh" "/proc/$p/cmdline" 2>/dev/null; then
     return 0
   fi
+  waiting && return 0
   [ "$DRYRUN" = 1 ] && return 1
   pgrep -f "[r]esearch\.hiwr\.(hiwr|data)|[t]ests/test_(hiwr|fullgrid)" >/dev/null
 }
+WAIT_MSG="고정된 커밋을 기다리는 중입니다 (2분마다 확인). 고정되면 알아서 시작하니 아무것도 붙여 넣지 않아도 됩니다."
 
 status() {
   if [ -f "$BASE/DONE" ]; then
@@ -189,7 +198,16 @@ status() {
     if [ -s "$BASE/WARNINGS" ]; then echo "참고(건너뛴 것):"; sed 's/^/  - /' "$BASE/WARNINGS"; fi
     return
   fi
+  if waiting; then
+    echo "$WAIT_MSG"
+    return
+  fi
   if ! running; then
+    if [ -z "$GO" ] && [ ! -f "$BASE/STAGE" ]; then
+      echo "아직 고정 전인데 기다리기가 멈춰 있습니다 (재부팅 등). 아래 한 줄 전체를 붙여 넣으면 다시 기다립니다:"
+      echo "$RESTART"
+      return
+    fi
     echo "지금 돌고 있지 않습니다. 마지막 기록:"
     grep -E "멈춤|\] ([0-9]|10)/$NST " "$LOG" 2>/dev/null | tail -3
     echo "이어서 하려면 아래 한 줄 전체를 붙여 넣으세요:"
@@ -211,7 +229,11 @@ status() {
          [ -n "$last" ] && echo "  자료: $last" ;;
     6) last=$(grep -oE "\[grid [0-9]+/[0-9]+ " "$LOG" 2>/dev/null | tail -1 | tr -d '[]' | awk '{print $2}')
        [ -n "$last" ] && echo "  고르기 작업: ${last} 끝 (무거운 작업이 먼저 시작해서 끝 무렵에 몰려 끝납니다)"
-       grep -q "\[eligibility\]" "$LOG" 2>/dev/null && echo "  고르기: 계좌·동전 비교 단계(마지막 부분)" ;;
+       if grep -q "\[eligibility\]" "$LOG" 2>/dev/null; then
+         last=$(grep -oE "\[eligibility [0-9]+/[0-9]+ [0-9.]+h, ~[0-9.]+h left" "$LOG" 2>/dev/null | tail -1 \
+                | sed -E 's/\[eligibility ([0-9]+\/[0-9]+) [0-9.]+h, ~([0-9.]+)h left/\1 끝, 약 \2시간 남음/')
+         echo "  고르기 마지막 부분(계좌·동전 비교): ${last:-시작}"
+       fi ;;
   esac
   case "$n" in
     6) echo "  6/$NST 고르기는 이 연구에서 가장 깁니다(하루 이상일 수 있음). 남은 시간이 그대로여도 정상이니 다시 시작하지 마세요." ;;
@@ -260,6 +282,7 @@ update() {                   # update <commit>: the developer's fix, only while 
   local want=$1
   [[ $want =~ ^[0-9a-f]{7,40}$ ]] || { echo "사용법: bash $SELF update <커밋 번호 (개발자가 준 것)>"; return 2; }
   [ -f "$BASE/DONE" ] && { echo "이미 끝났습니다. 바꿀 것 없습니다 (결과: $BASE/results.tgz, 보내기: bash $SELF push)"; return 1; }
+  if waiting; then echo "$WAIT_MSG (바꿀 것이 없습니다: 고정된 커밋으로 시작합니다)"; return 1; fi
   if running; then echo "이미 돌고 있습니다. 다시 붙여 넣을 필요 없습니다. 진행 보기: bash $SELF status"; return 1; fi
   if computed; then
     echo "이미 계산을 시작해서(6/$NST 이후) 코드를 바꾸지 않습니다. 이 화면을 개발자에게 보내 주세요."; return 1
@@ -282,15 +305,26 @@ case "$MODE" in
   status) status; exit 0 ;;
   push) push; exit $? ;;
   update) update "$ARG"; exit $? ;;
-  idle) running && { echo "이미 돌고 있습니다. 다시 시작할 필요 없습니다. 진행 보기: bash $SELF status"; exit 1; }
+  idle) waiting && { echo "$WAIT_MSG"; exit 1; }
+        running && { echo "이미 돌고 있습니다. 다시 시작할 필요 없습니다. 진행 보기: bash $SELF status"; exit 1; }
         exit 0 ;;              # the printed restart line starts with this guard: a paste during a run changes nothing
 esac
 
 for k in 1 2 3 4 5; do running || break; sleep 2; done      # a restart: let the old run finish dying
+waiting && { echo "$WAIT_MSG"; exit 1; }
 running && { echo "이미 돌고 있습니다. 화면 보기: $TM attach -t hiwr   (진행: bash $SELF status)"; exit 1; }
 if [ -f "$BASE/DONE" ]; then
   echo "이미 끝났습니다: $BASE/results.tgz  (보내기: bash $SELF push; 처음부터 다시 묶으려면 rm $BASE/DONE)"
   exit 0
+fi
+# No go commit yet (the restart line, a re-paste after a reboot, or the waiter's 12 hours ran out): wait for it again.
+if [ -z "$GO" ] && { [ "$DRYRUN" != 1 ] || [ -n "${HIWR_DRY_WAIT:-}" ]; }; then
+  WAITER=$BASE/wait_go.sh
+  [ -f "$WAITER" ] || cp "$REPO/research/hiwr/wait_go.sh" "$WAITER" 2>/dev/null \
+    || { echo "기다리기 스크립트가 없습니다 ($REPO/research/hiwr/wait_go.sh). 이 화면을 개발자에게 보내 주세요."; exit 1; }
+  echo "아직 고정 전입니다. $WAIT_MSG"
+  export HIWR_REPO="$REPO" HIWR_BASE="$BASE"
+  exec bash "$WAITER"
 fi
 echo $$ > "$BASE/RUNNING"
 rm -f "$BASE/WARNINGS"                       # every stage that warns re-runs on a resume, so it warns again
@@ -342,10 +376,7 @@ elif sub == "build":                     # data.build, one coin per process (the
     one = functools.partial(D.build_symbol, kit, man=man, first=first, last=last)
     with mp.get_context("fork").Pool(max(1, procs)) as pool:
         reps = pool.map(one, syms, chunksize=1)
-    rep = {"months": [first, last], "symbols": reps, "gap_days": len(man.get("gap_days", [])),
-           "missing_files": len(man["missing"])}
-    rep["problems"] = [p for r in rep["symbols"] for p in r["problems"]]
-    D._save_json(os.path.join(kit, "build.json"), rep)
+    rep = D.build_report(kit, first, last, reps, syms)     # the build.json of data.build and data.kit
     for r in reps:
         if r["minutes"]:
             print(f"{r['symbol']}: {r['minutes']:,} minutes {r['first']} .. {r['last']}{' (ended)' if r['ended'] else ''}")
@@ -472,7 +503,7 @@ cd "$REPO" || die "코드 폴더가 없습니다: $REPO"
 HEAD=$(git rev-parse HEAD 2>/dev/null || echo nogit)
 if [ "$DRYRUN" != 1 ] || [ -n "$GO" ]; then
   if ! [[ $GO =~ ^[0-9a-f]{7,40}$ ]]; then
-    die_fix "어느 커밋을 돌릴지 정해지지 않았습니다 (HIWR_GO=${GO:-없음}). SERVER_KO의 한 줄을 그대로 쓰세요."
+    die_fix "커밋 번호가 이상합니다 (HIWR_GO=${GO:-없음})."
   fi
   case "$HEAD" in
     "$GO"*) ;;
@@ -550,8 +581,9 @@ fi
 step="select"; picks_pinned && step="test"
 pin_check "$step"
 sub "고정 일치 (다음 단계: $step)"
-for f in research/hunt/out/v1/test.json research/hunt/out/wide/test.json; do
-  [ -f "$f" ] || warn "프로그램 전체 장부: 추세 사냥 결과 $f 가 이 코드에 없어 장부에 '없음'으로 적힙니다 (판정과는 관계없음)"
+for st in v1 wide; do
+  [ -f "research/hunt/results/hunt/$st/test.json" ] || [ -f "research/hunt/out/$st/test.json" ] \
+    || warn "프로그램 전체 장부: 추세 사냥 결과($st test.json)가 이 코드에 없어 장부는 '미완성'으로 적힙니다 (판정과 관계없음, 나중에 개발자가 채움)"
 done
 LEDGER_ARGS=()
 [ -f "$BASE/ledger_extra.json" ] && LEDGER_ARGS+=(--ledger-extra "$BASE/ledger_extra.json")
@@ -602,9 +634,10 @@ if picks_pinned; then
   [ -s "$OUT/select.json" ] || warn "고른 것은 고정돼 있는데 select.json이 없습니다"
   sub "건너뜀: 고르기 (이미 끝나 고정됨)"
 else
-  touch "$BASE/SELECT_RAN"
   mkdir -p "$PRIV"
-  sub "고르기 시작 (하루 이상 걸릴 수 있습니다; 진행: bash $SELF status)"
+  sub "고르기 시작 (반나절쯤 걸릴 수 있습니다; 진행: bash $SELF status)"
+  select_done() { compgen -G "$WORK/select_*/tables/*" >/dev/null 2>&1 && touch "$BASE/SELECT_RAN"; return 0; }
+  trap select_done EXIT      # a stop after the first exit table locks 'update'; a refusal before any computing does not
   if ! run_select "$PROCS"; then
     tail -40 "$LOG" | grep -q "REFUSED" && die_fix "고르기 거부: $(grep -E 'REFUSED' "$LOG" | tail -1 | cut -c1-200)"
     if tail -40 "$LOG" | grep -qE "tasks missing|workers keep dying"; then
@@ -615,6 +648,8 @@ else
       die "고르기 실패 (run.log 마지막 부분을 보내 주세요: tail -50 $LOG)"
     fi
   fi
+  trap - EXIT
+  touch "$BASE/SELECT_RAN"
   picks_pinned || die "고르기는 끝났는데 고른 것이 고정 파일에 없습니다"
 fi
 
@@ -663,20 +698,22 @@ reads_stage() {
     warn "참고 분석은 이 코드로 이미 한 번 해 봤고 끝나지 않아 또 하지 않습니다 (개발자에게 보내 주세요)"
     return 0
   fi
-  sub "참고 분석: 고른 것 ${P}개를 차례로 (최대 ${READS_HOURS}시간)"
-  timeout "${READS_HOURS}h" "${HIWR[@]}" reads --kit "$KIT" --kit-test "$KIT_TEST" --work "$WORK" --private "$PRIV" \
-    --procs "$PROCS" >>"$LOG" 2>&1 &
+  sub "참고 분석: 고른 것 ${P}개를 동시에 여러 개씩 (${READS_HOURS}시간 뒤에는 새로 시작하지 않음)"
+  timeout "$(( ${READS_HOURS%.*} + 3 ))h" "${HIWR[@]}" reads --kit "$KIT" --kit-test "$KIT_TEST" --work "$WORK" \
+    --private "$PRIV" --procs "$PROCS" --reads-hours "$READS_HOURS" >>"$LOG" 2>&1 &
   to=$!                      # timeout runs the read in its own process group: pass a pane kill or Ctrl+C on to it
   trap 'kill -TERM "$to" 2>/dev/null; exit 1' HUP INT TERM
   wait "$to" || rc=$?
   trap - HUP INT TERM
   echo "$HEAD" > "$tried"    # after the call: a kill of the whole run leaves the one try for the next restart
   if [ "$rc" = 124 ]; then
-    warn "참고 분석이 ${READS_HOURS}시간 안에 끝나지 않아 멈췄습니다 (판정은 그대로, 나머지는 그대로 묶습니다)"
+    warn "참고 분석이 시간 한도를 넘어 멈췄습니다 (판정은 그대로, 나머지는 그대로 묶습니다)"
   elif [ "$rc" != 0 ]; then
     warn "참고 분석 실패 (종료 코드 $rc, run.log의 [reads] 줄 참고; 판정은 그대로)"
   fi
   [ -s "$out" ] || warn "참고 분석 결과(reads.json)가 없습니다"
+  grep -q '"missing": \[\]' "$out" 2>/dev/null \
+    || { [ -s "$out" ] && warn "참고 분석 일부가 시간 한도 안에 끝나지 않았습니다 (reads.json의 missing; 판정과 관계없음)"; }
   return 0
 }
 stage 9 "참고 분석 (주말 포함·다른 레버리지·수수료 전 ROE 등; 통과 기준이 아님)"

@@ -258,3 +258,84 @@ def test_symbols_and_periods():
     assert D.PERIODS["SEL"] == (D.ms("2021-01-01"), D.ms("2024-01-01"))
     assert D.KIT_SEL == ("2020-01", "2023-12") and D.months(*D.KIT_SEL)[-1] == "2023-12"
     assert len(D.months(*D.KIT_SEL)) == 48 and len(D.months(*D.KIT_TEST)) == 33
+
+
+# ------------------------------------------------------------------ fixes after the 2026-10-12 review
+def _two_coin_archive():
+    """Two universe coins on a fake archive: BTC trades through Feb 2020, ETH lacks a day in January."""
+    rng = np.random.default_rng(5)
+    arc = FakeArchive()
+    for s, k in (("BTCUSDT", 0), ("ETHUSDT", 1)):
+        for m, start in (("2020-01", JAN), ("2020-02", D.ms("2020-02-01"))):
+            n = (29 if m == "2020-02" else 31) * 1440
+            ts = start + np.arange(n, dtype=np.int64) * MIN
+            c = 100 * (k + 1) * np.exp(np.cumsum(rng.normal(0, 0.0005, n)))
+            o = np.r_[c[0], c[:-1]]
+            keep = np.ones(n, bool)
+            if s == "ETHUSDT" and m == "2020-01":
+                keep[5 * 1440 + 100:5 * 1440 + 160] = False             # a gap day: filled from the daily file
+                day = slice(5 * 1440, 6 * 1440)
+                arc.put(D.rel_daily("klines", s, "2020-01-06"),
+                        _klines(ts[day], o[day], o[day] * 1.001, o[day] * 0.999, c[day], np.ones(1440)))
+                arc.put(D.rel_daily("markPriceKlines", s, "2020-01-06"),
+                        _klines(ts[day], o[day], o[day] * 1.001, o[day] * 0.999, c[day], np.zeros(1440)))
+            arc.put(D.rel_monthly("klines", s, m), _klines(ts[keep], o[keep], o[keep] * 1.001, o[keep] * 0.999,
+                                                           c[keep], np.ones(keep.sum())))
+            arc.put(D.rel_monthly("markPriceKlines", s, m), _klines(ts, o, o * 1.001, o * 0.999, c, np.zeros(n)))
+            f_t = start + np.arange(0, n * MIN, 8 * 3_600_000)
+            arc.put(D.rel_monthly("fundingRate", s, m), "calc_time,funding_interval_hours,last_funding_rate\n" +
+                    "".join(f"{int(t)},8,0.0001\n" for t in f_t))
+    return arc
+
+
+def test_kit_one_coin_at_a_time_equals_download_and_build(tmp_path, monkeypatch):
+    """Section 3's data pin on the development machine: 'kit' (download, build and drop one coin at a time) writes the
+    same arrays and the same build.json as download + build of every coin at once; the raw zips are gone."""
+    monkeypatch.setattr(D, "MIN_FREE", 0)
+    syms = ("BTCUSDT", "ETHUSDT")
+    arc = _two_coin_archive()
+    a, b = str(tmp_path / "all"), str(tmp_path / "percoin")
+    D.download(a, "2020-01", "2020-02", syms, procs=2, get=arc.get)
+    ra = D.build(a, "2020-01", "2020-02", syms)
+    n0 = len(arc.asked)
+    rb = D.kit(b, "2020-01", "2020-02", syms, procs=2, drop=True, get=arc.get)
+    asked = arc.asked[n0:]
+    assert sum(1 for r in asked if "daily" in r and "ETHUSDT" in r) == 4          # ETH's gap day, once (+ CHECKSUMs)
+    assert not any("daily" in r and "BTCUSDT" in r for r in asked)
+    for s in syms:
+        assert D.content_sha(D.load(a, s)) == D.content_sha(D.load(b, s))
+        assert not os.path.exists(os.path.join(b, "raw", "futures", "um", "monthly", "klines", s))
+    assert open(os.path.join(a, "build.json")).read() == open(os.path.join(b, "build.json")).read()
+    assert ra["problems"] == rb["problems"] == [] and D.manifest(a) == D.manifest(b)
+
+
+def test_spans_are_checked_against_section_4():
+    month = lambda m: D.ms(m + "-15")                                            # noqa: E731
+    rows = [{"symbol": "BTCUSDT", "minutes": 10, "last_ms": month("2023-12"), "ended": False},
+            {"symbol": "TOMOUSDT", "minutes": 10, "last_ms": D.ms("2023-11-14"), "ended": True}]
+    assert D.span_problems(rows, "2020-01", "2023-12", ("BTCUSDT", "TOMOUSDT")) == []
+    # a still-listed coin whose last monthly file went missing "ends" early: stop
+    bad = [dict(rows[0], last_ms=month("2023-10"), ended=True), rows[1]]
+    assert D.span_problems(bad, "2020-01", "2023-12", ("BTCUSDT", "TOMOUSDT"))[0].startswith("BTCUSDT: ends")
+    # TOMO ending in another month than section 4 lists; a coin missing from the kit
+    assert "section 4 says 2023-11" in D.span_problems([rows[0], dict(rows[1], last_ms=month("2023-09"))],
+                                                         "2020-01", "2023-12", ("BTCUSDT", "TOMOUSDT"))[0]
+    assert D.span_problems([rows[0]], "2020-01", "2023-12", ("BTCUSDT", "ETHUSDT")) == \
+        ["ETHUSDT: no data in the kit 2020-01 .. 2023-12"]
+    # the confirm kit: TOMO is not in it, WAVES ends in 2024-06, the others trade through 2026-09
+    test_rows = [{"symbol": "WAVESUSDT", "minutes": 5, "last_ms": D.ms("2024-06-11"), "ended": True},
+                 {"symbol": "BTCUSDT", "minutes": 5, "last_ms": month("2026-09"), "ended": False}]
+    assert D.span_problems(test_rows, *D.KIT_TEST, symbols=("TOMOUSDT", "WAVESUSDT", "BTCUSDT")) == []
+    assert D.span_problems({"BTCUSDT": {"minutes": 5, "last_ms": month("2023-12"), "ended": False}},
+                           "2020-01", "2023-12", ("BTCUSDT",)) == []
+    assert set(D.ENDS) <= set(D.SYMBOLS) and len(D.ENDS) == 8
+
+
+def test_the_command_line_never_fetches_confirm_months(tmp_path, capsys):
+    """Section 3 / 10.6: confirm-period months are fetched only by 'hiwr test' after the picks line."""
+    for argv in (["download", "--dir", str(tmp_path), "--first", "2024-01", "--last", "2026-09"],
+                 ["all", "--dir", str(tmp_path), "--first", "2023-06", "--last", "2024-01"],
+                 ["kit", "--dir", str(tmp_path), "--first", "2024-01", "--last", "2024-02"]):
+        assert D.main(argv) == 2
+    assert "confirm period" in capsys.readouterr().err
+    assert not os.listdir(str(tmp_path))

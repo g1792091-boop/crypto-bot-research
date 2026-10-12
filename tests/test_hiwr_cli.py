@@ -361,7 +361,8 @@ def _fake_signals(kind, name, sym, tf, combo):
 class Args:
     def __init__(self, **kw):
         self.__dict__.update(dict(kit=None, kit_test=None, fg1m=None, hunt5m=None, work=None, private=None, procs=2,
-                                  eligibility="lazy", ledger_extra=None, hunt_private=None, no_reads=False))
+                                  eligibility="lazy", ledger_extra=None, hunt_private=None, no_reads=False,
+                                  reads_hours=None))
         self.__dict__.update(kw)
 
 
@@ -383,7 +384,7 @@ def world(tmp_path_factory):
     mp.setattr(D, "KIT_TEST", ("2021-03", "2021-04"))
     mp.setattr(R, "WARMUP_BARS", 60)
     mp.setattr(R, "CHUNK", 2)                            # two grid tasks per cell
-    mp.setattr(H, "ELIG_CHUNK", 1)
+    mp.setattr(H, "ELIG_PAIRS", {"1h": 1})
     mp.setattr(H, "N_SEEDS", 2000)
     mp.setattr(H, "N_ACCT_SEEDS", 20)
     mp.setattr(H, "N_PBOOT", 2000)
@@ -566,6 +567,10 @@ def test_e2e_d11_on_every_public_output(world):
     assert set(dsb["test"]) == {"n", "win", "liq", "candidates"} and "p" not in dsb
     led = _load(world, "ledger.json")
     assert all("p" not in r for r in led["rows"] if r["deepseek"]) and led["hypotheses"] == 2
+    # no hunt file and no list of the other hypotheses here: incomplete, no count from a smaller family (13)
+    assert led["status"] == "incomplete" and led["bh_rejections"] is None and led["holm_rejections"] is None
+    assert all(r["bh_q10"] is None and r["holm_005"] is None for r in led["rows"]) and led["missing_sources"]
+    assert "장부 미완성" in open(os.path.join(world["state"], H.OUT_REL, "RESULTS_KO.md")).read()
     priv = json.load(open(os.path.join(world["private"], "ledger_private.json")))
     assert H.sha256_file(os.path.join(world["private"], "ledger_private.json")) == led["private_sha256"]
     assert all(r["p"] is not None for r in priv["rows"])
@@ -641,3 +646,213 @@ def test_pin_lines_cannot_be_superseded_except_reads(tmp_path, monkeypatch):
     H.append_pin(H.MANIFEST_SEL_REL)
     with pytest.raises(H.PinError, match="changed research/hiwr/data_manifest_sel.json"):
         H.check_pin("select")
+
+
+# ------------------------------------------------------------------ fixes after the 2026-10-12 review
+def test_e2e_proxy_labels_and_wallet_mean(world):
+    """Section 4: the proxy coins are labelled in every output; 8.1: the mean in % of the wallet at f* is reported."""
+    for name in ("select.json", "test.json", "reads.json"):
+        doc = _load(world, name)
+        assert "proxy_coins" in doc["data"] and doc["data"]["brackets_sha256"], name
+    picks = json.load(open(os.path.join(world["state"], H.PICKS_REL)))
+    assert picks["data"]["proxy_table_of"] == "SANDUSDT" and "proxy_coins" in picks["data"]
+    assert H.coin_labels(["BTCUSDT", "TOMOUSDT", "WAVESUSDT"])["proxy_coins"] == ["TOMOUSDT", "WAVESUSDT"]
+    core = next(p for p in picks["picks"] if p["kind"] == "core")
+    assert core["sel"]["mean_wallet_at_f_star"] == pytest.approx(core["sel"]["f_star"] * core["sel"]["mean"])
+    test = _load(world, "test.json")
+    b = test["results"][core["id"]]
+    assert b["test"]["mean_wallet_at_f_star"] == pytest.approx(b["f_star"] * b["test"]["mean"])
+    ds = next(p for p in picks["picks"] if p["kind"] == "ds")
+    assert "mean_wallet_at_f_star" not in test["results"][ds["id"]]["test"]          # D11
+
+
+def test_eligibility_files_are_kept_apart_by_mode(world, tmp_path):
+    """A select resumed in the other eligibility mode never reads the first mode's files (it picked another pair and
+    lost or doubled pairs before)."""
+    work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
+    cfgs = W.exit_configs()
+    S, _f, _m = H.cell_sums(work, "core", "SYN_A", "1h")
+    pr = H.cell_pairs(S, H.combo_neighbours("core", "SYN_A"), cfgs)
+    cell = [(("core", "SYN_A", "1h"), pr)]
+    w2 = str(tmp_path / "w")
+    t_all = H.elig_tasks(w2, cell, "all")
+    t_lazy = H.elig_tasks(w2, cell, "lazy")
+    assert len(t_all) > 1 and len(t_lazy) == 1
+    assert H.elig_path(t_all[0]) != H.elig_path(t_lazy[0]) and "elig_all" in H.elig_path(t_all[0])
+    assert all(len(t[5]) <= H.ELIG_PAIRS["1h"] for t in t_all)
+    # 'all' interrupted after one task, then resumed as 'lazy': lazy computes its own task and picks like a fresh run
+    k0 = next(t for t in t_all if t[4] == 0)
+    assert H._elig_job(k0).startswith("core SYN_A")
+    assert not os.path.exists(H.elig_path(t_lazy[0]))
+    assert H._elig_job(t_lazy[0]).startswith("core SYN_A")
+    fresh = str(tmp_path / "fresh")
+    tf_ = H.elig_tasks(fresh, cell, "lazy")[0]
+    H._elig_job(tf_)
+    assert H.choose_pick(H.elig_load(t_lazy[0]))["id"] == H.choose_pick(H.elig_load(tf_))["id"]
+    # a file made for other pairs or another mode is refused, never mixed in
+    doc = json.load(open(H.elig_path(k0)))
+    doc["mode"] = "lazy"
+    with open(H.elig_path(k0), "w") as fh:
+        json.dump(doc, fh)
+    with pytest.raises(SystemExit, match="another eligibility mode"):
+        H.elig_load(k0)
+
+
+def test_memory_errors_are_never_a_failed_combo(world, monkeypatch, tmp_path):
+    """A MemoryError (or an OS error) inside the signal code stops the task, writes nothing, and is redone; it is never
+    recorded as a combo that fails on every coin."""
+    work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
+    H.CTX["dirs"] = {"frames_SEL": os.path.join(work, "frames"), "tables_SEL": os.path.join(work, "tables")}
+    calls = []
+
+    def boom(kind, name, sym, tf, combo):
+        calls.append(sym)
+        if len(calls) == 2:
+            raise MemoryError("cannot allocate")
+        return _fake_signals(kind, name, sym, tf, combo)
+    monkeypatch.setattr(H, "raw_signals", boom)
+    w2 = str(tmp_path / "grid")
+    t = ("core", "SYN_A", "1h", 0, 2)
+    msg = H._grid_job((w2, t))
+    assert msg.startswith("ERROR") and "MemoryError" in msg
+    assert not os.path.exists(H.sums_path(w2, t) + ".json")
+    monkeypatch.setattr(H, "raw_signals", lambda *a: (_ for _ in ()).throw(ValueError("window too long")))
+    msg = H._grid_job((w2, t))                                   # a rule that cannot compute: recorded, no trades
+    assert not msg.startswith("ERROR") and json.load(open(H.sums_path(w2, t) + ".json"))["fails"]
+    with pytest.raises(MemoryError):
+        monkeypatch.setattr(H, "raw_signals", lambda *a: (_ for _ in ()).throw(MemoryError("x")))
+        H.eval_pairs("core", "SYN_A", "1h", [{"row": 0, "ci": 0, "n": 1, "mean": 0.0, "plateau": 0.0}])
+
+
+def test_trade_list_mismatch_message_has_no_figures(world, monkeypatch):
+    """The eval_pairs consistency error reaches run.log (published): counts only, never a mean (D11)."""
+    work = [os.path.join(world["work"], d) for d in os.listdir(world["work"]) if d.startswith("select_")][0]
+    H.CTX["dirs"] = {"frames_SEL": os.path.join(work, "frames"), "tables_SEL": os.path.join(work, "tables")}
+    S, _f, _m = H.cell_sums(work, "ds", "SYN_DS", "1h")
+    pr = H.cell_pairs(S, H.combo_neighbours("ds", "SYN_DS"), W.exit_configs())
+    p = dict(pr["abc"][0], mean=pr["abc"][0]["mean"] + 0.0123)
+    with pytest.raises(RuntimeError) as e:
+        H.eval_pairs("ds", "SYN_DS", "1h", [p])
+    import re
+    assert not re.search(r"\d\.\d", str(e.value).split("|maker")[-1].split("|taker")[-1])
+
+
+def test_select_never_runs_after_the_confirm_look(world, monkeypatch, tmp_path):
+    state = str(tmp_path)
+    os.makedirs(os.path.join(state, "research", "hiwr", "out"))
+    monkeypatch.setattr(H, "STATE", [state])
+    monkeypatch.setattr(H, "PIN_REL", "research/hiwr/pin_t.txt")
+    monkeypatch.setattr(H, "required_files", lambda: [H.MANIFEST_SEL_REL])
+    monkeypatch.setattr(H, "content_problems", lambda: [])
+    man = H.rpath(H.MANIFEST_SEL_REL)
+    with open(man, "w") as fh:
+        fh.write("{}")
+    with open(H.rpath(H.PIN_REL), "w") as fh:
+        fh.write(f"{H.sha256_file(man)}  {H.MANIFEST_SEL_REL}\n")
+    assert H.check_pin("select")["lines"] == 1
+    with open(H.out_path("test.json"), "w") as fh:
+        fh.write("{}")
+    with pytest.raises(H.PinError, match="confirm look happened"):
+        H.check_pin("select")
+    os.remove(H.out_path("test.json"))
+    with open(H.rpath(H.MANIFEST_TEST_REL), "w") as fh:
+        fh.write("{}")
+    with pytest.raises(H.PinError, match="confirm look happened"):
+        H.check_pin("select")
+
+
+def test_a_pick_without_test_trades_gets_p_1_and_no_T5():
+    assert H.p_seeds(np.array([0.1, -0.2, np.nan]), float("nan")) == 1.0
+    assert H.p_seeds(np.array([0.1, -0.2]), None) == 1.0
+    assert H._pct(float("nan")) == "-" and H._pct(None) == "-" and H._pct(0.123) == "12.3%"
+    fl = H.flip_control(np.array([np.nan, np.nan]), np.array([np.nan, np.nan]), np.array([0, 1]), 2, "TEST", "x",
+                        range(1, 11))
+    assert not np.isfinite(fl["obs"]) and H.p_seeds(fl["mean"], fl["obs"]) == 1.0
+
+
+def _hunt_test_files(root, v1_p=0.03, wide=(("W1", 0.2), ("W2", 0.4)), ds=("WDS",)):
+    """Test files laid out as the hunt's push publishes them (research/hunt/results/hunt/<study>/test.json)."""
+    v1 = {"pick": {"id": "V1PICK"}, "result": {"checks": {"P0": True, "p": v1_p}}}
+    res = {pid: {"checks": {"PASS": False, "p": p}} for pid, p in wide}
+    res.update({pid: {"checks": {"PASS": False}} for pid in ds})            # DeepSeek: p left out (D11)
+    paths = {}
+    for st, doc in (("v1", v1), ("wide", {"picks": [], "results": res})):
+        d = os.path.join(root, "research", "hunt", "results", "hunt", st)
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "test.json"), "w") as fh:
+            json.dump(doc, fh)
+        paths[st] = os.path.join(d, "test.json")
+    return paths
+
+
+def test_ledger_reads_the_published_hunt_files_and_never_shrinks_the_family(tmp_path, monkeypatch):
+    own = [{"id": f"hiwr{i}", "kind": "core", "p": p, "checks": {"T0": True}} for i, p in
+           enumerate((0.004, 0.011, 0.02))]
+    paths = _hunt_test_files(str(tmp_path))
+    monkeypatch.setattr(H, "HUNT_TESTS", (("hunt v1", (paths["v1"], "nowhere/v1.json")),
+                                          ("hunt wide", (paths["wide"],))))
+    monkeypatch.setattr(H, "LEDGER_EXTRA_REL", "research/hiwr/no_such_ledger_extra.json")
+    extra = str(tmp_path / "extra.json")
+    with open(extra, "w") as fh:
+        json.dump([{"id": "O1", "p": 0.5}], fh)
+    # the hunt's DeepSeek p is hidden: incomplete, nothing rejected or passed
+    pub, priv = H.ledger(own, extra)
+    assert pub["status"] == "incomplete" and pub["missing_p"] == ["WDS"] and pub["bh_rejections"] is None
+    assert {r["source"] for r in pub["rows"]} >= {paths["v1"], paths["wide"]}
+    # with the hunt's private file every row has a p: complete, BH and Holm over all 3 + 1 + 3 + 1 = 8 rows
+    hp = str(tmp_path / "wide_test_private.json")
+    with open(hp, "w") as fh:
+        json.dump({"results": {"WDS": {"checks": {"p": 0.9}}}}, fh)
+    pub, priv = H.ledger(own, extra, hp)
+    assert pub["status"] == "complete" and pub["hypotheses"] == 8 and pub["missing_sources"] == []
+    pv = [r["p"] for r in priv["rows"]]
+    assert pub["holm_rejections"] == sum(H.holm(pv)) and pub["bh_rejections"] == sum(H.bh(pv))
+    assert all("p" not in r for r in pub["rows"] if r["deepseek"])
+    # a missing hunt file or no list of the other hypotheses: incomplete, never counted over the smaller family
+    monkeypatch.setattr(H, "HUNT_TESTS", (("hunt v1", ("nowhere/v1.json",)), ("hunt wide", (paths["wide"],))))
+    pub, _ = H.ledger(own, extra, hp)
+    assert pub["status"] == "incomplete" and any("hunt v1" in m for m in pub["missing_sources"])
+    assert pub["holm_rejections"] is None and all(r["holm_005"] is None for r in pub["rows"])
+    pub, _ = H.ledger(own, None, hp)
+    assert pub["status"] == "incomplete" and any("O1-O4" in m for m in pub["missing_sources"])
+
+
+def test_ledger_command_rebuilds_without_touching_the_verdict(world, tmp_path, monkeypatch):
+    monkeypatch.setattr(H, "STATE", [world["state"]])
+    monkeypatch.setattr(H, "PIN_REL", "research/hiwr/pin_e2e.txt")
+    monkeypatch.setattr(H, "required_files", lambda: [H.PREREG_REL, H.MANIFEST_SEL_REL, H.CHECK_SEL_REL])
+    test_before = H.sha256_file(H.out_path("test.json"))
+    v_before = _load(world, "ledger.json").get("version", 1)
+    extra = str(tmp_path / "extra.json")
+    with open(extra, "w") as fh:
+        json.dump([], fh)                                            # "no other hypothesis"
+    assert H.main(["ledger", "--private", world["private"], "--ledger-extra", extra]) == 0
+    led = _load(world, "ledger.json")
+    assert led["version"] == v_before + 1 and led["status"] == "complete" and led["hypotheses"] == 2
+    assert os.path.exists(H.out_path(f"ledger_v{v_before}.json"))
+    assert led["test_json_sha256"] == test_before == H.sha256_file(H.out_path("test.json"))
+    assert H.d11_problems(led, {r["id"] for r in led["rows"] if r["deepseek"]}) == []
+
+
+def test_reads_stop_starting_picks_after_the_deadline(world, tmp_path, monkeypatch):
+    """The reads write one file per pick; with a deadline already passed no pick starts and reads.json lists every
+    pick as missing (the verdict is untouched); a later run with time left does them."""
+    monkeypatch.setattr(H, "STATE", [world["state"]])
+    monkeypatch.setattr(H, "PIN_REL", "research/hiwr/pin_e2e.txt")
+    picks = H.load_picks(Args(private=world["private"]))
+    kits = {"kit": world["sel_kit"], "man_sel": json.load(open(H.rpath(H.MANIFEST_SEL_REL))),
+            "kit_test": world["test_kit"], "man_test": json.load(open(H.rpath(H.MANIFEST_TEST_REL)))}
+    rd = H.reads_module()
+    args = Args(kit=world["sel_kit"], kit_test=world["test_kit"], work=str(tmp_path / "w"), private=world["private"],
+                procs=2, reads_hours=0.0)
+    ctx = {"H": H, "picks": picks, "kits": kits, "args": args, "pin": {}, "log": H.log}
+    H.CTX.pop("SEL", None)
+    H.CTX.pop("TEST", None)
+    pub, _priv = rd.run(ctx)
+    assert sorted(pub["missing"]) == sorted(p["id"] for p in picks) and pub["not_started_after_deadline"] == len(picks)
+    args.reads_hours = None
+    pub, priv = rd.run(ctx)
+    assert pub["missing"] == [] and set(priv["picks"]) == {p["id"] for p in picks}
+    full = json.load(open(os.path.join(world["private"], "reads_private.json")))["picks"]
+    core = next(p["id"] for p in picks if p["kind"] == "core")
+    assert priv["picks"][core]["R14_sha256"] == full[core]["R14_sha256"]

@@ -245,14 +245,18 @@ RULE_KO = ("규칙: 좋은 자리는 50배(증거금 50%) → 40배(40%) → 30�
 RULE_SHORT_KO = "좋은 자리 50→40→30→20배 · 보통 30→20배 · 거래소 한도와 안전 검사를 통과한 첫 배수"
 
 
-def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[float]) -> dict:
+def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[float], cap50: Optional[int] = None) -> dict:
     """"왜 N배" in plain Korean from the leverage the engine chose (the snapshot has no 좋은 자리 / 보통 mark: a 30x or
-    20x core entry may be either a 보통 자리 or a 좋은 자리 that stepped down, and the text says so)."""
+    20x core entry may be either a 보통 자리 or a 좋은 자리 that stepped down, and the text says so). ``cap50``: the
+    leverage the coin's bracket allows for this account's 50x order (size_position's first check); below 50, a 40x
+    entry is explained by the exchange's limit."""
     ds = a.get("kind") == "ds"
     if lev >= 50:
         group, lev_ko = "좋은 자리", "좋은 자리 첫 배수 50배 그대로"
     elif lev >= 40:
-        group, lev_ko = "좋은 자리", "좋은 자리 · 50배가 안전 검사에 걸려 40배"
+        group = "좋은 자리"
+        lev_ko = (f"좋은 자리 · 이 코인은 이 크기 주문에 거래소가 {cap50}배까지만 허용해 50배를 건너뛰고 40배"
+                  if cap50 is not None and cap50 < 50 else "좋은 자리 · 50배가 안전 검사에 걸려 40배")
     elif lev >= 30:
         group = "보통 자리" if ds else None
         lev_ko = ("딥시크 매매법은 규칙상 늘 보통 자리 · 첫 배수 30배 그대로" if ds else
@@ -278,6 +282,13 @@ def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[f
         parts.append(f"진입 때 청산까지 {liq_dist * 100:.1f}%")
     return {"group_ko": group, "head_ko": " · ".join(parts), "lev_ko": lev_ko, "sub_ko": sub, "rule_ko": RULE_KO,
             "rule_short_ko": RULE_SHORT_KO}
+
+
+def _cap50(ex: Optional[dict], sym: str, equity: Optional[float], size: float) -> Optional[int]:
+    """The leverage the coin's bracket allows for the account's 50x order at this equity (None without the table)."""
+    if not ex or sym not in (ex.get("brackets") or {}) or not equity:
+        return None
+    return int(ex["brackets"][sym].for_notional(equity * 0.5 * size * 50).max_leverage)
 
 
 POS_MONEY = ("lev", "entry", "stop", "tp", "stop_is_lock", "wallet", "equity_at_entry", "qty", "notional", "margin",
@@ -348,7 +359,7 @@ def positions_doc(doc: Optional[dict], ex: Optional[dict], strict: bool = DS_MON
                      stop_pnl=None if stop is None else side * qty * (stop - entry),
                      stop_roe=None if stop is None or not margin else side * qty * (stop - entry) / margin,
                      tp_pnl=None if tp is None else side * qty * (tp - entry),
-                     why=why_lev(a, lev, mp, ld))
+                     why=why_lev(a, lev, mp, ld, cap50=_cap50(ex, sym, r["equity_at_entry"], float(a.get("size") or 1.0))))
         out.append(p)
         counts["open"] += 1
         counts["long" if side > 0 else "short"] += 1
