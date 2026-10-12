@@ -1,0 +1,1046 @@
+{
+ "study": "wide",
+ "git_commit": "0f18ecb35e6adc4bd03479e93239fbf5226ac507",
+ "pin": {
+  "pin_file": "research/hunt/PREREG_HUNT_WIDE.sha256",
+  "pin_sha256": "e2bd88b019d8e5051ead97eaa20f382601fae636b387841cfb4ef7d7176a3aba",
+  "files": 94
+ },
+ "written_utc": "2026-10-12 00:04",
+ "choices": [
+  "H7.6: a 5m bar's entries (fills at its open) are decided first, on the state at the previous 5m close (equity, open positions, caps); then every open position, the new ones included, runs the bar in the order of H 7.6.",
+  "H7.6: a bar whose high (long) reaches the next untried add level fills every add level it reaches first (each moving the stop and the liquidation price), and only then checks the low against the (moved) stop, also when the low had reached the old stop; a bar that reaches no add level checks the stop at once.",
+  "H7.6: when the liquidation price lies inside the stop (only possible after a gapped add or a fallback leverage), the low (long) reaching it liquidates before the stop; otherwise the stop exits first.",
+  "H7.3: liquidation price = Binance's isolated one-way formula with the bracket's mmr and cum at the position's entry notional; margin per unit = qty x fill / L; funding is paid from / to the wallet, not the isolated margin.",
+  "H7.3: no L in 1..20 meeting (i) and (iii) -> the entry is skipped (counted 'leverage').",
+  "H7.2/7.4: U stays r x equity at the entry also after a liquidity or margin cut, so S_req uses that U.",
+  "H7.3: an entry or add is cut to what the free wallet (wallet - isolated margins) can pay incl. its taker fee; minimum notional is checked on every unit.",
+  "H7.5: the 'entry bar' of the chandelier is the signal-timeframe bin that holds the fill 5m bar; the signal bar itself is not included.",
+  "H7.6/2: funding at calc_time (rounded to the 5m grid) is charged after the 5m bar ending then; price = the coin's last 5m close; funding at or after the period end belongs to the next period.",
+  "H3: a coin whose bars end for good inside the period (manifest last_nonzero_volume_bar) closes its open position at its last 5m close (exit costs, counted 'coin end'); open positions at the period end are marked, not closed.",
+  "H8: same 5m fill time -> 30-day quote volume before the signal close (largest first), then pick number, then universe order; a signal whose coin has no 5m bar right after the close fills at the coin's next 5m bar.",
+  "H10: months after a bust have M = 1 (account stopped) and are flagged; ln M uses max(M, 1e-12).",
+  "H10: 'share of total profit from the top 10% of positions' = sum of the top 10% (ceil) positions' net P&L / sum of all positive net P&L.",
+  "H12(a): per coin the n_long + n_short random bars are drawn together without replacement (so one bar is never both sides); the first n_long drawn are long. Pool = the coin's bars with close in the period, label known, ATR14 > 0 and a fill bar inside the period.",
+  "H12/H13 seeds: sha256('|'.join(parts)) -> first 8 bytes little-endian -> numpy PCG64; v1 parts (hunt, control, period, r, seed); wide parts (hunt-wide, system id, control, period, r, seed); bootstrap seed = same with 'boot' as the seed part; r written with '%g'.",
+  "H13 P0: 'a position open in a month' = at least one position open at some 5m step of that month.",
+  "H11.2/W5: 72 / 66 positions = 2 x the period's months; positions = entries opened.",
+  "W3.2: a bar with a long and a short event gives no entry and is counted 'both'; F2-F4 warm-up of 300 bars is applied by entries_wide.events_on; the event edge is taken before the gate (a run of True bars that starts on a bar the gate blocks gives no entry later in the run).",
+  "W5: picks come from F1-F3 and F5 only (the 686 candidates); the 76 F4 systems run in select as a labelled read (their numbers were chosen after this test period was seen) and never in test, R22 included; the 'no pick' fallback is the best F1-F3 or F5 system.",
+  "W7: in the wide study the gate diagnostics run in the select period only (the other gate is a non-pick system); v1 runs them in select and test as H 14 says. In the 'no pick, fail' case the one system's reads run as a pick's.",
+  "W7: the first draft's sizing read (r = 2% / 5%) is replaced by the R1 goal board of reads_a.py (machine A: open-risk cap 4% x r / 0.5%, margin budget B = equity / 6 as written; machine B: goal-mode caps).",
+  "R24 (engine PR_FIXLEV): the rule bot's tier walk L, L - 10, ... down to 20x; per candidate margin = L% of equity at the previous 5m close, notional = L x margin; taken when the bracket allows L at that notional, the first stop lies inside the liquidation price by max(0.2% of the fill, 1 ATR14) and the loss at the stop (slippage and taker both ways) is <= 15% of equity; no candidate -> skipped ('no_leverage', by the lowest tier's reason in rulebot_skipped). Checked at entry on the planned unit; the liquidity and free-wallet cuts keep L.",
+  "H10: select runs report the metric set without the daily equity path (by year / side / group included); test runs include it. DeepSeek rows keep only counts and labels in the repository (W 11).",
+  "W3.3: F5 = famous.py's donchian / tsmom states on the system's own bars, day lengths x bars per day of the timeframe; event = the first bar of a state with the state defined on t and t-1; TSMOM decides at bars closing at Monday 00:00 UTC only.",
+  "W5/W6: the one-per-name walk runs to 30 names; batches of 10 are fixed in picks.json at select; a batch is tested only when >= 5 of the previous batch PASS; BH within each batch; untested members never run on test.",
+  "W12 lineup: computed in the test step from the full figures (DeepSeek: the label and the failing conditions only in public); 'no pick, fail' is excluded.",
+  "W7.1 reads: a reads module runs after test.json only when its file is pinned; the hook writes its outputs; any change of a study file while it ran, or a float under a DeepSeek row in its public output, refuses the write; a failed read never changes the test step's result.",
+  "H2: data identity = sha256 over the arrays the study reads, in order, each as 'name|dtype|shape' newline then its raw C-order bytes (5m: ts o h l c v qv; funding: ts rate); compared with research/hunt/data_manifest.json at every select / test. Coin end and missing funding months come from that pinned manifest copy; a coin end at or after the period end, and missing months outside the loaded span or after the coin end, are not carried into a step (select keeps nothing about 2024+)."
+ ],
+ "what": "R19: tested picks on 1m last-price bars and on 1m last + mark-price bars (liquidation on mark), same engine, signals from the study's 5m bars; the median control seeds alike",
+ "bar_source": {
+  "BTCUSDT": "1m",
+  "ETHUSDT": "1m",
+  "SOLUSDT": "1m",
+  "XRPUSDT": "1m",
+  "DOGEUSDT": "1m",
+  "BNBUSDT": "1m",
+  "LTCUSDT": "1m",
+  "MATICUSDT": "1m",
+  "BCHUSDT": "1m",
+  "LINKUSDT": "1m",
+  "AVAXUSDT": "1m",
+  "ADAUSDT": "1m",
+  "TRBUSDT": "1m",
+  "FILUSDT": "1m",
+  "FTMUSDT": "1m",
+  "ETCUSDT": "1m",
+  "DOTUSDT": "1m",
+  "NEARUSDT": "1m",
+  "EOSUSDT": "1m",
+  "CRVUSDT": "1m",
+  "SANDUSDT": "1m",
+  "ATOMUSDT": "1m",
+  "TOMOUSDT": "5m",
+  "AXSUSDT": "1m",
+  "STORJUSDT": "1m",
+  "MKRUSDT": "1m",
+  "BLZUSDT": "1m",
+  "COMPUSDT": "1m",
+  "RUNEUSDT": "1m",
+  "WAVESUSDT": "1m"
+ },
+ "bars_1m_counts": {
+  "BTCUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 126,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "6330cd65ba55c9ad387d1f99d70e7ad265ae5f07c666e43841b515d45bd45e70"
+  },
+  "ETHUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 127,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "159d2f158c9c2a0f5cfae3c8aaebd13ec0a0baf478b9dbb4a99c5ea37fffe76c"
+  },
+  "SOLUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 128,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "0b5fc65c6270c73c000ddcf23a3a63870cc68578e906cb806996c2efb2b457db"
+  },
+  "XRPUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 127,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "f3ea72652c775047b59cc168d721a3feccbf5fed7fb189b44a577edb4f48099d"
+  },
+  "DOGEUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 128,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "fb38c09fd16d9e47b9e3b9dbdcff04ffa07257d364ee3f3411320a3e27db5aa3"
+  },
+  "BNBUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 128,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "f611452fdbafef70681ef594767ba5766a3ef3c51f2b590d09394fef6ea0536e"
+  },
+  "LTCUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 130,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "43bcd5b2781000717c84ab8efd1f09d1e49bcf4081a131acfd4eabb959bd7cd0"
+  },
+  "MATICUSDT": {
+   "rows": 366343,
+   "duplicates": 0,
+   "zero_volume": 10123,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "080aa60562ea71f0fb9324cfbf74639022122223e73e9c762608de4264e09038"
+  },
+  "BCHUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 128,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "cf7877166e7148521d66aadf02f62503cf23ccf4db953bebaaf7d62ec25c5e02"
+  },
+  "LINKUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 128,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "171517b2648e228c6299a4634c7fb5d9793eaed3d587d14dcf0e215115ccb914"
+  },
+  "AVAXUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 127,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "87aa0697a63cb15af91ccb361eee58fd7856ad5806511ab35fccdd0b744cd97a"
+  },
+  "ADAUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 127,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "05d0aae5c8ed054510427bfc992a8e95f3364caabda3cced1ae403306b91d143"
+  },
+  "TRBUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 541,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "c08677f100d9387671c2a3a97778444bdda253d15bcafb3a5e78ce1ff6f9a9ba"
+  },
+  "FILUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 134,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "447db9b973d6bd49baf0db80296744847c5145ed13564efe2865aa78fc74a764"
+  },
+  "FTMUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 911068,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "66725c26906092b0d953107ab670c65c787a064a930054ef4f7da8641f19c5c9"
+  },
+  "ETCUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 158,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "bd84451fcdb7352f75ba050b610571c2b6e1aa7b7cefc60f796e70f9969a9ae7"
+  },
+  "DOTUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 129,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "f6062827a5c13e8cec7769b3bb4a08ab8488b7d53f71ed4c12eeec85807e539a"
+  },
+  "NEARUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 128,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "76a5b293db827deef6cf95c8f43e16b046f9c39b6ad3bf8f45e3476a0c761fa9"
+  },
+  "EOSUSDT": {
+   "rows": 729184,
+   "duplicates": 0,
+   "zero_volume": 138,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "e93f97495ffedad01e8128f1b0bc41a51b7c13ef5463213422dd8f81eb1dc3ef"
+  },
+  "CRVUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 281,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "f206c6b6c932241317de48be40edd551c029e00bffe1ca99a339c00428f1bf1e"
+  },
+  "SANDUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 465,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "00a7ba9c68e79f167b309863c9077e4bd8bb14be4ed572ae389fcec97aaae92c"
+  },
+  "ATOMUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 208,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "47119a8cc42c804fa3a287f818e791d7e988a8d4c02178fe8cfbc7847b8ec76b"
+  },
+  "TOMOUSDT": {
+   "file": "missing (5m bars used)"
+  },
+  "AXSUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 1028,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "1a79f4ad2f6471bb1f9c92cc94e6f17072eb689031d6110dac846cfecffac23b"
+  },
+  "STORJUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 63729,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "0537e91ac2361fea4f540e9ebec00b0f6c6f19262c7f6a4daff580b40811cd15"
+  },
+  "MKRUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 558311,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "b1c3c125f7aa6742d10f6f387931fa434a7d4f4aa2a131bca285886e6b72d729"
+  },
+  "BLZUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 931584,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "09f82404b5304e33eb7fec2c0482c72033e575d0b1d124f40047b99f96b21690"
+  },
+  "COMPUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 9246,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "a184d5727b85b498d726e1e5af1caac1153eb18bfa3084bfb073a990039399c3"
+  },
+  "RUNEUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 3677,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 2,
+   "content_sha256": "bdb52319538798440f5d038c9806b32dbf0b4648964db9ac968dd2db2982a74e"
+  },
+  "WAVESUSDT": {
+   "rows": 1445760,
+   "duplicates": 0,
+   "zero_volume": 1211945,
+   "off_grid": 0,
+   "non_finite": 0,
+   "bars_without_mark": 0,
+   "content_sha256": "af7ec535fb6aacc7c078d4d7c8db677ed029f3e0a1e0d89dedacc8a63dfa2e87"
+  }
+ },
+ "picks": {
+  "F3:F4_PULL:4h:NONE": {
+   "note": "DeepSeek pick: figures in the private file (D11)",
+   "n_positions": {
+    "5m": 1981,
+    "1m": 1981,
+    "1m_mark": 1981
+   },
+   "liquidations": {
+    "5m": 0,
+    "1m": 0,
+    "1m_mark": 0
+   }
+  },
+  "F1:E3:4h:NONE": {
+   "5m": {
+    "mean_lnM": -0.01410781791040952,
+    "median_M": 0.9790822371363205,
+    "end_multiple": 0.6277847091948331,
+    "max_dd": 0.4729102648225313,
+    "bust": false,
+    "n_positions": 389,
+    "adds_per_month": 10.484848484848484,
+    "share_add_level": [
+     0.5218508997429306,
+     0.2365038560411311,
+     0.13110539845758354
+    ],
+    "win_share": 0.09768637532133675,
+    "liquidations": 0,
+    "adds_filled": 346
+   },
+   "1m": {
+    "mean_lnM": -0.013937124137739402,
+    "median_M": 0.9790822371363207,
+    "end_multiple": 0.631330932603768,
+    "max_dd": 0.4747967556015687,
+    "bust": false,
+    "n_positions": 388,
+    "adds_per_month": 10.454545454545455,
+    "share_add_level": [
+     0.520618556701031,
+     0.2345360824742268,
+     0.13402061855670103
+    ],
+    "win_share": 0.0979381443298969,
+    "liquidations": 0,
+    "adds_filled": 345
+   },
+   "1m_mark": {
+    "mean_lnM": -0.013937124137739402,
+    "median_M": 0.9790822371363207,
+    "end_multiple": 0.631330932603768,
+    "max_dd": 0.4747967556015687,
+    "bust": false,
+    "n_positions": 388,
+    "adds_per_month": 10.454545454545455,
+    "share_add_level": [
+     0.520618556701031,
+     0.2345360824742268,
+     0.13402061855670103
+    ],
+    "win_share": 0.0979381443298969,
+    "liquidations": 0,
+    "adds_filled": 345
+   },
+   "change_1m_mark_minus_5m": {
+    "mean_lnM": 0.0001706937726701184,
+    "median_M": 2.220446049250313e-16,
+    "end_multiple": 0.0035462234089349565,
+    "max_dd": 0.0018864907790374086,
+    "n_positions": -1,
+    "liquidations": 0,
+    "adds_filled": -1
+   },
+   "median_control_seeds": {
+    "a": {
+     "seed": 406,
+     "5m": {
+      "mean_lnM": -0.010911319998956474,
+      "median_M": 0.9551306616279884,
+      "end_multiple": 0.6976250069120515,
+      "max_dd": 0.5258735263231175,
+      "bust": false,
+      "n_positions": 547,
+      "adds_per_month": 14.333333333333334,
+      "share_add_level": [
+       0.48628884826325414,
+       0.25045703839122485,
+       0.12797074954296161
+      ],
+      "win_share": 0.1206581352833638,
+      "liquidations": 0,
+      "adds_filled": 473
+     },
+     "1m_mark": {
+      "mean_lnM": -0.003872197803870825,
+      "median_M": 0.9655848199155068,
+      "end_multiple": 0.8800447438417573,
+      "max_dd": 0.45277639594608166,
+      "bust": false,
+      "n_positions": 547,
+      "adds_per_month": 14.363636363636363,
+      "share_add_level": [
+       0.48628884826325414,
+       0.25045703839122485,
+       0.12979890310786105
+      ],
+      "win_share": 0.12431444241316271,
+      "liquidations": 0,
+      "adds_filled": 474
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": 0.007039122195085649,
+      "median_M": 0.01045415828751839,
+      "end_multiple": 0.1824197369297058,
+      "max_dd": -0.0730971303770358,
+      "n_positions": 0,
+      "liquidations": 0,
+      "adds_filled": 1
+     }
+    },
+    "b": {
+     "seed": 659,
+     "5m": {
+      "mean_lnM": -0.01932211092234268,
+      "median_M": 0.9760258099823527,
+      "end_multiple": 0.5285437686067375,
+      "max_dd": 0.5758594961666196,
+      "bust": false,
+      "n_positions": 410,
+      "adds_per_month": 9.969696969696969,
+      "share_add_level": [
+       0.4853658536585366,
+       0.2073170731707317,
+       0.10975609756097561
+      ],
+      "win_share": 0.11463414634146342,
+      "liquidations": 0,
+      "adds_filled": 329
+     },
+     "1m_mark": {
+      "mean_lnM": -0.020814699687961367,
+      "median_M": 0.9760258099823532,
+      "end_multiple": 0.5031408693695173,
+      "max_dd": 0.5998397210078992,
+      "bust": false,
+      "n_positions": 409,
+      "adds_per_month": 9.878787878787879,
+      "share_add_level": [
+       0.4841075794621027,
+       0.20293398533007334,
+       0.1100244498777506
+      ],
+      "win_share": 0.11246943765281174,
+      "liquidations": 0,
+      "adds_filled": 326
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": -0.001492588765618686,
+      "median_M": 5.551115123125783e-16,
+      "end_multiple": -0.025402899237220167,
+      "max_dd": 0.023980224841279596,
+      "n_positions": -1,
+      "liquidations": 0,
+      "adds_filled": -3
+     }
+    }
+   }
+  },
+  "F2:S2_ST_ROC:4h:NONE": {
+   "5m": {
+    "mean_lnM": -0.014646812912787547,
+    "median_M": 0.951110470417199,
+    "end_multiple": 0.6167171265288357,
+    "max_dd": 0.8651120437493325,
+    "bust": false,
+    "n_positions": 2526,
+    "adds_per_month": 68.18181818181819,
+    "share_add_level": [
+     0.5003958828186856,
+     0.25257323832145684,
+     0.1377672209026128
+    ],
+    "win_share": 0.11836896278701504,
+    "liquidations": 0,
+    "adds_filled": 2250
+   },
+   "1m": {
+    "mean_lnM": -0.002491226277128355,
+    "median_M": 0.9511104704171991,
+    "end_multiple": 0.9210780816203092,
+    "max_dd": 0.8428170530730766,
+    "bust": false,
+    "n_positions": 2520,
+    "adds_per_month": 68.06060606060606,
+    "share_add_level": [
+     0.5,
+     0.251984126984127,
+     0.1392857142857143
+    ],
+    "win_share": 0.12142857142857143,
+    "liquidations": 0,
+    "adds_filled": 2246
+   },
+   "1m_mark": {
+    "mean_lnM": -0.002491226277128355,
+    "median_M": 0.9511104704171991,
+    "end_multiple": 0.9210780816203092,
+    "max_dd": 0.8428170530730766,
+    "bust": false,
+    "n_positions": 2520,
+    "adds_per_month": 68.06060606060606,
+    "share_add_level": [
+     0.5,
+     0.251984126984127,
+     0.1392857142857143
+    ],
+    "win_share": 0.12142857142857143,
+    "liquidations": 0,
+    "adds_filled": 2246
+   },
+   "change_1m_mark_minus_5m": {
+    "mean_lnM": 0.012155586635659191,
+    "median_M": 1.1102230246251565e-16,
+    "end_multiple": 0.30436095509147354,
+    "max_dd": -0.022294990676255844,
+    "n_positions": -6,
+    "liquidations": 0,
+    "adds_filled": -4
+   },
+   "median_control_seeds": {
+    "a": {
+     "seed": 414,
+     "5m": {
+      "mean_lnM": -0.033618178667850135,
+      "median_M": 0.9177121400369893,
+      "end_multiple": 0.329756790066139,
+      "max_dd": 0.8652721961134638,
+      "bust": false,
+      "n_positions": 2606,
+      "adds_per_month": 69.66666666666667,
+      "share_add_level": [
+       0.4927091327705295,
+       0.2478894858019954,
+       0.14159631619339985
+      ],
+      "win_share": 0.13392171910974673,
+      "liquidations": 0,
+      "adds_filled": 2299
+     },
+     "1m_mark": {
+      "mean_lnM": -0.029846854418929574,
+      "median_M": 0.9177121400369899,
+      "end_multiple": 0.3734593200668422,
+      "max_dd": 0.8500913714940556,
+      "bust": false,
+      "n_positions": 2600,
+      "adds_per_month": 69.66666666666667,
+      "share_add_level": [
+       0.49346153846153845,
+       0.24807692307692308,
+       0.1426923076923077
+      ],
+      "win_share": 0.13538461538461538,
+      "liquidations": 0,
+      "adds_filled": 2299
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": 0.0037713242489205608,
+      "median_M": 5.551115123125783e-16,
+      "end_multiple": 0.04370253000070318,
+      "max_dd": -0.015180824619408284,
+      "n_positions": -6,
+      "liquidations": 0,
+      "adds_filled": 0
+     }
+    },
+    "b": {
+     "seed": 734,
+     "5m": {
+      "mean_lnM": -0.008898980643771592,
+      "median_M": 0.9505091876555619,
+      "end_multiple": 0.7455251860491975,
+      "max_dd": 0.776799802332477,
+      "bust": false,
+      "n_positions": 2455,
+      "adds_per_month": 64.96969696969697,
+      "share_add_level": [
+       0.49368635437881875,
+       0.24562118126272914,
+       0.1340122199592668
+      ],
+      "win_share": 0.13156822810590632,
+      "liquidations": 0,
+      "adds_filled": 2144
+     },
+     "1m_mark": {
+      "mean_lnM": -0.003986920757341086,
+      "median_M": 0.9505091876555636,
+      "end_multiple": 0.8767193186439417,
+      "max_dd": 0.7404254154389374,
+      "bust": false,
+      "n_positions": 2452,
+      "adds_per_month": 65.12121212121212,
+      "share_add_level": [
+       0.4938825448613377,
+       0.2467373572593801,
+       0.13580750407830341
+      ],
+      "win_share": 0.1333605220228385,
+      "liquidations": 0,
+      "adds_filled": 2149
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": 0.004912059886430506,
+      "median_M": 1.6653345369377348e-15,
+      "end_multiple": 0.13119413259474422,
+      "max_dd": -0.03637438689353967,
+      "n_positions": -3,
+      "liquidations": 0,
+      "adds_filled": 5
+     }
+    }
+   }
+  },
+  "F3:F16_FIB382:4h:NONE": {
+   "note": "DeepSeek pick: figures in the private file (D11)",
+   "n_positions": {
+    "5m": 1563,
+    "1m": 1629,
+    "1m_mark": 1629
+   },
+   "liquidations": {
+    "5m": 0,
+    "1m": 0,
+    "1m_mark": 0
+   }
+  },
+  "F3:F8_VWICK:4h:NONE": {
+   "note": "DeepSeek pick: figures in the private file (D11)",
+   "n_positions": {
+    "5m": 1492,
+    "1m": 1486,
+    "1m_mark": 1486
+   },
+   "liquidations": {
+    "5m": 0,
+    "1m": 0,
+    "1m_mark": 0
+   }
+  },
+  "F3:F4_PULL_RSI:4h:NONE": {
+   "note": "DeepSeek pick: figures in the private file (D11)",
+   "n_positions": {
+    "5m": 261,
+    "1m": 261,
+    "1m_mark": 261
+   },
+   "liquidations": {
+    "5m": 0,
+    "1m": 0,
+    "1m_mark": 0
+   }
+  },
+  "F2:V45_AMB:4h:NONE": {
+   "5m": {
+    "mean_lnM": -0.006401090876065825,
+    "median_M": 0.9579219696377095,
+    "end_multiple": 0.8095829836326126,
+    "max_dd": 0.5321714176652094,
+    "bust": false,
+    "n_positions": 738,
+    "adds_per_month": 19.363636363636363,
+    "share_add_level": [
+     0.4715447154471545,
+     0.24525745257452575,
+     0.14905149051490515
+    ],
+    "win_share": 0.13956639566395665,
+    "liquidations": 0,
+    "adds_filled": 639
+   },
+   "1m": {
+    "mean_lnM": -0.0042989488412988235,
+    "median_M": 0.9579219696377095,
+    "end_multiple": 0.8677381227335318,
+    "max_dd": 0.5357352466869373,
+    "bust": false,
+    "n_positions": 738,
+    "adds_per_month": 19.393939393939394,
+    "share_add_level": [
+     0.4715447154471545,
+     0.24525745257452575,
+     0.15040650406504066
+    ],
+    "win_share": 0.14227642276422764,
+    "liquidations": 0,
+    "adds_filled": 640
+   },
+   "1m_mark": {
+    "mean_lnM": -0.0042989488412988235,
+    "median_M": 0.9579219696377095,
+    "end_multiple": 0.8677381227335318,
+    "max_dd": 0.5357352466869373,
+    "bust": false,
+    "n_positions": 738,
+    "adds_per_month": 19.393939393939394,
+    "share_add_level": [
+     0.4715447154471545,
+     0.24525745257452575,
+     0.15040650406504066
+    ],
+    "win_share": 0.14227642276422764,
+    "liquidations": 0,
+    "adds_filled": 640
+   },
+   "change_1m_mark_minus_5m": {
+    "mean_lnM": 0.0021021420347670013,
+    "median_M": 0.0,
+    "end_multiple": 0.058155139100919184,
+    "max_dd": 0.0035638290217279156,
+    "n_positions": 0,
+    "liquidations": 0,
+    "adds_filled": 1
+   },
+   "median_control_seeds": {
+    "a": {
+     "seed": 750,
+     "5m": {
+      "mean_lnM": -0.014451132629424508,
+      "median_M": 0.9416133032741787,
+      "end_multiple": 0.620712431995396,
+      "max_dd": 0.49595695004475204,
+      "bust": false,
+      "n_positions": 931,
+      "adds_per_month": 25.03030303030303,
+      "share_add_level": [
+       0.5091299677765844,
+       0.24489795918367346,
+       0.13319011815252416
+      ],
+      "win_share": 0.1288936627282492,
+      "liquidations": 0,
+      "adds_filled": 826
+     },
+     "1m_mark": {
+      "mean_lnM": -0.011006615898906075,
+      "median_M": 0.9584847152282812,
+      "end_multiple": 0.695434586401374,
+      "max_dd": 0.5004762089465993,
+      "bust": false,
+      "n_positions": 931,
+      "adds_per_month": 25.03030303030303,
+      "share_add_level": [
+       0.5091299677765844,
+       0.24489795918367346,
+       0.13319011815252416
+      ],
+      "win_share": 0.13211600429645542,
+      "liquidations": 0,
+      "adds_filled": 826
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": 0.003444516730518432,
+      "median_M": 0.016871411954102467,
+      "end_multiple": 0.07472215440597796,
+      "max_dd": 0.004519258901847234,
+      "n_positions": 0,
+      "liquidations": 0,
+      "adds_filled": 0
+     }
+    },
+    "b": {
+     "seed": 714,
+     "5m": {
+      "mean_lnM": -0.012051886868858445,
+      "median_M": 0.9562545534301862,
+      "end_multiple": 0.671855315018573,
+      "max_dd": 0.5464804740865253,
+      "bust": false,
+      "n_positions": 672,
+      "adds_per_month": 18.636363636363637,
+      "share_add_level": [
+       0.5089285714285714,
+       0.25595238095238093,
+       0.15029761904761904
+      ],
+      "win_share": 0.13839285714285715,
+      "liquidations": 0,
+      "adds_filled": 615
+     },
+     "1m_mark": {
+      "mean_lnM": -0.008733783520865134,
+      "median_M": 0.9623772282864328,
+      "end_multiple": 0.7496005186254632,
+      "max_dd": 0.5470916837241019,
+      "bust": false,
+      "n_positions": 672,
+      "adds_per_month": 18.636363636363637,
+      "share_add_level": [
+       0.5089285714285714,
+       0.25595238095238093,
+       0.15029761904761904
+      ],
+      "win_share": 0.14285714285714285,
+      "liquidations": 0,
+      "adds_filled": 615
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": 0.0033181033479933106,
+      "median_M": 0.006122674856246624,
+      "end_multiple": 0.07774520360689019,
+      "max_dd": 0.0006112096375765486,
+      "n_positions": 0,
+      "liquidations": 0,
+      "adds_filled": 0
+     }
+    }
+   }
+  },
+  "F3:F5_BOX_HTF:4h:NONE": {
+   "note": "DeepSeek pick: figures in the private file (D11)",
+   "n_positions": {
+    "5m": 353,
+    "1m": 353,
+    "1m_mark": 353
+   },
+   "liquidations": {
+    "5m": 0,
+    "1m": 0,
+    "1m_mark": 0
+   }
+  },
+  "F2:S5_DONCHIAN_MFI:4h:NONE": {
+   "5m": {
+    "mean_lnM": 8.843937861544542e-05,
+    "median_M": 0.9890913588057181,
+    "end_multiple": 1.0029227624601045,
+    "max_dd": 0.29211369247286106,
+    "bust": false,
+    "n_positions": 178,
+    "adds_per_month": 4.454545454545454,
+    "share_add_level": [
+     0.46629213483146065,
+     0.2247191011235955,
+     0.1348314606741573
+    ],
+    "win_share": 0.12359550561797752,
+    "liquidations": 0,
+    "adds_filled": 147
+   },
+   "1m": {
+    "mean_lnM": 1.7277511684143384e-05,
+    "median_M": 0.9890913588057173,
+    "end_multiple": 1.0005703204564798,
+    "max_dd": 0.29315743776938075,
+    "bust": false,
+    "n_positions": 177,
+    "adds_per_month": 4.424242424242424,
+    "share_add_level": [
+     0.4632768361581921,
+     0.22598870056497175,
+     0.13559322033898305
+    ],
+    "win_share": 0.11864406779661017,
+    "liquidations": 0,
+    "adds_filled": 146
+   },
+   "1m_mark": {
+    "mean_lnM": 1.7277511684143384e-05,
+    "median_M": 0.9890913588057173,
+    "end_multiple": 1.0005703204564798,
+    "max_dd": 0.29315743776938075,
+    "bust": false,
+    "n_positions": 177,
+    "adds_per_month": 4.424242424242424,
+    "share_add_level": [
+     0.4632768361581921,
+     0.22598870056497175,
+     0.13559322033898305
+    ],
+    "win_share": 0.11864406779661017,
+    "liquidations": 0,
+    "adds_filled": 146
+   },
+   "change_1m_mark_minus_5m": {
+    "mean_lnM": -7.116186693130203e-05,
+    "median_M": -7.771561172376096e-16,
+    "end_multiple": -0.0023524420036247218,
+    "max_dd": 0.0010437452965196825,
+    "n_positions": -1,
+    "liquidations": 0,
+    "adds_filled": -1
+   },
+   "median_control_seeds": {
+    "a": {
+     "seed": 389,
+     "5m": {
+      "mean_lnM": -0.0030745977161851356,
+      "median_M": 0.9868862319054116,
+      "end_multiple": 0.9035157610767456,
+      "max_dd": 0.3516459734545497,
+      "bust": false,
+      "n_positions": 179,
+      "adds_per_month": 4.363636363636363,
+      "share_add_level": [
+       0.4748603351955307,
+       0.2122905027932961,
+       0.11731843575418995
+      ],
+      "win_share": 0.12290502793296089,
+      "liquidations": 0,
+      "adds_filled": 144
+     },
+     "1m_mark": {
+      "mean_lnM": -0.00197820103541522,
+      "median_M": 0.986886231905412,
+      "end_multiple": 0.9368045271249743,
+      "max_dd": 0.3315174669527087,
+      "bust": false,
+      "n_positions": 179,
+      "adds_per_month": 4.393939393939394,
+      "share_add_level": [
+       0.4748603351955307,
+       0.21787709497206703,
+       0.11731843575418995
+      ],
+      "win_share": 0.12849162011173185,
+      "liquidations": 0,
+      "adds_filled": 145
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": 0.0010963966807699156,
+      "median_M": 4.440892098500626e-16,
+      "end_multiple": 0.033288766048228724,
+      "max_dd": -0.020128506501841004,
+      "n_positions": 0,
+      "liquidations": 0,
+      "adds_filled": 1
+     }
+    },
+    "b": {
+     "seed": 952,
+     "5m": {
+      "mean_lnM": 0.003197646162019391,
+      "median_M": 0.9915950625939903,
+      "end_multiple": 1.1112909119782046,
+      "max_dd": 0.18927068104087635,
+      "bust": false,
+      "n_positions": 179,
+      "adds_per_month": 5.363636363636363,
+      "share_add_level": [
+       0.5586592178770949,
+       0.2737430167597765,
+       0.1564245810055866
+      ],
+      "win_share": 0.1452513966480447,
+      "liquidations": 0,
+      "adds_filled": 177
+     },
+     "1m_mark": {
+      "mean_lnM": 0.0031264841186683556,
+      "median_M": 0.9915950625939906,
+      "end_multiple": 1.1086842766610117,
+      "max_dd": 0.1919902182109463,
+      "bust": false,
+      "n_positions": 178,
+      "adds_per_month": 5.333333333333333,
+      "share_add_level": [
+       0.5561797752808989,
+       0.2752808988764045,
+       0.15730337078651685
+      ],
+      "win_share": 0.1404494382022472,
+      "liquidations": 0,
+      "adds_filled": 176
+     },
+     "change_1m_mark_minus_5m": {
+      "mean_lnM": -7.116204335103548e-05,
+      "median_M": 2.220446049250313e-16,
+      "end_multiple": -0.0026066353171929624,
+      "max_dd": 0.002719537170069952,
+      "n_positions": -1,
+      "liquidations": 0,
+      "adds_filled": -1
+     }
+    }
+   }
+  },
+  "F3:F10_M2022:4h:NONE": {
+   "note": "DeepSeek pick: figures in the private file (D11)",
+   "n_positions": {
+    "5m": 403,
+    "1m": 403,
+    "1m_mark": 403
+   },
+   "liquidations": {
+    "5m": 0,
+    "1m": 0,
+    "1m_mark": 0
+   }
+  }
+ },
+ "private_sha256": "6c5fe872f93ece435eb8e1bc980928a2a855e003b9a881736b5d72465bc5834f",
+ "test_json_sha256": "f0d56ad568261d113b11fd37f439b733f6a023f046661c88d749e9c85e7eeaa4",
+ "seconds": 51.0
+}

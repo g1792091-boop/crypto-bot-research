@@ -1,0 +1,20 @@
+{
+ "ok": true,
+ "n_symbols": 30,
+ "n_checked": 30,
+ "differences": [],
+ "n_differences": 0,
+ "hashes_compared": [
+  "arrays_sha256",
+  "arrays_sha256_funding",
+  "content_5m",
+  "content_funding"
+ ],
+ "manifest": "/root/hunt/data5m/manifest.json",
+ "manifest_sha256": "533487ebbac1710b824979da7f36837be8080a4771e38fb3b7df7c87fabf7547",
+ "reference": "research/hunt/data_ref_5m.json",
+ "reference_sha256": "265aeb2b586d7104f12c4141cc5de6ac7e43778ba2dc7b24e0d88e10a3869241",
+ "files_rechecked": true,
+ "array_hashes_compared": true,
+ "checked_utc": "2026-10-11 20:57:39"
+}

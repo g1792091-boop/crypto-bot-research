@@ -1,0 +1,297 @@
+{
+ "study": "wide",
+ "git_commit": "0f18ecb35e6adc4bd03479e93239fbf5226ac507",
+ "pin": {
+  "pin_file": "research/hunt/PREREG_HUNT_WIDE.sha256",
+  "pin_sha256": "d3d7f2d08b7caf8b9628a50d96e786a595249e1ec1a9ac8742a0ca42249ced5a",
+  "files": 93
+ },
+ "written_utc": "2026-10-11 20:59",
+ "choices": [
+  "H7.6: a 5m bar's entries (fills at its open) are decided first, on the state at the previous 5m close (equity, open positions, caps); then every open position, the new ones included, runs the bar in the order of H 7.6.",
+  "H7.6: a bar whose high (long) reaches the next untried add level fills every add level it reaches first (each moving the stop and the liquidation price), and only then checks the low against the (moved) stop, also when the low had reached the old stop; a bar that reaches no add level checks the stop at once.",
+  "H7.6: when the liquidation price lies inside the stop (only possible after a gapped add or a fallback leverage), the low (long) reaching it liquidates before the stop; otherwise the stop exits first.",
+  "H7.3: liquidation price = Binance's isolated one-way formula with the bracket's mmr and cum at the position's entry notional; margin per unit = qty x fill / L; funding is paid from / to the wallet, not the isolated margin.",
+  "H7.3: no L in 1..20 meeting (i) and (iii) -> the entry is skipped (counted 'leverage').",
+  "H7.2/7.4: U stays r x equity at the entry also after a liquidity or margin cut, so S_req uses that U.",
+  "H7.3: an entry or add is cut to what the free wallet (wallet - isolated margins) can pay incl. its taker fee; minimum notional is checked on every unit.",
+  "H7.5: the 'entry bar' of the chandelier is the signal-timeframe bin that holds the fill 5m bar; the signal bar itself is not included.",
+  "H7.6/2: funding at calc_time (rounded to the 5m grid) is charged after the 5m bar ending then; price = the coin's last 5m close; funding at or after the period end belongs to the next period.",
+  "H3: a coin whose bars end for good inside the period (manifest last_nonzero_volume_bar) closes its open position at its last 5m close (exit costs, counted 'coin end'); open positions at the period end are marked, not closed.",
+  "H8: same 5m fill time -> 30-day quote volume before the signal close (largest first), then pick number, then universe order; a signal whose coin has no 5m bar right after the close fills at the coin's next 5m bar.",
+  "H10: months after a bust have M = 1 (account stopped) and are flagged; ln M uses max(M, 1e-12).",
+  "H10: 'share of total profit from the top 10% of positions' = sum of the top 10% (ceil) positions' net P&L / sum of all positive net P&L.",
+  "H12(a): per coin the n_long + n_short random bars are drawn together without replacement (so one bar is never both sides); the first n_long drawn are long. Pool = the coin's bars with close in the period, label known, ATR14 > 0 and a fill bar inside the period.",
+  "H12/H13 seeds: sha256('|'.join(parts)) -> first 8 bytes little-endian -> numpy PCG64; v1 parts (hunt, control, period, r, seed); wide parts (hunt-wide, system id, control, period, r, seed); bootstrap seed = same with 'boot' as the seed part; r written with '%g'.",
+  "H13 P0: 'a position open in a month' = at least one position open at some 5m step of that month.",
+  "H11.2/W5: 72 / 66 positions = 2 x the period's months; positions = entries opened.",
+  "W3.2: a bar with a long and a short event gives no entry and is counted 'both'; F2-F4 warm-up of 300 bars is applied by entries_wide.events_on; the event edge is taken before the gate (a run of True bars that starts on a bar the gate blocks gives no entry later in the run).",
+  "W5: picks come from F1-F3 and F5 only (the 686 candidates); the 76 F4 systems run in select as a labelled read (their numbers were chosen after this test period was seen) and never in test, R22 included; the 'no pick' fallback is the best F1-F3 or F5 system.",
+  "W7: in the wide study the gate diagnostics run in the select period only (the other gate is a non-pick system); v1 runs them in select and test as H 14 says. In the 'no pick, fail' case the one system's reads run as a pick's.",
+  "W7: the first draft's sizing read (r = 2% / 5%) is replaced by the R1 goal board of reads_a.py (machine A: open-risk cap 4% x r / 0.5%, margin budget B = equity / 6 as written; machine B: goal-mode caps).",
+  "R24 (engine PR_FIXLEV): the rule bot's tier walk L, L - 10, ... down to 20x; per candidate margin = L% of equity at the previous 5m close, notional = L x margin; taken when the bracket allows L at that notional, the first stop lies inside the liquidation price by max(0.2% of the fill, 1 ATR14) and the loss at the stop (slippage and taker both ways) is <= 15% of equity; no candidate -> skipped ('no_leverage', by the lowest tier's reason in rulebot_skipped). Checked at entry on the planned unit; the liquidity and free-wallet cuts keep L.",
+  "H10: select runs report the metric set without the daily equity path (by year / side / group included); test runs include it. DeepSeek rows keep only counts and labels in the repository (W 11).",
+  "W3.3: F5 = famous.py's donchian / tsmom states on the system's own bars, day lengths x bars per day of the timeframe; event = the first bar of a state with the state defined on t and t-1; TSMOM decides at bars closing at Monday 00:00 UTC only.",
+  "W5/W6: the one-per-name walk runs to 30 names; batches of 10 are fixed in picks.json at select; a batch is tested only when >= 5 of the previous batch PASS; BH within each batch; untested members never run on test.",
+  "W12 lineup: computed in the test step from the full figures (DeepSeek: the label and the failing conditions only in public); 'no pick, fail' is excluded.",
+  "W7.1 reads: a reads module runs after test.json only when its file is pinned; the hook writes its outputs; any change of a study file while it ran, or a float under a DeepSeek row in its public output, refuses the write; a failed read never changes the test step's result.",
+  "H2: data identity = sha256 over the arrays the study reads, in order, each as 'name|dtype|shape' newline then its raw C-order bytes (5m: ts o h l c v qv; funding: ts rate); compared with research/hunt/data_manifest.json at every select / test. Coin end and missing funding months come from that pinned manifest copy; a coin end at or after the period end, and missing months outside the loaded span or after the coin end, are not carried into a step (select keeps nothing about 2024+)."
+ ],
+ "picks": [
+  {
+   "id": "F3:F4_PULL:4h:NONE",
+   "strategy": "F4_PULL",
+   "family": "F3",
+   "name": "F4_PULL",
+   "kind": "ds",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "ema_fast": 9,
+    "ema_mid": 50,
+    "ema_slow": 200
+   },
+   "spec_sha": "6c78cf5a91ff2bfc",
+   "pick_no": 1,
+   "batch": 1
+  },
+  {
+   "id": "F1:E3:4h:NONE",
+   "strategy": "E3",
+   "family": "F1",
+   "name": "E3",
+   "kind": "hunt",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "threshold": 1.5
+   },
+   "spec_sha": "4868dccfb3dfdca3",
+   "pick_no": 2,
+   "batch": 1
+  },
+  {
+   "id": "F2:S2_ST_ROC:4h:NONE",
+   "strategy": "S2_ST_ROC",
+   "family": "F2",
+   "name": "S2_ST_ROC",
+   "kind": "core",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "st_atr_len": 10,
+    "st_mult": 6.0,
+    "roc_len": 9
+   },
+   "spec_sha": "3ed443aa0f8420cd",
+   "pick_no": 3,
+   "batch": 1
+  },
+  {
+   "id": "F3:F16_FIB382:4h:NONE",
+   "strategy": "F16_FIB382",
+   "family": "F3",
+   "name": "F16_FIB382",
+   "kind": "ds",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "swing_k": 3,
+    "leg_atr": 3.0,
+    "leg_max_bars": 30,
+    "zone_life": 50
+   },
+   "spec_sha": "3c6b806fe42aa62e",
+   "pick_no": 4,
+   "batch": 1
+  },
+  {
+   "id": "F3:F8_VWICK:4h:NONE",
+   "strategy": "F8_VWICK",
+   "family": "F3",
+   "name": "F8_VWICK",
+   "kind": "ds",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "body_frac": 0.7,
+    "body_atr": 1.3,
+    "zone_life": 50
+   },
+   "spec_sha": "834fcd348bba3764",
+   "pick_no": 5,
+   "batch": 1
+  },
+  {
+   "id": "F3:F4_PULL_RSI:4h:NONE",
+   "strategy": "F4_PULL_RSI",
+   "family": "F3",
+   "name": "F4_PULL_RSI",
+   "kind": "ds",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "ema_fast": 20,
+    "ema_slow": 50,
+    "rsi_len": 14,
+    "rsi_level": 40.0
+   },
+   "spec_sha": "0965e3a8b4ba10c8",
+   "pick_no": 6,
+   "batch": 1
+  },
+  {
+   "id": "F2:V45_AMB:4h:NONE",
+   "strategy": "V45_AMB",
+   "family": "F2",
+   "name": "V45_AMB",
+   "kind": "core",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "st_mult_main": 6.0,
+    "st_mult_strict": 3.0,
+    "htf_st_mult": 6.0,
+    "stoch_len": 14
+   },
+   "spec_sha": "abcb2cb5528fde95",
+   "pick_no": 7,
+   "batch": 1
+  },
+  {
+   "id": "F3:F5_BOX_HTF:4h:NONE",
+   "strategy": "F5_BOX_HTF",
+   "family": "F3",
+   "name": "F5_BOX_HTF",
+   "kind": "ds",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "box_len": 48,
+    "adx_max": 20.0,
+    "edge": 0.15,
+    "width_atr": 3.0
+   },
+   "spec_sha": "7fb417ffc4aac94b",
+   "pick_no": 8,
+   "batch": 1
+  },
+  {
+   "id": "F2:S5_DONCHIAN_MFI:4h:NONE",
+   "strategy": "S5_DONCHIAN_MFI",
+   "family": "F2",
+   "name": "S5_DONCHIAN_MFI",
+   "kind": "core",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "dc_len": 20,
+    "mfi_len": 14,
+    "mfi_level": 30.0,
+    "sync": 3
+   },
+   "spec_sha": "78134a25f81ba076",
+   "pick_no": 9,
+   "batch": 1
+  },
+  {
+   "id": "F3:F10_M2022:4h:NONE",
+   "strategy": "F10_M2022",
+   "family": "F3",
+   "name": "F10_M2022",
+   "kind": "ds",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "spec_sha": "b1ed30be0d182495",
+   "pick_no": 10,
+   "batch": 1
+  },
+  {
+   "id": "F2:N05_PSAR_POC:4h:G1",
+   "strategy": "N05_PSAR_POC",
+   "family": "F2",
+   "name": "N05_PSAR_POC",
+   "kind": "core",
+   "tf": "4h",
+   "gate": "G1",
+   "combo": {
+    "poc_lookback": 100,
+    "poc_tol": 0.2,
+    "pierce_frac": 0.5,
+    "sar_af": 0.02
+   },
+   "spec_sha": "c8da205d7cbf5737",
+   "pick_no": 11,
+   "batch": 2
+  },
+  {
+   "id": "F2:N11_BREAKAWAY:1h:NONE",
+   "strategy": "N11_BREAKAWAY",
+   "family": "F2",
+   "name": "N11_BREAKAWAY",
+   "kind": "core",
+   "tf": "1h",
+   "gate": "NONE",
+   "combo": {
+    "big_body": 0.8,
+    "small_body": 0.4,
+    "gap_tol": 0.05,
+    "prior_n": 5
+   },
+   "spec_sha": "a47f6f17026f8872",
+   "pick_no": 12,
+   "batch": 2
+  },
+  {
+   "id": "F5:TURTLE55:4h:NONE",
+   "strategy": "TURTLE55",
+   "family": "F5",
+   "name": "TURTLE55",
+   "kind": "famous",
+   "tf": "4h",
+   "gate": "NONE",
+   "combo": {
+    "entry_days": 55,
+    "exit_days": 20
+   },
+   "spec_sha": "081176a2a34985a1",
+   "pick_no": 13,
+   "batch": 2,
+   "note": "research/famous results of these rules on the old six (daily bars) have been read: the new-24 read is shown next to an F5 pick (W 3.3)"
+  }
+ ],
+ "label": "picks",
+ "batches": [
+  [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10
+  ],
+  [
+   11,
+   12,
+   13
+  ]
+ ],
+ "batch_size": 10,
+ "batch_trigger": 5,
+ "batch_labels": [
+  "1\uad70",
+  "2\uad70",
+  "3\uad70"
+ ],
+ "batch_rule": "W 5 / W 6: picks.json lists positions 1-10 (batch 1, 1\uad70), 11-20 (2\uad70) and 21-30 (3\uad70) of the one-per-name walk, fixed at select before any test bar is read. Batch 1 is tested. Batch n+1 is tested the same way (its own controls, BH q = 0.10 over its own p-values) only when >= 5 of the 10 picks of batch n PASS. Batches are never re-ordered after a test result. WIDE PASS = at least one PASS in any tested batch."
+}

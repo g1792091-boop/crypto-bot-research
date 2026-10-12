@@ -1,0 +1,23 @@
+{
+ "status": "no_pick_fail",
+ "picks": [
+  "P3S_K7_H28"
+ ],
+ "groups": {
+  "P3S_K7_H28": "P3S"
+ },
+ "K": 1,
+ "stamp": {
+  "commit": "f9d759e6525e9849ea1e74705ddb3e1d7a81afa8",
+  "pin": {
+   "pin_file": "research/altpump/PREREG_ALTPUMP.sha256",
+   "pin_sha256": "87a22903edddaa716198dad6d8e1dd9d9818305d045834e4b5afb3e37bef90c6",
+   "files": 2,
+   "code_sha256": "4a8672525b14b01fa61dd15849283111cde15580ebde6fe632716ba99000acb9"
+  },
+  "code_sha256": "4a8672525b14b01fa61dd15849283111cde15580ebde6fe632716ba99000acb9",
+  "data_sha256": "ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0",
+  "funding": "funding assumed 0.03%/8h",
+  "written_utc": "2026-10-11 12:23"
+ }
+}

@@ -1,0 +1,1812 @@
+{
+ "stamp": {
+  "commit": "cb742eeea442275d6f86961dc977b3bbee59f3d0",
+  "pin": {
+   "pin_file": "research/altpump/PREREG_ALTPUMP.sha256",
+   "pin_sha256": "c52fce00610e73a3a392e1b0403e47be4750125e9b2b42021e11ad1eeaa3b1ed",
+   "files": 4,
+   "code_sha256": "4a8672525b14b01fa61dd15849283111cde15580ebde6fe632716ba99000acb9"
+  },
+  "code_sha256": "4a8672525b14b01fa61dd15849283111cde15580ebde6fe632716ba99000acb9",
+  "data_sha256": "ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0",
+  "funding": "funding assumed 0.03%/8h",
+  "written_utc": "2026-10-11 13:02"
+ },
+ "board": {
+  "P3S_K7_H28": {
+   "p1": {
+    "r=0.005": {
+     "pick": {
+      "months": 35,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.9799700004111175,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 119,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.9235080412639392,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 181409,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9993768758163984,
+      "worst_multiple": 0.9699274993591296,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 235425,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 6,
+      "risk_cap": 0.02,
+      "margin_budget_per_position": "equity / 6"
+     },
+     "label": "chosen here"
+    },
+    "r=0.02": {
+     "pick": {
+      "months": 35,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.9214364440541115,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 119,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.7280180243853719,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 182152,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9966071787370213,
+      "worst_multiple": 0.8817997459574388,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 235487,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 6,
+      "risk_cap": 0.08,
+      "margin_budget_per_position": "equity / 6"
+     },
+     "label": "chosen here"
+    },
+    "r=0.05": {
+     "pick": {
+      "months": 35,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.811222999289069,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 119,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.4316768263804904,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 181863,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9937259566309095,
+      "worst_multiple": 0.7148335802339216,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 235243,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 4,
+      "risk_cap": 0.2,
+      "margin_budget_per_position": "equity / 4"
+     },
+     "label": "chosen here"
+    },
+    "r=0.1": {
+     "pick": {
+      "months": 35,
+      "bust_share": 0.0,
+      "median_multiple": 1.0030735876755459,
+      "worst_multiple": 0.6514798564804072,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 0.9576594379415604,
+     "pick_machine": {
+      "positions": 123,
+      "first_unit_risk_over_U": 0.9576594379415604,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 37,
+       "cut_free_wallet": 5
+      }
+     },
+     "random_days_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.1484905398019573,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 185169,
+      "first_unit_risk_over_U": 0.9677087954385205,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 28944,
+       "cut_free_wallet": 10095
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9848081261640698,
+      "worst_multiple": 0.4634360110853726,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 243893,
+      "first_unit_risk_over_U": 0.9527179702009342,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 74952,
+       "cut_free_wallet": 11015
+      }
+     },
+     "caps": {
+      "n_max": 4,
+      "risk_cap": 0.4,
+      "margin_budget_per_position": "equity / 4"
+     },
+     "label": "chosen here"
+    },
+    "r=0.2": {
+     "pick": {
+      "months": 35,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.5480880433016305,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 0.6914236741594196,
+     "pick_machine": {
+      "positions": 108,
+      "first_unit_risk_over_U": 0.6914236741594196,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 108,
+       "cut_free_wallet": 36
+      }
+     },
+     "random_days_pooled": {
+      "months": 70000,
+      "bust_share": 0.0006285714285714285,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.06047170324749826,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 163200,
+      "first_unit_risk_over_U": 0.7041685087350812,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 163138,
+       "cut_free_wallet": 44044
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 70000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9655268270474171,
+      "worst_multiple": 0.2812481000690658,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 213632,
+      "first_unit_risk_over_U": 0.7015886845860364,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 213632,
+       "cut_free_wallet": 51531
+      }
+     },
+     "caps": {
+      "n_max": 3,
+      "risk_cap": 0.6,
+      "margin_budget_per_position": "equity / 3"
+     },
+     "label": "chosen here"
+    }
+   },
+   "p2": {
+    "r=0.005": {
+     "pick": {
+      "months": 26,
+      "bust_share": 0.0,
+      "median_multiple": 1.000349415708023,
+      "worst_multiple": 0.971413358563661,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 128,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.9359422943412405,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 252591,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9972379651294556,
+      "worst_multiple": 0.9523865386243339,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 241254,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 6,
+      "risk_cap": 0.02,
+      "margin_budget_per_position": "equity / 6"
+     },
+     "label": "test"
+    },
+    "r=0.02": {
+     "pick": {
+      "months": 26,
+      "bust_share": 0.0,
+      "median_multiple": 1.001259861231928,
+      "worst_multiple": 0.8878620698718914,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 128,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.7459559955330879,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 252729,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9887604182621713,
+      "worst_multiple": 0.8172623262573633,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 242388,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 6,
+      "risk_cap": 0.08,
+      "margin_budget_per_position": "equity / 6"
+     },
+     "label": "test"
+    },
+    "r=0.05": {
+     "pick": {
+      "months": 26,
+      "bust_share": 0.0,
+      "median_multiple": 1.000590942975661,
+      "worst_multiple": 0.7305875668029131,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 128,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.4723200263498806,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 252273,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9722533958163833,
+      "worst_multiple": 0.5804877271738587,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 240101,
+      "first_unit_risk_over_U": 0.9982937102423602,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 912
+      }
+     },
+     "caps": {
+      "n_max": 4,
+      "risk_cap": 0.2,
+      "margin_budget_per_position": "equity / 4"
+     },
+     "label": "test"
+    },
+    "r=0.1": {
+     "pick": {
+      "months": 26,
+      "bust_share": 0.0,
+      "median_multiple": 0.9928851061511955,
+      "worst_multiple": 0.5780849223661234,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 0.9530861885681663,
+     "pick_machine": {
+      "positions": 132,
+      "first_unit_risk_over_U": 0.9530861885681663,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 25,
+       "cut_free_wallet": 10
+      }
+     },
+     "random_days_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.17287693576224397,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 264138,
+      "first_unit_risk_over_U": 0.9335129142557138,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 65140,
+       "cut_free_wallet": 28710
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 0.940350212816733,
+      "worst_multiple": 0.27520680822421517,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 250779,
+      "first_unit_risk_over_U": 0.9622894088853946,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 48552,
+       "cut_free_wallet": 11889
+      }
+     },
+     "caps": {
+      "n_max": 4,
+      "risk_cap": 0.4,
+      "margin_budget_per_position": "equity / 4"
+     },
+     "label": "test"
+    },
+    "r=0.2": {
+     "pick": {
+      "months": 26,
+      "bust_share": 0.0,
+      "median_multiple": 1.0273971387183565,
+      "worst_multiple": 0.5886168913421435,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 0.6988705972254541,
+     "pick_machine": {
+      "positions": 107,
+      "first_unit_risk_over_U": 0.6988705972254541,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 107,
+       "cut_free_wallet": 32
+      }
+     },
+     "random_days_pooled": {
+      "months": 52000,
+      "bust_share": 0.0004807692307692308,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.055070674382070764,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 214982,
+      "first_unit_risk_over_U": 0.6736144841074813,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 214864,
+       "cut_free_wallet": 76752
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 52000,
+      "bust_share": 0.0,
+      "median_multiple": 0.9171618590860668,
+      "worst_multiple": 0.14162400252066693,
+      "share_ge_x5": 0.000576923076923077,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 213910,
+      "first_unit_risk_over_U": 0.7066935393070491,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 213910,
+       "cut_free_wallet": 63762
+      }
+     },
+     "caps": {
+      "n_max": 3,
+      "risk_cap": 0.6,
+      "margin_budget_per_position": "equity / 3"
+     },
+     "label": "test"
+    }
+   },
+   "p3": {
+    "r=0.005": {
+     "pick": {
+      "months": 19,
+      "bust_share": 0.0,
+      "median_multiple": 1.0012873133002012,
+      "worst_multiple": 0.9770938368262866,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 64,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.9354902200177749,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 98782,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.9607595388064523,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 125558,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 6,
+      "risk_cap": 0.02,
+      "margin_budget_per_position": "equity / 6"
+     },
+     "label": "test"
+    },
+    "r=0.02": {
+     "pick": {
+      "months": 19,
+      "bust_share": 0.0,
+      "median_multiple": 1.0051570289228577,
+      "worst_multiple": 0.9094151230304397,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 64,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.7647060898089351,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 98890,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.8477520797590044,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 125631,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 6,
+      "risk_cap": 0.08,
+      "margin_budget_per_position": "equity / 6"
+     },
+     "label": "test"
+    },
+    "r=0.05": {
+     "pick": {
+      "months": 19,
+      "bust_share": 0.0,
+      "median_multiple": 1.0129314509174057,
+      "worst_multiple": 0.7761555942395502,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 1.0,
+     "pick_machine": {
+      "positions": 64,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "random_days_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.47713671286336995,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 98638,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.6339726686186162,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 125642,
+      "first_unit_risk_over_U": 1.0,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 0,
+       "cut_free_wallet": 0
+      }
+     },
+     "caps": {
+      "n_max": 4,
+      "risk_cap": 0.2,
+      "margin_budget_per_position": "equity / 4"
+     },
+     "label": "test"
+    },
+    "r=0.1": {
+     "pick": {
+      "months": 19,
+      "bust_share": 0.0,
+      "median_multiple": 1.0243510510089977,
+      "worst_multiple": 0.5872563586062721,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 0.9481809079705,
+     "pick_machine": {
+      "positions": 67,
+      "first_unit_risk_over_U": 0.9481809079705,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 12,
+       "cut_free_wallet": 5
+      }
+     },
+     "random_days_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.14163506062413778,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 101174,
+      "first_unit_risk_over_U": 0.95346773072124,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 26149,
+       "cut_free_wallet": 4981
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.3457817816780179,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 129470,
+      "first_unit_risk_over_U": 0.9502886482818305,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 20988,
+       "cut_free_wallet": 10191
+      }
+     },
+     "caps": {
+      "n_max": 4,
+      "risk_cap": 0.4,
+      "margin_budget_per_position": "equity / 4"
+     },
+     "label": "test"
+    },
+    "r=0.2": {
+     "pick": {
+      "months": 19,
+      "bust_share": 0.0,
+      "median_multiple": 1.036065284373867,
+      "worst_multiple": 0.4533004260264213,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0
+     },
+     "first_unit_risk_over_U": 0.708291942368583,
+     "pick_machine": {
+      "positions": 57,
+      "first_unit_risk_over_U": 0.708291942368583,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 57,
+       "cut_free_wallet": 19
+      }
+     },
+     "random_days_pooled": {
+      "months": 38000,
+      "bust_share": 0.0003421052631578947,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.06746842219046752,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck reference: the pick's own signals moved to random days (control b, 12), the pick's side kept; a no-skill one-sided rule reaches high multiples about this often in the same months"
+     },
+     "random_days_machine": {
+      "positions": 87001,
+      "first_unit_risk_over_U": 0.710248250474505,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 86952,
+       "cut_free_wallet": 21234
+      }
+     },
+     "coin_flip_pooled": {
+      "months": 38000,
+      "bust_share": 0.0,
+      "median_multiple": 1.0,
+      "worst_multiple": 0.247539339099176,
+      "share_ge_x5": 0.0,
+      "share_ge_x10": 0.0,
+      "share_ge_x20": 0.0,
+      "share_ge_x30": 0.0,
+      "share_ge_x50": 0.0,
+      "share_ge_x100": 0.0,
+      "label": "luck without the market side: coin-flip sides (control a) cancel the market's direction, so in a trending month they understate what luck gives a one-sided pick"
+     },
+     "coin_flip_machine": {
+      "positions": 110967,
+      "first_unit_risk_over_U": 0.7033809202403629,
+      "adds_per_position": 0.0,
+      "share_reaching_add": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "add_skips": {
+       "add_skip_risk_cap": 0,
+       "add_skip_margin_budget": 0,
+       "add_skip_free_wallet": 0,
+       "add_skip_liquidity": 0,
+       "add_skip_min_notional": 0,
+       "add_skip_liq_not_beyond_stop": 0
+      },
+      "adds_filled": 0,
+      "entry_cuts": {
+       "cut_liquidity": 0,
+       "cut_margin_budget": 110967,
+       "cut_free_wallet": 30229
+      }
+     },
+     "caps": {
+      "n_max": 3,
+      "risk_cap": 0.6,
+      "margin_budget_per_position": "equity / 3"
+     },
+     "label": "test"
+    }
+   }
+  }
+ },
+ "baseline": "goal-50x baseline (for scale only): coin flip on the big four at 1-minute fills, about 1% of months reach x50",
+ "note": "reported, never a pass rule (14)"
+}

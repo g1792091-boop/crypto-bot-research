@@ -1,0 +1,416 @@
+[10-11 15:12 UTC] 1/9 설치 (파이썬 패키지)  (남은 시간 약 102분, 어림)
+Hit:1 http://ubuntu.mirror.constant.com noble InRelease
+Hit:2 http://security.ubuntu.com/ubuntu noble-security InRelease
+Hit:3 http://ubuntu.mirror.constant.com noble-updates InRelease
+Hit:4 http://ubuntu.mirror.constant.com noble-backports InRelease
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+python3-pip is already the newest version (24.0+dfsg-1ubuntu1.3).
+git is already the newest version (1:2.43.0-1ubuntu7.3).
+tmux is already the newest version (3.4-1ubuntu0.1).
+The following NEW packages will be installed:
+  python3-pip-whl python3-setuptools-whl python3-venv python3.12-venv
+0 upgraded, 4 newly installed, 0 to remove and 11 not upgraded.
+Need to get 2,430 kB of archives.
+After this operation, 2,783 kB of additional disk space will be used.
+Get:1 http://ubuntu.mirror.constant.com noble-updates/universe amd64 python3-pip-whl all 24.0+dfsg-1ubuntu1.3 [1,707 kB]
+Get:2 http://ubuntu.mirror.constant.com noble-updates/universe amd64 python3-setuptools-whl all 68.1.2-2ubuntu1.2 [716 kB]
+Get:3 http://ubuntu.mirror.constant.com noble-updates/universe amd64 python3.12-venv amd64 3.12.3-1ubuntu0.17 [5,684 B]
+Get:4 http://ubuntu.mirror.constant.com noble-updates/universe amd64 python3-venv amd64 3.12.3-0ubuntu2.1 [1,032 B]
+Fetched 2,430 kB in 2s (1,410 kB/s)
+Selecting previously unselected package python3-pip-whl.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 93477 files and directories currently installed.)
+Preparing to unpack .../python3-pip-whl_24.0+dfsg-1ubuntu1.3_all.deb ...
+Unpacking python3-pip-whl (24.0+dfsg-1ubuntu1.3) ...
+Selecting previously unselected package python3-setuptools-whl.
+Preparing to unpack .../python3-setuptools-whl_68.1.2-2ubuntu1.2_all.deb ...
+Unpacking python3-setuptools-whl (68.1.2-2ubuntu1.2) ...
+Selecting previously unselected package python3.12-venv.
+Preparing to unpack .../python3.12-venv_3.12.3-1ubuntu0.17_amd64.deb ...
+Unpacking python3.12-venv (3.12.3-1ubuntu0.17) ...
+Selecting previously unselected package python3-venv.
+Preparing to unpack .../python3-venv_3.12.3-0ubuntu2.1_amd64.deb ...
+Unpacking python3-venv (3.12.3-0ubuntu2.1) ...
+Setting up python3-setuptools-whl (68.1.2-2ubuntu1.2) ...
+Setting up python3-pip-whl (24.0+dfsg-1ubuntu1.3) ...
+Setting up python3.12-venv (3.12.3-1ubuntu0.17) ...
+Setting up python3-venv (3.12.3-0ubuntu2.1) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+numpy 2.0.2 pandas 2.3.3 numba 0.60.0
+[10-11 15:13 UTC] 코드 90d3a882f2, CPU 32개, 메모리 125GB, 디스크 여유 76GB
+[10-11 15:13 UTC] 2/9 자체 점검 (시험 코드, 몇 분 동안 조용한 게 정상)  (남은 시간 약 98분, 어림)
+........................................................................ [ 31%]
+............................F
+=================================== FAILURES ===================================
+____________________ test_reads_hook_ctx_guard_and_d11[ok] _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-root/pytest-0/test_reads_hook_ctx_guard_and_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x73b8b695c710>
+mode = 'ok'
+
+    @pytest.mark.parametrize("mode", ["ok", "write", "d11", "unpinned"])
+    def test_reads_hook_ctx_guard_and_d11(tmp_path, monkeypatch, mode):
+        out, _ = _e2e_setup(tmp_path, monkeypatch, force_pass=True)
+        priv = tmp_path / "private"
+        args = ["--procs", "1", "--data", "x", "--private", str(priv)]
+        assert H.main(["select", "--study", "wide"] + args) == 0
+        fake = _FakeReads(mode)
+        monkeypatch.setattr(H, "READS_MODULES", ("reads_fake",))
+        monkeypatch.setattr(H, "_reads_module", lambda name: fake)
+        real_exists = os.path.exists
+        monkeypatch.setattr(H.os.path, "exists", lambda p: True if str(p).endswith("reads_fake.py") else real_exists(p))
+        monkeypatch.setattr(H, "sha256_file", (lambda f: (lambda p: "f" * 64 if str(p).endswith("reads_fake.py")
+                                                          else f(p)))(H.sha256_file))
+        monkeypatch.setattr(H, "reads_pinned_now", lambda study: {} if mode == "unpinned"
+                            else {"research/hunt/reads_fake.py": "f" * 64})
+        rc = H.main(["test", "--study", "wide", "--judge-usd-per-call", "0.002"] + args)
+        target = out / "wide" / "reads_fake.json"
+        assert (out / "wide" / "test.json").exists()                  # the verdict is written before any read
+        if mode == "ok":
+            assert rc == 0 and target.exists()
+>           assert fake.seen["judge_usd_per_call"] == 0.002 and fake.seen["window_seconds"] is None
+E           assert (0.002 == 0.002 and 0.0097411920032755 is None)
+
+tests/test_hunt.py:1652: AssertionError
+----------------------------- Captured stdout call -----------------------------
+wide select done in 0s; picks sha256 0000000000000000000000000000000000000000000000000000000000000000 appended to research/hunt/PREREG_HUNT_WIDE.sha256
+wide test: pick 1 (batch 1) F2:X:4h:NONE done in 0s
+wide test: pick 2 (batch 1) F5:TURTLE20:1h:NONE done in 0s
+wide test: pick 3 (batch 1) F1:E1:1h:G1 done in 0s
+wide test: pick 4 (batch 1) F3:F9_FVG:4h:NONE done in 0s
+wide test: pick 5 (batch 1) F1:E3:4h:NONE done in 0s
+wide test done in 1s
+[reads] reads_fake: reads line predates test.json: yes
+[reads] reads_fake: written ../../../tmp/pytest-of-root/pytest-0/test_reads_hook_ctx_guard_and_0/out/wide/reads_fake.json in 0s
+=========================== short test summary info ============================
+FAILED tests/test_hunt.py::test_reads_hook_ctx_guard_and_d11[ok] - assert (0....
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 100 passed in 16.54s
+[10-11 15:13 UTC] 멈춤: 자체 점검 실패 (run.log 마지막 부분도 보내 주세요: tail -50 /root/hunt/run.log)
+[10-11 15:13 UTC] 이 화면을 그대로 복사해 개발자에게 보내 주세요.
+[10-11 15:13 UTC] 아직 계산 전이라, 바로 못 고치면 서버를 Destroy해도 잃는 것이 없습니다.
+[10-11 15:13 UTC] 개발자가 고쳤다고 하면: 개발자가 준 줄(bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh update <커밋>)을 붙여 넣고, 그다음 이 줄로 이어서 합니다:
+[10-11 15:13 UTC]   tmux kill-session -t hunt 2>/dev/null; tmux new -s hunt "bash /root/hunt/crypto-bot-research/research/hunt/bootstrap.sh; bash"
+[10-11 20:52 UTC] 1/9 설치 (파이썬 패키지)  (남은 시간 약 642분, 어림)
+[10-11 20:52 UTC] 코드 0f18ecb35e, CPU 32개, 메모리 125GB, 디스크 여유 76GB
+[10-11 20:52 UTC] 2/9 자체 점검 (시험 코드, 몇 분 동안 조용한 게 정상)  (남은 시간 약 638분, 어림)
+........................................................................ [ 31%]
+........................................................................ [ 62%]
+...................s.................................................... [ 94%]
+.............                                                            [100%]
+228 passed, 1 skipped in 58.18s
+[10-11 20:53 UTC]   · 자체 점검 통과: 228 passed, 1 skipped in 58.18s
+[10-11 20:53 UTC] 3/9 고정 파일 확인 (사전 등록·코드·자료 기준이 고정된 그대로인지)  (남은 시간 약 634분, 어림)
+pin ok hunt v1 select {'pin_file': 'research/hunt/PREREG_HUNT.sha256', 'pin_sha256': 'adfcedc6bdd86072ac3ff5404f37861ad655326a9923a5127388344cf3da34ed', 'files': 29}
+[10-11 20:53 UTC]   · v1 고정 일치 (다음 단계: select)
+pin ok hunt wide select {'pin_file': 'research/hunt/PREREG_HUNT_WIDE.sha256', 'pin_sha256': 'd3d7f2d08b7caf8b9628a50d96e786a595249e1ec1a9ac8742a0ca42249ced5a', 'files': 93}
+[10-11 20:54 UTC]   · wide 고정 일치 (다음 단계: select)
+[10-11 20:54 UTC] 4/9 바이낸스 공개 자료 받기 (30개 코인, 2020-01 ~ 2026-09, 5분봉·마크 가격·펀딩)  (남은 시간 약 633분, 어림)
+symbols (30) from research/hunt/universe30.json: BTCUSDT ETHUSDT SOLUSDT XRPUSDT DOGEUSDT BNBUSDT LTCUSDT MATICUSDT BCHUSDT LINKUSDT AVAXUSDT ADAUSDT TRBUSDT FILUSDT FTMUSDT ETCUSDT DOTUSDT NEARUSDT EOSUSDT CRVUSDT SANDUSDT ATOMUSDT TOMOUSDT AXSUSDT STORJUSDT MKRUSDT BLZUSDT COMPUSDT RUNEUSDT WAVESUSDT
+2026-10-11 20:54:02 download 5m: start, 30 coins, 2020-01..2026-09, already done 0, workers 8
+2026-10-11 20:54:02 BTCUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:54:11 ETHUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:54:19 SOLUSDT: 219 files (kl 73, mk 73, fr 73) span 2020-09..2026-09
+2026-10-11 20:54:26 XRPUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:54:33 DOGEUSDT: 225 files (kl 75, mk 75, fr 75) span 2020-07..2026-09
+2026-10-11 20:54:39 BNBUSDT: 240 files (kl 80, mk 80, fr 80) span 2020-02..2026-09
+2026-10-11 20:54:47 LTCUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:54:55 MATICUSDT: 192 files (kl 48, mk 72, fr 72) span 2020-10..2024-09
+2026-10-11 20:55:00 BCHUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:55:08 LINKUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:55:15 AVAXUSDT: 219 files (kl 73, mk 73, fr 73) span 2020-09..2026-09
+2026-10-11 20:55:22 ADAUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:55:29 TRBUSDT: 219 files (kl 73, mk 73, fr 73) span 2020-09..2026-09
+2026-10-11 20:55:35 FILUSDT: 216 files (kl 72, mk 72, fr 72) span 2020-10..2026-09
+2026-10-11 20:55:42 FTMUSDT: 204 files (kl 73, mk 73, fr 58) span 2020-09..2026-09
+2026-10-11 20:55:47 ETCUSDT: 243 files (kl 81, mk 81, fr 81) span 2020-01..2026-09
+2026-10-11 20:55:55 DOTUSDT: 222 files (kl 74, mk 74, fr 74) span 2020-08..2026-09
+2026-10-11 20:56:01 NEARUSDT: 216 files (kl 72, mk 72, fr 72) span 2020-10..2026-09
+2026-10-11 20:56:08 EOSUSDT: 227 files (kl 65, mk 81, fr 81) span 2020-01..2025-05
+2026-10-11 20:56:14 CRVUSDT: 219 files (kl 73, mk 73, fr 73) span 2020-09..2026-09
+2026-10-11 20:56:20 SANDUSDT: 207 files (kl 69, mk 69, fr 69) span 2021-01..2026-09
+2026-10-11 20:56:26 ATOMUSDT: 240 files (kl 80, mk 80, fr 80) span 2020-02..2026-09
+2026-10-11 20:56:33 TOMOUSDT: 149 files (kl 44, mk 58, fr 47) span 2020-10..2024-05
+2026-10-11 20:56:37 AXSUSDT: 213 files (kl 71, mk 71, fr 71) span 2020-11..2026-09
+2026-10-11 20:56:43 STORJUSDT: 218 files (kl 73, mk 73, fr 72) span 2020-09..2026-09
+2026-10-11 20:56:50 MKRUSDT: 210 files (kl 74, mk 74, fr 62) span 2020-08..2026-09
+2026-10-11 20:56:56 BLZUSDT: 204 files (kl 73, mk 73, fr 58) span 2020-09..2026-09
+2026-10-11 20:57:02 COMPUSDT: 228 files (kl 76, mk 76, fr 76) span 2020-06..2026-09
+2026-10-11 20:57:09 RUNEUSDT: 219 files (kl 73, mk 73, fr 73) span 2020-09..2026-09
+2026-10-11 20:57:15 WAVESUSDT: 207 files (kl 74, mk 74, fr 59) span 2020-08..2026-09
+2026-10-11 20:57:21 download 5m: finished 30/30
+[10-11 20:57 UTC] 5/9 받은 자료가 고정된 자료와 같은지 확인 (가격·거래량·펀딩·마크 가격, 숫자 하나라도 다르면 멈춤)  (남은 시간 약 618분, 어림)
+VERIFY OK: 30/30 coins, 0 differences
+[10-11 20:57 UTC]   · 사냥이 읽는 값: VERIFY OK: 30/30 coins, 0 differences
+VERIFY OK: 30/30 coins, 0 differences
+[10-11 20:57 UTC]   · 모든 값(마크 가격 포함): VERIFY OK: 30/30 coins, 0 differences
+[10-11 20:57 UTC] 6/9 추세 사냥 계산 (v1·넓게 고르기 → 두 시험, 작업 32개 동시에)  (남은 시간 약 616분, 어림)
+[10-11 20:57 UTC]   · v1 고르기 (2021-01 ~ 2023-12)
+v1 select: v1:E1:1h done (1s)
+v1 select: v1:E1:4h done (2s)
+v1 select: v1:E2:1h done (6s)
+v1 select: v1:E2:4h done (7s)
+v1 select: v1:E3:1h done (7s)
+v1 select: v1:E3:4h done (7s)
+v1 select done in 7s; picks sha256 8cedf1027c4e852350f0112a296e7a27549fe105c9c37bc6de8c4117e4b649da appended to research/hunt/PREREG_HUNT.sha256
+[10-11 20:57 UTC]   · wide 고르기 (2021-01 ~ 2023-12)
+[wide select cells] 376/381 done, 64s
+[wide select cells] 381/381 done, 99s
+wide select done in 106s; picks sha256 395ce1e9605bb00f666d037a41df602acf4b7f207274be66b25e18cd79d80177 appended to research/hunt/PREREG_HUNT_WIDE.sha256
+[10-11 20:59 UTC]   · v1 시험 (2024-01 ~ 2026-09, 한 번만)
+v1 test done in 4s
+[reads] reads_a: research/hunt/reads_a.py is not in research/hunt/PREREG_HUNT.sha256 with its current sha256: not run (append its line, then `python -m research.hunt.hunt reads --study v1`)
+[10-11 20:59 UTC]   · wide 시험 (2024-01 ~ 2026-09, 한 번만)
+[controls F3:F4_PULL:4h:NONE test r=0.005] 2000/2000 done, 8s
+[controls F3:F4_PULL:4h:NONE test r=0.01] 2000/2000 done, 6s
+wide test: pick 1 (batch 1) F3:F4_PULL:4h:NONE done in 18s
+wide test: pick 2 (batch 1) F1:E3:4h:NONE done in 5s
+[controls F2:S2_ST_ROC:4h:NONE test r=0.005] 2000/2000 done, 9s
+[controls F2:S2_ST_ROC:4h:NONE test r=0.01] 2000/2000 done, 7s
+wide test: pick 3 (batch 1) F2:S2_ST_ROC:4h:NONE done in 21s
+[controls F3:F16_FIB382:4h:NONE test r=0.005] 2000/2000 done, 7s
+[controls F3:F16_FIB382:4h:NONE test r=0.01] 2000/2000 done, 5s
+wide test: pick 4 (batch 1) F3:F16_FIB382:4h:NONE done in 15s
+[controls F3:F8_VWICK:4h:NONE test r=0.005] 2000/2000 done, 6s
+wide test: pick 5 (batch 1) F3:F8_VWICK:4h:NONE done in 13s
+wide test: pick 6 (batch 1) F3:F4_PULL_RSI:4h:NONE done in 5s
+wide test: pick 7 (batch 1) F2:V45_AMB:4h:NONE done in 15s
+wide test: pick 8 (batch 1) F3:F5_BOX_HTF:4h:NONE done in 5s
+wide test: pick 9 (batch 1) F2:S5_DONCHIAN_MFI:4h:NONE done in 3s
+wide test: pick 10 (batch 1) F3:F10_M2022:4h:NONE done in 5s
+wide test done in 108s
+[reads] reads_a: reads line predates test.json: yes
+[reads] reads_a: 12 rows; window seconds 0.0097411920032755 (research/hunt/bench_window.json (synthetic bars, pinned)) -> rolling control seeds 1-100
+[reads_a R1 rows] 302/312 done, 60s
+[reads_a R1 rows] 312/312 done, 62s
+[reads_a R1 controls] 3/4632 done, 113s
+[reads_a R1 controls] 33/4632 done, 175s
+[reads_a R1 controls] 41/4632 done, 247s
+[reads_a R1 controls] 67/4632 done, 311s
+[reads_a R1 controls] 78/4632 done, 373s
+[reads_a R1 controls] 103/4632 done, 434s
+[reads_a R1 controls] 126/4632 done, 500s
+[reads_a R1 controls] 166/4632 done, 562s
+[reads_a R1 controls] 172/4632 done, 672s
+[reads_a R1 controls] 205/4632 done, 734s
+[reads_a R1 controls] 212/4632 done, 798s
+[reads_a R1 controls] 237/4632 done, 862s
+[reads_a R1 controls] 247/4632 done, 927s
+[reads_a R1 controls] 264/4632 done, 987s
+[reads_a R1 controls] 280/4632 done, 1053s
+[reads_a R1 controls] 303/4632 done, 1113s
+[reads_a R1 controls] 338/4632 done, 1174s
+[reads_a R1 controls] 363/4632 done, 1240s
+[reads_a R1 controls] 405/4632 done, 1300s
+[reads_a R1 controls] 457/4632 done, 1361s
+[reads_a R1 controls] 534/4632 done, 1421s
+[reads_a R1 controls] 578/4632 done, 1481s
+[reads_a R1 controls] 615/4632 done, 1542s
+[reads_a R1 controls] 657/4632 done, 1604s
+[reads_a R1 controls] 730/4632 done, 1665s
+[reads_a R1 controls] 773/4632 done, 1760s
+[reads_a R1 controls] 775/4632 done, 1841s
+[reads_a R1 controls] 805/4632 done, 1933s
+[reads_a R1 controls] 813/4632 done, 2001s
+[reads_a R1 controls] 839/4632 done, 2084s
+[reads_a R1 controls] 850/4632 done, 2146s
+[reads_a R1 controls] 873/4632 done, 2223s
+[reads_a R1 controls] 891/4632 done, 2286s
+[reads_a R1 controls] 928/4632 done, 2346s
+[reads_a R1 controls] 940/4632 done, 2411s
+[reads_a R1 controls] 944/4632 done, 2502s
+[reads_a R1 controls] 973/4632 done, 2570s
+[reads_a R1 controls] 983/4632 done, 2643s
+[reads_a R1 controls] 1001/4632 done, 2705s
+[reads_a R1 controls] 1013/4632 done, 2767s
+[reads_a R1 controls] 1023/4632 done, 2834s
+[reads_a R1 controls] 1041/4632 done, 2901s
+[reads_a R1 controls] 1056/4632 done, 2966s
+[reads_a R1 controls] 1075/4632 done, 3027s
+[reads_a R1 controls] 1101/4632 done, 3090s
+[reads_a R1 controls] 1126/4632 done, 3153s
+[reads_a R1 controls] 1144/4632 done, 3220s
+[reads_a R1 controls] 1162/4632 done, 3280s
+[reads_a R1 controls] 1188/4632 done, 3345s
+[reads_a R1 controls] 1199/4632 done, 3405s
+[reads_a R1 controls] 1223/4632 done, 3468s
+[reads_a R1 controls] 1246/4632 done, 3532s
+[reads_a R1 controls] 1265/4632 done, 3592s
+[reads_a R1 controls] 1308/4632 done, 3654s
+[reads_a R1 controls] 1330/4632 done, 3771s
+[reads_a R1 controls] 1366/4632 done, 3849s
+[reads_a R1 controls] 1383/4632 done, 3912s
+[reads_a R1 controls] 1402/4632 done, 3975s
+[reads_a R1 controls] 1418/4632 done, 4037s
+[reads_a R1 controls] 1437/4632 done, 4099s
+[reads_a R1 controls] 1463/4632 done, 4160s
+[reads_a R1 controls] 1504/4632 done, 4222s
+[reads_a R1 controls] 1530/4632 done, 4283s
+[reads_a R1 controls] 1551/4632 done, 4343s
+[reads_a R1 controls] 1579/4632 done, 4409s
+[reads_a R1 controls] 1601/4632 done, 4469s
+[reads_a R1 controls] 1623/4632 done, 4530s
+[reads_a R1 controls] 1650/4632 done, 4594s
+[reads_a R1 controls] 1701/4632 done, 4655s
+[reads_a R1 controls] 1716/4632 done, 4734s
+[reads_a R1 controls] 1752/4632 done, 4795s
+[reads_a R1 controls] 1775/4632 done, 4856s
+[reads_a R1 controls] 1795/4632 done, 4919s
+[reads_a R1 controls] 1819/4632 done, 4984s
+[reads_a R1 controls] 1851/4632 done, 5044s
+[reads_a R1 controls] 1902/4632 done, 5107s
+[reads_a R1 controls] 1962/4632 done, 5169s
+[reads_a R1 controls] 2031/4632 done, 5229s
+[reads_a R1 controls] 2112/4632 done, 5289s
+[reads_a R1 controls] 2176/4632 done, 5350s
+[reads_a R1 controls] 2248/4632 done, 5411s
+[reads_a R1 controls] 2319/4632 done, 5491s
+[reads_a R1 controls] 2365/4632 done, 5557s
+[reads_a R1 controls] 2403/4632 done, 5617s
+[reads_a R1 controls] 2458/4632 done, 5678s
+[reads_a R1 controls] 2488/4632 done, 5741s
+[reads_a R1 controls] 2533/4632 done, 5808s
+[reads_a R1 controls] 2571/4632 done, 5874s
+[reads_a R1 controls] 2614/4632 done, 5934s
+[reads_a R1 controls] 2672/4632 done, 5996s
+[reads_a R1 controls] 2733/4632 done, 6058s
+[reads_a R1 controls] 2789/4632 done, 6121s
+[reads_a R1 controls] 2871/4632 done, 6182s
+[reads_a R1 controls] 2941/4632 done, 6245s
+[reads_a R1 controls] 3016/4632 done, 6305s
+[reads_a R1 controls] 3111/4632 done, 6365s
+[reads_a R1 controls] 3197/4632 done, 6426s
+[reads_a R1 controls] 3295/4632 done, 6486s
+[reads_a R1 controls] 3365/4632 done, 6546s
+[reads_a R1 controls] 3475/4632 done, 6609s
+[reads_a R1 controls] 3535/4632 done, 6669s
+[reads_a R1 controls] 3591/4632 done, 6730s
+[reads_a R1 controls] 3665/4632 done, 6791s
+[reads_a R1 controls] 3721/4632 done, 6851s
+[reads_a R1 controls] 3771/4632 done, 6911s
+[reads_a R1 controls] 3859/4632 done, 6972s
+[reads_a R1 controls] 3963/4632 done, 7034s
+[reads_a R1 controls] 4040/4632 done, 7094s
+[reads_a R1 controls] 4114/4632 done, 7154s
+[reads_a R1 controls] 4183/4632 done, 7215s
+[reads_a R1 controls] 4247/4632 done, 7362s
+[reads_a R1 controls] 4249/4632 done, 7519s
+[reads_a R1 controls] 4279/4632 done, 7697s
+[reads_a R1 controls] 4287/4632 done, 7833s
+[reads_a R1 controls] 4313/4632 done, 7991s
+[reads_a R1 controls] 4324/4632 done, 8125s
+[reads_a R1 controls] 4347/4632 done, 8264s
+[reads_a R1 controls] 4362/4632 done, 8397s
+[reads_a R1 controls] 4386/4632 done, 8480s
+[reads_a R1 controls] 4397/4632 done, 8543s
+[reads_a R1 controls] 4406/4632 done, 8621s
+[reads_a R1 controls] 4413/4632 done, 8682s
+[reads_a R1 controls] 4418/4632 done, 8835s
+[reads_a R1 controls] 4429/4632 done, 8898s
+[reads_a R1 controls] 4438/4632 done, 8969s
+[reads_a R1 controls] 4448/4632 done, 9032s
+[reads_a R1 controls] 4455/4632 done, 9108s
+[reads_a R1 controls] 4461/4632 done, 9185s
+[reads_a R1 controls] 4466/4632 done, 9245s
+[reads_a R1 controls] 4475/4632 done, 9309s
+[reads_a R1 controls] 4485/4632 done, 9399s
+[reads_a R1 controls] 4491/4632 done, 9468s
+[reads_a R1 controls] 4497/4632 done, 9536s
+[reads_a R1 controls] 4506/4632 done, 9617s
+[reads_a R1 controls] 4515/4632 done, 9693s
+[reads_a R1 controls] 4520/4632 done, 9754s
+[reads_a R1 controls] 4527/4632 done, 9817s
+[reads_a R1 controls] 4535/4632 done, 9888s
+[reads_a R1 controls] 4544/4632 done, 9951s
+[reads_a R1 controls] 4553/4632 done, 10012s
+[reads_a R1 controls] 4563/4632 done, 10073s
+[reads_a R1 controls] 4576/4632 done, 10152s
+[reads_a R1 controls] 4588/4632 done, 10215s
+[reads_a R1 controls] 4597/4632 done, 10283s
+[reads_a R1 controls] 4605/4632 done, 10348s
+[reads_a R1 controls] 4630/4632 done, 10422s
+[reads_a R1 controls] 4632/4632 done, 10446s
+[reads] reads_a: board runs done (10511s)
+[reads] reads_a: done in 10585s
+[reads] reads_a: written research/hunt/out/wide/reads_a.json in 10585s
+/root/hunt/crypto-bot-research/research/hunt/out/v1/RESULTS_KO.md
+/root/hunt/crypto-bot-research/research/hunt/out/wide/RESULTS_KO.md
+[10-11 23:58 UTC] 7/9 알트 급등 연구 (고르기 → 시험 → 목표판 → 5분봉 2차 확인 → 요약)  (남은 시간 약 161분, 어림)
+[10-11 23:58 UTC]   · 참고: 알트 급등 연구는 이번에 돌리지 않았습니다 (ALTPUMP=0)
+[10-11 23:58 UTC] 8/9 정밀 재확인 (고른 것이 거래한 코인만 1분봉·마크 가격으로 다시) + 추가 분석 (주말 뺀 버전 등)  (남은 시간 약 151분, 어림)
+[10-11 23:58 UTC]   · 1분봉 받을 코인 29개: ADAUSDT ATOMUSDT AVAXUSDT AXSUSDT BCHUSDT BLZUSDT BNBUSDT BTCUSDT COMPUSDT CRVUSDT DOGEUSDT DOTUSDT EOSUSDT ETCUSDT ETHUSDT FILUSDT FTMUSDT LINKUSDT LTCUSDT MATICUSDT MKRUSDT NEARUSDT RUNEUSDT SANDUSDT SOLUSDT STORJUSDT TRBUSDT WAVESUSDT XRPUSDT
+symbols (29) from --symbols: ADAUSDT ATOMUSDT AVAXUSDT AXSUSDT BCHUSDT BLZUSDT BNBUSDT BTCUSDT COMPUSDT CRVUSDT DOGEUSDT DOTUSDT EOSUSDT ETCUSDT ETHUSDT FILUSDT FTMUSDT LINKUSDT LTCUSDT MATICUSDT MKRUSDT NEARUSDT RUNEUSDT SANDUSDT SOLUSDT STORJUSDT TRBUSDT WAVESUSDT XRPUSDT
+2026-10-11 23:58:18 download fidelity: start, 29 coins, 2024-01..2026-09, already done 0, workers 8
+2026-10-11 23:58:19 ADAUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:58:27 ATOMUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:58:36 AVAXUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:58:46 AXSUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:58:55 BCHUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:59:07 BLZUSDT: 84 files (kl 33, mk 33, fr 18) span 2024-01..2026-09
+2026-10-11 23:59:12 BNBUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:59:24 BTCUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:59:36 COMPUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:59:45 CRVUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-11 23:59:53 DOGEUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:00:02 DOTUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:00:11 EOSUSDT: 83 files (kl 17, mk 33, fr 33) span 2024-01..2025-05
+2026-10-12 00:00:16 ETCUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:00:26 ETHUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:00:38 FILUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:00:47 FTMUSDT: 84 files (kl 33, mk 33, fr 18) span 2024-01..2026-09
+2026-10-12 00:00:52 LINKUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:01:02 LTCUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:01:12 MATICUSDT: 75 files (kl 9, mk 33, fr 33) span 2024-01..2024-09
+2026-10-12 00:01:16 MKRUSDT: 87 files (kl 33, mk 33, fr 21) span 2024-01..2026-09
+2026-10-12 00:01:24 NEARUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:01:33 RUNEUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:01:42 SANDUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:01:50 SOLUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:02:01 STORJUSDT: 98 files (kl 33, mk 33, fr 32) span 2024-01..2026-09
+2026-10-12 00:02:09 TRBUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:02:19 WAVESUSDT: 84 files (kl 33, mk 33, fr 18) span 2024-01..2026-09
+2026-10-12 00:02:25 XRPUSDT: 99 files (kl 33, mk 33, fr 33) span 2024-01..2026-09
+2026-10-12 00:02:33 download fidelity: finished 29/29
+[10-12 00:02 UTC]   · v1 정밀 재확인 (1분봉·마크 가격)
+fidelity: v1:E3:1h done (30s)
+/root/hunt/crypto-bot-research/research/hunt/out/v1/fidelity.json
+[10-12 00:03 UTC]   · wide 정밀 재확인 (1분봉·마크 가격)
+fidelity: F3:F4_PULL:4h:NONE done (32s)
+fidelity: F1:E3:4h:NONE done (32s)
+fidelity: F2:S2_ST_ROC:4h:NONE done (36s)
+fidelity: F3:F16_FIB382:4h:NONE done (38s)
+fidelity: F3:F8_VWICK:4h:NONE done (39s)
+fidelity: F3:F4_PULL_RSI:4h:NONE done (41s)
+fidelity: F2:V45_AMB:4h:NONE done (49s)
+fidelity: F3:F5_BOX_HTF:4h:NONE done (50s)
+fidelity: F2:S5_DONCHIAN_MFI:4h:NONE done (50s)
+fidelity: F3:F10_M2022:4h:NONE done (51s)
+/root/hunt/crypto-bot-research/research/hunt/out/wide/fidelity.json
+[10-12 00:04 UTC]   · 추가 분석: 주말 뺀 버전(4개 봉)·롱만·FOMC/고용지표 시간 피하기·모멘텀 비교 (7.4a)
+[reads] reads_o: reads line predates test.json: yes
+[reads] reads_o: 12 rows; variants ['base', 'O1', 'O1b']; O2: research/hunt/macro_calendar.json is not in research/hunt/PREREG_HUNT_WIDE.sha256 with its current sha256 (W 7.4a: its line is appended to the pin before the read runs)
+[reads_o size fixed on select] 12/12 done, 6s
+[reads_o controls] 65/384 done, 74s
+[reads_o controls] 193/384 done, 137s
+[reads_o controls] 353/384 done, 218s
+[reads_o controls] 384/384 done, 227s
+[reads] reads_o: rows and controls done (252s)
+[reads_o R6 (e)] 144/144 done, 49s
+[reads_o select weekend map] 338/343 done, 62s
+[reads_o select weekend map] 343/343 done, 98s
+[reads] reads_o: done in 407s
+[reads] reads_o: written research/hunt/out/wide/reads_o.json in 407s
+{"reads_o": "written"}
+[10-12 00:10 UTC] 9/9 결과 묶기  (남은 시간 약 1분, 어림)
+stamp written /root/hunt/results/stamps/code_stamp.json

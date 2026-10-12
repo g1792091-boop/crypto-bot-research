@@ -1,0 +1,4901 @@
+{
+ "stamp": {
+  "commit": "f9d759e6525e9849ea1e74705ddb3e1d7a81afa8",
+  "pin": {
+   "pin_file": "research/altpump/PREREG_ALTPUMP.sha256",
+   "pin_sha256": "87a22903edddaa716198dad6d8e1dd9d9818305d045834e4b5afb3e37bef90c6",
+   "files": 2,
+   "code_sha256": "4a8672525b14b01fa61dd15849283111cde15580ebde6fe632716ba99000acb9"
+  },
+  "code_sha256": "4a8672525b14b01fa61dd15849283111cde15580ebde6fe632716ba99000acb9",
+  "data_sha256": "ef52161f91188f53a39d0642c6857254816264e7cd3ae901e2b15d9730d38eb0",
+  "funding": "funding assumed 0.03%/8h",
+  "written_utc": "2026-10-11 12:23"
+ },
+ "period": [
+  "2021-08-01",
+  "2024-07-01"
+ ],
+ "r": 0.02,
+ "value_windows": [
+  [
+   18780,
+   19905
+  ]
+ ],
+ "universe_size": {
+  "min": 88,
+  "median": 146.0,
+  "max": 265
+ },
+ "table": {
+  "P1_X20_M": {
+   "signals": 859,
+   "base": {
+    "months": 35,
+    "months_realised": 9,
+    "mean_ln": -0.25863383925009664,
+    "median_ln": -0.2790762200183944,
+    "q25_ln": -0.321839631495861,
+    "q75_ln": -0.11637006629021676,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.8888888888888888,
+    "worst_month": 0.5592019409087003,
+    "best_month": 0.9323842084881634,
+    "max_dd": 0.9024806591785315,
+    "end_multiple": 0.09751934082146851,
+    "bust": true,
+    "positions": 102,
+    "positions_per_month": 2.914285714285714,
+    "pnl_U_mean": -1.091684307475715,
+    "pnl_U_median": -1.0956621679124208,
+    "win_share": 0.0196078431372549,
+    "top10pct_share_of_profit": 0.5168813813152556,
+    "best_position_share_of_profit": 0.9858281663985768,
+    "adds_per_position": 0.5294117647058824,
+    "share_reaching_add": [
+     0.45098039215686275,
+     0.058823529411764705,
+     0.0196078431372549
+    ],
+    "exits": {
+     "stop": 99,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 2,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 34,
+     "add_moved_stop": 44,
+     "chandelier": 21
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.4313725490196076,
+    "d0_over_p0_median": 0.19247344865978627,
+    "counters": {
+     "signals_seen": 859,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 1,
+     "skip_n_max": 0,
+     "skip_risk_cap": 112,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 644,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 0,
+     "add_skip_risk_cap": 3,
+     "add_skip_margin_budget": 1,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 4,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 54
+    },
+    "fees_paid": 6.662869381489067,
+    "funding_paid": 23.633548910749255,
+    "price_pnl": -872.1842408862935,
+    "funding_share_of_gross": 0.027096968510613523,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.34714100305263684
+     },
+     "2022": {
+      "months": 4,
+      "mean_ln": -0.14799988449692136
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 102,
+      "pnl_U_sum": -111.35179936252294,
+      "pnl_U_mean": -1.091684307475715,
+      "win_share": 0.0196078431372549
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 8,
+    "mean_ln": -0.291277168272454,
+    "median_ln": -0.3072913833062938,
+    "q25_ln": -0.3525358751458185,
+    "q75_ln": -0.1715021955353713,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.875,
+    "worst_month": 0.5490369361516841,
+    "best_month": 0.9292376563429597,
+    "max_dd": 0.9027253974714635,
+    "end_multiple": 0.09727460252853645,
+    "bust": true,
+    "positions": 98,
+    "positions_per_month": 2.8
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 11,
+     "mean_ln": -0.21050001959549117,
+     "median_ln": -0.1690656187238079,
+     "q25_ln": -0.27661563560239,
+     "q75_ln": -0.10091247676608397,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.7272727272727273,
+     "worst_month": 0.583736173516562,
+     "best_month": 0.935731694286691,
+     "max_dd": 0.9012832080246005,
+     "end_multiple": 0.0987167919753995,
+     "bust": true,
+     "positions": 125,
+     "positions_per_month": 3.5714285714285716
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 8,
+     "mean_ln": -0.2902922040504225,
+     "median_ln": -0.2507366164359091,
+     "q25_ln": -0.43246125363221016,
+     "q75_ln": -0.11066765245160168,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.75,
+     "worst_month": 0.5200455612779649,
+     "best_month": 0.928999118525705,
+     "max_dd": 0.9019558736136015,
+     "end_multiple": 0.09804412638639849,
+     "bust": true,
+     "positions": 90,
+     "positions_per_month": 2.5714285714285716
+    }
+   }
+  },
+  "P1_X20_H7": {
+   "signals": 859,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.014162677008421672,
+    "median_ln": -0.03664088377327051,
+    "q25_ln": -0.09405693336857873,
+    "q75_ln": 0.062403752141415914,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.22857142857142856,
+    "worst_month": 0.7112378046101332,
+    "best_month": 1.3915422219881408,
+    "max_dd": 0.6505188872612822,
+    "end_multiple": 0.6091481974589597,
+    "bust": false,
+    "positions": 407,
+    "positions_per_month": 11.628571428571428,
+    "pnl_U_mean": -0.020032525591757954,
+    "pnl_U_median": -0.5371332570557137,
+    "win_share": 0.3366093366093366,
+    "top10pct_share_of_profit": 0.7892874344527837,
+    "best_position_share_of_profit": 0.0635769617814971,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 172,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 228,
+     "delisting_close": 3,
+     "period_end_marked": 2,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 2
+    },
+    "stop_source": {
+     "first_stop": 172,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.5896805896805897,
+    "d0_over_p0_median": 0.1813367967518516,
+    "counters": {
+     "signals_seen": 859,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 90,
+     "skip_n_max": 0,
+     "skip_risk_cap": 362,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 3,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 44.10531857274229,
+    "funding_paid": 208.89870948446472,
+    "price_pnl": -137.8477744838379,
+    "funding_share_of_gross": 1.5154304105864056,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": 0.04076959032270315
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.019100880861677567
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.031237487837006344
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.015913537087344536
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 407,
+      "pnl_U_sum": -8.153237915845487,
+      "pnl_U_mean": -0.020032525591757954,
+      "win_share": 0.3366093366093366
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.0233044217354411,
+    "median_ln": -0.045880704783840424,
+    "q25_ln": -0.09722432377342695,
+    "q75_ln": 0.05098122797244955,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.22857142857142856,
+    "worst_month": 0.7020868893302572,
+    "best_month": 1.3711298960232183,
+    "max_dd": 0.7285279162271443,
+    "end_multiple": 0.4423495993692289,
+    "bust": false,
+    "positions": 406,
+    "positions_per_month": 11.6
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.003775790442304488,
+     "median_ln": -0.035120247642804046,
+     "q25_ln": -0.08193588941154328,
+     "q75_ln": 0.09338520530887444,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.17142857142857143,
+     "worst_month": 0.7251663360249293,
+     "best_month": 1.3915422064723715,
+     "max_dd": 0.5960896062482075,
+     "end_multiple": 0.8762072182719499,
+     "bust": false,
+     "positions": 406,
+     "positions_per_month": 11.6
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.021871657377390438,
+     "median_ln": -0.040066453467369395,
+     "q25_ln": -0.1052320628821554,
+     "q75_ln": 0.05263073948641509,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2571428571428571,
+     "worst_month": 0.697516565522033,
+     "best_month": 1.3915422375302322,
+     "max_dd": 0.7148021225172116,
+     "end_multiple": 0.4650975975523497,
+     "bust": false,
+     "positions": 407,
+     "positions_per_month": 11.628571428571428
+    }
+   }
+  },
+  "P1_X30_M": {
+   "signals": 379,
+   "base": {
+    "months": 35,
+    "months_realised": 12,
+    "mean_ln": -0.19219083944042825,
+    "median_ln": -0.20389491958201467,
+    "q25_ln": -0.28188694032679473,
+    "q75_ln": -0.04312526778236334,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.6666666666666666,
+    "worst_month": 0.6269353670419381,
+    "best_month": 1.0043551344564883,
+    "max_dd": 0.9003698125320072,
+    "end_multiple": 0.0996301874679928,
+    "bust": true,
+    "positions": 100,
+    "positions_per_month": 2.857142857142857,
+    "pnl_U_mean": -1.1169730200278827,
+    "pnl_U_median": -1.0990684746807422,
+    "win_share": 0.0,
+    "top10pct_share_of_profit": null,
+    "best_position_share_of_profit": null,
+    "adds_per_position": 0.46,
+    "share_reaching_add": [
+     0.42,
+     0.04,
+     0.0
+    ],
+    "exits": {
+     "stop": 96,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 1,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 2,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 35,
+     "add_moved_stop": 42,
+     "chandelier": 19
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.16,
+    "d0_over_p0_median": 0.20912066074890645,
+    "counters": {
+     "signals_seen": 379,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 1,
+     "skip_n_max": 0,
+     "skip_risk_cap": 26,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 252,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 1,
+     "add_skip_risk_cap": 1,
+     "add_skip_margin_budget": 2,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 2,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 2,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 46
+    },
+    "fees_paid": 5.777978697825712,
+    "funding_paid": 13.808187126707393,
+    "price_pnl": -880.7836467074752,
+    "funding_share_of_gross": 0.015677161103438777,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.30514065259363293
+     },
+     "2022": {
+      "months": 7,
+      "mean_ln": -0.11151240147385351
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 100,
+      "pnl_U_sum": -111.69730200278826,
+      "pnl_U_mean": -1.1169730200278827,
+      "win_share": 0.0
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 11,
+    "mean_ln": -0.21023151074482962,
+    "median_ln": -0.21575662447471466,
+    "q25_ln": -0.26831214011978805,
+    "q75_ln": -0.093365672561885,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.7272727272727273,
+    "worst_month": 0.6185444000981495,
+    "best_month": 1.0041511324543044,
+    "max_dd": 0.9009912073547778,
+    "end_multiple": 0.09900879264522222,
+    "bust": true,
+    "positions": 95,
+    "positions_per_month": 2.7142857142857144
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 15,
+     "mean_ln": -0.15388728010665859,
+     "median_ln": -0.13796724452983034,
+     "q25_ln": -0.22881678929843208,
+     "q75_ln": -0.065471006634674,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.6666666666666666,
+     "worst_month": 0.669197366116557,
+     "best_month": 1.004355134456488,
+     "max_dd": 0.900570775711029,
+     "end_multiple": 0.09942922428897102,
+     "bust": true,
+     "positions": 119,
+     "positions_per_month": 3.4
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 9,
+     "mean_ln": -0.25777056247246644,
+     "median_ln": -0.23357230222814407,
+     "q25_ln": -0.34433280283601214,
+     "q75_ln": -0.1433345777791776,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.7777777777777778,
+     "worst_month": 0.5731535049727459,
+     "best_month": 1.0043551344564883,
+     "max_dd": 0.901720032523111,
+     "end_multiple": 0.09827996747688905,
+     "bust": true,
+     "positions": 81,
+     "positions_per_month": 2.3142857142857145
+    }
+   }
+  },
+  "P1_X30_H7": {
+   "signals": 379,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.020041802427407468,
+    "median_ln": -0.02237434062090548,
+    "q25_ln": -0.08786410712282958,
+    "q75_ln": 0.014773622610781259,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2,
+    "worst_month": 0.8131721045797113,
+    "best_month": 1.367179320709836,
+    "max_dd": 0.7459105948186628,
+    "end_multiple": 0.49585928854294725,
+    "bust": false,
+    "positions": 257,
+    "positions_per_month": 7.3428571428571425,
+    "pnl_U_mean": -0.0976873882126339,
+    "pnl_U_median": -0.808185665488506,
+    "win_share": 0.3035019455252918,
+    "top10pct_share_of_profit": 0.8205153669222991,
+    "best_position_share_of_profit": 0.11369045285332359,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 125,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 129,
+     "delisting_close": 2,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 125,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.568093385214008,
+    "d0_over_p0_median": 0.18090518654115098,
+    "counters": {
+     "signals_seen": 379,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 42,
+     "skip_n_max": 0,
+     "skip_risk_cap": 80,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 4,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 22.731504151345693,
+    "funding_paid": 99.09231251719157,
+    "price_pnl": -382.31689478851143,
+    "funding_share_of_gross": 0.2591889447417883,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": 0.04590843849552785
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.03424317294221905
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.051931709327047944
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": 0.01718221829905055
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 257,
+      "pnl_U_sum": -25.10565877064691,
+      "pnl_U_mean": -0.0976873882126339,
+      "win_share": 0.3035019455252918
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.025780591729337415,
+    "median_ln": -0.03533832645055999,
+    "q25_ln": -0.09187554574868542,
+    "q75_ln": 0.012289725020592706,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2,
+    "worst_month": 0.804906516888398,
+    "best_month": 1.346095798339243,
+    "max_dd": 0.7784033277381845,
+    "end_multiple": 0.40562722323548994,
+    "bust": false,
+    "positions": 256,
+    "positions_per_month": 7.314285714285714
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.014739728145679483,
+     "median_ln": -0.022374340620905705,
+     "q25_ln": -0.08113310894145481,
+     "q75_ln": 0.016480649327900134,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.17142857142857143,
+     "worst_month": 0.8249852062221023,
+     "best_month": 1.387904533337271,
+     "max_dd": 0.7110422008682981,
+     "end_multiple": 0.5969687660700583,
+     "bust": false,
+     "positions": 257,
+     "positions_per_month": 7.3428571428571425
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.025436094309276198,
+     "median_ln": -0.028331752128585082,
+     "q25_ln": -0.09143250933205252,
+     "q75_ln": 0.013064225784016564,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2,
+     "worst_month": 0.8014721106434928,
+     "best_month": 1.346587889500967,
+     "max_dd": 0.7766982801603646,
+     "end_multiple": 0.4105476409875747,
+     "bust": false,
+     "positions": 257,
+     "positions_per_month": 7.3428571428571425
+    }
+   }
+  },
+  "P1_X50_M": {
+   "signals": 107,
+   "base": {
+    "months": 35,
+    "months_realised": 31,
+    "mean_ln": -0.0748591498892117,
+    "median_ln": -0.04900888581934268,
+    "q25_ln": -0.09737409850997467,
+    "q75_ln": -0.021359845030677088,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.1935483870967742,
+    "worst_month": 0.7561373585601807,
+    "best_month": 1.004355134456488,
+    "max_dd": 0.9017886653909948,
+    "end_multiple": 0.09821133460900527,
+    "bust": true,
+    "positions": 85,
+    "positions_per_month": 2.4285714285714284,
+    "pnl_U_mean": -1.3357356070588795,
+    "pnl_U_median": -1.1591073916136472,
+    "win_share": 0.0,
+    "top10pct_share_of_profit": null,
+    "best_position_share_of_profit": null,
+    "adds_per_position": 0.6235294117647059,
+    "share_reaching_add": [
+     0.5176470588235295,
+     0.10588235294117647,
+     0.0
+    ],
+    "exits": {
+     "stop": 84,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 1,
+     "close_before_no_bar_day": 0
+    },
+    "stop_source": {
+     "first_stop": 36,
+     "add_moved_stop": 43,
+     "chandelier": 5
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.611764705882353,
+    "d0_over_p0_median": 0.17287351972057874,
+    "counters": {
+     "signals_seen": 107,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 0,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 1,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 21,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 2,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 5,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 5,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 53
+    },
+    "fees_paid": 5.968713794951489,
+    "funding_paid": 6.39271783683615,
+    "price_pnl": -889.4272337592072,
+    "funding_share_of_gross": 0.00718745457097937,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.13004630915583676
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.05240831333098201
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.06969272625505009
+     },
+     "2024": {
+      "months": 2,
+      "mean_ln": -0.10259481287699704
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 85,
+      "pnl_U_sum": -113.53752660000475,
+      "pnl_U_mean": -1.3357356070588795,
+      "win_share": 0.0
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 31,
+    "mean_ln": -0.0757573546792384,
+    "median_ln": -0.05090427031121654,
+    "q25_ln": -0.09539635145049438,
+    "q75_ln": -0.021894883170817774,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.16129032258064516,
+    "worst_month": 0.751344907037066,
+    "best_month": 1.0041511324543044,
+    "max_dd": 0.9044855749307414,
+    "end_multiple": 0.09551442506925852,
+    "bust": true,
+    "positions": 84,
+    "positions_per_month": 2.4
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.06183544656917571,
+     "median_ln": -0.04106943083748657,
+     "q25_ln": -0.08370879064285931,
+     "q75_ln": -0.020665752861080567,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2,
+     "worst_month": 0.7300681248959094,
+     "best_month": 1.0165945240399472,
+     "max_dd": 0.8875763940785554,
+     "end_multiple": 0.1148371053574066,
+     "bust": false,
+     "positions": 106,
+     "positions_per_month": 3.0285714285714285
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 28,
+     "mean_ln": -0.08246523895964299,
+     "median_ln": -0.05804570896955743,
+     "q25_ln": -0.1021380796647369,
+     "q75_ln": -0.021296045851240356,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.25,
+     "worst_month": 0.6748432330737559,
+     "best_month": 1.004355134456488,
+     "max_dd": 0.9006420895260853,
+     "end_multiple": 0.09935791047391478,
+     "bust": true,
+     "positions": 67,
+     "positions_per_month": 1.9142857142857144
+    }
+   }
+  },
+  "P1_X50_H7": {
+   "signals": 107,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.009852879889415168,
+    "median_ln": -0.02178202471049866,
+    "q25_ln": -0.04555217655448429,
+    "q75_ln": 0.005975015058646347,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.896458613606243,
+    "best_month": 1.206587496496068,
+    "max_dd": 0.6041330388603476,
+    "end_multiple": 0.7083260305692027,
+    "bust": false,
+    "positions": 98,
+    "positions_per_month": 2.8,
+    "pnl_U_mean": -0.13872325780664976,
+    "pnl_U_median": -1.0495981890134065,
+    "win_share": 0.2653061224489796,
+    "top10pct_share_of_profit": 0.8575053265091368,
+    "best_position_share_of_profit": 0.16274826667072342,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 64,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 32,
+     "delisting_close": 1,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 64,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.6530612244897958,
+    "d0_over_p0_median": 0.16861775100125775,
+    "counters": {
+     "signals_seen": 107,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 8,
+     "skip_n_max": 0,
+     "skip_risk_cap": 1,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 3,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 9.840715434857975,
+    "funding_paid": 32.746321574825885,
+    "price_pnl": -249.08693242111275,
+    "funding_share_of_gross": 0.13146543359996146,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": 0.044999575037468556
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.016976873556538697
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.035601318517869955
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": 0.010181605596005035
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 98,
+      "pnl_U_sum": -13.594879265051677,
+      "pnl_U_mean": -0.13872325780664976,
+      "win_share": 0.2653061224489796
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.011848934042735397,
+    "median_ln": -0.022313793636699376,
+    "q25_ln": -0.04694120510698614,
+    "q75_ln": 0.005696103951130696,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.893903976233162,
+    "best_month": 1.2017762009579662,
+    "max_dd": 0.6218013711640353,
+    "end_multiple": 0.6605300293402285,
+    "bust": false,
+    "positions": 98,
+    "positions_per_month": 2.8
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.006473688243020141,
+     "median_ln": -0.02072852582059094,
+     "q25_ln": -0.04200516869501584,
+     "q75_ln": 0.005975015058646458,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9000496556575986,
+     "best_month": 1.210226989800119,
+     "max_dd": 0.5641972270143604,
+     "end_multiple": 0.7972562860111815,
+     "bust": false,
+     "positions": 98,
+     "positions_per_month": 2.8
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.013250754442386,
+     "median_ln": -0.02282932975209143,
+     "q25_ln": -0.04903876677161789,
+     "q75_ln": 0.005975015058646458,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.892871536472689,
+     "best_month": 1.2029535398162088,
+     "max_dd": 0.6406138995951496,
+     "end_multiple": 0.6289041582685794,
+     "bust": false,
+     "positions": 98,
+     "positions_per_month": 2.8
+    }
+   }
+  },
+  "P2_X20_M": {
+   "signals": 859,
+   "base": {
+    "months": 35,
+    "months_realised": 19,
+    "mean_ln": -0.12207694833431168,
+    "median_ln": -0.10352536090922254,
+    "q25_ln": -0.2714103599039963,
+    "q75_ln": -0.016942816018312514,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.47368421052631576,
+    "worst_month": 0.6115541492874201,
+    "best_month": 1.3121375247185971,
+    "max_dd": 0.9046433538131038,
+    "end_multiple": 0.09832646921383775,
+    "bust": true,
+    "positions": 190,
+    "positions_per_month": 5.428571428571429,
+    "pnl_U_mean": -0.5132878438845541,
+    "pnl_U_median": -1.0738979315456425,
+    "win_share": 0.17894736842105263,
+    "top10pct_share_of_profit": 0.9062317422706759,
+    "best_position_share_of_profit": 0.1443649392987618,
+    "adds_per_position": 0.5210526315789473,
+    "share_reaching_add": [
+     0.38421052631578945,
+     0.1,
+     0.03684210526315789
+    ],
+    "exits": {
+     "stop": 175,
+     "stop_gap_open": 0,
+     "liquidation": 6,
+     "hold_close": 0,
+     "delisting_close": 3,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 3,
+     "close_before_no_bar_day": 3
+    },
+    "stop_source": {
+     "first_stop": 67,
+     "add_moved_stop": 36,
+     "chandelier": 72
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.5105263157894737,
+    "d0_over_p0_median": 0.18818096721486943,
+    "counters": {
+     "signals_seen": 859,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 3,
+     "skip_n_max": 64,
+     "skip_risk_cap": 140,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 462,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 1,
+     "add_skip_risk_cap": 11,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 1,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 99
+    },
+    "fees_paid": 9.122813896100869,
+    "funding_paid": 73.94616656506093,
+    "price_pnl": -818.6045503250003,
+    "funding_share_of_gross": 0.09033197596532173,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.25559997059257966
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.03851336405853792
+     },
+     "2023": {
+      "months": 2,
+      "mean_ln": -0.289650898343284
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 190,
+      "pnl_U_sum": -97.52469033806527,
+      "pnl_U_mean": -0.5132878438845541,
+      "win_share": 0.17894736842105263
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 19,
+    "mean_ln": -0.12272869807435048,
+    "median_ln": -0.10989138409396353,
+    "q25_ln": -0.23272939113092478,
+    "q75_ln": -0.019885516760286614,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.5263157894736842,
+    "worst_month": 0.5932856842578282,
+    "best_month": 1.286710086023925,
+    "max_dd": 0.9055643723457717,
+    "end_multiple": 0.09711637635124785,
+    "bust": true,
+    "positions": 185,
+    "positions_per_month": 5.285714285714286
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 27,
+     "mean_ln": -0.08675215679113875,
+     "median_ln": -0.09723115289430086,
+     "q25_ln": -0.20187488857117042,
+     "q75_ln": 0.026980100739409898,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.48148148148148145,
+     "worst_month": 0.6530500025045614,
+     "best_month": 1.339545126490115,
+     "max_dd": 0.9067996040614551,
+     "end_multiple": 0.0961055479790382,
+     "bust": true,
+     "positions": 266,
+     "positions_per_month": 7.6
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 15,
+     "mean_ln": -0.15435422216446787,
+     "median_ln": -0.13835098082397831,
+     "q25_ln": -0.35128277194064594,
+     "q75_ln": -0.06120083330158836,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.6,
+     "worst_month": 0.6106602057822281,
+     "best_month": 1.286433699734345,
+     "max_dd": 0.9042444521905224,
+     "end_multiple": 0.09873524219782932,
+     "bust": true,
+     "positions": 150,
+     "positions_per_month": 4.285714285714286
+    }
+   }
+  },
+  "P2_X20_H7": {
+   "signals": 859,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.053684122738964966,
+    "median_ln": -0.04690844546467201,
+    "q25_ln": -0.1180768825346241,
+    "q75_ln": 0.024976290828393463,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2857142857142857,
+    "worst_month": 0.7057538085830394,
+    "best_month": 1.1281393918889757,
+    "max_dd": 0.8609054541080305,
+    "end_multiple": 0.15275128082430195,
+    "bust": false,
+    "positions": 480,
+    "positions_per_month": 13.714285714285714,
+    "pnl_U_mean": -0.17850148036722238,
+    "pnl_U_median": -0.4233062978745887,
+    "win_share": 0.45416666666666666,
+    "top10pct_share_of_profit": 0.4939343354968942,
+    "best_position_share_of_profit": 0.015686163892526833,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 216,
+     "stop_gap_open": 0,
+     "liquidation": 9,
+     "hold_close": 249,
+     "delisting_close": 4,
+     "period_end_marked": 2,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 0
+    },
+    "stop_source": {
+     "first_stop": 216,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.5770833333333334,
+    "d0_over_p0_median": 0.18168122462116618,
+    "counters": {
+     "signals_seen": 859,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 4,
+     "skip_n_max": 0,
+     "skip_risk_cap": 375,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 2,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 26.787883465414133,
+    "funding_paid": 97.00790315472523,
+    "price_pnl": -723.4529325555604,
+    "funding_share_of_gross": 0.1340901374358243,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.05036119550721939
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.013353433756259518
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.07249686327608844
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.09948912565658356
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 480,
+      "pnl_U_sum": -85.68071057626675,
+      "pnl_U_mean": -0.17850148036722238,
+      "win_share": 0.45416666666666666
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 34,
+    "mean_ln": -0.06837432064559376,
+    "median_ln": -0.06942668790700057,
+    "q25_ln": -0.13154006887558695,
+    "q75_ln": 0.015996073417486024,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.3235294117647059,
+    "worst_month": 0.7098899238368312,
+    "best_month": 1.1184864638735734,
+    "max_dd": 0.9051073958600565,
+    "end_multiple": 0.09781015216602541,
+    "bust": true,
+    "positions": 462,
+    "positions_per_month": 13.2
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.027404653139002613,
+     "median_ln": -0.011189995457117824,
+     "q25_ln": -0.08226146074107164,
+     "q75_ln": 0.04191048651343575,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.17142857142857143,
+     "worst_month": 0.7625065103597367,
+     "best_month": 1.1287750626621453,
+     "max_dd": 0.6699130267691397,
+     "end_multiple": 0.38321355518113676,
+     "bust": false,
+     "positions": 483,
+     "positions_per_month": 13.8
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 31,
+     "mean_ln": -0.0759721872644261,
+     "median_ln": -0.07660989483917598,
+     "q25_ln": -0.12773333903357498,
+     "q75_ln": 0.013744914768685695,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.3225806451612903,
+     "worst_month": 0.6725870927948845,
+     "best_month": 1.1275038121494498,
+     "max_dd": 0.9081832486430721,
+     "end_multiple": 0.09488043061722656,
+     "bust": true,
+     "positions": 411,
+     "positions_per_month": 11.742857142857142
+    }
+   }
+  },
+  "P2_X30_M": {
+   "signals": 379,
+   "base": {
+    "months": 35,
+    "months_realised": 29,
+    "mean_ln": -0.07989770577826029,
+    "median_ln": -0.07126684192990172,
+    "q25_ln": -0.15597903663161877,
+    "q75_ln": 0.0035149976427757924,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.3448275862068966,
+    "worst_month": 0.5919326187778251,
+    "best_month": 1.329024064533,
+    "max_dd": 0.9101355992366124,
+    "end_multiple": 0.09856555023026423,
+    "bust": true,
+    "positions": 200,
+    "positions_per_month": 5.714285714285714,
+    "pnl_U_mean": -0.4964333987969449,
+    "pnl_U_median": -1.1213664876586873,
+    "win_share": 0.165,
+    "top10pct_share_of_profit": 0.9439250129410809,
+    "best_position_share_of_profit": 0.13167886675505888,
+    "adds_per_position": 0.645,
+    "share_reaching_add": [
+     0.48,
+     0.115,
+     0.05
+    ],
+    "exits": {
+     "stop": 191,
+     "stop_gap_open": 0,
+     "liquidation": 3,
+     "hold_close": 0,
+     "delisting_close": 2,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 3,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 76,
+     "add_moved_stop": 52,
+     "chandelier": 63
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.6,
+    "d0_over_p0_median": 0.17872895098382283,
+    "counters": {
+     "signals_seen": 379,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 3,
+     "skip_n_max": 17,
+     "skip_risk_cap": 30,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 129,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 2,
+     "add_skip_risk_cap": 2,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 129
+    },
+    "fees_paid": 12.931618008484975,
+    "funding_paid": 125.52198460937166,
+    "price_pnl": -762.98084715188,
+    "funding_share_of_gross": 0.1645152497312755,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.16616599554572173
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.022196562322277902
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.10165372849780045
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 200,
+      "pnl_U_sum": -99.28667975938899,
+      "pnl_U_mean": -0.4964333987969449,
+      "win_share": 0.165
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 27,
+    "mean_ln": -0.08556874238308998,
+    "median_ln": -0.08610413999767634,
+    "q25_ln": -0.15341361595761865,
+    "q75_ln": -0.008465382621663171,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.4074074074074074,
+    "worst_month": 0.5797924939279472,
+    "best_month": 1.303106249163376,
+    "max_dd": 0.9073324657278725,
+    "end_multiple": 0.09922591644331354,
+    "bust": true,
+    "positions": 179,
+    "positions_per_month": 5.114285714285714
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 31,
+     "mean_ln": -0.07614201253196004,
+     "median_ln": -0.06452602731094596,
+     "q25_ln": -0.16466638640979536,
+     "q75_ln": 0.012894656792193208,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.3870967741935484,
+     "worst_month": 0.6704031988474846,
+     "best_month": 1.354716540083182,
+     "max_dd": 0.9065885930816295,
+     "end_multiple": 0.09438223722826372,
+     "bust": true,
+     "positions": 244,
+     "positions_per_month": 6.9714285714285715
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 19,
+     "mean_ln": -0.12188924972915953,
+     "median_ln": -0.08001088737649088,
+     "q25_ln": -0.242369777897598,
+     "q75_ln": -0.010442381809201918,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.42105263157894735,
+     "worst_month": 0.5993787140774741,
+     "best_month": 1.1982246443551348,
+     "max_dd": 0.9023372603517091,
+     "end_multiple": 0.09867775431219182,
+     "bust": true,
+     "positions": 136,
+     "positions_per_month": 3.8857142857142857
+    }
+   }
+  },
+  "P2_X30_H7": {
+   "signals": 379,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.03638566088582172,
+    "median_ln": -0.02271824200612368,
+    "q25_ln": -0.059492367607663806,
+    "q75_ln": 0.009887789761124893,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.11428571428571428,
+    "worst_month": 0.7202744857093086,
+    "best_month": 1.0631566141880586,
+    "max_dd": 0.7452308379044261,
+    "end_multiple": 0.27985095223070633,
+    "bust": false,
+    "positions": 300,
+    "positions_per_month": 8.571428571428571,
+    "pnl_U_mean": -0.19579257663434796,
+    "pnl_U_median": -1.0325720227170943,
+    "win_share": 0.43,
+    "top10pct_share_of_profit": 0.45669178502153956,
+    "best_position_share_of_profit": 0.02532559361089745,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 151,
+     "stop_gap_open": 0,
+     "liquidation": 3,
+     "hold_close": 143,
+     "delisting_close": 2,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 151,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.56,
+    "d0_over_p0_median": 0.17984931267877569,
+    "counters": {
+     "signals_seen": 379,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 3,
+     "skip_n_max": 0,
+     "skip_risk_cap": 76,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 3,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 20.135476699472754,
+    "funding_paid": 64.70845707379331,
+    "price_pnl": -635.3051139960269,
+    "funding_share_of_gross": 0.10185414165294755,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.031421560435524694
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.02188826314748163
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.030218861799183094
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.08185080491102664
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 300,
+      "pnl_U_sum": -58.737772990304386,
+      "pnl_U_mean": -0.19579257663434796,
+      "win_share": 0.43
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.041642747183423416,
+    "median_ln": -0.026237863194187864,
+    "q25_ln": -0.06667481858607535,
+    "q75_ln": 0.0060156166478374,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.14285714285714285,
+    "worst_month": 0.71041709106977,
+    "best_month": 1.0554928188224912,
+    "max_dd": 0.7829198391883893,
+    "end_multiple": 0.23281848777899544,
+    "bust": false,
+    "positions": 299,
+    "positions_per_month": 8.542857142857143
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.017909899084332333,
+     "median_ln": -0.004774328115532213,
+     "q25_ln": -0.03860415336931439,
+     "q75_ln": 0.016826529345296326,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.7817183169233783,
+     "best_month": 1.0645235569699525,
+     "max_dd": 0.5396066157346491,
+     "end_multiple": 0.5342739973560332,
+     "bust": false,
+     "positions": 301,
+     "positions_per_month": 8.6
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.05127764211902161,
+     "median_ln": -0.03260696310848987,
+     "q25_ln": -0.08205492676859424,
+     "q75_ln": -0.0006139099769250222,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.17142857142857143,
+     "worst_month": 0.6708551300983657,
+     "best_month": 1.0617905239881067,
+     "max_dd": 0.8431262407114464,
+     "end_multiple": 0.16617439427473948,
+     "bust": false,
+     "positions": 299,
+     "positions_per_month": 8.542857142857143
+    }
+   }
+  },
+  "P2_X50_M": {
+   "signals": 107,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.055477346088363265,
+    "median_ln": -0.024672103035073386,
+    "q25_ln": -0.09769166892367788,
+    "q75_ln": -0.0006645417636253959,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.22857142857142856,
+    "worst_month": 0.7527274511161627,
+    "best_month": 1.1447180658819325,
+    "max_dd": 0.8669084216216827,
+    "end_multiple": 0.14345884015800875,
+    "bust": false,
+    "positions": 107,
+    "positions_per_month": 3.057142857142857,
+    "pnl_U_mean": -0.8639166096413071,
+    "pnl_U_median": -1.1983139514079089,
+    "win_share": 0.09345794392523364,
+    "top10pct_share_of_profit": 0.9903969345663626,
+    "best_position_share_of_profit": 0.4390613424740445,
+    "adds_per_position": 0.616822429906542,
+    "share_reaching_add": [
+     0.514018691588785,
+     0.06542056074766354,
+     0.037383177570093455
+    ],
+    "exits": {
+     "stop": 101,
+     "stop_gap_open": 0,
+     "liquidation": 5,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 40,
+     "add_moved_stop": 43,
+     "chandelier": 18
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.6261682242990654,
+    "d0_over_p0_median": 0.17287351972057874,
+    "counters": {
+     "signals_seen": 107,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 0,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 3,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 66
+    },
+    "fees_paid": 8.047559128208132,
+    "funding_paid": 42.03740873771466,
+    "price_pnl": -806.4561919760683,
+    "funding_share_of_gross": 0.05212609086019904,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.11928582324428198
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.017273376831106267
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.04894924404385718
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.09176775772862376
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 107,
+      "pnl_U_sum": -92.43907723161986,
+      "pnl_U_mean": -0.8639166096413071,
+      "win_share": 0.09345794392523364
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.05981727759366086,
+    "median_ln": -0.02925844808582516,
+    "q25_ln": -0.10101540040211493,
+    "q75_ln": -0.0008903256480913591,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.22857142857142856,
+    "worst_month": 0.7414732125368261,
+    "best_month": 1.1280187672157203,
+    "max_dd": 0.8829246418459273,
+    "end_multiple": 0.12324208147654292,
+    "bust": false,
+    "positions": 107,
+    "positions_per_month": 3.057142857142857
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.03748511668529314,
+     "median_ln": -0.02132435992131956,
+     "q25_ln": -0.0845073215343279,
+     "q75_ln": -0.0004939710239558865,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.17142857142857143,
+     "worst_month": 0.8115161449623578,
+     "best_month": 1.1571083412546197,
+     "max_dd": 0.754999605741843,
+     "end_multiple": 0.26928658789578847,
+     "bust": false,
+     "positions": 107,
+     "positions_per_month": 3.057142857142857
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 31,
+     "mean_ln": -0.07482829433363859,
+     "median_ln": -0.04732030568169381,
+     "q25_ln": -0.10886202995632832,
+     "q75_ln": -0.014298693221982649,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2903225806451613,
+     "worst_month": 0.7126333171151085,
+     "best_month": 1.0754854186922334,
+     "max_dd": 0.9035021448789329,
+     "end_multiple": 0.09830532087589687,
+     "bust": true,
+     "positions": 85,
+     "positions_per_month": 2.4285714285714284
+    }
+   }
+  },
+  "P2_X50_H7": {
+   "signals": 107,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.016285559501505186,
+    "median_ln": -0.006353639678032989,
+    "q25_ln": -0.025200012010922083,
+    "q75_ln": 0.003939631347271294,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.11428571428571428,
+    "worst_month": 0.837412306856917,
+    "best_month": 1.1138017915583038,
+    "max_dd": 0.5065747997687227,
+    "end_multiple": 0.5655285024121074,
+    "bust": false,
+    "positions": 105,
+    "positions_per_month": 3.0,
+    "pnl_U_mean": -0.2531751476531387,
+    "pnl_U_median": -1.062455420896909,
+    "win_share": 0.37142857142857144,
+    "top10pct_share_of_profit": 0.4680003863933379,
+    "best_position_share_of_profit": 0.057359026651731426,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 61,
+     "stop_gap_open": 0,
+     "liquidation": 3,
+     "hold_close": 41,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 0
+    },
+    "stop_source": {
+     "first_stop": 61,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.6285714285714286,
+    "d0_over_p0_median": 0.17153892597543557,
+    "counters": {
+     "signals_seen": 107,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 2,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 3,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 10.55015742853401,
+    "funding_paid": 28.385533649972754,
+    "price_pnl": -395.5358065093854,
+    "funding_share_of_gross": 0.07176476360124229,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.0032860550765237357
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.0036593436680806488
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.013836726139043402
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.07190595291975165
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 105,
+      "pnl_U_sum": -26.583390503579565,
+      "pnl_U_mean": -0.2531751476531387,
+      "win_share": 0.37142857142857144
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.018179615557493756,
+    "median_ln": -0.007836799514495056,
+    "q25_ln": -0.028313488498107418,
+    "q75_ln": 0.0015525532422680864,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.11428571428571428,
+    "worst_month": 0.8336558183546436,
+    "best_month": 1.1108157479022809,
+    "max_dd": 0.5351325964335543,
+    "end_multiple": 0.5292541411089464,
+    "bust": false,
+    "positions": 105,
+    "positions_per_month": 3.0
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.008702864750211809,
+     "median_ln": -0.004774328115532213,
+     "q25_ln": -0.02084011087757466,
+     "q75_ln": 0.009856099070249213,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.863428987996825,
+     "best_month": 1.1170788142183155,
+     "max_dd": 0.40511738998530356,
+     "end_multiple": 0.7374180863760595,
+     "bust": false,
+     "positions": 105,
+     "positions_per_month": 3.0
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.021792881567535567,
+     "median_ln": -0.01143617283270447,
+     "q25_ln": -0.033977987146484034,
+     "q75_ln": 0.0011374870719906888,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.11428571428571428,
+     "worst_month": 0.8130365256352476,
+     "best_month": 1.110524768898291,
+     "max_dd": 0.5890361839974704,
+     "end_multiple": 0.46638171238643544,
+     "bust": false,
+     "positions": 105,
+     "positions_per_month": 3.0
+    }
+   }
+  },
+  "P3L_K1_M": {
+   "signals": 174,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.05337646653198376,
+    "median_ln": -0.05468196924151644,
+    "q25_ln": -0.10156832724598117,
+    "q75_ln": -0.018049392698846395,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2571428571428571,
+    "worst_month": 0.8681115794559621,
+    "best_month": 1.187842873368004,
+    "max_dd": 0.8550637469223502,
+    "end_multiple": 0.154404989172608,
+    "bust": false,
+    "positions": 140,
+    "positions_per_month": 4.0,
+    "pnl_U_mean": -0.6381098954649705,
+    "pnl_U_median": -0.8112921838031104,
+    "win_share": 0.04285714285714286,
+    "top10pct_share_of_profit": 0.9302032529148602,
+    "best_position_share_of_profit": 0.44328926532483004,
+    "adds_per_position": 0.37142857142857144,
+    "share_reaching_add": [
+     0.3142857142857143,
+     0.05714285714285714,
+     0.0
+    ],
+    "exits": {
+     "stop": 134,
+     "stop_gap_open": 3,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 2,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 20,
+     "add_moved_stop": 31,
+     "chandelier": 86
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.3785714285714286,
+    "d0_over_p0_median": 0.3995418596709348,
+    "counters": {
+     "signals_seen": 174,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 1,
+     "skip_risk_cap": 33,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 45,
+     "add_skip_risk_cap": 1,
+     "add_skip_margin_budget": 4,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 6,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 52
+    },
+    "fees_paid": 5.27799225700558,
+    "funding_paid": 44.19862485472138,
+    "price_pnl": -796.1183937156648,
+    "funding_share_of_gross": 0.05551765315763701,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.05162257066418678
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.03173252885880525
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.06669246742525999
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.07149391998161912
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 140,
+      "pnl_U_sum": -89.33538536509587,
+      "pnl_U_mean": -0.6381098954649705,
+      "win_share": 0.04285714285714286
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.055026424053467436,
+    "median_ln": -0.05767727344935354,
+    "q25_ln": -0.10780319001603725,
+    "q75_ln": -0.019125597297772558,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2571428571428571,
+    "worst_month": 0.8594933085204757,
+    "best_month": 1.27516014531926,
+    "max_dd": 0.862269381371515,
+    "end_multiple": 0.14574090721517924,
+    "bust": false,
+    "positions": 139,
+    "positions_per_month": 3.9714285714285715
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.03742895688088017,
+     "median_ln": -0.04845653524375755,
+     "q25_ln": -0.0889874663261356,
+     "q75_ln": -0.012280690270103705,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2,
+     "worst_month": 0.8814334252511673,
+     "best_month": 1.3345530996348967,
+     "max_dd": 0.7550495087089003,
+     "end_multiple": 0.2698164163125119,
+     "bust": false,
+     "positions": 139,
+     "positions_per_month": 3.9714285714285715
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.05646386772390273,
+     "median_ln": -0.05821599271174555,
+     "q25_ln": -0.10458833990161157,
+     "q75_ln": -0.01609618012760026,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2571428571428571,
+     "worst_month": 0.8490691330333087,
+     "best_month": 1.2093458840976472,
+     "max_dd": 0.8668188767160984,
+     "end_multiple": 0.13858999647493989,
+     "bust": false,
+     "positions": 142,
+     "positions_per_month": 4.057142857142857
+    }
+   }
+  },
+  "P3L_K1_H28": {
+   "signals": 174,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.018735084743626184,
+    "median_ln": -0.025490496224045783,
+    "q25_ln": -0.042988248452134364,
+    "q75_ln": 0.0030413498638319223,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9004591969423127,
+    "best_month": 1.2334162160576605,
+    "max_dd": 0.5627858790383838,
+    "end_multiple": 0.5190640640142858,
+    "bust": false,
+    "positions": 101,
+    "positions_per_month": 2.8857142857142857,
+    "pnl_U_mean": -0.2936467832172576,
+    "pnl_U_median": -0.7315492823354507,
+    "win_share": 0.25742574257425743,
+    "top10pct_share_of_profit": 0.866591098205774,
+    "best_position_share_of_profit": 0.4227147990574996,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 48,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 48,
+     "delisting_close": 0,
+     "period_end_marked": 3,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 2
+    },
+    "stop_source": {
+     "first_stop": 48,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.3564356435643565,
+    "d0_over_p0_median": 0.40570071258907353,
+    "counters": {
+     "signals_seen": 174,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 73,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 35,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 4.742035289829666,
+    "funding_paid": 88.31978330855945,
+    "price_pnl": -387.8741173873248,
+    "funding_share_of_gross": 0.22770218312959703,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": 0.007446646126543441
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.011358191466237623
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.034579083297350696
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.023618983249428963
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 101,
+      "pnl_U_sum": -29.658325104943017,
+      "pnl_U_mean": -0.2936467832172576,
+      "win_share": 0.25742574257425743
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.022501487120842833,
+    "median_ln": -0.02689195890760059,
+    "q25_ln": -0.04539605187360663,
+    "q75_ln": 0.0,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.05714285714285714,
+    "worst_month": 0.8967216417574461,
+    "best_month": 1.2283471193103292,
+    "max_dd": 0.6037337652896719,
+    "end_multiple": 0.4549571459329946,
+    "bust": false,
+    "positions": 100,
+    "positions_per_month": 2.857142857142857
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.018610013908365124,
+     "median_ln": -0.024542507010100523,
+     "q25_ln": -0.04201728060292367,
+     "q75_ln": 0.0,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9021032150636338,
+     "best_month": 1.2334740661446923,
+     "max_dd": 0.554792509149491,
+     "end_multiple": 0.5213412366773922,
+     "bust": false,
+     "positions": 101,
+     "positions_per_month": 2.8857142857142857
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.019509660336341314,
+     "median_ln": -0.02586493749066898,
+     "q25_ln": -0.04396064511179719,
+     "q75_ln": 0.0030410925822202035,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.8988151788235785,
+     "best_month": 1.2333583644078365,
+     "max_dd": 0.5706463864871714,
+     "end_multiple": 0.5051811951559347,
+     "bust": false,
+     "positions": 101,
+     "positions_per_month": 2.8857142857142857
+    }
+   }
+  },
+  "P3L_K7_M": {
+   "signals": 180,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.05462781384620765,
+    "median_ln": -0.043531768635135595,
+    "q25_ln": -0.0839953677982502,
+    "q75_ln": -0.02610986306090561,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.14285714285714285,
+    "worst_month": 0.8773299725553004,
+    "best_month": 1.0302226155465426,
+    "max_dd": 0.8552057337599419,
+    "end_multiple": 0.1477884404008115,
+    "bust": false,
+    "positions": 133,
+    "positions_per_month": 3.8,
+    "pnl_U_mean": -0.6908034711770197,
+    "pnl_U_median": -0.8393740978298863,
+    "win_share": 0.07518796992481203,
+    "top10pct_share_of_profit": 0.9605241454043959,
+    "best_position_share_of_profit": 0.23643124414844663,
+    "adds_per_position": 0.38345864661654133,
+    "share_reaching_add": [
+     0.2706766917293233,
+     0.11278195488721804,
+     0.0
+    ],
+    "exits": {
+     "stop": 124,
+     "stop_gap_open": 4,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 4,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 1
+    },
+    "stop_source": {
+     "first_stop": 19,
+     "add_moved_stop": 24,
+     "chandelier": 85
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.3984962406015038,
+    "d0_over_p0_median": 0.35429171668667464,
+    "counters": {
+     "signals_seen": 180,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 6,
+     "skip_risk_cap": 41,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 27,
+     "add_skip_risk_cap": 6,
+     "add_skip_margin_budget": 3,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 13,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 51
+    },
+    "fees_paid": 5.119149518828227,
+    "funding_paid": 51.06215054415061,
+    "price_pnl": -796.0302595362099,
+    "funding_share_of_gross": 0.06414599185450674,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.05624794364453354
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.03866936374422888
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.06851517186221771
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.05741988985287352
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 133,
+      "pnl_U_sum": -91.87686166654362,
+      "pnl_U_mean": -0.6908034711770197,
+      "win_share": 0.07518796992481203
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.05863167979997065,
+    "median_ln": -0.04379106535948132,
+    "q25_ln": -0.09288154220878381,
+    "q75_ln": -0.024747990684387842,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2,
+    "worst_month": 0.8690676824698977,
+    "best_month": 1.0146153681968277,
+    "max_dd": 0.8764934464833578,
+    "end_multiple": 0.12846371436585952,
+    "bust": false,
+    "positions": 133,
+    "positions_per_month": 3.8
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.03564762621874268,
+     "median_ln": -0.03992728256434635,
+     "q25_ln": -0.07504163949922757,
+     "q75_ln": -0.019361897655054715,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.11428571428571428,
+     "worst_month": 0.8827395914960758,
+     "best_month": 1.2646596454595407,
+     "max_dd": 0.7186440908958445,
+     "end_multiple": 0.28717401651193264,
+     "bust": false,
+     "positions": 134,
+     "positions_per_month": 3.8285714285714287
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.057197788971469384,
+     "median_ln": -0.04782234747264424,
+     "q25_ln": -0.09551237406296564,
+     "q75_ln": -0.029931808237881767,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.22857142857142856,
+     "worst_month": 0.8666053342028066,
+     "best_month": 1.11405015597135,
+     "max_dd": 0.8676612726534179,
+     "end_multiple": 0.13507533569563912,
+     "bust": false,
+     "positions": 134,
+     "positions_per_month": 3.8285714285714287
+    }
+   }
+  },
+  "P3L_K7_H28": {
+   "signals": 180,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.016199778855625964,
+    "median_ln": -0.021048249319882847,
+    "q25_ln": -0.03944131190898641,
+    "q75_ln": 0.0009038376117986099,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9022064686204104,
+    "best_month": 1.1210656788963094,
+    "max_dd": 0.5304987988308298,
+    "end_multiple": 0.567228952792103,
+    "bust": false,
+    "positions": 100,
+    "positions_per_month": 2.857142857142857,
+    "pnl_U_mean": -0.2617528048464758,
+    "pnl_U_median": -0.6117883269701374,
+    "win_share": 0.25,
+    "top10pct_share_of_profit": 0.7813148129351681,
+    "best_position_share_of_profit": 0.16508761408116054,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 38,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 57,
+     "delisting_close": 0,
+     "period_end_marked": 3,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 2
+    },
+    "stop_source": {
+     "first_stop": 38,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.44,
+    "d0_over_p0_median": 0.3475303144035301,
+    "counters": {
+     "signals_seen": 180,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 80,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 19,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 4.417371605501283,
+    "funding_paid": 82.70333295749269,
+    "price_pnl": -345.6503426449044,
+    "funding_share_of_gross": 0.2392687718017279,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.010829934040146472
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.02701385113966023
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.01897646765194523
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": 0.006506872625514866
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 100,
+      "pnl_U_sum": -26.17528048464758,
+      "pnl_U_mean": -0.2617528048464758,
+      "win_share": 0.25
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.02016959015662714,
+    "median_ln": -0.024602696746130043,
+    "q25_ln": -0.041864169316051844,
+    "q75_ln": 0.0,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.8953754979685656,
+    "best_month": 1.114009686021502,
+    "max_dd": 0.5798228116882844,
+    "end_multiple": 0.4936464750764881,
+    "bust": false,
+    "positions": 100,
+    "positions_per_month": 2.857142857142857
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.015176737749458035,
+     "median_ln": -0.021048249319883756,
+     "q25_ln": -0.03788048927924405,
+     "q75_ln": 0.0009601772857355626,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9026726075799432,
+     "best_month": 1.1210660061744226,
+     "max_dd": 0.513850084621133,
+     "end_multiple": 0.5879074030849999,
+     "bust": false,
+     "positions": 100,
+     "positions_per_month": 2.857142857142857
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.017226519537595086,
+     "median_ln": -0.021048249319883527,
+     "q25_ln": -0.04244249287806821,
+     "q75_ln": 0.0008474915888270862,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9017403296611458,
+     "best_month": 1.1210653512228255,
+     "max_dd": 0.5466793741760958,
+     "end_multiple": 0.5472069652754104,
+     "bust": false,
+     "positions": 100,
+     "positions_per_month": 2.857142857142857
+    }
+   }
+  },
+  "P3S_K1_M": {
+   "signals": 174,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.015431596296455843,
+    "median_ln": -0.021858661481460474,
+    "q25_ln": -0.05671168468077724,
+    "q75_ln": 0.01660766384331508,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.8521198326813068,
+    "best_month": 1.173604733516698,
+    "max_dd": 0.4801697729887543,
+    "end_multiple": 0.5826865598631865,
+    "bust": false,
+    "positions": 132,
+    "positions_per_month": 3.7714285714285714,
+    "pnl_U_mean": -0.1764447393875484,
+    "pnl_U_median": -0.34994324949639055,
+    "win_share": 0.3712121212121212,
+    "top10pct_share_of_profit": 0.6699901478456277,
+    "best_position_share_of_profit": 0.06972733895518594,
+    "adds_per_position": 0.4621212121212121,
+    "share_reaching_add": [
+     0.42424242424242425,
+     0.03787878787878788,
+     0.0
+    ],
+    "exits": {
+     "stop": 127,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 3,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 2
+    },
+    "stop_source": {
+     "first_stop": 26,
+     "add_moved_stop": 8,
+     "chandelier": 93
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.356060606060606,
+    "d0_over_p0_median": 0.3828687618651632,
+    "counters": {
+     "signals_seen": 174,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 30,
+     "skip_risk_cap": 12,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 40,
+     "add_skip_risk_cap": 3,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 61
+    },
+    "fees_paid": 8.455350164203006,
+    "funding_paid": 126.67140515331613,
+    "price_pnl": -282.18668481929444,
+    "funding_share_of_gross": 0.44889221202776963,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.027585147044120302
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.010791463280482807
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.024260393696905722
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.04009216169304635
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 132,
+      "pnl_U_sum": -23.29070559915639,
+      "pnl_U_mean": -0.1764447393875484,
+      "win_share": 0.3712121212121212
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.021214881559591732,
+    "median_ln": -0.023903315908900602,
+    "q25_ln": -0.06385832564713853,
+    "q75_ln": 0.01218084244097293,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.08571428571428572,
+    "worst_month": 0.8456030905437026,
+    "best_month": 1.1656281049763895,
+    "max_dd": 0.5652710431613899,
+    "end_multiple": 0.47591269540592135,
+    "bust": false,
+    "positions": 133,
+    "positions_per_month": 3.8
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.008635712422893887,
+     "median_ln": -0.019330197358834574,
+     "q25_ln": -0.04607138722732008,
+     "q75_ln": 0.020518900246801034,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.02857142857142857,
+     "worst_month": 0.857346043340963,
+     "best_month": 1.1810060502395794,
+     "max_dd": 0.41829982364357854,
+     "end_multiple": 0.7391533016675418,
+     "bust": false,
+     "positions": 132,
+     "positions_per_month": 3.7714285714285714
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.021519347760476894,
+     "median_ln": -0.0230461629567186,
+     "q25_ln": -0.061015623143785606,
+     "q75_ln": 0.009320212198506895,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.8468180709421009,
+     "best_month": 1.1663715017359069,
+     "max_dd": 0.5726565805324659,
+     "end_multiple": 0.4708681447471089,
+     "bust": false,
+     "positions": 133,
+     "positions_per_month": 3.8
+    }
+   }
+  },
+  "P3S_K1_H28": {
+   "signals": 174,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.0019559746002539924,
+    "median_ln": -0.00016865397509902344,
+    "q25_ln": -0.0278244594422795,
+    "q75_ln": 0.015176122510636476,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9319755253396723,
+    "best_month": 1.0738714996241483,
+    "max_dd": 0.21258695890018986,
+    "end_multiple": 0.933831642756631,
+    "bust": false,
+    "positions": 109,
+    "positions_per_month": 3.1142857142857143,
+    "pnl_U_mean": -0.019372991795949698,
+    "pnl_U_median": 0.2022115110478368,
+    "win_share": 0.5504587155963303,
+    "top10pct_share_of_profit": 0.3411013324904176,
+    "best_position_share_of_profit": 0.04607010047497727,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 42,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 62,
+     "delisting_close": 0,
+     "period_end_marked": 3,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 2
+    },
+    "stop_source": {
+     "first_stop": 42,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.3302752293577982,
+    "d0_over_p0_median": 0.40568383658969814,
+    "counters": {
+     "signals_seen": 174,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 65,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 35,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 6.469966383046002,
+    "funding_paid": 92.19964248486971,
+    "price_pnl": 32.50125162454399,
+    "funding_share_of_gross": 2.8368028268561587,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.0077894678166818805
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.012443851009838892
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.004398048485950857
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.0210102337020228
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 109,
+      "pnl_U_sum": -2.111656105758517,
+      "pnl_U_mean": -0.019372991795949698,
+      "win_share": 0.5504587155963303
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.005033774099994026,
+    "median_ln": -0.001894458420480903,
+    "q25_ln": -0.03227512063356148,
+    "q75_ln": 0.013250310558496245,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9299755238781163,
+    "best_month": 1.0672544917560298,
+    "max_dd": 0.23943952913695077,
+    "end_multiple": 0.8384652903561225,
+    "bust": false,
+    "positions": 109,
+    "positions_per_month": 3.1142857142857143
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.0001593038972745074,
+     "median_ln": 0.0,
+     "q25_ln": -0.0273264482699387,
+     "q75_ln": 0.016142315322961856,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9369404450570117,
+     "best_month": 1.073871499624147,
+     "max_dd": 0.19915079094000898,
+     "end_multiple": 0.9944398786073022,
+     "bust": false,
+     "positions": 111,
+     "positions_per_month": 3.1714285714285713
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.004493122487047593,
+     "median_ln": -0.00016865397509880134,
+     "q25_ln": -0.030150639378123855,
+     "q75_ln": 0.01468920649652965,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9270177842128432,
+     "best_month": 1.0738714996241479,
+     "max_dd": 0.2381603830146617,
+     "end_multiple": 0.8544824738547976,
+     "bust": false,
+     "positions": 109,
+     "positions_per_month": 3.1142857142857143
+    }
+   }
+  },
+  "P3S_K7_M": {
+   "signals": 180,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.015448136591975721,
+    "median_ln": -0.011362210501554242,
+    "q25_ln": -0.048403506553878456,
+    "q75_ln": 0.010874436993522796,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.05714285714285714,
+    "worst_month": 0.8690313716890815,
+    "best_month": 1.1742892188741711,
+    "max_dd": 0.44046408766027556,
+    "end_multiple": 0.5823493342079683,
+    "bust": false,
+    "positions": 120,
+    "positions_per_month": 3.4285714285714284,
+    "pnl_U_mean": -0.20583982534108822,
+    "pnl_U_median": -0.4268470543972239,
+    "win_share": 0.375,
+    "top10pct_share_of_profit": 0.5671530135245466,
+    "best_position_share_of_profit": 0.11101148856484575,
+    "adds_per_position": 0.4666666666666667,
+    "share_reaching_add": [
+     0.4,
+     0.058333333333333334,
+     0.008333333333333333
+    ],
+    "exits": {
+     "stop": 113,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 4,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 3
+    },
+    "stop_source": {
+     "first_stop": 20,
+     "add_moved_stop": 10,
+     "chandelier": 83
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.4166666666666667,
+    "d0_over_p0_median": 0.3475303144035301,
+    "counters": {
+     "signals_seen": 180,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 39,
+     "skip_risk_cap": 21,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 21,
+     "add_skip_risk_cap": 3,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 56
+    },
+    "fees_paid": 8.71080343829382,
+    "funding_paid": 137.01528950590682,
+    "price_pnl": -271.92457284783177,
+    "funding_share_of_gross": 0.5038724087012916,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.045852342575468275
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.013093671980392595
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.025974895349047563
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.02614139790299157
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 120,
+      "pnl_U_sum": -24.700779040930588,
+      "pnl_U_mean": -0.20583982534108822,
+      "win_share": 0.375
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.021251949332332855,
+    "median_ln": -0.016317395159801466,
+    "q25_ln": -0.05257581958060592,
+    "q75_ln": 0.005857706336359043,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.08571428571428572,
+    "worst_month": 0.8621614869901996,
+    "best_month": 1.1677387794537843,
+    "max_dd": 0.52888310824449,
+    "end_multiple": 0.475295659927433,
+    "bust": false,
+    "positions": 120,
+    "positions_per_month": 3.4285714285714284
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.007874713233325881,
+     "median_ln": -0.011175516926298689,
+     "q25_ln": -0.0391330744357479,
+     "q75_ln": 0.018731050759047112,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.02857142857142857,
+     "worst_month": 0.881654878488634,
+     "best_month": 1.1755430999191179,
+     "max_dd": 0.3495364575092703,
+     "end_multiple": 0.7591051579448962,
+     "bust": false,
+     "positions": 120,
+     "positions_per_month": 3.4285714285714284
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.022259333368573272,
+     "median_ln": -0.014717256774544978,
+     "q25_ln": -0.05629614016245909,
+     "q75_ln": 0.007466635334322087,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.8564701220791012,
+     "best_month": 1.1730349044080866,
+     "max_dd": 0.5454359542390451,
+     "end_multiple": 0.45882946775564737,
+     "bust": false,
+     "positions": 120,
+     "positions_per_month": 3.4285714285714284
+    }
+   }
+  },
+  "P3S_K7_H28": {
+   "signals": 180,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.0002354616351832204,
+    "median_ln": 0.006230645353492706,
+    "q25_ln": -0.014118841293838228,
+    "q75_ln": 0.025494052454546015,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.8518417969365973,
+    "best_month": 1.0888080921566121,
+    "max_dd": 0.22345648719767963,
+    "end_multiple": 0.991792708011393,
+    "bust": false,
+    "positions": 104,
+    "positions_per_month": 2.9714285714285715,
+    "pnl_U_mean": 0.014003895796044911,
+    "pnl_U_median": 0.2133765561611195,
+    "win_share": 0.5865384615384616,
+    "top10pct_share_of_profit": 0.3805510819370008,
+    "best_position_share_of_profit": 0.051640209224494034,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 33,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 64,
+     "delisting_close": 0,
+     "period_end_marked": 4,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 3
+    },
+    "stop_source": {
+     "first_stop": 33,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.4519230769230769,
+    "d0_over_p0_median": 0.3468393857538068,
+    "counters": {
+     "signals_seen": 180,
+     "lapsed_no_next_bar": 0,
+     "skip_has_position": 0,
+     "skip_n_max": 0,
+     "skip_risk_cap": 76,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 21,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 6.881940963233811,
+    "funding_paid": 111.65888217176011,
+    "price_pnl": 110.33353114638376,
+    "funding_share_of_gross": 1.0120122234066629,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.017594272776202215
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.024252970009093832
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.009775985393410581
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.015665601456433444
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 104,
+      "pnl_U_sum": 1.4564051627886707,
+      "pnl_U_mean": 0.014003895796044911,
+      "win_share": 0.5865384615384616
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.0009193009573414885,
+    "median_ln": 0.00591325739094128,
+    "q25_ln": -0.018841628121213542,
+    "q75_ln": 0.019920927179991586,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9085107069812712,
+    "best_month": 1.095691068612344,
+    "max_dd": 0.23458414221676915,
+    "end_multiple": 0.9683365916422845,
+    "bust": false,
+    "positions": 102,
+    "positions_per_month": 2.914285714285714
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": 0.003614751040270127,
+     "median_ln": 0.006230645353492706,
+     "q25_ln": -0.013198845130058244,
+     "q75_ln": 0.02549405245454526,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.02857142857142857,
+     "worst_month": 0.8631141048155915,
+     "best_month": 1.0886152366576567,
+     "max_dd": 0.16730416820761318,
+     "end_multiple": 1.134867933949411,
+     "bust": false,
+     "positions": 104,
+     "positions_per_month": 2.9714285714285715
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.0029451253116749266,
+     "median_ln": 0.006230645353493369,
+     "q25_ln": -0.015450777884608365,
+     "q75_ln": 0.022750824734992348,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.8406200955278212,
+     "best_month": 1.0890032387495727,
+     "max_dd": 0.26901019173650165,
+     "end_multiple": 0.9020553601546163,
+     "bust": false,
+     "positions": 104,
+     "positions_per_month": 2.9714285714285715
+    }
+   }
+  },
+  "P4L_N5_M": {
+   "signals": 837,
+   "base": {
+    "months": 35,
+    "months_realised": 9,
+    "mean_ln": -0.2561437296917277,
+    "median_ln": -0.21870531750006808,
+    "q25_ln": -0.31833167051058503,
+    "q75_ln": -0.17382999234186328,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.8888888888888888,
+    "worst_month": 0.5408540383655234,
+    "best_month": 0.9274961235774144,
+    "max_dd": 0.9058840741647491,
+    "end_multiple": 0.09972951903755829,
+    "bust": true,
+    "positions": 108,
+    "positions_per_month": 3.085714285714286,
+    "pnl_U_mean": -0.997944600809663,
+    "pnl_U_median": -1.1008565558960282,
+    "win_share": 0.06481481481481481,
+    "top10pct_share_of_profit": 0.9626645819816647,
+    "best_position_share_of_profit": 0.6749817824396974,
+    "adds_per_position": 0.5740740740740741,
+    "share_reaching_add": [
+     0.4351851851851852,
+     0.1111111111111111,
+     0.027777777777777776
+    ],
+    "exits": {
+     "stop": 102,
+     "stop_gap_open": 0,
+     "liquidation": 1,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 2,
+     "close_before_no_bar_day": 3
+    },
+    "stop_source": {
+     "first_stop": 36,
+     "add_moved_stop": 40,
+     "chandelier": 26
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.6296296296296298,
+    "d0_over_p0_median": 0.1851072813965588,
+    "counters": {
+     "signals_seen": 837,
+     "lapsed_no_next_bar": 2,
+     "skip_has_position": 22,
+     "skip_n_max": 0,
+     "skip_risk_cap": 87,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 618,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 0,
+     "add_skip_risk_cap": 10,
+     "add_skip_margin_budget": 2,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 2,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 6,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 62
+    },
+    "fees_paid": 8.015448208315078,
+    "funding_paid": 38.25063834222586,
+    "price_pnl": -854.0043944119001,
+    "funding_share_of_gross": 0.044789744165856085,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.31161377251930633
+     },
+     "2022": {
+      "months": 4,
+      "mean_ln": -0.18680617615725453
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 108,
+      "pnl_U_sum": -107.7780168874436,
+      "pnl_U_mean": -0.997944600809663,
+      "win_share": 0.06481481481481481
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 9,
+    "mean_ln": -0.2582429510962868,
+    "median_ln": -0.18996170729158487,
+    "q25_ln": -0.3389688929795006,
+    "q75_ln": -0.16540851320771066,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.7777777777777778,
+    "worst_month": 0.5173627042352429,
+    "best_month": 0.924120033532826,
+    "max_dd": 0.9064065041082519,
+    "end_multiple": 0.09786301738881076,
+    "bust": true,
+    "positions": 101,
+    "positions_per_month": 2.8857142857142857
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 12,
+     "mean_ln": -0.19276829191905606,
+     "median_ln": -0.16068521013785597,
+     "q25_ln": -0.20603721015214424,
+     "q75_ln": -0.14185919071252734,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.8333333333333334,
+     "worst_month": 0.5961049181218604,
+     "best_month": 1.0362231520391012,
+     "max_dd": 0.9010578064606575,
+     "end_multiple": 0.09894219353934251,
+     "bust": true,
+     "positions": 134,
+     "positions_per_month": 3.8285714285714287
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 7,
+     "mean_ln": -0.3343492136291451,
+     "median_ln": -0.2803570998320204,
+     "q25_ln": -0.3560843370755694,
+     "q75_ln": -0.19306386259407918,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 1.0,
+     "worst_month": 0.451120734581281,
+     "best_month": 0.8472404628965744,
+     "max_dd": 0.9037151694473673,
+     "end_multiple": 0.09628483055263276,
+     "bust": true,
+     "positions": 83,
+     "positions_per_month": 2.3714285714285714
+    }
+   }
+  },
+  "P4L_N5_H28": {
+   "signals": 837,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.03647327023456228,
+    "median_ln": -0.07904939289330794,
+    "q25_ln": -0.12452632156642177,
+    "q75_ln": 0.06039582621790532,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.34285714285714286,
+    "worst_month": 0.7983794074876104,
+    "best_month": 1.2764722955936654,
+    "max_dd": 0.8785895715758232,
+    "end_multiple": 0.2789941519286457,
+    "bust": false,
+    "positions": 216,
+    "positions_per_month": 6.171428571428572,
+    "pnl_U_mean": -0.21900420071298154,
+    "pnl_U_median": -1.0670556781325133,
+    "win_share": 0.24074074074074073,
+    "top10pct_share_of_profit": 0.847359866644938,
+    "best_position_share_of_profit": 0.19461246021873357,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 151,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 61,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 4
+    },
+    "stop_source": {
+     "first_stop": 151,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.8194444444444446,
+    "d0_over_p0_median": 0.1714610792436374,
+    "counters": {
+     "signals_seen": 837,
+     "lapsed_no_next_bar": 2,
+     "skip_has_position": 70,
+     "skip_n_max": 0,
+     "skip_risk_cap": 549,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 1,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 12.044702642256862,
+    "funding_paid": 162.29740336269978,
+    "price_pnl": -546.6637420663999,
+    "funding_share_of_gross": 0.2968870822659874,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.012067711605914985
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.08927911934578046
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.02154743750818618
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": 0.018948797011249147
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 216,
+      "pnl_U_sum": -47.304907354004015,
+      "pnl_U_mean": -0.21900420071298154,
+      "win_share": 0.24074074074074073
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.054471753396799966,
+    "median_ln": -0.090014274274864,
+    "q25_ln": -0.13165584399467126,
+    "q75_ln": 0.039792836773929835,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.37142857142857144,
+    "worst_month": 0.7984698707549155,
+    "best_month": 1.2488910868179322,
+    "max_dd": 0.9086577676926824,
+    "end_multiple": 0.14859788659766593,
+    "bust": false,
+    "positions": 216,
+    "positions_per_month": 6.171428571428572
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.031021738371035522,
+     "median_ln": -0.07183689061503737,
+     "q25_ln": -0.11852055490905707,
+     "q75_ln": 0.060707803033031554,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2857142857142857,
+     "worst_month": 0.8014084925537273,
+     "best_month": 1.2816962126527445,
+     "max_dd": 0.8634042704790541,
+     "end_multiple": 0.3376447934687155,
+     "bust": false,
+     "positions": 217,
+     "positions_per_month": 6.2
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.041924180352296565,
+     "median_ln": -0.0897268956902213,
+     "q25_ln": -0.1337438510308058,
+     "q75_ln": 0.05916804962970623,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.37142857142857144,
+     "worst_month": 0.8147454145175234,
+     "best_month": 1.2712473645599276,
+     "max_dd": 0.8924864676851431,
+     "end_multiple": 0.23053644590261949,
+     "bust": false,
+     "positions": 215,
+     "positions_per_month": 6.142857142857143
+    }
+   }
+  },
+  "P4L_N10_M": {
+   "signals": 1313,
+   "base": {
+    "months": 35,
+    "months_realised": 9,
+    "mean_ln": -0.2578350774932425,
+    "median_ln": -0.18431876803291092,
+    "q25_ln": -0.3620736720773162,
+    "q75_ln": -0.16916578883291286,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.7777777777777778,
+    "worst_month": 0.5119821675863463,
+    "best_month": 1.1811187264449932,
+    "max_dd": 0.9292381654924903,
+    "end_multiple": 0.09822291923330784,
+    "bust": true,
+    "positions": 112,
+    "positions_per_month": 3.2,
+    "pnl_U_mean": -0.9632220037929302,
+    "pnl_U_median": -1.1008565558960277,
+    "win_share": 0.05357142857142857,
+    "top10pct_share_of_profit": 0.9593810164808037,
+    "best_position_share_of_profit": 0.6060309925691044,
+    "adds_per_position": 0.5267857142857143,
+    "share_reaching_add": [
+     0.44642857142857145,
+     0.07142857142857142,
+     0.008928571428571428
+    ],
+    "exits": {
+     "stop": 105,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 0,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 3,
+     "close_before_no_bar_day": 4
+    },
+    "stop_source": {
+     "first_stop": 35,
+     "add_moved_stop": 46,
+     "chandelier": 24
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.6160714285714284,
+    "d0_over_p0_median": 0.18829174407491123,
+    "counters": {
+     "signals_seen": 1313,
+     "lapsed_no_next_bar": 3,
+     "skip_has_position": 24,
+     "skip_n_max": 52,
+     "skip_risk_cap": 138,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 984,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 0,
+     "add_skip_risk_cap": 8,
+     "add_skip_margin_budget": 2,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 1,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 3,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 59
+    },
+    "fees_paid": 9.200619360574223,
+    "funding_paid": 61.17805381429207,
+    "price_pnl": -831.3984075918263,
+    "funding_share_of_gross": 0.07358452127842821,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.31673141028953655
+     },
+     "2022": {
+      "months": 4,
+      "mean_ln": -0.18421466149787494
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 112,
+      "pnl_U_sum": -107.88086442480818,
+      "pnl_U_mean": -0.9632220037929302,
+      "win_share": 0.05357142857142857
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 9,
+    "mean_ln": -0.26307926585679814,
+    "median_ln": -0.1945453793940629,
+    "q25_ln": -0.3831642028765761,
+    "q75_ln": -0.17762430595626935,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.7777777777777778,
+    "worst_month": 0.4985663458176865,
+    "best_month": 1.1471873880806327,
+    "max_dd": 0.930356623538766,
+    "end_multiple": 0.09369472455990319,
+    "bust": true,
+    "positions": 104,
+    "positions_per_month": 2.9714285714285715
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 13,
+     "mean_ln": -0.17731424921428063,
+     "median_ln": -0.15645151472686783,
+     "q25_ln": -0.2351188903417496,
+     "q75_ln": -0.14309296564664004,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.7692307692307693,
+     "worst_month": 0.5843761131454543,
+     "best_month": 1.2505755711232789,
+     "max_dd": 0.9324419446163856,
+     "end_multiple": 0.0997502975972389,
+     "bust": true,
+     "positions": 144,
+     "positions_per_month": 4.114285714285714
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 7,
+     "mean_ln": -0.33186877612259497,
+     "median_ln": -0.1988367749386516,
+     "q25_ln": -0.5969624368434379,
+     "q75_ln": -0.12414864307960004,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.7142857142857143,
+     "worst_month": 0.4379409097572438,
+     "best_month": 1.154478571583184,
+     "max_dd": 0.9276932601631942,
+     "end_multiple": 0.0979712282348033,
+     "bust": true,
+     "positions": 81,
+     "positions_per_month": 2.3142857142857145
+    }
+   }
+  },
+  "P4L_N10_H28": {
+   "signals": 1313,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.008954456106950991,
+    "median_ln": -0.08090266469483365,
+    "q25_ln": -0.13029514023911645,
+    "q75_ln": 0.1395004508093334,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2857142857142857,
+    "worst_month": 0.8295203431441394,
+    "best_month": 1.4478412276919406,
+    "max_dd": 0.8467452826541787,
+    "end_multiple": 0.730953111866337,
+    "bust": false,
+    "positions": 221,
+    "positions_per_month": 6.314285714285714,
+    "pnl_U_mean": 0.02279034316775918,
+    "pnl_U_median": -1.0678339113512414,
+    "win_share": 0.2579185520361991,
+    "top10pct_share_of_profit": 0.8206217680621043,
+    "best_position_share_of_profit": 0.1540409854556666,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 154,
+     "stop_gap_open": 0,
+     "liquidation": 0,
+     "hold_close": 63,
+     "delisting_close": 0,
+     "period_end_marked": 0,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 4
+    },
+    "stop_source": {
+     "first_stop": 154,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.918552036199095,
+    "d0_over_p0_median": 0.1681964917593933,
+    "counters": {
+     "signals_seen": 1313,
+     "lapsed_no_next_bar": 4,
+     "skip_has_position": 97,
+     "skip_n_max": 0,
+     "skip_risk_cap": 991,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 0,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 17.89231741793926,
+    "funding_paid": 248.59690215024688,
+    "price_pnl": -2.557668565474671,
+    "funding_share_of_gross": 97.19668353671557,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": 0.04613870249186137
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.09222153362335399
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": 0.003493061088722852
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": 0.08677369903549699
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 221,
+      "pnl_U_sum": 5.036665840074779,
+      "pnl_U_mean": 0.02279034316775918,
+      "win_share": 0.2579185520361991
+     },
+     "short": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.018973408786481776,
+    "median_ln": -0.08504237462398152,
+    "q25_ln": -0.1359715553921737,
+    "q75_ln": 0.12079432208482382,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.34285714285714286,
+    "worst_month": 0.8197062617124825,
+    "best_month": 1.4064953990326245,
+    "max_dd": 0.877817548643284,
+    "end_multiple": 0.5147523810060186,
+    "bust": false,
+    "positions": 214,
+    "positions_per_month": 6.114285714285714
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.014956031692631818,
+     "median_ln": -0.07378768085377564,
+     "q25_ln": -0.12761168422748836,
+     "q75_ln": 0.11018061653769029,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.3142857142857143,
+     "worst_month": 0.8067249944307808,
+     "best_month": 1.3312845236546103,
+     "max_dd": 0.8207155313962099,
+     "end_multiple": 0.5924664042654646,
+     "bust": false,
+     "positions": 222,
+     "positions_per_month": 6.3428571428571425
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.015788017155218804,
+     "median_ln": -0.08509886792081117,
+     "q25_ln": -0.13298482056012773,
+     "q75_ln": 0.13560393479220564,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.37142857142857144,
+     "worst_month": 0.8099967771262923,
+     "best_month": 1.4364186804505839,
+     "max_dd": 0.8706973572688124,
+     "end_multiple": 0.5754628528969585,
+     "bust": false,
+     "positions": 221,
+     "positions_per_month": 6.314285714285714
+    }
+   }
+  },
+  "P4S_N5_M": {
+   "signals": 295,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.03580306737258457,
+    "median_ln": -0.02932713636206207,
+    "q25_ln": -0.07910937167784682,
+    "q75_ln": 0.0034738249918704746,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.08571428571428572,
+    "worst_month": 0.7841158365834615,
+    "best_month": 1.1217486879542953,
+    "max_dd": 0.7835684446793838,
+    "end_multiple": 0.28561590564290873,
+    "bust": false,
+    "positions": 142,
+    "positions_per_month": 4.057142857142857,
+    "pnl_U_mean": -0.39814555174783073,
+    "pnl_U_median": -0.7087285013854756,
+    "win_share": 0.23943661971830985,
+    "top10pct_share_of_profit": 0.8468593362430415,
+    "best_position_share_of_profit": 0.3318200237799959,
+    "adds_per_position": 0.45774647887323944,
+    "share_reaching_add": [
+     0.3873239436619718,
+     0.06338028169014084,
+     0.007042253521126761
+    ],
+    "exits": {
+     "stop": 127,
+     "stop_gap_open": 0,
+     "liquidation": 1,
+     "hold_close": 0,
+     "delisting_close": 5,
+     "period_end_marked": 6,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 3
+    },
+    "stop_source": {
+     "first_stop": 29,
+     "add_moved_stop": 15,
+     "chandelier": 83
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.9014084507042253,
+    "d0_over_p0_median": 0.25810909587909336,
+    "counters": {
+     "signals_seen": 295,
+     "lapsed_no_next_bar": 1,
+     "skip_has_position": 50,
+     "skip_n_max": 60,
+     "skip_risk_cap": 42,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 13,
+     "add_skip_risk_cap": 11,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 65
+    },
+    "fees_paid": 11.075469599175026,
+    "funding_paid": 148.23174535953902,
+    "price_pnl": -555.0768793983768,
+    "funding_share_of_gross": 0.267047234106023,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.01063897671666186
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.02370777429587446
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.05665577042986025
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.03925832295805571
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 142,
+      "pnl_U_sum": -56.53666834819197,
+      "pnl_U_mean": -0.39814555174783073,
+      "win_share": 0.23943661971830985
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.04353244607380337,
+    "median_ln": -0.03826604699347847,
+    "q25_ln": -0.08601210460180764,
+    "q75_ln": 0.0,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.17142857142857143,
+    "worst_month": 0.7787987968203047,
+    "best_month": 1.1142092977338671,
+    "max_dd": 0.8209061774215487,
+    "end_multiple": 0.21791817894558987,
+    "bust": false,
+    "positions": 142,
+    "positions_per_month": 4.057142857142857
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.029130317485102475,
+     "median_ln": -0.02502363183372237,
+     "q25_ln": -0.07701720497691417,
+     "q75_ln": 0.0,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.05714285714285714,
+     "worst_month": 0.8066405212516389,
+     "best_month": 1.1243310954377528,
+     "max_dd": 0.7208679035507033,
+     "end_multiple": 0.36075323570736845,
+     "bust": false,
+     "positions": 144,
+     "positions_per_month": 4.114285714285714
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.043976585536600096,
+     "median_ln": -0.033834566072865294,
+     "q25_ln": -0.08849401980064661,
+     "q75_ln": -0.001034574616902684,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.14285714285714285,
+     "worst_month": 0.7767820592680282,
+     "best_month": 1.1184584505042188,
+     "max_dd": 0.8200148989298525,
+     "end_multiple": 0.21455686008065109,
+     "bust": false,
+     "positions": 143,
+     "positions_per_month": 4.085714285714285
+    }
+   }
+  },
+  "P4S_N5_H28": {
+   "signals": 295,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.0045151847523783655,
+    "median_ln": -0.0021761822879610647,
+    "q25_ln": -0.045710641469553906,
+    "q75_ln": 0.019021281531233836,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9236437376831144,
+    "best_month": 1.116748847542096,
+    "max_dd": 0.35235880974739975,
+    "end_multiple": 0.8538229148694099,
+    "bust": false,
+    "positions": 113,
+    "positions_per_month": 3.2285714285714286,
+    "pnl_U_mean": -0.039900613748402605,
+    "pnl_U_median": -0.03652954086354421,
+    "win_share": 0.4778761061946903,
+    "top10pct_share_of_profit": 0.460760924414701,
+    "best_position_share_of_profit": 0.06506914475064424,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 43,
+     "stop_gap_open": 0,
+     "liquidation": 3,
+     "hold_close": 53,
+     "delisting_close": 6,
+     "period_end_marked": 4,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 4
+    },
+    "stop_source": {
+     "first_stop": 43,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 1.9557522123893805,
+    "d0_over_p0_median": 0.25496095560323834,
+    "counters": {
+     "signals_seen": 295,
+     "lapsed_no_next_bar": 1,
+     "skip_has_position": 36,
+     "skip_n_max": 0,
+     "skip_risk_cap": 145,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 6,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 8.9822734533018,
+    "funding_paid": 142.10198036297592,
+    "price_pnl": 4.907168685687765,
+    "funding_share_of_gross": 28.95803862977651,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.006479809966442702
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.010377020123221503
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.019801085652785582
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.0020906050243767274
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 113,
+      "pnl_U_sum": -4.508769353569495,
+      "pnl_U_mean": -0.039900613748402605,
+      "win_share": 0.4778761061946903
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.011251238109637967,
+    "median_ln": -0.0060172756875406476,
+    "q25_ln": -0.055804286713248705,
+    "q75_ln": 0.01044436464062903,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.0,
+    "worst_month": 0.9187088726186359,
+    "best_month": 1.1061830711173655,
+    "max_dd": 0.4156776478330154,
+    "end_multiple": 0.6744934368076565,
+    "bust": false,
+    "positions": 113,
+    "positions_per_month": 3.2285714285714286
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.001803808324573189,
+     "median_ln": -0.0021761822879608423,
+     "q25_ln": -0.03902199595347878,
+     "q75_ln": 0.019021300033974682,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9249081983093784,
+     "best_month": 1.1174280412917892,
+     "max_dd": 0.29745441244914017,
+     "end_multiple": 0.938818328977044,
+     "bust": false,
+     "positions": 114,
+     "positions_per_month": 3.257142857142857
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.006343483583119912,
+     "median_ln": -0.004682673346684602,
+     "q25_ln": -0.04635997043458311,
+     "q75_ln": 0.019021263019735248,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.0,
+     "worst_month": 0.9223792770568512,
+     "best_month": 1.1160685299532558,
+     "max_dd": 0.37576123930579663,
+     "end_multiple": 0.800897804130072,
+     "bust": false,
+     "positions": 113,
+     "positions_per_month": 3.2285714285714286
+    }
+   }
+  },
+  "P4S_N10_M": {
+   "signals": 562,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.034519298016161305,
+    "median_ln": -0.03113308104529367,
+    "q25_ln": -0.09045729645689374,
+    "q75_ln": 0.0012415229309119212,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.17142857142857143,
+    "worst_month": 0.8097874804607502,
+    "best_month": 1.2076814405633893,
+    "max_dd": 0.7426199071749565,
+    "end_multiple": 0.2987418577307263,
+    "bust": false,
+    "positions": 155,
+    "positions_per_month": 4.428571428571429,
+    "pnl_U_mean": -0.3594580001420842,
+    "pnl_U_median": -0.6447070090584063,
+    "win_share": 0.27741935483870966,
+    "top10pct_share_of_profit": 0.7685597694214934,
+    "best_position_share_of_profit": 0.14039284136239807,
+    "adds_per_position": 0.43870967741935485,
+    "share_reaching_add": [
+     0.3741935483870968,
+     0.05806451612903226,
+     0.0064516129032258064
+    ],
+    "exits": {
+     "stop": 142,
+     "stop_gap_open": 0,
+     "liquidation": 1,
+     "hold_close": 0,
+     "delisting_close": 4,
+     "period_end_marked": 6,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 2
+    },
+    "stop_source": {
+     "first_stop": 26,
+     "add_moved_stop": 14,
+     "chandelier": 102
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.0580645161290323,
+    "d0_over_p0_median": 0.24583736892490715,
+    "counters": {
+     "signals_seen": 562,
+     "lapsed_no_next_bar": 1,
+     "skip_has_position": 60,
+     "skip_n_max": 192,
+     "skip_risk_cap": 154,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 10,
+     "add_skip_risk_cap": 22,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 68
+    },
+    "fees_paid": 12.451074191203048,
+    "funding_paid": 183.99649062013793,
+    "price_pnl": -504.8105774579345,
+    "funding_share_of_gross": 0.3644862030163586,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.027096704305625885
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": -0.01220090478248203
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.05432732779240477
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.045725519689812415
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 155,
+      "pnl_U_sum": -55.71599002202305,
+      "pnl_U_mean": -0.3594580001420842,
+      "win_share": 0.27741935483870966
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.04601940581439199,
+    "median_ln": -0.037656305878015765,
+    "q25_ln": -0.09800107991350122,
+    "q75_ln": -0.008473448562283981,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.2,
+    "worst_month": 0.8041685827701162,
+    "best_month": 1.1929438654072826,
+    "max_dd": 0.8157529694939606,
+    "end_multiple": 0.19975189580269503,
+    "bust": false,
+    "positions": 155,
+    "positions_per_month": 4.428571428571429
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.030277397943928128,
+     "median_ln": -0.026527523756420788,
+     "q25_ln": -0.07974191940674466,
+     "q75_ln": 0.00011248682108691406,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.11428571428571428,
+     "worst_month": 0.8350162356521065,
+     "best_month": 1.2144953304431598,
+     "max_dd": 0.6994384962958746,
+     "end_multiple": 0.34655666858048745,
+     "bust": false,
+     "positions": 157,
+     "positions_per_month": 4.485714285714286
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.043976326376516967,
+     "median_ln": -0.050672627281102105,
+     "q25_ln": -0.08946400044323942,
+     "q75_ln": -0.004758810234798313,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.2,
+     "worst_month": 0.7985991039477354,
+     "best_month": 1.2127848405740103,
+     "max_dd": 0.7953101335869902,
+     "end_multiple": 0.2145588062495568,
+     "bust": false,
+     "positions": 156,
+     "positions_per_month": 4.457142857142857
+    }
+   }
+  },
+  "P4S_N10_H28": {
+   "signals": 562,
+   "base": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.0027276308367806877,
+    "median_ln": -0.008143698075603783,
+    "q25_ln": -0.03330037952461386,
+    "q75_ln": 0.018972356642242564,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.8865950807127247,
+    "best_month": 1.1601597691670744,
+    "max_dd": 0.34004535912391287,
+    "end_multiple": 0.9089482843864369,
+    "bust": false,
+    "positions": 123,
+    "positions_per_month": 3.5142857142857142,
+    "pnl_U_mean": -0.011939331228428244,
+    "pnl_U_median": -0.03784443280965098,
+    "win_share": 0.4878048780487805,
+    "top10pct_share_of_profit": 0.475629308677707,
+    "best_position_share_of_profit": 0.05636457940965395,
+    "adds_per_position": 0.0,
+    "share_reaching_add": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "exits": {
+     "stop": 46,
+     "stop_gap_open": 0,
+     "liquidation": 1,
+     "hold_close": 66,
+     "delisting_close": 3,
+     "period_end_marked": 3,
+     "month_end_close": 0,
+     "bust_close": 0,
+     "close_before_no_bar_day": 4
+    },
+    "stop_source": {
+     "first_stop": 46,
+     "add_moved_stop": 0,
+     "chandelier": 0
+    },
+    "first_unit_risk_over_U": 1.0,
+    "leverage_mean": 2.0,
+    "d0_over_p0_median": 0.2537199566712973,
+    "counters": {
+     "signals_seen": 562,
+     "lapsed_no_next_bar": 1,
+     "skip_has_position": 40,
+     "skip_n_max": 0,
+     "skip_risk_cap": 398,
+     "skip_no_leverage": 0,
+     "skip_min_notional": 0,
+     "skip_bad_d0": 0,
+     "skip_after_bust": 0,
+     "pass2_daily_bar_days": 0,
+     "cut_liquidity": 0,
+     "cut_margin_budget": 0,
+     "cut_free_wallet": 0,
+     "d0_cap": 5,
+     "add_skip_risk_cap": 0,
+     "add_skip_margin_budget": 0,
+     "add_skip_free_wallet": 0,
+     "add_skip_liquidity": 0,
+     "add_skip_min_notional": 0,
+     "add_skip_liq_not_beyond_stop": 0,
+     "add_cut_liquidity": 0,
+     "add_cut_margin_budget": 0,
+     "add_cut_free_wallet": 0,
+     "adds_filled": 0
+    },
+    "fees_paid": 11.218127851650374,
+    "funding_paid": 193.9276235935323,
+    "price_pnl": 114.09403583161927,
+    "funding_share_of_gross": 1.6997174495582923,
+    "per_year": {
+     "2021": {
+      "months": 5,
+      "mean_ln": -0.011082435585556159
+     },
+     "2022": {
+      "months": 12,
+      "mean_ln": 0.023350215855407752
+     },
+     "2023": {
+      "months": 12,
+      "mean_ln": -0.0196383166211752
+     },
+     "2024": {
+      "months": 6,
+      "mean_ln": -0.0140996153617223
+     }
+    },
+    "per_side": {
+     "long": {
+      "positions": 0,
+      "pnl_U_sum": 0.0,
+      "pnl_U_mean": null,
+      "win_share": null
+     },
+     "short": {
+      "positions": 123,
+      "pnl_U_sum": -1.468537741096674,
+      "pnl_U_mean": -0.011939331228428244,
+      "win_share": 0.4878048780487805
+     }
+    },
+    "funding_flag": "funding assumed 0.03%/8h",
+    "liquidation_note": "daily bars: a liquidation comes only from an open beyond the liquidation price or a hair-cut stop fill beyond it (6.7); the 5m pass (15) measures liquidations"
+   },
+   "x2": {
+    "months": 35,
+    "months_realised": 35,
+    "mean_ln": -0.008572756344743387,
+    "median_ln": -0.013169020104701707,
+    "q25_ln": -0.03788947251352222,
+    "q75_ln": 0.009439449611499269,
+    "share_ge2": 0.0,
+    "share_ge5": 0.0,
+    "share_ge10": 0.0,
+    "share_lt09": 0.02857142857142857,
+    "worst_month": 0.8756938751373876,
+    "best_month": 1.1479124642037108,
+    "max_dd": 0.39704248121084074,
+    "end_multiple": 0.7407837941284013,
+    "bust": false,
+    "positions": 123,
+    "positions_per_month": 3.5142857142857142
+   },
+   "stop_fill_sensitivity": {
+    "f=0": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.0001969217690517667,
+     "median_ln": -0.007612532930565297,
+     "q25_ln": -0.031056919471408727,
+     "q75_ln": 0.015387520417083673,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.02857142857142857,
+     "worst_month": 0.8916040841954435,
+     "best_month": 1.1601235384253796,
+     "max_dd": 0.31457299812004935,
+     "end_multiple": 0.9931314352467462,
+     "bust": false,
+     "positions": 122,
+     "positions_per_month": 3.4857142857142858
+    },
+    "f=0.5": {
+     "months": 35,
+     "months_realised": 35,
+     "mean_ln": -0.004381148414968899,
+     "median_ln": -0.009920077867314879,
+     "q25_ln": -0.03414879331777455,
+     "q75_ln": 0.0189721735817749,
+     "share_ge2": 0.0,
+     "share_ge5": 0.0,
+     "share_ge10": 0.0,
+     "share_lt09": 0.02857142857142857,
+     "worst_month": 0.881591362655047,
+     "best_month": 1.1601953104415639,
+     "max_dd": 0.3591044416380952,
+     "end_multiple": 0.8578378404302666,
+     "bust": false,
+     "positions": 123,
+     "positions_per_month": 3.5142857142857142
+    }
+   }
+  }
+ },
+ "choice": {
+  "status": "no_pick_fail",
+  "picks": [
+   "P3S_K7_H28"
+  ],
+  "eligible": []
+ },
+ "seconds": 1.0
+}
