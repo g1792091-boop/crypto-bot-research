@@ -5,6 +5,7 @@
     results = reads_b.run_b(ctx)              # {read id: result}; a read that fails is returned as {'read', 'error'}, never raised
     text = reads_b.appendix_md(results)       # the Korean appendix part of these reads (committed page)
     priv = reads_b.private_md(results)        # the DeepSeek part 부록 for owner_report_extra.md ('[비공개]' lines; never committed)
+    reads_b.READS, reads_b.FUNCS, reads_b.DROPPED_AT_O8 (empty: X-017's tests are green)
 
 One result (everything outside 'private' may be committed):
     {'read': id, 'title': Korean title,
@@ -28,7 +29,6 @@ the tests require both paths to give identical results. Nothing here prints a fi
 from __future__ import annotations
 
 import datetime as dt
-import json
 import math
 import os
 import sys
@@ -245,6 +245,8 @@ class _State:
 
     def set_off(self, p, pdata) -> dict:
         off = pdata.offered("select", self.ctx.market)
+        DX.assert_no_minute_at_or_after({p["id"]: {"ts": np.r_[np.asarray(off["close"], np.int64), np.asarray(off["fill"], np.int64)]}},
+                                        DX.SELECT_CUT_MS)                     # E.1 item 3: select period only
         self._off[p["id"]] = {k: np.array(v, copy=True) for k, v in off.items()}
         key = off["coin"].astype(np.int64) * (1 << 50) + off["fill"].astype(np.int64)
         if len(np.unique(key)) != len(key):
@@ -707,11 +709,11 @@ def _save_reduced(st: _State, rid: str, p: dict) -> None:
             d = by_size.setdefault(scale, {})
             for k, v in keep.items():
                 d[f"{arm}__{part}__{k}"] = v
-    for (r, pid, arm), doc in st.extra.items() if rid == "X-026" else ():
-        if r == rid and pid == p["id"]:
+    for key, doc in st.extra.items():
+        if rid == "X-026" and isinstance(key, tuple) and len(key) == 3 and key[0] == rid and key[1] == p["id"]:
             d = by_size.setdefault(XC.SIZE_Q, {})
             for k, v in doc.items():
-                d[f"{arm}__missed__{k}"] = np.asarray(v)
+                d[f"{key[2]}__missed__{k}"] = np.asarray(v)
     for scale, doc in by_size.items():
         XC.save_reduced(st.ctx, p, REDUCED_DIR[rid], scale, doc)
 
@@ -787,16 +789,25 @@ def _sizeable(market, S, off: dict, q: np.ndarray, W: np.ndarray, stop_atr: floa
     return ok
 
 
-def _pre_x026(st: _State, p: dict, pdata, arm: str) -> None:
-    ctx, mk = st.ctx, st.ctx.market
-    off = pdata.offered("select", mk)
-    S = mk.S(XC.SIZE_Q)
-    tg = pdata.targets(off) if arm in ("F11.b", "F12.b") else None
-    acc = XC.account(ctx, p, arm, XC.SIZE_Q)
-    v = KX.variant_by_id(arm)
+def _skipped_sizeable(st: _State, p: dict, arm: str) -> tuple:
+    """X-025 (c1) at quarter size: the skipped-while-holding signals q, the account's realised wallet W just before each fill and the
+    sizeable flag (reads_lib.sizeable, the same flags X-025 prints; else this module's fallback)."""
+    if USE_LIB and hasattr(RL, "sizeable"):
+        r = RL.sizeable(st.ctx, p, arm, XC.SIZE_Q)
+        return np.asarray(r["q"], np.int64), np.asarray(r["W"], float), np.asarray(r["sizeable"], bool)
+    acc = XC.account(st.ctx, p, arm, XC.SIZE_Q)
+    off = st.off(p)
     qs = np.flatnonzero(st.c5(p, arm, XC.SIZE_Q) == 0)
     W = _wallet_before(acc, off["fill"][qs]) if len(qs) else np.zeros(0)
-    ok = _sizeable(mk, S, off, qs, W, KX.exit_of_pick(p, v)[0])
+    return qs, W, _sizeable(st.ctx.market, st.ctx.market.S(XC.SIZE_Q), off, qs, W, KX.exit_of_pick(p, KX.variant_by_id(arm))[0])
+
+
+def _pre_x026(st: _State, p: dict, pdata, arm: str) -> None:
+    mk = st.ctx.market
+    off = pdata.offered("select", mk)
+    tg = pdata.targets(off) if arm in ("F11.b", "F12.b") else None
+    v = KX.variant_by_id(arm)
+    qs, W, ok = _skipped_sizeable(st, p, arm)
     r, hold = [], []
     for q, w in zip(qs[ok], W[ok]):
         c = int(off["coin"][q])
@@ -1014,6 +1025,11 @@ def _r_x004(st: _State) -> dict:
                         tables[dim][0] += 1
                         tables[dim][1] += int(_thin_pair(cd[b]))
                         tables[dim][2] += int(md[b]["outside"])
+                if dim == "tf":                                       # C7 '픽 N개' and C13 on cells that hold a subset of the picks
+                    for b in buckets:
+                        bp = [p for p in picks if p["tf"] == b]
+                        cd[b]["n_picks"] = len(bp)
+                        cd[b]["label_c13"] = XC.c13_mark(bp[0], arm) if len(bp) == 1 else ""
                 counts["by_" + dim] = cd
                 if ok:
                     money["by_" + dim] = md
@@ -1414,6 +1430,13 @@ def _ceiling_count(st: _State, p: dict, size=XC.SIZE_Q, q15=False) -> int:
     return count
 
 
+def _ceiling(st: _State, p: dict, size=XC.SIZE_Q) -> int:
+    """X-025 (f) for X-016: reads_lib.entry_ceiling (the number X-025 prints) when used, else this module's walk."""
+    if USE_LIB and hasattr(RL, "entry_ceiling"):
+        return int(RL.entry_ceiling(st.ctx, p, size))
+    return _ceiling_count(st, p, size)
+
+
 def _goal_rows(w, a, b, nrate, ceiling) -> list:
     rows = []
     for T, lab in TARGETS:
@@ -1449,7 +1472,7 @@ def _r_x016(st: _State) -> dict:
     for pool in XC.POOLS:
         picks = st.picks(pool)
         N = len(picks)
-        ceil_n = sum(_ceiling_count(st, p) for p in picks)
+        ceil_n = sum(_ceiling(st, p) for p in picks)
         ceiling = ceil_n / (N * XC.N_MONTHS) if N else None
         (res["core"] if pool == "core" else res["private"]["ds"])["entries_ceiling_per_account_month"] = ceiling
         for arm in _arms_money(ctx, pool):
@@ -1753,6 +1776,11 @@ def _r_x030(st: _State) -> dict:
             lev = np.round(allf["lev"])
             m["by_tier"] = OrderedDict((str(t), _exc_cell(_sub(allf, lev == t), S)) for t in TIERS)
             m["by_bar"] = OrderedDict((g, _exc_cell(_frame_cat([f for f in frames if f["tf"] in tfs]), S)) for g, tfs, _ko in BAR_GROUPS)
+            for g, tfs, _ko in BAR_GROUPS:
+                bp = [p for p in picks if p["tf"] in tfs]
+                m["by_bar"][g]["n_picks"] = len(bp)
+                m["by_bar"][g]["flag"] = _thin(m["by_bar"][g]["n"], len(bp))
+                m["by_bar"][g]["label_c13"] = XC.c13_mark(bp[0], arm) if len(bp) == 1 else ""
             _put(st, res, pool, arm, None, m)
     return res
 
@@ -1849,7 +1877,8 @@ def _cost_size(st: _State, pool: str, arm: str, size: float) -> tuple:
     costR, fundR = cost / qR, cat["fund"] / qR
     gross = fr["R"] + costR + fundR
     mg, mc, mf = _mean(gross), _mean(costR), _mean(fundR)
-    money = OrderedDict([("cost_month_pct", _mean(100.0 * _cat(cost_m))), ("fund_month_pct", _mean(100.0 * _cat(fund_m))),
+    money = OrderedDict([("busts", int(sum(_bust(st.acc_money(p, arm, size)["w_end"]) for p in picks))), ("n_picks", N),
+                         ("cost_month_pct", _mean(100.0 * _cat(cost_m))), ("fund_month_pct", _mean(100.0 * _cat(fund_m))),
                          ("cost_per_trip_pct", _mean(100.0 * cost / fr["Wb"])), ("costR_mean", mc), ("fundR_mean", mf), ("gross_R_mean", mg),
                          ("cost_share_of_gross", (mc / mg) if mg is not None and mg > 0 and mc is not None else None),
                          ("c_star", ((mg - mf) / mc) if None not in (mg, mf, mc) and mc > 0 else None), ("by_hold", hb_money),
@@ -2134,7 +2163,7 @@ def _r_x043(st: _State) -> dict:
     rid, ctx = "X-043", st.ctx
     res = _new(rid)
     sizes = _x043_sizes(st)
-    verdict_ok, verdict_counts_ok, diffs = True, {"core": True, "ds": True}, []
+    verdict_ok, verdict_counts_ok, diffs = {"core": True, "ds": True}, {"core": True, "ds": True}, {"core": [], "ds": []}
     for pool in XC.POOLS:
         picks = st.picks(pool)
         arms = _arms_money(ctx, pool)
@@ -2155,6 +2184,8 @@ def _r_x043(st: _State) -> dict:
                 ent_ok = abs(es - eb) <= 0.01 * eb if eb else es == 0
                 verdict_counts_ok[pool] &= bool(ent_ok)
                 part = OrderedDict([("busts_differ", int(sum(_bust(b["w_end"]) != _bust(x["w_end"]) for b, x in zip(big, small)))),
+                                    ("busts_w5000", int(sum(_bust(b["w_end"]) for b in big))), ("busts_w1000", int(sum(_bust(x["w_end"]) for x in small))),
+                                    ("n_picks", len(picks)),
                                     ("final_multiple_median_w5000", _median([float(b["w_end"]) / float(b["w0"]) for b in big])),
                                     ("final_multiple_median_w1000", _median([float(x["w_end"]) / float(x["w0"]) for x in small]))])
                 M_ok = True
@@ -2165,16 +2196,17 @@ def _r_x043(st: _State) -> dict:
                     Ms = float(np.mean(L[(arm, s, "small")] - L[("E0", s, "small")]))
                     part.update(M_w5000=Mb, M_w1000=Ms)
                     M_ok = abs(XC.pct_month(Ms) - XC.pct_month(Mb)) <= 0.1
-                if pool == "core":
-                    verdict_ok &= bool(ent_ok and M_ok)
-                    if not (ent_ok and M_ok):
-                        diffs.append(f"{arm} {tag}")
+                verdict_ok[pool] &= bool(ent_ok and M_ok)
+                if not (ent_ok and M_ok):
+                    diffs[pool].append(f"{arm} {tag}")
                 m[tag] = part
             _put(st, res, pool, arm, counts, m)
         if pool == "ds":
             res["ds"]["label_verdict"] = ("진입·거절 수는 1,000달러도 5,000달러와 거의 같습니다" if verdict_counts_ok["ds"]
                                           else "진입 수가 1% 넘게 다른 줄이 있습니다")
-    res["core"]["label_verdict"] = ("1,000달러도 5,000달러와 거의 같습니다" if verdict_ok else "다릅니다: " + ", ".join(diffs))
+    for pool in XC.POOLS:
+        lab = "1,000달러도 5,000달러와 거의 같습니다" if verdict_ok[pool] else "다릅니다: " + ", ".join(diffs[pool])
+        (res["core"] if pool == "core" else res["private"]["ds"])["label_verdict"] = lab
     res["notes"].append("only the starting wallet S[10] changes; the $10 bust line S[9] stays")
     return res
 
@@ -2472,7 +2504,8 @@ def _r_x017(st: _State) -> dict:
                                 ("path_win_share", _share(win) if len(win) else None), ("flag", _thin(len(hold))),
                                 ("n_fallback", OrderedDict(zip(H_KEYS, np.sum([e["nfall"] for e in ex], axis=0).astype(int).tolist()))
                                  if N else None),
-                                ("e0_own_month_log", st.L(pool, "E0", size))])
+                                ("e0_own_month_log", st.L(pool, "E0", size)),
+                                ("e0_busts", int(sum(_bust(st.acc_money(p, "E0", size)["w_end"]) for p in picks))), ("n_picks", N)])
             cap = OrderedDict()
             for arm in _arms_money(ctx, pool):
                 gi = float(pooled[3])
@@ -2626,7 +2659,7 @@ def _md_x004(r):
                     for b, cell in row["by_" + dim].items():
                         mb = (row.get("money") or {}).get("by_" + dim, {}).get(b, {})
                         w, d = cell["weekend"], cell["weekday"]
-                        body.append([a, BUCKET_KO.get(b, b), f"{w['n']} · {d['n']}" + _fl_mark(_thin(min(w["n"], d["n"]))),
+                        body.append([a, BUCKET_KO.get(b, b) + _pick_mark(cell), f"{w['n']} · {d['n']}" + _fl_mark(_thin(min(w["n"], d["n"]))),
                                      f"{_pc(w['win_share'])} · {_pc(d['win_share'])}", f"{_ct(mb.get('G_weekend'))} · {_ct(mb.get('G_weekday'))}",
                                      _dl(mb)])
                 L += _tbl(["방식", "칸", "거래 주말 · 평일", "승률 주말 · 평일", "월 성장 기여 주말 · 평일", "주말-평일 거래당 차이(우연 범위)"], body)
@@ -2648,7 +2681,8 @@ def _md_x004(r):
                 for a, row in _ds_rows(r):
                     for b, cell in row["by_" + dim].items():
                         w, d = cell["weekend"], cell["weekday"]
-                        body.append([a, BUCKET_KO.get(b, b), f"{w['n']} · {d['n']}", f"{w['wins']}/{w['n']} · {d['wins']}/{d['n']}"])
+                        body.append([a, BUCKET_KO.get(b, b) + _pick_mark(cell), f"{w['n']} · {d['n']}",
+                                     f"{w['wins']}/{w['n']} · {d['wins']}/{d['n']}"])
                 L += [f"### X-004 나눠 보기: {DIM_KO.get(dim, dim)}", ""] + _tbl(["방식", "칸", "거래 주말 · 평일", "이긴 거래 주말 · 평일"], body)
                 bt = P["by_table"][dim]
                 L += [XC.c15_line(bt["n_cells"], bt["n_thin"]), ""]
@@ -2658,6 +2692,15 @@ def _md_x004(r):
 
 
 DIM_KO = {"side": "롱·숏", "tf": "봉", "coin": "코인", "year": "해", "state": "장세"}
+
+
+def _pick_mark(cell: dict) -> str:
+    """C7 '픽 N개' (fewer than 3 picks) and C13 '= F3.a' / '= F3.b' (one F7_RF_ONLY pick) of a cell over a subset of the picks."""
+    if "n_picks" not in cell:
+        return ""
+    k = int(cell["n_picks"])
+    out = f" (픽 {k}개)" if k < XC.FEW_PICKS else ""
+    return out + (f" {cell['label_c13']}" if cell.get("label_c13") else "")
 DLAM_NOTE_KO = "거래당 차이 = 주말 거래와 평일 거래의 거래당 평균 로그 성장 차이에 100을 곱한 값(지갑 %, 근사)이고, 괄호는 주를 통째로 다시 뽑아 만든 우연 범위입니다."
 
 
@@ -2826,7 +2869,8 @@ def _md_x017(r):
         if not p:
             continue
         mm = p["month_multiple"]
-        body.append([ko, f"{_x(mm['i_e0'])} (E0 {_x(math.exp(p['e0_own_month_log']), 3)})", _x(mm["iv_none"]), _x(mm["ii_24h"]),
+        lv = f", {XC.bust_cell(p['e0_busts'], p['n_picks'])}" if tag == "q100" else ""          # C12 on E0's live growth
+        body.append([ko, f"{_x(mm['i_e0'])} (E0 {_x(math.exp(p['e0_own_month_log']), 3)}{lv})", _x(mm["iv_none"]), _x(mm["ii_24h"]),
                      _x(mm["iii_48h"]), _x(mm["v_limit"]), f"{p['path_trades']}건 · {_h(p['path_hold_median'])} · {_pc(p['path_win_share'])}"
                      + _fl_mark(p["flag"])])
     L += _tbl(["크기", "① 지금 청산보다 오래 들지 않을 때", "④ 시간 제한 없이", "② 24시간", "③ 48시간", "⑤ 최고가에 팔 때", "④ 길의 거래 수·보유 중앙값·승률"], body)
@@ -2846,8 +2890,10 @@ def _md_x018(r):
                                         f"· 끝 {_x(b['final'])} · 가장 나쁜 달 {b['worst_month']}({_pc(b['worst_month_change'])}) "
                                         f"· 떨어진 달 {b['months_fell']}/{b['n_months']}")
             busts = XC.bust_cell(s["busts"], s["n_picks"])
-            body.append([a, ko, bc, f"{_pc(s['max_dd_p50'])} · {_pc(s['max_dd_p90'])} · {_pc(s['max_dd_max'])}", f"{_f(s['under_days_p50'], 0)}일",
-                         busts, f"{_f(k['longest_p50'], 0)} · {k['longest_max']}{_fl_mark(k['flag'])}", _f(t["n_eff"], 1)])
+            lv = f" ({busts})" if tag == "q100" else ""                 # C12: every live-size cell carries '파산 k/N'
+            body.append([a, ko, bc + lv, f"{_pc(s['max_dd_p50'])} · {_pc(s['max_dd_p90'])} · {_pc(s['max_dd_max'])}{lv}",
+                         f"{_f(s['under_days_p50'], 0)}일{lv}", busts, f"{_f(k['longest_p50'], 0)} · {k['longest_max']}{_fl_mark(k['flag'])}{lv}",
+                         _f(t["n_eff"], 1) + lv])
         e0 = row["money"].get("label_e0_max_dd")
         if e0:
             v = row["money"].get("e0_max_dd_median_select")
@@ -2949,7 +2995,8 @@ def _md_x030(r):
     body = []
     for a, row in _money_rows(r):
         m = row["money"]
-        cells = [("전체", m["all"])] + [(f"{t}배", m["by_tier"][str(t)]) for t in TIERS] + [(ko, m["by_bar"][g]) for g, _t, ko in BAR_GROUPS]
+        cells = [("전체", m["all"])] + [(f"{t}배", m["by_tier"][str(t)]) for t in TIERS] + [(ko + _pick_mark(m["by_bar"][g]), m["by_bar"][g])
+                                                                                       for g, _t, ko in BAR_GROUPS]
         for lab, c in cells:
             body.append([a, lab, f"{c['n']}{_fl_mark(c['flag'])}", " · ".join(_pc(c[f"reach_{k}R"], 0) for k in (1, 2, 3)),
                          " · ".join(_pc(c[f"touch_roe_{k}"], 0) for k in (12, 17, 22, 60)),
@@ -3007,7 +3054,8 @@ def _md_x034(r):
     for a, row in _money_rows(r):
         m = row["money"]
         live = m.get("live") or {}
-        body.append([a, _f(row["n_round_trips_per_account_month"], 2), f"{_f(m['cost_month_pct'], 2)}% (1/1 {_f(live.get('cost_month_pct'), 2)}%)",
+        lb = XC.bust_cell(live.get("busts", 0), live.get("n_picks", 0))
+        body.append([a, _f(row["n_round_trips_per_account_month"], 2), f"{_f(m['cost_month_pct'], 2)}% (1/1 크기 {_f(live.get('cost_month_pct'), 2)}%, {lb})",
                      f"{_f(m['fund_month_pct'], 2)}%", f"{_f(m['cost_per_trip_pct'], 3)}%", _R(m["costR_mean"]),
                      "1 미만(지금 비용에서도 평균 거래가 손해)" if m["c_star"] is not None and m["c_star"] < 1 else _f(m["c_star"], 2) + "배"])
         for i, ko in enumerate(HOLD_BUCKET_KO):
@@ -3107,11 +3155,13 @@ def _md_x043(r):
             if not m:
                 continue
             own = m.get("own_w1000")
-            cell = f"{_gm(m.get('M_w1000'))} vs {_gm(m.get('M_w5000'))}" if a != "E0" else "-"
+            lv = (f" ({XC.bust_cell(m['busts_w1000'], m['n_picks'])} vs {XC.bust_cell(m['busts_w5000'], m['n_picks'])})"
+                  if tag == "q100" else "")                                # C12: live-size cells carry '파산 k/N'
+            cell = f"{_gm(m.get('M_w1000'))} vs {_gm(m.get('M_w5000'))}{lv}" if a != "E0" else "-"
             body.append([a, ko, f"{row[f'entered_{tag}_w1000']} vs {row[f'entered_{tag}_w5000']}",
                          f"{row[f'rejected_{tag}_w1000']} vs {row[f'rejected_{tag}_w5000']}", cell,
-                         f"{_gm(own)}{_w12(own) if a != 'E0' else ''} vs {_gm(m.get('own_w5000'))}", f"{_x(m['final_multiple_median_w1000'])} vs {_x(m['final_multiple_median_w5000'])}",
-                         f"{m['busts_differ']}개 픽"])
+                         f"{_gm(own)}{_w12(own) if a != 'E0' else ''} vs {_gm(m.get('own_w5000'))}{lv}",
+                         f"{_x(m['final_multiple_median_w1000'])} vs {_x(m['final_multiple_median_w5000'])}{lv}", f"{m['busts_differ']}개 픽"])
             flag |= bool(a != "E0" and _w12(own))
     L += _tbl(["방식", "크기", "진입 1,000 vs 5,000달러", "거절", "E0 대비 %/월", "자기 성장", "최종 배수 중앙값", "파산 여부가 달라진 픽"], body)
     L += _w12_line(flag) + [XC.W["W13"], ""]
@@ -3150,30 +3200,57 @@ def appendix_md(results: dict) -> str:
 
 
 # ====================================================================================================== private DeepSeek appendix (never committed)
-def _flat(prefix: str, obj, out: list) -> None:
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            _flat(f"{prefix}.{k}" if prefix else str(k), v, out)
-    elif isinstance(obj, list):
-        if all(not isinstance(v, (dict, list)) for v in obj):
-            out.append((prefix, ", ".join(_pv(v) for v in obj)))
+def _ds_view(r: dict) -> dict:
+    """The DeepSeek pool of a result in the core layout: the committed DeepSeek counts with the private money merged in (E0 and choosable
+    rows only), so the core tables can render it for the private report."""
+    P = r.get("ds") or {}
+    priv = (r.get("private") or {}).get("ds") or {}
+    order = list(P.get("order") or [])
+    order += [a for a in priv.get("by_arm", {}) if a not in order]
+    by = OrderedDict()
+    for a in order:
+        row = OrderedDict(P.get("by_arm", {}).get(a) or {})
+        row.update(priv.get("by_arm", {}).get(a) or {})
+        by[a] = row
+    view = OrderedDict((k, v) for k, v in P.items() if k not in ("by_arm", "order"))
+    view.update((k, v) for k, v in priv.items() if k not in ("by_arm", "n_outside_by_table"))
+    if "n_outside_by_table" in priv and "by_table" in view:
+        view["by_table"] = OrderedDict((t, OrderedDict(c, n_outside=priv["n_outside_by_table"].get(t))) for t, c in view["by_table"].items())
+    view.update(pool="ds", order=order, by_arm=by)
+    out = OrderedDict(r)
+    out["core"] = view
+    stub = OrderedDict(P)                                      # the renderer's DeepSeek part is cut off by _private_lines
+    stub.update(order=[], by_arm=OrderedDict())
+    out["ds"] = stub
+    return out
+
+
+def _private_lines(rid: str, lines: list) -> list:
+    """Mark every line of a rendered core section as private: headings carry '[비공개]', table rows a first cell '비공개', prose lines start
+    with '[비공개] ' (so no line of 20 or more characters equals a line of a committed output)."""
+    out = []
+    for ln in lines:
+        if ln.startswith(f"## {rid} · 딥시크"):
+            break
+        if ln.startswith("#"):
+            lv = len(ln) - len(ln.lstrip("#"))
+            out.append("#" * lv + " [비공개] " + ln[lv:].strip().replace("· 코어 풀", "· 딥시크 풀"))
+        elif ln.startswith("|---"):
+            out.append("|---" + ln)
+        elif ln.startswith("|"):
+            out.append("| 비공개 " + ln)
+        elif ln.strip():
+            out.append("[비공개] " + ln)
         else:
-            for i, v in enumerate(obj):
-                _flat(f"{prefix}[{i}]", v, out)
-    else:
-        out.append((prefix, _pv(obj)))
-
-
-def _pv(v) -> str:
-    if isinstance(v, float):
-        return f"{v:.6g}"
-    return "-" if v is None else str(v)
+            out.append(ln)
+    return out
 
 
 def private_md(results: dict) -> str:
-    """The DeepSeek money of the tier B reads for owner_report_extra.md, part 부록: E0 and the choosable rows in the committed order, no
-    ranking, no p value; every heading carries '[비공개]', every table row's first cell reads '비공개' (never equal to a committed line)."""
-    L = ["## [비공개] 부록 B: 딥시크 풀 돈 숫자(추가 읽기 B 묶음)", "", "[비공개] 지금 청산(E0)과 선택 가능 줄만, 고르기 표 순서대로 적었습니다.", ""]
+    """The DeepSeek money of the tier B reads for owner_report_extra.md, part 부록: the core tables of each read on the DeepSeek pool (E0 and
+    the choosable rows, committed row order, no ranking, no p value), every line marked private. Never committed."""
+    L = ["## [비공개] 부록 B: 딥시크 풀 돈 숫자(추가 읽기 B 묶음)", "",
+         "[비공개] 지금 청산(E0)과 고르기 표의 선택 가능 줄만, 고르기 표 순서대로 적었습니다. 이 보고서는 대화창에서만 보여 드립니다.", ""]
     for rid in READS:
         r = results.get(rid)
         if not r or "error" in r or "dropped" in r:
@@ -3181,16 +3258,5 @@ def private_md(results: dict) -> str:
         priv = (r.get("private") or {}).get("ds") or {}
         if not priv:
             continue
-        L += [f"### [비공개] {rid} {TITLES[rid]}", "", "| 비공개 | 방식 | 항목 | 값 |", "|---|---|---|---|"]
-        for k, v in priv.items():
-            if k == "by_arm":
-                continue
-            items = []
-            _flat(k, v, items)
-            L += [f"| 비공개 | 풀 | {a} | {b} |" for a, b in items]
-        for arm, row in (priv.get("by_arm") or {}).items():
-            items = []
-            _flat("", row, items)
-            L += [f"| 비공개 | {arm} | {a} | {b} |" for a, b in items]
-        L += [""]
+        L += _private_lines(rid, MD[rid](_ds_view(r)))
     return "\n".join(L).rstrip("\n") + "\n"

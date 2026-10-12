@@ -13,6 +13,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sys
 
 import numpy as np
@@ -26,7 +27,6 @@ for _p in (HERE, XDIR, ROOT, os.path.join(ROOT, "research", "fullgrid")):
         sys.path.insert(0, _p)
 
 import common as XC  # noqa: E402
-import data_x as DX  # noqa: E402
 import kernel_x as KX  # noqa: E402
 import metrics as MT  # noqa: E402
 import reads_b as RB  # noqa: E402
@@ -309,10 +309,24 @@ def test_the_private_appendix_is_marked_and_never_equals_a_committed_line(result
     pub = set(ln.strip() for ln in RB.appendix_md(results).splitlines())
     lines = [ln for ln in priv.splitlines() if ln.strip()]
     assert lines and all(ln.startswith(("## [비공개]", "### [비공개]", "[비공개] ", "| 비공개 |", "|---|")) for ln in lines)
-    assert not [ln for ln in lines if len(ln.strip()) >= 20 and ln.strip() in pub]
+    assert "%/월" in priv and "| 비공개 | E0 |" in priv and "| 비공개 | F3.a |" in priv           # money in the core table format
+    assert "F1.w3.a" not in priv and "F7.N12.a" not in priv                                        # 선택 불가 in the DeepSeek pool
+    assert not [ln for ln in lines if len(ln.strip()) >= 20 and re.search(r"[0-9A-Za-z가-힣]", ln) and ln.strip() in pub]
     assert not XC._P_VALUE.search(priv)
     for rid in ("X-015", "X-016", "X-017", "X-018", "X-026", "X-030", "X-031", "X-038"):
         assert f"[비공개] {rid}" in priv
+
+
+def test_the_pages_pass_the_writers_of_common(results, bctx):
+    md = RB.appendix_md(results)
+    path = XC.write_out(bctx, "EXTRA_READS_APPENDIX_KO.md", md)                 # the committed writer's checks (C8, A8 tripwire, C14)
+    try:
+        sha = XC.write_owner_report_extra(bctx, RB.private_md(results))        # A8 (3): outside the repo, no p value, no shared line
+        priv = os.path.join(bctx.ds_private_root, "owner_report_extra.md")
+        assert sha == RX.sha256_file(priv) and XC.private_report_problems(bctx, priv) == []
+        os.remove(priv)
+    finally:
+        os.remove(path)
 
 
 # ====================================================================================================== determinism and isolation
@@ -475,6 +489,21 @@ def test_x004_weekend_counts_growth_split_and_chance_range(results, bctx, xw):
             assert m["range_lo"] <= m["range_hi"] and m["label_chance"] in ("우연 가능", "")
 
 
+def test_cells_over_a_subset_of_picks_carry_the_pick_count_and_the_c13_mark(results, bctx, xw):
+    for pool in XC.POOLS:
+        for arm, row in results["X-004"][pool]["by_arm"].items():
+            for b, cell in row["by_tf"].items():
+                assert cell["n_picks"] == sum(1 for p in bctx.pool_picks(pool) if p["tf"] == b)
+                assert cell["label_c13"] == ""                          # the synthetic picks are not F7_RF_ONLY
+    for arm, row in results["X-030"]["core"]["by_arm"].items():
+        assert row["money"]["by_bar"]["short"]["n_picks"] == 0 and row["money"]["by_bar"]["long"]["n_picks"] == 2
+    assert RB._pick_mark({"n_picks": 1, "label_c13": "= F3.a"}) == " (픽 1개) = F3.a" and RB._pick_mark({"n_picks": 4}) == ""
+    f7 = {"name": "F7_RF_ONLY", "id": "ds-F7_RF_ONLY-30m-1", "tf": "30m"}
+    assert XC.c13_mark(f7, "F11.b") == "= F3.b"
+    md = RB.appendix_md(results)
+    assert "1시간 (픽 1개)" in md and "15분 (픽 0개)" in md
+
+
 def test_x005_identity_of_new_dropped_and_removed_trades(results):
     for pool in XC.POOLS:
         for arm, row in results["X-005"][pool]["by_arm"].items():
@@ -546,6 +575,15 @@ def test_x016_entry_ceiling_walk(bctx, xw):
     for p in xw.cfg.picks:                                     # 1h / 4h picks: freeing at C0 + 15 min never takes fewer signals
         n_tf, n_15 = RB._ceiling_count(st, p), RB._ceiling_count(st, p, q15=True)
         assert 0 < n_tf <= n_15 <= len(st.off(p)["coin"])
+        if RB.RL is not None:                                  # the same walk as X-025's (reads_lib.entry_ceiling)
+            assert n_tf == RB.RL.entry_ceiling(bctx, p) and n_15 == RB.RL.entry_ceiling(bctx, p, plus_ms=900_000)
+            for arm in RB._arms_money(bctx, p["pool"]):
+                r = RB.RL.sizeable(bctx, p, arm)
+                acc = XC.account(bctx, p, arm, 0.25)
+                q = np.flatnonzero(st.c5(p, arm, 0.25) == 0)
+                W = RB._wallet_before(acc, st.off(p)["fill"][q])
+                ok = RB._sizeable(bctx.market, bctx.market.S(0.25), st.off(p), q, W, KX.exit_of_pick(p, KX.variant_by_id(arm))[0])
+                assert np.array_equal(r["q"], q) and np.allclose(r["W"], W, rtol=0, atol=1e-9) and np.array_equal(r["sizeable"], ok)
 
 
 def test_x017_candidates_hold_e0s_own_exit_and_the_time_stop_exit(xw, bctx):
@@ -758,6 +796,7 @@ def test_x041_x043_columns_and_the_crossing(results, bctx, xw):
     assert math.isclose(RB.crossing({1.0: 0.2, 2.0: -0.2, 3.0: -0.4}), 1.5)
     v = results["X-043"]
     assert v["core"]["label_verdict"].startswith(("1,000달러도", "다릅니다")) and "label_verdict" in v["ds"]
+    assert v["private"]["ds"]["label_verdict"].startswith(("1,000달러도", "다릅니다"))
     row = v["core"]["by_arm"]["F1.w3.a"]
     assert {"entered_q25_w1000", "entered_q100_w5000"} <= set(row) and {"q25", "q100"} <= set(row["money"])
 
@@ -784,4 +823,8 @@ def test_appendix_has_every_read_both_pools_tags_and_warnings(results):
         assert XC.W[w] in md, w
     ds = "\n".join(ds_sections(md))
     assert "%" not in ds and "%/월" not in ds and "파산" not in ds
+    dsl = set(ds_sections(md))
+    for ln in md.splitlines():                                  # C12: a core money row at live size carries '파산 k/N' in its cells
+        if ln.startswith("| ") and "| 1/1 크기 |" in ln and ln not in dsl:
+            assert "파산 " in ln, ln[:80]
     assert XC.CONTRIB_NOTE_KO in md and RB.R_DEF_KO in md
