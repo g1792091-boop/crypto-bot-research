@@ -797,6 +797,8 @@ The loss autopsy measured the rule bot's chosen side beating a coin flip in exac
 | +0.49% | 1.25% | 213, 83.6%, +0.123%, +0.024% | 154 | 15.9%, +2.86% | 13.1%, +2.40% (x2.35) |
 
   - At f_path, 13-45% of the week-block resampled SEL paths break the 30% cap; at f*, 5%.
+  - These sizes are `acct_net.py`'s bisection. The registered scan of 8.4 (22.6) gives the same f* within 0.01 and the
+    same f_path within 0.01, except +0.44% / 1%: its f_path is 5.83 (margin 19.4%), the first failure from below.
   - At the 8.4 (iii) ceiling (f = 9, margin 30%) the 1 ATR accounts' mark-to-market DD is 32.8-33.4%, above the cap.
   - Gross reading (comparison): the previous revision's two passers (+0.40%, 1 ATR and 1%) made +2.49% and +2.36% a
     month at f* (`feas/B_accounts_sizes.csv`, 22.4).

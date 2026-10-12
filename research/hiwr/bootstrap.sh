@@ -769,4 +769,4 @@ rm -f "$BASE/RUNNING"
 touch "$BASE/DONE"
 say "끝. 결과 $(du -h "$BASE/results.tgz" | cut -f1): $BASE/results.tgz"
 if [ -s "$BASE/WARNINGS" ]; then say "참고(건너뛴 것):"; sed 's/^/  - /' "$BASE/WARNINGS" | tee -a "$LOG"; fi
-say "보내기: bash $SELF push   (그다음 Vultr에서 서버 Destroy, 디스크 hiwr-disk도 삭제)"
+say "보내기: bash $SELF push   (그다음 Vultr에서 서버 Destroy)"
