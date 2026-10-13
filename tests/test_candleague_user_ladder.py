@@ -833,3 +833,70 @@ def test_chunk_rule_stamps_every_gate_account_signal_with_the_two_gate_values():
         assert set(o.meta["gate"]) == {"g1", "g2"} and all(isinstance(v, bool) for v in o.meta["gate"].values())
     one = {a["id"]: [(o.symbol, o.ts, o.side) for aid, o in sigs if aid == a["id"]] for a in accts}
     assert one[accts[0]["id"]] == one[accts[1]["id"]]                                           # the same signals, whatever the gate
+
+
+# ---------------------------------------------------------------- review fixes (2026-10-13): lineup order, coin-twin validation, fingerprint, F11 words
+def _real_rules():
+    return json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
+
+
+def _entry(doc, suffix):
+    return copy.deepcopy(next(e for e in doc["owner_exits"] if e["suffix"] == suffix))
+
+
+def test_the_lineup_is_in_the_files_order_not_the_order_kinds_first_appear():
+    doc = _real_rules()
+    cfg = RX.normalize_owner(doc)
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    accts = RX.owner_accounts(owner, cfg)
+    want = [e["suffix"] for e in doc["owner_exits"]]
+    assert [x["suffix"] for x in RX.lineup(accts)] == want                 # -iv and -ot (only some picks have them) sit after -tg, as in the file
+    assert [x["n"] for x in RX.lineup(accts)] == sorted(x["n"] for x in RX.lineup(accts))
+    # shuffling the accounts (as a restart or a filter could) does not change the order
+    assert [x["suffix"] for x in RX.lineup(list(reversed(accts)))] == want
+    # the first pick lacks the own-level kinds: it is exactly the case the old first-appearance order got wrong
+    first = [a for a in accts if a["pick"] == owner[0]["id"]]
+    assert not any(a["id"].endswith(("-iv", "-ot")) for a in first) and [x["suffix"] for x in RX.lineup(first)] == [s for s in want if s not in ("-iv", "-ot", "-fq", "-nv", "-tg", "-fqc", "-fqt", "-fqv") or any(a["id"].endswith(s) for a in first)]
+
+
+def test_a_coin_twin_must_follow_its_target_and_cannot_mirror_an_own_stop():
+    doc = _real_rules()
+    e, ld, ldc = _entry(doc, "-e"), _entry(doc, "-ld"), _entry(doc, "-ldc")
+    RX.normalize_owner(dict(doc, owner_exits=[e, ld, ldc]))
+    with pytest.raises(RX.RuleConfigError, match="must be listed before"):
+        RX.normalize_owner(dict(doc, owner_exits=[e, ldc, ld]))
+    iv = _entry(doc, "-iv")
+    twin = dict(ldc, suffix="-ivc", coin_of="-iv")
+    with pytest.raises(RX.RuleConfigError, match="cannot be a coin twin"):
+        RX.normalize_owner(dict(doc, owner_exits=[e, ld, iv, twin]))
+
+
+def test_a_coin_twin_inherits_the_weekend_switch():
+    doc = _real_rules()
+    e, ld, ldc = _entry(doc, "-e"), _entry(doc, "-ld"), _entry(doc, "-ldc")
+    wk = dict(ld, suffix="-ldw", weekend_off=True)                     # the primary's ladder with no weekend entries, and its coin twin
+    wkc = dict(ldc, suffix="-wkc", coin_of="-ldw")
+    cfg = RX.normalize_owner(dict(doc, owner_exits=[e, ld, wk, wkc]))
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    by = {a["id"]: a for a in RX.owner_accounts(owner[:1], cfg)}
+    pid = owner[0]["id"]
+    assert by[pid + "-ldw"].get("weekend_off") and by[pid + "-wkc"].get("weekend_off") and by[pid + "-wkc"].get("coin")
+
+
+def test_own_level_accounts_carry_the_native_hash_in_the_fingerprint(monkeypatch):
+    from candleague import runner as R
+    doc = _real_rules()
+    cfg = RX.normalize_owner(doc)
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    accts = RX.owner_accounts([c for c in owner if RX.native_levels_supported(c)][:1], cfg)
+    assert any(a.get("own_stop") for a in accts) and any(a.get("own_target") for a in accts)
+    only = [a for a in accts if a.get("own_stop") or a.get("own_target")]
+    monkeypatch.setattr(RX, "native_hash", lambda: "aaaa")
+    f1 = R.fingerprint(only)
+    monkeypatch.setattr(RX, "native_hash", lambda: "bbbb")
+    assert R.fingerprint(only) != f1                                  # a changed native module restarts the league even for accounts without an F11 rule
+
+
+def test_rule_ko_names_the_loss_depth_of_the_native_quick_stop():
+    assert "손실 0.5R 이상" in RX.rule_ko(RX.parse_rule("F11.a.d0.5"))
+    assert "손실" not in RX.rule_ko(RX.parse_rule("F11.a"))

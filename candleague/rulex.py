@@ -358,7 +358,7 @@ def rule_ko(rule: Optional[dict]) -> str:
             "F5": f"{_fmt(rule.get('P', 0))}R 뒤 {int(round(rule.get('g', 0) * 100))}% 반납",
             "F6": f"스윙 {rule.get('w')}봉, 손실 {_fmt(rule.get('d', 0))}R 이상",
             "F7": f"{rule.get('N')}봉", "F7h": f"{rule.get('H')}시간", "F8": f"스윙 {rule.get('w')}봉, {_fmt(rule.get('P', 0))}R 뒤",
-            "F9": "", "F10": f"{rule.get('N')}봉", "F11": "", "F12": "", "F13": ""}[f]
+            "F9": "", "F10": f"{rule.get('N')}봉", "F11": (f"손실 {_fmt(rule.get('d', 0))}R 이상" if rule.get("d") else ""), "F12": "", "F13": ""}[f]
     mode = "익절 유지" if rule["mode"] == "a" else "익절 없음"
     return f"{KO[f]}{' (' + bits + ')' if bits else ''} · {mode}" + (" · 15분 확인" if rule.get("q15") else "")
 
@@ -644,11 +644,18 @@ def normalize_owner(doc: dict) -> dict:
         if len(set(seen)) != len(seen):
             raise RuleConfigError(f"rule config: owner_exits repeat a {key} ({seen})")
     by_suffix = {e["suffix"]: e for e in out}
+    order = {e["suffix"]: i for i, e in enumerate(out)}
     for e in out:
         if e["coin_of"] is not None and (e["coin_of"] not in by_suffix or by_suffix[e["coin_of"]]["coin_of"] is not None
                                          or by_suffix[e["coin_of"]]["tp"] is None):
             raise RuleConfigError(f"rule config: owner_exits {e['suffix']!r} coin_of {e['coin_of']!r} must name another entry with an "
                                   "'exit' that is not a coin twin itself")
+        if e["coin_of"] is not None and order[e["coin_of"]] > order[e["suffix"]]:
+            raise RuleConfigError(f"rule config: owner_exits {e['suffix']!r} is a coin twin of {e['coin_of']!r}, which must be listed "
+                                  "before it (a twin listed first would silently make no account)")
+        if e["coin_of"] is not None and by_suffix[e["coin_of"]]["own_stop"]:
+            raise RuleConfigError(f"rule config: owner_exits {e['suffix']!r} cannot be a coin twin of {e['coin_of']!r}: that entry's stop "
+                                  "sits on the strategy's own side of the level, which a flipped side would not mirror")
     own = [e for e in out if e["role"] == "cand"]
     if len(own) != 1:
         raise RuleConfigError("rule config: owner_exits must hold the pick's current exit once (an entry with no rule, no exit, no "
@@ -679,7 +686,7 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
         k = c["exit"].split("|", 1)[1]
         cand_id = pid + own["suffix"]
         made, seen = {}, {}
-        for e in ents:
+        for n, e in enumerate(ents):
             exit_ = c["exit"]
             tgt = None
             er = e["rule"]
@@ -717,6 +724,7 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                  "rule": dict(er) if er is not None else dict(NO_RULE), "source": src,
                  "ox": {q: e[q] for q in ("role", "suffix", "kind", "label_ko", "short_ko", "desc_ko", "why_ko", "tp", "weekend_off", "size")}}
             a["ox"]["rule"] = er["id"] if er is not None else None
+            a["ox"]["n"] = n                                   # the entry's place in the file: the dashboard's order of kinds
             if e["tighten"] is not None:
                 a["tighten"] = e["tighten"]
                 a["ox"]["tighten"] = e["tighten"]
@@ -726,7 +734,7 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
             if e["gate"]:
                 a["gate"] = e["gate"]
             if tgt is not None:                                # a coin twin of a rule account: the same options, the coin's side
-                for flag in ("tighten", "own_stop", "own_target", "gate"):
+                for flag in ("tighten", "own_stop", "own_target", "gate", "weekend_off"):
                     if tgt.get(flag):
                         a[flag] = tgt[flag]
             if e["weekend_off"]:
@@ -740,7 +748,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
 
 def lineup(accts: list[dict]) -> Optional[list[dict]]:
     """The owner-exit league's account kinds in the file's order, for the dashboard and the Telegram summary: [{role, suffix, kind,
-    label_ko, short_ko, desc_ko, why_ko, rule, tp, weekend_off, size, accounts}]; None for any other league."""
+    label_ko, short_ko, desc_ko, why_ko, rule, tp, weekend_off, size, n, accounts}] (n: the entry's place in the file); None for any
+    other league."""
     out, by = [], {}
     for a in accts:
         ox = a.get("ox")
@@ -750,6 +759,7 @@ def lineup(accts: list[dict]) -> Optional[list[dict]]:
             by[ox["role"]] = {**ox, "accounts": 0}
             out.append(by[ox["role"]])
         by[ox["role"]]["accounts"] += 1
+    out.sort(key=lambda k: k.get("n", 0))                  # the file's order, not the order the kinds first appear across the picks
     return out or None
 
 
@@ -773,7 +783,7 @@ def check(cands: list[dict], cfg: dict) -> list[str]:
                     bad.append(f"{a['id']}: exit {exit_name(a)!r} unknown")
             except (KeyError, ValueError):
                 bad.append(f"{a['id']}: exit {a['exit']!r} has no F13 form")
-    if any(a["rule"]["family"] in NATIVE_FAMILIES for a in accts):
+    if any(a["rule"]["family"] in NATIVE_FAMILIES or a.get("own_stop") or a.get("own_target") for a in accts):
         try:
             native_provider()
         except RuleConfigError as exc:
