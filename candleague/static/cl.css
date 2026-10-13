@@ -212,5 +212,7 @@ tr.cl-bust td { opacity: .55; }
 .cl-elive-pct { font-weight: 700; }
 .cl-epick[hidden] { display: none; }
 .cl-ecl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.cl-ewhy { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 12.5px; line-height: 1.5; padding: 6px 0 2px; }
+.cl-ewhy b { font-weight: 600; }
 .cl-esel .select { min-width: 220px; }
 @media (max-width: 559px) { .cl-ebox { height: 210px; } .cl-esel .select { min-width: 0; width: 100%; } }

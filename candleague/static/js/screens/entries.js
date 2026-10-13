@@ -19,6 +19,7 @@ import * as LK from "../lk.js";
 import {loadLwc, color, tok} from "../chart.js";
 import {ROLES, ROLE_KO, ROLE_SHORT, TFS, TF_MS, tfKo, sideKo, reasonKo, coinOf, coinShort, roleId} from "../labels.js";
 import {afterBar, afterOn, keepPos, keepFill} from "../after.js";
+import {loadJudge} from "./pairs.js";
 
 const two = (n) => String(n).padStart(2, "0");
 const priceDec = (p) => { const a = Math.abs(Number(p) || 0); return a < 1 ? 5 : a < 10 ? 4 : a < 1000 ? 2 : 1; };
@@ -64,6 +65,8 @@ function shapeLine(sh, who) {
 export async function mount(el, ctx) {
   let meta = null;
   try { meta = await ctx.meta(); } catch (e) { /* names fall back to codes */ }
+  let judge = null;                        // the 11 strategies the meta file does not explain: /api/judge's plain words
+  try { judge = await loadJudge(ctx); } catch (e) { /* the rule line is left out */ }
   const q = ctx.params.query || {};
   const st = {kind: ["core", "ds"].includes(q.kind) ? q.kind : "all", tf: TFS.includes(q.tf) ? q.tf : "all", strat: q.s || "all",
     role: ROLES.includes(q.role) ? q.role : "cand", only: q.only === "1"};
@@ -143,6 +146,7 @@ export async function mount(el, ctx) {
       paintSection(sbox, name, d);
       return ui.card({plate: LK.stratKo(name, meta), sub: `${name}${sm.family ? ` · ${sm.family}` : ""}`, cls: "cl-esec",
         acts: h("span", {class: "row wrap"}, LK.kindChip(xs[0].c.kind), h("a", {class: "btn-line", href: `#/strategies?s=${encodeURIComponent(name)}`}, "매매법 설명"))},
+      !(sm.long || sm.short) && judge && judge[name] && judge[name].bet_ko ? h("p", {class: "note cl-erule"}, judge[name].bet_ko) : null,
       sm.long || sm.short ? h("dl", {class: "cl-erule"},
         sm.long ? h("div", null, h("dt", null, h("span", {class: "side long"}, "롱")), h("dd", null, sm.long)) : null,
         sm.short ? h("div", null, h("dt", null, h("span", {class: "side short"}, "숏")), h("dd", null, sm.short)) : null) : null,
@@ -404,12 +408,24 @@ export async function mount(el, ctx) {
       if (++ticks % BARS_EVERY === 0 && onScreen()) moreBars();
     }
     const win = (t) => (t.pnl != null ? t.pnl > 0 : t.roe != null ? t.roe > 0 : t.win != null ? !!t.win : null);
+    /** Why this position was opened: the strategy's own entry rule (the side taken), the bar it fired on and the leverage it got. The rule is what
+     *  the signal had to satisfy; the trade record does not keep the indicator values of that bar. */
+    function whyIn(it) {
+      const sm = LK.stratMeta(c.name, meta) || {}, j = (judge && judge[c.name]) || {};
+      const rule = (it.side > 0 ? sm.long : sm.short) || j.bet_ko || null;
+      const forced = /^(fq|ld)(40|50)$/.test(String((acct || a).role || ""));          // the leverage-comparison accounts: one leverage for every entry
+      const lev = it.leverage ? Number(it.leverage) : null;
+      const tier = lev == null ? null : forced ? `이 계좌는 모든 진입을 ${fmt.int(lev)}배로 합니다` : lev >= 40 ? `신호 품질 좋은 자리 → ${fmt.int(lev)}배` : `신호 품질 보통 자리 → ${fmt.int(lev)}배`;
+      return h("div", {class: "cl-ewhy"}, h("b", null, "왜 들어갔나"),
+        h("span", null, rule ? `${rule}` : "이 매매법의 진입 조건"), h("span", {class: "muted"}, `${tfKo(c.tf)} 봉이 마감할 때 맞아서 ${sideKo(it.side)} 신호${tier ? ` · ${tier}` : ""}`));
+    }
     function caption(it) {
       liveRow = null;
       const hold = (it.open ? Date.now() : it.exit_time) - it.entry_time;
       put(cap,
         h("div", {class: "cl-ecl"}, h("b", null, coinShort(coinOf(it.symbol))), h("span", {class: ["side", it.side > 0 ? "long" : "short"]}, sideKo(it.side)),
           h("span", {class: "muted"}, `진입 ${fmt.kst(it.entry_time)}`), it.entry_price == null ? h("span", {class: "muted"}, "가격 숨김") : h("span", {class: "num"}, px(it.entry_price))),
+        whyIn(it),
         it.open
           ? [h("div", {class: "cl-ecl"}, ui.pill("지금 열림", "accent"), h("span", {class: "muted"}, `${fmt.dur(hold / 1000)}째`),
             it.stop != null ? h("span", {class: "muted"}, `손절 ${px(it.stop)}`) : null, it.tp != null ? h("span", {class: "muted"}, `익절 ${px(it.tp)}`) : null),
