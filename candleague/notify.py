@@ -90,31 +90,35 @@ def _start_usd(doc: dict) -> str:
     return f"${v:,.0f}"
 
 
+FOCUS = ("-fq", "-ld", "-fqc", "-ldc")           # the pre-registered decision's kinds: the live candidate, the control and their coin-flip twins
+
+
 def owner_lines(doc: dict) -> list[str]:
-    """The owner-exit league's part of the 09:00 summary: per pool every exit's trades, win share, mean per trade (hidden for
-    DeepSeek unless its money is shown) and median hold hours, then how many picks each exit leads by wallet."""
+    """The owner-exit league's part of the 09:00 summary, kept short: the decision's schedule and one-line answer
+    (``doc["decision"]``), then per pool the four kinds the decision uses (live candidate, control, their coin twins; the first kinds
+    of the lineup when a smaller lineup has none of them): trades, win share, mean per trade (hidden for DeepSeek unless its money
+    is shown). The other kinds, and every number's meaning, are on the dashboard."""
     lu = doc.get("lineup") or []
     w = doc.get("watch") or {}
+    dec = doc.get("decision") or {}
     lines = ["", f"청산 비교 (같은 신호 · 계좌마다 {_start_usd(doc)}에서 시작)"]
+    if dec.get("observe_ms") and dec.get("decide_ms"):
+        lines.append(f"판정 일정: {dec.get('days', 0)}일째 · 14일째 확인(보기만) {_kst(dec['observe_ms'], '%m/%d')} · 28일째 판정 {_kst(dec['decide_ms'], '%m/%d')}")
+    if dec.get("summary_ko"):
+        lines.append(f"판정 한 줄: {dec['summary_ko']}")
+    show = [x for x in lu if x.get("suffix") in FOCUS] or lu[:4]
     for kind, ko in (("core", "기존 36"), ("ds", "딥시크")):
         p = (w.get("pools") or {}).get(kind)
         if not p or not p.get("picks"):
             continue
         lines += ["", f"{ko} 묶음 (후보 {p['picks']}개)"]
-        for x in lu:
+        for x in show:
             st = (p.get("roles") or {}).get(x["role"]) or {}
-            hold = (p.get("hold") or {}).get(x["role"]) or {}
             n, wins = int(st.get("n") or 0), int(st.get("wins") or 0)
             mean = "금액 숨김" if not p.get("money") else f"한 번 평균 {_pct(st.get('mean'))}"
             win = f"승률 {round(100 * wins / n)}%" if n else "승률 -"
-            held = "" if hold.get("median_h") is None else f" · 보유 중앙 {hold['median_h']:.1f}시간"
-            lines.append(f"  {x['label_ko']}: 거래 {n:,}번 · {win} · {mean}{held}")
-    lead, n, hidden = best_counts(doc)
-    if n:
-        lines += ["", f"후보마다 잔고 1등 ({n}개 후보, 닫힌 거래 기준)",
-                  "  " + " · ".join(f"{x['label_ko']} {lead.get(x['role'], 0)}" for x in lu)]
-    if hidden:
-        lines.append(f"(딥시크 후보 {hidden}개는 금액 숨김 설정이라 1등 세기에서 빠짐)")
+            lines.append(f"  {x.get('short_ko') or x['label_ko']}: 거래 {n:,}번 · {win} · {mean}")
+    lines += ["", "(거래가 적은 동안은 운이 큽니다. 승자는 28일째 판정에서만 가립니다)"]
     return lines
 
 
@@ -162,7 +166,7 @@ def summary_text(doc: dict, now_ms: Optional[int] = None) -> str:
         open_ = sum(1 for r in acc if r.get("open"))
         warn = sum(1 for j in (doc.get("judge") or {}).values() if (j.get("band") or {}).get("below"))
         lines += ["", f"경고등 {warn} · 파산 {busts} · 열린 포지션 {open_} (계좌 {len(acc)}개)",
-                  "후보마다 계좌 비교는 대시보드 '5계좌 비교'"]
+                  "자세한 비교는 대시보드 '판정' · '메인 vs 대조' · '한 달 시뮬'"]
         if doc.get("lag_s", 0) > 3600:
             lines.append(f"⚠ 자료가 {doc['lag_s'] // 3600}시간 늦습니다 (바이낸스 연결 확인)")
         lines += [f"{NAME} · 종이 매매 (실제 돈 아님)", "", f"{_kst(now_ms)} KST"]

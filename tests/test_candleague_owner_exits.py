@@ -423,7 +423,8 @@ def test_the_snapshot_carries_the_lineup_and_judges_nothing(tmp_path, whole):
 def test_telegram_names_the_owners_exits(tmp_path, whole):
     doc = RN.write_snapshots(str(tmp_path / "snap"), whole, END + MIN, ds_money=True)
     text = N.summary_text(doc, END + MIN)
-    assert "청산 비교" in text and all(lb in text for lb in LABELS) and "보유 중앙" in text and "잔고 1등" in text
+    assert "청산 비교" in text and "잔고 1등" not in text and "5계좌 비교" not in text and "28일째 판정" in text     # short: the decision's schedule and kinds, not every kind
+    assert any(x["short_ko"] in text for x in doc["lineup"][:4]) and "판정 일정" in text and "대시보드 '판정'" in text
     assert "기준 통과" not in text and "다음 점검" not in text and text.startswith("📊 아침 요약 · 후보 리그")
     lead, n, hid = N.best_counts(doc)
     assert n == sum(lead.values()) and hid == 0 and n >= 1
