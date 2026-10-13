@@ -273,7 +273,7 @@ function sizeBox(p) {
   return h("div", {class: "cl-sidebox"}, h("span", {class: "muted"}, "크기: 후보 계좌와 1/4 크기 계좌 (같은 신호 · 증거금 비율 1/4 · 배수는 같은 규칙으로 다시 고름)"),
     h("div", {class: "cl-sizerow hd"}, h("span", null, ""), h("span", null, "닫힌 거래까지 잔고"), h("span", null, "낙폭 중앙값"), h("span", null, "가장 큰 낙폭")),
     ["cand", "quarter"].map((r) => h("div", {class: "cl-sizerow"}, LK.roleChip(r), cell(z[r].wallet_sum, "$"), cell(z[r].dd_median), cell(z[r].dd_max))),
-    h("p", {class: "note"}, `계좌 ${fmt.int(z.cand.accounts)}개씩 · 각 $5,000에서 시작 (합계 시작 ${fmt.money(z.cand.accounts * 5000)}) · 점검처럼 닫힌 거래만 셉니다: 열린 포지션의 진입 수수료가 빠진 요약 화면의 잔고와 조금 다를 수 있습니다`));
+    h("p", {class: "note"}, `계좌 ${fmt.int(z.cand.accounts)}개씩 · 각 ${LK.startUsd()}에서 시작 (합계 시작 ${fmt.money(z.cand.accounts * LK.EQUITY)}) · 점검처럼 닫힌 거래만 셉니다: 열린 포지션의 진입 수수료가 빠진 요약 화면의 잔고와 조금 다를 수 있습니다`));
 }
 
 /** A bar from the middle: right = above 0, left = below 0 (its size against max). */

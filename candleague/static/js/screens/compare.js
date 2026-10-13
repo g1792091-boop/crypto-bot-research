@@ -44,10 +44,10 @@ export async function mount(el, ctx) {
       : [{id: "name", label: "매매법"}, {id: "cand", label: "후보 평균"}, {id: "gap", label: "기본값과 차이"}];
     if (!sorts.some((x) => x.id === st.sort)) st.sort = "name";
     put(sortBox, ui.seg(sorts, st.sort, (v) => { st.sort = v; save(); paint(); }, {label: "순서"}));
-    setSub(sumCard, owner ? `같은 기간 · 같은 시세 · 계좌마다 $5,000에서 시작 · 비교 기준은 ${ROLE_KO.cand} (참고)` : "같은 기간 · 같은 시세 · 거래 한 번 평균으로 비교 (참고)");
+    setSub(sumCard, owner ? `같은 기간 · 같은 시세 · 계좌마다 ${LK.startUsd()}에서 시작 · 비교 기준은 ${ROLE_KO.cand} (참고)` : "같은 기간 · 같은 시세 · 거래 한 번 평균으로 비교 (참고)");
     setPlate(gridCard, owner ? `후보마다 ${n}계좌` : "후보마다 5계좌");
     setSub(gridCard, owner
-      ? "칸 = 잔고 수익률 ($5,000 대비, 닫힌 거래까지) · 거래 수 · 승률 · 보유 시간 중앙값 · ★ = 그 후보 계좌들 중 잔고가 가장 많음 · 칸을 누르면 그 계좌"
+      ? `칸 = 잔고 수익률 (${LK.startUsd()} 대비, 닫힌 거래까지) · 거래 수 · 승률 · 보유 시간 중앙값 · ★ = 그 후보 계좌들 중 잔고가 가장 많음 · 칸을 누르면 그 계좌`
       : "칸 = 거래 한 번 평균 · 거래 수 · 승률 · ★ = 같은 크기 넷(1/4 빼고) 중 가장 좋음 · 칸을 누르면 그 계좌 · 후보 아래 작은 줄 = 후보 계좌가 나간 이유 · 수수료·펀딩 · 최장 연패 (최근 200번까지)");
     setPlate(whatCard, owner ? `계좌 ${n}개가 뭔가요` : "계좌 5개가 뭔가요");
     put(what, h("dl", {class: "kv"}, ROLES.map((r) => {

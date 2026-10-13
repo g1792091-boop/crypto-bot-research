@@ -497,13 +497,20 @@ def _owner_words(e: dict) -> tuple:
                 f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
     if r is not None and tp == X.ULAD:
         cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
-        when = (f"{r['w']}봉 스윙 구조가 무너지면(반대로 마감)" if r["family"] == "F1" else
+        when = ("그 매매법이 반대 방향 진입 신호를 내면(= 구조가 반대로 바뀌었다고 스스로 확신하면)" if r["family"] == "F3" else
+                "그 매매법이 스스로 '이 방향 구조가 무너졌다'고 보면(매매법마다 다른 조건. 예: OBV는 OBV가 평균선 아래로, 박스는 바닥 아래로 마감)" if r["family"] == "F11" else
+                f"{r['w']}봉 스윙 구조가 무너지면(반대로 마감)" if r["family"] == "F1" else
                 f"{r['w']}봉 스윙 구조가 무너지고 손실이 손절 거리의 {_fmt(r['d'] * 100)}% 넘게 났으면" if r["family"] == "F6" else
                 f"{rule_ko(r)} 규칙이 켜지면")
         base = f"계단 익절(+13%→+10%, +20%→+15% …) · {cap} · {when}"
         if e.get("tighten"):
             return ("손절 좁힘", f"{base} 청산하지 않고 손절선을 처음 거리의 {_fmt(e['tighten'] * 100)}%로 좁힘(가격이 이미 그 선을 넘었으면 바로 시장가 청산) · 한 번 좁힌 손절은 되돌리지 않음",
                     "구조가 무너질 때 바로 자르는 것보다 손절만 좁히는 편이 나은가")
+        if r["family"] == "F3":
+            return ("스위칭", f"{base} 다음 분 시장가로 청산하고 같은 분에 그 반대 신호로 반대 방향 진입(스위칭). 반대 신호가 안 나오면 계단 익절·손절만 작동",
+                    "구조가 반대로 바뀔 때 청산에 그치지 않고 갈아타면 나은가")
+        if r["family"] == "F11":
+            return ("매매법 판단", f"{base} 다음 분 시장가로 청산 (고정 익절 없음)", "매매법마다 자기 구조로 판단해 나오는 편이 나은가")
         return (("빠른 손절", f"{base} 다음 분 시장가로 청산", "구조가 무너질 때 손실을 줄이고도 승률이 버티나") if r["family"] == "F6" else
                 ("구조 청산", f"{base} 다음 분 시장가로 청산 (이익 중이든 손실 중이든)", "구조가 무너지면 이익이든 손실이든 나오는 편이 나은가"))
     if r is not None:
@@ -545,8 +552,8 @@ def _owner_entry(x, i: int) -> dict:
     if tp is not None:
         if rule is not None and tp != X.ULAD:
             raise RuleConfigError(f"rule config: {where} has both a rule and an exit (one or the other; only the owners' ladder {X.ULAD!r} takes a rule)")
-        if rule is not None and (rule["mode"] != "a" or rule["family"] in NATIVE_FAMILIES + LOCK_FAMILIES):
-            raise RuleConfigError(f"rule config: {where} the owners' ladder takes a decision rule of mode a only (mode b has no lock; F11, F12, F13 are not decisions on the chart)")
+        if rule is not None and (rule["mode"] != "a" or rule["family"] in ("F12",) + LOCK_FAMILIES):
+            raise RuleConfigError(f"rule config: {where} the owners' ladder takes a decision rule of mode a only (mode b has no lock; F12 and F13 are not one decision)")
         if not isinstance(tp, str) or tp not in TP_NAMES:
             raise RuleConfigError(f"rule config: {where} exit {tp!r} is not a take-profit rule of candleague.exits ({', '.join(TP_NAMES)}); "
                                   "the pick's own stop multiple is kept, so name the take-profit only (e.g. 'roe50')")
@@ -638,6 +645,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
         for e in ents:
             exit_ = c["exit"]
             tgt = None
+            if e["rule"] is not None and e["rule"]["family"] in NATIVE_FAMILIES and not native_supported(c):
+                continue                                      # no native exit for this strategy: no such account for the pick
             if e["tp"]:
                 kk = k if e["stop_max"] is None else f"{min(float(k), e['stop_max']):g}"
                 exit_ = f"{e['tp']}|{kk}"
@@ -747,6 +756,17 @@ def code_version(rule: dict) -> str:
 
 
 # ====================================================================== F11 / F12: the strategy's own exit
+# The strategies the study's native-exit code (research/exitflex/native.py, native_ds.py) knows: a native-exit account is made only for their picks
+# (a test compares this table with the two modules).
+NATIVE_COVERS = {"core": ("DOGE", "N03_ADX_GC", "N09_ALLIG_AROON", "N10_HA_PSAR", "N13_3OUTSIDE", "N19_FIB_CHOP", "OBV_S", "S4_BB_BBP"),
+                 "ds": ("F10_OTE", "F11_TSOUP", "F12_MSS_DISP", "F1_PVT_DIV", "F5_BOX", "F7_RF_ONLY", "F7_RF_TRIPLE", "F9_FVG")}
+
+
+def native_supported(c: dict) -> bool:
+    """Whether the strategy of pick (or account) ``c`` has native exit arrays (F11 / F12)."""
+    return c["name"] in NATIVE_COVERS.get(c["kind"], ())
+
+
 NATIVE: dict = {"provider": None}
 NATIVE_FILES = ("native.py", "native_ds.py")
 

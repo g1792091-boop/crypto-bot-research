@@ -240,17 +240,18 @@ def test_the_quick_stop_entry_builds_for_every_owner_pick_and_runs_the_studys_ru
 
 
 def test_the_rules_file_the_owners_install_builds_the_final_lineup():
-    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: seventeen account kinds on the 49 picks."""
+    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: nineteen account kinds on the 49 picks."""
     doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
     cfg = RX.normalize_owner(doc)
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
-    assert [e["suffix"] for e in doc["owner_exits"]] == ["-ld", "-ldc", "-ldp", "-ld1", "-fq", "-tg", "-sb", "-l5", "-l20", "-e", "-tp10", "-gb",
-                                                         "-ma", "-ts", "-ch", "-oc", "-wk"]
+    assert [e["suffix"] for e in doc["owner_exits"]] == ["-ld", "-ldc", "-ldp", "-ld1", "-fq", "-tg", "-sb", "-nv", "-sw", "-l5", "-l20", "-e", "-tp10",
+                                                         "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
-    want = 49 * 17 - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)            # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
-    assert len(owner) == 49 and len(accts) == want == 819
+    native = sum(1 for c in owner if RX.native_supported(c))                                  # -nv: the 38 picks of the 16 strategies with a native exit
+    want = 49 * 18 + native - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)     # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
+    assert len(owner) == 49 and native == 38 and len(accts) == want == 906
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
     assert sum(1 for a in accts if a.get("coin")) == 49 and sum(1 for a in accts if a["role"] == "cand") == 49
@@ -424,3 +425,66 @@ def test_the_fingerprint_sees_the_narrowing():
         if a["id"].endswith("-tg"):
             a["tighten"] = 0.3
     assert RN.fingerprint(other) != RN.fingerprint(accts)
+
+
+# ---------------------------------------------------------------- the strategy's own judgement (F11) on the owners' ladder
+def test_the_native_table_is_the_study_codes_table():
+    import importlib
+    import sys
+    d = RX.native_dir()
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    native, native_ds = importlib.import_module("native"), importlib.import_module("native_ds")
+    assert sorted(RX.NATIVE_COVERS["core"]) == sorted(native.SPEC) and sorted(RX.NATIVE_COVERS["ds"]) == sorted(native_ds.NAMES)
+
+
+def test_the_native_exit_account_is_made_only_for_picks_whose_strategy_has_one():
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
+    accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
+    nv = [a for a in accts if a["role"] == "nv"]
+    covered = [c for c in owner if RX.native_supported(c)]
+    assert len(nv) == len(covered) == 38 and {a["pick"] for a in nv} == {c["id"] for c in covered}
+    assert all(a["rule"]["id"] == "F11.a" and a["exit"].startswith("ladderU|") and float(a["exit"].split("|")[1]) <= 2 for a in nv)
+    weak = {c["id"] for c in owner if c["source"].get("tier") == "weak"}
+    assert weak and not weak & {a["pick"] for a in nv}                       # the eleven weak-clue picks have no native exit and no such account
+
+
+def test_f12_and_mode_b_of_f11_are_refused_on_the_ladder():
+    for rule in ("F12.a", "F11.b", "F12.b"):
+        doc = copy.deepcopy(LINEUP)
+        doc["owner_exits"].append({"suffix": "-x1", "exit": "ladderU", "rule": rule, "label_ko": "x"})
+        with pytest.raises(RX.RuleConfigError):
+            RX.normalize_owner(doc)
+
+
+@SIDES
+def test_the_strategys_own_view_breaking_closes_the_position_on_the_owners_ladder(side):
+    k = TR.key_of(side)
+    a = TR.acct("F11.a", exit_="ladderU|2")
+    assert isinstance(RX.make_engine(a, TR.BR, TR.SP), RX.RuleUserLadder)
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.nsig(side, ["event"], [0])),),
+               recs=[TR.nrec(TR.chk(1), side, 0, **{k: [0]}), TR.nrec(TR.chk(2), side, 0, **{k: [1]})])
+    TR.exits_at(e, TR.J0 + 120)                                              # the second hourly check: the strategy's own judgement fires
+    # the owners' lock still works under it: a climb into the +20% band and a fall is the locked +15%, not the rule
+    lev = TR._probe_leverage(a, side)
+    path, _top, jx = _band_path(lev, side, 0.20, 0.25)
+    e = TR.run(a, path, side, sigs=((TR.C0, TR.nsig(side, ["event"], [0])),), recs=[TR.nrec(TR.chk(1), side, 0, **{k: [0]})])
+    assert e.trades and e.trades[0].exit_reason == "LOCK" and e.trades[0].lock_roe == pytest.approx(0.15)
+
+
+@SIDES
+def test_the_switching_account_closes_on_the_strategys_opposite_signal_and_enters_the_other_way_in_the_same_minute(side):
+    from paperbot import paramshadow as PS
+    a = TR.acct("F3.a", exit_="ladderU|2")
+    e = RX.make_engine(a, TR.BR, TR.SP)
+    c1 = TR.chk(1)
+    by = {TR.C0: [(a["id"], TR.sig(TR.C0, side, aid=a["id"]))],
+          c1: [(a["id"], RX.RuleClose(TR.rec(c1, side, 0, **{("sf" if side > 0 else "lf"): True}))), (a["id"], TR.sig(c1, -side, aid=a["id"]))]}
+    PS.replay_day({a["id"]: e}, set(), by, TR.Path().steps(side), TR.BR)
+    assert [(t.side, t.exit_reason, t.exit_time) for t in e.trades] == [(side, "RULE", TR.at(TR.J0 + 60))]
+    assert e.position is not None and e.position.side == -side and e.position.entry_time == TR.at(TR.J0 + 60)         # switched at that minute
+    # no opposite flag: nothing happens, and the signal of the other side that arrives while holding is skipped as ever
+    e = RX.make_engine(a, TR.BR, TR.SP)
+    PS.replay_day({a["id"]: e}, set(), {TR.C0: by[TR.C0], c1: [by[c1][1]]}, TR.Path().steps(side), TR.BR)
+    assert not e.trades and e.position.side == side

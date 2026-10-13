@@ -27,7 +27,7 @@ and Telegram tag, apart from the rule bot and the demo lab. Owner summary: docs/
   in the owners' words) and the dashboard / Telegram name them; CONTRACT 2's verdict reads `na` (nothing to compare with) and
   WATCH_PREREG's checkpoints do not apply to this league. Without the file, or with the exit study's form, nothing changes.
 * **Engine**: paperbot.engine.PaperEngine through `candleague.exits.make_engine` (parity with the study's kernel is
-  tests/test_candleague_exits.py): v3_settings (quality_v1 sizing, $5,000, taker 0.05%, slippage 0.02%, maker 0.02% on
+  tests/test_candleague_exits.py): v3_settings (quality_v1 sizing, the start wallet (CANDLEAGUE_EQUITY, default 5,000; the owners' league 1,000), taker 0.05%, slippage 0.02%, maker 0.02% on
   take-profits, funding, mark-price liquidation, bust below $10), one position at a time per account, six coins
   (config.V3_SYMBOLS), 15m / 30m / 1h / 4h.
 * **Signals**: chart bars built from final 1m klines as the study built them (UTC bins); a signal is the bar's

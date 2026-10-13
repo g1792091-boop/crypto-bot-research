@@ -22,7 +22,7 @@ import * as fmt from "./fmt.js";
 import * as ui from "./ui.js";
 import {stamp, setPage} from "./ui.js";
 import {applySkin, skinNow, textSwitch, skinSwitch, navSwitch, textCycle, skinCycle, startPref} from "./prefs.js";
-import {setLeague, getMeta, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore} from "./lk.js";
+import {setLeague, getMeta, startUsd, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore} from "./lk.js";
 import {onLive, serverNow} from "./live.js";
 import {onPositions, kickPositions} from "./poskit.js";
 import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js";
@@ -182,7 +182,7 @@ function pillPanel() {
     next && next.what ? h("p", {class: "note"}, `${next.ko}${next.after ? ` (${next.after})` : ""}: ${next.what}`) : null,
     h("dl", {class: "kv"},
       h("div", null, h("dt", null, "시작"), h("dd", null, !doc || !doc.start_ms ? "—" : replayedBefore(doc)
-        ? `${fmt.kst(doc.start_ms)} KST (다시 돌리기 시작 · 설치 ${fmt.kst(doc.started_ms)})` : `${fmt.kst(doc.start_ms)} KST (설치한 때 · 모든 계좌 $5,000)`)),
+        ? `${fmt.kst(doc.start_ms)} KST (다시 돌리기 시작 · 설치 ${fmt.kst(doc.started_ms)})` : `${fmt.kst(doc.start_ms)} KST (설치한 때 · 모든 계좌 ${startUsd()})`)),
       h("div", null, h("dt", null, "오늘"), h("dd", null, doc && doc.start_ms ? `${fromKo(doc)} ${calDay(doc, now)}일째 (한국 날짜)` : "—")),
       h("div", null, h("dt", null, "엔진이 계산한 시각"), h("dd", null, doc ? `${fmt.kst(doc.done_ms)} KST (${leagueDay(doc)}일째까지)` : "—")),
       h("div", null, h("dt", null, "기록 쓴 시각"), h("dd", null, doc ? `${fmt.kst(doc.generated_ms)} KST (${fmt.ago(doc.generated_ms, now)})` : "—"))),

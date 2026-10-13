@@ -47,6 +47,20 @@
       "label_ko": "계단 · 구조 무너지면 청산"
     },
     {
+      "suffix": "-nv",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F11.a",
+      "label_ko": "계단 · 매매법 자체 판단으로 청산"
+    },
+    {
+      "suffix": "-sw",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F3.a",
+      "label_ko": "계단 · 반대 신호 나오면 스위칭"
+    },
+    {
       "suffix": "-l5",
       "exit": "ladder5",
       "label_ko": "계단 5%부터 (7%→5%)"

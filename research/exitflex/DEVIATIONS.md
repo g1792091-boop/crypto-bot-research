@@ -75,3 +75,7 @@ E.0 item 2 and TW.10).
   ladder ("ladderU|<k>") as the engine `RuleUserLadder`, and an owner-exit entry may carry `tighten` (0 < t <= 1): when the rule fires the stop is moved to
   t x the stop distance from the first stop's reference (never loosened; a price already past it is closed by the engine's own gap handling) instead of
   closing at market. The rules' decisions (`decide`), the chart records and every study id are unchanged; a rule account with no ladder is as before.
+  F11.a (the strategy's own exit, `native.py` / `native_ds.py`) may also run on the owners' ladder; its accounts exist only for the 16 strategies those
+  two modules define (`NATIVE_COVERS`, compared with the modules by a test). The league's install now copies `native.py`, `native_ds.py` and the
+  fullgrid modules they import (`run.py`, `kernel.py`, `memo.py`, `data.py`, `grid.py`) so the provider loads on the server (checked in a copy of
+  the installed layout, with numba blocked: the provider loads and gives arrays for all 38 picks). No study file changed.

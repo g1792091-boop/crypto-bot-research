@@ -177,6 +177,6 @@ export function answersBody(d, R) {
       blk ? ` 거래소 한도: 후보 크기에서는 ${blk}라서 다음 배수로 내려갑니다 (1/4 계좌는 주문이 작아 덜 걸림).` : "",
       used ? [h("br"), h("span", {class: "muted"}, usedN ? "후보 계좌가 지금까지 쓴 배수: " : "후보 계좌는 아직 닫힌 거래가 없습니다"), usedN ? RK.usedChips(used) : null] : null)),
     h("div", null, h("dt", null, "언제부터?"), h("dd", null,
-      d.start_ms ? [h("b", null, `${LK.startKo(d)} KST`), " (설치한 때)부터입니다. 모든 계좌가 그때 $5,000으로 시작했고, 거래·잔고·날짜(시작한 날 = D+0)는 모두 그때부터 셉니다. ",
+      d.start_ms ? [h("b", null, `${LK.startKo(d)} KST`), ` (설치한 때)부터입니다. 모든 계좌가 그때 ${LK.startUsd()}으로 시작했고, 거래·잔고·날짜(시작한 날 = D+0)는 모두 그때부터 셉니다. `,
         `오늘은 D+${LK.dPlus(d, serverNow())} (${LK.calDay(d, serverNow())}일째)입니다.`] : "엔진이 첫 기록을 쓰면 나옵니다.")));
 }

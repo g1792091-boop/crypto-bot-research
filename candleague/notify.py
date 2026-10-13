@@ -81,12 +81,21 @@ def best_counts(doc: dict) -> tuple:
     return lead, n, hidden
 
 
+def _start_usd(doc: dict) -> str:
+    """The start wallet as "$5,000" / "$1,000": the snapshot's ``equity0``, else this process's ``CANDLEAGUE_EQUITY`` (exits.start_equity)."""
+    v = doc.get("equity0") if isinstance(doc, dict) else None
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not v > 0 or v == float("inf"):
+        from .exits import start_equity
+        v = start_equity()
+    return f"${v:,.0f}"
+
+
 def owner_lines(doc: dict) -> list[str]:
     """The owner-exit league's part of the 09:00 summary: per pool every exit's trades, win share, mean per trade (hidden for
     DeepSeek unless its money is shown) and median hold hours, then how many picks each exit leads by wallet."""
     lu = doc.get("lineup") or []
     w = doc.get("watch") or {}
-    lines = ["", "청산 비교 (같은 신호 · 계좌마다 $5,000에서 시작)"]
+    lines = ["", f"청산 비교 (같은 신호 · 계좌마다 {_start_usd(doc)}에서 시작)"]
     for kind, ko in (("core", "기존 36"), ("ds", "딥시크")):
         p = (w.get("pools") or {}).get(kind)
         if not p or not p.get("picks"):
@@ -212,7 +221,7 @@ def restart_text(doc: dict, meta: dict, now_ms: int) -> str:
     warn = sum(1 for j in (doc.get("judge") or {}).values() if (j.get("band") or {}).get("below"))
     trades = sum(int(r.get("trades") or 0) for r in acc)
     lines = [f"🔄 새로 시작 · {NAME}", "",
-             f"{_kst(start)} KST 시작부터 모든 계좌 $5,000으로 다시 계산했습니다",
+             f"{_kst(start)} KST 시작부터 모든 계좌 {_start_usd(doc)}으로 다시 계산했습니다",
              f"{_kst(doc['done_ms'])} KST까지 따라잡았고, 이제 5분마다 이어 갑니다",
              f"새 기록: 닫힌 거래 {trades:,}번 · 파산 {busts} · 경고등 {warn}" + (" (대시보드에서 확인)" if busts or warn else "")]
     if meta.get("backup"):

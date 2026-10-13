@@ -32,7 +32,9 @@ UNITS="candleague-live.service candleague-dash.service candleague-watch.service 
 # the only paths copied from the repository
 CODE_PATHS="candleague paperbot third_party/sweep research/entry_study/param_defs research/entry_study/strength_defs \
 research/entry_study/sr.py research/entry_study/DEFS_BC.sha256 research/deepseek200/lib_c.py research/library \
-research/search research/fullgrid/ds_defs.py research/fullgrid/exchange.json"
+research/search research/fullgrid/ds_defs.py research/fullgrid/exchange.json \
+research/exitflex/native.py research/exitflex/native_ds.py research/fullgrid/run.py research/fullgrid/kernel.py research/fullgrid/memo.py \
+research/fullgrid/data.py research/fullgrid/grid.py"
 PIP_PKGS="numpy pandas scipy fastapi uvicorn"
 
 if [ "$(id -u)" -ne 0 ]; then echo "sudo로 실행하세요: sudo bash $0"; exit 1; fi

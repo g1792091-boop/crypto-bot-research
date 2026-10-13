@@ -22,6 +22,9 @@ const byCoin = (xs) => [...xs].sort((a, b) => COINS6.indexOf(a) - COINS6.indexOf
 /** A link to a term of 읽는 법's 용어 사전 (#/howto?q=ATR). */
 export const term = (word, label) => h("a", {class: "rl-term", href: `#/howto?q=${encodeURIComponent(word)}`, title: `${word}: 읽는 법 › 용어 사전`}, label || word);
 
+/** The start wallet the rules doc was made for (its equity0: 5000, or 1000 in the owners' league), else the snapshot's. */
+const eq0 = (r) => (r && Number(r.equity0) > 0 ? Number(r.equity0) : LK.EQUITY);
+
 // ---------------------------------------------------------------- /api/rules, one copy per page
 let RULES = null, RULES_KEY = null, rulesP = null;
 /** The rules doc (cached for the snapshot it was made for); onDoc(doc) once it is here and once more when the live
@@ -32,11 +35,11 @@ export async function loadRules(ctx, onDoc) {
   if (RULES && RULES_KEY === key && !RULES.atr_loading) { onDoc(RULES); return RULES; }
   if (!rulesP) rulesP = ctx.api("/api/rules").finally(() => { rulesP = null; });
   let doc = await rulesP;
-  RULES = doc; RULES_KEY = key;
+  RULES = doc; RULES_KEY = key; if (!(d && d.equity0 > 0)) LK.setEquity(doc && doc.equity0);   // the snapshot's own equity0 wins
   if (ctx.alive()) onDoc(doc);
   if (doc && doc.atr_loading && ctx.alive()) {
     try { doc = await ctx.api("/api/rules?wait=1"); } catch (e) { return RULES; }
-    RULES = doc;
+    RULES = doc; if (!(d && d.equity0 > 0)) LK.setEquity(doc && doc.equity0);
     if (ctx.alive()) onDoc(doc);
   }
   return RULES;
@@ -206,14 +209,14 @@ export function levRuleBody(r) {
         .map((t) => h("span", {role: "columnheader"}, t))),
       rows),
     h("ol", {class: "rl-checks"},
-      h("li", null, h("b", null, term("거래소 한도")), ` · 거래소(바이낸스)는 주문이 클수록 허용 배수를 낮춥니다. 잔고 $5,000이면 50배 주문은 $${fmt.int(top.notional || 125000)}어치(1/4 계좌는 $${fmt.int(top.q_notional || 31250)}). `,
+      h("li", null, h("b", null, term("거래소 한도")), ` · 거래소(바이낸스)는 주문이 클수록 허용 배수를 낮춥니다. 잔고 ${LK.usd0(eq0(r))}이면 50배 주문은 $${fmt.int(top.notional || eq0(r) * 25)}어치(1/4 계좌는 $${fmt.int(top.q_notional || eq0(r) * 6.25)}). `,
         blk ? `후보 크기에서는 ${blk}라서 그 코인은 다음 배수로 내려갑니다. ` : "지금 표로는 후보 크기에서 막히는 코인이 없습니다. ",
         qblk ? `1/4 크기에서는 ${qblk}.` : blk ? "1/4 계좌는 주문이 작아 이 한도에 걸리지 않습니다." : ""),
       h("li", null, h("b", null, term("청산 검사")), ` · 손절선이 `, term("청산가"), `보다 안쪽에 있고, 그 사이가 1 ATR 이상(최소 진입가의 ${share(c.buffer_min, 1)})이어야 합니다. 배수가 높을수록 청산가가 가까워집니다 (위의 ‘진입 때 청산까지’: 주문 크기에 따라 거래소 유지 증거금이 달라 후보와 1/4이 조금 다름).`),
       h("li", null, h("b", null, term("손실 검사")), ` · 손절에 닿았을 때 잃는 돈(수수료·슬리피지 포함)이 잔고의 ${share(c.max_loss, 0)} 이하여야 합니다. 그래서 배수마다 쓸 수 있는 `, term("손절 거리 한도"), "가 있습니다 (위의 ‘손절 거리 한도’).")),
     h("p", null, "그래서 ", h("b", null, "손절이 넓을수록 배수가 내려갑니다"), `. 예를 들어 손절이 1%면 좋은 자리라도 50배(한도 ${share((r.steps[0] || {}).max_stop, 2)})와 40배(한도 ${share((r.steps[1] || {}).max_stop, 2)})는 손실 검사에 걸려 30배로 들어갑니다. `,
       wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 20~30배가 많고, ` : "", "손절 2 ATR인 기본값 계좌는, 손절이 2 ATR보다 넓은 후보와 비교하면 40·50배가 더 자주 나옵니다."),
-    h("p", null, term("증거금"), " = 그 거래에 거는 돈 (잔고 × 비율). ", term("포지션 크기"), " = 증거금 × 배수. 예: 잔고 $5,000에서 30배면 증거금 $1,500, 포지션 $45,000. ",
+    h("p", null, term("증거금"), " = 그 거래에 거는 돈 (잔고 × 비율). ", term("포지션 크기"), ` = 증거금 × 배수. 예: 잔고 ${LK.usd0(eq0(r))}에서 30배면 증거금 ${LK.usd0(eq0(r) * 0.3)}, 포지션 ${LK.usd0(eq0(r) * 9)}. `,
       "1/4 계좌는 증거금만 1/4이라 손실 검사가 4배 느슨하고 거래소 한도에도 덜 걸려서, 후보보다 높은 배수로 들어가기도 합니다."),
     h("div", {class: "rl-usedall"}, h("span", {class: "muted"}, "지금까지 실제로 쓴 배수 (닫힌 거래 · 계좌마다 최근 200번까지)"),
       ROLES.map((role) => h("div", {class: "rl-urow"}, LK.roleChip(role), usedChips(used[role] || {}, {none: "아직 닫힌 거래 없음"}))),
@@ -243,7 +246,7 @@ export function nowBox(p, r) {
     return h("p", {class: "muted"}, r && r.atr_loading ? "지금 시세로 계산하는 중 (몇 초)…" : "시세를 받지 못해 지금 숫자는 없습니다 (규칙은 위와 같음).");
   }
   return h("div", {class: "stack tight"},
-    h("p", {class: "note"}, `${TF_BAR[p.tf] || tfKo(p.tf)} 마지막 닫힌 봉 기준 (${fmt.kst(r && r.atr_ms)} KST) · 지금 롱으로 들어간다면 · 잔고 $5,000 · `,
+    h("p", {class: "note"}, `${TF_BAR[p.tf] || tfKo(p.tf)} 마지막 닫힌 봉 기준 (${fmt.kst(r && r.atr_ms)} KST) · 지금 롱으로 들어간다면 · 잔고 ${LK.usd0(eq0(r))} · `,
       p.best_ok ? "배수는 ‘좋은 자리 / 보통 자리’ (같으면 ‘둘 다’)" : "늘 보통 자리", " · ‘못 들어감’ = 어느 배수도 거래소 한도·안전 검사를 통과 못 해서 그 신호는 건너뜀 · ",
       "본전 = 수수료·슬리피지를 넣고 이 손절·익절 거리로 본전이 되는 승률"),
     h("div", {class: "rl-coins"}, COINS6.filter((c) => now[c]).map((c) => coinTile(c, now[c], p))));

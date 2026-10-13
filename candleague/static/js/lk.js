@@ -10,12 +10,22 @@ import {acctFig} from "./v4kit.js";
 import {serverNow} from "./live.js";
 import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO, applyLineup} from "./labels.js";
 
-export const EQUITY = 5000;
+// The start wallet of every account: the snapshot's equity0 (5000, or 1000 for the owners' league; setLeague / setEquity set it
+// once a snapshot or the rules payload is here). A live ES-module binding: importers read the current value, so text that
+// names it is built inside the render function, never at module load.
+export let EQUITY = 5000;
+/** Take the start wallet from a snapshot / rules payload's ``equity0``: only a finite positive number counts, anything else
+ *  leaves the value as it is. */
+export function setEquity(v) { if (typeof v === "number" && Number.isFinite(v) && v > 0) EQUITY = v; }
+/** A whole-dollar amount: "$1,000" / "$5,000" (the start wallet when no number is given). */
+export const usd0 = (n = EQUITY) => `$${fmt.int(n)}`;
+/** The start wallet in words: "$1,000" / "$5,000". */
+export const startUsd = () => usd0(EQUITY);
 const DAY = 86400000;
 
 // ---------------------------------------------------------------- the snapshot and the meta file
 let LEAGUE = null, IDX = null, META = null, metaP = null;
-export function setLeague(d) { applyLineup(d && d.lineup); LEAGUE = d; IDX = null; }
+export function setLeague(d) { applyLineup(d && d.lineup); setEquity(d && d.equity0); LEAGUE = d; IDX = null; }
 export const league = () => LEAGUE;
 export async function getMeta() {
   if (META) return META;
@@ -44,7 +54,7 @@ export function paceLine(d, n, min = 300) {
 }
 
 // THE START (owners 10/12, "커스텀값 봇 돌린 시점부터 ... 규칙봇 형식처럼"): the league starts at its install time, every
-// account at $5,000 then; the snapshot's start_ms (league meta, the install time floored to 5 minutes) is the one
+// account at the start wallet (equity0) then; the snapshot's start_ms (league meta, the install time floored to 5 minutes) is the one
 // source of every "시작부터", "D+n" and "n일째" (no date is written into the page). started_ms is the install time.
 /** The league's day in Korea at the engine's processed time (the start's KST date = 1일째; calDay at done_ms), so the
  *  processed day and the calendar day read alike (a start at 12:00 KST is not "1일째" until noon the next day). */
@@ -149,7 +159,7 @@ export function fig(a, size = 20) {
   const kind = role === "flip" ? "flip" : role === "quarter" ? "adaptive" : role === "exitonly" ? "friend" : role === "base" ? "base" : "fixed";
   return acctFig({id: (a && a.id) || "", kind}, size, {hue: strHue((a && a.name) || "")});
 }
-/** 잔고 수익률: the wallet against the $5,000 start (closed trades; a fraction), null when hidden or unknown. */
+/** 잔고 수익률: the wallet against the start wallet (equity0; closed trades; a fraction), null when hidden or unknown. */
 export const walletRet = (a) => (a && a.wallet != null && Number.isFinite(Number(a.wallet)) ? Number(a.wallet) / EQUITY - 1 : null);
 /** The account against its pick's 동전 account on 한 번 평균 (better()): true / false / null (no flip, no trades, hidden). */
 export function vsFlip(a, ix = index()) {
@@ -242,7 +252,7 @@ export const smallN = (n, min = 30) => (n != null && n < min ? h("span", {class:
 
 // ---------------------------------------------------------------- the equity line of a pick's accounts (svg, one axis)
 /**
- * equityLines([{role, label, points: [[ms, $]...]}], {h}) -> an svg chart: one axis ($), the $5,000 start dashed, each
+ * equityLines([{role, label, points: [[ms, $]...]}], {h}) -> an svg chart: one axis ($), the start wallet (equity0) dashed, each
  * line named at its end and in the legend (never colour alone), a crosshair with every line's value at that time.
  * o.band = {label, points: [[ms, low $, high $]...]}: a shaded range behind the lines (the 묶음 레이스's 동전 middle
  * half), named in the legend and in the crosshair's list.

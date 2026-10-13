@@ -48,7 +48,7 @@ export function rankTable(o = {}) {
       {id: "kind", label: "종류", l: true, sort: (a) => a.kind, get: (a) => LK.kindChip(a.kind)},
       {id: "n", label: "거래", sort: (a) => a.trades, get: (a) => h("span", {class: "num"}, fmt.int(a.trades), a.trades < 30 ? h("small", {class: "muted"}, " 적음") : null)},
       {id: "win", label: "승률", sort: (a) => LK.winRate(a), get: (a) => (a.trades ? h("span", {class: "num"}, LK.winTxt(a), h("small", {class: "k4-wl"}, ` ${fmt.int(a.wins)}승 ${fmt.int(a.trades - a.wins)}패`)) : "—")},
-      {id: "wret", label: "잔고 수익률", title: "잔고 ÷ 5,000 − 1 (닫힌 거래 기준) · 순위의 기준", sort: (a) => walletRet(a, D),
+      {id: "wret", label: "잔고 수익률", title: `잔고 ÷ ${fmt.int(EQUITY)} − 1 (닫힌 거래 기준) · 순위의 기준`, sort: (a) => walletRet(a, D),
         get: (a) => { if (isHid(a)) return hid("개수만"); const r = walletRet(a, D), t = retPct(r); return h("span", {class: ["num", fmt.tone(r, t)]}, t); }},
       {id: "mean", label: "한 번 평균", title: "닫힌 거래마다 그 직전 지갑 대비 손익의 평균 (점검과 같은 단위)", sort: (a) => (isHid(a) ? null : a.mean_ret),
         get: (a) => (isHid(a) ? hid() : LK.ret(a.mean_ret))},

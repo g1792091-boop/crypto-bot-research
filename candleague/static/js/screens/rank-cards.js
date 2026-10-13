@@ -1,7 +1,7 @@
 // 순위표 (RANK builder): the screen's own numbers and its top blocks, copied from the rule bot's v4 board
 // (paperbot/dash/static/v4/screens/home-shared.js groupCards, board.js renderStats) and fitted to the 후보 리그:
 //   the four 묶음 cards  후보 · 기존 36 / 후보 · 딥시크 / 비교 계좌 (1/4 · 청산만 · 기본값) / 동전 던지기, each with the
-//                        median 잔고 수익률 (D-3: the wallet against the $5,000 start, closed trades only), the 참고
+//                        median 잔고 수익률 (D-3: the wallet against the start wallet, closed trades only), the 참고
 //                        comparisons on 한 번 평균 (the checkpoints' unit) and 파산 · 포지션
 //   the four tiles       계좌 · 포지션 중 · 시작보다 많은 계좌 · 파산 of the chosen 묶음
 // and the helpers the other rank-*.js files share (which accounts a 묶음 holds, hidden DeepSeek money, the ranking).
@@ -11,10 +11,11 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
+import {EQUITY} from "../lk.js";
 import {ROLES, ROLE_KO, ROLE_SHORT, KIND_KO, tfKo, onLineup, lineupOn} from "../labels.js";
 import {openAfter, afterOn} from "../after.js";
 
-export const EQUITY = 5000;
+export {EQUITY};                              // the start wallet: lk.js's live binding (equity0 of the snapshot)
 export const SMALL = 30;                         // 표본 적음 below the checkpoints' own floor (30 closed trades)
 export const CMP_ROLES = ["quarter", "exitonly", "base"];
 export const GROUPS = [
@@ -50,7 +51,7 @@ export function groupKo(g, sub) {
 /** True when this account's money is hidden (a DeepSeek account while the snapshot hides DeepSeek money): it is then
  *  counted only. Same rule as lk.js dsHidden, read from the given snapshot (and safe when the wallet is missing). */
 export const hidden = (a, d) => !!a && a.kind === "ds" && (!(d && d.ds_money) || a.wallet == null);
-/** 잔고 수익률 (a fraction): wallet / 5,000 - 1; null when hidden or unknown. */
+/** 잔고 수익률 (a fraction): wallet / start wallet - 1; null when hidden or unknown. */
 export function walletRet(a, d) {
   if (!a || hidden(a, d) || a.wallet == null || !Number.isFinite(Number(a.wallet))) return null;
   return Number(a.wallet) / EQUITY - 1;

@@ -182,7 +182,7 @@ export async function mount(el, ctx) {
       put(goal,
         h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
           ` (${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
-        h("p", {class: "s2a-goalline"}, `청산 비교 리그를 켠 때(${LK.startKo(d)})부터 모든 계좌 $5,000으로 시작해 5분마다 이어 갑니다.`,
+        h("p", {class: "s2a-goalline"}, `청산 비교 리그를 켠 때(${LK.startKo(d)})부터 모든 계좌 ${LK.startUsd()}으로 시작해 5분마다 이어 갑니다.`,
           h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
         h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, first.map((x) => h("li", {class: "done"},
           h("span", {class: "s2a-sn"}, fmt.mmdd(x.ms)), x.ko))),
@@ -193,7 +193,7 @@ export async function mount(el, ctx) {
       h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
         ` (${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
       h("p", {class: "s2a-goalline"}, LK.replayedBefore(d) ? `${fmt.mmdd(d.start_ms)}부터 다시 돌린 뒤 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`
-        : `봇을 켠 때(${LK.startKo(d)})부터 모든 계좌 $5,000으로 시작해 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`,
+        : `봇을 켠 때(${LK.startKo(d)})부터 모든 계좌 ${LK.startUsd()}으로 시작해 5분마다 이어 갑니다. 날짜와 기준은 시작 전에 고정했습니다.`,
         h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
       h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, steps.map((x, i) => h("li", {class: x.now ? "now" : x.done ? "done" : "",
         "aria-current": x.now ? "step" : null}, h("span", {class: "s2a-sn"}, x.ms ? fmt.mmdd(x.ms) : String(i + 1)), x.ko))),
@@ -330,7 +330,7 @@ function ledBar() {
     live.textContent = H.lv === "ok" ? "■ 닫힌 거래 기준" : H.lv === "warn" ? (LK.catchingUp(d) ? "■ 따라잡는 중" : "■ 늦음") : "■ 멈춤";
     live.title = `엔진 상태: ${H.ko} · 합계 잔고는 닫힌 거래까지 (열린 포지션 손익은 포지션 화면)`;
     const wins = ix.cands.filter((c) => c.wallet != null && c.wallet > LK.EQUITY).length;
-    put(mid, barRow(ix.cands), h("div", {class: "led-stats"}, h("span", null, `후보 ${fmt.int(ix.cands.length)}개 · 계좌마다 $5,000에서 시작`),
+    put(mid, barRow(ix.cands), h("div", {class: "led-stats"}, h("span", null, `후보 ${fmt.int(ix.cands.length)}개 · 계좌마다 ${LK.startUsd()}에서 시작`),
       h("span", null, `시작보다 많은 후보 ${fmt.int(wins)}개`)));
     // this card is the 38 picks': their own open positions and closed trades (190계좌 totals are on 서버 상태 · 포지션)
     const open = ix.cands.filter((a) => openAfter(a)).length;          // 설치 뒤 진입만: entered after the install
@@ -352,7 +352,7 @@ function ledBar() {
   return el;
 }
 
-/** One small bar per pick (its wallet against the $5,000 start), sorted: the spread of the 38 at a glance. */
+/** One small bar per pick (its wallet against the start wallet), sorted: the spread of the 38 at a glance. */
 function barRow(cands) {
   const vals = cands.map((c) => (c.wallet == null ? null : c.wallet / LK.EQUITY - 1)).filter((v) => v != null).sort((a, b) => b - a);
   if (!vals.length) return h("div", {class: "led-stats"}, h("span", null, "후보 잔고 준비 중"));

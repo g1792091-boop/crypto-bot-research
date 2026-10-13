@@ -28,7 +28,7 @@ export async function mount(el, ctx) {
   const head = h("div"), stats = h("div"), chart = h("div"), five = h("div"), params = h("div"), trades = h("div"), split = h("div");
   const why = h("div"), rule = h("div");
   const body = h("div", {class: "stack"}, stats, why,
-    ui.card({plate: "잔고 흐름", sub: "같은 후보의 계좌 5개 · 닫힌 거래마다 · $5,000에서 시작"}, chart),
+    ui.card({plate: "잔고 흐름", sub: `같은 후보의 계좌 5개 · 닫힌 거래마다 · ${LK.startUsd()}에서 시작`}, chart),
     rule,
     ui.card({plate: "롱 · 숏 · 코인별 · 커스텀값이 바꾼 거래", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split),
     ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five),
@@ -84,7 +84,7 @@ export async function mount(el, ctx) {
       ui.stat("거래", `${fmt.int(a.trades)}번`, a.trades < 30 ? "30번 전: 아직 판단 안 함" : `승 ${fmt.int(a.wins)} · 패 ${fmt.int(a.trades - a.wins)}`),
       ui.stat("승률", LK.winTxt(a)),
       ui.stat("한 번 평균", LK.ret(a.mean_ret, {hiddenIf: LK.dsHidden(a)}), "닫힌 거래마다 직전 지갑 대비"),
-      ui.stat("잔고", LK.wallet(a), a.wallet != null ? fmt.pct(LK.walletChange(a), true, 1) + " (시작 $5,000)" : null),
+      ui.stat("잔고", LK.wallet(a), a.wallet != null ? fmt.pct(LK.walletChange(a), true, 1) + ` (시작 ${LK.startUsd()})` : null),
       ui.stat("최대 낙폭", LK.ddTxt(a), "닫힌 거래 기준"),
       ui.stat(a.role === "cand" ? "기준" : "지금 포지션", a.role === "cand" ? h("span", null, LK.verdictPill(j), " ", LK.bandMark(j) || "")
         : openAfter(a) ? h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`)

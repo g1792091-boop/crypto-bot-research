@@ -7,7 +7,7 @@
 //   전체 목록      the same rows, 10 a page, with search, 봉 / 종류 / 성격 / 정렬; or the dense 표 (the old table)
 //   봉별 요약      per timeframe (참고) · CSV of the 묶음
 // #/rank?g=<core|ds|cmp|flip|all>&sub=<quarter|exitonly|base> chooses the 묶음 (old ?role=&kind= links still work).
-// Units (D-3): the rank and the big % are 잔고 수익률 (wallet / 5,000 - 1, closed trades); every ▲▼ comparison is on
+// Units (D-3): the rank and the big % are 잔고 수익률 (wallet / start wallet - 1, closed trades); every ▲▼ comparison is on
 // 한 번 평균 (the checkpoints' unit), so 순위표, 5계좌 비교 and 점검 진행 never contradict each other.
 // HONESTY: comparisons are 참고, small samples say 표본 적음, live ROE is hidden while the engine catches up, its
 // record is over 15 minutes old or the prices are over a minute old (poskit pricesLive); DeepSeek money follows the
@@ -131,7 +131,7 @@ export async function mount(el, ctx) {
   }
   function spark(a) {
     const v = st.sparks.get(a.id);
-    return v && v.length > 1 ? K4.miniSpark(v, {w: 56, h: 18, base: 5000, draw: st.sparkNew, label: "시작부터 지금까지 잔고 흐름 (닫힌 거래마다)"}) : null;
+    return v && v.length > 1 ? K4.miniSpark(v, {w: 56, h: 18, base: LK.EQUITY, draw: st.sparkNew, label: "시작부터 지금까지 잔고 흐름 (닫힌 거래마다)"}) : null;
   }
   let flashQ = [];
   function row(a, rk) {
