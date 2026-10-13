@@ -59,7 +59,8 @@ other rule account. The twins (``-e``, ``-eq``) and every account id and count a
 F11 and F12 (the strategy's own exit; all nine at once; PREREG 5.2 and Appendix A)
 ----------------------------------------------------------------------------------
 The strategy's component arrays, levels and targets come from a provider (``register_native``; production:
-``load_native_provider`` = research/exitflex/native.py and native_ds.py, the code the study runs) with the signature of
+``load_native_provider`` = research/exitflex/native.py and native_ds.py, the code the study runs, and for eleven more strategies
+candleague/native_more.py and native_more_ds.py) with the signature of
 ``kernel_x.register_f11``. Per chart close the record carries the tri-state values (1 true, 0 false, 2 unknown) of both sides'
 components; the entry seed carries the position side's component kinds and the values at the signal bar (rule C3: a state
 component is armed once it has been false at a close), the strategy's invalidation level and target (``meta['native_inv']``,
@@ -816,10 +817,14 @@ def code_version(rule: dict) -> str:
 
 
 # ====================================================================== F11 / F12: the strategy's own exit
-# The strategies the study's native-exit code (research/exitflex/native.py, native_ds.py) knows: a native-exit account is made only for their picks
-# (a test compares this table with the two modules).
-NATIVE_COVERS = {"core": ("DOGE", "N03_ADX_GC", "N09_ALLIG_AROON", "N10_HA_PSAR", "N13_3OUTSIDE", "N19_FIB_CHOP", "OBV_S", "S4_BB_BBP"),
-                 "ds": ("F10_OTE", "F11_TSOUP", "F12_MSS_DISP", "F1_PVT_DIV", "F5_BOX", "F7_RF_ONLY", "F7_RF_TRIPLE", "F9_FVG")}
+# The strategies the study's native-exit code (research/exitflex/native.py, native_ds.py) knows (a test compares this table with the two modules) ...
+NATIVE_STUDY = {"core": ("DOGE", "N03_ADX_GC", "N09_ALLIG_AROON", "N10_HA_PSAR", "N13_3OUTSIDE", "N19_FIB_CHOP", "OBV_S", "S4_BB_BBP"),
+                "ds": ("F10_OTE", "F11_TSOUP", "F12_MSS_DISP", "F1_PVT_DIV", "F5_BOX", "F7_RF_ONLY", "F7_RF_TRIPLE", "F9_FVG")}
+# ... and the eleven the league adds itself (owners 2026-10-13: candleague/native_more.py and native_more_ds.py, structure only: no own level or target).
+NATIVE_MORE = {"core": ("N02_ST_KST", "N04_ST_KLINGER", "N07_ICHI_CMO", "N12_ICHI_AO", "N21_ST_RSI_ADX", "N23_HA_ST"),
+               "ds": ("F15_LON_BRK", "F15_ORB", "F3_BOS", "F4_FAN", "F6_VWAP_FAIL")}
+# A native-exit account (-fq -nv -tg and their twins and filters) is made only for the picks of these strategies.
+NATIVE_COVERS = {k: NATIVE_STUDY[k] + NATIVE_MORE[k] for k in NATIVE_STUDY}
 
 
 # The strategies whose own exit is an invalidation LEVEL and a TARGET fixed at the signal bar (native.py: "only N13_3OUTSIDE and N19_FIB_CHOP have a level;
@@ -840,7 +845,8 @@ def native_supported(c: dict) -> bool:
 
 
 NATIVE: dict = {"provider": None}
-NATIVE_FILES = ("native.py", "native_ds.py")
+NATIVE_FILES = ("native.py", "native_ds.py")                       # research/exitflex: the study's code
+NATIVE_MORE_FILES = ("native_more.py", "native_more_ds.py")        # candleague: the league's own addition (same folder as this file)
 
 
 def register_native(fn: Optional[Callable]) -> None:
@@ -856,15 +862,17 @@ def native_dir() -> str:
 
 
 def native_hash() -> str:
-    """sha256 over native.py and native_ds.py (research/exitflex), the code that defines the strategies' own exits; 'absent' when missing."""
+    """sha256 over native.py and native_ds.py (research/exitflex) and native_more.py and native_more_ds.py (candleague), the code that
+    defines the strategies' own exits; 'absent' when missing."""
     import hashlib
     h = hashlib.sha256()
-    for f in NATIVE_FILES:
-        path = os.path.join(native_dir(), f)
-        if not os.path.exists(path):
-            return "absent"
-        with open(path, "rb") as fh:
-            h.update(fh.read())
+    for d, files in ((native_dir(), NATIVE_FILES), (os.path.dirname(os.path.abspath(__file__)), NATIVE_MORE_FILES)):
+        for f in files:
+            path = os.path.join(d, f)
+            if not os.path.exists(path):
+                return "absent"
+            with open(path, "rb") as fh:
+                h.update(fh.read())
     return h.hexdigest()[:16]
 
 
@@ -881,11 +889,18 @@ def load_native_provider() -> Callable:
     except Exception as exc:  # noqa: BLE001
         raise RuleConfigError(f"F11 / F12: the native exit modules cannot be imported ({type(exc).__name__}: {exc})") from None
 
+    from . import native_more, native_more_ds
+    keys = ("comp_long", "comp_short", "lvl_long", "lvl_short", "tgt_long", "tgt_short")
+
     def prov(a, sym, df, close_ms, lo, sh, btc):
         if a["kind"] == "core":
-            r = native.native_arrays(a["name"], df, a["tf"], a["combo"])
-            return {k: r.get(k) for k in ("comp_long", "comp_short", "lvl_long", "lvl_short", "tgt_long", "tgt_short")}
+            mod = native_more if a["name"] in NATIVE_MORE["core"] else native
+            r = mod.native_arrays(a["name"], df, a["tf"], a["combo"])
+            return {k: r.get(k) for k in keys}
         ctx = None if sym == "BTCUSDT" else {"BTCUSD": btc}
+        if a["name"] in NATIVE_MORE["ds"]:
+            r = native_more_ds.native_arrays(df, a["tf"], a["name"], a["combo"], ctx, sym[:-1])
+            return {k: r.get(k) for k in keys}
         r = native_ds.native(df, a["tf"], a["name"], a["combo"], ctx, sym[:-1])
         if isinstance(r, dict):
             lx, sx, inv_l, inv_s, tgt_l, tgt_s = (r[k] for k in ("lx", "sx", "inv_l", "inv_s", "tgt_l", "tgt_s"))

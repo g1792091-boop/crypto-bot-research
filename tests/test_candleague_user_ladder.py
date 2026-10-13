@@ -250,24 +250,24 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot", "-ld", "-ldc", "-fqc", "-ldp", "-ld1", "-ldt", "-ldv", "-fqt",
                                                          "-fqv", "-sb", "-l5", "-l20", "-e", "-tp10", "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
-    native = sum(1 for c in owner if RX.native_supported(c))                                  # -fq, -nv, -tg: only the 38 picks of the 16 strategies with their own structure
+    native = sum(1 for c in owner if RX.native_supported(c))                                  # -fq, -nv, -tg: the 49 picks of the 27 strategies with their own structure (16 from the study's code, 11 from candleague/native_more*.py)
     levels = sum(1 for c in owner if RX.native_levels_supported(c))                          # -iv, -ot: the 13 picks of the 7 strategies with a level and a target
-    # 49 picks x 18 kinds that every pick has, 38 x 6 kinds that need the strategy's own structure (-fq -nv -tg -fqc -fqt -fqv), 13 x 2 that need its own level and target
+    # 49 picks x 18 kinds that every pick has, 49 x 6 kinds that need the strategy's own structure (-fq -nv -tg -fqc -fqt -fqv), 13 x 2 that need its own level and target
     want = 49 * 18 + 6 * native + 2 * levels - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
-    assert len(owner) == 49 and native == 38 and levels == 13 and len(accts) == want == 1122
+    assert len(owner) == 49 and native == 49 and levels == 13 and len(accts) == want == 1188
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
-    assert sum(1 for a in accts if a.get("coin")) == 49 + 38 and sum(1 for a in accts if a["role"] == "cand") == 49
+    assert sum(1 for a in accts if a.get("coin")) == 49 + 49 and sum(1 for a in accts if a["role"] == "cand") == 49
     by = {a["id"]: a for a in accts}
     wide = next(c["id"] for c in owner if c["exit"].split("|")[1] == "4")
     assert (by[wide + "-ld"]["exit"], by[wide + "-ldp"]["exit"], by[wide + "-ld1"]["exit"]) == ("ladderU|2", "ladderU|4", "ladderU|1")
     assert by[wide + "-ldc"]["of"] == wide + "-ld"                                      # the coin twin is the primary's
     # the three structure accounts run the owners' ladder with the stop at most 2 ATR, for every pick (none is dropped as a duplicate of -ld)
-    for suffix, rule, tight, n in (("-sb", "F1.w3.a", None, 49), ("-tg", "F11.a", 0.5, 38), ("-fq", "F11.a.d0.5", None, 38), ("-nv", "F11.a", None, 38), ("-sw", "F3.a", None, 49)):
+    for suffix, rule, tight, n in (("-sb", "F1.w3.a", None, 49), ("-tg", "F11.a", 0.5, 49), ("-fq", "F11.a.d0.5", None, 49), ("-nv", "F11.a", None, 49), ("-sw", "F3.a", None, 49)):
         group = [a for a in accts if a["id"].endswith(suffix)]
         assert len(group) == n, suffix
         assert all(a["rule"]["id"] == rule and a.get("tighten") == tight and a["exit"] == by[a["pick"] + "-ld"]["exit"] for a in group), suffix
-        if n == 38:                                                       # each strategy's own structure: only picks whose strategy has one (no shared fallback)
+        if suffix in ("-tg", "-fq", "-nv"):                                  # each strategy's own structure (no shared fallback)
             assert all(RX.native_supported(a) for a in group), suffix
     lu = {x["suffix"]: x for x in RX.lineup(accts)}
     assert "tighten" not in lu["-fq"] and lu["-tg"]["tighten"] == 0.5 and lu["-tg"]["short_ko"] == "손절 좁힘"
@@ -444,7 +444,9 @@ def test_the_native_table_is_the_study_codes_table():
     if d not in sys.path:
         sys.path.insert(0, d)
     native, native_ds = importlib.import_module("native"), importlib.import_module("native_ds")
-    assert sorted(RX.NATIVE_COVERS["core"]) == sorted(native.SPEC) and sorted(RX.NATIVE_COVERS["ds"]) == sorted(native_ds.NAMES)
+    assert sorted(RX.NATIVE_STUDY["core"]) == sorted(native.SPEC) and sorted(RX.NATIVE_STUDY["ds"]) == sorted(native_ds.NAMES)
+    assert set(RX.NATIVE_COVERS["core"]) == set(RX.NATIVE_STUDY["core"]) | set(RX.NATIVE_MORE["core"]) and len(RX.NATIVE_COVERS["core"]) + len(RX.NATIVE_COVERS["ds"]) == 27
+    assert not set(RX.NATIVE_MORE["core"]) & set(native.SPEC) and not set(RX.NATIVE_MORE["ds"]) & set(native_ds.NAMES)       # the study's code is not duplicated
 
 
 def test_the_native_exit_account_is_made_only_for_picks_whose_strategy_has_one():
@@ -453,10 +455,10 @@ def test_the_native_exit_account_is_made_only_for_picks_whose_strategy_has_one()
     accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
     nv = [a for a in accts if a["role"] == "nv"]
     covered = [c for c in owner if RX.native_supported(c)]
-    assert len(nv) == len(covered) == 38 and {a["pick"] for a in nv} == {c["id"] for c in covered}
+    assert len(nv) == len(covered) == 49 and {a["pick"] for a in nv} == {c["id"] for c in covered}
     assert all(a["rule"]["id"] == "F11.a" and a["exit"].startswith("ladderU|") and float(a["exit"].split("|")[1]) <= 2 for a in nv)
     weak = {c["id"] for c in owner if c["source"].get("tier") == "weak"}
-    assert weak and not weak & {a["pick"] for a in nv}                       # the eleven weak-clue picks have no native exit and no such account
+    assert len(weak) == 11 and weak <= {a["pick"] for a in nv}              # the eleven weak-clue picks have the league's own structure (native_more*.py) and so these accounts
 
 
 def test_f12_and_mode_b_of_f11_are_refused_on_the_ladder():
@@ -705,7 +707,7 @@ def test_the_coin_twin_of_the_quick_stop_trades_the_same_rule_on_the_coins_side(
     accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
     by = {a["id"]: a for a in accts}
     twins = [a for a in accts if a["role"] == "fqc"]
-    assert len(twins) == 38 and all(a["coin"] is True and a["of"] == a["pick"] + "-fq" for a in twins)
+    assert len(twins) == 49 and all(a["coin"] is True and a["of"] == a["pick"] + "-fq" for a in twins)
     for a in twins:
         main = by[a["of"]]
         assert a["rule"]["id"] == main["rule"]["id"] == "F11.a.d0.5" and a["exit"] == main["exit"] and a["combo"] == main["combo"]
@@ -794,7 +796,7 @@ def test_the_gate_kinds_exist_for_the_right_picks_and_the_fingerprint_sees_the_g
     doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
-    for role, gate, n, rule in (("ldt", "g1", 49, None), ("ldv", "g2", 49, None), ("fqt", "g1", 38, "F11.a.d0.5"), ("fqv", "g2", 38, "F11.a.d0.5")):
+    for role, gate, n, rule in (("ldt", "g1", 49, None), ("ldv", "g2", 49, None), ("fqt", "g1", 49, "F11.a.d0.5"), ("fqv", "g2", 49, "F11.a.d0.5")):
         group = [a for a in accts if a["role"] == role]
         assert len(group) == n and all(a["gate"] == gate and a["exit"].startswith("ladderU|") for a in group)
         assert all((a["rule"]["id"] if a["rule"].get("family") else None) == rule for a in group)

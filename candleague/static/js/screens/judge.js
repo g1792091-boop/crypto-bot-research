@@ -1,7 +1,7 @@
 // #/judge 매매법별 구조 기준: 빠른 손절 · 손절 좁힘 · 매매법 판단 계좌는 "그 매매법 자체가 구조가 무너졌다고 볼 때"만 움직인다.
 // 맨 위에 두 상자 (빠른 손절은 언제 나가나? · 스위칭은 언제 하나?), 아래에 매매법마다 카드: 무엇에 거는 매매법인가, 자체 구조 기준
-// (롱 구조가 무너졌다 · 숏 구조가 무너졌다), 쓰는 봉, 지금까지 발동한 횟수. 자체 구조 코드가 없는 11개 매매법에는 빠른 손절 · 손절 좁힘 ·
-// 매매법 판단 계좌가 없다 (스위칭은 반대 신호만 있으면 되어 모든 매매법에 있다).
+// (롱 구조가 무너졌다 · 숏 구조가 무너졌다), 쓰는 봉, 지금까지 발동한 횟수. 리그의 27개 매매법 모두 자체 구조 기준이 있다
+// (11개는 리그가 새로 정했다). 기준이 없는 매매법이 생기면 그 카드에는 빠른 손절 · 손절 좁힘 · 매매법 판단 계좌가 없다.
 // Data: GET /api/judge (candleague/data/native_ko.json, from research/exitflex/native.py, native_ds.py, README_KO.md) and the shared
 // snapshot (the picks' strategies and timeframes from ``accounts``, the counts from ``events``, the kinds from ``lineup``).
 // A failed or empty /api/judge leaves the top boxes and the list of strategies, with a note. Every string is a text node.
@@ -78,7 +78,7 @@ export async function mount(el, ctx) {
         h("p", {class: "note"}, "구조가 무너졌는지는 봉이 마감할 때만 봅니다. 그래서 봉 한가운데의 잠깐 흔들림에는 나가지 않습니다. 손절선(최대 2 ATR)은 안전장치로 그대로 있습니다."),
         h("p", null, h("b", null, "손절 좁힘"), "과 ", h("b", null, "매매법 판단"), "도 같은 구조 기준을 씁니다. 손절 좁힘은 구조가 무너지면 청산하지 않고 손절선만 처음 거리의 절반으로 좁히고, ",
           "매매법 판단은 구조가 무너지면 손실이든 이익이든 청산합니다."),
-        h("p", {class: "cl-caveat"}, `빠른 손절과 손절 좁힘은 그 매매법 자체 구조 기준만 씁니다. 그래서 자체 구조 코드가 없는 ${none ? `${fmt.int(none)}개 ` : ""}매매법에는 이 계좌들이 없습니다 (아래 “자체 구조 기준 없음” 카드).`),
+        h("p", {class: "cl-caveat"}, `빠른 손절과 손절 좁힘은 그 매매법 자체 구조 기준만 씁니다. ${none ? `그래서 자체 구조 코드가 없는 ${fmt.int(none)}개 매매법에는 이 계좌들이 없습니다 (아래 “자체 구조 기준 없음” 카드).` : "이 리그의 매매법은 모두 자체 구조 기준이 있어서 모든 후보에 이 계좌들이 있습니다."}`),
         research.length ? h("p", {class: "note"}, `비교용으로 “${research.map((k) => String(k.label_ko).replace(/^연구\s*·\s*/, "")).join(" · ")}” 계좌가 따로 있습니다. `
           + "모든 매매법에 똑같이 최근 확인된 스윙 3봉 구조를 쓰는 연구용이고, 실전 후보가 아닙니다.") : null,
         h("p", {class: "note"}, "아래 조건의 숫자(평균선 길이, 기준값 등)는 후보마다 커스텀값을 씁니다.")),
@@ -86,7 +86,7 @@ export async function mount(el, ctx) {
         h("ol", null,
           h("li", null, h("b", null, "그 매매법이 스스로 반대 방향 진입 신호를 낼 때"), "만 합니다."),
           h("li", null, "그때 지금 포지션을 청산하고 ", h("b", null, "같은 분에 반대 방향으로 진입"), "합니다.")),
-        h("p", {class: "note"}, "반대 신호가 나오지 않으면 아무것도 하지 않고, 계단 익절 · 손절만 그대로 일합니다. 신호만 있으면 되기 때문에 자체 구조 코드가 없는 매매법에도 스위칭 계좌는 있습니다.")),
+        h("p", {class: "note"}, "반대 신호가 나오지 않으면 아무것도 하지 않고, 계단 익절 · 손절만 그대로 일합니다. 스위칭은 반대 방향 신호만 있으면 되므로 모든 후보에 계좌가 있습니다.")),
     ];
   }
 

@@ -75,8 +75,8 @@ E.0 item 2 and TW.10).
   ladder ("ladderU|<k>") as the engine `RuleUserLadder`, and an owner-exit entry may carry `tighten` (0 < t <= 1): when the rule fires the stop is moved to
   t x the stop distance from the first stop's reference (never loosened; a price already past it is closed by the engine's own gap handling) instead of
   closing at market. The rules' decisions (`decide`), the chart records and every study id are unchanged; a rule account with no ladder is as before.
-  F11.a (the strategy's own exit, `native.py` / `native_ds.py`) may also run on the owners' ladder; its accounts exist only for the 16 strategies those
-  two modules define (`NATIVE_COVERS`, compared with the modules by a test). The league's install now copies `native.py`, `native_ds.py` and the
+  F11.a (the strategy's own exit, `native.py` / `native_ds.py`) may also run on the owners' ladder; its accounts exist for the 16 strategies those
+  two modules define (`NATIVE_STUDY`, compared with the modules by a test; 11 more strategies are added below). The league's install now copies `native.py`, `native_ds.py` and the
   fullgrid modules they import (`run.py`, `kernel.py`, `memo.py`, `data.py`, `grid.py`) so the provider loads on the server (checked in a copy of
   the installed layout, with numba blocked: the provider loads and gives arrays for all 38 picks). No study file changed.
   Two more owner-league options, `own_stop` and `own_target`, use the study's own per-signal level and target (`native_inv`, `native_tgt`) on the owners' ladder:
@@ -86,3 +86,9 @@ E.0 item 2 and TW.10).
   Also `gate` (g1: the signal's side equals the BTC 4h trend, last closed bar's close vs its EMA50; g2: the pick bar's ATR% between the 20th and 80th percentile of
   its last 200 bars): a gate account takes a signal only when its stamped gate value is true (unknown = no entry), and the coin twin (`coin_of`) may now
   follow an entry that has a rule (same rule, the coin's side). League-side options only; the study's rules, ids and outputs are unchanged.
+* Later the same day, `candleague/native_more.py` and `candleague/native_more_ds.py` (new league files, not in a pin; `research/exitflex/*` is untouched) give the
+  eleven picks whose strategies the study's code does not cover (N02_ST_KST, N04_ST_KLINGER, N07_ICHI_CMO, N12_ICHI_AO, N21_ST_RSI_ADX, N23_HA_ST; F15_LON_BRK, F15_ORB,
+  F3_BOS, F4_FAN, F6_VWAP_FAIL) the same structure kinds as the other 38: the league's own definition of "this long's structure is broken" (shorts mirrored), read from
+  each strategy's own indicators with the pick's own numbers, in the shape of `native.py`'s arrays (tri-state, rules C1-C8; no level, no target). `NATIVE_COVERS` is now
+  the study's 16 (`NATIVE_STUDY`, still compared with the two modules) plus these 11 (`NATIVE_MORE`), 27 strategies and all 49 picks; the account fingerprint includes the
+  hash of the two new files (`native_hash`), so the league restarts. These eleven definitions are NOT the study's and no study result says anything about them.

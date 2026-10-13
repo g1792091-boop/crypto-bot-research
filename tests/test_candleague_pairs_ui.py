@@ -137,6 +137,10 @@ def _old_doc():
 
 
 # ---------------------------------------------------------------- running a screen under node
+NO_STRUCTURE_NOTE = ("자체 구조 청산 코드가 없는 매매법입니다. 빠른 손절, 손절 좁힘, 매매법 판단 계좌는 자체 구조 기준만 쓰기 때문에 이 매매법에는 만들지 않습니다. "
+                     "반대 방향 진입 신호만 있으면 되는 스위칭 계좌는 있습니다.")
+
+
 def _run(tmp_path, doc, body, judge="file", meta=True):
     """Run ``body`` (an async JS block that fills ``out``) on the DOM stand-in with the routes: /api/league, /api/meta (strategies_ko.json),
     /api/judge (judge: "file" = native_ko.json, "empty" = {}, anything else = no route: a 404). ``mount(name, query)`` returns the element."""
@@ -149,6 +153,11 @@ def _run(tmp_path, doc, body, judge="file", meta=True):
         routes["/api/meta"] = _json("strategies_ko.json")
     if judge == "file":
         routes["/api/judge"] = _json("native_ko.json")
+    elif judge == "some_none":                                   # the file as it was before the league gave 11 strategies a structure: the screen must still show a strategy without one
+        doc_j = _json("native_ko.json")
+        for n in list(rulex.NATIVE_MORE["core"]) + list(rulex.NATIVE_MORE["ds"]):
+            doc_j["strategies"][n].update(native=False, long_broken_ko=None, short_broken_ko=None, notes_ko=NO_STRUCTURE_NOTE)
+        routes["/api/judge"] = doc_j
     elif judge == "empty":
         routes["/api/judge"] = {}
     code = r"""
@@ -399,7 +408,7 @@ out.last = el.querySelectorAll("div[data-event]").map(txt);
 
 # ---------------------------------------------------------------- the judge screen
 def test_judge_top_boxes_and_cards(tmp_path):
-    o = _run(tmp_path, _doc(), r"""
+    o = _run(tmp_path, _doc(), judge="some_none", body=r"""
 const el = await mount("judge");
 out.page = txt(el);
 out.cards = el.querySelectorAll(".cl-ecard").map(txt);
@@ -435,6 +444,21 @@ out.q = el.querySelectorAll(".seg button").filter((b) => b.getAttribute("aria-se
     assert o["queries"][-1] == {"own": "none"}
     assert "$5,000" not in p
     _clean(p)
+
+
+def test_judge_with_the_real_file_every_strategy_has_a_structure(tmp_path):
+    o = _run(tmp_path, _doc(), r"""
+const el = await mount("judge");
+out.page = txt(el);
+out.own = el.querySelectorAll(".cl-ecard[data-own=\"true\"]").length;
+out.none = el.querySelectorAll(".cl-ecard[data-own=\"false\"]").length;
+out.chips = el.querySelectorAll(".seg button").map(txt);
+out.n02 = txt(el.querySelectorAll(".cl-ecard").find((c) => c.dataset.strategy === "N02_ST_KST"));
+""")
+    assert o["own"] == 27 and o["none"] == 0 and o["chips"][:3] == ["전체 27", "기준 있음 27", "기준 없음 0"]
+    assert "모든 후보에 이 계좌들이 있습니다" in o["page"] and "자체 구조 코드가 없는" not in o["page"] and "아래 “자체 구조 기준 없음” 카드" not in o["page"]
+    assert "슈퍼트렌드가 내림 방향이 되거나" in o["n02"] and "자체 구조 기준 있음" in o["n02"] and "롱 구조가 무너졌다" in o["n02"]
+    _clean(o["page"])
 
 
 def test_judge_without_the_file_or_with_an_empty_one(tmp_path):

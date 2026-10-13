@@ -204,7 +204,8 @@ def _n21(M, d, tf, combo, n):
     # the rebound failed: RSI, back above the level some bar after the dip, is under it again (a cross below the long level);
     # the short mirror is 100 - level, as the entry's
     below = M.cross_below(r, p["rsi_level"])
-    above = M.cross_above(r, 100.0 - p["rsi_level"])
+    import strategies as ST                          # the vendored locked module the strategy modules import their cross functions from
+    above = ST.cross_above(r, 100.0 - p["rsi_level"])
     return [(STATE, st_dn), (EVENT, tri(below, v))], [(STATE, st_up), (EVENT, tri(above, v))]
 
 

@@ -2,9 +2,9 @@
 screen, js/screens/judge.js; GET /api/judge returns this file).
 
 Sources of the conditions: research/exitflex/native.py (SPEC), native_ds.py, README_KO.md (public Korean explanations) and
-candleague/data/strategies_ko.json. The 16 strategies the study's native-exit code knows (candleague.rulex.NATIVE_COVERS: 8 core +
-8 DeepSeek-style) have conditions; the other 11 picks' strategies have no own structure code, so no quick stop / narrowing / native
-exit exists for them (the lineup of rules_owner_exits.json): their conditions are null and the notes say so."""
+candleague/data/strategies_ko.json. The 16 strategies the study's native-exit code knows (candleague.rulex.NATIVE_STUDY: 8 core +
+8 DeepSeek-style) and the 11 the league added itself (candleague/native_more.py, native_more_ds.py; rulex.NATIVE_MORE: 6 core + 5
+DeepSeek-style) all have conditions: 27 of 27 (rulex.NATIVE_COVERS)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 from candleague import rulex  # noqa: E402
 
 DATA = os.path.join(ROOT, "candleague", "data")
-WEAK = {"N02_ST_KST", "N12_ICHI_AO", "N07_ICHI_CMO", "N04_ST_KLINGER", "N23_HA_ST", "N21_ST_RSI_ADX", "F3_BOS", "F15_ORB", "F4_FAN",
+ADDED = {"N02_ST_KST", "N12_ICHI_AO", "N07_ICHI_CMO", "N04_ST_KLINGER", "N23_HA_ST", "N21_ST_RSI_ADX", "F3_BOS", "F15_ORB", "F4_FAN",
         "F6_VWAP_FAIL", "F15_LON_BRK"}
 FIELDS = {"kind", "name_ko", "native", "bet_ko", "long_broken_ko", "short_broken_ko", "notes_ko"}
 
@@ -41,22 +41,30 @@ def test_native_true_names_are_exactly_the_native_covers():
     s = _load()
     native = {n for n, v in s.items() if v["native"] is True}
     covers = set(rulex.NATIVE_COVERS["core"]) | set(rulex.NATIVE_COVERS["ds"])
-    assert native == covers and len(native) == 16
+    assert native == covers and len(native) == 27
+    assert native == set(rulex.NATIVE_STUDY["core"]) | set(rulex.NATIVE_STUDY["ds"]) | ADDED
     for kind in ("core", "ds"):
         assert {n for n in native if s[n]["kind"] == kind} == set(rulex.NATIVE_COVERS[kind])
 
 
-def test_the_weak_clue_strategies_have_no_own_structure():
-    """The 11 strategies without own structure code: native false, no long / short condition (null, never invented), and the notes say
-    so without claiming the shared 3-bar swing is used for the quick stop (it is not: those picks have no quick stop or narrowing)."""
+def test_the_eleven_added_strategies_have_their_structure_written_out():
+    """The 11 strategies the league gave a structure itself (native_more.py / native_more_ds.py): native true, a long and a short condition,
+    and notes that say the criterion is the league's own (not from the study's code)."""
     s = _load()
-    for n in WEAK:
+    assert {n for n in ADDED if n in rulex.NATIVE_MORE["core"] or n in rulex.NATIVE_MORE["ds"]} == ADDED == set(rulex.NATIVE_MORE["core"]) | set(rulex.NATIVE_MORE["ds"])
+    for n in ADDED:
         v = s[n]
-        assert v["native"] is False, n
-        assert v["long_broken_ko"] is None and v["short_broken_ko"] is None, n
-        assert "자체 구조" in v["notes_ko"] and "3봉" not in v["notes_ko"] and "스윙" not in v["notes_ko"], n
-        assert "스위칭" in v["notes_ko"], n
-    assert {n for n, v in s.items() if v["native"] is False} == WEAK
+        assert v["native"] is True and v["long_broken_ko"] and v["short_broken_ko"], n
+        assert "리그에서 새로 정했습니다" in v["notes_ko"] and "3봉" not in v["notes_ko"], n
+    assert "슈퍼트렌드" in s["N02_ST_KST"]["long_broken_ko"] and "KST" in s["N02_ST_KST"]["long_broken_ko"] and "아래로 꺾인" in s["N02_ST_KST"]["long_broken_ko"]
+    assert "클링거" in s["N04_ST_KLINGER"]["short_broken_ko"] and "위로 꺾인" in s["N04_ST_KLINGER"]["short_broken_ko"]
+    assert "전환선이 기준선 아래" in s["N07_ICHI_CMO"]["long_broken_ko"] and "구름대 아래" in s["N07_ICHI_CMO"]["long_broken_ko"] and "CMO" in s["N07_ICHI_CMO"]["long_broken_ko"]
+    assert "구름대 위" in s["N12_ICHI_AO"]["short_broken_ko"] and "AO" in s["N12_ICHI_AO"]["short_broken_ko"]
+    assert "역추세" in s["N21_ST_RSI_ADX"]["notes_ko"] and "RSI" in s["N21_ST_RSI_ADX"]["long_broken_ko"]
+    assert "하이킨아시" in s["N23_HA_ST"]["long_broken_ko"] and "슈퍼트렌드" in s["N23_HA_ST"]["long_broken_ko"]
+    assert "런던 범위" in s["F15_LON_BRK"]["long_broken_ko"] and "처음" in s["F15_ORB"]["long_broken_ko"]
+    assert "스윙 저점" in s["F3_BOS"]["long_broken_ko"] and "스윙 고점" in s["F3_BOS"]["short_broken_ko"]
+    assert "가장 짧은 EMA" in s["F4_FAN"]["long_broken_ko"] and "VWAP" in s["F6_VWAP_FAIL"]["long_broken_ko"]
 
 
 def test_every_strategy_among_the_picks_appears_with_its_kind():
@@ -72,7 +80,7 @@ def test_every_strategy_among_the_picks_appears_with_its_kind():
 
 
 def test_no_field_is_empty_text():
-    """Every text is a real sentence (not blank); the conditions are text for the 16 and null for the 11, nothing in between."""
+    """Every text is a real sentence (not blank); a native strategy has its two conditions as text, a non-native one (none today) has null."""
     for n, v in _load().items():
         assert isinstance(v["name_ko"], str) and len(v["name_ko"].strip()) >= 2, n
         for k in ("bet_ko", "notes_ko"):
@@ -88,11 +96,11 @@ def test_no_field_is_empty_text():
 
 
 def test_korean_names_agree_with_strategies_ko():
-    """The 16 strategies strategies_ko.json names carry the same Korean name and kind here."""
+    """strategies_ko.json (the earlier league's 16 strategies) names the study's 16: the same Korean name and kind here."""
     with open(os.path.join(DATA, "strategies_ko.json"), encoding="utf-8") as fh:
         ko = json.load(fh)["strategies"]
     s = _load()
-    assert set(ko) == {n for n, v in s.items() if v["native"]}
+    assert set(ko) == set(rulex.NATIVE_STUDY["core"]) | set(rulex.NATIVE_STUDY["ds"]) and set(ko) <= set(s)
     for n, v in ko.items():
         assert s[n]["name_ko"] == v["ko"] and s[n]["kind"] == v["kind"], n
 
