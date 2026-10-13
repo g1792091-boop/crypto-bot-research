@@ -39,6 +39,21 @@ export function rank(q, items, n) {
 let SCREENS = [];
 /** app.js: the menu's screens [{id, ko, group, groupKo, title}]. */
 export function setFindScreens(list) { SCREENS = list || []; }
+/** Extra words that find a screen besides its name and title (메인 vs 대조 / 목표 진척도 / 청산 이유 of the exit-structure league). */
+const SCREEN_WORDS = {
+  versus: "메인 대조 비교 승률 손익비 거래당 순수익 동전 던지기 낙폭 versus",
+  goal: "목표 진척도 승률 70 하루 진입 한 달 4배 낙폭 실전 후보 goal",
+  reasons: "청산 이유 손절 익절 계단 잠금 규칙 청산 청산당함 강제청산 reasons",
+};
+
+/** The account kinds of the exit-structure league (the snapshot's ``kinds``): one row each, opening 메인 vs 대조. */
+function kindItems(d) {
+  return (Array.isArray(d && d.kinds) ? d.kinds : []).filter((k) => k && k.role).map((k) => {
+    const group = k.group === "main" ? "메인" : k.group === "control" ? "대조" : "연구용";
+    return {kind: "kind", id: k.role, href: "#/versus", label: String(k.label_ko || k.short_ko || k.role), code: `${k.suffix || ""} ${k.role}`,
+      words: `${k.short_ko || ""} ${group} 종류 계좌`, sub: `종류 · ${group}${k.accounts ? ` · 계좌 ${k.accounts}개` : ""} · 메인 vs 대조에서 보기`};
+  });
+}
 
 function items() {
   const d = league();
@@ -55,17 +70,17 @@ function items() {
       words: `${KIND_KO[a.kind] || ""} ${ROLE_SHORT[a.role] || ""} ${a.name}`, sub: `계좌 · ${a.id}${pos}`,
       term: o ? `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${encodeURIComponent(String(o.symbol || "").replace(/T$/, ""))}` : null};
   });
-  return {picks, all};
+  return {picks, all, kinds: kindItems(d)};
 }
 
 export function search(raw) {
   const q = norm(raw);
   const scr = SCREENS.map((m) => ({kind: "screen", id: m.id, href: `#/${m.id}`, label: m.ko, code: m.id,
-    words: `${m.groupKo || ""} ${m.title || ""}`, sub: m.groupKo || ""}));
+    words: `${m.groupKo || ""} ${m.title || ""} ${SCREEN_WORDS[m.id] || ""}`, sub: m.groupKo || ""}));
   if (!q) return scr;
-  const {picks, all} = items();
+  const {picks, all, kinds} = items();
   const acc = rank(q, all, 8);
-  const out = [...rank(q, scr, 5), ...rank(q, picks, 6), ...acc];
+  const out = [...rank(q, scr, 5), ...rank(q, kinds, 3), ...rank(q, picks, 6), ...acc];
   // an account with an open position: its 터미널 line right after it
   return out.flatMap((x) => (x.kind === "account" && x.term ? [x, {...x, kind: "term", href: x.term, sub: `터미널에서 이 포지션 보기 · ${x.id}`}] : [x]));
 }
@@ -73,7 +88,7 @@ export function search(raw) {
 // ---------------------------------------------------------------- the box
 const st = {open: false, items: [], at: 0, opener: null};
 let box = null, input = null, list = null;
-const KIND_LABEL = {screen: "화면", pick: "후보", account: "계좌", term: "터미널"};
+const KIND_LABEL = {screen: "화면", kind: "종류", pick: "후보", account: "계좌", term: "터미널"};
 function build() {
   if (box) return;
   input = h("input", {type: "search", class: "find-in", placeholder: "화면 · 후보 · 계좌 찾기 (한글, 코드, 초성)", "aria-label": "찾기",

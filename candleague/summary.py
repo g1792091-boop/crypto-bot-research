@@ -15,6 +15,9 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import heapq
+import json
+import sqlite3
 from typing import Iterable, Optional
 
 import numpy as np
@@ -532,3 +535,298 @@ def race(accts: list[dict], book: dict, start_ms: int, end_ms: int, max_points: 
             roles[role] = row
         pools[pool] = {"money": bool(roles), "roles": roles}
     return {"t": grid, "step_ms": step, "start_ms": start, "end_ms": end, "pools": pools}
+
+
+# ---------------------------------------------------------------- the owner-exit league's kinds, pairs and events
+# Three more keys of league.json (runner.write_snapshots, only when the league has a lineup, rulex.lineup): ``kinds`` (one scoreboard row per
+# account kind), ``pairs`` (a main account's trade against the control account's trade on the same signal) and ``events`` (what the rules
+# did). Pure functions of the accounts, the closed-trade book ({account id: trades in exit order}) and the account rows; the DeepSeek money
+# rule (D11) is applied here once: a ROE, money or return figure counts DeepSeek accounts only with ``ds_money``.
+CONTROL = "-ld"                       # the control account of a pick is <pick id>-ld (the old fixed-stop ladder)
+REASONS = ("SL", "LOCK", "RULE", "TP", "LIQ")
+SAME_DIFF = 0.0005                    # |main ROE - control ROE| under this (0.05 points of margin) is 'same'
+PICK_MIN_TRADES = 5                   # best_pick / worst_pick: picks with at least this many closed trades
+PAIRS_RECENT = 60
+EVENTS_MAX = 200
+MINUTE = 60_000
+GROUP_PREFIX = (("메인", "main"), ("대조", "control"))      # the lineup labels' first word; any other label is a research account
+
+
+def kind_group(label_ko) -> str:
+    """"main" | "control" | "research" of a lineup kind by its Korean label's first word (메인 / 대조 / neither)."""
+    s = str(label_ko or "").lstrip()
+    for prefix, group in GROUP_PREFIX:
+        if s.startswith(prefix):
+            return group
+    return "research"
+
+
+def narrowed_keys(conn) -> set:
+    """{(account, entry_time, exit_time)} of the stored trades whose entry context says the stop was narrowed (``rx_narrowed``, set by
+    rulex.RuleUserLadder._narrow_stop). runner.closed_trades keeps no context, so the snapshot reads these few rows from the trades
+    table (a plain text search first, then the exact key); empty when the table cannot be read."""
+    out = set()
+    try:
+        for aid, d in conn.execute("SELECT account, data FROM trades WHERE instr(data, 'rx_narrowed') > 0"):
+            try:
+                t = json.loads(d)
+                if (t.get("context") or {}).get("rx_narrowed"):
+                    out.add((aid, t.get("entry_time"), t.get("exit_time")))
+            except (ValueError, AttributeError):
+                continue
+    except sqlite3.Error:
+        return set()
+    return out
+
+
+def _shown(a: dict, ds_money: bool) -> bool:
+    """Whether this account's ROE / money may be added to a figure: every core account, a DeepSeek one only with ``ds_money`` (D11)."""
+    return a.get("kind") != "ds" or bool(ds_money)
+
+
+def _tkey(t: dict) -> tuple:
+    """What makes two accounts' trades the same decision: coin, side and entry minute (one position at a time per account)."""
+    return t.get("symbol"), t.get("side"), t.get("entry_time")
+
+
+def _mean(xs: list) -> Optional[float]:
+    return sum(xs) / len(xs) if xs else None
+
+
+def kinds_summary(lineup: list, accts: list, book: dict, rows: list, start_ms: Optional[int], end_ms: Optional[int],
+                  ds_money: bool = False, narrowed=None, equity0: Optional[float] = None) -> list:
+    """One scoreboard dict per account kind of ``lineup`` (rulex.lineup), in its order:
+    {role, suffix, label_ko, short_ko, group, accounts, picks, trades, wins, win_rate, avg_win_roe, avg_loss_roe, payoff, mean_roe,
+    median_hold_h, trades_per_day, reasons, reason_mean_roe, narrowed_n, open_now, wallet_return_pct, max_dd_mean, best_pick,
+    worst_pick, best_pick_roe, worst_pick_roe, ds_in_roe}.
+
+    ``book``: {account id: closed trades in exit order} (runner.closed_trades); ``rows``: runner.account_rows (the wallet, the closed-trade
+    drawdown and the open position); ``end_ms``: the time the trades are counted to (the engine's processed time); ``narrowed``:
+    narrowed_keys; ``equity0``: the start wallet (default EQUITY). ``group`` is "main" | "control" | "research" (kind_group); ``picks`` the
+    distinct picks with at least one closed trade; a win is a trade with P&L above 0; ROE is the trade's net ROE on margin; fractions, not
+    percent (0.1 = 10%, the codebase's ``*_pct`` unit); ``payoff`` = avg_win_roe / |avg_loss_roe|; ``avg_loss_roe`` is negative (trades
+    with P&L of exactly 0 are in neither average); ``median_hold_h`` entry to exit in hours; ``trades_per_day`` = trades / days between
+    start and end (None before one day); ``reasons`` counts the exit reasons SL, LOCK, RULE, TP, LIQ (another reason is in ``trades`` only);
+    ``narrowed_n`` the trades whose stop was narrowed; ``open_now`` the accounts holding a position;
+    ``wallet_return_pct`` the mean over the kind's accounts of wallet / start wallet - 1 and ``max_dd_mean`` the mean closed-trade drawdown
+    (None without such an account); ``best_pick`` / ``worst_pick`` the pick ids with the highest / lowest mean ROE among those with at
+    least PICK_MIN_TRADES closed trades (``*_roe`` that mean).
+
+    DeepSeek money (D11): these fields count DeepSeek accounts and trades ALWAYS: accounts, picks, trades, wins, win_rate, reasons,
+    median_hold_h, trades_per_day, narrowed_n, open_now. These carry ROE / money / returns and so leave DeepSeek out (core accounts only)
+    unless ``ds_money``: avg_win_roe, avg_loss_roe, payoff, mean_roe, reason_mean_roe, wallet_return_pct, max_dd_mean, best_pick,
+    worst_pick, best_pick_roe, worst_pick_roe. ``ds_in_roe`` says which (``ds_money``). The mean of a reason (or a whole average) with no
+    trade to average is None."""
+    eq0 = EQUITY if equity0 is None else float(equity0)
+    narrowed = narrowed or ()
+    by_row = {r.get("id"): r for r in rows or []}
+    mine: dict = {}
+    for a in accts:
+        mine.setdefault(a.get("role"), []).append(a)
+    days = (end_ms - start_ms) / 86_400_000 if start_ms is not None and end_ms is not None else 0.0
+    out = []
+    for k in lineup or []:
+        n = wins = narrowed_n = open_now = 0
+        reasons = dict.fromkeys(REASONS, 0)
+        r_roe: dict = {r: [] for r in REASONS}
+        gains, falls, every, holds, ret, dds = [], [], [], [], [], []
+        picks, pick_roe = set(), {}
+        group = mine.get(k["role"], [])
+        for a in group:
+            aid = a["id"]
+            row = by_row.get(aid) or {}
+            show = _shown(a, ds_money)
+            if row.get("open"):
+                open_now += 1
+            if show:
+                if row.get("wallet") is not None:
+                    ret.append(float(row["wallet"]) / eq0 - 1.0 if eq0 > 0 else 0.0)
+                if row.get("max_dd") is not None:
+                    dds.append(float(row["max_dd"]))
+            trades = book.get(aid) or []
+            if trades:
+                picks.add(a.get("pick") or aid)
+            for t in trades:
+                n += 1
+                wins += won(t)
+                why = t.get("exit_reason")
+                en, ex = t.get("entry_time"), t.get("exit_time")
+                if en is not None and ex is not None:
+                    holds.append((int(ex) - int(en)) / HOUR_MS)
+                narrowed_n += (aid, en, ex) in narrowed
+                if why in reasons:
+                    reasons[why] += 1
+                roe = t.get("roe")
+                if not show or roe is None:
+                    continue
+                roe = float(roe)
+                every.append(roe)
+                if why in r_roe:
+                    r_roe[why].append(roe)
+                p = t.get("pnl")
+                sign = float(p) if p is not None else roe
+                if sign > 0:
+                    gains.append(roe)
+                elif sign < 0:
+                    falls.append(roe)
+                s = pick_roe.setdefault(a.get("pick") or aid, [0.0, 0])
+                s[0] += roe
+                s[1] += 1
+        avg_win, avg_loss = _mean(gains), _mean(falls)
+        ranked = {p: s[0] / s[1] for p, s in pick_roe.items() if s[1] >= PICK_MIN_TRADES}
+        best = max(ranked, key=lambda p: (ranked[p], p)) if ranked else None
+        worst = min(ranked, key=lambda p: (ranked[p], p)) if ranked else None
+        out.append({
+            "role": k["role"], "suffix": k.get("suffix"), "label_ko": k.get("label_ko"), "short_ko": k.get("short_ko"),
+            "group": kind_group(k.get("label_ko")), "accounts": len(group), "picks": len(picks), "trades": n, "wins": wins,
+            "win_rate": wins / n if n else None, "avg_win_roe": avg_win, "avg_loss_roe": avg_loss,
+            "payoff": avg_win / abs(avg_loss) if avg_win is not None and avg_loss else None, "mean_roe": _mean(every),
+            "median_hold_h": round(_median(holds), 3) if holds else None, "trades_per_day": n / days if days >= 1 else None,
+            "reasons": reasons, "reason_mean_roe": {r: _mean(v) for r, v in r_roe.items()}, "narrowed_n": narrowed_n,
+            "open_now": open_now, "wallet_return_pct": _mean(ret), "max_dd_mean": _mean(dds),
+            "best_pick": best, "worst_pick": worst, "best_pick_roe": ranked[best] if best else None,
+            "worst_pick_roe": ranked[worst] if worst else None, "ds_in_roe": bool(ds_money)})
+    return out
+
+
+def _main_roles(lineup: Optional[list]) -> list:
+    return [k["role"] for k in lineup or [] if kind_group(k.get("label_ko")) == "main"]
+
+
+def pairs_summary(lineup: list, accts: list, book: dict, ds_money: bool = False, equity0: Optional[float] = None) -> dict:
+    """The main accounts against the control, trade by trade: {"control": "-ld", "by_role": {main role: {n, n_shown, better, worse, same,
+    mean_diff_roe, sum_diff_pct_of_wallet, pct_better}}, "recent": [newest PAIRS_RECENT pairs]}.
+
+    A pair is a trade of a main-group account (kind_group "main") and the trade of the control account <pick>-ld with the same coin, side and
+    entry time (both closed); one control trade serves every main account of the pick. diff = main ROE - control ROE; better when diff >=
+    SAME_DIFF, worse when diff <= -SAME_DIFF, else same. ``mean_diff_roe`` is the mean diff; ``sum_diff_pct_of_wallet`` the sum over the pairs
+    of (main P&L / main wallet before the trade) - (control P&L / control wallet before it), the league's unit (returns); ``pct_better`` =
+    better / n_shown (a fraction). ``recent`` is newest first by the main trade's exit time: {pick, name, tf, kind, symbol, side, entry_time,
+    exit_time, role, a_reason, a_roe, b_reason, b_roe, diff_roe} (a = main, b = control).
+
+    DeepSeek money (D11): ``n`` counts every pair. ``n_shown`` counts the pairs whose ROE is shown: core pairs, and DeepSeek pairs only with
+    ``ds_money``; better, worse, same, mean_diff_roe, sum_diff_pct_of_wallet and pct_better are over those only (all None when n_shown is 0).
+    A DeepSeek pair in ``recent`` keeps its reasons but has a_roe, b_roe and diff_roe None unless ``ds_money``."""
+    eq0 = EQUITY if equity0 is None else float(equity0)
+    roles = _main_roles(lineup)
+    ids = {a["id"] for a in accts}
+    ctl: dict = {}
+
+    def control_of(cid: str) -> dict:
+        m = ctl.get(cid)
+        if m is None:                                    # {entry key: (trade, P&L / wallet before)} of one control account
+            m, eq = {}, eq0
+            for t in book.get(cid) or []:
+                p = float(t.get("pnl") or 0.0)
+                m.setdefault(_tkey(t), (t, p / eq if eq > 0 else 0.0))
+                eq += p
+            ctl[cid] = m
+        return m
+
+    stat = {r: [0, 0, 0, 0, 0, 0.0, 0.0] for r in roles}        # n, shown, better, worse, same, sum diff ROE, sum diff of wallet share
+    found = []
+    for a in accts:
+        st = stat.get(a.get("role"))
+        cid = f"{a.get('pick')}{CONTROL}"
+        if st is None or cid not in ids or not book.get(a["id"]):
+            continue
+        cm = control_of(cid)
+        show, eq = _shown(a, ds_money), eq0
+        for t in book[a["id"]]:
+            p = float(t.get("pnl") or 0.0)
+            ret = p / eq if eq > 0 else 0.0
+            eq += p
+            hit = cm.get(_tkey(t))
+            if hit is None:
+                continue
+            c, cret = hit
+            st[0] += 1
+            diff = None
+            if show and t.get("roe") is not None and c.get("roe") is not None:
+                diff = float(t["roe"]) - float(c["roe"])
+                st[1] += 1
+                if diff >= SAME_DIFF:
+                    st[2] += 1
+                elif diff <= -SAME_DIFF:
+                    st[3] += 1
+                else:
+                    st[4] += 1
+                st[5] += diff
+                st[6] += ret - cret
+            found.append((t.get("exit_time") or 0, a["id"], t.get("entry_time") or 0, a, t, c, diff))
+    by_role = {}
+    for r in roles:
+        n, m, b, w, s, d, rs = stat[r]
+        by_role[r] = {"n": n, "n_shown": m, "better": b if m else None, "worse": w if m else None, "same": s if m else None,
+                      "mean_diff_roe": d / m if m else None, "sum_diff_pct_of_wallet": rs if m else None,
+                      "pct_better": b / m if m else None}
+    recent = []
+    for ex, _aid, en, a, t, c, diff in heapq.nlargest(PAIRS_RECENT, found, key=lambda x: x[:3]):
+        show = diff is not None
+        recent.append({"pick": a.get("pick"), "name": a.get("name"), "tf": a.get("tf"), "kind": a.get("kind"), "symbol": t.get("symbol"),
+                       "side": t.get("side"), "entry_time": t.get("entry_time"), "exit_time": t.get("exit_time"), "role": a.get("role"),
+                       "a_reason": t.get("exit_reason"), "a_roe": t.get("roe") if show else None,
+                       "b_reason": c.get("exit_reason"), "b_roe": c.get("roe") if show else None, "diff_roe": diff})
+    return {"control": CONTROL, "by_role": by_role, "recent": recent}
+
+
+def events_summary(lineup: list, accts: list, book: dict, narrowed=None, rows: Optional[list] = None, ds_money: bool = False) -> list:
+    """The newest EVENTS_MAX rule-driven events of the main accounts, newest first: {time, account, pick, role, name, tf, kind, side,
+    symbol, event, roe, hold_h, control_roe}. One row per trade, ``time`` its exit time; ``event`` is the first that applies:
+
+    * "switch": the account's role is "sw" and its next trade starts in the same minute the trade ended, on the opposite side (the next
+      trade may still be open: ``rows``' open position, runner.account_rows, counts as the next trade);
+    * "narrowed": the trade's stop was narrowed (``narrowed``: narrowed_keys);
+    * "rule_exit": the trade ended by a rule (exit reason RULE).
+
+    ``control_roe``: the ROE of the pick's control (<pick>-ld) trade with the same coin, side and entry time, else None. ``hold_h``: hours
+    from entry to exit. DeepSeek money (D11): roe and control_roe are None for a DeepSeek account unless ``ds_money`` (hold, side and coin
+    are not money)."""
+    main = set(_main_roles(lineup))
+    narrowed = narrowed or ()
+    opens = {r.get("id"): r["open"] for r in rows or [] if r.get("open")}
+    found = []
+    for a in accts:
+        if a.get("role") not in main:
+            continue
+        aid, trades, sw = a["id"], book.get(a["id"]) or [], a["role"] == "sw"
+        for i, t in enumerate(trades):
+            ev = None
+            ex = t.get("exit_time")
+            if sw and ex is not None and t.get("side"):
+                if i + 1 < len(trades):                          # the next trade, or the position still open (not yet a closed trade)
+                    nxt = (trades[i + 1].get("side"), trades[i + 1].get("entry_time"))
+                else:
+                    o = opens.get(aid) or {}
+                    nxt = (o.get("side"), o.get("since"))
+                if nxt[0] == -t["side"] and nxt[1] is not None and int(nxt[1]) // MINUTE == int(ex) // MINUTE:
+                    ev = "switch"
+            if ev is None and (aid, t.get("entry_time"), ex) in narrowed:
+                ev = "narrowed"
+            if ev is None and t.get("exit_reason") == "RULE":
+                ev = "rule_exit"
+            if ev is not None:
+                found.append((ex or 0, aid, t.get("entry_time") or 0, a, t, ev))
+    ctl: dict = {}
+    out = []
+    for ex, aid, _en, a, t, ev in heapq.nlargest(EVENTS_MAX, found, key=lambda x: x[:3]):
+        show = _shown(a, ds_money)
+        cid = f"{a.get('pick')}{CONTROL}"
+        if cid not in ctl:
+            ctl[cid] = {}
+            for c in book.get(cid) or []:
+                ctl[cid].setdefault(_tkey(c), c.get("roe"))
+        hold = (int(t["exit_time"]) - int(t["entry_time"])) / HOUR_MS if t.get("entry_time") is not None and t.get("exit_time") is not None else None
+        out.append({"time": t.get("exit_time"), "account": aid, "pick": a.get("pick"), "role": a.get("role"), "name": a.get("name"),
+                    "tf": a.get("tf"), "kind": a.get("kind"), "side": t.get("side"), "symbol": t.get("symbol"), "event": ev,
+                    "roe": t.get("roe") if show else None, "hold_h": None if hold is None else round(hold, 3),
+                    "control_roe": ctl[cid].get(_tkey(t)) if show else None})
+    return out
+
+
+def owner_views(lineup: list, accts: list, book: dict, rows: list, start_ms: Optional[int], end_ms: Optional[int], ds_money: bool = False,
+                narrowed=None, equity0: Optional[float] = None) -> dict:
+    """{"kinds", "pairs", "events"}: the three keys runner.write_snapshots adds to league.json in the owner-exit league."""
+    return {"kinds": kinds_summary(lineup, accts, book, rows, start_ms, end_ms, ds_money, narrowed, equity0),
+            "pairs": pairs_summary(lineup, accts, book, ds_money, equity0),
+            "events": events_summary(lineup, accts, book, narrowed, rows, ds_money)}

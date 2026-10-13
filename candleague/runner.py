@@ -615,6 +615,9 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
     lu = RX.lineup(league.accts)
     if lu:                                    # the owner-exit league: its account kinds, in order, for the dashboard and Telegram
         doc["lineup"] = lu
+        # ... and their scoreboard, the main accounts against the control, the rules' events (summary.owner_views; DeepSeek money by ds_money)
+        doc.update(SM.owner_views(lu, league.accts, book, rows, league.start_ms, league.done, ds_money, SM.narrowed_keys(league.conn),
+                                  EQUITY))
     os.makedirs(snap, exist_ok=True)
     _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms, book))
     _write(snap, "league.json", doc)

@@ -723,6 +723,7 @@ def static_known(name: str) -> bool:
 
 PUBLIC_FILES = frozenset(("tokens.css", "base.css", "login.css", "login.js", "icon.svg"))   # the login page's own
 META_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "strategies_ko.json")
+JUDGE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "native_ko.json")     # /api/judge: the exits' judging words
 
 
 KLINE_END_MIN = 1_790_812_800_000            # 2026-10-01 00:00 UTC: no league trade is older (an older end is refused)
@@ -952,6 +953,15 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
         return JSONResponse(read_snap(os.path.dirname(META_FILE), os.path.basename(META_FILE)) or {})
+
+    @app.get("/api/judge")
+    def api_judge(req: Request):
+        """candleague/data/native_ko.json (the judging words of the account kinds) served as it is; {} while the file does not exist or
+        cannot be read."""
+        if not authed(req):
+            return JSONResponse({"error": "login"}, status_code=401)
+        doc = read_snap(os.path.dirname(JUDGE_FILE), os.path.basename(JUDGE_FILE))
+        return JSONResponse({} if doc is None else doc)
 
     @app.get("/api/live")
     def api_live(req: Request):

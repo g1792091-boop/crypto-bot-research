@@ -38,6 +38,9 @@ const MENU = [
   {id: "home", ko: "요약", group: "home"},
   {id: "rank", ko: "순위표", group: "home", also: ["account"]},
   {id: "check", ko: "점검 진행", group: "home"},
+  {id: "versus", ko: "메인 vs 대조", group: "home"},
+  {id: "goal", ko: "목표 진척도", group: "home"},
+  {id: "reasons", ko: "청산 이유", group: "home"},
   {id: "compare", ko: "5계좌 비교", group: "home"},
   {id: "weekly", ko: "흐름", group: "home"},
   {id: "strategies", ko: "매매법", group: "method"},
@@ -48,12 +51,15 @@ const MENU = [
 ];
 const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 · 수익)", positions: "포지션 (모의 계좌의 열린 포지션, 실시간 손익)",
   entries: "진입 차트 (매매법마다 따로, 후보가 들어간 자리)", fills: "체결 기록 (모든 계좌의 닫힌 거래)", home: "요약",
-  check: "점검 진행 (11/11 · 12/11 · 1/11 기준이 지금 어떤지)", rank: "순위표 (후보 38개와 비교 계좌 190개)",
+  check: "점검 진행 (11/11 · 12/11 · 1/11 기준이 지금 어떤지)",
+  versus: "메인 vs 대조 (새 청산 방법이 원래 방식보다 나은지: 승률 · 손익비 · 거래당 순수익 · 낙폭 · 동전 던지기 확인)",
+  goal: "목표 진척도 (승률 70% · 하루 1~3번 진입 · 거래당 +10% · 한 달 4배 · 낙폭, 실전 후보와 대조)",
+  reasons: "청산 이유 (손절 · 계단 잠금 · 규칙 청산 · 익절 · 청산당함으로 끝난 거래와 평균)", rank: "순위표 (후보 38개와 비교 계좌 190개)",
   compare: "5계좌 비교 (같은 후보의 계좌들을 나란히: 후보 · 1/4 · 청산만 · 기본값 · 동전, 또는 청산 비교 리그의 청산별 계좌)", weekly: "흐름 (묶음 레이스: 시간에 따른 잔고 · 주마다 후보 · 기본값 · 동전)",
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
-const SCREENS = {home: "home", check: "check", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
+const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
   account: "account", rules: "rules"};
 const TITLE = "후보 리그";
