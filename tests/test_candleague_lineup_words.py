@@ -335,9 +335,9 @@ def test_positions_and_terminal_open_on_main_plus_control_in_the_owner_league():
     root = os.path.join(ROOT, "candleague", "static", "js")
     for f in ("screens/terminal.js", "screens/positions.js"):
         src = open(os.path.join(root, f), encoding="utf-8").read()
-        assert 'lineupOn() ? "mn" : "cand"' in src, f
+        assert 'lineupOn() ? "k2" : "cand"' in src, f
     pk = open(os.path.join(root, "poskit.js"), encoding="utf-8").read()
-    assert '{id: "mn", ko: "메인만"}' in pk and '{id: "mc", ko: "메인 + 대조"}' in pk and 'kindGroup(p.role)' in pk
+    assert '{id: "k2", ko: "핵심 2개"}' in pk and '{id: "mn", ko: "메인만"}' in pk and '{id: "mc", ko: "메인 + 대조"}' in pk and 'kindGroup(p.role)' in pk
     lb = open(os.path.join(root, "labels.js"), encoding="utf-8").read()
     assert 'w === "메인" ? "main" : w === "대조" ? "control"' in lb
     rules = open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json"), encoding="utf-8").read()

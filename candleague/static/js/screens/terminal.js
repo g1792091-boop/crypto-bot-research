@@ -61,7 +61,7 @@ export async function mount(el, ctx) {
   try { await ctx.meta(); } catch (e) { /* the codes stand in for the Korean names */ }
   if (!ctx.alive()) return undefined;
   const q = ctx.params.query || {};
-  const grpDefault = lineupOn() ? "mn" : "cand";          // the owner-exit league: its kinds are many, 후보 is only the 지금 청산 account, so the first view is 메인만
+  const grpDefault = lineupOn() ? "k2" : "cand";          // the owner-exit league: its kinds are many, 후보 is only the 지금 청산 account, so the first view is 핵심 2개 (빠른 손절 + 원래 방식)
   const savedGrp = local.get("tm-grp", grpDefault);
   const st = {
     coin: COINS.includes(q.coin) ? q.coin : COINS.includes(local.get("tm-coin", "")) ? local.get("tm-coin", "") : "BTCUSD",
