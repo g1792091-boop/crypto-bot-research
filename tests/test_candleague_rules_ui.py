@@ -406,7 +406,7 @@ def test_static_rules_for_the_new_files():
     for m in re.finditer(r"font(?:-size)?:\s*([^;]+);", css):
         assert "var(--t-" in m.group(1), m.group(0)
     app = open(os.path.join(STATIC, "js", "app.js")).read()
-    assert '{id: "rules", ko: "익절·손절·배수", group: "method"}' in app and '{id: "weekly", ko: "흐름", group: "home"}' in app
+    assert '{id: "rules", ko: "익절·손절·배수", group: "method"}' in app and '{id: "weekly", ko: "흐름", group: "study"}' in app
     assert 'rules: "rules"' in app
     node = shutil.which("node")
     if node:
