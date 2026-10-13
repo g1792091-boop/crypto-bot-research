@@ -880,7 +880,7 @@ def main(argv: Optional[list] = None) -> int:
     except StartMismatch as exc:         # before any trade is shown (11.3)
         raise SystemExit(f"[후보 리그] {exc}") from None
     from .notify import Notifier
-    notifier = Notifier(conn)
+    notifier = Notifier(conn, snap=a.snap)
     print(f"[후보 리그] {len(accts)} accounts, brackets: {src}, start {_utc(lg.start_ms, '%Y-%m-%d %H:%M')} UTC, "
           f"done {_utc(lg.done, '%Y-%m-%d %H:%M')} UTC", flush=True)
     if lg.reset:          # a start-over replaces the old screens at once; a plain restart writes only after progress

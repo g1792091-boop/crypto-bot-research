@@ -103,7 +103,11 @@ def cost_notes_ko(eq0: float, ds_money: bool) -> list:
 
 
 def _fmt_pct(f: Optional[float], dec: int = 2) -> str:
-    return "—" if f is None else f"{f * 100:.{dec}f}%"
+    return "—" if f is None else ("−" if f < 0 and round(abs(f) * 100, dec) else "") + f"{abs(f) * 100:.{dec}f}%"
+
+
+def _usd(x: float) -> str:
+    return ("−" if x < 0 and round(abs(x)) else "") + f"${abs(x):,.0f}"
 
 
 def _headline(kinds: list) -> str:
@@ -114,7 +118,7 @@ def _headline(kinds: list) -> str:
     if not f["cost_n"]:
         return f"{f['name_ko']}: 비용을 되짚을 닫힌 거래가 아직 없습니다."
     share = f"총손익의 {_fmt_pct(f['share'], 1)}" if f["share"] is not None else "총손익이 0 이하라 비율은 확인 못 함"
-    return (f"{f['name_ko']}: 추정 비용은 거래 한 번에 평균 증거금의 {_fmt_pct(f['cost_roe'])}이고, 합치면 ${f['cost']:,.0f} ({share}) "
+    return (f"{f['name_ko']}: 추정 비용은 거래 한 번에 평균 증거금의 {_fmt_pct(f['cost_roe'])}이고, 합치면 {_usd(f['cost'])} ({share}) "
             f"입니다 (닫힌 거래 {f['cost_n']:,}건 기준).")
 
 
