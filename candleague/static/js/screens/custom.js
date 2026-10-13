@@ -30,13 +30,14 @@ export function paramTable(c, base, meta) {
     h("tbody", null, params.map((p) => {
       const dv = base && base.combo && p.name in base.combo ? base.combo[p.name] : p.default;
       const cv = c.combo ? c.combo[p.name] : null;
-      const same = JSON.stringify(dv) === JSON.stringify(cv);
+      const unknown = dv == null && lineupOn();                 // the owner-exit league's pick of a strategy without a description: no default to compare with
+      const same = !unknown && JSON.stringify(dv) === JSON.stringify(cv);
       const mult = typeof dv === "number" && typeof cv === "number" && dv !== 0 ? cv / dv : null;
-      return h("tr", {class: same ? "cl-same" : "cl-changed"},
+      return h("tr", {class: unknown ? "" : same ? "cl-same" : "cl-changed"},
         h("td", {class: "l"}, h("b", null, p.ko), h("small", {class: "cl-code"}, p.name), edgeMark(p.name) ? [" ", edgeMark(p.name)] : null),
         h("td", {class: "num"}, val(dv)),
         h("td", {class: "num"}, h("b", {class: same ? "" : "accent"}, val(cv))),
-        h("td", {class: "num"}, same ? h("span", {class: "muted"}, "그대로") : mult != null ? h("span", {class: mult > 1 ? "cl-up" : "cl-dn"}, `×${fmt.num(mult, 2)}`) : "바뀜"));
+        h("td", {class: "num"}, unknown ? h("span", {class: "muted"}, "—") : same ? h("span", {class: "muted"}, "그대로") : mult != null ? h("span", {class: mult > 1 ? "cl-up" : "cl-dn"}, `×${fmt.num(mult, 2)}`) : "바뀜"));
     }))),
   sm && sm.note ? h("p", {class: "note"}, sm.note) : null);
 }
@@ -46,7 +47,7 @@ export function paramTable(c, base, meta) {
 export function changedCount(c, base, meta) {
   if (base && base.combo) return Object.keys(c.combo || {}).filter((k) => JSON.stringify(base.combo[k]) !== JSON.stringify(c.combo[k])).length;
   const sm = LK.stratMeta(c.name, meta);
-  if (!(sm && sm.params)) return 0;
+  if (!(sm && sm.params)) return lineupOn() ? null : 0;           // no 기본값 account and no description of the strategy (a pick without one): unknown, never "0개"
   const def = (k) => (sm.params.find((p) => p.name === k) || {}).default;
   return Object.keys(c.combo || {}).filter((k) => def(k) !== undefined && JSON.stringify(def(k)) !== JSON.stringify(c.combo[k])).length;
 }
@@ -112,7 +113,7 @@ export async function mount(el, ctx) {
       const set = ix.sets[c.id];
       const pm = LK.pickMeta(c.id, meta) || {};
       const changed = changedCount(c, set.base, meta);
-      return ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.name} · 바뀐 값 ${changed}개`, cls: "cl-pickcard",
+      return ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.name} · 바뀐 값 ${changed == null ? "—" : `${changed}개`}`, cls: "cl-pickcard",
         acts: h("span", {class: "row wrap"}, LK.kindChip(c.kind), LK.styleChip(pm.style),
           h("a", {class: "btn-line", href: `#/entries?s=${encodeURIComponent(c.name)}`}, "진입 차트"),
           h("a", {class: "btn-line", href: `#/account/${encodeURIComponent(c.id)}`}, "계좌 자세히"))},

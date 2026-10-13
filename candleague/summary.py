@@ -1243,6 +1243,7 @@ def decision_views(book: dict, accts: list, lineup: Optional[list], start_ms: Op
 # Every draw of the bootstrap is shared by all cells (one resampling of days, applied to every cell with a matrix product: a cell costs
 # next to nothing, one second for a million trades). DeepSeek money (D11): without ``ds_money`` DeepSeek accounts are in no figure.
 import collections  # noqa: E402
+import itertools  # noqa: E402
 
 COND_KINDS = ("-fq", "-fqc", "-ld", "-ldc")                           # the kinds read (the order of the screen: the candidate first)
 COND_PAIRS = COIN_TWINS                                               # (real kind, its coin twin): -fq / -fqc and -ld / -ldc
@@ -1285,13 +1286,10 @@ def _cond_cols(rows) -> Optional[tuple]:
     if isinstance(rows[0], dict):
         rows = [tuple(r.get(f) for f in COND_FIELDS) for r in rows]
     sym, side, ent, ext, roe, g1, g2 = zip(*rows)
-    side = np.array([0.0 if v is None else v for v in side], dtype=float)
-    ent = np.array([np.nan if v is None else v for v in ent], dtype=float)
-    ext = np.array([np.nan if v is None else v for v in ext], dtype=float)
-    roe = np.array([np.nan if v is None else v for v in roe], dtype=float)
+    side, ent, ext, roe = (np.array(c, dtype=float) for c in (side, ent, ext, roe))           # a None becomes NaN and drops the row below
     keep = np.isfinite(ent) & np.isfinite(ext) & np.isfinite(roe) & (np.abs(side) == 1) & (ext >= ent)
-    c1 = np.fromiter((_G_CODE.get(v, 2) if v is not None else 2 for v in g1), np.int8, len(g1))
-    c2 = np.fromiter((_G_CODE.get(v, 2) if v is not None else 2 for v in g2), np.int8, len(g2))
+    c1 = np.fromiter(map(_G_CODE.get, g1, itertools.repeat(2)), np.int8, len(g1))
+    c2 = np.fromiter(map(_G_CODE.get, g2, itertools.repeat(2)), np.int8, len(g2))
     return list(sym), side, ent, ext, roe, c1, c2, keep
 
 

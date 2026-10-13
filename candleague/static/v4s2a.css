@@ -436,3 +436,8 @@ a.s2a-gc:hover { border-color: var(--ink-2); transform: translateY(-1px); }
 .s2a-krow .s2a-kopen { padding-top: 4px; }
 .s2a-decline { margin: 4px 0 0; }
 .s2a-dlk { display: block; font-weight: 700; font-size: var(--t-2xs); letter-spacing: .02em; }
+
+/* the owner-exit league's list of account kinds (long names): one column on a phone, two on a PC, a name may wrap */
+[data-screen] .kv.kv-kinds { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 760px) { [data-screen] .kv.kv-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; } }
+.kv.kv-kinds .cl-role { white-space: normal; align-items: flex-start; }

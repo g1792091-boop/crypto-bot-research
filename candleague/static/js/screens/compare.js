@@ -50,7 +50,7 @@ export async function mount(el, ctx) {
       ? `칸 = 잔고 수익률 (${LK.startUsd()} 대비, 닫힌 거래까지) · 거래 수 · 승률 · 보유 시간 중앙값 · ★ = 그 후보 계좌들 중 잔고가 가장 많음 · 칸을 누르면 그 계좌`
       : "칸 = 거래 한 번 평균 · 거래 수 · 승률 · ★ = 같은 크기 넷(1/4 빼고) 중 가장 좋음 · 칸을 누르면 그 계좌 · 후보 아래 작은 줄 = 후보 계좌가 나간 이유 · 수수료·펀딩 · 최장 연패 (최근 200번까지)");
     setPlate(whatCard, owner ? `계좌 종류 ${n}가지가 뭔가요` : "계좌 5개가 뭔가요");
-    put(what, h("dl", {class: "kv"}, ROLES.map((r) => {
+    put(what, h("dl", {class: ["kv", owner ? "kv-kinds" : ""]}, ROLES.map((r) => {
       const x = roleRule(r);
       return h("div", null, h("dt", null, LK.roleChip(r)), h("dd", null, ROLE_DESC[r], h("br"),
         h("small", {class: "muted"}, `진입: ${x.nums} · 익절·손절: ${x.exit} · 크기: ${x.size} · 방향: ${x.dir}`)));

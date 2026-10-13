@@ -88,6 +88,11 @@ export async function mount(el, ctx) {
     h("p", {class: "note"}, "후보 하나하나의 기준은 참고입니다. 실제 돈을 생각해 볼 수 있는 건 2차 점검에서 묶음이 통과하고 그 매매법도 통과했을 때뿐입니다."));
   }
 
+  /** The owner-exit league's picks are not 23: " (N개 다 차면 약 M개)" from the picks that carry a backtest band. */
+  const bandAll = (ix) => {
+    const n = ix.cands.filter((c) => c.kind === "core" && c.source && c.source.band).length;
+    return n ? ` (${fmt.int(n)}개 다 차면 약 ${fmt.num(n * 0.05, 1)}개)` : "";
+  };
   function paintLights(d) {
     const ix = LK.index(d);
     const rows = ix.cands.filter((c) => (ix.judge[c.id] || {}).band);
@@ -95,7 +100,7 @@ export async function mount(el, ctx) {
     put(lights, h("div", {class: "stats cl-stats3"},
       ui.stat("켜짐", fmt.int(on.length), on.length ? "아래 목록" : "없음", on.length ? "warn" : ""),
       ui.stat("범위 안", fmt.int(rows.length - on.length), "10번 이상 거래한 기존 36 후보 중"),
-      ui.stat("우연만으로 켜질 수", `약 ${fmt.num(rows.length * 0.05, 1)}개`, `기준이 있는 후보 ${fmt.int(rows.length)}개 × 5% (23개 다 차면 약 1개)`)),
+      ui.stat("우연만으로 켜질 수", `약 ${fmt.num(rows.length * 0.05, 1)}개`, `기준이 있는 후보 ${fmt.int(rows.length)}개 × 5%${lineupOn() ? bandAll(ix) : " (23개 다 차면 약 1개)"}`)),
     on.length ? ui.table([
       {label: "후보", l: true, get: (c) => LK.pickName(c)},
       {label: "기준 거래 수", get: (c) => `${fmt.int(ix.judge[c.id].band.n)}번`},

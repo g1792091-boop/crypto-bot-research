@@ -101,14 +101,14 @@ function paintOwner(el, ctx, d, want) {
   const when = (ms) => (ms ? ` (${fmt.mmdd(ms)})` : "");
   const sc = styleCounts(d);
   const groups = lineupGroups(d);
-  const kindList = (g) => h("dl", {class: "kv"}, ROLES.filter((r) => groups.some((x) => x.group === g && x.kinds.some((k) => k.role === r)))
+  const kindList = (g) => h("dl", {class: "kv kv-kinds"}, ROLES.filter((r) => groups.some((x) => x.group === g && x.kinds.some((k) => k.role === r)))
     .map((r) => h("div", null, h("dt", null, LK.roleChip(r)), h("dd", null, ROLE_DESC[r]))));
   el.append(
     ui.screenHead("읽는 법", "후보 리그를 처음 보는 분을 위한 안내"),
     ui.card({plate: "후보 리그가 뭔가요"},
-      h("p", null, `5년 백테스트에서 고른 커스텀값 후보 ${fmt.int(c.picks)}개(매매법 ${fmt.int(c.strategies)}개)를, 백테스트에 없던 앞으로의 시세로 종이 매매해 시험합니다. 돈이 된다는 증거가 아니라 모의로 지켜보려는 후보입니다. `,
-        `이번 리그는 ‘익절 · 손절을 어떻게 하면 나은가’를 보려고, 후보마다 청산 방법이 다른 계좌 ${fmt.int(c.kinds)}가지 종류를 나란히 돌립니다 (후보에 따라 없는 종류가 있어 계좌는 모두 ${fmt.int(c.accounts)}개). `,
-        `규칙봇과 같은 엔진 · 같은 크기 규칙(${LK.startUsd()} 시작, 좋은 자리 50/40배 · 보통 30/20배, 수수료 · 슬리피지 · 펀딩 · 강제청산 · 파산 포함)으로 계산하고 주문은 넣지 않습니다. `,
+      h("p", null, `5년 백테스트에서 고른 커스텀값 후보 ${fmt.int(c.picks)}개(매매법 ${fmt.int(c.strategies)}개)를, 백테스트에 없던 앞으로의 시세로 종이 매매해 시험합니다. 돈이 된다는 증거가 아니라 모의로 지켜보려는 후보입니다.`),
+      h("p", null, `이번 리그는 ‘익절 · 손절을 어떻게 하면 나은가’를 보려고, 후보마다 청산 방법이 다른 계좌 ${fmt.int(c.kinds)}가지 종류를 나란히 돌립니다 (후보에 따라 없는 종류가 있어 계좌는 모두 ${fmt.int(c.accounts)}개).`),
+      h("p", null, `규칙봇과 같은 엔진 · 같은 크기 규칙(${LK.startUsd()} 시작, 좋은 자리 50/40배 · 보통 30/20배, 수수료 · 슬리피지 · 펀딩 · 강제청산 · 파산 포함)으로 계산하고 주문은 넣지 않습니다. `,
         "배수와 익절 · 손절은 ", h("a", {href: "#/rules"}, "익절·손절·배수"), " 화면에 있습니다."),
       h("p", null, d && d.start_ms ? `규칙봇처럼 봇을 켠 때(설치 ${LK.startKo(d)})부터 시작했습니다: 모든 계좌가 그때 ${LK.startUsd()}이고, 거래 · 잔고 · 순위 · 날짜(시작한 날 = D+0)는 모두 그때부터입니다.`
         : `규칙봇처럼 봇을 켠 때(설치)부터 시작합니다: 모든 계좌가 그때 ${LK.startUsd()}이고, 거래 · 잔고 · 순위 · 날짜는 모두 그때부터입니다.`),

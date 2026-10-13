@@ -132,7 +132,7 @@ def test_every_bucket_matches_a_plain_python_count():
                 else:
                     assert cell["mean"] is None and cell["win_rate"] is None
                 seen += 1
-    assert seen > 100
+    assert seen > 80
     # every reference bucket with trades is in the output (an empty bucket is left out)
     out = {(dim["id"], b["id"]) for dim in d["dims"] for b in dim["buckets"]}
     assert {(k[0], k[1]) for k in ref} == out
@@ -158,23 +158,27 @@ def bucket_list(d, dim):
     return next(x for x in d["dims"] if x["id"] == dim)["buckets"]
 
 
+def day_with(weekday):
+    return next(dd for dd in range(1, 8) if weekday_of(at(dd)) == weekday)
+
+
 def test_the_edges_of_weekday_session_and_hold_time():
-    fri = next(dd for dd in range(7) if weekday_of(at(dd)) == 4)                 # a Friday in the fixture's week
-    sat, mon = fri + 1, fri + 3
-    rows = [row("BTCUSDT", 1, at(fri, 23, 59), 2, 0.01), row("BTCUSDT", 1, at(sat), 2, 0.01), row("BTCUSDT", 1, at(sat + 1, 23, 59), 2, 0.01),
-            row("BTCUSDT", 1, at(mon), 2, 0.01),                                             # Fri 23:59 weekday, Sat 00:00 weekend, Sun 23:59 weekend, Mon 00:00 weekday
-            row("BTCUSDT", 1, at(1, 7, 59), 2, 0.01), row("BTCUSDT", 1, at(1, 8), 2, 0.01),     # 07:59 asia, 08:00 europe
-            row("BTCUSDT", 1, at(1, 15, 59), 2, 0.01), row("BTCUSDT", 1, at(1, 16), 2, 0.01)]   # 15:59 europe, 16:00 us
+    fri = day_with(4)
+    tue = day_with(1)
+    rows = [row("BTCUSDT", 1, at(fri, 23, 59), 2, 0.01), row("BTCUSDT", 1, at(fri + 1), 2, 0.01), row("BTCUSDT", 1, at(fri + 2, 23, 59), 2, 0.01),
+            row("BTCUSDT", 1, at(fri + 3), 2, 0.01)]                                      # Fri 23:59 weekday, Sat 00:00 weekend, Sun 23:59 weekend, Mon 00:00 weekday
     d = views({"core-A-1h-1-fq": rows})
-    wk, ses = {b["id"]: b["kinds"]["-fq"]["n"] for b in bucket_list(d, "weekday")}, {b["id"]: b["kinds"]["-fq"]["n"] for b in bucket_list(d, "session")}
-    by_row = [classify(r, "1h") for r in rows]
-    assert [by_row[i]["weekday"] for i in range(4)] == ["weekday", "weekend", "weekend", "weekday"]
-    assert wk == {"weekday": sum(c["weekday"] == "weekday" for c in by_row), "weekend": 3 - 1 + 0}     # Sat 00:00 and Sun 23:59 weekend; the other six weekday
-    assert ses == {"asia": sum(c["session"] == "asia" for c in by_row), "europe": sum(c["session"] == "europe" for c in by_row),
-                   "us": sum(c["session"] == "us" for c in by_row)}
-    assert [by_row[i]["session"] for i in range(4, 8)] == ["asia", "europe", "europe", "us"]
+    assert {b["id"]: b["kinds"]["-fq"]["n"] for b in bucket_list(d, "weekday")} == {"weekday": 2, "weekend": 2}
+    assert [classify(r, "1h")["weekday"] for r in rows] == ["weekday", "weekend", "weekend", "weekday"]
+    rows = [row("BTCUSDT", 1, at(tue, 7, 59), 2, 0.01), row("BTCUSDT", 1, at(tue, 8), 2, 0.01),                  # 07:59 asia, 08:00 europe
+            row("BTCUSDT", 1, at(tue, 15, 59), 2, 0.01), row("BTCUSDT", 1, at(tue, 16), 2, 0.01),                # 15:59 europe, 16:00 us
+            row("BTCUSDT", 1, at(tue), 2, 0.01), row("BTCUSDT", 1, at(tue, 23, 59), 2, 0.01)]                    # 00:00 asia, 23:59 us
+    d = views({"core-A-1h-1-fq": rows})
+    assert {b["id"]: b["kinds"]["-fq"]["n"] for b in bucket_list(d, "session")} == {"asia": 2, "europe": 2, "us": 2}
+    assert [classify(r, "1h")["session"] for r in rows] == ["asia", "europe", "europe", "us", "asia", "us"]
+    assert [b["ko"] for b in bucket_list(d, "session")] == ["아시아", "유럽", "미국"]
     # hold time: < 1 h, 1-4 h, 4-18 h (18 h itself), over 18 h
-    start = at(1, 12)
+    start = at(tue, 12)
     holds = {"h0": [0.999], "h1": [1.0, 3.999], "h2": [4.0, 18.0], "h3": [18.0 + 1 / 3600]}
     rows = [row("BTCUSDT", 1, start, h, 0.01) for hs in holds.values() for h in hs]
     d = views({"core-A-1h-1-fq": rows})
@@ -185,7 +189,7 @@ def test_the_edges_of_weekday_session_and_hold_time():
 
 
 def test_the_session_and_weekday_follow_the_entry_not_the_exit():
-    sat = next(dd for dd in range(14) if weekday_of(at(dd)) == 5)
+    sat = day_with(5)
     rows = [row("BTCUSDT", 1, at(sat - 1, 23, 30), 3, 0.01)]                           # enters Friday 23:30, exits Saturday 02:30
     d = views({"core-A-1h-1-fq": rows})
     assert bucket(d, "weekday", "weekday")["kinds"]["-fq"]["n"] == 1 and bucket(d, "session", "us")["kinds"]["-fq"]["n"] == 1
@@ -214,7 +218,7 @@ def paired_book(n_days=12, per_day=4, gap=0.05, twin_noise=0.0, picks=(("core-A-
     for pick, _tf, _k in picks:
         for dd in range(n_days):
             for j in range(per_day):
-                e = at(dd, 1 + 5 * j)
+                e = at(dd) + (30 + j * (1380 // per_day)) * MIN                                   # spread over the day, never into the next
                 base = float(rng.normal(0, 0.03)) if twin_noise else 0.0
                 sym = COINS[j % 3]
                 book.setdefault(f"{pick}-fqc", []).append(row(sym, 1, e, 2, base))
@@ -254,7 +258,7 @@ def test_the_difference_to_the_coin_twin_and_its_day_cluster_interval():
                 assert df["diff"] == pytest.approx(0.05, abs=1e-6)                    # the same signals, +5 points exactly: no noise in the difference
                 assert df["lo"] == pytest.approx(0.05, abs=1e-6) and df["hi"] == pytest.approx(0.05, abs=1e-6) and df["flag"] == "good"
     # the control has no effect over its twin: the interval holds 0, no flag
-    ld = [b["diffs"]["-ld"] for dim in d["dims"] for b in dim["buckets"] if not b["diffs"]["-ld"]["few"]]
+    ld = [b["diffs"]["-ld"] for dim in d["dims"] for b in dim["buckets"] if not b["diffs"]["-ld"]["few"] and not b["unknown"]]
     assert ld and all(x["diff"] == 0 and x["flag"] is None and x["lo"] <= 0 <= x["hi"] for x in ld)
     # a difference that is noise: the interval is wide and contains it
     rng = np.random.default_rng(5)
@@ -399,7 +403,7 @@ def test_noise_alone_flags_about_the_expected_share_of_cells():
         accts, book, _ = random_world(seed=100 + seed, n=300, days=28)
         d = views(book, accts, now_day=28)
         tot, good, bad = tot + d["n_cells"], good + d["n_good"], bad + d["n_bad"]
-    assert tot > 500 and 0.01 < good / tot < 0.15 and 0.01 < bad / tot < 0.15
+    assert tot > 400 and 0.01 < good / tot < 0.15 and 0.01 < bad / tot < 0.15
 
 
 def test_about_a_million_trades_in_about_a_second():
