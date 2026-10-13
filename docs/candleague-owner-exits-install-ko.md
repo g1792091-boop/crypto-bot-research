@@ -55,7 +55,7 @@
 
 **1. 최신 코드 받기**
 ```bash
-cd /root/crypto-bot-research && git pull
+cd /root/crypto-bot-research && git fetch origin claude/keen-pasteur-wav02u && git checkout claude/keen-pasteur-wav02u && git pull origin claude/keen-pasteur-wav02u
 ```
 
 **2. 엔진 잠깐 멈추기** (대시보드는 계속 켜져 있어도 됩니다)
