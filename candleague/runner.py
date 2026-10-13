@@ -114,6 +114,7 @@ def fingerprint(accts: list[dict]) -> str:
                        + (["own_target", RX.native_hash()] if a.get("own_target") else [])
                        + (["gate", a["gate"], RX.GATE_PARAMS] if a.get("gate") else [])
                        + (["equity0", X.start_equity()] if X.start_equity() != V3_INITIAL else [])
+                       + (["min_lev", X.min_leverage()] if X.min_leverage() is not None else [])
                        + (["ulad", list(X.ULAD_FIRST + X.ULAD_SECOND + (X.ULAD_STEP,))] if str(a["exit"]).startswith(X.ULAD + "|") else [])
                        for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time;
     #                                                         the owner-exit league's weekend switch (an account without it: as before)
@@ -642,7 +643,7 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
     rows = account_rows(league.conn, league.accts, league.engines, ds_money, book)
     # the verdicts from the full rows (labels and counts only: a hidden DeepSeek pick still gets its pass / fail label)
     verdicts = judge(rows if ds_money else account_rows(league.conn, league.accts, league.engines, True, book))
-    doc = {"equity0": EQUITY, "generated_ms": now_ms, "done_ms": league.done, "lag_s": max(0, (now_ms - league.done) // 1000),
+    doc = {"equity0": EQUITY, "min_lev": X.min_leverage(), "generated_ms": now_ms, "done_ms": league.done, "lag_s": max(0, (now_ms - league.done) // 1000),
            "catching": catching(league, now_ms), "start_ms": league.start_ms, "started_ms": league.meta.get("started_ms"), "accounts": rows,
            "judge": verdicts, "notes": league.meta.get("notes", []), "ds_money": ds_money,
            "watch": SM.watch_summary(league.accts, book, now_ms, ds_money), "server": server_info(pass_s)}

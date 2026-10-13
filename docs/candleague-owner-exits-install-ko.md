@@ -44,7 +44,7 @@
 - 모두 **1,122계좌** (후보 49개 × 26종류에서, 자체 구조 코드가 없는 11개 후보의 3종류, 자체 가격 코드가 없는 36개 후보의 2종류와 손절이 이미 같은 후보의 중복 계좌를 뺀 것). 1/4 크기 · 청산만 바꾼 기본값 · 기본값 계좌는 이번에 뺐습니다.
   그래서 예전 점검(11/11 · 12/11 · 1/11)과 "기준 통과" 판정은 이 리그에서 하지 않고, 대신 **14일째 보기만 · 28일째 한 번 판정**하는 새 규칙을 씁니다(아래).
 - 새 11개는 "약한 단서" 매매법입니다(5년 시험에서 우연 보정만 빼고 통과한 숫자가 있는 매매법 중, 이번 주 규칙봇 상위와 겹친 것). 돈이 된다는 증거가 아니라 모의로 보려는 것입니다.
-- **새 기록 파일**(`league_exits.db`)에서 설치한 때부터 모든 계좌 **$1,000**으로 시작합니다(설정 `CANDLEAGUE_EQUITY=1000`. 규칙봇은 $5,000 그대로). 지금 기록(`league.db`)은 **지우지 않고 그 자리에 그대로** 두고, 사본도 하나 만들어 둡니다.
+- **새 기록 파일**(`league_exits.db`)에서 설치한 때부터 모든 계좌 **$1,000**으로 시작합니다(설정 `CANDLEAGUE_EQUITY=1000`. 규칙봇은 $5,000 그대로). 배수는 **50 → 40 → 30배만** 씁니다(설정 `CANDLEAGUE_MIN_LEV=30`: 20배 없음, 규칙봇은 20배도 씀). 손절이 넓어 30배에서도 안 맞는 신호는 진입하지 않으므로 거래가 줄 수 있습니다. 지금 기록(`league.db`)은 **지우지 않고 그 자리에 그대로** 두고, 사본도 하나 만들어 둡니다.
   지금 열려 있는 포지션은 새 리그로 옮겨지지 않고 예전 기록에 남습니다.
 
 **판정은 미리 정한 규칙으로만 합니다** → `docs/candleague-decision-protocol-ko.md` (화면 **판정**). 28일째 한 번, 같은 신호 짝 비교와 우연 보정을 거쳐 통과한 것만 인정하고, 하나도 통과하지 못하면 "새 구조에서 우위를 찾지 못했다"가 결론입니다.
@@ -87,11 +87,11 @@ sudo chown root:candleague /etc/candleague/candidates.json && sudo chmod 640 /et
 **5. 설치 시각을 정하고 설정 파일에 적기** (설치 시각 = 지금을 5분 단위로 내린 UTC 시각)
 ```bash
 T=$(date -u -d "@$(( $(date +%s) / 300 * 300 ))" +%Y-%m-%dT%H:%MZ); echo "설치 시각: $T"
-sudo sed -i '/^# 청산 비교 리그/d;/^CANDLEAGUE_RULES=/d;/^CANDLEAGUE_CANDIDATES=/d;/^CANDLEAGUE_DB=/d;/^CANDLEAGUE_START=/d;/^CANDLEAGUE_EXPECT_START=/d;/^CANDLEAGUE_EQUITY=/d' /etc/candleague/candleague.env
-printf '%s\n' "# 청산 비교 리그 (설치 $T)" "CANDLEAGUE_RULES=/etc/candleague/rules.json" "CANDLEAGUE_CANDIDATES=/etc/candleague/candidates.json" "CANDLEAGUE_DB=/var/lib/candleague/league_exits.db" "CANDLEAGUE_START=$T" "CANDLEAGUE_EXPECT_START=$T" "CANDLEAGUE_EQUITY=1000" | sudo tee -a /etc/candleague/candleague.env > /dev/null
-sudo grep -E '^CANDLEAGUE_(RULES|CANDIDATES|DB|START|EXPECT_START|EQUITY)=' /etc/candleague/candleague.env
+sudo sed -i '/^# 청산 비교 리그/d;/^CANDLEAGUE_RULES=/d;/^CANDLEAGUE_CANDIDATES=/d;/^CANDLEAGUE_DB=/d;/^CANDLEAGUE_START=/d;/^CANDLEAGUE_EXPECT_START=/d;/^CANDLEAGUE_EQUITY=/d;/^CANDLEAGUE_MIN_LEV=/d' /etc/candleague/candleague.env
+printf '%s\n' "# 청산 비교 리그 (설치 $T)" "CANDLEAGUE_RULES=/etc/candleague/rules.json" "CANDLEAGUE_CANDIDATES=/etc/candleague/candidates.json" "CANDLEAGUE_DB=/var/lib/candleague/league_exits.db" "CANDLEAGUE_START=$T" "CANDLEAGUE_EXPECT_START=$T" "CANDLEAGUE_EQUITY=1000" "CANDLEAGUE_MIN_LEV=30" | sudo tee -a /etc/candleague/candleague.env > /dev/null
+sudo grep -E '^CANDLEAGUE_(RULES|CANDIDATES|DB|START|EXPECT_START|EQUITY|MIN_LEV)=' /etc/candleague/candleague.env
 ```
-화면에 나온 **설치 시각(예: 2026-10-13T03:05Z)을 적어 두세요.** 마지막 줄에 여섯 줄(RULES, CANDIDATES, DB, START, EXPECT_START, EQUITY=1000)이 보이면 됩니다.
+화면에 나온 **설치 시각(예: 2026-10-13T03:05Z)을 적어 두세요.** 마지막 줄에 일곱 줄(RULES, CANDIDATES, DB, START, EXPECT_START, EQUITY=1000, MIN_LEV=30)이 보이면 됩니다.
 엔진은 시작 시각이 이 설치 시각과 다르면 아무것도 쓰지 않고 멈춥니다(시작 지킴이). 그러니 날짜가 엉뚱하게 시작될 일은 없습니다.
 
 **6. 설치 (코드 복사 + 엔진 켜기)**
@@ -126,7 +126,7 @@ sudo -u candleague /opt/candleague/venv/bin/python -m candleague.rulex accounts 
 
 ```bash
 sudo systemctl stop candleague-live
-sudo sed -i '/^# 청산 비교 리그/d;/^CANDLEAGUE_RULES=/d;/^CANDLEAGUE_CANDIDATES=/d;/^CANDLEAGUE_DB=/d;/^CANDLEAGUE_START=/d;/^CANDLEAGUE_EXPECT_START=/d;/^CANDLEAGUE_EQUITY=/d' /etc/candleague/candleague.env
+sudo sed -i '/^# 청산 비교 리그/d;/^CANDLEAGUE_RULES=/d;/^CANDLEAGUE_CANDIDATES=/d;/^CANDLEAGUE_DB=/d;/^CANDLEAGUE_START=/d;/^CANDLEAGUE_EXPECT_START=/d;/^CANDLEAGUE_EQUITY=/d;/^CANDLEAGUE_MIN_LEV=/d' /etc/candleague/candleague.env
 sudo systemctl start candleague-live candleague-watch.timer
 ```
 - 예전 리그(`league.db`, 후보 · 1/4 · 청산만 · 기본값 · 동전 190계좌)가 **멈춘 곳부터 지금까지 따라잡고** 이어 갑니다(같은 공개 시세 ·

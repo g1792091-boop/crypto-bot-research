@@ -81,3 +81,24 @@ def test_every_module_that_prints_or_replays_the_start_wallet_reads_the_environm
         out = subprocess.run([sys.executable, "-c", f"import sys; sys.path.insert(0, {ROOT!r}); " + code], capture_output=True, text=True, env=e, cwd=ROOT)
         assert out.returncode == 0, out.stderr[-400:]
         assert out.stdout.strip() == want
+
+
+# ---------------------------------------------------------------- the leverage floor (owners 2026-10-13): CANDLEAGUE_MIN_LEV=30 -> 50 / 40 / 30, no 20x
+def test_min_leverage_env_drops_the_20x_tier_only_in_the_league(monkeypatch):
+    from candleague import exits as X
+    from candleague import runner as R
+    monkeypatch.delenv("CANDLEAGUE_MIN_LEV", raising=False)
+    assert X.min_leverage() is None and [t.leverages for t in X.settings_for("ladderU|2").tiers] == [(50,), (40,), (30,), (20,)]
+    monkeypatch.setenv("CANDLEAGUE_MIN_LEV", "30")
+    assert X.min_leverage() == 30
+    assert [(t.name, t.margin_frac, t.leverages) for t in X.settings_for("ladderU|2").tiers] == [("best", 0.5, (50,)), ("best", 0.4, (40,)), ("normal", 0.3, (30,))]
+    quarter = X.settings_for("ladderU|2", size=0.25).tiers                      # a size factor keeps the floor
+    assert [t.leverages for t in quarter] == [(50,), (40,), (30,)]
+    acct = {"id": "a", "kind": "core", "name": "N", "tf": "1h", "combo": {}, "exit": "ladderU|2", "role": "cand"}
+    with_floor = R.fingerprint([acct])
+    monkeypatch.delenv("CANDLEAGUE_MIN_LEV")
+    assert R.fingerprint([acct]) != with_floor                                    # the floor restarts the league instead of mixing two rules in one record
+    for bad in ("0", "51", "x"):
+        monkeypatch.setenv("CANDLEAGUE_MIN_LEV", bad)
+        with pytest.raises(ValueError):
+            X.min_leverage()

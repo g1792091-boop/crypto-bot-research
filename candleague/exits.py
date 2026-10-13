@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import math
 import os
+from typing import Optional
 
 import numpy as np
 
@@ -248,15 +249,39 @@ def start_equity() -> float:
     return v
 
 
+MIN_LEV_ENV = "CANDLEAGUE_MIN_LEV"
+
+
+def min_leverage() -> Optional[int]:
+    """The lowest leverage the league may pick: the environment's ``CANDLEAGUE_MIN_LEV`` (the owners' new league, 2026-10-13: 30, so the
+    ladder is 50 -> 40 -> 30 and a signal whose stop does not fit at 30x is not entered), else None (the paper bot's own 50/40/30/20).
+    A value that is not a whole number from 1 to 50 is an error, never a silent default."""
+    raw = (os.environ.get(MIN_LEV_ENV) or "").strip()
+    if not raw:
+        return None
+    try:
+        v = int(raw)
+    except ValueError:
+        raise ValueError(f"{MIN_LEV_ENV}={raw!r} is not a whole number") from None
+    if not 1 <= v <= 50:
+        raise ValueError(f"{MIN_LEV_ENV}={raw!r} must be from 1 to 50")
+    return v
+
+
 def settings_for(name: str, size: float = 1.0, **kw):
     """The v4 settings with this exit's lock and take-profit mode (``kw``: other v3_settings overrides). ``size``
     multiplies every tier's margin fraction (leverages kept, as research/fullgrid/sizing.py's size_vector)."""
     s = spec(name)
     kw = {**kw, "ladder_first_lock": s["first_lock"], "ladder_step": s["step"], "ladder_trigger_gap": s["gap"]}
     kw.setdefault("initial_equity", start_equity())
+    lev_min = min_leverage()
+    if lev_min is not None and "tiers" not in kw:             # the owners' league: no leverage below the floor (a tier with none left is dropped)
+        from paperbot.config import V3_QUALITY_TIERS, Tier
+        kept = tuple(Tier(t.name, t.margin_frac, tuple(v for v in t.leverages if v >= lev_min)) for t in V3_QUALITY_TIERS)
+        kw["tiers"] = tuple(t for t in kept if t.leverages)
     if size != 1.0:
         from paperbot.config import V3_QUALITY_TIERS, Tier
-        tiers = tuple(Tier(t.name, round(t.margin_frac * size, 6), t.leverages) for t in V3_QUALITY_TIERS)
+        tiers = tuple(Tier(t.name, round(t.margin_frac * size, 6), t.leverages) for t in (kw.get("tiers") or V3_QUALITY_TIERS))
         kw.update(tiers=tiers, min_margin_frac=min(t.margin_frac for t in tiers),
                   max_margin_frac=max(0.50, max(t.margin_frac for t in tiers)))
     if not s["ladder"]:
