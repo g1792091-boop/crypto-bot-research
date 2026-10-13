@@ -175,7 +175,7 @@ def test_versus_verdict_gate_table_and_best_marks(tmp_path):
     ld = next(k for k in ks if k["role"] == "ld")
     up = sum(1 for k in main if k["mean_roe"] > ld["mean_roe"])
     n_min = min(k["trades"] for k in main + [ld])
-    assert len(main) == 4 and sum(1 for k in ks if k["group"] == "research") >= 1            # the file's lineup: four 메인 kinds
+    assert len(main) == sum(1 for e in OWNER if e["label_ko"].startswith("메인")) >= 4 and sum(1 for k in ks if k["group"] == "research") >= 1   # the file's 메인 kinds
     o = _run(tmp_path, "versus", _doc(), sels={"hero": ".kd-hero", "bestrow": "tr.kd-main td.kd-best", "best": "td.kd-best", "grp": "tr.kd-grp",
                                                 "prog": ".kd-hero .dl-progbar", "coin": ".kd-coin", "live": "tr.kd-live"})
     page, hero = o["text"], o["sel"]["hero"][0]["t"]
@@ -214,17 +214,17 @@ def test_versus_verdict_gate_table_and_best_marks(tmp_path):
 
 
 def test_versus_enough_trades_gives_the_comparison_sentence_and_the_card_view(tmp_path):
-    lu, ks = _kinds(scale=4.0)
+    lu, ks = _kinds(scale=10.0)
     main = [k for k in ks if k["group"] == "main"]
     ld = next(k for k in ks if k["role"] == "ld")
     up = sum(1 for k in main if k["mean_roe"] > ld["mean_roe"])
     assert min(k["trades"] for k in main + [ld]) >= 300
-    o = _run(tmp_path, "versus", _doc(scale=4.0), sels={"hero": ".kd-hero .dl-vbig"})
+    o = _run(tmp_path, "versus", _doc(scale=10.0), sels={"hero": ".kd-hero .dl-vbig"})
     big = o["sel"]["hero"][0]["t"]
     assert big == f"메인 {len(main)}개 중 {up}개가 대조보다 거래당 순수익이 높습니다"
     assert "아직 판정하기엔" not in o["text"] and "가장 높은 메인은" in o["text"]
     # the coin twin below the 대조 reads as a warning sentence
-    d = _doc(scale=4.0)
+    d = _doc(scale=10.0)
     next(k for k in d["kinds"] if k["role"] == "ldc")["mean_roe"] = 0.03
     o = _run(tmp_path, "versus", d)
     assert "이기지 못했습니다" in o["text"] and "진입에 실력이 없다는 뜻" in o["text"]
