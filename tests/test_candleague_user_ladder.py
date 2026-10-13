@@ -240,14 +240,21 @@ def test_the_quick_stop_entry_builds_for_every_owner_pick_and_runs_the_studys_ru
 
 
 def test_the_rules_file_the_owners_install_builds_the_final_lineup():
-    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: ten account kinds on the 49 picks."""
+    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: sixteen account kinds on the 49 picks."""
     doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
     cfg = RX.normalize_owner(doc)
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
-    assert [e["suffix"] for e in doc["owner_exits"]] == ["-ld", "-ldc", "-ld2", "-e", "-ma", "-tp10", "-gb", "-fq", "-oc", "-wk"]
-    assert len(owner) == 49 and len(accts) == 49 * 10 - sum(1 for c in owner if float(c["exit"].split("|")[1]) <= 2) == 478
+    assert [e["suffix"] for e in doc["owner_exits"]] == ["-ld", "-ldc", "-ldp", "-ld1", "-l5", "-l20", "-e", "-tp10", "-gb", "-ma", "-fq", "-sb",
+                                                         "-ts", "-ch", "-oc", "-wk"]
+    ks = [float(c["exit"].split("|")[1]) for c in owner]
+    want = 49 * 16 - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)            # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
+    assert len(owner) == 49 and len(accts) == want == 770
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
     assert sum(1 for a in accts if a.get("coin")) == 49 and sum(1 for a in accts if a["role"] == "cand") == 49
+    by = {a["id"]: a for a in accts}
+    wide = next(c["id"] for c in owner if c["exit"].split("|")[1] == "4")
+    assert (by[wide + "-ld"]["exit"], by[wide + "-ldp"]["exit"], by[wide + "-ld1"]["exit"]) == ("ladderU|2", "ladderU|4", "ladderU|1")
+    assert by[wide + "-ldc"]["of"] == wide + "-ld"                                      # the coin twin is the primary's

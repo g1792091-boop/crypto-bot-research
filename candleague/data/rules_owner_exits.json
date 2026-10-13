@@ -4,7 +4,8 @@
     {
       "suffix": "-ld",
       "exit": "ladderU",
-      "label_ko": "계단 익절 (실전 후보)"
+      "stop_max": 2,
+      "label_ko": "계단 익절 · 손절 최대 2 ATR (실전 후보)"
     },
     {
       "suffix": "-ldc",
@@ -13,19 +14,29 @@
       "label_ko": "계단 · 동전 던지기"
     },
     {
-      "suffix": "-ld2",
+      "suffix": "-ldp",
       "exit": "ladderU",
-      "stop_max": 2,
-      "label_ko": "계단 · 손절 최대 2 ATR"
+      "label_ko": "계단 · 후보의 손절 그대로"
+    },
+    {
+      "suffix": "-ld1",
+      "exit": "ladderU",
+      "stop_max": 1,
+      "label_ko": "계단 · 손절 최대 1 ATR"
+    },
+    {
+      "suffix": "-l5",
+      "exit": "ladder5",
+      "label_ko": "계단 5%부터 (7%→5%)"
+    },
+    {
+      "suffix": "-l20",
+      "exit": "ladder20",
+      "label_ko": "계단 20%부터 (22%→20%)"
     },
     {
       "suffix": "-e",
       "label_ko": "지금 청산"
-    },
-    {
-      "suffix": "-ma",
-      "rule": "F2.n50.b",
-      "label_ko": "이동평균 이탈"
     },
     {
       "suffix": "-tp10",
@@ -39,9 +50,29 @@
       "label_ko": "큰 수익 반납 보호"
     },
     {
+      "suffix": "-ma",
+      "rule": "F2.n50.b",
+      "label_ko": "이동평균 이탈"
+    },
+    {
       "suffix": "-fq",
       "rule": "F6.w3.d0.5",
       "label_ko": "빠른 손절 (관점 무너지면)"
+    },
+    {
+      "suffix": "-sb",
+      "rule": "F1.w3.a",
+      "label_ko": "구조 무너지면 청산"
+    },
+    {
+      "suffix": "-ts",
+      "rule": "F7h.H4.a",
+      "label_ko": "시간 제한 4시간"
+    },
+    {
+      "suffix": "-ch",
+      "rule": "F4.m1.5.a",
+      "label_ko": "추적 손절 1.5 ATR"
     },
     {
       "suffix": "-oc",

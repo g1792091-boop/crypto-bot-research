@@ -466,7 +466,7 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # new entries only.
 OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
-OWNER_MAX = 10
+OWNER_MAX = 20
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
 TP_NAMES = tuple(r[0] for r in X.TP_RULES) + (X.ULAD,)
 WEEKEND_KO = "토 00:00 ~ 월 00:00 UTC (한국 토 09:00 ~ 월 09:00)"
