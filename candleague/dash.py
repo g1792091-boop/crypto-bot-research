@@ -640,6 +640,7 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
 
     picks = {}
     lineup = doc.get("lineup") or None                  # the owner-exit league: the pick's accounts are <pick><suffix>
+    cands = [c for c in cands if c.get("exit")]         # a pick row without its exit (a hand-made or half-written snapshot) is left out, never an error
     for c in cands:
         if lineup and c.get("pick"):
             ids = {x["role"]: f"{c['pick']}{x['suffix']}" for x in lineup}

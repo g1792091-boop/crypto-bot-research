@@ -77,6 +77,24 @@ export function gateNode(g) {
   }
   return ui.missing("종류별 숫자");
 }
+/**
+ * The lineup's kinds by group, in the lineup's order (요약's hero): [{group, ko, kinds: [{role, suffix, name, live}]}], an empty group left
+ * out. Same group rule and same short name as the table (groupOf, kindName); a name that two kinds share (every 동전 짝 is "동전", three
+ * 대조 are "계단") takes the label without its group word, so no two chips read alike.
+ */
+export function lineupGroups(d) {
+  const lu = Array.isArray(d && d.lineup) ? d.lineup.filter((k) => k && typeof k === "object" && k.role) : [];
+  const seen = {};
+  for (const k of lu) { const n = kindName(k); seen[n] = (seen[n] || 0) + 1; }
+  const named = (k) => {
+    const n = kindName(k);
+    if (seen[n] < 2) return n;
+    return String(k.label_ko || "").replace(/^(메인|대조|연구|필터)\s*·\s*/, "").replace(/\s*\(실전 후보\)\s*$/, "").trim() || n;
+  };
+  return GROUP_ORDER.map((g) => ({group: g, ko: GROUP_KO[g],
+    kinds: lu.filter((k) => groupOf(k) === g).map((k) => ({role: k.role, suffix: k.suffix, name: named(k), live: k.role === LIVE_ROLE}))}))
+    .filter((x) => x.kinds.length);
+}
 /** The start wallet in words from the snapshot itself ("$1,000"); without ``equity0`` no dollar figure is made up. */
 export const startTxt = (d) => (d && Number(d.equity0) > 0 ? LK.usd0(Number(d.equity0)) : "시작 잔고");
 /** The 대조 kind of the snapshot (``pairs.control`` names its suffix) and the coin-flip twin. */
@@ -220,7 +238,7 @@ export function coinSentence(S) {
   const small = Math.min(ctl.n, coin.n) < SMALL_N ? ` (거래가 ${cnt(Math.min(ctl.n, coin.n))}뿐이라 운일 수 있습니다)` : "";
   return a > b
     ? `방향 실력 확인: 대조(${pc(a, true)})가 동전 던지기(${pc(b, true)})보다 거래당 ${ppTxt(a - b)} 높습니다. 진입 방향에 실력이 있을 수 있습니다${small}.`
-    : `방향 실력 확인: 대조(${pc(a, true)})가 동전 던지기(${pc(b, true)})를 이기지 못했습니다. 이대로면 진입에 실력이 없다는 뜻이고, 청산을 바꿔도 소용없습니다${small}.`;
+    : `방향 실력 확인: 대조(${pc(a, true)})가 동전 던지기(${pc(b, true)})를 이기지 못했습니다. 이대로면 진입 방향에 실력이 없을 수 있고, 그러면 청산을 바꿔도 의미가 작습니다${small}.`;
 }
 
 // ---------------------------------------------------------------- the boxes
@@ -235,17 +253,18 @@ function readGuide() {
 function ruleBox() {
   return ui.card({plate: "어떻게 고르나요", sub: "미리 정한 규칙 · 숫자를 본 뒤에 바꾸지 않습니다", cls: "kd-rule"},
     h("ol", {class: "kd-list"},
-      h("li", null, `2~3주 이상 돌리고, 비교하는 종류마다 거래가 ${fmt.int(MIN_TRADES)}건 넘은 뒤에 고릅니다. 그 전에는 운일 수 있습니다.`),
-      h("li", null, h("b", null, "거래당 순수익이 높은 것을 먼저"), " 봅니다. 비슷하면 ", h("b", null, "낙폭이 낮은 것"), "을 고릅니다."),
+      h("li", null, h("b", null, "고르는 것은 판정 화면의 규칙으로만"), " 합니다. 14일째에는 숫자만 보고 아무것도 바꾸지 않고, 판정은 28일째에 한 번만 합니다 (",
+        h("a", {href: "#/decision"}, "판정 화면"), ")."),
+      h("li", null, "이 화면의 ★ · 높고 낮음은 ", h("b", null, "참고"), "입니다. 종류가 많아서 가장 높은 것은 운이 좋았을 뿐일 수 있습니다. 판정은 같은 신호끼리 한 쌍씩 비교하고, 하나도 통과하지 못하면 ‘우위 없음’입니다."),
       h("li", null, "승률만 보고 고르지 않습니다. 승률이 높아도 거래당 순수익이 낮으면 소용없습니다."),
-      h("li", null, "동전 던지기 짝을 못 이기면 진입 자체에 실력이 없는 것입니다. 청산을 바꿔도 소용없습니다.")));
+      h("li", null, "동전 던지기 짝을 못 이기면 진입 방향에 실력이 없을 수 있습니다. 그때는 청산을 바꿔도 의미가 작습니다.")));
 }
 function coinBox(S) {
   if (!S.coin) return null;
   const small = sampleNote(Math.min(S.ctl ? S.ctl.n : 0, S.coin.n));
   return ui.card({plate: "방향 실력 확인", sub: `${S.coin.suffix} · 방향 실력 확인용: 진입 방향을 동전으로 정한 짝`, cls: "kd-coin"},
     h("p", {class: "dl-vline"}, coinSentence(S) || "아직 비교할 거래가 없습니다."),
-    h("p", {class: "note"}, "동전 던지기 계좌는 대조와 같은 시각에 같은 청산으로 들어가되 롱/숏만 동전으로 정합니다. 대조가 이 계좌를 이기지 못하면 방향을 맞힌 것이 아니라 운입니다."),
+    h("p", {class: "note"}, "동전 던지기 계좌는 대조와 같은 시각에 같은 청산으로 들어가되 롱/숏만 동전으로 정합니다. 대조가 이 계좌를 이기지 못하면 방향을 맞힌 것이 아니라 운일 수 있습니다."),
     small ? h("p", {class: "note"}, small) : null);
 }
 function picksNote(S) {
@@ -253,8 +272,8 @@ function picksNote(S) {
   if (!c) return null;
   const fewer = S.main.filter((k) => num(k.accounts) != null && num(c.accounts) != null && Number(k.accounts) < Number(c.accounts));
   if (!fewer.length) return null;
-  return h("p", {class: "refnote"}, h("b", null, "같은 매매법끼리가 아닙니다"),
-    ` · ${fewer.map((k) => `‘${k.name}’은 ${fmt.int(k.accounts)}개`).join(" · ")} 매매법에만 계좌가 있고(그 매매법 자신의 구조가 있는 것만), 대조는 ${fmt.int(c.accounts)}개 전부에 있습니다. `,
+  return h("p", {class: "refnote"}, h("b", null, "같은 후보끼리가 아닙니다"),
+    ` · ${fewer.map((k) => `‘${k.name}’은 ${fmt.int(k.accounts)}개`).join(" · ")} 후보에만 계좌가 있고(그 매매법에 자체 구조 · 가격 코드가 있는 후보만), 대조는 ${fmt.int(c.accounts)}개 후보 전부에 있습니다. `,
     "숫자 차이에는 매매법 구성의 차이가 섞여 있습니다. 같은 신호끼리 정확히 비교하려면 ", h("a", {href: "#/pairs"}, "짝 비교"), "를 보세요.");
 }
 
@@ -262,7 +281,7 @@ function picksNote(S) {
 function nameCell(k, S) {
   return h("td", {class: "l kd-nm"},
     h("div", {class: "kd-nmh"}, h("b", null, k.name), k.role === LIVE_ROLE ? ui.pill("실전 후보", "accent") : null, k === S.ctl ? ui.pill("기준", "") : null),
-    h("small", {class: "muted"}, `${k.suffix}${num(k.accounts) != null ? ` · ${fmt.int(k.accounts)}개 매매법` : ""}${k.open_now ? ` · 열린 ${fmt.int(k.open_now)}` : ""}`),
+    h("small", {class: "muted"}, `${k.suffix}${num(k.accounts) != null ? ` · ${fmt.int(k.accounts)}개 후보` : ""}${k.open_now ? ` · 열린 ${fmt.int(k.open_now)}` : ""}`),
     k.role === COIN_ROLE ? h("small", {class: "kd-coinnote"}, "방향 실력 확인용: 진입 방향을 동전으로 정한 짝") : null);
 }
 function diffEl(dd, long) {
@@ -302,7 +321,7 @@ function kindCard(k, S, best) {
   const small = k.n > 0 ? sampleNote(k.n) : null;
   return h("article", {class: ["kd-kcard", `kd-${k.group}`, k.role === LIVE_ROLE ? "kd-live" : ""], "aria-label": k.name},
     h("div", {class: "kd-kh"}, groupChip(k.group), k.role === LIVE_ROLE ? ui.pill("실전 후보", "accent") : null, h("b", null, k.name),
-      h("small", {class: "muted"}, `${k.suffix}${num(k.accounts) != null ? ` · ${fmt.int(k.accounts)}개 매매법` : ""}`)),
+      h("small", {class: "muted"}, `${k.suffix}${num(k.accounts) != null ? ` · ${fmt.int(k.accounts)}개 후보` : ""}`)),
     k.role === COIN_ROLE ? h("p", {class: "note"}, "방향 실력 확인용: 진입 방향을 동전으로 정한 짝") : null,
     h("div", {class: "kd-kbig"}, h("span", {class: "kd-kl"}, "거래당 순수익"), h("b", {class: "num"}, valueEl(mean, k, best)),
       dd ? diffEl(dd, true) : k === S.ctl ? h("small", {class: "muted"}, "비교 기준") : null),

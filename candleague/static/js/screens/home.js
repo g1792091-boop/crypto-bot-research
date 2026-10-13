@@ -14,9 +14,10 @@ import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {serverNow} from "../live.js";
-import {ROLES, ROLE_KO, ROLE_SHORT, KIND_LONG, sideKo, reasonKo, coinOf, coinShort, lineupOn} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, KIND_LONG, sideKo, reasonKo, coinOf, coinShort, lineupOn, compareKo} from "../labels.js";
 import {afterBar, afterFills, afterOn, afterSuffix, afterEmpty, openAfter} from "../after.js";
 import {luckShort} from "../whykit.js";
+import {lineupGroups} from "./versus.js";
 
 const SHOW = 5;
 
@@ -30,15 +31,18 @@ export async function mount(el, ctx) {
   const fills = h("div");
   const away = h("div");
   const fillsCard = ui.card({plate: "최근 체결", sub: "모든 계좌 · 누르면 그 계좌", acts: h("a", {class: "btn-line", href: "#/fills"}, "체결 기록 →")}, fills);
+  const head = ui.screenHead("요약", "후보 리그 한눈에 보기 · 커스텀값 후보 38개 × 계좌 5개");
+  const headSub = head.querySelector(".sub");
+  const tbCard = ui.card({plate: "상위 · 하위", sub: "후보 계좌의 거래 한 번 평균 (지갑 대비)", acts: h("a", {class: "btn-line", href: "#/rank"}, "순위표 →")}, tb);
+  const poolsSec = K4.secRow("묶음", "기존 36 · 딥시크 따로 (점검도 묶음마다 따로)", h("a", {class: "btn-line", href: "#/check"}, "점검 진행 →"));
   el.append(
-    ui.screenHead("요약", "후보 리그 한눈에 보기 · 커스텀값 후보 38개 × 계좌 5개"),
+    head,
     afterBar({cls: "s2a-after"}),
     away,
     h("div", {class: "s2a-wrap s2a-top"}, hero, goal),
     led,
-    h("section", {class: "k4-sec", "aria-label": "묶음"}, K4.secRow("묶음", "기존 36 · 딥시크 따로 (점검도 묶음마다 따로)",
-      h("a", {class: "btn-line", href: "#/check"}, "점검 진행 →")), pools),
-    ui.card({plate: "상위 · 하위", sub: "후보 계좌의 거래 한 번 평균 (지갑 대비)", acts: h("a", {class: "btn-line", href: "#/rank"}, "순위표 →")}, tb),
+    h("section", {class: "k4-sec", "aria-label": "묶음"}, poolsSec, pools),
+    tbCard,
     fillsCard,
     h("p", {class: "assume"}, "모의 계좌입니다 (가상 돈). 바이낸스 실제 시세로 계산하고 수수료·슬리피지·펀딩을 뺍니다. 주문은 넣지 않습니다."));
 
@@ -55,6 +59,7 @@ export async function mount(el, ctx) {
         h("p", {class: "note"}, "엔진이 시작(설치한 때)부터 계산해 첫 기록을 쓰면 여기에 나옵니다 (몇 분)."));
       return;
     }
+    paintHeadWords(d);
     paintAway(d);
     paintHero(d);
     paintGoal(d);
@@ -63,6 +68,19 @@ export async function mount(el, ctx) {
     paintTopBottom(d);
     paintFills();                       // the install time may come with this snapshot (설치 뒤 진입만)
   });
+
+  /** The head's subtitle and the two cards' small lines: the candidate league's words (38 picks, five accounts, checks per 묶음) stay as they
+   *  were; the owner-exit league's come from the snapshot (picks, accounts, the road to the decision). */
+  function paintHeadWords(d) {
+    const owner = lineupOn();
+    const n = LK.leagueCounts(d);
+    headSub.textContent = owner ? `후보 리그 한눈에 보기 · 후보 ${fmt.int(n.picks)}개 · 계좌 ${fmt.int(n.accounts)}개 (후보마다 계좌 종류 ${fmt.int(n.kinds)}가지)`
+      : "후보 리그 한눈에 보기 · 커스텀값 후보 38개 × 계좌 5개";
+    const sub = (card, text) => { const e = card.querySelector(".sub"); if (e) e.textContent = text; };
+    sub(tbCard, owner ? `후보마다 ‘${ROLE_KO.cand}’ 계좌의 거래 한 번 평균 (지갑 대비)` : "후보 계좌의 거래 한 번 평균 (지갑 대비)");
+    const ps = poolsSec.querySelector(".sub");
+    if (ps) ps.textContent = owner ? "기존 36 · 딥시크 따로" : "기존 36 · 딥시크 따로 (점검도 묶음마다 따로)";
+  }
 
   // 자리 비운 사이: what changed since this viewer's previous visit (this device only; nothing is sent anywhere)
   function paintAway(d) {
@@ -131,36 +149,33 @@ export async function mount(el, ctx) {
         h("a", {class: "btn-line", href: "#/custom"}, "커스텀값 보기"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법")));
   }
 
-  /** The owner-exit league (owners 10/12): no pre-registered checkpoint; per pool how many picks each exit leads by wallet. */
+  /** The owner-exit league's hero (owners 10/12): how many kinds of account run side by side, grouped (메인 · 대조 · 연구용: the same groups and
+   *  short names as 메인 vs 대조), the decision protocol's one line and the way to it. No ranking of the kinds here: that is what the 판정
+   *  screen's pre-registered rule is for (a "who leads" count of ~26 kinds would pick the luckiest). */
   function paintHeroOwner(d) {
-    const ix = LK.index(d);
     const H = LK.health(d);
-    const line = (kind) => {
-      const picks = ix.cands.filter((c) => c.kind === kind);
-      if (!picks.length) return null;
-      const lead = {}; let n = 0, hid = 0;
-      for (const c of picks) {
-        const set = ix.sets[c.id];
-        const rows = ROLES.map((r) => set[r]).filter(Boolean);
-        if (rows.some((a) => LK.dsHidden(a))) { hid += 1; continue; }
-        if (!rows.some((a) => a.trades)) continue;
-        const top = Math.max(...rows.map((a) => Number(a.wallet)));
-        const win = rows.filter((a) => Number(a.wallet) === top);
-        if (win.length !== 1) continue;
-        n += 1; lead[win[0].role] = (lead[win[0].role] || 0) + 1;
+    const groups = lineupGroups(d);
+    const kinds = groups.reduce((a, g) => a + g.kinds.length, 0) || ROLES.length;
+    const dec = d.decision && typeof d.decision === "object" ? d.decision : null;
+    const line = dec && typeof dec.summary_ko === "string" && dec.summary_ko ? dec.summary_ko : "판정 기록은 아직 없습니다 (엔진이 쓰면 저절로 나타납니다)";
+    const chip = (k) => h("span", {class: "pp", title: `${k.suffix}`}, k.name, k.live ? h("small", {class: "s2a-live"}, "실전 후보") : null);
+    const row = (g) => {
+      const head = ui.pill(`${g.ko} ${fmt.int(g.kinds.length)}`, g.group === "main" ? "accent" : g.group === "control" ? "" : "thin");
+      if (g.group === "research") {
+        return h("div", {class: "s2a-krow"}, head, h("span", {class: "muted s2a-small"}, "궁금해서 같이 돌리는 계좌 · 결정에는 쓰지 않음"),
+          ui.disclosure("이름 보기", h("div", {class: "s2a-krow s2a-kopen"}, g.kinds.map(chip))));
       }
-      return h("p", {class: "dl-vline"}, h("b", null, kind === "core" ? "기존 36" : "딥시크"), ` · 후보 ${fmt.int(picks.length)}개 · 잔고 1등 `,
-        n ? ROLES.map((r, i) => h("span", null, i ? " · " : "", LK.roleChip(r, ROLE_SHORT[r]), ` ${fmt.int(lead[r] || 0)}`)) : h("span", {class: "muted"}, "아직 비교할 거래 없음"),
-        hid ? h("span", {class: "muted"}, ` (금액 숨김 ${fmt.int(hid)}개 빼고)`) : null);
+      return h("div", {class: "s2a-krow"}, head, g.kinds.map(chip));
     };
     put(hero,
       h("div", {class: "s2a-hrow"}, ui.plate("청산 비교"), h("span", {class: "muted s2a-small"}, H.ko)),
-      h("p", {class: "dl-vbig ok"}, `청산 ${fmt.int(ROLES.length)}가지 `, h("em", null, "나란히")),
-      h("p", {class: "note"}, `후보마다 ${ROLES.map((r) => ROLE_KO[r]).join(" · ")} 계좌를 같은 신호 · 같은 손절로 돌립니다.`),
-      line("core"), line("ds"),
-      h("p", {class: "note"}, "잔고 1등 = 같은 후보의 계좌들 중 닫힌 거래까지 잔고가 가장 많은 계좌 (참고, 판정 아님). 거래가 적은 동안은 운이 큽니다."),
-      h("div", {class: "row wrap"}, h("a", {class: "btn-y", href: "#/compare"}, "후보마다 계좌 비교"),
-        h("a", {class: "btn-line", href: "#/rules"}, "익절·손절·배수"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법")));
+      h("p", {class: "dl-vbig ok"}, `계좌 종류 ${fmt.int(kinds)}가지 `, h("em", null, "나란히")),
+      h("div", {class: "s2a-kinds", "aria-label": "계좌 종류 묶음"}, groups.map(row)),
+      h("p", {class: "dl-vline s2a-decline"}, h("b", null, "판정 "), line),
+      h("div", {class: "row wrap"}, h("a", {class: "btn-y", href: "#/decision"}, "판정 화면 보기"),
+        h("a", {class: "btn-line", href: "#/compare"}, compareKo()), h("a", {class: "btn-line", href: "#/rules"}, "익절·손절·배수"),
+        h("a", {class: "btn-line", href: "#/howto"}, "읽는 법")),
+      h("p", {class: "note"}, "모의 거래의 기록입니다. 지금 숫자는 참고이고, 거래가 적은 동안은 운이 큽니다. 판정에서 통과하기 전에는 실전에 쓰지 않습니다."));
   }
 
   function paintGoal(d) {
@@ -178,15 +193,17 @@ export async function mount(el, ctx) {
       return h("div", {class: "cl-prog"}, h("div", {class: "cl-progh"}, h("b", null, kind === "core" ? "기존 36 후보 거래" : "딥시크 후보 거래"),
         h("span", {class: "num"}, `${fmt.int(n)} / ${fmt.int(min)}번`)), ui.progress(n / min, null), LK.paceLine(d, n, min));
     };
-    if (lineupOn()) {                    // the owner-exit league: its start, no pre-registered checkpoint
+    if (lineupOn()) {                    // the owner-exit league: its start, day 14 (look only), day 28 (the one decision)
+      const R = LK.road(d);
       put(goal,
         h("div", {class: "s2a-hrow"}, ui.plate("일정"), h("span", {class: "s2a-dcount"}, h("b", null, `D+${LK.dPlus(d, serverNow())}`),
           ` (${LK.calDay(d, serverNow())}일째, 한국 날짜)`)),
         h("p", {class: "s2a-goalline"}, `청산 비교 리그를 켠 때(${LK.startKo(d)})부터 모든 계좌 ${LK.startUsd()}으로 시작해 5분마다 이어 갑니다.`,
           h("small", {class: "muted"}, ` · 처리 ${fmt.kst(d.done_ms)} KST까지`)),
-        h("ol", {class: "steps dl-steps s2a-steps", "aria-label": "일정"}, first.map((x) => h("li", {class: "done"},
-          h("span", {class: "s2a-sn"}, fmt.mmdd(x.ms)), x.ko))),
-        h("p", {class: "note"}, "이 리그에는 미리 정한 점검 날짜가 없습니다. 두 분이 계좌들의 기록을 보고 정합니다."));
+        R ? ui.progress(R.days / R.decide, `${fmt.int(R.days)}일째 / ${fmt.int(R.decide)}일째에 판정`, R.phase === "decide" ? "ok" : "") : null,
+        LK.roadSteps(d, {cls: "s2a-steps"}),
+        h("p", {class: "note"}, `${R ? R.observe : 14}일째에는 숫자만 보고 아무것도 바꾸지 않습니다. 판정은 ${R ? R.decide : 28}일째에 한 번만, 숫자를 보기 전에 정한 규칙으로 합니다. `,
+          h("a", {href: "#/decision"}, "판정 화면 보기"), " · ‘n일째’는 시작 시각부터 24시간씩 센 날입니다."));
       return;
     }
     put(goal,
@@ -298,8 +315,9 @@ function ledBar() {
   const mid = h("div", {class: "led-m"});
   const right = h("div", {class: "led-r"});
   const cap = h("p", {class: "led-cap"});
+  const tEl = h("span", {class: "t"}, "후보 계좌 합계 잔고");
   const el = h("section", {class: "ledbar s2a-led", "aria-label": "후보 38개 합계 잔고"},
-    h("div", null, h("div", {class: "led-k"}, h("span", {class: "t"}, "후보 계좌 합계 잔고"), live),
+    h("div", null, h("div", {class: "led-k"}, tEl, live),
       h("div", {class: "led-n"}, total, h("span", null, "USDT")), h("div", {class: "led-chg"}, pctEl, absEl)),
     mid, right, cap);
   const cells = new Map();
@@ -332,7 +350,8 @@ function ledBar() {
     const wins = ix.cands.filter((c) => c.wallet != null && c.wallet > LK.EQUITY).length;
     put(mid, barRow(ix.cands), h("div", {class: "led-stats"}, h("span", null, `후보 ${fmt.int(ix.cands.length)}개 · 계좌마다 ${LK.startUsd()}에서 시작`),
       h("span", null, `시작보다 많은 후보 ${fmt.int(wins)}개`)));
-    // this card is the 38 picks': their own open positions and closed trades (190계좌 totals are on 서버 상태 · 포지션)
+    // this card is the picks' own accounts (the candidate league's 후보, the owner-exit league's 지금 청산): their open positions and closed
+    // trades; every account's totals are in the cells' titles and on 서버 상태 · 포지션
     const open = ix.cands.filter((a) => openAfter(a)).length;          // 설치 뒤 진입만: entered after the install
     const closed = ix.cands.reduce((a, x) => a + (x.trades || 0), 0);
     const ok = Object.values(d.judge || {}).filter((j) => j.verdict === "ok").length;
@@ -341,18 +360,25 @@ function ledBar() {
     cell("후보 열린 포지션", `후보 ${ix.cands.length}개 계좌의 열린 포지션${afterOn() ? " (설치 뒤에 들어간 것만)" : ""} (${fmt.int(d.accounts.length)}계좌 전체: ${fmt.int(d.accounts.filter((a) => openAfter(a)).length)}개)`,
       `후보 열린 포지션${afterOn() ? " (설치 뒤만)" : ""}`).textContent = fmt.int(open);
     cell("후보 닫힌 거래", `후보 ${ix.cands.length}개 계좌의 닫힌 거래 (${fmt.int(d.accounts.length)}계좌 전체: ${fmt.int(d.accounts.reduce((a, x) => a + (x.trades || 0), 0))}번)`).textContent = fmt.int(closed);
-    if (lineupOn()) cell("기준 통과", "이 리그(청산 비교)에는 기본값 · 동전 계좌가 없어 기준 판정을 하지 않습니다", "판정").textContent = "없음";
-    else cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
+    if (lineupOn()) {                    // no 기준 통과 here (no 기본값 account); the days to the one decision instead
+      const R = LK.road(d);
+      cell("기준 통과", R ? `${R.observe}일째는 숫자만 보고, 판정은 ${R.decide}일째에 한 번 (판정 화면)` : "판정은 한 번 (판정 화면)", "판정까지").textContent
+        = R ? (R.phase === "decide" ? "판정일 지남" : `${fmt.int(R.decide - R.days)}일 남음`) : "—";
+    } else cell("기준 통과", "30번 이상 거래한 후보 중 평균 > 0 · 기본값보다 · 동전보다").textContent = fmt.int(ok);
     cell("경고등", "기존 36 후보 중 백테스트 예상 범위(하위 5%) 아래").textContent = fmt.int(warn);
     cell("파산", `${fmt.int(d.accounts.length)}개 계좌 중 파산한 계좌`, `파산 (${fmt.int(d.accounts.length)}계좌)`).textContent = fmt.int(d.accounts.filter((a) => a.bust).length);
+    // the owner-exit league: the real number of picks and what the card adds up (one 지금 청산 account per pick), never a fixed 38
+    const mine = lineupOn() ? `후보 ${fmt.int(ix.cands.length)}개의 ‘${ROLE_KO.cand}’ 계좌` : null;
+    tEl.textContent = lineupOn() ? `‘${ROLE_KO.cand}’ 계좌 합계 잔고` : "후보 계좌 합계 잔고";
+    el.setAttribute("aria-label", lineupOn() ? `${mine} 합계 잔고` : "후보 38개 합계 잔고");
     cap.textContent = shown.length < ix.cands.length
       ? `합계는 금액이 보이는 후보 ${shown.length}개만 (딥시크 금액 숨김) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)`
-      : "후보 38개 계좌의 지갑 합계 (닫힌 거래까지) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)";
+      : `${mine ? `${mine}의` : "후보 38개 계좌의"} 지갑 합계 (닫힌 거래까지) · 수수료·슬리피지·펀딩 뺀 뒤 · 가상 돈 (주문 없음)`;
   };
   return el;
 }
 
-/** One small bar per pick (its wallet against the start wallet), sorted: the spread of the 38 at a glance. */
+/** One small bar per pick (its wallet against the start wallet), sorted: the spread of the picks at a glance. */
 function barRow(cands) {
   const vals = cands.map((c) => (c.wallet == null ? null : c.wallet / LK.EQUITY - 1)).filter((v) => v != null).sort((a, b) => b - a);
   if (!vals.length) return h("div", {class: "led-stats"}, h("span", null, "후보 잔고 준비 중"));

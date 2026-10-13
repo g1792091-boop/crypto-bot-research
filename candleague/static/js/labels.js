@@ -50,6 +50,9 @@ export function onLineup(fn) {
   return () => hooks.delete(fn);
 }
 export const lineupOn = () => !!LINEUP;
+/** The name of the 계좌 비교 screen (the menu, its title, every link and aria that points to it): the candidate league's "5계좌 비교"
+ *  (its five accounts), but "계좌 비교" while the owner-exit league runs (its ~26 kinds of account per pick: never a number). */
+export const compareKo = () => (LINEUP ? "계좌 비교" : "5계좌 비교");
 const reset = (obj, def) => { for (const k of Object.keys(obj)) delete obj[k]; Object.assign(obj, def); };
 /** Put the snapshot's lineup (or none: the candidate league's five accounts) into ROLES and the role maps, in place. */
 export function applyLineup(lu) {

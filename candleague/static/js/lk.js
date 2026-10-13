@@ -79,6 +79,47 @@ export const dayLine = (d, now = Date.now()) => (d && d.start_ms ? `D+${dPlus(d,
 export const REPLAY_GAP_MS = 5 * 60000;
 export const replayedBefore = (d) => !!(d && Number(d.start_ms) > 0 && Number(d.started_ms) > 0 && d.started_ms - d.start_ms >= REPLAY_GAP_MS);
 
+// ---------------------------------------------------------------- the owner-exit league's counts and road (never written into a page)
+/** The real counts of a snapshot: {picks (distinct pick ids), strategies (distinct names of the picks), accounts, kinds (the lineup's)}.
+ *  The owner-exit league's accounts carry their ``pick``; a snapshot without it counts its ``cand`` rows. */
+export function leagueCounts(d = LEAGUE) {
+  const accts = (d && d.accounts) || [];
+  const picks = new Set(), names = new Set();
+  for (const a of accts) {
+    const p = a.pick != null ? a.pick : a.role === "cand" ? a.id : null;
+    if (p != null) picks.add(p);
+    if (a.role === "cand" && a.name != null) names.add(a.name);
+  }
+  return {picks: picks.size, strategies: names.size, accounts: accts.length, kinds: ROLES.length};
+}
+const posNum = (v, def) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : def);
+/** The pre-registered road of the owner-exit league: {start_ms, observe (day), decide (day), observe_ms, decide_ms, days (24 hours
+ *  counted from the start, like the 판정 screen), phase}. From the snapshot's ``decision`` (summary.decision_views); without it the
+ *  same 14 / 28 days from the start. null before the start is known. */
+export function road(d = LEAGUE) {
+  if (!d || !(Number(d.start_ms) > 0)) return null;
+  const x = d.decision && typeof d.decision === "object" && !Array.isArray(d.decision) ? d.decision : {};
+  const cp = x.checkpoints && typeof x.checkpoints === "object" ? x.checkpoints : {};
+  const observe = posNum(cp.observe_day, 14), decide = posNum(cp.decide_day, 28);
+  const start = Number(d.start_ms);
+  const days = typeof x.days === "number" && Number.isFinite(x.days) ? Math.max(0, Math.floor(x.days))
+    : Math.max(0, Math.floor(((Number(d.done_ms) || start) - start) / DAY));
+  return {start_ms: start, observe, decide, observe_ms: posNum(x.observe_ms, start + observe * DAY), decide_ms: posNum(x.decide_ms, start + decide * DAY),
+    days, phase: days >= decide ? "decide" : "observe"};
+}
+/** The road as the schedule's steps (home 일정, 점검 진행, the day pill): 시작(설치) → n일째 첫 확인 → n일째 판정, each with its
+ *  KST date; the step the league is at is lit. */
+export function roadSteps(d = LEAGUE, o = {}) {
+  const r = road(d);
+  if (!r) return null;
+  const sn = (ms) => h("span", {class: "s2a-sn"}, fmt.mmdd(ms));
+  const first = r.days >= r.observe, last = r.days >= r.decide;
+  return h("ol", {class: ["steps", "dl-steps", o.cls], "aria-label": "일정"},
+    h("li", {class: "done"}, sn(r.start_ms), `${fmt.hm(r.start_ms)} 시작 (설치)`),
+    h("li", {class: first ? "done" : "now", "aria-current": !first ? "step" : null}, sn(r.observe_ms), `${r.observe}일째 첫 확인 · 숫자만 보고 아무것도 바꾸지 않음`),
+    h("li", {class: last ? "done" : first ? "now" : "", "aria-current": first && !last ? "step" : null}, sn(r.decide_ms), `${r.decide}일째 판정 · 한 번만`));
+}
+
 /** The engine is catching up: the snapshot's own ``catching`` (the engine writes it true only right after a start-over
  *  or a computed chunk while its processed time is more than 30 minutes behind, so a crash loop or a stuck engine never
  *  reads as catching up: it shows by its age and its lag, red); a snapshot without the field (written before 10/12) by

@@ -459,3 +459,8 @@ def test_rules_doc_on_the_league_shape():
     assert now["base_stop_pct"] == pytest.approx(2 * 78.0 / 60000.0) and now["stop_pct"] == pytest.approx(4 * 78.0 / 60000.0)
     assert r["used_all"] == {"quarter": {"50": 1, "30": 1}, "base": {"40": 1}, "cand": {}, "exitonly": {}, "flip": {}}
     assert D.rules_doc(None, None, EX, None) == {"status": "준비 중", "picks": {}}
+    # a pick row without its exit (a hand-made or half-written snapshot) is left out of the picks and the exits count, never a KeyError
+    bare = {k: v for k, v in cand.items() if k not in ("exit", "exit_ko")}
+    both = D.rules_doc({"accounts": [bare, {**cand, "id": "core-LTC-15m-1"}], "ds_money": True, "generated_ms": 1}, {}, EX, atr)
+    assert list(both["picks"]) == ["core-LTC-15m-1"] and both["exits"] == {"tp3R|4": 1}
+    assert D.rules_doc({"accounts": [bare], "generated_ms": 1}, {}, EX, atr)["picks"] == {}

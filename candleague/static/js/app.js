@@ -22,7 +22,8 @@ import * as fmt from "./fmt.js";
 import * as ui from "./ui.js";
 import {stamp, setPage} from "./ui.js";
 import {applySkin, skinNow, textSwitch, skinSwitch, navSwitch, textCycle, skinCycle, startPref} from "./prefs.js";
-import {setLeague, getMeta, startUsd, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore} from "./lk.js";
+import {setLeague, getMeta, startUsd, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore, leagueCounts, road} from "./lk.js";
+import {lineupOn, onLineup, compareKo} from "./labels.js";
 import {onLive, serverNow} from "./live.js";
 import {onPositions, kickPositions} from "./poskit.js";
 import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js";
@@ -44,7 +45,7 @@ const MENU = [
   {id: "reasons", ko: "청산 이유", group: "home"},
   {id: "pairs", ko: "짝 비교", group: "home"},
   {id: "decision", ko: "판정", group: "home"},
-  {id: "compare", ko: "5계좌 비교", group: "home"},
+  {id: "compare", get ko() { return compareKo(); }, group: "home"},          // "5계좌 비교" (candidate league) / "계좌 비교" (owner-exit league)
   {id: "weekly", ko: "흐름", group: "home"},
   {id: "strategies", ko: "매매법", group: "method"},
   {id: "judge", ko: "구조 기준", group: "method"},
@@ -67,6 +68,21 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
+/** The titles that name the old league's five accounts, 38 picks, 190 accounts or its 11/11 · 12/11 · 1/11 checks, in the owner-exit league's
+ *  words (the counts from the snapshot, never written here). */
+function ownerTitle(id) {
+  const n = leagueCounts(doc);
+  const T = {
+    check: "점검 진행 (경고등 · 후보마다 속도 · 연패. 승자를 가리는 판정은 판정 화면에서 28일째 한 번)",
+    rank: n.picks ? `순위표 (후보 ${n.picks}개와 모든 계좌 ${n.accounts}개)` : "순위표 (후보와 모든 계좌)",
+    compare: "계좌 비교 (같은 후보 · 같은 신호에서 청산 방법이 다른 계좌들을 나란히, 지금 청산 계좌와 비교)",
+    weekly: "흐름 (계좌 종류마다 시간에 따른 잔고 중앙값 · 주마다 거래 수 · 승률)",
+    rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 종류가 다른 점)",
+    howto: "읽는 법 (계좌 종류, 판정 규칙, 낱말 뜻)",
+  };
+  return T[id];
+}
+const titleOf = (id) => (lineupOn() && ownerTitle(id)) || MENU_TITLE[id];
 const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
   account: "account", rules: "rules"};
@@ -92,7 +108,7 @@ function buildMenu() {
     if (gi) kids.push(h("span", {class: "sg-sep", "aria-hidden": "true"}));
     kids.push(h("span", {class: "sg-k", "aria-hidden": "true", dataset: {group: g.id}}, g.ko));
     for (const m of MENU.filter((x) => x.group === g.id)) {
-      const a = h("a", {class: "sb", href: `#/${m.id}`, dataset: {screen: m.id, group: g.id}, title: MENU_TITLE[m.id] || null},
+      const a = h("a", {class: "sb", href: `#/${m.id}`, dataset: {screen: m.id, group: g.id}, title: titleOf(m.id) || null},
         h("span", {class: "sb-t", dataset: {t: m.ko}}, m.ko));
       links[m.id] = a;
       kids.push(a);
@@ -137,6 +153,21 @@ function markMenu(name) {
   }
   buildBot(name);
 }
+/** The words that follow the league's kind (the 계좌 비교 name, the titles that name the old five accounts): the links, 찾기 and the bottom bar
+ *  are written again when the snapshot's lineup appears or changes. */
+function refreshMenuWords() {
+  for (const m of MENU) {
+    const a = links[m.id];
+    if (!a) continue;
+    const t = a.querySelector(".sb-t");
+    if (t) { t.textContent = m.ko; t.dataset.t = m.ko; }
+    const title = titleOf(m.id);
+    if (title) a.title = title; else a.removeAttribute("title");
+  }
+  setFindScreens(MENU.map((m) => ({id: m.id, ko: m.ko, group: m.group, groupKo: groupKo(m.group), title: titleOf(m.id)})));
+  const entry = cur && MENU.find((m) => m.id === cur.name);
+  if (entry) { buildBot(cur.name); document.title = `${entry.ko} · ${TITLE}`; }
+}
 function onSkin() { applySkin(skinNow()); remount(); }
 function onNav() { buildMenu(); buildTop(); remount(); }
 
@@ -170,7 +201,21 @@ document.addEventListener("mousedown", (e) => { if (pop && !pop.contains(e.targe
 window.addEventListener("hashchange", closePop);
 
 let doc = null;
-const checkpoints = () => ((doc && doc.watch && doc.watch.checkpoints) || []);
+let cpMemo = {doc: null, owner: false, list: []};
+/** The schedule's dates: the candidate league's three checks (watch.checkpoints) or, in the owner-exit league (which has none), its road:
+ *  14일째 첫 확인 (look only) and 28일째 판정 (one decision), the dates from the snapshot's ``decision`` (lk.js road). One list per snapshot. */
+function checkpoints() {
+  const owner = lineupOn();
+  if (cpMemo.doc === doc && cpMemo.owner === owner) return cpMemo.list;
+  let list = (doc && doc.watch && doc.watch.checkpoints) || [];
+  if (owner) {
+    const r = road(doc);
+    list = r ? [{id: "R1", ko: `${r.observe}일째 확인`, ms: r.observe_ms, what: "숫자만 보고 아무것도 바꾸지 않습니다"},
+      {id: "R2", ko: `${r.decide}일째 판정`, ms: r.decide_ms, what: "미리 정한 규칙으로 한 번만 판정합니다"}] : [];
+  }
+  cpMemo = {doc, owner, list};
+  return list;
+}
 const cpShort = (c) => `${String(c.ko || c.id).replace(" 점검", "")} ${fmt.mmdd(c.ms).replace(/^0/, "").replace("/0", "/")}`;
 function nextCp(now = serverNow()) { return checkpoints().find((c) => c.ms > now) || null; }
 /** The schedule's first steps: "10/11 12:00 시작 (설치)"; an older record that replayed from 10/01 before its install
@@ -188,8 +233,8 @@ function pillPanel() {
   return h("div", {class: "tb-pin"},
     h("div", {class: "tb-ph"}, h("b", null, doc && doc.start_ms ? dayLine(doc, now) : "일정"), h("span", {class: "grow"}),
       h("button", {class: "btn-line tb-x", type: "button", onclick: closePop}, "닫기")),
-    h("p", {class: "tb-lead"}, next ? `다음: ${next.ko} ${fmt.mmdd(next.ms)} (${left}일 남음)` : "점검 일정 준비 중"),
-    h("ol", {class: "steps dl-steps", "aria-label": "점검 일정"},
+    h("p", {class: "tb-lead"}, next ? `다음: ${next.ko} ${fmt.mmdd(next.ms)} (${left}일 남음)` : lineupOn() && cps.length ? "판정 날짜가 모두 지났습니다" : "점검 일정 준비 중"),
+    h("ol", {class: "steps dl-steps", "aria-label": lineupOn() ? "판정 일정" : "점검 일정"},
       startSteps(doc).map((x) => h("li", {class: "done"}, x)),
       cps.map((c) => h("li", {class: c === next ? "now" : c.ms <= now ? "done" : "", "aria-current": c === next ? "step" : null},
         `${c.ko} ${fmt.mmdd(c.ms)}`))),
@@ -202,9 +247,10 @@ function pillPanel() {
       h("div", null, h("dt", null, "기록 쓴 시각"), h("dd", null, doc ? `${fmt.kst(doc.generated_ms)} KST (${fmt.ago(doc.generated_ms, now)})` : "—"))),
     doc && catchingUp(doc) ? h("p", {class: "kp-banner warn"}, h("b", null, "엔진이 따라잡는 중"),
       h("span", null, `${fromKo(doc)} ${fmt.kst(doc.done_ms)}까지 계산 · 다 따라잡으면 5분마다 이어서 계산합니다`)) : null,
-    h("p", {class: "note"}, "점검 날짜와 기준은 시작 전에 고정했습니다 (WATCH_PREREG). 엔진은 5분마다 이어서 계산합니다 (새 진입·청산은 몇 분 늦게 보임)."),
-    h("div", {class: "row wrap"}, h("a", {class: "btn-line", href: "#/check"}, "점검 진행"), h("a", {class: "btn-line", href: "#/howto"}, "읽는 법"),
-      h("a", {class: "btn-line", href: "#/status"}, "서버 상태")));
+    h("p", {class: "note"}, lineupOn() ? "판정 규칙은 숫자를 보기 전에 정했고 바꾸지 않습니다 (판정 화면). 엔진은 5분마다 이어서 계산합니다 (새 진입·청산은 몇 분 늦게 보임)."
+      : "점검 날짜와 기준은 시작 전에 고정했습니다 (WATCH_PREREG). 엔진은 5분마다 이어서 계산합니다 (새 진입·청산은 몇 분 늦게 보임)."),
+    h("div", {class: "row wrap"}, lineupOn() ? h("a", {class: "btn-line", href: "#/decision"}, "판정") : h("a", {class: "btn-line", href: "#/check"}, "점검 진행"),
+      h("a", {class: "btn-line", href: "#/howto"}, "읽는 법"), h("a", {class: "btn-line", href: "#/status"}, "서버 상태")));
 }
 function paintTop() {
   const H = health(doc, serverNow());
@@ -386,7 +432,8 @@ function markWide() {
 new MutationObserver(markWide).observe(main, {childList: true, subtree: true});
 window.addEventListener("resize", markWide);
 
-setFindScreens(MENU.map((m) => ({id: m.id, ko: m.ko, group: m.group, groupKo: groupKo(m.group), title: MENU_TITLE[m.id]})));
+onLineup(() => refreshMenuWords());
+setFindScreens(MENU.map((m) => ({id: m.id, ko: m.ko, group: m.group, groupKo: groupKo(m.group), title: titleOf(m.id)})));
 setSettingsHooks({screens: MENU.map((m) => ({id: m.id, ko: m.ko})), autoStart, remount, onNav});
 onAfterChange(() => remount());
 applySkin(skinNow());

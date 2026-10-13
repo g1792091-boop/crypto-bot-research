@@ -1525,22 +1525,37 @@ def gate_g1_arrays(close4_ms, close4) -> tuple:
     return np.asarray(close4_ms, np.int64), sign
 
 
+def gate_g1_stamp(close4_ms, sign4, close_ms: int, side: int) -> Optional[bool]:
+    """g1 as a three-way fact (the entry stamp, ``ctx["g1"]``): True when the last BTC 4h bar closed at or before ``close_ms`` has the side's trend, False
+    when it has the other one, None when it is not known (no such bar, or the EMA is cold / not finite). ``gate_g1`` is exactly "this is True"."""
+    j = int(np.searchsorted(close4_ms, close_ms, side="right")) - 1
+    if j < 0 or int(sign4[j]) == 0:
+        return None
+    return int(sign4[j]) == int(side)
+
+
 def gate_g1(close4_ms, sign4, close_ms: int, side: int) -> bool:
     """g1 at a signal bar closing at ``close_ms`` (ms): the last BTC 4h bar closed at or before it has the side's trend (False when there is none or the EMA is cold)."""
-    j = int(np.searchsorted(close4_ms, close_ms, side="right")) - 1
-    return bool(j >= 0 and int(sign4[j]) == int(side))
+    return gate_g1_stamp(close4_ms, sign4, close_ms, side) is True
+
+
+def gate_g2_stamp(atr_pct, i: int) -> Optional[bool]:
+    """g2 as a three-way fact (the entry stamp, ``ctx["g2"]``): True when the ATR% of pick bar ``i`` is inside [GATE_PCT_LO, GATE_PCT_HI] of its last GATE_WINDOW
+    values (itself included, ties not counted), False when it is outside, None when the window is not full or a value is not finite.
+    ``gate_g2`` is exactly "this is True"."""
+    if i < GATE_WINDOW - 1:
+        return None
+    w = np.asarray(atr_pct[i - GATE_WINDOW + 1:i + 1], float)
+    if not np.isfinite(w).all():
+        return None
+    pct = float(np.mean(w < w[-1]))
+    return GATE_PCT_LO <= pct <= GATE_PCT_HI
 
 
 def gate_g2(atr_pct, i: int) -> bool:
     """g2 at pick bar ``i``: the ATR% of the bar is inside [GATE_PCT_LO, GATE_PCT_HI] of its last GATE_WINDOW values (itself included, ties not counted);
     False when the window is not full or a value is not finite."""
-    if i < GATE_WINDOW - 1:
-        return False
-    w = np.asarray(atr_pct[i - GATE_WINDOW + 1:i + 1], float)
-    if not np.isfinite(w).all():
-        return False
-    pct = float(np.mean(w < w[-1]))
-    return GATE_PCT_LO <= pct <= GATE_PCT_HI
+    return gate_g2_stamp(atr_pct, i) is True
 
 
 def native_arrays(a: dict, sym: str, df, close, lo, sh, btc) -> dict:
@@ -1597,6 +1612,8 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
             strength: dict = {}
             natc: dict = {}
             recs: dict = {}                       # the same records serve every account with the same pick and needs
+            g1s: dict = {}                        # {(bar, side): g1 stamp} and {bar: g2 stamp}: asked by every account of the group, computed once
+            g2s: dict = {}
             for a in group:
                 key = (a["kind"], a["name"], repr(sorted(a["combo"].items())))
                 if key not in cache:
@@ -1633,6 +1650,16 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                     s = flip_of(a, int(close[i])) if (a["role"] == ROLE_FLIP or a.get("coin")) else s0
                     meta = {"stop_dist": spec["stop_atr"] * at, "account": a["id"],
                             "ctx": {"strength": _strength_feats(strength.get(a["name"]), smod, i, s)}}
+                    # the market state at the signal bar's close, stamped on EVERY entry whose group has the data (read-only: no entry, stop or size depends on
+                    # it; the conditions screen reads it back from the closed trade). True / False / None = not known. Nothing is loaded for the stamps alone.
+                    if g1 is not None:
+                        if (i, s) not in g1s:
+                            g1s[(i, s)] = gate_g1_stamp(g1[0], g1[1], int(close[i]), s)
+                        meta["ctx"]["g1"] = g1s[(i, s)]
+                    if atr_pct is not None:
+                        if i not in g2s:
+                            g2s[i] = gate_g2_stamp(atr_pct, i)
+                        meta["ctx"]["g2"] = g2s[i]
                     if a.get("gate"):
                         meta["gate"] = {"g1": bool(g1 is not None and gate_g1(g1[0], g1[1], int(close[i]), s)),
                                         "g2": gate_g2(atr_pct, i)}

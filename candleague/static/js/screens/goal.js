@@ -40,7 +40,7 @@ const GOALS = [
     }
     const fewer = X.ctl && k !== X.ctl && val(k.accounts) != null && val(X.ctl.accounts) != null && Number(k.accounts) < Number(X.ctl.accounts);
     return {big: v == null ? "—" : `${fmt.num(v, 1)}번`, v, st: judge(v, k.n, 1, 0.5), bar: frac(v, scale), ticks: [1 / scale, 3 / scale], sub,
-      extra: fewer ? `이 종류는 ${fmt.int(k.accounts)}개 매매법만 돌아서 대조(${fmt.int(X.ctl.accounts)}개)보다 적게 나올 수 있습니다` : null};
+      extra: fewer ? `이 종류는 ${fmt.int(k.accounts)}개 후보에만 있어서 대조(${fmt.int(X.ctl.accounts)}개 후보)보다 적게 나올 수 있습니다` : null};
   }},
   {id: "roe", title: "거래당 순수익", target: "+10% 정도 (거래 한 번에 증거금 대비)", ev: (k) => {
     const v = k.n ? val(k.mean_roe) : null, scale = Math.max(0.125, v ?? 0);
