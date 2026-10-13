@@ -58,6 +58,12 @@
       "label_ko": "대조 · 계단 · 동전 던지기"
     },
     {
+      "suffix": "-fqc",
+      "exit": "ladderU",
+      "coin_of": "-fq",
+      "label_ko": "대조 · 메인 빠른 손절의 동전 던지기 짝"
+    },
+    {
       "suffix": "-ldp",
       "exit": "ladderU",
       "label_ko": "대조 · 계단 · 후보의 손절 그대로"
@@ -67,6 +73,36 @@
       "exit": "ladderU",
       "stop_max": 1,
       "label_ko": "대조 · 계단 · 손절 최대 1 ATR"
+    },
+    {
+      "suffix": "-ldt",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "gate": "g1",
+      "label_ko": "필터 · 대조에 BTC 4시간 추세 방향만"
+    },
+    {
+      "suffix": "-ldv",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "gate": "g2",
+      "label_ko": "필터 · 대조에 변동성 보통일 때만"
+    },
+    {
+      "suffix": "-fqt",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F11.a.d0.5",
+      "gate": "g1",
+      "label_ko": "필터 · 빠른 손절에 BTC 4시간 추세 방향만"
+    },
+    {
+      "suffix": "-fqv",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F11.a.d0.5",
+      "gate": "g2",
+      "label_ko": "필터 · 빠른 손절에 변동성 보통일 때만"
     },
     {
       "suffix": "-sb",

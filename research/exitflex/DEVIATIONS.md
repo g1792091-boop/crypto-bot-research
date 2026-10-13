@@ -83,3 +83,6 @@ E.0 item 2 and TW.10).
   the first stop at the level (distance = level + 0.1 ATR, between 0.5 ATR and the account's cap; the cap when the level is missing or on the wrong side) and
   a take-profit limit at the target with the lock kept. The numbers 0.5 and 0.1 ATR are the league's own test values, not the study's. They exist only for the
   seven strategies that define a level and a target (`NATIVE_LEVELS`, compared with the modules by a test).
+  Also `gate` (g1: the signal's side equals the BTC 4h trend, last closed bar's close vs its EMA50; g2: the pick bar's ATR% between the 20th and 80th percentile of
+  its last 200 bars): a gate account takes a signal only when its stamped gate value is true (unknown = no entry), and the coin twin (`coin_of`) may now
+  follow an entry that has a rule (same rule, the coin's side). League-side options only; the study's rules, ids and outputs are unchanged.

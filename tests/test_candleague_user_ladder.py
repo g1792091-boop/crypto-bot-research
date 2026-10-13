@@ -241,22 +241,23 @@ def test_the_quick_stop_entry_builds_for_every_owner_pick_and_runs_the_studys_ru
 
 
 def test_the_rules_file_the_owners_install_builds_the_final_lineup():
-    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: twenty-one account kinds on the 49 picks."""
+    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: twenty-six account kinds on the 49 picks."""
     doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
     cfg = RX.normalize_owner(doc)
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
-    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot", "-ld", "-ldc", "-ldp", "-ld1", "-sb", "-l5", "-l20", "-e",
-                                                         "-tp10", "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
+    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot", "-ld", "-ldc", "-fqc", "-ldp", "-ld1", "-ldt", "-ldv", "-fqt",
+                                                         "-fqv", "-sb", "-l5", "-l20", "-e", "-tp10", "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
     native = sum(1 for c in owner if RX.native_supported(c))                                  # -fq, -nv, -tg: only the 38 picks of the 16 strategies with their own structure
     levels = sum(1 for c in owner if RX.native_levels_supported(c))                          # -iv, -ot: the 13 picks of the 7 strategies with a level and a target
-    want = 49 * 16 + 3 * native + 2 * levels - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
-    assert len(owner) == 49 and native == 38 and levels == 13 and len(accts) == want == 910
+    # 49 picks x 18 kinds that every pick has, 38 x 6 kinds that need the strategy's own structure (-fq -nv -tg -fqc -fqt -fqv), 13 x 2 that need its own level and target
+    want = 49 * 18 + 6 * native + 2 * levels - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
+    assert len(owner) == 49 and native == 38 and levels == 13 and len(accts) == want == 1122
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
-    assert sum(1 for a in accts if a.get("coin")) == 49 and sum(1 for a in accts if a["role"] == "cand") == 49
+    assert sum(1 for a in accts if a.get("coin")) == 49 + 38 and sum(1 for a in accts if a["role"] == "cand") == 49
     by = {a["id"]: a for a in accts}
     wide = next(c["id"] for c in owner if c["exit"].split("|")[1] == "4")
     assert (by[wide + "-ld"]["exit"], by[wide + "-ldp"]["exit"], by[wide + "-ld1"]["exit"]) == ("ladderU|2", "ladderU|4", "ladderU|1")
@@ -272,7 +273,7 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     assert "tighten" not in lu["-fq"] and lu["-tg"]["tighten"] == 0.5 and lu["-tg"]["short_ko"] == "손절 좁힘"
     mains = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("메인")]
     ctrl = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("대조")]
-    assert mains == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot"] and ctrl == ["-ld", "-ldc", "-ldp", "-ld1"]               # the strategy-own structures are the main ones; the old stop is the control
+    assert mains == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot"] and ctrl == ["-ld", "-ldc", "-fqc", "-ldp", "-ld1"]               # the strategy-own structures are the main ones; the old stop is the control
     assert lu["-sb"]["label_ko"].startswith("연구")                                                       # the same swing for every strategy is a research comparison
 
 
@@ -695,3 +696,140 @@ def test_chunk_rule_hands_the_strategys_own_level_to_an_own_stop_account_without
         assert not notes
     finally:
         RX.NATIVE["provider"] = saved
+
+
+# ---------------------------------------------------------------- the coin twin of a rule account, and the regime gates (owners 2026-10-13)
+def test_the_coin_twin_of_the_quick_stop_trades_the_same_rule_on_the_coins_side():
+    doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
+    by = {a["id"]: a for a in accts}
+    twins = [a for a in accts if a["role"] == "fqc"]
+    assert len(twins) == 38 and all(a["coin"] is True and a["of"] == a["pick"] + "-fq" for a in twins)
+    for a in twins:
+        main = by[a["of"]]
+        assert a["rule"]["id"] == main["rule"]["id"] == "F11.a.d0.5" and a["exit"] == main["exit"] and a["combo"] == main["combo"]
+    assert RX.check(owner, RX.normalize_owner(doc)) == []
+
+
+def test_chunk_rule_gives_a_coin_twin_of_a_rule_account_the_flipped_side_and_the_rule_seed():
+    saved = RX.NATIVE["provider"]
+    try:
+        n_of = {}
+
+        def prov(a, sym, df, close_ms, lo, sh, btc):
+            n = len(df)
+            n_of[a["id"]] = n
+            return {"comp_long": [("state", np.zeros(n))], "comp_short": [("state", np.zeros(n))], "lvl_long": np.full(n, 90.0), "lvl_short": np.full(n, 110.0),
+                    "tgt_long": None, "tgt_short": None}
+        RX.register_native(prov)
+        doc = copy.deepcopy(LINEUP)
+        doc["owner_exits"] += [{"suffix": "-fq", "exit": "ladderU", "stop_max": 2, "rule": "F11.a.d0.5", "label_ko": "x"},
+                               {"suffix": "-fqc", "exit": "ladderU", "coin_of": "-fq", "label_ko": "y"}]
+        cands = [{**c, "kind": "ds", "name": "F5_BOX", "id": "ds-F5_BOX-15m-1"} for c in TR._rule_cands("15m", "tp3R|4")]
+        accts = RX.owner_accounts(cands, RX.normalize_owner(doc))
+        fq, fqc = (next(a for a in accts if a["id"].endswith(sfx)) for sfx in ("-fq", "-fqc"))
+        by, notes = RX.chunk_rule(TR.LIB, TR.PS.FrameSource(TR.DATA), [fq, fqc], TR.TP.SYMS, TR.START, TR.START + TR.DAY, TR.START, TR.StubStrategies())
+        sigs = {aid: [] for aid in (fq["id"], fqc["id"])}
+        for close, items in by.items():
+            for aid, o in items:
+                if isinstance(o, TR.Signal):
+                    sigs[aid].append((close, o))
+        assert sigs[fq["id"]] and len(sigs[fqc["id"]]) == len(sigs[fq["id"]])
+        for (c1, o1), (c2, o2) in zip(sigs[fq["id"]], sigs[fqc["id"]]):
+            assert c1 == c2 and o2.side == L.flip_side(fqc["id"], c2) and o1.meta["native_s"] == o2.meta["native_s"] == o1.side
+            assert "rx0" in o2.meta and o2.meta["style"] == "rule:F11.a.d0.5"
+        assert not notes
+    finally:
+        RX.NATIVE["provider"] = saved
+
+
+def test_the_gate_helpers_are_causal_and_fail_closed():
+    # g1: a hand BTC 4h chart: rising closes (above the EMA once it is warm), then falling
+    n = 120
+    c = np.r_[np.linspace(100, 160, 80), np.linspace(160, 90, 40)]
+    t = np.arange(n, dtype=np.int64) * RX.TF_MS["4h"] + RX.TF_MS["4h"]                    # bar close times
+    ms, sign = RX.gate_g1_arrays(t, c)
+    assert (sign[:RX.GATE_EMA] == 0).all() and sign[70] == 1 and sign[-1] == -1
+    ok = lambda close_ms, side: RX.gate_g1(ms, sign, close_ms, side)                       # noqa: E731
+    assert ok(int(t[70]), 1) and not ok(int(t[70]), -1) and ok(int(t[-1]), -1) and not ok(int(t[-1]), 1)
+    assert ok(int(t[70]) + 1, 1) and not ok(int(t[10]), 1) and not ok(int(t[0]) - 1, 1)                # a bar closing later is not known yet; cold EMA and no bar: closed
+    # the value at a signal never reads a later bar: changing the future leaves it
+    c2 = c.copy()
+    c2[75:] = 1.0
+    ms2, sign2 = RX.gate_g1_arrays(t, c2)
+    assert sign2[74] == sign[74] and RX.gate_g1(ms2, sign2, int(t[74]), 1) == RX.gate_g1(ms, sign, int(t[74]), 1)
+    # g2: the percentile of the ATR% inside its last window
+    w = RX.GATE_WINDOW
+    atr = np.linspace(0.001, 0.01, w + 10)                                                  # rising: the newest value is always the top of its window
+    assert not RX.gate_g2(atr, w + 5) and not RX.gate_g2(atr, w - 2)                          # at the top (> 80%), and the window is not full yet
+    mid = np.r_[np.linspace(0.001, 0.01, w - 1), [0.0055]]
+    assert RX.gate_g2(mid, w - 1) and not RX.gate_g2(np.r_[mid[:-1], [0.0001]], w - 1) and not RX.gate_g2(np.r_[mid[:-1], [np.nan]], w - 1)
+
+
+@SIDES
+def test_a_gate_account_enters_only_when_the_signal_passed_the_gate_and_says_so(side):
+    for gate in RX.GATES:
+        a = _own(gate=gate)
+        # passed: the same entry as the plain account
+        s = TR.sig(TR.C0, side, aid=a["id"], gate={"g1": True, "g2": True})
+        e = TR.run(a, TR.Path(), side, sigs=((TR.C0, s),))
+        assert e.position is not None
+        # failed, absent or not known: no entry, a REJECTED outcome with the gate's name
+        for meta in ({"g1": False, "g2": False}, {"g1": True, "g2": True} if False else {}, {"g1": None, "g2": None}):
+            kw = {"gate": meta} if meta else {}
+            e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.sig(TR.C0, side, aid=a["id"], **kw)),))
+            assert e.position is None and not e.trades
+    # only its own gate counts
+    a = _own(gate="g2")
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.sig(TR.C0, side, aid=a["id"], gate={"g1": False, "g2": True})),))
+    assert e.position is not None
+    # a rule account with a gate (the quick stop's filter) is built with it
+    assert RX.make_engine(_ruled("F11.a.d0.5") | {"gate": "g1"}, TR.BR, TR.SP).rx_gate == "g1"
+    assert RX.make_engine(_own(gate="g2"), TR.BR, TR.SP).rx_gate == "g2" and getattr(RX.make_engine(_own(), TR.BR, TR.SP), "rx_gate", None) is None
+
+
+def test_the_gate_kinds_exist_for_the_right_picks_and_the_fingerprint_sees_the_gate():
+    from candleague import runner as RN
+    doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
+    for role, gate, n, rule in (("ldt", "g1", 49, None), ("ldv", "g2", 49, None), ("fqt", "g1", 38, "F11.a.d0.5"), ("fqv", "g2", 38, "F11.a.d0.5")):
+        group = [a for a in accts if a["role"] == role]
+        assert len(group) == n and all(a["gate"] == gate and a["exit"].startswith("ladderU|") for a in group)
+        assert all((a["rule"]["id"] if a["rule"].get("family") else None) == rule for a in group)
+    cands = [c for c in owner[:2]]
+    small = [a for a in accts if a["pick"] in {c["id"] for c in cands}]
+    base = RN.fingerprint(small)
+    other = copy.deepcopy(small)
+    for a in other:
+        if a["role"] == "ldt":
+            a["gate"] = "g2"
+    assert RN.fingerprint(other) != base
+
+
+@pytest.mark.parametrize("bad", [
+    {"suffix": "-x1", "exit": "ladderU", "gate": "g3", "label_ko": "x"},
+    {"suffix": "-x1", "gate": "g1", "label_ko": "x"},                                                 # needs the owners' ladder
+    {"suffix": "-x1", "exit": "ladderU", "gate": "g1", "coin_of": "-ld", "label_ko": "x"},
+])
+def test_a_bad_gate_entry_is_refused(bad):
+    doc = copy.deepcopy(LINEUP)
+    doc["owner_exits"].append(bad)
+    with pytest.raises(RX.RuleConfigError):
+        RX.normalize_owner(doc)
+
+
+def test_chunk_rule_stamps_every_gate_account_signal_with_the_two_gate_values():
+    doc = copy.deepcopy(LINEUP)
+    doc["owner_exits"] += [{"suffix": "-ldt", "exit": "ladderU", "stop_max": 2, "gate": "g1", "label_ko": "x"},
+                           {"suffix": "-ldv", "exit": "ladderU", "stop_max": 2, "gate": "g2", "label_ko": "y"}]
+    accts = [a for a in RX.owner_accounts(TR._rule_cands("15m", "tp3R|4"), RX.normalize_owner(doc)) if a.get("gate")]
+    assert [a["gate"] for a in accts] == ["g1", "g2"]
+    by, notes = RX.chunk_rule(TR.LIB, TR.PS.FrameSource(TR.DATA), accts, TR.TP.SYMS, TR.START, TR.START + TR.DAY, TR.START, TR.StubStrategies())
+    sigs = [(aid, o) for items in by.values() for aid, o in items if isinstance(o, TR.Signal)]
+    assert sigs and not notes and not any(isinstance(o, RX.RuleClose) for items in by.values() for _a, o in items)
+    for _aid, o in sigs:
+        assert set(o.meta["gate"]) == {"g1", "g2"} and all(isinstance(v, bool) for v in o.meta["gate"].values())
+    one = {a["id"]: [(o.symbol, o.ts, o.side) for aid, o in sigs if aid == a["id"]] for a in accts}
+    assert one[accts[0]["id"]] == one[accts[1]["id"]]                                           # the same signals, whatever the gate

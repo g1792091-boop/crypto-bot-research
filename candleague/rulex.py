@@ -465,9 +465,9 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "own_stop", "own_target"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "own_stop", "own_target", "gate"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
-OWNER_MAX = 24
+OWNER_MAX = 32
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
 TP_NAMES = tuple(r[0] for r in X.TP_RULES) + (X.ULAD,)
 WEEKEND_KO = "토 00:00 ~ 월 00:00 UTC (한국 토 09:00 ~ 월 09:00)"
@@ -480,8 +480,24 @@ def is_weekend(ms: int) -> bool:
     return (int(ms) // DAY + 3) % 7 >= 5
 
 
+# The regime gates (owners 2026-10-13): a gate account takes a signal only when the market state at the signal bar's close passes. g1: the signal's side is the side
+# of the BTC 4h trend (the last closed BTC 4h bar: close above its EMA(GATE_EMA) = up, below = down; long needs up, short needs down); g2: the pick bar's ATR% is
+# between the GATE_PCT_LO and GATE_PCT_HI percentile of its last GATE_WINDOW bars (not too quiet, not too wild). The numbers are the league's own test values.
+GATES = ("g1", "g2")
+GATE_EMA, GATE_WINDOW, GATE_PCT_LO, GATE_PCT_HI = 50, 200, 0.2, 0.8
+GATE_PARAMS = [GATE_EMA, GATE_WINDOW, GATE_PCT_LO, GATE_PCT_HI]
+
+
+GATE_KO = {"g1": f"BTC 4시간 추세와 같은 방향일 때만 (BTC 4시간 봉 종가가 EMA{GATE_EMA} 위면 상승, 아래면 하락 · 롱은 상승일 때, 숏은 하락일 때)",
+           "g2": f"변동성이 너무 낮지도 높지도 않을 때만 (그 봉의 ATR%가 최근 {GATE_WINDOW}봉 중 하위 {GATE_PCT_LO * 100:g}%~상위 {(1 - GATE_PCT_HI) * 100:g}% 사이)"}
+
+
 def _owner_words(e: dict) -> tuple:
     """(short label, what it does, what it is for) in plain Korean for an owner-exit entry the file does not describe itself."""
+    if e.get("gate"):
+        short, desc, why = _owner_words({**e, "gate": None})
+        return ("필터 " + short, f"신호가 나도 {GATE_KO[e['gate']]} 받음 · 안 맞으면 그 신호는 건너뜀(같은 신호의 필터 없는 계좌와 비교) · {desc}",
+                "이 장세 조건으로 걸러 받으면 나은가")
     r, tp = e["rule"], e["tp"]
     if e.get("coin_of"):
         return ("동전", "같은 청산 · 방향만 같은 신호 시각에 동전으로 정함 · 시장 방향 덕을 가리는 대조 계좌", "번 것이 시장 방향 덕인지 가르는 대조")
@@ -583,6 +599,9 @@ def _owner_entry(x, i: int) -> dict:
         raise RuleConfigError(f"rule config: {where} own_stop is the owners' ladder ('exit') with the first stop at the strategy's own level: no rule, no tighten, no coin twin")
     if ot_ and (tp != X.ULAD or rule is None or rule["family"] != "F11" or x.get("tighten") is not None or x.get("coin_of") is not None):
         raise RuleConfigError(f"rule config: {where} own_target needs the owners' ladder with an F11 rule (the strategy's own exit and its own target), no tighten, no coin twin")
+    gate = x.get("gate")
+    if gate is not None and (gate not in GATES or tp != X.ULAD or x.get("coin_of") is not None):
+        raise RuleConfigError(f"rule config: {where} gate must be one of {list(GATES)} and needs the owners' ladder ('exit') and no coin twin")
     tg = x.get("tighten")
     if tg is not None and (isinstance(tg, bool) or not isinstance(tg, (int, float)) or not 0 < float(tg) <= 1 or rule is None or tp != X.ULAD):
         raise RuleConfigError(f"rule config: {where} tighten must be a number in (0, 1] (the share of the stop distance the stop narrows to) "
@@ -601,7 +620,7 @@ def _owner_entry(x, i: int) -> dict:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
          "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin,
-         "tighten": None if tg is None else float(tg), "own_stop": os_, "own_target": ot_}
+         "tighten": None if tg is None else float(tg), "own_stop": os_, "own_target": ot_, "gate": gate}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -627,7 +646,7 @@ def normalize_owner(doc: dict) -> dict:
     by_suffix = {e["suffix"]: e for e in out}
     for e in out:
         if e["coin_of"] is not None and (e["coin_of"] not in by_suffix or by_suffix[e["coin_of"]]["coin_of"] is not None
-                                         or by_suffix[e["coin_of"]]["tp"] is None or by_suffix[e["coin_of"]]["rule"] is not None):
+                                         or by_suffix[e["coin_of"]]["tp"] is None):
             raise RuleConfigError(f"rule config: owner_exits {e['suffix']!r} coin_of {e['coin_of']!r} must name another entry with an "
                                   "'exit' that is not a coin twin itself")
     own = [e for e in out if e["role"] == "cand"]
@@ -676,8 +695,9 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                 if tgt is None:
                     continue                                  # that entry made no account for this pick
                 exit_ = tgt["exit"]
+                er = tgt["rule"] if tgt["rule"].get("family") is not None else None          # the twin trades the same rule, only the side is the coin's
             elif e["tp"]:
-                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"], e["own_stop"], e["own_target"])
+                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"], e["own_stop"], e["own_target"], e["gate"])
                 if (er is None and not e["own_stop"] and exit_ == c["exit"]) or key in seen:
                     continue                                  # the pick's own exit (or an earlier entry's) already: no duplicate account
                 seen[key] = e["suffix"]
@@ -703,6 +723,12 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
             for flag in ("own_stop", "own_target"):
                 if e[flag]:
                     a[flag] = True
+            if e["gate"]:
+                a["gate"] = e["gate"]
+            if tgt is not None:                                # a coin twin of a rule account: the same options, the coin's side
+                for flag in ("tighten", "own_stop", "own_target", "gate"):
+                    if tgt.get(flag):
+                        a[flag] = tgt[flag]
             if e["weekend_off"]:
                 a["weekend_off"] = True
             if tgt is not None:
@@ -791,14 +817,6 @@ NATIVE_COVERS = {"core": ("DOGE", "N03_ADX_GC", "N09_ALLIG_AROON", "N10_HA_PSAR"
 NATIVE_LEVELS = {"core": ("N13_3OUTSIDE", "N19_FIB_CHOP"), "ds": ("F10_OTE", "F11_TSOUP", "F1_PVT_DIV", "F5_BOX", "F9_FVG")}
 OWN_STOP_FLOOR_ATR = 0.5               # the own-level stop is never closer than this (a level a few ticks away is noise, not a stop) ...
 OWN_STOP_BUFFER_ATR = 0.1              # ... sits this far beyond the level, so the level itself does not trigger it, and is never wider than the account's cap
-
-
-# The regime gates (owners 2026-10-13): a gate account takes a signal only when the market state at the signal bar's close passes. g1: the signal's side is the side
-# of the BTC 4h trend (the last closed BTC 4h bar: close above its EMA(GATE_EMA) = up, below = down; long needs up, short needs down); g2: the pick bar's ATR% is
-# between the GATE_PCT_LO and GATE_PCT_HI percentile of its last GATE_WINDOW bars (not too quiet, not too wild). The numbers are the league's own test values.
-GATES = ("g1", "g2")
-GATE_EMA, GATE_WINDOW, GATE_PCT_LO, GATE_PCT_HI = 50, 200, 0.2, 0.8
-GATE_PARAMS = [GATE_EMA, GATE_WINDOW, GATE_PCT_LO, GATE_PCT_HI]
 
 
 def native_levels_supported(c: dict) -> bool:
@@ -1275,6 +1293,7 @@ class RuleMixin:
     rx_tighten: Optional[float] = None       # owners 2026-10-13: when the rule fires, narrow the stop to this share of the stop distance instead of closing
     rx_own_stop: bool = False                # owners 2026-10-13: the first stop sits just beyond the strategy's own invalidation level (capped, with a floor)
     rx_own_target: bool = False              # ... and a take-profit limit sits at the strategy's own target (F11 account, the lock kept)
+    rx_gate: Optional[str] = None            # owners 2026-10-13: a regime gate ("g1", "g2"): the signal's meta["gate"] says whether it passed (unknown = no entry)
 
     def submit(self, signal) -> None:
         if isinstance(signal, RuleClose):
@@ -1314,6 +1333,9 @@ class RuleMixin:
             return False
         if self.rx_weekend_off and is_weekend(sig.ts + 1):                # the signal bar's close (Signal.ts = close - 1)
             self._record(sig, "REJECTED", WEEKEND_REASON, bar.open_time)                       # an open position is managed as usual
+            return False
+        if self.rx_gate is not None and (sig.meta.get("gate") or {}).get(self.rx_gate) is not True:
+            self._record(sig, "REJECTED", f"regime gate {self.rx_gate}", bar.open_time)        # failed, or the market state was not known at the signal bar
             return False
         if self.rx_own_stop:
             self._own_level_stop(sig, bar)
@@ -1434,11 +1456,12 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     rule, name, size = a.get("rule") or NO_RULE, a["exit"], a.get("size", 1.0)
     weekend = bool(a.get("weekend_off"))
     if rule.get("family") is None:
-        if not weekend and not a.get("own_stop"):
+        if not weekend and not a.get("own_stop") and not a.get("gate"):
             return X.make_engine(name, brackets, specs, book=a["id"], size=size)
-        e = _lock_engine(a, brackets, specs)                               # the plain engine of the exit, with the weekend gate and / or the own-level stop
+        e = _lock_engine(a, brackets, specs)                               # the plain engine of the exit, with the weekend gate, the regime gate and / or the own-level stop
         e.rx_weekend_off = weekend
         e.rx_own_stop = bool(a.get("own_stop"))
+        e.rx_gate = a.get("gate")
         return e
     if rule["family"] in LOCK_FAMILIES:                                    # F13: another exit of candleague.exits, the plain engine with the C1 gate
         e = _lock_engine(a, brackets, specs)
@@ -1464,12 +1487,50 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     e.rx_rule, e.rx_sched, e.rx_tf_ms = rule, sched_of(a), TF_MS[a["tf"]]
     e.rx_no_entry_from = int(a["no_entry_from_ms"]) if a.get("no_entry_from_ms") else None
     e.rx_weekend_off = weekend
+    e.rx_gate = a.get("gate")
     return e
 
 
 # ====================================================================== the league side: signals and records per chunk
 class BothFlags(RuntimeError):
     """A chart bar carries both a long and a short flag of one pick (PREREG 3: no pick does; the league asserts it and stops)."""
+
+
+def gate_g1_arrays(close4_ms, close4) -> tuple:
+    """(bar close times, trend sign per BTC 4h bar): +1 when the bar's close is above its EMA(``GATE_EMA``) of closes, -1 below, 0 while the EMA is not warm
+    (the first ``GATE_EMA`` bars) or the values are not finite."""
+    c = np.asarray(close4, float)
+    if not len(c):
+        return np.zeros(0, np.int64), np.zeros(0, np.int8)
+    ema = np.empty(len(c))
+    a = 2.0 / (GATE_EMA + 1)
+    y = c[0]
+    for k in range(len(c)):                                                  # pandas ewm(span, adjust=False)
+        y = c[k] if k == 0 else (1 - a) * y + a * c[k]
+        ema[k] = y
+    sign = np.sign(c - ema).astype(np.int8)
+    ok = np.isfinite(c) & np.isfinite(ema)
+    sign[~ok] = 0
+    sign[:GATE_EMA] = 0
+    return np.asarray(close4_ms, np.int64), sign
+
+
+def gate_g1(close4_ms, sign4, close_ms: int, side: int) -> bool:
+    """g1 at a signal bar closing at ``close_ms`` (ms): the last BTC 4h bar closed at or before it has the side's trend (False when there is none or the EMA is cold)."""
+    j = int(np.searchsorted(close4_ms, close_ms, side="right")) - 1
+    return bool(j >= 0 and int(sign4[j]) == int(side))
+
+
+def gate_g2(atr_pct, i: int) -> bool:
+    """g2 at pick bar ``i``: the ATR% of the bar is inside [GATE_PCT_LO, GATE_PCT_HI] of its last GATE_WINDOW values (itself included, ties not counted);
+    False when the window is not full or a value is not finite."""
+    if i < GATE_WINDOW - 1:
+        return False
+    w = np.asarray(atr_pct[i - GATE_WINDOW + 1:i + 1], float)
+    if not np.isfinite(w).all():
+        return False
+    pct = float(np.mean(w < w[-1]))
+    return GATE_PCT_LO <= pct <= GATE_PCT_HI
 
 
 def native_arrays(a: dict, sym: str, df, close, lo, sh, btc) -> dict:
@@ -1489,6 +1550,14 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
     ra = [a for a in accts if a.get("rule")]
     by_close: dict[int, list] = {}
     notes: list[str] = []
+    g1 = None                                                             # (close times, trend sign) of the BTC 4h chart, when a g1 gate account exists
+    if any(a.get("gate") == "g1" for a in ra):
+        try:
+            cols4 = source.load("BTCUSDT", start - window_5m(lib, "4h") * FIVE, end)
+            f4 = rule_frame(lib, cols4, "4h", end)
+            g1 = gate_g1_arrays((f4["ts"].astype("int64") // 1_000_000).to_numpy(np.int64) + TF_MS["4h"], f4["close"].to_numpy(float))
+        except Exception as exc:  # noqa: BLE001  live: no BTC 4h chart -> the g1 gate does not pass (no entry), said in the notes
+            notes.append(f"BTC 4시간 차트를 만들지 못했습니다 ({type(exc).__name__}), 이 구간 g1 필터 계좌는 진입하지 않음")
     for tf in sorted({a["tf"] for a in ra}, key=lambda t: TF_MS[t]):
         span, w = TF_MS[tf], lib.warmup_bars(tf)
         group = [a for a in ra if a["tf"] == tf]
@@ -1513,6 +1582,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
             if not len(idx) and (pack15 is None or not len(pack15[2])):
                 continue
             pack = FramePack(lib, df)
+            atr_pct = (np.asarray(pack.atr(), float) / np.asarray(df["close"], float)) if any(a.get("gate") for a in group) else None
             cache: dict = {}
             strength: dict = {}
             natc: dict = {}
@@ -1553,6 +1623,9 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                     s = flip_of(a, int(close[i])) if (a["role"] == ROLE_FLIP or a.get("coin")) else s0
                     meta = {"stop_dist": spec["stop_atr"] * at, "account": a["id"],
                             "ctx": {"strength": _strength_feats(strength.get(a["name"]), smod, i, s)}}
+                    if a.get("gate"):
+                        meta["gate"] = {"g1": bool(g1 is not None and gate_g1(g1[0], g1[1], int(close[i]), s)),
+                                        "g2": gate_g2(atr_pct, i)}
                     if rule["family"] is not None:
                         meta["style"] = f"rule:{rule['id']}"
                     if decides:
