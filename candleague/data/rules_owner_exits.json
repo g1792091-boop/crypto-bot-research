@@ -1,0 +1,57 @@
+{
+  "enabled": true,
+  "owner_exits": [
+    {
+      "suffix": "-ld",
+      "exit": "ladderU",
+      "label_ko": "계단 익절 (실전 후보)"
+    },
+    {
+      "suffix": "-ldc",
+      "exit": "ladderU",
+      "coin_of": "-ld",
+      "label_ko": "계단 · 동전 던지기"
+    },
+    {
+      "suffix": "-ld2",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "label_ko": "계단 · 손절 최대 2 ATR"
+    },
+    {
+      "suffix": "-e",
+      "label_ko": "지금 청산"
+    },
+    {
+      "suffix": "-ma",
+      "rule": "F2.n50.b",
+      "label_ko": "이동평균 이탈"
+    },
+    {
+      "suffix": "-tp10",
+      "exit": "roe10",
+      "stop_max": 2,
+      "label_ko": "고정 익절 +10% (손절 최대 2 ATR)"
+    },
+    {
+      "suffix": "-gb",
+      "rule": "F5.P1.g50.a",
+      "label_ko": "큰 수익 반납 보호"
+    },
+    {
+      "suffix": "-fq",
+      "rule": "F6.w3.d0.5",
+      "label_ko": "빠른 손절 (관점 무너지면)"
+    },
+    {
+      "suffix": "-oc",
+      "rule": "F3.b",
+      "label_ko": "반대 신호 청산 (매매법 자체)"
+    },
+    {
+      "suffix": "-wk",
+      "weekend_off": true,
+      "label_ko": "주말 쉬는 계좌"
+    }
+  ]
+}
