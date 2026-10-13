@@ -26,7 +26,7 @@ import * as LK from "../lk.js";
 import {liveOk, livePnl, inGroup, POS_GROUPS} from "../poskit.js";
 import {markOf} from "../live.js";
 import {fadeIn} from "../v4kit.js";
-import {COINS} from "../labels.js";
+import {COINS, lineupOn} from "../labels.js";
 import {topBar} from "./terminal-top.js";
 import {coinStrip, fillsFeed} from "./terminal-feed.js";
 import {termChart} from "./terminal-chart.js";
@@ -61,12 +61,13 @@ export async function mount(el, ctx) {
   try { await ctx.meta(); } catch (e) { /* the codes stand in for the Korean names */ }
   if (!ctx.alive()) return undefined;
   const q = ctx.params.query || {};
-  const savedGrp = local.get("tm-grp", "cand");
+  const grpDefault = lineupOn() ? "all" : "cand";          // the owner-exit league: its kinds are many, 후보 is only the 지금 청산 account, so the first view is 전체
+  const savedGrp = local.get("tm-grp", grpDefault);
   const st = {
     coin: COINS.includes(q.coin) ? q.coin : COINS.includes(local.get("tm-coin", "")) ? local.get("tm-coin", "") : "BTCUSD",
     tf: TFS.includes(q.tf) ? q.tf : TFS.includes(local.get("tm-tf", "")) ? local.get("tm-tf", "") : "15m",
     sel: q.acct || null, at: q.at && Number.isFinite(Number(q.at)) ? Number(q.at) : null,
-    grp: POS_GROUPS.some((g) => g.id === savedGrp) ? savedGrp : "cand",
+    grp: POS_GROUPS.some((g) => g.id === savedGrp) ? savedGrp : grpDefault,
     pos: null, book: null, fills: null,
   };
   const asked = {acct: !!q.acct, coin: COINS.includes(q.coin), tf: TFS.includes(q.tf)};
