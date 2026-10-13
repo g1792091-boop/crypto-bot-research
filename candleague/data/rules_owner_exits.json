@@ -109,6 +109,7 @@
       "exit": "ladderU",
       "stop_max": 2,
       "rule": "F1.w3.a",
+      "short_ko": "공통 구조 청산",
       "label_ko": "연구 · 모든 매매법 공통 3봉 구조 청산"
     },
     {
