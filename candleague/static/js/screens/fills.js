@@ -13,6 +13,7 @@ import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {COINS, ROLES, ROLE_KO, ROLE_DESC, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
 import {tradesPane} from "./positions-orders.js";
+import {replayHref} from "../why.js";
 import {afterBar, afterFills, afterOn, afterSuffix, afterEmpty} from "../after.js";
 
 export const css = "scr/positions.css";
@@ -41,6 +42,8 @@ function tableView(ctx) {
       {id: "lev", label: "배수", sort: (r) => r.f.leverage, get: (r) => (r.f.pnl == null && r.f.roe == null ? "—" : r.f.leverage ? `${fmt.int(r.f.leverage)}배` : "—")},
       {id: "roe", label: "증거금 대비", sort: (r) => r.f.roe, get: (r) => (r.f.roe == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(r.f.roe)]}, fmt.pct(r.f.roe * 100, true, 1)))},
       {id: "pnl", label: "손익", sort: (r) => r.f.pnl, get: (r) => (r.f.pnl == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(r.f.pnl)]}, fmt.money(r.f.pnl, true)))},
+      {id: "rp", label: "다시보기", get: (r) => h("a", {class: "dl-tlink", href: replayHref(r.f.account, r.f.entry_time), title: "이 거래를 봉 하나씩 다시 보기",
+        onclick: (e) => e.stopPropagation()}, "다시보기")},
     ]});
   const el = h("div", {class: "stack"},
     h("div", {class: "dl-fields"},

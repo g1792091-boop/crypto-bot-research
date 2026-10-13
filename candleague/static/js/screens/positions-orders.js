@@ -17,6 +17,7 @@ import {markOf, serverNow} from "../live.js";
 import {coinShort, coinOf, reasonKo} from "../labels.js";
 import {sideTag, nameNode, usdt, dist, kindKo, HIDDEN_KO, HIDDEN_WHY} from "./positions-card.js";
 import {afterOn, keepFill, afterTag, afterEmpty} from "../after.js";
+import {replayHref} from "../why.js";
 
 const DAY = 86400000, KST = 9 * 3600000;
 /** Korea's midnight (ms) of the day ``ms`` falls in. */
@@ -105,7 +106,9 @@ export function fillRow(f, a, o = {}) {
     h("span", {class: f.exit_reason === "LIQ" ? "down" : ""}, reasonKo(f.exit_reason)),
     hid ? h("span", null, winOf(f) ? "이김" : "짐") : h("span", {class: fmt.tone(f.roe)}, `ROE ${fmt.pct(f.roe * 100, true, 1)}`),
     hid || f.entry_price == null ? null : h("span", {class: "num"}, `${fmt.price(f.entry_price)} → ${fmt.price(f.exit_price)}`),
-    a ? h("span", null, kindKo(a)) : null));
+    a ? h("span", null, kindKo(a)) : null,
+    h("a", {class: "cl-elink", href: replayHref(f.account, f.entry_time), title: "이 거래를 봉 하나씩 다시 보기",
+      onclick: (e) => e.stopPropagation(), onkeydown: (e) => e.stopPropagation()}, "다시보기")));
 }
 
 /** "N건 · 합계 +12.30 USDT · 이긴 거래 a · 강제청산 b · 딥시크 n건 (개수만)" (hidden trades counted only). */
