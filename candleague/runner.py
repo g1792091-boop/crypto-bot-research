@@ -621,6 +621,9 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
         # ... and their scoreboard, the main accounts against the control, the rules' events (summary.owner_views; DeepSeek money by ds_money)
         doc.update(SM.owner_views(lu, league.accts, book, rows, league.start_ms, league.done, ds_money, SM.narrowed_keys(league.conn),
                                   EQUITY))
+        # ... and the pre-registered decision protocol (summary.decision_views): the day count is the engine's processed time; DeepSeek is
+        # left out of every figure unless ds_money
+        doc["decision"] = SM.decision_views(book, league.accts, lu, league.start_ms, league.done, ds_money)
     os.makedirs(snap, exist_ok=True)
     _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms, book))
     _write(snap, "league.json", doc)

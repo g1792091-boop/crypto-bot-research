@@ -830,3 +830,367 @@ def owner_views(lineup: list, accts: list, book: dict, rows: list, start_ms: Opt
     return {"kinds": kinds_summary(lineup, accts, book, rows, start_ms, end_ms, ds_money, narrowed, equity0),
             "pairs": pairs_summary(lineup, accts, book, ds_money, equity0),
             "events": events_summary(lineup, accts, book, narrowed, rows, ds_money)}
+
+
+# ---------------------------------------------------------------- the pre-registered decision protocol (owners 2026-10-13)
+# league.json key ``decision`` (runner.write_snapshots, only when the league has a lineup): the rule that says in advance how the owners will
+# judge ~25 account kinds on the SAME signals, so that nobody picks the luckiest one after weeks of paper trading. Three kinds of test, one
+# multiple-testing family (Holm-Bonferroni, one-sided p): (a) every 메인 kind against the control -ld on the same signals, (b) every gate kind
+# (필터) kept vs dropped signals of the ungated kind, (c) the real kind against its coin-flip twin (-fq / -fqc, -ld / -ldc). The unit of
+# resampling is the UTC day (trades of one day share the market, so they are not independent). One decision, on day 28; day 14 is a look.
+# The pass rule is code, not opinion: n >= 300, Holm p < 0.05, mean difference > 0 and both halves of the period > 0.
+# DeepSeek money (D11): only core accounts enter any statistic unless ``ds_money`` (no ROE of a DeepSeek account, no count of its pairs).
+from operator import itemgetter  # noqa: E402
+
+DECISION_OBSERVE_DAY = 14             # a first look: numbers only, nothing is decided or changed
+DECISION_DAY = 28                     # the one decision day
+DECISION_MIN_PAIRS = 300
+DECISION_ALPHA = 0.05
+DECISION_CI = 0.90                    # the interval shown: the two-sided one that matches a one-sided test at 5%
+DECISION_MIN_DAYS = 5                 # fewer days than this cannot give a day-cluster p
+BOOT_CHUNK = 500
+GATE_SUFFIXES = ("-ldt", "-ldv", "-fqt", "-fqv")                       # gate kinds by name (any kind whose label starts "필터" is one too)
+GATE_BASE = {"-ldt": "-ld", "-ldv": "-ld", "-fqt": "-fq", "-fqv": "-fq"}    # the ungated kind a gate kind is compared with
+COIN_TWINS = (("-fq", "-fqc"), ("-ld", "-ldc"))                      # (real kind, its coin-flip twin)
+TESTS = ("main_vs_control", "filter_kept_vs_dropped", "vs_coin")
+_KEY3 = itemgetter("symbol", "side", "entry_time")
+_KEY2 = itemgetter("symbol", "entry_time")
+_F3, _F2 = ("symbol", "side", "entry_time"), ("symbol", "entry_time")
+FILTER_CAVEAT = "근사 비교: 필터 계좌가 다른 때 포지션 중이어서 건너뛴 신호도 '걸러진 것'에 섞입니다"
+
+
+def holm(ps: list) -> list:
+    """Holm-Bonferroni adjusted p-values of a family (same order as ``ps``): sort ascending, multiply the i-th smallest by (m - i + 1), make
+    the sequence non-decreasing, cap at 1. Ties keep their input order."""
+    m = len(ps)
+    order = sorted(range(m), key=lambda i: (ps[i], i))
+    out, run = [0.0] * m, 0.0
+    for rank, i in enumerate(order):
+        run = max(run, (m - rank) * ps[i])
+        out[i] = min(1.0, run)
+    return out
+
+
+def _is_gate(k: dict) -> bool:
+    return k.get("suffix") in GATE_SUFFIXES or str(k.get("label_ko") or "").lstrip().startswith("필터")
+
+
+def _base_of(suffix: str, have: set) -> str:
+    """The ungated kind a gate kind is compared with: the named one, else the kind whose suffix is this one without its last letter, else
+    the control."""
+    if suffix in GATE_BASE:
+        return GATE_BASE[suffix]
+    cut = suffix[:-1]
+    return cut if cut in have and cut != "-" else CONTROL
+
+
+def _keys(trades: list, getter, fields: tuple) -> list:
+    try:
+        return list(map(getter, trades))
+    except KeyError:                                     # a hand-made trade without some field
+        return [tuple(t.get(f) for f in fields) for t in trades]
+
+
+def _finite(x) -> Optional[float]:
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return None
+    return v if v == v and v not in (float("inf"), float("-inf")) else None
+
+
+def _roe_map(trades: list, getter, fields: tuple) -> dict:
+    """{entry key: ROE} of the trades with a finite ROE (the first trade of a key wins)."""
+    m: dict = {}
+    for k, t in zip(_keys(trades, getter, fields), trades):
+        r = _finite(t.get("roe"))
+        if r is not None and k not in m:
+            m[k] = r
+    return m
+
+
+def _boot_stats(seed: int, cols: list) -> Optional[np.ndarray]:
+    """N_BOOT resampled statistics, whole days with replacement. ``cols`` = [sum, count] per day (the mean) or [sum1, count1, sum2, count2]
+    (mean1 - mean2). A resample without any trade of a group has no statistic (NaN)."""
+    D = len(cols[0])
+    if D < 1:
+        return None
+    rng = np.random.default_rng(seed)
+    out = np.empty(N_BOOT)
+    done = 0
+    while done < N_BOOT:
+        m = min(BOOT_CHUNK, N_BOOT - done)
+        pick = rng.integers(0, D, size=(m, D))
+        with np.errstate(invalid="ignore", divide="ignore"):
+            v = cols[0][pick].sum(1) / cols[1][pick].sum(1)
+            if len(cols) == 4:
+                v = v - cols[2][pick].sum(1) / cols[3][pick].sum(1)
+        out[done:done + m] = v
+        done += m
+    return out
+
+
+def _boot_result(seed: int, cols: list, n_days: int) -> tuple:
+    """(ci_lo, ci_hi, one-sided p that the statistic is <= 0): None x3 when there are fewer than DECISION_MIN_DAYS days or no usable resample.
+    p = (1 + resamples <= 0) / (usable + 1): the study's convention (boot_mean_p), never 0."""
+    if n_days < DECISION_MIN_DAYS:
+        return None, None, None
+    v = _boot_stats(seed, cols)
+    v = v[np.isfinite(v)] if v is not None else None
+    if v is None or not len(v):
+        return None, None, None
+    lo, hi = np.percentile(v, [50 * (1 - DECISION_CI), 100 - 50 * (1 - DECISION_CI)])
+    return float(lo), float(hi), (1 + int((v <= 0).sum())) / (len(v) + 1)
+
+
+def _day_cols(ex: np.ndarray, weights: list) -> tuple:
+    """(days, [per-day sum of each weight array]) for the exit times ``ex`` (ms): np.bincount per UTC day."""
+    _u, inv = np.unique((ex // 86_400_000).astype(np.int64), return_inverse=True)
+    D = len(_u)
+    return D, [np.bincount(inv, w, D).astype(float) for w in weights]
+
+
+def _mean_or_none(x: np.ndarray) -> Optional[float]:
+    return float(x.mean()) if len(x) else None
+
+
+def _paired_test(diff: np.ndarray, ex: np.ndarray, seed: int) -> dict:
+    """Mean of paired differences with the day-cluster bootstrap and the two halves (split by exit time at the median)."""
+    n = len(diff)
+    if not n:
+        return {"n": 0, "n_days": 0, "mean": None, "lo": None, "hi": None, "p": None, "h1": None, "h2": None}
+    D, (s, c) = _day_cols(ex, [diff, np.ones(n)])
+    order = np.argsort(ex, kind="stable")
+    cut = n // 2
+    lo, hi, p = _boot_result(seed, [s, c], D)
+    return {"n": n, "n_days": D, "mean": float(diff.mean()), "lo": lo, "hi": hi, "p": p,
+            "h1": _mean_or_none(diff[order[:cut]]), "h2": _mean_or_none(diff[order[cut:]])}
+
+
+def _kept_test(roe: np.ndarray, kept: np.ndarray, ex: np.ndarray, seed: int) -> dict:
+    """Mean ROE of the kept trades minus the mean ROE of the dropped ones: the day-cluster bootstrap recomputes both means in every resample.
+    ``n`` is the smaller of the two groups (the weaker side of the comparison)."""
+    nk, nd = int(kept.sum()), int((~kept).sum())
+    out = {"n": min(nk, nd), "n_kept": nk, "n_dropped": nd, "n_days": 0, "mean": None, "lo": None, "hi": None, "p": None, "h1": None,
+           "h2": None, "mean_kept": _mean_or_none(roe[kept]), "mean_dropped": _mean_or_none(roe[~kept])}
+    if not len(roe):
+        return out
+    kf = kept.astype(float)
+    D, (sk, ck, sd, cd) = _day_cols(ex, [roe * kf, kf, roe * (1 - kf), 1 - kf])
+    out["n_days"] = D
+    if nk and nd:
+        out["mean"] = out["mean_kept"] - out["mean_dropped"]
+        out["lo"], out["hi"], out["p"] = _boot_result(seed, [sk, ck, sd, cd], D)
+        order = np.argsort(ex, kind="stable")
+        cut = len(roe) // 2
+
+        def gap(ix):
+            a, b = ix[kept[ix]], ix[~kept[ix]]
+            return float(roe[a].mean() - roe[b].mean()) if len(a) and len(b) else None
+        out["h1"], out["h2"] = gap(order[:cut]), gap(order[cut:])
+    return out
+
+
+def _sgn(x: float) -> str:
+    return f"{x:+.1f}".replace("-", "−")
+
+
+def _pp(x) -> str:
+    """A difference of ROE fractions in percentage points: 0.0123 -> "+1.2%p" (two decimals under 0.1 points: "+0.04%p")."""
+    if x is None:
+        return "—"
+    v = x * 100
+    return f"{f'{v:+.2f}' if 0 < abs(v) < 0.1 else _sgn(v)}%p".replace("-", "−")
+
+
+def _pf(p) -> str:
+    return "—" if p is None else ("0.001 미만" if p < 0.001 else f"{p:.3f}")
+
+
+def _verdict(r: dict, phase: str, days: int) -> tuple:
+    """(verdict, reason_ko) of a row whose ``p_holm`` is set. few: fewer than DECISION_MIN_PAIRS (the weaker group for a filter); wait: a
+    preview before the decision day; at / after it pass only if every condition holds, else fail with the failed conditions named."""
+    n = r["n"]
+    if n < DECISION_MIN_PAIRS:
+        return "few", f"표본 부족({n}/{DECISION_MIN_PAIRS})"
+    if phase != "decide":
+        return "wait", f"미리보기입니다: {DECISION_DAY}일째에 한 번만 판정합니다 (지금 {days}일째, 평균 차이 {_pp(r['mean_diff'])})"
+    fails = []
+    if r["mean_diff"] is None or r["mean_diff"] <= 0:
+        fails.append(f"평균 차이가 플러스가 아님({_pp(r['mean_diff'])})")
+    if r["p_holm"] is None:
+        fails.append(f"거래가 있는 날이 {DECISION_MIN_DAYS}일보다 적어 우연 보정을 할 수 없음")
+    elif r["p_holm"] >= DECISION_ALPHA:
+        fails.append(f"우연 보정 후 p={_pf(r['p_holm'])} ({DECISION_ALPHA}보다 작아야 통과)")
+    if not r["same_sign_halves"]:
+        fails.append(f"앞 절반({_pp(r['half1'])})과 뒤 절반({_pp(r['half2'])}) 중 플러스가 아닌 쪽이 있음")
+    if fails:
+        return "fail", "실패: " + ", ".join(fails)
+    return "pass", (f"통과: {n}쌍, 평균 차이 {_pp(r['mean_diff'])}, 우연 보정 후 p={_pf(r['p_holm'])} < {DECISION_ALPHA}, "
+                    f"앞 절반 {_pp(r['half1'])} · 뒤 절반 {_pp(r['half2'])}")
+
+
+def decision_rules_ko() -> list:
+    """The protocol in six short plain-Korean sentences, each "<what>: <how>" (the screen's rule box shows them in this order; the same text is
+    in docs/candleague-decision-protocol-ko.md)."""
+    return [
+        "거래당 순수익 차이: 같은 신호로 들어간 거래 한 쌍씩, 새 방식의 순수익(ROE)에서 비교 대상의 순수익을 뺀 값의 평균을 봅니다.",
+        "같은 날 거래는 묶어서 계산: 같은 날 끝난 거래는 같은 시장을 겪어 서로 닮았으므로, 하루를 한 덩어리로 보고 우연을 계산합니다.",
+        f"우연 보정: 시험이 여럿이라 운 좋은 하나가 나오기 쉬워서(홀름 보정) p를 키워서 봅니다. 보정 후 p가 {DECISION_ALPHA}보다 작아야 합니다.",
+        f"{DECISION_DAY}일째 한 번만 판정: {DECISION_OBSERVE_DAY}일째에는 숫자만 보고 아무것도 바꾸지 않습니다. 판정은 {DECISION_DAY}일째에 딱 한 번입니다.",
+        f"앞 절반과 뒤 절반이 같은 방향: 쌍이 {DECISION_MIN_PAIRS}개 이상이고, 기간의 앞 절반과 뒤 절반 모두 평균 차이가 플러스여야 통과입니다.",
+        "하나도 통과 못 하면 '우위 없음'이 결론: 새 구조는 실전에 쓰지 않습니다. 숫자를 본 뒤에 기준을 바꾸지 않습니다.",
+    ]
+
+
+def _summary_ko(rows: list, phase: str, days: int) -> str:
+    if phase != "decide":
+        return f"아직 판정 시점이 아닙니다 ({days}일째, {DECISION_DAY}일째에 판정)"
+    if not rows:
+        return "판정할 비교가 없습니다 (비교할 계좌 종류가 없음)"
+    cnt = {v: sum(r["verdict"] == v for r in rows) for v in ("pass", "fail", "few")}
+    if cnt["few"] == len(rows):
+        return f"판정 시점({DECISION_DAY}일째)이 지났지만 표본이 모자라 판정하지 못했습니다 (표본 부족 {cnt['few']}개): 통과한 것은 없습니다"
+    won = [r for r in rows if r["verdict"] == "pass"]
+    few = f" (표본 부족 {cnt['few']}개)" if cnt["few"] else ""
+    if not won:
+        return f"통과한 것 0개: 새 구조에서 우위를 찾지 못했습니다{few}"
+    by = {t: [r for r in won if r["test"] == t] for t in TESTS}
+    names = lambda rs: "·".join(str(r.get("short_ko") or r["suffix"]) for r in rs)  # noqa: E731
+    parts = []
+    if by["main_vs_control"]:
+        parts.append(f"메인 {len(by['main_vs_control'])}개({names(by['main_vs_control'])})가 대조를 이겼습니다")
+    if by["filter_kept_vs_dropped"]:
+        parts.append(f"필터 {len(by['filter_kept_vs_dropped'])}개({names(by['filter_kept_vs_dropped'])})가 거른 신호보다 남긴 신호가 낫습니다")
+    if by["vs_coin"]:
+        parts.append(f"방향 실력 {len(by['vs_coin'])}개({names(by['vs_coin'])})가 동전 던지기를 이겼습니다")
+    tail = ""
+    if not by["main_vs_control"] and not by["filter_kept_vs_dropped"]:
+        tail = ". 새 구조(메인)에서는 우위를 찾지 못했습니다"
+    return f"통과 {len(won)}개: " + ", ".join(parts) + tail + few
+
+
+def decision_views(book: dict, accts: list, lineup: Optional[list], start_ms: Optional[int], now_ms: Optional[int], ds_money: bool = False) -> dict:
+    """The pre-registered decision protocol (league.json key ``decision``):
+
+    {"phase": "observe" | "decide", "days": N, "checkpoints": {"observe_day": 14, "decide_day": 28}, "min_pairs": 300, "alpha": 0.05,
+     "boot": 2000, "ci_level": 0.9, "min_days": 5, "decide_ms", "observe_ms", "n_tests", "counts": {pass, fail, wait, few}, "ds_in_stats",
+     "summary_ko", "rules_ko": [...], "rows": [...]}.
+
+    One row per tested kind and test, in this order: (a) ``main_vs_control`` for each 메인 kind (kind_group): the trades of the kind and of the
+    control <pick>-ld with the same (symbol, side, entry_time), mean of ROE(main) - ROE(control); (b) ``filter_kept_vs_dropped`` for each gate
+    kind (suffix -ldt / -ldv / -fqt / -fqv, or a label starting "필터"): the ungated kind's trades the gate kind also took (KEPT) against the
+    other trades of the picks that have the gate kind (DROPPED), mean ROE(kept) - mean ROE(dropped), ``n`` = the smaller group (also
+    ``n_kept``, ``n_dropped``, ``mean_kept``, ``mean_dropped``); (c) ``vs_coin`` for -fq vs -fqc and -ld vs -ldc, paired by (pick, symbol,
+    entry_time) WITHOUT the side, mean of ROE(real) - ROE(coin). A row is {role, suffix, label_ko, short_ko, group (kind_group), test,
+    vs_suffix, vs_ko, n, n_days, mean_diff (ROE fraction), ci_lo, ci_hi (the DECISION_CI interval), p_one_sided (H1: the first is better),
+    p_holm, half1, half2, same_sign_halves, verdict ("pass" | "fail" | "wait" | "few"), reason_ko}.
+
+    The unit of resampling is the UTC day of the (first-named) trade's exit time; the bootstrap resamples days with replacement (N_BOOT,
+    seed from a constant string: the same data always gives the same numbers). p_holm is Holm-Bonferroni over ALL rows (one family; a row
+    without data counts with p = 1). The halves are the first / second half of the pairs ordered by exit time (``same_sign_halves``: both
+    halves' mean difference > 0). Verdicts: ``few`` when n < min_pairs; before the decision day ``wait`` (a preview); from it ``pass`` only if
+    p_holm < alpha, mean_diff > 0 and same_sign_halves, else ``fail`` with the failed conditions in ``reason_ko``.
+
+    DeepSeek money (D11): without ``ds_money`` every DeepSeek account is left out of every figure (counts included)."""
+    now = now_ms if now_ms is not None else start_ms
+    days = max(0, int((now - start_ms) // 86_400_000)) if start_ms is not None and now is not None else 0
+    phase = "decide" if days >= DECISION_DAY else "observe"
+    lu = [k for k in lineup or [] if k.get("role") and k.get("suffix")]
+    suffix_of = {k["role"]: k["suffix"] for k in lu}
+    kind_of = {k["suffix"]: k for k in lu}
+    # {pick: {suffix: trades}}: every account of the lineup, a hidden DeepSeek one left out
+    by_pick: dict = {}
+    for a in accts or []:
+        sfx = suffix_of.get(a.get("role"))
+        if sfx is not None and a.get("pick") is not None and _shown(a, ds_money):
+            by_pick.setdefault(a["pick"], {})[sfx] = book.get(a["id"]) or []
+
+    def head(k: dict, test: str, vs: str) -> dict:
+        v = kind_of.get(vs)
+        return {"role": k["role"], "suffix": k["suffix"], "label_ko": k.get("label_ko"), "short_ko": k.get("short_ko"),
+                "group": kind_group(k.get("label_ko")), "test": test, "vs_suffix": vs,
+                "vs_ko": (v.get("short_ko") or v.get("label_ko")) if v else vs}
+
+    found = []                                                    # (row head, test result)
+    ctl_maps: dict = {}
+    for k in lu:                                                  # (a) 메인 vs the control
+        if kind_group(k.get("label_ko")) != "main" or k["suffix"] == CONTROL:
+            continue
+        d, x = [], []
+        for pick, sm in by_pick.items():
+            mine = sm.get(k["suffix"])
+            if not mine or CONTROL not in sm:
+                continue
+            cm = ctl_maps.get(pick)
+            if cm is None:
+                cm = ctl_maps[pick] = _roe_map(sm[CONTROL], _KEY3, _F3)
+            for key, t in zip(_keys(mine, _KEY3, _F3), mine):
+                c = cm.get(key)
+                if c is None:
+                    continue
+                r, e = _finite(t.get("roe")), _finite(t.get("exit_time"))
+                if r is not None and e is not None:
+                    d.append(r - c)
+                    x.append(e)
+        found.append((head(k, TESTS[0], CONTROL), _paired_test(np.array(d), np.array(x), _seed("decision", TESTS[0], k["suffix"], CONTROL))))
+    for k in lu:                                                  # (b) a gate kind: the ungated kind's trades it kept vs dropped
+        if not _is_gate(k):
+            continue
+        base = _base_of(k["suffix"], set(kind_of))
+        roe, kept, x = [], [], []
+        for pick, sm in by_pick.items():
+            gate, plain = sm.get(k["suffix"]), sm.get(base)
+            if gate is None or not plain:
+                continue
+            took = set(_keys(gate, _KEY3, _F3))
+            for key, t in zip(_keys(plain, _KEY3, _F3), plain):
+                r, e = _finite(t.get("roe")), _finite(t.get("exit_time"))
+                if r is not None and e is not None:
+                    roe.append(r)
+                    kept.append(key in took)
+                    x.append(e)
+        found.append((head(k, TESTS[1], base), _kept_test(np.array(roe), np.array(kept, dtype=bool), np.array(x),
+                                                          _seed("decision", TESTS[1], k["suffix"], base))))
+    for real, twin in COIN_TWINS:                                 # (c) the real kind against its coin-flip twin
+        if real not in kind_of or twin not in kind_of:
+            continue
+        d, x = [], []
+        for pick, sm in by_pick.items():
+            mine, coin = sm.get(real), sm.get(twin)
+            if not mine or not coin:
+                continue
+            cm = _roe_map(coin, _KEY2, _F2)
+            for key, t in zip(_keys(mine, _KEY2, _F2), mine):
+                c = cm.get(key)
+                if c is None:
+                    continue
+                r, e = _finite(t.get("roe")), _finite(t.get("exit_time"))
+                if r is not None and e is not None:
+                    d.append(r - c)
+                    x.append(e)
+        found.append((head(kind_of[real], TESTS[2], twin), _paired_test(np.array(d), np.array(x), _seed("decision", TESTS[2], real, twin))))
+    adj = holm([1.0 if s["p"] is None else s["p"] for _h, s in found])
+    rows = []
+    for (hd, s), ph in zip(found, adj):
+        r = {**hd, "n": s["n"], "n_days": s["n_days"], "mean_diff": s["mean"], "ci_lo": s["lo"], "ci_hi": s["hi"], "p_one_sided": s["p"],
+             "p_holm": None if s["p"] is None else ph, "half1": s["h1"], "half2": s["h2"],
+             "same_sign_halves": bool(s["h1"] is not None and s["h2"] is not None and s["h1"] > 0 and s["h2"] > 0)}
+        if hd["test"] == TESTS[1]:
+            r.update(n_kept=s["n_kept"], n_dropped=s["n_dropped"], mean_kept=s["mean_kept"], mean_dropped=s["mean_dropped"])
+        r["verdict"], r["reason_ko"] = _verdict(r, phase, days)
+        if hd["test"] == TESTS[1]:
+            r["reason_ko"] += f" · {FILTER_CAVEAT}"
+        for f in ("mean_diff", "ci_lo", "ci_hi", "half1", "half2", "mean_kept", "mean_dropped"):
+            if f in r and r[f] is not None:
+                r[f] = round(float(r[f]), 7)
+        for f in ("p_one_sided", "p_holm"):
+            if r[f] is not None:
+                r[f] = round(float(r[f]), 6)
+        rows.append(r)
+    return {"phase": phase, "days": days, "checkpoints": {"observe_day": DECISION_OBSERVE_DAY, "decide_day": DECISION_DAY},
+            "min_pairs": DECISION_MIN_PAIRS, "alpha": DECISION_ALPHA, "boot": N_BOOT, "ci_level": DECISION_CI, "min_days": DECISION_MIN_DAYS,
+            "observe_ms": None if start_ms is None else int(start_ms) + DECISION_OBSERVE_DAY * 86_400_000,
+            "decide_ms": None if start_ms is None else int(start_ms) + DECISION_DAY * 86_400_000,
+            "n_tests": len(rows), "counts": {v: sum(r["verdict"] == v for r in rows) for v in ("pass", "fail", "wait", "few")},
+            "ds_in_stats": bool(ds_money), "summary_ko": _summary_ko(rows, phase, days), "rules_ko": decision_rules_ko(), "rows": rows}
