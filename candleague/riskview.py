@@ -20,8 +20,10 @@ The block, ``risk_views(...)``::
     now   (1) the open positions: {"open", "long", "short", "same_side" (1 long / -1 short / None even), "same_side_share", "crowded" (>= 80% the
           same side AND >= 10 open), "coins": [{coin, long, short}], "cluster": {side, side_n, coins, n, text_ko} ("롱 14개 중 BTC·ETH·SOL 9개"),
           "lev_mean", "lev_max", "margin": {...}, "stop": {...}}
-          margin: {"n", "missing", "sum", "wallets", "wallet_mean", "separate_pct", "shared_pct"} -- sum of the open margins over the sum of the kind's
-          wallets (the accounts as they are: one wallet each) and over ONE wallet (the same positions in a single shared account).
+          margin: {"n", "missing", "exact", "sum", "wallets", "wallet_mean", "separate_pct", "shared_pct"} -- sum of the open margins over the sum of
+          the kind's wallets (the accounts as they are: one wallet each) and over ONE wallet (the same positions in a single shared account; "one
+          wallet" is the kind's MEAN wallet, ``wallet_mean``, so shared_pct = separate_pct x the number of wallets). None when open positions
+          exist but none could be sized (a figure the snapshot cannot give is never a zero).
           stop: {"n", "locked", "no_stop", "loss", "long_loss", "short_loss", "separate_pct", "shared_pct", "worst_acct_pct"} -- what the positions
           whose stop is still on the losing side would lose if every one of them hit its stop at once (stop P&L = side x qty x (stop - entry), no
           exit fee or slippage), as a share of all the wallets / of ONE wallet / of the single most hit wallet.

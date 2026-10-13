@@ -626,3 +626,46 @@ def test_write_snapshots_with_nothing_open_says_so(tmp_path):
     f = kind(r, "-fq")
     assert f["now"]["open"] == 0 and f["now"]["cluster"] is None and "지금 열린 포지션이 없습니다" in r["headline_ko"]
     assert re.search(r"지갑의 −\d", r["headline_ko"]) is not None
+
+
+# ---------------------------------------------------------------- a real league (the engine's own accounts, positions and trades)
+def test_a_real_league_snapshot_agrees_with_the_snapshots_own_accounts_and_the_plain_reference(tmp_path):
+    """The owner-exit league on synthetic bars (test_candleague_owner_exits' world) with 메인 labels: the open positions and wallets are the engine's."""
+    import test_candleague_owner_exits as OE
+    from candleague import dash as D
+    owner = {"enabled": True, "owner_exits": [
+        {"suffix": "-e", "label_ko": "메인 · 지금 청산"}, {"suffix": "-ma", "rule": "F2.n50.b", "label_ko": "메인 · 이동평균 이탈"},
+        {"suffix": "-tp50", "exit": "roe50", "label_ko": "대조 · 고정 익절 ROE 50%"}, {"suffix": "-gb", "rule": "F5.P1.g50.a", "label_ko": "메인 · 큰 수익 반납 보호"},
+        {"suffix": "-wk", "weekend_off": True, "label_ko": "대조 · 주말 쉬는 계좌"}]}
+    lg = RN.League(RN.open_db(str(tmp_path / "real.db")), RX.accounts(OE.CANDS, RX.normalize_config(owner)), OE.TP.BRACKETS, OE.TP.SPECS, OE.LIB,
+                   OE.PS.FrameSource(OE.DATA), OE.TP._steps_from(OE.DATA), OE.TP.SYMS, log=lambda s: None, start_ms=OE.START)
+    lg.advance(OE.END)
+    doc = RN.write_snapshots(str(tmp_path / "snap"), lg, OE.END + MIN)
+    assert "risk_error" not in doc
+    r = json.loads(open(tmp_path / "snap" / "league.json").read(), parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))["risk"]
+    assert [k["suffix"] for k in r["kinds"]] == ["-e", "-ma", "-gb", None]                       # no 실전 후보 / 대조 in this lineup: the 메인 kinds, then 메인 전체
+    book = RN.closed_trades(lg.conn, lg.accts)
+    opened = [a for a in doc["accounts"] if a["open"]]
+    assert opened, "the synthetic run should leave positions open"
+    rows_of = lambda roles: [a for a in doc["accounts"] if a["role"] in roles]          # noqa: E731
+    for k in r["kinds"]:
+        roles = ("cand", "ma", "gb") if k["pooled"] else (k["role"],)
+        mine = rows_of(roles)
+        o = [a for a in mine if a["open"]]
+        assert k["accounts"] == len(mine) and k["now"]["open"] == len(o)
+        assert k["now"]["long"] == sum(a["open"]["side"] > 0 for a in o) and k["now"]["short"] == sum(a["open"]["side"] < 0 for a in o)
+        assert k["trades"] == sum(len(book[a["id"]]) for a in mine)
+        # the margin is the dashboard's rebuilt margin (same rule, no order-size rounding) of every open position
+        want = sum(D.rebuild_open(a["open"], float(a["wallet"]), float(a.get("size") or 1.0), None)["margin"] for a in o)
+        assert k["now"]["margin"]["sum"] == pytest.approx(want, rel=1e-6, abs=0.01)
+        worst, streak, dd, days = reference(mine, book, RN.EQUITY)
+        if k["trades"]:
+            assert k["worst"]["trade"]["pct"] == pytest.approx(worst, abs=1e-6) and k["worst"]["streak"]["max"] == streak
+            assert k["worst"]["dd"]["basket"] == pytest.approx(dd, abs=1e-6) and (k["days"]["total"], k["days"]["eligible"], k["days"]["crowded"]) == days
+        else:
+            assert k["worst"]["trade"] is None
+    # the stop of every open position is on the losing side or the winning side of its entry: the loss counts exactly the first kind
+    for k in r["kinds"][:-1]:
+        o = [a for a in rows_of((k["role"],)) if a["open"]]
+        losing = [a for a in o if a["open"].get("stop") is not None and a["open"]["side"] * (a["open"]["stop"] - a["open"]["entry"]) < 0]
+        assert k["now"]["stop"]["n"] == len(losing)

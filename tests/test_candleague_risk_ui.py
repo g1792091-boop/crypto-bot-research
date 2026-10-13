@@ -388,8 +388,8 @@ def test_registration_snippets_once_the_coordinator_added_them():
     if "risk" not in ids:
         pytest.skip("the screen is not registered in app.js yet: the coordinator adds the MENU / MENU_TITLE / SCREENS / find.js lines (see the report)")
     i = ids.index("risk")
-    assert menu[i][1] == "위험 점검" and menu[i][2] == "home"
-    assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=["trade", "home", "method", "info"].index)
+    assert menu[i][1] == "위험 점검" and menu[i][2] == "study"
+    assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=["trade", "home", "study", "method", "info"].index)
     assert 'risk: "risk"' in re.search(r"const SCREENS = \{([^}]*)\}", app).group(0)
     titles = re.search(r"const MENU_TITLE = \{(.*?)\};\s*const SCREENS", app, re.S).group(1)
     assert re.search(r"\brisk: \"", titles)

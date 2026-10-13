@@ -38,7 +38,8 @@ const cnt = (n) => `${fmt.int(n)}건`;
 export function mult(x, sign = false) {
   const v = num(x);
   if (v == null) return "—";
-  return `${fmt.num(v, Math.abs(v) < 10 ? 2 : Math.abs(v) < 100 ? 1 : 0, sign)}배`;
+  const a = Math.abs(v);
+  return `${fmt.num(v, a < 9.995 ? 2 : a < 99.95 ? 1 : 0, sign)}배`;
 }
 /** What a multiple of the snapshot's start wallet is in dollars ("$1,200"); null without a wallet (no figure is made up). */
 export function usd(m, e0) {
@@ -281,7 +282,7 @@ function legend(M) {
   const dt = (t) => h("dt", null, t);
   return ui.card({plate: "낱말 뜻", sub: "처음 보는 분을 위한 설명"},
     h("dl", {class: "kd-legend"},
-      h("div", null, dt("배수 (1.2배)"), h("dd", null, "시작 잔고의 몇 배가 되었나. 1배는 본전, 2배는 두 배, 0.5배는 반토막입니다. 1,000달러로 시작하면 1.2배는 1,200달러.")),
+      h("div", null, dt("배수 (1.2배)"), h("dd", null, "시작 잔고의 몇 배가 되었나. 1배는 본전, 2배는 두 배, 0.5배는 반토막입니다. 예: 100달러가 120달러가 되면 1.2배.")),
       h("div", null, dt("중앙값"), h("dd", null, `${fmt.int(M.boot)}번의 결과를 줄 세웠을 때 정확히 가운데 값. 절반은 이보다 좋고 절반은 나쁩니다. 평균이 아닙니다.`)),
       h("div", null, dt("5% ~ 95% 범위"), h("dd", null, "가장 나쁜 쪽 5%와 가장 좋은 쪽 5%를 뺀 가운데 90%가 들어가는 범위. 이 밖의 결과도 나올 수 있습니다.")),
       h("div", null, dt("동전 짝"), h("dd", null, "같은 신호 시각에 롱/숏을 동전 던지기로 정한 계좌. 방향에 실력이 없을 때 어디까지 나오는지 보여 주는 기준선입니다.")),
