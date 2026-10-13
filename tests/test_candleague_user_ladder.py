@@ -246,7 +246,7 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
-    assert [e["suffix"] for e in doc["owner_exits"]] == ["-ld", "-ldc", "-ldp", "-ld1", "-fq", "-tg", "-sb", "-nv", "-sw", "-l5", "-l20", "-e", "-tp10",
+    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-sb", "-ld", "-ldc", "-ldp", "-ld1", "-l5", "-l20", "-e", "-tp10",
                                                          "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
     native = sum(1 for c in owner if RX.native_supported(c))                                  # -nv: the 38 picks of the 16 strategies with a native exit
@@ -271,6 +271,9 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     assert sum(1 for a in fq if a["rule"]["id"] == "F11.a.d0.5") == 38
     lu = {x["suffix"]: x for x in RX.lineup(accts)}
     assert "tighten" not in lu["-fq"] and lu["-tg"]["tighten"] == 0.5 and lu["-tg"]["short_ko"] == "손절 좁힘"
+    mains = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("메인")]
+    ctrl = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("대조")]
+    assert mains == ["-fq", "-nv", "-sw", "-tg", "-sb"] and ctrl == ["-ld", "-ldc", "-ldp", "-ld1"]         # the new structures are the main ones; the old stop is the control
 
 
 # ---------------------------------------------------------------- a rule on the owners' ladder: the quick stop and the narrowing stop (owners 2026-10-13)

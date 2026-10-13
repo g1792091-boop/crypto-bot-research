@@ -2,35 +2,26 @@
   "enabled": true,
   "owner_exits": [
     {
-      "suffix": "-ld",
-      "exit": "ladderU",
-      "stop_max": 2,
-      "label_ko": "계단 익절 · 손절 최대 2 ATR (기준)"
-    },
-    {
-      "suffix": "-ldc",
-      "exit": "ladderU",
-      "coin_of": "-ld",
-      "label_ko": "계단 · 동전 던지기"
-    },
-    {
-      "suffix": "-ldp",
-      "exit": "ladderU",
-      "label_ko": "계단 · 후보의 손절 그대로"
-    },
-    {
-      "suffix": "-ld1",
-      "exit": "ladderU",
-      "stop_max": 1,
-      "label_ko": "계단 · 손절 최대 1 ATR"
-    },
-    {
       "suffix": "-fq",
       "exit": "ladderU",
       "stop_max": 2,
       "rule": "F6.w3.d0.5",
-      "label_ko": "계단 · 구조 확실히 무너지면 빠른 손절 (실전 후보)",
+      "label_ko": "메인 · 구조 확실히 무너지면 빠른 손절 (실전 후보)",
       "native_rule": "F11.a.d0.5"
+    },
+    {
+      "suffix": "-nv",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F11.a",
+      "label_ko": "메인 · 매매법 자체 판단으로 청산"
+    },
+    {
+      "suffix": "-sw",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F3.a",
+      "label_ko": "메인 · 반대 신호 나오면 스위칭"
     },
     {
       "suffix": "-tg",
@@ -38,28 +29,37 @@
       "stop_max": 2,
       "rule": "F1.w3.a",
       "tighten": 0.5,
-      "label_ko": "계단 · 구조 무너지면 손절 좁힘"
+      "label_ko": "메인 · 구조 무너지면 손절 좁힘"
     },
     {
       "suffix": "-sb",
       "exit": "ladderU",
       "stop_max": 2,
       "rule": "F1.w3.a",
-      "label_ko": "계단 · 구조 무너지면 청산"
+      "label_ko": "메인 · 구조 무너지면 청산"
     },
     {
-      "suffix": "-nv",
+      "suffix": "-ld",
       "exit": "ladderU",
       "stop_max": 2,
-      "rule": "F11.a",
-      "label_ko": "계단 · 매매법 자체 판단으로 청산"
+      "label_ko": "대조 · 계단 · 손절 최대 2 ATR (원래 메인)"
     },
     {
-      "suffix": "-sw",
+      "suffix": "-ldc",
       "exit": "ladderU",
-      "stop_max": 2,
-      "rule": "F3.a",
-      "label_ko": "계단 · 반대 신호 나오면 스위칭"
+      "coin_of": "-ld",
+      "label_ko": "대조 · 계단 · 동전 던지기"
+    },
+    {
+      "suffix": "-ldp",
+      "exit": "ladderU",
+      "label_ko": "대조 · 계단 · 후보의 손절 그대로"
+    },
+    {
+      "suffix": "-ld1",
+      "exit": "ladderU",
+      "stop_max": 1,
+      "label_ko": "대조 · 계단 · 손절 최대 1 ATR"
     },
     {
       "suffix": "-l5",
