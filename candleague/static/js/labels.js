@@ -71,9 +71,19 @@ export function applyLineup(lu) {
     ROLE_DESC[x.role] = `${x.desc_ko || ""}${x.why_ko ? `: ${x.why_ko}` : ""}`;
     SUFFIX[x.role] = x.suffix;
     const size = Number(x.size ?? 1);
-    ROLE_INFO[x.role] = {nums: "커스텀값 (후보와 같은 신호)", exit: String(x.desc_ko || "—"),
-      size: size === 1 ? "규칙봇과 같음 (증거금 = 배수%)" : `증거금 × ${size}`, dir: "신호대로",
+    // a 동전 짝 takes the same signal times with a coin-flip side; a 필터 account takes only the signals that pass its filter (the lineup's
+    // own words say which: desc_ko "… 동전으로 정함", label "필터 · …")
+    const coin = /동전/.test(`${x.desc_ko || ""} ${x.label_ko || ""}`), gate = /^\s*필터/.test(String(x.label_ko || ""));
+    ROLE_INFO[x.role] = {nums: gate ? "후보와 같은 신호 중 필터를 통과한 것만" : "커스텀값 (후보와 같은 신호)", exit: String(x.desc_ko || "—"),
+      size: size === 1 ? "규칙봇과 같음 (증거금 = 배수%)" : `증거금 × ${size}`, dir: coin ? "같은 시각에 방향만 동전으로 정함" : "신호대로",
       why: String(x.why_ko || "—")};
+  }
+  // two kinds that share a short name (every 동전 짝 is "동전", three 대조 are "계단") take the label without its 메인 / 대조 word, so no two
+  // chips, columns or lines read alike
+  const seen = {};
+  for (const x of LINEUP || []) seen[ROLE_SHORT[x.role]] = (seen[ROLE_SHORT[x.role]] || 0) + 1;
+  for (const x of LINEUP || []) {
+    if (seen[ROLE_SHORT[x.role]] > 1) ROLE_SHORT[x.role] = String(x.label_ko || "").replace(/^(메인|대조)\s*·\s*/, "").replace(/\s*\(실전 후보\)\s*$/, "").trim() || ROLE_SHORT[x.role];
   }
   for (const fn of hooks) { try { fn(LINEUP); } catch (e) { console.error(e); } }
 }

@@ -23,7 +23,7 @@ import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
 import {serverNow, liveState as priceState} from "../live.js";
 import {posPill, staleBanner, pricesLive, pxAgeKo} from "../poskit.js";
-import {ROLES, ROLE_SHORT, lineupOn} from "../labels.js";
+import {ROLES, ROLE_SHORT, lineupOn, compareKo} from "../labels.js";
 import {okGroup, okSub, groupKo, groupRows, ranking, hidden, walletRet, rankCards, rankTiles, CMP_ROLES} from "./rank-cards.js";
 import {rankRow, topBottom, listFilters, filterRows, sortRows, rankMemo, rankDeltas, motionNote} from "./rank-rows.js";
 import {rankTable, tfSummary, csvRows, CSV_HEAD} from "./rank-table.js";
@@ -77,6 +77,8 @@ export async function mount(el, ctx) {
   const banner = h("div", {class: "rk-banner"});
   const allBtn = h("button", {type: "button", class: "btn-line k4-allbtn", "aria-pressed": "false", onclick: () => pick("all")}, "전체 보기");
   const cards = rankCards({onPick: (id) => pick(id)});
+  const SEC_HINT = "같은 후보의 동전·기본값 계좌와 비교한 숫자는 모두 참고입니다 (판정은 점검 날에만)";
+  const secRow = K4.secRow("묶음", SEC_HINT, allBtn);
   const tiles = rankTiles();
   const subSeg = h("div", {class: "seg rk-sub", role: "tablist", "aria-label": "비교 계좌 고르기"},
     (lineupOn() ? [{id: "all", label: "모두"}, ...CMP_ROLES.map((r) => ({id: r, label: ROLE_SHORT[r]}))]       // the owner-exit league's other exits
@@ -98,18 +100,21 @@ export async function mount(el, ctx) {
       "순위·수익률·잔고는 닫힌 거래 기준 (열린 포지션 손익 제외) · 포지션 ROE는 지금 마크 가격 기준 (나갈 때 수수료 전)"));
   const tfBody = h("div", {class: "rk-tfbody"});
   const tfSub = h("span", {class: "sub"});
-  const tfCard = ui.card({plate: "봉별 요약", cls: "rk-tfcard"}, tfBody,
-    h("p", {class: "note"}, "잔고 중앙값·최고 계좌는 닫힌 거래 기준 · 동전보다 위·아래 = 자기 후보의 동전 계좌보다 한 번 평균이 위·아래인 계좌 수 (참고, 판정 아님) · 숨긴 딥시크 계좌는 돈 숫자에서 뺌"));
+  const TF_NOTE = "잔고 중앙값·최고 계좌는 닫힌 거래 기준 · 동전보다 위·아래 = 자기 후보의 동전 계좌보다 한 번 평균이 위·아래인 계좌 수 (참고, 판정 아님) · 숨긴 딥시크 계좌는 돈 숫자에서 뺌";
+  const TF_NOTE_OWNER = "잔고 중앙값·최고 계좌는 닫힌 거래 기준 (참고, 판정 아님) · 숨긴 딥시크 계좌는 돈 숫자에서 뺌";
+  const tfNote = h("p", {class: "note"}, TF_NOTE);
+  const tfCard = ui.card({plate: "봉별 요약", cls: "rk-tfcard"}, tfBody, tfNote);
   tfCard.querySelector(".card-h").append(tfSub);
+  const cmpLink = h("a", {class: "btn-line", href: "#/compare"}, "5계좌 비교");          // the screen's name follows the league (labels.js compareKo)
   const links = h("nav", {class: "rk-links", "aria-label": "다른 화면으로"}, h("span", {class: "muted"}, "더 보기"),
-    h("a", {class: "btn-line", href: "#/compare"}, "5계좌 비교"), h("a", {class: "btn-line", href: "#/check"}, "점검 진행"),
+    cmpLink, h("a", {class: "btn-line", href: "#/check"}, "점검 진행"),
     h("a", {class: "btn-line", href: "#/positions"}, "포지션"), h("a", {class: "btn-line", href: "#/fills"}, "체결 기록"));
 
   el.append(
     ui.screenHead("순위표", "묶음을 고르면 아래가 모두 그 묶음으로 바뀝니다", csvBtn),
     afterBar({cls: "rk-after"}),
     banner,
-    h("section", {class: "k4-sec rk-sec", "aria-label": "묶음"}, K4.secRow("묶음", "같은 후보의 동전·기본값 계좌와 비교한 숫자는 모두 참고입니다 (판정은 점검 날에만)", allBtn), cards),
+    h("section", {class: "k4-sec rk-sec", "aria-label": "묶음"}, secRow, cards),
     tbCard, listCard, links, tfCard);
 
   // ---------------------------------------------------------------- pieces
@@ -201,9 +206,16 @@ export async function mount(el, ctx) {
     put(moNote, motionNote(memoOf(d).base, st.rk.shown, {sparks: st.sparks.size > 0}));
     paintView();
     paintList(!userSwitch);
-    put(listNote, h("p", {class: "refnote"}, h("b", null, "참고"),
-      " · 동전 ▲▼ = 같은 후보의 동전 계좌(방향만 동전)보다 거래 한 번 평균이 위·아래 · 1/4 크기는 낙폭으로만 비교 · 판정이 아닙니다. 판정은 점검 날(",
-      cpDates(d), ")에 점검 진행 화면의 기준으로만 합니다.", dsMoneyHidden(d) ? " 딥시크는 금액 숨김 설정이라 개수와 점검 라벨만 보입니다 (순위 없이 맨 뒤)." : ""));
+    const owner = lineupOn();                    // the owner-exit league: the decision is day 28, on the 판정 screen, and nothing here is one
+    secRow.querySelector(".k4-hint").textContent = owner ? "같은 후보의 ‘지금 청산’ 계좌와 비교한 숫자는 모두 참고입니다 (판정은 28일째에 판정 화면에서 한 번만)" : SEC_HINT;
+    tfNote.textContent = owner ? TF_NOTE_OWNER : TF_NOTE;
+    cmpLink.textContent = compareKo();
+    put(listNote, owner ? h("p", {class: "refnote"}, h("b", null, "참고"),
+      " · 이 순위표의 순위와 ▲▼는 모두 참고이고 판정이 아닙니다. 판정은 ", `${LK.road(d) ? LK.road(d).decide : 28}일째에 `, h("a", {href: "#/decision"}, "판정 화면"), "의 규칙으로만 합니다.",
+      dsMoneyHidden(d) ? " 딥시크는 금액 숨김 설정이라 개수와 라벨만 보입니다 (순위 없이 맨 뒤)." : "")
+      : h("p", {class: "refnote"}, h("b", null, "참고"),
+        " · 동전 ▲▼ = 같은 후보의 동전 계좌(방향만 동전)보다 거래 한 번 평균이 위·아래 · 1/4 크기는 낙폭으로만 비교 · 판정이 아닙니다. 판정은 점검 날(",
+        cpDates(d), ")에 점검 진행 화면의 기준으로만 합니다.", dsMoneyHidden(d) ? " 딥시크는 금액 숨김 설정이라 개수와 점검 라벨만 보입니다 (순위 없이 맨 뒤)." : ""));
     put(tfBody, tfSummary(d, st.ix, st.g, st.sub));
     tfSub.textContent = `${label} · 참고`;
     if (userSwitch) { K4.swap(tb.el); K4.swap(tfBody); }

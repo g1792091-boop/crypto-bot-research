@@ -23,7 +23,7 @@ import * as LK from "../lk.js";
 import {markOf} from "../live.js";
 import {POS_GROUPS, inGroup, livePnl, liveOk, waitKo, gap} from "../poskit.js";
 import {countTo, swap} from "../v4kit.js";
-import {coinShort, coinOf, reasonKo} from "../labels.js";
+import {coinShort, coinOf, reasonKo, lineupOn} from "../labels.js";
 import {panel, ratioBar, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, ping} from "./terminal-kit.js";
 import {afterEmpty, afterTag, keepFill, installMs} from "../after.js";
 
@@ -270,6 +270,7 @@ export function bottomTable(ctx, st, hooks) {
     }
   }
   function render(user) {
+    grp.title = lineupOn() ? `묶음: 계좌 종류별, 또는 기존 36 · 딥시크 (전체 = ${LK.allAccountsKo()})` : "묶음: 후보 · 1/4 · 청산만 · 기본값 · 동전 계좌, 또는 기존 36 · 딥시크 (전체 = 190계좌)";
     paintHead();
     builtLive = allowedNow();
     const body = T.tab === "fills" ? fillsView() : T.tab === "stops" ? stopsView() : posView();

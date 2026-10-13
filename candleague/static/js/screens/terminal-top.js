@@ -17,12 +17,13 @@ import * as LK from "../lk.js";
 import {liveRow, liveState, serverNow} from "../live.js";
 import {freshLine, staleBanner, liveOk, waitKo, sums, crowd, inGroup, POS_GROUPS} from "../poskit.js";
 import {tickPrice} from "../v4kit.js";
-import {coinShort} from "../labels.js";
+import {coinShort, lineupOn} from "../labels.js";
 import {usdt, usdKo, mmss, clockKst, kstMidnight, TF_MS, TF_SHORT} from "./terminal-kit.js";
 import {afterBar, afterOn, afterTag} from "../after.js";
 
 const FUND_HOT = 0.0005;                    // 5 times the usual 0.01 %: the caution colour, nothing below it
-const GROUP_KO = Object.fromEntries(POS_GROUPS.map((g) => [g.id, g.id === "all" ? "190계좌" : g.ko]));
+/** The 묶음's name ("190계좌" for 전체 in the candidate league; the owner-exit league's real count of accounts). */
+const groupName = (id) => { const g = POS_GROUPS.find((x) => x.id === id); return g ? (g.id === "all" ? LK.allAccountsKo() : g.ko) : undefined; };
 
 /** topBar(ctx, st) -> {el, setCoin(), onLive(), onPositions(doc), onLeague(), onFills(rows), tick()} */
 export function topBar(ctx, st) {
@@ -106,10 +107,10 @@ export function topBar(ctx, st) {
     dot.dataset.s = ls.state === "ok" || ls.state === "fake" ? "live" : "down";
   }
   function paintOurs() {
-    const g = GROUP_KO[st.grp] || "후보";
+    const g = groupName(st.grp) || "후보";
     // (on: "포지션 · 전체 · 설치 뒤만", as short as the usual label, so the PC's row does not cut it)
     ours.k.textContent = afterOn(doc) ? `포지션 · ${st.grp === "all" ? "전체" : g} · 설치 뒤만` : `우리 포지션 · ${g}`;
-    ours.el.title = `${st.grp === "all" ? "후보 리그 190계좌 전체" : `${g} 묶음`}가 이 코인에 연 포지션 (아래 표의 묶음 고르기를 따름 · 딥시크 금액 숨김이어도 개수는 셉니다)`;
+    ours.el.title = `${st.grp === "all" ? `후보 리그 ${LK.allAccountsKo()} 전체` : `${g} 묶음`}가 이 코인에 연 포지션 (아래 표의 묶음 고르기를 따름 · 딥시크 금액 숨김이어도 개수는 셉니다)`;
     if (!doc || doc.status) { ours.v.textContent = "—"; return; }
     const ps = (doc.positions || []).filter((p) => p.coin === st.coin && inGroup(p, st.grp));
     const L = ps.filter((p) => Number(p.side) > 0).length, S = ps.length - L;
@@ -123,10 +124,14 @@ export function topBar(ctx, st) {
     put(cStatus, h("i", {class: ["tm-hdot", `l-${H.lv}`], "aria-hidden": "true"}), H.lv === "ok" ? "엔진 정상" : H.lv === "warn" ? "엔진 확인" : "엔진 문제");
     cStatus.title = `엔진 상태: ${H.ko} (누르면 서버 상태)`;
     const now = serverNow();
-    const cps = (d && d.watch && d.watch.checkpoints) || [];
+    const owner = lineupOn();                    // the owner-exit league: day 14 (look) and day 28 (decision) instead of the three checks
+    const cps = owner ? LK.roadDates(d) : (d && d.watch && d.watch.checkpoints) || [];
     const next = cps.find((c) => c.ms > now);
+    cDay.setAttribute("href", owner ? "#/decision" : "#/check");
+    cDay.title = owner ? "리그 시작(설치한 때)부터 한국 날짜로 며칠째 (시작한 날 = D+0) · 다음 확인 · 판정 날짜까지 (누르면 판정 화면)"
+      : "리그 시작(설치한 때)부터 한국 날짜로 며칠째 (시작한 날 = D+0) · 다음 점검까지 (누르면 점검 진행)";
     if (d && d.start_ms) {
-      put(cDay, h("b", null, `D+${LK.dPlus(d, now)}`), next ? ` · ${String(next.ko || next.id).replace(" 점검", "")} ${fmt.mmdd(next.ms).replace(/^0/, "").replace("/0", "/")}까지 ${Math.ceil((next.ms - now) / 86400000)}일` : " · 점검 끝");
+      put(cDay, h("b", null, `D+${LK.dPlus(d, now)}`), next ? ` · ${String(next.ko || next.id).replace(" 점검", "")} ${fmt.mmdd(next.ms).replace(/^0/, "").replace("/0", "/")}까지 ${Math.ceil((next.ms - now) / 86400000)}일` : owner ? " · 판정 끝" : " · 점검 끝");
     } else put(cDay, h("b", null, "D+—"));
     const aft = afterOn(doc);
     const upK = "후보 미실현 ";
@@ -136,10 +141,10 @@ export function topBar(ctx, st) {
     if (!doc || doc.status) { put(cOpen, "열린 —"); put(cUpnl, "후보 미실현 —"); }
     else {
       const c = doc.counts || {};
-      put(cOpen, aft ? "열린 " : "190계좌 열린 ", h("b", {class: "num"}, fmt.int(c.open || 0)), " · ", h("span", {class: "up"}, `롱 ${fmt.int(c.long || 0)}`), " · ",
+      put(cOpen, aft ? "열린 " : `${LK.allAccountsKo()} 열린 `, h("b", {class: "num"}, fmt.int(c.open || 0)), " · ", h("span", {class: "up"}, `롱 ${fmt.int(c.long || 0)}`), " · ",
         h("span", {class: "down"}, `숏 ${fmt.int(c.short || 0)}`));
-      cOpen.title = aft ? "지금 열린 포지션 중 설치 뒤에 들어간 것 (설치 뒤만 · 190계좌 · 누르면 포지션 화면)"
-        : "지금 열린 포지션: 후보 리그 190계좌 전체 (묶음 고르기와 상관없이 · 누르면 포지션 화면)";
+      cOpen.title = aft ? `지금 열린 포지션 중 설치 뒤에 들어간 것 (설치 뒤만 · ${LK.allAccountsKo()} · 누르면 포지션 화면)`
+        : `지금 열린 포지션: 후보 리그 ${LK.allAccountsKo()} 전체 (묶음 고르기와 상관없이 · 누르면 포지션 화면)`;
       const cand = (doc.positions || []).filter((p) => inGroup(p, "cand"));
       if (!liveOk(doc)) put(cUpnl, upK, h("span", {class: "warn-t"}, doc.catching_up ? "따라잡는 중" : doc.old ? "엔진 멈춤" : `감춤 (${waitKo(doc)})`));
       else {

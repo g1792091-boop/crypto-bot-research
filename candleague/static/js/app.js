@@ -22,7 +22,7 @@ import * as fmt from "./fmt.js";
 import * as ui from "./ui.js";
 import {stamp, setPage} from "./ui.js";
 import {applySkin, skinNow, textSwitch, skinSwitch, navSwitch, textCycle, skinCycle, startPref} from "./prefs.js";
-import {setLeague, getMeta, startUsd, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore, leagueCounts, road} from "./lk.js";
+import {setLeague, getMeta, startUsd, leagueDay, calDay, dPlus, catchingUp, health, dayLine, fromKo, replayedBefore, leagueCounts, roadDates} from "./lk.js";
 import {lineupOn, onLineup, compareKo} from "./labels.js";
 import {onLive, serverNow} from "./live.js";
 import {onPositions, kickPositions} from "./poskit.js";
@@ -79,6 +79,7 @@ function ownerTitle(id) {
     weekly: "흐름 (계좌 종류마다 시간에 따른 잔고 중앙값 · 주마다 거래 수 · 승률)",
     rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 종류가 다른 점)",
     howto: "읽는 법 (계좌 종류, 판정 규칙, 낱말 뜻)",
+    strategies: "매매법 (매매법 설명, 후보들, 묶음 성적)",
   };
   return T[id];
 }
@@ -208,11 +209,7 @@ function checkpoints() {
   const owner = lineupOn();
   if (cpMemo.doc === doc && cpMemo.owner === owner) return cpMemo.list;
   let list = (doc && doc.watch && doc.watch.checkpoints) || [];
-  if (owner) {
-    const r = road(doc);
-    list = r ? [{id: "R1", ko: `${r.observe}일째 확인`, ms: r.observe_ms, what: "숫자만 보고 아무것도 바꾸지 않습니다"},
-      {id: "R2", ko: `${r.decide}일째 판정`, ms: r.decide_ms, what: "미리 정한 규칙으로 한 번만 판정합니다"}] : [];
-  }
+  if (owner) list = roadDates(doc);
   cpMemo = {doc, owner, list};
   return list;
 }

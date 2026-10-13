@@ -427,7 +427,7 @@ a.s2a-gc:hover { border-color: var(--ink-2); transform: translateY(-1px); }
 .s2a-pathterm { row-gap: 12px; }
 
 /* 요약's hero in the owner-exit league: the kinds of account by group (메인 · 대조 · 연구용), short names as chips */
-.s2a-kinds { display: grid; gap: 8px; margin: 2px 0 4px; }
+.s2a-kgroups { display: grid; gap: 8px; margin: 2px 0 4px; grid-template-columns: minmax(0, 1fr); }
 .s2a-krow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 6px; min-width: 0; }
 .s2a-krow > .pp:first-child { font-weight: 800; }
 .s2a-krow .pp { white-space: normal; text-align: left; }
@@ -435,4 +435,4 @@ a.s2a-gc:hover { border-color: var(--ink-2); transform: translateY(-1px); }
 .s2a-krow .dl-region { flex-basis: 100%; }
 .s2a-krow .s2a-kopen { padding-top: 4px; }
 .s2a-decline { margin: 4px 0 0; }
-.s2a-decline b { color: var(--accent); }
+.s2a-dlk { display: block; font-weight: 700; font-size: var(--t-2xs); letter-spacing: .02em; }

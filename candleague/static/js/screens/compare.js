@@ -11,7 +11,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {ROLES, ROLE_KO, ROLE_SHORT, ROLE_DESC, TFS, tfKo, lineupOn, KIND_LONG} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, ROLE_DESC, TFS, tfKo, lineupOn, compareKo, KIND_LONG} from "../labels.js";
 import * as WK from "../whykit.js";
 import {roleRule} from "../rulekit.js";
 
@@ -37,24 +37,24 @@ export async function mount(el, ctx) {
     if (mode === owner) return;
     mode = owner;
     const n = ROLES.length;
-    put(head, ui.screenHead(owner ? `${n}계좌 비교` : "5계좌 비교", owner
-      ? "같은 후보 · 같은 신호에서 청산만 다른 계좌를 같은 기간으로 나란히"
+    put(head, ui.screenHead(compareKo(), owner
+      ? "같은 후보의 계좌들을 같은 신호 · 같은 기간으로 나란히 (청산 방법이 다릅니다)"
       : "같은 후보에서 갈라진 다섯 계좌를 같은 기간으로 나란히"));
     const sorts = owner ? [{id: "name", label: "매매법"}, {id: "cand", label: "지금 청산 잔고"}, {id: "gap", label: "가장 큰 차이"}]
       : [{id: "name", label: "매매법"}, {id: "cand", label: "후보 평균"}, {id: "gap", label: "기본값과 차이"}];
     if (!sorts.some((x) => x.id === st.sort)) st.sort = "name";
     put(sortBox, ui.seg(sorts, st.sort, (v) => { st.sort = v; save(); paint(); }, {label: "순서"}));
     setSub(sumCard, owner ? `같은 기간 · 같은 시세 · 계좌마다 ${LK.startUsd()}에서 시작 · 비교 기준은 ${ROLE_KO.cand} (참고)` : "같은 기간 · 같은 시세 · 거래 한 번 평균으로 비교 (참고)");
-    setPlate(gridCard, owner ? `후보마다 ${n}계좌` : "후보마다 5계좌");
+    setPlate(gridCard, owner ? `후보마다 계좌 (종류 ${n}가지)` : "후보마다 5계좌");
     setSub(gridCard, owner
       ? `칸 = 잔고 수익률 (${LK.startUsd()} 대비, 닫힌 거래까지) · 거래 수 · 승률 · 보유 시간 중앙값 · ★ = 그 후보 계좌들 중 잔고가 가장 많음 · 칸을 누르면 그 계좌`
       : "칸 = 거래 한 번 평균 · 거래 수 · 승률 · ★ = 같은 크기 넷(1/4 빼고) 중 가장 좋음 · 칸을 누르면 그 계좌 · 후보 아래 작은 줄 = 후보 계좌가 나간 이유 · 수수료·펀딩 · 최장 연패 (최근 200번까지)");
-    setPlate(whatCard, owner ? `계좌 ${n}개가 뭔가요` : "계좌 5개가 뭔가요");
+    setPlate(whatCard, owner ? `계좌 종류 ${n}가지가 뭔가요` : "계좌 5개가 뭔가요");
     put(what, h("dl", {class: "kv"}, ROLES.map((r) => {
       const x = roleRule(r);
       return h("div", null, h("dt", null, LK.roleChip(r)), h("dd", null, ROLE_DESC[r], h("br"),
         h("small", {class: "muted"}, `진입: ${x.nums} · 익절·손절: ${x.exit} · 크기: ${x.size} · 방향: ${x.dir}`)));
-    })), owner ? h("p", {class: "note"}, "손절은 모든 계좌가 후보의 것(ATR 배수) 그대로입니다. 같은 손절이라 고르는 배수(레버리지)도 같고, 익절 · 청산 방법(주말 쉬는 계좌는 주말 진입)만 다릅니다.") : null);
+    })), owner ? h("p", {class: "note"}, `${LK.OWNER_SAME_SIGNALS} ${LK.OWNER_SAME_RULE} ${LK.OWNER_STOP_DIFF}`) : null);
   }
 
   function paint() {
@@ -153,7 +153,7 @@ export async function mount(el, ctx) {
       return ui.stat(`${ROLE_SHORT[r]} > ${ROLE_SHORT.cand}`, `${fmt.int(up)} / ${fmt.int(n)}`, `${ROLE_KO[r]} 계좌의 잔고가 ${ROLE_KO.cand}보다 많은 후보`);
     })),
     pool("core"), pool("ds"),
-    h("p", {class: "note"}, `읽는 법: 같은 후보 · 같은 신호 · 같은 손절에서 청산만 다릅니다. 잔고가 ${ROLE_KO.cand}보다 많으면 그 청산이 이 기간에는 나았던 것이고, 보유 시간이 짧으면 포지션을 오래 들고 있지 않은 것입니다. 거래 수가 적은 동안은 운이 큽니다 (판정 아님).`,
+    h("p", {class: "note"}, `읽는 법: 같은 후보의 계좌를 같은 신호로 나란히 돌립니다 (청산 방법이 다르고, 손절 거리도 다를 수 있습니다). 잔고가 ${ROLE_KO.cand}보다 많으면 그 청산이 이 기간에는 나았던 것이고, 보유 시간이 짧으면 포지션을 오래 들고 있지 않은 것입니다. 거래 수가 적은 동안은 운이 큽니다 (판정 아님).`,
       hidden ? ` 딥시크 후보 ${fmt.int(hidden)}개는 금액 숨김 설정이라 세지 않았습니다.` : ""));
     put(grid, h("div", {class: "tbl-wrap"}, h("table", {class: "tbl cl-cmp"},
       h("thead", null, h("tr", null, h("th", {class: "l", scope: "col"}, "후보"), ROLES.map((r) => h("th", {scope: "col"}, LK.roleChip(r))))),
@@ -164,7 +164,7 @@ export async function mount(el, ctx) {
         const best = real.length >= 2 ? Math.max(...real) : null;
         return h("tr", null, pickCell(c), ROLES.map((r, i) => {
           const a = set[r];
-          if (!a) return h("td", {class: "muted", title: r === "cand" ? null : "이 후보의 청산이 이미 이것이라 따로 두지 않음"}, "—");
+          if (!a) return h("td", {class: "muted", title: r === "cand" ? null : "이 후보에는 이 종류 계좌가 없습니다 (그 매매법에 자체 구조 · 가격 코드가 없거나, 후보의 손절이 이미 같아 따로 두지 않음)"}, "—");
           const star = best != null && vals[i] === best && vals.filter((v) => v === best).length === 1;
           const w = wr(a);
           const t = w == null ? null : fmt.pct(w * 100, true, 1);

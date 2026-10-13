@@ -10,7 +10,7 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import * as RK from "../rulekit.js";
-import {TFS, tfKo} from "../labels.js";
+import {TFS, tfKo, ROLES, ROLE_KO, lineupOn} from "../labels.js";
 import {serverNow} from "../live.js";
 
 export async function mount(el, ctx) {
@@ -21,11 +21,12 @@ export async function mount(el, ctx) {
   const save = () => ctx.setQuery(Object.fromEntries(Object.entries({kind: st.kind, tf: st.tf, s: st.strat, pick: st.pick})
     .filter(([, v]) => v && v !== "all")));
   const answers = h("div"), rule = h("div"), list = h("div"), card = h("div", {id: "rl-pick"}), stratSel = h("span", {class: "rl-sel"});
+  const ruleCard = ui.card({plate: "배수(레버리지) 규칙", sub: "다섯 계좌 모두 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)"}, rule);
+  const rolesCard = ui.card({plate: "계좌 5개는 무엇이 다른가", sub: "같은 후보에서 갈라진 다섯 계좌 · 같은 시세 · 같은 기간"}, h("div"));
   el.append(
     ui.screenHead("익절·손절·배수", "후보마다 익절·손절을 어떻게 잡았고, 배수(레버리지)와 증거금은 어떻게 정하나"),
     ui.card({plate: "짧은 답", cls: "rl-answers"}, answers),
-    ui.card({plate: "배수(레버리지) 규칙", sub: "다섯 계좌 모두 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)"}, rule),
-    ui.card({plate: "계좌 5개는 무엇이 다른가", sub: "같은 후보에서 갈라진 다섯 계좌 · 같은 시세 · 같은 기간"}, RK.rolesTable()),
+    ruleCard, rolesCard,
     ui.card({plate: "후보마다 익절 · 손절", sub: "누르면 아래에 그 후보의 카드"},
       h("div", {class: "dl-fields"},
         ui.field("종류", ui.seg([{id: "all", label: "전체"}, {id: "core", label: "기존 36"}, {id: "ds", label: "딥시크"}], st.kind, (v) => { st.kind = v; st.strat = "all"; save(); paint(); }, {label: "종류"})),
@@ -46,6 +47,12 @@ export async function mount(el, ctx) {
     const d = LK.league();
     if (!d || !d.accounts) { put(list, ui.none("준비 중")); return; }
     const ix = LK.index(d);
+    // the owner-exit league: its accounts are not five and not "다섯 계좌 모두" the same stop; the snapshot's lineup names them
+    const owner = lineupOn();
+    ruleCard.querySelector(".sub").textContent = owner ? "모든 계좌가 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)" : "다섯 계좌 모두 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)";
+    rolesCard.querySelector(".plate").textContent = owner ? `계좌 종류 ${fmt.int(ROLES.length)}가지는 무엇이 다른가` : "계좌 5개는 무엇이 다른가";
+    rolesCard.querySelector(".sub").textContent = owner ? "같은 후보의 계좌들 · 같은 시세 · 같은 기간" : "같은 후보에서 갈라진 다섯 계좌 · 같은 시세 · 같은 기간";
+    put(rolesCard.lastElementChild, RK.rolesTable());
     put(answers, answersBody(d, R));
     put(rule, R ? RK.levRuleBody(R) : ui.none("규칙 숫자를 불러오는 중"));
     const names = [...new Set(ix.cands.filter((c) => st.kind === "all" || c.kind === st.kind).map((c) => c.name))]
@@ -159,7 +166,11 @@ export function answersBody(d, R) {
   const locks = picks.length - fixed;
   const r3 = picks.filter((p) => p.tp && p.tp.kind === "R" && p.tp.val === 3).length;
   const baseKo = (R && R.base_exit_ko) || "계단 잠금 10%부터 · 손절 2 ATR";
-  const exitHead = !picks.length ? [`후보 ${fmt.int(n)}개는 5년 탐색(84가지 청산 중)에서 각자 고른 익절·손절을 씁니다. `]
+  const owner = lineupOn();                         // the owner-exit league: these are the picks' own (지금 청산 account) exits, the others differ
+  const who = owner ? `후보마다 ‘${ROLE_KO.cand}’ 계좌는 ` : "";
+  const exitHead = owner && picks.length ? [`${who}5년 탐색(84가지 청산 중)에서 각자 고른 익절·손절을 씁니다 (후보 ${fmt.int(n)}개: 고정 익절 ${fmt.int(fixed)}개 · 계단 잠금 ${fmt.int(locks)}개). 다른 종류의 계좌는 청산 방법이 다릅니다 (아래 ‘무엇이 다른가’ 표). `]
+    : owner ? [`${who}5년 탐색(84가지 청산 중)에서 각자 고른 익절·손절을 씁니다. 다른 종류의 계좌는 청산 방법이 다릅니다. `]
+    : !picks.length ? [`후보 ${fmt.int(n)}개는 5년 탐색(84가지 청산 중)에서 각자 고른 익절·손절을 씁니다. `]
     : !locks ? [`후보 ${fmt.int(n)}개 모두 5년 탐색(84가지 청산 중)에서 각자 고른 `, h("b", null, "고정 익절"), "과 ", h("b", null, "ATR 손절"), "을 씁니다. 계단 잠금을 쓰는 후보는 없습니다. "]
       : [`후보 ${fmt.int(n)}개 중 ${fmt.int(fixed)}개는 `, h("b", null, "고정 익절"), `, ${fmt.int(locks)}개는 `, h("b", null, "계단 잠금"), "을 씁니다 (5년 탐색에서 각자 고른 것). 손절은 모두 ATR 손절입니다. "];
   const used = R && R.used_all ? R.used_all.cand || {} : null;
@@ -169,13 +180,13 @@ export function answersBody(d, R) {
     h("div", null, h("dt", null, "익절·손절은 어떻게?"), h("dd", null, exitHead,
       h("br"), h("span", {class: "muted"}, `익절: ${list(tpCount)}`), h("br"), h("span", {class: "muted"}, `손절: ${list(stopCount)}`),
       h("br"), "R = 진입가에서 손절까지의 거리.", r3 ? " 3R 익절이면 손절 거리의 3배 가면 익절하고, 4번 중 1번만 이겨도 본전(비용 전)입니다." : "",
-      ` 기본값 계좌만 규칙봇의 지금 청산(${baseKo})을 씁니다.`)),
+      owner ? "" : ` 기본값 계좌만 규칙봇의 지금 청산(${baseKo})을 씁니다.`)),
     h("div", null, h("dt", null, "배수(레버리지)는?"), h("dd", null,
       "규칙봇과 같은 규칙입니다. 좋은 자리(기존 36 매매법의 진입 강도 점수 상위)는 50배 → 40배 → 30배 → 20배, 보통 자리는 30배 → 20배 순서로 시도해, ",
       "거래소가 그 주문 크기에 허용하는 배수 안이고 두 가지 안전 검사(손절선이 청산가 안쪽에 1 ATR 이상 여유 · 손절 손실이 잔고의 15% 이하)를 통과한 첫 배수로 들어갑니다. ",
       "증거금은 잔고의 배수% (30배면 30%). 손절이 넓을수록 배수가 내려가고, 어느 배수도 안 되면 들어가지 않습니다. 딥시크는 늘 보통 자리입니다.",
-      blk ? ` 거래소 한도: 후보 크기에서는 ${blk}라서 다음 배수로 내려갑니다 (1/4 계좌는 주문이 작아 덜 걸림).` : "",
-      used ? [h("br"), h("span", {class: "muted"}, usedN ? "후보 계좌가 지금까지 쓴 배수: " : "후보 계좌는 아직 닫힌 거래가 없습니다"), usedN ? RK.usedChips(used) : null] : null)),
+      blk ? ` 거래소 한도: ${owner ? "이 크기" : "후보 크기"}에서는 ${blk}라서 다음 배수로 내려갑니다${owner ? "." : " (1/4 계좌는 주문이 작아 덜 걸림)."}` : "",
+      used ? [h("br"), h("span", {class: "muted"}, usedN ? `${owner ? `‘${ROLE_KO.cand}’` : "후보"} 계좌가 지금까지 쓴 배수: ` : `${owner ? `‘${ROLE_KO.cand}’` : "후보"} 계좌는 아직 닫힌 거래가 없습니다`), usedN ? RK.usedChips(used) : null] : null)),
     h("div", null, h("dt", null, "언제부터?"), h("dd", null,
       d.start_ms ? [h("b", null, `${LK.startKo(d)} KST`), ` (설치한 때)부터입니다. 모든 계좌가 그때 ${LK.startUsd()}으로 시작했고, 거래·잔고·날짜(시작한 날 = D+0)는 모두 그때부터 셉니다. `,
         `오늘은 D+${LK.dPlus(d, serverNow())} (${LK.calDay(d, serverNow())}일째)입니다.`] : "엔진이 첫 기록을 쓰면 나옵니다.")));

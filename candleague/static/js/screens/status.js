@@ -6,9 +6,16 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {freshLine, staleBanner} from "../poskit.js";
+import {lineupOn} from "../labels.js";
 
 /** How much of the span from the start to the time the record was written the engine has processed (a catch-up). */
 const catchShare = (d) => Math.max(0, Math.min(1, (d.done_ms - d.start_ms) / Math.max(1, d.generated_ms - d.start_ms)));
+
+/** "14일째 첫 확인 10/09 · 28일째 판정 10/23" (the owner-exit league's road; lk.js road). */
+const roadText = (d) => {
+  const r = LK.road(d);
+  return r ? `${r.observe}일째 첫 확인 ${fmt.mmdd(r.observe_ms)} · ${r.decide}일째 판정 ${fmt.mmdd(r.decide_ms)}` : "—";
+};
 
 export async function mount(el, ctx) {
   const tiles = h("div"), machine = h("div"), notes = h("div"), feed = h("div"), pos = h("div"), banner = h("div");
@@ -35,9 +42,11 @@ export async function mount(el, ctx) {
           : `${LK.startKo(d)} 시작 (설치한 때)`)),
       LK.catchingUp(d) ? ui.progress(catchShare(d), `따라잡는 중 (시작부터 기록 쓴 시각까지의 ${fmt.pct(100 * catchShare(d), false, 0)} 계산함)`) : null,
       h("dl", {class: "kv"},
-        h("div", null, h("dt", null, "계좌"), h("dd", null, `${fmt.int(d.accounts.length)}개 (후보 ${fmt.int(d.accounts.filter((a) => a.role === "cand").length)}개 × 5종류, 기본값은 칸마다 1개)`)),
+        h("div", null, h("dt", null, "계좌"), h("dd", null, lineupOn() ? `${fmt.int(d.accounts.length)}개 (후보 ${fmt.int(LK.leagueCounts(d).picks)}개 × 계좌 종류 ${fmt.int(LK.leagueCounts(d).kinds)}가지 · 후보에 따라 없는 종류가 있음)`
+          : `${fmt.int(d.accounts.length)}개 (후보 ${fmt.int(d.accounts.filter((a) => a.role === "cand").length)}개 × 5종류, 기본값은 칸마다 1개)`)),
         h("div", null, h("dt", null, "딥시크 금액"), h("dd", null, d.ds_money ? "보임 (두 분 요청 2026-10-11)" : "숨김 (CANDLEAGUE_DS_MONEY=0)")),
-        h("div", null, h("dt", null, "점검 날짜"), h("dd", null, ((d.watch && d.watch.checkpoints) || []).map((c) => `${c.ko} ${fmt.mmdd(c.ms)}`).join(" · ") || "—")))));
+        lineupOn() ? h("div", null, h("dt", null, "판정 일정"), h("dd", null, roadText(d)))
+          : h("div", null, h("dt", null, "점검 날짜"), h("dd", null, ((d.watch && d.watch.checkpoints) || []).map((c) => `${c.ko} ${fmt.mmdd(c.ms)}`).join(" · ") || "—")))));
     const s = d.server || {};
     const load1 = s.load ? s.load[0] : null;
     put(machine, h("div", {class: "stats cl-stats4"},

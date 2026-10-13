@@ -8,7 +8,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {TFS, tfKo, STYLE_KO, STYLE_DESC} from "../labels.js";
+import {TFS, tfKo, STYLE_KO, STYLE_DESC, ROLES, ROLE_KO, lineupOn} from "../labels.js";
 import * as RK from "../rulekit.js";
 import * as WK from "../whykit.js";
 
@@ -39,6 +39,16 @@ export function paramTable(c, base, meta) {
         h("td", {class: "num"}, same ? h("span", {class: "muted"}, "그대로") : mult != null ? h("span", {class: mult > 1 ? "cl-up" : "cl-dn"}, `×${fmt.num(mult, 2)}`) : "바뀜"));
     }))),
   sm && sm.note ? h("p", {class: "note"}, sm.note) : null);
+}
+
+/** How many of the pick's values differ from the defaults: the 기본값 account's numbers when there is one, else (the owner-exit league has
+ *  no 기본값 account) the strategy's default of /api/meta, the same default the table shows. */
+export function changedCount(c, base, meta) {
+  if (base && base.combo) return Object.keys(c.combo || {}).filter((k) => JSON.stringify(base.combo[k]) !== JSON.stringify(c.combo[k])).length;
+  const sm = LK.stratMeta(c.name, meta);
+  if (!(sm && sm.params)) return 0;
+  const def = (k) => (sm.params.find((p) => p.name === k) || {}).default;
+  return Object.keys(c.combo || {}).filter((k) => def(k) !== undefined && JSON.stringify(def(k)) !== JSON.stringify(c.combo[k])).length;
 }
 
 /** Where the pick came from and what kind of pick it is. */
@@ -72,6 +82,7 @@ export async function mount(el, ctx) {
   const save = () => ctx.setQuery(Object.fromEntries(Object.entries({kind: st.kind, s: st.strat, tf: st.tf}).filter(([, v]) => v !== "all")));
   const list = h("div", {class: "stack"});
   const stratSel = h("span");
+  const noteTail = h("span", null, `기본값 계좌는 지금 규칙봇 청산(${LIVE_EXIT_KO})을 씁니다.`);     // the owner-exit league has no 기본값 account (paint)
   el.append(
     ui.screenHead("커스텀값", "후보마다 기본값에서 바뀐 숫자와 익절·손절 · 5년 탐색에서 고른 값"),
     h("div", {class: "dl-fields"},
@@ -79,7 +90,7 @@ export async function mount(el, ctx) {
       ui.field("봉", ui.seg([{id: "all", label: "전체"}, ...TFS.map((t) => ({id: t, label: tfKo(t)}))], st.tf, (v) => { st.tf = v; save(); paint(); }, {label: "봉"})),
       ui.field("매매법", stratSel)),
     h("p", {class: "note"}, "기본값 = 규칙봇이 지금 쓰는 숫자. 커스텀값 = 5년 탐색(기본의 ⅓배~3배, 9단계)에서 고른 숫자. 색 글씨(커스텀값 칸)가 바뀐 값, 배수는 노랑 = 키움 · 파랑 = 줄임, '범위 끝' = 5년 탐색이 시도한 가장 작은(↓)·큰(↑) 값. ",
-      "익절·손절도 후보마다 84가지 중에서 골랐고, 기본값 계좌는 지금 규칙봇 청산(", LIVE_EXIT_KO, ")을 씁니다. 배수(레버리지) 규칙과 코인별로 지금 몇 배가 되는지는 ",
+      "익절·손절도 후보마다 84가지 중에서 골랐고, ", noteTail, " 배수(레버리지) 규칙과 코인별로 지금 몇 배가 되는지는 ",
       h("a", {href: "#/rules"}, "익절·손절·배수"), " 화면에 있습니다."),
     list);
 
@@ -87,6 +98,7 @@ export async function mount(el, ctx) {
   function paint() {
     const d = LK.league();
     if (!d || !d.accounts) { put(list, ui.none("준비 중")); return; }
+    noteTail.textContent = lineupOn() ? `후보의 ‘${ROLE_KO.cand}’ 계좌가 그 익절·손절을 씁니다 (다른 종류의 계좌는 청산 방법이 다릅니다).` : `기본값 계좌는 지금 규칙봇 청산(${LIVE_EXIT_KO})을 씁니다.`;
     const ix = LK.index(d);
     const names = [...new Set(ix.cands.filter((c) => st.kind === "all" || c.kind === st.kind).map((c) => c.name))]
       .sort((a, b) => LK.stratKo(a, meta).localeCompare(LK.stratKo(b, meta), "ko"));
@@ -99,7 +111,7 @@ export async function mount(el, ctx) {
     put(list, picks.map((c) => {
       const set = ix.sets[c.id];
       const pm = LK.pickMeta(c.id, meta) || {};
-      const changed = Object.keys(c.combo || {}).filter((k) => set.base && set.base.combo && JSON.stringify(set.base.combo[k]) !== JSON.stringify(c.combo[k])).length;
+      const changed = changedCount(c, set.base, meta);
       return ui.card({plate: `${LK.stratKo(c.name, meta)} · ${tfKo(c.tf)}`, sub: `${c.name} · 바뀐 값 ${changed}개`, cls: "cl-pickcard",
         acts: h("span", {class: "row wrap"}, LK.kindChip(c.kind), LK.styleChip(pm.style),
           h("a", {class: "btn-line", href: `#/entries?s=${encodeURIComponent(c.name)}`}, "진입 차트"),
@@ -108,7 +120,7 @@ export async function mount(el, ctx) {
         h("div", {class: "stack tight"}, h("h3", {class: "cl-h3"}, "숫자"), paramTable(c, set.base, meta),
           h("h3", {class: "cl-h3"}, "익절 · 손절 · 배수"), RK.ruleBox(c, R)),
         h("div", {class: "stack tight"}, h("h3", {class: "cl-h3"}, "어디서 왔나 · 성격"), originBox(c, meta),
-          h("h3", {class: "cl-h3"}, "지금 계좌 5개"), LK.fiveRows(set),
+          h("h3", {class: "cl-h3"}, lineupOn() ? `지금 계좌 ${fmt.int(ROLES.filter((r) => set[r]).length)}개` : "지금 계좌 5개"), LK.fiveRows(set),
           LK.pairedBox((((LK.league() || {}).watch || {}).picks || {})[c.id]?.paired, {hidden: LK.dsHidden(c)}))));
     }));
   }

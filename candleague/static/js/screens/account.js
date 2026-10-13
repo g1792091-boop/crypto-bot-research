@@ -9,7 +9,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {ROLES, ROLE_KO, ROLE_DESC, tfKo, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_DESC, tfKo, sideKo, reasonKo, coinOf, coinShort, lineupOn} from "../labels.js";
 import {paramTable, originBox} from "./custom.js";
 import {posPill, pricesLive} from "../poskit.js";
 import {serverNow} from "../live.js";
@@ -27,11 +27,22 @@ export async function mount(el, ctx) {
   const id = ctx.params.arg;
   const head = h("div"), stats = h("div"), chart = h("div"), five = h("div"), params = h("div"), trades = h("div"), split = h("div");
   const why = h("div"), rule = h("div");
+  const chartCard = ui.card({plate: "잔고 흐름", sub: `같은 후보의 계좌 5개 · 닫힌 거래마다 · ${LK.startUsd()}에서 시작`}, chart);
+  const splitCard = ui.card({plate: "롱 · 숏 · 코인별 · 커스텀값이 바꾼 거래", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split);
+  const fiveCard = ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five);
+  /** The card words that count the pick's accounts: five in the candidate league, the lineup's kinds (those this pick has) in the owner-exit league. */
+  const cardWords = (set) => {
+    const owner = lineupOn(), n = ROLES.filter((r) => set && set[r]).length;
+    const f = (card, k, t) => { const e = card.querySelector(k); if (e) e.textContent = t; };
+    f(chartCard, ".sub", `같은 후보의 계좌 ${owner ? fmt.int(n) : 5}개 · 닫힌 거래마다 · ${LK.startUsd()}에서 시작`);
+    f(splitCard, ".sub", `이 후보(${owner ? `‘${ROLE_KO.cand}’ 계좌` : "후보 계좌"})의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음`);
+    f(fiveCard, ".plate", `계좌 ${owner ? fmt.int(n) : 5}개`);
+  };
   const body = h("div", {class: "stack"}, stats, why,
-    ui.card({plate: "잔고 흐름", sub: `같은 후보의 계좌 5개 · 닫힌 거래마다 · ${LK.startUsd()}에서 시작`}, chart),
+    chartCard,
     rule,
-    ui.card({plate: "롱 · 숏 · 코인별 · 커스텀값이 바꾼 거래", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split),
-    ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five),
+    splitCard,
+    fiveCard,
     params,
     ui.card({plate: "거래 기록", sub: "이 계좌 · 최신 200번까지 · 코인을 누르면 터미널"}, trades));
   const afterEl = afterBar({cls: "cl-actafter"});
@@ -51,7 +62,7 @@ export async function mount(el, ctx) {
     put(why, INS ? WK.whyCard(a, (INS.accounts || {})[a.id], {flip: a.role === "cand" ? set.flip : null, rule: p && a.exit === p.exit ? p : null, pick: c,
       href: (t) => `#/terminal?acct=${encodeURIComponent(a.id)}&coin=${coinOf(t.symbol)}&at=${t.entry_time}`}) : null);
     // an account whose exit is not the pick's (the 기본값's lock) reads its own exit first (rulekit ownExitBox)
-    put(rule, c.role === "cand" ? ui.card({plate: "익절 · 손절 · 배수", sub: `${LK.pickKo(c, meta)} · 이 후보의 익절·손절과 계좌 5개 공통 배수 규칙 · 지금 코인별로 몇 배가 되나`, cls: "rl-pickcard"},
+    put(rule, c.role === "cand" ? ui.card({plate: "익절 · 손절 · 배수", sub: `${LK.pickKo(c, meta)} · 이 후보의 익절·손절과 ${lineupOn() ? "모든 계좌 공통" : "계좌 5개 공통"} 배수 규칙 · 지금 코인별로 몇 배가 되나`, cls: "rl-pickcard"},
       p ? RK.pickRuleBody(p, R, {account: a}) : RK.ruleBox(c, R)) : null);
   }
   RK.loadRules(ctx, (x) => { R = x; if (ctx.alive() && LK.league()) paintWhy(LK.league()); }).catch(() => { /* the exit's name stays */ });
@@ -86,10 +97,11 @@ export async function mount(el, ctx) {
       ui.stat("한 번 평균", LK.ret(a.mean_ret, {hiddenIf: LK.dsHidden(a)}), "닫힌 거래마다 직전 지갑 대비"),
       ui.stat("잔고", LK.wallet(a), a.wallet != null ? fmt.pct(LK.walletChange(a), true, 1) + ` (시작 ${LK.startUsd()})` : null),
       ui.stat("최대 낙폭", LK.ddTxt(a), "닫힌 거래 기준"),
-      ui.stat(a.role === "cand" ? "기준" : "지금 포지션", a.role === "cand" ? h("span", null, LK.verdictPill(j), " ", LK.bandMark(j) || "")
+      ui.stat(a.role === "cand" ? (lineupOn() ? "경고등" : "기준") : "지금 포지션", a.role === "cand" ? (lineupOn() ? (LK.bandMark(j) || h("span", {class: "muted"}, "—")) : h("span", null, LK.verdictPill(j), " ", LK.bandMark(j) || ""))
         : openAfter(a) ? h("span", {class: ["side", a.open.side > 0 ? "long" : "short"]}, `${coinShort(coinOf(a.open.symbol))} ${sideKo(a.open.side)}`)
           : openBefore(a) ? h("span", {class: "muted", title: "설치 전에 들어간 포지션이라 '설치 뒤 진입만' 보기에서 숨김"}, "설치 전 진입 · 숨김") : "없음",
       a.role !== "cand" && openBefore(a) ? "설치 뒤만 보는 중" : null)));
+    cardWords(set);
     put(five, LK.fiveRows(set));
     put(split, LK.sideSplit(((d.watch || {}).picks || {})[c.id], {hidden: LK.dsHidden(c)}),
       LK.pairedBox((((d.watch || {}).picks || {})[c.id] || {}).paired, {hidden: LK.dsHidden(c)}));
@@ -102,7 +114,7 @@ export async function mount(el, ctx) {
     const books = await Promise.all(ids.map((x) => ctx.api(`/api/trades/${encodeURIComponent(x.id)}`).catch(() => null)));
     if (!ctx.alive()) return;
     const series = ids.map((x, i) => ({role: x.role, label: ROLE_KO[x.role], points: books[i] && books[i].equity})).filter((x) => x.points);
-    put(chart, series.length ? LK.equityLines(series, {label: `${LK.pickKo(c, meta)} 계좌 5개 잔고`, until: d.done_ms})
+    put(chart, series.length ? LK.equityLines(series, {label: `${LK.pickKo(c, meta)} 계좌 ${lineupOn() ? fmt.int(ids.length) : 5}개 잔고`, until: d.done_ms})
       : ui.empty(a.kind === "ds" ? "딥시크 금액 숨김 설정이라 잔고 그래프가 없습니다" : "아직 끝난 거래가 없습니다"));
     const mine = books[ids.findIndex((x) => x.id === a.id)];
     const kept = afterBook(mine);                            // 설치 뒤 진입만: the trades entered after the install

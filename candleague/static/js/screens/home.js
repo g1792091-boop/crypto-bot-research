@@ -74,11 +74,11 @@ export async function mount(el, ctx) {
   function paintHeadWords(d) {
     const owner = lineupOn();
     const n = LK.leagueCounts(d);
-    headSub.textContent = owner ? `후보 리그 한눈에 보기 · 후보 ${fmt.int(n.picks)}개 · 계좌 ${fmt.int(n.accounts)}개 (후보마다 계좌 종류 ${fmt.int(n.kinds)}가지)`
+    headSub.textContent = owner ? `후보 리그 한눈에 보기 · 후보 ${fmt.int(n.picks)}개 · 계좌 ${fmt.int(n.accounts)}개`
       : "후보 리그 한눈에 보기 · 커스텀값 후보 38개 × 계좌 5개";
     const sub = (card, text) => { const e = card.querySelector(".sub"); if (e) e.textContent = text; };
     sub(tbCard, owner ? `후보마다 ‘${ROLE_KO.cand}’ 계좌의 거래 한 번 평균 (지갑 대비)` : "후보 계좌의 거래 한 번 평균 (지갑 대비)");
-    const ps = poolsSec.querySelector(".sub");
+    const ps = poolsSec.querySelector(".k4-hint");
     if (ps) ps.textContent = owner ? "기존 36 · 딥시크 따로" : "기존 36 · 딥시크 따로 (점검도 묶음마다 따로)";
   }
 
@@ -170,8 +170,8 @@ export async function mount(el, ctx) {
     put(hero,
       h("div", {class: "s2a-hrow"}, ui.plate("청산 비교"), h("span", {class: "muted s2a-small"}, H.ko)),
       h("p", {class: "dl-vbig ok"}, `계좌 종류 ${fmt.int(kinds)}가지 `, h("em", null, "나란히")),
-      h("div", {class: "s2a-kinds", "aria-label": "계좌 종류 묶음"}, groups.map(row)),
-      h("p", {class: "dl-vline s2a-decline"}, h("b", null, "판정 "), line),
+      h("div", {class: "s2a-kgroups", "aria-label": "계좌 종류 묶음"}, groups.map(row)),
+      h("p", {class: "dl-vline s2a-decline"}, h("small", {class: "muted s2a-dlk"}, "판정 한 줄"), line),
       h("div", {class: "row wrap"}, h("a", {class: "btn-y", href: "#/decision"}, "판정 화면 보기"),
         h("a", {class: "btn-line", href: "#/compare"}, compareKo()), h("a", {class: "btn-line", href: "#/rules"}, "익절·손절·배수"),
         h("a", {class: "btn-line", href: "#/howto"}, "읽는 법")),

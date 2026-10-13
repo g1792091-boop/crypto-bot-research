@@ -150,12 +150,12 @@ export const roleRule = (r) => (lineupOn() && ROLE_INFO[r]) || ROLE_RULE[r] || N
 /** The five accounts side by side: numbers, exit, size, direction, what it is for (rows on a phone, a table on a PC). */
 export function rolesTable() {
   const cols = [["nums", "진입"], ["exit", "익절·손절"], ["size", "크기 · 배수"], ["dir", "방향"], ["why", "보려는 것"]];
-  return h("div", {class: "rl-roles", role: "table", "aria-label": "계좌 5개가 다른 점"},
+  return h("div", {class: "rl-roles", role: "table", "aria-label": lineupOn() ? "계좌 종류가 다른 점" : "계좌 5개가 다른 점"},
     h("div", {class: "rl-rrow rl-rhd", role: "row"}, h("span", {role: "columnheader"}, "계좌"), cols.map(([, k]) => h("span", {role: "columnheader"}, k))),
     ROLES.map((r) => h("div", {class: ["rl-rrow", `r-${r}`], role: "row"}, h("span", {class: "rl-rname", role: "rowheader"}, LK.roleChip(r)),
       cols.map(([key, k]) => h("span", {role: "cell", dataset: {k}}, roleRule(r)[key])))),
     h("p", {class: "note"}, lineupOn()
-      ? "모든 계좌가 같은 신호 · 같은 크기 · 같은 배수 규칙(아래)입니다. 손절 거리도 후보의 것 그대로라 고르는 배수가 같고, 익절·청산만 다릅니다."
+      ? `${LK.OWNER_SAME_SIGNALS} ${LK.OWNER_SAME_RULE} ${LK.OWNER_STOP_DIFF}`
       : "배수 규칙은 다섯 계좌 모두 같습니다 (아래). 같은 규칙이라도 손절 폭과 증거금이 다르면 고르는 배수가 달라집니다."));
 }
 
@@ -188,14 +188,15 @@ function liqCell(liq, blocked) {
 export function levRuleBody(r) {
   if (!r || !r.steps) return ui.none("준비 중");
   const c = r.costs || {};
+  const owner = lineupOn();                   // the owner-exit league has no 1/4 or 기본값 account: its text names neither
   const rows = r.steps.map((s) => h("div", {class: ["rl-step", `l${s.lev}`], role: "row"},
     h("b", {class: "rl-steplev", role: "cell"}, `${s.lev}배`),
     h("span", {role: "cell", dataset: {k: "누가"}}, s.group === "best" ? "좋은 자리만" : "좋은 자리 · 보통 자리"),
-    h("span", {role: "cell", class: "num", dataset: {k: "증거금"}}, `${share(s.margin, 0)} · 1/4은 ${share(s.q_margin, 1)}`),
-    h("span", {role: "cell", class: "num", dataset: {k: "손절 거리 한도"}}, `${share(s.max_stop, 2)} · 1/4은 ${share(s.q_max_stop, 1)}`),
+    h("span", {role: "cell", class: "num", dataset: {k: "증거금"}}, owner ? share(s.margin, 0) : `${share(s.margin, 0)} · 1/4은 ${share(s.q_margin, 1)}`),
+    h("span", {role: "cell", class: "num", dataset: {k: "손절 거리 한도"}}, owner ? share(s.max_stop, 2) : `${share(s.max_stop, 2)} · 1/4은 ${share(s.q_max_stop, 1)}`),
     h("span", {role: "cell", class: "num rl-liqc", dataset: {k: "진입 때 청산까지"}},
-      h("span", null, h("small", {class: "muted"}, "후보 "), liqCell(s.liq, s.blocked)),
-      s.q_liq ? h("span", null, h("small", {class: "muted"}, "1/4 "), liqCell(s.q_liq, s.q_blocked)) : null)));
+      h("span", null, owner ? null : h("small", {class: "muted"}, "후보 "), liqCell(s.liq, s.blocked)),
+      !owner && s.q_liq ? h("span", null, h("small", {class: "muted"}, "1/4 "), liqCell(s.q_liq, s.q_blocked)) : null)));
   const used = r.used_all || {};
   const picks = Object.values(r.picks || {});
   const npick = picks.length, wide = picks.filter((p) => p.stop_atr >= 3).length;
@@ -205,19 +206,21 @@ export function levRuleBody(r) {
     h("p", null, "배수(레버리지)는 신호가 올 때마다 엔진이 정합니다. 아래 순서대로 시도해서 ", h("b", null, "거래소 한도 안이고 두 가지 안전 검사를 모두 통과한 첫 배수"),
       "로 들어갑니다. 하나도 통과하지 못하면 그 신호는 ", h("b", null, "들어가지 않고 건너뜁니다"), "."),
     h("div", {class: "rl-steps", role: "table", "aria-label": "배수 단계"},
-      h("div", {class: "rl-step rl-stephd", role: "row"}, ["배수", "누가 시도", "증거금 (잔고 중)", "손절 거리 한도 (손실 검사)", "진입 때 청산까지 (후보 · 1/4 크기)"]
+      h("div", {class: "rl-step rl-stephd", role: "row"}, ["배수", "누가 시도", "증거금 (잔고 중)", "손절 거리 한도 (손실 검사)", owner ? "진입 때 청산까지" : "진입 때 청산까지 (후보 · 1/4 크기)"]
         .map((t) => h("span", {role: "columnheader"}, t))),
       rows),
     h("ol", {class: "rl-checks"},
-      h("li", null, h("b", null, term("거래소 한도")), ` · 거래소(바이낸스)는 주문이 클수록 허용 배수를 낮춥니다. 잔고 ${LK.usd0(eq0(r))}이면 50배 주문은 $${fmt.int(top.notional || eq0(r) * 25)}어치(1/4 계좌는 $${fmt.int(top.q_notional || eq0(r) * 6.25)}). `,
-        blk ? `후보 크기에서는 ${blk}라서 그 코인은 다음 배수로 내려갑니다. ` : "지금 표로는 후보 크기에서 막히는 코인이 없습니다. ",
-        qblk ? `1/4 크기에서는 ${qblk}.` : blk ? "1/4 계좌는 주문이 작아 이 한도에 걸리지 않습니다." : ""),
-      h("li", null, h("b", null, term("청산 검사")), ` · 손절선이 `, term("청산가"), `보다 안쪽에 있고, 그 사이가 1 ATR 이상(최소 진입가의 ${share(c.buffer_min, 1)})이어야 합니다. 배수가 높을수록 청산가가 가까워집니다 (위의 ‘진입 때 청산까지’: 주문 크기에 따라 거래소 유지 증거금이 달라 후보와 1/4이 조금 다름).`),
+      h("li", null, h("b", null, term("거래소 한도")), ` · 거래소(바이낸스)는 주문이 클수록 허용 배수를 낮춥니다. 잔고 ${LK.usd0(eq0(r))}이면 50배 주문은 $${fmt.int(top.notional || eq0(r) * 25)}어치${owner ? "" : `(1/4 계좌는 $${fmt.int(top.q_notional || eq0(r) * 6.25)})`}. `,
+        blk ? `${owner ? "이 크기" : "후보 크기"}에서는 ${blk}라서 그 코인은 다음 배수로 내려갑니다. ` : `지금 표로는 ${owner ? "이 크기" : "후보 크기"}에서 막히는 코인이 없습니다. `,
+        owner ? "" : qblk ? `1/4 크기에서는 ${qblk}.` : blk ? "1/4 계좌는 주문이 작아 이 한도에 걸리지 않습니다." : ""),
+      h("li", null, h("b", null, term("청산 검사")), ` · 손절선이 `, term("청산가"), `보다 안쪽에 있고, 그 사이가 1 ATR 이상(최소 진입가의 ${share(c.buffer_min, 1)})이어야 합니다. 배수가 높을수록 청산가가 가까워집니다 (위의 ‘진입 때 청산까지’${owner ? "" : ": 주문 크기에 따라 거래소 유지 증거금이 달라 후보와 1/4이 조금 다름"}).`),
       h("li", null, h("b", null, term("손실 검사")), ` · 손절에 닿았을 때 잃는 돈(수수료·슬리피지 포함)이 잔고의 ${share(c.max_loss, 0)} 이하여야 합니다. 그래서 배수마다 쓸 수 있는 `, term("손절 거리 한도"), "가 있습니다 (위의 ‘손절 거리 한도’).")),
     h("p", null, "그래서 ", h("b", null, "손절이 넓을수록 배수가 내려갑니다"), `. 예를 들어 손절이 1%면 좋은 자리라도 50배(한도 ${share((r.steps[0] || {}).max_stop, 2)})와 40배(한도 ${share((r.steps[1] || {}).max_stop, 2)})는 손실 검사에 걸려 30배로 들어갑니다. `,
-      wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 20~30배가 많고, ` : "", "손절 2 ATR인 기본값 계좌는, 손절이 2 ATR보다 넓은 후보와 비교하면 40·50배가 더 자주 나옵니다."),
+      owner ? (wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 ‘${ROLE_KO.cand}’ 계좌는 20~30배가 많고, 손절을 최대 2 ATR로 좁힌 계좌(대조 · 메인)는 같은 자리에서 40·50배가 더 자주 나옵니다.`
+        : "손절을 최대 2 ATR로 좁힌 계좌(대조 · 메인)는 손절이 더 넓은 계좌보다 같은 자리에서 40·50배가 더 자주 나옵니다.")
+        : [wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 20~30배가 많고, ` : "", "손절 2 ATR인 기본값 계좌는, 손절이 2 ATR보다 넓은 후보와 비교하면 40·50배가 더 자주 나옵니다."]),
     h("p", null, term("증거금"), " = 그 거래에 거는 돈 (잔고 × 비율). ", term("포지션 크기"), ` = 증거금 × 배수. 예: 잔고 ${LK.usd0(eq0(r))}에서 30배면 증거금 ${LK.usd0(eq0(r) * 0.3)}, 포지션 ${LK.usd0(eq0(r) * 9)}. `,
-      "1/4 계좌는 증거금만 1/4이라 손실 검사가 4배 느슨하고 거래소 한도에도 덜 걸려서, 후보보다 높은 배수로 들어가기도 합니다."),
+      owner ? "" : "1/4 계좌는 증거금만 1/4이라 손실 검사가 4배 느슨하고 거래소 한도에도 덜 걸려서, 후보보다 높은 배수로 들어가기도 합니다."),
     h("div", {class: "rl-usedall"}, h("span", {class: "muted"}, "지금까지 실제로 쓴 배수 (닫힌 거래 · 계좌마다 최근 200번까지)"),
       ROLES.map((role) => h("div", {class: "rl-urow"}, LK.roleChip(role), usedChips(used[role] || {}, {none: "아직 닫힌 거래 없음"}))),
       r.hidden_accounts ? h("p", {class: "note"}, `딥시크 계좌 ${fmt.int(r.hidden_accounts)}개는 금액 숨김 설정이라 빠졌습니다.`) : null));
@@ -235,9 +238,12 @@ function coinTile(coin, x, p) {
       h("div", null, h("dt", null, p.tp && p.tp.kind === "roe" ? (ln ? `익절 거리 (${ln}배면)` : "익절 거리") : "익절 거리"), h("dd", {class: "num"}, share(x.tp_pct, 2))),
       x.be_cost != null ? h("div", null, h("dt", null, "본전 (비용 포함)"), h("dd", {class: "num"}, share(x.be_cost, 0))) : null,
       h("div", {class: "rl-cdh"}, h("dt", null, "배수"), h("dd", null, p.best_ok ? "좋은 / 보통" : "보통 자리")),
-      h("div", null, h("dt", null, "후보"), h("dd", {class: "num"}, levPair(x.lev.cand, p.best_ok))),
-      h("div", null, h("dt", null, "1/4"), h("dd", {class: "num"}, levPair(x.lev.quarter, p.best_ok))),
-      h("div", null, h("dt", null, "기본값"), h("dd", {class: "num", title: `기본값 계좌의 손절 2 ATR = ${share(x.base_stop_pct, 2)}`}, levPair(x.lev.base, p.best_ok)))));
+      lineupOn() ? [          // the owner-exit league: the pick's own stop (지금 청산), and what the same rule gives with a 2 ATR stop (메인 · 대조 cap it there)
+        h("div", null, h("dt", null, ROLE_KO.cand), h("dd", {class: "num"}, levPair(x.lev.cand, p.best_ok))),
+        h("div", null, h("dt", null, "손절 2 ATR이면"), h("dd", {class: "num", title: `손절 2 ATR = ${share(x.base_stop_pct, 2)}: 대조 · 메인은 손절이 최대 2 ATR`}, levPair(x.lev.base, p.best_ok)))]
+        : [h("div", null, h("dt", null, "후보"), h("dd", {class: "num"}, levPair(x.lev.cand, p.best_ok))),
+          h("div", null, h("dt", null, "1/4"), h("dd", {class: "num"}, levPair(x.lev.quarter, p.best_ok))),
+          h("div", null, h("dt", null, "기본값"), h("dd", {class: "num", title: `기본값 계좌의 손절 2 ATR = ${share(x.base_stop_pct, 2)}`}, levPair(x.lev.base, p.best_ok)))]));
 }
 /** "지금 이 숫자면": the six coins today (or why there is nothing). */
 export function nowBox(p, r) {
@@ -271,7 +277,8 @@ export function ownExitBox(a, p, r) {
     tp ? h("dl", {class: "rl-kv"},
       h("div", null, h("dt", null, "익절"), h("dd", null, h("b", null, tpShort(tp)), " · ", tpWords(tp, r && r.costs))),
       h("div", null, h("dt", null, "손절"), h("dd", null, h("b", null, `${num1(tp.stop_atr)} ATR`), " · ", stopWords(tp.stop_atr, p.tf, tp)))) : null,
-    h("p", {class: "note"}, "아래는 이 후보(후보 계좌)의 익절·손절입니다. 배수 규칙은 다섯 계좌 모두 같습니다."));
+    h("p", {class: "note"}, lineupOn() ? `아래는 이 후보의 ‘${ROLE_KO.cand}’ 계좌의 익절·손절입니다. 배수 규칙은 모든 계좌가 같고, 손절 거리가 다르면 고르는 배수도 달라질 수 있습니다.`
+      : "아래는 이 후보(후보 계좌)의 익절·손절입니다. 배수 규칙은 다섯 계좌 모두 같습니다."));
 }
 /** A pick's whole rule card body (the 익절·손절·배수 screen and 계좌 자세히); o.account: the account being read
  *  (계좌 자세히) when its exit is not the pick's. */
@@ -286,9 +293,9 @@ export function pickRuleBody(p, r, o = {}) {
       h("div", null, h("dt", null, "손절"), h("dd", null, h("b", null, `${num1(p.stop_atr)} ATR`), " · ", stopWords(p.stop_atr, p.tf, p.tp))),
       h("div", null, h("dt", null, "본전 승률"), h("dd", null, beWords(p))),
       h("div", null, h("dt", null, "배수"), h("dd", null, levWords(p))),
-      h("div", null, h("dt", null, "증거금"), h("dd", null, "잔고 × 배수%: 50배면 잔고의 50%, 40배 40%, 30배 30%, 20배 20%. 1/4 계좌는 그 1/4."))),
+      h("div", null, h("dt", null, "증거금"), h("dd", null, lineupOn() ? "잔고 × 배수%: 50배면 잔고의 50%, 40배 40%, 30배 30%, 20배 20%." : "잔고 × 배수%: 50배면 잔고의 50%, 40배 40%, 30배 30%, 20배 20%. 1/4 계좌는 그 1/4."))),
     h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, "지금 이 숫자면"), nowBox(p, r)),
-    h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, `계좌 ${ROLES.length}개의 익절·손절과 실제로 쓴 배수`),
+    h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, lineupOn() ? `이 후보의 계좌 ${fmt.int(ROLES.filter((r) => roles[r]).length)}개의 익절·손절과 실제로 쓴 배수` : `계좌 ${ROLES.length}개의 익절·손절과 실제로 쓴 배수`),
       h("div", {class: "rl-five"}, ROLES.map((role) => {
         const a = roles[role];
         if (!a) return null;
@@ -319,6 +326,6 @@ export function ruleBox(c, r) {
     h("div", {class: "rl-bl"}, h("b", null, "본전 승률"), h("span", null, be)),
     h("div", {class: "rl-bl"}, h("b", null, "배수"), h("span", null, p.best_ok ? "좋은 자리 50→40→30→20배 · 보통 30→20배" : "늘 보통 자리 30→20배",
       " · 실제 ", usedChips(((p.roles || {}).cand || {}).used))),
-    h("div", {class: "rl-bl muted"}, h("b", null, "기본값"), h("span", null, (r && r.base_exit_ko) || "계단 잠금 10%부터 · 손절 2 ATR")),
+    lineupOn() ? null : h("div", {class: "rl-bl muted"}, h("b", null, "기본값"), h("span", null, (r && r.base_exit_ko) || "계단 잠금 10%부터 · 손절 2 ATR")),
     h("a", {class: "btn-line", href: `#/rules?pick=${encodeURIComponent(c.id)}`}, "익절·손절·배수 자세히 (지금 코인별 배수)"));
 }

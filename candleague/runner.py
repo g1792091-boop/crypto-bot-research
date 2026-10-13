@@ -447,6 +447,37 @@ def closed_trades(conn, accts: list[dict]) -> dict:
     return book
 
 
+COND_SQL = ("SELECT account, json_extract(data, '$.symbol'), json_extract(data, '$.side'), json_extract(data, '$.entry_time'), "
+            "json_extract(data, '$.exit_time'), json_extract(data, '$.roe'), json_extract(data, '$.context.g1'), json_extract(data, '$.context.g2') "
+            "FROM trades WHERE account IN ({}) ORDER BY account, exit_time, rowid")
+
+
+def condition_trades(conn, ids, sql: bool = True) -> dict:
+    """{account: [(symbol, side, entry_time, exit_time, roe, g1, g2)] in exit order} of the given accounts only, for summary.conditions_views (the
+    조건별 성적 screen): the entry stamps ``g1`` / ``g2`` that rulex.chunk_rule wrote into the stored trade's context (True / False; None when the
+    market state was not known or the trade is older than the stamps). Reads only these accounts' rows (the four kinds the screen compares, not the
+    whole book); SQLite's JSON functions pick the six fields without building the whole trade, and a SQLite without them (or a row they cannot
+    read) falls back to ``json.loads`` with the same result."""
+    ids = [i for i in ids if i is not None]
+    out: dict = {i: [] for i in ids}
+    for lo in range(0, len(ids), 400):
+        part = ids[lo:lo + 400]
+        marks = ",".join("?" * len(part))
+        if sql:
+            try:
+                for r in conn.execute(COND_SQL.format(marks), part):
+                    out[r[0]].append(r[1:])
+                continue
+            except sqlite3.Error:
+                for i in part:
+                    out[i] = []
+        for aid, d in conn.execute(f"SELECT account, data FROM trades WHERE account IN ({marks}) ORDER BY account, exit_time, rowid", part):
+            t = json.loads(d)
+            c = t.get("context") or {}
+            out[aid].append((t.get("symbol"), t.get("side"), t.get("entry_time"), t.get("exit_time"), t.get("roe"), c.get("g1"), c.get("g2")))
+    return out
+
+
 HOLD_HOURS = (4, 8, 18)
 
 
@@ -624,6 +655,13 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
         # ... and the pre-registered decision protocol (summary.decision_views): the day count is the engine's processed time; DeepSeek is
         # left out of every figure unless ds_money
         doc["decision"] = SM.decision_views(book, league.accts, lu, league.start_ms, league.done, ds_money)
+        # ... and the exploratory 조건별 성적 (summary.conditions_views): where does a structure work? It reads the stored trades of the four kinds it
+        # compares (their entry stamps g1 / g2 live in the stored context, which closed_trades leaves out) and never decides anything
+        try:                                  # an exploratory screen must never stop the snapshot: on a failure the key is simply absent ("데이터 준비 중")
+            doc["conditions"] = SM.conditions_views(lambda ids: condition_trades(league.conn, ids), league.accts, lu, league.start_ms, league.done,
+                                                    ds_money)
+        except Exception as exc:  # noqa: BLE001
+            doc["conditions_error"] = f"{type(exc).__name__}: {exc}"[:200]
     os.makedirs(snap, exist_ok=True)
     _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms, book))
     _write(snap, "league.json", doc)

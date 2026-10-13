@@ -1230,3 +1230,293 @@ def decision_views(book: dict, accts: list, lineup: Optional[list], start_ms: Op
             "decide_ms": None if start_ms is None else int(start_ms) + DECISION_DAY * 86_400_000,
             "n_tests": len(rows), "counts": {v: sum(r["verdict"] == v for r in rows) for v in VERDICT_KO}, "ds_in_stats": bool(ds_money),
             "summary_ko": _summary_ko(rows, phase, days), "rules_ko": decision_rules_ko(), "rows": rows}
+
+
+# ---------------------------------------------------------------- 조건별 성적 (league.json key ``conditions``)
+# EXPLORATORY and read-only: WHERE (which weekday, session, side, coin, chart, BTC trend, volatility, hold time) does a structure work, and where
+# not? The five-year studies found no direction skill, so this league only learns where an edge might hide, without adding accounts. For the four
+# kinds -ld (대조), -ldc (its coin-flip twin), -fq (실전 후보) and -fqc (its coin twin), pooled over the picks, every bucket of every dimension
+# gets n, wins, win rate and the mean net ROE per trade; for -ld and -fq also the difference to the coin twin in the SAME bucket (difference
+# of two means, pair-free: the two kinds' trades in a bucket are not matched) with a day-cluster bootstrap interval (the unit is the UTC day of
+# the ENTRY, so the real trade and its coin twin of one signal share a cluster). It never passes or fails anything: with this many cells
+# some always look good by luck, so it is only used to choose what the NEXT pre-registered test (#/decision) should look at.
+# Every draw of the bootstrap is shared by all cells (one resampling of days, applied to every cell with a matrix product: a cell costs
+# next to nothing, one second for a million trades). DeepSeek money (D11): without ``ds_money`` DeepSeek accounts are in no figure.
+import collections  # noqa: E402
+
+COND_KINDS = ("-fq", "-fqc", "-ld", "-ldc")                           # the kinds read (the order of the screen: the candidate first)
+COND_PAIRS = COIN_TWINS                                               # (real kind, its coin twin): -fq / -fqc and -ld / -ldc
+COND_ROLE_KO = {"-fq": "실전 후보", "-ld": "대조", "-fqc": "동전", "-ldc": "동전"}
+COND_MIN_N = 30                                                       # a bucket with fewer trades is `few`: no mean is shown
+COND_LUCKY = 0.05                                                     # a cell whose interval lies above 0 happens by chance in 5% of cells
+COND_HOLD_H = (1, 4, 18)                                              # hold-time edges (hours): < 1, 1-4, 4-18, over 18
+COND_SESSION_H = 8                                                    # UTC 00-08 / 08-16 / 16-24
+COND_TF_ORDER = ("15m", "30m", "1h", "4h")
+COND_FIELDS = ("symbol", "side", "entry_time", "exit_time", "roe", "g1", "g2")
+_HOUR = 3_600_000
+_DAY = 86_400_000
+_G_CODE = {True: 0, False: 1}                                         # g1 / g2 stamp -> bucket (1 / 0 from SQL work as True / False); anything else is 2 (unknown)
+# (id, Korean name, one-line hint, [(bucket id, Korean name, hint)], is it known only after the entry?)
+_COND_FIXED = (
+    ("weekday", "요일", "들어간 시각이 평일인지 주말인지 (UTC 기준, 한국은 +9시간)",
+     (("weekday", "평일", "월~금 (UTC)"), ("weekend", "주말", "토·일 (UTC) · 한국은 토 09시 ~ 월 09시")), False),
+    ("session", "시간대", "들어간 시각 (UTC 기준, 한국은 +9시간)",
+     (("asia", "아시아", "UTC 00~08 · 한국 09~17시"), ("europe", "유럽", "UTC 08~16 · 한국 17~01시"), ("us", "미국", "UTC 16~24 · 한국 01~09시")), False),
+    ("side", "방향", "들어간 방향", (("long", "롱", ""), ("short", "숏", "")), False),
+)
+_COND_AFTER = (
+    ("g1", "BTC 추세", "들어간 방향이 그때 BTC 4시간 추세와 같았나 (동전 짝은 동전이 정한 방향 기준)",
+     (("with", "일치", "BTC 4시간 추세와 같은 방향"), ("against", "불일치", "BTC 4시간 추세와 반대 방향"), ("unknown", "모름", "기록 없음")), False),
+    ("g2", "변동성", "들어갈 때 변동성(ATR%)이 보통이었나",
+     (("normal", "보통", "ATR%가 최근 200봉의 하위 20~80% 사이"), ("odd", "아님", "너무 낮거나 너무 높음"), ("unknown", "모름", "기록 없음")), False),
+    ("hold", "보유시간", "거래가 끝난 뒤에야 아는 값이라 조건으로 쓸 수 없습니다 (참고만)",
+     (("h0", "1시간 미만", ""), ("h1", "1~4시간", ""), ("h2", "4~18시간", ""), ("h3", "18시간 넘음", "")), True),
+)
+COND_NOTE_KO = ("탐색용입니다. 칸이 많아서 우연히 좋아 보이는 칸이 저절로 생기고, 같은 거래가 여러 칸에 들어가 있어서 한꺼번에 몰려 나오기도 합니다. "
+                "판정(판정 화면의 미리 정한 규칙)에는 쓰지 않고, 다음에 따로 미리 정해서 시험할 것을 고르는 데만 씁니다. "
+                "보유시간은 거래가 끝난 뒤에야 알 수 있어서 조건으로 쓸 수 없습니다.")
+
+
+def _cond_cols(rows) -> Optional[tuple]:
+    """The columns of one account's rows as arrays: (symbol list, side, entry_time, exit_time, roe, g1 code, g2 code, keep mask) or None when empty.
+    A row is a COND_FIELDS tuple (or a dict with those keys). A row whose side, times or ROE is not usable is masked out."""
+    if not len(rows):
+        return None
+    if isinstance(rows[0], dict):
+        rows = [tuple(r.get(f) for f in COND_FIELDS) for r in rows]
+    sym, side, ent, ext, roe, g1, g2 = zip(*rows)
+    side = np.array([0.0 if v is None else v for v in side], dtype=float)
+    ent = np.array([np.nan if v is None else v for v in ent], dtype=float)
+    ext = np.array([np.nan if v is None else v for v in ext], dtype=float)
+    roe = np.array([np.nan if v is None else v for v in roe], dtype=float)
+    keep = np.isfinite(ent) & np.isfinite(ext) & np.isfinite(roe) & (np.abs(side) == 1) & (ext >= ent)
+    c1 = np.fromiter((_G_CODE.get(v, 2) if v is not None else 2 for v in g1), np.int8, len(g1))
+    c2 = np.fromiter((_G_CODE.get(v, 2) if v is not None else 2 for v in g2), np.int8, len(g2))
+    return list(sym), side, ent, ext, roe, c1, c2, keep
+
+
+def _cond_stats(code: np.ndarray, roe: np.ndarray, B: int) -> tuple:
+    n = np.bincount(code, None, B)
+    return n, np.bincount(code, (roe > 0).astype(float), B).astype(np.int64), np.bincount(code, roe, B)
+
+
+def _cond_cell(n: int, wins: int, total: float) -> dict:
+    few = n < COND_MIN_N
+    return {"n": int(n), "wins": int(wins), "few": few, "win_rate": None if few else round(wins / n, 4), "mean": None if few else round(total / n, 7)}
+
+
+def _cond_boot(D: int, seed: int, X: np.ndarray) -> np.ndarray:
+    """(N_BOOT, K) bootstrap values of the K cells whose four per-day columns (sum1, count1, sum2, count2) are X[:, 4k:4k+4], X of shape (D, 4K):
+    whole days drawn with replacement, ONE draw shared by all cells; a draw where a cell has no trade of one group has no value (NaN)."""
+    rng = np.random.default_rng(seed)
+    out = np.empty((N_BOOT, X.shape[1] // 4))
+    done = 0
+    while done < N_BOOT:
+        m = min(BOOT_CHUNK, N_BOOT - done)
+        pick = rng.integers(0, D, size=(m, D))
+        M = np.bincount((pick + np.arange(m)[:, None] * D).ravel(), minlength=m * D).reshape(m, D).astype(float)   # how often each day is drawn
+        R = M @ X
+        with np.errstate(invalid="ignore", divide="ignore"):
+            out[done:done + m] = R[:, 0::4] / R[:, 1::4] - R[:, 2::4] / R[:, 3::4]
+        done += m
+    return out
+
+
+def conditions_ids(accts: list, lineup: Optional[list], ds_money: bool = False) -> list:
+    """The account ids ``conditions_views`` reads: the accounts of the four kinds (a hidden DeepSeek one left out)."""
+    suffix_of = {k["role"]: k["suffix"] for k in lineup or [] if k.get("role") and k.get("suffix")}
+    return [a["id"] for a in accts or [] if suffix_of.get(a.get("role")) in COND_KINDS and _shown(a, ds_money)]
+
+
+def conditions_views(trades, accts: list, lineup: Optional[list], start_ms: Optional[int], now_ms: Optional[int], ds_money: bool = False) -> dict:
+    """The exploratory 조건별 성적 (league.json key ``conditions``), from the closed trades of the four kinds only.
+
+    ``trades``: {account id: rows} with a row = (symbol, side, entry_time, exit_time, roe, g1, g2) as ``runner.condition_trades`` reads them, or
+    a function of the account ids (conditions_ids) that returns it. Returns (JSON-safe):
+    {"days", "n_days" (UTC entry days with a trade), "min_n": 30, "boot", "ci_level", "min_days", "ds_in_stats", "n_trades", "kinds": [{suffix, role_ko,
+     short_ko, label_ko, accounts, n, wins, win_rate, mean}], "pairs": [{real, twin, real_ko, twin_ko}], "dims": [{id, ko, hint_ko, after_entry, buckets: [{id,
+     ko, hint_ko, unknown, kinds: {suffix: {n, wins, few, win_rate, mean}}, diffs: {real suffix: {n, n_twin, few, diff, lo, hi, flag}}}]}],
+     "n_cells", "n_good", "n_bad", "expected_lucky", "headline_ko", "note_ko"}.
+
+    A bucket with n < 30 is ``few`` (no mean, no win rate); a difference needs 30 trades on both sides. ``diff`` = mean of the real kind - mean of
+    its coin twin in the same bucket; ``lo`` / ``hi`` = the 90% day-cluster bootstrap interval (None under 5 days); ``flag`` "good" when the interval
+    lies above 0, "bad" below it. ``n_cells`` = the differences shown (an unknown bucket is no condition and is not counted), ``expected_lucky`` =
+    round(0.05 * n_cells): the cells that look good by chance alone. Nothing here is a verdict. Deterministic: no clock, a fixed seed."""
+    now = now_ms if now_ms is not None else start_ms
+    days = max(0, int((now - start_ms) // _DAY)) if start_ms is not None and now is not None else 0
+    lu = [k for k in lineup or [] if k.get("role") and k.get("suffix")]
+    kind_of = {k["suffix"]: k for k in lu}
+    suffix_of = {k["role"]: k["suffix"] for k in lu}
+    sfxs = [s for s in COND_KINDS if s in kind_of]
+    mine: dict = {s: [] for s in sfxs}                                         # {suffix: [(account id, pick tf)]}
+    for a in accts or []:
+        s = suffix_of.get(a.get("role"))
+        if s in mine and _shown(a, ds_money):
+            mine[s].append((a["id"], a.get("tf")))
+    ids = [i for s in sfxs for i, _tf in mine[s]]
+    book = trades(ids) if callable(trades) else (trades or {})
+    # the columns of each kind, all picks pooled: {suffix: [(symbols, side, entry, exit, roe, g1, g2, pick tf)]} per account with usable trades
+    per: dict = {}
+    for s in sfxs:
+        parts = []
+        for aid, tf in mine[s]:
+            c = _cond_cols(book.get(aid) or [])
+            if c is None:
+                continue
+            sym, side, ent, ext, roe, c1, c2, keep = c
+            if not keep.all():
+                sym = [x for x, k in zip(sym, keep) if k]
+                side, ent, ext, roe, c1, c2 = side[keep], ent[keep], ext[keep], roe[keep], c1[keep], c2[keep]
+            if len(roe):
+                parts.append((sym, side, ent, ext, roe, c1, c2, str(tf) if tf else "?"))
+        per[s] = parts
+    # coin and chart-timeframe codes, shared by all kinds (coins: the most traded first)
+    coin_n = collections.Counter()
+    for s in sfxs:
+        for p in per[s]:
+            coin_n.update(p[0])
+    coins = sorted(coin_n, key=lambda c: (-coin_n[c], c))
+    coin_idx = {c: i for i, c in enumerate(coins)}
+    tfs_seen = {p[7] for s in sfxs for p in per[s]}
+    tfs = [t for t in COND_TF_ORDER if t in tfs_seen] + sorted(t for t in tfs_seen if t not in COND_TF_ORDER)
+    tf_idx = {t: i for i, t in enumerate(tfs)}
+    cols: dict = {}
+    for s in sfxs:
+        if not per[s]:
+            cols[s] = None
+            continue
+        sym = [x for p in per[s] for x in p[0]]
+        cols[s] = {"coin": np.fromiter((coin_idx[x] for x in sym), np.int64, len(sym)),
+                   "tf": np.concatenate([np.full(len(p[4]), tf_idx[p[7]], np.int64) for p in per[s]]),
+                   "side": np.concatenate([p[1] for p in per[s]]), "ent": np.concatenate([p[2] for p in per[s]]),
+                   "ext": np.concatenate([p[3] for p in per[s]]), "roe": np.concatenate([p[4] for p in per[s]]),
+                   "g1": np.concatenate([p[5] for p in per[s]]).astype(np.int64), "g2": np.concatenate([p[6] for p in per[s]]).astype(np.int64)}
+    # the cluster unit: the UTC day of the entry, numbered over all four kinds
+    ent_days = [np.floor_divide(c["ent"], _DAY).astype(np.int64) for c in cols.values() if c is not None]
+    udays = np.unique(np.concatenate(ent_days)) if ent_days else np.zeros(0, np.int64)
+    D = len(udays)
+    for c in cols.values():
+        if c is not None:
+            c["day"] = np.searchsorted(udays, np.floor_divide(c["ent"], _DAY).astype(np.int64))
+    # the dimensions: (id, ko, buckets [(id, ko, hint, unknown)], code function)
+    coin_ko = lambda c: c[:-4] if c.endswith("USDT") and len(c) > 4 else c  # noqa: E731
+    dims = []
+    for did, dko, hint, bks, after in _COND_FIXED + _COND_AFTER:
+        dims.append([did, dko, hint, [(b, k, h, b == "unknown") for b, k, h in bks], after])
+    dims.insert(3, ["coin", "코인", "들어간 코인", [(coin_ko(c).lower(), coin_ko(c), "", False) for c in coins], False])
+    dims.insert(4, ["tf", "봉", "후보가 보는 차트의 봉 길이", [(t, "그 밖" if t == "?" else t, "", False) for t in tfs], False])
+
+    def code_of(did: str, c: dict) -> np.ndarray:
+        if did == "weekday":
+            return ((np.floor_divide(c["ent"], _DAY).astype(np.int64) + 3) % 7 >= 5).astype(np.int64)
+        if did == "session":
+            return (np.floor_divide(np.mod(c["ent"], _DAY), _HOUR * COND_SESSION_H)).astype(np.int64)
+        if did == "side":
+            return (c["side"] < 0).astype(np.int64)
+        if did == "coin":
+            return c["coin"]
+        if did == "tf":
+            return c["tf"]
+        if did in ("g1", "g2"):
+            return c[did]
+        h = (c["ext"] - c["ent"]) / _HOUR
+        return (h >= COND_HOLD_H[0]).astype(np.int64) + (h >= COND_HOLD_H[1]) + (h > COND_HOLD_H[2])
+
+    seed = _seed("conditions", "boot")
+    plan = []                                                                  # the cells that get an interval: (dim index, bucket index, real, twin)
+    out_dims = []
+    stat = {}                                                                  # {(dim index, suffix): (n, wins, sum, per-day sum, per-day count)}
+    for di, (did, dko, dhint, bl, after) in enumerate(dims):
+        B = len(bl)
+        for s in sfxs:
+            c = cols[s]
+            if c is None:
+                z = np.zeros(B)
+                stat[(di, s)] = (z.astype(np.int64), z.astype(np.int64), z, np.zeros((B, D)), np.zeros((B, D)))
+                continue
+            code = code_of(did, c)
+            n, w, t = _cond_stats(code, c["roe"], B)
+            flat = code * D + c["day"]
+            sd = np.bincount(flat, c["roe"], B * D).reshape(B, D)
+            cd = np.bincount(flat, None, B * D).reshape(B, D).astype(float)
+            stat[(di, s)] = (n, w, t, sd, cd)
+        for bi, (_b, _k, _h, unknown) in enumerate(bl):
+            if not unknown:
+                for real, twin in COND_PAIRS:
+                    if real in sfxs and twin in sfxs and stat[(di, real)][0][bi] >= COND_MIN_N and stat[(di, twin)][0][bi] >= COND_MIN_N:
+                        plan.append((di, bi, real, twin))
+    # one shared bootstrap over every cell that can show an interval
+    ci: dict = {}
+    if plan and D >= DECISION_MIN_DAYS:
+        X = np.empty((D, 4 * len(plan)))
+        for j, (di, bi, real, twin) in enumerate(plan):
+            X[:, 4 * j] = stat[(di, real)][3][bi]
+            X[:, 4 * j + 1] = stat[(di, real)][4][bi]
+            X[:, 4 * j + 2] = stat[(di, twin)][3][bi]
+            X[:, 4 * j + 3] = stat[(di, twin)][4][bi]
+        V = _cond_boot(D, seed, X)
+        for j, key in enumerate(plan):
+            v = V[:, j]
+            v = v[np.isfinite(v)]
+            if len(v):
+                lo, hi = np.percentile(v, [50 * (1 - DECISION_CI), 100 - 50 * (1 - DECISION_CI)])
+                ci[key] = (float(lo), float(hi))
+    n_cells = n_good = n_bad = 0
+    best = None                                                                # the biggest |difference| shown: (|diff|, text parts)
+    for di, (did, dko, dhint, bl, after) in enumerate(dims):
+        buckets = []
+        for bi, (bid, bko, hint, unknown) in enumerate(bl):
+            kinds = {}
+            for s in sfxs:
+                n, w, t = stat[(di, s)][0][bi], stat[(di, s)][1][bi], stat[(di, s)][2][bi]
+                kinds[s] = _cond_cell(int(n), int(w), float(t))
+            if not any(k["n"] for k in kinds.values()):
+                continue
+            diffs = {}
+            for real, twin in COND_PAIRS:
+                if real not in sfxs or twin not in sfxs:
+                    continue
+                nr, nt = kinds[real]["n"], kinds[twin]["n"]
+                d = {"n": nr, "n_twin": nt, "few": nr < COND_MIN_N or nt < COND_MIN_N, "diff": None, "lo": None, "hi": None, "flag": None}
+                if not d["few"]:
+                    d["diff"] = round(float(stat[(di, real)][2][bi] / nr - stat[(di, twin)][2][bi] / nt), 7)
+                    if not unknown:
+                        n_cells += 1
+                        lohi = ci.get((di, bi, real, twin))
+                        if lohi:
+                            d["lo"], d["hi"] = round(lohi[0], 7), round(lohi[1], 7)
+                            d["flag"] = "good" if lohi[0] > 0 else "bad" if lohi[1] < 0 else None
+                            n_good += d["flag"] == "good"
+                            n_bad += d["flag"] == "bad"
+                        if best is None or abs(d["diff"]) > best[0]:
+                            best = (abs(d["diff"]), real, dko, bko, d)
+                diffs[real] = d
+            buckets.append({"id": bid, "ko": bko, "hint_ko": hint, "unknown": unknown, "kinds": kinds, "diffs": diffs})
+        if buckets:
+            out_dims.append({"id": did, "ko": dko, "hint_ko": dhint, "after_entry": after, "buckets": buckets})
+    expected = int(round(COND_LUCKY * n_cells))
+    n_trades = {s: int(len(cols[s]["roe"])) if cols[s] is not None else 0 for s in sfxs}
+    kinds_out = []
+    for s in sfxs:
+        k = kind_of[s]
+        c = cols[s]
+        n = n_trades[s]
+        w = int((c["roe"] > 0).sum()) if c is not None else 0
+        cell = _cond_cell(n, w, float(c["roe"].sum()) if c is not None else 0.0)
+        kinds_out.append({"suffix": s, "role_ko": COND_ROLE_KO[s], "short_ko": k.get("short_ko"), "label_ko": k.get("label_ko"), "accounts": len(mine[s]),
+                          "n": n, "wins": w, "win_rate": cell["win_rate"], "mean": cell["mean"]})
+    pairs = [{"real": r, "twin": t, "real_ko": COND_ROLE_KO[r], "twin_ko": COND_ROLE_KO[t]} for r, t in COND_PAIRS if r in sfxs and t in sfxs]
+    if not sum(n_trades.values()):
+        head = "아직 닫힌 거래가 없어서 비교할 것이 없습니다"
+    elif not n_cells:
+        head = f"아직 칸마다 비교할 만큼 거래가 쌓이지 않았습니다 (한 칸에 양쪽 모두 {COND_MIN_N}건 이상 필요)"
+    else:
+        big = ""
+        if best is not None:
+            _a, real, dko, bko, d = best
+            big = f" 가장 큰 차이: {COND_ROLE_KO[real]} · {dko} {bko} {_pp(d['diff'])} (거래 {d['n']}건 대 {d['n_twin']}건)."
+        head = (f"동전 짝과 비교한 {n_cells}칸 중 차이 범위({int(DECISION_CI * 100)}%)가 0 위인 칸 {n_good}개, 0 아래인 칸 {n_bad}개입니다 "
+                f"(우연만으로도 0 위 칸이 {expected}개쯤 나옵니다).{big}")
+    return {"days": days, "n_days": int(D), "min_n": COND_MIN_N, "boot": N_BOOT, "ci_level": DECISION_CI, "min_days": DECISION_MIN_DAYS,
+            "ds_in_stats": bool(ds_money), "n_trades": n_trades, "kinds": kinds_out, "pairs": pairs, "dims": out_dims, "n_cells": int(n_cells),
+            "n_good": int(n_good), "n_bad": int(n_bad), "expected_lucky": expected, "headline_ko": head, "note_ko": COND_NOTE_KO}

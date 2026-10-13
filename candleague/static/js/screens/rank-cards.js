@@ -37,7 +37,7 @@ onLineup((lu) => {
   }
 });
 export const GROUP_IDS = [...GROUPS.map((g) => g.id), "all"];
-export const okGroup = (g) => (GROUP_IDS.includes(g) ? g : null);
+export const okGroup = (g) => (GROUP_IDS.includes(g) && !(g === "flip" && lineupOn()) ? g : null);      // the owner-exit league has no 동전 던지기 묶음 (its coin twins are kinds of 다른 청산)
 export const okSub = (s) => (CMP_ROLES.includes(s) ? s : "all");
 /** "기존 36 후보", "비교 계좌 · 1/4", "전체". */
 export function groupKo(g, sub) {
@@ -202,7 +202,10 @@ export function rankCards(o = {}) {
       if (g.id === "core" || g.id === "ds") {
         c.cnt.textContent = `${fmt.int(x.n)}계좌 · 매매법 ${fmt.int(x.strategies)}개 · ${allHidden ? "금액 숨김 (개수·라벨만)" : "잔고 수익률"}${hidNote}`;
         const ref = K4.pill("", "ref", "같은 후보의 동전 계좌와 거래 한 번 평균 비교: 참고 (판정 아님)");
-        if (allHidden && !x.vsFlip.n) {
+        if (lineupOn()) {               // no 기본값 or 동전 account per pick here: the comparisons are on the 다른 청산 card
+          c.vs.textContent = `다른 청산과의 비교는 ‘${GROUPS.find((y) => y.id === "cmp").ko}’ 카드 (참고)`;
+          c.vs2.textContent = "";
+        } else if (allHidden && !x.vsFlip.n) {
           put(c.vs, "후보마다 비교: 30번 넘으면 라벨로 ", ref);
           c.vs2.textContent = "금액 숨김 설정 · 개수와 라벨만";
         } else {
@@ -211,14 +214,16 @@ export function rankCards(o = {}) {
           c.vs2.textContent = `기본값보다 위 ${fmt.int(x.vsBase.up)}/${fmt.int(x.vsBase.n)}${lab}`;
         }
         put(c.pool, h("span", null, `묶음 한 번 평균 ${allHidden ? "숨김" : retTxt(x.pool)}`), glyph(x.poolFlip, "동전"), glyph(x.poolBase, "기본값"));
-        c.pool.title = "이 묶음 후보 계좌들의 모든 거래를 모은 한 번 평균 (점검과 같은 계산) · ▲▼ = 같은 묶음의 동전·기본값 계좌보다 위·아래";
-      } else if (g.id === "cmp" && lineupOn()) {     // the owner-exit league: the pick's other exits against its 지금 청산
+        c.pool.title = lineupOn() ? `이 묶음 ${ROLE_KO.cand} 계좌들의 모든 거래를 모은 한 번 평균`
+          : "이 묶음 후보 계좌들의 모든 거래를 모은 한 번 평균 (점검과 같은 계산) · ▲▼ = 같은 묶음의 동전·기본값 계좌보다 위·아래";
+      } else if (g.id === "cmp" && lineupOn()) {     // the owner-exit league: the pick's other exits against its 지금 청산, one short line (the kinds one by one: 계좌 비교)
         const r = x.byRole;
-        c.cnt.textContent = `${fmt.int(x.n)}계좌 · ${CMP_ROLES.map((k) => `${ROLE_SHORT[k]} ${fmt.int(r[k].n)}`).join(" · ")}${hidNote}`;
-        c.vs.textContent = `${ROLE_SHORT.cand}보다 나음 · ${CMP_ROLES.map((k) => `${ROLE_SHORT[k]} ${fmt.int(r[k].vs.up)}/${fmt.int(r[k].vs.n)}`).join(" · ")}`;
+        const up = CMP_ROLES.reduce((a, k) => a + r[k].vs.up, 0), of = CMP_ROLES.reduce((a, k) => a + r[k].vs.n, 0);
+        c.cnt.textContent = `${fmt.int(x.n)}계좌 · 계좌 종류 ${fmt.int(CMP_ROLES.length)}가지${hidNote}`;
+        c.vs.textContent = `‘${ROLE_KO.cand}’보다 한 번 평균이 높은 계좌 ${fmt.int(up)}/${fmt.int(of)} (참고)`;
         c.vs2.textContent = "";
-        put(c.pool, `한 번 평균 · ${CMP_ROLES.map((k) => `${ROLE_SHORT[k]} ${retTxt(r[k].pool)}`).join(" · ")}`);
-        c.pool.title = "청산마다 모든 거래를 모은 한 번 평균 (숨긴 딥시크 계좌는 뺌)";
+        put(c.pool, `묶음 한 번 평균 ${retTxt(x.pool)}`);
+        c.pool.title = "이 묶음의 모든 거래를 모은 한 번 평균 (숨긴 딥시크 계좌는 뺌) · 종류마다의 숫자는 계좌 비교 화면에";
       } else if (g.id === "cmp") {
         const r = x.byRole;
         c.cnt.textContent = `${fmt.int(x.n)}계좌 · 1/4 ${fmt.int(r.quarter.n)} · 청산만 ${fmt.int(r.exitonly.n)} · 기본값 ${fmt.int(r.base.n)}${hidNote}`;
@@ -234,6 +239,7 @@ export function rankCards(o = {}) {
         c.pool.title = "동전 계좌들의 모든 거래를 모은 한 번 평균 (숨긴 딥시크 계좌는 뺌)";
       }
       c.vs2.hidden = !c.vs2.textContent;
+      c.btn.hidden = g.id === "flip" && lineupOn();
       c.foot.textContent = `파산 ${fmt.int(x.bust)} · 포지션 ${fmt.int(x.open)}${afterOn() ? " (설치\u00a0뒤만)" : ""}`;
       c.btn.setAttribute("aria-pressed", String(g.id === sel));
     }

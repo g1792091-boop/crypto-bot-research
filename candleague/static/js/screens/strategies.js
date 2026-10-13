@@ -6,7 +6,7 @@ import {h, put} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
-import {TFS, tfKo} from "../labels.js";
+import {TFS, tfKo, lineupOn} from "../labels.js";
 
 export async function mount(el, ctx) {
   let meta = null;
@@ -14,8 +14,9 @@ export async function mount(el, ctx) {
   const q = ctx.params.query || {};
   const st = {kind: q.kind || "all"};
   const list = h("div", {class: "stack"});
+  const head = ui.screenHead("매매법", "후보 리그의 매매법 16개: 어떻게 들어가나, 무엇을 조절하나, 지금 묶음 성적");
   el.append(
-    ui.screenHead("매매법", "후보 리그의 매매법 16개: 어떻게 들어가나, 무엇을 조절하나, 지금 묶음 성적"),
+    head,
     h("div", {class: "dl-fields"}, ui.field("종류", ui.seg([{id: "all", label: "전체"}, {id: "core", label: "기존 36 (8개)"}, {id: "ds", label: "딥시크 (8개)"}],
       st.kind, (v) => { st.kind = v; ctx.setQuery(v === "all" ? {} : {kind: v}); paint(); }, {label: "종류"}))),
     list);
@@ -24,6 +25,10 @@ export async function mount(el, ctx) {
     const d = LK.league();
     const ix = d && d.accounts ? LK.index(d) : {cands: [], sets: {}};
     const ws = (d && d.watch && d.watch.strategies) || {};
+    // the owner-exit league runs more strategies than this list explains (the file has the 16 it was written for): say both numbers
+    const total = d && d.accounts ? LK.leagueCounts(d).strategies : 0, known = Object.keys((meta && meta.strategies) || {}).length;
+    head.querySelector(".sub").textContent = lineupOn() && total ? `후보 리그의 매매법 ${fmt.int(total)}개${total > known ? ` 중 설명이 있는 ${fmt.int(known)}개` : ""}: 어떻게 들어가나, 무엇을 조절하나, 지금 묶음 성적`
+      : "후보 리그의 매매법 16개: 어떻게 들어가나, 무엇을 조절하나, 지금 묶음 성적";
     const names = Object.keys((meta && meta.strategies) || {}).filter((n) => st.kind === "all" || meta.strategies[n].kind === st.kind)
       .sort((a, b) => (meta.strategies[a].kind === meta.strategies[b].kind ? meta.strategies[a].ko.localeCompare(meta.strategies[b].ko, "ko")
         : meta.strategies[a].kind === "core" ? -1 : 1));
@@ -58,10 +63,10 @@ export async function mount(el, ctx) {
             h("div", {class: "stats cl-stats3"},
               ui.stat("후보 거래", `${fmt.int(w.n)}번`, w.n ? `승률 ${fmt.pct((100 * w.wins) / w.n, false, 0)}` : "아직 없음"),
               ui.stat("한 번 평균", w.mean != null ? LK.ret(w.mean) : sm.kind === "ds" && w.n ? "숨김" : "—", "지갑 대비"),
-              ui.stat("기본값 · 동전", w.base_mean != null ? h("span", null, LK.ret(w.base_mean), " · ", LK.ret(w.flip_mean))
+              lineupOn() ? null : ui.stat("기본값 · 동전", w.base_mean != null ? h("span", null, LK.ret(w.base_mean), " · ", LK.ret(w.flip_mean))
                 : sm.kind === "ds" && w.base_n && !(LK.league() || {}).ds_money ? "숨김" : "—",
                 `기본값 ${fmt.int(w.base_n)}번 · 동전 ${fmt.int(w.flip_n)}번`)),
-            h("div", {class: "row wrap cl-marks"}, LK.vsMark(w.positive, "0보다"), LK.vsMark(w.beats_base, "기본값보다"), LK.vsMark(w.beats_flip, "동전보다")))
+            h("div", {class: "row wrap cl-marks"}, LK.vsMark(w.positive, "0보다"), lineupOn() ? null : LK.vsMark(w.beats_base, "기본값보다"), lineupOn() ? null : LK.vsMark(w.beats_flip, "동전보다")))
             : ui.none("준비 중"))));
     }));
     if (!scrolled && q.s) {

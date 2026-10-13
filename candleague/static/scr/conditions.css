@@ -1,0 +1,61 @@
+/* 조건별 성적 (js/screens/conditions.js): the exploratory look at where a structure works. Loaded after scr/kinds.css (the shared kd- rules:
+   .kd-root, .kd-hero, .kd-list, .kd-tcard, .kd-tbl, .kd-v up / down) by the screen's `export const css`. Screen-only rules, class prefix cn-,
+   scoped to `.scr.cn`; colours only from the tokens (both skins), font sizes only var(--t-*). A colour is never the only sign: a plus / minus
+   always comes with ▲ / ▼ and the number, a "clear of zero" cell with its words. */
+
+.scr.cn .cn-head { margin: 0; font: 700 var(--t-lg)/1.55 var(--f-body); letter-spacing: -.01em; text-wrap: balance; overflow-wrap: anywhere; }
+.scr.cn .cn-note { margin: 0; }
+.scr.cn .cn-ctl { align-items: center; }
+.scr.cn .cn-pairline { margin: -6px 0 0; }
+/* the dimension cards: one column, two side by side on a wide window (a table of five short columns needs no more than half the width) */
+.scr.cn .cn-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
+@media (min-width: 1100px) { .scr.cn .cn-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.scr.cn .cn-rulebox .cn-rules, .scr.cn .cn-hero .cn-rules { margin-top: 4px; }
+
+/* ---------------------------------------------------------------- one dimension: the table */
+.scr.cn .cn-tbl th, .scr.cn .cn-tbl td { padding-inline: 8px; vertical-align: top; }
+.scr.cn .cn-tbl td.kd-nm { min-width: 7em; max-width: 14em; }
+.scr.cn .cn-nm { display: grid; gap: 1px; }
+.scr.cn .cn-nm b { font-size: var(--t-sm); }
+.scr.cn .cn-nm small { font-size: var(--t-2xs); line-height: 1.4; }
+.scr.cn .cn-m { display: grid; justify-items: end; gap: 1px; }
+.scr.cn .cn-m small { font-size: var(--t-2xs); }
+.scr.cn .cn-few { color: var(--muted); font-size: var(--t-xs); font-weight: 600; }
+.scr.cn td.cn-dc { min-width: 10.5em; }
+.scr.cn .cn-d { display: grid; justify-items: end; gap: 3px; }
+.scr.cn .cn-d small { font-size: var(--t-2xs); line-height: 1.4; }
+.scr.cn .cn-flag { font-size: var(--t-2xs); font-weight: 700; }
+.scr.cn tr.cn-good td:first-child { box-shadow: inset 3px 0 0 var(--up); }
+.scr.cn tr.cn-bad td:first-child { box-shadow: inset 3px 0 0 var(--down); }
+.scr.cn tr.cn-unk td { color: var(--ink-2); }
+.scr.cn tr.cn-unk .cn-nm b { font-weight: 600; }
+
+/* the tiny bar: from the middle to the right for a plus, to the left for a minus (the longest difference on the page fills half the track) */
+.scr.cn .cn-bar { position: relative; display: block; width: 100%; max-width: 9em; height: 6px; margin-top: 1px; border-radius: 3px; background: var(--surface-3); }
+.scr.cn .cn-bar::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; margin-left: -.5px; background: var(--line-2); }
+.scr.cn .cn-bar i { position: absolute; top: 0; bottom: 0; width: var(--w, 0%); border-radius: 3px; }
+.scr.cn .cn-bar.pos i { left: 50%; background: var(--up); }
+.scr.cn .cn-bar.neg i { right: 50%; background: var(--down); }
+
+/* ---------------------------------------------------------------- one dimension: the cards (a phone's default) */
+.scr.cn .cn-cards { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
+.scr.cn .cn-card { display: grid; gap: 6px; padding: 9px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; align-content: start; }
+.scr.cn .cn-card.cn-good { border-color: var(--up-line); }
+.scr.cn .cn-card.cn-bad { border-color: var(--down-line); }
+.scr.cn .cn-card.cn-unk { border-style: dashed; }
+.scr.cn .cn-ch { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px 10px; }
+.scr.cn .cn-ch .cn-nm b { font-size: var(--t-md); }
+.scr.cn .cn-dv .kd-v { font-size: var(--t-lg); font-weight: 800; white-space: nowrap; }
+.scr.cn .cn-cb { display: grid; gap: 4px; }
+.scr.cn .cn-cb .cn-bar { max-width: none; margin: 0; }
+.scr.cn .cn-cr { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.scr.cn .cn-cr small { font-size: var(--t-2xs); }
+.scr.cn .cn-cg { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 8px; }
+.scr.cn .cn-cg > div { min-width: 0; }
+.scr.cn .cn-cg dt { color: var(--muted); font-size: var(--t-2xs); }
+.scr.cn .cn-cg dd { margin: 1px 0 0; font-size: var(--t-sm); }
+.scr.cn .cn-cg .cn-m { justify-items: start; }
+@media (max-width: 459px) {
+  .scr.cn .cn-head { font-size: var(--t-md); }
+  .scr.cn .cn-cards { grid-template-columns: minmax(0, 1fr); }
+}

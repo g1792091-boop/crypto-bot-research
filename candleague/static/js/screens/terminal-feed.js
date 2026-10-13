@@ -87,7 +87,7 @@ export function fillsFeed(ctx, st, onPick) {
   const list = h("div", {class: "tm-feed", role: "list", "aria-live": "off"});
   const ratio = ratioBar([{key: "L", label: "롱", tone: "up"}, {key: "S", label: "숏", tone: "down"}], {label: "최근 진입 롱·숏"});
   const ratioK = h("span", {class: "tm-rbk"}, "최근 진입");
-  const el = panel("우리 봇 체결", {cls: "tm-fills", sub: "190계좌 · 누르면 그 계좌", scroll: true,
+  const el = panel("우리 봇 체결", {cls: "tm-fills", sub: `${LK.allAccountsKo()} · 누르면 그 계좌`, scroll: true,
     tip: "후보 리그 계좌들의 진입·청산 (엔진은 5분마다 기록하므로 몇 분 늦게 보입니다) · 청산 손익은 수수료·펀딩 포함 · 딥시크 금액 숨김이면 딥시크는 건수만"}, list);
   el.append(h("div", {class: "tm-pf"}, h("div", {class: "tm-rbrow"}, ratioK, ratio)));
 
@@ -170,7 +170,7 @@ export function fillsFeed(ctx, st, onPick) {
       h("span", {class: "tm-fc muted"}, [...m.coins].slice(0, 2).join("·")), h("span", {class: "pp thin tm-fv"}, "개수만"));
   }
   function render() {
-    el.sub.textContent = afterOn(st.pos) ? "설치 뒤만 · 누르면 그 계좌" : "190계좌 · 누르면 그 계좌";
+    el.sub.textContent = afterOn(st.pos) ? "설치 뒤만 · 누르면 그 계좌" : `${LK.allAccountsKo()} · 누르면 그 계좌`;
     const ms = models();
     const nodes = [];
     const motionOk = !reduced() && visible();

@@ -18,11 +18,18 @@ const race = () => (lineupOn() ? ROLES.slice() : ["cand", "exitonly", "base", "f
 
 export async function mount(el, ctx) {
   const core = h("div"), ds = h("div"), race = h("div", {class: "rc-pools"});
-  el.append(
-    ui.screenHead("흐름", "묶음 레이스 (시간에 따른 잔고) · 주마다 후보 · 기본값 · 동전"),
-    ui.card({plate: "묶음 레이스", sub: "계좌 역할마다 잔고 중앙값 · 회색 띠 = 동전 계좌 가운데 50% (참고) · 닫힌 거래 기준"}, race),
-    h("p", {class: "note"}, "거래마다 (손익 ÷ 그 직전 지갑)으로 잽니다. 2차 점검의 운 검사는 이 주 단위를 섞어서 2,000번 다시 뽑습니다."),
-    core, ds);
+  const head = ui.screenHead("흐름", "묶음 레이스 (시간에 따른 잔고) · 주마다 후보 · 기본값 · 동전");
+  const raceCard = ui.card({plate: "묶음 레이스", sub: "계좌 역할마다 잔고 중앙값 · 회색 띠 = 동전 계좌 가운데 50% (참고) · 닫힌 거래 기준"}, race);
+  const unitNote = h("p", {class: "note"}, "거래마다 (손익 ÷ 그 직전 지갑)으로 잽니다. 2차 점검의 운 검사는 이 주 단위를 섞어서 2,000번 다시 뽑습니다.");
+  el.append(head, raceCard, unitNote, core, ds);
+  /** The owner-exit league has no 기본값 or 동전 account per pick, no 2차 점검 and no band; its words follow the snapshot's lineup. */
+  const words = () => {
+    const owner = lineupOn();
+    head.querySelector(".sub").textContent = owner ? "계좌 종류마다 시간에 따른 잔고 중앙값 · 주마다 거래 수 · 승률" : "묶음 레이스 (시간에 따른 잔고) · 주마다 후보 · 기본값 · 동전";
+    raceCard.querySelector(".sub").textContent = owner ? "계좌 종류마다 후보들의 잔고 중앙값 · 닫힌 거래 기준 (참고)" : "계좌 역할마다 잔고 중앙값 · 회색 띠 = 동전 계좌 가운데 50% (참고) · 닫힌 거래 기준";
+    unitNote.textContent = owner ? "거래마다 (손익 ÷ 그 직전 지갑)으로 잽니다. 판정은 이 주 단위가 아니라 하루 단위로 섞어 계산합니다 (판정 화면)."
+      : "거래마다 (손익 ÷ 그 직전 지갑)으로 잽니다. 2차 점검의 운 검사는 이 주 단위를 섞어서 2,000번 다시 뽑습니다.";
+  };
   let seen = null;
   async function loadRace(d) {
     if (seen === d.generated_ms) return;
@@ -33,6 +40,7 @@ export async function mount(el, ctx) {
     put(race, ["core", "ds"].map((k) => racePool(k, r, d)));
   }
   ctx.onLeague((d) => {
+    words();
     if (!d.watch) { put(core, ui.none("준비 중")); return; }
     put(core, poolWeeks("core", d.watch.pools.core));
     put(ds, poolWeeks("ds", d.watch.pools.ds));
@@ -65,7 +73,7 @@ export function racePool(kind, r, d) {
       h("span", {class: "num"}, fmt.money(ro[x].median[last])))),
     fl && fl.p25 ? h("span", null, "동전 계좌 가운데 50% ", h("span", {class: "num"}, `${fmt.money(fl.p25[last])} ~ ${fmt.money(fl.p75[last])}`)) : null),
     LK.equityLines(series, {band, label: `${KIND_LONG[kind]} 묶음 레이스`, h: 240, empty: "아직 닫힌 거래가 없습니다"}),
-    lineupOn() ? h("p", {class: "note"}, `계좌 종류마다 후보 계좌들의 잔고 중앙값입니다 (닫힌 거래까지, 참고). 같은 신호 · 같은 손절에서 청산만 다르니 선끼리의 차이가 청산의 차이입니다.${nTr != null && nTr < 300 ? ` ${ROLE_KO.cand} 거래 ${fmt.int(nTr)}번: 아직 적어서 하루하루 크게 흔들립니다.` : ""}`) :
+    lineupOn() ? h("p", {class: "note"}, `계좌 종류마다 후보 계좌들의 잔고 중앙값입니다 (닫힌 거래까지, 참고). 같은 후보의 계좌는 같은 신호로 들어가지만 청산 방법과 손절 거리가 다르고, 필터 계좌는 일부 신호를 건너뛰므로 선끼리의 차이에는 이런 것들이 섞여 있습니다.${nTr != null && nTr < 300 ? ` ${ROLE_KO.cand} 거래 ${fmt.int(nTr)}번: 아직 적어서 하루하루 크게 흔들립니다.` : ""}`) :
     h("p", {class: "note"}, where == null ? "아직 비교할 거래가 없습니다." : where === "above"
       ? "지금은 후보 중앙값이 동전 계좌 가운데 50%보다 위입니다 (참고)."
       : where === "below" ? "지금은 후보 중앙값이 동전 계좌 가운데 50%보다 아래입니다 (참고)."
@@ -100,7 +108,9 @@ function poolWeeks(kind, p) {
             : h("span", null, x.up == null ? "—" : x.up ? h("span", {class: "up"}, "▲ 플러스") : h("span", {class: "down"}, "▼ 마이너스"));
           return [h("td", {class: "num muted"}, x.n ? `${fmt.int(x.n)}번 · ${fmt.pct((100 * x.wins) / x.n, false, 0)}` : "—"), h("td", null, cell)];
         })))))),
-    h("p", {class: "note"}, "큰 숫자 = 그 주에 닫힌 거래의 한 번 평균(지갑 대비). 주 합계 = 그 주 거래마다 %를 더한 값으로 2차 점검 운 검사가 쓰는 단위이고, 지갑이 그만큼 변한 것은 아닙니다. 처음부터 평균 = 첫 주부터 그 주까지 모든 거래의 한 번 평균."));
+    h("p", {class: "note"}, lineupOn()
+      ? "큰 숫자 = 그 주에 닫힌 거래의 한 번 평균(지갑 대비). 주 합계 = 그 주 거래마다 %를 더한 값이고, 지갑이 그만큼 변한 것은 아닙니다. 처음부터 평균 = 첫 주부터 그 주까지 모든 거래의 한 번 평균."
+      : "큰 숫자 = 그 주에 닫힌 거래의 한 번 평균(지갑 대비). 주 합계 = 그 주 거래마다 %를 더한 값으로 2차 점검 운 검사가 쓰는 단위이고, 지갑이 그만큼 변한 것은 아닙니다. 처음부터 평균 = 첫 주부터 그 주까지 모든 거래의 한 번 평균."));
 }
 
 function bar(v, max) {

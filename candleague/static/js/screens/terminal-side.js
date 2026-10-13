@@ -17,7 +17,7 @@ import {markOf, serverNow} from "../live.js";
 import {inGroup, livePnl, liveOk, waitKo} from "../poskit.js";
 import {afterEmpty} from "../after.js";
 import {countTo} from "../v4kit.js";
-import {coinShort, coinOf, sideKo, reasonKo, ROLE_KO, KIND_KO} from "../labels.js";
+import {coinShort, coinOf, sideKo, reasonKo, ROLE_KO, KIND_KO, lineupOn} from "../labels.js";
 import {panel, acctLabel, sideTag, hiddenPos, hiddenFill, usdt, pctOf, short, fromApi, series, windowsFor, axisTicks, todayOf,
   calDays, failNote, H} from "./terminal-kit.js";
 
@@ -82,7 +82,7 @@ export function selPanel(ctx, st, hooks) {
     if (a) {
       kids.push(h("div", {class: "tm-kvs tm-rec"},
         kv("거래 · 승률", `${fmt.int(a.trades)}번 · ${LK.winTxt(a)}`), kv("잔고", LK.wallet(a)),
-        kv("한 번 평균", LK.ret(a.mean_ret, {hiddenIf: LK.dsHidden(a)}), "닫힌 거래 한 번의 평균 손익 (거래 전 잔고 대비) · 점검의 단위"),
+        kv("한 번 평균", LK.ret(a.mean_ret, {hiddenIf: LK.dsHidden(a)}), `닫힌 거래 한 번의 평균 손익 (거래 전 잔고 대비)${lineupOn() ? "" : " · 점검의 단위"}`),
         kv("최대 낙폭", LK.ddTxt(a)), a.bust ? kv("상태", h("span", {class: "pp bad"}, "파산")) : null));
       const pk = LK.pickOf(a);
       const set = pk ? LK.index().sets[pk.id] : null;
@@ -295,7 +295,11 @@ export function pnlPanel(ctx) {
         h("span", {class: "dn num"}, String(c.d)), has ? h("span", {class: "dv num"}, zero ? "0" : short(c.v)) : null);
     }));
   }
-  const draw = () => { drawCurve(); drawCal(); };
+  const draw = () => {
+    const d = LK.league();            // the owner-exit league: its real number of picks, not the candidate league's 38
+    kindSel.title = lineupOn() && d ? `후보 ${fmt.int(LK.leagueCounts(d).picks)}개 전체 · 기존 36의 후보 · 딥시크의 후보` : "후보 38개 전체 · 기존 36의 후보 · 딥시크의 후보";
+    drawCurve(); drawCal();
+  };
   async function load() {
     const kind = P.kind;
     try {

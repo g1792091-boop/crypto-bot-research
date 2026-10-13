@@ -8,7 +8,7 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
-import {TFS, tfKo, ROLE_SHORT} from "../labels.js";
+import {TFS, tfKo, ROLE_SHORT, ROLE_KO, lineupOn} from "../labels.js";
 import {EQUITY, GROUPS, hidden, walletRet, retPct, nameBits, kindKo, candVs, rowVsFlip, cmpVsCand, groupRows, ranking} from "./rank-cards.js";
 import {openAfter, openBefore, afterOn, beforeChip} from "../after.js";
 
@@ -36,12 +36,16 @@ function vsBaseOf(d, ix, a) {
 export function rankTable(o = {}) {
   let D = null, IX = null, RANK = new Map(), MIXED = true;
   const isHid = (r) => hidden(r, D);
+  const COLS = [];
   const tbl = K4.boardTable({
     page: 50, cls: "rk-table", sort: {id: "rk", dir: 1},
     onRow: (a) => o.onRow && o.onRow(a),
     rowCls: (a) => [a.bust ? "cl-bust" : "", a.role === "flip" ? "k4-flip" : "", isHid(a) ? "rk-cotr" : ""].join(" "),
     empty: "맞는 계좌가 없습니다",
-    cols: [
+    cols: COLS});
+  /** Every column the table can have; the owner-exit league (no 기본값 or 동전 account per pick, no 기준 판정) leaves out 기본값보다 · 동전보다 ·
+   *  후보 기준 and words 후보보다 as 지금 청산보다 (set() puts the right ones into COLS). */
+  const ALL = [
       {id: "rk", label: "순위", dir: 1, sort: (a) => (RANK.has(a.id) ? RANK.get(a.id) : null), get: (a) => h("span", {class: "num muted"}, RANK.has(a.id) ? fmt.int(RANK.get(a.id)) : "—")},
       {id: "name", label: "계좌", l: true, sort: (a) => `${LK.stratKo(a.name)} ${a.tf} ${a.role}`,
         get: (a) => h("a", {class: "k4-name rk-tname", href: `#/account/${encodeURIComponent(a.id)}`, title: a.id}, nameBits(a, {role: MIXED, size: 18}))},
@@ -72,11 +76,19 @@ export function rankTable(o = {}) {
       {id: "style", label: "성격", l: true, sort: (a) => ((LK.pickMeta((LK.pickOf(a, IX) || a).id) || {}).style || ""),
         get: (a) => LK.styleChip((LK.pickMeta((LK.pickOf(a, IX) || a).id) || {}).style) || "—"},
       {id: "exit", label: "익절 · 손절", l: true, get: (a) => h("span", {class: "cl-exit", title: a.exit_ko}, LK.exitShort(a.exit_ko))},
-    ]});
+    ];
+  const OWNER_OFF = new Set(["vb", "vf", "v"]);
+  const OWNER_VC = {label: "지금 청산보다", title: () => `다른 청산 계좌가 같은 후보의 ‘${ROLE_KO.cand}’ 계좌보다 한 번 평균이 높은가 (참고, 판정 아님)`};
+  const fitCols = () => {
+    const owner = lineupOn();
+    COLS.splice(0, COLS.length, ...ALL.filter((c) => !(owner && OWNER_OFF.has(c.id))).map((c) => (owner && c.id === "vc" ? {...c, label: OWNER_VC.label, title: OWNER_VC.title()} : c)));
+  };
+  fitCols();
+  tbl.set([]);
   return {
     el: tbl.el,
     /** mixed: the rows mix roles (비교 계좌, 전체): each name carries its role chip. */
-    set(rows, d, ix, rank, keep, mixed = true) { D = d; IX = ix; RANK = rank || new Map(); MIXED = mixed; tbl.set(rows, keep); },
+    set(rows, d, ix, rank, keep, mixed = true) { D = d; IX = ix; RANK = rank || new Map(); MIXED = mixed; fitCols(); tbl.set(rows, keep); },
   };
 }
 
@@ -113,13 +125,13 @@ export function tfSummary(d, ix, g, sub) {
   if (g === "all") {
     const rows = GROUPS.map((x) => ({key: x.short, g: x.id, rows: groupRows(d, x.id)})).filter((r) => r.rows.length);
     return ui.table([{label: "묶음", l: true, get: (r) => r.key}, ...common,
-      {label: "동전보다 위·아래 (참고)", get: (r) => (r.g === "flip" ? "—" : vs(r.rows))}], rows, {cls: "rk-tf", caption: "묶음별 요약"});
+      ...(lineupOn() ? [] : [{label: "동전보다 위·아래 (참고)", get: (r) => (r.g === "flip" ? "—" : vs(r.rows))}])], rows, {cls: "rk-tf", caption: "묶음별 요약"});
   }
   const mine = groupRows(d, g, sub);
   const kind = g === "core" || g === "ds" ? g : null;
   const rows = TFS.filter((tf) => mine.some((a) => a.tf === tf)).map((tf) => ({key: tfKo(tf), tf, rows: mine.filter((a) => a.tf === tf)}));
   const cols = [{label: "봉", l: true, get: (r) => r.key}, ...common];
-  if (g !== "flip") {
+  if (g !== "flip" && !lineupOn()) {
     cols.push({label: "동전 잔고 중앙값", title: "같은 봉 동전 계좌들의 잔고 중앙값", get: (r) => medWallet(flips(r.tf, kind))},
       {label: "동전보다 위·아래 (참고)", title: "자기 후보의 동전 계좌보다 한 번 평균이 위·아래인 계좌 수", get: (r) => vs(r.rows)});
   }

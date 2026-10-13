@@ -8,7 +8,7 @@ import {getJSON} from "./api.js";
 import {pill} from "./ui.js";
 import {acctFig} from "./v4kit.js";
 import {serverNow} from "./live.js";
-import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO, applyLineup} from "./labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, roleId, tfKo, KIND_KO, VERDICT_KO, VERDICT_CLS, STYLE_KO, applyLineup, lineupOn} from "./labels.js";
 
 // The start wallet of every account: the snapshot's equity0 (5000, or 1000 for the owners' league; setLeague / setEquity set it
 // once a snapshot or the rules payload is here). A live ES-module binding: importers read the current value, so text that
@@ -79,6 +79,16 @@ export const dayLine = (d, now = Date.now()) => (d && d.start_ms ? `D+${dPlus(d,
 export const REPLAY_GAP_MS = 5 * 60000;
 export const replayedBefore = (d) => !!(d && Number(d.start_ms) > 0 && Number(d.started_ms) > 0 && d.started_ms - d.start_ms >= REPLAY_GAP_MS);
 
+// ---------------------------------------------------------------- what the accounts of a pick share (owner-exit league)
+// Checked against candleague/data/rules_owner_exits.json and docs/candleague-owner-exits-install-ko.md: the same ENTRY signals (a 필터 account
+// takes only the signals that pass its filter, a 동전 twin the same signal times with a coin-flip side), the same start wallet and the same
+// leverage RULE; NOT the same stop: 지금 청산 keeps the pick's own stop, every 메인 caps it at 2 ATR (자체 손절: the strategy's own invalidation
+// price, 0.5 to 2 ATR), the 대조 kinds 2 ATR, 1 ATR or the pick's own, and a different stop distance can make the same rule pick another multiple.
+export const OWNER_SAME_SIGNALS = "같은 후보의 계좌는 같은 신호로 들어갑니다 (필터 계좌는 일부 신호를 건너뛰고, 동전 짝은 같은 시각에 방향만 동전으로 정합니다).";
+export const OWNER_SAME_RULE = "시작 잔고와 배수(레버리지)를 고르는 규칙은 모든 계좌가 같습니다.";
+export const OWNER_STOP_DIFF = "손절 거리는 계좌마다 다를 수 있습니다. ‘지금 청산’은 후보의 지금 손절 그대로이고, 메인은 모두 최대 2 ATR입니다 (‘자체 손절’은 매매법이 정한 무효화 가격 바로 밖, 0.5~2 ATR). "
+  + "대조는 종류에 따라 최대 2 ATR · 최대 1 ATR · 후보 손절 그대로입니다. 손절 거리가 다르면 같은 규칙이 고르는 배수도 달라질 수 있습니다.";
+
 // ---------------------------------------------------------------- the owner-exit league's counts and road (never written into a page)
 /** The real counts of a snapshot: {picks (distinct pick ids), strategies (distinct names of the picks), accounts, kinds (the lineup's)}.
  *  The owner-exit league's accounts carry their ``pick``; a snapshot without it counts its ``cand`` rows. */
@@ -107,6 +117,14 @@ export function road(d = LEAGUE) {
   return {start_ms: start, observe, decide, observe_ms: posNum(x.observe_ms, start + observe * DAY), decide_ms: posNum(x.decide_ms, start + decide * DAY),
     days, phase: days >= decide ? "decide" : "observe"};
 }
+/** The road's two dates as the day pill and the 터미널 band list them: [{id, ko, ms, what}] (empty before the start is known). */
+export function roadDates(d = LEAGUE) {
+  const r = road(d);
+  return r ? [{id: "R1", ko: `${r.observe}일째 확인`, ms: r.observe_ms, what: "숫자만 보고 아무것도 바꾸지 않습니다"},
+    {id: "R2", ko: `${r.decide}일째 판정`, ms: r.decide_ms, what: "미리 정한 규칙으로 한 번만 판정합니다"}] : [];
+}
+/** "190계좌" in the candidate league (its fixed size, as always written); the owner-exit league's real count from the snapshot ("1,122계좌"). */
+export const allAccountsKo = (d = LEAGUE) => (lineupOn() && d && d.accounts ? `${fmt.int(d.accounts.length)}계좌` : "190계좌");
 /** The road as the schedule's steps (home 일정, 점검 진행, the day pill): 시작(설치) → n일째 첫 확인 → n일째 판정, each with its
  *  KST date; the step the league is at is lit. */
 export function roadSteps(d = LEAGUE, o = {}) {
@@ -251,7 +269,7 @@ export function verdictPill(j) {
   const v = (j && j.verdict) || "early";
   return pill(v === "early" ? "아직" : VERDICT_KO[v] || v, VERDICT_CLS[v] || "thin",
     v === "early" ? "닫힌 거래 30번 전: 판단하지 않습니다" : v === "na"
-      ? "이 리그에는 기본값 · 동전 계좌가 없어 기준 판정을 하지 않습니다 (청산끼리 나란히 비교만)"
+      ? "이 리그에서는 후보마다 기준 판정을 하지 않습니다. 승자는 판정 화면의 규칙으로 28일째에 한 번만 가립니다"
       : "평균 > 0 · 기본값보다 · 동전보다 (세 가지 다면 통과)");
 }
 /** The warning light of a core pick (its own backtest band, WATCH_PREREG 3.1): null when there is no band yet. */
@@ -387,7 +405,7 @@ export function equityLines(series, o = {}) {
   return box;
 }
 
-/** A pick's five accounts as small rows: role, trades, win rate, mean per trade, wallet (the 커스텀값 / 5계좌 cards). */
+/** A pick's accounts as small rows (the five of the candidate league, or the lineup's kinds that pick has): role, trades, win rate, mean per trade, wallet (the 커스텀값 / 계좌 자세히 / 터미널 cards). */
 export function fiveRows(set, o = {}) {
   const head = h("div", {class: ["cl-fiverow", "cl-fivehd"], "aria-hidden": "true"}, h("span", null, "계좌"), h("span", null, "거래"),
     h("span", null, "승률"), h("span", null, o.short ? "평균" : "한 번 평균"), h("span", null, "잔고"), h("span", null, ""));
