@@ -45,7 +45,7 @@ const MENU = [
   {id: "reasons", ko: "청산 이유", group: "home"},
   {id: "pairs", ko: "짝 비교", group: "home"},
   {id: "decision", ko: "판정", group: "home"},
-  {id: "compare", get ko() { return compareKo(); }, group: "home"},          // "5계좌 비교" (candidate league) / "계좌 비교" (owner-exit league)
+  {id: "compare", ko: "5계좌 비교", group: "home"},
   {id: "weekly", ko: "흐름", group: "home"},
   {id: "strategies", ko: "매매법", group: "method"},
   {id: "judge", ko: "구조 기준", group: "method"},
@@ -68,6 +68,11 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
+const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
+  weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
+  account: "account", rules: "rules"};
+// the 계좌 비교 screen's label follows the league: "5계좌 비교" (candidate league, as written above) / "계좌 비교" (owner-exit league: its ~26 kinds)
+Object.defineProperty(MENU.find((m) => m.id === "compare"), "ko", {get: () => compareKo(), enumerable: true});
 /** The titles that name the old league's five accounts, 38 picks, 190 accounts or its 11/11 · 12/11 · 1/11 checks, in the owner-exit league's
  *  words (the counts from the snapshot, never written here). */
 function ownerTitle(id) {
@@ -84,9 +89,6 @@ function ownerTitle(id) {
   return T[id];
 }
 const titleOf = (id) => (lineupOn() && ownerTitle(id)) || MENU_TITLE[id];
-const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
-  weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
-  account: "account", rules: "rules"};
 const TITLE = "후보 리그";
 const WIDE_PX = 1100;                         // the rule bot opens its 터미널 on a PC window, 요약 here on a phone
 
@@ -166,6 +168,7 @@ function refreshMenuWords() {
     if (title) a.title = title; else a.removeAttribute("title");
   }
   setFindScreens(MENU.map((m) => ({id: m.id, ko: m.ko, group: m.group, groupKo: groupKo(m.group), title: titleOf(m.id)})));
+  setSettingsHooks({screens: MENU.map((m) => ({id: m.id, ko: m.ko})), autoStart, remount, onNav});          // 설정 › 첫 화면's list names the screens too
   const entry = cur && MENU.find((m) => m.id === cur.name);
   if (entry) { buildBot(cur.name); document.title = `${entry.ko} · ${TITLE}`; }
 }

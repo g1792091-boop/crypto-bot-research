@@ -22,7 +22,8 @@ export async function mount(el, ctx) {
     .filter(([, v]) => v && v !== "all")));
   const answers = h("div"), rule = h("div"), list = h("div"), card = h("div", {id: "rl-pick"}), stratSel = h("span", {class: "rl-sel"});
   const ruleCard = ui.card({plate: "배수(레버리지) 규칙", sub: "다섯 계좌 모두 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)"}, rule);
-  const rolesCard = ui.card({plate: "계좌 5개는 무엇이 다른가", sub: "같은 후보에서 갈라진 다섯 계좌 · 같은 시세 · 같은 기간"}, h("div"));
+  const rolesBody = h("div");
+  const rolesCard = ui.card({plate: "계좌 5개는 무엇이 다른가", sub: "같은 후보에서 갈라진 다섯 계좌 · 같은 시세 · 같은 기간"}, rolesBody);
   el.append(
     ui.screenHead("익절·손절·배수", "후보마다 익절·손절을 어떻게 잡았고, 배수(레버리지)와 증거금은 어떻게 정하나"),
     ui.card({plate: "짧은 답", cls: "rl-answers"}, answers),
@@ -52,7 +53,7 @@ export async function mount(el, ctx) {
     ruleCard.querySelector(".sub").textContent = owner ? "모든 계좌가 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)" : "다섯 계좌 모두 같은 규칙 · 규칙봇과 같은 엔진 (paperbot)";
     rolesCard.querySelector(".plate").textContent = owner ? `계좌 종류 ${fmt.int(ROLES.length)}가지는 무엇이 다른가` : "계좌 5개는 무엇이 다른가";
     rolesCard.querySelector(".sub").textContent = owner ? "같은 후보의 계좌들 · 같은 시세 · 같은 기간" : "같은 후보에서 갈라진 다섯 계좌 · 같은 시세 · 같은 기간";
-    put(rolesCard.lastElementChild, RK.rolesTable());
+    put(rolesBody, RK.rolesTable());
     put(answers, answersBody(d, R));
     put(rule, R ? RK.levRuleBody(R) : ui.none("규칙 숫자를 불러오는 중"));
     const names = [...new Set(ix.cands.filter((c) => st.kind === "all" || c.kind === st.kind).map((c) => c.name))]

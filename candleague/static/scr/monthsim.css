@@ -1,0 +1,91 @@
+/* 한 달 시뮬 (js/screens/monthsim.js): the range bars on a shared log axis, the coin twin's hatched bar under each, the number cells and the
+   comparison box. Everything else (cards, the table, the phone cards, the rule box) is scr/kinds.css (class prefix kd-). Screen-only rules,
+   class prefix ms-, scoped to the screen's own `.scr.ms`; colours only from the tokens (both skins), font sizes only var(--t-*). Colour is never
+   the only sign: every bar has its words and numbers next to it and the coin bars are hatched. */
+
+/* ---------------------------------------------------------------- the one sentence: long, so smaller than the other hero lines */
+.scr.ms .ms-hero .dl-vbig { font: 800 var(--t-lg)/1.35 var(--f-body); letter-spacing: -.01em; }
+
+/* ---------------------------------------------------------------- the legend */
+.scr.ms .ms-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--ink-2); font-size: var(--t-xs); }
+.scr.ms .ms-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.scr.ms .ms-sw { display: inline-block; flex: none; }
+.scr.ms .ms-sw.range { width: 22px; height: 8px; border-radius: 3px; background: var(--accent); }
+.scr.ms .ms-sw.med { width: 4px; height: 14px; border-radius: 2px; background: var(--ink); }
+.scr.ms .ms-sw.one { width: 0; height: 14px; border-left: 2px dashed var(--ink-2); }
+.scr.ms .ms-sw.goal { width: 0; height: 14px; border-left: 2px solid var(--up); }
+.scr.ms .ms-sw.coin { width: 22px; height: 8px; border-radius: 3px; border: 1px solid var(--muted);
+  background: repeating-linear-gradient(135deg, var(--muted) 0 3px, var(--surface-3) 3px 6px); }
+
+/* ---------------------------------------------------------------- the bars */
+.scr.ms .ms-chart { display: grid; gap: 14px; padding-inline: 14px; min-width: 0; }
+.scr.ms .ms-grp { display: grid; gap: 12px; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; align-content: start; }
+.scr.ms .ms-g-live { border-color: var(--accent-line); }
+.scr.ms .ms-gh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.scr.ms .ms-gh b { font-size: var(--t-md); }
+.scr.ms .ms-gh small { font-size: var(--t-xs); }
+.scr.ms .ms-krow { display: grid; gap: 8px; min-width: 0; }
+.scr.ms .ms-kh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.scr.ms .ms-kh b { font-size: var(--t-sm); }
+.scr.ms .ms-kh small { font-size: var(--t-xs); }
+.scr.ms .ms-bar { padding-block: 6px; }
+.scr.ms .ms-track { position: relative; height: 22px; border-radius: 6px; background: var(--surface-3); border: 1px solid var(--line-2); }
+.scr.ms .ms-range { position: absolute; top: 4px; bottom: 4px; left: var(--l, 0%); width: var(--w, 1%); min-width: 4px; border-radius: 4px; background: var(--rc, var(--accent)); }
+.scr.ms .ms-b-live { --rc: var(--accent); }
+.scr.ms .ms-b-control { --rc: var(--smc-bos); }
+.scr.ms .ms-b-coin .ms-range { background: repeating-linear-gradient(135deg, var(--muted) 0 3px, var(--surface-3) 3px 6px); box-shadow: inset 0 0 0 1px var(--muted); }
+.scr.ms .ms-range.clip-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.scr.ms .ms-range.clip-r { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.scr.ms .ms-med { position: absolute; top: -4px; bottom: -4px; left: var(--at, 50%); width: 4px; margin-left: -2px; border-radius: 2px; background: var(--ink);
+  box-shadow: 0 0 0 1px var(--surface-2); }
+.scr.ms .ms-tick { position: absolute; top: -7px; bottom: -7px; left: var(--at, 0%); width: 0; pointer-events: none; }
+.scr.ms .ms-tick.one { border-left: 2px dashed var(--ink-2); }
+.scr.ms .ms-tick.goal { border-left: 2px solid var(--up); }
+.scr.ms .ms-axis { position: relative; height: 16px; }
+.scr.ms .ms-at { position: absolute; top: 0; left: var(--at, 0%); transform: translateX(-50%); color: var(--muted); font-size: var(--t-2xs); line-height: 1.4; white-space: nowrap; }
+.scr.ms .ms-at.one { color: var(--ink-2); font-weight: 700; }
+.scr.ms .ms-at.goal { color: var(--up); font-weight: 800; }
+
+/* ---------------------------------------------------------------- the numbers under a bar */
+.scr.ms .ms-nums { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.scr.ms .ms-n { min-width: 0; padding: 6px 8px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface); }
+.scr.ms .ms-n.strong { border-color: var(--line-2); }
+.scr.ms .ms-n dt { color: var(--muted); font-size: var(--t-xs); }
+.scr.ms .ms-n dt small { display: block; font-size: var(--t-2xs); }
+.scr.ms .ms-n dd { margin: 2px 0 0; display: grid; gap: 1px; }
+.scr.ms .ms-n b { font: 800 var(--t-md)/1.25 var(--f-body); overflow-wrap: anywhere; }
+.scr.ms .ms-n.strong b { font-size: var(--t-lg); }
+.scr.ms .ms-n small { color: var(--muted); font-size: var(--t-xs); }
+.scr.ms .ms-real-line { margin: 0; color: var(--muted); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+.scr.ms .ms-coin .ms-n b { color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- too little data / no such kind */
+.scr.ms .ms-few, .scr.ms .ms-none { padding: 10px 12px; border-radius: var(--r-sm); border: 1px dashed var(--line-2); }
+.scr.ms .ms-fewt { margin: 0; color: var(--ink-2); font-size: var(--t-sm); font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.scr.ms .ms-fewcell { white-space: normal; color: var(--ink-2); font-size: var(--t-sm); }
+
+/* ---------------------------------------------------------------- the comparison with the coin */
+.scr.ms .ms-edge { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); }
+.scr.ms .ms-edge-h { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.scr.ms .ms-edge-h b { font-size: var(--t-sm); }
+.scr.ms .ms-edge-h small { font-size: var(--t-xs); }
+.scr.ms .ms-edge .note { margin: 0; }
+
+/* ---------------------------------------------------------------- the table and the single picks */
+.scr.ms .ms-tbl td.num small { display: block; font-size: var(--t-2xs); }
+.scr.ms .ms-cards .ms-kcard .kd-kbig small { font-size: var(--t-xs); }
+.scr.ms .ms-slist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.scr.ms .ms-srow { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.scr.ms .ms-srow b { font-size: var(--t-sm); }
+.scr.ms .ms-srow small { font-size: var(--t-xs); }
+.scr.ms .ms-sline { font-size: var(--t-sm); font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.scr.ms .ms-srow.ms-coin .ms-sline { color: var(--ink-2); }
+
+@media (min-width: 900px) { .scr.ms .ms-chart { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; } }
+@media (max-width: 459px) {
+  .scr.ms .ms-chart { padding-inline: 10px; }
+  .scr.ms .ms-grp { padding: 10px; }
+  .scr.ms .ms-nums { gap: 6px; }
+  .scr.ms .ms-n { padding: 6px; }
+  .scr.ms .ms-n.strong b { font-size: var(--t-md); }
+}

@@ -560,9 +560,11 @@ def test_the_dashboard_groups_each_picks_accounts_with_the_owners_words(tmp_path
     obv = next(r for r in cmp_["rows"] if "OBV" in r[0])
     assert obv[3] == "—"                                                                # its own exit is already roe50: no account
     t = cmp_["text"]
-    assert "5계좌 비교" in t and "이동평균 > 지금" in t and "8시간 넘게" in t and "보유 중앙" in t
+    assert "계좌 비교" in t and "5계좌 비교" not in t and "이동평균 > 지금" in t and "8시간 넘게" in t and "보유 중앙" in t       # the lineup's screen name is never "5계좌"
     assert all(lb in t for lb in LABELS) and "기본값보다" not in t
-    assert "청산 비교" in out["screens"]["home"]["text"] and "잔고 1등" in out["screens"]["home"]["text"]
+    home = out["screens"]["home"]["text"]
+    assert "청산 비교" in home and "계좌 종류 5가지" in home and "판정 화면 보기" in home                # the hero: kinds side by side, the way to the decision
+    assert "잔고 1등" not in home and "같은 손절" not in home and "미리 정한 점검 날짜가 없습니다" not in home      # the old league's wording is gone
     assert "청산 비교 리그" in out["screens"]["check"]["text"] and out["screens"]["check"]["hidden"] == 3
     assert "다른 청산" in out["screens"]["rank"]["text"]
     assert out["posGroups"] == ["all", "cand", "ma", "tp50", "gb", "wk", "core", "ds"]

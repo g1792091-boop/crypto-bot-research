@@ -655,6 +655,20 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
         # ... and the pre-registered decision protocol (summary.decision_views): the day count is the engine's processed time; DeepSeek is
         # left out of every figure unless ds_money
         doc["decision"] = SM.decision_views(book, league.accts, lu, league.start_ms, league.done, ds_money)
+        # ... and the 한 달 시뮬 (monthsim.monthsim_views): the days so far resampled into 30-day paths, the coin twins beside them (a luck
+        # calculator, decides nothing; DeepSeek is left out unless ds_money). A failure leaves the key absent ("데이터 준비 중")
+        try:
+            from . import monthsim as MS
+            doc["monthsim"] = MS.monthsim_views(book, league.accts, lu, league.start_ms, league.done, ds_money, EQUITY)
+        except Exception as exc:  # noqa: BLE001
+            doc["monthsim_error"] = f"{type(exc).__name__}: {exc}"[:200]
+        # ... and the 위험 점검 (riskview.risk_views): how crowded the open positions are on one side and the worst that already happened (counts
+        # only, never advice; DeepSeek is left out of every figure unless ds_money). A failure leaves the key absent ("데이터 준비 중")
+        try:
+            from . import riskview as RV
+            doc["risk"] = RV.risk_views(book, rows, lu, EQUITY, ds_money)
+        except Exception as exc:  # noqa: BLE001
+            doc["risk_error"] = f"{type(exc).__name__}: {exc}"[:200]
         # ... and the exploratory 조건별 성적 (summary.conditions_views): where does a structure work? It reads the stored trades of the four kinds it
         # compares (their entry stamps g1 / g2 live in the stored context, which closed_trades leaves out) and never decides anything
         try:                                  # an exploratory screen must never stop the snapshot: on a failure the key is simply absent ("데이터 준비 중")

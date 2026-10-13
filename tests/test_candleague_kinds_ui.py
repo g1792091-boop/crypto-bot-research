@@ -191,7 +191,7 @@ def test_versus_verdict_gate_table_and_best_marks(tmp_path):
     # the table: a row per kind in the lineup's order, three groups, the live candidate marked, the coin row labelled
     assert len(o["rows"]) == len(ks) and len(o["sel"]["grp"]) == 3
     names = [r[0] for r in o["rows"]]
-    assert "실전 후보" in names[0] and "-fq" in names[0] and "38개 매매법" in names[0]
+    assert "실전 후보" in names[0] and "-fq" in names[0] and "38개 후보" in names[0] and "매매법" not in names[0]
     coin_rows = [r[0] for r in o["rows"] if "-ldc" in r[0]]
     assert len(coin_rows) == 1 and "방향 실력 확인용: 진입 방향을 동전으로 정한 짝" in coin_rows[0]
     assert len(o["sel"]["live"]) == 1
@@ -206,10 +206,13 @@ def test_versus_verdict_gate_table_and_best_marks(tmp_path):
     assert "★" not in "".join(ldrow)
     assert "$1,000 대비" in page and "$5,000" not in page
     # the reading guide, the coin box and the decision rule
-    for need in ("이렇게 읽으세요", "어떻게 고르나요", "300건", "거래당 순수익이 높은 것을 먼저", "낙폭이 낮은 것", "승률만 보고 고르지 않습니다", "동전 던지기 짝을 못 이기면"):
+    for need in ("이렇게 읽으세요", "어떻게 고르나요", "300건", "고르는 것은 판정 화면의 규칙으로만", "14일째에는 숫자만 보고 아무것도 바꾸지 않고, 판정은 28일째에 한 번만 합니다",
+                 "★ · 높고 낮음은 참고입니다", "하나도 통과하지 못하면 ‘우위 없음’입니다", "승률만 보고 고르지 않습니다", "동전 던지기 짝을 못 이기면 진입 방향에 실력이 없을 수 있습니다"):
         assert need in page, need
+    # the old advice (pick the highest after 2~3 weeks) contradicts the pre-registered protocol: gone from this league's screen
+    assert "거래당 순수익이 높은 것을 먼저" not in page and "2~3주 이상 돌리고" not in page and "낙폭이 낮은 것을 고릅니다" not in page
     # kinds that exist for fewer picks than the 대조 are said so, from the data
-    assert "같은 매매법끼리가 아닙니다" in page and "38개" in page and "49개" in page
+    assert "같은 후보끼리가 아닙니다" in page and "38개" in page and "49개 후보 전부" in page and "같은 매매법끼리" not in page
     _no_junk(page)
 
 
@@ -227,7 +230,7 @@ def test_versus_enough_trades_gives_the_comparison_sentence_and_the_card_view(tm
     d = _doc(scale=10.0)
     next(k for k in d["kinds"] if k["role"] == "ldc")["mean_roe"] = 0.03
     o = _run(tmp_path, "versus", d)
-    assert "이기지 못했습니다" in o["text"] and "진입에 실력이 없다는 뜻" in o["text"]
+    assert "이기지 못했습니다" in o["text"] and "진입 방향에 실력이 없을 수 있고, 그러면 청산을 바꿔도 의미가 작습니다" in o["text"] and "진입에 실력이 없다는 뜻" not in o["text"]
     # the card view (a phone's default; remembered per device): one card per kind, the 연구용 ones behind a button
     o = _run(tmp_path, "versus", _doc(), local={"cl-versus-view": json.dumps("card")}, sels={"cards": ".kd-kcard", "rows": ".kd-row"})
     assert len(o["sel"]["cards"]) == len(ks) and not o["sel"]["rows"]
@@ -260,7 +263,7 @@ def test_goal_cards_words_targets_and_sample_notes(tmp_path):
     assert "66.7%" in win and "가까움" in win and "이긴 거래 80건 / 거래 120건" in win               # 60% to 70% = 가까움
     tpd = cell[("tpd", "fq")]
     assert "12.0번" in tpd and "달성" in tpd and "이상 목표 3번도 넘었습니다" in tpd
-    assert "이 종류는 38개 매매법만 돌아서 대조(49개)보다 적게 나올 수 있습니다" in tpd
+    assert "이 종류는 38개 후보에만 있어서 대조(49개 후보)보다 적게 나올 수 있습니다" in tpd
     roe = cell[("roe", "fq")]
     assert "+4.7%" in roe and "멀다" in roe
     month = cell[("month", "fq")]                                                            # 10 days, +5.0%: 1.05 ** 3 = x1.16

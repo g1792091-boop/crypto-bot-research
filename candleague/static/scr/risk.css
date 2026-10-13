@@ -1,0 +1,31 @@
+/* 위험 점검 (js/screens/risk.js): the long / short bar, the coin chips and the money lines on top of kinds.css (cards, tables, legend). Screen-only
+   rules, class prefix rv-, scoped to the screen's own `.scr.kd`; colours only from the tokens (both skins), font sizes only var(--t-*). Colour is
+   never the only sign: the bar has both numbers written beside it and a flag is a word. */
+
+.scr.kd .rv-bar { display: flex; gap: 2px; width: 100%; min-width: 96px; height: 16px; border-radius: 8px; overflow: hidden; background: var(--surface-3); }
+.scr.kd .rv-bar i { flex: 1 1 0; min-width: 3px; display: flex; align-items: center; justify-content: center; overflow: hidden; font: 800 var(--t-2xs)/1 var(--f-body);
+  font-style: normal; color: var(--accent-ink); white-space: nowrap; }
+.scr.kd .rv-bar i.rv-l { background: var(--up); }
+.scr.kd .rv-bar i.rv-s { background: var(--down); }
+.scr.kd .rv-bar.none { border: 1px dashed var(--line-2); background: transparent; }
+.scr.kd .rv-sn { display: block; margin: 4px 0 0; color: var(--ink-2); font: 700 var(--t-xs)/1.4 var(--f-body); }
+.scr.kd .rv-cs { display: block; margin-top: 2px; color: var(--muted); font-size: var(--t-2xs); font-weight: 500; line-height: 1.4; white-space: normal; }
+.scr.kd .rv-tbl td.rv-split { min-width: 150px; max-width: 220px; }
+.scr.kd .rv-tbl td.num { vertical-align: top; }
+.scr.kd .rv-tbl tr.rv-crowded td:first-child, .scr.kd .kd-kcard.rv-crowded { box-shadow: inset 3px 0 0 var(--down); }
+.scr.kd .rv-tbl tr.rv-sub td { padding-top: 0; border-top: 0; white-space: normal; }
+.scr.kd .rv-subbox { display: grid; gap: 8px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); }
+.scr.kd .rv-coinrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
+.scr.kd .rv-coins { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.scr.kd .rv-coin { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: var(--t-xs); white-space: nowrap; }
+.scr.kd .rv-coin b { color: var(--ink); }
+.scr.kd .rv-facts { margin: 0; display: grid; gap: 6px 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.scr.kd .rv-facts > div { min-width: 0; }
+.scr.kd .rv-facts dt { color: var(--muted); font-size: var(--t-xs); }
+.scr.kd .rv-facts dt, .scr.kd .rv-facts dd { white-space: normal; overflow-wrap: anywhere; }
+.scr.kd .rv-facts dd { margin: 2px 0 0; font-size: var(--t-sm); font-weight: 700; }
+.scr.kd .kd-kgrid.rv-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scr.kd .rv-card .note { margin: 0; }
+/* the one-sentence answer is long (counts of two kinds of risk): smaller than the other screens' short verdict */
+.scr.kd .kd-hero.rv-hero .dl-vbig { font-size: var(--t-lg); line-height: 1.4; letter-spacing: -.01em; }
+.scr.kd .rv-tbl td.l.kd-nm { min-width: 11em; }

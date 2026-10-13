@@ -254,7 +254,7 @@ export function whyCard(a, ins, o = {}) {
   return ui.card({plate, cls: "wy", sub: `닫힌 거래 ${fmt.int(ins.n)}번으로 계산 · 손익은 거래마다 수수료·펀딩 뒤`},
     head, h("div", {class: "wy-body"}, secs), cap);
 }
-/** The 5계좌 비교 one-liner of an account: "손절 9 · 익절 3 · 비용 −$123 · 최장 연패 6". */
+/** The 계좌 비교 (5계좌 비교 in the candidate league) one-liner of an account: "손절 9 · 익절 3 · 비용 −$123 · 최장 연패 6". */
 export function whyShort(ins) {
   if (!ins || !ins.n) return null;
   const r = ins.reasons || {};
