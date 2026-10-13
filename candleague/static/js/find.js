@@ -49,6 +49,7 @@ const SCREEN_WORDS = {
   decision: "판정 결정 미리 정한 규칙 사전 등록 통과 실패 대기 표본 부족 우연 보정 홀름 28일 우위 없음 필터 동전 짝 decision",
   conditions: "조건별 성적 요일 시간대 방향 코인 봉 BTC 추세 변동성 보유시간 언제 잘 맞나 탐색 동전 짝 conditions",
   risk: "위험 점검 위험 쏠림 같은 방향 몰림 롱 숏 한 지갑 손절 연속 손실 연속으로 진 낙폭 강제청산 파산 증거금 배수 레버리지 risk",
+  losses: "손실 해부 진 거래 손실 유형 벌었다가 놓침 강제청산 규칙 청산 손절 직행 오래 끌다 연속으로 진 같은 신호 함께 진 가장 크게 진 거래 다시보기 losses",
   monthsim: "한 달 시뮬 운 계산기 시뮬레이션 중앙값 범위 4배 목표 동전 짝 운 실력 단일 후보 monthsim",
   coins: "코인별 코인 BTC ETH SOL DOGE LTC BCH 거래 수 이긴 비율 거래당 평균 동전 던지기 짝 차이 손익 비중 coins",
   dataq: "데이터 점검 엔진 정상 늦음 확인 필요 오류 계좌 수 늦은 정도 시세 data check dataq",

@@ -261,7 +261,7 @@ def _headline(kinds: list) -> str:
     if not k["losses"]:
         return f"{k['name_ko']}: 아직 진 거래가 없습니다 (닫힌 거래 {k['trades']:,}건)."
     top = max((t for t in k["types"] if t["n"]), key=lambda t: (t["n"], -TYPE_IDS.index(t["id"])))
-    small = " 표본 적음, 참고만 하세요." if k["small"] else ""
+    small = " 표본 적음 (우연일 수 있습니다)." if k["small"] else ""
     return (f"{k['name_ko']}: 닫힌 거래 {k['trades']:,}건 중 {k['losses']:,}건이 손실 ({RV._pct_ko(k['loss_share'], 0)}). "
             f"가장 많은 유형은 ‘{TYPE_KO[top['id']]}’ {top['n']:,}건 ({RV._pct_ko(top['share'], 0)}).{small}")
 

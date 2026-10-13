@@ -16,7 +16,7 @@ export function cards(d) {
   const s = (b, k) => (b && typeof b === "object" && typeof b[k] === "string" && b[k] ? b[k] : null);
   const dq = x.dataq && typeof x.dataq === "object" ? [s(x.dataq, "status_ko"), s(x.dataq, "headline_ko")].filter(Boolean).join(" · ") || null : null;
   return [["decision", "판정", s(x.decision, "summary_ko")], ["monthsim", "한 달 시뮬", s(x.monthsim, "headline_ko")],
-    ["risk", "위험 점검", s(x.risk, "headline_ko")], ["conditions", "조건별", s(x.conditions, "headline_ko")],
+    ["risk", "위험 점검", s(x.risk, "headline_ko")], ["losses", "손실 해부", s(x.losses, "headline_ko")], ["conditions", "조건별", s(x.conditions, "headline_ko")],
     ["coins", "코인별", s(x.coins, "headline_ko")], ["costs", "실제 비용", s(x.costs, "headline_ko")],
     ["dataq", "데이터 점검", dq], ["timeline", "타임라인", s(x.timeline, "headline_ko")]];
 }

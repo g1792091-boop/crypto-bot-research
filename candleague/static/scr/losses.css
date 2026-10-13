@@ -1,0 +1,26 @@
+/* 손실 해부 (js/screens/losses.js): the loss-type bar, the breakdown tables and the biggest losses on top of kinds.css (cards, tables, the reason bar and
+   legend, which it reuses). Screen-only rules, class prefix lv-, scoped to the screen's own `.scr.kd`; colours only from the tokens (both skins), font
+   sizes only var(--t-*). Colour is never the only sign: every type has its name and count written in the legend, and a missing number reads "—". */
+
+.scr.kd .lv-t-liq { --rc: var(--crit-line); }
+.scr.kd .lv-t-gave_back { --rc: var(--warn); }
+.scr.kd .lv-t-gave_back_small { --rc: var(--warn-line); }
+.scr.kd .lv-t-rule_exit { --rc: var(--smc-bos); }
+.scr.kd .lv-t-gap { --rc: var(--down); }
+.scr.kd .lv-t-slow { --rc: var(--accent); }
+.scr.kd .lv-t-direct { --rc: var(--ink-2); }
+.scr.kd .lv-t-unknown { --rc: var(--muted); }
+.scr.kd .lv-card { display: grid; gap: 10px; }
+.scr.kd .lv-h { margin: 6px 0 0; font-size: var(--t-sm); color: var(--ink); }
+.scr.kd .lv-facts { margin: 0; display: grid; gap: 6px 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.scr.kd .lv-facts > div { min-width: 0; }
+.scr.kd .lv-facts dt { color: var(--muted); font-size: var(--t-xs); }
+.scr.kd .lv-facts dd { margin: 2px 0 0; font-size: var(--t-sm); font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
+.scr.kd .lv-cs { display: block; margin-top: 2px; color: var(--muted); font-size: var(--t-2xs); font-weight: 500; line-height: 1.4; white-space: normal; }
+.scr.kd .lv-leg { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.scr.kd .lv-bds { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.scr.kd .lv-bd { min-width: 0; }
+.scr.kd .lv-tbl caption { text-align: left; padding: 4px 8px; color: var(--ink-2); font-size: var(--t-xs); font-weight: 800; }
+.scr.kd .lv-tbl td.down { color: var(--down); }
+.scr.kd .lv-worst td { white-space: normal; }
+.scr.kd .lv-streak { margin: 0; }
