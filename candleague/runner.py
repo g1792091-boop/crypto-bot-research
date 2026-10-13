@@ -112,6 +112,7 @@ def fingerprint(accts: list[dict]) -> str:
                        + (["tighten", a["tighten"]] if a.get("tighten") else [])
                        + (["own_stop", RX.OWN_STOP_FLOOR_ATR, RX.OWN_STOP_BUFFER_ATR] if a.get("own_stop") else [])
                        + (["own_target"] if a.get("own_target") else [])
+                       + (["gate", a["gate"], RX.GATE_PARAMS] if a.get("gate") else [])
                        + (["equity0", X.start_equity()] if X.start_equity() != V3_INITIAL else [])
                        + (["ulad", list(X.ULAD_FIRST + X.ULAD_SECOND + (X.ULAD_STEP,))] if str(a["exit"]).startswith(X.ULAD + "|") else [])
                        for a in accts], sort_keys=True)     # rule accounts: + the rule, what its meaning depends on, and the C1 stop time;

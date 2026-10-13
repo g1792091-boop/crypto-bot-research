@@ -793,6 +793,14 @@ OWN_STOP_FLOOR_ATR = 0.5               # the own-level stop is never closer than
 OWN_STOP_BUFFER_ATR = 0.1              # ... sits this far beyond the level, so the level itself does not trigger it, and is never wider than the account's cap
 
 
+# The regime gates (owners 2026-10-13): a gate account takes a signal only when the market state at the signal bar's close passes. g1: the signal's side is the side
+# of the BTC 4h trend (the last closed BTC 4h bar: close above its EMA(GATE_EMA) = up, below = down; long needs up, short needs down); g2: the pick bar's ATR% is
+# between the GATE_PCT_LO and GATE_PCT_HI percentile of its last GATE_WINDOW bars (not too quiet, not too wild). The numbers are the league's own test values.
+GATES = ("g1", "g2")
+GATE_EMA, GATE_WINDOW, GATE_PCT_LO, GATE_PCT_HI = 50, 200, 0.2, 0.8
+GATE_PARAMS = [GATE_EMA, GATE_WINDOW, GATE_PCT_LO, GATE_PCT_HI]
+
+
 def native_levels_supported(c: dict) -> bool:
     """Whether the strategy of pick (or account) ``c`` has an invalidation level and a target at its signal bars."""
     return c["name"] in NATIVE_LEVELS.get(c["kind"], ())
