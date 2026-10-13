@@ -20,6 +20,7 @@ from candleague import candidates as C  # noqa: E402
 from candleague import exits as X  # noqa: E402
 from candleague import league as L  # noqa: E402
 from candleague import rulex as RX  # noqa: E402
+from candleague import runner as R  # noqa: E402
 from paperbot.engine import engine_state, restore_engine  # noqa: E402
 
 SIDES = pytest.mark.parametrize("side", [1, -1])
@@ -248,13 +249,13 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
     assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot", "-ld", "-ldc", "-fqc", "-ldp", "-ld1", "-ldt", "-ldv", "-fqt",
-                                                         "-fqv", "-sb", "-l5", "-l20", "-e", "-tp10", "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
+                                                         "-fqv", "-sb", "-l5", "-l20", "-e", "-tp10", "-gb", "-ma", "-ts", "-ch", "-oc", "-wk", "-fq40", "-fq50", "-ld40", "-ld50"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
     native = sum(1 for c in owner if RX.native_supported(c))                                  # -fq, -nv, -tg: the 49 picks of the 27 strategies with their own structure (16 from the study's code, 11 from candleague/native_more*.py)
     levels = sum(1 for c in owner if RX.native_levels_supported(c))                          # -iv, -ot: the 13 picks of the 7 strategies with a level and a target
-    # 49 picks x 18 kinds that every pick has, 49 x 6 kinds that need the strategy's own structure (-fq -nv -tg -fqc -fqt -fqv), 13 x 2 that need its own level and target
-    want = 49 * 18 + 6 * native + 2 * levels - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
-    assert len(owner) == 49 and native == 49 and levels == 13 and len(accts) == want == 1188
+    # 49 picks x 20 kinds that every pick has (+ -ld40 -ld50), 49 x 8 kinds that need the strategy's own structure (-fq -nv -tg -fqc -fqt -fqv, + -fq40 -fq50), 13 x 2 that need its own level and target
+    want = 49 * 20 + 8 * native + 2 * levels - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
+    assert len(owner) == 49 and native == 49 and levels == 13 and len(accts) == want == 1384
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
     assert sum(1 for a in accts if a.get("coin")) == 49 + 49 and sum(1 for a in accts if a["role"] == "cand") == 49
@@ -902,3 +903,35 @@ def test_own_level_accounts_carry_the_native_hash_in_the_fingerprint(monkeypatch
 def test_rule_ko_names_the_loss_depth_of_the_native_quick_stop():
     assert "손실 0.5R 이상" in RX.rule_ko(RX.parse_rule("F11.a.d0.5"))
     assert "손실" not in RX.rule_ko(RX.parse_rule("F11.a"))
+
+
+@SIDES
+@pytest.mark.parametrize("lev", [40, 50])
+def test_a_leverage_comparison_account_takes_the_same_trade_at_its_one_leverage(side, lev):
+    """The -fq40/-fq50/-ld40/-ld50 accounts: every entry at the one leverage (margin = leverage %), the 15% loss check lifted so the same
+    trade is taken, and the same ladder; the quality-rule account's leverage and size differ, the lock net ROE is the same."""
+    base = TR.acct(None, exit_="ladderU|2", role=RX.ROLE_BASE_LIVE)
+    var = {**base, "id": "tv", "lev": lev}
+    for lv in ("normal", "best"):
+        e = RX.make_engine(var, TR.BR, TR.SP)
+        assert [(t.name, t.margin_frac, t.leverages) for t in e.s.tiers] == [("best", lev / 100, (lev,)), ("normal", lev / 100, (lev,))] and e.s.max_loss_frac == 1.0
+    assert TR._probe_leverage(var, side) == lev
+    path, top, jx = _band_path(lev, side, 0.13, 0.20)
+    e = TR.run(var, path, side)
+    t = e.trades[0]
+    assert t.leverage == lev and t.exit_reason == "LOCK" and t.lock_roe == pytest.approx(0.10) and t.pnl > 0
+    b = TR.run(base, _band_path(TR._probe_leverage(base, side), side, 0.13, 0.20)[0], side).trades[0]
+    assert t.lock_roe == b.lock_roe                                                  # the same ladder, whatever the leverage
+
+
+def test_the_leverage_key_is_checked_and_restarts_the_league():
+    base = {"suffix": "-fq40", "exit": "ladderU", "stop_max": 2, "rule": "F11.a.d0.5", "label_ko": "연구 · 빠른 손절을 40배로", "lev": 40}
+    assert RX._owner_entry(base, 0)["lev"] == 40
+    for bad in (29, 51, 40.5, True, "40"):
+        with pytest.raises(RX.RuleConfigError):
+            RX._owner_entry({**base, "lev": bad}, 0)
+    for extra in ({"coin_of": "-fq"}, {"gate": "g1"}, {"tighten": 0.5}, {"weekend_off": True}, {"size": 0.5}):
+        with pytest.raises(RX.RuleConfigError):
+            RX._owner_entry({**base, **extra}, 0)
+    a = {"id": "a", "kind": "core", "name": "N", "tf": "1h", "combo": {}, "exit": "ladderU|2", "role": "fq40"}
+    assert R.fingerprint([a]) != R.fingerprint([{**a, "lev": 40}]) != R.fingerprint([{**a, "lev": 50}])

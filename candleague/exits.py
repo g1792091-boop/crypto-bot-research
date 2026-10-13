@@ -268,14 +268,23 @@ def min_leverage() -> Optional[int]:
     return v
 
 
-def settings_for(name: str, size: float = 1.0, **kw):
+def settings_for(name: str, size: float = 1.0, lev: Optional[int] = None, **kw):
     """The v4 settings with this exit's lock and take-profit mode (``kw``: other v3_settings overrides). ``size``
-    multiplies every tier's margin fraction (leverages kept, as research/fullgrid/sizing.py's size_vector)."""
+    multiplies every tier's margin fraction (leverages kept, as research/fullgrid/sizing.py's size_vector). ``lev`` (the owners'
+    league's leverage comparison accounts): every entry takes that one leverage with the margin share the rule gives it (margin =
+    leverage %), whatever the signal's quality, and the 15% loss check is lifted, so the account takes the same trades as the one
+    on the quality rule and only the leverage differs (a trade whose stop the exchange's liquidation buffer does not allow is
+    still refused)."""
     s = spec(name)
     kw = {**kw, "ladder_first_lock": s["first_lock"], "ladder_step": s["step"], "ladder_trigger_gap": s["gap"]}
     kw.setdefault("initial_equity", start_equity())
     lev_min = min_leverage()
-    if lev_min is not None and "tiers" not in kw:             # the owners' league: no leverage below the floor (a tier with none left is dropped)
+    if lev is not None:
+        from paperbot.config import Tier
+        kw["tiers"] = (Tier("best", lev / 100.0, (int(lev),)), Tier("normal", lev / 100.0, (int(lev),)))
+        kw.setdefault("max_loss_frac", 1.0)
+        kw["max_margin_frac"] = max(0.50, lev / 100.0)
+    elif lev_min is not None and "tiers" not in kw:             # the owners' league: no leverage below the floor (a tier with none left is dropped)
         from paperbot.config import V3_QUALITY_TIERS, Tier
         kept = tuple(Tier(t.name, t.margin_frac, tuple(v for v in t.leverages if v >= lev_min)) for t in V3_QUALITY_TIERS)
         kw["tiers"] = tuple(t for t in kept if t.leverages)
@@ -291,10 +300,10 @@ def settings_for(name: str, size: float = 1.0, **kw):
     return v3_settings(**kw)
 
 
-def make_engine(name: str, brackets: dict, specs: dict, book=None, size: float = 1.0, **kw) -> PaperEngine:
+def make_engine(name: str, brackets: dict, specs: dict, book=None, size: float = 1.0, lev: Optional[int] = None, **kw) -> PaperEngine:
     """A paper account that exits by rule ``name`` (signals must carry meta stop_dist = stop_dist(name, atr), and
     tp_struct for a structure rule); ``size`` scales the margin fractions (settings_for)."""
-    s, st = spec(name), settings_for(name, size=size, **kw)
+    s, st = spec(name), settings_for(name, size=size, lev=lev, **kw)
     extra = {} if book is None else {"book": book}
     if name.startswith(ULAD + "|"):
         return UserLadder(st, brackets, symbol_specs=specs, **extra)

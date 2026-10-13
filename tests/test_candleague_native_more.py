@@ -367,8 +367,8 @@ def test_the_eleven_picks_get_the_structure_accounts_and_the_other_38_picks_keep
         for k in kinds:
             assert c["id"] + k in ids, (c["id"], k)
         assert c["id"] + "-iv" not in ids and c["id"] + "-ot" not in ids                             # no own level or target for these 11
-    assert len(accts) == 1188 == 1122 + 11 * 6 and len(ids) == len(accts)
-    assert len(accts) - 66 == 1122
+    assert len(accts) == 1384 == 1122 + 11 * 6 + 196 and len(ids) == len(accts)
+    assert len(accts) - 66 - 196 == 1122
     by = {a["id"]: a for a in accts}
     for c in weak:
         assert by[c["id"] + "-fq"]["rule"]["id"] == "F11.a.d0.5" and by[c["id"] + "-nv"]["rule"]["id"] == "F11.a" and by[c["id"] + "-tg"]["tighten"] == 0.5

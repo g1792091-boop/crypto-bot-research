@@ -79,7 +79,7 @@ def test_home_hero_chips_decision_line_and_road(tmp_path):
     page, hero, goal = o["text"], o["sel"]["hero"][0]["t"], o["sel"]["goal"][0]["t"]
     # the head: the snapshot's own counts (one pick row here, 26 accounts), never "38 x 5"
     head = o["sel"]["head"][0]["t"]
-    assert "후보 리그 한눈에 보기 · 후보 1개 · 계좌 26개" in head and "38개" not in head and "× 계좌 5개" not in head
+    assert "후보 리그 한눈에 보기 · 후보 1개 · 계좌 30개" in head and "38개" not in head and "× 계좌 5개" not in head
     # the hero: how many kinds of account, grouped, short names, the decision's one line and the button
     assert "청산 비교" in hero and f"계좌 종류 {len(KU.OWNER)}가지 나란히" in hero
     for ko, n in (("메인", groups["main"]), ("대조", groups["control"]), ("연구용", groups["research"])):
@@ -93,7 +93,7 @@ def test_home_hero_chips_decision_line_and_road(tmp_path):
     # the old league's wall of text and its false claims are gone
     _clean(page)
     assert "같은 신호 · 같은 손절로 돌립니다" not in page and "잔고 1등" not in page
-    assert len(hero) < 700                                                  # a hero, not a wall of text
+    assert len(hero) < 780                                                  # a hero, not a wall of text (the four 레버리지 비교 kinds added their short names)
     # the road: 시작 → 14일째 첫 확인 → 28일째 판정, the snapshot's own dates, the bar to day 28
     assert "14일째 첫 확인 · 숫자만 보고 아무것도 바꾸지 않음" in goal and "28일째 판정 · 한 번만" in goal and "시작 (설치)" in goal
     assert _mmdd(d["decision"]["observe_ms"]) in goal and _mmdd(d["decision"]["decide_ms"]) in goal

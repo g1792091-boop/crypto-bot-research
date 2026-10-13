@@ -110,6 +110,7 @@ def fingerprint(accts: list[dict]) -> str:
                        + (["weekend_off"] if a.get("weekend_off") else [])
                        + (["coin"] if a.get("coin") else [])
                        + (["tighten", a["tighten"]] if a.get("tighten") else [])
+                       + (["lev", a["lev"]] if a.get("lev") else [])
                        + (["own_stop", RX.OWN_STOP_FLOOR_ATR, RX.OWN_STOP_BUFFER_ATR, RX.native_hash()] if a.get("own_stop") else [])
                        + (["own_target", RX.native_hash()] if a.get("own_target") else [])
                        + (["gate", a["gate"], RX.GATE_PARAMS] if a.get("gate") else [])

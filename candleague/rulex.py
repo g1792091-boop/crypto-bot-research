@@ -466,7 +466,7 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "own_stop", "own_target", "gate"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "own_stop", "own_target", "gate", "lev"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
 OWNER_MAX = 32
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
@@ -613,15 +613,20 @@ def _owner_entry(x, i: int) -> dict:
     size = x.get("size", 1.0)
     if isinstance(size, bool) or not isinstance(size, (int, float)) or not 0 < float(size) <= 1:
         raise RuleConfigError(f"rule config: {where} size must be a number in (0, 1] (1 = the league's live size)")
+    lev = x.get("lev")
+    if lev is not None and (isinstance(lev, bool) or not isinstance(lev, int) or not 30 <= lev <= 50 or tp != X.ULAD or x.get("coin_of") is not None
+                            or x.get("gate") is not None or x.get("tighten") is not None or os_ or ot_ or wk or float(size) != 1.0):
+        raise RuleConfigError(f"rule config: {where} lev must be a whole number from 30 to 50 (every entry takes that leverage) and needs the owners' ladder "
+                              "('exit') without a coin twin, gate, tighten, own stop or target, weekend switch or size")
     kind = "rule" if rule is not None else "exit" if tp is not None else "weekend" if wk else "own"
-    role = "cand" if kind == "own" and float(size) == 1.0 else suffix[1:]
+    role = "cand" if kind == "own" and float(size) == 1.0 and lev is None else suffix[1:]
     if coin is not None and role == "cand":
         raise RuleConfigError(f"rule config: {where} cannot be both the current exit and a coin flip")
     if role != "cand" and role in OWNER_RESERVED:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
          "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin,
-         "tighten": None if tg is None else float(tg), "own_stop": os_, "own_target": ot_, "gate": gate}
+         "tighten": None if tg is None else float(tg), "own_stop": os_, "own_target": ot_, "gate": gate, "lev": lev}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -705,8 +710,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                 exit_ = tgt["exit"]
                 er = tgt["rule"] if tgt["rule"].get("family") is not None else None          # the twin trades the same rule, only the side is the coin's
             elif e["tp"]:
-                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"], e["own_stop"], e["own_target"], e["gate"])
-                if (er is None and not e["own_stop"] and exit_ == c["exit"]) or key in seen:
+                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"], e["own_stop"], e["own_target"], e["gate"], e["lev"])
+                if (er is None and not e["own_stop"] and e["lev"] is None and exit_ == c["exit"]) or key in seen:
                     continue                                  # the pick's own exit (or an earlier entry's) already: no duplicate account
                 seen[key] = e["suffix"]
             src = {"pick": pid, "owner_exit": e["suffix"], "label_ko": e["label_ko"]}
@@ -726,6 +731,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                  "ox": {q: e[q] for q in ("role", "suffix", "kind", "label_ko", "short_ko", "desc_ko", "why_ko", "tp", "weekend_off", "size")}}
             a["ox"]["rule"] = er["id"] if er is not None else None
             a["ox"]["n"] = n                                   # the entry's place in the file: the dashboard's order of kinds
+            if e["lev"] is not None:
+                a["lev"] = e["lev"]
             if e["tighten"] is not None:
                 a["tighten"] = e["tighten"]
                 a["ox"]["tighten"] = e["tighten"]
@@ -1459,7 +1466,7 @@ def _lock_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     settings, take-profit and policy (a test compares every field with ``exits.make_engine``). F13's engine, and the owner-exit league's
     weekend-off account (the pick's own exit with the weekend gate, ``rx_weekend_off``)."""
     name, size = exit_name(a), a.get("size", 1.0)
-    s, st = X.spec(name), X.settings_for(name, size=size)
+    s, st = X.spec(name), X.settings_for(name, size=size, lev=a.get("lev"))
     if name.startswith(X.ULAD + "|"):
         return RuleUserLadder(st, brackets, symbol_specs=specs, book=a["id"])
     if s["ladder"] and s["tp_kind"] == X.TP_STRUCT:
@@ -1482,7 +1489,7 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     weekend = bool(a.get("weekend_off"))
     if rule.get("family") is None:
         if not weekend and not a.get("own_stop") and not a.get("gate"):
-            return X.make_engine(name, brackets, specs, book=a["id"], size=size)
+            return X.make_engine(name, brackets, specs, book=a["id"], size=size, lev=a.get("lev"))
         e = _lock_engine(a, brackets, specs)                               # the plain engine of the exit, with the weekend gate, the regime gate and / or the own-level stop
         e.rx_weekend_off = weekend
         e.rx_own_stop = bool(a.get("own_stop"))
@@ -1493,7 +1500,7 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
         e.rx_no_entry_from = int(a["no_entry_from_ms"]) if a.get("no_entry_from_ms") else None
         e.rx_weekend_off = weekend
         return e
-    s, st = X.spec(name), X.settings_for(name, size=size)
+    s, st = X.spec(name), X.settings_for(name, size=size, lev=a.get("lev"))
     if rule["mode"] == "b":
         st = replace(st, tp_mode="fixed")                  # no take-profit and no stepped lock
         e = RuleEngine(st, brackets, symbol_specs=specs, policy=NoTP(st), book=a["id"])
