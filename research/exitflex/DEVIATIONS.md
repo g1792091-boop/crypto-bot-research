@@ -79,3 +79,7 @@ E.0 item 2 and TW.10).
   two modules define (`NATIVE_COVERS`, compared with the modules by a test). The league's install now copies `native.py`, `native_ds.py` and the
   fullgrid modules they import (`run.py`, `kernel.py`, `memo.py`, `data.py`, `grid.py`) so the provider loads on the server (checked in a copy of
   the installed layout, with numba blocked: the provider loads and gives arrays for all 38 picks). No study file changed.
+  Two more owner-league options, `own_stop` and `own_target`, use the study's own per-signal level and target (`native_inv`, `native_tgt`) on the owners' ladder:
+  the first stop at the level (distance = level + 0.1 ATR, between 0.5 ATR and the account's cap; the cap when the level is missing or on the wrong side) and
+  a take-profit limit at the target with the lock kept. The numbers 0.5 and 0.1 ATR are the league's own test values, not the study's. They exist only for the
+  seven strategies that define a level and a target (`NATIVE_LEVELS`, compared with the modules by a test).

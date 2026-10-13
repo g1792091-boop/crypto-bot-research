@@ -31,6 +31,21 @@
       "label_ko": "메인 · 구조 무너지면 손절 좁힘"
     },
     {
+      "suffix": "-iv",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "own_stop": true,
+      "label_ko": "메인 · 처음 손절을 자체 무효화 가격에"
+    },
+    {
+      "suffix": "-ot",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F11.a",
+      "own_target": true,
+      "label_ko": "메인 · 자체 구조 청산 + 자체 익절 목표"
+    },
+    {
       "suffix": "-ld",
       "exit": "ladderU",
       "stop_max": 2,

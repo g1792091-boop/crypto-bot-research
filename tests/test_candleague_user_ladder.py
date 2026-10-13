@@ -8,6 +8,7 @@ import json
 import os
 import sys
 
+import numpy as np
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -240,18 +241,19 @@ def test_the_quick_stop_entry_builds_for_every_owner_pick_and_runs_the_studys_ru
 
 
 def test_the_rules_file_the_owners_install_builds_the_final_lineup():
-    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: nineteen account kinds on the 49 picks."""
+    """candleague/data/rules_owner_exits.json is copied to /etc/candleague/rules.json at the install: twenty-one account kinds on the 49 picks."""
     doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
     cfg = RX.normalize_owner(doc)
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
-    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-ld", "-ldc", "-ldp", "-ld1", "-sb", "-l5", "-l20", "-e", "-tp10",
-                                                         "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
+    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot", "-ld", "-ldc", "-ldp", "-ld1", "-sb", "-l5", "-l20", "-e",
+                                                         "-tp10", "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
     native = sum(1 for c in owner if RX.native_supported(c))                                  # -fq, -nv, -tg: only the 38 picks of the 16 strategies with their own structure
-    want = 49 * 16 + 3 * native - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
-    assert len(owner) == 49 and native == 38 and len(accts) == want == 884
+    levels = sum(1 for c in owner if RX.native_levels_supported(c))                          # -iv, -ot: the 13 picks of the 7 strategies with a level and a target
+    want = 49 * 16 + 3 * native + 2 * levels - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
+    assert len(owner) == 49 and native == 38 and levels == 13 and len(accts) == want == 910
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
     assert sum(1 for a in accts if a.get("coin")) == 49 and sum(1 for a in accts if a["role"] == "cand") == 49
@@ -270,7 +272,7 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     assert "tighten" not in lu["-fq"] and lu["-tg"]["tighten"] == 0.5 and lu["-tg"]["short_ko"] == "손절 좁힘"
     mains = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("메인")]
     ctrl = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("대조")]
-    assert mains == ["-fq", "-nv", "-sw", "-tg"] and ctrl == ["-ld", "-ldc", "-ldp", "-ld1"]               # the strategy-own structures are the main ones; the old stop is the control
+    assert mains == ["-fq", "-nv", "-sw", "-tg", "-iv", "-ot"] and ctrl == ["-ld", "-ldc", "-ldp", "-ld1"]               # the strategy-own structures are the main ones; the old stop is the control
     assert lu["-sb"]["label_ko"].startswith("연구")                                                       # the same swing for every strategy is a research comparison
 
 
@@ -546,3 +548,150 @@ def test_the_strategys_own_structure_narrows_the_stop_instead_of_closing(side):
     t = e.trades[0]
     assert t.exit_reason == "SL" and t.exit_time == TR.at(TR.J0 + 80) + TR.MIN - 1
     assert t.exit_price == pytest.approx((TR.P0 - side * 0.5 * TR.R) * (1 - side * TR.SLIP), rel=1e-12)
+
+
+# ---------------------------------------------------------------- the first stop at the strategy's own level, and its own target (owners 2026-10-13)
+def _own(**flags):
+    a = TR.acct(flags.pop("rule", None), exit_="ladderU|2")
+    a.update(flags)
+    return a
+
+
+def _entered(a, side, **meta):
+    """The position the engine opens for a hand signal carrying ``meta`` (the path stays flat, nothing closes)."""
+    s = TR.sig(TR.C0, side, aid=a["id"], **meta)
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, s),))
+    assert e.position is not None
+    return e.position
+
+
+@SIDES
+def test_the_own_level_stop_sits_just_beyond_the_level_between_the_floor_and_the_cap(side):
+    a = _own(own_stop=True)
+    # ATR 200, 2 ATR cap = 400, floor 0.5 ATR = 100, buffer 0.1 ATR = 20
+    for level_off, want in ((-300, 320), (-50, 100), (-1000, 400), (-100, 120)):
+        p = _entered(a, side, native_inv=TR.P0 + side * level_off)
+        assert p.stop_price == pytest.approx(TR.P0 - side * want), level_off
+        assert p.signal.meta["ctx"]["stop_src"] == "own" and p.stop_initial == p.stop_price
+    for bad in (None, float("nan"), TR.P0 - side * -300 + 0 * side):                              # none, NaN, and a level on the wrong side of the price
+        meta = {} if bad is None else {"native_inv": bad}
+        if bad is not None and not (bad != bad):
+            meta = {"native_inv": TR.P0 - side * -300}                                           # P0 + side * 300: beyond the price in the profit direction
+        p = _entered(a, side, **meta)
+        assert p.stop_price == pytest.approx(TR.P0 - side * TR.R) and p.signal.meta["ctx"]["stop_src"] == "atr"
+    # the plain ladder account of the same signal keeps the 2 ATR stop whatever the level says
+    p = _entered(TR.acct(None, exit_="ladderU|2"), side, native_inv=TR.P0 - side * 300)
+    assert p.stop_price == pytest.approx(TR.P0 - side * TR.R)
+
+
+@SIDES
+def test_the_own_level_stop_is_the_sizing_input_and_the_trade_closes_there(side):
+    a = _own(own_stop=True)
+    path = TR.Path().bar(TR.J0 + 30, o=0, c=-340, b=0, w=-340).hold(TR.J0 + 31, -340)
+    sigs = ((TR.C0, TR.sig(TR.C0, side, aid=a["id"], native_inv=TR.P0 - side * 300)),)
+    e = TR.run(a, path, side, sigs=sigs)
+    assert len(e.trades) == 1
+    t = e.trades[0]
+    assert t.exit_reason == "SL" and t.exit_price == pytest.approx((TR.P0 - side * 320) * (1 - side * TR.SLIP), rel=1e-12)
+    # the same fall does not touch the plain account's 400 stop
+    assert not TR.run(TR.acct(None, exit_="ladderU|2"), path, side, sigs=((TR.C0, TR.sig(TR.C0, side)),)).trades
+
+
+@SIDES
+def test_the_own_target_is_a_limit_beyond_the_fill_and_the_lock_stays(side):
+    a = _own(rule="F11.a", own_target=True)
+    p = _entered(a, side, rx0={}, native_tgt=TR.P0 + side * 500, native_s=side)
+    assert p.tp_price == pytest.approx(TR.P0 + side * 500)
+    p = _entered(a, side, rx0={}, native_tgt=TR.P0 - side * 50, native_s=side)                  # behind the fill: no take-profit
+    assert p.tp_price != p.tp_price
+    p = _entered(_own(rule="F11.a"), side, rx0={}, native_tgt=TR.P0 + side * 500, native_s=side)  # without the flag the target is not used (F11.a)
+    assert p.tp_price != p.tp_price
+    # the target is hit: a limit fill (maker) at the target price
+    path = TR.Path().bar(TR.J0 + 30, o=0, c=600, b=600, w=0).hold(TR.J0 + 31, 600)
+    e = TR.run(a, path, side, sigs=((TR.C0, TR.sig(TR.C0, side, {}, aid=a["id"], native_tgt=TR.P0 + side * 500, native_s=side)),))
+    assert e.trades and e.trades[0].exit_reason == "TP" and e.trades[0].exit_price == pytest.approx(TR.P0 + side * 500)
+    # a climb into the lock band that falls back first is still the owners' lock
+    lev = TR._probe_leverage(a, side)
+    path, _top, _jx = _band_path(lev, side, 0.20, 0.25)
+    e = TR.run(a, path, side, sigs=((TR.C0, TR.sig(TR.C0, side, {}, aid=a["id"], native_tgt=TR.P0 + side * 5000, native_s=side)),))
+    assert e.trades and e.trades[0].exit_reason == "LOCK" and e.trades[0].lock_roe == pytest.approx(0.15)
+
+
+def test_the_two_kinds_exist_only_for_the_strategies_with_a_level_and_a_target_and_the_table_is_the_study_codes():
+    import importlib
+    import sys
+    d = RX.native_dir()
+    if d not in sys.path:
+        sys.path.insert(0, d)
+    native_ds = importlib.import_module("native_ds")
+    assert sorted(RX.NATIVE_LEVELS["ds"]) == sorted(native_ds.LEVEL_STRATEGIES) and set(RX.NATIVE_LEVELS["core"]) <= set(RX.NATIVE_COVERS["core"])
+    assert "Only N13_3OUTSIDE and N19_FIB_CHOP have a level; only they have a target" in importlib.import_module("native").__doc__.replace("\n", " ").replace("  ", " ")
+    doc = json.load(open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json")))
+    owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
+    accts = RX.owner_accounts(owner, RX.normalize_owner(doc))
+    for role, flag in (("iv", "own_stop"), ("ot", "own_target")):
+        group = [a for a in accts if a["role"] == role]
+        want = [c for c in owner if RX.native_levels_supported(c)]
+        assert len(group) == len(want) == 13 and all(a.get(flag) is True and a["exit"].startswith("ladderU|") for a in group)
+        assert {a["pick"] for a in group} == {c["id"] for c in want}
+    assert all(a["rule"]["id"] == "F11.a" for a in accts if a["role"] == "ot") and all(a["rule"]["family"] is None for a in accts if a["role"] == "iv")
+
+
+@pytest.mark.parametrize("bad", [
+    {"suffix": "-x1", "exit": "ladderU", "own_stop": True, "rule": "F1.w3.a", "label_ko": "x"},                    # own_stop is not a rule account
+    {"suffix": "-x1", "exit": "ladderU", "own_stop": True, "coin_of": "-ld", "label_ko": "x"},
+    {"suffix": "-x1", "own_stop": True, "label_ko": "x"},                                                          # needs the owners' ladder
+    {"suffix": "-x1", "exit": "ladderU", "own_target": True, "label_ko": "x"},                                     # own_target needs an F11 rule
+    {"suffix": "-x1", "exit": "ladderU", "own_target": True, "rule": "F1.w3.a", "label_ko": "x"},
+    {"suffix": "-x1", "exit": "ladderU", "own_target": True, "rule": "F11.a", "tighten": 0.5, "label_ko": "x"},
+    {"suffix": "-x1", "exit": "ladderU", "own_stop": "yes", "label_ko": "x"},
+])
+def test_a_bad_own_stop_or_own_target_entry_is_refused(bad):
+    doc = copy.deepcopy(LINEUP)
+    doc["owner_exits"].append(bad)
+    with pytest.raises(RX.RuleConfigError):
+        RX.normalize_owner(doc)
+
+
+def test_the_fingerprint_sees_the_own_stop_and_the_own_target():
+    from candleague import runner as RN
+    doc = copy.deepcopy(LINEUP)
+    doc["owner_exits"] += [{"suffix": "-iv", "exit": "ladderU", "stop_max": 2, "own_stop": True, "label_ko": "x"},
+                           {"suffix": "-ot", "exit": "ladderU", "stop_max": 2, "rule": "F11.a", "own_target": True, "label_ko": "y"}]
+    cands = [{**c, "kind": "ds", "name": "F5_BOX", "id": "ds-F5_BOX-4h-1", "combo": {}} for c in _cands(("S2_ST_ROC", "4h", "tp3R|4"))]
+    accts = RX.owner_accounts(cands, RX.normalize_owner(doc))
+    assert {a["role"] for a in accts} >= {"iv", "ot"}
+    base = RN.fingerprint(accts)
+    for suffix, flag in (("-iv", "own_stop"), ("-ot", "own_target")):
+        other = copy.deepcopy(accts)
+        for a in other:
+            if a["id"].endswith(suffix):
+                a.pop(flag)
+        assert RN.fingerprint(other) != base
+
+
+def test_chunk_rule_hands_the_strategys_own_level_to_an_own_stop_account_without_a_rule():
+    saved = RX.NATIVE["provider"]
+    try:
+        def prov(a, sym, df, close_ms, lo, sh, btc):
+            n = len(df)
+            return {"comp_long": [], "comp_short": [], "lvl_long": np.full(n, 111.0), "lvl_short": np.full(n, 222.0),
+                    "tgt_long": np.full(n, 333.0), "tgt_short": np.full(n, 444.0)}
+        RX.register_native(prov)
+        doc = copy.deepcopy(LINEUP)
+        doc["owner_exits"].append({"suffix": "-iv", "exit": "ladderU", "stop_max": 2, "own_stop": True, "label_ko": "x"})
+        cfg = RX.normalize_owner(doc)
+        accts = RX.owner_accounts(TR._rule_cands("15m", "tp3R|4"), cfg)
+        iv = next(a for a in accts if a["id"].endswith("-iv")) if any(a["id"].endswith("-iv") for a in accts) else None
+        assert iv is None                                                       # the stub pick is not one of the seven strategies: no account
+        base = next(a for a in accts if a["id"].endswith("-ld"))
+        iv = {**base, "id": base["id"][:-3] + "-iv", "role": "iv", "own_stop": True, "exit": "ladderU|2"}
+        by, notes = RX.chunk_rule(TR.LIB, TR.PS.FrameSource(TR.DATA), [iv], TR.TP.SYMS, TR.START, TR.START + TR.DAY, TR.START, TR.StubStrategies())
+        sigs = [o for items in by.values() for aid, o in items if isinstance(o, TR.Signal)]
+        assert sigs and not any(isinstance(o, RX.RuleClose) for items in by.values() for _a, o in items)       # signals only: no rule, no chart records
+        for o in sigs:
+            want = (111.0, 333.0) if o.side > 0 else (222.0, 444.0)
+            assert (o.meta["native_inv"], o.meta["native_tgt"]) == want and o.meta["stop_dist"] == pytest.approx(2.0 * o.atr) and "rx0" not in o.meta
+        assert not notes
+    finally:
+        RX.NATIVE["provider"] = saved

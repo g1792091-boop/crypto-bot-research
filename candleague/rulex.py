@@ -465,9 +465,9 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "own_stop", "own_target"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
-OWNER_MAX = 20
+OWNER_MAX = 24
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
 TP_NAMES = tuple(r[0] for r in X.TP_RULES) + (X.ULAD,)
 WEEKEND_KO = "토 00:00 ~ 월 00:00 UTC (한국 토 09:00 ~ 월 09:00)"
@@ -495,6 +495,11 @@ def _owner_words(e: dict) -> tuple:
         tail = "후보의 익절과 손절은 그대로" if r["mode"] == "a" else "고정 익절 없음 · 손절은 그대로"
         return ("반납 보호", f"수익이 +{_fmt(r['P'])}R(손절 거리 {_fmt(r['P'])}배)에 닿은 뒤, 봉 마감 때 최고 수익의 "
                 f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
+    if e.get("own_stop"):
+        cap = f"최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "후보의 손절 폭까지"
+        return ("자체 손절", f"계단 익절(+13%→+10%, +20%→+15% …) · 처음 손절을 그 매매법이 정한 무효화 가격(스윙 저점·고점, 박스 바닥 등) 바로 밖에 둠"
+                f"(가격에서 {OWN_STOP_FLOOR_ATR:g} ATR 이상 {cap}으로 제한, {OWN_STOP_BUFFER_ATR:g} ATR 여유). 그 가격이 없거나 반대편이면 2 ATR 그대로. 구조 청산 규칙은 없음 · 손절이 가까우면 레버리지가 높아질 수 있음",
+                "손절을 매매법 자기 무효화 가격에 두면 나은가")
     if r is not None and tp == X.ULAD:
         cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
         when = ("그 매매법이 반대 방향 진입 신호를 내면(= 구조가 반대로 바뀌었다고 스스로 확신하면)" if r["family"] == "F3" else
@@ -512,6 +517,9 @@ def _owner_words(e: dict) -> tuple:
         if r["family"] == "F11" and r.get("d") is not None:
             return ("빠른 손절", f"{base} 손실이 손절 거리의 {_fmt(r['d'] * 100)}% 넘게 났을 때만 다음 분 시장가로 청산 (둘 중 하나만으로는 안 나감). 자체 구조 코드가 있는 매매법의 후보에만 있음",
                     "매매법마다 자기 구조로 확실히 무너졌을 때만 빨리 자르면 나은가")
+        if r["family"] == "F11" and e.get("own_target"):
+            return ("자체 목표", f"{base} 다음 분 시장가로 청산, 또는 그 매매법이 정한 익절 목표 가격(박스 천장·스윙 고점 등)에 닿으면 지정가로 익절(수수료 유리). 계단 잠금은 그대로. "
+                    "자체 가격 코드가 있는 7개 매매법의 후보에만 있음", "매매법 자기 익절 목표와 구조 청산을 계단에 더하면 나은가")
         if r["family"] == "F11":
             return ("매매법 판단", f"{base} 다음 분 시장가로 청산 (고정 익절 없음). 자체 구조 코드가 있는 매매법의 후보에만 있음", "매매법마다 자기 구조로 판단해 나오는 편이 나은가")
         return (("빠른 손절", f"{base} 다음 분 시장가로 청산", "구조가 무너질 때 손실을 줄이고도 승률이 버티나") if r["family"] == "F6" else
@@ -568,6 +576,13 @@ def _owner_entry(x, i: int) -> dict:
     coin = x.get("coin_of")
     if coin is not None and (not isinstance(coin, str) or not _SUFFIX_RE.match(coin) or tp is None or rule is not None):
         raise RuleConfigError(f"rule config: {where} coin_of must be the suffix of another entry (like '-ld') and needs an 'exit' (and no rule)")
+    os_, ot_ = x.get("own_stop", False), x.get("own_target", False)
+    if not isinstance(os_, bool) or not isinstance(ot_, bool):
+        raise RuleConfigError(f"rule config: {where} own_stop and own_target must be true or false")
+    if os_ and (tp != X.ULAD or rule is not None or x.get("tighten") is not None or x.get("coin_of") is not None):
+        raise RuleConfigError(f"rule config: {where} own_stop is the owners' ladder ('exit') with the first stop at the strategy's own level: no rule, no tighten, no coin twin")
+    if ot_ and (tp != X.ULAD or rule is None or rule["family"] != "F11" or x.get("tighten") is not None or x.get("coin_of") is not None):
+        raise RuleConfigError(f"rule config: {where} own_target needs the owners' ladder with an F11 rule (the strategy's own exit and its own target), no tighten, no coin twin")
     tg = x.get("tighten")
     if tg is not None and (isinstance(tg, bool) or not isinstance(tg, (int, float)) or not 0 < float(tg) <= 1 or rule is None or tp != X.ULAD):
         raise RuleConfigError(f"rule config: {where} tighten must be a number in (0, 1] (the share of the stop distance the stop narrows to) "
@@ -586,7 +601,7 @@ def _owner_entry(x, i: int) -> dict:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
          "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin,
-         "tighten": None if tg is None else float(tg)}
+         "tighten": None if tg is None else float(tg), "own_stop": os_, "own_target": ot_}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -649,6 +664,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
             exit_ = c["exit"]
             tgt = None
             er = e["rule"]
+            if (e["own_stop"] or e["own_target"]) and not native_levels_supported(c):
+                continue                                      # no own level / target for this strategy: no such account for the pick
             if er is not None and er["family"] in NATIVE_FAMILIES and not native_supported(c):
                 continue                                      # no native exit for this strategy: no such account for the pick
             if e["tp"]:
@@ -660,8 +677,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                     continue                                  # that entry made no account for this pick
                 exit_ = tgt["exit"]
             elif e["tp"]:
-                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"])
-                if (er is None and exit_ == c["exit"]) or key in seen:
+                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"], e["own_stop"], e["own_target"])
+                if (er is None and not e["own_stop"] and exit_ == c["exit"]) or key in seen:
                     continue                                  # the pick's own exit (or an earlier entry's) already: no duplicate account
                 seen[key] = e["suffix"]
             src = {"pick": pid, "owner_exit": e["suffix"], "label_ko": e["label_ko"]}
@@ -683,6 +700,9 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
             if e["tighten"] is not None:
                 a["tighten"] = e["tighten"]
                 a["ox"]["tighten"] = e["tighten"]
+            for flag in ("own_stop", "own_target"):
+                if e[flag]:
+                    a[flag] = True
             if e["weekend_off"]:
                 a["weekend_off"] = True
             if tgt is not None:
@@ -764,6 +784,18 @@ def code_version(rule: dict) -> str:
 # (a test compares this table with the two modules).
 NATIVE_COVERS = {"core": ("DOGE", "N03_ADX_GC", "N09_ALLIG_AROON", "N10_HA_PSAR", "N13_3OUTSIDE", "N19_FIB_CHOP", "OBV_S", "S4_BB_BBP"),
                  "ds": ("F10_OTE", "F11_TSOUP", "F12_MSS_DISP", "F1_PVT_DIV", "F5_BOX", "F7_RF_ONLY", "F7_RF_TRIPLE", "F9_FVG")}
+
+
+# The strategies whose own exit is an invalidation LEVEL and a TARGET fixed at the signal bar (native.py: "only N13_3OUTSIDE and N19_FIB_CHOP have a level;
+# only they have a target"; native_ds.LEVEL_STRATEGIES): the own-stop and own-target accounts exist only for their picks (a test compares with the modules).
+NATIVE_LEVELS = {"core": ("N13_3OUTSIDE", "N19_FIB_CHOP"), "ds": ("F10_OTE", "F11_TSOUP", "F1_PVT_DIV", "F5_BOX", "F9_FVG")}
+OWN_STOP_FLOOR_ATR = 0.5               # the own-level stop is never closer than this (a level a few ticks away is noise, not a stop) ...
+OWN_STOP_BUFFER_ATR = 0.1              # ... sits this far beyond the level, so the level itself does not trigger it, and is never wider than the account's cap
+
+
+def native_levels_supported(c: dict) -> bool:
+    """Whether the strategy of pick (or account) ``c`` has an invalidation level and a target at its signal bars."""
+    return c["name"] in NATIVE_LEVELS.get(c["kind"], ())
 
 
 def native_supported(c: dict) -> bool:
@@ -1233,6 +1265,8 @@ class RuleMixin:
     rx_no_entry_from: Optional[int] = None   # PREREG 11.4 item 9: from this time (ms) the account takes no new entry
     rx_weekend_off: bool = False             # owners 2026-10-12: no new entry from a signal bar closing Sat 00:00 - Mon 00:00 UTC
     rx_tighten: Optional[float] = None       # owners 2026-10-13: when the rule fires, narrow the stop to this share of the stop distance instead of closing
+    rx_own_stop: bool = False                # owners 2026-10-13: the first stop sits just beyond the strategy's own invalidation level (capped, with a floor)
+    rx_own_target: bool = False              # ... and a take-profit limit sits at the strategy's own target (F11 account, the lock kept)
 
     def submit(self, signal) -> None:
         if isinstance(signal, RuleClose):
@@ -1253,6 +1287,19 @@ class RuleMixin:
             return
         super().submit(signal)
 
+    def _own_level_stop(self, sig, bar) -> None:
+        """The first stop at the strategy's own invalidation level: the distance from the reference price to the level plus ``OWN_STOP_BUFFER_ATR``,
+        at least ``OWN_STOP_FLOOR_ATR`` and at most the account's own cap (``stop_dist``, k x ATR). A level that is missing or on the wrong side of the
+        price leaves the cap as it is. The result is written into the signal before the engine sizes the position, so the leverage rule sees it."""
+        meta = sig.meta
+        lvl, atr, cap = meta.get("native_inv"), float(sig.atr), float(meta["stop_dist"])
+        raw = float(meta.get("ref_price", bar.open))
+        src = "atr"
+        if lvl is not None and math.isfinite(float(lvl)) and atr > 0 and sig.side * (raw - float(lvl)) > 0:
+            meta["stop_dist"] = min(max(sig.side * (raw - float(lvl)) + OWN_STOP_BUFFER_ATR * atr, OWN_STOP_FLOOR_ATR * atr), cap)
+            src = "own"
+        meta.setdefault("ctx", {})["stop_src"] = src
+
     def _try_enter(self, sig, bar) -> bool:
         if self.rx_no_entry_from is not None and bar.open_time >= self.rx_no_entry_from:
             self._record(sig, "REJECTED", "no new entry from the C1 time", bar.open_time)       # an open position closes by its own rules
@@ -1260,6 +1307,8 @@ class RuleMixin:
         if self.rx_weekend_off and is_weekend(sig.ts + 1):                # the signal bar's close (Signal.ts = close - 1)
             self._record(sig, "REJECTED", WEEKEND_REASON, bar.open_time)                       # an open position is managed as usual
             return False
+        if self.rx_own_stop:
+            self._own_level_stop(sig, bar)
         ok = super()._try_enter(sig, bar)
         if ok and self.rx_rule is not None:
             p = self.position
@@ -1270,9 +1319,9 @@ class RuleMixin:
             rx["q"] = [dict(r) for r in meta.pop("rx_early", ()) if r["t"] > rx["c0"]]
             meta["rx"] = rx
             t = rx.get("tgt")
-            if (self.rx_rule["family"] in NATIVE_FAMILIES and self.rx_rule["mode"] == "b" and t is not None
-                    and (t - p.entry_price) * p.side > 0):
-                p.tp_price = float(t)               # F11.b / F12.b: the strategy's own target as a limit, without the lock (PREREG C6, C8)
+            if (t is not None and (t - p.entry_price) * p.side > 0 and (
+                    (self.rx_rule["family"] in NATIVE_FAMILIES and self.rx_rule["mode"] == "b") or self.rx_own_target)):
+                p.tp_price = float(t)               # F11.b / F12.b: the strategy's own target as a limit, without the lock (PREREG C6, C8); own_target: with the lock
         return ok
 
     def _rx_decide(self, p, rx) -> bool:
@@ -1377,10 +1426,11 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     rule, name, size = a.get("rule") or NO_RULE, a["exit"], a.get("size", 1.0)
     weekend = bool(a.get("weekend_off"))
     if rule.get("family") is None:
-        if not weekend:
+        if not weekend and not a.get("own_stop"):
             return X.make_engine(name, brackets, specs, book=a["id"], size=size)
-        e = _lock_engine(a, brackets, specs)                               # the plain engine of the exit, with the weekend gate
-        e.rx_weekend_off = True
+        e = _lock_engine(a, brackets, specs)                               # the plain engine of the exit, with the weekend gate and / or the own-level stop
+        e.rx_weekend_off = weekend
+        e.rx_own_stop = bool(a.get("own_stop"))
         return e
     if rule["family"] in LOCK_FAMILIES:                                    # F13: another exit of candleague.exits, the plain engine with the C1 gate
         e = _lock_engine(a, brackets, specs)
@@ -1394,6 +1444,7 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     elif name.startswith(X.ULAD + "|"):
         e = RuleUserLadder(st, brackets, symbol_specs=specs, book=a["id"])
         e.rx_tighten = a.get("tighten")
+        e.rx_own_target = bool(a.get("own_target"))
     elif s["ladder"] and s["tp_kind"] == X.TP_STRUCT:
         e = RuleLadderEngine(st, brackets, symbol_specs=specs, struct=True, book=a["id"])
     elif s["ladder"] and s["tp_kind"] == X.TP_R:
@@ -1481,7 +1532,7 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                 rule, spec = a["rule"], X.spec(exit_name(a))
                 decides = rule["family"] not in (None,) + LOCK_FAMILIES        # F13 makes no decision at a chart close: no seed, no record
                 nat = None
-                if rule["family"] in NATIVE_FAMILIES:
+                if rule["family"] in NATIVE_FAMILIES or a.get("own_stop") or a.get("own_target"):
                     if key not in natc:
                         natc[key] = native_arrays(a, sym, df, close, lo, sh, frames.get("BTCUSDT"))
                     nat = natc[key]
@@ -1498,10 +1549,10 @@ def chunk_rule(lib, source, accts: list[dict], symbols: Iterable[str], start: in
                         meta["style"] = f"rule:{rule['id']}"
                     if decides:
                         meta["rx0"] = entry_seed(pack, rule, i, s, nat)
-                        if nat is not None:             # the strategy's level and target (mirrored at the fill for a flip: new_rx)
-                            k0 = "l" if s0 > 0 else "s"
-                            meta["native_inv"], meta["native_tgt"], meta["native_s"] = (
-                                _fin(nat["lvl"][k0][i]), _fin(nat["tgt"][k0][i]), s0)
+                    if nat is not None:                 # the strategy's level and target (mirrored at the fill for a flip: new_rx)
+                        k0 = "l" if s0 > 0 else "s"
+                        meta["native_inv"], meta["native_tgt"], meta["native_s"] = (
+                            _fin(nat["lvl"][k0][i]), _fin(nat["tgt"][k0][i]), s0)
                     sig = Signal(ts=int(close[i]) - 1, symbol=sym, timeframe=tf, strategy_id=a["name"], side=s,
                                  stop_price=0.0, tier="best", atr=at, meta=meta)
                     by_close.setdefault(int(close[i]), []).append((a["id"], sig))
