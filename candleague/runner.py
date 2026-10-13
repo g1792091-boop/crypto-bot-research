@@ -669,6 +669,14 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
             doc["risk"] = RV.risk_views(book, rows, lu, EQUITY, ds_money)
         except Exception as exc:  # noqa: BLE001
             doc["risk_error"] = f"{type(exc).__name__}: {exc}"[:200]
+        # ... and the 실제 비용 (costview) / 신호 (signalview) / 알림 기록 (the notifier's telegram.json) blocks; each fails alone into doc["<name>_error"]
+        from . import costview as CV, notify as NT, signalview as SV
+        for key, build in (("costs", lambda: CV.cost_views(book, rows, lu, EQUITY, ds_money)), ("signals", lambda: SV.signal_views(book, rows, lu, now_ms, ds_money)),
+                           ("telegram", lambda: NT.read_log(snap))):
+            try:
+                doc[key] = build()
+            except Exception as exc:  # noqa: BLE001
+                doc[f"{key}_error"] = f"{type(exc).__name__}: {exc}"[:200]
         # ... and the exploratory 조건별 성적 (summary.conditions_views): where does a structure work? It reads the stored trades of the four kinds it
         # compares (their entry stamps g1 / g2 live in the stored context, which closed_trades leaves out) and never decides anything
         try:                                  # an exploratory screen must never stop the snapshot: on a failure the key is simply absent ("데이터 준비 중")

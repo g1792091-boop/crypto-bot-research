@@ -1,0 +1,14 @@
+/* 타임라인 (js/screens/timeline.js): small additions on top of kinds.css. Class prefix tl-, scoped to the screen's own `.scr.kd`; colours only from the
+   tokens (both skins), font sizes only var(--t-*). A coming day says 예정 and a passed one 지남 in words; colour is never the only sign. */
+
+.scr.kd .tl-tbl td { vertical-align: top; }
+.scr.kd .tl-tbl td.tl-x { white-space: normal; min-width: 14em; }
+.scr.kd .tl-tbl td.tl-t { white-space: nowrap; }
+.scr.kd .tl-s { display: block; margin-top: 2px; color: var(--muted); font-size: var(--t-2xs); font-weight: 500; }
+.scr.kd .tl-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.scr.kd .tl-acct { color: var(--accent); font-size: var(--t-xs); overflow-wrap: anywhere; text-decoration: underline; }
+.scr.kd .tl-list { list-style: none; margin: 0; padding: 0; }
+.scr.kd .tl-item .kd-rtext { margin: 6px 0 0; }
+.scr.kd .tl-a { margin: 6px 0 0; }
+.scr.kd .tl-coming td:first-child, .scr.kd .tl-item.tl-coming { box-shadow: inset 3px 0 0 var(--warn); }
+.scr.kd .tl-hero .dl-vbig { font-size: var(--t-lg); line-height: 1.4; letter-spacing: -.01em; }

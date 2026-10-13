@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -242,11 +243,69 @@ def band_text(r: dict, b: dict, now_ms: int) -> str:
                       f"{NAME} · 종이 매매 (실제 돈 아님)", "", f"{_kst(now_ms)} KST"])
 
 
+# ---------------------------------------------------------------- 알림 기록 (the 알림 기록 screen): the last messages this notifier sent
+TG_FILE = "telegram.json"             # in the snapshot dir, next to league.json; the engine writes it, the dashboard serves it (doc["telegram"])
+TG_KEEP = 50                          # messages kept
+TG_CAP = 4000                         # characters kept of one message (Telegram's own limit is 4096)
+TG_TITLE = 120
+_CTRL = re.compile(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
+_TOKEN = re.compile(r"\b\d{6,}:[A-Za-z0-9_-]{25,}\b")      # a bot token has this shape; the league's texts never carry one, this is a belt and braces
+TG_KINDS = (("🚨", "bust"), ("🔄", "start"), ("⚠", "alert"), ("📊", "summary"))
+
+
+def clean_text(text) -> str:
+    """A message as it is stored: text only, control characters (except line breaks) removed, a token-shaped string blanked, at most TG_CAP characters."""
+    s = _TOKEN.sub("[숨김]", _CTRL.sub("", str(text if text is not None else "").replace("\r", "")))
+    return s[:TG_CAP]
+
+
+def message_kind(text: str) -> str:
+    """summary / start / bust / alert by the emoji the message starts with (anything else: alert)."""
+    head = str(text or "").lstrip()
+    return next((k for e, k in TG_KINDS if head.startswith(e)), "alert")
+
+
+def read_log(snap: Optional[str]) -> Optional[dict]:
+    """{"cap", "messages": [{ms, kind, title, text}, newest first]} from the snapshot dir's telegram.json; None when absent or unreadable."""
+    try:
+        with open(os.path.join(snap, TG_FILE)) as fh:
+            raw = json.load(fh)
+        msgs = [m for m in raw["messages"] if isinstance(m, dict) and isinstance(m.get("ms"), (int, float)) and isinstance(m.get("text"), str)]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return {"cap": TG_KEEP, "messages": [{"ms": int(m["ms"]), "kind": str(m.get("kind") or "alert"), "title": clean_text(m.get("title"))[:TG_TITLE],
+                                          "text": clean_text(m["text"])} for m in reversed(msgs[-TG_KEEP:])]}
+
+
+def record_sent(snap: Optional[str], text: str, now_ms: int) -> bool:
+    """Append one sent text to telegram.json (the last TG_KEEP, written atomically through runner._write). Never raises: False when it could not
+    be written (no snapshot dir, a full disk); a failure here must not stop the league or the other chats."""
+    try:
+        if not snap or not os.path.isdir(snap):
+            return False
+        from .runner import _write
+        old = []
+        try:
+            with open(os.path.join(snap, TG_FILE)) as fh:
+                old = [m for m in json.load(fh)["messages"] if isinstance(m, dict)]
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+        body = clean_text(text)
+        title = body.split("\n", 1)[0].strip()[:TG_TITLE]
+        old.append({"ms": int(now_ms), "kind": message_kind(body), "title": title, "text": body})
+        _write(snap, TG_FILE, {"v": 1, "messages": old[-TG_KEEP:]})
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"{TAG} telegram log failed: {type(exc).__name__}", flush=True)
+        return False
+
+
 class Notifier:
     """Decides what to send after each pass; remembers what it sent in the league database (kv)."""
 
-    def __init__(self, conn, sender: Optional[Callable[[str], None]] = None):
+    def __init__(self, conn, sender: Optional[Callable[[str], None]] = None, snap: Optional[str] = None):
         self.conn = conn
+        self.snap = snap or os.environ.get("CANDLEAGUE_SNAP") or "/var/lib/candleague/snap"      # where telegram.json goes (the runner's --snap)
         token = os.environ.get("CANDLEAGUE_TG_TOKEN")
         chats = [c.strip() for c in os.environ.get("CANDLEAGUE_TG_CHAT", "").split(",") if c.strip()][:4]
 
@@ -304,6 +363,7 @@ class Notifier:
             for text in out:
                 try:
                     self.sender(text)
+                    record_sent(self.snap, text, now_ms)
                 except Exception as exc:  # noqa: BLE001  a Telegram outage never stops the league
                     print(f"[후보 리그] telegram failed: {type(exc).__name__}", flush=True)
         return out

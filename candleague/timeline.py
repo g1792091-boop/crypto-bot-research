@@ -27,7 +27,7 @@ from typing import Optional
 from .riskview import COIN_TWIN, CONTROL, LIVE, _coin, _name, _num, _shown
 
 CAP = 60
-MAX_LIQ = 20
+MAX_LIQ = 10
 MAX_BUST = 10
 FOCUS = (LIVE, CONTROL, COIN_TWIN[LIVE], COIN_TWIN[CONTROL])
 SIDE_KO = {1: "롱", -1: "숏"}

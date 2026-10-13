@@ -1,0 +1,11 @@
+/* 데이터 점검 (js/screens/dataq.js): small additions on top of kinds.css. Class prefix dq-, scoped to the screen's own `.scr.kd`; colours only from the
+   tokens (both skins), font sizes only var(--t-*). The result of a check is a written word in a pill, never colour alone. */
+
+.scr.kd .dq-tbl td { vertical-align: top; }
+.scr.kd .dq-tbl td.dq-d { white-space: normal; min-width: 14em; color: var(--ink-2); font-size: var(--t-xs); }
+.scr.kd .dq-tbl td.num { white-space: normal; }
+.scr.kd .kd-kcard.dq-bad { box-shadow: inset 3px 0 0 var(--down); }
+.scr.kd .dq-hero.dq-check { box-shadow: inset 4px 0 0 var(--down); }
+.scr.kd .dq-hero.dq-late { box-shadow: inset 4px 0 0 var(--warn); }
+.scr.kd .dq-hero .dl-vbig { font-size: var(--t-lg); line-height: 1.4; letter-spacing: -.01em; }
+.scr.kd .dq-todo .kd-list { margin: 0; }

@@ -98,7 +98,7 @@ def _headline(kinds: list) -> str:
             continue
         up = sum(r["diff"] > 0 for r in ok)
         bits.append(f"{k['name_ko']}: 거래 {MIN_N}건 이상인 코인 {len(ok)}개 중 {up}개에서 거래당 평균이 동전 짝보다 높음")
-    return " · ".join(bits)
+    return "; ".join(bits)
 
 
 def coin_views(book: dict, rows: list, lineup: Optional[list], equity0: Optional[float] = None, ds_money: bool = False) -> dict:

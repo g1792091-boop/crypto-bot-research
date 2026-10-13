@@ -1,0 +1,17 @@
+/* 코인별 (js/screens/coins.js): small additions on top of kinds.css (cards, tables, legend). Class prefix cn-, scoped to the screen's own `.scr.kd`;
+   colours only from the tokens (both skins), font sizes only var(--t-*). "적음" is always a written pill, never colour alone. */
+
+.scr.kd .cn-tbl td.num { vertical-align: top; }
+.scr.kd .cn-tbl td.l.kd-nm { min-width: 6em; }
+.scr.kd .cn-s { display: block; margin-top: 2px; color: var(--muted); font-size: var(--t-2xs); font-weight: 500; line-height: 1.4; white-space: normal; }
+.scr.kd .cn-few { margin-left: 6px; }
+.scr.kd .cn-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.scr.kd .cn-tags:empty { display: none; }
+.scr.kd .cn-facts { margin: 0; display: grid; gap: 6px 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scr.kd .cn-facts > div { min-width: 0; }
+.scr.kd .cn-facts dt { color: var(--muted); font-size: var(--t-xs); white-space: normal; }
+.scr.kd .cn-facts dd { margin: 2px 0 0; font-size: var(--t-sm); font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
+.scr.kd .kd-kcard.cn-thin { border-style: dashed; }
+.scr.kd .cn-card .up { color: var(--up); }
+.scr.kd .cn-card .down { color: var(--down); }
+.scr.kd .cn-hero .dl-vbig { font-size: var(--t-lg); line-height: 1.4; letter-spacing: -.01em; }
