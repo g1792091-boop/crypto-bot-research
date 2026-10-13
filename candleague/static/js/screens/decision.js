@@ -1,10 +1,11 @@
 // #/decision 판정 (owners 10/13): the pre-registered decision protocol. After weeks of paper trading the owners must not pick the luckiest of
 // ~25 account kinds, so the rule for "who won" is fixed BEFORE the numbers are looked at: a pair-by-pair comparison on the same signals, whole
-// days resampled as one lump, a correction for testing many kinds at once (Holm), one decision on day 28 (day 14 is a first look) and three
-// more conditions (300+ pairs, both halves of the period positive, a positive mean). If nothing passes, the answer is "우위 없음" and the new
-// structures are not used for real money.
-// Top to bottom: the rule box (always, even before the data exists), the one-sentence answer with a bar to the decision day, three tables
-// (메인 vs 대조 / 필터 / 동전 짝; cards on a phone) with a verdict WORD and colour per kind, and a word list for beginners.
+// days resampled as one lump, ONE correction over only FOUR pre-registered tests (Holm), one decision on day 28 (day 14 is a first look) and
+// three more conditions (300+ pairs, both halves of the period positive, a positive mean). Every other comparison is "탐색" (reference only,
+// never a ground to decide). If nothing passes, the answer is "우위 없음" and the new structures are not used for real money.
+// Top to bottom: the rule box (always, even before the data exists), the one-sentence answer with a bar to the decision day, the four rows that
+// decide ("이것으로만 판정합니다"), then the reference rows ("참고용") as 메인 vs 대조 / 필터 / 동전 짝 (tables; cards on a phone), each with a
+// verdict WORD and colour, and a word list for beginners.
 // Data: the snapshot's ``decision`` (candleague/summary.py decision_views, written next to ``kinds`` / ``pairs`` in the owner-exit league).
 // HONESTY: a verdict word never rests on colour alone; every number may be null and then reads "—", never 0; the sentence comes from the
 // server (counts only). DeepSeek money is left out of the figures unless the money switch is on (the server does that; a note says so).
@@ -16,12 +17,14 @@ import {kindName, ppTxt, startTxt} from "./versus.js";
 
 export const css = "scr/kinds.css";
 
-export const DEFAULTS = {observe_day: 14, decide_day: 28, min_pairs: 300, alpha: 0.05, ci_level: 0.9};
-/** The six rules as the server writes them (candleague/summary.decision_rules_ko, same order and words); used when the snapshot has none. */
+export const DEFAULTS = {observe_day: 14, decide_day: 28, min_pairs: 300, alpha: 0.05, ci_level: 0.9, family_size: 4};
+/** The seven rules as the server writes them (candleague/summary.decision_rules_ko, same order and words); used when the snapshot has none. */
 export const RULES_DEFAULT = [
   "거래당 순수익 차이: 같은 신호로 들어간 거래 한 쌍씩, 새 방식의 순수익(ROE)에서 비교 대상의 순수익을 뺀 값의 평균을 봅니다.",
   "같은 날 거래는 묶어서 계산: 같은 날 끝난 거래는 같은 시장을 겪어 서로 닮았으므로, 하루를 한 덩어리로 보고 우연을 계산합니다.",
-  `우연 보정: 시험이 여럿이라 운 좋은 하나가 나오기 쉬워서(홀름 보정) p를 키워서 봅니다. 보정 후 p가 ${DEFAULTS.alpha}보다 작아야 합니다.`,
+  "판정에 쓰는 것은 4개뿐: ① 빠른 손절 vs 대조, ② 빠른 손절 vs 동전 짝, ③ 대조 vs 동전 짝, ④ BTC 추세 필터가 남긴 신호 vs 버린 신호. "
+  + "나머지 종류는 참고용(탐색)이라 통과 · 실패를 매기지 않고, 그것만으로는 결정하지 않습니다.",
+  `우연 보정: 이 ${DEFAULTS.family_size}개를 함께 시험하므로 운 좋은 하나가 나오기 쉬워서(홀름 보정) p를 키워서 봅니다. 보정 후 p가 ${DEFAULTS.alpha}보다 작아야 합니다.`,
   `${DEFAULTS.decide_day}일째 한 번만 판정: ${DEFAULTS.observe_day}일째에는 숫자만 보고 아무것도 바꾸지 않습니다. 판정은 ${DEFAULTS.decide_day}일째에 딱 한 번입니다.`,
   `앞 절반과 뒤 절반이 같은 방향: 쌍이 ${DEFAULTS.min_pairs}개 이상이고, 기간의 앞 절반과 뒤 절반 모두 평균 차이가 플러스여야 통과입니다.`,
   "하나도 통과 못 하면 '우위 없음'이 결론: 새 구조는 실전에 쓰지 않습니다. 숫자를 본 뒤에 기준을 바꾸지 않습니다.",
@@ -33,6 +36,7 @@ export const VERDICT = {
   fail: {ko: "실패", cls: "bad", help: "판정일에 조건 하나라도 못 넘었습니다"},
   wait: {ko: "대기", cls: "warn", help: "판정일 전이라 미리보기입니다"},
   few: {ko: "표본 부족", cls: "thin", help: "쌍이 모자라 판단하지 않습니다"},
+  explore: {ko: "탐색", cls: "", help: "참고용 숫자입니다: 판정에 쓰지 않고, 이것만으로 결정하지 않습니다"},
 };
 export const TESTS = [
   {id: "main_vs_control", plate: "메인 vs 대조", sub: "새 청산 방법이 같은 신호에서 원래 방식(대조)보다 나은가",
@@ -59,11 +63,12 @@ export function normDecision(x) {
     phase: x.phase === "decide" ? "decide" : "observe", days: Math.max(0, num(x.days) ?? 0),
     observe: num(cp.observe_day) ?? DEFAULTS.observe_day, decide: num(cp.decide_day) ?? DEFAULTS.decide_day,
     min: num(x.min_pairs) ?? DEFAULTS.min_pairs, alpha: num(x.alpha) ?? DEFAULTS.alpha, ci: num(x.ci_level) ?? DEFAULTS.ci_level,
+    family: num(x.family_size) ?? DEFAULTS.family_size,
     observe_ms: num(x.observe_ms), decide_ms: num(x.decide_ms), dsIn: x.ds_in_stats === true,
     summary: typeof x.summary_ko === "string" ? x.summary_ko : "",
     rules: Array.isArray(x.rules_ko) && x.rules_ko.length ? x.rules_ko.map(String) : null,
     counts: {pass: num(c.pass) ?? 0, fail: num(c.fail) ?? 0, wait: num(c.wait) ?? 0, few: num(c.few) ?? 0},
-    rows: x.rows.filter((r) => r && typeof r === "object"),
+    rows: x.rows.filter((r) => r && typeof r === "object").map((r) => ({...r, primary: r.primary === true})),
   };
 }
 /**
@@ -146,44 +151,70 @@ function hero(D) {
     h("p", {class: "note"}, "모의 거래 기록입니다. 앞으로를 약속하는 숫자가 아닙니다. 통과하기 전에는 실전에 쓰지 않습니다."));
 }
 
-// ---------------------------------------------------------------- one test: a table (or cards on a phone)
-function tableView(rows, D) {
+// ---------------------------------------------------------------- rows: a table (or cards on a phone)
+const TEST_BY_ID = Object.fromEntries(TESTS.map((t) => [t.id, t]));
+/** The p of a row: the corrected one for a deciding row, the raw one for a reference row (which is not corrected). */
+const pOf = (r) => (r.primary ? r.p_holm : r.p_one_sided);
+const pHead = (primary) => (primary ? "p (보정 후)" : "p (보정 전)");
+const pTitle = (primary) => (primary
+  ? "작을수록 우연일 가능성이 낮음. 4개를 함께 시험한 것을 감안해 보정한 값"
+  : "참고용이라 보정하지 않은 값입니다. 비교가 많아 작게 나와도 우연일 수 있습니다");
+function nameCell(r) {
+  const t = TEST_BY_ID[r.test];
+  return h("td", {class: "l kd-nm"}, h("div", {class: "kd-nmh"}, h("b", null, kindName(r)), r.suffix === "-fq" ? ui.pill("실전 후보", "accent") : null),
+    h("small", {class: "muted"}, `${t ? `${t.plate} · ` : ""}${r.suffix} · ${vsText(r)}`));
+}
+function tableView(rows, D, primary) {
   const body = [];
   for (const r of rows) {
-    body.push(h("tr", {class: ["kd-row", `kd-v-${r.verdict}`], dataset: {verdict: r.verdict, suffix: r.suffix, test: r.test}},
-      h("td", {class: "l kd-nm"}, h("div", {class: "kd-nmh"}, h("b", null, kindName(r)), r.suffix === "-fq" ? ui.pill("실전 후보", "accent") : null),
-        h("small", {class: "muted"}, `${r.suffix} · ${vsText(r)}`)),
+    body.push(h("tr", {class: ["kd-row", `kd-v-${r.verdict}`], dataset: {verdict: r.verdict, suffix: r.suffix, test: r.test, primary: r.primary ? "1" : "0"}},
+      nameCell(r),
       h("td", null, verdictPill(r, true)),
       h("td", {class: "num"}, sampleEl(r, D)),
       h("td", {class: "num"}, diffEl(r.mean_diff)),
       h("td", {class: "num"}, h("span", {class: "kd-v"}, ciTxt(r.ci_lo, r.ci_hi))),
-      h("td", {class: "num"}, h("span", {class: ["kd-v", num(r.p_holm) != null && r.p_holm < D.alpha ? "up" : ""]}, pTxt(r.p_holm)))));
+      h("td", {class: "num"}, h("span", {class: ["kd-v", r.primary && num(r.p_holm) != null && r.p_holm < D.alpha ? "up" : ""]}, pTxt(pOf(r))))));
     body.push(h("tr", {class: "kd-reason"}, h("td", {class: "l", colspan: "6", style: {color: "var(--ink-2)", fontSize: "var(--t-xs)", lineHeight: "1.6", whiteSpace: "normal"}},
       num(r.half1) == null && num(r.half2) == null ? null : h("span", {class: "muted"}, `${halvesTxt(r)} · `), reasonOf(r))));
   }
   const th = (label, title) => h("th", {scope: "col", title}, label);
-  return h("div", {class: "tbl-wrap"}, h("table", {class: "tbl kd-tbl"}, h("caption", {class: "sr"}, "판정 표"),
-    h("thead", null, h("tr", null, h("th", {class: "l", scope: "col"}, "종류"), th("판정", "통과 · 실패 · 대기 · 표본 부족"), th("표본", "비교한 쌍(거래) 수"),
+  return h("div", {class: "tbl-wrap"}, h("table", {class: "tbl kd-tbl"}, h("caption", {class: "sr"}, primary ? "판정에 쓰는 4개의 표" : "참고용 표"),
+    h("thead", null, h("tr", null, h("th", {class: "l", scope: "col"}, "종류"), th("판정", "통과 · 실패 · 대기 · 표본 부족 · 탐색"), th("표본", "비교한 쌍(거래) 수"),
       th("평균 차이", "거래 하나당 순수익 차이(%p, 비교 대상보다 얼마나 나은가)"), th(`구간 (${Math.round(D.ci * 100)}%)`, "우연을 감안한 범위: 0을 포함하면 이겼다고 말하기 어렵습니다"),
-      th("p (보정 후)", "작을수록 우연일 가능성이 낮음. 여러 개를 함께 시험한 것을 감안해 보정한 값"))),
+      th(pHead(primary), pTitle(primary)))),
     h("tbody", null, body)));
 }
-function cardView(rows, D) {
-  return h("div", {class: "kd-cards"}, rows.map((r) => h("article", {class: ["kd-kcard", `kd-v-${r.verdict}`], "aria-label": kindName(r), dataset: {verdict: r.verdict, suffix: r.suffix, test: r.test}},
-    h("div", {class: "kd-kh"}, verdictPill(r, true), h("b", null, kindName(r)), r.suffix === "-fq" ? ui.pill("실전 후보", "accent") : null,
-      h("small", {class: "muted"}, `${r.suffix} · ${vsText(r)}`)),
-    h("div", {class: "kd-kbig"}, h("span", {class: "kd-kl"}, "평균 차이 (거래 하나당)"), h("b", {class: "num"}, diffEl(r.mean_diff, true))),
-    h("dl", {class: "kd-kgrid"},
-      h("div", null, h("dt", null, "표본"), h("dd", {class: "num"}, sampleEl(r, D))),
-      h("div", null, h("dt", null, `구간 (${Math.round(D.ci * 100)}%)`), h("dd", {class: "num"}, ciTxt(r.ci_lo, r.ci_hi))),
-      h("div", null, h("dt", null, "p (보정 후)"), h("dd", {class: "num"}, pTxt(r.p_holm))),
-      h("div", null, h("dt", null, "앞 · 뒤 절반"), h("dd", {class: "num"}, halvesTxt(r).replace("앞 절반", "앞").replace("뒤 절반", "뒤")))),
-    h("p", {class: "note"}, reasonOf(r)))));
+function cardView(rows, D, primary) {
+  return h("div", {class: "kd-cards"}, rows.map((r) => h("article", {class: ["kd-kcard", `kd-v-${r.verdict}`], "aria-label": kindName(r),
+    dataset: {verdict: r.verdict, suffix: r.suffix, test: r.test, primary: r.primary ? "1" : "0"}},
+  h("div", {class: "kd-kh"}, verdictPill(r, true), h("b", null, kindName(r)), r.suffix === "-fq" ? ui.pill("실전 후보", "accent") : null,
+    h("small", {class: "muted"}, `${(TEST_BY_ID[r.test] || {plate: ""}).plate} · ${r.suffix} · ${vsText(r)}`)),
+  h("div", {class: "kd-kbig"}, h("span", {class: "kd-kl"}, "평균 차이 (거래 하나당)"), h("b", {class: "num"}, diffEl(r.mean_diff, true))),
+  h("dl", {class: "kd-kgrid"},
+    h("div", null, h("dt", null, "표본"), h("dd", {class: "num"}, sampleEl(r, D))),
+    h("div", null, h("dt", null, `구간 (${Math.round(D.ci * 100)}%)`), h("dd", {class: "num"}, ciTxt(r.ci_lo, r.ci_hi))),
+    h("div", null, h("dt", null, pHead(primary)), h("dd", {class: "num"}, pTxt(pOf(r)))),
+    h("div", null, h("dt", null, "앞 · 뒤 절반"), h("dd", {class: "num"}, halvesTxt(r).replace("앞 절반", "앞").replace("뒤 절반", "뒤")))),
+  h("p", {class: "note"}, reasonOf(r)))));
 }
-function testCard(t, rows, D, view) {
-  return ui.card({plate: t.plate, sub: t.sub, cls: "kd-tcard", id: `dc-${t.id}`},
-    h("p", {class: "note"}, t.how),
-    rows.length ? (view === "card" ? cardView(rows, D) : tableView(rows, D)) : ui.none(t.none));
+const rowsView = (rows, D, view, primary) => (view === "card" ? cardView(rows, D, primary) : tableView(rows, D, primary));
+
+/** The four rows that decide, first. */
+function primaryCard(rows, D, view) {
+  return ui.card({plate: `이것으로만 판정합니다 (${fmt.int(rows.length || D.family)}개)`, sub: "미리 정한 4가지 비교 · 통과 · 실패는 여기서만 매깁니다", cls: "kd-tcard kd-primary", id: "dc-primary"},
+    h("p", {class: "note"}, `이 ${fmt.int(D.family)}개를 함께 시험하므로 운 좋은 하나가 나오는 것을 막으려고 p를 보정해서 봅니다. 아래 ‘참고용’ 비교는 판정에 쓰지 않습니다.`),
+    rows.length ? rowsView(rows, D, view, true) : ui.none("판정에 쓰는 비교가 아직 없습니다"),
+    ui.disclosure("세 가지 비교 방법 보기", h("div", {class: "stack tight"}, TESTS.map((t) => h("p", {class: "note"}, h("b", null, `${t.plate}: `), t.how)))));
+}
+/** The rest, for reference only. */
+function referenceCards(rows, D, view) {
+  const known = new Set(TESTS.map((t) => t.id));
+  const head = ui.card({plate: "참고용 (판정에 쓰지 않음)", sub: `${fmt.int(rows.length)}개 · 탐색`, cls: "kd-ref", id: "dc-reference"},
+    h("p", {class: "note"}, "아래 비교는 궁금해서 같이 보는 숫자입니다. 통과 · 실패를 매기지 않고, 비교가 많아 우연히 좋아 보이는 것이 섞여 있으므로 이것만으로는 실전 결정의 근거가 되지 않습니다."),
+    rows.length ? null : ui.none("참고용 비교가 아직 없습니다"));
+  const groups = [...TESTS.map((t) => [t, rows.filter((r) => r.test === t.id)]), [{id: "other", plate: "그 밖의 비교", sub: "", how: ""}, rows.filter((r) => !known.has(r.test))]];
+  return [head, groups.filter(([, rs]) => rs.length).map(([t, rs]) => ui.card({plate: `${t.plate} (참고용)`, sub: t.sub, cls: "kd-tcard", id: `dc-${t.id}`},
+    t.how ? h("p", {class: "note"}, t.how) : null, rowsView(rs, D, view, false)))];
 }
 
 function legend(D) {
@@ -194,9 +225,11 @@ function legend(D) {
       h("div", null, dt("fail"), h("dd", null, `${D.decide}일째 이후에 위 조건 중 하나라도 못 넘은 것입니다. 이유 줄에 어느 조건인지 씁니다.`)),
       h("div", null, dt("wait"), h("dd", null, `${D.decide}일째 전입니다. 지금은 미리보기이고 통과 · 실패를 말하지 않습니다.`)),
       h("div", null, dt("few"), h("dd", null, `비교할 쌍(거래)이 ${fmt.int(D.min)}개보다 적습니다. 적은 표본은 운일 수 있어 판단하지 않습니다.`)),
+      h("div", null, dt("explore"), h("dd", null, "판정에 쓰지 않는 참고 숫자입니다. 통과 · 실패를 매기지 않고, 이것만으로는 결정하지 않습니다.")),
       h("div", null, h("dt", null, "평균 차이"), h("dd", null, "거래 하나당 순수익(증거금 대비)의 평균 차이입니다. %p는 퍼센트 포인트. 플러스면 앞에 적은 쪽이 낫습니다.")),
       h("div", null, h("dt", null, "구간"), h("dd", null, `우연을 감안했을 때 평균 차이가 ${Math.round(D.ci * 100)}% 확률로 들어 있는 범위입니다. 0을 포함하면 이겼다고 말하기 어렵습니다.`)),
-      h("div", null, h("dt", null, "p (보정 후)"), h("dd", null, "‘실제로는 차이가 없는데 이런 숫자가 우연히 나올’ 가능성입니다. 작을수록 우연이 아닙니다. 종류를 많이 시험하므로 그만큼 크게 고쳐서(홀름 보정) 보여 줍니다."))));
+      h("div", null, h("dt", null, "p (보정 후)"), h("dd", null, "‘실제로는 차이가 없는데 이런 숫자가 우연히 나올’ 가능성입니다. 작을수록 우연이 아닙니다. 판정에 쓰는 4개를 함께 시험하므로 그만큼 크게 고쳐서(홀름 보정) 보여 줍니다.")),
+      h("div", null, h("dt", null, "p (보정 전)"), h("dd", null, "참고용 비교의 p입니다. 보정하지 않았으니 작게 나와도 우연일 수 있습니다."))));
 }
 function closing(D, d) {
   const wallet = Number(d && d.equity0) > 0 ? `모든 계좌는 ${startTxt(d)}에서 시작하는 모의 계좌입니다 (가상 돈). ` : "모의 계좌입니다 (가상 돈). ";
@@ -231,12 +264,10 @@ export async function mount(el, ctx) {
     if (g.state !== "ok") { put(root, ruleBox(null), missingBox(g, d)); return; }
     const D = g.D;
     seg.set(st.view);
-    const by = (id) => D.rows.filter((r) => r.test === id);
-    const known = new Set(TESTS.map((t) => t.id));
     put(root, ruleBox(D), hero(D),
       h("div", {class: "row wrap", style: {justifyContent: "flex-end"}}, seg),
-      TESTS.map((t) => testCard(t, by(t.id), D, st.view)),
-      D.rows.some((r) => !known.has(r.test)) ? ui.card({plate: "그 밖의 비교"}, st.view === "card" ? cardView(D.rows.filter((r) => !known.has(r.test)), D) : tableView(D.rows.filter((r) => !known.has(r.test)), D)) : null,
+      primaryCard(D.rows.filter((r) => r.primary), D, st.view),
+      referenceCards(D.rows.filter((r) => !r.primary), D, st.view),
       legend(D), closing(D, d));
   }
   ctx.onLeague((d) => { st.d = d; paint(); });

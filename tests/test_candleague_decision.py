@@ -4,7 +4,8 @@
   * the three tests by hand on tiny examples: 메인 vs 대조 (pairs by symbol + side + entry time, the day as the unit, the halves), a gate
     kind's kept vs dropped trades (and the gate account that is busy at another time), a real kind against its coin twin (paired WITHOUT the side);
   * the day-cluster bootstrap: deterministic (a constant seed), the number of days is the unit, p is never 0;
-  * Holm-Bonferroni on a known set, and over the whole family of rows;
+  * Holm-Bonferroni on a known set, and over the FOUR primary rows only (every other row is exploratory: verdict "explore", no Holm, never
+    pass / fail);
   * the verdict rules: few (n < 300), wait (a preview before day 28), pass, fail (each failed condition named), the halves rule;
   * the one-sentence summary, an empty book, a league without lineup, NaN / None ROEs;
   * the DeepSeek money rule (D11) both ways: with ds_money off nothing of a DeepSeek account reaches any number, with it on it does;
@@ -106,12 +107,13 @@ def test_main_vs_control_by_hand(monkeypatch):
     assert r["same_sign_halves"] is True
     assert r["ci_lo"] <= r["mean_diff"] <= r["ci_hi"] and r["ci_lo"] > 0
     assert 1 / (SM.N_BOOT + 1) <= r["p_one_sided"] < 0.02                           # a resample of six days is rarely not positive (it needs the -5 day often)
-    assert r["p_holm"] == pytest.approx(min(1.0, len(d["rows"]) * r["p_one_sided"]), abs=1e-5)     # rank 1 of the whole family
+    assert r["primary"] is True and d["family_size"] == SM.FAMILY_SIZE == 4
+    assert r["p_holm"] == pytest.approx(min(1.0, 4 * r["p_one_sided"]), abs=1e-5)  # rank 1 of the family of four (the other three have no data: p = 1)
     assert r["verdict"] == "pass" and r["reason_ko"].startswith("통과")
-    # a main kind without accounts is a row too: nothing to compare, 표본 부족(0/3)
+    # another 메인 kind is a row too, but an exploratory one: always "explore", no Holm, and the reason says it cannot justify a decision
     nv = rows_by(d, "main_vs_control")["-nv"]
-    assert (nv["n"], nv["mean_diff"], nv["p_one_sided"], nv["p_holm"], nv["verdict"]) == (0, None, None, None, "few")
-    assert nv["reason_ko"] == "표본 부족(0/3)" and nv["same_sign_halves"] is False
+    assert (nv["n"], nv["mean_diff"], nv["p_one_sided"], nv["p_holm"], nv["verdict"], nv["primary"]) == (0, None, None, None, "explore", False)
+    assert nv["reason_ko"].startswith("탐색용: 판정에 쓰지 않습니다") and "근거가 될 수 없습니다" in nv["reason_ko"] and nv["same_sign_halves"] is False
     # the control is not tested against itself, a research kind (gb) is not a 메인 kind
     assert "-ld" not in rows_by(d, "main_vs_control") and "-gb" not in rows_by(d, "main_vs_control")
 
@@ -197,9 +199,9 @@ def test_filter_kept_vs_dropped_by_hand(monkeypatch):
     small(monkeypatch)
     d = run(filter_example(), SPEC_F)
     f = rows_by(d, "filter_kept_vs_dropped")
-    assert list(f) == ["-ldt", "-fqt"]                                              # every gate kind (label starts 필터), in the lineup's order
+    assert list(f) == ["-ldt", "-fqt"]                                              # every gate kind (label starts 필터), the primary one first
     r = f["-ldt"]
-    assert (r["vs_suffix"], r["group"]) == ("-ld", "research")
+    assert (r["vs_suffix"], r["group"], r["primary"], f["-fqt"]["primary"]) == ("-ld", "research", True, False)
     assert (r["n_kept"], r["n_dropped"], r["n"]) == (3, 5, 3)                       # n is the smaller group
     assert r["mean_kept"] == pytest.approx(0.20) and r["mean_dropped"] == pytest.approx(0.02) and r["mean_diff"] == pytest.approx(0.18)
     assert r["n_days"] == 8
@@ -207,11 +209,13 @@ def test_filter_kept_vs_dropped_by_hand(monkeypatch):
     assert r["half1"] == pytest.approx(0.15 - (-0.15)) and r["half2"] == pytest.approx(0.30 - 0.4 / 3)
     assert r["same_sign_halves"] is True
     assert "근사 비교" in r["reason_ko"] and "다른 때 포지션 중" in r["reason_ko"]       # the gate account can be busy at another time
+    assert r["verdict"] == "pass" or r["verdict"] == "fail"                         # the primary gate row is judged (day 30, min pairs 3)
     # the fq gate kind is compared with the fq kind
     q = f["-fqt"]
     assert q["vs_suffix"] == "-fq" and (q["n_kept"], q["n_dropped"], q["n"]) == (1, 1, 1) and q["mean_diff"] == pytest.approx(0.80)
     assert q["half1"] is None and q["half2"] is None and q["same_sign_halves"] is False       # each half holds only kept or only dropped
-    assert q["verdict"] == "few" and q["reason_ko"].startswith("표본 부족(1/3)")
+    assert q["verdict"] == "explore" and q["reason_ko"].startswith("탐색용: 판정에 쓰지 않습니다") and "표본도 적음(1/3)" in q["reason_ko"]
+    assert q["p_holm"] is None and "근사 비교" in q["reason_ko"]
     # p comes from the day-cluster bootstrap of the difference of two means
     assert 0 < r["p_one_sided"] <= 1 and r["ci_lo"] < r["mean_diff"] < r["ci_hi"]
 
@@ -274,13 +278,33 @@ def test_vs_coin_pairs_without_the_side(monkeypatch):
     assert len(with_side) == 1 and r["n"] == 5
 
 
-def test_vs_coin_rows_exist_only_when_both_kinds_are_in_the_lineup(monkeypatch):
+def test_the_four_primary_rows_exist_even_when_their_kinds_do_not(monkeypatch):
+    """A primary kind (or its coin twin) missing from the lineup or the book still has its row: n = 0, verdict few (wait is for n >= 300)."""
     small(monkeypatch)
     lu = [k for k in LU if k["suffix"] != "-fqc"]
-    c = rows_by(run(coin_example(), {P1: ["fq", "ld", "ldc"]}, lineup=lu), "vs_coin")
-    assert list(c) == ["-ld"]
-    lu = [k for k in LU if k["suffix"] not in ("-fqc", "-ldc")]
-    assert rows_by(run(coin_example(), {P1: ["fq", "ld"]}, lineup=lu), "vs_coin") == {}
+    d = run(coin_example(), {P1: ["fq", "ld", "ldc"]}, lineup=lu)
+    c = rows_by(d, "vs_coin")
+    assert list(c) == ["-fq", "-ld"] and c["-fq"]["n"] == 0 and c["-fq"]["verdict"] == "few" and c["-fq"]["vs_suffix"] == "-fqc" and c["-ld"]["n"] == 6
+    lu = [k for k in LU if k["suffix"] not in ("-fqc", "-ldc", "-ldt")]
+    d = run(coin_example(), {P1: ["fq", "ld"]}, lineup=lu)
+    assert [(r["test"], r["suffix"], r["n"], r["verdict"], r["primary"]) for r in d["rows"] if r["primary"]] == [
+        ("main_vs_control", "-fq", 4, "fail", True), ("vs_coin", "-fq", 0, "few", True), ("vs_coin", "-ld", 0, "few", True),
+        ("filter_kept_vs_dropped", "-ldt", 0, "few", True)]
+    assert "거래가 있는 날이 5일보다 적어" in d["rows"][0]["reason_ko"]               # four pairs on four days: no day-cluster p
+    stub = d["rows"][3]
+    assert (stub["role"], stub["label_ko"], stub["group"]) == ("ldt", None, "research") and stub["reason_ko"].startswith("표본 부족(0/3)")
+    # before day 28 a primary row with enough pairs is a preview (wait), one without is few
+    d = run(coin_example(), {P1: ["fq", "ld"]}, lineup=lu, now_day=10)
+    assert [r["verdict"] for r in d["rows"] if r["primary"]] == ["wait", "few", "few", "few"]
+
+
+def test_primary_rows_come_first_in_a_fixed_order(monkeypatch):
+    small(monkeypatch)
+    d = run(coin_example(), {P1: ["fq", "fqc", "ld", "ldc"]})
+    got = [(r["test"], r["suffix"]) for r in d["rows"]]
+    assert got[:4] == [("main_vs_control", "-fq"), ("vs_coin", "-fq"), ("vs_coin", "-ld"), ("filter_kept_vs_dropped", "-ldt")]
+    assert [r["primary"] for r in d["rows"]] == [True] * 4 + [False] * (len(got) - 4) and got[4:] == [("main_vs_control", "-nv"), ("filter_kept_vs_dropped", "-fqt")]
+    assert len(set(got)) == len(got)                                                 # no comparison twice
 
 
 # ---------------------------------------------------------------- Holm
@@ -294,21 +318,61 @@ def test_holm_on_a_known_set():
     assert all(a >= p for a, p in zip(adj, [0.0005, 0.011, 0.012, 0.2, 0.9]))
 
 
-def test_holm_is_one_family_over_all_rows(monkeypatch):
+def test_holm_runs_over_the_four_primary_rows_only(monkeypatch):
     small(monkeypatch)
     book = {**main_example(), **{k: v for k, v in filter_example().items() if not k.startswith(P1 + "-fq") and k != f"{P1}-ld"},
             **{k: v for k, v in coin_example().items() if k.endswith(("-fqc", "-ldc"))}}
     book[f"{P1}-ld"] = main_example()[f"{P1}-ld"]
-    d = run(book, {P1: ["fq", "ld", "ldt", "fqc", "ldc"], P2: ["ld", "ldt"], P3: ["ld"]})
+    spec = {P1: ["fq", "ld", "ldt", "fqc", "ldc"], P2: ["ld", "ldt"], P3: ["ld"]}
+    d = run(book, spec)
     rows = d["rows"]
-    assert {r["test"] for r in rows} == set(SM.TESTS) and d["n_tests"] == len(rows)
-    ps = [1.0 if r["p_one_sided"] is None else r["p_one_sided"] for r in rows]
-    want = SM.holm(ps)
-    got = [r["p_holm"] for r in rows]
-    for g, w, r in zip(got, want, rows):
-        assert (g is None) if r["p_one_sided"] is None else g == pytest.approx(w, abs=1e-5)
-    assert sum(r["p_one_sided"] is None for r in rows) >= 2                       # rows without a p still count in the family (as 1)
-    assert all(r["p_holm"] >= r["p_one_sided"] for r in rows if r["p_holm"] is not None)
+    prim = [r for r in rows if r["primary"]]
+    assert len(prim) == d["family_size"] == 4 and rows[:4] == prim and {r["test"] for r in prim} == set(SM.TESTS)
+    ps = [1.0 if r["p_one_sided"] is None else r["p_one_sided"] for r in prim]
+    for r, w in zip(prim, SM.holm(ps)):
+        if r["p_one_sided"] is None:
+            assert r["p_holm"] is None
+        else:
+            assert r["p_holm"] == pytest.approx(w, abs=1e-5) and r["p_holm"] >= r["p_one_sided"]
+    assert sum(r["p_one_sided"] is not None for r in prim) >= 3
+    assert all(r["p_holm"] is None for r in rows if not r["primary"])                # exploratory rows are not corrected
+    # more exploratory kinds change nothing about the primary rows (the family is pre-registered, not "everything that was tried")
+    more = LU + [kind(f"x{i}", f"메인 · 새 구조 {i}") for i in range(20)] + [kind("ldv", "필터 · 대조에 변동성")]
+    book2 = {**book, **{f"{P1}-x{i}": main_example()[f"{P1}-fq"] for i in range(20)}}
+    d2 = run(book2, {**spec, P1: spec[P1] + [f"x{i}" for i in range(20)]}, lineup=more)
+    assert d2["rows"][:4] == prim and len(d2["rows"]) == len(rows) + 21 and d2["family_size"] == 4
+    # a known set: p = .001 (rank 1), .02, .30, 1 (no data) -> .004, .06, .6, 1: only the first stays under .05
+    assert SM.holm([0.02, 0.001, 1.0, 0.30]) == pytest.approx([0.06, 0.004, 1.0, 0.6])
+
+
+def test_exploratory_rows_never_pass_or_fail():
+    """A clear winner among the other 메인 kinds (and a clear loser) is still only "explore": no p_holm, no pass, no fail, whatever the numbers."""
+    book = bulk([0.05] * 30)
+    book[f"{P1}-nv"] = [dict(t, roe=t["roe"] + 0.30) for t in book[f"{P1}-fq"]]       # nv beats the control by 35 points on every pair
+    book[f"{P1}-ldt"] = book[f"{P1}-ld"][:100]
+    book[f"{P1}-fqt"] = book[f"{P1}-fq"][:150]
+    spec = {P1: ["fq", "ld", "nv", "ldt", "fqt"]}
+    for now in (5, 20, 28, 40):
+        d = run(book, spec, now_day=now)
+        nv = rows_by(d, "main_vs_control")["-nv"]
+        assert nv["verdict"] == "explore" and nv["verdict_ko"] == "탐색" and nv["primary"] is False and nv["p_holm"] is None, now
+        assert nv["mean_diff"] == pytest.approx(0.35) and nv["n"] == 300 and nv["p_one_sided"] is not None and nv["ci_lo"] is not None      # the numbers are there
+        assert nv["reason_ko"].startswith("탐색용: 판정에 쓰지 않습니다") and "이것만으로는 결정의 근거가 될 수 없습니다" in nv["reason_ko"] and "+35.0%p" in nv["reason_ko"]
+        assert rows_by(d, "filter_kept_vs_dropped")["-fqt"]["verdict"] == "explore"
+        assert not any(r["verdict"] in ("pass", "fail", "wait", "few") for r in d["rows"] if not r["primary"])
+        assert d["counts"]["explore"] == d["n_tests"] - 4
+        if now >= 28:
+            assert rows_by(d, "main_vs_control")["-fq"]["verdict"] == "pass"       # a primary row can
+            assert d["summary_ko"].startswith("통과 1개: 메인 1개(빠른 손절)가 대조를 이겼습니다") and "자체 판단" not in d["summary_ko"]
+    # even all exploratory rows winning does not make a summary "pass"
+    book2 = {k: v for k, v in book.items() if not k.endswith("-fq")}
+    d = run(book2, spec, now_day=40)
+    assert d["counts"]["pass"] == 0 and "표본이 모자라" in d["summary_ko"] and rows_by(d, "main_vs_control")["-nv"]["verdict"] == "explore"
+    # and a primary loser with a winning exploratory kind next to it is an honest "nothing found"
+    book3 = bulk([-0.02] * 30)
+    book3[f"{P1}-nv"] = [dict(t, roe=t["roe"] + 0.40) for t in book3[f"{P1}-fq"]]
+    d = run(book3, {P1: ["fq", "ld", "nv"]}, now_day=40)
+    assert d["summary_ko"].startswith("통과한 것 0개: 새 구조에서 우위를 찾지 못했습니다") and rows_by(d, "main_vs_control")["-fq"]["verdict"] == "fail"
 
 
 # ---------------------------------------------------------------- verdicts
@@ -414,7 +478,7 @@ def test_summary_sentences():
     assert d["counts"]["pass"] == 1 and d["summary_ko"].startswith("통과 1개: 메인 1개(빠른 손절)가 대조를 이겼습니다")
     assert "표본 부족" in d["summary_ko"]                                              # the other rows have no pairs
     d = run({}, {P1: ["fq", "ld"]}, now_day=30)
-    assert "표본이 모자라" in d["summary_ko"] and d["counts"]["few"] == d["n_tests"] > 0
+    assert "표본이 모자라" in d["summary_ko"] and d["counts"]["few"] == 4 and d["counts"]["explore"] == d["n_tests"] - 4 > 0
     assert d["summary_ko"].count("0개") == 0                                         # honest: not "found nothing", but "could not judge"
     # only the coin test passes: no claim about the new structure
     book = {f"{P1}-ld": [trade("BTCUSDT", 1, at(d_, 1, k), at(d_, 5, k), 0.10) for d_ in range(30) for k in range(10)]}
@@ -424,19 +488,21 @@ def test_summary_sentences():
     assert "새 구조(메인)에서는 우위를 찾지 못했습니다" in d["summary_ko"]
     # the rules are in the block, short and plain, with the numbers of the constants
     rules = d["rules_ko"]
-    assert len(rules) == 6 and rules == SM.decision_rules_ko()
+    assert len(rules) == 7 and rules == SM.decision_rules_ko()
     text = "\n".join(rules)
-    for need in ("거래당 순수익 차이", "같은 날 거래는 묶어서 계산", "우연 보정", "28일째 한 번만 판정", "300개 이상", "0.05보다", "앞 절반과 뒤 절반", "우위 없음", "실전에 쓰지 않습니다"):
+    for need in ("거래당 순수익 차이", "같은 날 거래는 묶어서 계산", "판정에 쓰는 것은 4개뿐", "참고용(탐색)", "우연 보정", "이 4개를 함께", "28일째 한 번만 판정", "300개 이상", "0.05보다",
+                 "앞 절반과 뒤 절반", "우위 없음", "실전에 쓰지 않습니다"):
         assert need in text, need
 
 
 def test_empty_inputs_and_odd_trades():
     d = SM.decision_views({}, [], None, None, None, False)
-    assert d["rows"] == [] and d["phase"] == "observe" and d["days"] == 0 and d["n_tests"] == 0
+    assert d["phase"] == "observe" and d["days"] == 0 and d["n_tests"] == 4 and all(r["primary"] and r["n"] == 0 and r["verdict"] == "few" for r in d["rows"])
     assert d["summary_ko"] == "아직 판정 시점이 아닙니다 (0일째, 28일째에 판정)"
     d = run({}, {P1: ["fq", "ld", "ldt", "fqc", "ldc"]}, now_day=3)
-    assert all(r["n"] == 0 and r["verdict"] == "few" and r["p_one_sided"] is None and r["mean_diff"] is None for r in d["rows"])
-    assert all(r["reason_ko"].startswith("표본 부족(0/300)") for r in d["rows"])
+    assert all(r["n"] == 0 and r["p_one_sided"] is None and r["mean_diff"] is None for r in d["rows"])
+    assert all(r["verdict"] == ("few" if r["primary"] else "explore") for r in d["rows"])
+    assert all(r["reason_ko"].startswith("표본 부족(0/300)") for r in d["rows"] if r["primary"])
     json.dumps(d, allow_nan=False)
     # None / NaN ROE and a missing exit time never reach a number; days are counted from the start (a clock before the start is day 0)
     ld = [trade("BTCUSDT", 1, at(i, 1), at(i, 3), 0.0) for i in range(8)]
@@ -471,8 +537,12 @@ def test_the_real_lineup_has_a_row_per_tested_kind():
     gates = [k["suffix"] for k in lu if k["suffix"] in SM.GATE_SUFFIXES or k["label_ko"].startswith("필터")]
     coins = [r for r, c in SM.COIN_TWINS if r in sfx and c in sfx]
     got = {t: [r["suffix"] for r in d["rows"] if r["test"] == t] for t in SM.TESTS}
-    assert got["main_vs_control"] == mains and got["filter_kept_vs_dropped"] == gates and got["vs_coin"] == coins
-    assert len(mains) >= 4 and len(gates) >= 4 and len(coins) == 2
+    assert got["main_vs_control"] == ["-fq"] + [m for m in mains if m != "-fq"] and got["filter_kept_vs_dropped"] == ["-ldt"] + [g for g in gates if g != "-ldt"]
+    assert got["vs_coin"] == ["-fq", "-ld"] == coins
+    assert len(mains) >= 4 and len(gates) >= 4
+    # exactly the four pre-registered rows are primary, first; every other row is exploratory
+    assert [(r["test"], r["suffix"]) for r in d["rows"] if r["primary"]] == [(t, s_) for t, s_, _v in SM.PRIMARY] == [r_ for r_ in [(r["test"], r["suffix"]) for r in d["rows"][:4]]]
+    assert not any(r["primary"] for r in d["rows"][4:]) and all(r["verdict"] == "explore" for r in d["rows"][4:])
     assert len(d["rows"]) == d["n_tests"] and d["phase"] == "observe" and d["days"] == 3
     # and with trades: every gate kind compares with the right ungated kind
     vs = {r["suffix"]: r["vs_suffix"] for r in d["rows"] if r["test"] == "filter_kept_vs_dropped"}
@@ -508,7 +578,7 @@ def test_deepseek_money_is_left_out_and_in(monkeypatch):
     assert rows_by(on5, "main_vs_control")["-fq"]["mean_diff"] == pytest.approx((0.07 + 0.35) / 2)
     # a league of DeepSeek picks only, switch off: no pair at all
     only = run(ds_book(1.0), {DS: ["fq", "ld", "fqc", "ldt"]}, ds_money=False)
-    assert all(r["n"] == 0 and r["mean_diff"] is None for r in only["rows"]) and only["counts"]["few"] == only["n_tests"]
+    assert all(r["n"] == 0 and r["mean_diff"] is None for r in only["rows"]) and only["counts"]["few"] == 4 and only["counts"]["explore"] == only["n_tests"] - 4
     # the sentence and the reasons carry no figure of a hidden pick (they are made from the core rows)
     assert str(0.35) not in json.dumps(off5)
 
@@ -540,7 +610,8 @@ def test_about_a_million_trades_in_a_few_seconds():
     took = time.perf_counter() - t
     assert took < 8.0, took                                                           # about 0.6 s here; the bound is for slow machines
     assert d["n_tests"] == 12 and all(r["n"] > 10_000 for r in d["rows"])
-    assert d["phase"] == "decide" and all(r["verdict"] in ("pass", "fail") for r in d["rows"])
+    assert d["phase"] == "decide" and all(r["verdict"] in ("pass", "fail") for r in d["rows"] if r["primary"])
+    assert all(r["verdict"] == "explore" for r in d["rows"] if not r["primary"])
 
 
 # ---------------------------------------------------------------- write_snapshots
@@ -580,9 +651,11 @@ def test_write_snapshots_carries_the_decision_in_a_league_with_a_lineup(tmp_path
     assert saved["decision"] == doc["decision"] and "kinds" in saved and "pairs" in saved               # next to the other owner-league keys
     d = saved["decision"]
     assert d["phase"] == "observe" and d["days"] == 2 and d["checkpoints"] == {"observe_day": 14, "decide_day": 28} and d["min_pairs"] == 300
-    assert [r["suffix"] for r in d["rows"]] == ["-fq"] and d["rows"][0]["test"] == "main_vs_control"
+    assert [(r["test"], r["suffix"]) for r in d["rows"]] == [(t, s_) for t, s_, _v in SM.PRIMARY]        # fq and ld only: the four primary rows, two of them empty
+    assert d["family_size"] == 4 and d["n_tests"] == 4
     r = d["rows"][0]
-    assert r["n"] == 4 and r["mean_diff"] == pytest.approx(0.15) and r["verdict"] == "few" and r["reason_ko"] == "표본 부족(4/300)"
+    assert r["n"] == 4 and r["mean_diff"] == pytest.approx(0.15) and r["verdict"] == "few" and r["reason_ko"] == "표본 부족(4/300)" and r["primary"] is True
+    assert [x["n"] for x in d["rows"][1:]] == [0, 0, 0]
     assert d["ds_in_stats"] is True and d["summary_ko"] == "아직 판정 시점이 아닙니다 (2일째, 28일째에 판정)"
     json.loads(open(tmp_path / "snap" / "league.json").read(), parse_constant=lambda c: (_ for _ in ()).throw(ValueError(c)))   # no NaN / Infinity
     # the day count is the engine's processed time (a league that is still catching up is not on day 30 yet)
