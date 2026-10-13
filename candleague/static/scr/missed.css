@@ -1,0 +1,17 @@
+/* 놓친 신호 (js/screens/missed.js): the per-kind and per-pick signal tables with a small share bar, on top of kinds.css. Screen-only rules, class prefix
+   ms-, scoped to the screen's own `.scr.kd`; colours only from the tokens (both skins), font sizes only var(--t-*). Colour is never the only sign:
+   every share is written next to the bar. */
+
+.scr.kd .ms-card { display: grid; gap: 10px; }
+.scr.kd .ms-tbl td { white-space: normal; }
+.scr.kd .ms-s { color: var(--muted); font-size: var(--t-2xs); }
+.scr.kd .ms-blk { display: block; margin-top: 2px; }
+.scr.kd .ms-pill { margin-left: 6px; }
+.scr.kd .ms-bc { min-width: 90px; }
+.scr.kd .ms-bar { display: flex; height: 10px; border-radius: var(--r-sm); overflow: hidden; background: var(--surface-3); border: 1px solid var(--line); }
+.scr.kd .ms-seg { display: block; height: 100%; }
+.scr.kd .ms-in { background: var(--up); }
+.scr.kd .ms-skip { background: var(--warn); }
+.scr.kd .ms-rej { background: var(--down); }
+.scr.kd .ms-why { display: grid; gap: 8px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2); }
+.scr.kd .ms-why p { margin: 0; }

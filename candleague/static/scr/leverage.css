@@ -1,0 +1,17 @@
+/* 레버리지 비교 (js/screens/leverage.js): the kinds of one family side by side, on top of kinds.css (cards, rules, tables). Screen-only rules, class
+   prefix lg-, scoped to the screen's own `.scr.kd`; colours only from the tokens (both skins), font sizes only var(--t-*). Colour is never the only
+   sign: every number is written, a missing number reads "—". */
+
+.scr.kd .lg-fam { display: grid; gap: 12px; }
+.scr.kd .lg-cols { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.scr.kd .lg-col { min-width: 0; padding: 10px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); display: grid; gap: 8px; align-content: start; }
+.scr.kd .lg-miss { border-style: dashed; }
+.scr.kd .lg-h { margin: 0; font-size: var(--t-sm); color: var(--ink); display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.scr.kd .lg-facts { margin: 0; display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scr.kd .lg-facts > div { min-width: 0; }
+.scr.kd .lg-facts dt { color: var(--muted); font-size: var(--t-xs); }
+.scr.kd .lg-facts dd { margin: 2px 0 0; font-size: var(--t-sm); font-weight: 700; overflow-wrap: anywhere; }
+.scr.kd .lg-reading { display: grid; gap: 6px; }
+.scr.kd .lg-diff { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.scr.kd .lg-why { display: grid; gap: 8px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink-2); }
+.scr.kd .lg-why p { margin: 0; }

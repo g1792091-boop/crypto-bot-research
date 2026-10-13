@@ -55,6 +55,8 @@ const MENU = [
   {id: "conditions", ko: "조건별", group: "study"},
   {id: "risk", ko: "위험 점검", group: "study"},
   {id: "losses", ko: "손실 해부", group: "study"},
+  {id: "leverage", ko: "레버리지 비교", group: "study"},
+  {id: "missed", ko: "놓친 신호", group: "study"},
   {id: "weekly", ko: "흐름", group: "study"},
   {id: "strategies", ko: "매매법", group: "method"},
   {id: "judge", ko: "구조 기준", group: "method"},
@@ -79,6 +81,8 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   conditions: "조건별 성적 (언제 잘 맞고 언제 안 맞나: 요일 · 시간대 · 방향 · 코인 · 봉 · BTC 추세 · 변동성 · 보유시간별 평균을 동전 짝과 비교한 탐색용 화면)",
   risk: "위험 점검 (포지션이 한쪽 방향에 몰렸는지, 지금까지 가장 나빴던 거래 · 연속 손실 · 낙폭이 얼마였는지: 숫자만)",
   losses: "손실 해부 (진 거래를 유형별로 나누고 코인 · 시간대 · 배수별로 보기, 연속으로 진 횟수와 가장 크게 진 거래 10개: 숫자와 설명만)",
+  leverage: "레버리지 비교 (같은 신호 · 같은 청산에서 배수만 다른 계좌를 나란히: 30배이던 포지션이 40배나 50배였다면, 위험 비교이지 우위의 증거가 아님)",
+  missed: "놓친 신호 (들어온 신호 중 진입 · 이미 포지션이 있어 건너뜀 · 거절이 얼마인지, 진입이 드문 매매법: 숫자와 설명만)",
   monthsim: "한 달 시뮬 (지금 성적이 한 달 이어진다면? 5% ~ 95% 범위 · 중앙값 · 4배 이상 몫, 동전 짝과 비교하는 운 계산기)",
   coins: "코인별 (코인마다 거래 수 · 이긴 비율 · 거래당 평균 · 동전 짝과 차이)",
   dataq: "데이터 점검 (엔진과 데이터가 정상인지, 늦음 · 확인 필요)",
@@ -94,7 +98,7 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
-const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", glance: "glance", conditions: "conditions", regime: "regime", signals: "signals", costs: "costs", telegram: "telegram", coins: "coins", dataq: "dataq", timeline: "timeline", risk: "risk", losses: "losses", monthsim: "monthsim", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
+const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", glance: "glance", conditions: "conditions", regime: "regime", signals: "signals", costs: "costs", telegram: "telegram", coins: "coins", dataq: "dataq", timeline: "timeline", risk: "risk", losses: "losses", leverage: "leverage", missed: "missed", monthsim: "monthsim", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", charts: "charts", fills: "fills", status: "status", howto: "howto",
   account: "account", rules: "rules", replay: "replay"};
 // the 계좌 비교 screen's label follows the league: "5계좌 비교" (candidate league, as written above) / "계좌 비교" (owner-exit league: its ~26 kinds)
