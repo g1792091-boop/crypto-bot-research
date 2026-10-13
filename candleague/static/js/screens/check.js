@@ -11,6 +11,12 @@ import * as LK from "../lk.js";
 import {ROLES, KIND_LONG, tfKo, lineupOn, compareKo} from "../labels.js";
 import * as WK from "../whykit.js";
 
+/** The owner-exit league's picks are not 23: " (N개 다 차면 약 M개)" from the picks that carry a backtest band. */
+function bandAll(ix) {
+  const n = ix.cands.filter((c) => c.kind === "core" && c.source && c.source.band).length;
+  return n ? ` (${fmt.int(n)}개 다 차면 약 ${fmt.num(n * 0.05, 1)}개)` : "";
+}
+
 export async function mount(el, ctx) {
   try { await ctx.meta(); } catch (e) { /* codes instead of names */ }
   const time = h("div"), core = h("div"), ds = h("div"), basis = h("div"), lights = h("div"), strat = h("div"), done = h("div");
@@ -88,11 +94,6 @@ export async function mount(el, ctx) {
     h("p", {class: "note"}, "후보 하나하나의 기준은 참고입니다. 실제 돈을 생각해 볼 수 있는 건 2차 점검에서 묶음이 통과하고 그 매매법도 통과했을 때뿐입니다."));
   }
 
-  /** The owner-exit league's picks are not 23: " (N개 다 차면 약 M개)" from the picks that carry a backtest band. */
-  const bandAll = (ix) => {
-    const n = ix.cands.filter((c) => c.kind === "core" && c.source && c.source.band).length;
-    return n ? ` (${fmt.int(n)}개 다 차면 약 ${fmt.num(n * 0.05, 1)}개)` : "";
-  };
   function paintLights(d) {
     const ix = LK.index(d);
     const rows = ix.cands.filter((c) => (ix.judge[c.id] || {}).band);

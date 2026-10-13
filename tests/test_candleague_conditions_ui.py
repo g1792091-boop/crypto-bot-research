@@ -165,7 +165,7 @@ def test_full_data_headline_caveat_cards_in_order_and_the_columns(tmp_path):
     assert len(o["sel"]["flags"]) == len(o["sel"]["good"]) and len(o["sel"]["bars"]) >= len(o["sel"]["good"])
     # the unknown buckets are muted rows with their words; the hold-time card says it is known only after the entry
     assert len(o["sel"]["unk"]) == 2 and all(r["d"]["bucket"] == "unknown" and "모름" in r["t"] and r["d"]["flag"] == "" for r in o["sel"]["unk"])
-    assert "끝난 뒤에 아는 값" in o["sel"]["after"][0]["t"] and "조건으로 쓸 수 없고 참고만 합니다" in o["sel"]["after"][0]["t"]
+    assert "끝난 뒤에 아는 값" in o["sel"]["after"][0]["t"] and "조건으로 쓸 수 없습니다 (참고만)" in o["sel"]["after"][0]["t"]
     # the session card carries the Korean time of the UTC hours
     assert "UTC 00~08 · 한국 09~17시" in page and "UTC 16~24 · 한국 01~09시" in page
     # the closing: the wallet, the shared signals, DeepSeek out, no real orders

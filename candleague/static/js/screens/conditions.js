@@ -151,7 +151,7 @@ function cardView(dim, pair, C, max) {
 function dimCard(dim, pair, C, view, max) {
   const onlyUnknown = dim.buckets.length > 0 && dim.buckets.every((b) => b.unknown);
   return ui.card({plate: dim.ko, sub: dim.hint || undefined, cls: "kd-tcard cn-dim", id: `cn-${dim.id}`},
-    dim.after ? h("p", {class: "note"}, ui.pill("끝난 뒤에 아는 값", "warn"), " 들어갈 때는 알 수 없는 값이라, 조건으로 쓸 수 없고 참고만 합니다.") : null,
+    dim.after ? h("p", {class: "note"}, ui.pill("끝난 뒤에 아는 값", "warn", "들어갈 때는 알 수 없는 값입니다")) : null,
     onlyUnknown ? h("p", {class: "note"}, "이 기록은 아직 없습니다. 이 기록을 남기기 전에 들어간 거래는 ‘모름’으로 셉니다.") : null,
     view === "card" ? cardView(dim, pair, C, max) : tableView(dim, pair, C, max));
 }
