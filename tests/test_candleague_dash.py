@@ -111,7 +111,7 @@ def test_static_kit_and_meta(tmp_path):
     ex = m["names_extra"]                                   # the 11 picks strategies_ko.json does not list get their Korean names
     assert len(ex) == 11 and ex["N02_ST_KST"] == "슈퍼트렌드·KST" and ex["F3_BOS"] == "구조 이어짐(BOS) 돌파" and not set(ex) & set(m["strategies"])
     ent = c.get("/static/js/screens/entries.js").text                  # every entry says why it was opened (the strategy's rule, the bar, the leverage and why that leverage)
-    assert "왜 들어갔나" in ent and "loadJudge" in ent and "cl-ewhy" in c.get("/static/cl.css").text
+    assert "왜 청산했나" in ent and "long_broken_ko" in ent and "ROLE_DESC" in c.get("/static/js/screens/fills.js").text and "왜 들어갔나" in ent and "loadJudge" in ent and "cl-ewhy" in c.get("/static/cl.css").text
     assert "names_extra" in c.get("/static/js/lk.js").text           # the page falls back to those names before it shows a bare code
     assert c.get("/favicon.ico").status_code == 200
 

@@ -11,7 +11,7 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
-import {COINS, ROLES, ROLE_KO, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
+import {COINS, ROLES, ROLE_KO, ROLE_DESC, sideKo, reasonKo, coinOf, coinShort} from "../labels.js";
 import {tradesPane} from "./positions-orders.js";
 import {afterBar, afterFills, afterOn, afterSuffix, afterEmpty} from "../after.js";
 
@@ -37,7 +37,7 @@ function tableView(ctx) {
       {id: "side", label: "방향", l: true, get: (r) => h("span", {class: ["side", r.f.side > 0 ? "long" : "short"]}, sideKo(r.f.side))},
       {id: "ep", label: "진입가", get: (r) => (r.f.entry_price == null ? "숨김" : px(r.f.entry_price))},
       {id: "xp", label: "청산가", get: (r) => (r.f.exit_price == null ? "숨김" : px(r.f.exit_price))},
-      {id: "why", label: "이유", sort: (r) => r.f.exit_reason, get: (r) => reasonKo(r.f.exit_reason)},
+      {id: "why", label: "이유", sort: (r) => r.f.exit_reason, get: (r) => h("span", {title: r.a && r.f.exit_reason === "RULE" ? ROLE_DESC[r.a.role] || "" : ""}, reasonKo(r.f.exit_reason))},
       {id: "lev", label: "배수", sort: (r) => r.f.leverage, get: (r) => (r.f.pnl == null && r.f.roe == null ? "—" : r.f.leverage ? `${fmt.int(r.f.leverage)}배` : "—")},
       {id: "roe", label: "증거금 대비", sort: (r) => r.f.roe, get: (r) => (r.f.roe == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(r.f.roe)]}, fmt.pct(r.f.roe * 100, true, 1)))},
       {id: "pnl", label: "손익", sort: (r) => r.f.pnl, get: (r) => (r.f.pnl == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(r.f.pnl)]}, fmt.money(r.f.pnl, true)))},

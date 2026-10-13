@@ -17,7 +17,7 @@ import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
 import * as LK from "../lk.js";
 import {loadLwc, color, tok} from "../chart.js";
-import {ROLES, ROLE_KO, ROLE_SHORT, TFS, TF_MS, tfKo, sideKo, reasonKo, coinOf, coinShort, roleId} from "../labels.js";
+import {ROLES, ROLE_KO, ROLE_SHORT, ROLE_DESC, TFS, TF_MS, tfKo, sideKo, reasonKo, coinOf, coinShort, roleId} from "../labels.js";
 import {afterBar, afterOn, keepPos, keepFill} from "../after.js";
 import {loadJudge} from "./pairs.js";
 
@@ -419,6 +419,19 @@ export async function mount(el, ctx) {
       return h("div", {class: "cl-ewhy"}, h("b", null, "왜 들어갔나"),
         h("span", null, rule ? `${rule}` : "이 매매법의 진입 조건"), h("span", {class: "muted"}, `${tfKo(c.tf)} 봉이 마감할 때 맞아서 ${sideKo(it.side)} 신호${tier ? ` · ${tier}` : ""}`));
     }
+    /** Why a closed position was closed: the plain meaning of the exit; for a rule exit the account kind's rule and, where the kind waits for the
+     *  strategy's own structure to break, that strategy's own conditions (the record does not say which of them fired). */
+    function whyOut(it) {
+      if (it.open) return null;
+      const j = (judge && judge[c.name]) || {};
+      const role = String((acct || a).role || "");
+      const own = /^(fq|nv|tg|fqt|fqv|fq40|fq50)$/.test(role) ? (it.side > 0 ? j.long_broken_ko : j.short_broken_ko) : null;
+      const base = {SL: "처음 손절선(또는 좁힌 손절선)에 닿았습니다", TP: "익절 가격에 닿았습니다", LOCK: "계단 잠금선에 닿았습니다 (수익이 났다가 잠근 선까지 되돌아옴)",
+        LIQ: "강제청산 가격에 닿았습니다"}[it.exit_reason];
+      if (it.exit_reason !== "RULE") return base ? h("div", {class: "cl-ewhy"}, h("b", null, "왜 청산했나"), h("span", null, base)) : null;
+      return h("div", {class: "cl-ewhy"}, h("b", null, "왜 청산했나"), h("span", null, ROLE_DESC[role] || "이 계좌의 규칙으로 청산"),
+        own ? h("span", {class: "muted"}, `이 매매법의 구조가 무너졌다고 보는 조건: ${own}`) : null);
+    }
     function caption(it) {
       liveRow = null;
       const hold = (it.open ? Date.now() : it.exit_time) - it.entry_time;
@@ -442,7 +455,8 @@ export async function mount(el, ctx) {
           h("span", {class: "muted"}, "가장 유리"), h("span", {class: "num"}, rTxt(m.best)),
           h("span", {class: "muted"}, "가장 불리"), h("span", {class: "num"}, rTxt(-m.worst)),
           h("span", {class: "muted"}, "청산"), h("span", {class: ["num", fmt.tone(m.end)]}, rTxt(m.end)),
-          !win(it) && m.best >= 1 ? ui.pill("벌었다가 놓침", "warn") : null) : null))(rMarks(it)));
+          !win(it) && m.best >= 1 ? ui.pill("벌었다가 놓침", "warn") : null) : null))(rMarks(it)),
+        whyOut(it));
     }
     function destroy() {
       seq++;
