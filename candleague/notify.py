@@ -47,6 +47,13 @@ def strat_ko(name: str) -> str:
                 _KO.update({k: v["ko"] for k, v in json.load(fh)["strategies"].items()})
         except (OSError, ValueError, KeyError):
             _KO["_"] = ""
+        try:                                                  # the picks strategies_ko.json does not list: native_ko.json's names
+            with open(os.path.join(os.path.dirname(META_FILE), "native_ko.json")) as fh:
+                for k, v in json.load(fh)["strategies"].items():
+                    if v.get("name_ko"):
+                        _KO.setdefault(k, v["name_ko"])
+        except (OSError, ValueError, KeyError, AttributeError):
+            pass
     return _KO.get(name) or name
 
 

@@ -52,6 +52,7 @@ def test_summary_text():
 
 def test_korean_names_and_silent_sending(monkeypatch):
     assert N.strat_ko("DOGE") == "도지 봇" and N.strat_ko("NOPE") == "NOPE"
+    assert N.strat_ko("N02_ST_KST") == "슈퍼트렌드·KST" and N.strat_ko("F15_ORB") == "시가 범위 돌파(ORB)"    # picks only native_ko.json names
     assert N.pick_ko({"name": "F5_BOX", "tf": "4h", "role": "quarter"}) == "박스권 양 끝 반전 4시간 1/4 크기"
     sent = {}
 

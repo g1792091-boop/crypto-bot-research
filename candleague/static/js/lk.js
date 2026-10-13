@@ -216,7 +216,8 @@ export function pickOf(a, ix = index()) {
 }
 
 // ---------------------------------------------------------------- names
-export const stratKo = (name, meta = META) => (meta && meta.strategies && meta.strategies[name] ? meta.strategies[name].ko : name);
+export const stratKo = (name, meta = META) => (meta && meta.strategies && meta.strategies[name] ? meta.strategies[name].ko
+  : (meta && meta.names_extra && meta.names_extra[name]) || name);
 export const stratMeta = (name, meta = META) => (meta && meta.strategies ? meta.strategies[name] : null) || null;
 /** A pick's entry of strategies_ko.json by its id, or by an account's id (the owner-exit league's <pick>-e: its ``pick``). */
 export function pickMeta(id, meta = META) {

@@ -94,6 +94,18 @@ def read_snap(snap: str, name: str):
 KLINE_TFS = ("1m", "5m", "15m", "30m", "1h", "4h")      # 1m / 5m: the 터미널's short charts, the 포지션 cards' 진입 뒤 가격
 STATIC_TYPES = {".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml"}
 
+
+def with_extra_names(doc: dict) -> dict:
+    """``doc`` (strategies_ko.json) plus ``names_extra``: the Korean names of the strategies that file does not list (the picks whose
+    own structure rules came later), taken from native_ko.json, so no screen shows a bare code."""
+    out = dict(doc)
+    have = set((doc.get("strategies") or {}).keys())
+    j = read_snap(os.path.dirname(JUDGE_FILE), os.path.basename(JUDGE_FILE)) or {}
+    out["names_extra"] = {k: str(v["name_ko"]) for k, v in (j.get("strategies") or {}).items()
+                          if k not in have and isinstance(v, dict) and v.get("name_ko")}
+    return out
+
+
 # ---------------------------------------------------------------- DeepSeek money (D11)
 # The snapshot's own switch (league.json ds_money, CANDLEAGUE_DS_MONEY on the engine) decides, as before: with it off
 # the engine already writes no DeepSeek money and every view here adds none. DS_MONEY_STRICT=True hides DeepSeek money
@@ -983,7 +995,8 @@ def create_app(snap: str, password_hash: str, secret: bytes, live=None, open_: b
         """Korean names, entry rules, parameter meanings and each pick's character (candleague/data/strategies_ko.json)."""
         if not authed(req):
             return JSONResponse({"error": "login"}, status_code=401)
-        return JSONResponse(read_snap(os.path.dirname(META_FILE), os.path.basename(META_FILE)) or {})
+        doc = read_snap(os.path.dirname(META_FILE), os.path.basename(META_FILE)) or {}
+        return JSONResponse(with_extra_names(doc))
 
     @app.get("/api/judge")
     def api_judge(req: Request):

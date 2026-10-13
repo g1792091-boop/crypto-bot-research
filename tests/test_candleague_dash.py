@@ -108,6 +108,9 @@ def test_static_kit_and_meta(tmp_path):
     m = c.get("/api/meta").json()
     assert len(m["strategies"]) == 16 and len(m["picks"]) == 38
     assert m["strategies"]["DOGE"]["ko"] == "도지 봇" and m["strategies"]["F5_BOX"]["kind"] == "ds"
+    ex = m["names_extra"]                                   # the 11 picks strategies_ko.json does not list get their Korean names
+    assert len(ex) == 11 and ex["N02_ST_KST"] == "슈퍼트렌드·KST" and ex["F3_BOS"] == "구조 이어짐(BOS) 돌파" and not set(ex) & set(m["strategies"])
+    assert "names_extra" in c.get("/static/js/lk.js").text           # the page falls back to those names before it shows a bare code
     assert c.get("/favicon.ico").status_code == 200
 
 
