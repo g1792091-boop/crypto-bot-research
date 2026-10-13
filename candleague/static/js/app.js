@@ -30,7 +30,7 @@ import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js
 import {gearButton, settingsTab, openSettings, closeSettings, settingsOpen, setSettingsHooks} from "./settings.js";
 import {onAfterChange, syncAfter} from "./after.js";
 
-const GROUPS = [{id: "trade", ko: "거래"}, {id: "home", ko: "홈"}, {id: "study", ko: "분석"}, {id: "method", ko: "매매법"}, {id: "info", ko: "안내"}];
+const GROUPS = [{id: "trade", ko: "실시간"}, {id: "home", ko: "요약 · 판정"}, {id: "study", ko: "계좌 · 분석"}, {id: "method", ko: "매매법"}, {id: "info", ko: "안내"}];
 const MENU = [
   {id: "terminal", ko: "터미널", group: "trade"},
   {id: "positions", ko: "포지션", group: "trade"},
@@ -42,13 +42,13 @@ const MENU = [
   {id: "versus", ko: "메인 vs 대조", group: "home"},
   {id: "goal", ko: "목표 진척도", group: "home"},
   {id: "monthsim", ko: "한 달 시뮬", group: "home"},
-  {id: "rank", ko: "순위표", group: "home", also: ["account"]},
   {id: "check", ko: "점검 진행", group: "home"},
+  {id: "rank", ko: "순위표", group: "study", also: ["account"]},
+  {id: "compare", ko: "5계좌 비교", group: "study"},
   {id: "pairs", ko: "짝 비교", group: "study"},
   {id: "reasons", ko: "청산 이유", group: "study"},
   {id: "conditions", ko: "조건별", group: "study"},
   {id: "risk", ko: "위험 점검", group: "study"},
-  {id: "compare", ko: "5계좌 비교", group: "study"},
   {id: "weekly", ko: "흐름", group: "study"},
   {id: "strategies", ko: "매매법", group: "method"},
   {id: "judge", ko: "구조 기준", group: "method"},

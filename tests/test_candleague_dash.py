@@ -254,10 +254,10 @@ def test_shell_menu_header_and_screen_hooks():
     root = os.path.join(ROOT, "candleague", "static")
     app = open(os.path.join(root, "js", "app.js")).read()
     groups = re.findall(r'\{id: "(\w+)", ko: "([^"]+)"\}', re.search(r"const GROUPS = \[(.*?)\];", app, re.S).group(1))
-    assert groups == [("trade", "거래"), ("home", "홈"), ("study", "분석"), ("method", "매매법"), ("info", "안내")]
+    assert groups == [("trade", "실시간"), ("home", "요약 · 판정"), ("study", "계좌 · 분석"), ("method", "매매법"), ("info", "안내")]
     menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
-    assert [m[0] for m in menu] == ["terminal", "positions", "entries", "fills", "events", "home", "decision", "versus", "goal", "monthsim", "rank", "check", "pairs", "reasons",
-                                    "conditions", "risk", "compare", "weekly", "strategies", "judge", "custom", "rules", "status", "howto"]
+    assert [m[0] for m in menu] == ["terminal", "positions", "entries", "fills", "events", "home", "decision", "versus", "goal", "monthsim", "check", "rank", "compare", "pairs", "reasons",
+                                    "conditions", "risk", "weekly", "strategies", "judge", "custom", "rules", "status", "howto"]
     assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=[g[0] for g in groups].index)   # groups stay together
     assert "mod.css" in app and "mod.wide" in app and "onPositions" in app and "onLive" in app
     assert 'innerWidth >= WIDE_PX ? "terminal" : "home"' in app                    # the landing (D-2)
