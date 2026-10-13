@@ -200,7 +200,7 @@ def test_kind_groups_on_the_real_lineup():
     # the group follows the file's labels (메인 / 대조 / anything else), in the file's order
     for g, word in (("main", "메인"), ("control", "대조")):
         assert by[g] == [e["suffix"] for e in doc["owner_exits"] if e["label_ko"].startswith(word)]
-    assert by["main"][:4] == ["-fq", "-nv", "-sw", "-tg"] and by["control"] == ["-ld", "-ldc", "-ldp", "-ld1"]
+    assert by["main"][:4] == ["-fq", "-nv", "-sw", "-tg"] and by["control"] == ["-ld", "-ldc", "-fqc", "-ldp", "-ld1"]
     assert len(by["research"]) == len(lu) - len(by["main"]) - len(by["control"]) > 0
     assert [k["role"] for k in ks] == [x["role"] for x in lu]
     assert [k["accounts"] for k in ks] == [x["accounts"] for x in lu] and sum(k["accounts"] for k in ks) == len(accts)
