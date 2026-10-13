@@ -331,13 +331,13 @@ out.rows = r.querySelectorAll(".rl-row").length;
 
 
 def test_positions_and_terminal_open_on_main_plus_control_in_the_owner_league():
-    """The first view of 터미널 / 포지션 is 메인 + 대조 (not the 연구 / 필터 kinds, not just the 지금 청산 account); the group helper reads the label's first word."""
+    """The first view of 터미널 / 포지션 is 메인만 (not the 연구 / 필터 kinds, not just the 지금 청산 account); the group helper reads the label's first word."""
     root = os.path.join(ROOT, "candleague", "static", "js")
     for f in ("screens/terminal.js", "screens/positions.js"):
         src = open(os.path.join(root, f), encoding="utf-8").read()
-        assert 'lineupOn() ? "mc" : "cand"' in src, f
+        assert 'lineupOn() ? "mn" : "cand"' in src, f
     pk = open(os.path.join(root, "poskit.js"), encoding="utf-8").read()
-    assert '{id: "mc", ko: "메인 + 대조"}' in pk and 'kindGroup(p.role)' in pk
+    assert '{id: "mn", ko: "메인만"}' in pk and '{id: "mc", ko: "메인 + 대조"}' in pk and 'kindGroup(p.role)' in pk
     lb = open(os.path.join(root, "labels.js"), encoding="utf-8").read()
     assert 'w === "메인" ? "main" : w === "대조" ? "control"' in lb
     rules = open(os.path.join(ROOT, "candleague", "data", "rules_owner_exits.json"), encoding="utf-8").read()

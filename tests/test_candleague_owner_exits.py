@@ -568,7 +568,7 @@ def test_the_dashboard_groups_each_picks_accounts_with_the_owners_words(tmp_path
     assert "잔고 1등" not in home and "같은 손절" not in home and "미리 정한 점검 날짜가 없습니다" not in home      # the old league's wording is gone
     assert "청산 비교 리그" in out["screens"]["check"]["text"] and out["screens"]["check"]["hidden"] == 3
     assert "다른 청산" in out["screens"]["rank"]["text"]
-    assert out["posGroups"] == ["all", "mc", "cand", "ma", "tp50", "gb", "wk", "core", "ds"]
+    assert out["posGroups"] == ["all", "mn", "mc", "cand", "ma", "tp50", "gb", "wk", "core", "ds"]
     # a snapshot without a lineup: the candidate league's five accounts again
     assert out["after"]["roles"] == ["cand", "quarter", "exitonly", "base", "flip"] and out["after"]["cand"] == "후보"
     assert out["after"]["posGroups"] == ["all", "cand", "quarter", "exitonly", "base", "flip", "core", "ds"]

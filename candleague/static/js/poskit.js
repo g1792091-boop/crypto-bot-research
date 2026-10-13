@@ -151,12 +151,13 @@ export const POS_GROUPS = [
 const POS_DEFAULT = POS_GROUPS.slice();
 // the owner-exit league (labels.js applyLineup): its own account kinds instead of 후보 · 1/4 · 청산만 · 기본값 · 동전
 onLineup((lu) => {
-  POS_GROUPS.splice(0, POS_GROUPS.length, ...(lu ? [{id: "all", ko: "전체"}, {id: "mc", ko: "메인 + 대조"}, ...ROLES.map((r) => ({id: r, ko: ROLE_SHORT[r]})),
+  POS_GROUPS.splice(0, POS_GROUPS.length, ...(lu ? [{id: "all", ko: "전체"}, {id: "mn", ko: "메인만"}, {id: "mc", ko: "메인 + 대조"}, ...ROLES.map((r) => ({id: r, ko: ROLE_SHORT[r]})),
     {id: "core", ko: KIND_KO.core}, {id: "ds", ko: KIND_KO.ds}] : POS_DEFAULT));
 });
 export function inGroup(p, id) {
   if (!id || id === "all") return true;
   if (id === "core" || id === "ds") return p.kind === id;
+  if (id === "mn") return kindGroup(p.role) === "main";                                          // the owner-exit league's first view: only the 메인 kinds
   if (id === "mc") { const g = kindGroup(p.role); return g === "main" || g === "control"; }       // the owner-exit league's first view: 메인 and 대조, not the 연구 / 필터 kinds
   return p.role === id;
 }

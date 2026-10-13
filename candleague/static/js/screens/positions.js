@@ -63,12 +63,12 @@ export async function mount(el, ctx) {
   const q = ctx.params.query || {};
   const st = {
     coin: coinKey(q.coin) || coinKey(local.get("ps-coin", "")), tab: local.get("ps-tab", "pos"), sort: local.get("ps-sort", "pnl"),
-    grp: local.get("ps-grp", lineupOn() ? "mc" : "cand"), doc: null, open: new Set(), firstOpen: true, focus: q.acct || null, pin: null, countsKey: "", lastGen: null,
+    grp: local.get("ps-grp", lineupOn() ? "mn" : "cand"), doc: null, open: new Set(), firstOpen: true, focus: q.acct || null, pin: null, countsKey: "", lastGen: null,
     sortedWith: 0, sortedLive: false, // how many shown positions had a sort value, and were live numbers allowed, when
                                       // the cards were last ordered
   };
   if (coinKey(q.coin)) local.set("ps-coin", st.coin);          // #/positions?coin=BTCUSD (a link from another screen)
-  if (!POS_GROUPS.some((g) => g.id === st.grp)) st.grp = lineupOn() ? "mc" : "cand";
+  if (!POS_GROUPS.some((g) => g.id === st.grp)) st.grp = lineupOn() ? "mn" : "cand";
   if (!SORTS.some((x) => x.id === st.sort)) st.sort = "pnl";
   if (!["pos", "ord", "trd"].includes(st.tab)) st.tab = "pos";
   const cards = new Map();            // account id -> {key, el}: reused, so a number counts from its last value
