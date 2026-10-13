@@ -16,6 +16,10 @@ import {serverNow} from "../live.js";
 import {afterBar, afterOn, afterBook, openAfter, openBefore, beforeChip, afterEmpty} from "../after.js";
 import * as RK from "../rulekit.js";
 import * as WK from "../whykit.js";
+import {whyCard as retCard} from "./account-why.js";
+import {replayHref} from "../why.js";
+
+export const css = ["scr/replay.css"];
 
 /** Live ROE may be shown: the engine is not catching up, wrote its record in the last 15 minutes, and the prices
  *  are live (poskit pricesLive). */
@@ -26,7 +30,7 @@ export async function mount(el, ctx) {
   try { meta = await ctx.meta(); } catch (e) { /* codes */ }
   const id = ctx.params.arg;
   const head = h("div"), stats = h("div"), chart = h("div"), five = h("div"), params = h("div"), trades = h("div"), split = h("div");
-  const why = h("div"), rule = h("div");
+  const why = h("div"), rule = h("div"), ret = h("div");
   const chartCard = ui.card({plate: "잔고 흐름", sub: `같은 후보의 계좌 5개 · 닫힌 거래마다 · ${LK.startUsd()}에서 시작`}, chart);
   const splitCard = ui.card({plate: "롱 · 숏 · 코인별 · 커스텀값이 바꾼 거래", sub: "이 후보(후보 계좌)의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음"}, split);
   const fiveCard = ui.card({plate: "계좌 5개", sub: "누르면 그 계좌"}, five);
@@ -38,7 +42,7 @@ export async function mount(el, ctx) {
     f(splitCard, ".sub", `이 후보(${owner ? `‘${ROLE_KO.cand}’ 계좌` : "후보 계좌"})의 닫힌 거래를 나눠 보기 · 한쪽 방향이나 한 코인에서만 벌었으면 운일 수 있음`);
     f(fiveCard, ".plate", `계좌 ${owner ? fmt.int(n) : 5}개`);
   };
-  const body = h("div", {class: "stack"}, stats, why,
+  const body = h("div", {class: "stack"}, stats, ret, why,
     chartCard,
     rule,
     splitCard,
@@ -117,6 +121,7 @@ export async function mount(el, ctx) {
     put(chart, series.length ? LK.equityLines(series, {label: `${LK.pickKo(c, meta)} 계좌 ${lineupOn() ? fmt.int(ids.length) : 5}개 잔고`, until: d.done_ms})
       : ui.empty(a.kind === "ds" ? "딥시크 금액 숨김 설정이라 잔고 그래프가 없습니다" : "아직 끝난 거래가 없습니다"));
     const mine = books[ids.findIndex((x) => x.id === a.id)];
+    put(ret, retCard(a, mine, {start: LK.EQUITY, hidden: hid}));          // 왜 이 수익률인가: the full record, not the 설치 뒤 view
     const kept = afterBook(mine);                            // 설치 뒤 진입만: the trades entered after the install
     const nKept = (kept && kept.trades || []).length, nAll = (mine && mine.trades || []).length;
     put(trades, afterOn() && kept ? h("p", {class: "note"}, `설치 뒤만 · ${fmt.int(nKept)}번 (이 목록의 전체 ${fmt.int(kept.all_trades || 0)}번 중)`) : null,
@@ -138,5 +143,6 @@ export function tradeTable(rows, a) {
     {label: "배수", get: (t) => (t.leverage ? `${fmt.int(t.leverage)}배` : "—")},
     {label: "증거금 대비", get: (t) => (t.roe == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(t.roe)]}, fmt.pct(t.roe * 100, true, 1)))},
     {label: "손익", get: (t) => (t.pnl == null ? h("span", {class: "muted"}, "숨김") : h("span", {class: ["num", fmt.tone(t.pnl)]}, fmt.money(t.pnl, true)))},
+    {label: "다시보기", get: (t) => h("a", {href: replayHref(a.id, t.entry_time), class: "dl-tlink", title: "이 거래를 봉 하나씩 다시 보기"}, "다시보기")},
   ], rows, {cls: "lv-dense"});
 }

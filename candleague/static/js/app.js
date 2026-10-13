@@ -38,7 +38,7 @@ const MENU = [
   {id: "regime", ko: "시장 국면", group: "trade"},
   {id: "signals", ko: "신호", group: "trade"},
   {id: "entries", ko: "진입 차트", group: "trade"},
-  {id: "fills", ko: "체결 기록", group: "trade"},
+  {id: "fills", ko: "체결 기록", group: "trade", also: ["replay"]},
   {id: "events", ko: "발동 기록", group: "trade"},
   {id: "home", ko: "요약", group: "home"},
   {id: "glance", ko: "한눈 지도", group: "home"},
@@ -94,7 +94,7 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
 const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", glance: "glance", conditions: "conditions", regime: "regime", signals: "signals", costs: "costs", telegram: "telegram", coins: "coins", dataq: "dataq", timeline: "timeline", risk: "risk", monthsim: "monthsim", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", charts: "charts", fills: "fills", status: "status", howto: "howto",
-  account: "account", rules: "rules"};
+  account: "account", rules: "rules", replay: "replay"};
 // the 계좌 비교 screen's label follows the league: "5계좌 비교" (candidate league, as written above) / "계좌 비교" (owner-exit league: its ~26 kinds)
 Object.defineProperty(MENU.find((m) => m.id === "compare"), "ko", {get: () => compareKo(), enumerable: true});
 /** The titles that name the old league's five accounts, 38 picks, 190 accounts or its 11/11 · 12/11 · 1/11 checks, in the owner-exit league's
