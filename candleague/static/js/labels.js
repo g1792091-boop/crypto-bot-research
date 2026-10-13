@@ -50,6 +50,15 @@ export function onLineup(fn) {
   return () => hooks.delete(fn);
 }
 export const lineupOn = () => !!LINEUP;
+/** The group of an account kind in the owner-exit league, from its label's first word: "main" (메인), "control" (대조), "filter" (필터), else
+ *  "research" (연구 and the study's own kinds); null outside that league or for a role it does not know. */
+export function kindGroup(role) {
+  if (!LINEUP) return null;
+  const label = ROLE_KO[role];
+  if (label == null) return null;
+  const w = String(label).trim().split(/\s*·\s*|\s+/)[0];
+  return w === "메인" ? "main" : w === "대조" ? "control" : w === "필터" ? "filter" : "research";
+}
 /** The name of the 계좌 비교 screen (the menu, its title, every link and aria that points to it): the candidate league's "5계좌 비교"
  *  (its five accounts), but "계좌 비교" while the owner-exit league runs (its ~26 kinds of account per pick: never a number). */
 export const compareKo = () => (LINEUP ? "계좌 비교" : "5계좌 비교");
