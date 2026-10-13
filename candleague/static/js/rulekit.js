@@ -76,7 +76,7 @@ export function tpWords(tp, o = {}) {
   }
   if (tp.kind === "roe") {
     const at = (lev) => share(tp.val / lev + rt, 1);
-    return `증거금 대비 순수익(수수료 뺀 ROE)이 +${num1(tp.val * 100)}%가 되는 가격에 지정가로 익절합니다. 배수가 낮을수록 그 가격이 멀어집니다: 20배면 약 ${at(20)}, 30배면 약 ${at(30)} 움직여야 합니다.`;
+    return `증거금 대비 순수익(수수료 뺀 ROE)이 +${num1(tp.val * 100)}%가 되는 가격에 지정가로 익절합니다. 배수가 낮을수록 그 가격이 멀어집니다: ${LK.levLadder().lowTwo.map((v) => `${v}배면 약 ${at(v)}`).join(", ")} 움직여야 합니다.`;
   }
   if (tp.kind === "ladder_R") return `손절 거리의 ${num1(tp.val)}배(${num1(tp.val)}R)에 지정가 익절을 걸어 두고, 그 전에는 ${lock(tp.first_lock || 0.1)}`;
   if (tp.kind === "struct") return `직전 ${num1(tp.val)}봉 스윙 자리에 지정가 익절을 걸고, ${lock(tp.first_lock || 0.1)}`;
@@ -111,6 +111,14 @@ export function beWords(p) {
 /** Which leverage steps a pick's accounts try, in words. */
 export function levWords(p) {
   if (!p) return "—";
+  const L = LK.levLadder();
+  if (L.on) {                                    // the floor league (min_lev): its own ladder, and the rule that a signal with no fitting step is not entered
+    const how = L.normal.length > 1 ? `${L.normalArrow} 순서로 시도해 거래소 한도 안이고 두 가지 안전 검사를 모두 통과한 첫 배수로 들어갑니다`
+      : `${L.normal[0]}배만 시도해 거래소 한도 안이고 두 가지 안전 검사를 모두 통과하면 들어가고, 아니면 들어가지 않습니다`;
+    const end = ` 이 리그는 ${L.low}배보다 낮게는 내려가지 않아, 손절이 넓어 ${L.low}배도 안 맞는 신호는 진입하지 않습니다.`;
+    if (p.best_ok) return [term("좋은 자리"), ` (진입 강도 점수가 높은 자리: 5년 신호의 약 ${share(p.p_best, 0)})면 ${L.bestArrow}, 아니면 `, term("보통 자리"), `라서 ${how}.${end}`];
+    return [p.kind === "ds" ? "딥시크 매매법은 진입 강도 점수가 없어서 " : `이 칸(${tfKo(p.tf)})은 진입 강도 기준이 없어서 `, "늘 ", term("보통 자리"), `: ${how}.${end}`];
+  }
   if (p.best_ok) {
     return [term("좋은 자리"), ` (진입 강도 점수가 높은 자리: 5년 신호의 약 ${share(p.p_best, 0)})면 50배 → 40배 → 30배 → 20배, 아니면 `, term("보통 자리"),
       "라서 30배 → 20배 순서로 시도해, 거래소 한도 안이고 두 가지 안전 검사를 모두 통과한 첫 배수로 들어갑니다."];
@@ -136,7 +144,7 @@ export function levPair(x, bestOk) {
 // ---------------------------------------------------------------- the five accounts, what each changes
 export const ROLE_RULE = {
   cand: {nums: "커스텀값", exit: "후보 것", size: "규칙봇과 같음 (증거금 = 배수%)", dir: "신호대로", why: "커스텀값 + 커스텀 익절·손절이 정말 나은가"},
-  quarter: {nums: "커스텀값", exit: "후보 것", size: "증거금만 1/4 (50배 12.5% · 40배 10% · 30배 7.5% · 20배 5%)", dir: "신호대로",
+  quarter: {nums: "커스텀값", exit: "후보 것", get size() { return `증거금만 1/4 (${LK.levLadder().quarterText})`; }, dir: "신호대로",
     why: "크기를 줄이면 덜 흔들리나 · 손실 검사가 4배 느슨하고 거래소 한도에도 덜 걸려서 후보보다 높은 배수가 나오기도 함"},
   exitonly: {nums: "기본값 (규칙봇 숫자)", exit: "후보 것", size: "규칙봇과 같음", dir: "신호대로", why: "좋아진 게 숫자 덕인가 익절·손절 덕인가"},
   base: {nums: "기본값 (규칙봇 숫자)", exit: "지금 규칙봇 것: 계단 잠금 10%부터 · 손절 2 ATR", size: "규칙봇과 같음", dir: "신호대로", why: "규칙봇과 같은 조건 (그 칸에 하나)"},
@@ -202,6 +210,8 @@ export function levRuleBody(r) {
   const npick = picks.length, wide = picks.filter((p) => p.stop_atr >= 3).length;
   const blk = blockedWords(r, ""), qblk = blockedWords(r, "q_");
   const top = r.steps[0] || {};
+  const L = LK.levLadder(), lowStep = r.steps.find((x) => x.lev === L.low) || {};
+  const many = L.on ? `${L.low}배로 내려가거나 들어가지 못하는 신호가 많고, ` : "20~30배가 많고, ";
   return h("div", {class: "stack tight rl-levrule"},
     h("p", null, "배수(레버리지)는 신호가 올 때마다 엔진이 정합니다. 아래 순서대로 시도해서 ", h("b", null, "거래소 한도 안이고 두 가지 안전 검사를 모두 통과한 첫 배수"),
       "로 들어갑니다. 하나도 통과하지 못하면 그 신호는 ", h("b", null, "들어가지 않고 건너뜁니다"), "."),
@@ -216,9 +226,10 @@ export function levRuleBody(r) {
       h("li", null, h("b", null, term("청산 검사")), ` · 손절선이 `, term("청산가"), `보다 안쪽에 있고, 그 사이가 1 ATR 이상(최소 진입가의 ${share(c.buffer_min, 1)})이어야 합니다. 배수가 높을수록 청산가가 가까워집니다 (위의 ‘진입 때 청산까지’${owner ? "" : ": 주문 크기에 따라 거래소 유지 증거금이 달라 후보와 1/4이 조금 다름"}).`),
       h("li", null, h("b", null, term("손실 검사")), ` · 손절에 닿았을 때 잃는 돈(수수료·슬리피지 포함)이 잔고의 ${share(c.max_loss, 0)} 이하여야 합니다. 그래서 배수마다 쓸 수 있는 `, term("손절 거리 한도"), "가 있습니다 (위의 ‘손절 거리 한도’).")),
     h("p", null, "그래서 ", h("b", null, "손절이 넓을수록 배수가 내려갑니다"), `. 예를 들어 손절이 1%면 좋은 자리라도 50배(한도 ${share((r.steps[0] || {}).max_stop, 2)})와 40배(한도 ${share((r.steps[1] || {}).max_stop, 2)})는 손실 검사에 걸려 30배로 들어갑니다. `,
-      owner ? (wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 ‘${ROLE_KO.cand}’ 계좌는 20~30배가 많고, 손절을 최대 2 ATR로 좁힌 계좌(대조 · 메인)는 같은 자리에서 40·50배가 더 자주 나옵니다.`
+      L.on ? `이 리그는 ${L.low}배보다 낮게는 내려가지 않아, 손절이 ${L.low}배 한도(${share(lowStep.max_stop, 2)})보다 넓은 신호는 들어가지 않습니다. ` : "",
+      owner ? (wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 ‘${ROLE_KO.cand}’ 계좌는 ${many}손절을 최대 2 ATR로 좁힌 계좌(대조 · 메인)는 같은 자리에서 40·50배가 더 자주 나옵니다.`
         : "손절을 최대 2 ATR로 좁힌 계좌(대조 · 메인)는 손절이 더 넓은 계좌보다 같은 자리에서 40·50배가 더 자주 나옵니다.")
-        : [wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 20~30배가 많고, ` : "", "손절 2 ATR인 기본값 계좌는, 손절이 2 ATR보다 넓은 후보와 비교하면 40·50배가 더 자주 나옵니다."]),
+        : [wide ? `후보 ${fmt.int(npick)}개 중 ${fmt.int(wide)}개는 손절이 3~4 ATR로 넓어서 ${many}` : "", "손절 2 ATR인 기본값 계좌는, 손절이 2 ATR보다 넓은 후보와 비교하면 40·50배가 더 자주 나옵니다."]),
     h("p", null, term("증거금"), " = 그 거래에 거는 돈 (잔고 × 비율). ", term("포지션 크기"), ` = 증거금 × 배수. 예: 잔고 ${LK.usd0(eq0(r))}에서 30배면 증거금 ${LK.usd0(eq0(r) * 0.3)}, 포지션 ${LK.usd0(eq0(r) * 9)}. `,
       owner ? "" : "1/4 계좌는 증거금만 1/4이라 손실 검사가 4배 느슨하고 거래소 한도에도 덜 걸려서, 후보보다 높은 배수로 들어가기도 합니다."),
     h("div", {class: "rl-usedall"}, h("span", {class: "muted"}, "지금까지 실제로 쓴 배수 (닫힌 거래 · 계좌마다 최근 200번까지)"),
@@ -293,7 +304,7 @@ export function pickRuleBody(p, r, o = {}) {
       h("div", null, h("dt", null, "손절"), h("dd", null, h("b", null, `${num1(p.stop_atr)} ATR`), " · ", stopWords(p.stop_atr, p.tf, p.tp))),
       h("div", null, h("dt", null, "본전 승률"), h("dd", null, beWords(p))),
       h("div", null, h("dt", null, "배수"), h("dd", null, levWords(p))),
-      h("div", null, h("dt", null, "증거금"), h("dd", null, lineupOn() ? "잔고 × 배수%: 50배면 잔고의 50%, 40배 40%, 30배 30%, 20배 20%." : "잔고 × 배수%: 50배면 잔고의 50%, 40배 40%, 30배 30%, 20배 20%. 1/4 계좌는 그 1/4."))),
+      h("div", null, h("dt", null, "증거금"), h("dd", null, lineupOn() ? `잔고 × 배수%: ${LK.levLadder().marginText}.` : `잔고 × 배수%: ${LK.levLadder().marginText}. 1/4 계좌는 그 1/4.`))),
     h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, "지금 이 숫자면"), nowBox(p, r)),
     h("div", {class: "rl-sub"}, h("h3", {class: "cl-h3"}, lineupOn() ? `이 후보의 계좌 ${fmt.int(ROLES.filter((r) => roles[r]).length)}개의 익절·손절과 실제로 쓴 배수` : `계좌 ${ROLES.length}개의 익절·손절과 실제로 쓴 배수`),
       h("div", {class: "rl-five"}, ROLES.map((role) => {
@@ -324,7 +335,7 @@ export function ruleBox(c, r) {
     h("div", {class: "rl-bl"}, h("b", null, "손절"), h("span", null, `${num1(p.stop_atr)} ATR = ${TF_BAR[p.tf] || tfKo(p.tf)} 평균 움직임의 ${num1(p.stop_atr)}배 · `,
       stopMoves(p.tp) ? "수익이 나면 계단 잠금으로 올라감" : "움직이지 않음")),
     h("div", {class: "rl-bl"}, h("b", null, "본전 승률"), h("span", null, be)),
-    h("div", {class: "rl-bl"}, h("b", null, "배수"), h("span", null, p.best_ok ? "좋은 자리 50→40→30→20배 · 보통 30→20배" : "늘 보통 자리 30→20배",
+    h("div", {class: "rl-bl"}, h("b", null, "배수"), h("span", null, p.best_ok ? `좋은 자리 ${LK.levLadder().bestTight} · 보통 ${LK.levLadder().normalTight}` : `늘 보통 자리 ${LK.levLadder().normalTight}`,
       " · 실제 ", usedChips(((p.roles || {}).cand || {}).used))),
     lineupOn() ? null : h("div", {class: "rl-bl muted"}, h("b", null, "기본값"), h("span", null, (r && r.base_exit_ko) || "계단 잠금 10%부터 · 손절 2 ATR")),
     h("a", {class: "btn-line", href: `#/rules?pick=${encodeURIComponent(c.id)}`}, "익절·손절·배수 자세히 (지금 코인별 배수)"));

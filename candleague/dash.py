@@ -241,10 +241,36 @@ def rebuild_open(o: dict, wallet: float, size: float, ex: Optional[dict]) -> dic
     return {"qty": qty, "margin": margin, "equity_at_entry": eq0, "liq": liq, "exact": False}
 
 
-RULE_KO = ("규칙: 좋은 자리는 50배(증거금 50%) → 40배(40%) → 30배(30%) → 20배(20%), 보통 자리는 30배 → 20배 순서로 "
-           "시도해, 거래소가 그 주문 크기에 허용하는 배수 안이고 두 가지 안전 검사(손절선이 청산가 안쪽에 여유 · 손절 손실이 "
-           "잔고의 15% 이하)를 통과한 첫 배수로 들어갑니다")
-RULE_SHORT_KO = "좋은 자리 50→40→30→20배 · 보통 30→20배 · 거래소 한도와 안전 검사를 통과한 첫 배수"
+def _ladder() -> tuple:
+    """(best, normal): the leverages the league tries, from the process env (exits.min_leverage(), read at call time): the rule bot's
+    50/40/30/20 for a good spot and 30/20 for a normal one, without those below CANDLEAGUE_MIN_LEV."""
+    from . import exits as X
+    m = X.min_leverage()
+    keep = lambda xs: [v for v in xs if m is None or v >= m]  # noqa: E731
+    return keep([50, 40, 30, 20]), keep([30, 20])
+
+
+def rule_ko() -> str:
+    best, normal = _ladder()
+    bt = " → ".join(f"{v}배({v}%)" if i else f"{v}배(증거금 {v}%)" for i, v in enumerate(best))
+    nt = " → ".join(f"{v}배" for v in normal) + (" 순서로 " if len(normal) > 1 else "만 ")
+    tail = "" if len(best) == 4 else (f" 이 리그는 {best[-1]}배보다 낮게는 내려가지 않아, 어느 배수도 안 맞으면(손절이 넓으면) 들어가지 않습니다.")
+    return (f"규칙: 좋은 자리는 {bt}, 보통 자리는 {nt}"
+            "시도해, 거래소가 그 주문 크기에 허용하는 배수 안이고 두 가지 안전 검사(손절선이 청산가 안쪽에 여유 · 손절 손실이 "
+            "잔고의 15% 이하)를 통과한 첫 배수로 들어갑니다" + ("." + tail if tail else ""))
+
+
+def rule_short_ko() -> str:
+    best, normal = _ladder()
+    return f"좋은 자리 {'→'.join(map(str, best))}배 · 보통 {'→'.join(map(str, normal))}배 · 거래소 한도와 안전 검사를 통과한 첫 배수"
+
+
+def __getattr__(name: str):                                  # RULE_KO / RULE_SHORT_KO: the same text, but from the env at the time of the read
+    if name == "RULE_KO":
+        return rule_ko()
+    if name == "RULE_SHORT_KO":
+        return rule_short_ko()
+    raise AttributeError(name)
 
 
 def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[float], cap50: Optional[int] = None) -> dict:
@@ -284,8 +310,8 @@ def why_lev(a: dict, lev: int, margin_pct: Optional[float], liq_dist: Optional[f
         parts.append(f"증거금 {margin_pct * 100:.4g}%")
     if liq_dist is not None:
         parts.append(f"진입 때 청산까지 {liq_dist * 100:.1f}%")
-    return {"group_ko": group, "head_ko": " · ".join(parts), "lev_ko": lev_ko, "sub_ko": sub, "rule_ko": RULE_KO,
-            "rule_short_ko": RULE_SHORT_KO}
+    return {"group_ko": group, "head_ko": " · ".join(parts), "lev_ko": lev_ko, "sub_ko": sub, "rule_ko": rule_ko(),
+            "rule_short_ko": rule_short_ko()}
 
 
 def _cap50(ex: Optional[dict], sym: str, equity: Optional[float], size: float) -> Optional[int]:
@@ -476,9 +502,9 @@ def atr14(h: list, lo: list, c: list, n: int = 14) -> Optional[float]:
 
 
 def _settings(exit_name: str, size: float):
-    key = (exit_name, size)
+    from .exits import min_leverage, settings_for
+    key = (exit_name, size, min_leverage())                 # the leverage floor is part of the settings
     if key not in _SETTINGS:
-        from .exits import settings_for
         _SETTINGS[key] = settings_for(exit_name, size=size)
     return _SETTINGS[key]
 
@@ -502,9 +528,13 @@ def rule_steps(ex: Optional[dict], equity: float = RULE_EQUITY) -> list[dict]:
     notional, ``q_liq`` at the 1/4 account's: a smaller order falls in a lower bracket; None where the step is blocked)."""
     from paperbot.config import V3_QUALITY_TIERS
     from paperbot.margin import liquidation_price
+    from . import exits as X
+    floor = X.min_leverage() or 0                         # the owners' league: no step below CANDLEAGUE_MIN_LEV
     out = []
     for t in V3_QUALITY_TIERS:
         for lev in t.leverages:
+            if lev < floor:
+                continue
             row = {"lev": int(lev), "group": t.name, "margin": t.margin_frac, "q_margin": round(t.margin_frac * QUARTER, 6),
                    "max_stop": max_stop(t.margin_frac, lev), "q_max_stop": max_stop(t.margin_frac * QUARTER, lev),
                    "notional": equity * t.margin_frac * lev, "q_notional": equity * t.margin_frac * QUARTER * lev,

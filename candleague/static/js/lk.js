@@ -27,6 +27,36 @@ const DAY = 86400000;
 let LEAGUE = null, IDX = null, META = null, metaP = null;
 export function setLeague(d) { applyLineup(d && d.lineup); setEquity(d && d.equity0); LEAGUE = d; IDX = null; }
 export const league = () => LEAGUE;
+/** The leverage ladder the league tries (owners 2026-10-13: the candidate league runs with a floor, snapshot min_lev = 30, so 50 -> 40 -> 30 for a
+ *  좋은 자리, 30 only for a 보통 자리, and a signal whose stop does not fit at the floor is not entered). Without min_lev (the rule bot, the
+ *  old league) the full 50/40/30/20 and 30/20, in the words these screens always used. Every ladder text of the dashboard comes from here. */
+export const LEV_BEST = [50, 40, 30, 20], LEV_NORMAL = [30, 20];
+const STOP_LIM = {50: "0.48%", 40: "0.82%", 30: "1.55%", 20: "3.63%"};   // the widest stop (of the entry price) the 15 % loss check allows per leverage
+export function levLadder(d = LEAGUE) {
+  const m = d && Number.isInteger(d.min_lev) && d.min_lev >= 1 && d.min_lev <= 50 ? d.min_lev : null;
+  const keep = (xs) => (m == null ? xs : xs.filter((v) => v >= m));
+  const best = keep(LEV_BEST), normal = keep(LEV_NORMAL), low = best.length ? best[best.length - 1] : null;
+  const arrow = (xs) => xs.map((v) => `${v}배`).join(" → ");            // "50배 → 40배 → 30배"
+  const tight = (xs) => (xs.length ? `${xs.join("→")}배` : "없음");        // "50→40→30배"
+  const first = (xs) => xs[0];
+  return {
+    min: m, on: m != null, best, normal, low, has20: best.includes(20),
+    bestArrow: arrow(best), normalArrow: arrow(normal), bestTight: tight(best), normalTight: tight(normal),
+    /** "50/40배 · 보통 30/20배" of the 읽는 법 line (the old league's words; the floor league names all of its steps) */
+    slash: m == null ? "좋은 자리 50/40배 · 보통 30/20배" : `좋은 자리 ${best.join("/")}배 · 보통 ${normal.join("/")}배`,
+    /** "30배 → 20배 순서로 시도" / "30배만 시도" */
+    tryNormal: normal.length > 1 ? `${arrow(normal)} 순서로 시도` : normal.length ? `${first(normal)}배만 시도` : "시도하지 않음",
+    /** "50배면 잔고의 50%, 40배 40%, 30배 30%" (margin % = leverage) */
+    marginText: best.map((v, i) => (i ? `${v}배 ${v}%` : `${v}배면 잔고의 ${v}%`)).join(", "),
+    /** the quarter account's margins "50배 12.5% · 40배 10% · ..." */
+    quarterText: best.map((v) => `${v}배 ${v / 4}%`).join(" · "),
+    /** the two lowest steps, low first, for "20배면 약 …, 30배면 약 …" */
+    lowTwo: best.slice(-2).reverse(),
+    /** the widest stop per step "50배 약 0.48%, 40배 0.82%, 30배 1.55%" */
+    stopLimits: best.map((v, i) => `${v}배 ${i ? "" : "약 "}${STOP_LIM[v]}`).join(", "),
+    stopLimitLow: low == null ? null : STOP_LIM[low],
+  };
+}
 export async function getMeta() {
   if (META) return META;
   metaP = metaP || getJSON("/api/meta").then((m) => (META = m || {})).catch((e) => { metaP = null; throw e; });

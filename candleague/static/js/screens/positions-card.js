@@ -88,7 +88,7 @@ export function whyBox(p) {
     h("span", null, K4.plate(lev ? `왜 ${fmt.lev(lev)}` : "왜 이 배수")),
     h("p", null, head.filter(Boolean).join(" · ")),
     w ? h("small", null, [w.lev_ko, w.sub_ko].filter(Boolean).join(" · ")) : null,
-    w && w.rule_ko ? h("small", {class: "ps-rule"}, w.rule_short_ko || "좋은 자리 50→40→30→20배 · 보통 30→20배", " · ",
+    w && w.rule_ko ? h("small", {class: "ps-rule"}, w.rule_short_ko || `좋은 자리 ${LK.levLadder().bestTight} · 보통 ${LK.levLadder().normalTight}`, " · ",
       h("a", {href: p.pick ? `#/rules?pick=${encodeURIComponent(p.pick)}` : "#/rules"}, "배수 규칙 자세히")) : null);
 }
 

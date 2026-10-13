@@ -135,7 +135,7 @@ export function pickRow(c, R, on, onPick, o = {}) {
   h("span", {class: "rl-rx rl-rtp", dataset: {k: "익절"}, title: p ? RK.tpShort(p.tp) : c.exit_ko}, p ? RK.tpTiny(p.tp, {long: true}) : c.exit_ko),
   h("span", {class: "rl-rx", dataset: {k: "손절"}}, p ? `${fmt.num(p.stop_atr, p.stop_atr % 1 ? 1 : 0)} ATR` : "—"),
   h("span", {class: "rl-rx num", dataset: {k: "본전"}}, p && p.breakeven != null ? RK.share(p.breakeven, 0) : p && p.tp.kind === "roe" ? "배수에 따라" : "—"),
-  h("span", {class: "rl-rx", dataset: {k: "배수"}}, p ? (p.best_ok ? "50→40→30→20배" : "30→20배") : "—"),
+  h("span", {class: "rl-rx", dataset: {k: "배수"}}, p ? (p.best_ok ? LK.levLadder().bestTight : LK.levLadder().normalTight) : "—"),
   h("span", {class: "rl-rx rl-ru", dataset: {k: "후보가 쓴 배수"}}, p ? RK.usedChips(((p.roles || {}).cand || {}).used) : "—"));
 }
 
@@ -183,9 +183,10 @@ export function answersBody(d, R) {
       h("br"), "R = 진입가에서 손절까지의 거리.", r3 ? " 3R 익절이면 손절 거리의 3배 가면 익절하고, 4번 중 1번만 이겨도 본전(비용 전)입니다." : "",
       owner ? "" : ` 기본값 계좌만 규칙봇의 지금 청산(${baseKo})을 씁니다.`)),
     h("div", null, h("dt", null, "배수(레버리지)는?"), h("dd", null,
-      "규칙봇과 같은 규칙입니다. 좋은 자리(기존 36 매매법의 진입 강도 점수 상위)는 50배 → 40배 → 30배 → 20배, 보통 자리는 30배 → 20배 순서로 시도해, ",
+      "규칙봇과 같은 규칙입니다. 좋은 자리(기존 36 매매법의 진입 강도 점수 상위)는 ", LK.levLadder().bestArrow, ", 보통 자리는 ", LK.levLadder().tryNormal, "해, ",
       "거래소가 그 주문 크기에 허용하는 배수 안이고 두 가지 안전 검사(손절선이 청산가 안쪽에 1 ATR 이상 여유 · 손절 손실이 잔고의 15% 이하)를 통과한 첫 배수로 들어갑니다. ",
       "증거금은 잔고의 배수% (30배면 30%). 손절이 넓을수록 배수가 내려가고, 어느 배수도 안 되면 들어가지 않습니다. 딥시크는 늘 보통 자리입니다.",
+      LK.levLadder().on ? ` 이 리그는 ${LK.levLadder().low}배보다 낮게는 내려가지 않아, 손절이 넓은 신호는 거래가 줄 수 있습니다.` : "",
       blk ? ` 거래소 한도: ${owner ? "이 크기" : "후보 크기"}에서는 ${blk}라서 다음 배수로 내려갑니다${owner ? "." : " (1/4 계좌는 주문이 작아 덜 걸림)."}` : "",
       used ? [h("br"), h("span", {class: "muted"}, usedN ? `${owner ? `‘${ROLE_KO.cand}’` : "후보"} 계좌가 지금까지 쓴 배수: ` : `${owner ? `‘${ROLE_KO.cand}’` : "후보"} 계좌는 아직 닫힌 거래가 없습니다`), usedN ? RK.usedChips(used) : null] : null)),
     h("div", null, h("dt", null, "언제부터?"), h("dd", null,
