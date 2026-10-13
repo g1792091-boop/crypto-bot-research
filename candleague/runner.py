@@ -671,6 +671,14 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
             doc["risk"] = RV.risk_views(book, rows, lu, EQUITY, ds_money)
         except Exception as exc:  # noqa: BLE001
             doc["risk_error"] = f"{type(exc).__name__}: {exc}"[:200]
+        # ... and the 손실 해부 (lossview.loss_views): the closed losing trades of every account kind, sorted into plain loss types with their
+        # breakdowns and the biggest ones (descriptive only; read-only on the trades already loaded; DeepSeek is left out unless ds_money). A failure
+        # leaves the key absent ("준비 중")
+        try:
+            from . import lossview as LV
+            doc["losses"] = LV.loss_views(book, rows, lu, ds_money)
+        except Exception as exc:  # noqa: BLE001
+            doc["losses_error"] = f"{type(exc).__name__}: {exc}"[:200]
         # ... and the 실제 비용 (costview) / 신호 (signalview) / 알림 기록 (the notifier's telegram.json) blocks; each fails alone into doc["<name>_error"]
         from . import costview as CV, notify as NT, signalview as SV
         for key, build in (("costs", lambda: CV.cost_views(book, rows, lu, EQUITY, ds_money)), ("signals", lambda: SV.signal_views(book, rows, lu, now_ms, ds_money)),
