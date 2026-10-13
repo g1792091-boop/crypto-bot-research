@@ -1,0 +1,6 @@
+/* 여러 차트 (#/charts): the grid, cells, heads and the full-window cell are in v4screens.css (copied from the rule bot's
+   v4 screens/charts.css; loaded on every page). Only what the 후보 리그 adds: the "+N개 더" mark in a cell head, and the
+   cell's position picker, which can hold the 20 newest of many accounts. Tokens only. */
+.cg-more { flex: none; padding: 1px 6px; border: 1px solid var(--line-2); border-radius: 999px; color: var(--ink-2); font: 700 var(--t-2xs)/1.4 var(--f-term); white-space: nowrap; }
+.cg-more[hidden] { display: none; }
+.cg-ov option, .cg-ov optgroup { font-size: var(--t-xs); }

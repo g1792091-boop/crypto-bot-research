@@ -34,6 +34,7 @@ const GROUPS = [{id: "trade", ko: "실시간"}, {id: "home", ko: "요약 · 판�
 const MENU = [
   {id: "terminal", ko: "터미널", group: "trade"},
   {id: "positions", ko: "포지션", group: "trade"},
+  {id: "charts", ko: "여러 차트", group: "trade"},
   {id: "entries", ko: "진입 차트", group: "trade"},
   {id: "fills", ko: "체결 기록", group: "trade"},
   {id: "events", ko: "발동 기록", group: "trade"},
@@ -58,6 +59,7 @@ const MENU = [
   {id: "howto", ko: "읽는 법", group: "info"},
 ];
 const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 · 수익)", positions: "포지션 (모의 계좌의 열린 포지션, 실시간 손익)",
+  charts: "여러 차트 (코인 · 봉을 칸마다 골라 한 화면에: 캔들 위에 열린 포지션 선)",
   entries: "진입 차트 (매매법마다 따로, 후보가 들어간 자리)", fills: "체결 기록 (모든 계좌의 닫힌 거래)", home: "요약",
   check: "점검 진행 (11/11 · 12/11 · 1/11 기준이 지금 어떤지)",
   versus: "메인 vs 대조 (새 청산 방법이 원래 방식보다 나은지: 승률 · 손익비 · 거래당 순수익 · 낙폭 · 동전 던지기 확인)",
@@ -75,7 +77,7 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
 const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", conditions: "conditions", risk: "risk", monthsim: "monthsim", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
-  weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
+  weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", charts: "charts", fills: "fills", status: "status", howto: "howto",
   account: "account", rules: "rules"};
 // the 계좌 비교 screen's label follows the league: "5계좌 비교" (candidate league, as written above) / "계좌 비교" (owner-exit league: its ~26 kinds)
 Object.defineProperty(MENU.find((m) => m.id === "compare"), "ko", {get: () => compareKo(), enumerable: true});
