@@ -260,10 +260,15 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     assert (by[wide + "-ld"]["exit"], by[wide + "-ldp"]["exit"], by[wide + "-ld1"]["exit"]) == ("ladderU|2", "ladderU|4", "ladderU|1")
     assert by[wide + "-ldc"]["of"] == wide + "-ld"                                      # the coin twin is the primary's
     # the three structure accounts run the owners' ladder with the stop at most 2 ATR, for every pick (none is dropped as a duplicate of -ld)
-    for suffix, rule, tight in (("-fq", "F6.w3.d0.5", None), ("-tg", "F1.w3.a", 0.5), ("-sb", "F1.w3.a", None)):
+    for suffix, rule, tight in (("-tg", "F1.w3.a", 0.5), ("-sb", "F1.w3.a", None)):
         group = [a for a in accts if a["id"].endswith(suffix)]
         assert len(group) == 49
         assert all(a["rule"]["id"] == rule and a.get("tighten") == tight and a["exit"] == by[a["pick"] + "-ld"]["exit"] for a in group), suffix
+    # the live candidate: the strategy's own structure with a loss deeper than half the stop; the 3-bar swing for the picks whose strategy has no own exit
+    fq = [a for a in accts if a["id"].endswith("-fq")]
+    assert len(fq) == 49 and all(a["exit"] == by[a["pick"] + "-ld"]["exit"] and not a.get("tighten") for a in fq)
+    assert all(a["rule"]["id"] == ("F11.a.d0.5" if RX.native_supported(a) else "F6.w3.d0.5") for a in fq)
+    assert sum(1 for a in fq if a["rule"]["id"] == "F11.a.d0.5") == 38
     lu = {x["suffix"]: x for x in RX.lineup(accts)}
     assert "tighten" not in lu["-fq"] and lu["-tg"]["tighten"] == 0.5 and lu["-tg"]["short_ko"] == "손절 좁힘"
 
@@ -488,3 +493,52 @@ def test_the_switching_account_closes_on_the_strategys_opposite_signal_and_enter
     e = RX.make_engine(a, TR.BR, TR.SP)
     PS.replay_day({a["id"]: e}, set(), {TR.C0: by[TR.C0], c1: [by[c1][1]]}, TR.Path().steps(side), TR.BR)
     assert not e.trades and e.position.side == side
+
+
+# ---------------------------------------------------------------- F11 with a loss condition: the strategy's own structure, only at a net loss deeper than d x R
+def test_f11_with_a_loss_depth_is_written_and_read_like_the_studys_ids():
+    r = RX.parse_rule("F11.a.d0.5")
+    assert r["family"] == "F11" and r["mode"] == "a" and r["d"] == 0.5 and r["id"] == "F11.a.d0.5" and RX.rule_needs(r)["nat"] is True
+    assert RX.parse_rule("F11.a")["id"] == "F11.a" and "d" not in RX.parse_rule("F11.a")                     # the study's own ids are as before
+    for bad in ("F11.a.d", "F11.a.q15", "F11.a.d-1", "F11.c.d0.5", "F11.a.d0.5.q15"):
+        with pytest.raises(RX.RuleConfigError):
+            RX.parse_rule(bad)
+    assert RX.native_ids() == ["F11.a", "F11.b", "F12.a", "F12.b"] and len(RX.study_ids()) + len(RX.native_ids()) == 86
+
+
+@SIDES
+def test_f11_with_a_loss_depth_fires_only_when_the_strategys_own_view_broke_and_the_loss_is_deep_enough(side):
+    k = TR.key_of(side)
+    a = TR.acct("F11.a.d0.5", exit_="ladderU|2")
+    assert TR.rn(side, -120) > -0.5 > TR.rn(side, -140)                         # the same two depths the F6 test uses
+    ev = lambda off, v: TR.nrec(TR.chk(1), side, off, **{k: [v]})              # noqa: E731
+    # an event component true at a shallow loss: not enough, the event is gone at the next check
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.nsig(side, ["event"], [0])),), recs=[ev(-120, 1), TR.nrec(TR.chk(2), side, -150, **{k: [0]})])
+    assert not e.trades
+    # the same event at a deep loss: closed at the next minute
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.nsig(side, ["event"], [0])),), recs=[ev(-140, 1)])
+    TR.exits_at(e, TR.J0 + 60)
+    # a state that stays broken: shallow at the first check (no), deep at the second (yes)
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.nsig(side, ["state"], [0])),),
+               recs=[ev(-120, 1), TR.nrec(TR.chk(2), side, -150, **{k: [1]})])
+    TR.exits_at(e, TR.J0 + 120)
+    # a deep loss and the view not broken: nothing
+    e = TR.run(a, TR.Path(), side, sigs=((TR.C0, TR.nsig(side, ["state"], [0])),), recs=[ev(-300, 0)])
+    assert not e.trades
+    # without the loss depth the same shallow event closes it (the study's F11.a)
+    e = TR.run(TR.acct("F11.a", exit_="ladderU|2"), TR.Path(), side, sigs=((TR.C0, TR.nsig(side, ["event"], [0])),), recs=[ev(-120, 1)])
+    TR.exits_at(e, TR.J0 + 60)
+
+
+def test_native_rule_must_be_an_f11_a_rule_next_to_a_rule_on_the_ladder():
+    base = {"suffix": "-x1", "exit": "ladderU", "stop_max": 2, "rule": "F6.w3.d0.5", "native_rule": "F11.a.d0.5", "label_ko": "x"}
+    doc = copy.deepcopy(LINEUP)
+    doc["owner_exits"].append(base)
+    assert RX.normalize_owner(doc)["owner_exits"][-1]["native_rule"]["id"] == "F11.a.d0.5"
+    for bad in ({"native_rule": "F6.w3.d0.5"}, {"native_rule": "F11.b"}, {"native_rule": 5}, {"rule": None}, {"exit": None}, {"tighten": 0.5}):
+        e = {**base, **bad}
+        e = {k: v for k, v in e.items() if v is not None}
+        doc = copy.deepcopy(LINEUP)
+        doc["owner_exits"].append(e)
+        with pytest.raises(RX.RuleConfigError):
+            RX.normalize_owner(doc)

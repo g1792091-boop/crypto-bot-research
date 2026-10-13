@@ -153,7 +153,7 @@ _PAT = {
     "F8": rf"F8\.w(?P<w>\d+)\.P(?P<P>{_N})\.(?P<mode>[ab])",
     "F9": r"F9\.(?P<mode>[ab])(?P<q>\.q15)?",
     "F10": r"F10\.N(?P<N>\d+)\.(?P<mode>[ab])",
-    "F11": r"F11\.(?P<mode>[ab])",
+    "F11": rf"F11\.(?P<mode>[ab])(?:\.d(?P<d>{_N}))?",
     "F12": r"F12\.(?P<mode>[ab])",
     "F13": r"F13\.(?P<mode>[ab])",
 }
@@ -204,7 +204,7 @@ def rule_id(r: dict) -> str:
         return f"F12.{m}"
     if f == "F13":
         return f"F13.{m}"
-    return f"F11.{m}"
+    return f"F11.{m}" + (f".d{_fmt(r['d'])}" if r.get("d") is not None else "")
 
 
 def parse_rule(x) -> dict:
@@ -277,7 +277,7 @@ def _normalize(d: dict, src) -> dict:
         need("P", float, 1e-9)
     if fam == "F5":
         need("g", float, 1e-9, 1 - 1e-9)
-    if fam == "F6":
+    if fam == "F6" or (fam == "F11" and "d" in d):         # F11.<mode>.d<D> (owners 2026-10-13): the strategy's own exit, only at a net loss deeper than D x R
         need("d", float, 0.0)
     if fam in ("F7", "F10"):
         need("N", int, 1)
@@ -465,7 +465,7 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "native_rule"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
 OWNER_MAX = 20
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
@@ -495,6 +495,13 @@ def _owner_words(e: dict) -> tuple:
         tail = "후보의 익절과 손절은 그대로" if r["mode"] == "a" else "고정 익절 없음 · 손절은 그대로"
         return ("반납 보호", f"수익이 +{_fmt(r['P'])}R(손절 거리 {_fmt(r['P'])}배)에 닿은 뒤, 봉 마감 때 최고 수익의 "
                 f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
+    if r is not None and tp == X.ULAD and e.get("native_rule") is not None:
+        nd = e["native_rule"].get("d")
+        cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
+        where = f" · 손실이 손절 거리의 {_fmt(nd * 100)}% 넘게 났을 때만" if nd else ""
+        return ("빠른 손절", f"계단 익절(+13%→+10%, +20%→+15% …) · {cap} · 그 매매법이 스스로 '이 방향 구조가 무너졌다'고 확실히 보고(매매법마다 다른 조건. 예: OBV는 OBV가 평균선 아래로, 박스는 바닥 아래로 마감){where} 다음 분 시장가로 청산. "
+                f"자체 구조 판단 코드가 없는 후보(약한 단서 11개)는 같은 자리에서 3봉 스윙 구조가 무너졌을 때",
+                "매매법마다 자기 구조로 확실히 무너졌을 때만 빨리 자르면 나은가")
     if r is not None and tp == X.ULAD:
         cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
         when = ("그 매매법이 반대 방향 진입 신호를 내면(= 구조가 반대로 바뀌었다고 스스로 확신하면)" if r["family"] == "F3" else
@@ -565,6 +572,13 @@ def _owner_entry(x, i: int) -> dict:
     coin = x.get("coin_of")
     if coin is not None and (not isinstance(coin, str) or not _SUFFIX_RE.match(coin) or tp is None or rule is not None):
         raise RuleConfigError(f"rule config: {where} coin_of must be the suffix of another entry (like '-ld') and needs an 'exit' (and no rule)")
+    nr = x.get("native_rule")
+    if nr is not None:
+        nrule = parse_rule(nr) if isinstance(nr, str) else None
+        if (nrule is None or nrule["family"] != "F11" or nrule["mode"] != "a" or rule is None or tp != X.ULAD or x.get("tighten") is not None):
+            raise RuleConfigError(f"rule config: {where} native_rule must be an F11.a rule id (like 'F11.a.d0.5') given together with a rule on the owners' "
+                                  "ladder (the rule used for the picks whose strategy has no native exit) and no tighten")
+        nr = nrule
     tg = x.get("tighten")
     if tg is not None and (isinstance(tg, bool) or not isinstance(tg, (int, float)) or not 0 < float(tg) <= 1 or rule is None or tp != X.ULAD):
         raise RuleConfigError(f"rule config: {where} tighten must be a number in (0, 1] (the share of the stop distance the stop narrows to) "
@@ -583,7 +597,7 @@ def _owner_entry(x, i: int) -> dict:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
          "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin,
-         "tighten": None if tg is None else float(tg)}
+         "tighten": None if tg is None else float(tg), "native_rule": nr}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -645,7 +659,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
         for e in ents:
             exit_ = c["exit"]
             tgt = None
-            if e["rule"] is not None and e["rule"]["family"] in NATIVE_FAMILIES and not native_supported(c):
+            er = e["native_rule"] if (e["native_rule"] is not None and native_supported(c)) else e["rule"]     # the rule this pick's account runs
+            if er is not None and er["family"] in NATIVE_FAMILIES and not native_supported(c):
                 continue                                      # no native exit for this strategy: no such account for the pick
             if e["tp"]:
                 kk = k if e["stop_max"] is None else f"{min(float(k), e['stop_max']):g}"
@@ -656,8 +671,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                     continue                                  # that entry made no account for this pick
                 exit_ = tgt["exit"]
             elif e["tp"]:
-                key = (exit_, bool(e["weekend_off"]), e["size"], e["rule"]["id"] if e["rule"] is not None else None, e["tighten"])
-                if (e["rule"] is None and exit_ == c["exit"]) or key in seen:
+                key = (exit_, bool(e["weekend_off"]), e["size"], er["id"] if er is not None else None, e["tighten"])
+                if (er is None and exit_ == c["exit"]) or key in seen:
                     continue                                  # the pick's own exit (or an earlier entry's) already: no duplicate account
                 seen[key] = e["suffix"]
             src = {"pick": pid, "owner_exit": e["suffix"], "label_ko": e["label_ko"]}
@@ -665,17 +680,17 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                 src = {**(c.get("source") or {}), **src}
             elif tgt is not None:
                 src["coin_of"] = tgt["id"]
-            elif e["rule"] is not None:
-                src["rule"] = e["rule"]["id"]
+            elif er is not None:
+                src["rule"] = er["id"]
                 if e["tp"]:
                     src["exit_of"] = c["exit"]
             elif e["tp"]:
                 src["exit_of"] = c["exit"]
             a = {**{q: c[q] for q in ("kind", "name", "tf", "combo")}, "exit": exit_, "id": pid + e["suffix"], "role": e["role"],
                  "of": (tgt["id"] if tgt is not None else pid if e["role"] == "cand" else cand_id), "pick": pid, "size": e["size"],
-                 "rule": dict(e["rule"]) if e["rule"] is not None else dict(NO_RULE), "source": src,
+                 "rule": dict(er) if er is not None else dict(NO_RULE), "source": src,
                  "ox": {q: e[q] for q in ("role", "suffix", "kind", "label_ko", "short_ko", "desc_ko", "why_ko", "tp", "weekend_off", "size")}}
-            a["ox"]["rule"] = e["rule"]["id"] if e["rule"] is not None else None
+            a["ox"]["rule"] = er["id"] if er is not None else None
             if e["tighten"] is not None:
                 a["tighten"] = e["tighten"]
                 a["ox"]["tighten"] = e["tighten"]
@@ -1184,6 +1199,8 @@ def decide(rule: dict, sched: str, rx: dict, side: int, fill: float, R: float, r
             cm |= CB["F11"]
         rx["comp"] = cm
         return cm != 0
+    if fam == "F11" and rule.get("d") is not None:                  # the strategy's own exit, and a net loss deeper than d x R at this check
+        return bool(xit and rc < -rule["d"])
     return xit                                                     # F11
 
 
