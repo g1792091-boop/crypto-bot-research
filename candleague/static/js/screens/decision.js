@@ -133,10 +133,11 @@ function ruleBox(D) {
     })));
 }
 function whenLine(D) {
-  const at = (ms) => (ms != null ? ` (${fmt.mmdd(ms)})` : "");
-  if (D.phase === "decide") return `판정일(${D.decide}일째)이 지났습니다. 이 표의 통과 · 실패가 최종 판정입니다.`;
-  if (D.days >= D.observe) return `중간 확인(${D.observe}일째${at(D.observe_ms)})은 지났습니다. 지금 숫자는 미리보기이고 아무것도 바꾸지 않습니다. 판정은 ${D.decide}일째${at(D.decide_ms)}에 한 번만 합니다.`;
-  return `중간 확인은 ${D.observe}일째${at(D.observe_ms)}, 판정은 ${D.decide}일째${at(D.decide_ms)}에 한 번만 합니다. 그 전에는 아무것도 바꾸지 않습니다.`;
+  const on = (ms) => (ms != null ? `, ${fmt.mmdd(ms)}` : "");           // "14일째, 10/25" (KST date)
+  const date = (ms) => (ms != null ? `(${fmt.mmdd(ms)})` : "");
+  if (D.phase === "decide") return `판정일(${D.decide}일째${on(D.decide_ms)})이 지났습니다. 이 표의 통과 · 실패가 최종 판정입니다.`;
+  if (D.days >= D.observe) return `중간 확인(${D.observe}일째${on(D.observe_ms)})은 지났습니다. 지금 숫자는 미리보기이고 아무것도 바꾸지 않습니다. 판정은 ${D.decide}일째${date(D.decide_ms)}에 한 번만 합니다.`;
+  return `중간 확인은 ${D.observe}일째${date(D.observe_ms)}, 판정은 ${D.decide}일째${date(D.decide_ms)}에 한 번만 합니다. 그 전에는 아무것도 바꾸지 않습니다.`;
 }
 function hero(D) {
   const won = D.counts.pass > 0;
