@@ -46,6 +46,7 @@ const SCREEN_WORDS = {
   reasons: "청산 이유 손절 익절 계단 잠금 규칙 청산 청산당함 강제청산 reasons",
   pairs: "짝 비교 같은 신호 메인 대조 빠른 손절 낫다 못하다 pairs",
   decision: "판정 결정 미리 정한 규칙 사전 등록 통과 실패 대기 표본 부족 우연 보정 홀름 28일 우위 없음 필터 동전 짝 decision",
+  conditions: "조건별 성적 요일 시간대 방향 코인 봉 BTC 추세 변동성 보유시간 언제 잘 맞나 탐색 동전 짝 conditions",
   events: "발동 기록 빠른 손절 손절 좁힘 스위칭 구조 무너짐 events",
   judge: "구조 기준 매매법 자체 구조 무너짐 빠른 손절 스위칭 언제 judge",
 };

@@ -224,7 +224,7 @@ out.again = LB.compareKo();
 """)
     assert o["owner"] == "계좌 비교" and o["old"] == "5계좌 비교" and o["again"] == "계좌 비교"
     app = open(os.path.join(ROOT, "candleague", "static", "js", "app.js"), encoding="utf-8").read()
-    assert '{id: "compare", ko: "5계좌 비교", group: "home"}' in app                      # the candidate league's label stays as written
+    assert '{id: "compare", ko: "5계좌 비교", group: "study"}' in app                      # the candidate league's label stays as written
     assert 'Object.defineProperty(MENU.find((m) => m.id === "compare"), "ko"' in app and "compareKo()" in app
     assert "function refreshMenuWords()" in app and "onLineup(() => refreshMenuWords())" in app
     # every title that names the old league's counts has an owner-exit version

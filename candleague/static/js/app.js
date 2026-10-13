@@ -30,7 +30,7 @@ import {openFind, closeFind, findOpen, setFindScreens, lensIcon} from "./find.js
 import {gearButton, settingsTab, openSettings, closeSettings, settingsOpen, setSettingsHooks} from "./settings.js";
 import {onAfterChange, syncAfter} from "./after.js";
 
-const GROUPS = [{id: "trade", ko: "거래"}, {id: "home", ko: "홈"}, {id: "method", ko: "매매법"}, {id: "info", ko: "안내"}];
+const GROUPS = [{id: "trade", ko: "거래"}, {id: "home", ko: "홈"}, {id: "study", ko: "분석"}, {id: "method", ko: "매매법"}, {id: "info", ko: "안내"}];
 const MENU = [
   {id: "terminal", ko: "터미널", group: "trade"},
   {id: "positions", ko: "포지션", group: "trade"},
@@ -38,15 +38,16 @@ const MENU = [
   {id: "fills", ko: "체결 기록", group: "trade"},
   {id: "events", ko: "발동 기록", group: "trade"},
   {id: "home", ko: "요약", group: "home"},
-  {id: "rank", ko: "순위표", group: "home", also: ["account"]},
-  {id: "check", ko: "점검 진행", group: "home"},
+  {id: "decision", ko: "판정", group: "home"},
   {id: "versus", ko: "메인 vs 대조", group: "home"},
   {id: "goal", ko: "목표 진척도", group: "home"},
-  {id: "reasons", ko: "청산 이유", group: "home"},
-  {id: "pairs", ko: "짝 비교", group: "home"},
-  {id: "decision", ko: "판정", group: "home"},
-  {id: "compare", ko: "5계좌 비교", group: "home"},
-  {id: "weekly", ko: "흐름", group: "home"},
+  {id: "rank", ko: "순위표", group: "home", also: ["account"]},
+  {id: "check", ko: "점검 진행", group: "home"},
+  {id: "pairs", ko: "짝 비교", group: "study"},
+  {id: "reasons", ko: "청산 이유", group: "study"},
+  {id: "conditions", ko: "조건별", group: "study"},
+  {id: "compare", ko: "5계좌 비교", group: "study"},
+  {id: "weekly", ko: "흐름", group: "study"},
   {id: "strategies", ko: "매매법", group: "method"},
   {id: "judge", ko: "구조 기준", group: "method"},
   {id: "custom", ko: "커스텀값", group: "method"},
@@ -62,13 +63,14 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   reasons: "청산 이유 (손절 · 계단 잠금 · 규칙 청산 · 익절 · 청산당함으로 끝난 거래와 평균)",
   pairs: "짝 비교 (같은 신호에서 메인 계좌와 대조 계좌의 결과를 한 쌍씩: 빠른 손절이 낫고 못했던 횟수)",
   decision: "판정 (미리 정한 규칙으로 승자 가리기: 같은 신호 짝 · 우연 보정 · 28일째 한 번만 판정, 하나도 통과 못 하면 우위 없음)",
+  conditions: "조건별 성적 (언제 잘 맞고 언제 안 맞나: 요일 · 시간대 · 방향 · 코인 · 봉 · BTC 추세 · 변동성 · 보유시간별 평균을 동전 짝과 비교한 탐색용 화면)",
   events: "발동 기록 (빠른 손절 · 손절 좁힘 · 스위칭이 일어날 때마다 쉬운 문장으로)",
   judge: "구조 기준 (매매법마다 자기 구조가 무너졌다고 보는 조건, 빠른 손절 · 스위칭이 나가는 때)", rank: "순위표 (후보 38개와 비교 계좌 190개)",
   compare: "5계좌 비교 (같은 후보의 계좌들을 나란히: 후보 · 1/4 · 청산만 · 기본값 · 동전, 또는 청산 비교 리그의 청산별 계좌)", weekly: "흐름 (묶음 레이스: 시간에 따른 잔고 · 주마다 후보 · 기본값 · 동전)",
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
-const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
+const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", conditions: "conditions", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", fills: "fills", status: "status", howto: "howto",
   account: "account", rules: "rules"};
 // the 계좌 비교 screen's label follows the league: "5계좌 비교" (candidate league, as written above) / "계좌 비교" (owner-exit league: its ~26 kinds)
@@ -105,8 +107,16 @@ const menu = document.getElementById("menu");
 const bot = document.getElementById("botbar");
 const links = {};
 const findSub = () => h("button", {type: "button", class: "findsub", "aria-label": "찾기: 화면, 후보, 계좌", onclick: () => openFind()}, lensIcon(), "찾기");
+const tabs = {};
+/** The top menu is two levels: the five group tabs, then only the current group's screens (a PC window shows 5-8 buttons, not 22);
+ *  the left column (메뉴 위치 왼쪽) and the phone's bottom bar keep every group. */
 function buildMenu() {
-  const kids = [];
+  const kids = [h("span", {class: "sg-tabs", role: "group", "aria-label": "메뉴 묶음"}, GROUPS.map((g) => {
+    const first = MENU.find((x) => x.group === g.id);
+    const a = h("a", {class: "sg-tab", href: `#/${first.id}`, dataset: {group: g.id}, title: MENU.filter((x) => x.group === g.id).map((x) => x.ko).join(" · ")}, g.ko);
+    tabs[g.id] = a;
+    return a;
+  })), h("span", {class: "sg-sep sg-sep-tabs", "aria-hidden": "true"})];
   GROUPS.forEach((g, gi) => {
     if (gi) kids.push(h("span", {class: "sg-sep", "aria-hidden": "true"}));
     kids.push(h("span", {class: "sg-k", "aria-hidden": "true", dataset: {group: g.id}}, g.ko));
@@ -121,10 +131,11 @@ function buildMenu() {
     h("span", {class: "strip-tools"}, textSwitch(remount), skinSwitch(onSkin), navSwitch(onNav), settingsTab()));
   if (cur) markMenu(cur.name);
 }
-/** The phone's bottom bar: the four groups (a tap opens the group's first screen, or stays on the group's screen). */
+/** The phone's bottom bar: the five groups (a tap opens the group's first screen, or stays on the group's screen). */
 const BOT_IC = {
   trade: [[1, 9, 3, 6], [6, 5, 3, 10], [11, 2, 3, 13]],
   home: [[7, 1, 2, 2], [5, 3, 6, 2], [3, 5, 10, 2], [3, 7, 2, 8], [11, 7, 2, 8], [7, 10, 2, 5], [3, 13, 10, 2]],
+  study: [[2, 11, 3, 3], [6, 7, 3, 7], [10, 3, 3, 11]],
   method: [[2, 2, 12, 2], [2, 7, 12, 2], [2, 12, 8, 2]],
   info: [[7, 1, 2, 2], [6, 5, 3, 2], [7, 7, 2, 6], [5, 13, 6, 2]],
 };
@@ -141,9 +152,18 @@ function buildBot(name) {
   }));
 }
 function markMenu(name) {
+  const here = MENU.find((x) => x.id === name || (x.also || []).includes(name));
+  const gid = here ? here.group : null;
+  for (const g of GROUPS) {                                        // the current group's tab; the other groups' screens fold away (css: top menu only)
+    const t = tabs[g.id];
+    if (!t) continue;
+    if (g.id === gid) t.setAttribute("aria-current", "true"); else t.removeAttribute("aria-current");
+    t.href = `#/${g.id === gid && here ? here.id : MENU.find((x) => x.group === g.id).id}`;
+  }
   for (const m of MENU) {
     const a = links[m.id];
     if (!a) continue;
+    if (gid && m.group !== gid) a.setAttribute("data-off", ""); else a.removeAttribute("data-off");
     const on = m.id === name || (m.also || []).includes(name);
     if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     if (on && getComputedStyle(menu).flexWrap === "nowrap" && menu.scrollWidth > menu.clientWidth + 1) {

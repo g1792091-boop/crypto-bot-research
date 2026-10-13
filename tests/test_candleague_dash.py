@@ -247,17 +247,17 @@ def test_klines_before_a_past_entry():
 
 
 def test_shell_menu_header_and_screen_hooks():
-    """The rule bot's shell: the menu in groups 거래 | 홈 | 매매법 | 안내 with every screen a text button (터미널 first), the
+    """The rule bot's shell: the menu in groups 거래 | 홈 | 분석 | 매매법 | 안내 (two levels on top: the group tabs, then only the current group's screens) with every screen a text button (터미널 first), the
     phone's bottom bar, 찾기 (/), 설정 (,), the day pill and 모의 in the top bar; a screen module may bring its own css and
     ask for the full width; the three live screens are routed."""
     import re
     root = os.path.join(ROOT, "candleague", "static")
     app = open(os.path.join(root, "js", "app.js")).read()
     groups = re.findall(r'\{id: "(\w+)", ko: "([^"]+)"\}', re.search(r"const GROUPS = \[(.*?)\];", app, re.S).group(1))
-    assert groups == [("trade", "거래"), ("home", "홈"), ("method", "매매법"), ("info", "안내")]
+    assert groups == [("trade", "거래"), ("home", "홈"), ("study", "분석"), ("method", "매매법"), ("info", "안내")]
     menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
-    assert [m[0] for m in menu] == ["terminal", "positions", "entries", "fills", "events", "home", "rank", "check", "versus", "goal", "reasons", "pairs", "decision",
-                                    "compare", "weekly", "strategies", "judge", "custom", "rules", "status", "howto"]
+    assert [m[0] for m in menu] == ["terminal", "positions", "entries", "fills", "events", "home", "decision", "versus", "goal", "rank", "check", "pairs", "reasons",
+                                    "conditions", "compare", "weekly", "strategies", "judge", "custom", "rules", "status", "howto"]
     assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=[g[0] for g in groups].index)   # groups stay together
     assert "mod.css" in app and "mod.wide" in app and "onPositions" in app and "onLive" in app
     assert 'innerWidth >= WIDE_PX ? "terminal" : "home"' in app                    # the landing (D-2)

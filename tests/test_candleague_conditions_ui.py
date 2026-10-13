@@ -362,8 +362,8 @@ def test_menu_entry_and_find_words_once_registered():
         pytest.skip("the screen is not registered in app.js yet (the coordinator adds the MENU / MENU_TITLE / SCREENS entries)")
     menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
     ids = [m[0] for m in menu]
-    i = ids.index("decision")
-    assert ids[i + 1] == "conditions" and menu[i + 1][1] == "조건별" and menu[i + 1][2] == "home"
+    i = ids.index("reasons")
+    assert ids[i + 1] == "conditions" and menu[i + 1][1] == "조건별" and menu[i + 1][2] == "study"                 # the 분석 group: 짝 비교 · 청산 이유 · 조건별 ...
     assert 'conditions: "conditions"' in re.search(r"const SCREENS = \{([^}]*)\}", app).group(1)
     assert re.search(r"\bconditions: \"조건별 성적", re.search(r"const MENU_TITLE = \{(.*?)\};\s*const SCREENS", app, re.S).group(1))
     assert re.search(r"\bconditions: \"조건별 성적 ", find)

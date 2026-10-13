@@ -356,3 +356,16 @@ a.g4-c:hover, a.g4-c:focus-visible { outline: 2px solid var(--ink); outline-offs
 .g4-ready .kv { margin: 0; }
 .card ul.g4-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--t-sm); }
 .g4-check li { line-height: 1.55; }
+
+/* the two-level top menu: group tabs, then only the current group's screens (the left column and the phone's bottom bar keep every group) */
+.sg-tabs { flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 9px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+.sg-tab { flex: none; display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 7px; color: var(--muted); text-decoration: none;
+  font: 800 var(--t-sm)/1 var(--f-body); }
+.sg-tab:hover { color: var(--ink); }
+.sg-tab[aria-current="true"] { color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.sg-sep-tabs { margin: 0 8px; }
+:root:not([data-nav="left"]) .sb[data-off] { display: none; }
+:root:not([data-nav="left"]) .sg-sep:not(.sg-sep-tabs) { display: none; }
+@media (min-width: 1000px) { :root[data-nav="left"] .sg-tabs, :root[data-nav="left"] .sg-sep-tabs { display: none; } }
+@media (max-width: 999px) { :root[data-nav="left"] .sb[data-off] { display: none; } }
+@media (max-width: 559px) { .sg-tabs, .sg-sep-tabs { display: none; } }          /* the phone's bottom bar already holds the groups */

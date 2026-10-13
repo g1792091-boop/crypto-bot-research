@@ -443,10 +443,12 @@ def test_menu_screens_files_and_static_rules():
     app = open(os.path.join(STATIC, "js", "app.js"), encoding="utf-8").read()
     menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
     ids = [m[0] for m in menu]
-    i = ids.index("check")
-    assert ids[i + 1:i + 4] == ["versus", "goal", "reasons"]                                # right after 점검 진행, in the 홈 group
-    assert [m[1] for m in menu[i + 1:i + 4]] == ["메인 vs 대조", "목표 진척도", "청산 이유"] and {m[2] for m in menu[i + 1:i + 4]} == {"home"}
-    assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=["trade", "home", "method", "info"].index)       # groups stay together
+    i = ids.index("home")
+    assert ids[i + 1:i + 4] == ["decision", "versus", "goal"]                                # the 홈 group: 요약 then the answer (판정), 메인 vs 대조, 목표 진척도
+    assert [m[1] for m in menu[i + 1:i + 4]] == ["판정", "메인 vs 대조", "목표 진척도"] and {m[2] for m in menu[i + 1:i + 4]} == {"home"}
+    j = ids.index("pairs")
+    assert ids[j:j + 2] == ["pairs", "reasons"] and {m[2] for m in menu[j:j + 2]} == {"study"}        # the 분석 group
+    assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=["trade", "home", "study", "method", "info"].index)       # groups stay together
     screens = re.search(r"const SCREENS = \{([^}]*)\}", app).group(1)
     titles = re.search(r"const MENU_TITLE = \{(.*?)\};\s*const SCREENS", app, re.S).group(1)
     for name in SCREENS:

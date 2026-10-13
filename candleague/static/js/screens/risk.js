@@ -13,7 +13,7 @@
 import {h, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as ui from "../ui.js";
-import {hasLineup, notReady, oldLeagueBox} from "./pairs.js";
+import {eunNeun, hasLineup, notReady, oldLeagueBox} from "./pairs.js";
 import {pc, startTxt} from "./versus.js";
 
 export const css = ["scr/kinds.css", "scr/risk.css"];
@@ -221,7 +221,7 @@ export function daysCells(k, R) {
   return {
     eligible: e, total: num(d.total) ?? 0, crowded: num(d.crowded) ?? 0, share: num(d.share),
     lopsided: e && num(lop.share) != null ? `${fmt.mmdd(num(lop.day_ms))} · ${sideWord(lop.side)} ${pc(lop.share, false, 0)} (그날 ${cnt(lop.n, "건")})` : "—",
-    ref: ref.suffix && num(ref.eligible) != null ? `‘${ref.name_ko || ref.suffix}’는 ${cnt(ref.eligible, "일")} 중 ${cnt(ref.crowded, "일")}${num(ref.share) != null ? ` (${pc(ref.share, false, 0)})` : ""}` : null,
+    ref: ref.suffix && num(ref.eligible) != null ? `‘${ref.name_ko || ref.suffix}’${eunNeun(ref.name_ko || ref.suffix)} ${cnt(ref.eligible, "일")} 중 ${cnt(ref.crowded, "일")}${num(ref.share) != null ? ` (${pc(ref.share, false, 0)})` : ""}` : null,
     min: R.thr.min_day_trades,
   };
 }
@@ -232,7 +232,7 @@ function daysTable(R) {
       h("td", {class: "l kd-nm"}, h("div", {class: "kd-nmh"}, h("b", null, nameOf(k)), livePill(k), poolPill(k)), h("small", {class: "muted"}, subName(k))),
       h("td", {class: "num"}, h("span", {class: "kd-v"}, c.total ? cnt(c.eligible, "일") : "—"), h("small", {class: "rv-cs"}, `진입 ${R.thr.min_day_trades}건 이상인 날 (거래 있는 ${cnt(c.total, "일")} 중)`)),
       h("td", {class: "num"}, h("span", {class: "kd-v"}, c.eligible ? `${cnt(c.crowded, "일")}${c.share != null ? ` (${pc(c.share, false, 0)})` : ""}` : "—")),
-      h("td", {class: "rv-split"}, sideBar(d.long, d.short, "일"), h("small", {class: "rv-sn"}, splitTxt(d.long, d.short, "일", ["롱 몰림", "숏 몰림"]))),
+      h("td", {class: "rv-split"}, sideBar(d.long, d.short, "일", ["롱 몰림", "숏 몰림"]), h("small", {class: "rv-sn"}, splitTxt(d.long, d.short, "일", ["롱 몰림", "숏 몰림"]))),
       h("td", {class: "num"}, c.lopsided),
       h("td", {class: "l"}, c.ref ? h("small", {class: "rv-cs"}, `동전 던지기 짝 ${c.ref}`) : h("span", {class: "muted"}, "—")));
   });
@@ -254,7 +254,7 @@ function daysCards(R) {
       h("dl", {class: "kd-kgrid rv-facts"},
         h("div", null, h("dt", null, "가장 심했던 날"), h("dd", {class: "num"}, c.lopsided)),
         h("div", null, h("dt", null, "전체 거래 있는 날"), h("dd", {class: "num"}, cnt(c.total, "일")))),
-      c.ref ? h("p", {class: "note"}, `참고: 방향을 동전으로 정한 짝 ${c.ref}`) : null);
+      c.ref ? h("p", {class: "note"}, `참고: 동전 던지기 짝 ${c.ref}`) : null);
   }));
 }
 
