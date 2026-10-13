@@ -390,7 +390,7 @@ def test_menu_screens_file_and_static_rules():
     menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
     ids = [m[0] for m in menu]
     i = ids.index("home")
-    assert ids[i + 1] == "decision" and menu[i + 1][1] == "판정" and menu[i + 1][2] == "home"                  # right after 요약, in the 홈 group (the answer comes first)
+    assert ids[i + 2] == "decision" and menu[i + 2][1] == "판정" and menu[i + 2][2] == "home"                  # right after 요약, in the 홈 group (the answer comes first)
     assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=["trade", "home", "study", "method", "info"].index)       # groups stay together
     screens = re.search(r"const SCREENS = \{([^}]*)\}", app).group(1)
     titles = re.search(r"const MENU_TITLE = \{(.*?)\};\s*const SCREENS", app, re.S).group(1)

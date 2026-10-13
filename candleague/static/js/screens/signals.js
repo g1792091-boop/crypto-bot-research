@@ -58,7 +58,7 @@ function coinView(B, view) {
   }
   return h("div", {class: "tbl-wrap"}, h("table", {class: "tbl kd-tbl s4-tbl"}, h("caption", {class: "sr"}, "코인별 마지막 진입"),
     h("thead", null, h("tr", null, h("th", {class: "l", scope: "col"}, "코인"), cols.map((k) => h("th", {class: "l", scope: "col"}, k.label)))),
-    h("tbody", null, coins.map((coin) => h("tr", {class: "kd-row sg-row", dataset: {coin}}, h("td", {class: "l kd-nm"}, h("b", null, fmt.coin(coin))),
+    h("tbody", null, coins.map((coin) => h("tr", {class: "sg-row", dataset: {coin}}, h("td", {class: "l kd-nm"}, h("b", null, fmt.coin(coin))),
       cols.map((k) => h("td", {class: "l"}, k.node(coin))))))));
 }
 export const COLS = [

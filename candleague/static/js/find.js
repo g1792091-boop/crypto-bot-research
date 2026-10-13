@@ -53,6 +53,7 @@ const SCREEN_WORDS = {
   coins: "코인별 코인 BTC ETH SOL DOGE LTC BCH 거래 수 이긴 비율 거래당 평균 동전 던지기 짝 차이 손익 비중 coins",
   dataq: "데이터 점검 엔진 정상 늦음 확인 필요 오류 계좌 수 늦은 정도 시세 data check dataq",
   timeline: "타임라인 시간 순서 일어난 일 시작 14일째 28일째 판정 첫 거래 가장 큰 이익 손실 강제청산 파산 timeline",
+  glance: "한눈 지도 처음 순서 안내 어느 화면 한 줄 답 glance",
   events: "발동 기록 빠른 손절 손절 좁힘 스위칭 구조 무너짐 events",
   judge: "구조 기준 매매법 자체 구조 무너짐 빠른 손절 스위칭 언제 judge",
 };

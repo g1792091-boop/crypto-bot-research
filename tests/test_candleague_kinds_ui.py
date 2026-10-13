@@ -444,8 +444,8 @@ def test_menu_screens_files_and_static_rules():
     menu = re.findall(r'\{id: "(\w+)", ko: "([^"]+)", group: "(\w+)"', re.search(r"const MENU = \[(.*?)\];", app, re.S).group(1))
     ids = [m[0] for m in menu]
     i = ids.index("home")
-    assert ids[i + 1:i + 4] == ["decision", "versus", "goal"]                                # the 홈 group: 요약 then the answer (판정), 메인 vs 대조, 목표 진척도
-    assert [m[1] for m in menu[i + 1:i + 4]] == ["판정", "메인 vs 대조", "목표 진척도"] and {m[2] for m in menu[i + 1:i + 4]} == {"home"}
+    assert ids[i + 2:i + 5] == ["decision", "versus", "goal"]                                # the 홈 group: 요약 then the answer (판정), 메인 vs 대조, 목표 진척도
+    assert [m[1] for m in menu[i + 2:i + 5]] == ["판정", "메인 vs 대조", "목표 진척도"] and {m[2] for m in menu[i + 2:i + 5]} == {"home"} and ids[i + 1] == "glance"
     j = ids.index("pairs")
     assert ids[j:j + 2] == ["pairs", "reasons"] and {m[2] for m in menu[j:j + 2]} == {"study"}        # the 분석 group
     assert [m[2] for m in menu] == sorted([m[2] for m in menu], key=["trade", "home", "study", "method", "info"].index)       # groups stay together

@@ -116,3 +116,6 @@
   .scr.kd .kd-legend > div { grid-template-columns: minmax(0, 1fr); }
   .scr.kd .kd-rleg { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* 한눈 지도 (screens/glance.js): the cards in a responsive grid */
+.scr.kd .kd-glance { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; margin-top: 12px; }

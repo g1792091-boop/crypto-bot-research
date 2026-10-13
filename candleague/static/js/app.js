@@ -39,6 +39,7 @@ const MENU = [
   {id: "fills", ko: "체결 기록", group: "trade"},
   {id: "events", ko: "발동 기록", group: "trade"},
   {id: "home", ko: "요약", group: "home"},
+  {id: "glance", ko: "한눈 지도", group: "home"},
   {id: "decision", ko: "판정", group: "home"},
   {id: "versus", ko: "메인 vs 대조", group: "home"},
   {id: "goal", ko: "목표 진척도", group: "home"},
@@ -76,13 +77,14 @@ const MENU_TITLE = {terminal: "터미널 (차트 · 열린 포지션 · 체결 �
   coins: "코인별 (코인마다 거래 수 · 이긴 비율 · 거래당 평균 · 동전 짝과 차이)",
   dataq: "데이터 점검 (엔진과 데이터가 정상인지, 늦음 · 확인 필요)",
   timeline: "타임라인 (리그에서 있었던 일을 시간 순서로)",
+  glance: "한눈 지도 (분석 화면마다 한 줄 답과 처음 보는 순서)",
   events: "발동 기록 (빠른 손절 · 손절 좁힘 · 스위칭이 일어날 때마다 쉬운 문장으로)",
   judge: "구조 기준 (매매법마다 자기 구조가 무너졌다고 보는 조건, 빠른 손절 · 스위칭이 나가는 때)", rank: "순위표 (후보 38개와 비교 계좌 190개)",
   compare: "5계좌 비교 (같은 후보의 계좌들을 나란히: 후보 · 1/4 · 청산만 · 기본값 · 동전, 또는 청산 비교 리그의 청산별 계좌)", weekly: "흐름 (묶음 레이스: 시간에 따른 잔고 · 주마다 후보 · 기본값 · 동전)",
   custom: "커스텀값 (기본값과 바뀐 숫자, 익절·손절)", strategies: "매매법 (16개 매매법 설명과 묶음 성적)",
   rules: "익절·손절·배수 (후보마다 익절·손절, 배수와 증거금 규칙, 계좌 5개가 다른 점)",
   status: "서버 상태 (엔진 · 시세 · 처리 시각)", howto: "읽는 법 (계좌 5개, 점검 규칙, 낱말 뜻)"};
-const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", conditions: "conditions", coins: "coins", dataq: "dataq", timeline: "timeline", risk: "risk", monthsim: "monthsim", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
+const SCREENS = {home: "home", check: "check", versus: "versus", goal: "goal", reasons: "reasons", pairs: "pairs", decision: "decision", glance: "glance", conditions: "conditions", coins: "coins", dataq: "dataq", timeline: "timeline", risk: "risk", monthsim: "monthsim", events: "events", judge: "judge", rank: "rank", compare: "compare", custom: "custom", strategies: "strategies",
   weekly: "weekly", terminal: "terminal", entries: "entries", positions: "positions", charts: "charts", fills: "fills", status: "status", howto: "howto",
   account: "account", rules: "rules"};
 // the 계좌 비교 screen's label follows the league: "5계좌 비교" (candidate league, as written above) / "계좌 비교" (owner-exit league: its ~26 kinds)

@@ -12,10 +12,11 @@ import {hero, legend, ruleBox} from "./kit4.js";
 export const css = ["scr/kinds.css", "scr/s4.css"];
 export const COINS = ["BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD"];
 export const EMA_N = 50, WINDOW = 200, LO = 0.2, HI = 0.8, ATR_N = 14, TF_MS = 4 * 3600 * 1000, BARS = 300, POLL_MS = 300000;
+const PL = Math.round(LO * 100), PH = Math.round(HI * 100);
 export const RULES = [
   "무엇을 보여 주나: 이 리그의 두 필터(g1 · g2)가 보는 시장 상태를 지금 시세로 보여 줍니다. 숫자만 보여 주고 무엇을 하라는 말은 없습니다.",
   `g1 BTC 추세: 마지막으로 닫힌 BTC 4시간 봉의 종가가 EMA${EMA_N}보다 위면 상승, 아래면 하락입니다. 롱은 상승일 때만, 숏은 하락일 때만 들어갑니다.`,
-  `g2 변동성: 마지막 닫힌 4시간 봉의 ATR%가 최근 ${WINDOW}봉 가운데 하위 ${LO * 100}%에서 상위 ${(1 - HI) * 100}% 사이(보통 범위)일 때만 들어갑니다.`,
+  `g2 변동성: 마지막 닫힌 4시간 봉의 ATR%가 최근 ${WINDOW}봉 가운데 하위 ${PL}%에서 상위 ${100 - PH}% 사이(보통 범위)일 때만 들어갑니다.`,
   "리그의 g2는 각 전략이 쓰는 차트(15분~4시간)로 계산합니다. 여기서는 코인마다 4시간 봉으로 계산하므로 시장의 대략적인 상태입니다.",
 ];
 const num = (x) => (fmt.bad(x) ? null : Number(x));
@@ -104,8 +105,8 @@ function btcCard(A) {
       h("div", null, h("dt", null, "종가가 EMA보다"), h("dd", {class: "num"}, t && t.gap != null ? `${fmt.pct(Math.abs(t.gap) * 100, false, 2)} ${t.gap > 0 ? "위" : t.gap < 0 ? "아래" : "같음"}` : "—"))));
 }
 function bandBar(pct) {
-  const label = pct == null ? "위치를 알 수 없음" : `최근 ${WINDOW}봉 중 하위 ${Math.round(pct * 100)}% 위치 (보통 범위 ${LO * 100}~${HI * 100}%)`;
-  return h("span", {class: "rg-bar", role: "img", "aria-label": label}, h("i", {class: "rg-ok", style: {left: `${LO * 100}%`, width: `${(HI - LO) * 100}%`}}),
+  const label = pct == null ? "위치를 알 수 없음" : `최근 ${WINDOW}봉 중 하위 ${Math.round(pct * 100)}% 위치 (보통 범위 ${PL}~${PH}%)`;
+  return h("span", {class: "rg-bar", role: "img", "aria-label": label}, h("i", {class: "rg-ok", style: {left: `${PL}%`, width: `${PH - PL}%`}}),
     pct == null ? null : h("i", {class: "rg-mark", style: {left: `${Math.min(99, Math.max(0, pct * 100))}%`}}));
 }
 function coinCard(x) {
@@ -132,7 +133,7 @@ export async function mount(el, ctx) {
     if (!A || !A.ok) { put(root, rules, missing(A || {off: false}, load)); return; }
     put(root, rules, hero(sentence(A), "4시간 봉 기준 · 두 필터가 무엇을 뜻하는지는 아래 낱말 뜻에 있습니다", "지금 시세로 계산한 상태입니다. 앞으로를 약속하지 않고, 어떤 행동도 권하지 않습니다."), btcCard(A),
       ui.card({plate: "코인별 변동성 (g2)", sub: `마지막 닫힌 4시간 봉의 ATR%가 최근 ${WINDOW}봉 중 어디쯤인가`, cls: "kd-tcard s4-card", id: "rg-coins"},
-        h("p", {class: "note"}, `띠의 색칠된 구간이 보통 범위(하위 ${LO * 100}%~${HI * 100}%)이고 세로선이 지금 위치입니다.`), h("div", {class: "kd-cards rg-cards"}, A.coins.map(coinCard))),
+        h("p", {class: "note"}, `띠의 색칠된 구간이 보통 범위(하위 ${PL}%~${PH}%)이고 세로선이 지금 위치입니다.`), h("div", {class: "kd-cards rg-cards"}, A.coins.map(coinCard))),
       legend([
         ["g1 BTC 추세 필터", "비트코인이 오르는 중이면 롱만, 내리는 중이면 숏만 들어가게 하는 필터입니다. 추세는 4시간 봉 종가가 50봉 평균선(EMA50) 위인지 아래인지로 정합니다."],
         ["g2 변동성 필터", "그 코인이 너무 조용하거나 너무 거칠 때는 들어가지 않게 하는 필터입니다. 최근 200봉과 비교해 중간 60% 안에 있을 때만 통과합니다."],

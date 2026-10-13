@@ -166,7 +166,7 @@ def test_costs_full_data_rules_first_then_the_sentence_then_the_table(tmp_path):
     assert re.search(r"\d+(\.\d)?%", first) and "$" in first and "vs" in first and "건 /" in first                 # the rt %, the dollars, cost vs net ROE, n of n
     heads = " ".join(x["t"] for x in o["sel"]["plates"])
     assert "비용이 깎은 몫" in heads
-    assert page.count("추정") >= 8 and "확인 못 함" in page or "총손익" in page                                        # every figure is labelled 추정
+    assert page.count("추정") >= 8 and "총손익" in page                                                          # every figure is labelled 추정
     for w in ("수수료", "미끄러짐(슬리피지)", "펀딩비", "증거금 대비", "총손익", "추정"):
         assert w in [x["t"] for x in o["sel"]["legend"]], w
     no_junk(page)
@@ -185,7 +185,7 @@ def test_costs_card_view_and_table_view(tmp_path):
 
 
 def test_costs_cannot_derive_reads_as_dashes_and_reasons(tmp_path):
-    book = {"a-fq": [CT.ct(side=1, exit_=98.0, roe=-0.21)]}                                              # a loss: gross <= 0, net ROE <= 0
+    book = {"p0-fq": [CT.ct(side=1, exit_=98.0, roe=-0.21)]}                                              # a loss: gross <= 0, net ROE <= 0
     b = json.loads(json.dumps(CV.cost_views(book, CT.rows_for(("fq", "ld")), RT.LU, 1000.0)))
     o = run(tmp_path, "costs", doc(costs=b), SELS)
     fq = o["sel"]["rows"][0]["t"]
@@ -237,7 +237,7 @@ def test_signals_phone_cards_and_absent(tmp_path):
     assert len(o["sel"]["coincards"]) == 6 and "BTC" in o["sel"]["coincards"][0]["t"] and "5시간 전" in o["sel"]["coincards"][0]["t"] and len(o["sel"]["cards"]) == 10
     no_junk(o["text"])
     assert "이 숫자는 딥시크를 뺀 후보만으로 계산했습니다" in o["text"]
-    assert "이 숫자에는 딥시크 계좌도 들어 있습니다" in run(tmp_path, "signals", doc(signals=signal_block(ds=True)))["text"] or True       # (the block's own flag decides)
+    assert "이 숫자에는 딥시크 계좌도 들어 있습니다" in run(tmp_path, "signals", doc(signals=signal_block(ds=True)))["text"]
     blank = json.loads(json.dumps(SV.signal_views({}, [RT.row("a-fq", "fq")], RT.LU, NOW)))
     o = run(tmp_path, "signals", doc(signals=blank), SELS)
     no_junk(o["text"])
@@ -250,7 +250,7 @@ def test_telegram_list(tmp_path):
     o = run(tmp_path, "telegram", d, {**SELS, "msgs": "article.tg-msg", "regions": ".dl-region"})
     page = o["text"]
     msgs = o["sel"]["msgs"]
-    assert len(msgs) == 3 and [m["d"]["kind"] for m in msgs] == ["start", "bust", "summary"] or [m["d"]["kind"] for m in msgs] == ["alert", "bust", "start"][:3] or len(msgs) == 3
+    assert len(msgs) == 3
     assert [m["d"]["kind"] for m in msgs] == [m["kind"] for m in d["telegram"]["messages"]]                         # newest first, as the server writes them
     first = msgs[0]["t"]
     assert re.search(r"\d\d/\d\d \d\d:\d\d KST", first) and ("요약" in first or "시작" in first or "파산" in first or "경고" in first) and "전체 보기" in first
@@ -288,8 +288,6 @@ def test_absent_old_league_and_no_snapshot(tmp_path, screen, key, rules):
                              (doc(**{key: None}, lineup=False), ("새 리그 전용", "이전 리그"), ("데이터 준비 중",)),
                              (doc(**{key: None}, accounts=False), ("준비 중", "후보 리그 기록이 아직 없습니다"), ("새 리그 전용",)),
                              (None, ("준비 중",), ("새 리그 전용",))):
-        if screen != "telegram" and key == "costs":
-            pass
         o = run(tmp_path, screen, d, SELS)
         for t in need:
             assert t in o["text"], (screen, t, o["text"][:300])
