@@ -23,6 +23,8 @@ import time
 import urllib.parse
 from typing import Optional
 
+from .exits import start_equity
+
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 SESSION_S = 7 * 86_400
 COOKIE = "candleague_session"
@@ -455,7 +457,7 @@ RULE_TFS = ("15m", "30m", "1h", "4h")
 RULE_COINS = ("BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "LTCUSD", "BCHUSD")
 ATR_BARS = 200                                              # bars asked per coin and timeframe (Wilder warm-up)
 ATR_TTL_S = 300.0                                           # the ATRs are fetched again at most every 5 minutes
-RULE_EQUITY = 5000.0
+RULE_EQUITY = start_equity()
 LIVE_EXIT = "ladder|2"                                      # exits.LIVE_EXIT: the 기본값 accounts' (the rule bot's) exit
 _SETTINGS: dict = {}
 
@@ -610,6 +612,7 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
         return {"status": "준비 중", "picks": {}}
     from . import exits as X
     from paperbot.config import V3_P_BEST
+    eq0 = float(doc.get("equity0") or RULE_EQUITY)              # the wallet the accounts started with (the snapshot says; else this process's)
     st = _settings(LIVE_EXIT, 1.0)
     rt = st.round_trip_cost
     win_rt = st.taker_fee + st.slippage_frac + st.maker_fee      # in at market, out at the take-profit's limit order
@@ -661,7 +664,7 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
             for coin, x in tfa.items():
                 sym = coin + "T"
                 stop_pct = X.stop_dist(c["exit"], x["atr"]) / x["price"]
-                lev = {r: {g: lev_now(e, z, g, x["price"], x["atr"], sym, ex) for g in groups}
+                lev = {r: {g: lev_now(e, z, g, x["price"], x["atr"], sym, ex, eq0) for g in groups}
                        for r, e, z in (("cand", c["exit"], 1.0), ("quarter", c["exit"], QUARTER), ("base", LIVE_EXIT, 1.0))}
                 ln = lev["cand"].get("normal")
                 if tp["kind"] in ("R", "ladder_R"):
@@ -682,7 +685,7 @@ def rules_doc(doc: Optional[dict], book: Optional[dict], ex: Optional[dict], atr
             "ds_money": bool(doc.get("ds_money")) and not strict,
             "costs": {"taker": st.taker_fee, "maker": st.maker_fee, "slip": st.slippage_frac, "round_trip": rt, "win_cost": win_rt,
                       "max_loss": st.max_loss_frac, "buffer_atr": st.liq_buffer_atr_mult, "buffer_min": st.liq_buffer_min_frac},
-            "steps": rule_steps(ex), "p_best": dict(V3_P_BEST), "base_exit": LIVE_EXIT, "base_exit_ko": X.exit_ko(LIVE_EXIT),
+            "equity0": eq0, "steps": rule_steps(ex, eq0), "p_best": dict(V3_P_BEST), "base_exit": LIVE_EXIT, "base_exit_ko": X.exit_ko(LIVE_EXIT),
             "base_tp": tp_info(LIVE_EXIT),
             "exits": exits, "used_all": used_all, "hidden_accounts": hidden_n, "picks": picks}
 

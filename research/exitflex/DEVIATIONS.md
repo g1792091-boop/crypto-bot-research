@@ -71,3 +71,7 @@ E.0 item 2 and TW.10).
   `lock_exit`, the F13 names and every existing function behave as before (the league's tests, including the study's parity test, pass).
 * `candleague/rulex.py`, `candleague/runner.py`, `candleague/notify.py` and `candleague/candidates.py`'s consumers changed for the owner-exit
   league (rules file form "owner_exits"). No study result, gate, choice or report is touched. The study's own outputs stay as hashed.
+* Same day, `candleague/rulex.py` only (not in a pin): a decision rule of the study (F1 structure break, F6 early loss cut; mode a) may now run on the owners'
+  ladder ("ladderU|<k>") as the engine `RuleUserLadder`, and an owner-exit entry may carry `tighten` (0 < t <= 1): when the rule fires the stop is moved to
+  t x the stop distance from the first stop's reference (never loosened; a price already past it is closed by the engine's own gap handling) instead of
+  closing at market. The rules' decisions (`decide`), the chart records and every study id are unchanged; a rule account with no ladder is as before.

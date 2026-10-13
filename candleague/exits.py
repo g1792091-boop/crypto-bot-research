@@ -20,10 +20,11 @@ here (tests/test_fullgrid_kernel.py); this module is that set-up, for the league
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 
-from paperbot.config import v3_settings
+from paperbot.config import V3_INITIAL, v3_settings
 from paperbot.engine import PaperEngine
 from paperbot.ladder import net_roe, roe_price, tighten
 from paperbot.policy import OwnerPolicy
@@ -228,11 +229,31 @@ class UserLadder(PaperEngine):
         p.lock_roe = lock
 
 
+EQUITY_ENV = "CANDLEAGUE_EQUITY"
+
+
+def start_equity() -> float:
+    """The paper wallet every account of the league starts with: the environment's ``CANDLEAGUE_EQUITY`` (the owners' new league: 1000), else the
+    paper bot's $5,000 (``paperbot.config.V3_INITIAL``; the old league, the study and the tests). A value that is not a positive number is an error,
+    never a silent default."""
+    raw = (os.environ.get(EQUITY_ENV) or "").strip()
+    if not raw:
+        return V3_INITIAL
+    try:
+        v = float(raw)
+    except ValueError:
+        raise ValueError(f"{EQUITY_ENV}={raw!r} is not a number") from None
+    if not (math.isfinite(v) and v > 0):
+        raise ValueError(f"{EQUITY_ENV}={raw!r} must be a positive number")
+    return v
+
+
 def settings_for(name: str, size: float = 1.0, **kw):
     """The v4 settings with this exit's lock and take-profit mode (``kw``: other v3_settings overrides). ``size``
     multiplies every tier's margin fraction (leverages kept, as research/fullgrid/sizing.py's size_vector)."""
     s = spec(name)
     kw = {**kw, "ladder_first_lock": s["first_lock"], "ladder_step": s["step"], "ladder_trigger_gap": s["gap"]}
+    kw.setdefault("initial_equity", start_equity())
     if size != 1.0:
         from paperbot.config import V3_QUALITY_TIERS, Tier
         tiers = tuple(Tier(t.name, round(t.margin_frac * size, 6), t.leverages) for t in V3_QUALITY_TIERS)

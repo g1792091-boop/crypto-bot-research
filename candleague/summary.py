@@ -19,7 +19,9 @@ from typing import Iterable, Optional
 
 import numpy as np
 
-EQUITY = 5000.0
+from .exits import start_equity
+
+EQUITY = start_equity()               # the accounts' start wallet (exits.start_equity: CANDLEAGUE_EQUITY, else 5000)
 ROLES = ("cand", "quarter", "exitonly", "base", "flip")
 POOLS = ("core", "ds")
 POOL_MIN_TRADES = 300                 # WATCH_PREREG 3.4

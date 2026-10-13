@@ -25,6 +25,28 @@
       "label_ko": "계단 · 손절 최대 1 ATR"
     },
     {
+      "suffix": "-fq",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F6.w3.d0.5",
+      "label_ko": "계단 · 구조 무너지면 빠른 손절"
+    },
+    {
+      "suffix": "-tg",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F1.w3.a",
+      "tighten": 0.5,
+      "label_ko": "계단 · 구조 무너지면 손절 좁힘"
+    },
+    {
+      "suffix": "-sb",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F1.w3.a",
+      "label_ko": "계단 · 구조 무너지면 청산"
+    },
+    {
       "suffix": "-l5",
       "exit": "ladder5",
       "label_ko": "계단 5%부터 (7%→5%)"
@@ -53,16 +75,6 @@
       "suffix": "-ma",
       "rule": "F2.n50.b",
       "label_ko": "이동평균 이탈"
-    },
-    {
-      "suffix": "-fq",
-      "rule": "F6.w3.d0.5",
-      "label_ko": "빠른 손절 (관점 무너지면)"
-    },
-    {
-      "suffix": "-sb",
-      "rule": "F1.w3.a",
-      "label_ko": "구조 무너지면 청산"
     },
     {
       "suffix": "-ts",

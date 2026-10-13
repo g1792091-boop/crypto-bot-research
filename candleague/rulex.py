@@ -103,6 +103,7 @@ from typing import Callable, Iterable, Optional
 import numpy as np
 
 from paperbot.engine import PaperEngine
+from paperbot.ladder import tighten
 from paperbot.models import Signal
 from paperbot.paramshadow import _strength_feats, chart_frame, stamp_ref
 from paperbot.policy import OwnerPolicy
@@ -464,7 +465,7 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
 OWNER_MAX = 20
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
@@ -494,6 +495,17 @@ def _owner_words(e: dict) -> tuple:
         tail = "후보의 익절과 손절은 그대로" if r["mode"] == "a" else "고정 익절 없음 · 손절은 그대로"
         return ("반납 보호", f"수익이 +{_fmt(r['P'])}R(손절 거리 {_fmt(r['P'])}배)에 닿은 뒤, 봉 마감 때 최고 수익의 "
                 f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
+    if r is not None and tp == X.ULAD:
+        cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
+        when = (f"{r['w']}봉 스윙 구조가 무너지면(반대로 마감)" if r["family"] == "F1" else
+                f"{r['w']}봉 스윙 구조가 무너지고 손실이 손절 거리의 {_fmt(r['d'] * 100)}% 넘게 났으면" if r["family"] == "F6" else
+                f"{rule_ko(r)} 규칙이 켜지면")
+        base = f"계단 익절(+13%→+10%, +20%→+15% …) · {cap} · {when}"
+        if e.get("tighten"):
+            return ("손절 좁힘", f"{base} 청산하지 않고 손절선을 처음 거리의 {_fmt(e['tighten'] * 100)}%로 좁힘(가격이 이미 그 선을 넘었으면 바로 시장가 청산) · 한 번 좁힌 손절은 되돌리지 않음",
+                    "구조가 무너질 때 바로 자르는 것보다 손절만 좁히는 편이 나은가")
+        return (("빠른 손절", f"{base} 다음 분 시장가로 청산", "구조가 무너질 때 손실을 줄이고도 승률이 버티나") if r["family"] == "F6" else
+                ("구조 청산", f"{base} 다음 분 시장가로 청산 (이익 중이든 손실 중이든)", "구조가 무너지면 이익이든 손실이든 나오는 편이 나은가"))
     if r is not None:
         return KO[r["family"]], f"{rule_ko(r)} · 손절은 그대로", "이 청산 규칙이 지금 청산보다 나은가"
     if tp == X.ULAD:
@@ -531,8 +543,10 @@ def _owner_entry(x, i: int) -> dict:
     rule = parse_rule(x["rule"]) if x.get("rule") is not None else None
     tp = x.get("exit")
     if tp is not None:
-        if rule is not None:
-            raise RuleConfigError(f"rule config: {where} has both a rule and an exit (one or the other)")
+        if rule is not None and tp != X.ULAD:
+            raise RuleConfigError(f"rule config: {where} has both a rule and an exit (one or the other; only the owners' ladder {X.ULAD!r} takes a rule)")
+        if rule is not None and (rule["mode"] != "a" or rule["family"] in NATIVE_FAMILIES + LOCK_FAMILIES):
+            raise RuleConfigError(f"rule config: {where} the owners' ladder takes a decision rule of mode a only (mode b has no lock; F11, F12, F13 are not decisions on the chart)")
         if not isinstance(tp, str) or tp not in TP_NAMES:
             raise RuleConfigError(f"rule config: {where} exit {tp!r} is not a take-profit rule of candleague.exits ({', '.join(TP_NAMES)}); "
                                   "the pick's own stop multiple is kept, so name the take-profit only (e.g. 'roe50')")
@@ -542,8 +556,12 @@ def _owner_entry(x, i: int) -> dict:
     if sm is not None and (isinstance(sm, bool) or not isinstance(sm, (int, float)) or float(sm) not in X.STOPS or tp is None):
         raise RuleConfigError(f"rule config: {where} stop_max must be one of the stops {list(X.STOPS)} and needs an 'exit'")
     coin = x.get("coin_of")
-    if coin is not None and (not isinstance(coin, str) or not _SUFFIX_RE.match(coin) or tp is None):
-        raise RuleConfigError(f"rule config: {where} coin_of must be the suffix of another entry (like '-ld') and needs an 'exit'")
+    if coin is not None and (not isinstance(coin, str) or not _SUFFIX_RE.match(coin) or tp is None or rule is not None):
+        raise RuleConfigError(f"rule config: {where} coin_of must be the suffix of another entry (like '-ld') and needs an 'exit' (and no rule)")
+    tg = x.get("tighten")
+    if tg is not None and (isinstance(tg, bool) or not isinstance(tg, (int, float)) or not 0 < float(tg) <= 1 or rule is None or tp != X.ULAD):
+        raise RuleConfigError(f"rule config: {where} tighten must be a number in (0, 1] (the share of the stop distance the stop narrows to) "
+                              "and needs a rule on the owners' ladder")
     wk = x.get("weekend_off", False)
     if not isinstance(wk, bool):
         raise RuleConfigError(f"rule config: {where} weekend_off must be true or false")
@@ -557,7 +575,8 @@ def _owner_entry(x, i: int) -> dict:
     if role != "cand" and role in OWNER_RESERVED:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
-         "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin}
+         "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin,
+         "tighten": None if tg is None else float(tg)}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -583,7 +602,7 @@ def normalize_owner(doc: dict) -> dict:
     by_suffix = {e["suffix"]: e for e in out}
     for e in out:
         if e["coin_of"] is not None and (e["coin_of"] not in by_suffix or by_suffix[e["coin_of"]]["coin_of"] is not None
-                                         or by_suffix[e["coin_of"]]["tp"] is None):
+                                         or by_suffix[e["coin_of"]]["tp"] is None or by_suffix[e["coin_of"]]["rule"] is not None):
             raise RuleConfigError(f"rule config: owner_exits {e['suffix']!r} coin_of {e['coin_of']!r} must name another entry with an "
                                   "'exit' that is not a coin twin itself")
     own = [e for e in out if e["role"] == "cand"]
@@ -628,8 +647,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                     continue                                  # that entry made no account for this pick
                 exit_ = tgt["exit"]
             elif e["tp"]:
-                key = (exit_, bool(e["weekend_off"]), e["size"])
-                if exit_ == c["exit"] or key in seen:
+                key = (exit_, bool(e["weekend_off"]), e["size"], e["rule"]["id"] if e["rule"] is not None else None, e["tighten"])
+                if (e["rule"] is None and exit_ == c["exit"]) or key in seen:
                     continue                                  # the pick's own exit (or an earlier entry's) already: no duplicate account
                 seen[key] = e["suffix"]
             src = {"pick": pid, "owner_exit": e["suffix"], "label_ko": e["label_ko"]}
@@ -639,6 +658,8 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                 src["coin_of"] = tgt["id"]
             elif e["rule"] is not None:
                 src["rule"] = e["rule"]["id"]
+                if e["tp"]:
+                    src["exit_of"] = c["exit"]
             elif e["tp"]:
                 src["exit_of"] = c["exit"]
             a = {**{q: c[q] for q in ("kind", "name", "tf", "combo")}, "exit": exit_, "id": pid + e["suffix"], "role": e["role"],
@@ -646,6 +667,9 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
                  "rule": dict(e["rule"]) if e["rule"] is not None else dict(NO_RULE), "source": src,
                  "ox": {q: e[q] for q in ("role", "suffix", "kind", "label_ko", "short_ko", "desc_ko", "why_ko", "tp", "weekend_off", "size")}}
             a["ox"]["rule"] = e["rule"]["id"] if e["rule"] is not None else None
+            if e["tighten"] is not None:
+                a["tighten"] = e["tighten"]
+                a["ox"]["tighten"] = e["tighten"]
             if e["weekend_off"]:
                 a["weekend_off"] = True
             if tgt is not None:
@@ -1182,6 +1206,7 @@ class RuleMixin:
     rx_seen: Optional[dict] = None       # {coin: its previous minute present} (the league's, see replay_day); None = no gating
     rx_no_entry_from: Optional[int] = None   # PREREG 11.4 item 9: from this time (ms) the account takes no new entry
     rx_weekend_off: bool = False             # owners 2026-10-12: no new entry from a signal bar closing Sat 00:00 - Mon 00:00 UTC
+    rx_tighten: Optional[float] = None       # owners 2026-10-13: when the rule fires, narrow the stop to this share of the stop distance instead of closing
 
     def submit(self, signal) -> None:
         if isinstance(signal, RuleClose):
@@ -1230,6 +1255,16 @@ class RuleMixin:
         return decide_ready(self.rx_rule, self.rx_sched, rx, p.side, p.entry_price, float(p.signal.meta["stop_dist"]),
                             self.s.round_trip_cost, f, p.mfe_price, self.rx_tf_ms, prev)
 
+    def _narrow_stop(self, p) -> None:
+        """The owners' stop narrowing: the stop moves to ``rx_tighten`` x the stop distance from the reference the first stop was set from (so 1 is
+        the first stop itself), never away from the price. A stop the price is already beyond is a gap for the engine's own exit handling (a
+        market close at the minute's open, slippage, taker fee)."""
+        want = p.stop_initial + p.side * (1.0 - self.rx_tighten) * float(p.signal.meta["stop_dist"])
+        new = tighten(p.side, p.stop_price, want)
+        if new != p.stop_price:
+            p.stop_price = new
+            p.signal.meta.setdefault("ctx", {})["rx_narrowed"] = 1
+
     @staticmethod
     def _gapped(p, bar) -> bool:
         """The open is beyond liquidation (mark), the stop or the take-profit: the engine's own exit handling takes it."""
@@ -1256,7 +1291,10 @@ class RuleMixin:
                 comp = (self.position.signal.meta.get("rx") or {}).get("comp")
                 if comp is not None:                                  # F12: every component that fired at this check (PREREG 5.2, tr_comp)
                     self.position.signal.meta.setdefault("ctx", {})["rx_comp"] = int(comp)
-                self._close_market(bar.open, bar.open_time, "RULE")   # taker fee, slippage, at the open
+                if self.rx_tighten is not None:
+                    self._narrow_stop(self.position)                  # the engine's own exit handling below takes a stop the price is already past
+                else:
+                    self._close_market(bar.open, bar.open_time, "RULE")   # taker fee, slippage, at the open
         super().step(bars, None)                                      # entries, then the normal exit handling
         p = self.position
         if p is not None:
@@ -1271,6 +1309,10 @@ class RuleEngine(RuleMixin, PaperEngine):
 
 class RuleLadderEngine(RuleMixin, X.LadderTP):
     pass
+
+
+class RuleUserLadder(RuleMixin, X.UserLadder):
+    """The owners' stepped lock (``exits.UserLadder``) with a rule account's step order; with no rule it is that engine plus the gates."""
 
 
 class LockEngine(RuleEngine):
@@ -1288,6 +1330,8 @@ def _lock_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     weekend-off account (the pick's own exit with the weekend gate, ``rx_weekend_off``)."""
     name, size = exit_name(a), a.get("size", 1.0)
     s, st = X.spec(name), X.settings_for(name, size=size)
+    if name.startswith(X.ULAD + "|"):
+        return RuleUserLadder(st, brackets, symbol_specs=specs, book=a["id"])
     if s["ladder"] and s["tp_kind"] == X.TP_STRUCT:
         return LockLadderEngine(st, brackets, symbol_specs=specs, struct=True, book=a["id"])
     if s["ladder"] and s["tp_kind"] == X.TP_R:
@@ -1321,6 +1365,9 @@ def make_engine(a: dict, brackets: dict, specs: dict) -> PaperEngine:
     if rule["mode"] == "b":
         st = replace(st, tp_mode="fixed")                  # no take-profit and no stepped lock
         e = RuleEngine(st, brackets, symbol_specs=specs, policy=NoTP(st), book=a["id"])
+    elif name.startswith(X.ULAD + "|"):
+        e = RuleUserLadder(st, brackets, symbol_specs=specs, book=a["id"])
+        e.rx_tighten = a.get("tighten")
     elif s["ladder"] and s["tp_kind"] == X.TP_STRUCT:
         e = RuleLadderEngine(st, brackets, symbol_specs=specs, struct=True, book=a["id"])
     elif s["ladder"] and s["tp_kind"] == X.TP_R:
@@ -1691,7 +1738,7 @@ def audit_restored(lg, log: Callable[[str], None] = print) -> list[str]:
 # and hold hours only (D11); the full figures go to a private folder on request.
 CHECK_DAYS = {"c1": 30, "c2": 61, "repeat": 92}
 P_LIMIT = {"c2": 0.03, "repeat": 0.02}                 # the exact sign-flip test of C2 and of its repeat
-INITIAL_EQUITY = 5000.0
+INITIAL_EQUITY = X.start_equity()
 MONTH_DAYS = 365.25 / 12
 MIN_TRADES_C2 = 150
 EXACT_MAX_WEEKS = 20
