@@ -5,9 +5,8 @@
       "suffix": "-fq",
       "exit": "ladderU",
       "stop_max": 2,
-      "rule": "F6.w3.d0.5",
-      "label_ko": "메인 · 구조 확실히 무너지면 빠른 손절 (실전 후보)",
-      "native_rule": "F11.a.d0.5"
+      "rule": "F11.a.d0.5",
+      "label_ko": "메인 · 구조 확실히 무너지면 빠른 손절 (실전 후보)"
     },
     {
       "suffix": "-nv",
@@ -27,16 +26,9 @@
       "suffix": "-tg",
       "exit": "ladderU",
       "stop_max": 2,
-      "rule": "F1.w3.a",
+      "rule": "F11.a",
       "tighten": 0.5,
       "label_ko": "메인 · 구조 무너지면 손절 좁힘"
-    },
-    {
-      "suffix": "-sb",
-      "exit": "ladderU",
-      "stop_max": 2,
-      "rule": "F1.w3.a",
-      "label_ko": "메인 · 구조 무너지면 청산"
     },
     {
       "suffix": "-ld",
@@ -60,6 +52,13 @@
       "exit": "ladderU",
       "stop_max": 1,
       "label_ko": "대조 · 계단 · 손절 최대 1 ATR"
+    },
+    {
+      "suffix": "-sb",
+      "exit": "ladderU",
+      "stop_max": 2,
+      "rule": "F1.w3.a",
+      "label_ko": "연구 · 모든 매매법 공통 3봉 구조 청산"
     },
     {
       "suffix": "-l5",

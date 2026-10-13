@@ -465,7 +465,7 @@ def accounts(cands: list[dict], cfg: dict) -> list[dict]:
 # which (``normalize_owner``); the code adds no exit of its own. The study's rules run on its RuleEngine exactly as above (no new
 # rule logic); a changed take-profit is another exit of candleague.exits on the plain engine; the weekend switch is a gate on
 # new entries only.
-OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten", "native_rule"))
+OWNER_KEYS = frozenset(("suffix", "label_ko", "short_ko", "desc_ko", "why_ko", "rule", "exit", "weekend_off", "size", "stop_max", "coin_of", "tighten"))
 OWNER_RESERVED = ("quarter", "exitonly", "base", "flip") + ROLES           # role names other leagues give their accounts
 OWNER_MAX = 20
 _SUFFIX_RE = re.compile(r"^-[a-z][a-z0-9]{0,7}$")
@@ -495,13 +495,6 @@ def _owner_words(e: dict) -> tuple:
         tail = "후보의 익절과 손절은 그대로" if r["mode"] == "a" else "고정 익절 없음 · 손절은 그대로"
         return ("반납 보호", f"수익이 +{_fmt(r['P'])}R(손절 거리 {_fmt(r['P'])}배)에 닿은 뒤, 봉 마감 때 최고 수익의 "
                 f"{int(round(r['g'] * 100))}%를 돌려주면 다음 분 시장가로 청산 · {tail}", "크게 벌었다가 다 돌려주는 일을 막으면 나은가")
-    if r is not None and tp == X.ULAD and e.get("native_rule") is not None:
-        nd = e["native_rule"].get("d")
-        cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
-        where = f" · 손실이 손절 거리의 {_fmt(nd * 100)}% 넘게 났을 때만" if nd else ""
-        return ("빠른 손절", f"계단 익절(+13%→+10%, +20%→+15% …) · {cap} · 그 매매법이 스스로 '이 방향 구조가 무너졌다'고 확실히 보고(매매법마다 다른 조건. 예: OBV는 OBV가 평균선 아래로, 박스는 바닥 아래로 마감){where} 다음 분 시장가로 청산. "
-                f"자체 구조 판단 코드가 없는 후보(약한 단서 11개)는 같은 자리에서 3봉 스윙 구조가 무너졌을 때",
-                "매매법마다 자기 구조로 확실히 무너졌을 때만 빨리 자르면 나은가")
     if r is not None and tp == X.ULAD:
         cap = f"손절은 최대 {e['stop_max']:g} ATR" if e.get("stop_max") else "손절은 후보의 것 그대로"
         when = ("그 매매법이 반대 방향 진입 신호를 내면(= 구조가 반대로 바뀌었다고 스스로 확신하면)" if r["family"] == "F3" else
@@ -516,8 +509,11 @@ def _owner_words(e: dict) -> tuple:
         if r["family"] == "F3":
             return ("스위칭", f"{base} 다음 분 시장가로 청산하고 같은 분에 그 반대 신호로 반대 방향 진입(스위칭). 반대 신호가 안 나오면 계단 익절·손절만 작동",
                     "구조가 반대로 바뀔 때 청산에 그치지 않고 갈아타면 나은가")
+        if r["family"] == "F11" and r.get("d") is not None:
+            return ("빠른 손절", f"{base} 손실이 손절 거리의 {_fmt(r['d'] * 100)}% 넘게 났을 때만 다음 분 시장가로 청산 (둘 중 하나만으로는 안 나감). 자체 구조 코드가 있는 매매법의 후보에만 있음",
+                    "매매법마다 자기 구조로 확실히 무너졌을 때만 빨리 자르면 나은가")
         if r["family"] == "F11":
-            return ("매매법 판단", f"{base} 다음 분 시장가로 청산 (고정 익절 없음)", "매매법마다 자기 구조로 판단해 나오는 편이 나은가")
+            return ("매매법 판단", f"{base} 다음 분 시장가로 청산 (고정 익절 없음). 자체 구조 코드가 있는 매매법의 후보에만 있음", "매매법마다 자기 구조로 판단해 나오는 편이 나은가")
         return (("빠른 손절", f"{base} 다음 분 시장가로 청산", "구조가 무너질 때 손실을 줄이고도 승률이 버티나") if r["family"] == "F6" else
                 ("구조 청산", f"{base} 다음 분 시장가로 청산 (이익 중이든 손실 중이든)", "구조가 무너지면 이익이든 손실이든 나오는 편이 나은가"))
     if r is not None:
@@ -572,13 +568,6 @@ def _owner_entry(x, i: int) -> dict:
     coin = x.get("coin_of")
     if coin is not None and (not isinstance(coin, str) or not _SUFFIX_RE.match(coin) or tp is None or rule is not None):
         raise RuleConfigError(f"rule config: {where} coin_of must be the suffix of another entry (like '-ld') and needs an 'exit' (and no rule)")
-    nr = x.get("native_rule")
-    if nr is not None:
-        nrule = parse_rule(nr) if isinstance(nr, str) else None
-        if (nrule is None or nrule["family"] != "F11" or nrule["mode"] != "a" or rule is None or tp != X.ULAD or x.get("tighten") is not None):
-            raise RuleConfigError(f"rule config: {where} native_rule must be an F11.a rule id (like 'F11.a.d0.5') given together with a rule on the owners' "
-                                  "ladder (the rule used for the picks whose strategy has no native exit) and no tighten")
-        nr = nrule
     tg = x.get("tighten")
     if tg is not None and (isinstance(tg, bool) or not isinstance(tg, (int, float)) or not 0 < float(tg) <= 1 or rule is None or tp != X.ULAD):
         raise RuleConfigError(f"rule config: {where} tighten must be a number in (0, 1] (the share of the stop distance the stop narrows to) "
@@ -597,7 +586,7 @@ def _owner_entry(x, i: int) -> dict:
         raise RuleConfigError(f"rule config: {where} suffix {suffix!r} gives the role {role!r}, which another league's accounts use")
     e = {"suffix": suffix, "role": role, "kind": kind, "label_ko": label.strip(), "rule": rule, "tp": tp, "weekend_off": wk,
          "size": float(size), "stop_max": None if sm is None else float(sm), "coin_of": coin,
-         "tighten": None if tg is None else float(tg), "native_rule": nr}
+         "tighten": None if tg is None else float(tg)}
     short, desc, why = _owner_words(e)
     e.update(short_ko=str(x.get("short_ko") or short).strip(), desc_ko=str(x.get("desc_ko") or desc).strip(),
              why_ko=str(x.get("why_ko") or why).strip())
@@ -659,7 +648,7 @@ def owner_accounts(cands: list[dict], cfg: dict) -> list[dict]:
         for e in ents:
             exit_ = c["exit"]
             tgt = None
-            er = e["native_rule"] if (e["native_rule"] is not None and native_supported(c)) else e["rule"]     # the rule this pick's account runs
+            er = e["rule"]
             if er is not None and er["family"] in NATIVE_FAMILIES and not native_supported(c):
                 continue                                      # no native exit for this strategy: no such account for the pick
             if e["tp"]:

@@ -246,12 +246,12 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     owner = C.load(os.path.join(ROOT, "candleague", "data", "candidates_owner.json"))
     accts = RX.owner_accounts(owner, cfg)
     assert doc["enabled"] is True
-    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-sb", "-ld", "-ldc", "-ldp", "-ld1", "-l5", "-l20", "-e", "-tp10",
+    assert [e["suffix"] for e in doc["owner_exits"]] == ["-fq", "-nv", "-sw", "-tg", "-ld", "-ldc", "-ldp", "-ld1", "-sb", "-l5", "-l20", "-e", "-tp10",
                                                          "-gb", "-ma", "-ts", "-ch", "-oc", "-wk"]
     ks = [float(c["exit"].split("|")[1]) for c in owner]
-    native = sum(1 for c in owner if RX.native_supported(c))                                  # -nv: the 38 picks of the 16 strategies with a native exit
-    want = 49 * 18 + native - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)     # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
-    assert len(owner) == 49 and native == 38 and len(accts) == want == 906
+    native = sum(1 for c in owner if RX.native_supported(c))                                  # -fq, -nv, -tg: only the 38 picks of the 16 strategies with their own structure
+    want = 49 * 16 + 3 * native - sum(1 for k in ks if k <= 2) - sum(1 for k in ks if k <= 1)  # -ldp is -ld when k <= 2; -ld1 is -ld when k <= 1
+    assert len(owner) == 49 and native == 38 and len(accts) == want == 884
     assert len({a["id"] for a in accts}) == len(accts) and RX.check(owner, cfg) == []
     assert all(a["combo"] == next(c for c in owner if c["id"] == a["pick"])["combo"] for a in accts)
     assert sum(1 for a in accts if a.get("coin")) == 49 and sum(1 for a in accts if a["role"] == "cand") == 49
@@ -260,20 +260,18 @@ def test_the_rules_file_the_owners_install_builds_the_final_lineup():
     assert (by[wide + "-ld"]["exit"], by[wide + "-ldp"]["exit"], by[wide + "-ld1"]["exit"]) == ("ladderU|2", "ladderU|4", "ladderU|1")
     assert by[wide + "-ldc"]["of"] == wide + "-ld"                                      # the coin twin is the primary's
     # the three structure accounts run the owners' ladder with the stop at most 2 ATR, for every pick (none is dropped as a duplicate of -ld)
-    for suffix, rule, tight in (("-tg", "F1.w3.a", 0.5), ("-sb", "F1.w3.a", None)):
+    for suffix, rule, tight, n in (("-sb", "F1.w3.a", None, 49), ("-tg", "F11.a", 0.5, 38), ("-fq", "F11.a.d0.5", None, 38), ("-nv", "F11.a", None, 38), ("-sw", "F3.a", None, 49)):
         group = [a for a in accts if a["id"].endswith(suffix)]
-        assert len(group) == 49
+        assert len(group) == n, suffix
         assert all(a["rule"]["id"] == rule and a.get("tighten") == tight and a["exit"] == by[a["pick"] + "-ld"]["exit"] for a in group), suffix
-    # the live candidate: the strategy's own structure with a loss deeper than half the stop; the 3-bar swing for the picks whose strategy has no own exit
-    fq = [a for a in accts if a["id"].endswith("-fq")]
-    assert len(fq) == 49 and all(a["exit"] == by[a["pick"] + "-ld"]["exit"] and not a.get("tighten") for a in fq)
-    assert all(a["rule"]["id"] == ("F11.a.d0.5" if RX.native_supported(a) else "F6.w3.d0.5") for a in fq)
-    assert sum(1 for a in fq if a["rule"]["id"] == "F11.a.d0.5") == 38
+        if n == 38:                                                       # each strategy's own structure: only picks whose strategy has one (no shared fallback)
+            assert all(RX.native_supported(a) for a in group), suffix
     lu = {x["suffix"]: x for x in RX.lineup(accts)}
     assert "tighten" not in lu["-fq"] and lu["-tg"]["tighten"] == 0.5 and lu["-tg"]["short_ko"] == "손절 좁힘"
     mains = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("메인")]
     ctrl = [x["suffix"] for x in RX.lineup(accts) if x["label_ko"].startswith("대조")]
-    assert mains == ["-fq", "-nv", "-sw", "-tg", "-sb"] and ctrl == ["-ld", "-ldc", "-ldp", "-ld1"]         # the new structures are the main ones; the old stop is the control
+    assert mains == ["-fq", "-nv", "-sw", "-tg"] and ctrl == ["-ld", "-ldc", "-ldp", "-ld1"]               # the strategy-own structures are the main ones; the old stop is the control
+    assert lu["-sb"]["label_ko"].startswith("연구")                                                       # the same swing for every strategy is a research comparison
 
 
 # ---------------------------------------------------------------- a rule on the owners' ladder: the quick stop and the narrowing stop (owners 2026-10-13)
@@ -533,15 +531,18 @@ def test_f11_with_a_loss_depth_fires_only_when_the_strategys_own_view_broke_and_
     TR.exits_at(e, TR.J0 + 60)
 
 
-def test_native_rule_must_be_an_f11_a_rule_next_to_a_rule_on_the_ladder():
-    base = {"suffix": "-x1", "exit": "ladderU", "stop_max": 2, "rule": "F6.w3.d0.5", "native_rule": "F11.a.d0.5", "label_ko": "x"}
-    doc = copy.deepcopy(LINEUP)
-    doc["owner_exits"].append(base)
-    assert RX.normalize_owner(doc)["owner_exits"][-1]["native_rule"]["id"] == "F11.a.d0.5"
-    for bad in ({"native_rule": "F6.w3.d0.5"}, {"native_rule": "F11.b"}, {"native_rule": 5}, {"rule": None}, {"exit": None}, {"tighten": 0.5}):
-        e = {**base, **bad}
-        e = {k: v for k, v in e.items() if v is not None}
-        doc = copy.deepcopy(LINEUP)
-        doc["owner_exits"].append(e)
-        with pytest.raises(RX.RuleConfigError):
-            RX.normalize_owner(doc)
+@SIDES
+def test_the_strategys_own_structure_narrows_the_stop_instead_of_closing(side):
+    k = TR.key_of(side)
+    a = _ruled("F11.a", 0.5)
+    sigs = ((TR.C0, TR.nsig(side, ["event"], [0])),)
+    path = TR.Path().bar(TR.J0 + 80, o=0, c=-250, b=0, w=-250).hold(TR.J0 + 81, -250)
+    # no break: the stop stays at 2 ATR (400) and the fall to -250 does not reach it
+    e = TR.run(a, path, side, sigs=sigs, recs=[TR.nrec(TR.chk(1), side, 0, **{k: [0]})])
+    assert not e.trades and e.position.stop_price == pytest.approx(TR.P0 - side * TR.R)
+    # the strategy's own view breaks at the first check (any loss): the stop moves to half the distance, and the fall is stopped there
+    e = TR.run(a, path, side, sigs=sigs, recs=[TR.nrec(TR.chk(1), side, -50, **{k: [1]})])
+    assert len(e.trades) == 1
+    t = e.trades[0]
+    assert t.exit_reason == "SL" and t.exit_time == TR.at(TR.J0 + 80) + TR.MIN - 1
+    assert t.exit_price == pytest.approx((TR.P0 - side * 0.5 * TR.R) * (1 - side * TR.SLIP), rel=1e-12)
