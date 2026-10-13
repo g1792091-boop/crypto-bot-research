@@ -676,6 +676,9 @@ def write_snapshots(snap: str, league: "League", now_ms: int, ds_money: bool = F
                                                     ds_money)
         except Exception as exc:  # noqa: BLE001
             doc["conditions_error"] = f"{type(exc).__name__}: {exc}"[:200]
+        # ... and the 코인별 / 타임라인 / 데이터 점검 (screens3.add_blocks; each fails alone into doc["<name>_error"]; dataq last, it reads the errors)
+        from . import screens3 as S3
+        S3.add_blocks(doc, book, rows, lu, EQUITY, ds_money)
     os.makedirs(snap, exist_ok=True)
     _write(snap, "trades.json", trade_book(league.conn, league.accts, ds_money, league.start_ms, book))
     _write(snap, "league.json", doc)
