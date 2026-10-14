@@ -14,7 +14,7 @@ import {h, s, put, local} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as LK from "../lk.js";
 import {markOf, serverNow} from "../live.js";
-import {inGroup, livePnl, liveOk, waitKo} from "../poskit.js";
+import {inGroup, livePnl, liveOk, waitKo, extremes} from "../poskit.js";
 import {afterEmpty} from "../after.js";
 import {countTo} from "../v4kit.js";
 import {coinShort, coinOf, sideKo, reasonKo, ROLE_KO, KIND_KO, lineupOn} from "../labels.js";
@@ -57,6 +57,8 @@ export function selPanel(ctx, st, hooks) {
           kv("청산가", h("b", {class: "num warn-t"}, fmt.price(p.liq)), "진입 때 기준 (펀딩이 쌓이면 조금 달라짐)"),
           kv(p.stop_is_lock ? "잠금선" : "손절선", h("b", {class: ["num", p.stop_is_lock ? "up" : "down"]}, fmt.price(p.stop)), p.stop_is_lock ? "닿으면 수익으로 끝나는 선 (계단 잠금)" : null),
           p.tp != null ? kv("익절", h("b", {class: "num up"}, fmt.price(p.tp))) : null,
+          ((x) => (x && x.best != null && x.worst != null ? kv("진입 뒤 최고 · 최저", h("span", {class: "num"}, h("b", {class: "up"}, fmt.pct(x.best * 100, true, 1)), " · ", h("b", {class: "down"}, fmt.pct(x.worst * 100, true, 1))),
+            "진입한 뒤 가장 높았던 / 가장 낮았던 수익률 (증거금 대비, 수수료 전)") : null))(allowed ? extremes(p) : extremes(p, null)),
           kv("크기", p.qty == null ? "—" : `${fmt.num(p.qty, p.qty >= 100 ? 1 : 4)} ${coinShort(p.coin)}`, "진입 때 기준"),
           kv("증거금", p.margin == null ? "—" : `${fmt.num(p.margin, 2)} USDT · ${pctOf(p.margin_pct, 1, false)}`, "진입 때 잔고 대비 증거금"),
           p.stop_pnl != null ? kv(p.stop_is_lock ? "잠금에 닿으면" : "손절에 닿으면", h("b", {class: ["num", fmt.tone(p.stop_pnl)]}, `${usdt(p.stop_pnl)} USDT`),

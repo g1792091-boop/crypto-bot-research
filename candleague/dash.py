@@ -386,6 +386,11 @@ def positions_doc(doc: Optional[dict], ex: Optional[dict], strict: bool = DS_MON
              "size": a.get("size", 1.0), "coin": coin, "symbol": sym, "side": side, "since": o.get("since"),
              "trades": a.get("trades"), "wins": a.get("wins"), "bust": bool(a.get("bust")), "hidden": hidden}
         p.update({k: None for k in POS_MONEY})
+        p["mfe"] = p["mae"] = None                          # the best / worst price since the entry (the engine's 1-minute record)
+        if not hidden:
+            for k in ("mfe", "mae"):
+                v = o.get(k)
+                p[k] = float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
         if not hidden and o.get("entry") is not None and o.get("lev") and a.get("wallet") is not None:
             lev, entry = int(o["lev"]), float(o["entry"])
             stop = None if o.get("stop") is None else float(o["stop"])

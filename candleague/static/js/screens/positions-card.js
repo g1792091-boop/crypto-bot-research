@@ -11,7 +11,7 @@ import {h, s} from "../dom.js";
 import * as fmt from "../fmt.js";
 import * as K4 from "../v4kit.js";
 import * as LK from "../lk.js";
-import {livePnl, gap} from "../poskit.js";
+import {livePnl, gap, extremes} from "../poskit.js";
 import {serverNow} from "../live.js";
 import {tfKo, sideKo, coinShort, ROLE_SHORT, KIND_KO} from "../labels.js";
 
@@ -173,10 +173,12 @@ export function posCard(p, o = {}) {
     h("span", null, h("i", {class: "ps-m-key liq", "aria-hidden": "true"}), "청산 ", dLiqEl)),
     h("div", {class: "ps-m-track", "aria-hidden": "true"}, h("i", {class: "ps-m-danger"}), h("i", {class: "ps-m-tick now"}),
       h("i", {class: "ps-m-tick stop"}), h("i", {class: "ps-m-tick liq"})));
+  const extEl = h("span", {class: "num", title: "진입한 뒤 가장 높았던 / 가장 낮았던 수익률 (증거금 대비, 수수료 전). 1분봉 기록 + 지금 가격"}, "—");
   const pairs = [
     ["진입가", fmt.price(p.entry)], ["마크 가격", markEl], ["청산가", h("span", {class: "down num", title: "진입 때 기준 (펀딩 전)"}, fmt.price(p.liq))],
     [lockLine ? "잠금선 (손절 주문)" : "손절가", fmt.price(p.stop)],
     fin(p.tp) != null ? ["익절가", h("span", {class: "up num"}, fmt.price(p.tp))] : null,
+    ["진입 뒤 최고 · 최저", extEl],
     [`크기 (${coinShort(p.coin)})`, qtyTxt(p.qty)], ["증거금 (USDT)", fmt.num(p.margin, 2)],
   ];
   const when = h("span", {class: "muted ps-when"});
@@ -239,6 +241,9 @@ export function posCard(p, o = {}) {
     K4.countTo(rowPnl, u && u.pnl, {format: (v) => fmt.num(v, 2, true), tone: true});
     K4.countTo(rowRoi, u && u.roe, {format: (v) => fmt.pct(v * 100, true, 2), tone: true});
     ledNote.textContent = allowed ? (u ? "" : "시세 없음") : waitKo;
+    const ex = extremes(p, allowed ? mark : null);
+    extEl.replaceChildren(...(ex && ex.best != null && ex.worst != null
+      ? [h("span", {class: "up"}, fmt.pct(ex.best * 100, true, 1)), " · ", h("span", {class: "down"}, fmt.pct(ex.worst * 100, true, 1))] : ["—"]));
     el.classList.toggle("ps-wait", !allowed);
     if (allowed) { markEl.title = ""; K4.tickPrice(markEl, mark ?? null, mark != null ? fmt.price(mark) : "—", p.coin); }
     else { markEl.textContent = /따라잡/.test(waitKo) ? "따라잡은 뒤" : "감춤"; markEl.title = waitKo; delete markEl.dataset.pv; }

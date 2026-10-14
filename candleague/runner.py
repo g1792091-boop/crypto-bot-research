@@ -526,7 +526,9 @@ def account_rows(conn, accts: list[dict], engines: dict, ds_money: bool = False,
                "bust": bool(e.bust),
                "open": None if pos is None else {"symbol": pos.symbol, "side": pos.side, "entry": pos.entry_price,
                                                  "stop": pos.stop_price, "tp": None if math.isnan(pos.tp_price)
-                                                 else pos.tp_price, "since": pos.entry_time, "lev": pos.leverage}}
+                                                 else pos.tp_price, "since": pos.entry_time, "lev": pos.leverage,
+                                                 "mfe": _finite(getattr(pos, "mfe_price", None)),      # the best and worst price since the entry (1m bars)
+                                                 "mae": _finite(getattr(pos, "mae_price", None))}}
         if a.get("rule"):
             row.update(rule=a["rule"].get("id"), rule_ko=RX.rule_ko(a["rule"]), pick=a.get("pick"), hold=hold_stats(book[a["id"]]),
                        counts=counts.get(a["id"]) or dict(offered=0, entered=0, skipped=0, rejected=0, closed=0),

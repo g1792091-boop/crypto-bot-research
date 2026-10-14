@@ -303,3 +303,27 @@ def test_strict_summary_scrub_keeps_labels():
     assert s["accounts"][0]["open"] == {"symbol": "BTCUSDT", "side": 1, "since": 1} and s["accounts"][1]["wallet"] == 2.0
     assert doc["accounts"][0]["wallet"] == 1.0                      # the cached original is not touched
     assert D.strict_league({**doc, "ds_money": False}) == {**doc, "ds_money": False}
+
+
+@pytest.mark.parametrize("side", [1, -1])
+def test_an_open_position_carries_its_best_and_worst_price_since_the_entry(side):
+    """The snapshot's open position keeps the engine's best / worst price (mfe / mae) and /api/positions passes them on, so the cards can show the
+    highest and the lowest ROE since the entry; a hidden DeepSeek position gets neither."""
+    sym, price = "BTCUSDT", 61234.5
+    e = _engine_entry("ladder|2", sym, price, side, 0.005, "normal", 1.0, 5000.0)
+    t = T0 + MIN
+    e.step({sym: Bar(sym, t, t + MIN - 1, price, price * 1.004, price * 0.9985, price * 1.001)})          # up to +0.4 %, down to -0.15 %
+    assert e.position is not None
+    p = e.position
+    acct = {"id": "core-S2_ST_ROC-15m-1", "role": "cand", "kind": "core", "name": "S2_ST_ROC", "tf": "15m", "exit": "ladder|2", "combo": {}, "size": 1.0}
+    row = _row(acct, e)
+    assert row["open"]["mfe"] == p.mfe_price and row["open"]["mae"] == p.mae_price and row["open"]["mfe"] != row["open"]["mae"]
+    doc = D.positions_doc({"accounts": [row], "ds_money": True, "generated_ms": T0, "done_ms": T0, "start_ms": T0}, EX)
+    q = doc["positions"][0]
+    assert q["mfe"] == p.mfe_price and q["mae"] == p.mae_price
+    best = max(q["mfe"], q["mae"]) if side > 0 else min(q["mfe"], q["mae"])
+    assert (q["mfe"] - price) * side > 0 and (q["mae"] - price) * side < 0 and best                       # the favourable and the adverse extreme
+    ds = {**acct, "kind": "ds", "id": "ds-F5_BOX-1h-1"}
+    hidden = D.positions_doc({"accounts": [{**row, **{k: ds[k] for k in ("id", "kind")}}], "ds_money": False, "generated_ms": T0, "done_ms": T0,
+                              "start_ms": T0}, EX)["positions"][0]
+    assert hidden["hidden"] is True and hidden["mfe"] is None and hidden["mae"] is None

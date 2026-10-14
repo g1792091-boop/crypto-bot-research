@@ -113,6 +113,8 @@ def test_static_kit_and_meta(tmp_path):
     ent = c.get("/static/js/screens/entries.js").text + c.get("/static/js/why.js").text   # every entry says why it was opened (the strategy's rule, the bar, the leverage and why that leverage); js/why.js is shared with 거래 다시보기
     assert "왜 청산했나" in ent and "long_broken_ko" in ent and "ROLE_DESC" in c.get("/static/js/screens/fills.js").text and "왜 들어갔나" in ent and "loadJudge" in ent and "cl-ewhy" in c.get("/static/cl.css").text
     assert c.get("/static/js/screens/replay.js").status_code == 200 and c.get("/static/scr/replay.css").status_code == 200   # the hidden 거래 다시보기 screen and its css are served
+    assert "export function extremes" in c.get("/static/js/poskit.js").text and "진입 뒤 최고 · 최저" in c.get("/static/js/screens/positions-card.js").text \
+        and "진입 뒤 최고 · 최저" in c.get("/static/js/screens/terminal-side.js").text            # an open position shows its best and worst ROE since the entry
     assert "names_extra" in c.get("/static/js/lk.js").text           # the page falls back to those names before it shows a bare code
     assert c.get("/favicon.ico").status_code == 200
 

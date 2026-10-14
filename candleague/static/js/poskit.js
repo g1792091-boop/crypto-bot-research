@@ -81,6 +81,17 @@ export function livePnl(p, mark) {
     stopGap: p.stop_is_lock ? null : gap(p.side, m, p.stop), lockGap: p.stop_is_lock ? gap(p.side, m, p.stop) : null,
     tpGap: p.tp == null ? null : -gap(p.side, m, p.tp)};
 }
+/** The best and worst ROE (fractions of the margin, before fees) a position has had since its entry: the engine's best / worst price
+ *  (``mfe`` / ``mae``, 1-minute bars up to its last record) widened by the mark now, so it never lags the number on the card.
+ *  null while the engine has not recorded them or a number is missing. */
+export function extremes(p, mark) {
+  if (!p || p.hidden) return null;
+  const hi = fin(p.mfe), lo = fin(p.mae), m = fin(mark === undefined ? markOf(p.coin) : mark), e = fin(p.entry), L = fin(p.lev), s = Number(p.side);
+  if (hi == null || lo == null || e == null || L == null || !s) return null;
+  const best = s > 0 ? Math.max(hi, m == null ? hi : m) : Math.min(hi, m == null ? hi : m);       // mfe: a long's highest / a short's lowest price
+  const worst = s > 0 ? Math.min(lo, m == null ? lo : m) : Math.max(lo, m == null ? lo : m);
+  return {best: roeOf(s, L, e, best), worst: roeOf(s, L, e, worst), bestPrice: best, worstPrice: worst};
+}
 /** ROE (a fraction) of a position from its leverage alone: side x lev x (mark/entry - 1); needs no size. */
 export function roeOf(side, lev, entry, mark) {
   const e = fin(entry), m = fin(mark), L = fin(lev);
