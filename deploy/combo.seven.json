@@ -1,0 +1,55 @@
+{
+  "paper_db": "/var/lib/paperbot/paper3.db",
+  "db": "/var/lib/paperbot/combo/combo.db",
+  "members": [
+    {
+      "strategy": "F10_M2022",
+      "tf": "15m"
+    },
+    {
+      "strategy": "N03_ADX_GC",
+      "tf": "30m"
+    },
+    {
+      "strategy": "N09_ALLIG_AROON",
+      "tf": "1h"
+    },
+    {
+      "pick": "core-N07_ICHI_CMO-30m-2"
+    },
+    {
+      "pick": "core-N09_ALLIG_AROON-15m-3"
+    },
+    {
+      "pick": "ds-F12_MSS_DISP-1h-1"
+    },
+    {
+      "pick": "ds-F5_BOX-15m-1"
+    }
+  ],
+  "leverage": {
+    "BTCUSDT": 40,
+    "default": 30
+  },
+  "margin": "leverage",
+  "initial_equity": 1000,
+  "max_loss_frac": 0.15,
+  "loss_cap": "shrink",
+  "stop": {
+    "mode": "atr_fit",
+    "atr": 3.0,
+    "min_atr": 1.0
+  },
+  "ladder": {
+    "first_lock": 0.1,
+    "step": 0.05,
+    "trigger_gap": 0.01
+  },
+  "rank": [
+    "score",
+    "timeframe",
+    "order"
+  ],
+  "flip_twin": true,
+  "telegram": true
+}
