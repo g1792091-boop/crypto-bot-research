@@ -138,6 +138,8 @@ BTC 40배는 가격이 약 2.1%, 30배 알트는 약 2.7~2.8% 움직이면 강�
 cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
 sudo cp /opt/crypto-bot-research/deploy/combo.fitted.json /etc/paperbot/combo.json   # 5년에 맞춘 설정(3-3)
 # 같은 7개를 조건 없이: deploy/combo.seven.json (지난 11일에는 더 좋았고, 5년으로는 크게 손실)
+# 두 분의 원래 8개 + 5년 조건: deploy/combo.fitted8.json (8개 중 6개가 조건과 함께 남음, V3.9·OBV는 빠짐)
+# 두 분의 원래 8개, 조건 없음: deploy/combo.owners8.json (지난 11일 59번 55승, 5년으로는 크게 손실)
 # 또는 combo.example.json을 복사해서 매매법 목록과 손절 방식을 직접 고치기
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
 ```
