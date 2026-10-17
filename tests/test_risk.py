@@ -144,3 +144,18 @@ def test_leverage_stage_review_needs_every_condition():
         r = leverage_stage_review(**args)
         assert not r["ok"] and r["next"] == 20 and any(x.startswith("미달") for x in r["reasons"]), kw
     assert abs(max_drawdown([100, 120, 90, 130]) - 0.25) < 1e-9
+
+
+def test_max_loss_frac_is_an_optional_owner_setting():
+    assert cfg(max_loss_frac=0.35).problems() == []
+    assert any("max_loss_frac" in p for p in cfg(max_loss_frac=1.5).problems())
+    assert R.RiskConfig.from_dict({"max_loss_frac": 0.35}).max_loss_frac == 0.35
+    assert R.RiskConfig().max_loss_frac is None
+    st = R.RiskState()
+    # 10 units, stop 2 away: $20 at the stop on a $100 account
+    d = R.check_entry(cfg(), st, "BTCUSDT", qty=10, price=100, leverage=10, qty_step=0.001, stop=98, equity=100,
+                      max_loss_frac=0.15)
+    assert d.action == R.REDUCE and d.qty == pytest.approx(7.5) and "15%" in d.text()
+    d = R.check_entry(cfg(), st, "BTCUSDT", qty=10, price=100, leverage=10, qty_step=0.001, stop=98, equity=100,
+                      max_loss_frac=0.35)
+    assert d.action == R.ALLOW and d.qty == 10

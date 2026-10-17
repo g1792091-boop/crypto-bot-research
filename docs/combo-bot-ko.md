@@ -186,6 +186,30 @@ sudo journalctl -fu paperbot-combo           # "[합친 봇 페이퍼] 시작" �
 }
 ```
 
+**시드 40%로 돌릴 때 (두 분 결정 10/17: BTC 40배·알트 30배, 증거금 = 계좌의 40%)**
+
+`deploy/combo.*.json`은 이미 `"margin": 0.4`, `"max_loss_frac": 0.35`입니다. 실행기 설정의 `risk`를 아래처럼 바꿉니다. 손절 한 번에 계좌의 약 20~33%가 나갑니다.
+
+```json
+  "qty_scale": 0.1,
+  "risk": {
+    "daily_max_loss_usd": 40,
+    "max_drawdown_pct": 0.5,
+    "max_consecutive_losses": 3,
+    "max_leverage": 40,
+    "max_notional_usd": 10000,
+    "max_loss_frac": 0.35,
+    "allowed_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"],
+    "kill_file": "/var/lib/paperbot/STOP"
+  }
+```
+
+| 설정 | 값 | 이유 |
+|---|---|---|
+| `max_loss_frac` | 0.35 | 손절 한 번 최대 손실(계좌 비율). 없으면 페이퍼 규칙의 15%로 크기를 줄입니다 |
+| `max_notional_usd` | 10000 | $100에서 BTC 한 번 약 $1,600. 계좌가 커져도 막지 않도록 넉넉히 |
+| `daily_max_loss_usd` / `max_drawdown_pct` / `max_consecutive_losses` | 40 / 0.5 / 3 | 장이 바뀐 신호(연속 손실, 큰 낙폭)에서 멈춤 |
+
 | 설정 | 값 | 이유 |
 |---|---|---|
 | `account` / `paper_db` | `COMBO@mix` / combo.db | 합친 봇 계좌 |

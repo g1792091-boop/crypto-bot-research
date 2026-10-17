@@ -14,6 +14,7 @@ one position, the better spot first; the order executor follows it unchanged.
 
 import dataclasses
 import json
+import math
 import warnings
 
 import numpy as np
@@ -319,6 +320,51 @@ def test_executor_mirrors_the_combined_account_at_40x(tmp_path):
     assert fake.lev["BTCUSDT"] == 40 and fake.pos["BTCUSDT"] > 0, evs
     # live size = paper qty x 0.1, then cut to the $400 cap and the $10 loss at the stop: never more
     assert fake.pos["BTCUSDT"] * w.px["BTCUSDT"] <= 400.0 + 1e-6
+
+
+def test_seed_40_percent_runs_through_the_executor_when_both_allow_it(tmp_path):
+    """Owners 2026-10-17: margin 40% of equity on every coin. The paper account sizes 40% (max_loss_frac 0.35, so a
+    wide stop is not cut) and the executor follows it when its own risk.max_loss_frac allows the larger stop loss;
+    without that setting the executor keeps the paper rules' 15% and cuts the live size."""
+    from fakefutures import FakeFutures
+    from paperbot import risk as R
+    from paperbot.executor import ExecConfig, ExecStore, Executor, Paper3Source
+    from paperbot.testnet import TestnetClient
+
+    def run(sub, frac):
+        w = World(tmp_path / sub, margin=0.4, max_loss_frac=0.35)
+        w.now = T0 + 5_000
+        w.run.poll()
+        B = T0 + 15 * MIN
+        w.add_minutes(T0, 15)
+        w.signal("V39_ALL", "BTCUSDT", 1, B, atr_frac=0.006)     # 2 ATR = 1.2%: a stop costs ~21% at 40% x 40
+        w.add_minutes(B, 1)
+        w.now = B + 65_000
+        w.run.poll()
+        p = w.engine().position
+        assert p is not None and p.leverage == 40
+        assert abs(p.margin - 0.4 * 1000) < 1.0                    # 40% of the paper wallet, not cut
+        fake = FakeFutures(prices={"BTCUSDT": w.px["BTCUSDT"], "ETHUSDT": w.px["ETHUSDT"]}, wallet=100.0)
+        clock = lambda: w.now                                      # noqa: E731
+        fake.clock = clock
+        risk = R.RiskConfig(daily_max_loss_usd=100.0, max_drawdown_pct=0.6, max_consecutive_losses=3, max_leverage=40,
+                            max_notional_usd=2000.0, allowed_symbols=("BTCUSDT", "ETHUSDT"),
+                            kill_file=str(tmp_path / sub / "STOP"), max_loss_frac=frac)
+        cfg = ExecConfig(account=C.ACCOUNT, paper_db=w.cfg.db, db=str(tmp_path / sub / "exec.db"), qty_scale=0.1,
+                         risk=risk, sweep_every=1)
+        ex = Executor(cfg, TestnetClient("k", "s", send=fake, clock_ms=clock), Paper3Source(cfg.paper_db, cfg.account),
+                      ExecStore(cfg.db), ListNotifier(), now_ms=clock, sleep=lambda s: None)
+        ex.start()
+        ex.loop_once()
+        return fake.pos.get("BTCUSDT", 0.0), p.qty
+
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    live, paper = run("a", 0.35)
+    assert live == pytest.approx(math.floor(paper * 0.1 / 0.001 + 1e-9) * 0.001)   # paper x 0.1 on the exchange's
+    assert live * PX["BTCUSDT"] > 1500                                       # 0.001 BTC step: ~$1,600 at 40x
+    cut, _ = run("b", None)
+    assert 0 < cut < live * 0.8                                            # the default 15% cuts it
 
 
 # ---------------------------------------------------------------- custom numbers = the rule bot's path

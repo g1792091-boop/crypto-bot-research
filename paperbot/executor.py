@@ -1697,9 +1697,11 @@ class Executor:
             rules = v3_settings(taker_fee=self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE)
             stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side)
             # the loss at the stop must fit today's remaining loss limit and the paper rules' share of LIVE equity
+            # (or the config's own share, risk.max_loss_frac)
+            frac = self.cfg.risk.max_loss_frac if self.cfg.risk.max_loss_frac is not None else rules.max_loss_frac
             dec = R.check_entry(self.cfg.risk, self.risk, it.symbol, qty, price, it.leverage, spec["qty_step"],
                                 spec["min_qty"], spec["min_notional"], stop=stop, equity=self.risk.last_equity,
-                                max_loss_frac=rules.max_loss_frac, cost_frac=rules.taker_fee + rules.slippage_frac)
+                                max_loss_frac=frac, cost_frac=rules.taker_fee + rules.slippage_frac)
         self._event(INFO if dec.ok else WARN, "entry_check", f"진입 검사({it.symbol}): {dec.action} - {dec.text()}",
                     {"key": it.key, "qty": dec.qty, "leverage": dec.leverage, "direct": it.direct})
         if not dec.ok:

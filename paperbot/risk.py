@@ -50,6 +50,9 @@ class RiskConfig:
     max_notional_usd: Optional[float] = None
     allowed_symbols: tuple = ()
     kill_file: Optional[str] = None
+    # share of the live equity one stop-out may lose (optional): None = the paper rules' own share (15%);
+    # owners 2026-10-17 run 40% margin at 40x / 30x, where a stop costs 20-33% of the account
+    max_loss_frac: Optional[float] = None
 
     @classmethod
     def from_dict(cls, d: dict) -> "RiskConfig":
@@ -80,6 +83,9 @@ class RiskConfig:
             out.append("최대 레버리지는 1~125 사이 정수입니다")
         if self.max_notional_usd is not None and not self.max_notional_usd > 0:
             out.append("포지션 최대 크기는 0보다 커야 합니다")
+        if self.max_loss_frac is not None and not (isinstance(self.max_loss_frac, (int, float))
+                                                   and 0 < self.max_loss_frac <= 1):
+            out.append("손절 한 번 최대 손실(max_loss_frac)은 0~1 사이 비율입니다(예: 35% → 0.35)")
         return out
 
 
