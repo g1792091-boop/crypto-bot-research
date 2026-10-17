@@ -47,6 +47,11 @@ list of conditions; a signal goes in when ANY of them holds, a condition holds w
 or not, the candidate league's gate g1, ``BtcTrend``). A filtered signal is logged FILTERED and reaches neither account.
 When the BTC trend cannot be read (Binance down), a condition that needs it does not hold.
 
+Early exit (``early_exit``, owners 2026-10-17: "추세가 꺾이면 빠른 손절", no switching): with "own", a signal of the
+open position's own strategy on its coin in the other direction closes it at the open of the minute that starts at
+that signal's bar close; with "any", a signal of any member does. Every member signal counts, inside its conditions
+or not. Nothing is entered in that minute (no switch into the other side). Exit reason "REV". Off by default.
+
 A coin-flip twin ``COMBOFLIP@mix`` (``flip_twin``) gets every signal at the same moment with a side drawn from a hash
 of the signal: what the same rules earn without the strategies' direction (the yardstick of every other analysis).
 
@@ -105,7 +110,11 @@ DS_DEFS_FILE = os.path.join(ROOT, "research", "fullgrid", "ds_defs.py")
 DS_TFS_OF = {d[0]: d[2] for d in DS200_DEFS}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
-KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산"}
+KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
+           "REV": "빠른 청산(반대 신호)"}
+EARLY_EXITS = (None, "own", "any")
+KO_EARLY = {None: "없음(고정 손절과 계단 익절만)", "own": "같은 매매법이 반대 신호를 내면 바로 청산",
+            "any": "합친 매매법 중 하나라도 반대 신호를 내면 바로 청산"}
 KST_MS = 9 * 3_600_000
 H4 = 4 * 3_600_000
 BTC_EMA = 50                        # candleague/rulex.py GATE_EMA
@@ -410,6 +419,7 @@ class ComboConfig:
     rank: tuple = RANK_KEYS
     no_score: float = 3.0
     flip_twin: bool = True
+    early_exit: Optional[str] = None    # None | "own" | "any" (the class docstring)
     symbols: tuple = V3_SYMBOLS
     poll_s: float = 2.0
     max_signal_age_s: float = 150.0
@@ -488,6 +498,8 @@ class ComboConfig:
         bad = [s for s in self.symbols if s not in V3_SYMBOLS]
         if bad:
             out.append(f"symbols: 규칙봇 6개 코인만 됩니다({', '.join(bad)})")
+        if self.early_exit not in EARLY_EXITS:
+            out.append('early_exit는 null(끔), "own"(같은 매매법의 반대 신호), "any"(아무 매매법의 반대 신호)입니다')
         return out
 
 
@@ -595,6 +607,29 @@ class ComboEngine(PaperEngine):
         kw.pop("policy", None)
         super().__init__(settings, brackets, policy=FixedLevPolicy(settings, combo), **kw)
         self.combo = combo
+        self._exit_on: list[Signal] = []
+
+    def exit_signal(self, sig: Signal) -> None:
+        """A member's signal of this minute (entered or not, inside its conditions or not) for the early exit rule."""
+        if self.combo.early_exit:
+            self._exit_on.append(sig)
+
+    def step(self, bars: dict[str, Bar], funding: Optional[dict[str, float]] = None) -> None:
+        """``early_exit``: a signal against the open position (its coin, the other side, a bar closed after the entry;
+        "own": the same member) closes it at this minute's open, and this minute enters nothing."""
+        trig, self._exit_on = self._exit_on, []
+        p = self.position
+        if trig and p is not None and p.symbol in bars:
+            own = p.signal.meta.get("member", p.signal.strategy_id)
+            hit = [g for g in trig if g.symbol == p.symbol and int(g.side) == -int(p.side) and g.ts + 1 > p.entry_time
+                   and (self.combo.early_exit == "any" or g.meta.get("member", g.strategy_id) == own)]
+            if hit:
+                bar = bars[p.symbol]
+                self._close_market(bar.open, bar.open_time, "REV")
+                for g in self.pending:
+                    self._record(g, "SKIPPED", "early exit this minute", bar.open_time)
+                self.pending = []
+        super().step(bars, funding)
 
     def _rank_key(self, sig: Signal) -> tuple:
         return rank_key(self.combo, self.s, sig)
@@ -1012,9 +1047,7 @@ class ComboRunner:
                                                self.cfg.symbols)
         for m, row in rows:
             sig = rule_signal(self.cfg, m, row)
-            if self._allowed(m, sig, "rule"):
-                self.queue.append(Queued(int(row["bar_close"]), dataclasses.asdict(sig)))
-                self._log(sig, "SUBMITTED", "rule")
+            self._queue(m, sig, int(row["bar_close"]), "rule")
         self.cursor = int(top)
         now = self.now_ms()
         if self.funding is not None:
@@ -1052,13 +1085,19 @@ class ComboRunner:
             sig = _sig_from(q.signal)
             age = now - int(sig.meta.get("ref_time") or q.bar_close)
             label = sig.meta.get("member", sig.strategy_id)
+            exit_only = bool(sig.meta.get("exit_only"))
             for aid, e in self.book.engines.items():
                 s = sig if aid == ACCOUNT else replace(sig, side=flip_side(aid, sig), meta=dict(sig.meta))
+                if self.cfg.early_exit:
+                    e.exit_signal(s)          # at its own minute, late or not: the paper replays every minute
+                if exit_only:
+                    continue
                 if age > self.cfg.max_signal_age_s * 1000:
                     e._record(s, "REJECTED", "late", ts, age_ms=age)
                     continue
                 e.submit(s)
-            self._count(label, "late" if age > self.cfg.max_signal_age_s * 1000 else "submitted")
+            if not exit_only:
+                self._count(label, "late" if age > self.cfg.max_signal_age_s * 1000 else "submitted")
         self.queue = keep
 
     def _custom(self, boundary: int) -> None:
@@ -1084,9 +1123,16 @@ class ComboRunner:
             ref = ask if g["side"] > 0 else bid
             sig = make_signal(self.cfg, m, boundary, g["symbol"], g["side"], g["atr"], ref, ready, ready - boundary,
                               g["ctx"], "custom")
-            if self._allowed(m, sig, "custom"):
-                self.queue.append(Queued(boundary, dataclasses.asdict(sig)))
-                self._log(sig, "SUBMITTED", "custom")
+            self._queue(m, sig, boundary, "custom")
+
+    def _queue(self, m: Member, sig: Signal, bar_close: int, source: str) -> None:
+        """Inside the member's conditions: queued for entry. Outside: logged FILTERED, and with ``early_exit`` queued
+        as exit-only (it may close the open position, never opens one)."""
+        if self._allowed(m, sig, source):
+            self.queue.append(Queued(bar_close, dataclasses.asdict(sig)))
+            self._log(sig, "SUBMITTED", source)
+        elif self.cfg.early_exit:
+            self.queue.append(Queued(bar_close, dataclasses.asdict(replace(sig, meta={**sig.meta, "exit_only": True}))))
 
     def _allowed(self, m: Member, sig: Signal, source: str) -> bool:
         """The member's conditions (``when``); a signal outside them is logged FILTERED and reaches no account."""
@@ -1201,6 +1247,7 @@ def cmd_run(args) -> int:
     notifier.send(INFO, f"[합친 봇 페이퍼] 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값, "
                         f"{sum(bool(m.when) for m in members)}개 조건 있음), "
                         f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 손절 {stop_text(cfg)}, "
+                        f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}, "
                         f"포지션 1개, 지갑 ${book.engines[ACCOUNT].wallet:,.2f}")
     stop = {"flag": False}
 
@@ -1256,6 +1303,7 @@ def cmd_check(args) -> int:
           f"{cfg.ladder['first_lock']:.0%} 잠금, 이후 {cfg.ladder['step']:.0%}씩")
     print(f"- 동시에 나온 신호: {' > '.join({'score': '진입 점수', 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
     print(f"- 동전 쌍둥이 계좌: {'있음' if cfg.flip_twin else '없음'}")
+    print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}")
     for m in members:
         print("  " + m.describe())
     for p in probs:

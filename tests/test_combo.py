@@ -10,7 +10,9 @@ one position, the better spot first; the order executor follows it unchanged.
 - custom numbers: the custom path with the default numbers gives exactly the rule bot's signals (36: compute_last;
   DeepSeek: dssig's job), so a custom pick runs on the same frames as the rule bot;
 - conditions (when): parsing and refusals, KST sessions and weekends at their edges, the BTC 4h trend equal to the
-  candidate league's gate g1, and the runner keeping a signal outside its member's conditions from both accounts."""
+  candidate league's gate g1, and the runner keeping a signal outside its member's conditions from both accounts;
+- early exit: an opposite signal of the same strategy ("own") or any member ("any") closes the position at the next
+  minute's open, never opens the other side, and a signal outside its conditions still counts as an exit."""
 
 import dataclasses
 import json
@@ -617,3 +619,67 @@ def test_runner_keeps_signals_outside_the_conditions_from_both_accounts(tmp_path
         assert n == 1
     assert w.run.counts["V39_ALL@15m"] == {"filtered": 1}
     assert w.run.counts["OBV_S@15m"] == {"filtered": 1, "submitted": 1}
+
+
+# ---------------------------------------------------------------- early exit (빠른 청산)
+def _open_long(w, strategy="V39_ALL"):
+    w.now = T0 + 5_000
+    w.run.poll()
+    B = T0 + 15 * MIN
+    w.add_minutes(T0, 15)
+    w.signal(strategy, "BTCUSDT", 1, B)
+    w.add_minutes(B, 1)
+    w.now = B + 65_000
+    w.run.poll()
+    p = w.engine().position
+    assert p is not None and p.symbol == "BTCUSDT" and p.side == 1
+    return B
+
+
+def _next(w, B, strategy, side, sym="BTCUSDT"):
+    B2 = B + 15 * MIN
+    w.add_minutes(B + MIN, 14)
+    w.signal(strategy, sym, side, B2)
+    w.add_minutes(B2, 1)
+    w.now = B2 + 65_000
+    w.run.poll()
+    return B2
+
+
+def test_early_exit_own_closes_on_the_same_strategy_only_and_never_switches(tmp_path):
+    w = World(tmp_path, early_exit="own")
+    B = _open_long(w)
+    B2 = _next(w, B, "OBV_S", -1)                 # another strategy's short: "own" keeps the long
+    assert w.engine().position is not None
+    B3 = _next(w, B2, "V39_ALL", -1)              # the same strategy turns: out at the open of B3, no short
+    e = w.engine()
+    assert e.position is None
+    t = json.loads(w.store.conn.execute("SELECT data FROM trades WHERE account_id = ?", (C.ACCOUNT,)).fetchone()[0])
+    assert t["exit_reason"] == "REV" and t["exit_time"] == B3
+    assert abs(t["exit_price"] - w.px["BTCUSDT"] * (1 - 0.0002)) < 1e-6          # market at the open, slippage
+    outs = w.store.conn.execute("SELECT status, reason FROM outcomes WHERE account_id = ? ORDER BY id DESC LIMIT 1",
+                                (C.ACCOUNT,)).fetchall()
+    assert outs[0] == ("SKIPPED", "early exit this minute")
+
+
+def test_early_exit_any_and_a_signal_outside_its_conditions_still_closes(tmp_path):
+    w = World(tmp_path, early_exit="any",
+              members=[{"strategy": "V39_ALL", "tf": "15m"}, {"strategy": "OBV_S", "tf": "15m", "when": [{"symbol": "ETHUSDT"}]}])
+    B = _open_long(w)
+    B2 = _next(w, B, "OBV_S", -1)                 # outside OBV's conditions (ETH only): no entry, but it is a turn
+    assert w.engine().position is None
+    t = json.loads(w.store.conn.execute("SELECT data FROM trades WHERE account_id = ?", (C.ACCOUNT,)).fetchone()[0])
+    assert t["exit_reason"] == "REV" and t["exit_time"] == B2
+    st = w.store.conn.execute("SELECT status FROM signal_log WHERE strategy = 'OBV_S@15m'").fetchall()
+    assert st == [("FILTERED",)]
+    n = w.store.conn.execute("SELECT COUNT(*) FROM outcomes WHERE account_id = ? AND reason = 'ok'", (C.ACCOUNT,)).fetchone()[0]
+    assert n == 1                                  # only the first long was ever entered
+
+
+def test_early_exit_off_keeps_the_fixed_stop_only(tmp_path):
+    w = World(tmp_path)
+    assert w.cfg.early_exit is None and w.cfg.problems() == []
+    assert "early_exit" in " ".join(cfg_of(tmp_path, early_exit="fast").problems())
+    B = _open_long(w)
+    _next(w, B, "V39_ALL", -1)
+    assert w.engine().position is not None
