@@ -8,7 +8,9 @@ one position, the better spot first; the order executor follows it unchanged.
   reference price, a competing one is recorded as skipped, a late one is refused, a restart goes on, the coin-flip
   twin gets every signal; the executor's own reader sees the position and mirrors it at 40x into a fake exchange;
 - custom numbers: the custom path with the default numbers gives exactly the rule bot's signals (36: compute_last;
-  DeepSeek: dssig's job), so a custom pick runs on the same frames as the rule bot."""
+  DeepSeek: dssig's job), so a custom pick runs on the same frames as the rule bot;
+- conditions (when): parsing and refusals, KST sessions and weekends at their edges, the BTC 4h trend equal to the
+  candidate league's gate g1, and the runner keeping a signal outside its member's conditions from both accounts."""
 
 import dataclasses
 import json
@@ -458,3 +460,114 @@ def test_funding_is_paid_once_at_its_minute():
     assert f.take(T0 + 6 * MIN) == {}
     f.poll(T0 + 30 * MIN)                               # polled again later: the same rate is not taken twice
     assert f.take(T0 + 40 * MIN) == {}
+
+
+# ---------------------------------------------------------------- conditions (when)
+def test_conditions_parse_describe_and_refusals():
+    core = ["V39_ALL", "OBV_S", "N13_3OUTSIDE"]
+    ms = C.resolve_members([
+        {"strategy": "V39_ALL", "tf": "1h", "when": [{"symbol": "SOLUSDT", "session": "asia"},
+                                                     {"side": "short", "btc_trend": "against", "weekend": False}]},
+        {"pick": "core-N13_3OUTSIDE-30m-1", "when": {"symbol": ["BCHUSDT", "LTCUSDT"], "session": ["dawn", "us"]}},
+        {"strategy": "OBV_S", "tf": "30m"}], core=core)
+    assert ms[0].when == ((("symbol", ("SOLUSDT",)), ("session", ("asia",))),
+                          (("side", -1), ("weekend", False), ("btc_trend", "against")))
+    assert ms[1].when == ((("symbol", ("BCHUSDT", "LTCUSDT")), ("session", ("dawn", "us"))),)
+    assert ms[2].when is None and ms[0].needs_btc and not ms[1].needs_btc
+    d = ms[0].describe()
+    assert "조건: (SOL + 아시아(09-17시)) 또는 (숏만 + 평일 + BTC 4시간 추세와 반대 방향)" in d
+    hash(ms[0])                                                     # Members stay hashable
+    for bad, text in [({"symbol": "XRPUSDT"}, "6개 코인"), ({"side": "up"}, "long"), ({"session": "night"}, "session"),
+                      ({"weekend": "yes"}, "weekend"), ({"btc_trend": "up"}, "btc_trend"), ({"hour": 3}, "없는 조건"),
+                      ("asia", "조건 목록"), (["asia"], "형식")]:
+        with pytest.raises(C.ComboError, match=text):
+            C.resolve_members([{"strategy": "OBV_S", "tf": "1h", "when": bad}], core=core)
+    with pytest.raises(C.ComboError, match="알 수 없는 이름"):
+        C.resolve_members([{"strategy": "OBV_S", "tf": "1h", "whne": [{"side": "long"}]}], core=core)
+
+
+def test_conditions_kst_session_weekend_and_btc_trend():
+    H = 3_600_000
+    # T0 = Monday 2026-10-05 00:00 UTC = 09:00 KST
+    assert [C.kst_session(T0 + h * H) for h in (0, 7, 8, 12, 13, 20, 21, 23)] == [
+        "asia", "asia", "europe", "europe", "us", "us", "dawn", "dawn"]
+    assert C.kst_session(T0 - 1) == "dawn" and C.kst_session(T0 + 21 * H - 1) == "us"
+    fri = T0 + 4 * 24 * H                                         # Friday 00:00 UTC
+    assert not C.kst_weekend(fri + 15 * H - 1) and C.kst_weekend(fri + 15 * H)    # Saturday 00:00 KST
+    sun_end = fri + (15 + 48) * H                                  # Monday 00:00 KST
+    assert C.kst_weekend(sun_end - 1) and not C.kst_weekend(sun_end)
+    m = C.resolve_members([{"strategy": "V39_ALL", "tf": "1h", "when": [
+        {"symbol": "SOLUSDT", "session": "asia"}, {"side": "short", "btc_trend": "against"}]}], core=["V39_ALL"])[0]
+    up = lambda t: 1                                               # noqa: E731
+    assert m.allows("SOLUSDT", 1, T0, up) == (True, "")            # first condition
+    assert m.allows("SOLUSDT", 1, T0 + 8 * H, up) == (False, "조건 밖")
+    assert m.allows("ETHUSDT", -1, T0 + 8 * H, up) == (True, "")   # short against an up trend
+    assert m.allows("ETHUSDT", -1, T0 + 8 * H, lambda t: -1)[0] is False
+    assert m.allows("ETHUSDT", -1, T0 + 8 * H, lambda t: None) == (False, "조건 밖(BTC 4시간 추세를 못 읽음)")
+    assert m.allows("SOLUSDT", 1, T0, lambda t: None) == (True, "")      # a condition without the trend still holds
+
+
+def _btc_rows(n, end_open, seed=3):
+    rng = np.random.default_rng(seed)
+    c = 60000 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+    return [[end_open - (n - 1 - k) * C.H4, c[k], c[k] * 1.01, c[k] * 0.99, c[k], 1.0] for k in range(n)]
+
+
+def test_btc_trend_equals_the_league_gate_and_fetches_only_when_a_bar_is_due():
+    from candleague.rulex import gate_g1_arrays, gate_g1_stamp
+    rows = _btc_rows(600, T0)                    # the last row opens at T0: still forming until T0 + 4h
+    calls = []
+    now = {"t": T0 + 3_600_000}
+
+    def fetch():
+        calls.append(now["t"])
+        return [r for r in rows if r[0] <= now["t"]]
+
+    bt = C.BtcTrend(fetch, lambda: now["t"])
+    closed = [r for r in rows if r[0] + C.H4 <= now["t"]]
+    cm, sg = gate_g1_arrays(np.array([r[0] + C.H4 for r in closed]), np.array([r[4] for r in closed]))
+    for k in (60, 200, 598):
+        t = int(cm[k]) + 5 * MIN
+        want = gate_g1_stamp(cm, sg, t, 1)
+        got = bt.sign_at(t)
+        assert (None if got is None else got == 1) == want
+    assert bt.sign_at(int(cm[10])) is None                         # the EMA is cold for the first 50 bars
+    assert len(calls) == 1                                         # one fetch: every bar asked for was there
+    t = T0 + 30 * MIN
+    assert bt.sign_at(t) == int(sg[-1]) and len(calls) == 1
+    now["t"] = T0 + C.H4 + 2_000                                   # the bar of T0 has closed
+    assert bt.sign_at(T0 + C.H4 + MIN) is not None and len(calls) == 2
+    assert int(bt.close_ms[-1]) == T0 + C.H4
+    bad = C.BtcTrend(lambda: (_ for _ in ()).throw(OSError("down")), lambda: now["t"])
+    assert bad.sign_at(T0) is None and "BTC 4h klines failed" in bad.errors[0]
+
+
+def test_runner_keeps_signals_outside_the_conditions_from_both_accounts(tmp_path):
+    w = World(tmp_path, members=[{"strategy": "V39_ALL", "tf": "15m", "when": [{"symbol": "ETHUSDT"}]},
+                                 {"strategy": "OBV_S", "tf": "15m", "when": [{"btc_trend": "with"}]}])
+    rising = [[T0 - (100 - k) * C.H4, 50000.0 + 100 * k, 0, 0, 50000.0 + 100 * k, 1.0] for k in range(100)]
+    btc = C.BtcTrend(lambda: rising, lambda: w.now)
+    w.run = C.ComboRunner(w.cfg, w.members, w.book, w.store, w.note, None, now_ms=lambda: w.now,
+                          prices=lambda: {}, btc=btc)
+    w.now = T0 + 5_000
+    w.run.poll()
+    B = T0 + 15 * MIN
+    w.add_minutes(T0, 15)
+    w.signal("V39_ALL", "BTCUSDT", 1, B)           # outside: V39 only on ETH
+    w.signal("OBV_S", "ETHUSDT", -1, B)            # outside: a short against the up trend
+    w.signal("OBV_S", "SOLUSDT", 1, B)             # inside: a long with the up trend
+    w.add_minutes(B, 1)
+    w.now = B + 65_000
+    w.run.poll()
+    p = w.engine().position
+    assert p is not None and p.symbol == "SOLUSDT" and p.signal.strategy_id == "OBV_S"
+    rows = w.store.conn.execute("SELECT strategy, symbol, status, data FROM signal_log ORDER BY id").fetchall()
+    st = {(r[0], r[1]): (r[2], json.loads(r[3]).get("why")) for r in rows}
+    assert st[("V39_ALL@15m", "BTCUSDT")] == ("FILTERED", "조건 밖")
+    assert st[("OBV_S@15m", "ETHUSDT")] == ("FILTERED", "조건 밖")
+    assert st[("OBV_S@15m", "SOLUSDT")][0] == "SUBMITTED"
+    for aid in (C.ACCOUNT, C.FLIP_ACCOUNT):        # the filtered signals reached neither account
+        n = w.store.conn.execute("SELECT COUNT(*) FROM outcomes WHERE account_id = ?", (aid,)).fetchone()[0]
+        assert n == 1
+    assert w.run.counts["V39_ALL@15m"] == {"filtered": 1}
+    assert w.run.counts["OBV_S@15m"] == {"filtered": 1, "submitted": 1}

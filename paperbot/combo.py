@@ -39,6 +39,14 @@ The account (``ComboEngine``: paperbot.engine.PaperEngine with three changes)
   without a strength definition) counts as ``no_score`` (3, the middle). The research found no edge in it; it is the
   owners' rule. Every losing candidate is recorded (outcomes: SKIPPED "lower score than entered signal").
 
+Conditions (``when``, owners 2026-10-17: the 5-year fit): a member may trade only some of its signals. ``when`` is a
+list of conditions; a signal goes in when ANY of them holds, a condition holds when ALL of its keys do:
+``symbol`` (a coin or a list), ``side`` ("long" / "short"), ``session`` (KST hours of the bar close: "asia" 09-17,
+"europe" 17-22, "us" 22-06, "dawn" 06-09; one or a list), ``weekend`` (true: KST Saturday/Sunday, false: weekdays),
+``btc_trend`` ("with" / "against": the last closed BTC 4h bar's close above / below its EMA(50) agrees with the side
+or not, the candidate league's gate g1, ``BtcTrend``). A filtered signal is logged FILTERED and reaches neither account.
+When the BTC trend cannot be read (Binance down), a condition that needs it does not hold.
+
 A coin-flip twin ``COMBOFLIP@mix`` (``flip_twin``) gets every signal at the same moment with a side drawn from a hash
 of the signal: what the same rules earn without the strategies' direction (the yardstick of every other analysis).
 
@@ -78,7 +86,7 @@ from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier
 from .sizing import SizeDecision
 from .store3 import Store3
 
-VERSION = "combo-v1"
+VERSION = "combo-v2"
 ACCOUNT = "COMBO@mix"
 FLIP_ACCOUNT = "COMBOFLIP@mix"
 KIND = "combo"
@@ -98,6 +106,13 @@ DS_TFS_OF = {d[0]: d[2] for d in DS200_DEFS}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산"}
+KST_MS = 9 * 3_600_000
+H4 = 4 * 3_600_000
+BTC_EMA = 50                        # candleague/rulex.py GATE_EMA
+SESSIONS = {"asia": (9, 17), "europe": (17, 22), "us": (22, 6), "dawn": (6, 9)}       # KST hours [from, to)
+KO_SESSION = {"asia": "아시아(09-17시)", "europe": "유럽(17-22시)", "us": "미국(22-06시)", "dawn": "새벽(06-09시)"}
+WHEN_KEYS = ("symbol", "side", "session", "weekend", "btc_trend")
+SIDES = {"long": 1, "short": -1}
 
 
 class ComboError(ValueError):
@@ -116,15 +131,163 @@ class Member:
     numbers: Optional[dict]
     order: int
     pick: Optional[str] = None
+    when: Optional[tuple] = None       # conditions (parse_when): ((("symbol", ("SOLUSDT",)), ("side", 1)), ...)
 
     @property
     def custom(self) -> bool:
         return self.numbers is not None
 
+    @property
+    def needs_btc(self) -> bool:
+        return any(k == "btc_trend" for c in (self.when or ()) for k, _ in c)
+
     def describe(self) -> str:
         what = "기본값(규칙봇 신호)" if not self.custom else \
             "커스텀값 " + ", ".join(f"{k}={v}" for k, v in sorted(self.numbers.items()))
-        return f"{self.order}. {self.name} {KO_TF.get(self.tf, self.tf)} - {what}" + (f" [{self.pick}]" if self.pick else "")
+        out = f"{self.order}. {self.name} {KO_TF.get(self.tf, self.tf)} - {what}" + (f" [{self.pick}]" if self.pick else "")
+        if self.when:
+            out += " | 조건: " + " 또는 ".join(describe_condition(c) for c in self.when)
+        return out
+
+    def allows(self, symbol: str, side: int, bar_close: int, btc: Optional[Callable[[int], Optional[int]]] = None
+               ) -> tuple[bool, str]:
+        """(trade it, why not). ``btc(bar_close)``: the BTC 4h trend sign (+1 / -1) or None when unknown."""
+        if not self.when:
+            return True, ""
+        sign = btc(bar_close) if (btc is not None and self.needs_btc) else None
+        for c in self.when:
+            if condition_holds(c, symbol, side, bar_close, sign):
+                return True, ""
+        if self.needs_btc and sign is None:
+            return False, "조건 밖(BTC 4시간 추세를 못 읽음)"
+        return False, "조건 밖"
+
+
+def kst_session(ms: int) -> str:
+    hr = ((int(ms) + KST_MS) // 3_600_000) % 24
+    for name, (a, b) in SESSIONS.items():
+        if (a <= hr < b) if a < b else (hr >= a or hr < b):
+            return name
+    raise AssertionError(hr)
+
+
+def kst_weekend(ms: int) -> bool:
+    return ((int(ms) + KST_MS) // 86_400_000 + 3) % 7 >= 5          # day 0 (1970-01-01) was a Thursday: +3 -> Monday 0 .. Sunday 6
+
+
+def condition_holds(cond: tuple, symbol: str, side: int, bar_close: int, btc_sign: Optional[int]) -> bool:
+    for k, v in cond:
+        if k == "symbol" and symbol not in v:
+            return False
+        if k == "side" and int(side) != v:
+            return False
+        if k == "session" and kst_session(bar_close) not in v:
+            return False
+        if k == "weekend" and kst_weekend(bar_close) != v:
+            return False
+        if k == "btc_trend" and (btc_sign is None or (btc_sign == int(side)) != (v == "with")):
+            return False
+    return True
+
+
+def describe_condition(cond: tuple) -> str:
+    parts = []
+    for k, v in cond:
+        if k == "symbol":
+            parts.append("/".join(s.replace("USDT", "") for s in v))
+        elif k == "side":
+            parts.append("롱만" if v > 0 else "숏만")
+        elif k == "session":
+            parts.append("/".join(KO_SESSION[s] for s in v))
+        elif k == "weekend":
+            parts.append("주말(토·일)" if v else "평일")
+        elif k == "btc_trend":
+            parts.append("BTC 4시간 추세와 같은 방향" if v == "with" else "BTC 4시간 추세와 반대 방향")
+    return "(" + " + ".join(parts) + ")" if parts else "(항상)"
+
+
+def parse_when(raw, where: str) -> Optional[tuple]:
+    """Config ``when`` -> a hashable tuple of conditions (each a tuple of (key, value) in WHEN_KEYS order).
+    None or [] means every signal. Raises ComboError (Korean)."""
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        raw = [raw]
+    if not isinstance(raw, list):
+        raise ComboError(f"{where}: when은 조건 목록([{{...}}, ...])입니다")
+    out = []
+    for i, c in enumerate(raw, 1):
+        if not isinstance(c, dict):
+            raise ComboError(f"{where}: when {i}번째 조건이 {{...}} 형식이 아닙니다")
+        unknown = sorted(set(c) - set(WHEN_KEYS))
+        if unknown:
+            raise ComboError(f"{where}: when에 없는 조건 이름 {', '.join(unknown)} (있는 것: {', '.join(WHEN_KEYS)})")
+        items = []
+        for k in WHEN_KEYS:
+            if k not in c:
+                continue
+            v = c[k]
+            if k == "symbol":
+                v = (v,) if isinstance(v, str) else tuple(v) if isinstance(v, list) else None
+                if not v or any(s not in V3_SYMBOLS for s in v):
+                    raise ComboError(f"{where}: when symbol은 규칙봇 6개 코인 중에서({', '.join(V3_SYMBOLS)})")
+            elif k == "side":
+                v = SIDES.get(v) if isinstance(v, str) else None
+                if v is None:
+                    raise ComboError(f'{where}: when side는 "long" 또는 "short"입니다')
+            elif k == "session":
+                v = (v,) if isinstance(v, str) else tuple(v) if isinstance(v, list) else None
+                if not v or any(s not in SESSIONS for s in v):
+                    raise ComboError(f"{where}: when session은 {', '.join(SESSIONS)} 중에서(한국 시간)")
+            elif k == "weekend":
+                if not isinstance(v, bool):
+                    raise ComboError(f"{where}: when weekend는 true(주말만) 또는 false(평일만)입니다")
+            elif k == "btc_trend":
+                if v not in ("with", "against"):
+                    raise ComboError(f'{where}: when btc_trend는 "with"(같은 방향) 또는 "against"(반대)입니다')
+            items.append((k, v))
+        out.append(tuple(items))
+    return tuple(out) or None
+
+
+class BtcTrend:
+    """The BTC 4h trend of the candidate league's gate g1 (candleague/rulex.py ``gate_g1_arrays``): the close of each
+    closed 4h bar against the EMA(50) of closes (pandas ewm span 50, adjust=False, from the first fetched bar), +1 above,
+    -1 below, 0 for the first 50 bars. ``sign_at(t)``: the last bar closed at or before t (None when that bar is missing,
+    the fetch failed or the EMA is cold). ``fetch()``: Binance BTCUSDT 4h klines, oldest first (rows [open_ms, open,
+    high, low, close, ...], the bar still forming included); fetched again only when a newer 4h bar should be there."""
+
+    def __init__(self, fetch: Callable[[], list], now_ms: Callable[[], int]):
+        self.fetch, self.now_ms = fetch, now_ms
+        self.close_ms = np.zeros(0, np.int64)
+        self.sign = np.zeros(0, np.int8)
+        self.errors: list[str] = []
+
+    def _load(self) -> None:
+        now = self.now_ms()
+        rows = [r for r in self.fetch() if int(r[0]) + H4 <= now]
+        c = np.array([float(r[4]) for r in rows])
+        ema, y, a = np.empty(len(c)), 0.0, 2.0 / (BTC_EMA + 1)
+        for k in range(len(c)):
+            y = c[k] if k == 0 else (1 - a) * y + a * c[k]
+            ema[k] = y
+        sign = np.sign(c - ema).astype(np.int8)
+        sign[~(np.isfinite(c) & np.isfinite(ema))] = 0
+        sign[:BTC_EMA] = 0
+        self.close_ms = np.array([int(r[0]) + H4 for r in rows], np.int64)
+        self.sign = sign
+
+    def sign_at(self, t: int) -> Optional[int]:
+        need = int(t) - int(t) % H4                                # the 4h close at or before t
+        if not len(self.close_ms) or int(self.close_ms[-1]) < need:
+            try:
+                self._load()
+            except Exception as exc:  # noqa: BLE001  unknown: the conditions that need it do not hold
+                self.errors.append(f"BTC 4h klines failed: {type(exc).__name__}: {exc}"[:300])
+        j = int(np.searchsorted(self.close_ms, int(t), side="right")) - 1
+        if j < 0 or int(self.close_ms[j]) < need or int(self.sign[j]) == 0:
+            return None
+        return int(self.sign[j])
 
 
 _DS_MOD: list = []
@@ -175,8 +338,9 @@ def load_picks(path: str) -> dict:
 
 def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Optional[list] = None) -> list[Member]:
     """Config ``members`` -> Members. A spec is {"strategy", "tf"} (default numbers), {"strategy", "tf", "numbers"}
-    (custom numbers) or {"pick": "<candidate league id>"} (that pick's custom numbers). Custom numbers equal to the
-    defaults become a default member (the rule bot's own signals). Raises ComboError (Korean) on anything wrong."""
+    (custom numbers) or {"pick": "<candidate league id>"} (that pick's custom numbers), each with an optional ``when``
+    (parse_when). Custom numbers equal to the defaults become a default member (the rule bot's own signals). Raises
+    ComboError (Korean) on anything wrong."""
     if not isinstance(specs, list) or not specs:
         raise ComboError("members(매매법 목록)가 비어 있습니다")
     core = core_names() if core is None else core
@@ -185,6 +349,9 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
     for i, sp in enumerate(specs, 1):
         if not isinstance(sp, dict):
             raise ComboError(f"members {i}번째 항목이 {{...}} 형식이 아닙니다")
+        unknown = sorted(set(sp) - {"pick", "strategy", "tf", "numbers", "when"})
+        if unknown:
+            raise ComboError(f"members {i}번째 항목에 알 수 없는 이름: {', '.join(unknown)}")
         pick = sp.get("pick")
         if pick:
             if picks is None:
@@ -216,11 +383,12 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
             numbers = None if all(_same(full[k], want[k]) for k in want) else full
         key = (kind, name, tf, json.dumps(numbers, sort_keys=True))
         if key in seen:
-            raise ComboError(f"{name} {tf}가 같은 숫자로 두 번 들어 있습니다")
+            raise ComboError(f"{name} {tf}가 같은 숫자로 두 번 들어 있습니다(조건이 여럿이면 when 목록에 함께 적습니다)")
         seen.add(key)
         label = pick or (f"{name}@{tf}" if numbers is None else f"{name}@{tf}~" +
                          hashlib.sha1(json.dumps(numbers, sort_keys=True).encode()).hexdigest()[:6])
-        out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick))
+        when = parse_when(sp.get("when"), label)
+        out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick, when=when))
     return out
 
 
@@ -794,10 +962,12 @@ class ComboRunner:
 
     def __init__(self, cfg: ComboConfig, members: list[Member], book: AccountBook, store: Store3, notifier: Notifier,
                  custom: Optional[CustomSignals], now_ms: Callable[[], int], prices: Callable[[], dict],
-                 funding: Optional[FundingFeed] = None, fetch_5m: Optional[Callable] = None):
+                 funding: Optional[FundingFeed] = None, fetch_5m: Optional[Callable] = None,
+                 btc: Optional[BtcTrend] = None):
         self.cfg, self.members, self.book, self.store = cfg, members, book, store
         self.notifier, self.custom, self.now_ms, self.prices, self.funding = notifier, custom, now_ms, prices, funding
         self.fetch_5m = fetch_5m
+        self.btc = btc
         st = store.get_state(STATE_KEY)
         st = st[1] if st else {}
         self.cursor: Optional[int] = st.get("cursor")
@@ -842,8 +1012,9 @@ class ComboRunner:
                                                self.cfg.symbols)
         for m, row in rows:
             sig = rule_signal(self.cfg, m, row)
-            self.queue.append(Queued(int(row["bar_close"]), dataclasses.asdict(sig)))
-            self._log(sig, "SUBMITTED", "rule")
+            if self._allowed(m, sig, "rule"):
+                self.queue.append(Queued(int(row["bar_close"]), dataclasses.asdict(sig)))
+                self._log(sig, "SUBMITTED", "rule")
         self.cursor = int(top)
         now = self.now_ms()
         if self.funding is not None:
@@ -913,15 +1084,31 @@ class ComboRunner:
             ref = ask if g["side"] > 0 else bid
             sig = make_signal(self.cfg, m, boundary, g["symbol"], g["side"], g["atr"], ref, ready, ready - boundary,
                               g["ctx"], "custom")
-            self.queue.append(Queued(boundary, dataclasses.asdict(sig)))
-            self._log(sig, "SUBMITTED", "custom")
+            if self._allowed(m, sig, "custom"):
+                self.queue.append(Queued(boundary, dataclasses.asdict(sig)))
+                self._log(sig, "SUBMITTED", "custom")
 
-    def _log(self, sig: Signal, status: str, source: str) -> None:
+    def _allowed(self, m: Member, sig: Signal, source: str) -> bool:
+        """The member's conditions (``when``); a signal outside them is logged FILTERED and reaches no account."""
+        ok, why = m.allows(sig.symbol, sig.side, sig.ts + 1, self.btc.sign_at if self.btc is not None else None)
+        if self.btc is not None and self.btc.errors:
+            for e in self.btc.errors:
+                self.store.alert(self.now_ms(), WARN, f"[combo] {e}")
+            self.btc.errors.clear()
+        if not ok:
+            self._log(sig, "FILTERED", source, why)
+            self._count(m.label, "filtered")
+        return ok
+
+    def _log(self, sig: Signal, status: str, source: str, why: str = "") -> None:
+        data = {"source": source, "score": sig.meta.get("score_raw"), "strategy": sig.strategy_id}
+        if why:
+            data["why"] = why
         self.store.log_signals([{
             "bar_close": sig.ts + 1, "timeframe": sig.timeframe, "strategy": sig.meta.get("member", sig.strategy_id),
             "symbol": sig.symbol, "side": sig.side, "atr": sig.atr, "ref_price": sig.meta.get("ref_price"),
             "ref_time": sig.meta.get("ref_time"), "delay_ms": sig.meta.get("delay_ms"), "status": status,
-            "data": {"source": source, "score": sig.meta.get("score_raw"), "strategy": sig.strategy_id}}])
+            "data": data}])
 
     # ---- messages
     def _tell(self, before: dict) -> None:
@@ -998,8 +1185,10 @@ def cmd_run(args) -> int:
     book = build_book(cfg, settings, brackets, store, notifier, specs)
     custom = CustomSignals(members, syms) if any(m.custom for m in members) else None
     now = rest.server_time()
+    btc = BtcTrend(lambda: rest.klines("BTCUSDT", "4h", limit=500), lambda: int(time.time() * 1000)) \
+        if any(m.needs_btc for m in members) else None
     runner = ComboRunner(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
-                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b))
+                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc)
     if runner.cursor is None or book.last_ts is None:
         runner.start_at()
     # funding from the first minute not stepped yet: a rate already paid before a restart is never paid again
@@ -1009,7 +1198,8 @@ def cmd_run(args) -> int:
     store.put_state("combo_run", now, {"version": VERSION, "brackets": src, "taker_fee": settings.taker_fee,
                                        "members": [m.describe() for m in members], "config": dataclasses.asdict(cfg)})
     store.commit()
-    notifier.send(INFO, f"[합친 봇 페이퍼] 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값), "
+    notifier.send(INFO, f"[합친 봇 페이퍼] 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값, "
+                        f"{sum(bool(m.when) for m in members)}개 조건 있음), "
                         f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 손절 {stop_text(cfg)}, "
                         f"포지션 1개, 지갑 ${book.engines[ACCOUNT].wallet:,.2f}")
     stop = {"flag": False}
