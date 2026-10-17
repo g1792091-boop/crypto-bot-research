@@ -92,7 +92,7 @@ sudo nano /etc/paperbot/executor.json
 
 거래 하나가 손절로 잃을 수 있는 돈은 코드가 따로 계좌의 15%와 오늘 남은 하루 한도 중 작은 값 안으로 줄입니다.
 
-> 10/17 분석 뒤 실거래 권장값은 `docs/live1019-analysis-ko.md` 4-3에 있습니다(계좌 N09_ALLIG_AROON@1h, `entry_source` paper,
+> 10/17 분석 뒤 실거래 권장값은 `docs/live1019-analysis-ko.md` 4-3에 있습니다(계좌 V39_ALL@1h — 10/17 두 분 선택, 미리 정한 기준의 대안은 N09_ALLIG_AROON@1h, `entry_source` paper,
 > 하루 $10, 낙폭 30%, 6연패, 상한 $400). 테스트넷도 같은 `risk`·`entry_source`로 연습하세요.
 
 설정 확인:
