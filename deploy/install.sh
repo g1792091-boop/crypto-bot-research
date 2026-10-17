@@ -132,6 +132,9 @@ install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/dscheck
 # the custom-value shadow (paperbot/paramshadow.py): its bar cache, engine states, shadow trades and the summary the
 # dashboard and the specialists read; the only folder that job writes
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/paramshadow
+# the combined bot (paperbot/combo.py, docs/combo-bot-ko.md): its own paper database, the only folder it writes. 755 so
+# the order executor (paperbot-exec, group paperbot) can read combo.db when it follows the combined account
+install -d -o paperbot -g paperbot -m 755 /var/lib/paperbot/combo
 install -d -o root -g paperbot -m 750 /etc/paperbot
 
 echo "== code version"
@@ -161,7 +164,7 @@ echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
 # running bot never reads a half-copied tree. The previous code stays in $APP.old.
 # The agents timer is paused too, so no agent pass starts on a half-copied tree.
-UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer"
+UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -263,7 +266,7 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-dscheck.service paperbot-dscheck.timer \
          paperbot-paramshadow.service paperbot-paramshadow.timer \
          paperbot-failed@.service paperbot-debate.service \
-         paperbot-ghcoin.service paperbot-tgtrades.service paperbot-executor.service; do
+         paperbot-ghcoin.service paperbot-tgtrades.service paperbot-combo.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
@@ -298,6 +301,10 @@ else
   # The custom-value shadow (커스텀값 그림자) is read-only (paper3.db opened read-only, public bars, no order, no account
   # change, no Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
   systemctl enable --now paperbot-paramshadow.timer >/dev/null 2>&1 || echo "paramshadow timer could not be enabled: sudo systemctl enable --now paperbot-paramshadow.timer"
+fi
+# The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
+if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
+  echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"
 fi
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then

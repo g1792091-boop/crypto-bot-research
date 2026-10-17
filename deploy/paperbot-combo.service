@@ -1,0 +1,43 @@
+# 합친 봇 (combined bot, paperbot/combo.py, docs/combo-bot-ko.md): ONE paper account that trades the owners' chosen
+# strategies (rule-bot default numbers and candidate-league custom numbers), one position, the better spot first, fixed
+# leverage per coin. Paper only: no orders. It reads paper3.db (read-only: the rule bot's 1m bars and signal_log) and
+# writes only /var/lib/paperbot/combo; the order executor can follow its account ("paper_db":
+# "/var/lib/paperbot/combo/combo.db", "account": "COMBO@mix").
+#
+# install.sh installs this unit but never enables or starts it. A person starts it after writing
+# /etc/paperbot/combo.json (deploy/combo.example.json):
+#   sudo systemctl enable --now paperbot-combo
+# Restart is safe: the account, its signal queue and the last minute are in its database; missed minutes are replayed
+# from paper3.db, missed signals are recorded late and never traded.
+[Unit]
+Description=paperbot combined bot (one paper account, several strategies; no orders)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.combo run --config /etc/paperbot/combo.json
+Restart=always
+RestartSec=15
+NotifyAccess=main
+WatchdogSec=600
+TimeoutStartSec=20min
+TimeoutStopSec=60
+Nice=5
+MemoryMax=1500M
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot/combo
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target
