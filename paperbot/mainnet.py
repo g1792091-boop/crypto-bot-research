@@ -121,8 +121,7 @@ def trading_keys(mode: str, env: Mapping, paper_env: Optional[Mapping] = None) -
 # ---------------------------------------------------------------- online checks
 UNNEEDED = {"enableInternalTransfer": "계정 간 이체", "permitsUniversalTransfer": "통합 이체",
             "enableMargin": "마진", "enableSpotAndMarginTrading": "현물·마진 거래",
-            "enableVanillaOptions": "옵션", "enablePortfolioMarginTrading": "포트폴리오 마진",
-            "otherPermissions": "Earn·환전(Exchange)"}     # the last: Bybit keys only (bybit.permission_record)
+            "enableVanillaOptions": "옵션", "enablePortfolioMarginTrading": "포트폴리오 마진"}
 
 
 def check_permissions(perm: dict) -> list[str]:
@@ -138,6 +137,9 @@ def check_permissions(perm: dict) -> list[str]:
     # permissions the executor never uses: a leaked key could move or trade money outside the futures budget
     out += [f"{label} 권한({k})이 켜져 있습니다. 실행기에는 필요 없으니 끄세요" for k, label in UNNEEDED.items()
             if perm.get(k)]
+    # problems another exchange's permission record found itself (paperbot.bybit.permission_record: other permission
+    # groups, a main-account key); Binance's record has no such field
+    out += [str(p) for p in perm.get("extraProblems") or []]
     return out
 
 

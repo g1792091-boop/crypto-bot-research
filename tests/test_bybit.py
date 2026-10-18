@@ -245,6 +245,7 @@ def test_market_order_is_read_back_until_final():
     c, fake = client()
     fake.market_lag = 2                                                # creation is asynchronous
     o = c.market(BTC, "BUY", 1.0, client_id="pbe1")
+    o_first = o["orderId"]
     assert o["status"] == "FILLED" and o["executedQty"] == "1.000" and float(o["avgPrice"]) == 100.0
     assert o["side"] == "BUY" and o["clientOrderId"] == "pbe1"
     assert c.order(BTC, client_id="pbe1")["orderId"] == o["orderId"]   # the look-up after a lost answer
@@ -261,9 +262,9 @@ def test_market_order_is_read_back_until_final():
     with pytest.raises(TestnetError) as e:
         c.market(BTC, "BUY", 0.0004)
     assert e.value.code == "QTY_ZERO"
-    with pytest.raises(TestnetError) as e:                             # orderLinkId must be unique
-        c.market(BTC, "BUY", 1.0, client_id="pbe1")
-    assert e.value.code == 110072
+    n, pos = len(fake.orders), fake.pos[BTC]
+    again = c.market(BTC, "BUY", 1.0, client_id="pbe1")                # 110072: never a second order, looked up
+    assert again["duplicate"] and again["orderId"] == o_first and len(fake.orders) == n and fake.pos[BTC] == pos
 
 
 def test_link_ids():

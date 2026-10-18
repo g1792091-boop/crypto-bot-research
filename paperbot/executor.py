@@ -796,8 +796,15 @@ class Executor:
         was = (meta or {}).get("account") or bot.get("account")
         if was and was != cfg.account:
             raise Refused(f"이 DB는 paper 계좌 {was}의 기록입니다. 계좌를 바꾸려면 새 db 파일을 쓰세요")
+        # one database, one exchange: a record without the field is a Binance record (written before Bybit existed)
+        venue = (meta or {}).get("exchange") or bot.get("exchange") or ("binance" if (meta or bot) else None)
+        if venue and venue != cfg.exchange:
+            raise Refused(f"이 DB({cfg.db})는 {venue} 실행기의 기록입니다. {cfg.exchange}는 새 db 파일을 쓰세요")
         if meta is None:
-            store.put_state("meta", now_ms(), {"mode": cfg.mode, "account": cfg.account, "since": now_ms()})
+            first = {"mode": cfg.mode, "account": cfg.account, "since": now_ms()}
+            if cfg.exchange != "binance":
+                first["exchange"] = cfg.exchange
+            store.put_state("meta", now_ms(), first)
             store.commit()
         client.on_request = self._audit
         if keycheck is not None:
@@ -827,6 +834,7 @@ class Executor:
         self.last_transfer_scan = 0
         self.held: Optional[list] = None        # alerts raised during protective work: sent when it is done
         self.gates_failed = False               # mainnet gates failed at the start with a position open (halted)
+        self.pnl_alerted: set = set()           # trades whose fills disagreed with the exchange's P&L record (alerted)
 
     # ------------------------------------------------------------ records
     def _audit(self, a: dict) -> None:
@@ -904,7 +912,12 @@ class Executor:
         that cannot be written must not keep a protective order or a close from going out)."""
         t["n"] = int(t.get("n", 0)) + 1
         self._save(strict=False)
-        return f"pb{t['base']}{tag}{t['n']}"
+        cid = f"pb{t['base']}{tag}{t['n']}"
+        if getattr(self.raw, "UNIQUE_CLIENT_IDS", False):
+            # Bybit refuses an id used before, even by a finished order: a counter that could not be saved before a
+            # restart must never repeat one (<= 28 characters, Bybit allows 36)
+            cid += "r" + os.urandom(4).hex()
+        return cid
 
     def _server_ms(self) -> int:
         """The exchange's clock (fills, income and transfers carry exchange time)."""
@@ -1806,6 +1819,10 @@ class Executor:
                         f"{' (빠른 진입' + lag + ')' if it.direct else ''}",
                         {"key": it.key, "direct": it.direct, "signal_lag_ms": t.get("signal_lag_ms")})
             self._protect(t, [])
+            if o.get("orderId") is None:
+                # Bybit: the entry was accepted but its answer could not be read: its id (for the trade's P&L) is
+                # looked up by the entry's client id, after the stop
+                self._adopted_entry_order(t)
             if abs(amt) < dec.qty - spec["qty_step"] / 2:      # after the stop (and sent after this block)
                 self._event(WARN, "partial_fill", f"{it.symbol} 진입이 일부만 체결됐습니다: {abs(amt):g}/{dec.qty:g}")
             if cut_err is not None:
@@ -2020,6 +2037,17 @@ class Executor:
         taker = self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE
         c = P.trade_costs(t["side"], fills, funding, t.get("entry_ref"), t.get("exit_ref") or t.get("stop"),
                           taker_fee=taker, qty_step=spec["qty_step"], prices=prices)
+        mismatch = sorted({str(f.get("orderId")) for f in fills if f.get("realizedCheck") == "mismatch"})
+        if mismatch:
+            # Bybit: the fills' realized P&L disagrees with the exchange's own record (closed-pnl): never booked as
+            # final (the loss streak and stage-check would count a wrong sign); the wallet estimate stays
+            c = {**c, "final": False, "ok": False,
+                 "problems": list(c["problems"]) + ["실현 손익이 거래소 기록(closed-pnl)과 다름"]}
+            first = t["key"] not in self.pnl_alerted
+            self.pnl_alerted.add(t["key"])
+            self._event(WARN, "pnl_check", f"{t['symbol']} 체결로 계산한 실현 손익이 거래소 기록(closed-pnl)과 다릅니다"
+                        f"(주문 {', '.join(mismatch)}). 이 거래는 지갑 변화로 손익을 잡습니다. 확인해 주세요",
+                        {"key": t["key"], "orders": mismatch}, notify=first)
         self.store.fills(t["key"], fills)
         self.store.funding(t["key"], funding)
         if c["final"]:
@@ -2242,6 +2270,13 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
     except (TestnetError, OSError, KeyError, ValueError) as e:
         line(False, f"거래소 연결: {e}")
         return False
+    setup = getattr(client, "account_setup", None)       # Bybit: account type, margin mode, position mode (reads)
+    if callable(setup):
+        try:
+            for good, text in setup(cfg.risk.allowed_symbols):
+                line(good, text)
+        except (TestnetError, Refused, KeyError, TypeError, ValueError) as e:
+            line(False, f"계정 설정 읽기: {e}")
     if cfg.mode == MODE_MAINNET:
         keycheck.offset_ms = client.offset_ms
         problems, warnings = online_gates(keycheck.api_restrictions, wallet, float(cfg.budget_usd or 0),

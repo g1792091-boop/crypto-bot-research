@@ -73,6 +73,10 @@ class FakeBybit:
         self.ghosts = {}                    # orderId -> list reads it still shows as Untriggered after a cancel
         self.lag_left = {}                  # orderId -> reads left that show a new market order as New
         self.closed_hidden = False          # closed-pnl answers nothing (records lag)
+        # the docs do not say whose side a closed-pnl record's ``side`` is: "order" (the closing order's side, as the
+        # docs' example numbers suggest) or "position" (the closed position's side); the client must not depend on it
+        self.closed_side = "order"
+        self.closed_tamper = None           # f(record) -> record, applied to closed-pnl answers (a wrong record)
         self.margin_refusal = None          # a reason the account cannot be set to isolated margin
         self.key_info = {"id": "1", "note": "exec", "apiKey": api_key, "readOnly": 0, "secret": "",
                          "permissions": {"ContractTrade": ["Order", "Position"], "Spot": [], "Wallet": [],
@@ -122,6 +126,26 @@ class FakeBybit:
                            "execPrice": str(self.last[symbol]), "execQty": str(abs(self.pos[symbol])),
                            "execType": "Funding", "execValue": "0", "execTime": str(t), "feeCurrency": "",
                            "isMaker": False, "feeRate": "0.0001", "closedSize": "", "seq": self.n})
+
+    def add_resting(self, symbol, side, qty, price, link=""):
+        """An active (unfilled) limit order, e.g. placed on the website."""
+        oid = self._new_id()
+        self.orders[oid] = {"orderId": oid, "orderLinkId": link, "symbol": symbol, "side": side, "orderType": "Limit",
+                            "price": str(price), "qty": str(qty), "positionIdx": 0, "timeInForce": "GTC",
+                            "reduceOnly": False, "closeOnTrigger": False, "cumExecQty": "0", "avgPrice": "",
+                            "leavesQty": str(qty), "orderStatus": "New", "cancelType": "UNKNOWN",
+                            "rejectReason": "EC_NoError", "createdTime": str(self.clock()),
+                            "updatedTime": str(self.clock()), "stopOrderType": "UNKNOWN", "triggerPrice": "0",
+                            "triggerDirection": 0, "triggerBy": "UNKNOWN", "tpslMode": ""}
+        if link:
+            self.by_link[link] = oid
+        return oid
+
+    def add_log(self, kind, amount, time=None):
+        """Another transaction-log row that moves the wallet (BONUS, AIRDROP, FEE_REFUND, CURRENCY_BUY, ...)."""
+        t = self.clock() if time is None else time
+        self.wallet += amount
+        self._log(kind, "", t, cash=amount, change=amount)
 
     def add_transfer(self, amount, time=None):
         t = self.clock() if time is None else time
@@ -216,7 +240,9 @@ class FakeBybit:
             realized = float(closing) * (price - self.entry[symbol]) * (1 if amt > 0 else -1)
             rec = next((r for r in self.closed if r["orderId"] == order_id), None)
             if rec is None:
-                rec = {"symbol": symbol, "orderId": order_id, "side": "Sell" if amt > 0 else "Buy", "qty": "0",
+                closing_side = "Sell" if amt > 0 else "Buy"
+                side = closing_side if self.closed_side == "order" else ("Buy" if amt > 0 else "Sell")
+                rec = {"symbol": symbol, "orderId": order_id, "side": side, "qty": "0",
                        "orderPrice": "0", "orderType": "Market", "execType": "Trade", "closedSize": "0",
                        "cumEntryValue": "0", "avgEntryPrice": str(self.entry[symbol]), "cumExitValue": "0",
                        "avgExitPrice": "0", "closedPnl": "0", "fillCount": "0", "leverage": self.lev[symbol],
@@ -388,6 +414,11 @@ class FakeBybit:
             rows = []
             for s in syms:
                 amt = self.pos[s]
+                if self.hedge[s] and amt == 0:                  # hedge mode: a Buy-side and a Sell-side row
+                    rows += [{"positionIdx": i, "symbol": s, "side": "", "size": "0", "avgPrice": "0",
+                              "leverage": self.lev[s], "markPrice": str(self.last[s]), "liqPrice": "",
+                              "unrealisedPnl": "0", "updatedTime": str(self.clock())} for i in (1, 2)]
+                    continue
                 rows.append({"positionIdx": 0, "riskId": 1, "riskLimitValue": "200000", "symbol": s,
                              "side": "" if amt == 0 else ("Buy" if amt > 0 else "Sell"), "size": str(abs(amt)),
                              "avgPrice": str(self.entry[s]), "positionValue": str(float(abs(amt)) * self.entry[s]),
@@ -408,18 +439,21 @@ class FakeBybit:
                 return ok({"list": [self._view(o)], "nextPageCursor": "", "category": "linear"})
             if path == "/v5/order/history":
                 return ok(self._paged([o for o in self.orders.values() if o["symbol"] == q.get("symbol")], q))
-            stop = q.get("orderFilter") == "StopOrder"
+            flt = q.get("orderFilter")
             rows = []
             for o in self.orders.values():
                 if q.get("symbol") and o["symbol"] != q["symbol"]:
                     continue
                 ghost = self.ghosts.get(o["orderId"], 0)
-                if o["orderStatus"] == "Untriggered" or ghost > 0:
+                if o["orderStatus"] == "Untriggered" or ghost > 0:          # conditional (StopOrder)
                     if ghost > 0:
                         self.ghosts[o["orderId"]] = ghost - 1
                         o = {**o, "orderStatus": "Untriggered"}
-                    if stop or q.get("orderFilter") is None:
+                    if flt in (None, "StopOrder"):
                         rows.append(dict(o))
+                elif o["orderStatus"] in ("New", "PartiallyFilled"):        # active orders (Order)
+                    if flt in (None, "Order"):
+                        rows.append(self._view(o))
             return ok(self._paged(rows, q))
         if path == "/v5/order/cancel":
             s = q["symbol"]
@@ -437,10 +471,11 @@ class FakeBybit:
             s = q["symbol"]
             assert q.get("orderFilter") in ("Order", "StopOrder"), q
             done = []
-            if q["orderFilter"] == "StopOrder":
-                for o in self.live_stops(s):
-                    self._cancel(o)
-                    done.append({"orderId": o["orderId"], "orderLinkId": o["orderLinkId"]})
+            todo = self.live_stops(s) if q["orderFilter"] == "StopOrder" else \
+                [o for o in self.orders.values() if o["symbol"] == s and o["orderStatus"] in ("New", "PartiallyFilled")]
+            for o in todo:
+                self._cancel(o)
+                done.append({"orderId": o["orderId"], "orderLinkId": o["orderLinkId"]})
             return ok({"list": done, "success": "1"})
         if path == "/v5/execution/list":
             lo, hi = self._range(q)
@@ -451,6 +486,8 @@ class FakeBybit:
             lo, hi = self._range(q)
             rows = [] if self.closed_hidden else [dict(r) for r in self.closed if r["symbol"] == q["symbol"]
                                                   and lo <= int(r["createdTime"]) <= hi]
+            if self.closed_tamper:
+                rows = [self.closed_tamper(r) for r in rows]
             return ok(self._paged(rows, q))
         if path == "/v5/account/transaction-log":
             assert q.get("accountType") == "UNIFIED" and int(q.get("limit") or 20) <= 50

@@ -56,7 +56,11 @@ Safety:
 - Keys: BYBIT_TESTNET_API_KEY/SECRET (testnet), BYBIT_LIVE_API_KEY/SECRET (mainnet, behind the same switch
   PAPERBOT_LIVE_MAINNET=I_UNDERSTAND); never the paper runner's key nor any Binance key nor the other mode's key.
 - Mainnet start gate: GET /v5/user/query-api (any key may read it) must show withdrawals off, contract trading on,
-  an IP whitelist, nothing else (transfers, spot, options, earn, convert).
+  an IP whitelist, every other permission group empty, and a sub-account's key (isMaster false).
+- An order that was accepted (it has an id) is never reported as not executed: a failed read-back returns it as not
+  final (the executor settles it from the position), and a resend with the same orderLinkId is refused by Bybit
+  (110072) and answered with the existing order, so one order id can never become two positions.
+- One executor database, one exchange (executor.py refuses a Binance database).
 - A position's size is never read as 0 from a missing or garbled field (that would close the trade's record and
   cancel its stop): such an answer is an error.
 - AI agents never import this module (tests/test_bybit.py checks it).
@@ -106,10 +110,14 @@ PREFIX = {MODE_TESTNET: "[바이비트 테스트넷 실행기]", MODE_MAINNET: "
 # retCodes (docs v5/error.mdx)
 RATE_CODES = (10006, 10018)                    # too many visits / IP rate limit
 TRANSIENT_CODES = (10000, 10016, 10019, 429)   # server timeout / server error / restarting / high load, retry
-TIME_CODES = (10002,)                          # request time outside the recv window
+# request time outside the recv window / "request expired" / "invalid duplicate request" (a replayed timestamp):
+# refused, not executed: the executor re-syncs the clock and sends once more (an order with the same orderLinkId cannot
+# be created twice: 110072)
+TIME_CODES = (10002, -1, 10014)
 NOT_FOUND_CODES = (110001,)                    # order does not exist
 GONE_CODES = (110008, 110010)                  # order completed or cancelled / order cancelled
 TRIGGER_CODES = (110092, 110093)               # expect Rising/Falling, but trigger_price <=/>= current
+DUPLICATE_LINK_ID = 110072                     # an order with this orderLinkId exists (an earlier send went through)
 LEVERAGE_NOT_MODIFIED = 110043
 MODE_NOT_MODIFIED = 110025
 MARGIN_NOT_MODIFIED = 110026
@@ -122,7 +130,14 @@ ORDER_FINAL = ("FILLED", "CANCELED", "REJECTED", "EXPIRED")
 ORDER_WAITS = (0.05, 0.1, 0.2, 0.4)       # a market order is read back after these (creation is asynchronous)
 SPAN_MS = 7 * 86_400_000                  # execution/closed-pnl/transaction-log: endTime - startTime <= 7 days
 MAX_PAGES = 50
-INCOME_TYPE = {"TRANSFER_IN": "TRANSFER", "TRANSFER_OUT": "TRANSFER", "SETTLEMENT": "FUNDING_FEE"}
+# transaction-log types -> Binance income types. "TRANSFER": money in or out that is not trading P&L (the executor moves
+# its daily-loss and drawdown baselines by it): transfers, bonuses, airdrops, fee refunds, currency converts
+INCOME_TYPE = {"TRANSFER_IN": "TRANSFER", "TRANSFER_OUT": "TRANSFER", "SETTLEMENT": "FUNDING_FEE",
+               "BONUS": "TRANSFER", "BONUS_RECOLLECT": "TRANSFER", "BONUS_TRANSFER_IN": "TRANSFER",
+               "BONUS_TRANSFER_OUT": "TRANSFER", "AIRDROP": "TRANSFER", "FEE_REFUND": "TRANSFER",
+               "CURRENCY_BUY": "TRANSFER", "CURRENCY_SELL": "TRANSFER"}
+# /v5/user/query-api permission groups the executor may have; every other group must be empty
+TRADING_GROUPS = ("ContractTrade", "Derivatives")
 FILL_TYPES_SKIPPED = ("Funding",)         # funding comes from the transaction log (income), never as a fill
 
 
@@ -215,10 +230,16 @@ def fills_from_executions(execs: list, closed: Optional[dict] = None) -> list:
 
     Bybit's fills carry no realized P&L. Each fill that closes part of a position (``closedSize`` > 0) gets
     closedSize x (fill price - entry price) x position side, with the entry price of its order's record in
-    /v5/position/closed-pnl (``closed``: orderId -> record; the exchange's own average entry). Without a record (it
-    can lag the fill) the entry price is replayed from the fills before it, in time order; a fill that closes a
-    position opened before the first fill of the list keeps realizedPnl 0 and ``realizedSource`` "unknown" (the
-    executor only books its own orders, whose opening fills are in its window)."""
+    /v5/position/closed-pnl (``closed``: orderId -> record; the exchange's own average entry). The position side comes
+    from the fill itself (one-way mode: a closing Sell fill closes a long), never from the record's ``side`` (the
+    docs do not say whose side that is). Without a record (it can lag the fill) the entry price is replayed from the
+    fills before it, in time order; a fill that closes a position opened before the first fill of the list keeps
+    realizedPnl 0 and ``realizedSource`` "unknown" (the executor only books its own orders, whose opening fills are in
+    its window).
+
+    Cross-check: per closing order, the realized P&L of its fills must equal the record's own gross P&L, closedPnl +
+    openFee + closeFee (closedPnl is net of both fees). A difference (a sign or a size) marks the order's fills
+    ``realizedCheck`` "mismatch": the executor then keeps the wallet estimate for the trade and alerts."""
     closed = closed or {}
     out = []
     pos, avg = Decimal(0), Decimal(0)
@@ -250,8 +271,8 @@ def fills_from_executions(execs: list, closed: Optional[dict] = None) -> list:
         rec = closed.get(str(e.get("orderId")))
         entry = rec and rec.get("avgEntryPrice")
         if cs > 0 and entry not in (None, "", "0"):
-            pside = 1 if rec.get("side") == "Sell" else -1          # the closing order's side: Sell closes a long
-            realized, source = cs * (px - Decimal(str(entry))) * pside, "closed-pnl"
+            pside = -sgn                                   # the fill's own side: a closing Sell fill closes a long
+            realized, source = cs * (px - _dec(entry, "avgEntryPrice")) * pside, "closed-pnl"
         elif cs > 0 and known:
             realized, source = replay, "replay"
         elif cs > 0:
@@ -266,13 +287,37 @@ def fills_from_executions(execs: list, closed: Optional[dict] = None) -> list:
                     "realizedSource": source, "commission": str(e.get("execFee") or "0"),
                     "commissionAsset": fee_cur, "time": int(e.get("execTime") or 0), "maker": bool(e.get("isMaker")),
                     "closedSize": _num(cs), "execType": e.get("execType"), "positionSide": "BOTH",
-                    "marginAsset": SETTLE})
+                    "marginAsset": SETTLE, "realizedCheck": None})
+    _check_against_closed_pnl(out, closed)
     return out
 
 
+def _check_against_closed_pnl(fills: list, closed: dict) -> None:
+    """Mark each closing order's fills ok / mismatch against the record's gross (closedPnl + openFee + closeFee)."""
+    by_order: dict = {}
+    for f in fills:
+        if f["realizedSource"] == "closed-pnl":
+            by_order.setdefault(str(f["orderId"]), []).append(f)
+    for oid, fs in by_order.items():
+        rec = closed.get(oid) or {}
+        if any(rec.get(k) in (None, "") for k in ("closedPnl", "openFee", "closeFee")):
+            for f in fs:
+                f["realizedCheck"] = "unchecked"
+            continue
+        ours = sum(Decimal(f["realizedPnl"]) for f in fs)
+        theirs = Decimal(str(rec["closedPnl"])) + Decimal(str(rec["openFee"])) + Decimal(str(rec["closeFee"]))
+        notional = sum(Decimal(f["closedSize"]) * Decimal(f["price"]) for f in fs)
+        bad = abs(ours - theirs) > Decimal("0.01") + Decimal("0.0002") * notional
+        for f in fs:
+            f["realizedCheck"] = "mismatch" if bad else "ok"
+            f["bybitGross"] = _num(theirs)
+
+
 def permission_record(r) -> Optional[dict]:
-    """/v5/user/query-api -> the Binance apiRestrictions fields mainnet.check_permissions reads. None when the answer
-    is not a key record (nothing verified)."""
+    """/v5/user/query-api -> the Binance apiRestrictions fields mainnet.check_permissions reads, plus
+    ``extraProblems``: any permission group other than contract/derivatives trading that is not empty (Spot, Wallet
+    and Options have their own Binance fields), and a key that is not a sub-account's (isMaster must be false). None
+    when the answer is not a key record (nothing verified)."""
     if not isinstance(r, dict) or not isinstance(r.get("permissions"), dict) or "readOnly" not in r:
         return None
     perms = r["permissions"]
@@ -285,6 +330,17 @@ def permission_record(r) -> Optional[dict]:
         writable = int(r.get("readOnly")) == 0
     except (TypeError, ValueError):
         writable = False
+    extra = []
+    others = sorted(g for g, v in perms.items() if v and g not in TRADING_GROUPS + ("Wallet", "Spot", "Options"))
+    if others:
+        extra.append(f"필요 없는 권한이 켜져 있습니다: {', '.join(others)}. 계약 거래(주문·포지션) 말고는 모두 끄세요")
+    wallet_other = sorted(set(perms.get("Wallet") or []) - {"Withdraw", "AccountTransfer", "SubMemberTransfer",
+                                                            "SubMemberTransferList"})
+    if wallet_other:
+        extra.append(f"지갑 권한({', '.join(wallet_other)})이 켜져 있습니다. 끄세요")
+    if r.get("isMaster") is not False:
+        extra.append(f"주 계정의 키이거나 확인되지 않습니다(isMaster={r.get('isMaster')!r}). 실행기 전용 하위 계정의 "
+                     "키만 씁니다")
     return {
         "enableReading": True,
         "enableWithdrawals": has("Wallet", "Withdraw"),
@@ -295,7 +351,7 @@ def permission_record(r) -> Optional[dict]:
                                                                   "SubMemberTransferList")),
         "enableSpotAndMarginTrading": has("Spot"),
         "enableVanillaOptions": has("Options"),
-        "otherPermissions": has("Earn") or has("Exchange"),
+        "extraProblems": extra,
         "ips": ips, "uta": r.get("uta"), "isMaster": r.get("isMaster"), "readOnly": r.get("readOnly"),
     }
 
@@ -313,6 +369,9 @@ class BybitClient:
     # a stop bigger than the position is replaced by one of the position's size (the executor's _cover): what Bybit
     # does with a triggered reduce-only order larger than the position is not documented
     EXACT_STOP_SIZE = True
+    # Bybit refuses an orderLinkId used before, even by a finished order (110072): the executor adds a random part to
+    # its stop and close ids, so a counter that could not be saved before a restart never repeats one
+    UNIQUE_CLIENT_IDS = True
 
     def __init__(self, api_key: str, api_secret: str, base: Optional[str] = None, send=None,
                  clock_ms: Callable[[], int] = lambda: int(time.time() * 1000),
@@ -555,6 +614,39 @@ class BybitClient:
         info = self.acct if self.acct is not None else self.account_info()
         return str(info.get("marginMode") or "")
 
+    def account_setup(self, symbols) -> list:
+        """(ok, Korean text) lines for preflight, reads only: account type, margin mode, position mode. The executor
+        switches a unified account to isolated margin and every symbol to one-way at its start; that needs no position
+        and no order, so a mode still to switch while something is open fails here."""
+        info = self.account_info()
+        uta = self._uta()
+        status = info.get("unifiedMarginStatus")
+        kind = {1: "클래식 계정", 3: "통합 거래 계정 UTA 1.0", 4: "통합 거래 계정 UTA 1.0 pro",
+                5: "통합 거래 계정 UTA 2.0", 6: "통합 거래 계정 UTA 2.0 pro"}.get(int(status))
+        out = [(True, f"계정 종류: {kind} (unifiedMarginStatus {status})")]
+        busy = None
+        mm = info.get("marginMode")
+        if not uta:
+            out.append((True, "마진: 클래식 계정은 코인마다 격리로 바꿉니다(진입 때 확인)"))
+        elif mm == "ISOLATED_MARGIN":
+            out.append((True, "마진 모드: 격리(ISOLATED_MARGIN)"))
+        else:
+            busy = self._busy()
+            out.append((not busy, f"마진 모드: {mm}. " + ("포지션·주문이 있어 격리로 못 바꿉니다: 정리한 뒤 다시 하세요"
+                                                       if busy else "실행기가 켤 때 격리 마진으로 바꿉니다")))
+        hedge = []
+        for s in symbols:
+            rows = self.req("GET", "/v5/position/list", {"category": CATEGORY, "symbol": s}).get("list") or []
+            if any(int(r.get("positionIdx") or 0) != 0 for r in rows):
+                hedge.append(s)
+        if not hedge:
+            out.append((True, "포지션 모드: 단방향(one-way)"))
+        else:
+            busy = self._busy() if busy is None else busy
+            out.append((not busy, f"포지션 모드: 양방향(hedge)인 코인 {', '.join(hedge)}. "
+                        + ("포지션·주문이 있어 못 바꿉니다" if busy else "실행기가 켤 때 단방향으로 바꿉니다")))
+        return out
+
     def account(self) -> dict:
         r = self.req("GET", "/v5/account/wallet-balance", {"accountType": "UNIFIED" if self._uta() else "CONTRACT"})
         lst = r.get("list")
@@ -719,11 +811,37 @@ class BybitClient:
                 "orderType": "Market", "qty": q, "positionIdx": 0, "orderLinkId": link}
         if reduce_only:
             body["reduceOnly"] = True
-        r = self.req("POST", "/v5/order/create", body)
+        placeholder = {"orderId": None, "clientOrderId": link, "symbol": symbol, "side": side, "type": "MARKET",
+                       "origQty": q, "executedQty": "0", "avgPrice": "0", "status": "NEW", "reduceOnly": reduce_only}
+        try:
+            r = self.req("POST", "/v5/order/create", body)
+        except TestnetError as e:
+            if getattr(e, "ret_code", None) != DUPLICATE_LINK_ID:
+                raise
+            # an order with this orderLinkId exists: an earlier send of THIS order went through (the executor's ids
+            # are unique). Never a second order: its state is looked up; not visible yet -> not final (NEW)
+            o, note = None, ""
+            for w in (0.0,) + ORDER_WAITS:
+                if w:
+                    self.sleep(w)
+                try:
+                    o = self._order_dict(self._find(symbol, link=link))
+                    break
+                except TestnetError as e2:
+                    note = str(e2)
+                    if e2.code not in NOT_FOUND or isinstance(e2, TransientError):
+                        break
+            return {**(o or {**placeholder, "readBack": f"110072, 조회 실패: {note}"}), "duplicate": True}
         oid = r.get("orderId")
         if not oid:
             raise TransientError(200, None, "주문 번호가 없는 응답(결과 모름)")
         self.order_symbol[oid] = symbol
+        return self._read_back(symbol, oid, {**placeholder, "orderId": oid})
+
+    def _read_back(self, symbol: str, oid, placeholder: dict) -> dict:
+        """The accepted order, read until final. The order WAS accepted (it has an id): an error of the read (a rate
+        limit, a ban, a timeout) never escapes as if it had not run; the last state seen (or NEW) is returned and the
+        executor settles it from the position."""
         o = None
         for w in (0.0,) + ORDER_WAITS:
             if w:
@@ -731,15 +849,12 @@ class BybitClient:
             try:
                 o = self._order_dict(self._find(symbol, order_id=oid))
             except TestnetError as e:
-                if e.code not in NOT_FOUND or isinstance(e, TransientError):
-                    raise
-                o = None
-            if o is not None and o["status"] in ORDER_FINAL:
+                if e.code in NOT_FOUND and not isinstance(e, TransientError):
+                    continue                           # not visible yet (creation is asynchronous)
+                return {**(o or placeholder), "readBack": f"읽기 실패: {e}"}
+            if o["status"] in ORDER_FINAL:
                 break
-        if o is None:
-            o = {"orderId": oid, "clientOrderId": link, "symbol": symbol, "side": side, "type": "MARKET",
-                 "origQty": q, "executedQty": "0", "avgPrice": "0", "status": "NEW", "reduceOnly": reduce_only}
-        return o
+        return o or placeholder
 
     def order(self, symbol: str, order_id=None, client_id: Optional[str] = None) -> dict:
         return self._order_dict(self._find(symbol, order_id=order_id,
@@ -825,6 +940,13 @@ class BybitClient:
         except (TransientError, RateLimited):
             raise
         except TestnetError as e:
+            if getattr(e, "ret_code", None) == DUPLICATE_LINK_ID:
+                # this stop was placed by an earlier send: use it (never fail protection over a duplicate id)
+                try:
+                    return self._algo_dict(self._find(symbol, link=link))
+                except TestnetError as e2:
+                    raise TransientError(e.status, e.code, f"같은 번호의 손절이 있는데 아직 안 보입니다(결과 모름): "
+                                                           f"{e2}") from e
             raise self._would_trigger(e, symbol, side, float(trig)) from e
         oid = r.get("orderId")
         if not oid:
@@ -1213,15 +1335,24 @@ class BybitDrill:
             fills, rec = got
             realized = sum(float(f["realizedPnl"]) for f in fills)
             fees = sum(float(f["commission"]) for f in fills)
-            pside = 1 if rec.get("side") == "Sell" else -1
-            gross = (_f(rec.get("avgExitPrice")) - _f(rec.get("avgEntryPrice"))) * _f(rec.get("closedSize")) * pside
+            open_side = "BUY" if self.side > 0 else "SELL"
+            ins = [f for f in fills if f["side"] == open_side]
+            outs = [f for f in fills if f["side"] != open_side]
+            q_in = sum(float(f["qty"]) for f in ins)
+            # from the fills' own prices and sides alone (no Bybit field whose meaning could be misread): a flipped
+            # sign or a wrong entry price fails here whenever the exit price differs from the entry price
+            by_fills = self.side * (sum(float(f["qty"]) * float(f["price"]) for f in outs)
+                                    - sum(float(f["qty"]) * float(f["price"]) for f in ins)) if q_in else 0.0
             tol = max(0.02, 1e-4 * abs(qty) * entry)
-            # the record's own numbers: gross = (exit - entry) x size; closedPnl = gross - open fee - close fee
-            ok = abs(realized - gross) <= tol and abs((realized - fees) - _f(rec.get("closedPnl"))) <= tol
-            detail = {"fills": len(fills), "realized": round(realized, 6), "fees": round(fees, 6),
-                      "net": round(realized - fees, 6), "bybit_gross": round(gross, 6),
+            fine = max(1e-6, 1e-7 * abs(qty) * entry)
+            # Bybit's own record: closedPnl is net of the open and the close fee
+            ok = (abs(realized - by_fills) <= fine and (realized == 0 or (realized > 0) == (by_fills > 0))
+                  and abs((realized - fees) - _f(rec.get("closedPnl"))) <= tol
+                  and all(f.get("realizedCheck") == "ok" for f in outs))
+            detail = {"fills": len(fills), "realized": round(realized, 6), "by_fill_prices": round(by_fills, 6),
+                      "fees": round(fees, 6), "net": round(realized - fees, 6),
                       "bybit_closedPnl": rec.get("closedPnl"), "bybit_openFee": rec.get("openFee"),
-                      "bybit_closeFee": rec.get("closeFee")}
+                      "bybit_closeFee": rec.get("closeFee"), "check": sorted({str(f.get("realizedCheck")) for f in outs})}
         self._step("fills and P&L read back = Bybit closed-pnl (realized, fees, net)", ok, detail)
         return self.log
 
