@@ -884,21 +884,35 @@ class CustomSignals:
         """[{member, symbol, side, atr, ctx}] of the members due at ``boundary`` that fire on the bar just closed.
         Errors are collected in ``self.errors`` (one coin's computation skipped), never raised."""
         out = []
-        for m in self.due(boundary):
-            for sym in self.symbols:
-                if not self.complete(sym, boundary):
-                    self.errors.append(f"{m.label} {sym}: 5m history incomplete at {boundary}")
-                    continue
-                try:
-                    got = self._one(m, sym, boundary)
-                except Exception as exc:  # noqa: BLE001  one coin of one member skipped
-                    self.errors.append(f"{m.label} {sym}: {type(exc).__name__}: {exc}"[:300])
-                    continue
-                if got is not None:
-                    out.append(got)
+        self._frames = {}             # one chart frame per kind, timeframe and coin at this boundary (each member a copy)
+        try:
+            for m in self.due(boundary):
+                for sym in self.symbols:
+                    if not self.complete(sym, boundary):
+                        self.errors.append(f"{m.label} {sym}: 5m history incomplete at {boundary}")
+                        continue
+                    try:
+                        got = self._one(m, sym, boundary)
+                    except Exception as exc:  # noqa: BLE001  one coin of one member skipped
+                        self.errors.append(f"{m.label} {sym}: {type(exc).__name__}: {exc}"[:300])
+                        continue
+                    if got is not None:
+                        out.append(got)
+        finally:
+            self._frames = {}
         return out
 
     def frame(self, m: Member, symbol: str, boundary: int):
+        key = (m.kind, m.tf, symbol, boundary, self.window(m))
+        cache = getattr(self, "_frames", None)
+        if cache is not None and key in cache:
+            return cache[key].copy()
+        df = self._frame(m, symbol, boundary)
+        if cache is not None:
+            cache[key] = df.copy()
+        return df
+
+    def _frame(self, m: Member, symbol: str, boundary: int):
         need = self.window(m)
         cols = self._cols(symbol, need)
         if cols is None or len(cols[0]) < need:
@@ -917,6 +931,17 @@ class CustomSignals:
         return df
 
     def _btc_frame(self, m: Member, boundary: int):
+        key = ("btc", m.tf, boundary, self.window(m))
+        cache = getattr(self, "_frames", None)
+        if cache is not None and key in cache:
+            b = cache[key]
+            return None if b is None else b.copy()
+        b = self._btc_frame_new(m, boundary)
+        if cache is not None:
+            cache[key] = None if b is None else b.copy()
+        return b
+
+    def _btc_frame_new(self, m: Member, boundary: int):
         from .dssig import BTC_TF_BARS, frame
         cols = self._cols("BTCUSDT", self.window(m))
         if cols is None:
