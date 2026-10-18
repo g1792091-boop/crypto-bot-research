@@ -1,0 +1,1161 @@
+{
+ "paper_db": "/var/lib/paperbot/paper3.db",
+ "db": "/var/lib/paperbot/combo/live16w-plateau.db",
+ "members": [
+  {
+   "strategy": "F12_MSS_DISP",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 2.4
+   },
+   "cell": "F12_MSS_DISP_1h",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "dow",
+     6
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     10
+    ]
+   ]
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "tf": "30m",
+   "numbers": {
+    "st_atr_len": 8,
+    "st_mult": 4.0,
+    "kst_roc_lens": [
+     3,
+     5,
+     7,
+     10
+    ],
+    "kst_signal_len": 27
+   },
+   "cell": "core-N02_ST_KST-30m-2",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "vol3",
+     2
+    ],
+    [
+     "mom24",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     6
+    ]
+   ]
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "tf": "1h",
+   "numbers": {
+    "ema_slow": 16,
+    "rsi_len": 14,
+    "rsi_level": 30.0,
+    "chop_len": 34
+   },
+   "cell": "S1_EMA_RSI_CHOP_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "hr",
+     21
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 25,
+    "fvg_min_atr": 0.4
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "symside",
+     11
+    ]
+   ]
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 2,
+    "disp_atr": 2.4
+   },
+   "cell": "ds-F12_MSS_DISP-1h-1",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     6
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "sym",
+     3
+    ]
+   ]
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "tf": "15m",
+   "numbers": {
+    "swing_k": 9,
+    "disp_atr": 3.6
+   },
+   "cell": "F12_MSS_DISP_15m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "btc",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "symside",
+     10
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "oi24",
+     0
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "symside",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.333333333333
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "vol3",
+     2
+    ]
+   ]
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "tf": "1h",
+   "numbers": {
+    "ema_len": 25,
+    "di_len": 21,
+    "adx_len": 28,
+    "adx_min": 25.0
+   },
+   "cell": "S6_EMA_DMI_ADX_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "fund",
+     0
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     4
+    ]
+   ]
+  },
+  {
+   "strategy": "F15_ASIA_BRK",
+   "tf": "30m",
+   "numbers": {
+    "asia_win_h": 8
+   },
+   "cell": "F15_ASIA_BRK_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.5
+   ],
+   "off": [
+    [
+     "hr",
+     22
+    ],
+    [
+     "reg5side",
+     5
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "symside",
+     9
+    ],
+    [
+     "symside",
+     11
+    ]
+   ]
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "tf": "1h",
+   "numbers": {
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "ext_cap": 1.5
+   },
+   "cell": "N06_MACD_ORB_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    2.0
+   ],
+   "off": [
+    [
+     "hb",
+     5
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 63,
+    "ema_slow": 100,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "reg",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "30m",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_30m",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     0
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     13
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.4
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "regside",
+     0
+    ]
+   ]
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "tf": "30m",
+   "numbers": {
+    "st_atr_len": 8,
+    "st_mult": 4.0,
+    "kst_roc_lens": [
+     15,
+     23,
+     30,
+     45
+    ],
+    "kst_signal_len": 27
+   },
+   "cell": "core-N02_ST_KST-30m-2",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "vol3",
+     2
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "symside",
+     8
+    ]
+   ]
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "tf": "30m",
+   "numbers": {
+    "ema_slow": 30,
+    "rsi_len": 11,
+    "rsi_level": 30.0,
+    "chop_len": 34
+   },
+   "cell": "S1_EMA_RSI_CHOP_30m",
+   "stop": [
+    "atr",
+    1.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "dow",
+     0
+    ],
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     22
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "1h",
+   "numbers": {
+    "box_len": 48,
+    "adx_max": 20.0,
+    "edge": 0.075,
+    "width_atr": 3.0
+   },
+   "cell": "F5_BOX_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     6
+    ],
+    [
+     "hb",
+     0
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "reg",
+     2
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "vol3",
+     2
+    ]
+   ]
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "tf": "30m",
+   "numbers": {
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "ext_cap": 1.5
+   },
+   "cell": "N06_MACD_ORB_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    3.0
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     12
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "vol3",
+     2
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "15m",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.0
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "posside",
+     7
+    ],
+    [
+     "regside",
+     0
+    ],
+    [
+     "symside",
+     3
+    ],
+    [
+     "symside",
+     6
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "1h",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_1h",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "vol3",
+     1
+    ],
+    [
+     "session",
+     2
+    ],
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "pos",
+     3
+    ],
+    [
+     "reg",
+     1
+    ],
+    [
+     "sym",
+     5
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.333333333333
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "posside",
+     3
+    ],
+    [
+     "reg5side",
+     1
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     5
+    ],
+    [
+     "symside",
+     8
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 60,
+    "adx_max": 16.0,
+    "edge": 0.225,
+    "width_atr": 2.4
+   },
+   "cell": "ds-F5_BOX-15m-1",
+   "stop": [
+    "atr",
+    4.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "side",
+     -1
+    ],
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "pos",
+     1
+    ],
+    [
+     "regwk",
+     0
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "30m",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.5
+   ],
+   "off": [
+    [
+     "dow",
+     5
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "regwk",
+     4
+    ],
+    [
+     "sym",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "tf": "1h",
+   "numbers": {
+    "bb_len": 40,
+    "bb_mult": 4.0,
+    "sq_lookback": 33,
+    "sq_pct": 0.3
+   },
+   "cell": "core-S4_BB_BBP-1h-2",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     10
+    ],
+    [
+     "reg5side",
+     2
+    ],
+    [
+     "regside",
+     5
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     0
+    ]
+   ]
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "tf": "30m",
+   "numbers": {
+    "range_len": 34,
+    "fib_level": 0.333333333333,
+    "touch_atr": 0.6,
+    "slope_thr": 0.6
+   },
+   "cell": "core-N19_FIB_CHOP-30m-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     6
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "reg5side",
+     3
+    ],
+    [
+     "regwk",
+     1
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     10
+    ]
+   ]
+  }
+ ],
+ "leverage": {
+  "BTCUSDT": 40,
+  "default": 30
+ },
+ "margin": 0.4,
+ "initial_equity": 1000,
+ "max_loss_frac": 0.35,
+ "loss_cap": "shrink",
+ "stop": {
+  "mode": "atr_fit",
+  "atr": 3.0,
+  "min_atr": 1.0
+ },
+ "ladder": {
+  "first_lock": 0.1,
+  "step": 0.03,
+  "trigger_gap": 0.01
+ },
+ "rank": [
+  "order"
+ ],
+ "flip_twin": true,
+ "telegram": true,
+ "macro_blackout_min": 30,
+ "no_weekend": true
+}
