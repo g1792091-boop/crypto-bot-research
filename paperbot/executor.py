@@ -1,6 +1,10 @@
-"""Executor: mirrors ONE paper v3 account into real orders on Binance USD-M futures.
+"""Executor: mirrors ONE paper v3 account into real orders on Binance USD-M futures (or Bybit USDT perpetuals).
 
 Testnet (fake money) by default. Mainnet (real money) only when every gate in paperbot/mainnet.py holds.
+``"exchange": "bybit"`` in the config trades on Bybit (API v5, category linear) through paperbot/bybit.py, whose client
+answers in the Binance client's shapes, with the same gates (its own hosts, keys BYBIT_TESTNET_* / BYBIT_LIVE_*, the
+key's permissions from /v5/user/query-api); everything below applies to both (docs/bybit-ko.md). The default is
+"binance".
 On the server it runs as its own user, paperbot-exec (never paperbot, the agents' and the dashboard's user): run
 these commands with ``sudo -u paperbot-exec`` (docs/live-safety.md 1-9, 3).
 
@@ -67,6 +71,7 @@ import urllib.parse
 from dataclasses import dataclass, field, fields
 from typing import Callable, Mapping, Optional
 
+from . import bybit as BY
 from . import livepnl as P
 from . import risk as R
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
@@ -84,6 +89,7 @@ SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
+EXCHANGES = ("binance", "bybit")
 # reconcile emergencies: counted with the unplanned halts by stage-check
 EMERGENCY_KINDS = ("unknown_position", "wrong_side", "protect_failed", "not_flat", "no_stop", "oversize")
 # income types that move money in or out of the futures wallet (not trading P&L)
@@ -129,6 +135,8 @@ class ExecConfig:
     equity_every_s: float = 300.0        # equity samples (stage-check drawdown)
     entry_unknown_s: float = 60.0        # an entry whose outcome is unknown: wait this long for it to show up
     transfer_every_s: float = 60.0       # deposits/withdrawals read this often (and before a money halt)
+    exchange: str = "binance"            # "binance" | "bybit" (paperbot/bybit.py)
+    bybit_host: Optional[str] = None     # bybit: another allowed host of the mode (mainnet: "api.bytick.com")
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -163,6 +171,11 @@ class ExecConfig:
             out.append("budget_usd는 0보다 커야 합니다")
         if self.mode == MODE_MAINNET and self.budget_usd is None:
             out.append("실거래(mainnet)는 정한 금액 budget_usd(예: 500)가 필요합니다")
+        if self.exchange not in EXCHANGES:
+            out.append(f"exchange={self.exchange!r}: \"binance\" 또는 \"bybit\"만 있습니다")
+        elif self.bybit_host is not None and (self.exchange != "bybit" or self.bybit_host not in BY.hosts_for(self.mode)):
+            out.append(f"bybit_host={self.bybit_host!r}: exchange가 \"bybit\"일 때 그 모드의 주소"
+                       f"({', '.join(BY.hosts_for(self.mode))})만 씁니다")
         if self.risk.kill_file and self.db and not _kill_file_visible(self.risk.kill_file, self.db):
             out.append(f"비상 정지 파일 {self.risk.kill_file}은 실행기 DB가 있는 폴더나 그 위 폴더에 둡니다"
                        "(예: /var/lib/paperbot/STOP). /tmp·/home 같은 곳은 서비스 안에서 보이지 않아 "
@@ -182,6 +195,9 @@ def refuse_unless_allowed(cfg: ExecConfig, client) -> None:
     """The client must point at the host of the configured mode, and be the client class of that mode."""
     if cfg.mode not in SUPPORTED_MODES:
         raise Refused(f"mode={cfg.mode!r}: testnet/mainnet 외의 모드는 시작하지 않습니다")
+    if cfg.exchange == "bybit":
+        BY.refuse_unless_allowed(cfg.mode, client)
+        return
     host = urllib.parse.urlparse(getattr(client, "base", "") or "").hostname or ""
     if cfg.mode == MODE_TESTNET:
         if host not in TESTNET_HOSTS or tuple(ALLOWED_HOSTS) != TESTNET_HOSTS or isinstance(client, MainnetClient) \
@@ -753,7 +769,9 @@ class Executor:
             raise Refused("설정이 끝나지 않아 시작하지 않습니다: " + "; ".join(probs))
         env = os.environ if env is None else env
         paper_env = read_env_file(cfg.paper_env_file)
-        if cfg.mode == MODE_MAINNET:
+        if cfg.exchange == "bybit":
+            BY.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
+        elif cfg.mode == MODE_MAINNET:
             key, secret = trading_keys(MODE_MAINNET, env, paper_env)        # flag, separate names, no reuse
             if (client.key, client.secret) != (key, secret):
                 raise Refused("실거래 실행기의 키가 LIVE_API_KEY/LIVE_API_SECRET와 다릅니다")
@@ -769,7 +787,7 @@ class Executor:
         self.keycheck = keycheck
         self.notifier = notifier or NullNotifier()
         self.now_ms, self.sleep, self.exists = now_ms, sleep, exists
-        self.prefix = PREFIX[cfg.mode]
+        self.prefix = (BY.PREFIX if cfg.exchange == "bybit" else PREFIX)[cfg.mode]
         bot = store.get_state("bot") or {}
         meta = store.get_state("meta")
         recorded = (meta or {}).get("mode") or bot.get("mode")
@@ -919,6 +937,9 @@ class Executor:
             self._spec(s)
             try:
                 self.c.isolated(s)
+            except Refused as e:                   # Bybit: the account cannot be put in isolated margin at all
+                self._event(CRITICAL, "margin_refused", f"격리 마진으로 바꿀 수 없어 시작하지 않습니다: {e}")
+                raise
             except TestnetError as e:
                 if e.code not in (-4047, -4048):   # open orders / position: cannot change now
                     raise
@@ -969,7 +990,7 @@ class Executor:
         try:
             perm = self.c._retry("키 권한", read_permissions)
         except (TransientError, RateLimited) as e:
-            self._event(CRITICAL, "mainnet_unreachable", f"api.binance.com 키 권한 확인이 안 됩니다({e}). "
+            self._event(CRITICAL, "mainnet_unreachable", f"{kc.host} 키 권한 확인이 안 됩니다({e}). "
                         "30초 뒤 다시 켭니다(systemd)." + held)
             raise
         except TestnetError as e:
@@ -984,13 +1005,14 @@ class Executor:
 
             def perm_reader():
                 return perm
-        problems, warnings = online_gates(perm_reader, wallet, float(self.cfg.budget_usd), acct.get("assets"))
+        problems, warnings = online_gates(perm_reader, wallet, float(self.cfg.budget_usd), acct.get("assets"),
+                                          where=kc.host)
         for w in warnings:
             self._event(WARN, "key_permission", w)
         definite = [p for p in (check_balance(wallet, float(self.cfg.budget_usd)), check_assets(acct.get("assets")))
                     if p]
         if problems and unverified is not None and not definite and self._position_open():
-            self._event(CRITICAL, "mainnet_unverified", f"api.binance.com이 키 권한 확인을 받아 주지 않았습니다({unverified}). "
+            self._event(CRITICAL, "mainnet_unverified", f"{kc.host}이 키 권한 확인을 받아 주지 않았습니다({unverified}). "
                         "잘못된 것이 확인된 것은 아니어서 열린 포지션은 닫지 않고, 30초 뒤 다시 켭니다(systemd)." + held)
             raise GateUnverified(unverified)
         if problems and self._position_open():
@@ -1488,6 +1510,12 @@ class Executor:
                     self._event(WARN, "stop_level", f"{t['symbol']}: 거래소 손절 {level:g}이 기록({t['stop']:g})보다 "
                                 "유리한 쪽이라 그대로 씁니다(옮기던 중 재시작)")
                     t["stop"] = level
+                if getattr(self.raw, "EXACT_STOP_SIZE", False) and not best.get("closePosition") \
+                        and float(best.get("quantity") or 0) > qty + spec["qty_step"] / 2:
+                    self._event(WARN, "stop_size", f"{t['symbol']}: 거래소 손절 수량 {float(best['quantity']):g}이 포지션 "
+                                f"{qty:g}보다 커서 포지션 크기로 다시 겁니다", {"algoId": best["algoId"]}, notify=False)
+                    self._move(t, t["stop"], [s["algoId"] for s in stops], "손절 수량 맞추기")
+                    return
                 t["stop_algo_id"] = best["algoId"]
                 self._note_algo(t, best["algoId"])
                 others = [s["algoId"] for s in stops if s["algoId"] != best["algoId"]]
@@ -2138,6 +2166,8 @@ def _notifier() -> Notifier:
 def _clients(cfg: ExecConfig, env: Optional[Mapping] = None):
     """(order client, key-permission client or None) for the configured mode, keys from the environment."""
     env = os.environ if env is None else env
+    if cfg.exchange == "bybit":
+        return BY.clients(cfg.mode, env, read_env_file(cfg.paper_env_file), host=cfg.bybit_host)
     key, secret = trading_keys(cfg.mode, env, read_env_file(cfg.paper_env_file))
     if cfg.mode == MODE_MAINNET:
         return MainnetClient(key, secret), KeyCheckClient(key, secret)
@@ -2151,7 +2181,7 @@ def _client() -> TestnetClient:           # kept for scripts written against the
 def cmd_run(args) -> int:
     cfg = ExecConfig.from_file(args.config)
     note = _notifier()                            # first: a database that cannot be opened is alerted too
-    prefix = PREFIX.get(cfg.mode, "[실행기]")
+    prefix = (BY.PREFIX if cfg.exchange == "bybit" else PREFIX).get(cfg.mode, "[실행기]")
     try:
         store = ExecStore(cfg.db, service=True)
     except Refused as e:                          # another executor holds the database: it stays the only one
@@ -2215,7 +2245,7 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
     if cfg.mode == MODE_MAINNET:
         keycheck.offset_ms = client.offset_ms
         problems, warnings = online_gates(keycheck.api_restrictions, wallet, float(cfg.budget_usd or 0),
-                                          acct.get("assets"))
+                                          acct.get("assets"), where=keycheck.host)
         for p in problems:
             line(False, p)
         if not problems:
