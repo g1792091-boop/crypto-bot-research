@@ -121,7 +121,8 @@ def trading_keys(mode: str, env: Mapping, paper_env: Optional[Mapping] = None) -
 # ---------------------------------------------------------------- online checks
 UNNEEDED = {"enableInternalTransfer": "계정 간 이체", "permitsUniversalTransfer": "통합 이체",
             "enableMargin": "마진", "enableSpotAndMarginTrading": "현물·마진 거래",
-            "enableVanillaOptions": "옵션", "enablePortfolioMarginTrading": "포트폴리오 마진"}
+            "enableVanillaOptions": "옵션", "enablePortfolioMarginTrading": "포트폴리오 마진",
+            "otherPermissions": "Earn·환전(Exchange)"}     # the last: Bybit keys only (bybit.permission_record)
 
 
 def check_permissions(perm: dict) -> list[str]:
@@ -170,15 +171,16 @@ def check_assets(assets) -> Optional[str]:
 
 
 def online_gates(perm_reader: Callable[[], dict], wallet: float, budget: float,
-                 assets=None) -> tuple[list[str], list[str]]:
-    """(problems, warnings). ``perm_reader`` fetches apiRestrictions; an unreachable or refused check is a problem,
-    and so is an answer that is not a permission record (None, a list, ...: nothing was verified)."""
+                 assets=None, where: str = "api.binance.com") -> tuple[list[str], list[str]]:
+    """(problems, warnings). ``perm_reader`` fetches apiRestrictions (Bybit: paperbot.bybit.permission_record of
+    /v5/user/query-api, ``where`` its host); an unreachable or refused check is a problem, and so is an answer that is
+    not a permission record (None, a list, ...: nothing was verified)."""
     problems: list[str] = []
     warnings: list[str] = []
     try:
         perm = perm_reader()
     except (TestnetError, OSError, ValueError) as e:
-        problems.append(f"api.binance.com에서 키 권한을 확인하지 못했습니다({e}). 확인 못 하면 시작하지 않습니다")
+        problems.append(f"{where}에서 키 권한을 확인하지 못했습니다({e}). 확인 못 하면 시작하지 않습니다")
     else:
         if not isinstance(perm, dict):
             problems.append(f"키 권한 응답이 이상합니다(확인 안 됨): {perm!r}"[:200])
