@@ -391,3 +391,30 @@ def test_macro_blackout_skips_entries_around_a_release(tmp_path, monkeypatch):
         assert dataclasses.replace(w.cfg, macro_blackout_min=0).problems()           # 1~240 only
     finally:
         EV.reset()
+
+
+def test_no_weekend_skips_saturday_and_sunday_kst():
+    sat0 = T0 + 5 * 86_400_000 - 9 * H1                      # Saturday 00:00 KST (T0 is Monday 09:00 KST)
+    assert C.kst_weekend(sat0) and not C.kst_weekend(sat0 - MIN)
+    assert C.kst_weekend(sat0 + 2 * 86_400_000 - MIN) and not C.kst_weekend(sat0 + 2 * 86_400_000)
+
+
+def test_runner_no_weekend(tmp_path):
+    w = RWorld(tmp_path, {"stop": ["pct", 1.0], "entry": "now"})
+    w.run.cfg = w.cfg = dataclasses.replace(w.cfg, no_weekend=True)
+    t = T0 + 15 * MIN                                        # Monday: enters
+    for k in range(15):
+        w.minute(T0 + k * MIN)
+    w.signal(t)
+    w.minute(t)
+    assert w.book.engines[C.ACCOUNT].position is not None
+    w2 = RWorld(tmp_path / "b", {"stop": ["pct", 1.0], "entry": "now"}) if (tmp_path / "b").mkdir() is None else None
+    w2.run.cfg = w2.cfg = dataclasses.replace(w2.cfg, no_weekend=True)
+    sat = T0 - 2 * 86_400_000 + 15 * MIN                     # Saturday 09:15 KST
+    w2.book.last_ts = sat - 16 * MIN
+    for k in range(15):
+        w2.minute(sat - 15 * MIN + k * MIN)
+    w2.signal(sat)
+    w2.minute(sat)
+    assert w2.book.engines[C.ACCOUNT].position is None
+    assert any(s == "FILTERED" and "주말" in _why(d) for _, s, d in w2.statuses())

@@ -439,6 +439,7 @@ class ComboConfig:
     early_exit: Optional[str] = None    # None | "own" | "any" (the class docstring)
     macro_blackout_min: Optional[int] = None   # no entry from N minutes before to N minutes after a US macro release
                                                # (data/macro_events.csv, paperbot/events.py): owners 2026-10-18 "30"
+    no_weekend: bool = False            # no entry on KST Saturday / Sunday (owners 2026-10-18); a position runs on
     symbols: tuple = V3_SYMBOLS
     poll_s: float = 2.0
     max_signal_age_s: float = 150.0
@@ -1172,6 +1173,10 @@ class ComboRunner:
                 keep.append(q)
                 continue
             sig = _sig_from(q.signal)
+            if self.cfg.no_weekend and not sig.meta.get("exit_only") and kst_weekend(ts):
+                self._restate(sig, "FILTERED", "주말(한국 시간 토·일) 진입 안 함")
+                self._count(sig.meta.get("member", sig.strategy_id), "filtered")
+                continue
             if self.cfg.macro_blackout_min and not sig.meta.get("exit_only"):
                 ev = self._macro_near(ts)
                 if ev:
@@ -1640,6 +1645,8 @@ def cmd_check(args) -> int:
     print(f"- 동시에 나온 신호: {' > '.join({'score': '진입 점수', 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
     print(f"- 동전 쌍둥이 계좌: {'있음' if cfg.flip_twin else '없음'}")
     print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}")
+    if cfg.no_weekend:
+        print("- 주말(한국 시간 토·일)에는 새로 진입하지 않음(열린 포지션은 손절·익절까지 그대로)")
     if cfg.macro_blackout_min:
         from . import events as EV
         now = int(time.time() * 1000)
