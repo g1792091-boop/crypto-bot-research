@@ -138,14 +138,16 @@ def check_permissions(perm: dict) -> list[str]:
     out += [f"{label} 권한({k})이 켜져 있습니다. 실행기에는 필요 없으니 끄세요" for k, label in UNNEEDED.items()
             if perm.get(k)]
     # problems another exchange's permission record found itself (paperbot.bybit.permission_record: other permission
-    # groups, a main-account key); Binance's record has no such field
+    # groups, a main-account key; paperbot.mexc.permission_record: no owners' statement); Binance's record has none
     out += [str(p) for p in perm.get("extraProblems") or []]
     return out
 
 
 def permission_warnings(perm: dict) -> list[str]:
-    """Kept for callers of the first version: the unneeded permissions are problems now (check_permissions)."""
-    return []
+    """Notes another exchange's permission record carries (paperbot.mexc.permission_record: what MEXC cannot report
+    and the owners stated instead). Binance and Bybit records have none: the unneeded permissions are problems
+    (check_permissions)."""
+    return [str(w) for w in (perm.get("warnings") or [])] if isinstance(perm, dict) else []
 
 
 def check_balance(wallet: float, budget: float) -> Optional[str]:

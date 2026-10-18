@@ -1,0 +1,37 @@
+# The second order executor (MEXC): the same program, sandbox and user as paperbot-executor.service, its own config
+# /etc/paperbot/executor-mexc.json ("exchange": "mexc", mainnet only) and its own database. Both executors can follow
+# the same paper account side by side (docs/mexc-ko.md 7). Everything below the header of paperbot-executor.service
+# applies unchanged: own user paperbot-exec, root-only key file, exit 2 = a gate refused (not restarted), SIGTERM lets
+# the loop in progress finish.
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it:
+#   sudo systemctl start paperbot-executor-mexc    (and `enable` only after the first days went as expected)
+[Unit]
+Description=paperbot order executor, MEXC (mainnet: every gate must pass)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot-exec
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor-mexc.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env
+# no core dump (it would hold the keys)
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

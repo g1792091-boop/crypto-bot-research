@@ -83,8 +83,17 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                  "LimitCORE=0"):
         assert line in unit, line
     assert not [x for x in unit if x.startswith("ReadWritePaths=") and x != "ReadWritePaths=/var/lib/paperbot/exec"]
+    # the second executor (MEXC, docs/mexc-ko.md): the same unit but its own config, nothing else differs
+    sibling = _unit("deploy/paperbot-executor-mexc.service")
+    differ = sorted(set(unit) ^ set(sibling))
+    assert differ == sorted(["Description=paperbot order executor (testnet unless every mainnet gate passes)",
+                             "Description=paperbot order executor, MEXC (mainnet: every gate must pass)",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor.json",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor-mexc.json"]), differ
     for svc in sorted(os.listdir(os.path.join(REPO, "deploy"))):
-        if not svc.endswith(".service") or svc == "paperbot-executor.service":
+        if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor

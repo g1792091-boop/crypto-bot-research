@@ -107,6 +107,7 @@ chmod -R u+rwX,g+rX,g-w,o-rwx /var/lib/paperbot/exec
 if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
   for db in /var/lib/paperbot/exec/*.db; do
     [ -f "$db" ] || continue
+    systemctl is-active --quiet paperbot-executor-mexc 2>/dev/null && continue   # the MEXC executor runs: leave them
     runuser -u paperbot-exec -- sqlite3 "$db" 'PRAGMA journal_mode=DELETE;' >/dev/null \
       || echo "could not switch $db to rollback mode: the nightly backup may fail to read it until the executor was started and stopped once"
   done
@@ -269,11 +270,17 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-ghcoin.service paperbot-tgtrades.service paperbot-combo.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
+# the second executor (MEXC, its own config executor-mexc.json): installed only, never enabled or started here
+install -m 644 "$APP/deploy/paperbot-executor-mexc.service" /etc/systemd/system/paperbot-executor-mexc.service
 systemctl daemon-reload
 # The order executor is installed only: never enabled, started or restarted here (docs/live-safety.md).
 if systemctl is-active --quiet paperbot-executor 2>/dev/null; then
   echo "paperbot-executor is running the previous code; restart it yourself when ready:"
   echo "  sudo systemctl restart paperbot-executor"
+fi
+if systemctl is-active --quiet paperbot-executor-mexc 2>/dev/null; then
+  echo "paperbot-executor-mexc is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-executor-mexc"
 fi
 # New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then

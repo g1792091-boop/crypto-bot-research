@@ -1,10 +1,11 @@
-"""Executor: mirrors ONE paper v3 account into real orders on Binance USD-M futures (or Bybit USDT perpetuals).
+"""Executor: mirrors ONE paper v3 account into real orders on Binance USD-M futures (or Bybit / MEXC USDT perpetuals).
 
 Testnet (fake money) by default. Mainnet (real money) only when every gate in paperbot/mainnet.py holds.
 ``"exchange": "bybit"`` in the config trades on Bybit (API v5, category linear) through paperbot/bybit.py, whose client
 answers in the Binance client's shapes, with the same gates (its own hosts, keys BYBIT_TESTNET_* / BYBIT_LIVE_*, the
 key's permissions from /v5/user/query-api); everything below applies to both (docs/bybit-ko.md). The default is
-"binance".
+"binance". ``"exchange": "mexc"`` trades MEXC USDT-M perpetuals (contract API v1) through paperbot/mexc.py, mainnet only
+(MEXC has no futures testnet), keys MEXC_LIVE_KEY / MEXC_LIVE_SECRET (docs/mexc-ko.md).
 On the server it runs as its own user, paperbot-exec (never paperbot, the agents' and the dashboard's user): run
 these commands with ``sudo -u paperbot-exec`` (docs/live-safety.md 1-9, 3).
 
@@ -73,6 +74,7 @@ from typing import Callable, Mapping, Optional
 
 from . import bybit as BY
 from . import livepnl as P
+from . import mexc as MX
 from . import risk as R
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
 from .mainnet import (MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE, KeyCheckClient, MainnetClient,
@@ -89,7 +91,7 @@ SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
-EXCHANGES = ("binance", "bybit")
+EXCHANGES = ("binance", "bybit", "mexc")
 # reconcile emergencies: counted with the unplanned halts by stage-check
 EMERGENCY_KINDS = ("unknown_position", "wrong_side", "protect_failed", "not_flat", "no_stop", "oversize")
 # income types that move money in or out of the futures wallet (not trading P&L)
@@ -135,8 +137,10 @@ class ExecConfig:
     equity_every_s: float = 300.0        # equity samples (stage-check drawdown)
     entry_unknown_s: float = 60.0        # an entry whose outcome is unknown: wait this long for it to show up
     transfer_every_s: float = 60.0       # deposits/withdrawals read this often (and before a money halt)
-    exchange: str = "binance"            # "binance" | "bybit" (paperbot/bybit.py)
+    exchange: str = "binance"            # "binance" | "bybit" (paperbot/bybit.py) | "mexc" (paperbot/mexc.py)
     bybit_host: Optional[str] = None     # bybit: another allowed host of the mode (mainnet: "api.bytick.com")
+    mexc_host: Optional[str] = None      # mexc: "api.mexc.com" (default) or "contract.mexc.com"
+    mexc_market_type: int = 5            # mexc: market order type 5 (market) or 6 (market converted to the price)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -172,10 +176,16 @@ class ExecConfig:
         if self.mode == MODE_MAINNET and self.budget_usd is None:
             out.append("실거래(mainnet)는 정한 금액 budget_usd(예: 500)가 필요합니다")
         if self.exchange not in EXCHANGES:
-            out.append(f"exchange={self.exchange!r}: \"binance\" 또는 \"bybit\"만 있습니다")
+            out.append(f"exchange={self.exchange!r}: \"binance\", \"bybit\", \"mexc\"만 있습니다")
         elif self.bybit_host is not None and (self.exchange != "bybit" or self.bybit_host not in BY.hosts_for(self.mode)):
             out.append(f"bybit_host={self.bybit_host!r}: exchange가 \"bybit\"일 때 그 모드의 주소"
                        f"({', '.join(BY.hosts_for(self.mode))})만 씁니다")
+        if self.mexc_host is not None and (self.exchange != "mexc" or self.mexc_host not in MX.MEXC_HOSTS):
+            out.append(f"mexc_host={self.mexc_host!r}: exchange가 \"mexc\"일 때 {', '.join(MX.MEXC_HOSTS)}만 씁니다")
+        if self.mexc_market_type not in MX.MARKET_TYPES:
+            out.append(f"mexc_market_type={self.mexc_market_type!r}: 5(시장가) 또는 6만 있습니다")
+        if self.exchange == "mexc" and self.mode != MODE_MAINNET:
+            out.append("MEXC에는 선물 테스트넷이 없습니다: \"exchange\": \"mexc\"는 \"mode\": \"mainnet\"만 됩니다")
         if self.risk.kill_file and self.db and not _kill_file_visible(self.risk.kill_file, self.db):
             out.append(f"비상 정지 파일 {self.risk.kill_file}은 실행기 DB가 있는 폴더나 그 위 폴더에 둡니다"
                        "(예: /var/lib/paperbot/STOP). /tmp·/home 같은 곳은 서비스 안에서 보이지 않아 "
@@ -197,6 +207,9 @@ def refuse_unless_allowed(cfg: ExecConfig, client) -> None:
         raise Refused(f"mode={cfg.mode!r}: testnet/mainnet 외의 모드는 시작하지 않습니다")
     if cfg.exchange == "bybit":
         BY.refuse_unless_allowed(cfg.mode, client)
+        return
+    if cfg.exchange == "mexc":
+        MX.refuse_unless_allowed(cfg.mode, client)
         return
     host = urllib.parse.urlparse(getattr(client, "base", "") or "").hostname or ""
     if cfg.mode == MODE_TESTNET:
@@ -771,6 +784,8 @@ class Executor:
         paper_env = read_env_file(cfg.paper_env_file)
         if cfg.exchange == "bybit":
             BY.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
+        elif cfg.exchange == "mexc":
+            MX.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
         elif cfg.mode == MODE_MAINNET:
             key, secret = trading_keys(MODE_MAINNET, env, paper_env)        # flag, separate names, no reuse
             if (client.key, client.secret) != (key, secret):
@@ -787,7 +802,7 @@ class Executor:
         self.keycheck = keycheck
         self.notifier = notifier or NullNotifier()
         self.now_ms, self.sleep, self.exists = now_ms, sleep, exists
-        self.prefix = (BY.PREFIX if cfg.exchange == "bybit" else PREFIX)[cfg.mode]
+        self.prefix = _prefixes(cfg.exchange)[cfg.mode]
         bot = store.get_state("bot") or {}
         meta = store.get_state("meta")
         recorded = (meta or {}).get("mode") or bot.get("mode")
@@ -945,7 +960,11 @@ class Executor:
             self._note_offset(off)
         if self.cfg.mode == MODE_MAINNET:
             self._mainnet_gates()
-        self.c.one_way()
+        try:
+            self.c.one_way()
+        except Refused as e:                       # MEXC: hedge mode that cannot be switched to one-way
+            self._event(CRITICAL, "mode_refused", f"단방향 포지션 모드로 바꿀 수 없어 시작하지 않습니다: {e}")
+            raise
         for s in self.cfg.risk.allowed_symbols:
             self._spec(s)
             try:
@@ -1529,6 +1548,13 @@ class Executor:
                                 f"{qty:g}보다 커서 포지션 크기로 다시 겁니다", {"algoId": best["algoId"]}, notify=False)
                     self._move(t, t["stop"], [s["algoId"] for s in stops], "손절 수량 맞추기")
                     return
+                if best.get("refreshAt") and self._server_ms() >= int(best["refreshAt"]):
+                    # MEXC: a plan order expires after its execution cycle (7 days): the same stop is placed again
+                    # before that (new first, then the old one goes)
+                    self._event(INFO, "stop_refresh", f"{t['symbol']}: 거래소 손절이 곧 만료돼 같은 가격으로 다시 겁니다",
+                                {"algoId": best["algoId"]}, notify=False)
+                    self._move(t, t["stop"], [s["algoId"] for s in stops], "손절 갱신(만료 전)")
+                    return
                 t["stop_algo_id"] = best["algoId"]
                 self._note_algo(t, best["algoId"])
                 others = [s["algoId"] for s in stops if s["algoId"] != best["algoId"]]
@@ -2045,7 +2071,8 @@ class Executor:
                  "problems": list(c["problems"]) + ["실현 손익이 거래소 기록(closed-pnl)과 다름"]}
             first = t["key"] not in self.pnl_alerted
             self.pnl_alerted.add(t["key"])
-            self._event(WARN, "pnl_check", f"{t['symbol']} 체결로 계산한 실현 손익이 거래소 기록(closed-pnl)과 다릅니다"
+            self._event(WARN, "pnl_check", f"{t['symbol']} 체결로 계산한 실현 손익이 거래소 기록"
+                        f"({getattr(self.raw, 'PNL_RECORD', 'closed-pnl')})과 다릅니다"
                         f"(주문 {', '.join(mismatch)}). 이 거래는 지갑 변화로 손익을 잡습니다. 확인해 주세요",
                         {"key": t["key"], "orders": mismatch}, notify=first)
         self.store.fills(t["key"], fills)
@@ -2191,11 +2218,18 @@ def _notifier() -> Notifier:
     return ConsoleNotifier()
 
 
+def _prefixes(exchange: str) -> dict:
+    return {"bybit": BY.PREFIX, "mexc": MX.PREFIX}.get(exchange, PREFIX)
+
+
 def _clients(cfg: ExecConfig, env: Optional[Mapping] = None):
     """(order client, key-permission client or None) for the configured mode, keys from the environment."""
     env = os.environ if env is None else env
     if cfg.exchange == "bybit":
         return BY.clients(cfg.mode, env, read_env_file(cfg.paper_env_file), host=cfg.bybit_host)
+    if cfg.exchange == "mexc":
+        return MX.clients(cfg.mode, env, read_env_file(cfg.paper_env_file), host=cfg.mexc_host,
+                          market_type=cfg.mexc_market_type)
     key, secret = trading_keys(cfg.mode, env, read_env_file(cfg.paper_env_file))
     if cfg.mode == MODE_MAINNET:
         return MainnetClient(key, secret), KeyCheckClient(key, secret)
@@ -2209,7 +2243,7 @@ def _client() -> TestnetClient:           # kept for scripts written against the
 def cmd_run(args) -> int:
     cfg = ExecConfig.from_file(args.config)
     note = _notifier()                            # first: a database that cannot be opened is alerted too
-    prefix = (BY.PREFIX if cfg.exchange == "bybit" else PREFIX).get(cfg.mode, "[실행기]")
+    prefix = _prefixes(cfg.exchange).get(cfg.mode, "[실행기]")
     try:
         store = ExecStore(cfg.db, service=True)
     except Refused as e:                          # another executor holds the database: it stays the only one
@@ -2270,7 +2304,7 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
     except (TestnetError, OSError, KeyError, ValueError) as e:
         line(False, f"거래소 연결: {e}")
         return False
-    setup = getattr(client, "account_setup", None)       # Bybit: account type, margin mode, position mode (reads)
+    setup = getattr(client, "account_setup", None)       # Bybit / MEXC: margin and position mode, leverage (reads)
     if callable(setup):
         try:
             for good, text in setup(cfg.risk.allowed_symbols):
