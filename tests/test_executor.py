@@ -28,9 +28,15 @@ class Source:
 
     def __init__(self, clock):
         self.clock, self.intent, self.ts = clock, None, None
+        self.closed = []                                   # closed paper trades' P&L, newest first (신호등)
 
     def read(self):
         return self.intent, (self.ts if self.ts is not None else self.clock() - 30_000)
+
+    def recent(self, n):
+        if isinstance(self.closed, Exception):
+            raise self.closed
+        return self.closed[:n]
 
 
 def risk_cfg(tmp_path, **kw):
@@ -394,6 +400,85 @@ def test_late_or_stale_paper_is_not_followed(w):
     w.src.ts = None
     w.loop()
     assert w.fake.pos[BTC] == 5.0
+
+
+
+def _lit(w, n=5, min_win=0.8):
+    import dataclasses
+    w.store.close()
+    w.cfg = dataclasses.replace(w.cfg, signal_light_n=n, signal_light_min_win=min_win)
+    return w.open()
+
+
+def test_signal_light_red_skips_the_entry_and_green_follows_again(w):
+    _lit(w)
+    w.src.closed = [1.0, -1.0, 1.0, -1.0, 1.0]                             # 3 of the last 5 won: 60% < 80%
+    w.paper(stop=95.0, entry_time=w.clock.t)
+    w.loop()
+    assert w.fake.pos[BTC] == 0 and w.events("light_red")
+    assert any("신호등 빨강" in m for _lvl, m in w.note.messages)            # the owners hear it
+    w.src.closed = [1.0] * 5                                               # the paper recovers ...
+    w.loop(2)
+    assert w.fake.pos[BTC] == 0                                            # ... the skipped entry stays skipped
+    w.src.intent = None
+    w.loop()
+    w.paper(stop=95.0, entry_time=w.clock.t)                               # the next paper entry is followed
+    w.loop()
+    assert w.fake.pos[BTC] == 5.0
+
+
+def test_signal_light_with_too_few_closed_trades_follows(w):
+    _lit(w)
+    w.src.closed = [-1.0, -1.0]                                            # only 2 of 5: not enough to judge
+    w.paper(stop=95.0, entry_time=w.clock.t)
+    w.loop()
+    assert w.fake.pos[BTC] == 5.0 and not w.events("light_red")
+
+
+def test_signal_light_at_the_threshold_follows(w):
+    _lit(w, n=5, min_win=0.8)
+    w.src.closed = [1.0, 1.0, -1.0, 1.0, 1.0]                              # 4 of 5 = 80%: green
+    w.paper(stop=95.0, entry_time=w.clock.t)
+    w.loop()
+    assert w.fake.pos[BTC] == 5.0
+
+
+def test_signal_light_unreadable_record_waits_and_warns_once(w):
+    import sqlite3
+    _lit(w)
+    w.src.closed = sqlite3.OperationalError("database is locked")
+    w.paper(stop=95.0, entry_time=w.clock.t)
+    w.loop(3)
+    assert w.fake.pos[BTC] == 0 and len(w.events("light_unread")) == 1
+    w.src.closed = [1.0] * 5
+    w.loop()
+    assert w.fake.pos[BTC] == 5.0
+
+
+def test_signal_light_off_by_default_and_config_checks(w, tmp_path):
+    assert w.cfg.signal_light_n == 0
+    w.src.closed = [-1.0] * 20
+    w.paper(stop=95.0, entry_time=w.clock.t)
+    w.loop()
+    assert w.fake.pos[BTC] == 5.0 and not w.events("light_red")
+    import dataclasses
+    bad = [dataclasses.replace(w.cfg, signal_light_n=3).problems(), dataclasses.replace(w.cfg, signal_light_n=20,
+           signal_light_min_win=1.5).problems(), dataclasses.replace(w.cfg, signal_light_n=True).problems()]
+    assert all(any("signal_light" in p for p in b) for b in bad)
+    assert not [p for p in dataclasses.replace(w.cfg, signal_light_n=20, signal_light_min_win=0.85).problems()
+                if "signal_light" in p]
+
+
+def test_paper3_source_recent_reads_the_last_closed_trades(tmp_path):
+    import sqlite3
+    db = str(tmp_path / "combo.db")
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY, account_id TEXT, exit_time INTEGER, pnl REAL)")
+    rows = [("COMBO@mix", 1, 1.0), ("COMBO@mix", 3, -2.0), ("OTHER@mix", 4, 9.0), ("COMBO@mix", 2, 3.0)]
+    conn.executemany("INSERT INTO trades (account_id, exit_time, pnl) VALUES (?, ?, ?)", rows)
+    conn.commit(); conn.close()
+    assert Paper3Source(db, "COMBO@mix").recent(2) == [-2.0, 3.0]          # newest exit first, own account only
+    assert Paper3Source(db, "COMBO@mix").recent(10) == [-2.0, 3.0, 1.0]
 
 
 # ------------------------------------------------------------------ errors and limits

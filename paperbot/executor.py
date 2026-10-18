@@ -141,6 +141,8 @@ class ExecConfig:
     bybit_host: Optional[str] = None     # bybit: another allowed host of the mode (mainnet: "api.bytick.com")
     mexc_host: Optional[str] = None      # mexc: "api.mexc.com" (default) or "contract.mexc.com"
     mexc_market_type: int = 5            # mexc: market order type 5 (market) or 6 (market converted to the price)
+    signal_light_n: int = 0              # 신호등 (owners 10-19): a new entry is followed only while the paper account's
+    signal_light_min_win: float = 0.85   # last N closed trades won at least this share; the paper keeps trading. 0 = off
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -184,6 +186,10 @@ class ExecConfig:
             out.append(f"mexc_host={self.mexc_host!r}: exchange가 \"mexc\"일 때 {', '.join(MX.MEXC_HOSTS)}만 씁니다")
         if self.mexc_market_type not in MX.MARKET_TYPES:
             out.append(f"mexc_market_type={self.mexc_market_type!r}: 5(시장가) 또는 6만 있습니다")
+        if not (isinstance(self.signal_light_n, int) and (self.signal_light_n == 0 or 5 <= self.signal_light_n <= 200)):
+            out.append("signal_light_n은 0(신호등 끔) 또는 5~200입니다")
+        if not (isinstance(self.signal_light_min_win, (int, float)) and 0.5 <= self.signal_light_min_win <= 1):
+            out.append("signal_light_min_win은 0.5~1 사이 비율입니다(예: 0.85)")
         if self.exchange == "mexc" and self.mode != MODE_MAINNET:
             out.append("MEXC에는 선물 테스트넷이 없습니다: \"exchange\": \"mexc\"는 \"mode\": \"mainnet\"만 됩니다")
         if self.risk.kill_file and self.db and not _kill_file_visible(self.risk.kill_file, self.db):
@@ -278,6 +284,16 @@ class Paper3Source:
                       side=int(p["side"]), qty=float(p["qty"]), leverage=int(p["leverage"]),
                       stop=float(p["stop_price"]), entry_price=float(p["entry_price"]),
                       entry_time=int(p["entry_time"])), ts
+
+    def recent(self, n: int) -> list[float]:
+        """P&L of the account's last ``n`` closed paper trades, newest first (the 신호등 reads it)."""
+        conn = _ro(self.path)
+        try:
+            rows = conn.execute("SELECT pnl FROM trades WHERE account_id = ? ORDER BY exit_time DESC, id DESC LIMIT ?",
+                                (self.account, int(n))).fetchall()
+        finally:
+            conn.close()
+        return [float(r[0]) for r in rows]
 
 
 class SignalSource:
@@ -834,6 +850,7 @@ class Executor:
         self.errors = 0
         self.move_failures = 0
         self._stale_noted = False
+        self._light_unread: Optional[str] = None
         self.last_sync = 0
         self.last_equity = 0
         self.settle_tries: dict = {}
@@ -1720,7 +1737,8 @@ class Executor:
             return
         now = self.now_ms()
         if direct is not None and direct.key not in self.done:
-            self._enter(direct)
+            if self._light_ok(direct.key, direct.symbol):
+                self._enter(direct)
             return
         if intent is None or intent.key in self.done:
             return
@@ -1735,7 +1753,38 @@ class Executor:
             self._event(WARN, "late", f"paper 진입이 {(now - intent.entry_time) / 1000:.0f}초 전이라 따라 하지 않습니다",
                         {"key": intent.key})
             return
-        self._enter(intent)
+        if self._light_ok(intent.key, intent.symbol):
+            self._enter(intent)
+
+    def _light_ok(self, key: str, symbol: str) -> bool:
+        """신호등 (owners 10-19): follow a new entry only while the paper account's last ``signal_light_n`` closed
+        trades won at least ``signal_light_min_win`` of them. Fewer closed trades than that: followed. Red: this
+        entry is skipped for good (the paper keeps trading; the next entry after the record recovers is followed).
+        A record that cannot be read: no entry this loop (retried until the entry is too old)."""
+        n = int(self.cfg.signal_light_n)
+        if not n:
+            return True
+        recent = getattr(self.source, "recent", None)
+        try:
+            pnl = list(recent(n)) if recent is not None else []
+        except (sqlite3.Error, Refused) as e:
+            if self._light_unread != key:
+                self._light_unread = key
+                self._event(WARN, "light_unread", f"신호등: paper 거래 기록을 읽지 못해 {symbol} 진입을 잠시 미룹니다 "
+                            f"({type(e).__name__}: {e})", {"key": key})
+            return False
+        if len(pnl) < n:
+            return True
+        wins = sum(1 for p in pnl if p > 0)
+        need = float(self.cfg.signal_light_min_win)
+        if wins >= need * n - 1e-9:
+            return True
+        self._mark_done(key)
+        self._event(WARN, "light_red", f"신호등 빨강: paper 최근 {n}번 중 {wins}번 이김({wins / n:.0%}, 기준 {need:.0%}) "
+                    f"→ {symbol} 진입을 따라 하지 않습니다. paper는 계속 거래하고, 기준을 다시 넘으면 따라갑니다",
+                    {"key": key, "wins": wins, "n": n})
+        self._save()
+        return False
 
     def _confirm(self, t: dict, it: Intent) -> None:
         """The paper position of a fast entry appeared: from here on it is followed like any other."""
@@ -2399,6 +2448,8 @@ def cmd_check(args) -> int:
     probs = cfg.problems()
     for p in probs:
         print(f"- {p}")
+    print("신호등: 꺼짐 (paper의 모든 진입을 따라감)" if not cfg.signal_light_n else
+          f"신호등: 켜짐 - paper 최근 {cfg.signal_light_n}번 중 {cfg.signal_light_min_win:.0%} 이상 이겼을 때만 진입을 따라감")
     print("준비됨" if not probs else f"{len(probs)}개를 채워야 합니다")
     return 0 if not probs else 1
 
