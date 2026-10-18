@@ -409,7 +409,9 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
         label = pick or (f"{name}@{tf}" if numbers is None else f"{name}@{tf}~" +
                          hashlib.sha1(json.dumps(numbers, sort_keys=True).encode()).hexdigest()[:6])
         if research is not None:
-            label = f"{name}@{tf}#{i}"
+            label = f"{name}@{tf}#{i}~{RM.spec_tag(research)}"
+            if sp.get("when"):
+                raise ComboError(f"{label}: 연구 설정에는 when을 함께 쓰지 않습니다(filter/off를 씁니다)")
         when = parse_when(sp.get("when"), label)
         out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick, when=when,
                           research=research))
@@ -1216,6 +1218,19 @@ class ComboRunner:
                 self._queue(m, sig, boundary, "custom")
 
     # ---- research members (paperbot/rmember.py)
+    def _research_failed(self, text: str) -> None:
+        """A research rule could not be read (no trade): an alert each time, Telegram on the 1st / 10th / 100th."""
+        self.rfails = getattr(self, "rfails", 0) + 1
+        msg = f"[합친 봇 페이퍼] 연구 조건을 못 읽어 진입 안 함({self.rfails}번째): {text}"[:300]
+        self.store.alert(self.now_ms(), WARN, msg)
+        if self.rfails in (1, 10, 100) or self.rfails % 1000 == 0:
+            self.notifier.send(WARN, msg)
+
+    def _research_errors(self) -> None:
+        for e in self.rdata.errors:
+            self._research_failed(e)
+        self.rdata.errors.clear()
+
     def _research_signal(self, m: Member, sig: Signal, boundary: int) -> None:
         """A research member's signal at its bar close: the signal-time filter, then queued ("now") or waiting for
         the break ("break"). The displacement filter and the off buckets are read at the entry minute."""
@@ -1223,8 +1238,10 @@ class ComboRunner:
         try:
             tags = self.rdata.signal_tags(sig.symbol, sig.side, boundary)
         except Exception as exc:  # noqa: BLE001  without its tags the setting cannot be checked: no trade
-            self._log(sig, "FILTERED", "custom", f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200])
+            why = f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200]
+            self._log(sig, "FILTERED", "custom", why)
             self._count(m.label, "filtered")
+            self._research_failed(f"{m.label} {sig.symbol}: {why}")
             return
         bad = RM.filter_fails(r, tags)
         if bad:
@@ -1276,12 +1293,13 @@ class ComboRunner:
                     raise RuntimeError("no 1m bars for the swing window")
                 meta["rswing"] = {"lo": float(l.min()), "hi": float(h.max())}
         except Exception as exc:  # noqa: BLE001  unreadable: no trade
-            self._restate(sig, "FILTERED", f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200])
+            why = f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200]
+            self._restate(sig, "FILTERED", why)
             self._count(m.label, "filtered")
+            self._research_failed(f"{m.label} {sig.symbol}: {why}")
             return None
-        for e in self.rdata.errors:
-            self.store.alert(self.now_ms(), WARN, f"[combo] research data: {e}"[:300])
-        self.rdata.errors.clear()
+        finally:
+            self._research_errors()
         return replace(sig, meta=meta)
 
     def _breaks(self, ts: int, bars: dict) -> None:
@@ -1295,7 +1313,7 @@ class ComboRunner:
             sig = _sig_from(b["signal"])
             m = self.by_label.get(b["member"])
             if m is None or ts >= b["until"]:
-                self._restate(sig, "FILTERED", "돌파 없음(신호봉 시간 안에)")
+                self._restate(sig, "FILTERED", "돌파 없음(신호봉 시간 안에)", expect=("WAITING",))
                 continue
             if ts < b["t0"]:
                 keep.append(b)
@@ -1312,11 +1330,13 @@ class ComboRunner:
                         raise RuntimeError("no 1m bars of the signal bar")
                     b["level"] = float(h.max()) if sig.side > 0 else float(l.min())
                     if m.research.disp and not self._disp_ok(m, sig, b["t0"], float(bar.open)):
-                        self._restate(sig, "FILTERED", "연구 조건 밖: 신호봉 크기")
+                        self._restate(sig, "FILTERED", "연구 조건 밖: 신호봉 크기", expect=("WAITING",))
                         self._count(m.label, "filtered")
                         continue
             except Exception as exc:  # noqa: BLE001
-                self._restate(sig, "FILTERED", f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200])
+                why = f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200]
+                self._restate(sig, "FILTERED", why, expect=("WAITING",))
+                self._research_failed(f"{b['member']} {sig.symbol}: {why}")
                 continue
             broke = bar.high > b["level"] if sig.side > 0 else bar.low < b["level"]
             if not broke:
@@ -1324,7 +1344,7 @@ class ComboRunner:
                 continue
             entry_t = ts + MIN
             if now - entry_t > self.cfg.max_signal_age_s * 1000:
-                self._restate(sig, "FILTERED", "돌파 확인이 늦음(재시작 따라잡기)")
+                self._restate(sig, "FILTERED", "돌파 확인이 늦음(재시작 따라잡기)", expect=("WAITING",))
                 continue
             if px is None:
                 try:
@@ -1340,6 +1360,7 @@ class ComboRunner:
                 meta["ref_price"] = float(ref)
             nsig = replace(sig, ts=entry_t - 1, meta=meta)
             self.queue.append(Queued(entry_t, dataclasses.asdict(nsig)))
+            self._restate(sig, "BROKE", f"돌파 확인: {entry_t} 분에 진입 신호", expect=("WAITING",))
             self._log(nsig, "SUBMITTED", "custom", "돌파 확인")
         self.breaks = keep
 
@@ -1364,14 +1385,17 @@ class ComboRunner:
             self._count(m.label, "filtered")
         return ok
 
-    def _restate(self, sig: Signal, status: str, why: str) -> None:
+    def _restate(self, sig: Signal, status: str, why: str, expect: tuple = ("SUBMITTED",)) -> None:
         """A later status of a signal already logged (signal_log keeps one row per bar, coin and member): a research
-        member's signal filtered at its entry minute, or a break that never came."""
+        member's signal filtered at its entry minute (its SUBMITTED row), or a break that never came (its WAITING
+        row). A row in another status belongs to another signal of the same bar and is left alone."""
         cur = self.store.conn.execute(
-            "SELECT data FROM signal_log WHERE bar_close = ? AND timeframe = ? AND strategy = ? AND symbol = ?",
+            "SELECT data, status FROM signal_log WHERE bar_close = ? AND timeframe = ? AND strategy = ? AND symbol = ?",
             (sig.ts + 1, sig.timeframe, sig.meta.get("member", sig.strategy_id), sig.symbol)).fetchone()
         if cur is None:
             self._log(sig, status, "custom", why)
+            return
+        if cur[1] not in expect:
             return
         try:
             data = json.loads(cur[0] or "{}")
@@ -1448,8 +1472,18 @@ def _brackets(cfg: ComboConfig, rest) -> tuple[dict, str]:
 KL_MS = {"1m": MIN, "1h": 3_600_000, "4h": H4}
 
 
+def research_problems(cfg: ComboConfig, members: list) -> list[str]:
+    if cfg.early_exit and any(m.research for m in members):
+        return ["early_exit는 연구 설정(research) 매매법과 함께 쓰지 않습니다(탐색에 없던 규칙)"]
+    return []
+
+
 def research_data(rest, symbols) -> RM.RData:
-    """RData on Binance (public endpoints): closed klines, settled funding, 5-minute open interest."""
+    """RData on Binance (public endpoints): closed klines, settled funding, 5-minute open interest. Its own client:
+    one retry and a 5 s timeout, so a failing endpoint costs seconds, not a minute, inside a boundary."""
+    from .binance import BinanceREST, urllib_fetch
+    rest = BinanceREST(base_url=rest.base, fetch=lambda u, h: urllib_fetch(u, h, timeout=5.0), max_retries=1,
+                       backoff=0.5)
 
     def klines(symbol, interval, start, end):
         ms, out, t = KL_MS[interval], [], int(start)
@@ -1502,6 +1536,16 @@ def cmd_run(args) -> int:
     btc = BtcTrend(lambda: rest.klines("BTCUSDT", "4h", limit=500), lambda: int(time.time() * 1000)) \
         if any(m.needs_btc for m in members) else None
     rdata = research_data(rest, syms) if any(m.research for m in members) else None
+    if rdata is not None:
+        probs = research_problems(cfg, members)
+        if probs:
+            raise SystemExit("설정 문제: " + "; ".join(probs))
+        t_now = rest.server_time()
+        for s in syms:                           # the 7-day 1m range of the rules, before the first signal
+            try:
+                rdata.ensure_1m(s, t_now - t_now % MIN - RM.RData.KEEP_1M * MIN, t_now - t_now % MIN)
+            except Exception as exc:  # noqa: BLE001  fetched again at the first entry
+                notifier.send(WARN, f"[합친 봇 페이퍼] {s} 1분봉 7일치를 못 받음(첫 진입 때 다시): {exc}"[:300])
     runner = ComboRunner(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
                          lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
                          rdata=rdata)
@@ -1565,6 +1609,7 @@ def cmd_check(args) -> int:
     except ComboError as exc:
         probs.append(str(exc))
         members = []
+    probs += research_problems(cfg, members)
     print(f"합친 봇 설정 {args.config}")
     print(f"- 따라 읽는 규칙봇 DB: {cfg.paper_db} / 자기 DB: {cfg.db}")
     print(f"- 배수: " + ", ".join(f"{s} {cfg.lev_of(s)}배" for s in cfg.symbols) +

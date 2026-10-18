@@ -157,15 +157,24 @@ BTC 40배는 가격이 약 2.1%, 30배 알트는 약 2.7~2.8% 움직이면 강�
 - 같은 방법으로 2020~24년만 보고 맞춘 봇들은 2025~26년에 모두 손실이었습니다.
 - 그래서 실행기 한도(하루 손실, 낙폭, 연속 손실)를 꼭 켜고, 동전 계좌(`COMBOFLIP@mix`)와 나란히 보세요.
 
-설치는 5장과 같고, 설정 파일만 다릅니다.
+설치는 5장과 같습니다. 다른 점은 **설정마다 새 DB 파일**을 쓴다는 것입니다(`research16.db`, `research20.db`). 옛 합친 봇 DB를 옮기거나 지우지 마세요. 실행기가 옛 계좌를 따라가는 중에 페이퍼 계좌가 비면, 실행기는 그것을 "청산"으로 보고 실제 포지션을 시장가로 닫습니다.
 
 ```bash
+# 1) 실행기가 이미 합친 봇을 따라가고 있으면 먼저 멈추고, 실제 포지션이 없는지 확인
+sudo touch /var/lib/paperbot/STOP
+# 2) 합친 봇 끄기 -> 설정 바꾸기 -> 확인
+sudo systemctl stop paperbot-combo
 sudo cp /opt/crypto-bot-research/deploy/combo.research16.json /etc/paperbot/combo.json   # 또는 combo.research20.json
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
+# 3) "준비됨"이면 켜기
+sudo systemctl start paperbot-combo
 ```
 
-- 이미 다른 설정으로 돌던 합친 봇이 있으면, 바꾸기 전에 끄고 DB를 옮겨 두세요(새 계좌로 시작). `sudo systemctl stop paperbot-combo && sudo mv /var/lib/paperbot/combo/combo.db /var/lib/paperbot/combo/combo.db.old`
-- 시작할 때 커스텀값 5분봉에 더해 1분봉 7일치를 받습니다. 첫 신호 때 몇 초 더 걸릴 수 있습니다.
+- 실행기 설정(6장)의 `paper_db`를 `/var/lib/paperbot/combo/research16.db`(또는 research20.db)로, 실행기 `db`는 **새 파일**로 바꾼 뒤 실행기를 켜고 `STOP` 파일을 지웁니다.
+- 시작할 때 커스텀값 5분봉과 1분봉 7일치를 받습니다(몇 분 걸릴 수 있음).
+- 상태 보기: `sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/research16.db`
+- 연구 조건을 못 읽으면(바이낸스 오류 등) 그 신호는 들어가지 않고, 텔레그램에 "연구 조건을 못 읽어 진입 안 함"이 옵니다(1, 10, 100번째). 미결제약정을 못 읽으면, 미결제약정 구간을 끈 설정만 그 신호를 건너뜁니다.
+- %·스윙 손절은 탐색과 같이 강제청산 0.2% 안쪽까지 당깁니다(BTC 2% 손절은 실제 1.9%). 거래소 손절은 체결가, 강제청산은 표시가격 기준이라 급한 꼬리에서는 손절 대신 강제청산(증거금 전부)이 될 수 있습니다.
 
 ## 4. 두 분이 정할 것
 

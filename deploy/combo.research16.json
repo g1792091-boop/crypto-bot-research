@@ -1,6 +1,6 @@
 {
  "paper_db": "/var/lib/paperbot/paper3.db",
- "db": "/var/lib/paperbot/combo/combo.db",
+ "db": "/var/lib/paperbot/combo/research16.db",
  "members": [
   {
    "strategy": "F12_MSS_DISP",

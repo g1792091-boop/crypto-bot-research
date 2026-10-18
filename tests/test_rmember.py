@@ -198,9 +198,38 @@ def test_research_member_keeps_its_numbers_and_label():
                             {"strategy": "N03_ADX_GC", "tf": "15m", "numbers": d, "stop": ["pct", 2], "off": [["hr", 1]]}],
                            core=core)
     assert all(m.custom and m.research is not None for m in ms)
-    assert [m.label for m in ms] == ["N03_ADX_GC@15m#1", "N03_ADX_GC@15m#2"]
+    assert [m.label for m in ms] == [f"N03_ADX_GC@15m#1~{RM.spec_tag(ms[0].research)}",
+                                     f"N03_ADX_GC@15m#2~{RM.spec_tag(ms[1].research)}"]
+    assert RM.spec_tag(ms[0].research) != RM.spec_tag(ms[1].research)      # other settings, other label
     with pytest.raises(C.ComboError, match="numbers"):
         C.resolve_members([{"strategy": "N03_ADX_GC", "tf": "15m", "stop": ["atr", 3]}], core=core)
+    with pytest.raises(C.ComboError, match="when"):
+        C.resolve_members([{"strategy": "N03_ADX_GC", "tf": "15m", "numbers": d, "stop": ["atr", 3],
+                            "when": {"side": "long"}}], core=core)
+
+
+def test_open_interest_failure_refuses_members_that_switch_off_oi_buckets():
+    r = RM.parse_spec({"stop": ["pct", 1], "off": [["oi24", 2]]}, "t")
+    r0 = RM.parse_spec({"stop": ["pct", 1], "off": [["hr", 3]]}, "t")
+    dims = {"oi24": 3, "oi_failed": True, "hr": 5}
+    assert RM.off_hits(r, dims) == ["oi24=읽기 실패"] and RM.off_hits(r0, dims) == []
+    assert RM.off_hits(r, {"oi24": 2, "oi_failed": False, "hr": 5}) == ["oi24=2"]
+
+
+def test_failed_fetch_is_not_repeated_for_a_minute():
+    calls = []
+
+    def boom(*a):
+        calls.append(a)
+        raise OSError("down")
+    rd = RM.RData(["BTCUSDT"], boom, boom, boom)
+    for k in range(3):
+        with pytest.raises(Exception):
+            rd.bars("BTCUSDT", "4h", T0 + k * 1000)
+    assert len(calls) == 1
+    with pytest.raises(Exception):
+        rd.bars("BTCUSDT", "4h", T0 + 61_000)
+    assert len(calls) == 2
 
 
 def _cfg(tmp_path, members=None):
@@ -213,7 +242,7 @@ def _cfg(tmp_path, members=None):
 def _sig(sym="BTCUSDT", side=1, ref=60000.0, atr=60.0, **meta):
     return Signal(ts=T0 - 1, symbol=sym, timeframe="15m", strategy_id="N03_ADX_GC", side=side, stop_price=0.0,
                   tier="best", score=3.0, atr=atr, meta={"ref_price": ref, "stop_dist": 2 * atr, "member_order": 1,
-                                                          "member": "N03_ADX_GC@15m#1", **meta})
+                                                          "member": "N03_ADX_GC@15m#1~x", **meta})
 
 
 def test_engine_research_stops(tmp_path):

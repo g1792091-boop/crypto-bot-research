@@ -287,7 +287,21 @@ class RData:
         self._bars: dict = {}                               # (symbol, tf) -> dict of arrays
         self._fund: dict = {}
         self._oi: dict = {}
+        self._failed: dict = {}                             # (what, symbol) -> (time, error): not fetched again for 60 s
         self.errors: list[str] = []
+
+    def _fetch(self, what: str, symbol: str, t: int, fn):
+        """``fn()`` unless the same fetch failed less than a minute ago (then that error again, no network call)."""
+        f = self._failed.get((what, symbol))
+        if f is not None and 0 <= int(t) - f[0] < 60_000:
+            raise RuntimeError(f"{what} {symbol}: failed {int(t) - f[0]} ms ago: {f[1]}")
+        try:
+            out = fn()
+        except Exception as exc:  # noqa: BLE001  remembered, then raised to the caller
+            self._failed[(what, symbol)] = (int(t), f"{type(exc).__name__}: {exc}"[:200])
+            raise
+        self._failed.pop((what, symbol), None)
+        return out
 
     # ---- 1m bars
     def add_1m(self, symbol: str, ts: int, o: float, h: float, l: float) -> None:
@@ -344,7 +358,7 @@ class RData:
         need = int(t) - int(t) % ms                  # the bar closing at or before t
         b = self._bars.get((symbol, tf))
         if b is None or int(b["close_t"][-1]) < need:
-            rows = self.klines(symbol, tf, need - self.FETCH[tf] * ms, need)
+            rows = self._fetch(tf, symbol, t, lambda: self.klines(symbol, tf, need - self.FETCH[tf] * ms, need))
             if not rows:
                 raise RuntimeError(f"{symbol} {tf}: no bars")
             o = np.array([int(r[0]) for r in rows], np.int64)
@@ -363,9 +377,13 @@ class RData:
 
     def last_funding(self, symbol: str, t: int) -> Optional[float]:
         f = self._fund.get(symbol)
-        # funding settles on the hour: read again in every new hour and at least every 5 minutes
-        if f is None or int(t) // H1 != f["fetched"] // H1 or int(t) - f["fetched"] >= 5 * MIN:
-            rows = self.funding_fetch(symbol, int(t) - 3 * DAY)
+        # read again every 5 minutes, and every 30 s while the newest rate is older than the last 4-hour mark (funding
+        # settles on 4-hour marks: a rate Binance has not published yet is looked for again, not kept for 5 minutes)
+        due = f is None or not 0 <= int(t) - f["fetched"] < 5 * MIN
+        if not due and (not len(f["t"]) or int(f["t"][-1]) < int(t) - int(t) % (4 * H1)):
+            due = int(t) - f["fetched"] >= 30_000
+        if due:
+            rows = self._fetch("funding", symbol, t, lambda: self.funding_fetch(symbol, int(t) - 3 * DAY))
             ft = np.array([int(x[0]) - int(x[0]) % MIN for x in rows], np.int64)
             fr = np.array([float(x[1]) for x in rows])
             f = {"t": ft, "r": fr, "fetched": int(t)}
@@ -376,7 +394,7 @@ class RData:
     def oi_at(self, symbol: str, t: int) -> int:
         o = self._oi.get(symbol)
         if o is None or not 0 <= int(t) - o["fetched"] < 5 * MIN:
-            rows = self.oi_fetch(symbol, int(t) - DAY - 2 * H1, int(t) + MIN)
+            rows = self._fetch("oi", symbol, t, lambda: self.oi_fetch(symbol, int(t) - DAY - 2 * H1, int(t) + MIN))
             o = {"t": np.array([int(x[0]) for x in rows], np.int64), "v": np.array([float(x[1]) for x in rows]),
                  "fetched": int(t)}
             self._oi[symbol] = o
@@ -415,14 +433,15 @@ class RData:
         pos = pos_bucket(o_entry, float(h.max()), float(l.min())) if len(ts) >= POS_MINP else 2
         try:
             oi = self.oi_at(symbol, t)
-        except Exception as exc:  # noqa: BLE001  unknown, as the search's rows without data
+        except Exception as exc:  # noqa: BLE001  unknown (3); a member that switches off oi24 buckets refuses it
             self.errors.append(f"{symbol} open interest: {type(exc).__name__}: {exc}"[:200])
-            oi = 3
+            oi = None
         hr = kst_hour(t)
         d = {"sym": si, "side": int(side), "symside": si * 2 + long, "hb": hr // 4, "hr": hr, "dow": kst_dow(t),
              "wk": sig["weekend"], "btc": sig["btc"], "ctr4": sig["ctr4"], "mom24": sig["mom24"], "vol3": sig["vol3"],
              "fund": sig["fund"], "reg": reg, "regwk": reg * 2 + sig["weekend"], "regside": reg * 2 + long,
-             "reg5": reg5, "reg5side": reg5 * 2 + long, "pos": pos, "posside": pos * 2 + long, "oi24": oi}
+             "reg5": reg5, "reg5side": reg5 * 2 + long, "pos": pos, "posside": pos * 2 + long,
+             "oi24": 3 if oi is None else oi, "oi_failed": oi is None}
         return d
 
 
@@ -431,4 +450,18 @@ def filter_fails(r: RSpec, tags: dict) -> list:
 
 
 def off_hits(r: RSpec, dims: dict) -> list:
-    return sorted(f"{d}={v}" for d, v in r.off if int(dims[d]) == v)
+    """The off buckets the trade is in. Open interest that could not be read counts as a hit for a member that
+    switches off any known oi24 bucket (the search would have skipped some of those trades)."""
+    hits = sorted(f"{d}={v}" for d, v in r.off if int(dims[d]) == v)
+    if dims.get("oi_failed") and any(d == "oi24" and v != 3 for d, v in r.off):
+        hits.append("oi24=읽기 실패")
+    return hits
+
+
+def spec_tag(r: RSpec) -> str:
+    """A short hash of the settings: a member's label changes when its settings do (a queue saved under other
+    settings is never applied to these)."""
+    import hashlib
+    import json
+    key = json.dumps([list(r.stop), r.entry, r.invert, sorted(r.filter), r.disp, sorted(r.off)], default=list)
+    return hashlib.sha1(key.encode()).hexdigest()[:6]
