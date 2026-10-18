@@ -105,6 +105,7 @@ ALLOW = (
     ("paperbot/dash/static/v4/INVENTORY.md", "라이브러리 2,000개, 딥시크 342개", "luck-calc's row names (the library)"),
     ("docs/regime5y.md", "5년 156건", "one regime cell's 5-year trade count"),
     ("docs/size5y.md", "144개를 다 더한 것", "the 5-year studies' 144 cells (36 strategies x 4 timeframes)"),
+    ("docs/live1019-analysis-ko.md", "144개 페이퍼 계좌", "the rule bot's core accounts (36 strategies x 4 timeframes)"),
 )
 
 
