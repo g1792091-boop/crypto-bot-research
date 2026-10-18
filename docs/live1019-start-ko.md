@@ -6,7 +6,38 @@
 - 주말(한국 시간 토·일)에는 진입하지 않습니다. 미국 경제 발표(CPI·고용·FOMC·PCE) 앞뒤 30분에도 진입하지 않습니다.
 - 봇 두 개를 따로 돌립니다. 바이비트 $100, MEXC $100. 둘 다 같은 신호(같은 페이퍼 계좌)를 따라갑니다.
 
-## 0. 백테스트 숫자 (알고 시작할 것)
+## 버전 비교와 추천 (10/18 밤 시험 결과)
+
+같은 매매법 계열에서 만든 네 가지 버전입니다. 숫자는 2020-01~2026-09, 실거래 규칙(주말 쉼, 발표 30분 금지)을 넣은 백테스트입니다.
+
+| | 지금 버전 | 안정 버전 | 고원형 | **고원형 합본 (추천)** |
+|---|---|---|---|---|
+| 설정 파일 | `combo.live16w.json` | `combo.live16w-stable.json` | `combo.live16w-plateau.json` | **`combo.live-plateau37.json`** |
+| 매매법 / 설정 | 15 / 78 | 13 / 38 | 12 / 25 | 13 / 37 |
+| 평일 하루 진입 | 2.6번 | 1.7번 | 1.05번 | 1.34번 |
+| 승률 | 92.0% | 85.8% | 89.5% | 88.5% |
+| 한 달 중간값 | 6.0배 | 1.9배 | 1.8배 | 2.0배 |
+| 손실 난 달 (81개월) | 0 | 14 | 6 | 6 |
+| 가장 나쁜 달 | 1.66배 | 0.45배 | 0.52배 | 0.75배 |
+| 커스텀값 ±10% 바꾸면 | 0.55~1.04배로 무너짐 | 0.52~0.98배로 무너짐 | 1.4배 유지 | 고원형 설정만 모음 |
+| 비용 2배 | 2.2배 | 1.0배 (본전) | 1.24배 | 1.15배 |
+| 같은 방식을 2020~24년에만 맞춰 2025~26년(처음 보는 기간)에 돌리면 | 승률 74.4%, 한 달 0.28배 | 77.1%, 0.41배 | 77.3%, 0.70배 | **78.3%, 0.77배 (가장 덜 잃음)** |
+| 최대 낙폭 | -72% | -78% | -83% | -73% |
+
+- **커스텀값 시험**: 지금 버전은 커스텀값을 10%만 바꿔도 대부분의 달이 손실로 바뀝니다. 92%와 한 달 6배는 정확히 그 숫자에서만 나옵니다(과최적화).
+- **고원형**: 값을 10% 내려도, 그대로여도, 10% 올려도 모두 버는 설정만 남긴 것입니다. 숫자 하나에 덜 기댑니다.
+- **처음 보는 기간 시험**: 8가지가 넘는 방법을 2020~24년에 맞춰 2025~26년에 돌렸습니다. 모두 승률 75~78%로 모였고, 손익분기(약 78%) 근처이거나 조금 아래였습니다. 고원형 합본이 가장 덜 잃었지만 아직 플러스는 아닙니다.
+- **추천: 고원형 합본.** 백테스트 숫자는 낮지만 실거래에서 백테스트와 덜 어긋날 버전입니다. 지금 버전의 한 달 6배는 기대하지 않는 것이 정직합니다.
+
+**고원형 합본으로 $100 시작한 첫 한 달** (거래를 섞어 2만 번 돌린 결과)
+
+| 실거래 승률 | 한 달 뒤 중간값 | $100 아래로 끝남 | 한 번이라도 $50 아래 |
+|---|---|---|---|
+| 88.5% (백테스트 그대로) | $198 | 10% | 3% |
+| 85% | $155 | 22% | 7% |
+| 80% | $109 | 44% | 19% |
+
+## 0. 백테스트 숫자 (지금 버전 기준, 알고 시작할 것)
 
 2020-01~2026-09, 실거래 규칙(주말 쉼, 발표 30분)을 넣은 결과입니다.
 
@@ -86,13 +117,24 @@ PAPERBOT_LIVE_MAINNET=I_UNDERSTAND
 
 `MEXC_LIVE_KEY_CHECKED` 줄은 "MEXC 키를 선물 거래만, 출금 없음, IP 제한으로 만들었다"는 두 분의 확인입니다. MEXC는 키 권한을 API로 알려 주지 않아서 이 줄이 대신합니다([`mexc-ko.md`](mexc-ko.md) 3장).
 
-## 4. 합친 봇(페이퍼)을 16개 설정으로 바꾸기
+## 4. 합친 봇(페이퍼)을 고른 버전으로 바꾸기
+
+두 분이 고른 버전의 설정 파일을 씁니다. 실행기 설정의 `paper_db`도 같은 줄의 DB로 맞춥니다(5장·6장).
+
+| 버전 | 설정 파일 | 페이퍼 DB (`paper_db`) |
+|---|---|---|
+| 고원형 합본 (추천) | `deploy/combo.live-plateau37.json` | `/var/lib/paperbot/combo/live-plateau37.db` |
+| 고원형 | `deploy/combo.live16w-plateau.json` | `/var/lib/paperbot/combo/live16w-plateau.db` |
+| 안정 버전 | `deploy/combo.live16w-stable.json` | `/var/lib/paperbot/combo/live16w-stable.db` |
+| 지금 버전 | `deploy/combo.live16w.json` | `/var/lib/paperbot/combo/live16w.db` |
+
+아래는 고원형 합본 예시입니다.
 
 ```bash
 # 실행기가 돌고 있으면 먼저 멈추고 실제 포지션이 없는지 확인
 sudo touch /var/lib/paperbot/STOP
 sudo systemctl stop paperbot-combo
-sudo cp /opt/crypto-bot-research/deploy/combo.live16w.json /etc/paperbot/combo.json
+sudo cp /opt/crypto-bot-research/deploy/combo.live-plateau37.json /etc/paperbot/combo.json
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
 ```
 
@@ -103,7 +145,7 @@ sudo systemctl start paperbot-combo
 sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼] 시작" 확인 (1분봉 7일치를 받느라 몇 분 걸림)
 ```
 
-- 페이퍼 DB는 새 파일 `/var/lib/paperbot/combo/live16w.db`입니다. 옛 DB는 지우거나 옮기지 마세요.
+- 페이퍼 DB는 고른 버전의 새 파일입니다(위 표, 고원형 합본이면 `/var/lib/paperbot/combo/live-plateau37.db`). 옛 DB는 지우거나 옮기지 마세요.
 - 규칙봇(paperbot-live3)이 돌고 있어야 합니다. 합친 봇은 규칙봇의 1분봉을 읽습니다.
 
 ## 5. 바이비트 실행기 설정
@@ -117,8 +159,8 @@ sudo nano /etc/paperbot/executor.json
   "exchange": "bybit",
   "mode": "mainnet",
   "account": "COMBO@mix",
-  "paper_db": "/var/lib/paperbot/combo/live16w.db",
-  "db": "/var/lib/paperbot/exec/executor-bybit-live16w.db",
+  "paper_db": "/var/lib/paperbot/combo/live-plateau37.db",
+  "db": "/var/lib/paperbot/exec/executor-bybit-live.db",
   "budget_usd": 100,
   "qty_scale": 0.1,
   "entry_source": "paper",
@@ -167,7 +209,7 @@ sudo nano /etc/paperbot/executor-mexc.json
 ```json
   "exchange": "mexc",
   "mode": "mainnet",
-  "db": "/var/lib/paperbot/exec/executor-mexc-live16w.db",
+  "db": "/var/lib/paperbot/exec/executor-mexc-live.db",
 ```
 
 확인:
@@ -193,9 +235,9 @@ sudo journalctl -fu paperbot-executor -u paperbot-executor-mexc
 ## 8. 매일 볼 것
 
 ```bash
-sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/live16w.db
-sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-bybit-live16w.db
-sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-mexc-live16w.db
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/live-plateau37.db
+sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-bybit-live.db
+sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-mexc-live.db
 ```
 
 | 볼 것 | 기준 |
