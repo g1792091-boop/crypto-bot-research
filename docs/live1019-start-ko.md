@@ -212,7 +212,8 @@ PAPERBOT_LIVE_MAINNET=I_UNDERSTAND
 
 | 버전 | 설정 파일 | 페이퍼 DB (`paper_db`) |
 |---|---|---|
-| 고원형 합본 (추천) | `deploy/combo.live-plateau37.json` | `/var/lib/paperbot/combo/live-plateau37.db` |
+| A+C 합본 (바이비트 추천, 10/19 아침) | `deploy/combo.live-ac.json` | `/var/lib/paperbot/combo/live-ac.db` |
+| 고원형 합본 = B 안정형 (MEXC 추천) | `deploy/combo.live-plateau37.json` | `/var/lib/paperbot/combo/live-plateau37.db` |
 | 고원형 | `deploy/combo.live16w-plateau.json` | `/var/lib/paperbot/combo/live16w-plateau.db` |
 | 안정 버전 | `deploy/combo.live16w-stable.json` | `/var/lib/paperbot/combo/live16w-stable.db` |
 | 지금 버전 | `deploy/combo.live16w.json` | `/var/lib/paperbot/combo/live16w.db` |
@@ -238,6 +239,11 @@ sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼] 시작" 확인
 - 규칙봇(paperbot-live3)이 돌고 있어야 합니다. 합친 봇은 규칙봇의 1분봉을 읽습니다.
 
 ### 4-2. (두 분이 고르면) 두 봇을 서로 다른 유형으로: A 최고형 = 바이비트, B 안정형 = MEXC
+
+**10/19 아침 추천은 A 대신 A+C 합본입니다.** 아래 명령에서 `combo.live16w.json`을 `combo.live-ac.json`으로, 바이비트 `paper_db`의 `live16w.db`를 `live-ac.db`로 바꾸면 됩니다. 텔레그램 이름은 "[합친 봇 페이퍼 A+C 합본]"으로 나옵니다.
+- A+C 합본: 평일 하루 3.1번, 승률 91.2%, 월 x7.66(바이비트 수수료), 손실 난 달 0/81, 최대 연패 3번입니다.
+- 실거래 코드 재생 확인(9/24, 9/25)에서 평일 거래가 백테스트와 시각·코인·방향·결과까지 모두 같았습니다(4건 중 4건).
+- 신호등을 쓰면 두 실행기 설정에 "신호등" 장의 두 줄을 넣습니다. 바이비트는 0.85(또는 0.9), MEXC는 0.8을 권합니다.
 
 바이비트와 MEXC가 **다른 페이퍼 봇**을 따라가게 하는 방법입니다. 페이퍼 봇 두 개를 켭니다(`paperbot-combo`, `paperbot-combo2`).
 - A 최고형은 거래가 많아서 수수료가 싼 바이비트에 둡니다.
