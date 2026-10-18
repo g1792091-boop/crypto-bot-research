@@ -2943,5 +2943,6 @@
   "order"
  ],
  "flip_twin": true,
- "telegram": true
+ "telegram": true,
+ "macro_blackout_min": 30
 }

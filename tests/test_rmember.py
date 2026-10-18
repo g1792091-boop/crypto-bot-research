@@ -370,3 +370,24 @@ def test_runner_break_entry_waits_for_the_break(tmp_path, broke):
     else:
         assert not held and any("돌파 없음" in _why(d) for _, s, d in w.statuses())
     assert not w.run.breaks
+
+
+def test_macro_blackout_skips_entries_around_a_release(tmp_path, monkeypatch):
+    from paperbot import events as EV
+    t = T0 + 15 * MIN
+    f = tmp_path / "macro.csv"
+    f.write_text("ts_utc,kind,source_url\n" + EV.Event(t + 20 * MIN, "CPI", "x").ts_utc + ",CPI,https://example\n")
+    monkeypatch.setattr(EV, "PATH", f)
+    EV.reset()
+    try:
+        w = RWorld(tmp_path, {"stop": ["pct", 1.0], "entry": "now"})
+        w.run.cfg = w.cfg = dataclasses.replace(w.cfg, macro_blackout_min=30)
+        for k in range(15):
+            w.minute(T0 + k * MIN)
+        w.signal(t)
+        w.minute(t)
+        assert w.book.engines[C.ACCOUNT].position is None
+        assert any(s == "FILTERED" and "경제 발표" in _why(d) for _, s, d in w.statuses())
+        assert dataclasses.replace(w.cfg, macro_blackout_min=0).problems()           # 1~240 only
+    finally:
+        EV.reset()

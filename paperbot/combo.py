@@ -437,6 +437,8 @@ class ComboConfig:
     no_score: float = 3.0
     flip_twin: bool = True
     early_exit: Optional[str] = None    # None | "own" | "any" (the class docstring)
+    macro_blackout_min: Optional[int] = None   # no entry from N minutes before to N minutes after a US macro release
+                                               # (data/macro_events.csv, paperbot/events.py): owners 2026-10-18 "30"
     symbols: tuple = V3_SYMBOLS
     poll_s: float = 2.0
     max_signal_age_s: float = 150.0
@@ -515,6 +517,9 @@ class ComboConfig:
         bad = [s for s in self.symbols if s not in V3_SYMBOLS]
         if bad:
             out.append(f"symbols: 규칙봇 6개 코인만 됩니다({', '.join(bad)})")
+        if self.macro_blackout_min is not None and not (isinstance(self.macro_blackout_min, int)
+                                                        and 0 < self.macro_blackout_min <= 240):
+            out.append("macro_blackout_min은 1~240분(정수) 또는 null입니다")
         if self.early_exit not in EARLY_EXITS:
             out.append('early_exit는 null(끔), "own"(같은 매매법의 반대 신호), "any"(아무 매매법의 반대 신호)입니다')
         return out
@@ -1167,6 +1172,12 @@ class ComboRunner:
                 keep.append(q)
                 continue
             sig = _sig_from(q.signal)
+            if self.cfg.macro_blackout_min and not sig.meta.get("exit_only"):
+                ev = self._macro_near(ts)
+                if ev:
+                    self._restate(sig, "FILTERED", ev)
+                    self._count(sig.meta.get("member", sig.strategy_id), "filtered")
+                    continue
             if sig.meta.get("research") and not sig.meta.get("exit_only"):
                 sig = self._research_entry(sig, ts, bars or {})
                 if sig is None:
@@ -1187,6 +1198,16 @@ class ComboRunner:
             if not exit_only:
                 self._count(label, "late" if age > self.cfg.max_signal_age_s * 1000 else "submitted")
         self.queue = keep
+
+    def _macro_near(self, ts: int) -> str:
+        """'' or why minute ts is inside the macro blackout (an entry in that minute is not made)."""
+        from . import events as EV
+        w = int(self.cfg.macro_blackout_min) * MIN
+        near = EV.near(int(ts), w, w)
+        if not near:
+            return ""
+        e = near[0]
+        return f"경제 발표 앞뒤 {self.cfg.macro_blackout_min}분: {EV.KIND_KO.get(e.kind, e.kind)} {e.ts_utc}"
 
     def _custom(self, boundary: int) -> None:
         now = self.now_ms()
@@ -1619,6 +1640,13 @@ def cmd_check(args) -> int:
     print(f"- 동시에 나온 신호: {' > '.join({'score': '진입 점수', 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
     print(f"- 동전 쌍둥이 계좌: {'있음' if cfg.flip_twin else '없음'}")
     print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}")
+    if cfg.macro_blackout_min:
+        from . import events as EV
+        now = int(time.time() * 1000)
+        nxt = [e for e in EV.all_events() if e.ts_ms >= now]
+        print(f"- 경제 발표 앞뒤 {cfg.macro_blackout_min}분 진입 안 함: 앞으로 일정 {len(nxt)}개"
+              + (f", 마지막 {nxt[-1].ts_utc}" if nxt else " (일정 없음: data/macro_events.csv를 채우세요)"))
+        probs += [f"경제 발표 일정 파일: {p}" for p in EV.problems()]
     for m in members:
         print("  " + m.describe())
     for p in probs:
