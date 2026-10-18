@@ -3901,5 +3901,6 @@
  "flip_twin": true,
  "telegram": true,
  "macro_blackout_min": 30,
- "no_weekend": true
+ "no_weekend": true,
+ "name": "A 최고형"
 }

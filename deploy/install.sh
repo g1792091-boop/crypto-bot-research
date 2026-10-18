@@ -165,7 +165,7 @@ echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
 # running bot never reads a half-copied tree. The previous code stays in $APP.old.
 # The agents timer is paused too, so no agent pass starts on a half-copied tree.
-UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo"
+UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo paperbot-combo2"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -270,6 +270,9 @@ for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service pa
          paperbot-ghcoin.service paperbot-tgtrades.service paperbot-combo.service paperbot-executor.service; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
+# the second combined bot (its own config combo2.json and paper database: two bots of different types side by side,
+# docs/live1019-start-ko.md): installed only, started by a person
+install -m 644 "$APP/deploy/paperbot-combo2.service" /etc/systemd/system/paperbot-combo2.service
 # the second executor (MEXC, its own config executor-mexc.json): installed only, never enabled or started here
 install -m 644 "$APP/deploy/paperbot-executor-mexc.service" /etc/systemd/system/paperbot-executor-mexc.service
 systemctl daemon-reload

@@ -683,3 +683,10 @@ def test_early_exit_off_keeps_the_fixed_stop_only(tmp_path):
     B = _open_long(w)
     _next(w, B, "V39_ALL", -1)
     assert w.engine().position is not None
+
+
+def test_a_named_paper_bot_tags_its_messages():
+    # two paper bots side by side (paperbot-combo + paperbot-combo2): each names itself in the Telegram messages
+    from paperbot.combo import ComboConfig
+    assert ComboConfig.from_dict({"paper_db": "p", "db": "d", "members": [], "name": "B 안정형"}).tag == "[합친 봇 페이퍼 B 안정형]"
+    assert ComboConfig.from_dict({"paper_db": "p", "db": "d", "members": []}).tag == "[합친 봇 페이퍼]"

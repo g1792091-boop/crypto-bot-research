@@ -446,6 +446,7 @@ class ComboConfig:
     picks_file: str = CANDIDATES_FILE
     brackets_file: Optional[str] = None
     telegram: bool = True
+    name: str = ""                      # shown in the messages: "[합친 봇 페이퍼 <name>]" (two paper bots side by side)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ComboConfig":
@@ -465,6 +466,10 @@ class ComboConfig:
             return cls.from_dict(json.load(fh))
 
     # ---- values
+    @property
+    def tag(self) -> str:
+        return f"[합친 봇 페이퍼 {self.name}]" if self.name else "[합친 봇 페이퍼]"
+
     def lev_of(self, symbol: str) -> int:
         return int(self.leverage.get(symbol, self.leverage.get("default", 30)))
 
@@ -1247,7 +1252,7 @@ class ComboRunner:
     def _research_failed(self, text: str) -> None:
         """A research rule could not be read (no trade): an alert each time, Telegram on the 1st / 10th / 100th."""
         self.rfails = getattr(self, "rfails", 0) + 1
-        msg = f"[합친 봇 페이퍼] 연구 조건을 못 읽어 진입 안 함({self.rfails}번째): {text}"[:300]
+        msg = f"{self.cfg.tag} 연구 조건을 못 읽어 진입 안 함({self.rfails}번째): {text}"[:300]
         self.store.alert(self.now_ms(), WARN, msg)
         if self.rfails in (1, 10, 100) or self.rfails % 1000 == 0:
             self.notifier.send(WARN, msg)
@@ -1451,14 +1456,14 @@ class ComboRunner:
         was_entry, was_n = before.get(ACCOUNT, (None, 0))
         for t in e.trades[was_n:]:
             self.notifier.send(INFO, (
-                f"[합친 봇 페이퍼] 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
+                f"{self.cfg.tag} 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
                 f"{KO_TF.get(t.timeframe, t.timeframe)}: {KO_EXIT.get(t.exit_reason, t.exit_reason)}, "
                 f"순ROE {t.roe:+.1%}, ${t.pnl:+,.2f}, 지갑 ${t.equity_after:,.2f}"))
         p = e.position
         if p is not None and p.entry_time != was_entry:
             m = p.signal.meta
             self.notifier.send(INFO, (
-                f"[합친 봇 페이퍼] 진입 {p.symbol} {KO_SIDE.get(p.side, p.side)} {p.signal.strategy_id} "
+                f"{self.cfg.tag} 진입 {p.symbol} {KO_SIDE.get(p.side, p.side)} {p.signal.strategy_id} "
                 f"{KO_TF.get(p.signal.timeframe, p.signal.timeframe)} ({m.get('member')}), {p.leverage}배, "
                 f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g} ({m.get('stop_rule', '')}), "
                 f"점수 {p.signal.score:.2f}"))
@@ -1571,7 +1576,7 @@ def cmd_run(args) -> int:
             try:
                 rdata.ensure_1m(s, t_now - t_now % MIN - RM.RData.KEEP_1M * MIN, t_now - t_now % MIN)
             except Exception as exc:  # noqa: BLE001  fetched again at the first entry
-                notifier.send(WARN, f"[합친 봇 페이퍼] {s} 1분봉 7일치를 못 받음(첫 진입 때 다시): {exc}"[:300])
+                notifier.send(WARN, f"{cfg.tag} {s} 1분봉 7일치를 못 받음(첫 진입 때 다시): {exc}"[:300])
     runner = ComboRunner(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
                          lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
                          rdata=rdata)
@@ -1584,7 +1589,7 @@ def cmd_run(args) -> int:
     store.put_state("combo_run", now, {"version": VERSION, "brackets": src, "taker_fee": settings.taker_fee,
                                        "members": [m.describe() for m in members], "config": dataclasses.asdict(cfg)})
     store.commit()
-    notifier.send(INFO, f"[합친 봇 페이퍼] 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값, "
+    notifier.send(INFO, f"{cfg.tag} 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값, "
                         f"{sum(bool(m.when) for m in members)}개 조건 있음), "
                         f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 손절 {stop_text(cfg)}, "
                         f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}, "
@@ -1606,7 +1611,7 @@ def cmd_run(args) -> int:
             except Exception as exc:  # noqa: BLE001  a failing poll is retried; the state is per minute
                 runner.errors += 1
                 store.conn.rollback()
-                text = f"[합친 봇 페이퍼] 오류(다시 시도): {type(exc).__name__}: {exc}"[:300]
+                text = f"{cfg.tag} 오류(다시 시도): {type(exc).__name__}: {exc}"[:300]
                 store.alert(int(time.time() * 1000), WARN, text)
                 store.commit()
                 if runner.errors in (1, 10, 100):
