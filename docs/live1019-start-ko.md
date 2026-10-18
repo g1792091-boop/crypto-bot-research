@@ -176,6 +176,40 @@ sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼] 시작" 확인
 - 페이퍼 DB는 고른 버전의 새 파일입니다(위 표, 고원형 합본이면 `/var/lib/paperbot/combo/live-plateau37.db`). 옛 DB는 지우거나 옮기지 마세요.
 - 규칙봇(paperbot-live3)이 돌고 있어야 합니다. 합친 봇은 규칙봇의 1분봉을 읽습니다.
 
+### 4-2. (두 분이 고르면) 두 봇을 서로 다른 유형으로: A 최고형 = 바이비트, B 안정형 = MEXC
+
+바이비트와 MEXC가 **다른 페이퍼 봇**을 따라가게 하는 방법입니다. 페이퍼 봇 두 개를 켭니다(`paperbot-combo`, `paperbot-combo2`).
+- A 최고형은 거래가 많아서 수수료가 싼 바이비트에 둡니다.
+- 두 봇은 A가 하는 거래 중 약 40%만 같이 합니다(같은 코인·방향·1시간 안).
+
+```bash
+sudo touch /var/lib/paperbot/STOP
+sudo systemctl stop paperbot-combo paperbot-combo2
+sudo cp /opt/crypto-bot-research/deploy/combo.live16w.json /etc/paperbot/combo.json          # A 최고형 -> 바이비트
+sudo cp /opt/crypto-bot-research/deploy/combo.live-plateau37.json /etc/paperbot/combo2.json  # B 안정형 -> MEXC
+cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
+cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo2.json
+```
+
+둘 다 마지막 줄이 **"준비됨"**이면 켭니다.
+
+```bash
+sudo systemctl start paperbot-combo paperbot-combo2
+sudo journalctl -fu paperbot-combo -u paperbot-combo2   # "[합친 봇 페이퍼 A 최고형] 시작", "[합친 봇 페이퍼 B 안정형] 시작"
+```
+
+실행기 설정의 `paper_db`만 봇마다 다르게 씁니다(5장·6장의 나머지는 그대로).
+
+| 실행기 | 설정 파일 | `paper_db` |
+|---|---|---|
+| 바이비트 | `/etc/paperbot/executor.json` | `/var/lib/paperbot/combo/live16w.db` (A 최고형) |
+| MEXC | `/etc/paperbot/executor-mexc.json` | `/var/lib/paperbot/combo/live-plateau37.db` (B 안정형) |
+
+- 매일 볼 것(8장)의 첫 줄은 두 번 봅니다: `--db /var/lib/paperbot/combo/live16w.db`, `--db /var/lib/paperbot/combo/live-plateau37.db`.
+- 실거래 승률 기준은 봇마다 다릅니다. A는 백테스트 92%, B는 88.5%입니다. 20번 넘게 거래한 뒤 A가 85%, B가 82% 아래면 알려 주세요.
+- 며칠 문제없으면 부팅 때 자동으로 켜지게 합니다: `sudo systemctl enable paperbot-combo paperbot-combo2`.
+- `/var/lib/paperbot/STOP` 하나로 두 실행기가 모두 멈춥니다.
+
 ## 5. 바이비트 실행기 설정
 
 ```bash
