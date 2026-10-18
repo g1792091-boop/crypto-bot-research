@@ -88,6 +88,7 @@ from .engine import PaperEngine
 from .margin import Brackets, liquidation_price
 from .models import Bar, Signal
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier
+from . import rmember as RM
 from .sizing import SizeDecision
 from .store3 import Store3
 
@@ -141,6 +142,7 @@ class Member:
     order: int
     pick: Optional[str] = None
     when: Optional[tuple] = None       # conditions (parse_when): ((("symbol", ("SOLUSDT",)), ("side", 1)), ...)
+    research: Optional[RM.RSpec] = None   # a setting of the 5-year search (paperbot/rmember.py)
 
     @property
     def custom(self) -> bool:
@@ -156,6 +158,8 @@ class Member:
         out = f"{self.order}. {self.name} {KO_TF.get(self.tf, self.tf)} - {what}" + (f" [{self.pick}]" if self.pick else "")
         if self.when:
             out += " | 조건: " + " 또는 ".join(describe_condition(c) for c in self.when)
+        if self.research:
+            out += " | " + RM.describe(self.research)
         return out
 
     def allows(self, symbol: str, side: int, bar_close: int, btc: Optional[Callable[[int], Optional[int]]] = None
@@ -358,7 +362,8 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
     for i, sp in enumerate(specs, 1):
         if not isinstance(sp, dict):
             raise ComboError(f"members {i}번째 항목이 {{...}} 형식이 아닙니다")
-        unknown = sorted(set(sp) - {"pick", "strategy", "tf", "numbers", "when"})
+        unknown = sorted(set(sp) - {"pick", "strategy", "tf", "numbers", "when", "stop", "entry", "invert", "filter",
+                                    "disp", "off", "cell"})
         if unknown:
             raise ComboError(f"members {i}번째 항목에 알 수 없는 이름: {', '.join(unknown)}")
         pick = sp.get("pick")
@@ -383,21 +388,31 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
             raise ComboError(f"{name}의 봉 {tf}: 15m/30m/1h/4h만 됩니다")
         if kind == "ds" and tf not in DS_TFS_OF.get(name, ()):
             raise ComboError(f"딥시크 {name}은(는) {tf}에서 돌지 않습니다")
+        try:
+            research = RM.parse_spec(sp, f"{name} {tf}")
+        except RM.RSpecError as exc:
+            raise ComboError(str(exc)) from None
+        if research is not None and numbers is None:
+            raise ComboError(f"{name} {tf}: 연구 설정(stop/entry/filter/off)은 numbers와 함께 적습니다")
         if numbers is not None:
             want = default_numbers(kind, name)
             unknown = sorted(set(numbers) - set(want))
             if unknown:
                 raise ComboError(f"{name}에 없는 숫자 이름: {', '.join(unknown)} (있는 것: {', '.join(sorted(want))})")
             full = {**want, **numbers}
-            numbers = None if all(_same(full[k], want[k]) for k in want) else full
-        key = (kind, name, tf, json.dumps(numbers, sort_keys=True))
+            # a research member always computes its own signals (the search's), even on the default numbers
+            numbers = None if (research is None and all(_same(full[k], want[k]) for k in want)) else full
+        key = (kind, name, tf, json.dumps(numbers, sort_keys=True), research)
         if key in seen:
             raise ComboError(f"{name} {tf}가 같은 숫자로 두 번 들어 있습니다(조건이 여럿이면 when 목록에 함께 적습니다)")
         seen.add(key)
         label = pick or (f"{name}@{tf}" if numbers is None else f"{name}@{tf}~" +
                          hashlib.sha1(json.dumps(numbers, sort_keys=True).encode()).hexdigest()[:6])
+        if research is not None:
+            label = f"{name}@{tf}#{i}"
         when = parse_when(sp.get("when"), label)
-        out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick, when=when))
+        out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick, when=when,
+                          research=research))
     return out
 
 
@@ -574,8 +589,9 @@ class FixedLevPolicy:
         bracket = brackets.for_notional(notional)
         liq = liquidation_price(side, qty, entry, margin, bracket)
         buffer = self.s.liq_buffer_min_frac * entry
+        atr_mult = float(sig.meta.get("liq_buffer_atr", self.s.liq_buffer_atr_mult))    # research pct/swing: 0
         if sig.atr is not None:
-            buffer = max(buffer, self.s.liq_buffer_atr_mult * sig.atr)
+            buffer = max(buffer, atr_mult * sig.atr)
         if (stop - liq) * side < buffer:
             return SizeDecision(False, reasons=reasons + [f"{lev}x: stop {stop:.6g} too close to liq {liq:.6g}"])
         return SizeDecision(True, "combo", lev, margin, qty, liq, qty * per, reasons)
@@ -650,15 +666,21 @@ class ComboEngine(PaperEngine):
         raw = float(sig.meta.get("ref_price", bar.open))
         lev = c.lev_of(sig.symbol)
         atr = sig.atr
-        if c.stop_mode == "roe":
+        rstop = sig.meta.get("rstop")
+        if rstop and rstop[0] in ("pct", "swing"):
+            return self._research_stop(sig, raw, lev, rstop)
+        stop_mode, stop_atr = c.stop_mode, c.stop_atr
+        if rstop:                                   # research ["atr", k]: the house atr_fit with that k, at least 1 ATR
+            stop_mode, stop_atr = "atr_fit", float(rstop[1])
+        if stop_mode == "roe":
             dist = raw * float(c.stop["roe"]) / lev
             rule = f"ROE -{float(c.stop['roe']):.0%} at {lev}x"
         else:
             if atr is None or not atr > 0:
                 return None, (sig, "no ATR for the stop")
-            dist = c.stop_atr * atr
-            rule = f"{c.stop_atr:g} x ATR"
-            if c.stop_mode == "atr_fit":
+            dist = stop_atr * atr
+            rule = f"{stop_atr:g} x ATR"
+            if stop_mode == "atr_fit":
                 # the sizing checks the stop against the liquidation price of the FILL (the reference price plus
                 # slippage): widest distance from the reference price = fill x L - slippage - buffer (a hair less)
                 fill = raw * (1 + sig.side * self.s.slippage_frac)
@@ -667,12 +689,38 @@ class ComboEngine(PaperEngine):
                 buffer = max(self.s.liq_buffer_min_frac * fill, self.s.liq_buffer_atr_mult * atr)
                 widest = (room - abs(fill - raw) - buffer) * (1 - 1e-6)
                 if dist > widest:
-                    if widest < float(c.stop.get("min_atr", 1.0)) * atr:
-                        return None, (sig, f"{lev}x: even {float(c.stop.get('min_atr', 1.0)):g} x ATR does not fit "
-                                           f"inside liquidation")
-                    rule = f"{c.stop_atr:g} x ATR pulled in to {widest / atr:.2f} x ATR (fits {lev}x)"
+                    min_atr = 1.0 if rstop else float(c.stop.get("min_atr", 1.0))
+                    if widest < min_atr * atr:
+                        return None, (sig, f"{lev}x: even {min_atr:g} x ATR does not fit inside liquidation")
+                    rule = f"{stop_atr:g} x ATR pulled in to {widest / atr:.2f} x ATR (fits {lev}x)"
                     dist = widest
         return replace(sig, meta={**sig.meta, "stop_dist": dist, "stop_rule": rule}), None
+
+    def _research_stop(self, sig: Signal, raw: float, lev: int, rstop):
+        """Research pct / swing stops (ck3.trade_pct): from the fill, pulled in to 0.2 % of the fill inside the
+        liquidation price, no ATR buffer. ``meta["rswing"]``: the lowest low / highest high of the swing window."""
+        c = self.combo
+        fill = raw * (1 + sig.side * self.s.slippage_frac)
+        if rstop[0] == "pct":
+            frac = float(rstop[1]) / 100.0
+            rule = f"{float(rstop[1]):g}% of the fill"
+        else:
+            sw = sig.meta.get("rswing") or {}
+            lv = sw.get("lo") if sig.side > 0 else sw.get("hi")
+            if lv is None:
+                return None, (sig, "no swing window for the stop")
+            frac = max((raw - lv) / raw + 0.001 if sig.side > 0 else (lv - raw) / raw + 0.001, 0.003)
+            rule = f"swing {float(rstop[1]):g} bars ({lv:.6g}) +0.1%"
+        notional = max(self.wallet * c.margin_frac(lev) * lev, 1.0)
+        room = liq_distance(sig.side, fill, lev, notional, self.brackets[sig.symbol]) * fill
+        liq = fill - sig.side * room
+        stop = RM.pct_stop(sig.side, raw, fill, frac, liq)
+        if stop is None:
+            return None, (sig, f"{lev}x: the stop does not fit inside liquidation")
+        if abs(fill - stop) < frac * fill - 1e-12:
+            rule += f", pulled in to {abs(fill - stop) / fill:.3%} (fits {lev}x)"
+        dist = sig.side * (raw - stop)              # PaperEngine: stop = reference price - side x stop_dist
+        return replace(sig, meta={**sig.meta, "stop_dist": dist, "stop_rule": rule, "liq_buffer_atr": 0.0}), None
 
 
 def make_cls(cfg: ComboConfig):
@@ -998,15 +1046,18 @@ class ComboRunner:
     def __init__(self, cfg: ComboConfig, members: list[Member], book: AccountBook, store: Store3, notifier: Notifier,
                  custom: Optional[CustomSignals], now_ms: Callable[[], int], prices: Callable[[], dict],
                  funding: Optional[FundingFeed] = None, fetch_5m: Optional[Callable] = None,
-                 btc: Optional[BtcTrend] = None):
+                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None):
         self.cfg, self.members, self.book, self.store = cfg, members, book, store
         self.notifier, self.custom, self.now_ms, self.prices, self.funding = notifier, custom, now_ms, prices, funding
         self.fetch_5m = fetch_5m
         self.btc = btc
+        self.rdata = rdata
+        self.by_label = {m.label: m for m in members}
         st = store.get_state(STATE_KEY)
         st = st[1] if st else {}
         self.cursor: Optional[int] = st.get("cursor")
         self.queue: list[Queued] = [Queued(int(q["bar_close"]), q["signal"]) for q in st.get("queue", [])]
+        self.breaks: list[dict] = list(st.get("breaks", []))     # research "break" entries waiting for the break
         self.counts: dict = st.get("counts", {})
         self.errors = 0
 
@@ -1014,7 +1065,7 @@ class ComboRunner:
     def _save_state(self, ts: int) -> None:
         self.store.put_state(STATE_KEY, ts, {
             "cursor": self.cursor, "queue": [{"bar_close": q.bar_close, "signal": q.signal} for q in self.queue],
-            "counts": self.counts, "version": VERSION,
+            "breaks": self.breaks, "counts": self.counts, "version": VERSION,
             "members": [m.label for m in self.members]})
 
     def _count(self, label: str, what: str) -> None:
@@ -1054,7 +1105,7 @@ class ComboRunner:
             self.funding.poll(now)
         n = 0
         for ts in sorted(minutes):
-            self._submit_due(ts)
+            self._submit_due(ts, minutes[ts])
             before = {aid: (e.position.entry_time if e.position else None, len(e.trades))
                       for aid, e in self.book.engines.items()}
             self.book.step(ts, minutes[ts], self.funding.take(ts) if self.funding else None)
@@ -1062,6 +1113,12 @@ class ComboRunner:
             for b in minutes[ts].values():
                 if self.custom is not None:
                     self.custom.add_1m(b)
+                if self.rdata is not None:
+                    self.rdata.add_1m(b.symbol, b.open_time, b.open, b.high, b.low)
+            if self.rdata is not None:
+                self._breaks(ts, minutes[ts])
+                if ts % (60 * MIN) == 0:
+                    self.rdata.trim(ts)
             boundary = ts + MIN
             if boundary % FIVE == 0 and self.custom is not None and self.custom.members:
                 self._custom(boundary)
@@ -1075,7 +1132,7 @@ class ComboRunner:
         self.store.commit()
         return n
 
-    def _submit_due(self, ts: int) -> None:
+    def _submit_due(self, ts: int, bars: Optional[dict] = None) -> None:
         """Signals whose bar closed at or before this minute's open go in now (the engine fills them in this step)."""
         keep, now = [], self.now_ms()
         for q in self.queue:
@@ -1083,6 +1140,10 @@ class ComboRunner:
                 keep.append(q)
                 continue
             sig = _sig_from(q.signal)
+            if sig.meta.get("research") and not sig.meta.get("exit_only"):
+                sig = self._research_entry(sig, ts, bars or {})
+                if sig is None:
+                    continue
             age = now - int(sig.meta.get("ref_time") or q.bar_close)
             label = sig.meta.get("member", sig.strategy_id)
             exit_only = bool(sig.meta.get("exit_only"))
@@ -1119,11 +1180,143 @@ class ComboRunner:
         ready = self.now_ms()
         for g in got:
             m: Member = g["member"]
+            side = -g["side"] if (m.research and m.research.invert) else g["side"]
             bid, ask = px.get(g["symbol"], (None, None))
-            ref = ask if g["side"] > 0 else bid
-            sig = make_signal(self.cfg, m, boundary, g["symbol"], g["side"], g["atr"], ref, ready, ready - boundary,
+            ref = ask if side > 0 else bid
+            sig = make_signal(self.cfg, m, boundary, g["symbol"], side, g["atr"], ref, ready, ready - boundary,
                               g["ctx"], "custom")
-            self._queue(m, sig, boundary, "custom")
+            if m.research is not None:
+                self._research_signal(m, sig, boundary)
+            else:
+                self._queue(m, sig, boundary, "custom")
+
+    # ---- research members (paperbot/rmember.py)
+    def _research_signal(self, m: Member, sig: Signal, boundary: int) -> None:
+        """A research member's signal at its bar close: the signal-time filter, then queued ("now") or waiting for
+        the break ("break"). The displacement filter and the off buckets are read at the entry minute."""
+        r = m.research
+        try:
+            tags = self.rdata.signal_tags(sig.symbol, sig.side, boundary)
+        except Exception as exc:  # noqa: BLE001  without its tags the setting cannot be checked: no trade
+            self._log(sig, "FILTERED", "custom", f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200])
+            self._count(m.label, "filtered")
+            return
+        bad = RM.filter_fails(r, tags)
+        if bad:
+            self._log(sig, "FILTERED", "custom", "연구 조건 밖: " + ", ".join(bad))
+            self._count(m.label, "filtered")
+            return
+        sig = replace(sig, meta={**sig.meta, "research": True, "rtags": tags, "rsig_t": boundary})
+        if r.entry == "break":
+            self.breaks.append({"member": m.label, "t0": boundary, "until": boundary + TF_MS[m.tf],
+                                "level": None, "signal": dataclasses.asdict(sig)})
+            self._log(sig, "WAITING", "custom", "돌파 확인 대기")
+            return
+        self._queue(m, sig, boundary, "custom")
+
+    def _disp_ok(self, m: Member, sig: Signal, t0: int, open_t0: float) -> bool:
+        tfm = RM.TF_MIN[m.tf]
+        ts, o, h, l = self.rdata.window_1m(sig.symbol, t0 - tfm * MIN, t0)
+        if len(ts) < tfm:
+            return False                              # the search: no trade without the bar's minutes
+        return RM.disp_ok(m.research.disp, sig.side, float(sig.atr or 0.0), h, l, float(o[0]), open_t0)
+
+    def _research_entry(self, sig: Signal, ts: int, bars: dict) -> Optional[Signal]:
+        """At the entry minute ts: the displacement filter ("now" entries), the off buckets and the swing window.
+        None (logged FILTERED) when the setting does not trade it."""
+        m = self.by_label.get(sig.meta.get("member"))
+        if m is None or m.research is None:
+            self._restate(sig, "FILTERED", "설정에 없는 연구 매매법(설정이 바뀜)")
+            return None
+        bar = bars.get(sig.symbol)
+        if bar is None:
+            return sig                                # the engine records it: no bar of its coin this minute
+        r = m.research
+        try:
+            if r.disp and r.entry == "now" and not self._disp_ok(m, sig, ts, float(bar.open)):
+                self._restate(sig, "FILTERED", "연구 조건 밖: 신호봉 크기")
+                self._count(m.label, "filtered")
+                return None
+            dims = self.rdata.entry_dims(sig.symbol, sig.side, ts, float(bar.open), sig.meta["rtags"])
+            hit = RM.off_hits(r, dims)
+            if hit:
+                self._restate(sig, "FILTERED", "끈 구간: " + ", ".join(hit))
+                self._count(m.label, "filtered")
+                return None
+            meta = {**sig.meta, "rstop": list(r.stop), "rdims": dims}
+            if r.stop[0] == "swing":
+                w = int(r.stop[1]) * RM.TF_MIN[m.tf]
+                _t, _o, h, l = self.rdata.window_1m(sig.symbol, ts - w * MIN, ts)
+                if not len(_t):
+                    raise RuntimeError("no 1m bars for the swing window")
+                meta["rswing"] = {"lo": float(l.min()), "hi": float(h.max())}
+        except Exception as exc:  # noqa: BLE001  unreadable: no trade
+            self._restate(sig, "FILTERED", f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200])
+            self._count(m.label, "filtered")
+            return None
+        for e in self.rdata.errors:
+            self.store.alert(self.now_ms(), WARN, f"[combo] research data: {e}"[:300])
+        self.rdata.errors.clear()
+        return replace(sig, meta=meta)
+
+    def _breaks(self, ts: int, bars: dict) -> None:
+        """Research "break" entries: minute ts trades beyond the signal bar's high (long) / low (short) -> the entry
+        is the next minute's open (queued for it); past the bar's tf minutes, the signal lapses."""
+        if not self.breaks:
+            return
+        keep, now = [], self.now_ms()
+        px = None
+        for b in self.breaks:
+            sig = _sig_from(b["signal"])
+            m = self.by_label.get(b["member"])
+            if m is None or ts >= b["until"]:
+                self._restate(sig, "FILTERED", "돌파 없음(신호봉 시간 안에)")
+                continue
+            if ts < b["t0"]:
+                keep.append(b)
+                continue
+            bar = bars.get(sig.symbol)
+            if bar is None:
+                keep.append(b)
+                continue
+            try:
+                if b["level"] is None:
+                    tfm = RM.TF_MIN[m.tf]
+                    t_, _o, h, l = self.rdata.window_1m(sig.symbol, b["t0"] - tfm * MIN, b["t0"])
+                    if not len(t_):
+                        raise RuntimeError("no 1m bars of the signal bar")
+                    b["level"] = float(h.max()) if sig.side > 0 else float(l.min())
+                    if m.research.disp and not self._disp_ok(m, sig, b["t0"], float(bar.open)):
+                        self._restate(sig, "FILTERED", "연구 조건 밖: 신호봉 크기")
+                        self._count(m.label, "filtered")
+                        continue
+            except Exception as exc:  # noqa: BLE001
+                self._restate(sig, "FILTERED", f"연구 조건을 못 읽음: {type(exc).__name__}: {exc}"[:200])
+                continue
+            broke = bar.high > b["level"] if sig.side > 0 else bar.low < b["level"]
+            if not broke:
+                keep.append(b)
+                continue
+            entry_t = ts + MIN
+            if now - entry_t > self.cfg.max_signal_age_s * 1000:
+                self._restate(sig, "FILTERED", "돌파 확인이 늦음(재시작 따라잡기)")
+                continue
+            if px is None:
+                try:
+                    px = self.prices()
+                except Exception:  # noqa: BLE001  without a price the fill is the entry minute's open
+                    px = {}
+            bid, ask = px.get(sig.symbol, (None, None))
+            ref = ask if sig.side > 0 else bid
+            meta = {**sig.meta, "ref_time": now, "delay_ms": now - entry_t, "break_level": b["level"],
+                    "break_minute": ts}
+            meta.pop("ref_price", None)
+            if ref is not None:
+                meta["ref_price"] = float(ref)
+            nsig = replace(sig, ts=entry_t - 1, meta=meta)
+            self.queue.append(Queued(entry_t, dataclasses.asdict(nsig)))
+            self._log(nsig, "SUBMITTED", "custom", "돌파 확인")
+        self.breaks = keep
 
     def _queue(self, m: Member, sig: Signal, bar_close: int, source: str) -> None:
         """Inside the member's conditions: queued for entry. Outside: logged FILTERED, and with ``early_exit`` queued
@@ -1145,6 +1338,25 @@ class ComboRunner:
             self._log(sig, "FILTERED", source, why)
             self._count(m.label, "filtered")
         return ok
+
+    def _restate(self, sig: Signal, status: str, why: str) -> None:
+        """A later status of a signal already logged (signal_log keeps one row per bar, coin and member): a research
+        member's signal filtered at its entry minute, or a break that never came."""
+        cur = self.store.conn.execute(
+            "SELECT data FROM signal_log WHERE bar_close = ? AND timeframe = ? AND strategy = ? AND symbol = ?",
+            (sig.ts + 1, sig.timeframe, sig.meta.get("member", sig.strategy_id), sig.symbol)).fetchone()
+        if cur is None:
+            self._log(sig, status, "custom", why)
+            return
+        try:
+            data = json.loads(cur[0] or "{}")
+        except ValueError:
+            data = {}
+        data["why"] = why
+        self.store.conn.execute(
+            "UPDATE signal_log SET status = ?, data = ? WHERE bar_close = ? AND timeframe = ? AND strategy = ? "
+            "AND symbol = ?", (status, json.dumps(data, default=str), sig.ts + 1, sig.timeframe,
+                               sig.meta.get("member", sig.strategy_id), sig.symbol))
 
     def _log(self, sig: Signal, status: str, source: str, why: str = "") -> None:
         data = {"source": source, "score": sig.meta.get("score_raw"), "strategy": sig.strategy_id}
@@ -1208,6 +1420,37 @@ def _brackets(cfg: ComboConfig, rest) -> tuple[dict, str]:
     return load_brackets(rest, list(cfg.symbols), path, False)
 
 
+KL_MS = {"1m": MIN, "1h": 3_600_000, "4h": H4}
+
+
+def research_data(rest, symbols) -> RM.RData:
+    """RData on Binance (public endpoints): closed klines, settled funding, 5-minute open interest."""
+
+    def klines(symbol, interval, start, end):
+        ms, out, t = KL_MS[interval], [], int(start)
+        now = int(time.time() * 1000)
+        while t < end:
+            got = rest.klines(symbol, interval, start_time=t, limit=1500)
+            got = [r for r in got if int(r[0]) < end and int(r[0]) + ms <= now]
+            if not got:
+                break
+            out += [[int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])] for r in got]
+            t = int(got[-1][0]) + ms
+            if len(got) < 1500:
+                break
+            time.sleep(0.3)
+        return out
+
+    def funding(symbol, start):
+        return [(int(r["fundingTime"]), float(r["fundingRate"])) for r in rest.funding_rates(symbol, start_time=start)]
+
+    def oi(symbol, start, end):
+        rows = rest.flow_stats("oi", symbol, "5m", start_time=start, end_time=end, limit=500)
+        return [(int(r["timestamp"]), float(r["sumOpenInterest"])) for r in rows]
+
+    return RM.RData(symbols, klines, funding, oi)
+
+
 def cmd_run(args) -> int:
     from .binance import BinanceREST
     from .live import _notifier
@@ -1233,8 +1476,10 @@ def cmd_run(args) -> int:
     now = rest.server_time()
     btc = BtcTrend(lambda: rest.klines("BTCUSDT", "4h", limit=500), lambda: int(time.time() * 1000)) \
         if any(m.needs_btc for m in members) else None
+    rdata = research_data(rest, syms) if any(m.research for m in members) else None
     runner = ComboRunner(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
-                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc)
+                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
+                         rdata=rdata)
     if runner.cursor is None or book.last_ts is None:
         runner.start_at()
     # funding from the first minute not stepped yet: a rate already paid before a restart is never paid again
