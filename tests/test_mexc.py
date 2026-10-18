@@ -680,6 +680,7 @@ def test_drill_order_cycle_is_one_smallest_order(side, net):
     assert moved["detail"]["during"] == 2
     pnl = log[-1]["detail"]
     assert pnl["fills"] == 2 and pnl["realized"] < 0 and pnl["check"] == ["ok"]
+    assert pnl["fee_rate_pct"] == pytest.approx(100 * fake.fee, rel=1e-3)   # the rate MEXC really charged
 
 
 def test_drill_stops_when_equity_leaves_out_the_position_margin():

@@ -1521,6 +1521,8 @@ class MexcDrill:
                   and abs((w1 - w0) - (realized - fees)) <= tol)
             detail = {"fills": len(fills), "realized": round(realized, 6), "by_fill_prices": round(by_fills, 6),
                       "fees": round(fees, 6), "net": round(realized - fees, 6),
+                      # paid fee per side, % of notional (MEXC API futures notice 2026-06-01: taker 0.08%)
+                      "fee_rate_pct": round(100 * fees / notional, 4) if notional else None,
                       "mexc_profit": [f.get("mexcProfit") for f in outs], "check": sorted({str(f.get("realizedCheck"))
                                                                                           for f in outs}),
                       "wallet_change": round(w1 - w0, 6)}
