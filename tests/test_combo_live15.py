@@ -359,3 +359,46 @@ def test_a_new_config_drops_the_old_members_queued_signals(tmp_path):
     assert run.breaks == []
     alerts = [r[0] for r in w.store.conn.execute("SELECT text FROM alerts").fetchall()]
     assert any("설정이 바뀜" in a for a in alerts)
+
+
+# ---------------------------------------------------------------- the paper bot's own Telegram words (10-20)
+OLD_WORDS = ("A+C", "3 ATR", "3%씩", "27개", "95개", "연패", "낙폭", "신호등")
+
+
+def test_the_start_message_says_the_running_config():
+    cfg = C.ComboConfig.from_file(str(CFG15))
+    text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
+    assert text.startswith("[합친 봇 페이퍼 규칙봇 15] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 30%, "
+                           "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%), "
+                           "계단 익절 순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%), "
+                           "빠른 청산 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만), 추격 진입 막기 4개, 포지션 1개, ")
+    assert "진입 쉼 주말·경제 발표 앞뒤 30분·나스닥 개장 뒤 30분, 지갑 $1,000.00" in text
+    for w in OLD_WORDS:
+        assert w not in text, w
+    # the A+C config (the rollback) still reads as itself
+    old = C.ComboConfig.from_file(str(ROOT / "deploy" / "combo.live-ac.json"))
+    t2 = C.start_text(old, C.resolve_members(old.members, old.picks_file), 1000.0)
+    assert t2.startswith("[합친 봇 페이퍼 A+C 합본] 시작: 매매법 95개(95개 커스텀값), ") and "증거금 잔고의 40%" in t2
+    assert "손절 3 ATR(안 맞으면 강제청산 안쪽으로 당김)" in t2 and "이후 3%씩" in t2 and "추격" not in t2
+
+
+def test_the_paper_bots_own_trade_lines_in_korean():
+    from types import SimpleNamespace
+    from paperbot.models import TradeRecord
+    cfg = C.ComboConfig.from_file(str(CFG15))
+    t = TradeRecord(strategy_id="S3_CMO_SANDWICH", symbol="SOLUSDT", timeframe="30m", side=-1, signal_ts=T0 - 1,
+                    entry_time=T0, entry_price=150.0, exit_time=T0 + HOUR, exit_price=150.4, exit_reason="REV", qty=60.0,
+                    leverage=30, tier="best", margin=300.0, stop_price=152.3, tp_price=float("nan"), liq_price=155.0,
+                    fees=0.5, funding=0.0, pnl=-24.3, roe=-0.081, price_move=-0.0027, mae_price=150.6, mfe_price=149.8,
+                    equity_after=975.7, score=3.0)
+    assert C.exit_text(cfg, t) == ("[합친 봇 페이퍼 규칙봇 15] 청산 SOLUSDT 숏 S3_CMO_SANDWICH 30분: 빠른 청산(반대 신호), "
+                                   "순ROE -8.1%, -$24.30, 지갑 $975.70")
+    sig = SimpleNamespace(meta={"member": "V39_ALL@1h", "stop_rule": "ROE -50% net at 40x"}, strategy_id="V39_ALL",
+                          timeframe="1h", score=3.0)
+    p = SimpleNamespace(symbol="BTCUSDT", side=1, signal=sig, leverage=40, margin=300.0, stop_price=66_504.0)
+    assert C.entry_text(cfg, p) == ("[합친 봇 페이퍼 규칙봇 15] 진입 BTCUSDT 롱 V39_ALL 1시간 (V39_ALL@1h), 40배, 증거금 $300.00, "
+                                    "손절 66504 (순ROE -50%(수수료·슬리피지 포함), 40배), 점수 3.00")
+    assert C.stop_rule_ko("ROE -50% at 30x") == "ROE -50%, 30배"
+    assert C.stop_rule_ko("3 x ATR") == "3 ATR"
+    assert C.stop_rule_ko("3 x ATR pulled in to 2.10 x ATR (fits 40x)") == "3 ATR을 2.10 ATR로 당김(40배 강제청산 안쪽)"
+    assert C.stop_rule_ko("1.5% of the fill") == "1.5% of the fill" and C.stop_rule_ko(None) == ""

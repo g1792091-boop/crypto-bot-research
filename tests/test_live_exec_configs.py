@@ -37,4 +37,22 @@ def test_no_removed_limits_and_fixed_rules_kept():
 def test_check_config_says_ready(capsys):
     for name in ("executor.live-bybit.json", "executor.live-mexc.json"):
         E.main(["check-config", "--config", str(DEPLOY / name)])
-        assert capsys.readouterr().out.strip().splitlines()[-1] == "준비됨"
+        lines = capsys.readouterr().out.strip().splitlines()
+        assert lines[-1] == "준비됨"
+        # the 규칙봇 15 guide (step 5): the last two lines are the light (off) and 준비됨; the halt line before them says
+        # the executor no longer halts by itself on a losing run or a drawdown (owners 10-19)
+        assert lines[-2] == "신호등: 꺼짐 (paper의 모든 진입을 따라감)"
+        assert lines[-3] == "멈춤: 연패·낙폭으로는 멈추지 않음 (비상 정지 파일 /var/lib/paperbot/STOP만)"
+        assert not [ln for ln in lines if "연패면" in ln or "3연패" in ln or "낙폭 50%" in ln]
+
+
+def test_check_config_names_the_halts_of_an_old_config(tmp_path, capsys):
+    d = _load("executor.live-bybit.json")
+    d["risk"].update(max_consecutive_losses=3, max_drawdown_pct=0.5)
+    d["signal_light_n"], d["signal_light_min_win"] = 20, 0.85
+    p = tmp_path / "old.json"
+    p.write_text(json.dumps(d), encoding="utf-8")
+    E.main(["check-config", "--config", str(p)])
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[-3] == "멈춤: 3연패 · 최고점 대비 낙폭 50%에 닿으면 스스로 멈춤, 비상 정지 파일 /var/lib/paperbot/STOP"
+    assert lines[-2].startswith("신호등: 켜짐 - paper 최근 20번 중 85% 이상")

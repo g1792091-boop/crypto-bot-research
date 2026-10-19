@@ -119,9 +119,12 @@ def xtrade(paper_entry, symbol=BTC, side=1, entry_price=100.05, exit_price=100.9
     return t
 
 
-def info(name, db, n=20, share=0.85, budget=100.0):
+def info(name, db, n=20, share=0.85, budget=100.0, halts=True):
+    """An executor as the A+C bot's live configs had it (light 20, halts at 3 losses and 50%); ``halts`` False: without
+    the two halts, as the live configs since owners 10-19 (tests/test_livecheck_live15.py)."""
     return LC.ExecInfo(name=name, config="-", unit=f"paperbot-executor-{name}", db=str(db), light_n=n,
-                       light_min=share, exchange=name, budget=budget, kill_file="/nonexistent/STOP")
+                       light_min=share, exchange=name, budget=budget, kill_file="/nonexistent/STOP",
+                       max_dd=0.5 if halts else None, max_streak=3 if halts else None)
 
 
 def sources(tmp_path, paper, execs=(), shadows="/nonexistent/shadow-*.db"):
@@ -1744,7 +1747,7 @@ def test_preview_prints_every_message_type_and_sends_nothing(monkeypatch):
     def no_network(*a, **k):
         raise AssertionError("the preview must not reach the network")
     monkeypatch.setattr(urllib.request, "urlopen", no_network)
-    items = PV.scenes()
+    items = PV.scenes("ac")                     # the A+C bot's world: every message type, the light and halts included
     text = PV.render(items)
     titles = {PV.kind_of(PV.shown(lv, t)[0]) for _s, lv, t in items}
     for kind in ("실행기 켜짐", "진입 대기", "진입", "잠금 시작", "청산(이김)", "손실 카드", "손실 카드(소리)", "신호등 바뀜",
@@ -1901,15 +1904,12 @@ def test_another_configs_reference_no_expected_range_and_no_88_82_rule(tmp_path)
         s.commit()
         s.conn.close()
         run(src, T + MIN, n)
-        (lv, text), = [(lv, m) for lv, m in n.messages if "40번 도달" in m]
-        assert lv == INFO and text.startswith(f"🏁 40번 도달 · 페이퍼 첫 40번 {wins + 1}승(") and "→" not in text.split("\n")[0]
-        assert "88%" not in text and "82%" not in text and "멈추고" not in text and "백테스트 승률" not in text
-        assert text.splitlines()[-1] == f"참고: {LC.CHECK_NO_RULE_KO} · {why}"
+        # 규칙봇 15 (10-20): no 🏁 at all (the 88% / 82% rule and the database's first 40 trades are the old bot's)
+        assert not [m for _l, m in n.messages if "40번" in m or "🏁" in m]
         assert not [m for _l, m in n.messages if "기대 범위" in m or "📉" in m]          # no expected-range alarm or note
-    # the morning check: the checkpoint line without the rule, one note
+    # the morning check: no checkpoint line (the reference note says once why there is no comparison)
     p = {"n": 45, "wins": 40, "rate": 40 / 45, "first40": {"wins": 36, "rate": 0.9}, "last40": {"wins": 35, "rate": 35 / 40}}
-    line = LC.checkpoint_line(p, why)
-    assert line == f"- 판단: 거래 40/40번 · 첫 40번 36승 90.0% ({LC.CHECK_NO_RULE_KO})" and "88" not in line
-    assert LC.checkpoint_line({"n": 12, "wins": 11, "rate": 11 / 12}, why) == f"- 판단: 거래 12/40번 · 지금 11/12승 92% ({LC.CHECK_NO_RULE_KO})"
+    assert LC.checkpoint_line(p, why) == "" and LC.checkpoint_line({"n": 12, "wins": 11, "rate": 11 / 12}, why) == ""
+    assert not [ln for ln in LC.score_lines(dict(p, pnl=0.0, day={"n": 0}), [], [], why) if "판단" in ln]
     assert LC.checkpoint_line(p).startswith("- 판단(첫 40번): 36승 90.0% → 늘리기 검토")            # the old config: as before
     assert LC.drift_conditions(_closed(5, 20), None) == ([], set())

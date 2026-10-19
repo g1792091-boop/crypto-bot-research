@@ -102,7 +102,13 @@ def test_a_losing_pair_of_a_live_executor_is_due_once(src):
 def test_the_packet_is_facts_only(src):
     pk = T.packet_for(src, "weekly", {"window": [NOW - 7 * DAY, NOW]})
     s = json.dumps(pk, ensure_ascii=False)
-    assert pk["fixed_rules"] == list(T.FIXED) and pk["expect"]["honest_win"] == 0.7497 and pk["expect"]["fit_win"] == 0.9132
+    # the rules as this world's configs say them (its paper bot ran the A+C config; its executors had the light and halts)
+    rules = pk["fixed_rules"]
+    assert rules == T.fixed_rules(src["bot"]["config"], src["bot"]["infos"]) and rules != list(T.FIXED)
+    assert "증거금 잔고의 40%" in rules and "손절 3 ATR(안 맞으면 강제청산 안쪽으로 당김)" in rules
+    assert any(r.startswith("3연패 멈춤 · 최고점에서 50% 빠지면 멈춤 · 비상 정지 파일") for r in rules)
+    assert pk["bot"]["name"] == "A+C 합본" and pk["checkpoint_rule"] == T.CHECK_RULE_OLD
+    assert pk["expect"]["honest_win"] == 0.7497 and pk["expect"]["fit_win"] == 0.9132
     kinds = {a["id"]: a["kind"] for a in pk["accounts"]}
     assert kinds == {"paper": "페이퍼(연습)", "bybit": "실거래(진짜 돈)", "mexc": "실거래(진짜 돈)"}
     assert pk["trades"] and all(set(t) >= {"coin", "side", "strategy", "roe", "exit", "live"} for t in pk["trades"])
@@ -118,6 +124,8 @@ def test_every_prompt_keeps_the_team_off_the_controls():
         sp = T.system_prompt(role)
         assert "매매 권한이 없습니다" in sp and "고정 규칙" in sp and "패킷(JSON)에 있는 숫자만" in sp and "JSON 하나만" in sp
         assert f"{T.SMALL_N}번보다 적으면" in sp and "fit(맞춘 숫자, 낙관)" in sp
+        assert "5년 기준표가 있을 때만" in sp and "지난 봇 숫자를 빌려 오지 않고" in sp
+        assert "75%" not in sp and "91%" not in sp                    # no other bot's 5-year numbers in a prompt
     assert "시험해 볼 가설" in T.system_prompt("lead") and "ideas" in T.system_prompt("lead")
     assert '"--tools", ""' in open(R.__file__, encoding="utf-8").read()          # the runner gives no tool at all
 
@@ -185,3 +193,37 @@ def test_status_and_the_command_line(tmp_path, monkeypatch, capsys):
     assert "AI 사용: 오늘 0/12번" in capsys.readouterr().out
     monkeypatch.setenv(T.BUDGET_ENV, "day=zero")
     assert T.main(["--db", db, "status"]) == 2
+
+
+# ---------------------------------------------------------------- 규칙봇 15 (from 10-20): the facts follow the running configs
+def test_the_packet_describes_the_running_bot_live15(monkeypatch):
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", os.path.join(root, "deploy", "combo.live15.json"))
+    p = {"paper": "/nonexistent/live-ac.db", "bybit_db": "/nonexistent/b.db", "mexc_db": "/nonexistent/m.db",
+         "bybit_config": os.path.join(root, "deploy", "executor.live-bybit.json"),
+         "mexc_config": os.path.join(root, "deploy", "executor.live-mexc.json")}
+    world = T.bot_world(p)
+    assert world["ref_ko"]                                          # the A+C 5-year reference is another config's
+    src = {"now": NOW, "bot": world}
+    pk = T.facts(src, "weekly", window=(NOW - 7 * DAY, NOW))
+    rules = pk["fixed_rules"]
+    assert rules[:9] == ["매매법 15개", "BTC 40배 · 나머지 30배", "증거금 잔고의 30%", "한 번에 포지션 하나", "시장가 진입",
+                         "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
+                         "계단 익절(순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%))",
+                         "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
+                         "추격 진입 막기 4개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)"]
+    for r in ("나스닥 개장 뒤 30분 진입 없음", "연패·낙폭으로 저절로 멈추지 않음(비상 정지 파일 /var/lib/paperbot/STOP으로만 멈춤)",
+              "손절 한 번 최대 잔고의 35%", "신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)", "실거래 금액 바이비트 $100 · MEXC $100"):
+        assert r in rules, r
+    text = json.dumps(pk, ensure_ascii=False)
+    for old in ("3연패", "50% 빠지면", "낙폭 50%", "잔고의 40%", "3%씩", "3 ATR", "A+C", "신호등:", "88% 이상", "82~88%"):
+        assert old not in text, old
+    assert pk["checkpoint_rule"] == T.CHECK_RULE_NONE and pk["bot"]["name"] == "규칙봇 15"
+    assert pk["bot"]["break_even"] == 0.833 and "58승 4패" in pk["bot"]["start_basis"]
+    assert pk["expect"]["words"].startswith(world["ref_ko"]) and "5년 숫자(fit·honest)가 없습니다" in pk["expect"]["words"]
+    rows = [{"key": k, "exit_time": NOW - (3 - i) * H, "pnl": -2.0, "symbol": "ETHUSDT", "side": 1, "roe": -0.5,
+             "paper": {"id": i}, "strategy_id": "F3_BOS", "timeframe": "30m", "reason_ko": "손절"} for i, k in enumerate("ab")]
+    _key, focus = T.due_loss({"now": NOW, "bot": world, "trades": {"accts": {"bybit": {"rows": rows}}}})
+    assert focus["how_rare"] == T.HOW_RARE_NONE
+    # a config that cannot be read: the owners' 10-19 decisions
+    assert T.fixed_rules(None, None) == list(T.FIXED) and "신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)" in T.FIXED

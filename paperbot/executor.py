@@ -2443,6 +2443,22 @@ def cmd_status(args) -> int:
     return 0
 
 
+def halt_rules_text(risk: R.RiskConfig) -> str:
+    """check-config: which limits halt the executor by themselves (the loss streak and the drawdown are optional since
+    owners 10-19 and off in the live configs); the kill file always does."""
+    auto = []
+    if risk.max_consecutive_losses is not None:
+        auto.append(f"{risk.max_consecutive_losses}연패")
+    if risk.max_drawdown_pct is not None:
+        auto.append(f"최고점 대비 낙폭 {risk.max_drawdown_pct:.0%}")
+    if risk.daily_max_loss_usd is not None:
+        auto.append(f"하루 손실 ${risk.daily_max_loss_usd:,.2f}")
+    kill = risk.kill_file or "(비상 정지 파일 없음)"
+    if not auto:
+        return f"멈춤: 연패·낙폭으로는 멈추지 않음 (비상 정지 파일 {kill}만)"
+    return f"멈춤: {' · '.join(auto)}에 닿으면 스스로 멈춤, 비상 정지 파일 {kill}"
+
+
 def cmd_check(args) -> int:
     try:
         cfg = ExecConfig.from_file(args.config)
@@ -2452,6 +2468,7 @@ def cmd_check(args) -> int:
     probs = cfg.problems()
     for p in probs:
         print(f"- {p}")
+    print(halt_rules_text(cfg.risk))
     print("신호등: 꺼짐 (paper의 모든 진입을 따라감)" if not cfg.signal_light_n else
           f"신호등: 켜짐 - paper 최근 {cfg.signal_light_n}번 중 {cfg.signal_light_min_win:.0%} 이상 이겼을 때만 진입을 따라감")
     print("준비됨" if not probs else f"{len(probs)}개를 채워야 합니다")

@@ -48,6 +48,8 @@ cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
 
 - 설치가 끝나면 페이퍼 봇은 아직 **예전 설정(A+C)** 으로 다시 켜져 있습니다. 새 코드는 예전 설정을 똑같이 돌립니다.
 - 실행기는 install.sh가 다시 켜지 않습니다. 그대로 둡니다.
+- **새 실거래 대시보드**도 이때 같이 켜집니다: `http://(Tailscale 주소):8093` (같은 비밀번호, 로그인은 따로). 규칙봇
+  대시보드(8080) 메뉴에서는 실거래가 빠집니다. 자세한 것은 `docs/livedash-ko.md`.
 
 **3) 새 설정 넣기 (예전 설정은 따로 보관)**
 
@@ -95,7 +97,7 @@ cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/pyth
 sudo systemctl restart paperbot-executor paperbot-executor-mexc
 ```
 
-- 두 check-config 모두 끝 두 줄이 `신호등: 꺼짐 (paper의 모든 진입을 따라감)`, `준비됨`이어야 합니다.
+- 두 check-config 모두 끝 두 줄이 `신호등: 꺼짐 (paper의 모든 진입을 따라감)`, `준비됨`이어야 합니다. 그 바로 위 줄은 `멈춤: 연패·낙폭으로는 멈추지 않음 (비상 정지 파일 /var/lib/paperbot/STOP만)`입니다.
 - 실행기 재시작은 **두 실행기 모두 포지션이 없을 때만** 합니다(1)에서 확인한 상태).
 - **남는 것:** 비상 정지 파일(`/var/lib/paperbot/STOP`)과 진입 한도(최대 40배, 코인 6개, 포지션 크기, 손절 한 번 최대 35%)는 그대로입니다. 연패나 낙폭으로 저절로 멈추는 일은 없어집니다. 시드 비중 30%에서 −50% 손절 한 번이 계좌 약 −15%라서 연속 3번이면 약 −39%, 4번이면 약 −48%까지 갑니다. 멈추고 싶을 때는 `sudo touch /var/lib/paperbot/STOP`.
 

@@ -919,15 +919,21 @@ def morning_line(conn, trades: list, pos_entry: Optional[int], w0: int, w1: int)
         return None
     parts, n = [], 0
     for g in GROUPS:
-        b = block_of([r for r in rows if r["grp"] == g])
+        grp = [r for r in rows if r["grp"] == g]
+        b = block_of(grp)
         if not b["n"]:
             continue
         more = f" 진행 {b['open']}" if b["open"] else ""
+        label = GROUP_SHORT[g]
+        if g == "research":                    # 규칙봇 15 has no research setting: its filter there is the chase block
+            chase = {r.get("why_kind") for r in grp} & {"chase", "chase_unread"}
+            label = ("추격 막기" if all(r.get("why_kind") in ("chase", "chase_unread") for r in grp)
+                     else "연구 조건·추격 막기" if chase else label)
         if g == "exec":
-            parts.append(f"{GROUP_SHORT[g]} {b['n']}번(페이퍼 {b['wins']}승 {b['losses']}패{more})")
+            parts.append(f"{label} {b['n']}번(페이퍼 {b['wins']}승 {b['losses']}패{more})")
         else:
             n += b["n"]
-            parts.append(f"{GROUP_SHORT[g]} {b['wins']}승 {b['losses']}패{more}")
+            parts.append(f"{label} {b['wins']}승 {b['losses']}패{more}")
     tk = block_of([{**t, "state": "closed"} for t in trades if w0 <= (t.get("entry_time") or 0) < w1],
                   1 if pos_entry is not None and w0 <= pos_entry < w1 else 0)
     parts.append(f"실제로 탄 거래 {tk['wins']}승 {tk['losses']}패" + (f" 진행 {tk['open']}" if tk["open"] else ""))

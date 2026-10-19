@@ -15,11 +15,14 @@ The members (each one call per meeting, in this order; the lead reads the others
 
 Meetings (code decides when; ``tick`` runs one due meeting at most):
     loss        the last two closed trades of a live executor both lost (closed within 3 days): once per pair
-    checkpoint  the paper account reached 40, 80, 120 ... closed trades (the owners' 40-trade decision): once each
+    checkpoint  the paper account reached 40, 80, 120 ... closed trades: once each (the A+C bot's 40-trade 88% / 82%
+                rule only while its 5-year reference is the running config's; 규칙봇 15 has none: checkpoint_rule)
     weekly      Monday from 10:00 KST: the week before (Monday 09:00 to Monday 09:00); no closed trade = a quiet
                 line without AI
-The fixed rules are never up for discussion (FIXED), an idea is only ever a hypothesis to test in the way the
-improvement ledger already does (2020-24 then 2025-26, then a shadow bot): the owners decide, by hand.
+The fixed rules are never up for discussion (fixed_rules: read from the running configs, the paper bot's and both
+executors'; the owners' 10-19 decisions, FIXED, for a config that cannot be read), an idea is only ever a hypothesis
+to test in the way the improvement ledger already does (2020-24 then 2025-26, then a shadow bot): the owners decide, by
+hand.
 
 Budget (the owners' Claude plan, shared with their chats): LIVETEAM_BUDGET="day=12,week=40,tokens_day=900000"
 (calls per KST day, calls per 7 KST days, tokens per KST day). A meeting starts only when all its calls fit, each call
@@ -64,10 +67,12 @@ DASH_HINT = "대시보드 › 실거래 › 분석팀"
 
 ROLES = {
     "risk": {"name": "방패", "title": "리스크 담당",
-             "focus": "잔고와 낙폭, 연속 손실, 멈춤, 신호등, 실거래가 페이퍼를 제대로 따라갔는지, 수수료·미끄러짐 같은 비용"},
+             "focus": "잔고와 낙폭, 연속 손실, 실행기 멈춤·비상 정지, 실거래가 페이퍼를 제대로 따라갔는지(신호등은 켜져 있을 때만), "
+                      "수수료·미끄러짐 같은 비용"},
     "stats": {"name": "저울", "title": "통계 담당",
-              "focus": "이게 우연인지 아닌지. 거래 수가 충분한지, 현실 기대 범위(처음 보는 기간 75%) 안인지, 5년 숫자(맞춘 숫자 91%는 "
-                       "낙관)와 비교해 어떤지. 다른 사람이 성급하게 결론 내면 반박하는 역할"},
+              "focus": "이게 우연인지 아닌지. 거래 수가 충분한지, 본전 승률보다 높은지, 이 봇의 5년 기준표가 있으면 현실 기대 범위"
+                       "(처음 보는 기간) 안인지와 맞춘 숫자(낙관)와 비교해 어떤지, 없으면 시작 근거와 비교해 어떤지. 다른 사람이 성급하게 "
+                       "결론 내면 반박하는 역할"},
     "market": {"name": "나침반", "title": "시장 담당",
                "focus": "BTC 4시간 장세(강상승·약상승·강하락·약하락·횡보), 코인, 한국 시간대, 롱/숏, 다가오는 미국 경제 발표"},
     "lead": {"name": "등대", "title": "팀장",
@@ -77,9 +82,28 @@ KIND_ROLES = {"weekly": ("risk", "stats", "market", "lead"), "loss": ("risk", "s
               "checkpoint": ("risk", "stats", "market", "lead")}
 KIND_KO = {"weekly": "주간 보고", "loss": "손실 회의", "checkpoint": "판단 회의"}
 VERDICTS = ("정상 범위", "지켜보기", "주의")
-FIXED = ("BTC 40배 · 나머지 30배", "증거금 잔고의 40%", "한 번에 포지션 하나", "시장가 진입", "계단 익절(순ROE 11%에서 10% 잠금, 그 뒤 3%씩)",
-         "코인 6개(BTC ETH SOL DOGE LTC BCH)", "한국 시간 주말 진입 없음", "미국 경제 발표 앞뒤 30분 진입 없음", "거래소에 거는 손절",
-         "3연패 멈춤 · 최고점에서 50% 빠지면 멈춤 · 손절 한 번 최대 35%")
+# The owners' fixed rules as the running configs say them (fixed_rules: the paper bot's config, both executors' configs).
+# What a config that cannot be read would have said comes from the owners' 10-19 decisions for 규칙봇 15 (from 10-20):
+FIXED_PAPER = ("매매법 15개(규칙봇 기본값, 30분·1시간)", "BTC 40배 · 나머지 30배", "증거금 잔고의 30%", "한 번에 포지션 하나",
+               "시장가 진입", "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
+               "계단 익절(순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%))",
+               "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
+               "추격 진입 막기 4개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
+               "코인 6개(BTC ETH SOL DOGE LTC BCH)", "한국 시간 주말 진입 없음", "미국 경제 발표 앞뒤 30분 진입 없음",
+               "나스닥 개장 뒤 30분 진입 없음")
+FIXED_EXEC = ("거래소에 거는 손절", "연패·낙폭으로 저절로 멈추지 않음(비상 정지 파일 /var/lib/paperbot/STOP으로만 멈춤)",
+              "손절 한 번 최대 잔고의 35%", "신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)")
+FIXED = FIXED_PAPER + FIXED_EXEC
+# what the owners knew when they started a bot without a 5-year reference (keyed by its config name; its guide)
+START_BASIS = {"규칙봇 15": ("docs/live15-start-ko.md '근거와 한계': 규칙봇의 지난 2주 실제 진입을 새 규칙으로 다시 판정하면 58승 4패(94%), "
+                            "평일 하루 6.2번 진입, 최대 낙폭 20%(증거금 40%로 계산). 이 2주는 15개를 고를 때 쓴 바로 그 기간이라 앞으로는 "
+                            "더 낮을 가능성이 큼. 같은 장에서 동전 던지기로 들어가도 75% 이김. 본전 승률 약 86%(복리) / 82~83%(단순 합계). "
+                            "두 분은 첫 1~2주 페이퍼 승률을 이 숫자들과 비교해 판단")}
+HOW_RARE_OLD = "현실 숫자(2025-26)로 2연패는 거래 1,000번에 약 47번, 3연패는 약 9번 나왔습니다(5년 기준표 streaks)"
+HOW_RARE_NONE = "이 봇은 5년 기준표가 없어 연패가 얼마나 드문지 정한 숫자가 없습니다(페이퍼 승률과 본전 승률로만 봅니다)"
+CHECK_RULE_OLD = "페이퍼 거래 40번에서 두 분이 판단: 88% 이상 금액 늘리기 검토 · 82~88% 지켜보기 · 82% 미만 멈추고 다시 생각"
+CHECK_RULE_NONE = ("이 봇에는 40번 판단 기준(88%/82%)이 없음(그 숫자는 지난 봇의 5년 기준표로 정한 것). 두 분이 페이퍼 승률을 "
+                   "본전 승률(bot.break_even)과 시작 근거(bot.start_basis)에 비교해 판단")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
@@ -199,6 +223,119 @@ def put_state(conn, k: str, now: int, data: dict) -> None:
     conn.commit()
 
 
+# ---------------------------------------------------------------- the running bot (its configs, read-only)
+def bot_world(p: Optional[dict] = None) -> dict:
+    """The configs the live side runs, read-only: the paper bot's (its own ``combo_run`` record, else the config file the
+    live side runs: livecheck.combo_config), both executors' (livecheck.load_executors: plain JSON, never a key file; the
+    dashboard's paths) and why the 5-year reference does not apply when it was made for another config
+    (livecheck.usable_expected; '' = it applies)."""
+    from . import livecheck as LC
+    from .dash.more import livebots as L
+    p = p or L.paths()
+    conn = LC.open_ro(p.get("paper") or "")
+    try:
+        cfg, _where = LC.combo_config(LC.Sources(paper_db=p.get("paper") or LC.PAPER_DB), conn)
+    finally:
+        if conn is not None:
+            conn.close()
+    specs = tuple((name, p.get(f"{name}_config") or path, unit, p.get(f"{name}_db") or db, n, share)
+                  for name, path, unit, db, n, share in LC.EXECUTORS)
+    _exp, ref_ko = LC.usable_expected(LC.Sources())
+    return {"config": cfg, "infos": LC.load_executors(specs), "ref_ko": ref_ko}
+
+
+def _combo(cfg: Optional[dict]):
+    """paperbot.combo.ComboConfig of a config dict (a record may lack the paths), None when it cannot be read."""
+    if not isinstance(cfg, dict):
+        return None
+    from . import combo as C
+    try:
+        return C.ComboConfig.from_dict({"paper_db": "", "db": "", **cfg, "members": list(cfg.get("members") or [])})
+    except Exception:  # noqa: BLE001  an unreadable config: the owners' decisions are said instead
+        return None
+
+
+def _paper_rules(cfg: Optional[dict]) -> Optional[list]:
+    c = _combo(cfg)
+    if c is None or c.ladder_spec is None:
+        return None
+    from . import combo as C
+    try:
+        stop = C.stop_text(c)
+    except Exception:  # noqa: BLE001
+        return None
+    members = [m for m in (cfg.get("members") or [])]
+    nc = sum(1 for m in members if isinstance(m, dict) and m.get("no_chase"))
+    out = [f"매매법 {len(members)}개", f"BTC {c.lev_of('BTCUSDT')}배 · 나머지 {c.lev_of('ETHUSDT')}배",
+           "증거금 " + ("배수%" if c.margin == "leverage" else f"잔고의 {float(c.margin):.0%}"), "한 번에 포지션 하나",
+           "시장가 진입", f"손절 {stop}", f"계단 익절({c.ladder_spec.describe()})",
+           f"빠른 청산: {C.KO_EARLY.get(c.early_exit, c.early_exit)}"
+           + ("(첫 잠금 전까지만)" if c.early_exit and c.early_exit_until_lock else "")]
+    if nc:
+        out.append(f"추격 진입 막기 {nc}개 매매법(" + C.CHASE_KO.split("(", 1)[1])
+    out.append(f"코인 {len(c.symbols)}개({' '.join(s.replace('USDT', '') for s in c.symbols)})")
+    if c.no_weekend:
+        out.append("한국 시간 주말 진입 없음")
+    if c.macro_blackout_min:
+        out.append(f"미국 경제 발표 앞뒤 {c.macro_blackout_min}분 진입 없음")
+    if c.us_open_pause_min:
+        out.append(f"나스닥 개장 뒤 {c.us_open_pause_min}분 진입 없음")
+    return out
+
+
+def _exec_rules(infos: list) -> list:
+    out = ["거래소에 거는 손절"]
+    streaks = sorted({e.max_streak for e in infos if e.max_streak})
+    dds = sorted({e.max_dd for e in infos if e.max_dd is not None})
+    kill = infos[0].kill_file
+    if not streaks and not dds:
+        out.append(f"연패·낙폭으로 저절로 멈추지 않음(비상 정지 파일 {kill}으로만 멈춤)")
+    else:
+        out.append(" · ".join(([f"{'/'.join(map(str, streaks))}연패 멈춤"] if streaks else [])
+                              + ([f"최고점에서 {'/'.join(f'{d:.0%}' for d in dds)} 빠지면 멈춤"] if dds else [])
+                              + [f"비상 정지 파일 {kill}"]))
+    losses = sorted({e.max_loss for e in infos if e.max_loss is not None})
+    if losses:
+        out.append(f"손절 한 번 최대 잔고의 {'/'.join(f'{x:.0%}' for x in losses)}")
+    lit = [e for e in infos if e.light_on]
+    if not lit:
+        out.append("신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)")
+    for e in lit:
+        out.append(f"신호등: {e.label}는 페이퍼 최근 {e.light_n}번 중 {e.light_min:.0%} 이상 이겼을 때만 새 진입을 따라감")
+    money = [f"{e.label} ${e.budget:,.0f}" for e in infos if e.budget]
+    if money:
+        out.append("실거래 금액 " + " · ".join(money))
+    return out
+
+
+def fixed_rules(cfg: Optional[dict], infos: Optional[list]) -> list:
+    """The owners' fixed rules of the live side as the running configs say them (the paper bot's config, the executors'
+    configs that could be read); a part whose config cannot be read: the owners' decisions (FIXED_PAPER / FIXED_EXEC)."""
+    readable = [e for e in (infos or []) if not e.problem]
+    return list(_paper_rules(cfg) or FIXED_PAPER) + (_exec_rules(readable) if readable else list(FIXED_EXEC))
+
+
+def bot_facts(world: Optional[dict]) -> dict:
+    """The bot itself: its name, its strategies, its break-even win rate when the stop and the first lock are fixed net
+    ROEs (a -50% stop and a +10% first lock: 50 / 60 = 83%, plain sum), whether a 5-year reference applies, and what
+    the owners started it on (START_BASIS)."""
+    w = world or {}
+    cfg = w.get("config") if isinstance(w.get("config"), dict) else {}
+    c = _combo(cfg) if cfg else None
+    be = None
+    if c is not None and c.stop_mode == "roe" and c.ladder_spec is not None:
+        s, f = float(c.stop["roe"]), float(c.ladder_spec.first_lock)
+        be = round(s / (s + f), 3)
+    name = (cfg or {}).get("name") or None
+    out = {"name": name or "(설정 이름 없음)", "strategies": len(cfg.get("members") or []) or None,
+           "reference": w.get("ref_ko") or "5년 기준표 있음(expect)",
+           "break_even": be, "break_even_words": ("본전 승률 = 이길 때 첫 잠금만큼, 질 때 손절만큼일 때 본전이 되는 승률(단순 합계, "
+                                                  "수수료 포함 순ROE 기준; 복리로는 조금 더 높음)") if be is not None else None}
+    if name in START_BASIS:
+        out["start_basis"] = START_BASIS[name]
+    return out
+
+
 # ---------------------------------------------------------------- the facts (the dashboard's own readers)
 def sources(now: int, p: Optional[dict] = None) -> dict:
     """Everything the 실거래 screen shows, read once (read-only): the summary, 순위, 지도, 비용, 지금, 일정, 거래, the loss cards
@@ -215,6 +352,10 @@ def sources(now: int, p: Optional[dict] = None) -> dict:
             out[name] = fn()
         except Exception as exc:  # noqa: BLE001  one unreadable source is said, never fatal
             out[name] = {"state": "error", "reason": f"{type(exc).__name__}: {exc}"}
+    try:
+        out["bot"] = bot_world(p)
+    except Exception as exc:  # noqa: BLE001  the rules then come from the owners' decisions (FIXED)
+        out["bot"] = {"config": None, "infos": [], "ref_ko": "", "error": f"{type(exc).__name__}: {exc}"}
     return out
 
 
@@ -269,18 +410,25 @@ def facts(src: dict, kind: str, window: Optional[tuple] = None, focus: Optional[
             else {"state": c.get("state"), "reason": c.get("reason_ko")}
     wn = src.get("whynow") or {}
     cal = src.get("calendar") or {}
-    out = {"meeting": KIND_KO.get(kind, kind), "now_kst": kst_text(now), "fixed_rules": list(FIXED),
+    world = src.get("bot") or {}
+    ref_ko = world.get("ref_ko") or ""
+    words = ("fit = 5년에 맞춘 숫자(낙관), honest = 2020-24에만 맞춘 쌍둥이가 처음 본 2025-26에서 낸 숫자(현실), "
+             "break_even = 본전 승률. p_under_honest = 현실 승률대로라면 지금보다 적게 이길 확률(작을수록 현실보다 못함)")
+    if ref_ko:
+        words = (f"{ref_ko}. 이 봇은 5년 숫자(fit·honest)가 없습니다: 지난 봇 숫자를 쓰지 말고, 페이퍼 승률을 본전 승률"
+                 "(bot.break_even)과 시작 근거(bot.start_basis)에 비교합니다")
+    out = {"meeting": KIND_KO.get(kind, kind), "now_kst": kst_text(now),
+           "fixed_rules": fixed_rules(world.get("config"), world.get("infos")), "bot": bot_facts(world),
            "accounts": accts,
            "expect": {"fit_win": band.get("fit"), "honest_win": band.get("honest"), "break_even": band.get("break_even"),
                       "so_far": {k: {"n": v.get("n"), "wins": v.get("wins"), "rate": v.get("rate"), "p_under_honest": v.get("p_honest")}
                                  for k, v in (band.get("accounts") or {}).items()},
-                      "words": "fit = 5년에 맞춘 숫자(낙관), honest = 2020-24에만 맞춘 쌍둥이가 처음 본 2025-26에서 낸 숫자(현실), "
-                               "break_even = 본전 승률. p_under_honest = 현실 승률대로라면 지금보다 적게 이길 확률(작을수록 현실보다 못함)"},
+                      "words": words},
            "strategies": strategies[:30], "cuts": cuts, "costs": costs,
            "now": {"head": wn.get("head_ko"), "blocked": [i.get("ko") for i in wn.get("items") or [] if i.get("ok") is False]},
            "next_releases": [{"when_kst": kst_text(x.get("ts")), "what": x.get("kind_ko")} for x in cal.get("items") or []
                              if x.get("when") in ("now", "soon", "later")][:6],
-           "checkpoint_rule": "페이퍼 거래 40번에서 두 분이 판단: 88% 이상 금액 늘리기 검토 · 82~88% 지켜보기 · 82% 미만 멈추고 다시 생각"}
+           "checkpoint_rule": CHECK_RULE_NONE if ref_ko else CHECK_RULE_OLD}
     rows = ((src.get("trades") or {}).get("accts") or {}).get("paper") or {}
     prow = rows.get("rows") or [] if isinstance(rows, dict) else []
     if window:
@@ -322,7 +470,7 @@ def due_loss(src: dict) -> Optional[tuple]:
                                                   "roe": r.get("roe"), "paper_roe": (r.get("paper") or {}).get("roe"),
                                                   "exit": r.get("reason_ko"), "closed_kst": kst_text(r.get("exit_time")),
                                                   "loss_card": (r.get("card") or {}).get("label")} for r in last2],
-                     "how_rare": "현실 숫자(2025-26)로 2연패는 거래 1,000번에 약 47번, 3연패는 약 9번 나왔습니다(5년 기준표 streaks)"}
+                     "how_rare": HOW_RARE_NONE if (src.get("bot") or {}).get("ref_ko") else HOW_RARE_OLD}
             return "loss:" + "+".join(sorted(ids)), focus
     return None
 
@@ -357,7 +505,9 @@ def system_prompt(role: str) -> str:
               "2. 고정 규칙(fixed_rules)은 두 분이 정한 것이라 바꾸자고 하지 않습니다.\n"
               "3. 패킷(JSON)에 있는 숫자만 씁니다. 없는 숫자는 '자료 없음'이라고 씁니다. 추측한 숫자를 만들지 않습니다.\n"
               f"4. 거래가 {SMALL_N}번보다 적으면 결론을 내리지 말고 '아직 우연이 큰 단계'라고 분명히 씁니다.\n"
-              "5. 5년 숫자 둘을 구분합니다: fit(맞춘 숫자, 낙관)과 honest(처음 보는 기간, 현실). 본전 승률(break_even)도 함께 봅니다.\n"
+              "5. 5년 기준표가 있을 때만 숫자 둘을 구분해 씁니다: fit(맞춘 숫자, 낙관)과 honest(처음 보는 기간, 현실). 기준표가 없다고 "
+              "적혀 있으면(bot.reference) 5년 숫자를 만들거나 지난 봇 숫자를 빌려 오지 않고, 본전 승률(break_even)과 시작 근거"
+              "(start_basis)에 비교합니다.\n"
               "6. 페이퍼(연습 돈)와 실거래(진짜 돈)를 섞지 않습니다.\n"
               "7. 쉬운 한국어로, 짧게. 전문용어는 풀어서. 매매법은 코드 그대로 부릅니다(화면이 이름으로 바꿔 보여줍니다).\n")
     if role == "lead":

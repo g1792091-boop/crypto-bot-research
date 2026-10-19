@@ -668,3 +668,18 @@ def test_load_ref_refuses_another_configs_reference(tmp_path, monkeypatch, capsy
     assert LI.load_ref() == REF
     monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
     assert LI.load_ref() == REF
+
+
+def test_the_weekly_scorecard_stays_silent_for_live15(tmp_path, monkeypatch, capsys):
+    """규칙봇 15 (from 10-20): the Monday scorecard compares with the A+C bot's 5-year reference, which is not this
+    config's: nothing is scored, sent or written (no 📊 주간 성적표 with the old 27 strategies or their honest rates)."""
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(DEPLOY / "combo.live15.json"))
+
+    class NoSend:
+        def send(self, level, text):
+            raise AssertionError(f"nothing may be sent: {text[:60]}")
+    monkeypatch.setattr(LC, "_notifier", lambda: NoSend())
+    db = tmp_path / "out" / "liveimprove.db"
+    assert LI.main(["weekly", "--db", str(db), "--paper-db", str(tmp_path / "none.db")]) == 0
+    out = capsys.readouterr().out
+    assert LC.REF_OTHER_CONFIG_KO in out and "주간 성적표" not in out and not db.exists()

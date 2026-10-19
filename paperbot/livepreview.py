@@ -1,6 +1,10 @@
 """미리 보기: every live Telegram message type of paperbot/livecheck.py, built from a hand-made world.
 
-    python -m paperbot.livecheck preview
+    python -m paperbot.livecheck preview          the running bot's world: 규칙봇 15 (deploy/combo.live15.json, both
+                                                  executors without the signal light and without the loss-streak and
+                                                  drawdown halts, owners 10-19)
+    python -m paperbot.livecheck preview --old    the A+C bot's world (deploy/combo.live-ac.json: the light, the halts,
+                                                  the 5-year reference, the 40-trade checkpoint, the break waits)
 
 It writes small databases in the real schemas into a temporary folder (the paper bot's paperbot.store3, the rule
 bot's 1m bars, and the executors' own tables, copied here as ``EXEC_SCHEMA`` so this module never imports the
@@ -18,7 +22,7 @@ import shutil
 import sqlite3
 import tempfile
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 from . import livecheck as LC
@@ -46,9 +50,28 @@ CREATE TABLE IF NOT EXISTS funding (symbol TEXT NOT NULL, tran_id INTEGER NOT NU
 CREATE TABLE IF NOT EXISTS equity (ts INTEGER PRIMARY KEY, equity REAL NOT NULL, wallet REAL NOT NULL,
     transfers REAL);
 """
-BTC, SOL = "BTCUSDT", "SOLUSDT"
-LON = ("F15_LON_BRK", "1h", 88)                  # strategy, tf, setting number (member_order) in the live config
+BTC, SOL, ETH = "BTCUSDT", "SOLUSDT", "ETHUSDT"
+LON = ("F15_LON_BRK", "1h", 88)                  # strategy, tf, setting number (member_order) in the A+C config
 ASIA = ("F15_ASIA_BRK", "30m", 37)
+V39 = ("V39_ALL", "1h", 1)                       # ... in the 규칙봇 15 config (deploy/combo.live15.json)
+CMO = ("S3_CMO_SANDWICH", "30m", 2)
+BOS = ("F3_BOS", "30m", 12)
+
+
+@dataclass(frozen=True)
+class Profile:
+    """The configs a preview world runs: the paper bot's config file, each executor's light (N, share) and halts."""
+    key: str
+    config: str                      # deploy/<file>
+    lights: tuple                    # ((N, share) Bybit, (N, share) MEXC); N 0 = no light
+    streak: Optional[int]            # the executors' loss-streak halt (None: none)
+    dd: Optional[float]              # ... and drawdown halt
+    main: tuple                      # the strategy of most trades
+    alt: tuple
+
+
+LIVE15 = Profile("live15", "combo.live15.json", ((0, 0.85), (0, 0.90)), None, None, V39, CMO)
+AC = Profile("ac", "combo.live-ac.json", ((20, 0.85), (20, 0.90)), 3, 0.5, LON, ASIA)
 
 
 # ====================================================================== the world
@@ -80,10 +103,12 @@ NO_TG = {"base": None, "over": None, "over_exists": False, "over_mtime": None}
 
 
 class World:
-    """One paper bot, the rule bot's bars, two executors (Bybit $100 light 20 / 85%, MEXC $100 light 20 / 90%)."""
+    """One paper bot, the rule bot's bars, two executors (Bybit $100, MEXC $100) as ``prof`` sets them up: 규칙봇 15 (no
+    light, no loss-streak or drawdown halt) or the A+C bot (light 20 / 85% and 20 / 90%, 3 losses, 50%)."""
 
-    def __init__(self, root: str):
+    def __init__(self, root: str, prof: Profile = None):
         self.root = root
+        self.prof = prof = prof or LIVE15
         self.paper = os.path.join(root, "live-ac.db")
         self.rule = os.path.join(root, "paper3.db")
         self.dbs = {"bybit": os.path.join(root, "bybit.db"), "mexc": os.path.join(root, "mexc.db")}
@@ -95,21 +120,26 @@ class World:
         Store3(self.paper).conn.close()
         Store3(self.rule).conn.close()
         self.position: Optional[dict] = None
-        self.infos = [LC.ExecInfo("bybit", "/etc/paperbot/executor.json", "paperbot-executor", self.dbs["bybit"], 20,
-                                  0.85, exchange="bybit", budget=100.0, kill_file="/nonexistent/STOP"),
+        (bn, bs), (mn, ms) = prof.lights
+        kill = "/nonexistent/STOP" if prof is AC else "/var/lib/paperbot/STOP"     # 규칙봇 15's words name the file
+        self.infos = [LC.ExecInfo("bybit", "/etc/paperbot/executor.json", "paperbot-executor", self.dbs["bybit"], bn,
+                                  bs, exchange="bybit", budget=100.0, kill_file=kill,
+                                  max_dd=prof.dd, max_streak=prof.streak, max_loss=0.35),
                       LC.ExecInfo("mexc", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc",
-                                  self.dbs["mexc"], 20, 0.90, exchange="mexc", budget=100.0,
-                                  kill_file="/nonexistent/STOP")]
+                                  self.dbs["mexc"], mn, ms, exchange="mexc", budget=100.0,
+                                  kill_file=kill, max_dd=prof.dd, max_streak=prof.streak,
+                                  max_loss=0.35)]
 
     def src(self) -> LC.Sources:
         return LC.Sources(db=os.path.join(self.root, "livecheck.db"), paper_db=self.paper, rule_db=self.rule,
-                          combo_config=os.path.join(LC.ROOT, "deploy", "combo.live-ac.json"),
+                          combo_config=os.path.join(LC.ROOT, "deploy", self.prof.config),
                           shadow_glob=os.path.join(self.root, "shadow-*.db"), executors=self.infos)
 
     # ---- the paper bot
-    def paper_trade(self, entry: int, exit_: int, roe: float, symbol=BTC, side=1, strat=LON, price=67_250.0,
+    def paper_trade(self, entry: int, exit_: int, roe: float, symbol=BTC, side=1, strat=None, price=67_250.0,
                     reason=None, lock=None, mfe=None, lev=40, stop=None, reg5=1, hr=None):
-        margin = 400.0
+        strat = strat or self.prof.main
+        margin = 400.0 if self.prof is AC else 300.0
         pnl = roe * margin
         stop = stop if stop is not None else price * (1 - side * 0.0123)
         exit_price = price * (1 + side * roe / lev)
@@ -123,8 +153,11 @@ class World:
         s = Store3(self.paper)
         s.trade(LC.ACCOUNT, rec)
         hour = hr if hr is not None else int(LC.kst(entry, "%H"))
-        meta = {"member": f"{strat[0]}@{strat[1]}#{strat[2]}~x", "member_order": strat[2],
-                "rdims": {"reg5": reg5, "hr": hour}, "rstop": ["atr", 3.0]}
+        if self.prof is AC:                              # the A+C bot's research settings
+            meta = {"member": f"{strat[0]}@{strat[1]}#{strat[2]}~x", "member_order": strat[2],
+                    "rdims": {"reg5": reg5, "hr": hour}, "rstop": ["atr", 3.0]}
+        else:                                            # 규칙봇 15: the rule bot's default numbers, the -50% net stop
+            meta = {"member": f"{strat[0]}@{strat[1]}", "member_order": strat[2], "stop_rule": f"ROE -50% net at {lev}x"}
         s.outcome(LC.ACCOUNT, SignalOutcome(Signal(ts=entry - 1, symbol=symbol, timeframe=strat[1],
                                                    strategy_id=strat[0], side=side, stop_price=stop, meta=meta),
                                             "ENTERED", "", entry))
@@ -132,8 +165,9 @@ class World:
         s.conn.close()
         return pnl
 
-    def open_position(self, entry: int, symbol=BTC, side=1, strat=LON, price=67_250.0, stop=66_420.0, lev=40,
+    def open_position(self, entry: int, symbol=BTC, side=1, strat=None, price=67_250.0, stop=66_420.0, lev=40,
                       lock=None):
+        strat = strat or self.prof.main
         sig = asdict(Signal(ts=entry - 1, symbol=symbol, timeframe=strat[1], strategy_id=strat[0], side=side,
                             stop_price=stop, meta={"member_order": strat[2]}))
         self.position = {"signal": sig, "symbol": symbol, "side": side, "qty": 400 * lev / price, "entry_price": price,
@@ -226,36 +260,47 @@ class World:
         return got.items
 
 
-def _history(w: World, start: int, wins: int, losses_at=(3, 9, 15), n: int = 20, strat=LON):
+def _history(w: World, start: int, wins: int, losses_at=(3, 9, 15), n: int = 20, strat=None):
     """``n`` closed paper trades before ``start``, losses at the given positions."""
     t = start - n * 12 * H1
+    loss = -0.35 if w.prof is AC else -0.50
     for k in range(n):
-        w.paper_trade(t, t + H1, -0.35 if k in losses_at else 0.12, strat=strat, lock=None if k in losses_at else 0.10)
+        w.paper_trade(t, t + H1, loss if k in losses_at else 0.12, strat=strat, lock=None if k in losses_at else 0.10)
         t += 12 * H1
 
 
 # ====================================================================== the scenes
-def scenes() -> list:
-    """[(title, level, text)] of every message type, in the order an owner would meet them."""
+def scenes(world: str = "live15") -> list:
+    """[(title, level, text)] of every message type, in the order an owner would meet them. ``world``: "live15" (the
+    running bot from 10-20, 규칙봇 15) or "ac" (the A+C bot before it)."""
     out: list = []
     tmp = tempfile.mkdtemp(prefix="livepreview_")
     try:
-        out += _trade_scene(os.path.join(tmp, "a"))
-        out += _pause_scene(os.path.join(tmp, "p"))
-        out += _alarm_scene(os.path.join(tmp, "b"))
-        out += _drift_scene(os.path.join(tmp, "c"))
-        out += _halt_scene(os.path.join(tmp, "d"))
-        out += _checkpoint_scene(os.path.join(tmp, "e"))
-        out += _morning_scene(os.path.join(tmp, "f"))
-        out += _setup_scene(os.path.join(tmp, "g"))
+        if world == "ac":
+            out += _trade_scene(os.path.join(tmp, "a"))
+            out += _pause_scene(os.path.join(tmp, "p"), AC)
+            out += _alarm_scene(os.path.join(tmp, "b"), AC)
+            out += _drift_scene(os.path.join(tmp, "c"))
+            out += _halt_scene(os.path.join(tmp, "d"))
+            out += _checkpoint_scene(os.path.join(tmp, "e"), AC)
+            out += _morning_scene(os.path.join(tmp, "f"), AC)
+            out += _setup_scene(os.path.join(tmp, "g"), AC)
+        else:
+            out += _trade_scene15(os.path.join(tmp, "a"))
+            out += _pause_scene(os.path.join(tmp, "p"), LIVE15)
+            out += _alarm_scene(os.path.join(tmp, "b"), LIVE15)
+            out += _halt_scene15(os.path.join(tmp, "d"))
+            out += _checkpoint_scene(os.path.join(tmp, "e"), LIVE15)
+            out += _morning_scene(os.path.join(tmp, "f"), LIVE15)
+            out += _setup_scene(os.path.join(tmp, "g"), LIVE15)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return out
 
 
-def _mk(path: str) -> World:
+def _mk(path: str, prof: Profile = None) -> World:
     os.makedirs(path, exist_ok=True)
-    return World(path)
+    return World(path, prof or AC)
 
 
 T0 = LC.window_of("2026-10-20")[0] + 8 * H1          # Tuesday 10/20 17:00 KST
@@ -344,12 +389,119 @@ def _trade_scene(path: str) -> list:
     return out
 
 
-def _pause_scene(path: str) -> list:
+def _trade_scene15(path: str) -> list:
+    """규칙봇 15: both executors follow every paper entry (no light), the first lock, a winning exit, a quick exit on the
+    strategy's own reverse signal before the first lock (a small loss: a quiet card), then a -50% stop as the second
+    loss in a row (the loud card: no executor halts by itself any more), and MEXC stopped by hand."""
+    w = _mk(path, LIVE15)
+    out = []
+    _history(w, T0, 18, losses_at=(6, 14))
+    w.x_state("bybit", T0 - MIN)
+    w.x_state("mexc", T0 - MIN)
+    w.x_event("bybit", T0 - 2 * DAY, "start", "시작")
+    w.x_event("mexc", T0 - 2 * DAY, "start", "시작")
+    w.tick(T0 - MIN)
+    w.watch(T0 - MIN)                                    # the first look: runs recorded, nothing sent
+    # ▶️ Bybit restarted (an update)
+    w.x_event("bybit", T0 - 30 * MIN, "start", "시작")
+    w.tick(T0 - 29 * MIN)
+    out += [("▶️ 실행기 켜짐", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
+    # 🟢 entry: V39_ALL 1h BTC long at 40x, the stop at -50% net ROE (price -1.11%); both executors follow it with 30% of
+    # their own balance (the paper's share)
+    eqs = {"bybit": 107.87, "mexc": 107.87}
+    gap = {"bybit": (1.0002, 0.006, 0.00055), "mexc": (1.0003, 0.011, 0.0008)}     # fill, ROE given up, fee rate
+
+    def follow(name: str, k: str, sym: str, t: int, price: float, lev: int) -> tuple:
+        px = round(price * gap[name][0], 2)
+        qty = round(eqs[name] * 0.3 * lev / px, 4)
+        stop_ = round(px * (1 - (0.0111 if lev == 40 else 0.0153)), 2)
+        w.x_open(name, k, sym, 1, t + 3000, px, qty, stop_, lev=lev)
+        return px, qty, stop_
+
+    def settle(name: str, k: str, t: int, px: float, qty: float, roe: float, lev: int) -> None:
+        live = roe - gap[name][1]
+        pnl = round(qty * px / lev * live, 2)
+        w.x_close(name, k, t, pnl, px, px * (1 + live / lev), qty, gap[name][2])
+        eqs[name] = round(eqs[name] + pnl, 2)
+
+    key = f"{LC.ACCOUNT}|{BTC}|{T0}"
+    stop = round(67_250.0 * (1 - 0.0111), 1)
+    w.open_position(T0, stop=stop)
+    held = {}
+    for name in eqs:
+        px, qty, xstop = held[name] = follow(name, key, BTC, T0, 67_250.0, 40)
+        w.x_state(name, T0 + MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": qty,
+                                         "entry_ts": T0 + 3000, "stop_initial": xstop, "stop": xstop,
+                                         "stop_algo_id": "a1"})
+    w.tick(T0 + MIN)
+    out += [("🟢 진입", lv, t) for lv, t in w.watch(T0 + MIN)]
+    # 🔒 the first lock: +11% net ROE reached, +10% locked
+    w.position["lock_roe"], w.position["stop_price"] = 0.10, 67_430.0
+    for name, (px, qty, xstop) in held.items():
+        w.x_state(name, T0 + 62 * MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": qty,
+                                              "entry_ts": T0 + 3000, "stop_initial": xstop,
+                                              "stop": round(px * (1 + 0.145 / 40), 1), "stop_algo_id": "a2"})
+    w.tick(T0 + 62 * MIN)
+    out += [("🔒 잠금 시작", lv, t) for lv, t in w.watch(T0 + 62 * MIN)]
+    # ✅ a winning exit: +20% reached (lock 17%), then back to the lock
+    x = T0 + 2 * H1 + 6 * MIN
+    w.position = None
+    w.paper_trade(T0, x, 0.171, lock=0.17, mfe=67_250 * (1 + 0.205 / 40))
+    for name, (px, qty, _s) in held.items():
+        settle(name, key, x + 2000, px, qty, 0.171, 40)
+        w.x_state(name, x + MIN, trade=None, last_equity=eqs[name], peak_equity=eqs[name])
+    w.tick(x + MIN)
+    out += [("✅ 청산(이김)", lv, t) for lv, t in w.watch(x + MIN)]
+    # ❌ a quick exit on the reverse signal before the first lock (-8%), then a -50% stop: two losses in a row
+    peak = dict(eqs)
+    for k, (e, roe, reason, sym, strat, price) in enumerate((
+            (x + 2 * H1, -0.081, "REV", SOL, CMO, 182.35), (x + 5 * H1, -0.50, "SL", ETH, BOS, 2_415.0))):
+        skey = f"{LC.ACCOUNT}|{sym}|{e}"
+        legs = {name: follow(name, skey, sym, e, price, 30) for name in eqs}
+        w.paper_trade(e, e + 90 * MIN, roe, symbol=sym, strat=strat, price=price, lev=30, reason=reason,
+                      mfe=price * (1 + 0.06 / 30), stop=round(price * (1 - 0.0153), 2))
+        for name, (px, qty, _s) in legs.items():
+            settle(name, skey, e + 90 * MIN + 2000, px, qty, roe, 30)
+            w.x_state(name, e + 92 * MIN, trade=None, last_equity=eqs[name], peak_equity=peak[name])
+        w.tick(e + 92 * MIN)
+        out += [("❌ 청산 = 손실 카드" + (" (소리)" if k else ""), lv, t) for lv, t in w.watch(e + 92 * MIN)]
+    # ⏹ MEXC stopped by hand
+    w.x_event("mexc", x + 8 * H1, "sigterm", "끄라는 신호(SIGTERM)를 받아 멈춥니다")
+    w.tick(x + 8 * H1 + MIN)
+    out += [("⏹ 실행기 꺼짐", lv, t) for lv, t in w.watch(x + 8 * H1 + MIN, units=lambda u: (
+        ("inactive", "disabled") if u == "paperbot-executor-mexc" else ("active", "enabled")))]
+    return out
+
+
+def _halt_scene15(path: str) -> list:
+    """규칙봇 15: no halt for a losing run or a drawdown; a halt still comes from an executor's own safety stop (here a
+    position found on the wrong side: loud) or from the STOP file (a person's stop: quiet ⏹)."""
+    w = _mk(path, LIVE15)
+    out = []
+    now = T0 + 9 * H1
+    _history(w, now - 6 * H1, 17, n=17)
+    for k in range(2):
+        e = now - (5 - k) * H1
+        key = f"{LC.ACCOUNT}|{SOL}|{e}"
+        w.paper_trade(e, e + 30 * MIN, 0.12, symbol=SOL, strat=CMO, price=182.35, lev=30, lock=0.10)
+        w.x_open("bybit", key, SOL, 1, e + 2000, 182.39, 5.43, 179.6, lev=30)
+        w.x_close("bybit", key, e + 30 * MIN + 2000, round(5.43 * (183.05 - 182.39), 2), 182.39, 183.05, 5.43, 0.00055)
+    w.x_state("bybit", now - MIN, halted=True, halt_reason="방향이 반대인 포지션 발견", halted_ts=now - 2 * H1,
+              halt_kinds=["wrong_side"], last_equity=111.2, peak_equity=114.6)
+    w.x_state("mexc", now - MIN, halted=True, halt_reason="비상 정지 파일이 있습니다(/var/lib/paperbot/STOP)",
+              halted_ts=now - H1, halt_kinds=["kill"], last_equity=101.3)
+    w.tick(now)
+    out += [("🚨 멈춤 요약 / ⏹ STOP 파일", lv, t) for lv, t in w.watch(now)
+            if "실행기가 멈췄습니다" in t or "사람이 끔" in t]
+    return out
+
+
+def _pause_scene(path: str, prof: Profile = None) -> list:
     """⏸ / 🔔 the paper bot's entry pauses by the live config's rules (deploy/combo.live-ac.json: ±30 minutes around a
     US macro release, the KST weekend), from a release file of its own (paperbot/events.py reads it for this scene
     only): a CPI on Thursday with a paper position open, then the weekend and a PCE on Monday evening."""
     from . import events as EV
-    w = _mk(path)
+    w = _mk(path, prof)
     cpi = LC.window_of("2026-10-22")[0] + 12 * H1 + 30 * MIN          # Thursday 10/22 21:30 KST
     sat = LC.window_of("2026-10-23")[0] + 15 * H1                     # Saturday 10/24 00:00 KST
     pce = sat + 2 * DAY + 21 * H1 + 30 * MIN                          # the Monday after, 21:30 KST
@@ -376,22 +528,30 @@ def _pause_scene(path: str) -> list:
     return out
 
 
-def _alarm_scene(path: str) -> list:
-    w = _mk(path)
+def _alarm_scene(path: str, prof: Profile = None) -> list:
+    w = _mk(path, prof)
     out = []
     now = T0 + 5 * H1
     _history(w, now - 6 * H1, 18, losses_at=(4, 12), n=20)
+    if w.prof is not AC:                                 # 규칙봇 15: Bybit lost twice where the paper won (no drift scene)
+        a = now - 50 * MIN
+        for e, pp, xp in ((a - 3 * H1, 0.12, -1.1), (a - 2 * H1, 0.11, -0.9)):
+            key = f"{LC.ACCOUNT}|{BTC}|{e}"
+            w.paper_trade(e, e + 40 * MIN, pp, strat=w.prof.alt)
+            w.x_open("bybit", key, BTC, 1, e + 2000, 67_300.0, 0.0192, 66_553.0)
+            w.x_close("bybit", key, e + 41 * MIN, xp, 67_300.0, 67_200.0, 0.0192, 0.00055)
     w.x_state("bybit", now - MIN, last_equity=79.5, peak_equity=107.87)
     w.x_state("mexc", now - MIN, last_equity=151.2, peak_equity=151.2)
     w.tick(now - 3 * MIN)
     out += [("", lv, t) for lv, t in w.watch(now - 3 * MIN)]
     # an entry Bybit did not follow, a position without a stop at MEXC, MEXC quiet, equity alarms
     key = f"{LC.ACCOUNT}|{BTC}|{now - 5 * MIN}"
-    w.open_position(now - 5 * MIN)
-    w.x_open("mexc", key, BTC, 1, now - 5 * MIN + 2000, 67_260.0, 0.0238, 66_430.0)
+    pstop, xstop = (66_420.0, 66_430.0) if w.prof is AC else (66_504.0, 66_513.0)
+    w.open_position(now - 5 * MIN, stop=pstop)
+    w.x_open("mexc", key, BTC, 1, now - 5 * MIN + 2000, 67_260.0, 0.0238, xstop)
     w.x_state("mexc", now - MIN, last_equity=151.2, peak_equity=151.2,
               trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": 0.0238,
-                     "entry_ts": now - 5 * MIN + 2000, "stop_initial": 66_430.0, "stop": 66_430.0,
+                     "entry_ts": now - 5 * MIN + 2000, "stop_initial": xstop, "stop": xstop,
                      "stop_algo_id": None})
     w.tick(now)
     c = w._x("mexc")                                     # MEXC has gone quiet for 15 minutes
@@ -462,8 +622,9 @@ def _halt_scene(path: str) -> list:
     return out
 
 
-def _checkpoint_scene(path: str) -> list:
-    w = _mk(path)
+def _checkpoint_scene(path: str, prof: Profile = None) -> list:
+    """🏁 the 40th paper trade: the A+C bot's verdict; nothing for 규칙봇 15 (no 5-year reference, no 40-trade rule)."""
+    w = _mk(path, prof)
     now = T0 + 10 * H1
     _history(w, now - H1, 36, losses_at=(5, 17, 26, 33), n=39)
     w.x_state("bybit", now - MIN)
@@ -481,17 +642,26 @@ def _checkpoint_scene(path: str) -> list:
     return [("🏁 40번 도달", lv, t) for lv, t in w.watch(now) if t.startswith(("🏁", "🚨 🏁"))]
 
 
-def _morning_scene(path: str) -> list:
+def _morning_scene(path: str, prof: Profile = None) -> list:
+    prof = prof or AC
+    main, alt = prof.main, prof.alt
+    label = (lambda st: f"{st[0]}@{st[1]}#{st[2]}~x") if prof is AC else (lambda st: f"{st[0]}@{st[1]}")
+    if prof is AC:
+        run_cfg = {"members": [], "macro_blackout_min": 30, "no_weekend": True}
+    else:
+        with open(os.path.join(LC.ROOT, "deploy", prof.config), encoding="utf-8") as fh:
+            run_cfg = json.load(fh)
+    loss = -0.36 if prof is AC else -0.50
     out = []
     for name, day, diff in (("q", "2026-10-28", False), ("l", "2026-10-29", True)):
-        w = _mk(os.path.join(path, name))
+        w = _mk(os.path.join(path, name), prof)
         w0, w1 = LC.window_of(day)
         _history(w, w0 + 10 * H1, 17, n=20)
         e = w0 + 10 * H1 + 30 * MIN
         key = f"{LC.ACCOUNT}|{BTC}|{e}"
         w.paper_trade(e, e + H1, 0.18, lock=0.16)
         lo = w0 + 20 * H1                                # a loss at 05:00 KST: its card line in the morning
-        w.paper_trade(lo, lo + H1, -0.36, symbol=SOL, strat=ASIA, price=182.35, lev=30, stop=180.02)
+        w.paper_trade(lo, lo + H1, loss, symbol=SOL, strat=alt, price=182.35, lev=30, stop=180.02)
         w.x_open("bybit", key, BTC, 1, e + 2000, 67_262.0, 0.0238, 66_431.0)
         w.x_close("bybit", key, e + H1 + 2000, 7.1, 67_262.0, 67_560.0, 0.0238, 0.00055)
         w.x_equity("bybit", w1 - MIN, 107.1)
@@ -499,24 +669,23 @@ def _morning_scene(path: str) -> list:
         w.x_state("mexc", w1 + 9 * MIN, last_equity=100.0)
         w.x_equity("mexc", w1 - MIN, 100.0)
         s = Store3(w.paper)
-        s.put_state("combo_run", w0 - DAY, {"config": {"members": [], "macro_blackout_min": 30, "no_weekend": True},
-                                            "taker_fee": 0.0005})
+        s.put_state("combo_run", w0 - DAY, {"config": run_cfg, "taker_fee": 0.0005})
         for sig_t in (w0 + 4 * H1, e):
-            s.log_signals([{"bar_close": sig_t, "timeframe": "1h", "strategy": "F15_LON_BRK@1h#88~x",
+            s.log_signals([{"bar_close": sig_t, "timeframe": main[1], "strategy": label(main),
                             "symbol": BTC, "side": 1, "atr": 1.0, "ref_price": 1.0, "ref_time": sig_t,
-                            "delay_ms": 0, "status": "SUBMITTED", "data": {"strategy": "F15_LON_BRK"}}])
+                            "delay_ms": 0, "status": "SUBMITTED", "data": {"strategy": main[0]}}])
         s.commit()
         s.conn.close()
         w.tick(w1 + 9 * MIN)
-        rs = [{"bar_close": t, "tf": "1h", "strategy": "F15_LON_BRK@1h#88~x", "symbol": BTC, "side": 1,
-               "status": "SUBMITTED", "why": "", "name": "F15_LON_BRK"} for t in (w0 + 4 * H1, e)]
+        rs = [{"bar_close": t, "tf": main[1], "strategy": label(main), "symbol": BTC, "side": 1,
+               "status": "SUBMITTED", "why": "", "name": main[0]} for t in (w0 + 4 * H1, e)]
         if diff:
             rs.append(dict(rs[0], bar_close=w0 + 14 * H1, symbol=SOL))
-        rt = [{"entry_time": e, "exit_time": e + H1, "symbol": BTC, "side": 1, "strategy": "F15_LON_BRK",
-               "tf": "1h", "member": None, "reason": "LOCK", "roe": 0.18, "pnl": 72.0, "entry_price": 67_250.0,
+        rt = [{"entry_time": e, "exit_time": e + H1, "symbol": BTC, "side": 1, "strategy": main[0],
+               "tf": main[1], "member": None, "reason": "LOCK", "roe": 0.18, "pnl": 72.0, "entry_price": 67_250.0,
                "exit_price": 67_550.0, "fees": 0.4, "funding": 0.0, "qty": 0.2},
-              {"entry_time": lo, "exit_time": lo + H1, "symbol": SOL, "side": 1, "strategy": "F15_ASIA_BRK",
-               "tf": "30m", "member": None, "reason": "SL", "roe": -0.36, "pnl": -144.0, "entry_price": 182.35,
+              {"entry_time": lo, "exit_time": lo + H1, "symbol": SOL, "side": 1, "strategy": alt[0],
+               "tf": alt[1], "member": None, "reason": "SL", "roe": loss, "pnl": 400.0 * loss, "entry_price": 182.35,
                "exit_price": 180.2, "fees": 0.4, "funding": 0.0, "qty": 60.0}]
         res = LR.ReplayResult(w0=w0, w1=w1, end=w1 + MIN, source="live", seeded=True, signals=rs, trades=rt)
         got = Collect()
@@ -525,10 +694,10 @@ def _morning_scene(path: str) -> list:
     return out
 
 
-def _setup_scene(path: str) -> list:
+def _setup_scene(path: str, prof: Profile = None) -> list:
     """The live bot's token put in /etc/paperbot/live-telegram.env without its chat lines: said once, through
     live.env's bot (the rule bot's room), after 10 minutes; ✅ from the live bot once the chat lines are in."""
-    w = _mk(path)
+    w = _mk(path, prof)
     now = T0 + 9 * H1
     w.tick(now)
     base = {"TELEGRAM_BOT_TOKEN": "rule-bot", "TELEGRAM_CHAT_CRITICAL": "-1001234567890"}
@@ -588,6 +757,6 @@ def render(items: list) -> str:
     return "\n\n".join(blocks)
 
 
-def main() -> int:
-    print(render(scenes()))
+def main(world: str = "live15") -> int:
+    print(render(scenes(world)))
     return 0

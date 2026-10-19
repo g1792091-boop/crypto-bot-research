@@ -1639,18 +1639,66 @@ class ComboRunner:
             return          # the live watcher's 🟢 / ✅ / ❌ messages (paperbot/livecheck.py) take their place
         was_entry, was_n = before.get(ACCOUNT, (None, 0))
         for t in e.trades[was_n:]:
-            self.notifier.send(INFO, (
-                f"{self.cfg.tag} 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
-                f"{KO_TF.get(t.timeframe, t.timeframe)}: {KO_EXIT.get(t.exit_reason, t.exit_reason)}, "
-                f"순ROE {t.roe:+.1%}, ${t.pnl:+,.2f}, 지갑 ${t.equity_after:,.2f}"))
+            self.notifier.send(INFO, exit_text(self.cfg, t))
         p = e.position
         if p is not None and p.entry_time != was_entry:
-            m = p.signal.meta
-            self.notifier.send(INFO, (
-                f"{self.cfg.tag} 진입 {p.symbol} {KO_SIDE.get(p.side, p.side)} {p.signal.strategy_id} "
-                f"{KO_TF.get(p.signal.timeframe, p.signal.timeframe)} ({m.get('member')}), {p.leverage}배, "
-                f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g} ({m.get('stop_rule', '')}), "
-                f"점수 {p.signal.score:.2f}"))
+            self.notifier.send(INFO, entry_text(self.cfg, p))
+
+
+# ====================================================================== message words (Telegram, check-config)
+def stop_rule_ko(rule: Optional[str]) -> str:
+    """The entry's stop rule (signal meta ``stop_rule``, kept in English in the records) in the owners' words."""
+    import re
+    r = str(rule or "")
+    m = re.fullmatch(r"ROE -(\d+)% net at (\d+)x", r)
+    if m:
+        return f"순ROE -{m[1]}%(수수료·슬리피지 포함), {m[2]}배"
+    m = re.fullmatch(r"ROE -(\d+)% at (\d+)x", r)
+    if m:
+        return f"ROE -{m[1]}%, {m[2]}배"
+    m = re.fullmatch(r"([\d.]+) x ATR pulled in to ([\d.]+) x ATR \(fits (\d+)x\)", r)
+    if m:
+        return f"{m[1]} ATR을 {m[2]} ATR로 당김({m[3]}배 강제청산 안쪽)"
+    m = re.fullmatch(r"([\d.]+) x ATR", r)
+    if m:
+        return f"{m[1]} ATR"
+    return r
+
+
+def exit_text(cfg: "ComboConfig", t) -> str:
+    """The paper bot's own exit line (a TradeRecord)."""
+    return (f"{cfg.tag} 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
+            f"{KO_TF.get(t.timeframe, t.timeframe)}: {KO_EXIT.get(t.exit_reason, t.exit_reason)}, "
+            f"순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
+
+
+def entry_text(cfg: "ComboConfig", p) -> str:
+    """The paper bot's own entry line (an open Position)."""
+    m = p.signal.meta
+    rule = stop_rule_ko(m.get("stop_rule"))
+    return (f"{cfg.tag} 진입 {p.symbol} {KO_SIDE.get(p.side, p.side)} {p.signal.strategy_id} "
+            f"{KO_TF.get(p.signal.timeframe, p.signal.timeframe)} ({m.get('member')}), {p.leverage}배, "
+            f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g}" + (f" ({rule})" if rule else "")
+            + f", 점수 {p.signal.score:.2f}")
+
+
+def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
+    """The paper bot's start message: its name, its strategies and its rules as the running config says them."""
+    nc = sum(m.no_chase for m in members)
+    rest = ((["주말"] if cfg.no_weekend else [])
+            + ([f"경제 발표 앞뒤 {cfg.macro_blackout_min}분"] if cfg.macro_blackout_min else [])
+            + ([f"나스닥 개장 뒤 {cfg.us_open_pause_min}분"] if cfg.us_open_pause_min else []))
+    pause = ("진입 쉼 " + "·".join(rest) + ", ") if rest else ""
+    kinds = ([f"{sum(m.custom for m in members)}개 커스텀값"] if any(m.custom for m in members) else []) \
+        + ([f"{sum(bool(m.when) for m in members)}개 조건 있음"] if any(m.when for m in members) else [])
+    return (f"{cfg.tag} 시작: 매매법 {len(members)}개" + (f"({', '.join(kinds)})" if kinds else "") + ", "
+            f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 증거금 "
+            f"{'배수%' if cfg.margin == 'leverage' else f'잔고의 {float(cfg.margin):.0%}'}, 손절 {stop_text(cfg)}, "
+            f"계단 익절 {cfg.ladder_spec.describe()}, "
+            f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
+            f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
+            f"{f'추격 진입 막기 {nc}개, ' if nc else ''}"
+            f"포지션 1개, {pause}지갑 ${wallet:,.2f}")
 
 
 # ====================================================================== start
@@ -1773,14 +1821,7 @@ def cmd_run(args) -> int:
     store.put_state("combo_run", now, {"version": VERSION, "brackets": src, "taker_fee": settings.taker_fee,
                                        "members": [m.describe() for m in members], "config": dataclasses.asdict(cfg)})
     store.commit()
-    notifier.send(INFO, f"{cfg.tag} 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값, "
-                        f"{sum(bool(m.when) for m in members)}개 조건 있음), "
-                        f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 손절 {stop_text(cfg)}, "
-                        f"계단 익절 {cfg.ladder_spec.describe()}, "
-                        f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
-                        f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
-                        f"{f'추격 진입 막기 {sum(m.no_chase for m in members)}개, ' if any(m.no_chase for m in members) else ''}"
-                        f"포지션 1개, 지갑 ${book.engines[ACCOUNT].wallet:,.2f}")
+    notifier.send(INFO, start_text(cfg, members, book.engines[ACCOUNT].wallet))
     stop = {"flag": False}
 
     def on_term(signum, frame):  # noqa: ARG001

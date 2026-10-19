@@ -30,10 +30,12 @@ halted. ``--dry-run`` prints the message and writes nothing (no Telegram, no liv
    and the day's averages. Loud when the average slippage is worse than ``SLIP_FLAG_BPS`` a side or the fee rate is
    above the assumed one.
 3. 성적표: the paper account since its database started (trades, wins, win rate, last 20 and last 40, net P&L), each
-   executor (trades, win rate, realised $ P&L, equity, halted or not, its signal light from the paper's last N closed
-   trades and its own config's threshold, how many paper entries the light skipped), the coin-flip twin and the
-   shadow paper bots (/var/lib/paperbot/combo/shadow-*.db) for reference, and the owners' 40-trade checkpoint
-   (88% or more: consider more money; 82-88%: keep watching; under 82%: stop and rethink). Mondays add the last 7 days.
+   executor (trades, win rate, realised $ P&L, equity, halted or not, and only for an executor that runs the signal
+   light (off in the live configs since owners 10-19): the light from the paper's last N closed trades and its own
+   config's threshold, how many paper entries the light skipped), the coin-flip twin and the shadow paper bots
+   (/var/lib/paperbot/combo/shadow-*.db) for reference, and the owners' 40-trade checkpoint (88% or more: consider
+   more money; 82-88%: keep watching; under 82%: stop and rethink; only with the 5-year reference of the running
+   config: none for 규칙봇 15). Mondays add the last 7 days.
    Samples under 20 trades are marked as small.
 4. 못 탄 신호 (one quiet line, never loud): the day's signals the paper bot did not take and their virtual results per
    reason, and the paper trades the executors did not follow, next to the trades it took ("어제 못 탄 신호 n개(가상): 한 번에
@@ -51,7 +53,8 @@ it clears where that helps):
    never called), or its state is older than 10 minutes while it should be running (systemd: started or enabled);
 3. the paper bot's heartbeat (combo.py writes ``state.heartbeat`` every poll) is older than 10 minutes, or the newest 1m
    bar of the rule bot (paper3.db live_bars, the paper bot's data) is older than 5 minutes;
-4. an executor's equity is 25% or more below its peak (its halt is at 50%; re-armed under 20%), and, silent, the first
+4. an executor's equity is 25% or more below its peak (re-armed under 20%; the message names its own drawdown halt
+   when its config has one, else says there is none: the live configs since owners 10-19), and, silent, the first
    time its equity (deposits taken out) reaches +50% and +100% of its start.
 Each pass also records what it saw (``seen``): the morning check reads the paper bot's stopped spans from it.
 
@@ -72,9 +75,11 @@ expected range, no 88% / 82% rule, one line saying why):
 ② 기대 이탈 (watcher): the paper's last 20 / 40 wins under the honest 5th percentile: loud "기대 범위 밑"; under the fit
    5th percentile only: a silent note; a strategy with 3+ losses in its last 5 trades: a silent note; an executor that
    lost where the paper won, 2+ times in its last 20 trades: loud. Under 20 paper trades: "표본 작음", no alarm.
-⑤ 멈춤 요약 (watcher): a halt of an executor gives one loud message: the rule (3 losses / drawdown 50% / STOP file /
-   other), the trades before it with their card labels, the balance against the budget, the paper's last 20 and the
-   light, and the owners' guide quoted as it is (start guide section 9 and the rules table, live-safety.md 3-5).
+⑤ 멈춤 요약 (watcher): a halt of an executor gives one loud message: the rule (a loss streak / drawdown with the
+   executor's own number, both off in the live configs since owners 10-19 / STOP file / other), the trades before it
+   with their card labels, the balance against the budget, the paper's last 20 (and the light when it runs one), and
+   the owners' guide (start guide section 9 and the rules table, live-safety.md 3-5; without those two halts a line
+   that this halt was not one of them).
 Server (watcher; the bots share the server with the experiments): free disk under 2 GB, MemAvailable under 500 MB:
 loud, with the biggest memory users (systemctl show MemoryCurrent) and the experiments to stop first; the rule bot,
 the paper bot and the executors are never suggested.
@@ -139,11 +144,12 @@ PAPER_DB = "/var/lib/paperbot/combo/live-ac.db"
 RULE_DB = "/var/lib/paperbot/paper3.db"
 SHADOW_GLOB = "/var/lib/paperbot/combo/shadow-*.db"
 SHADOW_NAMES = {"shadow-b": "그림자 B 안정형", "shadow-nocut": "그림자 끄는 구간 없음", "shadow-ac32": "그림자 32개"}
-# (name, executor config, systemd unit, fallbacks when the config cannot be read: db, light N, light share)
+# (name, executor config, systemd unit, fallbacks when the config cannot be read: db, light N, light share; the live
+# configs run without the signal light since owners 10-19 (deploy/executor.live-*.json "signal_light_n": 0))
 EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",
-              "/var/lib/paperbot/exec/executor-bybit-live.db", 20, 0.85),
+              "/var/lib/paperbot/exec/executor-bybit-live.db", 0, 0.85),
              ("mexc", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc",
-              "/var/lib/paperbot/exec/executor-mexc-live.db", 20, 0.90))
+              "/var/lib/paperbot/exec/executor-mexc-live.db", 0, 0.90))
 ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005}
 
 
@@ -156,7 +162,7 @@ EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스"}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
-           "REV": "빠른 청산", "TP": "익절", "END": "끝"}
+           "REV": "빠른 청산(반대 신호)", "TP": "익절", "END": "끝"}
 KO_DOW = "월화수목금토일"
 KO_STATUS = {"SUBMITTED": "진입 신호", "FILTERED": "걸러짐", "WAITING": "돌파 대기", "BROKE": "돌파 확인",
              "REJECTED": "거절"}
@@ -310,8 +316,21 @@ class ExecInfo:
     account: str = ACCOUNT
     budget: Optional[float] = None
     kill_file: str = "/var/lib/paperbot/STOP"
-    max_dd: float = 0.5
+    max_dd: Optional[float] = None  # its drawdown halt (risk.max_drawdown_pct); None: none (owners 10-19) or not known
+    max_streak: Optional[int] = None    # its loss-streak halt (risk.max_consecutive_losses); None: none or not known
+    max_loss: Optional[float] = None    # one stop-out's largest share of its equity (risk.max_loss_frac)
     problem: str = ""               # the config could not be read: the fallbacks are used
+
+    @property
+    def light_on(self) -> bool:
+        return bool(self.light_n)
+
+    @property
+    def auto_halts(self) -> Optional[bool]:
+        """Does it halt by itself on a losing run or a drawdown? None when its config could not be read."""
+        if self.max_dd is not None or self.max_streak is not None:
+            return True
+        return None if self.problem else False
 
     @property
     def label(self) -> str:
@@ -340,6 +359,10 @@ def load_executors(specs=EXECUTORS) -> list[ExecInfo]:
             e.kill_file = str(risk.get("kill_file") or e.kill_file)
             if risk.get("max_drawdown_pct") is not None:
                 e.max_dd = float(risk["max_drawdown_pct"])
+            if risk.get("max_consecutive_losses") is not None:
+                e.max_streak = int(risk["max_consecutive_losses"])
+            if risk.get("max_loss_frac") is not None:
+                e.max_loss = float(risk["max_loss_frac"])
         except (OSError, ValueError, TypeError) as exc:
             e.problem = f"설정 파일을 못 읽음({type(exc).__name__}); 기본값 사용"
         out.append(e)
@@ -944,16 +967,14 @@ CHECK_NO_RULE_KO = "40번 판단 기준은 지난 봇의 5년 기준표로 정�
 
 
 def checkpoint_line(p: dict, ref_ko: str = "") -> str:
-    """The owners' 40-trade checkpoint in the morning check. ``ref_ko`` (the reference was made for another config):
-    the count only, without the old bot's 88% / 82% rule."""
+    """The owners' 40-trade checkpoint in the morning check. ``ref_ko`` (the reference was made for another config,
+    e.g. 규칙봇 15 from 10-20): '' (no line). The 40-trade 88% / 82% rule came from the old bot's 5-year reference and
+    the paper account's first 40 trades are that bot's; the reference note (reference_notes) says once why there is no
+    such comparison."""
     rule = "거래 40번에서 88% 이상이면 늘리기 검토 / 82~88% 계속 지켜보기 / 82% 미만 멈추고 다시 생각"
     n = p["n"]
     if ref_ko:
-        if n >= CHECK_N:
-            now = f" · 첫 40번 {p['first40']['wins']}승 {p['first40']['rate']:.1%}"
-        else:
-            now = f" · 지금 {p['wins']}/{n}승 {p['rate']:.0%}" if n else ""
-        return f"- 판단: 거래 {min(n, CHECK_N)}/{CHECK_N}번{now} ({CHECK_NO_RULE_KO})"
+        return ""
     if n < CHECK_N:
         now = f", 지금 {p['wins']}/{n}승 {p['rate']:.0%}" if n else ""
         return f"- 판단: {rule} → {CHECK_N - n}번 남음{now}"
@@ -996,9 +1017,10 @@ def score_lines(paper: Optional[dict], execs: list, shadows: list, ref_ko: str =
             line += f" · 잔고 {money(r['equity'])}"
         line += " · " + (f"멈춤({r['halt_reason'][:60]})" if r.get("halted") else "정상")
         out.append(line)
-        sk = f" · 신호등이 거른 진입 {r.get('light_skips', 0)}번" + \
-            (f"(어제 {r['light_skips_day']}번)" if r.get("light_skips_day") else "")
-        out.append(f"  {light_text(r['light'])}{sk}")
+        if (r.get("light") or {}).get("state", "off") != "off":       # no light (owners 10-19): no light line
+            sk = f" · 신호등이 거른 진입 {r.get('light_skips', 0)}번" + \
+                (f"(어제 {r['light_skips_day']}번)" if r.get("light_skips_day") else "")
+            out.append(f"  {light_text(r['light'])}{sk}")
         if r.get("kill_file"):
             out.append("  비상 정지 파일(STOP)이 있음: 새 진입 없음")
         small = small or n < SMALL
@@ -1007,7 +1029,9 @@ def score_lines(paper: Optional[dict], execs: list, shadows: list, ref_ko: str =
         if f is not None:
             out.append(f"- 동전 쌍둥이(참고): 거래 {f['n']}번 · {f['wins']}승"
                        + (f"({f['rate']:.0%})" if f["n"] else "") + f" · 손익 {usd(f['pnl'])}")
-        out.append(checkpoint_line(paper, ref_ko))
+        cp = checkpoint_line(paper, ref_ko)
+        if cp:
+            out.append(cp)
     for s in shadows:
         if s.get("missing"):
             out.append(f"- {s['label']}(참고): 못 읽음")
@@ -1506,9 +1530,7 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                     conds.append(Cond(f"dd:{ex.name}", CRITICAL,
                                       f"{ex.label} 실거래 잔고가 최고점보다 {dd:.0%} 줄었습니다\n"
                                       f"잔고 {money(float(eq))} · 최고 {money(float(peak))}\n"
-                                      f"{ex.max_dd:.0%}가 되면 실행기가 스스로 멈춥니다\n"
-                                      f"지금 할 일: 두 분이 계속할지 정하세요(멈추려면 sudo systemctl stop {ex.unit}, "
-                                      "포지션은 거래소 손절이 지킴)",
+                                      + dd_halt_words(ex),
                                       recover=f"✅ {ex.label} 잔고가 최고점 대비 {DD_CLEAR:.0%} 안으로 돌아왔습니다"))
                 start = ex.budget
                 if start is None:
@@ -1568,14 +1590,15 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                         f"페이퍼 진입 {kst(e['entry_time'])} {coin(e['symbol'])} {KO_SIDE.get(e['side'], '')} "
                         f"{e['strategy']} {KO_TF.get(e['tf'], e['tf'])} ({(now_ms - e['entry_time']) // MIN}분 지남"
                         + (", 페이퍼는 이미 청산" if not e["open"] else "") + ")\n"
-                        f"{light_text(light)} · 멈춤 아님 · 실행기 마지막 기록 {_ago(now_ms, bts)}\n"
+                        + (f"{light_text(light)} · " if light["state"] != "off" else "")
+                        + f"멈춤 아님 · 실행기 마지막 기록 {_ago(now_ms, bts)}\n"
                         f"실행기 기록: {said}\n"
                         f"지금 할 일: 거래소 앱에서 포지션을 확인하고 sudo journalctl -u {ex.unit} -n 50 으로 이유를 보세요"))
         finally:
             c.close()
     # 3부 ②: the paper against the backtest's ranges
     if paper is not None and exp is not None:
-        dc, dj = drift_conditions(paper, exp)
+        dc, dj = drift_conditions(paper, exp, lights=any(ex.light_on for ex in infos))
         conds += dc
         judged |= dj
     # the server (same server as the experiments)
@@ -1584,6 +1607,18 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
         conds += hc
         judged |= hj
     return conds, judged, seen
+
+
+def dd_halt_words(ex: ExecInfo) -> str:
+    """The drawdown alarm's last lines: the executor's own drawdown halt when its config has one; none since owners
+    10-19 (the live configs): said so, with both ways to stop; config unreadable: neither claimed."""
+    stop = f"멈추려면 sudo systemctl stop {ex.unit}, 포지션은 거래소 손절이 지킴"
+    if ex.max_dd is not None:
+        return f"{ex.max_dd:.0%}가 되면 실행기가 스스로 멈춥니다\n지금 할 일: 두 분이 계속할지 정하세요({stop})"
+    if ex.auto_halts is False:
+        return ("잔고가 줄어도 실행기는 스스로 멈추지 않습니다(낙폭 멈춤 없음)\n"
+                f"지금 할 일: 두 분이 계속할지 정하세요({stop} · 두 실행기 모두 바로 닫고 멈추려면 sudo touch {ex.kill_file})")
+    return f"지금 할 일: 두 분이 계속할지 정하세요({stop})"
 
 
 def _active_before(src: Sources, key: str) -> bool:
@@ -1756,11 +1791,17 @@ PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
 UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
 REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
-HALT_KO = {"streak": "3연패(연속 손실 3번)", "drawdown": "낙폭 50%", "kill": "STOP 파일(비상 정지)"}
+HALT_KO = {"streak": "3연패(연속 손실 3번)", "drawdown": "낙폭 50%", "kill": "STOP 파일(비상 정지)",
+           "wrong_side": "방향이 반대인 포지션(실행기 안전장치)", "gate": "실거래 관문 확인 실패(실행기 안전장치)"}
 # quoted from docs/live1019-start-ko.md (the owners' rules and section 9) and docs/live-safety.md 3-5; a test keeps
 # them equal to the guide
 HALT_GUIDE = ("3연패나 낙폭 50% 멈춤은 이유가 있어서 걸린 것입니다. 두 분이 같이 원인을 본 뒤에 풉니다",
               "다시 켤지는 두 분이 정합니다: STOP 파일 지우기 → 실행기 끄기 → `clear-halt`")
+# an executor without the loss-streak and drawdown halts (owners 10-19, 규칙봇 15) halted by the STOP file or one of
+# its own safety stops (a wrong-side or unknown position, a stop it could not place ...): the first line is true of
+# such a halt whatever the config says; the second is the guide's
+HALT_GUIDE_NO_AUTO = ("이 멈춤은 연패·낙폭 때문이 아닙니다(비상 정지 파일이나 실행기 안전장치). 두 분이 같이 원인을 본 뒤에 풉니다",
+                      HALT_GUIDE[1])
 LOSS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS loss_cards (
     key TEXT PRIMARY KEY,
@@ -1987,20 +2028,35 @@ def _p(x: Optional[float], d: int = 1) -> str:
 
 
 CARD_TODO = {"실거래-페이퍼 차이": "거래소 앱의 체결 가격·시각을 페이퍼와 비교해 보세요",
-             "평소보다 큰 손실": "거래소 앱에서 손절이 제자리에 걸려 있었는지 보세요",
-             "연속": "따로 할 일은 없습니다. 3연패면 실행기가 스스로 멈춥니다(9장)"}
+             "평소보다 큰 손실": "거래소 앱에서 손절이 제자리에 걸려 있었는지 보세요"}
 
 
-def card_text(c: dict, exp: Optional[dict] = None) -> str:
-    """❌ 청산 = the loss card (3부 ①; 4부 style). Loud cards start with 🚨 and end with "지금 할 일:"."""
+def streak_todo(infos: Optional[list]) -> str:
+    """'지금 할 일' of a losing run's card, from the executors' configs: their loss-streak halt when they have one; none
+    since owners 10-19 (the live configs): said so, with the kill file; configs not known: neither claimed."""
+    if infos:
+        ns = [ex.max_streak for ex in infos if ex.max_streak]
+        if ns:
+            return f"따로 할 일은 없습니다. {min(ns)}연패면 실행기가 스스로 멈춥니다(9장)"
+        if all(ex.auto_halts is False for ex in infos):
+            return ("연패해도 실행기는 스스로 멈추지 않습니다. 계속할지 두 분이 정하세요"
+                    f"(두 실행기 모두 바로 닫고 멈추려면 sudo touch {infos[0].kill_file})")
+    return "계속할지 두 분이 정하세요(손실 카드들의 판정을 같이 보세요)"
+
+
+def card_text(c: dict, exp: Optional[dict] = None, infos: Optional[list] = None) -> str:
+    """❌ 청산 = the loss card (3부 ①; 4부 style). Loud cards start with 🚨 and end with "지금 할 일:". ``infos``: the
+    executors (their halts and lights decide some words)."""
     sym = c["symbol"]
     head = head_line("❌", "청산", sym, c["side"], f"순ROE {fmt_roe(c['roe'])}")
     typ = f" · {c['type']}" if c.get("type") else ""
     lines = [("🚨 " + head) if c["loud"] else head,
              f"{c['strategy']} {KO_TF.get(c['tf'], c['tf'])}{typ}"
-             + (f" · 세팅 {c['member_order']}번" if c.get("member_order") else "") + f" · {c['hold_h']:.1f}시간 보유",
+             + (f" · {'세팅' if '#' in str(c.get('member') or '#') else '목록'} {c['member_order']}번"
+                if c.get("member_order") else "") + f" · {c['hold_h']:.1f}시간 보유",
              f"진입 {kst(c['entry_time'])} → {KO_EXIT.get(c['exit_reason'], c['exit_reason'])} {kst(c['exit_time'])}"
-             + (f" · 손절 {c['stop_type']}" if c.get("stop_type") else "")
+             + (f" · 손절 {c['stop_type']}" if c.get("stop_type") else
+                " · 손절" if c.get("stop_pct") is not None else "")
              + (f" 거리 {c['stop_pct']:.2f}%" if c.get("stop_pct") is not None else "")
              + (f" · 먼저 {c['mfe_roe']:+.1%}까지" if c.get("mfe_roe") is not None else "")]
     reg = (f"장세 {REG5_KO[int(c['reg5'])]} · " if c.get("reg5") is not None and 0 <= int(c["reg5"]) < 5 else "")
@@ -2040,7 +2096,7 @@ def card_text(c: dict, exp: Optional[dict] = None) -> str:
             lines.append(f"{pad}따라가지 않음")
     lines.append(f"판정: {c['label']}")
     if c["loud"]:
-        todo = CARD_TODO.get(c["label"]) or CARD_TODO["연속"]
+        todo = CARD_TODO.get(c["label"]) or streak_todo(infos)
         lines.append(f"지금 할 일: {todo}")
     return "\n".join(lines)
 
@@ -2114,7 +2170,7 @@ def cards_pass(src: Sources, out_conn, now_ms: int, exp: Optional[dict], send: O
                 continue                                      # an executor is still closing: next pass
             card = build_card(t, entry_meta(pc, ACCOUNT, t["entry_time"], t["symbol"]), trades, exp, outs, ref_ko=ref_ko)
             card["leverage"], card["entry_price"] = t.get("leverage"), t.get("entry_price")
-            text = card_text(card)
+            text = card_text(card, infos=infos)
             sent = None
             if send is not None and now_ms - t["exit_time"] <= CARD_SEND_MS:
                 sent = send(CRITICAL if card["loud"] else INFO, text) is not False
@@ -2192,7 +2248,8 @@ def drift_line(d: dict) -> str:
     return "- 기대 범위: " + " · ".join(parts)
 
 
-def drift_conditions(paper: list, exp: Optional[dict]) -> tuple[list, set]:
+def drift_conditions(paper: list, exp: Optional[dict], lights: bool = True) -> tuple[list, set]:
+    """``lights``: an executor runs the signal light (then the alarm says what it does)."""
     conds, judged = [], {"drift:", "drift_note:", "strat:"}
     d = drift_state(paper, exp)
     if exp is None:
@@ -2203,8 +2260,8 @@ def drift_conditions(paper: list, exp: Optional[dict]) -> tuple[list, set]:
                               f"기대 범위 밑 · 페이퍼 최근 {w['n']}번 {w['wins']}승\n"
                               f"처음 보는 기간(2025-26) 백테스트에서도 최근 {w['n']}번이 {w['honest_p5']}승보다 적은 때는 "
                               f"5%뿐이었습니다(맞춘 백테스트 하위 5%는 {w['fit_p5']}승)\n"
-                              "신호등이 빨강이면 실거래는 이미 따라가지 않습니다\n"
-                              "지금 할 일: 손실 카드들의 판정을 같이 보세요",
+                              + ("신호등이 빨강이면 실거래는 이미 따라가지 않습니다\n" if lights else "")
+                              + "지금 할 일: 손실 카드들의 판정을 같이 보세요",
                               recover=f"✅ 페이퍼 최근 {w['n']}번 승리가 다시 기대 범위 안입니다"))
         elif w["state"] == "low":
             conds.append(Cond(f"drift_note:{w['n']}", INFO,
@@ -2236,7 +2293,7 @@ def exec_vs_paper(c, paper: list) -> list:
 
 
 # ---------------------------------------------------------------- ⑤ 멈춤 원인 요약
-def halt_rule(risk: dict) -> str:
+def halt_kinds(risk: dict) -> list:
     kinds = list(risk.get("halt_kinds") or [])
     reason = str(risk.get("halt_reason") or "")
     if not kinds:
@@ -2246,8 +2303,38 @@ def halt_rule(risk: dict) -> str:
             kinds.append("drawdown")
         if "비상 정지" in reason or "STOP" in reason:
             kinds.append("kill")
-    words = [HALT_KO[k] for k in kinds if k in HALT_KO]
+    return kinds
+
+
+def halt_rule(risk: dict, ex: Optional[ExecInfo] = None) -> str:
+    """The rule a halt came from, in words; a streak or drawdown halt with the executor's own number (its config,
+    else the number in the halt's own record, else the old live configs' 3 / 50%)."""
+    import re
+    reason = str(risk.get("halt_reason") or "")
+    words = []
+    for k in halt_kinds(risk):
+        if k == "streak":
+            m = re.search(r"멈춤 기준 (\d+)번", reason) or re.search(r"연속 손실 (\d+)번", reason)
+            n = (ex.max_streak if ex is not None and ex.max_streak else None) or (int(m[1]) if m else None)
+            words.append(f"{n}연패(연속 손실 {n}번)" if n else HALT_KO["streak"])
+        elif k == "drawdown":
+            m = re.search(r"멈춤 기준 (\d+)%", reason)
+            d = (f"{ex.max_dd:.0%}" if ex is not None and ex.max_dd is not None else None) or (f"{m[1]}%" if m else None)
+            words.append(f"낙폭 {d}" if d else HALT_KO["drawdown"])
+        elif k in HALT_KO:
+            words.append(HALT_KO[k])
     return " + ".join(words) if words else f"기타({reason[:80] or '이유 기록 없음'})"
+
+
+def halt_guide(ex: ExecInfo, risk: dict) -> tuple[str, tuple]:
+    """(the header line, the guide lines) of a halt summary: the owners' guide about the loss-streak and drawdown halts
+    (quoted from live1019-start-ko.md) only when this halt came from one of them or the executor's config has them; the
+    live configs have neither since owners 10-19: then a line that this halt is not one of them (true of its kinds
+    whatever the config says) and the guide's way to lift it."""
+    kinds = set(halt_kinds(risk))
+    if kinds & {"streak", "drawdown"} or ex.auto_halts:
+        return "안내서(live1019-start-ko.md):", HALT_GUIDE
+    return "안내:", HALT_GUIDE_NO_AUTO
 
 
 def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
@@ -2273,7 +2360,7 @@ def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
         finally:
             oc.close()
     by = {f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}": t for t in paper}
-    lines = [f"{ex.label} 실행기가 멈췄습니다 · 이유: {halt_rule(risk)}",
+    lines = [f"{ex.label} 실행기가 멈췄습니다 · 이유: {halt_rule(risk, ex)}",
              f"멈춤 기록: {str(risk.get('halt_reason') or '-')[:120]}"]
     if rows:
         lines.append("멈추기 전 거래:")
@@ -2290,12 +2377,14 @@ def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
     elif eq is not None:
         lines.append(f"잔고 {money(float(eq))}")
     last20 = paper[-20:]
+    light = f" · {light_text(light_state(paper, ex.light_n, ex.light_min))}" if ex.light_on else ""
     if len(paper) >= 20:
         w = sum(1 for t in last20 if t["pnl"] > 0)
-        lines.append(f"페이퍼 최근 20번 {w}승({w / 20:.0%}) · {light_text(light_state(paper, ex.light_n, ex.light_min))}")
+        lines.append(f"페이퍼 최근 20번 {w}승({w / 20:.0%}){light}")
     else:
-        lines.append(f"페이퍼 거래 {len(paper)}번(표본 작음) · {light_text(light_state(paper, ex.light_n, ex.light_min))}")
-    lines += ["안내서(live1019-start-ko.md):"] + [f"- {g}" for g in HALT_GUIDE]
+        lines.append(f"페이퍼 거래 {len(paper)}번(표본 작음){light}")
+    head, guide = halt_guide(ex, risk)
+    lines += [head] + [f"- {g}" for g in guide]
     lines += ["지금 할 일: 두 분이 같이 원인을 본 뒤 이 순서로 풉니다(live-safety.md 3-5)",
               "sudo rm /var/lib/paperbot/STOP   (비상 정지 파일이 있었다면)",
               f"sudo systemctl stop {ex.unit}",
@@ -2620,6 +2709,8 @@ def day_line(paper: list, now_ms: int, infos: list) -> str:
         w_all = sum(1 for t in paper if t["pnl"] > 0)
         out += f" · 지금까지 {len(paper)}번 {w_all}승(표본 작음)"
     lights = [f"{ex.label} {LIGHT_DOT[light_state(paper, ex.light_n, ex.light_min)['state']]}" for ex in infos]
+    if not any(ex.light_on for ex in infos):          # no light (owners 10-19): no light dots
+        lights = []
     return out + (" · 신호등 " + " ".join(lights) if lights else "")
 
 
@@ -3208,7 +3299,8 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
                  infos: Optional[list] = None, ref_ko: str = "") -> list:
     """🚦 a signal light that changed, 🏁 the 40th paper trade, ▶️ / ⏹ an executor started / stopped by a signal.
     The first look only records (nothing is sent for what was already so). ``ref_ko``: the reference was made for
-    another config (usable_expected): the 40th trade is counted without the old bot's 88% / 82% rule.
+    another config (usable_expected): no 🏁 at all (the 88% / 82% rule is the old bot's). 🚦 only for an executor that
+    runs the light (signal_light_n; off in the live configs since owners 10-19), and ▶️ names the light only then.
     Returns [(kind, key, level, text)]."""
     out = []
     infos = infos if infos is not None else (src.executors or load_executors())
@@ -3246,7 +3338,7 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
                             L = light_state(paper or [], ex.light_n, ex.light_min)
                             text = (f"▶️ {ex.label} 실행기 켜짐"
                                     + (f" · 잔고 {fmt_usd(eq, sign=False)}" if eq is not None else "")
-                                    + f" · {light_text(L)}")
+                                    + (f" · {light_text(L)}" if ex.light_on else ""))
                         else:
                             text = (f"⏹ {ex.label} 실행기 꺼짐 (끄라는 신호를 받음: 사람이 끔이나 서버 재시작)\n"
                                     "열린 포지션은 거래소 손절이 지킵니다. 다시 켜기: "
@@ -3270,8 +3362,13 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
         finally:
             if c is not None:
                 c.close()
-    # 🏁 the 40th closed paper trade (counted from the paper bot's live start: its database)
-    if paper is not None and len(paper) >= CHECK_N and _state_get(conn, "checkpoint40") is None:
+    # 🏁 the 40th closed paper trade (counted from the paper bot's live start: its database). Not for a config the 5-year
+    # reference was not made for (ref_ko, e.g. 규칙봇 15 from 10-20): its 88% / 82% rule is the old bot's and the
+    # database's first 40 trades are the old bot's too; nothing is sent or recorded (a later config with its own
+    # reference still gets its 🏁 once)
+    if ref_ko:
+        pass
+    elif paper is not None and len(paper) >= CHECK_N and _state_get(conn, "checkpoint40") is None:
         level, text = checkpoint_text(paper, execs40, exp, ref_ko=ref_ko)
         emit("checkpoint", "checkpoint40", level, text, "checkpoint40", str(len(paper)))
     conn.commit()
@@ -3279,9 +3376,23 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
 
 
 # ---------------------------------------------------------------- 📋 the day ahead
+def us_open_span(w1: int, mins) -> Optional[tuple]:
+    """(from, to) ms of the paper bot's Nasdaq-open pause in the trading day that starts at ``w1`` (09:00 KST): the
+    NYSE open (09:30 New York, the KST date of ``w1``) and ``mins`` after it, on NYSE weekdays that are not holidays
+    (combo.py us_open_pause); None without the rule (config us_open_pause_min) or on a day without an open."""
+    if not mins:
+        return None
+    from .sessions import NY, NYSE_HOLIDAYS
+    d = _dt.datetime.fromtimestamp((int(w1) + KST_MS) / 1000, _dt.timezone.utc).date()
+    if d.weekday() >= 5 or d.strftime("%Y-%m-%d") in NYSE_HOLIDAYS:
+        return None
+    a = int(_dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=NY).timestamp() * 1000)
+    return a, a + int(mins) * MIN
+
+
 def rest_line(w1: int, cfg: Optional[dict]) -> str:
-    """오늘 진입 쉬는 시간: the US macro releases of the trading day ahead (±macro_blackout_min, data/macro_events.csv)
-    and, on Friday, the weekend."""
+    """오늘 진입 쉬는 시간: the US macro releases of the trading day ahead (±macro_blackout_min, data/macro_events.csv),
+    the Nasdaq open pause (us_open_pause_min) and, on Friday, the weekend."""
     cfg = cfg or {}
     mins = cfg.get("macro_blackout_min", 30)
     parts = []
@@ -3292,11 +3403,15 @@ def rest_line(w1: int, cfg: Optional[dict]) -> str:
         except Exception:  # noqa: BLE001  the line says it could not be read
             evs = None
         if evs is None:
-            parts.append("경제 발표 일정을 못 읽음")
+            parts.append((0, "경제 발표 일정을 못 읽음"))
         for e in evs or []:
             a, b = e.ts_ms - int(mins) * MIN, e.ts_ms + int(mins) * MIN
             when = kst(a) if (a + KST_MS) // DAY == (w1 + KST_MS) // DAY else "내일 " + kst(a)
-            parts.append(f"{when}~{kst(b)} {EV.KIND_KO.get(e.kind, e.kind)}")
+            parts.append((a, f"{when}~{kst(b)} {EV.KIND_KO.get(e.kind, e.kind)}"))
+    us = us_open_span(w1, cfg.get("us_open_pause_min"))
+    if us is not None:
+        parts.append((us[0], f"{kst(us[0])}~{kst(us[1])} 나스닥 개장"))
+    parts = [x for _t, x in sorted(parts, key=lambda p: p[0])]
     line = "- 오늘 진입 쉬는 시간: " + (" · ".join(parts) if parts else "없음(미국 경제 발표 없음)")
     weekday = _dt.datetime.fromtimestamp((w1 + KST_MS) / 1000, _dt.timezone.utc).weekday()
     if weekday == 4 and cfg.get("no_weekend", True):
@@ -3650,7 +3765,7 @@ def cmd_chat_ids(a) -> int:
 
 def cmd_preview(a) -> int:
     from .livepreview import main as preview_main
-    return preview_main()
+    return preview_main("ac" if getattr(a, "old", False) else "live15")
 
 
 def cmd_show(a) -> int:
@@ -3709,7 +3824,9 @@ def main(argv: Optional[list] = None) -> int:
     w = sub.add_parser("watch", help="one pass of the real-time watcher (every minute by its timer)")
     common(w)
     w.add_argument("--dry-run", action="store_true", help="print what would be sent: no Telegram, nothing written")
-    sub.add_parser("preview", help="print one sample of every live Telegram message (hand-made world, sends nothing)")
+    pv = sub.add_parser("preview", help="print one sample of every live Telegram message (hand-made world, sends nothing)")
+    pv.add_argument("--old", action="store_true", help="the A+C bot's world (light, halts, 5-year reference) instead of "
+                                                      "규칙봇 15's")
     c = sub.add_parser("chat-ids", help="the owners' private chat ids the bot in effect has seen (getUpdates; sends "
                                         "nothing, never prints the token)")
     s = sub.add_parser("show", help="print a stored check and where the live messages go")
