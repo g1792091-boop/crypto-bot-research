@@ -1514,6 +1514,25 @@ def _record(trades: list) -> dict:
             "roe_avg": sum(roes) / len(roes) if roes else None, "last_exit_ms": max(exits) if exits else None}
 
 
+def signals_by_strategy(sig: dict) -> dict:
+    """{strategy: {week: {signals, <stage>: n}, today: {…}, last_ms, last_stage, last_ko}} of read_signals' rows."""
+    sig_by: dict = {}
+    if sig.get("state") != "ok":
+        return sig_by
+    t0 = sig.get("today_ms") or 0
+    for r in sig.get("rows") or []:
+        if r.get("status") == "BROKE":
+            continue                                   # its entry signal is a SUBMITTED row of its own (as 신호 counts)
+        s = sig_by.setdefault(r.get("strategy"), {"week": {}, "today": {}, "last_ms": None, "last_stage": None, "last_ko": None})
+        for span in ("week",) + (("today",) if (r.get("t") or 0) >= t0 else ()):
+            c = s[span]
+            c["signals"] = c.get("signals", 0) + 1
+            c[r.get("stage") or "other"] = c.get(r.get("stage") or "other", 0) + 1
+        if s["last_ms"] is None or (r.get("t") or 0) > s["last_ms"]:
+            s["last_ms"], s["last_stage"], s["last_ko"] = r.get("t"), r.get("stage"), r.get("ko")
+    return sig_by
+
+
 def rank(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/rank: 매매법 순위표. Per strategy of the combined bot (from the config it runs): the paper account's
     closed trades and open position, each executor's followed trades (a live trade takes its paper partner's strategy),
@@ -1546,19 +1565,7 @@ def rank(p: dict, now: int) -> dict:
             pt = by_pid.get(m.get(str(t["key"])))
             live.setdefault((x["id"], pt.get("strategy_id") if pt else None), []).append(t)
     sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
-    sig_by: dict = {}
-    if sig.get("state") == "ok":
-        t0 = sig.get("today_ms") or 0
-        for r in sig.get("rows") or []:
-            if r.get("status") == "BROKE":
-                continue                                   # its entry signal is a SUBMITTED row of its own (as 신호 counts)
-            s = sig_by.setdefault(r.get("strategy"), {"week": {}, "today": {}, "last_ms": None, "last_stage": None, "last_ko": None})
-            for span in ("week",) + (("today",) if (r.get("t") or 0) >= t0 else ()):
-                c = s[span]
-                c["signals"] = c.get("signals", 0) + 1
-                c[r.get("stage") or "other"] = c.get(r.get("stage") or "other", 0) + 1
-            if s["last_ms"] is None or (r.get("t") or 0) > s["last_ms"]:
-                s["last_ms"], s["last_stage"], s["last_ko"] = r.get("t"), r.get("stage"), r.get("ko")
+    sig_by = signals_by_strategy(sig)
     card = scorecard(p, execs)
     status = {r.get("key"): r for r in card.get("rows") or []} if card.get("state") == "ok" else {}
     contribs = sorted(((s.get("contrib") or 0.0), k) for k, s in ((ref or {}).get("strategies") or {}).items() if k in groups)
@@ -2057,15 +2064,143 @@ def whynow(p: dict, now: int) -> dict:
     sig = read_signals(p["paper"], ACCOUNT, now, keep=1)
     last = (sig.get("rows") or [None])[0] if sig.get("state") == "ok" else None
     combo = read_combo(p["paper"], paths_more()["combo_config"])
-    pend = pending(p, now, members_of(combo) if combo.get("state") == "ok" else [])
+    members = members_of(combo) if combo.get("state") == "ok" else []
+    pend = pending(p, now, members)
+    try:
+        lk = likely_rows(load_likely(), now, members, pend.get("waits") or [])
+        lk = {"state": "ok", **{k: lk[k] for k in ("cell", "bot", "note_ko")}, "top": lk["rows"][:LIKELY_TOP]}
+    except FileNotFoundError:
+        lk = _missing(str(LIKELY_FILE), LIKELY_MISSING_KO)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        lk = _err(str(LIKELY_FILE), exc)
     blocked = [i for i in items if i["ok"] is False]
     head = ("지금 진입할 수 있어요 · 신호를 기다리는 중" if not blocked else
             "지금은 새 진입 안 해요: " + blocked[0]["ko"])
     return {"now_ms": now, "ready": not blocked, "head_ko": head, "items": items,
             "last_signal": {k: last.get(k) for k in ("t", "strategy", "tf", "symbol", "side", "stage", "ko")} if last else None,
             "signals": {k: sig.get(k) for k in ("state", "reason_ko", "stages")}, "next_pause": cn.get("next"),
-            "pause_until": cn.get("pause_until"), "pending": pend,
+            "pause_until": cn.get("pause_until"), "pending": pend, "likely": lk,
             "pending_blocked_ko": next((i["ko"] for i in items if i["ok"] is False and i["id"] in ("weekend", "macro", "position", "paper")), None)}
+
+
+# ---------------------------------------------------------------- 진입 가능성 (owners 10/19 "각 매매법마다 진입 가능성 몇%, 순위별로")
+LIKELY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir, os.pardir, "deploy",
+                           "combo.live-ac.likely.json")
+LIKELY_GROUP = ("mt", "mt", "mt", "mt", "fri", "sat", "sun")     # KST weekday (Monday 0) → the file's day group
+LIKELY_TOP = 5
+LIKELY_MISSING_KO = "진입 가능성 기준표(deploy/combo.live-ac.likely.json)가 없어요"
+LIKELY_NOTE_KO = ("5년 백테스트(지금 설정 95개, 실거래 규칙)에서 같은 요일·같은 한국 시각 뒤 1·4·24시간 안에 그 매매법의 진입 신호가 나온 "
+                  "비율이에요. '최근'은 2025~26년만. 포지션이 비어 있을 때 기준이고, 예측이 아니라 과거 빈도예요. 오늘의 경제 발표 쉬는 "
+                  "시간은 따로 빼지 않았어요.")
+_likely_ref: dict = {}
+
+
+def load_likely(path: Optional[str] = None) -> dict:
+    """deploy/combo.live-ac.likely.json (the research script likely27.py, from the same 5-year backtest as the expected file):
+    per strategy and for the whole bot, by KST day group (월~목 · 금 · 토 · 일) and KST hour, the share of past hours after
+    which an entry signal came within 1 / 4 / 24 hours, and the share of the next entry each strategy gave. Cached by mtime."""
+    path = os.path.normpath(path or LIKELY_FILE)
+    mt = os.stat(path).st_mtime_ns
+    c = _likely_ref.get(path)
+    if c and c[0] == mt:
+        return c[1]
+    with open(path, encoding="utf-8") as f:
+        d = json.load(f)
+    if not isinstance(d.get("strategies"), dict) or not isinstance(d.get("bot"), dict):
+        raise ValueError("strategies / bot missing")
+    _likely_ref[path] = (mt, d)
+    return d
+
+
+def kst_cell(ms: int) -> tuple:
+    """(day group, KST hour) of a moment."""
+    return LIKELY_GROUP[int(((ms + KST_MS) // DAY + 3) % 7)], int((ms + KST_MS) // HOUR % 24)
+
+
+def _lk(block: Optional[dict], period: str, key: str, g: str, h: int) -> Optional[float]:
+    try:
+        return _f(block[period][key][g][h])
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
+def likely_rows(ref: dict, now: int, members: list, waits: list) -> dict:
+    """The strategies the bot runs, most likely to enter first: a strategy with a break signal waiting now leads (closest to
+    its level first), then by the recent (2025-26) share of past hours like this one followed by its entry signal within 4
+    hours, then within 24 hours. Each row: those shares (recent and 5 years) for 1 / 4 / 24 hours and the share of next
+    entries, the next 24 hours' 1-hour shares (when it tends to come), and its waits."""
+    g, h = kst_cell(now)
+    strategies = ref.get("strategies") or {}
+    names = sorted({m["strategy"] for m in members}) if members else sorted(strategies)
+    n_set: dict = {}
+    tfs: dict = {}
+    for m in members:
+        n_set[m["strategy"]] = n_set.get(m["strategy"], 0) + 1
+        tfs.setdefault(m["strategy"], set()).add(m.get("tf"))
+    by_wait: dict = {}
+    for w in waits:
+        by_wait.setdefault(w.get("strategy"), []).append({k: w.get(k) for k in ("symbol", "side", "tf", "level", "last", "to_go", "touched",
+                                                                                 "until", "left_ms", "t0")})
+    hour0 = now // HOUR * HOUR
+    cells = [(hour0 + k * HOUR,) + kst_cell(hour0 + k * HOUR) for k in range(24)]
+
+    def shares(e):
+        return {key: {per: _lk(e, per, key, g, h) for per in ("recent", "all")} for key in ("w1", "w4", "w24", "next")}
+
+    rows = []
+    for s in names:
+        e = strategies.get(s)
+        ws = sorted(by_wait.get(s) or [], key=lambda w: (not w.get("touched"), w["to_go"] if w.get("to_go") is not None else 9.0))
+        rows.append({"strategy": s, "known": e is not None, "type": (e or {}).get("type"),
+                     "n_settings": n_set.get(s, (e or {}).get("settings")),
+                     "tfs": sorted(tfs.get(s) or (e or {}).get("tfs") or [], key=lambda t: TF_ORDER.get(t, 99)),
+                     "p": shares(e), "hours": [{"t": t, "p": _lk(e, "recent", "w1", gg, hh)} for t, gg, hh in cells],
+                     "signals_5y": ((e or {}).get("signals") or {}).get("all"), "waits": ws})
+
+    def order(r):
+        w = r["waits"]
+        lead = (0, 0 if w[0].get("touched") else 1, w[0]["to_go"] if w[0].get("to_go") is not None else 9.0) if w else (1, 1, 9.0)
+        neg = lambda x: -x if x is not None else 1.0                                                  # noqa: E731
+        return lead + (neg(r["p"]["w4"]["recent"]), neg(r["p"]["w24"]["recent"]), neg(r["p"]["next"]["recent"]), r["strategy"])
+    rows.sort(key=order)
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    bot = ref.get("bot") or {}
+    samples = ref.get("samples") or {}
+    return {"cell": {"group": g, "hour": h, "samples": {per: (samples.get(per) or {}).get(g) for per in ("recent", "all")}},
+            "bot": {**{key: {per: _lk(bot, per, key, g, h) for per in ("recent", "all")} for key in ("w1", "w4", "w24")},
+                    "next_h_median": {per: _lk(bot, per, "next_h_median", g, h) for per in ("recent", "all")},
+                    "hours": [{"t": t, "p": _lk(bot, "recent", "w1", gg, hh)} for t, gg, hh in cells]},
+            "note_ko": LIKELY_NOTE_KO, "source": ref.get("source"), "rows": rows}
+
+
+def likely(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/likely: 진입 가능성 순위. Every strategy the bot runs with how often, in the 5-year backtest, an
+    hour like this one (KST day group and hour) was followed by its entry signal within 1 / 4 / 24 hours (recent 2025-26 and
+    all 5 years), its waits now, its signals of the last 7 days, and what stops an entry now (/now's checks). Past
+    frequency, never a forecast; read-only."""
+    try:
+        ref = load_likely()
+    except FileNotFoundError:
+        return {"now_ms": now, **_missing(os.path.normpath(LIKELY_FILE), LIKELY_MISSING_KO), "rows": []}
+    except (OSError, ValueError) as exc:
+        return {"now_ms": now, **_err(os.path.normpath(LIKELY_FILE), exc), "rows": []}
+    w = whynow(p, now)
+    combo = read_combo(p["paper"], paths_more()["combo_config"])
+    members = members_of(combo) if combo.get("state") == "ok" else []
+    out = likely_rows(ref, now, members, ((w.get("pending") or {}).get("waits")) or [])
+    sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
+    sig_by = signals_by_strategy(sig)
+    for r in out["rows"]:
+        s = sig_by.get(r["strategy"]) or {}
+        r["sig"] = {"week": (s.get("week") or {}).get("signals", 0), "today": (s.get("today") or {}).get("signals", 0),
+                    "entered_week": (s.get("week") or {}).get("entered", 0), "last_ms": s.get("last_ms"), "last_ko": s.get("last_ko")}
+    return {"now_ms": now, "state": "ok", **out,
+            "combo": {k: combo.get(k) for k in ("state", "reason_ko", "path")},
+            "signals": {k: sig.get(k) for k in ("state", "reason_ko", "since_ms")},
+            "ready": w.get("ready"), "head_ko": w.get("head_ko"), "blocked_ko": w.get("pending_blocked_ko"),
+            "pending": {k: (w.get("pending") or {}).get(k) for k in ("state", "rule_state", "closes")},
+            "next_pause": w.get("next_pause"), "pause_until": w.get("pause_until")}
 
 
 # ================================================================ the live checks (livecheck.db, liveimprove.db; read-only)
@@ -2532,7 +2667,13 @@ def register(app, ctx) -> dict:
         p = paths()
         return _cached(key("now", p), lambda: json_finite(whynow(p, int(time.time() * 1000))))
 
+    @app.get("/api/v4/livebots/likely")
+    def get_livebots_likely():
+        """실거래 › 순위 · 진입 가능성: each strategy's past entry frequency at this KST day and hour, its waits now (5 s cache)."""
+        p = paths()
+        return _cached(key("likely", p), lambda: json_finite(likely(p, int(time.time() * 1000))))
+
     return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf",
                        "/api/v4/livebots/safety", "/api/v4/livebots/shadows", "/api/v4/livebots/settings", "/api/v4/livebots/rank",
                        "/api/v4/livebots/calendar", "/api/v4/livebots/map", "/api/v4/livebots/costs", "/api/v4/livebots/now",
-                       "/api/v4/livebots/team"], "paths": paths}
+                       "/api/v4/livebots/team", "/api/v4/livebots/likely"], "paths": paths}
