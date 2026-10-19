@@ -1491,4 +1491,23 @@ def register(app, ctx) -> dict:
         p = paths()
         return _cached(key("perf", p), lambda: json_finite(perf(p, int(time.time() * 1000))))
 
-    return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf"], "paths": paths}
+    @app.get("/api/v4/livebots/safety")
+    def get_livebots_safety():
+        """실거래 › 안전: halts, the limits each config has, the kill file, the lights' history and the WARN / CRITICAL log."""
+        p = paths()
+        return _cached(key("safety", p), lambda: json_finite(safety(p, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/shadows")
+    def get_livebots_shadows():
+        """실거래 › 그림자: the shadow paper bots next to the live paper bot, from the same start (5 s cache)."""
+        p = paths()
+        return _cached(key("shadows", p), lambda: json_finite(shadows(p, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/settings")
+    def get_livebots_settings():
+        """실거래 › 설정: the fixed rules, the settings grouped by strategy, the lights and the limits (5 s cache)."""
+        p = paths()
+        return _cached(key("settings", p), lambda: json_finite(settings(p, int(time.time() * 1000))))
+
+    return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf",
+                       "/api/v4/livebots/safety", "/api/v4/livebots/shadows", "/api/v4/livebots/settings"], "paths": paths}

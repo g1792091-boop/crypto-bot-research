@@ -6,6 +6,8 @@
 //   거래   the closed trades of each account, 10 a page, one opened in place (screens/livebots-trades.js, its own endpoint)
 //   신호   "왜 안 들어갔지?": the combined bot's signals and what became of each (screens/livebots-signals.js)
 //   성적   rolling 20 / 40 win share, the 40-trade checkpoint, breakdowns, the coin-flip twin (screens/livebots-perf.js)
+//   안전   per executor: halt, the limits its config has, the kill file, the light and its history, the WARN / CRITICAL log
+//   그림자 the shadow paper bots next to the live paper bot from the same start; 설정: the fixed rules and every setting
 // Each tab is its own mount: a tab change re-mounts the screen (no update()), so every timer, stream listener and chart of
 // the tab before is disposed by the router (ctx), never left running behind another tab.
 // HONESTY: a file or table that is not there yet = 수집 전; one that cannot be read = 못 읽음 + why, never a zero; a refresh
@@ -17,6 +19,8 @@ import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
 import {signalsView} from "./livebots-signals.js";
 import {perfView} from "./livebots-perf.js";
+import {safetyView} from "./livebots-safety.js";
+import {shadowsView, settingsView} from "./livebots-more.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -26,6 +30,9 @@ export const TABS = [
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},
   {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},
   {id: "perf", label: "성적", make: (ctx) => perfView(ctx), own: true},
+  {id: "safety", label: "안전", make: (ctx) => safetyView(ctx), own: true},
+  {id: "shadows", label: "그림자", make: (ctx) => shadowsView(ctx), own: true},
+  {id: "settings", label: "설정", make: (ctx) => settingsView(ctx), own: true},
 ];
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "summary");
 

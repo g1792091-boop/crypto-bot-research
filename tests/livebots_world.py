@@ -248,3 +248,20 @@ def build_world(folder: str) -> dict:
 def env_of(p: dict) -> dict:
     from paperbot.dash.more.livebots import ENV
     return {ENV[k][0]: v for k, v in p.items() if k in ENV}
+
+
+def shadow_db(path: str, pnls: list, since: int = T0) -> str:
+    """A shadow paper bot's database (the same Store3 shape, account COMBO@mix): closed trades of ``pnls`` from ``since``."""
+    s = Store3(path)
+    s.add_account(ACCOUNT, "combo", "mix", "combo", since, "combo-v2")
+    eq = 1000.0
+    for i, pnl in enumerate(pnls):
+        eq += pnl
+        t = since + (i + 1) * H
+        s.trade(ACCOUNT, _trade("ETHUSDT", 1, t, pnl, pnl / 400, eq, "S2_ST_ROC", "1h", "LOCK" if pnl > 0 else "SL"))
+    s.put_state("accounts", NOW - MIN, {"last_ts": NOW - MIN, "engines": {ACCOUNT: {"wallet": eq, "peak_equity": eq, "max_drawdown": 0.0,
+                "halted": False, "halt_reason": "", "bust": False, "warned": [], "last_mark": {}, "position": None, "pending": [],
+                "n_trades": len(pnls)}}})
+    s.put_state("combo_run", since, {"version": "combo-v2", "taker_fee": 0.0005, "members": [], "config": {**CONFIG, "name": "B 안정형"}})
+    s.close()
+    return path

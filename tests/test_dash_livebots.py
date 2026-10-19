@@ -525,6 +525,82 @@ def test_signals_and_perf_routes(client):
     assert set(pf["accts"]) == {"paper", "bybit", "mexc"} and pf["checkpoint"]["left"] == 34
 
 
+# ---------------------------------------------------------------- 안전 · 그림자 · 설정
+def test_safety_lists_halts_limits_the_kill_file_lights_and_the_log(world):
+    open(os.path.join(os.path.dirname(world["paper"]), "STOP"), "w").close()
+    sf = L.safety(world, NOW)
+    b, m = sf["execs"]
+    assert b["id"] == "bybit" and b["record"]["halted"] is False and m["record"]["halted"] is True
+    assert m["record"]["halt_reason"] == "연속 손실 3번" and m["record"]["halted_ts"] == W.T0 + 8 * H
+    assert [x["action"] for x in b["record"]["halts"]] == ["halt", "clear"]
+    assert b["config"]["kill_file"]["present"] is True
+    assert "daily_max_loss_usd" not in [x["key"] for x in b["config"]["limits"]]
+    assert [e["kind"] for e in b["log"]] == ["pnl_check", "halt_cleared", "halt"] and all(e["kind"] != "retry" for e in b["log"])
+    assert b["lights"] == [] and b["light"]["state"] == "building"
+
+
+def test_safety_shows_the_lights_history(tmp_path):
+    p = W.build_world(str(tmp_path / "w"))
+    from paperbot.executor import ExecStore
+    st = ExecStore(p["bybit_db"], lock=False)
+    st.event(NOW - H, "WARN", "light_red", "신호등 빨강: paper 최근 20번 중 16번 이김(80%, 기준 85%) → ETHUSDT 진입을 따라 하지 않습니다",
+             {"key": "COMBO@mix|ETHUSDT|1", "wins": 16, "n": 20})
+    st.close()
+    sf = L.safety(p, NOW)
+    lt = sf["execs"][0]["lights"]
+    assert len(lt) == 1 and lt[0]["kind_ko"] == "신호등 빨강" and lt[0]["data"]["wins"] == 16
+    d = L.build(p, NOW)
+    assert ex(d, "bybit")["light"]["last_event"]["kind"] == "light_red"
+
+
+def test_shadows_from_the_same_start_or_not_there_yet(world, tmp_path, monkeypatch):
+    monkeypatch.setenv("PAPERBOT_LIVE_SHADOW_DIR", str(tmp_path / "nowhere"))
+    sh = L.shadows(world, NOW)
+    assert [x["state"] for x in sh["shadows"]] == ["missing", "missing", "missing"]
+    assert sh["start_ko"].startswith("sudo systemctl start paperbot-combo-shadow@b")
+    d = tmp_path / "sh"
+    d.mkdir()
+    W.shadow_db(str(d / "shadow-b.db"), [4.0, 6.0, -30.0, 5.0])
+    with open(d / "shadow-nocut.db", "wb") as fh:
+        fh.write(b"garbage" * 100)
+    monkeypatch.setenv("PAPERBOT_LIVE_SHADOW_DIR", str(d))
+    sh = L.shadows(world, NOW)
+    b, nocut, ac32 = sh["shadows"]
+    assert b["state"] == "ok" and b["name_ko"] == "그림자 B 안정형" and b["stats"]["trades"] == 4 and b["stats"]["pnl"] == pytest.approx(-15.0)
+    assert b["since_ms"] == W.T0 and b["main"]["stats"]["trades"] == 6                     # the live paper over the same start
+    assert nocut["state"] == "error" and ac32["state"] == "missing"
+
+
+def test_settings_group_every_setting_by_strategy(world, monkeypatch):
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", "/nonexistent/combo.json")
+    st = L.settings(world, NOW)
+    assert st["combo"]["source"] == "db" and st["n_settings"] == 3 and st["n_strategies"] == 2
+    r = st["rules"]
+    assert (r["leverage_btc"], r["leverage_alt"], r["margin"], r["max_loss_frac"], r["no_weekend"], r["macro_blackout_min"]) == (40, 30, 0.4, 0.35, True, 30)
+    assert r["ladder"] == {"first_lock": 0.1, "step": 0.03, "trigger_gap": 0.01}
+    g = {x["strategy"]: x for x in st["groups"]}
+    assert g["S2_ST_ROC"]["n"] == 2 and g["S2_ST_ROC"]["tfs"] == ["1h", "30m"] and [m["order"] for m in g["S2_ST_ROC"]["members"]] == [1, 3]
+    assert [x["config"]["signal_light_min_win"] for x in st["execs"]] == [0.85, 0.9]
+
+
+def test_settings_fall_back_to_the_config_file_then_say_missing(tmp_path, monkeypatch):
+    p = {k: str(tmp_path / f"{k}.db") for k in L.ENV}
+    cfg = tmp_path / "combo.json"
+    cfg.write_text(json.dumps(W.CONFIG), encoding="utf-8")
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(cfg))
+    st = L.settings(p, NOW)
+    assert st["combo"]["source"] == "file" and st["n_settings"] == 3
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    assert L.settings(p, NOW)["combo"]["state"] == "missing"
+
+
+def test_the_last_three_routes(client):
+    client.post("/api/login", json={"password": PW})
+    assert len(client.get("/api/v4/livebots/safety").json()["execs"]) == 2
+    assert len(client.get("/api/v4/livebots/shadows").json()["shadows"]) == 3
+    assert client.get("/api/v4/livebots/settings").json()["n_settings"] == 3
+
+
 # ---------------------------------------------------------------- wiring
 def test_wiring_route_menu_find_inventory_and_module():
     routes = _read(V4, "core", "routes.js")
@@ -532,10 +608,12 @@ def test_wiring_route_menu_find_inventory_and_module():
     assert "livebots:" in _read(V4, "core", "search.js")
     assert "livebots" in MORE.MODULES
     js = "".join(_read(SCREENS, f) for f in os.listdir(SCREENS) if f.startswith("livebots") and f.endswith(".js"))
-    for path in ("/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf"):
+    for path in ("/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf", "/api/v4/livebots/safety",
+                 "/api/v4/livebots/shadows", "/api/v4/livebots/settings"):
         assert f'"{path}"' in js, path
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(SCREENS, "livebots.js"))
-    assert tabs[:5] == [("summary", "요약"), ("chart", "차트"), ("trades", "거래"), ("signals", "신호"), ("perf", "성적")]
+    assert tabs == [("summary", "요약"), ("chart", "차트"), ("trades", "거래"), ("signals", "신호"), ("perf", "성적"), ("safety", "안전"),
+                    ("shadows", "그림자"), ("settings", "설정")]
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):
