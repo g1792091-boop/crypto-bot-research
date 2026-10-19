@@ -82,7 +82,7 @@ def test_live15_config_is_clean_and_has_the_owners_15():
     assert all(not m.custom and m.research is None and m.tf in ("30m", "1h") for m in ms)
     assert cfg.stop_net and cfg.early_exit == "own" and cfg.early_exit_until_lock
     assert cfg.no_weekend and cfg.macro_blackout_min == 30 and cfg.us_open_pause_min == 30
-    assert cfg.lev_of("BTCUSDT") == 40 and cfg.lev_of("SOLUSDT") == 30 and cfg.margin == 0.4
+    assert cfg.lev_of("BTCUSDT") == 40 and cfg.lev_of("SOLUSDT") == 30 and cfg.margin == 0.3
     assert cfg.ladder_spec == ComboLadder.of(LAD15)
     # the executors follow this database: the same path as the A+C bot's
     assert cfg.db == json.loads((ROOT / "deploy" / "executor.live-bybit.json").read_text())["paper_db"]
@@ -155,8 +155,8 @@ def test_net_stop_distance_and_its_realised_roe(tmp_path):
         assert e.position is None
         t = e.trades[-1]
         assert t.exit_reason == "SL" and t.roe == pytest.approx(-0.50, abs=0.006), (sym, t.roe)
-        # 40% margin: the account loses about a fifth (under the 35% cap: no size cut)
-        assert 0.18 < -t.pnl / 1000 < 0.22
+        # 30% margin (owners 10-19 "시드비중 30%"): the account loses about 15% (under the 35% cap: no size cut)
+        assert 0.14 < -t.pnl / 1000 < 0.17
 
 
 def test_engine_steps_the_two_part_ladder(tmp_path):
