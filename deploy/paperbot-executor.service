@@ -38,7 +38,7 @@ Group=paperbot
 UMask=0027
 WorkingDirectory=/opt/crypto-bot-research
 EnvironmentFile=/etc/paperbot/executor.env
-# the owners' private chats for the live messages (optional, deploy/live-telegram.env.example)
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
 EnvironmentFile=-/etc/paperbot/live-telegram.env
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor.json
 Restart=on-failure

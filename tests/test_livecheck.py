@@ -3,8 +3,11 @@ bot's paperbot.store3, the executor's paperbot.executor.ExecStore), an injected 
 
 import json
 import os
+import re
 import sqlite3
+import time
 from dataclasses import asdict
+from typing import Optional
 
 import pytest
 
@@ -1205,6 +1208,7 @@ def _tg(monkeypatch, env: dict, fail=(), code=400):
 
     def urlopen(url, data=None, timeout=None):
         d = {k: v[0] for k, v in urllib.parse.parse_qs(data.decode()).items()}
+        d["_url"] = url
         if d["chat_id"] in fail:
             raise urllib.error.HTTPError(url, code, "x", {"Retry-After": "3"}, None)
         sent.append(d)
@@ -1303,6 +1307,172 @@ def test_chat_ids_lists_the_private_chats_and_never_the_token():
     assert "SECRET" not in bad and "봇 토큰을 확인하세요" in bad
     assert "시작(Start)" in LC.chat_ids_text("SECRET:TOKEN", fetch=lambda url: b'{"ok": true, "result": []}')
     assert "TELEGRAM_BOT_TOKEN이 없습니다" in LC.chat_ids_text("")
+
+
+# ---------------------------------------------------------------- the live bot (its own token, owners 10-19)
+RULE_TOKEN, LIVE_TOKEN = "111:RULEBOTSECRET", "222:LIVEBOTSECRET"
+
+
+def tg_files(tmp_path, over: Optional[str], base: Optional[str] = None, mtime_ago_ms: int = 60 * MIN):
+    """live.env (the rule bot's room, an exchange key next to it) and, when given, live-telegram.env."""
+    lp, op = tmp_path / "live.env", tmp_path / "live-telegram.env"
+    lp.write_text(base if base is not None else
+                  "# /etc/paperbot/live.env\nBINANCE_API_KEY=k\nBINANCE_API_SECRET=never-kept\n"
+                  f'TELEGRAM_BOT_TOKEN="{RULE_TOKEN}"\nTELEGRAM_CHAT_CRITICAL=-1001234\nTELEGRAM_CHAT_WARN=\n'
+                  "TELEGRAM_CHAT_INFO=\n", encoding="utf-8")
+    if over is not None:
+        op.write_text(over, encoding="utf-8")
+        t = (time.time() * 1000 - mtime_ago_ms) / 1000
+        os.utime(op, (t, t))
+    return str(lp), str(op)
+
+
+FULL = (f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\nTELEGRAM_CHAT_CRITICAL=111,222\nTELEGRAM_CHAT_WARN=111,222\n"
+        "TELEGRAM_CHAT_INFO=111,222\nTELEGRAM_SOUND=critical\nPAPERBOT_COMBO_TRADE_MSGS=0\n")
+
+
+def test_the_live_bot_files_and_the_token_in_effect(tmp_path):
+    lp, op = tg_files(tmp_path, FULL)
+    t = LC.tg_files(lp, op)
+    assert t["base"] == {"TELEGRAM_BOT_TOKEN": RULE_TOKEN, "TELEGRAM_CHAT_CRITICAL": "-1001234",
+                         "TELEGRAM_CHAT_WARN": "", "TELEGRAM_CHAT_INFO": ""}          # the exchange key never kept
+    eff = LC.tg_effective(t, environ={"TELEGRAM_BOT_TOKEN": "from-env", "TELEGRAM_CHAT_CRITICAL": "-1"})
+    assert eff["TELEGRAM_BOT_TOKEN"] == LIVE_TOKEN and eff["TELEGRAM_CHAT_CRITICAL"] == "111,222"
+    assert LC.tg_source(t) == "live-telegram.env(실거래 전용 봇)" and LC.tg_problem(t) is None
+    # no override: live.env's bot; neither file readable: the environment
+    t0 = LC.tg_files(lp, str(tmp_path / "missing.env"))
+    assert LC.tg_effective(t0, environ={})["TELEGRAM_BOT_TOKEN"] == RULE_TOKEN and LC.tg_source(t0) == "live.env(규칙봇)"
+    none = LC.tg_files(str(tmp_path / "x.env"), str(tmp_path / "y.env"))
+    assert LC.tg_effective(none, environ={"TELEGRAM_BOT_TOKEN": "e"})["TELEGRAM_BOT_TOKEN"] == "e"
+    assert LC.tg_problem(none) is None and LC.tg_problem(t0) is None
+    # the token without the chat lines (commented out): live.env's room, where the new bot is not
+    lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\n#TELEGRAM_CHAT_CRITICAL=111,222\n")
+    kind, text = LC.tg_problem(LC.tg_files(lp, op))
+    assert kind == "token" and text.startswith("🚨 텔레그램 설정 · 실거래 전용 봇의 채팅 줄이 없습니다")
+    assert "지금 할 일: chat-ids" in text and "SECRET" not in text
+    # the same chats written out again are still live.env's room; the same token as live.env is not a new bot
+    lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\nTELEGRAM_CHAT_CRITICAL=-1001234\n")
+    assert LC.tg_problem(LC.tg_files(lp, op))[0] == "token"
+    lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={RULE_TOKEN}\nTELEGRAM_SOUND=critical\n")
+    assert LC.tg_problem(LC.tg_files(lp, op)) is None
+    # an empty CRITICAL line sends nowhere
+    lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\nTELEGRAM_CHAT_CRITICAL=\n")
+    kind, text = LC.tg_problem(LC.tg_files(lp, op))
+    assert kind == "empty" and "비어 있습니다" in text and any(ln.startswith("지금 할 일:") for ln in text.split("\n"))
+
+
+def test_the_watcher_says_once_through_live_env_bot_that_the_new_token_has_no_chats(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(LC.STATE_SCHEMA)
+    base = {"TELEGRAM_BOT_TOKEN": RULE_TOKEN, "TELEGRAM_CHAT_CRITICAL": "-1001234"}
+    half = {"base": base, "over": {"TELEGRAM_BOT_TOKEN": LIVE_TOKEN}, "over_exists": True, "over_mtime": T - 5 * MIN}
+    rule, live = ListNotifier(), ListNotifier()
+    assert LC.tg_pass(conn, T, half, rule.send, live.send) == []            # being filled in: 10 minutes' grace
+    got = LC.tg_pass(conn, T + 6 * MIN, half, rule.send, live.send)
+    assert [g[0] for g in got] == ["tg_setup"] and rule.messages[0][0] == CRITICAL and live.messages == []
+    assert LC.tg_pass(conn, T + 7 * MIN, half, rule.send, live.send) == []  # once
+    done = {**half, "over": {"TELEGRAM_BOT_TOKEN": LIVE_TOKEN, "TELEGRAM_CHAT_CRITICAL": "111,222"},
+            "over_mtime": T + 8 * MIN}
+    got = LC.tg_pass(conn, T + 9 * MIN, done, rule.send, live.send)
+    assert got[0][0] == "tg_clear" and live.messages[0][1].startswith("✅ 텔레그램 설정이 맞춰졌습니다")
+    assert len(rule.messages) == 1 and LC.tg_pass(conn, T + 10 * MIN, done, rule.send, live.send) == []
+    # live.env's bot refused: tried again on the next pass
+    conn.execute("DELETE FROM live_state")
+    assert LC.tg_pass(conn, T + 20 * MIN, half, lambda lv, tx: False, live.send) == []
+    assert LC.tg_pass(conn, T + 21 * MIN, half, rule.send, live.send)[0][0] == "tg_setup"
+    # in a watcher pass (the notifier handed in carries both)
+    src, _ = trade_world(tmp_path)
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False,
+                       tg={**half, "over_mtime": T - 11 * MIN})
+    assert [o for o in out if o[0] == "tg_setup"] and msgs(n, "🚨 텔레그램 설정")
+    out = LC.run_watch(src, now_ms=T + MIN, notifier=n, units=Units(), exists=lambda p: False,
+                       tg={**half, "over_mtime": T - 11 * MIN})
+    assert not [o for o in out if o[0] == "tg_setup"]
+
+
+def test_the_setup_alarm_goes_out_with_live_env_bot_and_room(monkeypatch):
+    sent = _tg(monkeypatch, {"TELEGRAM_BOT_TOKEN": LIVE_TOKEN, "TELEGRAM_CHAT_CRITICAL": "111,222",
+                             "TELEGRAM_SOUND": "critical"})
+    t = {"base": {"TELEGRAM_BOT_TOKEN": RULE_TOKEN, "TELEGRAM_CHAT_CRITICAL": "-1001234"}, "over": {}}
+    assert LC.tg_base_send(t)(CRITICAL, "🚨 텔레그램 설정 · x") is True
+    assert len(sent) == 1 and f"/bot{RULE_TOKEN}/" in sent[0]["_url"] and sent[0]["chat_id"] == "-1001234"
+    assert sent[0]["disable_notification"] == "true"                  # live.env's own sound rule (all silent)
+    assert LC.tg_base_send({"base": {"TELEGRAM_BOT_TOKEN": RULE_TOKEN}}) is None
+    assert LC.tg_base_send({"base": None}) is None
+
+
+def test_chat_ids_asks_with_the_token_in_effect_and_says_which_bot(tmp_path, monkeypatch, capsys):
+    import urllib.request
+    asked = []
+
+    class Resp:
+        def __init__(self, body):
+            self.body = body
+
+        def read(self):
+            return self.body
+
+    def urlopen(url, timeout=None):
+        asked.append(url)
+        if url.endswith("/getMe"):
+            return Resp(json.dumps({"ok": True, "result": {"username": "our_live_bot"}}).encode())
+        return Resp(json.dumps({"ok": True, "result": [
+            {"message": {"date": 1792500000, "chat": {"id": 111, "type": "private", "first_name": "민수"}}}]}).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "333:FROMENV")
+    lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\n")
+    assert LC.main(["chat-ids", "--live-env", lp, "--live-telegram-env", op]) == 0
+    out = capsys.readouterr().out
+    assert all(f"/bot{LIVE_TOKEN}/" in u for u in asked) and len(asked) == 2
+    assert out.splitlines()[0] == "봇: @our_live_bot · 토큰: live-telegram.env(실거래 전용 봇)"
+    assert "111 · 민수" in out and "SECRET" not in out and "FROMENV" not in out
+    asked.clear()
+    assert LC.main(["chat-ids", "--live-env", lp, "--live-telegram-env", str(tmp_path / "none.env")]) == 0
+    out = capsys.readouterr().out
+    assert all(f"/bot{RULE_TOKEN}/" in u for u in asked) and "아직 규칙봇 토큰입니다" in out and "SECRET" not in out
+
+
+def test_show_ends_with_where_the_live_messages_go(tmp_path, capsys):
+    db = str(tmp_path / "livecheck.db")
+    LC.open_out(db).close()
+    lp, op = tg_files(tmp_path, FULL)
+    LC.main(["show", "--db", db, "--live-env", lp, "--live-telegram-env", op])
+    last = capsys.readouterr().out.rstrip().splitlines()[-1]
+    assert last == "텔레그램 설정: live-telegram.env(실거래 전용 봇) → 채팅 2곳 · 🚨만 소리 · 페이퍼 봇 날것 진입·청산 줄 끔"
+    lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\n")
+    LC.main(["show", "--db", db, "--live-env", lp, "--live-telegram-env", op])
+    out = capsys.readouterr().out
+    assert "⚠ 텔레그램 설정 · 실거래 전용 봇의 채팅 줄이 없습니다" in out and "SECRET" not in out
+    LC.main(["show", "--db", db, "--live-env", lp, "--live-telegram-env", str(tmp_path / "none.env")])
+    assert "live-telegram.env 없음" in capsys.readouterr().out
+    LC.main(["show", "--db", db, "--live-env", str(tmp_path / "no.env"), "--live-telegram-env", op])
+    assert "live.env를 못 읽음" in capsys.readouterr().out
+
+
+def test_every_live_unit_loads_the_live_bot_file_after_its_own_and_install_never_writes_it():
+    deploy = os.path.join(LC.ROOT, "deploy")
+    live, exe = "/etc/paperbot/live.env", "/etc/paperbot/executor.env"
+    for unit, own in (("paperbot-combo", live), ("paperbot-executor", exe), ("paperbot-executor-mexc", exe),
+                      ("paperbot-livecheck", live), ("paperbot-livewatch", live), ("paperbot-liveimprove", live)):
+        with open(os.path.join(deploy, unit + ".service"), encoding="utf-8") as fh:
+            envs = [ln.split("=", 1)[1].strip() for ln in fh if ln.startswith("EnvironmentFile=")]
+        assert envs[-1] == "-/etc/paperbot/live-telegram.env" and own in envs, unit
+    with open(os.path.join(deploy, "paperbot-combo-shadow@.service"), encoding="utf-8") as fh:
+        assert "live-telegram" not in fh.read()
+    with open(os.path.join(deploy, "install.sh"), encoding="utf-8") as fh:
+        lines = [ln.strip() for ln in fh if "live-telegram.env" in ln and not ln.strip().startswith("#")]
+    assert lines == ["if [ -f /etc/paperbot/live-telegram.env ]; then",
+                     "chown root:paperbot /etc/paperbot/live-telegram.env && chmod 640 /etc/paperbot/live-telegram.env"]
+    with open(os.path.join(deploy, "live-telegram.env.example"), encoding="utf-8") as fh:
+        ex = fh.read().splitlines()
+    assert all(ln.startswith("#") for ln in ex if ln.strip())                     # nothing set by copying it
+    keys = [ln for ln in ex if re.match(r"^#[A-Z_]+=", ln)]
+    assert keys == ["#TELEGRAM_BOT_TOKEN=", "#TELEGRAM_CHAT_CRITICAL=111,222", "#TELEGRAM_CHAT_WARN=",
+                    "#TELEGRAM_CHAT_INFO=", "#TELEGRAM_SOUND=critical", "#PAPERBOT_COMBO_TRADE_MSGS=0"]
+    assert ex[ex.index("#TELEGRAM_BOT_TOKEN=") - 1] == (
+        "# 실거래 전용 봇 토큰(@BotFather에서 새로 만든 봇). 이 줄과 채팅 줄 3개는 함께 넣습니다(새 봇은 규칙봇 방에 없으므로 "
+        "채팅 줄 없이 토큰만 넣으면 보내기가 실패합니다)")
 
 
 def test_money_prices_and_roe_as_the_owners_read_them():
@@ -1551,7 +1721,8 @@ def test_preview_prints_every_message_type_and_sends_nothing(monkeypatch):
                  "40번 도달", "참고", "좋은 소식", "다시 정상", "실행기 꺼짐(사람이 끔)", "아침 점검",
                  "아침 점검(확인할 것 있음)", "알람: 따라가지 않음", "알람: 실행기 조용함", "알람: 손절 기록 없음",
                  "알람: 디스크 부족", "알람: 메모리 부족", "알람: 페이퍼 봇 멈춤", "알람: 1분봉 멈춤",
-                 "알람: 잔고 25% 하락", "알람: 실거래만 짐", "알람: 기대 범위 밑", "알람: 멈춤 요약"):
+                 "알람: 잔고 25% 하락", "알람: 실거래만 짐", "알람: 기대 범위 밑", "알람: 멈춤 요약",
+                 "알람: 텔레그램 설정", "텔레그램 설정 맞춰짐"):
         assert kind in titles, kind
     for block in text.split("\n\n━━ "):
         head, body = block.split("\n", 1)

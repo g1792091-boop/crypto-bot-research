@@ -23,7 +23,7 @@ User=paperbot
 Group=paperbot
 WorkingDirectory=/opt/crypto-bot-research
 EnvironmentFile=/etc/paperbot/live.env
-# the owners' private chats for the live messages (optional, deploy/live-telegram.env.example)
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
 EnvironmentFile=-/etc/paperbot/live-telegram.env
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.livecheck run

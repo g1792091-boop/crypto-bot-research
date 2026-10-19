@@ -82,10 +82,14 @@ trade, ▶️ / ⏹ an executor started or stopped on a signal. Every message: a
 the key number), Korean labels, the strategy as name + Korean timeframe + type (never the member label), prices at
 the coin's precision, money as $x.xx, ROE as +x.x%; alarms are CRITICAL (🚨, they ring with TELEGRAM_SOUND=critical)
 and end with "지금 할 일:", everything else is INFO (silent); raw error text only on a last "자세히:" line. Where they
-go: the units load /etc/paperbot/live-telegram.env after live.env (the owners' private chats, comma-separated, in
-TELEGRAM_CHAT_*; paperbot/notify.py), so the rule bot's room keeps only the rule bot.
+go: the units load /etc/paperbot/live-telegram.env after live.env (the live bot's own token from @BotFather and the
+owners' private chats, comma-separated, in TELEGRAM_CHAT_*; paperbot/notify.py), so the rule bot's room keeps only the
+rule bot. A new token there whose chats are still live.env's room (where the new bot is not), or an empty CRITICAL
+chat line, reaches no one: after 10 minutes the watcher says so once through live.env's own bot (tg_pass), and
+``show`` ends with where the live messages go. Of those two files only the Telegram lines are read.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
-``chat-ids`` lists the private chats the bot has seen (getUpdates with live.env's token, never printed; sends nothing).
+``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
+getUpdates; the token is never printed; sends nothing).
 
 Read-only towards the bots: their databases are opened read-only (paperbot/livepnl.py ``open_ro``), the executors'
 configs are read as plain JSON (never their key file), no exchange account is called and no order is sent.
@@ -104,7 +108,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .notify import CRITICAL, INFO
+from .notify import CRITICAL, INFO, chat_ids
 
 MIN = 60_000
 H1 = 3_600_000
@@ -1539,10 +1543,12 @@ def _active_before(src: Sources, key: str) -> bool:
 
 
 def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False, notifier=None,
-              units: Callable = unit_state, exists: Callable = os.path.exists, host: Optional["Host"] = None) -> list:
+              units: Callable = unit_state, exists: Callable = os.path.exists, host: Optional["Host"] = None,
+              tg: Optional[dict] = None) -> list:
     """One pass: first the loss cards of new losing paper trades (3부 ①; so a halt summary can name their causes),
     then every condition that became active is sent once (loud unless said otherwise) and every one that cleared is
-    re-armed (with a silent line when it has one). Returns [(event, key, level, text)]."""
+    re-armed (with a silent line when it has one). ``tg``: the Telegram files (tg_files(); read when None).
+    Returns [(event, key, level, text)]."""
     now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
     exp = load_expected(src.expected)
     out = []
@@ -1564,6 +1570,15 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
                         pass
                 ro.close()
         send = (lambda lv, tx: True) if (dry_run or n is None) else n.send
+        # the live bot's own Telegram setup first: when it cannot reach the owners, live.env's bot says so
+        t = tg if tg is not None else tg_files()
+        if dry_run or n is None:
+            send_base = send
+        elif notifier is not None:
+            send_base = n.send               # a notifier handed in (tests, the preview) carries both
+        else:
+            send_base = tg_base_send(t)
+        out += tg_pass(cc, now_ms, t, send_base, send)
         for kind, key, level, text in trade_pass(src, cc, now_ms, exp, send, units=units):
             out.append((kind, key, level, text))
         for card in cards_pass(src, cc, now_ms, exp, send=send):
@@ -2786,6 +2801,152 @@ def rest_line(w1: int, cfg: Optional[dict]) -> str:
     return line
 
 
+# ---------------------------------------------------------------- 🤖 the live bot's Telegram setup (owners 10-19)
+# The live side writes through its own bot (a new token from @BotFather) to each owner's private chat with it:
+# /etc/paperbot/live-telegram.env, loaded by the live units after their own env file, carries the token and the chat
+# lines. A token there without the chat lines would send to live.env's room, where the new bot is not:
+# nothing would arrive, so the watcher says so once through live.env's own bot (the rule bot's room).
+LIVE_ENV = "/etc/paperbot/live.env"
+LIVE_TG_ENV = "/etc/paperbot/live-telegram.env"
+TG_KEYS = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_CRITICAL", "TELEGRAM_CHAT_WARN", "TELEGRAM_CHAT_INFO",
+           "TELEGRAM_SOUND", "PAPERBOT_COMBO_TRADE_MSGS")
+TG_SETUP_GRACE_MS = 10 * MIN       # the owners fill live-telegram.env in steps (token, chat-ids, chat lines)
+TG_FIX = ("지금 할 일: chat-ids로 두 분 개인 채팅 번호를 찾아 live-telegram.env에 채팅 줄 3개"
+          "(TELEGRAM_CHAT_CRITICAL·WARN·INFO)를 넣고 페이퍼 봇을 다시 켜기(12장 \"실거래 텔레그램을 개인 채팅으로\")")
+
+
+def read_tg_env(path: str) -> Optional[dict]:
+    """The Telegram lines of an EnvironmentFile (systemd's KEY=VALUE, '#' comments, optional quotes; a later line
+    wins); None when it cannot be read. Every other line (an exchange key) is skipped, never kept."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
+    out = {}
+    for line in lines:
+        s = line.strip()
+        if not s or s[0] in "#;" or "=" not in s:
+            continue
+        k, v = s.split("=", 1)
+        if k.strip() not in TG_KEYS:
+            continue
+        v = v.strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        out[k.strip()] = v
+    return out
+
+
+def tg_files(live_env: str = LIVE_ENV, override: str = LIVE_TG_ENV) -> dict:
+    """{"base": live.env's Telegram lines (None: unreadable), "over": live-telegram.env's (None: no file or
+    unreadable), "over_exists", "over_mtime" (ms)}."""
+    try:
+        mtime, exists = int(os.stat(override).st_mtime * 1000), True
+    except OSError:
+        mtime, exists = None, False
+    return {"base": read_tg_env(live_env), "over": read_tg_env(override), "over_exists": exists, "over_mtime": mtime}
+
+
+def tg_effective(t: dict, environ=None) -> dict:
+    """The Telegram values in effect, as the live units load them: live.env, then live-telegram.env over it; the
+    process environment only for what neither file says (or when they cannot be read)."""
+    env = os.environ if environ is None else environ
+    eff = {k: env[k] for k in TG_KEYS if k in env}
+    eff.update(t.get("base") or {})
+    eff.update(t.get("over") or {})
+    return eff
+
+
+def tg_source(t: dict) -> str:
+    """Where the token in effect comes from, in the owners' words."""
+    if (t.get("over") or {}).get("TELEGRAM_BOT_TOKEN"):
+        return "live-telegram.env(실거래 전용 봇)"
+    if (t.get("base") or {}).get("TELEGRAM_BOT_TOKEN"):
+        return "live.env(규칙봇)"
+    return "환경 변수"
+
+
+def tg_problem(t: dict) -> Optional[tuple]:
+    """(kind, text) when live-telegram.env cannot reach the owners: a new bot token whose chats are still live.env's
+    (the rule bot's room, where the new bot is not), or an empty CRITICAL chat line. None when fine or not judged
+    (live.env unreadable, no override)."""
+    base, over = t.get("base"), t.get("over")
+    if base is None or not over:
+        return None
+    if "TELEGRAM_CHAT_CRITICAL" in over and not chat_ids(over["TELEGRAM_CHAT_CRITICAL"]):
+        return "empty", ("🚨 텔레그램 설정 · live-telegram.env의 TELEGRAM_CHAT_CRITICAL 줄이 비어 있습니다\n"
+                         "실거래 메시지(진입·청산·알람)가 아무 데도 가지 않습니다. 이 메시지는 그래서 규칙봇 방으로 "
+                         "보냅니다\n" + TG_FIX + ". 아직이면 그 줄 앞에 #를 붙여 두세요")
+    bt = base.get("TELEGRAM_BOT_TOKEN", "")
+    et = over.get("TELEGRAM_BOT_TOKEN") or bt
+    bc = chat_ids(base.get("TELEGRAM_CHAT_CRITICAL"))
+    ec = chat_ids(over["TELEGRAM_CHAT_CRITICAL"]) if "TELEGRAM_CHAT_CRITICAL" in over else bc
+    if et and et != bt and set(ec) == set(bc):
+        return "token", ("🚨 텔레그램 설정 · 실거래 전용 봇의 채팅 줄이 없습니다\n"
+                         "live-telegram.env에 새 봇 토큰은 있는데 채팅 번호가 live.env(규칙봇 방) 그대로입니다. 새 봇은 "
+                         "규칙봇 방에 없어서 실거래 메시지(진입·청산·알람)가 가지 않습니다. 이 메시지는 그래서 규칙봇 "
+                         "방으로 보냅니다\n" + TG_FIX)
+    return None
+
+
+def tg_status(t: dict) -> str:
+    """One doctor line for ``show``: where the live messages go (never a token; chats counted, not listed)."""
+    base, over = t.get("base"), t.get("over")
+    if base is None:
+        return "텔레그램 설정: live.env를 못 읽음(서버에서 paperbot 사용자로 실행하면 보입니다)"
+    prob = tg_problem(t)
+    if prob is not None:
+        return "⚠ " + prob[1].removeprefix("🚨 ")
+    if t.get("over_exists") and over is None:
+        return ("⚠ 텔레그램 설정: live-telegram.env를 못 읽음. 지금 할 일: sudo chown root:paperbot "
+                f"{LIVE_TG_ENV} && sudo chmod 640 {LIVE_TG_ENV}")
+    eff = tg_effective(t, environ={})
+    n = len(chat_ids(eff.get("TELEGRAM_CHAT_CRITICAL")))
+    mode = str(eff.get("TELEGRAM_SOUND", "")).strip().lower()
+    sound = {"critical": "🚨만 소리", "1": "🚨·경고 소리"}.get(mode, "모두 무음")
+    if not over:
+        return f"텔레그램 설정: 실거래 메시지도 live.env의 봇·방으로 갑니다(live-telegram.env 없음, 12장) · {sound}"
+    return (f"텔레그램 설정: {tg_source(t)} → 채팅 {n}곳 · {sound}"
+            + (" · 페이퍼 봇 날것 진입·청산 줄 끔" if eff.get("PAPERBOT_COMBO_TRADE_MSGS", "").strip() == "0" else ""))
+
+
+def tg_base_send(t: dict) -> Optional[Callable]:
+    """live.env's own bot and room (the rule bot's), for the one message the live chats cannot carry."""
+    from .notify import TelegramNotifier
+    base = t.get("base") or {}
+    if not base.get("TELEGRAM_BOT_TOKEN") or not chat_ids(base.get("TELEGRAM_CHAT_CRITICAL")):
+        return None
+    return TelegramNotifier(env=base).send
+
+
+def tg_pass(conn, now_ms: int, t: dict, send_base: Optional[Callable], send: Callable) -> list:
+    """🚨 once (through live.env's bot) when live-telegram.env cannot reach the owners, after it has stayed so for
+    TG_SETUP_GRACE_MS (the owners fill it in steps); ✅ through the live chats once it is fixed (live_state
+    'tg_setup')."""
+    out = []
+    prob = tg_problem(t)
+    prev = _state_get(conn, "tg_setup")
+    if prob is None:
+        if prev and t.get("base") is not None:
+            text = "✅ 텔레그램 설정이 맞춰졌습니다 · 실거래 메시지는 live-telegram.env의 봇과 채팅으로 갑니다"
+            if send(INFO, text) is not False:
+                conn.execute("DELETE FROM live_state WHERE k = 'tg_setup'")
+                out.append(("tg_clear", "tg_setup", INFO, text))
+        conn.commit()
+        return out
+    kind, text = prob
+    if prev == kind:
+        return out
+    if t.get("over_mtime") is not None and now_ms - int(t["over_mtime"]) < TG_SETUP_GRACE_MS:
+        return out                       # being filled in right now
+    if send_base is not None and send_base(CRITICAL, text) is not False:
+        _state_put(conn, "tg_setup", kind, now_ms)
+        out.append(("tg_setup", "tg_setup", CRITICAL, text))
+    conn.commit()
+    return out
+
+
 # ====================================================================== commands
 def _notifier():
     """The live messages' notifier (paperbot/notify.py TelegramNotifier; shared with paperbot/liveimprove.py). Where
@@ -2934,25 +3095,36 @@ def private_chats(updates: list) -> list:
     return sorted(seen.values(), key=lambda x: -x[3])
 
 
-def chat_ids_text(token: str, fetch: Optional[Callable] = None) -> str:
-    """The owners' private chat ids as the bot saw them (getUpdates: reads only, sends nothing). The token is never
-    printed, not even in an error."""
+def chat_ids_text(token: str, fetch: Optional[Callable] = None, source: Optional[str] = None) -> str:
+    """The owners' private chat ids as the bot saw them (getMe and getUpdates: reads only, sends nothing). The token
+    is never printed, not even in an error. ``source``: where the token came from (tg_source)."""
     import urllib.request
     if not token:
-        return "TELEGRAM_BOT_TOKEN이 없습니다: live.env를 읽은 채로 실행하세요(문서 12장의 명령)"
+        return ("TELEGRAM_BOT_TOKEN이 없습니다: live-telegram.env와 live.env를 읽을 수 있는 paperbot 사용자로 "
+                "실행하세요(12장의 명령)")
+    get = fetch if fetch is not None else (lambda u: urllib.request.urlopen(u, timeout=20).read())
+    head = []
+    try:                                 # which bot this is (the owners check it is the live bot)
+        me = json.loads(get(f"https://api.telegram.org/bot{token}/getMe"))
+        name = ((me or {}).get("result") or {}).get("username") if isinstance(me, dict) else None
+    except Exception:  # noqa: BLE001  only a label; getUpdates below reports the error
+        name = None
+    if name or source:
+        head.append(f"봇: {('@' + name) if name else '(이름 못 읽음)'}" + (f" · 토큰: {source}" if source else ""))
+    if source and source.startswith("live.env"):
+        head.append("주의: 아직 규칙봇 토큰입니다. 실거래 전용 봇 토큰을 live-telegram.env에 먼저 넣으세요(12장)")
     url = f"https://api.telegram.org/bot{token}/getUpdates?limit=100&timeout=0"
     try:
-        raw = fetch(url) if fetch is not None else urllib.request.urlopen(url, timeout=20).read()
-        got = json.loads(raw)
+        got = json.loads(get(url))
     except Exception as exc:  # noqa: BLE001  the type only: an error text could carry the URL with the token
         code = getattr(exc, "code", None)
         return (f"텔레그램에 묻지 못했습니다({type(exc).__name__}{f' {code}' if code else ''}). "
                 + ("봇 토큰을 확인하세요" if code in (401, 404) else "잠시 뒤 다시 해 보세요"))
     chats = private_chats(got.get("result") if isinstance(got, dict) else [])
     if not chats:
-        return ("최근 개인 채팅이 없습니다. 각자 텔레그램에서 봇을 열어 시작(Start)을 누르고 \"hi\"를 보낸 뒤 다시 "
-                "실행하세요(봇은 시작을 누른 사람에게만 보낼 수 있습니다)")
-    lines = ["개인 채팅 (번호 · 이름 · 아이디 · 마지막 메시지)"]
+        return "\n".join(head + ["최근 개인 채팅이 없습니다. 각자 텔레그램에서 봇을 열어 시작(Start)을 누르고 "
+                                 "\"hi\"를 보낸 뒤 다시 실행하세요(봇은 시작을 누른 사람에게만 보낼 수 있습니다)"])
+    lines = head + ["개인 채팅 (번호 · 이름 · 아이디 · 마지막 메시지)"]
     for cid, name, user, when in chats:
         lines.append(f"{cid} · {name or '-'} · {('@' + user) if user else '-'} · "
                      + (kst_dt(when) if when else "-"))
@@ -2962,7 +3134,9 @@ def chat_ids_text(token: str, fetch: Optional[Callable] = None) -> str:
 
 
 def cmd_chat_ids(a) -> int:
-    print(chat_ids_text(os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()))
+    """The token in effect: live.env, then live-telegram.env over it (as the live units load them)."""
+    t = tg_files(a.live_env, a.live_telegram_env)
+    print(chat_ids_text(str(tg_effective(t).get("TELEGRAM_BOT_TOKEN", "")).strip(), source=tg_source(t)))
     return 0
 
 
@@ -2972,6 +3146,13 @@ def cmd_preview(a) -> int:
 
 
 def cmd_show(a) -> int:
+    try:
+        return _show(a)
+    finally:                             # where the live messages go (the live bot's setup), last
+        print("\n" + tg_status(tg_files(a.live_env, a.live_telegram_env)))
+
+
+def _show(a) -> int:
     conn = open_ro(a.db)
     if conn is None:
         print(f"{a.db}가 없습니다(아직 점검 전)")
@@ -3020,10 +3201,14 @@ def main(argv: Optional[list] = None) -> int:
     common(w)
     w.add_argument("--dry-run", action="store_true", help="print what would be sent: no Telegram, nothing written")
     sub.add_parser("preview", help="print one sample of every live Telegram message (hand-made world, sends nothing)")
-    sub.add_parser("chat-ids", help="the owners' private chat ids the bot has seen (getUpdates; sends nothing)")
-    s = sub.add_parser("show", help="print a stored check")
+    c = sub.add_parser("chat-ids", help="the owners' private chat ids the bot in effect has seen (getUpdates; sends "
+                                        "nothing, never prints the token)")
+    s = sub.add_parser("show", help="print a stored check and where the live messages go")
     s.add_argument("--db", default=DEFAULT_DB)
     s.add_argument("--day", default=None)
+    for p in (c, s):
+        p.add_argument("--live-env", default=LIVE_ENV, help=argparse.SUPPRESS)
+        p.add_argument("--live-telegram-env", default=LIVE_TG_ENV, help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
     return {"run": cmd_run, "watch": cmd_watch, "show": cmd_show, "preview": cmd_preview,
             "chat-ids": cmd_chat_ids}[a.cmd](a)

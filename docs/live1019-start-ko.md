@@ -129,7 +129,7 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 - 신호등이 빨강이 되면 텔레그램이 옵니다. 페이퍼는 계속 거래하고, 승률이 돌아오면 실거래도 자동으로 다시 따라갑니다.
 - 페이퍼와 실거래가 같은 신호에 다르게 움직였거나, "거래소 기록과 다릅니다" 알림이 오면 알려 주세요.
 - 며칠 문제없으면 부팅 때 자동으로 켜지게 합니다: `sudo systemctl enable paperbot-combo paperbot-executor paperbot-executor-mexc`.
-- 실거래 메시지(진입·청산·알람·아침 점검)는 두 분 **개인 채팅**으로 받습니다. 12장의 "실거래 텔레그램을 개인 채팅으로"를 한 번 따라 하면 규칙봇 단체방에는 규칙봇 메시지만 남습니다.
+- 실거래 메시지(진입·청산·알람·아침 점검)는 **실거래 전용 봇**(@BotFather에서 새로 만든 봇)이 두 분 **개인 채팅**으로 보냅니다. 12장의 "실거래 텔레그램을 개인 채팅으로"를 한 번 따라 하면 규칙봇 단체방에는 규칙봇 메시지만 남습니다.
 
 **7) 두 분 운영 수칙** (참고 자료 『기술적 분석은 처음이지?』 9장의 "매매를 망치는 습관"을 우리 봇에 맞춘 것)
 
@@ -351,7 +351,11 @@ MEXC_LIVE_KEY=(MEXC 키)
 MEXC_LIVE_SECRET=(MEXC 비밀키)
 MEXC_LIVE_KEY_CHECKED=FUTURES_ONLY_NO_WITHDRAW_IP_BOUND
 PAPERBOT_LIVE_MAINNET=I_UNDERSTAND
+TELEGRAM_BOT_TOKEN=(실거래 전용 봇 토큰)
+TELEGRAM_CHAT_CRITICAL=(개인 채팅 번호)
 ```
+
+텔레그램 두 줄은 규칙봇(`live.env`)의 것을 옮기지 않습니다. @BotFather에서 새로 만든 **실거래 전용 봇**의 토큰과 개인 채팅 번호를 넣습니다(번호 찾기는 12장). 실행기 알람이 오늘부터 그 봇으로 옵니다. 12장의 `live-telegram.env`를 만든 뒤에는 같은 값이 두 곳에 있게 되고, 실행기는 나중에 읽는 `live-telegram.env`의 값을 씁니다. 두 곳을 같은 값으로 두면 됩니다.
 
 `MEXC_LIVE_KEY_CHECKED` 줄은 "MEXC 키를 선물 거래만, 출금 없음, IP 제한으로 만들었다"는 두 분의 확인입니다. MEXC는 키 권한을 API로 알려 주지 않아서 이 줄이 대신합니다([`mexc-ko.md`](mexc-ko.md) 3장).
 
@@ -630,34 +634,42 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
 
 **실거래 텔레그램을 개인 채팅으로 (한 번만)**
 
-실거래 쪽 메시지(페이퍼 봇 `paperbot-combo`, 두 실행기, 아침 점검과 1분 감시)를 두 분 각자의 봇 개인 채팅으로 보냅니다. 규칙봇 단체방에는 규칙봇 메시지만 남습니다.
+실거래 쪽 메시지(페이퍼 봇 `paperbot-combo`, 두 실행기, 아침 점검과 1분 감시)는 **실거래 전용 봇**이 두 분 각자의 개인 채팅으로 보냅니다. 규칙봇 단체방에는 규칙봇 메시지만 남습니다. 토큰과 채팅 번호는 `/etc/paperbot/live-telegram.env` 한 파일에 둡니다. 실거래 쪽 서비스가 모두 `live.env`(실행기는 `executor.env`) 다음에 이 파일을 읽어 덮어씁니다.
 
-1. 두 분이 각자 텔레그램에서 우리 봇을 열고 **시작(Start)** 을 누른 뒤 "hi"를 한 번 보냅니다. 봇은 시작을 누른 사람에게만 보낼 수 있습니다.
-2. 서버에서 개인 채팅 번호를 봅니다(토큰은 화면에 나오지 않고, 아무것도 보내지 않습니다).
-   ```bash
-   sudo -u paperbot bash -c 'set -a; . /etc/paperbot/live.env; cd /opt/crypto-bot-research && /opt/paperbot/venv/bin/python -m paperbot.livecheck chat-ids'
-   ```
-   - 결과 예: `111111111 · 민수 · @minsu · 10/19 21:05`. 두 분 번호만 고릅니다(서버 안내서 [`server-setup-v3.md`](server-setup-v3.md) 4-2의 `chats` 명령으로 보이는 `(private)` 줄과 같은 번호입니다).
-3. 파일을 만듭니다.
+1. 텔레그램에서 **@BotFather** → `/newbot` → 이름 → 아이디(끝이 `bot`)를 정하면 토큰이 나옵니다. 토큰은 채팅으로 보내지 말고 서버에만 넣습니다.
+2. 두 분이 각자 새 봇을 열고 **시작(Start)** 을 누른 뒤 "hi"를 한 번 보냅니다. 봇은 시작을 누른 사람에게만 보낼 수 있습니다.
+3. 파일을 토큰 한 줄로 만듭니다.
    ```bash
    sudo nano /etc/paperbot/live-telegram.env
    ```
    ```
+   TELEGRAM_BOT_TOKEN=(1에서 받은 토큰)
+   ```
+   - 권한: `sudo chown root:paperbot /etc/paperbot/live-telegram.env && sudo chmod 640 /etc/paperbot/live-telegram.env` (설치 스크립트도 파일이 있으면 맞춰 줍니다. 내용은 건드리지 않습니다).
+   - 이 상태로 두지 말고 바로 4~5를 합니다. 새 봇은 규칙봇 방에 없어서 채팅 줄 없이 토큰만 있으면 실거래 메시지가 가지 않습니다. 10분이 넘으면 1분 감시가 규칙봇 방에 🚨 "텔레그램 설정"을 한 번 보냅니다.
+4. 개인 채팅 번호를 봅니다. 지금 쓰이는 토큰(`live.env` 다음 `live-telegram.env`)으로 묻습니다. 토큰은 화면에 나오지 않고, 아무것도 보내지 않습니다.
+   ```bash
+   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck chat-ids
+   ```
+   - 첫 줄이 `봇: @(새 봇 아이디) · 토큰: live-telegram.env(실거래 전용 봇)`인지 봅니다. "아직 규칙봇 토큰입니다"가 나오면 3을 다시 봅니다.
+   - 결과 예: `111111111 · 민수 · @minsu · 10/19 21:05`. 두 분 번호만 고릅니다.
+5. 같은 파일에 나머지 줄을 넣어 모두 여섯 줄로 만듭니다.
+   ```
+   TELEGRAM_BOT_TOKEN=(1에서 받은 토큰)
    TELEGRAM_CHAT_CRITICAL=111111111,222222222
    TELEGRAM_CHAT_WARN=111111111,222222222
    TELEGRAM_CHAT_INFO=111111111,222222222
    TELEGRAM_SOUND=critical
    PAPERBOT_COMBO_TRADE_MSGS=0
    ```
-   - 세 줄 모두 같은 두 번호(쉼표로 구분)를 넣습니다. **빈 줄(`TELEGRAM_CHAT_CRITICAL=`)로 두면 안 됩니다**: 실거래 메시지가 아무 데도 가지 않습니다.
+   - 토큰 줄과 채팅 줄 3개는 함께 있어야 합니다. 세 줄 모두 같은 두 번호(쉼표로 구분)를 넣습니다. **빈 줄(`TELEGRAM_CHAT_CRITICAL=`)로 두면 안 됩니다**: 실거래 메시지가 아무 데도 가지 않습니다.
    - `TELEGRAM_SOUND=critical`: 🚨 알람만 소리가 나고 나머지는 무음입니다. `PAPERBOT_COMBO_TRADE_MSGS=0`: 페이퍼 봇의 날것 진입·청산 줄 대신 1분 감시의 🟢·✅·❌ 메시지가 갑니다.
-   - 권한: `sudo chown root:paperbot /etc/paperbot/live-telegram.env && sudo chmod 640 /etc/paperbot/live-telegram.env` (설치 스크립트도 파일이 있으면 맞춰 줍니다. 내용은 건드리지 않습니다).
-4. 다시 켭니다.
+6. 다시 켭니다.
    - 페이퍼 봇은 바로: `sudo systemctl restart paperbot-combo`
    - 실행기는 **포지션이 없을 때만**(`executor status`에서 포지션 `null`) 또는 처음 켜기 전에: `sudo systemctl restart paperbot-executor paperbot-executor-mexc`
    - 아침 점검과 1분 감시는 다음 실행부터 저절로 따릅니다.
-5. 확인: 다음 진입부터 두 분 개인 채팅에 🟢 진입이 오고, 규칙봇 단체방에는 규칙봇 메시지만 남습니다. 전체 모양은 `... -m paperbot.livecheck preview`로 미리 볼 수 있습니다.
-- `executor.env`의 봇 토큰이 `live.env`와 다른 봇이면, 그 봇에도 두 분이 시작(Start)을 눌러야 실행기 메시지가 옵니다.
+7. 확인: 다음 진입부터 두 분 개인 채팅에 새 봇의 🟢 진입이 오고, 규칙봇 단체방에는 규칙봇 메시지만 남습니다. `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck show`의 마지막 줄이 `텔레그램 설정: live-telegram.env(실거래 전용 봇) → 채팅 2곳 · 🚨만 소리 · 페이퍼 봇 날것 진입·청산 줄 끔`이면 맞습니다. 전체 모양은 `... -m paperbot.livecheck preview`로 미리 볼 수 있습니다.
+- `executor.env`에도 같은 새 봇 토큰과 개인 채팅 번호가 있습니다(3장, 실행기 알람이 오늘부터 오도록 넣은 것). 이 업데이트 뒤에는 두 곳에 같이 있고, 나중에 읽는 `live-telegram.env`가 이깁니다. 두 곳을 같은 값으로 두면 됩니다.
 
 **실거래 메시지 (1분마다 확인, 한 거래에 한 번씩)**
 
@@ -693,6 +705,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
 | 페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다 / 규칙봇 1분봉이 5분 넘게 들어오지 않습니다 | 페이퍼 봇이나 그 1분봉이 멈춤(그동안 실거래도 새 진입 없음) | 메시지의 `systemctl status` 명령으로 확인 |
 | 실거래 잔고가 최고점보다 25% 줄었습니다 | 50% 자동 멈춤 전에 미리 | 두 분이 계속할지 정하기 |
 | 디스크 부족 / 메모리 부족 | 서버의 남은 디스크가 2GB 아래, 남은 메모리가 500MB 아래 | 메시지의 "먼저 끌 것(실험)" 명령으로 실험 서비스부터 끄기. paperbot-live3·paperbot-combo·실행기는 끄지 않기 |
+| 텔레그램 설정 · 실거래 전용 봇의 채팅 줄이 없습니다 / 채팅 줄이 비어 있습니다 | `live-telegram.env`에 새 봇 토큰만 있고 채팅 줄이 없거나(채팅이 `live.env`의 규칙봇 방 그대로), `TELEGRAM_CHAT_CRITICAL=`이 빈 채로 10분이 지남. 실거래 메시지가 못 가므로 이것만 **규칙봇 방으로**(live.env의 봇) 한 번 옵니다 | 위 "실거래 텔레그램을 개인 채팅으로" 4~6. 고치면 새 봇이 개인 채팅으로 "✅ 텔레그램 설정이 맞춰졌습니다"를 보냅니다 |
 
 - 문제가 풀리면 소리 없이 "✅ …다시 들어옵니다"가 오고, 같은 문제가 다시 생기면 다시 울립니다(잔고 알람은 20% 안으로 돌아온 뒤에).
 - 좋은 소식은 소리 없이 한 번만: 실거래 잔고가 처음으로 시작보다 +50%, +100%가 됐을 때.
@@ -724,7 +737,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
 ```bash
 cd /opt/crypto-bot-research
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck run --day 2026-10-19 --dry-run   # 10/19 09:00 ~ 10/20 09:00, 보내지도 저장하지도 않고 화면에만
-sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck show                             # 마지막 아침 메시지와 대조 차이 전체
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck show                             # 마지막 아침 메시지와 대조 차이 전체, 끝줄에 텔레그램 설정
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck watch --dry-run                  # 지금 울릴 알람이 있는지(보내지 않음)
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck preview                          # 모든 메시지 모양을 예시로(보내지 않음)
 sudo systemctl list-timers paperbot-livecheck.timer paperbot-livewatch.timer                         # 다음 실행 시각

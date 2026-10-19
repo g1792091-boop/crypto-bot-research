@@ -22,6 +22,8 @@ Group=paperbot
 WorkingDirectory=/opt/crypto-bot-research
 # the Telegram bot and chats of live.env; no exchange is called, so the read-only Binance key is dropped
 EnvironmentFile=/etc/paperbot/live.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
 UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL BACKUP_PASSPHRASE
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/opt/paperbot/venv/bin/python -m paperbot.liveimprove weekly

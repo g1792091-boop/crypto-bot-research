@@ -690,19 +690,23 @@ class TelegramNotifier:
     by commas (owners 10-19: the live bots write to each owner's private chat with the bot); a message is accepted
     when at least one chat accepted it, and each chat that failed is logged. One id behaves as before."""
 
-    def __init__(self, timeout: float = 10.0, retry_wait_max: Optional[float] = None, sleep=None) -> None:
+    def __init__(self, timeout: float = 10.0, retry_wait_max: Optional[float] = None, sleep=None,
+                 env=None) -> None:
+        """``env``: the TELEGRAM_* values to use instead of the process environment (paperbot/livecheck.py warns
+        through live.env's bot when /etc/paperbot/live-telegram.env cannot reach anyone)."""
+        e = os.environ if env is None else env
         self.retry_wait_max = RETRY_WAIT_MAX_S if retry_wait_max is None else float(retry_wait_max)
         self.sleep = sleep or time.sleep
-        self.token = os.environ["TELEGRAM_BOT_TOKEN"]
-        critical = os.environ["TELEGRAM_CHAT_CRITICAL"]
+        self.token = e["TELEGRAM_BOT_TOKEN"]
+        critical = e["TELEGRAM_CHAT_CRITICAL"]
         self.chats = {
             CRITICAL: critical,
             # an empty value in the env file means "not set", not "chat id ''"
-            WARN: os.environ.get("TELEGRAM_CHAT_WARN") or critical,
-            INFO: os.environ.get("TELEGRAM_CHAT_INFO") or critical,
+            WARN: e.get("TELEGRAM_CHAT_WARN") or critical,
+            INFO: e.get("TELEGRAM_CHAT_INFO") or critical,
         }
         self.timeout = timeout
-        self.sound = sound_mode()
+        self.sound = sound_mode(e)
 
     def send(self, level: str, text: str) -> bool:
         """True when Telegram accepted the message; False when delivery failed (never raises). A 429 'retry after

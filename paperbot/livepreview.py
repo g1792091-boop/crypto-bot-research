@@ -66,6 +66,9 @@ def _units(_unit: str) -> tuple:
     return ("active", "enabled")
 
 
+NO_TG = {"base": None, "over": None, "over_exists": False, "over_mtime": None}
+
+
 class World:
     """One paper bot, the rule bot's bars, two executors (Bybit $100 light 20 / 85%, MEXC $100 light 20 / 90%)."""
 
@@ -202,11 +205,14 @@ class World:
         c.commit()
         c.close()
 
-    def watch(self, now: int, host: Optional[LC.Host] = None, units=_units) -> list:
+    def watch(self, now: int, host: Optional[LC.Host] = None, units=_units, tg: Optional[dict] = None) -> list:
+        """``tg``: the Telegram files as the watcher would read them (none by default: the server's real
+        /etc/paperbot files never enter the preview)."""
         got = Collect()
         LC.run_watch(self.src(), now_ms=now, notifier=got, units=units, exists=lambda p: False,
                      host=host or LC.Host(disk_free=lambda p: 40 * 1024 ** 3, mem_available=lambda: 3 * 1024 ** 3,
-                                          unit_memory=lambda: []))
+                                          unit_memory=lambda: []),
+                     tg=tg if tg is not None else NO_TG)
         return got.items
 
 
@@ -230,6 +236,7 @@ def scenes() -> list:
         out += _halt_scene(os.path.join(tmp, "d"))
         out += _checkpoint_scene(os.path.join(tmp, "e"))
         out += _morning_scene(os.path.join(tmp, "f"))
+        out += _setup_scene(os.path.join(tmp, "g"))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return out
@@ -450,17 +457,36 @@ def _morning_scene(path: str) -> list:
     return out
 
 
+def _setup_scene(path: str) -> list:
+    """The live bot's token put in /etc/paperbot/live-telegram.env without its chat lines: said once, through
+    live.env's bot (the rule bot's room), after 10 minutes; ✅ from the live bot once the chat lines are in."""
+    w = _mk(path)
+    now = T0 + 9 * H1
+    w.tick(now)
+    base = {"TELEGRAM_BOT_TOKEN": "rule-bot", "TELEGRAM_CHAT_CRITICAL": "-1001234567890"}
+    half = {"base": base, "over": {"TELEGRAM_BOT_TOKEN": "live-bot"}, "over_exists": True,
+            "over_mtime": now - 15 * MIN}
+    done = {"base": base, "over": {"TELEGRAM_BOT_TOKEN": "live-bot", "TELEGRAM_CHAT_CRITICAL": "111,222",
+                                   "TELEGRAM_SOUND": "critical", "PAPERBOT_COMBO_TRADE_MSGS": "0"},
+            "over_exists": True, "over_mtime": now}
+    out = [("🚨 텔레그램 설정", lv, t) for lv, t in w.watch(now, tg=half) if "텔레그램 설정" in t]
+    w.tick(now + MIN)
+    out += [("✅ 텔레그램 설정", lv, t) for lv, t in w.watch(now + MIN, tg=done) if "텔레그램 설정" in t]
+    return out
+
+
 # ====================================================================== print
 KINDS = (("▶️", "실행기 켜짐"), ("⏹", "실행기 꺼짐(사람이 끔)"), ("🟢 진입", "진입"), ("🔒", "잠금 시작"),
-         ("✅ 청산", "청산(이김)"), ("🚨 ❌", "손실 카드(소리)"), ("❌", "손실 카드"), ("🚦", "신호등 바뀜"),
-         ("🏁", "40번 도달"), ("📉", "참고"), ("🎉", "좋은 소식"), ("✅", "다시 정상"), ("📋", "아침 점검"),
+         ("✅ 청산", "청산(이김)"), ("✅ 텔레그램", "텔레그램 설정 맞춰짐"), ("🚨 ❌", "손실 카드(소리)"),
+         ("❌", "손실 카드"), ("🚦", "신호등 바뀜"), ("🏁", "40번 도달"), ("📉", "참고"), ("🎉", "좋은 소식"), ("✅", "다시 정상"), ("📋", "아침 점검"),
          ("🚨 실거래 일일 점검", "아침 점검(확인할 것 있음)"))
 
 
 ALARMS = (("페이퍼를 따라가지 않았습니다", "따라가지 않음"), ("기록을 남기지 않습니다", "실행기 조용함"),
           ("손절 기록이 없습니다", "손절 기록 없음"), ("디스크 부족", "디스크 부족"), ("메모리 부족", "메모리 부족"),
           ("페이퍼 봇이 10분", "페이퍼 봇 멈춤"), ("규칙봇 1분봉", "1분봉 멈춤"), ("최고점보다", "잔고 25% 하락"),
-          ("페이퍼가 이긴 거래에서", "실거래만 짐"), ("기대 범위 밑", "기대 범위 밑"), ("실행기가 멈췄습니다", "멈춤 요약"))
+          ("페이퍼가 이긴 거래에서", "실거래만 짐"), ("기대 범위 밑", "기대 범위 밑"), ("실행기가 멈췄습니다", "멈춤 요약"),
+          ("텔레그램 설정", "텔레그램 설정"))
 
 
 def kind_of(body: str) -> str:
@@ -479,11 +505,13 @@ def shown(level: str, text: str) -> tuple:
 
 
 def render(items: list) -> str:
-    """Each message as Telegram shows it, with whether it rings (TELEGRAM_SOUND=critical)."""
+    """Each message as Telegram shows it, with whether it rings (TELEGRAM_SOUND=critical). The Telegram setup alarm
+    goes through live.env's bot to the rule bot's room (the live chats cannot carry it)."""
     blocks = []
-    for i, (_scene, level, text) in enumerate(items, 1):
+    for i, (scene, level, text) in enumerate(items, 1):
         body, rings = shown(level, text)
-        blocks.append(f"━━ {i}. {kind_of(body)} · {'소리' if rings else '무음'} ━━\n{body}")
+        where = " · 규칙봇 방으로" if scene.startswith("🚨 텔레그램") else ""
+        blocks.append(f"━━ {i}. {kind_of(body)}{where} · {'소리' if rings else '무음'} ━━\n{body}")
     return "\n\n".join(blocks)
 
 
