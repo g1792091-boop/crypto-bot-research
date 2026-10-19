@@ -1,11 +1,13 @@
 // 실거래 › 안전 (#/livebots/safety): per executor (/api/v4/livebots/safety) whether it is halted and why (and since when),
 // the risk limits its config REALLY has (owners 10/19 took the $40 daily limit and the wallet check out: a limit the
 // config does not set is simply not listed), the kill file (/var/lib/paperbot/STOP: there or not), the signal light now and
-// every time it turned red (or could not read the paper), the halt log, and its WARN / CRITICAL log, 10 a page.
+// every time it turned red (or could not read the paper), the halt log, and its WARN / CRITICAL log, 10 a page. Between
+// them the live checks (livebots-checks.js, livecheck.db): 아침 점검 of the last 14 days and the watcher's 감시 알람.
 // HONESTY: the executors' own records only; an executor that could not be read says 못 읽음 and why; the page changes
 // nothing (no 'clear halt' button: that stays a command on the server, with a name and a note).
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {lightRow, sourceState, notesEl} from "./livebots-kit.js";
+import {checksView} from "./livebots-checks.js";
 
 const REFRESH_MS = 30 * 1000;
 
@@ -17,10 +19,11 @@ export function safetyView(ctx) {
   const exSeg = ui.seg([{id: "all", label: "전부"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "MEXC"}], st.ex, (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); },
     {label: "실행기 고르기"});
   const pg = ui.pager({size: 10, row: (e) => evRow(e), empty: () => (st.d ? ui.empty("주의 · 긴급 기록이 아직 없어요") : motion.shimmer(3))});
-  const el = h("div", {class: "lb-safety stack"}, stateSlot, cards,
+  const checks = checksView();
+  const el = h("div", {class: "lb-safety stack"}, stateSlot, cards, checks.el,
     ui.card({title: "주의 · 긴급 기록", sub: "실행기 두 개 · 거래소 요청 재시도는 뺌 · 10개씩", cls: "lb-logcard", acts: [exSeg]}, pg.el),
     ui.note("멈춤 풀기는 이 화면에 없어요: 서버에서 이름과 메모를 남기는 명령으로만 풀어요 (clear-halt)"),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC 실행기 기록")));
+    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC 실행기 기록"), ui.assumeLine(["closed"], "아침 점검의 페이퍼 손익")));
 
   function evRow(e) {
     return h("div", {class: "lb-ev", role: "listitem"},
@@ -61,8 +64,9 @@ export function safetyView(ctx) {
   }
   function draw() {
     const d = st.d;
-    if (!d) { put(cards, motion.shimmer(4)); drawLog(false); return; }
+    if (!d) { put(cards, motion.shimmer(4)); drawLog(false); checks.set(null); return; }
     put(cards, (d.execs || []).map(card));
+    checks.set(d.checks || {state: "missing", reason_ko: "서버가 점검 기록을 보내지 않았어요"});
     drawLog(false);
   }
   async function load() {

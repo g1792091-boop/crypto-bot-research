@@ -3,11 +3,14 @@
 // 본전 약 78 %, all 참고: earlier tests, not a promise), the 40-trade checkpoint the owners set (나아가기 88 % 이상 늘리기
 // 검토 / 82~88 % 지켜보기 / 82 % 미만 멈추고 다시 생각; nothing is judged before 40), and the record by strategy, coin,
 // timeframe, 롱 / 숏 and Korea-time hour, each row with 표본 적음 under 20 (and under 40), and the coin-flip twin of the paper
-// (참고: the same moments with a random side).
-// HONESTY: closed trades only; small samples say so; the reference lines are labelled 참고; no pass / fail word before 40.
+// (참고: the same moments with a random side). Then 매매법 성적표 and 개선 후보 장부 (livebots-score.js: liveimprove's
+// scorecard per strategy with its status words, and its improvement ledger with the exact commands, read-only).
+// HONESTY: closed trades only; small samples say so; the reference lines are labelled 참고; no pass / fail word before 40
+// (the scorecard's words are liveimprove's own test against the backtest, not the 40-trade decision).
 import {h, s, put, ui, fmt, local, motion} from "../core/pb.js";
 import {acctKo, sourceState} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
+import {scoreView, ledgerView} from "./livebots-score.js";
 
 const IDS = ["paper", "bybit", "mexc"];
 const REFRESH_MS = 60 * 1000;
@@ -54,13 +57,15 @@ export function perfView(ctx) {
   const flip = h("div", {class: "lb-flip"});
   const pg = ui.pager({size: 10, row: (r) => brow(r), empty: () => (st.d ? ui.empty("닫힌 거래가 아직 없어요") : motion.shimmer(3))});
   const legend = h("div", {class: "lb-legend", role: "list"});
+  const score = scoreView(ctx), ledger = ledgerView();
   const el = h("div", {class: "lb-perf stack"},
     h("div", {class: "lb-tbar"}, seg), stateSlot,
     ui.card({title: "승률 흐름", sub: "최근 20번 · 40번 닫힌 거래의 이긴 비율", cls: "lb-rollcard"}, head, chart, legend),
     ui.card({title: "40번 판단까지", sub: "페이퍼 닫힌 거래 기준 · 두 분이 정하는 자리", cls: "lb-cpcard"}, cp),
+    score.el, ledger.el,
     ui.card({title: "나눠 보기", sub: "표본 적음 = 20번 미만 (40번 미만도 조심)", cls: "lb-brkcard", acts: [bseg]}, pg.el),
     ui.card({title: "동전 쌍둥이 (참고)", sub: "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌", cls: "lb-flipcard"}, flip),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC"), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이")));
+    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC"), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이 · 매매법 성적표")));
 
   function brow(r) {
     const fl = smallFloor(r.trades);
@@ -75,7 +80,9 @@ export function perfView(ctx) {
   function draw() {
     seg.set(st.acct);
     const d = st.d;
-    if (!d) { put(chart, motion.shimmer(3)); drawBreak(false); return; }
+    if (!d) { put(chart, motion.shimmer(3)); drawBreak(false); score.set(null); ledger.set(null); return; }
+    score.set(d.scorecard || {state: "missing", reason_ko: "서버가 성적표를 보내지 않았어요"});
+    ledger.set(d.ledger || {state: "missing", reason_ko: "서버가 장부를 보내지 않았어요"});
     const a = d.accts[st.acct];
     if (!a || a.state !== "ok") { put(stateSlot, sourceState(a, acctKo(st.acct))); put(head); put(chart); put(legend); drawBreak(false); }
     else {

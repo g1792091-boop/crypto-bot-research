@@ -159,10 +159,13 @@
 .lb-tc { font-weight: 800; }
 .lb-ts { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .lb-tr, .lb-tp { text-align: right; }
+/* a phone: time / coin · side · strategy / why it closed (and its card) · ROE · money, three short lines */
 @media (max-width: 759px) {
-  .lb-trow { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .lb-trow { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
+  .lb-trow > .side { justify-self: start; }
   .lb-tt { grid-column: 1 / -1; }
-  .lb-ts { grid-column: 1 / 3; }
+  .lb-ts { grid-column: 3 / -1; }
+  .lb-tpills { grid-column: 1 / 4; }
 }
 .lb-tdet { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 4px 8px 12px; min-width: 0; }
 .lb-tdet .kv { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
@@ -258,3 +261,77 @@
 .lb-mem { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); min-width: 0; }
 .lb-memh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); }
 .lb-memh .muted { overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- 손실 카드 (livebots-cards.js, opened under a losing trade) */
+.lb-tpills { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.lb-cardseg button { padding: 0 10px; }
+.lb-csum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 2px 0 4px; font-size: var(--t-sm); color: var(--ink); }
+.lb-csum.muted { color: var(--muted); font-size: var(--t-xs); }
+.lb-cnone { padding: 4px 0; }
+.lb-lcard { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface); min-width: 0; }
+.lb-lcard.gap, .lb-lcard.bigger { border-color: var(--down-line); }
+.lb-lcard.streak, .lb-lcard.weak { border-color: var(--warn-line); }
+.lb-chead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); min-width: 0; }
+.lb-chead b { overflow-wrap: anywhere; }
+.lb-cchip { font-weight: 800; }
+.lb-cline { margin: 0; font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.lb-cline.muted { font-size: var(--t-xs); }
+.lb-ch4 { margin: 6px 0 0; font: 800 var(--t-xs)/1.3 var(--f-body); color: var(--ink-2); }
+.lb-cbt, .lb-cexs { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; font-size: var(--t-sm); line-height: 1.55; min-width: 0; }
+.lb-cbt li { overflow-wrap: anywhere; }
+.lb-cbt li::before { content: "· "; color: var(--muted); }
+.lb-cex { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.lb-cex > span { min-width: 0; overflow-wrap: anywhere; }
+.lb-cwhy { font-size: var(--t-xs); }
+.lb-cnoise { margin: 0; font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.lb-ctext { margin: 6px 0 0; padding: 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink-2); font: 400 var(--t-xs)/1.6 var(--f-term);
+  white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- 매매법 성적표 · 개선 후보 장부 (livebots-score.js) */
+.lb-schead { display: grid; gap: 4px; margin-bottom: 8px; min-width: 0; }
+.lb-sco { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; font-size: var(--t-sm); }
+.lb-scref { margin: 0; font-size: var(--t-xs); }
+.lb-scbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 4px; min-width: 0; }
+.lb-scbar > .seg.scroll { max-width: 100%; }
+.lb-sc { display: grid; gap: 3px; padding: 8px 2px; border-top: 1px solid var(--line); min-width: 0; }
+.lb-sch { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); }
+.lb-scl { min-width: 0; overflow-wrap: anywhere; }
+.lb-scc { font-size: var(--t-xs); overflow-wrap: anywhere; min-width: 0; }
+.lb-sch .pp { margin-left: auto; }
+.lb-scn { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: var(--t-sm); }
+.lb-scn .muted { font-size: var(--t-xs); }
+.lb-scx { font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lb-scnotes { display: grid; gap: 4px; margin-top: 8px; }
+.lb-luck { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--ink); font-size: var(--t-xs); line-height: 1.6; }
+.lb-schow { display: grid; gap: 4px; margin: 6px 0 0; padding: 0 0 0 16px; font-size: var(--t-xs); color: var(--ink-2); line-height: 1.6; }
+.lb-lghead { display: grid; gap: 4px; margin-bottom: 6px; min-width: 0; }
+.lb-lgsum { margin: 0; font-size: var(--t-sm); }
+.lb-lg { display: grid; gap: 6px; padding: 10px 2px; border-top: 1px solid var(--line); min-width: 0; }
+.lb-lg.closed { gap: 2px; opacity: .85; }
+.lb-lgh { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); min-width: 0; }
+.lb-lgh .muted { font-size: var(--t-xs); }
+.lb-lgl { min-width: 0; overflow-wrap: anywhere; }
+.lb-lg .steps li { padding: 3px 9px; }
+.lb-lgev, .lb-lgq { margin: 0; font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.lb-lgev { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.lb-lgcmds { display: grid; gap: 4px; }
+.lb-lglog { display: grid; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.lb-adopt { display: grid; gap: 4px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line-2); }
+.lb-adoptl { display: grid; gap: 4px; margin: 0; padding: 0 0 0 16px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); }
+
+/* ---------------------------------------------------------------- 아침 점검 · 감시 알람 (livebots-checks.js) */
+.lb-checks { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+@media (min-width: 1100px) { .lb-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+.lb-msum { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin: 0 0 6px; font-size: var(--t-sm); overflow-wrap: anywhere; }
+.lb-mlist { display: grid; min-width: 0; }
+.lb-mrow { display: grid; gap: 4px; padding: 9px 2px; border-top: 1px solid var(--line); min-width: 0; }
+.lb-mrow.none { opacity: .8; }
+.lb-mrow .note { margin: 0; }
+.lb-mtop { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-sm); }
+.lb-mday { min-width: calc(76px * var(--ts)); }
+.lb-mwhy { display: grid; gap: 2px; margin: 0; padding: 0 0 0 16px; font-size: var(--t-sm); color: var(--ink); line-height: 1.55; overflow-wrap: anywhere; }
+.lb-mrow .lb-msum { margin: 0; font-size: var(--t-xs); color: var(--ink-2); }
+.lb-whead { min-width: 0; }
+.lb-al { display: grid; gap: 4px; padding: 10px 2px; border-top: 1px solid var(--line); min-width: 0; }
+.lb-altitle { margin: 0; font-size: var(--t-sm); font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.lb-al .clamp { font-size: var(--t-xs); color: var(--ink-2); white-space: pre-line; overflow-wrap: anywhere; }

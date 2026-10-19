@@ -12,6 +12,11 @@
     PAPERBOT_LIVE_MEXC_DB       /var/lib/paperbot/exec/executor-mexc-live.db    MEXC 실행기
     PAPERBOT_LIVE_BYBIT_CONFIG  /etc/paperbot/executor.json                     (키 없음: 계좌 · 신호등 · 크기 비율 · 위험 한도만 씀)
     PAPERBOT_LIVE_MEXC_CONFIG   /etc/paperbot/executor-mexc.json
+    PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
+    PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
+
+거래 · 성적 · 안전 탭은 그 둘도 읽습니다(읽기만): 손실 카드(거래), 매매법 성적표와 개선 후보 장부(성적; 성적표는 liveimprove의
+함수로 지금 계산: ``score`` 명령과 같은 숫자와 상태 말), 아침 점검 14일과 감시 알람(안전).
 
 DB는 모두 ``mode=ro``(쓰는 쪽이 멈춘 WAL 파일은 immutable, paperbot.livepnl.open_ro) + ``query_only``로 열고, 한 번 읽는 동안
 하나의 시점(BEGIN)으로 읽습니다.
@@ -873,8 +878,12 @@ FILTER_KO = {"session": "시간대", "weekend": "주말", "btc": "BTC 4시간 �
 SIGNALS_KEEP = 200                     # recent signal rows sent (the page pages them 10 at a time)
 TRADES_KEEP = 500                      # closed trades per account sent to 거래 (newest first)
 SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocut.db", "그림자 끄는 구간 없음"), ("ac32", "shadow-ac32.db", "그림자 32개"))
+# the live checks' own files (read-only here): paperbot/livecheck.py (morning check, watcher, loss cards) and
+# paperbot/liveimprove.py (weekly scorecard, the improvement ledger)
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
-            "combo_config": ("PAPERBOT_LIVE_COMBO_CONFIG", "/etc/paperbot/combo.json")}
+            "combo_config": ("PAPERBOT_LIVE_COMBO_CONFIG", "/etc/paperbot/combo.json"),
+            "check_db": ("PAPERBOT_LIVE_CHECK_DB", "/var/lib/paperbot/livecheck.db"),
+            "improve_db": ("PAPERBOT_LIVE_IMPROVE_DB", "/var/lib/paperbot/liveimprove.db")}
 
 
 def paths_more(env: Optional[dict] = None) -> dict:
@@ -1202,12 +1211,18 @@ def entered_meta(path: str, account: str) -> dict:
 
 
 # ---------------------------------------------------------------- 거래
-def trade_rows(p: dict, now: int) -> dict:
+def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
     """GET /api/v4/livebots/trades: every closed trade of the three accounts (newest first, at most TRADES_KEEP each) with
     its setting, its reason, its costs and its partners on the other side (live <-> paper: same coin and side, entry within
-    5 minutes; slippage = the live entry against the paper's, in the trade's favour positive)."""
+    5 minutes; slippage = the live entry against the paper's, in the trade's favour positive). A losing paper trade carries
+    its loss card (livecheck.db ``loss_cards``, made by the watcher a few minutes after the exit); a live trade carries the
+    card of its paper partner."""
+    more = more or paths_more()
     _configs, _follows, paper, execs = sources(p, now)
-    combo = read_combo(p["paper"], paths_more()["combo_config"])
+    combo = read_combo(p["paper"], more["combo_config"])
+    cards = read_cards(more["check_db"], now)
+    card_by = {c["key"]: c for c in cards.get("cards") or []}
+    card_of = lambda t: card_by.get(f"{ACCOUNT}|{t.get('symbol')}|{t.get('entry_time')}") if t else None     # noqa: E731
     members = members_of(combo) if combo.get("state") == "ok" else []
     meta = entered_meta(p["paper"], ACCOUNT) if paper.get("state") == "ok" else {}
     a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
@@ -1244,7 +1259,7 @@ def trade_rows(p: dict, now: int) -> dict:
                                                    "entry_price", "exit_price", "qty", "margin", "fees", "funding", "strategy_id", "timeframe",
                                                    "lock_roe", "stop_initial", "stop_price", "liq_price")},
                          "key": f"paper:{t['id']}", "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
-                         **setting(t["symbol"], t["entry_time"]), "live": cells})
+                         **setting(t["symbol"], t["entry_time"]), "live": cells, "card": card_of(t)})
         out["paper"] = {"state": "ok", "rows": rows, "n": len(ptrades)}
     else:
         out["paper"] = {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")} if paper.get("state") != "ok" else \
@@ -1273,9 +1288,12 @@ def trade_rows(p: dict, now: int) -> dict:
                          "diff": (t["pnl"] - pt["pnl"] * scale) if pt and pt.get("pnl") is not None and t.get("pnl") is not None and scale else None,
                          "slip_vs_paper": slip, "gap_ms": abs(pt["entry_time"] - t["paper_time"]) if pt and t.get("paper_time") is not None else None,
                          "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None,
-                         **(setting(pt["symbol"], pt["entry_time"]) if pt else {"member": None, "order": None, "setting": None})})
+                         **(setting(pt["symbol"], pt["entry_time"]) if pt else {"member": None, "order": None, "setting": None}),
+                         "card": card_of(pt)})
         out[x["id"]] = {"state": "ok", "rows": rows, "n": len(r.get("trades") or []), "qty_scale": x["config"].get("qty_scale")}
-    return {"now_ms": now, "accts": out, "match_ms": MATCH_MS, "combo_state": combo.get("state"), "members_n": len(members)}
+    return {"now_ms": now, "accts": out, "match_ms": MATCH_MS, "combo_state": combo.get("state"), "members_n": len(members),
+            "cards": {**{k: cards.get(k) for k in ("state", "reason_ko", "reason", "path")}, "n": len(card_by),
+                      "kinds": [{"id": k, "ko": ko, "tone": tone} for k, ko, tone in CARD_KINDS]}}
 
 
 def why_missed(rec: dict, pt: dict, account: str) -> dict:
@@ -1341,8 +1359,10 @@ def _cum(trades: list) -> list:
     return out
 
 
-def perf(p: dict, now: int) -> dict:
-    """GET /api/v4/livebots/perf."""
+def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
+    """GET /api/v4/livebots/perf: the records, plus 매매법 성적표 (``scorecard``: liveimprove's own functions over the paper
+    database now) and 개선 후보 장부 (``ledger``: liveimprove.db, read-only)."""
+    more = more or paths_more()
     _configs, _follows, paper, execs = sources(p, now)
     out = {}
     a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
@@ -1365,13 +1385,16 @@ def perf(p: dict, now: int) -> dict:
         out[x["id"]] = {"state": "ok", **perf_of(live, "entry_ts", "exit_ts")}
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
     return {"now_ms": now, "accts": out, "refs": REFS, "checkpoint": checkpoint((a or {}).get("trades") or []) if a else None,
-            "flip": {"state": "ok", **perf_of(flip.get("trades") or [])} if flip and flip.get("known") else None, "small": list(SMALL)}
+            "flip": {"state": "ok", **perf_of(flip.get("trades") or [])} if flip and flip.get("known") else None, "small": list(SMALL),
+            "scorecard": scorecard(p, execs), "ledger": read_ledger(more["improve_db"])}
 
 
 # ---------------------------------------------------------------- 안전
-def safety(p: dict, now: int, keep: int = 500) -> dict:
+def safety(p: dict, now: int, keep: int = 500, more: Optional[dict] = None) -> dict:
     """GET /api/v4/livebots/safety: per executor its halt, the limits its config really has, the kill file, the light now and
-    every light_red / light_unread event, the halt log and its WARN / CRITICAL log (newest ``keep``)."""
+    every light_red / light_unread event, the halt log and its WARN / CRITICAL log (newest ``keep``); and the live checks
+    (``checks``, livecheck.db read-only): the morning check's last 14 days and the watcher's alarm log."""
+    more = more or paths_more()
     _configs, _follows, paper, execs = sources(p, now)
     out = []
     for x in execs:
@@ -1394,7 +1417,8 @@ def safety(p: dict, now: int, keep: int = 500) -> dict:
                     "record": {k: r.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms", "stale", "mode", "halted", "halt_reason",
                                                      "halted_ts", "consecutive_losses", "since_ms", "halts", "retry_24h", "log_error")},
                     "lights": lights, "log": log})
-    return {"now_ms": now, "execs": out, "paper": {k: paper.get(k) for k in ("state", "reason_ko", "path", "as_of_ms", "stale")}}
+    return {"now_ms": now, "execs": out, "paper": {k: paper.get(k) for k in ("state", "reason_ko", "path", "as_of_ms", "stale")},
+            "checks": read_checks(more["check_db"], now)}
 
 
 # ---------------------------------------------------------------- 그림자
@@ -1446,6 +1470,360 @@ def settings(p: dict, now: int) -> dict:
                        for k, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]}
 
 
+# ================================================================ the live checks (livecheck.db, liveimprove.db; read-only)
+# loss card labels (paperbot/livecheck.py build_card, strongest first): id, the label as the card says it, the chip's tone
+CARD_KINDS = (("gap", "실거래-페이퍼 차이", "bad"), ("bigger", "평소보다 큰 손실", "bad"), ("streak", "연속 손실", "warn"),
+              ("weak", "백테스트에서도 약한 자리", "warn"), ("normal", "정상 범위 손실", "thin"))
+CARDS_KEEP = 1000
+NOISE_MS = 4 * HOUR                    # livecheck NOISE_MS: the noise stop is checked 4 hours after the exit
+REG5_CARD_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")      # livecheck REG5_KO (BTC 4h regime)
+CHECK_MISSING_KO = "점검 파일이 아직 안 생겼어요 (아침 점검이나 실시간 감시가 아직 한 번도 돌지 않았어요)"
+IMPROVE_MISSING_KO = "장부 파일이 아직 안 생겼어요 (월요일 09:30 주간 점검이 처음 돌면 생겨요)"
+MORNING_DAYS = 14
+WATCH_KEEP = 200
+WATCH_STALE_MS = 10 * 60_000           # the watcher runs every 2 minutes (deploy/paperbot-livewatch.timer)
+# the watcher's condition keys (paperbot/livecheck.py watch_conditions, drift_conditions, health_conditions) in words
+WATCH_KO = {"paper_stale": "페이퍼 기록 멈춤", "rule_bars": "규칙봇 1분봉 멈춤", "stale": "실행기 기록 멈춤", "stop": "손절 기록 없음",
+            "dd": "잔고 낙폭", "good": "잔고 좋은 소식", "halt": "실행기 멈춤", "vs_paper": "페이퍼가 이긴 거래에서 짐",
+            "follow": "페이퍼를 안 따라감", "drift": "기대 범위 밑", "drift_note": "기대 범위 참고", "strat": "매매법 연속 손실 참고",
+            "disk": "디스크 부족", "memory": "메모리 부족"}
+WATCH_EX_KEYS = ("stale", "stop", "dd", "good", "halt", "vs_paper", "follow")
+# liveimprove's commands as the start guide writes them on the server (docs/live1019-start-ko.md 13)
+SERVER_CD = "cd /opt/crypto-bot-research"
+SERVER_PY = "sudo -u paperbot /opt/paperbot/venv/bin/"
+
+
+def card_kind(label: Any) -> str:
+    s = str(label or "")
+    if s.startswith("연속 손실"):
+        return "streak"
+    return next((k for k, ko, _t in CARD_KINDS if ko == s), "other")
+
+
+def _card(row: tuple, now: int) -> dict:
+    """One loss card as the page shows it: the stored card (livecheck build_card's fields) and its noise check."""
+    key, tid, made, label, loud, streak, weak, noise, nroe, nts, sent, text, data = row
+    d = _j(data)
+    exit_t, entry_t = _i(d.get("exit_time")), _i(d.get("entry_time"))
+    n = _i(noise)
+    if n is None:
+        nstate = "wait" if exit_t is None or now < exit_t + NOISE_MS + 10 * 60_000 else "checking"
+    else:
+        nstate = {1: "noise", 0: "not"}.get(n, "unknown")
+    reg5 = _i(d.get("reg5"))
+    hon = d.get("honest") if isinstance(d.get("honest"), list) and len(d["honest"]) == 2 else None
+    cell = lambda v: [_i(v[0]), _f(v[1])] if isinstance(v, list) and len(v) == 2 else None      # noqa: E731
+    execs = []
+    for o in d.get("executors") or []:
+        if isinstance(o, dict):
+            execs.append({"name": o.get("name"), "label": o.get("label"), "status": o.get("status"), "roe": _f(o.get("roe")),
+                          "pnl": _f(o.get("pnl")), "entry_bps": _f(o.get("entry_bps")), "exit_bps": _f(o.get("exit_bps")),
+                          "why": o.get("why") or ""})
+    stop_pct = _f(d.get("stop_pct"))
+    return {"key": key, "trade_id": _i(tid), "made_ts": _i(made), "label": label, "kind": card_kind(label), "loud": bool(loud),
+            "streak": _i(streak), "weak_cell": bool(weak), "sent": None if sent is None else bool(sent), "text": text or "",
+            "strategy": d.get("strategy"), "tf": d.get("tf"), "member_order": _i(d.get("member_order")), "type": d.get("type") or "",
+            "symbol": d.get("symbol"), "side": _i(d.get("side")), "entry_time": entry_t, "exit_time": exit_t,
+            "hold_ms": exit_t - entry_t if exit_t is not None and entry_t is not None else None, "roe": _f(d.get("roe")),
+            "pnl": _f(d.get("pnl")), "exit_reason": d.get("exit_reason"), "exit_ko": EXIT_KO.get(d.get("exit_reason"), d.get("exit_reason")),
+            "stop_type": d.get("stop_type") or "", "stop_dist": stop_pct / 100 if stop_pct is not None else None,
+            "reg5": reg5, "reg5_ko": REG5_CARD_KO[reg5] if reg5 is not None and 0 <= reg5 < len(REG5_CARD_KO) else None,
+            "hour": _i(d.get("hour")), "mfe_roe": _f(d.get("mfe_roe")), "fit_win": _f(d.get("fit_win")),
+            "honest": [_i(hon[0]), _f(hon[1])] if hon else None, "loss_median": _f(d.get("loss_median")),
+            "loss_worst": _f(d.get("loss_worst")), "hours_median": _f(d.get("hours_median")), "hours_p90": _f(d.get("hours_p90")),
+            "reg5_cell": cell(d.get("reg5_cell")), "sym_cell": cell(d.get("sym_cell")),
+            "weak": [str(w) for w in d.get("weak") or []], "fit_longest": _i(d.get("fit_longest")),
+            "honest_longest": _i(d.get("honest_longest")), "gap": bool(d.get("gap")), "bigger": bool(d.get("bigger")),
+            "executors": execs, "noise": {"state": nstate, "roe": _f(nroe), "ts": _i(nts)}}
+
+
+def read_cards(path: str, now: int) -> dict:
+    """livecheck.db ``loss_cards`` (newest exits first): {state, cards}."""
+    try:
+        conn = open_ro(path)
+    except FileNotFoundError:
+        return _missing(path, CHECK_MISSING_KO)
+    except (OSError, sqlite3.Error) as exc:
+        return _err(path, exc)
+    try:
+        conn.execute("BEGIN")
+        if "loss_cards" not in _tables(conn):
+            return _missing(path, "점검 파일은 있지만 손실 카드 표는 아직 안 생겼어요 (감시가 첫 기록을 쓰기 전)")
+        rows = conn.execute("SELECT key, trade_id, ts, label, loud, streak, weak, noise, noise_roe, noise_ts, sent, text, data "
+                            "FROM loss_cards ORDER BY exit_time DESC, key LIMIT ?", (CARDS_KEEP,)).fetchall()
+    except sqlite3.Error as exc:
+        return _err(path, exc)
+    finally:
+        conn.close()
+    return {"state": "ok", "path": path, "cards": [_card(r, now) for r in rows]}
+
+
+def _score_row(r: dict) -> dict:
+    keep = ("key", "label", "n", "wins", "win", "avg_roe", "losses", "loss_roe_median", "pnl", "fit", "honest", "honest_src", "status",
+            "p", "family", "tfs")
+    ex = {}
+    for name, e in (r.get("exec") or {}).items():
+        ex[name] = {k: e.get(k) for k in ("n", "wins", "pnl", "live_roe", "paper_roe", "leak")}
+    return {**{k: r.get(k) for k in keep}, "exec": ex}
+
+
+def scorecard(p: dict, execs: list) -> dict:
+    """매매법 성적표, computed now with liveimprove's own functions (read_paper, exec_follow, scorecard: the same numbers and
+    status words as ``python -m paperbot.liveimprove score``) over the paper database and the executors' followed trades,
+    against deploy/combo.live-ac.expected.json. Every database read-only (mode=ro, query_only)."""
+    from ... import livecheck as LC
+    from ... import liveimprove as LI
+    path = p["paper"]
+    try:
+        ref = LI.load_ref()
+    except (OSError, ValueError) as exc:
+        return {**_err(str(LI.EXPECTED), exc), "reason_ko": "백테스트 기준표(deploy/combo.live-ac.expected.json)를 못 읽었어요"}
+    try:
+        conn = open_ro(path)
+    except FileNotFoundError:
+        return _missing(path)
+    except (OSError, sqlite3.Error) as exc:
+        return _err(path, exc)
+    try:
+        conn.execute("BEGIN")
+        if "trades" not in _tables(conn):
+            return _missing(path, NO_TABLE_KO)
+        trades = LI.read_paper(conn, ref)
+        _ts, run = LC.get_state(conn, "combo_run")
+    except (sqlite3.Error, ValueError, TypeError, KeyError) as exc:
+        return _err(path, exc)
+    finally:
+        conn.close()
+    problems = []
+    why = LI.ref_mismatch((run or {}).get("config") if isinstance(run, dict) else None, ref)
+    if why:
+        problems.append(f"기준표가 페이퍼 봇의 지금 설정과 다름({why}): 세팅별 줄과 손절·진입 구분은 믿지 마세요")
+    infos = [LC.ExecInfo(name=x["id"], config=(x["config"] or {}).get("path") or "-", unit="-", db=x["record"].get("path") or "",
+                         light_n=0, light_min=0.0, exchange=(x["config"] or {}).get("exchange") or x["id"], account=x["follows"])
+             for x in execs]
+    try:
+        follow = LI.exec_follow(infos, trades)
+        card = LI.scorecard(trades, ref, follow, cuts=("strategy",))
+    except (sqlite3.Error, ValueError, TypeError, KeyError) as exc:
+        return _err(path, exc)
+    o = card["overall"]
+    return {"state": "ok", "path": path, "source": "live", "n": len(trades),
+            "since_ms": min((t["entry_time"] for t in trades), default=None),
+            "overall": {**_score_row(o), "break_even": o.get("break_even"), "roll": {str(k): v for k, v in (o.get("roll") or {}).items()}},
+            "rows": [_score_row(r) for r in card["cuts"]["strategy"]],
+            "words": [LI.SMALL, LI.OK, LI.WATCH, LI.BAD], "small_n": LI.SMALL_N, "check_n": LI.CHECK_N, "family": LI.family_size(ref, "strategy"),
+            "luck_ko": LI.LUCK_NOTE, "how_ko": list(LI.READ_HOW[1:]), "problems": problems,
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"),
+                       "followed": follow.get(x["id"]) is not None} for x in execs],
+            "cmd": f"{SERVER_PY}python -m paperbot.liveimprove score"}
+
+
+def ledger_cmds(row: dict) -> list:
+    """The exact server commands of a ledger item's next step (liveimprove.next_step's own commands, run as the start
+    guide writes them)."""
+    from ... import liveimprove as LI
+    full = LI.next_step(row, full=True)
+    if " → " not in full:
+        return []
+    out = []
+    for part in full.split(" → ", 1)[1].split(" / "):
+        i = part.find("python -m ")
+        if i >= 0:
+            out.append(SERVER_PY + part[i:].strip())
+    return out
+
+
+def read_ledger(path: str) -> dict:
+    """개선 후보 장부 (liveimprove.db ``ledger``, ``ledger_log``, the latest ``weeks`` row): open items first, each with its
+    question, its evidence when found and now, the next step and its exact command. Read-only: a status moves only by the
+    command (liveimprove set_status)."""
+    from ... import liveimprove as LI
+    try:
+        conn = open_ro(path)
+    except FileNotFoundError:
+        return _missing(path, IMPROVE_MISSING_KO)
+    except (OSError, sqlite3.Error) as exc:
+        return _err(path, exc)
+    try:
+        conn.execute("BEGIN")
+        tables = _tables(conn)
+        if "ledger" not in tables:
+            return _missing(path, "장부 파일은 있지만 장부 표는 아직 안 생겼어요")
+        cur = conn.execute("SELECT * FROM ledger ORDER BY id")
+        cols = [c[0] for c in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        logs = conn.execute("SELECT item, ts, day, old, new, note, who FROM ledger_log ORDER BY id").fetchall() if "ledger_log" in tables else []
+        week = conn.execute("SELECT week, ts, since, trades, wins, tested, flagged, new_items, level, sent FROM weeks "
+                            "ORDER BY week DESC LIMIT 1").fetchone() if "weeks" in tables else None
+    except sqlite3.Error as exc:
+        return _err(path, exc)
+    finally:
+        conn.close()
+    by_item: dict = {}
+    for item, ts, day, old, new, note, who in logs:
+        by_item.setdefault(_i(item), []).append({"ts": _i(ts), "day": day, "old": old, "new": new, "note": note or "", "who": who or ""})
+    items = []
+    for r in rows:
+        latest = _j(r.get("latest"))
+        r = {**r, "latest": latest}
+        is_open = r.get("status") in LI.OPEN
+        items.append({"id": _i(r.get("id")), "cell": r.get("cell"), "kind": r.get("kind"), "kind_ko": LI.KIND_KO.get(r.get("kind"), r.get("kind")),
+                      "label": r.get("label"), "found": r.get("found"), "found_ts": _i(r.get("found_ts")), "n": _i(r.get("n")),
+                      "wins": _i(r.get("wins")), "expected": _f(r.get("expected")), "expected_src": r.get("expected_src"), "p": _f(r.get("p")),
+                      "family": _i(r.get("family")), "question": r.get("question") or "", "status": r.get("status"),
+                      "status_ts": _i(r.get("status_ts")), "rule_b": bool(r.get("rule_b")), "rule_c": bool(r.get("rule_c")),
+                      "latest": {k: latest.get(k) for k in ("ts", "n", "wins", "expected", "p")}, "rule_a": LI.rule_a(latest),
+                      "note": r.get("note") or "", "open": is_open,
+                      "next_ko": LI.next_step(r, full=False) if is_open else "끝난 항목",
+                      "cmds": ledger_cmds(r) if is_open else [], "log": by_item.get(_i(r.get("id")), [])})
+    items.sort(key=lambda x: (0, x["id"] or 0) if x["open"] else (1, -(x["status_ts"] or 0)))
+    wk = None
+    if week:
+        try:
+            new_items = json.loads(week[7]) if isinstance(week[7], str) else []
+        except ValueError:
+            new_items = []
+        wk = {"week": week[0], "ts": _i(week[1]), "since_ms": _i(week[2]), "trades": _i(week[3]), "wins": _i(week[4]), "tested": _i(week[5]),
+              "flagged": _i(week[6]), "new_items": new_items if isinstance(new_items, list) else [],
+              "level": week[8], "sent": None if week[9] is None else bool(week[9])}
+    return {"state": "ok", "path": path, "items": items, "n": len(items), "open_n": sum(1 for x in items if x["open"]), "week": wk,
+            "statuses": list(LI.STATUSES), "adopt_rule": list(LI.ADOPT_RULE), "cd": SERVER_CD,
+            "list_cmd": f"{SERVER_PY}python -m paperbot.liveimprove ledger list"}
+
+
+def _loud_reasons(text: str, n: int) -> list:
+    """The morning check's loud reasons as its message lists them (livecheck.compose: the head line, the span, a blank
+    line, then one '- reason' line each)."""
+    if not n:
+        return []
+    out = []
+    for ln in (text or "").split("\n")[3:]:
+        if not ln.startswith("- "):
+            break
+        out.append(ln[2:])
+    return out[:n]
+
+
+def _morning_item(row: tuple) -> dict:
+    day, ts, level, loud, text, report, sent = row
+    rep = _j(report)
+    paper = rep.get("paper") if isinstance(rep.get("paper"), dict) else None
+    pday = (paper or {}).get("day") if isinstance((paper or {}).get("day"), dict) else None
+    par = rep.get("parity") if isinstance(rep.get("parity"), dict) else {}
+    ex = []
+    for r in rep.get("executors") or []:
+        if isinstance(r, dict):
+            ex.append({"name": r.get("name"), "label": r.get("label"), "missing": bool(r.get("missing")), "exists": r.get("exists"),
+                       "n": _i(r.get("day_trades")), "pnl": _f(r.get("day_pnl")), "halted": r.get("halted")})
+    lines = (text or "").split("\n")
+    return {"day": day, "state": "ok", "ts": _i(ts), "level": level, "loud_n": _i(loud) or 0,
+            "reasons": _loud_reasons(text, _i(loud) or 0), "head": lines[0].lstrip("📋🚨 ") if lines else "", "text": text or "",
+            "sent": None if sent is None else bool(sent),
+            "summary": {"paper": {"n": _i(pday.get("n")), "wins": _i(pday.get("wins")), "pnl": _f(pday.get("pnl"))} if pday else None,
+                        "execs": ex, "parity_flags": _i(par.get("flags")), "parity_error": par.get("error") or None}}
+
+
+def _watch_kind(key: str) -> dict:
+    parts = str(key).split(":")
+    kind = parts[0]
+    return {"kind": kind, "kind_ko": WATCH_KO.get(kind, kind), "ex": parts[1] if kind in WATCH_EX_KEYS and len(parts) > 1 else None}
+
+
+def read_checks(path: str, now: int) -> dict:
+    """livecheck.db, one snapshot: ``morning`` (the morning check's last 14 KST check days, newest first: level, the loud
+    reasons, a summary, the whole message; a day without a record says so) and ``watch`` (every alarm the watcher sent:
+    time, level, its message, whether it is still on, cleared (and so re-armed) or a once-only note; the watcher's last
+    pass)."""
+    try:
+        conn = open_ro(path)
+    except FileNotFoundError:
+        m = _missing(path, CHECK_MISSING_KO)
+        return {**m, "morning": m, "watch": m}
+    except (OSError, sqlite3.Error) as exc:
+        e = _err(path, exc)
+        return {**e, "morning": e, "watch": e}
+    try:
+        conn.execute("BEGIN")
+        tables = _tables(conn)
+        days = conn.execute("SELECT day, ts, level, loud, text, report, sent FROM days ORDER BY day DESC LIMIT 60").fetchall() \
+            if "days" in tables else None
+        log = conn.execute("SELECT ts, key, event, level, text, sent FROM watch_log ORDER BY ts, rowid").fetchall() \
+            if "watch_log" in tables else None
+        w = conn.execute("SELECT key, active, first_ts, last_ts, cleared_ts, level, text, recover, once FROM watch").fetchall() \
+            if "watch" in tables else []
+        seen = conn.execute("SELECT MAX(ts), COUNT(*) FROM seen").fetchone() if "seen" in tables else (None, 0)
+    except sqlite3.Error as exc:
+        e = _err(path, exc)
+        return {**e, "morning": e, "watch": e}
+    finally:
+        conn.close()
+    return {"state": "ok", "path": path, "morning": _morning(days, now), "watch": _watch(log, w, seen, now)}
+
+
+def _morning(days: Optional[list], now: int) -> dict:
+    if days is None:
+        return _missing("", "점검 파일은 있지만 아침 점검 표는 아직 안 생겼어요")
+    if not days:
+        return _missing("", "아침 점검이 아직 한 번도 돌지 않았어요 (매일 09:10)")
+    from ... import livecheck as LC
+    by = {r[0]: r for r in days}
+    last = LC.default_day(now)
+    first = min(by)
+    epoch = _dt.date(1970, 1, 1)
+    d_last = _dt.date.fromisoformat(last)
+    want = [(d_last - _dt.timedelta(days=i)).isoformat() for i in range(MORNING_DAYS)]
+    want = sorted({d for d in want if d >= first} | {d for d in by if d > last}, reverse=True)
+    items = []
+    for day in want:
+        w0 = (_dt.date.fromisoformat(day) - epoch).days * DAY
+        base = {"day": day, "day_ko": LC.kst_day(w0), "w0": w0, "w1": w0 + DAY}
+        if day in by:
+            items.append({**base, **_morning_item(by[day])})
+        elif now < w0 + DAY + 45 * 60_000:
+            items.append({**base, "state": "pending", "why_ko": "아직 점검 전이에요 (매일 09:10에 돌아요)"})
+        else:
+            items.append({**base, "state": "none", "why_ko": "그날 점검 기록이 없어요 (점검이 돌지 않았거나 실패했어요)"})
+    return {"state": "ok", "items": items, "last_day": last, "first_day": first, "loud_days": sum(1 for x in items if x.get("loud_n"))}
+
+
+def _watch(log: Optional[list], w: list, seen: tuple, now: int) -> dict:
+    if log is None:
+        return _missing("", "점검 파일은 있지만 감시 기록 표는 아직 안 생겼어요")
+    last_seen, passes = _i(seen[0]), _i(seen[1]) or 0
+    if not passes and not log:
+        return _missing("", "실시간 감시가 아직 한 번도 돌지 않았어요 (2분마다 돌아요)")
+    cond = {r[0]: {"active": bool(r[1]), "first_ts": _i(r[2]), "last_ts": _i(r[3]), "cleared_ts": _i(r[4]), "once": bool(r[8])} for r in w}
+    fires, open_fire = [], {}
+    for ts, key, event, level, text, sent in log:
+        if event == "fire":
+            f = {"ts": _i(ts), "key": key, **_watch_kind(key), "level": level, "level_ko": "긴급" if level == "CRITICAL" else "조용한 알림",
+                 "title": (text or "").split("\n")[0], "text": text or "", "sent": None if sent is None else bool(sent),
+                 "cleared_ts": None, "recover": ""}
+            fires.append(f)
+            if f["sent"] is not False:
+                open_fire[key] = f
+        elif event == "clear":
+            f = open_fire.pop(key, None)
+            if f is not None:
+                f["cleared_ts"], f["recover"] = _i(ts), text or ""
+    for f in fires:
+        c = cond.get(f["key"]) or {}
+        if f["sent"] is False:
+            f["state"] = "unsent"
+        elif f["cleared_ts"] is not None:
+            f["state"] = "cleared"
+        elif c.get("once"):
+            f["state"] = "once"
+        elif c.get("active") and c.get("first_ts") == f["ts"]:
+            f["state"], f["last_ts"] = "active", c.get("last_ts")
+        else:
+            f["state"] = "unknown"
+    items = sorted(fires, key=lambda f: -(f["ts"] or 0))[:WATCH_KEEP]
+    return {"state": "ok", "items": items, "n": len(fires), "active_n": sum(1 for f in fires if f["state"] == "active"),
+            "last_seen_ms": last_seen, "passes": passes,
+            "stale": last_seen is None or now - last_seen > WATCH_STALE_MS}
+
+
 def _cached(key: str, make) -> dict:
     now = time.time()
     with _lock:
@@ -1475,7 +1853,7 @@ def register(app, ctx) -> dict:
 
     @app.get("/api/v4/livebots/trades")
     def get_livebots_trades():
-        """실거래 › 거래: the three accounts' closed trades with their settings, reasons, costs and partners (5 s cache)."""
+        """실거래 › 거래: the three accounts' closed trades with their settings, reasons, costs, partners and loss cards (5 s cache)."""
         p = paths()
         return _cached(key("trades", p), lambda: json_finite(trade_rows(p, int(time.time() * 1000))))
 
@@ -1487,13 +1865,14 @@ def register(app, ctx) -> dict:
 
     @app.get("/api/v4/livebots/perf")
     def get_livebots_perf():
-        """실거래 › 성적: rolling win shares and the breakdowns of each account (5 s cache)."""
+        """실거래 › 성적: rolling win shares and the breakdowns of each account, 매매법 성적표, 개선 후보 장부 (5 s cache)."""
         p = paths()
         return _cached(key("perf", p), lambda: json_finite(perf(p, int(time.time() * 1000))))
 
     @app.get("/api/v4/livebots/safety")
     def get_livebots_safety():
-        """실거래 › 안전: halts, the limits each config has, the kill file, the lights' history and the WARN / CRITICAL log."""
+        """실거래 › 안전: halts, the limits each config has, the kill file, the lights' history, the WARN / CRITICAL log, the
+        morning checks and the watcher's alarms."""
         p = paths()
         return _cached(key("safety", p), lambda: json_finite(safety(p, int(time.time() * 1000))))
 

@@ -713,3 +713,351 @@ def test_the_terminal_hooks_are_optional_and_the_rule_bots_terminal_passes_none(
     live = _read(SCREENS, "livebots-term.js")
     assert "termChart(ctx, st," in live and "pnlPanel(ctx, {" in live and "watchList(ctx, st, pick, {marks})" in live
     assert "topBar(ctx, st)" in live and "bigFeed(ctx)" in live and "liqFeed(ctx, st," in live and "consolePanel(" in live
+
+
+# ================================================================ the live checks: livecheck.db and liveimprove.db (read-only)
+# Both files are made by paperbot/livecheck.py and paperbot/liveimprove.py themselves (livebots_world.live_checks): the
+# watcher's two passes with their loss cards, the morning checks, the weekly pass, the owners' ledger steps.
+from paperbot import livecheck as LC  # noqa: E402
+from paperbot import liveimprove as LI  # noqa: E402
+
+
+def _checked(folder, rich=False):
+    p = W.build_world(folder)
+    m = W.live_checks(p, folder, rich=rich)
+    return p, {**L.paths_more(), **m}
+
+
+@pytest.fixture
+def checked(tmp_path):
+    return _checked(str(tmp_path / "c"))
+
+
+@pytest.fixture(scope="module")
+def rich(tmp_path_factory):
+    return _checked(str(tmp_path_factory.mktemp("rich")), rich=True)
+
+
+def test_a_losing_trade_carries_its_loss_card(checked):
+    p, more = checked
+    t = L.trade_rows(p, NOW, more)
+    assert t["cards"]["state"] == "ok" and t["cards"]["n"] == 1
+    assert [k["id"] for k in t["cards"]["kinds"]] == ["gap", "bigger", "streak", "weak", "normal"]
+    by = {r["symbol"]: r for r in t["accts"]["paper"]["rows"]}
+    c = by["SOLUSDT"]["card"]                                         # t3, the standard world's one loss
+    assert all(by[s]["card"] is None for s in by if s != "SOLUSDT")   # wins have none
+    assert c["key"] == f"COMBO@mix|SOLUSDT|{W.T0 + 3 * H}" and c["label"] == "정상 범위 손실" and c["kind"] == "normal"
+    assert c["strategy"] == "S2_ST_ROC" and c["tf"] == "30m" and c["member_order"] == 3 and c["roe"] == pytest.approx(-0.15)
+    assert c["fit_win"] is None and c["streak"] == 1 and c["hold_ms"] == 40 * MIN and c["exit_ko"] == "손절"
+    # the noise stop, four hours after the exit, from the rule bot's 1m bars: back to +15 % net ROE (30x, 100 -> 100.5)
+    assert c["noise"]["state"] == "noise" and c["noise"]["roe"] == pytest.approx(0.15)
+    ex = {o["name"]: o for o in c["executors"]}
+    assert ex["bybit"]["status"] == "followed" and ex["bybit"]["pnl"] == pytest.approx(-6.3)
+    assert ex["mexc"]["status"] == "not_followed" and "오늘 남은 손실 한도" in ex["mexc"]["why"]
+    assert c["text"] == LC.card_text(json.loads(sqlite3.connect(more["check_db"]).execute(
+        "SELECT data FROM loss_cards").fetchone()[0]))                # the stored card, as the watcher wrote it
+    # a live trade shows its paper partner's card
+    b = next(r for r in t["accts"]["bybit"]["rows"] if r["symbol"] == "SOLUSDT")
+    assert b["card"]["key"] == c["key"] and all(r["card"] is None for r in t["accts"]["bybit"]["rows"] if r["symbol"] != "SOLUSDT")
+
+
+def test_loss_cards_of_every_label_and_their_counts(rich):
+    p, more = rich
+    t = L.trade_rows(p, NOW, more)
+    rows = t["accts"]["paper"]["rows"]
+    cards = [r["card"] for r in rows if r["card"]]
+    stored = dict(sqlite3.connect(more["check_db"]).execute("SELECT key, label FROM loss_cards").fetchall())
+    assert len(cards) == len(stored) == 17 and all(stored[c["key"]] == c["label"] for c in cards)   # the watcher's labels
+    assert all(not r["win"] for r in rows if r["card"])
+    kinds = {}
+    for c in cards:
+        kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
+    assert kinds == {"gap": 1, "bigger": 1, "streak": 3, "weak": 8, "normal": 4}
+    gap = next(c for c in cards if c["kind"] == "gap")
+    assert gap["label"] == "실거래-페이퍼 차이" and gap["gap"] is True
+    assert {o["name"]: o["status"] for o in gap["executors"]} == {"bybit": "followed", "mexc": "not_followed"}
+    assert next(o for o in gap["executors"] if o["name"] == "bybit")["roe"] > 0               # bybit won where the paper lost
+    big = next(c for c in cards if c["kind"] == "bigger")
+    assert big["strategy"] == "F12_MSS_DISP" and big["roe"] == pytest.approx(-0.75) and big["roe"] < big["loss_worst"]
+    weak = next(c for c in cards if c["kind"] == "weak")
+    assert weak["strategy"] == "F4_FAN" and weak["sym_cell"] == [26, pytest.approx(0.7692)] and weak["weak"] == ["코인"]
+    assert weak["honest"] == [116, pytest.approx(0.6207)] and weak["fit_longest"] == 3 and weak["honest_longest"] == 5
+    assert {c["label"] for c in cards if c["kind"] == "streak"} == {"연속 손실 2번째"}
+    # noise: the old ones without 1m bars could not be checked; the newest are still being checked; t3 was a noise stop
+    states = {c["noise"]["state"] for c in cards}
+    assert {"noise", "unknown", "checking"} <= states and "wait" not in states
+
+
+def test_the_scorecard_is_liveimproves_own(rich):
+    """Status words, counts, fit / honest rates and the executors' cost gap are exactly liveimprove's (its `score`)."""
+    p, more = rich
+    sc = L.perf(p, NOW, more)["scorecard"]
+    assert sc["state"] == "ok" and sc["source"] == "live" and sc["n"] == 48
+    g = LI.gather(LI.Sources(paper_db=p["paper"], executors=W.exec_infos(p)))
+    card = LI.scorecard(g["trades"], g["ref"], g["follow"], cuts=("strategy",))
+    mine = {r["key"]: r for r in sc["rows"]}
+    theirs = {r["key"]: r for r in card["cuts"]["strategy"]}
+    assert set(mine) == set(theirs) and len(mine) == 28                 # the 27 reference strategies + S2_ST_ROC (not in it)
+    for k, r in theirs.items():
+        m = mine[k]
+        assert (m["n"], m["wins"], m["status"], m["fit"], m["honest"], m["honest_src"], m["label"]) == \
+            (r["n"], r["wins"], r["status"], r["fit"], r["honest"], r["honest_src"], r["label"]), k
+        for ex, e in r["exec"].items():
+            assert m["exec"][ex]["n"] == e["n"] and m["exec"][ex]["leak"] == pytest.approx(e["leak"]) if e["leak"] is not None \
+                else m["exec"][ex]["leak"] is None
+    words = {k: mine[k]["status"] for k in ("N03_ADX_GC", "F4_FAN", "N08_ICHI_WR", "F12_MSS_DISP")}
+    assert words == {"N03_ADX_GC": LI.WATCH, "F4_FAN": LI.BAD, "N08_ICHI_WR": LI.OK, "F12_MSS_DISP": LI.SMALL}
+    assert sc["words"] == [LI.SMALL, LI.OK, LI.WATCH, LI.BAD] == ["표본 작음", "기대 안", "주의", "확실히 나쁨"]
+    assert sc["overall"]["status"] == card["overall"]["status"] and sc["overall"]["n"] == 48 and sc["overall"]["wins"] == 31
+    assert sc["luck_ko"] == LI.LUCK_NOTE and "1~2개는 \"주의\"" in sc["luck_ko"] and sc["family"] == 27
+    assert sc["problems"] and "세팅 수가 다름" in sc["problems"][0]          # the world's config is not the reference's
+    assert mine["N03_ADX_GC"]["exec"]["bybit"]["n"] == 16 and sc["cmd"].endswith("python -m paperbot.liveimprove score")
+
+
+def test_the_ledger_open_first_with_question_next_step_and_the_exact_command(rich):
+    p, more = rich
+    lg = L.perf(p, NOW, more)["ledger"]
+    assert lg["state"] == "ok" and lg["n"] == 4 and lg["open_n"] == 3
+    items = lg["items"]
+    assert [x["open"] for x in items] == [True, True, True, False] and [x["id"] for x in items[:3]] == [1, 2, 3]
+    one = items[0]
+    assert one["status"] == "백테스트 시험" and one["question"].endswith(LI.QUESTION_TAIL)
+    assert one["next_ko"] == LI.next_step({"id": 1, "status": "백테스트 시험"}, full=False)
+    assert one["cmds"] == ['sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liveimprove ledger set 1 --status "그림자 시험" '
+                           '--backtest-ok --note "..."',
+                           'sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liveimprove ledger set 1 --status 기각 --note "..."']
+    assert [(x["old"], x["new"]) for x in one["log"]] == [(None, "발견"), ("발견", "백테스트 시험")] and one["log"][1]["who"] == "두 분"
+    assert items[1]["status"] == "발견" and items[1]["cmds"][0].endswith('ledger set 2 --status "백테스트 시험" --note "..."')
+    for x in items[:3]:                                                # liveimprove's own command, as the start guide runs it
+        full = LI.next_step({"id": x["id"], "status": x["status"]}, full=True)
+        assert all(c.replace("sudo -u paperbot /opt/paperbot/venv/bin/", "") in full for c in x["cmds"])
+    last = items[-1]
+    assert last["status"] == "기각" and last["cmds"] == [] and last["next_ko"] == "끝난 항목" and last["note"] == "2025-26에서 나빠짐"
+    assert lg["adopt_rule"] == list(LI.ADOPT_RULE) and len(lg["adopt_rule"]) == 5
+    assert lg["week"]["week"] == "2026-10-19" and lg["week"]["tested"] > 0 and lg["week"]["flagged"] == 4
+    assert lg["list_cmd"].endswith("python -m paperbot.liveimprove ledger list") and lg["cd"] == "cd /opt/crypto-bot-research"
+
+
+def test_morning_checks_of_14_days_and_the_watchers_alarms(checked):
+    p, more = checked
+    ch = L.safety(p, NOW, more=more)["checks"]
+    assert ch["state"] == "ok"
+    m = ch["morning"]
+    assert m["state"] == "ok" and m["last_day"] == "2026-10-18" and m["loud_days"] == 1
+    assert [(x["day"], x["state"]) for x in m["items"]] == [("2026-10-18", "ok"), ("2026-10-17", "ok"), ("2026-10-16", "none"),
+                                                             ("2026-10-15", "ok")]  # from the first record on; 10/16 had no check
+    d18 = m["items"][0]
+    text = sqlite3.connect(more["check_db"]).execute("SELECT text FROM days WHERE day = '2026-10-18'").fetchone()[0]
+    assert d18["level"] == "CRITICAL" and d18["text"] == text and d18["day_ko"] == "10/18(일)" and d18["sent"] is True
+    assert d18["loud_n"] == len(d18["reasons"]) == 2 and all(f"\n- {r}\n" in text for r in d18["reasons"])
+    assert any("MEXC" in r for r in d18["reasons"])
+    sm = d18["summary"]
+    assert {x["name"]: (x["n"], x["halted"]) for x in sm["execs"]} == {"bybit": (1, False), "mexc": (0, True)}
+    assert sm["paper"] == {"n": 0, "wins": 0, "pnl": 0.0} and sm["parity_error"]
+    d17 = m["items"][1]
+    assert d17["level"] == "INFO" and d17["loud_n"] == 0 and d17["reasons"] == [] and all(x["missing"] for x in d17["summary"]["execs"])
+    assert m["items"][2]["why_ko"].startswith("그날 점검 기록이")
+    # before 09:45 KST the day that just ended is 점검 전, not a missing check
+    early = L.read_checks(more["check_db"], W.T0 + L.DAY + 10 * MIN)["morning"]
+    assert early["items"][0]["day"] == "2026-10-19" and early["items"][0]["state"] == "pending"
+    w = ch["watch"]
+    assert w["state"] == "ok" and w["last_seen_ms"] == NOW and w["passes"] == 2 and w["stale"] is False
+    by = {f["kind"]: f for f in w["items"]}
+    assert by["rule_bars"]["state"] == "cleared" and by["rule_bars"]["cleared_ts"] == NOW and by["rule_bars"]["ts"] == NOW - 30 * MIN
+    assert by["rule_bars"]["recover"].startswith("✅") and by["rule_bars"]["kind_ko"] == "규칙봇 1분봉 멈춤"
+    assert by["stop"]["state"] == "active" and by["stop"]["ex"] == "bybit" and by["stop"]["last_ts"] == NOW
+    assert by["halt"]["state"] == "active" and by["halt"]["ex"] == "mexc" and by["halt"]["level"] == "CRITICAL"
+    assert w["active_n"] == 2 and all(f["sent"] for f in w["items"]) and by["halt"]["title"].startswith("MEXC 실행기가 멈췄습니다")
+    assert L.read_checks(more["check_db"], NOW + 11 * MIN)["watch"]["stale"] is True    # a watcher silent for 10 minutes
+
+
+def test_live_check_files_not_there_yet_say_so(tmp_path, world):
+    """No file: 수집 전 (missing), never an empty list; a file without its tables: missing; garbage: 못 읽음 with the reason."""
+    more = {**L.paths_more(), "check_db": str(tmp_path / "none" / "livecheck.db"), "improve_db": str(tmp_path / "none" / "liveimprove.db")}
+    t = L.trade_rows(world, NOW, more)
+    assert t["cards"]["state"] == "missing" and t["cards"]["reason_ko"] == L.CHECK_MISSING_KO and t["cards"]["n"] == 0
+    assert all(r["card"] is None for r in t["accts"]["paper"]["rows"])
+    pf = L.perf(world, NOW, more)
+    assert pf["ledger"]["state"] == "missing" and pf["ledger"]["reason_ko"] == L.IMPROVE_MISSING_KO and "items" not in pf["ledger"]
+    assert pf["scorecard"]["state"] == "ok"                                 # the scorecard reads the paper bot only
+    ch = L.safety(world, NOW, more=more)["checks"]
+    assert ch["state"] == ch["morning"]["state"] == ch["watch"]["state"] == "missing" and "items" not in ch["morning"]
+    # files there but without their tables
+    empty = str(tmp_path / "empty.db")
+    sqlite3.connect(empty).close()
+    more2 = {**more, "check_db": empty, "improve_db": empty}
+    assert L.trade_rows(world, NOW, more2)["cards"]["state"] == "missing"
+    assert L.perf(world, NOW, more2)["ledger"]["state"] == "missing"
+    ch = L.safety(world, NOW, more=more2)["checks"]
+    assert ch["morning"]["state"] == "missing" and ch["watch"]["state"] == "missing"
+    # garbage: 못 읽음 + why, never 0 or an empty list
+    bad = str(tmp_path / "bad.db")
+    with open(bad, "wb") as fh:
+        fh.write(b"garbage" * 300)
+    more3 = {**more, "check_db": bad, "improve_db": bad}
+    c = L.trade_rows(world, NOW, more3)["cards"]
+    assert c["state"] == "error" and "망가졌" in c["reason_ko"] and "DatabaseError" in c["reason"]
+    assert L.perf(world, NOW, more3)["ledger"]["state"] == "error"
+    assert L.safety(world, NOW, more=more3)["checks"]["morning"]["state"] == "error"
+    # a watcher file before its first pass: the morning check ran, the watcher not yet
+    only = str(tmp_path / "only-morning.db")
+    LC.open_out(only).close()
+    w = L.read_checks(only, NOW)
+    assert w["morning"]["state"] == "missing" and "아침 점검이 아직" in w["morning"]["reason_ko"]
+    assert w["watch"]["state"] == "missing" and "실시간 감시가 아직" in w["watch"]["reason_ko"]
+    # the scorecard without the paper database: 수집 전, without the reference: 못 읽음
+    gone = dict(world, paper=str(tmp_path / "nope.db"))
+    assert L.perf(gone, NOW, more)["scorecard"]["state"] == "missing"
+
+
+def test_the_live_check_files_are_only_read(rich, monkeypatch):
+    """Byte-identical files, no new file next to them (no -journal / -wal), every connection mode=ro, no key file opened."""
+    p, more = rich
+    folder = os.path.dirname(p["paper"])
+    env = os.path.join(folder, "executor.env")
+    with open(env, "w", encoding="utf-8") as fh:
+        fh.write("BYBIT_LIVE_KEY=secret-key-456\n")
+    files = sorted(os.listdir(folder))
+    before = {f: open(os.path.join(folder, f), "rb").read() for f in files if os.path.isfile(os.path.join(folder, f))}
+    uris = []
+    real_connect, real_open = sqlite3.connect, builtins.open
+
+    def connect(target, *a, **k):
+        uris.append(str(target))
+        return real_connect(target, *a, **k)
+
+    def guarded(path, *a, **k):
+        assert not str(path).endswith(".env"), path
+        return real_open(path, *a, **k)
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(builtins, "open", guarded)
+    out = json.dumps([L.trade_rows(p, NOW, more), L.perf(p, NOW, more), L.safety(p, NOW, more=more)], ensure_ascii=False)
+    monkeypatch.setattr(builtins, "open", real_open)
+    monkeypatch.setattr(sqlite3, "connect", real_connect)
+    assert "secret-key-456" not in out
+    assert uris and all("mode=ro" in u for u in uris), [u for u in uris if "mode=ro" not in u]
+    assert any("livecheck.db" in u for u in uris) and any("liveimprove.db" in u for u in uris)
+    assert sorted(os.listdir(folder)) == files
+    assert {f: open(os.path.join(folder, f), "rb").read() for f in before} == before
+
+
+def test_the_new_parts_come_through_the_routes(tmp_path, monkeypatch):
+    p, more = _checked(str(tmp_path / "r"))
+    for k, v in {**W.env_of(p), **W.env_more_of({"check_db": more["check_db"], "improve_db": more["improve_db"]})}.items():
+        monkeypatch.setenv(k, v)
+    base = tmp_path / "data"
+    base.mkdir()
+    dbp = str(base / "paper3.db")
+    _store(dbp).close()
+    c = TestClient(create_app(dbp, hash_password(PW), SECRET, candles=lambda s, i, n: []))
+    c.post("/api/login", json={"password": PW})
+    t = c.get("/api/v4/livebots/trades").json()
+    assert t["cards"]["state"] == "ok" and next(r for r in t["accts"]["paper"]["rows"] if r["symbol"] == "SOLUSDT")["card"]["kind"] == "normal"
+    pf = c.get("/api/v4/livebots/perf").json()
+    assert pf["scorecard"]["state"] == "ok" and pf["ledger"]["state"] == "ok" and pf["ledger"]["open_n"] == 1
+    sf = c.get("/api/v4/livebots/safety").json()
+    assert sf["checks"]["morning"]["state"] == "ok" and sf["checks"]["watch"]["state"] == "ok"
+
+
+def test_the_env_vars_and_the_service_let_the_dashboard_read_them():
+    assert L.paths_more({})["check_db"] == "/var/lib/paperbot/livecheck.db"
+    assert L.paths_more({})["improve_db"] == "/var/lib/paperbot/liveimprove.db"
+    assert L.paths_more({"PAPERBOT_LIVE_CHECK_DB": "/x/c.db"})["check_db"] == "/x/c.db"
+    example = _read(ROOT, "deploy", "dash.env.example")
+    assert "#PAPERBOT_LIVE_CHECK_DB=/var/lib/paperbot/livecheck.db" in example
+    assert "#PAPERBOT_LIVE_IMPROVE_DB=/var/lib/paperbot/liveimprove.db" in example
+    svc = _read(ROOT, "deploy", "paperbot-dash.service").splitlines()
+    val = lambda k: next(ln for ln in svc if ln.startswith(k + "=")).split("=", 1)[1].split()       # noqa: E731
+    hidden = val("InaccessiblePaths")
+    for f in ("/var/lib/paperbot/livecheck.db", "/var/lib/paperbot/liveimprove.db"):
+        assert not any(f.startswith(h.lstrip("-")) or h.lstrip("-").rstrip("/") == "/var/lib/paperbot" for h in hidden), f
+        assert any(f.startswith(r.rstrip("/") + "/") for r in val("ReadWritePaths") + val("ReadOnlyPaths")), f
+    assert "User=paperbot" in svc                                   # the user the livecheck / livewatch / liveimprove units write as
+    for unit in ("paperbot-livecheck.service", "paperbot-livewatch.service", "paperbot-liveimprove.service"):
+        assert "User=paperbot" in _read(ROOT, "deploy", unit).splitlines()
+    src = _read(ROOT, "paperbot", "dash", "more", "livebots.py")
+    new = src[src.index("# ================================================================ the live checks"):src.index("def _cached(")]
+    for call in ("sqlite3.connect(", "executor.env", ".open_out(", ".set_status(", ".ledger_add(", ".run_weekly(", ".run_watch(",
+                 ".run_check(", ".cards_pass(", ".save_day(", ".save_week("):
+        assert call not in new, call                                # only read: never a writer of either module
+
+
+# ---------------------------------------------------------------- the page: the card, the scorecard, the ledger, the checks in node
+def _page(call: str, data) -> dict:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    script = (f"const D = await import('{dom}');\n"
+              + "".join(f"const {n} = await import('file://{SCREENS}/{f}');\n" for n, f in (
+                  ("Cd", "livebots-cards.js"), ("Sc", "livebots-score.js"), ("Ch", "livebots-checks.js"), ("Tr", "livebots-trades.js")))
+              + f"const d = {json.dumps(data)};\nconst out = ({call});\n"
+              "console.log(JSON.stringify(out && out.el ? D.walk(out.el) : out instanceof Node ? D.walk(out) : {json: out}));")
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    if "text" in out:
+        out["text"] = re.sub(r"\s+", " ", out["text"])
+    return out
+
+
+def test_the_loss_card_opens_inline_with_label_backtest_noise_and_executors(rich):
+    p, more = rich
+    t = L.trade_rows(p, NOW, more)
+    rows = t["accts"]["paper"]["rows"]
+    gap = next(r for r in rows if r["card"] and r["card"]["kind"] == "gap")["card"]
+    x = _page("Cd.cardBlock(d.card, {kinds: d.kinds})", {"card": gap, "kinds": t["cards"]["kinds"]})
+    txt = x["text"]
+    assert "실거래-페이퍼 차이" in txt and "손실 카드 · N03_ADX_GC 15분" in txt and "백테스트 승률 95.2%" in txt   # (names table: browser only) and "처음 보는 2025-26 84% (171번)" in txt
+    assert "손실은 보통" in txt and "최악" in txt and "연속 손실 1번째 (백테스트 최장 3번, 처음 보는 기간 5번)" in txt
+    assert "노이즈 손절은 확인 못 했어요" in txt and "바이비트" in txt and "따라감" in txt and "MEXC" in txt and "안 따라감" in txt
+    assert "카드 글 보기" in txt and "pp lb-cchip bad" in x["classes"]
+    for bad in ("null", "undefined", "NaN"):
+        assert bad not in txt, bad
+    t3 = next(r for r in rows if r["symbol"] == "SOLUSDT")["card"]
+    assert "노이즈 손절이었어요: 청산 뒤 4시간 안에 순ROE +15.0%까지 돌아갔어요" in _page("Cd.cardBlock(d)", t3)["text"]
+    assert "백테스트 기준표에 이 매매법이 없어요" in _page("Cd.cardBlock(d)", t3)["text"]
+    # 손실 카드만 and the count by label over the trades shown
+    out = _page("({only: Tr.filterRows(d.rows, {res: 'all', card: true}).length, all: Tr.filterRows(d.rows, {res: 'all'}).length,"
+                " counts: Cd.cardCounts(d.rows, d.kinds), f4: Tr.filterRows(d.rows, {strat: 'F4_FAN', res: 'all', card: true}).length})",
+                {"rows": rows, "kinds": t["cards"]["kinds"]})["json"]
+    assert out["only"] == 17 and out["all"] == 48 and out["f4"] == 9
+    assert [(k["id"], k["n"]) for k in out["counts"]] == [("gap", 1), ("bigger", 1), ("streak", 3), ("weak", 8), ("normal", 4)]
+    s = _page("Cd.cardSummary(d.rows, d.kinds, {state: 'ok'})", {"rows": rows, "kinds": t["cards"]["kinds"]})["text"]
+    assert "손실 카드 17장" in s and "백테스트에서도 약한 자리 8" in s and "연속 손실 3" in s and "10/15~10/19" in s
+    # a live account's rows carry the paper partner's card
+    live = t["accts"]["bybit"]["rows"]
+    assert _page("Tr.filterRows(d, {res: 'all', card: true}).length", live)["json"] == sum(1 for r in live if r["card"])
+
+
+def test_scorecard_ledger_and_checks_render(rich, checked, tmp_path):
+    p, more = rich
+    pf = L.perf(p, NOW, more)
+    sc = _page("(() => { const v = Sc.scoreView({}); v.set(d); return v; })()", pf["scorecard"])["text"]
+    assert "전체 48번 31승" in sc and "주의" in sc and "확실히 나쁨" in sc and "표본 작음" in sc and "기대 안" in sc
+    assert "매매법 27개를 한꺼번에 보면 운만으로도 1~2개는 \"주의\"가 나옵니다. 정상입니다." in sc and "N03_ADX_GC 15분·1시간" in sc
+    assert "실거래 비용" in sc and "바이비트 16번" in sc and "python -m paperbot.liveimprove score" in sc
+    order = _page("Sc.sortRows(d.rows.filter((r) => r.n), 'status', d.words).map((r) => r.key)", pf["scorecard"])["json"]
+    assert order[:2] == ["F4_FAN", "N03_ADX_GC"]                         # 확실히 나쁨, then 주의
+    assert _page("Sc.sortRows(d.rows.filter((r) => r.n), 'n', d.words).map((r) => r.key)", pf["scorecard"])["json"][0] == "N03_ADX_GC"
+    lg = _page("(() => { const v = Sc.ledgerView(); v.set(d); return v; })()", pf["ledger"])["text"]
+    assert "열린 것 3개" in lg and "#1" in lg and "백테스트 시험" in lg and "질문" in lg and "다음" in lg
+    assert 'ledger set 1 --status "그림자 시험" --backtest-ok --note "..."' in lg and "ledger list" in lg
+    for line in LI.ADOPT_RULE:
+        assert line in lg, line
+    ch = L.safety(checked[0], NOW, more=checked[1])["checks"]
+    c = _page("(() => { const v = Ch.checksView(); v.set(d); return v; })()", ch)["text"]
+    assert "10/18(일)" in c and "확인할 것 2개" in c and "대조는 못 함" in c and "기록 없음" in c and "점검 글 보기" in c
+    assert "지금 켜진 알람 2개" in c and "다시 울릴 준비" in c and "켜져 있음" in c and "규칙봇 1분봉 멈춤" in c
+    for bad in ("null", "undefined", "NaN"):
+        assert bad not in sc + lg + c, bad
+    # nothing there yet: 수집 전 in every part, never a zero or '없어요'
+    none = {**L.paths_more(), "check_db": str(tmp_path / "x" / "c.db"), "improve_db": str(tmp_path / "x" / "i.db")}
+    gone = {**L.read_checks(none["check_db"], NOW)}
+    c = _page("(() => { const v = Ch.checksView(); v.set(d); return v; })()", gone)["text"]
+    lg = _page("(() => { const v = Sc.ledgerView(); v.set(d); return v; })()", L.read_ledger(none["improve_db"]))["text"]
+    cs = _page("Tr.filterRows([], {res: 'all'}).length === 0 && null", None)
+    assert cs["json"] is None
+    for t_ in (c, lg):
+        assert "수집 전" in t_ and "없어요" not in t_ and "0.00" not in t_ and "USDT" not in t_, t_
+    assert c.count("수집 전") == 2

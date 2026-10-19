@@ -22,7 +22,9 @@ RestartSec=5
 # program the agents run (~/.local) or the 5-year caches, and cannot read the exchange key or the
 # agents' login token. No database FILE is listed read-only here: this service runs for weeks, and a
 # listed file stays pinned to its old inode after a restore (old file + new WAL); the code opens
-# paper3.db, daily3.db and agents3.db read-only (file:...?mode=ro) instead.
+# paper3.db, daily3.db and agents3.db read-only (file:...?mode=ro) instead. The same for the live checks'
+# /var/lib/paperbot/livecheck.db and liveimprove.db (written by the paperbot user's livecheck / livewatch /
+# liveimprove units): visible here, opened mode=ro + query_only by the 실거래 screen, never hidden below.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

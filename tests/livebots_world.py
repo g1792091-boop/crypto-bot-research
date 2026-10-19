@@ -18,6 +18,11 @@ bybit (qty_scale 0.1, light 20 / 85%):  t2 +1.40 (fills, fee 0.30)  t3 -6.30 (fe
                                   open: BTC long, entry 62,010, stop 62,210 (above entry: locked)
 mexc (qty_scale 0.1, light 20 / 90%):   t2 +1.30 (fee 0.40)  t4 +0.90 (fee 0.20)  t6 +0.60 (key 2 minutes after the paper's)
                                   t3 missed: entry_check WARN; t5 missed: late WARN; halted at T0+8h (3연패)
+
+The live checks (``live_checks``): livecheck.db and liveimprove.db made by paperbot/livecheck.py and paperbot/liveimprove.py
+themselves (two watcher passes with their loss cards, three morning checks, the weekly pass and the owners' ledger steps).
+``rich=True`` first adds four KST days of reference strategies before T0 (``rich_trades``): N03_ADX_GC 8/14 (주의),
+F4_FAN 1/10 (확실히 나쁨), N08_ICHI_WR 15/15, F12_MSS_DISP 2/3, and loss cards of every label.
 """
 from __future__ import annotations
 
@@ -248,6 +253,171 @@ def build_world(folder: str) -> dict:
 def env_of(p: dict) -> dict:
     from paperbot.dash.more.livebots import ENV
     return {ENV[k][0]: v for k, v in p.items() if k in ENV}
+
+
+# ---------------------------------------------------------------- the live checks' own files (livecheck.db, liveimprove.db)
+# Made by paperbot/livecheck.py and paperbot/liveimprove.py themselves (their schemas and writers: run_watch with its loss
+# cards and noise checks, run_check, save_week through run_weekly, ledger_add, set_status), never a copy of them.
+EX_UNITS = {"bybit": "paperbot-executor", "mexc": "paperbot-executor-mexc"}
+# the rich world (rich_trades): four KST days before T0 (10/15 .. 10/18), reference strategies so the scorecard has words
+# and the loss cards every label. (strategy, tf, member label order or None, member_order or None, coin, side, won)
+RICH = {"N03": ("N03_ADX_GC", "15m", 5, 5), "F4": ("F4_FAN", "30m", 77, 77), "N08": ("N08_ICHI_WR", "30m", 49, 49),
+        "F12": ("F12_MSS_DISP", "1h", 1, None)}
+RICH_DAYS = (
+    "N08 W, F4 L, N03 W, N08 W, F4 W, N03 W, F4 L, N08 W, N03 W, F12 W",
+    "F4 L, N08 W, N03 L, N08 W, F4 L, N03 W, N08 W, F4 L, N03 W, N08 W",
+    "N03 L, N03 L, N08 W, F4 L, N08 W, N03 W, F12 W, F4 L, N08 W, N03 Lgap",
+    "F4 L, N08 W, N03 W, F12 Lbig, N08 W, F4 L, N03 L, N08 W, N03 L, N08 W, N03 W, N08 W",
+)
+RICH_COIN = {"N03": ("ETHUSDT", -1), "F4": ("BTCUSDT", 1), "N08": ("SOLUSDT", 1), "F12": ("LTCUSDT", -1)}
+RICH_MARGIN = 40.0
+BYBIT_FOLLOWS = ("N03",)               # the rich trades bybit followed (qty 1.2 x 100 / 30x = margin 4, one tenth of the paper's)
+
+
+def rich_plan() -> list:
+    """[(code, strategy, tf, order, member_order, coin, side, entry ms, won, tag)] of the rich world, oldest first."""
+    out = []
+    for d, line in enumerate(RICH_DAYS):
+        base = T0 - (len(RICH_DAYS) - d) * DAY + H                  # 10:00 KST of that day
+        for i, item in enumerate(line.split(", ")):
+            code, res = item.split(" ")
+            strat, tf, order, mo = RICH[code]
+            sym, side = RICH_COIN[code]
+            out.append((code, strat, tf, order, mo, sym, side, base + i * 80 * MIN, res.startswith("W"), res[1:]))
+    return out
+
+
+def rich_trades(p: dict) -> list:
+    """Adds the rich world's paper trades (with their ENTERED signals: setting, BTC 4h regime, stop) to the paper database
+    and the trades bybit followed (one that won where the paper lost: the live-paper gap) to its database."""
+    s = Store3(p["paper"])
+    eq = 1000.0
+    plan = rich_plan()
+    for k, (code, strat, tf, order, mo, sym, side, t, won, tag) in enumerate(plan):
+        roe = 0.12 if won else (-0.75 if tag == "big" else -0.35 if code == "F4" else -0.45)
+        pnl = round(RICH_MARGIN * roe, 2)
+        eq += pnl
+        rec = _trade(sym, side, t, pnl, roe, eq, strat, tf, "LOCK" if won else "SL")
+        s.trade(ACCOUNT, rec)
+        meta = {"member": f"{strat}@{tf}#{order}~rich", "stop_rule": "3 x ATR", "source": "custom", "rdims": {"reg5": k % 5},
+                "rstop": ["atr", 2.0]}
+        if mo is not None:
+            meta["member_order"] = mo
+        sig = Signal(ts=t - 1, symbol=sym, timeframe=tf, strategy_id=strat, side=side, stop_price=0.0, tier="best", score=3.0, atr=1.0,
+                     meta=meta)
+        from paperbot.models import SignalOutcome
+        s.outcome(ACCOUNT, SignalOutcome(sig, "ENTERED", "ok", t, {"fill": 100.0}))
+    s.close()
+    st = ExecStore(p["bybit_db"], lock=False)
+    for code, strat, tf, order, mo, sym, side, t, won, tag in plan:
+        if code in BYBIT_FOLLOWS or tag == "gap":
+            paper = RICH_MARGIN * (0.12 if won else -0.45) / 10
+            pnl = 0.4 if tag == "gap" else round(paper - 0.03, 2)            # the gap: bybit won where the paper lost
+            _live(st, _k(sym, t), sym, side, t, pnl, 0.05, qty=1.2)
+    st.close()
+    return plan
+
+
+def exec_infos(p: dict) -> list:
+    """The executors as paperbot/livecheck.py reads them (their configs as plain JSON; never the key file)."""
+    from paperbot import livecheck as LC
+    return LC.load_executors(tuple((ex, p[f"{ex}_config"], EX_UNITS[ex], p[f"{ex}_db"], 20, 0.85) for ex in ("bybit", "mexc")))
+
+
+def rule_bars(path: str, symbol: str, a: int, b: int, high=None, step: int = MIN) -> str:
+    """The rule bot's 1m bars (paper3.db ``live_bars``, store3's own writer) for ``symbol`` in [a, b); ``high(ts)`` sets a
+    bar's high (default: the close)."""
+    s = Store3(path)
+    rows = []
+    for ts in range(a - a % MIN, b, step):
+        hi = high(ts) if high else 100.0
+        rows.append({"ts": ts, "symbol": symbol, "open": 100.0, "high": hi, "low": 99.9, "close": 100.0, "volume": 1.0,
+                     "close_time": ts + MIN - 1, "processed_at": ts + MIN})
+    s.live_bars(rows)
+    s.close()
+    return path
+
+
+def livecheck_db(p: dict, folder: str, now: int = NOW) -> str:
+    """livecheck.db by livecheck's own passes: the watcher at now - 30 min (loss cards, the noise check of the SOL loss
+    from the rule bot's bars: back to +15 % ROE within 4 hours = a noise stop; the 1m bars late, bybit's open position
+    without a recorded stop, MEXC halted) and at ``now`` (the bars back: that alarm clears and re-arms), then the morning
+    checks: 10/18 with both executors (loud: MEXC halted), the days before with executors not started yet (quiet), one
+    day (10/16) without a check."""
+    from paperbot import livecheck as LC
+    from paperbot.notify import ListNotifier
+    out = os.path.join(folder, "livecheck.db")
+    rule = os.path.join(folder, "rule-paper3.db")
+    t3 = next(x[3] for x in PAPER if x[0] == "t3")
+    rule_bars(rule, "SOLUSDT", t3 + 40 * MIN, t3 + 40 * MIN + 4 * H, high=lambda ts: 100.5 if ts == t3 + 2 * H else 100.0)
+    infos = exec_infos(p)
+    src = LC.Sources(db=out, paper_db=p["paper"], rule_db=rule, combo_config=os.path.join(folder, "no-combo.json"),
+                     cache=os.path.join(folder, "livecheck-cache.db"), shadow_glob=os.path.join(folder, "shadow-*.db"), executors=infos)
+    units = lambda unit: ("active", "enabled")            # noqa: E731  (both executors meant to run)
+    LC.run_watch(src, now_ms=now - 30 * MIN, notifier=ListNotifier(), units=units, exists=lambda path: False)
+    rule_bars(rule, "BTCUSDT", now - 3 * MIN, now)
+    LC.run_watch(src, now_ms=now, notifier=ListNotifier(), units=units, exists=lambda path: False)
+    LC.run_check(src, day="2026-10-18", now_ms=now, no_replay=True, notifier=ListNotifier())
+    before = [LC.ExecInfo(name=x.name, config=x.config, unit=x.unit, db=os.path.join(folder, f"not-started-{x.name}.db"),
+                          light_n=x.light_n, light_min=x.light_min, exchange=x.exchange, account=x.account) for x in infos]
+    early = LC.Sources(**{**src.__dict__, "executors": before})
+    for day in ("2026-10-17", "2026-10-15"):
+        LC.run_check(early, day=day, now_ms=now, no_replay=True, notifier=ListNotifier())
+    return out
+
+
+def liveimprove_db(p: dict, folder: str, now: int = NOW) -> str:
+    """liveimprove.db by liveimprove's own writers: on a world without candidates two hand-made flagged cells
+    (ledger_add, the finder's shape), then the weekly pass (run_weekly: snapshot, week, the evidence refreshed), then the
+    owners' hand: #1 to 백테스트 시험 (set_status)."""
+    from paperbot import liveimprove as LI
+    from paperbot.notify import ListNotifier
+    out = os.path.join(folder, "liveimprove.db")
+    ref = LI.load_ref()
+    src = LI.Sources(db=out, paper_db=p["paper"], executors=exec_infos(p))
+    conn = LI.open_out(out)
+    try:
+        cand = LI.find_candidates(LI.gather(src)["trades"], ref)
+        if not cand["flagged"]:
+            flagged = []
+            for kind, key, n, w, tfs in (("strategy_coin", ("S2_ST_ROC", "SOLUSDT"), 9, 4, ["30m"]), ("hb", (3,), 8, 4, [])):
+                p0, _fit, _hon, src_ko = LI.cell_expect(ref, kind, key)
+                flagged.append({"cell": LI.cell_id(kind, key), "kind": kind, "key": list(key), "label": LI.cell_label(ref, kind, key, tfs),
+                                "n": n, "wins": w, "expected": p0, "expected_src": src_ko, "p": LI.binom_cdf(w, n, p0), "family": 14,
+                                "question": LI.question(ref, kind, key, tfs)})
+            LI.ledger_add(conn, flagged, now - DAY)
+    finally:
+        conn.close()
+    LI.run_weekly(src, now_ms=now, notifier=ListNotifier())
+    conn = LI.open_out(out)
+    try:
+        LI.set_status(conn, 1, "백테스트 시험", "질문대로 두 기간 돌림", now_ms=now + MIN, who="두 분")
+        rows = LI.ledger_rows(conn)
+        if len(rows) >= 2:
+            LI.set_status(conn, rows[-1]["id"], "기각", "2025-26에서 나빠짐", now_ms=now + 2 * MIN, who="두 분")
+    finally:
+        conn.close()
+    return out
+
+
+def live_checks(p: dict, folder: Optional[str] = None, now: int = NOW, rich: bool = False) -> dict:
+    """The two live-check files for a world ({"check_db", "improve_db"}); ``rich``: first the rich world's trades."""
+    folder = folder or os.path.dirname(p["paper"])
+    if rich:
+        rich_trades(p)
+    return {"check_db": livecheck_db(p, folder, now), "improve_db": liveimprove_db(p, folder, now)}
+
+
+def env_more_of(m: dict) -> dict:
+    from paperbot.dash.more.livebots import ENV_MORE
+    return {ENV_MORE[k][0]: v for k, v in m.items() if k in ENV_MORE}
+
+
+def extend_world(folder: str, p: dict) -> dict:
+    """For the screenshot scripts: the rich world's trades and both live-check files, their paths in the environment."""
+    m = live_checks(p, folder, rich=True)
+    os.environ.update(env_more_of(m))
+    return m
 
 
 def shadow_db(path: str, pnls: list, since: int = T0) -> str:
