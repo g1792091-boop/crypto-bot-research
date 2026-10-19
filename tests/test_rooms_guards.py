@@ -712,7 +712,7 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     # the small databases first; the order executor's records (mainnet and testnet) are in exec/; since 10-19 also
     # the live Bybit and MEXC executors' records and the live paper bot's combo/live-ac.db
     assert ("for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live "
-            "exec/executor-mexc-live combo/live-ac shadow200/shadow200 debate/debate daily3 paper3; do") in script
+            "exec/executor-mexc-live combo/live-ac livecheck liveimprove shadow200/shadow200 debate/debate daily3 paper3; do") in script
     assert "VACUUM INTO" in script and "sqlite3 -bail -readonly" in script and ".backup" not in script.split(
         "\nlib=")[1]
     lib, bk = tmp_path / "lib", tmp_path / "bk"
