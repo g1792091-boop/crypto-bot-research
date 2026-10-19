@@ -33,8 +33,14 @@ const TF_S = Object.fromEntries(Object.entries(bars.TF_MS).map(([k, v]) => [k, v
 const RELAY_FRESH_MS = 6000;
 const narrowBox = () => typeof matchMedia === "function" && matchMedia("(max-width: 1279px)").matches;     // the forming bar keeps the relay's trade price this long against the 5 s candle poll
 
-/** termChart(ctx, st, onTf) -> {el, ready, setSym, onTicker, onBoard, onTrades, onTick, flash, tick} */
-export function termChart(ctx, st, onTf) {
+/** termChart(ctx, st, onTf, src) -> {el, ready, setSym, onTicker, onBoard, onTrades, onTick, flash, tick, refresh}
+ *  src (the 실거래 터미널, screens/livebots-term.js; absent here on #/terminal): another owner of the lines and marks:
+ *  {key (the deck's per-device key), lines(sym, mark) -> deck line specs of its own positions, posKeys(sym) -> Set of open
+ *  position keys on that coin (a new one flashes the pane once: a real fill), trades(sym) -> [{symbol, side, entry_time,
+ *  exit_time, pnl}] for the marks, more(sym, tf) -> the '차트 화면 →' link, keyTitle (the legend's line words), label}.
+ *  With it the rule bot's board, its /api/trades marks and the 차트 위 얹기 (its stop map reads the rule bot's board) stay
+ *  out; call refresh() when its data changed. */
+export function termChart(ctx, st, onTf, src = null) {
   const tfBtns = new Map();
   const tfBar = h("div", {class: "term-tfs", role: "tablist", "aria-label": "봉"}, TFS.map((tf) => {
     const b = h("button", {type: "button", role: "tab", "aria-selected": String(tf === st.tf), onclick: () => setTf(tf)}, SHORT[tf]);
@@ -53,8 +59,10 @@ export function termChart(ctx, st, onTf) {
   const fxSlot = h("span", {class: "term-fx"});            // the deck's header controls (filled once the chart exists)
   if (!TFS.includes(st.tf)) st.tf = "15m";
   // 차트 크게 보기 (core/fullchart.js): the whole panel (its interval buttons and '선' menu too) fills the window; key "f"
-  const fs = fullChart({ctx, label: "터미널 차트"});
-  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: ctx.href("chart", st.sym, {tf: st.tf})}, "차트 화면 →")]}, wrap, vpHost, keyLine);
+  const fs = fullChart({ctx, label: (src && src.label) || "터미널 차트"});
+  const moreHref = (tf) => (src && src.more ? src.more(st.sym, tf) : ctx.href("chart", st.sym, {tf}));
+  const deckKey = (src && src.key) || "term";
+  const el = panel("차트", {cls: "term-chart", acts: [fxSlot, tfBar, fs, h("a", {class: "term-more", href: moreHref(st.tf)}, "차트 화면 →")]}, wrap, vpHost, keyLine);
   fs.bind(el);
   const moreA = el.head.querySelector(".term-more");
 
@@ -163,6 +171,7 @@ export function termChart(ctx, st, onTf) {
   }
   async function loadTrades() {
     const sym = st.sym;
+    if (src) { trades = (src.trades(sym) || []).filter((t) => t.symbol === sym); drawMarks(); return; }
     try { const rows = await ctx.api(`/api/trades?symbol=${encodeURIComponent(sym)}&limit=100`); if (sym === st.sym && ctx.alive()) { trades = rows || []; drawMarks(); } }
     catch (e) { /* marks stay */ }
   }
@@ -192,7 +201,7 @@ export function termChart(ctx, st, onTf) {
         marks.push({time: bt, position: "aboveBar", color: tok("--warn"), shape: "square", text: e.kind, glow: false});
       }
     }
-    const mine = trades.filter((t) => t.symbol === sym && MAIN.has(groupOfT(t)) && t.entry_time / 1000 >= t0).slice(0, 12);
+    const mine = trades.filter((t) => t.symbol === sym && (src || MAIN.has(groupOfT(t))) && t.entry_time / 1000 >= t0).slice(0, 12);
     for (const t of mine) {
       const e = Math.floor(t.entry_time / 1000), x = Math.floor(t.exit_time / 1000);
       marks.push({time: e - (e % step), position: t.side > 0 ? "belowBar" : "aboveBar", color: tok("--accent"), shape: t.side > 0 ? "arrowUp" : "arrowDown", text: ""});
@@ -204,7 +213,7 @@ export function termChart(ctx, st, onTf) {
     put(keyLine, h("span", null, h("i", {class: "k-ar"}), "우리 진입"), h("span", null, h("i", {class: "k-up"}), "청산 이익"), h("span", null, h("i", {class: "k-dn"}), "청산 손실"),
       // (one line at 1280 px: the details are in the tooltips)
       h("span", {title: "마우스를 올리면 지표 이름과 한국 시각"}, h("i", {class: "k-ev"}), "경제지표"),
-      h("span", {title: "기존 36 · 5분봉 · 추가 계좌의 진입선과 손절·잠금선 · 왼쪽 이름표를 누르면 그 선만 숨김 · 오른쪽 이름은 선에 마우스를 올리거나 누르면 더 보임"},
+      h("span", {title: (src && src.keyTitle) || "기존 36 · 5분봉 · 추가 계좌의 진입선과 손절·잠금선 · 왼쪽 이름표를 누르면 그 선만 숨김 · 오른쪽 이름은 선에 마우스를 올리거나 누르면 더 보임"},
         h("i", {class: "k-ln"}), "우리 진입·손절선"),
       LEVEL_TFS.includes(st.tf) && deck.shown("sr") ? h("span", null, h("i", {class: "k-sr"}), "지지·저항") : null,
       // conv-b: a short hint, the details in its tooltip (the line stays one line at 1280 px)
@@ -212,6 +221,13 @@ export function termChart(ctx, st, onTf) {
   }
   function drawPos() {
     if (!deck) return;
+    if (src) {
+      deck.setLines("pos", src.lines(st.sym, store.mark(st.sym)) || []);
+      const keys = src.posKeys(st.sym) || new Set();
+      if (seenPos && [...keys].some((k) => !seenPos.has(k))) deck.flash(ownEvent());      // a live bot really filled on this coin
+      seenPos = keys;
+      return;
+    }
     const accts = board ? board.accounts.filter((a) => a.position && a.position.symbol === st.sym && MAIN.has(fmt.groupOf(a))) : [];
     deck.setLines("pos", posLines(accts, store.mark(st.sym), {stops: 6}));
     // a position of this coin that is new since the last board: our bot really filled an entry (one accent flash)
@@ -235,7 +251,7 @@ export function termChart(ctx, st, onTf) {
     if (tf === st.tf || !TFS.includes(tf)) return;
     onTf(tf);
     for (const [k, b] of tfBtns) b.setAttribute("aria-selected", String(k === tf));
-    moreA.href = ctx.href("chart", st.sym, {tf});
+    moreA.href = moreHref(tf);
     loadCandles();
   }
 
@@ -248,7 +264,10 @@ export function termChart(ctx, st, onTf) {
       series = C.chart.addCandlestickSeries({...candleOptions(), lastValueVisible: false, priceLineVisible: true, priceLineStyle: 2, priceLineWidth: 1,
         priceLineColor: tok("--accent")});
       vpPrepare("term", false);                           // 매물대 is opt-in here (the declutter); a device with saved choices starts with it off too
+      // (the 실거래 터미널: its own deck key, and its position lines on even on a phone, where the house default hides them)
+      const deckOpts = src ? {key: deckKey, defaults: {sr: false, vp: false, pos: true, risk: true}} : null;
       deck = chartDeck({chart: C.chart, series, wrap, box, ctx, key: "term", groups: ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], defaults: {sr: false, vp: false},
+        ...deckOpts,
         sym: () => st.sym, legend});
       vpAttach({chart: C.chart, series, deck, wrap, box, ctx, key: "term", host: vpHost, legend, sym: () => st.sym, tf: () => st.tf});
       deck.onToggle((g) => { if (g === "ev" || g === "sr" || g == null) drawMarks(); });
@@ -260,8 +279,10 @@ export function termChart(ctx, st, onTf) {
       // (deck.flashSel and deck.smcBtn hold the same items: the 차트 screen shows them as separate buttons)
       put(fxSlot, deck.lightChip, deck.viewBtn, deck.menuBtn, draw.toggle);
       // 차트 위 얹기 (screens/chart-plus.js): 시장 강제청산 거품, 우리 손절·청산 지도, 아래 칸 — all off until chosen in '선'
-      try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 230}); }
-      catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
+      if (!src) {
+        try { chartPlus({ctx, deck, chart: C.chart, series, wrap, box, key: "term", sym: () => st.sym, tf: () => st.tf, minMain: 230}); }
+        catch (e) { /* the add-ons are optional: a fault in them never takes the chart down */ }
+      }
       C.chart.subscribeCrosshairMove((p) => {
         const d = p && p.seriesData && p.seriesData.get(series);
         paintLegend(d || last);
@@ -285,7 +306,9 @@ export function termChart(ctx, st, onTf) {
   ctx.every(30000, loadAlerts, {now: true});           // conv-b: the armed alerts (a fired one leaves the chart)
   return {
     el, ready,
-    setSym() { relayAt = 0; seenPos = null; if (deck) { deck.setLines("pos", []); deck.setLines("sr", []); } trades = []; moreA.href = ctx.href("chart", st.sym, {tf: st.tf}); loadCandles(); },
+    setSym() { relayAt = 0; seenPos = null; if (deck) { deck.setLines("pos", []); deck.setLines("sr", []); } trades = []; moreA.href = moreHref(st.tf); loadCandles(); },
+    /** (src) its positions or closed trades changed: the lines and the marks are drawn again (a new position flashes once). */
+    refresh() { drawPos(); if (src && series) loadTrades(); },
     onTicker() { drawPos(); },
     onBoard(b) { board = b; drawPos(); },
     onTrades(rows) {

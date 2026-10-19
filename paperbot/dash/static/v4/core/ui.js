@@ -24,6 +24,15 @@ export function assumeLine(kinds = ["closed", "open"], extra) {
   const text = k.has("closed") && k.has("open") ? ASSUME_ALL_KO : k.has("open") ? ASSUME_OPEN_KO : ASSUME_KO;
   return h("p", {class: "assume once"}, text, extra ? ` · ${extra}` : null);
 }
+/** Real money (owners 10/19, the 실거래 screen #/livebots): the live executors' own records, never 모의. Closed trades
+ *  are the exchange's fills (fees and funding in), a trade whose fills are not read yet is the wallet's change (어림); an
+ *  open position is at the mark price before the exit fee. The page sends no order. */
+export const ASSUME_LIVE_KO = "실거래 · 거래소 실제 체결 · 닫힌 거래 손익은 체결 기록 기준(거래소 수수료·펀딩 포함, 체결을 아직 못 읽은 거래는 지갑 변화로 어림) · "
+  + "열린 포지션은 마크 가격 기준 미실현(나갈 때 수수료 전) · 주문 버튼 없음";
+/** The 실거래 screen's one caption line for real money (the paper rows keep assumeLine's words). */
+export function assumeLive(extra) {
+  return h("p", {class: "assume once"}, ASSUME_LIVE_KO, extra ? ` · ${extra}` : null);
+}
 let tipNow = null;
 function tipClose() {
   if (!tipNow) return;

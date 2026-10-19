@@ -13,7 +13,7 @@ import {s, local} from "./dom.js";
 import {START_KEY} from "./prefs.js";
 
 export const GROUPS = [
-  {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
+  {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint", "livebots"]},
   {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "charts", "market"]},
   {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "compare", "path", "combo", "combo5y", "whatif", "league"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
@@ -27,6 +27,7 @@ export const SCREENS = {
   story: {ko: "하이라이트", group: "home", title: "오늘의 하이라이트", hidden: true},
   checkpoint: {ko: "판정", group: "home", title: "30일 판정"},
   account: {ko: "계좌", group: "home", title: "계좌", hidden: true},
+  livebots: {ko: "실거래", group: "home", title: "실거래"},
   terminal: {ko: "터미널", group: "trade", title: "터미널", feature: "wide"},
   positions: {ko: "포지션", group: "trade", title: "포지션"},
   chart: {ko: "차트", group: "trade", title: "차트"},
@@ -119,6 +120,8 @@ const SICON = {
   board: () => [R(1, 9, 4, 6), R(6, 4, 4, 11), R(11, 11, 4, 4), R(7, 1, 2, 2)],
   flow: () => [R(1, 14, 14, 1), R(1, 11, 2, 2), R(3, 9, 2, 2), R(5, 10, 2, 2), R(7, 7, 2, 2), R(9, 8, 2, 2), R(11, 5, 2, 2), R(13, 2, 2, 2)],
   checkpoint: () => [R(3, 1, 2, 14), R(5, 2, 9, 1), R(5, 3, 7, 3), R(5, 6, 9, 1), R(1, 14, 6, 1)],
+  // 실거래: a coin (the money) with a live signal light above it
+  livebots: () => [R(6, 1, 4, 3), R(5, 6, 6, 1), R(3, 7, 10, 1), R(2, 8, 12, 5), R(3, 13, 10, 1), R(5, 14, 6, 1), R(7, 9, 2, 3)],
   terminal: () => [R(1, 2, 14, 1), R(1, 2, 1, 10), R(14, 2, 1, 10), R(1, 11, 14, 1), R(3, 5, 1, 1), R(4, 6, 1, 1), R(3, 7, 1, 1),
     R(6, 8, 4, 1), R(7, 12, 2, 2), R(4, 14, 8, 1)],
   positions: () => [R(6, 2, 4, 1), R(5, 3, 1, 2), R(10, 3, 1, 2), R(1, 5, 14, 1), R(1, 5, 1, 9), R(14, 5, 1, 9), R(1, 13, 14, 1),

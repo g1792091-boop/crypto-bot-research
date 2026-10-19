@@ -4,7 +4,7 @@
 /** Other words people use for a screen (Korean and English). */
 export const ALIAS = {
   home: "홈 요약 처음 home summary", board: "순위 랭킹 등수 ranking leaderboard board", flow: "흐름 추이 flow",
-  checkpoint: "판정 합격 30일 verdict checkpoint", terminal: "터미널 한눈 pc terminal", positions: "포지션 보유 열린 position",
+  checkpoint: "판정 합격 30일 verdict checkpoint", livebots: "실거래 실전 진짜 돈 바이비트 멕시 MEXC 실행기 신호등 합본 live bybit mexc executor", terminal: "터미널 한눈 pc terminal", positions: "포지션 보유 열린 position",
   chart: "차트 캔들 봉 chart candle", market: "시장 코인 시세 펀딩 market", strategies: "매매법 전략 strategy strategies",
   grid: "한눈 지도 격자 grid map", analysis: "분석 analysis", compare: "매매법 비교 나란히 견주기 compare versus", combo: "조합 성과 합치기 섞기 포트폴리오 상관 combo portfolio", office: "회의실 회의 사무실 office meeting", rooms: "에이전트 방 채팅 room agent",
   league: "그림자 리그 그림자 계좌 가상 거래 구경 영상 매매법 릴스 매물대 shadow league", digest: "회의 요약 digest", debate: "토론 debate", server: "서버 비용 cpu server cost", alerts: "알림 기록 alert",

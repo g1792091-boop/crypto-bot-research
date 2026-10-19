@@ -27,8 +27,9 @@ export const TICK_FRESH_MS = 6000;                 // a coin whose relay price i
 const ROW_GAP_MS = 500;                            // a watchlist row lights at most twice a second
 
 // ---------------------------------------------------------------- coin strip (the watchlist)
-/** watchList(ctx, st, onPick) -> {el, setSym, onTicker, onFeatures, onTick} */
-export function watchList(ctx, st, onPick) {
+/** watchList(ctx, st, onPick, o) -> {el, setSym, onTicker, onFeatures, onTick}. o.marks: another painter of each coin's
+ *  second line ({paint(rows, data, failed)}, fed through onBoard: the 실거래 터미널 paints its live accounts' positions). */
+export function watchList(ctx, st, onPick, o = {}) {
   const rows = new Map();
   const list = h("div", {class: "term-wl", role: "listbox", "aria-label": "코인 고르기 (서버 경유 5초 · 실시간 체결이 오면 바로)"}, bars.SYMS.map((s) => {
     const px = h("span", {class: "num term-wpx"}, "—"), chg = h("span", {class: "num term-wch"}, ""), gh = h("span", {class: "term-wgh", hidden: !features.ghcoin});
@@ -42,7 +43,7 @@ export function watchList(ctx, st, onPick) {
   const el = h("nav", {class: "term-coins", "aria-label": "관심 종목"}, list);
   el.head = null;
   let gh = null;
-  const marks = coinMarks();
+  const marks = o.marks || coinMarks();
   let board = null, boardFailed = false;
   async function loadGh() {
     const on = features.ghcoin;
