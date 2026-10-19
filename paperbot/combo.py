@@ -85,6 +85,8 @@ from .accounts import AccountBook
 from .aggregate import Aggregator, TF_MS
 from .config import DS200_DEFS, DS200_IDS, DS_WINDOW_5M, V3_STOP_ATR, V3_SYMBOLS, V3_TRADE_TFS, v3_settings
 from .engine import PaperEngine
+from .ladder import net_roe, roe_price, tighten
+from .ladder2 import ComboLadder
 from .margin import Brackets, liquidation_price
 from .models import Bar, Signal
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier
@@ -143,6 +145,7 @@ class Member:
     pick: Optional[str] = None
     when: Optional[tuple] = None       # conditions (parse_when): ((("symbol", ("SOLUSDT",)), ("side", 1)), ...)
     research: Optional[RM.RSpec] = None   # a setting of the 5-year search (paperbot/rmember.py)
+    no_chase: bool = False     # owners 2026-10-19 "고점 추격 롱, 저점 추격 숏 안 하게": chase_check before the entry
 
     @property
     def custom(self) -> bool:
@@ -160,6 +163,8 @@ class Member:
             out += " | 조건: " + " 또는 ".join(describe_condition(c) for c in self.when)
         if self.research:
             out += " | " + RM.describe(self.research)
+        if self.no_chase:
+            out += " | " + CHASE_KO
         return out
 
     def allows(self, symbol: str, side: int, bar_close: int, btc: Optional[Callable[[int], Optional[int]]] = None
@@ -200,6 +205,50 @@ def us_open_pause(ts: int, mins: int) -> str:
 
 def kst_weekend(ms: int) -> bool:
     return ((int(ms) + KST_MS) // 86_400_000 + 3) % 7 >= 5          # day 0 (1970-01-01) was a Thursday: +3 -> Monday 0 .. Sunday 6
+
+
+# no_chase members (owners 2026-10-19 "고점에서 추격 롱, 저점에서 추격 숏은 안 하게"): no long in the top 20% of the coin's
+# 7-day range or the top 10% of its 24-hour range (shorts: the bottoms), both windows ending at the last hour closed before
+# the signal bar's close, at the signal's reference price. The same test as the owners' check on the rule bot's own entries
+# (10-19: the four settings that take it lost almost only on such entries); fewer than 20 of the 24 hours read: no entry.
+HOUR_MS = 3_600_000
+CHASE_24H, CHASE_24H_MIN, CHASE_24H_HI, CHASE_24H_LO = 24, 20, 0.9, 0.1
+CHASE_7D, CHASE_7D_MIN, CHASE_7D_HI, CHASE_7D_LO = 168, 150, 0.8, 0.2
+CHASE_KO = "추격 진입 막기(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)"
+
+
+def chase_hours(conn, symbol: str, bar_close: int) -> dict:
+    """{hour index: (high, low)} of the rule bot's 1m bars (paper3.db live_bars) in the 7 days before the hour of
+    ``bar_close``."""
+    k = int(bar_close) // HOUR_MS
+    rows = conn.execute("SELECT ts / 3600000, MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ? AND ts < ? "
+                        "GROUP BY ts / 3600000", (symbol, (k - CHASE_7D) * HOUR_MS, k * HOUR_MS)).fetchall()
+    return {int(h): (float(hi), float(lo)) for h, hi, lo in rows if hi is not None and lo is not None}
+
+
+def chase_check(hours: dict, bar_close: int, side: int, price: float) -> tuple[Optional[bool], str]:
+    """(True: a chase, why) / (False, '') / (None, why: too few hours to tell)."""
+    k = int(bar_close) // HOUR_MS
+
+    def rng(n):
+        v = [hours[j] for j in range(k - n, k) if j in hours]
+        return (max(a for a, _ in v), min(b for _, b in v), len(v)) if v else None
+
+    r24, r7 = rng(CHASE_24H), rng(CHASE_7D)
+    if not (r24 and r24[2] >= CHASE_24H_MIN):
+        return None, "추격 판단에 쓸 24시간 1분봉이 모자람"
+    p24 = (price - r24[1]) / max(r24[0] - r24[1], 1e-12)
+    if side > 0 and p24 >= CHASE_24H_HI:
+        return True, f"롱인데 24시간 고점 쪽({p24:.0%} 위치)"
+    if side < 0 and p24 <= CHASE_24H_LO:
+        return True, f"숏인데 24시간 저점 쪽({p24:.0%} 위치)"
+    if r7 and r7[2] >= CHASE_7D_MIN:
+        p7 = (price - r7[1]) / max(r7[0] - r7[1], 1e-12)
+        if side > 0 and p7 >= CHASE_7D_HI:
+            return True, f"롱인데 7일 범위 위 20% 안({p7:.0%} 위치)"
+        if side < 0 and p7 <= CHASE_7D_LO:
+            return True, f"숏인데 7일 범위 아래 20% 안({p7:.0%} 위치)"
+    return False, ""
 
 
 def condition_holds(cond: tuple, symbol: str, side: int, bar_close: int, btc_sign: Optional[int]) -> bool:
@@ -377,7 +426,7 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
         if not isinstance(sp, dict):
             raise ComboError(f"members {i}번째 항목이 {{...}} 형식이 아닙니다")
         unknown = sorted(set(sp) - {"pick", "strategy", "tf", "numbers", "when", "stop", "entry", "invert", "filter",
-                                    "disp", "off", "cell"})
+                                    "disp", "off", "cell", "no_chase"})
         if unknown:
             raise ComboError(f"members {i}번째 항목에 알 수 없는 이름: {', '.join(unknown)}")
         pick = sp.get("pick")
@@ -427,8 +476,13 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
             if sp.get("when"):
                 raise ComboError(f"{label}: 연구 설정에는 when을 함께 쓰지 않습니다(filter/off를 씁니다)")
         when = parse_when(sp.get("when"), label)
+        no_chase = sp.get("no_chase", False)
+        if not isinstance(no_chase, bool):
+            raise ComboError(f"{label}: no_chase는 true 또는 false입니다")
+        if no_chase and research is not None:
+            raise ComboError(f"{label}: 연구 설정에는 no_chase를 함께 쓰지 않습니다(off의 pos/posside를 씁니다)")
         out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick, when=when,
-                          research=research))
+                          research=research, no_chase=no_chase))
     return out
 
 
@@ -451,6 +505,8 @@ class ComboConfig:
     no_score: float = 3.0
     flip_twin: bool = True
     early_exit: Optional[str] = None    # None | "own" | "any" (the class docstring)
+    early_exit_until_lock: bool = False  # the early exit only before the first lock (owners 10-19: the check on the rule
+                                         # bot's entries; once +10% is locked the ladder alone decides)
     macro_blackout_min: Optional[int] = None   # no entry from N minutes before to N minutes after a US macro release
                                                # (data/macro_events.csv, paperbot/events.py): owners 2026-10-18 "30"
     us_open_pause_min: Optional[int] = None    # no entry from the NYSE open (09:30 New York, weekdays, not on NYSE
@@ -500,6 +556,16 @@ class ComboConfig:
     def stop_atr(self) -> float:
         return float(self.stop.get("atr", V3_STOP_ATR))
 
+    @property
+    def stop_net(self) -> bool:
+        """``stop: {"mode": "roe", "roe": 0.5, "net": true}``: the loss at the stop is the ROE after fees and slippage of
+        both sides (the ladder's definition); without "net" it is the price move x leverage (before costs)."""
+        return self.stop_mode == "roe" and self.stop.get("net") is True
+
+    @property
+    def ladder_spec(self) -> Optional[ComboLadder]:
+        return ComboLadder.of(self.ladder)
+
     def problems(self) -> list[str]:
         out = []
         if not self.paper_db:
@@ -525,12 +591,26 @@ class ComboConfig:
             r = self.stop.get("roe")
             if not (isinstance(r, (int, float)) and 0 < r < 1):
                 out.append("stop.roe는 0~1 사이 비율입니다(-50% = 0.5)")
+            elif "net" in self.stop and not isinstance(self.stop["net"], bool):
+                out.append("stop.net은 true(수수료 포함) 또는 false입니다")
+            elif self.stop_net:
+                rt = v3_settings().round_trip_cost
+                worst = max(self.lev_of(s) for s in self.symbols) if self.symbols else 1
+                if not float(r) / worst > 2 * rt:
+                    out.append(f"stop.roe {float(r):.0%}(수수료 포함)는 {worst}배에서 수수료보다 작아 손절 자리가 없습니다")
         elif not (0 < self.stop_atr <= 10):
             out.append("stop.atr는 0~10입니다")
-        lad = self.ladder
-        if not (0 < float(lad.get("first_lock", 0)) < 1 and 0 < float(lad.get("step", 0)) < 1
-                and 0 < float(lad.get("trigger_gap", 0)) < 1):
-            out.append("ladder의 first_lock, step, trigger_gap은 0~1 사이 비율입니다")
+        unknown = sorted(set(self.stop) - {"mode", "atr", "min_atr", "roe", "net"})
+        if unknown:
+            out.append(f"stop에 알 수 없는 이름: {', '.join(unknown)}")
+        lad = self.ladder_spec
+        if lad is None:
+            out.append("ladder에 first_lock, step, trigger_gap이 필요합니다")
+        else:
+            out += lad.problems()
+            unknown = sorted(set(self.ladder) - {"first_lock", "step", "trigger_gap", "next_trigger", "next_gap"})
+            if unknown:
+                out.append(f"ladder에 알 수 없는 이름: {', '.join(unknown)}")
         bad = [r for r in self.rank if r not in RANK_KEYS]
         if bad or not self.rank:
             out.append(f"rank는 {', '.join(RANK_KEYS)}의 순서입니다")
@@ -548,6 +628,10 @@ class ComboConfig:
             out.append("us_open_pause_min은 1~240분(정수) 또는 null입니다")
         if self.early_exit not in EARLY_EXITS:
             out.append('early_exit는 null(끔), "own"(같은 매매법의 반대 신호), "any"(아무 매매법의 반대 신호)입니다')
+        if not isinstance(self.early_exit_until_lock, bool):
+            out.append("early_exit_until_lock은 true 또는 false입니다")
+        elif self.early_exit_until_lock and not self.early_exit:
+            out.append("early_exit_until_lock은 early_exit를 켰을 때만 씁니다")
         return out
 
 
@@ -656,6 +740,7 @@ class ComboEngine(PaperEngine):
         kw.pop("policy", None)
         super().__init__(settings, brackets, policy=FixedLevPolicy(settings, combo), **kw)
         self.combo = combo
+        self.ladder2 = combo.ladder_spec
         self._exit_on: list[Signal] = []
 
     def exit_signal(self, sig: Signal) -> None:
@@ -668,6 +753,8 @@ class ComboEngine(PaperEngine):
         "own": the same member) closes it at this minute's open, and this minute enters nothing."""
         trig, self._exit_on = self._exit_on, []
         p = self.position
+        if trig and p is not None and self.combo.early_exit_until_lock and p.lock_roe is not None:
+            trig = []                                   # +10% already locked: the ladder alone decides
         if trig and p is not None and p.symbol in bars:
             own = p.signal.meta.get("member", p.signal.strategy_id)
             hit = [g for g in trig if g.symbol == p.symbol and int(g.side) == -int(p.side) and g.ts + 1 > p.entry_time
@@ -679,6 +766,20 @@ class ComboEngine(PaperEngine):
                     self._record(g, "SKIPPED", "early exit this minute", bar.open_time)
                 self.pending = []
         super().step(bars, funding)
+
+    def _raise_lock(self, p) -> None:
+        """PaperEngine._raise_lock with the config's ladder (paperbot/ladder2.py: the two-part form of 10-19 as well);
+        the same best net ROE, funding and order of checks."""
+        if self.ladder2 is None or not self.ladder2.two_part:
+            return super()._raise_lock(p)
+        fund = p.funding_paid / p.notional_entry if p.notional_entry else 0.0
+        rt = self.s.round_trip_cost
+        best = net_roe(p.side, p.entry_price, p.mfe_price, p.leverage, rt, fund)
+        lock = self.ladder2.lock_for(best)
+        if lock is None or (p.lock_roe is not None and lock <= p.lock_roe + 1e-12):
+            return
+        p.stop_price = tighten(p.side, p.stop_price, roe_price(p.side, p.entry_price, p.leverage, lock, rt, fund))
+        p.lock_roe = lock
 
     def _rank_key(self, sig: Signal) -> tuple:
         return rank_key(self.combo, self.s, sig)
@@ -705,7 +806,13 @@ class ComboEngine(PaperEngine):
         stop_mode, stop_atr = c.stop_mode, c.stop_atr
         if rstop:                                   # research ["atr", k]: the house atr_fit with that k, at least 1 ATR
             stop_mode, stop_atr = "atr_fit", float(rstop[1])
-        if stop_mode == "roe":
+        if stop_mode == "roe" and c.stop_net:
+            # the stop loses roe of the margin after both sides' fees and slippage (the ladder's net ROE)
+            dist = raw * (float(c.stop["roe"]) / lev - self.s.round_trip_cost)
+            if not dist > 0:
+                return None, (sig, f"{lev}x: ROE -{float(c.stop['roe']):.0%} is inside the fees")
+            rule = f"ROE -{float(c.stop['roe']):.0%} net at {lev}x"
+        elif stop_mode == "roe":
             dist = raw * float(c.stop["roe"]) / lev
             rule = f"ROE -{float(c.stop['roe']):.0%} at {lev}x"
         else:
@@ -1118,6 +1225,24 @@ class ComboRunner:
         self.breaks: list[dict] = list(st.get("breaks", []))     # research "break" entries waiting for the break
         self.counts: dict = st.get("counts", {})
         self.errors = 0
+        self._drop_old_members(st)
+
+    def _drop_old_members(self, st: dict) -> None:
+        """A new config on the same database (owners 10-19: the 15-strategy bot after the A+C bot): queued signals and
+        break waits of members no longer in the config never trade; their WAITING rows are closed as FILTERED."""
+        known = set(self.by_label)
+        member_of = lambda d: (d.get("meta") or {}).get("member", d.get("strategy_id"))  # noqa: E731
+        old_q = [q for q in self.queue if member_of(q.signal) not in known]
+        old_b = [b for b in self.breaks if b.get("member") not in known]
+        if not old_q and not old_b:
+            return
+        self.queue = [q for q in self.queue if member_of(q.signal) in known]
+        self.breaks = [b for b in self.breaks if b.get("member") in known]
+        for b in old_b:
+            self._restate(_sig_from(b["signal"]), "FILTERED", "설정이 바뀌어 기다리던 돌파 신호를 버림", expect=("WAITING",))
+        self.store.alert(self.now_ms(), WARN, f"[combo] 설정이 바뀜: 예전 매매법의 대기 신호 {len(old_q)}개, 돌파 대기 "
+                                             f"{len(old_b)}개를 버렸습니다(진입 안 함)")
+        self.store.commit()
 
     # ---- state
     def _save_state(self, ts: int) -> None:
@@ -1198,22 +1323,14 @@ class ComboRunner:
                 keep.append(q)
                 continue
             sig = _sig_from(q.signal)
-            if self.cfg.no_weekend and not sig.meta.get("exit_only") and kst_weekend(ts):
-                self._restate(sig, "FILTERED", "주말(한국 시간 토·일) 진입 안 함")
+            why = "" if sig.meta.get("exit_only") else self._entry_block(sig, ts, q.bar_close, bars or {})
+            if why:
+                self._restate(sig, "FILTERED", why)
                 self._count(sig.meta.get("member", sig.strategy_id), "filtered")
-                continue
-            if self.cfg.macro_blackout_min and not sig.meta.get("exit_only"):
-                ev = self._macro_near(ts)
-                if ev:
-                    self._restate(sig, "FILTERED", ev)
-                    self._count(sig.meta.get("member", sig.strategy_id), "filtered")
+                if not self.cfg.early_exit:
                     continue
-            if self.cfg.us_open_pause_min and not sig.meta.get("exit_only"):
-                why = us_open_pause(ts, int(self.cfg.us_open_pause_min))
-                if why:
-                    self._restate(sig, "FILTERED", why)
-                    self._count(sig.meta.get("member", sig.strategy_id), "filtered")
-                    continue
+                # never an entry, but the strategy still turned: with early_exit it may close the open position
+                sig = replace(sig, meta={**sig.meta, "exit_only": True})
             if sig.meta.get("research") and not sig.meta.get("exit_only"):
                 sig = self._research_entry(sig, ts, bars or {})
                 if sig is None:
@@ -1234,6 +1351,45 @@ class ComboRunner:
             if not exit_only:
                 self._count(label, "late" if age > self.cfg.max_signal_age_s * 1000 else "submitted")
         self.queue = keep
+
+    def _entry_block(self, sig: Signal, ts: int, bar_close: int, bars: dict) -> str:
+        """'' or why minute ts takes no entry from this signal: the KST weekend, a US macro release, the NYSE open,
+        then a no_chase member's chase (in that order; the first reason is the one logged)."""
+        if self.cfg.no_weekend and kst_weekend(ts):
+            return "주말(한국 시간 토·일) 진입 안 함"
+        if self.cfg.macro_blackout_min:
+            ev = self._macro_near(ts)
+            if ev:
+                return ev
+        if self.cfg.us_open_pause_min:
+            why = us_open_pause(ts, int(self.cfg.us_open_pause_min))
+            if why:
+                return why
+        m = self.by_label.get(sig.meta.get("member", sig.strategy_id))
+        if m is not None and m.no_chase:
+            return self._chase_block(sig, bar_close, bars)
+        return ""
+
+    def _chase_block(self, sig: Signal, bar_close: int, bars: dict) -> str:
+        """'' or why a no_chase member's signal is a chase (or cannot be told: then no entry either)."""
+        from .livepnl import open_ro
+        price = sig.meta.get("ref_price")
+        if not price and sig.symbol in bars:
+            price = bars[sig.symbol].open
+        if not price:
+            return "추격 판단에 쓸 가격이 없음(진입 안 함)"
+        try:
+            conn = open_ro(self.cfg.paper_db)
+            try:
+                hours = chase_hours(conn, sig.symbol, bar_close)
+            finally:
+                conn.close()
+        except Exception as exc:  # noqa: BLE001  unreadable bars: no entry, said so
+            return f"추격 판단에 쓸 1분봉을 못 읽음(진입 안 함): {type(exc).__name__}"[:200]
+        chase, why = chase_check(hours, bar_close, int(sig.side), float(price))
+        if chase is None:
+            return why + "(진입 안 함)"
+        return "추격 진입 막기: " + why if chase else ""
 
     def _macro_near(self, ts: int) -> str:
         """'' or why minute ts is inside the macro blackout (an entry in that minute is not made)."""
@@ -1620,7 +1776,10 @@ def cmd_run(args) -> int:
     notifier.send(INFO, f"{cfg.tag} 시작: 매매법 {len(members)}개({sum(m.custom for m in members)}개 커스텀값, "
                         f"{sum(bool(m.when) for m in members)}개 조건 있음), "
                         f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 손절 {stop_text(cfg)}, "
-                        f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}, "
+                        f"계단 익절 {cfg.ladder_spec.describe()}, "
+                        f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
+                        f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
+                        f"{f'추격 진입 막기 {sum(m.no_chase for m in members)}개, ' if any(m.no_chase for m in members) else ''}"
                         f"포지션 1개, 지갑 ${book.engines[ACCOUNT].wallet:,.2f}")
     stop = {"flag": False}
 
@@ -1653,6 +1812,11 @@ def cmd_run(args) -> int:
 
 
 def stop_text(cfg: ComboConfig) -> str:
+    if cfg.stop_net:
+        rt = v3_settings().round_trip_cost
+        lv = sorted({cfg.lev_of(s) for s in cfg.symbols}, reverse=True)
+        moves = ", ".join(f"{v}배 가격 {float(cfg.stop['roe']) / v - rt:.2%}" for v in lv)
+        return f"순ROE -{float(cfg.stop['roe']):.0%}(수수료·슬리피지 포함: {moves})"
     if cfg.stop_mode == "roe":
         return f"ROE -{float(cfg.stop['roe']):.0%}"
     if cfg.stop_mode == "atr_fit":
@@ -1673,11 +1837,15 @@ def cmd_check(args) -> int:
     print(f"- 따라 읽는 규칙봇 DB: {cfg.paper_db} / 자기 DB: {cfg.db}")
     print(f"- 배수: " + ", ".join(f"{s} {cfg.lev_of(s)}배" for s in cfg.symbols) +
           f" / 증거금: {'배수%' if cfg.margin == 'leverage' else f'{float(cfg.margin):.0%}'}")
-    print(f"- 손절: {stop_text(cfg)} / 계단 익절: 순ROE {cfg.ladder['first_lock'] + cfg.ladder['trigger_gap']:.0%}에서 "
-          f"{cfg.ladder['first_lock']:.0%} 잠금, 이후 {cfg.ladder['step']:.0%}씩")
+    lad = cfg.ladder_spec
+    print(f"- 손절: {stop_text(cfg)} / 계단 익절: {lad.describe() if lad is not None else '설정 오류'}")
     print(f"- 동시에 나온 신호: {' > '.join({'score': '진입 점수', 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
     print(f"- 동전 쌍둥이 계좌: {'있음' if cfg.flip_twin else '없음'}")
-    print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}")
+    print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
+          + (" (첫 잠금 +10% 전까지만, 잠긴 뒤에는 계단 익절만)" if cfg.early_exit and cfg.early_exit_until_lock else ""))
+    nc = [m for m in members if m.no_chase]
+    if nc:
+        print(f"- 추격 진입 막기: {len(nc)}개 매매법 ({', '.join(m.label for m in nc)}) — {CHASE_KO}")
     if cfg.no_weekend:
         print("- 주말(한국 시간 토·일)에는 새로 진입하지 않음(열린 포지션은 손절·익절까지 그대로)")
     if cfg.macro_blackout_min:
