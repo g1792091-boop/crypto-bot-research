@@ -560,7 +560,7 @@ def test_refuses_anything_but_the_testnet(tmp_path):
             Executor(ExecConfig(**{**w.cfg.__dict__, "mode": "mainnet"}), c, w.src, store)
         with pytest.raises(Refused) as e:
             Executor(ExecConfig(**{**w.cfg.__dict__, "risk": R.RiskConfig()}), c, w.src, store)
-        assert "멈춤 낙폭" in str(e.value)
+        assert "비상 정지" in str(e.value)
     finally:
         store.close()
     with pytest.raises(ValueError):
@@ -580,7 +580,7 @@ def test_testnet_key_must_not_be_the_paper_key(tmp_path, monkeypatch, capsys):
     conf.write_text(json.dumps({"account": "A@15m", "paper_db": "p", "db": str(tmp_path / "e.db"), "qty_scale": 1,
                                 "risk": {}}))
     assert main(["check-config", "--config", str(conf)]) == 1
-    assert "멈춤 낙폭" in capsys.readouterr().out
+    assert "비상 정지" in capsys.readouterr().out
     monkeypatch.setenv("TESTNET_API_KEY", "same")
     monkeypatch.setenv("TESTNET_API_SECRET", "x")
     monkeypatch.setenv("BINANCE_API_KEY", "same")

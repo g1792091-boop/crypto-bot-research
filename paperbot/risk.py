@@ -30,10 +30,9 @@ from typing import Callable, Optional
 ALLOW, REDUCE, BLOCK, FLATTEN_HALT = "allow", "reduce", "block", "flatten_and_halt"
 
 # config key -> the owners' name for it (docs/paper-v3-rules-addendum.md Q6)
-# max_consecutive_losses is optional since 2026-10-19 (owners: "연패하면 봇 거래 정지는 없애주라"): absent or null = no
-# loss-streak halt; the drawdown halt, the kill file and the other limits stay required.
+# max_consecutive_losses and max_drawdown_pct are optional since 2026-10-19 (owners: "연패하면 봇 거래 정지는 없애주라",
+# "낙폭 50% 멈춤도 빼줘"): absent or null = no such halt; the kill file and the entry limits stay required.
 REQUIRED = {
-    "max_drawdown_pct": "멈춤 낙폭(%)",
     "max_leverage": "최대 레버리지(배)",
     "max_notional_usd": "포지션 최대 크기($)",
     "allowed_symbols": "거래 허용 코인",

@@ -168,8 +168,8 @@ def test_mainnet_refuses_without_every_offline_gate(tmp_path):
         assert "fapi.binance.com" in refused(client=TestnetClient("lk", "ls", send=lv.send))
         assert "testnet" in refused(cfg=cfg_for(tmp_path, "testnet"), client=MainnetClient("lk", "ls"))
         # the risk config complete, and the budget set
-        assert "멈춤 낙폭" in refused(cfg=cfg_for(tmp_path, risk=R.RiskConfig()))
-        assert "멈춤 낙폭" in refused(cfg=cfg_for(tmp_path, risk=risk_cfg(tmp_path, max_drawdown_pct=None)))
+        assert "비상 정지" in refused(cfg=cfg_for(tmp_path, risk=R.RiskConfig()))
+        assert "비상 정지" in refused(cfg=cfg_for(tmp_path, risk=risk_cfg(tmp_path, kill_file=None)))
         assert "budget_usd" in refused(cfg=cfg_for(tmp_path, budget_usd=None))
         assert not lv.fake.calls                                   # nothing reached the exchange
     finally:

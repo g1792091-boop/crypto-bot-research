@@ -17,7 +17,9 @@ def test_config_must_be_filled_by_the_owners():
     empty = R.RiskConfig()
     probs = empty.problems()
     assert len(probs) == len(R.REQUIRED)
-    assert any("멈춤 낙폭" in p for p in probs)
+    assert not any("멈춤 낙폭" in p or "연속 손실" in p for p in probs)   # owners 10-19: both halts optional
+    assert any("비상 정지" in p for p in probs)
+    assert cfg(max_drawdown_pct=None, max_consecutive_losses=None).problems() == []
     assert not any("하루 최대 손실" in p for p in probs)          # owners 10-19: the daily limit is optional
     assert cfg().problems() == [] and cfg(daily_max_loss_usd=None).problems() == []
     bad = cfg(max_drawdown_pct=20, max_leverage=0, max_consecutive_losses=0, daily_max_loss_usd=-1)
@@ -160,3 +162,13 @@ def test_max_loss_frac_is_an_optional_owner_setting():
     d = R.check_entry(cfg(), st, "BTCUSDT", qty=10, price=100, leverage=10, qty_step=0.001, stop=98, equity=100,
                       max_loss_frac=0.35)
     assert d.action == R.ALLOW and d.qty == 10
+
+
+def test_no_drawdown_or_streak_halt_when_left_out():
+    # owners 10-19: "연패하면 봇 거래 정지는 없애주라", "낙폭 50% 멈춤도 빼줘"
+    c = cfg(max_drawdown_pct=None, max_consecutive_losses=None, daily_max_loss_usd=None)
+    st = R.RiskState()
+    R.observe_equity(st, T0, 1_000.0)
+    st.consecutive_losses = 10
+    assert R.check_loop(c, st, 300.0).action == R.ALLOW                    # -70% from the peak, 10 losses in a row
+    assert R.check_loop(c, st, 300.0, "비상 정지 파일").action == R.FLATTEN_HALT   # the kill file still works

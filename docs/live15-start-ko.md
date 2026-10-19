@@ -72,16 +72,17 @@ sudo systemctl restart paperbot-combo
 - 예전 매매법의 대기 신호가 남아 있었다면 "설정이 바뀜: 예전 매매법의 대기 신호 n개 ... 버렸습니다" 알림이 남습니다. 정상입니다(진입하지 않음).
 - **실행기는 다시 켜지 않습니다.** 같은 페이퍼 DB를 계속 읽습니다.
 
-**5) 연패 멈춤 없애기 (10/19 결정, 실행기 설정)**
+**5) 연패 멈춤·낙폭 멈춤 없애기 (10/19 결정, 실행기 설정)**
 
-2)에서 새 코드를 받은 뒤에 합니다. 예전 코드는 이 값이 없으면 실행기를 켜지 않습니다. 실행기 설정 두 파일에서 `max_consecutive_losses` 줄만 뺍니다(다른 값은 그대로):
+2)에서 새 코드를 받은 뒤에 합니다. 예전 코드는 이 값들이 없으면 실행기를 켜지 않습니다. 실행기 설정 두 파일에서 `max_consecutive_losses`(연패 멈춤)와 `max_drawdown_pct`(낙폭 50% 멈춤) 두 줄만 뺍니다(다른 값은 그대로):
 
 ```bash
 sudo python3 - <<'EOF'
 import json
 for p in ("/etc/paperbot/executor.json", "/etc/paperbot/executor-mexc.json"):
     d = json.load(open(p, encoding="utf-8"))
-    print(p, "연패 멈춤 값:", d.get("risk", {}).pop("max_consecutive_losses", "이미 없음"))
+    r = d.get("risk", {})
+    print(p, "연패 멈춤:", r.pop("max_consecutive_losses", "이미 없음"), "/ 낙폭 멈춤:", r.pop("max_drawdown_pct", "이미 없음"))
     open(p, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
 EOF
 cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor check-config --config /etc/paperbot/executor.json
@@ -91,7 +92,7 @@ sudo systemctl restart paperbot-executor paperbot-executor-mexc
 
 - 두 check-config 모두 마지막 줄이 `준비됨`이어야 합니다.
 - 실행기 재시작은 **두 실행기 모두 포지션이 없을 때만** 합니다(1)에서 확인한 상태).
-- **남아 있는 멈춤:** 최대 낙폭 50%(`max_drawdown_pct`)와 비상 정지 파일은 그대로입니다. −50% 손절 한 번이 계좌 약 −20%라서, 연속 3번 지면 고점 대비 약 −49%, 4번째에 낙폭 50% 멈춤이 걸립니다.
+- **남는 것:** 비상 정지 파일(`/var/lib/paperbot/STOP`)과 진입 한도(최대 40배, 코인 6개, 포지션 크기, 손절 한 번 최대 35%)는 그대로입니다. 연패나 낙폭으로 저절로 멈추는 일은 없어집니다. −50% 손절 한 번이 계좌 약 −20%라서 연속 3번이면 약 −49%, 4번이면 약 −59%까지 갑니다. 멈추고 싶을 때는 `sudo touch /var/lib/paperbot/STOP`.
 
 ## 같이 알아 두실 것
 
