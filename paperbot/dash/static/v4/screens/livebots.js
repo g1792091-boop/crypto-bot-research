@@ -1,11 +1,19 @@
 // #/livebots[/<tab>] — 실거래 (owners 10/19, the live start day: 바이비트 $100 + MEXC $100). The two live order executors
 // (real money) and the paper account both follow (A+C 합본, COMBO@mix), read-only: dash/more/livebots.py reads the paper
 // bot's database, both executors' databases and their configs (never the key file).
+//   관제   the control room (screens/livebots-hq.js, owners 10/19 "간지나게"): the two real wallets, the open position's gauge,
+//          "왜 지금 진입 안 하나", the day's pause dial, the light rings and the strategies at work, at a glance
 //   요약   the 실거래 터미널 (screens/livebots-term.js: the rule bot's terminal frame and parts, fed with the live records)
+//   순위   매매법 순위표: the 27 strategies as cards and a list (screens/livebots-rank.js, /api/v4/livebots/rank)
+//   분석팀 the 실거래 분석 팀 (paperbot/liveteam.py): its meetings, each member's words, the conclusions and ideas, its AI use
+//          and its switch (screens/livebots-team.js, /api/v4/livebots/team)
 //   차트   the open positions on the price chart, big, with their lines in words (screens/livebots-chart.js)
 //   거래   the closed trades of each account, 10 a page, one opened in place (screens/livebots-trades.js, its own endpoint)
 //   신호   "왜 안 들어갔지?": the combined bot's signals and what became of each (screens/livebots-signals.js)
 //   성적   rolling 20 / 40 win share, the 40-trade checkpoint, breakdowns, the coin-flip twin (screens/livebots-perf.js)
+//   지도   기대 범위 띠 and the record by regime, coin, KST block and side next to 5 years (screens/livebots-map.js)
+//   비용   how far the live trades fall behind the paper trades they followed, and the ones not followed (livebots-cost.js)
+//   일정   US macro releases and the weekend: when the bots pause, whether an entry may be made now (livebots-cal.js)
 //   안전   per executor: halt, the limits its config has, the kill file, the light and its history, the WARN / CRITICAL log
 //   그림자 the shadow paper bots next to the live paper bot from the same start; 설정: the fixed rules and every setting
 // Each tab is its own mount: a tab change re-mounts the screen (no update()), so every timer, stream listener and chart of
@@ -23,20 +31,32 @@ import {signalsView} from "./livebots-signals.js";
 import {perfView} from "./livebots-perf.js";
 import {safetyView} from "./livebots-safety.js";
 import {shadowsView, settingsView} from "./livebots-more.js";
+import {hqView} from "./livebots-hq.js";
+import {rankView} from "./livebots-rank.js";
+import {mapView} from "./livebots-map.js";
+import {costView} from "./livebots-cost.js";
+import {calView} from "./livebots-cal.js";
+import {teamView} from "./livebots-team.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
 export const TABS = [
+  {id: "hq", label: "관제", make: (ctx, hub) => hqView(ctx, hub)},
   {id: "summary", label: "요약", make: (ctx, hub) => termView(ctx, hub)},
+  {id: "rank", label: "순위", make: (ctx) => rankView(ctx), own: true},
+  {id: "team", label: "분석팀", make: (ctx) => teamView(ctx), own: true},
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},
   {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},
   {id: "perf", label: "성적", make: (ctx) => perfView(ctx), own: true},
+  {id: "map", label: "지도", make: (ctx) => mapView(ctx), own: true},
+  {id: "cost", label: "비용", make: (ctx) => costView(ctx), own: true},
+  {id: "cal", label: "일정", make: (ctx) => calView(ctx), own: true},
   {id: "safety", label: "안전", make: (ctx) => safetyView(ctx), own: true},
   {id: "shadows", label: "그림자", make: (ctx) => shadowsView(ctx), own: true},
   {id: "settings", label: "설정", make: (ctx) => settingsView(ctx), own: true},
 ];
-const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "summary");
+const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
 // what the page already heard (module level: a tab change re-mounts the screen, the same record must not sound again);
 // seen null = the next answer is the baseline (the first look, and the first look after the page was hidden)
 const heard = {state: null};

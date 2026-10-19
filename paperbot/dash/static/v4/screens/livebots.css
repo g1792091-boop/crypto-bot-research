@@ -3,6 +3,14 @@
    new (the account colours, the live strip's chips, the rows under the terminal) and the terminal on a phone (one
    column at 390 px, no page scroll sideways). Tokens only (both skins), every font size a --t-* token. */
 @import url("terminal.css");
+@import url("livebots-hq.css");
+@import url("livebots-rank.css");
+@import url("livebots-map.css");
+@import url("livebots-cost.css");
+@import url("livebots-cal.css");
+@import url("livebots-team.css");
+@import url("livebots-signals-wait.css");
+@import url("livebots-likely.css");
 
 /* the page column: the terminal takes the window from 760 px (a phone keeps the shell's 16 px gutter) */
 @media (min-width: 760px) {
