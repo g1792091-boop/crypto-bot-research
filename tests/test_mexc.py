@@ -762,3 +762,19 @@ def test_the_query_is_encoded_like_mexcs_java_example():
     """URLEncoder.encode(value).replaceAll("\\+", "%20"): spaces as %20, commas encoded."""
     assert MX.query_string({"a": "x y", "b": "1,2", "c": True}) == "a=x%20y&b=1%2C2&c=true"
     assert urllib.parse.unquote(MX.query_string({"s": "BTC_USDT"})) == "s=BTC_USDT"
+
+
+def test_drill_paces_its_requests():
+    """The owners' live drill 10-19 got MEXC code 510 (too frequent) reading six coins at once: the drill's requests
+    are spaced (at least DRILL_MIN_GAP_S apart)."""
+    d, fake = drill()
+    t = [0.0]
+    waits = []
+
+    def sleep(s):
+        waits.append(s)
+        t[0] += s
+    MX.pace(d.client, sleep=sleep, clock=lambda: t[0])
+    d.check()
+    n = sum(1 for m, p, q in fake.calls)
+    assert n > 5 and len(waits) >= n // 2 and all(w >= MX.DRILL_MIN_GAP_S - 1e-9 for w in waits)   # (the key check uses its own client)

@@ -129,6 +129,10 @@ DRILL_CONFIRM = "REAL_ORDER"
 # owners' first live drill 2026-10-19): the executor's spec carries it as min_notional, the drill orders a bit above it
 MIN_ORDER_USDT = 5.0
 DRILL_ORDER_USDT = 6.0
+# the drill reads six coins at once: MEXC answered "Requests are too frequent" (code 510) on the owners' live drill
+# 2026-10-19, so the drill spaces its requests (the executor's loop has its own retries and waits)
+DRILL_MIN_GAP_S = 0.25
+DRILL_PAUSE_S = 3.0
 # owners 2026-10-17: BTC 40x, the other coins 30x (set at the start; the entry itself sets the paper account's leverage)
 FIXED_LEVERAGE = {"BTCUSDT": 40}
 DEFAULT_LEVERAGE = 30
@@ -1351,6 +1355,22 @@ def reconcile(c: MexcClient, symbol: str, stop_price: Optional[float] = None) ->
     return out
 
 
+def pace(c: "MexcClient", gap_s: float = DRILL_MIN_GAP_S, sleep=time.sleep, clock=time.monotonic) -> None:
+    """The drill's requests: at least ``gap_s`` apart, and no endpoint past half its rate window (MEXC code 510)."""
+    orig, last = c.req, [None]
+
+    def paced(*a, **k):
+        if last[0] is not None:
+            wait = max(gap_s - (clock() - last[0]), c.throttle_s(share=0.5))
+            if wait > 0:
+                sleep(wait)
+        try:
+            return orig(*a, **k)
+        finally:
+            last[0] = clock()
+    c.req = paced
+
+
 @dataclass
 class MexcDrill:
     """The MEXC micro drill on the REAL account. ``check()`` reads (time, contracts, account, open orders and stops),
@@ -1575,12 +1595,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.cmd == "reconcile":
         print(json.dumps(reconcile(c, args.symbol or "BTCUSDT"), indent=1))
         return 0
+    pace(c)
     d = MexcDrill(c, symbol=args.symbol, side=1 if args.side == "long" else -1, keycheck=kc)
     orders = args.cmd == "drill" and args.confirm_order == DRILL_CONFIRM
     ok = True
     try:
         d.check()
         if orders:
+            time.sleep(DRILL_PAUSE_S)             # let the reads' rate window empty before the order cycle
             d.order_cycle()
         elif args.cmd == "drill":
             d.log.append({"step": "주문 단계", "ok": True,
