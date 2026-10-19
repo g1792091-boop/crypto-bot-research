@@ -878,7 +878,8 @@ FILTER_KO = {"session": "시간대", "weekend": "주말", "btc": "BTC 4시간 �
              "fund": "펀딩", "side": "방향"}
 SIGNALS_KEEP = 200                     # recent signal rows sent (the page pages them 10 at a time)
 TRADES_KEEP = 500                      # closed trades per account sent to 거래 (newest first)
-SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocut.db", "그림자 끄는 구간 없음"), ("ac32", "shadow-ac32.db", "그림자 32개"))
+SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocut.db", "그림자 끄는 구간 없음"), ("ac32", "shadow-ac32.db", "그림자 32개"),
+           ("chase", "shadow-chase.db", "그림자 어중간한 추격 막기"), ("trend4h", "shadow-trend4h.db", "그림자 4시간 역추세만"))
 # the live checks' own files (read-only here): paperbot/livecheck.py (morning check, watcher, loss cards) and
 # paperbot/liveimprove.py (weekly scorecard, the improvement ledger)
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
@@ -1449,7 +1450,7 @@ def shadows(p: dict, now: int) -> dict:
         out.append(row)
     return {"now_ms": now, "shadows": out, "main": {"state": main.get("state"), "reason_ko": main.get("reason_ko"),
             "since_ms": (ma or {}).get("since_ms"), "stats": (ma or {}).get("stats")},
-            "start_ko": "sudo systemctl start paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32",
+            "start_ko": "sudo systemctl start " + " ".join(f"paperbot-combo-shadow@{sid}" for sid, _f, _k in SHADOWS),
             "dir": more["shadow_dir"]}
 
 

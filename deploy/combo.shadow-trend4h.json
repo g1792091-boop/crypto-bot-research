@@ -1,0 +1,5034 @@
+{
+ "paper_db": "/var/lib/paperbot/paper3.db",
+ "db": "/var/lib/paperbot/combo/shadow-trend4h.db",
+ "members": [
+  {
+   "strategy": "F12_MSS_DISP",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 2.4
+   },
+   "cell": "F12_MSS_DISP_1h",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "dow",
+     6
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "15m",
+   "numbers": {
+    "tenkan_len": 14,
+    "kijun_len": 26,
+    "wr_len": 11,
+    "wr_oversold": -77.0
+   },
+   "cell": "N08_ICHI_WR_15m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "fund",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "oi24",
+     2
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "sym",
+     5
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "tf": "30m",
+   "numbers": {
+    "bb_len": 25,
+    "bb_mult": 4.0,
+    "sq_lookback": 80,
+    "sq_pct": 0.6
+   },
+   "cell": "core-S4_BB_BBP-30m-1",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     17
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "regside",
+     0
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "tf": "30m",
+   "numbers": {
+    "st_atr_len": 8,
+    "st_mult": 4.0,
+    "kst_roc_lens": [
+     3,
+     5,
+     7,
+     10
+    ],
+    "kst_signal_len": 27
+   },
+   "cell": "core-N02_ST_KST-30m-2",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "vol3",
+     2
+    ],
+    [
+     "mom24",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 40,
+    "ema_slow": 100,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_15m",
+   "stop": [
+    "atr",
+    4.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     5
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "symside",
+     9
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "1h",
+   "numbers": {
+    "tenkan_len": 9,
+    "kijun_len": 26,
+    "wr_len": 28,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_1h",
+   "stop": [
+    "swing",
+    5
+   ],
+   "entry": "break",
+   "invert": true,
+   "off": [
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "tf": "30m",
+   "numbers": {
+    "range_len": 11,
+    "fib_level": 0.333333333333,
+    "touch_atr": 0.1,
+    "slope_thr": 0.6
+   },
+   "cell": "core-N19_FIB_CHOP-30m-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     3
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "pos",
+     0
+    ],
+    [
+     "reg5side",
+     7
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "tf": "1h",
+   "numbers": {
+    "ema_slow": 16,
+    "rsi_len": 14,
+    "rsi_level": 30.0,
+    "chop_len": 34
+   },
+   "cell": "S1_EMA_RSI_CHOP_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "hr",
+     21
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 144,
+    "adx_max": 13.333333333333,
+    "edge": 0.12,
+    "width_atr": 1.5
+   },
+   "cell": "ds-F5_BOX-15m-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "weekend",
+     1
+    ],
+    [
+     "btc",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 25,
+    "fvg_min_atr": 0.4
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F4_PULL",
+   "tf": "1h",
+   "numbers": {
+    "ema_fast": 9,
+    "ema_mid": 17,
+    "ema_slow": 200
+   },
+   "cell": "F4_PULL_1h",
+   "stop": [
+    "atr",
+    1.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     4
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "oi24",
+     0
+    ],
+    [
+     "reg5side",
+     2
+    ],
+    [
+     "regwk",
+     1
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "30m",
+   "numbers": {
+    "ema_fast": 17,
+    "ema_slow": 200,
+    "adx_len": 42,
+    "adx_level": 12.5
+   },
+   "cell": "core-N03_ADX_GC-30m-3",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "pos",
+     1
+    ],
+    [
+     "reg5side",
+     3
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "15m",
+   "numbers": {
+    "tenkan_len": 14,
+    "kijun_len": 26,
+    "wr_len": 7,
+    "wr_oversold": -77.0
+   },
+   "cell": "N08_ICHI_WR_15m",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "fund",
+     1
+    ],
+    [
+     "vol3",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "regside",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 63,
+    "ema_slow": 100,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_15m",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     1
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "1h",
+   "numbers": {
+    "ema_fast": 50,
+    "ema_slow": 200,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "side",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "ctr4",
+     0
+    ],
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "1h",
+   "numbers": {
+    "ema_fast": 33,
+    "ema_slow": 250,
+    "adx_len": 5,
+    "adx_level": 50.0
+   },
+   "cell": "core-N03_ADX_GC-1h-1",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "mom24",
+     1
+    ],
+    [
+     "side",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "tf": "15m",
+   "numbers": {
+    "range_len": 51,
+    "fib_level": 0.25,
+    "touch_atr": 0.066666666667,
+    "slope_thr": 0.6
+   },
+   "cell": "core-N19_FIB_CHOP-15m-1",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hb",
+     3
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "15m",
+   "numbers": {
+    "swing_k": 5,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_15m",
+   "stop": [
+    "swing",
+    5
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "mom24",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     12
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "reg5side",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 2,
+    "disp_atr": 2.4
+   },
+   "cell": "ds-F12_MSS_DISP-1h-1",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     6
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F12_MSS_DISP",
+   "tf": "15m",
+   "numbers": {
+    "swing_k": 9,
+    "disp_atr": 3.6
+   },
+   "cell": "F12_MSS_DISP_15m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "btc",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "tf": "30m",
+   "numbers": {
+    "range_len": 11,
+    "fib_level": 0.25,
+    "touch_atr": 0.16,
+    "slope_thr": 0.6
+   },
+   "cell": "core-N19_FIB_CHOP-30m-1",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "session",
+     0
+    ],
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     11
+    ],
+    [
+     "oi24",
+     2
+    ],
+    [
+     "sym",
+     4
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 96,
+    "adx_max": 13.333333333333,
+    "edge": 0.12,
+    "width_atr": 6.0
+   },
+   "cell": "ds-F5_BOX-15m-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "weekend",
+     1
+    ],
+    [
+     "mom24",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "regside",
+     1
+    ],
+    [
+     "sym",
+     0
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "tf": "30m",
+   "numbers": {
+    "bb_len": 25,
+    "bb_mult": 4.0,
+    "sq_lookback": 80,
+    "sq_pct": 0.6
+   },
+   "cell": "core-S4_BB_BBP-30m-1",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hb",
+     3
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "reg5",
+     2
+    ],
+    [
+     "vol3",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "1h",
+   "numbers": {
+    "tenkan_len": 9,
+    "kijun_len": 26,
+    "wr_len": 18,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_1h",
+   "stop": [
+    "swing",
+    5
+   ],
+   "entry": "break",
+   "invert": true,
+   "off": [
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "regwk",
+     1
+    ],
+    [
+     "symside",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "oi24",
+     0
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "tf": "15m",
+   "numbers": {
+    "bb_len": 20,
+    "bb_mult": 4.0,
+    "sq_lookback": 100,
+    "sq_pct": 0.3
+   },
+   "cell": "S4_BB_BBP_15m",
+   "stop": [
+    "atr",
+    4.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "30m",
+   "numbers": {
+    "tenkan_len": 9,
+    "kijun_len": 26,
+    "wr_len": 28,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_30m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "session",
+     2
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "reg5",
+     3
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 75,
+    "ema_slow": 160,
+    "adx_len": 5,
+    "adx_level": 75.0
+   },
+   "cell": "core-N03_ADX_GC-15m-1",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "ctr4",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     2
+    ],
+    [
+     "sym",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "30m",
+   "numbers": {
+    "ema_fast": 17,
+    "ema_slow": 200,
+    "adx_len": 21,
+    "adx_level": 12.5
+   },
+   "cell": "core-N03_ADX_GC-30m-3",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "small",
+    1.0
+   ],
+   "off": [
+    [
+     "fund",
+     1
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "regside",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX_RSI",
+   "tf": "30m",
+   "numbers": {
+    "box_len": 48,
+    "adx_max": 20.0,
+    "edge": 0.15,
+    "rsi_level": 30.0
+   },
+   "cell": "F5_BOX_RSI_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    2.0
+   ],
+   "off": [
+    [
+     "hb",
+     2
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "regside",
+     1
+    ],
+    [
+     "regside",
+     3
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.333333333333
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "vol3",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "tf": "15m",
+   "numbers": {
+    "ema_slow": 20,
+    "rsi_len": 14,
+    "rsi_level": 30.0,
+    "chop_len": 34
+   },
+   "cell": "S1_EMA_RSI_CHOP_15m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "oi24",
+     2
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "30m",
+   "numbers": {
+    "ema_fast": 150,
+    "ema_slow": 200,
+    "adx_len": 21,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_30m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "side",
+     1
+    ],
+    [
+     "fund",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "vol3",
+     1
+    ],
+    [
+     "wk",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 48,
+    "adx_max": 10.0,
+    "edge": 0.15,
+    "width_atr": 3.0
+   },
+   "cell": "F5_BOX_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     5
+    ],
+    [
+     "hb",
+     3
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "symside",
+     9
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "tf": "1h",
+   "numbers": {
+    "ema_len": 25,
+    "di_len": 21,
+    "adx_len": 28,
+    "adx_min": 25.0
+   },
+   "cell": "S6_EMA_DMI_ADX_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "fund",
+     0
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "tf": "30m",
+   "numbers": {
+    "macd_fast": 18,
+    "macd_slow": 26,
+    "macd_signal": 11,
+    "ext_cap": 0.75
+   },
+   "cell": "N06_MACD_ORB_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "side",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "reg",
+     1
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F15_ASIA_BRK",
+   "tf": "30m",
+   "numbers": {
+    "asia_win_h": 8
+   },
+   "cell": "F15_ASIA_BRK_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.5
+   ],
+   "off": [
+    [
+     "hr",
+     22
+    ],
+    [
+     "reg5side",
+     5
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "symside",
+     9
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "tf": "1h",
+   "numbers": {
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "ext_cap": 1.5
+   },
+   "cell": "N06_MACD_ORB_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    2.0
+   ],
+   "off": [
+    [
+     "hb",
+     5
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "vol3",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 63,
+    "ema_slow": 100,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "reg",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "1h",
+   "numbers": {
+    "ema_fast": 33,
+    "ema_slow": 250,
+    "adx_len": 5,
+    "adx_level": 75.0
+   },
+   "cell": "core-N03_ADX_GC-1h-1",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "regside",
+     5
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "30m",
+   "numbers": {
+    "tenkan_len": 9,
+    "kijun_len": 13,
+    "wr_len": 28,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_30m",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "oi24",
+     2
+    ],
+    [
+     "regside",
+     3
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 96,
+    "adx_max": 16.0,
+    "edge": 0.12,
+    "width_atr": 6.0
+   },
+   "cell": "ds-F5_BOX-15m-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "weekend",
+     0
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "fund",
+     1
+    ],
+    [
+     "hb",
+     3
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "vol3",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "30m",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_30m",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     0
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     13
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "vol3",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "30m",
+   "numbers": {
+    "ema_fast": 17,
+    "ema_slow": 200,
+    "adx_len": 11,
+    "adx_level": 12.5
+   },
+   "cell": "core-N03_ADX_GC-30m-3",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "sym",
+     5
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "30m",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_30m",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "vol3",
+     0
+    ],
+    [
+     "mom24",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     12
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "wk",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 63,
+    "ema_slow": 100,
+    "adx_len": 11,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "reg5side",
+     1
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 24,
+    "adx_max": 16.0,
+    "edge": 0.12,
+    "width_atr": 2.0
+   },
+   "cell": "ds-F5_BOX-15m-1",
+   "stop": [
+    "atr",
+    4.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "weekend",
+     1
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     1
+    ],
+    [
+     "hb",
+     4
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     9
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.4
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "regside",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "30m",
+   "numbers": {
+    "tenkan_len": 9,
+    "kijun_len": 26,
+    "wr_len": 14,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_30m",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "reg5",
+     1
+    ],
+    [
+     "regwk",
+     5
+    ],
+    [
+     "vol3",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "tf": "30m",
+   "numbers": {
+    "st_atr_len": 8,
+    "st_mult": 4.0,
+    "kst_roc_lens": [
+     15,
+     23,
+     30,
+     45
+    ],
+    "kst_signal_len": 27
+   },
+   "cell": "core-N02_ST_KST-30m-2",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "vol3",
+     2
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "15m",
+   "numbers": {
+    "tenkan_len": 14,
+    "kijun_len": 26,
+    "wr_len": 11,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_15m",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "mom24",
+     1
+    ],
+    [
+     "regside",
+     5
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "symside",
+     3
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S1_EMA_RSI_CHOP",
+   "tf": "30m",
+   "numbers": {
+    "ema_slow": 30,
+    "rsi_len": 11,
+    "rsi_level": 30.0,
+    "chop_len": 34
+   },
+   "cell": "S1_EMA_RSI_CHOP_30m",
+   "stop": [
+    "atr",
+    1.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "dow",
+     0
+    ],
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     22
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "30m",
+   "numbers": {
+    "swing_k": 3,
+    "disp_atr": 1.2,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.5
+   },
+   "cell": "F10_M2022_30m",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "btc",
+     1
+    ],
+    [
+     "weekend",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "fund",
+     1
+    ],
+    [
+     "hb",
+     2
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     9
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "30m",
+   "numbers": {
+    "ema_fast": 50,
+    "ema_slow": 200,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    1.5
+   ],
+   "off": [
+    [
+     "dow",
+     5
+    ],
+    [
+     "hb",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "oi24",
+     0
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 100,
+    "ema_slow": 250,
+    "adx_len": 5,
+    "adx_level": 75.0
+   },
+   "cell": "core-N03_ADX_GC-15m-1",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "fund",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "15m",
+   "numbers": {
+    "tenkan_len": 14,
+    "kijun_len": 26,
+    "wr_len": 9,
+    "wr_oversold": -77.0
+   },
+   "cell": "N08_ICHI_WR_15m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "fund",
+     1
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     5
+    ],
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "regside",
+     3
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "symside",
+     5
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX_RSI",
+   "tf": "1h",
+   "numbers": {
+    "box_len": 96,
+    "adx_max": 20.0,
+    "edge": 0.225,
+    "rsi_level": 28.0
+   },
+   "cell": "F5_BOX_RSI_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "mom24",
+     1
+    ],
+    [
+     "fund",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "oi24",
+     0
+    ],
+    [
+     "reg5side",
+     7
+    ],
+    [
+     "sym",
+     5
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "tf": "1h",
+   "numbers": {
+    "ema_len": 30,
+    "di_len": 14,
+    "adx_len": 28,
+    "adx_min": 25.0
+   },
+   "cell": "S6_EMA_DMI_ADX_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "fund",
+     0
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hb",
+     4
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "pos",
+     0
+    ],
+    [
+     "pos",
+     1
+    ],
+    [
+     "regside",
+     1
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N02_ST_KST",
+   "tf": "1h",
+   "numbers": {
+    "st_atr_len": 10,
+    "st_mult": 6.0,
+    "kst_roc_lens": [
+     10,
+     15,
+     20,
+     30
+    ],
+    "kst_signal_len": 14
+   },
+   "cell": "N02_ST_KST_1h",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "mom24",
+     1
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "dow",
+     2
+    ],
+    [
+     "hb",
+     0
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "posside",
+     2
+    ],
+    [
+     "posside",
+     6
+    ],
+    [
+     "reg5side",
+     1
+    ],
+    [
+     "regwk",
+     2
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "1h",
+   "numbers": {
+    "box_len": 48,
+    "adx_max": 20.0,
+    "edge": 0.075,
+    "width_atr": 3.0
+   },
+   "cell": "F5_BOX_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     6
+    ],
+    [
+     "hb",
+     0
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "reg",
+     2
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "vol3",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "tf": "30m",
+   "numbers": {
+    "macd_fast": 12,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "ext_cap": 1.5
+   },
+   "cell": "N06_MACD_ORB_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    3.0
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     12
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "vol3",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "15m",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.0
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "posside",
+     7
+    ],
+    [
+     "regside",
+     0
+    ],
+    [
+     "symside",
+     3
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "1h",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_1h",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "vol3",
+     1
+    ],
+    [
+     "session",
+     2
+    ],
+    [
+     "side",
+     -1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "pos",
+     3
+    ],
+    [
+     "reg",
+     1
+    ],
+    [
+     "sym",
+     5
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "1h",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_1h",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "vol3",
+     1
+    ],
+    [
+     "session",
+     2
+    ],
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "ctr4",
+     0
+    ],
+    [
+     "dow",
+     3
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F10_M2022",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 4,
+    "disp_atr": 0.96,
+    "sweep_bars": 20,
+    "fvg_min_atr": 0.333333333333
+   },
+   "cell": "F10_M2022_1h",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "posside",
+     3
+    ],
+    [
+     "reg5side",
+     1
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     5
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX",
+   "tf": "15m",
+   "numbers": {
+    "box_len": 60,
+    "adx_max": 16.0,
+    "edge": 0.225,
+    "width_atr": 2.4
+   },
+   "cell": "ds-F5_BOX-15m-1",
+   "stop": [
+    "atr",
+    4.0
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "side",
+     -1
+    ],
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "pos",
+     1
+    ],
+    [
+     "regwk",
+     0
+    ],
+    [
+     "vol3",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F9_IFVG",
+   "tf": "30m",
+   "numbers": {
+    "fvg_min_atr": 0.5,
+    "zone_life": 50
+   },
+   "cell": "F9_IFVG_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.5
+   ],
+   "off": [
+    [
+     "dow",
+     5
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "regwk",
+     4
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX_RSI",
+   "tf": "1h",
+   "numbers": {
+    "box_len": 96,
+    "adx_max": 20.0,
+    "edge": 0.225,
+    "rsi_level": 32.0
+   },
+   "cell": "F5_BOX_RSI_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "mom24",
+     1
+    ],
+    [
+     "fund",
+     1
+    ],
+    [
+     "vol3",
+     2
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     0
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "hr",
+     23
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S4_BB_BBP",
+   "tf": "1h",
+   "numbers": {
+    "bb_len": 40,
+    "bb_mult": 4.0,
+    "sq_lookback": 33,
+    "sq_pct": 0.3
+   },
+   "cell": "core-S4_BB_BBP-1h-2",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     10
+    ],
+    [
+     "reg5side",
+     2
+    ],
+    [
+     "regside",
+     5
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 63,
+    "ema_slow": 100,
+    "adx_len": 14,
+    "adx_level": 25.0
+   },
+   "cell": "N03_ADX_GC_15m",
+   "stop": [
+    "swing",
+    5
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ],
+    [
+     "side",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     3
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "reg5",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N06_MACD_ORB",
+   "tf": "30m",
+   "numbers": {
+    "macd_fast": 18,
+    "macd_slow": 26,
+    "macd_signal": 9,
+    "ext_cap": 0.75
+   },
+   "cell": "N06_MACD_ORB_30m",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "mom24",
+     0
+    ],
+    [
+     "side",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     4
+    ],
+    [
+     "hr",
+     3
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "pos",
+     1
+    ],
+    [
+     "regwk",
+     3
+    ],
+    [
+     "vol3",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX_RSI",
+   "tf": "1h",
+   "numbers": {
+    "box_len": 32,
+    "adx_max": 20.0,
+    "edge": 0.225,
+    "rsi_level": 32.0
+   },
+   "cell": "F5_BOX_RSI_1h",
+   "stop": [
+    "swing",
+    5
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "mom24",
+     1
+    ],
+    [
+     "fund",
+     1
+    ],
+    [
+     "session",
+     2
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "sym",
+     0
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N19_FIB_CHOP",
+   "tf": "30m",
+   "numbers": {
+    "range_len": 34,
+    "fib_level": 0.333333333333,
+    "touch_atr": 0.6,
+    "slope_thr": 0.6
+   },
+   "cell": "core-N19_FIB_CHOP-30m-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "dow",
+     6
+    ],
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "reg5side",
+     3
+    ],
+    [
+     "regwk",
+     1
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "S6_EMA_DMI_ADX",
+   "tf": "1h",
+   "numbers": {
+    "ema_len": 40,
+    "di_len": 21,
+    "adx_len": 28,
+    "adx_min": 25.0
+   },
+   "cell": "S6_EMA_DMI_ADX_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "fund",
+     0
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "ctr4",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "vol3",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N03_ADX_GC",
+   "tf": "15m",
+   "numbers": {
+    "ema_fast": 100,
+    "ema_slow": 160,
+    "adx_len": 5,
+    "adx_level": 75.0
+   },
+   "cell": "core-N03_ADX_GC-15m-1",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "ctr4",
+     1
+    ],
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "sym",
+     4
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N08_ICHI_WR",
+   "tf": "30m",
+   "numbers": {
+    "tenkan_len": 9,
+    "kijun_len": 26,
+    "wr_len": 28,
+    "wr_oversold": -80.0
+   },
+   "cell": "N08_ICHI_WR_30m",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "invert": true,
+   "filter": [
+    [
+     "fund",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     0
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "oi24",
+     0
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F4_FAN",
+   "tf": "30m",
+   "numbers": {
+    "fan_lens": [
+     24,
+     39,
+     63,
+     102,
+     165
+    ]
+   },
+   "cell": "ds-F4_FAN-30m-3",
+   "stop": [
+    "atr",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "btc",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     11
+    ],
+    [
+     "hr",
+     15
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "hr",
+     17
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "mom24",
+     0
+    ],
+    [
+     "oi24",
+     1
+    ],
+    [
+     "regside",
+     4
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "vol3",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F17_Z",
+   "tf": "30m",
+   "numbers": {
+    "z_len": 30,
+    "z_level": 4.0
+   },
+   "cell": "F17_Z_30m",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "ctr4",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     2
+    ],
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     12
+    ],
+    [
+     "symside",
+     5
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F1_RSI_DIV",
+   "tf": "1h",
+   "numbers": {
+    "swing_k": 3,
+    "div_max_bars": 60,
+    "rsi_len": 14
+   },
+   "cell": "F1_RSI_DIV_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "body",
+    1.0
+   ],
+   "off": [
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     10
+    ],
+    [
+     "hr",
+     21
+    ],
+    [
+     "reg5side",
+     7
+    ],
+    [
+     "sym",
+     4
+    ],
+    [
+     "symside",
+     5
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F7_RF_TRIPLE",
+   "tf": "1h",
+   "numbers": {
+    "rf_period": 80,
+    "rf_mult": 9.0
+   },
+   "cell": "ds-F7_RF_TRIPLE-1h-1",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    3.0
+   ],
+   "off": [
+    [
+     "hr",
+     2
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "hr",
+     18
+    ],
+    [
+     "reg5side",
+     4
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "DOGE",
+   "tf": "1h",
+   "numbers": {
+    "ema_slow": 156,
+    "stoch_len": 105,
+    "spread_min": 0.45,
+    "chop_max": 30.9
+   },
+   "cell": "core-DOGE-1h-1",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "btc",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     3
+    ],
+    [
+     "reg5side",
+     0
+    ],
+    [
+     "symside",
+     4
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "DOGE",
+   "tf": "30m",
+   "numbers": {
+    "ema_slow": 78,
+    "stoch_len": 23,
+    "spread_min": 0.225,
+    "chop_max": 77.25
+   },
+   "cell": "core-DOGE-30m-1",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "fund",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     0
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "regside",
+     0
+    ],
+    [
+     "regside",
+     5
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F15_OPEN0930",
+   "tf": "15m",
+   "numbers": {
+    "judge_min": 60
+   },
+   "cell": "F15_OPEN0930_15m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    3.0
+   ],
+   "off": [
+    [
+     "posside",
+     6
+    ],
+    [
+     "reg5side",
+     2
+    ],
+    [
+     "reg5side",
+     7
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N13_3OUTSIDE",
+   "tf": "1h",
+   "numbers": {
+    "engulf_min": 0.625,
+    "prior_n": 2,
+    "atr_len": 28
+   },
+   "cell": "core-N13_3OUTSIDE-1h-1",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "session",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "pos",
+     0
+    ],
+    [
+     "reg",
+     0
+    ],
+    [
+     "reg5side",
+     7
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N12_ICHI_AO",
+   "tf": "30m",
+   "numbers": {
+    "tenkan_len": 27,
+    "kijun_len": 52,
+    "ao_fast_len": 6,
+    "ao_slow_len": 17
+   },
+   "cell": "core-N12_ICHI_AO-30m-3",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "session",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     1
+    ],
+    [
+     "hr",
+     9
+    ],
+    [
+     "hr",
+     16
+    ],
+    [
+     "reg5side",
+     7
+    ],
+    [
+     "symside",
+     10
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "tf": "15m",
+   "numbers": {
+    "big_body": 0.8,
+    "small_body": 0.133333333333,
+    "gap_tol": 0.05,
+    "prior_n": 5
+   },
+   "cell": "N11_BREAKAWAY_15m",
+   "stop": [
+    "swing",
+    20
+   ],
+   "entry": "now",
+   "invert": true,
+   "off": [
+    [
+     "hr",
+     2
+    ],
+    [
+     "oi24",
+     1
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "tf": "30m",
+   "numbers": {
+    "big_body": 0.8,
+    "small_body": 0.4,
+    "gap_tol": 0.05,
+    "prior_n": 5
+   },
+   "cell": "N11_BREAKAWAY_30m",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    1.5
+   ],
+   "off": [
+    [
+     "hr",
+     1
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "reg5",
+     3
+    ],
+    [
+     "symside",
+     0
+    ],
+    [
+     "symside",
+     6
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F15_LON_BRK",
+   "tf": "1h",
+   "numbers": {
+    "lon_win_h": 14
+   },
+   "cell": "F15_LON_BRK_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "session",
+     3
+    ]
+   ],
+   "off": [
+    [
+     "pos",
+     0
+    ],
+    [
+     "reg",
+     1
+    ],
+    [
+     "reg5",
+     1
+    ],
+    [
+     "symside",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "tf": "1h",
+   "numbers": {
+    "big_body": 0.8,
+    "small_body": 0.4,
+    "gap_tol": 0.05,
+    "prior_n": 6
+   },
+   "cell": "N11_BREAKAWAY_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "off": [
+    [
+     "hr",
+     5
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     7
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     13
+    ],
+    [
+     "sym",
+     2
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F17_Z",
+   "tf": "30m",
+   "numbers": {
+    "z_len": 30,
+    "z_level": 4.0
+   },
+   "cell": "F17_Z_30m",
+   "stop": [
+    "atr",
+    1.5
+   ],
+   "entry": "now",
+   "invert": true,
+   "filter": [
+    [
+     "ctr4",
+     0
+    ],
+    [
+     "weekend",
+     0
+    ],
+    [
+     "vol3",
+     0
+    ]
+   ],
+   "off": [
+    [
+     "dow",
+     2
+    ],
+    [
+     "hb",
+     5
+    ],
+    [
+     "hr",
+     5
+    ],
+    [
+     "sym",
+     3
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F15_LON_BRK",
+   "tf": "1h",
+   "numbers": {
+    "lon_win_h": 7
+   },
+   "cell": "F15_LON_BRK_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    2.5
+   ],
+   "off": [
+    [
+     "hr",
+     0
+    ],
+    [
+     "hr",
+     22
+    ],
+    [
+     "reg5side",
+     6
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "symside",
+     5
+    ],
+    [
+     "symside",
+     7
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "N11_BREAKAWAY",
+   "tf": "1h",
+   "numbers": {
+    "big_body": 0.8,
+    "small_body": 0.4,
+    "gap_tol": 0.05,
+    "prior_n": 4
+   },
+   "cell": "N11_BREAKAWAY_1h",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "now",
+   "invert": true,
+   "off": [
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     14
+    ],
+    [
+     "regside",
+     2
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F6_VWAP_FAIL",
+   "tf": "1h",
+   "numbers": {
+    "fail_bars": 10
+   },
+   "cell": "F6_VWAP_FAIL_1h",
+   "stop": [
+    "atr",
+    3.0
+   ],
+   "entry": "now",
+   "disp": [
+    "range",
+    2.5
+   ],
+   "off": [
+    [
+     "hr",
+     4
+    ],
+    [
+     "hr",
+     6
+    ],
+    [
+     "hr",
+     8
+    ],
+    [
+     "hr",
+     19
+    ],
+    [
+     "hr",
+     20
+    ],
+    [
+     "pos",
+     1
+    ],
+    [
+     "pos",
+     4
+    ],
+    [
+     "sym",
+     1
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F5_BOX_HTF",
+   "tf": "1h",
+   "numbers": {
+    "box_len": 60,
+    "adx_max": 20.0,
+    "edge": 0.12,
+    "width_atr": 1.0
+   },
+   "cell": "F5_BOX_HTF_1h",
+   "stop": [
+    "swing",
+    10
+   ],
+   "entry": "now",
+   "filter": [
+    [
+     "vol3",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "hb",
+     2
+    ],
+    [
+     "reg5side",
+     4
+    ],
+    [
+     "symside",
+     1
+    ],
+    [
+     "symside",
+     8
+    ],
+    [
+     "symside",
+     11
+    ],
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  },
+  {
+   "strategy": "F15_OPEN0930",
+   "tf": "30m",
+   "numbers": {
+    "judge_min": 40
+   },
+   "cell": "F15_OPEN0930_30m",
+   "stop": [
+    "pct",
+    2.0
+   ],
+   "entry": "break",
+   "filter": [
+    [
+     "weekend",
+     1
+    ]
+   ],
+   "off": [
+    [
+     "ctr4",
+     1
+    ]
+   ]
+  }
+ ],
+ "leverage": {
+  "BTCUSDT": 40,
+  "default": 30
+ },
+ "margin": 0.4,
+ "initial_equity": 1000,
+ "max_loss_frac": 0.35,
+ "loss_cap": "shrink",
+ "stop": {
+  "mode": "atr_fit",
+  "atr": 3.0,
+  "min_atr": 1.0
+ },
+ "ladder": {
+  "first_lock": 0.1,
+  "step": 0.03,
+  "trigger_gap": 0.01
+ },
+ "rank": [
+  "order"
+ ],
+ "flip_twin": true,
+ "no_weekend": true,
+ "macro_blackout_min": 30,
+ "telegram": false,
+ "name": "그림자 4시간 역추세만"
+}

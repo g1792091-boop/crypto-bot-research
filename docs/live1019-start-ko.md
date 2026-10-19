@@ -576,16 +576,18 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 
 ## 11. 그림자 페이퍼 봇 (선택, 10/19 추가)
 
-지금 페이퍼 봇(A+C 합본) 옆에서 다른 설정의 페이퍼 봇 3개를 같은 실제 시장으로 돌립니다. 한 달 뒤 어느 버전이 처음 보는 데이터에서 나았는지 같은 조건으로 비교하려는 것입니다.
+지금 페이퍼 봇(A+C 합본) 옆에서 다른 설정의 페이퍼 봇 5개를 같은 실제 시장으로 돌립니다. 한 달 뒤 어느 버전이 처음 보는 데이터에서 나았는지 같은 조건으로 비교하려는 것입니다.
 
 | 그림자 | 설정 파일 | 무엇이고 왜 돌리나 |
 |---|---|---|
 | `@b` 그림자 B 안정형 | `deploy/combo.shadow-b.json` | 고원형 합본(세팅 37개). 백테스트는 낮지만(88.5%) 처음 보는 기간 시험에서 가장 덜 잃었습니다. 실제 시장에서도 그런지 봅니다. |
 | `@nocut` 그림자 끄는 구간 없음 | `deploy/combo.shadow-nocut.json` | 지금 봇과 같은 세팅 95개에서 끄는 구간만 뺐습니다. 백테스트 91%의 대부분은 끄는 구간이 만듭니다(빼면 약 79%). 처음 보는 데이터에서도 끄는 구간이 도움이 되는지 잽니다. |
 | `@ac32` 그림자 32개 | `deploy/combo.shadow-ac32.json` | 오늘 27개로 줄이기 전 버전(매매법 32개·세팅 101개). 줄인 것이 나았는지 봅니다. |
+| `@chase` 그림자 어중간한 추격 막기 (10/19 밤 추가) | `deploy/combo.shadow-chase.json` | 지금 봇 95개에 "7일 범위 위 20%에서 롱, 아래 20%에서 숏"만 더 막았습니다. 7일 고점·저점을 뚫는 돌파 진입은 그대로 둡니다(5년에서 가장 좋았던 묶음). 백테스트: 5년(맞춘 숫자) 승률 91.3% → 90.5%로 조금 나빠지고, 2025~26(현실 숫자) 75.0% → 76.0%로 조금 나아졌습니다. 둘 다 손익분기(80.8%) 아래라 규칙으로 쓸 근거는 아직 없고, 실제 시장에서 어떤지 봅니다. |
+| `@trend4h` 그림자 4시간 역추세만 (10/19 밤 추가) | `deploy/combo.shadow-trend4h.json` | 지금 봇 95개에 "코인 4시간 추세(종가 vs EMA50)와 같은 방향 진입"을 막았습니다. 진입이 절반 이하로 줄어요. 백테스트: 5년 91.3% → 89.2%, 2025~26 75.0% → 75.9%. 역시 손익분기 아래라 근거가 약하고, 실제 시장에서 봅니다. |
 
 - **돈이 걸리지 않습니다.** 주문을 내지 않고, 실행기는 그림자를 따라가지 않습니다. 텔레그램도 보내지 않습니다.
-- DB는 각자 따로입니다: `/var/lib/paperbot/combo/shadow-b.db`, `shadow-nocut.db`, `shadow-ac32.db`. 실행기 설정의 `"paper_db"`는 그대로 `live-ac.db`입니다. 그림자 DB를 넣지 않습니다.
+- DB는 각자 따로입니다: `/var/lib/paperbot/combo/shadow-b.db`, `shadow-nocut.db`, `shadow-ac32.db`, `shadow-chase.db`, `shadow-trend4h.db`. 실행기 설정의 `"paper_db"`는 그대로 `live-ac.db`입니다. 그림자 DB를 넣지 않습니다.
 - 지금 페이퍼 봇과 실행기보다 낮은 순위로 돕니다(CPU·디스크를 덜 받고, 메모리 한도 768M).
 
 **켜기·끄기**
@@ -593,6 +595,10 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 ```bash
 sudo systemctl start paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32
 sudo systemctl stop paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32
+
+# 추격 막기 그림자 둘만 (10/19 밤 추가; 위 셋과 따로 켜고 끌 수 있어요)
+sudo systemctl start paperbot-combo-shadow@chase paperbot-combo-shadow@trend4h
+sudo systemctl stop paperbot-combo-shadow@chase paperbot-combo-shadow@trend4h
 ```
 
 - 켜는 데 8분쯤 걸립니다. 바이낸스 요청 한도를 넘지 않게 2분 간격으로 하나씩 켜집니다. 명령이 끝날 때까지 기다립니다.
@@ -606,7 +612,7 @@ free -m
 systemctl status paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32 --no-pager
 ```
 
-- `free -m`의 `available`이 1000 이상이면 됩니다. 시험에서 그림자 하나가 약 270MB를 썼습니다(셋이면 약 0.8GB, 서버는 8GB).
+- `free -m`의 `available`이 1000 이상이면 됩니다. 시험에서 그림자 하나가 약 270MB를 썼습니다(셋이면 약 0.8GB, 다섯이면 약 1.4GB, 서버는 8GB).
 - `systemctl status`에서 셋 다 `active (running)`이고 `Memory:`가 300M 안팎이면 됩니다(한도 768M).
 - `available`이 1000 아래로 내려가면 그림자부터 끕니다(위 stop 명령). 지금 페이퍼 봇과 실행기가 먼저입니다.
 
@@ -617,6 +623,8 @@ cd /opt/crypto-bot-research
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-b.db
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-nocut.db
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-ac32.db
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-chase.db
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-trend4h.db
 ```
 
 비교 기준은 지금 페이퍼 봇입니다(`live-ac.db`, 맨 위 6)의 첫 줄).

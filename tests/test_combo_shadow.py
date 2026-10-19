@@ -32,7 +32,11 @@ LIVE = DEPLOY / "combo.live-ac.json"
 UNIT = "paperbot-combo-shadow@.service"
 LIVE_UNIT = "paperbot-combo.service"
 OLD_COMMIT = "2179a84"                  # the live-ac config before it went down to 27 strategies / 95 settings
-SHADOWS = {"b": ("그림자 B 안정형", 37), "nocut": ("그림자 끄는 구간 없음", 95), "ac32": ("그림자 32개", 101)}
+SHADOWS = {"b": ("그림자 B 안정형", 37), "nocut": ("그림자 끄는 구간 없음", 95), "ac32": ("그림자 32개", 101),
+           "chase": ("그림자 어중간한 추격 막기", 95), "trend4h": ("그림자 4시간 역추세만", 95)}
+# owners 10/19 "저점 추격 숏 고점 추격 롱 방지": the live members with extra switch-off buckets (rmember OFF_DIMS)
+EXTRA_CUTS = {"chase": [["posside", 7], ["posside", 2]],      # long in the top 20% / short in the bottom 20% of the 7-day range
+              "trend4h": [["ctr4", 1]]}                       # the coin's 4h trend agrees with the side
 OWN = ("members", "db", "name", "telegram")   # what a shadow sets itself; every other key is the live bot's
 
 
@@ -127,6 +131,20 @@ def test_nocut_is_the_live_members_without_their_switch_off_buckets():
         assert (x.kind, x.name, x.tf, x.numbers, x.when) == (y.kind, y.name, y.tf, y.numbers, y.when)
         assert y.research.off == frozenset()
         assert dataclasses.replace(x.research, off=frozenset()) == y.research
+
+
+@pytest.mark.parametrize("tag", sorted(EXTRA_CUTS))
+def test_the_anti_chase_shadows_are_the_live_members_plus_their_cuts(tag):
+    """A change of the live config must be carried into these two (or they compare against a bot that no longer runs)."""
+    live = _load(LIVE)["members"]
+    sh = _load(_path(tag))["members"]
+    assert len(sh) == len(live) == 95
+    for m, s in zip(live, sh):
+        assert _without(s, ("off",)) == _without(m, ("off",))
+        assert s["off"] == list(m.get("off") or []) + [c for c in EXTRA_CUTS[tag] if c not in (m.get("off") or [])]
+    for x in C.resolve_members(sh):
+        hits = RM.off_hits(x.research, {**{d: -1 for d in RM.OFF_DIMS}, "posside": 7, "ctr4": 1})
+        assert hits, x.name                                                 # every setting refuses that bucket
 
 
 def test_ac32_is_the_32_strategy_live_config_of_the_earlier_commit():
