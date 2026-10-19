@@ -268,6 +268,7 @@ export function rowDetail(r, d, href) {
   const mrow = (m) => h("li", {class: "lbr-m"},
     h("div", {class: "lbr-mh"}, h("b", {class: "num"}, `#${fmt.int(m.order)}`), h("span", {class: "lbr-tf"}, m.tf_ko || fmt.tfKo(m.tf)),
       h("span", null, m.entry_ko || "즉시"), m.invert ? ui.pill("방향 반대", "warn", "신호와 반대 방향으로 들어가요") : null,
+      m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null,
       h("span", {class: "lbr-mbt num"}, m.bt && m.bt.trades != null ? `5년 ${fmt.int(m.bt.trades)}번 · ${pc0(m.bt.win)}` : "5년 —")),
     h("p", {class: "lbr-ml"}, h("span", {class: "muted"}, "손절 "), (m.stop && m.stop.ko) || "—"),
     (m.filter || []).length || m.disp ? h("p", {class: "lbr-ml"}, h("span", {class: "muted"}, "조건 "), [...(m.filter || []).map((f) => f.ko), m.disp].filter(Boolean).join(" · ")) : null,

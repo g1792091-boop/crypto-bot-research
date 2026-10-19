@@ -15,7 +15,11 @@
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
-거래 · 성적 · 안전 탭은 그 둘도 읽습니다(읽기만): 손실 카드(거래), 매매법 성적표와 개선 후보 장부(성적; 성적표는 liveimprove의
+5년 기준표(deploy/combo.live-ac.expected.json, combo.live-ac.likely.json)의 config_sha256이 PAPERBOT_LIVE_COMBO_CONFIG 파일의
+sha256과 다르면(설정이 바뀜) 그 표는 지난 봇 것이라 쓰지 않습니다(livecheck.ref_config_problem): 순위의 5년 숫자, 성적표, 기대 범위 띠,
+진입 가능성, 시작 안내의 참고선(REFS)과 40번 판단 기준(88% · 82%) 대신 그 이유 한 줄. 파일을 못 읽으면(개발 PC) 예전처럼 씁니다.
+
+거래 · 성적 · 안전 탭은 그 둘도 읽습니다(읽기만):손실 카드(거래), 매매법 성적표와 개선 후보 장부(성적; 성적표는 liveimprove의
 함수로 지금 계산: ``score`` 명령과 같은 숫자와 상태 말), 아침 점검 14일과 감시 알람(안전).
 
 DB는 모두 ``mode=ro``(쓰는 쪽이 멈춘 WAL 파일은 immutable, paperbot.livepnl.open_ro) + ``query_only``로 열고, 한 번 읽는 동안
@@ -357,12 +361,30 @@ def round_trip(taker_fee: Any) -> float:
 
 
 def next_lock(lock_roe: Optional[float], ladder: dict) -> Optional[dict]:
-    """The next ladder step: the net ROE that arms it and the lock it sets (paperbot.ladder.Ladder.lock_for)."""
-    first, step, gap = _f(ladder.get("first_lock")), _f(ladder.get("step")), _f(ladder.get("trigger_gap"))
-    if first is None or step is None or gap is None:
+    """The next ladder step: the net ROE that arms it and the lock it sets (paperbot/ladder2.py ComboLadder.next_after:
+    both forms, the rule bot's 'every step' and the two-part one with next_trigger / next_gap). None when the config's
+    ladder lacks first_lock, step or trigger_gap."""
+    from ...ladder2 import ComboLadder
+    spec = ComboLadder.of(ladder)
+    if spec is None:
         return None
-    lock = first if lock_roe is None else lock_roe + step
-    return {"lock": lock, "at": lock + gap}
+    lock, at = spec.next_after(lock_roe)
+    return {"lock": lock, "at": at}
+
+
+LADDER_KEYS = ("first_lock", "step", "trigger_gap")     # every form (paperbot/ladder2.py ComboLadder)
+LADDER_KEYS2 = ("next_trigger", "next_gap")             # the two-part form only
+
+
+def ladder_numbers(lad: Optional[dict]) -> dict:
+    """A config's ladder for the page: first_lock, step, trigger_gap (None when missing), plus next_trigger and next_gap
+    only when the config has both (the two-part form; an old config's answer keeps its three keys)."""
+    lad = lad if isinstance(lad, dict) else {}
+    out = {k: _f(lad.get(k)) for k in LADDER_KEYS}
+    two = {k: _f(lad.get(k)) for k in LADDER_KEYS2}
+    if None not in two.values():
+        out.update(two)
+    return out
 
 
 def roe_price(side: int, entry: Optional[float], lev: Optional[int], roe: float, rt: float = 0.0, ff: float = 0.0) -> Optional[float]:
@@ -391,6 +413,7 @@ def _paper_position(aid: str, e: dict, rt: float, ladder: dict) -> Optional[dict
     if nx:
         nx["price"] = roe_price(side, entry, lev, nx["at"], rt, ff)
         nx["lock_price"] = roe_price(side, entry, lev, nx["lock"], rt, ff)
+        nx["then"] = next_lock(nx["lock"], ladder)       # the step after it (the gauge's 그다음; two-part: 15 % -> 12 %)
     return {"key": f"{aid}|{sym}|{_i(p.get('entry_time'))}", "symbol": sym, "side": side, "qty": qty, "leverage": lev,
             "entry": entry, "entry_time": _i(p.get("entry_time")), "stop": _f(p.get("stop_price")),
             "stop_initial": _f(p.get("stop_initial")), "lock_roe": lock, "locked": lock is not None,
@@ -457,7 +480,7 @@ def read_paper(path: str, accounts: Iterable[str], now_ms: int) -> dict:
         }
     return {"state": "ok", "path": path, "as_of_ms": ts, "stale": ts is None or now_ms - ts > PAPER_STALE_MS,
             "name_ko": cfg.get("name") if isinstance(cfg.get("name"), str) else None, "round_trip": rt,
-            "ladder": {k: _f(ladder.get(k)) for k in ("first_lock", "step", "trigger_gap")} if ladder else None,
+            "ladder": ladder_numbers(ladder) if ladder else None,
             "leverage": cfg.get("leverage") if isinstance(cfg.get("leverage"), dict) else None, "margin": _f(cfg.get("margin")),
             "taker_fee": _f(run_d.get("taker_fee")), "started_ms": _i(run[0]) if run else None, "accounts": out_acc}
 
@@ -679,17 +702,39 @@ def today_of(trades: list, now: int, t_key: str = "exit_time") -> dict:
             "pnl": sum(t["pnl"] for t in xs), "from_ms": t0}
 
 
-def checkpoint(trades: list) -> dict:
-    """Progress to the owners' 40-trade look (paper closed trades of this database). Nothing is judged before 40."""
+def checkpoint(trades: list, rule_ko: str = "") -> dict:
+    """Progress to the owners' 40-trade look (paper closed trades of this database). Nothing is judged before 40.
+    ``rule_ko`` (ref_problem: the 5-year reference, and with it the 88 % / 82 % rule, is another config's): the count
+    only, no rule and no zone, and ``rule_ko`` says why."""
     st = stats(t.get("pnl") for t in trades)
     n, goal = st["trades"], CHECKPOINT["trades"]
-    out = {**CHECKPOINT, "n": n, "left": max(0, goal - n), "win_rate": st["win_rate"], "ready": n >= goal, "zone": None}
+    rule = {k: None for k in ("up", "low", "up_ko", "mid_ko", "low_ko")} if rule_ko else {}
+    out = {**CHECKPOINT, **rule, "n": n, "left": max(0, goal - n), "win_rate": st["win_rate"], "ready": n >= goal, "zone": None}
+    if rule_ko:
+        out["rule_ko"] = rule_ko
     if n >= goal:
         last = [t.get("pnl") for t in trades[-goal:]]
         w = sum(1 for p in last if (_f(p) or 0) > 0) / goal
         out["last_win_rate"] = w
-        out["zone"] = "up" if w >= CHECKPOINT["up"] - 1e-9 else "mid" if w >= CHECKPOINT["low"] - 1e-9 else "low"
+        if not rule_ko:
+            out["zone"] = "up" if w >= CHECKPOINT["up"] - 1e-9 else "mid" if w >= CHECKPOINT["low"] - 1e-9 else "low"
     return out
+
+
+def ref_problem() -> str:
+    """'' when the 5-year reference (deploy/combo.live-ac.expected.json) may be shown against the live bot, else the
+    guard's Korean reason (livecheck.ref_config_problem: made for another config than PAPERBOT_LIVE_COMBO_CONFIG's file).
+    The start guide's reference lines (REFS) and the owners' 40-trade rule (CHECKPOINT) are that old config's too: they
+    go with it. A reference that cannot be read says nothing here (its own readers say so)."""
+    from ... import livecheck as LC
+    from ... import liveimprove as LI
+    try:
+        LI.load_ref(combo_config=paths_more()["combo_config"])
+    except LC.RefConfigMismatch as exc:
+        return str(exc)
+    except (OSError, ValueError):
+        return ""
+    return ""
 
 
 def acct_paper(paper: dict, account: str, now: int) -> dict:
@@ -840,7 +885,8 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     marks = marks_of(paper, execs, ACCOUNT)
     events = sorted(((dict(e, ex=x["id"], ex_ko=x["name_ko"])) for x in execs for e in (x["record"].get("events") or [])),
                     key=lambda e: (e["ts"] or 0, e["id"] or 0), reverse=True)[:2 * EVENTS_KEEP]
-    cp = checkpoint((pa or {}).get("trades") or []) if pa else None
+    ref_ko = ref_problem()
+    cp = checkpoint((pa or {}).get("trades") or [], ref_ko) if pa else None
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
     for x in execs:                                      # the page needs neither the raw reasons nor the full trade list here
         rec = x["record"]
@@ -857,7 +903,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     return {"now_ms": now, "paths": p, "account": ACCOUNT, "flip_account": FLIP_ACCOUNT, "paper": paper_out, "execs": execs,
             "accts": accts, "fills": fills, "marks": marks, "events": events, "checkpoint": cp,
             "flip": {"stats": flip.get("stats")} if flip and flip.get("known") else None,
-            "refs": REFS, "match_ms": MATCH_MS, "small": list(SMALL)}
+            "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None, "match_ms": MATCH_MS, "small": list(SMALL)}
 
 
 # ================================================================ the other tabs (거래 · 신호 · 성적 · 안전 · 그림자 · 설정)
@@ -965,8 +1011,15 @@ def stop_ko(stop: Any, cfg_stop: Optional[dict] = None) -> dict:
     c = cfg_stop or {}
     mode, k = c.get("mode", "atr"), _f(c.get("atr"))
     if mode == "roe":
-        return {"mode": "roe", "value": _f(c.get("roe")), "ko": f"ROE -{(_f(c.get('roe')) or 0) * 100:g}%"}
+        net = c.get("net") is True              # combo.py stop_net: the loss after both sides' fees and slippage
+        return {"mode": "roe", "value": _f(c.get("roe")), "net": net,
+                "ko": f"{'순' if net else ''}ROE -{(_f(c.get('roe')) or 0) * 100:g}%" + (" (수수료·슬리피지 포함)" if net else "")}
     return {"mode": mode, "value": k, "ko": f"ATR {k:g}배" + (" (안 맞으면 당김)" if mode == "atr_fit" else "") if k else "ATR"}
+
+
+# a member with "no_chase": true (paperbot/combo.py Member.no_chase, CHASE_KO; the file is not imported here)
+NO_CHASE_KO = "추격 진입 막기"
+NO_CHASE_WHY_KO = "롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함"
 
 
 def describe_member(sp: dict, order: int, cfg_stop: Optional[dict] = None) -> dict:
@@ -985,7 +1038,8 @@ def describe_member(sp: dict, order: int, cfg_stop: Optional[dict] = None) -> di
             "numbers": numbers, "custom": numbers is not None, "entry": sp.get("entry", "now"),
             "entry_ko": "돌파 확인" if sp.get("entry") == "break" else "즉시", "invert": bool(sp.get("invert")),
             "stop": stop_ko(sp.get("stop"), cfg_stop), "filter": flt, "disp": disp_ko, "off": off, "cell": sp.get("cell"),
-            "when": sp.get("when")}
+            "when": sp.get("when"), "no_chase": bool(sp.get("no_chase")),
+            "no_chase_ko": f"{NO_CHASE_KO} ({NO_CHASE_WHY_KO})" if sp.get("no_chase") else None}
 
 
 def read_combo(paper_path: str, cfg_path: str) -> dict:
@@ -1029,10 +1083,9 @@ def rules_of(combo: dict) -> dict:
     c = combo.get("config") or {}
     lev = c.get("leverage") if isinstance(c.get("leverage"), dict) else {"BTCUSDT": 40, "default": 30}
     lad = c.get("ladder") if isinstance(c.get("ladder"), dict) else {}
-    first, step, gap = _f(lad.get("first_lock")), _f(lad.get("step")), _f(lad.get("trigger_gap"))
     margin = c.get("margin", "leverage")
     return {"leverage_btc": _i(lev.get("BTCUSDT")), "leverage_alt": _i(lev.get("default")), "margin": margin if isinstance(margin, str) else _f(margin),
-            "ladder": {"first_lock": first, "step": step, "trigger_gap": gap}, "max_loss_frac": _f(c.get("max_loss_frac")),
+            "ladder": ladder_numbers(lad), "max_loss_frac": _f(c.get("max_loss_frac")),
             "no_weekend": bool(c.get("no_weekend")), "macro_blackout_min": _i(c.get("macro_blackout_min")), "early_exit": c.get("early_exit"),
             "one_position": True, "initial_equity": _f(c.get("initial_equity")), "name": c.get("name"),
             "stop": stop_ko(None, c.get("stop") if isinstance(c.get("stop"), dict) else None),
@@ -1056,6 +1109,12 @@ def why_cat(status: str, why: str) -> tuple:
         return "weekend", "주말 진입 안 함"
     if w.startswith("경제 발표"):
         return "macro", "경제 발표 앞뒤"
+    if w.startswith("나스닥 개장"):                       # combo.py us_open_pause (us_open_pause_min): a pause like the two above
+        return "usopen", "나스닥 개장 뒤"
+    if w.startswith("추격 진입 막기"):                     # combo.py _chase_block: a no_chase member's chase
+        return "chase", "추격 진입 막기"
+    if w.startswith("추격 판단"):                          # ... or one it could not tell (no entry either; before '못 읽음')
+        return "chase_unread", "추격 판단 못 함"
     if w.startswith("돌파 없음"):
         return "nobreak", "돌파 없음"
     if w.startswith("돌파 확인이 늦음"):
@@ -1064,7 +1123,7 @@ def why_cat(status: str, why: str) -> tuple:
         return "unread", "조건을 못 읽음"
     if w.startswith("조건 밖"):
         return "when", "조건 밖"
-    if w.startswith("설정에 없는"):
+    if w.startswith("설정에 없는") or w.startswith("설정이 바뀌어"):
         return "config", "설정이 바뀜"
     return "other", w or "이유 기록 없음"
 
@@ -1387,7 +1446,9 @@ def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
             live.append({**t, "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None})
         out[x["id"]] = {"state": "ok", **perf_of(live, "entry_ts", "exit_ts")}
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
-    return {"now_ms": now, "accts": out, "refs": REFS, "checkpoint": checkpoint((a or {}).get("trades") or []) if a else None,
+    ref_ko = ref_problem()
+    return {"now_ms": now, "accts": out, "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None,
+            "checkpoint": checkpoint((a or {}).get("trades") or [], ref_ko) if a else None,
             "flip": {"state": "ok", **perf_of(flip.get("trades") or [])} if flip and flip.get("known") else None, "small": list(SMALL),
             "scorecard": scorecard(p, execs), "ledger": read_ledger(more["improve_db"])}
 
@@ -1543,9 +1604,13 @@ def rank(p: dict, now: int) -> dict:
     if combo.get("state") != "ok":
         return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path")}}
     _configs, _follows, paper, execs = sources(p, now)
+    from ... import livecheck as LC
+    ref_ko = None
     try:
         from ... import liveimprove as LI
         ref, ref_err = LI.load_ref(), None
+    except LC.RefConfigMismatch as exc:              # another config's reference: no 5-year numbers at all
+        ref, ref_err, ref_ko = None, None, str(exc)
     except (OSError, ValueError) as exc:
         ref, ref_err = None, f"{type(exc).__name__}: {exc}"
     members = members_of(combo)
@@ -1595,8 +1660,8 @@ def rank(p: dict, now: int) -> dict:
     return {"now_ms": now, "combo": {"state": "ok", "source": combo["source"], "path": combo["path"], "since_ms": combo.get("since_ms")},
             "paper": {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms", "stale")},
             "signals": {k: sig.get(k) for k in ("state", "reason_ko", "reason", "path", "since_ms", "today_ms")},
-            "ref": {"state": "ok" if ref is not None else "error", "reason": ref_err,
-                    "reason_ko": None if ref is not None else "5년 기준표(deploy/combo.live-ac.expected.json)를 못 읽었어요",
+            "ref": {"state": "ok" if ref is not None else "missing" if ref_ko else "error", "reason": ref_err,
+                    "reason_ko": None if ref is not None else ref_ko or "5년 기준표(deploy/combo.live-ac.expected.json)를 못 읽었어요",
                     "break_even": _f((ref or {}).get("break_even_win")), "fit_win": _f((((ref or {}).get("overall") or {}).get("fit") or {}).get("win")),
                     "honest_win": _f((((ref or {}).get("overall") or {}).get("honest") or {}).get("win_2025_26"))},
             "scorecard": {k: card.get(k) for k in ("state", "reason_ko", "reason", "words", "small_n", "problems")},
@@ -2019,6 +2084,7 @@ def whynow(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/now: what stands between now and the next live entry, in the order the bots check it: the
     weekend and macro pause (calendar), the paper bot alive, a position already open (one at a time), each executor
     running, not halted, its light, then the only thing left: a signal. Read-only; never a guess."""
+    from ... import livecheck as LC
     configs, follows, paper, execs = sources(p, now)
     cal = calendar(p, now)
     items = []
@@ -2072,6 +2138,8 @@ def whynow(p: dict, now: int) -> dict:
         lk = {"state": "ok", **{k: lk[k] for k in ("cell", "bot", "note_ko")}, "top": lk["rows"][:LIKELY_TOP]}
     except FileNotFoundError:
         lk = _missing(str(LIKELY_FILE), LIKELY_MISSING_KO)
+    except LC.RefConfigMismatch as exc:                  # another config's frequencies: none shown
+        lk = _missing(str(LIKELY_FILE), str(exc))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         lk = _err(str(LIKELY_FILE), exc)
     blocked = [i for i in items if i["ok"] is False]
@@ -2099,17 +2167,24 @@ _likely_ref: dict = {}
 def load_likely(path: Optional[str] = None) -> dict:
     """deploy/combo.live-ac.likely.json (the research script likely27.py, from the same 5-year backtest as the expected file):
     per strategy and for the whole bot, by KST day group (월~목 · 금 · 토 · 일) and KST hour, the share of past hours after
-    which an entry signal came within 1 / 4 / 24 hours, and the share of the next entry each strategy gave. Cached by mtime."""
+    which an entry signal came within 1 / 4 / 24 hours, and the share of the next entry each strategy gave. Cached by mtime.
+    livecheck.RefConfigMismatch (a ValueError, the Korean reason) when its ``source.config_sha256`` is not the running
+    config's (livecheck.ref_config_problem; checked on every call: the config can change without this file)."""
+    from ... import livecheck as LC
     path = os.path.normpath(path or LIKELY_FILE)
     mt = os.stat(path).st_mtime_ns
     c = _likely_ref.get(path)
     if c and c[0] == mt:
-        return c[1]
-    with open(path, encoding="utf-8") as f:
-        d = json.load(f)
-    if not isinstance(d.get("strategies"), dict) or not isinstance(d.get("bot"), dict):
-        raise ValueError("strategies / bot missing")
-    _likely_ref[path] = (mt, d)
+        d = c[1]
+    else:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+        if not isinstance(d.get("strategies"), dict) or not isinstance(d.get("bot"), dict):
+            raise ValueError("strategies / bot missing")
+        _likely_ref[path] = (mt, d)
+    why = LC.ref_config_problem(d, paths_more()["combo_config"])
+    if why:
+        raise LC.RefConfigMismatch(why)
     return d
 
 
@@ -2180,10 +2255,13 @@ def likely(p: dict, now: int) -> dict:
     hour like this one (KST day group and hour) was followed by its entry signal within 1 / 4 / 24 hours (recent 2025-26 and
     all 5 years), its waits now, its signals of the last 7 days, and what stops an entry now (/now's checks). Past
     frequency, never a forecast; read-only."""
+    from ... import livecheck as LC
     try:
         ref = load_likely()
     except FileNotFoundError:
         return {"now_ms": now, **_missing(os.path.normpath(LIKELY_FILE), LIKELY_MISSING_KO), "rows": []}
+    except LC.RefConfigMismatch as exc:                  # another config's frequencies: none shown
+        return {"now_ms": now, **_missing(os.path.normpath(LIKELY_FILE), str(exc)), "rows": []}
     except (OSError, ValueError) as exc:
         return {"now_ms": now, **_err(os.path.normpath(LIKELY_FILE), exc), "rows": []}
     w = whynow(p, now)
@@ -2268,6 +2346,7 @@ def _card(row: tuple, now: int) -> dict:
             "reg5_cell": cell(d.get("reg5_cell")), "sym_cell": cell(d.get("sym_cell")),
             "weak": [str(w) for w in d.get("weak") or []], "fit_longest": _i(d.get("fit_longest")),
             "honest_longest": _i(d.get("honest_longest")), "gap": bool(d.get("gap")), "bigger": bool(d.get("bigger")),
+            "ref_ko": d.get("ref_ko") or None,              # livecheck build_card: why it has no 5-year numbers
             "executors": execs, "noise": {"state": nstate, "roe": _f(nroe), "ts": _i(nts)}}
 
 
@@ -2329,6 +2408,8 @@ def live_card(p: dict, execs: list, cuts: tuple) -> dict:
     path = p["paper"]
     try:
         ref = LI.load_ref()
+    except LC.RefConfigMismatch as exc:              # another config's reference: no scorecard against it
+        return _missing(str(LI.EXPECTED), str(exc))
     except (OSError, ValueError) as exc:
         return {**_err(str(LI.EXPECTED), exc), "reason_ko": "백테스트 기준표(deploy/combo.live-ac.expected.json)를 못 읽었어요"}
     try:

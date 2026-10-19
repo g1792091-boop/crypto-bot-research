@@ -56,7 +56,9 @@ it clears where that helps):
 Each pass also records what it saw (``seen``): the morning check reads the paper bot's stopped spans from it.
 
 3부 (owners 2026-10-19, live improvement; compared with deploy/combo.live-ac.expected.json, the backtest reference:
-"fit" = the whole period, "honest" = the twin fitted on 2020-24 read on unseen 2025-26):
+"fit" = the whole period, "honest" = the twin fitted on 2020-24 read on unseen 2025-26; a reference whose config_sha256
+is not the running config file's is another bot's and is not used at all, ``ref_config_problem``: no card number, no
+expected range, no 88% / 82% rule, one line saying why):
 ① 손실 카드: each new losing COMBO@mix paper trade gets a card (livecheck.db loss_cards, for the dashboard; sent by the
    watcher a few minutes after the exit, once the executors closed): strategy / tf / setting number / type, coin,
    side, entry and exit KST, hold hours, net ROE, exit reason, stop type and distance, BTC 4h regime (reg5) and KST
@@ -106,6 +108,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import glob
+import hashlib
 import json
 import os
 import re
@@ -128,6 +131,10 @@ EXPECTED_FILE = os.path.join(ROOT, "deploy", "combo.live-ac.expected.json")     
 DEFAULT_DB = "/var/lib/paperbot/livecheck.db"
 DEFAULT_CACHE = "/var/lib/paperbot/livecheck-cache.db"
 COMBO_CONFIG = "/etc/paperbot/combo.json"
+COMBO_CONFIG_ENV = "PAPERBOT_LIVE_COMBO_CONFIG"    # the running config's path when set (the dashboard's name, dash.env)
+# A 5-year reference (expected.json, likely.json) whose config_sha256 is not the running config's: never shown as if it
+# described that config (ref_config_problem).
+REF_OTHER_CONFIG_KO = "이 설정의 5년 기준표가 없어요(지난 봇 기준표라 쓰지 않아요)"
 PAPER_DB = "/var/lib/paperbot/combo/live-ac.db"
 RULE_DB = "/var/lib/paperbot/paper3.db"
 SHADOW_GLOB = "/var/lib/paperbot/combo/shadow-*.db"
@@ -138,6 +145,13 @@ EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",
              ("mexc", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc",
               "/var/lib/paperbot/exec/executor-mexc-live.db", 20, 0.90))
 ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005}
+
+
+def running_combo_config() -> str:
+    """The config file the live paper bot runs: ``PAPERBOT_LIVE_COMBO_CONFIG`` when set, else /etc/paperbot/combo.json."""
+    return os.environ.get(COMBO_CONFIG_ENV) or COMBO_CONFIG
+
+
 EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스"}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
@@ -702,7 +716,7 @@ class Sources:
     db: str = DEFAULT_DB
     paper_db: str = PAPER_DB
     rule_db: str = RULE_DB
-    combo_config: str = COMBO_CONFIG
+    combo_config: str = field(default_factory=running_combo_config)
     cache: str = DEFAULT_CACHE
     shadow_glob: str = SHADOW_GLOB
     executors: list = field(default_factory=list)
@@ -926,9 +940,20 @@ def shadow_report(pattern: str) -> list:
     return out
 
 
-def checkpoint_line(p: dict) -> str:
+CHECK_NO_RULE_KO = "40번 판단 기준은 지난 봇의 5년 기준표로 정한 숫자라 이 설정에는 쓰지 않아요"
+
+
+def checkpoint_line(p: dict, ref_ko: str = "") -> str:
+    """The owners' 40-trade checkpoint in the morning check. ``ref_ko`` (the reference was made for another config):
+    the count only, without the old bot's 88% / 82% rule."""
     rule = "거래 40번에서 88% 이상이면 늘리기 검토 / 82~88% 계속 지켜보기 / 82% 미만 멈추고 다시 생각"
     n = p["n"]
+    if ref_ko:
+        if n >= CHECK_N:
+            now = f" · 첫 40번 {p['first40']['wins']}승 {p['first40']['rate']:.1%}"
+        else:
+            now = f" · 지금 {p['wins']}/{n}승 {p['rate']:.0%}" if n else ""
+        return f"- 판단: 거래 {min(n, CHECK_N)}/{CHECK_N}번{now} ({CHECK_NO_RULE_KO})"
     if n < CHECK_N:
         now = f", 지금 {p['wins']}/{n}승 {p['rate']:.0%}" if n else ""
         return f"- 판단: {rule} → {CHECK_N - n}번 남음{now}"
@@ -939,7 +964,7 @@ def checkpoint_line(p: dict) -> str:
     return f"- 판단(첫 40번): {f['wins']}승 {f['rate']:.1%} → {verdict}{tail}"
 
 
-def score_lines(paper: Optional[dict], execs: list, shadows: list) -> list:
+def score_lines(paper: Optional[dict], execs: list, shadows: list, ref_ko: str = "") -> list:
     out = ["성적표(시작부터)"]
     small = False
     if paper is None:
@@ -982,7 +1007,7 @@ def score_lines(paper: Optional[dict], execs: list, shadows: list) -> list:
         if f is not None:
             out.append(f"- 동전 쌍둥이(참고): 거래 {f['n']}번 · {f['wins']}승"
                        + (f"({f['rate']:.0%})" if f["n"] else "") + f" · 손익 {usd(f['pnl'])}")
-        out.append(checkpoint_line(paper))
+        out.append(checkpoint_line(paper, ref_ko))
     for s in shadows:
         if s.get("missing"):
             out.append(f"- {s['label']}(참고): 못 읽음")
@@ -1084,10 +1109,11 @@ def utc_date(ms: int) -> str:
 def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], execs: list, shadows: list,
             week: Optional[list], cards: Optional[list] = None, drift: Optional[str] = None,
             notes: Optional[list] = None, now_ms: Optional[int] = None, rest: Optional[str] = None,
-            missed: Optional[str] = None) -> tuple[str, str, list]:
+            missed: Optional[str] = None, ref_ko: str = "") -> tuple[str, str, list]:
     """(level, text, loud reasons). ``cards``: the loss cards of the day (3부 ①, already sent by the watcher; here one
     line each with the noise-stop result), ``drift``: the paper against the backtest's ranges (3부 ②), ``missed``: the
-    day's not-entered signals in one quiet line (paperbot/livemissed.py morning_line; never loud)."""
+    day's not-entered signals in one quiet line (paperbot/livemissed.py morning_line; never loud), ``ref_ko``: the
+    reference was made for another config (the checkpoint line without the old bot's rule)."""
     loud = []
     if parity.get("flags"):
         loud.append(f"대조에서 이유를 모르는 차이 {parity['flags']}개")
@@ -1110,7 +1136,7 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
             lines.append(f"- 외 {len(cards) - MAX_LINES}장")
     if missed:
         lines += ["", missed]
-    sl = score_lines(paper, execs, shadows)
+    sl = score_lines(paper, execs, shadows, ref_ko)
     if drift:
         at = next((i for i, ln in enumerate(sl) if ln.startswith("- 페이퍼")), 0)
         sl.insert(at + 1, drift)
@@ -1581,7 +1607,7 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
     re-armed (with a silent line when it has one). ``tg``: the Telegram files (tg_files(); read when None).
     Returns [(event, key, level, text)]."""
     now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    exp = load_expected(src.expected)
+    exp, ref_ko = usable_expected(src)          # another config's reference: no comparison numbers (ref_config_problem)
     out = []
     conn = None if dry_run else open_out(src.db)
     try:
@@ -1617,10 +1643,10 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
         out += wait_pass(src, cc, now_ms, send, send_ids=getattr(n, "send_ids", None) if live else None)
         out += wait_result_pass(src, cc, now_ms, getattr(n, "edit", None) if live else (lambda lv, ids, tx: True))
         out += pause_pass(src, cc, now_ms, send)
-        for card in cards_pass(src, cc, now_ms, exp, send=send):
+        for card in cards_pass(src, cc, now_ms, exp, send=send, ref_ko=ref_ko):
             if card.get("sent"):
                 out.append(("card", card["key"], CRITICAL if card["loud"] else INFO, card["text"]))
-        out += changes_pass(src, cc, now_ms, exp, send)
+        out += changes_pass(src, cc, now_ms, exp, send, ref_ko=ref_ko)
         try:                                        # 못 탄 신호 성적: view only, bounded (60 sims / 10 s), sends nothing
             from .livemissed import missed_pass
             missed_pass(src, cc, now_ms)
@@ -1773,6 +1799,40 @@ def load_expected(path: str = EXPECTED_FILE) -> Optional[dict]:
         return None
 
 
+class RefConfigMismatch(ValueError):
+    """A 5-year reference made for another config than the one the live bot runs (``ref_config_problem``)."""
+
+
+def ref_config_problem(ref: Optional[dict], combo_config_path: Optional[str] = None) -> str:
+    """'' when the 5-year reference ``ref`` (deploy/combo.live-ac.expected.json, or likely.json with its ``source``) may
+    be shown against the running config, else the Korean reason (REF_OTHER_CONFIG_KO). The one guard of livecheck,
+    liveimprove and the dashboard: a reference whose ``config_sha256`` is not the sha256 of the running config file's
+    bytes (``combo_config_path``, default ``running_combo_config()``) describes another bot. A config file that cannot
+    be read (a development machine, the tests) or a reference without the hash: usable, as before."""
+    if not isinstance(ref, dict):
+        return ""
+    want = ref.get("config_sha256")
+    if not want and isinstance(ref.get("source"), dict):
+        want = ref["source"].get("config_sha256")
+    if not want:
+        return ""
+    try:
+        with open(combo_config_path or running_combo_config(), "rb") as fh:
+            sha = hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return ""
+    return "" if sha == str(want).strip().lower() else REF_OTHER_CONFIG_KO
+
+
+def usable_expected(src: Sources) -> tuple[Optional[dict], str]:
+    """(the backtest reference, '') or (None, why): None also when it was made for another config than
+    ``src.combo_config`` (ref_config_problem), so no loss card, expected range or checkpoint line compares the bot
+    with another bot's numbers."""
+    exp = load_expected(src.expected)
+    why = ref_config_problem(exp, src.combo_config)
+    return (None, why) if why else (exp, "")
+
+
 def ref_member(exp: Optional[dict], order: Optional[int], strategy: str, tf: str) -> Optional[dict]:
     """The reference of one setting: ``members`` is keyed by the config position from 0 (the paper bot's
     ``member_order`` counts from 1); only when strategy and timeframe agree."""
@@ -1857,8 +1917,9 @@ def live_gap(outs: list, paper_exit: int) -> bool:
     return False
 
 
-def build_card(t: dict, meta: dict, trades: list, exp: Optional[dict], outs: list) -> dict:
-    """One losing paper trade against the backtest reference (fields kept for the dashboard)."""
+def build_card(t: dict, meta: dict, trades: list, exp: Optional[dict], outs: list, ref_ko: str = "") -> dict:
+    """One losing paper trade against the backtest reference (fields kept for the dashboard). Without a reference
+    (``exp`` None) no backtest number at all, not even the streak lengths; ``ref_ko`` says why (usable_expected)."""
     name, tf = t.get("strategy", ""), t.get("tf", "")
     order = meta.get("member_order")
     if order is None and "#" in str(meta.get("member", "")):
@@ -1911,10 +1972,11 @@ def build_card(t: dict, meta: dict, trades: list, exp: Optional[dict], outs: lis
         "fit_win": st.get("win"), "honest": honest if isinstance(honest, list) else None,
         "loss_median": med, "loss_worst": worst, "hours_median": st.get("hours_to_stop_median"),
         "hours_p90": st.get("hours_to_stop_p90"), "reg5_cell": reg_cell, "sym_cell": sym_cell, "weak": weak,
-        "streak": streak, "fit_longest": (((exp or {}).get("overall") or {}).get("fit") or {}).get("streaks", {})
-        .get("longest", 3), "honest_longest": (((exp or {}).get("overall") or {}).get("honest") or {})
-        .get("streaks", {}).get("longest", 5), "executors": outs, "gap": gap, "bigger": bigger, "label": label,
-        "loud": bool(bigger or gap or streak >= 2), "member_ref": mem}
+        "streak": streak, "fit_longest": None if exp is None else (((exp or {}).get("overall") or {}).get("fit") or {})
+        .get("streaks", {}).get("longest", 3), "honest_longest": None if exp is None else
+        (((exp or {}).get("overall") or {}).get("honest") or {}).get("streaks", {}).get("longest", 5),
+        "executors": outs, "gap": gap, "bigger": bigger, "label": label,
+        "loud": bool(bigger or gap or streak >= 2), "member_ref": mem, **({"ref_ko": ref_ko} if ref_ko else {})}
 
 
 EXP_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
@@ -1957,8 +2019,11 @@ def card_text(c: dict, exp: Optional[dict] = None) -> str:
         if cells:
             lines.append(" · ".join(cells) + (" → 백테스트에서도 약한 자리" if c.get("weak") else ""))
     else:
-        lines.append(f"{reg}{int(c['hour']):02d}시 · 백테스트 기준표에 이 매매법이 없음")
-    lines.append(f"연속 손실 {c['streak']}번째 (백테스트 최장 {c['fit_longest']}번, 처음 보는 기간 {c['honest_longest']}번)")
+        lines.append(f"{reg}{int(c['hour']):02d}시 · {c.get('ref_ko') or '백테스트 기준표에 이 매매법이 없음'}")
+    if c.get("fit_longest") is None and c.get("honest_longest") is None:
+        lines.append(f"연속 손실 {c['streak']}번째")
+    else:
+        lines.append(f"연속 손실 {c['streak']}번째 (백테스트 최장 {c['fit_longest']}번, 처음 보는 기간 {c['honest_longest']}번)")
     for o in c["executors"]:
         pad = PAD.get(o.get("name"), f"{o['label']} ")
         if o["status"] == "followed":
@@ -2020,10 +2085,11 @@ def noise_check(rule_db: str, c: dict, lev: int, entry: float, now_ms: int) -> O
 
 
 def cards_pass(src: Sources, out_conn, now_ms: int, exp: Optional[dict], send: Optional[Callable] = None,
-               infos: Optional[list] = None, older_only: bool = False) -> list:
+               infos: Optional[list] = None, older_only: bool = False, ref_ko: str = "") -> list:
     """New losing paper trades -> cards (stored; sent when fresh and ``send`` is given), then the noise check of the
     cards whose 4 hours are over. ``older_only`` (the morning check): only losses too old for the watcher to send, so
-    a fresh card keeps its message. Returns the new cards."""
+    a fresh card keeps its message. ``ref_ko``: why ``exp`` is None (usable_expected), said on the card. Returns the
+    new cards."""
     pc = open_ro(src.paper_db)
     if pc is None or out_conn is None:
         if pc is not None:
@@ -2046,7 +2112,7 @@ def cards_pass(src: Sources, out_conn, now_ms: int, exp: Optional[dict], send: O
             outs = [exec_outcome(ex, conns[ex.name], key, t) for ex in infos]
             if any(o["status"] == "open" for o in outs) and now_ms - t["exit_time"] < CARD_WAIT_MS:
                 continue                                      # an executor is still closing: next pass
-            card = build_card(t, entry_meta(pc, ACCOUNT, t["entry_time"], t["symbol"]), trades, exp, outs)
+            card = build_card(t, entry_meta(pc, ACCOUNT, t["entry_time"], t["symbol"]), trades, exp, outs, ref_ko=ref_ko)
             card["leverage"], card["entry_price"] = t.get("leverage"), t.get("entry_price")
             text = card_text(card)
             sent = None
@@ -3093,10 +3159,18 @@ def light_change_text(ex: ExecInfo, old: str, L: dict) -> str:
             f"{LIGHT_WORD.get(L['state'], '')}").rstrip()
 
 
-def checkpoint_text(paper: list, execs: list, exp: Optional[dict]) -> tuple[str, str]:
-    """🏁 the 40th closed paper trade: the owners' pre-registered verdict (loud only under 82%)."""
+def checkpoint_text(paper: list, execs: list, exp: Optional[dict], ref_ko: str = "") -> tuple[str, str]:
+    """🏁 the 40th closed paper trade: the owners' pre-registered verdict (loud only under 82%). ``ref_ko`` (the
+    reference was made for another config): the count only, silent, without the old bot's 88% / 82% rule."""
     f = win_stats(paper[:CHECK_N])
     rate = f["rate"] or 0.0
+    if ref_ko:
+        lines = [f"🏁 40번 도달 · 페이퍼 첫 40번 {f['wins']}승({rate:.1%})"]
+        parts = [f"{ex.label} {n}번 {w}승" + (f"({w / n:.0%})" if n else "") for ex, (n, w) in execs]
+        if parts:
+            lines.append("실거래 " + " · ".join(parts))
+        lines.append(f"참고: {CHECK_NO_RULE_KO} · {ref_ko}")
+        return INFO, "\n".join(lines)
     verdict = ("늘리기 검토" if rate >= GROW - 1e-9 else "계속 지켜보기" if rate >= KEEP - 1e-9 else "멈추고 다시 생각")
     loud = rate < KEEP - 1e-9
     lines = [f"🏁 40번 도달 · 페이퍼 첫 40번 {f['wins']}승({rate:.1%}) → {verdict}",
@@ -3131,9 +3205,11 @@ def stopped_by_signal(c) -> Optional[int]:
 
 
 def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Callable,
-                 infos: Optional[list] = None) -> list:
+                 infos: Optional[list] = None, ref_ko: str = "") -> list:
     """🚦 a signal light that changed, 🏁 the 40th paper trade, ▶️ / ⏹ an executor started / stopped by a signal.
-    The first look only records (nothing is sent for what was already so). Returns [(kind, key, level, text)]."""
+    The first look only records (nothing is sent for what was already so). ``ref_ko``: the reference was made for
+    another config (usable_expected): the 40th trade is counted without the old bot's 88% / 82% rule.
+    Returns [(kind, key, level, text)]."""
     out = []
     infos = infos if infos is not None else (src.executors or load_executors())
     pc = open_ro(src.paper_db)
@@ -3196,7 +3272,7 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
                 c.close()
     # 🏁 the 40th closed paper trade (counted from the paper bot's live start: its database)
     if paper is not None and len(paper) >= CHECK_N and _state_get(conn, "checkpoint40") is None:
-        level, text = checkpoint_text(paper, execs40, exp)
+        level, text = checkpoint_text(paper, execs40, exp, ref_ko=ref_ko)
         emit("checkpoint", "checkpoint40", level, text, "checkpoint40", str(len(paper)))
     conn.commit()
     return out
@@ -3420,10 +3496,10 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
     try:
         monday = _dt.datetime.fromtimestamp(w1 / 1000 + 9 * 3600, _dt.timezone.utc).weekday() == 0
         week = week_lines(out_conn, day, w1, execs, paper, infos, parity) if monday else None
-        exp = load_expected(src.expected)
-        notes = reference_notes(exp, src)
+        exp, ref_ko = usable_expected(src)    # another config's reference: None, and one note says so
+        notes = reference_notes(exp, src, ref_ko)
         if not dry_run:                       # cards the watcher has not made yet (stored, not sent) and noise checks
-            cards_pass(src, out_conn, now_ms, exp, send=None, infos=infos, older_only=True)
+            cards_pass(src, out_conn, now_ms, exp, send=None, infos=infos, older_only=True, ref_ko=ref_ko)
         cards = stored_cards(out_conn, w0, w1)
         drift = drift_line(drift_state(trades, exp)) if (paper is not None and exp is not None) else None
         ccfg = None
@@ -3440,7 +3516,7 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
         except Exception as exc:  # noqa: BLE001
             print(f"missed line: {type(exc).__name__}: {exc}", file=sys.stderr)
         level, text, loud = compose(day, w0, w1, parity, paper, execs, shadows, week, cards=cards, drift=drift,
-                                    notes=notes, now_ms=now_ms, rest=rest_line(w1, ccfg), missed=missed)
+                                    notes=notes, now_ms=now_ms, rest=rest_line(w1, ccfg), missed=missed, ref_ko=ref_ko)
         report = {"day": day, "w0": w0, "w1": w1, "parity": parity, "executors": execs, "shadows": shadows,
                   "paper": {k: v for k, v in (paper or {}).items() if k != "trades"} if paper else None,
                   "infos": [ex.__dict__ for ex in infos]}
@@ -3456,18 +3532,14 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
     return {"level": level, "text": text, "loud": loud, "report": report, "sent": sent}
 
 
-def reference_notes(exp: Optional[dict], src: Sources) -> list:
-    """The backtest reference missing, or made for another config than the one in /etc/paperbot/combo.json."""
+def reference_notes(exp: Optional[dict], src: Sources, ref_ko: str = "") -> list:
+    """One line when the backtest reference is missing, or made for another config than the running one
+    (``src.combo_config``; ref_config_problem's reason: then nothing is compared with it)."""
+    why = ref_ko or ref_config_problem(exp, src.combo_config)
+    if why:
+        return [why]
     if exp is None:
         return [f"백테스트 기준표({src.expected})를 못 읽어 손실 카드·기대 범위 비교 없음"]
-    try:
-        import hashlib
-        with open(src.combo_config, "rb") as fh:
-            sha = hashlib.sha256(fh.read()).hexdigest()
-    except OSError:
-        return []
-    if exp.get("config_sha256") and sha != exp["config_sha256"]:
-        return ["백테스트 기준표가 지금 설정 파일과 다름(설정이 바뀌면 기준표도 다시 만들어야 함): 카드의 숫자는 참고만"]
     return []
 
 
@@ -3622,7 +3694,8 @@ def main(argv: Optional[list] = None) -> int:
         p.add_argument("--db", default=DEFAULT_DB, help="livecheck.db (its own results)")
         p.add_argument("--paper-db", default=None, help="the paper bot's database (default: combo.json's db)")
         p.add_argument("--rule-db", default=None, help="paper3.db, the rule bot's 1m bars (default: combo.json's)")
-        p.add_argument("--combo-config", default=COMBO_CONFIG)
+        p.add_argument("--combo-config", default=running_combo_config(),
+                       help="the config the paper bot runs (default: PAPERBOT_LIVE_COMBO_CONFIG, else /etc/paperbot/combo.json)")
         p.add_argument("--cache", default=DEFAULT_CACHE, help="kline cache between nights")
         p.add_argument("--shadows", default=SHADOW_GLOB)
         p.add_argument("--expected", default=EXPECTED_FILE, help="the backtest reference (combo.live-ac.expected.json)")

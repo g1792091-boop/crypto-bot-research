@@ -80,15 +80,26 @@ export function shadowsView(ctx) {
 // ---------------------------------------------------------------- 설정
 const pctOf = (x) => (x == null ? "—" : fmt.pct(x, 0, false));
 
+/** The ladder in the owners' words (paperbot/ladder2.py ComboLadder.describe): the rule bot's form (lock first_lock at
+ *  first_lock + trigger_gap, then one step more per step) or the two-part one (next_trigger / next_gap: 11 % -> 10 %,
+ *  15 % -> 12 %, 20 % -> 17 %, then every 5 % the reached net ROE minus 3 %). "—" without the numbers. */
+export function ladderKo(lad) {
+  const l = lad || {};
+  if (l.first_lock == null || l.trigger_gap == null) return "—";
+  const first = `순ROE ${pctOf(l.first_lock + l.trigger_gap)}에서 ${pctOf(l.first_lock)} 잠금`;
+  if (l.next_trigger == null || l.next_gap == null) return `${first}, 그 뒤 ${pctOf(l.step)}씩 올림`;
+  const t2 = l.next_trigger, l2 = l.next_trigger - l.next_gap, st = l.step;
+  return `${first}, ${pctOf(t2)}에서 ${pctOf(l2)}` + (st != null ? `, ${pctOf(t2 + st)}에서 ${pctOf(l2 + st)}, 그 뒤 ${pctOf(st)}마다` : ", 그 뒤")
+    + ` (닿은 순ROE - ${pctOf(l.next_gap)})`;
+}
+
 /** The fixed rules in the owners' words, from the config's own numbers. */
 export function rulesList(r) {
-  const lad = r.ladder || {};
-  const first = lad.first_lock != null && lad.trigger_gap != null ? lad.first_lock + lad.trigger_gap : null;
   return [
     ["배수", `BTC ${r.leverage_btc ?? "—"}배 · 나머지 ${r.leverage_alt ?? "—"}배 (고정)`],
     ["증거금", typeof r.margin === "number" ? `잔고의 ${pctOf(r.margin)}` : r.margin === "leverage" ? "배수와 같은 %" : "—"],
     ["포지션", "한 번에 하나"],
-    ["계단 잠금", first != null ? `순ROE ${pctOf(first)}에서 ${pctOf(lad.first_lock)} 잠금, 그 뒤 ${pctOf(lad.step)}씩 올림` : "—"],
+    ["계단 잠금", ladderKo(r.ladder)],
     ["손절 한 번", r.max_loss_frac != null ? `잔고의 최대 ${pctOf(r.max_loss_frac)} (넘으면 크기를 줄임)` : "—"],
     ["주말", r.no_weekend ? "한국 시간 토·일에는 새로 진입하지 않음 (열린 포지션은 그대로)" : "주말에도 진입"],
     ["경제 발표", r.macro_blackout_min ? `미국 경제 발표 앞뒤 ${r.macro_blackout_min}분은 진입하지 않음` : "제한 없음"],
@@ -112,7 +123,7 @@ export function settingsView(ctx) {
   function memberRow(m) {
     return h("div", {class: "lb-mem", role: "listitem"},
       h("div", {class: "lb-memh"}, h("b", null, `${m.order}번`), h("span", {class: "pp thin"}, m.tf_ko), h("span", null, m.entry_ko), m.invert ? ui.pill("반대 방향", "warn") : null,
-        h("span", {class: "muted"}, `손절 ${m.stop.ko}`)),
+        m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null, h("span", {class: "muted"}, `손절 ${m.stop.ko}`)),
       m.numbers ? h("div", {class: "lb-nums"}, Object.entries(m.numbers).map(([k, v]) => h("span", {class: "pp thin num"}, `${k} ${Array.isArray(v) ? v.join("/") : v}`)))
         : h("p", {class: "note"}, "기본 숫자 (규칙봇과 같은 신호)"),
       m.filter.length ? h("p", {class: "note"}, `조건: ${m.filter.map((f) => f.ko).join(" · ")}`) : null,

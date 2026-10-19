@@ -641,3 +641,30 @@ def test_the_weekly_unit_has_the_livecheck_hardening_and_never_the_key_file():
                       r"install -m 644 \"\$APP/deploy/\$u\" /etc/systemd/system/\$u\s+done", inst)
     assert block and "systemctl enable --now paperbot-liveimprove.timer" in inst
     assert inst.index("for t in paperbot-livecheck.timer") < block.start()
+
+
+# ====================================================================== another config's reference (10/20 config change)
+def test_load_ref_refuses_another_configs_reference(tmp_path, monkeypatch, capsys):
+    raw = (DEPLOY / "combo.live-ac.json").read_bytes()
+    same, other = tmp_path / "same.json", tmp_path / "new.json"
+    same.write_bytes(raw)
+    other.write_bytes(raw + b"\n")
+    assert REF["config_sha256"] == hashlib.sha256(raw).hexdigest()
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(other))
+    with pytest.raises(ValueError) as e:                             # the dashboard's callers catch ValueError
+        LI.load_ref()
+    assert isinstance(e.value, LC.RefConfigMismatch) and str(e.value) == LC.REF_OTHER_CONFIG_KO
+    with pytest.raises(LC.RefConfigMismatch):
+        LI.gather(LI.Sources(db=str(tmp_path / "li.db"), paper_db=str(tmp_path / "none.db"), executors=[]))
+    assert LI.load_ref(combo_config=str(same)) == REF                 # an explicit running config wins
+    # the CLI: nothing scored, sent or written; the Monday timer's run is not a failure
+    db = tmp_path / "out" / "liveimprove.db"
+    assert LI.main(["weekly", "--db", str(db), "--paper-db", str(tmp_path / "none.db")]) == 0
+    assert LC.REF_OTHER_CONFIG_KO in capsys.readouterr().out and not db.exists()
+    assert LI.main(["score", "--paper-db", str(tmp_path / "none.db")]) == 1
+    assert LI.main(["preview"]) == 1 and "만들지 않았어요" in capsys.readouterr().out
+    # the references' own config, or no readable config (a dev machine): as before
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(same))
+    assert LI.load_ref() == REF
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    assert LI.load_ref() == REF

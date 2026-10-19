@@ -3,10 +3,10 @@
 // chart deck of core/chartfx.js with its glow, the Premium / Discount light blinking with the real market trades
 // (core/blink.js) and a wash (core/flash.js) on a real big trade, a liquidation, or a live bot that really filled on this
 // coin; the same '조명' / '번쩍임' settings as everywhere) with each account's entry line, its stop or lock line, the paper's
-// first stop once locked and its next ladder step (순ROE 11 %, then every 3 %), and the marks of the accounts' recent
-// trades on that coin. Under the chart the same lines in words, each with its distance from the mark, and the coin's
-// recent trades. HONESTY: the lines are the records' prices, the distances are the dashboard's own mark; nothing moves
-// without a real change; no order buttons.
+// first stop once locked and its next ladder step (the server's next_lock: the config's ladder, either form), and the
+// marks of the accounts' recent trades on that coin. Under the chart the same lines in words, each with its distance
+// from the mark, and the coin's recent trades. HONESTY: the lines are the records' prices, the distances are the
+// dashboard's own mark; nothing moves without a real change; no order buttons.
 import {h, put, ui, fmt, store, local, motion, bars} from "../core/pb.js";
 import {watchList} from "./terminal-feed.js";
 import {termChart} from "./terminal-chart.js";
@@ -34,7 +34,7 @@ export function chartView(ctx, hub) {
   const watch = watchList(ctx, st, pick, {marks});
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("lb-ctf", tf); }, {
     key: "live", label: "실거래 차트",
-    keyTitle: "페이퍼(연습, P) · 바이비트(B) · MEXC(M)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (순ROE 11%, 그 뒤 3%마다) · 왼쪽 이름표를 누르면 그 선만 숨김",
+    keyTitle: "페이퍼(연습, P) · 바이비트(B) · MEXC(M)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김",
     more: (sym, tf) => ctx.href("chart", sym, {tf}),
     lines: (sym, mark) => liveLines(st.d ? st.d.accts : [], sym, mark),
     posKeys: (sym) => posKeys(st.d ? st.d.accts : [], sym),

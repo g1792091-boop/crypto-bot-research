@@ -139,7 +139,8 @@ export function stepAngle(v, xs, span = 68, over = 20) {
  * The gauge of an open position. kind "paper": net ROE (the ladder's own number, paperbot/ladder.py: fees, slippage and
  * funding taken out) at the live mark, else the paper's own last mark; "live": the executor's ROE at the mark (before the
  * exit fee). Anchors, low to high: the stop (손절, or 잠금선 once locked), the entry, the next lock step (its trigger
- * 'at' and the lock it sets) and the one after it (one ladder step more). Zones between anchors: loss (stop .. entry),
+ * 'at' and the lock it sets) and the one after it (afterNext: the server's next_lock.then, so the two-part ladder's
+ * 11 % -> 15 % -> 20 % is drawn as the bot locks). Zones between anchors: loss (stop .. entry),
  * safe (entry .. a lock stop: profit already locked), run (toward the next step), lock (between the next two steps).
  * -> {kind, roe, anchors: [{k, v, price, lock?, angle}], zones: [{tone, a0, a1}], needle, entryA, xs} or null.
  */
@@ -152,7 +153,6 @@ export function gaugeModel(p, o = {}) {
   const entry = paper ? at(p.entry) : 0;
   const stop = Number(p.stop) > 0 ? at(p.stop) : null;
   const nx = p.next_lock && p.next_lock.at != null ? p.next_lock : null;
-  const step = o.ladder && o.ladder.step != null ? Number(o.ladder.step) : null;
   const rt = paper ? Number(p.round_trip || 0) : 0, ff = paper ? Number(p.funding_frac || 0) : 0;
   const priceAt = (r) => roePrice(Number(p.side), Number(p.entry), Number(p.leverage), r, rt, ff);
   const anchors = [];
@@ -160,10 +160,8 @@ export function gaugeModel(p, o = {}) {
   if (entry != null) anchors.push({k: "entry", v: entry, price: Number(p.entry)});
   if (nx) {
     anchors.push({k: "next", v: Number(nx.at), lock: nx.lock != null ? Number(nx.lock) : null, price: nx.price != null ? Number(nx.price) : priceAt(Number(nx.at))});
-    if (step != null && step > 0) {
-      const v2 = Number(nx.at) + step;
-      anchors.push({k: "next2", v: v2, lock: nx.lock != null ? Number(nx.lock) + step : null, price: priceAt(v2)});
-    }
+    const th = afterNext(nx, o.ladder);
+    if (th) anchors.push({k: "next2", v: th.at, lock: th.lock, price: priceAt(th.at)});
   }
   anchors.sort((a, b) => a.v - b.v || (a.k === "entry" ? -1 : 1));
   const xs = anchors.map((a) => a.v);
@@ -179,6 +177,17 @@ export function gaugeModel(p, o = {}) {
   zones.push({tone: "out", a0: last, a1: 88});
   const e = anchors.find((a) => a.k === "entry");
   return {kind: paper ? "paper" : "live", roe, anchors, zones, xs, needle: stepAngle(roe, xs), entryA: e ? e.angle : null};
+}
+
+/**
+ * The ladder step after the next one {at, lock}: the server's own (next_lock.then: paperbot/ladder2.py, both forms, e.g.
+ * the two-part ladder's 15 % -> 12 % after 11 % -> 10 %), else (an answer without it) one ladder step more. null without.
+ */
+export function afterNext(nx, ladder) {
+  if (!nx || nx.at == null) return null;
+  if (nx.then && nx.then.at != null) return {at: Number(nx.then.at), lock: nx.then.lock != null ? Number(nx.then.lock) : null};
+  const step = ladder && ladder.step != null ? Number(ladder.step) : null;
+  return step != null && step > 0 ? {at: Number(nx.at) + step, lock: nx.lock != null ? Number(nx.lock) + step : null} : null;
 }
 
 /**
@@ -1321,6 +1330,7 @@ export function hqView(ctx, hub) {
     const row = (k, f) => [h("span", {class: "lbh-etk"}, k), ...cols.map((c) => h("span", {class: "lbh-etv num"}, f(c)))];
     const nx = p.next_lock;
     const step = ladder && ladder.step != null ? Number(ladder.step) : null;
+    const th = afterNext(nx, ladder), two = !!(ladder && ladder.next_trigger != null);
     put(eBody,
       h("div", {class: "lbh-ebig"}, h("b", {class: ["lbh-eside", Number(p.side) > 0 ? "up" : "down"]}, fmt.sideKo(p.side)),
         h("b", {class: "lbh-ecoin"}, fmt.coin(p.symbol)), h("span", {class: "lbh-etf"}, "무기한"), h("b", {class: "lbh-elev num"}, fmt.lev(p.leverage))),
@@ -1337,7 +1347,7 @@ export function hqView(ctx, hub) {
       fl ? h("div", {class: "lbh-eladder"},
         h("p", null, h("span", {class: "k"}, "첫 잠금"), `순ROE ${fmt.pct(fl.at, 0, false)} (${fmt.price(fl.atPrice)})에 닿으면 ${fmt.pct(fl.lock, 0, false)} 잠금 (${fmt.price(fl.lockPrice)})`),
         nx && nx.at != null ? h("p", null, h("span", {class: "k"}, p.locked ? "다음 단계" : "그다음"), p.locked ? `순ROE ${fmt.pct(nx.at, 0, false)} (${fmt.price(nx.price)})에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금`
-          : step != null ? `순ROE ${fmt.pct(nx.at + step, 0, false)}에 닿으면 ${fmt.pct(nx.lock + step, 0, false)} 잠금 (${fmt.pct(step, 0, false)}마다 한 단계)` : "—") : null,
+          : th ? `순ROE ${fmt.pct(th.at, 0, false)}에 닿으면 ${fmt.pct(th.lock, 0, false)} 잠금 (${two ? "그 뒤 " : ""}${fmt.pct(step, 0, false)}마다 한 단계)` : "—") : null,
         fl.rr != null ? h("p", {class: "lbh-err", title: `첫 잠금 ${fmt.pct(fl.lock, 0)}를 첫 손절의 ${fmt.pct(fl.risk, 1)}와 비교 (순ROE, 페이퍼 기준)`},
           h("span", {class: "k"}, "손익비"), h("b", {class: "num"}, `1 : ${fmt.num(fl.rr, 2)}`), ` 첫 잠금 기준 · 손절 ${fmt.pct(fl.risk, 1)} 대 첫 잠금 ${fmt.pct(fl.lock, 0)}`) : null,
         h("p", {class: "muted"}, "잠금 단계는 페이퍼 기준이고, 실행기도 페이퍼가 잠그면 거래소 손절을 같이 옮겨요"))
@@ -1491,8 +1501,10 @@ export function hqView(ctx, hub) {
     }
     const zone = cp && cp.ready ? cp.zone : null;
     const up = cp ? cp.up_ko : "88% 이상이면 금액 늘리기 검토", mid = cp ? cp.mid_ko : "82~88%면 그대로 지켜보기", low = cp ? cp.low_ko : "82% 미만이면 멈추고 다시 생각";
-    cRules.replaceChildren(...[["up", up], ["mid", mid], ["low", low]].map(([k, t]) => h("li", {class: ["k-" + k, zone === k ? "on" : ""]}, t)));
-    cNote.textContent = cp && cp.ready ? `최근 ${fmt.int(goal)}번 승률 ${fmt.pct(cp.last_win_rate, 1, false)} · 두 분이 정한 규칙으로 보는 자리예요` : `${fmt.int(goal)}번이 되기 전에는 승률로 판단하지 않아요 (지금 숫자는 판단 아님)`;
+    // rule_ko: the 5-year reference (and the 88 / 82 % rule made with it) is another config's: the count only, no rule
+    const rules = cp && cp.rule_ko ? [["none", cp.rule_ko]] : [["up", up], ["mid", mid], ["low", low]];
+    cRules.replaceChildren(...rules.map(([k, t]) => h("li", {class: ["k-" + k, zone === k ? "on" : ""]}, t)));
+    cNote.textContent = cp && cp.ready ? `최근 ${fmt.int(goal)}번 승률 ${fmt.pct(cp.last_win_rate, 1, false)} · ${cp.rule_ko ? "이 설정의 판단 기준은 아직 없어요" : "두 분이 정한 규칙으로 보는 자리예요"}` : `${fmt.int(goal)}번이 되기 전에는 승률로 판단하지 않아요 (지금 숫자는 판단 아님)`;
     // the frame's progress bar (the same count)
     const pct = n != null ? Math.min(1, n / goal) : 0;
     pbFill.style.transform = `scaleX(${pct.toFixed(4)})`;

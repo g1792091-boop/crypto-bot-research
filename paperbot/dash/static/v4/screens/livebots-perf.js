@@ -5,8 +5,10 @@
 // timeframe, 롱 / 숏 and Korea-time hour, each row with 표본 적음 under 20 (and under 40), and the coin-flip twin of the paper
 // (참고: the same moments with a random side). Then 매매법 성적표 and 개선 후보 장부 (livebots-score.js: liveimprove's
 // scorecard per strategy with its status words, and its improvement ledger with the exact commands, read-only).
-// HONESTY: closed trades only; small samples say so; the reference lines are labelled 참고; no pass / fail word before 40
-// (the scorecard's words are liveimprove's own test against the backtest, not the 40-trade decision).
+// HONESTY: closed trades only; small samples say so; the reference lines are labelled 참고, and drawn only for the config
+// they were made for (refs null + refs_ko, checkpoint.rule_ko: another config's, so neither the lines nor 88 / 82 %); no
+// pass / fail word before 40 (the scorecard's words are liveimprove's own test against the backtest, not the 40-trade
+// decision).
 import {h, s, put, ui, fmt, local, motion} from "../core/pb.js";
 import {acctKo, sourceState} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
@@ -94,10 +96,12 @@ export function perfView(ctx) {
       put(chart, c || h("p", {class: "lb-flat"}, `최근 20번 승률은 닫힌 거래가 20번이 되면 그려져요 (지금 ${fmt.int(x.trades)}번)`));
       const R = d.refs || {};
       const li = (...k) => h("span", {class: "lb-li", role: "listitem"}, ...k);
+      // no refs (refs_ko): the start guide's lines are another config's, so none is drawn or named
       put(legend, li(h("i", {class: "lb-key r20"}), "최근 20번"), li(h("i", {class: "lb-key r40"}), "최근 40번"),
-        li(h("i", {class: "lb-key bt"}), `백테스트 ${fmt.pct(R.backtest, 0, false)}`),
-        li(h("i", {class: "lb-key band"}), `흔들기 시험 ${fmt.pct((R.shake || [])[0], 0, false)}~${fmt.pct((R.shake || [])[1], 0, false)}`),
-        li(h("i", {class: "lb-key be"}), `본전 약 ${fmt.pct(R.breakeven, 0, false)}`), li(ui.pill("", "ref"), " 지나간 시험의 숫자, 약속 아님"));
+        ...(d.refs ? [li(h("i", {class: "lb-key bt"}), `백테스트 ${fmt.pct(R.backtest, 0, false)}`),
+          li(h("i", {class: "lb-key band"}), `흔들기 시험 ${fmt.pct((R.shake || [])[0], 0, false)}~${fmt.pct((R.shake || [])[1], 0, false)}`),
+          li(h("i", {class: "lb-key be"}), `본전 약 ${fmt.pct(R.breakeven, 0, false)}`), li(ui.pill("", "ref"), " 지나간 시험의 숫자, 약속 아님")]
+          : [li(ui.pill("", "ref"), ` ${d.refs_ko || "참고선 없음"}`)]));
     }
     const k = d.checkpoint;
     if (!k) put(cp, sourceState(d.accts.paper, "페이퍼 DB"));
@@ -106,7 +110,8 @@ export function perfView(ctx) {
       put(cp, h("div", {class: "lb-cpbar", role: "img", "aria-label": `${k.n} / ${k.trades}`}, h("i", {style: {width: `${(pct * 100).toFixed(1)}%`}})),
         h("p", {class: "lb-cpn"}, h("b", {class: "num"}, `${fmt.int(k.n)} / ${fmt.int(k.trades)}번`),
           k.ready ? h("span", null, ` · 마지막 40번 승률 ${fmt.pct(k.last_win_rate, 1, false)}`) : h("span", {class: "muted"}, ` · ${fmt.int(k.left)}번 남음`)),
-        h("ul", {class: "lb-cprules"}, [["up", k.up_ko], ["mid", k.mid_ko], ["low", k.low_ko]].map(([z, t]) => h("li", {class: ["lb-cpz", z, k.zone === z ? "on" : ""]}, t))),
+        h("ul", {class: "lb-cprules"}, (k.rule_ko ? [["none", k.rule_ko]] : [["up", k.up_ko], ["mid", k.mid_ko], ["low", k.low_ko]])
+          .map(([z, t]) => h("li", {class: ["lb-cpz", z, k.zone === z ? "on" : ""]}, t))),
         ui.note(k.ready ? "40번이 됐어요: 두 분이 정할 때예요 (이 화면은 숫자만 보여 드려요)"
           : `지금 승률 ${k.win_rate == null ? "—" : fmt.pct(k.win_rate, 1, false)}는 참고예요: 40번 전에는 판단하지 않아요`));
     }

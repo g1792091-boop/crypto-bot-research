@@ -75,7 +75,7 @@ const NEAR = 0.0005;                    // entries this close share one line (ch
  * The chart deck's lines of the accounts' positions on one coin (core/chartfx.js setLines): an entry line per price (the
  * paper and the executors that followed it usually share one: 'P·B 롱 40배 · B +1.2% · P +1.3%'), each account's stop or
  * lock line (dashed), the paper's first stop once locked and its NEXT ladder step (the price where the paper's net ROE
- * reaches the next trigger: 11 %, then every 3 %).
+ * reaches the next trigger: the server's next_lock, from the config's ladder in either form).
  */
 export function liveLines(accts, sym, mark) {
   const xs = (accts || []).filter((a) => a && a.state === "ok" && a.position && a.position.symbol === sym && a.position.entry > 0)

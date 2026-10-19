@@ -15,8 +15,10 @@ COMBO@mix, "A+C 합본") that the two real-money executors follow (Bybit $100, M
    (reg5), KST 4-hour block (hb), stop type, entry style and invert. A row: trades, wins, win rate, average net ROE,
    losses and their median net ROE, the backtest reference's fit win rate and its honest one
    (deploy/combo.live-ac.expected.json: the twin fitted on 2020-24 only, read on unseen 2025-26; a strategy with fewer
-   than ``HONEST_MIN_N`` unseen trades uses the overall 75%), and a status word from a one-sided binomial test of the
-   live wins against the honest rate: "표본 작음" under ``SMALL_N`` trades, "주의" at p < 0.05, "확실히 나쁨" only at
+   than ``HONEST_MIN_N`` unseen trades uses the overall 75%; a reference made for another config than the running one,
+   livecheck.ref_config_problem, is not loaded at all: ``load_ref`` raises and nothing is scored, sent or written),
+   and a status word from a one-sided binomial test of the live wins against the honest rate: "표본 작음" under
+   ``SMALL_N`` trades, "주의" at p < 0.05, "확실히 나쁨" only at
    p < 0.05 / (rows of the table) (27 for the strategies: with 27 strategies 1-2 "주의" by luck alone are normal),
    else "기대 안". The executor columns: for the trades each executor followed (livecheck.match_paper), its net ROE
    against the paper's on the same trades (what costs and slippage take).
@@ -212,9 +214,16 @@ def verdict(n: int, wins: int, p0: Optional[float], family: int) -> tuple[str, O
 
 
 # ====================================================================== the reference (combo.live-ac.expected.json)
-def load_ref(path: Optional[str] = None) -> dict:
+def load_ref(path: Optional[str] = None, combo_config: Optional[str] = None) -> dict:
+    """The 5-year reference. ``livecheck.RefConfigMismatch`` (a ValueError whose text is the Korean reason) when it
+    was made for another config than the running one (livecheck.ref_config_problem: ``combo_config``, by default
+    PAPERBOT_LIVE_COMBO_CONFIG or /etc/paperbot/combo.json), so no scorecard compares the bot with another bot."""
     with open(path or EXPECTED, encoding="utf-8") as fh:
-        return json.load(fh)
+        ref = json.load(fh)
+    why = LC.ref_config_problem(ref, combo_config)
+    if why:
+        raise LC.RefConfigMismatch(why)
+    return ref
 
 
 def honest_overall(ref: dict) -> float:
@@ -1047,6 +1056,7 @@ class Sources:
     paper_db: str = LC.PAPER_DB
     expected: str = str(EXPECTED)
     executors: Optional[list] = None              # None: the executors' configs (livecheck.load_executors)
+    combo_config: Optional[str] = None            # the running config (load_ref's guard); None: livecheck's default
 
 
 def since_ms(day: Optional[str]) -> Optional[int]:
@@ -1065,7 +1075,7 @@ def _day(s: str) -> str:
 def gather(src: Sources, since: Optional[int] = None) -> dict:
     """Everything the commands read, read-only: the reference, the paper trades since ``since`` (default: the first),
     the executors' followed trades, and what could not be read."""
-    ref = load_ref(src.expected)
+    ref = load_ref(src.expected, src.combo_config)
     problems = []
     conn = open_ro(src.paper_db)
     trades, run_cfg = [], None
@@ -1299,7 +1309,7 @@ def _sources(a) -> Sources:
                 paper = json.load(fh).get("db")
         except (OSError, ValueError, AttributeError):
             paper = None
-    return Sources(db=a.db, paper_db=paper or LC.PAPER_DB, expected=a.expected)
+    return Sources(db=a.db, paper_db=paper or LC.PAPER_DB, expected=a.expected, combo_config=a.combo_config)
 
 
 def cmd_score(a) -> int:
@@ -1404,7 +1414,7 @@ def main(argv: Optional[list] = None) -> int:
     def common(p):
         p.add_argument("--db", default=DEFAULT_DB, help="liveimprove.db (its own snapshots and ledger)")
         p.add_argument("--paper-db", default=None, help="the paper bot's database (default: combo.json's db)")
-        p.add_argument("--combo-config", default=LC.COMBO_CONFIG)
+        p.add_argument("--combo-config", default=LC.running_combo_config())
         p.add_argument("--expected", default=str(EXPECTED), help="the backtest reference")
         p.add_argument("--since", type=_day, default=None, help="YYYY-MM-DD: count trades from 09:00 KST of that "
                                                                 "date (default: the first trade)")
@@ -1433,8 +1443,12 @@ def main(argv: Optional[list] = None) -> int:
     pv.add_argument("--loud", action="store_true", help="the week with a strategy that is surely bad")
     pv.add_argument("--expected", default=str(EXPECTED), help="the backtest reference")
     a = ap.parse_args(argv)
-    return {"score": cmd_score, "candidates": cmd_candidates, "ledger": cmd_ledger, "weekly": cmd_weekly,
-            "preview": cmd_preview}[a.cmd](a)
+    try:
+        return {"score": cmd_score, "candidates": cmd_candidates, "ledger": cmd_ledger, "weekly": cmd_weekly,
+                "preview": cmd_preview}[a.cmd](a)
+    except LC.RefConfigMismatch as exc:          # the reference is another config's: nothing compared, sent or written
+        print(f"{exc}: 성적표·개선 후보·주간 메시지를 만들지 않았어요 (보내지도 쓰지도 않음)")
+        return 0 if a.cmd == "weekly" else 1      # the Monday timer: not a failure of the run
 
 
 if __name__ == "__main__":

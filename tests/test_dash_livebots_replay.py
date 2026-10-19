@@ -620,3 +620,50 @@ def test_css_and_js_static():
         assert bad not in code, bad
     assert "MAX_PX" in js and "devicePixelRatio" in js and "motion.reduced()" in js
     assert re.search(r"position:\s*\"absolute\"", js)                # the canvas is pinned inside its box (no resize feedback)
+
+
+# ================================================================ the two-part ladder (owners 10/19: 11 % -> 10 %, 15 % -> 12 %, 20 % -> 17 %, ...)
+TWO = {"first_lock": 0.10, "trigger_gap": 0.01, "step": 0.05, "next_trigger": 0.15, "next_gap": 0.03}
+
+
+def test_two_part_ladder_rebuild_locks_12_at_15_then_out_at_the_lock():
+    """A long that reaches +12 % net (lock 10 %), then +16 % (lock 12 %, armed at 15 %, not the old form's 13 %), then
+    falls back through the 12 % lock: out there."""
+    from paperbot.ladder import roe_price
+    run = {"taker_fee": 0.0005, "config": {**W.CONFIG, "ladder": TWO}}
+    e0 = T0 + 9 * H
+    t = {"id": 1, "side": 1, "entry_price": 100.0, "entry_time": e0, "leverage": 10, "stop_initial": 95.0, "liq_price": 90.5,
+         "qty": 1.0, "margin": 10.0, "exit_reason": "LOCK", "exit_time": e0 + 3 * MIN, "fees": None, "exit_price": None}
+    rules = R.rules_of(t, run)
+    assert rules["ladder"] == TWO and rules["spec"].two_part
+    rt = rules["round_trip"]
+    px = lambda roe: roe_price(1, 100.0, 10, roe, rt)                                             # noqa: E731
+
+    def bar(i, o, hi, lo, c):
+        ts = e0 + i * MIN
+        return {"ts": ts, "open": o, "high": hi, "low": lo, "close": c, "m_open": o, "m_high": hi, "m_low": lo, "close_time": ts + MIN - 1}
+
+    bars = [bar(0, 100.0, 100.2, 99.9, 100.1),                       # the entry bar: far from any trigger
+            bar(1, 100.1, px(0.12), 100.05, px(0.115)),               # best +12 %: lock 10 % (armed at 11 %)
+            bar(2, px(0.115), px(0.16), px(0.13), px(0.155)),         # best +16 %: lock 12 % (armed at 15 %)
+            bar(3, px(0.15), px(0.151), px(0.10), px(0.105))]         # back through the 12 % lock: out at it
+    rb = R.rebuild(t, bars, rules, False, [])
+    locks = [(k["lock"], k["trigger"], k["steps"], k["best"]) for k in rb["locks"]]
+    assert [round(x[0], 9) for x in locks] == [0.10, 0.12] and [round(x[1], 9) for x in locks] == [0.11, 0.15]
+    assert [x[2] for x in locks] == [1, 1] and locks[1][3] == pytest.approx(0.16)
+    assert rb["lock"] == pytest.approx(0.12) and rb["stop"] == pytest.approx(px(0.12))
+    x = rb["exit"]
+    assert x["reason"] == "LOCK" and x["how"] == "touch" and x["price"] == pytest.approx(px(0.12) * (1 - rules["slippage"]))
+    assert x["t"] == e0 + 4 * MIN - 1
+    # one fast bar from nothing to +16 %: only the 12 % lock is set, two steps climbed (10 % and 12 %)
+    rb = R.rebuild(t, [bars[0], bar(1, 100.1, px(0.16), 100.05, px(0.155)), bars[3]], rules, False, [])
+    assert [(round(k["lock"], 9), round(k["trigger"], 9), k["steps"]) for k in rb["locks"]] == [(0.12, 0.15, 2)]
+    # the next steps: 20 % -> 17 %, 25 % -> 22 %
+    assert [round(rules["spec"].lock_for(b), 9) for b in (0.11, 0.149, 0.15, 0.199, 0.20, 0.25, 0.30)] == [0.10, 0.10, 0.12, 0.12, 0.17, 0.22, 0.27]
+    assert R.ladder_ko(rules["ladder"]) == "순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%)"
+    # the old form: the same answer as before (its ladder, words and lock records)
+    old = R.rules_of(t, {"taker_fee": 0.0005, "config": W.CONFIG})
+    assert old["ladder"] == {"first_lock": 0.1, "step": 0.03, "trigger_gap": 0.01} and not old["spec"].two_part
+    assert R.ladder_ko(old["ladder"]) == "순ROE 11%에서 10% 잠금, 그 뒤 3%씩"
+    rb = R.rebuild(t, [bars[0], bar(1, 100.1, px(0.16), 100.05, px(0.155)), bars[3]], old, False, [])
+    assert [(k["lock"], k["trigger"], k["steps"]) for k in rb["locks"]] == [(0.1 + 0.03 * 1, (0.1 + 0.03 * 1) + 0.01, 2)]  # +16 %: 13 % at 14 %

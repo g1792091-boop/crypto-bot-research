@@ -1141,3 +1141,140 @@ def test_the_paper_account_is_named_페이퍼_연습_next_to_real_money(world):
     assert "페이퍼(연습)" in _read(SCREENS, "livebots-parts.js")
     for f in ("livebots-term.js", "livebots-chart.js"):                  # the chart's line key: 페이퍼(연습, P) · 바이비트(B) · MEXC(M)
         assert "페이퍼(연습, P)" in _read(SCREENS, f), f
+
+
+# ---------------------------------------------------------------- the 10/20 config: two-part ladder, no_chase, another bot's reference
+TWO = {"first_lock": 0.10, "trigger_gap": 0.01, "step": 0.05, "next_trigger": 0.15, "next_gap": 0.03}
+LIVE_CFG = os.path.join(ROOT, "deploy", "combo.live-ac.json")
+
+
+def _set_ladder(world, ladder):
+    """The world's paper bot runs ``ladder`` (its own combo_run record, as the bot writes it at its start)."""
+    conn = sqlite3.connect(world["paper"])
+    d = json.loads(conn.execute("SELECT data FROM state WHERE k = 'combo_run'").fetchone()[0])
+    d["config"] = {**d["config"], "ladder": ladder}
+    conn.execute("UPDATE state SET data = ? WHERE k = 'combo_run'", (json.dumps(d),))
+    conn.commit()
+    conn.close()
+
+
+def _running_config(tmp_path, monkeypatch, same: bool) -> str:
+    """PAPERBOT_LIVE_COMBO_CONFIG -> a copy of deploy/combo.live-ac.json (the references' config) or other bytes."""
+    with open(LIVE_CFG, "rb") as fh:
+        raw = fh.read()
+    path = tmp_path / ("same.json" if same else "new.json")
+    path.write_bytes(raw if same else raw + b"\n")
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(path))
+    return str(path)
+
+
+def _node_mods(body: str, data, mods: dict):
+    """Runs ``body`` in node with the tiny DOM, each of ``mods`` ({name: screens file}) imported and ``d`` = data."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    imports = "".join(f"const {k} = await import('file://{SCREENS}/{f}');\n" for k, f in mods.items())
+    script = f"const D = await import('{dom}');\n{imports}const d = {json.dumps(data)};\n{body}"
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=90)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_next_lock_follows_the_two_part_ladder_and_keeps_the_old_one():
+    want = {None: (0.10, 0.11), 0.10: (0.12, 0.15), 0.12: (0.17, 0.20), 0.17: (0.22, 0.25)}
+    for lock, (lk, at) in want.items():
+        nx = L.next_lock(lock, TWO)
+        assert set(nx) == {"lock", "at"} and nx["lock"] == pytest.approx(lk) and nx["at"] == pytest.approx(at), lock
+    old = dict(W.LADDER)                          # 10 % at 11 %, then 3 % steps: the very floats of the old formula
+    assert L.next_lock(None, old) == {"lock": 0.1, "at": 0.1 + 0.01}
+    assert L.next_lock(0.1, old) == {"lock": 0.1 + 0.03, "at": 0.1 + 0.03 + 0.01}
+    assert L.next_lock(0.13, old) == {"lock": 0.13 + 0.03, "at": 0.13 + 0.03 + 0.01}
+    assert L.next_lock(None, {"first_lock": 0.1, "step": 0.03}) is None and L.next_lock(0.1, {}) is None
+    assert L.ladder_numbers(old) == old and L.ladder_numbers(TWO) == TWO
+    assert L.ladder_numbers({**old, "next_trigger": 0.15}) == old              # half a second part: the old form
+
+
+def test_the_open_position_and_the_settings_show_the_two_part_ladder(world):
+    _set_ladder(world, TWO)
+    d = L.build(world, NOW)
+    p = acct(d, "paper")["position"]
+    assert p["lock_roe"] == pytest.approx(0.10)                              # locked 10 %: next 12 % at 15 %, then 17 % at 20 %
+    nx = p["next_lock"]
+    assert nx["lock"] == pytest.approx(0.12) and nx["at"] == pytest.approx(0.15)
+    assert nx["then"] == {"lock": pytest.approx(0.17), "at": pytest.approx(0.20)}
+    assert nx["price"] == pytest.approx(L.roe_price(1, 62000.0, 40, 0.15, p["round_trip"], p["funding_frac"]))
+    assert acct(d, "bybit")["position"]["next_lock"]["then"]["at"] == pytest.approx(0.20)      # the executor follows the paper's
+    assert d["paper"]["ladder"] == TWO and L.settings(world, NOW)["rules"]["ladder"] == TWO
+    out = _node_mods("""const pa = d.accts.find((a) => a.id === "paper");
+      const g = Q.gaugeModel(pa.position, {kind: "paper", mark: 62510, ladder: d.paper.ladder});
+      const un = {lock: 0.1, at: 0.11, then: {lock: 0.12, at: 0.15}};
+      console.log(JSON.stringify({next2: g.anchors.find((a) => a.k === "next2"), un: Q.afterNext(un, d.paper.ladder),
+        old: Q.afterNext({lock: 0.1, at: 0.11}, {step: 0.03}), none: Q.afterNext(null, d.paper.ladder),
+        two: M.ladderKo(d.paper.ladder), one: M.ladderKo({first_lock: 0.1, step: 0.03, trigger_gap: 0.01}), no: M.ladderKo({})}));""",
+                     d, {"Q": "livebots-hq.js", "M": "livebots-more.js"})
+    assert out["next2"]["v"] == pytest.approx(0.20) and out["next2"]["lock"] == pytest.approx(0.17)
+    assert out["un"] == {"at": pytest.approx(0.15), "lock": pytest.approx(0.12)}            # 11 % -> 10 %, then 15 % -> 12 %
+    assert out["old"] == {"at": pytest.approx(0.14), "lock": pytest.approx(0.13)} and out["none"] is None
+    assert out["two"] == "순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%)"
+    assert out["one"] == "순ROE 11%에서 10% 잠금, 그 뒤 3%씩 올림" and out["no"] == "—"
+    for f in ("livebots-chart.js", "livebots-term.js"):                       # no fixed ladder numbers in the chart key
+        assert "그 뒤 3%마다" not in _read(SCREENS, f), f
+
+
+def test_new_filter_reasons_have_their_own_categories():
+    assert L.why_cat("FILTERED", "추격 진입 막기: 롱인데 24시간 고점 쪽(93% 위치)") == ("chase", "추격 진입 막기")
+    assert L.why_cat("FILTERED", "추격 진입 막기: 숏인데 7일 범위 아래 20% 안(12% 위치)") == ("chase", "추격 진입 막기")
+    for w in ("추격 판단에 쓸 24시간 1분봉이 모자람(진입 안 함)", "추격 판단에 쓸 1분봉을 못 읽음(진입 안 함): OperationalError",
+              "추격 판단에 쓸 가격이 없음(진입 안 함)"):
+        assert L.why_cat("FILTERED", w) == ("chase_unread", "추격 판단 못 함"), w          # never '조건을 못 읽음'
+    assert L.why_cat("FILTERED", "나스닥 개장 뒤 30분 진입 안 함 (뉴욕 09:30 개장)") == ("usopen", "나스닥 개장 뒤")
+    assert L.why_cat("FILTERED", "설정이 바뀌어 기다리던 돌파 신호를 버림") == ("config", "설정이 바뀜")
+    assert L.why_cat("FILTERED", "주말 진입 안 함")[0] == "weekend"                   # the old ones as before
+    assert L.why_words("추격 진입 막기: 롱인데 24시간 고점 쪽(93% 위치)") == "추격 진입 막기: 롱인데 24시간 고점 쪽(93% 위치)"
+    m = L.describe_member({"strategy": "S2_ST_ROC", "tf": "1h", "no_chase": True}, 3)
+    assert m["no_chase"] is True and m["no_chase_ko"].startswith("추격 진입 막기 (")
+    m = L.describe_member({"strategy": "S2_ST_ROC", "tf": "1h"}, 4)
+    assert m["no_chase"] is False and m["no_chase_ko"] is None
+    for f in ("livebots-more.js", "livebots-rank.js", "livebots-trades.js"):          # the settings, rank and trade screens say it
+        assert "추격 진입 막기" in _read(SCREENS, f), f
+
+
+def test_another_configs_5_year_reference_is_never_shown(world, tmp_path, monkeypatch):
+    from paperbot import livecheck as LC
+    _running_config(tmp_path, monkeypatch, same=False)
+    why = LC.REF_OTHER_CONFIG_KO
+    with pytest.raises(ValueError) as e:                                      # load_likely: the guard's reason
+        L.load_likely()
+    assert isinstance(e.value, LC.RefConfigMismatch) and str(e.value) == why
+    lk = L.likely(world, NOW)
+    assert lk["state"] == "missing" and lk["reason_ko"] == why and lk["rows"] == []
+    assert L.whynow(world, NOW)["likely"]["state"] == "missing" and L.whynow(world, NOW)["likely"]["reason_ko"] == why
+    rk = L.rank(world, NOW)
+    assert rk["ref"]["state"] == "missing" and rk["ref"]["reason_ko"] == why
+    assert rk["ref"]["break_even"] is None and rk["ref"]["fit_win"] is None and rk["ref"]["honest_win"] is None
+    assert all(r["bt"] is None and all(m["bt"] is None for m in r["members"]) for r in rk["rows"])   # no per-member numbers
+    assert rk["scorecard"]["state"] == "missing" and rk["scorecard"]["reason_ko"] == why
+    d = L.build(world, NOW)
+    assert d["refs"] is None and d["refs_ko"] == why
+    cp = d["checkpoint"]
+    assert cp["rule_ko"] == why and cp["trades"] == 40 and cp["n"] == 6 and cp["zone"] is None
+    assert cp["up"] is None and cp["low"] is None and cp["up_ko"] is None and cp["mid_ko"] is None and cp["low_ko"] is None
+    pf = L.perf(world, NOW)
+    assert pf["refs"] is None and pf["checkpoint"]["rule_ko"] == why and pf["scorecard"]["reason_ko"] == why
+    mp = L.map_view(world, NOW)
+    assert mp["band"] is None and mp["card"]["state"] == "missing" and mp["card"]["reason_ko"] == why
+    assert all(r["bt_win"] is None and r["bt_n"] is None for rows in mp["cuts"].values() for r in rows)
+    out = _node_mods("""const svg = P.rollChart({roll20: [[1, 0.9], [2, 0.8]], roll40: []}, d.refs, 600), cls = [];
+      const go = (n) => { if (!n || !n.childNodes) return; const c = n.getAttribute && n.getAttribute('class'); if (c) cls.push(c); n.childNodes.forEach(go); };
+      go(svg); console.log(JSON.stringify({cls}));""", pf, {"P": "livebots-perf.js"})
+    assert "r20" in out["cls"] and not {"ref bt", "ref be", "band"} & set(out["cls"])     # no old reference line drawn
+    # the same bytes as the references' config: today's answers
+    _running_config(tmp_path, monkeypatch, same=True)
+    L._cache.clear()
+    assert L.load_likely()["source"]["config"] == "deploy/combo.live-ac.json"
+    assert L.likely(world, NOW)["state"] == "ok" and L.rank(world, NOW)["ref"]["state"] == "ok"
+    d = L.build(world, NOW)
+    assert d["refs"] == L.REFS and d["refs_ko"] is None
+    assert "rule_ko" not in d["checkpoint"] and d["checkpoint"]["up_ko"] == L.CHECKPOINT["up_ko"]
+    assert L.map_view(world, NOW)["band"] is not None

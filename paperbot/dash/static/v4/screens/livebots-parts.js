@@ -69,7 +69,7 @@ export function bandLine(ctx) {
     else {
       put(c.goal, h("span", null, `${fmt.int(cp.trades)}번 판단까지 `), cp.ready ? h("b", null, "도착") : h("b", {class: "num"}, `${fmt.int(cp.left)}번 남음`),
         h("span", {class: "muted num"}, ` · 페이퍼(연습) ${fmt.int(cp.n)}/${fmt.int(cp.trades)}`));
-      c.goal.title = `페이퍼 닫힌 거래 ${fmt.int(cp.n)}번 · ${fmt.int(cp.trades)}번이 되면 두 분이 정해요: ${cp.up_ko} / ${cp.mid_ko} / ${cp.low_ko} · 그 전의 승률은 판단이 아니에요 (참고)`;
+      c.goal.title = `페이퍼 닫힌 거래 ${fmt.int(cp.n)}번 · ${fmt.int(cp.trades)}번이 되면 두 분이 정해요: ${cp.rule_ko || `${cp.up_ko} / ${cp.mid_ko} / ${cp.low_ko}`} · 그 전의 승률은 판단이 아니에요 (참고)`;
     }
   }
   set(null, "loading");

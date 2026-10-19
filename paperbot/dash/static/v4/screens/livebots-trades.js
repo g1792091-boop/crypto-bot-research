@@ -59,7 +59,7 @@ export function tradesView(ctx) {
     const rows = [
       kv("매매법", r.strategy_id ? `${fmt.stratKo(r.strategy_id)} (${r.strategy_id})` : "—"), kv("봉", r.timeframe ? fmt.tfKo(r.timeframe) : null),
       kv("설정", r.order ? `${r.order}번 설정${s && s.cell ? ` · ${s.cell}` : ""}` : r.member || "기록 없음"),
-      kv("진입 방식", s ? s.entry_ko + (s.invert ? " · 반대 방향" : "") : null),
+      kv("진입 방식", s ? s.entry_ko + (s.invert ? " · 반대 방향" : "") + (s.no_chase ? " · 추격 진입 막기" : "") : null),
       kv("손절 방식", s ? s.stop.ko : r.stop_rule || null), kv("처음 손절 거리", dist != null ? `${fmt.pct(dist, 2, false)} (${fmt.price(r.stop_initial)})` : null),
       kv("진입", `${fmt.kst(r.entry_time)} · ${fmt.price(r.entry_price)}`), kv("청산", `${fmt.kst(r.exit_time)}${r.exit_price ? ` · ${fmt.price(r.exit_price)}` : ""}`),
       kv("청산 이유", r.reason_ko), kv("가장 높은 잠금", live ? (r.locked ? `잠금선 ${fmt.price(r.stop_final)}` : r.paper && r.paper.lock_roe != null ? `페이퍼 기준 순ROE ${fmt.pct(r.paper.lock_roe, 0, false)}` : "잠금 없음")

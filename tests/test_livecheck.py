@@ -1189,7 +1189,7 @@ def test_reference_note_when_the_config_changed(tmp_path):
     cfg = tmp_path / "combo.json"
     cfg.write_text("{}")
     src = LC.Sources(combo_config=str(cfg), expected="-")
-    assert "기준표가 지금 설정 파일과 다름" in LC.reference_notes({"config_sha256": "abc"}, src)[0]
+    assert LC.reference_notes({"config_sha256": "abc"}, src) == [LC.REF_OTHER_CONFIG_KO]      # the guard's own reason
     import hashlib
     assert LC.reference_notes({"config_sha256": hashlib.sha256(b"{}").hexdigest()}, src) == []
     assert "기준표" in LC.reference_notes(None, src)[0]
@@ -1814,3 +1814,102 @@ def test_the_morning_check_has_one_quiet_line_about_the_signals_not_taken(tmp_pa
     out = LC.run_check(src, day="2026-10-18", now_ms=W.T0 + 10 * W.MIN, no_replay=True, notifier=ListNotifier())
     assert "못 탄 신호" not in out["text"]
     events.reset()
+
+
+# ====================================================================== another config's 5-year reference (10/20 config change)
+def _cfgs(tmp_path):
+    """(a copy of deploy/combo.live-ac.json: the references' config, a config with other bytes)."""
+    from pathlib import Path
+    raw = (Path(LC.ROOT) / "deploy" / "combo.live-ac.json").read_bytes()
+    same, other = tmp_path / "same.json", tmp_path / "new.json"
+    same.write_bytes(raw)
+    other.write_bytes(raw + b"\n")
+    return str(same), str(other)
+
+
+def test_ref_config_problem_is_the_sha_of_the_running_config_file(tmp_path, monkeypatch):
+    same, other = _cfgs(tmp_path)
+    why = LC.REF_OTHER_CONFIG_KO
+    exp = LC.load_expected()
+    with open(os.path.join(LC.ROOT, "deploy", "combo.live-ac.likely.json"), encoding="utf-8") as fh:
+        likely = json.load(fh)                                       # its hash sits in "source"
+    for ref in (exp, likely):
+        assert LC.ref_config_problem(ref, same) == "" and LC.ref_config_problem(ref, other) == why
+        assert LC.ref_config_problem(ref, str(tmp_path / "none.json")) == ""        # unreadable (dev machine): usable
+    assert LC.ref_config_problem({"overall": {}}, other) == "" and LC.ref_config_problem(None, other) == ""
+    monkeypatch.delenv(LC.COMBO_CONFIG_ENV, raising=False)
+    assert LC.running_combo_config() == "/etc/paperbot/combo.json" == LC.Sources().combo_config
+    monkeypatch.setenv(LC.COMBO_CONFIG_ENV, other)
+    assert LC.running_combo_config() == other == LC.Sources().combo_config
+    assert LC.ref_config_problem(exp) == why and LC.usable_expected(LC.Sources()) == (None, why)
+    assert LC.reference_notes(exp, LC.Sources()) == [why]                     # the morning check's one line
+    monkeypatch.setenv(LC.COMBO_CONFIG_ENV, same)
+    got, w = LC.usable_expected(LC.Sources())
+    assert w == "" and got == exp and LC.reference_notes(exp, LC.Sources()) == []
+
+
+def test_another_configs_reference_gives_cards_without_backtest_numbers(tmp_path):
+    same, other = _cfgs(tmp_path)
+    with open(same, "rb") as fh:
+        sha = __import__("hashlib").sha256(fh.read()).hexdigest()
+    entry, exit_ = T - 2 * H1, T - 30 * MIN
+    src = card_setup(tmp_path, [loss(entry, exit_, -0.4)], [entered(entry)], exp=dict(EXP, config_sha256=sha))
+    src.combo_config = other
+    assert LC.usable_expected(src) == (None, LC.REF_OTHER_CONFIG_KO)
+    n = ListNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    (level, text), = msgs(n, "❌ 청산")
+    lines = text.split("\n")
+    assert "백테스트" not in text and "처음 보는 기간" not in text and "이 장세" not in text and "손실 보통" not in text
+    assert lines[3] == f"장세 강상승 · 14시 · {LC.REF_OTHER_CONFIG_KO}" and lines[4] == "연속 손실 1번째"
+    conn = sqlite3.connect(src.db)
+    card = json.loads(conn.execute("SELECT data FROM loss_cards").fetchone()[0])
+    row = conn.execute("SELECT key, trade_id, ts, label, loud, streak, weak, noise, noise_roe, noise_ts, sent, text, data "
+                       "FROM loss_cards").fetchone()
+    conn.close()
+    assert card["ref_ko"] == LC.REF_OTHER_CONFIG_KO and card["fit_win"] is None and card["member_ref"] is None
+    assert card["fit_longest"] is None and card["honest_longest"] is None and card["reg5_cell"] is None
+    from paperbot.dash.more import livebots as L
+    page = L._card(row, T)                                           # the dashboard's card says why too
+    assert page["ref_ko"] == LC.REF_OTHER_CONFIG_KO and page["fit_win"] is None and page["fit_longest"] is None
+    # the references' own config: today's card, with its numbers
+    d2 = tmp_path / "same"
+    d2.mkdir()
+    src = card_setup(d2, [loss(entry, exit_, -0.4)], [entered(entry)], exp=dict(EXP, config_sha256=sha))
+    src.combo_config = same
+    n = ListNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    text = msgs(n, "❌ 청산")[0][1]
+    assert "장세 강상승 · 14시 · 백테스트 승률 90.0% (처음 보는 기간 80%)" in text
+    assert "연속 손실 1번째 (백테스트 최장 3번, 처음 보는 기간 5번)" in text
+
+
+def test_another_configs_reference_no_expected_range_and_no_88_82_rule(tmp_path):
+    same, other = _cfgs(tmp_path)
+    with open(same, "rb") as fh:
+        sha = __import__("hashlib").sha256(fh.read()).hexdigest()
+    why = LC.REF_OTHER_CONFIG_KO
+    for wins in (35, 31):                                            # 36 / 40 and 32 / 40 (the old rule: grow / stop and rethink)
+        d = tmp_path / f"w{wins}"
+        d.mkdir()
+        src = card_setup(d, _paper_run(wins, 39 - wins, losses_last=False), [], exp=dict(EXP, config_sha256=sha))
+        src.combo_config = other
+        n = ListNotifier()
+        run(src, T, n)
+        s = Store3(src.paper_db)
+        s.trade(LC.ACCOUNT, trade(T - 30 * MIN, T - 10 * MIN, 1.0))
+        s.commit()
+        s.conn.close()
+        run(src, T + MIN, n)
+        (lv, text), = [(lv, m) for lv, m in n.messages if "40번 도달" in m]
+        assert lv == INFO and text.startswith(f"🏁 40번 도달 · 페이퍼 첫 40번 {wins + 1}승(") and "→" not in text.split("\n")[0]
+        assert "88%" not in text and "82%" not in text and "멈추고" not in text and "백테스트 승률" not in text
+        assert text.splitlines()[-1] == f"참고: {LC.CHECK_NO_RULE_KO} · {why}"
+        assert not [m for _l, m in n.messages if "기대 범위" in m or "📉" in m]          # no expected-range alarm or note
+    # the morning check: the checkpoint line without the rule, one note
+    p = {"n": 45, "wins": 40, "rate": 40 / 45, "first40": {"wins": 36, "rate": 0.9}, "last40": {"wins": 35, "rate": 35 / 40}}
+    line = LC.checkpoint_line(p, why)
+    assert line == f"- 판단: 거래 40/40번 · 첫 40번 36승 90.0% ({LC.CHECK_NO_RULE_KO})" and "88" not in line
+    assert LC.checkpoint_line({"n": 12, "wins": 11, "rate": 11 / 12}, why) == f"- 판단: 거래 12/40번 · 지금 11/12승 92% ({LC.CHECK_NO_RULE_KO})"
+    assert LC.checkpoint_line(p).startswith("- 판단(첫 40번): 36승 90.0% → 늘리기 검토")            # the old config: as before
+    assert LC.drift_conditions(_closed(5, 20), None) == ([], set())

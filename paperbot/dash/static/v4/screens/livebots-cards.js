@@ -83,7 +83,7 @@ export function cardBlock(c, o = {}) {
     const cells = [c.reg5_cell ? `이 장세 ${pc(c.reg5_cell[1], 0, false)} (${fmt.int(c.reg5_cell[0])}번)` : null,
       c.sym_cell ? `이 코인 ${pc(c.sym_cell[1], 0, false)} (${fmt.int(c.sym_cell[0])}번)` : null].filter(Boolean);
     if (cells.length) bt.push(h("li", null, cells.join(" · "), c.weak && c.weak.length ? h("b", {class: "warn-t"}, ` → 백테스트에서도 약한 자리 (${c.weak.join("·")})`) : ""));
-  } else bt.push(h("li", {class: "muted"}, "백테스트 기준표에 이 매매법이 없어요 (비교 못 함)"));
+  } else bt.push(h("li", {class: "muted"}, c.ref_ko || "백테스트 기준표에 이 매매법이 없어요 (비교 못 함)"));
   if (c.streak != null) {
     bt.push(h("li", null, `연속 손실 ${fmt.int(c.streak)}번째`, c.fit_longest != null ? ` (백테스트 최장 ${fmt.int(c.fit_longest)}번` : "",
       c.honest_longest != null ? `, 처음 보는 기간 ${fmt.int(c.honest_longest)}번)` : c.fit_longest != null ? ")" : ""));

@@ -17,9 +17,9 @@ Where from (all read-only, the 실거래 tab's own paths):
 - the bars: the rule bot's paper3.db ``live_bars`` (``PAPERBOT_LIVE_RULE_DB``, /var/lib/paperbot/paper3.db; never
   pruned), the very 1-minute bars the combined bot steps on (paperbot/combo.py ``read_paper``).
 
-The stop path is rebuilt with the engine's own pure functions (paperbot/ladder.py ``net_roe``, ``LadderSpec.lock_for``,
-``roe_price``, ``tighten``) in the order of paperbot/engine.py ``PaperEngine.step`` / ``_handle_exit`` / ``_raise_lock``,
-one minute at a time (``rebuild``):
+The stop path is rebuilt with the engine's own pure functions (paperbot/ladder.py ``net_roe``, ``roe_price``, ``tighten``;
+the combined bot's ladder paperbot/ladder2.py ``ComboLadder.lock_for``, either form) in the order of paperbot/engine.py
+``PaperEngine.step`` / ``_handle_exit`` / ``_raise_lock``, one minute at a time (``rebuild``):
   0. ``REV`` (빠른 청산, ComboEngine.step): at the open of the recorded minute, before anything else, at the open with
      slippage;
   1. funding at the open of the minute (the funding fraction of the ladder moves; see below);
@@ -137,9 +137,10 @@ def read_trade(path: str, trade_id: int, account: str = ACCOUNT) -> dict:
 # ---------------------------------------------------------------- the trade's own rules
 def rules_of(t: dict, run: dict) -> dict:
     """The round trip, slippage and ladder the engine used for this trade (see the module doc). ``ladder`` None when the
-    run's config has none (then nothing can be rebuilt)."""
+    run's config has none (then nothing can be rebuilt); ``spec`` is paperbot/ladder2.py ``ComboLadder`` (the rule bot's
+    form, or the two-part one when the config has next_trigger / next_gap)."""
     from ...config import v3_settings
-    from ...ladder import LadderSpec
+    from ...ladder2 import ComboLadder
     run_fee = L._f((run or {}).get("taker_fee"))
     fees, qty, e, x = t.get("fees"), t.get("qty"), t.get("entry_price"), t.get("exit_price")
     tk, src = None, None
@@ -157,9 +158,9 @@ def rules_of(t: dict, run: dict) -> dict:
     cfg = (run or {}).get("config") if isinstance((run or {}).get("config"), dict) else {}
     lad = cfg.get("ladder") if isinstance(cfg.get("ladder"), dict) else {}
     first, step, gap = L._f(lad.get("first_lock")), L._f(lad.get("step")), L._f(lad.get("trigger_gap"))
-    spec = LadderSpec(first, step, gap) if None not in (first, step, gap) else None
+    spec = ComboLadder.of(lad) if None not in (first, step, gap) else None
     return {"taker_fee": tk, "taker_from": src, "run_taker_fee": run_fee, "slippage": s.slippage_frac, "round_trip": s.round_trip_cost,
-            "ladder": {"first_lock": first, "step": step, "trigger_gap": gap} if spec else None, "spec": spec}
+            "ladder": L.ladder_numbers(lad) if spec else None, "spec": spec}
 
 
 def funding_steps(entry_t: int, exit_t: int, funding: Optional[float], notional: Optional[float]) -> tuple:
@@ -258,8 +259,8 @@ def rebuild(t: dict, bars: list, rules: dict, ref_fill: bool, fund: list, until:
                 if new is not None and not (lock is not None and new <= lock + 1e-12):
                     price = tighten(side, stop, roe_price(side, entry, lev, new, rt, ff))
                     # how many ladder steps this bar climbed (a fast bar can arm 10 % and 13 % at once: only the higher is set)
-                    steps = round((new - spec.first_lock) / spec.step) + 1 if lock is None else round((new - lock) / spec.step)
-                    locks.append({"t": ts, "at": ts + MIN, "best": best, "lock": new, "trigger": new + spec.trigger_gap,
+                    steps = spec.index(new) - spec.index(lock)
+                    locks.append({"t": ts, "at": ts + MIN, "best": best, "lock": new, "trigger": spec.trigger_of(new),
                                   "price": price, "from": stop, "from_lock": lock, "steps": max(1, steps)})
                     stop, lock = price, new
         row[2] = None if out is not None else stop
@@ -567,8 +568,7 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
         "rules": {k: rules[k] for k in ("taker_fee", "taker_from", "slippage", "round_trip", "ladder")} | {
             "entry_bar": "ref" if ref else "open", "entry_bar_from": ref_from, "funding_frac": (t.get("funding") or 0) / notional if notional else None,
             "funding_how": fund_how, "funding_steps": [[ft, fr] for ft, fr in fund],
-            "ladder_ko": (f"순ROE {_pk(lad['first_lock'] + lad['trigger_gap'])}에서 {_pk(lad['first_lock'])} 잠금, 그 뒤 {_pk(lad['step'])}씩"
-                          if lad else None)},
+            "ladder_ko": ladder_ko(lad)},
         "bars": bars, "path": path, "stops": stops, "locks": (rb or {}).get("locks") or [],
         "exit": {"record": {"t": t["exit_time"], "price": t.get("exit_price"), "reason": t["exit_reason"],
                             "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"])},
@@ -584,6 +584,19 @@ def _roe_at(side: int, t: dict, px: Optional[float], rules: dict, ff: float) -> 
     if px is None or not t.get("entry_price") or not t.get("leverage"):
         return None
     return net_roe(side, float(t["entry_price"]), float(px), float(t["leverage"]), rules["round_trip"], ff)
+
+
+def ladder_ko(lad: Optional[dict]) -> Optional[str]:
+    """The run's ladder in the owners' words: '순ROE 11%에서 10% 잠금, 그 뒤 3%씩' (the rule bot's form), or the two-part
+    one '순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%)'. None without a ladder."""
+    if not lad:
+        return None
+    first = f"순ROE {_pk(lad['first_lock'] + lad['trigger_gap'])}에서 {_pk(lad['first_lock'])} 잠금"
+    if lad.get("next_trigger") is None or lad.get("next_gap") is None:
+        return f"{first}, 그 뒤 {_pk(lad['step'])}씩"
+    t2, l2, st = lad["next_trigger"], lad["next_trigger"] - lad["next_gap"], lad["step"]
+    return (f"{first}, {_pk(t2)}에서 {_pk(l2)}, {_pk(t2 + st)}에서 {_pk(l2 + st)}, 그 뒤 {_pk(st)}마다 "
+            f"(닿은 순ROE - {_pk(lad['next_gap'])})")
 
 
 def _pk(x: Optional[float]) -> str:

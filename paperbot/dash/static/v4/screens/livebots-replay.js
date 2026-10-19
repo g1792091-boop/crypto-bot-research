@@ -1,6 +1,7 @@
 // 실거래 › 다시보기 (#/livebots/replay?id=<paper trade id>; owners 10/19 "D2" 거래 다시보기): any closed trade of the live
 // setup played back on its 1-minute bars: entry → the first stop → the ladder locks stepping up (lock 10 % net ROE when the
-// best net ROE reaches 11 %, then every 3 %) → exit, with the executors that followed it. /api/v4/livebots/replay (the list)
+// best net ROE reaches 11 %, then the config's later steps; the server's rebuild and ladder_ko) → exit, with the executors
+// that followed it. /api/v4/livebots/replay (the list)
 // and /api/v4/livebots/replay/<id> (dash/more/livetape.py: the record, its bars, the stop path rebuilt minute by minute with
 // the engine's own functions, the executors' paired trades). Other screens link here with replayHref(id).
 //   고르기  the closed trades, newest first: coin, side, strategy · timeframe, net ROE, 이김 / 짐 chips of one size, the
