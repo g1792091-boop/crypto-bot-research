@@ -51,7 +51,7 @@ ENGINE_KO = "엔진 기록 (페이퍼 엔진이 1분봉 고가·저가로 따라
 EXEC_LIQ_KO = "실행기 기록에 청산가가 없어요 (거래소 앱에서 확인)"
 FLIP_KO = "동전 쌍둥이 (참고): 같은 순간 같은 신호에 방향만 무작위로 들어가는 비교용 페이퍼"
 EXEC_COST_KO = "순ROE는 페이퍼 비용(수수료·슬리피지 왕복) 가정, 펀딩 뺌"
-CARDS = (("paper", L.ACCOUNT), ("bybit", None), ("mexc", None), ("flip", L.FLIP_ACCOUNT))
+CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("flip", L.FLIP_ACCOUNT))
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()
@@ -232,9 +232,10 @@ def paper_trade_extremes(path: str, account: str, keep: int) -> dict:
 
 
 # ---------------------------------------------------------------- the config the bot runs
-def combo_facts(p: dict, more: dict) -> dict:
-    """The run's config (live-ac.db combo_run, else PAPERBOT_LIVE_COMBO_CONFIG) as the cards need it."""
-    combo = L.read_combo(p["paper"], more["combo_config"])
+def combo_facts(p: dict, more: dict, path: Optional[str] = None) -> dict:
+    """The run's config (live-ac.db combo_run, else PAPERBOT_LIVE_COMBO_CONFIG) as the cards need it; ``path``: another
+    paper bot's database (its combo_run, else PAPERBOT_LIVE_COMBO2_CONFIG; owners 10-19, the -35 % bot)."""
+    combo = L.read_combo(path, more.get("combo2_config") or "-") if path else L.read_combo(p["paper"], more["combo_config"])
     if combo.get("state") != "ok":
         return {"state": combo.get("state"), "reason_ko": combo.get("reason_ko"), "reason": combo.get("reason"), "path": combo.get("path"),
                 "cfg": {}, "members": []}
@@ -277,10 +278,14 @@ def _gap(pp: Optional[dict], xp: dict) -> Optional[dict]:
             "delay_ms": (xp["entry_time"] - pp["entry_time"]) if xp.get("entry_time") is not None and pp.get("entry_time") is not None else None}
 
 
-def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, bars_state: dict, now: int, execs: list) -> dict:
-    """The paper account's (or its coin-flip twin's) card."""
+def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, bars_state: dict, now: int, execs: list,
+               bot: Optional[dict] = None) -> dict:
+    """The paper account's (or its coin-flip twin's) card. ``bot`` (livebots.paper_bots; two paper bots, owners 10-19):
+    its label, and its executors' cells only for the executors that follow it (the others "other")."""
     base = {"id": cid, "kind": "flip" if cid == "flip" else "paper", "account": acct,
             "name_ko": "동전 쌍둥이" if cid == "flip" else "페이퍼(연습)", "note_ko": FLIP_KO if cid == "flip" else None}
+    if bot:
+        base.update(label_ko=bot.get("label_ko"), stop_ko=bot.get("stop_ko"), bot_ko=bot.get("name"))
     if paper.get("state") != "ok":
         return {**base, **{k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")}}
     a = (paper.get("accounts") or {}).get(acct) or {}
@@ -310,9 +315,14 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
     cells = []
     for x in execs:
         xp = (x["record"].get("position") if x["record"].get("state") == "ok" else None) or None
-        if cid == "paper" and xp and xp.get("key") == pos.get("key"):
+        if cid not in ("paper", "paper2"):
+            continue
+        if bot and not L.LP.same(x.get("paper_path"), bot["path"]):
+            cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "other",
+                          "reason_ko": f"{x['name_ko']}는 다른 페이퍼({x.get('follows_ko') or '다른 페이퍼'})를 따라가요"})
+        elif xp and xp.get("key") == pos.get("key"):
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "following", **(_gap(pos, xp) or {})})
-        elif cid == "paper":
+        else:
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "none" if x["record"].get("state") == "ok" else "unknown",
                           "reason_ko": None if x["record"].get("state") == "ok" else x["record"].get("reason_ko")})
     out["position"] = {
@@ -396,19 +406,31 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
     more = more or L.paths_more()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     _configs, _follows, paper, execs = L.sources(p, now)
+    bots = L.paper_bots(p, paper, execs)
+    two = len(bots) > 1
     facts = combo_facts(p, more)
-    raw = raw_positions(p["paper"], (L.ACCOUNT, L.FLIP_ACCOUNT)) if paper.get("state") == "ok" else {}
+    # each paper bot: its read, its config (the -35 % bot's stop for its own cards and its executor's), its raw positions
+    per: dict = {}
+    for b in bots:
+        f = facts if b["id"] == "paper" else combo_facts(p, more, b["path"])
+        rw = raw_positions(b["path"], (L.ACCOUNT, L.FLIP_ACCOUNT)) if b["read"].get("state") == "ok" else {}
+        per[L.LP.norm(b["path"])] = (b, f, rw)
+    raw = per[L.LP.norm(p["paper"])][2]
     conn, bars_state = open_bars(more["rule_db"])
     try:
         cards = {}
-        cards["paper"] = paper_card("paper", L.ACCOUNT, paper, raw, facts, conn, bars_state, now, execs)
-        pp = (cards["paper"].get("position") or None)
-        if pp:
-            pp = {**((paper.get("accounts") or {}).get(L.ACCOUNT, {}).get("position") or {}), "_best_roe": pp.get("best_roe")}
+        best: dict = {}
+        for b, f, rw in per.values():
+            cards[b["id"]] = paper_card(b["id"], L.ACCOUNT, b["read"], rw, f, conn, bars_state, now, execs, bot=b if two else None)
+            best[L.LP.norm(b["path"])] = (cards[b["id"]].get("position") or {}).get("best_roe")
         for x in execs:
-            follow = (paper.get("accounts") or {}).get(x["follows"], {}).get("position") if paper.get("state") == "ok" else None
-            fp = pp if x["follows"] == L.ACCOUNT else ({**follow, "_best_roe": None} if follow else None)
-            cards[x["id"]] = exec_card(x, fp, paper, facts, conn, bars_state, now)
+            b, f, _rw = per.get(L.LP.norm(x["paper_path"])) or per[L.LP.norm(p["paper"])]
+            own = b["read"]
+            follow = (own.get("accounts") or {}).get(x["follows"], {}).get("position") if own.get("state") == "ok" else None
+            fp = {**follow, "_best_roe": best.get(L.LP.norm(b["path"])) if x["follows"] == L.ACCOUNT else None} if follow else None
+            cards[x["id"]] = exec_card(x, fp, own, f, conn, bars_state, now)
+            if two:
+                cards[x["id"]]["follows_ko"] = b["label_ko"].split(" (")[0]
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [])
     finally:
         if conn is not None:
@@ -416,7 +438,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
     return {"now_ms": now, "account": L.ACCOUNT, "rules": rules_out(facts, paper.get("round_trip") if paper.get("state") == "ok" else None),
             "combo": {k: facts.get(k) for k in ("state", "reason_ko", "reason", "path", "source")},
             "bars": {k: bars_state.get(k) for k in ("state", "reason_ko", "reason", "path")},
-            "cards": [cards[c] for c, _a in CARDS if c in cards]}
+            "cards": [cards[c] for c, _a in CARDS if c in cards], "papers": L.papers_out(bots)}
 
 
 # ---------------------------------------------------------------- 거래 tab: 최대 +% / 최대 −% of the closed trades
@@ -457,20 +479,24 @@ def excursions(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Op
     conn, bars_state = open_bars(more["rule_db"])
     accts: dict = {}
     try:
-        if paper.get("state") != "ok":
-            accts["paper"] = {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")}
-        else:
+        for b in L.paper_bots(p, paper, execs):           # the second paper bot's rows as "paper2:<id>" (거래 tab's keys)
+            pr, aid = b["read"], b["id"]
+            if pr.get("state") != "ok":
+                accts[aid] = {k: pr.get(k) for k in ("state", "reason_ko", "reason", "path")}
+                continue
+            rt = float(pr.get("round_trip") or 0.0)
             rows = {}
-            for tid, t in paper_trade_extremes(p["paper"], L.ACCOUNT, L.TRADES_KEEP).items():
+            for tid, t in paper_trade_extremes(b["path"], L.ACCOUNT, L.TRADES_KEEP).items():
                 side, entry, lev = int(t["side"] or 0), t["entry_price"], t["leverage"]
                 notional = (t["qty"] or 0) * (entry or 0)
                 ff = (t["funding"] or 0.0) / notional if notional else 0.0
                 if t["mfe_price"] and t["mae_price"] and t["mfe_price"] > 0 and t["mae_price"] > 0:
-                    rows[f"paper:{tid}"] = excursion(side, entry, lev, rt_paper, ff, t["mfe_price"], t["mae_price"], "engine")
+                    rows[f"{aid}:{tid}"] = excursion(side, entry, lev, rt, ff, t["mfe_price"], t["mae_price"], "engine")
                 else:
-                    rows[f"paper:{tid}"] = _closed(conn, bars_state, json.dumps(["paper", tid, t["entry_time"], t["exit_time"], rt_paper]),
-                                                   t["symbol"], side, entry, lev, rt_paper, ff, t["entry_time"], t["exit_time"])
-            accts["paper"] = {"state": "ok", "rows": rows}
+                    fk = ["paper", tid, t["entry_time"], t["exit_time"], rt] if aid == "paper" else [aid, b["path"], tid, t["entry_time"], t["exit_time"], rt]
+                    rows[f"{aid}:{tid}"] = _closed(conn, bars_state, json.dumps(fk), t["symbol"], side, entry, lev, rt, ff,
+                                                   t["entry_time"], t["exit_time"])
+            accts[aid] = {"state": "ok", "rows": rows}
         for x in execs:
             r = x["record"]
             if r.get("state") != "ok":

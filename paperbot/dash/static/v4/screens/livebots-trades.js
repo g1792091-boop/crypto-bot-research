@@ -34,7 +34,8 @@ export function excOf(x, acct, key, failed) {
   return {state: "ok", mfe: r.mfe, mae: r.mae, mfe_move: r.mfe_move, mae_move: r.mae_move, src: r.src, src_ko: r.src_ko, bars: r.bars};
 }
 const REFRESH_MS = 30 * 1000;
-const STATE_KO = {matched: "따라감", missed: "안 따라감", before: "시작 전", open: "닫는 중", unknown: "모름"};
+const STATE_KO = {matched: "따라감", missed: "안 따라감", before: "시작 전", open: "닫는 중", unknown: "모름", other: "다른 페이퍼"};
+const isPaper = (id) => id === "paper" || id === "paper2";
 const F0 = () => ({coin: "", strat: "", res: "all", card: false});
 
 /** The trades in a filter: {coin, strat, res: "all" | "win" | "loss", card: only the ones with a loss card}. */
@@ -46,10 +47,11 @@ export function filterRows(rows, f) {
 /** tradesView(ctx) -> {el, set()}: its own endpoint, read now and every 30 s. */
 export function tradesView(ctx) {
   const q = ctx.params.query || {};
-  const st = {acct: IDS.includes(q.acct) ? q.acct : local.get("lb-tacct2", "bybit"), f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false};
-  if (!IDS.includes(st.acct)) st.acct = "bybit";
-  const seg = ui.seg(IDS.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lb-tacct2", id); st.f = F0(); st.open = null; resSeg.set("all"); draw(true); },
+  const want = q.acct || local.get("lb-tacct2", "bybit");
+  const st = {acct: IDS.includes(want) ? want : "bybit", f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false, ids: IDS};
+  const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lb-tacct2", id); st.f = F0(); st.open = null; resSeg.set("all"); draw(true); },
     {label: "계좌 고르기"});
+  let seg = segOf(IDS);
   const coinSel = h("select", {class: "select", "aria-label": "코인"});
   const stratSel = h("select", {class: "select", "aria-label": "매매법"});
   const resSeg = ui.seg([{id: "all", label: "전부"}, {id: "win", label: "이김"}, {id: "loss", label: "짐"}], "all", (id) => { st.f.res = id; draw(false); }, {label: "이김·짐"});
@@ -71,7 +73,7 @@ export function tradesView(ctx) {
   const money = (x, est) => (x == null ? "—" : `${fmt.money(x, true)}${est ? "≈" : ""}`);
   const kv = (k, v) => [k, v == null || v === "" ? "—" : v];
   function detail(r) {
-    const live = st.acct !== "paper";
+    const live = !isPaper(st.acct);
     const s = r.setting;
     const dist = r.stop_initial && r.entry_price ? Math.abs(r.entry_price - r.stop_initial) / r.entry_price : null;
     const rows = [
@@ -107,7 +109,7 @@ export function tradesView(ctx) {
   function excRows(r) {
     const e = excOf(st.x, st.acct, String(r.key), st.xFailed);
     if (e.state !== "ok") return [kv("최대 +% · 최대 −%", `${EX_NONE[e.state] || "—"}${e.why ? ` (${e.why})` : ""}`)];
-    const src = e.src === "engine" ? "페이퍼 엔진 기록" : `바이낸스 1분봉 기준${e.bars ? ` · ${fmt.int(e.bars)}개` : ""}${st.acct !== "paper" ? " · 페이퍼 비용 가정" : ""}`;
+    const src = e.src === "engine" ? "페이퍼 엔진 기록" : `바이낸스 1분봉 기준${e.bars ? ` · ${fmt.int(e.bars)}개` : ""}${!isPaper(st.acct) ? " · 페이퍼 비용 가정" : ""}`;
     return [kv("최대 +% (진입 뒤 최고)", `순ROE ${fmt.pct(e.mfe, 1)} · 가격 ${fmt.pct(e.mfe_move, 2)}`),
       kv("최대 −% (진입 뒤 최저)", `순ROE ${fmt.pct(e.mae, 1)} · 가격 ${fmt.pct(e.mae_move, 2)}`), kv("최대 ±의 출처", src)];
   }
@@ -164,7 +166,7 @@ export function tradesView(ctx) {
     const cs = st.d.cards || {};
     put(csum, cs.state && cs.state !== "ok" ? sourceState(cs, "손실 카드") : cardSummary(xs, cs.kinds, cs));
     pg.set(xs, !user);
-    put(cap, st.acct === "paper" ? ui.assumeLine(["closed"], "페이퍼 A+C 합본") : ui.assumeLive(`${acctKo(st.acct)} · ≈ = 체결 기록 전 지갑 변화로 어림`));
+    put(cap, isPaper(st.acct) ? ui.assumeLine(["closed"], st.acct === "paper2" ? acctKo("paper2") : "페이퍼 A+C 합본") : ui.assumeLive(`${acctKo(st.acct)} · ≈ = 체결 기록 전 지갑 변화로 어림`));
   }
   async function load() {
     let d;
@@ -179,6 +181,17 @@ export function tradesView(ctx) {
     const sig = JSON.stringify({...d, now_ms: 0});
     if (st.d && sig === st.sig) { put(stateSlot); return; }
     st.d = d; st.sig = sig;
+    // two paper bots (owners 10/19): the second one's table is a choice too, only while there is one
+    const ids = d.accts && d.accts.paper2 ? ["paper", "paper2", "bybit", "mexc"] : IDS;
+    if (ids.length !== st.ids.length) {
+      st.ids = ids;
+      if (!ids.includes(st.acct)) st.acct = "bybit";
+      const want2 = local.get("lb-tacct2", "");
+      if (q.acct === "paper2" || (!q.acct && want2 === "paper2" && ids.includes("paper2"))) st.acct = "paper2";
+      const next = segOf(ids);
+      seg.replaceWith(next);
+      seg = next;
+    }
     if (ctx.alive()) draw(false);
   }
   // 최대 +% / 최대 −% (its own answer: a failure here never hides the trades)

@@ -50,3 +50,19 @@
 .lbg-imply .num.down { color: var(--down); }
 .lbg-warn { margin: 0; padding: 7px 10px; border-radius: var(--r-sm); border: 1px dashed var(--warn-line); background: var(--warn-soft); color: var(--ink);
   font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+/* 목표에 필요한 승률 · 돈 늘리기 기준 · 규칙 고정 (owners 10/19, docs/live15-plan-ko.md) */
+.lbg-need { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
+.lbg-need p { margin: 0; font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.lbg-need-ko { color: var(--ink); font-weight: 600; }
+.lbg-need small { display: block; margin-top: 2px; font-size: var(--t-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.lbg-scale { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-size: var(--t-sm); }
+.lbg-scale ul { margin: 4px 0; padding: 0; list-style: none; }
+.lbg-scale li { margin: 2px 0; overflow-wrap: anywhere; }
+.lbg-scale-ko { margin: 4px 0 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.lbg-frozen.on { color: var(--ink); font-weight: 600; }
+/* 손절 비교 (owners 10/19 final: Bybit -50 % against MEXC -35 %, for the 11/3 review): one plain table, numbers only */
+.lbg-h2h-why, .lbg-h2h-gap { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.lbg-h2h-gap { color: var(--ink-2); font-size: var(--t-xs); }
+.lbg-h2h-t td.num { font-variant-numeric: tabular-nums; }
+.lbg-h2h-t td.num.up { color: var(--up); }
+.lbg-h2h-t td.num.down { color: var(--down); }

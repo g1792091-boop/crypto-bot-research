@@ -33,7 +33,7 @@
 // buttons, only view switches).
 import {h, put, ui, serverNow, sound, LIVE, LIVE_PORT, siteUrl, GROUPS} from "../core/pb.js";
 import {liveEvents} from "./livebots-calc.js";
-import {realLine} from "./livebots-kit.js";
+import {realLine, setPapers} from "./livebots-kit.js";
 import {termView} from "./livebots-term.js";
 import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
@@ -144,6 +144,7 @@ export async function mount(el, ctx) {
     put(staleSlot);
     ui.dim(body, false);
     st.d = d; st.state = "ok"; st.okAt = serverNow();
+    setPapers(d.papers);                 // two paper bots: their labels everywhere (null with one: the usual names)
     put(real, realLine(d));
     view.set(d, "ok");
     // 소리 · 빛: only what really arrived since the last answer (core/sound.js playLive; its gate, cooldown and switches)

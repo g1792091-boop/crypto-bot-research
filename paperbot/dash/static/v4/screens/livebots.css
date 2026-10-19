@@ -54,6 +54,7 @@
 .lb-a-paper .lb-sw { background: var(--series-coin); }
 .lb-a-bybit .lb-sw { background: var(--series-core); }
 .lb-a-mexc .lb-sw { background: var(--series-m5); }
+.lb-a-paper2 .lb-sw { background: var(--series-ds); }      /* the second paper bot (only while there is one) */
 
 /* the terminal under the real-money strip and the screen's head: one window high on a PC (strip and head about 80 px) */
 @media (min-width: 1200px) and (min-height: 640px) {

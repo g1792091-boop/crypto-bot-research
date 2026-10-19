@@ -403,15 +403,18 @@ def stops_of(t: dict, rb: dict) -> list:
 
 
 # ---------------------------------------------------------------- the executors
-def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict) -> dict:
+def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict, path: Optional[str] = None, other_ko: Optional[str] = None) -> dict:
     """What one executor did with the paper trade ``pt``: matched (its own trade: entry, exit reference, the exchange stop
-    it recorded, its own result), or why not (livebots ``why_missed``: the executor's own records)."""
+    it recorded, its own result), or why not (livebots ``why_missed``: the executor's own records), or "other": it followed
+    the other paper bot then (owners 10-19, ``path``: this trade's paper database)."""
     r = x["record"]
     base = {"id": x["id"], "name_ko": x["name_ko"], "s": SHORT.get(x["id"], x["id"][:1].upper())}
     if r.get("state") != "ok":
         return {**base, "state": "unknown", "src_state": r.get("state"), "reason_ko": r.get("reason_ko")}
     lk = pairs.get(pt["id"])
     if lk is None:
+        if path and not L.followed_at(x, path, pt.get("entry_time")):
+            return {**base, **L.other_cell(x, other_ko)}
         return {**base, **L.why_missed(r, pt, ACCOUNT)}
     lt = live_by[lk]
     reason = lt["exit_reason"]
@@ -427,47 +430,57 @@ def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict) -> dict:
             "locked": bool(lt.get("stop_final") and lt.get("entry_price") and (lt["stop_final"] - lt["entry_price"]) * lt["side"] > 0)}
 
 
-def exec_pairs(execs: list, ptrades: list) -> list:
-    """[(executor, {paper id: live key}, {live key: live trade})] (livebots ``match``, the pairing of every 실거래 tab)."""
+def exec_pairs(execs: list, ptrades: list, path: Optional[str] = None) -> list:
+    """[(executor, {paper id: live key}, {live key: live trade})] (livebots ``pairs_of``, the pairing of every 실거래 tab:
+    each live trade with the paper trade of the paper bot it followed; only this paper database's (``path``) here)."""
     out = []
     for x in execs:
         r = x["record"]
         if r.get("state") != "ok":
             out.append((x, {}, {}))
             continue
-        m = L.match(ptrades, r.get("trades") or [])
-        out.append((x, {pid: lk for lk, pid in m.items()}, {str(t["key"]): t for t in r.get("trades") or []}))
+        m = {pt["id"]: lk for lk, pt in L.pairs_of(x).items() if path is None or L.LP.same(pt["paper_path"], path)}
+        out.append((x, m, {str(t["key"]): t for t in r.get("trades") or []}))
     return out
 
 
-def _sources(p: dict, now: int) -> tuple:
+def _sources(p: dict, now: int, bot: str = "paper") -> tuple:
+    """(paper read, its account, execs, its path, the other bot's short label): ``bot`` "paper2" is the second paper bot
+    (owners 10-19); without one it is the main one."""
     _configs, _follows, paper, execs = L.sources(p, now)
-    a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
-    return paper, a, execs
+    bots = L.paper_bots(p, paper, execs)
+    b = next((x for x in bots if x["id"] == bot), bots[0])
+    other = next((x for x in bots if x["id"] != b["id"]), None)
+    pr = b["read"]
+    a = (pr.get("accounts") or {}).get(ACCOUNT) if pr.get("state") == "ok" else None
+    return pr, a, execs, b["path"], ((other or {}).get("label_ko") or "").split(" (")[0] or None, bots
 
 
 # ---------------------------------------------------------------- GET /api/v4/livebots/replay
-def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: int = 0, limit: int = LIST_DEFAULT) -> dict:
-    """The closed paper trades, newest first (exit time, then id), ``limit`` from ``offset`` (at most 500)."""
+def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: int = 0, limit: int = LIST_DEFAULT,
+               bot: str = "paper") -> dict:
+    """The closed paper trades, newest first (exit time, then id), ``limit`` from ``offset`` (at most 500); ``bot``
+    "paper2": the second paper bot's (owners 10-19, two paper bots)."""
     p = p or L.paths()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     offset, limit = max(0, int(offset or 0)), max(1, min(LIST_MAX, int(limit or LIST_DEFAULT)))
-    paper, a, execs = _sources(p, now)
+    paper, a, execs, path, other_ko, bots = _sources(p, now, bot)
     head = {"now_ms": now, "account": ACCOUNT, "offset": offset, "limit": limit,
             "execs": [{"id": x["id"], "name_ko": x["name_ko"], "s": SHORT.get(x["id"], x["id"][:1].upper()),
-                       "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko")} for x in execs]}
+                       "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko")} for x in execs],
+            "bot": bot if len(bots) > 1 else "paper", "papers": L.papers_out(bots)}
     if paper.get("state") != "ok":
         return {**head, **{k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")}, "rows": [], "n": 0}
     if not a or not a.get("known"):
         return {**head, "state": "missing", "reason_ko": "페이퍼 DB에 이 계좌의 기록이 아직 없어요", "path": paper.get("path"), "rows": [], "n": 0}
     trades = a.get("trades") or []
     newest = sorted(trades, key=lambda t: (t["exit_time"] or 0, t["id"] or 0), reverse=True)
-    prs = exec_pairs(execs, trades)
+    prs = exec_pairs(execs, trades, path)
     rows = []
     for t in newest[offset:offset + limit]:
         cells = []
         for x, pairs, live_by in prs:
-            c = _exec_cell(x, pairs, live_by, t)
+            c = _exec_cell(x, pairs, live_by, t, path, other_ko)
             cells.append({k: c.get(k) for k in ("id", "s", "name_ko", "state", "pnl", "roe", "est", "reason_ko", "why_ko")})
         rows.append({**{k: t.get(k) for k in ("id", "symbol", "side", "strategy_id", "timeframe", "entry_time", "exit_time", "exit_reason",
                                                "leverage", "pnl", "roe", "lock_roe", "entry_price", "exit_price")},
@@ -479,12 +492,15 @@ def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: i
 
 
 # ---------------------------------------------------------------- GET /api/v4/livebots/replay/{trade_id}
-def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, more: Optional[dict] = None) -> Optional[dict]:
-    """One trade's replay (None when the paper account has no trade with this id)."""
+def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, more: Optional[dict] = None,
+              bot: str = "paper") -> Optional[dict]:
+    """One trade's replay (None when the paper account has no trade with this id); ``bot`` "paper2": the second paper
+    bot's trade (its own database, its own run's ladder and costs)."""
     p = p or L.paths()
     more = more or L.paths_more()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    rec = read_trade(p["paper"], trade_id)
+    _pr, _a, _x, bot_path, _o, _b = _sources(p, now, bot) if bot != "paper" else (None, None, None, p["paper"], None, None)
+    rec = read_trade(bot_path, trade_id)
     if rec.get("state") != "ok":
         return {"now_ms": now, "id": int(trade_id), **{k: rec.get(k) for k in ("state", "reason_ko", "reason", "path")}}
     t = rec["trade"]
@@ -550,10 +566,10 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
         notes.append("거래 기록으로 수수료율을 알 수 없어 " + ("봇 실행 기록의 수수료율" if rules["taker_from"] == "run" else "기본 수수료율") + "로 계산했어요")
     side = int(t["side"])
     rb_exit = rb.get("exit") if rb else None
-    _paper, a, execs = _sources(p, now)
+    _paper, a, execs, bpath, other_ko, _bots = _sources(p, now, bot)
     ptrades = (a or {}).get("trades") or []
     pt = next((x for x in ptrades if x["id"] == t["id"]), None) or t
-    cells = [_exec_cell(x, pairs, live_by, pt) for x, pairs, live_by in exec_pairs(execs, ptrades)]
+    cells = [_exec_cell(x, pairs, live_by, pt, bpath, other_ko) for x, pairs, live_by in exec_pairs(execs, ptrades, bpath)]
     done = now >= hi and all(c["state"] not in ("open", "unknown") for c in cells) and bars["state"] in ("ok", "none")
     lad = rules["ladder"]
     trade = {**{k: t.get(k) for k in ("id", "symbol", "side", "strategy_id", "timeframe", "entry_time", "exit_time", "exit_reason",
@@ -606,17 +622,17 @@ def _pk(x: Optional[float]) -> str:
     return f"{v:.0f}%" if abs(v - round(v)) < 1e-6 else f"{v:.1f}%"
 
 
-def one_cached(p: dict, more: dict, trade_id: int) -> Optional[dict]:
+def one_cached(p: dict, more: dict, trade_id: int, bot: str = "paper") -> Optional[dict]:
     """``build_one`` cached per trade: a finished answer (``final``) for 10 minutes, any other for 5 seconds."""
     from ..app import json_finite
-    key = json.dumps([int(trade_id), p, more], sort_keys=True)
+    key = json.dumps([int(trade_id), p, more] + ([bot] if bot != "paper" else []), sort_keys=True)
     now = time.time()
     with _lock:
         hit = _one.get(key)
         if hit is not None and now < hit[0]:
             _one.move_to_end(key)
             return hit[1]
-    v = build_one(p, int(trade_id), more=more)
+    v = build_one(p, int(trade_id), more=more, bot=bot)
     if v is None:
         return None
     v = json_finite(v)
@@ -635,17 +651,19 @@ def register(app, ctx) -> dict:
     from ..app import json_finite
 
     @app.get("/api/v4/livebots/replay")
-    def get_livebots_replay(offset: int = 0, limit: int = LIST_DEFAULT):
-        """실거래 › 다시보기: the paper account's closed trades, newest first, with each executor's part (5 s cache)."""
+    def get_livebots_replay(offset: int = 0, limit: int = LIST_DEFAULT, bot: str = "paper"):
+        """실거래 › 다시보기: the paper account's closed trades, newest first, with each executor's part (5 s cache);
+        ``bot=paper2``: the second paper bot's (owners 10-19)."""
         p = L.paths()
         o, n = max(0, int(offset)), max(1, min(LIST_MAX, int(limit)))
-        key = "replay:" + json.dumps([p, L.paths_more(), o, n], sort_keys=True)
-        return L._cached(key, lambda: json_finite(build_list(p, offset=o, limit=n)))
+        b = "paper2" if bot == "paper2" else "paper"
+        key = "replay:" + json.dumps([p, L.paths_more(), o, n] + ([b] if b != "paper" else []), sort_keys=True)
+        return L._cached(key, lambda: json_finite(build_list(p, offset=o, limit=n, bot=b)))
 
     @app.get("/api/v4/livebots/replay/{trade_id}")
-    def get_livebots_replay_one(trade_id: int):
+    def get_livebots_replay_one(trade_id: int, bot: str = "paper"):
         """실거래 › 다시보기: one closed trade on its 1-minute bars, the stop path and the locks rebuilt, the executors' part."""
-        v = one_cached(L.paths(), L.paths_more(), trade_id)
+        v = one_cached(L.paths(), L.paths_more(), trade_id, "paper2" if bot == "paper2" else "paper")
         if v is None:
             raise HTTPException(404, "그런 거래가 없어요")
         return v

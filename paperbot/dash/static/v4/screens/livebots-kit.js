@@ -11,7 +11,24 @@ export const ACCT = {
   paper: {ko: "페이퍼(연습)", s: "P", tip: "페이퍼(연습) A+C 합본 (모의 돈 · 두 실행기가 따라가는 계좌)"},
   bybit: {ko: "바이비트", s: "B", tip: "바이비트 실행기 (실거래 · 진짜 돈)"},
   mexc: {ko: "MEXC", s: "M", tip: "MEXC 실행기 (실거래 · 진짜 돈)"},
+  // the second paper bot (owners 10/19, docs/live15-mexc-ko.md): only on the page while there is one (the summary's papers)
+  paper2: {ko: "페이퍼 2(연습)", s: "P2", tip: "두 번째 페이퍼(연습) 봇 (모의 돈)"},
 };
+const ACCT0 = {paper: {...ACCT.paper}, paper2: {...ACCT.paper2}};
+/**
+ * Two paper bots (the summary's ``papers``, null with one): each paper account takes its label ("페이퍼 −50%", "페이퍼 −35%")
+ * and says who follows it in its tooltip; with one paper bot the names are the usual ones again. Called with every summary.
+ */
+export function setPapers(papers) {
+  for (const id of ["paper", "paper2"]) Object.assign(ACCT[id], ACCT0[id]);
+  for (const b of papers || []) {
+    if (!ACCT[b.id]) continue;
+    const short = (b.label_ko || "").split(" (")[0] || ACCT0[b.id].ko;
+    ACCT[b.id].ko = short;
+    const who = (b.followers || []).length ? `${b.followers.join("·")}가 따라감` : "따라가는 실행기 없음";
+    ACCT[b.id].tip = `${short} 페이퍼(연습)${b.name ? ` ${b.name}` : ""}${b.stop_ko ? ` · 손절 ${b.stop_ko}` : ""} · ${who}`;
+  }
+}
 export const acctKo = (id) => (ACCT[id] ? ACCT[id].ko : id);
 /** A small swatch + the account's name (its colour is a series token: lb-a-<id> in livebots.css). */
 export const acctTag = (id, o = {}) => h("span", {class: ["lb-acct", "lb-a-" + id], title: (ACCT[id] || {}).tip || id},
@@ -97,7 +114,7 @@ export function liveLines(accts, sym, mark) {
     for (const {a, p} of g.items) {
       if (p.stop) {
         kids.push({id: `lv:s:${a.id}`, parent: id, group: "risk", price: p.stop, tone: p.locked ? "up" : "down", dash: 1, alpha: 0.55, axis: false,
-          label: `${ACCT[a.id].s} ${p.locked ? "잠금" : "손절"}`});
+          label: `${(ACCT[a.id] || {s: a.id}).s} ${p.locked ? "잠금" : "손절"}`});
       }
       if (a.kind === "paper" && p.locked && p.stop_initial) {
         kids.push({id: `lv:f:${a.id}`, parent: id, group: "risk", price: p.stop_initial, tone: "down", dash: 2, alpha: 0.35, axis: false, label: "첫 손절"});
@@ -107,7 +124,7 @@ export function liveLines(accts, sym, mark) {
           label: `다음 잠금 ${fmt.pct(p.next_lock.at, 0, false)}`});
       }
     }
-    const p0 = g.items[0].p, letters = g.items.map((x) => ACCT[x.a.id].s).join("·");
+    const p0 = g.items[0].p, letters = g.items.map((x) => (ACCT[x.a.id] || {s: x.a.id}).s).join("·");
     const locked = g.items.some((x) => x.p.locked);
     out.push({id, group: "pos", price: g.price, tone, dash: 0, alpha: 0.75, axis: true,
       pill: {text: [`${letters} ${fmt.sideKo(p0.side)} ${fmt.lev(p0.leverage)}`,

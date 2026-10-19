@@ -8,6 +8,7 @@
 
 어디서 읽나 (환경 변수로 바꿀 수 있음, 기본값 = 10/19 시작 안내 docs/live1019-start-ko.md):
     PAPERBOT_LIVE_PAPER_DB      /var/lib/paperbot/combo/live-ac.db              페이퍼 봇 (store3 표)
+    PAPERBOT_LIVE_PAPER2_DB     /var/lib/paperbot/combo/live15-mexc.db          두 번째 페이퍼 봇 (손절 -35%, 있을 때만 보임)
     PAPERBOT_LIVE_BYBIT_DB      /var/lib/paperbot/exec/executor-bybit-live.db   바이비트 실행기
     PAPERBOT_LIVE_MEXC_DB       /var/lib/paperbot/exec/executor-mexc-live.db    MEXC 실행기
     PAPERBOT_LIVE_BYBIT_CONFIG  /etc/paperbot/executor.json                     (키 없음: 계좌 · 신호등 · 크기 비율 · 위험 한도만 씀)
@@ -34,6 +35,11 @@ DB는 모두 ``mode=ro``(쓰는 쪽이 멈춘 WAL 파일은 immutable, paperbot.
 마지막 N번 닫힌 거래(exit_time, id 순으로 최신부터) 중 이긴(pnl > 0) 수가 N x 기준 이상이면 초록, 아니면 빨강, N번이 안 되면 근거
 쌓는 중(모든 진입을 따라감), N = 0이면 꺼짐.
 
+두 페이퍼 (owners 10/19, docs/live15-mexc-ko.md): 실행기마다 자기 페이퍼를 따로 짝지어요(paperbot/livepapers.py). 실행기 설정의
+paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트의 paper_db)으로 "언제부터 어느 페이퍼를 따라갔는지"를 알고, 실거래 거래는
+그때 따라간 페이퍼의 거래와만 비교해요. 두 실행기가 같은 페이퍼를 따라가면(10/20 상태) 모든 것이 예전과 같아요. 두 번째 페이퍼 봇
+(PAPERBOT_LIVE_PAPER2_DB) 파일이 있거나 실행기가 다른 페이퍼를 따라가면 그 페이퍼도 계좌 하나로 보여요(``paper2``).
+
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
 from __future__ import annotations
@@ -48,10 +54,15 @@ import threading
 import time
 from typing import Any, Iterable, Optional
 
-ACCOUNT = "COMBO@mix"                  # paperbot/combo.py ACCOUNT (the account both executors follow)
+from ... import livepapers as LP
+
+ACCOUNT = "COMBO@mix"                 # paperbot/combo.py ACCOUNT (the account both executors follow)
 FLIP_ACCOUNT = "COMBOFLIP@mix"         # paperbot/combo.py FLIP_ACCOUNT (coin-flip twin: same moments, random side; 참고)
 ENV = {
     "paper": ("PAPERBOT_LIVE_PAPER_DB", "/var/lib/paperbot/combo/live-ac.db"),
+    # the second paper bot (owners 10-19, docs/live15-mexc-ko.md: 규칙봇 15 with the -35 % stop, MEXC follows it): shown
+    # next to the first one once its file exists; nothing of it shows before (the one-paper page stays as it was)
+    "paper2": ("PAPERBOT_LIVE_PAPER2_DB", "/var/lib/paperbot/combo/live15-mexc.db"),
     "bybit_db": ("PAPERBOT_LIVE_BYBIT_DB", "/var/lib/paperbot/exec/executor-bybit-live.db"),
     "mexc_db": ("PAPERBOT_LIVE_MEXC_DB", "/var/lib/paperbot/exec/executor-mexc-live.db"),
     "bybit_config": ("PAPERBOT_LIVE_BYBIT_CONFIG", "/etc/paperbot/executor.json"),
@@ -480,6 +491,7 @@ def read_paper(path: str, accounts: Iterable[str], now_ms: int) -> dict:
         }
     return {"state": "ok", "path": path, "as_of_ms": ts, "stale": ts is None or now_ms - ts > PAPER_STALE_MS,
             "name_ko": cfg.get("name") if isinstance(cfg.get("name"), str) else None, "round_trip": rt,
+            "stop": cfg.get("stop") if isinstance(cfg.get("stop"), dict) else None,
             "ladder": ladder_numbers(ladder) if ladder else None,
             "leverage": cfg.get("leverage") if isinstance(cfg.get("leverage"), dict) else None, "margin": _f(cfg.get("margin")),
             "taker_fee": _f(run_d.get("taker_fee")), "started_ms": _i(run[0]) if run else None, "accounts": out_acc}
@@ -575,6 +587,7 @@ def read_exec(path: str, now_ms: int) -> dict:
                            f"({', '.join('?' * len(WHY))}) ORDER BY id DESC LIMIT ?", (*WHY_KO, WHY_SCAN)).fetchall()
         retry = conn.execute("SELECT COUNT(*) FROM events WHERE kind = 'retry' AND ts >= ?", (now_ms - DAY,)).fetchone()[0]
         first_start = conn.execute("SELECT MIN(ts) FROM events WHERE kind = 'start'").fetchone()[0]
+        starts = LP.starts_of(conn)                      # which paper database each start followed (livepapers)
     except sqlite3.Error as exc:
         return _err(path, exc)
     finally:
@@ -618,7 +631,7 @@ def read_exec(path: str, now_ms: int) -> dict:
         "trades": closed, "halts": [{"ts": _i(r[0]), "action": r[1], "reason": r[2]} for r in halts],
         "events": [{"id": _i(i), "ts": _i(t), "level": lvl, "kind": k, "kind_ko": KIND_KO.get(k, k), "level_ko": LEVEL_KO.get(lvl, lvl),
                     "text": txt} for i, t, lvl, k, txt in events],
-        "retry_24h": int(retry or 0), "why": by_key,
+        "retry_24h": int(retry or 0), "why": by_key, "starts": [[t, pdb] for t, pdb in starts],
     }
 
 
@@ -737,9 +750,12 @@ def ref_problem() -> str:
     return ""
 
 
-def acct_paper(paper: dict, account: str, now: int) -> dict:
-    """The paper account (A+C 합본) as one of the terminal's three accounts."""
-    base = {"id": "paper", "name_ko": "페이퍼(연습)", "kind": "paper", "account": account}     # never taken for real money
+def acct_paper(paper: dict, account: str, now: int, id_: str = "paper", label: Optional[dict] = None) -> dict:
+    """The paper account (A+C 합본) as one of the terminal's three accounts; ``id_`` "paper2" with its ``label``
+    (paper_bots) for the second paper bot (owners 10-19: 규칙봇 15 at -35 %)."""
+    base = {"id": id_, "name_ko": "페이퍼(연습)", "kind": "paper", "account": account}     # never taken for real money
+    if label:
+        base.update(label_ko=label.get("label_ko"), stop_ko=label.get("stop_ko"), bot_ko=label.get("name"), followers=label.get("followers"))
     if paper.get("state") != "ok":
         return {**base, "state": paper.get("state"), "reason_ko": paper.get("reason_ko"), "reason": paper.get("reason"), "path": paper.get("path")}
     a = (paper.get("accounts") or {}).get(account) or {}
@@ -751,7 +767,7 @@ def acct_paper(paper: dict, account: str, now: int) -> dict:
             "stale": paper.get("stale"), "balance": a.get("wallet"), "initial": a.get("initial"), "halted": bool(a.get("halted")),
             "halt_reason": a.get("halt_reason") or "", "bust": bool(a.get("bust")), "position": a.get("position"),
             "stats": a.get("stats"), "today": today_of(trades, now), "since_ms": since,
-            "hours": hours_of(trades), "start": since, "calendar": calendar_of(trades, "paper", since, now),
+            "hours": hours_of(trades), "start": since, "calendar": calendar_of(trades, id_, since, now),
             "curve": a.get("curve")}
 
 
@@ -780,32 +796,34 @@ def acct_exec(x: dict, paper_pos: Optional[dict], now: int) -> dict:
             "calendar": calendar_of(trades, x["id"], since, now, "exit_ts"), "curve": r.get("curve")}
 
 
-def fills_of(paper: dict, execs: list, account: str, limit: int = FILLS_KEEP) -> list:
+def fills_of(paper: dict, execs: list, account: str, limit: int = FILLS_KEEP, papers: Optional[list] = None) -> list:
     """실거래 체결: every entry and exit of the three accounts, newest first. A live exit that followed the paper's close takes
-    the paper trade's reason (손절 / 잠금 익절) when the two trades are matched; the reason is never guessed from the P&L."""
+    the reason of the paper trade it followed (손절 / 잠금 익절; its own paper bot's, pairs_of) when the two trades are
+    matched; the reason is never guessed from the P&L. ``papers`` (paper_bots): the second paper bot's fills too, as
+    "paper2", while an executor follows it."""
     out = []
-    a = (paper.get("accounts") or {}).get(account) if paper.get("state") == "ok" else None
-    ptrades = (a or {}).get("trades") or []
-    by_id = {t["id"]: t for t in ptrades}
-    for t in ptrades:
-        base = {"acct": "paper", "symbol": t["symbol"], "side": t["side"], "lev": t["leverage"]}
-        out.append({**base, "key": f"paper:e:{t['id']}", "kind": "entry", "t": t["entry_time"], "price": t["entry_price"]})
-        out.append({**base, "key": f"paper:x:{t['id']}", "kind": "exit", "t": t["exit_time"], "price": t["exit_price"], "pnl": t["pnl"],
-                    "roe": t["roe"], "reason": t["exit_reason"], "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"])})
-    p = (a or {}).get("position")
-    if p:
-        out.append({"acct": "paper", "symbol": p["symbol"], "side": p["side"], "lev": p["leverage"], "key": f"paper:e:{p['key']}",
-                    "kind": "entry", "t": p["entry_time"], "price": p["entry"], "open": True})
+    srcs = [("paper", paper)] + [(b["id"], b["read"]) for b in (papers or []) if b["id"] != "paper" and b.get("followers")]
+    for aid, pr in srcs:
+        a = (pr.get("accounts") or {}).get(account) if pr.get("state") == "ok" else None
+        for t in (a or {}).get("trades") or []:
+            base = {"acct": aid, "symbol": t["symbol"], "side": t["side"], "lev": t["leverage"]}
+            out.append({**base, "key": f"{aid}:e:{t['id']}", "kind": "entry", "t": t["entry_time"], "price": t["entry_price"]})
+            out.append({**base, "key": f"{aid}:x:{t['id']}", "kind": "exit", "t": t["exit_time"], "price": t["exit_price"], "pnl": t["pnl"],
+                        "roe": t["roe"], "reason": t["exit_reason"], "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"])})
+        p = (a or {}).get("position")
+        if p:
+            out.append({"acct": aid, "symbol": p["symbol"], "side": p["side"], "lev": p["leverage"], "key": f"{aid}:e:{p['key']}",
+                        "kind": "entry", "t": p["entry_time"], "price": p["entry"], "open": True})
     for x in execs:
         r = x["record"]
         if r.get("state") != "ok":
             continue
-        pairs = match(ptrades, r.get("trades") or [])
+        pairs = pairs_of(x)
         for t in r.get("trades") or []:
             base = {"acct": x["id"], "symbol": t["symbol"], "side": t["side"], "lev": t["leverage"]}
             reason = t["exit_reason"]
             if reason == "PAPER" and str(t["key"]) in pairs:
-                reason = by_id[pairs[str(t["key"])]]["exit_reason"] or reason
+                reason = pairs[str(t["key"])]["exit_reason"] or reason
             out.append({**base, "key": f"{x['id']}:e:{t['key']}", "kind": "entry", "t": t["entry_ts"], "price": t["entry_price"]})
             out.append({**base, "key": f"{x['id']}:x:{t['key']}", "kind": "exit", "t": t["exit_ts"], "price": t["exit_ref"], "pnl": t["pnl"],
                         "roe": t["roe"], "est": t["est"], "reason": reason, "reason_ko": EXIT_KO.get(reason, reason)})
@@ -818,12 +836,15 @@ def fills_of(paper: dict, execs: list, account: str, limit: int = FILLS_KEEP) ->
     return out[:limit]
 
 
-def marks_of(paper: dict, execs: list, account: str, sym_limit: int = 12) -> list:
+def marks_of(paper: dict, execs: list, account: str, sym_limit: int = 12, papers: Optional[list] = None) -> list:
     """Recent closed trades of every account for the chart's entry / exit marks: {acct, symbol, side, entry_time, exit_time,
-    pnl}, newest first, at most ``sym_limit`` per coin."""
+    pnl}, newest first, at most ``sym_limit`` per coin (the second paper bot's while an executor follows it)."""
     out, per = [], {}
-    a = (paper.get("accounts") or {}).get(account) if paper.get("state") == "ok" else None
-    rows = [("paper", t["symbol"], t["side"], t["entry_time"], t["exit_time"], t["pnl"]) for t in (a or {}).get("trades") or []]
+    rows = []
+    srcs = [("paper", paper)] + [(b["id"], b["read"]) for b in (papers or []) if b["id"] != "paper" and b.get("followers")]
+    for aid, pr in srcs:
+        a = (pr.get("accounts") or {}).get(account) if pr.get("state") == "ok" else None
+        rows += [(aid, t["symbol"], t["side"], t["entry_time"], t["exit_time"], t["pnl"]) for t in (a or {}).get("trades") or []]
     for x in execs:
         r = x["record"]
         if r.get("state") == "ok":
@@ -837,23 +858,201 @@ def marks_of(paper: dict, execs: list, account: str, sym_limit: int = 12) -> lis
 
 
 # ---------------------------------------------------------------- the whole answer
+def _paper_of(x: dict, path: Optional[str] = None) -> dict:
+    """The read_paper answer of ``path`` (default: the paper database the executor follows now), read once per request."""
+    return x["_papers"].get(LP.norm(path or x["paper_path"])) or _missing(path or x["paper_path"])
+
+
+def own_account(x: dict) -> Optional[dict]:
+    """The paper account the executor follows now, in its own paper database (read_paper's account answer)."""
+    pa = _paper_of(x)
+    a = (pa.get("accounts") or {}).get(x["follows"]) if pa.get("state") == "ok" else None
+    return a if a and a.get("known") else None
+
+
+def pairs_of(x: dict) -> dict:
+    """{live trade key: the paper trade it followed}: each closed live trade against the paper database the executor
+    followed when it entered (livepapers segments), the same coin and side within MATCH_MS (match). A paper trade carries
+    ``paper_path`` (its database). With one paper bot this is match(paper trades, live trades), as it always was."""
+    if "_pairs" in x:
+        return x["_pairs"]
+    r = x["record"]
+    out: dict = {}
+    if r.get("state") == "ok":
+        groups: dict = {}
+        for lt in r.get("trades") or []:
+            path = LP.paper_at(x["segs"], lt.get("entry_ts"))
+            groups.setdefault(LP.norm(path), (path, []))[1].append(lt)
+        for path, lts in groups.values():
+            pa = _paper_of(x, path)
+            acc = (pa.get("accounts") or {}).get(x["follows"]) if pa.get("state") == "ok" else None
+            pts = (acc or {}).get("trades") or []
+            by = {t["id"]: t for t in pts}
+            for lk, pid in match(pts, lts).items():
+                out[lk] = {**by[pid], "paper_path": path}
+    x["_pairs"] = out
+    return out
+
+
+def rev_pairs(x: dict) -> dict:
+    """{(paper database, paper trade id): live trade key} of pairs_of."""
+    return {(LP.norm(pt["paper_path"]), pt["id"]): lk for lk, pt in pairs_of(x).items()}
+
+
+def followed_at(x: dict, path: str, t: Optional[int]) -> bool:
+    """Did the executor follow the paper database ``path`` at ``t``?"""
+    return LP.followed_at(x["segs"], path, t)
+
+
+def other_cell(x: dict, label_ko: Optional[str]) -> dict:
+    """A paper trade of a paper bot the executor did not follow then (owners 10-19: two paper bots)."""
+    return {"state": "other", "why_ko": f"이때 {x['name_ko']}는 {label_ko or '다른 페이퍼'}를 따라갔어요"}
+
+
+def paper_bots(p: dict, paper: dict, execs: list) -> list:
+    """The paper bots on the page: [{"id": "paper" | "paper2", "path", "read", "name", "stop", "stop_short", "stop_ko",
+    "followers", "label_ko"}]. The second only when there is one: another paper database an executor follows now, else the
+    -35 % bot's file (PAPERBOT_LIVE_PAPER2_DB) once it is there. One paper bot: one item (the page as before)."""
+    main = p["paper"]
+    second = next((x["paper_path"] for x in execs if not LP.same(x["paper_path"], main)), None)
+    if second is None and p.get("paper2") and not LP.same(p["paper2"], main) and os.path.exists(p["paper2"]):
+        second = p["paper2"]
+    papers = execs[0]["_papers"] if execs else {LP.norm(main): paper}
+    out = []
+    for pid, path in (("paper", main), ("paper2", second)):
+        if path is None:
+            continue
+        pr = papers.get(LP.norm(path)) or paper
+        fol = [x["name_ko"] for x in execs if LP.same(x["paper_path"], path)]
+        stop = pr.get("stop") if pr.get("state") == "ok" else None
+        out.append({"id": pid, "path": path, "read": pr, "name": pr.get("name_ko"), "stop": stop, "stop_short": LP.stop_short(stop),
+                    "stop_ko": LP.stop_words(stop), "followers": fol, "follower_ids": [x["id"] for x in execs if LP.same(x["paper_path"], path)],
+                    "label_ko": LP.label(stop, fol)})
+    return out
+
+
+def bot_id(bots: list, path: Optional[str]) -> Optional[str]:
+    """"paper" / "paper2": which paper bot on the page ``path`` is (None: neither)."""
+    return next((b["id"] for b in bots if LP.same(b["path"], path)), None)
+
+
+def papers_out(bots: list) -> Optional[list]:
+    """The paper bots for the page (no records): None with one paper bot (nothing new on the page)."""
+    if len(bots) < 2:
+        return None
+    return [{k: b.get(k) for k in ("id", "path", "name", "stop", "stop_short", "stop_ko", "followers", "follower_ids", "label_ko")}
+            | {"state": b["read"].get("state"), "as_of_ms": b["read"].get("as_of_ms"), "stale": b["read"].get("stale")} for b in bots]
+
+
+PARTED_KEEP = 30                       # parted shared entries listed (newest first)
+
+
+def _eq_before(trades: list, ms: Optional[int], initial: Optional[float]) -> Optional[float]:
+    """The closed-trade equity just before ``ms``: the last equity_after of a trade closed by then, else the start."""
+    eq = initial
+    for t in trades:
+        if ms is not None and (t.get("exit_time") or 0) <= ms and t.get("equity_after") is not None:
+            eq = t["equity_after"]
+    return eq
+
+
+def compare_papers(bots: list) -> Optional[dict]:
+    """두 페이퍼 비교 (owners 10-19, docs/live15-mexc-ko.md): the two paper bots side by side since the second one started
+    (its account's first record): closed trades, wins, win rate, net ROE sum, equity then and now, the deepest drop of the
+    closed-trade equity, and the entries both made (same coin, side and entry minute) whose results parted (one won where
+    the other lost, or another exit). None with one paper bot."""
+    if len(bots) < 2:
+        return None
+    accs = []
+    for b in bots[:2]:
+        pr = b["read"]
+        a = (pr.get("accounts") or {}).get(ACCOUNT) if pr.get("state") == "ok" else None
+        accs.append(a if a and a.get("known") else None)
+    if accs[1] is None or accs[0] is None:
+        b = bots[1] if accs[1] is None else bots[0]
+        st = b["read"]
+        return {"state": st.get("state") if st.get("state") != "ok" else "missing", "path": b["path"],
+                "reason_ko": st.get("reason_ko") if st.get("state") != "ok" else "이 페이퍼 DB에 아직 계좌 기록이 없어요"}
+    since = accs[1].get("since_ms") or bots[1]["read"].get("started_ms") \
+        or min((t["entry_time"] for t in accs[1].get("trades") or [] if t.get("entry_time") is not None), default=None)
+    rows, mine = [], []
+    for b, a in zip(bots, accs):
+        allt = sorted(a.get("trades") or [], key=lambda t: (t.get("exit_time") or 0, t.get("id") or 0))
+        ts = [t for t in allt if since is None or (t.get("entry_time") or 0) >= since]
+        mine.append(ts)
+        st = stats(t.get("pnl") for t in ts)
+        eq0 = _eq_before(allt, since, a.get("initial"))
+        peak, dd = eq0, 0.0
+        for t in ts:
+            e = t.get("equity_after")
+            if e is None:
+                continue
+            peak = e if peak is None or e > peak else peak
+            if peak:
+                dd = max(dd, 1 - e / peak)
+        wallet = a.get("wallet")
+        rows.append({"id": b["id"], "label_ko": b["label_ko"], "name": b.get("name"), "stop_short": b.get("stop_short"),
+                     "stop_ko": b.get("stop_ko"), "n": st["trades"], "wins": st["wins"], "losses": st["losses"], "win_rate": st["win_rate"],
+                     "roe_sum": sum(t.get("roe") or 0.0 for t in ts), "pnl": st["pnl"], "start_equity": eq0, "equity": wallet,
+                     "change": (wallet / eq0 - 1) if wallet is not None and eq0 else None, "max_dd": dd, "open": bool(a.get("position"))})
+    key = lambda t: (t.get("symbol"), t.get("side"), t.get("entry_time"))           # noqa: E731
+    by0, by1 = {key(t): t for t in mine[0]}, {key(t): t for t in mine[1]}
+    shared = [k for k in by0 if k in by1]
+    parted = []
+    for k in shared:
+        x, y = by0[k], by1[k]
+        if ((x.get("pnl") or 0) > 0) != ((y.get("pnl") or 0) > 0) or x.get("exit_reason") != y.get("exit_reason"):
+            parted.append({"symbol": k[0], "side": k[1], "entry_time": k[2], "strategy_id": x.get("strategy_id"), "timeframe": x.get("timeframe"),
+                           bots[0]["id"]: {f: x.get(f) for f in ("exit_reason", "roe", "pnl", "exit_time")},
+                           bots[1]["id"]: {f: y.get(f) for f in ("exit_reason", "roe", "pnl", "exit_time")}})
+    parted.sort(key=lambda r: -(r["entry_time"] or 0))
+    only = {bots[0]["id"]: sum(1 for k in by0 if k not in by1), bots[1]["id"]: sum(1 for k in by1 if k not in by0)}
+    s0, s1 = rows[0]["stop_short"] or "첫 페이퍼", rows[1]["stop_short"] or "두 번째 페이퍼"
+    words = (f"같은 진입 {len(shared)}번 중 결과가 갈린 거래 {len(parted)}번"
+             + (f" · 한쪽만 들어간 거래: {s0} {only[bots[0]['id']]}번, {s1} {only[bots[1]['id']]}번" if any(only.values()) else ""))
+    return {"state": "ok", "since_ms": since, "rows": rows, "shared": len(shared), "parted": len(parted), "only": only,
+            "parted_rows": parted[:PARTED_KEEP], "words_ko": words,
+            "note_ko": "두 봇은 같은 신호로 들어가고 손절 자리만 달라요. 한쪽이 먼저 손절되면 그 뒤 다른 진입을 혼자 할 수 있어요 (한 번에 포지션 하나)"}
+
+
 def sources(p: dict, now: int) -> tuple:
-    """(configs, follows, paper, execs): every source read once, in one snapshot each."""
+    """(configs, follows, paper, execs): every source read once, in one snapshot each. ``paper`` is the main paper bot
+    (PAPERBOT_LIVE_PAPER_DB); each executor carries the paper database it follows now (``paper_path``), when it followed
+    which (``segs``, livepapers.segments from its own start records) and every paper database it ever followed
+    (``_papers``, read once and shared; with the second paper bot's file when it is there)."""
     configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
     follows = {ex: (c.get("account") if c.get("state") == "ok" and c.get("account") else ACCOUNT) for ex, c in configs.items()}
-    paper = read_paper(p["paper"], [ACCOUNT, FLIP_ACCOUNT, *follows.values()], now)
+    want = [ACCOUNT, FLIP_ACCOUNT, *follows.values()]
+    paper = read_paper(p["paper"], want, now)
+    papers = {LP.norm(p["paper"]): paper}
+
+    def get(path: str) -> dict:
+        k = LP.norm(path)
+        if k not in papers:
+            papers[k] = read_paper(path, want, now)
+        return papers[k]
+    if p.get("paper2") and os.path.exists(p["paper2"]):
+        get(p["paper2"])
     execs = []
     for ex, ko, dk, _ck in EXECS:
         cfg = configs[ex]
         rec = read_exec(p[dk], now)
-        acc = (paper.get("accounts") or {}).get(follows[ex]) or {}
+        cfg_paper = cfg.get("paper_db") if cfg.get("state") == "ok" else None
+        starts = (rec.get("starts") or []) if rec.get("state") == "ok" else []
+        started = any(pdb for _t, pdb in starts)        # a start of this code (it names its paper database)
+        segs = LP.segments(starts, p["paper"], cfg_paper)
+        for path in LP.paths_of(segs):
+            get(path)
+        cur = LP.current(segs)
+        own = get(cur)
+        acc = (own.get("accounts") or {}).get(follows[ex]) or {}
         if cfg.get("state") != "ok":
             lt = {"state": "unknown", "reason_ko": "실행기 설정을 읽지 못해 신호등 기준을 몰라요" if cfg.get("state") == "error"
                   else "실행기 설정 파일이 아직 없어 신호등 기준을 몰라요", "config_state": cfg.get("state")}
-        elif paper.get("state") != "ok":
-            lt = {"state": "unknown", "reason_ko": "페이퍼 기록을 읽지 못해 신호등을 계산하지 못해요", "paper_state": paper.get("state"),
+        elif own.get("state") != "ok":
+            lt = {"state": "unknown", "reason_ko": "페이퍼 기록을 읽지 못해 신호등을 계산하지 못해요", "paper_state": own.get("state"),
                   "n": cfg["signal_light_n"], "min_win": cfg["signal_light_min_win"]}
-        else:
+        else:                                           # the executor's own rule on the paper it follows now
             newest = [t["pnl"] for t in sorted(acc.get("trades") or [], key=lambda t: (t["exit_time"] or 0, t["id"] or 0), reverse=True)]
             lt = light(cfg["signal_light_n"], cfg["signal_light_min_win"], newest)
         if rec.get("state") == "ok":
@@ -861,16 +1060,32 @@ def sources(p: dict, now: int) -> tuple:
             lt["last_event"] = last
         notes = []
         if cfg.get("state") == "ok":
-            if cfg.get("paper_db") and os.path.abspath(cfg["paper_db"]) != os.path.abspath(p["paper"]):
-                notes.append(f"이 실행기는 다른 페이퍼 DB({cfg['paper_db']})를 따라가요. 이 화면의 신호등과 비교는 {p['paper']} 기준이에요")
+            if LP.config_differs(segs, cfg_paper):
+                notes.append(f"실행기 설정의 페이퍼 DB({cfg_paper})는 실행기를 (다시) 켜야 적용돼요. 지금은 {cur}를 따라가요"
+                             + ("" if started else " (이 실행기 기록에 페이퍼 DB를 남긴 시작이 아직 없어요)"))
             if cfg.get("db") and os.path.abspath(cfg["db"]) != os.path.abspath(p[dk]):
                 notes.append(f"실행기 설정의 DB({cfg['db']})와 이 화면이 읽는 DB({p[dk]})가 달라요")
             if follows[ex] != ACCOUNT:
                 notes.append(f"이 실행기는 {follows[ex]} 계좌를 따라가요")
         if rec.get("state") == "ok" and rec.get("account") and rec["account"] != follows[ex]:
             notes.append(f"실행기 기록의 계좌({rec['account']})와 설정의 계좌({follows[ex]})가 달라요")
-        execs.append({"id": ex, "name_ko": ko, "follows": follows[ex], "config": cfg, "record": rec, "light": lt, "notes": notes})
+        execs.append({"id": ex, "name_ko": ko, "follows": follows[ex], "config": cfg, "record": rec, "light": lt, "notes": notes,
+                      "segs": segs, "paper_path": cur, "_papers": papers})
+    bots = paper_bots(p, paper, execs)
+    if len(bots) > 1:                                   # two paper bots: each executor names the one it follows
+        for x in execs:
+            b = next((b for b in bots if LP.same(b["path"], x["paper_path"])), None)
+            x["paper_id"] = b["id"] if b else None
+            x["follows_ko"] = " · ".join(v for v in (f"페이퍼 {b['stop_short']}" if b.get("stop_short") else "페이퍼", b.get("name")) if v) \
+                if b else x["paper_path"]
+            if len(x["segs"]) > 1:
+                x["switched_ms"] = x["segs"][-1][0]
     return configs, follows, paper, execs
+
+
+def public(x: dict) -> dict:
+    """An executor's entry of sources() without the shared paper reads (``_papers``, ``_pairs``)."""
+    return {k: v for k, v in x.items() if not k.startswith("_")}
 
 
 def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
@@ -879,17 +1094,21 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     _configs, _follows, paper, execs = sources(p, now)
     pa = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
-    ppos = (pa or {}).get("position")
-    accts = [acct_paper(paper, ACCOUNT, now)] + [acct_exec(x, ppos, now) for x in execs]
-    fills = fills_of(paper, execs, ACCOUNT)
-    marks = marks_of(paper, execs, ACCOUNT)
+    bots = paper_bots(p, paper, execs)
+    # each executor borrows the next lock of the paper position IT follows (its own paper bot's)
+    accts = [acct_paper(paper, ACCOUNT, now, label=bots[0] if len(bots) > 1 else None)]
+    accts += [acct_paper(b["read"], ACCOUNT, now, b["id"], b) for b in bots[1:]]
+    accts += [acct_exec(x, (own_account(x) or {}).get("position"), now) for x in execs]
+    fills = fills_of(paper, execs, ACCOUNT, papers=bots)
+    marks = marks_of(paper, execs, ACCOUNT, papers=bots)
     events = sorted(((dict(e, ex=x["id"], ex_ko=x["name_ko"])) for x in execs for e in (x["record"].get("events") or [])),
                     key=lambda e: (e["ts"] or 0, e["id"] or 0), reverse=True)[:2 * EVENTS_KEEP]
     ref_ko = ref_problem()
     cp = checkpoint((pa or {}).get("trades") or [], ref_ko) if pa else None
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
+    execs = [public(x) for x in execs]
     for x in execs:                                      # the page needs neither the raw reasons nor the full trade list here
-        rec = x["record"]
+        rec = x["record"] = dict(x["record"])
         rec.pop("why", None)
         rec.pop("events", None)
         if rec.get("trades") is not None:
@@ -903,7 +1122,8 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     return {"now_ms": now, "paths": p, "account": ACCOUNT, "flip_account": FLIP_ACCOUNT, "paper": paper_out, "execs": execs,
             "accts": accts, "fills": fills, "marks": marks, "events": events, "checkpoint": cp,
             "flip": {"stats": flip.get("stats")} if flip and flip.get("known") else None,
-            "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None, "match_ms": MATCH_MS, "small": list(SMALL)}
+            "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None, "match_ms": MATCH_MS, "small": list(SMALL),
+            "papers": papers_out(bots)}
 
 
 # ================================================================ the other tabs (거래 · 신호 · 성적 · 안전 · 그림자 · 설정)
@@ -930,6 +1150,8 @@ SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocu
 # paperbot/liveimprove.py (weekly scorecard, the improvement ledger)
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
             "combo_config": ("PAPERBOT_LIVE_COMBO_CONFIG", "/etc/paperbot/combo.json"),
+            # the second paper bot's config file (its database's combo_run is read first; docs/live15-mexc-ko.md)
+            "combo2_config": ("PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-mexc.json"),
             "check_db": ("PAPERBOT_LIVE_CHECK_DB", "/var/lib/paperbot/livecheck.db"),
             "improve_db": ("PAPERBOT_LIVE_IMPROVE_DB", "/var/lib/paperbot/liveimprove.db"),
             "rule_db": ("PAPERBOT_LIVE_RULE_DB", "/var/lib/paperbot/paper3.db")}
@@ -1281,33 +1503,60 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
     card of its paper partner."""
     more = more or paths_more()
     _configs, _follows, paper, execs = sources(p, now)
+    bots = paper_bots(p, paper, execs)
     combo = read_combo(p["paper"], more["combo_config"])
+    combos = {LP.norm(p["paper"]): combo}
     cards = read_cards(more["check_db"], now)
     card_by = {c["key"]: c for c in cards.get("cards") or []}
-    card_of = lambda t: card_by.get(f"{ACCOUNT}|{t.get('symbol')}|{t.get('entry_time')}") if t else None     # noqa: E731
-    members = members_of(combo) if combo.get("state") == "ok" else []
-    meta = entered_meta(p["paper"], ACCOUNT) if paper.get("state") == "ok" else {}
-    a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
-    ptrades = (a or {}).get("trades") or []
-    by_pid = {t["id"]: t for t in ptrades}
-    pairs = {x["id"]: (match(ptrades, x["record"].get("trades") or []) if x["record"].get("state") == "ok" else {}) for x in execs}
-    rev = {xid: {pid: lk for lk, pid in m.items()} for xid, m in pairs.items()}
+
+    def card_of(t: Optional[dict], path: Optional[str] = None) -> Optional[dict]:
+        """The loss card of a paper trade: the main paper bot's under its key, the second's under its own (livecheck.card_key)."""
+        if not t:
+            return None
+        from ... import livecheck as LC
+        return card_by.get(LC.card_key(ACCOUNT, t.get("symbol"), t.get("entry_time"), None if LP.same(path or p["paper"], p["paper"]) else path))
+    metas: dict = {}
+
+    def meta_of(path: str) -> dict:
+        k = LP.norm(path)
+        if k not in metas:
+            pr = (execs[0]["_papers"] if execs else {}).get(k) or (paper if LP.same(path, p["paper"]) else {})
+            metas[k] = entered_meta(path, ACCOUNT) if pr.get("state") == "ok" else {}
+        return metas[k]
+
+    def members_at(path: str) -> list:
+        k = LP.norm(path)
+        if k not in combos:
+            combos[k] = read_combo(path, more.get("combo2_config") or "-")
+        c = combos[k]
+        return members_of(c) if c.get("state") == "ok" else []
+    members = members_at(p["paper"])
+    rev = {x["id"]: rev_pairs(x) for x in execs}
     live_by = {x["id"]: {str(t["key"]): t for t in x["record"].get("trades") or []} for x in execs if x["record"].get("state") == "ok"}
 
-    def setting(sym, et):
-        m = meta.get((sym, et)) or {}
+    def setting(sym, et, path=None):
+        path = path or p["paper"]
+        m = meta_of(path).get((sym, et)) or {}
         order = m.get("member_order")
-        mem = members[order - 1] if order and 0 < order <= len(members) else None
+        ms = members_at(path)
+        mem = ms[order - 1] if order and 0 < order <= len(ms) else None
         return {"member": m.get("member"), "order": order, "stop_rule": m.get("stop_rule"), "score": m.get("score"), "setting": mem,
                 "break_level": m.get("break_level")}
 
-    out = {"paper": None, "bybit": None, "mexc": None}
-    if a is not None:
+    def paper_rows(b: dict) -> dict:
+        """One paper bot's closed trades with, per executor, its partner (it followed this bot then), why not, or "other"
+        (it followed the other paper bot then)."""
+        pr, path = b["read"], b["path"]
+        a = (pr.get("accounts") or {}).get(ACCOUNT) if pr.get("state") == "ok" else None
+        if a is None:
+            return {k: pr.get(k) for k in ("state", "reason_ko", "reason", "path")} if pr.get("state") != "ok" else \
+                {"state": "missing", "reason_ko": "페이퍼 DB에 이 계좌의 기록이 아직 없어요"}
+        ptrades = a.get("trades") or []
         rows = []
         for t in reversed(ptrades[-TRADES_KEEP:]):
             cells = {}
             for x in execs:
-                lk = rev.get(x["id"], {}).get(t["id"])
+                lk = rev.get(x["id"], {}).get((LP.norm(path), t["id"]))
                 if x["record"].get("state") != "ok":
                     cells[x["id"]] = {"state": "unknown"}
                 elif lk is not None:
@@ -1315,26 +1564,31 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                     cells[x["id"]] = {"state": "matched", "key": lt["key"], "pnl": lt["pnl"], "est": lt["est"], "entry_price": lt["entry_price"],
                                       "slip": (lt["side"] * (t["entry_price"] - lt["entry_price"]) / t["entry_price"]) if t.get("entry_price") and lt.get("entry_price") else None,
                                       "diff": (lt["pnl"] - t["pnl"] * (x["config"].get("qty_scale") or 0)) if lt.get("pnl") is not None and x["config"].get("qty_scale") else None}
+                elif not followed_at(x, path, t.get("entry_time")):
+                    other = next((o for o in bots if LP.same(o["path"], LP.paper_at(x["segs"], t.get("entry_time")))), None)
+                    cells[x["id"]] = other_cell(x, (other or {}).get("label_ko", "").split(" (")[0] or None)
                 else:
                     cells[x["id"]] = why_missed(x["record"], t, ACCOUNT)
             rows.append({**{k: t.get(k) for k in ("id", "symbol", "side", "entry_time", "exit_time", "exit_reason", "leverage", "pnl", "roe",
                                                    "entry_price", "exit_price", "qty", "margin", "fees", "funding", "strategy_id", "timeframe",
                                                    "lock_roe", "stop_initial", "stop_price", "liq_price")},
-                         "key": f"paper:{t['id']}", "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
-                         **setting(t["symbol"], t["entry_time"]), "live": cells, "card": card_of(t)})
-        out["paper"] = {"state": "ok", "rows": rows, "n": len(ptrades)}
-    else:
-        out["paper"] = {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")} if paper.get("state") != "ok" else \
-            {"state": "missing", "reason_ko": "페이퍼 DB에 이 계좌의 기록이 아직 없어요"}
+                         "key": f"{b['id']}:{t['id']}", "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
+                         **setting(t["symbol"], t["entry_time"], path), "live": cells, "card": card_of(t, path)})
+        return {"state": "ok", "rows": rows, "n": len(ptrades)}
+
+    out = {"paper": None, "bybit": None, "mexc": None}
+    out["paper"] = paper_rows(bots[0])
+    for b in bots[1:]:
+        out[b["id"]] = {**paper_rows(b), "label_ko": b["label_ko"], "path": b["path"]}
     for x in execs:
         r = x["record"]
         if r.get("state") != "ok":
             out[x["id"]] = {k: r.get(k) for k in ("state", "reason_ko", "reason", "path")}
             continue
         rows = []
+        pairs = pairs_of(x)
         for t in reversed((r.get("trades") or [])[-TRADES_KEEP:]):
-            pid = pairs[x["id"]].get(str(t["key"]))
-            pt = by_pid.get(pid) if pid is not None else None
+            pt = pairs.get(str(t["key"]))
             reason = t["exit_reason"]
             if reason == "PAPER" and pt:
                 reason = pt["exit_reason"] or reason
@@ -1345,13 +1599,14 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                          "entry_time": t["entry_ts"], "exit_time": t["exit_ts"], "exit_reason": reason, "reason_ko": EXIT_KO.get(reason, reason),
                          "win": (t["pnl"] or 0) > 0, "locked": bool(t.get("stop_final") and t.get("entry_price") and (t["stop_final"] - t["entry_price"]) * t["side"] > 0),
                          "paper": ({k: pt.get(k) for k in ("id", "entry_time", "exit_time", "entry_price", "exit_price", "pnl", "roe", "exit_reason", "lock_roe",
-                                                             "strategy_id", "timeframe", "fees", "funding", "qty")} if pt else None),
+                                                             "strategy_id", "timeframe", "fees", "funding", "qty")}
+                                   | ({"paper_id": bot_id(bots, pt["paper_path"])} if len(bots) > 1 else {}) if pt else None),
                          "paper_scaled": pt["pnl"] * scale if pt and pt.get("pnl") is not None and scale else None,
                          "diff": (t["pnl"] - pt["pnl"] * scale) if pt and pt.get("pnl") is not None and t.get("pnl") is not None and scale else None,
                          "slip_vs_paper": slip, "gap_ms": abs(pt["entry_time"] - t["paper_time"]) if pt and t.get("paper_time") is not None else None,
                          "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None,
-                         **(setting(pt["symbol"], pt["entry_time"]) if pt else {"member": None, "order": None, "setting": None}),
-                         "card": card_of(pt)})
+                         **(setting(pt["symbol"], pt["entry_time"], pt["paper_path"]) if pt else {"member": None, "order": None, "setting": None}),
+                         "card": card_of(pt, pt["paper_path"] if pt else None)})
         out[x["id"]] = {"state": "ok", "rows": rows, "n": len(r.get("trades") or []), "qty_scale": x["config"].get("qty_scale")}
     return {"now_ms": now, "accts": out, "match_ms": MATCH_MS, "combo_state": combo.get("state"), "members_n": len(members),
             "cards": {**{k: cards.get(k) for k in ("state", "reason_ko", "reason", "path")}, "n": len(card_by),
@@ -1437,20 +1692,24 @@ def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
         if r.get("state") != "ok":
             out[x["id"]] = {k: r.get(k) for k in ("state", "reason_ko", "reason", "path")}
             continue
-        ptrades = (a or {}).get("trades") or []
-        m = match(ptrades, r.get("trades") or [])
-        by_pid = {t["id"]: t for t in ptrades}
+        m = pairs_of(x)                                    # its own paper bot's trades (livepapers)
         live = []
         for t in r.get("trades") or []:                    # the live trade takes its paper partner's strategy and timeframe
-            pt = by_pid.get(m.get(str(t["key"])))
+            pt = m.get(str(t["key"]))
             live.append({**t, "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None})
         out[x["id"]] = {"state": "ok", **perf_of(live, "entry_ts", "exit_ts")}
+    bots = paper_bots(p, paper, execs)
+    for b in bots[1:]:                                     # the second paper bot's record next to the first's
+        a2 = (b["read"].get("accounts") or {}).get(ACCOUNT) if b["read"].get("state") == "ok" else None
+        out[b["id"]] = ({"state": "ok", **perf_of(a2.get("trades") or [])} if a2 and a2.get("known")
+                        else {k: b["read"].get(k) for k in ("state", "reason_ko", "reason", "path")}) | {"label_ko": b["label_ko"]}
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
     ref_ko = ref_problem()
     return {"now_ms": now, "accts": out, "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None,
             "checkpoint": checkpoint((a or {}).get("trades") or [], ref_ko) if a else None,
             "flip": {"state": "ok", **perf_of(flip.get("trades") or [])} if flip and flip.get("known") else None, "small": list(SMALL),
-            "scorecard": scorecard(p, execs), "ledger": read_ledger(more["improve_db"])}
+            "scorecard": scorecard(p, execs), "ledger": read_ledger(more["improve_db"]), "papers": papers_out(bots),
+            "compare": compare_papers(bots)}
 
 
 # ---------------------------------------------------------------- 안전
@@ -1620,15 +1879,14 @@ def rank(p: dict, now: int) -> dict:
     acc = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
     ptrades = (acc or {}).get("trades") or []
     pos = (acc or {}).get("position")
-    by_pid = {t["id"]: t for t in ptrades}
     live: dict = {}
     for x in execs:
         r = x["record"]
         if r.get("state") != "ok":
             continue
-        m = match(ptrades, r.get("trades") or [])
+        m = pairs_of(x)                                  # a live trade takes the strategy of the paper trade IT followed
         for t in r.get("trades") or []:
-            pt = by_pid.get(m.get(str(t["key"])))
+            pt = m.get(str(t["key"]))
             live.setdefault((x["id"], pt.get("strategy_id") if pt else None), []).append(t)
     sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
     sig_by = signals_by_strategy(sig)
@@ -1926,12 +2184,13 @@ def costs(p: dict, now: int) -> dict:
         coins = [{"symbol": c["symbol"], "n": c["n"], "slip_avg": sum(c["slip"]) / len(c["slip"]) if c["slip"] else None, "diff": c["diff"]}
                  for c in sorted(by_coin.values(), key=lambda c: -c["n"])]
         missed: dict = {}
-        for r in ((accts.get("paper") or {}).get("rows") or []):
-            cell = (r.get("live") or {}).get(ex) or {}
-            if cell.get("state") == "missed":            # before the executor's start, or still closing: not a miss
-                k = cell.get("why_kind") or "none"
-                m = missed.setdefault(k, {"kind": k, "ko": cell.get("why_ko") or k, "n": 0})
-                m["n"] += 1
+        for pid in ("paper", "paper2"):                  # each paper bot's trades it was following then (others say "other")
+            for r in ((accts.get(pid) or {}).get("rows") or []):
+                cell = (r.get("live") or {}).get(ex) or {}
+                if cell.get("state") == "missed":        # before the executor's start, or still closing: not a miss
+                    k = cell.get("why_kind") or "none"
+                    m = missed.setdefault(k, {"kind": k, "ko": cell.get("why_ko") or k, "n": 0})
+                    m["n"] += 1
         out[ex] = {"state": "ok", "n": len(rows), "matched": len(matched), "qty_scale": a.get("qty_scale"),
                    "slip_avg": sum(slips) / len(slips) if slips else None, "slip_worst": min(slips) if slips else None,
                    "fees": sum(fees) if fees else None, "funding": sum(fund) if fund else None,
@@ -2020,6 +2279,22 @@ def fill_gaps(path: str, rows: list, exchange: str) -> dict:
     s["total_parts"] = sum(1 for x in parts if x is not None)
     return {"state": "ok", "path": path, "exchange": exchange, **s, "rows": out[:60],
             "assumed": {"taker": PAPER_TAKER, "slip": PAPER_SLIP, "exchange_fee": LC.ASSUMED_FEE.get(exchange, LC.ASSUMED_FEE["binance"])}}
+
+
+def gap_rows(x: dict, since: Optional[int] = None) -> list:
+    """An executor's closed trades in fill_gaps' shape (trade_rows' fields), each with the paper trade it followed
+    (pairs_of: its own paper bot's), entered from ``since`` on."""
+    pairs = pairs_of(x)
+    out = []
+    for t in x["record"].get("trades") or []:
+        if since is not None and (t.get("entry_ts") or 0) < since:
+            continue
+        pt = pairs.get(str(t["key"]))
+        out.append({"key": t["key"], "symbol": t["symbol"], "side": t["side"], "entry_time": t["entry_ts"], "exit_time": t["exit_ts"],
+                    "entry_price": t["entry_price"], "commission": t["commission"], "funding": t["funding"], "pnl": t["pnl"],
+                    "leverage": t["leverage"],
+                    "paper": {k: pt.get(k) for k in ("entry_price", "exit_price", "roe", "strategy_id", "timeframe", "pnl")} if pt else None})
+    return out
 
 
 def entry_judge(accts: dict, configs: dict) -> dict:
@@ -2204,6 +2479,18 @@ def whynow(p: dict, now: int) -> dict:
             {k: pos.get(k) for k in ("symbol", "side", "strategy_id", "timeframe", "entry_time", "last_mark_roe_net")} if pos else None)
         if acc.get("halted"):
             add("paper_halt", False, "페이퍼 계좌가 멈춤", {"reason": acc.get("halt_reason")})
+    for b in paper_bots(p, paper, execs)[1:]:            # the second paper bot, while an executor follows it
+        if not b["follower_ids"]:
+            continue
+        pr, who, nm = b["read"], ",".join(b["follower_ids"]), b["label_ko"].split(" (")[0]
+        if pr.get("state") != "ok":
+            add("paper2", False, f"{nm} 봇 기록을 못 읽음", {"reason_ko": pr.get("reason_ko")}, who=who)
+            continue
+        add("paper2", not pr.get("stale"), f"{nm} 봇이 돌고 있음" if not pr.get("stale") else f"{nm} 봇 기록이 멈춤(5분 넘게 새 기록 없음)",
+            {"as_of": pr.get("as_of_ms")}, who=who)
+        pos2 = ((pr.get("accounts") or {}).get(ACCOUNT) or {}).get("position")
+        add("position2", pos2 is None, f"{nm} 포지션이 비어 있음" if pos2 is None else f"{nm}에 이미 포지션이 있어 새 진입 안 함(한 번에 하나)",
+            {k: pos2.get(k) for k in ("symbol", "side", "strategy_id", "timeframe", "entry_time", "last_mark_roe_net")} if pos2 else None, who=who)
     for x in execs:
         r, ko = x["record"], x["name_ko"]
         if r.get("state") != "ok":
@@ -2526,7 +2813,7 @@ def live_card(p: dict, execs: list, cuts: tuple) -> dict:
                          light_n=0, light_min=0.0, exchange=(x["config"] or {}).get("exchange") or x["id"], account=x["follows"])
              for x in execs]
     try:
-        follow = LI.exec_follow(infos, trades)
+        follow = LI.exec_follow(infos, trades, paper_db=path)       # each executor's trades on THIS paper bot
         card = LI.scorecard(trades, ref, follow, cuts=cuts)
     except (sqlite3.Error, ValueError, TypeError, KeyError) as exc:
         return _err(path, exc)

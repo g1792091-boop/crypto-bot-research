@@ -83,9 +83,11 @@ function ladderBox(p) {
 
 /** One account's card; .update(mark) rolls its mark-dependent numbers. */
 export function posCard(c) {
-  const name = NAME[c.id] || c.name_ko || c.id;
+  const name = (c.label_ko || "").split(" (")[0] || NAME[c.id] || c.name_ko || c.id;     // two paper bots: "페이퍼 −35%"
   const tag = c.id === "flip" ? h("span", {class: "lb-acct lb-a-flip", title: c.note_ko || ""}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name) : acctTag(c.id);
   const kindPill = c.kind === "live" ? ui.pill("진짜 돈", "warn") : c.id === "flip" ? ui.pill("", "ref") : ui.pill("모의", "thin");     // ("ref" prints 참고 itself)
+  // two paper bots: the executor's card names the paper bot it follows (its ladder and stop are that bot's)
+  const follows = c.kind === "live" && c.follows_ko ? h("small", {class: "muted"}, `따라감 · ${c.follows_ko}`) : null;
   if (c.state !== "ok") {
     const el = ui.card({cls: "lbp-card none"}, h("div", {class: "lbp-top"}, tag, kindPill), sourceState(c, c.kind === "live" ? `${name} 실행기 기록` : "페이퍼 DB"));
     el.update = () => {};
@@ -93,7 +95,7 @@ export function posCard(c) {
   }
   const p = c.position;
   if (!p) {
-    const el = ui.card({cls: "lbp-card none"}, h("div", {class: "lbp-top"}, tag, kindPill, h("span", {class: "grow"}),
+    const el = ui.card({cls: "lbp-card none"}, h("div", {class: "lbp-top"}, tag, kindPill, follows, h("span", {class: "grow"}),
       c.halted ? ui.pill(`멈춤${c.halt_reason ? `: ${c.halt_reason}` : ""}`, "bad") : null),
     h("p", {class: "lbp-flat"}, "포지션 없음"),
     h("p", {class: "note"}, c.wallet != null ? `잔고 ${c.kind === "live" ? fmt.usd(c.wallet) : `${fmt.money(c.wallet)} USDT`} · ` : "",
@@ -147,14 +149,15 @@ export function posCard(c) {
     ? h("p", {class: "note lbp-gap"}, p.gap ? ["페이퍼 진입 ", h("b", {class: "num"}, fmt.price(p.gap.paper_entry)), " → 이 실행기 ", h("b", {class: "num"}, fmt.price(p.gap.live_entry)),
       " · ", h("b", {class: ["num", fmt.tone(p.gap.slip)]}, fmt.pct(p.gap.slip, 3)), p.gap.slip >= 0 ? " (페이퍼보다 유리)" : " (페이퍼보다 불리)",
       p.gap.delay_ms != null ? ` · ${fmt.dur(p.gap.delay_ms / 1000)} 뒤 체결` : ""] : "페이퍼와 진입 차이: 따라가는 페이퍼 포지션이 없어요")
-    : c.id === "paper" ? h("p", {class: "note lbp-gap"}, gaps.length ? gaps.map((g, i) => [i ? " · " : "", `${g.name_ko} `, h("b", {class: "num"}, fmt.price(g.live_entry)),
+    : c.id === "paper" || c.id === "paper2" ? h("p", {class: "note lbp-gap"}, gaps.length ? gaps.map((g, i) => [i ? " · " : "", `${g.name_ko} `, h("b", {class: "num"}, fmt.price(g.live_entry)),
       " (", h("span", {class: ["num", fmt.tone(g.slip)]}, fmt.pct(g.slip, 3)), g.delay_ms != null ? `, ${fmt.dur(g.delay_ms / 1000)} 뒤` : "", ")"])
       : "실행기가 따라 들어간 기록이 아직 없어요 (따라가는 중이 아니거나 아직 진입 확인 중)",
-    (p.execs || []).filter((x) => x.state !== "following").map((x) => ` · ${x.name_ko}: ${x.state === "unknown" ? `기록 못 읽음${x.reason_ko ? ` (${x.reason_ko})` : ""}` : "이 포지션 없음"}`))
+    (p.execs || []).filter((x) => x.state !== "following").map((x) => ` · ${x.name_ko}: ${x.state === "unknown" ? `기록 못 읽음${x.reason_ko ? ` (${x.reason_ko})` : ""}`
+      : x.state === "other" ? "다른 페이퍼를 따라가요" : "이 포지션 없음"}`))
       : null;
   const capText = live ? ui.ASSUME_LIVE_KO : ui.ASSUME_OPEN_KO;
   const el = ui.card({cls: `lbp-card ${live ? "live" : c.id}`},
-    h("div", {class: "lbp-top"}, tag, kindPill, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
+    h("div", {class: "lbp-top"}, tag, kindPill, follows, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
       ui.sideTag(p.side), h("span", {class: "muted"}, `격리 ${fmt.lev(p.leverage)}`), grp, p.status === "entering" ? ui.pill("진입 확인 중", "warn") : null),
     h("p", {class: "lbp-strat"}, stratLine, st && st.no_chase ? h("small", {class: "muted"}, " · 추격 진입 막기") : null),
     h("div", {class: "pnl lbp-led"},

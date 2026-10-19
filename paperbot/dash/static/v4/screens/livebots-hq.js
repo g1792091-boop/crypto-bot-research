@@ -394,11 +394,12 @@ export function freshMilestones(before, reached, seen, firstWinAt = null, now = 
  *  entry (the same trade's entry fill): {exit, entry, paper} or null. */
 export function lastClosed(fills) {
   const xs = (fills || []).filter((f) => f && f.kind === "exit" && f.t != null).sort((a, b) => b.t - a.t);
-  const pick = xs.find((f) => f.acct !== "paper") || xs.find((f) => f.acct === "paper") || null;
+  const paperish = (f) => f.acct === "paper" || f.acct === "paper2";               // the second paper bot's fills are paper too
+  const pick = xs.find((f) => !paperish(f)) || xs.find((f) => f.acct === "paper") || xs.find(paperish) || null;
   if (!pick) return null;
   const ek = String(pick.key || "").replace(/:x:/, ":e:");
   const entry = (fills || []).find((f) => f && f.kind === "entry" && f.key === ek) || null;
-  return {exit: pick, entry, paper: pick.acct === "paper"};
+  return {exit: pick, entry, paper: paperish(pick)};
 }
 
 /** The 실시간 feed: the newest fills, WARN / CRITICAL events and the last signal, newest first: [{key, t, kind, ...}]. */
@@ -961,7 +962,8 @@ export function hqView(ctx, hub) {
       r.streak.textContent = cl == null ? "—" : mx ? `${fmt.int(cl)} / ${fmt.int(mx)}` : fmt.int(cl);
       r.streak.title = mx ? `${fmt.int(mx)}연패면 실행기가 멈춰요` : "";
     }
-    r.foll.textContent = x ? `따라감 · ${x.follows || "—"}${a && a.sub_ko ? ` · ${a.sub_ko}` : ""}` : "";
+    // two paper bots (the summary's papers): the paper bot it follows by its label, else the account as before
+    r.foll.textContent = x ? `따라감 · ${x.follows_ko || x.follows || "—"}${a && a.sub_ko ? ` · ${a.sub_ko}` : ""}` : "";
     const ns = [...((x && x.notes) || [])];
     if (ok && a.kill_file && a.kill_file.present) ns.unshift(`비상 정지 파일이 있어요 (${a.kill_file.path || ""})`);
     if (ok && a.halted) ns.unshift(`멈춤: ${a.halt_reason || "이유 기록 없음"}${a.halted_ts ? ` · ${fmt.kst(a.halted_ts)}부터` : ""} · 사람이 풀 때까지 새 진입 없음`);

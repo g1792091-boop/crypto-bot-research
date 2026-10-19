@@ -122,7 +122,7 @@ export function fillsPanel(ctx) {
       }
     }
     let W = 0, L = 0, n = 0;
-    for (const f of fills) { if (f.kind !== "exit" || f.acct === "paper" || f.pnl == null) continue; if (f.pnl > 0) W++; else L++; if (++n >= 20) break; }
+    for (const f of fills) { if (f.kind !== "exit" || f.acct === "paper" || f.acct === "paper2" || f.pnl == null) continue; if (f.pnl > 0) W++; else L++; if (++n >= 20) break; }
     ratioK.textContent = `실거래 최근 ${fmt.int(n)}번`;
     ratio.set({W, L});
   }

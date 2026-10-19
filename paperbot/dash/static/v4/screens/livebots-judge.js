@@ -8,6 +8,9 @@
 //                  virtual trade when it has one, else replayed the same way)
 //   동전 쌍둥이     the paper account against its coin-flip twin (same signals, random side) since the start, and the gap
 //                  in plain words; 성적 keeps the all-time twin block, this is the since-start head-to-head
+//   두 페이퍼 비교  only while there are two paper bots (owners 10/19, docs/live15-mexc-ko.md): each one's trades, wins, win
+//                  rate, net ROE sum, equity and deepest drop since the second one started, and "같은 진입 n번 중 결과가
+//                  갈린 거래 m번" (the server's compare)
 // HONESTY: a replay is arithmetic on the recorded bars, never a trade (said on every card); funding is left out (said);
 // what could not be worked out says why; under 20 decided trades the card says it is mostly luck; the start of the
 // config is the server's (sure or not, and how it knows); a failed refresh keeps the last answer dimmed with its age.
@@ -85,12 +88,16 @@ export function judgeView(ctx) {
   const revSlot = h("div", {class: "lbj-slot"});
   const chaseSlot = h("div", {class: "lbj-slot"});
   const twinSlot = h("div", {class: "lbj-slot"});
+  const twoSlot = h("div", {class: "lbj-slot"});
+  const twoCard = ui.card({title: "두 페이퍼 비교", sub: "같은 신호 · 손절만 다름 · 두 번째 봇 시작부터", cls: "lbj-card lbj-two"}, twoSlot);
+  twoCard.hidden = true;
   const revPg = ui.pager({size: 10, row: (r) => revRow(r), empty: () => (st.d ? ui.empty("빠른 손절로 닫힌 거래가 아직 없어요") : motion.shimmer(2))});
   const chasePg = ui.pager({size: 10, row: (r) => chaseRow(r), empty: () => (st.d ? ui.empty("추격 막기에 걸린 신호가 아직 없어요") : motion.shimmer(2))});
   const body = h("div", {class: "lbj-body stack"}, head,
     ui.card({title: "빠른 손절 판정", sub: "반대 신호로 일찍 닫은 거래를 붙잡고 있었다면", cls: "lbj-card lbj-rev"}, revSlot, revPg.el),
     ui.card({title: "추격 막기 판정", sub: "B 그룹이 막은 신호에 들어갔다면", cls: "lbj-card lbj-chase"}, chaseSlot, chasePg.el),
     ui.card({title: "동전 쌍둥이 비교", sub: "같은 신호 · 방향만 동전 · 규칙봇 15 시작부터", cls: "lbj-card lbj-twin"}, twinSlot),
+    twoCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) 손익 · 다시 계산한 결과는 가상이에요"),
       ui.assumeLive("바이비트 · MEXC: 따라간 거래의 크기로 셈")));
   const el = h("div", {class: "lbj stack"}, stateSlot, body);
@@ -170,6 +177,25 @@ export function judgeView(ctx) {
       tw.small ? h("p", {class: "lbj-luck"}, `거래 ${fmt.int(Math.min(tw.real.n, tw.flip.n))}개라 아직 우연이 커요 (${fmt.int(tw.small_n)}개 넘어야 조금 믿을 만)`) : null,
       h("p", {class: "note"}, ui.pill("", "ref"), ` 참고 · 예전 분석에서 새 규칙의 동전 승률은 약 ${fmt.pct(tw.ref_flip_win, 0, false)}였어요 · 비교일 뿐 실력의 증거가 아니에요`));
   }
+  function drawTwo(d) {
+    const c = d.compare;
+    twoCard.hidden = !c;                                  // one paper bot: no card (the page as before)
+    if (!c) { put(twoSlot); return; }
+    if (c.state !== "ok") { put(twoSlot, sourceState(c, "두 번째 페이퍼 기록")); return; }
+    const col = (x) => h("div", {class: ["lbj-tcol", x.id]}, h("b", {class: "lbj-tt"}, x.label_ko || x.id),
+      ui.kv([["거래", `${fmt.int(x.n)}번`], ["이김", `${fmt.int(x.wins)}번`], ["승률", has(x.win_rate) ? fmt.pct(x.win_rate, 1, false) : "—"],
+        ["순ROE 합", h("b", {class: ["num", fmt.tone(x.roe_sum, fmt.pct(x.roe_sum, 1))]}, fmt.pct(x.roe_sum, 1))],
+        ["잔고", has(x.equity) ? `${fmt.money(x.equity)} USDT${has(x.change) ? ` (${fmt.pct(x.change, 1)})` : ""}` : "—"],
+        ["최대 낙폭", has(x.max_dd) ? fmt.pct(-x.max_dd, 1) : "—"]]));
+    const rows = c.rows || [];
+    put(twoSlot, h("div", {class: "lbj-twin2"}, ...rows.map(col)),
+      h("p", {class: "lbj-gap"}, c.words_ko),
+      c.since_ms ? h("p", {class: "note"}, `${fmt.kst(c.since_ms)}부터 · ${c.note_ko || ""}`) : null,
+      (c.parted_rows || []).length ? h("ul", {class: "lbj-parted"}, (c.parted_rows || []).slice(0, 10).map((r) => h("li", null,
+        `${fmt.kst(r.entry_time)} ${fmt.coin(r.symbol)} ${fmt.sideKo(r.side)} ${r.strategy_id ? fmt.stratKo(r.strategy_id) : ""} · `,
+        ...rows.map((x, i) => { const v = r[x.id] || {}; return [i ? " / " : "", `${(x.label_ko || "").split(" (")[0]} `, h("b", {class: ["num", fmt.tone(v.roe, fmt.pct(v.roe, 1))]}, fmt.pct(v.roe, 1))]; })))) : null,
+      ui.smallSample(Math.min(...rows.map((x) => x.n || 0)), 20));
+  }
   function draw() {
     const d = st.d;
     if (!d) { put(head, motion.shimmer(1)); put(revSlot, motion.shimmer(2, true)); put(chaseSlot); put(twinSlot); revPg.set(undefined); chasePg.set(undefined); return; }
@@ -177,7 +203,7 @@ export function judgeView(ctx) {
     put(head, h("b", null, "새 규칙이 실제로 도왔나?"), h("span", {class: "muted"}, ` · ${startWords(s)}`),
       d.paper && d.paper.state !== "ok" ? sourceState(d.paper, "페이퍼 DB") : null,
       s.combo && s.combo.state && s.combo.state !== "ok" ? sourceState(s.combo, "합친 봇 설정") : null);
-    drawRev(d); drawChase(d); drawTwin(d);
+    drawRev(d); drawChase(d); drawTwin(d); drawTwo(d);
   }
   async function load() {
     let d;
