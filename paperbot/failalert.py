@@ -50,6 +50,11 @@ JOBS_KO = {
                                      "내일 10:00에 다시 돎 (빠진 날은 다음 실행이 이어서 계산, 계좌·주문과 무관)\n"
                                      "결과 한 줄: cat /var/lib/paperbot/paramshadow/last.txt\n"
                                      "지금 다시: sudo systemctl start paperbot-paramshadow"),
+    "paperbot-livecheck.service": ("실거래 일일 점검(09:10)",
+                                   "내일 09:10에 다시 돎 (실거래 봇·주문과 무관, 지켜보기만 함)\n"
+                                   "지난 결과: cd /opt/crypto-bot-research && sudo -u paperbot "
+                                   "/opt/paperbot/venv/bin/python -m paperbot.livecheck show\n"
+                                   "지금 다시: sudo systemctl start paperbot-livecheck"),
     "paperbot-shadow200.service": ("딥시크 200 그림자 시험(기록만)",
                                    "15분마다 다시 돎 (빠진 부분은 다음 실행이 스스로 메움, 계좌·주문과 무관)\n"
                                    "지금 상태: cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.shadow200 status"),

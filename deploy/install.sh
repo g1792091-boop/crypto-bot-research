@@ -323,6 +323,18 @@ else
   # change, no Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
   systemctl enable --now paperbot-paramshadow.timer >/dev/null 2>&1 || echo "paramshadow timer could not be enabled: sudo systemctl enable --now paperbot-paramshadow.timer"
 fi
+# 실거래 일일 점검 (paperbot/livecheck.py; docs/live1019-start-ko.md "실거래 일일 점검과 알람"): read-only towards the
+# paper bot and the executors (their databases opened read-only, executor.env never opened, no exchange account, no
+# order), public Binance klines, one Telegram message every morning at 09:10 KST. Installed AND switched on here
+# (its timer): with no executor running yet it only says so. Its real state is printed.
+for u in paperbot-livecheck.service paperbot-livecheck.timer; do
+  install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+for t in paperbot-livecheck.timer; do
+  systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
+  echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
+done
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"

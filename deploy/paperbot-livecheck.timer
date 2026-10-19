@@ -1,0 +1,10 @@
+[Unit]
+Description=paperbot live daily check at 00:10 UTC (09:10 KST: the trading day 09:00 -> 09:00 KST that just ended)
+
+[Timer]
+OnCalendar=*-*-* 00:10:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
