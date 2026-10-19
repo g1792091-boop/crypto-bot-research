@@ -168,8 +168,8 @@ def test_mainnet_refuses_without_every_offline_gate(tmp_path):
         assert "fapi.binance.com" in refused(client=TestnetClient("lk", "ls", send=lv.send))
         assert "testnet" in refused(cfg=cfg_for(tmp_path, "testnet"), client=MainnetClient("lk", "ls"))
         # the risk config complete, and the budget set
-        assert "하루 최대 손실" in refused(cfg=cfg_for(tmp_path, risk=R.RiskConfig()))
-        assert "하루 최대 손실" in refused(cfg=cfg_for(tmp_path, risk=risk_cfg(tmp_path, daily_max_loss_usd=None)))
+        assert "멈춤 낙폭" in refused(cfg=cfg_for(tmp_path, risk=R.RiskConfig()))
+        assert "멈춤 낙폭" in refused(cfg=cfg_for(tmp_path, risk=risk_cfg(tmp_path, max_drawdown_pct=None)))
         assert "budget_usd" in refused(cfg=cfg_for(tmp_path, budget_usd=None))
         assert not lv.fake.calls                                   # nothing reached the exchange
     finally:
@@ -229,11 +229,10 @@ def test_mainnet_does_not_start_while_the_permission_check_cannot_be_reached(tmp
 
 def test_mainnet_balance_guard_and_a_full_cycle_on_the_same_code_path(tmp_path):
     paper = Paper(str(tmp_path / "paper3.db"))
-    lv = Live(tmp_path, fake=FakeFutures(wallet=600.01, host="fapi.binance.com", api_key="lk"))
-    try:
-        with pytest.raises(Refused) as e:                         # budget 500 x 1.2 = 600
-            lv.executor().start()
-        assert "하위 계정" in str(e.value)
+    lv = Live(tmp_path, fake=FakeFutures(wallet=5000.0, host="fapi.binance.com", api_key="lk"))
+    try:                                                          # owners 10-19: no wallet cap (was budget x 1.2)
+        lv.executor().start()                                     # a profitable account restarts like any other
+        assert lv.events("mainnet_gates") and not lv.events("mainnet_refused")
     finally:
         lv.close()
     (tmp_path / "x").mkdir()

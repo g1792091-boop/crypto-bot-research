@@ -56,7 +56,6 @@ sudo nano /etc/paperbot/executor.json
   "signal_light_n": 20,
   "signal_light_min_win": 0.85,
   "risk": {
-    "daily_max_loss_usd": 40,
     "max_drawdown_pct": 0.5,
     "max_consecutive_losses": 3,
     "max_leverage": 40,
@@ -106,7 +105,8 @@ sudo journalctl -fu paperbot-executor -u paperbot-executor-mexc
 
 - 평일 하루 평균 3번쯤 진입합니다. 몇 시간 동안 진입이 없을 수도 있습니다.
 - **첫 거래는 두 분이 앱으로 같이 봅니다.** 진입 → 손절 주문 걸림 → 순ROE 11%에서 잠금 이동 → 청산 → 손익이 앱과 같음.
-- **새 페이퍼 DB라 거래가 20번 쌓이기 전(약 1주)에는 신호등에 판단 근거가 없어서 모든 진입을 따라갑니다.** 그동안은 3연패, 낙폭 50%, 하루 $40 멈춤 장치(9장)가 지킵니다.
+- **10/19 두 분 결정:** 하루 손실 한도($40)와 지갑 금액 상한($120) 확인은 없앴습니다. 서버의 `/etc/paperbot/executor.json`, `executor-mexc.json`에 `"daily_max_loss_usd"` 줄이 있으면 지우고 check-config를 다시 하세요.
+- **새 페이퍼 DB라 거래가 20번 쌓이기 전(약 1주)에는 신호등에 판단 근거가 없어서 모든 진입을 따라갑니다.** 그동안은 3연패와 낙폭 50% 멈춤 장치(9장)가 지킵니다.
 
 **6) 매일 볼 것**
 
@@ -220,7 +220,7 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 ```
 
 - `check-config` 결과에 "신호등: 켜짐 - paper 최근 20번 중 85% 이상 …"이 나오면 맞게 들어간 것입니다.
-- 새 페이퍼 봇은 거래가 20번 쌓이기 전까지 모든 진입을 따라갑니다. 처음 며칠은 기존 멈춤 장치(3연패, 낙폭 50%, 하루 $40)가 지킵니다.
+- 새 페이퍼 봇은 거래가 20번 쌓이기 전까지 모든 진입을 따라갑니다. 처음 며칠은 기존 멈춤 장치(3연패, 낙폭 50%)가 지킵니다.
 - 빨간불일 때는 텔레그램으로 "신호등 빨강: paper 최근 20번 중 16번 이김(80%, 기준 85%) → … 진입을 따라 하지 않습니다"가 옵니다.
 
 ## 거래소 수수료 (10/19 새벽 확인)
@@ -298,7 +298,7 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 ## 1. 두 분이 먼저 할 것 (휴대폰·PC)
 
 **바이비트** ([`bybit-ko.md`](bybit-ko.md) 1장)
-- 실행기 전용 **하위 계정**을 만들고 USDT $100만 넣습니다($120 넘으면 실행기가 거부합니다).
+- 실행기 전용 **하위 계정**을 만들고 USDT $100만 넣습니다(10/19부터 지갑 금액 상한 확인은 없습니다. USDT 말고 다른 코인은 두지 마세요).
 - 하위 계정 API 키: 선물(계약) 거래만, **출금 권한 없음**, 서버 IP로 제한.
 
 **MEXC** ([`mexc-ko.md`](mexc-ko.md) 1~2장)
@@ -421,7 +421,6 @@ sudo nano /etc/paperbot/executor.json
   "entry_source": "paper",
   "stop_from": "ratio",
   "risk": {
-    "daily_max_loss_usd": 40,
     "max_drawdown_pct": 0.5,
     "max_consecutive_losses": 3,
     "max_leverage": 40,
@@ -440,7 +439,7 @@ cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/pyth
 sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --config /etc/paperbot/executor.json
 ```
 
-preflight에서 다음이 모두 `[OK]`여야 합니다: 주소 api.bybit.com, 키 권한(출금 꺼짐·IP 제한·하위 계정), 지갑 $120 이하·USDT만.
+preflight에서 다음이 모두 `[OK]`여야 합니다: 주소 api.bybit.com, 키 권한(출금 꺼짐·IP 제한·하위 계정), 지갑은 USDT만.
 
 ## 6. MEXC: 연습 먼저, 그다음 실행기 설정
 
@@ -510,7 +509,6 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 |---|---|---|
 | 연속 손실 | 3번 | 6번 (3연패 이상) |
 | 낙폭 | 계좌 고점 대비 50% | 7번 |
-| 하루 손실 | $40 | 하루 계좌 40% 이상 손실은 3일 |
 
 - 백테스트에서도 평균 1년에 한 번쯤 멈춥니다. 멈추면 텔레그램이 오고, 실행기는 새 진입을 하지 않습니다.
 - 다시 켤지는 두 분이 정합니다: STOP 파일 지우기 → 실행기 끄기 → `clear-halt` ([`live-safety.md`](live-safety.md)).

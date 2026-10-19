@@ -34,7 +34,7 @@
 
 1. 바이비트 실계정에서 **실행기 전용 하위 계정(sub-account)** 을 만듭니다. 주 계정은 쓰지 않습니다.
 2. 하위 계정은 통합 거래 계정(UTA)이면 됩니다(요즘 기본).
-3. 하위 계정에 **$100 USDT만** 옮깁니다. $120을 넘거나 USDT 말고 다른 코인이 있으면 실행기가 켜지지 않습니다.
+3. 하위 계정에 **$100 USDT만** 옮깁니다. USDT 말고 다른 코인이 있으면 실행기가 켜지지 않습니다(금액 상한 확인은 10/19에 없앰).
 4. 하위 계정에서 키를 만듭니다. 설정은 1-1과 같습니다.
    - 읽기·쓰기, 서버 IP만, 계약 주문·포지션만.
    - **그 밖의 권한은 모두 끕니다**(출금, 이체, 현물, 옵션, Earn, 환전, P2P, 카드 등). 하나라도 켜져 있으면 실행기가 거부합니다.
@@ -80,7 +80,6 @@ sudo nano /etc/paperbot/executor.json
   "entry_source": "paper",
   "stop_from": "ratio",
   "risk": {
-    "daily_max_loss_usd": 40,
     "max_drawdown_pct": 0.5,
     "max_consecutive_losses": 3,
     "max_leverage": 40,
@@ -193,7 +192,7 @@ sudo -u paperbot-exec sqlite3 -readonly /var/lib/paperbot/exec/executor-bybit-te
 4. 관문 점검(5장 명령). 다음이 모두 `[OK]`여야 합니다.
    - 주소 api.bybit.com (mainnet)
    - 키 권한: 출금 꺼짐, 선물 켜짐, IP 제한 있음, 필요 없는 권한 꺼짐(하위 계정 키)
-   - 지갑 $120 이하, USDT만
+   - 지갑은 USDT만
 5. 켜기: `sudo systemctl start paperbot-executor`. 첫 거래는 두 분이 화면과 바이비트 앱으로 같이 봅니다:
    진입, 손절이 걸림, 잠금 이동, 청산, 손익이 앱과 같음.
 6. 며칠 문제없으면: `sudo systemctl enable paperbot-executor`

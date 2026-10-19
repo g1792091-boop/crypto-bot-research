@@ -18,7 +18,7 @@
 
 1. **KYC 인증**을 끝냅니다. KYC가 없으면 API로 선물 주문이 안 됩니다.
 2. 실행기용 돈은 **선물(Futures) 지갑에 $100 USDT만** 둡니다.
-   - $120을 넘거나, USDT 말고 다른 코인이 선물 지갑에 있으면 실행기가 켜지지 않습니다.
+   - USDT 말고 다른 코인이 선물 지갑에 있으면 실행기가 켜지지 않습니다(금액 상한 확인은 10/19에 없앰).
    - 현물 지갑의 돈은 상관없습니다. 키에 이체 권한이 없으니 실행기는 현물 돈을 옮길 수 없습니다.
    - 하위 계정(sub-account)을 쓸 수 있으면 하위 계정이 더 좋습니다.
 3. **보너스·체험금**이 선물 지갑에 있으면 실행기가 켜지지 않습니다. 보너스가 없는 계정을 씁니다.
@@ -138,7 +138,6 @@ sudo nano /etc/paperbot/executor-mexc.json
   "entry_source": "paper",
   "stop_from": "ratio",
   "risk": {
-    "daily_max_loss_usd": 40,
     "max_drawdown_pct": 0.5,
     "max_consecutive_losses": 3,
     "max_leverage": 40,
@@ -183,7 +182,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --confi
 
 - 키 파일 `/etc/paperbot/executor.env`는 하나입니다. 두 봇이 같은 파일에서 자기 키만 씁니다.
 - 바이비트 설정과 키는 [`bybit-ko.md`](bybit-ko.md) 7장 그대로입니다.
-- 두 봇은 서로 모릅니다. 한도(하루 $40 손실, 연속 손실 3번 등)도 봇마다 따로 셉니다.
+- 두 봇은 서로 모릅니다. 한도(연속 손실 3번, 낙폭 50% 등)도 봇마다 따로 셉니다.
 - 같은 paper 진입을 따라가도 체결 가격·수량은 조금 다릅니다. 거래소마다 주문 단위가 다르기 때문입니다.
 
 켜기:

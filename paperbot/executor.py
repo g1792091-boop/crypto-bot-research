@@ -78,7 +78,7 @@ from . import mexc as MX
 from . import risk as R
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
 from .mainnet import (MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE, KeyCheckClient, MainnetClient,
-                      Refused, check_assets, check_balance, online_gates, read_env_file, trading_keys)
+                      Refused, check_assets, online_gates, read_env_file, trading_keys)
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, NullNotifier, Notifier
 from .levrule import requested_tier
@@ -118,7 +118,7 @@ class ExecConfig:
     qty_scale: float                      # live quantity = paper quantity x qty_scale
     risk: R.RiskConfig
     mode: str = MODE_TESTNET              # "testnet" | "mainnet" (mainnet: every gate in paperbot/mainnet.py)
-    budget_usd: Optional[float] = None    # money in the executor's account; mainnet refuses a wallet > 1.2x
+    budget_usd: Optional[float] = None    # money put in at the start (mainnet: required; no wallet cap since 10-19)
     poll_s: float = 3.0
     max_entry_age_s: float = 180.0       # paper entries older than this are not followed
     paper_stale_s: float = 300.0         # paper state older than this -> no new entries
@@ -1058,8 +1058,7 @@ class Executor:
                                           where=kc.host)
         for w in warnings:
             self._event(WARN, "key_permission", w)
-        definite = [p for p in (check_balance(wallet, float(self.cfg.budget_usd)), check_assets(acct.get("assets")))
-                    if p]
+        definite = [p for p in (check_assets(acct.get("assets")),) if p]
         if problems and unverified is not None and not definite and self._position_open():
             self._event(CRITICAL, "mainnet_unverified", f"{kc.host}이 키 권한 확인을 받아 주지 않았습니다({unverified}). "
                         "잘못된 것이 확인된 것은 아니어서 열린 포지션은 닫지 않고, 30초 뒤 다시 켭니다(systemd)." + held)
@@ -1075,7 +1074,7 @@ class Executor:
             self._event(CRITICAL, "mainnet_refused", "실거래를 시작하지 않습니다: " + "; ".join(problems) + held)
             raise Refused("; ".join(problems))
         self._event(INFO, "mainnet_gates", f"실거래 관문 통과: 출금 꺼짐, 선물 켜짐, IP 제한 있음, 필요 없는 권한 꺼짐, "
-                    f"지갑 ${wallet:,.2f} ≤ ${self.cfg.budget_usd * 1.2:,.2f}(USDT만)")
+                    f"지갑 ${wallet:,.2f}(USDT만)")
 
     def _position_open(self) -> bool:
         """A trade on record, or any position on the exchange (positionRisk). A read that fails for a moment raises
@@ -2368,7 +2367,7 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
             line(False, p)
         if not problems:
             line(True, "키 권한: 출금 꺼짐, 선물 켜짐, IP 제한 있음, 필요 없는 권한 꺼짐; "
-                       "지갑이 정한 금액의 1.2배 이하, USDT만")
+                       "지갑은 USDT만")
         for w in warnings:
             out("[주의] " + w)
     try:

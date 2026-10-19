@@ -17,8 +17,9 @@ def test_config_must_be_filled_by_the_owners():
     empty = R.RiskConfig()
     probs = empty.problems()
     assert len(probs) == len(R.REQUIRED)
-    assert any("하루 최대 손실" in p for p in probs) and any("멈춤 낙폭" in p for p in probs)
-    assert cfg().problems() == []
+    assert any("멈춤 낙폭" in p for p in probs)
+    assert not any("하루 최대 손실" in p for p in probs)          # owners 10-19: the daily limit is optional
+    assert cfg().problems() == [] and cfg(daily_max_loss_usd=None).problems() == []
     bad = cfg(max_drawdown_pct=20, max_leverage=0, max_consecutive_losses=0, daily_max_loss_usd=-1)
     assert len(bad.problems()) == 4
     with pytest.raises(ValueError):

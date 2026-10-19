@@ -502,14 +502,16 @@ def test_mainnet_refuses_without_the_owners_statement(tmp_path):
 
 
 def test_mainnet_balance_bonus_and_asset_guards_and_preflight(tmp_path):
-    for i, change in enumerate(({"wallet": 13_000.0}, {"bonus": 5.0}, {"other": {"MX": 2.0}})):
-        fake = FakeMexc(wallet=change.get("wallet", 10_000.0))
+    (tmp_path / "big").mkdir()                                  # owners 10-19: no wallet cap (was budget x 1.2)
+    World(tmp_path / "big", fake=FakeMexc(wallet=13_000.0)).store.close()
+    for i, change in enumerate(({"bonus": 5.0}, {"other": {"MX": 2.0}})):
+        fake = FakeMexc(wallet=10_000.0)
         fake.bonus, fake.other = change.get("bonus", 0.0), change.get("other", {})
         (tmp_path / str(i)).mkdir()
         w = World.__new__(World)
         with pytest.raises(Refused) as e:
             World.__init__(w, tmp_path / str(i), fake=fake)
-        assert ("1.2배" in str(e.value)) if i == 0 else ("USDT 말고" in str(e.value)), (change, str(e.value))
+        assert "USDT 말고" in str(e.value), (change, str(e.value))
         w.store.close()
     (tmp_path / "ok").mkdir()
     w = World(tmp_path / "ok", cfg_kw={"mexc_host": "contract.mexc.com"})

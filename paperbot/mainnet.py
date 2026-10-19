@@ -16,8 +16,8 @@ Gates (all must hold; any failure refuses the start with a Korean reason):
    permission record (empty, ``null``, not JSON) is refused. If api.binance.com cannot be reached even after
    retries, nothing can be verified: the executor stops with an error that systemd retries (exit 1);
 6. the risk config is complete (risk.problems() empty) and ``budget_usd`` is set;
-7. the futures wallet holds at most budget_usd x 1.2 and no asset other than USDT (a main account by
-   mistake is never traded; use a sub-account that holds only the budget; BNB there would pay the fees).
+7. the futures wallet holds no asset other than USDT (BNB there would pay the fees). Owners 2026-10-19: no cap on
+   the wallet's amount any more (it used to be budget_usd x 1.2): a profitable account must restart like any other.
 
 AI agents never import this module (tests/test_executor.py checks it).
 """
@@ -40,7 +40,6 @@ LIVE_KEY_NAMES = ("LIVE_API_KEY", "LIVE_API_SECRET")
 TESTNET_KEY_NAMES = ("TESTNET_API_KEY", "TESTNET_API_SECRET")
 PAPER_KEY_NAMES = ("BINANCE_API_KEY", "BINANCE_API_SECRET")   # the paper runner's read-only key
 PAPER_ENV_FILE = "/etc/paperbot/live.env"
-BALANCE_HEADROOM = 1.2
 
 
 class Refused(Exception):
@@ -150,13 +149,6 @@ def permission_warnings(perm: dict) -> list[str]:
     return [str(w) for w in (perm.get("warnings") or [])] if isinstance(perm, dict) else []
 
 
-def check_balance(wallet: float, budget: float) -> Optional[str]:
-    if wallet > budget * BALANCE_HEADROOM + 1e-9:
-        return (f"선물 지갑 ${wallet:,.2f}가 정한 금액 ${budget:,.2f}의 {BALANCE_HEADROOM:.1f}배를 넘습니다. "
-                "실행기 전용 하위 계정에 정한 금액만 넣으세요(주 계정 사용 방지)")
-    return None
-
-
 def check_assets(assets) -> Optional[str]:
     """The futures wallet's other assets (GET /fapi/v2/account ``assets``). totalWalletBalance counts USDT only, so
     a wallet that also holds USDC, BNB, ... is not the budget-only sub-account (and BNB there pays the fees)."""
@@ -191,9 +183,6 @@ def online_gates(perm_reader: Callable[[], dict], wallet: float, budget: float,
         else:
             problems += check_permissions(perm)
             warnings += permission_warnings(perm)
-    bal = check_balance(wallet, budget)
-    if bal:
-        problems.append(bal)
     other = check_assets(assets)
     if other:
         problems.append(other)

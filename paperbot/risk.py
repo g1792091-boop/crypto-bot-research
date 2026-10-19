@@ -31,7 +31,6 @@ ALLOW, REDUCE, BLOCK, FLATTEN_HALT = "allow", "reduce", "block", "flatten_and_ha
 
 # config key -> the owners' name for it (docs/paper-v3-rules-addendum.md Q6)
 REQUIRED = {
-    "daily_max_loss_usd": "하루 최대 손실($)",
     "max_drawdown_pct": "멈춤 낙폭(%)",
     "max_consecutive_losses": "연속 손실 멈춤(번)",
     "max_leverage": "최대 레버리지(배)",
@@ -43,7 +42,7 @@ REQUIRED = {
 
 @dataclass(frozen=True)
 class RiskConfig:
-    daily_max_loss_usd: Optional[float] = None
+    daily_max_loss_usd: Optional[float] = None    # optional: None = no daily limit (owners 2026-10-19: off)
     max_drawdown_pct: Optional[float] = None      # 0.20 = halt at 20 % below the peak
     max_consecutive_losses: Optional[int] = None
     max_leverage: Optional[int] = None

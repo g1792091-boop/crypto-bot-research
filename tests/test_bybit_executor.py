@@ -461,9 +461,8 @@ def test_mainnet_refuses_a_key_with_the_wrong_permissions(tmp_path, change, need
 def test_mainnet_balance_and_asset_guards_and_preflight(tmp_path):
     fake = FakeBybit(wallet=900.0, host="api.bybit.com", api_key="lk", api_secret="ls")
     (tmp_path / "a").mkdir()
-    with pytest.raises(Refused) as e:
-        World(tmp_path / "a", mode="mainnet", fake=fake)
-    assert "1.2배" in str(e.value)
+    w = World(tmp_path / "a", mode="mainnet", fake=fake)      # owners 10-19: no wallet cap (was budget x 1.2)
+    w.store.close()
     fake = FakeBybit(wallet=500.0, host="api.bybit.com", api_key="lk", api_secret="ls")
     fake.other_coins = {"BTC": 0.01}
     (tmp_path / "b").mkdir()

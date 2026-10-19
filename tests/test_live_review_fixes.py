@@ -483,11 +483,12 @@ def test_a_redirect_is_never_followed(monkeypatch):
 # ------------------------------------------------------------------ stage-check counts live days from a real start
 def test_stage_check_counts_days_from_the_first_start_that_passed_the_gates(tmp_path):
     Paper(str(tmp_path / "paper3.db"))
-    lv = Live(tmp_path, fake=FakeFutures(wallet=700.0, host="fapi.binance.com", api_key="lk"))
+    lv = Live(tmp_path, fake=FakeFutures(wallet=500.0, host="fapi.binance.com", api_key="lk"))
+    lv.fake.other_assets = {"BNB": 1.0}
     try:
-        with pytest.raises(Refused):                           # day 0: refused (wallet over budget x 1.2)
+        with pytest.raises(Refused):                           # day 0: refused (BNB in the futures wallet)
             lv.executor().start()
-        lv.fake.wallet = 500.0
+        lv.fake.other_assets = {}
         lv.clock.t += 20 * 86_400_000                          # day 20: fixed, really started
         lv.executor().start()
         lv.store.commit()

@@ -696,7 +696,7 @@ def test_a_permission_check_binance_does_not_let_through_never_sells_the_live_po
         assert not isinstance(e.value, Refused) and not ex.risk.halted and not ex.gates_failed
         assert lv.fake.pos[BTC] == 5.0 and lv.fake.covered(BTC) and not lv.events("halt")
         assert any(lvl == CRITICAL and "닫지 않고" in txt for lvl, txt in lv.note.messages)
-        lv.fake.wallet = 1_000.0                                 # a definite problem as well: halted and closed
+        lv.fake.other_assets = {"BNB": 1.0}                      # a definite problem as well: halted and closed
         ex = lv.executor()
         ex.start()
         assert ex.risk.halted and ex.gates_failed
