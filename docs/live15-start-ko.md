@@ -74,9 +74,9 @@ sudo systemctl restart paperbot-combo
 - 예전 매매법의 대기 신호가 남아 있었다면 "설정이 바뀜: 예전 매매법의 대기 신호 n개 ... 버렸습니다" 알림이 남습니다. 정상입니다(진입하지 않음).
 - **실행기는 다시 켜지 않습니다.** 같은 페이퍼 DB를 계속 읽습니다.
 
-**5) 연패 멈춤·낙폭 멈춤 없애기 (10/19 결정, 실행기 설정)**
+**5) 연패 멈춤·낙폭 멈춤·신호등 없애기 (10/19 결정, 실행기 설정)**
 
-2)에서 새 코드를 받은 뒤에 합니다. 예전 코드는 이 값들이 없으면 실행기를 켜지 않습니다. 실행기 설정 두 파일에서 `max_consecutive_losses`(연패 멈춤)와 `max_drawdown_pct`(낙폭 50% 멈춤) 두 줄만 뺍니다(다른 값은 그대로):
+2)에서 새 코드를 받은 뒤에 합니다. 예전 코드는 이 값들이 없으면 실행기를 켜지 않습니다. 실행기 설정 두 파일에서 `max_consecutive_losses`(연패 멈춤)와 `max_drawdown_pct`(낙폭 50% 멈춤)를 빼고, 신호등을 끕니다(`signal_light_n` 0). 다른 값은 그대로입니다:
 
 ```bash
 sudo python3 - <<'EOF'
@@ -84,7 +84,10 @@ import json
 for p in ("/etc/paperbot/executor.json", "/etc/paperbot/executor-mexc.json"):
     d = json.load(open(p, encoding="utf-8"))
     r = d.get("risk", {})
-    print(p, "연패 멈춤:", r.pop("max_consecutive_losses", "이미 없음"), "/ 낙폭 멈춤:", r.pop("max_drawdown_pct", "이미 없음"))
+    print(p, "연패 멈춤:", r.pop("max_consecutive_losses", "이미 없음"), "/ 낙폭 멈춤:", r.pop("max_drawdown_pct", "이미 없음"),
+          "/ 신호등:", d.get("signal_light_n"), "-> 0")
+    d["signal_light_n"] = 0
+    d.pop("signal_light_min_win", None)
     open(p, "w", encoding="utf-8").write(json.dumps(d, indent=2, ensure_ascii=False) + "\n")
 EOF
 cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor check-config --config /etc/paperbot/executor.json
@@ -92,13 +95,13 @@ cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/pyth
 sudo systemctl restart paperbot-executor paperbot-executor-mexc
 ```
 
-- 두 check-config 모두 마지막 줄이 `준비됨`이어야 합니다.
+- 두 check-config 모두 끝 두 줄이 `신호등: 꺼짐 (paper의 모든 진입을 따라감)`, `준비됨`이어야 합니다.
 - 실행기 재시작은 **두 실행기 모두 포지션이 없을 때만** 합니다(1)에서 확인한 상태).
 - **남는 것:** 비상 정지 파일(`/var/lib/paperbot/STOP`)과 진입 한도(최대 40배, 코인 6개, 포지션 크기, 손절 한 번 최대 35%)는 그대로입니다. 연패나 낙폭으로 저절로 멈추는 일은 없어집니다. 시드 비중 30%에서 −50% 손절 한 번이 계좌 약 −15%라서 연속 3번이면 약 −39%, 4번이면 약 −48%까지 갑니다. 멈추고 싶을 때는 `sudo touch /var/lib/paperbot/STOP`.
 
 ## 같이 알아 두실 것
 
-- **신호등:** 바이비트는 페이퍼 최근 20번 중 85%, MEXC는 90% 이상 이겼을 때만 따라갑니다. 새 봇의 기대 승률(89~94%) 근처라서, 특히 **MEXC는 20번 중 3번만 져도 따라가기를 멈춥니다**(페이퍼는 계속 돌고, 기록이 회복되면 다시 따라감). 신호등은 예전 A+C 봇의 거래도 함께 셉니다(같은 계좌). 바꾸려면 `/etc/paperbot/executor-mexc.json`의 `signal_light_min_win`을 고치고, **포지션이 없을 때** `sudo systemctl restart paperbot-executor-mexc`.
+- **신호등은 끕니다** (10/19 결정). 두 실행기가 페이퍼의 모든 진입을 그대로 따라갑니다. 그래서 실거래 결과를 페이퍼와 바로 비교할 수 있고, 예전 A+C 봇의 거래가 새 봇의 따라가기에 영향을 주지도 않습니다. 대신 성적이 나빠질 때 저절로 쉬는 장치는 없습니다(비상 정지 파일만 남음).
 - **대시보드·아침 점검의 5년 기준표**(`combo.live-ac.expected.json`, `likely.json`)는 예전 A+C 봇의 것이라 새 설정에서는 쓰지 않습니다("이 설정의 5년 기준표가 없어요"로 나옴). 새 봇은 백테스트 없이 시작했기 때문입니다.
 - **페이퍼 계좌 기록은 이어집니다.** 순위표에서 예전 매매법 거래는 지금 설정에 없는 매매법으로 따로 표시됩니다.
 - **수수료:** 계산은 테이커 0.05% + 슬리피지 0.02%로 했습니다. 바이비트 0.055%, MEXC 0.06~0.08%라 실제는 조금 더 나쁩니다.

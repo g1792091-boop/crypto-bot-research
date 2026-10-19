@@ -15,9 +15,10 @@ def _load(name):
 def test_bybit_and_mexc_differ_only_in_exchange_db_and_light():
     b, m = _load("executor.live-bybit.json"), _load("executor.live-mexc.json")
     diff = {k for k in set(b) | set(m) if b.get(k) != m.get(k)}
-    assert diff == {"exchange", "db", "signal_light_min_win"}
+    assert diff == {"exchange", "db"}
     assert (b["exchange"], m["exchange"]) == ("bybit", "mexc")
-    assert (b["signal_light_min_win"], m["signal_light_min_win"]) == (0.85, 0.9)
+    # owners 10-19 (규칙봇 15): no signal light, both executors follow every paper entry
+    assert b["signal_light_n"] == m["signal_light_n"] == 0 and "signal_light_min_win" not in b
     assert b["paper_db"] == m["paper_db"] == "/var/lib/paperbot/combo/live-ac.db"
     assert b["account"] == "COMBO@mix" and b["mode"] == "mainnet" and b["budget_usd"] == 100
 

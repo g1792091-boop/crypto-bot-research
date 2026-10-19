@@ -8,8 +8,7 @@
   "qty_scale": 0.1,
   "entry_source": "paper",
   "stop_from": "ratio",
-  "signal_light_n": 20,
-  "signal_light_min_win": 0.85,
+  "signal_light_n": 0,
   "risk": {
     "max_leverage": 40,
     "max_notional_usd": 10000,
