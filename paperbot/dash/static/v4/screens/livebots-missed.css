@@ -1,5 +1,6 @@
-/* 실거래 › 못 탄 신호 (screens/livebots-missed.js). The question on top with two blocks side by side (실제로 탄 거래 vs 못 탄
-   신호(가상): wins and losses at the same size, green and red only for meaning), the rows below (one line on a wide screen,
+/* 실거래 › 못 탄 신호 (screens/livebots-missed.js). The question on top with the cards (실제로 탄 거래, then one card per
+   "왜 못 탔나" group: wins and losses at the same size, green and red only for meaning, the one-line read), the group chips
+   and the result filter with the chosen group's totals for both sides always above the rows (one line on a wide screen,
    stacked on a phone, never sideways), the honest foot always on. Tokens only (both skins), every font size a --t-* token.
    Nothing loops; the one swap is still under prefers-reduced-motion. */
 
@@ -16,18 +17,24 @@
 .lbm-warn { margin: 0; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--warn-line); background: var(--warn-soft);
   color: var(--ink); font-size: var(--t-xs); line-height: 1.5; overflow-wrap: anywhere; }
 
-.lbm-vs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; min-width: 0; }
-.lbm-vsx { align-self: center; color: var(--muted); font: 400 var(--t-md)/1 var(--f-pixel); }
-@media (max-width: 759px) {
-  .lbm-vs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-  .lbm-vsx { display: none; }
-}
+/* the cards: 실제로 탄 거래 first, then the groups (one column on a phone, up to four on a wide screen) */
+.lbm-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 10px; align-items: stretch; min-width: 0; }
+.lbm-blk.none { align-content: start; opacity: .75; }
+.lbm-blk.none .lbm-read { color: var(--muted); }
+.lbm-read { margin: 0; padding-top: 6px; border-top: 1px dashed var(--line); color: var(--ink); font-size: var(--t-xs); line-height: 1.55; }
+.lbm-blk { --gc: var(--line-2); }
+.lbm-blk.g-one, .lbm-g.g-one { --gc: var(--accent); }
+.lbm-blk.g-research, .lbm-g.g-research { --gc: var(--series-ds); }
+.lbm-blk.g-nobreak, .lbm-g.g-nobreak { --gc: var(--smc-bos); }
+.lbm-blk.g-pause, .lbm-g.g-pause { --gc: var(--warn); }
+.lbm-blk.g-late, .lbm-g.g-late { --gc: var(--ink-2); }
+.lbm-blk.g-exec, .lbm-g.g-exec { --gc: var(--series-m5); }
+.lbm-blk[class*="g-"] { border-style: dashed; border-color: color-mix(in srgb, var(--gc) 55%, transparent); }
+.lbm-blk[class*="g-"] h3 { color: var(--gc); }
 .lbm-blk { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line);
   background: var(--surface); }
 .lbm-blk.taken { border-color: var(--accent-line); }
-.lbm-blk.missed { border-style: dashed; border-color: var(--line-2); }
 .lbm-blk h3 { margin: 0; color: var(--ink); font: 800 var(--t-sm)/1.3 var(--f-body); }
-.lbm-blk.missed h3 { color: var(--ink-2); }
 .lbm-n { color: var(--ink); font: 400 var(--t-xl)/1 var(--f-led); white-space: nowrap; }
 .lbm-closed { margin: 0; color: var(--muted); font-size: var(--t-2xs); }
 .lbm-wl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; min-width: 0; }
@@ -53,8 +60,21 @@
 .lbm-pass:empty { display: none; }
 .lbm-stale { color: var(--warn); font-weight: 700; }
 
-/* ---------------------------------------------------------------- the rows */
+/* ---------------------------------------------------------------- the filters and the totals above the rows */
 .lbm-list { min-width: 0; }
+.lbm-gseg { min-width: 0; max-width: 100%; }
+.lbm-gseg .seg { max-width: 100%; }
+.lbm-rbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.lbm-tot { display: grid; gap: 2px; margin: 0; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--surface-2);
+  color: var(--ink); font-size: var(--t-xs); line-height: 1.55; }
+.lbm-tot:empty { display: none; }
+.lbm-totr { color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- the rows */
+.lbm-g { display: inline-flex; padding: 0 6px; margin-right: 2px; border-radius: 5px; white-space: nowrap; vertical-align: 1px;
+  border: 1px solid color-mix(in srgb, var(--gc) 60%, transparent); background: color-mix(in srgb, var(--gc) 12%, transparent);
+  color: var(--gc); font: 700 var(--t-2xs)/1.6 var(--f-body); }
+.lbm-res .lbm-how { flex-basis: 100%; color: var(--ink-2); font-weight: 400; }
 .lbm-row { display: grid; align-items: center; column-gap: 12px; row-gap: 4px; min-width: 0; padding: 9px 2px; border-top: 1px solid var(--line);
   grid-template-columns: 92px 84px minmax(0, 1fr) minmax(0, 1.3fr) minmax(150px, max-content) 74px minmax(0, 1.3fr);
   grid-template-areas: "t c s why res hold tk"; font-size: var(--t-xs); }
@@ -92,5 +112,5 @@
 .lbm-foot p:first-child { color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
-  .lbm-vs.swap { animation: none; }
+  .lbm-cards.swap { animation: none; }
 }

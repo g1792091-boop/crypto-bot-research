@@ -1780,3 +1780,37 @@ def test_the_preview_executor_tables_match_the_executor():
         assert cols == [r[1] for r in a.execute(f"PRAGMA table_info({table})")], table
     real.close()
     a.close()
+
+
+# ---------------------------------------------------------------- 4. 못 탄 신호: one quiet line in the morning check
+def test_the_morning_check_has_one_quiet_line_about_the_signals_not_taken(tmp_path, monkeypatch):
+    """The watcher's pass (paperbot/livemissed.py) on the world where the combined bot really ran (tests/livesim_world.py,
+    research mode: every group), then the morning check of that day: one line, never loud, nothing per signal; a day
+    without such signals has no line."""
+    import sys as _sys
+    from pathlib import Path
+
+    from paperbot import events
+    from paperbot import livemissed as LM
+    _sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import livesim_world as W
+    csv = tmp_path / "macro.csv"
+    csv.write_text(W.MACRO_CSV, encoding="utf-8")
+    monkeypatch.setattr(events, "PATH", Path(csv))
+    events.reset()
+    monkeypatch.setattr(LC, "load_executors", lambda *a, **k: [])
+    w = W.build(str(tmp_path / "w"), until=W.END_R, research=True)
+    w.close()
+    src = LC.Sources(db=str(tmp_path / "livecheck.db"), paper_db=w.paper_db, rule_db=w.rule_db, combo_config=str(tmp_path / "no.json"),
+                     cache=str(tmp_path / "cache.db"), shadow_glob=str(tmp_path / "shadow-*.db"), executors=[])
+    conn = LC.open_out(src.db)
+    LM.missed_pass(src, conn, W.END_R + 5 * W.MIN, log=lambda s: None)
+    conn.close()
+    n = ListNotifier()
+    out = LC.run_check(src, day="2026-10-19", now_ms=W.T0 + W.DAY + 10 * W.MIN, no_replay=True, notifier=n)
+    line = "어제 못 탄 신호 9개(가상): 한 번에 하나 1승 2패 · 연구 조건 2승 1패 · 돌파 없음 1승 0패 · 쉬는 시간 0승 1패 · 늦음 1승 0패 · 실제로 탄 거래 3승 1패"
+    assert line in out["text"].splitlines() and out["level"] == INFO and not any("못 탄" in x for x in out["loud"])
+    assert len(n.messages) == 1                                   # the morning message only: nothing per signal
+    out = LC.run_check(src, day="2026-10-18", now_ms=W.T0 + 10 * W.MIN, no_replay=True, notifier=ListNotifier())
+    assert "못 탄 신호" not in out["text"]
+    events.reset()

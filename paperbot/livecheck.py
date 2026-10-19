@@ -35,6 +35,10 @@ halted. ``--dry-run`` prints the message and writes nothing (no Telegram, no liv
    shadow paper bots (/var/lib/paperbot/combo/shadow-*.db) for reference, and the owners' 40-trade checkpoint
    (88% or more: consider more money; 82-88%: keep watching; under 82%: stop and rethink). Mondays add the last 7 days.
    Samples under 20 trades are marked as small.
+4. 못 탄 신호 (one quiet line, never loud): the day's signals the paper bot did not take and their virtual results per
+   reason, and the paper trades the executors did not follow, next to the trades it took ("어제 못 탄 신호 n개(가상): 한 번에
+   하나 a승 b패 · 연구 조건 c승 d패 · … · 실제로 탄 거래 x승 y패"; paperbot/livemissed.py morning_line on the watcher's
+   ``missed`` table; nothing when the day has none). No message per signal.
 
 ``watch`` (deploy/paperbot-livewatch.timer, every minute; 실시간 감시) sends a LOUD message once per condition, with
 the next step, and re-arms it when the condition clears (state in livecheck.db: watch, watch_log; a silent line when
@@ -897,6 +901,7 @@ def paper_report(conn, w0: int, w1: int) -> dict:
     _ts, acc = get_state(conn, "accounts")
     eng = ((acc or {}).get("engines") or {})
     s["wallet"] = (eng.get(ACCOUNT) or {}).get("wallet")
+    s["pos_entry"] = ((eng.get(ACCOUNT) or {}).get("position") or {}).get("entry_time")
     flip = paper_trades(conn, FLIP_ACCOUNT)
     s["flip"] = win_stats(flip) if flip or FLIP_ACCOUNT in eng else None
     s["trades"] = trades
@@ -1078,10 +1083,11 @@ def utc_date(ms: int) -> str:
 
 def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], execs: list, shadows: list,
             week: Optional[list], cards: Optional[list] = None, drift: Optional[str] = None,
-            notes: Optional[list] = None, now_ms: Optional[int] = None, rest: Optional[str] = None
-            ) -> tuple[str, str, list]:
+            notes: Optional[list] = None, now_ms: Optional[int] = None, rest: Optional[str] = None,
+            missed: Optional[str] = None) -> tuple[str, str, list]:
     """(level, text, loud reasons). ``cards``: the loss cards of the day (3부 ①, already sent by the watcher; here one
-    line each with the noise-stop result), ``drift``: the paper against the backtest's ranges (3부 ②)."""
+    line each with the noise-stop result), ``drift``: the paper against the backtest's ranges (3부 ②), ``missed``: the
+    day's not-entered signals in one quiet line (paperbot/livemissed.py morning_line; never loud)."""
     loud = []
     if parity.get("flags"):
         loud.append(f"대조에서 이유를 모르는 차이 {parity['flags']}개")
@@ -1102,6 +1108,8 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
         lines += ["", f"손실 카드 {len(cards)}장"] + [card_line(c, now_ms or w1) for c in cards[:MAX_LINES]]
         if len(cards) > MAX_LINES:
             lines.append(f"- 외 {len(cards) - MAX_LINES}장")
+    if missed:
+        lines += ["", missed]
     sl = score_lines(paper, execs, shadows)
     if drift:
         at = next((i for i, ln in enumerate(sl) if ln.startswith("- 페이퍼")), 0)
@@ -1613,7 +1621,7 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
             if card.get("sent"):
                 out.append(("card", card["key"], CRITICAL if card["loud"] else INFO, card["text"]))
         out += changes_pass(src, cc, now_ms, exp, send)
-        try:                                        # 못 탄 신호 성적 (D1): view only, bounded (30 sims / 10 s), sends nothing
+        try:                                        # 못 탄 신호 성적: view only, bounded (60 sims / 10 s), sends nothing
             from .livemissed import missed_pass
             missed_pass(src, cc, now_ms)
         except Exception as exc:  # noqa: BLE001  never in the way of the alarms below
@@ -3425,8 +3433,14 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
                 ccfg = combo_config(src, lc)[0]
             finally:
                 lc.close()
+        missed = None
+        try:                                  # 못 탄 신호 (the watcher's table): one quiet line, never in the way of the check
+            from .livemissed import morning_line
+            missed = morning_line(out_conn, trades, (paper or {}).get("pos_entry"), w0, w1)
+        except Exception as exc:  # noqa: BLE001
+            print(f"missed line: {type(exc).__name__}: {exc}", file=sys.stderr)
         level, text, loud = compose(day, w0, w1, parity, paper, execs, shadows, week, cards=cards, drift=drift,
-                                    notes=notes, now_ms=now_ms, rest=rest_line(w1, ccfg))
+                                    notes=notes, now_ms=now_ms, rest=rest_line(w1, ccfg), missed=missed)
         report = {"day": day, "w0": w0, "w1": w1, "parity": parity, "executors": execs, "shadows": shadows,
                   "paper": {k: v for k, v in (paper or {}).items() if k != "trades"} if paper else None,
                   "infos": [ex.__dict__ for ex in infos]}
