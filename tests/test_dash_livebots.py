@@ -334,6 +334,8 @@ def _render(call: str, data: dict) -> dict:
         pytest.skip("needs node")
     dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
     script = (f"const D = await import('{dom}');\n"
+              "if (!Node.prototype.after) Node.prototype.after = function (...xs) { const p = this.parentNode; if (!p) return;"
+              " const i = p.childNodes.indexOf(this); for (const [j, x] of xs.entries()) { p.childNodes.splice(i + 1 + j, 0, x); x.parentNode = p; } };\n"
               f"const K = await import('file://{SCREENS}/livebots-kit.js'); const P = await import('file://{SCREENS}/livebots-parts.js');\n"
               f"const {{ui}} = await import('file://{V4}/core/pb.js');\n"
               f"const d = {json.dumps(data)}; const ctx = {{href: (n, a, q) => '#/' + n + (a ? '/' + a : ''), alive: () => true, track() {{}}, every() {{}}, on() {{}}}};\n"
@@ -382,6 +384,12 @@ def test_the_strip_and_the_lists(world):
     assert "실거래 체결" in fills and "진입" in fills and "잠금" in fills and "손절" in fills and "+0.70" in fills
     wait = _render("(() => { const b = P.bandLine(ctx); b.set(null, 'failed'); return b.el; })()", d)["text"]
     assert "$" not in wait and "0.00" not in wait and "—" in wait          # nothing read: dashes, never a zero
+    gone = L.build({k: "/nonexistent/" + k for k in L.ENV}, NOW)
+    for call in ("P.tablePanel(ctx, {sym: 'BTCUSDT'}, () => {})", "P.minePanel(ctx, {sym: 'BTCUSDT'})"):
+        t = _render(f"(() => {{ const x = {call}; x.set(d, 'ok'); return x.el; }})()", gone)["text"]
+        assert "수집 전" in t and "없어요" not in t and "0.00" not in t, (call, t)               # nothing read is not 'none'
+    t = _render("(() => { const x = P.tablePanel(ctx, {sym: 'BTCUSDT'}, () => {}); x.set(d, 'ok'); return x.el; })()", d)["text"]
+    assert "페이퍼" in t and "바이비트" in t and "62,010.0" in t and "잠금 62,210.0" in t
 
 
 # ---------------------------------------------------------------- 거래: the trade list with settings, reasons and partners
@@ -599,6 +607,77 @@ def test_the_last_three_routes(client):
     assert len(client.get("/api/v4/livebots/safety").json()["execs"]) == 2
     assert len(client.get("/api/v4/livebots/shadows").json()["shadows"]) == 3
     assert client.get("/api/v4/livebots/settings").json()["n_settings"] == 3
+
+
+# ---------------------------------------------------------------- 소리 · 빛
+def test_live_events_only_what_really_arrived(world):
+    d = L.build(world, NOW)
+    later = json.loads(json.dumps(d))
+    later["fills"] = [{"key": "mexc:x:new", "acct": "mexc", "kind": "exit", "t": NOW + 30_000, "reason": "LOCK", "pnl": 0.5},
+                      {"key": "bybit:e:new", "acct": "bybit", "kind": "entry", "t": NOW + 31_000},
+                      {"key": "paper:x:old", "acct": "paper", "kind": "exit", "t": NOW - 3 * H, "reason": "SL", "pnl": -5}] + d["fills"]
+    m = ex(later, "mexc")
+    b = ex(later, "bybit")
+    b["light"] = {**b["light"], "state": "red", "last_event": {"kind": "light_red", "ts": NOW + 20_000}}
+    b["record"]["halted"] = True
+    b["record"]["halted_ts"] = NOW - 2 * H                                   # an old halt: no alarm sound now
+    out = _node(f"""const d = {json.dumps(d)}, later = {json.dumps(later)};
+    const a = C.liveEvents(null, d, {NOW});
+    const b = C.liveEvents(a.state, later, {NOW} + 40000);
+    const c = C.liveEvents(b.state, later, {NOW} + 45000);
+    const re = C.liveEvents({{...b.state, seen: null}}, later, {NOW} + 50000);
+    console.log(JSON.stringify({{a: a.names, b: b.names, fresh: b.fresh.map((f) => f.key), al: b.alarms, c: c.names, re: re.names}}));""")
+    assert out["a"] == []                                                    # the first look is the past
+    assert out["b"] == ["lv_tp", "lv_entry", "lv_alert"] and out["fresh"] == ["mexc:x:new", "bybit:e:new"]      # the 3-hour-old one is not now
+    assert out["al"] == [{"id": "bybit", "what": "red"}]                     # the halt is old: no alarm for it
+    assert out["c"] == [] and out["re"] == []                                # heard once; after a hidden page: a new baseline
+    assert m["id"] == "mexc"
+
+
+def _sound(body: str):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    core = "file://" + os.path.join(V4, "core")
+    pre = ("const mem = {}; globalThis.localStorage = {getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; }};\n"
+           "globalThis.window = globalThis; globalThis.AudioContext = class { constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }\n"
+           "  createGain() { return {gain: {value: 0, setTargetAtTime() {}}, connect() {}}; } resume() { return Promise.resolve(); } };\n")
+    script = pre + f"const S = await import('{core}/sound.js');\n" + body
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_live_sounds_borrow_the_rule_bots_motifs_with_their_own_switches():
+    out = _sound("""
+    const played = []; S._test.setSink((k, a) => played.push({name: a.name, fs: a.fs, eng: a.eng}));
+    const ids = S.EVENTS.map((e) => e[0]);
+    const off = S.playLive(["lv_entry"]);                                   // sound off: nothing
+    S.cfg.on = true; S.cfg.night = false; S._test.unlock(true); S.setKind("v6");
+    const two = S.playLive(["lv_entry", "lv_tp", "lv_sl"], 1000);           // at most two, the rarest first
+    const again = S.playLive(["lv_sl"], 1500);                              // the same motif within 1.2 s: one sound
+    S.setEv("lv_alert", false);
+    const muted = S.playLive(["lv_alert"], 9000);
+    S.cfg.on = false;
+    const pv = [S.preview("lv_tp"), S.preview("lv_alert"), S.preview("lv_nope")];
+    console.log(JSON.stringify({ids, off, two, again, muted, pv, played, tp: S.MOTIFS.c_tp[0], sl: S.MOTIFS.c_sl[0], liq: S.MOTIFS.c_liq[0], map: S.LIVE_MOTIF}));""")
+    assert out["ids"][-1] == "layer" and {"lv_entry", "lv_tp", "lv_sl", "lv_alert"} <= set(out["ids"])
+    assert out["map"] == {"lv_entry": "c_entry", "lv_tp": "c_tp", "lv_sl": "c_sl", "lv_alert": "c_liq"}
+    assert out["off"] == [] and out["two"] == ["lv_sl", "lv_tp"] and out["again"] == [] and out["muted"] == []
+    assert out["played"][0] == {"name": "lv_sl", "fs": out["sl"]}                        # the 손절 motif, note for note (v6)
+    assert out["pv"] == [True, True, False] and out["played"][-2]["fs"] == out["tp"] and out["played"][-1]["fs"] == out["liq"]
+
+
+def test_sound_and_light_are_wired_to_real_records_only():
+    js = _read(SCREENS, "livebots.js")
+    assert "const ev = liveEvents(heard.state, d, serverNow());" in js and "sound.playLive(ev.names)" in js and "view.alarm(ev.alarms)" in js
+    assert 'heard.state = {...heard.state, seen: null}' in js                # a page shown again starts from a new baseline
+    term, chart = _read(SCREENS, "livebots-term.js"), _read(SCREENS, "livebots-chart.js")
+    for src in (term, chart):
+        assert "posKeys: (sym) => posKeys(" in src and "tickStream(ctx)" in src and "chart.onBig(r)" in src
+    tc = _read(SCREENS, "terminal-chart.js")
+    assert "[...seenPos].some((k) => !keys.has(k)))) deck.flash(ownEvent());" in tc   # a live position that opened or closed: one wash
+    assert "sound.EVENTS.map(" in _read(V4, "core", "settings.js")                        # the 설정 panel lists the live switches too
 
 
 # ---------------------------------------------------------------- wiring

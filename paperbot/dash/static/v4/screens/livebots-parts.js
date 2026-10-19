@@ -73,7 +73,9 @@ export function bandLine(ctx) {
     }
   }
   set(null, "loading");
-  return {el, set};
+  /** A light that really turned red or an executor that really halted since the last answer: its chip lights once. */
+  const alarm = (list) => { for (const a of list || []) motion.flash(a.what === "red" ? c.light : c.halt, "down"); };
+  return {el, set, alarm};
 }
 
 // ---------------------------------------------------------------- 실거래 체결
@@ -135,12 +137,13 @@ export function coinMarks() {
   return {
     paint(rows, d, failed) {
       const accts = d ? d.accts || [] : null;
-      const cnt = accts ? coinCounts(accts, (s) => store.mark(s)) : null;
+      const readable = accts ? accts.some((a) => a.state === "ok") : false;
+      const cnt = accts && readable ? coinCounts(accts, (s) => store.mark(s)) : null;
       for (const [sym, r] of rows) {
         if (!r.pos) continue;
         if (!cnt) {
           put(r.pos, "—"); r.pos.className = "term-wpos muted";
-          r.pos.title = `${fmt.coin(sym)}: 실거래 포지션 ${failed ? "불러오지 못함" : "불러오는 중"}`;
+          r.pos.title = `${fmt.coin(sym)}: 실거래 포지션 ${accts && !readable ? "수집 전 (세 계좌 기록을 아직 못 읽음)" : failed ? "불러오지 못함" : "불러오는 중"}`;
           continue;
         }
         const xs = cnt[sym] || [];
@@ -201,7 +204,8 @@ export function minePanel(ctx, st) {
       return r.node;
     });
     for (const k of [...rows.keys()]) if (!xs.some((a) => a.id === k)) rows.delete(k);
-    if (!nodes.length) put(list, ui.empty(`${fmt.coin(st.sym)}에 열린 포지션이 없어요`));
+    if (!nodes.length) put(list, accts.some((a) => a.state === "ok") ? ui.empty(`${fmt.coin(st.sym)}에 열린 포지션이 없어요`)
+      : h("p", {class: "empty"}, ui.notYet("수집 전"), " 세 계좌의 기록을 아직 못 읽었어요"));
     else list.replaceChildren(h("div", {class: "term-cr hd", "aria-hidden": "true"}, h("span", null, "방향"), h("span", null, "계좌"), h("span", null, "배수"),
       h("span", null, "ROE")), ...nodes);
   }
@@ -242,6 +246,9 @@ export function tablePanel(ctx, st, onPick) {
     const bad = (t.d ? t.d.accts || [] : []).filter((a) => a.state !== "ok" && (!t.acct || a.id === t.acct));
     return bad.length ? h("span", {class: "down"}, `${bad.map((a) => `${acctKo(a.id)} ${a.state === "error" ? "못 읽음" : "수집 전"}`).join(" · ")} · `) : null;
   };
+  /** "none" only when an account in the filter was really read; otherwise 수집 전 / 못 읽음 (never '없음') */
+  const noneOr = (words) => (accts().some((a) => a.state === "ok") ? ui.empty(words)
+    : h("p", {class: "empty"}, ui.notYet("수집 전"), " 이 계좌들의 기록을 아직 못 읽었어요"));
   function posTable() {
     const xs = accts().filter((a) => a.state === "ok" && a.position);
     const rows = xs.map((a) => {
@@ -259,7 +266,7 @@ export function tablePanel(ctx, st, onPick) {
     });
     put(foot, h("span", {class: "muted"}, unreadNote(), "ROE = 마크 가격 기준 미실현 ÷ 증거금 · 페이퍼의 순ROE(잠금 계산)는 줄에 마우스를 올리면"));
     return rows.length ? table([["계좌"], ["코인"], ["방향"], ["배수", "r xn"], ["진입가", "r xe"], ["마크", "r xm"], ["미실현 (USDT)", "r"], ["ROE", "r"], ["청산가", "r"],
-      ["손절·잠금", "r"], ["진입 시각", "r xs"]], rows) : ui.empty("열린 포지션이 없어요");
+      ["손절·잠금", "r"], ["진입 시각", "r xs"]], rows) : noneOr("열린 포지션이 없어요");
   }
   function fillsTable() {
     const fills = ((t.d && t.d.fills) || []).filter((f) => f.kind === "exit" && (!t.acct || f.acct === t.acct)).slice(0, 20);
@@ -268,7 +275,7 @@ export function tablePanel(ctx, st, onPick) {
       h("td", {class: ["r", "num", fmt.tone(f.roe)]}, f.roe == null ? "—" : fmt.pct(f.roe, 1)),
       h("td", {class: ["r", "num", fmt.tone(f.pnl)], title: f.est ? "체결을 아직 못 읽어 지갑 변화로 잡은 어림" : null}, f.pnl == null ? "—" : `${fmt.money(f.pnl, true)}${f.est ? "≈" : ""}`)));
     put(foot, h("span", {class: "muted"}, unreadNote(), `최근 ${fmt.int(rows.length)}건 · `, h("a", {href: ctx.href("livebots", "trades")}, "거래 전체 →")));
-    return rows.length ? table([["청산"], ["계좌"], ["코인"], ["방향"], ["배수", "r"], ["이유"], ["ROE", "r"], ["손익 (USDT)", "r"]], rows) : ui.empty("닫힌 거래가 아직 없어요");
+    return rows.length ? table([["청산"], ["계좌"], ["코인"], ["방향"], ["배수", "r"], ["이유"], ["ROE", "r"], ["손익 (USDT)", "r"]], rows) : noneOr("닫힌 거래가 아직 없어요");
   }
   function stopsTable() {
     const xs = accts().filter((a) => a.state === "ok" && a.position && a.position.stop).map((a) => {
@@ -281,7 +288,7 @@ export function tablePanel(ctx, st, onPick) {
       h("td", {class: ["r", "num", x.d != null && x.d < 0.005 ? "down" : ""]}, x.d == null ? "—" : fmt.pct(x.d, 2, false)),
       h("td", {class: "muted"}, x.a.kind === "live" ? (x.p.stop_order ? `거래소에 걸림 · #${String(x.p.stop_order).slice(-8)}` : "거래소 손절 (번호 기록 없음)") : "모의 (주문 없음)")));
     put(foot, h("span", {class: "muted"}, unreadNote(), "실행기는 거래소에 손절을 걸고 확인한 가격을 기록해요 · 페이퍼는 모의라 주문 없음"));
-    return rows.length ? table([["계좌"], ["코인"], ["방향"], ["종류"], ["가격", "r"], ["지금", "r"], ["거리", "r"], ["주문"]], rows) : ui.empty("걸린 손절이 없어요");
+    return rows.length ? table([["계좌"], ["코인"], ["방향"], ["종류"], ["가격", "r"], ["지금", "r"], ["거리", "r"], ["주문"]], rows) : noneOr("걸린 손절이 없어요");
   }
   function render(user) {
     el.tip.set(TAB_NOTE[t.tab] || TAB_NOTE.pos);
@@ -290,6 +297,7 @@ export function tablePanel(ctx, st, onPick) {
       return;
     }
     let L = 0, S = 0, tot = 0, known = 0, nLive = 0;
+    const liveRead = accts().some((a) => a.kind === "live" && a.state === "ok");
     for (const a of accts()) {
       if (a.state !== "ok" || !a.position) continue;
       if (Number(a.position.side) > 0) L++; else S++;
@@ -300,7 +308,7 @@ export function tablePanel(ctx, st, onPick) {
     }
     ratio.set({L, S}, (n, sh) => `${fmt.int(n)}`);
     if (posBtn) posBtn.textContent = `포지션 ${fmt.int(L + S)}`;
-    motion.countTo(total, nLive && known === nLive ? tot : nLive ? null : 0, {dec: 2, sign: true, tone: true, glow: true});
+    motion.countTo(total, !liveRead ? null : nLive && known === nLive ? tot : nLive ? null : 0, {dec: 2, sign: true, tone: true, glow: true});
     const body = t.tab === "fills" ? fillsTable() : t.tab === "stops" ? stopsTable() : posTable();
     tbl.replaceChildren(body);
     if (user) motion.swap(tbl);

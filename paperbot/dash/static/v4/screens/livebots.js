@@ -13,7 +13,8 @@
 // HONESTY: a file or table that is not there yet = 수집 전; one that cannot be read = 못 읽음 + why, never a zero; a refresh
 // that fails keeps the last answer on screen, dimmed, with its age (ui.staleNote); nothing here changes anything (no order
 // buttons, only view switches).
-import {h, put, ui, serverNow} from "../core/pb.js";
+import {h, put, ui, serverNow, sound} from "../core/pb.js";
+import {liveEvents} from "./livebots-calc.js";
 import {termView} from "./livebots-term.js";
 import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
@@ -35,6 +36,9 @@ export const TABS = [
   {id: "settings", label: "설정", make: (ctx) => settingsView(ctx), own: true},
 ];
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "summary");
+// what the page already heard (module level: a tab change re-mounts the screen, the same record must not sound again);
+// seen null = the next answer is the baseline (the first look, and the first look after the page was hidden)
+const heard = {state: null};
 
 export async function mount(el, ctx) {
   ctx.setTitle("실거래");
@@ -50,6 +54,7 @@ export async function mount(el, ctx) {
 
   const hub = {state: () => st.state, at: () => st.okAt, retry: () => load().catch(() => {}), get: () => st.d};
   const view = TABS.find((t) => t.id === st.tab).make(ctx, hub);
+  const own = !!TABS.find((t) => t.id === st.tab).own;
   put(body, view.el);
 
   async function load() {
@@ -61,9 +66,10 @@ export async function mount(el, ctx) {
       if (!ctx.alive() || (e && e.name === "AbortError")) return;
       // a refresh that fails after a good answer keeps the page, dimmed, and says how old it is (never silently stale)
       st.state = "failed";
-      if (st.d) { put(staleSlot, ui.staleNote(e, st.okAt, () => load())); ui.dim(body, true); }
+      if (own) { /* a tab with its own endpoint says its own failures; the summary poll only feeds the sounds here */ }
+      else if (st.d) { put(staleSlot, ui.staleNote(e, st.okAt, () => load())); ui.dim(body, true); }
       else put(staleSlot, ui.errorBox(e, () => load()));
-      view.set(null, "failed");
+      if (view.set) view.set(null, "failed");
       throw e;
     } finally { st.busy = false; }
     if (!ctx.alive()) return;
@@ -71,8 +77,14 @@ export async function mount(el, ctx) {
     ui.dim(body, false);
     st.d = d; st.state = "ok"; st.okAt = serverNow();
     view.set(d, "ok");
+    // 소리 · 빛: only what really arrived since the last answer (core/sound.js playLive; its gate, cooldown and switches)
+    const ev = liveEvents(heard.state, d, serverNow());
+    heard.state = ev.state;
+    if (ev.names.length) sound.playLive(ev.names);
+    if (ev.alarms.length && view.alarm) view.alarm(ev.alarms);
   }
-  if (TABS.find((t) => t.id === st.tab).own) return;      // (this tab reads its own endpoint)
+  ctx.listen(document, "visibilitychange", () => { if (!document.hidden && heard.state) heard.state = {...heard.state, seen: null}; });
+  // every tab reads the summary too (5 s, cached by the server): the sounds and the alarms follow the live bots on every tab
   try { await load(); } catch (e) { /* the box and the parts say so; the poll asks again */ }
   ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
 }

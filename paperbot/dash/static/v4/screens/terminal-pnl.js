@@ -181,7 +181,8 @@ export function pnlPanel(ctx, src = null) {
     const all = daysOf(st.cal);
     calMonth.textContent = all.length ? `${all[0].d.slice(0, 7).replace("-", ".")}${all[all.length - 1].d.slice(0, 7) !== all[0].d.slice(0, 7) ? ` – ${Number(all[all.length - 1].d.slice(5, 7))}월` : ""}` : "";
     if (!st.cal) {
-      put(calBox, st.calState === "failed" ? failNote("수익 캘린더", {retry: () => { st.calState = "loading"; drawCal(); if (src) { if (src.retry) src.retry(); } else loadCal(); }}) : motion.shimmer(2));
+      put(calBox, st.calState === "failed" ? failNote("수익 캘린더", {retry: () => { st.calState = "loading"; drawCal(); if (src) { if (src.retry) src.retry(); } else loadCal(); }})
+        : st.calState === "none" ? h("div", {class: "term-pnone sm"}, h("b", null, "수집 전"), h("span", null, `${who()}의 기록이 아직 없습니다`)) : motion.shimmer(2));
       return;
     }
     put(calBox, calendar(st.cal));

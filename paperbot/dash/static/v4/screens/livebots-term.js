@@ -163,5 +163,7 @@ export function termView(ctx, src) {
       pnl.refresh();
       if (st.d) { drawBelow(st.d); drawConsole(st.d); }
     },
+    /** (livebots.js) a light turned red or an executor halted, really, since the last answer. */
+    alarm(list) { band.alarm(list); },
   };
 }

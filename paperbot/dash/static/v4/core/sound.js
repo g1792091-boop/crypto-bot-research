@@ -85,7 +85,14 @@ export const hoursKo = () => `${pad2(hours.from)}~${pad2(hours.to)}시`;
 /** The event sounds the 설정 panel lists, in its order: [id, 한국어, what really makes it sound]. */
 export const EVENTS = [["c_entry", "진입", "우리 계좌(기존 36·5분봉·추가)가 새로 들어갈 때"], ["c_tp", "익절", "우리 계좌가 이익으로 닫을 때"],
   ["c_sl", "손절", "우리 계좌가 손실로 닫을 때"], ["c_liq", "강제청산", "우리 계좌가 강제청산될 때"], ["c_meet", "회의 결론", "회의가 결론을 내고 끝날 때"],
-  ["c_ms", "기념일", "D+10 · D+20 · 판정 날 (한 번씩)"], ["layer", "바탕음", "바이낸스 실제 체결 · 딥시크·동전 봇 체결"]];
+  ["c_ms", "기념일", "D+10 · D+20 · 판정 날 (한 번씩)"],
+  // 실거래 (#/livebots, owners 10/19): the live bots' real records, while the 실거래 screen is open; each borrows a motif (LIVE_MOTIF)
+  ["lv_entry", "실거래 진입", "페이퍼 · 바이비트 · MEXC가 새로 들어갈 때 (실거래 화면을 열어 둔 동안)"],
+  ["lv_tp", "실거래 익절", "세 계좌 중 하나가 잠금선에서 이익으로 닫힐 때"], ["lv_sl", "실거래 손절", "세 계좌 중 하나가 손절선에서 닫힐 때"],
+  ["lv_alert", "신호등 빨강 · 멈춤", "실행기 신호등이 빨강이 되거나 실행기가 멈출 때"],
+  ["layer", "바탕음", "바이낸스 실제 체결 · 딥시크·동전 봇 체결"]];
+/** The live bots' events and the motif each one sounds with (the rule bot's own: 진입, 익절, 손절; an alarm = the fast fall). */
+export const LIVE_MOTIF = {lv_entry: "c_entry", lv_tp: "c_tp", lv_sl: "c_sl", lv_alert: "c_liq"};
 const evOff = {};
 { const v = local.get(EV_KEY, null); if (v && typeof v === "object") for (const [k] of EVENTS) if (v[k] === false) evOff[k] = false; }
 /** Is this event's sound on (every one is on by default)? */
@@ -415,6 +422,25 @@ export function playMotifs(names, now = Date.now()) {
   });
   return pick;
 }
+/** The live bots' real events (screens/livebots.js: a fill or an alarm the screen saw arrive, never one of the first look):
+ *  the same gate, cooldown and spacing as playMotifs, each event's own switch in the 설정 panel, the motif of LIVE_MOTIF. */
+const LIVE_ORDER = ["lv_alert", "lv_sl", "lv_tp", "lv_entry"];
+export function playLive(names, now = Date.now()) {
+  if (!canPlay(now)) return [];
+  const pick = LIVE_ORDER.filter((n) => names.includes(n) && evOn(n) && !(now - (lastMotif[n] || -Infinity) < MOTIF_COOLDOWN_MS)).slice(0, 2);
+  pick.forEach((n, i) => {
+    lastMotif[n] = now;
+    const base = LIVE_MOTIF[n];
+    const [fs, gaps, v] = MOTIFS[base];
+    const go = () => {
+      if (!canPlay()) return;
+      if (engine === "v7") sink("run", {...motif7(base, v), name: n, eng: "v7"});
+      else sink("run", {fs, gaps, v, name: n});
+    };
+    if (i === 0) go(); else setTimeout(go, 450 * i);
+  });
+  return pick;
+}
 function feed(items) {
   if (!items.length) return;
   if (!canPlay() || !evOn("layer")) { layer.clear(); return; }
@@ -557,7 +583,7 @@ export function startOnTap() {
  *  browser's permission to play): the motif in the chosen kind and volume, or for 바탕음 one ordinary buy beep. It
  *  plays even with the live sound off; no timer and no record ever calls it. False where the page has no audio. */
 export function preview(name) {
-  if (name !== "layer" && !MOTIFS[name]) return false;
+  if (name !== "layer" && !MOTIFS[name] && !LIVE_MOTIF[name]) return false;
   const c = ac();
   if (!c) return false;
   if (name === "layer") {
@@ -566,8 +592,9 @@ export function preview(name) {
     sink(b.fs ? "run" : "beep", {...b, src: "preview", key: "preview"});
     return true;
   }
-  const [fs, gaps, v] = MOTIFS[name];
-  if (engine === "v7") sink("run", {...motif7(name, v), name, eng: "v7"});
+  const base = LIVE_MOTIF[name] || name;
+  const [fs, gaps, v] = MOTIFS[base];
+  if (engine === "v7") sink("run", {...motif7(base, v), name, eng: "v7"});
   else sink("run", {fs, gaps, v, name});
   return true;
 }

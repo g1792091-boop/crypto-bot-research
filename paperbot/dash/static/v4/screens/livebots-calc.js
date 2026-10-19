@@ -150,3 +150,32 @@ export function alarms(prev, next) {
   }
   return out;
 }
+
+/** Was this alarm (alarms() above) really recent: the executor's own light_red event or its halt time within `recentMs`. */
+export function recentAlarm(a, d, now, recentMs = 180000) {
+  const x = ((d && d.execs) || []).find((e) => e.id === a.id);
+  if (!x) return false;
+  const t = a.what === "red" ? (x.light && x.light.last_event && x.light.last_event.kind === "light_red" ? x.light.last_event.ts : null)
+    : x.record ? x.record.halted_ts : null;
+  return t != null && now - t <= recentMs && t <= now + 60000;
+}
+
+/**
+ * The live events of a new answer, for the sounds and the one-shot lights (honesty: the first look is the past; a record
+ * the page already heard never sounds again; anything older than `recentMs` is not "now"):
+ * liveEvents(state, d, now) -> {state (keep it for the next answer), names (sound events: lv_entry / lv_tp / lv_sl / lv_alert),
+ * fresh (the new fills), alarms}. state: {seen: Set of fill keys or null (null = take this answer as the baseline), prev}.
+ */
+export function liveEvents(state, d, now, recentMs = 180000) {
+  const st = state || {seen: null, prev: null};
+  const {keys, fresh} = freshFills(st.seen, (d && d.fills) || []);
+  const seen = new Set([...(st.seen || []), ...keys]);
+  if (seen.size > 600) for (const k of [...seen].slice(0, seen.size - 600)) seen.delete(k);
+  const recent = fresh.filter((f) => f.t != null && now - f.t <= recentMs && f.t <= now + 60000);
+  const names = [...new Set(recent.map(fillSound).filter(Boolean))];
+  const al = alarms(st.prev, d).filter((a) => recentAlarm(a, d, now, recentMs));
+  if (al.length) names.push("lv_alert");
+  const prev = d ? {execs: (d.execs || []).map((x) => ({id: x.id, light: {state: x.light && x.light.state},
+    record: {state: x.record && x.record.state, halted: x.record && x.record.halted}}))} : st.prev;
+  return {state: {seen, prev}, names, fresh: recent, alarms: al};
+}
