@@ -24,6 +24,9 @@ Restart=on-failure
 RestartSec=30
 RestartPreventExitStatus=2
 TimeoutStopSec=60
+# Real money first (owners 2026-10-19: the live bots share the server with the experiments): in a server-wide
+# memory shortage the kernel kills experiments long before the executors (the shadows have +500).
+OOMScoreAdjust=-900
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

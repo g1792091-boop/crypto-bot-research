@@ -31,6 +31,8 @@ TimeoutStartSec=20min
 TimeoutStopSec=60
 Nice=5
 MemoryMax=1500M
+# the executors follow this paper bot: in a server-wide memory shortage experiments go first (owners 2026-10-19)
+OOMScoreAdjust=-500
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
