@@ -332,6 +332,83 @@ export function rowDetail(r, d, href) {
   return h("div", {class: "lbr-dgrid"}, parts, link);
 }
 
+// ---------------------------------------------------------------- 그룹별 성적 (owners 10/19 night: 규칙봇 15's A and B)
+// /api/v4/livebots/groups (dash/more/liveinsight.py groups()): per account, group A (the 11 without the chase block) and
+// B (the 4 with it) since the 규칙봇 15 start, and 예전 매매법 (settings no longer in the config, their whole record); a
+// live trade takes its paper partner's group (짝 페이퍼 없음 when it has none). Shown on 성적 and 순위 (성적 순위).
+export const GROUPS_API = "/api/v4/livebots/groups";
+const GROUP_KEY = "lbrg-acct";
+const GROUP_ACCTS = [{id: "paper", label: "페이퍼"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "MEXC"}];
+
+/** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}]. */
+export function groupRows(d, acct) {
+  const a = d && d.accts && d.accts[acct];
+  if (!a || a.state !== "ok") return [];
+  const defs = Object.fromEntries(((d && d.defs) || []).map((g) => [g.id, g]));
+  const ids = ["A", "B", "old", ...(a.groups.none && a.groups.none.n ? ["none"] : [])];
+  return ids.map((id) => ({id, ko: (defs[id] || {}).ko || (id === "none" ? "짝 페이퍼 없음" : id), sub: (defs[id] || {}).sub_ko || "",
+    n_members: (defs[id] || {}).n_members, rec: a.groups[id] || {n: 0}}));
+}
+
+/** groupBlock(ctx, {poll}) -> {el, set(), refresh()}: the card on its own endpoint, the account remembered on this device.
+ *  poll (default true): asked every 60 s through ctx.every; false: only when the owner calls refresh() (순위 asks it again
+ *  when its own records changed, so the hidden switch view polls nothing extra). */
+export function groupBlock(ctx, o = {}) {
+  const st = {d: null, okAt: 0, acct: local.get(GROUP_KEY, "paper")};
+  if (!GROUP_ACCTS.some((x) => x.id === st.acct)) st.acct = "paper";
+  const seg = ui.seg(GROUP_ACCTS, st.acct, (id) => { st.acct = id; local.set(GROUP_KEY, id); draw(); }, {label: "계좌 고르기"});
+  const stateSlot = h("div", {class: "lb-slot"});
+  const head = h("p", {class: "lbrg-start"});
+  const rows = h("div", {class: "lbrg-rows", role: "list"});
+  const el = ui.card({title: "그룹별 성적", sub: "A 그룹 · B 그룹(추격 진입 막기) · 예전 매매법", cls: "lbrg-card", acts: [seg]},
+    stateSlot, head, rows,
+    ui.note("A·B는 규칙봇 15 시작부터, 예전 매매법은 지금 설정에 없는 매매법의 기록 전체예요 · 실거래는 짝 페이퍼 거래의 그룹을 따라요 · 20번 미만은 대부분 운이에요"));
+  const pc = (x) => (numOr(x) == null ? "—" : fmt.pct(x, 1, false));
+  function row(g, small) {
+    const r = g.rec || {};
+    const live = st.acct !== "paper";
+    return h("div", {class: ["lbrg-row", "g-" + g.id], role: "listitem"},
+      h("span", {class: "lbrg-name"}, h("b", null, g.ko), h("small", null, g.sub + (g.n_members ? ` · ${fmt.int(g.n_members)}개` : ""))),
+      h("span", {class: "lbrg-v"}, h("small", null, "거래"), h("b", {class: "num"}, `${fmt.int(r.n || 0)}번`)),
+      h("span", {class: "lbrg-v"}, h("small", null, "이김"), h("b", {class: "num"}, fmt.int(r.wins || 0))),
+      h("span", {class: "lbrg-v"}, h("small", null, "승률"), h("b", {class: "num"}, r.n ? pc(r.win_rate) : "—")),
+      h("span", {class: "lbrg-v"}, h("small", null, "순ROE 합"), h("b", {class: ["num", fmt.tone(r.roe_sum, fmt.pct(r.roe_sum, 1))]}, r.n ? fmt.pct(r.roe_sum, 1) : "—")),
+      h("span", {class: "lbrg-v"}, h("small", null, live ? "손익 (진짜 돈)" : "손익 (연습)"),
+        h("b", {class: ["num", fmt.tone(r.pnl, fmt.money(r.pnl))]}, r.n ? `${fmt.money(r.pnl, true)}` : "—")),
+      r.n ? ui.smallSample(r.n, small) : h("span"));
+  }
+  function draw() {
+    seg.set(st.acct);
+    const d = st.d;
+    if (!d) { put(rows, motion.shimmer(3)); return; }
+    const s = d.start || {};
+    put(head, s.ms != null ? `규칙봇 15 시작 ${fmt.kst(s.ms)}부터 · ${s.how_ko || ""}` : s.how_ko || "시작 시각 모름");
+    const a = (d.accts || {})[st.acct];
+    if (!a || a.state !== "ok") { put(rows, sourceState(a, st.acct === "paper" ? "페이퍼 DB" : "실행기 DB")); return; }
+    put(rows, groupRows(d, st.acct).map((g) => row(g, numOr(d.small_n) || 20)));
+  }
+  async function load() {
+    let d;
+    try { d = await ctx.api(GROUPS_API); }
+    catch (e) {
+      if (!ctx.alive() || (e && e.name === "AbortError")) return;
+      put(stateSlot, st.d ? ui.staleNote(e, st.okAt, () => load()) : ui.errorBox(e, () => load()));
+      ui.dim(rows, !!st.d);
+      throw e;
+    }
+    if (!ctx.alive()) return;
+    st.okAt = Date.now();
+    put(stateSlot);
+    ui.dim(rows, false);
+    st.d = d;
+    draw();
+  }
+  draw();
+  load().catch(() => {});
+  if (o.poll !== false) ctx.every(60 * 1000, () => load().catch(() => {}), {now: false});
+  return {el, set() {}, refresh: () => load().catch(() => {})};
+}
+
 // ---------------------------------------------------------------- the switch: 진입 가능성 | 성적 순위
 export const RANK_MODES = [{id: "likely", label: "진입 가능성"}, {id: "rank", label: "성적 순위"}];
 const MODE_KEY = "lb-rank-mode";
@@ -383,6 +460,7 @@ export function boardView(ctx) {
     row: (x) => listRow(x), match: (x, q) => matches(x.r, q, fmt.stratKo), empty: "맞는 매매법이 없어요"});
   const listCount = h("span", {class: "lbr-lcount"});
   const foot = h("div", {class: "lbr-foot"});
+  const grp = groupBlock(ctx, {poll: false});              // asked again only when this view's records change (load)
   const body = h("div", {class: "lbr-body stack"},
     h("section", {class: "lbr-hero", "aria-label": "매매법 순위 요약"},
       h("div", {class: "lbr-hhead"}, ui.plate("매매법 순위"), h("span", {class: "lbr-hsub"}, "A+C 합본 · 두 실행기가 따라가는 페이퍼(연습)의 매매법들")),
@@ -392,6 +470,7 @@ export function boardView(ctx) {
       h("div", {class: "lbr-ahead"}, h("div", {class: "lbr-atitle"}, h("h2", null, "순위"), sortNote),
         h("label", {class: "lbr-sort"}, h("span", null, "순서"), sel)),
       arena),
+    grp.el,
     ui.card({title: "전체 목록", sub: "줄을 누르면 세팅 · 5년 숫자 · 실거래 · 신호가 펼쳐져요", cls: "lbr-listcard", acts: [listCount]}, list.el),
     foot);
   const el = h("div", {class: "lbr stack"}, stateSlot, body);
@@ -630,8 +709,10 @@ export function boardView(ctx) {
     st.okAt = Date.now();
     const key = sameKey(d);
     if (key === st.key) return;                             // the same records again: nothing redrawn (an open line stays open)
+    const first = !st.key;
     st.key = key; st.d = d;
     draw(false);
+    if (!first) grp.refresh();                              // new records: the groups' numbers too (the first read is its own)
   }
   draw(false);
   load().catch(() => {});

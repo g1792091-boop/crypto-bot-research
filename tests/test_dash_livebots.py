@@ -682,9 +682,12 @@ def test_sound_and_light_are_wired_to_real_records_only():
 
 # ---------------------------------------------------------------- wiring
 def test_wiring_route_menu_find_inventory_and_module():
+    # owners 10/19: the 실거래 screens moved to their own site (paperbot/livedash, tests/test_livedash_app.py): on the rule
+    # bot's dashboard the route stays (hidden) and only says where it moved; the 실거래 site's menu lists the tabs
     routes = _read(V4, "core", "routes.js")
-    assert 'livebots: {ko: "실거래", group: "home", title: "실거래"}' in routes and '"checkpoint", "livebots"]' in routes
-    assert "livebots:" in _read(V4, "core", "search.js")
+    assert 'livebots: {ko: "실거래", group: "home", title: "실거래", hidden: true}' in routes and '"checkpoint"]},' in routes
+    assert "livebots:" not in _read(V4, "core", "search.js").split("export const LIVE_ALIAS")[0]
+    assert "pos:" in _read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert "livebots" in MORE.MODULES and "livemissed" in MORE.MODULES and "livetape" in MORE.MODULES
     js = "".join(_read(SCREENS, f) for f in os.listdir(SCREENS) if f.startswith("livebots") and f.endswith(".js"))
     for path in ("/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf", "/api/v4/livebots/safety",
@@ -693,9 +696,12 @@ def test_wiring_route_menu_find_inventory_and_module():
                  "/api/v4/livebots/likely", "/api/v4/livebots/missed", "/api/v4/livebots/replay"):
         assert f'"{path}"' in js, path
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(SCREENS, "livebots.js"))
-    assert tabs == [("hq", "관제"), ("summary", "요약"), ("rank", "순위"), ("team", "분석팀"), ("chart", "차트"), ("trades", "거래"), ("replay", "다시보기"), ("signals", "신호"),
-                    ("missed", "못 탄 신호"), ("perf", "성적"), ("map", "지도"), ("cost", "비용"), ("cal", "일정"), ("safety", "안전"), ("shadows", "그림자"),
-                    ("settings", "설정")]
+    # in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 지금 · 기록 · 성적 · 운영); part B's 위험 · 봇 상태 · 목표 ·
+    # 규칙 점검 join once their files are there
+    own = [t for t in tabs if t[0] not in ("risk", "health", "goal", "judge")]
+    assert own == [("hq", "관제"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("trades", "거래"), ("replay", "다시보기"),
+                   ("signals", "신호"), ("missed", "못 탄 신호"), ("perf", "성적"), ("rank", "순위"), ("map", "지도"), ("cost", "비용"),
+                   ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자")]
     assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq")' in _read(SCREENS, "livebots.js")   # owners 10/19: 관제 first
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
@@ -720,7 +726,10 @@ def test_the_terminal_hooks_are_optional_and_the_rule_bots_terminal_passes_none(
     assert "const marks = o.marks || coinMarks();" in _read(SCREENS, "terminal-feed.js")
     live = _read(SCREENS, "livebots-term.js")
     assert "termChart(ctx, st," in live and "pnlPanel(ctx, {" in live and "watchList(ctx, st, pick, {marks})" in live
-    assert "topBar(ctx, st)" in live and "bigFeed(ctx)" in live and "liqFeed(ctx, st," in live and "consolePanel(" in live
+    assert "topBar(ctx, st, {meetings: false})" in live and "bigFeed(ctx)" in live and "liqFeed(ctx, st," in live and "consolePanel(" in live
+    # the AI meetings line is the rule bot's (the 실거래 site has no rooms): the live terminal never asks for the office
+    top = _read(SCREENS, "terminal-top.js")
+    assert "export function topBar(ctx, st, o = {})" in top and "if (o.meetings !== false) {\n    office(25000);" in top
 
 
 # ================================================================ the live checks: livecheck.db and liveimprove.db (read-only)
@@ -1095,8 +1104,9 @@ def test_the_mode_chip_says_실거래_on_livebots_and_모의_everywhere_else():
     rule = re.search(r"\.mocktag\.real \{([^}]*)\}", base).group(1)
     assert "var(--warn)" in rule and "var(--warn-soft)" in rule and not re.search(r"#[0-9a-fA-F]{3,8}\b", rule)
     assert '<span class="mocktag" title="모든 계좌는 모의(가상 돈)입니다">모의</span>' in _read(V4, "index.html")   # the default
-    # the menu: the 실거래 button (its data-sb is its id) always carries the dot in that colour, outside any media query
-    assert "livebots" in out["items"]
+    # the menu: no 실거래 button on the rule bot's dashboard any more (owners 10/19: its own site, tests/test_livedash_app.py);
+    # the dot rule for a 실거래 button stays in core/nav.css, outside any media query
+    assert "livebots" not in out["items"]
     nav = re.sub(r"/\*.*?\*/", "", _read(V4, "core", "nav.css"), flags=re.S)
     dot = re.search(r'\.sb\[data-sb="livebots"\]::before \{([^}]*)\}', nav)
     assert dot and "var(--warn)" in dot.group(1) and 'content: ""' in dot.group(1)

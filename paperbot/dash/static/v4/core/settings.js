@@ -34,6 +34,7 @@ import {openAway} from "./since.js";
 import {startTour} from "./tour.js";
 import {toast} from "./ui.js";
 import {leave as leaveFull} from "./fullchart.js";
+import {LIVE, PAPER_PORT, siteUrl} from "./site.js";
 
 // the chart decks the panel lists: [deck key, 이름, its '선' groups, the screen's own first choice (null: the deck's rule)]. The
 // groups and first choices are the screens' own (screens/terminal-chart.js, screens/chart.js): 매물대 (vp) is off on the 터미널
@@ -45,6 +46,10 @@ export const DECKS = [
   ["chart", "차트 화면", ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], () => ({vp: !phone()})],
   [GRID_DECK.key, "여러 차트", GRID_DECK.groups, GRID_DECK.defaults],
 ];
+// the 실거래 site (core/site.js): its one chart deck (screens/livebots-term.js / livebots-chart.js: key "live", 지지·저항 and
+// 매물대 off at first like the 터미널's), no 여러 차트, no 메뉴 위치 (no left rail there), no TV 자동 넘김; its sounds only
+export const LIVE_DECKS = [["live", "실거래 차트", ["pos", "risk", "sr", "smc", "ev", "vol", "vp"], () => ({sr: false, vp: false})]];
+const liveEvent = (id) => id === "layer" || id.startsWith("lv_");
 // the 차트 screen's own toggles (screens/chart.js TOGGLES, "chart-show"): [key, label, default]
 export const CHART_SHOW = [["mk", "진입·청산", true], ["al", "가격 알림 선", true], ["gh", "GH Coin 타점", false]];
 const FLASH_SUB = {often: "큰 체결마다", normal: "고래·큰 청산·우리 체결만", off: "번쩍임 없음 (은은한 빛은 그대로)"};
@@ -131,7 +136,7 @@ function screenSection() {
   const startRow = row("첫 화면", "주소만 열었을 때 처음 보이는 화면 · 자동 = 창 크기대로 · 'PC 화면'은 휴대폰에서 자동대로", sel);
   const swipeRow = row("휴대폰 옆으로 밀기", "화면을 옆으로 밀면 같은 묶음의 다음·이전 화면으로 (차트·표 위는 제외)",
     toggle("휴대폰 옆으로 밀기", swipeOn(), (on) => setPref(SWIPE_KEY, on)));
-  return section("screen", "화면", null, skinRow, textRow, navRow, startRow, swipeRow);
+  return section("screen", "화면", null, skinRow, textRow, LIVE ? null : navRow, startRow, swipeRow);
 }
 
 function chartSection() {
@@ -144,7 +149,7 @@ function chartSection() {
     choice("차트 조명", LIGHT_MODES.map((m) => ({id: m.id, ko: m.ko, title: LIGHT_SUB[m.id]})), lNow, (id) => setPref(LIGHT_KEY, id)), {dim: !ai, id: "light"});
   const flashRow = row("번쩍임", ai ? "큰 체결·청산·우리 체결 때 차트가 한 번 빛남 (실제 일만)" : "AI 화면 색에서만 빛납니다 (지금은 클래식)",
     choice("번쩍임", FLASH_MODES.map((m) => ({id: m.id, ko: m.ko, title: FLASH_SUB[m.id]})), fNow, (id) => setPref(FLASH_KEY, id)), {dim: !ai, id: "flash"});
-  const decks = DECKS.map(([key, ko, groups, defs]) => {
+  const decks = (LIVE ? LIVE_DECKS : DECKS).map(([key, ko, groups, defs]) => {
     const defaults = typeof defs === "function" ? defs() : defs;
     const now = deckState(key, groups, defaults);
     // choices saved before the 매물대 existed: the screen switches it to its first choice once (screens/chart-vp.js vpPrepare,
@@ -182,7 +187,7 @@ function chartSection() {
     setPref(GRID_KEY, {...(v && typeof v === "object" ? v : {}), layout: id});
   }));
   return section("chart", "차트", "선 이름표를 눌러 숨긴 선은 '다시 보기'로 돌아옵니다", lightRow, flashRow,
-    h("p", {class: "set-note"}, "차트에 보일 선 (켜진 것만 보입니다)"), decks, gridRow);
+    h("p", {class: "set-note"}, "차트에 보일 선 (켜진 것만 보입니다)"), decks, LIVE ? null : gridRow);
 }
 
 function soundSection() {
@@ -214,10 +219,11 @@ function soundSection() {
     toggle("밤에 끄기", c.night, (on) => sound.setCfg({night: on})), hourSel("from"), h("span", {"aria-hidden": "true"}, "~"), hourSel("to"), nightNote), {wide: true});
   const wake = row("화면 켜두기", sound.wakeSupported() ? "소리가 켜져 있는 동안 휴대폰 화면이 잠들지 않게" : "이 기기는 지원하지 않습니다",
     toggle("화면 켜두기", sound.wakeOn(), (on) => sound.setWake(on), {disabled: !sound.wakeSupported()}));
-  const evRows = sound.EVENTS.map(([id, ko, why]) => row(ko, why, h("div", {class: "set-ev"},
+  // each site lists its own sounds: the 실거래 site the live bots' and 바탕음, the rule bot's page its own (실거래 moved out)
+  const evRows = sound.EVENTS.map(([id, ko, why]) => ((LIVE ? !liveEvent(id) : id.startsWith("lv_")) ? null : row(ko, why, h("div", {class: "set-ev"},
     h("button", {type: "button", class: "btn-line set-try", "aria-label": `${ko} 소리 들어보기`,
       onclick: () => { if (!sound.preview(id)) toast("이 브라우저는 소리를 낼 수 없습니다"); }}, "들어보기"),
-    toggle(`${ko} 소리`, sound.evOn(id), (on) => sound.setEv(id, on))), {id: "ev-" + id}));
+    toggle(`${ko} 소리`, sound.evOn(id), (on) => sound.setEv(id, on))), {id: "ev-" + id})));
   return section("sound", "소리", "소리는 실제 기록이 생길 때만 납니다 · '들어보기'는 누를 때 한 번", onRow, kind, volRow, dens, night, wake,
     h("p", {class: "set-note"}, "소리별 켜기·끄기"), evRows);
 }
@@ -238,8 +244,21 @@ function goSection() {
       h("kbd", null, "t"), " TV 자동 넘김 · ", h("kbd", null, "Esc"), " 닫기 · ", h("kbd", null, "1"), "~", h("kbd", null, "9"), " 화면 이동"));
 }
 
+/** The 실거래 site's 바로가기: the rule bot's dashboard on this same host (its own login), the keys this site has. */
+function liveGoSection() {
+  const paper = siteUrl(PAPER_PORT);
+  return section("go", "바로가기", null,
+    paper ? h("div", {class: "set-links"}, h("a", {class: "btn-line", href: paper, title: "규칙봇(모의) 대시보드: 같은 서버의 8080 포트 · 로그인 따로"}, "규칙봇 대시보드 ↗")) : null,
+    h("p", {class: "set-keys"}, h("kbd", null, "/"), " 찾기 · ", h("kbd", null, ","), " 설정 · ", h("kbd", null, "f"), " 차트 크게 (차트 위에서) · ",
+      h("kbd", null, "Esc"), " 닫기 · ", h("kbd", null, "1"), "~", h("kbd", null, "9"), " 화면 이동"));
+}
+
 // ---------------------------------------------------------------- the panel
 function body() {
+  if (LIVE) {
+    return [screenSection(), chartSection(), soundSection(), liveGoSection(),
+      h("p", {class: "set-foot"}, "이 설정은 이 기기(이 브라우저)에만 기억됩니다. 다른 휴대폰·PC는 각자 따로입니다.")];
+  }
   return [screenSection(), chartSection(), soundSection(), tvPanelSection(), goSection(),
     h("p", {class: "set-foot"}, "이 설정은 이 기기(이 브라우저)에만 기억됩니다. 다른 휴대폰·PC는 각자 따로입니다.")];
 }

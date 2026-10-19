@@ -13,6 +13,11 @@
 @import url("livebots-likely.css");
 @import url("livebots-missed.css");
 @import url("livebots-replay.css");
+@import url("livebots-pos.css");
+@import url("livebots-risk.css");
+@import url("livebots-health.css");
+@import url("livebots-goal.css");
+@import url("livebots-judge.css");
 
 /* the page column: the terminal takes the window from 760 px (a phone keeps the shell's 16 px gutter) */
 @media (min-width: 760px) {
@@ -21,6 +26,10 @@
 }
 [data-screen="livebots"] { gap: 8px; }
 .lb-slot:empty { display: none; }
+/* the rule bot's dashboard: #/livebots only says where the 실거래 screens moved (the separate 실거래 site) */
+.lb-moved { max-width: 640px; }
+.lb-moved-p { margin: 0; color: var(--ink-2); line-height: 1.6; }
+.lb-moved-a { justify-self: start; max-width: 100%; overflow-wrap: anywhere; min-height: 40px; }
 .lb-body { display: grid; gap: 12px; min-width: 0; }
 
 /* the real-money strip over every tab (owners 10/19): thin, in the real-money colour (--warn, as the top bar's 실거래 chip) */
@@ -170,7 +179,7 @@
 .lb-tsum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 2px; font-size: var(--t-sm); color: var(--ink); }
 .lb-titem { border-top: 1px solid var(--line); min-width: 0; }
 .lb-titem.open { background: var(--surface-2); border-radius: var(--r-sm); }
-.lb-trow { display: grid; grid-template-columns: calc(92px * var(--ts)) calc(46px * var(--ts)) auto minmax(0, 1fr) auto calc(64px * var(--ts)) calc(76px * var(--ts));
+.lb-trow { display: grid; grid-template-columns: calc(92px * var(--ts)) calc(46px * var(--ts)) auto minmax(0, 1fr) auto calc(84px * var(--ts)) calc(64px * var(--ts)) calc(76px * var(--ts));
   align-items: center; gap: 4px 10px; width: 100%; min-height: 40px; padding: 6px 4px; border: 0; background: none; color: inherit; font: inherit;
   font-size: var(--t-sm); text-align: left; cursor: pointer; }
 .lb-trow:hover { background: var(--surface-2); }
@@ -178,13 +187,17 @@
 .lb-tc { font-weight: 800; }
 .lb-ts { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
 .lb-tr, .lb-tp { text-align: right; }
-/* a phone: time / coin · side · strategy / why it closed (and its card) · ROE · money, three short lines */
+/* 최대 +% / 최대 −% of the trade (dash/more/livepos.py excursions): two short numbers, one over the other */
+.lb-tx { display: grid; justify-items: end; gap: 0; font-size: var(--t-2xs); line-height: 1.25; white-space: nowrap; }
+.lb-tx .up { color: var(--up); } .lb-tx .down { color: var(--down); }
+/* a phone: time / coin · side · strategy / why it closed (and its card) · ROE · money / 최대 +% · 최대 −%, four short lines */
 @media (max-width: 759px) {
   .lb-trow { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
   .lb-trow > .side { justify-self: start; }
   .lb-tt { grid-column: 1 / -1; }
   .lb-ts { grid-column: 3 / -1; }
   .lb-tpills { grid-column: 1 / 4; }
+  .lb-tx { grid-column: 1 / -1; grid-row: 4; display: flex; justify-content: flex-start; gap: 10px; }
 }
 .lb-tdet { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 4px 8px 12px; min-width: 0; }
 .lb-tdet .kv { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }

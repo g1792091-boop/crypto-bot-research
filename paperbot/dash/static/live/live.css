@@ -1,0 +1,17 @@
+/* 실거래 site (paperbot/livedash): the few places where its frame differs from the rule bot's page (static/v4/index.html).
+   Tokens only (both skins), every font size a --t-* token. The screens' own look is static/v4/screens/livebots*.css. */
+
+/* the brand: a coin in the real-money colour (the top bar's 실거래 chip is the same --warn) */
+.brand .bic { color: var(--warn); border-color: var(--warn-line); }
+.brand-t b { color: var(--warn); }
+
+/* the phone's bottom bar: four groups (지금 · 기록 · 성적 · 운영) instead of the rule bot's five */
+.botbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* the link back to the rule bot's dashboard (the strip's end / the top bar): a quiet dashed button like 예전 화면 */
+a.oldui.paperlink { border-style: dashed; }
+
+/* the screens take the window's width on a PC, as the 실거래 screen did inside the rule bot's page */
+@media (min-width: 760px) {
+  .top, .subtabs { max-width: none; padding-inline: 12px; }
+}

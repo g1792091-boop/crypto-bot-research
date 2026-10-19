@@ -240,7 +240,8 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
     o.extra = routes.navGroups({wide: true}).map((g) => g.ko);
     console.log(JSON.stringify(o));""")
     assert out["groups"] == [["trade", "거래"], ["home", "성적"], ["strat", "매매법"], ["agents", "AI 직원"], ["server", "서버"]]
-    assert out["pc"] == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint", "livebots", "strategies", "grid", "analysis",
+    # (실거래 moved to its own site, owners 10/19: paperbot/livedash, tests/test_livedash_app.py)
+    assert out["pc"] == ["terminal", "positions", "chart", "charts", "market", "home", "board", "flow", "checkpoint", "strategies", "grid", "analysis",
                          "compare", "path", "combo", "combo5y", "whatif", "league", "office", "rooms", "digest", "debate", "server", "alerts", "signals", "help"]
     assert out["phone"] == [x for x in out["pc"] if x != "terminal"]                     # the PC 터미널 is off a phone's menu; 토론방 stays
     assert out["help"] == {"id": "help", "ko": "도움말", "to": "howto", "screens": ["howto", "faq"]}
@@ -256,7 +257,7 @@ def test_menu_order_captions_keys_and_new_screens_in_node():
       tradeAll: routes.menuScreens(g("trade"), true), home: routes.menuScreens(g("home"), {}), agents: routes.menuScreens(g("agents"), {debate: false})}));""")
     assert out["tradePc"] == out["tradeAll"] == ["terminal", "positions", "chart", "charts", "market"]
     assert out["tradePhone"] == ["positions", "chart", "charts", "market"]
-    assert out["home"] == ["home", "board", "flow", "checkpoint", "livebots"]            # hidden screens (계좌, 하이라이트) out; 실거래 last (keys 1-9 unchanged)
+    assert out["home"] == ["home", "board", "flow", "checkpoint"]                        # hidden screens (계좌, 하이라이트, 실거래: moved) out
     assert out["agents"] == ["office", "rooms", "digest", "debate"]                      # 토론방 stays (greyed 꺼짐)
 
 

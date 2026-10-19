@@ -26,6 +26,7 @@ import {bus} from "./api.js";
 import {store} from "./store.js";
 import {h, local} from "./dom.js";
 import {tick7, motif7, render7} from "./sound7.js";
+import {LIVE} from "./site.js";
 import {listenTicks} from "./ticks.js";
 
 // ---------------------------------------------------------------- settings (per device)
@@ -525,7 +526,12 @@ export function onSummary(s, now = Date.now()) {
 // ---------------------------------------------------------------- wiring
 let feeds = null, roomsT = null;
 function applyFeeds() {
-  if (cfg.on && !feeds) {
+  if (cfg.on && !feeds && LIVE) {
+    // the 실거래 site (core/site.js): no rule-bot stream, rooms or run summary there; the live bots' own events come from
+    // the 실거래 screen (playLive), the 바탕음 from the market relay with the ticker's price moves as its fallback
+    feeds = [store.watch("ticker", (tk) => { ticksSync(); if (!tk) return; const mv = priceMoves(tk); if (!tradesLive()) feed(mv); })];
+    ticksSync();
+  } else if (cfg.on && !feeds) {
     feeds = [
       // polled every 5 s while the sound is on; heard only while the market-trade relay is not live (the fallback),
       // and always read so the baseline stays fresh for the moment it takes over

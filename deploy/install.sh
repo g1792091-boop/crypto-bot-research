@@ -165,7 +165,7 @@ echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
 # running bot never reads a half-copied tree. The previous code stays in $APP.old.
 # The agents timer is paused too, so no agent pass starts on a half-copied tree.
-UNITS="paperbot-live3 paperbot-dash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo paperbot-combo2"
+UNITS="paperbot-live3 paperbot-dash paperbot-livedash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo paperbot-combo2"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -258,7 +258,7 @@ fi
 [ -f /etc/paperbot/executor.env ] && chmod 600 /etc/paperbot/executor.env && chown root:root /etc/paperbot/executor.env
 
 echo "== systemd units (installed, not started)"
-for u in paperbot-live3.service paperbot-dash.service paperbot-daily3.service paperbot-daily3.timer \
+for u in paperbot-live3.service paperbot-dash.service paperbot-livedash.service paperbot-daily3.service paperbot-daily3.timer \
          paperbot-backup.service paperbot-backup.timer paperbot-agents.service paperbot-agents.timer \
          paperbot-liq.service paperbot-labmonthly.service paperbot-labmonthly.timer \
          paperbot-checkpoint.service paperbot-checkpoint.timer paperbot-offsite.service paperbot-offsite.timer \
@@ -377,6 +377,34 @@ if [ -n "$RUNNING" ]; then
   echo "restarted:$RUNNING (the bot resumes from its saved state; the start is logged in the runs table)"
 fi
 trap - EXIT HUP INT TERM
+
+# 실거래 대시보드 (paperbot-livedash, docs/livedash-ko.md; owners 10/19 "따로 실거래용 봇 대시보드 사이트"): read-only, the
+# same password and DASH_HOST as the rule bot's dashboard (/etc/paperbot/dash.env), port 8093. Switched on here once the
+# rule bot's dashboard is set up (paperbot-dash enabled: its password and DASH_HOST are in place), and (re)started with
+# this code; otherwise installed only, with the one command. The firewall: Tailscale only, never the internet (the rule
+# of deploy/candleague/firewall.sh: nothing to do when ufw already allows everything on tailscale0, else 8093/tcp on
+# tailscale0 alone).
+LIVEDASH_PORT=8093
+if systemctl is-enabled --quiet paperbot-dash 2>/dev/null; then
+  systemctl enable paperbot-livedash >/dev/null 2>&1 || echo "paperbot-livedash could not be enabled: sudo systemctl enable --now paperbot-livedash"
+  systemctl restart paperbot-livedash || echo "paperbot-livedash did not start: sudo journalctl -u paperbot-livedash -n 50"
+  DHOST="$(sed -n 's/^DASH_HOST=//p' /etc/paperbot/dash.env 2>/dev/null | tail -n 1 | tr -d "\"' " || true)"
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active' \
+     && [[ "$DHOST" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+    RULES="$(ufw status 2>/dev/null)"
+    if printf '%s\n' "$RULES" | grep -Eq '^Anywhere on tailscale0[[:space:]]+ALLOW'; then
+      echo "firewall: ufw already allows tailscale0 (as for 8080): 실거래 대시보드 $LIVEDASH_PORT is reachable over Tailscale too"
+    elif printf '%s\n' "$RULES" | grep -Eq "^$LIVEDASH_PORT/tcp on tailscale0[[:space:]]+ALLOW"; then
+      echo "firewall: $LIVEDASH_PORT/tcp on tailscale0 already allowed"
+    else
+      ufw allow in on tailscale0 to any port "$LIVEDASH_PORT" proto tcp comment 'paperbot livedash' >/dev/null
+      echo "firewall: allowed $LIVEDASH_PORT/tcp on tailscale0 only (Tailscale devices, not the internet)"
+    fi
+  fi
+  echo "실거래 대시보드(paperbot-livedash): 자동 시작 $(systemctl is-enabled paperbot-livedash 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active paperbot-livedash 2>/dev/null || echo 알 수 없음) · 주소 http://${DHOST:-DASH_HOST}:$LIVEDASH_PORT"
+else
+  echo "실거래 대시보드(paperbot-livedash) 설치만 했습니다(규칙봇 대시보드가 아직 꺼져 있음). 켜기: sudo systemctl enable --now paperbot-livedash"
+fi
 
 cat <<'NEXT'
 

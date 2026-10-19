@@ -44,7 +44,7 @@ export function termView(ctx, src) {
   const acct = (id) => (st.d ? (st.d.accts || []).find((a) => a.id === id) : null);
 
   // ---- the parts (the terminal's own where they show the market, livebots-parts.js where they show our three accounts)
-  const top = topBar(ctx, st);
+  const top = topBar(ctx, st, {meetings: false});       // (its AI meetings line is replaced by the live strip below)
   const perp = top.el.querySelector(".term-perp");
   if (perp) perp.textContent = "무기한 · 바이낸스 시세";
   const meet = top.el.querySelector(".term-mline");             // (the AI meetings line is the rule bot's: the live strip takes its place)

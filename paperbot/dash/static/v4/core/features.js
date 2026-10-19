@@ -2,6 +2,7 @@
 // start and every 10 minutes; bus event "features" after each probe. A screen or tab with `feature` is hidden while
 // it is false. Nothing is guessed: a probe that fails leaves the feature hidden.
 import {api, bus} from "./api.js";
+import {LIVE} from "./site.js";
 
 export const features = {
   debate: false,        // /api/debate ready (debate.db exists): the 24-hour debate room has run at least once
@@ -26,8 +27,9 @@ async function one(path) {
 }
 
 export async function probeFeatures() {
-  const [deb, q, gh, liq, pa] = await Promise.all([one("/api/debate"), one("/api/analysis/questions"),
-    one("/api/ghcoin/board"), one("/api/liq?symbol=BTCUSDT&minutes=60"), one("/api/price-alerts")]);
+  // the 실거래 site (core/site.js) serves only what its screens use: the liquidation recorder and the price alerts (read)
+  const [deb, q, gh, liq, pa] = await Promise.all([LIVE ? null : one("/api/debate"), LIVE ? null : one("/api/analysis/questions"),
+    LIVE ? null : one("/api/ghcoin/board"), one("/api/liq?symbol=BTCUSDT&minutes=60"), one("/api/price-alerts")]);
   features.debate = !!(deb && deb.ready);
   features.debateRunning = !!(deb && deb.ready && deb.state === "running");
   features.questions = !!(q && Array.isArray(q.questions) && q.questions.length);

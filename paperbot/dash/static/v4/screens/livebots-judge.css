@@ -1,0 +1,67 @@
+/* 실거래 › 규칙 점검 (screens/livebots-judge.js). Tokens only (both skins), every font size a --t-* token; the AI skin
+   gets a soft glow on the verdicts, 클래식 stays plain. One column on a phone, rows wrap (no sideways page scroll). */
+.lbj { min-width: 0; }
+.lbj-body { min-width: 0; }
+.lbj-intro { margin: 0 2px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+.lbj-intro .muted { font-size: var(--t-xs); }
+.lbj-slot { display: grid; gap: 8px; min-width: 0; }
+.lbj-slot:empty { display: none; }
+.lbj-card { position: relative; overflow: hidden; }
+.lbj-card::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--accent); opacity: .8; }
+.lbj-chase::before { background: var(--series-m5); }
+.lbj-twin::before { background: var(--cmp-hi); }
+.lbj-rule { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+
+/* the verdict */
+.lbj-hero { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); min-width: 0; }
+.lbj-hero.up { border-color: var(--up-line); }
+.lbj-hero.down { border-color: var(--down-line); }
+.lbj-big { font: 800 var(--t-md)/1.4 var(--f-body); color: var(--ink); overflow-wrap: anywhere; }
+.lbj-hero.up .lbj-big { color: var(--up); }
+.lbj-hero.down .lbj-big { color: var(--down); }
+:root:not([data-skin="classic"]) .lbj-hero.up .lbj-big { text-shadow: 0 0 14px var(--up-glow); }
+:root:not([data-skin="classic"]) .lbj-hero.down .lbj-big { text-shadow: 0 0 14px var(--down-glow); }
+.lbj-money { color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lbj-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.lbj-chip { padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+  font-size: var(--t-xs); line-height: 1.7; }
+.lbj-chip b { color: var(--ink); }
+.lbj-chip.up b { color: var(--up); }
+.lbj-chip.down b { color: var(--down); }
+.lbj-chip.thin { border-style: dashed; }
+
+/* the rows (10 a page) */
+.lbj-row { display: grid; grid-template-columns: 92px minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.6fr) 80px; gap: 4px 10px; align-items: center;
+  padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: var(--t-sm); min-width: 0; }
+.lbj-row:last-child { border-bottom: 0; }
+.lbj-row small { display: block; color: var(--muted); font-size: var(--t-2xs); }
+.lbj-rt { font-size: var(--t-xs); }
+.lbj-rc { min-width: 0; overflow-wrap: anywhere; }
+.lbj-rc .muted { font-size: var(--t-xs); }
+.lbj-g { margin-left: 6px; padding: 0 6px; border-radius: var(--r-sm); border: 1px solid var(--line-2); color: var(--ink-2); font: 700 var(--t-2xs)/1.6 var(--f-body); }
+.lbj-rv b { font-size: var(--t-sm); }
+.lbj-rv b.up, .lbj-rcf.up span { color: var(--up); }
+.lbj-rv b.down, .lbj-rcf.down span { color: var(--down); }
+.lbj-rcf { min-width: 0; overflow-wrap: anywhere; }
+.lbj-rwhy { font-size: var(--t-xs); overflow-wrap: anywhere; min-width: 0; }
+.lbj-src { justify-self: end; padding: 0 7px; border-radius: 999px; border: 1px dashed var(--line-2); color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; }
+.lbj-row.k-none { opacity: .85; }
+@media (max-width: 759px) {
+  .lbj-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .lbj-rc, .lbj-rcf, .lbj-rwhy { grid-column: 1 / -1; }
+  .lbj-rt { grid-column: 1; }
+}
+
+/* the coin-flip twin */
+.lbj-twin2 { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+@media (max-width: 420px) { .lbj-twin2 { grid-template-columns: minmax(0, 1fr); } }
+.lbj-tcol { padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+.lbj-tcol.real { border-color: var(--accent-line); }
+.lbj-tt { display: block; margin-bottom: 4px; color: var(--ink); font-size: var(--t-sm); }
+.lbj-tcol .num.up { color: var(--up); }
+.lbj-tcol .num.down { color: var(--down); }
+.lbj-gap { margin: 0; font: 800 var(--t-md)/1.4 var(--f-body); color: var(--ink); }
+.lbj-gap.up { color: var(--up); }
+.lbj-gap.down { color: var(--down); }
+.lbj-luck { margin: 0; padding: 6px 10px; border-radius: var(--r-sm); border: 1px dashed var(--warn-line); background: var(--warn-soft);
+  color: var(--ink); font-size: var(--t-xs); line-height: 1.55; }

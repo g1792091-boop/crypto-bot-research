@@ -21,8 +21,10 @@ const clockKst = (ms) => { const d = new Date(ms + 9 * 3.6e6); return `${two(d.g
 const clean = (t) => String(t || "").replace(/^\s*🧾\s*/u, "").trim();
 const pct2 = (v) => fmt.pctOf(v, 2, true);
 
-/** topBar(ctx, st) -> {el, setSym, onTicker(map), onRelay, onTick, tick()} */
-export function topBar(ctx, st) {
+/** topBar(ctx, st, o) -> {el, setSym, onTicker(map), onRelay, onTick, tick()}. o.meetings false: the AI meetings line is
+ *  another screen's to replace (the 실거래 터미널, screens/livebots-term.js): the office is never asked for (the 실거래
+ *  site has no rule-bot rooms). */
+export function topBar(ctx, st, o = {}) {
   const symEl = h("b", {class: "term-sym"}), perp = h("span", {class: "term-perp"}, "무기한 · 모의");
   const favSlot = h("span", {class: "term-fav"});          // conv-b: ★ this coin (core/favs.js)
   const px = h("b", {class: "term-px num"}, "—"), chg = h("span", {class: "term-chg num"}, "");
@@ -154,11 +156,13 @@ export function topBar(ctx, st) {
     try { const o = await store.need("office", age); if (ctx.alive()) meetings(o); }
     catch (e) { if (!sig && ctx.alive()) put(track, h("span", {class: "term-mi muted"}, "회의 기록을 불러오지 못함 · 30초마다 다시 시도 중")); }
   };
-  office(25000);
-  ctx.every(30000, () => office(25000), {now: false});
-  let roomT = null;
-  ctx.on("rooms", () => { clearTimeout(roomT); roomT = setTimeout(() => ctx.alive() && office(0), 900); });
-  ctx.track(() => clearTimeout(roomT));
+  if (o.meetings !== false) {
+    office(25000);
+    ctx.every(30000, () => office(25000), {now: false});
+    let roomT = null;
+    ctx.on("rooms", () => { clearTimeout(roomT); roomT = setTimeout(() => ctx.alive() && office(0), 900); });
+    ctx.track(() => clearTimeout(roomT));
+  }
 
   return {
     el,

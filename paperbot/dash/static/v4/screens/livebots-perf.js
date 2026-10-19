@@ -5,6 +5,8 @@
 // timeframe, 롱 / 숏 and Korea-time hour, each row with 표본 적음 under 20 (and under 40), and the coin-flip twin of the paper
 // (참고: the same moments with a random side). Then 매매법 성적표 and 개선 후보 장부 (livebots-score.js: liveimprove's
 // scorecard per strategy with its status words, and its improvement ledger with the exact commands, read-only).
+// 그룹별 성적 (owners 10/19 night, 규칙봇 15): A / B / 예전 매매법 per account since the start (livebots-rank.js groupBlock,
+// /api/v4/livebots/groups), the same card as 순위's.
 // HONESTY: closed trades only; small samples say so; the reference lines are labelled 참고, and drawn only for the config
 // they were made for (refs null + refs_ko, checkpoint.rule_ko: another config's, so neither the lines nor 88 / 82 %); no
 // pass / fail word before 40 (the scorecard's words are liveimprove's own test against the backtest, not the 40-trade
@@ -13,6 +15,7 @@ import {h, s, put, ui, fmt, local, motion} from "../core/pb.js";
 import {acctKo, sourceState} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
 import {scoreView, ledgerView} from "./livebots-score.js";
+import {groupBlock} from "./livebots-rank.js";
 
 const IDS = ["paper", "bybit", "mexc"];
 const REFRESH_MS = 60 * 1000;
@@ -60,10 +63,12 @@ export function perfView(ctx) {
   const pg = ui.pager({size: 10, row: (r) => brow(r), empty: () => (st.d ? ui.empty("닫힌 거래가 아직 없어요") : motion.shimmer(3))});
   const legend = h("div", {class: "lb-legend", role: "list"});
   const score = scoreView(ctx), ledger = ledgerView();
+  const groups = groupBlock(ctx);
   const el = h("div", {class: "lb-perf stack"},
     h("div", {class: "lb-tbar"}, seg), stateSlot,
     ui.card({title: "승률 흐름", sub: "최근 20번 · 40번 닫힌 거래의 이긴 비율", cls: "lb-rollcard"}, head, chart, legend),
     ui.card({title: "40번 판단까지", sub: "페이퍼 닫힌 거래 기준 · 두 분이 정하는 자리", cls: "lb-cpcard"}, cp),
+    groups.el,
     score.el, ledger.el,
     ui.card({title: "나눠 보기", sub: "표본 적음 = 20번 미만 (40번 미만도 조심)", cls: "lb-brkcard", acts: [bseg]}, pg.el),
     ui.card({title: "동전 쌍둥이 (참고)", sub: "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌", cls: "lb-flipcard"}, flip),

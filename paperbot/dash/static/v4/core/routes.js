@@ -9,11 +9,16 @@
 // core/settings.js) when it has one, else the 터미널 on a PC window (900 px and up, where the terminal fits without
 // sideways scrolling), else the 차트 screen (a phone or a tablet held upright); 홈 (요약) stays one click away (#/home,
 // its button, its number key (6 since 여러 차트)).
+// The 실거래 site (paperbot/livedash, port 8093, owners 10/19 "실거래용 봇 대시보드 사이트를 따로"; core/site.js LIVE): the
+// same router over its own menu (LIVE_GROUPS / LIVE_SCREENS below, put in place of the rule bot's before anything reads
+// them): every 실거래 tab is a menu item whose module is screens/livebots.js (`mod`), opened at #/<tab> (an old
+// #/livebots/<tab> link still lands on it). On the rule bot's page #/livebots is hidden and only says where it moved.
 import {s, local} from "./dom.js";
 import {START_KEY} from "./prefs.js";
+import {LIVE} from "./site.js";
 
 export const GROUPS = [
-  {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint", "livebots"]},
+  {id: "home", ko: "홈", screens: ["home", "board", "flow", "checkpoint"]},
   {id: "trade", ko: "거래", screens: ["terminal", "positions", "chart", "charts", "market"]},
   {id: "strat", ko: "매매법", screens: ["strategies", "grid", "analysis", "compare", "path", "combo", "combo5y", "whatif", "league"]},
   {id: "agents", ko: "에이전트", screens: ["office", "rooms", "digest", "debate"]},
@@ -27,7 +32,7 @@ export const SCREENS = {
   story: {ko: "하이라이트", group: "home", title: "오늘의 하이라이트", hidden: true},
   checkpoint: {ko: "판정", group: "home", title: "30일 판정"},
   account: {ko: "계좌", group: "home", title: "계좌", hidden: true},
-  livebots: {ko: "실거래", group: "home", title: "실거래"},
+  livebots: {ko: "실거래", group: "home", title: "실거래", hidden: true},
   terminal: {ko: "터미널", group: "trade", title: "터미널", feature: "wide"},
   positions: {ko: "포지션", group: "trade", title: "포지션"},
   chart: {ko: "차트", group: "trade", title: "차트"},
@@ -74,6 +79,7 @@ export const LANDING_MIN_PX = 900;
  *  switched-off screen (900 > 760), so the router may also send a PC-only screen opened on a phone here (no loop).
  *  The 설정 panel's automatic 첫 화면 shows this same screen (core/settings.js autoStart). */
 export function mainLanding() {
+  if (LIVE) return LIVE_START;          // the 실거래 site opens on 관제 (owners 10/19)
   const wide = typeof matchMedia !== "function" || matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
   return wide ? "terminal" : "chart";
 }
@@ -92,9 +98,12 @@ export function parseHash(hash) {
   const arg = parts.length > 1 ? decodeURIComponent(parts.slice(1).join("/")) : null;
   const query = {};
   if (qs) for (const [k, v] of new URLSearchParams(qs)) query[k] = v;
+  // the 실거래 site: #/livebots/<tab> (the 실거래 screens' own links, an old bookmark) is the tab's menu item
+  if (LIVE && name === "livebots") return {name: arg && Object.hasOwn(SCREENS, arg) ? arg : LIVE_START, arg: null, query};
   return {name, arg, query};
 }
 export function href(name, arg, query) {
+  if (LIVE && name === "livebots") { name = arg || LIVE_START; arg = null; }   // (the 실거래 site: #/<tab>)
   let out = "#/" + encodeURIComponent(name);
   if (arg != null && arg !== "") out += "/" + encodeURIComponent(arg);
   const q = query && Object.entries(query).filter(([, v]) => v != null && v !== "");
@@ -110,8 +119,15 @@ const ICON = {
   strat: () => [R(2, 1, 10, 1), R(2, 1, 1, 14), R(2, 14, 11, 1), R(12, 1, 1, 14), R(5, 4, 5, 1), R(5, 7, 5, 1), R(5, 10, 3, 1), R(13, 3, 1, 12)],
   agents: () => [R(5, 1, 6, 2), R(5, 3, 6, 4), R(3, 8, 10, 5), R(1, 9, 2, 3), R(13, 9, 2, 3), R(5, 13, 2, 2), R(9, 13, 2, 2)],
   server: () => [1, 6, 11].flatMap((y) => [R(2, y, 12, 1), R(2, y + 3, 12, 1), R(2, y, 1, 4), R(13, y, 1, 4), R(10, y + 1, 2, 2), R(4, y + 1, 4, 1)]),
+  // the 실거래 site's four groups (LIVE_GROUPS): 지금 a radar dot in a ring, 기록 a ruled page, 성적 three bars, 운영 a gear
+  now: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6), R(2, 11, 1, 2),
+    R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(7, 4, 2, 5), R(9, 7, 3, 2)],
+  rec: () => [R(2, 1, 12, 1), R(2, 1, 1, 14), R(13, 1, 1, 14), R(2, 14, 12, 1), R(5, 4, 6, 1), R(5, 7, 6, 1), R(5, 10, 4, 1)],
+  perf: () => [R(1, 14, 14, 1), R(2, 9, 3, 5), R(7, 5, 3, 9), R(12, 2, 3, 12)],
+  ops: () => [R(7, 0, 2, 3), R(7, 13, 2, 3), R(0, 7, 3, 2), R(13, 7, 3, 2), R(2, 2, 2, 2), R(12, 2, 2, 2), R(2, 12, 2, 2),
+    R(12, 12, 2, 2), R(4, 3, 8, 2), R(4, 11, 8, 2), R(3, 4, 2, 8), R(11, 4, 2, 8)],
 };
-export const icon = (group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
+export const icon =(group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
 
 // one 16 x 16 pixel icon per screen: the left rail (core/rail.js) and 찾기 (the menu strip itself is text only)
@@ -155,6 +171,26 @@ const SICON = {
   howto: () => [R(7, 1, 2, 2), R(7, 13, 2, 2), R(1, 7, 2, 2), R(13, 7, 2, 2), R(5, 3, 6, 2), R(5, 11, 6, 2), R(3, 5, 2, 6), R(11, 5, 2, 6),
     R(3, 3, 2, 2), R(11, 3, 2, 2), R(3, 11, 2, 2), R(11, 11, 2, 2)],
   faq: () => [R(5, 1, 6, 2), R(3, 3, 3, 3), R(10, 3, 3, 4), R(8, 7, 3, 2), R(7, 9, 2, 2), R(7, 12, 2, 2)],
+  // the 실거래 site's tabs (LIVE_SCREENS, 찾기): the nearest drawing of a rule-bot screen
+  hq: () => SICON.livebots(),
+  pos: () => SICON.positions(),
+  summary: () => SICON.terminal(),
+  risk: () => SICON.alerts(),
+  health: ICON.server,
+  trades: () => SICON.digest(),
+  replay: () => SICON.flow(),
+  missed: () => SICON.signals(),
+  perf: () => SICON.board(),
+  goal: () => SICON.checkpoint(),
+  rank: () => SICON.board(),
+  judge: () => SICON.howto(),
+  map: () => SICON.grid(),
+  cost: () => SICON.market(),
+  cal: () => SICON.digest(),
+  safety: () => SICON.alerts(),
+  settings: ICON.ops,
+  team: () => SICON.office(),
+  shadows: () => SICON.league(),
 };
 export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
@@ -203,18 +239,63 @@ export function navGroups(feats) {
   }).filter(Boolean);
 }
 
+// ---------------------------------------------------------------- the 실거래 site (paperbot/livedash, core/site.js LIVE)
+// Owners 10/19: "실거래용 봇 대시보드 사이트를 따로 … 지금 실거래봇 대시보드 형식으로 똑같이": the 실거래 tabs are this site's
+// menu, in four groups (the strip's thin lines, the phone's bottom bar). Every item opens screens/livebots.js on its tab
+// (`mod`; the router hands it {name: "livebots", arg: <tab>}), so the screens, their css scope ([data-screen="livebots"])
+// and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
+export const LIVE_START = "hq";
+const LIVE_GROUPS = [
+  {id: "now", ko: "지금", screens: ["hq", "pos", "summary", "chart", "risk", "health"]},
+  {id: "rec", ko: "기록", screens: ["trades", "replay", "signals", "missed"]},
+  {id: "perf", ko: "성적", screens: ["perf", "goal", "rank", "judge", "map", "cost"]},
+  {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
+];
+const LIVE_SCREENS = {
+  hq: {ko: "관제", group: "now", title: "관제"},
+  pos: {ko: "포지션", group: "now", title: "포지션"},
+  summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},
+  chart: {ko: "차트", group: "now", title: "차트"},
+  risk: {ko: "위험", group: "now", title: "위험"},
+  health: {ko: "봇 상태", group: "now", title: "봇 상태"},
+  trades: {ko: "거래", group: "rec", title: "거래"},
+  replay: {ko: "다시보기", group: "rec", title: "거래 다시보기"},
+  signals: {ko: "신호", group: "rec", title: "신호"},
+  missed: {ko: "못 탄 신호", group: "rec", title: "못 탄 신호"},
+  perf: {ko: "성적", group: "perf", title: "성적"},
+  goal: {ko: "목표", group: "perf", title: "목표"},
+  rank: {ko: "순위", group: "perf", title: "매매법 순위"},
+  judge: {ko: "규칙 점검", group: "perf", title: "규칙 점검"},
+  map: {ko: "지도", group: "perf", title: "지도"},
+  cost: {ko: "비용", group: "perf", title: "비용"},
+  cal: {ko: "일정", group: "ops", title: "일정"},
+  safety: {ko: "안전", group: "ops", title: "안전"},
+  settings: {ko: "설정", group: "ops", title: "봇 설정"},
+  team: {ko: "분석팀", group: "ops", title: "분석팀"},
+  shadows: {ko: "그림자", group: "ops", title: "그림자 봇"},
+};
+if (LIVE) {
+  // put in place (the same objects every module already imported): the menu, the screens, the strip's groups
+  GROUPS.splice(0, GROUPS.length, ...LIVE_GROUPS);
+  for (const k of Object.keys(SCREENS)) delete SCREENS[k];
+  for (const [k, v] of Object.entries(LIVE_SCREENS)) SCREENS[k] = {...v, mod: "livebots"};
+  NAV.splice(0, NAV.length, ...LIVE_GROUPS.map((g) => ({group: g.id, ko: g.ko})));
+  JOINED.length = 0;
+}
+
 /** The number keys 1-9 (core/navkeys.js): the menu's first nine buttons, in its order (owners 10/06 ~14:00). */
 export const KEYS = navGroups(true).flatMap((g) => g.items.map((it) => it.to)).slice(0, 9);
 /** A screen's number key ("1" ... "9"), null when it has none. */
 export const keyOf = (name) => { const i = KEYS.indexOf(name); return i < 0 ? null : String(i + 1); };
 /** Links that open in the side panel instead of leaving the page (core/drawer.js): route name -> panel kind. */
 export const PEEKABLE = {account: "account", strategies: "strategy", replay: "trade"};
+if (LIVE) for (const k of Object.keys(PEEKABLE)) delete PEEKABLE[k];       // (the 실거래 site: no side panel; its 다시보기 is a tab)
 /** The screens about real money (owners 10/19: the 실거래 screen must never be taken for the rule bot's paper screens). */
 export const REAL_SCREENS = ["livebots"];
 /** The top bar's mode chip for a screen (core/shell.js): 실거래 in the real-money colour (--warn, base.css .mocktag.real)
- *  on a real-money screen, 모의 on every other one. */
+ *  on a real-money screen, 모의 on every other one; every screen of the 실거래 site is one. */
 export function modeTag(name) {
-  return REAL_SCREENS.includes(name)
+  return LIVE || REAL_SCREENS.includes(name)
     ? {text: "실거래", real: true, title: "진짜 돈: 바이비트 · MEXC 실행기와 그 둘이 따라가는 페이퍼(연습) · 이 화면은 보기만 해요 (주문 버튼 없음)"}
     : {text: "모의", real: false, title: "모든 계좌는 모의(가상 돈)입니다"};
 }

@@ -1,0 +1,52 @@
+/* 실거래 › 목표 (screens/livebots-goal.js). Tokens only (both skins), every font size a --t-* token. The progress bars
+   and the win-rate scale are plain boxes; the AI skin adds a soft glow on the big numbers, 클래식 stays plain. */
+.lbg { min-width: 0; }
+.lbg-body { min-width: 0; }
+.lbg-intro { margin: 0 2px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+.lbg-intro .muted, .lbg-month { font-size: var(--t-xs); color: var(--ink-2); }
+.lbg-slot { display: grid; gap: 8px; min-width: 0; }
+.lbg-slot:empty { display: none; }
+.lbg-cards { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; align-items: start; }
+@media (min-width: 900px) { .lbg-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.lbg-acct { position: relative; overflow: hidden; display: grid; gap: 8px; }
+.lbg-acct::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--lbg-c, var(--line-2)); }
+.lbg-a-paper { --lbg-c: var(--series-ds); }
+.lbg-a-bybit { --lbg-c: var(--series-core); }
+.lbg-a-mexc { --lbg-c: var(--series-m5); }
+.lbg-acct.off { border-style: dashed; }
+.lbg-ah { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
+.lbg-ah .lb-acct { font: 800 var(--t-md)/1.3 var(--f-body); color: var(--ink); }
+.lbg-kind { padding: 0 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); font: 700 var(--t-2xs)/1.7 var(--f-body); }
+.lbg-kind.live { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
+.lbg-ret { display: grid; gap: 2px; min-width: 0; }
+.lbg-ret .k, .lbg-win .k { color: var(--muted); font-size: var(--t-xs); }
+.lbg-ret b { font: 800 var(--t-2xl)/1.1 var(--f-term); color: var(--ink); }
+.lbg-ret.up b { color: var(--up); }
+.lbg-ret.down b { color: var(--down); }
+:root:not([data-skin="classic"]) .lbg-ret.up b { text-shadow: 0 0 16px var(--up-glow); }
+:root:not([data-skin="classic"]) .lbg-ret.down b { text-shadow: 0 0 16px var(--down-glow); }
+.lbg-ret .s { color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lbg-prog { position: relative; height: 12px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.lbg-prog i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 999px; }
+.lbg-pgoal { position: absolute; right: 6px; top: -1px; color: var(--ink-2); font: 700 var(--t-2xs)/1.2 var(--f-body); }
+.lbg-pace, .lbg-sofar { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.lbg-sofar { color: var(--ink-2); font-size: var(--t-xs); }
+
+/* the win rate against break-even */
+.lbg-win { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.lbg-win b { font: 800 var(--t-2xl)/1.1 var(--f-term); color: var(--ink); }
+.lbg-win .s { color: var(--ink-2); font-size: var(--t-sm); }
+.lbg-wbar { position: relative; height: 18px; border-radius: var(--r-sm); background: var(--surface-3); margin: 4px 0; }
+.lbg-band { position: absolute; top: 3px; bottom: 3px; border-radius: var(--r-sm); background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.lbg-plain { position: absolute; top: 0; bottom: 0; background: var(--warn-soft); opacity: .8; }
+.lbg-be { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--warn); }
+.lbg-pt { position: absolute; top: 3px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent);
+  border: 2px solid var(--surface); }
+:root:not([data-skin="classic"]) .lbg-pt { box-shadow: 0 0 10px var(--accent-glow); }
+.lbg-wl { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.lbg-rec .num.up { color: var(--up); }
+.lbg-rec .num.down { color: var(--down); }
+.lbg-imply .num.up { color: var(--up); }
+.lbg-imply .num.down { color: var(--down); }
+.lbg-warn { margin: 0; padding: 7px 10px; border-radius: var(--r-sm); border: 1px dashed var(--warn-line); background: var(--warn-soft); color: var(--ink);
+  font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }

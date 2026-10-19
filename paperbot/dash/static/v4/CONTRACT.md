@@ -550,3 +550,28 @@ Status after the review pass (team P10 is adding these to `app.py`): **#1 arrive
   paperbot-tgtrades is off they say the alert is saved and rings once it is back, never "텔레그램으로 알립니다".
 - **TV 자동 넘김** (`core/tvmode.js`): key t, the rail's TV, the 서버 sub-tab row; `tvSection(onDone)` is the same
   controls for a settings panel. It only changes which real screen is shown (no invented activity).
+
+## 8. The 실거래 site (owners 10/19: its own site, paperbot/livedash, port 8093)
+
+- **Two sites, one code.** The rule bot's dashboard (static/v4/index.html, core/main.js) and the 실거래 site
+  (static/live/index.html, static/live/main.js + shell.js) share every core module and the 실거래 screens. A module tells
+  them apart only through `core/site.js` (`LIVE`, `SITE`, `BRAND`, `LIVE_PORT`, `PAPER_PORT`, `siteUrl(port, hash)`; screens
+  import them from pb.js). Keep that to the few places that really differ (the menu, a probe of a rule-bot route); a screen
+  that works on both sites needs no branch.
+- **The menu is the tabs.** core/routes.js swaps in `LIVE_GROUPS` / `LIVE_SCREENS` on the 실거래 site (지금 · 기록 · 성적 ·
+  운영); each item has `mod: "livebots"`, so the router mounts screens/livebots.js with `ctx.params = {name: "livebots", arg:
+  <tab id>, query}` inside `<div class="scr" data-screen="livebots">`. A new 실거래 tab = one line in `LIVE_GROUPS` /
+  `LIVE_SCREENS` (routes.js) and one line in livebots.js `TABS`: `{id, label, make: (ctx, hub) => view(ctx, hub), own: true}`
+  where `view` returns `{el, set(d, state)}` (`set` gets every summary answer of /api/v4/livebots, 5 s, or `(null,
+  "failed")`; `own: true` = the tab reads and shows its own endpoint's failures; `hub` = `{state(), at(), retry(), get()}` of
+  that summary). The tab's own polls go through `ctx.every` / `ctx.api` (cleaned on leave). Links between tabs:
+  `ctx.href("livebots", "<tab>", query)` / `ctx.go(...)` (on the 실거래 site they become `#/<tab>`).
+- **CSS.** A tab's css file is `screens/livebots-<part>.css`, `@import`ed by livebots.css (the router loads only
+  livebots.css); scope rules under `[data-screen="livebots"]` or a `lb<x>-` prefix of the tab; tokens only, font sizes
+  `--t-*`, 390 px without sideways scroll.
+- **Routes.** A tab's server routes are a dash/more module registered by paperbot/livedash/app.py (`MODULES`, or
+  `OPTIONAL_MODULES` for one that may be missing). tests/test_livedash_app.py fails when the live page's modules hold an
+  `/api` path the live app does not serve (or list in `NOT_ON_LIVE` with the reason it is never called there).
+- **Not on the 실거래 site:** the rule bot's stream (/api/stream and its bus events), its store keys other than `ticker` and
+  `board` (names only there), the side panel, the bell, the tour, the since sheet, the verdict band, TV mode. The rule bot's
+  dashboard keeps `#/livebots` hidden; it only says where the screens moved.

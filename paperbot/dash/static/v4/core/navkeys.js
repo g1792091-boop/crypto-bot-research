@@ -19,6 +19,7 @@ import {openSettings, settingsOpen} from "./settings.js";
 import {swipeOn} from "./prefs.js";
 import {toggleFull} from "./fullchart.js";
 import {toggleTv, stopTv, tvOn, tvPanelOpen} from "./tvmode.js";
+import {LIVE} from "./site.js";
 
 const typing = (el) => !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
 
@@ -88,6 +89,8 @@ export function startNavKeys() {
     if (e.key === "," || e.code === "Comma") { e.preventDefault(); openSettings(); return; }
     if ((e.key === "f" || e.key === "F" || e.code === "KeyF") && !e.shiftKey && !e.repeat) { if (toggleFull()) e.preventDefault(); return; }
     // t: TV 자동 넘김 on / off (e.code too: a keyboard in 한글 mode sends "ㅅ" for t); Esc ends it when nothing else is open
+    // (the rule bot's page only: its screens are the TV's choices; the 실거래 site has no TV mode, core/site.js)
+    if (LIVE && (e.key === "t" || e.key === "T" || e.code === "KeyT")) return;
     if ((e.key === "t" || e.key === "T" || e.code === "KeyT") && !e.repeat && !tvPanelOpen()) { e.preventDefault(); toggleTv(); return; }
     if (e.key === "Escape" && tvOn() && !peekOpen() && !tvPanelOpen()) { stopTv(); return; }
     const name = keyScreen(e.key);

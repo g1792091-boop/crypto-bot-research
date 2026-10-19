@@ -259,6 +259,28 @@
 .lbr-howl b { color: var(--ink); }
 .lbr-key { display: inline-block; width: 16px; height: 6px; margin-right: 4px; border-radius: 3px; vertical-align: middle; background: var(--bc); }
 
+/* ---------------------------------------------------------------- 그룹별 성적 (A · B · 예전 매매법; also on 성적) */
+.lbrg-card { min-width: 0; }
+.lbrg-start { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+.lbrg-rows { display: grid; min-width: 0; }
+.lbrg-row { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(5, minmax(0, 1fr)) auto; gap: 4px 10px; align-items: center;
+  padding: 8px 4px; border-bottom: 1px solid var(--line); min-width: 0; }
+.lbrg-row:last-child { border-bottom: 0; }
+.lbrg-row.g-A { border-left: 3px solid var(--series-core); }
+.lbrg-row.g-B { border-left: 3px solid var(--series-m5); }
+.lbrg-row.g-old, .lbrg-row.g-none { border-left: 3px solid var(--line-2); opacity: .9; }
+.lbrg-name { display: grid; min-width: 0; padding-left: 6px; }
+.lbrg-name b { color: var(--ink); font-size: var(--t-sm); }
+.lbrg-name small, .lbrg-v small { color: var(--muted); font-size: var(--t-2xs); overflow-wrap: anywhere; }
+.lbrg-v { display: grid; min-width: 0; }
+.lbrg-v b { color: var(--ink); font-size: var(--t-sm); }
+.lbrg-v b.up { color: var(--up); }
+.lbrg-v b.down { color: var(--down); }
+@media (max-width: 759px) {
+  .lbrg-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lbrg-name { grid-column: 1 / -1; }
+}
+
 /* ---------------------------------------------------------------- still under prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .lbr-card, .lbr-card::before, .lbr-player, .lbr-chev, .lbr-lhead { transition: none; }

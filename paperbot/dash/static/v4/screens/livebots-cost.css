@@ -127,3 +127,26 @@
 @media (max-width: 759px) {
   .lbk-crow { grid-template-columns: minmax(0, 1fr) calc(46px * var(--ts)) calc(72px * var(--ts)) calc(72px * var(--ts)); gap: 6px; }
 }
+
+/* 체결 비교 (per exchange) and 진입 방식 판단 (owners 10/19 night) */
+.lbk-gaps .lbk-tiles { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.lbk-gnote { margin: 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.55; overflow-wrap: anywhere; }
+.lbk-judge { display: grid; gap: 8px; min-width: 0; }
+.lbk-jrows { display: grid; gap: 8px; min-width: 0; }
+.lbk-jrow { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, .8fr) minmax(0, 1.2fr) minmax(0, 2.4fr); gap: 4px 12px; align-items: center;
+  padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; font-size: var(--t-sm); }
+.lbk-jrow .lb-acct { font-weight: 800; color: var(--ink); }
+.lbk-jn b { color: var(--ink); font-size: var(--t-md); }
+.lbk-jn small, .lbk-jsrc { color: var(--muted); font-size: var(--t-2xs); }
+.lbk-jsrc { grid-column: 1 / -1; }
+.lbk-jbar { position: relative; height: 10px; border-radius: 999px; background: var(--surface-3); overflow: visible; }
+.lbk-jbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); }
+.lbk-jbar em { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink-2); }
+.lbk-jko { color: var(--ink); overflow-wrap: anywhere; }
+.lbk-jko.down { color: var(--down); }
+.lbk-jko.up { color: var(--up); }
+.lbk-jwho { margin: 0; color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; }
+@media (max-width: 759px) {
+  .lbk-jrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lbk-jbar, .lbk-jko { grid-column: 1 / -1; }
+}

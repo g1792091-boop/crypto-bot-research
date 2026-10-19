@@ -14,6 +14,8 @@ export {store} from "./store.js";
 export {features} from "./features.js";
 export {bus, api, apiText, post, serverNow, ApiError, stream} from "./api.js";
 export {href, SCREENS, GROUPS, landing} from "./routes.js";
+// which site this page is (core/site.js): the rule bot's dashboard or the separate 실거래 site (paperbot/livedash)
+export {SITE, LIVE, LIVE_PORT, PAPER_PORT, siteUrl} from "./site.js";
 export {setBadge} from "./shell.js";
 export {joinedTabs} from "./strip.js";
 export {startTour} from "./tour.js";

@@ -7,6 +7,10 @@
 // what each executor did with it (따라감 / 안 따라감 with the executor's own reason). A losing trade with a loss card
 // (livecheck.db; a live trade shows its paper partner's) opens with the card under it (livebots-cards.js); the filter
 // 손실 카드만 and, over the trades shown, the count by the card's cause label.
+// 최대 +% / 최대 −% (owners 10/19 "최대 %까지 갔는지 최대 -%까지 갔는지"): each row's best and worst net ROE between its entry
+// and its exit (GET /api/v4/livebots/positions/excursions, dash/more/livepos.py, keyed by the row's own key): the paper's
+// from its engine record, an executor's from the rule bot's 1m Binance bars with its own fill; a row without them says why
+// (수집 전 / 못 읽음 / 1분봉 없음), never a zero; a failed read of them leaves the trades as they are.
 // HONESTY: every number is a record's; a field the record does not have is '—' or left out; real money and paper money each
 // carry their own caption; no buttons that change anything; cards not collected yet say 수집 전, never '없음'.
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
@@ -14,7 +18,21 @@ import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 import {cardBlock, cardSummary} from "./livebots-cards.js";
 import {replayHref} from "./livebots-replay.js";
 
+export const EXC_API = "/api/v4/livebots/positions/excursions";
 const IDS = ["paper", "bybit", "mexc"];
+const EX_NONE = {missing: "수집 전", error: "못 읽음", none: "1분봉 없음"};
+
+/** A row's 최대 +% / 최대 −% (pure; node tests): {state, mfe, mae, src, why} from the excursions answer x, its account and
+ *  the row key; state "wait" before the first answer, "failed" when it could not be read. */
+export function excOf(x, acct, key, failed) {
+  if (!x) return {state: failed ? "failed" : "wait", why: failed ? "최대 +% · 최대 −%를 불러오지 못했어요" : "불러오는 중"};
+  const a = x.accts && x.accts[acct];
+  if (!a || a.state !== "ok") return {state: (a && a.state) || "missing", why: (a && a.reason_ko) || "아직 기록이 없어요"};
+  const r = a.rows && a.rows[key];
+  if (!r) return {state: "none", why: "이 거래의 최대 +% · 최대 −%는 아직 계산 전이에요"};
+  if (r.state !== "ok") return {state: r.state, why: r.reason_ko || ""};
+  return {state: "ok", mfe: r.mfe, mae: r.mae, mfe_move: r.mfe_move, mae_move: r.mae_move, src: r.src, src_ko: r.src_ko, bars: r.bars};
+}
 const REFRESH_MS = 30 * 1000;
 const STATE_KO = {matched: "따라감", missed: "안 따라감", before: "시작 전", open: "닫는 중", unknown: "모름"};
 const F0 = () => ({coin: "", strat: "", res: "all", card: false});
@@ -28,7 +46,7 @@ export function filterRows(rows, f) {
 /** tradesView(ctx) -> {el, set()}: its own endpoint, read now and every 30 s. */
 export function tradesView(ctx) {
   const q = ctx.params.query || {};
-  const st = {acct: IDS.includes(q.acct) ? q.acct : local.get("lb-tacct2", "bybit"), f: F0(), d: null, open: null, okAt: 0};
+  const st = {acct: IDS.includes(q.acct) ? q.acct : local.get("lb-tacct2", "bybit"), f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false};
   if (!IDS.includes(st.acct)) st.acct = "bybit";
   const seg = ui.seg(IDS.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lb-tacct2", id); st.f = F0(); st.open = null; resSeg.set("all"); draw(true); },
     {label: "계좌 고르기"});
@@ -67,6 +85,7 @@ export function tradesView(ctx) {
       kv(live ? "ROE" : "순ROE", r.roe != null ? fmt.pct(r.roe, 1) : null), kv("손익 (USDT)", money(r.pnl, r.est)),
       kv("수수료", live ? (r.commission != null ? fmt.money(r.commission) : "체결 기록 전") : r.fees != null ? fmt.money(r.fees) : null),
       kv("펀딩", (live ? r.funding : r.funding) != null ? fmt.money(r.funding, true) : null),
+      ...excRows(r),
     ];
     if (live) {
       rows.push(kv("짝 페이퍼 거래", r.paper ? `${fmt.kst(r.paper.entry_time)} 진입 · ${fmt.price(r.paper.entry_price)} · 손익 ${fmt.money(r.paper.pnl, true)}` : "없음 (페이퍼에 같은 거래가 없어요)"),
@@ -83,6 +102,22 @@ export function tradesView(ctx) {
     const pid = live ? (r.paper ? r.paper.id : null) : r.id;           // 다시보기 (D2): the paper trade's 1m replay
     const replay = pid != null ? h("a", {class: "btn-line", href: replayHref(pid)}, "▶ 다시보기") : null;
     return h("div", {class: "lb-tdet"}, r.card || !r.win ? cardPart(r, live) : null, replay, ui.kv(rows), nums, ...extra, cells);
+  }
+  /** 최대 +% / 최대 −% in the opened trade: the numbers, the price moves and where they come from (or why not). */
+  function excRows(r) {
+    const e = excOf(st.x, st.acct, String(r.key), st.xFailed);
+    if (e.state !== "ok") return [kv("최대 +% · 최대 −%", `${EX_NONE[e.state] || "—"}${e.why ? ` (${e.why})` : ""}`)];
+    const src = e.src === "engine" ? "페이퍼 엔진 기록" : `바이낸스 1분봉 기준${e.bars ? ` · ${fmt.int(e.bars)}개` : ""}${st.acct !== "paper" ? " · 페이퍼 비용 가정" : ""}`;
+    return [kv("최대 +% (진입 뒤 최고)", `순ROE ${fmt.pct(e.mfe, 1)} · 가격 ${fmt.pct(e.mfe_move, 2)}`),
+      kv("최대 −% (진입 뒤 최저)", `순ROE ${fmt.pct(e.mae, 1)} · 가격 ${fmt.pct(e.mae_move, 2)}`), kv("최대 ±의 출처", src)];
+  }
+  /** The row's small 최대 +% / 최대 −% cell. */
+  function excCell(r) {
+    const e = excOf(st.x, st.acct, String(r.key), st.xFailed);
+    if (e.state === "wait") return h("span", {class: "lb-tx muted"}, "…");
+    if (e.state !== "ok") return h("span", {class: "lb-tx muted", title: e.why}, EX_NONE[e.state] || "—");
+    return h("span", {class: "lb-tx num", title: `최대 +% / 최대 −% (진입 뒤 순ROE · ${e.src === "engine" ? "페이퍼 엔진 기록" : "바이낸스 1분봉 기준"})`},
+      h("span", {class: fmt.tone(e.mfe)}, `최대 ${fmt.pct(e.mfe, 1)}`), h("span", {class: fmt.tone(e.mae)}, `최대 ${fmt.pct(e.mae, 1)}`));
   }
   /** The loss card first (what the owners open a loss for); a loss without one says why not. */
   function cardPart(r, live) {
@@ -101,6 +136,7 @@ export function tradesView(ctx) {
     h("span", {class: "lb-ts"}, r.strategy_id ? `${fmt.stratKo(r.strategy_id)} · ${fmt.tfKo(r.timeframe)}` : "매매법 모름"),
     h("span", {class: "lb-tpills"}, ui.pill(r.reason_ko || "—", r.exit_reason === "LOCK" || r.exit_reason === "TP" ? "good" : r.exit_reason === "SL" || r.exit_reason === "LIQ" ? "bad" : "thin"),
       r.card ? ui.pill("카드", "thin", `손실 카드: ${r.card.label || ""}`) : null),
+    excCell(r),
     h("span", {class: ["num", "lb-tr", fmt.tone(r.roe)]}, r.roe == null ? "—" : fmt.pct(r.roe, 1)),
     h("b", {class: ["num", "lb-tp", fmt.tone(r.pnl)]}, money(r.pnl, r.est)));
     return h("div", {class: ["lb-titem", open ? "open" : ""], role: "listitem"}, head, open ? detail(r) : null);
@@ -145,8 +181,26 @@ export function tradesView(ctx) {
     st.d = d; st.sig = sig;
     if (ctx.alive()) draw(false);
   }
+  // 최대 +% / 최대 −% (its own answer: a failure here never hides the trades)
+  async function loadExc() {
+    let x;
+    try { x = await ctx.api(EXC_API); }
+    catch (e) {
+      if (!ctx.alive() || (e && e.name === "AbortError")) return;
+      st.xFailed = true;
+      if (!st.x) pg.rerender();
+      return;
+    }
+    if (!ctx.alive()) return;
+    const sig = JSON.stringify({...x, now_ms: 0});
+    st.xFailed = false;
+    if (sig === st.xsig) return;
+    st.x = x; st.xsig = sig;
+    pg.rerender();
+  }
   draw(true);
   load().catch(() => {});
-  ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
+  loadExc();
+  ctx.every(REFRESH_MS, () => { load().catch(() => {}); loadExc(); }, {now: false});
   return {el, set() {}};
 }

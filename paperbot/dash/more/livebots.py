@@ -1899,7 +1899,8 @@ def _map_label(ref: Optional[dict], cut: str, k: Any) -> str:
 def costs(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/costs: per executor, its closed trades next to the paper trade each followed: entry price gap
     (in the trade's favour positive), fees, funding, and the live P&L minus the paper's scaled to the live size. Plus the
-    paper trades it did not follow and why (its own records). Read from the 거래 tab's own rows (trade_rows)."""
+    paper trades it did not follow and why (its own records). Read from the 거래 tab's own rows (trade_rows). Since 10/19
+    night also 체결 비교 per executor (``gaps``: fill_gaps) and 진입 방식 판단 (``entry_judge``)."""
     tr = trade_rows(p, now)
     accts = tr.get("accts") or {}
     out = {}
@@ -1945,8 +1946,97 @@ def costs(p: dict, now: int) -> dict:
                                "paper_fees": (r.get("paper") or {}).get("fees"), "paper_funding": (r.get("paper") or {}).get("funding")}
                             for r in rows[:60]]}
     pa = accts.get("paper") or {}
+    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
+    for ex, _ko, dk, _ck in EXECS:                      # 체결 비교 (owners 10/19 night): added, nothing above changes
+        if (out.get(ex) or {}).get("state") == "ok":
+            cfg = configs[ex] if configs[ex].get("state") == "ok" else {}
+            out[ex]["gaps"] = fill_gaps(p[dk], (accts.get(ex) or {}).get("rows") or [], cfg.get("exchange") or ex)
     return {"now_ms": now, "paper": {"state": pa.get("state"), "n": pa.get("n"), "reason_ko": pa.get("reason_ko")},
-            "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in EXECS], "accts": out, "match_ms": MATCH_MS}
+            "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in EXECS], "accts": out, "match_ms": MATCH_MS,
+            "entry_judge": entry_judge(out, configs)}
+
+
+# ---------------------------------------------------------------- 체결 비교 (owners 10/19 night: each live fill against the paper's)
+PAPER_TAKER, PAPER_SLIP = 0.0005, 0.0002   # the paper rules' fee and slippage per side (paperbot/livepnl.py, config.v3_settings)
+ENTRY_JUDGE_N = (10, 20)                   # owners 10/19: after 10-20 measured trades they decide whether the executors enter at
+                                           # the signal time instead of following the paper's fill (the page shows numbers only)
+WIN_REF = 0.10                             # a +10 % win (the first lock): the share of it an entry gap eats
+
+
+def _avg(xs: list) -> Optional[float]:
+    xs = [x for x in xs if x is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+def fill_gaps(path: str, rows: list, exchange: str) -> dict:
+    """Per executor (its 거래 rows, trade_rows): each closed trade's entry and exit fill against its paper partner's
+    (paperbot/livecheck.py cost_row on the executor's own fills; the entry falls back to the trade's recorded entry
+    price): the price gap in the trade's favour positive, the same in net ROE points at the trade's leverage (gap x
+    leverage), the fee it really paid per side against the paper's 0.05 % (+ 0.02 % slippage, in the paper's fill
+    already), and the averages. A gap that was not measured is None (체결 기록 전), never 0."""
+    from ... import livecheck as LC
+    info = LC.ExecInfo(name=exchange, config="-", unit="-", db=path, light_n=0, light_min=0.0, exchange=exchange)
+    try:
+        conn = open_ro(path)
+    except FileNotFoundError:
+        return _missing(path)
+    except (OSError, sqlite3.Error) as exc:
+        return _err(path, exc)
+    out = []
+    try:
+        has = "fills" in _tables(conn)
+        for r in rows:
+            pt = r.get("paper")
+            et = {"key": r.get("key"), "symbol": r.get("symbol"), "side": r.get("side"), "entry_ts": r.get("entry_time"),
+                  "exit_ts": r.get("exit_time"), "entry_price": r.get("entry_price"), "commission": r.get("commission"),
+                  "funding": r.get("funding"), "pnl": r.get("pnl")}
+            fills = LC.exec_fills(conn, str(r.get("key"))) if has else []
+            c = LC.cost_row(info, et, {"entry_price": pt.get("entry_price"), "exit_price": pt.get("exit_price"), "roe": pt.get("roe"),
+                                       "strategy": pt.get("strategy_id") or "", "tf": pt.get("timeframe") or ""} if pt else None, fills)
+            lev = _f(r.get("leverage"))
+            ein = -c["entry_bps"] / 1e4 if c.get("entry_bps") is not None else None
+            eout = -c["exit_bps"] / 1e4 if c.get("exit_bps") is not None else None
+            fee = _f(c.get("fee_rate"))
+            out.append({"key": r.get("key"), "symbol": r.get("symbol"), "side": r.get("side"), "leverage": r.get("leverage"),
+                        "exit_time": r.get("exit_time"), "matched": pt is not None, "fills": c.get("fills"),
+                        "entry_gap": ein, "exit_gap": eout, "entry_roe": ein * lev if ein is not None and lev else None,
+                        "exit_roe": eout * lev if eout is not None and lev else None, "fee_rate": fee, "notional": _f(c.get("notional")),
+                        "commission": _f(c.get("commission")),
+                        "fee_roe": (PAPER_TAKER - fee) * 2 * lev if fee is not None and lev else None})
+    except sqlite3.Error as exc:
+        return _err(path, exc)
+    finally:
+        conn.close()
+    fee_rows = [x for x in out if x["fee_rate"] is not None and x["notional"]]
+    notional = sum(x["notional"] for x in fee_rows)
+    s = {"n": len(out), "matched": sum(1 for x in out if x["matched"]),
+         "entry_n": sum(1 for x in out if x["entry_gap"] is not None), "exit_n": sum(1 for x in out if x["exit_gap"] is not None),
+         "fee_n": len(fee_rows), "entry_gap": _avg([x["entry_gap"] for x in out]), "exit_gap": _avg([x["exit_gap"] for x in out]),
+         "entry_roe": _avg([x["entry_roe"] for x in out]), "exit_roe": _avg([x["exit_roe"] for x in out]),
+         "fee_rate": sum(x["commission"] for x in fee_rows) / notional if notional else None,
+         "fee_roe": _avg([x["fee_roe"] for x in out])}
+    parts = [s["entry_roe"], s["exit_roe"], s["fee_roe"]]
+    s["total_roe"] = sum(x for x in parts if x is not None) if any(x is not None for x in parts) else None
+    s["total_parts"] = sum(1 for x in parts if x is not None)
+    return {"state": "ok", "path": path, "exchange": exchange, **s, "rows": out[:60],
+            "assumed": {"taker": PAPER_TAKER, "slip": PAPER_SLIP, "exchange_fee": LC.ASSUMED_FEE.get(exchange, LC.ASSUMED_FEE["binance"])}}
+
+
+def entry_judge(accts: dict, configs: dict) -> dict:
+    """진입 방식 판단 (owners 10/19: after 10-20 trades they decide whether to enter at the signal time instead of following
+    the paper fill): per executor how many entries were measured, the average entry gap in net ROE points and the share
+    of a +10 % win it eats. Numbers only: no threshold, the decision is the owners'."""
+    out = []
+    for ex, ko, _dk, _ck in EXECS:
+        g = (accts.get(ex) or {}).get("gaps") or {}
+        cfg = configs.get(ex) or {}
+        er = g.get("entry_roe") if g.get("state") == "ok" else None
+        out.append({"id": ex, "name_ko": ko, "state": g.get("state") or (accts.get(ex) or {}).get("state"), "n": g.get("entry_n") or 0,
+                    "entry_roe": er, "entry_gap": g.get("entry_gap") if g.get("state") == "ok" else None,
+                    "share_of_win": (-er / WIN_REF) + 0.0 if er is not None else None,     # + 0.0: never a "-0"
+                    "entry_source": cfg.get("entry_source") if cfg.get("state") == "ok" else None})
+    return {"need": list(ENTRY_JUDGE_N), "win_ref": WIN_REF, "rows": out,
+            "who_ko": "판단은 두 분이 해요: 이 화면은 숫자만 보여 드려요"}
 
 
 # ---------------------------------------------------------------- 분석팀 (실거래 분석 팀, owners 10/19)

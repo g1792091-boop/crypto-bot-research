@@ -19,6 +19,9 @@ downloaded the 60-66 screen files again, 1.4-2.6 s of empty screen).
 - ``index_html`` also lists the boot modules (the static imports reachable from core/main.js) as
   ``<link rel="modulepreload">``, so the first open after an update asks for them in one round instead of a chain
   nine imports deep.
+- The 실거래 site (paperbot/livedash) uses the same class over one more folder: ``Assets(static, dirs=("v4", "vendor",
+  "live"), index="live/index.html", boot="live/main.js", code_dirs=("live", "v4"))`` (its page and boot module in
+  static/live, every screen and core module still static/v4's). The rule bot's page keeps the defaults, unchanged.
 """
 from __future__ import annotations
 
@@ -42,10 +45,14 @@ VER_RE = re.compile(r"^[0-9a-f]{6,16}$")
 class Assets:
     """Content fingerprints of static/v4 and static/vendor (thread-safe; the routes call it from worker threads)."""
 
-    def __init__(self, static_dir: str, dirs: tuple = ASSET_DIRS, check_s: float = CHECK_S):
+    def __init__(self, static_dir: str, dirs: tuple = ASSET_DIRS, check_s: float = CHECK_S, index: str = "v4/index.html",
+                 boot: str = BOOT, code_dirs: Optional[tuple] = None):
         self.root = os.path.abspath(static_dir)
         self.dirs = dirs
         self.check_s = check_s
+        self.index = index                      # the page (relative to static/)
+        self.boot = boot                        # its boot module (the modulepreload walk starts here)
+        self.code_dirs = tuple(code_dirs or (dirs[0],))     # folders whose imports the walk follows
         self._lock = threading.Lock()
         self._checked = 0.0
         self._sig: Optional[tuple] = None
@@ -120,7 +127,8 @@ class Assets:
     # ------------------------------------------------------------------ the page
     def boot_modules(self) -> list:
         """The static imports reachable from core/main.js (relative paths under static/), in a stable order."""
-        seen, todo, out = set(), [BOOT], []
+        seen, todo, out = set(), [self.boot], []
+        code = tuple(d + "/" for d in self.code_dirs)
         while todo:
             rel = todo.pop(0)
             if rel in seen:
@@ -135,7 +143,7 @@ class Assets:
             base = os.path.dirname(rel)
             for spec in IMPORT_RE.findall(src):
                 nxt = os.path.normpath(os.path.join(base, spec)).replace(os.sep, "/")
-                if nxt.startswith(self.dirs[0] + "/") and nxt not in seen:
+                if nxt.startswith(code) and nxt not in seen:
                     todo.append(nxt)
         return out
 
@@ -146,10 +154,11 @@ class Assets:
             if self._index is not None:
                 return self._index
             ver = self._ver
-            with open(os.path.join(self.root, "v4", "index.html"), encoding="utf-8") as fh:
+            with open(os.path.join(self.root, *self.index.split("/")), encoding="utf-8") as fh:
                 html = fh.read()
             pre = f"{VERSIONED}{ver}/"
-            html = html.replace('"/static/v4/', f'"{pre}v4/')
+            for d in self.dirs:
+                html = html.replace(f'"/static/{d}/', f'"{pre}{d}/')
             links = "".join(f'<link rel="modulepreload" href="{pre}{m}">\n' for m in self.boot_modules()
                             if m in self._etags)
             meta = f'<meta name="pb-ver" content="{ver}">\n'
@@ -158,12 +167,13 @@ class Assets:
             return html
 
 
-def split_versioned(path: str) -> Optional[tuple]:
-    """'/static/v-<ver>/v4/core/x.js' -> ('<ver>', 'v4/core/x.js'); None for any other path."""
+def split_versioned(path: str, dirs: tuple = ASSET_DIRS) -> Optional[tuple]:
+    """'/static/v-<ver>/v4/core/x.js' -> ('<ver>', 'v4/core/x.js'); None for any other path (``dirs``: the page's
+    folders, Assets.dirs)."""
     if not path.startswith(VERSIONED):
         return None
     ver, _, rest = path[len(VERSIONED):].partition("/")
-    if not VER_RE.match(ver) or not rest.startswith(tuple(d + "/" for d in ASSET_DIRS)):
+    if not VER_RE.match(ver) or not rest.startswith(tuple(d + "/" for d in dirs)):
         return None
     return ver, rest
 
@@ -179,7 +189,7 @@ def asset_files(static_dir: str, assets: Assets):
     class AssetFiles(StaticFiles):
         async def get_response(self, path: str, scope):
             await anyio.to_thread.run_sync(assets.refresh)
-            sp = split_versioned("/static/" + path.replace(os.sep, "/"))
+            sp = split_versioned("/static/" + path.replace(os.sep, "/"), assets.dirs)
             cc = None
             if sp:
                 ver, path = sp

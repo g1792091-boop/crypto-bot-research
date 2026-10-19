@@ -1,0 +1,37 @@
+# 실거래 대시보드 (paperbot/livedash, docs/livedash-ko.md): the live bots' own site, separate from the rule bot's dashboard
+# (paperbot-dash, port 8080). Read-only: the paper bot's live-ac.db, both executors' databases and configs (never the key
+# file), the live checks' files, the rule bot's 1m bars and liq.db, the price alerts in inbox.db; it writes nothing.
+# The same password as the rule bot's dashboard (DASH_PASSWORD_HASH and DASH_SECRET in /etc/paperbot/dash.env) with its
+# own session cookie. Listens on DASH_HOST (127.0.0.1 or the Tailscale address), port 8093; reach it through Tailscale or
+# an SSH tunnel, never the internet.
+[Unit]
+Description=paperbot 실거래 dashboard (live bots, read-only)
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/dash.env
+# After a reboot the Tailscale address can appear a few seconds after the network: wait up to 60 s for DASH_HOST so the
+# first start does not fail to bind (Restart=always would retry anyway).
+ExecStartPre=-/bin/sh -c 'n=0; until ip -4 -o addr show | grep -qF " inet $$DASH_HOST/" || [ $$n -ge 60 ]; do n=$$((n+1)); sleep 1; done'
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.livedash --host ${DASH_HOST} --port 8093 --liq-db /var/lib/paperbot/liq.db --inbox-db /var/lib/paperbot/inbox.db
+Restart=always
+RestartSec=5
+# Read-only everywhere: this service writes no file at all (no database, no inbox). /var/lib/paperbot stays visible
+# (its databases are opened mode=ro + query_only by the code; the -shm files of their read-only connections need the
+# folder, as for paperbot-dash), the executors' folder is read-only (its files are paperbot-exec:paperbot 640: the group
+# reads, never writes, and they hold no key). The order executor's KEYS (executor.env), the agents' and the debate room's
+# keys, the live bot's env and the backups stay invisible. No database FILE is listed read-only here (a listed file stays
+# pinned to its old inode after a restore); the code opens them read-only instead.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab -/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/etc/paperbot/live-telegram.env -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target

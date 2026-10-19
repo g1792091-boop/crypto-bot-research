@@ -7,6 +7,12 @@
 // Why no waterfall (paper -> slip -> fees -> funding -> live): the paper P&L the server sends is already after the
 // paper's own assumed fees and funding, and a slip in USDT needs the trade's size; neither is in this answer, so a
 // split of the gap by cause would be invented. The bars show only what is measured.
+// 체결 비교 (owners 10/19 night): per exchange the entry fill and the exit fill against the paper's (price %, and net ROE
+// points at the trade's leverage), the fee really paid per side against the paper's 0.05 % (+ 0.02 % slippage), and the
+// sum per trade (``gaps``, livebots.py fill_gaps on the executor's own fills). 진입 방식 판단: how many entries are measured
+// against the 10-20 the owners want before deciding whether the executors enter at the signal time instead of following
+// the paper fill, the average entry gap in ROE points and the share of a +10 % win it eats (``entry_judge``; numbers only,
+// 판단은 두 분이).
 // HONESTY: real money (실거래 · 진짜 돈) next to paper money (페이퍼 · 연습) always named; a number that is not there is
 // '—' or its reason (체결 기록 전), never 0; ≈ marks a wallet estimate; a failed refresh keeps the last answer dimmed with
 // its age. The pure functions below are tested in node.
@@ -77,6 +83,36 @@ export function barGeom(items, W = 520, H = 150) {
 /** How many paper trades an executor did not follow, in all. */
 export const missedTotal = (a) => (a && a.missed ? a.missed.reduce((t, m) => t + (Number(m.n) || 0), 0) : 0);
 
+/** 체결 비교 tiles of one exchange (the server's ``gaps``): entry, exit, fee per side, the sum per trade; every unknown
+ *  said as such (체결 기록 전), never 0. Gaps: + = in the trade's favour (the 비용 tab's own sign). */
+export function gapTiles(g) {
+  if (!g || g.state !== "ok") return [];
+  const a = g.assumed || {};
+  const gap = (x, roe, n, what) => ({v: has(x) ? fmt.pct(x, 3) : "체결 기록 전", tone: has(roe) ? fmt.tone(roe, pp(roe)) : "",
+    sub: has(x) ? `순ROE ${pp(roe)} · ${fmt.int(n)}번 잼 · ${what}` : `${what} · 체결을 읽은 거래가 없어요`});
+  return [
+    {id: "in", k: "진입 체결 차이 평균", ...gap(g.entry_gap, g.entry_roe, g.entry_n, "+는 페이퍼보다 유리")},
+    {id: "out", k: "청산 체결 차이 평균", ...gap(g.exit_gap, g.exit_roe, g.exit_n, "+는 페이퍼보다 유리")},
+    {id: "fee", k: "수수료 (한쪽)", v: has(g.fee_rate) ? fmt.pct(g.fee_rate, 3, false) : "체결 기록 전", tone: "",
+      sub: `가정 ${fmt.pct(a.taker, 2, false)} + 미끄러짐 ${fmt.pct(a.slip, 2, false)} · 거래소 기본 ${fmt.pct(a.exchange_fee, 3, false)}`
+        + (has(g.fee_roe) ? ` · 순ROE ${pp(g.fee_roe)}` : "")},
+    {id: "sum", k: "거래당 합 (순ROE)", v: has(g.total_roe) ? pp(g.total_roe) : "—", tone: has(g.total_roe) ? fmt.tone(g.total_roe, pp(g.total_roe)) : "",
+      sub: has(g.total_roe) ? `진입 + 청산 + 수수료 중 잰 것 ${fmt.int(g.total_parts)}개 · −면 실거래가 덜 벎` : "잰 것이 아직 없어요"},
+  ];
+}
+
+/** 진입 방식 판단, one exchange in words: {n, of, pct (0..1 of the 20), roe, share, ko}. */
+export function judgeRow(r, need = [10, 20]) {
+  const n = Number((r && r.n) || 0), hi = need[1] || 20;
+  const roe = r && has(r.entry_roe) ? Number(r.entry_roe) : null, share = r && has(r.share_of_win) ? Number(r.share_of_win) : null;
+  let ko = "잰 진입이 아직 없어요";
+  if (roe != null) {
+    ko = roe < 0 ? `진입이 평균 순ROE ${pp(roe)} 불리 · +10% 이긴 거래의 ${fmt.pct(share, 0, false)}를 먹어요`
+      : roe > 0 ? `진입이 평균 순ROE ${pp(roe)} 유리 (페이퍼보다 좋게 들어감)` : "진입이 페이퍼와 같아요";
+  }
+  return {n, need, pct: Math.min(1, n / hi), roe, share, ko, ready: n >= (need[0] || 10)};
+}
+
 // ================================================================ the view
 /** costView(ctx) -> {el, set()}: its own endpoint, read now and every 30 s. */
 export function costView(ctx) {
@@ -87,6 +123,7 @@ export function costView(ctx) {
   const cards = h("div", {class: "lbk-cards"});
   const seg = ui.seg(EX.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lbk-acct", id); drawList(true); },
     {label: "실행기 고르기"});
+  const judge = h("div", {class: "lbk-judge"});
   const listSum = h("div", {class: "lbk-lsum"});
   const listSlot = h("div", {class: "lb-slot"});
   const listHead = h("div", {class: "lbk-row lbk-rhead", "aria-hidden": "true", hidden: true}, h("span", null, "닫힌 때"), h("span", null, "코인 · 매매법 · 청산"),
@@ -96,6 +133,7 @@ export function costView(ctx) {
     h("div", {class: "lbk-intro"}, h("b", null, "실거래(진짜 돈)는 페이퍼(연습)보다 얼마나 덜 버나"),
       h("span", {class: "muted"}, " · 같은 거래끼리 견줘요: 페이퍼 손익을 실거래 크기로 줄여서 (코인·방향이 같고 진입이 5분 안)")),
     paperSlot, cards,
+    ui.card({title: "진입 방식 판단", sub: "페이퍼 체결을 따라가기 vs 신호 때 바로 들어가기 · 숫자만", cls: "lbk-jcard"}, judge),
     ui.card({title: "최근 실거래", sub: "닫힌 거래 · 새것부터 10개씩 · 한국 시간", cls: "lbk-listcard", acts: [seg]}, listSlot, listSum,
       listHead, pg.el),
     h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC · ≈ = 체결 기록 전 지갑 변화로 어림"),
@@ -154,6 +192,29 @@ export function costView(ctx) {
             h("span", {class: "lbk-mk"}, m.ko), h("span", {class: "lbk-mbar"}, h("i", {style: {width: `${((m.n / mx) * 100).toFixed(1)}%`}})),
             h("b", {class: "num"}, `${fmt.int(m.n)}번`)))));
   }
+  function gapsEl(a) {
+    const g = a.gaps;
+    if (!g) return null;
+    if (g.state !== "ok") return h("div", {class: "lbk-sub"}, h("h3", {class: "lbk-h3"}, "체결 비교"), sourceState(g, "체결 기록"));
+    return h("div", {class: "lbk-sub lbk-gaps"}, h("h3", {class: "lbk-h3"}, "체결 비교", h("span", {class: "num lbk-mt"}, ` ${fmt.int(g.matched)}번 짝`)),
+      h("div", {class: "lbk-tiles"}, gapTiles(g).map(tile)),
+      h("p", {class: "lbk-gnote"}, "차이 = 실거래 체결가 − 페이퍼 체결가 (페이퍼 체결가에는 미끄러짐 0.02%가 이미 들어 있어요) · 순ROE = 차이 × 그 거래의 배수"));
+  }
+  function judgeEl(d) {
+    const j = d.entry_judge;
+    if (!j) return ui.note("서버가 진입 방식 숫자를 보내지 않았어요");
+    const need = j.need || [10, 20];
+    return [h("div", {class: "lbk-jrows", role: "list"}, (j.rows || []).map((r) => {
+      const w = judgeRow(r, need);
+      if (r.state && r.state !== "ok") return h("div", {class: "lbk-jrow", role: "listitem"}, acctTag(r.id), sourceState({state: r.state}, `${acctKo(r.id)} 실행기 DB`));
+      return h("div", {class: "lbk-jrow", role: "listitem"}, acctTag(r.id),
+        h("span", {class: "lbk-jn"}, h("b", {class: "num"}, `${fmt.int(w.n)}번`), h("small", null, ` / ${fmt.int(need[0])}~${fmt.int(need[1])}번 잼`)),
+        h("span", {class: "lbk-jbar", role: "img", "aria-label": `${fmt.int(w.n)} / ${fmt.int(need[1])}`},
+          h("i", {style: {width: `${Math.round(w.pct * 1000) / 10}%`}}), h("em", {style: {left: `${Math.round((need[0] / need[1]) * 1000) / 10}%`}})),
+        h("span", {class: ["lbk-jko", w.roe != null && w.roe < 0 ? "down" : w.roe != null && w.roe > 0 ? "up" : ""]}, w.ko),
+        r.entry_source ? h("small", {class: "lbk-jsrc"}, `지금: ${r.entry_source === "paper" ? "페이퍼 체결을 따라감" : "신호 때 바로 들어감"}`) : null);
+    })), h("p", {class: "lbk-jwho"}, j.who_ko || "판단은 두 분이 해요")];
+  }
   function exCard(id) {
     const a = (st.d.accts || {})[id];
     const head = [acctTag(id), h("span", {class: "lbk-real"}, "실거래 · 진짜 돈")];
@@ -176,7 +237,7 @@ export function costView(ctx) {
         has(a.qty_scale) ? ` · 페이퍼 크기 × ${fmt.num(a.qty_scale, 2)}` : "",
         has(dt) ? (dt < 0 ? " · 실거래가 덜 벌었어요" : dt > 0 ? " · 실거래가 더 벌었어요" : "") : ""));
     return h("section", {class: ["card", "lbk-card", "lbk-a-" + id], "aria-label": acctKo(id)}, top, hero,
-      h("div", {class: "lbk-tiles"}, costTiles(a).map(tile)),
+      h("div", {class: "lbk-tiles"}, costTiles(a).map(tile)), gapsEl(a),
       a.est_n ? h("p", {class: "lbk-est"}, `≈ 체결 기록 전이라 지갑 변화로 어림한 거래 ${fmt.int(a.est_n)}개 (체결을 읽으면 정확한 값으로 바뀌어요)`) : null,
       bars(a), coinsEl(a), missedEl(a));
   }
@@ -210,10 +271,11 @@ export function costView(ctx) {
   }
   function draw() {
     const d = st.d;
-    if (!d) { put(cards, motion.shimmer(4, true)); drawList(false); return; }
+    if (!d) { put(cards, motion.shimmer(4, true)); put(judge, motion.shimmer(2)); drawList(false); return; }
     const p = d.paper || {};
     put(paperSlot, p.state && p.state !== "ok" ? sourceState(p, "페이퍼 DB (짝 맞출 페이퍼 거래)") : null);
     put(cards, EX.map(exCard));
+    put(judge, judgeEl(d));
     cards.querySelectorAll(".lbk-bars").forEach((b) => b.redraw && b.redraw());
     drawList(false);
   }

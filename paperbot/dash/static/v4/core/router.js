@@ -1,11 +1,14 @@
 // Hash router: #/<screen>/<arg>?k=v. Loads screens/<name>.js (ES module) and screens/<name>.css on first use, calls
 // mount(el, ctx) / unmount(), or update(params) when only the argument changed and the screen exports update().
 // ctx (CONTRACT.md) cleans up after the screen: its fetches are aborted, its watchers, bus handlers, polls removed.
+// A menu item with `mod` (the 실거래 site's tabs, core/routes.js LIVE_SCREENS) mounts that module instead, as
+// {name: mod, arg: <the item's name>}: screens/livebots.js on its tab, its css and its [data-screen] scope unchanged.
 import {h, clear, on as domOn} from "./dom.js";
 import {api, post, bus, poll} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
 import {SCREENS, DEFAULT, LANDING_MIN_PX, parseHash, href, landing} from "./routes.js";
+import {BRAND} from "./site.js";
 import {swap, shimmer} from "./motion.js";
 import {errorBox, toast} from "./ui.js";
 import {peekGo} from "./drawer.js";
@@ -49,7 +52,7 @@ export function makeCtx(name, params) {
     timeout: (fn, ms) => { const t = setTimeout(() => alive && fn(), ms); track(() => clearTimeout(t)); return t; },
     track,
     toast,
-    setTitle: (t) => { document.title = t ? `${t} · Paper v4` : "Paper v4"; },
+    setTitle: (t) => { document.title = t ? `${t} · ${BRAND}` : BRAND; },
     _dispose() {
       alive = false;
       ac.abort();
@@ -62,7 +65,10 @@ export function makeCtx(name, params) {
 async function show(params) {
   let {name} = params;
   let meta = SCREENS[name];
-  if (!meta) { name = DEFAULT; meta = SCREENS[name]; params = {...params, name, arg: null}; }
+  if (!meta) { name = SCREENS[DEFAULT] ? DEFAULT : landing(); meta = SCREENS[name]; params = {...params, name, arg: null}; }
+  // the module behind the item (itself, or `mod`: the 실거래 site's tabs are screens/livebots.js on that tab)
+  const mod = meta.mod || name;
+  const modParams = meta.mod ? {...params, name: mod, arg: name} : params;
   if (meta.feature && (features.probed || meta.feature === "wide") && !features[meta.feature]) {
     // a PC screen on a narrow window goes to the start screen there (the 차트 screen: landing() never answers a
     // switched-off screen, so this cannot loop); any other switched-off screen to 홈
@@ -73,8 +79,8 @@ async function show(params) {
   }
   // same screen, new argument: let the screen update in place when it can
   if (cur.name === name && cur.mod && typeof cur.mod.update === "function") {
-    cur.ctx.params = params;
-    try { await cur.mod.update(params); } catch (e) { console.error(e); }
+    cur.ctx.params = modParams;
+    try { await cur.mod.update(modParams); } catch (e) { console.error(e); }
     bus.emit("route", {name, params});
     return;
   }
@@ -87,21 +93,21 @@ async function show(params) {
   cur.mod = null; cur.ctx = null;
   const main = document.getElementById("screen");
   clear(main);
-  const el = h("div", {class: "scr", "data-screen": name});
+  const el = h("div", {class: "scr", "data-screen": mod});
   main.append(el);
   el.append(shimmer(4, true));
   cur.name = name; cur.arg = params.arg; cur.el = el;
-  document.title = `${meta.title || meta.ko} · Paper v4`;
+  document.title = `${meta.title || meta.ko} · ${BRAND}`;
   bus.emit("route", {name, params});
   window.scrollTo(0, 0);
   let imported = false;
   try {
-    const [mod] = await Promise.all([import(`../screens/${name}.js`).then((m) => { imported = true; return m; }), loadCss(name)]);
+    const [m] = await Promise.all([import(`../screens/${mod}.js`).then((x) => { imported = true; return x; }), loadCss(mod)]);
     if (token !== cur.token) return;
-    const ctx = makeCtx(name, params);
-    cur.mod = mod; cur.ctx = ctx;
+    const ctx = makeCtx(mod, modParams);
+    cur.mod = m; cur.ctx = ctx;
     clear(el);
-    await mod.mount(el, ctx);
+    await m.mount(el, ctx);
     if (token === cur.token) swap(el);
   } catch (e) {
     if (token !== cur.token) return;

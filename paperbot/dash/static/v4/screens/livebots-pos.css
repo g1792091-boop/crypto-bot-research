@@ -1,0 +1,77 @@
+/* 실거래 › 포지션 (screens/livebots-pos.js): one Binance-style card per account (the rule bot's 포지션 card's look,
+   screens/positions-kit.css), the meter 손절 → 진입 → 지금 → 익절, 최대 +% / 최대 −%, the ladder steps. Scoped under the
+   실거래 screen; tokens only (both skins), every font size a --t-* token; one column at 390 px, no page scroll sideways. */
+[data-screen="livebots"] .lbp { display: grid; gap: 12px; min-width: 0; }
+[data-screen="livebots"] .lbp-head { display: grid; gap: 4px; min-width: 0; }
+[data-screen="livebots"] .lbp-rules { margin: 0; padding: 8px 12px; border-radius: var(--r-md); background: var(--surface-2); color: var(--ink-2);
+  font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+[data-screen="livebots"] .lbp-grid { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+@media (min-width: 1100px) { [data-screen="livebots"] .lbp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* the card */
+[data-screen="livebots"] .lbp-card { gap: 10px; min-width: 0; }
+[data-screen="livebots"] .lbp-card.live { border-color: var(--warn-line); }
+[data-screen="livebots"] .lbp-card.none { gap: 6px; }
+[data-screen="livebots"] .lbp-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+[data-screen="livebots"] .lbp-sym { font-size: var(--t-lg); font-weight: 800; letter-spacing: -.01em; }
+[data-screen="livebots"] .lbp-perp { font-size: var(--t-xs); }
+[data-screen="livebots"] .lbp-strat { margin: -4px 0 0; color: var(--ink-2); font-size: var(--t-sm); overflow-wrap: anywhere; }
+[data-screen="livebots"] .lbp-flat { margin: 6px 0 0; font: 800 var(--t-md)/1.3 var(--f-body); color: var(--muted); }
+[data-screen="livebots"] .lb-a-flip .lb-sw { background: var(--cmp-lo); }
+[data-screen="livebots"] .lbp-led { min-width: 0; flex-wrap: wrap; row-gap: 6px; }
+[data-screen="livebots"] .lbp-led > .r { margin-left: auto; text-align: right; }
+[data-screen="livebots"] .lbp-led > div { min-width: 0; }
+[data-screen="livebots"] .lbp-led .led-num { display: block; font-size: min(var(--t-2xl), 9vw); }
+[data-screen="livebots"] .lbp-led .led-sm { display: block; font-size: min(var(--t-xl), 7vw); }
+[data-screen="livebots"] .lbp-led b:not(.up):not(.down) { color: var(--led-digit); }
+[data-screen="livebots"] .lbp-card .kv dd { overflow-wrap: anywhere; }
+[data-screen="livebots"] .lbp-card .kv small { font-size: var(--t-2xs); }
+@media (max-width: 420px) { [data-screen="livebots"] .lbp-card .kv { grid-template-columns: minmax(0, 1fr); } }
+
+/* the meter: stop (left) -> next ladder price (right); the entry tick and the mark now */
+[data-screen="livebots"] .lbp-meter { display: grid; gap: 6px; }
+[data-screen="livebots"] .lbp-mk { display: flex; justify-content: space-between; gap: 8px; font-size: var(--t-2xs); color: var(--muted); }
+[data-screen="livebots"] .lbp-mk .up { color: var(--up); } [data-screen="livebots"] .lbp-mk .down { color: var(--down); }
+[data-screen="livebots"] .lbp-mtrack { position: relative; height: 8px; border-radius: 8px;
+  background: linear-gradient(90deg, var(--down-soft), var(--surface-2) 45%, var(--up-soft)); }
+[data-screen="livebots"] .lbp-mt { position: absolute; top: -4px; width: 2px; height: 16px; border-radius: 1px; margin-left: -1px; transition: left .6s var(--ease); }
+[data-screen="livebots"] .lbp-mt.entry { background: var(--ink-2); }
+[data-screen="livebots"] .lbp-mt.now { width: 4px; margin-left: -2px; background: var(--accent); }
+[data-screen="livebots"] .lbp-meter.na .lbp-mt { opacity: 0; }
+[data-screen="livebots"] .lbp-mnote { font-size: var(--t-2xs); }
+
+/* 최대 +% / 최대 −% */
+[data-screen="livebots"] .lbp-ex { display: grid; gap: 4px; padding: 8px 10px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; }
+[data-screen="livebots"] .lbp-ex.none { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--t-xs); }
+[data-screen="livebots"] .lbp-exrow { display: grid; grid-template-columns: 52px auto minmax(40px, 1fr); align-items: center; gap: 2px 10px; min-width: 0; }
+[data-screen="livebots"] .lbp-exrow small { grid-column: 2 / -1; font-size: var(--t-2xs); }
+[data-screen="livebots"] .lbp-exk { color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
+[data-screen="livebots"] .lbp-exrow b { font-size: var(--t-md); }
+[data-screen="livebots"] .lbp-extrack { height: 6px; border-radius: 6px; background: var(--surface); overflow: hidden; }
+[data-screen="livebots"] .lbp-exbar { display: block; height: 100%; border-radius: 6px; }
+[data-screen="livebots"] .lbp-exbar.up { background: var(--up); } [data-screen="livebots"] .lbp-exbar.down { background: var(--down); }
+[data-screen="livebots"] .lbp-exsrc { margin: 2px 0 0; }
+
+/* secured profit, the fast stop, the entry gap */
+[data-screen="livebots"] .lbp-sec, [data-screen="livebots"] .lbp-fast { margin: 0; font-size: var(--t-sm); color: var(--ink-2); overflow-wrap: anywhere; }
+[data-screen="livebots"] .lbp-sec b.up { color: var(--up); }
+[data-screen="livebots"] .lbp-fast.armed b { color: var(--warn); }
+[data-screen="livebots"] .lbp-fast.off b { color: var(--muted); }
+[data-screen="livebots"] .lbp-gap { margin: 0; }
+[data-screen="livebots"] .lbp-gap .up { color: var(--up); } [data-screen="livebots"] .lbp-gap .down { color: var(--down); }
+
+/* the ladder: small steps that wrap */
+[data-screen="livebots"] .lbp-lad { display: grid; gap: 6px; min-width: 0; }
+[data-screen="livebots"] .lbp-ladk { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: var(--t-sm); }
+[data-screen="livebots"] .lbp-ladk small { font-size: var(--t-2xs); }
+/* (over components.css `.card ol`: a list in a card is a padded grid there) */
+[data-screen="livebots"] .lbp-lad ol.lbp-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+[data-screen="livebots"] .lbp-step { display: grid; gap: 1px; min-width: 76px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: var(--surface); color: var(--muted); font-size: var(--t-2xs); }
+[data-screen="livebots"] .lbp-step b { color: var(--ink-2); font-size: var(--t-xs); }
+[data-screen="livebots"] .lbp-step .lbp-sn { font-weight: 700; }
+[data-screen="livebots"] .lbp-step .lbp-sok { font-style: normal; font-weight: 800; }
+[data-screen="livebots"] .lbp-step.done { border-color: var(--up-line); background: var(--up-soft); color: var(--up); }
+[data-screen="livebots"] .lbp-step.done b { color: var(--up); }
+[data-screen="livebots"] .lbp-step.next { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+[data-screen="livebots"] .lbp-step.next b { color: var(--ink); }

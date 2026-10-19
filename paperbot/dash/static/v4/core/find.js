@@ -11,9 +11,10 @@ import {features} from "./features.js";
 import {store} from "./store.js";
 import {acctName, stratKo, tfKo, GROUP_KO, groupOf} from "./fmt.js";
 import {openPeek, closePeek} from "./drawer.js";
-import {ALIAS, norm, rank} from "./search.js";
+import {ALIAS, LIVE_ALIAS, norm, rank} from "./search.js";
 import {favs} from "./favs.js";
 import {favItem} from "./favpop.js";
+import {LIVE} from "./site.js";
 
 function screenItems() {
   const out = [];
@@ -24,7 +25,7 @@ function screenItems() {
       const k = KEYS.indexOf(n);
       // the menu's group caption under the name (성적 for 요약 ...); a screen behind a shared button is found by its name too (도움말)
       const j = JOINED.find((x) => x.screens.includes(n));
-      out.push({kind: "screen", id: n, label: m.ko, code: n, words: `${m.title || ""} ${ALIAS[n] || ""}${j ? " " + j.ko : ""}`, sub: navLabel(g.id),
+      out.push({kind: "screen", id: n, label: m.ko, code: n, words: `${m.title || ""} ${(LIVE ? LIVE_ALIAS : ALIAS)[n] || ""}${j ? " " + j.ko : ""}`, sub: navLabel(g.id),
         key: k < 0 ? null : String(k + 1)});
     }
   }
@@ -58,6 +59,7 @@ let box = null, input = null, list = null;
 const KIND_KO = {screen: "화면", strategy: "매매법", account: "계좌", coin: "코인"};
 /** conv-b: with an empty box the starred strategies, accounts and coins come first (at most 8; core/favs.js). */
 function favItems() {
+  if (LIVE) return [];                // (the stars are the rule bot's strategies / accounts: their screens are not on the 실거래 site)
   const f = favs(), board = store.get("board"), out = [];
   for (const kind of ["strategy", "account", "coin"]) {
     for (const id of f[kind]) {
