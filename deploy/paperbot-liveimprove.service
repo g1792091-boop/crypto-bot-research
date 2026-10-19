@@ -1,0 +1,42 @@
+# 매매법 성적표와 개선 후보 장부 (paperbot/liveimprove.py, docs/live1019-start-ko.md 13): every Monday 09:30 KST the
+# combined paper bot's trades since its first one are scored per strategy, setting, coin, side, BTC regime, KST 4-hour
+# block, stop, entry style and invert against the backtest reference (deploy/combo.live-ac.expected.json); cells where
+# live losses concentrate become rows of the improvement ledger (research questions only: a status is changed by hand,
+# a config only by the owners). ONE Telegram message, silent unless a strategy (or the whole account) is "확실히 나쁨".
+# Read-only towards the bots: the paper and executor databases are opened read-only (mode=ro, query_only), the
+# executors' configs are read as plain JSON, their key file is hidden below, no exchange or Binance call, no order.
+# Writes only /var/lib/paperbot/liveimprove.db. Started by paperbot-liveimprove.timer. By hand (prints, sends nothing,
+# writes nothing):
+#   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liveimprove weekly --dry-run
+[Unit]
+Description=paperbot live improvement (매매법 성적표와 개선 후보 장부; read-only, no orders)
+After=network-online.target paperbot-combo.service paperbot-livecheck.service
+Wants=network-online.target
+# a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# the Telegram bot and chats of live.env; no exchange is called, so the read-only Binance key is dropped
+EnvironmentFile=/etc/paperbot/live.env
+UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL BACKUP_PASSPHRASE
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.liveimprove weekly
+# Below the live bots: low CPU and disk priority, bounded memory and time (a pass reads two small databases: seconds).
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryMax=512M
+TimeoutStartSec=15min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# its own file only (SQLite read-only opens of a WAL database also use the folder for the -shm file)
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/combo/live-ac.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/livecheck.db -/var/lib/paperbot/lab /opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot

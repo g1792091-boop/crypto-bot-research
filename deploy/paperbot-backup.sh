@@ -9,7 +9,7 @@
 # and inbox.db (the owners' posts and approvals), liq.db (liquidations: no public history, a lost day is
 # lost for good), the order executor's records (exec/executor.db for mainnet, exec/executor-testnet.db: its
 # trades, fills, halts and open-position state; copied as executor.db / executor-testnet.db; the live Bybit and MEXC
-# executors' exec/executor-bybit-live.db and exec/executor-mexc-live.db and the live paper bot's combo/live-ac.db
+# executors' exec/executor-bybit-live.db and exec/executor-mexc-live.db and the live paper bot's combo/live-ac.db, the live checks' livecheck.db and the owners' improvement ledger liveimprove.db
 # since 10-19), the debate room's
 # debate/debate.db (rounds, graded claims, the paid-API spend counter; group paperbot reads it), then daily3.db
 # and paper3.db. The backup writes none
@@ -25,7 +25,7 @@ mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
 # keep this list the same as DB_NAMES in paperbot/offsite.py (tests/test_offsite.py checks it)
-for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live exec/executor-mexc-live combo/live-ac shadow200/shadow200 debate/debate daily3 paper3; do
+for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live exec/executor-mexc-live combo/live-ac livecheck liveimprove shadow200/shadow200 debate/debate daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
   n=$(basename "$f")

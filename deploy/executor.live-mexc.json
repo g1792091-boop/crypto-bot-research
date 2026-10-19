@@ -1,0 +1,29 @@
+{
+  "exchange": "mexc",
+  "mode": "mainnet",
+  "account": "COMBO@mix",
+  "paper_db": "/var/lib/paperbot/combo/live-ac.db",
+  "db": "/var/lib/paperbot/exec/executor-mexc-live.db",
+  "budget_usd": 100,
+  "qty_scale": 0.1,
+  "entry_source": "paper",
+  "stop_from": "ratio",
+  "signal_light_n": 20,
+  "signal_light_min_win": 0.9,
+  "risk": {
+    "max_drawdown_pct": 0.5,
+    "max_consecutive_losses": 3,
+    "max_leverage": 40,
+    "max_notional_usd": 10000,
+    "max_loss_frac": 0.35,
+    "allowed_symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "DOGEUSDT",
+      "LTCUSDT",
+      "BCHUSDT"
+    ],
+    "kill_file": "/var/lib/paperbot/STOP"
+  }
+}
