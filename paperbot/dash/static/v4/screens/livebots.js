@@ -4,6 +4,8 @@
 //   요약   the 실거래 터미널 (screens/livebots-term.js: the rule bot's terminal frame and parts, fed with the live records)
 //   차트   the open positions on the price chart, big, with their lines in words (screens/livebots-chart.js)
 //   거래   the closed trades of each account, 10 a page, one opened in place (screens/livebots-trades.js, its own endpoint)
+//   신호   "왜 안 들어갔지?": the combined bot's signals and what became of each (screens/livebots-signals.js)
+//   성적   rolling 20 / 40 win share, the 40-trade checkpoint, breakdowns, the coin-flip twin (screens/livebots-perf.js)
 // Each tab is its own mount: a tab change re-mounts the screen (no update()), so every timer, stream listener and chart of
 // the tab before is disposed by the router (ctx), never left running behind another tab.
 // HONESTY: a file or table that is not there yet = 수집 전; one that cannot be read = 못 읽음 + why, never a zero; a refresh
@@ -13,6 +15,8 @@ import {h, put, ui, serverNow} from "../core/pb.js";
 import {termView} from "./livebots-term.js";
 import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
+import {signalsView} from "./livebots-signals.js";
+import {perfView} from "./livebots-perf.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -20,6 +24,8 @@ export const TABS = [
   {id: "summary", label: "요약", make: (ctx, hub) => termView(ctx, hub)},
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},
+  {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},
+  {id: "perf", label: "성적", make: (ctx) => perfView(ctx), own: true},
 ];
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "summary");
 

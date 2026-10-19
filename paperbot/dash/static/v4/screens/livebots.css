@@ -171,3 +171,55 @@
 .lb-tlive { display: grid; gap: 6px; }
 .lb-tcell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface); font-size: var(--t-sm); min-width: 0; }
 .lb-cmeta { font-size: var(--t-xs); overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- 신호 (livebots-signals.js) */
+.lb-funnel, .lb-reasons { display: grid; gap: 6px; min-width: 0; }
+.lb-reasons { margin-top: 10px; }
+.lb-rhead { margin: 12px 0 0; color: var(--muted); font-size: var(--t-xs); font-weight: 700; }
+.lb-fstep, .lb-rsn { display: grid; grid-template-columns: calc(120px * var(--ts)) minmax(0, 1fr) calc(44px * var(--ts)); align-items: center; gap: 10px;
+  font-size: var(--t-sm); min-height: 28px; }
+.lb-fk, .lb-rk { color: var(--ink-2); overflow-wrap: anywhere; }
+.lb-fbar, .lb-rbar { display: block; height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; }
+.lb-fbar i, .lb-rbar i { display: block; height: 100%; border-radius: 5px; background: var(--muted); }
+.lb-fstep.signals .lb-fbar i { background: var(--accent); }
+.lb-fstep.entered .lb-fbar i, .lb-rsn.entered .lb-rbar i { background: var(--up); }
+.lb-fstep.rejected .lb-fbar i, .lb-rsn.rejected .lb-rbar i { background: var(--down); }
+.lb-fstep.skipped .lb-fbar i, .lb-rsn.skipped .lb-rbar i { background: var(--warn); }
+.lb-fstep.waiting .lb-fbar i, .lb-rsn.waiting .lb-rbar i, .lb-rsn.broke .lb-rbar i { background: var(--accent); }
+.lb-fstep b, .lb-rsn b { text-align: right; }
+.lb-srow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); min-width: 0; }
+.lb-st { font-size: var(--t-xs); }
+.lb-ss { color: var(--ink-2); min-width: 0; overflow-wrap: anywhere; }
+.lb-sw2 { flex-basis: 100%; font-size: var(--t-xs); min-width: 0; }
+
+/* ---------------------------------------------------------------- 성적 (livebots-perf.js) */
+.lb-phead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0 0 8px; font-size: var(--t-sm); }
+.lb-rollbox { min-width: 0; overflow: hidden; }
+.lb-roll { display: block; max-width: 100%; height: auto; }
+.lb-roll .grid { stroke: var(--line); stroke-width: 1; }
+.lb-roll .ax { fill: var(--muted); font: 600 var(--t-2xs)/1 var(--f-term); text-anchor: end; }
+.lb-roll .ax.end { text-anchor: end; }
+.lb-roll text.ax:not(.end) { text-anchor: end; }
+.lb-roll .band { fill: var(--cmp-lo); opacity: .35; }
+.lb-roll .ref { stroke-width: 1.5; stroke-dasharray: 5 4; }
+.lb-roll .ref.bt { stroke: var(--cmp-hi); }
+.lb-roll .ref.be { stroke: var(--down); }
+.lb-roll .r20 { fill: none; stroke: var(--accent); stroke-width: 2; }
+.lb-roll .r40 { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+.lb-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 0; padding: 0; list-style: none; color: var(--ink-2); font-size: var(--t-xs); }
+.lb-legend .lb-li { display: inline-flex; align-items: center; gap: 4px; }
+.lb-key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; }
+.lb-key.r20 { background: var(--accent); } .lb-key.r40 { background: var(--ink-2); } .lb-key.bt { background: var(--cmp-hi); }
+.lb-key.band { background: var(--cmp-lo); height: 10px; } .lb-key.be { background: var(--down); }
+.lb-cpbar { height: 12px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+.lb-cpbar i { display: block; height: 100%; border-radius: 6px; background: var(--accent); }
+.lb-cpn { margin: 8px 0; font-size: var(--t-sm); }
+.lb-cprules { display: grid; gap: 4px; margin: 0 0 8px; padding: 0; list-style: none; font-size: var(--t-sm); color: var(--ink-2); }
+.lb-cpz::before { content: "· "; }
+.lb-cpz.on { color: var(--ink); font-weight: 800; }
+.lb-brow { display: grid; grid-template-columns: minmax(0, 1fr) calc(52px * var(--ts)) calc(52px * var(--ts)) calc(72px * var(--ts)) auto; align-items: center; gap: 8px;
+  padding: 7px 2px; border-top: 1px solid var(--line); font-size: var(--t-sm); min-height: 34px; }
+.lb-brow > * { text-align: right; }
+.lb-brow > .lb-bk { text-align: left; min-width: 0; overflow-wrap: anywhere; }
+.lb-recs { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); min-width: 0; }
+.lb-rec { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; align-content: start; }

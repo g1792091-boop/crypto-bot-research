@@ -439,6 +439,92 @@ def test_trades_route(client):
     assert set(d["accts"]) == {"paper", "bybit", "mexc"} and d["accts"]["mexc"]["qty_scale"] == 0.1
 
 
+# ---------------------------------------------------------------- 신호 and 성적
+def test_signals_funnel_counts_every_row_by_its_real_reason(world):
+    sg = L.read_signals(world["paper"], L.ACCOUNT, NOW)
+    assert sg["state"] == "ok" and sg["today_ms"] == W.T0 - 9 * H and sg["since_ms"] == W.T0 - 9 * H - 6 * W.DAY
+    assert sg["stages"]["today"] == {"signals": 13, "filtered": 4, "entered": 6, "skipped": 1, "rejected": 1, "waiting": 1}
+    assert sg["stages"]["week"]["signals"] == 14 and sg["stages"]["week"]["filtered"] == 5          # + the Saturday one
+    week = {c["cat"]: c["n"] for c in sg["counts"]["week"]}
+    assert week == {"entered": 6, "off": 2, "research": 1, "weekend": 1, "macro": 1, "lost": 1, "late": 1, "waiting": 1}
+    ko = {c["cat"]: c["ko"] for c in sg["counts"]["week"]}
+    assert ko["lost"] == "같은 때 다른 신호에 밀림" and ko["off"] == "끈 구간" and ko["weekend"] == "주말 진입 안 함"
+    rows = sg["rows"]
+    assert rows[0]["status"] == "WAITING" and rows[0]["stage"] == "waiting" and [r["t"] for r in rows] == sorted((r["t"] for r in rows), reverse=True)
+    eth = next(r for r in rows if r["symbol"] == "ETHUSDT" and r["status"] == "FILTERED")
+    assert eth["why"] == "끈 구간: hr=5" and eth["why_ko"] == "끈 구간: 시각 05시"
+    btc = next(r for r in rows if r["cat"] == "research")
+    assert btc["why_ko"] == "연구 조건 밖 (필요: 평일만)"
+    late = next(r for r in rows if r["cat"] == "late")
+    assert late["stage"] == "rejected" and late["member"] == "S2_ST_ROC@30m#3~abc123" and late["strategy"] == "S2_ST_ROC"
+
+
+def test_signals_without_records_are_missing(tmp_path):
+    p = str(tmp_path / "empty.db")
+    sqlite3.connect(p).close()
+    assert L.read_signals(p, L.ACCOUNT, NOW)["state"] == "missing"
+    assert L.read_signals(str(tmp_path / "none.db"), L.ACCOUNT, NOW)["reason_ko"] == L.MISSING_KO
+
+
+def test_why_and_outcome_words():
+    assert L.why_cat("FILTERED", "경제 발표 앞뒤 30분: 소비자물가(CPI) 2026-10-19 12:30") == ("macro", "경제 발표 앞뒤")
+    assert L.why_cat("FILTERED", "돌파 없음(신호봉 시간 안에)") == ("nobreak", "돌파 없음")
+    assert L.why_cat("FILTERED", "조건 밖(BTC 4시간 추세를 못 읽음)")[0] == "unread"
+    assert L.why_cat("FILTERED", "조건 밖") == ("when", "조건 밖") and L.why_cat("BROKE", "")[0] == "broke"
+    assert L.outcome_cat("SKIPPED", "in position")[1] == "포지션 있음 (한 번에 하나)"
+    assert L.outcome_cat("REJECTED", "stop rule")[0] == "stoprule" and L.outcome_cat("REJECTED", "halted: x")[0] == "halted"
+    assert L.why_words("끈 구간: oi24=읽기 실패, dow=6") == "끈 구간: 미결제약정 읽기 실패 · 요일 일요일"
+
+
+def test_perf_rolling_breakdowns_and_the_live_side(tmp_path):
+    p = W.build_world(str(tmp_path / "w"))
+    os.remove(p["paper"])
+    W.paper_db(p["paper"], extra_wins=[True] * 12 + [False] * 2 + [True] * 20)       # 40 paper trades
+    pf = L.perf(p, NOW)
+    a = pf["accts"]["paper"]
+    assert a["stats"]["trades"] == 40 and a["stats"]["wins"] == 37
+    assert len(a["roll20"]) == 21 and len(a["roll40"]) == 1 and a["roll40"][0][1] == pytest.approx(37 / 40)
+    assert a["roll20"][-1][1] == pytest.approx(1.0) and a["roll20"][0][1] == pytest.approx(17 / 20)
+    coins = {r["key"]: r for r in a["by_coin"]}
+    assert coins["ETHUSDT"]["trades"] == 35 and coins["ETHUSDT"]["small"] is True and coins["ETHUSDT"]["small_floor"] == 40
+    sides = {r["key"]: r["trades"] for r in a["by_side"]}
+    assert sides == {1: 38, -1: 2}                                              # t2 and t5 were the shorts
+    hours = {r["key"]: r["trades"] for r in a["by_hour"]}
+    assert hours[10] == 1 and sum(hours.values()) == 40                         # t1 entered at 10:00 KST
+    assert pf["checkpoint"]["ready"] is True and pf["checkpoint"]["zone"] == "up"
+    m = pf["accts"]["mexc"]
+    assert {r["key"]: r["trades"] for r in m["by_strategy"]} == {"N03_ADX_GC": 3}  # the live trades take their paper partner's strategy
+    assert pf["flip"]["stats"]["trades"] == 4 and pf["refs"]["breakeven"] == 0.78
+
+
+def test_rolling_chart_in_node(tmp_path):
+    p = W.build_world(str(tmp_path / "w"))
+    os.remove(p["paper"])
+    W.paper_db(p["paper"], extra_wins=[True] * 12 + [False] * 2 + [True] * 20)
+    pf = L.perf(p, NOW)
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    script = (f"const D = await import('{dom}'); const P = await import('file://{SCREENS}/livebots-perf.js'); const d = {json.dumps(pf)};\n"
+              "const svg = P.rollChart(d.accts.paper, d.refs, 600); const none = P.rollChart({roll20: [], roll40: []}, d.refs, 600);\n"
+              "const cls = []; const go = (n) => { if (!n || !n.childNodes) return; const c = n.getAttribute && n.getAttribute('class'); if (c) cls.push(c); n.childNodes.forEach(go); }; go(svg);\n"
+              "console.log(JSON.stringify({w: D.walk(svg), none, cls}));")
+    out = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    o = json.loads(out.stdout.strip().splitlines()[-1])
+    assert o["none"] is None and "100%" in o["w"]["text"] and "50%" in o["w"]["text"]
+    assert {"r20", "r40", "band"} <= set(" ".join(o["cls"]).split())
+
+
+def test_signals_and_perf_routes(client):
+    client.post("/api/login", json={"password": PW})
+    sg = client.get("/api/v4/livebots/signals").json()
+    assert sg["state"] == "ok" and sg["stages"]["today"]["entered"] == 6
+    pf = client.get("/api/v4/livebots/perf").json()
+    assert set(pf["accts"]) == {"paper", "bybit", "mexc"} and pf["checkpoint"]["left"] == 34
+
+
 # ---------------------------------------------------------------- wiring
 def test_wiring_route_menu_find_inventory_and_module():
     routes = _read(V4, "core", "routes.js")
@@ -446,9 +532,10 @@ def test_wiring_route_menu_find_inventory_and_module():
     assert "livebots:" in _read(V4, "core", "search.js")
     assert "livebots" in MORE.MODULES
     js = "".join(_read(SCREENS, f) for f in os.listdir(SCREENS) if f.startswith("livebots") and f.endswith(".js"))
-    assert '"/api/v4/livebots"' in js and '"/api/v4/livebots/trades"' in js
+    for path in ("/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf"):
+        assert f'"{path}"' in js, path
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(SCREENS, "livebots.js"))
-    assert tabs[:3] == [("summary", "요약"), ("chart", "차트"), ("trades", "거래")]
+    assert tabs[:5] == [("summary", "요약"), ("chart", "차트"), ("trades", "거래"), ("signals", "신호"), ("perf", "성적")]
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):

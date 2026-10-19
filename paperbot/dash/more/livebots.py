@@ -1057,6 +1057,26 @@ def why_cat(status: str, why: str) -> tuple:
     return "other", w or "이유 기록 없음"
 
 
+def why_words(why: Any) -> Optional[str]:
+    """The bot's why of a filtered signal with its bucket codes in words ('끈 구간: hr=5, symside=7' -> '끈 구간: 시각 05시 · 코인x방향
+    DOGE 롱'; '연구 조건 밖: weekend=0' -> '연구 조건 밖 (필요: 평일만)'); any other text as it is."""
+    w = str(why or "")
+    for head, kind in (("끈 구간: ", "off"), ("연구 조건 밖: ", "filter")):
+        if not w.startswith(head):
+            continue
+        parts = []
+        for item in w[len(head):].split(", "):
+            k, sep, v = item.partition("=")
+            if not sep:
+                return w
+            if kind == "off":
+                parts.append(f"{DIM_KO.get(k, k)} {'읽기 실패' if v == '읽기 실패' else dim_value_ko(k, v)}")
+            else:
+                parts.append(filter_ko(k, v))
+        return f"끈 구간: {' · '.join(parts)}" if kind == "off" else f"연구 조건 밖 (필요: {' · '.join(parts)})"
+    return w or None
+
+
 def outcome_cat(status: str, reason: str) -> tuple:
     """(category id, Korean) of an engine outcome (paperbot/engine.py _record, combo.py)."""
     r = str(reason or "")
@@ -1131,7 +1151,8 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
             cat, ko, stage = "other", str(status), "other"
         name = d.get("strategy") or str(strat).split("@")[0]
         row = {"id": _i(_id), "t": _i(bc), "tf": tf, "member": strat, "strategy": name, "symbol": sym, "side": _i(side), "status": status,
-               "stage": stage, "cat": cat, "ko": ko, "why": d.get("why"), "source": d.get("source")}
+               "stage": stage, "cat": cat, "ko": ko, "why": d.get("why"), "why_ko": why_words(d.get("why")) if d.get("why") else None,
+               "source": d.get("source")}
         out_rows.append(row)
         for span in ("week",) + (("today",) if (_i(bc) or 0) >= t0 else ()):
             c = counts[span].setdefault(cat, {"cat": cat, "ko": ko, "stage": stage, "n": 0})
@@ -1458,4 +1479,16 @@ def register(app, ctx) -> dict:
         p = paths()
         return _cached(key("trades", p), lambda: json_finite(trade_rows(p, int(time.time() * 1000))))
 
-    return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades"], "paths": paths}
+    @app.get("/api/v4/livebots/signals")
+    def get_livebots_signals():
+        """실거래 › 신호: the combined bot's signals of the last 7 KST days and what became of each (5 s cache)."""
+        p = paths()
+        return _cached(key("signals", p), lambda: json_finite(read_signals(p["paper"], ACCOUNT, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/perf")
+    def get_livebots_perf():
+        """실거래 › 성적: rolling win shares and the breakdowns of each account (5 s cache)."""
+        p = paths()
+        return _cached(key("perf", p), lambda: json_finite(perf(p, int(time.time() * 1000))))
+
+    return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf"], "paths": paths}
