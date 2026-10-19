@@ -792,6 +792,26 @@ def test_watch_paper_heartbeat_and_rule_bars(tmp_path):
     assert "paper_stale" in keys(out)
 
 
+def test_rule_bars_wait_while_the_restarted_rule_bot_catches_up(tmp_path):
+    """An update restarts paperbot-live3 (owners 10-19: 🚨 at 14:05, ✅ at 14:07): no alarm in its first 10 minutes
+    unless its newest bar is 15 minutes old; an alarm already sent is neither repeated nor cleared meanwhile."""
+    def run(src, now, up, units=None):
+        return LC.run_watch(src, now_ms=now, notifier=ListNotifier(), units=units or Units(),
+                            exists=lambda p: False, started=lambda u: up if u == "paperbot-live3" else None)
+
+    for d in "abc":
+        (tmp_path / d).mkdir()
+    src = watch_setup(tmp_path / "a", entry=None, bar=T - 7 * MIN)
+    assert "rule_bars" not in keys(run(src, T, T - 3 * MIN))                  # restarted 3 min ago: catching up
+    assert "rule_bars" in keys(run(src, T, T - 12 * MIN))                     # 12 min ago: loud
+    assert keys(run(src, T + MIN, T), "clear") == []                          # restarted again: no false ✅
+    late = watch_setup(tmp_path / "b", entry=None, bar=T - 17 * MIN)
+    assert "rule_bars" in keys(run(late, T, T - 3 * MIN))                     # 16 min without a bar: loud anyway
+    starting = watch_setup(tmp_path / "c", entry=None, bar=T - 7 * MIN)
+    out = run(starting, T, T - 3 * MIN, Units(**{"paperbot-live3": ("activating", "enabled")}))
+    assert "rule_bars" in keys(out)                                           # not running (a crash loop): loud
+
+
 def test_watch_drawdown_rearms_below_20_and_good_news_once(tmp_path):
     src = watch_setup(tmp_path, entry=None)
     db = src.executors[0].db

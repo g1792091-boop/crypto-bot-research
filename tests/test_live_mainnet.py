@@ -655,7 +655,13 @@ def test_executor_unit_is_installed_but_never_started_by_install_sh():
     for name in ("TESTNET_API_KEY", "LIVE_API_KEY", "LIVE_API_SECRET", "PAPERBOT_LIVE_MAINNET"):
         assert f"\n{name}=\n" in env
     for svc in ("deploy/paperbot-agents.service", "deploy/paperbot-dash.service"):
-        hidden = next(x for x in _read(svc).splitlines() if x.startswith("InaccessiblePaths="))
-        assert "-/etc/paperbot/executor.env" in hidden and "-/var/lib/paperbot/exec" in hidden, svc
+        lines = _read(svc).splitlines()
+        hidden = next(x for x in lines if x.startswith("InaccessiblePaths="))
+        assert "-/etc/paperbot/executor.env" in hidden, svc                # the keys: never
+        if svc.endswith("dash.service"):                                   # the 실거래 screen reads the records only
+            ro = next(x for x in lines if x.startswith("ReadOnlyPaths="))
+            assert "-/var/lib/paperbot/exec" in ro and "-/var/lib/paperbot/exec" not in hidden
+        else:
+            assert "-/var/lib/paperbot/exec" in hidden, svc
     wrapper = _read("deploy/paperbot-exec.sh")
     assert "testnet|executor) shift" in wrapper and "EnvironmentFile=/etc/paperbot/executor.env" in wrapper

@@ -1056,8 +1056,13 @@ class Executor:
                 return perm
         problems, warnings = online_gates(perm_reader, wallet, float(self.cfg.budget_usd), acct.get("assets"),
                                           where=kc.host)
-        for w in warnings:
-            self._event(WARN, "key_permission", w)
+        for w in warnings:     # a standing note (MEXC: what its API cannot show): to Telegram the first time only
+            try:
+                told = self.store.conn.execute("SELECT 1 FROM events WHERE kind = 'key_permission' AND text = ? "
+                                               "LIMIT 1", (w,)).fetchone() is not None
+            except sqlite3.Error:
+                told = False
+            self._event(WARN, "key_permission", w, notify=not told)
         definite = [p for p in (check_assets(acct.get("assets")),) if p]
         if problems and unverified is not None and not definite and self._position_open():
             self._event(CRITICAL, "mainnet_unverified", f"{kc.host}이 키 권한 확인을 받아 주지 않았습니다({unverified}). "

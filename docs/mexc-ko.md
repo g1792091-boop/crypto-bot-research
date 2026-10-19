@@ -167,7 +167,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --confi
 
 - check-config 마지막 줄: **"준비됨"**
 - preflight 마지막 줄: **"관문 모두 통과(주문은 하지 않았습니다)"**
-- preflight의 `[주의]` 한 줄("MEXC는 키 권한을 API로 알려 주지 않습니다…")은 정상입니다. 켤 때마다 알림으로도 한 번 옵니다.
+- preflight의 `[주의]` 한 줄("MEXC는 키 권한을 API로 알려 주지 않습니다…")은 정상입니다. 알림은 처음 켤 때 한 번만 옵니다(그 뒤로 켤 때는 실행기 기록에만 남김).
 
 ## 6. 두 봇 같이 돌리기 (바이비트 $100 + MEXC $100)
 

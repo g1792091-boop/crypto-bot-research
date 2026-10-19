@@ -1237,6 +1237,9 @@ STOP_GRACE_MS = 60_000             # an open real position without a recorded st
 STALE_EXEC_MS = 10 * MIN           # executor state older than this while it should run
 STALE_PAPER_MS = 10 * MIN          # the paper bot's heartbeat older than this
 STALE_BARS_MS = 5 * MIN            # the rule bot's newest 1m bar older than this
+RULE_UNIT = "paperbot-live3"       # the rule bot: it writes those 1m bars
+RESTART_GRACE_MS = 10 * MIN        # the rule bot (re)started this recently (an update): its bars catch up first...
+STALE_BARS_HARD_MS = 15 * MIN      # ...but never quiet once its newest bar is this old
 DD_WARN, DD_CLEAR = 0.25, 0.20     # equity this far below its peak: loud; re-armed once back under DD_CLEAR
 GOOD_STEPS = (0.5, 1.0)            # equity first +50% / +100% of its start: silent good news, once
 SEEN_KEEP_MS = 60 * DAY
@@ -1296,6 +1299,18 @@ def unit_state(unit: str) -> tuple[str, str]:
     return out[0], out[1]
 
 
+def unit_started(unit: str) -> Optional[int]:
+    """When a systemd unit last became active (epoch ms), None when systemctl cannot say."""
+    import subprocess
+    try:
+        p = subprocess.run(["systemctl", "show", unit, "-p", "ActiveEnterTimestampMonotonic", "--value"],
+                           capture_output=True, text=True, timeout=5)
+        us = int((p.stdout or "").strip() or 0)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return int(time.time() * 1000 - (time.monotonic() - us / 1e6) * 1000) if us > 0 else None
+
+
 def should_run(ex: ExecInfo, units: Callable) -> tuple[bool, str]:
     """Is the executor meant to be running (started or enabled; a person's ``systemctl stop`` of a disabled unit is
     not)? Unknown (no systemctl): when its database exists."""
@@ -1351,7 +1366,7 @@ def _paper_entries(conn, now_ms: int) -> list:
 
 def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                      exists: Callable = os.path.exists, host: Optional["Host"] = None,
-                     exp: Optional[dict] = None) -> tuple[list, set, dict]:
+                     exp: Optional[dict] = None, started: Callable = unit_started) -> tuple[list, set, dict]:
     """(active conditions, the key prefixes that could be judged this time, an observation for ``seen``)."""
     conds, judged, seen = [], set(), {"ts": int(now_ms), "exec": {}}
     infos = src.executors or load_executors()
@@ -1388,8 +1403,13 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
         finally:
             rc.close()
     seen["rule_bar"] = bar
-    judged.add("rule_bars")
-    if bar is None or now_ms - (bar + MIN) > STALE_BARS_MS:
+    late = bar is None or now_ms - (bar + MIN) > STALE_BARS_MS
+    up = started(RULE_UNIT) if late and bar is not None and units(RULE_UNIT)[0] == "active" else None
+    if up is not None and 0 <= now_ms - up < RESTART_GRACE_MS and now_ms - (bar + MIN) <= STALE_BARS_HARD_MS:
+        late = None                       # just restarted (an update): not judged while its bars catch up
+    else:
+        judged.add("rule_bars")
+    if late:
         conds.append(Cond("rule_bars", CRITICAL,
                           "규칙봇 1분봉이 5분 넘게 들어오지 않습니다\n"
                           + (f"마지막 1분봉: {_ago(now_ms, bar + MIN)}\n" if bar is not None else
@@ -1544,7 +1564,7 @@ def _active_before(src: Sources, key: str) -> bool:
 
 def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False, notifier=None,
               units: Callable = unit_state, exists: Callable = os.path.exists, host: Optional["Host"] = None,
-              tg: Optional[dict] = None) -> list:
+              tg: Optional[dict] = None, started: Callable = unit_started) -> list:
     """One pass: first the loss cards of new losing paper trades (3부 ①; so a halt summary can name their causes),
     then every condition that became active is sent once (loud unless said otherwise) and every one that cleared is
     re-armed (with a silent line when it has one). ``tg``: the Telegram files (tg_files(); read when None).
@@ -1588,7 +1608,7 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
         if conn is None:
             cc.close()
         # ---- conditions
-        conds, judged, seen = watch_conditions(src, now_ms, units, exists, host=host, exp=exp)
+        conds, judged, seen = watch_conditions(src, now_ms, units, exists, host=host, exp=exp, started=started)
         stored = {}
         if conn is not None:
             stored = {r[0]: {"active": r[1], "recover": r[2], "once": r[3]} for r in conn.execute(

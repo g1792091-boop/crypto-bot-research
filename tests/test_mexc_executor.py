@@ -491,6 +491,16 @@ def test_mainnet_gates_and_a_full_cycle(tmp_path):
     w.store.close()
 
 
+def test_the_key_note_reaches_telegram_once_and_the_record_every_start(tmp_path):
+    w = World(tmp_path)
+    w.restart()
+    w.restart()
+    assert len(w.events("key_permission")) == 3                                # every start keeps its record
+    told = [m for m in w.note.messages if MX.KEY_CHECKED in m[1]]
+    assert len(told) == 1 and told[0][0] == WARN                               # the owners read it once
+    w.store.close()
+
+
 def test_mainnet_refuses_without_the_owners_statement(tmp_path):
     env = {k: v for k, v in LIVE_ENV.items() if k != MX.KEY_CHECKED}
     w = World.__new__(World)
