@@ -273,6 +273,17 @@ done
 # the second combined bot (its own config combo2.json and paper database: two bots of different types side by side,
 # docs/live1019-start-ko.md): installed only, started by a person
 install -m 644 "$APP/deploy/paperbot-combo2.service" /etc/systemd/system/paperbot-combo2.service
+# the shadow paper bots (그림자 페이퍼 봇, docs/live1019-start-ko.md): one template, one instance per
+# deploy/combo.shadow-<name>.json; paper only, no Telegram, below the live paper bot. Installed only: never enabled,
+# started or stopped here (not among the units stopped for the code swap). A running shadow keeps the previous code
+# until a person restarts it, after the live paper bot runs again (the shadows then start one at a time).
+install -m 644 "$APP/deploy/paperbot-combo-shadow@.service" "/etc/systemd/system/paperbot-combo-shadow@.service"
+SHADOWS="$(systemctl list-units --plain --no-legend --state=active 'paperbot-combo-shadow@*.service' 2>/dev/null \
+  | awk '{print $1}' | tr '\n' ' ' || true)"
+if [ -n "${SHADOWS// /}" ]; then
+  echo "그림자 페이퍼 봇이 이전 코드로 돌고 있습니다. 실제 페이퍼 봇이 다시 돈 뒤 다시 켜세요:"
+  echo "  sudo systemctl restart ${SHADOWS% }"
+fi
 # the second executor (MEXC, its own config executor-mexc.json): installed only, never enabled or started here
 install -m 644 "$APP/deploy/paperbot-executor-mexc.service" /etc/systemd/system/paperbot-executor-mexc.service
 systemctl daemon-reload

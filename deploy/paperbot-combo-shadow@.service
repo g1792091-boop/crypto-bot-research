@@ -1,0 +1,71 @@
+# 그림자 페이퍼 봇 (shadow paper bots, docs/live1019-start-ko.md 11): extra paper-only copies of the
+# combined bot (paperbot/combo.py, unchanged) with other configs, next to the live paper bot on the same live market,
+# so the owners can compare versions on data no backtest has seen. One instance per config in this repository:
+#   paperbot-combo-shadow@b      deploy/combo.shadow-b.json      B 안정형 (the plateau settings, 37)
+#   paperbot-combo-shadow@nocut  deploy/combo.shadow-nocut.json  live-ac's 95 settings without the switch-off buckets
+#   paperbot-combo-shadow@ac32   deploy/combo.shadow-ac32.json   the previous 32 strategies / 101 settings
+# Paper only: no orders, and no executor follows a shadow. Instance <name> writes only
+# /var/lib/paperbot/combo/shadow-<name>.db (never live-ac.db, the executors' paper_db, and never another shadow's).
+# No Telegram: "telegram": false in each config, and the Telegram lines of live.env are removed below. The first
+# ExecStartPre refuses to start a config whose db is not shadow-<name>.db or whose telegram is not false. live.env
+# stays for the rule bot's read-only Binance key: the same leverage brackets and fee rate as the live paper bot.
+#
+# Never in the way of the live paper bot (Nice=5, CPUWeight 100) and the executors:
+# - CPU and disk: Nice=10, CPUWeight=20, IOWeight=20; in a server-wide memory shortage the kernel kills a shadow first
+#   (OOMScoreAdjust).
+# - Binance request limit: a start downloads ~2,000 weight of history (7 days of 1m bars and ~125 days of 5m bars,
+#   about 1,200 a minute for 1.5-2 minutes; the IP's limit is 2,400 a minute, the rule bot uses ~1,000). The second
+#   ExecStartPre makes the shadows start one at a time, each 2 minutes after the one before (a lock in the combo
+#   folder, released when the sleep ends), so two shadows never download at once and a restart lets the live bot go
+#   first. Starting all three takes about 8 minutes (TimeoutStartSec leaves room for more).
+# - Memory: measured offline (one process per config: the engine and its history built as `run` builds them, then a
+#   48-hour minute-by-minute replay, 2026-09-22/23, with trades): ~167 MB once the engine is built, ~249 MB with
+#   its history, then 258-266 MB for the whole 48 hours (no growth); peak 265 MB for B (37 settings), 267 MB nocut
+#   (95), 268 MB ac32 (101), 267 MB live-ac itself. MemoryMax=768M is about 3x that: three shadows stay under
+#   2.3 GB of the server's 8 GB at worst (~0.8 GB as measured), and a shadow that grows past it is restarted alone.
+#   CPU (8-hour replay): ~0.25 s of one core a minute on average (95 / 101 settings; B ~0.1 s), ~7 s at an hour
+#   boundary.
+#
+# install.sh installs this template but never enables, starts or stops it; a running shadow keeps the previous code
+# until restarted (install.sh prints the command). A person starts the shadows:
+#   sudo systemctl start paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32
+# and stops them with `sudo systemctl stop` and the same names. Restart is safe: the account and its signal queue are
+# in its database; missed minutes are replayed from paper3.db, missed signals are recorded late and never traded.
+[Unit]
+Description=paperbot shadow paper bot %i (combined bot, deploy/combo.shadow-%i.json; paper only, no orders, no Telegram)
+After=network-online.target paperbot-live3.service paperbot-combo.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+UnsetEnvironment=TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_CRITICAL TELEGRAM_CHAT_WARN TELEGRAM_CHAT_INFO TELEGRAM_CHAT_BACKUP DEADMAN_URL BACKUP_PASSPHRASE
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStartPre=/opt/paperbot/venv/bin/python -c "import json, sys; c = json.load(open(sys.argv[1], encoding='utf-8')); want = '/var/lib/paperbot/combo/shadow-' + sys.argv[2] + '.db'; ok = c.get('db') == want and c.get('telegram') is False; sys.exit(0 if ok else 'shadow config refused: db must be ' + want + ' and telegram false')" /opt/crypto-bot-research/deploy/combo.shadow-%i.json %i
+ExecStartPre=/usr/bin/flock /var/lib/paperbot/combo/.shadow-start.lock /bin/sleep 120
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.combo run --config /opt/crypto-bot-research/deploy/combo.shadow-%i.json
+Restart=always
+RestartSec=15
+NotifyAccess=main
+WatchdogSec=600
+TimeoutStartSec=30min
+TimeoutStopSec=60
+Nice=10
+CPUWeight=20
+IOWeight=20
+MemoryMax=768M
+OOMScoreAdjust=500
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot/combo
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target

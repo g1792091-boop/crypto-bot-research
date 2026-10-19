@@ -545,3 +545,57 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 - **노이즈 손절**: 손절된 뒤 4시간 안에 원래 방향으로 +11% ROE까지 간 비율입니다. 높으면 손절이 좁거나 진입이 이릅니다(S1 71%, F5_BOX_RSI 67%, F12_MSS_DISP 60%).
 - **늦은 진입 점검**: S1_EMA_RSI_CHOP, F5_BOX_RSI, F12_MSS_DISP는 진 거래가 이긴 거래보다 진입 전에 더 많이 움직인 뒤였습니다. "이미 많이 움직였으면 진입 안 함" 조건을 넣어 다시 돌렸지만, 앞·뒤 두 기간 모두에서 좋아지는 경우가 없어 넣지 않았습니다(넣어도 전체 성적 변화가 거의 없음: 4,592 → 4,586거래, 승률 92.0% 그대로).
 - **커스텀값**: 같은 매매법의 다른 커스텀값은 대부분 손실입니다. 92%는 지금 정확한 값과 끄기 조건이 함께 만든 숫자입니다. 실거래가 백테스트와 달라질 수 있는 가장 큰 이유입니다.
+
+## 11. 그림자 페이퍼 봇 (선택, 10/19 추가)
+
+지금 페이퍼 봇(A+C 합본) 옆에서 다른 설정의 페이퍼 봇 3개를 같은 실제 시장으로 돌립니다. 한 달 뒤 어느 버전이 처음 보는 데이터에서 나았는지 같은 조건으로 비교하려는 것입니다.
+
+| 그림자 | 설정 파일 | 무엇이고 왜 돌리나 |
+|---|---|---|
+| `@b` 그림자 B 안정형 | `deploy/combo.shadow-b.json` | 고원형 합본(세팅 37개). 백테스트는 낮지만(88.5%) 처음 보는 기간 시험에서 가장 덜 잃었습니다. 실제 시장에서도 그런지 봅니다. |
+| `@nocut` 그림자 끄는 구간 없음 | `deploy/combo.shadow-nocut.json` | 지금 봇과 같은 세팅 95개에서 끄는 구간만 뺐습니다. 백테스트 91%의 대부분은 끄는 구간이 만듭니다(빼면 약 79%). 처음 보는 데이터에서도 끄는 구간이 도움이 되는지 잽니다. |
+| `@ac32` 그림자 32개 | `deploy/combo.shadow-ac32.json` | 오늘 27개로 줄이기 전 버전(매매법 32개·세팅 101개). 줄인 것이 나았는지 봅니다. |
+
+- **돈이 걸리지 않습니다.** 주문을 내지 않고, 실행기는 그림자를 따라가지 않습니다. 텔레그램도 보내지 않습니다.
+- DB는 각자 따로입니다: `/var/lib/paperbot/combo/shadow-b.db`, `shadow-nocut.db`, `shadow-ac32.db`. 실행기 설정의 `"paper_db"`는 그대로 `live-ac.db`입니다. 그림자 DB를 넣지 않습니다.
+- 지금 페이퍼 봇과 실행기보다 낮은 순위로 돕니다(CPU·디스크를 덜 받고, 메모리 한도 768M).
+
+**켜기·끄기**
+
+```bash
+sudo systemctl start paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32
+sudo systemctl stop paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32
+```
+
+- 켜는 데 8분쯤 걸립니다. 바이낸스 요청 한도를 넘지 않게 2분 간격으로 하나씩 켜집니다. 명령이 끝날 때까지 기다립니다.
+- 서버를 다시 켜면 그림자는 저절로 켜지지 않습니다. 같은 start 명령을 다시 칩니다.
+- 코드를 새로 받으면(install.sh) 화면에 나온 `restart` 명령으로 그림자도 다시 켭니다. 그래야 모든 봇이 같은 코드로 돕니다.
+
+**켠 뒤 메모리 확인** (켜고 10분쯤 뒤, 다음 날 한 번 더)
+
+```bash
+free -m
+systemctl status paperbot-combo-shadow@b paperbot-combo-shadow@nocut paperbot-combo-shadow@ac32 --no-pager
+```
+
+- `free -m`의 `available`이 1000 이상이면 됩니다. 시험에서 그림자 하나가 약 270MB를 썼습니다(셋이면 약 0.8GB, 서버는 8GB).
+- `systemctl status`에서 셋 다 `active (running)`이고 `Memory:`가 300M 안팎이면 됩니다(한도 768M).
+- `available`이 1000 아래로 내려가면 그림자부터 끕니다(위 stop 명령). 지금 페이퍼 봇과 실행기가 먼저입니다.
+
+**보기**
+
+```bash
+cd /opt/crypto-bot-research
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-b.db
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-nocut.db
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/shadow-ac32.db
+```
+
+비교 기준은 지금 페이퍼 봇입니다(`live-ac.db`, 맨 위 6)의 첫 줄).
+
+**읽는 법**
+
+- 거래가 40번쯤 쌓이거나 한 달이 지난 뒤에만 비교합니다. 그 전의 차이는 대부분 운입니다.
+- 넷 모두 같은 방식으로 봅니다: 같은 기간, 같은 숫자(거래 수, 승률 = 승 ÷ 거래, 지갑). 그래서 그림자는 되도록 오늘 켭니다. 며칠 늦게 켰다면 켠 날짜를 적어 두고 알려 주세요. 지금 페이퍼 봇도 그날부터의 거래만 세어야 같은 비교입니다.
+- 며칠 결과를 보고 실행기가 따라가는 페이퍼 봇을 바꾸지 않습니다.
+- 끄는 구간 없음이 지금 봇만큼 하면 끄는 구간은 처음 보는 데이터에서 도움이 안 된 것입니다. 지금 봇이 분명히 앞서면 도움이 된 것입니다.
