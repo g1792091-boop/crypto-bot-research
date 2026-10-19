@@ -1752,7 +1752,8 @@ def test_preview_prints_every_message_type_and_sends_nothing(monkeypatch):
                  "아침 점검(확인할 것 있음)", "알람: 따라가지 않음", "알람: 실행기 조용함", "알람: 손절 기록 없음",
                  "알람: 디스크 부족", "알람: 메모리 부족", "알람: 페이퍼 봇 멈춤", "알람: 1분봉 멈춤",
                  "알람: 잔고 25% 하락", "알람: 실거래만 짐", "알람: 기대 범위 밑", "알람: 멈춤 요약",
-                 "알람: 텔레그램 설정", "텔레그램 설정 맞춰짐"):
+                 "알람: 텔레그램 설정", "텔레그램 설정 맞춰짐", "진입 대기 → 결과(같은 메시지가 바뀜)", "진입 쉼 시작",
+                 "진입 쉼 끝"):
         assert kind in titles, kind
     for block in text.split("\n\n━━ "):
         head, body = block.split("\n", 1)

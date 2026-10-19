@@ -17,6 +17,7 @@ import os
 import shutil
 import sqlite3
 import tempfile
+import time
 from dataclasses import asdict
 from typing import Optional
 
@@ -52,12 +53,21 @@ ASIA = ("F15_ASIA_BRK", "30m", 37)
 
 # ====================================================================== the world
 class Collect:
-    """A notifier that keeps what would be sent."""
+    """A notifier that keeps what would be sent; like the Telegram notifier it gives message ids (``send_ids``), so a
+    message edited later (the ⏳ wait turned into its result, ``edit``) is kept too, in its new form."""
 
     def __init__(self):
         self.items: list = []
 
     def send(self, level: str, text: str) -> bool:
+        self.items.append((level, text))
+        return True
+
+    def send_ids(self, level: str, text: str) -> dict:
+        self.items.append((level, text))
+        return {"preview": len(self.items)}
+
+    def edit(self, level: str, ids: dict, text: str) -> bool:
         self.items.append((level, text))
         return True
 
@@ -231,6 +241,7 @@ def scenes() -> list:
     tmp = tempfile.mkdtemp(prefix="livepreview_")
     try:
         out += _trade_scene(os.path.join(tmp, "a"))
+        out += _pause_scene(os.path.join(tmp, "p"))
         out += _alarm_scene(os.path.join(tmp, "b"))
         out += _drift_scene(os.path.join(tmp, "c"))
         out += _halt_scene(os.path.join(tmp, "d"))
@@ -279,6 +290,16 @@ def _trade_scene(path: str) -> list:
     r.conn.close()
     w.tick(T0 - 25 * MIN)
     out += [("⏳ 진입 대기", lv, t) for lv, t in w.watch(T0 - 25 * MIN)]
+    # ... the bar ends without the break: the paper bot restates the wait (combo.py _restate) and the same message
+    # gets its result line (edited in place)
+    s = Store3(w.paper)
+    s.conn.execute("UPDATE signal_log SET status = 'FILTERED', data = ? WHERE bar_close = ? AND strategy = ? AND symbol = ?",
+                   (json.dumps({"source": "custom", "strategy": "N02_ST_KST", "why": "돌파 없음(신호봉 시간 안에)"}),
+                    t0, "N02_ST_KST@30m#3~x", SOL))
+    s.commit()
+    s.conn.close()
+    w.tick(T0)
+    out += [("⏳ 진입 대기 → 결과(같은 메시지가 바뀜)", lv, t) for lv, t in w.watch(T0)]
     # 🟢 entry: Bybit followed, MEXC's light blocked it
     key = f"{LC.ACCOUNT}|{BTC}|{T0}"
     w.open_position(T0)
@@ -320,6 +341,38 @@ def _trade_scene(path: str) -> list:
     w.tick(x + 8 * H1 + MIN)
     out += [("⏹ 실행기 꺼짐", lv, t) for lv, t in w.watch(x + 8 * H1 + MIN, units=lambda u: (
         ("inactive", "disabled") if u == "paperbot-executor-mexc" else ("active", "enabled")))]
+    return out
+
+
+def _pause_scene(path: str) -> list:
+    """⏸ / 🔔 the paper bot's entry pauses by the live config's rules (deploy/combo.live-ac.json: ±30 minutes around a
+    US macro release, the KST weekend), from a release file of its own (paperbot/events.py reads it for this scene
+    only): a CPI on Thursday with a paper position open, then the weekend and a PCE on Monday evening."""
+    from . import events as EV
+    w = _mk(path)
+    cpi = LC.window_of("2026-10-22")[0] + 12 * H1 + 30 * MIN          # Thursday 10/22 21:30 KST
+    sat = LC.window_of("2026-10-23")[0] + 15 * H1                     # Saturday 10/24 00:00 KST
+    pce = sat + 2 * DAY + 21 * H1 + 30 * MIN                          # the Monday after, 21:30 KST
+    csv = os.path.join(path, "macro_events.csv")
+    with open(csv, "w", encoding="utf-8") as fh:
+        fh.write("ts_utc,kind,source_url\n")
+        for ms, kind, url in ((cpi, "CPI", "https://www.bls.gov/schedule/news_release/cpi.htm"),
+                              (pce, "PCE", "https://www.bea.gov/news/schedule")):
+            fh.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(ms / 1000))},{kind},{url}\n")
+    old = EV.PATH
+    EV.PATH = csv
+    EV.reset()
+    out = []
+    try:
+        w.open_position(cpi - 3 * H1)
+        for now, pos in ((cpi - 29 * MIN, True), (cpi + 31 * MIN, True), (sat + MIN, False), (sat + 2 * DAY + MIN, False)):
+            if not pos:
+                w.position = None
+            w.tick(now)
+            out += [("⏸ 🔔 진입 쉼", lv, t) for lv, t in w.watch(now) if t.startswith(("⏸", "🔔"))]
+    finally:
+        EV.PATH = old
+        EV.reset()
     return out
 
 
@@ -494,7 +547,9 @@ def _setup_scene(path: str) -> list:
 KINDS = (("▶️", "실행기 켜짐"), ("⏹", "실행기 꺼짐(사람이 끔)"), ("⏳", "진입 대기"), ("🟢 진입", "진입"), ("🔒", "잠금 시작"),
          ("✅ 청산", "청산(이김)"), ("✅ 텔레그램", "텔레그램 설정 맞춰짐"), ("🚨 ❌", "손실 카드(소리)"),
          ("❌", "손실 카드"), ("🚦", "신호등 바뀜"), ("🏁", "40번 도달"), ("📉", "참고"), ("🎉", "좋은 소식"), ("✅", "다시 정상"), ("📋", "아침 점검"),
-         ("🚨 실거래 일일 점검", "아침 점검(확인할 것 있음)"))
+         ("🚨 실거래 일일 점검", "아침 점검(확인할 것 있음)"), ("⏸", "진입 쉼 시작"), ("🔔", "진입 쉼 끝"))
+# a message edited in place: (its start, what the edit adds, kind) — the ⏳ wait with its result line
+EDITED = (("⏳", "\n\n→ ", "진입 대기 → 결과(같은 메시지가 바뀜)"),)
 
 
 ALARMS = (("페이퍼를 따라가지 않았습니다", "따라가지 않음"), ("기록을 남기지 않습니다", "실행기 조용함"),
@@ -505,6 +560,9 @@ ALARMS = (("페이퍼를 따라가지 않았습니다", "따라가지 않음"), 
 
 
 def kind_of(body: str) -> str:
+    for start, mark, name in EDITED:
+        if body.startswith(start) and mark in body:
+            return name
     for start, name in KINDS:
         if body.startswith(start):
             return name

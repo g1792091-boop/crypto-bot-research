@@ -78,7 +78,9 @@ live trades, one message each, de-duplicated in livecheck.db (trade_msgs, live_s
 each executor's answer: ✅ entered with its margin and stop, ⛔ blocked by its light, ⏸ halted, ⚠ did not follow;
 sent once every executor answered or after 3 minutes), 🔒 the FIRST lock only, ✅ a winning exit (each executor's
 P&L and balance, the day, the lights), ❌ a losing exit = its loss card; 🚦 a light that changes, 🏁 the 40th paper
-trade, ▶️ / ⏹ an executor started or stopped on a signal. Every message: a short first line (emoji, what, coin, side,
+trade, ▶️ / ⏹ an executor started or stopped on a signal; ⏳ a break signal waiting (once its result is known the same
+message gets it as a last line: edited, never a second message), ⏸ / 🔔 the paper bot's entry pause (the weekend, a
+macro release) starting / ending. Every message: a short first line (emoji, what, coin, side,
 the key number), Korean labels, the strategy as name + Korean timeframe + type (never the member label), prices at
 the coin's precision, money as $x.xx, ROE as +x.x%; alarms are CRITICAL (🚨, they ring with TELEGRAM_SOUND=critical)
 and end with "지금 할 일:", everything else is INFO (silent); raw error text only on a last "자세히:" line. Where they
@@ -102,6 +104,7 @@ import datetime as _dt
 import glob
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -1190,7 +1193,7 @@ CREATE TABLE IF NOT EXISTS scores (
 def open_out(path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
-    conn.executescript(SCHEMA + WATCH_SCHEMA + LOSS_SCHEMA + TRADE_SCHEMA + STATE_SCHEMA)
+    conn.executescript(SCHEMA + WATCH_SCHEMA + LOSS_SCHEMA + TRADE_SCHEMA + STATE_SCHEMA + TG_IDS_SCHEMA)
     conn.commit()
     return conn
 
@@ -1579,10 +1582,10 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
         cc = conn
         if conn is None:
             cc = sqlite3.connect(":memory:")
-            cc.executescript(LOSS_SCHEMA + TRADE_SCHEMA + STATE_SCHEMA)
+            cc.executescript(LOSS_SCHEMA + TRADE_SCHEMA + STATE_SCHEMA + TG_IDS_SCHEMA)
             ro = open_ro(src.db)
             if ro is not None:
-                for table, n_cols in (("loss_cards", 22), ("trade_msgs", 6), ("live_state", 3)):
+                for table, n_cols in (("loss_cards", 22), ("trade_msgs", 6), ("live_state", 3), ("tg_ids", 4)):
                     try:
                         cc.executemany(f"INSERT INTO {table} VALUES ({','.join('?' * n_cols)})",
                                        ro.execute(f"SELECT * FROM {table}").fetchall())
@@ -1601,7 +1604,11 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
         out += tg_pass(cc, now_ms, t, send_base, send)
         for kind, key, level, text in trade_pass(src, cc, now_ms, exp, send, units=units):
             out.append((kind, key, level, text))
-        out += wait_pass(src, cc, now_ms, send)
+        # ⏳ with the Telegram notifier's message ids when it gives them (a notifier without them: no result edit)
+        live = not (dry_run or n is None)
+        out += wait_pass(src, cc, now_ms, send, send_ids=getattr(n, "send_ids", None) if live else None)
+        out += wait_result_pass(src, cc, now_ms, getattr(n, "edit", None) if live else (lambda lv, ids, tx: True))
+        out += pause_pass(src, cc, now_ms, send)
         for card in cards_pass(src, cc, now_ms, exp, send=send):
             if card.get("sent"):
                 out.append(("card", card["key"], CRITICAL if card["loud"] else INFO, card["text"]))
@@ -2355,6 +2362,17 @@ CREATE TABLE IF NOT EXISTS trade_msgs (
     PRIMARY KEY (key, kind)
 );
 """
+# where a sent message landed ({chat id: message id}, notify.TelegramNotifier.send_ids), for a message that is edited
+# later (the ⏳ wait turns into its result); a table of its own so older livecheck.db files keep their columns
+TG_IDS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS tg_ids (
+    key TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ids_json TEXT NOT NULL,
+    ts INTEGER NOT NULL,
+    PRIMARY KEY (key, kind)
+);
+"""
 
 
 # ---------------------------------------------------------------- numbers as the owners read them
@@ -2561,9 +2579,23 @@ def _msg_put(conn, key: str, kind: str, first_ts: int, sent_ts: Optional[int] = 
 # timeframe, for the price to trade beyond the signal bar's high (long) / low (short), then enters the next minute
 # (paperbot/combo.py _research_signal / _breaks; its signal_log row says WAITING until then). That wait is a real
 # "entry may come": the page and one quiet message show it. The bot's other checks still apply at the break (the signal
-# bar size, the switched-off buckets, one position at a time, the weekend and the macro pause).
+# bar size, the switched-off buckets, one position at a time, the weekend and the macro pause). Once the bot has
+# restated the wait (combo.py _restate: BROKE and then its entry's outcome, or FILTERED with its why) the same message
+# gets one result line at its end (wait_result_pass; Telegram editMessageText, never a second message).
 WAIT_TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": H1, "4h": 4 * H1}
 WAIT_MSGS_ENV = "PAPERBOT_LIVE_WAIT_MSGS"              # "0": no ⏳ message (the page still shows the waits)
+WAIT_EDIT_MAX_MS = 48 * H1                             # a wait sent longer ago than this is no longer edited
+# the bot's why of a wait that ended without an entry (combo.py _breaks / _submit_due / _research_entry), plain Korean;
+# "돌파 없음" has its own line (WAIT_LAPSED)
+WAIT_WHY_KO = (("연구 조건 밖: 신호봉 크기", "신호봉 크기가 연구 조건 밖"), ("연구 조건 밖", "연구 조건 밖"),
+               ("연구 조건을 못 읽음", "연구 조건을 못 읽음"), ("돌파 확인이 늦음", "돌파 확인이 늦음(봇 재시작 따라잡기)"),
+               ("주말", "주말이라 진입 쉼"), ("경제 발표", "경제 발표 앞뒤라 진입 쉼"), ("끈 구간", "끈 구간에 걸림"),
+               ("설정에 없는", "설정이 바뀜"))
+# the paper engine's reason when the entry signal of a break was not taken (engine.py _record, combo.py)
+WAIT_SKIP_KO = (("in position", "이미 포지션 있음"), ("lower score", "같은 때 다른 신호가 먼저 들어감"), ("late", "신호가 늦음"),
+                ("stop rule", "손절 자리가 안 맞음"), ("sizing", "크기 계산이 거절함"), ("halted", "페이퍼 계좌 멈춤 중"),
+                ("early exit", "같은 분에 빠른 청산"), ("guard", "보호 장치"), ("no next bar", "다음 1분봉 없음"))
+WAIT_LAPSED = "→ ⌛ 시간 지남 · 진입 없음"
 
 
 def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
@@ -2634,10 +2666,11 @@ def _paused_now(now_ms: int, mins: int = 30) -> bool:
         return False
 
 
-def wait_pass(src: Sources, conn, now_ms: int, send: Callable) -> list:
+def wait_pass(src: Sources, conn, now_ms: int, send: Callable, send_ids: Optional[Callable] = None) -> list:
     """⏳ one quiet message per break signal that starts waiting, while the paper account holds no position and the bots
     are not paused (then a break could not enter anyway: nothing is sent, and the wait is not marked, so a wait still
-    open when the position closes is told then). Off with PAPERBOT_LIVE_WAIT_MSGS=0."""
+    open when the position closes is told then). Off with PAPERBOT_LIVE_WAIT_MSGS=0. ``send_ids`` (the Telegram
+    notifier's): sent through it instead and where it landed kept (tg_ids), so its result can be written into it."""
     if conn is None or os.environ.get(WAIT_MSGS_ENV, "").strip() == "0":
         return []
     pc = open_ro(src.paper_db)
@@ -2662,9 +2695,257 @@ def wait_pass(src: Sources, conn, now_ms: int, send: Callable) -> list:
             _msg_put(conn, w["key"], "wait", now_ms)      # already beyond: the entry message comes instead
             continue
         text = wait_text(w, now_ms)
-        if send(INFO, text) is not False:
+        if send_ids is not None:
+            ids = send_ids(INFO, text) or {}
+            ok = bool(ids)                                 # {} = no chat took it (tried again next pass)
+        else:
+            ids, ok = {}, send(INFO, text) is not False
+        if ok:
             _msg_put(conn, w["key"], "wait", now_ms, now_ms, INFO, text)
+            ids = {str(c): int(m) for c, m in ids.items() if m is not None}
+            if ids:
+                conn.execute("INSERT OR REPLACE INTO tg_ids VALUES (?,?,?,?)", (w["key"], "wait", json.dumps(ids), now_ms))
             out.append(("wait", w["key"], INFO, text))
+    return out
+
+
+def _why_of(data) -> str:
+    """The why a signal_log row's data carries (combo.py _log / _restate)."""
+    try:
+        return str(json.loads(data or "{}").get("why") or "")
+    except (ValueError, AttributeError):
+        return ""
+
+
+def _why_ko(why: str) -> str:
+    w = str(why or "")
+    return next((ko for head, ko in WAIT_WHY_KO if w.startswith(head)), w[:60] or "이유 기록 없음")
+
+
+def _skip_ko(reason: str) -> str:
+    r = str(reason or "")
+    return next((ko for head, ko in WAIT_SKIP_KO if r.startswith(head)), r[:60] or "이유 기록 없음")
+
+
+def _entry_outcome(pc, entry_t: int, tf: str, member: str, symbol: str) -> Optional[tuple]:
+    """(status, reason) of the paper account's outcome for the entry signal a break made (its signal: ts + 1 = the
+    entry minute, the same timeframe, setting and coin), None while the engine has not recorded it."""
+    try:
+        rows = pc.execute("SELECT status, reason, data FROM outcomes WHERE account_id = ? AND symbol = ? AND step_ts >= ? "
+                          "AND step_ts < ? ORDER BY id", (ACCOUNT, symbol, entry_t - MIN, entry_t + DAY)).fetchall()
+    except sqlite3.Error:
+        return None
+    for status, reason, data in rows:
+        try:
+            s = json.loads(data or "{}").get("signal") or {}
+            meta = s.get("meta") or {}
+            if int(s.get("ts")) + 1 == entry_t and s.get("timeframe") == tf and (meta.get("member") or s.get("strategy_id")) == member:
+                return status, reason
+        except (ValueError, TypeError, AttributeError):
+            continue
+    return None
+
+
+def wait_result(pc, key: str) -> Optional[str]:
+    """The result line of a ⏳ wait (key 'setting|coin|signal bar close'), from the paper bot's own records: the wait's
+    signal_log row as combo.py restated it (BROKE: then its entry signal's row and the engine's outcome; FILTERED: the
+    why). None while the result is not known yet."""
+    try:
+        member, sym, t0 = key.rsplit("|", 2)
+        row = pc.execute("SELECT status, data, timeframe FROM signal_log WHERE bar_close = ? AND strategy = ? AND symbol = ?",
+                         (int(t0), member, sym)).fetchone()
+    except (ValueError, sqlite3.Error):
+        return None
+    if row is None:
+        return None
+    status, data, tf = row
+    if status == "FILTERED":
+        why = _why_of(data)
+        return WAIT_LAPSED if why.startswith("돌파 없음") else f"→ 진입 안 함: {_why_ko(why)}"
+    if status != "BROKE":
+        return None
+    m = re.search(r"(\d{12,})", _why_of(data))             # "돌파 확인: {entry minute ms} 분에 진입 신호"
+    if not m:
+        return None
+    entry_t = int(m[1])
+    try:
+        sub = pc.execute("SELECT status, data FROM signal_log WHERE bar_close = ? AND timeframe = ? AND strategy = ? AND symbol = ?",
+                         (entry_t, tf, member, sym)).fetchone()
+    except sqlite3.Error:
+        return None
+    if sub is not None and sub[0] == "FILTERED":           # the weekend, a macro release, a switched-off bucket ...
+        return f"→ 돌파했지만 진입 안 함: {_why_ko(_why_of(sub[1]))}"
+    o = _entry_outcome(pc, entry_t, tf, member, sym)
+    if o is None:
+        return None
+    if o[0] == "ENTERED":
+        return f"→ ✅ 돌파! {kst(entry_t)}에 진입했어요 (🟢 진입 알림 참고)"
+    return f"→ 돌파했지만 진입 안 함: {_skip_ko(o[1])}"
+
+
+def wait_result_pass(src: Sources, conn, now_ms: int, edit: Optional[Callable]) -> list:
+    """→ each sent ⏳ wait whose result is known gets it: the same message edited (``edit``: the Telegram notifier's
+    editMessageText), its text + a blank line + one result line (wait_result). Once per wait (trade_msgs kind
+    'wait_result'), also when the edit fails (the message deleted or too old: logged, never sent as a new message); a
+    wait sent more than 48 hours ago is given up quietly. Only waits whose message ids were kept (tg_ids); off with
+    PAPERBOT_LIVE_WAIT_MSGS=0. Returns [("wait_result", key, level, new text)] edited."""
+    if conn is None or edit is None or os.environ.get(WAIT_MSGS_ENV, "").strip() == "0":
+        return []
+    rows = conn.execute("SELECT m.key, m.sent_ts, m.text, g.ids_json FROM trade_msgs m JOIN tg_ids g ON g.key = m.key "
+                        "AND g.kind = 'wait' WHERE m.kind = 'wait' AND m.sent_ts IS NOT NULL AND NOT EXISTS (SELECT 1 "
+                        "FROM trade_msgs r WHERE r.key = m.key AND r.kind = 'wait_result') ORDER BY m.sent_ts").fetchall()
+    if not rows:
+        return []
+    out = []
+    pc = open_ro(src.paper_db)
+    try:
+        for key, sent_ts, text, ids_json in rows:
+            if now_ms - int(sent_ts) > WAIT_EDIT_MAX_MS or not text:
+                _msg_put(conn, key, "wait_result", now_ms)            # given up quietly
+                continue
+            line = wait_result(pc, key) if pc is not None else None
+            if line is None:
+                continue
+            new = f"{text}\n\n{line}"
+            try:
+                ids = json.loads(ids_json or "{}")
+            except ValueError:
+                ids = {}
+            ok = bool(ids) and edit(INFO, ids, new) is not False
+            if not ok:
+                print(f"⏳ 대기 메시지에 결과를 못 씀(새 메시지는 안 보냄): {key}", file=sys.stderr)
+            _msg_put(conn, key, "wait_result", now_ms, now_ms if ok else None, INFO, new)
+            if ok:
+                out.append(("wait_result", key, INFO, new))
+        conn.execute("DELETE FROM tg_ids WHERE ts < ?", (now_ms - 30 * DAY,))
+        conn.commit()
+    finally:
+        if pc is not None:
+            pc.close()
+    return out
+
+
+# ---------------------------------------------------------------- ⏸ 🔔 진입 쉼 시작 · 끝 (owners 10/19)
+# The paper bot makes no new entry in its pauses (combo.py _submit_due): the KST weekend (config no_weekend) and
+# ±macro_blackout_min around each US macro release (data/macro_events.csv). One quiet message when a pause starts and
+# one when it ends; pauses that overlap or touch are one (a Friday-night release running into the weekend).
+PAUSE_MSGS_ENV = "PAPERBOT_LIVE_PAUSE_MSGS"            # "0": no ⏸ / 🔔 message
+PAUSE_SEND_MS = 10 * MIN                               # a start / end first seen later than this after it: not told
+PAUSE_POS = "열린 포지션은 손절·잠금 그대로 관리돼요"
+
+
+def pause_spans(cfg: Optional[dict], a: int, b: int) -> list:
+    """The paper bot's entry pauses that touch [a, b], oldest first, overlapping or touching ones merged: each {"from",
+    "to", "weekend": bool, "macro": [events.Event], "parts": the weekend ("weekend") and the releases by start}. The
+    weekend is the dashboard's (paperbot/dash/more/livebots.py weekend_span: Saturday 00:00 to Monday 00:00 KST, as
+    combo.py kst_weekend) when the config has no_weekend; a release's pause is its time ±macro_blackout_min, edges
+    included (paperbot/events.py near, as combo.py _macro_near takes it). [] without a config (the rules unknown)."""
+    if not cfg:
+        return []
+    lo = a - 3 * DAY                                       # earlier pauses that may reach [a, b] through a merge
+    raw = []
+    if cfg.get("no_weekend"):
+        from .dash.more.livebots import weekend_span
+        s, e = weekend_span(lo)
+        while s <= b:
+            raw.append((s, e, "weekend"))
+            s, e = s + 7 * DAY, e + 7 * DAY
+    w = int(cfg.get("macro_blackout_min") or 0) * MIN
+    if w:
+        from . import events as EV
+        raw += [(ev.ts_ms - w, ev.ts_ms + w, ev) for ev in EV.all_events() if ev.ts_ms + w >= lo and ev.ts_ms - w <= b]
+    out: list = []
+    for s, e, part in sorted(raw, key=lambda x: (x[0], x[1])):
+        if out and s <= out[-1]["to"]:
+            cur = out[-1]
+            cur["to"] = max(cur["to"], e)
+        else:
+            cur = {"from": s, "to": e, "weekend": False, "macro": [], "parts": []}
+            out.append(cur)
+        cur["parts"].append(part)
+        if part == "weekend":
+            cur["weekend"] = True
+        else:
+            cur["macro"].append(part)
+    return [x for x in out if x["to"] >= a and x["from"] <= b]
+
+
+def _at(ms: int, ref: int) -> str:
+    """'21:30' on ``ref``'s KST day, else with the weekday: '월 00:00'."""
+    if (int(ms) + KST_MS) // DAY == (int(ref) + KST_MS) // DAY:
+        return kst(ms)
+    return f"{KO_DOW[_dt.datetime.fromtimestamp((int(ms) + KST_MS) / 1000, _dt.timezone.utc).weekday()]} {kst(ms)}"
+
+
+def pause_what(span: dict, mins: int, ref: int, times: bool = True) -> str:
+    """'CPI 발표 21:30 앞뒤 30분', '주말', 'NFP 발표 23:45 앞뒤 30분 + 주말' (in time order; ``times`` False: without the
+    release times)."""
+    words, macros = [], []
+    for p in span["parts"]:
+        if p == "weekend":
+            words.append("주말")
+            continue
+        if not macros:
+            words.append("")                               # where the releases go
+        m = f"{p.kind} 발표" + (f" {_at(p.ts_ms, ref)}" if times else "")
+        if m not in macros:
+            macros.append(m)
+    rel = " · ".join(macros) + f" 앞뒤 {mins}분"
+    return " + ".join(x or rel for x in words)
+
+
+def pause_start_text(span: dict, mins: int, now_ms: int, pos: bool) -> str:
+    until = _at(span["to"], now_ms)
+    if span["weekend"] and not span["macro"]:
+        return f"⏸ 주말 진입 쉼 시작 · {until}까지" + (f"\n{PAUSE_POS}" if pos else "")
+    return (f"⏸ 진입 쉼 시작 · {pause_what(span, mins, now_ms)}\n{until}까지 새 진입 없음"
+            + (f" ({PAUSE_POS})" if pos else ""))
+
+
+def pause_end_text(nxt: Optional[dict], mins: int, now_ms: int) -> str:
+    return "🔔 진입 쉼 끝 · 다시 진입할 수 있어요" + (
+        f"\n다음 쉼: {_at(nxt['from'], now_ms)}~{_at(nxt['to'], nxt['from'])} ({pause_what(nxt, mins, now_ms, False)})"
+        if nxt is not None else "")
+
+
+def pause_pass(src: Sources, conn, now_ms: int, send: Callable) -> list:
+    """⏸ one quiet message when an entry pause of the paper bot starts and 🔔 one when it ends (pause_spans of the
+    config the paper bot runs, combo_config; the end names the next pause when it starts within 24 hours; the start
+    says that an open paper position is still managed). Told only within PAUSE_SEND_MS after the moment (a watcher that
+    was down sends no stale news), once each (trade_msgs kinds 'pause' / 'resume', keyed by the moment's ms); the start
+    of a pause already over is not told. Off with PAPERBOT_LIVE_PAUSE_MSGS=0. Returns [(kind, key, level, text)] sent."""
+    if conn is None or os.environ.get(PAUSE_MSGS_ENV, "").strip() == "0":
+        return []
+    pc = open_ro(src.paper_db)
+    try:
+        cfg, _where = combo_config(src, pc)
+        _ts, acc = get_state(pc, "accounts") if pc is not None else (None, None)
+    finally:
+        if pc is not None:
+            pc.close()
+    pos = (((acc or {}).get("engines") or {}).get(ACCOUNT) or {}).get("position")
+    try:
+        spans = pause_spans(cfg, now_ms - PAUSE_SEND_MS, now_ms + DAY)
+    except Exception as exc:  # noqa: BLE001  the calendar unreadable: no pause news this pass
+        print(f"진입 쉼 일정을 못 읽음: {type(exc).__name__}: {exc}"[:200], file=sys.stderr)
+        return []
+    mins = int((cfg or {}).get("macro_blackout_min") or 0)
+    due = []
+    for i, sp in enumerate(spans):
+        if now_ms - PAUSE_SEND_MS <= sp["from"] <= now_ms < sp["to"]:
+            due.append((sp["from"], "pause", pause_start_text(sp, mins, now_ms, bool(pos))))
+        if now_ms - PAUSE_SEND_MS <= sp["to"] <= now_ms:
+            nxt = next((x for x in spans[i + 1:] if x["from"] <= now_ms + DAY), None)
+            due.append((sp["to"], "resume", pause_end_text(nxt, mins, now_ms)))
+    out = []
+    for t, kind, text in sorted(due, key=lambda d: d[0]):
+        key = str(int(t))
+        if _msg_row(conn, key, kind):
+            continue
+        if send(INFO, text) is not False:
+            _msg_put(conn, key, kind, now_ms, now_ms, INFO, text)
+            out.append((kind, key, INFO, text))
+    conn.commit()
     return out
 
 

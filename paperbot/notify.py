@@ -688,7 +688,9 @@ class TelegramNotifier:
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_CRITICAL, TELEGRAM_CHAT_WARN,
     TELEGRAM_CHAT_INFO (WARN and INFO fall back to CRITICAL's chat). Each value may name several chat ids separated
     by commas (owners 10-19: the live bots write to each owner's private chat with the bot); a message is accepted
-    when at least one chat accepted it, and each chat that failed is logged. One id behaves as before."""
+    when at least one chat accepted it, and each chat that failed is logged. One id behaves as before.
+    ``send_ids`` / ``edit`` (owners 10-19, the live watcher's ⏳ message that turns into its result): a message whose
+    ids per chat are kept can later be rewritten in place (editMessageText) instead of sending another one."""
 
     def __init__(self, timeout: float = 10.0, retry_wait_max: Optional[float] = None, sleep=None,
                  env=None) -> None:
@@ -722,10 +724,54 @@ class TelegramNotifier:
         """One sendMessage to each chat id of the level: (accepted, None), or (False, seconds Telegram asked to wait)
         on a 429, (False, None) on any other failure. Accepted = at least one chat accepted it (then nothing is sent
         again: a retry would repeat it to the chats that have it). Never raises."""
+        got, wait = self._send(level, text)
+        return (True, None) if got else (False, wait)
+
+    def send_ids(self, level: str, text: str) -> dict:
+        """``send_once`` that also says where the message landed, so it can be edited later (``edit``): {chat id:
+        message id} of the chats that accepted it (the id None when Telegram's answer could not be read), {} when no
+        chat did. Same wording, silence, chats and 429 handling as ``send_once`` (never waits: the caller tries again
+        on its next pass). Never raises."""
+        try:
+            return self._send(level, text)[0]
+        except Exception as exc:  # noqa: BLE001  (a message, never a stopped caller)
+            print(f"telegram send failed: {type(exc).__name__}", file=sys.stderr)
+            return {}
+
+    def edit(self, level: str, ids: dict, text: str) -> bool:
+        """editMessageText: the message ``send_ids`` sent becomes ``text`` in each chat of ``ids`` (worded as a new
+        message would be, ``telegram_text``; an edit never rings). True when at least one chat took it; a chat that
+        refused (the message deleted or too old, a 429) is logged and keeps the old text: nothing is sent instead.
+        Never raises."""
+        try:
+            _lvl, body = telegram_text(level, text)
+            url = f"https://api.telegram.org/bot{self.token}/editMessageText"
+            items = [(str(c), m) for c, m in (ids or {}).items() if m is not None]
+            ok = False
+            for i, (cid, mid) in enumerate(items, 1):
+                tag = f" (chat {i} of {len(items)})" if len(items) > 1 else ""
+                data = urllib.parse.urlencode({"chat_id": cid, "message_id": str(int(mid)), "text": body}).encode()
+                try:
+                    urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
+                except urllib.error.HTTPError as exc:
+                    print(f"telegram edit failed{tag}: HTTP {exc.code}", file=sys.stderr)
+                    continue
+                except Exception as exc:  # noqa: BLE001
+                    print(f"telegram edit failed{tag}: {type(exc).__name__}", file=sys.stderr)
+                    continue
+                ok = True
+            return ok
+        except Exception as exc:  # noqa: BLE001
+            print(f"telegram edit failed: {type(exc).__name__}", file=sys.stderr)
+            return False
+
+    def _send(self, level: str, text: str) -> tuple[dict, Optional[float]]:
+        """sendMessage to each chat id of the level: ({chat id: message id or None} of the chats that accepted it,
+        None), or ({}, the longest wait a 429 asked for, or None). Counted once when accepted."""
         level, body = telegram_text(level, text)
         ids = chat_ids(self.chats.get(level, self.chats[CRITICAL])) or [""]
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        accepted, waits = False, []
+        got, waits = {}, []
         for i, cid in enumerate(ids, 1):
             tag = f" (chat {i} of {len(ids)})" if len(ids) > 1 else ""
             data = urllib.parse.urlencode({
@@ -734,7 +780,7 @@ class TelegramNotifier:
                 "disable_notification": json.dumps(silent(level, self.sound)),
             }).encode()
             try:
-                urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
+                raw = urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
             except urllib.error.HTTPError as exc:
                 wait = retry_after(exc) if exc.code == 429 else None
                 print(f"telegram send failed{tag}: HTTP {exc.code}"
@@ -745,12 +791,21 @@ class TelegramNotifier:
                 print(f"telegram send failed{tag}: {type(exc).__name__}", file=sys.stderr)
                 waits.append(None)
                 continue
-            accepted = True
-        if accepted:
+            got[cid] = message_id(raw)
+        if got:
             count_send(level)               # G13: never raises, never delays past TG_SENDS_WAIT_S
-            return True, None
+            return got, None
         known = [w for w in waits if w is not None]
-        return False, (max(known) if known else None)
+        return {}, (max(known) if known else None)
+
+
+def message_id(raw) -> Optional[int]:
+    """sendMessage's answer ({"ok": true, "result": {"message_id": 42, ...}}) -> 42; None when unreadable."""
+    try:
+        v = (json.loads(raw or b"{}").get("result") or {}).get("message_id")
+        return None if v is None else int(v)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 RETRY_WAIT_MAX_S = 30.0          # the longest a blocking send waits on a 429 (Telegram usually asks 5-40 s)
