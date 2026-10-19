@@ -1601,6 +1601,7 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
         out += tg_pass(cc, now_ms, t, send_base, send)
         for kind, key, level, text in trade_pass(src, cc, now_ms, exp, send, units=units):
             out.append((kind, key, level, text))
+        out += wait_pass(src, cc, now_ms, send)
         for card in cards_pass(src, cc, now_ms, exp, send=send):
             if card.get("sent"):
                 out.append(("card", card["key"], CRITICAL if card["loud"] else INFO, card["text"]))
@@ -2553,6 +2554,118 @@ def _msg_row(conn, key: str, kind: str) -> Optional[tuple]:
 def _msg_put(conn, key: str, kind: str, first_ts: int, sent_ts: Optional[int] = None, level: Optional[str] = None,
              text: Optional[str] = None) -> None:
     conn.execute("INSERT OR REPLACE INTO trade_msgs VALUES (?,?,?,?,?,?)", (key, kind, first_ts, sent_ts, level, text))
+
+
+# ---------------------------------------------------------------- ⏳ 진입 대기 (owners 10/19)
+# A "break" setting of the combined bot (33 of its 95) does not enter at its signal: it waits, for one bar of its own
+# timeframe, for the price to trade beyond the signal bar's high (long) / low (short), then enters the next minute
+# (paperbot/combo.py _research_signal / _breaks; its signal_log row says WAITING until then). That wait is a real
+# "entry may come": the page and one quiet message show it. The bot's other checks still apply at the break (the signal
+# bar size, the switched-off buckets, one position at a time, the weekend and the macro pause).
+WAIT_TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": H1, "4h": 4 * H1}
+WAIT_MSGS_ENV = "PAPERBOT_LIVE_WAIT_MSGS"              # "0": no ⏳ message (the page still shows the waits)
+
+
+def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
+    """The break signals still waiting now, oldest first: coin, side, strategy, setting, timeframe, the signal bar's
+    close (t0) and the deadline (t0 + one bar), the level the price must trade beyond (the signal bar's 1m high / low
+    in the rule bot's bars, as the paper bot takes it; None before that bar is in the file), the last 1m close and how
+    far it still has to go (a fraction of the price, <= 0 once beyond)."""
+    try:
+        rows = paper_conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, data FROM signal_log WHERE status = 'WAITING' "
+                                  "AND bar_close >= ? ORDER BY bar_close, id", (int(now_ms) - 4 * H1,)).fetchall()
+    except sqlite3.Error:
+        return []
+    out = []
+    for bc, tf, member, sym, side, data in rows:
+        tf_ms = WAIT_TF_MS.get(tf)
+        if tf_ms is None or bc is None:
+            continue
+        t0, until = int(bc), int(bc) + tf_ms
+        if until <= now_ms:
+            continue                                   # lapsed: the bot restates it at its next minute
+        try:
+            d = json.loads(data or "{}")
+        except ValueError:
+            d = {}
+        side = int(side or 0)
+        level = last = last_ts = moved = None
+        if rule_conn is not None:
+            try:
+                hi, lo = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ? AND ts < ?",
+                                           (sym, t0 - tf_ms, t0)).fetchone()
+                level = hi if side > 0 else lo
+                r = rule_conn.execute("SELECT ts, close FROM live_bars WHERE symbol = ? ORDER BY ts DESC LIMIT 1", (sym,)).fetchone()
+                if r:
+                    last_ts, last = int(r[0]), float(r[1])
+                hi2, lo2 = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ?", (sym, t0)).fetchone()
+                moved = hi2 if side > 0 else lo2
+            except sqlite3.Error:
+                pass
+        level = float(level) if level is not None else None
+        out.append({"key": f"{member}|{sym}|{t0}", "t0": t0, "until": until, "tf": tf, "member": member,
+                    "strategy": d.get("strategy") or str(member).split("@")[0], "symbol": sym, "side": side,
+                    "level": level, "last": last, "last_ts": last_ts,
+                    "to_go": (side * (level - last) / last) if level is not None and last else None,
+                    "touched": (moved > level if side > 0 else moved < level) if moved is not None and level is not None else None})
+    return out
+
+
+def wait_text(w: dict, now_ms: int) -> str:
+    side = KO_SIDE.get(w["side"], "")
+    where = "위로 올라가면" if w["side"] > 0 else "아래로 내려가면"
+    lv = f"{w['level']:,.6g}" if w.get("level") is not None else "신호봉 끝"
+    lines = [f"⏳ 진입 대기 · {coin(w['symbol'])} {side} · {w['strategy']} {KO_TF.get(w['tf'], w['tf'])}",
+             f"{lv} {where} 진입" + (f" (지금 {w['last']:,.6g} · {abs(w['to_go']):.2%} 남음)" if w.get("to_go") is not None and w["to_go"] > 0
+                                    else " (지금 그 가격 근처)" if w.get("to_go") is not None else ""),
+             f"{kst(w['until'])}까지 못 넘으면 진입 없음 · {max(0, (w['until'] - now_ms) // MIN)}분 남음",
+             "들어가면 🟢 진입 알림이 따로 와요 (봇의 다른 확인은 그대로: 신호봉 크기·끈 구간·한 번에 하나)"]
+    return "\n".join(lines)
+
+
+def _paused_now(now_ms: int, mins: int = 30) -> bool:
+    """The bots' own pause right now: the KST weekend, or ±mins around a registered US macro release."""
+    if ((int(now_ms) + KST_MS) // DAY + 3) % 7 >= 5:
+        return True
+    try:
+        from . import events as EV
+        return bool(EV.near(int(now_ms), mins * MIN, mins * MIN))
+    except Exception:  # noqa: BLE001  without the file: not paused by it (the paper bot says so itself)
+        return False
+
+
+def wait_pass(src: Sources, conn, now_ms: int, send: Callable) -> list:
+    """⏳ one quiet message per break signal that starts waiting, while the paper account holds no position and the bots
+    are not paused (then a break could not enter anyway: nothing is sent, and the wait is not marked, so a wait still
+    open when the position closes is told then). Off with PAPERBOT_LIVE_WAIT_MSGS=0."""
+    if conn is None or os.environ.get(WAIT_MSGS_ENV, "").strip() == "0":
+        return []
+    pc = open_ro(src.paper_db)
+    if pc is None:
+        return []
+    rc = open_ro(src.rule_db)
+    try:
+        _ts, acc = get_state(pc, "accounts")
+        pos = (((acc or {}).get("engines") or {}).get(ACCOUNT) or {}).get("position")
+        waits = pending_entries(pc, rc, now_ms)
+    finally:
+        pc.close()
+        if rc is not None:
+            rc.close()
+    if pos or _paused_now(now_ms):
+        return []
+    out = []
+    for w in waits:
+        if _msg_row(conn, w["key"], "wait"):
+            continue
+        if w.get("touched"):
+            _msg_put(conn, w["key"], "wait", now_ms)      # already beyond: the entry message comes instead
+            continue
+        text = wait_text(w, now_ms)
+        if send(INFO, text) is not False:
+            _msg_put(conn, w["key"], "wait", now_ms, now_ms, INFO, text)
+            out.append(("wait", w["key"], INFO, text))
+    return out
 
 
 def trade_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Callable, infos: Optional[list] = None,

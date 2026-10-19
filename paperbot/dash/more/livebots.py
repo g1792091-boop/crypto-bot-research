@@ -884,7 +884,8 @@ SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocu
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
             "combo_config": ("PAPERBOT_LIVE_COMBO_CONFIG", "/etc/paperbot/combo.json"),
             "check_db": ("PAPERBOT_LIVE_CHECK_DB", "/var/lib/paperbot/livecheck.db"),
-            "improve_db": ("PAPERBOT_LIVE_IMPROVE_DB", "/var/lib/paperbot/liveimprove.db")}
+            "improve_db": ("PAPERBOT_LIVE_IMPROVE_DB", "/var/lib/paperbot/liveimprove.db"),
+            "rule_db": ("PAPERBOT_LIVE_RULE_DB", "/var/lib/paperbot/paper3.db")}
 
 
 def paths_more(env: Optional[dict] = None) -> dict:
@@ -1649,7 +1650,7 @@ def calendar(p: dict, now: int) -> dict:
     macro_now = next((x for x in items if w and x["pause_from"] <= now <= x["pause_to"]), None)
     wk_now = no_weekend and kst_weekend(now)
     wk_a, wk_b = weekend_span(now)
-    # the pause windows of the next 7 days, merged where they touch (a release inside the weekend adds nothing)
+    # the pause windows of the next 7 days, by start (overlapping ones are not merged here: the page merges them)
     spans = []
     if no_weekend:
         a, b = wk_a, wk_b
@@ -1660,7 +1661,8 @@ def calendar(p: dict, now: int) -> dict:
         if w and x["pause_to"] >= now and x["pause_from"] < now + CAL_TIMELINE_DAYS * DAY:
             spans.append({"from": x["pause_from"], "to": x["pause_to"], "why": "macro", "ko": f"{x['kind_ko']} 앞뒤 {mins}분", "kind": x["kind"]})
     spans.sort(key=lambda s: s["from"])
-    nxt = next((s for s in spans if s["from"] > now), None)
+    edge = max([now] + [x for x in ((macro_now or {}).get("pause_to"), wk_b if wk_now else None) if x is not None])
+    nxt = next((s for s in spans if s["from"] > edge), None)        # the next pause after the one now (if any)
     last = max((e.ts_ms for e in evs), default=None)
     return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "path", "source")},
             "rules": {"macro_blackout_min": mins, "no_weekend": no_weekend},
@@ -1962,6 +1964,48 @@ def team(p: dict, now: int, units=None) -> dict:
             "ideas_open": sum(1 for v in idea_by.values() for i in v if i["status"] == "제안")}
 
 
+# ---------------------------------------------------------------- ⏳ 진입 대기 (owners 10/19)
+TF_MS_LB = {"15m": 15 * 60_000, "30m": 30 * 60_000, "1h": HOUR, "4h": 4 * HOUR}
+
+
+def pending(p: dict, now: int, members: Optional[list] = None) -> dict:
+    """진입 대기: the combined bot's break signals still waiting (paperbot/livecheck.py pending_entries: the level the price
+    must trade beyond, the last 1m close, how far to go, the deadline), and when each timeframe's next bar closes (when
+    the bot next looks for signals) with how many settings run on it."""
+    from ... import livecheck as LC
+    more = paths_more()
+    try:
+        pc = open_ro(p["paper"])
+    except FileNotFoundError:
+        return {**_missing(p["paper"]), "waits": [], "closes": []}
+    except (OSError, sqlite3.Error) as exc:
+        return {**_err(p["paper"], exc), "waits": [], "closes": []}
+    rc, rule_state = None, "ok"
+    try:
+        rc = open_ro(more["rule_db"])
+    except FileNotFoundError:
+        rule_state = "missing"
+    except (OSError, sqlite3.Error):
+        rule_state = "error"
+    try:
+        pc.execute("BEGIN")
+        waits = LC.pending_entries(pc, rc, now) if "signal_log" in _tables(pc) else []
+    finally:
+        pc.close()
+        if rc is not None:
+            rc.close()
+    for w in waits:
+        w["left_ms"] = w["until"] - now
+    by_tf: dict = {}
+    for m in members or []:
+        t = m.get("tf")
+        if t in TF_MS_LB:
+            c = by_tf.setdefault(t, {"tf": t, "now": 0, "break": 0})
+            c["break" if m.get("entry") == "break" else "now"] += 1
+    closes = [{**c, "next_ms": (now // TF_MS_LB[t] + 1) * TF_MS_LB[t]} for t, c in sorted(by_tf.items(), key=lambda kv: TF_MS_LB[kv[0]])]
+    return {"state": "ok", "waits": waits, "closes": closes, "rule_state": rule_state, "rule_path": more["rule_db"]}
+
+
 # ---------------------------------------------------------------- 지금 (왜 지금 진입 안 하나, owners 10/19)
 def whynow(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/now: what stands between now and the next live entry, in the order the bots check it: the
@@ -2012,13 +2056,16 @@ def whynow(p: dict, now: int) -> dict:
             {k: lt.get(k) for k in ("n", "wins", "need_wins", "min_win", "have")}, who=x["id"], tone="ok" if st in ("green", "building", "off") else "stop" if st == "red" else "warn")
     sig = read_signals(p["paper"], ACCOUNT, now, keep=1)
     last = (sig.get("rows") or [None])[0] if sig.get("state") == "ok" else None
+    combo = read_combo(p["paper"], paths_more()["combo_config"])
+    pend = pending(p, now, members_of(combo) if combo.get("state") == "ok" else [])
     blocked = [i for i in items if i["ok"] is False]
     head = ("지금 진입할 수 있어요 · 신호를 기다리는 중" if not blocked else
             "지금은 새 진입 안 해요: " + blocked[0]["ko"])
     return {"now_ms": now, "ready": not blocked, "head_ko": head, "items": items,
             "last_signal": {k: last.get(k) for k in ("t", "strategy", "tf", "symbol", "side", "stage", "ko")} if last else None,
             "signals": {k: sig.get(k) for k in ("state", "reason_ko", "stages")}, "next_pause": cn.get("next"),
-            "pause_until": cn.get("pause_until")}
+            "pause_until": cn.get("pause_until"), "pending": pend,
+            "pending_blocked_ko": next((i["ko"] for i in items if i["ok"] is False and i["id"] in ("weekend", "macro", "position", "paper")), None)}
 
 
 # ================================================================ the live checks (livecheck.db, liveimprove.db; read-only)

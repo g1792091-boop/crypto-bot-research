@@ -1747,7 +1747,7 @@ def test_preview_prints_every_message_type_and_sends_nothing(monkeypatch):
     items = PV.scenes()
     text = PV.render(items)
     titles = {PV.kind_of(PV.shown(lv, t)[0]) for _s, lv, t in items}
-    for kind in ("실행기 켜짐", "진입", "잠금 시작", "청산(이김)", "손실 카드", "손실 카드(소리)", "신호등 바뀜",
+    for kind in ("실행기 켜짐", "진입 대기", "진입", "잠금 시작", "청산(이김)", "손실 카드", "손실 카드(소리)", "신호등 바뀜",
                  "40번 도달", "참고", "좋은 소식", "다시 정상", "실행기 꺼짐(사람이 끔)", "아침 점검",
                  "아침 점검(확인할 것 있음)", "알람: 따라가지 않음", "알람: 실행기 조용함", "알람: 손절 기록 없음",
                  "알람: 디스크 부족", "알람: 메모리 부족", "알람: 페이퍼 봇 멈춤", "알람: 1분봉 멈춤",

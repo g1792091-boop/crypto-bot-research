@@ -264,6 +264,21 @@ def _trade_scene(path: str) -> list:
     w.x_event("bybit", T0 - 30 * MIN, "start", "시작")
     w.tick(T0 - 29 * MIN)
     out += [("▶️ 실행기 켜짐", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
+    # ⏳ a break signal waits one bar for the price to trade below its signal bar's low (it lapses at T0: no entry)
+    t0 = T0 - 30 * MIN
+    s = Store3(w.paper)
+    s.log_signals([{"bar_close": t0, "timeframe": "30m", "strategy": "N02_ST_KST@30m#3~x", "symbol": SOL, "side": -1,
+                    "atr": 1.0, "ref_price": 182.1, "ref_time": t0, "delay_ms": 800, "status": "WAITING",
+                    "data": {"source": "custom", "strategy": "N02_ST_KST", "why": "돌파 확인 대기"}}])
+    s.commit()
+    s.conn.close()
+    r = Store3(w.rule)
+    r.live_bars([{"ts": ts, "symbol": SOL, "open": 182.0, "high": 182.4, "low": 181.2 if ts == t0 - 7 * MIN else 181.6,
+                  "close": 182.0 if ts < t0 else 182.1, "processed_at": ts + MIN} for ts in range(t0 - 30 * MIN, T0 - 26 * MIN, MIN)])
+    r.commit()
+    r.conn.close()
+    w.tick(T0 - 25 * MIN)
+    out += [("⏳ 진입 대기", lv, t) for lv, t in w.watch(T0 - 25 * MIN)]
     # 🟢 entry: Bybit followed, MEXC's light blocked it
     key = f"{LC.ACCOUNT}|{BTC}|{T0}"
     w.open_position(T0)
@@ -476,7 +491,7 @@ def _setup_scene(path: str) -> list:
 
 
 # ====================================================================== print
-KINDS = (("▶️", "실행기 켜짐"), ("⏹", "실행기 꺼짐(사람이 끔)"), ("🟢 진입", "진입"), ("🔒", "잠금 시작"),
+KINDS = (("▶️", "실행기 켜짐"), ("⏹", "실행기 꺼짐(사람이 끔)"), ("⏳", "진입 대기"), ("🟢 진입", "진입"), ("🔒", "잠금 시작"),
          ("✅ 청산", "청산(이김)"), ("✅ 텔레그램", "텔레그램 설정 맞춰짐"), ("🚨 ❌", "손실 카드(소리)"),
          ("❌", "손실 카드"), ("🚦", "신호등 바뀜"), ("🏁", "40번 도달"), ("📉", "참고"), ("🎉", "좋은 소식"), ("✅", "다시 정상"), ("📋", "아침 점검"),
          ("🚨 실거래 일일 점검", "아침 점검(확인할 것 있음)"))
