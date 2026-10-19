@@ -685,15 +685,15 @@ def test_wiring_route_menu_find_inventory_and_module():
     routes = _read(V4, "core", "routes.js")
     assert 'livebots: {ko: "실거래", group: "home", title: "실거래"}' in routes and '"checkpoint", "livebots"]' in routes
     assert "livebots:" in _read(V4, "core", "search.js")
-    assert "livebots" in MORE.MODULES and "livemissed" in MORE.MODULES
+    assert "livebots" in MORE.MODULES and "livemissed" in MORE.MODULES and "livetape" in MORE.MODULES
     js = "".join(_read(SCREENS, f) for f in os.listdir(SCREENS) if f.startswith("livebots") and f.endswith(".js"))
     for path in ("/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf", "/api/v4/livebots/safety",
                  "/api/v4/livebots/shadows", "/api/v4/livebots/settings", "/api/v4/livebots/rank", "/api/v4/livebots/calendar",
                  "/api/v4/livebots/map", "/api/v4/livebots/costs", "/api/v4/livebots/now", "/api/v4/livebots/team",
-                 "/api/v4/livebots/likely", "/api/v4/livebots/missed"):
+                 "/api/v4/livebots/likely", "/api/v4/livebots/missed", "/api/v4/livebots/replay"):
         assert f'"{path}"' in js, path
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(SCREENS, "livebots.js"))
-    assert tabs == [("hq", "관제"), ("summary", "요약"), ("rank", "순위"), ("team", "분석팀"), ("chart", "차트"), ("trades", "거래"), ("signals", "신호"),
+    assert tabs == [("hq", "관제"), ("summary", "요약"), ("rank", "순위"), ("team", "분석팀"), ("chart", "차트"), ("trades", "거래"), ("replay", "다시보기"), ("signals", "신호"),
                     ("missed", "못 탄 신호"), ("perf", "성적"), ("map", "지도"), ("cost", "비용"), ("cal", "일정"), ("safety", "안전"), ("shadows", "그림자"),
                     ("settings", "설정")]
     assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq")' in _read(SCREENS, "livebots.js")   # owners 10/19: 관제 first
@@ -702,7 +702,7 @@ def test_wiring_route_menu_find_inventory_and_module():
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):
         assert word in inv, word
     css = _read(SCREENS, "livebots.css")
-    for part in ("hq", "rank", "map", "cost", "cal", "team", "likely", "missed"):
+    for part in ("hq", "rank", "map", "cost", "cal", "team", "likely", "missed", "replay"):
         assert f'@import url("livebots-{part}.css");' in css, part
         own = re.sub(r"/\*.*?\*/", "", _read(SCREENS, f"livebots-{part}.css"), flags=re.S)
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", own) and not re.search(r"font-size:\s*\d", own), part

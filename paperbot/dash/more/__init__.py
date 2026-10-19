@@ -59,6 +59,7 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
             실행기 DB 두 개, 실행기 설정 두 개; 키 파일은 열지 않음; 없으면 '수집 전', 못 읽으면 '못 읽음'과 이유)
     livemissed 실거래 › 못 탄 신호 (#/livebots/missed): 1포지션 규칙으로 못 탄 신호의 가상 결과 vs 실제로 탄 거래
             (livecheck.db missed, live-ac.db; 읽기만)
+    livetape 실거래 › 다시보기 (#/livebots/replay?id=): 닫힌 거래 하나를 1분봉에 다시 재생, 손절·잠금 경로를 봇 계산 그대로 다시 (읽기만)
 """
 from __future__ import annotations
 
@@ -95,6 +96,7 @@ MODULES += ("shadowleague",)                   # 그림자 리그 (#/league): sh
 MODULES += ("paramlive",)                      # 커스텀값 실시간 비교: paramshadow's last.json / error.json, read-only, mtime cache
 MODULES += ("livebots",)                       # 실거래 (#/livebots): live-ac.db + the two executors' databases and configs, read-only
 MODULES += ("livemissed",)                     # 실거래 › 못 탄 신호: livecheck.db missed (the watcher's pass) + live-ac.db, read-only, 5 s cache
+MODULES += ("livetape",)                       # 실거래 › 다시보기 (#/livebots/replay?id=): one closed trade on its 1m bars, the stop path rebuilt, read-only
 
 
 def register_all(app, **kw) -> dict:

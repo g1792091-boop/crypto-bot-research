@@ -12,6 +12,7 @@
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 import {cardBlock, cardSummary} from "./livebots-cards.js";
+import {replayHref} from "./livebots-replay.js";
 
 const IDS = ["paper", "bybit", "mexc"];
 const REFRESH_MS = 30 * 1000;
@@ -79,7 +80,9 @@ export function tradesView(ctx) {
       ui.pill(STATE_KO[c.state] || c.state, c.state === "matched" ? "good" : c.state === "missed" ? "warn" : "thin"),
       c.state === "matched" ? h("span", {class: "num"}, ` 손익 ${money(c.pnl, c.est)} · 미끄러짐 ${c.slip == null ? "—" : fmt.pct(c.slip, 3)} · 차이 ${c.diff == null ? "—" : fmt.money(c.diff, true)}`)
         : h("span", {class: "muted"}, ` ${c.why_ko || ""}`), c.why_text ? h("span", {class: "lb-cmeta muted", title: c.why_text}, ` · ${c.why_text}`) : null))) : null;
-    return h("div", {class: "lb-tdet"}, r.card || !r.win ? cardPart(r, live) : null, ui.kv(rows), nums, ...extra, cells);
+    const pid = live ? (r.paper ? r.paper.id : null) : r.id;           // 다시보기 (D2): the paper trade's 1m replay
+    const replay = pid != null ? h("a", {class: "btn-line", href: replayHref(pid)}, "▶ 다시보기") : null;
+    return h("div", {class: "lb-tdet"}, r.card || !r.win ? cardPart(r, live) : null, replay, ui.kv(rows), nums, ...extra, cells);
   }
   /** The loss card first (what the owners open a loss for); a loss without one says why not. */
   function cardPart(r, live) {
