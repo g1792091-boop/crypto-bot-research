@@ -26,3 +26,14 @@ def test_experiments_are_not_protected():
             continue
         v = _oom(unit.name)
         assert v is None or v >= 0, unit.name
+
+
+def test_dashboard_reads_the_executor_records_but_never_the_keys():
+    """Owners 10-19: the 실거래 screen showed 못 읽음 while paperbot-dash.service hid /var/lib/paperbot/exec. The
+    folder is read-only there now; the key file stays hidden."""
+    lines = (DEPLOY / "paperbot-dash.service").read_text(encoding="utf-8").splitlines()
+    ro = next(x for x in lines if x.startswith("ReadOnlyPaths=")).split("=", 1)[1].split()
+    hidden = next(x for x in lines if x.startswith("InaccessiblePaths=")).split("=", 1)[1].split()
+    assert "-/var/lib/paperbot/exec" in ro and "-/var/lib/paperbot/exec" not in hidden
+    assert "-/etc/paperbot/executor.env" in hidden
+    assert not any(x.startswith("EnvironmentFile=/etc/paperbot/executor.env") for x in lines)

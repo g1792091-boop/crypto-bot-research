@@ -29,9 +29,11 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/paperbot
-ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab
-# The order executor's keys and its databases (directory: a stable inode) are never visible here.
-InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/backups/paperbot
+# The 실거래 screen reads the executors' records (owners 10-19: they showed 못 읽음 while the folder was hidden):
+# the folder (a stable inode) is read-only here, its files are paperbot-exec:paperbot 640 (group reads, never
+# writes) and hold no key. The order executor's KEYS (executor.env) stay invisible.
+ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab -/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/backups/paperbot
 
 [Install]
 WantedBy=multi-user.target

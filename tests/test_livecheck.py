@@ -1355,6 +1355,16 @@ def test_the_live_bot_files_and_the_token_in_effect(tmp_path):
     assert LC.tg_problem(LC.tg_files(lp, op))[0] == "token"
     lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={RULE_TOKEN}\nTELEGRAM_SOUND=critical\n")
     assert LC.tg_problem(LC.tg_files(lp, op)) is None
+    # live.env already wrote to an owner's PRIVATE chat (a positive id, the person's own): the same id under the new
+    # bot is that person's chat with the new bot, not the rule bot's room (owners 10-19)
+    priv = tmp_path / "priv"
+    priv.mkdir()
+    (priv / "live.env").write_text(f"TELEGRAM_BOT_TOKEN={RULE_TOKEN}\nTELEGRAM_CHAT_CRITICAL=8454602726\n",
+                                   encoding="utf-8")
+    (priv / "live-telegram.env").write_text(f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\nTELEGRAM_CHAT_CRITICAL=8454602726\n",
+                                            encoding="utf-8")
+    t = LC.tg_files(str(priv / "live.env"), str(priv / "live-telegram.env"))
+    assert LC.tg_problem(t) is None and "live-telegram.env(실거래 전용 봇)" in LC.tg_status(t)
     # an empty CRITICAL line sends nowhere
     lp, op = tg_files(tmp_path, f"TELEGRAM_BOT_TOKEN={LIVE_TOKEN}\nTELEGRAM_CHAT_CRITICAL=\n")
     kind, text = LC.tg_problem(LC.tg_files(lp, op))

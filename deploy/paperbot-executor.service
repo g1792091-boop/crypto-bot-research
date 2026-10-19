@@ -16,8 +16,8 @@
 # paperbot-exec. Group paperbot lets the executor read the code, paper3.db, executor.json and live.env (the paper
 # runner's read-only key, which it refuses as an order key). It writes only /var/lib/paperbot/exec
 # (paperbot-exec:paperbot 750; UMask 0027: files 640, so the nightly backup, as paperbot, can read them and nothing
-# running as paperbot can change them). The agents and the dashboard cannot see /var/lib/paperbot/exec or the key
-# file at all (their units hide them).
+# running as paperbot can change them). The agents cannot see /var/lib/paperbot/exec; the dashboard reads it
+# read-only (its 실거래 screen, 10-19). Neither can see the key file (their units hide it).
 # Exit status 2 = a gate refused the start for a definite reason (key permissions, wallet, config) with no position
 # open: not restarted (fix the cause, then start it by hand). With a position open a mainnet gate found wrong does
 # not exit: the executor halts like the kill switch (closes everything, opens nothing) until a person clears it. Any

@@ -2882,7 +2882,10 @@ def tg_problem(t: dict) -> Optional[tuple]:
     et = over.get("TELEGRAM_BOT_TOKEN") or bt
     bc = chat_ids(base.get("TELEGRAM_CHAT_CRITICAL"))
     ec = chat_ids(over["TELEGRAM_CHAT_CRITICAL"]) if "TELEGRAM_CHAT_CRITICAL" in over else bc
-    if et and et != bt and set(ec) == set(bc):
+    # a private chat's id is the person's own id, the same for every bot: the new bot reaches it once that person
+    # pressed Start (chat-ids lists it), so only a shared group or channel (negative id, @name) means "still the rule
+    # bot's room" (owners 10-19: the rule bot already wrote to a private chat, the live lines were right)
+    if et and et != bt and set(ec) == set(bc) and not all(str(c).strip().isdigit() for c in ec):
         return "token", ("🚨 텔레그램 설정 · 실거래 전용 봇의 채팅 줄이 없습니다\n"
                          "live-telegram.env에 새 봇 토큰은 있는데 채팅 번호가 live.env(규칙봇 방) 그대로입니다. 새 봇은 "
                          "규칙봇 방에 없어서 실거래 메시지(진입·청산·알람)가 가지 않습니다. 이 메시지는 그래서 규칙봇 "
