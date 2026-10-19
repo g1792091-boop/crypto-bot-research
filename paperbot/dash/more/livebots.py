@@ -862,6 +862,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
 
 # ================================================================ the other tabs (거래 · 신호 · 성적 · 안전 · 그림자 · 설정)
 TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+TF_ORDER = {"5m": 0, "15m": 1, "30m": 2, "1h": 3, "4h": 4}
 SIDE_KO = {1: "롱", -1: "숏"}
 COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")      # paperbot/rmember.py SYMS (the index of `sym`)
 DOW_KO = "월화수목금토일"
@@ -1470,6 +1471,464 @@ def settings(p: dict, now: int) -> dict:
                        for k, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]}
 
 
+# ---------------------------------------------------------------- 순위 (매매법 순위표, owners 10/19)
+RANK_SIG_KEEP = 100_000                # every signal row of the 7 days is counted (the page shows counts, not rows)
+WEEKS_PER_MONTH = 30.44 / 7
+
+
+def _bt_strategy(ref: Optional[dict], name: Any) -> Optional[dict]:
+    """One strategy's 5-year numbers from deploy/combo.live-ac.expected.json ('fit' = fitted on the whole period, optimistic;
+    'honest' = the twin fitted on 2020-24 only, read on unseen 2025-26)."""
+    s = ((ref or {}).get("strategies") or {}).get(name) if isinstance(ref, dict) else None
+    if not isinstance(s, dict):
+        return None
+    hon = s.get("honest_2025_26") if isinstance(s.get("honest_2025_26"), list) and len(s["honest_2025_26"]) == 2 else None
+    w25 = s.get("win_2025_26") if isinstance(s.get("win_2025_26"), list) and len(s["win_2025_26"]) == 2 else None
+    pm = _f(s.get("per_month"))
+    return {"type_ko": s.get("type") or None, "trades": _i(s.get("trades")), "per_week": pm / WEEKS_PER_MONTH if pm is not None else None,
+            "win": _f(s.get("win")), "contrib": _f(s.get("contrib")),
+            "recent_n": _i(w25[0]) if w25 else None, "recent_win": _f(w25[1]) if w25 else None,
+            "honest_n": _i(hon[0]) if hon else None, "honest_win": _f(hon[1]) if hon else None,
+            "loss_roe_median": _f(s.get("loss_roe_median")), "win_roe_mean": _f(s.get("win_roe_mean")),
+            "hours_to_win_median": _f(s.get("hours_to_win_median")), "hours_to_stop_median": _f(s.get("hours_to_stop_median")),
+            "long_share": _f(s.get("long_share"))}
+
+
+def _bt_member(ref: Optional[dict], order: Any) -> Optional[dict]:
+    """A setting's own 5-year numbers (expected json ``members`` is keyed by the config position from 0; describe_member's
+    order counts from 1)."""
+    o = _i(order)
+    m = ((ref or {}).get("members") or {}).get(str(o - 1)) if isinstance(ref, dict) and o else None
+    if not isinstance(m, dict):
+        return None
+    return {"trades": _i(m.get("trades")), "win": _f(m.get("win")), "contrib": _f(m.get("contrib"))}
+
+
+def _record(trades: list) -> dict:
+    """n, wins, losses, net P&L, mean net ROE and the last exit of some closed trades."""
+    s = stats(t.get("pnl") for t in trades)
+    roes = [r for r in (_f(t.get("roe")) for t in trades) if r is not None]
+    exits = [x for x in (_i(t.get("exit_time") if t.get("exit_time") is not None else t.get("exit_ts")) for t in trades) if x is not None]
+    return {"n": s["trades"], "wins": s["wins"], "losses": s["losses"], "win_rate": s["win_rate"], "pnl": s["pnl"],
+            "roe_avg": sum(roes) / len(roes) if roes else None, "last_exit_ms": max(exits) if exits else None}
+
+
+def rank(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/rank: 매매법 순위표. Per strategy of the combined bot (from the config it runs): the paper account's
+    closed trades and open position, each executor's followed trades (a live trade takes its paper partner's strategy),
+    its signals of the last 7 KST days and what became of them, its 5-year numbers, and 매매법 성적표's status word. Nothing
+    is ranked here: the page sorts (a ranking of few trades is mostly luck; it says so)."""
+    combo = read_combo(p["paper"], paths_more()["combo_config"])
+    if combo.get("state") != "ok":
+        return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path")}}
+    _configs, _follows, paper, execs = sources(p, now)
+    try:
+        from ... import liveimprove as LI
+        ref, ref_err = LI.load_ref(), None
+    except (OSError, ValueError) as exc:
+        ref, ref_err = None, f"{type(exc).__name__}: {exc}"
+    members = members_of(combo)
+    groups: dict = {}
+    for m in members:
+        groups.setdefault(m["strategy"], []).append({**m, "bt": _bt_member(ref, m["order"])})
+    acc = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
+    ptrades = (acc or {}).get("trades") or []
+    pos = (acc or {}).get("position")
+    by_pid = {t["id"]: t for t in ptrades}
+    live: dict = {}
+    for x in execs:
+        r = x["record"]
+        if r.get("state") != "ok":
+            continue
+        m = match(ptrades, r.get("trades") or [])
+        for t in r.get("trades") or []:
+            pt = by_pid.get(m.get(str(t["key"])))
+            live.setdefault((x["id"], pt.get("strategy_id") if pt else None), []).append(t)
+    sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
+    sig_by: dict = {}
+    if sig.get("state") == "ok":
+        t0 = sig.get("today_ms") or 0
+        for r in sig.get("rows") or []:
+            if r.get("status") == "BROKE":
+                continue                                   # its entry signal is a SUBMITTED row of its own (as 신호 counts)
+            s = sig_by.setdefault(r.get("strategy"), {"week": {}, "today": {}, "last_ms": None, "last_stage": None, "last_ko": None})
+            for span in ("week",) + (("today",) if (r.get("t") or 0) >= t0 else ()):
+                c = s[span]
+                c["signals"] = c.get("signals", 0) + 1
+                c[r.get("stage") or "other"] = c.get(r.get("stage") or "other", 0) + 1
+            if s["last_ms"] is None or (r.get("t") or 0) > s["last_ms"]:
+                s["last_ms"], s["last_stage"], s["last_ko"] = r.get("t"), r.get("stage"), r.get("ko")
+    card = scorecard(p, execs)
+    status = {r.get("key"): r for r in card.get("rows") or []} if card.get("state") == "ok" else {}
+    contribs = sorted(((s.get("contrib") or 0.0), k) for k, s in ((ref or {}).get("strategies") or {}).items() if k in groups)
+    bt_rank = {k: i for i, (_c, k) in enumerate(reversed(contribs), 1)}
+    rows = []
+    for name, ms in groups.items():
+        sc = status.get(name) or {}
+        rows.append({
+            "strategy": name, "in_config": True, "n_settings": len(ms), "tfs": sorted({m["tf"] for m in ms}, key=lambda t: TF_ORDER.get(t, 99)),
+            "members": ms, "paper": _record([t for t in ptrades if t.get("strategy_id") == name]),
+            "open": {k: pos.get(k) for k in ("symbol", "side", "leverage", "entry_time", "timeframe", "member", "last_mark_roe_net", "locked")}
+            if pos and pos.get("strategy_id") == name else None,
+            "live": {x["id"]: _record(live.get((x["id"], name), [])) for x in execs if x["record"].get("state") == "ok"},
+            "sig": sig_by.get(name) or {"week": {}, "today": {}, "last_ms": None, "last_stage": None, "last_ko": None},
+            "bt": _bt_strategy(ref, name), "bt_rank": bt_rank.get(name),
+            "status": {k: sc.get(k) for k in ("status", "n", "win", "fit", "honest", "p")} if sc else None})
+    unknown = sorted(k for k in {t.get("strategy_id") for t in ptrades} if k and k not in groups)
+    for name in unknown:                   # traded under an earlier config: listed, marked, never mixed into the 27
+        rows.append({"strategy": name, "in_config": False, "n_settings": 0, "tfs": sorted({t.get("timeframe") for t in ptrades if t.get("strategy_id") == name and t.get("timeframe")},
+                                                                                         key=lambda t: TF_ORDER.get(t, 99)),
+                     "members": [], "paper": _record([t for t in ptrades if t.get("strategy_id") == name]), "open": None,
+                     "live": {x["id"]: _record(live.get((x["id"], name), [])) for x in execs if x["record"].get("state") == "ok"},
+                     "sig": sig_by.get(name) or {"week": {}, "today": {}, "last_ms": None, "last_stage": None, "last_ko": None},
+                     "bt": _bt_strategy(ref, name), "bt_rank": None,
+                     "status": {k: (status.get(name) or {}).get(k) for k in ("status", "n", "win", "fit", "honest", "p")} if status.get(name) else None})
+    return {"now_ms": now, "combo": {"state": "ok", "source": combo["source"], "path": combo["path"], "since_ms": combo.get("since_ms")},
+            "paper": {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms", "stale")},
+            "signals": {k: sig.get(k) for k in ("state", "reason_ko", "reason", "path", "since_ms", "today_ms")},
+            "ref": {"state": "ok" if ref is not None else "error", "reason": ref_err,
+                    "reason_ko": None if ref is not None else "5년 기준표(deploy/combo.live-ac.expected.json)를 못 읽었어요",
+                    "break_even": _f((ref or {}).get("break_even_win")), "fit_win": _f((((ref or {}).get("overall") or {}).get("fit") or {}).get("win")),
+                    "honest_win": _f((((ref or {}).get("overall") or {}).get("honest") or {}).get("win_2025_26"))},
+            "scorecard": {k: card.get(k) for k in ("state", "reason_ko", "reason", "words", "small_n", "problems")},
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state")} for x in execs],
+            "n_settings": len(members), "n_strategies": len(groups), "small": list(SMALL), "rows": rows,
+            "unknown_strategies": unknown,
+            "open": {k: pos.get(k) for k in ("strategy_id", "symbol", "side", "timeframe", "entry_time")} if pos else None}
+
+
+# ---------------------------------------------------------------- 일정 (경제 일정과 진입 쉬는 시간, owners 10/19)
+CAL_BACK_DAYS = 3
+CAL_AHEAD_DAYS = 21
+CAL_TIMELINE_DAYS = 7
+CAL_LOW_DAYS = 45                      # fewer registered days ahead than this: the page asks for next year's dates
+KIND_INFO_KO = {"CPI": "미국 물가 발표. 예상과 다르면 금리 전망이 바뀌어 크게 움직이기 쉬워요",
+                "FOMC": "미국 기준금리 결정. 발표 뒤 의장 기자회견(30분 뒤)까지 흔들리기 쉬워요",
+                "NFP": "미국 일자리 숫자. 매달 첫 금요일 무렵, 크게 출렁이기 쉬워요",
+                "PCE": "연준이 가장 보는 물가 지표. CPI보다는 덜하지만 움직일 수 있어요"}
+
+
+def kst_weekend(ms: int) -> bool:
+    """paperbot/combo.py kst_weekend, word for word (Saturday and Sunday, Korean time)."""
+    return ((int(ms) + KST_MS) // DAY + 3) % 7 >= 5
+
+
+def weekend_span(ms: int) -> tuple:
+    """(start, end) of the KST weekend at or after ``ms`` (the one ms is in, if any): Saturday 00:00 to Monday 00:00 KST."""
+    day = (int(ms) + KST_MS) // DAY
+    dow = (day + 3) % 7                                    # Monday 0 .. Sunday 6
+    sat = day + (5 - dow) if dow < 5 else day - (dow - 5)
+    return sat * DAY - KST_MS, (sat + 2) * DAY - KST_MS
+
+
+def calendar(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/calendar: the US macro releases around now (data/macro_events.csv: the same file and the same
+    ±macro_blackout_min window the paper bot uses), the KST weekend, whether an entry may be made now by these rules, the
+    pause windows of the next 7 days and how far ahead the release file reaches. The bot's own rules only: signals, the
+    light and an open position decide the rest."""
+    combo = read_combo(p["paper"], paths_more()["combo_config"])
+    cfg = combo.get("config") or {} if combo.get("state") == "ok" else {}
+    mins = _i(cfg.get("macro_blackout_min")) if combo.get("state") == "ok" else 30
+    no_weekend = bool(cfg.get("no_weekend", True)) if combo.get("state") == "ok" else True
+    w = (mins or 0) * 60_000
+    try:
+        from ... import events as EV
+        evs, problems, ev_err = EV.all_events(), EV.problems(), None
+    except Exception as exc:  # noqa: BLE001  the page says it could not be read
+        evs, problems, ev_err = [], [], f"{type(exc).__name__}: {exc}"
+    kind_ko = getattr(EV, "KIND_KO", {}) if ev_err is None else {}
+    items = []
+    for e in evs:
+        if not (now - CAL_BACK_DAYS * DAY <= e.ts_ms <= now + CAL_AHEAD_DAYS * DAY):
+            continue
+        a, b = e.ts_ms - w, e.ts_ms + w
+        items.append({"ts": e.ts_ms, "kind": e.kind, "kind_ko": kind_ko.get(e.kind, e.kind), "info_ko": KIND_INFO_KO.get(e.kind),
+                      "pause_from": a if w else None, "pause_to": b if w else None, "url": getattr(e, "source_url", None),
+                      "when": "past" if b < now else "now" if a <= now <= b and w else "soon" if e.ts_ms <= now + DAY else "later",
+                      "weekend": kst_weekend(e.ts_ms)})
+    macro_now = next((x for x in items if w and x["pause_from"] <= now <= x["pause_to"]), None)
+    wk_now = no_weekend and kst_weekend(now)
+    wk_a, wk_b = weekend_span(now)
+    # the pause windows of the next 7 days, merged where they touch (a release inside the weekend adds nothing)
+    spans = []
+    if no_weekend:
+        a, b = wk_a, wk_b
+        while a < now + CAL_TIMELINE_DAYS * DAY:
+            spans.append({"from": a, "to": b, "why": "weekend", "ko": "주말(토·일, 한국 시간)"})
+            a, b = a + 7 * DAY, b + 7 * DAY
+    for x in items:
+        if w and x["pause_to"] >= now and x["pause_from"] < now + CAL_TIMELINE_DAYS * DAY:
+            spans.append({"from": x["pause_from"], "to": x["pause_to"], "why": "macro", "ko": f"{x['kind_ko']} 앞뒤 {mins}분", "kind": x["kind"]})
+    spans.sort(key=lambda s: s["from"])
+    nxt = next((s for s in spans if s["from"] > now), None)
+    last = max((e.ts_ms for e in evs), default=None)
+    return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "path", "source")},
+            "rules": {"macro_blackout_min": mins, "no_weekend": no_weekend},
+            "events": {"state": "error" if ev_err else "ok", "reason": ev_err, "problems": problems,
+                       "reason_ko": "경제 발표 일정 파일(data/macro_events.csv)을 못 읽었어요" if ev_err else None,
+                       "last_ms": last, "days_left": (last - now) / DAY if last is not None else None,
+                       "low": last is None or last - now < CAL_LOW_DAYS * DAY, "low_days": CAL_LOW_DAYS},
+            "now": {"weekend": wk_now, "macro": macro_now, "paused": bool(wk_now or macro_now),
+                    "pause_until": max(x for x in ((macro_now or {}).get("pause_to"), wk_b if wk_now else None) if x is not None)
+                    if (wk_now or macro_now) else None,
+                    "pause_ko": ("주말이라 진입 쉬는 중" if wk_now else f"{macro_now['kind_ko']} 발표 앞뒤 {mins}분이라 진입 쉬는 중") if (wk_now or macro_now) else None,
+                    "next": nxt},
+            "weekend": {"from": wk_a, "to": wk_b}, "items": items, "spans": spans,
+            "timeline": {"from": now, "to": now + CAL_TIMELINE_DAYS * DAY}}
+
+
+# ---------------------------------------------------------------- 지도 (기대 범위 띠 + 장세 · 코인 · 시간대, owners 10/19)
+BAND_MIN_N = 40                        # the band is drawn at least this far (the 40-trade checkpoint)
+BAND_AHEAD = 20                        # and this many trades past the last closed trade
+BAND_POINTS = 160                      # binomial quantiles are worked out at most at this many trade counts
+BAND_QS = (0.05, 0.5, 0.95)
+MAP_CUTS = ("reg5", "coin", "hb", "side")
+REF_SPLIT = {"reg5": "by_reg5", "coin": "by_sym", "hb": "by_hb", "side": "by_side"}
+
+
+def _logpmf(n: int, k: int, p: float) -> float:
+    return math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1) + k * math.log(p) + (n - k) * math.log1p(-p)
+
+
+def binom_cdf(n: int, k: int, p: float) -> float:
+    """P(X <= k), X ~ Binomial(n, p), summed in log space (exact; no scipy on the server)."""
+    if k < 0:
+        return 0.0
+    if k >= n:
+        return 1.0
+    return min(1.0, sum(math.exp(_logpmf(n, j, p)) for j in range(0, k + 1)))
+
+
+def binom_quantiles(n: int, p: float, qs: tuple = BAND_QS) -> list:
+    """The smallest k with P(X <= k) >= q for each q (X ~ Binomial(n, p)), one pass over k."""
+    out, c, i = [], 0.0, 0
+    qs = sorted(qs)
+    for k in range(0, n + 1):
+        c += math.exp(_logpmf(n, k, p))
+        while i < len(qs) and c >= qs[i] - 1e-12:
+            out.append(k)
+            i += 1
+        if i == len(qs):
+            break
+    while len(out) < len(qs):
+        out.append(n)
+    return out
+
+
+def band_ns(n_max: int, points: int = BAND_POINTS) -> list:
+    """Trade counts the band is worked out at: every count up to 60, then evenly spaced, the last always in."""
+    if n_max <= points:
+        return list(range(1, n_max + 1))
+    head = list(range(1, 61))
+    step = (n_max - 60) / (points - 60)
+    tail = sorted({min(n_max, int(round(60 + step * i))) for i in range(1, points - 59)})
+    return head + [n for n in tail if n > 60] + ([n_max] if tail[-1:] != [n_max] else [])
+
+
+def cum_wins(trades: list, t_exit: str) -> list:
+    """[[trade number, wins so far, exit ms]] in closing order."""
+    out, w = [], 0
+    for i, t in enumerate(sorted(trades, key=lambda t: (_i(t.get(t_exit)) or 0, str(t.get("id") or t.get("key") or ""))), 1):
+        w += 1 if (_f(t.get("pnl")) or 0) > 0 else 0
+        out.append([i, w, _i(t.get(t_exit))])
+    return out
+
+
+def band(ref: Optional[dict], lines: dict) -> dict:
+    """기대 범위 띠: for trade counts 1..N, the 5th / 50th / 95th percentile of wins if each trade wins with the fitted rate
+    (optimistic) and with the honest twin's unseen-2025-26 rate, the break-even line, and each account's wins so far.
+    Below the honest band's 5th percentile is the drift alarm's line (livecheck drift_conditions)."""
+    ov = (ref or {}).get("overall") or {}
+    fit = _f((ov.get("fit") or {}).get("win"))
+    hon = _f((ov.get("honest") or {}).get("win_2025_26"))
+    be = _f((ref or {}).get("break_even_win"))
+    n_max = max([BAND_MIN_N] + [len(v) + BAND_AHEAD for v in lines.values()])
+    ns = band_ns(n_max)
+    out = {"n_max": n_max, "ns": ns, "fit": fit, "honest": hon, "break_even": be, "qs": list(BAND_QS)}
+    for name, p in (("fit_band", fit), ("honest_band", hon)):
+        out[name] = [binom_quantiles(n, p) for n in ns] if p and 0 < p < 1 else None
+    acts = {}
+    for k, v in lines.items():
+        n, w = (v[-1][0], v[-1][1]) if v else (0, 0)
+        acts[k] = {"points": v, "n": n, "wins": w, "rate": w / n if n else None,
+                   # how unusual the wins so far are under each rate (P(X <= wins)): small = fewer wins than that rate makes likely
+                   "p_honest": binom_cdf(n, w, hon) if n and hon and 0 < hon < 1 else None,
+                   "p_fit": binom_cdf(n, w, fit) if n and fit and 0 < fit < 1 else None}
+    out["accounts"] = acts
+    return out
+
+
+def map_view(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/map: 기대 범위 띠 (paper and each executor's wins so far against the 5-year bands) and the paper
+    account's record by BTC 4h regime, coin, KST 4-hour block and side, each next to its 5-year number (liveimprove's
+    own cuts: the same numbers and status words as ``score``)."""
+    _configs, _follows, paper, execs = sources(p, now)
+    got = live_card(p, execs, MAP_CUTS)
+    ref = got.get("ref") if got.get("state") == "ok" else None
+    if ref is None:
+        try:
+            from ... import liveimprove as LI
+            ref = LI.load_ref()
+        except (OSError, ValueError):
+            ref = None
+    a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
+    lines = {}
+    if a is not None:
+        lines["paper"] = cum_wins(a.get("trades") or [], "exit_time")
+    for x in execs:
+        if x["record"].get("state") == "ok":
+            lines[x["id"]] = cum_wins(x["record"].get("trades") or [], "exit_ts")
+    bands = band(ref, lines) if ref else None
+    fit = ((ref or {}).get("overall") or {}).get("fit") or {}
+    cuts = {}
+    for cut in MAP_CUTS:
+        live_rows = {str(r.get("key")): r for r in (got["card"]["cuts"].get(cut) or [])} if got.get("state") == "ok" else {}
+        split = dict(fit.get(REF_SPLIT[cut]) or {})
+        if cut == "coin":                              # the reference counts coins by their place in ``symbols``
+            syms = (ref or {}).get("symbols") or []
+            split = {(syms[int(k)] if str(k).isdigit() and int(k) < len(syms) else k): v for k, v in split.items()}
+        keys = list(split.keys()) + [k for k in live_rows if k not in split]
+        rows = []
+        for k in keys:
+            bt = split.get(k)
+            lr = live_rows.get(k) or {}
+            rows.append({"key": k, "label": lr.get("label") or _map_label(ref, cut, k),
+                         "bt_n": _i(bt[0]) if isinstance(bt, list) and len(bt) == 2 else None,
+                         "bt_win": _f(bt[1]) if isinstance(bt, list) and len(bt) == 2 else None,
+                         **{f: lr.get(f) for f in ("n", "wins", "win", "avg_roe", "pnl", "fit", "honest", "status", "p")},
+                         "exec": {name: {kk: e.get(kk) for kk in ("n", "wins", "live_roe", "paper_roe")} for name, e in (lr.get("exec") or {}).items()}})
+        cuts[cut] = rows
+    return {"now_ms": now, "paper": {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms")},
+            "card": {k: got.get(k) for k in ("state", "reason_ko", "reason", "path", "problems")},
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state")} for x in execs],
+            "band": bands, "cuts": cuts, "symbols": (ref or {}).get("symbols"), "reg5_names": (ref or {}).get("reg5_names")}
+
+
+def _map_label(ref: Optional[dict], cut: str, k: Any) -> str:
+    syms = (ref or {}).get("symbols") or []
+    reg = (ref or {}).get("reg5_names") or list(REG5_CARD_KO)
+    i = _i(k)
+    if cut == "reg5" and i is not None and 0 <= i < len(reg):
+        return reg[i]
+    if cut == "coin":
+        return str(syms[i] if i is not None and 0 <= i < len(syms) else k).replace("USDT", "")
+    if cut == "hb" and i is not None:
+        return f"{i * 4:02d}~{i * 4 + 4:02d}시"
+    if cut == "side" and i is not None:
+        return "롱" if i > 0 else "숏"
+    return str(k)
+
+
+# ---------------------------------------------------------------- 비용 (실거래가 페이퍼보다 얼마나 덜 버나, owners 10/19)
+def costs(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/costs: per executor, its closed trades next to the paper trade each followed: entry price gap
+    (in the trade's favour positive), fees, funding, and the live P&L minus the paper's scaled to the live size. Plus the
+    paper trades it did not follow and why (its own records). Read from the 거래 tab's own rows (trade_rows)."""
+    tr = trade_rows(p, now)
+    accts = tr.get("accts") or {}
+    out = {}
+    for ex, _ko, _dk, _ck in EXECS:
+        a = accts.get(ex) or {}
+        if a.get("state") != "ok":
+            out[ex] = {k: a.get(k) for k in ("state", "reason_ko", "reason", "path")}
+            continue
+        rows = a.get("rows") or []
+        matched = [r for r in rows if r.get("paper")]
+        slips = [r["slip_vs_paper"] for r in matched if r.get("slip_vs_paper") is not None]
+        diffs = [r["diff"] for r in matched if r.get("diff") is not None]
+        fees = [r["commission"] for r in rows if r.get("commission") is not None]
+        fund = [r["funding"] for r in rows if r.get("funding") is not None]
+        roe_gap = [(r["roe"] - r["paper"]["roe"]) for r in matched if r.get("roe") is not None and (r.get("paper") or {}).get("roe") is not None]
+        by_coin: dict = {}
+        for r in matched:
+            c = by_coin.setdefault(r.get("symbol"), {"symbol": r.get("symbol"), "n": 0, "slip": [], "diff": 0.0})
+            c["n"] += 1
+            if r.get("slip_vs_paper") is not None:
+                c["slip"].append(r["slip_vs_paper"])
+            c["diff"] += r.get("diff") or 0.0
+        coins = [{"symbol": c["symbol"], "n": c["n"], "slip_avg": sum(c["slip"]) / len(c["slip"]) if c["slip"] else None, "diff": c["diff"]}
+                 for c in sorted(by_coin.values(), key=lambda c: -c["n"])]
+        missed: dict = {}
+        for r in ((accts.get("paper") or {}).get("rows") or []):
+            cell = (r.get("live") or {}).get(ex) or {}
+            if cell.get("state") == "missed":            # before the executor's start, or still closing: not a miss
+                k = cell.get("why_kind") or "none"
+                m = missed.setdefault(k, {"kind": k, "ko": cell.get("why_ko") or k, "n": 0})
+                m["n"] += 1
+        out[ex] = {"state": "ok", "n": len(rows), "matched": len(matched), "qty_scale": a.get("qty_scale"),
+                   "slip_avg": sum(slips) / len(slips) if slips else None, "slip_worst": min(slips) if slips else None,
+                   "fees": sum(fees) if fees else None, "funding": sum(fund) if fund else None,
+                   "diff_total": sum(diffs) if diffs else None, "diff_avg": sum(diffs) / len(diffs) if diffs else None,
+                   "roe_gap_avg": sum(roe_gap) / len(roe_gap) if roe_gap else None,
+                   "est_n": sum(1 for r in rows if r.get("est")), "coins": coins,
+                   "missed": sorted(missed.values(), key=lambda m: -m["n"]),
+                   "rows": [{k: r.get(k) for k in ("key", "symbol", "side", "entry_time", "exit_time", "pnl", "roe", "commission", "funding",
+                                                   "slip_vs_paper", "diff", "paper_scaled", "est", "strategy_id", "timeframe", "reason_ko")}
+                            | {"paper_roe": (r.get("paper") or {}).get("roe")} for r in rows[:60]]}
+    pa = accts.get("paper") or {}
+    return {"now_ms": now, "paper": {"state": pa.get("state"), "n": pa.get("n"), "reason_ko": pa.get("reason_ko")},
+            "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in EXECS], "accts": out, "match_ms": MATCH_MS}
+
+
+# ---------------------------------------------------------------- 지금 (왜 지금 진입 안 하나, owners 10/19)
+def whynow(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/now: what stands between now and the next live entry, in the order the bots check it: the
+    weekend and macro pause (calendar), the paper bot alive, a position already open (one at a time), each executor
+    running, not halted, its light, then the only thing left: a signal. Read-only; never a guess."""
+    configs, follows, paper, execs = sources(p, now)
+    cal = calendar(p, now)
+    items = []
+
+    def add(id_, ok, ko, detail=None, who=None, tone=None):
+        items.append({"id": id_, "ok": ok, "ko": ko, "detail": detail, "who": who, "tone": tone or ("ok" if ok else "warn" if ok is None else "stop")})
+
+    cn = cal.get("now") or {}
+    rules = cal.get("rules") or {}
+    if rules.get("no_weekend"):
+        add("weekend", not cn.get("weekend"), "주말이 아님" if not cn.get("weekend") else "주말(토·일 한국 시간)이라 진입 쉼",
+            None if not cn.get("weekend") else {"until": (cal.get("weekend") or {}).get("to")})
+    if rules.get("macro_blackout_min"):
+        m = cn.get("macro")
+        add("macro", m is None, "미국 경제 발표 앞뒤 시간이 아님" if m is None else f"{m['kind_ko']} 발표 앞뒤 {rules['macro_blackout_min']}분이라 진입 쉼",
+            {"until": m["pause_to"], "ts": m["ts"]} if m else None)
+    if cal.get("events", {}).get("state") != "ok":
+        add("macro_file", None, "경제 발표 일정 파일을 못 읽음(봇도 같은 파일을 봐요)")
+    if paper.get("state") != "ok":
+        add("paper", False, "페이퍼 봇 기록을 못 읽음", {"reason_ko": paper.get("reason_ko")})
+    else:
+        add("paper", not paper.get("stale"), "페이퍼 봇이 돌고 있음" if not paper.get("stale") else "페이퍼 봇 기록이 멈춤(5분 넘게 새 기록 없음)",
+            {"as_of": paper.get("as_of_ms")})
+        acc = (paper.get("accounts") or {}).get(ACCOUNT) or {}
+        pos = acc.get("position")
+        add("position", pos is None, "포지션이 비어 있음" if pos is None else "이미 포지션이 있어 새 진입 안 함(한 번에 하나)",
+            {k: pos.get(k) for k in ("symbol", "side", "strategy_id", "timeframe", "entry_time", "last_mark_roe_net")} if pos else None)
+        if acc.get("halted"):
+            add("paper_halt", False, "페이퍼 계좌가 멈춤", {"reason": acc.get("halt_reason")})
+    for x in execs:
+        r, ko = x["record"], x["name_ko"]
+        if r.get("state") != "ok":
+            add("exec", False, f"{ko} 실행기 기록을 못 읽음", {"reason_ko": r.get("reason_ko")}, who=x["id"])
+            continue
+        add("exec", not r.get("stale"), f"{ko} 실행기가 돌고 있음" if not r.get("stale") else f"{ko} 실행기 기록이 멈춤", {"as_of": r.get("as_of_ms")}, who=x["id"])
+        halted = bool(r.get("halted"))
+        add("halt", not halted, f"{ko} 멈춤 아님" if not halted else f"{ko} 실행기가 멈춤(사람이 풀어야 함)",
+            {"reason": r.get("halt_reason")} if halted else None, who=x["id"])
+        lt = x.get("light") or {}
+        st = lt.get("state")
+        add("light", st != "red", {"green": f"{ko} 신호등 초록", "red": f"{ko} 신호등 빨강이라 따라가지 않음", "building": f"{ko} 신호등 근거 쌓는 중(모두 따라감)",
+                                  "off": f"{ko} 신호등 꺼짐(모두 따라감)"}.get(st, f"{ko} 신호등 모름"),
+            {k: lt.get(k) for k in ("n", "wins", "need_wins", "min_win", "have")}, who=x["id"], tone="ok" if st in ("green", "building", "off") else "stop" if st == "red" else "warn")
+    sig = read_signals(p["paper"], ACCOUNT, now, keep=1)
+    last = (sig.get("rows") or [None])[0] if sig.get("state") == "ok" else None
+    blocked = [i for i in items if i["ok"] is False]
+    head = ("지금 진입할 수 있어요 · 신호를 기다리는 중" if not blocked else
+            "지금은 새 진입 안 해요: " + blocked[0]["ko"])
+    return {"now_ms": now, "ready": not blocked, "head_ko": head, "items": items,
+            "last_signal": {k: last.get(k) for k in ("t", "strategy", "tf", "symbol", "side", "stage", "ko")} if last else None,
+            "signals": {k: sig.get(k) for k in ("state", "reason_ko", "stages")}, "next_pause": cn.get("next"),
+            "pause_until": cn.get("pause_until")}
+
+
 # ================================================================ the live checks (livecheck.db, liveimprove.db; read-only)
 # loss card labels (paperbot/livecheck.py build_card, strongest first): id, the label as the card says it, the chip's tone
 CARD_KINDS = (("gap", "실거래-페이퍼 차이", "bad"), ("bigger", "평소보다 큰 손실", "bad"), ("streak", "연속 손실", "warn"),
@@ -1571,6 +2030,25 @@ def scorecard(p: dict, execs: list) -> dict:
     """매매법 성적표, computed now with liveimprove's own functions (read_paper, exec_follow, scorecard: the same numbers and
     status words as ``python -m paperbot.liveimprove score``) over the paper database and the executors' followed trades,
     against deploy/combo.live-ac.expected.json. Every database read-only (mode=ro, query_only)."""
+    got = live_card(p, execs, ("strategy",))
+    if got.get("state") != "ok":
+        return got
+    card, trades, problems, follow, LI = got["card"], got["trades"], got["problems"], got["follow"], got["LI"]
+    o = card["overall"]
+    return {"state": "ok", "path": p["paper"], "source": "live", "n": len(trades),
+            "since_ms": min((t["entry_time"] for t in trades), default=None),
+            "overall": {**_score_row(o), "break_even": o.get("break_even"), "roll": {str(k): v for k, v in (o.get("roll") or {}).items()}},
+            "rows": [_score_row(r) for r in card["cuts"]["strategy"]],
+            "words": [LI.SMALL, LI.OK, LI.WATCH, LI.BAD], "small_n": LI.SMALL_N, "check_n": LI.CHECK_N, "family": LI.family_size(got["ref"], "strategy"),
+            "luck_ko": LI.LUCK_NOTE, "how_ko": list(LI.READ_HOW[1:]), "problems": problems,
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"),
+                       "followed": follow.get(x["id"]) is not None} for x in execs],
+            "cmd": f"{SERVER_PY}python -m paperbot.liveimprove score"}
+
+
+def live_card(p: dict, execs: list, cuts: tuple) -> dict:
+    """liveimprove's scorecard over the paper database now (read-only), with the asked cuts: {"state": "ok", "card", "trades",
+    "ref", "follow", "problems", "LI"} or the honest state of what could not be read."""
     from ... import livecheck as LC
     from ... import liveimprove as LI
     path = p["paper"]
@@ -1603,19 +2081,10 @@ def scorecard(p: dict, execs: list) -> dict:
              for x in execs]
     try:
         follow = LI.exec_follow(infos, trades)
-        card = LI.scorecard(trades, ref, follow, cuts=("strategy",))
+        card = LI.scorecard(trades, ref, follow, cuts=cuts)
     except (sqlite3.Error, ValueError, TypeError, KeyError) as exc:
         return _err(path, exc)
-    o = card["overall"]
-    return {"state": "ok", "path": path, "source": "live", "n": len(trades),
-            "since_ms": min((t["entry_time"] for t in trades), default=None),
-            "overall": {**_score_row(o), "break_even": o.get("break_even"), "roll": {str(k): v for k, v in (o.get("roll") or {}).items()}},
-            "rows": [_score_row(r) for r in card["cuts"]["strategy"]],
-            "words": [LI.SMALL, LI.OK, LI.WATCH, LI.BAD], "small_n": LI.SMALL_N, "check_n": LI.CHECK_N, "family": LI.family_size(ref, "strategy"),
-            "luck_ko": LI.LUCK_NOTE, "how_ko": list(LI.READ_HOW[1:]), "problems": problems,
-            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"),
-                       "followed": follow.get(x["id"]) is not None} for x in execs],
-            "cmd": f"{SERVER_PY}python -m paperbot.liveimprove score"}
+    return {"state": "ok", "card": card, "trades": trades, "ref": ref, "follow": follow, "problems": problems, "LI": LI}
 
 
 def ledger_cmds(row: dict) -> list:
@@ -1888,5 +2357,36 @@ def register(app, ctx) -> dict:
         p = paths()
         return _cached(key("settings", p), lambda: json_finite(settings(p, int(time.time() * 1000))))
 
+    @app.get("/api/v4/livebots/rank")
+    def get_livebots_rank():
+        """실거래 › 순위: per strategy its paper and live record, 7-day signals, 5-year numbers and status word (5 s cache)."""
+        p = paths()
+        return _cached(key("rank", p), lambda: json_finite(rank(p, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/calendar")
+    def get_livebots_calendar():
+        """실거래 › 일정: US macro releases with the bot's pause windows, the weekend, whether entries may be made now (5 s cache)."""
+        p = paths()
+        return _cached(key("calendar", p), lambda: json_finite(calendar(p, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/map")
+    def get_livebots_map():
+        """실거래 › 지도: wins so far against the 5-year bands, and the record by regime, coin, KST block and side (5 s cache)."""
+        p = paths()
+        return _cached(key("map", p), lambda: json_finite(map_view(p, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/costs")
+    def get_livebots_costs():
+        """실거래 › 비용: how far each executor's trades fall behind the paper trades they followed, and why some were not (5 s cache)."""
+        p = paths()
+        return _cached(key("costs", p), lambda: json_finite(costs(p, int(time.time() * 1000))))
+
+    @app.get("/api/v4/livebots/now")
+    def get_livebots_now():
+        """실거래 (관제 · 지금): what stands between now and the next live entry (5 s cache)."""
+        p = paths()
+        return _cached(key("now", p), lambda: json_finite(whynow(p, int(time.time() * 1000))))
+
     return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf",
-                       "/api/v4/livebots/safety", "/api/v4/livebots/shadows", "/api/v4/livebots/settings"], "paths": paths}
+                       "/api/v4/livebots/safety", "/api/v4/livebots/shadows", "/api/v4/livebots/settings", "/api/v4/livebots/rank",
+                       "/api/v4/livebots/calendar", "/api/v4/livebots/map", "/api/v4/livebots/costs", "/api/v4/livebots/now"], "paths": paths}
