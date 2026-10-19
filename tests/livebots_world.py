@@ -435,3 +435,40 @@ def shadow_db(path: str, pnls: list, since: int = T0) -> str:
     s.put_state("combo_run", since, {"version": "combo-v2", "taker_fee": 0.0005, "members": [], "config": {**CONFIG, "name": "B 안정형"}})
     s.close()
     return path
+
+
+# ---------------------------------------------------------------- the 실거래 분석 팀's own file (paperbot/liveteam.py)
+TEAM_LEAD = {"headline": "페이퍼 48번 중 31번 이김: 현실 기대 범위의 아래쪽, 아직 판단은 이릅니다", "verdict": "지켜보기",
+             "summary": ["페이퍼 승률 64.6%는 현실 숫자(75%)보다 낮지만 48번이면 우연으로도 나올 수 있는 범위(p=0.07)입니다",
+                         "F4_FAN이 10번 중 1번만 이겨 성적표에서 '확실히 나쁨'입니다", "MEXC는 3연패로 멈춰 있습니다(사람이 풀어야 함)"],
+             "good": ["N08_ICHI_WR 15번 모두 이김"], "worries": ["F4_FAN", "MEXC 멈춤"], "watch_next": ["다음 20번의 승률", "F4_FAN의 다음 5번"],
+             "ideas": [{"idea": "F4_FAN을 강하락 장세에서 빼면 나아지는가", "why": "실거래 10번 중 9번 손실, 그중 6번이 강하락",
+                        "test": "2020-24로 정하고 2025-26에서 한 번 확인, 그다음 그림자 봇 2주"}]}
+
+
+def team_db(folder: str, p: dict, now: int = NOW) -> str:
+    """liveteam.db made by paperbot/liveteam.py itself (FakeRunner answers): a decision meeting at 40 trades (done, with an
+    idea), a weekly report, a quiet week and a meeting whose plan limit stopped it."""
+    from paperbot import liveteam as T
+    from paperbot.agents import runner as R
+    path = os.path.join(folder, "liveteam.db")
+    os.environ[T.DB_ENV] = path
+    conn = T.connect(path)
+    try:
+        src = T.sources(now, p)
+        answers = {"risk": {"headline": "바이비트 -8.35달러, MEXC는 3연패로 멈춤", "points": ["바이비트 19번 중 12번 이김", "MEXC 멈춤은 규칙대로"],
+                            "worry": "MEXC가 멈춘 동안 페이퍼 진입을 못 따라감", "luck": "아직 거래가 적어 우연이 큼"},
+                   "stats": {"headline": "48번 중 31번: 현실 기대보다 낮지만 우연 범위 안", "points": ["현실 75%면 31번 이하일 확률 7%"],
+                             "worry": None, "luck": "p=0.07, 아직 결론 못 냄"},
+                   "market": {"headline": "횡보장에서 8번 중 4번", "points": ["강하락 8번", "SOL 16번"], "worry": None, "luck": "칸마다 10번 미만"},
+                   "lead": TEAM_LEAD}
+        T.tick(conn, src, R.FakeRunner(answers=answers), T.BUDGET_DEFAULT)
+        T.quiet(conn, "weekly", "weekly:2026-10-12", now - 7 * DAY, "지난주 닫힌 거래가 없어 AI 회의 없이 넘어갑니다")
+        T.tick(conn, src, R.FakeRunner(answers=answers), T.BUDGET_DEFAULT)
+        T.tick(conn, {**src, "now": now + H}, R.FakeRunner(answers=answers, fail={"risk": R.UsageLimitReached("5-hour limit reached")}),
+               T.BUDGET_DEFAULT, only="loss", force=True)
+        T.put_state(conn, "auth", now, {"ok": True, "why": "claude.ai"})
+        T.put_state(conn, "tick", now, {"result": {"state": "done"}, "dry": False})
+    finally:
+        conn.close()
+    return path

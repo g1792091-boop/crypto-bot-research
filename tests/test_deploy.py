@@ -53,19 +53,20 @@ def test_failed_scheduled_jobs_send_one_korean_warning():
 def test_the_owners_check_of_the_units_shows_only_the_settings():
     """The owners' check after a deploy (`systemctl cat <the five jobs> | grep -E ...`): one line per setting, no
     comment that only mentions one (a failure hook per job, the weekly rehearsal, the Obsidian export, the shadow test
-    and the DeepSeek nightly check among them; 1 pinned Claude Code, 1 clean stop)."""
+    and the DeepSeek nightly check among them; 2 pinned Claude Code (agent rooms, 실거래 분석 팀), 1 clean stop)."""
     text = "\n".join(f"# /etc/systemd/system/{u}\n" + (DEPLOY / u).read_text(encoding="utf-8") for u in FA.JOBS_KO)
     for pat in (r"OnFailure|DISABLE_AUTOUPDATER|SuccessExitStatus",
                 r"^(OnFailure=|Environment=DISABLE_AUTOUPDATER|SuccessExitStatus=)"):
         got = [ln for ln in text.splitlines() if re.search(pat, ln)]
         n = len(FA.JOBS_KO)
-        assert len(got) == n + 2 and sum("OnFailure" in ln for ln in got) == n, (pat, got)
+        assert len(got) == n + 3 and sum("OnFailure" in ln for ln in got) == n, (pat, got)
     # 13 jobs (paper v4): the 7 before, the DeepSeek nightly check and the nightly backup (owners' G29, G31), the
     # custom-value shadow (owners' "2번", 2026-10-10), the live daily check, the live watcher and the weekly live
-    # scorecard (2026-10-19): 15 lines
-    assert len(FA.JOBS_KO) == 13 and {"paperbot-dscheck.service", "paperbot-backup.service",
+    # scorecard (2026-10-19), and the 실거래 분석 팀 (owners 10/19; its pinned Claude Code too): 17 lines
+    assert len(FA.JOBS_KO) == 14 and {"paperbot-dscheck.service", "paperbot-backup.service",
                                       "paperbot-paramshadow.service", "paperbot-livecheck.service",
-                                      "paperbot-livewatch.service", "paperbot-liveimprove.service"} <= set(FA.JOBS_KO)
+                                      "paperbot-livewatch.service", "paperbot-liveimprove.service",
+                                      "paperbot-liveteam.service"} <= set(FA.JOBS_KO)
 
 
 def test_a_failed_backup_warns_and_the_dscheck_bar_cache_is_never_copied():

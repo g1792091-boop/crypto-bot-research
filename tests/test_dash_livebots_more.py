@@ -267,3 +267,28 @@ def test_the_new_routes_are_behind_the_login_and_answer(client):
     assert got["/api/v4/livebots/rank"].json()["n_settings"] == 3
     assert got["/api/v4/livebots/now"].json()["ready"] is False
     assert set(got["/api/v4/livebots/costs"].json()["accts"]) == {"bybit", "mexc"}
+
+
+# ---------------------------------------------------------------- 분석팀
+def test_team_reads_the_teams_own_file(rich, tmp_path, monkeypatch):
+    d = os.path.dirname(rich["paper"])
+    monkeypatch.setenv("PAPERBOT_LIVETEAM_DB", os.path.join(d, "liveteam.db"))   # first: restored after the test
+    W.team_db(d, rich)
+    t = L.team(rich, NOW, units=lambda u: ("inactive", "disabled"))
+    assert t["state"] == "ok" and [r["id"] for r in t["roster"]] == ["risk", "stats", "market", "lead"]
+    assert t["timer"]["on"] is False and t["timer"]["on_cmd"] == "sudo systemctl enable --now paperbot-liveteam.timer"
+    assert [(m["kind"], m["state"]) for m in t["meetings"]] == [("loss", "failed"), ("weekly", "done"), ("weekly", "quiet"),
+                                                               ("checkpoint", "done")]
+    cp = t["meetings"][-1]
+    assert [x["name"] for x in cp["messages"]] == ["방패", "저울", "나침반", "등대"] and cp["verdict"] == "지켜보기"
+    assert cp["result"]["ideas"][0]["test"].startswith("2020-24") and cp["ideas"][0]["status"] == "제안"
+    assert t["usage"]["day_calls"] == 9 and t["when"]["paper_n"] == 48 and t["when"]["checkpoint_next"] == 80
+    assert t["auth"]["ok"] is True and t["ideas_open"] == 2
+    assert "AI 사용 한도" in t["meetings"][0]["why"]
+
+
+def test_team_before_it_was_ever_turned_on(world, tmp_path, monkeypatch):
+    monkeypatch.setenv("PAPERBOT_LIVETEAM_DB", str(tmp_path / "none" / "liveteam.db"))
+    t = L.team(world, NOW, units=lambda u: ("", ""))
+    assert t["state"] == "missing" and "분석팀" in t["reason_ko"] and t["roster"] and t["timer"]["on"] is False
+    assert t["when"]["weekly_next_ms"] == W.T0 + 7 * DAY + H                  # NOW is Monday 19:00 KST: next Monday 10:00

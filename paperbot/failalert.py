@@ -64,6 +64,10 @@ JOBS_KO = {
                                      "미리 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
                                      "/opt/paperbot/venv/bin/python -m paperbot.liveimprove weekly --dry-run\n"
                                      "지금 다시: sudo systemctl start paperbot-liveimprove"),
+    "paperbot-liveteam.service": ("실거래 분석 팀(AI, 15분마다)",
+                                  "15분 뒤 다시 시도 (실거래 봇·주문·설정과 무관, 읽기만 함)\n"
+                                  "기록: sudo journalctl -u paperbot-liveteam -n 50\n"
+                                  "끄기: sudo systemctl disable --now paperbot-liveteam.timer"),
     "paperbot-shadow200.service": ("딥시크 200 그림자 시험(기록만)",
                                    "15분마다 다시 돎 (빠진 부분은 다음 실행이 스스로 메움, 계좌·주문과 무관)\n"
                                    "지금 상태: cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.shadow200 status"),

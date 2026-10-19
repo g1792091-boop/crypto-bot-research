@@ -1,0 +1,42 @@
+# 실거래 분석 팀 (paperbot/liveteam.py, docs/live1019-start-ko.md 15): four AI members (Claude Code in print mode on the
+# owners' subscription login, no tools: paperbot/agents/runner.py) read what the live side recorded and explain it in
+# plain Korean: a loss meeting after two live losses in a row, a decision meeting at 40, 80 ... paper trades, a weekly
+# report on Mondays from 10:00 KST. Read-only towards the bots (the dashboard's own read-only readers: the paper and
+# executor databases mode=ro, the executors' key file hidden below, no exchange call, no order, no setting changed).
+# Writes only /var/lib/paperbot/liveteam.db; the conclusion goes to the live bot's private chats, quietly.
+# INSTALLED OFF: the owners turn the timer on after about 20 live trades:
+#   sudo systemctl enable --now paperbot-liveteam.timer
+# By hand (fake answers, nothing sent):
+#   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liveteam run weekly --force --dry-run
+[Unit]
+Description=paperbot 실거래 분석 팀 (AI, read-only, no orders)
+After=network-online.target paperbot-combo.service paperbot-livecheck.service
+Wants=network-online.target
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# the subscription token (CLAUDE_CODE_OAUTH_TOKEN) of the agent rooms; then the live bot's Telegram (later files win)
+EnvironmentFile=/etc/paperbot/agents.env
+EnvironmentFile=-/etc/paperbot/live.env
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL BACKUP_PASSPHRASE ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN
+Environment=PATH=/var/lib/paperbot/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=DISABLE_AUTOUPDATER=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.liveteam tick
+Nice=15
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryHigh=1500M
+MemoryMax=2G
+TimeoutStartSec=70min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/paperbot
+ReadOnlyPaths=-/var/lib/paperbot/paper3.db -/var/lib/paperbot/combo -/var/lib/paperbot/exec -/var/lib/paperbot/livecheck.db -/var/lib/paperbot/liveimprove.db -/var/lib/paperbot/daily3.db -/var/lib/paperbot/agents3.db -/var/lib/paperbot/inbox.db -/var/lib/paperbot/checkpoint.db -/var/lib/paperbot/lab /opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot/executor.env -/etc/paperbot/dash.env -/etc/paperbot/debate.env -/var/lib/paperbot/debate -/var/backups/paperbot

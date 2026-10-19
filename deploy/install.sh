@@ -353,6 +353,14 @@ systemctl daemon-reload
 systemctl enable --now paperbot-liveimprove.timer >/dev/null 2>&1 \
   || echo "paperbot-liveimprove.timer could not be enabled: sudo systemctl enable --now paperbot-liveimprove.timer"
 echo "paperbot-liveimprove.timer: 자동 시작 $(systemctl is-enabled paperbot-liveimprove.timer 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active paperbot-liveimprove.timer 2>/dev/null || echo 알 수 없음)"
+# 실거래 분석 팀 (paperbot/liveteam.py; docs/live1019-start-ko.md 15): AI members on the owners' Claude plan, read-only
+# towards the bots, no order. Installed OFF: never enabled or started here (it spends the owners' plan); the owners turn
+# it on after about 20 live trades. Its real state is printed.
+for u in paperbot-liveteam.service paperbot-liveteam.timer; do
+  install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+echo "paperbot-liveteam.timer (실거래 분석 팀): 자동 시작 $(systemctl is-enabled paperbot-liveteam.timer 2>/dev/null || echo 꺼짐), 지금 $(systemctl is-active paperbot-liveteam.timer 2>/dev/null || echo 꺼짐) · 켜기: sudo systemctl enable --now paperbot-liveteam.timer"
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"

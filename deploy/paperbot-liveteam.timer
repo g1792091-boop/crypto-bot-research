@@ -1,0 +1,12 @@
+# 실거래 분석 팀 (deploy/paperbot-liveteam.service): one pass every 15 minutes, off the agent rooms' minutes. Installed
+# off; the owners turn it on after about 20 live trades: sudo systemctl enable --now paperbot-liveteam.timer
+[Unit]
+Description=Run the 실거래 분석 팀 every 15 minutes
+
+[Timer]
+OnCalendar=*:7/15
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

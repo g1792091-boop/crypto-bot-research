@@ -1284,7 +1284,7 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                          "entry_time": t["entry_ts"], "exit_time": t["exit_ts"], "exit_reason": reason, "reason_ko": EXIT_KO.get(reason, reason),
                          "win": (t["pnl"] or 0) > 0, "locked": bool(t.get("stop_final") and t.get("entry_price") and (t["stop_final"] - t["entry_price"]) * t["side"] > 0),
                          "paper": ({k: pt.get(k) for k in ("id", "entry_time", "exit_time", "entry_price", "exit_price", "pnl", "roe", "exit_reason", "lock_roe",
-                                                             "strategy_id", "timeframe")} if pt else None),
+                                                             "strategy_id", "timeframe", "fees", "funding", "qty")} if pt else None),
                          "paper_scaled": pt["pnl"] * scale if pt and pt.get("pnl") is not None and scale else None,
                          "diff": (t["pnl"] - pt["pnl"] * scale) if pt and pt.get("pnl") is not None and t.get("pnl") is not None and scale else None,
                          "slip_vs_paper": slip, "gap_ms": abs(pt["entry_time"] - t["paper_time"]) if pt and t.get("paper_time") is not None else None,
@@ -1800,7 +1800,8 @@ def map_view(p: dict, now: int) -> dict:
         cuts[cut] = rows
     return {"now_ms": now, "paper": {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms")},
             "card": {k: got.get(k) for k in ("state", "reason_ko", "reason", "path", "problems")},
-            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state")} for x in execs],
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko")}
+                      for x in execs],
             "band": bands, "cuts": cuts, "symbols": (ref or {}).get("symbols"), "reg5_names": (ref or {}).get("reg5_names")}
 
 
@@ -1864,10 +1865,101 @@ def costs(p: dict, now: int) -> dict:
                    "missed": sorted(missed.values(), key=lambda m: -m["n"]),
                    "rows": [{k: r.get(k) for k in ("key", "symbol", "side", "entry_time", "exit_time", "pnl", "roe", "commission", "funding",
                                                    "slip_vs_paper", "diff", "paper_scaled", "est", "strategy_id", "timeframe", "reason_ko")}
-                            | {"paper_roe": (r.get("paper") or {}).get("roe")} for r in rows[:60]]}
+                            | {"paper_roe": (r.get("paper") or {}).get("roe"), "qty": r.get("qty"), "entry_price": r.get("entry_price"),
+                               "notional": r["qty"] * r["entry_price"] if r.get("qty") and r.get("entry_price") else None,
+                               "paper_fees": (r.get("paper") or {}).get("fees"), "paper_funding": (r.get("paper") or {}).get("funding")}
+                            for r in rows[:60]]}
     pa = accts.get("paper") or {}
     return {"now_ms": now, "paper": {"state": pa.get("state"), "n": pa.get("n"), "reason_ko": pa.get("reason_ko")},
             "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in EXECS], "accts": out, "match_ms": MATCH_MS}
+
+
+# ---------------------------------------------------------------- 분석팀 (실거래 분석 팀, owners 10/19)
+TEAM_UNIT = "paperbot-liveteam.timer"
+TEAM_KEEP = 40
+TEAM_ON_KO = "sudo systemctl enable --now paperbot-liveteam.timer"
+TEAM_OFF_KO = "sudo systemctl disable --now paperbot-liveteam.timer"
+
+
+def team(p: dict, now: int, units=None) -> dict:
+    """GET /api/v4/livebots/team: the 실거래 분석 팀 (paperbot/liveteam.py) read-only from its own liveteam.db: the members,
+    the newest meetings with every member's words, the lead's conclusion and the ideas, the AI used today and in 7 days,
+    whether its timer is on, the login check, and when the next meetings come."""
+    from ... import liveteam as T
+    path = os.environ.get(T.DB_ENV) or T.DB_DEFAULT
+    roster = [{"id": k, **v} for k, v in T.ROLES.items()]
+    try:
+        budget, budget_err = T.parse_budget(os.environ.get(T.BUDGET_ENV)), None
+    except ValueError as exc:
+        budget, budget_err = dict(T.BUDGET_DEFAULT), str(exc)
+    if units is None:
+        from ... import livecheck as LC
+        units = LC.unit_state
+    active, enabled = units(TEAM_UNIT)
+    timer = {"unit": TEAM_UNIT, "active": active or None, "enabled": enabled or None, "on": active == "active",
+             "on_cmd": TEAM_ON_KO, "off_cmd": TEAM_OFF_KO}
+    m9 = T.monday_09(now)
+    nxt = m9 + 7 * DAY + (T.WEEKLY_HOUR - 9) * HOUR if now >= m9 + (T.WEEKLY_HOUR - 9) * HOUR else m9 + (T.WEEKLY_HOUR - 9) * HOUR
+    paper_n = None
+    try:
+        pc = open_ro(p["paper"])
+        try:
+            got = pc.execute("SELECT COUNT(*) FROM trades WHERE account_id = ?", (ACCOUNT,)).fetchone() if "trades" in _tables(pc) else None
+            paper_n = _i(got[0]) if got else None
+        finally:
+            pc.close()
+    except (OSError, sqlite3.Error):
+        paper_n = None
+    when = {"weekly_next_ms": nxt, "paper_n": paper_n, "checkpoint_every": T.CHECK_EVERY,
+            "checkpoint_next": ((paper_n or 0) // T.CHECK_EVERY + 1) * T.CHECK_EVERY if paper_n is not None else None,
+            "loss_rule_ko": "실거래 실행기의 마지막 닫힌 거래 2개가 모두 손실이면 (3일 안)"}
+    base = {"now_ms": now, "path": path, "roster": roster, "kinds": T.KIND_KO, "verdicts": list(T.VERDICTS), "timer": timer,
+            "budget": budget, "budget_error": budget_err, "when": when, "small_n": T.SMALL_N}
+    try:
+        conn = open_ro(path)
+    except FileNotFoundError:
+        return {**base, **_missing(path, "분석팀 기록 파일이 아직 없어요 (분석팀을 켜고 첫 회의가 열리면 생겨요)")}
+    except (OSError, sqlite3.Error) as exc:
+        return {**base, **_err(path, exc)}
+    try:
+        conn.execute("BEGIN")
+        if "meetings" not in _tables(conn):
+            return {**base, **_missing(path, NO_TABLE_KO)}
+        ms = conn.execute("SELECT id, kind, key, title, started_ts, finished_ts, state, why, headline, verdict, result, sent, calls, "
+                          "tokens, dry FROM meetings ORDER BY id DESC LIMIT ?", (TEAM_KEEP,)).fetchall()
+        ids = [m[0] for m in ms] or [-1]
+        q = ",".join("?" * len(ids))
+        msgs = conn.execute(f"SELECT meeting, seq, role, ts, text, error, tokens FROM messages WHERE meeting IN ({q}) ORDER BY meeting, seq",
+                            ids).fetchall()
+        ideas = conn.execute(f"SELECT id, meeting, ts, idea, why, test, status FROM ideas WHERE meeting IN ({q}) ORDER BY id", ids).fetchall()
+        day = T.kst_date(now)
+        u_day = conn.execute("SELECT COALESCE(SUM(calls),0), COALESCE(SUM(tokens),0) FROM usage WHERE day = ?", (day,)).fetchone()
+        u_week = conn.execute("SELECT COALESCE(SUM(calls),0) FROM usage WHERE ts >= ?", (now - 7 * DAY,)).fetchone()
+        st = {r[0]: (_i(r[1]), _j(r[2])) for r in conn.execute("SELECT k, ts, data FROM state")}
+    except sqlite3.Error as exc:
+        return {**base, **_err(path, exc)}
+    finally:
+        conn.close()
+    by_m: dict = {}
+    for mid, seq, role, ts, text, error, tok in msgs:
+        r = T.ROLES.get(role) or {}
+        by_m.setdefault(mid, []).append({"seq": _i(seq), "role": role, "name": r.get("name"), "title": r.get("title"), "ts": _i(ts),
+                                         "text": text or "", "error": error, "tokens": _i(tok)})
+    idea_by: dict = {}
+    for iid, mid, ts, idea, why, test, status in ideas:
+        idea_by.setdefault(mid, []).append({"id": _i(iid), "ts": _i(ts), "idea": idea, "why": why, "test": test, "status": status})
+    meetings = []
+    for mid, kind, key, title, s0, s1, state, why, head, verdict, result, sent, calls, tokens, dry in ms:
+        meetings.append({"id": _i(mid), "kind": kind, "kind_ko": T.KIND_KO.get(kind, kind), "key": key, "title": title, "started_ts": _i(s0),
+                         "finished_ts": _i(s1), "state": state, "why": why, "headline": head, "verdict": verdict, "result": _j(result),
+                         "sent": None if sent is None else bool(sent), "calls": _i(calls), "tokens": _i(tokens), "dry": bool(dry),
+                         "messages": by_m.get(mid, []), "ideas": idea_by.get(mid, [])})
+    auth = st.get("auth")
+    tick = st.get("tick")
+    return {**base, "state": "ok", "meetings": meetings,
+            "usage": {"day_calls": _i(u_day[0]), "day_tokens": _i(u_day[1]), "week_calls": _i(u_week[0])},
+            "auth": {"ts": auth[0], **(auth[1] or {})} if auth else None, "last_tick": {"ts": tick[0], **(tick[1] or {})} if tick else None,
+            "ideas_open": sum(1 for v in idea_by.values() for i in v if i["status"] == "제안")}
 
 
 # ---------------------------------------------------------------- 지금 (왜 지금 진입 안 하나, owners 10/19)
@@ -2381,6 +2473,12 @@ def register(app, ctx) -> dict:
         p = paths()
         return _cached(key("costs", p), lambda: json_finite(costs(p, int(time.time() * 1000))))
 
+    @app.get("/api/v4/livebots/team")
+    def get_livebots_team():
+        """실거래 › 분석팀: the 실거래 분석 팀's meetings, words, conclusions and ideas, its AI use and its switch (5 s cache)."""
+        p = paths()
+        return _cached(key("team", p), lambda: json_finite(team(p, int(time.time() * 1000))))
+
     @app.get("/api/v4/livebots/now")
     def get_livebots_now():
         """실거래 (관제 · 지금): what stands between now and the next live entry (5 s cache)."""
@@ -2389,4 +2487,5 @@ def register(app, ctx) -> dict:
 
     return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades", "/api/v4/livebots/signals", "/api/v4/livebots/perf",
                        "/api/v4/livebots/safety", "/api/v4/livebots/shadows", "/api/v4/livebots/settings", "/api/v4/livebots/rank",
-                       "/api/v4/livebots/calendar", "/api/v4/livebots/map", "/api/v4/livebots/costs", "/api/v4/livebots/now"], "paths": paths}
+                       "/api/v4/livebots/calendar", "/api/v4/livebots/map", "/api/v4/livebots/costs", "/api/v4/livebots/now",
+                       "/api/v4/livebots/team"], "paths": paths}
