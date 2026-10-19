@@ -96,7 +96,8 @@ def test_each_shadow_writes_its_own_database_never_the_live_one_or_an_executors(
     assert live["paper_db"] not in dbs.values()
     # no other paper bot config in the repository writes there
     others = {_load(p)["db"] for p in DEPLOY.glob("combo.*.json")
-              if not p.name.startswith("combo.shadow-") and not p.name.endswith(".expected.json")}   # backtest reference
+              if not p.name.startswith("combo.shadow-")
+              and not p.name.endswith((".expected.json", ".likely.json"))}   # backtest references, not configs
     assert others and not others & set(dbs.values())
     # and no executor follows a shadow: every "paper_db" an owner guide or example gives an executor is another file
     named = set()

@@ -85,7 +85,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS meetings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,
-    key TEXT NOT NULL UNIQUE,          -- weekly:2026-10-26 | loss:<the pair> | checkpoint:40
+    key TEXT NOT NULL UNIQUE,          -- weekly:<Monday, YYYY-MM-DD> | loss:<the pair> | checkpoint:40
     title TEXT NOT NULL,
     started_ts INTEGER NOT NULL,
     finished_ts INTEGER,
