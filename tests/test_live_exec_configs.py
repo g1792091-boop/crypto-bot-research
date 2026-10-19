@@ -26,7 +26,8 @@ def test_no_removed_limits_and_fixed_rules_kept():
     for name in ("executor.live-bybit.json", "executor.live-mexc.json"):
         r = _load(name)["risk"]
         assert "daily_max_loss_usd" not in r
-        assert r["max_consecutive_losses"] == 3 and r["max_drawdown_pct"] == 0.5 and r["max_loss_frac"] == 0.35
+        assert "max_consecutive_losses" not in r            # owners 10-19: no loss-streak halt
+        assert r["max_drawdown_pct"] == 0.5 and r["max_loss_frac"] == 0.35
         assert r["max_leverage"] == 40 and r["kill_file"] == "/var/lib/paperbot/STOP"
         assert r["allowed_symbols"] == ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"]
 

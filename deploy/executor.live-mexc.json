@@ -12,7 +12,6 @@
   "signal_light_min_win": 0.9,
   "risk": {
     "max_drawdown_pct": 0.5,
-    "max_consecutive_losses": 3,
     "max_leverage": 40,
     "max_notional_usd": 10000,
     "max_loss_frac": 0.35,

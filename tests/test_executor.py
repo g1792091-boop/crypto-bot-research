@@ -376,6 +376,21 @@ def test_consecutive_losses_halt(tmp_path):
     w.store.close()
 
 
+def test_no_streak_halt_when_the_limit_is_left_out(tmp_path):
+    # owners 10-19 "연패하면 봇 거래 정지는 없애주라": max_consecutive_losses absent / null = no streak halt
+    assert risk_cfg(tmp_path, max_consecutive_losses=None).problems() == []
+    w = World(tmp_path, max_consecutive_losses=None)
+    for k in range(4):
+        w.fake.set_price(BTC, 100.0)
+        w.paper(stop=95.0, entry_time=w.clock.t - 10_000)
+        w.loop()
+        assert w.fake.pos[BTC] == 5.0, k
+        w.fake.set_price(BTC, 94.0)
+        w.loop()
+    assert not w.ex.risk.halted and w.ex.risk.consecutive_losses == 4
+    w.store.close()
+
+
 def test_entry_limits_from_risk_config(tmp_path):
     w = World(tmp_path, max_leverage=10, max_notional_usd=300.0)
     w.paper(stop=95.0, qty=5.0, lev=50)
