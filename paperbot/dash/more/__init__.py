@@ -57,6 +57,8 @@ data (dash.app.Data), rooms, db, daily_db, agents_db, checkpoint_db, candles (th
             읽기만; 매매법 상세 카드 + 분석 › 커스텀값 비교; 없으면 '아직 첫 계산 전'; 참고용, 판정 아님)
     livebots 실거래 (#/livebots): 바이비트 · MEXC 주문 실행기와 그 둘이 따르는 페이퍼 계좌(A+C 합본)를 읽기만 (live-ac.db,
             실행기 DB 두 개, 실행기 설정 두 개; 키 파일은 열지 않음; 없으면 '수집 전', 못 읽으면 '못 읽음'과 이유)
+    livemissed 실거래 › 못 탄 신호 (#/livebots/missed): 1포지션 규칙으로 못 탄 신호의 가상 결과 vs 실제로 탄 거래
+            (livecheck.db missed, live-ac.db; 읽기만)
 """
 from __future__ import annotations
 
@@ -92,6 +94,7 @@ MODULES += ("vplevels",)                       # vp-chart: the bot's own 매물�
 MODULES += ("shadowleague",)                   # 그림자 리그 (#/league): shadow_league.db next to agents3.db, read-only, 5 s cache
 MODULES += ("paramlive",)                      # 커스텀값 실시간 비교: paramshadow's last.json / error.json, read-only, mtime cache
 MODULES += ("livebots",)                       # 실거래 (#/livebots): live-ac.db + the two executors' databases and configs, read-only
+MODULES += ("livemissed",)                     # 실거래 › 못 탄 신호: livecheck.db missed (the watcher's pass) + live-ac.db, read-only, 5 s cache
 
 
 def register_all(app, **kw) -> dict:

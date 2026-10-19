@@ -1613,6 +1613,11 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
             if card.get("sent"):
                 out.append(("card", card["key"], CRITICAL if card["loud"] else INFO, card["text"]))
         out += changes_pass(src, cc, now_ms, exp, send)
+        try:                                        # 못 탄 신호 성적 (D1): view only, bounded (30 sims / 10 s), sends nothing
+            from .livemissed import missed_pass
+            missed_pass(src, cc, now_ms)
+        except Exception as exc:  # noqa: BLE001  never in the way of the alarms below
+            print(f"missed_pass: {type(exc).__name__}: {exc}", file=sys.stderr)
         if conn is None:
             cc.close()
         # ---- conditions

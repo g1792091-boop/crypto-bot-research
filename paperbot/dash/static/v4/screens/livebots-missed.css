@@ -1,0 +1,96 @@
+/* 실거래 › 못 탄 신호 (screens/livebots-missed.js). The question on top with two blocks side by side (실제로 탄 거래 vs 못 탄
+   신호(가상): wins and losses at the same size, green and red only for meaning), the rows below (one line on a wide screen,
+   stacked on a phone, never sideways), the honest foot always on. Tokens only (both skins), every font size a --t-* token.
+   Nothing loops; the one swap is still under prefers-reduced-motion. */
+
+.lbm { display: grid; gap: 12px; min-width: 0; }
+.lbm-body { display: grid; gap: 12px; min-width: 0; }
+.lbm-body[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- the head: the question and the two blocks */
+.lbm-head { display: grid; gap: 10px; min-width: 0; padding: 14px; border-radius: var(--r-lg); border: 1px solid var(--accent-line);
+  background: radial-gradient(80% 140% at 0% 0%, var(--accent-soft), transparent 60%), var(--console); }
+.lbm-htop { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; min-width: 0; }
+.lbm-htop h2 { margin: 0; color: var(--ink); font: 800 var(--t-lg)/1.25 var(--f-body); }
+.lbm-sub { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.5; }
+.lbm-warn { margin: 0; padding: 6px 10px; border-radius: var(--r-sm); border: 1px solid var(--warn-line); background: var(--warn-soft);
+  color: var(--ink); font-size: var(--t-xs); line-height: 1.5; overflow-wrap: anywhere; }
+
+.lbm-vs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: stretch; min-width: 0; }
+.lbm-vsx { align-self: center; color: var(--muted); font: 400 var(--t-md)/1 var(--f-pixel); }
+@media (max-width: 759px) {
+  .lbm-vs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .lbm-vsx { display: none; }
+}
+.lbm-blk { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line);
+  background: var(--surface); }
+.lbm-blk.taken { border-color: var(--accent-line); }
+.lbm-blk.missed { border-style: dashed; border-color: var(--line-2); }
+.lbm-blk h3 { margin: 0; color: var(--ink); font: 800 var(--t-sm)/1.3 var(--f-body); }
+.lbm-blk.missed h3 { color: var(--ink-2); }
+.lbm-n { color: var(--ink); font: 400 var(--t-xl)/1 var(--f-led); white-space: nowrap; }
+.lbm-closed { margin: 0; color: var(--muted); font-size: var(--t-2xs); }
+.lbm-wl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; min-width: 0; }
+.lbm-wl > span { display: grid; justify-items: center; gap: 0; min-width: 0; padding: 4px 6px; border-radius: var(--r-sm); }
+.lbm-w { border: 1px solid var(--up-line); background: var(--up-soft); }
+.lbm-l { border: 1px solid var(--down-line); background: var(--down-soft); }
+.lbm-wl .k { color: var(--ink-2); font-size: var(--t-2xs); }
+.lbm-wl b { font: 400 var(--t-xl)/1.05 var(--f-led); }            /* 이김 and 짐: the same size */
+.lbm-w b { color: var(--up); }
+.lbm-l b { color: var(--down); }
+.lbm-kv { display: grid; gap: 2px; margin: 0; min-width: 0; }
+.lbm-kv > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; font-size: var(--t-xs); line-height: 1.55; }
+.lbm-kv dt { color: var(--muted); }
+.lbm-kv dd { margin: 0; color: var(--ink); font-weight: 700; }
+.lbm-kv dd.up { color: var(--up); }
+.lbm-kv dd.down { color: var(--down); }
+.lbm-extra { margin: 0; color: var(--ink-2); font-size: var(--t-2xs); line-height: 1.5; }
+.lbm-blk .pp { justify-self: start; }
+.lbm-small { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
+.lbm-small:empty { display: none; }
+.lbm-small b { color: var(--warn); }
+.lbm-pass { margin: 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.5; }
+.lbm-pass:empty { display: none; }
+.lbm-stale { color: var(--warn); font-weight: 700; }
+
+/* ---------------------------------------------------------------- the rows */
+.lbm-list { min-width: 0; }
+.lbm-row { display: grid; align-items: center; column-gap: 12px; row-gap: 4px; min-width: 0; padding: 9px 2px; border-top: 1px solid var(--line);
+  grid-template-columns: 92px 84px minmax(0, 1fr) minmax(0, 1.3fr) minmax(150px, max-content) 74px minmax(0, 1.3fr);
+  grid-template-areas: "t c s why res hold tk"; font-size: var(--t-xs); }
+.lbm-row:first-child { border-top: 0; }
+.lbm-t { grid-area: t; color: var(--muted); white-space: nowrap; }
+.lbm-c { grid-area: c; display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.lbm-c b { color: var(--ink); font-size: var(--t-sm); }
+.lbm-s { grid-area: s; min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.lbm-why { grid-area: why; min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
+.lbm-res { grid-area: res; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; justify-self: start; min-width: 0; max-width: 100%;
+  padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--ink-2); line-height: 1.5; }
+.lbm-res i { font-style: normal; }
+.lbm-res b { font-weight: 800; white-space: nowrap; }
+.lbm-res small { color: var(--muted); font-size: var(--t-2xs); overflow-wrap: anywhere; }
+.lbm-res.up { border-color: var(--up-line); background: var(--up-soft); color: var(--up); }
+.lbm-res.down { border-color: var(--down-line); background: var(--down-soft); color: var(--down); }
+.lbm-res.open { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); }
+.lbm-res.thin { border-style: dashed; color: var(--muted); }
+.lbm-res.bad { border-color: var(--down-line); color: var(--down); }
+.lbm-hold { grid-area: hold; color: var(--ink-2); white-space: nowrap; text-align: right; }
+.lbm-tk { grid-area: tk; min-width: 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.lbm-tk.open { color: var(--accent); }
+@media (max-width: 1099px) {
+  .lbm-row { grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "t c s hold" "why why res res" "tk tk tk tk"; }
+}
+@media (max-width: 759px) {
+  .lbm-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "t c hold" "s s s" "why why why" "res res res" "tk tk tk";
+    column-gap: 8px; padding: 10px 2px; }
+}
+
+/* ---------------------------------------------------------------- the foot (always on) */
+.lbm-foot { display: grid; gap: 6px; min-width: 0; padding: 10px 14px; border-radius: var(--r-md); border: 1px dashed var(--line-2);
+  background: var(--surface); }
+.lbm-foot p { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
+.lbm-foot p:first-child { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .lbm-vs.swap { animation: none; }
+}

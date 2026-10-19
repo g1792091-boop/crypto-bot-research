@@ -37,6 +37,7 @@ import {mapView} from "./livebots-map.js";
 import {costView} from "./livebots-cost.js";
 import {calView} from "./livebots-cal.js";
 import {teamView} from "./livebots-team.js";
+import {missedView} from "./livebots-missed.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -48,6 +49,7 @@ export const TABS = [
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},
   {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},
+  {id: "missed", label: "못 탄 신호", make: (ctx) => missedView(ctx), own: true},
   {id: "perf", label: "성적", make: (ctx) => perfView(ctx), own: true},
   {id: "map", label: "지도", make: (ctx) => mapView(ctx), own: true},
   {id: "cost", label: "비용", make: (ctx) => costView(ctx), own: true},
