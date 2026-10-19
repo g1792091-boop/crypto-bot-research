@@ -122,6 +122,7 @@ sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status 
 - 신호등이 빨강이 되면 텔레그램이 옵니다. 페이퍼는 계속 거래하고, 승률이 돌아오면 실거래도 자동으로 다시 따라갑니다.
 - 페이퍼와 실거래가 같은 신호에 다르게 움직였거나, "거래소 기록과 다릅니다" 알림이 오면 알려 주세요.
 - 며칠 문제없으면 부팅 때 자동으로 켜지게 합니다: `sudo systemctl enable paperbot-combo paperbot-executor paperbot-executor-mexc`.
+- 실거래 메시지(진입·청산·알람·아침 점검)는 두 분 **개인 채팅**으로 받습니다. 12장의 "실거래 텔레그램을 개인 채팅으로"를 한 번 따라 하면 규칙봇 단체방에는 규칙봇 메시지만 남습니다.
 
 **7) 두 분 운영 수칙** (참고 자료 『기술적 분석은 처음이지?』 9장의 "매매를 망치는 습관"을 우리 봇에 맞춘 것)
 
@@ -618,7 +619,47 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
 
 ## 12. 실거래 일일 점검과 알람 (10/19 추가)
 
-서버가 매일 아침 실거래를 대신 점검하고, 2분마다 지켜보다가 문제가 생기면 텔레그램으로 알려 줍니다. 봇과 주문에는 손대지 않고 기록만 읽습니다.
+서버가 매일 아침 실거래를 대신 점검하고, 1분마다 지켜보며 거래와 문제를 텔레그램으로 알려 줍니다. 봇과 주문에는 손대지 않고 기록만 읽습니다.
+
+**실거래 텔레그램을 개인 채팅으로 (한 번만)**
+
+실거래 쪽 메시지(페이퍼 봇 `paperbot-combo`, 두 실행기, 아침 점검과 1분 감시)를 두 분 각자의 봇 개인 채팅으로 보냅니다. 규칙봇 단체방에는 규칙봇 메시지만 남습니다.
+
+1. 두 분이 각자 텔레그램에서 우리 봇을 열고 **시작(Start)** 을 누른 뒤 "hi"를 한 번 보냅니다. 봇은 시작을 누른 사람에게만 보낼 수 있습니다.
+2. 서버에서 개인 채팅 번호를 봅니다(토큰은 화면에 나오지 않고, 아무것도 보내지 않습니다).
+   ```bash
+   sudo -u paperbot bash -c 'set -a; . /etc/paperbot/live.env; cd /opt/crypto-bot-research && /opt/paperbot/venv/bin/python -m paperbot.livecheck chat-ids'
+   ```
+   - 결과 예: `111111111 · 민수 · @minsu · 10/19 21:05`. 두 분 번호만 고릅니다(서버 안내서 [`server-setup-v3.md`](server-setup-v3.md) 4-2의 `chats` 명령으로 보이는 `(private)` 줄과 같은 번호입니다).
+3. 파일을 만듭니다.
+   ```bash
+   sudo nano /etc/paperbot/live-telegram.env
+   ```
+   ```
+   TELEGRAM_CHAT_CRITICAL=111111111,222222222
+   TELEGRAM_CHAT_WARN=111111111,222222222
+   TELEGRAM_CHAT_INFO=111111111,222222222
+   TELEGRAM_SOUND=critical
+   PAPERBOT_COMBO_TRADE_MSGS=0
+   ```
+   - 세 줄 모두 같은 두 번호(쉼표로 구분)를 넣습니다. **빈 줄(`TELEGRAM_CHAT_CRITICAL=`)로 두면 안 됩니다**: 실거래 메시지가 아무 데도 가지 않습니다.
+   - `TELEGRAM_SOUND=critical`: 🚨 알람만 소리가 나고 나머지는 무음입니다. `PAPERBOT_COMBO_TRADE_MSGS=0`: 페이퍼 봇의 날것 진입·청산 줄 대신 1분 감시의 🟢·✅·❌ 메시지가 갑니다.
+   - 권한: `sudo chown root:paperbot /etc/paperbot/live-telegram.env && sudo chmod 640 /etc/paperbot/live-telegram.env` (설치 스크립트도 파일이 있으면 맞춰 줍니다. 내용은 건드리지 않습니다).
+4. 다시 켭니다.
+   - 페이퍼 봇은 바로: `sudo systemctl restart paperbot-combo`
+   - 실행기는 **포지션이 없을 때만**(`executor status`에서 포지션 `null`) 또는 처음 켜기 전에: `sudo systemctl restart paperbot-executor paperbot-executor-mexc`
+   - 아침 점검과 1분 감시는 다음 실행부터 저절로 따릅니다.
+5. 확인: 다음 진입부터 두 분 개인 채팅에 🟢 진입이 오고, 규칙봇 단체방에는 규칙봇 메시지만 남습니다. 전체 모양은 `... -m paperbot.livecheck preview`로 미리 볼 수 있습니다.
+- `executor.env`의 봇 토큰이 `live.env`와 다른 봇이면, 그 봇에도 두 분이 시작(Start)을 눌러야 실행기 메시지가 옵니다.
+
+**실거래 메시지 (1분마다 확인, 한 거래에 한 번씩)**
+
+- 🟢 **진입**: 페이퍼 진입과 거래소마다의 결과(✅ 들어감·증거금·손절 / ⛔ 신호등이 막음 / ⏸ 멈춤 중 / ⚠ 따라가지 않음). 실행기가 답할 때까지(들어감·이유 기록) 최대 3분 기다렸다 한 번 보냅니다.
+- **각 실행기는 포지션을 한 번에 하나만 듭니다.** 바이비트와 MEXC는 서로 다른 계정이라 각자 최대 하나씩, 따로 움직입니다. 그래서 진입 메시지에 거래소가 한 줄씩 나옵니다(`포지션 1/1`).
+- 🔒 **잠금 시작**: 처음 잠금(+10% 확보)만, 거래소 손절이 어디로 옮겨졌는지. 그 뒤 +3%씩 올리는 것은 보내지 않고, 청산 메시지에 마지막 잠금이 나옵니다.
+- ✅ **청산(이김)**: 순ROE, 보유 시간, 잠금, 거래소마다 손익·잔고, 오늘 승패·최근 20번·신호등.
+- ❌ **청산(짐) = 손실 카드**(아래). 🚦 신호등 색이 바뀔 때, 🏁 페이퍼 40번째 거래(미리 정한 판단 기준, 82% 미만이면 소리), ▶️·⏹ 실행기를 켜거나 사람이 껐을 때.
+- 소리: 🚨로 시작하는 메시지만 소리가 납니다(`TELEGRAM_SOUND=critical`). 나머지는 모두 무음입니다.
 
 **아침 메시지 (매일 09:10, 한 통)**
 
@@ -632,9 +673,10 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
   2. **실제 비용**: 어제 닫힌 실거래를 각자의 페이퍼 거래와 짝지어, 진입·청산 가격 차이(bps, +가 불리), 낸 수수료율(가정: 바이비트 0.055%, MEXC 0.08%), 펀딩.
   3. **성적표**: 페이퍼(시작부터 거래·승·승률·최근 20번·최근 40번·손익), 바이비트·MEXC(거래·승률·실현 손익·잔고·멈춤 여부·신호등 색과 신호등이 거른 진입 수), 동전 쌍둥이(참고), 그림자 봇이 있으면 한 줄씩(참고), 그리고 **판단: 거래 40번에서 88% 이상이면 늘리기 검토 / 82~88% 계속 지켜보기 / 82% 미만 멈추고 다시 생각** (남은 거래 수). 20번 미만은 "표본이 작음"이라고 적습니다.
   4. **월요일**에는 지난 7일 요약이 붙습니다.
+  5. **오늘 진입 쉬는 시간**: 앞으로 24시간 안의 미국 경제 발표 앞뒤 30분(`data/macro_events.csv`). 금요일에는 "주말(토·일 KST)은 진입하지 않습니다"가 붙습니다.
 - 결과는 `/var/lib/paperbot/livecheck.db`에도 남습니다(나중에 대시보드용).
 
-**알람 (2분마다 확인, 소리 나게, 같은 문제는 한 번만)**
+**알람 (1분마다 확인, 소리 나게, 같은 문제는 한 번만, 끝에 "지금 할 일:")**
 
 | 알람 | 언제 | 할 일 |
 |---|---|---|
@@ -677,6 +719,7 @@ cd /opt/crypto-bot-research
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck run --day 2026-10-19 --dry-run   # 10/19 09:00 ~ 10/20 09:00, 보내지도 저장하지도 않고 화면에만
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck show                             # 마지막 아침 메시지와 대조 차이 전체
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck watch --dry-run                  # 지금 울릴 알람이 있는지(보내지 않음)
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck preview                          # 모든 메시지 모양을 예시로(보내지 않음)
 sudo systemctl list-timers paperbot-livecheck.timer paperbot-livewatch.timer                         # 다음 실행 시각
 ```
 

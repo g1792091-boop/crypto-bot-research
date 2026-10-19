@@ -150,10 +150,13 @@ def test_the_template_unit_runs_the_shadow_config_below_the_live_paper_bot():
     assert svc["ExecStart"] == ["/opt/paperbot/venv/bin/python -m paperbot.combo run "
                                 "--config /opt/crypto-bot-research/deploy/combo.shadow-%i.json"]
     # the live paper bot's user, folder, environment, restart policy and hardening
-    for k in ("Type", "User", "Group", "WorkingDirectory", "EnvironmentFile", "Restart", "RestartSec", "NotifyAccess",
+    for k in ("Type", "User", "Group", "WorkingDirectory", "Restart", "RestartSec", "NotifyAccess",
               "WatchdogSec", "TimeoutStopSec", "NoNewPrivileges", "PrivateTmp", "ProtectSystem", "ProtectHome",
               "RestrictAddressFamilies", "ReadWritePaths", "InaccessiblePaths"):
         assert svc[k] == live[k], k
+    # live.env as the live paper bot; never the owners' private chats of the live messages (the shadows send nothing)
+    assert svc["EnvironmentFile"] == ["/etc/paperbot/live.env"]
+    assert live["EnvironmentFile"] == ["/etc/paperbot/live.env", "-/etc/paperbot/live-telegram.env"]
     assert "-/etc/paperbot/executor.env" in svc["InaccessiblePaths"][0].split()
     assert u["[Unit]"]["StartLimitIntervalSec"] == ["0"]
     assert "paperbot-combo.service" in u["[Unit]"]["After"][0].split()

@@ -9,6 +9,8 @@ the text already starts with its own emoji (🔔, 📈, ✅ …).
 Sound (owners' decision 2026-10-05 21:15 KST, "전부 다 무음으로"): EVERY message goes silent; the level mark and the
 first line still say how urgent it is. ``TELEGRAM_SOUND=1`` in the env file brings back the level-based sound
 (CRITICAL and WARN ring, INFO silent); the words 'loud' / '소리' below describe that optional mode.
+``TELEGRAM_SOUND=critical`` (owners 2026-10-19, the live bots' private chats, /etc/paperbot/live-telegram.env) rings
+CRITICAL only. Each TELEGRAM_CHAT_* may hold several chat ids separated by commas (``chat_ids``).
 
 ``Router`` holds the live runner's noisy lines (1m gaps, clock skew, signal timeouts) for the hourly digest and
 rings only past a threshold; real emergencies (liquidation, job failure, …) are never held: the first CRITICAL of a
@@ -660,16 +662,33 @@ def sound_on(env=None) -> bool:
     return str((os.environ if env is None else env).get("TELEGRAM_SOUND", "")).strip() == "1"
 
 
-def silent(level: str, sound: bool) -> bool:
-    """Telegram's disable_notification: always, unless sound is on; then INFO only (CRITICAL and WARN ring)."""
+def sound_mode(env=None):
+    """TELEGRAM_SOUND as ``silent`` takes it: True for "1" (CRITICAL and WARN ring), "critical" (owners 10-19, the
+    live chats: only CRITICAL rings), False otherwise (unset or "0": every message silent)."""
+    v = str((os.environ if env is None else env).get("TELEGRAM_SOUND", "")).strip().lower()
+    return True if v == "1" else ("critical" if v == "critical" else False)
+
+
+def silent(level: str, sound) -> bool:
+    """Telegram's disable_notification: always, unless sound is on; then INFO only (CRITICAL and WARN ring); with
+    sound "critical" everything but CRITICAL."""
+    if sound == "critical":
+        return level != CRITICAL
     return (not sound) or level == INFO
 
 
+def chat_ids(value) -> list:
+    """A TELEGRAM_CHAT_* value as chat ids: one id, or several separated by commas ('111, 222')."""
+    return [x.strip() for x in str(value or "").split(",") if x.strip()]
+
+
 class TelegramNotifier:
-    """Sends to one chat per level. Token and chat ids come from the
+    """Sends to the chat(s) of each level. Token and chat ids come from the
     environment so they never land in the repository:
     TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_CRITICAL, TELEGRAM_CHAT_WARN,
-    TELEGRAM_CHAT_INFO (WARN and INFO fall back to CRITICAL's chat)."""
+    TELEGRAM_CHAT_INFO (WARN and INFO fall back to CRITICAL's chat). Each value may name several chat ids separated
+    by commas (owners 10-19: the live bots write to each owner's private chat with the bot); a message is accepted
+    when at least one chat accepted it, and each chat that failed is logged. One id behaves as before."""
 
     def __init__(self, timeout: float = 10.0, retry_wait_max: Optional[float] = None, sleep=None) -> None:
         self.retry_wait_max = RETRY_WAIT_MAX_S if retry_wait_max is None else float(retry_wait_max)
@@ -683,7 +702,7 @@ class TelegramNotifier:
             INFO: os.environ.get("TELEGRAM_CHAT_INFO") or critical,
         }
         self.timeout = timeout
-        self.sound = sound_on()
+        self.sound = sound_mode()
 
     def send(self, level: str, text: str) -> bool:
         """True when Telegram accepted the message; False when delivery failed (never raises). A 429 'retry after
@@ -696,27 +715,38 @@ class TelegramNotifier:
         return self.send_once(level, text)[0]
 
     def send_once(self, level: str, text: str) -> tuple[bool, Optional[float]]:
-        """One sendMessage: (accepted, None), or (False, seconds Telegram asked to wait) on a 429, (False, None) on
-        any other failure. Never raises."""
+        """One sendMessage to each chat id of the level: (accepted, None), or (False, seconds Telegram asked to wait)
+        on a 429, (False, None) on any other failure. Accepted = at least one chat accepted it (then nothing is sent
+        again: a retry would repeat it to the chats that have it). Never raises."""
         level, body = telegram_text(level, text)
-        data = urllib.parse.urlencode({
-            "chat_id": self.chats.get(level, self.chats[CRITICAL]),
-            "text": body,
-            "disable_notification": json.dumps(silent(level, self.sound)),
-        }).encode()
+        ids = chat_ids(self.chats.get(level, self.chats[CRITICAL])) or [""]
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        try:
-            urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
-        except urllib.error.HTTPError as exc:
-            wait = retry_after(exc) if exc.code == 429 else None
-            print(f"telegram send failed: HTTP {exc.code}" + (f", retry after {wait:g}s" if wait is not None else ""),
-                  file=sys.stderr)
-            return False, wait
-        except Exception as exc:  # delivery failure must not stop trading logic
-            print(f"telegram send failed: {type(exc).__name__}", file=sys.stderr)
-            return False, None
-        count_send(level)               # G13: never raises, never delays past TG_SENDS_WAIT_S
-        return True, None
+        accepted, waits = False, []
+        for i, cid in enumerate(ids, 1):
+            tag = f" (chat {i} of {len(ids)})" if len(ids) > 1 else ""
+            data = urllib.parse.urlencode({
+                "chat_id": cid,
+                "text": body,
+                "disable_notification": json.dumps(silent(level, self.sound)),
+            }).encode()
+            try:
+                urllib.request.urlopen(url, data=data, timeout=self.timeout).read()
+            except urllib.error.HTTPError as exc:
+                wait = retry_after(exc) if exc.code == 429 else None
+                print(f"telegram send failed{tag}: HTTP {exc.code}"
+                      + (f", retry after {wait:g}s" if wait is not None else ""), file=sys.stderr)
+                waits.append(wait)
+                continue
+            except Exception as exc:  # delivery failure must not stop trading logic
+                print(f"telegram send failed{tag}: {type(exc).__name__}", file=sys.stderr)
+                waits.append(None)
+                continue
+            accepted = True
+        if accepted:
+            count_send(level)               # G13: never raises, never delays past TG_SENDS_WAIT_S
+            return True, None
+        known = [w for w in waits if w is not None]
+        return False, (max(known) if known else None)
 
 
 RETRY_WAIT_MAX_S = 30.0          # the longest a blocking send waits on a 429 (Telegram usually asks 5-40 s)

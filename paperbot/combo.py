@@ -1453,6 +1453,8 @@ class ComboRunner:
         e = self.book.engines.get(ACCOUNT)
         if e is None or not self.cfg.telegram:
             return
+        if os.environ.get("PAPERBOT_COMBO_TRADE_MSGS", "").strip() == "0":
+            return          # the live watcher's 🟢 / ✅ / ❌ messages (paperbot/livecheck.py) take their place
         was_entry, was_n = before.get(ACCOUNT, (None, 0))
         for t in e.trades[was_n:]:
             self.notifier.send(INFO, (

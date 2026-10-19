@@ -326,8 +326,9 @@ fi
 # 실거래 일일 점검 and 실시간 감시 (paperbot/livecheck.py; docs/live1019-start-ko.md "실거래 일일 점검과 알람"):
 # read-only towards the paper bot and the executors (their databases opened read-only, executor.env never opened, no
 # exchange account, no order); the morning check reads public Binance klines and sends one Telegram message at 09:10
-# KST, the watcher (every 2 minutes) sends a loud message once per new problem. Installed AND switched on here (their
-# timers): with no executor running yet they only say what they see. Their real state is printed.
+# KST, the watcher (every minute) sends the live trades and a loud message once per new problem. Installed AND
+# switched on here (their timers): with no executor running yet they only say what they see. Their real state is
+# printed.
 for u in paperbot-livecheck.service paperbot-livecheck.timer paperbot-livewatch.service paperbot-livewatch.timer; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
@@ -336,6 +337,11 @@ for t in paperbot-livecheck.timer paperbot-livewatch.timer; do
   systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
   echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
 done
+# The owners' private chats for the live messages (deploy/live-telegram.env.example): an owner makes the file; this
+# script never creates it or touches its lines (an empty chat line would silence the live bots), only its permissions.
+if [ -f /etc/paperbot/live-telegram.env ]; then
+  chown root:paperbot /etc/paperbot/live-telegram.env && chmod 640 /etc/paperbot/live-telegram.env
+fi
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"

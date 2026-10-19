@@ -1,17 +1,19 @@
-# 실거래 실시간 감시 (paperbot/livecheck.py watch, docs/live1019-start-ko.md "실거래 일일 점검과 알람"): every 2 minutes,
-# one LOUD Telegram message per new condition (de-duplicated in /var/lib/paperbot/livecheck.db, re-armed once it
-# clears): an executor did not follow a paper entry although its signal light allowed it; an executor's open position
-# without a recorded stop, or its state older than 10 minutes while it should run; the paper bot silent for 10 minutes
-# or the rule bot's newest 1m bar older than 5 minutes; an executor 25% below its equity peak (silent good news at
-# +50% / +100%); a loss card per losing paper trade (3부 ①, silent unless it is bigger than usual, differs from the
-# real trade or is the 2nd loss in a row), the paper below its backtest range (②), a summary when an executor halts
-# (⑤), low disk or memory on this shared server. Read-only towards the bots: their databases opened read-only, the executors' configs read as JSON,
-# executor.env never opened, no exchange call, no order, no Binance call. `systemctl is-active/is-enabled` tells
-# whether an executor should be running. Writes only /var/lib/paperbot/livecheck.db. Started by paperbot-livewatch.timer.
+# 실거래 실시간 감시 (paperbot/livecheck.py watch, docs/live1019-start-ko.md section 12): every minute (one pass takes
+# about half a second). The live Telegram stream: each paper entry, first lock and exit with what each executor did
+# (🟢 / 🔒 / ✅, ❌ = the loss card), a signal light that changes (🚦), the 40th paper trade (🏁), an executor started or
+# stopped by hand (▶️ / ⏹); and one LOUD message per new problem, re-armed once it clears (de-duplicated in
+# /var/lib/paperbot/livecheck.db): an executor that did not follow a paper entry its light allowed, an open position
+# without a recorded stop, an executor or the paper bot or the rule bot's bars gone quiet, equity 25% below its peak,
+# the paper below its backtest range, a halt summary, low disk or memory on this shared server. Where they go and what
+# rings: /etc/paperbot/live-telegram.env (the owners' private chats, TELEGRAM_SOUND=critical), loaded after live.env.
+# Read-only towards the bots: their databases opened read-only, the executors' configs read as JSON, executor.env never
+# opened, no exchange call, no order, no Binance call; `systemctl is-active / is-enabled / show` only reads.
+# Writes only /var/lib/paperbot/livecheck.db. Started by paperbot-livewatch.timer.
 # By hand (prints what would be sent; sends nothing, writes nothing):
 #   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck watch --dry-run
+# Every message type with sample numbers: ... -m paperbot.livecheck preview
 [Unit]
-Description=paperbot live watcher every 2 minutes (실거래 실시간 감시; read-only, no orders)
+Description=paperbot live watcher every minute (실거래 실시간 감시; read-only, no orders)
 After=network-online.target
 # a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
 OnFailure=paperbot-failed@%n.service
@@ -23,6 +25,8 @@ Group=paperbot
 WorkingDirectory=/opt/crypto-bot-research
 # TELEGRAM_BOT_TOKEN and the chats; systemd reads the file before the sandbox below applies
 EnvironmentFile=/etc/paperbot/live.env
+# the owners' private chats for the live messages (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
 # the exchange key and the dead-man URL are not this job's business
 UnsetEnvironment=BINANCE_API_KEY BINANCE_API_SECRET DEADMAN_URL BACKUP_PASSPHRASE
 Environment=PYTHONDONTWRITEBYTECODE=1

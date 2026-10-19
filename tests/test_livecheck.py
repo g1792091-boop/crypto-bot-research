@@ -11,7 +11,7 @@ import pytest
 from paperbot import livecheck as LC
 from paperbot import livereplay as LR
 from paperbot.models import Signal, SignalOutcome, TradeRecord
-from paperbot.notify import CRITICAL, INFO, ListNotifier, telegram_text
+from paperbot.notify import CRITICAL, INFO, WARN, ListNotifier, telegram_text
 from paperbot.store3 import Store3
 
 MIN = 60_000
@@ -389,8 +389,8 @@ def test_loud_when_parity_or_costs_flag_or_an_executor_is_halted(tmp_path):
     assert "- 대조에서 이유를 모르는 차이 1개" in text and "- 바이비트 실행기 멈춤" in text
     assert "- 바이비트 수수료가 0.070%로 가정 0.055%보다 높습니다" in text
     assert "- 신호 재계산에만 있음 21:00 BTC 롱 F15_LON_BRK 1시간 (진입 신호)" in text
-    assert "멈춤(낙폭 50%)" in text and "사람이 풀어야 합니다" in text
-    assert "livecheck show 결과를 개발자에게 보내 주세요" in text and "거래소 앱의 체결 내역" in text
+    assert "멈춤(낙폭 50%)" in text and "지금 할 일: 멈춘 실행기는 이유를 확인한 뒤 사람이 풉니다" in text
+    assert "지금 할 일: 대조 차이 전체를 개발자에게 보내 주세요" in text and "지금 할 일: 거래소 앱의 체결 내역" in text
 
 
 def test_a_crash_of_the_replay_still_sends_the_rest(tmp_path, capsys):
@@ -399,7 +399,8 @@ def test_a_crash_of_the_replay_still_sends_the_rest(tmp_path, capsys):
     def broken(*a):
         raise KeyError("members")
     out = LC.run_check(src, day="2026-10-20", now_ms=NOW, replay=broken, notifier=ListNotifier())
-    assert "대조: 못 함 — 다시 계산 중 오류(KeyError: 'members'); 개발자에게 알려 주세요" in out["text"]
+    assert "대조: 못 함 — 다시 계산 중 오류가 났습니다. 개발자에게 알려 주세요" in out["text"]
+    assert out["text"].endswith("자세히: KeyError: 'members'")                  # raw text only on the last line
     assert "성적표(시작부터)" in out["text"] and "KeyError" in capsys.readouterr().err
 
 
@@ -417,7 +418,8 @@ def test_binance_down_and_missing_databases(tmp_path):
     def down(*a):
         raise LR.MarketDown("URLError: no route")
     out = LC.run_check(src, day="2026-10-20", now_ms=NOW, replay=down, notifier=ListNotifier())
-    assert "대조: 못 함 — 바이낸스에 연결하지 못해 다시 계산을 못 했습니다(URLError: no route)" in out["text"]
+    assert "대조: 못 함 — 바이낸스에 연결하지 못해 다시 계산을 못 했습니다" in out["text"]
+    assert out["text"].endswith("자세히: URLError: no route")
     assert out["text"].splitlines()[0] == "📋 실거래 일일 점검 · 대조는 못 함" and out["level"] == INFO
     gone = LC.Sources(db=str(tmp_path / "o.db"), paper_db=str(tmp_path / "none.db"), rule_db="/nonexistent",
                       combo_config="/nonexistent", shadow_glob="/nonexistent/*.db",
@@ -632,6 +634,10 @@ def fresh(src, now):
     conn.close()
 
 
+def msgs(n, start):
+    return [(lv, m) for lv, m in n.messages if m.startswith(start)]
+
+
 def keys(out, event="fire"):
     return [k for e, k, _lvl, _t in out if e == event]
 
@@ -659,15 +665,16 @@ def test_watch_a_paper_entry_not_followed_alarms_once_and_rearms(tmp_path):
     key = f"{LC.ACCOUNT}|{BTC}|{T - 5 * MIN}"
     out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
     assert keys(out) == [f"follow:bybit:{key}"]
-    level, text = n.messages[0]
+    level, text = msgs(n, "실거래가 페이퍼를")[0]
     assert level == CRITICAL and text.startswith("실거래가 페이퍼를 따라가지 않았습니다 · 바이비트")
     assert "페이퍼 진입 13:55 BTC 롱 F15_LON_BRK 1시간 (5분 지남)" in text
     assert "신호등 근거 쌓는 중(0/20번, 그동안 모두 따라감) · 멈춤 아님" in text
     assert "실행기 기록: 이 진입에 대한 기록 없음" in text
-    assert "다음: 거래소 앱에서 포지션을 확인하고 sudo journalctl -u paperbot-executor -n 50" in text
+    assert text.splitlines()[-1].startswith("지금 할 일: 거래소 앱에서 포지션을 확인하고 sudo journalctl -u "
+                                            "paperbot-executor -n 50")
     assert telegram_text(CRITICAL, text)[1].startswith("🚨 실거래가 페이퍼를 따라가지 않았습니다")
     assert LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False) == []
-    assert len(n.messages) == 1                                         # once per condition
+    assert len(msgs(n, "실거래가 페이퍼를")) == 1                          # once per condition
     # the executor followed after all: the condition clears without a message
     from paperbot.executor import ExecStore
     st = ExecStore(src.executors[0].db, lock=False)
@@ -675,7 +682,7 @@ def test_watch_a_paper_entry_not_followed_alarms_once_and_rearms(tmp_path):
     st.commit()
     st.close()
     out = LC.run_watch(src, now_ms=T + 4 * MIN, notifier=n, units=Units(), exists=lambda p: False)
-    assert keys(out, "clear") == [f"follow:bybit:{key}"] and len(n.messages) == 1
+    assert keys(out, "clear") == [f"follow:bybit:{key}"] and len(msgs(n, "실거래가 페이퍼를")) == 1
     conn = sqlite3.connect(src.db)
     assert conn.execute("SELECT active FROM watch WHERE key = ?", (f"follow:bybit:{key}",)).fetchone() == (0,)
     assert conn.execute("SELECT COUNT(*) FROM seen").fetchone() == (3,)
@@ -710,7 +717,7 @@ def test_watch_follow_is_quiet_when_the_executor_may_skip_the_entry(tmp_path):
     n = ListNotifier()
     out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
     assert keys(out) == [f"follow:bybit:{LC.ACCOUNT}|{BTC}|{T - 5 * MIN}"]
-    assert "신호등 초록(최근 20번 20승 100%, 기준 85%)" in n.messages[0][1]
+    assert "신호등 초록(최근 20번 20승 100%, 기준 85%)" in msgs(n, "실거래가 페이퍼를")[0][1]
 
 
 def test_watch_a_closed_paper_trade_and_the_executors_own_words(tmp_path):
@@ -724,14 +731,15 @@ def test_watch_a_closed_paper_trade_and_the_executors_own_words(tmp_path):
     st.close()
     n = ListNotifier()
     LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
-    text = n.messages[0][1]
+    text = msgs(n, "실거래가 페이퍼를")[0][1]
     assert "(20분 지남, 페이퍼는 이미 청산)" in text
     assert "실행기 기록: paper 진입이 200초 전이라 따라 하지 않습니다" in text
     # an hour later the trade is out of the window: cleared silently
     fresh(src, T + H1)
     _set_bot(src.executors[0].db, ts=T + H1 - MIN)
     out = LC.run_watch(src, now_ms=T + H1, notifier=n, units=Units(), exists=lambda p: False)
-    assert keys(out, "clear") == [f"follow:bybit:{LC.ACCOUNT}|{BTC}|{entry}"] and len(n.messages) == 1
+    assert keys(out, "clear") == [f"follow:bybit:{LC.ACCOUNT}|{BTC}|{entry}"]
+    assert len(msgs(n, "실거래가 페이퍼를")) == 1
 
 
 def test_watch_open_position_without_a_stop_and_a_stale_executor(tmp_path):
@@ -907,16 +915,19 @@ def test_loss_card_contents_against_the_reference(tmp_path):
     n = ListNotifier()
     out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
     assert [k for e, k, _l, _t in out if e == "card"] == [key]
-    level, text = n.messages[-1]
-    assert level == INFO and text.startswith("🧾 손실 카드 · F15_LON_BRK 1시간 (#1, 돌파)")
-    assert "BTC 롱 · 진입 10/20 12:00 → 청산 13:30 (1.5시간)" in text
-    assert "순ROE -40.0% · 손절 · 손절 atr3, 거리 1.00%" in text
-    assert "장세 강상승 · 진입 14시 · 먼저 +16.0%까지 갔음" in text
-    assert "백테스트 승률 90.0% (처음 보는 2025-26 80%, 40번) · 손실 보통 -45% / 최악 -60% · 손절까지 보통 1.5시간" in text
-    assert "이 장세 92%(50번) · 이 코인 90%(60번)" in text and "약한 자리" not in text
-    assert "연속 손실 1번째 (백테스트 최장 3번, 처음 보는 기간 5번)" in text
-    assert "바이비트: 따라감, 순ROE -42.0%, 진입 +5.0bps / 청산 +3.0bps" in text
-    assert "MEXC: 신호등이 막음(따라가지 않음)" in text and text.endswith("판정: 정상 범위 손실")
+    level, text = msgs(n, "❌ 청산")[0]
+    assert level == INFO and text.split("\n") == [
+        "❌ 청산 · BTC 롱 · 순ROE -40.0%",
+        "F15_LON_BRK 1시간 · 돌파 · 세팅 1번 · 1.5시간 보유",
+        "진입 12:00 → 손절 13:30 · 손절 atr3 거리 1.00% · 먼저 +16.0%까지",
+        "장세 강상승 · 14시 · 백테스트 승률 90.0% (처음 보는 기간 80%)",
+        "손실 보통 -45% / 최악 -60% · 손절까지 보통 1.5시간",
+        "이 장세 92%(50번) · 이 코인 90%(60번)",
+        "연속 손실 1번째 (백테스트 최장 3번, 처음 보는 기간 5번)",
+        "바이비트 -$1.05 (-42.0%) · 진입 +5.0 / 청산 +3.0bps",
+        "MEXC     ⛔ 신호등이 막음",
+        "판정: 정상 범위 손실"]
+    assert telegram_text(INFO, text) == (INFO, text)
     assert LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False) == []
     conn = sqlite3.connect(src.db)
     row = conn.execute("SELECT label, loud, streak, sent, data FROM loss_cards").fetchone()
@@ -934,7 +945,7 @@ def test_card_labels_and_when_a_card_is_loud():
     meta = {"member_order": 1, "rdims": {"reg5": 4, "hr": 3}}
     c = LC.build_card(t, meta, [t], EXP, [])
     assert c["label"] == "백테스트에서도 약한 자리" and c["weak"] == ["장세"] and not c["loud"]   # 70% in 횡보
-    assert "→ 백테스트에서도 약한 자리" in LC.card_text(c)
+    assert "→ 백테스트에서도 약한 자리" in LC.card_text(c) and "지금 할 일" not in LC.card_text(c)
     c = LC.build_card(t, meta, [prev, t], EXP, [])
     assert c["label"] == "연속 손실 2번째" and c["loud"]
     c = LC.build_card(dict(t, roe=-0.7), meta, [t], EXP, [])
@@ -944,7 +955,8 @@ def test_card_labels_and_when_a_card_is_loud():
     c = LC.build_card(t, meta, [prev, t], EXP, gap)
     assert c["label"] == "실거래-페이퍼 차이" and c["loud"]
     text = LC.card_text(c)
-    assert text.startswith("손실 카드 · F15_LON_BRK 1시간") and telegram_text(CRITICAL, text)[1].startswith("🚨 손실 카드")
+    assert text.startswith("🚨 ❌ 청산 · SOL 롱 · 순ROE -40.0%") and telegram_text(CRITICAL, text) == (CRITICAL, text)
+    assert text.splitlines()[-1] == "지금 할 일: 거래소 앱의 체결 가격·시각을 페이퍼와 비교해 보세요"
     assert LC.live_gap([{"status": "followed", "pnl": 0.3, "entry_bps": 1.0, "exit_bps": 1.0, "exit_ts": T}], T)
     assert not LC.live_gap([{"status": "followed", "pnl": -3, "entry_bps": 4.0, "exit_bps": -2.0, "exit_ts": T}], T)
     no_ref = LC.build_card(dict(t, strategy="NEW"), meta, [t], EXP, [])
@@ -952,17 +964,17 @@ def test_card_labels_and_when_a_card_is_loud():
 
 
 def test_a_card_waits_for_the_executor_to_close(tmp_path):
-    entry, exit_ = T - H1, T - 5 * MIN
+    entry, exit_ = T - H1, T - MIN
     open_x = xtrade(entry, fills=False)
     open_x["exit_ts"] = None
     src = card_setup(tmp_path, [loss(entry, exit_)], [entered(entry)], x_trades=[open_x])
     n = ListNotifier()
     LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
-    assert not [m for _l, m in n.messages if "손실 카드" in m]
-    fresh(src, T + 31 * MIN)
-    out = LC.run_watch(src, now_ms=T + 31 * MIN, notifier=n, units=Units(), exists=lambda p: False)
-    assert [e for e, *_ in out].count("card") == 1
-    assert "바이비트: 따라감, 아직 닫는 중" in [m for _l, m in n.messages if "손실 카드" in m][0]
+    assert not msgs(n, "❌ 청산")                                    # the executor is still closing
+    fresh(src, T + 2 * MIN)
+    out = LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert [e for e, *_ in out].count("card") == 1                   # 3 minutes after the paper exit at most
+    assert "바이비트 아직 닫는 중" in msgs(n, "❌ 청산")[0][1]
 
 
 def test_noise_stop_is_stored_and_shown_in_the_next_morning_check(tmp_path):
@@ -1111,8 +1123,8 @@ def test_server_health_disk_and_memory(tmp_path):
     mem = [m for _l, m in n.messages if m.startswith("메모리 부족")][0]
     assert mem.startswith("메모리 부족 · 남은 메모리 400MB")
     assert "많이 쓰는 순서: paperbot-live3 1.4GB, paperbot-agents 900MB, paperbot-combo 700MB" in mem
-    first = [ln for ln in mem.splitlines() if ln.startswith("먼저 끌 것")][0]
-    assert first == ("먼저 끌 것(실험): sudo systemctl stop paperbot-agents paperbot-combo-shadow@b "
+    first = mem.splitlines()[-1]
+    assert first == ("지금 할 일: 실험부터 끄기 sudo systemctl stop paperbot-agents paperbot-combo-shadow@b "
                      "candleague-live")
     for keep in ("paperbot-live3", "paperbot-combo ", "paperbot-executor"):
         assert keep not in first.replace("paperbot-combo-shadow", "")
@@ -1124,7 +1136,7 @@ def test_server_health_disk_and_memory(tmp_path):
     assert sorted(keys(out, "clear")) == ["disk", "memory"]
     state.update(mem=300 * 1024 ** 2)
     assert keys(run(T + 6 * MIN)) == ["memory"]
-    assert LC.memory_lines([("paperbot-live3.service", 10)])[1].startswith("끌 만한 실험 서비스가 켜져 있지 않습니다")
+    assert LC.memory_lines([("paperbot-live3.service", 10)])[-1].startswith("지금 할 일: 끌 만한 실험 서비스가")
     assert LC.memory_lines([])[0].startswith("(서비스별 메모리를 읽지 못함")
 
 
@@ -1172,4 +1184,397 @@ def test_the_morning_check_leaves_fresh_losses_to_the_watcher(tmp_path):
     conn.close()
     n = ListNotifier()
     LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
-    assert [m for _l, m in n.messages if m.startswith("🧾 손실 카드")]
+    assert msgs(n, "❌ 청산")
+
+
+# ====================================================================== 4부: 실거래 텔레그램
+def _tg(monkeypatch, env: dict, fail=(), code=400):
+    """notify.TelegramNotifier's urlopen recorded; the chat ids in ``fail`` answer with HTTP ``code``."""
+    import urllib.error
+    import urllib.parse
+    from paperbot import notify
+    for k in ("TELEGRAM_CHAT_CRITICAL", "TELEGRAM_CHAT_WARN", "TELEGRAM_CHAT_INFO", "TELEGRAM_SOUND"):
+        monkeypatch.delenv(k, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    sent = []
+
+    class Resp:
+        def read(self):
+            return b"{}"
+
+    def urlopen(url, data=None, timeout=None):
+        d = {k: v[0] for k, v in urllib.parse.parse_qs(data.decode()).items()}
+        if d["chat_id"] in fail:
+            raise urllib.error.HTTPError(url, code, "x", {"Retry-After": "3"}, None)
+        sent.append(d)
+        return Resp()
+    monkeypatch.setattr(notify.urllib.request, "urlopen", urlopen)
+    return sent
+
+
+def test_several_private_chats_per_level_and_one_failing_never_stops_the_others(monkeypatch, capsys):
+    from paperbot.notify import TelegramNotifier
+    sent = _tg(monkeypatch, {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_CRITICAL": "111, 222"})
+    n = TelegramNotifier()
+    assert n.send(INFO, "🟢 진입 · BTC 롱 · 40배") is True
+    assert [d["chat_id"] for d in sent] == ["111", "222"]           # WARN / INFO fall back to the same two
+    sent = _tg(monkeypatch, {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_CRITICAL": "111,222"}, fail={"111"})
+    n = TelegramNotifier(sleep=lambda s: None)
+    assert n.send(CRITICAL, "a") is True and [d["chat_id"] for d in sent] == ["222"]
+    assert capsys.readouterr().err.count("telegram send failed (chat 1 of 2): HTTP 400") == 1
+    # accepted by one: never sent again (a 429 elsewhere does not repeat it to the chat that has it)
+    sent = _tg(monkeypatch, {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_CRITICAL": "111,222"}, fail={"111"}, code=429)
+    assert TelegramNotifier(sleep=lambda s: None).send_once(CRITICAL, "b") == (True, None)
+    assert [d["chat_id"] for d in sent] == ["222"]
+    _tg(monkeypatch, {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_CRITICAL": "111,222"}, fail={"111", "222"}, code=429)
+    assert TelegramNotifier(sleep=lambda s: None).send_once(CRITICAL, "c") == (False, 3.0)
+
+
+def test_sound_critical_rings_only_the_alarms(monkeypatch):
+    from paperbot.notify import TelegramNotifier
+    for mode, want in (("critical", ["false", "true", "true"]), ("CRITICAL", ["false", "true", "true"]),
+                       ("1", ["false", "false", "true"]), ("0", ["true", "true", "true"]), (None, ["true"] * 3)):
+        env = {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_CRITICAL": "111"}
+        if mode is not None:
+            env["TELEGRAM_SOUND"] = mode
+        sent = _tg(monkeypatch, env)
+        n = TelegramNotifier()
+        for level in (CRITICAL, WARN, INFO):
+            n.send(level, "x")
+        assert [d["disable_notification"] for d in sent] == want, mode
+
+
+def test_an_override_file_with_only_the_critical_line_reaches_every_level(monkeypatch):
+    """live.env names the rule bot's room; /etc/paperbot/live-telegram.env sets only TELEGRAM_CHAT_CRITICAL (WARN and
+    INFO empty in live.env, as the server guide leaves them): every live message goes to the owners' chats."""
+    from paperbot.notify import TelegramNotifier
+    sent = _tg(monkeypatch, {"TELEGRAM_BOT_TOKEN": "t", "TELEGRAM_CHAT_CRITICAL": "111,222", "TELEGRAM_CHAT_WARN": "",
+                             "TELEGRAM_CHAT_INFO": "", "TELEGRAM_SOUND": "critical"})
+    n = LC._notifier()
+    assert isinstance(n, TelegramNotifier)
+    for level in (CRITICAL, WARN, INFO):
+        assert n.send(level, "x") is True
+    assert [d["chat_id"] for d in sent] == ["111", "222"] * 3
+    # an empty CRITICAL (a blank line in the override) does not crash: the console, as before
+    from paperbot.notify import ConsoleNotifier
+    monkeypatch.setenv("TELEGRAM_CHAT_CRITICAL", "")
+    assert isinstance(LC._notifier(), ConsoleNotifier)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN")
+    assert isinstance(LC._notifier(), ConsoleNotifier)
+
+
+def test_the_paper_bot_leaves_its_raw_trade_lines_out_when_asked(monkeypatch):
+    from types import SimpleNamespace
+    from paperbot import combo as C
+    pos = SimpleNamespace(entry_time=T, symbol=BTC, side=1, leverage=40, margin=40.0, stop_price=66_420.0,
+                          signal=SimpleNamespace(meta={"member": "x"}, strategy_id="F15_LON_BRK", timeframe="1h",
+                                                 score=3.0))
+    eng = SimpleNamespace(trades=[], position=pos)
+    me = SimpleNamespace(book=SimpleNamespace(engines={C.ACCOUNT: eng}), cfg=SimpleNamespace(telegram=True, tag="[t]"),
+                         notifier=ListNotifier())
+    monkeypatch.setenv("PAPERBOT_COMBO_TRADE_MSGS", "0")
+    C.ComboRunner._tell(me, {C.ACCOUNT: (None, 0)})
+    assert me.notifier.messages == []
+    monkeypatch.delenv("PAPERBOT_COMBO_TRADE_MSGS")
+    C.ComboRunner._tell(me, {C.ACCOUNT: (None, 0)})
+    assert len(me.notifier.messages) == 1 and "진입 BTCUSDT 롱 F15_LON_BRK" in me.notifier.messages[0][1]
+
+
+def test_chat_ids_lists_the_private_chats_and_never_the_token():
+    import urllib.error
+    ups = {"ok": True, "result": [
+        {"message": {"date": 1792500000, "chat": {"id": 111, "type": "private", "first_name": "민수",
+                                                  "username": "minsu"}}},
+        {"message": {"date": 1792500600, "chat": {"id": -100123, "type": "supergroup", "title": "알림방"}}},
+        {"message": {"date": 1792501200, "chat": {"id": 222, "type": "private", "first_name": "지현"}}},
+        {"message": {"date": 1792499000, "chat": {"id": 111, "type": "private", "first_name": "민수"}}}]}
+    text = LC.chat_ids_text("SECRET:TOKEN", fetch=lambda url: json.dumps(ups).encode())
+    assert text.splitlines() == [
+        "개인 채팅 (번호 · 이름 · 아이디 · 마지막 메시지)",
+        f"222 · 지현 · - · {LC.kst_dt(1792501200000)}",
+        f"111 · 민수 · @minsu · {LC.kst_dt(1792500000000)}",
+        "live-telegram.env의 세 줄에 넣을 값: 222,111  (두 분 것만 남기세요)"]
+    assert "SECRET" not in text and "-100123" not in text
+
+    def refused(url):
+        raise urllib.error.HTTPError(url, 401, f"Unauthorized {url}", {}, None)
+    bad = LC.chat_ids_text("SECRET:TOKEN", fetch=refused)
+    assert "SECRET" not in bad and "봇 토큰을 확인하세요" in bad
+    assert "시작(Start)" in LC.chat_ids_text("SECRET:TOKEN", fetch=lambda url: b'{"ok": true, "result": []}')
+    assert "TELEGRAM_BOT_TOKEN이 없습니다" in LC.chat_ids_text("")
+
+
+def test_money_prices_and_roe_as_the_owners_read_them():
+    assert LC.fmt_price(67_250.4, BTC) == "67,250" and LC.fmt_price(2_612.3, "ETHUSDT") == "2,612.30"
+    assert LC.fmt_price(0.245123, "DOGEUSDT") == "0.24512" and LC.fmt_price(182.35, SOL) == "182.35"
+    assert LC.fmt_price(1234.5) == "1,234" and LC.fmt_price(5.5) == "5.50" and LC.fmt_price(None) == "-"
+    assert (LC.fmt_usd(9.364), LC.fmt_usd(-1.5), LC.fmt_usd(40, sign=False)) == ("+$9.36", "-$1.50", "$40.00")
+    assert LC.fmt_usd(1234.5, sign=False) == "$1,234.50"
+    assert LC.fmt_roe(0.234) == "+23.4%" and LC.fmt_roe(-0.38) == "-38.0%"
+    assert LC.strat_text("F15_LON_BRK", "1h", EXP) == "F15_LON_BRK 1시간 · 돌파"
+    assert LC.strat_text("X", "30m", EXP) == "X 30분"
+
+
+def trade_world(tmp_path, entry=T - MIN, **kw):
+    """A paper position entered at ``entry`` (BTC long 40x at 67,250, stop 66,420) and two executors."""
+    src = card_setup(tmp_path, [], [], **kw)
+    conn = sqlite3.connect(src.paper_db)
+    pos = {"symbol": BTC, "side": 1, "qty": 0.24, "entry_price": 67_250.0, "entry_time": entry, "leverage": 40,
+           "stop_price": 66_420.0, "stop_initial": 66_420.0, "lock_roe": None,
+           "signal": {"strategy_id": "F15_LON_BRK", "timeframe": "1h", "meta": {}}}
+    conn.execute("INSERT OR REPLACE INTO state VALUES ('accounts', ?, ?)",
+                 (T - MIN, json.dumps({"last_ts": T - MIN, "engines": {LC.ACCOUNT: {"wallet": 1000.0,
+                                                                                    "position": pos}}})))
+    conn.commit()
+    conn.close()
+    return src, pos
+
+
+def set_position(src, pos):
+    conn = sqlite3.connect(src.paper_db)
+    conn.execute("UPDATE state SET data = ? WHERE k = 'accounts'",
+                 (json.dumps({"last_ts": T, "engines": {LC.ACCOUNT: {"wallet": 1000.0, "position": pos}}}),))
+    conn.commit()
+    conn.close()
+
+
+def x_entered(path, key, price=67_262.0, stop=66_431.0, qty=0.0238, moved=None):
+    from paperbot.executor import ExecStore
+    st = ExecStore(path, lock=False)
+    st.trade_open({"key": key, "symbol": BTC, "side": 1, "qty": qty, "leverage": 40, "entry_ts": T,
+                   "entry_price": price, "stop_initial": stop})
+    st.commit()
+    st.close()
+    _set_bot(path, ts=T, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": qty, "entry_ts": T,
+                                "stop_initial": stop, "stop": moved or stop, "stop_algo_id": "a1"})
+
+
+def run(src, now, n):
+    fresh(src, now)
+    for ex in src.executors:
+        _set_bot(ex.db, ts=now - 2000)
+    return LC.run_watch(src, now_ms=now, notifier=n, units=Units(), exists=lambda p: False)
+
+
+def test_entry_waits_for_both_executors_then_one_message(tmp_path):
+    entry = T - MIN
+    src, _pos = trade_world(tmp_path, entry)
+    key = f"{LC.ACCOUNT}|{BTC}|{entry}"
+    n = ListNotifier()
+    run(src, T, n)
+    assert not msgs(n, "🟢")                                         # nobody answered yet
+    x_entered(src.executors[0].db, key)
+    run(src, T + 20_000, n)
+    assert not msgs(n, "🟢")                                         # MEXC has not answered yet
+    from paperbot.executor import ExecStore
+    st = ExecStore(src.executors[1].db, lock=False)
+    st.event(T + 25_000, "WARN", "light_red", "신호등 빨강", {"key": key})
+    st.commit()
+    st.close()
+    run(src, T + 30_000, n)
+    (lv, text), = msgs(n, "🟢")
+    assert lv == INFO and text.split("\n") == [
+        "🟢 진입 · BTC 롱 · 40배",
+        "F15_LON_BRK 1시간 · 돌파",
+        "페이퍼   67,250 · 손절 66,420 (-1.23%)",
+        "바이비트 ✅ 67,262 · 증거금 $40.02 · 손절 66,431 · 포지션 1/1",
+        "MEXC     ⛔ 신호등이 막음"]
+    assert telegram_text(INFO, text) == (INFO, text)
+    run(src, T + 90_000, n)
+    assert len(msgs(n, "🟢")) == 1                                   # de-duplicated
+    conn = sqlite3.connect(src.db)
+    assert conn.execute("SELECT kind, sent_ts IS NOT NULL FROM trade_msgs").fetchall() == [("entry", 1)]
+    conn.close()
+
+
+def test_entry_after_three_minutes_without_an_answer_and_old_entries(tmp_path):
+    entry = T - MIN
+    src, _pos = trade_world(tmp_path, entry)
+    n = ListNotifier()
+    run(src, T, n)
+    run(src, entry + 3 * MIN, n)
+    (_lv, text), = msgs(n, "🟢")
+    assert "바이비트 ⚠ 따라가지 않음 (알람 따로)" in text and "MEXC     ⚠ 따라가지 않음 (알람 따로)" in text
+    _set_bot(src.executors[1].db, ts=T, halted=True)
+    (tmp_path / "old").mkdir()
+    src2, _p = trade_world(tmp_path / "old", T - 40 * MIN)          # first seen 40 minutes late: recorded only
+    n2 = ListNotifier()
+    run(src2, T, n2)
+    assert not msgs(n2, "🟢")
+    conn = sqlite3.connect(src2.db)
+    assert conn.execute("SELECT sent_ts FROM trade_msgs WHERE kind = 'entry'").fetchall() == [(None,)]
+    conn.close()
+    # a halted executor is ⏸
+    st = LC.entry_state(src.executors[1], LC.open_ro(src.executors[1].db), "k", [], T, True)
+    assert st == {"state": "halted"}
+    assert LC.entry_exec_line(src.executors[1], st, BTC) == "MEXC     ⏸ 멈춤 중이라 따라가지 않음"
+
+
+def test_only_the_first_lock_and_the_exit_shows_the_final_lock(tmp_path):
+    entry = T - H1
+    src, pos = trade_world(tmp_path, entry)
+    key = f"{LC.ACCOUNT}|{BTC}|{entry}"
+    x_entered(src.executors[0].db, key)
+    n = ListNotifier()
+    run(src, T, n)                                                   # the entry (old enough to send)
+    set_position(src, dict(pos, lock_roe=0.10, stop_price=67_430.0))
+    run(src, T + MIN, n)
+    assert not msgs(n, "🔒")                                         # Bybit has not moved its stop yet
+    x_entered(src.executors[0].db, key, moved=67_430.0)
+    run(src, T + 2 * MIN, n)
+    (lv, text), = msgs(n, "🔒")
+    assert lv == INFO and text == "🔒 잠금 시작 · BTC 롱 · +10% 확보\n바이비트 손절 66,431 → 67,430 · MEXC 따라가지 않음"
+    set_position(src, dict(pos, lock_roe=0.13, stop_price=67_530.0))
+    run(src, T + 3 * MIN, n)
+    assert len(msgs(n, "🔒")) == 1                                   # later steps are not sent
+    # the exit: Bybit still closing -> wait; then one message with the final lock
+    set_position(src, None)
+    x = T + 4 * MIN
+    t = trade(entry, x, 93.6, roe=0.234, entry_price=67_250.0, exit_price=67_643.0)
+    t.lock_roe, t.mfe_price = 0.13, 67_250 * (1 + 0.26 / 40)
+    s = Store3(src.paper_db)
+    s.trade(LC.ACCOUNT, t)
+    s.commit()
+    s.conn.close()
+    run(src, x + MIN, n)
+    assert not msgs(n, "✅ 청산")
+    from paperbot.executor import ExecStore
+    st = ExecStore(src.executors[0].db, lock=False)
+    st.trade_close(key, x + 3000, "paper 청산", 9.36, {"key": key})
+    st.commit()
+    st.close()
+    _set_bot(src.executors[0].db, ts=x, trade=None, last_equity=117.23)
+    run(src, x + 2 * MIN, n)
+    (lv, text), = msgs(n, "✅ 청산")
+    lines = text.split("\n")
+    assert lines[0] == "✅ 청산 · BTC 롱 · 순ROE +23.4%"
+    assert lines[1] == "F15_LON_BRK 1시간 · 돌파 · 1.1시간 보유 · 잠금 +13% 청산 (최고 +26%)"
+    assert lines[2] == "바이비트 +$9.36 (+23.4%) · 잔고 $117.23" and lines[3] == "MEXC     따라가지 않음"
+    assert lines[4].startswith("오늘 1승 0패 · 지금까지 1번 1승(표본 작음) · 신호등 바이비트 ⚪ MEXC ⚪")
+    run(src, x + 3 * MIN, n)
+    assert len(msgs(n, "✅ 청산")) == 1
+
+
+def test_light_changes_checkpoint_and_executor_start_stop(tmp_path):
+    src = card_setup(tmp_path, _paper_run(17, 3), [])
+    n = ListNotifier()
+    run(src, T, n)                                                   # first look: recorded, nothing sent
+    assert not msgs(n, "🚦") and not msgs(n, "▶️")
+    s = Store3(src.paper_db)
+    s.trade(LC.ACCOUNT, trade(T - 30 * MIN, T - 10 * MIN, -1.0))      # 16 of the last 20: Bybit 🟢 -> 🔴
+    s.commit()
+    s.conn.close()
+    run(src, T + MIN, n)
+    (lv, text), = msgs(n, "🚦")
+    assert lv == INFO and text == ("🚦 신호등 · 바이비트 🟢→🔴 · 최근 20번 16승(80%) · 기준 85%\n"
+                                   "새 진입을 따라가지 않습니다(페이퍼는 계속 거래, 기준을 넘으면 다시 따라감)")
+    run(src, T + 2 * MIN, n)
+    assert len(msgs(n, "🚦")) == 1
+    # ▶️ / ⏹ from the executor's own start / SIGTERM events
+    from paperbot.executor import ExecStore
+    st = ExecStore(src.executors[1].db, lock=False)
+    st.event(T + 2 * MIN, "INFO", "start", "시작")
+    st.commit()
+    st.close()
+    run(src, T + 3 * MIN, n)                                         # the first start event seen: recorded
+    st = ExecStore(src.executors[1].db, lock=False)
+    st.event(T + 4 * MIN, "INFO", "sigterm", "끄라는 신호(SIGTERM)")
+    st.commit()
+    st.close()
+    run(src, T + 5 * MIN, n)
+    (lv, text), = msgs(n, "⏹")
+    assert lv == INFO and text.startswith("⏹ MEXC 실행기 꺼짐 (끄라는 신호를 받음: 사람이 끔이나 서버 재시작)")
+    # stopped by hand: no "quiet executor" alarm while systemd says it is not running
+    _set_bot(src.executors[1].db, ts=T - 30 * MIN)
+    fresh(src, T + 20 * MIN)
+    out = LC.run_watch(src, now_ms=T + 20 * MIN, notifier=n, exists=lambda p: False,
+                       units=Units(**{"paperbot-executor-mexc": ("inactive", "enabled")}))
+    assert "stale:mexc" not in keys(out)
+    st = ExecStore(src.executors[1].db, lock=False)
+    st.event(T + 21 * MIN, "INFO", "start", "시작")
+    st.commit()
+    st.close()
+    run(src, T + 22 * MIN, n)
+    (lv, text), = msgs(n, "▶️")
+    assert text.startswith("▶️ MEXC 실행기 켜짐 · 잔고 $110.00 · 신호등 빨강(최근 20번 16승 80%, 기준 90%)")
+
+
+def test_checkpoint_at_the_40th_trade_loud_only_under_82(tmp_path):
+    for wins, loud in ((35, False), (31, True)):
+        d = tmp_path / f"w{wins}"
+        d.mkdir()
+        src = card_setup(d, _paper_run(wins, 39 - wins, losses_last=False), [])
+        n = ListNotifier()
+        run(src, T, n)
+        assert not [m for _l, m in n.messages if "40번 도달" in m]
+        s = Store3(src.paper_db)
+        s.trade(LC.ACCOUNT, trade(T - 30 * MIN, T - 10 * MIN, 1.0))
+        s.commit()
+        s.conn.close()
+        run(src, T + MIN, n)
+        got = [(lv, m) for lv, m in n.messages if "40번 도달" in m]
+        assert len(got) == 1
+        lv, text = got[0]
+        if loud:
+            assert lv == CRITICAL and text.startswith("🚨 🏁 40번 도달 · 페이퍼 첫 40번 32승(80.0%) → 멈추고 다시 생각")
+            assert text.splitlines()[-1].startswith("지금 할 일: 미리 정한 대로 멈추고 다시 생각합니다")
+        else:
+            assert lv == INFO and text.startswith("🏁 40번 도달 · 페이퍼 첫 40번 36승(90.0%) → 늘리기 검토")
+        assert "미리 정한 기준: 88% 이상 늘리기 검토 / 82~88% 계속 지켜보기 / 82% 미만 멈추고 다시 생각" in text
+        run(src, T + 2 * MIN, n)
+        assert len([m for _l, m in n.messages if "40번 도달" in m]) == 1
+
+
+def test_morning_rest_line_macro_releases_and_the_weekend():
+    w0, w1 = LC.window_of("2026-10-28")                             # the day ahead: Thursday 10/29 09:00 ->
+    assert LC.rest_line(w1, {"macro_blackout_min": 30}) == "- 오늘 진입 쉬는 시간: 21:00~22:00 PCE 물가"
+    w0, w1 = LC.window_of("2026-10-27")                             # Wednesday 10/28 09:00 -> FOMC at 03:00
+    assert LC.rest_line(w1, None) == "- 오늘 진입 쉬는 시간: 내일 02:30~03:30 FOMC 금리 결정"
+    w0, w1 = LC.window_of("2026-10-29")                             # Friday 10/30 09:00
+    assert LC.rest_line(w1, {}) == ("- 오늘 진입 쉬는 시간: 없음(미국 경제 발표 없음)\n"
+                                    "- 주말(토·일 KST)은 진입하지 않습니다")
+    assert "주말" not in LC.rest_line(w1, {"no_weekend": False})
+
+
+def test_preview_prints_every_message_type_and_sends_nothing(monkeypatch):
+    import urllib.request
+    from paperbot import livepreview as PV
+
+    def no_network(*a, **k):
+        raise AssertionError("the preview must not reach the network")
+    monkeypatch.setattr(urllib.request, "urlopen", no_network)
+    items = PV.scenes()
+    text = PV.render(items)
+    titles = {PV.kind_of(PV.shown(lv, t)[0]) for _s, lv, t in items}
+    for kind in ("실행기 켜짐", "진입", "잠금 시작", "청산(이김)", "손실 카드", "손실 카드(소리)", "신호등 바뀜",
+                 "40번 도달", "참고", "좋은 소식", "다시 정상", "실행기 꺼짐(사람이 끔)", "아침 점검",
+                 "아침 점검(확인할 것 있음)", "알람: 따라가지 않음", "알람: 실행기 조용함", "알람: 손절 기록 없음",
+                 "알람: 디스크 부족", "알람: 메모리 부족", "알람: 페이퍼 봇 멈춤", "알람: 1분봉 멈춤",
+                 "알람: 잔고 25% 하락", "알람: 실거래만 짐", "알람: 기대 범위 밑", "알람: 멈춤 요약"):
+        assert kind in titles, kind
+    for block in text.split("\n\n━━ "):
+        head, body = block.split("\n", 1)
+        assert head.endswith(("· 소리 ━━", "· 무음 ━━"))
+        assert ("소리" in head) == body.startswith("🚨"), head
+        first = body.split("\n")[0]
+        assert "~" not in first.split("·")[0] and "#" not in first           # no member label or hash
+        if body.startswith("🚨") and not body.startswith("🚨 실거래 일일 점검"):
+            assert any(ln.startswith("지금 할 일:") for ln in body.split("\n")), head
+    assert "자세히:" not in text.split("\n")[0]
+    assert LC.main(["preview"]) == 0
+
+
+def test_the_preview_executor_tables_match_the_executor():
+    from paperbot import livepreview as PV
+    from paperbot.executor import ExecStore
+    import tempfile
+    d = tempfile.mkdtemp()
+    real = ExecStore(os.path.join(d, "real.db"), lock=False)
+    a = sqlite3.connect(os.path.join(d, "pv.db"))
+    a.executescript(PV.EXEC_SCHEMA)
+    for table in ("events", "requests", "trades", "halts", "state", "fills", "funding", "equity"):
+        cols = [r[1] for r in real.conn.execute(f"PRAGMA table_info({table})")]
+        assert cols == [r[1] for r in a.execute(f"PRAGMA table_info({table})")], table
+    real.close()
+    a.close()

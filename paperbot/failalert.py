@@ -55,8 +55,8 @@ JOBS_KO = {
                                    "지난 결과: cd /opt/crypto-bot-research && sudo -u paperbot "
                                    "/opt/paperbot/venv/bin/python -m paperbot.livecheck show\n"
                                    "지금 다시: sudo systemctl start paperbot-livecheck"),
-    "paperbot-livewatch.service": ("실거래 실시간 감시(2분마다)",
-                                   "2분마다 다시 돎 (실거래 봇·주문과 무관, 지켜보기만 함)\n"
+    "paperbot-livewatch.service": ("실거래 실시간 감시(1분마다)",
+                                   "1분마다 다시 돎 (실거래 봇·주문과 무관, 지켜보기만 함)\n"
                                    "지금 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
                                    "/opt/paperbot/venv/bin/python -m paperbot.livecheck watch --dry-run"),
     "paperbot-shadow200.service": ("딥시크 200 그림자 시험(기록만)",
