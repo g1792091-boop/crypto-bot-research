@@ -6,7 +6,8 @@ follow the combined paper bot (paperbot/combo.py, account COMBO@mix).
     python -m paperbot.livecheck watch [--dry-run]
 
 ``run`` (deploy/paperbot-livecheck.timer, 09:10 KST) checks one trading day, 09:00 KST to 09:00 KST (00:00 to 00:00
-UTC: the day boundary of the paper bot's daily snapshots), by default the one that ended at 09:00 today; ``--day`` names it by the KST date it starts on. It stores the result in its own SQLite file
+UTC: the day boundary of the paper bot's daily snapshots), by default the one that ended at 09:00 today; ``--day``
+names it by the KST date it starts on. It stores the result in its own SQLite file
 (``--db``, default /var/lib/paperbot/livecheck.db: tables days, parity, costs, scores; for a dashboard later) and sends
 ONE plain-Korean Telegram message through the repository's notifier (paperbot/live.py ``_notifier``: live.env's bot
 and chats). Silent (INFO) when everything is fine; loud (CRITICAL) when the replay and the paper bot disagree without
@@ -48,6 +49,28 @@ it clears where that helps):
    time its equity (deposits taken out) reaches +50% and +100% of its start.
 Each pass also records what it saw (``seen``): the morning check reads the paper bot's stopped spans from it.
 
+3부 (owners 2026-10-19, live improvement; compared with deploy/combo.live-ac.expected.json, the backtest reference:
+"fit" = the whole period, "honest" = the twin fitted on 2020-24 read on unseen 2025-26):
+① 손실 카드: each new losing COMBO@mix paper trade gets a card (livecheck.db loss_cards, for the dashboard; sent by the
+   watcher a few minutes after the exit, once the executors closed): strategy / tf / setting number / type, coin,
+   side, entry and exit KST, hold hours, net ROE, exit reason, stop type and distance, BTC 4h regime (reg5) and KST
+   hour, the best ROE first reached (MFE), the strategy's fit and unseen win, its usual and worst loss and hours to
+   stop, its backtest win in this regime and on this coin ("백테스트에서도 약한 자리" when that cell is weak), the place
+   in the losing streak, and what each executor did (followed: net ROE and slippage; blocked by the light; not
+   followed). One cause label: 실거래-페이퍼 차이 > 평소보다 큰 손실 > 연속 손실 N번째 > 백테스트에서도 약한 자리 > 정상 범위
+   손실. Silent, loud when the loss is beyond the strategy's backtest worst, there is a live-paper gap, or it is the 2nd+
+   loss in a row. Four hours after the exit the noise stop is checked (the price back at +11% ROE from the entry, from
+   the rule bot's 1m bars) and shown in the next morning check, never as a message of its own.
+② 기대 이탈 (watcher): the paper's last 20 / 40 wins under the honest 5th percentile: loud "기대 범위 밑"; under the fit
+   5th percentile only: a silent note; a strategy with 3+ losses in its last 5 trades: a silent note; an executor that
+   lost where the paper won, 2+ times in its last 20 trades: loud. Under 20 paper trades: "표본 작음", no alarm.
+⑤ 멈춤 요약 (watcher): a halt of an executor gives one loud message: the rule (3 losses / drawdown 50% / STOP file /
+   other), the trades before it with their card labels, the balance against the budget, the paper's last 20 and the
+   light, and the owners' guide quoted as it is (start guide section 9 and the rules table, live-safety.md 3-5).
+Server (watcher; the bots share the server with the experiments): free disk under 2 GB, MemAvailable under 500 MB:
+loud, with the biggest memory users (systemctl show MemoryCurrent) and the experiments to stop first; the rule bot,
+the paper bot and the executors are never suggested.
+
 Read-only towards the bots: their databases are opened read-only (paperbot/livepnl.py ``open_ro``), the executors'
 configs are read as plain JSON (never their key file), no exchange account is called and no order is sent.
 """
@@ -73,6 +96,8 @@ DAY = 86_400_000
 KST_MS = 9 * H1
 ACCOUNT = "COMBO@mix"
 FLIP_ACCOUNT = "COMBOFLIP@mix"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+EXPECTED_FILE = os.path.join(ROOT, "deploy", "combo.live-ac.expected.json")     # the backtest reference (3부)
 DEFAULT_DB = "/var/lib/paperbot/livecheck.db"
 DEFAULT_CACHE = "/var/lib/paperbot/livecheck-cache.db"
 COMBO_CONFIG = "/etc/paperbot/combo.json"
@@ -195,7 +220,8 @@ def paper_trades(conn, account: str) -> list:
                     "roe": float(roe), "symbol": sym, "side": int(d.get("side") or 0),
                     "strategy": d.get("strategy_id", ""), "tf": d.get("timeframe", ""),
                     "entry_price": d.get("entry_price"), "exit_price": d.get("exit_price"),
-                    "funding": d.get("funding"), "fees": d.get("fees")})
+                    "funding": d.get("funding"), "fees": d.get("fees"), "leverage": d.get("leverage"),
+                    "stop_initial": d.get("stop_initial"), "mfe_price": d.get("mfe_price")})
     return out
 
 
@@ -652,6 +678,7 @@ class Sources:
     cache: str = DEFAULT_CACHE
     shadow_glob: str = SHADOW_GLOB
     executors: list = field(default_factory=list)
+    expected: str = EXPECTED_FILE
 
 
 def combo_config(src: Sources, live_conn) -> tuple[Optional[dict], str]:
@@ -1026,8 +1053,10 @@ def utc_date(ms: int) -> str:
 
 
 def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], execs: list, shadows: list,
-            week: Optional[list]) -> tuple[str, str, list]:
-    """(level, text, loud reasons)."""
+            week: Optional[list], cards: Optional[list] = None, drift: Optional[str] = None,
+            notes: Optional[list] = None, now_ms: Optional[int] = None) -> tuple[str, str, list]:
+    """(level, text, loud reasons). ``cards``: the loss cards of the day (3부 ①, already sent by the watcher; here one
+    line each with the noise-stop result), ``drift``: the paper against the backtest's ranges (3부 ②)."""
     loud = []
     if parity.get("flags"):
         loud.append(f"대조에서 이유를 모르는 차이 {parity['flags']}개")
@@ -1041,7 +1070,16 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
         lines = [f"실거래 일일 점검 · 확인할 것 {len(loud)}개", span, ""] + [f"- {x}" for x in loud] + [""]
     else:
         lines = ["📋 실거래 일일 점검 · " + ("이상 없음" if not parity.get("error") else "대조는 못 함"), span, ""]
-    lines += parity_lines(parity) + [""] + cost_lines(execs) + [""] + score_lines(paper, execs, shadows)
+    lines += parity_lines(parity) + [""] + cost_lines(execs)
+    if cards:
+        lines += ["", f"손실 카드 {len(cards)}장"] + [card_line(c, now_ms or w1) for c in cards[:MAX_LINES]]
+        if len(cards) > MAX_LINES:
+            lines.append(f"- 외 {len(cards) - MAX_LINES}장")
+    sl = score_lines(paper, execs, shadows)
+    if drift:
+        at = next((i for i, ln in enumerate(sl) if ln.startswith("- 페이퍼")), 0)
+        sl.insert(at + 1, drift)
+    lines += [""] + sl + [f"※ {x}" for x in (notes or [])]
     if week:
         lines += [""] + week
     nxt = []
@@ -1126,7 +1164,7 @@ CREATE TABLE IF NOT EXISTS scores (
 def open_out(path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
-    conn.executescript(SCHEMA + WATCH_SCHEMA)
+    conn.executescript(SCHEMA + WATCH_SCHEMA + LOSS_SCHEMA)
     conn.commit()
     return conn
 
@@ -1286,7 +1324,8 @@ def _paper_entries(conn, now_ms: int) -> list:
 
 
 def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
-                     exists: Callable = os.path.exists) -> tuple[list, set, dict]:
+                     exists: Callable = os.path.exists, host: Optional["Host"] = None,
+                     exp: Optional[dict] = None) -> tuple[list, set, dict]:
     """(active conditions, the key prefixes that could be judged this time, an observation for ``seen``)."""
     conds, judged, seen = [], set(), {"ts": int(now_ms), "exec": {}}
     infos = src.executors or load_executors()
@@ -1398,6 +1437,26 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                             conds.append(Cond(f"good:{ex.name}:{step_:g}", INFO,
                                               f"🎉 {ex.label} 실거래 잔고가 처음으로 시작보다 +{step_:.0%}가 됐습니다\n"
                                               f"잔고 {money(float(eq))} (시작 {money(float(start))})", once=True))
+            # 3부 ⑤: a halt, summed up once
+            judged.add(f"halt:{ex.name}:")
+            if risk.get("halted"):
+                conds.append(Cond(f"halt:{ex.name}:{int(risk.get('halted_ts') or 0)}", CRITICAL,
+                                  halt_text(ex, risk, c, paper or [], src.db),
+                                  recover=f"✅ {ex.label} 실행기 멈춤이 풀렸습니다"))
+            # 3부 ②: lost where the paper won
+            if paper is not None:
+                judged.add(f"vs_paper:{ex.name}")
+                bad = exec_vs_paper(c, paper)
+                if len(bad) >= VS_PAPER_MAX:
+                    conds.append(Cond(f"vs_paper:{ex.name}", CRITICAL,
+                                      f"{ex.label} 실거래가 페이퍼가 이긴 거래에서 {len(bad)}번 졌습니다"
+                                      f"(최근 {VS_PAPER_N}번 중)\n"
+                                      + "\n".join(f"- {kst_dt(t['entry_time'])} {coin(t['symbol'])} "
+                                                  f"{KO_SIDE.get(t['side'], '')} {t['strategy']}: 페이퍼 {usd(t['pnl'])}"
+                                                  f", 실거래 {usd(p)}" for t, p in bad[:4]) + "\n"
+                                      "체결 가격이나 손절 위치가 페이퍼와 다를 수 있습니다\n"
+                                      "다음: 아침 점검의 실제 비용 줄과 손실 카드를 보고, 거래소 앱의 체결 내역과 비교하세요",
+                                      recover=f"✅ {ex.label}: 페이퍼가 이긴 거래에서 진 실거래가 다시 1번 이하입니다"))
             # 1. the paper entries it should have followed
             if paper is not None:
                 judged.add(f"follow:{ex.name}:")
@@ -1427,6 +1486,16 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                         f"다음: 거래소 앱에서 포지션을 확인하고 sudo journalctl -u {ex.unit} -n 50 으로 이유를 보세요"))
         finally:
             c.close()
+    # 3부 ②: the paper against the backtest's ranges
+    if paper is not None and exp is not None:
+        dc, dj = drift_conditions(paper, exp)
+        conds += dc
+        judged |= dj
+    # the server (same server as the experiments)
+    if host is not None:
+        hc, hj = health_conditions(host, src)
+        conds += hc
+        judged |= hj
     return conds, judged, seen
 
 
@@ -1444,14 +1513,37 @@ def _active_before(src: Sources, key: str) -> bool:
 
 
 def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False, notifier=None,
-              units: Callable = unit_state, exists: Callable = os.path.exists) -> list:
-    """One pass: every condition that became active is sent once (loud), every one that cleared is re-armed (with a
-    silent line when it has one). Returns [(event, key, level, text)]."""
+              units: Callable = unit_state, exists: Callable = os.path.exists, host: Optional["Host"] = None) -> list:
+    """One pass: first the loss cards of new losing paper trades (3부 ①; so a halt summary can name their causes),
+    then every condition that became active is sent once (loud unless said otherwise) and every one that cleared is
+    re-armed (with a silent line when it has one). Returns [(event, key, level, text)]."""
     now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    conds, judged, seen = watch_conditions(src, now_ms, units, exists)
+    exp = load_expected(src.expected)
     out = []
     conn = None if dry_run else open_out(src.db)
     try:
+        n = notifier if (notifier is not None or dry_run) else _notifier()
+        # ---- loss cards (silent unless the card says otherwise); a dry run works on a copy in memory
+        cc = conn
+        if conn is None:
+            cc = sqlite3.connect(":memory:")
+            cc.executescript(LOSS_SCHEMA)
+            ro = open_ro(src.db)
+            if ro is not None:
+                try:
+                    cc.executemany("INSERT INTO loss_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                   ro.execute("SELECT * FROM loss_cards").fetchall())
+                except sqlite3.Error:
+                    pass
+                finally:
+                    ro.close()
+        send = (lambda lv, tx: True) if (dry_run or n is None) else n.send
+        for card in cards_pass(src, cc, now_ms, exp, send=send):
+            out.append(("card", card["key"], CRITICAL if card["loud"] else INFO, card["text"]))
+        if conn is None:
+            cc.close()
+        # ---- conditions
+        conds, judged, seen = watch_conditions(src, now_ms, units, exists, host=host, exp=exp)
         stored = {}
         if conn is not None:
             stored = {r[0]: {"active": r[1], "recover": r[2], "once": r[3]} for r in conn.execute(
@@ -1466,7 +1558,6 @@ def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False,
                     stored = {}
                 finally:
                     ro.close()
-        n = notifier if (notifier is not None or dry_run) else _notifier()
         now_keys = {c.key for c in conds}
         for c in conds:
             row = stored.get(c.key)
@@ -1534,6 +1625,638 @@ def down_spans(db: str, a: int, b: int, stale_ms: int = 5 * MIN) -> list:
     return [(x, y) for x, y in out if y >= a and x <= b]
 
 
+# ====================================================================== 3부: 손실 카드, 기대 이탈, 멈춤 요약, 서버 상태
+GAP_BPS = 10.0                     # a followed executor's entry or exit this far from the paper's price: a live gap
+CARD_WAIT_MS = 3 * MIN             # a card waits this long after the paper exit for the executors to close
+CARD_MAX_WAIT_MS = 30 * MIN        # ... at most this long
+CARD_SEND_MS = 2 * H1              # losses older than this when first seen get a stored card, no message
+CARD_LOOKBACK_MS = 7 * DAY
+NOISE_MS = 4 * H1                  # noise stop: within 4 hours after the exit ...
+NOISE_ROE = 0.11                   # ... the price went back to +11% ROE from the entry (the ladder's first step)
+NOISE_GIVE_UP_MS = 28 * H1         # no 1m bars by then: "확인 못 함"
+WEAK_MIN_N = 5                     # a backtest cell with fewer trades is not judged
+WEAK_GAP = 0.08                    # a cell this far below the strategy's own win (or under break-even) is weak
+STRAT_LAST, STRAT_LOSSES = 5, 3    # one strategy with 3+ losses in its last 5 trades: a silent note
+VS_PAPER_N, VS_PAPER_MAX = 20, 2   # an executor lost where the paper won, 2+ times in its last 20 trades: loud
+DISK_MIN, DISK_CLEAR = 2 * 1024 ** 3, int(2.5 * 1024 ** 3)
+MEM_MIN, MEM_CLEAR = 500 * 1024 ** 2, 700 * 1024 ** 2
+PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot-executor.service",
+                   "paperbot-executor-mexc.service")
+EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
+UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
+REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
+HALT_KO = {"streak": "3연패(연속 손실 3번)", "drawdown": "낙폭 50%", "kill": "STOP 파일(비상 정지)"}
+# quoted from docs/live1019-start-ko.md (the owners' rules and section 9) and docs/live-safety.md 3-5; a test keeps
+# them equal to the guide
+HALT_GUIDE = ("3연패나 낙폭 50% 멈춤은 이유가 있어서 걸린 것입니다. 두 분이 같이 원인을 본 뒤에 풉니다",
+              "다시 켤지는 두 분이 정합니다: STOP 파일 지우기 → 실행기 끄기 → `clear-halt`")
+LOSS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS loss_cards (
+    key TEXT PRIMARY KEY,
+    trade_id INTEGER,
+    ts INTEGER NOT NULL,
+    entry_time INTEGER,
+    exit_time INTEGER,
+    symbol TEXT,
+    side INTEGER,
+    strategy TEXT,
+    tf TEXT,
+    member_order INTEGER,
+    roe REAL,
+    exit_reason TEXT,
+    label TEXT,
+    loud INTEGER,
+    streak INTEGER,
+    weak INTEGER,
+    noise INTEGER,
+    noise_roe REAL,
+    noise_ts INTEGER,
+    text TEXT,
+    sent INTEGER,
+    data TEXT
+);
+CREATE INDEX IF NOT EXISTS loss_cards_exit ON loss_cards (exit_time);
+"""
+
+
+def load_expected(path: str = EXPECTED_FILE) -> Optional[dict]:
+    """The backtest reference (deploy/combo.live-ac.expected.json), None when it cannot be read."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def ref_member(exp: Optional[dict], order: Optional[int], strategy: str, tf: str) -> Optional[dict]:
+    """The reference of one setting: ``members`` is keyed by the config position from 0 (the paper bot's
+    ``member_order`` counts from 1); only when strategy and timeframe agree."""
+    if not exp or order is None:
+        return None
+    m = (exp.get("members") or {}).get(str(int(order) - 1))
+    return m if m and m.get("strategy") == strategy and m.get("tf") == tf else None
+
+
+def _cell(d: Optional[dict], k) -> Optional[list]:
+    v = (d or {}).get(str(k))
+    return v if isinstance(v, list) and len(v) == 2 else None
+
+
+def weak_cell(cell: Optional[list], strat_win: Optional[float], break_even: float) -> bool:
+    if not cell or cell[0] < WEAK_MIN_N:
+        return False
+    return cell[1] < break_even or (strat_win is not None and cell[1] <= strat_win - WEAK_GAP)
+
+
+def entry_meta(conn, account: str, entry_time: int, symbol: str) -> dict:
+    """The signal meta of the paper entry (outcomes ENTERED: member, member_order, rdims, rstop, stop_rule)."""
+    try:
+        r = conn.execute("SELECT data FROM outcomes WHERE account_id = ? AND status = 'ENTERED' AND step_ts = ? "
+                         "AND symbol = ? ORDER BY id DESC LIMIT 1", (account, int(entry_time), symbol)).fetchone()
+    except sqlite3.Error:
+        return {}
+    if r is None:
+        return {}
+    try:
+        return (json.loads(r[0]).get("signal") or {}).get("meta") or {}
+    except (ValueError, TypeError, AttributeError):
+        return {}
+
+
+def loss_streak(trades: list, t: dict) -> int:
+    """Losses in a row ending with ``t`` (paper trades ordered by exit)."""
+    n = 0
+    for x in reversed([y for y in trades if (y["exit_time"], y["id"]) <= (t["exit_time"], t["id"])]):
+        if x["pnl"] >= 0:
+            break
+        n += 1
+    return n
+
+
+def exec_outcome(ex: ExecInfo, conn, key: str, pt: dict) -> dict:
+    """What one executor did with the paper trade ``key``: followed (its net ROE and slippage), blocked by the
+    signal light, or not followed (its own words)."""
+    if conn is None:
+        return {"name": ex.name, "label": ex.label, "status": "no_record"}
+    try:
+        r = conn.execute("SELECT * FROM trades WHERE key = ?", (key,)).fetchone()
+        cols = [c[0] for c in conn.execute("SELECT * FROM trades LIMIT 0").description]
+    except sqlite3.Error:
+        r = None
+    if r is not None:
+        et = dict(zip(cols, r))
+        row = cost_row(ex, et, pt, exec_fills(conn, key))
+        margin = (float(et.get("qty") or 0) * float(et.get("entry_price") or 0)) / max(int(et.get("leverage") or 1), 1)
+        roe = (float(et["pnl"]) / margin) if (et.get("pnl") is not None and margin) else None
+        return {"name": ex.name, "label": ex.label, "status": "followed" if et.get("exit_ts") else "open",
+                "roe": roe, "pnl": et.get("pnl"), "entry_bps": row["entry_bps"], "exit_bps": row["exit_bps"],
+                "exit_ts": et.get("exit_ts")}
+    told = _key_events(conn, key)
+    if any(k == "light_red" for _ts, k, _t in told):
+        return {"name": ex.name, "label": ex.label, "status": "blocked"}
+    return {"name": ex.name, "label": ex.label, "status": "not_followed",
+            "why": " / ".join(str(x[2])[:80] for x in told) if told else ""}
+
+
+def live_gap(outs: list, paper_exit: int) -> bool:
+    """A followed executor whose trade went another way than the paper's (price far apart, a win, another exit)."""
+    for o in outs:
+        if o["status"] != "followed":
+            continue
+        if (o.get("pnl") or 0) > 0:
+            return True
+        if any(abs(o[k]) > GAP_BPS for k in ("entry_bps", "exit_bps") if o.get(k) is not None):
+            return True
+        if o.get("exit_ts") and abs(int(o["exit_ts"]) - int(paper_exit)) > EXIT_TOL_MS:
+            return True
+    return False
+
+
+def build_card(t: dict, meta: dict, trades: list, exp: Optional[dict], outs: list) -> dict:
+    """One losing paper trade against the backtest reference (fields kept for the dashboard)."""
+    name, tf = t.get("strategy", ""), t.get("tf", "")
+    order = meta.get("member_order")
+    if order is None and "#" in str(meta.get("member", "")):
+        try:
+            order = int(str(meta["member"]).split("#")[1].split("~")[0])
+        except ValueError:
+            order = None
+    st = ((exp or {}).get("strategies") or {}).get(name) or {}
+    mem = ref_member(exp, order, name, tf)
+    be = float((exp or {}).get("break_even_win") or 0.776)
+    dims = meta.get("rdims") or {}
+    reg5 = dims.get("reg5")
+    hour = dims.get("hr", int(((int(t["entry_time"]) + KST_MS) // H1) % 24))
+    sym_i = ((exp or {}).get("symbols") or list(EXP_SYMBOLS)).index(t["symbol"]) \
+        if t["symbol"] in ((exp or {}).get("symbols") or list(EXP_SYMBOLS)) else None
+    entry, lev, side = float(t.get("entry_price") or 0), int(t.get("leverage") or 1), int(t["side"])
+    stop0 = t.get("stop_initial")
+    rstop = meta.get("rstop")
+    stop_type = (f"{rstop[0]}{float(rstop[1]):g}" if isinstance(rstop, list) and len(rstop) == 2
+                 else (mem or {}).get("stop", ""))
+    mfe = t.get("mfe_price")
+    reg_cell = _cell(st.get("by_reg5"), reg5) if reg5 is not None else None
+    sym_cell = _cell(st.get("by_sym"), sym_i) if sym_i is not None else None
+    weak = [w for w, c in (("장세", reg_cell), ("코인", sym_cell)) if weak_cell(c, st.get("win"), be)]
+    streak = loss_streak(trades, t)
+    roe = float(t["roe"])
+    worst, med = st.get("loss_roe_worst"), st.get("loss_roe_median")
+    bigger = worst is not None and roe < float(worst)
+    gap = live_gap(outs, t["exit_time"])
+    if gap:
+        label = "실거래-페이퍼 차이"
+    elif bigger:
+        label = "평소보다 큰 손실"
+    elif streak >= 2:
+        label = f"연속 손실 {streak}번째"
+    elif weak:
+        label = "백테스트에서도 약한 자리"
+    else:
+        label = "정상 범위 손실"
+    honest = st.get("honest_2025_26")
+    return {
+        "key": f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}", "trade_id": t["id"], "strategy": name, "tf": tf,
+        "member_order": order, "member": meta.get("member"), "type": st.get("type", ""),
+        "symbol": t["symbol"], "side": side, "entry_time": int(t["entry_time"]), "exit_time": int(t["exit_time"]),
+        "hold_h": (int(t["exit_time"]) - int(t["entry_time"])) / H1, "roe": roe, "pnl": t["pnl"],
+        "exit_reason": t.get("reason"), "stop_type": stop_type,
+        "stop_pct": abs(entry - float(stop0)) / entry * 100 if (stop0 and entry) else None,
+        "reg5": reg5, "hour": hour,
+        "mfe_roe": side * (float(mfe) - entry) / entry * lev if (mfe and entry) else None,
+        "fit_win": st.get("win"), "honest": honest if isinstance(honest, list) else None,
+        "loss_median": med, "loss_worst": worst, "hours_median": st.get("hours_to_stop_median"),
+        "hours_p90": st.get("hours_to_stop_p90"), "reg5_cell": reg_cell, "sym_cell": sym_cell, "weak": weak,
+        "streak": streak, "fit_longest": (((exp or {}).get("overall") or {}).get("fit") or {}).get("streaks", {})
+        .get("longest", 3), "honest_longest": (((exp or {}).get("overall") or {}).get("honest") or {})
+        .get("streaks", {}).get("longest", 5), "executors": outs, "gap": gap, "bigger": bigger, "label": label,
+        "loud": bool(bigger or gap or streak >= 2), "member_ref": mem}
+
+
+EXP_SYMBOLS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
+
+
+def _p(x: Optional[float], d: int = 1) -> str:
+    return "-" if x is None else f"{x:+.{d}%}"
+
+
+def card_text(c: dict) -> str:
+    head = (f"손실 카드 · {c['strategy']} {KO_TF.get(c['tf'], c['tf'])}"
+            + (f" (#{c['member_order']}" + (f", {c['type']}" if c.get("type") else "") + ")"
+               if c.get("member_order") else ""))
+    lines = [head if c["loud"] else "🧾 " + head,
+             f"{coin(c['symbol'])} {KO_SIDE.get(c['side'], '')} · 진입 {kst_dt(c['entry_time'])} → 청산 "
+             f"{kst(c['exit_time'])} ({c['hold_h']:.1f}시간)",
+             f"순ROE {c['roe']:+.1%} · {KO_EXIT.get(c['exit_reason'], c['exit_reason'])}"
+             + (f" · 손절 {c['stop_type']}" if c.get("stop_type") else "")
+             + (f", 거리 {c['stop_pct']:.2f}%" if c.get("stop_pct") is not None else ""),
+             (f"장세 {REG5_KO[int(c['reg5'])]} · " if c.get("reg5") is not None and 0 <= int(c["reg5"]) < 5 else "")
+             + f"진입 {int(c['hour']):02d}시"
+             + (f" · 먼저 {c['mfe_roe']:+.1%}까지 갔음" if c.get("mfe_roe") is not None else "")]
+    if c.get("fit_win") is not None:
+        hon = c.get("honest")
+        lines.append(f"백테스트 승률 {c['fit_win']:.1%}"
+                     + (f" (처음 보는 2025-26 {hon[1]:.0%}, {hon[0]}번)" if hon else "")
+                     + (f" · 손실 보통 {c['loss_median']:+.0%} / 최악 {c['loss_worst']:+.0%}"
+                        if c.get("loss_median") is not None and c.get("loss_worst") is not None else "")
+                     + (f" · 손절까지 보통 {c['hours_median']:.1f}시간" if c.get("hours_median") is not None else ""))
+        cells = []
+        if c.get("reg5_cell"):
+            cells.append(f"이 장세 {c['reg5_cell'][1]:.0%}({c['reg5_cell'][0]}번)")
+        if c.get("sym_cell"):
+            cells.append(f"이 코인 {c['sym_cell'][1]:.0%}({c['sym_cell'][0]}번)")
+        if cells:
+            lines.append(" · ".join(cells) + (" → 백테스트에서도 약한 자리" if c.get("weak") else ""))
+    else:
+        lines.append("백테스트 기준표에 이 매매법이 없음")
+    lines.append(f"연속 손실 {c['streak']}번째 (백테스트 최장 {c['fit_longest']}번, 처음 보는 기간 {c['honest_longest']}번)")
+    for o in c["executors"]:
+        if o["status"] == "followed":
+            lines.append(f"{o['label']}: 따라감, 순ROE {_p(o.get('roe'))}"
+                         + (f", 진입 {o['entry_bps']:+.1f}bps" if o.get("entry_bps") is not None else "")
+                         + (f" / 청산 {o['exit_bps']:+.1f}bps" if o.get("exit_bps") is not None else ""))
+        elif o["status"] == "open":
+            lines.append(f"{o['label']}: 따라감, 아직 닫는 중")
+        elif o["status"] == "blocked":
+            lines.append(f"{o['label']}: 신호등이 막음(따라가지 않음)")
+        elif o["status"] == "not_followed":
+            lines.append(f"{o['label']}: 따라가지 않음" + (f"({o['why']})" if o.get("why") else ""))
+    lines.append(f"판정: {c['label']}")
+    return "\n".join(lines)
+
+
+def card_line(c: dict, now_ms: int) -> str:
+    """The morning check's line of a card (with its noise-stop result once known)."""
+    n = c.get("noise")
+    if n is None:
+        tail = "노이즈 손절 확인은 다음 점검에서" if now_ms < c["exit_time"] + NOISE_MS + 10 * MIN else "노이즈 확인 중"
+    elif n == 1:
+        tail = f"노이즈 손절(4시간 안에 {c['noise_roe']:+.1%}까지 돌아감)"
+    elif n == 0:
+        tail = "노이즈 손절 아님" + (f"(4시간 최고 {c['noise_roe']:+.1%})" if c.get("noise_roe") is not None else "")
+    else:
+        tail = "노이즈 손절 확인 못 함(1분봉 없음)"
+    return (f"- {kst_dt(c['exit_time'])} {coin(c['symbol'])} {KO_SIDE.get(c['side'], '')} {c['strategy']} "
+            f"{c['roe']:+.1%} · {c['label']} · {tail}")
+
+
+def noise_check(rule_db: str, c: dict, lev: int, entry: float, now_ms: int) -> Optional[tuple]:
+    """(noise 1/0/-1, best ROE from the entry within NOISE_MS after the exit) once the 4 hours are over; None while
+    waiting. From the rule bot's 1m bars (paper3.db live_bars, read-only)."""
+    a, b = int(c["exit_time"]), int(c["exit_time"]) + NOISE_MS
+    if now_ms < b + 2 * MIN:
+        return None
+    conn = open_ro(rule_db)
+    rows = []
+    if conn is not None:
+        try:
+            rows = conn.execute("SELECT high, low FROM live_bars WHERE symbol = ? AND ts >= ? AND ts < ?",
+                                (c["symbol"], a - a % MIN, b)).fetchall()
+        except sqlite3.Error:
+            rows = []
+        finally:
+            conn.close()
+    if len(rows) < int(0.8 * NOISE_MS / MIN):
+        return (-1, None) if now_ms > int(c["exit_time"]) + NOISE_GIVE_UP_MS else None
+    side = int(c["side"])
+    best = max(float(r[0]) for r in rows) if side > 0 else min(float(r[1]) for r in rows)
+    roe = side * (best - entry) / entry * lev
+    return (1 if roe >= NOISE_ROE else 0), roe
+
+
+def cards_pass(src: Sources, out_conn, now_ms: int, exp: Optional[dict], send: Optional[Callable] = None,
+               infos: Optional[list] = None, older_only: bool = False) -> list:
+    """New losing paper trades -> cards (stored; sent when fresh and ``send`` is given), then the noise check of the
+    cards whose 4 hours are over. ``older_only`` (the morning check): only losses too old for the watcher to send, so
+    a fresh card keeps its message. Returns the new cards."""
+    pc = open_ro(src.paper_db)
+    if pc is None or out_conn is None:
+        if pc is not None:
+            pc.close()
+        return []
+    new = []
+    infos = infos if infos is not None else (src.executors or load_executors())
+    conns = {ex.name: open_ro(ex.db) for ex in infos}
+    try:
+        trades = paper_trades(pc, ACCOUNT)
+        have = {r[0] for r in out_conn.execute("SELECT key FROM loss_cards")}
+        for t in trades:
+            if t["pnl"] >= 0 or t["exit_time"] < now_ms - CARD_LOOKBACK_MS or now_ms - t["exit_time"] < CARD_WAIT_MS:
+                continue
+            if older_only and now_ms - t["exit_time"] <= CARD_SEND_MS:
+                continue
+            key = f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}"
+            if key in have:
+                continue
+            outs = [exec_outcome(ex, conns[ex.name], key, t) for ex in infos]
+            if any(o["status"] == "open" for o in outs) and now_ms - t["exit_time"] < CARD_MAX_WAIT_MS:
+                continue                                      # an executor is still closing: next pass
+            card = build_card(t, entry_meta(pc, ACCOUNT, t["entry_time"], t["symbol"]), trades, exp, outs)
+            card["leverage"], card["entry_price"] = t.get("leverage"), t.get("entry_price")
+            text = card_text(card)
+            sent = None
+            if send is not None and now_ms - t["exit_time"] <= CARD_SEND_MS:
+                sent = send(CRITICAL if card["loud"] else INFO, text) is not False
+                if not sent:
+                    continue                                  # not stored: tried again on the next pass
+            out_conn.execute("INSERT OR REPLACE INTO loss_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                             (key, t["id"], now_ms, card["entry_time"], card["exit_time"], card["symbol"],
+                              card["side"], card["strategy"], card["tf"], card["member_order"], card["roe"],
+                              card["exit_reason"], card["label"], int(card["loud"]), card["streak"],
+                              int(bool(card["weak"])), None, None, None, text,
+                              None if sent is None else int(sent), json.dumps(card, default=str, ensure_ascii=False)))
+            card["text"] = text
+            new.append(card)
+        for key, data in out_conn.execute("SELECT key, data FROM loss_cards WHERE noise IS NULL").fetchall():
+            c = json.loads(data)
+            got = noise_check(src.rule_db, c, int(c.get("leverage") or 1), float(c.get("entry_price") or 0) or 1.0,
+                              now_ms)
+            if got is not None:
+                out_conn.execute("UPDATE loss_cards SET noise = ?, noise_roe = ?, noise_ts = ? WHERE key = ?",
+                                 (got[0], got[1], now_ms, key))
+        out_conn.commit()
+    finally:
+        pc.close()
+        for c in conns.values():
+            if c is not None:
+                c.close()
+    return new
+
+
+def stored_cards(out_conn, a: int, b: int) -> list:
+    """Cards of losses that exited in [a, b), and older ones whose noise check finished in [a, b)."""
+    if out_conn is None:
+        return []
+    try:
+        rows = out_conn.execute("SELECT data, noise, noise_roe, noise_ts FROM loss_cards WHERE (exit_time >= ? AND "
+                                "exit_time < ?) OR (exit_time < ? AND noise_ts >= ? AND noise_ts < ?) "
+                                "ORDER BY exit_time", (a, b, a, a, b)).fetchall()
+    except sqlite3.Error:
+        return []
+    out = []
+    for data, noise, nroe, nts in rows:
+        c = json.loads(data)
+        c.update(noise=noise, noise_roe=nroe, noise_ts=nts)
+        out.append(c)
+    return out
+
+
+# ---------------------------------------------------------------- ② 기대 이탈
+def drift_state(paper: list, exp: Optional[dict]) -> dict:
+    """The paper's last 20 / 40 wins against the backtest's 5th percentiles (fit, honest)."""
+    out = {"n": len(paper), "windows": []}
+    o = (exp or {}).get("overall") or {}
+    for n in (20, 40):
+        fit = ((o.get("fit") or {}).get(f"rolling{n}_wins") or {}).get("p5")
+        hon = ((o.get("honest") or {}).get(f"rolling{n}_wins") or {}).get("p5")
+        if len(paper) < n or fit is None or hon is None:
+            out["windows"].append({"n": n, "wins": None, "fit_p5": fit, "honest_p5": hon, "state": "small"})
+            continue
+        wins = sum(1 for t in paper[-n:] if t["pnl"] > 0)
+        state = "below" if wins < hon else ("low" if wins < fit else "ok")
+        out["windows"].append({"n": n, "wins": wins, "fit_p5": fit, "honest_p5": hon, "state": state})
+    return out
+
+
+def drift_line(d: dict) -> str:
+    if d["n"] < 20:
+        return f"- 기대 범위: 표본 작음({d['n']}번, 20번부터 봄)"
+    parts = []
+    for w in d["windows"]:
+        if w["state"] == "small":
+            continue
+        word = {"ok": "범위 안", "low": "맞춘 백테스트 하위 5% 밑", "below": "기대 범위 밑"}[w["state"]]
+        parts.append(f"최근 {w['n']}번 {w['wins']}승(백테스트 하위 5% {w['fit_p5']}승, 처음 보는 기간 "
+                     f"{w['honest_p5']}승) {word}")
+    return "- 기대 범위: " + " · ".join(parts)
+
+
+def drift_conditions(paper: list, exp: Optional[dict]) -> tuple[list, set]:
+    conds, judged = [], {"drift:", "drift_note:", "strat:"}
+    d = drift_state(paper, exp)
+    if exp is None:
+        return conds, set()
+    for w in d["windows"]:
+        if w["state"] == "below":
+            conds.append(Cond(f"drift:{w['n']}", CRITICAL,
+                              f"기대 범위 밑 · 페이퍼 최근 {w['n']}번 {w['wins']}승\n"
+                              f"처음 보는 기간(2025-26) 백테스트에서도 최근 {w['n']}번이 {w['honest_p5']}승보다 적은 때는 "
+                              f"5%뿐이었습니다(맞춘 백테스트 하위 5%는 {w['fit_p5']}승)\n"
+                              "신호등이 빨강이면 실거래는 이미 따라가지 않습니다. 손실 카드들의 판정을 같이 보세요",
+                              recover=f"✅ 페이퍼 최근 {w['n']}번 승리가 다시 기대 범위 안입니다"))
+        elif w["state"] == "low":
+            conds.append(Cond(f"drift_note:{w['n']}", INFO,
+                              f"📉 참고: 페이퍼 최근 {w['n']}번 {w['wins']}승 · 맞춘 백테스트의 하위 5%({w['fit_p5']}승) "
+                              f"밑, 처음 보는 기간 하위 5%({w['honest_p5']}승) 위"))
+    by: dict = {}
+    for t in paper:
+        by.setdefault(t.get("strategy", ""), []).append(t)
+    for name, ts in sorted(by.items()):
+        last = ts[-STRAT_LAST:]
+        lost = sum(1 for t in last if t["pnl"] < 0)
+        if len(last) >= STRAT_LOSSES and lost >= STRAT_LOSSES:
+            conds.append(Cond(f"strat:{name}", INFO,
+                              f"📉 참고: {name} 최근 {len(last)}번 중 {lost}번 손실"
+                              + (f" (백테스트 승률 {exp['strategies'][name]['win']:.0%})"
+                                 if name in (exp.get("strategies") or {}) else "")))
+    return conds, judged
+
+
+def exec_vs_paper(c, paper: list) -> list:
+    """The executor's last VS_PAPER_N closed trades it lost where its paper trade won: [(paper trade, pnl)]."""
+    by = {f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}": t for t in paper}
+    try:
+        rows = c.execute("SELECT key, pnl FROM trades WHERE exit_ts IS NOT NULL AND pnl IS NOT NULL "
+                         "ORDER BY exit_ts DESC LIMIT ?", (VS_PAPER_N,)).fetchall()
+    except sqlite3.Error:
+        return []
+    return [(by[k], float(p)) for k, p in rows if k in by and float(p) < 0 and by[k]["pnl"] > 0]
+
+
+# ---------------------------------------------------------------- ⑤ 멈춤 원인 요약
+def halt_rule(risk: dict) -> str:
+    kinds = list(risk.get("halt_kinds") or [])
+    reason = str(risk.get("halt_reason") or "")
+    if not kinds:
+        if "연속 손실" in reason:
+            kinds.append("streak")
+        if "낙폭" in reason:
+            kinds.append("drawdown")
+        if "비상 정지" in reason or "STOP" in reason:
+            kinds.append("kill")
+    words = [HALT_KO[k] for k in kinds if k in HALT_KO]
+    return " + ".join(words) if words else f"기타({reason[:80] or '이유 기록 없음'})"
+
+
+def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
+    halted_ts = int(risk.get("halted_ts") or 0)
+    kinds = set(risk.get("halt_kinds") or [])
+    try:
+        rows = c.execute("SELECT key, symbol, side, entry_ts, exit_ts, pnl, qty, entry_price, leverage FROM trades "
+                         "WHERE exit_ts IS NOT NULL" + (" AND exit_ts <= ?" if halted_ts else "") +
+                         " ORDER BY exit_ts DESC LIMIT 8", ((halted_ts + MIN,) if halted_ts else ())).fetchall()
+    except sqlite3.Error:
+        rows = []
+    if "drawdown" in kinds and risk.get("peak_ts"):
+        rows = [r for r in rows if int(r[4]) >= int(risk["peak_ts"])] or rows[:3]
+    else:
+        rows = rows[:3]
+    labels = {}
+    oc = open_ro(out_db)
+    if oc is not None:
+        try:
+            labels = dict(oc.execute("SELECT key, label FROM loss_cards").fetchall())
+        except sqlite3.Error:
+            labels = {}
+        finally:
+            oc.close()
+    by = {f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}": t for t in paper}
+    lines = [f"{ex.label} 실행기가 멈췄습니다 · 이유: {halt_rule(risk)}",
+             f"멈춤 기록: {str(risk.get('halt_reason') or '-')[:120]}"]
+    if rows:
+        lines.append("멈추기 전 거래:")
+        for key, sym, side, ets, xts, pnl, qty, px, lev in reversed(rows):
+            margin = float(qty or 0) * float(px or 0) / max(int(lev or 1), 1)
+            roe = f"{float(pnl) / margin:+.1%}" if (pnl is not None and margin) else "-"
+            pt = by.get(key)
+            lines.append(f"- {kst_dt(int(xts))} {coin(sym)} {KO_SIDE.get(side, '')} "
+                         f"{(pt or {}).get('strategy', '')} {roe} ({usd(float(pnl or 0))})"
+                         + (f" · 카드: {labels[key]}" if key in labels else ""))
+    eq = risk.get("last_equity")
+    if eq is not None and ex.budget:
+        lines.append(f"잔고 {money(float(eq))} (시작 {money(ex.budget)}, {float(eq) / ex.budget - 1:+.1%})")
+    elif eq is not None:
+        lines.append(f"잔고 {money(float(eq))}")
+    last20 = paper[-20:]
+    if len(paper) >= 20:
+        w = sum(1 for t in last20 if t["pnl"] > 0)
+        lines.append(f"페이퍼 최근 20번 {w}승({w / 20:.0%}) · {light_text(light_state(paper, ex.light_n, ex.light_min))}")
+    else:
+        lines.append(f"페이퍼 거래 {len(paper)}번(표본 작음) · {light_text(light_state(paper, ex.light_n, ex.light_min))}")
+    lines += ["안내서(live1019-start-ko.md):"] + [f"- {g}" for g in HALT_GUIDE]
+    lines += ["풀 때(live-safety.md 3-5, 두 분이 같이 원인을 본 뒤):",
+              "sudo rm /var/lib/paperbot/STOP   (비상 정지 파일이 있었다면)",
+              f"sudo systemctl stop {ex.unit}",
+              "cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor "
+              f"clear-halt --config {ex.config} --by 이름 --note \"이유\"",
+              f"sudo systemctl start {ex.unit}"]
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------- 서버 상태
+def _disk_free(path: str) -> Optional[int]:
+    try:
+        st = os.statvfs(path)
+    except OSError:
+        return None
+    return int(st.f_bavail) * int(st.f_frsize)
+
+
+def _mem_available() -> Optional[int]:
+    try:
+        with open("/proc/meminfo", encoding="ascii") as fh:
+            for ln in fh:
+                if ln.startswith("MemAvailable:"):
+                    return int(ln.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _unit_memory() -> list:
+    """[(unit, bytes)] of the active paperbot-family services (systemctl list-units / show -p MemoryCurrent)."""
+    import subprocess
+    try:
+        p = subprocess.run(["systemctl", "list-units", "--type=service", "--state=active", "--plain", "--no-legend",
+                            *UNIT_FAMILIES], capture_output=True, text=True, timeout=10)
+        units = [ln.split()[0] for ln in (p.stdout or "").splitlines() if ln.strip()]
+        if not units:
+            return []
+        p = subprocess.run(["systemctl", "show", "-p", "Id", "-p", "MemoryCurrent", *units], capture_output=True,
+                           text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    out, cur = [], {}
+    for ln in (p.stdout or "").splitlines() + [""]:
+        if not ln.strip():
+            if cur.get("Id") and str(cur.get("MemoryCurrent", "")).isdigit():
+                out.append((cur["Id"], int(cur["MemoryCurrent"])))
+            cur = {}
+            continue
+        k, _, v = ln.partition("=")
+        cur[k] = v.strip()
+    return out
+
+
+@dataclass
+class Host:
+    """The server, read-only: free disk (statvfs), MemAvailable (/proc/meminfo), the services' memory (systemctl)."""
+    disk_free: Callable[[str], Optional[int]] = _disk_free
+    mem_available: Callable[[], Optional[int]] = _mem_available
+    unit_memory: Callable[[], list] = _unit_memory
+    paths: tuple = ("/", "/var/lib/paperbot")
+
+
+def _gb(x: int) -> str:
+    return f"{x / 1024 ** 3:.1f}GB" if x >= 1024 ** 3 else f"{x / 1024 ** 2:.0f}MB"
+
+
+def experiment(unit: str) -> bool:
+    return unit not in PROTECTED_UNITS and any(h in unit for h in EXPERIMENT_HINTS)
+
+
+def memory_lines(units: list) -> list:
+    """The biggest memory users, the experiments to stop first; the bots that trade are never suggested."""
+    if not units:
+        return ["(서비스별 메모리를 읽지 못함: systemctl status 로 보세요)"]
+    top = sorted(units, key=lambda u: -u[1])[:6]
+    lines = ["많이 쓰는 순서: " + ", ".join(f"{u.removesuffix('.service')} {_gb(m)}" for u, m in top)]
+    first = [u for u, _m in sorted(units, key=lambda u: -u[1]) if experiment(u)][:3]
+    if first:
+        lines.append("먼저 끌 것(실험): sudo systemctl stop " + " ".join(u.removesuffix(".service") for u in first))
+    else:
+        lines.append("끌 만한 실험 서비스가 켜져 있지 않습니다. 서버를 키우거나 개발자에게 알려 주세요")
+    lines.append("끄면 안 됨: paperbot-live3, paperbot-combo, paperbot-executor, paperbot-executor-mexc")
+    return lines
+
+
+def health_conditions(host: Host, src: Sources) -> tuple[list, set]:
+    conds, judged, seen_dev = [], set(), set()
+    low = []
+    for path in host.paths:
+        try:
+            dev = os.stat(path).st_dev
+        except OSError:
+            dev = path
+        if dev in seen_dev:
+            continue
+        seen_dev.add(dev)
+        free = host.disk_free(path)
+        if free is None:
+            continue
+        judged.add("disk")
+        prev = _active_before(src, "disk")
+        if free < DISK_MIN or (prev and free < DISK_CLEAR):
+            low.append((path, free))
+    if low:
+        conds.append(Cond("disk", CRITICAL,
+                          "디스크 부족 · " + ", ".join(f"{p} 남은 공간 {_gb(f)}" for p, f in low) + "\n"
+                          "꽉 차면 DB 기록이 실패해 페이퍼 봇과 실행기가 멈춥니다\n"
+                          "다음: sudo du -xh /var/lib/paperbot --max-depth 2 | sort -h | tail 로 큰 것을 보고, 실험 "
+                          "기록이나 오래된 백업(/var/backups/paperbot)부터 정리하세요(거래 DB는 지우지 마세요)",
+                          recover="✅ 디스크 공간이 다시 넉넉합니다"))
+    mem = host.mem_available()
+    if mem is not None:
+        judged.add("memory")
+        prev = _active_before(src, "memory")
+        if mem < MEM_MIN or (prev and mem < MEM_CLEAR):
+            conds.append(Cond("memory", CRITICAL,
+                              f"메모리 부족 · 남은 메모리 {_gb(mem)}\n"
+                              "모자라면 리눅스가 아무 프로그램이나 강제로 끕니다(페이퍼 봇이나 실행기일 수도 있음)\n"
+                              + "\n".join(memory_lines(host.unit_memory())),
+                              recover="✅ 메모리 여유가 다시 생겼습니다"))
+    return conds, judged
+
+
 # ====================================================================== commands
 def _notifier():
     from .live import _notifier as live_notifier
@@ -1568,7 +2291,14 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
     try:
         monday = _dt.datetime.fromtimestamp(w1 / 1000 + 9 * 3600, _dt.timezone.utc).weekday() == 0
         week = week_lines(out_conn, day, w1, execs, paper, infos, parity) if monday else None
-        level, text, loud = compose(day, w0, w1, parity, paper, execs, shadows, week)
+        exp = load_expected(src.expected)
+        notes = reference_notes(exp, src)
+        if not dry_run:                       # cards the watcher has not made yet (stored, not sent) and noise checks
+            cards_pass(src, out_conn, now_ms, exp, send=None, infos=infos, older_only=True)
+        cards = stored_cards(out_conn, w0, w1)
+        drift = drift_line(drift_state(trades, exp)) if (paper is not None and exp is not None) else None
+        level, text, loud = compose(day, w0, w1, parity, paper, execs, shadows, week, cards=cards, drift=drift,
+                                    notes=notes, now_ms=now_ms)
         report = {"day": day, "w0": w0, "w1": w1, "parity": parity, "executors": execs, "shadows": shadows,
                   "paper": {k: v for k, v in (paper or {}).items() if k != "trades"} if paper else None,
                   "infos": [ex.__dict__ for ex in infos]}
@@ -1584,9 +2314,24 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
     return {"level": level, "text": text, "loud": loud, "report": report, "sent": sent}
 
 
+def reference_notes(exp: Optional[dict], src: Sources) -> list:
+    """The backtest reference missing, or made for another config than the one in /etc/paperbot/combo.json."""
+    if exp is None:
+        return [f"백테스트 기준표({src.expected})를 못 읽어 손실 카드·기대 범위 비교 없음"]
+    try:
+        import hashlib
+        with open(src.combo_config, "rb") as fh:
+            sha = hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return []
+    if exp.get("config_sha256") and sha != exp["config_sha256"]:
+        return ["백테스트 기준표가 지금 설정 파일과 다름(설정이 바뀌면 기준표도 다시 만들어야 함): 카드의 숫자는 참고만"]
+    return []
+
+
 def _sources(a) -> Sources:
     src = Sources(db=a.db, paper_db=a.paper_db, rule_db=a.rule_db, combo_config=a.combo_config, cache=a.cache,
-                  shadow_glob=a.shadows)
+                  shadow_glob=a.shadows, expected=a.expected)
     return src
 
 
@@ -1618,7 +2363,7 @@ def cmd_watch(a) -> int:
         cc = {}
     src.paper_db = a.paper_db or cc.get("db") or PAPER_DB
     src.rule_db = a.rule_db or cc.get("paper_db") or RULE_DB
-    out = run_watch(src, dry_run=a.dry_run)
+    out = run_watch(src, dry_run=a.dry_run, host=Host())
     for event, key, level, text in out:
         print(f"[{event} {level}] {key}\n{text}\n")
     if a.dry_run and not out:
@@ -1663,6 +2408,7 @@ def main(argv: Optional[list] = None) -> int:
         p.add_argument("--combo-config", default=COMBO_CONFIG)
         p.add_argument("--cache", default=DEFAULT_CACHE, help="kline cache between nights")
         p.add_argument("--shadows", default=SHADOW_GLOB)
+        p.add_argument("--expected", default=EXPECTED_FILE, help="the backtest reference (combo.live-ac.expected.json)")
     r = sub.add_parser("run", help="the morning check of one day (09:00 to 09:00 KST)")
     common(r)
     r.add_argument("--day", default=None, help="YYYY-MM-DD: the KST date the checked day starts on (09:00)")

@@ -850,3 +850,326 @@ def test_watch_command_line_dry_run(tmp_path, capsys):
     assert LC.main(["watch", "--dry-run", "--db", src.db, "--combo-config", str(tmp_path / "combo.json")]) == 0
     got = capsys.readouterr().out
     assert "[fire CRITICAL] paper_stale\n페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다" in got
+
+
+# ====================================================================== 3부: 손실 카드, 기대 이탈, 멈춤 요약, 서버 상태
+EXP = {"symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"], "break_even_win": 0.776,
+       "config_sha256": "x",
+       "overall": {"fit": {"rolling20_wins": {"p5": 16}, "rolling40_wins": {"p5": 33}, "streaks": {"longest": 3}},
+                   "honest": {"rolling20_wins": {"p5": 12}, "rolling40_wins": {"p5": 25}, "streaks": {"longest": 5}}},
+       "strategies": {"F15_LON_BRK": {"type": "돌파", "win": 0.9, "honest_2025_26": [40, 0.8],
+                                      "loss_roe_median": -0.45, "loss_roe_worst": -0.6, "hours_to_stop_median": 1.5,
+                                      "hours_to_stop_p90": 6.0, "by_reg5": {"0": [50, 0.92], "4": [30, 0.70]},
+                                      "by_sym": {"0": [60, 0.9], "2": [3, 0.3]}}},
+       "members": {"0": {"strategy": "F15_LON_BRK", "tf": "1h", "stop": "atr3"}}}
+MEMBER = "F15_LON_BRK@1h#1~abc"
+
+
+def entered(entry, symbol=BTC, side=1, reg5=0, hr=14, rstop=("atr", 3.0)):
+    meta = {"member": MEMBER, "member_order": 1, "rdims": {"reg5": reg5, "hr": hr, "sym": 0}, "rstop": list(rstop)}
+    return SignalOutcome(signal=Signal(ts=entry - 1, symbol=symbol, timeframe="1h", strategy_id="F15_LON_BRK",
+                                       side=side, stop_price=0.0, meta=meta), status="ENTERED", reason="",
+                         step_ts=entry)
+
+
+def loss(entry, exit_, roe=-0.4, symbol=BTC, side=1, mfe=100.4):
+    t = trade(entry, exit_, roe * 10, symbol=symbol, side=side, reason="SL", roe=roe, exit_price=99.0)
+    t.stop_initial, t.mfe_price = 99.0, mfe
+    return t
+
+
+def card_setup(tmp_path, trades, outcomes, x_trades=(), red=(), now=None, exp=EXP):
+    paper = paper_db(tmp_path / "live-ac.db", trades=trades, outcomes=outcomes, heartbeat=(now or T) - MIN)
+    rule = rule_db(tmp_path / "paper3.db", (now or T) - 2 * MIN)
+    byb = exec_db(tmp_path / "bybit.db", trades=list(x_trades), state_ts=(now or T) - MIN)
+    mx = exec_db(tmp_path / "mexc.db", light_red=list(red), state_ts=(now or T) - MIN)
+    (tmp_path / "exp.json").write_text(json.dumps(exp))
+    return LC.Sources(db=str(tmp_path / "livecheck.db"), paper_db=paper, rule_db=rule, combo_config="-",
+                      expected=str(tmp_path / "exp.json"),
+                      executors=[info("bybit", byb), info("mexc", mx, share=0.9)])
+
+
+def test_reference_member_keys_count_from_zero_and_must_agree():
+    exp = LC.load_expected()
+    assert exp is not None and exp["members"]["0"]["strategy"] == "F12_MSS_DISP"
+    assert LC.ref_member(exp, 1, "F12_MSS_DISP", "1h")["stop"] == "atr2"      # member_order 1 = members["0"]
+    assert LC.ref_member(exp, 1, "F12_MSS_DISP", "30m") is None
+    assert LC.weak_cell([30, 0.70], 0.9, 0.776) and LC.weak_cell([30, 0.81], 0.9, 0.776)
+    assert not LC.weak_cell([30, 0.85], 0.9, 0.776) and not LC.weak_cell([3, 0.3], 0.9, 0.776)
+
+
+def test_loss_card_contents_against_the_reference(tmp_path):
+    entry, exit_ = T - 2 * H1, T - 30 * MIN
+    key = f"{LC.ACCOUNT}|{BTC}|{entry}"
+    src = card_setup(tmp_path, [trade(W0 - DAY, W0 - DAY + H1, 2.0), loss(entry, exit_, -0.4)], [entered(entry)],
+                     x_trades=[xtrade(entry, entry_price=100.05, exit_price=98.97, pnl=-1.05, exit_ts=exit_ + 3000)],
+                     red=[(key, entry + 2000)])
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert [k for e, k, _l, _t in out if e == "card"] == [key]
+    level, text = n.messages[-1]
+    assert level == INFO and text.startswith("🧾 손실 카드 · F15_LON_BRK 1시간 (#1, 돌파)")
+    assert "BTC 롱 · 진입 10/20 12:00 → 청산 13:30 (1.5시간)" in text
+    assert "순ROE -40.0% · 손절 · 손절 atr3, 거리 1.00%" in text
+    assert "장세 강상승 · 진입 14시 · 먼저 +16.0%까지 갔음" in text
+    assert "백테스트 승률 90.0% (처음 보는 2025-26 80%, 40번) · 손실 보통 -45% / 최악 -60% · 손절까지 보통 1.5시간" in text
+    assert "이 장세 92%(50번) · 이 코인 90%(60번)" in text and "약한 자리" not in text
+    assert "연속 손실 1번째 (백테스트 최장 3번, 처음 보는 기간 5번)" in text
+    assert "바이비트: 따라감, 순ROE -42.0%, 진입 +5.0bps / 청산 +3.0bps" in text
+    assert "MEXC: 신호등이 막음(따라가지 않음)" in text and text.endswith("판정: 정상 범위 손실")
+    assert LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False) == []
+    conn = sqlite3.connect(src.db)
+    row = conn.execute("SELECT label, loud, streak, sent, data FROM loss_cards").fetchone()
+    conn.close()
+    assert row[:4] == ("정상 범위 손실", 0, 1, 1)
+    card = json.loads(row[4])
+    assert card["reg5_cell"] == [50, 0.92] and card["executors"][1]["status"] == "blocked"
+
+
+def test_card_labels_and_when_a_card_is_loud():
+    t = {"id": 2, "entry_time": T - H1, "exit_time": T, "symbol": SOL, "side": 1, "strategy": "F15_LON_BRK",
+         "tf": "1h", "pnl": -4.0, "roe": -0.4, "reason": "SL", "entry_price": 100.0, "leverage": 30,
+         "stop_initial": 99.0, "mfe_price": 100.1}
+    prev = {"id": 1, "entry_time": T - 3 * H1, "exit_time": T - 2 * H1, "pnl": -1.0}
+    meta = {"member_order": 1, "rdims": {"reg5": 4, "hr": 3}}
+    c = LC.build_card(t, meta, [t], EXP, [])
+    assert c["label"] == "백테스트에서도 약한 자리" and c["weak"] == ["장세"] and not c["loud"]   # 70% in 횡보
+    assert "→ 백테스트에서도 약한 자리" in LC.card_text(c)
+    c = LC.build_card(t, meta, [prev, t], EXP, [])
+    assert c["label"] == "연속 손실 2번째" and c["loud"]
+    c = LC.build_card(dict(t, roe=-0.7), meta, [t], EXP, [])
+    assert c["label"] == "평소보다 큰 손실" and c["loud"]
+    gap = [{"status": "followed", "label": "바이비트", "pnl": -5.0, "entry_bps": 14.0, "exit_bps": 1.0,
+            "exit_ts": T}]
+    c = LC.build_card(t, meta, [prev, t], EXP, gap)
+    assert c["label"] == "실거래-페이퍼 차이" and c["loud"]
+    text = LC.card_text(c)
+    assert text.startswith("손실 카드 · F15_LON_BRK 1시간") and telegram_text(CRITICAL, text)[1].startswith("🚨 손실 카드")
+    assert LC.live_gap([{"status": "followed", "pnl": 0.3, "entry_bps": 1.0, "exit_bps": 1.0, "exit_ts": T}], T)
+    assert not LC.live_gap([{"status": "followed", "pnl": -3, "entry_bps": 4.0, "exit_bps": -2.0, "exit_ts": T}], T)
+    no_ref = LC.build_card(dict(t, strategy="NEW"), meta, [t], EXP, [])
+    assert "백테스트 기준표에 이 매매법이 없음" in LC.card_text(no_ref) and no_ref["label"] == "정상 범위 손실"
+
+
+def test_a_card_waits_for_the_executor_to_close(tmp_path):
+    entry, exit_ = T - H1, T - 5 * MIN
+    open_x = xtrade(entry, fills=False)
+    open_x["exit_ts"] = None
+    src = card_setup(tmp_path, [loss(entry, exit_)], [entered(entry)], x_trades=[open_x])
+    n = ListNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert not [m for _l, m in n.messages if "손실 카드" in m]
+    fresh(src, T + 31 * MIN)
+    out = LC.run_watch(src, now_ms=T + 31 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert [e for e, *_ in out].count("card") == 1
+    assert "바이비트: 따라감, 아직 닫는 중" in [m for _l, m in n.messages if "손실 카드" in m][0]
+
+
+def test_noise_stop_is_stored_and_shown_in_the_next_morning_check(tmp_path):
+    day = "2026-10-20"
+    w0, w1 = LC.window_of(day)
+    entry, exit_ = w1 - 6 * H1, w1 - 5 * H1                         # 03:00 -> 04:00 KST, long 40x
+    src = card_setup(tmp_path, [loss(entry, exit_)], [entered(entry)], now=exit_ + 10 * MIN)
+    LC.run_watch(src, now_ms=exit_ + 10 * MIN, notifier=ListNotifier(), units=Units(), exists=lambda p: False)
+    rows = []
+    for k in range(240):                                             # 4 hours after the exit; +0.3% = +12% at 40x
+        t = exit_ + k * MIN
+        hi = 100.3 if k == 100 else 99.5
+        rows.append({"ts": t, "symbol": BTC, "open": 99.5, "high": hi, "low": 99.0, "close": 99.5,
+                     "processed_at": t + MIN})
+    s = Store3(src.rule_db)
+    s.live_bars(rows)
+    s.commit()
+    s.conn.close()
+    out = LC.run_check(src, day=day, now_ms=w1 + 10 * MIN, replay=lambda *a: result(), notifier=ListNotifier())
+    assert "손실 카드 1장" in out["text"]
+    assert "- 10/21 04:00 BTC 롱 F15_LON_BRK -40.0% · 정상 범위 손실 · 노이즈 손절(4시간 안에 +12.0%까지 돌아감)" \
+        in out["text"]
+    conn = sqlite3.connect(src.db)
+    assert conn.execute("SELECT noise, round(noise_roe, 3) FROM loss_cards").fetchone() == (1, 0.12)
+    conn.close()
+    # before the 4 hours are over the line says so
+    c = {"exit_time": T, "symbol": BTC, "side": 1, "strategy": "S", "roe": -0.4, "label": "정상 범위 손실",
+         "noise": None}
+    assert LC.card_line(c, T + H1).endswith("노이즈 손절 확인은 다음 점검에서")
+    assert LC.noise_check(src.rule_db, dict(c, exit_time=T + DAY), 40, 100.0, T + DAY + H1) is None
+    assert LC.noise_check("/nonexistent", c, 40, 100.0, T + 29 * H1) == (-1, None)
+
+
+def _paper_run(n_wins, n_losses, strategy="F15_LON_BRK", start=W0 - 20 * DAY, losses_last=True):
+    out = []
+    t = start
+    pnls = [1.0] * n_wins + [-1.0] * n_losses if losses_last else [-1.0] * n_losses + [1.0] * n_wins
+    for p in pnls:
+        out.append(trade(t, t + 30 * MIN, p, strategy=strategy))
+        t += 2 * H1
+    return out
+
+
+def test_drift_below_the_honest_range_is_loud_below_fit_is_a_note(tmp_path):
+    assert LC.drift_line(LC.drift_state(_closed(10, 2), EXP)) == "- 기대 범위: 표본 작음(12번, 20번부터 봄)"
+    conds, _j = LC.drift_conditions([dict(x, strategy="A") for x in _closed(10, 2)], EXP)
+    assert conds == []                                               # small sample: no win-rate alarm
+    cases = ((11, 9, "drift:20", CRITICAL), (15, 5, "drift_note:20", INFO), (17, 3, None, None))
+    for wins, losses, key, level in cases:
+        tr = [dict(x, strategy=f"S{i % 7}") for i, x in enumerate(_closed(wins, losses))]
+        tr = tr[:-losses] + [dict(x, strategy=f"T{i}") for i, x in enumerate(tr[-losses:])] if losses else tr
+        conds, _j = LC.drift_conditions(tr, EXP)
+        got = [(c.key, c.level) for c in conds if c.key.startswith("drift")]
+        assert got == ([(key, level)] if key else []), (wins, got)
+    loud = [c for c in LC.drift_conditions(_closed(11, 9), EXP)[0] if c.key == "drift:20"][0]
+    assert loud.text.startswith("기대 범위 밑 · 페이퍼 최근 20번 11승")
+    line = LC.drift_line(LC.drift_state(_closed(17, 3), EXP))
+    assert line == "- 기대 범위: 최근 20번 17승(백테스트 하위 5% 16승, 처음 보는 기간 12승) 범위 안"
+    # one strategy with 3 losses in its last 5: a silent note (and the watcher de-duplicates it)
+    src = card_setup(tmp_path, _paper_run(2, 3, start=W0 - 20 * DAY), [])
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert "strat:F15_LON_BRK" in keys(out)
+    note = [(lv, m) for lv, m in n.messages if "F15_LON_BRK 최근" in m]
+    assert note == [(INFO, "📉 참고: F15_LON_BRK 최근 5번 중 3번 손실 (백테스트 승률 90%)")]
+    again = LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert "strat:F15_LON_BRK" not in keys(again)
+
+
+def test_an_executor_losing_where_the_paper_won_twice_is_loud(tmp_path):
+    a, b = W0 + H1, W0 + 3 * H1
+    src = card_setup(tmp_path, [trade(a, a + H1, 3.0), trade(b, b + H1, 2.0)], [],
+                     x_trades=[xtrade(a, pnl=-0.4), xtrade(b, pnl=-0.2)])
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert "vs_paper:bybit" in keys(out) and "vs_paper:mexc" not in keys(out)
+    m = [x for _l, x in n.messages if x.startswith("바이비트 실거래가 페이퍼가 이긴 거래에서")][0]
+    assert m.startswith("바이비트 실거래가 페이퍼가 이긴 거래에서 2번 졌습니다(최근 20번 중)")
+    assert "- 10/20 10:00 BTC 롱 F15_LON_BRK: 페이퍼 +$3.00, 실거래 -$0.40" in m
+
+
+def test_halt_summary_names_the_rule_the_trades_and_the_guide(tmp_path):
+    a, b, c = W0, W0 + H1, W0 + 2 * H1
+    paper = [loss(a, a + 30 * MIN), loss(b, b + 30 * MIN), loss(c, c + 30 * MIN)]
+    src = card_setup(tmp_path, paper, [entered(a), entered(b), entered(c)],
+                     x_trades=[xtrade(x, exit_price=99.0, pnl=-1.0, exit_ts=x + 30 * MIN) for x in (a, b, c)])
+    _set_bot(src.executors[0].db, ts=T, halted=True, halt_reason="연속 손실 3번", halted_ts=c + H1,
+             halt_kinds=["streak"], last_equity=64.0)
+    n = ListNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    msg = [m for _l, m in n.messages if "실행기가 멈췄습니다" in m]
+    assert len(msg) == 1
+    m = msg[0]
+    assert m.startswith("바이비트 실행기가 멈췄습니다 · 이유: 3연패(연속 손실 3번)\n멈춤 기록: 연속 손실 3번")
+    assert "- 10/20 09:30 BTC 롱 F15_LON_BRK -40.0% (-$1.00) · 카드: 정상 범위 손실" in m
+    assert "- 10/20 11:30 BTC 롱 F15_LON_BRK -40.0% (-$1.00) · 카드: 연속 손실 3번째" in m
+    assert "잔고 $64.00 (시작 $100.00, -36.0%)" in m
+    assert "페이퍼 거래 3번(표본 작음) · 신호등 근거 쌓는 중(3/20번, 그동안 모두 따라감)" in m
+    assert f"- {LC.HALT_GUIDE[0]}" in m and f"- {LC.HALT_GUIDE[1]}" in m
+    assert ("sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor clear-halt --config - "
+            "--by 이름 --note \"이유\"") in m
+    assert "sudo systemctl stop paperbot-executor-bybit" in m
+    # the follow alarm stays quiet while halted; the summary is sent once and re-armed when the halt is lifted
+    fresh(src, T + 2 * MIN)
+    again = LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert not [k for k in keys(again) if k.startswith("halt:")]
+    _set_bot(src.executors[0].db, ts=T + 3 * MIN, halted=False, halted_ts=None, halt_kinds=None)
+    fresh(src, T + 4 * MIN)
+    out = LC.run_watch(src, now_ms=T + 4 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert [k for k in keys(out, "clear") if k.startswith("halt:")] and n.messages[-1][1].startswith("✅ 바이비트 실행기 멈춤")
+    assert LC.halt_rule({"halt_kinds": ["drawdown"]}) == "낙폭 50%"
+    assert LC.halt_rule({"halt_kinds": ["kill"]}) == "STOP 파일(비상 정지)"
+    assert LC.halt_rule({"halt_reason": "알 수 없는 포지션"}) == "기타(알 수 없는 포지션)"
+
+
+def test_halt_guide_quotes_are_the_owners_guide():
+    from pathlib import Path
+    guide = (Path(LC.ROOT) / "docs" / "live1019-start-ko.md").read_text(encoding="utf-8")
+    safety = (Path(LC.ROOT) / "docs" / "live-safety.md").read_text(encoding="utf-8")
+    for q in LC.HALT_GUIDE:
+        assert q in guide, q
+    assert "sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor clear-halt --config " in safety
+    assert "--by 이름 --note \"이유\"" in safety and "### 3-5. 멈춤 풀기" in safety
+
+
+def test_server_health_disk_and_memory(tmp_path):
+    src = card_setup(tmp_path, [], [])
+    units = [("paperbot-live3.service", 1_400 * 1024 ** 2), ("paperbot-agents.service", 900 * 1024 ** 2),
+             ("paperbot-combo.service", 700 * 1024 ** 2), ("paperbot-combo-shadow@b.service", 300 * 1024 ** 2),
+             ("candleague-live.service", 250 * 1024 ** 2), ("paperbot-executor.service", 90 * 1024 ** 2),
+             ("paperbot-dash.service", 120 * 1024 ** 2)]
+    state = {"disk": 1.5 * 1024 ** 3, "mem": 400 * 1024 ** 2}
+    host = LC.Host(disk_free=lambda p: int(state["disk"]), mem_available=lambda: int(state["mem"]),
+                   unit_memory=lambda: units, paths=("/",))
+    n = ListNotifier()
+
+    def run(now):
+        fresh(src, now)
+        _set_bot(src.executors[0].db, ts=now - MIN)
+        _set_bot(src.executors[1].db, ts=now - MIN)
+        return LC.run_watch(src, now_ms=now, notifier=n, units=Units(), exists=lambda p: False, host=host)
+    out = run(T)
+    assert sorted(keys(out)) == ["disk", "memory"]
+    disk = [m for _l, m in n.messages if m.startswith("디스크 부족")][0]
+    assert disk.startswith("디스크 부족 · / 남은 공간 1.5GB")
+    mem = [m for _l, m in n.messages if m.startswith("메모리 부족")][0]
+    assert mem.startswith("메모리 부족 · 남은 메모리 400MB")
+    assert "많이 쓰는 순서: paperbot-live3 1.4GB, paperbot-agents 900MB, paperbot-combo 700MB" in mem
+    first = [ln for ln in mem.splitlines() if ln.startswith("먼저 끌 것")][0]
+    assert first == ("먼저 끌 것(실험): sudo systemctl stop paperbot-agents paperbot-combo-shadow@b "
+                     "candleague-live")
+    for keep in ("paperbot-live3", "paperbot-combo ", "paperbot-executor"):
+        assert keep not in first.replace("paperbot-combo-shadow", "")
+    assert "끄면 안 됨: paperbot-live3, paperbot-combo, paperbot-executor, paperbot-executor-mexc" in mem
+    state.update(mem=600 * 1024 ** 2, disk=2.2 * 1024 ** 3)       # between the thresholds: still the same alarms
+    assert run(T + 2 * MIN) == []
+    state.update(mem=800 * 1024 ** 2, disk=3 * 1024 ** 3)
+    out = run(T + 4 * MIN)
+    assert sorted(keys(out, "clear")) == ["disk", "memory"]
+    state.update(mem=300 * 1024 ** 2)
+    assert keys(run(T + 6 * MIN)) == ["memory"]
+    assert LC.memory_lines([("paperbot-live3.service", 10)])[1].startswith("끌 만한 실험 서비스가 켜져 있지 않습니다")
+    assert LC.memory_lines([])[0].startswith("(서비스별 메모리를 읽지 못함")
+
+
+def test_unit_memory_parsing_and_meminfo(monkeypatch):
+    import subprocess
+
+    class P:
+        def __init__(self, out):
+            self.stdout = out
+    calls = []
+
+    def fake(cmd, **kw):
+        calls.append(cmd)
+        if cmd[1] == "list-units":
+            return P("paperbot-live3.service loaded active running x\n"
+                     "paperbot-agents.service loaded active running y\n")
+        return P("Id=paperbot-live3.service\nMemoryCurrent=1048576\n\nId=paperbot-agents.service\n"
+                 "MemoryCurrent=[not set]\n")
+    monkeypatch.setattr(subprocess, "run", fake)
+    assert LC._unit_memory() == [("paperbot-live3.service", 1048576)]
+    assert calls[1][:5] == ["systemctl", "show", "-p", "Id", "-p"]
+    assert LC._mem_available() is None or LC._mem_available() > 0
+    assert LC._disk_free("/") is None or LC._disk_free("/") > 0
+
+
+def test_reference_note_when_the_config_changed(tmp_path):
+    cfg = tmp_path / "combo.json"
+    cfg.write_text("{}")
+    src = LC.Sources(combo_config=str(cfg), expected="-")
+    assert "기준표가 지금 설정 파일과 다름" in LC.reference_notes({"config_sha256": "abc"}, src)[0]
+    import hashlib
+    assert LC.reference_notes({"config_sha256": hashlib.sha256(b"{}").hexdigest()}, src) == []
+    assert "기준표" in LC.reference_notes(None, src)[0]
+    from pathlib import Path
+    live = Path(LC.ROOT) / "deploy" / "combo.live-ac.json"
+    assert LC.reference_notes(LC.load_expected(), LC.Sources(combo_config=str(live))) == []
+
+
+def test_the_morning_check_leaves_fresh_losses_to_the_watcher(tmp_path):
+    entry, exit_ = T - H1, T - 30 * MIN
+    src = card_setup(tmp_path, [loss(entry, exit_)], [entered(entry)])
+    LC.run_check(src, day="2026-10-19", now_ms=T, replay=lambda *a: result(), notifier=ListNotifier())
+    conn = sqlite3.connect(src.db)
+    assert conn.execute("SELECT COUNT(*) FROM loss_cards").fetchone() == (0,)
+    conn.close()
+    n = ListNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert [m for _l, m in n.messages if m.startswith("🧾 손실 카드")]

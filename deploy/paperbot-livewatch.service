@@ -3,7 +3,9 @@
 # clears): an executor did not follow a paper entry although its signal light allowed it; an executor's open position
 # without a recorded stop, or its state older than 10 minutes while it should run; the paper bot silent for 10 minutes
 # or the rule bot's newest 1m bar older than 5 minutes; an executor 25% below its equity peak (silent good news at
-# +50% / +100%). Read-only towards the bots: their databases opened read-only, the executors' configs read as JSON,
+# +50% / +100%); a loss card per losing paper trade (3부 ①, silent unless it is bigger than usual, differs from the
+# real trade or is the 2nd loss in a row), the paper below its backtest range (②), a summary when an executor halts
+# (⑤), low disk or memory on this shared server. Read-only towards the bots: their databases opened read-only, the executors' configs read as JSON,
 # executor.env never opened, no exchange call, no order, no Binance call. `systemctl is-active/is-enabled` tells
 # whether an executor should be running. Writes only /var/lib/paperbot/livecheck.db. Started by paperbot-livewatch.timer.
 # By hand (prints what would be sent; sends nothing, writes nothing):
