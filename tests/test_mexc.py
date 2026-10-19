@@ -671,7 +671,11 @@ def test_drill_order_cycle_is_one_smallest_order(side, net):
     assert all(r["ok"] for r in log), log
     assert d.symbol == BTC                                                 # the cheapest smallest order
     creates = [q for m, p, q in fake.calls if p.endswith("/order/create")]
-    assert [q["vol"] for q in creates] == [1, 1] and [q["side"] for q in creates] == (
+    # MEXC refuses orders under 5 USDT (code 7008, the owners' first live drill): the fewest contracts worth >= $6
+    spec, px = d.client.spec(BTC), d.client.price(BTC)
+    vol = creates[0]["vol"]
+    assert vol * spec["qty_step"] * px >= MX.DRILL_ORDER_USDT > (vol - 1) * spec["qty_step"] * px
+    assert [q["vol"] for q in creates] == [vol, vol] and [q["side"] for q in creates] == (
         [1, 4] if side > 0 else [3, 2])
     plans = [q for m, p, q in fake.calls if p.endswith("planorder/place")]
     assert len(plans) == 2                                                 # the stop, then the moved stop

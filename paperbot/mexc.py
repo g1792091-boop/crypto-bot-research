@@ -98,6 +98,7 @@ import hashlib
 import hmac
 import http.client
 import json
+import math
 import os
 import sys
 import time
@@ -124,6 +125,10 @@ LIVE_KEY_NAMES = ("MEXC_LIVE_KEY", "MEXC_LIVE_SECRET")
 KEY_CHECKED = "MEXC_LIVE_KEY_CHECKED"                 # the owners' statement: what the API cannot report
 KEY_CHECKED_VALUE = "FUTURES_ONLY_NO_WITHDRAW_IP_BOUND"
 DRILL_CONFIRM = "REAL_ORDER"
+# MEXC refuses an order under 5 USDT (code 7008 "Cannot be less than the minimum order amount 5 USDT", seen on the
+# owners' first live drill 2026-10-19): the executor's spec carries it as min_notional, the drill orders a bit above it
+MIN_ORDER_USDT = 5.0
+DRILL_ORDER_USDT = 6.0
 # owners 2026-10-17: BTC 40x, the other coins 30x (set at the start; the entry itself sets the paper account's leverage)
 FIXED_LEVERAGE = {"BTCUSDT": 40}
 DEFAULT_LEVERAGE = 30
@@ -599,7 +604,7 @@ class MexcClient:
         if cs <= 0 or vu <= 0 or mv <= 0 or pu <= 0:
             raise TestnetError(400, "BAD_SPEC", f"{row.get('symbol')}: 계약 단위 정보가 이상합니다")
         maxv = row.get("maxVol")
-        return {"qty_step": float(cs * vu), "min_qty": float(cs * mv), "tick": float(pu), "min_notional": 0.0,
+        return {"qty_step": float(cs * vu), "min_qty": float(cs * mv), "tick": float(pu), "min_notional": MIN_ORDER_USDT,
                 "max_leverage": _f(row.get("maxLeverage")), "status": row.get("state"),
                 "api_allowed": row.get("apiAllowed"), "position_open_type": row.get("positionOpenType"),
                 "contract_size": _num(cs), "vol_unit": _num(vu), "min_vol": _num(mv), "price_unit": _num(pu),
@@ -1377,9 +1382,16 @@ class MexcDrill:
         return check()
 
     def smallest(self) -> str:
-        """The coin whose smallest order is the cheapest."""
+        """The coin whose smallest order MEXC accepts is the cheapest."""
         c = self.client
-        return min(self.symbols, key=lambda s: c.spec(s)["min_qty"] * c.price(s))
+        return min(self.symbols, key=lambda s: self.drill_qty(c.spec(s), c.price(s)) * c.price(s))
+
+    @staticmethod
+    def drill_qty(spec: dict, price: float) -> float:
+        """The fewest contracts worth at least DRILL_ORDER_USDT (MEXC refuses orders under MIN_ORDER_USDT)."""
+        step = spec["qty_step"]
+        need = math.ceil(DRILL_ORDER_USDT / (price * step) - 1e-9) * step if price > 0 else 0.0
+        return round(max(spec["min_qty"], need), 12)
 
     def check(self) -> list:
         c = self.client
@@ -1391,7 +1403,7 @@ class MexcDrill:
             rows[s] = {"contractSize": sp["contract_size"], "minVol": sp["min_vol"], "volUnit": sp["vol_unit"],
                        "priceUnit": sp["price_unit"], "maxVol": sp["max_vol"], "maxLeverage": sp["max_leverage"],
                        "state": sp["status"], "apiAllowed": sp["api_allowed"],
-                       "positionOpenType": sp["position_open_type"], "min_order_usd": round(sp["min_qty"] * px, 4)}
+                       "positionOpenType": sp["position_open_type"], "min_order_usd": round(max(sp["min_qty"] * px, MIN_ORDER_USDT), 4)}
         self._step("계약 정보(6개 코인)", all(r["state"] in (0, "0") and _int(r["positionOpenType"], 3) in (1, 3)
                                           for r in rows.values()), rows)
         a = c.account()
@@ -1428,7 +1440,7 @@ class MexcDrill:
         self._step(f"{s} 시작 전 포지션·주문·조건 주문 없음", float(c.position(s)["positionAmt"]) == 0
                    and not c.open_orders(s) and not c.open_algo_orders(s), "포지션이 없고 주문이 없어야 합니다")
         w0 = float(c.account()["totalWalletBalance"])
-        qty = spec["min_qty"]
+        qty = self.drill_qty(spec, c.price(s))
         cid = ext_id(None)
         o = c.market(s, buy, qty, client_id=cid)
         for _ in range(20):
@@ -1436,9 +1448,9 @@ class MexcDrill:
                 break
             self.wait(0.5)
             o = c.order(s, order_id=o["orderId"])
-        self._step("시장가 진입 체결(가장 작은 수량)", o.get("status") == "FILLED",
+        self._step(f"시장가 진입 체결(가장 작은 주문, 약 ${DRILL_ORDER_USDT:.0f})", o.get("status") == "FILLED",
                    {"status": o.get("status"), "avg": o.get("avgPrice"), "qty": o.get("executedQty"),
-                    "contracts": spec["min_vol"], "orderId": o.get("orderId")})
+                    "contracts": round(qty / spec["qty_step"]), "orderId": o.get("orderId")})
         found = c.order(s, client_id=cid)
         self._step("진입 주문을 우리 번호(externalOid)로 찾음", found.get("orderId") == o["orderId"],
                    {"externalOid": cid, "orderId": found.get("orderId")})
