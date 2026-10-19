@@ -1859,57 +1859,6 @@
    ]
   },
   {
-   "strategy": "F13_FVG_PD",
-   "tf": "30m",
-   "numbers": {
-    "swing_k": 3,
-    "fvg_min_atr": 1.0,
-    "zone_life": 50
-   },
-   "cell": "F13_FVG_PD_30m",
-   "stop": [
-    "atr",
-    4.0
-   ],
-   "entry": "now",
-   "filter": [
-    [
-     "weekend",
-     1
-    ],
-    [
-     "mom24",
-     1
-    ],
-    [
-     "btc",
-     1
-    ]
-   ],
-   "off": [
-    [
-     "hr",
-     12
-    ],
-    [
-     "hr",
-     15
-    ],
-    [
-     "hr",
-     19
-    ],
-    [
-     "hr",
-     20
-    ],
-    [
-     "symside",
-     0
-    ]
-   ]
-  },
-  {
    "strategy": "N03_ADX_GC",
    "tf": "1h",
    "numbers": {
@@ -3059,57 +3008,6 @@
    ]
   },
   {
-   "strategy": "F13_FVG_PD",
-   "tf": "30m",
-   "numbers": {
-    "swing_k": 3,
-    "fvg_min_atr": 0.625,
-    "zone_life": 150
-   },
-   "cell": "F13_FVG_PD_30m",
-   "stop": [
-    "atr",
-    4.0
-   ],
-   "entry": "now",
-   "filter": [
-    [
-     "weekend",
-     1
-    ],
-    [
-     "mom24",
-     1
-    ]
-   ],
-   "off": [
-    [
-     "dow",
-     6
-    ],
-    [
-     "hr",
-     2
-    ],
-    [
-     "hr",
-     4
-    ],
-    [
-     "hr",
-     20
-    ],
-    [
-     "oi24",
-     2
-    ],
-    [
-     "sym",
-     0
-    ]
-   ]
-  },
-  {
    "strategy": "N06_MACD_ORB",
    "tf": "30m",
    "numbers": {
@@ -4164,60 +4062,6 @@
    ]
   },
   {
-   "strategy": "F16_FIB764",
-   "tf": "30m",
-   "numbers": {
-    "swing_k": 3,
-    "leg_atr": 3.0,
-    "leg_max_bars": 30,
-    "zone_life": 50
-   },
-   "cell": "F16_FIB764_30m",
-   "stop": [
-    "atr",
-    3.0
-   ],
-   "entry": "now",
-   "disp": [
-    "range",
-    3.0
-   ],
-   "off": [
-    [
-     "hb",
-     4
-    ],
-    [
-     "hr",
-     2
-    ],
-    [
-     "oi24",
-     0
-    ],
-    [
-     "oi24",
-     2
-    ],
-    [
-     "reg5side",
-     1
-    ],
-    [
-     "reg5side",
-     6
-    ],
-    [
-     "symside",
-     2
-    ],
-    [
-     "symside",
-     8
-    ]
-   ]
-  },
-  {
    "strategy": "DOGE",
    "tf": "30m",
    "numbers": {
@@ -4305,48 +4149,6 @@
    ]
   },
   {
-   "strategy": "OBV_B",
-   "tf": "1h",
-   "numbers": {
-    "break_len": 9,
-    "ao_fast": 5,
-    "ao_slow": 34,
-    "ac_len": 5
-   },
-   "cell": "OBV_B_1h",
-   "stop": [
-    "atr",
-    3.0
-   ],
-   "entry": "now",
-   "disp": [
-    "range",
-    3.0
-   ],
-   "off": [
-    [
-     "hr",
-     8
-    ],
-    [
-     "hr",
-     15
-    ],
-    [
-     "hr",
-     20
-    ],
-    [
-     "hr",
-     23
-    ],
-    [
-     "oi24",
-     2
-    ]
-   ]
-  },
-  {
    "strategy": "N13_3OUTSIDE",
    "tf": "1h",
    "numbers": {
@@ -4426,37 +4228,6 @@
     [
      "symside",
      10
-    ]
-   ]
-  },
-  {
-   "strategy": "F15_OPEN0000",
-   "tf": "30m",
-   "numbers": {
-    "judge_min": 60
-   },
-   "cell": "F15_OPEN0000_30m",
-   "stop": [
-    "atr",
-    3.0
-   ],
-   "entry": "now",
-   "disp": [
-    "body",
-    1.5
-   ],
-   "off": [
-    [
-     "reg5",
-     3
-    ],
-    [
-     "symside",
-     0
-    ],
-    [
-     "symside",
-     11
     ]
    ]
   },
@@ -4789,44 +4560,6 @@
     [
      "sym",
      1
-    ]
-   ]
-  },
-  {
-   "strategy": "N18_VWMA_MACD",
-   "tf": "1h",
-   "numbers": {
-    "vwma_len": 20,
-    "macd_fast": 12,
-    "macd_slow": 26,
-    "macd_signal": 9
-   },
-   "cell": "N18_VWMA_MACD_1h",
-   "stop": [
-    "atr",
-    3.0
-   ],
-   "entry": "now",
-   "disp": [
-    "body",
-    2.0
-   ],
-   "off": [
-    [
-     "hr",
-     8
-    ],
-    [
-     "hr",
-     18
-    ],
-    [
-     "regside",
-     3
-    ],
-    [
-     "symside",
-     11
     ]
    ]
   },
