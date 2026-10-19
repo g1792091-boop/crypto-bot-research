@@ -122,3 +122,52 @@
   .lb-term .term-pnl { flex: none; }
   .lb-term .term-pnl .term-ph { flex-wrap: wrap; row-gap: 4px; height: auto; }
 }
+
+/* ---------------------------------------------------------------- 차트 (livebots-chart.js): the terminal chart, big */
+.lb-chartv.term { grid-template-rows: none; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.lb-cbig .term-chart { height: min(68vh, 640px); min-height: 360px; }
+@media (max-width: 759px) {
+  .lb-cbig .term-chart { height: 440px; min-height: 0; }
+  .lb-cbig .term-chart .term-ph { flex-wrap: wrap; row-gap: 4px; height: auto; }
+  .lb-cbig .term-tfs { overflow-x: auto; max-width: 100%; }
+}
+.lb-lines { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); min-width: 0; }
+.lb-lblock { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+.lb-lblock.flat { opacity: .8; }
+.lb-lhead2 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 4px; }
+.lb-lrow { display: grid; grid-template-columns: calc(96px * var(--ts)) minmax(0, auto) minmax(0, 1fr); gap: 2px 10px; align-items: baseline; font-size: var(--t-sm); }
+.lb-lk { color: var(--muted); font-size: var(--t-xs); }
+.lb-lx { font-size: var(--t-xs); overflow-wrap: anywhere; white-space: normal; }
+@media (max-width: 459px) { .lb-lrow { grid-template-columns: calc(84px * var(--ts)) minmax(0, 1fr); } .lb-lx { grid-column: 2; } }
+.lb-flat { margin: 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px dashed var(--line-2); color: var(--ink-2); font-size: var(--t-sm); }
+.lb-rlist { display: grid; }
+.lb-rrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 2px; border-top: 1px solid var(--line);
+  font-size: var(--t-sm); min-height: 32px; }
+
+/* ---------------------------------------------------------------- 거래 (livebots-trades.js) */
+.lb-tbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.lb-tfil { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.lb-tfil .select { min-height: 34px; max-width: 100%; }
+.lb-tsum { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 2px; font-size: var(--t-sm); color: var(--ink); }
+.lb-titem { border-top: 1px solid var(--line); min-width: 0; }
+.lb-titem.open { background: var(--surface-2); border-radius: var(--r-sm); }
+.lb-trow { display: grid; grid-template-columns: calc(92px * var(--ts)) calc(46px * var(--ts)) auto minmax(0, 1fr) auto calc(64px * var(--ts)) calc(76px * var(--ts));
+  align-items: center; gap: 4px 10px; width: 100%; min-height: 40px; padding: 6px 4px; border: 0; background: none; color: inherit; font: inherit;
+  font-size: var(--t-sm); text-align: left; cursor: pointer; }
+.lb-trow:hover { background: var(--surface-2); }
+.lb-tt { font-size: var(--t-xs); }
+.lb-tc { font-weight: 800; }
+.lb-ts { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.lb-tr, .lb-tp { text-align: right; }
+@media (max-width: 759px) {
+  .lb-trow { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+  .lb-tt { grid-column: 1 / -1; }
+  .lb-ts { grid-column: 1 / 3; }
+}
+.lb-tdet { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 4px 8px 12px; min-width: 0; }
+.lb-tdet .kv { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.lb-tdet .kv dd { overflow-wrap: anywhere; }
+.lb-nums { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.lb-tlive { display: grid; gap: 6px; }
+.lb-tcell { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 8px; border-radius: var(--r-sm); background: var(--surface); font-size: var(--t-sm); min-width: 0; }
+.lb-cmeta { font-size: var(--t-xs); overflow-wrap: anywhere; }

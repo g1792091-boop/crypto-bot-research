@@ -49,8 +49,56 @@ PAPER = [
 ]
 FLIP_PNL = [5.0, -30.0, -20.0, 7.0]
 LADDER = {"first_lock": 0.1, "step": 0.03, "trigger_gap": 0.01}
+# three settings in the shape of deploy/combo.live-ac.json (research members: stop, entry, invert, filter, disp, off, cell)
+MEMBERS = [
+    {"strategy": "S2_ST_ROC", "tf": "1h", "numbers": {"st_len": 10, "roc_len": 12}, "cell": "S2_ST_ROC_1h", "stop": ["atr", 3.0],
+     "entry": "now", "filter": [["weekend", 0], ["session", 0]], "off": [["hr", 5], ["symside", 7], ["dow", 3]]},
+    {"strategy": "N03_ADX_GC", "tf": "15m", "numbers": {"adx_len": 14}, "cell": "N03_ADX_GC_15m", "stop": ["swing", 10],
+     "entry": "break", "invert": True, "disp": ["range", 1.5], "off": [["oi24", 2]]},
+    {"strategy": "S2_ST_ROC", "tf": "30m", "numbers": {"st_len": 8, "roc_len": 9}, "cell": "core-S2_ST_ROC-30m-1", "stop": ["pct", 2.0],
+     "entry": "now"},
+]
 CONFIG = {"name": "A+C 합본", "initial_equity": 1000, "leverage": {"BTCUSDT": 40, "default": 30}, "margin": 0.4,
-          "ladder": LADDER, "max_loss_frac": 0.35, "flip_twin": True}
+          "ladder": LADDER, "max_loss_frac": 0.35, "flip_twin": True, "no_weekend": True, "macro_blackout_min": 30,
+          "stop": {"mode": "atr_fit", "atr": 3.0, "min_atr": 1.0}, "rank": ["order"], "members": MEMBERS}
+ORDER_OF = {("S2_ST_ROC", "1h"): 1, ("N03_ADX_GC", "15m"): 2, ("S2_ST_ROC", "30m"): 3}
+
+
+def _label(strat: str, tf: str) -> str:
+    return f"{strat}@{tf}#{ORDER_OF.get((strat, tf), 9)}~abc123"
+
+
+def _signal(sym: str, tf: str, strat: str, side: int, bar_close: int, member: Optional[str] = None) -> Signal:
+    member = member or _label(strat, tf)
+    return Signal(ts=bar_close - 1, symbol=sym, timeframe=tf, strategy_id=strat, side=side, stop_price=0.0, tier="best", score=3.0,
+                  atr=1.0, meta={"member": member, "member_order": ORDER_OF.get((strat, tf), 9), "stop_rule": "3 x ATR", "source": "custom"})
+
+
+def signals_and_outcomes(s: Store3) -> None:
+    """The combined bot's own records of its signals (paperbot/combo.py _log / _restate and the engine's outcomes): every
+    paper trade was an ENTERED signal; around them signals that were filtered (research filter, a switched-off bucket, the
+    weekend, a macro release), one that lost to another signal of the same minute, one late, one waiting for its break."""
+    from paperbot.models import SignalOutcome
+    for _name, sym, side, t, _pnl, _roe, strat, tf, _reason in PAPER:
+        sig = _signal(sym, tf, strat, side, t)
+        s.log_signals([{"bar_close": t, "timeframe": tf, "strategy": sig.meta["member"], "symbol": sym, "side": side, "atr": 1.0,
+                        "ref_price": 100.0, "ref_time": t, "delay_ms": 900, "status": "SUBMITTED", "data": {"source": "custom", "strategy": strat}}])
+        s.outcome(ACCOUNT, SignalOutcome(sig, "ENTERED", "ok", t, {"fill": 100.0}))
+    rows = [("FILTERED", "BTCUSDT", 1, T0 + 30 * MIN, "연구 조건 밖: weekend=0"), ("FILTERED", "ETHUSDT", -1, T0 + 90 * MIN, "끈 구간: hr=5"),
+            ("FILTERED", "SOLUSDT", 1, T0 + 150 * MIN, "끈 구간: symside=7"), ("FILTERED", "DOGEUSDT", 1, T0 - 2 * DAY, "주말(한국 시간 토·일) 진입 안 함"),
+            ("FILTERED", "LTCUSDT", -1, T0 + 200 * MIN, "경제 발표 앞뒤 30분: 소비자물가(CPI) 2026-10-19 12:30"),
+            ("WAITING", "BCHUSDT", 1, NOW - 10 * MIN, "돌파 확인 대기")]
+    for st, sym, side, t, why in rows:
+        s.log_signals([{"bar_close": t, "timeframe": "15m", "strategy": _label("N03_ADX_GC", "15m"), "symbol": sym, "side": side, "atr": 1.0,
+                        "ref_price": 100.0, "ref_time": t, "delay_ms": 800, "status": st, "data": {"source": "custom", "strategy": "N03_ADX_GC", "why": why}}])
+    # same minute as t2: a second signal lost to it; and a late one
+    lost = _signal("SOLUSDT", "1h", "S2_ST_ROC", 1, T0 + 2 * H)
+    late = _signal("BTCUSDT", "30m", "S2_ST_ROC", -1, T0 + 7 * H)
+    for sig, st, reason in ((lost, "SKIPPED", "lower score than entered signal"), (late, "REJECTED", "late")):
+        s.log_signals([{"bar_close": sig.ts + 1, "timeframe": sig.timeframe, "strategy": sig.meta["member"], "symbol": sig.symbol, "side": sig.side,
+                        "atr": 1.0, "ref_price": 100.0, "ref_time": sig.ts + 1, "delay_ms": 900, "status": "SUBMITTED",
+                        "data": {"source": "custom", "strategy": sig.strategy_id}}])
+        s.outcome(ACCOUNT, SignalOutcome(sig, st, reason, sig.ts + 1, {}))
 
 
 def _trade(sym, side, entry_t, pnl, roe, eq, strat, tf, reason, price=100.0) -> TradeRecord:
@@ -61,7 +109,7 @@ def _trade(sym, side, entry_t, pnl, roe, eq, strat, tf, reason, price=100.0) -> 
                        mae_price=price, mfe_price=price, equity_after=eq, score=3.0, lock_roe=0.1 if reason == "LOCK" else None)
 
 
-def paper_db(path: str, with_position: bool = True, n_extra: int = 0, extra_wins: Optional[list] = None) -> str:
+def paper_db(path: str, with_position: bool = True, n_extra: int = 0, extra_wins: Optional[list] = None, records: bool = True) -> str:
     """live-ac.db. ``extra_wins``: more closed trades after t6 (True = +5, False = -5), for the light tests."""
     s = Store3(path)
     s.add_account(ACCOUNT, "combo", "mix", "combo", T0, "combo-v2")
@@ -83,7 +131,7 @@ def paper_db(path: str, with_position: bool = True, n_extra: int = 0, extra_wins
         s.trade(FLIP, _trade("ETHUSDT", 1 if i % 2 else -1, T0 + (i + 2) * H, pnl, pnl / 400, feq, "S2_ST_ROC", "15m", "SL"))
     pos = None
     if with_position:
-        sig = Signal(ts=T0 + 9 * H - 1, symbol="BTCUSDT", timeframe="1h", strategy_id="S2_ST_ROC", side=1, stop_price=61000.0)
+        sig = _signal("BTCUSDT", "1h", "S2_ST_ROC", 1, T0 + 9 * H)
         pos = Position(signal=sig, symbol="BTCUSDT", side=1, qty=0.25, entry_price=62000.0, entry_time=T0 + 9 * H, leverage=40,
                        tier="base", margin=387.0, margin_initial=387.5, stop_price=62200.0, tp_price=0.0, liq_price=60600.0,
                        entry_fee=7.75, funding_paid=0.5, stop_initial=61000.0, lock_roe=0.1)
@@ -93,7 +141,10 @@ def paper_db(path: str, with_position: bool = True, n_extra: int = 0, extra_wins
                FLIP: {"wallet": feq, "peak_equity": 1005.0, "max_drawdown": 0.05, "halted": False, "halt_reason": "", "bust": False,
                       "warned": [], "last_mark": {}, "position": None, "pending": [], "n_trades": 4}}
     s.put_state("accounts", NOW - 2 * MIN, {"last_ts": NOW - 2 * MIN, "engines": engines})
-    s.put_state("combo_run", T0, {"version": "combo-v2", "brackets": "example", "taker_fee": 0.0005, "members": [], "config": CONFIG})
+    if records:
+        signals_and_outcomes(s)
+    s.put_state("combo_run", T0, {"version": "combo-v2", "brackets": "example", "taker_fee": 0.0005,
+                                  "members": [f"{i}. {m['strategy']}" for i, m in enumerate(MEMBERS, 1)], "config": CONFIG})
     s.close()
     return path
 

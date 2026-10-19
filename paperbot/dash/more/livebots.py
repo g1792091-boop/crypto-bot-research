@@ -1452,4 +1452,10 @@ def register(app, ctx) -> dict:
         p = paths()
         return _cached(key("sum", p), lambda: json_finite(build(p)))
 
-    return {"routes": ["/api/v4/livebots"], "paths": paths}
+    @app.get("/api/v4/livebots/trades")
+    def get_livebots_trades():
+        """실거래 › 거래: the three accounts' closed trades with their settings, reasons, costs and partners (5 s cache)."""
+        p = paths()
+        return _cached(key("trades", p), lambda: json_finite(trade_rows(p, int(time.time() * 1000))))
+
+    return {"routes": ["/api/v4/livebots", "/api/v4/livebots/trades"], "paths": paths}

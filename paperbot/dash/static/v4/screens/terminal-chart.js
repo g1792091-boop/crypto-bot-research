@@ -224,7 +224,8 @@ export function termChart(ctx, st, onTf, src = null) {
     if (src) {
       deck.setLines("pos", src.lines(st.sym, store.mark(st.sym)) || []);
       const keys = src.posKeys(st.sym) || new Set();
-      if (seenPos && [...keys].some((k) => !seenPos.has(k))) deck.flash(ownEvent());      // a live bot really filled on this coin
+      // a live bot really filled on this coin: a position opened, or one closed (its key left), lights the pane once
+      if (seenPos && ([...keys].some((k) => !seenPos.has(k)) || [...seenPos].some((k) => !keys.has(k)))) deck.flash(ownEvent());
       seenPos = keys;
       return;
     }

@@ -82,7 +82,7 @@ def test_the_three_accounts(world):
     rt, ff = pos["round_trip"], 0.5 / (0.25 * 62000.0)
     assert abs(pos["funding_frac"] - ff) < 1e-12 and abs(pos["next_lock"]["lock"] - 0.13) < 1e-12 and abs(pos["next_lock"]["at"] - 0.14) < 1e-12
     assert abs(pos["next_lock"]["price"] - 62000.0 * (1 + (0.14 / 40 + rt + ff))) < 1e-6
-    assert pos["member"] is None and pos["key"] == f"COMBO@mix|BTCUSDT|{W.T0 + 9 * H}"
+    assert pos["member"] == "S2_ST_ROC@1h#1~abc123" and pos["member_order"] == 1 and pos["key"] == f"COMBO@mix|BTCUSDT|{W.T0 + 9 * H}"
     # bybit: balance = the executor's last equity; the change is counted from its first balance record (100.0)
     assert b["kind"] == "live" and b["balance"] == 101.5 and b["initial"] == 100.0 and b["initial_ts"] == W.T0 + 2 * H
     assert b["halted"] is False and b["consecutive_losses"] == 1 and b["max_consecutive_losses"] == 3
@@ -285,8 +285,8 @@ def test_env_vars_choose_the_files():
     assert p["paper"] == "/x/p.db" and p["bybit_db"] == "/var/lib/paperbot/exec/executor-bybit-live.db"
     assert p["mexc_config"] == "/etc/paperbot/executor-mexc.json"
     example = _read(ROOT, "deploy", "dash.env.example")
-    for var, _default in L.ENV.values():
-        assert var in example, var
+    for var, _default in list(L.ENV.values()) + list(L.ENV_MORE.values()):
+        assert f"#{var}=" in example, var
 
 
 # ---------------------------------------------------------------- the page: pure functions in node
@@ -384,6 +384,61 @@ def test_the_strip_and_the_lists(world):
     assert "$" not in wait and "0.00" not in wait and "—" in wait          # nothing read: dashes, never a zero
 
 
+# ---------------------------------------------------------------- 거래: the trade list with settings, reasons and partners
+def test_trades_carry_the_setting_the_reason_and_the_partners(world, monkeypatch):
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", "/nonexistent/combo.json")            # the run's own config (in the database) is used
+    t = L.trade_rows(world, NOW)
+    assert t["combo_state"] == "ok" and t["members_n"] == 3
+    paper = t["accts"]["paper"]
+    assert paper["state"] == "ok" and paper["n"] == 6 and [r["symbol"] for r in paper["rows"]][:2] == ["BCHUSDT", "LTCUSDT"]     # newest first
+    by = {r["symbol"]: r for r in paper["rows"]}
+    sol = by["SOLUSDT"]                                                     # t3: S2_ST_ROC 30m = the config's 3rd setting
+    assert sol["order"] == 3 and sol["member"] == "S2_ST_ROC@30m#3~abc123" and sol["exit_reason"] == "SL" and sol["reason_ko"] == "손절"
+    assert sol["setting"]["stop"] == {"mode": "pct", "value": 2.0, "ko": "진입가의 2% (강제청산 안쪽으로 당김)"} and sol["setting"]["entry_ko"] == "즉시"
+    bch = by["BCHUSDT"]                                                     # t6: N03 15m = the 2nd setting: 돌파 확인, 반대 방향, swing stop
+    s2 = bch["setting"]
+    assert s2["entry_ko"] == "돌파 확인" and s2["invert"] is True and s2["stop"]["mode"] == "swing" and s2["disp"] == "신호봉 높이 ATR 1.5배 이상"
+    assert s2["off"] == [{"dim": "oi24", "dim_ko": "미결제약정", "value": 2, "ko": "미결제약정: 미결제약정 늘어남(+5% 위)"}]
+    btc = by["BTCUSDT"]
+    assert btc["setting"]["filter"] == [{"tag": "weekend", "value": 0, "ko": "평일만"}, {"tag": "session", "value": 0, "ko": "시간대 아시아(09-17시)"}]
+    assert {o["ko"] for o in btc["setting"]["off"]} == {"시각: 05시", "코인x방향: DOGE 롱", "요일: 목요일"}     # symside 7 = DOGE (3) x 2 + long
+    # what each executor did with each paper trade, from its own records
+    assert bch["live"]["bybit"]["state"] == "matched" and bch["live"]["bybit"]["diff"] == pytest.approx(0.7 - 8.0 * 0.1)
+    assert by["DOGEUSDT"]["live"]["bybit"] == {"state": "missed", "why_kind": "halted", "why_ko": "그때 실행기가 멈춰 있었어요"}
+    assert by["LTCUSDT"]["live"]["mexc"]["why_kind"] == "late" and by["SOLUSDT"]["live"]["mexc"]["why_kind"] == "entry_check"
+    assert "오늘 남은 손실 한도" in by["SOLUSDT"]["live"]["mexc"]["why_text"]
+    assert by["LTCUSDT"]["live"]["bybit"]["why_kind"] is None and "이유가 없어요" in by["LTCUSDT"]["live"]["bybit"]["why_ko"]
+    assert by["BTCUSDT"]["live"]["bybit"]["state"] == "before"           # the paper's t1 came before the executor started
+    # a live trade: its paper partner, the entry slippage against it (in the trade's favour > 0) and the money difference
+    m = {r["symbol"]: r for r in t["accts"]["mexc"]["rows"]}
+    eth = m["ETHUSDT"]
+    assert eth["exit_reason"] == "LOCK" and eth["paper"]["id"] == 2 and eth["slip_vs_paper"] == pytest.approx(0.0)
+    assert eth["diff"] == pytest.approx(1.3 - 15.0 * 0.1) and eth["order"] == 2 and eth["setting"]["strategy"] == "N03_ADX_GC"
+    assert m["BCHUSDT"]["gap_ms"] == 2 * MIN                               # matched though its key is 2 minutes off
+    b = [r for r in t["accts"]["bybit"]["rows"] if r["symbol"] == "BTCUSDT"][0]
+    assert b["paper"] is None and b["exit_reason"] == "PAPER" and b["diff"] is None and b["est"] is True
+
+
+def test_trade_filters_in_node(world):
+    rows = L.trade_rows(world, NOW)["accts"]["paper"]["rows"]
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    script = (f"await import('{dom}'); const T = await import('file://{SCREENS}/livebots-trades.js'); const r = {json.dumps(rows)};\n"
+              "console.log(JSON.stringify({w: T.filterRows(r, {res: 'win'}).length, l: T.filterRows(r, {res: 'loss'}).length,"
+              " c: T.filterRows(r, {coin: 'BTCUSDT', res: 'all'}).length, s: T.filterRows(r, {strat: 'N03_ADX_GC', res: 'win'}).length}));")
+    out = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout.strip().splitlines()[-1]) == {"w": 5, "l": 1, "c": 1, "s": 3}
+
+
+def test_trades_route(client):
+    client.post("/api/login", json={"password": PW})
+    d = client.get("/api/v4/livebots/trades").json()
+    assert set(d["accts"]) == {"paper", "bybit", "mexc"} and d["accts"]["mexc"]["qty_scale"] == 0.1
+
+
 # ---------------------------------------------------------------- wiring
 def test_wiring_route_menu_find_inventory_and_module():
     routes = _read(V4, "core", "routes.js")
@@ -391,7 +446,9 @@ def test_wiring_route_menu_find_inventory_and_module():
     assert "livebots:" in _read(V4, "core", "search.js")
     assert "livebots" in MORE.MODULES
     js = "".join(_read(SCREENS, f) for f in os.listdir(SCREENS) if f.startswith("livebots") and f.endswith(".js"))
-    assert '"/api/v4/livebots"' in js
+    assert '"/api/v4/livebots"' in js and '"/api/v4/livebots/trades"' in js
+    tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(SCREENS, "livebots.js"))
+    assert tabs[:3] == [("summary", "요약"), ("chart", "차트"), ("trades", "거래")]
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):
