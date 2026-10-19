@@ -25,11 +25,13 @@ sudo systemctl stop paperbot-executor paperbot-executor-mexc paperbot-combo
 **2) 페이퍼 봇 (A+C 합본)**
 
 ```bash
-sudo cp /opt/crypto-bot-research/deploy/combo.live-ac.json /etc/paperbot/combo.json
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.live-ac.json /etc/paperbot/combo.json
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
 ```
 
 마지막 줄이 **"준비됨"**이면 켭니다.
+
+- `Permission denied: '/etc/paperbot/combo.json'`이 나오면 `cp`로 복사해서 봇이 못 읽는 것입니다(10/19 서버에서 실제로 나옴). `sudo chown root:paperbot /etc/paperbot/combo.json && sudo chmod 640 /etc/paperbot/combo.json` 뒤 check-config를 다시 합니다. 실행기 설정 두 파일도 같습니다.
 
 ```bash
 sudo systemctl start paperbot-combo
@@ -41,7 +43,7 @@ sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼 A+C 합본] 시
 아래 내용이 담긴 파일이 저장소에 있습니다. 직접 치지 말고 복사합니다(10/19 추가).
 
 ```bash
-sudo cp /opt/crypto-bot-research/deploy/executor.live-bybit.json /etc/paperbot/executor.json
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/executor.live-bybit.json /etc/paperbot/executor.json
 ```
 
 내용(손으로 고칠 때만 `sudo nano /etc/paperbot/executor.json`):
@@ -82,7 +84,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --confi
 **4) MEXC: 연습 → 실행기**
 
 - 먼저 6장의 연습 두 단계(`mexc drill`, `mexc drill --confirm-order REAL_ORDER`)를 합니다. 모든 줄이 OK이고 `fee_rate_pct`가 0.08 근처여야 합니다.
-- MEXC 실행기 설정도 복사합니다: `sudo cp /opt/crypto-bot-research/deploy/executor.live-mexc.json /etc/paperbot/executor-mexc.json`
+- MEXC 실행기 설정도 복사합니다: `sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/executor.live-mexc.json /etc/paperbot/executor-mexc.json`
 - 이 파일은 3)의 내용과 같고 아래 세 줄만 다릅니다.
 
 ```json
@@ -370,7 +372,7 @@ PAPERBOT_LIVE_MAINNET=I_UNDERSTAND
 # 실행기가 돌고 있으면 먼저 멈추고 실제 포지션이 없는지 확인
 sudo touch /var/lib/paperbot/STOP
 sudo systemctl stop paperbot-combo
-sudo cp /opt/crypto-bot-research/deploy/combo.live-plateau37.json /etc/paperbot/combo.json
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.live-plateau37.json /etc/paperbot/combo.json
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
 ```
 
@@ -399,8 +401,8 @@ sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼] 시작" 확인
 ```bash
 sudo touch /var/lib/paperbot/STOP
 sudo systemctl stop paperbot-combo paperbot-combo2
-sudo cp /opt/crypto-bot-research/deploy/combo.live16w.json /etc/paperbot/combo.json          # A 최고형 -> 바이비트
-sudo cp /opt/crypto-bot-research/deploy/combo.live-plateau37.json /etc/paperbot/combo2.json  # B 안정형 -> MEXC
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.live16w.json /etc/paperbot/combo.json          # A 최고형 -> 바이비트
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.live-plateau37.json /etc/paperbot/combo2.json  # B 안정형 -> MEXC
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
 cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo2.json
 ```
