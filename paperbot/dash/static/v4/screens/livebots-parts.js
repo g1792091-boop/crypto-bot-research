@@ -68,7 +68,7 @@ export function bandLine(ctx) {
     if (!cp) { put(c.goal, h("span", null, "40번 판단까지 "), dash()); c.goal.title = "페이퍼 거래 기록을 아직 못 읽음"; }
     else {
       put(c.goal, h("span", null, `${fmt.int(cp.trades)}번 판단까지 `), cp.ready ? h("b", null, "도착") : h("b", {class: "num"}, `${fmt.int(cp.left)}번 남음`),
-        h("span", {class: "muted num"}, ` · 페이퍼 ${fmt.int(cp.n)}/${fmt.int(cp.trades)}`));
+        h("span", {class: "muted num"}, ` · 페이퍼(연습) ${fmt.int(cp.n)}/${fmt.int(cp.trades)}`));
       c.goal.title = `페이퍼 닫힌 거래 ${fmt.int(cp.n)}번 · ${fmt.int(cp.trades)}번이 되면 두 분이 정해요: ${cp.up_ko} / ${cp.mid_ko} / ${cp.low_ko} · 그 전의 승률은 판단이 아니에요 (참고)`;
     }
   }
@@ -85,7 +85,7 @@ export function fillsPanel(ctx) {
   const list = h("div", {class: "term-feed term-fl", role: "list", "aria-live": "off"});
   const ratio = ratioBar([{key: "W", label: "이김", tone: "up"}, {key: "L", label: "짐", tone: "down"}], {label: "최근 닫힌 실거래 이김·짐"});
   const ratioK = h("span", {class: "term-rbk"}, "최근 청산");
-  const el = panel("실거래 체결", {cls: "term-fills lb-fills", sub: "페이퍼 · 바이비트 · MEXC", scroll: true,
+  const el = panel("실거래 체결", {cls: "term-fills lb-fills", sub: "페이퍼(연습) · 바이비트 · MEXC", scroll: true,
     info: `세 계좌의 진입과 청산 (잠금 = 잠금선에서 이익으로 닫힘, 손절 = 손절선에서 닫힘) · 실거래 손익: ${ui.ASSUME_LIVE_KO} · 페이퍼 손익: ${ui.ASSUME_KO}`}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
   const nodes = new Map();
@@ -172,7 +172,7 @@ export function minePanel(ctx, st) {
   const list = h("div", {class: "term-cp", role: "list"});
   const other = h("p", {class: "term-cpo muted", hidden: true});
   const el = panel("이 코인 포지션", {cls: "term-mine lb-mine", scroll: true,
-    info: `페이퍼 · 바이비트 · MEXC의 이 코인 포지션 · ROE = 마크 가격 기준 미실현 ÷ 증거금 (나갈 때 수수료 전) · 줄에 마우스를 올리면 진입가 · 손절·잠금 · 다음 잠금 · 청산가 · 주문 버튼 없음`},
+    info: `페이퍼(연습) · 바이비트 · MEXC의 이 코인 포지션 · ROE = 마크 가격 기준 미실현 ÷ 증거금 (나갈 때 수수료 전) · 줄에 마우스를 올리면 진입가 · 손절·잠금 · 다음 잠금 · 청산가 · 주문 버튼 없음`},
     list, other);
   const rows = new Map();
   let data = null, state = "loading";
@@ -226,7 +226,7 @@ export function tablePanel(ctx, st, onPick) {
   const tabs = ui.seg([{id: "pos", label: "포지션"}, {id: "fills", label: "체결"}, {id: "stops", label: "손절 주문"}], t.tab,
     (id) => { t.tab = id; local.set("lb-tab", id); render(true); }, {label: "아래 표"});
   const posBtn = tabs.querySelector('[data-id="pos"]');
-  const sel = h("select", {class: "select term-sel", "aria-label": "계좌 고르기", title: "ALL = 페이퍼 · 바이비트 · MEXC"},
+  const sel = h("select", {class: "select term-sel", "aria-label": "계좌 고르기", title: "ALL = 페이퍼(연습) · 바이비트 · MEXC"},
     h("option", {value: ""}, "ALL"), IDS.map((id) => h("option", {value: id}, acctKo(id))));
   sel.value = t.acct;
   sel.addEventListener("change", () => { t.acct = sel.value; local.set("lb-tacct", t.acct); render(true); });

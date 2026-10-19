@@ -15,6 +15,7 @@
 // buttons, only view switches).
 import {h, put, ui, serverNow, sound} from "../core/pb.js";
 import {liveEvents} from "./livebots-calc.js";
+import {realLine} from "./livebots-kit.js";
 import {termView} from "./livebots-term.js";
 import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
@@ -45,12 +46,14 @@ export async function mount(el, ctx) {
   const st = {tab: tabOf(ctx.params.arg), d: null, state: "loading", okAt: 0, busy: false};
   const seg = ui.seg(TABS.map((t) => ({id: t.id, label: t.label})), st.tab, (id) => { if (id !== st.tab) ctx.go("livebots", id); },
     {label: "실거래 보기", scroll: true});
+  // the real-money strip on every tab (owners 10/19: never taken for the rule bot's paper screens), from the summary answer
+  const real = h("div", {class: "lb-real", role: "note", "aria-label": "진짜 돈 화면"}, realLine(null));
   const head = h("div", {class: "lb-head"},
-    h("h1", null, "실거래"), h("span", {class: "sub"}, "바이비트 · MEXC 실행기와 그 둘이 따라가는 페이퍼 · 보기만 하는 화면 (주문 버튼 없음)"), seg);
+    h("h1", null, "실거래"), h("span", {class: "sub"}, "바이비트 · MEXC 실행기와 그 둘이 따라가는 페이퍼(연습)"), seg);
   const staleSlot = h("div", {class: "lb-slot"});
   const body = h("div", {class: "lb-body"});
   el.classList.add("lb-scr", "lb-tab-" + st.tab);
-  el.append(head, staleSlot, body);
+  el.append(real, head, staleSlot, body);
 
   const hub = {state: () => st.state, at: () => st.okAt, retry: () => load().catch(() => {}), get: () => st.d};
   const view = TABS.find((t) => t.id === st.tab).make(ctx, hub);
@@ -76,6 +79,7 @@ export async function mount(el, ctx) {
     put(staleSlot);
     ui.dim(body, false);
     st.d = d; st.state = "ok"; st.okAt = serverNow();
+    put(real, realLine(d));
     view.set(d, "ok");
     // 소리 · 빛: only what really arrived since the last answer (core/sound.js playLive; its gate, cooldown and switches)
     const ev = liveEvents(heard.state, d, serverNow());

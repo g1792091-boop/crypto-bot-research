@@ -26,7 +26,7 @@ export function daySummary(sm) {
   if (!sm) return null;
   const parts = [];
   const p = sm.paper;
-  if (p) parts.push(h("span", null, `페이퍼 ${fmt.int(p.n)}번 ${fmt.int(p.wins)}승`, p.n ? h("b", {class: ["num", fmt.tone(p.pnl)]}, ` ${fmt.money(p.pnl, true)}`) : ""));
+  if (p) parts.push(h("span", null, `페이퍼(연습) ${fmt.int(p.n)}번 ${fmt.int(p.wins)}승`, p.n ? h("b", {class: ["num", fmt.tone(p.pnl)]}, ` ${fmt.money(p.pnl, true)}`) : ""));
   else parts.push(h("span", {class: "muted"}, "페이퍼 못 읽음"));
   for (const x of sm.execs || []) {
     if (x.missing) { parts.push(h("span", {class: "muted"}, `${x.label} ${x.exists ? "못 읽음" : "시작 전"}`)); continue; }

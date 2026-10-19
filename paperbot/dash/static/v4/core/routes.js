@@ -209,3 +209,12 @@ export const KEYS = navGroups(true).flatMap((g) => g.items.map((it) => it.to)).s
 export const keyOf = (name) => { const i = KEYS.indexOf(name); return i < 0 ? null : String(i + 1); };
 /** Links that open in the side panel instead of leaving the page (core/drawer.js): route name -> panel kind. */
 export const PEEKABLE = {account: "account", strategies: "strategy", replay: "trade"};
+/** The screens about real money (owners 10/19: the 실거래 screen must never be taken for the rule bot's paper screens). */
+export const REAL_SCREENS = ["livebots"];
+/** The top bar's mode chip for a screen (core/shell.js): 실거래 in the real-money colour (--warn, base.css .mocktag.real)
+ *  on a real-money screen, 모의 on every other one. */
+export function modeTag(name) {
+  return REAL_SCREENS.includes(name)
+    ? {text: "실거래", real: true, title: "진짜 돈: 바이비트 · MEXC 실행기와 그 둘이 따라가는 페이퍼(연습) · 이 화면은 보기만 해요 (주문 버튼 없음)"}
+    : {text: "모의", real: false, title: "모든 계좌는 모의(가상 돈)입니다"};
+}

@@ -7,7 +7,8 @@ import {lightWords, lightCells, roeAt, netRoe} from "./livebots-calc.js";
 
 /** The three accounts' names: ko for lists, s for the one-letter chips of a tight row, tip for the tooltip. */
 export const ACCT = {
-  paper: {ko: "페이퍼", s: "P", tip: "페이퍼 A+C 합본 (모의 · 두 실행기가 따라가는 계좌)"},
+  // owners 10/19: next to the real accounts the paper account is always named 페이퍼(연습), never taken for real money
+  paper: {ko: "페이퍼(연습)", s: "P", tip: "페이퍼(연습) A+C 합본 (모의 돈 · 두 실행기가 따라가는 계좌)"},
   bybit: {ko: "바이비트", s: "B", tip: "바이비트 실행기 (실거래 · 진짜 돈)"},
   mexc: {ko: "MEXC", s: "M", tip: "MEXC 실행기 (실거래 · 진짜 돈)"},
 };
@@ -15,6 +16,29 @@ export const acctKo = (id) => (ACCT[id] ? ACCT[id].ko : id);
 /** A small swatch + the account's name (its colour is a series token: lb-a-<id> in livebots.css). */
 export const acctTag = (id, o = {}) => h("span", {class: ["lb-acct", "lb-a-" + id], title: (ACCT[id] || {}).tip || id},
   h("i", {class: "lb-sw", "aria-hidden": "true"}), o.short ? (ACCT[id] || {}).s || id : acctKo(id));
+
+/** An executor's part of the real-money strip: its balance, or 수집 전 / 못 읽음 (never a zero for what is unknown). */
+function realOf(a) {
+  if (!a) return {bal: "—", pos: "—"};
+  if (a.state === "missing" || a.state === "none") return {bal: "수집 전", pos: "수집 전", unk: true};
+  if (a.state !== "ok") return {bal: "못 읽음", pos: "못 읽음", unk: true};
+  return {bal: a.balance == null ? "—" : fmt.usd(a.balance), pos: `${a.position ? 1 : 0}/1`};
+}
+
+/**
+ * The thin real-money strip over every 실거래 tab (owners 10/19): '진짜 돈 · 바이비트 $X · MEXC $Y · 포지션 n/1·n/1 · 보기만
+ * 하는 화면(주문 버튼 없음)'. d: the summary answer (/api/v4/livebots), null before the first one (dashes, never a zero).
+ */
+export function realLine(d) {
+  const by = Object.fromEntries(((d && d.accts) || []).map((a) => [a.id, a]));
+  const ids = ["bybit", "mexc"].map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
+  const sep = () => h("span", {class: "lb-real-s", "aria-hidden": "true"}, "·");
+  return [h("b", {class: "lb-real-k"}, "진짜 돈"),
+    ...ids.flatMap((x) => [sep(), h("span", {class: ["lb-real-a", x.unk ? "unk" : ""]}, `${ACCT[x.id].ko} `, h("b", {class: "num"}, x.bal))]),
+    sep(), h("span", {class: "lb-real-a", title: `한 번에 포지션 하나 · ${ids.map((x) => `${ACCT[x.id].ko} ${x.pos}`).join(" · ")}`},
+      "포지션 ", h("b", {class: "num"}, ids.map((x) => x.pos).join("·"))),
+    sep(), h("span", {class: "lb-real-v"}, "보기만 하는 화면(주문 버튼 없음)")];
+}
 
 /** Exit reasons in the owners' words (the server sends reason_ko too; this is for the short tags of a dense row). */
 export const EXIT_SHORT = {SL: "손절", LOCK: "잠금", LIQ: "청산", HALT: "멈춤", MANUAL: "수동", REV: "반대", TP: "익절", PAPER: "청산", OTHER: "청산", END: "끝"};

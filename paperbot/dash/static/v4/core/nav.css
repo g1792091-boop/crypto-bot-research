@@ -41,6 +41,11 @@
 .sb.off .sb-t { color: var(--muted); }
 .sb .pp { padding: 0 5px; }
 .sb .ndot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+/* 실거래 (#/livebots, real money; owners 10/19): always a dot in the real-money colour before its name, its underline in
+   that colour when open, and its rail icon in that colour, so it is found at a glance among the rule bot's screens */
+.sb[data-sb="livebots"]::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.sb[data-sb="livebots"][aria-current="page"]::after { background: var(--warn); box-shadow: none; }
+.rail-a[data-screen="livebots"] .rail-ic, .rail-a[data-screen="livebots"][aria-current="page"] .rail-ic { color: var(--warn); }
 /* the end of the row below 1200 px: 글자 크기 · 화면 색 · 예전 화면 (core/shell.js; on a PC they are in the top bar) */
 .strip-tools { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 /* the phone's 찾기 (first in the row) stays at the row's left edge while the buttons slide under it */

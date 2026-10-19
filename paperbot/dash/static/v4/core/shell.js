@@ -7,7 +7,7 @@ import {h, put, clear, $, local} from "./dom.js";
 import {api, bus, stream} from "./api.js";
 import {store} from "./store.js";
 import {features} from "./features.js";
-import {GROUPS, SCREENS, href, icon, parseHash, screenIcon, landing, navLabel} from "./routes.js";
+import {GROUPS, SCREENS, href, icon, parseHash, screenIcon, landing, navLabel, modeTag} from "./routes.js";
 import {mmdd, kst} from "./fmt.js";
 import {expand, pulseLive} from "./motion.js";
 import {soundButton, startSound} from "./sound.js";
@@ -46,6 +46,12 @@ function renderNav() {
   const crumb = $("#crumb");
   if (crumb) put(crumb, h("span", {class: "crumb-g"}, navLabel(gid)), h("span", {class: "crumb-s", "aria-hidden": "true"}, "›"),
     h("b", null, meta.ko));
+  // the mode chip at the top bar's end: 모의 on every screen, 실거래 in the real-money colour on #/livebots (owners 10/19)
+  const tag = $(".mocktag");
+  if (tag) {
+    const m = modeTag(p.name);
+    tag.textContent = m.text; tag.title = m.title; tag.classList.toggle("real", m.real);
+  }
   // the phone's bottom bar: the 5 groups as before (a tap opens the group's first screen)
   put($("#botbar"), GROUPS.map((g) => link(g)));
   // the menu strip: every screen its own text button (core/strip.js). At its start on a phone: 찾기 (it stays at the

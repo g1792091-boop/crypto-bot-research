@@ -13,6 +13,15 @@
 .lb-slot:empty { display: none; }
 .lb-body { display: grid; gap: 12px; min-width: 0; }
 
+/* the real-money strip over every tab (owners 10/19): thin, in the real-money colour (--warn, as the top bar's 실거래 chip) */
+.lb-real { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; padding: 4px 12px; border-radius: var(--r-sm);
+  border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--ink); font-size: var(--t-xs); line-height: 1.5; }
+.lb-real-k { color: var(--warn); font-weight: 800; }
+.lb-real-s { color: var(--muted); }
+.lb-real-a { white-space: nowrap; }
+.lb-real-a.unk b { color: var(--muted); font-weight: 700; }
+.lb-real-v { color: var(--ink-2); }
+
 /* the screen's head: title, one line, the tabs */
 .lb-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; }
 .lb-head h1 { margin: 0; font: 800 var(--t-lg)/1.2 var(--f-body); color: var(--ink); }
@@ -27,9 +36,9 @@
 .lb-a-bybit .lb-sw { background: var(--series-core); }
 .lb-a-mexc .lb-sw { background: var(--series-m5); }
 
-/* the terminal under the screen's head: one window high on a PC (the head is about 44 px) */
+/* the terminal under the real-money strip and the screen's head: one window high on a PC (strip and head about 80 px) */
 @media (min-width: 1200px) and (min-height: 640px) {
-  .lb-term.term { height: max(700px, calc(100dvh - var(--top-h) - var(--sub-h) - 60px)); min-height: 0; }
+  .lb-term.term { height: max(700px, calc(100dvh - var(--top-h) - var(--sub-h) - 96px)); min-height: 0; }
 }
 .lb-term .term-perp { color: var(--muted); }
 .lb-foot { display: grid; gap: 2px; }

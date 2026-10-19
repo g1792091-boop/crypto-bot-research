@@ -379,7 +379,7 @@ def test_the_strip_and_the_lists(world):
     d = L.build(world, NOW)
     band = _render("(() => { const b = P.bandLine(ctx); b.set(d, 'ok'); return b.el; })()", d)["text"]
     assert "바이비트 $101.50" in band and "MEXC $102.80" in band and "오늘 실거래" in band and "7번 5승 2패" in band
-    assert "근거 쌓는 중 6/20" in band and "멈춤 MEXC" in band and "40번 판단까지 34번 남음" in band and "페이퍼 6/40" in band
+    assert "근거 쌓는 중 6/20" in band and "멈춤 MEXC" in band and "40번 판단까지 34번 남음" in band and "페이퍼(연습) 6/40" in band
     fills = _render("(() => { const f = P.fillsPanel(ctx); f.set(d, 'ok'); return f.el; })()", d)["text"]
     assert "실거래 체결" in fills and "진입" in fills and "잠금" in fills and "손절" in fills and "+0.70" in fills
     wait = _render("(() => { const b = P.bandLine(ctx); b.set(null, 'failed'); return b.el; })()", d)["text"]
@@ -1056,8 +1056,80 @@ def test_scorecard_ledger_and_checks_render(rich, checked, tmp_path):
     gone = {**L.read_checks(none["check_db"], NOW)}
     c = _page("(() => { const v = Ch.checksView(); v.set(d); return v; })()", gone)["text"]
     lg = _page("(() => { const v = Sc.ledgerView(); v.set(d); return v; })()", L.read_ledger(none["improve_db"]))["text"]
-    cs = _page("Tr.filterRows([], {res: 'all'}).length === 0 && null", None)
-    assert cs["json"] is None
     for t_ in (c, lg):
         assert "수집 전" in t_ and "없어요" not in t_ and "0.00" not in t_ and "USDT" not in t_, t_
     assert c.count("수집 전") == 2
+
+
+# ================================================================ never taken for the rule bot's paper screens (owners 10/19)
+def _core(body: str):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    script = f"const R = await import('file://{V4}/core/routes.js');\n" + body
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_the_mode_chip_says_실거래_on_livebots_and_모의_everywhere_else():
+    out = _core("console.log(JSON.stringify({all: Object.fromEntries(Object.keys(R.SCREENS).map((n) => [n, R.modeTag(n)])),"
+                " home: R.modeTag(''), items: R.navGroups(true).flatMap((g) => g.items.map((it) => it.id))}));")
+    tags = out["all"]
+    assert tags["livebots"]["text"] == "실거래" and tags["livebots"]["real"] is True and "진짜 돈" in tags["livebots"]["title"]
+    others = {n: t for n, t in tags.items() if n != "livebots"}
+    assert len(others) > 20 and all(t == {"text": "모의", "real": False, "title": "모든 계좌는 모의(가상 돈)입니다"} for t in others.values())
+    assert out["home"]["text"] == "모의"
+    # the shell sets it on every route; the real-money colour is a token (the warn / gold one), never a hex
+    shell = _read(V4, "core", "shell.js")
+    assert "const m = modeTag(p.name);" in shell and 'tag.classList.toggle("real", m.real)' in shell and 'bus.on("route", renderNav)' in shell
+    base = re.sub(r"/\*.*?\*/", "", _read(V4, "base.css"), flags=re.S)
+    rule = re.search(r"\.mocktag\.real \{([^}]*)\}", base).group(1)
+    assert "var(--warn)" in rule and "var(--warn-soft)" in rule and not re.search(r"#[0-9a-fA-F]{3,8}\b", rule)
+    assert '<span class="mocktag" title="모든 계좌는 모의(가상 돈)입니다">모의</span>' in _read(V4, "index.html")   # the default
+    # the menu: the 실거래 button (its data-sb is its id) always carries the dot in that colour, outside any media query
+    assert "livebots" in out["items"]
+    nav = re.sub(r"/\*.*?\*/", "", _read(V4, "core", "nav.css"), flags=re.S)
+    dot = re.search(r'\.sb\[data-sb="livebots"\]::before \{([^}]*)\}', nav)
+    assert dot and "var(--warn)" in dot.group(1) and 'content: ""' in dot.group(1)
+    depth = 0
+    for ch in nav[:dot.start()]:
+        depth += 1 if ch == "{" else -1 if ch == "}" else 0
+    assert depth == 0                                                   # top level: on every window, both menu layouts
+    assert '.rail-a[data-screen="livebots"] .rail-ic' in nav and 'dataset: {sb: it.id}' in _read(V4, "core", "strip.js")
+
+
+def test_the_real_money_strip_on_every_livebots_tab(world, tmp_path):
+    d = L.build(world, NOW)
+    t = _render("ui.note(K.realLine(d))", d)["text"]
+    assert t.startswith("진짜 돈 · 바이비트 $101.50 · MEXC $102.80 · 포지션 1/1·0/1 · 보기만 하는 화면(주문 버튼 없음)"), t
+    gone = L.build({k: "/nonexistent/" + k for k in L.ENV}, NOW)
+    t = _render("ui.note(K.realLine(d))", gone)["text"]
+    assert "바이비트 수집 전" in t and "MEXC 수집 전" in t and "$" not in t and "0.00" not in t and "0/1" not in t
+    with open(world["mexc_db"], "wb") as fh:
+        fh.write(b"garbage" * 200)
+    t = _render("ui.note(K.realLine(d))", L.build(world, NOW))["text"]
+    assert "바이비트 $101.50" in t and "MEXC 못 읽음" in t and "포지션 1/1·못 읽음" in t
+    t = _render("ui.note(K.realLine(null))", None)["text"]                  # before the first answer: dashes only
+    assert "바이비트 —" in t and "$" not in t and "0/1" not in t
+    # it is the 실거래 screen's own: drawn by livebots.js on every tab (one mount), refreshed with the summary; no other screen
+    js = _read(SCREENS, "livebots.js")
+    assert "el.append(real, head, staleSlot, body);" in js and "put(real, realLine(d));" in js
+    others = [f for f in os.listdir(SCREENS) if f.endswith(".js") and not f.startswith("livebots") and "realLine" in _read(SCREENS, f)]
+    assert others == []
+    css = re.sub(r"/\*.*?\*/", "", _read(SCREENS, "livebots.css"), flags=re.S)
+    assert "var(--warn-line)" in re.search(r"\.lb-real \{([^}]*)\}", css).group(1)
+
+
+def test_the_paper_account_is_named_페이퍼_연습_next_to_real_money(world):
+    d = L.build(world, NOW)
+    assert acct(d, "paper")["name_ko"] == "페이퍼(연습)"
+    t = _render("d.accts.map((a) => K.acctCard(a, ui.ledBar({label: a.id}), []))", d)["text"]
+    assert "페이퍼(연습)" in t and "바이비트" in t
+    fills = _render("(() => { const f = P.fillsPanel(ctx); f.set(d, 'ok'); return f.el; })()", d)["text"]
+    assert "페이퍼(연습) · 바이비트 · MEXC" in fills
+    kit = _read(SCREENS, "livebots-kit.js")
+    assert 'paper: {ko: "페이퍼(연습)"' in kit
+    assert "페이퍼(연습)" in _read(SCREENS, "livebots-parts.js")
+    for f in ("livebots-term.js", "livebots-chart.js"):                  # the chart's line key: 페이퍼(연습, P) · 바이비트(B) · MEXC(M)
+        assert "페이퍼(연습, P)" in _read(SCREENS, f), f

@@ -34,7 +34,7 @@ export function chartView(ctx, hub) {
   const watch = watchList(ctx, st, pick, {marks});
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("lb-ctf", tf); }, {
     key: "live", label: "실거래 차트",
-    keyTitle: "페이퍼(P) · 바이비트(B) · MEXC(M)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (순ROE 11%, 그 뒤 3%마다) · 왼쪽 이름표를 누르면 그 선만 숨김",
+    keyTitle: "페이퍼(연습, P) · 바이비트(B) · MEXC(M)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (순ROE 11%, 그 뒤 3%마다) · 왼쪽 이름표를 누르면 그 선만 숨김",
     more: (sym, tf) => ctx.href("chart", sym, {tf}),
     lines: (sym, mark) => liveLines(st.d ? st.d.accts : [], sym, mark),
     posKeys: (sym) => posKeys(st.d ? st.d.accts : [], sym),

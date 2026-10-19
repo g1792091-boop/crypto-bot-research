@@ -694,7 +694,7 @@ def checkpoint(trades: list) -> dict:
 
 def acct_paper(paper: dict, account: str, now: int) -> dict:
     """The paper account (A+C 합본) as one of the terminal's three accounts."""
-    base = {"id": "paper", "name_ko": "페이퍼", "kind": "paper", "account": account}
+    base = {"id": "paper", "name_ko": "페이퍼(연습)", "kind": "paper", "account": account}     # never taken for real money
     if paper.get("state") != "ok":
         return {**base, "state": paper.get("state"), "reason_ko": paper.get("reason_ko"), "reason": paper.get("reason"), "path": paper.get("path")}
     a = (paper.get("accounts") or {}).get(account) or {}
