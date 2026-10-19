@@ -241,7 +241,46 @@ def bot_world(p: Optional[dict] = None) -> dict:
     specs = tuple((name, p.get(f"{name}_config") or path, unit, p.get(f"{name}_db") or db, n, share)
                   for name, path, unit, db, n, share in LC.EXECUTORS)
     _exp, ref_ko = LC.usable_expected(LC.Sources())
-    return {"config": cfg, "infos": LC.load_executors(specs), "ref_ko": ref_ko}
+    out = {"config": cfg, "infos": LC.load_executors(specs), "ref_ko": ref_ko}
+    # owners 10-19 (docs/live15-mexc-ko.md): a second paper bot (규칙봇 15 at -35 %) and which executor follows which:
+    # the paper database each executor's last start recorded (livecheck.PaperSet, paperbot/livepapers.py)
+    second = second_paper(p.get("paper") or LC.PAPER_DB, out["infos"])
+    if second:
+        out["second"] = second
+    return out
+
+
+COMBO2_CONFIG_ENV, COMBO2_CONFIG = "PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-mexc.json"
+
+
+def second_paper(main: str, infos: list) -> Optional[dict]:
+    """{"config", "label", "first_label", "follows": {executor: its paper bot's short name}} when an executor follows
+    another paper bot than ``main`` (its last start recorded it), else None."""
+    from . import livecheck as LC
+    from . import livepapers as LP
+    ps = LC.PaperSet(main)
+    cur = {}
+    for ex in infos:
+        c = LC.open_ro(ex.db)
+        try:
+            cur[ex.label] = LP.current(ps.segs(ex, c))
+        finally:
+            if c is not None:
+                c.close()
+    other = next((p for p in cur.values() if not LP.same(p, main)), None)
+    if other is None:
+        return None
+    c2 = LC.open_ro(other)
+    try:
+        cfg2, _w = LC.combo_config(LC.Sources(paper_db=other, combo_config=os.environ.get(COMBO2_CONFIG_ENV) or COMBO2_CONFIG), c2)
+    finally:
+        if c2 is not None:
+            c2.close()
+    names = {LP.norm(main): LC.paper_name(main), LP.norm(other): LC.paper_name(other)}
+    fol = lambda path: "·".join(k for k, v in cur.items() if LP.same(v, path))           # noqa: E731
+    return {"config": cfg2, "label": f"{names[LP.norm(other)]} ({fol(other)}가 따라감)",
+            "first_label": f"{names[LP.norm(main)]}" + (f" ({fol(main)}가 따라감)" if fol(main) else ""),
+            "follows": {k: names.get(LP.norm(v), v) for k, v in cur.items()}}
 
 
 def _combo(cfg: Optional[dict]):
@@ -308,11 +347,20 @@ def _exec_rules(infos: list) -> list:
     return out
 
 
-def fixed_rules(cfg: Optional[dict], infos: Optional[list]) -> list:
+def fixed_rules(cfg: Optional[dict], infos: Optional[list], second: Optional[dict] = None) -> list:
     """The owners' fixed rules of the live side as the running configs say them (the paper bot's config, the executors'
-    configs that could be read); a part whose config cannot be read: the owners' decisions (FIXED_PAPER / FIXED_EXEC)."""
+    configs that could be read); a part whose config cannot be read: the owners' decisions (FIXED_PAPER / FIXED_EXEC).
+    ``second`` (bot_world, owners 10-19): the second paper bot's rules where they differ from the first's (its stop), and
+    which executor follows which paper bot."""
     readable = [e for e in (infos or []) if not e.problem]
-    return list(_paper_rules(cfg) or FIXED_PAPER) + (_exec_rules(readable) if readable else list(FIXED_EXEC))
+    out = list(_paper_rules(cfg) or FIXED_PAPER)
+    if second:
+        mine = _paper_rules(second.get("config")) or []
+        diff = [r for r in mine if r not in out and not r.startswith("매매법 ")]
+        out.append(f"두 번째 페이퍼 봇 {second.get('label')}: " + (" · ".join(diff) if diff else "규칙을 못 읽음")
+                   + " (나머지 규칙은 첫 번째와 같음)")
+        out.append("따라가는 페이퍼: " + " · ".join(f"{k}는 {v}" for k, v in (second.get("follows") or {}).items()))
+    return out + (_exec_rules(readable) if readable else list(FIXED_EXEC))
 
 
 def bot_facts(world: Optional[dict]) -> dict:
@@ -333,6 +381,12 @@ def bot_facts(world: Optional[dict]) -> dict:
                                                   "수수료 포함 순ROE 기준; 복리로는 조금 더 높음)") if be is not None else None}
     if name in START_BASIS:
         out["start_basis"] = START_BASIS[name]
+    sec = w.get("second") if isinstance(w.get("second"), dict) else None
+    c2 = _combo(sec.get("config")) if sec else None
+    if c2 is not None and c2.stop_mode == "roe" and c2.ladder_spec is not None:
+        s2, f2 = float(c2.stop["roe"]), float(c2.ladder_spec.first_lock)
+        out["second"] = {"name": (sec.get("config") or {}).get("name"), "label": sec.get("label"), "break_even": round(s2 / (s2 + f2), 3),
+                         "why": "손절만 다른 같은 봇: 손절이 좁으면 지는 거래의 손실이 작고 지는 거래는 늘어요(본전 승률이 낮아짐)"}
     return out
 
 
@@ -361,7 +415,8 @@ def sources(now: int, p: Optional[dict] = None) -> dict:
 
 def _acct_line(a: dict) -> dict:
     st = a.get("stats") or {}
-    return {"id": a.get("id"), "name": a.get("name_ko"), "kind": "페이퍼(연습)" if a.get("kind") == "paper" else "실거래(진짜 돈)",
+    return {"id": a.get("id"), "name": a.get("label_ko") or a.get("name_ko"),
+            "kind": "페이퍼(연습)" if a.get("kind") == "paper" else "실거래(진짜 돈)",
             "state": a.get("state"), "balance": a.get("balance"), "start": a.get("initial"), "halted": a.get("halted"),
             "halt_reason": a.get("halt_reason") or None, "losing_run": a.get("consecutive_losses"),
             "trades": st.get("trades"), "wins": st.get("wins"), "pnl": st.get("pnl"), "today": a.get("today"),
@@ -418,7 +473,7 @@ def facts(src: dict, kind: str, window: Optional[tuple] = None, focus: Optional[
         words = (f"{ref_ko}. 이 봇은 5년 숫자(fit·honest)가 없습니다: 지난 봇 숫자를 쓰지 말고, 페이퍼 승률을 본전 승률"
                  "(bot.break_even)과 시작 근거(bot.start_basis)에 비교합니다")
     out = {"meeting": KIND_KO.get(kind, kind), "now_kst": kst_text(now),
-           "fixed_rules": fixed_rules(world.get("config"), world.get("infos")), "bot": bot_facts(world),
+           "fixed_rules": fixed_rules(world.get("config"), world.get("infos"), world.get("second")), "bot": bot_facts(world),
            "accounts": accts,
            "expect": {"fit_win": band.get("fit"), "honest_win": band.get("honest"), "break_even": band.get("break_even"),
                       "so_far": {k: {"n": v.get("n"), "wins": v.get("wins"), "rate": v.get("rate"), "p_under_honest": v.get("p_honest")}
@@ -435,6 +490,10 @@ def facts(src: dict, kind: str, window: Optional[tuple] = None, focus: Optional[
         a, b = window
         out["window_kst"] = [kst_text(a), kst_text(b)]
         out["trades"] = [_trade_line(r) for r in prow if r.get("exit_time") is not None and a <= r["exit_time"] < b][:60]
+        rows2 = ((src.get("trades") or {}).get("accts") or {}).get("paper2")
+        if isinstance(rows2, dict) and rows2.get("rows") is not None:    # the second paper bot's (its own executors' cells)
+            out["trades_paper2"] = {"label": rows2.get("label_ko"), "rows": [_trade_line(r) for r in rows2["rows"]
+                                    if r.get("exit_time") is not None and a <= r["exit_time"] < b][:60]}
         cards = (src.get("cards") or {}).get("cards") or []
         out["loss_cards"] = [{"label": c.get("label"), "strategy": c.get("strategy"), "tf": c.get("tf"), "coin": c.get("symbol"),
                               "roe": c.get("roe"), "regime": c.get("reg5_ko"), "noise": (c.get("noise") or {}).get("state"),

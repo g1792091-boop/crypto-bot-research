@@ -743,14 +743,8 @@ def _pass(src, conn, now_ms: int, cap: int, budget_s: float, res: dict, t0: floa
 
 
 # ---------------------------------------------------------------- group exec: the paper trades an executor did not follow
-def _exec_pass(src, conn, now_ms: int, since: int, trades: list, pos: Optional[dict], marks: dict, rt: float, res: dict) -> dict:
-    """Per executor (src.executors, else livecheck.load_executors: the configs as plain JSON) the paper trades entered in
-    the window more than FOLLOW_MS ago that it has no trade for, with its own reason (the 거래 tab's matching and words:
-    livebots.match, why_missed; an executor that started after the entry is not asked). The paper result, no simulation.
-    Returns {executor: its record's state}."""
-    from . import livecheck as LC
-    from .dash.more import livebots as LB
-    infos = list(getattr(src, "executors", None) or LC.load_executors())
+def _exec_paper(trades: list, pos: Optional[dict], marks: dict, rt: float, since: int, now_ms: int) -> list:
+    """One paper bot's trades entered in the window more than FOLLOW_MS ago, its open position as one more (id None)."""
     paper = [t for t in trades if since <= t["entry_time"] <= now_ms - FOLLOW_MS]
     if pos and since <= int(pos.get("entry_time") or 0) <= now_ms - FOLLOW_MS:
         sig = pos.get("signal") if isinstance(pos.get("signal"), dict) else {}
@@ -758,37 +752,83 @@ def _exec_pass(src, conn, now_ms: int, since: int, trades: list, pos: Optional[d
                       "exit_time": None, "reason": None, "pnl": None, "roe": _pos_roe(pos, marks, rt), "strategy": sig.get("strategy_id"),
                       "tf": sig.get("timeframe"), "entry_price": _f(pos.get("entry_price")), "exit_price": None,
                       "leverage": pos.get("leverage"), "margin": _f(pos.get("margin_initial"))})
+    return paper
+
+
+def _exec_pass(src, conn, now_ms: int, since: int, trades: list, pos: Optional[dict], marks: dict, rt: float, res: dict) -> dict:
+    """Per executor (src.executors, else livecheck.load_executors: the configs as plain JSON) the paper trades entered in
+    the window more than FOLLOW_MS ago that it has no trade for, with its own reason (the 거래 tab's matching and words:
+    livebots.match, why_missed; an executor that started after the entry is not asked). The paper result, no simulation.
+    Owners 10-19 (docs/live15-mexc-ko.md): each executor only against the paper bot it followed at the entry
+    (paperbot/livepapers.py from its own start records; another bot's rows carry that bot's database in their key).
+    Returns {executor: its record's state}."""
+    from . import livecheck as LC
+    from . import livepapers as LP
+    from .dash.more import livebots as LB
+    infos = list(getattr(src, "executors", None) or LC.load_executors())
+    main = getattr(src, "paper_db", None) or PAPER_DB
+    paper = _exec_paper(trades, pos, marks, rt, since, now_ms)
+    others: dict = {}
+
+    def paper_of(path: str) -> list:
+        """Another paper bot's window (read once a pass, read-only)."""
+        k = LP.norm(path)
+        if k not in others:
+            pc = LC.open_ro(path)
+            got: list = []
+            if pc is not None:
+                try:
+                    d = read_paper(pc, since, since)
+                    got = _exec_paper(d["trades"], d["pos"], d["marks"], rt, since, now_ms)
+                except sqlite3.Error:
+                    got = []
+                finally:
+                    pc.close()
+            others[k] = got
+        return others[k]
     states = {}
     for ex in infos:
         rec = LB.read_exec(ex.db, now_ms)
         states[ex.name] = rec.get("state")
         if rec.get("state") != "ok":
             continue                                   # not readable: nothing is said about it (the 거래 tab says why)
-        pairs = LB.match([t for t in paper if t["id"] is not None], rec.get("trades") or [])
-        followed = set(pairs.values())
-        for t in paper:
-            key = f"exec:{ex.name}|{ACCOUNT}|{t['symbol']}|{t['entry_time']}"
-            w = None if (t["id"] is not None and t["id"] in followed) else LB.why_missed(rec, t, ACCOUNT)
-            if w is None or w.get("state") != "missed":
-                conn.execute("DELETE FROM missed WHERE key = ?", (key,))    # followed (or it was not running yet)
-                continue
-            old = _full(conn, key)
-            if old and old["state"] == "closed":
-                continue
-            row = dict(old) if old else {"first_ts": now_ms, "sims": 0}
-            closed = t["exit_time"] is not None
-            row.update(key=key, t=t["entry_time"], step_ts=t["entry_time"], member=None, strategy=t["strategy"], tf=t["tf"],
-                       symbol=t["symbol"], side=t["side"], why_kind=w.get("why_kind") or "unknown",
-                       why=f"{getattr(ex, 'label', ex.name)}: {w.get('why_ko') or '이유 기록 없음'}", grp="exec", executor=ex.name,
-                       state="closed" if closed else "open", entry_ts=t["entry_time"], entry_price=t.get("entry_price"),
-                       stop=None, leverage=t.get("leverage"), margin=t.get("margin"), exit_ts=t["exit_time"],
-                       exit_price=t.get("exit_price"), reason=t["reason"], roe_net=t["roe"], pnl=t["pnl"], best_roe=None,
-                       last_ts=None, wallet=None, error=None, updated_ts=now_ms,
-                       signal=json.dumps({"paper": t["id"]}), detail=json.dumps({"why_text": w.get("why_text")}, ensure_ascii=False),
-                       data=json.dumps({"why": ""}), path=None)
-            _with_taken(row, None)
-            _upsert(conn, row)
-            res["exec"] += 1
+        xc = LC.open_ro(ex.db)                         # its own start records (which paper database each start followed)
+        try:
+            starts = LP.starts_of(xc) if xc is not None else []
+        finally:
+            if xc is not None:
+                xc.close()
+        segs = LP.segments(starts, main)
+        for path in LP.paths_of(segs):
+            is_main = LP.same(path, main)
+            mine = [t for t in (paper if is_main else paper_of(path)) if LP.followed_at(segs, path, t["entry_time"])]
+            lts = [lt for lt in rec.get("trades") or [] if LP.same(LP.paper_at(segs, lt.get("entry_ts")), path)]
+            pairs = LB.match([t for t in mine if t["id"] is not None], lts)
+            followed = set(pairs.values())
+            for t in mine:
+                key = f"exec:{ex.name}|{LC.card_key(ACCOUNT, t['symbol'], t['entry_time'], None if is_main else path)}"
+                w = None if (t["id"] is not None and t["id"] in followed) else LB.why_missed(rec, t, ACCOUNT)
+                if w is None or w.get("state") != "missed":
+                    conn.execute("DELETE FROM missed WHERE key = ?", (key,))    # followed (or it was not running yet)
+                    continue
+                old = _full(conn, key)
+                if old and old["state"] == "closed":
+                    continue
+                row = dict(old) if old else {"first_ts": now_ms, "sims": 0}
+                closed = t["exit_time"] is not None
+                row.update(key=key, t=t["entry_time"], step_ts=t["entry_time"], member=None, strategy=t["strategy"], tf=t["tf"],
+                           symbol=t["symbol"], side=t["side"], why_kind=w.get("why_kind") or "unknown",
+                           why=f"{getattr(ex, 'label', ex.name)}: {w.get('why_ko') or '이유 기록 없음'}", grp="exec", executor=ex.name,
+                           state="closed" if closed else "open", entry_ts=t["entry_time"], entry_price=t.get("entry_price"),
+                           stop=None, leverage=t.get("leverage"), margin=t.get("margin"), exit_ts=t["exit_time"],
+                           exit_price=t.get("exit_price"), reason=t["reason"], roe_net=t["roe"], pnl=t["pnl"], best_roe=None,
+                           last_ts=None, wallet=None, error=None, updated_ts=now_ms,
+                           signal=json.dumps({"paper": t["id"]} if is_main else {"paper": t["id"], "paper_db": path}),
+                           detail=json.dumps({"why_text": w.get("why_text")}, ensure_ascii=False),
+                           data=json.dumps({"why": ""}), path=None)
+                _with_taken(row, None)
+                _upsert(conn, row)
+                res["exec"] += 1
     return states
 
 

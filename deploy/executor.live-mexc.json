@@ -2,7 +2,7 @@
   "exchange": "mexc",
   "mode": "mainnet",
   "account": "COMBO@mix",
-  "paper_db": "/var/lib/paperbot/combo/live-ac.db",
+  "paper_db": "/var/lib/paperbot/combo/live15-mexc.db",
   "db": "/var/lib/paperbot/exec/executor-mexc-live.db",
   "budget_usd": 100,
   "qty_scale": 0.1,

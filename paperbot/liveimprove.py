@@ -419,9 +419,12 @@ def live_roe(et: dict) -> Optional[float]:
         return None
 
 
-def exec_follow(infos: list, paper: list) -> dict:
+def exec_follow(infos: list, paper: list, paper_db: Optional[str] = None) -> dict:
     """{executor name: {paper trade id: {"live_roe", "paper_roe", "win"}}} of the executor's closed trades matched to
-    the paper trade they followed (livecheck.match_paper); None when its database cannot be read."""
+    the paper trade they followed (livecheck.match_paper); None when its database cannot be read. ``paper_db`` (the
+    database ``paper`` comes from): only the live trades the executor made while it followed that paper bot (owners
+    10-19: MEXC follows the -35 % one; paperbot/livepapers.py), so another bot's shared entries are never counted."""
+    from . import livepapers as LP
     out: dict = {}
     for ex in infos:
         conn = open_ro(ex.db)
@@ -429,9 +432,12 @@ def exec_follow(infos: list, paper: list) -> dict:
             out[ex.name] = None
             continue
         got = {}
+        segs = LP.segments(LP.starts_of(conn), paper_db) if paper_db else None
         try:
             for et in LC.exec_trades(conn):
                 if et.get("exit_ts") is None or et.get("pnl") is None:
+                    continue
+                if segs is not None and not LP.followed_at(segs, paper_db, et.get("entry_ts")):
                     continue
                 pt = LC.match_paper(et, paper, ex.account)
                 if pt is None:
@@ -1095,7 +1101,7 @@ def gather(src: Sources, since: Optional[int] = None) -> dict:
     start = since if since is not None else first
     window = [t for t in trades if start is None or t["entry_time"] >= start]
     infos = src.executors if src.executors is not None else LC.load_executors()
-    follow = exec_follow(infos, trades)
+    follow = exec_follow(infos, trades, paper_db=src.paper_db)    # each executor's trades on this paper bot only
     return {"ref": ref, "trades": window, "all": trades, "since": start, "infos": infos, "follow": follow,
             "problems": problems}
 

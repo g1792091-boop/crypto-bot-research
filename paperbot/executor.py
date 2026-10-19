@@ -1000,10 +1000,14 @@ class Executor:
             meta = {"mode": self.cfg.mode, "account": self.cfg.account, **meta, "live_since": self.now_ms()}
             self.store.put_state("meta", self.now_ms(), meta)
             self.store.commit()
-        self._event(INFO, "start", f"시작: paper 계좌 {self.cfg.account} 따라 하기, {self.cfg.mode}, "
-                    f"진입 {'신호 즉시' if self.signals is not None else 'paper 포지션'}, "
+        # a record only (no order depends on it): which paper database this start follows, so the live checks and the
+        # 실거래 site can pair each live trade with the paper bot it really followed when an executor's paper_db is
+        # switched (owners 10-19: MEXC follows the -35 % paper bot, docs/live15-mexc-ko.md)
+        self._event(INFO, "start", f"시작: paper 계좌 {self.cfg.account} 따라 하기 (페이퍼 DB {self.cfg.paper_db}), "
+                    f"{self.cfg.mode}, 진입 {'신호 즉시' if self.signals is not None else 'paper 포지션'}, "
                     f"비상 정지 파일 {os.path.abspath(self.cfg.risk.kill_file)}",
-                    {"halted": self.risk.halted, "trade": self.trade, "kill_file": self.cfg.risk.kill_file})
+                    {"halted": self.risk.halted, "trade": self.trade, "kill_file": self.cfg.risk.kill_file,
+                     "paper_db": self.cfg.paper_db})
         if self.risk.halted:
             self._event(WARN, "halted", f"멈춤 상태로 시작합니다(사람이 풀어야 함): {self.risk.halt_reason}")
         self._save()

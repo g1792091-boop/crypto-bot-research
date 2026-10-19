@@ -5,6 +5,9 @@
                                                   drawdown halts, owners 10-19)
     python -m paperbot.livecheck preview --old    the A+C bot's world (deploy/combo.live-ac.json: the light, the halts,
                                                   the 5-year reference, the 40-trade checkpoint, the break waits)
+    python -m paperbot.livecheck preview --two    two paper bots (docs/live15-mexc-ko.md): Bybit follows 규칙봇 15
+                                                  (-50 %), MEXC its -35 % twin (deploy/combo.live15-mexc.json): the
+                                                  switch, one entry in both, the -35 % stop alone, the morning check
 
 It writes small databases in the real schemas into a temporary folder (the paper bot's paperbot.store3, the rule
 bot's 1m bars, and the executors' own tables, copied here as ``EXEC_SCHEMA`` so this module never imports the
@@ -260,10 +263,10 @@ class World:
         return got.items
 
 
-def _history(w: World, start: int, wins: int, losses_at=(3, 9, 15), n: int = 20, strat=None):
-    """``n`` closed paper trades before ``start``, losses at the given positions."""
+def _history(w: World, start: int, wins: int, losses_at=(3, 9, 15), n: int = 20, strat=None, loss: Optional[float] = None):
+    """``n`` closed paper trades before ``start``, losses at the given positions (``loss``: their net ROE)."""
     t = start - n * 12 * H1
-    loss = -0.35 if w.prof is AC else -0.50
+    loss = loss if loss is not None else -0.35 if w.prof is AC else -0.50
     for k in range(n):
         w.paper_trade(t, t + H1, loss if k in losses_at else 0.12, strat=strat, lock=None if k in losses_at else 0.10)
         t += 12 * H1
@@ -276,7 +279,9 @@ def scenes(world: str = "live15") -> list:
     out: list = []
     tmp = tempfile.mkdtemp(prefix="livepreview_")
     try:
-        if world == "ac":
+        if world == "two":
+            out += _two_paper_scene(os.path.join(tmp, "m"))
+        elif world == "ac":
             out += _trade_scene(os.path.join(tmp, "a"))
             out += _pause_scene(os.path.join(tmp, "p"), AC)
             out += _alarm_scene(os.path.join(tmp, "b"), AC)
@@ -470,6 +475,98 @@ def _trade_scene15(path: str) -> list:
     w.tick(x + 8 * H1 + MIN)
     out += [("⏹ 실행기 꺼짐", lv, t) for lv, t in w.watch(x + 8 * H1 + MIN, units=lambda u: (
         ("inactive", "disabled") if u == "paperbot-executor-mexc" else ("active", "enabled")))]
+    return out
+
+
+def _two_paper_scene(path: str) -> list:
+    """Two paper bots (owners 10-19): 규칙봇 15 (-50 %) followed by Bybit, its -35 % twin followed by MEXC since MEXC's
+    restart with the new paper_db (its start record names it). One entry both bots make: ONE 🟢 with a line per paper
+    bot; the price falls past -0.73 %: the -35 % bot stops alone (its loss card names MEXC only), the -50 % bot holds and
+    wins later (its ✅ names Bybit only); the morning check lists both paper bots."""
+    w = _mk(path, LIVE15)
+    out = []
+    second = os.path.join(path, "live15-mexc.db")
+    Store3(second).conn.close()
+    main_path = w.paper
+    cfgs = {}
+    for f, at in (("combo.live15.json", main_path), ("combo.live15-mexc.json", second)):
+        with open(os.path.join(LC.ROOT, "deploy", f), encoding="utf-8") as fh:
+            cfgs[at] = json.load(fh)
+        st = Store3(at)
+        st.put_state("combo_run", T0 - 3 * DAY, {"config": cfgs[at], "taker_fee": 0.0005})
+        st.commit()
+        st.conn.close()
+    w.infos[1].paper_db = second                         # /etc/paperbot/executor-mexc.json after the switch
+
+    def on(path_: str):
+        w.paper = path_
+    for at in (main_path, second):
+        on(at)
+        _history(w, T0, 18, losses_at=(6, 14), loss=-0.50 if at == main_path else -0.352)
+    on(main_path)
+    for name in ("bybit", "mexc"):
+        w.x_state(name, T0 - MIN)
+        w.x_event(name, T0 - 2 * DAY, "start", "시작", {"paper_db": main_path} if name == "bybit" else None)
+    for at in (second, main_path):
+        on(at)
+        w.tick(T0 - MIN)
+    w.watch(T0 - MIN)                                    # the first look: runs recorded, nothing sent
+    # ▶️ the switch: MEXC started with the -35 % bot's database (docs/live15-mexc-ko.md)
+    w.x_event("mexc", T0 - 30 * MIN, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {second})", {"paper_db": second})
+    for at in (second, main_path):
+        on(at)
+        w.tick(T0 - 29 * MIN)
+    out += [("▶️ 실행기 켜짐 (페이퍼 바꿈)", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
+    # 🟢 one entry, both bots: BTC long 40x; the -50 % stop 1.11 % under, the -35 % stop 0.73 % under
+    key = f"{LC.ACCOUNT}|{BTC}|{T0}"
+    px = 67_250.0
+    stops = {main_path: round(px * (1 - (0.50 / 40 - 0.0014)), 1), second: round(px * (1 - (0.35 / 40 - 0.0014)), 1)}
+    legs = {"bybit": (round(px * 1.0002, 1), 0.0144, main_path), "mexc": (round(px * 1.0003, 1), 0.0144, second)}
+    for name, (fill, qty, at) in legs.items():
+        xs = round(fill * (1 - (0.50 if at == main_path else 0.35) / 40 + 0.0014), 1)
+        w.x_open(name, key, BTC, 1, T0 + 3000, fill, qty, xs)
+        w.x_state(name, T0 + MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": qty, "entry_ts": T0 + 3000,
+                                         "stop_initial": xs, "stop": xs, "stop_algo_id": "a1"})
+    for at in (second, main_path):
+        on(at)
+        w.open_position(T0, stop=stops[at])
+        w.tick(T0 + MIN)
+    out += [("🟢 진입 (두 페이퍼)", lv, t) for lv, t in w.watch(T0 + MIN)]
+    # ❌ the price dips 0.8 %: the -35 % bot and MEXC stop out, the -50 % bot and Bybit hold
+    x1 = T0 + 40 * MIN
+    on(second)
+    w.position = None
+    w.paper_trade(T0, x1, -0.352, stop=stops[second], mfe=px * 1.001)
+    w.tick(x1 + MIN)
+    on(main_path)
+    w.open_position(T0, stop=stops[main_path])
+    w.tick(x1 + MIN)
+    fill, qty, _a = legs["mexc"]
+    w.x_close("mexc", key, x1 + 2000, round(-0.362 * fill * qty / 40, 2), fill, round(fill * (1 - 0.362 / 40), 1), qty, 0.0008)
+    w.x_state("mexc", x1 + MIN, trade=None, last_equity=98.8, peak_equity=107.87)
+    out += [("❌ 청산 = 손실 카드 (−35% 봇만)", lv, t) for lv, t in w.watch(x1 + 2 * MIN)]
+    # ✅ the -50 % bot comes back and locks +12 % (Bybit with it)
+    x2 = T0 + 3 * H1
+    on(main_path)
+    w.position = None
+    w.paper_trade(T0, x2, 0.121, lock=0.12, mfe=px * (1 + 0.155 / 40), stop=stops[main_path])
+    w.tick(x2 + MIN)
+    on(second)
+    w.tick(x2 + MIN)
+    on(main_path)
+    fill, qty, _a = legs["bybit"]
+    w.x_close("bybit", key, x2 + 2000, round(0.115 * fill * qty / 40, 2), fill, round(fill * (1 + 0.115 / 40), 1), qty, 0.00055)
+    w.x_state("bybit", x2 + MIN, trade=None, last_equity=108.3, peak_equity=108.3)
+    out += [("✅ 청산(이김, −50% 봇만)", lv, t) for lv, t in w.watch(x2 + 2 * MIN)]
+    # 📋 the morning check: a line per paper bot, each saying which executor follows it
+    day = LC.default_day(T0 + DAY)
+    w0, w1 = LC.window_of(day)
+    for at in (second, main_path):
+        on(at)
+        w.tick(w1 + 9 * MIN)
+    got = Collect()
+    r = LC.run_check(w.src(), day=day, now_ms=w1 + 10 * MIN, no_replay=True, notifier=got)
+    out.append(("📋 아침 점검 (두 페이퍼)", r["level"], r["text"]))
     return out
 
 

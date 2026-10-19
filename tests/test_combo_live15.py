@@ -84,9 +84,10 @@ def test_live15_config_is_clean_and_has_the_owners_15():
     assert cfg.no_weekend and cfg.macro_blackout_min == 30 and cfg.us_open_pause_min == 30
     assert cfg.lev_of("BTCUSDT") == 40 and cfg.lev_of("SOLUSDT") == 30 and cfg.margin == 0.3
     assert cfg.ladder_spec == ComboLadder.of(LAD15)
-    # the executors follow this database: the same path as the A+C bot's
+    # Bybit follows this database: the same path as the A+C bot's (MEXC follows the -35 % twin since owners 10-19:
+    # deploy/combo.live15-mexc.json, tests/test_combo_live15_mexc.py)
     assert cfg.db == json.loads((ROOT / "deploy" / "executor.live-bybit.json").read_text())["paper_db"]
-    assert cfg.db == json.loads((ROOT / "deploy" / "executor.live-mexc.json").read_text())["paper_db"]
+    assert cfg.db != json.loads((ROOT / "deploy" / "executor.live-mexc.json").read_text())["paper_db"]
 
 
 def test_check_config_words(capsys):

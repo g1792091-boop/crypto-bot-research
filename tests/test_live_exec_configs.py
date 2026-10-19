@@ -12,15 +12,18 @@ def _load(name):
     return json.loads((DEPLOY / name).read_text(encoding="utf-8"))
 
 
-def test_bybit_and_mexc_differ_only_in_exchange_db_and_light():
+def test_bybit_and_mexc_differ_only_in_exchange_db_and_paper_db():
     b, m = _load("executor.live-bybit.json"), _load("executor.live-mexc.json")
     diff = {k for k in set(b) | set(m) if b.get(k) != m.get(k)}
-    assert diff == {"exchange", "db"}
+    assert diff == {"exchange", "db", "paper_db"}
     assert (b["exchange"], m["exchange"]) == ("bybit", "mexc")
     # owners 10-19 (규칙봇 15): no signal light, both executors follow every paper entry
     assert b["signal_light_n"] == m["signal_light_n"] == 0 and "signal_light_min_win" not in b
-    assert b["paper_db"] == m["paper_db"] == "/var/lib/paperbot/combo/live-ac.db"
-    assert b["account"] == "COMBO@mix" and b["mode"] == "mainnet" and b["budget_usd"] == 100
+    # owners 10-19 (final, "Mexc -35%로 가자"): each executor follows its own paper bot, the "db" of that bot's config file:
+    # Bybit 규칙봇 15 (-50 %), MEXC its -35 % twin (deploy/combo.live15-mexc.json, docs/live15-mexc-ko.md)
+    assert b["paper_db"] == _load("combo.live15.json")["db"] == "/var/lib/paperbot/combo/live-ac.db"
+    assert m["paper_db"] == _load("combo.live15-mexc.json")["db"] == "/var/lib/paperbot/combo/live15-mexc.db"
+    assert b["account"] == m["account"] == "COMBO@mix" and b["mode"] == "mainnet" and b["budget_usd"] == 100
 
 
 def test_no_removed_limits_and_fixed_rules_kept():

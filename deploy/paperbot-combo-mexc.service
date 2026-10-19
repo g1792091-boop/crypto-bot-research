@@ -1,0 +1,52 @@
+# 두 번째 실거래용 페이퍼 봇 (owners 10/19, docs/live15-mexc-ko.md): "규칙봇 15"와 똑같고 손절만 순ROE -35%
+# (deploy/combo.live15-mexc.json). The same program, user and sandbox as paperbot-combo.service, its own config
+# /etc/paperbot/combo-mexc.json and its own database /var/lib/paperbot/combo/live15-mexc.db (account COMBO@mix in that
+# file). The MEXC executor follows it once its config says "paper_db": "/var/lib/paperbot/combo/live15-mexc.db"; the
+# Bybit executor keeps following paperbot-combo (-50%). Paper only: no orders.
+#
+# Not paperbot-combo2.service: that unit (/etc/paperbot/combo2.json) may already run something else on the server.
+# install.sh installs this unit but never enables or starts it. A person starts it after writing
+# /etc/paperbot/combo-mexc.json (docs/live15-mexc-ko.md):
+#   sudo systemctl enable --now paperbot-combo-mexc
+# Telegram: its start and error lines go to the owners' chats like paperbot-combo's; its raw entry / exit lines stay
+# off (PAPERBOT_COMBO_TRADE_MSGS=0 below: the live watcher's messages tell the trades; live-telegram.env may override).
+# Restart is safe: the account, its signal queue and the last minute are in its database; missed minutes are replayed
+# from paper3.db, missed signals are recorded late and never traded.
+[Unit]
+Description=paperbot combined bot for MEXC (규칙봇 15 at -35% net stop, its own config combo-mexc.json; no orders)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+# no raw entry / exit lines of its own (the watcher's 🟢 / ✅ / ❌ tell the trades; avoids two near-identical lines)
+Environment=PAPERBOT_COMBO_TRADE_MSGS=0
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.combo run --config /etc/paperbot/combo-mexc.json
+Restart=always
+RestartSec=15
+NotifyAccess=main
+WatchdogSec=600
+TimeoutStartSec=20min
+TimeoutStopSec=60
+Nice=5
+MemoryMax=1500M
+# the MEXC executor follows this paper bot: in a server-wide memory shortage experiments go first (owners 2026-10-19)
+OOMScoreAdjust=-500
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot/combo
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target

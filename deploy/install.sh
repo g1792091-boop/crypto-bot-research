@@ -165,7 +165,7 @@ echo "== code"
 # Copy to a staging folder first, then swap while the services are stopped, so a
 # running bot never reads a half-copied tree. The previous code stays in $APP.old.
 # The agents timer is paused too, so no agent pass starts on a half-copied tree.
-UNITS="paperbot-live3 paperbot-dash paperbot-livedash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo paperbot-combo2"
+UNITS="paperbot-live3 paperbot-dash paperbot-livedash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo paperbot-combo2 paperbot-combo-mexc"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -273,6 +273,10 @@ done
 # the second combined bot (its own config combo2.json and paper database: two bots of different types side by side,
 # docs/live1019-start-ko.md): installed only, started by a person
 install -m 644 "$APP/deploy/paperbot-combo2.service" /etc/systemd/system/paperbot-combo2.service
+# the second LIVE paper bot (규칙봇 15 at -35%, its own config combo-mexc.json and database live15-mexc.db; the MEXC
+# executor follows it, docs/live15-mexc-ko.md): installed only, started by a person. A running one is stopped for
+# the code swap and started again like paperbot-combo (UNITS above).
+install -m 644 "$APP/deploy/paperbot-combo-mexc.service" /etc/systemd/system/paperbot-combo-mexc.service
 # the shadow paper bots (그림자 페이퍼 봇, docs/live1019-start-ko.md): one template, one instance per
 # deploy/combo.shadow-<name>.json; paper only, no Telegram, below the live paper bot. Installed only: never enabled,
 # started or stopped here (not among the units stopped for the code swap). A running shadow keeps the previous code
@@ -364,6 +368,11 @@ echo "paperbot-liveteam.timer (실거래 분석 팀): 자동 시작 $(systemctl 
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"
+fi
+# The -35% paper bot for MEXC is installed only (docs/live15-mexc-ko.md): started by a person after writing
+# /etc/paperbot/combo-mexc.json.
+if ! systemctl is-enabled --quiet paperbot-combo-mexc 2>/dev/null; then
+  echo "MEXC용 -35% 페이퍼 봇(paperbot-combo-mexc) 설치만 했습니다. 켜는 순서(MEXC 포지션이 없을 때): docs/live15-mexc-ko.md"
 fi
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then
