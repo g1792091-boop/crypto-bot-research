@@ -1,0 +1,9 @@
+[Unit]
+Description=paperbot live watcher every 2 minutes (실거래 실시간 감시)
+
+[Timer]
+OnCalendar=*:0/2
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target

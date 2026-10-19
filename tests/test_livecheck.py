@@ -564,3 +564,289 @@ def test_no_stale_numbers_and_no_order_code_in_the_new_modules():
                              r"import\s+\S*\b(executor|testnet|mainnet|bybit|mexc)\b|"
                              r"from\s+\.+\s+import\s+.*\b(executor|testnet|mainnet|risk|bybit|mexc)\b)", src, re.M)
         assert "executor.env" not in src
+
+
+# ====================================================================== 실시간 감시 (watch)
+T = W0 + 5 * H1                      # "now" of the watch tests
+
+
+class Units:
+    """systemctl as the watcher sees it: name -> (ActiveState, UnitFileState)."""
+
+    def __init__(self, **states):
+        self.states = states
+
+    def __call__(self, unit):
+        return self.states.get(unit, ("active", "enabled"))
+
+
+class FailingNotifier(ListNotifier):
+    def __init__(self):
+        super().__init__()
+        self.fail = True
+
+    def send(self, level, text):
+        if self.fail:
+            return False
+        super().send(level, text)
+        return True
+
+
+def position(entry, symbol=BTC, side=1):
+    sig_ = {"strategy_id": "F15_LON_BRK", "timeframe": "1h"}
+    return {"symbol": symbol, "side": side, "entry_time": entry, "signal": sig_}
+
+
+def rule_db(path, last_bar):
+    s = Store3(str(path))
+    s.live_bars([{"ts": last_bar, "symbol": BTC, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0,
+                  "processed_at": last_bar + MIN + 1000}])
+    s.commit()
+    s.conn.close()
+    return str(path)
+
+
+def watch_setup(tmp_path, entry=T - 5 * MIN, past=(), x_trades=(), hb=T - MIN, bar=T - 2 * MIN, bybit=None,
+                halted=False, trade_open=None, state_ts=T - MIN, live_since=W0 - DAY):
+    paper = paper_db(tmp_path / "live-ac.db", trades=list(past), heartbeat=hb,
+                     position=position(entry) if entry else None)
+    rule = rule_db(tmp_path / "paper3.db", bar)
+    byb = bybit or exec_db(tmp_path / "bybit.db", trades=list(x_trades), halted=halted, trade_open=trade_open,
+                           state_ts=state_ts, live_since=live_since)
+    src = LC.Sources(db=str(tmp_path / "livecheck.db"), paper_db=paper, rule_db=rule, combo_config="-",
+                     executors=[info("bybit", byb)])
+    src.executors[0].unit = "paperbot-executor"
+    return src
+
+
+def fresh(src, now):
+    """The paper bot and the rule bot still running at ``now``."""
+    conn = sqlite3.connect(src.paper_db)
+    conn.execute("INSERT OR REPLACE INTO state VALUES ('heartbeat', ?, '{}')", (now - MIN,))
+    conn.commit()
+    conn.close()
+    conn = sqlite3.connect(src.rule_db)
+    conn.execute("INSERT OR IGNORE INTO live_bars (ts, symbol, open, high, low, close, processed_at) "
+                 "VALUES (?, 'BTCUSDT', 1, 1, 1, 1, ?)", (now - 2 * MIN, now - MIN))
+    conn.commit()
+    conn.close()
+
+
+def keys(out, event="fire"):
+    return [k for e, k, _lvl, _t in out if e == event]
+
+
+def _set_bot(path, **kw):
+    conn = sqlite3.connect(path)
+    ts, data = conn.execute("SELECT ts, data FROM state WHERE k = 'bot'").fetchone()
+    data = json.loads(data)
+    risk = data["risk"]
+    for k, v in kw.items():
+        if k in ("ts",):
+            ts = v
+        elif k == "trade":
+            data["trade"] = v
+        else:
+            risk[k] = v
+    conn.execute("UPDATE state SET ts = ?, data = ? WHERE k = 'bot'", (ts, json.dumps(data)))
+    conn.commit()
+    conn.close()
+
+
+def test_watch_a_paper_entry_not_followed_alarms_once_and_rearms(tmp_path):
+    src = watch_setup(tmp_path)
+    n = ListNotifier()
+    key = f"{LC.ACCOUNT}|{BTC}|{T - 5 * MIN}"
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert keys(out) == [f"follow:bybit:{key}"]
+    level, text = n.messages[0]
+    assert level == CRITICAL and text.startswith("실거래가 페이퍼를 따라가지 않았습니다 · 바이비트")
+    assert "페이퍼 진입 13:55 BTC 롱 F15_LON_BRK 1시간 (5분 지남)" in text
+    assert "신호등 근거 쌓는 중(0/20번, 그동안 모두 따라감) · 멈춤 아님" in text
+    assert "실행기 기록: 이 진입에 대한 기록 없음" in text
+    assert "다음: 거래소 앱에서 포지션을 확인하고 sudo journalctl -u paperbot-executor -n 50" in text
+    assert telegram_text(CRITICAL, text)[1].startswith("🚨 실거래가 페이퍼를 따라가지 않았습니다")
+    assert LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False) == []
+    assert len(n.messages) == 1                                         # once per condition
+    # the executor followed after all: the condition clears without a message
+    from paperbot.executor import ExecStore
+    st = ExecStore(src.executors[0].db, lock=False)
+    st.trade_open({"key": key, "symbol": BTC, "side": 1, "qty": 1.0, "leverage": 40, "entry_ts": T})
+    st.commit()
+    st.close()
+    out = LC.run_watch(src, now_ms=T + 4 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert keys(out, "clear") == [f"follow:bybit:{key}"] and len(n.messages) == 1
+    conn = sqlite3.connect(src.db)
+    assert conn.execute("SELECT active FROM watch WHERE key = ?", (f"follow:bybit:{key}",)).fetchone() == (0,)
+    assert conn.execute("SELECT COUNT(*) FROM seen").fetchone() == (3,)
+    conn.close()
+
+
+def test_watch_follow_is_quiet_when_the_executor_may_skip_the_entry(tmp_path):
+    reds = [trade(W0 - 30 * DAY + k * H1, W0 - 30 * DAY + k * H1 + 30 * MIN, -1.0 if k < 5 else 1.0)
+            for k in range(20)]                                       # 15/20 = 75% < 85%: red
+    cases = {
+        "red light": dict(past=reds),
+        "halted": dict(halted=True),
+        "too fresh": dict(entry=T - 2 * MIN),
+        "before the executor went live": dict(live_since=T - 2 * MIN),
+    }
+    for name, kw in cases.items():
+        d = tmp_path / name.replace(" ", "_")
+        d.mkdir()
+        src = watch_setup(d, **kw)
+        out = LC.run_watch(src, now_ms=T, notifier=ListNotifier(), units=Units(), exists=lambda p: False)
+        assert not [k for k in keys(out) if k.startswith("follow:")], name
+    (tmp_path / "x").mkdir()
+    src = watch_setup(tmp_path / "x")
+    out = LC.run_watch(src, now_ms=T, notifier=ListNotifier(), units=Units(), exists=lambda p: True)  # kill file
+    assert not keys(out)
+    out = LC.run_watch(src, now_ms=T, notifier=ListNotifier(), exists=lambda p: False,
+                       units=Units(**{"paperbot-executor": ("inactive", "disabled")}))   # stopped on purpose
+    assert not keys(out)
+    greens = [trade(W0 - 30 * DAY + k * H1, W0 - 30 * DAY + k * H1 + 30 * MIN, 1.0) for k in range(20)]
+    (tmp_path / "g").mkdir()
+    src = watch_setup(tmp_path / "g", past=greens)
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert keys(out) == [f"follow:bybit:{LC.ACCOUNT}|{BTC}|{T - 5 * MIN}"]
+    assert "신호등 초록(최근 20번 20승 100%, 기준 85%)" in n.messages[0][1]
+
+
+def test_watch_a_closed_paper_trade_and_the_executors_own_words(tmp_path):
+    entry = T - 20 * MIN
+    src = watch_setup(tmp_path, entry=None, past=[trade(entry, T - 10 * MIN, 1.0)])
+    from paperbot.executor import ExecStore
+    st = ExecStore(src.executors[0].db, lock=False)
+    st.event(entry + 200_000, "WARN", "late", "paper 진입이 200초 전이라 따라 하지 않습니다",
+             {"key": f"{LC.ACCOUNT}|{BTC}|{entry}"})
+    st.commit()
+    st.close()
+    n = ListNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    text = n.messages[0][1]
+    assert "(20분 지남, 페이퍼는 이미 청산)" in text
+    assert "실행기 기록: paper 진입이 200초 전이라 따라 하지 않습니다" in text
+    # an hour later the trade is out of the window: cleared silently
+    fresh(src, T + H1)
+    _set_bot(src.executors[0].db, ts=T + H1 - MIN)
+    out = LC.run_watch(src, now_ms=T + H1, notifier=n, units=Units(), exists=lambda p: False)
+    assert keys(out, "clear") == [f"follow:bybit:{LC.ACCOUNT}|{BTC}|{entry}"] and len(n.messages) == 1
+
+
+def test_watch_open_position_without_a_stop_and_a_stale_executor(tmp_path):
+    t = {"key": "k1", "symbol": SOL, "side": -1, "qty": 0.5, "status": "open", "entry_ts": T - 3 * MIN,
+         "stop_algo_id": None}
+    src = watch_setup(tmp_path, entry=None, trade_open=t, state_ts=T - 15 * MIN)
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert sorted(keys(out)) == ["stale:bybit", "stop:bybit:k1"]
+    msgs = dict((m.split("\n")[0], m) for _l, m in n.messages)
+    assert "바이비트 실거래 포지션에 손절 기록이 없습니다" in msgs
+    assert "SOL 숏 0.5 · 진입 13:57, 3분 전 · 상태 open" in msgs["바이비트 실거래 포지션에 손절 기록이 없습니다"]
+    stale = msgs["바이비트 실행기가 10분 넘게 기록을 남기지 않습니다"]
+    assert "마지막 기록: 13:45, 15분 전 · 서비스 상태: 켜져 있음" in stale
+    assert "sudo systemctl status paperbot-executor" in stale
+    # the stop is recorded and the state is fresh again: both clear, each with a silent line
+    _set_bot(src.executors[0].db, ts=T + MIN, trade=dict(t, stop_algo_id="a1"))
+    fresh(src, T + 2 * MIN)
+    out = LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert sorted(keys(out, "clear")) == ["stale:bybit", "stop:bybit:k1"]
+    assert sorted(m for lv, m in n.messages[2:]) == ["✅ 바이비트 실행기 기록이 다시 들어옵니다",
+                                                     "✅ 바이비트 포지션의 손절이 기록됐거나 포지션이 닫혔습니다"]
+    assert all(lv == INFO for lv, _m in n.messages[2:])
+    # stale again: re-armed, sent again
+    fresh(src, T + 20 * MIN)
+    out = LC.run_watch(src, now_ms=T + 20 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert keys(out) == ["stale:bybit"]
+    # an executor stopped on purpose (disabled and inactive) is not stale
+    fresh(src, T + 40 * MIN)
+    out = LC.run_watch(src, now_ms=T + 40 * MIN, notifier=n, exists=lambda p: False,
+                       units=Units(**{"paperbot-executor": ("inactive", "disabled")}))
+    assert keys(out, "clear") == ["stale:bybit"]
+
+
+def test_watch_paper_heartbeat_and_rule_bars(tmp_path):
+    src = watch_setup(tmp_path, entry=None, hb=T - 12 * MIN, bar=T - 7 * MIN)
+    n = ListNotifier()
+    out = LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    assert sorted(keys(out)) == ["paper_stale", "rule_bars"]
+    texts = "\n".join(m for _l, m in n.messages)
+    assert "페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다\n마지막 기록: 13:48, 12분 전" in texts
+    assert "규칙봇 1분봉이 5분 넘게 들어오지 않습니다\n마지막 1분봉: 13:54, 6분 전" in texts
+    # an unreadable paper database: still loud (no heartbeat), the follow checks are not judged
+    os.remove(src.paper_db)
+    gone = LC.Sources(db=str(tmp_path / "w2.db"), paper_db=src.paper_db, rule_db=src.rule_db, executors=src.executors)
+    out = LC.run_watch(gone, now_ms=T, notifier=ListNotifier(), units=Units(), exists=lambda p: False)
+    assert "paper_stale" in keys(out)
+
+
+def test_watch_drawdown_rearms_below_20_and_good_news_once(tmp_path):
+    src = watch_setup(tmp_path, entry=None)
+    db = src.executors[0].db
+    n = ListNotifier()
+
+    def run(now):
+        fresh(src, now)
+        return LC.run_watch(src, now_ms=now, notifier=n, units=Units(), exists=lambda p: False)
+    _set_bot(db, ts=T, last_equity=74.0, peak_equity=100.0)
+    assert keys(run(T)) == ["dd:bybit"]
+    assert n.messages[-1][1].startswith("바이비트 실거래 잔고가 최고점보다 26% 줄었습니다\n잔고 $74.00 · 최고 $100.00\n50%가 되면")
+    _set_bot(db, ts=T + 2 * MIN, last_equity=78.0)                    # 22%: still the same alarm, nothing sent
+    assert run(T + 2 * MIN) == [] and len(n.messages) == 1
+    _set_bot(db, ts=T + 4 * MIN, last_equity=82.0)                    # 18%: cleared, re-armed
+    assert keys(run(T + 4 * MIN), "clear") == ["dd:bybit"] and n.messages[-1][0] == INFO
+    _set_bot(db, ts=T + 6 * MIN, last_equity=74.0)
+    assert keys(run(T + 6 * MIN)) == ["dd:bybit"] and len(n.messages) == 3
+    _set_bot(db, ts=T + 8 * MIN, last_equity=151.0, peak_equity=151.0)
+    out = run(T + 8 * MIN)
+    assert keys(out) == ["good:bybit:0.5"] and keys(out, "clear") == ["dd:bybit"]
+    good = [m for lv, m in n.messages if m.startswith("🎉")]
+    assert good == ["🎉 바이비트 실거래 잔고가 처음으로 시작보다 +50%가 됐습니다\n잔고 $151.00 (시작 $100.00)"]
+    assert [lv for lv, m in n.messages if m.startswith("🎉")] == [INFO]
+    _set_bot(db, ts=T + 10 * MIN, last_equity=120.0, peak_equity=151.0)
+    _set_bot(db, ts=T + 12 * MIN, last_equity=160.0, peak_equity=160.0)
+    assert keys(run(T + 12 * MIN)) == []                              # once only, even after a dip
+    _set_bot(db, ts=T + 14 * MIN, last_equity=205.0, peak_equity=205.0)
+    assert keys(run(T + 14 * MIN)) == ["good:bybit:1"]
+
+
+def test_watch_unsent_alarm_is_retried_and_dry_run_writes_nothing(tmp_path):
+    src = watch_setup(tmp_path, entry=None, hb=T - 30 * MIN)
+    n = FailingNotifier()
+    LC.run_watch(src, now_ms=T, notifier=n, units=Units(), exists=lambda p: False)
+    n.fail = False
+    out = LC.run_watch(src, now_ms=T + 2 * MIN, notifier=n, units=Units(), exists=lambda p: False)
+    assert keys(out) == ["paper_stale"] and len(n.messages) == 1          # Telegram refused it first: sent now
+    (tmp_path / "d").mkdir()
+    src2 = watch_setup(tmp_path / "d", entry=None, hb=T - 30 * MIN)
+    out = LC.run_watch(src2, now_ms=T, dry_run=True, units=Units(), exists=lambda p: False)
+    assert keys(out) == ["paper_stale"] and not os.path.exists(src2.db)
+
+
+def test_the_morning_check_names_the_paper_bots_stopped_span_from_the_watch(tmp_path):
+    src, _rep = _setup(tmp_path)
+    conn = LC.open_out(src.db)
+    hb = W0 + 3 * H1
+    for k in range(0, 31, 2):                                         # 12:00 .. 12:30 heartbeat stuck at 12:00
+        conn.execute("INSERT INTO seen VALUES (?,?,?,?,?)", (hb + k * MIN, hb, hb, hb, "{}"))
+    conn.execute("INSERT INTO seen VALUES (?,?,?,?,?)", (hb + 32 * MIN, hb + 31 * MIN, hb, hb, "{}"))
+    conn.commit()
+    conn.close()
+    assert LC.down_spans(src.db, W0, W1) == [(hb, hb + 31 * MIN)]
+    rep = result(signals=[rsig(W0 + 8 * H1, symbol=SOL, member="F15_ASIA_BRK@30m#2~def", tf="30m"),
+                          rsig(W0 + 10 * H1), rsig(hb + 15 * MIN)],
+                 trades=[rtrade(W0 + 8 * H1, W0 + 9 * H1, 0.4, symbol=SOL, strategy="F15_ASIA_BRK", tf="30m"),
+                         rtrade(W0 + 10 * H1, W0 + 11 * H1, -0.2)])
+    out = LC.run_check(src, day="2026-10-20", now_ms=NOW, replay=lambda *a: rep, notifier=ListNotifier())
+    assert out["level"] == INFO
+    assert "- 신호 재계산에만 있음 12:15 BTC 롱 F15_LON_BRK 1시간 (진입 신호) — 그때 페이퍼 봇이 멈춰 있었음(12:00~12:31, 감시 기록)" \
+        in out["text"]
+
+
+def test_watch_command_line_dry_run(tmp_path, capsys):
+    src = watch_setup(tmp_path, entry=None, hb=W0 - 30 * DAY)
+    (tmp_path / "combo.json").write_text(json.dumps({"db": src.paper_db, "paper_db": src.rule_db}))
+    assert LC.main(["watch", "--dry-run", "--db", src.db, "--combo-config", str(tmp_path / "combo.json")]) == 0
+    got = capsys.readouterr().out
+    assert "[fire CRITICAL] paper_stale\n페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다" in got

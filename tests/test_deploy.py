@@ -60,10 +60,11 @@ def test_the_owners_check_of_the_units_shows_only_the_settings():
         got = [ln for ln in text.splitlines() if re.search(pat, ln)]
         n = len(FA.JOBS_KO)
         assert len(got) == n + 2 and sum("OnFailure" in ln for ln in got) == n, (pat, got)
-    # 11 jobs (paper v4): the 7 before, the DeepSeek nightly check and the nightly backup (owners' G29, G31), the
-    # custom-value shadow (owners' "2번", 2026-10-10), the live daily check (2026-10-19): 13 lines
-    assert len(FA.JOBS_KO) == 11 and {"paperbot-dscheck.service", "paperbot-backup.service",
-                                      "paperbot-paramshadow.service", "paperbot-livecheck.service"} <= set(FA.JOBS_KO)
+    # 12 jobs (paper v4): the 7 before, the DeepSeek nightly check and the nightly backup (owners' G29, G31), the
+    # custom-value shadow (owners' "2번", 2026-10-10), the live daily check and the live watcher (2026-10-19): 14 lines
+    assert len(FA.JOBS_KO) == 12 and {"paperbot-dscheck.service", "paperbot-backup.service",
+                                      "paperbot-paramshadow.service", "paperbot-livecheck.service",
+                                      "paperbot-livewatch.service"} <= set(FA.JOBS_KO)
 
 
 def test_a_failed_backup_warns_and_the_dscheck_bar_cache_is_never_copied():

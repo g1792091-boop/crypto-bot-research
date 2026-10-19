@@ -618,7 +618,7 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
 
 ## 12. 실거래 일일 점검과 알람 (10/19 추가)
 
-서버가 매일 아침 실거래를 대신 점검해서 텔레그램으로 알려 줍니다. 봇과 주문에는 손대지 않고 기록만 읽습니다.
+서버가 매일 아침 실거래를 대신 점검하고, 2분마다 지켜보다가 문제가 생기면 텔레그램으로 알려 줍니다. 봇과 주문에는 손대지 않고 기록만 읽습니다.
 
 **아침 메시지 (매일 09:10, 한 통)**
 
@@ -634,14 +634,30 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
   4. **월요일**에는 지난 7일 요약이 붙습니다.
 - 결과는 `/var/lib/paperbot/livecheck.db`에도 남습니다(나중에 대시보드용).
 
+**알람 (2분마다 확인, 소리 나게, 같은 문제는 한 번만)**
+
+| 알람 | 언제 | 할 일 |
+|---|---|---|
+| 실거래가 페이퍼를 따라가지 않았습니다 | 페이퍼가 들어간 지 3분이 지났는데 실행기에 그 거래가 없음. 신호등이 초록(또는 근거 쌓는 중)이고, 멈춤도 비상 정지 파일도 없고, 실행기가 켜져 있어야 할 때만 | 거래소 앱에서 포지션 확인, 메시지의 `journalctl` 명령으로 이유 보기 |
+| 실거래 포지션에 손절 기록이 없습니다 | 실행기가 연 포지션에 손절 주문 번호가 1분 넘게 없음(거래소에 묻지 않고 실행기 기록만 봄) | 앱에서 손절이 걸려 있는지 바로 보고, 없으면 앱에서 손절을 걸거나 닫기 |
+| 실행기가 10분 넘게 기록을 남기지 않습니다 | 켜져 있어야 할 실행기의 기록이 10분 넘게 멈춤 | `systemctl status`·`journalctl`로 확인 |
+| 페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다 / 규칙봇 1분봉이 5분 넘게 들어오지 않습니다 | 페이퍼 봇이나 그 1분봉이 멈춤(그동안 실거래도 새 진입 없음) | 메시지의 `systemctl status` 명령으로 확인 |
+| 실거래 잔고가 최고점보다 25% 줄었습니다 | 50% 자동 멈춤 전에 미리 | 두 분이 계속할지 정하기 |
+
+- 문제가 풀리면 소리 없이 "✅ …다시 들어옵니다"가 오고, 같은 문제가 다시 생기면 다시 울립니다(잔고 알람은 20% 안으로 돌아온 뒤에).
+- 좋은 소식은 소리 없이 한 번만: 실거래 잔고가 처음으로 시작보다 +50%, +100%가 됐을 때.
+- 실행기를 일부러 끈 경우(`systemctl stop`이고 자동 시작도 꺼져 있음)에는 그 실행기 알람을 보내지 않습니다.
+- 아침 점검은 이 감시 기록으로 "그때 페이퍼 봇이 멈춰 있었음"을 대조 차이의 이유로 붙입니다.
+
 **손으로 돌리기**
 
 ```bash
 cd /opt/crypto-bot-research
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck run --day 2026-10-19 --dry-run   # 10/19 09:00 ~ 10/20 09:00, 보내지도 저장하지도 않고 화면에만
 sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck show                             # 마지막 아침 메시지와 대조 차이 전체
-sudo systemctl list-timers paperbot-livecheck.timer                                                  # 다음 실행 시각
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.livecheck watch --dry-run                  # 지금 울릴 알람이 있는지(보내지 않음)
+sudo systemctl list-timers paperbot-livecheck.timer paperbot-livewatch.timer                         # 다음 실행 시각
 ```
 
 - `--day`는 점검하는 하루가 시작되는 날짜(그날 09:00)입니다. 다시 계산에 6~10분 걸립니다. 빨리 보려면 `--no-replay`(대조 없이).
-- 설치(`deploy/install.sh`)가 아침 점검 타이머를 켭니다. 끄기: `sudo systemctl disable --now paperbot-livecheck.timer`.
+- 설치(`deploy/install.sh`)가 두 타이머를 켭니다. 끄기: `sudo systemctl disable --now paperbot-livecheck.timer paperbot-livewatch.timer`.

@@ -323,15 +323,16 @@ else
   # change, no Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
   systemctl enable --now paperbot-paramshadow.timer >/dev/null 2>&1 || echo "paramshadow timer could not be enabled: sudo systemctl enable --now paperbot-paramshadow.timer"
 fi
-# 실거래 일일 점검 (paperbot/livecheck.py; docs/live1019-start-ko.md "실거래 일일 점검과 알람"): read-only towards the
-# paper bot and the executors (their databases opened read-only, executor.env never opened, no exchange account, no
-# order), public Binance klines, one Telegram message every morning at 09:10 KST. Installed AND switched on here
-# (its timer): with no executor running yet it only says so. Its real state is printed.
-for u in paperbot-livecheck.service paperbot-livecheck.timer; do
+# 실거래 일일 점검 and 실시간 감시 (paperbot/livecheck.py; docs/live1019-start-ko.md "실거래 일일 점검과 알람"):
+# read-only towards the paper bot and the executors (their databases opened read-only, executor.env never opened, no
+# exchange account, no order); the morning check reads public Binance klines and sends one Telegram message at 09:10
+# KST, the watcher (every 2 minutes) sends a loud message once per new problem. Installed AND switched on here (their
+# timers): with no executor running yet they only say what they see. Their real state is printed.
+for u in paperbot-livecheck.service paperbot-livecheck.timer paperbot-livewatch.service paperbot-livewatch.timer; do
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
-for t in paperbot-livecheck.timer; do
+for t in paperbot-livecheck.timer paperbot-livewatch.timer; do
   systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
   echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
 done

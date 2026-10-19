@@ -3,10 +3,10 @@ follow the combined paper bot (paperbot/combo.py, account COMBO@mix).
 
     python -m paperbot.livecheck run [--day YYYY-MM-DD] [--dry-run] [--no-replay]
     python -m paperbot.livecheck show [--day YYYY-MM-DD]
+    python -m paperbot.livecheck watch [--dry-run]
 
 ``run`` (deploy/paperbot-livecheck.timer, 09:10 KST) checks one trading day, 09:00 KST to 09:00 KST (00:00 to 00:00
-UTC: the day boundary of the paper bot's snapshots and of the executors' daily loss limit), by default the one that
-ended at 09:00 today; ``--day`` names it by the KST date it starts on. It stores the result in its own SQLite file
+UTC: the day boundary of the paper bot's daily snapshots), by default the one that ended at 09:00 today; ``--day`` names it by the KST date it starts on. It stores the result in its own SQLite file
 (``--db``, default /var/lib/paperbot/livecheck.db: tables days, parity, costs, scores; for a dashboard later) and sends
 ONE plain-Korean Telegram message through the repository's notifier (paperbot/live.py ``_notifier``: live.env's bot
 and chats). Silent (INFO) when everything is fine; loud (CRITICAL) when the replay and the paper bot disagree without
@@ -33,6 +33,21 @@ halted. ``--dry-run`` prints the message and writes nothing (no Telegram, no liv
    (88% or more: consider more money; 82-88%: keep watching; under 82%: stop and rethink). Mondays add the last 7 days.
    Samples under 20 trades are marked as small.
 
+``watch`` (deploy/paperbot-livewatch.timer, every 2 minutes; 실시간 감시) sends a LOUD message once per condition, with
+the next step, and re-arms it when the condition clears (state in livecheck.db: watch, watch_log; a silent line when
+it clears where that helps):
+1. the paper bot entered more than 3 minutes ago (its open position, or a trade entered within the last hour and
+   already closed) and an executor has no trade with that key although its signal light was green (or still building,
+   fewer than N closed trades) at the entry, it was not halted, no kill file, it should be running and it was already
+   live then ("실거래가 페이퍼를 따라가지 않았습니다", with what its own records say about that entry);
+2. an executor's open position has no protective stop recorded in its state (its ``stop_algo_id``; the exchange is
+   never called), or its state is older than 10 minutes while it should be running (systemd: started or enabled);
+3. the paper bot's heartbeat (combo.py writes ``state.heartbeat`` every poll) is older than 10 minutes, or the newest 1m
+   bar of the rule bot (paper3.db live_bars, the paper bot's data) is older than 5 minutes;
+4. an executor's equity is 25% or more below its peak (its halt is at 50%; re-armed under 20%), and, silent, the first
+   time its equity (deposits taken out) reaches +50% and +100% of its start.
+Each pass also records what it saw (``seen``): the morning check reads the paper bot's stopped spans from it.
+
 Read-only towards the bots: their databases are opened read-only (paperbot/livepnl.py ``open_ro``), the executors'
 configs are read as plain JSON (never their key file), no exchange account is called and no order is sent.
 """
@@ -49,6 +64,8 @@ import sys
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
+
+from .notify import CRITICAL, INFO
 
 MIN = 60_000
 H1 = 3_600_000
@@ -751,6 +768,7 @@ def parity_check(src: Sources, live_conn, w0: int, w1: int, now_ms: int, replay:
     ctx.prebreak = {(s["bar_close"], s["symbol"], s["side"]) for s in live_sig
                     if s["status"] == "SUBMITTED" and s.get("why") == "돌파 확인"
                     and (s["strategy"], s["symbol"], s["side"]) not in waiting}
+    ctx.down += down_spans(src.db, w0, w1)             # the watcher's own record of the paper bot's heartbeat
     if extra_ctx is not None:
         extra_ctx(ctx, w0, w1)
     rep_sig = res.signals
@@ -1036,7 +1054,6 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
         nxt.append("멈춘 실행기: 이유를 확인한 뒤 사람이 풀어야 합니다(executor clear-halt, docs/live1019-start-ko.md)")
     if nxt:
         lines += ["", "다음 할 일"] + [f"- {x}" for x in nxt]
-    from .notify import CRITICAL, INFO
     text = "\n".join(lines)
     if len(text) > 3900:
         text = text[:3880] + "\n…(나머지: python -m paperbot.livecheck show)"
@@ -1109,7 +1126,7 @@ CREATE TABLE IF NOT EXISTS scores (
 def open_out(path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
     conn = sqlite3.connect(path, timeout=30)
-    conn.executescript(SCHEMA)
+    conn.executescript(SCHEMA + WATCH_SCHEMA)
     conn.commit()
     return conn
 
@@ -1147,6 +1164,374 @@ def save_day(conn, day: str, now_ms: int, w0: int, w1: int, level: str, loud: li
                      (day, "paper", pp["n"], pp["wins"], pp["pnl"], pp.get("wallet"),
                       json.dumps({"last20": pp.get("last20"), "last40": pp.get("last40")}, default=str)))
     conn.commit()
+
+
+# ====================================================================== 실시간 감시 (watch, every 2 minutes)
+FOLLOW_MS = 3 * MIN                # a paper entry older than this must have been followed
+RECENT_MS = H1                     # ... also when the paper trade already closed within this
+STOP_GRACE_MS = 60_000             # an open real position without a recorded stop after this
+STALE_EXEC_MS = 10 * MIN           # executor state older than this while it should run
+STALE_PAPER_MS = 10 * MIN          # the paper bot's heartbeat older than this
+STALE_BARS_MS = 5 * MIN            # the rule bot's newest 1m bar older than this
+DD_WARN, DD_CLEAR = 0.25, 0.20     # equity this far below its peak: loud; re-armed once back under DD_CLEAR
+GOOD_STEPS = (0.5, 1.0)            # equity first +50% / +100% of its start: silent good news, once
+SEEN_KEEP_MS = 60 * DAY
+RUNNING = ("active", "activating", "reloading", "deactivating", "failed")
+UNIT_KO = {"active": "켜져 있음", "activating": "다시 켜지는 중", "reloading": "설정 다시 읽는 중",
+           "deactivating": "끄는 중", "failed": "오류로 멈춤", "enabled": "꺼져 있음(자동 시작은 켜짐)",
+           "enabled-runtime": "꺼져 있음(자동 시작은 켜짐)", "inactive": "꺼져 있음"}
+WATCH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS watch (
+    key TEXT PRIMARY KEY,
+    active INTEGER NOT NULL,
+    first_ts INTEGER NOT NULL,
+    last_ts INTEGER NOT NULL,
+    cleared_ts INTEGER,
+    level TEXT NOT NULL,
+    text TEXT NOT NULL,
+    recover TEXT,
+    once INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS watch_log (
+    ts INTEGER NOT NULL,
+    key TEXT NOT NULL,
+    event TEXT NOT NULL,
+    level TEXT,
+    text TEXT,
+    sent INTEGER
+);
+CREATE TABLE IF NOT EXISTS seen (
+    ts INTEGER PRIMARY KEY,
+    paper_hb INTEGER,
+    paper_step INTEGER,
+    rule_bar INTEGER,
+    data TEXT
+);
+"""
+
+
+@dataclass
+class Cond:
+    key: str
+    level: str
+    text: str
+    recover: Optional[str] = None      # a silent line when it clears
+    once: bool = False                 # good news: never sent again
+
+
+def unit_state(unit: str) -> tuple[str, str]:
+    """(ActiveState, UnitFileState) of a systemd unit, ('', '') when systemctl cannot be asked."""
+    import subprocess
+    out = []
+    for verb in ("is-active", "is-enabled"):
+        try:
+            p = subprocess.run(["systemctl", verb, unit], capture_output=True, text=True, timeout=5)
+            out.append((p.stdout or "").strip().splitlines()[0] if (p.stdout or "").strip() else "")
+        except (OSError, subprocess.SubprocessError):
+            out.append("")
+    return out[0], out[1]
+
+
+def should_run(ex: ExecInfo, units: Callable) -> tuple[bool, str]:
+    """Is the executor meant to be running (started or enabled; a person's ``systemctl stop`` of a disabled unit is
+    not)? Unknown (no systemctl): when its database exists."""
+    active, enabled = units(ex.unit)
+    if active in RUNNING or enabled in ("enabled", "enabled-runtime"):
+        word = active if active in RUNNING else enabled
+        return True, UNIT_KO.get(word, word)
+    if not active and not enabled:
+        return os.path.exists(ex.db), "알 수 없음"
+    return False, UNIT_KO.get(active, active)
+
+
+def _ago(now_ms: int, ts: Optional[int]) -> str:
+    if ts is None:
+        return "기록 없음"
+    m = max(0, int(now_ms) - int(ts)) // MIN
+    return f"{kst(ts)}, {m}분 전" if m < 120 else f"{kst_dt(ts)}, {m // 60}시간 전"
+
+
+def _key_events(conn, key: str, limit: int = 3) -> list:
+    try:
+        return conn.execute("SELECT ts, kind, text FROM events WHERE data LIKE ? ORDER BY id DESC LIMIT ?",
+                            (f'%"{key}"%', limit)).fetchall()
+    except sqlite3.Error:
+        return []
+
+
+def _paper_entries(conn, now_ms: int) -> list:
+    """The paper account's entries the executors should have followed by now: its open position and the trades
+    entered (and already closed) within RECENT_MS, each entered more than FOLLOW_MS ago."""
+    out = []
+    _ts, acc = get_state(conn, "accounts")
+    p = (((acc or {}).get("engines") or {}).get(ACCOUNT) or {}).get("position")
+    if p:
+        sig = p.get("signal") or {}
+        out.append({"entry_time": int(p["entry_time"]), "symbol": p["symbol"], "side": int(p["side"]),
+                    "strategy": sig.get("strategy_id", ""), "tf": sig.get("timeframe", ""), "open": True})
+    try:
+        rows = conn.execute("SELECT entry_time, symbol, data FROM trades WHERE account_id = ? AND exit_time >= ?",
+                            (ACCOUNT, int(now_ms) - RECENT_MS)).fetchall()
+    except sqlite3.Error:
+        rows = []
+    for et, sym, data in rows:
+        try:
+            d = json.loads(data)
+        except (ValueError, TypeError):
+            d = {}
+        out.append({"entry_time": int(et), "symbol": sym, "side": int(d.get("side") or 0),
+                    "strategy": d.get("strategy_id", ""), "tf": d.get("timeframe", ""), "open": False})
+    return [e for e in out if int(now_ms) - e["entry_time"] > FOLLOW_MS
+            and (e["open"] or e["entry_time"] >= int(now_ms) - RECENT_MS)]
+
+
+def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
+                     exists: Callable = os.path.exists) -> tuple[list, set, dict]:
+    """(active conditions, the key prefixes that could be judged this time, an observation for ``seen``)."""
+    conds, judged, seen = [], set(), {"ts": int(now_ms), "exec": {}}
+    infos = src.executors or load_executors()
+    # ---- 3. the paper bot and its bars
+    pc = open_ro(src.paper_db)
+    paper, entries = None, []
+    if pc is not None:
+        try:
+            hb, _h = get_state(pc, "heartbeat")
+            step, _a = get_state(pc, "accounts")
+            paper = paper_trades(pc, ACCOUNT)
+            entries = _paper_entries(pc, now_ms)
+        finally:
+            pc.close()
+        seen.update(paper_hb=hb, paper_step=step)
+    else:
+        hb = step = None
+    hb = hb if hb is not None else step               # a database written before the heartbeat existed
+    judged.add("paper_stale")
+    if hb is None or now_ms - hb > STALE_PAPER_MS:
+        conds.append(Cond("paper_stale", CRITICAL,
+                          "페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다\n"
+                          f"마지막 기록: {_ago(now_ms, hb)}\n"
+                          "실행기는 페이퍼가 멈추면 새 진입을 하지 않습니다(열린 포지션은 거래소 손절이 지킴)\n"
+                          "다음: sudo systemctl status paperbot-combo · sudo journalctl -u paperbot-combo -n 50",
+                          recover="✅ 페이퍼 봇 기록이 다시 들어옵니다"))
+    rc, bar = open_ro(src.rule_db), None
+    if rc is not None:
+        try:
+            got = rc.execute("SELECT MAX(ts) FROM live_bars").fetchone()
+            bar = int(got[0]) if got and got[0] is not None else None
+        except sqlite3.Error:
+            bar = None
+        finally:
+            rc.close()
+    seen["rule_bar"] = bar
+    judged.add("rule_bars")
+    if bar is None or now_ms - (bar + MIN) > STALE_BARS_MS:
+        conds.append(Cond("rule_bars", CRITICAL,
+                          "규칙봇 1분봉이 5분 넘게 들어오지 않습니다\n"
+                          + (f"마지막 1분봉: {_ago(now_ms, bar + MIN)}\n" if bar is not None else
+                             f"1분봉 기록({src.rule_db})을 읽을 수 없습니다\n")
+                          + "페이퍼 봇은 이 1분봉으로 움직입니다(멈추면 페이퍼도 실거래도 멈춤)\n"
+                          "다음: sudo systemctl status paperbot-live3 · sudo journalctl -u paperbot-live3 -n 50",
+                          recover="✅ 규칙봇 1분봉이 다시 들어옵니다"))
+    # ---- per executor
+    for ex in infos:
+        run, why = should_run(ex, units)
+        c = open_ro(ex.db)
+        if c is None:
+            judged.add(f"stale:{ex.name}")
+            if run:
+                conds.append(Cond(f"stale:{ex.name}", CRITICAL,
+                                  f"{ex.label} 실행기 기록을 읽을 수 없습니다(파일 없음)\n"
+                                  f"서비스 상태: {why}\n"
+                                  f"다음: sudo systemctl status {ex.unit} · sudo journalctl -u {ex.unit} -n 50",
+                                  recover=f"✅ {ex.label} 실행기 기록이 다시 들어옵니다"))
+            continue
+        try:
+            bts, bot = get_state(c, "bot")
+            _m, meta = get_state(c, "meta")
+            keys = {r[0] for r in c.execute("SELECT key FROM trades")}
+            risk = (bot or {}).get("risk") or {}
+            seen["exec"][ex.name] = {"ts": bts, "equity": risk.get("last_equity"), "halted": bool(risk.get("halted"))}
+            # 2a. state / heartbeat
+            judged.add(f"stale:{ex.name}")
+            if run and (bts is None or now_ms - bts > STALE_EXEC_MS):
+                conds.append(Cond(f"stale:{ex.name}", CRITICAL,
+                                  f"{ex.label} 실행기가 10분 넘게 기록을 남기지 않습니다\n"
+                                  f"마지막 기록: {_ago(now_ms, bts)} · 서비스 상태: {why}\n"
+                                  "꺼졌거나 멈춰 있으면 페이퍼를 따라가지 못합니다(열린 포지션은 거래소 손절이 지킴)\n"
+                                  f"다음: sudo systemctl status {ex.unit} · sudo journalctl -u {ex.unit} -n 50",
+                                  recover=f"✅ {ex.label} 실행기 기록이 다시 들어옵니다"))
+            # 2b. an open position without a recorded stop
+            t = (bot or {}).get("trade")
+            judged.add(f"stop:{ex.name}:")
+            if t and t.get("status") in ("open", "entering") and not t.get("stop_algo_id") \
+                    and now_ms - int(t.get("entry_ts") or now_ms) > STOP_GRACE_MS:
+                conds.append(Cond(f"stop:{ex.name}:{t.get('key')}", CRITICAL,
+                                  f"{ex.label} 실거래 포지션에 손절 기록이 없습니다\n"
+                                  f"{coin(t.get('symbol', ''))} {KO_SIDE.get(t.get('side'), '')} "
+                                  f"{t.get('qty')} · 진입 {_ago(now_ms, t.get('entry_ts'))} · 상태 {t.get('status')}\n"
+                                  "다음: 거래소 앱에서 이 포지션에 손절 주문이 걸려 있는지 바로 보세요. 없으면 앱에서 "
+                                  "손절을 걸거나 포지션을 닫으세요",
+                                  recover=f"✅ {ex.label} 포지션의 손절이 기록됐거나 포지션이 닫혔습니다"))
+            # 4. drawdown and good news
+            eq, peak = risk.get("last_equity"), risk.get("peak_equity")
+            if eq is not None and peak:
+                dd = 1 - float(eq) / float(peak)
+                judged.add(f"dd:{ex.name}")
+                prev = _active_before(src, f"dd:{ex.name}")
+                if dd >= DD_WARN or (prev and dd >= DD_CLEAR):
+                    conds.append(Cond(f"dd:{ex.name}", CRITICAL,
+                                      f"{ex.label} 실거래 잔고가 최고점보다 {dd:.0%} 줄었습니다\n"
+                                      f"잔고 {money(float(eq))} · 최고 {money(float(peak))}\n"
+                                      f"{ex.max_dd:.0%}가 되면 실행기가 스스로 멈춥니다\n"
+                                      f"다음: 두 분이 계속할지 정하세요(멈추려면 sudo systemctl stop {ex.unit}, "
+                                      "포지션은 거래소 손절이 지킴)",
+                                      recover=f"✅ {ex.label} 잔고가 최고점 대비 {DD_CLEAR:.0%} 안으로 돌아왔습니다"))
+                start = ex.budget
+                if start is None:
+                    first, _l = exec_equity(c)
+                    start = (first or {}).get("equity")
+                if start:
+                    gain = (float(eq) - float(risk.get("transfers") or 0.0)) / float(start) - 1
+                    for step_ in GOOD_STEPS:
+                        judged.add(f"good:{ex.name}:{step_:g}")
+                        if gain >= step_:
+                            conds.append(Cond(f"good:{ex.name}:{step_:g}", INFO,
+                                              f"🎉 {ex.label} 실거래 잔고가 처음으로 시작보다 +{step_:.0%}가 됐습니다\n"
+                                              f"잔고 {money(float(eq))} (시작 {money(float(start))})", once=True))
+            # 1. the paper entries it should have followed
+            if paper is not None:
+                judged.add(f"follow:{ex.name}:")
+                halted = bool(risk.get("halted"))
+                kill = exists(ex.kill_file)
+                since = (meta or {}).get("live_since") or (meta or {}).get("since")
+                held = (bot or {}).get("trade") or {}
+                for e in entries:
+                    key = f"{ex.account}|{e['symbol']}|{e['entry_time']}"
+                    if key in keys or held.get("key") == key:
+                        continue
+                    if not run or halted or kill or (since is not None and e["entry_time"] < int(since)):
+                        continue
+                    light = light_state(paper, ex.light_n, ex.light_min, at=e["entry_time"] + MIN)
+                    if light["state"] == "red":
+                        continue
+                    told = _key_events(c, key)
+                    said = " / ".join(str(x[2])[:90] for x in told) if told else "이 진입에 대한 기록 없음"
+                    conds.append(Cond(
+                        f"follow:{ex.name}:{key}", CRITICAL,
+                        f"실거래가 페이퍼를 따라가지 않았습니다 · {ex.label}\n"
+                        f"페이퍼 진입 {kst(e['entry_time'])} {coin(e['symbol'])} {KO_SIDE.get(e['side'], '')} "
+                        f"{e['strategy']} {KO_TF.get(e['tf'], e['tf'])} ({(now_ms - e['entry_time']) // MIN}분 지남"
+                        + (", 페이퍼는 이미 청산" if not e["open"] else "") + ")\n"
+                        f"{light_text(light)} · 멈춤 아님 · 실행기 마지막 기록 {_ago(now_ms, bts)}\n"
+                        f"실행기 기록: {said}\n"
+                        f"다음: 거래소 앱에서 포지션을 확인하고 sudo journalctl -u {ex.unit} -n 50 으로 이유를 보세요"))
+        finally:
+            c.close()
+    return conds, judged, seen
+
+
+def _active_before(src: Sources, key: str) -> bool:
+    conn = open_ro(src.db)
+    if conn is None:
+        return False
+    try:
+        r = conn.execute("SELECT active FROM watch WHERE key = ?", (key,)).fetchone()
+        return bool(r and r[0])
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+
+
+def run_watch(src: Sources, now_ms: Optional[int] = None, dry_run: bool = False, notifier=None,
+              units: Callable = unit_state, exists: Callable = os.path.exists) -> list:
+    """One pass: every condition that became active is sent once (loud), every one that cleared is re-armed (with a
+    silent line when it has one). Returns [(event, key, level, text)]."""
+    now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
+    conds, judged, seen = watch_conditions(src, now_ms, units, exists)
+    out = []
+    conn = None if dry_run else open_out(src.db)
+    try:
+        stored = {}
+        if conn is not None:
+            stored = {r[0]: {"active": r[1], "recover": r[2], "once": r[3]} for r in conn.execute(
+                "SELECT key, active, recover, once FROM watch")}
+        elif os.path.exists(src.db):
+            ro = open_ro(src.db)
+            if ro is not None:
+                try:
+                    stored = {r[0]: {"active": r[1], "recover": r[2], "once": r[3]} for r in ro.execute(
+                        "SELECT key, active, recover, once FROM watch")}
+                except sqlite3.Error:
+                    stored = {}
+                finally:
+                    ro.close()
+        n = notifier if (notifier is not None or dry_run) else _notifier()
+        now_keys = {c.key for c in conds}
+        for c in conds:
+            row = stored.get(c.key)
+            if row and row["active"]:
+                if conn is not None:
+                    conn.execute("UPDATE watch SET last_ts = ? WHERE key = ?", (now_ms, c.key))
+                continue
+            ok = True if dry_run or n is None else (n.send(c.level, c.text) is not False)
+            out.append(("fire", c.key, c.level, c.text))
+            if conn is not None:
+                conn.execute("INSERT INTO watch_log VALUES (?,?,?,?,?,?)", (now_ms, c.key, "fire", c.level, c.text,
+                                                                            int(ok)))
+                if ok:                       # not sent: tried again on the next pass
+                    conn.execute("INSERT OR REPLACE INTO watch (key, active, first_ts, last_ts, cleared_ts, level, "
+                                 "text, recover, once) VALUES (?,1,?,?,NULL,?,?,?,?)",
+                                 (c.key, now_ms, now_ms, c.level, c.text, c.recover, int(c.once)))
+        for key, row in stored.items():
+            if not row["active"] or row["once"] or key in now_keys:
+                continue
+            if not any(key == j or (j.endswith(":") and key.startswith(j)) for j in judged):
+                continue                     # not judged this time (a database unreadable): left as it is
+            out.append(("clear", key, INFO, row["recover"] or ""))
+            if row["recover"] and not dry_run and n is not None:
+                n.send(INFO, row["recover"])
+            if conn is not None:
+                conn.execute("UPDATE watch SET active = 0, cleared_ts = ? WHERE key = ?", (now_ms, key))
+                conn.execute("INSERT INTO watch_log VALUES (?,?,?,?,?,?)", (now_ms, key, "clear", INFO,
+                                                                            row["recover"] or "", 1))
+        if conn is not None:
+            conn.execute("INSERT OR REPLACE INTO seen VALUES (?,?,?,?,?)",
+                         (now_ms, seen.get("paper_hb"), seen.get("paper_step"), seen.get("rule_bar"),
+                          json.dumps(seen.get("exec") or {})))
+            conn.execute("DELETE FROM seen WHERE ts < ?", (now_ms - SEEN_KEEP_MS,))
+            conn.execute("DELETE FROM watch WHERE active = 0 AND once = 0 AND cleared_ts < ?", (now_ms - 30 * DAY,))
+            conn.execute("DELETE FROM watch_log WHERE ts < ?", (now_ms - SEEN_KEEP_MS,))
+            conn.commit()
+    finally:
+        if conn is not None:
+            conn.close()
+    return out
+
+
+def down_spans(db: str, a: int, b: int, stale_ms: int = 5 * MIN) -> list:
+    """(from, to) spans in [a, b] when the watcher saw the paper bot's heartbeat older than ``stale_ms``."""
+    conn = open_ro(db)
+    if conn is None:
+        return []
+    try:
+        rows = conn.execute("SELECT ts, paper_hb FROM seen WHERE ts >= ? AND ts <= ? ORDER BY ts",
+                            (int(a) - H1, int(b) + H1)).fetchall()
+    except sqlite3.Error:
+        rows = []
+    finally:
+        conn.close()
+    out, start = [], None
+    for ts, hb in rows:
+        stale = hb is None or ts - int(hb) > stale_ms
+        if stale and start is None:
+            start = int(hb) if hb is not None else int(ts)
+        elif not stale and start is not None:
+            out.append((start, int(hb)))
+            start = None
+    if start is not None:
+        out.append((start, int(rows[-1][0])))
+    return [(x, y) for x, y in out if y >= a and x <= b]
 
 
 # ====================================================================== commands
@@ -1224,6 +1609,23 @@ def cmd_run(a) -> int:
     return 0
 
 
+def cmd_watch(a) -> int:
+    src = _sources(a)
+    try:
+        with open(src.combo_config, encoding="utf-8") as fh:
+            cc = json.load(fh)
+    except (OSError, ValueError):
+        cc = {}
+    src.paper_db = a.paper_db or cc.get("db") or PAPER_DB
+    src.rule_db = a.rule_db or cc.get("paper_db") or RULE_DB
+    out = run_watch(src, dry_run=a.dry_run)
+    for event, key, level, text in out:
+        print(f"[{event} {level}] {key}\n{text}\n")
+    if a.dry_run and not out:
+        print("새로 울릴 알람 없음")
+    return 0
+
+
 def cmd_show(a) -> int:
     conn = open_ro(a.db)
     if conn is None:
@@ -1268,11 +1670,14 @@ def main(argv: Optional[list] = None) -> int:
     r.add_argument("--no-replay", action="store_true", help="skip the replay (대조)")
     r.add_argument("--replay-budget-min", type=float, default=REPLAY_BUDGET_MIN)
     r.add_argument("--verbose", action="store_true")
+    w = sub.add_parser("watch", help="one pass of the real-time watcher (every 2 minutes by its timer)")
+    common(w)
+    w.add_argument("--dry-run", action="store_true", help="print what would be sent: no Telegram, nothing written")
     s = sub.add_parser("show", help="print a stored check")
     s.add_argument("--db", default=DEFAULT_DB)
     s.add_argument("--day", default=None)
     a = ap.parse_args(argv)
-    return {"run": cmd_run, "show": cmd_show}[a.cmd](a)
+    return {"run": cmd_run, "watch": cmd_watch, "show": cmd_show}[a.cmd](a)
 
 
 if __name__ == "__main__":
