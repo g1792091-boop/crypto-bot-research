@@ -1,5 +1,129 @@
 # 10/19(월) 실거래 시작 순서: 바이비트 $100 + MEXC $100
 
+## ★ 최종 시작 순서 (10/19 확정 구성, 이 장만 따라 하세요)
+
+확정 구성:
+- **페이퍼 봇 1개: A+C 합본.** 설정 `deploy/combo.live-ac.json`, DB `/var/lib/paperbot/combo/live-ac.db`.
+- **바이비트 실행기:** $100, 신호등 최근 20번 중 85% 이상일 때만 따라감.
+- **MEXC 실행기:** $100, 신호등 최근 20번 중 90% 이상일 때만 따라감.
+- 두 실행기 모두 같은 페이퍼 계좌(`COMBO@mix`)를 따라갑니다.
+
+이 장 아래의 옛 장들(고원형 합본 `live-plateau37`, A 최고형 `live16w` 예시)은 비교 기록입니다. 파일 이름은 이 장을 따르세요. 봇 설명은 [최종 설계](live1019-final-design-ko.md)와 [봇 이해하기](live1019-bot-guide-ko.md)에 있습니다.
+
+**1) 멈추고 코드 받기**
+
+```bash
+sudo touch /var/lib/paperbot/STOP
+sudo systemctl stop paperbot-executor paperbot-executor-mexc paperbot-combo
+```
+
+- 거래소 앱에서 두 계정 모두 열린 포지션과 남은 주문이 없는지 봅니다.
+- 2장의 명령으로 코드를 받습니다. 키가 아직 없으면 1장·3장을 먼저 합니다.
+- `paperbot-combo2`를 켠 적이 있으면 `sudo systemctl stop paperbot-combo2`로 끕니다. 이 구성에서는 쓰지 않습니다.
+
+**2) 페이퍼 봇 (A+C 합본)**
+
+```bash
+sudo cp /opt/crypto-bot-research/deploy/combo.live-ac.json /etc/paperbot/combo.json
+cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo.json
+```
+
+마지막 줄이 **"준비됨"**이면 켭니다.
+
+```bash
+sudo systemctl start paperbot-combo
+sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼 A+C 합본] 시작" 확인 (1분봉 7일치를 받느라 몇 분 걸림)
+```
+
+**3) 바이비트 실행기**
+
+```bash
+sudo nano /etc/paperbot/executor.json
+```
+
+```json
+{
+  "exchange": "bybit",
+  "mode": "mainnet",
+  "account": "COMBO@mix",
+  "paper_db": "/var/lib/paperbot/combo/live-ac.db",
+  "db": "/var/lib/paperbot/exec/executor-bybit-live.db",
+  "budget_usd": 100,
+  "qty_scale": 0.1,
+  "entry_source": "paper",
+  "stop_from": "ratio",
+  "signal_light_n": 20,
+  "signal_light_min_win": 0.85,
+  "risk": {
+    "daily_max_loss_usd": 40,
+    "max_drawdown_pct": 0.5,
+    "max_consecutive_losses": 3,
+    "max_leverage": 40,
+    "max_notional_usd": 10000,
+    "max_loss_frac": 0.35,
+    "allowed_symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"],
+    "kill_file": "/var/lib/paperbot/STOP"
+  }
+}
+```
+
+```bash
+cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor check-config --config /etc/paperbot/executor.json
+sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --config /etc/paperbot/executor.json
+```
+
+- check-config 끝 두 줄: **"신호등: 켜짐 - paper 최근 20번 중 85% 이상 이겼을 때만 진입을 따라감"**, **"준비됨"**.
+- preflight는 모든 줄이 `[OK]`여야 합니다(5장).
+
+**4) MEXC: 연습 → 실행기**
+
+- 먼저 6장의 연습 두 단계(`mexc drill`, `mexc drill --confirm-order REAL_ORDER`)를 합니다. 모든 줄이 OK이고 `fee_rate_pct`가 0.08 근처여야 합니다.
+- `/etc/paperbot/executor-mexc.json`은 3)의 내용과 같고 아래 세 줄만 다릅니다.
+
+```json
+  "exchange": "mexc",
+  "db": "/var/lib/paperbot/exec/executor-mexc-live.db",
+  "signal_light_min_win": 0.9,
+```
+
+(`"paper_db"`는 바이비트와 같은 `/var/lib/paperbot/combo/live-ac.db`입니다.)
+
+```bash
+cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor check-config --config /etc/paperbot/executor-mexc.json
+sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --config /etc/paperbot/executor-mexc.json
+```
+
+- check-config 끝 두 줄: **"신호등: 켜짐 - paper 최근 20번 중 90% 이상 …"**, **"준비됨"**.
+
+**5) 켜기**
+
+```bash
+sudo rm -f /var/lib/paperbot/STOP
+sudo systemctl start paperbot-executor paperbot-executor-mexc
+sudo journalctl -fu paperbot-executor -u paperbot-executor-mexc
+```
+
+- 평일 하루 평균 3번쯤 진입합니다. 몇 시간 동안 진입이 없을 수도 있습니다.
+- **첫 거래는 두 분이 앱으로 같이 봅니다.** 진입 → 손절 주문 걸림 → 순ROE 11%에서 잠금 이동 → 청산 → 손익이 앱과 같음.
+- **새 페이퍼 DB라 거래가 20번 쌓이기 전(약 1주)에는 신호등에 판단 근거가 없어서 모든 진입을 따라갑니다.** 그동안은 3연패, 낙폭 50%, 하루 $40 멈춤 장치(9장)가 지킵니다.
+
+**6) 매일 볼 것**
+
+```bash
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /var/lib/paperbot/combo/live-ac.db
+sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-bybit-live.db
+sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-mexc-live.db
+```
+
+- **페이퍼 최근 20번 승률이 가장 중요한 숫자입니다.**
+  - 백테스트는 91%입니다. 하지만 커스텀값 흔들기 시험과 처음 보는 기간 시험은 75~86%를 가리킵니다.
+  - 84% 이상이면 버는 쪽, 80% 안팎이면 손해 쪽입니다.
+- 신호등이 빨강이 되면 텔레그램이 옵니다. 페이퍼는 계속 거래하고, 승률이 돌아오면 실거래도 자동으로 다시 따라갑니다.
+- 페이퍼와 실거래가 같은 신호에 다르게 움직였거나, "거래소 기록과 다릅니다" 알림이 오면 알려 주세요.
+- 며칠 문제없으면 부팅 때 자동으로 켜지게 합니다: `sudo systemctl enable paperbot-combo paperbot-executor paperbot-executor-mexc`.
+
+---
+
 두 분이 10/18 밤에 정한 것:
 - 매매법: 16개 매매법 봇(설정 78개). 2020-01~2026-09 전체 백테스트가 가장 좋았던 조합입니다.
 - 고정 규칙: BTC 40배, 알트 30배, 계단식 익절(ROE 11%에서 10% 잠금, 이후 3%씩), 증거금 = 계좌의 40%, 한 번에 한 포지션, 코인 6개.
