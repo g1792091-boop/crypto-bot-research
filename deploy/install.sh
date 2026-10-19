@@ -336,6 +336,17 @@ for t in paperbot-livecheck.timer paperbot-livewatch.timer; do
   systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
   echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
 done
+# 매매법 성적표와 개선 후보 장부 (paperbot/liveimprove.py; docs/live1019-start-ko.md 13): read-only towards the paper
+# bot and the executors (their databases opened read-only, the executors' key file never opened, no exchange account,
+# no order), one Telegram message every Monday at 09:30 KST, its own /var/lib/paperbot/liveimprove.db. It never changes
+# a bot or a config (the owners decide). Installed AND switched on here (its timer). Its real state is printed.
+for u in paperbot-liveimprove.service paperbot-liveimprove.timer; do
+  install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+systemctl enable --now paperbot-liveimprove.timer >/dev/null 2>&1 \
+  || echo "paperbot-liveimprove.timer could not be enabled: sudo systemctl enable --now paperbot-liveimprove.timer"
+echo "paperbot-liveimprove.timer: 자동 시작 $(systemctl is-enabled paperbot-liveimprove.timer 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active paperbot-liveimprove.timer 2>/dev/null || echo 알 수 없음)"
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"

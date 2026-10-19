@@ -1,0 +1,10 @@
+[Unit]
+Description=paperbot live improvement every Monday at 00:30 UTC (09:30 KST: the weekly scorecard and improvement ledger)
+
+[Timer]
+OnCalendar=Mon *-*-* 00:30:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
