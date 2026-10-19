@@ -1002,3 +1002,23 @@ def test_debate_db_is_backed_up_and_restored_to_the_debate_user():
     assert f"User={off.DEBATE_USER}" in unit.splitlines()
     plain = off.next_steps(dest, ["paper3.db"])
     assert "/var/lib/paperbot/debate" not in plain and "paperbot -g paperbot -m 640" in plain
+
+
+def test_live_trading_databases_are_backed_up_and_restored_to_their_folders():
+    """10-19 live start: the Bybit and MEXC executors' records and the live paper bot's DB are real-money history.
+    They are in the nightly and off-site backup, and a restore puts them back where the services read them: the
+    executor DBs to the executor user's folder, live-ac.db to the paper bot's combo folder (install.sh's line)."""
+    for f in ("exec/executor-bybit-live", "exec/executor-mexc-live", "combo/live-ac"):
+        assert f in off.DB_NAMES
+    bases = [f.rsplit("/", 1)[-1] for f in off.DB_NAMES]
+    assert len(bases) == len(set(bases))                       # a copy is <basename>.db: no two may share one
+    dest = Path("/root/restore-out/20261019")
+    text = off.next_steps(dest, ["executor-bybit-live.db", "executor-mexc-live.db", "live-ac.db"])
+    cmds = [x.strip() for x in text.splitlines() if x.strip().startswith("sudo install")]
+    for n in ("executor-bybit-live.db", "executor-mexc-live.db"):
+        assert f"sudo install -o paperbot-exec -g paperbot -m 640 {dest / n} /var/lib/paperbot/exec/{n}" in cmds
+    assert f"sudo install -o paperbot -g paperbot -m 640 {dest / 'live-ac.db'} /var/lib/paperbot/combo/live-ac.db" in cmds
+    assert "sudo install -d -o paperbot -g paperbot -m 755 /var/lib/paperbot/combo" in cmds
+    install = (REPO / "deploy" / "install.sh").read_text(encoding="utf-8")
+    assert "install -d -o paperbot -g paperbot -m 755 /var/lib/paperbot/combo" in install
+    assert "paperbot-executor-mexc" in text and "paperbot-combo" in text   # stopped before the files go back

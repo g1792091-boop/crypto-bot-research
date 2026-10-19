@@ -68,7 +68,8 @@ from .notify import WARN, ConsoleNotifier, Notifier, TelegramNotifier
 API = "https://api.telegram.org"
 # the databases deploy/paperbot-backup.sh copies (keep the two lists the same: tests/test_offsite.py
 # compares them); a copy is <basename>.db
-DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet", "shadow200/shadow200",
+DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet",
+            "exec/executor-bybit-live", "exec/executor-mexc-live", "combo/live-ac", "shadow200/shadow200",
             "debate/debate", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)
 MULTIPART_ROOM = 1_000_000              # form fields, caption and boundaries around the file
@@ -789,7 +790,8 @@ DEBATE_USER = "paperbot-debate"
 _SUBDIR_OF = {f.rsplit("/", 1)[-1] + ".db": f.rsplit("/", 1)[0] for f in DB_NAMES if "/" in f}
 # the folder line for each subfolder (the same owner and mode as deploy/install.sh)
 _DIR_LINE = {EXEC_DIR: f"-o {EXEC_USER} -g paperbot -m 750", DEBATE_DIR: f"-o {DEBATE_USER} -g paperbot -m 2750",
-             "/var/lib/paperbot/shadow200": "-o paperbot -g paperbot -m 750"}
+             "/var/lib/paperbot/shadow200": "-o paperbot -g paperbot -m 750",
+             "/var/lib/paperbot/combo": "-o paperbot -g paperbot -m 755"}
 
 
 def _target(name: str) -> str:
@@ -810,7 +812,8 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "",
         "다음 순서 (docs/offsite-backup.md 9-5):",
         "1) 봇과 작업을 모두 멈춥니다 (새 서버에서 아직 켜지 않았다면 'not loaded' 같은 말이 나와도 괜찮습니다):",
-        "   sudo systemctl stop paperbot-live3 paperbot-dash paperbot-liq paperbot-executor paperbot-debate \\",
+        "   sudo systemctl stop paperbot-live3 paperbot-dash paperbot-liq paperbot-executor paperbot-executor-mexc \\",
+        "     paperbot-combo paperbot-debate \\",
         "     paperbot-agents.timer paperbot-agents.service paperbot-daily3.timer paperbot-checkpoint.timer \\",
         "     paperbot-checkpoint.service paperbot-backup.timer paperbot-offsite.timer",
         "2) 데이터베이스를 제자리에 넣고, 남아 있을 수 있는 -wal/-shm 파일을 지웁니다:",
@@ -829,6 +832,8 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         ]
     if any(_target(n).startswith("/var/lib/paperbot/shadow200/") for n in names):
         lines.append(f"   sudo install -d {_DIR_LINE['/var/lib/paperbot/shadow200']} /var/lib/paperbot/shadow200")
+    if any(_target(n).startswith("/var/lib/paperbot/combo/") for n in names):
+        lines.append(f"   sudo install -d {_DIR_LINE['/var/lib/paperbot/combo']} /var/lib/paperbot/combo")
     for n in names:
         t = _target(n)
         lines.append(f"   sudo install -o {_owner(t)} -m 640 {dest / n} {t}")
