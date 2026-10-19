@@ -38,9 +38,13 @@ sudo journalctl -fu paperbot-combo      # "[합친 봇 페이퍼 A+C 합본] 시
 
 **3) 바이비트 실행기**
 
+아래 내용이 담긴 파일이 저장소에 있습니다. 직접 치지 말고 복사합니다(10/19 추가).
+
 ```bash
-sudo nano /etc/paperbot/executor.json
+sudo cp /opt/crypto-bot-research/deploy/executor.live-bybit.json /etc/paperbot/executor.json
 ```
+
+내용(손으로 고칠 때만 `sudo nano /etc/paperbot/executor.json`):
 
 ```json
 {
@@ -78,7 +82,8 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --confi
 **4) MEXC: 연습 → 실행기**
 
 - 먼저 6장의 연습 두 단계(`mexc drill`, `mexc drill --confirm-order REAL_ORDER`)를 합니다. 모든 줄이 OK이고 `fee_rate_pct`가 0.08 근처여야 합니다.
-- `/etc/paperbot/executor-mexc.json`은 3)의 내용과 같고 아래 세 줄만 다릅니다.
+- MEXC 실행기 설정도 복사합니다: `sudo cp /opt/crypto-bot-research/deploy/executor.live-mexc.json /etc/paperbot/executor-mexc.json`
+- 이 파일은 3)의 내용과 같고 아래 세 줄만 다릅니다.
 
 ```json
   "exchange": "mexc",
