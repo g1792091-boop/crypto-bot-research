@@ -156,8 +156,9 @@ def test_ac32_is_the_32_strategy_live_config_of_the_earlier_commit():
         pytest.skip(f"commit {OLD_COMMIT} not in this checkout")
     old = json.loads(r.stdout)
     sh = _load(_path("ac32"))
-    assert _without(sh, ("db", "name", "telegram")) == _without(old, ("db", "name", "telegram"))
-    assert list(sh) == list(old)
+    later = ("us_open_pause_min",)                  # rules added to every bot after that commit (owners 10/19 night)
+    assert _without(sh, ("db", "name", "telegram") + later) == _without(old, ("db", "name", "telegram"))
+    assert [k for k in sh if k not in later] == list(old)
     assert len(old["members"]) == 101 and len({m["strategy"] for m in old["members"]}) == 32
     assert old["db"] == _load(LIVE)["db"] != sh["db"]
 

@@ -2231,6 +2231,7 @@
  "flip_twin": true,
  "no_weekend": true,
  "macro_blackout_min": 30,
+ "us_open_pause_min": 30,
  "telegram": false,
  "name": "그림자 끄는 구간 없음"
 }

@@ -1,7 +1,7 @@
 {
  "about": "백테스트 기준표(실거래 손실 카드·이탈 알람·매매법 성적표가 비교하는 숫자). A+C 합본 27개·세팅 95개, 실거래 규칙(평일만, 미국 지표 ±30분 진입 없음), 1포지션, 바이비트 수수료 0.055%. 기간 2020-01 ~ 2026-09(81개월). 'fit'은 전체 기간에 맞춘 숫자(낙관), 'honest'는 2020-24에만 맞춘 쌍둥이(wAC)의 처음 보는 2025-26 숫자. ROE는 증거금 대비 순손익(수수료 뺀 뒤). reg5: BTC 4시간 0 강상승 1 약상승 2 강하락 3 약하락 4 횡보. hb: 한국 시간 4시간 묶음(0 = 00-03시). sym: 0 BTC 1 ETH 2 SOL 3 DOGE 4 LTC 5 BCH 순서는 symbols.",
  "config": "deploy/combo.live-ac.json",
- "config_sha256": "4c83e99b7fba5f0279a5b0c398b6b71ce69994342d33acc2c0cb1ed2c58051cc",
+ "config_sha256": "31429ac7e55e5384463b769baae3958503d71fb8f6497c43636f62a4b3af439f",
  "symbols": [
   "BTCUSDT",
   "ETHUSDT",
