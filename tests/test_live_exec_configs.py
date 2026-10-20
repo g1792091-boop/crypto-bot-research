@@ -59,3 +59,18 @@ def test_check_config_names_the_halts_of_an_old_config(tmp_path, capsys):
     lines = capsys.readouterr().out.strip().splitlines()
     assert lines[-3] == "멈춤: 3연패 · 최고점 대비 낙폭 50%에 닿으면 스스로 멈춤, 비상 정지 파일 /var/lib/paperbot/STOP"
     assert lines[-2].startswith("신호등: 켜짐 - paper 최근 20번 중 85% 이상")
+
+
+def test_wooxpro_config_is_the_mexc_slot_with_its_own_exchange_db_and_costs(capsys):
+    """owners 10-20 (Bybit + WOO X Pro): the second slot's config for WOO X Pro, installed as /etc/paperbot/executor-mexc.json
+    (docs/wooxpro-ko.md): the -35 % paper, its own database, the TetherMax taker 0.042 %; everything else as MEXC's."""
+    m, w = _load("executor.live-mexc.json"), _load("executor.live-wooxpro.json")
+    diff = {k for k in set(m) | set(w) if m.get(k) != w.get(k)}
+    assert diff == {"exchange", "db", "net_costs"}
+    assert w["exchange"] == "wooxpro" and w["db"] == "/var/lib/paperbot/exec/executor-wooxpro-live.db"
+    assert w["paper_db"] == "/var/lib/paperbot/combo/live15-mexc.db"
+    assert w["net_costs"]["wooxpro"] == {"taker_fee": 0.00042, "slippage": 0.0002}
+    E.main(["check-config", "--config", str(DEPLOY / "executor.live-wooxpro.json")])
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert lines[-1] == "준비됨"
+    assert any("WOO X Pro 테이커 0.042% + 슬리피지 0.02% (한쪽), 왕복 0.124%" in ln for ln in lines), lines

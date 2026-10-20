@@ -1,5 +1,7 @@
-# The second order executor (MEXC): the same program, sandbox and user as paperbot-executor.service, its own config
-# /etc/paperbot/executor-mexc.json ("exchange": "mexc", mainnet only) and its own database. Both executors can follow
+# The second order executor: the same program, sandbox and user as paperbot-executor.service, its own config
+# /etc/paperbot/executor-mexc.json and its own database. The config says which exchange: "mexc" (until 10-20) or
+# "wooxpro" (owners 10-20: Bybit + WOO X Pro; deploy/executor.live-wooxpro.json, docs/wooxpro-ko.md); the unit and file
+# names stay as they are so every page and check finds it. Mainnet only. Both executors can follow
 # the same paper account side by side (docs/mexc-ko.md 7). Everything below the header of paperbot-executor.service
 # applies unchanged: own user paperbot-exec, root-only key file, exit 2 = a gate refused (not restarted), SIGTERM lets
 # the loop in progress finish.
@@ -7,7 +9,7 @@
 # install.sh installs this unit but NEVER enables or starts it. A person starts it:
 #   sudo systemctl start paperbot-executor-mexc    (and `enable` only after the first days went as expected)
 [Unit]
-Description=paperbot order executor, MEXC (mainnet: every gate must pass)
+Description=paperbot order executor 2 (MEXC or WOO X Pro by its config; mainnet: every gate must pass)
 After=network-online.target paperbot-live3.service
 Wants=network-online.target
 StartLimitIntervalSec=0

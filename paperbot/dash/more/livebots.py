@@ -70,6 +70,9 @@ ENV = {
 }
 # (id, Korean name, db key, config key)
 EXECS = (("bybit", "바이비트", "bybit_db", "bybit_config"), ("mexc", "MEXC", "mexc_db", "mexc_config"))
+# the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
+# and config path stay "mexc" so every page and check keeps working)
+EX_NAME = {"bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "binance": "바이낸스"}
 LIGHT_N_DEFAULT = 0                    # executor.ExecConfig.signal_light_n: 0 = the light is off
 LIGHT_MIN_DEFAULT = 0.85               # executor.ExecConfig.signal_light_min_win
 MATCH_MS = 5 * 60_000                  # a live trade and a paper trade of the same coin and side within 5 minutes
@@ -166,9 +169,37 @@ def _j(raw: Any) -> dict:
 
 
 def paths(env: Optional[dict] = None) -> dict:
-    """Where each source is: the environment variable when set, else the start guide's path."""
+    """Where each source is: the environment variable when set, else the start guide's path. An executor's database:
+    its variable when set, else the ``db`` its own config names (owners 10-20: the second slot's WOO X Pro executor has
+    its own database), else the start guide's path."""
     env = os.environ if env is None else env
-    return {k: (env.get(var) or default) for k, (var, default) in ENV.items()}
+    out = {k: (env.get(var) or default) for k, (var, default) in ENV.items()}
+    for _ex, _ko, dk, ck in EXECS:
+        if not env.get(ENV[dk][0]):
+            db = _config_db(out[ck])
+            if db:
+                out[dk] = db
+    return out
+
+
+def _config_db(path: str) -> Optional[str]:
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    db = raw.get("db") if isinstance(raw, dict) else None
+    return db if isinstance(db, str) and db else None
+
+
+def slots(configs: Optional[dict] = None) -> list:
+    """EXECS with each slot's name taken from the exchange its config names (the slot's own name when unread)."""
+    out = []
+    for ex, ko, dk, ck in EXECS:
+        c = (configs or {}).get(ex) or {}
+        name = EX_NAME.get(c.get("exchange")) if c.get("state") == "ok" else None
+        out.append((ex, name or ko, dk, ck))
+    return out
 
 
 def thin(points: list, n: int = CURVE_MAX) -> list:
@@ -1072,7 +1103,7 @@ def sources(p: dict, now: int) -> tuple:
     if p.get("paper2") and os.path.exists(p["paper2"]):
         get(p["paper2"])
     execs = []
-    for ex, ko, dk, _ck in EXECS:
+    for ex, ko, dk, _ck in slots(configs):
         cfg = configs[ex]
         rec = read_exec(p[dk], now)
         cfg_paper = cfg.get("paper_db") if cfg.get("state") == "ok" else None
@@ -1818,7 +1849,7 @@ def settings(p: dict, now: int) -> dict:
     runs), each executor's light threshold and risk limits."""
     combo = read_combo(p["paper"], paths_more()["combo_config"])
     configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
-    execs = [{"id": ex, "name_ko": ko, "config": configs[ex]} for ex, ko, _dk, _ck in EXECS]
+    execs = [{"id": ex, "name_ko": ko, "config": configs[ex]} for ex, ko, _dk, _ck in slots(configs)]
     if combo.get("state") != "ok":
         return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path")}, "execs": execs}
     members = members_of(combo)
@@ -2250,7 +2281,7 @@ def costs(p: dict, now: int) -> dict:
             out[ex]["gaps"] = fill_gaps(p[dk], (accts.get(ex) or {}).get("rows") or [], cfg.get("exchange") or ex,
                                         cfg.get("ladder_from") or "paper")
     return {"now_ms": now, "paper": {"state": pa.get("state"), "n": pa.get("n"), "reason_ko": pa.get("reason_ko")},
-            "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in EXECS], "accts": out, "match_ms": MATCH_MS,
+            "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in slots(configs)], "accts": out, "match_ms": MATCH_MS,
             "entry_judge": entry_judge(out, configs)}
 
 
@@ -2345,7 +2376,7 @@ def entry_judge(accts: dict, configs: dict) -> dict:
     the paper fill): per executor how many entries were measured, the average entry gap in net ROE points and the share
     of a +10 % win it eats. Numbers only: no threshold, the decision is the owners'."""
     out = []
-    for ex, ko, _dk, _ck in EXECS:
+    for ex, ko, _dk, _ck in slots(configs):
         g = (accts.get(ex) or {}).get("gaps") or {}
         cfg = configs.get(ex) or {}
         er = g.get("entry_roe") if g.get("state") == "ok" else None

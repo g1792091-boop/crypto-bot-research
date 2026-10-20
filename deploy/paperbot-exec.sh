@@ -9,8 +9,10 @@
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh bybit drill --symbol BTCUSDT --side long   (Bybit testnet)
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh mexc drill          (MEXC mainnet: reads + settings only)
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh mexc drill --confirm-order REAL_ORDER   (+ one tiny order)
+#   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh wooxpro drill --confirm-order REAL_ORDER  (WOO X Pro, owners 10-20)
 #
-# Only the modules paperbot.testnet, paperbot.executor, paperbot.bybit and paperbot.mexc can be run this way.
+# Only the modules paperbot.testnet, paperbot.executor, paperbot.bybit, paperbot.mexc and paperbot.wooxpro can be run
+# this way.
 set -eu
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo"; exit 1; fi
 if ! id paperbot-exec >/dev/null 2>&1 || [ "$(id -u paperbot-exec)" = "$(id -u paperbot)" ]; then
@@ -19,8 +21,8 @@ fi
 mod=${1:-}
 case "$mod" in
   testnet|executor) shift ;;
-  bybit|mexc) shift ;;
-  *) echo "usage: $0 testnet|executor|bybit|mexc <command> [options]"; exit 1 ;;
+  bybit|mexc|wooxpro) shift ;;
+  *) echo "usage: $0 testnet|executor|bybit|mexc|wooxpro <command> [options]"; exit 1 ;;
 esac
 if [ -t 0 ]; then io=--pty; else io=--pipe; fi
 exec systemd-run --quiet --wait --collect $io --uid=paperbot-exec --gid=paperbot \

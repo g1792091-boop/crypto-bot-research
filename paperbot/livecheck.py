@@ -151,7 +151,7 @@ EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",
               "/var/lib/paperbot/exec/executor-bybit-live.db", 0, 0.85),
              ("mexc", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc",
               "/var/lib/paperbot/exec/executor-mexc-live.db", 0, 0.90))
-ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005}
+ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.0006}
 
 
 def running_combo_config() -> str:
@@ -159,7 +159,7 @@ def running_combo_config() -> str:
     return os.environ.get(COMBO_CONFIG_ENV) or COMBO_CONFIG
 
 
-EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스"}
+EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro"}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",

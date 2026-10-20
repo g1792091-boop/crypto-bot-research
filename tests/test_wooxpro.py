@@ -1,0 +1,476 @@
+"""WOO X Pro (paperbot/wooxpro.py) on the fake exchange (tests/fakewooxpro.py): signing, contract units, orders, the
+stop protocol (place, confirm, move with two at once, cancel), a stop that fires, fills and P&L, income, error mapping,
+key gates, the drill, and the executor's whole cycle with ``"exchange": "wooxpro"`` (owners 10-20). No network."""
+
+import json
+import socket
+
+import pytest
+
+from fakewooxpro import FakeWooX
+from paperbot import risk as R
+from paperbot import wooxpro as WX
+from paperbot.executor import ExecConfig, ExecStore, Executor, Intent, Refused
+from paperbot.mainnet import FLAG, FLAG_VALUE
+from paperbot.notify import ListNotifier
+from paperbot.testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, RateLimited, TestnetError, TransientError,
+                              covers, live_stops, move_stop, place_stop)
+
+T0 = 1_800_000_000_000
+BTC, DOGE = "BTCUSDT", "DOGEUSDT"
+LIVE_ENV = {FLAG: FLAG_VALUE, "WOOXPRO_LIVE_KEY": "wk", "WOOXPRO_LIVE_SECRET": "ws", "WOOXPRO_LIVE_MEMO": "wm",
+            WX.KEY_CHECKED: WX.KEY_CHECKED_VALUE}
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    def refuse(*a, **k):
+        raise AssertionError("a test tried to open a network connection")
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+
+
+class Clock:
+    def __init__(self, t=T0):
+        self.t = t
+
+    def __call__(self):
+        return self.t
+
+
+def make(fake=None, clock=None, **kw):
+    clock = clock or Clock()
+    fake = fake or FakeWooX()
+    fake.clock = clock
+    c = WX.WooXProClient("wk", "ws", "wm", send=fake, clock_ms=clock, sleep=lambda s: None, **kw)
+    return c, fake, clock
+
+
+def ready(c, fake, symbols=(BTC,)):
+    c.sync_time()
+    c.one_way()
+    for s in symbols:
+        c.isolated(s)
+    return c
+
+
+# ------------------------------------------------------------------ transport, signing, errors
+def test_signed_requests_and_the_envelope():
+    c, fake, _ = make()
+    assert c.position_mode() == "hedge_mode"
+    m, path, query, body = fake.calls[-1][1:]
+    assert (m, path, body) == ("GET", "/contract/private/get-position-mode", None)
+    bad = WX.WooXProClient("wk", "ws", "other-memo", send=fake, clock_ms=fake.now, sleep=lambda s: None)
+    with pytest.raises(TestnetError) as e:                 # the memo is part of the signature
+        bad.position_mode()
+    assert e.value.code == 30005
+    with pytest.raises(ValueError):
+        WX.WooXProClient("wk", "ws", "wm", base="https://api.wooxpro.com")
+    with pytest.raises(ValueError):
+        WX.WooXProClient("wk", "ws", "")                   # no memo: refused at construction
+
+
+def test_error_codes_map_to_the_executor_classes():
+    c, fake, clock = make()
+    fake.fail("GET", "/contract/private/get-position-mode", "429")
+    with pytest.raises(RateLimited) as e:
+        c.position_mode()
+    assert e.value.status == 429
+    fake.fail("GET", "/contract/private/get-position-mode", "403")
+    with pytest.raises(RateLimited) as e:
+        c.position_mode()
+    assert e.value.status == 418
+    fake.fail("GET", "/contract/private/get-position-mode", "503_before")
+    with pytest.raises(TransientError):
+        c.position_mode()
+    c.offset_ms = 120_000                                  # a clock two minutes off: the clock refusal (-1021)
+    with pytest.raises(TestnetError) as e:
+        c.position_mode()
+    assert e.value.code == BAD_TIMESTAMP
+    c.offset_ms = 0
+    with pytest.raises(TestnetError) as e:
+        c.order(BTC, order_id="12345")
+    assert e.value.code == NOT_FOUND[0]
+
+
+@pytest.mark.parametrize("source", ["system", "funding", "none"])
+def test_server_time(source):
+    c, fake, clock = make()
+    fake.time_source = source
+    clock.t += 0
+    off = c.sync_time()
+    assert off == 0 and c.time_source == {"system": "/system/time", "funding": "/contract/public/funding-rate",
+                                          "none": "local"}[source]
+
+
+def test_contract_units_from_the_details():
+    c, fake, _ = make()
+    sp = c.spec(BTC)
+    assert sp["qty_step"] == 0.001 and sp["min_qty"] == 0.001 and sp["tick"] == 0.1 and sp["max_leverage"] == 100
+    assert c.spec(DOGE)["qty_step"] == 10 and c._contracts(DOGE, 25.0) == 2      # floored, never more than asked
+    with pytest.raises(TestnetError):
+        c.spec("BTCUSD")                                   # not a USDT perpetual
+    assert c.price(BTC) == 100.0
+
+
+def test_klines_in_seconds_and_pieces():
+    c, fake, clock = make()
+    for i in range(3):
+        fake.set_price(BTC, 100.0 + i)
+        clock.t += 60_000
+    rows = c.klines(BTC, T0 - 60_000, clock.t)
+    assert [r[0] for r in rows] == [T0, T0 + 60_000, T0 + 120_000] and rows[-1][3] == 102.0
+
+
+# ------------------------------------------------------------------ account set-up
+def test_one_way_and_isolated_leverage_read_back():
+    c, fake, _ = make()
+    ready(c, fake, symbols=(BTC, DOGE))
+    assert fake.mode == "one_way_mode"
+    assert fake.levs[BTC] == ["isolated", 40] and fake.levs[DOGE] == ["isolated", 30]
+    lines = c.account_setup((BTC, DOGE))
+    assert lines[0] == (True, "포지션 모드: 단방향(one-way)") and all(ok for ok, _ in lines)
+
+
+def test_hedge_mode_with_a_position_is_refused():
+    c, fake, _ = make()
+    fake.pos[BTC] = 5
+    with pytest.raises(Refused):
+        c.one_way()
+
+
+# ------------------------------------------------------------------ orders and stops
+def test_market_entry_close_and_reduce_only_sides():
+    c, fake, _ = make()
+    ready(c, fake)
+    o = c.market(BTC, "BUY", 5.0, client_id="pbAentry1")
+    assert o["status"] == "FILLED" and o["executedQty"] == "5" and o["avgPrice"] == "100.0"
+    assert fake.pos[BTC] == 5000 and float(c.position(BTC)["positionAmt"]) == 5.0
+    assert c.order(BTC, client_id="pbAentry1")["orderId"] == o["orderId"]        # found by its client_order_id
+    body = json.loads(fake.calls[-4][4] if fake.calls[-4][2].endswith("submit-order") else
+                      next(x[4] for x in fake.calls if x[2].endswith("submit-order")))
+    assert body["side"] == 1 and body["type"] == "market" and body["size"] == 5000 and body["leverage"] == "40"
+    x = c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbAclose1")
+    assert x["status"] == "FILLED" and x["reduceOnly"] is True and fake.pos[BTC] == 0
+    sent = [json.loads(b) for _, m, p, _, b in fake.calls if p.endswith("submit-order")]
+    assert [s["side"] for s in sent] == [1, 3]
+
+
+def test_a_long_client_id_is_hashed_to_letters_and_digits():
+    cid = "pb1800000000000V45_AMB@15m|BTCUSDT-s3r00ff00ff"
+    ext = WX.ext_id(cid)
+    assert len(ext) <= 32 and ext.isalnum() and WX.ext_id(cid) == ext
+    assert WX.ext_id("pbAs1r1a2b3c4d") == "pbAs1r1a2b3c4d"
+
+
+def test_opening_order_rate_limit_is_an_unknown_outcome_never_resent():
+    c, fake, _ = make()
+    ready(c, fake)
+    fake.fail("POST", "/contract/private/submit-order", "429")
+    with pytest.raises(TransientError):
+        c.market(BTC, "BUY", 1.0, client_id="pbAentry2")
+    assert sum(1 for x in fake.calls if x[2].endswith("submit-order")) == 1
+
+
+def test_duplicate_client_id_answers_the_existing_order():
+    c, fake, _ = make()
+    ready(c, fake)
+    first = c.market(BTC, "BUY", 1.0, client_id="pbAentry3")
+    again = c.market(BTC, "BUY", 1.0, client_id="pbAentry3")
+    assert again["orderId"] == first["orderId"] and fake.pos[BTC] == 1000
+
+
+def test_stop_place_confirm_move_cancel():
+    c, fake, _ = make()
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbAs1r1")
+    stops = live_stops(c, BTC)
+    assert len(stops) == 1 and stops[0]["algoId"] == st["algoId"] and stops[0]["triggerPrice"] == "95"
+    assert stops[0]["workingType"] == "CONTRACT_PRICE" and covers(stops[0], 5.0) and stops[0]["side"] == "SELL"
+    body = json.loads(next(x[4] for x in fake.calls if x[2].endswith("submit-tp-sl-order")))
+    assert body == {"symbol": BTC, "type": "stop_loss", "side": 3, "size": 5000, "trigger_price": "95",
+                    "executive_price": "95", "price_type": 1, "plan_category": 1, "client_order_id": "pbAs1r1",
+                    "category": "market"}
+    seen = {}
+    orig = c.cancel_algo
+
+    def watch(algo_id=None, client_id=None):
+        seen.setdefault("during", len(live_stops(c, BTC)))
+        return orig(algo_id=algo_id, client_id=client_id)
+    c.cancel_algo = watch
+    fake.set_price(BTC, 105.0)
+    mv = move_stop(c, BTC, "SELL", 101.1, 5.0, [st["algoId"]], client_id="pbAs2r2")
+    c.cancel_algo = orig
+    assert mv["result"] == "moved" and seen["during"] == 2
+    assert [(x["triggerPrice"], x["quantity"]) for x in live_stops(c, BTC)] == [("101.1", "5")]
+    assert not fake.unprotected()
+    c.cancel_all_algo(BTC)
+    assert not live_stops(c, BTC)
+
+
+def test_stop_found_after_a_lost_answer():
+    c, fake, _ = make()
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    fake.fail("POST", "/contract/private/submit-tp-sl-order", "drop_after")
+    with pytest.raises(TransientError):
+        c.stop_close(BTC, "SELL", 95.0, 5.0, client_id="pbAs1r9")
+    got = c.algo_order(client_id="pbAs1r9")                 # by its client_order_id in the resting list
+    assert got["algoStatus"] == "NEW" and got["triggerPrice"] == "95"
+
+
+@pytest.mark.parametrize("past", ["refuse", "trigger"])
+def test_a_stop_past_the_price(past):
+    c, fake, _ = make()
+    fake.plan_past = past
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    fake.set_price(BTC, 100.5)
+    if past == "refuse":
+        with pytest.raises(TestnetError) as e:
+            c.stop_close(BTC, "SELL", 101.1, 5.0, client_id="pbAs3r3")
+        assert e.value.code == WOULD_TRIGGER                 # the executor then closes at market
+    else:
+        got = place_stop(c, BTC, "SELL", 101.1, 5.0, client_id="pbAs3r3")
+        assert got.get("fired") and fake.pos[BTC] == 0
+
+
+@pytest.mark.parametrize("history_plans,placed_cid", [(True, True), (True, False), (False, True)])
+def test_a_fired_stop_reads_as_triggered_with_its_market_order(history_plans, placed_cid):
+    c, fake, _ = make()
+    fake.history_plans, fake.placed_cid = history_plans, placed_cid
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbAs4r4")
+    fake.set_price(BTC, 94.0)
+    assert fake.pos[BTC] == 0
+    got = c.algo_order(algo_id=st["algoId"])
+    assert got["algoStatus"] == "TRIGGERED" and got["actualOrderId"]
+    fills = c.user_trades(BTC, T0 - 5_000, T0 + 5_000)
+    assert {f["orderId"] for f in fills} >= {got["actualOrderId"]}
+
+
+def test_cancelled_stop_reads_as_cancelled():
+    c, fake, _ = make()
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbAs5r5")
+    c.cancel_algo(algo_id=st["algoId"])
+    assert c.algo_order(algo_id=st["algoId"])["algoStatus"] == "CANCELED"
+    with pytest.raises(TestnetError) as e:
+        c.cancel_algo(algo_id=st["algoId"])
+    assert e.value.code in NOT_FOUND
+
+
+# ------------------------------------------------------------------ fills, P&L, income
+def test_fills_replay_the_realized_pnl_and_check_realised_profit():
+    c, fake, clock = make()
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    clock.t += 60_000
+    fake.set_price(BTC, 110.0)
+    c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbAx")
+    fills = c.user_trades(BTC, T0 - 5_000, clock.t + 5_000)
+    assert [f["side"] for f in fills] == ["BUY", "SELL"]
+    out = fills[1]
+    assert out["realizedPnl"] == "50" and out["realizedCheck"] == "ok" and out["wooSide"] == 3
+    assert float(out["commission"]) == pytest.approx(0.0006 * 5 * 110.0)
+    assert float(c.account()["totalWalletBalance"]) == pytest.approx(10_000 + 50 - 0.0006 * 5 * 210)
+
+
+def test_trades_window_is_split_when_full(monkeypatch):
+    c, fake, clock = make()
+    ready(c, fake, symbols=(DOGE,))
+    for i in range(130):
+        c.market(DOGE, "BUY", 10.0, client_id=f"pbB{i}")
+        c.market(DOGE, "SELL", 10.0, reduce_only=True, client_id=f"pbC{i}")
+        clock.t += 1_000
+    fills = c.user_trades(DOGE, T0 - 1_000, clock.t + 1_000)
+    assert len(fills) == 260
+
+
+def test_income_funding_and_transfers():
+    c, fake, clock = make()
+    fake.add_funding(BTC, -1.25, time=T0 + 1_000)
+    fake.add_transfer(50.0, time=T0 + 2_000)
+    rows = c.income(None, None, T0, T0 + 10_000)
+    assert [(r["incomeType"], r["income"]) for r in rows] == [("FUNDING_FEE", "-1.25"), ("TRANSFER", "50")]
+    assert [r["incomeType"] for r in c.income(BTC, None, T0, T0 + 10_000)] == ["FUNDING_FEE"]
+
+
+# ------------------------------------------------------------------ keys and allowlist
+def test_keys_gates():
+    assert WX.trading_keys("mainnet", LIVE_ENV) == ("wk", "ws", "wm")
+    for drop, needle in (("WOOXPRO_LIVE_MEMO", "MEMO"), (FLAG, "실거래 스위치"), ("WOOXPRO_LIVE_SECRET", "비어")):
+        env = {k: v for k, v in LIVE_ENV.items() if k != drop}
+        with pytest.raises(Refused, match=needle):
+            WX.trading_keys("mainnet", env)
+    with pytest.raises(Refused, match="MEXC"):
+        WX.trading_keys("mainnet", {**LIVE_ENV, "MEXC_LIVE_KEY": "wk"})
+    with pytest.raises(Refused, match="테스트넷"):
+        WX.trading_keys("testnet", LIVE_ENV)
+    c, kc = WX.clients("mainnet", LIVE_ENV)
+    WX.refuse_unless_allowed("mainnet", c)
+    with pytest.raises(Refused):
+        WX.refuse_unless_allowed("mainnet", WX.public_client())
+    with pytest.raises(Refused):
+        WX.refuse_unless_allowed("mainnet", kc)                        # the key-check class never trades
+
+
+def test_key_check_needs_the_owners_statement():
+    fake = FakeWooX()
+    fake.clock = Clock()
+    for attested, problems in ((True, False), (False, True)):
+        kc = WX.WooXProKeyCheckClient("wk", "ws", "wm", send=fake, clock_ms=fake.clock, sleep=lambda s: None,
+                                      attested=attested)
+        perm = kc.api_restrictions()
+        from paperbot.mainnet import check_permissions
+        assert bool(check_permissions(perm)) is problems
+
+
+def test_agents_never_import_the_module():
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1] / "paperbot"
+    for p in list(root.glob("agents*.py")) + list(root.glob("rooms*.py")) + list((root / "agents").glob("**/*.py")):
+        assert "wooxpro" not in p.read_text(encoding="utf-8"), p
+
+
+# ------------------------------------------------------------------ the drill
+def test_drill_check_and_order_cycle_with_the_trigger_test():
+    c, fake, clock = make()
+    fake.prices[DOGE] = 0.2
+    kc = WX.WooXProKeyCheckClient("wk", "ws", "wm", send=fake, clock_ms=clock, sleep=lambda s: None, attested=True)
+    waits = []
+
+    def wait(s):
+        waits.append(s)
+        clock.t += int(s * 1000)
+        if len(waits) == 3 and fake.pos[DOGE]:            # the market reaches the trigger-test stop
+            fake.set_price(DOGE, 0.199)
+    d = WX.WooXProDrill(c, symbol=DOGE, keycheck=kc, wait=wait, trigger_wait_s=600)
+    d.check()
+    d.order_cycle()
+    fails = [r for r in d.log if not r["ok"]]
+    assert not fails, fails
+    steps = {r["step"]: r for r in d.log}
+    fired = next(r for k, r in steps.items() if k.startswith("손절 발동 시험:"))
+    assert fired["detail"]["status"] == "TRIGGERED"
+    pnl = next(r for k, r in steps.items() if k.startswith("체결로 계산한 손익"))
+    assert pnl["detail"]["fee_rate_pct"] == pytest.approx(0.06, abs=1e-3)
+    assert fake.pos[DOGE] == 0 and not fake.plans
+
+
+def test_drill_stops_when_two_stops_cannot_rest_at_once():
+    c, fake, clock = make()
+    fake.two_stops = False
+    fake.prices[DOGE] = 0.2
+    d = WX.WooXProDrill(c, symbol=DOGE, wait=lambda s: None, trigger_test=False)
+    d.check()
+    with pytest.raises((AssertionError, TestnetError)):
+        d.order_cycle()
+
+
+# ------------------------------------------------------------------ the executor, whole cycle
+class Source:
+    def __init__(self, clock):
+        self.clock, self.intent, self.ts = clock, None, None
+
+    def read(self):
+        return self.intent, (self.ts if self.ts is not None else self.clock() - 30_000)
+
+
+class World:
+    def __init__(self, tmp_path, fake=None):
+        self.clock = Clock()
+        self.fake = fake or FakeWooX(wallet=10_000.0)
+        self.fake.clock = self.clock
+        self.src = Source(self.clock)
+        self.note = ListNotifier()
+        risk = R.RiskConfig(daily_max_loss_usd=500.0, max_drawdown_pct=0.2, max_consecutive_losses=3, max_leverage=40,
+                            max_notional_usd=1_000.0, allowed_symbols=(BTC, "ETHUSDT"),
+                            kill_file=str(tmp_path / "STOP"))
+        self.cfg = ExecConfig(account="V45_AMB@15m", paper_db=str(tmp_path / "paper3.db"),
+                              db=str(tmp_path / "exec-woox.db"), qty_scale=1.0, risk=risk, retries=4, sweep_every=1,
+                              exchange="wooxpro", mode="mainnet", budget_usd=10_000.0,
+                              paper_env_file=str(tmp_path / "live.env"))
+        self.store = ExecStore(self.cfg.db)
+        kw = dict(send=self.fake, clock_ms=self.clock, sleep=lambda s: None)
+        self.client = WX.WooXProClient("wk", "ws", "wm", **kw)
+        self.keycheck = WX.WooXProKeyCheckClient("wk", "ws", "wm", attested=True, **kw)
+        self.ex = Executor(self.cfg, self.client, self.src, self.store, self.note, now_ms=self.clock,
+                           sleep=lambda s: None, keycheck=self.keycheck, env=dict(LIVE_ENV))
+        self.ex.start()
+
+    def loop(self, n=1):
+        for _ in range(n):
+            self.clock.t += 3_000
+            self.ex.loop_once()
+
+    def paper(self, stop, side=1, qty=5.0, lev=20, entry=100.0):
+        et = self.src.intent.entry_time if self.src.intent else self.clock.t - 60_000
+        self.src.intent = Intent(key=f"V45_AMB@15m|{BTC}|{et}", symbol=BTC, side=side, qty=qty, leverage=lev,
+                                 stop=stop, entry_price=entry, entry_time=et)
+
+    def stops(self):
+        return [(float(p["trigger_price"]), int(p["size"])) for p in self.fake.live_stops(BTC)]
+
+
+def test_executor_config_problems():
+    risk = R.RiskConfig(max_leverage=40, allowed_symbols=(BTC,), kill_file="/var/lib/paperbot/STOP")
+    cfg = ExecConfig(account="A", paper_db="p", db="/var/lib/paperbot/exec/x.db", qty_scale=1.0, exchange="wooxpro",
+                     mode="testnet", budget_usd=100.0, risk=risk)
+    assert any("WOO X Pro에는 선물 테스트넷이 없습니다" in p for p in cfg.problems())
+    cfg = ExecConfig(account="A", paper_db="p", db="/var/lib/paperbot/exec/x.db", qty_scale=1.0, exchange="wooxpro",
+                     mode="mainnet", budget_usd=100.0, risk=risk,
+                     net_costs={"wooxpro": {"taker_fee": 0.00042, "slippage": 0.0002}})
+    assert not [p for p in cfg.problems() if "net_costs" in p or "exchange" in p]
+
+
+def test_executor_entry_stop_lock_steps_and_exit_from_fills(tmp_path):
+    w = World(tmp_path)
+    assert w.fake.mode == "one_way_mode" and w.fake.levs[BTC] == ["isolated", 40]
+    w.paper(stop=95.0)
+    w.loop()
+    assert w.fake.pos[BTC] == 5000 and w.stops() == [(95.0, 5000)]
+    assert w.fake.levs[BTC] == ["isolated", 20]                        # the paper's leverage
+    assert w.ex.prefix == "[WOO X Pro 실거래 실행기]" and w.store.get_state("meta")["exchange"] == "wooxpro"
+    for price, lock in [(105.0, 101.1), (109.0, 104.9), (113.0, 109.3)]:
+        w.fake.set_price(BTC, price)
+        w.paper(stop=lock)
+        w.loop()
+        assert w.stops() == [(lock, 5000)], (price, lock)
+    assert not w.fake.unprotected()
+    w.fake.add_funding(BTC, -1.25)
+    w.src.intent = None                                                # paper exit
+    w.loop(2)
+    assert w.fake.pos[BTC] == 0 and not w.fake.plans and w.ex.trade is None
+    key, qty, reason, pnl, source = w.store.conn.execute(
+        "SELECT key, qty, exit_reason, pnl, pnl_source FROM trades").fetchone()
+    assert source == "fills" and pnl == pytest.approx(w.fake.wallet - 10_000.0, abs=1e-6)
+
+
+def test_executor_books_a_stop_that_fired_on_the_exchange(tmp_path):
+    w = World(tmp_path)
+    w.paper(stop=95.0)
+    w.loop()
+    w.fake.set_price(BTC, 94.0)                                        # the exchange stop fires
+    w.loop(3)
+    assert w.fake.pos[BTC] == 0 and w.ex.trade is None
+    reason, source = w.store.conn.execute("SELECT exit_reason, pnl_source FROM trades").fetchone()
+    assert "손절" in reason and source == "fills"
+
+
+# ------------------------------------------------------------------ the live site: the second slot's name and database
+def test_live_site_reads_the_second_slots_exchange_and_database(tmp_path):
+    from paperbot.dash.more import livebots as LB
+    cfg = tmp_path / "executor-mexc.json"
+    cfg.write_text(json.dumps({"exchange": "wooxpro", "db": str(tmp_path / "executor-wooxpro-live.db"),
+                               "account": "COMBO@mix"}), encoding="utf-8")
+    env = {"PAPERBOT_LIVE_MEXC_CONFIG": str(cfg), "PAPERBOT_LIVE_BYBIT_CONFIG": str(tmp_path / "none.json")}
+    p = LB.paths(env)
+    assert p["mexc_db"] == str(tmp_path / "executor-wooxpro-live.db")
+    assert p["bybit_db"] == "/var/lib/paperbot/exec/executor-bybit-live.db"           # no config: the guide's path
+    assert LB.paths({**env, "PAPERBOT_LIVE_MEXC_DB": "/x.db"})["mexc_db"] == "/x.db"   # the variable still wins
+    configs = {ex: LB.read_config(p[ck]) for ex, _ko, _dk, ck in LB.EXECS}
+    assert [ko for _ex, ko, _dk, _ck in LB.slots(configs)] == ["바이비트", "WOO X Pro"]
