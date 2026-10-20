@@ -1,9 +1,12 @@
 # 규칙봇 15: one strategy account's record under the new rule (net -50% stop; win = reaches net +11%, the first lock).
 # Read-only on paper3.db: the rule bot's own default-number account, every real entry of the last weeks.
 #   python3 research/live15/one.py N08_ICHI_WR@1h [N08_ICHI_WR@30m ...]      (P=/path/to/paper3.db for another copy)
+#   --nochase: only the entries the chase block lets through (the B group's rule: none in the top 20% of the 7-day
+#   range or the top 10% of the 24h range, shorts mirrored; an entry that cannot be judged is not taken either)
 import sqlite3, json, os, sys, collections, bisect
 P = os.environ.get("P", "/var/lib/paperbot/paper3.db")
-WANT = sys.argv[1:] or ["N08_ICHI_WR@1h", "N08_ICHI_WR@30m"]
+NOCHASE = "--nochase" in sys.argv
+WANT = [a for a in sys.argv[1:] if not a.startswith("--")] or ["N08_ICHI_WR@1h", "N08_ICHI_WR@30m"]
 pc = sqlite3.connect(f"file:{P}?mode=ro", uri=True)
 bars = collections.defaultdict(lambda: ([], [], []))
 for ts, sym, h, l in pc.execute("SELECT ts, symbol, high, low FROM live_bars ORDER BY ts"):
@@ -42,10 +45,13 @@ def judge(t):
         if side * (good - tgt) >= 0:
             return "W", mae, chase
     return "O", mae, chase
-print("새 규칙(손절 순ROE -50%, 순ROE +11% 닿으면 이김)으로 다시 본 규칙봇 기본값 계정의 실제 진입\n")
+print("새 규칙(손절 순ROE -50%, 순ROE +11% 닿으면 이김)으로 다시 본 규칙봇 기본값 계정의 실제 진입"
+      + (" · 추격 막기를 통과한 진입만" if NOCHASE else "") + "\n")
 for a in WANT:
     ts = [json.loads(d) for (d,) in pc.execute("SELECT data FROM trades WHERE account_id = ? ORDER BY entry_time", (a,))]
     r = [x for x in (judge(t) for t in ts) if x]
+    if NOCHASE:
+        r = [x for x in r if x[2] is False]
     w = sum(s == "W" for s, _, _ in r); l = sum(s == "L" for s, _, _ in r); o = sum(s == "O" for s, _, _ in r)
     c = [ch for _, _, ch in r if ch is not None]
     deep = sum(s == "W" and m <= -0.25 for s, m, _ in r)
