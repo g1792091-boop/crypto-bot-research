@@ -232,3 +232,14 @@ def test_the_two_paper_preview(monkeypatch):
     morning = items[-1][2]
     assert "- 페이퍼 −50%(바이비트가 따라감)" in morning and "- 페이퍼 −35%(MEXC가 따라감)" in morning
     assert LC.main(["preview", "--two"]) == 0
+
+
+def test_the_second_slot_trading_woo_x_pro_is_named_woo_x_pro_in_trade_lines():
+    """Owners 10-20: the "mexc" slot trades WOO X Pro; its Telegram trade lines say so, never "MEXC"."""
+    def info(name, exchange):
+        return LC.ExecInfo(name=name, config="-", unit=f"paperbot-executor-{name}", db="-", light_n=0, light_min=0.85,
+                           exchange=exchange)
+    assert LC._pad(info("mexc", "wooxpro")) == "WOO X Pro "
+    assert LC._pad(info("mexc", "mexc")) == LC.PAD["mexc"]
+    assert LC._pad(info("bybit", "bybit")) == LC.PAD["bybit"]
+    assert LC.pad_of("mexc", "WOO X Pro") == "WOO X Pro "

@@ -2353,7 +2353,7 @@ def card_text(c: dict, exp: Optional[dict] = None, infos: Optional[list] = None)
     else:
         lines.append(f"연속 손실 {c['streak']}번째 (백테스트 최장 {c['fit_longest']}번, 처음 보는 기간 {c['honest_longest']}번)")
     for o in c["executors"]:
-        pad = PAD.get(o.get("name"), f"{o['label']} ")
+        pad = pad_of(o.get("name"), o["label"])
         if o["status"] == "followed":
             lines.append(f"{pad}{fmt_usd(o.get('pnl'))} ({fmt_roe(o.get('roe'))})"
                          + (f" · 진입 {o['entry_bps']:+.1f}" if o.get("entry_bps") is not None else "")
@@ -2833,6 +2833,13 @@ ENTRY_WAIT_MS = 3 * MIN            # a trade message waits this long at most for
 TRADE_SEND_MS = 30 * MIN           # an entry / exit older than this when first seen is recorded, not sent
 PRICE_DP = {"BTCUSDT": 0, "ETHUSDT": 2, "SOLUSDT": 2, "DOGEUSDT": 5, "LTCUSDT": 2, "BCHUSDT": 2}
 PAD = {"paper": "페이퍼   ", "bybit": "바이비트 ", "mexc": "MEXC     "}
+
+
+def pad_of(name: Optional[str], label: str) -> str:
+    """The slot's line head: its padded name when the slot trades its own exchange, else the exchange's name (the
+    "mexc" slot trading WOO X Pro, owners 10-20, reads "WOO X Pro", never "MEXC")."""
+    p = PAD.get(name or "")
+    return p if p and p.strip() == label else f"{label} "
 LIGHT_DOT = {"green": "🟢", "red": "🔴", "building": "⚪", "off": "⚪"}
 TRADE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS trade_msgs (
@@ -2889,7 +2896,7 @@ def strat_text(name: str, tf: str, exp: Optional[dict]) -> str:
 
 
 def _pad(ex) -> str:
-    return PAD.get(ex.name, ex.label + " ")
+    return pad_of(ex.name, ex.label)
 
 
 def head_line(emoji: str, what: str, symbol: str, side: int, key_number: str) -> str:
