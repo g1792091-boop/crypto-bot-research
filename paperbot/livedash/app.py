@@ -12,7 +12,8 @@
   DASH_SECRET, ``live_secret``): cookies belong to a host, not a port, so the two sites never read or overwrite each
   other's session, and a session of one is no session of the other.
 - Routes: only what the 실거래 screens and the core modules they load ask for (tests/test_livedash_app.py scans them):
-  the 실거래 additions of dash/more (livebots, livemissed, livetape, livepos, part B's liveinsight the moment it exists),
+  the 실거래 additions of dash/more (livebots, livemissed, livetape, livepos, livewhy = 진입 근거, part B's liveinsight the
+  moment it exists),
   the market pieces the 요약 / 차트 tabs show (ticks, movers, topstats, vplevels; /api/candles, /api/ticker, /api/levels,
   /api/events, /api/liq, /api/market), the server clock and code version (/api/time), the strategy names (/api/board:
   names only here) and the price alerts the rule bot's dashboard keeps (/api/price-alerts: read-only here; making one
@@ -50,7 +51,7 @@ PUBLIC_PATHS = ("/login", "/api/login", "/static/login.css", "/static/login.js",
                 "/static/live/manifest.json", "/static/icon.svg", "/static/icon-192.png", "/static/icon-512.png",
                 "/static/apple-touch-icon.png")
 # dash/more modules the 실거래 screens call (each registers its own GET routes; read-only)
-MODULES = ("livebots", "livemissed", "livetape", "livepos", "ticks", "movers", "topstats", "vplevels")
+MODULES = ("livebots", "livemissed", "livetape", "livepos", "livewhy", "ticks", "movers", "topstats", "vplevels")
 # part B's 실거래 additions: registered when the module is there (an app without it still starts)
 OPTIONAL_MODULES = ("liveinsight",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"

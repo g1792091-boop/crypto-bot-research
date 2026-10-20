@@ -1,0 +1,45 @@
+/* 실거래 › 진입 근거 (screens/livebots-why.js): the button on a position card or an opened trade and its panel: six short
+   parts (신호, 매매법 조건 ✓ / ✗, 그때 차트, 진입 전 검사, 같은 때 다른 신호, 성적). Scoped under the 실거래 screen; tokens only
+   (both skins), every font size a --t-* token; one column at 390 px, no page scroll sideways. */
+[data-screen="livebots"] .lbw { display: grid; gap: 8px; min-width: 0; }
+[data-screen="livebots"] .lbw-btn { justify-self: start; }
+[data-screen="livebots"] .lbw-body { min-width: 0; }
+[data-screen="livebots"] .lbw-in { display: grid; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2);
+  border: 1px solid var(--line-2); min-width: 0; overflow-wrap: anywhere; }
+[data-screen="livebots"] .lbw-head { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: var(--t-sm); }
+[data-screen="livebots"] .lbw-head small { font-size: var(--t-xs); }
+[data-screen="livebots"] .lbw-sec { display: grid; gap: 6px; min-width: 0; }
+[data-screen="livebots"] .lbw-h { margin: 0; display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 800; color: var(--ink); }
+[data-screen="livebots"] .lbw-n { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-size: var(--t-2xs); font-weight: 800; }
+[data-screen="livebots"] .lbw-sec .kv dd { overflow-wrap: anywhere; }
+[data-screen="livebots"] .lbw-note { margin: 0; font-size: var(--t-2xs); }
+[data-screen="livebots"] .lbw-verdict { margin: 0; font-size: var(--t-sm); font-weight: 700; }
+[data-screen="livebots"] .lbw-verdict.good { color: var(--up); }
+[data-screen="livebots"] .lbw-verdict.warn { color: var(--warn); }
+/* (over components.css `.card ul` / `.card ol`: a list in a card is a padded grid there) */
+[data-screen="livebots"] .lbw ul.lbw-conds, [data-screen="livebots"] .lbw ul.lbw-checks, [data-screen="livebots"] .lbw ul.lbw-rivals,
+[data-screen="livebots"] .lbw ul.lbw-rec { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: var(--t-sm); }
+[data-screen="livebots"] .lbw-conds li, [data-screen="livebots"] .lbw-checks li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; align-items: baseline; }
+[data-screen="livebots"] .lbw-checks small, [data-screen="livebots"] .lbw-rivals small { font-size: var(--t-2xs); }
+[data-screen="livebots"] .lbw-ok { font-style: normal; font-weight: 800; text-align: center; }
+[data-screen="livebots"] .lbw-ok.on { color: var(--up); }
+[data-screen="livebots"] .lbw-ok.off { color: var(--down); }
+[data-screen="livebots"] .lbw-ok.na { color: var(--muted); }
+[data-screen="livebots"] .lbw-conds li.off span { color: var(--ink-2); }
+[data-screen="livebots"] .lbw-vals { display: flex; flex-wrap: wrap; gap: 4px; font-size: var(--t-xs); }
+[data-screen="livebots"] .lbw-rivals .up { color: var(--up); }
+/* 그때 차트: key, value and words; with the trade green, against it red */
+[data-screen="livebots"] .lbw-chart { margin: 0; display: grid; gap: 4px; }
+[data-screen="livebots"] .lbw-ci { display: grid; grid-template-columns: minmax(96px, 30%) minmax(0, 1fr); gap: 2px 10px; font-size: var(--t-sm); }
+[data-screen="livebots"] .lbw-ci dt { color: var(--ink-2); }
+[data-screen="livebots"] .lbw-ci dd { margin: 0; min-width: 0; }
+[data-screen="livebots"] .lbw-ci small { font-size: var(--t-xs); }
+[data-screen="livebots"] .lbw-ci.good dd b { color: var(--up); }
+[data-screen="livebots"] .lbw-ci.bad dd b { color: var(--down); }
+[data-screen="livebots"] .lbw-tags { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+@media (max-width: 420px) {
+  [data-screen="livebots"] .lbw-in { padding: 8px 10px; }
+  [data-screen="livebots"] .lbw-ci { grid-template-columns: minmax(0, 1fr); }
+  [data-screen="livebots"] .lbw-sec .kv { grid-template-columns: minmax(0, 1fr); }
+}

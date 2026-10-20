@@ -274,6 +274,14 @@ def setting_of(facts: dict, order: Optional[int]) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------- one card
+def why_ref(bot: Optional[str], symbol: Optional[str], entry: Optional[int]) -> Optional[dict]:
+    """The 진입 근거 reference of a paper entry (GET /api/v4/livebots/why?bot=&symbol=&entry=): an executor's position and
+    trade carry the one of the paper entry they followed."""
+    if bot not in ("paper", "paper2") or not symbol or entry is None:
+        return None
+    return {"bot": bot, "symbol": symbol, "entry": int(entry)}
+
+
 def _gap(pp: Optional[dict], xp: dict) -> Optional[dict]:
     """The entry gap of an executor's position against the paper's: price (in the trade's favour positive, livebots'
     trade_rows rule) and time."""
@@ -345,6 +353,8 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
         "round_trip": rt, "funding_frac": ff, "funding_paid": pos.get("funding_paid"),
         "last_mark": pos.get("last_mark"), "last_mark_roe_net": pos.get("last_mark_roe_net"), "best_roe": best,
         "excursion": ex, "fast": fast_state(cfg, lock), "execs": cells, "status": "open",
+        # 진입 근거 (dash/more/livewhy.py): this paper entry's reference (the coin-flip twin's side is a coin flip: none)
+        "why": why_ref(cid, pos.get("symbol"), pos.get("entry_time")) if cid in ("paper", "paper2") else None,
     }
     return out
 
@@ -504,6 +514,9 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
             follow = (own.get("accounts") or {}).get(x["follows"], {}).get("position") if own.get("state") == "ok" else None
             fp = {**follow, "_best_roe": best.get(L.LP.norm(b["path"])) if x["follows"] == L.ACCOUNT else None} if follow else None
             cards[x["id"]] = exec_card(x, fp, own, f, conn, bars_state, now)
+            xpos = cards[x["id"]].get("position")
+            if xpos and xpos.get("paired") and follow:
+                xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two:
                 cards[x["id"]]["follows_ko"] = b["label_ko"].split(" (")[0]
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [])

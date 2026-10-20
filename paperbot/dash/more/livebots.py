@@ -1642,6 +1642,7 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                                                    "entry_price", "exit_price", "qty", "margin", "fees", "funding", "strategy_id", "timeframe",
                                                    "lock_roe", "stop_initial", "stop_price", "liq_price")},
                          "key": f"{b['id']}:{t['id']}", "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
+                         "why": {"bot": b["id"], "symbol": t["symbol"], "entry": t["entry_time"]} if t.get("entry_time") is not None else None,
                          **setting(t["symbol"], t["entry_time"], path), "live": cells, "card": card_of(t, path)})
         return {"state": "ok", "rows": rows, "n": len(ptrades)}
 
@@ -1675,7 +1676,10 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                          "slip_vs_paper": slip, "gap_ms": abs(pt["entry_time"] - t["paper_time"]) if pt and t.get("paper_time") is not None else None,
                          "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None,
                          **(setting(pt["symbol"], pt["entry_time"], pt["paper_path"]) if pt else {"member": None, "order": None, "setting": None}),
-                         "card": card_of(pt, pt["paper_path"] if pt else None)})
+                         "card": card_of(pt, pt["paper_path"] if pt else None),
+                         # 진입 근거: the paper entry this trade followed (dash/more/livewhy.py)
+                         "why": {"bot": bot_id(bots, pt["paper_path"]), "symbol": pt["symbol"], "entry": pt["entry_time"]}
+                         if pt and pt.get("entry_time") is not None and bot_id(bots, pt["paper_path"]) else None})
         out[x["id"]] = {"state": "ok", "rows": rows, "n": len(r.get("trades") or []), "qty_scale": x["config"].get("qty_scale")}
     return {"now_ms": now, "accts": out, "match_ms": MATCH_MS, "combo_state": combo.get("state"), "members_n": len(members),
             "cards": {**{k: cards.get(k) for k in ("state", "reason_ko", "reason", "path")}, "n": len(card_by),

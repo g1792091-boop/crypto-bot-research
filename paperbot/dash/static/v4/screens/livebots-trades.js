@@ -11,12 +11,15 @@
 // and its exit (GET /api/v4/livebots/positions/excursions, dash/more/livepos.py, keyed by the row's own key): the paper's
 // from its engine record, an executor's from the rule bot's 1m Binance bars with its own fill; a row without them says why
 // (수집 전 / 못 읽음 / 1분봉 없음), never a zero; a failed read of them leaves the trades as they are.
+// 진입 근거 (owners 10/20): the opened trade's button shows why it entered (livebots-why.js; a live trade: the paper entry
+// it followed).
 // HONESTY: every number is a record's; a field the record does not have is '—' or left out; real money and paper money each
 // carry their own caption; no buttons that change anything; cards not collected yet say 수집 전, never '없음'.
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 import {cardBlock, cardSummary} from "./livebots-cards.js";
 import {replayHref} from "./livebots-replay.js";
+import {whyBox} from "./livebots-why.js";
 
 export const EXC_API = "/api/v4/livebots/positions/excursions";
 const IDS = ["paper", "bybit", "mexc"];
@@ -103,7 +106,8 @@ export function tradesView(ctx) {
         : h("span", {class: "muted"}, ` ${c.why_ko || ""}`), c.why_text ? h("span", {class: "lb-cmeta muted", title: c.why_text}, ` · ${c.why_text}`) : null))) : null;
     const pid = live ? (r.paper ? r.paper.id : null) : r.id;           // 다시보기 (D2): the paper trade's 1m replay
     const replay = pid != null ? h("a", {class: "btn-line", href: replayHref(pid)}, "▶ 다시보기") : null;
-    return h("div", {class: "lb-tdet"}, r.card || !r.win ? cardPart(r, live) : null, replay, ui.kv(rows), nums, ...extra, cells);
+    const why = whyBox(ctx.api, r.why, {label: live ? "진입 근거 보기 (따라간 페이퍼 진입)" : "진입 근거 보기"});
+    return h("div", {class: "lb-tdet"}, r.card || !r.win ? cardPart(r, live) : null, replay, why, ui.kv(rows), nums, ...extra, cells);
   }
   /** 최대 +% / 최대 −% in the opened trade: the numbers, the price moves and where they come from (or why not). */
   function excRows(r) {

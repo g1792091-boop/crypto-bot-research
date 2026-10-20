@@ -17,11 +17,14 @@
 //   거래소 기준 (owners 10/20 "거래소 기준으로 익절해야지"): an executor that runs the ladder on its own position
 //             (ladder_from "exchange") shows ITS lock, ITS next step and ITS ladder (its fill, its exchange's prices and
 //             costs), its own best price, and that it stays open after the paper's price exit
+//   진입 근거 (owners 10/20 "왜 진입했는지 어떤 근거로 진입했는지"): the button under the strategy line opens the entry's
+//             reasons (livebots-why.js; an executor's: the paper entry it followed)
 // Data: GET /api/v4/livebots/positions (dash/more/livepos.py; asked every 10 s, the server caches 5 s). HONESTY: no file =
 // 수집 전, unreadable = 못 읽음 + why, a value the records do not have is '—' with the reason; no order buttons.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 import {acctTag, sourceState} from "./livebots-kit.js";
 import {netRoe, unrealized, distTo} from "./livebots-calc.js";
+import {whyBox} from "./livebots-why.js";
 
 export const POS_API = "/api/v4/livebots/positions";
 const REFRESH_MS = 10 * 1000;
@@ -85,8 +88,9 @@ function ladderBox(p) {
       h("small", {class: "num"}, fmt.price(s.price)), s.state === "done" ? h("i", {class: "lbp-sok", "aria-label": "잠금됨"}, "잠금") : s.state === "next" ? h("i", {class: "lbp-sok"}, "다음") : null))));
 }
 
-/** One account's card; .update(mark) rolls its mark-dependent numbers. */
-export function posCard(c) {
+/** One account's card; .update(mark) rolls its mark-dependent numbers. ``o.api`` (the screen's ctx.api): the 진입 근거
+ *  button asks its answer with it (without one the card has no button). */
+export function posCard(c, o = {}) {
   const name = (c.label_ko || "").split(" (")[0] || NAME[c.id] || c.name_ko || c.id;     // two paper bots: "페이퍼 −35%"
   const tag = c.id === "flip" ? h("span", {class: "lb-acct lb-a-flip", title: c.note_ko || ""}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name) : acctTag(c.id);
   const kindPill = c.kind === "live" ? ui.pill("진짜 돈", "warn") : c.id === "flip" ? ui.pill("", "ref") : ui.pill("모의", "thin");     // ("ref" prints 참고 itself)
@@ -171,6 +175,7 @@ export function posCard(c) {
     h("div", {class: "lbp-top"}, tag, kindPill, basisPill, follows, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
       ui.sideTag(p.side), h("span", {class: "muted"}, `격리 ${fmt.lev(p.leverage)}`), grp, p.status === "entering" ? ui.pill("진입 확인 중", "warn") : null),
     h("p", {class: "lbp-strat"}, stratLine, st && st.no_chase ? h("small", {class: "muted"}, " · 추격 진입 막기") : null),
+    whyBox(o.api, p.why, {label: live ? "진입 근거 보기 (따라간 페이퍼 진입)" : "진입 근거 보기"}),
     h("div", {class: "pnl lbp-led"},
       h("div", null, h("span", {class: "k"}, "미실현 손익", live ? " ($)" : " (USDT)", " ", ui.infoTip(`${capText} · 마크 = 바이낸스 가격 (거래소 가격과 조금 다를 수 있어요)`, "미실현 손익")), uEl),
       h("div", {class: "r"}, h("span", {class: "k"}, "순ROE", " ", ui.infoTip(live ? `${p.cost_ko || "페이퍼 비용 가정"} · 레버리지 x (가격 변화 − 왕복 비용)` : "레버리지 x (가격 변화 − 왕복 수수료·슬리피지 − 낸 펀딩) · 계단 잠금과 같은 식", "순ROE")), rEl)),
@@ -224,7 +229,7 @@ export function posView(ctx) {
   function draw(d) {
     put(rules, rulesLine(d.rules),
       d.bars && d.bars.state !== "ok" ? h("p", {class: "note"}, "최대 +% · 최대 −%의 1분봉: ", sourceState(d.bars, "규칙봇 1분봉")) : null);
-    st.cards = (d.cards || []).map((c) => ({el: posCard(c), sym: c.position ? c.position.symbol : null}));
+    st.cards = (d.cards || []).map((c) => ({el: posCard(c, {api: ctx.api}), sym: c.position ? c.position.symbol : null}));
     grid.replaceChildren(...st.cards.map((c) => c.el));
     roll();
   }
