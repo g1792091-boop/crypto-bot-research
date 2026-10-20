@@ -34,11 +34,11 @@ def test_only_the_stop_the_database_and_the_name_differ():
     assert b["stop"] == {"mode": "roe", "roe": 0.35, "net": True} and a["stop"] == {"mode": "roe", "roe": 0.5, "net": True}
     assert b["db"] == "/var/lib/paperbot/combo/live15-mexc.db" != a["db"]
     assert b["paper_db"] == a["paper_db"] == "/var/lib/paperbot/paper3.db"      # the same rule-bot bars and signals
-    assert b["name"] == "규칙봇 15 MEXC −35%"
+    assert b["name"] == "규칙봇 15 −35%"
     # start and error lines still reach the owners; the coin-flip twin gives the -35 % bot its own yardstick
     assert b["telegram"] is True and b["flip_twin"] is True
     cfg = C.ComboConfig.from_dict(b)
-    assert cfg.problems() == [] and cfg.stop_net and cfg.tag == "[합친 봇 페이퍼 규칙봇 15 MEXC −35%]"
+    assert cfg.problems() == [] and cfg.stop_net and cfg.tag == "[합친 봇 페이퍼 규칙봇 15 −35%]"
     assert [m.label for m in C.resolve_members(cfg.members)] == [m.label for m in C.resolve_members(_raw(CFG15)["members"])]
 
 
@@ -62,7 +62,7 @@ def test_check_config_says_ready_with_the_minus_35_stop(capsys):
 def test_the_start_message_names_the_bot_and_its_stop():
     cfg = C.ComboConfig.from_file(str(CFG35))
     text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
-    assert text.startswith("[합친 봇 페이퍼 규칙봇 15 MEXC −35%] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
+    assert text.startswith("[합친 봇 페이퍼 규칙봇 15 −35%] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
                            "손절 순ROE -35%(수수료·슬리피지 포함: 40배 가격 0.73%, 30배 가격 1.03%), ")
 
 
@@ -157,7 +157,7 @@ def test_a_stop_change_keeps_the_open_position_and_applies_to_the_next_entry(tmp
     from paperbot.store3 import Store3
     from tests.test_combo_live15 import HOUR, World
     stop35 = {"mode": "roe", "roe": 0.35, "net": True}
-    w = World(tmp_path, stop=stop35, name="규칙봇 15 MEXC −35%")
+    w = World(tmp_path, stop=stop35, name="규칙봇 15 −35%")
     w.now = T0 + 5_000
     w.run.poll()
     B = T0 + HOUR

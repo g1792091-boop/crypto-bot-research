@@ -63,7 +63,7 @@ def test_the_summary_names_both_paper_bots_and_who_follows_which(two, monkeypatc
     assert [a["id"] for a in d["accts"]] == ["paper", "paper2", "bybit", "mexc"]
     assert [(b["id"], b["label_ko"]) for b in d["papers"]] == [("paper", "페이퍼 −50% (바이비트가 따라감)"), ("paper2", "페이퍼 −35% (MEXC가 따라감)")]
     x = _by(d["execs"])
-    assert x["mexc"]["follows_ko"] == "페이퍼 −35% · 규칙봇 15 MEXC −35%" and x["bybit"]["follows_ko"] == "페이퍼 −50% · 규칙봇 15"
+    assert x["mexc"]["follows_ko"] == "페이퍼 −35% · 규칙봇 15 −35%" and x["bybit"]["follows_ko"] == "페이퍼 −50% · 규칙봇 15"
     assert x["mexc"]["segs"] == [[None, p["paper"]], [TW.SWITCH, p["paper2"]]] and x["mexc"]["switched_ms"] == TW.SWITCH
     a = _by(d["accts"])
     assert a["paper2"]["label_ko"] == "페이퍼 −35% (MEXC가 따라감)" and a["paper2"]["stats"]["trades"] == 6

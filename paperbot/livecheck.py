@@ -151,7 +151,7 @@ EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",
               "/var/lib/paperbot/exec/executor-bybit-live.db", 0, 0.85),
              ("mexc", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc",
               "/var/lib/paperbot/exec/executor-mexc-live.db", 0, 0.90))
-ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.0006}
+ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.00042}   # WOO X Pro: the API's rate (10-20)
 
 
 def running_combo_config() -> str:
