@@ -368,6 +368,56 @@ def test_drill_check_and_order_cycle_with_the_trigger_test():
     assert fake.pos[DOGE] == 0 and not fake.plans
 
 
+def test_drill_prints_each_step_as_it_happens_and_a_last_line():
+    c, fake, clock = make()
+    fake.prices[DOGE] = 0.2
+    lines = []
+    d = WX.WooXProDrill(c, symbol=DOGE, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000,
+                        say=lines.append)
+    assert WX.run_drill(c, d, "drill", True, pause=lambda s: None)
+    assert len([x for x in lines if x.startswith("[OK]")]) == len(d.log)
+    assert any("창을 닫지 마세요" in x for x in lines)
+    assert lines[-1] == "끝: drill 모두 [OK]"
+    assert fake.pos[DOGE] == 0 and not fake.plans
+
+
+@pytest.mark.parametrize("stop", ["error", "ctrl_c"])
+def test_a_drill_stopped_part_way_leaves_the_coin_flat(stop):
+    c, fake, clock = make()
+    fake.prices[DOGE] = 0.2
+    lines = []
+
+    def wait(s):            # the stop is resting and the trigger test waits: then the drill is stopped
+        clock.t += int(s * 1000)
+        if fake.pos[DOGE] and fake.plans and clock.t > T0 + 60_000:
+            if stop == "ctrl_c":
+                raise KeyboardInterrupt("SIGHUP")
+            raise ValueError("an unexpected reply")
+    d = WX.WooXProDrill(c, symbol=DOGE, wait=wait, trigger_wait_s=600, elapsed=lambda: clock.t / 1000,
+                        say=lines.append)
+    assert not WX.run_drill(c, d, "drill", True, pause=lambda s: None)
+    steps = {r["step"]: r for r in d.log}
+    assert not steps["멈춤"]["ok"] and ("KeyboardInterrupt" if stop == "ctrl_c" else "ValueError") in \
+        steps["멈춤"]["detail"]
+    assert steps["정리 후 상태"]["ok"], steps["정리 후 상태"]
+    assert fake.pos[DOGE] == 0 and not fake.plans and not fake.live_stops()
+    assert lines[-1].startswith("끝: drill [FAIL]")
+
+
+def test_the_clean_up_still_cancels_when_the_close_fails():
+    c, fake, clock = make()
+    ready(c, fake, (DOGE,))
+    fake.prices[DOGE] = 0.2
+    c.market(DOGE, "BUY", 30)
+    place_stop(c, DOGE, "SELL", 0.19, 30)
+    fake.fail("POST", "/contract/private/submit-order", ("ret", 40011, "Invalid parameter"), times=1)
+    log = []
+    WX.leave_flat(c, DOGE, lambda *row: log.append(row))
+    assert log[0][0].startswith("정리: 포지션 닫기 실패") and not log[0][1]
+    assert not fake.plans and fake.pos[DOGE] != 0          # the stop is gone even though the close failed
+    assert log[-1][0] == "정리 후 상태" and not log[-1][1]
+
+
 def test_drill_stops_when_two_stops_cannot_rest_at_once():
     c, fake, clock = make()
     fake.two_stops = False

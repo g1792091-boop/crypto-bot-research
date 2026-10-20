@@ -88,6 +88,7 @@ import http.client
 import json
 import math
 import os
+import signal
 import sys
 import time
 import urllib.parse
@@ -101,7 +102,7 @@ from .livepnl import balanced
 from .mainnet import (FLAG, FLAG_VALUE, LIVE_KEY_NAMES as BINANCE_LIVE_KEY_NAMES, MODE_MAINNET, PAPER_ENV_FILE,
                       PAPER_KEY_NAMES, TESTNET_KEY_NAMES as BINANCE_TESTNET_KEY_NAMES, Refused, check_permissions,
                       read_env_file)
-from .testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, ProtectionError, RateLimited, TestnetError,
+from .testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, RateLimited, TestnetError,
                       TransientError, cancel_everything, covers, hide_process_memory, live_stops, move_stop,
                       place_stop, round_stop, urllib_send)
 
@@ -1364,12 +1365,31 @@ class WooXProDrill:
     trigger_wait_s: float = TRIGGER_WAIT_S
     wait: Callable[[float], None] = time.sleep
     elapsed: Callable[[], float] = time.monotonic          # seconds, for the drill's waits (tests pass their clock)
+    say: Optional[Callable[[str], None]] = None            # each step printed as it happens (the CLI prints)
     log: list = field(default_factory=list)
 
+    def add(self, name: str, ok: bool, detail) -> None:
+        row = {"step": name, "ok": bool(ok), "detail": detail}
+        self.log.append(row)
+        if self.say:
+            self.say(row_text(row))
+
     def _step(self, name: str, ok: bool, detail, fatal: bool = True) -> None:
-        self.log.append({"step": name, "ok": bool(ok), "detail": detail})
+        self.add(name, ok, detail)
         if not ok and fatal:
             raise AssertionError(f"{name}: {detail}")
+
+    def _note(self, text: str) -> None:
+        """A progress line during the long waits (printed, not a step)."""
+        if self.say:
+            self.say(f"  ... {text}")
+
+    def _waiting(self, start: float, last: list, what: str) -> None:
+        """Every 5 minutes of a long wait: one line that the drill is still waiting."""
+        mins = int((self.elapsed() - start) // 300) * 5
+        if mins and mins != last[0]:
+            last[0] = mins
+            self._note(f"{what}: {mins}분째 기다리는 중")
 
     def _until(self, check, tries: int = 10, pause: float = 0.4):
         for _ in range(tries):
@@ -1576,9 +1596,14 @@ class WooXProDrill:
         entry = float(c.position(s)["entryPrice"] or 0)
         start = self.elapsed()
         last = c.price(s)
+        shown = [0]
+        if entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0:
+            self._note(f"이익 쪽 손절 시험: 가격이 진입가보다 {PROFIT_GAP:.1%} 유리해지기를 기다립니다"
+                       f"(최대 {min(PROFIT_WAIT_S, self.trigger_wait_s) / 60:.0f}분). 창을 닫지 마세요")
         while entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0 \
                 and self.elapsed() - start < min(PROFIT_WAIT_S, self.trigger_wait_s):
             self.wait(5.0)
+            self._waiting(start, shown, "이익 쪽 손절 시험")
             if float(c.position(s)["positionAmt"]) == 0:          # the earlier stop fired while waiting: that is the test
                 got = self._until(lambda: (lambda o: o if o.get("algoStatus") in ("TRIGGERED", "CANCELED") else None)(
                     self._algo_or_empty(stop_id)), tries=10, pause=1.5) or self._algo_or_empty(stop_id)
@@ -1604,10 +1629,14 @@ class WooXProDrill:
                        fatal=False)
         sid = mv["stop"]["algoId"]
         start = self.elapsed()
+        shown = [0]
+        self._note(f"손절 발동 시험: 시험 손절 {level:g}(지금 가격 {last:g})에 가격이 닿기를 기다립니다"
+                   f"(최대 {self.trigger_wait_s / 60:.0f}분). 창을 닫지 마세요")
         while self.elapsed() - start < self.trigger_wait_s:
             if float(c.position(s)["positionAmt"]) == 0:
                 break
             self.wait(5.0)
+            self._waiting(start, shown, "손절 발동 시험")
         flat = float(c.position(s)["positionAmt"]) == 0
         if not flat:
             self._step("손절 발동 시험(진짜로 발동시키기)", True,
@@ -1627,6 +1656,44 @@ class WooXProDrill:
             return self.client.algo_order(algo_id=sid)
         except TestnetError:
             return {}
+
+
+def row_text(row: dict) -> str:
+    return ("[OK]  " if row["ok"] else "[FAIL]") + f" {row['step']}: {row['detail']}"
+
+
+def leave_flat(c: WooXProClient, sym: str, add) -> None:
+    """After a drill stopped part-way: close the drill coin's position (reduce-only) and cancel its orders and
+    stops, each on its own so one failure does not skip the other. ``add(step, ok, detail)`` records the result."""
+    try:
+        amt = float(c.position(sym)["positionAmt"])
+        if amt:
+            c.market(sym, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True)
+    except Exception as e:                     # noqa: BLE001 - the cancel below must still run
+        add("정리: 포지션 닫기 실패(앱에서 직접 확인하세요)", False, f"{type(e).__name__}: {e}")
+    try:
+        cancel_everything(c, sym)
+    except Exception as e:                     # noqa: BLE001
+        add("정리: 주문·손절 취소 실패(앱에서 직접 확인하세요)", False, f"{type(e).__name__}: {e}")
+    try:
+        amt = float(c.position(sym)["positionAmt"])
+        left = (len(c.open_orders(sym)), len(c.open_algo_orders(sym)))
+        add("정리 후 상태", amt == 0 and left == (0, 0),
+            {"positionAmt": amt, "orders": left[0], "plan_orders": left[1]})
+    except Exception as e:                     # noqa: BLE001
+        add("정리 후 상태(앱에서 직접 확인하세요)", False, f"{type(e).__name__}: {e}")
+
+
+def _interrupt(signum, frame):
+    raise KeyboardInterrupt(signal.Signals(signum).name)
+
+
+def say(text: str) -> None:
+    """Print one drill line now; a closed terminal (after SIGHUP) must not stop the clean-up."""
+    try:
+        print(text, flush=True)
+    except OSError:
+        pass
 
 
 def specs_text(c: WooXProClient, symbols=COINS) -> str:
@@ -1665,33 +1732,41 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
     pace(c)
     d = WooXProDrill(c, symbol=args.symbol, side=1 if args.side == "long" else -1, keycheck=kc,
-                     trigger_test=not args.no_trigger_test)
-    orders = args.cmd == "drill" and args.confirm_order == DRILL_CONFIRM
+                     trigger_test=not args.no_trigger_test, say=say)
+    # a closed terminal (SIGHUP) or a stop (SIGTERM) mid-drill: leave the account flat before exiting
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, _interrupt)
+    return 0 if run_drill(c, d, args.cmd, args.confirm_order == DRILL_CONFIRM, signals=True) else 1
+
+
+def run_drill(c: WooXProClient, d: WooXProDrill, cmd: str, confirmed: bool, pause=time.sleep,
+              signals: bool = False) -> bool:
+    """check, then (drill + the confirmation only) the order cycle. Any stop part-way (a failed step, an error, Ctrl+C,
+    a closed terminal) leaves the drill coin flat with no order or stop left. True when every step is [OK]."""
+    orders = cmd == "drill" and confirmed
     ok = True
     try:
         d.check()
         if orders:
-            time.sleep(DRILL_PAUSE_S)
+            d._note(f"진짜 주문 시험을 시작합니다(최대 약 {(TRIGGER_WAIT_S + PROFIT_WAIT_S) / 60 + 5:.0f}분). "
+                    "'끝:' 줄이 나올 때까지 이 창을 닫지 마세요")
+            pause(DRILL_PAUSE_S)
             d.order_cycle()
-        elif args.cmd == "drill":
-            d.log.append({"step": "주문 단계", "ok": True,
-                          "detail": f"건너뜀: 진짜 주문 한 번은 --confirm-order {DRILL_CONFIRM} 를 붙일 때만 합니다"})
-    except (AssertionError, TestnetError, ProtectionError, Refused) as e:
-        d.log.append({"step": "멈춤", "ok": False, "detail": str(e)})
+        elif cmd == "drill":
+            d.add("주문 단계", True, f"건너뜀: 진짜 주문 한 번은 --confirm-order {DRILL_CONFIRM} 를 붙일 때만 합니다")
+    except (Exception, KeyboardInterrupt) as e:  # noqa: BLE001 - any stop part-way leaves the account flat
+        if signals:
+            for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+                signal.signal(sig, signal.SIG_IGN)   # the clean-up itself runs to its end
+        d.add("멈춤", False, f"{type(e).__name__}: {e}")
         ok = False
-        sym = d.symbol
-        if orders and sym:
-            try:                              # leave the account flat
-                amt = float(c.position(sym)["positionAmt"])
-                if amt:
-                    c.market(sym, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True)
-                cancel_everything(c, sym)
-            except TestnetError as e2:
-                d.log.append({"step": "정리 실패(앱에서 직접 확인하세요)", "ok": False, "detail": str(e2)})
+        if orders and d.symbol:
+            leave_flat(c, d.symbol, d.add)
     ok = ok and all(r["ok"] for r in d.log)
-    for row in d.log:
-        print(("[OK]  " if row["ok"] else "[FAIL]") + f" {row['step']}: {row['detail']}")
-    return 0 if ok else 1
+    bad = [r["step"] for r in d.log if not r["ok"]]
+    if d.say:
+        d.say(f"끝: {cmd} " + ("모두 [OK]" if ok else f"[FAIL] {len(bad)}개 — {', '.join(bad)}"))
+    return ok
 
 
 if __name__ == "__main__":

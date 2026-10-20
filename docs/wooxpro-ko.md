@@ -86,7 +86,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh wooxpro check
   BTC 40배·나머지 30배, 키 확인.
 - `수수료율` 줄의 `taker_pct`가 0.042면 TetherMax 할인이 API에도 적용된 것입니다.
 
-**4) 진짜 최소 주문 시험 (약 $6, 손절 발동 시험 포함, 최대 25분쯤)**
+**4) 진짜 최소 주문 시험 (약 $6, 손절 발동 시험 포함, 최대 35분쯤)**
 
 ```bash
 sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh wooxpro drill --confirm-order REAL_ORDER
@@ -94,6 +94,10 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh wooxpro drill --confirm-or
 
 - 가장 싼 코인(보통 DOGE)으로 진입 → 손절 걸기 → 손절 옮기기(두 개 동시) → 손절 발동 시험 → 정리 → 손익 대조를 합니다.
 - 수수료와 약간의 손실(몇 센트)이 납니다.
+- 줄이 하나씩 바로 나옵니다. 기다리는 동안에는 `... 기다리는 중` 줄이 5분마다 나옵니다. 마지막 줄 `끝: drill …`이 나와야
+  끝난 것입니다. 그 전에는 다른 명령을 치지 말고 창을 닫지 않습니다.
+- 중간에 멈춰야 하면 Ctrl+C를 누릅니다. 창이 닫히거나 오류로 멈춰도 시험 코인의 포지션을 닫고 주문·손절을 모두 취소한 뒤
+  끝납니다(`정리 후 상태` 줄). 그 줄이 `[FAIL]`이면 앱에서 포지션과 주문을 직접 확인합니다.
 - **결과 전체를 붙여 주세요.** 모두 `[OK]`인지 같이 봅니다.
 - 20분 안에 가격이 시험 손절에 닿지 않으면 "발동을 못 봤습니다"로 끝납니다(실패는 아님). 그때는 한 번 더 합니다.
 
