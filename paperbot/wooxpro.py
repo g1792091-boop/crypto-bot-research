@@ -319,6 +319,7 @@ class WooXProClient:
         self.pending_stops: dict = {}    # client_order_id -> (symbol, side code, trigger, size, sent ms)
         self.pos_rows: dict = {}         # symbol -> the last position row (open type, leverage for a close order)
         self.lev: dict = {}              # symbol -> leverage set by leverage()
+        self.kline_source = ""           # klines(): "last" (the last price's candles) or "mark" (those were empty)
 
     # ------------------------------------------------------------ transport
     def _now(self) -> int:
@@ -571,16 +572,27 @@ class WooXProClient:
         return float(_dec(last.get("close_price"), "mark close"))
 
     def klines(self, symbol: str, start_ms: int, end_ms: int) -> list:
-        """1m candles of the last price, what the stops trigger on (price_type 1), opened in [start_ms, end_ms], the one
-        still forming included: [(open ms, high, low, close)], oldest first. GET /contract/public/kline step 1, start
-        and end in SECONDS, at most 500 rows a request (read in pieces of 480 minutes)."""
+        """1m candles opened in [start_ms, end_ms], the one still forming included: [(open ms, high, low, close)], oldest
+        first. The last price's candles first (what the stops trigger on, price_type 1): GET /contract/public/kline step
+        1, start and end in SECONDS, at most 500 rows a request (read in pieces of 480 minutes). That endpoint answered
+        an empty list for every coin and range on the owners' server (10-20) while the mark price's candles
+        (/contract/public/markprice-kline, the same shape) came back: an empty answer is read again from those
+        (``kline_source`` says which one answered). Neither has a row: []."""
+        rows = self._kline_rows("/kline", symbol, start_ms, end_ms)
+        self.kline_source = "last"
+        if not rows:
+            rows = self._kline_rows("/markprice-kline", symbol, start_ms, end_ms)
+            self.kline_source = "mark"
+        return rows
+
+    def _kline_rows(self, path: str, symbol: str, start_ms: int, end_ms: int) -> list:
         lo = int(start_ms) - int(start_ms) % 60_000
         out = {}
         a = lo
         while a <= int(end_ms):
             b = min(int(end_ms), a + 480 * 60_000)
-            data = self.req("GET", PUBLIC + "/kline", {"symbol": symbol, "step": 1, "start_time": a // 1000,
-                                                       "end_time": max(b // 1000, a // 1000 + 1)},
+            data = self.req("GET", PUBLIC + path, {"symbol": symbol, "step": 1, "start_time": a // 1000,
+                                                   "end_time": max(b // 1000, a // 1000 + 1)},
                             signed=False, limit_key="kline")
             if not isinstance(data, list):
                 raise TransientError(200, None, f"{symbol}: 1분봉 응답이 목록이 아닙니다 {str(data)[:80]!r}")

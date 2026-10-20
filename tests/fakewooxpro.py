@@ -64,6 +64,7 @@ class FakeWooX:
         self.bars: dict = {}                       # (symbol, minute ms) -> [o, h, l, c]
         self.calls: list = []
         self.fails: list = []
+        self.last_kline_empty = False     # True: GET /contract/public/kline answers [] (as on the owners' server)
         self.cids: set = set()
         self.next_id = 220_000_000_000
         self.time_source = "system"
@@ -256,6 +257,8 @@ class FakeWooX:
             rows = [{"timestamp": t // 1000, "open_price": repr(b[0]), "high_price": repr(b[1]),
                      "low_price": repr(b[2]), "close_price": repr(b[3]), "volume": "1"}
                     for (sym, t), b in sorted(self.bars.items()) if sym == s and lo <= t <= hi]
+            if self.last_kline_empty and path.endswith("/kline"):
+                rows = []                             # the owners' server, 10-20: the last price's candles are empty
             if not rows and path.endswith("markprice-kline"):
                 rows = [{"timestamp": self.now() // 60_000 * 60, "close_price": repr(self.prices[s])}]
             return self._ok(rows)

@@ -121,6 +121,21 @@ def test_klines_in_seconds_and_pieces():
         clock.t += 60_000
     rows = c.klines(BTC, T0 - 60_000, clock.t)
     assert [r[0] for r in rows] == [T0, T0 + 60_000, T0 + 120_000] and rows[-1][3] == 102.0
+    assert c.kline_source == "last"
+
+
+def test_empty_last_price_candles_are_read_from_the_mark_price_candles():
+    """The owners' server, 10-20: /contract/public/kline answered [] for every coin while /markprice-kline answered."""
+    c, fake, clock = make()
+    fake.last_kline_empty = True
+    for i in range(3):
+        fake.set_price(BTC, 100.0 + i)
+        clock.t += 60_000
+    rows = c.klines(BTC, T0 - 60_000, clock.t)
+    assert [r[0] for r in rows] == [T0, T0 + 60_000, T0 + 120_000] and rows[-1][3] == 102.0
+    assert c.kline_source == "mark"
+    paths = [x[2] for x in fake.calls if "kline" in x[2]]
+    assert paths == ["/contract/public/kline", "/contract/public/markprice-kline"]
 
 
 # ------------------------------------------------------------------ account set-up
@@ -438,7 +453,7 @@ class Source:
 
 
 class World:
-    def __init__(self, tmp_path, fake=None):
+    def __init__(self, tmp_path, fake=None, **cfg_kw):
         self.clock = Clock()
         self.fake = fake or FakeWooX(wallet=10_000.0)
         self.fake.clock = self.clock
@@ -450,7 +465,7 @@ class World:
         self.cfg = ExecConfig(account="V45_AMB@15m", paper_db=str(tmp_path / "paper3.db"),
                               db=str(tmp_path / "exec-woox.db"), qty_scale=1.0, risk=risk, retries=4, sweep_every=1,
                               exchange="wooxpro", mode="mainnet", budget_usd=10_000.0,
-                              paper_env_file=str(tmp_path / "live.env"))
+                              paper_env_file=str(tmp_path / "live.env"), **cfg_kw)
         self.store = ExecStore(self.cfg.db)
         kw = dict(send=self.fake, clock_ms=self.clock, sleep=lambda s: None)
         self.client = WX.WooXProClient("wk", "ws", "wm", **kw)
@@ -505,6 +520,30 @@ def test_executor_entry_stop_lock_steps_and_exit_from_fills(tmp_path):
     key, qty, reason, pnl, source = w.store.conn.execute(
         "SELECT key, qty, exit_reason, pnl, pnl_source FROM trades").fetchone()
     assert source == "fills" and pnl == pytest.approx(w.fake.wallet - 10_000.0, abs=1e-6)
+
+
+def test_the_own_ladder_locks_on_mark_price_candles_when_the_last_price_candles_are_empty(tmp_path):
+    """The owners' server, 10-20: WOO X Pro's last-price 1m candles came back empty. The "own" ladder (its fill, this
+    exchange's 1m highs) reads the mark price's candles instead: a high between two loops still locks, with no
+    "candles unreadable" warning."""
+    fake = FakeWooX(wallet=10_000.0)
+    fake.last_kline_empty = True
+    ladder = {"first_lock": 0.10, "trigger_gap": 0.01, "step": 0.05, "next_trigger": 0.15, "next_gap": 0.03}
+    w = World(tmp_path, fake=fake, ladder_from="own", ladder=ladder,
+              net_costs={"wooxpro": {"taker_fee": 0.00042, "slippage": 0.0002}})
+    w.paper(stop=95.0, lev=5)
+    w.loop()
+    t = w.ex.trade
+    assert t is not None and t["entry_price"] == pytest.approx(100.0)
+    w.clock.t += 60_000 - w.clock.t % 60_000 + 1_000                 # the next minute
+    w.fake.set_price(BTC, 102.5)                                     # 5x: net ROE +11.9 %, between two loops
+    w.fake.set_price(BTC, 102.3)                                     # the loop's own price: +10.9 %, no lock by itself
+    w.loop()
+    o = w.ex.trade["own"]
+    assert o["src"] == "kline" and o["best"] == pytest.approx(102.5) and o["lock"] == pytest.approx(0.10)
+    assert w.stops() == [(102.2, 5000)]                              # +10 % net: 102.124, a tick up (never looser)
+    assert not w.store.conn.execute("SELECT 1 FROM events WHERE kind = 'own_prices'").fetchall()
+    assert w.ex.c.kline_source == "mark"
 
 
 def test_executor_books_a_stop_that_fired_on_the_exchange(tmp_path):
