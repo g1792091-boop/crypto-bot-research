@@ -3,9 +3,14 @@
 #   python3 research/live15/one.py N08_ICHI_WR@1h [N08_ICHI_WR@30m ...]      (P=/path/to/paper3.db for another copy)
 #   --nochase: only the entries the chase block lets through (the B group's rule: none in the top 20% of the 7-day
 #   range or the top 10% of the 24h range, shorts mirrored; an entry that cannot be judged is not taken either)
+#   --since=2026-10-20: only entries from that day on (Korea time 00:00): the days after the 15 were picked (10/19 used
+#   the two weeks before), the honest part of the record
 import sqlite3, json, os, sys, collections, bisect
+from datetime import datetime, timedelta, timezone
 P = os.environ.get("P", "/var/lib/paperbot/paper3.db")
 NOCHASE = "--nochase" in sys.argv
+SINCE_ARG = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--since=")), None)
+SINCE = int(datetime.strptime(SINCE_ARG, "%Y-%m-%d").replace(tzinfo=timezone(timedelta(hours=9))).timestamp() * 1000) if SINCE_ARG else None
 WANT = [a for a in sys.argv[1:] if not a.startswith("--")] or ["N08_ICHI_WR@1h", "N08_ICHI_WR@30m"]
 pc = sqlite3.connect(f"file:{P}?mode=ro", uri=True)
 bars = collections.defaultdict(lambda: ([], [], []))
@@ -46,9 +51,10 @@ def judge(t):
             return "W", mae, chase
     return "O", mae, chase
 print("새 규칙(손절 순ROE -50%, 순ROE +11% 닿으면 이김)으로 다시 본 규칙봇 기본값 계정의 실제 진입"
-      + (" · 추격 막기를 통과한 진입만" if NOCHASE else "") + "\n")
+      + (" · 추격 막기를 통과한 진입만" if NOCHASE else "") + (f" · {SINCE_ARG}(한국 시간)부터 진입만" if SINCE_ARG else "") + "\n")
 for a in WANT:
-    ts = [json.loads(d) for (d,) in pc.execute("SELECT data FROM trades WHERE account_id = ? ORDER BY entry_time", (a,))]
+    ts = [json.loads(d) for (d,) in pc.execute("SELECT data FROM trades WHERE account_id = ? AND entry_time >= ? ORDER BY entry_time",
+                                                (a, SINCE or 0))]
     r = [x for x in (judge(t) for t in ts) if x]
     if NOCHASE:
         r = [x for x in r if x[2] is False]
