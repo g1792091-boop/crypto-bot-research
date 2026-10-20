@@ -122,7 +122,7 @@ cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
 sudo python3 - <<'EOF'
 import json
 LADDER = {"first_lock": 0.10, "trigger_gap": 0.01, "step": 0.05, "next_trigger": 0.15, "next_gap": 0.03}
-COSTS = {"bybit": {"taker_fee": 0.00055, "slippage": 0.0002}, "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}}
+COSTS = {"bybit": {"taker_fee": 0.00044, "slippage": 0.0002}, "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}}
 combos = {}
 for c in ("/etc/paperbot/combo.json", "/etc/paperbot/combo-mexc.json"):
     try:

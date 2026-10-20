@@ -45,6 +45,9 @@ BYBIT_RT = 2 * (0.00055 + 0.0002)              # 0.15 %
 MEXC_RT = 2 * (0.0008 + 0.0002)                # 0.20 %
 BINANCE_RT = 2 * (0.0005 + 0.0002)             # 0.14 %
 COSTS = {"bybit": {"taker_fee": 0.00055, "slippage": 0.0002}, "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}}
+# the live configs carry Bybit's measured taker fee for this account (owners 10-20: 0.044 % on the real fills)
+LIVE_COSTS = {"bybit": {"taker_fee": 0.00044, "slippage": 0.0002}, "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}}
+LIVE_BYBIT_RT = 2 * (0.00044 + 0.0002)         # 0.128 %
 BYBIT_ENV = {"BYBIT_TESTNET_API_KEY": "k", "BYBIT_TESTNET_API_SECRET": "s"}
 MEXC_ENV = {FLAG: FLAG_VALUE, "MEXC_LIVE_KEY": "mk", "MEXC_LIVE_SECRET": "ms", MX.KEY_CHECKED: MX.KEY_CHECKED_VALUE}
 
@@ -238,7 +241,8 @@ def rig(tmp_path):
 # ====================================================================== the config
 def test_check_config_validates_the_own_ladder_and_says_it_in_words(tmp_path, capsys):
     base = json.loads((DEPLOY / "executor.live-bybit.json").read_text(encoding="utf-8"))
-    base.update(db=str(tmp_path / "x.db"), risk={**base["risk"], "kill_file": str(tmp_path / "STOP")})
+    base.update(db=str(tmp_path / "x.db"), risk={**base["risk"], "kill_file": str(tmp_path / "STOP")},
+                net_costs=COSTS)          # the wording below is read with the standard 0.055 %
 
     def check(**change):
         d = {**base, **change}
@@ -309,10 +313,10 @@ def test_each_live_executor_runs_the_ladder_of_the_paper_bot_it_follows():
         d = json.loads((DEPLOY / name).read_text(encoding="utf-8"))
         combo = next(c for c in combos if c["db"] == d["paper_db"])
         assert d["ladder_from"] == "own" and d["ladder"] == combo["ladder"] == LADDER
-        assert d["net_costs"] == COSTS and d["ladder_basis"] == "net"          # "gross" is the owners' later choice
+        assert d["net_costs"] == LIVE_COSTS and d["ladder_basis"] == "net"          # "gross" is the owners' later choice
         cfg = ExecConfig.from_dict(d)
         assert cfg.problems() == [] and cfg.ladder_spec() == SPEC
-        assert cfg.own_round_trip() == pytest.approx(BYBIT_RT if d["exchange"] == "bybit" else MEXC_RT)
+        assert cfg.own_round_trip() == pytest.approx(LIVE_BYBIT_RT if d["exchange"] == "bybit" else MEXC_RT)
 
 
 # ====================================================================== the DOGE case of 10-20

@@ -62,7 +62,7 @@ def test_check_config_says_ready_with_the_minus_35_stop(capsys):
 def test_the_start_message_names_the_bot_and_its_stop():
     cfg = C.ComboConfig.from_file(str(CFG35))
     text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
-    assert text.startswith("[합친 봇 페이퍼 규칙봇 15 MEXC −35%] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 30%, "
+    assert text.startswith("[합친 봇 페이퍼 규칙봇 15 MEXC −35%] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
                            "손절 순ROE -35%(수수료·슬리피지 포함: 40배 가격 0.73%, 30배 가격 1.03%), ")
 
 
@@ -98,7 +98,7 @@ def test_net_minus_35_stop_distance_and_its_realised_roe(tmp_path):
         t = e.trades[-1]
         assert t.exit_reason == "SL" and t.roe == pytest.approx(-0.35, abs=0.006), (sym, t.roe)
         # 30 % margin: one -35 % stop costs about 10.5 % of the account (-50 %: about 15 %)
-        assert 0.10 < -t.pnl / 1000 < 0.115
+        assert 0.13 < -t.pnl / 1000 < 0.15
 
 
 def test_a_bar_that_stops_the_minus_35_bot_leaves_the_minus_50_bot_open(tmp_path):

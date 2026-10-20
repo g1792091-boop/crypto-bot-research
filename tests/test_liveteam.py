@@ -207,7 +207,7 @@ def test_the_packet_describes_the_running_bot_live15(monkeypatch):
     src = {"now": NOW, "bot": world}
     pk = T.facts(src, "weekly", window=(NOW - 7 * DAY, NOW))
     rules = pk["fixed_rules"]
-    assert rules[:9] == ["매매법 15개", "BTC 40배 · 나머지 30배", "증거금 잔고의 30%", "한 번에 포지션 하나", "시장가 진입",
+    assert rules[:9] == ["매매법 15개", "BTC 40배 · 나머지 30배", "증거금 잔고의 40%", "한 번에 포지션 하나", "시장가 진입",
                          "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
                          "계단 익절(순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%))",
                          "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
@@ -216,7 +216,7 @@ def test_the_packet_describes_the_running_bot_live15(monkeypatch):
               "손절 한 번 최대 잔고의 35%", "신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)", "실거래 금액 바이비트 $100 · MEXC $100"):
         assert r in rules, r
     text = json.dumps(pk, ensure_ascii=False)
-    for old in ("3연패", "50% 빠지면", "낙폭 50%", "잔고의 40%", "3%씩", "3 ATR", "A+C", "신호등:", "88% 이상", "82~88%"):
+    for old in ("3연패", "50% 빠지면", "낙폭 50%", "3%씩", "3 ATR", "A+C", "신호등:", "88% 이상", "82~88%"):
         assert old not in text, old
     assert pk["checkpoint_rule"] == T.CHECK_RULE_NONE and pk["bot"]["name"] == "규칙봇 15"
     assert pk["bot"]["break_even"] == 0.833 and "58승 4패" in pk["bot"]["start_basis"]

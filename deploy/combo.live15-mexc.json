@@ -22,7 +22,7 @@
   "BTCUSDT": 40,
   "default": 30
  },
- "margin": 0.3,
+ "margin": 0.4,
  "initial_equity": 1000,
  "max_loss_frac": 0.35,
  "loss_cap": "shrink",

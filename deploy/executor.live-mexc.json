@@ -20,7 +20,7 @@
   "ladder_basis": "net",
   "net_costs": {
     "bybit": {
-      "taker_fee": 0.00055,
+      "taker_fee": 0.00044,
       "slippage": 0.0002
     },
     "mexc": {

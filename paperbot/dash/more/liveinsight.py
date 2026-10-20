@@ -99,7 +99,7 @@ RULES_FROZEN_UNTIL = "2026-11-03"
 SCALE_TRADES = 40                      # (a) closed live trades since the 규칙봇 15 start
 SCALE_WIN = 0.88                       # (b) the win rate of the paper trades those live trades followed
 SCALE_GAP = 0.01                       # (c) the live entry gap against the paper, at most 1 net-ROE point a trade on average
-SCALE_KO = "돈 한 단계 늘릴 때: 같은 증거금 30% 그대로, 넣는 돈을 지금만큼 더 (예: {a} → {b}), 그 뒤 거래 40번 다시 확인"
+SCALE_KO = "돈 한 단계 늘릴 때: 같은 증거금 그대로, 넣는 돈을 지금만큼 더 (예: {a} → {b}), 그 뒤 거래 40번 다시 확인"
 GOAL_MATH_KO = "계산일 뿐 예측이 아니에요: 지금까지의 평균 이익·손실과 진입 횟수가 그대로 간다고 할 때 필요한 승률이에요"
 # 손절 비교 (owners 10/19 final, "Mexc -35%로 가자"; docs/live15-plan-ko.md): MEXC on the -35 % twin against Bybit on
 # -50 % is the two-week test that tells the owners which stop gets more money at the 11/3 review. Shown plainly, no verdict.
@@ -859,7 +859,7 @@ def scale_check(cx: dict, x: dict) -> dict:
     a, b = (f"${budget:,.0f}", f"${budget * 2:,.0f}") if budget else ("$100", "$200")
     return {"ok": ok, "checks": checks,
             "ko": SCALE_KO.format(a=a, b=b) if ok else "아직 아니에요: " + " · ".join(c["ko"] for c in checks if not c["ok"]),
-            "note_ko": "보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 증거금(30%)이나 배수는 올리지 않아요"}
+            "note_ko": "보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 증거금 비중이나 배수는 올리지 않아요"}
 
 
 def frozen(now: int) -> dict:

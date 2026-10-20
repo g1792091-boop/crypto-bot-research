@@ -82,7 +82,7 @@ def test_live15_config_is_clean_and_has_the_owners_15():
     assert all(not m.custom and m.research is None and m.tf in ("30m", "1h") for m in ms)
     assert cfg.stop_net and cfg.early_exit == "own" and cfg.early_exit_until_lock
     assert cfg.no_weekend and cfg.macro_blackout_min == 30 and cfg.us_open_pause_min == 30
-    assert cfg.lev_of("BTCUSDT") == 40 and cfg.lev_of("SOLUSDT") == 30 and cfg.margin == 0.3
+    assert cfg.lev_of("BTCUSDT") == 40 and cfg.lev_of("SOLUSDT") == 30 and cfg.margin == 0.4
     assert cfg.ladder_spec == ComboLadder.of(LAD15)
     # Bybit follows this database: the same path as the A+C bot's (MEXC follows the -35 % twin since owners 10-19:
     # deploy/combo.live15-mexc.json, tests/test_combo_live15_mexc.py)
@@ -156,8 +156,8 @@ def test_net_stop_distance_and_its_realised_roe(tmp_path):
         assert e.position is None
         t = e.trades[-1]
         assert t.exit_reason == "SL" and t.roe == pytest.approx(-0.50, abs=0.006), (sym, t.roe)
-        # 30% margin (owners 10-19 "시드비중 30%"): the account loses about 15% (under the 35% cap: no size cut)
-        assert 0.14 < -t.pnl / 1000 < 0.17
+        # 40% margin (owners 10-20, back from 30%): the account loses about 20% (under the 35% cap: no size cut)
+        assert 0.19 < -t.pnl / 1000 < 0.22
 
 
 def test_engine_steps_the_two_part_ladder(tmp_path):
@@ -369,7 +369,7 @@ OLD_WORDS = ("A+C", "3 ATR", "3%씩", "27개", "95개", "연패", "낙폭", "신
 def test_the_start_message_says_the_running_config():
     cfg = C.ComboConfig.from_file(str(CFG15))
     text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
-    assert text.startswith("[합친 봇 페이퍼 규칙봇 15] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 30%, "
+    assert text.startswith("[합친 봇 페이퍼 규칙봇 15] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
                            "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%), "
                            "계단 익절 순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%), "
                            "빠른 청산 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만), 추격 진입 막기 4개, 포지션 1개, ")

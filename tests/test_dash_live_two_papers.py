@@ -117,8 +117,8 @@ def test_positions_risk_health_groups_and_replay_use_each_executors_own_paper(tw
     assert _by(cards["paper"]["position"]["execs"])["mexc"]["state"] == "other"
     assert _by(cards["paper2"]["position"]["execs"])["mexc"]["state"] == "following"
     rk = _by(I.risk(p, NOW, more)["accts"])
-    assert rk["mexc"]["stop_roe"] == pytest.approx(0.35) and rk["mexc"]["next"][0]["left"] == pytest.approx(1 - 0.3 * 0.35)
-    assert rk["bybit"]["next"][0]["left"] == pytest.approx(0.85) and rk["paper2"]["label_ko"].startswith("페이퍼 −35%")
+    assert rk["mexc"]["stop_roe"] == pytest.approx(0.35) and rk["mexc"]["next"][0]["left"] == pytest.approx(1 - 0.4 * 0.35)
+    assert rk["bybit"]["next"][0]["left"] == pytest.approx(0.80) and rk["paper2"]["label_ko"].startswith("페이퍼 −35%")
     hb = [i for i in I.health(p, NOW, more)["items"] if i["id"].startswith("paper2")]
     assert [i["ko"] for i in hb] == ["페이퍼 −35% 봇 심장 박동", "페이퍼 −35% 봇 마지막 1분"] and hb[0]["severity"] == "bad"
     g = I.groups(p, NOW, more)["accts"]["mexc"]
@@ -181,7 +181,7 @@ def test_goal_answers_per_account_with_the_scale_checklist(one):
     sc = a["bybit"]["scale"]
     assert [c["id"] for c in sc["checks"]] == ["trades", "paper_win", "gap"] and not sc["ok"]
     assert sc["checks"][0]["ko"].startswith("거래 ") and sc["checks"][0]["ko"].endswith("/40번")
-    assert sc["ko"].startswith("아직 아니에요: 거래 ") and "증거금(30%)이나 배수는 올리지 않아요" in sc["note_ko"]
+    assert sc["ko"].startswith("아직 아니에요: 거래 ") and "증거금 비중이나 배수는 올리지 않아요" in sc["note_ko"]
 
 
 def test_scale_up_when_all_three_hold(one, monkeypatch):
@@ -195,7 +195,7 @@ def test_scale_up_when_all_three_hold(one, monkeypatch):
     cx["start"] = {"ms": None, "sure": False}
     s = I.scale_check(cx, x)
     assert s["ok"] and [c["ok"] for c in s["checks"]] == [True, True, True]
-    assert s["ko"] == "돈 한 단계 늘릴 때: 같은 증거금 30% 그대로, 넣는 돈을 지금만큼 더 (예: $100 → $200), 그 뒤 거래 40번 다시 확인"
+    assert s["ko"] == "돈 한 단계 늘릴 때: 같은 증거금 그대로, 넣는 돈을 지금만큼 더 (예: $100 → $200), 그 뒤 거래 40번 다시 확인"
     monkeypatch.setattr(L, "fill_gaps", lambda *a, **k: {"state": "ok", "entry_roe": -0.013, "entry_n": 40})
     s = I.scale_check(cx, x)
     assert not s["ok"] and s["ko"] == "아직 아니에요: 진입 차이 평균 순ROE +1.3%p (잰 거래 40번)"
