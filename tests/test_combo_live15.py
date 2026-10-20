@@ -6,7 +6,8 @@
 - no_chase members: a long at the top of the 7-day / 24-hour range is FILTERED, one in the middle is entered, a filtered
   signal still turns the strategy (closes its open position with early_exit), too few hours means no entry;
 - a new config on the same database drops the old members' queued signals;
-- the config file itself: no problems, 15 members, 4 no_chase, check-config's words."""
+- the config file itself: no problems, 14 members, 3 no_chase (owners 10/20 night took 레인지 필터만 F7_RF_ONLY@1h out:
+  "레인지 필터만 매매법 빼줘"), check-config's words."""
 
 from __future__ import annotations
 
@@ -77,8 +78,9 @@ def test_live15_config_is_clean_and_has_the_owners_15():
     assert [m.label for m in ms] == [
         "V39_ALL@1h", "S3_CMO_SANDWICH@30m", "N20_EMA9_CHOP@30m", "N05_PSAR_POC@30m", "S3_CMO_SANDWICH@1h",
         "N06_MACD_ORB@30m", "OBV_S@30m", "F9_IFVG@1h", "S6_EMA_DMI_ADX@1h", "F15_ORB@30m", "N08_ICHI_WR@30m",
-        "F3_BOS@30m", "F7_RF_ONLY@1h", "F9_FVG@1h", "N12_ICHI_AO@30m"]
-    assert [m.label for m in ms if m.no_chase] == ["F3_BOS@30m", "F7_RF_ONLY@1h", "F9_FVG@1h", "N12_ICHI_AO@30m"]
+        "F3_BOS@30m", "F9_FVG@1h", "N12_ICHI_AO@30m"]
+    assert [m.label for m in ms if m.no_chase] == ["F3_BOS@30m", "F9_FVG@1h", "N12_ICHI_AO@30m"]
+    assert not any(m.name == "F7_RF_ONLY" for m in ms)                   # owners 10/20 night: "레인지 필터만 매매법 빼줘"
     assert all(not m.custom and m.research is None and m.tf in ("30m", "1h") for m in ms)
     assert cfg.stop_net and cfg.early_exit == "own" and cfg.early_exit_until_lock
     assert cfg.no_weekend and cfg.macro_blackout_min == 30 and cfg.us_open_pause_min == 30
@@ -94,7 +96,7 @@ def test_check_config_words(capsys):
     assert C.main(["check-config", "--config", str(CFG15)]) == 0
     out = capsys.readouterr().out
     for want in ("순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)", "15%에서 12%", "20%에서 17%",
-                 "첫 잠금 +10% 전까지만", "추격 진입 막기: 4개 매매법", "준비됨"):
+                 "첫 잠금 +10% 전까지만", "추격 진입 막기: 3개 매매법", "준비됨"):
         assert want in out, want
 
 
@@ -369,10 +371,10 @@ OLD_WORDS = ("A+C", "3 ATR", "3%씩", "27개", "95개", "연패", "낙폭", "신
 def test_the_start_message_says_the_running_config():
     cfg = C.ComboConfig.from_file(str(CFG15))
     text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
-    assert text.startswith("[합친 봇 페이퍼 규칙봇 15] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
+    assert text.startswith("[합친 봇 페이퍼 규칙봇 15] 시작: 매매법 14개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
                            "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%), "
                            "계단 익절 순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%), "
-                           "빠른 청산 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만), 추격 진입 막기 4개, 포지션 1개, ")
+                           "빠른 청산 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만), 추격 진입 막기 3개, 포지션 1개, ")
     assert "진입 쉼 주말·경제 발표 앞뒤 30분·나스닥 개장 뒤 30분, 지갑 $1,000.00" in text
     for w in OLD_WORDS:
         assert w not in text, w

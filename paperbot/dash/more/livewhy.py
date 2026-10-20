@@ -408,12 +408,12 @@ def checks(cfg: dict, member: Optional[dict], entry: int, bar_close: int, side: 
 
 
 # ---------------------------------------------------------------- the record before this entry
-def record_of(trades: list, meta: dict, order: Optional[int], strategy: str, tf: str, entry: int) -> dict:
-    """This setting's (its order in the config, else the strategy x timeframe) and this strategy's closed trades of the bot
-    that ended before this entry."""
+def record_of(trades: list, meta: dict, member: Optional[str], strategy: str, tf: str, entry: int) -> dict:
+    """This setting's (its member label: the label stays when the list is renumbered; else the strategy x timeframe) and
+    this strategy's closed trades of the bot that ended before this entry."""
     before = [t for t in trades if (L._i(t.get("exit_time")) or 0) <= int(entry)]
-    if order:
-        mine = [t for t in before if (meta.get((t.get("symbol"), L._i(t.get("entry_time")))) or {}).get("member_order") == order]
+    if member:
+        mine = [t for t in before if (meta.get((t.get("symbol"), L._i(t.get("entry_time")))) or {}).get("member") == member]
     else:
         mine = [t for t in before if t.get("strategy_id") == strategy and t.get("timeframe") == tf]
     return {"setting": L._record(mine), "strategy": L._record([t for t in before if t.get("strategy_id") == strategy]),
@@ -458,7 +458,7 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
     cfg = (combo.get("config") or {}) if combo.get("state") == "ok" else {}
     members = L.members_of(combo) if combo.get("state") == "ok" else []
     order = L._i(meta.get("member_order"))
-    member = members[order - 1] if order and 0 < order <= len(members) and members[order - 1].get("strategy") == strategy else None
+    member = L.member_of(members, order, strategy, tf)
     rank = cfg.get("rank") if isinstance(cfg.get("rank"), list) else []
     score = L._f(meta.get("score_raw"))
     signal = {"strategy": strategy, "tf": tf, "tf_ko": L.TF_KO.get(tf, tf), "side": side, "side_ko": SIDE_KO.get(side), "bar_close": bar_close,
@@ -477,7 +477,8 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
         {"state": "none", "reason_ko": "이 화면은 바이낸스 봉을 받지 않아요"}
     acc = (b["read"].get("accounts") or {}).get(L.ACCOUNT) if b["read"].get("state") == "ok" else None
     trades = (acc or {}).get("trades") or []
-    rec = record_of(trades, L.entered_meta(b["path"], L.ACCOUNT) if order else {}, order, strategy, tf, int(entry))
+    label = meta.get("member")
+    rec = record_of(trades, L.entered_meta(b["path"], L.ACCOUNT) if label else {}, label, strategy, tf, int(entry))
     return {**base, "state": "ok", "signal": signal, "setting": setting,
             "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path", "source")},
             "rule": {k: rule.get(k) for k in ("state", "reason_ko", "reason", "path", "status", "close", "bid", "ask", "delay_ms")},

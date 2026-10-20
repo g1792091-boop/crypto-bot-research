@@ -14,7 +14,6 @@
   {"strategy": "F15_ORB", "tf": "30m"},
   {"strategy": "N08_ICHI_WR", "tf": "30m"},
   {"strategy": "F3_BOS", "tf": "30m", "no_chase": true},
-  {"strategy": "F7_RF_ONLY", "tf": "1h", "no_chase": true},
   {"strategy": "F9_FVG", "tf": "1h", "no_chase": true},
   {"strategy": "N12_ICHI_AO", "tf": "30m", "no_chase": true}
  ],

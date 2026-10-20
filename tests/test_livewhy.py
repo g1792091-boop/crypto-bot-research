@@ -324,3 +324,27 @@ def test_the_panel_in_node(world):
     assert "whyBox(ctx.api, r.why," in js
     with open(os.path.join(V4, "screens", "livebots.css"), encoding="utf-8") as fh:
         assert '@import url("livebots-why.css");' in fh.read()
+
+
+# ================================================================ a renumbered list (owners 10/20 night took 레인지 필터만 out)
+def test_settings_follow_their_strategy_when_the_list_is_renumbered(world):
+    """An entry recorded as setting 1 (S2_ST_ROC 1h) after a setting was put before it: the cards, the 거래 rows and the
+    panel find S2_ST_ROC 1h at its new number 2, never another strategy at the old number."""
+    cfg = live15_config()
+    cfg["members"].insert(0, {"strategy": "F7_RF_ONLY", "tf": "1h", "no_chase": True})
+    s = Store3(world["paper"])
+    s.put_state("combo_run", T0, {"version": "combo-v2", "taker_fee": 0.0005, "members": [], "config": cfg})
+    s.close()
+    ms = L.members_of(L.read_combo(world["paper"], "-"))
+    assert L.member_of(ms, 1)["strategy"] == "F7_RF_ONLY"                        # by the number alone (no strategy given)
+    assert L.member_of(ms, 1, "S2_ST_ROC", "1h")["order"] == 2
+    assert L.member_of(ms, 1, "S2_ST_ROC", "4h") is None                        # not in the list: none, never a neighbour
+    pos = next(c for c in P.build(L.paths(), L.paths_more(), NOW)["cards"] if c["id"] == "paper")["position"]
+    assert pos["setting"]["strategy"] == "S2_ST_ROC" and pos["setting"]["order"] == 2 and pos["setting"]["group"] == "B"
+    d = _why(world)
+    assert d["setting"]["strategy"] == "S2_ST_ROC" and d["setting"]["order"] == 2 and d["record"]["setting"]["n"] == 1
+    rows = {r["id"]: r for r in L.trade_rows(L.paths(), NOW)["accts"]["paper"]["rows"]}
+    t1 = next(r for r in rows.values() if r["strategy_id"] == "S2_ST_ROC" and r["timeframe"] == "1h")
+    assert t1["order"] == 1 and t1["setting"]["strategy"] == "S2_ST_ROC" and t1["setting"]["order"] == 2
+    other = [r for r in rows.values() if r["strategy_id"] != "S2_ST_ROC" and r["setting"]]
+    assert all(r["setting"]["strategy"] == r["strategy_id"] for r in other)

@@ -1333,6 +1333,21 @@ def describe_member(sp: dict, order: int, cfg_stop: Optional[dict] = None) -> di
             "no_chase_ko": f"{NO_CHASE_KO} ({NO_CHASE_WHY_KO})" if sp.get("no_chase") else None}
 
 
+def member_of(members: list, order: Any, strategy: Any = None, tf: Any = None) -> Optional[dict]:
+    """The setting a recorded entry came from: the one at its recorded number (``member_order``, from 1) when it is the same
+    strategy and timeframe; else the only setting of that strategy and timeframe in the config now (a setting taken out of
+    the list moves the ones after it up a number: owners 10/20 took 레인지 필터만 out); else None. Without a strategy: by
+    the number alone."""
+    o = _i(order)
+    m = members[o - 1] if o and 0 < o <= len(members) else None
+    if strategy is None:
+        return m
+    if m is not None and m.get("strategy") == strategy and (tf is None or m.get("tf") == tf):
+        return m
+    same = [x for x in members if x.get("strategy") == strategy and (tf is None or x.get("tf") == tf)]
+    return same[0] if len(same) == 1 else None
+
+
 def read_combo(paper_path: str, cfg_path: str) -> dict:
     """The combined bot's settings: the config it really runs (combo_run in its database) or, before its first start,
     the config file (/etc/paperbot/combo.json). Nothing is computed from strategy code."""
@@ -1603,12 +1618,11 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
     rev = {x["id"]: rev_pairs(x) for x in execs}
     live_by = {x["id"]: {str(t["key"]): t for t in x["record"].get("trades") or []} for x in execs if x["record"].get("state") == "ok"}
 
-    def setting(sym, et, path=None):
+    def setting(sym, et, path=None, strategy=None, tf=None):
         path = path or p["paper"]
         m = meta_of(path).get((sym, et)) or {}
         order = m.get("member_order")
-        ms = members_at(path)
-        mem = ms[order - 1] if order and 0 < order <= len(ms) else None
+        mem = member_of(members_at(path), order, strategy, tf)
         return {"member": m.get("member"), "order": order, "stop_rule": m.get("stop_rule"), "score": m.get("score"), "setting": mem,
                 "break_level": m.get("break_level")}
 
@@ -1643,7 +1657,8 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                                                    "lock_roe", "stop_initial", "stop_price", "liq_price")},
                          "key": f"{b['id']}:{t['id']}", "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
                          "why": {"bot": b["id"], "symbol": t["symbol"], "entry": t["entry_time"]} if t.get("entry_time") is not None else None,
-                         **setting(t["symbol"], t["entry_time"], path), "live": cells, "card": card_of(t, path)})
+                         **setting(t["symbol"], t["entry_time"], path, t.get("strategy_id"), t.get("timeframe")), "live": cells,
+                         "card": card_of(t, path)})
         return {"state": "ok", "rows": rows, "n": len(ptrades)}
 
     out = {"paper": None, "bybit": None, "mexc": None}
@@ -1675,7 +1690,8 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                          "diff": (t["pnl"] - pt["pnl"] * scale) if pt and pt.get("pnl") is not None and t.get("pnl") is not None and scale else None,
                          "slip_vs_paper": slip, "gap_ms": abs(pt["entry_time"] - t["paper_time"]) if pt and t.get("paper_time") is not None else None,
                          "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None,
-                         **(setting(pt["symbol"], pt["entry_time"], pt["paper_path"]) if pt else {"member": None, "order": None, "setting": None}),
+                         **(setting(pt["symbol"], pt["entry_time"], pt["paper_path"], pt.get("strategy_id"), pt.get("timeframe")) if pt
+                            else {"member": None, "order": None, "setting": None}),
                          "card": card_of(pt, pt["paper_path"] if pt else None),
                          # 진입 근거: the paper entry this trade followed (dash/more/livewhy.py)
                          "why": {"bot": bot_id(bots, pt["paper_path"]), "symbol": pt["symbol"], "entry": pt["entry_time"]}

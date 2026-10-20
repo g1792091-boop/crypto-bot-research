@@ -262,13 +262,14 @@ def rules_out(facts: dict, rt: Optional[float]) -> dict:
             "n_members": len(facts.get("members") or []), "n_no_chase": sum(1 for m in facts.get("members") or [] if m.get("no_chase"))}
 
 
-def setting_of(facts: dict, order: Optional[int]) -> Optional[dict]:
-    """The member (setting) at ``order`` in the config the bot runs, with its group: B = "no_chase" (추격 진입 막기), else A."""
+def setting_of(facts: dict, order: Optional[int], strategy: Optional[str] = None, tf: Optional[str] = None) -> Optional[dict]:
+    """The member (setting) at ``order`` in the config the bot runs, with its group: B = "no_chase" (추격 진입 막기), else A.
+    With the position's strategy and timeframe: that setting even when the list was renumbered since (livebots.member_of)."""
     ms = facts.get("members") or []
-    if not order or not 0 < order <= len(ms):
+    m = L.member_of(ms, order, strategy, tf)
+    if m is None:
         return None
-    m = ms[order - 1]
-    return {"order": order, "strategy": m.get("strategy"), "tf": m.get("tf"), "group": "B" if m.get("no_chase") else "A",
+    return {"order": m.get("order") or order, "strategy": m.get("strategy"), "tf": m.get("tf"), "group": "B" if m.get("no_chase") else "A",
             "no_chase": bool(m.get("no_chase")), "no_chase_ko": m.get("no_chase_ko"), "entry_ko": m.get("entry_ko"),
             "stop_ko": (m.get("stop") or {}).get("ko")}
 
@@ -343,7 +344,7 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
         "key": pos.get("key"), "symbol": pos.get("symbol"), "side": side, "leverage": lev, "qty": pos.get("qty"), "margin": margin,
         "entry": entry, "entry_time": pos.get("entry_time"), "strategy_id": pos.get("strategy_id"), "timeframe": pos.get("timeframe"),
         "member": pos.get("member"), "member_order": pos.get("member_order"), "stop_rule": pos.get("stop_rule"),
-        "setting": setting_of(facts, pos.get("member_order")),
+        "setting": setting_of(facts, pos.get("member_order"), pos.get("strategy_id"), pos.get("timeframe")),
         "stop": pos.get("stop"), "stop_initial": pos.get("stop_initial"), "stop50": stop50, "stop_rule_cfg": sr,
         "locked": lock is not None, "lock_roe": lock, "lock_price": pos.get("stop") if lock is not None else None,
         "secured": {"roe": lock, "usd": lock * margin if margin else None} if lock is not None else None,
@@ -406,7 +407,8 @@ def exec_card(x: dict, pp: Optional[dict], paper: dict, facts: dict, conn, bars_
         "entry": entry, "entry_time": xp.get("entry_time"), "status": xp.get("status"), "stop_order": xp.get("stop_order"),
         "strategy_id": pp.get("strategy_id") if paired else None, "timeframe": pp.get("timeframe") if paired else None,
         "member": pp.get("member") if paired else None, "member_order": pp.get("member_order") if paired else None,
-        "setting": setting_of(facts, pp.get("member_order")) if paired else None, "paired": paired,
+        "setting": setting_of(facts, pp.get("member_order"), pp.get("strategy_id"), pp.get("timeframe")) if paired else None,
+        "paired": paired,
         "stop": stop, "stop_initial": xp.get("stop_initial"), "stop50": roe_price(side, entry, lev, -sr["roe"], rt if sr["net"] else 0.0) if sr else None,
         "stop_rule_cfg": sr, "locked": locked, "lock_roe": lock, "lock_price": stop if locked else None, "secured": secured,
         "next": nxt, "ladder": ladder_steps(spec, lock if paired else None, best, price_of, lock_price_of),
@@ -466,7 +468,8 @@ def own_exec_card(out: dict, x: dict, xp: dict, pp: Optional[dict], paired: bool
         "entry": entry, "entry_time": xp.get("entry_time"), "status": xp.get("status"), "stop_order": xp.get("stop_order"),
         "strategy_id": pp.get("strategy_id") if paired else None, "timeframe": pp.get("timeframe") if paired else None,
         "member": pp.get("member") if paired else None, "member_order": pp.get("member_order") if paired else None,
-        "setting": setting_of(facts, pp.get("member_order")) if paired else None, "paired": paired,
+        "setting": setting_of(facts, pp.get("member_order"), pp.get("strategy_id"), pp.get("timeframe")) if paired else None,
+        "paired": paired,
         "stop": stop, "stop_initial": xp.get("stop_initial"),
         "stop50": roe_price(side, entry, lev, -sr["roe"], paper_rt if sr["net"] else 0.0) if sr else None,
         "stop_rule_cfg": sr, "locked": lock is not None, "lock_roe": lock, "lock_price": stop if lock is not None else None,

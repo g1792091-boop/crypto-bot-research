@@ -380,7 +380,7 @@ def test_positions_paper_card_entry_stop_takeprofit_ladder_group_fast_and_extrem
     r = d["rules"]
     assert r["name"] == "규칙봇 15" and r["stop"] == {"roe": 0.5, "net": True} and r["two_part"] is True and r["early_exit"] == "own"
     assert r["early_exit_until_lock"] is True and r["margin"] == 0.4 and (r["leverage_btc"], r["leverage_alt"]) == (40, 30)
-    assert r["n_members"] == 15 and r["n_no_chase"] == 5                    # live15's four B members + the world's first
+    assert r["n_members"] == 14 and r["n_no_chase"] == 4                    # live15's three B members + the world's first
     p = _card(d, "paper")["position"]
     rt, ff = p["round_trip"], 0.5 / (0.25 * 62000.0)
     assert p["entry"] == 62000.0 and p["side"] == 1 and p["leverage"] == 40 and p["entry_time"] == ENTRY

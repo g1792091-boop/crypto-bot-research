@@ -54,7 +54,7 @@ def test_check_config_says_ready_with_the_minus_35_stop(capsys):
     out = capsys.readouterr().out
     # 0.35 / 40 - 0.14 % = 0.735 % (printed 0.73 %), 0.35 / 30 - 0.14 % = 1.027 %
     for want in ("자기 DB: /var/lib/paperbot/combo/live15-mexc.db", "순ROE -35%(수수료·슬리피지 포함: 40배 가격 0.73%, 30배 가격 1.03%)",
-                 "15%에서 12%", "첫 잠금 +10% 전까지만", "추격 진입 막기: 4개 매매법", "동전 쌍둥이 계좌: 있음"):
+                 "15%에서 12%", "첫 잠금 +10% 전까지만", "추격 진입 막기: 3개 매매법", "동전 쌍둥이 계좌: 있음"):
         assert want in out, want
     assert out.strip().splitlines()[-1] == "준비됨"
 
@@ -62,7 +62,7 @@ def test_check_config_says_ready_with_the_minus_35_stop(capsys):
 def test_the_start_message_names_the_bot_and_its_stop():
     cfg = C.ComboConfig.from_file(str(CFG35))
     text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
-    assert text.startswith("[합친 봇 페이퍼 규칙봇 15 −35%] 시작: 매매법 15개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
+    assert text.startswith("[합친 봇 페이퍼 규칙봇 15 −35%] 시작: 매매법 14개, BTC 40배·나머지 30배, 증거금 잔고의 40%, "
                            "손절 순ROE -35%(수수료·슬리피지 포함: 40배 가격 0.73%, 30배 가격 1.03%), ")
 
 
