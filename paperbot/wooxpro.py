@@ -167,6 +167,10 @@ RATE = {"details": 12, "kline": 12, "markprice_kline": 12, "funding_rate": 12, "
 DEFAULT_RATE = 6
 READ_RETRIES = 3                                     # a read refused for the rate (429): read again after a pause
 READ_PAUSE_S = 1.0                                   # ... of 1 s, 2 s, 3 s
+# writes that may be sent again after a 429 (refused, nothing ran): settings, cancels, and a stop (its client_order_id
+# makes a second copy impossible: 40050). Never an opening market order (market(): an unknown outcome, looked up)
+RETRY_POSTS = frozenset({"position_mode_set", "leverage_set", "cancel_order", "cancel_orders", "plan_cancel",
+                         "tpsl_submit"})
 
 
 def hosts_for(mode: str) -> tuple:
@@ -350,12 +354,13 @@ class WooXProClient:
         """One request. ``params``: the GET query or the POST body (a dict). Returns the answer's ``data``. A read (GET)
         refused for the request rate (429, code 30013; the owners' first live check 10-20 got "(U)Request too many
         requests", a per-account limit the docs do not size) is read again after a pause, at most READ_RETRIES times;
-        a POST is never sent again here (the executor decides)."""
+        so is a RETRY_POSTS write. Any other POST is never sent again here (the executor decides)."""
         for attempt in range(READ_RETRIES + 1):
             try:
                 return self._req_once(method, path, params, signed, limit_key)
             except RateLimited as e:
-                if method != "GET" or e.status != 429 or attempt == READ_RETRIES:
+                again = method == "GET" or (limit_key or path) in RETRY_POSTS
+                if not again or e.status != 429 or attempt == READ_RETRIES:
                     raise
                 self.sleep(min(max(float(getattr(e, "retry_after", 0) or 0), READ_PAUSE_S * (attempt + 1)), 5.0))
         raise AssertionError("unreachable")

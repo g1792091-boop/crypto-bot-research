@@ -554,6 +554,26 @@ def test_a_read_refused_for_the_rate_is_read_again_but_an_order_never():
     assert sum(1 for x in fake.calls if x[2].endswith("submit-order")) == 1      # an order: never resent here
 
 
+def test_a_setting_a_cancel_or_a_stop_refused_for_the_rate_is_sent_again():
+    """The first live check (10-20) stopped on a 429 right before the one-way switch: settings, cancels and stops
+    (refused, nothing ran) are sent again after a pause."""
+    c, fake, clock = make()
+    c.sleep = lambda s: setattr(clock, "t", clock.t + int(s * 1000))
+    fake.fail("POST", "/contract/private/set-position-mode", "429", times=2)
+    c.one_way()
+    assert c.position_mode() == "one_way_mode"
+    fake.fail("POST", "/contract/private/submit-leverage", "429", times=1)
+    c.isolated(BTC)
+    assert fake.levs[BTC] == ["isolated", 40]
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    fake.fail("POST", "/contract/private/submit-tp-sl-order", "429", times=1)
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbAs")
+    assert [float(p["trigger_price"]) for p in fake.live_stops(BTC)] == [95.0]
+    fake.fail("POST", "/contract/private/cancel-plan-order", "429", times=1)
+    c.cancel_algo(algo_id=st["algoId"])
+    assert not fake.live_stops(BTC)
+
+
 def test_review_fixes_state_sign_trigger_income_and_server_errors():
     c, fake, _ = make()
     ready(c, fake)
