@@ -81,5 +81,9 @@
   - 거래 한 번으로 넣지 않고 규칙 고정 기간(11/3까지)을 지킵니다.
   - 11/3 검토 때 `python3 research/live15/one.py N08_ICHI_WR@1h N08_ICHI_WR@30m`로 그때까지의 기록을 보고 정합니다.
 
+- **가장 먼저 뺄 후보 (10/20 확인)**: B의 FVG 되돌림 1시간(`F9_FVG@1h`)과 일목 AO 30분(`N12_ICHI_AO@30m`). 추격 막기를
+  통과한 진입만 세면 10/19 23승 3패(88%)·17승 2패(89%)에서 10/20 24승 4패(86%)·17승 3패(85%)로, 본전 승률 근처입니다. 하루에
+  한 번씩 진 차이라 지금은 빼지 않고 11/3에 `python3 research/live15/one.py F9_FVG@1h N12_ICHI_AO@30m --nochase`로 다시 봅니다.
+
 관련 문서: `docs/live15-start-ko.md` (10/20 바꾸는 순서), `docs/live15-mexc-ko.md` (MEXC를 −35% 봇으로 옮기는 순서와 되돌리기),
 `docs/livedash-ko.md` (실거래 사이트, 목표 탭).
