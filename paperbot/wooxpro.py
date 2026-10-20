@@ -124,8 +124,9 @@ DRILL_MIN_GAP_S = 1.0                                 # the first live check (10
 DRILL_PAUSE_S = 3.0
 TRIGGER_GAP = 0.001                                   # the trigger test's stop: 0.1 % from the last price
 TRIGGER_WAIT_S = 1200                                 # ... waited for at most 20 minutes
-PROFIT_GAP = 0.003                                    # first the price is waited for 0.3 % past the entry, so the test
+PROFIT_GAP = 0.0015                                   # first the price is waited for 0.15 % past the entry, so the test
 PROFIT_WAIT_S = 600                                   # stop rests on the profit side (a lock's place); at most 10 min
+# (0.3 % was not reached in the owners' first drill, 10-20: 0.15 % still puts the stop 0.05 % past the entry)
 FIXED_LEVERAGE = MX.FIXED_LEVERAGE                    # owners 2026-10-17: BTC 40x, the other coins 30x
 DEFAULT_LEVERAGE = MX.DEFAULT_LEVERAGE
 COINS = MX.COINS
@@ -1604,7 +1605,8 @@ class WooXProDrill:
         shown = [0]
         if entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0:
             self._note(f"이익 쪽 손절 시험: 가격이 진입가보다 {PROFIT_GAP:.1%} 유리해지기를 기다립니다"
-                       f"(최대 {min(PROFIT_WAIT_S, self.trigger_wait_s) / 60:.0f}분). 창을 닫지 마세요")
+                       f"(최대 {min(PROFIT_WAIT_S, self.trigger_wait_s) / 60:.0f}분). 기다리는 것이 정상입니다: 창을 닫거나 Ctrl+C를 "
+                       "누르지 마세요")
         while entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0 \
                 and self.elapsed() - start < min(PROFIT_WAIT_S, self.trigger_wait_s):
             self.wait(5.0)
@@ -1636,7 +1638,7 @@ class WooXProDrill:
         start = self.elapsed()
         shown = [0]
         self._note(f"손절 발동 시험: 시험 손절 {level:g}(지금 가격 {last:g})에 가격이 닿기를 기다립니다"
-                   f"(최대 {self.trigger_wait_s / 60:.0f}분). 창을 닫지 마세요")
+                   f"(최대 {self.trigger_wait_s / 60:.0f}분). 기다리는 것이 정상입니다: 창을 닫거나 Ctrl+C를 누르지 마세요")
         while self.elapsed() - start < self.trigger_wait_s:
             if float(c.position(s)["positionAmt"]) == 0:
                 break
