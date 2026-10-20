@@ -72,7 +72,7 @@ export function perfView(ctx) {
     score.el, ledger.el,
     ui.card({title: "나눠 보기", sub: "표본 적음 = 20번 미만 (40번 미만도 조심)", cls: "lb-brkcard", acts: [bseg]}, pg.el),
     ui.card({title: "동전 쌍둥이 (참고)", sub: "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌", cls: "lb-flipcard"}, flip),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC"), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이 · 매매법 성적표")));
+    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이 · 매매법 성적표")));
 
   function brow(r) {
     const fl = smallFloor(r.trades);

@@ -105,7 +105,7 @@ GOAL_MATH_KO = "계산일 뿐 예측이 아니에요: 지금까지의 평균 이
 # -50 % is the two-week test that tells the owners which stop gets more money at the 11/3 review. Shown plainly, no verdict.
 H2H_REVIEW_KO = "11/3 검토에서 어느 손절에 돈을 더 넣을지 정하려는 2주 비교예요"
 H2H_NOTE_KO = ("숫자를 나란히 보여 주기만 해요 (어느 쪽이 낫다고 정하지 않아요) · 두 봇은 같은 신호로 들어가고 손절 자리만 달라요 · "
-               "페이퍼는 두 번째 봇 시작부터, 실거래는 MEXC가 옮긴 때부터 두 계좌 모두 같은 기간으로 셌어요")
+               "페이퍼는 두 번째 봇 시작부터, 실거래는 두 번째 실행기(WOO X Pro)가 옮긴 때부터 두 계좌 모두 같은 기간으로 셌어요")
 FUNDING_KO = "펀딩비는 넣지 않았어요 (비율이 기록에 없어요 · 보통 8시간에 순ROE 0.3%p 안팎)"
 REV_KO = "빠른 손절: 첫 잠금(+10%) 전에 같은 매매법이 반대 신호를 내면 기다리지 않고 바로 닫는 규칙이에요"
 CHASE_KO = "추격 막기: B 그룹 4개만, 롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면 (숏은 아래쪽) 진입하지 않는 규칙이에요"
@@ -990,7 +990,7 @@ def head_to_head(cx: dict) -> Optional[dict]:
     n_min = min(s["paper"]["n"] or 0 for s in sides)
     return {"state": "ok", "since_ms": c["since_ms"], "live_since_ms": switch, "sides": sides, "words_ko": c["words_ko"],
             "small": n_min < SMALL_N, "small_n": SMALL_N, "review_ko": H2H_REVIEW_KO, "note_ko": H2H_NOTE_KO,
-            **({} if switch is not None else {"live_ko": "실거래 비교는 MEXC가 두 번째 페이퍼로 옮긴 뒤부터 나와요"})}
+            **({} if switch is not None else {"live_ko": "실거래 비교는 두 번째 실행기(WOO X Pro)가 두 번째 페이퍼로 옮긴 뒤부터 나와요"})}
 
 
 def goal_record(cx: dict, mo: dict) -> dict:

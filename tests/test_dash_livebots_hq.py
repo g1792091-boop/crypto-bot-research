@@ -297,7 +297,7 @@ def test_feed_ticker_and_why_words_are_real_records_only(world):
     assert b["balance"] == 101.5
     assert out["tk0"] == []
     tkb = {x["k"]: x["text"] for x in out["tkb"]}
-    assert tkb["mexc"] == "MEXC 못 읽음" and "sum" not in tkb                     # never a total over an unreadable wallet
+    assert tkb["mexc"] == "WOO X Pro 못 읽음" and "sum" not in tkb                     # never a total over an unreadable wallet
     for x in out["tk"] + out["tkb"]:
         assert not re.search(r"\b(null|undefined|NaN)\b", x["text"]), x
     why = {}

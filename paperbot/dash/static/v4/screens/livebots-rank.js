@@ -338,7 +338,7 @@ export function rowDetail(r, d, href) {
 // live trade takes its paper partner's group (짝 페이퍼 없음 when it has none). Shown on 성적 and 순위 (성적 순위).
 export const GROUPS_API = "/api/v4/livebots/groups";
 const GROUP_KEY = "lbrg-acct";
-const GROUP_ACCTS = [{id: "paper", label: "페이퍼"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "MEXC"}];
+const GROUP_ACCTS = [{id: "paper", label: "페이퍼"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}];
 
 /** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}]. */
 export function groupRows(d, acct) {
@@ -683,12 +683,12 @@ export function boardView(ctx) {
           h("b", null, "처음 보는 기간"), " 승률이에요 (2020-24에만 맞추고 2025-26에 처음 돌려 본 숫자)."),
         h("li", null, h("b", null, "거래가 적으면 순위는 대부분 운이에요."),
           ` 매매법이 ${c ? fmt.int(c.strategies) : "여러"}개라 하나가 1주에 ${c && c.perWeek != null ? fmt.num(c.perWeek, 1) + "번꼴" : "1번도 안 되게"} 거래해요 (5년 평균). 닫힌 거래 ${fmt.int(smallMin(d))}번 미만은 '표본 적음'이에요.`),
-        h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), " 순위는 두 실행기가 따라가는 페이퍼(모의) 거래로 매겨요. 바이비트 · MEXC 기록은 줄을 펼치면 보여요."),
+        h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), " 순위는 두 실행기가 따라가는 페이퍼(모의) 거래로 매겨요. 바이비트 · WOO X Pro 기록은 줄을 펼치면 보여요."),
         h("li", null, "5년 기여도 = 5년 시험에서 전체가 불어난 몫 중 이 매매법이 낸 몫. 같은 숫자면 5년 기여도가 큰 쪽이 먼저예요."),
         h("li", null, "막대: ", h("span", {class: "lbr-key fit"}), "5년(맞춘 숫자) · ", h("span", {class: "lbr-key honest"}), "처음 보는 기간 · ",
           h("span", {class: "lbr-key now"}), "지금(페이퍼, 거래가 있을 때) · 0~100%", be != null ? `, 세로 줄 = 본전 승률 약 ${fmt.pct(be, 0, false)}` : ""),
         d && sources(d).card ? h("li", null, "상태 말(표본 작음 · 기대 안 · 주의 · 확실히 나쁨)은 성적 탭의 매매법 성적표와 같은 계산이에요.") : null)),
-    h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive("바이비트 · MEXC (펼친 줄의 실거래)"))];
+    h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive("바이비트 · WOO X Pro (펼친 줄의 실거래)"))];
   }
   const namesKey = (d) => ((d && d.rows) || []).map((r) => fmt.stratKo(r.strategy)).join("|");
 

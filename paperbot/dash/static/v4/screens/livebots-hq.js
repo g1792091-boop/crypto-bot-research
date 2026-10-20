@@ -843,7 +843,7 @@ export function hqView(ctx, hub) {
   const clockT = h("b", {class: "num"}, "—");
   const cmd = h("div", {class: "lbh-cmd"},
     h("div", {class: "lbh-caps"}, sLive, h("span", {class: "lbh-sep", "aria-hidden": "true"}, "·"), sDay, h("span", {class: "lbh-sep", "aria-hidden": "true"}, "·"),
-      h("span", null, "바이비트 · MEXC"), sSum),
+      h("span", null, "바이비트 · WOO X Pro"), sSum),
     verdict, h("div", {class: "lbh-clock", "aria-label": "한국 시간"}, clockT, h("span", null, "KST · 한국 시간")));
   const banner = h("div", {class: "lbh-banner", role: "status", hidden: true});
 
@@ -1100,7 +1100,7 @@ export function hqView(ctx, hub) {
   const tiles = panel("매매법 27개 · 이번 주 신호", "lbh-tilep", "최근 7일(한국 시간) · 밝을수록 신호가 많아요", tGrid, tRead, tLeg);
   const tHead = tiles.h2;
 
-  const foot = h("div", {class: "lbh-foot"}, ui.assumeLive("바이비트 · MEXC"),
+  const foot = h("div", {class: "lbh-foot"}, ui.assumeLive("바이비트 · WOO X Pro"),
     ui.assumeLine(["closed", "open"], "페이퍼(연습) A+C 합본 COMBO@mix · 게이지의 순ROE"));
   const root = h("div", {class: "lbh", dataset: {still: ""}},
     h("h2", {class: "lbh-sr"}, "실거래 관제"), cmd, frame,
@@ -1132,7 +1132,7 @@ export function hqView(ctx, hub) {
     sDay.title = days.length ? "실거래를 켠 날이 DAY 01 (한국 시간)" : "실행기 시작 기록이 아직 없어요";
     const both = exs.every((a) => a && a.state === "ok" && a.balance != null);
     sSum.textContent = both ? ` · 합계 ${usd0(exs.reduce((x, a) => x + Number(a.balance), 0))}` : "";
-    sSum.title = both ? "바이비트 + MEXC 잔고 (진짜 돈만, 페이퍼 빼고)" : "";
+    sSum.title = both ? "바이비트 + WOO X Pro 잔고 (진짜 돈만, 페이퍼 빼고)" : "";
     // the verdict: /now's own words
     const n = fNow.d;
     let tone = "wait", head = fNow.err && !n ? "지금 상태를 불러오지 못함" : "불러오는 중", until = null, untilKo = "";

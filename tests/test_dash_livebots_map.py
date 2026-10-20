@@ -180,12 +180,12 @@ def test_each_account_in_one_sentence_against_the_honest_range(tmp_path, rich):
     assert b["accounts"]["paper"]["wins"] == 31 and p5 == 31                      # the rich paper sits right on the edge
     assert out["paper"] == {"text": "페이퍼 48번 중 31번 이김 (64.6%) · 현실 기대 범위 안", "tone": "", "where": "inside"}
     assert out["bybit"]["text"] == "바이비트 19번 중 12번 이김 (63.2%) · 현실 기대 범위 안"
-    assert out["mexc"]["text"] == "MEXC 3번 중 3번 이김 (100.0%) · 현실 기대 범위 안"
+    assert out["mexc"]["text"] == "WOO X Pro 3번 중 3번 이김 (100.0%) · 현실 기대 범위 안"
     # one win fewer than the honest 5 % edge: the warning (the line the drift alarm uses), one more than the 95 %: above
     assert out["low"] == {"text": f"페이퍼 48번 중 {p5 - 1}번 이김 ({(p5 - 1) / 48 * 100:.1f}%) · 현실 기대 범위 아래", "tone": "warn", "where": "below"}
     assert out["edge"] == "inside" and out["top"] == "inside"
     assert out["high"]["where"] == "above" and out["high"]["text"].endswith("현실 기대 범위 위") and out["high"]["tone"] == "up"
-    assert out["none"] == {"text": "MEXC 아직 닫힌 거래 없음", "tone": "none", "where": "none"} and out["gone"]["where"] == "none"
+    assert out["none"] == {"text": "WOO X Pro 아직 닫힌 거래 없음", "tone": "none", "where": "none"} and out["gone"]["where"] == "none"
     assert out["nob"]["where"] == "unknown" and "범위" not in out["nob"]["text"]       # no honest band: no word about it
 
 
@@ -215,7 +215,7 @@ def test_band_geometry_step_lines_and_labels(tmp_path, rich):
     ly = sorted(e["ly"] for e in out["ends"])
     assert all(b2 - a2 >= 16 - 1e-9 for a2, b2 in zip(ly, ly[1:]))               # labels pulled apart
     assert all(pad["t"] + 6 - 1e-9 <= e["ly"] <= 300 - pad["b"] - 4 + 1e-9 for e in out["ends"])
-    assert {e["id"]: e["label"] for e in out["ends"]} == {"paper": "페이퍼 31/48", "bybit": "바이비트 12/19", "mexc": "MEXC 3/3"}
+    assert {e["id"]: e["label"] for e in out["ends"]} == {"paper": "페이퍼 31/48", "bybit": "바이비트 12/19", "mexc": "WOO X Pro 3/3"}
     assert out["hon"] == [True, True, True] and out["fit"]
     assert out["be"]["y2"] == pytest.approx(out["beWant"]) and out["check"] == pytest.approx(out["checkWant"])
     assert out["step"] == "M0.0,100.0H10.0V90.0H20.0H30.0V80.0"                  # a loss stays flat, a win steps up
@@ -363,8 +363,8 @@ def test_empty_missing_and_a_failed_refresh(tmp_path):
                 ec=ec, xm=xm, xc=xc)
     assert out["ec"].count("실거래 거래가 아직 없어요") >= 3 and "첫 거래가 닫히면 채워져요" in out["ec"]   # both cards and the list
     assert "짝 맞춘 거래 0 / 0" in out["ec"] and "놓친 페이퍼 거래 없음" in out["ec"]
-    assert "수집 전" in out["xm"] and "아직 파일이 없어요" in out["xm"] and "MEXC" in out["xm"]
-    assert "수집 전" in out["xc"] and "MEXC 실행기 DB" in out["xc"] and "페이퍼 DB (짝 맞출 페이퍼 거래)" in out["xc"]
+    assert "수집 전" in out["xm"] and "아직 파일이 없어요" in out["xm"] and "WOO X Pro" in out["xm"]
+    assert "수집 전" in out["xc"] and "WOO X Pro 실행기 DB" in out["xc"] and "페이퍼 DB (짝 맞출 페이퍼 거래)" in out["xc"]
     assert "불러오지 못했습니다" in out["fail"]
     assert "서버에 닿지 못했습니다" in out["st"] and "자료를 보여 드립니다" in out["st"] and "is-stale" in out["stcls"]
     assert "수집 전" in out["st"]                                                  # the last answer is still on the page

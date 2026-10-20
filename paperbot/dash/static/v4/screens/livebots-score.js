@@ -15,7 +15,7 @@ import {sourceState} from "./livebots-kit.js";
 
 const SORTS = [{id: "n", label: "거래 많은 순"}, {id: "status", label: "상태"}, {id: "excess", label: "기대 대비"}, {id: "win", label: "승률"},
   {id: "pnl", label: "손익"}];
-const EX_KO = {bybit: "바이비트", mexc: "MEXC"};
+const EX_KO = {bybit: "바이비트", mexc: "WOO X Pro"};
 /** The status words' tones (liveimprove: SMALL, OK, WATCH, BAD in that order). */
 const TONE = ["thin", "good", "warn", "bad"];
 export const toneOf = (words, w) => TONE[(words || []).indexOf(w)] || "thin";

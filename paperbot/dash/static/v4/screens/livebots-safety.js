@@ -16,14 +16,14 @@ export function safetyView(ctx) {
   const st = {d: null, okAt: 0, ex: local.get("lb-sex", "all")};
   const stateSlot = h("div", {class: "lb-slot"});
   const cards = h("div", {class: "lb-safe"});
-  const exSeg = ui.seg([{id: "all", label: "전부"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "MEXC"}], st.ex, (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); },
+  const exSeg = ui.seg([{id: "all", label: "전부"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}], st.ex, (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); },
     {label: "실행기 고르기"});
   const pg = ui.pager({size: 10, row: (e) => evRow(e), empty: () => (st.d ? ui.empty("주의 · 긴급 기록이 아직 없어요") : motion.shimmer(3))});
   const checks = checksView();
   const el = h("div", {class: "lb-safety stack"}, stateSlot, cards, checks.el,
     ui.card({title: "주의 · 긴급 기록", sub: "실행기 두 개 · 거래소 요청 재시도는 뺌 · 10개씩", cls: "lb-logcard", acts: [exSeg]}, pg.el),
     ui.note("멈춤 풀기는 이 화면에 없어요: 서버에서 이름과 메모를 남기는 명령으로만 풀어요 (clear-halt)"),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC 실행기 기록"), ui.assumeLine(["closed"], "아침 점검의 페이퍼 손익")));
+    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro 실행기 기록"), ui.assumeLine(["closed"], "아침 점검의 페이퍼 손익")));
 
   function evRow(e) {
     return h("div", {class: "lb-ev", role: "listitem"},

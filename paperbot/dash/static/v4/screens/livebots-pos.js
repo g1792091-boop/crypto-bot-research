@@ -25,7 +25,7 @@ import {netRoe, unrealized, distTo} from "./livebots-calc.js";
 
 export const POS_API = "/api/v4/livebots/positions";
 const REFRESH_MS = 10 * 1000;
-const NAME = {paper: "페이퍼(연습)", bybit: "바이비트", mexc: "MEXC", flip: "동전 쌍둥이"};
+const NAME = {paper: "페이퍼(연습)", bybit: "바이비트", mexc: "WOO X Pro", flip: "동전 쌍둥이"};
 
 /** A card's mark-dependent numbers (pure; node tests): unrealized money, net ROE, distances, the meter's places. */
 export function atMark(p, mark) {
@@ -217,7 +217,7 @@ export function posView(ctx) {
   const rules = h("div", {class: "lbp-head"});
   const stateSlot = h("div", {class: "lb-slot"});
   const grid = h("div", {class: "lbp-grid"}, motion.shimmer(2));
-  const foot = h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC · 마크 = 바이낸스 가격"),
+  const foot = h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro · 마크 = 바이낸스 가격"),
     ui.assumeLine(["open"], "페이퍼(연습) · 동전 쌍둥이 (참고)"));
   const el = h("div", {class: "lbp stack"}, rules, stateSlot, grid, foot);
   const roll = () => { for (const c of st.cards) c.el.update(c.sym ? ctx.store.mark(c.sym) : null); };

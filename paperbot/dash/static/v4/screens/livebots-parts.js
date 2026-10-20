@@ -21,7 +21,7 @@ const IDS = ["paper", "bybit", "mexc"];
 /** bandLine(ctx) -> {el, set(d, state)}: one slim line of chips, each a link to the tab that explains it. */
 export function bandLine(ctx) {
   const chip = (key, tab, label) => h("a", {class: ["term-bc2", "lb-bc", "c-" + key], href: ctx.href("livebots", tab), "data-k": key, title: label});
-  const c = {bybit: chip("bybit", "safety", "바이비트 잔고"), mexc: chip("mexc", "safety", "MEXC 잔고"), today: chip("today", "trades", "오늘 실거래 손익"),
+  const c = {bybit: chip("bybit", "safety", "바이비트 잔고"), mexc: chip("mexc", "safety", "WOO X Pro 잔고"), today: chip("today", "trades", "오늘 실거래 손익"),
     light: chip("light", "safety", "신호등"), halt: chip("halt", "safety", "멈춤"), goal: chip("goal", "perf", "40번 판단까지")};
   const el = h("div", {class: "term-band lb-band", role: "group", "aria-label": "실거래 한 줄 요약"},
     h("span", {class: "term-bl"}, "실거래"), c.bybit, c.mexc, c.today, c.light, c.halt, c.goal);
@@ -85,7 +85,7 @@ export function fillsPanel(ctx) {
   const list = h("div", {class: "term-feed term-fl", role: "list", "aria-live": "off"});
   const ratio = ratioBar([{key: "W", label: "이김", tone: "up"}, {key: "L", label: "짐", tone: "down"}], {label: "최근 닫힌 실거래 이김·짐"});
   const ratioK = h("span", {class: "term-rbk"}, "최근 청산");
-  const el = panel("실거래 체결", {cls: "term-fills lb-fills", sub: "페이퍼(연습) · 바이비트 · MEXC", scroll: true,
+  const el = panel("실거래 체결", {cls: "term-fills lb-fills", sub: "페이퍼(연습) · 바이비트 · WOO X Pro", scroll: true,
     info: `세 계좌의 진입과 청산 (잠금 = 잠금선에서 이익으로 닫힘, 손절 = 손절선에서 닫힘) · 실거래 손익: ${ui.ASSUME_LIVE_KO} · 페이퍼 손익: ${ui.ASSUME_KO}`}, list);
   el.append(h("div", {class: "term-pf"}, h("div", {class: "term-rbrow"}, ratioK, ratio)));
   const nodes = new Map();
@@ -172,7 +172,7 @@ export function minePanel(ctx, st) {
   const list = h("div", {class: "term-cp", role: "list"});
   const other = h("p", {class: "term-cpo muted", hidden: true});
   const el = panel("이 코인 포지션", {cls: "term-mine lb-mine", scroll: true,
-    info: `페이퍼(연습) · 바이비트 · MEXC의 이 코인 포지션 · ROE = 마크 가격 기준 미실현 ÷ 증거금 (나갈 때 수수료 전) · 줄에 마우스를 올리면 진입가 · 손절·잠금 · 다음 잠금 · 청산가 · 주문 버튼 없음`},
+    info: `페이퍼(연습) · 바이비트 · WOO X Pro의 이 코인 포지션 · ROE = 마크 가격 기준 미실현 ÷ 증거금 (나갈 때 수수료 전) · 줄에 마우스를 올리면 진입가 · 손절·잠금 · 다음 잠금 · 청산가 · 주문 버튼 없음`},
     list, other);
   const rows = new Map();
   let data = null, state = "loading";
@@ -214,7 +214,7 @@ export function minePanel(ctx, st) {
 
 // ---------------------------------------------------------------- the bottom table
 const TAB_NOTE = {
-  pos: `세 계좌의 열린 포지션 · 미실현 = 마크 가격 기준 (나갈 때 수수료 전) · 실거래 미실현 합계는 바이비트 + MEXC만 (페이퍼는 모의라 더하지 않음)`,
+  pos: `세 계좌의 열린 포지션 · 미실현 = 마크 가격 기준 (나갈 때 수수료 전) · 실거래 미실현 합계는 바이비트 + WOO X Pro만 (페이퍼는 모의라 더하지 않음)`,
   fills: "세 계좌의 닫힌 거래 · 실거래 손익은 거래소 체결 기록 기준 (≈ = 체결을 아직 못 읽어 지갑 변화로 어림) · 페이퍼는 모의",
   stops: "손절·잠금 가격 · 실행기는 거래소에 실제로 걸어 둔 손절 주문 (실행기가 확인한 가격), 페이퍼는 모의라 주문 없음 · 지금 가격에서 가까운 순",
 };
@@ -226,7 +226,7 @@ export function tablePanel(ctx, st, onPick) {
   const tabs = ui.seg([{id: "pos", label: "포지션"}, {id: "fills", label: "체결"}, {id: "stops", label: "손절 주문"}], t.tab,
     (id) => { t.tab = id; local.set("lb-tab", id); render(true); }, {label: "아래 표"});
   const posBtn = tabs.querySelector('[data-id="pos"]');
-  const sel = h("select", {class: "select term-sel", "aria-label": "계좌 고르기", title: "ALL = 페이퍼(연습) · 바이비트 · MEXC"},
+  const sel = h("select", {class: "select term-sel", "aria-label": "계좌 고르기", title: "ALL = 페이퍼(연습) · 바이비트 · WOO X Pro"},
     h("option", {value: ""}, "ALL"), IDS.map((id) => h("option", {value: id}, acctKo(id))));
   sel.value = t.acct;
   sel.addEventListener("change", () => { t.acct = sel.value; local.set("lb-tacct", t.acct); render(true); });

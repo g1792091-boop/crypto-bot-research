@@ -34,7 +34,7 @@ export function chartView(ctx, hub) {
   const watch = watchList(ctx, st, pick, {marks});
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("lb-ctf", tf); }, {
     key: "live", label: "실거래 차트",
-    keyTitle: "페이퍼(연습, P) · 바이비트(B) · MEXC(M)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김",
+    keyTitle: "페이퍼(연습, P) · 바이비트(B) · WOO X Pro(W)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김",
     more: (sym, tf) => ctx.href("chart", sym, {tf}),
     lines: (sym, mark) => liveLines(st.d ? st.d.accts : [], sym, mark),
     posKeys: (sym) => posKeys(st.d ? st.d.accts : [], sym),
@@ -46,7 +46,7 @@ export function chartView(ctx, hub) {
   const el = h("div", {class: "term lb-chartv"}, watch.el, h("div", {class: "lb-cbig"}, chart.el),
     ui.card({title: "선 읽기", sub: "차트의 선을 말로 · 거리는 지금 마크 가격에서", cls: "lb-linecard"}, cards),
     ui.card({title: "이 코인 최근 거래", sub: "세 계좌의 닫힌 거래 (차트의 표시)", cls: "lb-recentcard"}, recent),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC"), ui.assumeLine(["closed", "open"], "페이퍼(P)")));
+    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed", "open"], "페이퍼(P)")));
 
   const row = (k, v, extra) => h("div", {class: "lb-lrow"}, h("span", {class: "lb-lk"}, k), h("b", {class: "num"}, v), extra ? h("span", {class: "lb-lx muted num"}, extra) : null);
   const dist = (mk, price) => { const x = distTo(mk, price); return x == null ? "마크 없음" : `지금에서 ${fmt.pct(x, 2, false)}`; };

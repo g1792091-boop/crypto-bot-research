@@ -378,7 +378,7 @@ def test_account_cards_say_halt_and_never_print_null(world):
 def test_the_strip_and_the_lists(world):
     d = L.build(world, NOW)
     band = _render("(() => { const b = P.bandLine(ctx); b.set(d, 'ok'); return b.el; })()", d)["text"]
-    assert "바이비트 $101.50" in band and "MEXC $102.80" in band and "오늘 실거래" in band and "7번 5승 2패" in band
+    assert "바이비트 $101.50" in band and "WOO X Pro $102.80" in band and "오늘 실거래" in band and "7번 5승 2패" in band
     assert "근거 쌓는 중 6/20" in band and "멈춤 MEXC" in band and "40번 판단까지 34번 남음" in band and "페이퍼(연습) 6/40" in band
     fills = _render("(() => { const f = P.fillsPanel(ctx); f.set(d, 'ok'); return f.el; })()", d)["text"]
     assert "실거래 체결" in fills and "진입" in fills and "잠금" in fills and "손절" in fills and "+0.70" in fills
@@ -1120,14 +1120,14 @@ def test_the_mode_chip_says_실거래_on_livebots_and_모의_everywhere_else():
 def test_the_real_money_strip_on_every_livebots_tab(world, tmp_path):
     d = L.build(world, NOW)
     t = _render("ui.note(K.realLine(d))", d)["text"]
-    assert t.startswith("진짜 돈 · 바이비트 $101.50 · MEXC $102.80 · 포지션 1/1·0/1 · 보기만 하는 화면(주문 버튼 없음)"), t
+    assert t.startswith("진짜 돈 · 바이비트 $101.50 · WOO X Pro $102.80 · 포지션 1/1·0/1 · 보기만 하는 화면(주문 버튼 없음)"), t
     gone = L.build({k: "/nonexistent/" + k for k in L.ENV}, NOW)
     t = _render("ui.note(K.realLine(d))", gone)["text"]
-    assert "바이비트 수집 전" in t and "MEXC 수집 전" in t and "$" not in t and "0.00" not in t and "0/1" not in t
+    assert "바이비트 수집 전" in t and "WOO X Pro 수집 전" in t and "$" not in t and "0.00" not in t and "0/1" not in t
     with open(world["mexc_db"], "wb") as fh:
         fh.write(b"garbage" * 200)
     t = _render("ui.note(K.realLine(d))", L.build(world, NOW))["text"]
-    assert "바이비트 $101.50" in t and "MEXC 못 읽음" in t and "포지션 1/1·못 읽음" in t
+    assert "바이비트 $101.50" in t and "WOO X Pro 못 읽음" in t and "포지션 1/1·못 읽음" in t
     t = _render("ui.note(K.realLine(null))", None)["text"]                  # before the first answer: dashes only
     assert "바이비트 —" in t and "$" not in t and "0/1" not in t
     # it is the 실거래 screen's own: drawn by livebots.js on every tab (one mount), refreshed with the summary; no other screen
@@ -1145,7 +1145,7 @@ def test_the_paper_account_is_named_페이퍼_연습_next_to_real_money(world):
     t = _render("d.accts.map((a) => K.acctCard(a, ui.ledBar({label: a.id}), []))", d)["text"]
     assert "페이퍼(연습)" in t and "바이비트" in t
     fills = _render("(() => { const f = P.fillsPanel(ctx); f.set(d, 'ok'); return f.el; })()", d)["text"]
-    assert "페이퍼(연습) · 바이비트 · MEXC" in fills
+    assert "페이퍼(연습) · 바이비트 · WOO X Pro" in fills
     kit = _read(SCREENS, "livebots-kit.js")
     assert 'paper: {ko: "페이퍼(연습)"' in kit
     assert "페이퍼(연습)" in _read(SCREENS, "livebots-parts.js")

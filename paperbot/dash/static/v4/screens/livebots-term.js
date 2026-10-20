@@ -57,7 +57,7 @@ export function termView(ctx, src) {
   const fills = fillsPanel(ctx);
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("lb-tf", tf); }, {
     key: "live", label: "실거래 차트",
-    keyTitle: "페이퍼(연습, P) · 바이비트(B) · MEXC(M)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김",
+    keyTitle: "페이퍼(연습, P) · 바이비트(B) · WOO X Pro(W)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김",
     more: (sym, tf) => ctx.href("livebots", "chart", {sym, tf}),
     lines: (sym, mark) => liveLines(st.d ? st.d.accts : [], sym, mark),
     posKeys: (sym) => posKeys(st.d ? st.d.accts : [], sym),
@@ -73,7 +73,7 @@ export function termView(ctx, src) {
   const pnl = pnlPanel(ctx, {
     who: () => acctKo(pnlId), key: () => pnlId, winKey: "lb-pnl-win", lead: pseg, retry: () => src.retry(),
     info: `고른 계좌가 닫은 거래의 실현 손익 합 (열린 포지션 빼고, 아래 표에 따로) · 한국 시간 · 막대 = 그 시간(또는 그날) 손익 · 최대 낙폭 = 이 선이 그 전 최고점에서 가장 깊게 내려간 만큼 · `
-      + `바이비트·MEXC: ${ui.ASSUME_LIVE_KO} · 페이퍼: ${ui.ASSUME_KO}`,
+      + `바이비트·WOO X Pro: ${ui.ASSUME_LIVE_KO} · 페이퍼: ${ui.ASSUME_KO}`,
     curve: () => { const a = acct(pnlId); return a && a.state === "ok" ? {start: a.start, now: st.d.now_ms, hours: a.hours || []} : null; },
     cal: () => { const a = acct(pnlId); return a && a.state === "ok" ? a.calendar || null : null; },
     state: () => { const a = acct(pnlId); return !st.d ? (st.state === "failed" ? "failed" : "loading") : !a ? "none" : a.state === "ok" ? (st.state === "failed" ? "failed" : "ok") : a.state === "error" ? "failed" : "none"; },
@@ -84,7 +84,7 @@ export function termView(ctx, src) {
   const left = h("aside", {class: "term-col term-left", "aria-label": "실시간 큰 체결, 시장 강제청산, 실거래 체결"}, big.el, liq.el, fills.el);
   const mid = h("div", {class: "term-mid"}, watch.el, chart.el, table.el);
   const right = h("aside", {class: "term-col term-right", "aria-label": "이 코인 포지션과 수익"}, mine.el, pnl.el);
-  const foot = h("div", {class: "term-foot lb-foot"}, ui.assumeLive("바이비트 · MEXC"),
+  const foot = h("div", {class: "term-foot lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"),
     ui.assumeLine(["closed", "open"], `페이퍼(P) · '시장' 표시 = 바이낸스 ${MARKET_LABEL}`));
   const root = h("div", {class: "term lb-term"}, top.el, h("div", {class: "term-grid"}, left, mid, right), foot);
 
@@ -92,7 +92,7 @@ export function termView(ctx, src) {
   const leds = {};
   const cards = h("div", {class: "lb-nowgrid"});
   const lights = h("div", {class: "lb-lgrid"});
-  const con = consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "MEXC"}],
+  const con = consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}],
     foot: "실행기 두 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌", maxHeight: "260px", max: 120});
   con.showEmpty("불러오는 중");
   const below = h("div", {class: "lb-below"},

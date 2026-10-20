@@ -55,7 +55,7 @@ export function riskView(ctx) {
     ui.card({title: "손절이 연달아 오면", sub: "설정의 증거금 · 손절로 계산 (복리)", cls: "lbv-card lbv-next"}, table),
     ui.card({title: "비상 정지", sub: "두 실행기를 한 번에 멈추는 파일", cls: "lbv-card lbv-kill"}, kill),
     h("div", {class: "lb-foot"}, ui.assumeLine(["open"], "페이퍼(연습): 손절 손익은 잠금 계산과 같은 순ROE 식"),
-      ui.assumeLive("바이비트 · MEXC: 손절 손익은 거래소 기본 수수료로 어림")));
+      ui.assumeLive("바이비트 · WOO X Pro: 손절 손익은 거래소 기본 수수료로 어림")));
   const el = h("div", {class: "lbv stack"}, stateSlot, body);
 
   function acctCard(a) {

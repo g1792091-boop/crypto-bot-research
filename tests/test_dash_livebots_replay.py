@@ -528,7 +528,7 @@ def test_view_newest_trade_picker_chart_timeline_and_result(answers, rw):
     assert not _bad(t), _bad(t)
     newest = answers["list"]["rows"][0]
     assert out["calls"] == ["/api/v4/livebots/replay", f"/api/v4/livebots/replay/{newest['id']}"]       # the newest by default
-    for words in ("거래 다시보기", "재생", "1×", "4×", "16×", "진입", "청산", "순ROE", "기록과 같음", "페이퍼(연습)", "바이비트", "MEXC",
+    for words in ("거래 다시보기", "재생", "1×", "4×", "16×", "진입", "청산", "순ROE", "기록과 같음", "페이퍼(연습)", "바이비트", "WOO X Pro",
                   "계단 익절: 순ROE 11%에서 10% 잠금, 그 뒤 3%씩"):
         assert words in t, words
     assert any("lbrp-res" in c.split() for c in cls)                                     # reduced motion: no autoplay, the end shown

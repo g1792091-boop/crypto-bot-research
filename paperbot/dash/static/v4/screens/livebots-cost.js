@@ -136,7 +136,7 @@ export function costView(ctx) {
     ui.card({title: "진입 방식 판단", sub: "페이퍼 체결을 따라가기 vs 신호 때 바로 들어가기 · 숫자만", cls: "lbk-jcard"}, judge),
     ui.card({title: "최근 실거래", sub: "닫힌 거래 · 새것부터 10개씩 · 한국 시간", cls: "lbk-listcard", acts: [seg]}, listSlot, listSum,
       listHead, pg.el),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · MEXC · ≈ = 체결 기록 전 지갑 변화로 어림"),
+    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro · ≈ = 체결 기록 전 지갑 변화로 어림"),
       ui.assumeLine(["closed"], "페이퍼(연습) 손익은 실거래 크기(설정의 크기 비율)로 줄여 견줌")));
   const el = h("div", {class: "lbk stack"}, stateSlot, body);
 

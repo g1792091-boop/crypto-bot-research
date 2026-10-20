@@ -110,14 +110,14 @@ export function goalView(ctx) {
   const rec = h("div", {class: "lbg-slot"});
   const imply = h("div", {class: "lbg-slot"});
   const h2h = h("div", {class: "lbg-slot"});
-  const h2hCard = ui.card({title: "손절 비교 (11/3 검토용)", sub: "바이비트 −50% · MEXC −35% · 같은 신호, 손절만 다름", cls: "lbg-card lbg-h2h"}, h2h);
+  const h2hCard = ui.card({title: "손절 비교 (11/3 검토용)", sub: "바이비트 −50% · WOO X Pro −35% · 같은 신호, 손절만 다름", cls: "lbg-card lbg-h2h"}, h2h);
   h2hCard.hidden = true;                                  // one paper bot: no card (the page as before)
   const body = h("div", {class: "lbg-body stack"}, head, cards,
     ui.card({title: "지금까지 기록", sub: "페이퍼(연습) · 규칙봇 15 시작부터 닫힌 거래", cls: "lbg-card lbg-rec"}, rec),
     ui.card({title: "지금 기록 그대로라면", sub: "계산일 뿐이에요 · 예측이 아니에요", cls: "lbg-card lbg-imply"}, imply),
     h2hCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습): 잔고는 닫힌 거래 기준"),
-      ui.assumeLive("바이비트 · MEXC: 잔고 기록 기준 · 입출금 뺌")));
+      ui.assumeLive("바이비트 · WOO X Pro: 잔고 기록 기준 · 입출금 뺌")));
   const el = h("div", {class: "lbg stack"}, stateSlot, body);
 
   function acctCard(a, d) {
@@ -193,7 +193,7 @@ export function goalView(ctx) {
         h("tbody", null, t.rows.map((r) => h("tr", null, h("td", {class: "l"}, r.k),
           ...r.cells.map((c, i) => h("td", {class: ["num", r.tones[i]]}, c))))))),
       h("p", {class: "lbg-h2h-gap"}, x.words_ko || ""),
-      ui.note(`페이퍼: ${fmt.kst(x.since_ms)}부터` + (x.live_since_ms != null ? ` · 실거래: ${fmt.kst(x.live_since_ms)}부터 (MEXC가 옮긴 때)` : ` · ${x.live_ko || ""}`)),
+      ui.note(`페이퍼: ${fmt.kst(x.since_ms)}부터` + (x.live_since_ms != null ? ` · 실거래: ${fmt.kst(x.live_since_ms)}부터 (WOO X Pro가 옮긴 때)` : ` · ${x.live_ko || ""}`)),
       ui.smallSample(Math.min(...x.sides.map((s) => (s.paper || {}).n || 0)), x.small_n || 20),
       ui.note(x.note_ko || ""));
   }

@@ -99,7 +99,7 @@ export function judgeView(ctx) {
     ui.card({title: "동전 쌍둥이 비교", sub: "같은 신호 · 방향만 동전 · 규칙봇 15 시작부터", cls: "lbj-card lbj-twin"}, twinSlot),
     twoCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) 손익 · 다시 계산한 결과는 가상이에요"),
-      ui.assumeLive("바이비트 · MEXC: 따라간 거래의 크기로 셈")));
+      ui.assumeLive("바이비트 · WOO X Pro: 따라간 거래의 크기로 셈")));
   const el = h("div", {class: "lbj stack"}, stateSlot, body);
 
   const money = (x) => (has(x) ? `${fmt.money(x, true)} USDT` : "—");

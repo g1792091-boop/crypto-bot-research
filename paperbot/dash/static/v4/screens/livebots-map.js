@@ -19,7 +19,7 @@ import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 export const MAP_API = "/api/v4/livebots/map";
 const REFRESH_MS = 30 * 1000;
 const IDS = ["paper", "bybit", "mexc"];
-const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "MEXC"};
+const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro"};
 /** liveimprove SMALL_N: a cut is judged (and coloured here) from this many live trades. */
 export const MIN_N = 10;
 const SMALL_ACCT = 20;                   // an account's line: fewer closed trades than this is mostly luck (표본 적음)

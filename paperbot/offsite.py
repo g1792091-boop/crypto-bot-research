@@ -69,7 +69,8 @@ API = "https://api.telegram.org"
 # the databases deploy/paperbot-backup.sh copies (keep the two lists the same: tests/test_offsite.py
 # compares them); a copy is <basename>.db
 DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet",
-            "exec/executor-bybit-live", "exec/executor-mexc-live", "combo/live-ac", "livecheck", "liveimprove",
+            "exec/executor-bybit-live", "exec/executor-mexc-live", "exec/executor-wooxpro-live", "combo/live-ac",
+            "combo/live15-mexc", "livecheck", "liveimprove",
             "shadow200/shadow200",
             "debate/debate", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)

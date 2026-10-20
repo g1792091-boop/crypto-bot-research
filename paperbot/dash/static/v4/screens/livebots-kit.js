@@ -10,7 +10,7 @@ export const ACCT = {
   // owners 10/19: next to the real accounts the paper account is always named 페이퍼(연습), never taken for real money
   paper: {ko: "페이퍼(연습)", s: "P", tip: "페이퍼(연습) A+C 합본 (모의 돈 · 두 실행기가 따라가는 계좌)"},
   bybit: {ko: "바이비트", s: "B", tip: "바이비트 실행기 (실거래 · 진짜 돈)"},
-  mexc: {ko: "MEXC", s: "M", tip: "MEXC 실행기 (실거래 · 진짜 돈)"},
+  mexc: {ko: "WOO X Pro", s: "W", tip: "WOO X Pro 실행기 (실거래 · 진짜 돈)"},
   // the second paper bot (owners 10/19, docs/live15-mexc-ko.md): only on the page while there is one (the summary's papers)
   paper2: {ko: "페이퍼 2(연습)", s: "P2", tip: "두 번째 페이퍼(연습) 봇 (모의 돈)"},
 };
