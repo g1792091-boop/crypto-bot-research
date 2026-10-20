@@ -119,10 +119,12 @@ DRILL_CONFIRM = "REAL_ORDER"
 # bot's ~$1,000 orders; the drill orders a bit above it
 MIN_ORDER_USDT = 5.0
 DRILL_ORDER_USDT = 6.0
-DRILL_MIN_GAP_S = 0.35
+DRILL_MIN_GAP_S = 1.0                                 # the first live check (10-20) hit the account rate limit at 0.35 s
 DRILL_PAUSE_S = 3.0
 TRIGGER_GAP = 0.001                                   # the trigger test's stop: 0.1 % from the last price
 TRIGGER_WAIT_S = 1200                                 # ... waited for at most 20 minutes
+PROFIT_GAP = 0.003                                    # first the price is waited for 0.3 % past the entry, so the test
+PROFIT_WAIT_S = 600                                   # stop rests on the profit side (a lock's place); at most 10 min
 FIXED_LEVERAGE = MX.FIXED_LEVERAGE                    # owners 2026-10-17: BTC 40x, the other coins 30x
 DEFAULT_LEVERAGE = MX.DEFAULT_LEVERAGE
 COINS = MX.COINS
@@ -142,6 +144,7 @@ ORDER_WAITS = (0.05, 0.1, 0.2, 0.4)                  # a market order is read ba
 KLINE_ROWS = 500
 TRADES_CAP = 200                                     # trades / order-history: at most 200 rows a request
 INCOME_CAP = 1000                                    # transaction-history page_size max
+FLOW_NAMES = {1: "transfer", 3: "funding fee"}       # transaction-history ``type`` of the rows income() books
 SPAN_MS = 89 * 86_400_000                            # trades / order-history: start and end at most 90 days apart
 
 # error codes (WOO X Pro docs "Restful Error Code"; ccxt bitmart.py 330-509)
@@ -161,6 +164,8 @@ RATE = {"details": 12, "kline": 12, "markprice_kline": 12, "funding_rate": 12, "
         "fee_rate": 2, "position": 6, "position_v2": 6, "position_mode": 2, "position_mode_set": 2,
         "leverage_set": 24, "assets": 12}
 DEFAULT_RATE = 6
+READ_RETRIES = 3                                     # a read refused for the rate (429): read again after a pause
+READ_PAUSE_S = 1.0                                   # ... of 1 s, 2 s, 3 s
 
 
 def hosts_for(mode: str) -> tuple:
@@ -341,7 +346,20 @@ class WooXProClient:
         return max(0.0, min(wait, RATE_WINDOW_MS / 1000.0))
 
     def req(self, method: str, path: str, params=None, signed: bool = True, limit_key: Optional[str] = None):
-        """One request. ``params``: the GET query or the POST body (a dict). Returns the answer's ``data``."""
+        """One request. ``params``: the GET query or the POST body (a dict). Returns the answer's ``data``. A read (GET)
+        refused for the request rate (429, code 30013; the owners' first live check 10-20 got "(U)Request too many
+        requests", a per-account limit the docs do not size) is read again after a pause, at most READ_RETRIES times;
+        a POST is never sent again here (the executor decides)."""
+        for attempt in range(READ_RETRIES + 1):
+            try:
+                return self._req_once(method, path, params, signed, limit_key)
+            except RateLimited as e:
+                if method != "GET" or e.status != 429 or attempt == READ_RETRIES:
+                    raise
+                self.sleep(min(max(float(getattr(e, "retry_after", 0) or 0), READ_PAUSE_S * (attempt + 1)), 5.0))
+        raise AssertionError("unreachable")
+
+    def _req_once(self, method: str, path: str, params=None, signed: bool = True, limit_key: Optional[str] = None):
         if signed and self.public_only:
             raise TestnetError(400, "NO_KEY", "키 없이 만든 클라이언트라 개인 API를 부르지 않습니다")
         audit = {"method": method, "path": path, "params": dict(params or {})}
@@ -379,19 +397,20 @@ class WooXProClient:
             code = int(code)
         msg = (data.get("message") if isinstance(data, dict) else None) or str((raw or b"")[:200])
         err: Optional[TestnetError] = None
-        if isinstance(code, int) and code != OK_CODE:
-            err = self._error(code, msg, status)
+        if status >= 500 or status in (0, 408):
+            # a server error first, whatever code it carries: the request may have run (looked up, never resent)
+            err = TransientError(status, code, msg or "server error")
         elif status == 429:
             try:
                 after = float(hdr.get("retry-after") or 2.0)
             except ValueError:
                 after = 2.0
             err = RateLimited(429, code, msg or "rate limited", after)
-        elif status in (403, 418):
+        elif status in (403, 418) and code not in REGION_CODES:
             # an IP block or a ban: never retried in the request, the loop waits (the executor's 418 ban handling)
             err = RateLimited(418, code, f"HTTP {status} (IP 차단·허용 안 된 IP·막힌 지역): {msg}"[:300], 300.0)
-        elif status >= 500 or status in (0, 408):
-            err = TransientError(status, code, msg or "server error")
+        elif isinstance(code, int) and code != OK_CODE:
+            err = self._error(code, msg, status)
         elif status != 200:
             err = TestnetError(status, code, msg)
         elif not isinstance(data, dict) or code != OK_CODE:
@@ -616,7 +635,7 @@ class WooXProClient:
             raise TransientError(200, None, "열린 주문 응답이 목록이 아닙니다")
         if rows:
             return True
-        return bool(self._plans(None))
+        return bool(self._resting(None))
 
     def one_way(self) -> None:
         """One-way position mode (the executor's Binance assumption). Switched only with nothing open; not possible:
@@ -886,6 +905,11 @@ class WooXProClient:
             raise TransientError(200, None, f"조건 주문 응답이 목록이 아닙니다: {str(data)[:80]!r}")
         return [r for r in data if isinstance(r, dict) and (not symbol or r.get("symbol") == symbol)]
 
+    def _resting(self, symbol: Optional[str]) -> list:
+        """The plan / TP/SL orders that still rest: state 1 (approval) or 2 (check). A row in another state (the docs'
+        own example shows a 4 in this list) is finished: never counted as a stop that covers a position."""
+        return [r for r in self._plans(symbol) if _int(r.get("state"), 0) in OPEN_STATES]
+
     def _algo_dict(self, row: dict, status: str = "NEW", actual: str = "") -> dict:
         sym = str(row.get("symbol") or "")
         sid = str(row.get("order_id"))
@@ -899,6 +923,8 @@ class WooXProClient:
         else:
             otype = "CONDITIONAL"                           # a plan order or an opening one: never counted as a stop
         trig = row.get("trigger_price")
+        if status == "NEW":                                 # a resting stop's level is never read as 0 from a gap
+            trig = _num(_dec(trig, "trigger_price"))
         cid = row.get("client_order_id") or self.cid_by_stop.get(sid, "")
         self.order_symbol[sid] = sym
         return {"algoId": sid, "clientAlgoId": cid, "symbol": sym,
@@ -933,6 +959,9 @@ class WooXProClient:
         except (TransientError, RateLimited):
             raise
         except TestnetError as e:
+            if getattr(e, "ret_code", None) == DUPLICATE_CID:
+                # sent before and the first one landed (its answer was lost): look it up, never a refusal
+                raise TransientError(e.status, e.code, f"같은 번호의 손절이 이미 있습니다(결과 확인 필요): {e.msg}") from e
             raise self._would_trigger(e, symbol, side, float(trig)) from e
         sid = data.get("order_id") if isinstance(data, dict) else data
         if sid in (None, "", 0, "0") or isinstance(sid, (dict, list, bool)):
@@ -972,7 +1001,7 @@ class WooXProClient:
         if sid is not None:
             return sid
         fp = self.pending_stops.get(ext)
-        rows = self._plans(fp[0] if fp else None)
+        rows = self._resting(fp[0] if fp else None)
         hit = next((r for r in rows if r.get("client_order_id") == ext), None)
         if hit is None and fp is not None:
             _, code, trig, size, sent = fp
@@ -990,17 +1019,20 @@ class WooXProClient:
     def _finished_stop(self, sid: str, symbols) -> Optional[dict]:
         """A stop that no longer rests: its own history row (TRIGGERED when it names the order it placed, else
         CANCELED), or the market order it placed (client_order_id "PLAN_<id>", seen in the docs' history example)."""
+        now_s = self._now() // 1000
+        span = {"start_time": now_s - SPAN_MS // 1000, "end_time": now_s + 60}
         for s in symbols:
-            rows = self._history(s, order_id=sid)
+            rows = self._history(s, order_id=sid, **span)
             row = next((r for r in rows if str(r.get("order_id")) == sid), None)
-            placed = next((r for r in self._history(s, client_order_id=f"PLAN_{sid}")
+            placed = next((r for r in self._history(s, client_order_id=f"PLAN_{sid}", **span)
                            if r.get("client_order_id") == f"PLAN_{sid}"), None)
             if row is None and placed is None:
                 continue
             base = row or {"order_id": sid, "symbol": s, "side": (placed or {}).get("side"), "type": "stop_loss",
                            "size": (placed or {}).get("size"), "trigger_price": (placed or {}).get("trigger_price"),
                            "price_type": PRICE_LAST}
-            actual = str((row or {}).get("executive_order_id") or "") or (str(placed.get("order_id")) if placed else "")
+            ex = (row or {}).get("executive_order_id")
+            actual = str(ex) if ex not in (None, "", 0, "0") else (str(placed.get("order_id")) if placed else "")
             if not base.get("trigger_price"):
                 base = {**base, "trigger_price": None}
             return self._algo_dict(base, "TRIGGERED" if actual else "CANCELED", actual)
@@ -1014,9 +1046,13 @@ class WooXProClient:
         row = next((r for r in self._plans(sym) if str(r.get("order_id")) == algo_id), None)
         if row is None and sym is not None:
             row = next((r for r in self._plans(None) if str(r.get("order_id")) == algo_id), None)
-        if row is not None:
+        if row is not None and _int(row.get("state"), 0) in OPEN_STATES:
             return self._algo_dict(row)
+        if row is not None:
+            sym = str(row.get("symbol") or "") or sym
         done = self._finished_stop(algo_id, [sym] if sym else COINS)
+        if done is None and row is not None:
+            return self._algo_dict({**row, "trigger_price": row.get("trigger_price") or None}, "CANCELED")
         if done is None:
             raise TestnetError(404, NOT_FOUND[0], f"조건 주문 {algo_id}이 없습니다")
         return done
@@ -1044,11 +1080,11 @@ class WooXProClient:
         return {"algoId": algo_id, "clientAlgoId": self.cid_by_stop.get(algo_id, ""), "code": "200", "msg": "success"}
 
     def open_algo_orders(self, symbol: str) -> list:
-        return [self._algo_dict(r) for r in self._plans(symbol)]
+        return [self._algo_dict(r) for r in self._resting(symbol)]
 
     def cancel_all_algo(self, symbol: str) -> dict:
         """No documented "cancel every plan order" call: each resting one is cancelled by its id."""
-        for r in self._plans(symbol):
+        for r in self._resting(symbol):
             try:
                 self.req("POST", PRIVATE + "/cancel-plan-order", {"symbol": symbol, "order_id": str(r.get("order_id"))},
                          limit_key="plan_cancel")
@@ -1077,15 +1113,17 @@ class WooXProClient:
             amt = _dec(r.get("current_amount"), "current_amount")
             if amt == 0:
                 continue
-            if _int(r.get("position_type")) not in (1, 2):
-                raise TransientError(200, None, f"{r.get('symbol')}: 포지션 방향이 이상합니다({r.get('position_type')!r})")
+            pt = _int(r.get("position_type"))
+            if pt not in (1, 2) or (amt < 0 and pt == 1):
+                raise TransientError(200, None, f"{r.get('symbol')}: 포지션 방향이 이상합니다(position_type "
+                                                f"{r.get('position_type')!r}, 수량 {r.get('current_amount')!r})")
             out.append(r)
         return out
 
     def _position_dict(self, symbol: str, rows: list) -> dict:
         amt = Decimal(0)
         for r in rows:
-            q = self._qty(symbol, r.get("current_amount"))
+            q = abs(self._qty(symbol, r.get("current_amount")))     # the side comes from position_type only
             amt += q if _int(r.get("position_type")) == 1 else -q
         main = rows[0] if rows else {}
         if rows:
@@ -1123,8 +1161,8 @@ class WooXProClient:
         if len(data) >= TRADES_CAP and hi_s - lo_s > 1:
             if depth > 20:
                 raise TransientError(0, None, f"{symbol}: 체결이 너무 많아 나눠 읽지 못했습니다")
-            mid = (lo_s + hi_s) // 2
-            return self._trade_rows(symbol, lo_s, mid, depth + 1) + self._trade_rows(symbol, mid + 1, hi_s, depth + 1)
+            mid = (lo_s + hi_s) // 2             # the halves share ``mid`` (user_trades drops repeats by trade_id)
+            return self._trade_rows(symbol, lo_s, mid, depth + 1) + self._trade_rows(symbol, mid, hi_s, depth + 1)
         return [r for r in data if isinstance(r, dict)]
 
     def user_trades(self, symbol: str, start_ms: int, end_ms: int, limit: int = 1000) -> list:
@@ -1155,8 +1193,8 @@ class WooXProClient:
         if len(data) >= INCOME_CAP and hi - lo > 1000:
             if depth > 20:
                 raise TransientError(0, None, "자금 기록이 너무 많아 나눠 읽지 못했습니다")
-            mid = (lo + hi) // 2
-            return self._flows(flow_type, symbol, lo, mid, depth + 1) + self._flows(flow_type, symbol, mid + 1, hi,
+            mid = (lo + hi) // 2                 # the halves share ``mid`` (income drops repeats)
+            return self._flows(flow_type, symbol, lo, mid, depth + 1) + self._flows(flow_type, symbol, mid, hi,
                                                                                     depth + 1)
         return [r for r in data if isinstance(r, dict)]
 
@@ -1168,16 +1206,25 @@ class WooXProClient:
         lo, hi = int(start_ms), int(end_ms)
         kinds = []
         if income_type in (None, "FUNDING_FEE"):
-            kinds.append((3, "FUNDING_FEE", symbol))
+            kinds.append((3, "FUNDING_FEE", symbol, FLOW_NAMES[3]))
         if symbol is None and income_type in (None, "TRANSFER"):
-            kinds.append((1, "TRANSFER", None))
-        for flow, kind, sym in kinds:
+            kinds.append((1, "TRANSFER", None, FLOW_NAMES[1]))
+        seen = set()
+        for flow, kind, sym, name in kinds:
             for r in self._flows(flow, sym, lo, hi):
                 t = _int(r.get("time"))
                 if not (lo <= t <= hi) or (sym and r.get("symbol") != sym):
                     continue
                 if str(r.get("account") or "futures") != "futures":
                     continue
+                # a server that ignores flow_type answers every kind: a realized P&L or a fee is never booked as a
+                # transfer (it would move the daily-loss and drawdown baselines) nor as funding
+                if str(r.get("type") or "").strip().lower() != name:
+                    continue
+                k = (kind, str(r.get("tran_id")), t, str(r.get("amount")), str(r.get("symbol")))
+                if k in seen:
+                    continue
+                seen.add(k)
                 out.append({"symbol": str(r.get("symbol") or ""), "incomeType": kind,
                             "income": _num(_dec(r.get("amount"), "amount")), "asset": r.get("asset") or SETTLE,
                             "time": t, "tranId": _id60(kind, r.get("tran_id"), r.get("symbol"), t, r.get("amount")),
@@ -1316,6 +1363,7 @@ class WooXProDrill:
     trigger_test: bool = True
     trigger_wait_s: float = TRIGGER_WAIT_S
     wait: Callable[[float], None] = time.sleep
+    elapsed: Callable[[], float] = time.monotonic          # seconds, for the drill's waits (tests pass their clock)
     log: list = field(default_factory=list)
 
     def _step(self, name: str, ok: bool, detail, fatal: bool = True) -> None:
@@ -1370,6 +1418,15 @@ class WooXProDrill:
             self._step("수수료율(API로 읽음, 편도)", False, str(e), fatal=False)
         left = {s: (len(c.open_orders(s)), len(c.open_algo_orders(s))) for s in self.symbols}
         self._step("열린 주문·조건 주문(목록 읽기)", True, left)
+        now = c.clock_ms() + c.offset_ms
+        try:
+            inc = c.income(None, None, now - 7 * 86_400_000, now)
+            kinds: dict = {}
+            for r in inc:
+                kinds[r["incomeType"]] = kinds.get(r["incomeType"], 0) + 1
+            self._step("펀딩·입출금 기록 읽기(지난 7일)", True, {"rows": kinds}, fatal=False)
+        except TestnetError as e:
+            self._step("펀딩·입출금 기록 읽기(지난 7일)", False, str(e), fatal=False)
         c.one_way()
         self._step("포지션 모드 단방향", c.position_mode() == ONE_WAY, {"position_mode": c.position_mode()})
         levs = {}
@@ -1506,6 +1563,9 @@ class WooXProDrill:
                                                                                        for f in outs}),
                       "wallet_change": round(w1 - w0, 6)}
         self._step("체결로 계산한 손익 = 체결 가격 = WOO X Pro realised_profit = 지갑 변화(수수료 포함)", ok, detail)
+        if fills:
+            self._step("체결 기록에 수수료가 들어 있음(0이면 수수료를 못 읽는 것)", detail.get("fees", 0) > 0,
+                       {"fee_rate_pct": detail.get("fee_rate_pct")}, fatal=False)
         return self.log
 
     def _trigger_test(self, s: str, sell: str, amt: float, stop_id: str, spec: dict) -> Optional[dict]:
@@ -1513,16 +1573,38 @@ class WooXProDrill:
         position must close by itself, and the stop must read as fired (its market order's id when WOO X Pro names it).
         Not reached in time: noted (not a failure), and the cycle closes the position itself."""
         c = self.client
+        entry = float(c.position(s)["entryPrice"] or 0)
+        start = self.elapsed()
         last = c.price(s)
+        while entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0 \
+                and self.elapsed() - start < min(PROFIT_WAIT_S, self.trigger_wait_s):
+            self.wait(5.0)
+            if float(c.position(s)["positionAmt"]) == 0:          # the earlier stop fired while waiting: that is the test
+                got = self._until(lambda: (lambda o: o if o.get("algoStatus") in ("TRIGGERED", "CANCELED") else None)(
+                    self._algo_or_empty(stop_id)), tries=10, pause=1.5) or self._algo_or_empty(stop_id)
+                self._step("손절 발동 시험: 가격이 닿자 WOO X Pro가 포지션을 스스로 닫음", got.get("algoStatus") == "TRIGGERED",
+                           {"status": got.get("algoStatus"), "actualOrderId": got.get("actualOrderId")}, fatal=False)
+                return got
+            last = c.price(s)
         level = round_stop(last * (1 - self.side * TRIGGER_GAP), spec["tick"], self.side)
         mv = move_stop(c, s, sell, level, abs(amt), [stop_id], client_id=ext_id(None))
+        profit_side = bool(entry) and self.side * (level - entry) > 0
         if mv["result"] != "moved":
             self._step("손절 발동 시험(진짜로 발동시키기)", True, f"건너뜀: 가격이 이미 손절을 지나 바로 닫혔습니다({mv['result']})",
                        fatal=False)
             return None
+        if profit_side:
+            rest = [x for x in live_stops(c, s) if x["algoId"] == mv["stop"]["algoId"]]
+            self._step("이익 쪽 손절(계단 잠금 자리, 진입가보다 유리한 곳)이 걸림", bool(rest),
+                       {"entry": entry, "stop": level}, fatal=False)
+        else:
+            self._step("이익 쪽 손절(계단 잠금 자리)", True,
+                       f"확인 못 함: {min(PROFIT_WAIT_S, self.trigger_wait_s) / 60:.0f}분 안에 가격이 진입가보다 "
+                       f"{PROFIT_GAP:.1%} 유리하게 가지 않았습니다. 반대 방향(--side short 또는 long)으로 한 번 더 하세요",
+                       fatal=False)
         sid = mv["stop"]["algoId"]
-        start = time.monotonic()
-        while time.monotonic() - start < self.trigger_wait_s:
+        start = self.elapsed()
+        while self.elapsed() - start < self.trigger_wait_s:
             if float(c.position(s)["positionAmt"]) == 0:
                 break
             self.wait(5.0)

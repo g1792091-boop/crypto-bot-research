@@ -72,10 +72,11 @@ def test_signed_requests_and_the_envelope():
 
 def test_error_codes_map_to_the_executor_classes():
     c, fake, clock = make()
-    fake.fail("GET", "/contract/private/get-position-mode", "429")
+    fake.fail("GET", "/contract/private/get-position-mode", "429", times=9)       # past the read retries
     with pytest.raises(RateLimited) as e:
         c.position_mode()
     assert e.value.status == 429
+    fake.fails.clear()
     fake.fail("GET", "/contract/private/get-position-mode", "403")
     with pytest.raises(RateLimited) as e:
         c.position_mode()
@@ -346,9 +347,12 @@ def test_drill_check_and_order_cycle_with_the_trigger_test():
     def wait(s):
         waits.append(s)
         clock.t += int(s * 1000)
-        if len(waits) == 3 and fake.pos[DOGE]:            # the market reaches the trigger-test stop
-            fake.set_price(DOGE, 0.199)
-    d = WX.WooXProDrill(c, symbol=DOGE, keycheck=kc, wait=wait, trigger_wait_s=600)
+        stops = [float(p["trigger_price"]) for p in fake.plans.values()]
+        if fake.pos[DOGE] and len(stops) == 1 and stops[0] < 0.2:
+            fake.set_price(DOGE, 0.2008)                  # the price moves 0.4 % our way: the test stop goes above entry
+        elif fake.pos[DOGE] and len(stops) == 1 and stops[0] > 0.2:
+            fake.set_price(DOGE, 0.2)                     # ... and comes back to it: the stop fires
+    d = WX.WooXProDrill(c, symbol=DOGE, keycheck=kc, wait=wait, trigger_wait_s=600, elapsed=lambda: clock.t / 1000)
     d.check()
     d.order_cycle()
     fails = [r for r in d.log if not r["ok"]]
@@ -356,6 +360,9 @@ def test_drill_check_and_order_cycle_with_the_trigger_test():
     steps = {r["step"]: r for r in d.log}
     fired = next(r for k, r in steps.items() if k.startswith("손절 발동 시험:"))
     assert fired["detail"]["status"] == "TRIGGERED"
+    assert steps["이익 쪽 손절(계단 잠금 자리, 진입가보다 유리한 곳)이 걸림"]["ok"]
+    assert steps["체결 기록에 수수료가 들어 있음(0이면 수수료를 못 읽는 것)"]["ok"]
+    assert steps["펀딩·입출금 기록 읽기(지난 7일)"]["ok"]
     pnl = next(r for k, r in steps.items() if k.startswith("체결로 계산한 손익"))
     assert pnl["detail"]["fee_rate_pct"] == pytest.approx(0.06, abs=1e-3)
     assert fake.pos[DOGE] == 0 and not fake.plans
@@ -365,7 +372,7 @@ def test_drill_stops_when_two_stops_cannot_rest_at_once():
     c, fake, clock = make()
     fake.two_stops = False
     fake.prices[DOGE] = 0.2
-    d = WX.WooXProDrill(c, symbol=DOGE, wait=lambda s: None, trigger_test=False)
+    d = WX.WooXProDrill(c, symbol=DOGE, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000)
     d.check()
     with pytest.raises((AssertionError, TestnetError)):
         d.order_cycle()
@@ -474,3 +481,71 @@ def test_live_site_reads_the_second_slots_exchange_and_database(tmp_path):
     assert LB.paths({**env, "PAPERBOT_LIVE_MEXC_DB": "/x.db"})["mexc_db"] == "/x.db"   # the variable still wins
     configs = {ex: LB.read_config(p[ck]) for ex, _ko, _dk, ck in LB.EXECS}
     assert [ko for _ex, ko, _dk, _ck in LB.slots(configs)] == ["바이비트", "WOO X Pro"]
+
+
+def test_a_read_refused_for_the_rate_is_read_again_but_an_order_never():
+    c, fake, clock = make()
+    pauses = []
+
+    def pause(s):
+        pauses.append(s)
+        clock.t += int(s * 1000)
+    c.sleep = pause
+    fake.fail("GET", "/contract/private/get-position-mode", "429", times=2)
+    assert c.position_mode() == "hedge_mode" and len(pauses) == 2                  # read again after a pause
+    fake.fail("GET", "/contract/private/get-position-mode", "429", times=9)
+    with pytest.raises(RateLimited):
+        c.position_mode()                                                         # at most READ_RETRIES times
+    fake.fails.clear()
+    ready(c, fake)
+    fake.fail("POST", "/contract/private/submit-order", "429")
+    with pytest.raises(TransientError):
+        c.market(BTC, "BUY", 1.0, client_id="pbAentry7")
+    assert sum(1 for x in fake.calls if x[2].endswith("submit-order")) == 1      # an order: never resent here
+
+
+def test_review_fixes_state_sign_trigger_income_and_server_errors():
+    c, fake, _ = make()
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbAs6r6")
+    fake.plans[st["algoId"]]["state"] = 4                    # a finished row still in the list: never a covering stop
+    assert live_stops(c, BTC) == [] and c.algo_order(algo_id=st["algoId"])["algoStatus"] != "NEW"
+    fake.plans[st["algoId"]]["state"] = 1
+    fake.plans[st["algoId"]]["trigger_price"] = ""          # a resting stop without its level: an error, never 0
+    with pytest.raises(TransientError):
+        live_stops(c, BTC)
+    fake.plans[st["algoId"]]["trigger_price"] = "95"
+    # income: rows of other kinds (a server that ignores flow_type) are never booked as transfers or funding
+    fake.flows.append({"symbol": BTC, "type": "Realized PNL", "flow": 1, "amount": "-300", "asset": "USDT",
+                       "account": "futures", "time": str(T0 + 1), "tran_id": "9"})
+    assert c.income(None, None, T0, T0 + 10) == []
+    # a 5xx carrying an unknown code: an unknown outcome, never a refusal
+    real = fake.__call__
+
+    def five(method, url, headers, body):
+        if url.endswith("submit-tp-sl-order") and not getattr(five, "done", False):
+            five.done = True
+            real(method, url, headers, body)
+            return 500, json.dumps({"code": 50000, "message": "Bad Request"}).encode(), {}
+        return real(method, url, headers, body)
+    c.send = five
+    with pytest.raises(TransientError):
+        c.stop_close(BTC, "SELL", 96.0, 5.0, client_id="pbAs7r7")
+    c.send = real
+    fake.fails.clear()
+    # a short read with a negative amount and position_type 2 stays a short
+    c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbAx2")
+    c.market(BTC, "SELL", 2.0, client_id="pbAs8")
+    orig = fake._route
+
+    def neg(m, path, query, body):
+        st_, raw, h = orig(m, path, query, body)
+        if path == "/contract/private/position":
+            d = json.loads(raw)
+            for r in d["data"]:
+                r["current_amount"] = "-" + r["current_amount"]
+            raw = json.dumps(d).encode()
+        return st_, raw, h
+    fake._route = neg
+    assert float(c.position(BTC)["positionAmt"]) == -2.0
