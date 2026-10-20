@@ -1604,7 +1604,7 @@ class WooXProDrill:
         last = c.price(s)
         shown = [0]
         if entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0:
-            self._note(f"이익 쪽 손절 시험: 가격이 진입가보다 {PROFIT_GAP:.1%} 유리해지기를 기다립니다"
+            self._note(f"이익 쪽 손절 시험: 가격이 진입가보다 {PROFIT_GAP * 100:g}% 유리해지기를 기다립니다"
                        f"(최대 {min(PROFIT_WAIT_S, self.trigger_wait_s) / 60:.0f}분). 기다리는 것이 정상입니다: 창을 닫거나 Ctrl+C를 "
                        "누르지 마세요")
         while entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0 \
@@ -1632,7 +1632,7 @@ class WooXProDrill:
         else:
             self._step("이익 쪽 손절(계단 잠금 자리)", True,
                        f"확인 못 함: {min(PROFIT_WAIT_S, self.trigger_wait_s) / 60:.0f}분 안에 가격이 진입가보다 "
-                       f"{PROFIT_GAP:.1%} 유리하게 가지 않았습니다. 반대 방향(--side short 또는 long)으로 한 번 더 하세요",
+                       f"{PROFIT_GAP * 100:g}% 유리하게 가지 않았습니다. 반대 방향(--side short 또는 long)으로 한 번 더 하세요",
                        fatal=False)
         sid = mv["stop"]["algoId"]
         start = self.elapsed()
