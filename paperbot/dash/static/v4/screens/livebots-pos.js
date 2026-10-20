@@ -14,6 +14,9 @@
 //   ladder    every step: the net ROE that arms it → the lock, its price; locked steps lit, the next one outlined
 //   secured   the lock as net ROE and money; 빠른 손절 (the strategy's own reverse signal before the first lock, then off)
 //   gap       the paper-vs-live entry gap of this position (price, seconds)
+//   거래소 기준 (owners 10/20 "거래소 기준으로 익절해야지"): an executor that runs the ladder on its own position
+//             (ladder_from "exchange") shows ITS lock, ITS next step and ITS ladder (its fill, its exchange's prices and
+//             costs), its own best price, and that it stays open after the paper's price exit
 // Data: GET /api/v4/livebots/positions (dash/more/livepos.py; asked every 10 s, the server caches 5 s). HONESTY: no file =
 // 수집 전, unreadable = 못 읽음 + why, a value the records do not have is '—' with the reason; no order buttons.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
@@ -73,7 +76,8 @@ function ladderBox(p) {
   const steps = p.ladder || [];
   if (!steps.length) return h("p", {class: "note"}, "계단 잠금: 설정에 계단이 없어요");
   const from = p.ladder_from === "paper" ? " · 가격은 페이퍼 기준 (이 실행기 손절은 페이퍼 잠금을 따라 진입가 비율로 옮겨요)"
-    : p.ladder_from === "own" ? " · 따라가는 페이퍼 포지션이 없어 이 실행기 진입가로 그린 계단" : "";
+    : p.ladder_from === "own" ? " · 따라가는 페이퍼 포지션이 없어 이 실행기 진입가로 그린 계단"
+    : p.ladder_from === "exchange" ? ` · 거래소 기준: 이 실행기 체결가 · 이 거래소 가격 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)${p.basis === "gross" ? " · 계단 숫자는 화면 ROE (수수료 전)" : ""}` : "";
   return h("div", {class: "lbp-lad"},
     h("div", {class: "lbp-ladk"}, h("b", null, "계단 익절"), h("small", {class: "muted"}, `순ROE가 닿으면 → 그 잠금으로 손절을 올려요${from}`)),
     h("ol", {class: "lbp-steps"}, steps.map((s) => h("li", {class: ["lbp-step", s.state], title: `${s.n}단: 최고 순ROE ${fmt.pct(s.at, 0, false)} (${fmt.price(s.price)})에 닿으면 순ROE ${fmt.pct(s.lock, 0, false)} 잠금 (${fmt.price(s.lock_price)})`},
@@ -86,6 +90,8 @@ export function posCard(c) {
   const name = (c.label_ko || "").split(" (")[0] || NAME[c.id] || c.name_ko || c.id;     // two paper bots: "페이퍼 −35%"
   const tag = c.id === "flip" ? h("span", {class: "lb-acct lb-a-flip", title: c.note_ko || ""}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name) : acctTag(c.id);
   const kindPill = c.kind === "live" ? ui.pill("진짜 돈", "warn") : c.id === "flip" ? ui.pill("", "ref") : ui.pill("모의", "thin");     // ("ref" prints 참고 itself)
+  // owners 10/20 "거래소 기준으로 익절해야지": an executor that locks on its own position says so on its card
+  const basisPill = c.position && c.position.ladder_from === "exchange" ? ui.pill(c.position.basis_ko || "거래소 기준", "accent", c.position.ladder_ko || "") : null;
   // two paper bots: the executor's card names the paper bot it follows (its ladder and stop are that bot's)
   const follows = c.kind === "live" && c.follows_ko ? h("small", {class: "muted"}, `따라감 · ${c.follows_ko}`) : null;
   if (c.state !== "ok") {
@@ -115,13 +121,14 @@ export function posCard(c) {
   const markEl = h("span", {class: "num"}, "—");
   const dStopEl = h("small", {class: "num muted"}), dTpEl = h("small", {class: "num muted"}), dLiqEl = h("small", {class: "num muted"});
   const nx = p.next;
-  const stopK = p.locked ? "잠금선 (손절이 올라간 자리)" : "손절가";
+  const own = p.ladder_from === "exchange";
+  const stopK = p.locked ? (own && p.lock_roe != null ? `잠금선 (거래소 기준 ${p.basis === "gross" ? "화면 " : ""}+${fmt.pct(p.lock_roe, 0, false)} 잠금)` : "잠금선 (손절이 올라간 자리)") : "손절가";
   const stopV = h("span", null, h("b", {class: ["num", p.locked ? "up" : "down"]}, fmt.price(p.stop)), " ", dStopEl,
     p.locked && p.stop_initial ? h("small", {class: "muted"}, ` · 처음 손절 ${fmt.price(p.stop_initial)}`) : null,
     !p.locked && p.stop50 && p.stop_rule_cfg ? h("small", {class: "muted", title: "설정의 손절: 수수료·슬리피지 포함 순ROE"},
       ` · 설정 −${fmt.pct(p.stop_rule_cfg.roe, 0, false)}${p.stop_rule_cfg.net ? " 순ROE" : ""} 자리 ${fmt.price(p.stop50)}`) : null);
   const tpV = nx && nx.price ? h("span", null, h("b", {class: "num up"}, fmt.price(nx.price)), " ", dTpEl,
-    h("small", {class: "muted"}, ` · 순ROE ${fmt.pct(nx.at, 0, false)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금 (손절 → ${fmt.price(nx.lock_price)})${nx.from === "paper" && live ? " · 페이퍼 기준" : ""}`))
+    h("small", {class: "muted"}, ` · 순ROE ${fmt.pct(nx.at, 0, false)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금 (손절 → ${fmt.price(nx.lock_price)})${nx.from === "paper" && live ? " · 페이퍼 기준" : nx.from === "exchange" ? " · 거래소 기준 (자기 체결가)" : ""}`))
     : ui.notYet("—", "다음 잠금 자리를 계산하지 못했어요 (설정에 계단이 없거나 포지션 기록이 모자라요)");
   const liqV = p.liq ? h("span", null, h("b", {class: "num down"}, fmt.price(p.liq)), " ", dLiqEl) : h("span", {class: "muted"}, p.liq_ko || "—");
   const held = p.entry_time ? fmt.dur((serverNow() - p.entry_time) / 1000) : null;
@@ -140,10 +147,14 @@ export function posCard(c) {
     h("div", {class: "lbp-mtrack"}, mEntry, mNow), meterNote);
   const secured = p.secured ? h("p", {class: "lbp-sec"}, h("b", {class: "up"}, "확보한 수익 "),
     h("b", {class: "num up"}, `순ROE ${pctOr(p.secured.roe)}`), p.secured.usd != null ? h("span", {class: "num"}, ` · ${live ? fmt.usd(p.secured.usd) : `${fmt.money(p.secured.usd, true)} USDT`}`) : null,
-    h("small", {class: "muted"}, live ? " (지금 손절선에서 닫히면 · 페이퍼 비용 가정)" : " (잠금선에서 닫혀도 남는 순이익)"))
+    h("small", {class: "muted"}, own ? " (지금 손절선에서 닫히면 · 거래소 비용 기준)" : live ? " (지금 손절선에서 닫히면 · 페이퍼 비용 가정)" : " (잠금선에서 닫혀도 남는 순이익)"))
     : h("p", {class: "lbp-sec"}, h("b", null, "확보한 수익 "), h("span", {class: "muted"}, "아직 없음 · 첫 잠금 전"),
       nx && nx.price ? h("small", {class: "muted"}, ` (순ROE ${fmt.pct(nx.at, 0, false)} · ${fmt.price(nx.price)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금)`) : null);
   const fast = p.fast ? h("p", {class: ["lbp-fast", p.fast.state]}, h("b", null, "빠른 손절 "), p.fast.ko) : null;
+  // 거래소 기준: its own best price so far (its own exchange's 1m candles) and, after the paper's price exit, that it stays
+  const ownBest = own && p.own_best && p.own_best.price ? h("p", {class: "note"}, `거래소 기준 최고 ${p.basis === "gross" ? "화면 ROE" : "순ROE"} ${pctOr(p.own_best.roe)} (${fmt.price(p.own_best.price)}, `,
+    p.own_best.src === "last" ? "1분봉을 못 읽어 지금 가격" : "이 거래소 1분봉", ")") : null;
+  const staying = own && p.staying ? h("p", {class: "note"}, p.staying.ko) : null;
   const gaps = live ? [] : (p.execs || []).filter((x) => x.state === "following");
   const gapEl = live
     ? h("p", {class: "note lbp-gap"}, p.gap ? ["페이퍼 진입 ", h("b", {class: "num"}, fmt.price(p.gap.paper_entry)), " → 이 실행기 ", h("b", {class: "num"}, fmt.price(p.gap.live_entry)),
@@ -157,13 +168,13 @@ export function posCard(c) {
       : null;
   const capText = live ? ui.ASSUME_LIVE_KO : ui.ASSUME_OPEN_KO;
   const el = ui.card({cls: `lbp-card ${live ? "live" : c.id}`},
-    h("div", {class: "lbp-top"}, tag, kindPill, follows, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
+    h("div", {class: "lbp-top"}, tag, kindPill, basisPill, follows, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
       ui.sideTag(p.side), h("span", {class: "muted"}, `격리 ${fmt.lev(p.leverage)}`), grp, p.status === "entering" ? ui.pill("진입 확인 중", "warn") : null),
     h("p", {class: "lbp-strat"}, stratLine, st && st.no_chase ? h("small", {class: "muted"}, " · 추격 진입 막기") : null),
     h("div", {class: "pnl lbp-led"},
       h("div", null, h("span", {class: "k"}, "미실현 손익", live ? " ($)" : " (USDT)", " ", ui.infoTip(`${capText} · 마크 = 바이낸스 가격 (거래소 가격과 조금 다를 수 있어요)`, "미실현 손익")), uEl),
       h("div", {class: "r"}, h("span", {class: "k"}, "순ROE", " ", ui.infoTip(live ? `${p.cost_ko || "페이퍼 비용 가정"} · 레버리지 x (가격 변화 − 왕복 비용)` : "레버리지 x (가격 변화 − 왕복 수수료·슬리피지 − 낸 펀딩) · 계단 잠금과 같은 식", "순ROE")), rEl)),
-    ui.kv(pairs), meter, excursionBox(p.excursion), secured, ladderBox(p), fast, gapEl,
+    ui.kv(pairs), meter, excursionBox(p.excursion), ownBest, secured, ladderBox(p), fast, staying, gapEl,
     c.note_ko ? h("p", {class: "note"}, c.note_ko) : null);
   el.update = (mark) => {
     const m = atMark(p, mark);

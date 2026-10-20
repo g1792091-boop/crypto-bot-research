@@ -18,6 +18,8 @@ Failures are injected per request with ``fail(method, path, kind, ...)``:
 After every request the fake records, per open position, whether a live stop covers it
 (``timeline``), so tests can assert a position was never left unprotected.
 
+1m klines of the last price (GET /fapi/v1/klines) are built from every ``set_price`` (``ticks``) and the price now.
+
 Also: account fills (GET /fapi/v1/userTrades, with realizedPnl and commission), funding (``add_funding``,
 GET /fapi/v1/income), other income and wallet transfers (``add_income``, ``add_transfer``), fees paid in another
 asset (``fee_asset``, e.g. "BNB", valued at ``last["BNBUSDT"]``), other assets in the futures wallet
@@ -71,6 +73,7 @@ class FakeFutures:
         self.weight = 0
         self.fee_asset = "USDT"    # "BNB": fees are charged in BNB (BNB fee discount), not from the USDT wallet
         self.other_assets = {}     # asset -> balance shown in GET /fapi/v2/account "assets" besides USDT
+        self.ticks = []            # (exchange ms, symbol, last price) of every set_price: the 1m klines are built from them
 
     # ------------------------------------------------------------ test controls
     def fail(self, method, path, kind, times=1, extra=None):
@@ -93,8 +96,22 @@ class FakeFutures:
 
     def set_price(self, symbol, price):
         self.last[symbol] = price
+        self.ticks.append((self.clock(), symbol, price))
         self._trigger(symbol)
         self._snap("PRICE", symbol)
+
+    def klines(self, symbol, lo, hi):
+        """1m candles [open ms, high, low, close] of the last price opened in [lo, hi]: every set_price, and the price
+        now in the minute now (a minute without a trade has no candle)."""
+        ticks = sorted([(t, p) for t, s, p in self.ticks if s == symbol] + [(self.clock(), self.last[symbol])],
+                       key=lambda x: x[0])
+        bars = {}
+        for t, p in ticks:
+            m = t - t % 60_000
+            if lo <= m <= hi:
+                b = bars.setdefault(m, [m, p, p, p, p])
+                b[2], b[3], b[4] = max(b[2], p), min(b[3], p), p
+        return [bars[m] for m in sorted(bars)]
 
     def live_stops(self, symbol=None):
         return [o for o in self.algos.values() if o["algoStatus"] == "NEW"
@@ -124,7 +141,8 @@ class FakeFutures:
         assert u.hostname in self.hosts, u.hostname
         assert (u.hostname == "api.binance.com") == u.path.startswith("/sapi/"), (u.hostname, u.path)
         q = dict(urllib.parse.parse_qsl(u.query if body is None else body.decode()))
-        public = u.path in ("/fapi/v1/exchangeInfo", "/fapi/v1/premiumIndex", "/fapi/v1/ticker/price", "/fapi/v1/time")
+        public = u.path in ("/fapi/v1/exchangeInfo", "/fapi/v1/premiumIndex", "/fapi/v1/ticker/price", "/fapi/v1/time",
+                            "/fapi/v1/klines")
         if not public:
             assert "signature" in q and headers["X-MBX-APIKEY"] == self.api_key
         q.pop("signature", None)
@@ -253,6 +271,11 @@ class FakeFutures:
             return ok({"symbol": q["symbol"], "markPrice": str(self.last[q["symbol"]])})
         if path == "/fapi/v1/ticker/price":
             return ok({"symbol": q["symbol"], "price": str(self.last[q["symbol"]])})
+        if path == "/fapi/v1/klines":
+            assert q["interval"] == "1m" and int(q["limit"]) <= 1500, q
+            rows = self.klines(q["symbol"], int(q["startTime"]), int(q["endTime"]))[:int(q["limit"])]
+            return ok([[m, str(o), str(h), str(lo), str(c), "1", m + 59_999, "1", 1, "0", "0", "0"]
+                       for m, o, h, lo, c in rows])
         if path == "/fapi/v1/positionSide/dual":
             if not self.dual:
                 return self.err(-4059, "No need to change position side.")

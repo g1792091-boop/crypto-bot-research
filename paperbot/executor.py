@@ -27,6 +27,16 @@ What it does (docs/live-safety.md explains it for the owners):
 - paper lock step  -> moves the stop: new stop -> confirmed -> old stop cancelled
                       (-2021 "would immediately trigger" -> reduce-only market close);
 - paper exit       -> reduce-only market close, every order cancelled, flat checked.
+  with ``ladder_from: "own"`` (owners 10-20, "거래소 기준으로 익절해야지") the take-profit ladder is judged on the
+  executor's OWN position: its fill, its own exchange's 1m candles (last price, read since the last check so a spike
+  between loops counts), its own exchange's costs (``net_costs``; ``"ladder_basis": "gross"``: the exchange screen's
+  ROE before fees instead) and the paper bot's ladder (``ladder``); it moves
+  its exchange stop itself (only ever tighter) and ignores the paper's lock steps. A paper exit at a price level of the
+  paper's own prices (SL, LOCK, TP, LIQ) leaves the live position on its own stop and ladder; the fast stop (REV, a
+  reverse signal) is followed only while the live position has no lock of its own; every other paper exit (HALT,
+  MANUAL) is followed. A new paper entry while the live position still stays open is NOT followed (recorded as a
+  missed signal, never closes the live position); once it closed on its own, fresh paper entries are followed as
+  before. The entry and its first stop (``stop_from``) are unchanged.
 
 Every loop, before following the paper account, it reconciles the exchange with its own state:
 an unknown position is closed and alerted; a position without a stop gets one at once (or is
@@ -77,6 +87,8 @@ from . import livepnl as P
 from . import mexc as MX
 from . import risk as R
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
+from .ladder import net_roe, roe_price
+from .ladder2 import ComboLadder
 from .mainnet import (MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE, KeyCheckClient, MainnetClient,
                       Refused, check_assets, online_gates, read_env_file, trading_keys)
 from .margin import Brackets
@@ -92,6 +104,28 @@ TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
 EXCHANGES = ("binance", "bybit", "mexc")
+# owners 10-20 ("거래소 기준으로 익절해야지"): "paper" = the exchange stop follows the paper's lock steps (as before);
+# "own" = the executor runs the take-profit ladder on its OWN position: its fill, its own exchange's prices, its own costs
+LADDER_FROM = ("paper", "own")
+# the scale the "own" ladder is judged on (owners 10-20): "net" = net ROE after the round-trip cost (the paper's
+# definition, paperbot/ladder.py net_roe); "gross" = the ROE the exchange screen shows, before fees (no cost term)
+LADDER_BASES = ("net", "gross")
+LADDER_KEYS = ("first_lock", "trigger_gap", "step", "next_trigger", "next_gap")
+COST_KEYS = ("taker_fee", "slippage")
+# the net ROE of the "own" ladder: each exchange's taker fee per side plus slippage per side (a config's ``net_costs``
+# replaces one); Bybit's taker 0.055 %, MEXC's API taker 0.08 % (owners 10-20), Binance's VIP0 0.05 %
+NET_COSTS = {"binance": {"taker_fee": 0.0005, "slippage": 0.0002}, "bybit": {"taker_fee": 0.00055, "slippage": 0.0002},
+             "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}}
+EX_KO = {"binance": "바이낸스", "bybit": "바이비트", "mexc": "MEXC"}
+# what closed the paper position (paperbot/engine.py, combo.py exit reasons) and what "own" does with it
+PRICE_EXITS = ("SL", "LOCK", "TP", "LIQ")       # a price level on the paper's prices: the live position stays on its own
+PAPER_EXIT_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "REV": "빠른 청산(반대 신호)",
+                 "HALT": "멈춤 청산", "MANUAL": "수동 청산"}
+OWN_EXIT_WAIT_S = 30.0                    # "own": the paper position is gone but its trade record is not readable yet
+OWN_PAGE_MIN = 500                        # "own": 1m candles per request (every exchange answers at least this many)
+OWN_LOOKBACK_MS = 3 * 86_400_000          # "own": candles read back at most this far (a longer gap: from there on)
+MIN_MS = 60_000
+OWN_STALE_MS = 2 * MIN_MS                 # "own": a candle answer whose newest minute opened longer ago is not a read
 # reconcile emergencies: counted with the unplanned halts by stage-check
 EMERGENCY_KINDS = ("unknown_position", "wrong_side", "protect_failed", "not_flat", "no_stop", "oversize")
 # income types that move money in or out of the futures wallet (not trading P&L)
@@ -143,6 +177,12 @@ class ExecConfig:
     mexc_market_type: int = 5            # mexc: market order type 5 (market) or 6 (market converted to the price)
     signal_light_n: int = 0              # 신호등 (owners 10-19): a new entry is followed only while the paper account's
     signal_light_min_win: float = 0.85   # last N closed trades won at least this share; the paper keeps trading. 0 = off
+    ladder_from: str = "paper"           # "paper": the stop follows the paper's lock steps; "own" (owners 10-20): the
+                                         # executor's own ladder on its own fill, its exchange's prices and costs
+    ladder: Optional[dict] = None        # "own": the paper bot's ladder (first_lock, trigger_gap, step, next_trigger,
+                                         # next_gap: paperbot/ladder2.py ComboLadder)
+    net_costs: Optional[dict] = None     # "own": {exchange: {"taker_fee": per side, "slippage": per side}} (NET_COSTS)
+    ladder_basis: str = "net"            # "own": "net" (after the round-trip cost) or "gross" (the exchange screen's ROE)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -196,7 +236,70 @@ class ExecConfig:
             out.append(f"비상 정지 파일 {self.risk.kill_file}은 실행기 DB가 있는 폴더나 그 위 폴더에 둡니다"
                        "(예: /var/lib/paperbot/STOP). /tmp·/home 같은 곳은 서비스 안에서 보이지 않아 "
                        "파일을 만들어도 멈추지 않습니다")
+        if self.ladder_from not in LADDER_FROM:
+            out.append("ladder_from은 \"paper\"(페이퍼 잠금 따라가기) 또는 \"own\"(거래소 기준 익절)입니다")
+        if self.ladder_basis not in LADDER_BASES:
+            out.append("ladder_basis는 \"net\"(수수료·슬리피지 뺀 순ROE) 또는 \"gross\"(거래소 화면 ROE, 수수료 전)입니다")
+        out += self._ladder_problems() + self._cost_problems()
         return out + self.risk.problems()
+
+    def _ladder_problems(self) -> list:
+        if self.ladder is None:
+            return ["ladder_from \"own\"(거래소 기준 익절)은 ladder(계단: first_lock, trigger_gap, step, next_trigger, "
+                    "next_gap)가 있어야 합니다"] if self.ladder_from == "own" else []
+        if not isinstance(self.ladder, dict):
+            return ["ladder는 {first_lock, trigger_gap, step, next_trigger, next_gap} 묶음입니다"]
+        out = []
+        extra = sorted(set(self.ladder) - set(LADDER_KEYS))
+        if extra:
+            out.append(f"ladder에 모르는 항목: {', '.join(extra)}")
+        for k in LADDER_KEYS:
+            v = self.ladder.get(k)
+            if k in ("next_trigger", "next_gap") and v is None:
+                continue
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                out.append(f"ladder의 {k}는 숫자(비율, 예: 0.10)입니다")
+        if out:
+            return out
+        return ComboLadder.of(self.ladder).problems()
+
+    def _cost_problems(self) -> list:
+        if self.net_costs is None:
+            return []
+        if not isinstance(self.net_costs, dict):
+            return ["net_costs는 {거래소: {taker_fee, slippage}} 묶음입니다"]
+        out = []
+        for ex, c in self.net_costs.items():
+            if ex not in EXCHANGES:
+                out.append(f"net_costs의 거래소 {ex!r}: \"binance\", \"bybit\", \"mexc\"만 있습니다")
+            elif not isinstance(c, dict) or set(c) != set(COST_KEYS) or any(
+                    isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 0.005 for v in c.values()):
+                out.append(f"net_costs의 {ex}: taker_fee와 slippage(한쪽, 0~0.005 사이 비율, 예: 0.00055)만 적습니다")
+        return out
+
+    def ladder_spec(self) -> Optional[ComboLadder]:
+        """The "own" ladder (paperbot/ladder2.py), None without a valid one."""
+        if self._ladder_problems() or not isinstance(self.ladder, dict):
+            return None
+        return ComboLadder.of(self.ladder)
+
+    def net_cost(self) -> Optional[dict]:
+        """{"taker_fee", "slippage"} per side for this executor's exchange: its ``net_costs`` entry, else NET_COSTS."""
+        got = self.net_costs.get(self.exchange) if isinstance(self.net_costs, dict) else None
+        if isinstance(got, dict) and set(got) == set(COST_KEYS):
+            return {k: float(got[k]) for k in COST_KEYS}
+        base = NET_COSTS.get(self.exchange)
+        return dict(base) if base is not None else None
+
+    def own_round_trip(self) -> Optional[float]:
+        """This exchange's round trip: taker fee and slippage on both sides (paperbot/ladder.py net_roe)."""
+        c = self.net_cost()
+        return None if c is None else 2 * (c["taker_fee"] + c["slippage"])
+
+    def ladder_round_trip(self) -> Optional[float]:
+        """The round trip the "own" ladder is judged with: the exchange's ("net") or none ("gross": the screen's ROE,
+        lock price = entry x (1 + side x lock / leverage))."""
+        return 0.0 if self.ladder_basis == "gross" else self.own_round_trip()
 
 
 def _kill_file_visible(kill_file: str, db: str) -> bool:
@@ -284,6 +387,26 @@ class Paper3Source:
                       side=int(p["side"]), qty=float(p["qty"]), leverage=int(p["leverage"]),
                       stop=float(p["stop_price"]), entry_price=float(p["entry_price"]),
                       entry_time=int(p["entry_time"])), ts
+
+    def exit_of(self, key: str) -> Optional[dict]:
+        """The paper's closed trade of the position ``key`` (account|symbol|entry ms): {reason (paperbot/engine.py
+        exit_reason: SL, LOCK, TP, LIQ, REV, HALT, MANUAL), exit_time, exit_price}; None when paper3.db has no such trade
+        (yet). "own" reads it to tell a price exit from the others."""
+        acct, sym, et = key.rsplit("|", 2)
+        conn = _ro(self.path)
+        try:
+            row = conn.execute("SELECT exit_reason, exit_time, data FROM trades WHERE account_id = ? AND symbol = ? "
+                               "AND entry_time = ? ORDER BY id DESC LIMIT 1", (acct, sym, int(et))).fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            return None
+        try:
+            data = json.loads(row[2] or "{}")
+        except (TypeError, ValueError):
+            data = {}
+        return {"reason": row[0], "exit_time": int(row[1]), "exit_price": data.get("exit_price"),
+                "lock_roe": data.get("lock_roe")}
 
     def recent(self, n: int) -> list[float]:
         """P&L of the account's last ``n`` closed paper trades, newest first (the 신호등 reads it)."""
@@ -677,6 +800,9 @@ class Guarded:
     def price(self, symbol):
         return self._retry("price", self.c.price, symbol)
 
+    def klines(self, symbol, start_ms, end_ms):
+        return self._retry("klines", self.c.klines, symbol, start_ms, end_ms)
+
     def account(self):
         return self._retry("account", self.c.account)
 
@@ -867,6 +993,13 @@ class Executor:
         self.held: Optional[list] = None        # alerts raised during protective work: sent when it is done
         self.gates_failed = False               # mainnet gates failed at the start with a position open (halted)
         self.pnl_alerted: set = set()           # trades whose fills disagreed with the exchange's P&L record (alerted)
+        # "own" (owners 10-20, "거래소 기준으로 익절해야지"): the take-profit ladder on this executor's own position
+        self.own = cfg.ladder_from == "own"
+        self.ladder = cfg.ladder_spec() if self.own else None
+        self.own_cost = cfg.net_cost() if self.own else None
+        self.own_cost_rt = cfg.own_round_trip() if self.own else None      # the exchange's round trip (the records)
+        self.own_rt = cfg.ladder_round_trip() if self.own else None        # the ladder's: 0 on the "gross" basis
+        self.own_fails = 0                      # 1m candle reads that failed in a row (the last price stood in)
 
     # ------------------------------------------------------------ records
     def _audit(self, a: dict) -> None:
@@ -1003,11 +1136,17 @@ class Executor:
         # a record only (no order depends on it): which paper database this start follows, so the live checks and the
         # 실거래 site can pair each live trade with the paper bot it really followed when an executor's paper_db is
         # switched (owners 10-19: MEXC follows the -35 % paper bot, docs/live15-mexc-ko.md)
+        own = {}
+        if self.own:                             # a record of the rule it runs (the dashboard and the checks read it)
+            own = {"ladder_from": "own", "ladder": dict(self.cfg.ladder or {}), "ladder_basis": self.cfg.ladder_basis,
+                   "net_cost": self.own_cost, "round_trip": self.own_cost_rt, "ladder_round_trip": self.own_rt}
         self._event(INFO, "start", f"시작: paper 계좌 {self.cfg.account} 따라 하기 (페이퍼 DB {self.cfg.paper_db}), "
                     f"{self.cfg.mode}, 진입 {'신호 즉시' if self.signals is not None else 'paper 포지션'}, "
-                    f"비상 정지 파일 {os.path.abspath(self.cfg.risk.kill_file)}",
+                    f"비상 정지 파일 {os.path.abspath(self.cfg.risk.kill_file)}"
+                    + (f", 익절 거래소 기준({own_ladder_text(self.ladder, self.cfg.ladder_basis)}"
+                       + f"; 비용 {own_cost_text(self.cfg)})" if self.own else ""),
                     {"halted": self.risk.halted, "trade": self.trade, "kill_file": self.cfg.risk.kill_file,
-                     "paper_db": self.cfg.paper_db})
+                     "paper_db": self.cfg.paper_db, **own})
         if self.risk.halted:
             self._event(WARN, "halted", f"멈춤 상태로 시작합니다(사람이 풀어야 함): {self.risk.halt_reason}")
         self._save()
@@ -1172,7 +1311,8 @@ class Executor:
         2. deposits/withdrawals, then account -> daily loss, drawdown, loss streak (transfers taken out) -> close
            everything (a new halt is saved at once);
         3. stops -> reconcile, each symbol on its own (one stuck symbol never blocks the others or the limits);
-        4. limits again (a stop-out booked by the reconcile can complete a loss streak), then follow the paper.
+        4. limits again (a stop-out booked by the reconcile can complete a loss streak), then ("own") the executor's own
+           ladder on its own prices, then follow the paper.
         A failed reconcile action is re-raised at the end (loop_error) after everything else has run."""
         self.loops += 1
         now = self.now_ms()
@@ -1213,6 +1353,8 @@ class Executor:
             self.new_signals = []
         else:
             self._poll_signals()
+            if self.own:                         # its own prices and ladder: before (and without) the paper
+                self._isolated(failed, "거래소 기준 잠금", self._own_ladder)
             try:
                 intent, paper_ts = self.source.read()
             except Refused as e:                 # the account is gone from paper3.db (replaced or restored db)
@@ -1702,6 +1844,218 @@ class Executor:
         return Intent(key=key, symbol=sym, side=side, qty=dec.qty, leverage=dec.leverage, stop=stop,
                       entry_price=fill, entry_time=bar, direct=True, signal_ref=ref, signal_ready=ready)
 
+    # ------------------------------------------------------------ "own": the ladder on this executor's own position
+    def _own_state(self, t: dict, fill_ms: Optional[int] = None) -> dict:
+        """The trade's own-ladder record, saved with the trade (a restart keeps it): its fill time on the exchange's
+        clock, the minute its candles were read up to, the best price since the fill, the lock reached, the costs and
+        the ladder it is judged with. Made at the fill (``fill_ms``); for an adopted entry, from the entry's send time."""
+        o = t.get("own")
+        if isinstance(o, dict) and o.get("fill_ms") is not None:
+            return o
+        if fill_ms is None:
+            fill_ms = int(t.get("entry_ts") or self.now_ms()) + int(getattr(self.raw, "offset_ms", 0) or 0)
+        o = {"fill_ms": int(fill_ms), "read_min": int(fill_ms) - int(fill_ms) % MIN_MS, "best": float(t["entry_price"]),
+             "best_roe": None, "lock": None, "lock_price": None, "src": None, "rt": self.own_rt, "cost": self.own_cost,
+             "cost_rt": self.own_cost_rt, "basis": self.cfg.ladder_basis, "exchange": self.cfg.exchange,
+             "ladder": dict(self.cfg.ladder or {})}
+        t["own"] = o
+        return o
+
+    def _own_ladder(self) -> None:
+        """"own" (owners 10-20, "거래소 기준으로 익절해야지"): the take-profit ladder on this executor's OWN position.
+
+        Its best price comes from its own exchange's 1m candles of the last price (what its stop triggers on) since its
+        own fill, so a spike between two loops is not missed (_own_best). Its net ROE is paperbot/ladder.py ``net_roe``
+        on its own fill, its leverage and its exchange's costs (``net_costs``; funding is not counted); on the "gross"
+        basis (``ladder_basis``) the same with no cost term: the ROE the exchange screen shows. When the ladder
+        (paperbot/ladder2.py ``lock_for``) arms a lock above the one reached, the exchange stop moves to that lock's price
+        (``roe_price``, rounded to the tick on the tight side); a stop that is already tighter stays: only ever tightened.
+        A lock counts as reached only once the exchange stop is there: a move that failed is tried again next loop. The
+        paper's lock steps are not followed (_follow)."""
+        t = self.trade
+        if t is None or t.get("status") != "open" or self.ladder is None or self.own_rt is None:
+            return
+        try:
+            entry, side, lev = float(t.get("entry_price") or 0), int(t["side"]), float(t.get("leverage") or 0)
+        except (TypeError, ValueError):
+            return
+        if entry <= 0 or lev <= 0:
+            return
+        o = self._own_state(t)
+        rt = float(o.get("rt") if o.get("rt") is not None else self.own_rt)
+        best, last = self._own_best(t, o, side)
+        o["best"], o["best_roe"] = best, net_roe(side, entry, best, lev, rt)
+        want = self.ladder.lock_for(o["best_roe"])
+        cur = o.get("lock")
+        if want is not None and (cur is None or want > float(cur) + 1e-12):
+            self._own_lock(t, o, want, entry, side, lev, rt, last)
+        if self.trade is t:
+            tick = self._spec(t["symbol"])["tick"]
+            nl, at = self.ladder.next_after(o.get("lock"))
+            o["next"] = {"lock": nl, "at": at, "price": roe_price(side, entry, lev, at, rt),
+                         "lock_price": round_stop(roe_price(side, entry, lev, nl, rt), tick, side)}
+
+    def _own_best(self, t: dict, o: dict, side: int) -> tuple[float, Optional[float]]:
+        """(the best price since the fill, the newest price seen). Read from the newest minute already read on (that
+        minute again: it may have been forming): each later minute's high (a long) or low (a short); the fill's own minute
+        only its close, at every loop (its high or low may come from before the fill). Candles that cannot be read, or an
+        answer without a minute since the fill opened within OWN_STALE_MS (empty, or old minutes only): the last price
+        stands in for this loop and the same minutes are read again next time (nothing is skipped)."""
+        sym = t["symbol"]
+        best = float(o.get("best") or t["entry_price"])
+        fill_min = int(o["fill_ms"]) - int(o["fill_ms"]) % MIN_MS
+        now = self._server_ms()
+        start = max(int(o.get("read_min") or fill_min), fill_min)
+        oldest = now - OWN_LOOKBACK_MS
+        if start < oldest:
+            start = oldest - oldest % MIN_MS
+            self._event(WARN, "own_prices", f"{sym} 거래소 1분봉을 {OWN_LOOKBACK_MS // 86_400_000}일 전부터만 읽습니다"
+                        "(실행기가 오래 꺼져 있었음). 그 앞의 최고가는 저장된 값을 씁니다", {"key": t["key"]}, notify=False)
+        try:
+            bars = [b for b in self._own_klines(sym, start, now) if b[0] >= fill_min]
+            if not bars or bars[-1][0] < now - OWN_STALE_MS:
+                # an answer without this position's recent minutes (an empty list, a time unit read otherwise, a feed
+                # that stopped) is never "the price did not move": the last price stands in, the minutes are read again
+                raise ValueError("1분봉 응답에 체결 뒤의 최근 분이 없습니다"
+                                 + (f"(마지막 분 {bars[-1][0]})" if bars else "(빈 목록)"))
+        except RateLimited:
+            raise
+        except (TestnetError, ValueError, TypeError, IndexError) as e:      # unreadable or garbled: the last price
+            self.own_fails += 1
+            try:
+                px: Optional[float] = float(self.c.price(sym))
+            except RateLimited:
+                raise
+            except TestnetError:
+                px = None
+            if px:
+                best = max(best, px) if side > 0 else min(best, px)
+                o["src"] = "last"
+            self._event(WARN, "own_prices", f"{sym} 거래소 1분봉을 못 읽어 이번에는 지금 가격"
+                        + (f" {px:g}" if px else "(못 읽음)") + f"만 봅니다. 못 읽은 분은 다음에 다시 읽습니다: {e}",
+                        {"key": t["key"], "fails": self.own_fails},
+                        notify=self.own_fails in (1, 10, 100) or self.own_fails % 1000 == 0)
+            return best, px
+        if self.own_fails:
+            self._event(INFO, "own_prices", f"{sym} 거래소 1분봉을 다시 읽습니다(못 읽은 동안의 분도 다시 봄)",
+                        {"key": t["key"]}, notify=False)
+        self.own_fails = 0
+        newest, last = None, None
+        for ot, hi, lo, close in bars:
+            px = close if ot == fill_min else (hi if side > 0 else lo)
+            best = max(best, px) if side > 0 else min(best, px)
+            newest, last = ot, close
+        if newest is not None:
+            o["read_min"] = max(int(o.get("read_min") or 0), int(newest))
+        o["src"] = "kline"
+        return best, last
+
+    def _own_klines(self, symbol: str, start: int, end: int) -> list:
+        """The exchange's 1m candles opened in [start, end], OWN_PAGE_MIN minutes per request, each minute once."""
+        out, lo = [], start - start % MIN_MS
+        while lo <= end:
+            hi = min(end, lo + OWN_PAGE_MIN * MIN_MS - 1)
+            out += self.c.klines(symbol, lo, hi)
+            lo = hi + 1
+        return sorted(set(out))
+
+    def _own_lock(self, t: dict, o: dict, want: float, entry: float, side: int, lev: float, rt: float,
+                  last: Optional[float]) -> None:
+        sym = t["symbol"]
+        tick = self._spec(sym)["tick"]
+        target = round_stop(roe_price(side, entry, lev, want, rt), tick, side)
+        old = float(t["stop"])
+        gross = o.get("basis") == "gross"
+        word = f"거래소 기준 잠금 {'화면 ' if gross else ''}+{want:.0%}"
+        roe_word = "화면 ROE" if gross else "순ROE"
+        data = {"key": t["key"], "lock": want, "target": target, "entry": entry, "best": o["best"],
+                "best_roe": o["best_roe"], "src": o.get("src"), "round_trip": rt, "leverage": lev, "old": old,
+                "basis": "gross" if gross else "net"}
+        if (target - old) * side > tick / 2:
+            self._move(t, target, [s["algoId"] for s in live_stops(self.c, sym)], word, ref=last)
+            if self.trade is not t:
+                # -2021: the price was already past the lock: closed with a reduce-only market order (_after_move)
+                self._event(INFO, "own_lock", f"{sym} {word}: 가격이 이미 잠금 자리 {target:g}을 지나 시장가로 "
+                            "닫았습니다 (자기 체결가 기준)", {**data, "stop": target, "closed": True})
+                return
+            if (float(t["stop"]) - target) * side < -tick / 2:
+                return                       # not moved (move_failed recorded): the old stop stays, tried again next loop
+        o["lock"], o["lock_price"], o["lock_ts"] = want, float(t["stop"]), self._server_ms()
+        self._event(INFO, "own_lock", f"{sym} {word} (자기 체결가 기준): 체결 {entry:g}, 거래소 "
+                    f"{'최고' if side > 0 else '최저'} {o['best']:g} ({roe_word} {o['best_roe']:+.1%}) → 손절 {old:g} → "
+                    f"{float(t['stop']):g}",
+                    {**data, "stop": float(t["stop"]), "closed": False})
+        self._save(strict=False)
+
+    def _own_exit_why(self, t: dict, intent: Optional[Intent]) -> Optional[str]:
+        """"own": the paper position ``t`` follows is gone. The close reason when the live position follows the paper
+        out, None when it stays on its own exchange stop and ladder:
+        - the paper's exit was a price level on its own prices (SL, LOCK, TP, LIQ): stays;
+        - REV (the fast stop: a reverse signal of the strategy): followed while this position has no lock of its own,
+          ignored once it has one (owners 10-17 "첫 잠금 전까지만", judged on the LIVE position's own lock);
+        - any other paper exit (HALT, MANUAL, a reason not known here): followed;
+        - the paper trade cannot be read yet: waits OWN_EXIT_WAIT_S (the exchange stop protects), then followed.
+        The paper's own exit of ``t`` decides, also when the paper already holds ANOTHER position (``intent``). While
+        this position stays, that new paper entry is not followed and never closes this one (owners 10-20, _own_skip);
+        when this one follows the paper out, the new entry is judged like any entry (max_entry_age_s)."""
+        sym = t["symbol"]
+        px = t.get("paper_exit") or {}
+        if px.get("action") == "stay":
+            self._own_skip(t, intent)
+            return None
+        exit_of = getattr(self.source, "exit_of", None)
+        got = None
+        if exit_of is not None:
+            try:
+                got = exit_of(t["key"])
+            except (sqlite3.Error, Refused, ValueError) as e:
+                self._event(WARN, "paper_exit_unread", f"{sym} paper 청산 기록을 못 읽었습니다: {e}", {"key": t["key"]},
+                            notify=False)
+        now = self.now_ms()
+        if got is None:
+            first = int(t.setdefault("paper_gone", now))
+            if now - first < OWN_EXIT_WAIT_S * 1000:
+                if first == now:
+                    self._event(INFO, "paper_exit_wait", f"{sym} paper 포지션이 없어졌습니다. 청산 이유를 읽을 때까지 "
+                                "거래소 손절로 지킵니다", {"key": t["key"]}, notify=False)
+                return None
+            self._event(WARN, "paper_exit_unknown", f"{sym} paper 청산 이유를 {OWN_EXIT_WAIT_S:.0f}초 동안 못 읽어 "
+                        "예전처럼 따라 닫습니다", {"key": t["key"]})
+            return "paper 청산 → 거래소 포지션 닫기 (paper 청산 이유를 못 읽음)"
+        reason = str(got.get("reason") or "")
+        ko = PAPER_EXIT_KO.get(reason, reason or "이유 없음")
+        lock = (t.get("own") or {}).get("lock")
+        record = {"reason": reason, "exit_time": got.get("exit_time"), "exit_price": got.get("exit_price"), "seen": now,
+                  "own_lock": lock}
+        if reason in PRICE_EXITS or (reason == "REV" and lock is not None):
+            t["paper_exit"] = {**record, "action": "stay"}
+            why = (f"자기 잠금 +{float(lock):.0%}가 있어 빠른 청산을 따르지 않고" if reason == "REV" else
+                   "거래소 기준으로")
+            self._event(INFO, "own_stay", f"{sym} paper가 {ko}로 닫았습니다 → {why} 계속 들고 갑니다 (거래소 손절 "
+                        f"{float(t['stop']):g}" + (f", 자기 잠금 +{float(lock):.0%}" if lock is not None else
+                                                   ", 아직 자기 잠금 없음") + ")",
+                        {"key": t["key"], **record})
+            self._save(strict=False)
+            self._own_skip(t, intent)
+            return None
+        t["paper_exit"] = {**record, "action": "close"}
+        return f"paper 청산 → 거래소 포지션 닫기 (paper {ko}" + (", 자기 첫 잠금 전" if reason == "REV" else "") + ")"
+
+    def _own_skip(self, t: dict, intent: Optional[Intent]) -> None:
+        """"own" (owners 10-20): the paper entered another position while this live position stays on its own stop and
+        ladder. The live position is never closed for it (one position at a time: the new entry is the one left out).
+        That paper entry is recorded once ("own_busy", INFO: a missed signal of this executor on the checks and the
+        8093 site, never an alarm) and marked done, so it is never joined later; once this position closes on its own
+        stop or ladder, fresh paper entries are followed as before (max_entry_age_s)."""
+        if intent is None or intent.key == t["key"] or intent.key in self.done:
+            return
+        self._mark_done(intent.key)
+        self._event(INFO, "own_busy", f"{intent.symbol} {'롱' if intent.side > 0 else '숏'} paper 진입: 실거래가 아직 자기 "
+                    f"포지션(거래소 기준, {t['symbol']} {'롱' if t['side'] > 0 else '숏'})을 들고 있어 이번 진입은 따라가지 않음",
+                    {"key": intent.key, "symbol": intent.symbol, "side": intent.side, "paper_entry": intent.entry_price,
+                     "held_symbol": t["symbol"], "held_side": t["side"], "held_entry_ts": t.get("entry_ts")})
+        self._save(strict=False)
+
     # ------------------------------------------------------------ follow the paper account
     def _follow(self, intent: Optional[Intent], paper_ts: Optional[int], direct: Optional[Intent] = None,
                 entries: bool = True) -> None:
@@ -1721,8 +2075,14 @@ class Executor:
                 else:
                     return                                   # the exchange stop protects until the paper catches up
             if intent is None or intent.key != t["key"]:
-                self._exit(t, "paper 청산 → 거래소 포지션 닫기")
+                why = self._own_exit_why(t, intent) if self.own else "paper 청산 → 거래소 포지션 닫기"
+                if why is None:
+                    return                                   # "own": stays on its own exchange stop and ladder
+                self._exit(t, why)
                 t = None
+            elif self.own:
+                t.pop("paper_gone", None)                    # the paper position read again: no exit seen
+                return                                       # "own": the paper's lock steps are not followed
             else:
                 spec = self._spec(t["symbol"])
                 side, tick = t["side"], spec["tick"]
@@ -1892,6 +2252,8 @@ class Executor:
                 float(self.c.position(it.symbol).get("entryPrice") or 0) or price
             t["stop"] = t["stop_initial"] = self._stop_level(it.stop, it.entry_price, t["entry_price"], spec["tick"],
                                                              it.side)
+            if self.own:                                    # its own ladder starts at its own fill (exchange clock)
+                self._own_state(t, fill_ms=sent + int(getattr(self.raw, "offset_ms", 0) or 0))
             if it.signal_ready:
                 t["signal_lag_ms"] = sent - it.signal_ready         # signal ready -> live order answered
             self.store.trade_open(t)
@@ -2463,6 +2825,76 @@ def halt_rules_text(risk: R.RiskConfig) -> str:
     return f"멈춤: {' · '.join(auto)}에 닿으면 스스로 멈춤, 비상 정지 파일 {kill}"
 
 
+def _pct(x: float) -> str:
+    """0.00055 -> "0.055%", 0.0015 -> "0.15%" (no trailing zeros)."""
+    return f"{x * 100:.4f}".rstrip("0").rstrip(".") + "%"
+
+
+def own_ladder_text(spec: Optional[ComboLadder], basis: str = "net") -> str:
+    """The ladder in words on its basis: 순ROE ("net") or 화면 ROE ("gross", the exchange screen's, before fees)."""
+    if spec is None:
+        return "계단 없음"
+    return spec.describe().replace("순ROE", "화면 ROE") if basis == "gross" else spec.describe()
+
+
+def own_cost_text(cfg: ExecConfig) -> str:
+    """The cost basis of the "own" net ROE in words."""
+    c = cfg.net_cost()
+    if c is None:
+        return "비용 모름"
+    return (f"{EX_KO.get(cfg.exchange, cfg.exchange)} 테이커 {_pct(c['taker_fee'])} + 슬리피지 {_pct(c['slippage'])} (한쪽), "
+            f"왕복 {_pct(cfg.own_round_trip())}")
+
+
+def coin_leverage(cfg: ExecConfig) -> dict:
+    """{symbol: leverage} of the allowed coins: the owners' fixed leverage (10-17: BTC 40x, every other coin 30x; the
+    paper bot's, paperbot/bybit.py FIXED_LEVERAGE), never above the config's max_leverage."""
+    cap = int(cfg.risk.max_leverage or BY.DEFAULT_LEVERAGE)
+    return {s: min(int(BY.FIXED_LEVERAGE.get(s, BY.DEFAULT_LEVERAGE)), cap) for s in cfg.risk.allowed_symbols}
+
+
+def first_lock_net_text(cfg: ExecConfig, spec: Optional[ComboLadder]) -> str:
+    """"gross": what the first lock leaves after the round-trip cost, per coin: lock - leverage x round trip."""
+    rt = cfg.own_round_trip()
+    if spec is None or rt is None:
+        return "첫 잠금이 남기는 순ROE: 계산 못 함"
+    by: dict = {}
+    for s, lev in coin_leverage(cfg).items():
+        by.setdefault(lev, []).append(s[:-4] if s.endswith("USDT") else s)
+    parts = []
+    for lev in sorted(by, reverse=True):
+        net = spec.first_lock - lev * rt
+        parts.append(f"{'·'.join(by[lev])} {lev}배 {net:+.1%}" + (" (손실을 잠금)" if net <= 0 else ""))
+    return (f"첫 잠금 화면 +{spec.first_lock:.0%}가 남기는 순ROE: " + ", ".join(parts)
+            + f" (잠금 - 배수 × 왕복 비용 {_pct(rt)})")
+
+
+def ladder_lines(cfg: ExecConfig) -> list:
+    """check-config: how the take-profit ladder is judged (owners 10-20), in words."""
+    if cfg.ladder_from != "own":
+        return ["익절(계단 잠금): 페이퍼 기준 - paper의 잠금을 따라 손절을 옮김"
+                + (" (stop_from \"ratio\": 체결가 비율)" if cfg.stop_from == "ratio" else "")]
+    spec = cfg.ladder_spec()
+    gross = cfg.ladder_basis == "gross"
+    steps = own_ladder_text(spec, cfg.ladder_basis)
+    out = ["익절(계단 잠금): 거래소 기준 - 이 실행기의 체결가, 이 거래소의 1분봉 고가·저가, 이 거래소의 비용으로 판단 "
+           "(paper의 잠금은 따르지 않음)",
+           f"계단: {steps}" if spec is not None else "계단: 없음 또는 잘못됨(위 항목을 고치세요)"]
+    if gross:
+        out += ["기준(ladder_basis \"gross\"): 화면 ROE - 거래소 앱에 보이는 수수료 전 ROE. 잠금 가격 = 체결가 × (1 ± 잠금 / 배수), "
+                "비용 없음",
+                f"비용(참고): {own_cost_text(cfg)}",
+                first_lock_net_text(cfg, spec)]
+    else:
+        out += ["기준(ladder_basis \"net\"): 순ROE - 수수료·슬리피지 왕복을 뺀 ROE (페이퍼와 같은 정의)",
+                f"순ROE 비용: {own_cost_text(cfg)}, 펀딩은 계산에 넣지 않음"]
+    out.append("paper 청산: 손절·계단 익절(가격)은 따르지 않고 자기 손절·계단으로 계속, 빠른 청산(반대 신호)은 자기 첫 잠금 전에만 "
+               "따름, 그 밖의 청산(멈춤·수동)은 따름")
+    out.append("paper 새 진입: 실거래가 아직 자기 포지션을 들고 있으면 따라가지 않음(놓친 신호로 기록, 들고 있던 포지션은 닫지 않음). "
+               "닫힌 뒤의 새 진입부터 따름")
+    return out
+
+
 def cmd_check(args) -> int:
     try:
         cfg = ExecConfig.from_file(args.config)
@@ -2472,6 +2904,8 @@ def cmd_check(args) -> int:
     probs = cfg.problems()
     for p in probs:
         print(f"- {p}")
+    for line in ladder_lines(cfg):
+        print(line)
     print(halt_rules_text(cfg.risk))
     print("신호등: 꺼짐 (paper의 모든 진입을 따라감)" if not cfg.signal_light_n else
           f"신호등: 켜짐 - paper 최근 {cfg.signal_light_n}번 중 {cfg.signal_light_min_win:.0%} 이상 이겼을 때만 진입을 따라감")

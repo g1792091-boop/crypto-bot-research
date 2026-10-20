@@ -9,6 +9,25 @@
   "entry_source": "paper",
   "stop_from": "ratio",
   "signal_light_n": 0,
+  "ladder_from": "own",
+  "ladder": {
+    "first_lock": 0.1,
+    "trigger_gap": 0.01,
+    "step": 0.05,
+    "next_trigger": 0.15,
+    "next_gap": 0.03
+  },
+  "ladder_basis": "net",
+  "net_costs": {
+    "bybit": {
+      "taker_fee": 0.00055,
+      "slippage": 0.0002
+    },
+    "mexc": {
+      "taker_fee": 0.0008,
+      "slippage": 0.0002
+    }
+  },
   "risk": {
     "max_leverage": 40,
     "max_notional_usd": 10000,

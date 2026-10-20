@@ -95,6 +95,8 @@ EXEC_TRADE_COLS = ("key", "symbol", "side", "qty", "leverage", "entry_ts", "entr
                    "exit_reason", "pnl", "data", "pnl_source", "realized", "commission", "funding", "slippage")
 # reasons a paper entry was not followed, strongest first (executor.py events carrying data.key)
 WHY = (("light_red", "신호등 빨강이라 따라가지 않았어요"),
+       # "own" (owners 10-20): its own position (거래소 기준) was still open; a missed signal, not an alarm
+       ("own_busy", "실거래가 아직 자기 포지션(거래소 기준)을 들고 있어 따라가지 않았어요"),
        ("late", "페이퍼 진입을 늦게 봐서 건너뛰었어요"),
        ("entry_check", "진입 검사에서 막혔어요"),
        ("entry_skip", "가격이 이미 손절선을 지나 들어가지 않았어요"),
@@ -119,6 +121,9 @@ KIND_KO = {
     "margin": "격리 마진", "key_permission": "키 권한", "position_read": "포지션 못 읽음", "account_unread": "잔고 못 읽음",
     "transfers_unread": "입출금 못 읽음", "signal_read": "신호 못 읽음", "signal_mode_off": "빠른 진입 꺼짐",
     "oversize_retry": "크기 줄이기 다시", "cap_unchecked": "한도 확인 못 함", "recover": "복구", "direct_confirmed": "빠른 진입 확인",
+    "own_prices": "거래소 1분봉 못 읽음", "own_lock": "거래소 기준 잠금", "own_stay": "거래소 기준으로 계속",
+    "own_busy": "자기 포지션 중이라 안 따라감",
+    "paper_exit_unknown": "페이퍼 청산 이유 모름", "paper_exit_unread": "페이퍼 청산 기록 못 읽음",
 }
 LEVEL_KO = {"WARN": "주의", "CRITICAL": "긴급"}
 # exit reasons: the paper engine's codes (paperbot/combo.py KO_EXIT) and what an executor's close was
@@ -337,6 +342,7 @@ def read_config(path: str) -> dict:
            "exchange": raw.get("exchange") if isinstance(raw.get("exchange"), str) else "binance",
            "mode": raw.get("mode") if isinstance(raw.get("mode"), str) else None,
            "entry_source": raw.get("entry_source") if isinstance(raw.get("entry_source"), str) else "paper",
+           "ladder_from": raw.get("ladder_from") if raw.get("ladder_from") in ("paper", "own") else "paper",
            "signal_light_n": LIGHT_N_DEFAULT if n is None else n,
            "signal_light_min_win": LIGHT_MIN_DEFAULT if mw is None else mw,
            "qty_scale": _f(raw.get("qty_scale")), "budget_usd": _f(raw.get("budget_usd")),
@@ -543,17 +549,42 @@ def _live_trade(d: dict) -> dict:
             "account": k[0] if k else None}
 
 
+def _own_view(t: dict) -> Optional[dict]:
+    """An executor's "own" ladder record of its open trade (executor.py ``_own_state``, owners 10-20 "거래소 기준"): the
+    lock it reached on its own position, its best price and net ROE (its own exchange's 1m candles), the next step,
+    the costs and the ladder it is judged with, and whether it stays open after the paper's price exit. None for a
+    trade that follows the paper's lock steps."""
+    o = t.get("own")
+    if not isinstance(o, dict):
+        return None
+    nx = o.get("next") if isinstance(o.get("next"), dict) else None
+    px = t.get("paper_exit") if isinstance(t.get("paper_exit"), dict) else {}
+    cost = o.get("cost") if isinstance(o.get("cost"), dict) else {}
+    return {"lock": _f(o.get("lock")), "lock_price": _f(o.get("lock_price")), "best": _f(o.get("best")),
+            "best_roe": _f(o.get("best_roe")), "src": o.get("src") if isinstance(o.get("src"), str) else None,
+            "round_trip": _f(o.get("rt")), "cost_round_trip": _f(o.get("cost_rt")) if o.get("cost_rt") is not None
+            else _f(o.get("rt")), "basis": "gross" if o.get("basis") == "gross" else "net",
+            "taker_fee": _f(cost.get("taker_fee")), "slippage": _f(cost.get("slippage")),
+            "exchange": o.get("exchange") if isinstance(o.get("exchange"), str) else None,
+            "ladder": o.get("ladder") if isinstance(o.get("ladder"), dict) else None,
+            "next": {k: _f(nx.get(k)) for k in ("lock", "at", "price", "lock_price")} if nx else None,
+            "staying": px.get("action") == "stay", "paper_reason": px.get("reason") if px.get("action") == "stay" else None,
+            "paper_exit_time": _i(px.get("exit_time")) if px.get("action") == "stay" else None}
+
+
 def _live_position(t: Optional[dict]) -> Optional[dict]:
     if not isinstance(t, dict) or t.get("status") not in ("open", "entering"):
         return None
     side, entry, stop = _i(t.get("side")) or 0, _f(t.get("entry_price")), _f(t.get("stop"))
     qty, lev = _f(t.get("qty")), _i(t.get("leverage"))
+    own = _own_view(t)
     return {"key": t.get("key"), "status": t.get("status"), "symbol": t.get("symbol"), "side": side, "qty": qty,
             "leverage": lev, "entry": entry, "entry_time": _i(t.get("entry_ts")), "stop": stop,
             "stop_initial": _f(t.get("stop_initial")), "locked": bool(entry and stop and (stop - entry) * side > 0),
-            "lock_roe": None, "liq": None, "margin": entry * qty / lev if entry and qty and lev else None,
+            "lock_roe": own["lock"] if own else None, "liq": None,
+            "margin": entry * qty / lev if entry and qty and lev else None,
             "stop_order": t.get("stop_algo_id"), "paper_entry": _f(t.get("paper_entry")),
-            "paper_time": (parse_key(t.get("key")) or (None, None, _i(t.get("entry_time"))))[2]}
+            "paper_time": (parse_key(t.get("key")) or (None, None, _i(t.get("entry_time"))))[2], "own": own}
 
 
 def read_exec(path: str, now_ms: int) -> dict:
@@ -773,7 +804,8 @@ def acct_paper(paper: dict, account: str, now: int, id_: str = "paper", label: O
 
 def acct_exec(x: dict, paper_pos: Optional[dict], now: int) -> dict:
     """An executor as one of the terminal's three accounts. Its open position borrows the paper position's next lock step
-    when it follows that very paper position (the executor moves its stop when the paper's lock moves)."""
+    when it follows that very paper position (the executor moves its stop when the paper's lock moves); an executor that
+    runs its own ladder ("own", owners 10-20 "거래소 기준") shows its own next step instead."""
     r, cfg = x["record"], x["config"] or {}
     base = {"id": x["id"], "name_ko": x["name_ko"], "kind": "live", "account": x["follows"]}
     if r.get("state") != "ok":
@@ -782,7 +814,13 @@ def acct_exec(x: dict, paper_pos: Optional[dict], now: int) -> dict:
     pos = r.get("position")
     if pos:
         pos = dict(pos)
-        if paper_pos and pos.get("key") == paper_pos.get("key") and paper_pos.get("next_lock"):
+        own = pos.get("own")
+        if own and own.get("next"):
+            # 거래소 기준 (owners 10-20): its own next step on its own fill and costs, never the paper's
+            pos["next_lock"] = {**own["next"], "from": "exchange"}
+            if paper_pos and pos.get("key") == paper_pos.get("key"):
+                pos["paper_lock_roe"] = paper_pos.get("lock_roe")
+        elif paper_pos and pos.get("key") == paper_pos.get("key") and paper_pos.get("next_lock"):
             pos["next_lock"] = {**paper_pos["next_lock"], "from": "paper"}
             pos["paper_lock_roe"] = paper_pos.get("lock_roe")
     since = r.get("since_ms")
@@ -2209,7 +2247,8 @@ def costs(p: dict, now: int) -> dict:
     for ex, _ko, dk, _ck in EXECS:                      # 체결 비교 (owners 10/19 night): added, nothing above changes
         if (out.get(ex) or {}).get("state") == "ok":
             cfg = configs[ex] if configs[ex].get("state") == "ok" else {}
-            out[ex]["gaps"] = fill_gaps(p[dk], (accts.get(ex) or {}).get("rows") or [], cfg.get("exchange") or ex)
+            out[ex]["gaps"] = fill_gaps(p[dk], (accts.get(ex) or {}).get("rows") or [], cfg.get("exchange") or ex,
+                                        cfg.get("ladder_from") or "paper")
     return {"now_ms": now, "paper": {"state": pa.get("state"), "n": pa.get("n"), "reason_ko": pa.get("reason_ko")},
             "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in EXECS], "accts": out, "match_ms": MATCH_MS,
             "entry_judge": entry_judge(out, configs)}
@@ -2227,14 +2266,17 @@ def _avg(xs: list) -> Optional[float]:
     return sum(xs) / len(xs) if xs else None
 
 
-def fill_gaps(path: str, rows: list, exchange: str) -> dict:
+def fill_gaps(path: str, rows: list, exchange: str, ladder_from: str = "paper") -> dict:
     """Per executor (its 거래 rows, trade_rows): each closed trade's entry and exit fill against its paper partner's
     (paperbot/livecheck.py cost_row on the executor's own fills; the entry falls back to the trade's recorded entry
     price): the price gap in the trade's favour positive, the same in net ROE points at the trade's leverage (gap x
     leverage), the fee it really paid per side against the paper's 0.05 % (+ 0.02 % slippage, in the paper's fill
-    already), and the averages. A gap that was not measured is None (체결 기록 전), never 0."""
+    already), and the averages. A gap that was not measured is None (체결 기록 전), never 0. An "own" executor's exit on
+    its own stop or lock (``ladder_from`` "own", owners 10-20 "거래소 기준") is no fill gap: that exit is left out
+    (``own_exit``), its entry counts."""
     from ... import livecheck as LC
-    info = LC.ExecInfo(name=exchange, config="-", unit="-", db=path, light_n=0, light_min=0.0, exchange=exchange)
+    info = LC.ExecInfo(name=exchange, config="-", unit="-", db=path, light_n=0, light_min=0.0, exchange=exchange,
+                       ladder_from=ladder_from)
     try:
         conn = open_ro(path)
     except FileNotFoundError:
@@ -2248,7 +2290,7 @@ def fill_gaps(path: str, rows: list, exchange: str) -> dict:
             pt = r.get("paper")
             et = {"key": r.get("key"), "symbol": r.get("symbol"), "side": r.get("side"), "entry_ts": r.get("entry_time"),
                   "exit_ts": r.get("exit_time"), "entry_price": r.get("entry_price"), "commission": r.get("commission"),
-                  "funding": r.get("funding"), "pnl": r.get("pnl")}
+                  "funding": r.get("funding"), "pnl": r.get("pnl"), "exit_reason": r.get("exit_raw")}
             fills = LC.exec_fills(conn, str(r.get("key"))) if has else []
             c = LC.cost_row(info, et, {"entry_price": pt.get("entry_price"), "exit_price": pt.get("exit_price"), "roe": pt.get("roe"),
                                        "strategy": pt.get("strategy_id") or "", "tf": pt.get("timeframe") or ""} if pt else None, fills)
@@ -2258,6 +2300,7 @@ def fill_gaps(path: str, rows: list, exchange: str) -> dict:
             fee = _f(c.get("fee_rate"))
             out.append({"key": r.get("key"), "symbol": r.get("symbol"), "side": r.get("side"), "leverage": r.get("leverage"),
                         "exit_time": r.get("exit_time"), "matched": pt is not None, "fills": c.get("fills"),
+                        "own_exit": bool(c.get("own_exit")),
                         "entry_gap": ein, "exit_gap": eout, "entry_roe": ein * lev if ein is not None and lev else None,
                         "exit_roe": eout * lev if eout is not None and lev else None, "fee_rate": fee, "notional": _f(c.get("notional")),
                         "commission": _f(c.get("commission")),
@@ -2292,7 +2335,7 @@ def gap_rows(x: dict, since: Optional[int] = None) -> list:
         pt = pairs.get(str(t["key"]))
         out.append({"key": t["key"], "symbol": t["symbol"], "side": t["side"], "entry_time": t["entry_ts"], "exit_time": t["exit_ts"],
                     "entry_price": t["entry_price"], "commission": t["commission"], "funding": t["funding"], "pnl": t["pnl"],
-                    "leverage": t["leverage"],
+                    "leverage": t["leverage"], "exit_raw": t.get("exit_raw"),
                     "paper": {k: pt.get(k) for k in ("entry_price", "exit_price", "roe", "strategy_id", "timeframe", "pnl")} if pt else None})
     return out
 

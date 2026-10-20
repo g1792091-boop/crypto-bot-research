@@ -5,7 +5,8 @@ Every private request's signature is checked (HMAC-SHA256 of timestamp + key + r
 body, X-BAPI-* headers) and so is the timestamp against the recv window; request bodies are checked against the
 documented parameters (strings for qty / triggerPrice, booleans for reduceOnly / closeOnTrigger, ...).
 
-Covers what paperbot/bybit.py uses: instruments-info, tickers, risk-limit, time, account info and margin mode, wallet
+Covers what paperbot/bybit.py uses: instruments-info, tickers, kline (1m, built from every ``set_price``),
+risk-limit, time, account info and margin mode, wallet
 balance, position mode, leverage, positions, market orders (filled at once, but read back as "New" for
 ``market_lag`` reads: creation is asynchronous), conditional stop orders (trigger on the last price, 110092 / 110093
 when the trigger is already past, Untriggered -> Filled with the same order id when hit), cancels (a cancelled
@@ -83,6 +84,7 @@ class FakeBybit:
                                          "Options": [], "Derivatives": [], "Exchange": [], "Earn": []},
                          "ips": ["158.247.200.152"], "type": 1, "uta": 1, "isMaster": False}
         self.page = 50                      # rows per page of the cursor lists (smaller: tests paging)
+        self.ticks = []                     # (exchange ms, symbol, last price) of every set_price: the 1m klines
 
     # ------------------------------------------------------------ test controls
     def fail(self, method, path, kind, times=1, when=None):
@@ -91,8 +93,22 @@ class FakeBybit:
 
     def set_price(self, symbol, price):
         self.last[symbol] = price
+        self.ticks.append((self.clock(), symbol, price))
         self._trigger(symbol)
         self._snap("PRICE", symbol)
+
+    def klines(self, symbol, lo, hi):
+        """1m candles [start ms, open, high, low, close] of the last price that started in [lo, hi]: every set_price and
+        the price now in the minute now (a minute without a trade has no candle), oldest first."""
+        ticks = sorted([(t, p) for t, s, p in self.ticks if s == symbol] + [(self.clock(), self.last[symbol])],
+                       key=lambda x: x[0])
+        bars = {}
+        for t, p in ticks:
+            m = t - t % 60_000
+            if lo <= m <= hi:
+                b = bars.setdefault(m, [m, p, p, p, p])
+                b[2], b[3], b[4] = max(b[2], p), min(b[3], p), p
+        return [bars[m] for m in sorted(bars)]
 
     def live_stops(self, symbol=None):
         return [o for o in self.orders.values() if o["orderStatus"] == "Untriggered"
@@ -349,6 +365,12 @@ class FakeBybit:
             s = q["symbol"]
             return ok({"category": "linear", "list": [{"symbol": s, "lastPrice": str(self.last[s]),
                                                        "markPrice": str(self.last[s]), "indexPrice": str(self.last[s])}]})
+        if path == "/v5/market/kline":
+            assert q["category"] == "linear" and q["interval"] == "1" and 1 <= int(q["limit"]) <= 1000, q
+            rows = self.klines(q["symbol"], int(q["start"]), int(q["end"]))[-int(q["limit"]):]
+            # market/kline.mdx: [startTime, open, high, low, close, volume, turnover] as strings, newest first
+            return ok({"category": "linear", "symbol": q["symbol"],
+                       "list": [[str(m), str(o), str(h), str(lo), str(c), "1", "1"] for m, o, h, lo, c in reversed(rows)]})
         if path == "/v5/market/risk-limit":
             s = q["symbol"]
             return ok({"category": "linear", "nextPageCursor": "", "list": [

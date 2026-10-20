@@ -19,6 +19,7 @@ executor, the stop protocol (place_stop / move_stop / live_stops / covers) and l
                                                                    priceFilter.tickSize, leverageFilter.maxLeverage
   leverage_brackets()          GET  /v5/market/risk-limit         (signal mode only)
   mark / price                 GET  /v5/market/tickers            markPrice / lastPrice
+  klines (1m)                  GET  /v5/market/kline              interval 1, last price ("own" ladder of the executor)
   sync_time                    GET  /v5/market/time               timeNano
   account()                    GET  /v5/account/wallet-balance    USDT walletBalance / unrealisedPnl (+ other coins)
   one_way()                    POST /v5/position/switch-mode      coin=USDT mode=0 (110025 "not modified" is fine)
@@ -557,6 +558,24 @@ class BybitClient:
     def price(self, symbol: str) -> float:
         """Last traded price: what the stops trigger on (triggerBy LastPrice)."""
         return float(_dec(self._ticker(symbol).get("lastPrice"), "lastPrice"))
+
+    def klines(self, symbol: str, start_ms: int, end_ms: int, limit: int = 1000) -> list:
+        """1m candles of the last traded price (what the stops trigger on: triggerBy LastPrice) opened in
+        [start_ms, end_ms], the one still forming included: [(open ms, high, low, close)], oldest first.
+        GET /v5/market/kline category=linear interval=1 (market/kline.mdx: rows [startTime, open, high, low, close,
+        volume, turnover] newest first, at most 1000)."""
+        r = self.req("GET", "/v5/market/kline", {"category": CATEGORY, "symbol": symbol, "interval": "1",
+                                                  "start": int(start_ms), "end": int(end_ms), "limit": int(limit)},
+                     signed=False)
+        rows = r.get("list")
+        if not isinstance(rows, list):
+            raise TransientError(200, None, f"{symbol}: 1분봉 응답이 목록이 아닙니다")
+        out = []
+        for x in rows:
+            if not isinstance(x, (list, tuple)) or len(x) < 5:
+                raise TransientError(200, None, f"{symbol}: 1분봉 줄의 모양이 다릅니다 {str(x)[:80]}")
+            out.append((int(x[0]), float(_dec(x[2], "high")), float(_dec(x[3], "low")), float(_dec(x[4], "close"))))
+        return sorted(out)
 
     def risk_limits(self, symbol: str) -> list:
         """Risk limit tiers (/v5/market/risk-limit), cached. maintenanceMargin / initialMargin are read as ratios;

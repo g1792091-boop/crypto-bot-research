@@ -32,6 +32,7 @@ unchanged. Quantities: MEXC counts contracts (``vol``); the client converts with
   Binance client call          MEXC contract v1
   spec(symbol)                 GET  /api/v1/contract/detail (all contracts, once: 1 request / 5 s)
   mark / price                 GET  /api/v1/contract/ticker   fairPrice / lastPrice
+  klines (1m)                  GET  /api/v1/contract/kline/{symbol}   interval Min1, last price ("own" ladder)
   sync_time                    GET  /api/v1/contract/ping
   account()                    GET  /api/v1/private/account/assets   USDT equity; wallet = equity - unrealized
   one_way()                    GET  /position/position_mode; 1 (hedge) -> POST /position/change_position_mode 2
@@ -664,6 +665,27 @@ class MexcClient:
     def price(self, symbol: str) -> float:
         """Last traded price: what the stops trigger on (trend 1)."""
         return float(_dec(self._ticker(symbol).get("lastPrice"), "lastPrice"))
+
+    def klines(self, symbol: str, start_ms: int, end_ms: int) -> list:
+        """1m candles of the last (deal) price, what the stops trigger on (trend 1), opened in [start_ms, end_ms], the
+        one still forming included: [(open ms, high, low, close)], oldest first. GET /api/v1/contract/kline/{symbol}
+        interval=Min1, start / end in SECONDS; the answer is columns {time (s), open, close, high, low, vol, ...} (ccxt
+        fetchOHLCV: convert_trading_view_to_ohlcv; at most 2000 rows). A time that already reads as milliseconds is kept as
+        it is (only a live run can confirm the unit; docs/mexc-ko.md)."""
+        data = self.req("GET", PUBLIC + f"/kline/{mx(symbol)}", {"interval": "Min1", "start": int(start_ms) // 1000,
+                                                                 "end": int(end_ms) // 1000}, signed=False,
+                        limit_key="kline")
+        cols = [data.get(k) if isinstance(data, dict) else None for k in ("time", "high", "low", "close")]
+        if not all(isinstance(c, list) for c in cols) or len({len(c) for c in cols}) != 1:
+            raise TransientError(200, None, f"{symbol}: 1분봉 응답의 모양이 다릅니다 {str(data)[:80]!r}")
+        out = []
+        lo = int(start_ms) - int(start_ms) % 60_000
+        for t, hi, low, close in zip(*cols):
+            ms = int(_dec(t, "time"))
+            ms = ms * 1000 if ms < 10 ** 11 else ms
+            if lo <= ms <= int(end_ms):
+                out.append((ms, float(_dec(hi, "high")), float(_dec(low, "low")), float(_dec(close, "close"))))
+        return sorted(out)
 
     def leverage_brackets(self) -> list:
         """Signal mode needs Binance-like notional brackets; MEXC's risk tiers count contracts. Not offered: the

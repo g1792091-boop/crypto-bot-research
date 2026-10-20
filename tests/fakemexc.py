@@ -8,7 +8,8 @@ must be sent exactly so, or the POST body), and so is Request-Time against the 1
 checked against the documented parameters (side 1-4, openType, leverage for isolated, externalOid <= 32, vol a JSON
 number in whole volUnits, triggerType / executeCycle / trend / orderType of plan orders, list bodies of the cancels).
 
-Covers what paperbot/mexc.py uses: ping, contract detail, ticker, account assets (equity, unrealized, bonus), position
+Covers what paperbot/mexc.py uses: ping, contract detail, ticker, kline (1m, built from every ``set_price``),
+account assets (equity, unrealized, bonus), position
 mode, leverage per symbol x position type, open positions (one-way; hedge rows when ``mode`` is 1), market orders
 (filled at once, read back as uncompleted for ``market_lag`` reads), order look-ups by id and externalOid, cancels,
 plan (trigger) orders that trigger on the last price and place a market order whose id they report, expire after
@@ -91,6 +92,8 @@ class FakeMexc:
         self.page = 100
         self.ping_str = True                                # ping answers the time as a string
         self.equity_without_margin = False                  # "equity" leaving out the isolated position margin
+        self.ticks = []                                     # (exchange ms, symbol, last price): the 1m klines
+        self.kline_ms = False                               # kline times in milliseconds instead of seconds
 
     # ------------------------------------------------------------ test controls
     def fail(self, method, path, kind, times=1, when=None):
@@ -98,8 +101,22 @@ class FakeMexc:
 
     def set_price(self, symbol, price):
         self.last[symbol] = price
+        self.ticks.append((self.clock(), symbol, price))
         self._trigger(symbol)
         self._snap("PRICE", symbol)
+
+    def klines(self, symbol, lo, hi):
+        """1m candles [start ms, open, high, low, close] of the last price that started in [lo, hi] (every set_price and
+        the price now in the minute now), oldest first."""
+        ticks = sorted([(t, p) for t, s, p in self.ticks if s == symbol] + [(self.clock(), self.last[symbol])],
+                       key=lambda x: x[0])
+        bars = {}
+        for t, p in ticks:
+            m = t - t % 60_000
+            if lo <= m <= hi:
+                b = bars.setdefault(m, [m, p, p, p, p])
+                b[2], b[3], b[4] = max(b[2], p), min(b[3], p), p
+        return [bars[m] for m in sorted(bars)]
 
     def amt(self, symbol):
         """The position in coins (signed)."""
@@ -349,6 +366,15 @@ class FakeMexc:
             return self._ok(str(t) if self.ping_str else t)
         if path == "/api/v1/contract/detail":
             return self._ok([self._detail(s, v) for s, v in SPECS.items() if q.get("symbol") in (None, s)])
+        if path.startswith("/api/v1/contract/kline/"):
+            assert q["interval"] == "Min1" and set(q) == {"interval", "start", "end"}, q
+            s = path.rsplit("/", 1)[1]
+            # seconds in and out (ccxt fetchOHLCV): {time, open, close, high, low, vol, amount} as columns, oldest first
+            rows = self.klines(s, int(q["start"]) * 1000, int(q["end"]) * 1000 + 999)[:2000]
+            t = [m if self.kline_ms else m // 1000 for m, *_r in rows]
+            return self._ok({"time": t, "open": [r[1] for r in rows], "close": [r[4] for r in rows],
+                             "high": [r[2] for r in rows], "low": [r[3] for r in rows], "vol": [1.0] * len(rows),
+                             "amount": [1.0] * len(rows)})
         if path == "/api/v1/contract/ticker":
             s = q["symbol"]
             return self._ok({"symbol": s, "lastPrice": self.last[s], "fairPrice": self.last[s],

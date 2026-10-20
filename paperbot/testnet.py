@@ -309,6 +309,16 @@ class TestnetClient:
         """Last traded price: what a CONTRACT_PRICE stop triggers on."""
         return float(self.req("GET", "/fapi/v1/ticker/price", {"symbol": symbol}, signed=False)["price"])
 
+    def klines(self, symbol: str, start_ms: int, end_ms: int, limit: int = 1000) -> list:
+        """1m candles of the LAST traded price (what a CONTRACT_PRICE stop triggers on) opened in [start_ms, end_ms],
+        the one still forming included: [(open ms, high, low, close)], oldest first (GET /fapi/v1/klines, at most
+        ``limit`` per request; the executor's "own" ladder reads its best price from them)."""
+        rows = self.req("GET", "/fapi/v1/klines", {"symbol": symbol, "interval": "1m", "startTime": int(start_ms),
+                                                   "endTime": int(end_ms), "limit": int(limit)}, signed=False)
+        if not isinstance(rows, list):
+            raise TransientError(200, None, f"{symbol}: 1분봉 응답이 목록이 아닙니다")
+        return sorted((int(r[0]), float(r[2]), float(r[3]), float(r[4])) for r in rows)
+
     def account(self) -> dict:
         return self.req("GET", "/fapi/v2/account")
 

@@ -21,7 +21,10 @@ trip + funding / notional)), the round trip of the paper's run (``combo_run.take
 follows the paper position it copies (dash/more/livebots.py ``acct_exec``): its stop moves when the paper's lock moves,
 to the paper's stop scaled by its own fill (paperbot/executor.py ``_stop_level`` "ratio"), so its 익절가 is the paper's
 trigger price and its lock prices are the paper's x (executor entry / paper entry); without such a paper position the
-steps are drawn on its own entry and say so.
+steps are drawn on its own entry and say so. An executor that runs the ladder on its own position (``"ladder_from":
+"own"``, owners 10-20 "거래소 기준으로 익절해야지": its trade's ``own`` record) shows ITS lock, ITS next step and ITS ladder from
+its own fill and its exchange's costs ("거래소 기준", ``ladder_from`` "exchange", own_exec_card), whether the paper holds that
+position or already closed it.
 
 최대 +% / 최대 −% (net ROE, the ladder's definition): the paper's from the engine's own record (``mfe_price`` /
 ``mae_price`` of the position or the trade: the best / worst 1m bar high or low since the fill); an executor's (and a
@@ -51,6 +54,9 @@ ENGINE_KO = "엔진 기록 (페이퍼 엔진이 1분봉 고가·저가로 따라
 EXEC_LIQ_KO = "실행기 기록에 청산가가 없어요 (거래소 앱에서 확인)"
 FLIP_KO = "동전 쌍둥이 (참고): 같은 순간 같은 신호에 방향만 무작위로 들어가는 비교용 페이퍼"
 EXEC_COST_KO = "순ROE는 페이퍼 비용(수수료·슬리피지 왕복) 가정, 펀딩 뺌"
+EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스"}
+OWN_KO = "거래소 기준"
+OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 이 거래소의 1분봉 고가·저가 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)"
 CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("flip", L.FLIP_ACCOUNT))
 
 _lock = threading.Lock()
@@ -364,6 +370,9 @@ def exec_card(x: dict, pp: Optional[dict], paper: dict, facts: dict, conn, bars_
     spec = ladder_of(cfg)
     sr = stop_rule(cfg)
     lock = pp.get("lock_roe") if paired else None
+    own = xp.get("own") if isinstance(xp.get("own"), dict) else None
+    if own is not None:
+        return own_exec_card(out, x, xp, pp, paired, own, cfg, facts, spec, sr, ex, rt)
     if paired:
         pside, pentry, plev = int(pp["side"]), pp["entry"], pp["leverage"]
         prt, pff = float(pp.get("round_trip") or 0.0), float(pp.get("funding_frac") or 0.0)
@@ -398,6 +407,72 @@ def exec_card(x: dict, pp: Optional[dict], paper: dict, facts: dict, conn, bars_
         "gap": _gap(pp, xp) if paired else None,
     }
     return out
+
+
+def own_exec_card(out: dict, x: dict, xp: dict, pp: Optional[dict], paired: bool, own: dict, cfg: dict, facts: dict, spec, sr,
+                  ex: dict, paper_rt: float) -> dict:
+    """An executor that runs the ladder on its own position ("own", owners 10-20 "거래소 기준으로 익절해야지"): its own lock,
+    next step and ladder from its own fill, its own exchange's prices and costs (the executor's ``own`` record,
+    livebots._own_view), never the paper's; its fast stop follows the paper's reverse signal only before its OWN first
+    lock. 최대 +% / 최대 −% stay the Binance 1m bars' (the page's one source for them); its own best price beside it.
+    The ladder's numbers are on its basis (``ladder_basis``: "net" after its round-trip cost, "gross" the exchange
+    screen's ROE before fees); the money it secures and the card's net ROE are always after its round-trip cost."""
+    side, entry, lev = int(xp.get("side") or 0), xp.get("entry"), xp.get("leverage")
+    rt = own.get("round_trip") if own.get("round_trip") is not None else paper_rt          # the ladder's (0: gross)
+    crt = own.get("cost_round_trip") if own.get("cost_round_trip") is not None else rt     # the exchange's
+    gross = own.get("basis") == "gross"
+    from ...ladder2 import ComboLadder
+    ospec = ComboLadder.of(own.get("ladder")) or spec
+    lock = own.get("lock")
+    stop = xp.get("stop")
+    price_of = lambda r_: roe_price(side, entry, lev, r_, rt)                    # noqa: E731
+    nx = own.get("next")
+    nxt = {**nx, "from": "exchange"} if nx else None
+    if nxt is None and ospec is not None:
+        nl = ospec.next_after(lock)
+        nxt = {"lock": nl[0], "at": nl[1], "price": price_of(nl[1]), "lock_price": price_of(nl[0]), "from": "exchange"}
+    secured = None
+    if lock is not None and stop and entry:
+        sroe = net_roe(side, entry, stop, lev, crt)
+        secured = {"roe": sroe, "usd": sroe * xp["margin"] if sroe is not None and xp.get("margin") else None, "basis": "stop"}
+    exname = EX_KO.get(own.get("exchange") or x["id"], x.get("name_ko") or x["id"])
+    cost_ko = (f"순ROE는 {exname} 비용 기준 (수수료 {own['taker_fee'] * 100:.3f}% + 슬리피지 {own['slippage'] * 100:.2f}%, 양쪽 · 왕복 "
+               f"{crt * 100:.2f}%), 펀딩 뺌") if own.get("taker_fee") is not None and own.get("slippage") is not None and crt is not None \
+        else "순ROE는 이 거래소 비용 기준, 펀딩 뺌"
+    ee = cfg.get("early_exit")
+    if not ee:
+        fast = {"state": "none", "ko": "빠른 손절 없음 (설정에 없어요) · 손절선과 거래소 기준 계단 익절만"}
+    elif lock is not None:
+        fast = {"state": "off", "ko": "꺼짐 · 이 실행기는 자기 첫 잠금을 지나 계단 익절만 (페이퍼의 빠른 청산은 안 따라요)"}
+    else:
+        fast = {"state": "armed", "ko": "빠른 손절 대기: 페이퍼가 반대 신호로 닫으면 따라 닫아요 (이 실행기 자기 첫 잠금 전까지만)"}
+    staying = None
+    if own.get("staying"):
+        why = EXIT_REASON_KO.get(own.get("paper_reason"), own.get("paper_reason") or "")
+        staying = {"paper_reason": own.get("paper_reason"), "paper_exit_time": own.get("paper_exit_time"),
+                   "ko": f"페이퍼는 이미 닫았어요 ({why}) · 이 포지션은 거래소 기준 손절·계단으로 계속 들고 있어요"}
+    out["position"] = {
+        "key": xp.get("key"), "symbol": xp.get("symbol"), "side": side, "leverage": lev, "qty": xp.get("qty"), "margin": xp.get("margin"),
+        "entry": entry, "entry_time": xp.get("entry_time"), "status": xp.get("status"), "stop_order": xp.get("stop_order"),
+        "strategy_id": pp.get("strategy_id") if paired else None, "timeframe": pp.get("timeframe") if paired else None,
+        "member": pp.get("member") if paired else None, "member_order": pp.get("member_order") if paired else None,
+        "setting": setting_of(facts, pp.get("member_order")) if paired else None, "paired": paired,
+        "stop": stop, "stop_initial": xp.get("stop_initial"),
+        "stop50": roe_price(side, entry, lev, -sr["roe"], paper_rt if sr["net"] else 0.0) if sr else None,
+        "stop_rule_cfg": sr, "locked": lock is not None, "lock_roe": lock, "lock_price": stop if lock is not None else None,
+        "secured": secured, "next": nxt, "ladder": ladder_steps(ospec, lock, own.get("best_roe"), price_of, price_of),
+        "ladder_from": "exchange", "basis": "gross" if gross else "net", "basis_ko": OWN_KO + (" · 화면 ROE" if gross else ""),
+        "ladder_ko": OWN_LADDER_KO + (" · 계단 숫자는 화면 ROE(수수료 전), 잠금 가격 = 체결가 × (1 ± 잠금 / 배수)" if gross else ""),
+        "liq": None, "liq_ko": EXEC_LIQ_KO, "round_trip": crt, "ladder_round_trip": rt, "funding_frac": 0.0, "cost_ko": cost_ko,
+        "best_roe": own.get("best_roe"),
+        "own_best": {"price": own.get("best"), "roe": own.get("best_roe"), "src": own.get("src")},
+        "excursion": ex, "fast": fast, "staying": staying, "gap": _gap(pp, xp) if paired else None,
+    }
+    return out
+
+
+EXIT_REASON_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "REV": "빠른 청산", "HALT": "멈춤 청산",
+                  "MANUAL": "수동 청산"}
 
 
 def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:

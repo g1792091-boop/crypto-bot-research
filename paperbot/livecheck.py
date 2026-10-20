@@ -69,8 +69,8 @@ expected range, no 88% / 82% rule, one line saying why):
    stop, its backtest win in this regime and on this coin ("백테스트에서도 약한 자리" when that cell is weak), the place
    in the losing streak, and what each executor did (followed: net ROE and slippage; blocked by the light; not
    followed). One cause label: 실거래-페이퍼 차이 > 평소보다 큰 손실 > 연속 손실 N번째 > 백테스트에서도 약한 자리 > 정상 범위
-   손실. Silent, loud when the loss is beyond the strategy's backtest worst, there is a live-paper gap, or it is the 2nd+
-   loss in a row. Four hours after the exit the noise stop is checked (the price back at +11% ROE from the entry, from
+   손실. Silent, loud when the loss is beyond the strategy's backtest worst, there is a live-paper gap (an entry only when
+   it is WORSE than the paper's: owners 10-20, ``worse_entry``), or it is the 2nd+ loss in a row. Four hours after the exit the noise stop is checked (the price back at +11% ROE from the entry, from
    the rule bot's 1m bars) and shown in the next morning check, never as a message of its own.
 ② 기대 이탈 (watcher): the paper's last 20 / 40 wins under the honest 5th percentile: loud "기대 범위 밑"; under the fit
    5th percentile only: a silent note; a strategy with 3+ losses in its last 5 trades: a silent note; an executor that
@@ -322,10 +322,17 @@ class ExecInfo:
     max_loss: Optional[float] = None    # one stop-out's largest share of its equity (risk.max_loss_frac)
     problem: str = ""               # the config could not be read: the fallbacks are used
     paper_db: str = ""              # the paper database its config names ("": the main one; paperbot/livepapers.py)
+    ladder_from: str = "paper"      # "own" (owners 10-20): its take-profit ladder on its own fill and exchange prices
 
     @property
     def light_on(self) -> bool:
         return bool(self.light_n)
+
+    @property
+    def own(self) -> bool:
+        """Judges its take-profit ladder on its own position ("거래소 기준"): its exits and locks part from the paper's by
+        design, never an alarm by themselves (own_exit)."""
+        return self.ladder_from == "own"
 
     @property
     def auto_halts(self) -> Optional[bool]:
@@ -355,6 +362,7 @@ def load_executors(specs=EXECUTORS) -> list[ExecInfo]:
             e.exchange = str(d.get("exchange") or "binance")
             e.account = str(d.get("account") or ACCOUNT)
             e.paper_db = str(d.get("paper_db") or "")
+            e.ladder_from = str(d.get("ladder_from") or "paper")
             e.light_n = int(d.get("signal_light_n", 0) or 0)
             e.light_min = float(d.get("signal_light_min_win", 0.85))
             e.budget = float(d["budget_usd"]) if d.get("budget_usd") is not None else None
@@ -499,6 +507,64 @@ def exec_equity(conn) -> tuple[Optional[dict], Optional[dict]]:
 
 
 # ====================================================================== 2. costs
+def _data(et: dict) -> dict:
+    d = et.get("data")
+    if isinstance(d, dict):
+        return d
+    try:
+        d = json.loads(d or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def own_exit(ex: "ExecInfo", et: dict) -> bool:
+    """An "own" executor's trade (owners 10-20, "거래소 기준으로 익절해야지") that its OWN exchange stop or lock closed, or
+    that stayed open after the paper's price exit (paperbot/executor.py: "...발동", "...이미 지나 시장가로 닫음", the
+    trade's ``paper_exit`` "stay"): its exit price and time differ from the paper's by design. Shown, never compared
+    with the paper's exit as slippage and never an alarm by itself. The trade's own record decides (an executor
+    restarted into "own" or back runs each trade by the rule it started it with); a row without its record (the site's
+    체결 비교) goes by the executor's config."""
+    if not et.get("exit_ts"):
+        return False
+    d = _data(et)
+    if not (isinstance(d.get("own"), dict) if d else ex.own):
+        return False
+    r = str(et.get("exit_reason") or "")
+    stayed = ((d.get("paper_exit") or {}).get("action") == "stay")
+    return stayed or "발동" in r or "이미 지나" in r
+
+
+OWN_BUSY = "own_busy"    # executor.py _own_skip: a paper entry left out while its own position stayed open (not an alarm)
+OWN_BUSY_KO = "자기 포지션(거래소 기준)을 들고 있어 따라가지 않음"
+
+
+def own_busy(told: list) -> bool:
+    """Did the executor leave this paper entry out on purpose: its own ("own") position was still open (owners 10-20)?
+    ``told``: _key_events rows (ts, kind, text)."""
+    return any(k == OWN_BUSY for _ts, k, _t in told or [])
+
+
+OPEN_OWN_KO = "아직 열림 · 거래소 기준 손절·계단으로 따로 닫혀요"
+
+
+def own_words(o: dict) -> str:
+    """An "own" executor's own exit on a message: "거래소 기준 청산 14:35(자기 잠금 +10%)"."""
+    lock = o.get("own_lock")
+    at = f" {kst(int(o['exit_ts']))}" if o.get("exit_ts") else ""
+    return f"거래소 기준 청산{at}" + (f"(자기 잠금 {lock:+.0%})" if lock is not None else "")
+
+
+def own_lock_of(et: dict) -> Optional[float]:
+    """The lock an "own" trade reached on its own position (its ``own`` record), None before its first lock."""
+    o = _data(et).get("own")
+    lock = o.get("lock") if isinstance(o, dict) else None
+    try:
+        return None if lock is None else float(lock)
+    except (TypeError, ValueError):
+        return None
+
+
 def match_paper(et: dict, paper: list, account: str = ACCOUNT) -> Optional[dict]:
     """The paper trade an executor trade followed: its key (account|symbol|paper entry time), else the same coin and
     side entered within MATCH_MS of the live entry."""
@@ -539,11 +605,14 @@ def cost_row(ex: ExecInfo, et: dict, pt: Optional[dict], fills: list) -> dict:
     if pt is not None:
         pe, px = pt.get("entry_price"), pt.get("exit_price")
         row.update(paper_entry=pe, paper_exit=px, paper_roe=pt["roe"], strategy=pt.get("strategy", ""),
-                   tf=pt.get("tf", ""))
+                   tf=pt.get("tf", ""), paper_reason=pt.get("reason"), paper_exit_ts=pt.get("exit_time"))
         if pe and avg_in:
             row["entry_bps"] = side * (float(avg_in) - float(pe)) / float(pe) * 1e4
         if px and avg_out:
             row["exit_bps"] = side * (float(px) - float(avg_out)) / float(px) * 1e4
+    if own_exit(ex, et):
+        # "거래소 기준": its own exit, not a follow of the paper's: the price gap is shown, never counted as slippage
+        row.update(own_exit=True, own_lock=own_lock_of(et), exit_gap_bps=row["exit_bps"], exit_bps=None)
     return row
 
 
@@ -558,7 +627,9 @@ def cost_summary(rows: list, fee: float) -> dict:
          "exit_bps": sum(outs) / len(outs) if outs else None, "side_bps": sum(both) / len(both) if both else None,
          "fee_rate": comm / notional if notional else None, "assumed_fee": fee, "funding": fund,
          "pnl": sum(float(r["pnl"] or 0) for r in rows), "unmatched": sum(1 for r in rows if not r["matched"]),
-         "unmeasured": sum(1 for r in rows if r.get("entry_bps") is None and r.get("exit_bps") is None)}
+         "unmeasured": sum(1 for r in rows if r.get("entry_bps") is None and r.get("exit_bps") is None
+                           and not r.get("own_exit")),
+         "own_exits": sum(1 for r in rows if r.get("own_exit"))}
     s["flags"] = []
     if s["side_bps"] is not None and s["side_bps"] > SLIP_FLAG_BPS:
         s["flags"].append(f"미끄러짐이 한쪽 평균 {s['side_bps']:+.1f}bps로 기준 {SLIP_FLAG_BPS:g}bps보다 큽니다")
@@ -1156,6 +1227,30 @@ def cost_lines(execs: list) -> list:
         out.append(line)
         if c.get("unmeasured"):
             out.append(f"  {c['unmeasured']}번은 체결 기록이 없어 가격 비교 못 함")
+        if c.get("own_exits"):
+            out.append(f"  {c['own_exits']}번은 거래소 기준으로 따로 닫혀 청산 가격은 페이퍼와 비교하지 않음")
+    return out
+
+
+def own_lines(execs: list) -> list:
+    """거래소 기준 익절 (owners 10-20): the day's live trades of an "own" executor that closed apart from the paper (its own
+    stop or lock, or after the paper's price exit), next to the paper trade they started with. Shown, never loud."""
+    rows = [(r, x) for r in execs for x in (r.get("costs") or []) if x.get("own_exit")]
+    if not rows:
+        return []
+    out = ["거래소 기준 익절(어제, 페이퍼와 따로 닫힌 실거래 · 알람 아님)"]
+    for r, x in rows[:MAX_LINES]:
+        lock = f"자기 잠금 {x['own_lock']:+.0%}" if x.get("own_lock") is not None else "자기 잠금 없이"
+        paper = ""
+        if x.get("matched"):
+            gap = (int(x["exit_ts"]) - int(x["paper_exit_ts"])) // MIN if x.get("paper_exit_ts") and x.get("exit_ts") \
+                else None
+            paper = (f" · 페이퍼 {KO_EXIT.get(x.get('paper_reason'), x.get('paper_reason') or '')} {pct(x.get('paper_roe'))}"
+                     + (f" ({'+' if gap >= 0 else ''}{gap}분)" if gap is not None else ""))
+        out.append(f"- {r['label']} {kst(int(x['exit_ts']))} {coin(x['symbol'])} {KO_SIDE.get(x['side'], '')}: "
+                   f"{usd(float(x['pnl'] or 0))} ({lock}){paper}")
+    if len(rows) > MAX_LINES:
+        out.append(f"- 외 {len(rows) - MAX_LINES}번")
     return out
 
 
@@ -1265,6 +1360,9 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
     if rest:
         lines += [rest, ""]
     lines += parity_lines(parity) + [""] + cost_lines(execs)
+    ol = own_lines(execs)
+    if ol:
+        lines += [""] + ol
     if cards:
         lines += ["", f"손실 카드 {len(cards)}장"] + [card_line(c, now_ms or w1) for c in cards[:MAX_LINES]]
         if len(cards) > MAX_LINES:
@@ -1691,7 +1789,7 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
             # 3부 ②: lost where the paper won (the paper trade it followed: its own paper bot's)
             if own is not None:
                 judged.add(f"vs_paper:{ex.name}")
-                bad = exec_vs_paper(c, paper, paper_for=lambda t, segs=segs: ps.at(segs, t))
+                bad = exec_vs_paper(c, paper, paper_for=lambda t, segs=segs: ps.at(segs, t), ex=ex)
                 if len(bad) >= VS_PAPER_MAX:
                     conds.append(Cond(f"vs_paper:{ex.name}", CRITICAL,
                                       f"{ex.label} 실거래가 페이퍼가 이긴 거래에서 {len(bad)}번 졌습니다"
@@ -1721,6 +1819,8 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                     if light["state"] == "red":
                         continue
                     told = _key_events(c, key)
+                    if own_busy(told):
+                        continue                   # "own": left out while its own position stayed (a missed signal)
                     said = " / ".join(str(x[2])[:90] for x in told) if told else "이 진입에 대한 기록 없음"
                     conds.append(Cond(
                         f"follow:{ex.name}:{key}", CRITICAL,
@@ -2085,24 +2185,45 @@ def exec_outcome(ex: ExecInfo, conn, key: str, pt: dict) -> dict:
         row = cost_row(ex, et, pt, exec_fills(conn, key))
         margin = (float(et.get("qty") or 0) * float(et.get("entry_price") or 0)) / max(int(et.get("leverage") or 1), 1)
         roe = (float(et["pnl"]) / margin) if (et.get("pnl") is not None and margin) else None
-        return {"name": ex.name, "label": ex.label, "status": "followed" if et.get("exit_ts") else "open",
-                "roe": roe, "pnl": et.get("pnl"), "entry_bps": row["entry_bps"], "exit_bps": row["exit_bps"],
-                "exit_ts": et.get("exit_ts")}
+        out = {"name": ex.name, "label": ex.label, "status": "followed" if et.get("exit_ts") else "open",
+               "roe": roe, "pnl": et.get("pnl"), "entry_bps": row["entry_bps"], "exit_bps": row["exit_bps"],
+               "exit_ts": et.get("exit_ts")}
+        _ts, bot = get_state(conn, "bot")
+        live = (bot or {}).get("trade") or {}
+        cur = live if live.get("key") == key else _data(et)
+        if ex.own or isinstance(cur.get("own"), dict):
+            # "거래소 기준" (owners 10-20): its own lock; its own exit; or still open on purpose after the paper's exit
+            out.update(own=True, own_exit=bool(row.get("own_exit")), own_lock=own_lock_of({"data": cur}),
+                       staying=not et.get("exit_ts") and ((cur.get("paper_exit") or {}).get("action") == "stay"))
+        return out
     told = _key_events(conn, key)
     if any(k == "light_red" for _ts, k, _t in told):
         return {"name": ex.name, "label": ex.label, "status": "blocked"}
     return {"name": ex.name, "label": ex.label, "status": "not_followed",
-            "why": " / ".join(str(x[2])[:80] for x in told) if told else ""}
+            "why": " / ".join(str(x[2])[:80] for x in told) if told else "",
+            **({"busy": True} if own_busy(told) else {})}
+
+
+def worse_entry(o: dict) -> bool:
+    """The live entry WORSE than the paper's by more than GAP_BPS (entry_bps: + = worse for us: a long filled higher, a
+    short lower). A better entry (owners 10-20: DOGE paper 0.07937, Bybit long 0.07924) is shown, never an alarm."""
+    return o.get("entry_bps") is not None and o["entry_bps"] > GAP_BPS
 
 
 def live_gap(outs: list, paper_exit: int) -> bool:
-    """A followed executor whose trade went another way than the paper's (price far apart, a win, another exit)."""
+    """A followed executor whose trade went another way than the paper's (an entry worse than the paper's, an exit price
+    far apart, a win, another exit). An "own" executor's own exit (own_exit: its own stop or lock, owners 10-20) parts
+    from the paper by design: only its entry price counts then. Only a WORSE entry counts (worse_entry, owners 10-20)."""
     for o in outs:
         if o["status"] != "followed":
             continue
+        if worse_entry(o):
+            return True
+        if o.get("own_exit"):
+            continue
         if (o.get("pnl") or 0) > 0:
             return True
-        if any(abs(o[k]) > GAP_BPS for k in ("entry_bps", "exit_bps") if o.get(k) is not None):
+        if o.get("exit_bps") is not None and abs(o["exit_bps"]) > GAP_BPS:
             return True
         if o.get("exit_ts") and abs(int(o["exit_ts"]) - int(paper_exit)) > EXIT_TOL_MS:
             return True
@@ -2236,7 +2357,14 @@ def card_text(c: dict, exp: Optional[dict] = None, infos: Optional[list] = None)
         if o["status"] == "followed":
             lines.append(f"{pad}{fmt_usd(o.get('pnl'))} ({fmt_roe(o.get('roe'))})"
                          + (f" · 진입 {o['entry_bps']:+.1f}" if o.get("entry_bps") is not None else "")
-                         + (f" / 청산 {o['exit_bps']:+.1f}bps" if o.get("exit_bps") is not None else ""))
+                         + (f" / 청산 {o['exit_bps']:+.1f}bps" if o.get("exit_bps") is not None else "")
+                         + (" · 진입이 페이퍼보다 유리" if o.get("entry_bps") is not None and o["entry_bps"] < -GAP_BPS else "")
+                         + (f" · {own_words(o)}" if o.get("own_exit") else ""))
+        elif o["status"] == "not_followed" and o.get("busy"):
+            lines.append(f"{pad}{OWN_BUSY_KO}")
+        elif o["status"] == "open" and o.get("staying"):
+            lines.append(f"{pad}{OPEN_OWN_KO}" + (f" (자기 잠금 {o['own_lock']:+.0%})" if o.get("own_lock") is not None
+                                                  else ""))
         elif o["status"] == "open":
             lines.append(f"{pad}아직 닫는 중")
         elif o["status"] == "blocked":
@@ -2335,7 +2463,8 @@ def cards_pass(src: Sources, out_conn, now_ms: int, exp: Optional[dict], send: O
                     continue                                  # a paper bot no executor followed then: no card
                 xkey = f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}"
                 outs = [exec_outcome(ex, conns[ex.name], xkey, t) for ex in fol]
-                if any(o["status"] == "open" for o in outs) and now_ms - t["exit_time"] < CARD_WAIT_MS:
+                if any(o["status"] == "open" and not o.get("staying") for o in outs) \
+                        and now_ms - t["exit_time"] < CARD_WAIT_MS:
                     continue                                  # an executor is still closing: next pass
                 card = build_card(t, entry_meta(ppc, ACCOUNT, t["entry_time"], t["symbol"]), trades, exp, outs, ref_ko=ref_ko)
                 card["key"] = key
@@ -2455,20 +2584,23 @@ def drift_conditions(paper: list, exp: Optional[dict], lights: bool = True) -> t
     return conds, judged
 
 
-def exec_vs_paper(c, paper: list, paper_for: Optional[Callable] = None) -> list:
+def exec_vs_paper(c, paper: list, paper_for: Optional[Callable] = None, ex: Optional["ExecInfo"] = None) -> list:
     """The executor's last VS_PAPER_N closed trades it lost where its paper trade won: [(paper trade, pnl)].
     ``paper_for(entry ms)``: the paper trades of the paper bot it followed then (PaperSet.at; owners 10-19: two paper bots
-    with different stops part on purpose, so a live trade is held against its own paper bot only)."""
+    with different stops part on purpose, so a live trade is held against its own paper bot only). ``ex`` an "own"
+    executor (owners 10-20): a trade it closed on its own (own_exit) parts from the paper by design and is left out."""
     def by_of(trades: list) -> dict:
         return {f"{ACCOUNT}|{t['symbol']}|{t['entry_time']}": t for t in trades}
     try:
-        rows = c.execute("SELECT key, pnl, entry_ts FROM trades WHERE exit_ts IS NOT NULL AND pnl IS NOT NULL "
-                         "ORDER BY exit_ts DESC LIMIT ?", (VS_PAPER_N,)).fetchall()
+        rows = c.execute("SELECT key, pnl, entry_ts, exit_ts, exit_reason, data FROM trades WHERE exit_ts IS NOT NULL "
+                         "AND pnl IS NOT NULL ORDER BY exit_ts DESC LIMIT ?", (VS_PAPER_N,)).fetchall()
     except sqlite3.Error:
         return []
     main = by_of(paper or [])
     out = []
-    for k, p, ets in rows:
+    for k, p, ets, xts, why, data in rows:
+        if ex is not None and own_exit(ex, {"exit_ts": xts, "exit_reason": why, "data": data}):
+            continue
         by = by_of(paper_for(ets)) if paper_for is not None else main
         if k in by and float(p) < 0 and by[k]["pnl"] > 0:
             out.append((by[k], float(p)))
@@ -2798,6 +2930,8 @@ def entry_state(ex: ExecInfo, c, key: str, paper: list, entry_time: int, run: bo
     told = _key_events(c, key)
     if any(k == "light_red" for _t, k, _x in told):
         return {"state": "blocked", "light": light_state(paper, ex.light_n, ex.light_min, at=entry_time + MIN)}
+    if own_busy(told):
+        return {"state": "busy"}
     if told:
         return {"state": "refused", "why": str(told[0][2])[:70]}
     if ((bot or {}).get("risk") or {}).get("halted"):
@@ -2819,6 +2953,8 @@ def entry_exec_line(ex: ExecInfo, st: dict, symbol: str) -> str:
         return f"{_pad(ex)}⛔ 신호등이 막음{num}"
     if s == "halted":
         return f"{_pad(ex)}⏸ 멈춤 중이라 따라가지 않음"
+    if s == "busy":
+        return f"{_pad(ex)}⏸ {OWN_BUSY_KO}"
     if s == "off":
         return f"{_pad(ex)}⏹ 꺼져 있음"
     if s == "none":
@@ -2855,6 +2991,10 @@ def lock_text(p: dict, moves: list) -> str:
             parts.append(f"{ex.label} 손절 아직 그대로({fmt_price(mv['from'], p['symbol'])})")
         elif mv["state"] == "closed":
             parts.append(f"{ex.label} 이미 청산")
+        elif mv["state"] == "own":
+            parts.append(f"{ex.label} 거래소 기준(페이퍼 잠금은 안 따름 · "
+                         + (f"자기 잠금 {mv['lock']:+.0%}, 손절 {fmt_price(mv.get('to'), p['symbol'])}"
+                            if mv.get("lock") is not None else "자기 잠금 아직") + ")")
         else:
             parts.append(f"{ex.label} 따라가지 않음")
     return "\n".join([head_line("🔒", "잠금 시작", p["symbol"], p["side"], f"{float(p['lock_roe']):+.0%} 확보"),
@@ -2865,14 +3005,108 @@ def exit_exec_line(ex: ExecInfo, o: dict) -> str:
     s = o["status"]
     if s == "followed":
         return (f"{_pad(ex)}{fmt_usd(o.get('pnl'))} ({fmt_roe(o.get('roe'))})"
+                + (f" · {own_words(o)}" if o.get("own_exit") else "")
                 + (f" · 잔고 {fmt_usd(o['equity'], sign=False)}" if o.get("equity") is not None else ""))
+    if s == "open" and o.get("staying"):
+        return f"{_pad(ex)}{OPEN_OWN_KO}" + (f" (자기 잠금 {o['own_lock']:+.0%})" if o.get("own_lock") is not None else "")
     if s == "open":
         return f"{_pad(ex)}아직 닫는 중"
     if s == "blocked":
         return f"{_pad(ex)}⛔ 신호등이 막음"
     if s == "no_record":
         return f"{_pad(ex)}기록 없음"
+    if o.get("busy"):
+        return f"{_pad(ex)}{OWN_BUSY_KO}"
     return f"{_pad(ex)}따라가지 않음"
+
+
+def own_lock_text(ex: ExecInfo, ev: dict, side: int) -> str:
+    """🔒 an "own" executor's first lock on its own position (its "own_lock" record)."""
+    d = ev.get("data") or {}
+    parts = str(d.get("key") or "").split("|")
+    sym = parts[1] if len(parts) == 3 else ""
+    lock = float(d.get("lock") or 0)
+    tail = (f"가격이 이미 잠금 자리 {fmt_price(d.get('stop'), sym)}을 지나 시장가로 닫음" if d.get("closed")
+            else f"손절 {fmt_price(d.get('stop'), sym)}")
+    best = "거래소 최고" if side > 0 else "거래소 최저"
+    gross = d.get("basis") == "gross"                  # ladder_basis "gross": the exchange screen's ROE, before fees
+    roe = "화면 ROE" if gross else "순ROE"
+    return "\n".join([f"🔒 {ex.label} 잠금 {'화면 ' if gross else ''}{lock:+.0%} (자기 체결가 기준) · {tail}",
+                      f"{coin(sym)} {KO_SIDE.get(int(side), '')} · 체결 {fmt_price(d.get('entry'), sym)} · {best} "
+                      f"{fmt_price(d.get('best'), sym)}" + (f" ({roe} {fmt_roe(d['best_roe'])})" if d.get("best_roe")
+                                                            is not None else "") + " · 거래소 기준"])
+
+
+def own_exit_text(ex: ExecInfo, et: dict, pt: Optional[dict]) -> str:
+    """✅ / ❌ an "own" executor's trade that closed apart from the paper: its own stop or lock (거래소 기준), with what
+    the paper did (its exit and the time between, or still open)."""
+    sym, side = et["symbol"], int(et.get("side") or 0)
+    qty, px, lev = float(et.get("qty") or 0), float(et.get("entry_price") or 0), max(int(et.get("leverage") or 1), 1)
+    margin = qty * px / lev
+    pnl = et.get("pnl")
+    roe = float(pnl) / margin if (pnl is not None and margin) else None
+    lock = own_lock_of(et)
+    r = str(et.get("exit_reason") or "")
+    if "이미 지나" in r:
+        how = "잠금 자리가 이미 지나 시장가로 닫음"
+    elif lock is not None:
+        how = f"자기 잠금 {lock:+.0%} 손절 발동"
+    else:
+        how = "자기 손절 발동"
+    lines = [head_line("✅" if (pnl or 0) >= 0 else "❌", f"{ex.label} 청산 (거래소 기준)", sym, side,
+                       f"순ROE {fmt_roe(roe)}"), f"{fmt_usd(pnl)} · {how}"]
+    if pt is not None:
+        gap = (int(et["exit_ts"]) - int(pt["exit_time"])) // MIN
+        lines.append(f"페이퍼: {kst(int(pt['exit_time']))} {exit_reason_text(pt)} {fmt_roe(pt.get('roe'))}"
+                     f" ({abs(gap)}분 {'먼저' if gap >= 0 else '뒤'})")
+    else:
+        lines.append("페이퍼: 아직 열림 (따로 닫혀요)")
+    lines.append("알람 아님: 거래소 기준 익절이라 페이퍼와 닫는 때가 다를 수 있어요")
+    return "\n".join(lines)
+
+
+def own_pass(ex: ExecInfo, c, conn, now_ms: int, send: Callable, paper_for: Callable) -> list:
+    """An "own" executor's messages (owners 10-20): 🔒 its FIRST own lock of each trade (its "own_lock" records), and
+    ✅ / ❌ a trade it closed apart from the paper (own_exit), one each (trade_msgs kinds "lock:<name>", "exit:<name>");
+    older than TRADE_SEND_MS when first seen: recorded, never sent. Never loud."""
+    out = []
+    firsts: dict = {}
+    for ev in exec_events(c, "own_lock"):
+        k = (ev.get("data") or {}).get("key")
+        if k and k not in firsts:
+            firsts[k] = ev
+    for k, ev in firsts.items():
+        kind = f"lock:{ex.name}"
+        if now_ms - ev["ts"] > 2 * H1 or _msg_row(conn, k, kind):
+            continue
+        if now_ms - ev["ts"] > TRADE_SEND_MS:
+            _msg_put(conn, k, kind, now_ms)
+            continue
+        row = _exec_row(c, k)
+        if row is None:
+            _ts, bot = get_state(c, "bot")
+            row = (bot or {}).get("trade") or {}
+        text = own_lock_text(ex, ev, int(row.get("side") or 0))
+        if send(INFO, text) is not False:
+            _msg_put(conn, k, kind, now_ms, now_ms, INFO, text)
+            out.append((kind, k, INFO, text))
+    for et in exec_trades(c):
+        if not et.get("exit_ts") or now_ms - int(et["exit_ts"]) > 2 * H1 or not own_exit(ex, et):
+            continue
+        key, kind = str(et["key"]), f"exit:{ex.name}"
+        if _msg_row(conn, key, kind):
+            continue
+        if now_ms - int(et["exit_ts"]) > TRADE_SEND_MS:
+            _msg_put(conn, key, kind, now_ms)
+            continue
+        parts = key.split("|")
+        pt = next((p for p in paper_for(et.get("entry_ts")) or [] if len(parts) == 3 and p["symbol"] == parts[1]
+                   and str(p["entry_time"]) == parts[2]), None)      # its own paper trade (closed), by key only
+        text = own_exit_text(ex, et, pt)
+        if send(INFO, text) is not False:
+            _msg_put(conn, key, kind, now_ms, now_ms, INFO, text)
+            out.append((kind, key, INFO, text))
+    return out
 
 
 def exit_reason_text(t: dict) -> str:
@@ -3404,7 +3638,9 @@ def trade_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Calla
                     _bts, bot = get_state(c, "bot") if c is not None else (None, None)
                     t = (bot or {}).get("trade") or {}
                     xr = _exec_row(c, key) if c is not None else None
-                    if t.get("key") == key and t.get("status") == "open":
+                    if t.get("key") == key and t.get("status") == "open" and ex.own:
+                        moves.append((ex, {"state": "own", "lock": own_lock_of({"data": t}), "to": t.get("stop")}))
+                    elif t.get("key") == key and t.get("status") == "open":
                         a, b = t.get("stop_initial"), t.get("stop")
                         moves.append((ex, {"state": "moved" if (a and b and float(a) != float(b)) else "waiting",
                                            "from": a, "to": b}))
@@ -3440,12 +3676,17 @@ def trade_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Calla
                 g = next((g for g in grp if mine(ex, g[0], t["entry_time"])), None)
                 if g is not None:
                     outs.append((ex, exit_outcome(ex, conns[ex.name], key, g[2])))
-            if any(o["status"] == "open" for _e, o in outs) and now_ms - t["exit_time"] < ENTRY_WAIT_MS:
+            if any(o["status"] == "open" and not o.get("staying") for _e, o in outs) \
+                    and now_ms - t["exit_time"] < ENTRY_WAIT_MS:
                 continue
             text = win_text(t, outs, grp[0][1], now_ms, exp, infos)
             if send(INFO, text) is not False:
                 _msg_put(conn, key, "exit", now_ms, now_ms, INFO, text)
                 out.append(("exit", key, INFO, text))
+        # ---- "own" executors (owners 10-20, 거래소 기준): their own first lock, and a trade they closed apart from the paper
+        for ex in infos:
+            if ex.own and conns[ex.name] is not None:
+                out += own_pass(ex, conns[ex.name], conn, now_ms, send, lambda t, ex=ex: ps.at(segs[ex.name], t))
         conn.execute("DELETE FROM trade_msgs WHERE first_ts < ?", (now_ms - 30 * DAY,))
         conn.commit()
     finally:

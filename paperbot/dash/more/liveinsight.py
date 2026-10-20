@@ -840,7 +840,8 @@ def scale_check(cx: dict, x: dict) -> dict:
     paired = [pairs[str(t["key"])] for t in live if str(t["key"]) in pairs]
     pw = sum(1 for t in paired if (t.get("pnl") or 0) > 0)
     pwr = pw / len(paired) if paired else None
-    gaps = L.fill_gaps(r["path"], L.gap_rows(x, since), (x["config"] or {}).get("exchange") or x["id"]) if r.get("path") else {}
+    gaps = L.fill_gaps(r["path"], L.gap_rows(x, since), (x["config"] or {}).get("exchange") or x["id"],
+                       (x["config"] or {}).get("ladder_from") or "paper") if r.get("path") else {}
     er = gaps.get("entry_roe") if gaps.get("state") == "ok" else None
     cost = -er if er is not None else None                     # in the trade's favour positive -> a cost is negative
     checks = [
