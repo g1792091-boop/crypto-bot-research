@@ -232,7 +232,7 @@ def test_the_menus_of_both_sites_in_node():
     assert "livebots" not in paper["items"] and paper["groups"] == ["거래", "성적", "매매법", "AI 직원", "서버"]
     assert paper["tag"]["text"] == "모의" and paper["href"] == "#/livebots/replay?id=7" and paper["mod"] is None
     assert live["groups"] == ["지금", "기록", "성적", "운영"] and live["land"] == "trend" and live["tag"]["text"] == "실거래"
-    assert live["items"][:3] == ["trend", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
+    assert live["items"][:4] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
                                                      "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"

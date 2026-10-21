@@ -9,6 +9,10 @@
 //          만들어야겠네 야무지게 필요한부분들 전부다 포함해서"), the site's first screen: what the bot is doing now, the wallets,
 //          the open position and its supervisor, every coin's 1h / 4h judgment, the pullback waits, the pauses, today's signal
 //          flow, the ten entry strategies, the new bot's record, the supervisor's exits, the rules
+//   추세 차트 the 추세판단 봇's judgments over time (screens/livebots-tchart.js, /api/v4/livebots/trendchart; owners 10/21
+//          "대시보드 화면들 더 멋있게 모든 필요한 화면 부분들 다 추가로 만들어줘"): 72 hours of every coin's 1h / 4h judgment as a
+//          heatmap with the paper entries and the supervisor's exits, and the chosen coin's candles with the judgment band
+//          the bot read, its signals by what became of them, the paper trades and the wait's pullback level
 //   한눈에 the executors at a glance (screens/livebots-hq.js, owners 10/19 "간지나게"; 관제 until 10/21): the two real
 //          wallets, the open position's gauge, "왜 지금 진입 안 하나", the day's pause dial, the light rings
 //   포지션 each account's open position as a Binance-style card: 진입가 · 손절가 · 익절가 (the next ladder step) and the whole
@@ -59,12 +63,14 @@ import {healthView} from "./livebots-health.js";
 import {goalView} from "./livebots-goal.js";
 import {judgeView} from "./livebots-judge.js";
 import {trendView} from "./livebots-trend.js";
+import {tchartView} from "./livebots-tchart.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
 // in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 지금 · 기록 · 성적 · 운영)
 export const TABS = [
   {id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true},
+  {id: "tchart", label: "추세 차트", make: (ctx, hub) => tchartView(ctx, hub), own: true},
   {id: "hq", label: "한눈에", make: (ctx, hub) => hqView(ctx, hub)},
   {id: "pos", label: "포지션", make: (ctx, hub) => posView(ctx, hub), own: true},
   {id: "summary", label: "요약", make: (ctx, hub) => termView(ctx, hub)},

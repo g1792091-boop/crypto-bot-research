@@ -173,6 +173,9 @@ const SICON = {
   faq: () => [R(5, 1, 6, 2), R(3, 3, 3, 3), R(10, 3, 3, 4), R(8, 7, 3, 2), R(7, 9, 2, 2), R(7, 12, 2, 2)],
   // the 실거래 site's tabs (LIVE_SCREENS, 찾기): the nearest drawing of a rule-bot screen
   trend: () => SICON.livebots(),
+  // 추세 차트: two rows of judgment cells (the heatmap) over three candles
+  tchart: () => [R(1, 1, 4, 3), R(6, 1, 3, 3), R(10, 1, 5, 3), R(1, 5, 6, 3), R(8, 5, 7, 3), R(3, 9, 1, 6), R(2, 10, 3, 3),
+    R(8, 10, 1, 5), R(7, 11, 3, 2), R(13, 9, 1, 6), R(12, 10, 3, 3)],
   hq: () => SICON.grid(),
   pos: () => SICON.positions(),
   summary: () => SICON.terminal(),
@@ -247,13 +250,14 @@ export function navGroups(feats) {
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
 export const LIVE_START = "trend";
 const LIVE_GROUPS = [
-  {id: "now", ko: "지금", screens: ["trend", "hq", "pos", "summary", "chart", "risk", "health"]},
+  {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
 ];
 const LIVE_SCREENS = {
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇)"},
+  tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실행기 두 계좌)"},
   pos: {ko: "포지션", group: "now", title: "포지션"},
   summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},

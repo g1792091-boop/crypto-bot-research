@@ -1,0 +1,184 @@
+/* 실거래 › 추세 차트 (screens/livebots-tchart.js): the 추세판단 봇's judgments over 72 hours as a heatmap and its signals on
+   the price chart. Tokens only (both skins), every font size a --t-* token; one column at 390 px with no page scroll
+   sideways (the heatmap scrolls sideways inside its own box, the coin names stay put). Motion: the open position's dot
+   breathes; off under prefers-reduced-motion. */
+.ltc { gap: 12px; min-width: 0; }
+.ltc-body, .ltc-cards { display: grid; gap: 12px; min-width: 0; }
+.ltc-cards > .card { min-width: 0; }
+.ltc-two { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
+@media (min-width: 1000px) { .ltc-two { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); } }
+.ltc-stamp { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
+.ltc-check .pp { white-space: nowrap; }
+.ltc-sub { color: var(--ink-2); font-size: var(--t-xs); }
+
+/* ---------------------------------------------------------------- 지금 받는 곳 */
+.ltc-now { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-bottom: 12px; min-width: 0; }
+.ltc-nowi { display: grid; gap: 2px; padding: 9px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2);
+  min-width: 0; }
+.ltc-nowi.on { border-color: var(--accent-line); background: linear-gradient(100deg, var(--accent-soft), transparent 80%), var(--surface-2); }
+.ltc-nowk { color: var(--muted); font-size: var(--t-xs); }
+.ltc-nowi b { font-size: var(--t-md); color: var(--ink-2); overflow-wrap: anywhere; }
+.ltc-nowi.on b { color: var(--ink); }
+
+/* ---------------------------------------------------------------- the heatmap */
+.ltc-hscroll { overflow-x: auto; overscroll-behavior-x: contain; max-width: 100%; min-width: 0; padding-bottom: 6px; scrollbar-width: thin; }
+.ltc-heat { --lab: 104px; --cw: 9px; display: grid; gap: 8px; min-width: calc(var(--lab) + 72 * var(--cw)); }
+.ltc-coin, .ltc-axisrow { display: grid; grid-template-columns: var(--lab) minmax(0, 1fr); min-width: 0; }
+.ltc-lab { position: sticky; left: 0; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: 1fr 1fr;
+  column-gap: 6px; padding-right: 8px; background: var(--surface); }
+.ltc-axisrow .ltc-lab { grid-template-rows: auto; }
+.ltc-name { grid-row: 1 / 3; align-self: stretch; display: flex; align-items: center; min-width: 0; padding: 0 0 0 9px; margin: 0;
+  border: 0; border-left: 3px solid var(--line-2); border-radius: var(--r-sm); background: transparent; color: var(--ink);
+  font: 800 var(--t-sm)/1.2 var(--f-body); letter-spacing: .02em; text-align: left; cursor: pointer;
+  transition: background .2s var(--ease), border-color .2s var(--ease), color .2s var(--ease); }
+.ltc-name:hover { background: var(--surface-2); }
+.ltc-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ltc-coin.sel .ltc-name { border-left-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.ltc-tf { align-self: center; color: var(--muted); font-size: var(--t-2xs); text-align: right; white-space: nowrap; }
+.ltc-lines { display: grid; gap: 3px; min-width: 0; }
+.ltc-coin.sel .ltc-lines { border-radius: 4px; box-shadow: 0 0 0 1px var(--accent-line); }
+.ltc-cells { position: relative; display: grid; grid-template-columns: repeat(var(--cols, 72), minmax(0, 1fr)); gap: 1px; height: 20px;
+  min-width: 0; }
+
+/* the cells (and the legend's swatches): strong colour = a trend the bot takes; a light tint = 3 of 4 but not held yet;
+   hatched = 힘 약함 / 끝물 (no entry); grey hatch = 못 읽음 */
+.ltc-c { display: block; min-width: 0; border-radius: 2px; background: var(--surface-3); cursor: pointer; }
+.ltc-c.up, .ltc-sw.up { background: color-mix(in srgb, var(--up) 80%, var(--surface)); }
+.ltc-c.down, .ltc-sw.down { background: color-mix(in srgb, var(--down) 80%, var(--surface)); }
+.ltc-c.hold, .ltc-sw.hold { background: var(--surface-3); }
+.ltc-c.hold.up, .ltc-sw.hold.up { background: color-mix(in srgb, var(--up) 28%, var(--surface-2)); }
+.ltc-c.hold.down, .ltc-sw.hold.down { background: color-mix(in srgb, var(--down) 28%, var(--surface-2)); }
+.ltc-c.up.weak, .ltc-c.up.tired, .ltc-sw.up.weak {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--up) 55%, var(--surface)) 0 3px, var(--surface-2) 3px 6px); }
+.ltc-c.down.weak, .ltc-c.down.tired, .ltc-sw.down.weak {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--down) 55%, var(--surface)) 0 3px, var(--surface-2) 3px 6px); }
+.ltc-c.na, .ltc-sw.na { background: repeating-linear-gradient(45deg, var(--line-2) 0 1px, transparent 1px 4px), var(--surface-2); }
+.ltc-c.gap { background: transparent; box-shadow: inset 0 0 0 1px var(--line); cursor: default; }
+.ltc-c.now { position: relative; z-index: 1; box-shadow: 0 0 0 1.5px var(--ink), 0 0 12px color-mix(in srgb, var(--ink) 35%, transparent); }
+.ltc-c:not(.gap):hover, .ltc-c.pin { position: relative; z-index: 2; box-shadow: 0 0 0 2px var(--accent); }
+.ltc-cells.stale { box-shadow: 4px 0 0 -2px var(--warn); }
+.ltc-cells.ltc-off { display: flex; align-items: center; padding: 0 8px; border: 1px dashed var(--line-2); border-radius: 3px; }
+.ltc-cells.ltc-off.error { border-color: var(--down-line); background: var(--down-soft); }
+.ltc-offt { color: var(--muted); font-size: var(--t-2xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ltc-off.error .ltc-offt { color: var(--down); }
+
+/* the marks over a row: paper entries (● long · ○ short), supervisor exits (×), KST midnights */
+.ltc-marks { position: absolute; inset: 0; pointer-events: none; }
+.ltc-dot { position: absolute; top: 50%; left: calc(var(--x) * 100%); z-index: 2; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 2px var(--surface), 0 0 8px color-mix(in srgb, var(--ink) 60%, transparent);
+  pointer-events: auto; }
+.ltc-dot.short { background: var(--surface); border: 2px solid var(--ink); }
+.ltc-dot.open { animation: ltc-breathe 2.2s var(--ease) infinite; }
+@keyframes ltc-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+.ltc-x { position: absolute; top: 50%; left: calc(var(--x) * 100%); z-index: 2; transform: translate(-50%, -54%); color: var(--ink);
+  font: 900 var(--t-sm)/1 var(--f-body); font-style: normal; pointer-events: auto;
+  text-shadow: 0 0 2px var(--surface), 0 0 4px var(--surface), 0 0 6px var(--surface); }
+.ltc-day { position: absolute; top: -3px; bottom: -3px; left: calc(var(--x) * 100%); width: 1px; background: var(--ink-2); opacity: .35; }
+
+/* the time axis */
+.ltc-axis { position: relative; height: 18px; min-width: 0; }
+.ltc-tick { position: absolute; bottom: 2px; left: calc(var(--x) * 100%); padding-left: 3px; border-left: 1px solid var(--line-2);
+  color: var(--muted); font-size: var(--t-2xs); line-height: 1.2; white-space: nowrap; }
+.ltc-tick.day { color: var(--ink); font-weight: 700; border-left-color: var(--ink-2); }
+.ltc-tick.now { left: auto; right: 0; padding: 0 0 0 4px; border: 0; color: var(--ink); font-weight: 700; }
+
+/* the cell in words */
+.ltc-read { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); margin-top: 12px; min-width: 0; }
+.ltc-ritem { --c: var(--line-2); display: grid; gap: 5px; align-content: start; padding: 10px 12px; min-width: 0;
+  border-radius: var(--r-md); border: 1px solid var(--line); border-left: 3px solid var(--c); background: var(--surface-2); }
+.ltc-ritem.up { --c: var(--up); }
+.ltc-ritem.down { --c: var(--down); }
+.ltc-ritem.na { --c: var(--line-2); border-style: dashed; }
+.ltc-rhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; font-size: var(--t-sm); min-width: 0; }
+.ltc-rt { color: var(--muted); font-size: var(--t-xs); }
+.ltc-rmain { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.ltc-rmain .ltc-word { font-size: var(--t-lg); line-height: 1.25; }
+.ltc-rsub, .ltc-rmarks { color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.ltc-rmarks { color: var(--ink); }
+.ltc-unpin { justify-self: start; font-size: var(--t-xs); }
+.ltc-word { color: var(--ink); font-weight: 800; }
+.ltc-word.up { color: var(--up); }
+.ltc-word.down { color: var(--down); }
+.ltc-word.hold, .ltc-word.na { color: var(--muted); }
+.ltc-allow { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
+.ltc-allow.up { color: var(--up); font-weight: 700; }
+.ltc-allow.down { color: var(--down); font-weight: 700; }
+.ltc-votes { display: flex; flex-wrap: wrap; gap: 2px 10px; color: var(--muted); font-size: var(--t-2xs); }
+.ltc-vote { display: inline-flex; gap: 3px; align-items: baseline; }
+.ltc-vote i { font-style: normal; }
+.ltc-vote.up { color: var(--up); }
+.ltc-vote.down { color: var(--down); }
+
+/* the legends */
+.ltc ul.ltc-legend { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2);
+  font-size: var(--t-xs); }
+.ltc-legend li { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ltc-sw { display: inline-block; flex: none; width: 18px; height: 11px; border-radius: 2px; }
+.ltc-sw.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); }
+.ltc-sw.dot.short { background: var(--surface); border: 2px solid var(--ink); }
+.ltc-sw.xx { width: auto; height: auto; background: none; color: var(--ink); font-weight: 900; font-style: normal; }
+.ltc-mk { display: inline-grid; place-items: center; flex: none; width: 10px; height: 10px; border-radius: 50%; color: var(--surface);
+  font: 900 var(--t-2xs)/1 var(--f-body); font-style: normal; }
+.ltc-mk.in { background: var(--up); }
+.ltc-mk.wait { background: var(--warn); }
+.ltc-mk.miss { background: var(--muted); }
+.ltc-mk.blk { background: var(--muted); }
+.ltc-mk.arr { width: 0; height: 0; border-radius: 0; border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-bottom: 9px solid var(--up); }
+.ltc-mk.ex { border-radius: 2px; background: var(--down); }
+.ltc-mk.dash { width: 18px; height: 0; border-radius: 0; border-top: 2px dashed var(--warn); }
+.ltc-mk.ema { width: 18px; height: 2px; border-radius: 1px; background: var(--ink-2); }
+.ltc-mk.band { width: 18px; height: 9px; border-radius: 1px;
+  background: linear-gradient(90deg, var(--up) 0 40%, transparent 40%) bottom / 100% 100% no-repeat,
+    linear-gradient(90deg, transparent 40%, var(--line-2) 40%) bottom / 100% 35% no-repeat; }
+
+/* ---------------------------------------------------------------- 차트 */
+.ltc-chartcard { display: grid; gap: 0; min-width: 0; }
+.ltc-ctrl { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; min-width: 0; }
+.ltc-ctrl .seg { max-width: 100%; }
+.ltc-coinnow { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 12px 0 2px; min-width: 0; }
+.ltc-coinnow:empty { display: none; }
+.ltc-cn { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 6px 11px; min-width: 0;
+  border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); font-size: var(--t-sm); }
+.ltc-cn.mine { border-color: var(--accent-line); background: linear-gradient(100deg, var(--accent-soft), transparent 85%), var(--surface-2); }
+.ltc-cnk { color: var(--muted); font-size: var(--t-xs); }
+.ltc-cread { min-height: 1.7em; margin: 8px 0 6px; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.ltc-cread .ltc-word { font-size: var(--t-xs); }
+.ltc-ct { color: var(--ink); font-weight: 700; }
+.ltc-cwrap { position: relative; min-width: 0; }
+.ltc-cbox { height: 470px; min-width: 0; border-radius: var(--r-md); border: 1px solid var(--line); overflow: hidden; }
+.ltc-cslot { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--surface) 78%, transparent); }
+.ltc-cslot:empty { display: none; }
+.ltc-cwait { color: var(--muted); font-size: var(--t-sm); }
+
+/* ---------------------------------------------------------------- 이 코인 최근 3일 · 읽는 법 */
+.ltc ul.ltc-evlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; font-size: var(--t-sm); min-width: 0; }
+.ltc-ev { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto auto; gap: 3px 10px; align-items: center; padding: 8px 0;
+  border-bottom: 1px solid var(--line); min-width: 0; }
+.ltc-ev:last-child { border-bottom: 0; }
+.ltc-et { color: var(--muted); font-size: var(--t-xs); white-space: nowrap; }
+.ltc-ew { min-width: 0; overflow-wrap: anywhere; }
+.ltc-ev.k-blocked .ltc-ew, .ltc-ev.k-other .ltc-ew, .ltc-ev.k-nopull .ltc-ew { color: var(--ink-2); }
+.ltc-ev.k-entered .ltc-ew b { color: var(--up); }
+.ltc-ev .num:not(.ltc-et) { text-align: right; min-width: 48px; }
+.ltc-esub { grid-column: 2 / -1; color: var(--ink-2); font-size: var(--t-2xs); line-height: 1.5; overflow-wrap: anywhere; }
+.ltc ul.ltc-how { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }
+.ltc-how li { position: relative; padding-left: 14px; overflow-wrap: anywhere; }
+.ltc-how li::before { content: ""; position: absolute; left: 0; top: .7em; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.ltc-how li.ltc-sub { font-size: var(--t-xs); }
+.ltc-how li.ltc-sub::before { background: var(--line-2); }
+
+@media (max-width: 640px) {
+  .ltc-heat { --lab: 96px; --cw: 10px; }
+  .ltc-name { padding-left: 6px; font-size: var(--t-xs); }
+  .ltc-now { grid-template-columns: minmax(0, 1fr); }
+  .ltc-cbox { height: 340px; }
+  .ltc-ev { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .ltc-ev > .ltc-et, .ltc-esub { grid-column: 1 / -1; }
+  .ltc-read { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ltc-dot.open { animation: none; }
+  .ltc-name { transition: none; }
+}
