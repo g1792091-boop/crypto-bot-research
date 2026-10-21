@@ -11,7 +11,7 @@ bot's start, a big win that must never be counted as the new bot's):
   (TREND_NO_REF_KO "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토");
 - the trend bot's own: records from its start only (the old win is not in any of them), groups by role (눌림 · 자리 · 돌파 ·
   횡보) and entry bar (30분 · 1시간 진입), the map split by the judgment it entered on, the supervisor's exits held instead
-  (감독 청산 판정), the chase block in its scope, the break-even from its own config, the freeze from its own start, its
+  (감독 청산 판정), the chase block in its scope, the break-even from its own numbers (the replay's until 20 trades), the freeze from its own start, its
   rules in 설정 with 쉬기 없음 · 하루 손실 한도 없음, 진입 가능성's note that a raw signal frequency overstates its entries;
 - the views in node (the tiny DOM) draw those answers with the new words and without the old ones."""
 from __future__ import annotations
@@ -154,13 +154,17 @@ def test_goal_drops_the_old_references(tw):
     # its own replay (7/1~10/20 on real bars, measured 10/21), never the old bot's 6.2
     assert d["weekday_ref"] == I.TREND_WEEKDAY_REF == 1.11 and d["record"]["weekday_ref"] == 1.11
     assert d["weekday_ref_ko"].startswith("7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자")
-    assert abs(d["break_even"] - 0.8505) < 1e-3 and d["break_even_plain"] == [pytest.approx(5 / 6)] * 2   # its own config: 40 %, +10 % / -50 %
-    assert "증거금 40%" in d["break_even_ko"] and d["record"]["break_even"] == d["break_even"]
+    # its own numbers (owners 10/21 night): under 20 closed trades the replay's average win / loss (+12.3 % / -21.8 %) at its
+    # 40 % margin, never the old bot's +10 % / -50 % (86 %, or 85 % at 40 %)
+    assert abs(d["break_even"] - 0.6548) < 1e-3 and d["break_even_plain"] == [pytest.approx(0.6389, abs=1e-3)] * 2
+    assert "증거금 40%" in d["break_even_ko"] and "재현" in d["break_even_ko"] and d["record"]["break_even"] == d["break_even"]
     f = d["frozen"]
     assert f["until_ms"] == T.T0 + 14 * L.DAY and f["on"] and f["ko"].startswith("규칙 고정: 10/19까지") and "추세판단 봇 시작부터" in f["why_ko"]
     assert d["record"]["n"] == 1 and d["record"]["since_ms"] == T.T0
     need = d["accts"][0]["need"]
-    # with its own 1.1 entries a weekday and +10 % / −50 % a trade, ×6 in the month is out of reach: said so, honestly
+    # with its own 1.1 entries a weekday and the replay's +12.3 % / −21.8 % a trade, ×6 in the month is out of reach: said so
+    assert (need["w_src"], need["l_src"]) == ("replay", "replay") and "(재현 · 가상)" in need["src_ko"]
+    assert d["path"]["rows"][0]["n"] == pytest.approx(1.11 * 22) and d["grid"]["state"] == "ok"
     assert need["state"] == "impossible" and "승률 100%로도 모자람" in need["ko"] and "참고값 6.2" not in need["src_ko"] and "6.2번" not in _flat(d)
 
 
@@ -318,8 +322,8 @@ def test_views_draw_the_trend_bots_answers(tmp_path, answers):
               "견줄 동전 승률 기준이 없어요", "같은 신호 · 방향만 동전 · 추세판단 봇 시작부터"):
         assert w in jd, w
     gl = out["gl"]
-    for w in ("추세판단 봇 시작 10/05 09:00", "1.1번 (7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자", "본전 약 85%", "단순 합으로는 83%", "증거금 40%",
-              "규칙 고정: 10/19까지"):
+    for w in ("추세판단 봇 시작 10/05 09:00", "1.1번 (7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자", "본전 약 65%", "단순 합으로는 64%",
+              "증거금 40%", "목표 경로 (한 달 ×6)", "무엇이면 닿나", "×6 경로라면 지금", "규칙 고정: 10/19까지"):
         assert w in gl, w
     mp = out["mp"]
     for w in ("이긴 횟수", "기대 범위 띠가 없는 이유", NO_REF, "진입 때 추세 판단", "4개 중 3개", "진입 봉", "30분 진입", "손익", "표본",
@@ -341,7 +345,7 @@ def test_views_draw_the_trend_bots_answers(tmp_path, answers):
     assert out["brk"][0] == "by_role" and out["tone"] == ["ok", "bad", "small", "none"]
     assert out["cuts"] == ["judge", "coin", "hb", "side", "tf"]
     assert "감독 청산 1번" in out["sv"]["ko"] and out["sv0"]["ko"] == "추세판단 봇 시작 뒤 감독 청산으로 닫힌 거래가 아직 없어요"
-    assert out["rv0"]["ko"].startswith("추세판단 봇 시작 뒤") and out["be"] == "본전 약 85% (복리; 단순 합으로는 83%)"
+    assert out["rv0"]["ko"].startswith("추세판단 봇 시작 뒤") and out["be"] == "본전 약 65% (복리; 단순 합으로는 64%)"
     assert out["sr"] == ["·", "✓"]
     assert out["rp"]["head"] == "추세 판단" and len(out["rp"]["parts"]) == 5
     assert out["rg"] == [["눌림", 1], ["돌파", 1], ["횡보", 1]]

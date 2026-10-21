@@ -66,3 +66,33 @@
 .lbg-h2h-t td.num { font-variant-numeric: tabular-nums; }
 .lbg-h2h-t td.num.up { color: var(--up); }
 .lbg-h2h-t td.num.down { color: var(--down); }
+/* 추세판단 봇 (owners 10/21 night): 목표 경로, 무엇이면 닿나 (가상 계산), each account against the x6 path */
+.lbg-card[hidden] { display: none; }
+.lbg-path-why { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.lbg-path-rows { display: grid; gap: 6px; min-width: 0; }
+.lbg-path-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 7px 10px; border-radius: var(--r-sm);
+  background: var(--surface-2); font-size: var(--t-sm); min-width: 0; overflow-wrap: anywhere; }
+.lbg-path-row.wait { border: 1px dashed var(--line-2); background: transparent; }
+.lbg-path-k { flex: 1 1 100%; color: var(--ink-2); font-size: var(--t-xs); font-weight: 700; }
+.lbg-path-row b { color: var(--ink); font: 800 var(--t-md)/1.25 var(--f-term); }
+:root:not([data-skin="classic"]) .lbg-path-row b { text-shadow: 0 0 12px var(--head-glow); }
+.lbg-path-row small { flex: 1 1 100%; font-size: var(--t-2xs); }
+.lbg-act-t td.num, .lbg-grid-t td.num { font-variant-numeric: tabular-nums; }
+.lbg-act-t td.up, .lbg-grid-t td.up { color: var(--up); }
+.lbg-act-t td.down, .lbg-grid-t td.down { color: var(--down); }
+.lbg-act-t tr.off td { color: var(--ink-2); }
+.lbg-grid-t td.reach { background: var(--up-soft); font-weight: 800; }
+.lbg-grid-t .lbg-need-w { color: var(--ink); font-weight: 700; }
+.lbg-spot { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+.lbg-pp { display: grid; gap: 3px; margin-top: 4px; padding-top: 6px; border-top: 1px solid var(--line); min-width: 0; }
+.lbg-pp-k { color: var(--ink-2); font-size: var(--t-xs); }
+.lbg-pbar { position: relative; height: 10px; border-radius: 999px; background: var(--surface-3); }
+.lbg-pbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; background: var(--accent); }
+.lbg-pbar i.down { background: var(--down); }
+.lbg-pbar i.up { background: var(--up); }
+.lbg-pbar em { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink); }
+.lbg-pp-ko { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.5; overflow-wrap: anywhere; }
+.lbg-pp-ko.down { color: var(--down); }
+.lbg-pp-ko.up { color: var(--up); }
+.lbg-pp small { font-size: var(--t-2xs); line-height: 1.45; overflow-wrap: anywhere; }
+.lbg-pp-none { margin: 0; color: var(--ink-2); font-size: var(--t-xs); }

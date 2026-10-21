@@ -41,9 +41,14 @@ first start on this database (``trend_start``: exact), the groups are its roles 
 (30분 · 1시간 진입: ``trend_groups``), the chase block covers the members with it (all of them in its config), the
 supervisor's exits (JUDGE · TIME) get their own held-instead check (``sup_part``), and nothing of the old bot is shown as
 its reference: no coin-flip 75 %, no 6.2 entries a weekday (TREND_WEEKDAY_REF: its own replay, 1.1), no 88 % money rule,
-the break-even worked out from its own config, the rule freeze 2 weeks from its own start; 위험's paper loss streak and
-peak count its own trades only (새 봇 시작 뒤; the executors' are their real accounts' and stay whole). Another bot: all as
-before.
+the rule freeze 2 weeks from its own start; 위험's paper loss streak and peak count its own trades only (새 봇 시작 뒤;
+the executors' are their real accounts' and stay whole). Its 목표 (owners 10/21 night, the tab rebuilt for it): the
+break-even and the win rate the goal needs from its own average win and loss (its closed trades from TREND_OWN_N = 20 on,
+else the 7/1~10/20 replay's, 가상; never the old +10 % / -50 % at 30 %), 목표 경로 (``path``: x6 in a month over the
+replay's 1.11 entries a weekday and, once measured, its own; the wallet growth and the net ROE a trade that needs, next to
+the replay, the paper and each executor), 무엇이면 닿나 (``grid``: the month's multiple by win rate x average win at its
+average loss, 가상 계산) and each account's wallet against the x6 path this month (``progress``, from its start when it
+started this month). Another bot: all as before (no ``path`` / ``grid`` / ``progress``).
 
 Honest states (CONTRACT 1.6): a file or table not there = ``missing`` (수집 전), unreadable = ``error`` (못 읽음 + why),
 never a zero; small samples say so. Times are UTC ms, ratios are ratios (0.1 = 10 %), money is each account's USDT.
@@ -139,8 +144,24 @@ TREND_WEEKDAY_REF: Optional[float] = 1.11
 TREND_WEEKDAY_REF_KO: Optional[str] = ("7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자 · 평일 80일 89번 · "
                                        "그 기간 시장의 숫자라 앞으로는 다를 수 있어요")
 TREND_SCALE_KO = "새 봇의 돈 늘리기 기준은 아직 없어요 · 2주 검토에서 두 분이 정해요 (예전 봇의 88% 기준은 쓰지 않아요)"
-TREND_BE_KO = ("본전 승률은 이 봇 설정의 숫자로 계산했어요: 이길 때 첫 잠금 +{w:.0%}, 질 때 손절 −{l:.0%}, 증거금 {m:.0%} "
-               "(이길 때 더 가면 본전은 이보다 낮아져요)")
+# 목표 for the trend bot (owners 10/21 night: the goal tab rebuilt for it). The old bot's break-even (BREAK_EVEN 86 %, 82-83 %
+# plain: +10 % wins, -50 % losses at 30 % margin) is not this bot's: its wins and losses are its own averages, from its
+# closed trades since the start once there are TREND_OWN_N of them, else the 7/1~10/20 replay's (가상, data/
+# trend_replay_0701_1020.json through livereplayref.load_ref). 목표 경로: x6 in a month over N entries needs (1 + g)^N = 6 a
+# trade, g = 6^(1/N) - 1 of the wallet, = g / margin net ROE a trade if every trade were the same (a spread needs more).
+TREND_OWN_N = SMALL_N                  # from 20 closed trades the bot's own average win / loss replace the replay's
+GRID_WINS = (0.4, 0.5, 0.6, 0.7, 0.8)  # 무엇이면 닿나: win rates (rows)
+GRID_AVG_WIN = (0.10, 0.15, 0.20, 0.30, 0.40)    # 무엇이면 닿나: average win net ROE (columns)
+GRID_LIVE_DAYS = 5                     # the bot's own entries a weekday are used in the grid from this many weekdays (fewer: wide)
+TREND_BE_KO = "본전 승률은 이 봇의 숫자로 계산했어요: 이긴 거래 평균 +{w:.1%}, 진 거래 평균 −{l:.1%} ({src}), 증거금 {m:.0%}"
+TREND_AVG_SRC_KO = {"own": "추세판단 봇 시작 뒤 닫힌 거래 {n}번",
+                    "replay": "7/1~10/20 재현 · 가상 · 시작 뒤 닫힌 거래가 {k}번이 되면 이 봇 기록으로 바꿔요"}
+TREND_BE_NONE_KO = "본전 승률을 셀 이 봇의 숫자가 아직 없어요 (재현 파일이 없고, 시작 뒤 닫힌 거래가 {k}번이 안 돼요)"
+PATH_KO = ("모든 거래가 똑같이 번다고 칠 때의 숫자예요 · 실제로는 이기고 지는 크기가 들쭉날쭉해서 평균 순ROE는 이보다 더 필요해요 · "
+           "목표일 뿐 예측이 아니에요")
+GRID_KO = ("가상 계산이에요: 한 달 진입 {n:.0f}번이 그 승률·이긴 거래 평균으로, 진 거래는 평균 −{l:.1%}({src})로 간다고 칠 때의 한 달 배수 "
+           "(복리, 증거금 {m:.0%}) · 예측이 아니에요")
+PROGRESS_KO = "×6 경로: 한 달 평일 {wd:.0f}일에 ×6이 되는 속도를 평일만큼 나눠 그은 선이에요 (진입은 평일에만 해요)"
 GROUP_SUB_KO = {"A": "추격 막기 없음", "B": "추격 진입 막기", "old": "지금 설정에 없는 매매법 (시작 전 기록)",
                 "none": "페이퍼에 같은 거래가 없는 실거래"}
 
@@ -882,16 +903,23 @@ def per_weekday_of(entries: list, since: Optional[int], now: int) -> Optional[fl
     return sum(1 for t in entries if t is not None and not L.kst_weekend(t)) / days if days >= WEEKDAY_MIN else None
 
 
+AVG_SUFFIX_KO = {"record": "", "own": "", "lock": " (첫 잠금 기준)", "stop": " (손절 기준)", "replay": " (재현 · 가상)", "none": ""}
+
+
 def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Optional[float],
-             ref_wd: Optional[float] = WEEKDAY_ENTRIES) -> dict:
+             ref_wd: Optional[float] = WEEKDAY_ENTRIES, avg: Optional[dict] = None) -> dict:
     """목표에 필요한 승률 (owners 10/19, docs/live15-plan-ko.md): what win rate the rest of the month needs for the goal at
     this account's own numbers so far (average win and loss; fallbacks the first lock and the config's stop), next to the
     win rate so far and its 90 % Wilson range; and the whole month's from its start (x6). Arithmetic, never a forecast.
     ``ref_wd``: the entries per weekday used before a whole weekday has gone by (the trend bot: TREND_WEEKDAY_REF, none
-    yet: then nothing is worked out until its own count exists)."""
+    yet: then nothing is worked out until its own count exists). ``avg`` (the trend bot, trend_avg_of): its average win
+    and loss instead of the first lock and the stop (its own from TREND_OWN_N closed trades, else the replay's)."""
     m = margin_share(cfg)
-    w, w_src = (rec["avg_win"], "record") if rec.get("avg_win") is not None and rec["avg_win"] > 0 else (first_lock(cfg), "lock")
-    l, l_src = (-rec["avg_loss"], "record") if rec.get("avg_loss") is not None and rec["avg_loss"] < 0 else (stop_roe(cfg), "stop")
+    if avg is not None:
+        w, w_src, l, l_src = avg.get("w"), avg.get("src") or "none", avg.get("l"), avg.get("src") or "none"
+    else:
+        w, w_src = (rec["avg_win"], "record") if rec.get("avg_win") is not None and rec["avg_win"] > 0 else (first_lock(cfg), "lock")
+        l, l_src = (-rec["avg_loss"], "record") if rec.get("avg_loss") is not None and rec["avg_loss"] < 0 else (stop_roe(cfg), "stop")
     if per_wd is None and ref_wd is None:
         return {"m": m, "w": w, "w_src": w_src, "l": l, "l_src": l_src, "per_weekday": None, "per_weekday_src": None,
                 "n_left": None, "n_month": None, "needed": needed, "now": rec.get("win_rate"),
@@ -908,8 +936,9 @@ def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Op
     out = {"m": m, "w": w, "w_src": w_src, "l": l, "l_src": l_src, "per_weekday": pw, "per_weekday_src": pw_src,
            "n_left": n_left, "n_month": n_month, "needed": needed, "now": wr, "wilson90": wil, "month_p": p_month,
            "note_ko": GOAL_MATH_KO,
-           "src_ko": " · ".join([f"평균 이익 {'+' if w >= 0 else ''}{w * 100:.1f}%" + ("" if w_src == "record" else " (첫 잠금 기준)"),
-                                 f"평균 손실 −{l * 100:.1f}%" + ("" if l_src == "record" else " (손절 기준)") if l is not None else "평균 손실 모름",
+           "src_ko": " · ".join([f"평균 이익 {'+' if w >= 0 else ''}{w * 100:.1f}%" + AVG_SUFFIX_KO.get(w_src, "") if w is not None
+                                 else "평균 이익 모름",
+                                 f"평균 손실 −{l * 100:.1f}%" + AVG_SUFFIX_KO.get(l_src, "") if l is not None else "평균 손실 모름",
                                  f"평일 하루 {pw:.1f}번" + ("" if pw_src == "record" else f" (참고값 {ref_wd:g}: 평일 하루가 다 지나기 전)"),
                                  f"증거금 {m:.0%}" if m else "증거금 모름"]),
            "month_ko": f"한 달 전체로 보면 약 {p_month:.0%} 필요" if p_month is not None and 0 <= p_month <= 1 else
@@ -1017,12 +1046,19 @@ def _paper_goal(cx: dict, b: Optional[dict], mo: dict, target: float, win_step: 
     mine = since_start(trades, side["start"], side["meta"], side["members"])
     entries = [t.get("entry_time") for t in mine] + ([a["position"]["entry_time"]] if a.get("position") else [])
     pwd = per_weekday_of(entries, side["start"].get("ms"), cx["now"])
-    return {**base, "state": "ok", "start_equity": eq0, "start_ms": mo["from_ms"], "late_start": False,
-            "now_equity": wallet, "change": (wallet - eq0) if wallet is not None and eq0 is not None else None,
-            "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in month_trades),
-            "closed_n": len(month_trades), "pace": pace,
-            "so_far_per_day": (mult ** (1 / mo["days_gone"]) - 1) if mult and mo["days_gone"] >= 0.5 else None,
-            "need": win_need(record(mine), pace.get("need"), mo, side["cfg"] or cx["cfg"], pwd, weekday_ref(cx) if pid == "paper" else WEEKDAY_ENTRIES)}
+    trend = bool(cx.get("trend")) and pid == "paper"
+    rec = record(mine)
+    out = {**base, "state": "ok", "start_equity": eq0, "start_ms": mo["from_ms"], "late_start": False,
+           "now_equity": wallet, "change": (wallet - eq0) if wallet is not None and eq0 is not None else None,
+           "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in month_trades),
+           "closed_n": len(month_trades), "pace": pace,
+           "so_far_per_day": (mult ** (1 / mo["days_gone"]) - 1) if mult and mo["days_gone"] >= 0.5 else None,
+           "need": win_need(rec, pace.get("need"), mo, side["cfg"] or cx["cfg"], pwd, weekday_ref(cx) if pid == "paper" else WEEKDAY_ENTRIES,
+                            avg=trend_avg_of(rec, rep_of(cx)) if trend else None)}
+    if trend:                                            # 이번 달 x6 경로 (owners 10/21 night): from the bot's own start
+        f_ms, f_ko = _from_of(cx, mo)
+        out["progress"] = path_progress(_equity_at(trades, f_ms, a.get("initial")), wallet, f_ms, cx["now"], mo, f_ko)
+    return out
 
 
 def weekday_ref(cx: dict) -> Optional[float]:
@@ -1033,22 +1069,201 @@ def weekday_ref(cx: dict) -> Optional[float]:
 
 def break_even_of(cx: dict) -> tuple:
     """(compounded, [plain sum], words) break-even win rate: the owners' earlier analysis of the old rules (BREAK_EVEN at
-    30 % margin), or for the trend bot the arithmetic of its own config (first lock w, ROE stop l, margin m: p ln(1+mw) +
-    (1-p) ln(1-ml) = 0, and l / (w + l) as a plain sum); None when the config lacks a number."""
+    30 % margin), or for the trend bot the arithmetic of its own numbers (trend_avgs: the average win w and loss l of its
+    closed trades from TREND_OWN_N on, else the replay's; margin m: p ln(1+mw) + (1-p) ln(1-ml) = 0, and l / (w + l) as a
+    plain sum); None with the reason when it has no such numbers yet (the +10 % / -50 % of the old bot is never used)."""
     if not cx.get("trend"):
         return BREAK_EVEN, list(BREAK_EVEN_PLAIN), None
-    cfg = cx["cfg"]
-    m, w, l = margin_share(cfg), first_lock(cfg), stop_roe(cfg)
-    if not m or not w or not l or m * l >= 1:
-        return None, [], "본전 승률을 셀 설정 숫자(증거금·첫 잠금·손절)가 없어요"
+    m, av = margin_share(cx["cfg"]), trend_avgs(cx)
+    w, l = av["w"], av["l"]
+    if not m or not w or not l or w <= 0 or l <= 0 or m * l >= 1:
+        return None, [], TREND_BE_NONE_KO.format(k=TREND_OWN_N)
     be = need_win(1.0, 1, m, w, l)
     plain = l / (w + l)
-    return be, [plain, plain], TREND_BE_KO.format(w=w, l=l, m=m)
+    return be, [plain, plain], TREND_BE_KO.format(w=w, l=l, m=m, src=av["src_ko"])
+
+
+# ================================================================ 목표 for the trend bot (owners 10/21 night)
+def replay_numbers() -> dict:
+    """The 7/1~10/20 replay's record (가상; livereplayref.load_ref, read once per change of the file): trades, win rate and
+    mean net ROE as the file has them, the average win and loss of its trade list, its window; a state without the file."""
+    from . import livereplayref as X
+    ref = X.load_ref()
+    if ref.get("state") != "ok":
+        return {k: ref.get(k) for k in ("state", "reason_ko", "reason")}
+    d = ref["d"]
+    roes = [r for r in (_f(t.get("roe")) for t in d["trade_list"]) if r is not None]
+    w, lo = [r for r in roes if r > 0], [r for r in roes if r <= 0]
+    tr = d["trades"]
+    return {"state": "ok", "n": _i(tr.get("n")) or len(roes), "win_rate": _f(tr.get("win_rate")), "roe_mean": _f(tr.get("roe_mean")),
+            "roe_mean_before": _f(tr.get("roe_mean_before_costs")), "avg_win": sum(w) / len(w) if w else None,
+            "avg_loss": sum(lo) / len(lo) if lo else None, "window_kst": d.get("window_kst"), "per_weekday": TREND_WEEKDAY_REF}
+
+
+def rep_of(cx: dict) -> dict:
+    """replay_numbers, read once per request (kept in the context)."""
+    if not cx.get("_rep"):
+        cx["_rep"] = replay_numbers()
+    return cx["_rep"]
+
+
+def trend_avg_of(rec: dict, rep: dict) -> dict:
+    """The average win and loss (net ROE; the loss as a positive number) a trend-bot account's arithmetic uses: its own
+    closed trades once there are TREND_OWN_N (with both a win and a loss), else the replay's (가상); {w, l, src (own |
+    replay | none), n, src_ko}."""
+    aw, al = rec.get("avg_win"), rec.get("avg_loss")
+    if (rec.get("n") or 0) >= TREND_OWN_N and aw is not None and aw > 0 and al is not None and al < 0:
+        return {"w": aw, "l": -al, "src": "own", "n": rec["n"], "src_ko": TREND_AVG_SRC_KO["own"].format(n=rec["n"])}
+    if rep.get("state") == "ok" and rep.get("avg_win") and rep.get("avg_loss") is not None and rep["avg_loss"] < 0:
+        return {"w": rep["avg_win"], "l": -rep["avg_loss"], "src": "replay", "n": rep.get("n"),
+                "src_ko": TREND_AVG_SRC_KO["replay"].format(k=TREND_OWN_N)}
+    return {"w": None, "l": None, "src": "none", "n": rec.get("n") or 0, "src_ko": TREND_BE_NONE_KO.format(k=TREND_OWN_N)}
+
+
+def _paper_mine(cx: dict) -> list:
+    """The main paper bot's closed trades since the start (since_start)."""
+    a = cx["acc"]
+    return since_start(a.get("trades") or [], cx["start"], cx["meta"], cx["members"]) if a else []
+
+
+def trend_avgs(cx: dict) -> dict:
+    """trend_avg_of for the paper bot itself (read once per request): the numbers the break-even and the grid use."""
+    if "_avg" not in cx:
+        cx["_avg"] = trend_avg_of(record(_paper_mine(cx)), rep_of(cx))
+    return cx["_avg"]
+
+
+def _need_per_trade(target: float, n: Optional[float], m: Optional[float]) -> dict:
+    """x``target`` over ``n`` trades: the wallet growth a trade (1 + g)^n = target, and g / m as net ROE at margin ``m``."""
+    if not n or n <= 0:
+        return {"n": n, "growth": None, "roe": None}
+    g = target ** (1 / n) - 1
+    return {"n": n, "growth": g, "roe": g / m if m else None}
+
+
+def _roe_mean(trades: list, roe_key: str = "roe") -> Optional[float]:
+    xs = [r for r in (_f(t.get(roe_key)) for t in trades if _f(t.get("pnl")) is not None) if r is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+def goal_path(cx: dict, mo: dict) -> dict:
+    """목표 경로 (the trend bot): x6 in a month over N entries, N = the replay's 1.11 a weekday x this month's weekdays, and the
+    paper bot's own entries a weekday x the same once it has a whole weekday and an entry; the wallet growth a trade and
+    the net ROE at its margin that needs, next to what was done: the replay (가상), the paper since the start and each
+    executor since the start (net ROE mean, win rate, trades)."""
+    target, m = 1 + MONTHLY_TARGET, margin_share(cx["cfg"])
+    rep = rep_of(cx)
+    wd_month = mo["weekdays_gone"] + mo["weekdays_left"]
+    mine = _paper_mine(cx)
+    pos = (cx["acc"] or {}).get("position")
+    since = cx["start"].get("ms")
+    entries = [t.get("entry_time") for t in mine] + ([pos["entry_time"]] if pos and pos.get("entry_time") is not None
+                                                     and (since is None or pos["entry_time"] >= since) else [])
+    pwd = per_weekday_of(entries, since, cx["now"]) if cx["acc"] else None
+    wdays = weekday_days(since, cx["now"]) if since is not None else None
+    rows = [{"id": "replay", "per_weekday": TREND_WEEKDAY_REF, **_need_per_trade(target, (TREND_WEEKDAY_REF or 0) * wd_month, m)}]
+    if pwd:
+        rows.append({"id": "live", "per_weekday": pwd, "entries": len(entries), "weekdays": wdays,
+                     "few": wdays is None or wdays < GRID_LIVE_DAYS, **_need_per_trade(target, pwd * wd_month, m)})
+    else:
+        rows.append({"id": "live", "per_weekday": pwd, "entries": len(entries), "weekdays": wdays, "n": None, "growth": None, "roe": None,
+                     "wait_ko": "평일 하루가 다 지나면 이 봇의 진입 횟수로도 계산해요" if pwd is None
+                     else "추세판단 봇 시작 뒤 평일 진입이 아직 없어요"})
+    actual = [{"id": "replay", "kind": "replay", "state": rep.get("state"), "reason_ko": rep.get("reason_ko"), "n": rep.get("n"),
+               "win_rate": rep.get("win_rate"), "roe_mean": rep.get("roe_mean"), "window_kst": rep.get("window_kst"), "small": False}]
+    st = paper_state(cx)
+    rec = record(mine) if st["state"] == "ok" else None
+    actual.append({"id": "paper", "kind": "paper", **({"state": "ok", "n": rec["n"], "win_rate": rec["win_rate"],
+                                                       "roe_mean": _roe_mean(mine), "small": rec["small"]} if rec else _src(st))})
+    for x in cx["execs"]:
+        r = x["record"]
+        if r.get("state") != "ok":
+            actual.append({"id": x["id"], "kind": "live", **_src(r)})
+            continue
+        ts = [t for t in r.get("trades") or [] if since is None or (t.get("entry_ts") or 0) >= since]
+        lr = record(ts)
+        actual.append({"id": x["id"], "kind": "live", "state": "ok", "real": r.get("mode") == "mainnet", "n": lr["n"],
+                       "win_rate": lr["win_rate"], "roe_mean": _roe_mean(ts), "small": lr["small"],
+                       "est": sum(1 for t in ts if t.get("est"))})
+    # the need the actual rows are held against: the bot's own speed once it is measured over GRID_LIVE_DAYS weekdays
+    need = rows[1] if rows[1].get("roe") is not None and not rows[1].get("few") else rows[0]
+    return {"target_mult": target, "month_weekdays": wd_month, "margin": m, "rows": rows, "actual": actual,
+            "need_roe": need.get("roe"), "need_src": need["id"], "note_ko": PATH_KO, "replay_ko": TREND_WEEKDAY_REF_KO,
+            "small_n": SMALL_N}
+
+
+def _month_mult(n: float, m: float, p: float, w: float, l: float) -> Optional[float]:
+    """The month's multiple of n trades at win rate p, average win w and loss l (net ROE), margin m, compounded:
+    exp(n [p ln(1 + m w) + (1 - p) ln(1 - m l)]); None when a loss would take the whole stake."""
+    if m * l >= 1 or 1 + m * w <= 0:
+        return None
+    return math.exp(n * (p * math.log(1 + m * w) + (1 - p) * math.log(1 - m * l)))
+
+
+def goal_grid(cx: dict, path: dict) -> dict:
+    """무엇이면 닿나 (가상 계산): the month's multiple for each win rate (GRID_WINS) x average win (GRID_AVG_WIN) at the bot's
+    average loss (trend_avgs) over the month's entries (the bot's own count once measured over GRID_LIVE_DAYS weekdays, else
+    the replay's), each row's average win that would reach x6, and where the replay (and the bot from TREND_OWN_N trades)
+    sits."""
+    av, m, target = trend_avgs(cx), path["margin"], path["target_mult"]
+    live = next((r for r in path["rows"] if r["id"] == "live" and r.get("n") and not r.get("few")), None)
+    base = live or path["rows"][0]
+    n = base.get("n")
+    if not m or not n or av["l"] is None:
+        return {"state": "none", "ko": av["src_ko"] if av["l"] is None else "한 달 진입 횟수나 증거금을 몰라서 계산하지 못했어요"}
+    l = av["l"]
+    rows = []
+    for p in GRID_WINS:
+        cells = [{"w": w, "mult": _month_mult(n, m, p, w, l)} for w in GRID_AVG_WIN]
+        x = (math.log(target) / n - (1 - p) * math.log(1 - m * l)) / p if m * l < 1 else None
+        rows.append({"p": p, "cells": [{**c, "reach": c["mult"] is not None and c["mult"] >= target - 1e-9} for c in cells],
+                     "need_w": (math.exp(x) - 1) / m if x is not None else None})
+    rep = rep_of(cx)
+    spots = []
+    if rep.get("state") == "ok" and rep.get("win_rate") is not None and rep.get("avg_win") and rep.get("avg_loss") is not None:
+        spots.append({"id": "replay", "p": rep["win_rate"], "w": rep["avg_win"], "l": -rep["avg_loss"],
+                      "mult": _month_mult(n, m, rep["win_rate"], rep["avg_win"], -rep["avg_loss"])})
+    if av["src"] == "own":
+        rec = record(_paper_mine(cx))
+        spots.append({"id": "paper", "p": rec["win_rate"], "w": av["w"], "l": av["l"], "n_trades": rec["n"],
+                      "mult": _month_mult(n, m, rec["win_rate"], av["w"], av["l"]) if rec["win_rate"] is not None else None})
+    return {"state": "ok", "n": n, "n_src": "live" if live else "replay", "m": m, "l": l, "l_src": av["src"], "target_mult": target,
+            "wins": list(GRID_WINS), "avg_wins": list(GRID_AVG_WIN), "rows": rows, "spots": spots,
+            "ko": GRID_KO.format(n=n, l=l, m=m, src=av["src_ko"])}
+
+
+def path_progress(eq0: Optional[float], eq_now: Optional[float], from_ms: int, now: int, mo: dict, from_ko: str) -> dict:
+    """This KST month against the x6 path (the trend bot): the wallet from ``from_ms`` (the month's start, or the bot's
+    start when later) to now, and where a wallet growing to x6 over the month's weekdays would be now and at the month's
+    end from the same point (weekdays only: the bot does not enter on the weekend)."""
+    target, wd_month = 1 + MONTHLY_TARGET, mo["weekdays_gone"] + mo["weekdays_left"]
+    if not wd_month:
+        return {"state": "none"}
+    path_now = target ** (weekday_days(from_ms, now) / wd_month)
+    path_end = target ** (weekday_days(from_ms, mo["to_ms"]) / wd_month)
+    mult = eq_now / eq0 if eq0 and eq_now is not None else None
+    return {"state": "ok" if mult is not None else "none", "from_ms": from_ms, "from_ko": from_ko, "start_equity": eq0,
+            "now_equity": eq_now, "mult": mult, "path_now": path_now, "path_end": path_end,
+            "vs_path": mult / path_now - 1 if mult is not None else None, "ko": PROGRESS_KO.format(wd=wd_month)}
+
+
+def _from_of(cx: dict, mo: dict) -> tuple:
+    """(from ms, words): the month's start, or the trend bot's start when it started later this month."""
+    since = cx["start"].get("ms")
+    if since is not None and since > mo["from_ms"]:
+        return since, f"추세판단 봇 시작({_kst(since)})부터"
+    return mo["from_ms"], f"{mo['label']} 1일부터"
+
+
+def _kst(ms: int) -> str:
+    d = _dt.datetime(1970, 1, 1) + _dt.timedelta(milliseconds=int(ms) + KST_MS)
+    return f"{d.month}/{d.day} {d.hour:02d}:{d.minute:02d}"
 
 
 def goal(p: dict, now: int, more: Optional[dict] = None) -> dict:
     """GET /api/v4/livebots/goal: this month against the owners' goal, and the record so far (module docstring). Per
-    account also 목표에 필요한 승률 (``need``), per live account 돈 늘리기 기준 (``scale``), and 규칙 고정 (``frozen``)."""
+    account also 목표에 필요한 승률 (``need``), per live account 돈 늘리기 기준 (``scale``), and 규칙 고정 (``frozen``); the trend
+    bot also 목표 경로 (``path``), 무엇이면 닿나 (``grid``) and per account the x6 path this month (``progress``)."""
     cx = context(p, now, more)
     cfg = cx["cfg"]
     mo = month_of(now)
@@ -1080,19 +1295,29 @@ def goal(p: dict, now: int, more: Optional[dict] = None) -> dict:
         entries = [t.get("entry_ts") for t in mine] + ([r["position"]["entry_time"]] if r.get("position") else [])
         pwd = per_weekday_of(entries, since if since is not None else r.get("since_ms"), now)
         own = L.LP.same(x.get("paper_path") or cx["p"]["paper"], cx["p"]["paper"])   # it follows the main paper bot
+        trend = bool(cx.get("trend")) and own
+        rec = record(mine)
         accts.append({"id": x["id"], "kind": "live", "state": "ok", "start_equity": eq0, "start_ms": t0, "late_start": late,
                       "now_equity": now_eq, "now_ms": eqs["rows"][-1][0], "change": now_eq - eq0 if eq0 is not None else None,
                       "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in trades), "closed_n": len(trades),
                       "pace": pace, "so_far_per_day": (mult ** (1 / days_gone) - 1) if mult and days_gone >= 0.5 else None,
-                      "need": win_need(record(mine), pace.get("need"), mo, own_cfg, pwd, weekday_ref(cx) if own else WEEKDAY_ENTRIES),
+                      "need": win_need(rec, pace.get("need"), mo, own_cfg, pwd, weekday_ref(cx) if own else WEEKDAY_ENTRIES,
+                                       avg=trend_avg_of(rec, rep_of(cx)) if trend else None),
                       "scale": scale, **({"follows_ko": x.get("follows_ko")} if x.get("follows_ko") else {})})
+        if trend:                                        # 이번 달 x6 경로 (owners 10/21 night): real money, deposits taken out
+            f_ms, f_ko = _from_of(cx, mo)
+            e0, et, elate = _eq_from(eqs["rows"], f_ms)
+            accts[-1]["progress"] = {**path_progress(e0, now_eq, et if elate else f_ms, now, mo, f_ko), "late_start": elate}
     be, be_plain, be_ko = break_even_of(cx)
+    path = goal_path(cx, mo) if cx.get("trend") else None
     return {"now_ms": now, "start": start_out(cx), "target": MONTHLY_TARGET, "target_mult": target, "month": mo, "accts": accts,
             "record": goal_record(cx, mo), "margin": ms, "win_step": win_step, "loss_step": ms * stop_roe(cfg) if ms and stop_roe(cfg) else None,
             "break_even": be, "break_even_plain": be_plain, "break_even_ko": be_ko, "weekday_ref": weekday_ref(cx),
             "weekday_ref_ko": TREND_WEEKDAY_REF_KO if cx.get("trend") else None, "small_n": SMALL_N,
             "frozen": frozen(now, cx.get("trend")), "need_note_ko": GOAL_MATH_KO, "papers": L.papers_out(cx["bots"]), "h2h": head_to_head(cx),
-            "trend_bot": L.trend_out(cx.get("trend"))}
+            "trend_bot": L.trend_out(cx.get("trend")),
+            # the trend bot (owners 10/21 night): 목표 경로 and 무엇이면 닿나; another bot: none (the page as before)
+            "path": path, "grid": goal_grid(cx, path) if path else None}
 
 
 def _h2h_live(x: dict, since: Optional[int]) -> dict:

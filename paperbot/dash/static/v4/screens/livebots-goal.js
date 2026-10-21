@@ -19,8 +19,14 @@
 // and real money (진짜 돈) carry their own captions; a failed refresh keeps the last answer dimmed with its age.
 // 추세판단 봇 (the server's trend_bot, owners 10/21): the start is "추세판단 봇 시작", the record counts from it, the old bot's
 // 6.2 entries a weekday is gone (the server's weekday_ref is the trend bot's own measured reference, none yet: no 참고 line),
-// the break-even is the arithmetic of the bot's own config (break_even_ko says how), the money rule has no threshold yet
-// (✓ / ✗ become · : facts only), and 규칙 고정 is 2 weeks from the bot's own start.
+// the money rule has no threshold yet (✓ / ✗ become · : facts only), and 규칙 고정 is 2 weeks from the bot's own start.
+// Rebuilt for it (owners 10/21 night): the old bot's 86 % / 82-83 % break-even (+10 % / −50 % at 30 % margin) is gone; the
+// break-even and the win rate the goal needs come from the bot's own average win / loss (its closed trades from 20 on, else
+// the 7/1~10/20 replay's, 가상; break_even_ko says which). On top 목표 경로 (the server's path): x6 in a month over the
+// replay's 1.11 entries a weekday and the bot's own once measured, the wallet growth and the net ROE a trade that needs,
+// next to the replay (가상), the paper (연습) and each executor (진짜 돈); 무엇이면 닿나 (grid): the month's multiple by win
+// rate x average win at the bot's average loss, the cells that reach x6 marked, labelled 가상 계산; per account the
+// wallet against the x6 path this month (progress, from the bot's start when it started this month).
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 import {weekdaysKo} from "./livebots-expect.js";
@@ -75,15 +81,74 @@ export function beWords(be, plain) {
 /** The start in words: "추세판단 봇 시작 10/21 21:00" (the bot's own name; the old one's "규칙봇 15"). */
 export const startKo = (s) => (s && s.ms != null ? `${s.name || "규칙봇 15"} 시작 ${fmt.kst(s.ms)}` : null);
 
-/** The pace the rest of the month needs, in words (pace: the server's {need, reached, per_day, per_weekday, wins}). */
-export function paceWords(p) {
+/** The pace the rest of the month needs, in words (pace: the server's {need, reached, per_day, per_weekday, wins}; step:
+ *  the server's win_step, one first-lock win as a share of the account: 30 % margin x +10 % = +3 %, 40 % = +4 %). */
+export function paceWords(p, step = 0.03) {
   if (!p || !has(p.need)) return "계산할 잔고가 없어요";
   if (p.reached) return "이번 달 목표에 닿았어요";
   const parts = [`목표까지 ×${fmt.num(p.need, 2)} 더`];
   if (has(p.per_day)) parts.push(`남은 날 하루 ${fmt.pct(p.per_day, 1)}씩`);
   if (has(p.per_weekday)) parts.push(`평일만 치면 하루 ${fmt.pct(p.per_weekday, 1)}씩`);
-  if (has(p.wins)) parts.push(`+3% 승리로 ${fmt.int(p.wins)}번 (지는 거래 없이)`);
+  if (has(p.wins)) parts.push(`${fmt.pct(has(step) ? step : 0.03, 0)} 승리로 ${fmt.int(p.wins)}번 (지는 거래 없이)`);
   return parts.join(" · ");
+}
+
+// ---------------------------------------------------------------- 추세판단 봇 (owners 10/21 night: the tab rebuilt for it)
+/** 목표 경로 (the server's path) as rows: per entry speed (the replay's, the bot's own once measured) the month's entries,
+ *  the wallet growth a trade and the net ROE at the margin that x6 needs; a speed not measured yet says why. */
+export function pathRows(p) {
+  if (!p || !Array.isArray(p.rows)) return [];
+  return p.rows.map((r) => {
+    const who = r.id === "replay" ? "재현 진입 속도" : "이 봇 실제 진입 속도";
+    if (!has(r.n) || !has(r.growth)) return {id: r.id, ko: who, wait: r.wait_ko || "계산할 숫자가 없어요"};
+    return {id: r.id, ko: `${who} (평일 하루 ${fmt.num(r.per_weekday, 2)}번 × 평일 ${fmt.num(p.month_weekdays, 0)}일)`,
+      n: `한 달 약 ${fmt.num(r.n, 0)}번`, growth: `거래마다 지갑 ${fmt.pct(r.growth, 1)}`, roe: has(r.roe) ? fmt.pct(r.roe, 1) : "—",
+      few: !!r.few, fewKo: r.few ? `평일 ${fmt.num(r.weekdays, 1)}일로 잰 속도라 아직 흔들려요` : null};
+  });
+}
+
+/** What was done next to the need: [{id, name, n, win, roe, gap, tone, small, state, reason}] (the replay 가상, the paper
+ *  연습, each executor 진짜 돈), gap = mean net ROE - the need (per trade, %p). */
+export function actualRows(p) {
+  if (!p || !Array.isArray(p.actual)) return [];
+  const need = p.need_roe;
+  return p.actual.map((r) => {
+    const name = r.id === "replay" ? "재현 (가상)" : acctKo(r.id);
+    if (r.state !== "ok") return {id: r.id, name, state: r.state || "missing", reason: r.reason_ko || "기록이 없어요"};
+    const roe = has(r.roe_mean) ? Number(r.roe_mean) : null;
+    const gap = roe != null && has(need) ? roe - Number(need) : null;
+    return {id: r.id, name, state: "ok", kind: r.kind, n: has(r.n) ? `${fmt.int(r.n)}번` : "—",
+      win: has(r.win_rate) ? fmt.pct(r.win_rate, 0, false) : "—", roe: roe != null ? fmt.pct(roe, 1) : "—", tone: roe != null ? fmt.tone(roe, fmt.pct(roe, 1)) : "",
+      gap: gap != null ? `${fmt.num(gap * 100, 1, true)}%p` : "—", gapTone: gap != null ? (gap >= 0 ? "up" : "down") : "",
+      small: r.kind !== "replay" && !!r.small, est: r.est || 0, real: r.real};
+  });
+}
+
+/** 무엇이면 닿나 (the server's grid) as a table: {head, rows: [{p, cells: [{text, reach, tone}], need}]}; null without it. */
+export function gridView(g) {
+  if (!g || g.state !== "ok" || !Array.isArray(g.rows)) return null;
+  const head = ["이긴 비율 \\ 이긴 거래 평균", ...(g.avg_wins || []).map((w) => fmt.pct(w, 0)), "×6에 필요한 이긴 거래 평균"];
+  const rows = g.rows.map((r) => ({p: fmt.pct(r.p, 0, false),
+    cells: r.cells.map((c) => ({text: has(c.mult) ? multKo(c.mult) : "—", reach: !!c.reach, tone: has(c.mult) ? (c.mult >= 1 ? "up" : "down") : ""})),
+    need: has(r.need_w) ? fmt.pct(r.need_w, 0) : "—"}));
+  return {head, rows};
+}
+
+/** Where the replay (and the bot, from 20 trades) sits on the grid, in words. */
+export function spotWords(g) {
+  if (!g || g.state !== "ok") return [];
+  return (g.spots || []).map((s) => `${s.id === "replay" ? "재현(가상)" : "이 봇 (페이퍼)"}: 이긴 비율 ${fmt.pct(s.p, 0, false)} · 이긴 거래 평균 `
+    + `${fmt.pct(s.w, 1)} · 진 거래 평균 ${fmt.pct(-s.l, 1)} → 한 달 ${multKo(s.mult)}`);
+}
+
+/** An account against the x6 path this month (the server's progress), in words: {ko, sub, at, path} (at / path: 0..1 on
+ *  the bar, the log scale of progressOf). */
+export function progressWords(pr, target = 5) {
+  if (!pr || pr.state !== "ok") return null;
+  const gap = has(pr.vs_path) ? `경로보다 ${fmt.pct(pr.vs_path, 1)}` : "";
+  return {ko: `×6 경로라면 지금 ${multKo(pr.path_now)} · 실제 ${multKo(pr.mult)}${gap ? ` (${gap})` : ""}`,
+    sub: `${pr.from_ko || ""} · 월말 경로 ${multKo(pr.path_end)}${pr.late_start ? " · 첫 잔고 기록부터 셈" : ""}`,
+    at: progressOf(pr.mult - 1, target), path: progressOf(pr.path_now - 1, target), tone: has(pr.vs_path) ? (pr.vs_path >= 0 ? "up" : "down") : ""};
 }
 
 /** 손절 비교 (the server's h2h) as a plain table: {head: [two column titles], rows: [{k, cells: [two texts], tones: [two
@@ -131,7 +196,13 @@ export function goalView(ctx) {
   h2hCard.hidden = true;                                  // one paper bot: no card (the page as before)
   const recCard = ui.card({title: "지금까지 기록", sub: "페이퍼(연습) · 규칙봇 15 시작부터 닫힌 거래", cls: "lbg-card lbg-rec"}, rec);
   const recSub = recCard.firstChild ? Array.from(recCard.firstChild.childNodes).find((n) => String(n.className || "") === "sub") : null;
-  const body = h("div", {class: "lbg-body stack"}, head, cards,
+  // the trend bot only (the server's path / grid): another bot's page stays as it was
+  const pathSlot = h("div", {class: "lbg-slot"});
+  const pathCard = ui.card({title: "목표 경로 (한 달 ×6)", sub: "필요한 것 vs 지금까지 · 목표일 뿐 예측이 아니에요", cls: "lbg-card lbg-path"}, pathSlot);
+  const gridSlot = h("div", {class: "lbg-slot"});
+  const gridCard = ui.card({title: "무엇이면 닿나", sub: "가상 계산 · 이긴 비율 × 이긴 거래 평균", cls: "lbg-card lbg-grid"}, gridSlot);
+  pathCard.hidden = gridCard.hidden = true;
+  const body = h("div", {class: "lbg-body stack"}, head, pathCard, cards, gridCard,
     recCard,
     ui.card({title: "지금 기록 그대로라면", sub: "계산일 뿐이에요 · 예측이 아니에요", cls: "lbg-card lbg-imply"}, imply),
     h2hCard,
@@ -139,6 +210,52 @@ export function goalView(ctx) {
       ui.assumeLive("바이비트 · WOO X Pro: 잔고 기록 기준 · 입출금 뺌")));
   const el = h("div", {class: "lbg stack"}, stateSlot, body);
 
+  function progressEl(a, d) {
+    if (!a.progress) return null;
+    const w = progressWords(a.progress, d.target);
+    if (!w) return h("p", {class: "lbg-pp-none"}, "×6 경로와 견줄 잔고 기록이 아직 없어요");
+    const pct = (x) => `${Math.round(Math.max(0, Math.min(1, x || 0)) * 1000) / 10}%`;
+    return h("div", {class: "lbg-pp"}, h("b", {class: "lbg-pp-k"}, a.kind === "live" ? "이번 달 ×6 경로 (진짜 돈)" : "이번 달 ×6 경로 (연습 돈)"),
+      h("div", {class: "lbg-pbar", role: "img", "aria-label": w.ko}, h("i", {class: w.tone, style: {width: pct(w.at)}}),
+        w.path != null ? h("em", {style: {left: pct(w.path)}, title: "×6 경로의 지금 자리"}) : null),
+      h("p", {class: ["lbg-pp-ko", w.tone]}, w.ko), h("small", {class: "muted"}, w.sub));
+  }
+  function drawPath(d) {
+    const p = d.path, g = d.grid;
+    pathCard.hidden = !p;
+    gridCard.hidden = !g;
+    if (p) {
+      const rows = pathRows(p), act = actualRows(p);
+      put(pathSlot,
+        h("p", {class: "lbg-path-why"}, `×6 = 한 달 +${fmt.num((p.target_mult - 1) * 100, 0)}% · 거래마다 지갑이 같은 만큼 불어난다고 치면, 한 번에 증거금 `
+          + `${fmt.pct(p.margin, 0, false)}를 거니까 순ROE로는 그 ${fmt.num(1 / (p.margin || 1), 1)}배가 필요해요`),
+        h("div", {class: "lbg-path-rows", role: "list"}, rows.map((r) => h("div", {class: ["lbg-path-row", r.wait ? "wait" : ""], role: "listitem"},
+          h("span", {class: "lbg-path-k"}, r.ko),
+          r.wait ? h("span", {class: "muted"}, r.wait)
+            : [h("span", null, r.n), h("span", null, r.growth), h("b", {class: "num"}, `평균 순ROE ${r.roe}`), r.fewKo ? h("small", {class: "muted"}, r.fewKo) : null]))),
+        h("div", {class: "tbl-wrap"}, h("table", {class: "tbl lbg-act-t"},
+          h("thead", null, h("tr", null, ...["", "거래", "이긴 비율", "평균 순ROE",
+            `필요한 것과 차이 (${p.need_src === "live" ? "실제 진입 속도" : "재현 진입 속도"} 기준)`].map((t, i) => h("th", {class: i ? "" : "l"}, t)))),
+          h("tbody", null, act.map((r) => h("tr", {class: r.state !== "ok" ? "off" : ""},
+            h("td", {class: "l"}, r.id === "replay" ? r.name : acctTag(r.id), r.kind === "live" && r.real === false ? h("small", {class: "muted"}, " 테스트넷") : null),
+            ...(r.state !== "ok" ? [h("td", {colspan: 4, class: "l muted"}, r.reason)]
+              : [h("td", {class: "num"}, r.n, r.small ? " " : null, r.small ? ui.pill("표본 적음", "thin", `${p.small_n || 20}번 미만: 대부분 운이에요`) : null),
+                h("td", {class: "num"}, r.win),
+                h("td", {class: ["num", r.tone]}, r.roe), h("td", {class: ["num", r.gapTone]}, r.gap)])))))),
+        act.some((r) => r.est) ? ui.note("≈ 실거래 순ROE에는 체결 기록 전이라 지갑 변화로 어림한 거래가 섞여 있어요") : null,
+        ui.note(p.note_ko || ""), p.replay_ko ? ui.note(`재현: ${p.replay_ko}`) : null);
+    } else put(pathSlot);
+    if (g) {
+      const t = gridView(g);
+      put(gridSlot, !t ? h("p", {class: "lbg-path-why"}, g.ko || "계산할 숫자가 아직 없어요") : [
+        h("div", {class: "tbl-wrap"}, h("table", {class: "tbl lbg-grid-t"},
+          h("thead", null, h("tr", null, t.head.map((c, i) => h("th", {class: i ? "" : "l"}, c)))),
+          h("tbody", null, t.rows.map((r) => h("tr", null, h("th", {class: "l", scope: "row"}, r.p),
+            ...r.cells.map((c) => h("td", {class: ["num", c.reach ? "reach" : "", c.tone]}, c.text)), h("td", {class: "num lbg-need-w"}, r.need)))))),
+        ...spotWords(g).map((s) => h("p", {class: "lbg-spot"}, s)),
+        h("p", {class: "lbg-warn"}, g.ko)]);
+    } else put(gridSlot);
+  }
   function acctCard(a, d) {
     const name = [acctTag(a.id), h("span", {class: ["lbg-kind", a.kind]}, a.kind === "live" ? "실거래 · 진짜 돈" : "모의 · 연습 돈"),
       a.follows_ko ? h("small", {class: "muted"}, ` 따라감 · ${a.follows_ko}`) : null];
@@ -163,8 +280,9 @@ export function goalView(ctx) {
         h("span", {class: "s"}, has(a.change) ? `${fmt.money(a.change, true)} USDT · ${fmt.money(a.start_equity)} → ${fmt.money(a.now_equity)}` : "—")),
       h("div", {class: "lbg-prog", role: "img", "aria-label": `목표 ×${fmt.num(d.target_mult, 0)}까지 ${prog == null ? "—" : fmt.pct(prog, 0, false)}`},
         h("i", {style: {width: `${Math.round((prog || 0) * 1000) / 10}%`}}), h("span", {class: "lbg-pgoal"}, `목표 ×${fmt.num(d.target_mult, 0)}`)),
-      h("p", {class: "lbg-pace"}, paceWords(a.pace)),
+      h("p", {class: "lbg-pace"}, paceWords(a.pace, d.win_step)),
       has(a.so_far_per_day) ? h("p", {class: "lbg-sofar"}, `지금까지 하루 평균 ${fmt.pct(a.so_far_per_day, 1)} (복리)`) : null,
+      progressEl(a, d),
       a.late_start ? ui.note(`이 계좌는 ${fmt.kst(a.start_ms)} 첫 잔고 기록부터 셌어요`) : null,
       ui.note(`이번 달 닫힌 거래 ${fmt.int(a.closed_n || 0)}번 · ${fmt.money(a.closed_pnl, true)} USDT`), needEl, scaleEl);
   }
@@ -234,6 +352,7 @@ export function goalView(ctx) {
       startKo(d.start) ? h("span", {class: "muted"}, ` · ${startKo(d.start)}`) : null,
       d.frozen ? h("span", {class: ["lbg-frozen", d.frozen.on ? "on" : ""], title: d.frozen.why_ko || ""}, ` · ${d.frozen.ko}`) : null);
     put(cards, (d.accts || []).map((a) => acctCard(a, d)));
+    drawPath(d);
     drawRec(d);
     drawH2h(d);
   }
