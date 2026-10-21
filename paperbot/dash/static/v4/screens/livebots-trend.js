@@ -329,7 +329,8 @@ export function trendView(ctx, hub) {
     return h("div", {class: "ltr-inh", role: "note"},
       h("b", null, "전환 전 포지션"),
       h("span", null, `예전 ${prev}가 ${fmt.kst(p.entry_time)}에 연 포지션이에요 · 새 봇(${fmt.kst((t.bot || {}).since)} 시작)이 `
-        + "이어서 정리해요: 손절 · 계단 익절 · 추세 뒤집힘 청산(첫 잠금 전)"),
+        + (p.locked ? "첫 잠금에 가 있어 계단 익절로 이어서 정리해요"
+          : "다음 1분 안에 \"전환 전 포지션 정리\"로 닫아요 (첫 잠금 전이라서)")),
       h("span", null, "닫힐 때까지 새 봇은 새로 들어가지 않아요 (한 번에 하나) · 이 거래는 새 봇 성적에 세지 않아요"));
   }
   function prevClosed(t) {

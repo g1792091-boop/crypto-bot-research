@@ -64,9 +64,14 @@ def _switch(tmp_path, monkeypatch):
     w.store.put_state("combo_run", T.T0, {"config": _cfg_json(w)})
     B, p = T._enter_long(w)
     since = B + 10 * MIN
-    w.run.since = since                                     # the switch: everything before is the bot before it
     w.judge.j[("BTCUSDT", "1h")] = T.J(dir=-1, votes={"V39": -1, "S6": -1, "OBV": -1, "N12": 1})
     T._to(w, B + 3 * MIN, since + 2 * MIN)
+    # the switch: everything before is the bot before it. Set after the last minute stepped: the trend bot closes such a
+    # position at its next minute (SWITCH, owners 10/21 night), so this is the page at the switch's first minute
+    w.run.since = since
+    w.run._snap = None
+    w.run._snapshot(since + 2 * MIN)                         # the trend state with the new start (the page reads it)
+    w.run._save_state(since + 2 * MIN)
     w.store.commit()
     key = f"{L.ACCOUNT}|BTCUSDT|{p.entry_time}"
     paths = {"paper": w.cfg.db}
@@ -112,15 +117,15 @@ def test_the_position_from_before_the_switch_and_the_executors_part_in_it(tmp_pa
 
 def test_once_closed_it_is_listed_apart_and_never_the_bots_trade(tmp_path, monkeypatch):
     w, B, p, since, paths = _switch(tmp_path, monkeypatch)
-    H = T.T0 + HOUR                                          # the first 1h close after the entry: JUDGE
-    T._to(w, since + 2 * MIN, H + 2 * MIN)
+    H = T.T0 + HOUR
+    T._to(w, since + 2 * MIN, H + 2 * MIN)                   # its first minute closes the position from before (SWITCH)
     w.store.commit()
     d = json_finite(LT.build(paths, H + 3 * MIN))
     assert d["position"] is None
     (x,) = d["prev"]["closed"]
-    assert (x["symbol"], x["reason"], x["reason_ko"]) == ("BTCUSDT", "JUDGE", "감독 청산(추세 뒤집힘)") and x["entry_time"] < since
-    (s,) = d["sup"]
-    assert s["inherited"] is True and s["reason"] == "JUDGE"
+    assert (x["symbol"], x["reason"], x["entry_time"]) == ("BTCUSDT", "SWITCH", B + 2 * MIN) and x["entry_time"] < since
+    assert x["exit_time"] == since + 2 * MIN
+    assert d["sup"] == []                                    # not a supervisor exit of this bot
     assert d["record"]["n"] == 0 and d["trades"] == []       # the bot's record starts empty
 
 
@@ -216,7 +221,7 @@ def test_the_view_of_the_switch_night(tmp_path, monkeypatch):
     for words in (
             # the hero and the position: the bot before it's, closed by this one, never its trade
             "전환 전 포지션 정리 중 · BTC 롱", "전환 전 포지션 (예전 규칙봇 15가 연 것, 새 봇이 이어서 정리)",
-            "예전 규칙봇 15가", "이어서 정리해요: 손절 · 계단 익절 · 추세 뒤집힘 청산(첫 잠금 전)",
+            "예전 규칙봇 15가", "다음 1분 안에 \"전환 전 포지션 정리\"로 닫아요 (첫 잠금 전이라서)",
             "닫힐 때까지 새 봇은 새로 들어가지 않아요 (한 번에 하나)", "새 봇 성적에 세지 않아요",
             # its 1h judgment was against it from the entry: closed only if the next close is against it too
             "진입 때부터 반대 · 10:00에 끝나는 1시간봉도 반대면 감독 청산",
@@ -477,5 +482,6 @@ def test_trades_entered_before_the_start_are_tagged(tmp_path, monkeypatch):
     r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     out = json.loads(r.stdout.strip().splitlines()[-1])
-    assert "전환 전" in out["text"] and "감독 청산" in out["text"]
-    assert "전환 전" not in out["other"]                        # another bot: no tag
+    assert "전환 전" in out["text"] and "전환 전 포지션 정리" in out["text"]
+    # another bot: no tag (only the exit reason's own words "전환 전 포지션 정리")
+    assert out["other"].count("전환 전") == out["other"].count("전환 전 포지션 정리")

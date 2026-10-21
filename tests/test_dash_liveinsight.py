@@ -910,7 +910,9 @@ def test_the_files_keep_the_house_rules():
         for bad in ("innerHTML", "insertAdjacentHTML", "outerHTML", "DOMParser", "eval(", "toLocaleString", "Intl.NumberFormat", "setInterval(",
                     "localStorage", "toFixed("):
             assert bad not in code, (name, bad)
-        assert set(re.findall(r'from "([^"]+)"', js)) == {"../core/pb.js", "./livebots-kit.js"}, name
+        # 목표 reads the replay's first-day words from 재현 비교 (weekdaysKo: "평일 30분", owners 10/21 "허전해 보여서")
+        want = {"../core/pb.js", "./livebots-kit.js"} | ({"./livebots-expect.js"} if name == "goal" else set())
+        assert set(re.findall(r'from "([^"]+)"', js)) == want, name
         assert f'export function {name}View(ctx)' in js and f'"/api/v4/livebots/{name}"' in js, name
         assert f'@import url("livebots-{name}.css");' in lbcss, name                     # loaded with the 실거래 screen's css
         assert "ui.staleNote(e, st.okAt" in js and "ui.dim(body, !!st.d)" in js and "sourceState(" in js, name
