@@ -564,7 +564,8 @@ def test_safety_shows_the_lights_history(tmp_path):
 def test_shadows_from_the_same_start_or_not_there_yet(world, tmp_path, monkeypatch):
     monkeypatch.setenv("PAPERBOT_LIVE_SHADOW_DIR", str(tmp_path / "nowhere"))
     sh = L.shadows(world, NOW)
-    assert [x["state"] for x in sh["shadows"]] == ["missing"] * 5
+    assert [x["state"] for x in sh["shadows"]] == ["missing"] * 6                      # the old bots' (규칙봇 15 too)
+    assert [x["state"] for x in sh["trend"]["shadows"]] == ["off"] * 3 and sh["trend"]["on"] is False   # not the trend bot here
     assert sh["start_ko"].startswith("sudo systemctl start paperbot-combo-shadow@b")
     d = tmp_path / "sh"
     d.mkdir()
@@ -573,10 +574,11 @@ def test_shadows_from_the_same_start_or_not_there_yet(world, tmp_path, monkeypat
         fh.write(b"garbage" * 100)
     monkeypatch.setenv("PAPERBOT_LIVE_SHADOW_DIR", str(d))
     sh = L.shadows(world, NOW)
-    b, nocut, ac32, chase, trend4h = sh["shadows"]
+    b, nocut, ac32, chase, trend4h, rule15 = sh["shadows"]
     assert b["state"] == "ok" and b["name_ko"] == "그림자 B 안정형" and b["stats"]["trades"] == 4 and b["stats"]["pnl"] == pytest.approx(-15.0)
     assert b["since_ms"] == W.T0 and b["main"]["stats"]["trades"] == 6                     # the live paper over the same start
-    assert nocut["state"] == "error" and ac32["state"] == chase["state"] == trend4h["state"] == "missing"
+    assert nocut["state"] == "error" and ac32["state"] == chase["state"] == trend4h["state"] == rule15["state"] == "missing"
+    assert b["until_ms"] is None and b["no_overlap"] is False                            # another live bot: compared as before
 
 
 def test_settings_group_every_setting_by_strategy(world, monkeypatch):
@@ -605,7 +607,7 @@ def test_settings_fall_back_to_the_config_file_then_say_missing(tmp_path, monkey
 def test_the_last_three_routes(client):
     client.post("/api/login", json={"password": PW})
     assert len(client.get("/api/v4/livebots/safety").json()["execs"]) == 2
-    assert len(client.get("/api/v4/livebots/shadows").json()["shadows"]) == 5
+    assert len(client.get("/api/v4/livebots/shadows").json()["shadows"]) == 6
     assert client.get("/api/v4/livebots/settings").json()["n_settings"] == 3
 
 

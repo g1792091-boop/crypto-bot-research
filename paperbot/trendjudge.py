@@ -20,7 +20,8 @@ only early in the trend (ADX below ``breakout_adx_max`` and rising); the price a
 beyond the higher bar's EMA20 in the trade's direction and within ``etf_ema_atr`` (1.5) ATR of the entry bar's EMA20;
 entry-bar RSI below 70 for a long, above 30 for a short. A pass returns the pullback to wait for: ``pullback_atr``
 (0.25) entry-bar ATR from the reference price, ``pullback_big_atr`` (0.5) when the signal bar's range is over
-``big_bar_atr`` (2) ATR (a long bar is never chased: a deeper pullback).
+``big_bar_atr`` (2) ATR (a long bar is never chased: a deeper pullback). With ``pullback_wait`` false (the shadow
+trend-now only; the owners' config waits) the runner enters at the signal's own minute instead (paperbot/trendbot.py).
 
 Bars: Binance USDT-M klines (public; volume for OBV), only bars closed ``SETTLE_MS`` before now, the last ``KEEP`` closed
 bars at or before the time asked (``Klines.frame``): the same answer for the same minute on a replay.
@@ -72,6 +73,8 @@ class TrendRules:
     big_bar_atr: float = 2.0          # a signal bar longer than this many ATR: the deeper pullback
     pullback_atr: float = 0.25        # the pullback waited for (entry-bar ATR from the reference price)
     pullback_big_atr: float = 0.5
+    pullback_wait: bool = True        # False: a signal that passed enters at its own minute like the combined bot's, no
+                                      # pullback wait (the shadow trend-now, owners 10-21: rule variants for the 11/04 review)
     rsi_long_max: float = 70.0        # entry-bar RSI(14): no long at or above, no short at or below rsi_short_min
     rsi_short_min: float = 30.0
     breakout: tuple = BREAKOUT        # strategies that take only an early trend
@@ -138,6 +141,8 @@ class TrendRules:
         num("record_min", 1, 100, True)
         if not isinstance(self.judge_exit, bool):
             out.append("trend.judge_exit는 true 또는 false입니다")
+        if not isinstance(self.pullback_wait, bool):
+            out.append("trend.pullback_wait는 true 또는 false입니다")
         if not (isinstance(self.breakout, tuple) and all(isinstance(s, str) for s in self.breakout)):
             out.append("trend.breakout은 매매법 이름 목록입니다")
         if not out and self.adx_tired <= self.adx_min:
@@ -150,13 +155,16 @@ class TrendRules:
         """The rules in the owners' words (check-config, the start message, the docs)."""
         return [
             f"추세 판단: 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉 / 판단 4개(V3.9·EMA·DMI·ADX·OBV 추세형·일목·AO) 중 "
-            f"{self.vote_min}개 이상 같은 쪽 / ADX {self.adx_min:g} 이상, {self.adx_tired:g} 넘고 꺾이면 끝물 / "
+            + (f"{self.vote_min}개 이상" if self.vote_min != 4 else "4개 모두")
+            + f" 같은 쪽 / ADX {self.adx_min:g} 이상, {self.adx_tired:g} 넘고 꺾이면 끝물 / "
             f"유지 1시간봉 {self.hold_1h}개·4시간봉 {self.hold_4h}개 / 보류면 진입 안 함",
             f"진입 전 검사: 상위 봉 EMA20에서 진입 방향 {self.htf_ema_atr:g} ATR 넘게 멀면 안 함 / 진입 봉 EMA20에서 "
             f"{self.etf_ema_atr:g} ATR 안 / RSI 롱 {self.rsi_long_max:g} 미만·숏 {self.rsi_short_min:g} 초과 / 돌파형("
             f"{', '.join(self.breakout)})은 ADX {self.breakout_adx_max:g} 미만이고 오를 때만 / 추격 막기 전체",
-            f"진입 방식: 진입 봉 하나 동안 {self.pullback_atr:g} ATR 되돌림을 기다림(신호 봉이 {self.big_bar_atr:g} ATR 넘는 "
-            f"장대봉이면 {self.pullback_big_atr:g} ATR), 안 오면 버림 / 동시 신호는 점수(판단 강도+자리+최근 성적)",
+            (f"진입 방식: 진입 봉 하나 동안 {self.pullback_atr:g} ATR 되돌림을 기다림(신호 봉이 {self.big_bar_atr:g} ATR 넘는 "
+             f"장대봉이면 {self.pullback_big_atr:g} ATR), 안 오면 버림" if self.pullback_wait is not False
+             else "진입 방식: 되돌림을 기다리지 않고 검사를 통과한 신호에 바로 진입(신호 나온 그 분)")
+            + " / 동시 신호는 점수(판단 강도+자리+최근 성적)",
             "쉬기: " + " / ".join([
                 f"같은 매매법 손실 {self.member_losses}번 연속이면 {self.member_pause_h:g}시간" if self.member_losses is not None
                 else "매매법 쉬기 없음",

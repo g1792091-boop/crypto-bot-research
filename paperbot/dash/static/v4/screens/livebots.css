@@ -303,6 +303,31 @@
 .lb-shk { color: var(--accent); } .lb-mk { color: var(--ink-2); }
 .lb-cmd { display: block; padding: 8px 10px; border-radius: var(--r-sm); background: var(--surface-2); font: 600 var(--t-xs)/1.5 var(--f-term); color: var(--ink);
   overflow-wrap: anywhere; white-space: normal; }
+/* 추세판단 봇 그림자 (livebots-shadow.js): the one difference, the same-span table (그림자 | 실거래 페이퍼), the commands */
+.lb-tsh-diff { display: grid; gap: 2px; font-size: var(--t-sm); min-width: 0; }
+.lb-tsh-diff p { margin: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.lb-tsh-live { color: var(--ink-2); }
+.lb-tsh-grid { display: grid; margin-top: 8px; min-width: 0; font-size: var(--t-sm); }
+.lb-tsh-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: baseline;
+  padding: 6px 2px; border-top: 1px solid var(--line); }
+.lb-tsh-row > span { min-width: 0; overflow-wrap: anywhere; }
+.lb-tsh-hd { border-top: 0; font-size: var(--t-xs); font-weight: 700; }
+.lb-tsh-hd > :first-child, .lb-tsh-k, .lb-tsh-mn, .lb-tsh-key { color: var(--ink-2); }
+.lb-tsh-sh { color: var(--ink); font-weight: 700; }
+.lb-tsh-key { margin: 4px 0 0; font-size: var(--t-xs); }
+.lb-tsh-state, .lb-tsh-cfg { margin: 6px 0 0; font-size: var(--t-sm); overflow-wrap: anywhere; }
+.lb-tsh-cfg { color: var(--ink-2); }
+.lb-tsh-cfg.warn { color: var(--warn); font-weight: 700; }
+.lb-tsh-code { font: 600 var(--t-xs)/1.5 var(--f-term); overflow-wrap: anywhere; }
+.lb-tsh-how { display: grid; gap: 4px; margin-top: 6px; font-size: var(--t-sm); min-width: 0; }
+.lb-tsh-old { min-width: 0; }
+.lb-tsh-old .region { margin-top: 8px; }
+/* a phone: the row's name over its two numbers */
+@media (max-width: 520px) {
+  .lb-tsh-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2px 10px; }
+  .lb-tsh-row > :first-child { grid-column: 1 / -1; }
+  .lb-tsh-hd > :first-child { display: none; }
+}
 .lb-rules .kv { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
 .lb-rules .kv dd { overflow-wrap: anywhere; }
 .lb-ghead { margin: 0 0 6px; font-size: var(--t-sm); color: var(--ink); }

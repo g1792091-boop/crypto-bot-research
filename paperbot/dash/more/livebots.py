@@ -1331,7 +1331,9 @@ FILTER_KO = {"session": "시간대", "weekend": "주말", "btc": "BTC 4시간 �
 SIGNALS_KEEP = 200                     # recent signal rows sent (the page pages them 10 at a time)
 TRADES_KEEP = 500                      # closed trades per account sent to 거래 (newest first)
 SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocut.db", "그림자 끄는 구간 없음"), ("ac32", "shadow-ac32.db", "그림자 32개"),
-           ("chase", "shadow-chase.db", "그림자 어중간한 추격 막기"), ("trend4h", "shadow-trend4h.db", "그림자 4시간 역추세만"))
+           ("chase", "shadow-chase.db", "그림자 어중간한 추격 막기"), ("trend4h", "shadow-trend4h.db", "그림자 4시간 역추세만"),
+           ("rule15", "shadow-rule15.db", "그림자 규칙봇 15(옛 규칙)"))
+# the old bots' shadows above (A+C 합본 · 규칙봇 15); the 추세판단 봇's own three are dash/more/liveshadow.py TREND_SHADOWS
 # the live checks' own files (read-only here): paperbot/livecheck.py (morning check, watcher, loss cards) and
 # paperbot/liveimprove.py (weekly scorecard, the improvement ledger)
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
@@ -2008,12 +2010,23 @@ def safety(p: dict, now: int, keep: int = 500, more: Optional[dict] = None) -> d
 
 
 # ---------------------------------------------------------------- 그림자
-def shadows(p: dict, now: int) -> dict:
-    """GET /api/v4/livebots/shadows: the shadow paper bots (other settings of the same combined bot, same database shape,
-    account COMBO@mix) next to the live paper bot, each counted from the same start (the later of the two first records)."""
+OLD_ERA_KO = "예전 봇(A+C 합본 · 규칙봇 15)의 설정을 바꾼 그림자예요. 지금 추세판단 봇과는 견주지 않아요"
+
+
+def shadows(p: dict, now: int, units=None) -> dict:
+    """GET /api/v4/livebots/shadows: ``trend`` the 추세판단 봇's own shadows, each next to the live paper bot from its own
+    start, by trade and net ROE (dash/more/liveshadow.py); ``shadows`` the old bots' shadows (other settings of the
+    combined bot before it, same database shape, account COMBO@mix) next to the live paper bot, each counted from the same
+    start (the later of the two first records). While the live paper runs the trend bot an old shadow is compared only
+    over the old bot's days (``until_ms``: the trend bot's start; ``no_overlap`` when it started later: its own record
+    only)."""
+    from . import liveshadow as LS                            # (liveshadow imports this module)
     more = paths_more()
     main = read_paper(p["paper"], [ACCOUNT], now)
     ma = (main.get("accounts") or {}).get(ACCOUNT) if main.get("state") == "ok" else None
+    tb = trend_bot(p["paper"])
+    end = tb["since"] if tb else None
+    before = lambda ts: [t for t in ts if end is None or (t.get("entry_time") or 0) < end]   # noqa: E731
     out = []
     for sid, fname, ko in SHADOWS:
         path = os.path.join(more["shadow_dir"], fname)
@@ -2024,14 +2037,19 @@ def shadows(p: dict, now: int) -> dict:
             row.update(state="missing", reason_ko="이 그림자 DB에 아직 계좌 기록이 없어요")
         elif sa:
             start = max(x for x in (sa.get("since_ms"), (ma or {}).get("since_ms"), 0) if x is not None)
+            apart = end is not None and start >= end             # turned on after the old bot ended: nothing to compare
             st_ = [t for t in sa.get("trades") or [] if (t.get("entry_time") or 0) >= start]
-            mt = [t for t in (ma or {}).get("trades") or [] if (t.get("entry_time") or 0) >= start] if ma else None
+            st_ = st_ if apart else before(st_)
+            mt = before([t for t in (ma or {}).get("trades") or [] if (t.get("entry_time") or 0) >= start]) if ma and not apart else None
             row.update(since_ms=start, as_of_ms=sh.get("as_of_ms"), stale=sh.get("stale"), name_cfg=sh.get("name_ko"),
                        stats=stats(t["pnl"] for t in st_), curve=thin([[t["exit_time"], c] for t, c in zip(st_, _cum(st_))]),
                        main=({"stats": stats(t["pnl"] for t in mt), "curve": thin([[t["exit_time"], c] for t, c in zip(mt, _cum(mt))])} if mt is not None else None),
-                       position=sa.get("position"))
+                       position=sa.get("position"), until_ms=None if apart else end, no_overlap=apart,
+                       later=(sum(1 for t in sa.get("trades") or [] if (t.get("entry_time") or 0) >= end) if end is not None and not apart else None))
         out.append(row)
-    return {"now_ms": now, "shadows": out, "main": {"state": main.get("state"), "reason_ko": main.get("reason_ko"),
+    return {"now_ms": now, "trend": LS.trend_shadows(p, now, more["shadow_dir"], units), "shadows": out,
+            "old_until_ms": end, "old_ko": OLD_ERA_KO,
+            "main": {"state": main.get("state"), "reason_ko": main.get("reason_ko"),
             "since_ms": (ma or {}).get("since_ms"), "stats": (ma or {}).get("stats")},
             "start_ko": "sudo systemctl start " + " ".join(f"paperbot-combo-shadow@{sid}" for sid, _f, _k in SHADOWS),
             "dir": more["shadow_dir"]}

@@ -144,7 +144,10 @@ REF_OTHER_CONFIG_KO = "이 설정의 5년 기준표가 없어요(지난 봇 기�
 PAPER_DB = "/var/lib/paperbot/combo/live-ac.db"
 RULE_DB = "/var/lib/paperbot/paper3.db"
 SHADOW_GLOB = "/var/lib/paperbot/combo/shadow-*.db"
-SHADOW_NAMES = {"shadow-b": "그림자 B 안정형", "shadow-nocut": "그림자 끄는 구간 없음", "shadow-ac32": "그림자 32개"}
+SHADOW_NAMES = {"shadow-b": "그림자 B 안정형", "shadow-nocut": "그림자 끄는 구간 없음", "shadow-ac32": "그림자 32개",
+                # the 추세판단 봇's own (deploy/combo.shadow-trend-*.json; the live site's 그림자 tab compares them by ROE)
+                "shadow-trend-time": "그림자 시간 정리 있음", "shadow-trend-now": "그림자 되돌림 없이 바로 진입",
+                "shadow-trend-vote4": "그림자 판단 4개 모두 같은 쪽"}
 # (name, executor config, systemd unit, fallbacks when the config cannot be read: db, light N, light share; the live
 # configs run without the signal light since owners 10-19 (deploy/executor.live-*.json "signal_light_n": 0))
 EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",

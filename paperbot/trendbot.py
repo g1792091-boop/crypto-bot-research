@@ -13,6 +13,9 @@ the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coi
    (0.5 after a long signal bar): WAITING "되돌림 기다림"; the first 1m bar that trades there -> the entry is the next
    minute (the reference price = the book then, the executors follow with a market order as always): BROKE
    "되돌림 확인" and a new SUBMITTED row; no touch by the entry bar's second-to-last minute: FILTERED "되돌림 안 옴".
+   With ``pullback_wait`` false (the shadow trend-now only, deploy/combo.shadow-trend-now.json; the owners' config
+   waits) a signal that passed goes to the accounts at its own minute like the combined bot's: its SUBMITTED row stays,
+   with the judgment and the checks read (``_enter_now``).
 3. 점수: the signals of one minute compete by ``trendjudge.score`` (judge strength + spot + the member's recent record).
 4. 쉬기 (all OFF in the owners' config: 10-21 "10번은 없애고" took the daily limit, 10-21 night "쉬기는 빼주고" the
    member and coin pauses; only this bot's own trades count, from its first start on this database, ``trend_since``):
@@ -302,12 +305,26 @@ class TrendRunner(C.ComboRunner):
         meta["ctx"] = {**(sig.meta.get("ctx") or {}), "trend": {"judge": j.text(self.rules), "score": float(sc), "htf": htf}}
         nsig = replace(sig, score=float(sc), meta=meta)
         label = sig.meta.get("member", sig.strategy_id)
+        if not self.rules.pullback_wait:
+            return self._enter_now(sig, nsig, label, j, info, sc, parts)
         self.pulls.append({"member": label, "t0": int(ts), "until": until, "level": float(info["level"]),
                            "signal": dataclasses.asdict(nsig)})
         self._restate(sig, "WAITING", f"되돌림 기다림: {info['level']:.6g}까지({info['pullback_atr']:g} ATR"
                       + (", 장대봉이라 깊게" if info["big_bar"] else "") + f", {kst(until - MIN)}까지) · {j.text(self.rules)}",
                       extra={"trend": {**info, "score": sc, "score_parts": parts}})
         self._count(label, "waiting")
+        return True
+
+    def _enter_now(self, sig: Signal, nsig: Signal, label: str, j, info: dict, sc: float, parts: dict) -> bool:
+        """``pullback_wait`` false (the shadow trend-now): the signal that passed goes to every account now, at its own
+        minute, as combo.ComboRunner._submit_due would submit it (the coin-flip twin its side by ``flip_side``), with
+        its judgment and score; its SUBMITTED row keeps the numbers read. Returns True: _submit_due submits nothing more
+        (the signal's early-exit turn there is unchanged)."""
+        for aid, e in self.book.engines.items():
+            e.submit(nsig if aid == C.ACCOUNT else replace(nsig, side=C.flip_side(aid, nsig), meta=dict(nsig.meta)))
+        self._restate(sig, "SUBMITTED", f"추세 판단 통과: 되돌림 안 기다리고 바로 진입 · {j.text(self.rules)}",
+                      extra={"trend": {**info, "score": sc, "score_parts": parts}})
+        self._count(label, "submitted")
         return True
 
     def _after_step(self, ts: int, bars: dict) -> None:

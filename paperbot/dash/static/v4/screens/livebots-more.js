@@ -1,8 +1,6 @@
 // 실거래 › 그림자 and 설정 (#/livebots/shadows, #/livebots/settings).
-//   그림자  the shadow paper bots (other settings of the same combined bot: B 안정형, 끄는 구간 없음, 32개; their own databases,
-//           the same shape) next to the live paper bot, each counted from the same start (/api/v4/livebots/shadows): trades,
-//           win rate, P&L and both lines; 참고 and small samples say so. None there yet: 수집 전 and the one command that starts
-//           them (the page itself starts nothing).
+//   그림자  screens/livebots-shadow.js (re-exported here): the 추세판단 봇's three shadows next to the live paper, each from
+//           its own start, by trade and net ROE; the old bots' shadows folded under 예전 봇 비교용.
 //   설정    the combined bot's fixed rules (BTC 40x / alts 30x, margin, one position, the ladder, no KST weekend entries,
 //           none ±30 min around US macro releases, the loss cap per stop), each executor's light and limits, and every
 //           setting grouped by strategy (timeframe, custom numbers, stop, entry mode, conditions, switched-off buckets),
@@ -11,9 +9,9 @@
 //           the 2-week rule freeze from its start, its rules exactly as the bot wrote them (state trend rules: TrendRules.
 //           describe, each line split at its " / "), and its members by role (눌림 · 자리 · 돌파 · 횡보) with their entry
 //           bar (30분 진입 = the closed 1h bar's trend, 1시간 진입 = the 4h bar's); every setting row carries its role.
-import {h, s, put, ui, fmt, motion} from "../core/pb.js";
+import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
-import {smallFloor} from "./livebots-calc.js";
+export {shadowsView, twoLines} from "./livebots-shadow.js";
 
 const REFRESH_MS = 60 * 1000;
 
@@ -30,55 +28,6 @@ function loader(ctx, path, st, stateSlot, draw, every = REFRESH_MS) {
   draw();
   load().catch(() => {});
   ctx.every(every, () => load().catch(() => {}), {now: false});
-}
-
-/** Two cumulative P&L lines on one scale (real width W): the shadow (accent) and the live paper (muted). */
-export function twoLines(a, b, W = 600) {
-  const H = 120, pad = 6;
-  const pts = [...(a || []), ...(b || [])];
-  if (pts.length < 2) return null;
-  const t0 = Math.min(...pts.map((p) => p[0])), t1 = Math.max(...pts.map((p) => p[0]));
-  let lo = Math.min(0, ...pts.map((p) => p[1])), hi = Math.max(0, ...pts.map((p) => p[1]));
-  if (hi === lo) hi = lo + 1;
-  const X = (t) => pad + (t1 > t0 ? (t - t0) / (t1 - t0) : 1) * (W - 2 * pad), Y = (v) => pad + (1 - (v - lo) / (hi - lo)) * (H - 2 * pad);
-  const path = (xs) => (xs || []).map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
-  return s("svg", {class: "lb-two", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "그림자와 실거래 페이퍼의 누적 손익"},
-    s("line", {class: "zero", x1: 0, x2: W, y1: Y(0), y2: Y(0)}),
-    b && b.length > 1 ? s("path", {class: "main", d: path(b)}) : null, a && a.length > 1 ? s("path", {class: "shadow", d: path(a)}) : null);
-}
-
-/** shadowsView(ctx) -> {el, set()} */
-export function shadowsView(ctx) {
-  const st = {d: null, okAt: 0};
-  const stateSlot = h("div", {class: "lb-slot"});
-  const body = h("div", {class: "lb-shadows"});
-  const el = h("div", {class: "lb-shadowv stack"}, stateSlot, body,
-    h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "그림자도 모의 · 참고")));
-  const statLine = (x) => (x ? `${fmt.int(x.trades)}번 · 승률 ${x.win_rate == null ? "—" : fmt.pct(x.win_rate, 1, false)} · ${fmt.money(x.pnl, true)} USDT` : "—");
-  function draw() {
-    const d = st.d;
-    if (!d) { put(body, motion.shimmer(3)); return; }
-    const W = Math.max(260, Math.round((body.clientWidth || 600) - 40));
-    const any = (d.shadows || []).some((x) => x.state === "ok");
-    put(body,
-      !any ? ui.card({title: "그림자 봇", sub: "아직 켜지 않았거나 기록 전", cls: "lb-shnone"},
-        h("p", {class: "lb-flat"}, ui.notYet("수집 전"), " 그림자 봇의 기록이 아직 없어요. 켜는 명령 (서버에서, 한 번):"),
-        h("code", {class: "lb-cmd"}, d.start_ko), ui.note(`찾는 곳: ${d.dir}`)) : null,
-      (d.shadows || []).map((x) => {
-        if (x.state !== "ok") return ui.card({title: x.name_ko, cls: "lb-shcard"}, sourceState(x, x.name_ko));
-        const fl = smallFloor(x.stats.trades);
-        const diff = x.main && x.main.stats ? x.stats.pnl - x.main.stats.pnl : null;
-        return ui.card({title: x.name_ko, sub: `${fmt.kst(x.since_ms)}부터 같은 기간 · 모의`, cls: "lb-shcard", acts: [ui.pill("", "ref")]},
-          h("div", {class: "lb-recs"},
-            h("div", {class: "lb-rec"}, h("b", {class: "lb-shk"}, "그림자"), h("span", null, statLine(x.stats)), fl ? ui.smallSample(x.stats.trades, fl) : null),
-            h("div", {class: "lb-rec"}, h("b", {class: "lb-mk"}, "실거래 페이퍼"), h("span", null, x.main ? statLine(x.main.stats) : "—"))),
-          twoLines(x.curve, x.main && x.main.curve, W) || h("p", {class: "lb-flat"}, "닫힌 거래가 두 번 넘게 쌓이면 선이 그려져요"),
-          diff != null ? ui.note(`같은 기간 손익 차이 (그림자 − 실거래 페이퍼): ${fmt.money(diff, true)} USDT · 거래가 적을 때는 우연일 수 있어요`) : null,
-          x.stale ? ui.pill(`기록 멈춤 · ${fmt.ago(x.as_of_ms)}`, "warn") : null);
-      }));
-  }
-  loader(ctx, "/api/v4/livebots/shadows", st, stateSlot, draw);
-  return {el, set() {}};
 }
 
 // ---------------------------------------------------------------- 설정

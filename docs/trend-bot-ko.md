@@ -152,8 +152,9 @@
 
 ## 8. 옛 규칙 비교 (선택, 돈 안 듦)
 
-- 옛 규칙봇 15(−50%)를 **그림자 봇**으로 따로 돌리면, 새 봇과 같은 시장에서 옛 규칙이 어땠을지 공짜로 비교할 수 있어요(주문 없음,
-  텔레그램 없음, 실거래 사이트 그림자 탭): `systemctl start paperbot-combo-shadow@rule15`
+- 옛 규칙봇 15(−50%)를 **그림자 봇**으로 따로 돌리면, 새 봇과 같은 시장에서 옛 규칙이 어땠을지 공짜로 볼 수 있어요(주문 없음,
+  텔레그램 없음): `systemctl start paperbot-combo-shadow@rule15`. 실거래 사이트 그림자 탭 맨 아래 접힌 **예전 봇 비교용**에 자기
+  기록이 보여요(규칙 하나가 아니라 봇 전체가 달라서 지금 봇과 한 칸에 나란히 두지는 않아요). 규칙 하나씩 견주는 그림자는 아래 10.
 - 옛 −35% 페이퍼 봇(`paperbot-combo-mexc`)은 이제 따라가는 실행기가 없습니다. 비교용으로 그냥 둬도 되고, 끄려면:
   `systemctl stop paperbot-combo-mexc`
 
@@ -169,3 +170,51 @@
   - AI 비용이 드는 것(쓰고 있지 않다면): `systemctl disable --now paperbot-agents.timer paperbot-evening.timer paperbot-debate paperbot-liveteam.timer`
     (실거래 분석 팀은 이제 추세판단 봇 기준으로 설명합니다: 6의 "분석팀")
 - 끈 뒤 확인: `systemctl is-active paperbot-live3 paperbot-combo paperbot-executor paperbot-executor-mexc` → 네 줄 모두 `active`.
+
+## 10. 그림자 비교 봇 (11/04 검토용 · 돈 안 듦)
+
+규칙은 2주 동안 바꾸지 않는 대신, 바꿀까 말까 하는 규칙을 **그림자 페이퍼 봇**으로 옆에서 같이 돌려 11/04 검토 때 숫자로 정해요.
+그림자는 실거래 봇(`deploy/combo.trend.json`)과 매매법 10개 · 배수 · 증거금 · 손절 · 계단 익절 · 쉬는 시간이 모두 같고 **딱 하나만**
+다릅니다. 주문 없음 · 텔레그램 없음 · 따라가는 실행기 없음, 자기 기록 파일만 씁니다(`/var/lib/paperbot/combo/shadow-<이름>.db`,
+설정 `deploy/combo.shadow-<이름>.json`). 실거래 봇과 실행기는 아무것도 바뀌지 않아요.
+
+| 이름 | 바꾼 것 하나 (설정) | 무엇을 보려고 |
+|---|---|---|
+| `trend-time` | 시간 정리 있음 (`trend.time_bars: 4`) | 진입 봉 4개(30분 진입이면 2시간, 1시간 진입이면 4시간) 안에 첫 잠금(+10%)을 못 가면 청산. 10/21 밤에 뺀 시간 정리를 다시 넣었으면 나았을지 |
+| `trend-now` | 되돌림 안 기다림 (`trend.pullback_wait: false`) | 검사를 통과한 신호에 그 분에 바로 진입(예전 봇처럼). 0.25 ATR 되돌림을 기다리는 게 진입 가격·횟수에서 이득인지 |
+| `trend-vote4` | 판단 4개 모두 같은 쪽일 때만 (`trend.vote_min: 4`) | 추세를 더 엄격하게 보면 진입은 줄고 이기는 비율은 오르는지. 이 그림자는 감독 청산(추세 뒤집힘)도 4개 모두 반대일 때만 해요 |
+
+`trend-now`의 `pullback_wait`는 이번에 코드에 새로 넣은 설정이에요. 없으면(실거래 봇) 기다림 = 지금 그대로이고, 시험으로 실거래 설정이
+예전과 똑같이 기다리는 것을 확인했어요.
+
+**켜기** (서버에서, 언제 해도 됨; 하나씩 또는 한 줄로):
+
+```
+sudo systemctl start paperbot-combo-shadow@trend-time
+```
+```
+sudo systemctl start paperbot-combo-shadow@trend-now
+```
+```
+sudo systemctl start paperbot-combo-shadow@trend-vote4
+```
+```
+sudo systemctl start paperbot-combo-shadow@trend-time paperbot-combo-shadow@trend-now paperbot-combo-shadow@trend-vote4
+```
+
+- 하나마다 **약 2분** 기다렸다가 돌기 시작해요(바이낸스 요청은 실거래 봇이 먼저 하게). 셋을 같이 켜면 하나씩 차례로라 약 6분이고,
+  그동안 명령이 안 끝난 것처럼 보여도 그대로 두면 됩니다.
+- **끄기:** `sudo systemctl stop paperbot-combo-shadow@trend-time` (나머지도 이름만 바꿔서). 다시 켜면 기록과 지갑이 이어져요.
+- **확인:** `systemctl is-active paperbot-combo-shadow@trend-time` → `active`. 실거래 사이트 **그림자** 탭의 카드가 "아직 안 켬 · 켜는
+  법: …" 대신 숫자로 바뀌어요(첫 기록까지 2~3분).
+- **새 코드 받은 뒤:** 돌고 있던 그림자는 다시 켤 때까지 예전 코드로 돌아요. `install.sh`가 마지막에 다시 켜는 명령을 보여 줍니다.
+- **메모리:** 그림자 하나는 **768MB까지만**(`MemoryMax=768M`) 쓰게 묶여 있어요. 넘으면 그 그림자만 다시 켜지고 실거래 봇·실행기는
+  그대로예요. 추세판단 봇은 매매법 10개라 가볍습니다(개발 환경에서 엔진과 추세 판단을 만들어 보니 약 150MB; 서버에서는 아직 안 잼.
+  예전 95개짜리 그림자는 서버에서 약 270MB). 셋 다 켜도 최악 2.3GB(서버 8GB). 서버 메모리가 모자라면 커널이 그림자를 먼저 끄고,
+  CPU·디스크도 실거래 봇보다 뒤로 밀려요.
+- **보는 법:** 그림자마다 **켠 때부터** 새 지갑($1,000)이라 달러로는 견주지 않아요. 닫힌 거래 · 이긴 비율 · 거래당 평균 순ROE ·
+  순ROE 합 · 평일 하루 진입 · 청산 이유 · 누적 순ROE 최대 낙폭으로 보고, 실거래 페이퍼도 그 그림자를 켠 때부터만 셉니다. 카드마다
+  그림자의 시작 기록에서 실거래 봇과 정말 그 한 곳만 다른지 확인한 줄이 있어요(실거래 설정이 나중에 바뀌면 "다른 곳이 n곳"으로 알려 줌).
+- **솔직하게:** 평일 하루 1번꼴이면 11/04까지 그림자마다 10번 남짓이라, 양쪽 다 **20번이 안 되면 "표본 적음 · 아직 판단 못 함"**으로
+  나와요. 그 숫자로는 어느 쪽이 확실히 낫다고 말할 수 없어요(큰 손절·익절 한 번에 뒤집힘). 오래 둘수록 비교가 단단해지니 검토 뒤에도
+  켜 두는 게 좋아요.
