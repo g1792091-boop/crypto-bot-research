@@ -421,7 +421,7 @@ def test_the_wiring():
     assert '{id: "review", label: "검토", make: (ctx, hub) => reviewView(ctx, hub), own: true}' in js
     assert js.index('{id: "missed"') < js.index('{id: "review", label: "검토"') < js.index('{id: "perf", label: "성적"')
     routes = _read(V4, "core", "routes.js")
-    assert '{id: "perf", ko: "성적", screens: ["review", "perf", ' in routes
+    assert '{id: "perf", ko: "성적", screens: ["review", ' in routes
     assert 'review: {ko: "검토", group: "perf", title: "2주 검토 (추세판단 봇)"},' in routes and "review: () => SICON." in routes
     assert "review:" in _read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert '@import url("livebots-review.css");' in _read(SCREENS, "livebots.css")

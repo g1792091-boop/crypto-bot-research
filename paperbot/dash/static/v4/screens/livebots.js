@@ -29,6 +29,10 @@
 //   못 탄 신호 the virtual results of the signals the bot did not take (screens/livebots-missed.js)
 //   검토   추세판단 봇's 2-week review (screens/livebots-review.js, /api/v4/livebots/trendreview): real vs coin flip, day by
 //          day, did each new rule help (가상), the record split, what to look at on the review day
+//   재현 비교 추세판단 봇's 7/1~10/20 replay (data/trend_replay_0701_1020.json) against its live record since the start
+//          (screens/livebots-expect.js, /api/v4/livebots/replayref): entries a weekday, the funnel, the results, the
+//          costs split (before costs → slippage → fees → net), by member / coin / side, the cumulative line, with the
+//          band the replay leaves for each
 //   성적   rolling 20 / 40 win share, the 40-trade checkpoint, breakdowns, the coin-flip twin (screens/livebots-perf.js)
 //   순위   매매법 순위표: the strategies as cards and a list (screens/livebots-rank.js, /api/v4/livebots/rank)
 //   지도   기대 범위 띠 and the record by regime, coin, KST block and side next to 5 years (screens/livebots-map.js)
@@ -64,6 +68,7 @@ import {riskView} from "./livebots-risk.js";
 import {healthView} from "./livebots-health.js";
 import {goalView} from "./livebots-goal.js";
 import {reviewView} from "./livebots-review.js";
+import {expectView} from "./livebots-expect.js";
 import {judgeView} from "./livebots-judge.js";
 import {trendView} from "./livebots-trend.js";
 import {tchartView} from "./livebots-tchart.js";
@@ -85,6 +90,7 @@ export const TABS = [
   {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},
   {id: "missed", label: "못 탄 신호", make: (ctx) => missedView(ctx), own: true},
   {id: "review", label: "검토", make: (ctx, hub) => reviewView(ctx, hub), own: true},
+  {id: "expect", label: "재현 비교", make: (ctx, hub) => expectView(ctx, hub), own: true},
   {id: "perf", label: "성적", make: (ctx) => perfView(ctx), own: true},
   {id: "goal", label: "목표", make: (ctx) => goalView(ctx), own: true},
   {id: "rank", label: "순위", make: (ctx) => rankView(ctx), own: true},

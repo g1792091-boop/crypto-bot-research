@@ -185,6 +185,7 @@ const SICON = {
   replay: () => SICON.flow(),
   missed: () => SICON.signals(),
   review: () => SICON.checkpoint(),
+  expect: () => SICON.compare(),
   perf: () => SICON.board(),
   goal: () => SICON.checkpoint(),
   rank: () => SICON.board(),
@@ -253,7 +254,7 @@ export const LIVE_START = "trend";
 const LIVE_GROUPS = [
   {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["trades", "replay", "signals", "missed"]},
-  {id: "perf", ko: "성적", screens: ["review", "perf", "goal", "rank", "judge", "map", "cost"]},
+  {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
 ];
 const LIVE_SCREENS = {
@@ -270,6 +271,7 @@ const LIVE_SCREENS = {
   signals: {ko: "신호", group: "rec", title: "신호"},
   missed: {ko: "못 탄 신호", group: "rec", title: "못 탄 신호"},
   review: {ko: "검토", group: "perf", title: "2주 검토 (추세판단 봇)"},
+  expect: {ko: "재현 비교", group: "perf", title: "재현 비교 (7/1~10/20 가상 vs 실제)"},
   perf: {ko: "성적", group: "perf", title: "성적"},
   goal: {ko: "목표", group: "perf", title: "목표"},
   rank: {ko: "순위", group: "perf", title: "매매법 순위"},

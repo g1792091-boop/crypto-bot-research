@@ -236,8 +236,8 @@ def test_the_menus_of_both_sites_in_node():
                                                      "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"
-    # 성적 starts with 검토 (the 추세판단 봇's 2-week review)
-    assert live["items"].index("review") + 1 == live["items"].index("perf")
+    # 성적 starts with 검토 (the 추세판단 봇's 2-week review), then 재현 비교 (its 7/1~10/20 replay against the live record)
+    assert live["items"].index("review") + 1 == live["items"].index("expect") == live["items"].index("perf") - 1
     # every menu item of the live site is a tab of screens/livebots.js (part B's tabs once their files are there)
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(V4, "screens", "livebots.js"))
     have = {t for t, _ in tabs}

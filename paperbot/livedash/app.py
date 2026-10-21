@@ -57,6 +57,8 @@ MODULES = ("livebots", "livemissed", "livetape", "livepos", "livewhy", "livetren
 OPTIONAL_MODULES = ("liveinsight",)
 # 실거래 › 검토 (#/review: the 추세판단 봇's 2-week review, dash/more/livereview.py)
 MODULES = MODULES + ("livereview",)
+# 실거래 › 재현 비교 (#/expect: the 추세판단 봇's 7/1~10/20 replay against its live record, dash/more/livereplayref.py)
+MODULES = MODULES + ("livereplayref",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 
