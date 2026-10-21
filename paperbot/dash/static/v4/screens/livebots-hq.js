@@ -498,16 +498,20 @@ export function closeness(w, scale = 0.02) {
 }
 /** A wait's deadline by this page's clock: the time of the answer + the server's own left_ms (else its until). */
 export const waitEnd = (w, fetchedAt) => (!w ? null : w.left_ms != null && fetchedAt ? Number(fetchedAt) + Number(w.left_ms) : w.until != null ? Number(w.until) : null);
-/** A wait in words: {move: "101.00 위로 올라가면 진입" | null (no level), last, left: "1.00% 남음" | null}. */
+/** A wait in words: {move: "101.00 위로 올라가면 진입" (a break) | "99.00까지 내려오면 진입 (되돌림)" (the 추세판단 봇's
+ *  pullback) | null (no level), last, left: "1.00% 남음" | null, touch: the pill once touched}. */
 export function waitWords(w) {
-  const long = Number(w && w.side) > 0;
-  return {move: !w || w.level == null ? null : `${fmt.price(w.level)} ${long ? "위로 올라가면" : "아래로 내려가면"} 진입`,
+  const long = Number(w && w.side) > 0, pull = !!w && w.kind === "pullback";
+  return {touch: pull ? "되돌림 닿음 · 진입 확인 중" : "돌파함 · 진입 확인 중",
+    move: !w || w.level == null ? null : pull ? `${fmt.price(w.level)}까지 ${long ? "내려오면" : "올라오면"} 진입 (되돌림)`
+      : `${fmt.price(w.level)} ${long ? "위로 올라가면" : "아래로 내려가면"} 진입`,
     last: !w || w.last == null ? null : fmt.price(w.last),
     left: !w || w.touched === true || w.to_go == null ? null : `${fmt.pct(Math.max(0, Number(w.to_go)), 2, false)} 남음`};
 }
 /** The next bar closes in words: "15분봉 마감 19:15 KST · 바로 진입 0개 · 돌파 대기 1개". */
-export const closeWords = (c) => `${fmt.tfKo(c.tf)}봉 마감 ${fmt.hm(c.next_ms)} KST · 바로 진입 ${fmt.int(c.now)}개 · 돌파 대기 ${fmt.int(c["break"])}개`;
-export const WAIT_NOTE_KO = "진입 대기 = 신호는 나왔고 돌파를 기다리는 중. 진입 확정이 아니에요. 시간 안에 못 넘으면 진입 없음.";
+export const closeWords = (c) => (c.pull ? `${fmt.tfKo(c.tf)}봉 마감 ${fmt.hm(c.next_ms)} KST · 되돌림 진입 ${fmt.int(c.pull)}개`
+  : `${fmt.tfKo(c.tf)}봉 마감 ${fmt.hm(c.next_ms)} KST · 바로 진입 ${fmt.int(c.now)}개 · 돌파 대기 ${fmt.int(c["break"])}개`);
+export const WAIT_NOTE_KO = "진입 대기 = 신호는 나왔고 정한 가격(되돌림 또는 돌파)을 기다리는 중. 진입 확정이 아니에요. 시간 안에 안 닿으면 진입 없음.";
 export const WAIT_TG_KO = "텔레그램에도 ⏳ 진입 대기 알림이 한 번 가요 (끄기: PAPERBOT_LIVE_WAIT_MSGS=0)";
 
 /**
@@ -540,8 +544,8 @@ export function waitCard(n, fetchedAt) {
         ww.move ? h("p", {class: "lbh-wmove"}, ww.move)
           : h("p", {class: "lbh-wnolvl"}, `기준가 못 읽음 (규칙봇 1분봉 파일: ${pd.rule_path || "경로 모름"}${pd.rule_state && pd.rule_state !== "ok" ? `, ${pd.rule_state === "error" ? "못 읽음" : "없음"}` : ""})`),
         ww.move ? h("div", {class: "lbh-wnow"}, h("span", null, "지금 ", h("b", {class: "num"}, ww.last || "—")), ww.left ? h("span", {class: "num lbh-wleft"}, ww.left) : null) : null,
-        cl != null ? h("div", {class: "lbh-wbar", role: "img", "aria-label": ww.left || "돌파함"}, h("i", {style: {transform: `scaleX(${cl.toFixed(3)})`}})) : null,
-        w.touched === true ? h("p", {class: "lbh-wtouch"}, ui.pill("돌파함 · 진입 확인 중", "good")) : null);
+        cl != null ? h("div", {class: "lbh-wbar", role: "img", "aria-label": ww.left || ww.touch}, h("i", {style: {transform: `scaleX(${cl.toFixed(3)})`}})) : null,
+        w.touched === true ? h("p", {class: "lbh-wtouch"}, ui.pill(ww.touch, "good")) : null);
       rows.set(w.key, row);
       kids.push(row);
     }
@@ -1051,7 +1055,7 @@ export function hqView(ctx, hub) {
 
   // ---- the cards: ⏳ 진입 대기 · 진입 카드 · 결과 카드 · 실시간
   const wBody = h("div", {class: "lbh-wbody"});
-  const waitP = panel("⏳ 진입 대기", "lbh-waitp", "신호는 나왔고 돌파를 기다리는 중", wBody);
+  const waitP = panel("⏳ 진입 대기", "lbh-waitp", "신호는 나왔고 정한 가격을 기다리는 중", wBody);
   const lBody = h("div", {class: "lbh-lbody"});
   const likeP = panel("진입 가능성 TOP 5", "lbh-likep", "4시간 안에 신호가 나온 빈도 · 5년 백테스트", lBody);
   const eBody = h("div", {class: "lbh-ecard"});

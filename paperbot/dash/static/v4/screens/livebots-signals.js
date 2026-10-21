@@ -15,7 +15,7 @@ import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
 const REFRESH_MS = 30 * 1000;
-const STAGE = [["signals", "신호"], ["filtered", "걸러짐"], ["waiting", "돌파 기다림"], ["skipped", "밀림·건너뜀"], ["rejected", "거절"], ["entered", "진입"]];
+const STAGE = [["signals", "신호"], ["filtered", "걸러짐"], ["waiting", "가격 기다림 (되돌림·돌파)"], ["skipped", "밀림·건너뜀"], ["rejected", "거절"], ["entered", "진입"]];
 const TONE = {entered: "good", filtered: "thin", waiting: "accent", broke: "accent", skipped: "warn", rejected: "bad", submitted: "thin", other: "thin"};
 const LIST = [{id: "all", label: "전부"}, {id: "out", label: "안 들어감"}, {id: "entered", label: "진입"}];
 
@@ -46,17 +46,23 @@ export function countdownKo(ms) {
 /** One wait in words: coin, side, setting, the level line, the price now, how far to go, closeness, touched. */
 export function waitWords(w, rulePath) {
   const long = Number(w.side) > 0;
+  // the 추세판단 봇 waits for a pullback (back DOWN to its level for a long), the break settings for a break (UP beyond)
+  const pull = w.kind === "pullback";
   const lv = w.level == null ? null : fmt.price(w.level);
   const tg = w.to_go == null || !Number.isFinite(Number(w.to_go)) ? null : Number(w.to_go);
-  return {coin: fmt.coin(w.symbol), long, name: fmt.stratKo(w.strategy), tf: fmt.tfKo(w.tf),
-    line: lv ? `${lv} ${long ? "위로 올라가면" : "아래로 내려가면"} 진입` : `기준가 못 읽음 (규칙봇 1분봉: ${rulePath || "—"})`,
+  const move = pull ? `${lv}까지 ${long ? "내려오면" : "올라오면"} 진입 (되돌림)` : `${lv} ${long ? "위로 올라가면" : "아래로 내려가면"} 진입`;
+  return {coin: fmt.coin(w.symbol), long, pull, name: fmt.stratKo(w.strategy), tf: fmt.tfKo(w.tf),
+    line: lv ? move : pull ? "되돌림 가격 못 읽음 (봇의 기다림 기록)" : `기준가 못 읽음 (규칙봇 1분봉: ${rulePath || "—"})`,
     now: w.last == null ? "—" : fmt.price(w.last),
-    left: w.touched === true && lv ? "한 번 넘었어요" : tg == null ? (lv ? "지금 가격 못 읽음" : "—") : tg > 0 ? `${fmt.pct(tg, 2, false)} 남음` : "기준가를 넘었어요",
+    left: w.touched === true && lv ? (pull ? "한 번 닿았어요" : "한 번 넘었어요") : tg == null ? (lv ? "지금 가격 못 읽음" : "—")
+      : tg > 0 ? `${fmt.pct(tg, 2, false)} 남음` : pull ? "기준가에 닿았어요" : "기준가를 넘었어요",
+    touchKo: pull ? "되돌림 닿음 · 진입 확인 중" : "돌파함 · 진입 확인 중",
     near: w.touched === true && lv ? 1 : closeness(tg), touched: w.touched === true, noLevel: w.level == null};
 }
 
 /** A timeframe's next bar close: "15분봉 마감 19:15 KST · 바로 진입 0개 · 돌파 대기 1개 설정". */
-export const closeWords = (c) => `${fmt.tfKo(c.tf)}봉 마감 ${fmt.hm(c.next_ms)} KST · 바로 진입 ${fmt.int(c.now || 0)}개 · 돌파 대기 ${fmt.int(c.break || 0)}개 설정`;
+export const closeWords = (c) => (c.pull ? `${fmt.tfKo(c.tf)}봉 마감 ${fmt.hm(c.next_ms)} KST · 되돌림 진입 ${fmt.int(c.pull)}개 설정`
+  : `${fmt.tfKo(c.tf)}봉 마감 ${fmt.hm(c.next_ms)} KST · 바로 진입 ${fmt.int(c.now || 0)}개 · 돌파 대기 ${fmt.int(c.break || 0)}개 설정`);
 
 /** The part of /now this section shows, without what changes every second (left_ms, now_ms): the same waits draw nothing. */
 export function waitKey(d) {
@@ -76,9 +82,9 @@ export function waitView(ctx) {
   const st = {d: null, key: "", okAt: 0, clocks: []};
   const slot = h("div", {class: "lb-slot"});
   const body = h("div", {class: "lbw-body"}, motion.shimmer(2));
-  const el = ui.card({title: "⏳ 진입 대기", sub: "신호는 나왔고 돌파를 기다리는 진입 · 한국 시간", cls: "lbw-card"}, slot, body,
-    ui.note("진입 대기 = 신호는 나왔고 돌파를 기다리는 중. 진입 확정이 아니에요. 시간 안에 못 넘으면 진입 없음. "
-      + "텔레그램에도 ⏳ 알림이 한 번 가요 (끄기: PAPERBOT_LIVE_WAIT_MSGS=0)."));
+  const el = ui.card({title: "⏳ 진입 대기", sub: "신호는 나왔고 정한 가격을 기다리는 진입 (되돌림 · 돌파) · 한국 시간", cls: "lbw-card"}, slot, body,
+    ui.note("진입 대기 = 신호는 나왔고 정한 가격을 기다리는 중. 추세판단 봇은 되돌림(롱이면 내려와야)을, 돌파형 설정은 돌파(롱이면 올라가야)를 "
+      + "기다려요. 진입 확정이 아니에요. 시간 안에 안 닿으면 진입 없음. 텔레그램에도 ⏳ 알림이 한 번 가요 (끄기: PAPERBOT_LIVE_WAIT_MSGS=0)."));
 
   function tick() {
     const now = Date.now();
@@ -99,7 +105,7 @@ export function waitView(ctx) {
       x.near != null && x.near >= 0.8 ? "near" : ""], role: "listitem"},
     h("div", {class: "lbw-top"}, h("b", {class: "lbw-coin"}, x.coin), ui.sideTag(w.side),
       h("span", {class: "lbw-strat", title: w.member || ""}, `${x.name} · ${x.tf}`),
-      x.touched ? h("span", {class: "lbw-touch", title: "신호 뒤 1분봉이 이미 기준가를 넘었어요: 봇이 진입하는 중이어야 해요"}, h("i", {"aria-hidden": "true"}), "돌파함 · 진입 확인 중") : null),
+      x.touched ? h("span", {class: "lbw-touch", title: "신호 뒤 1분봉이 이미 기준가에 닿았어요: 봇이 진입하는 중이어야 해요"}, h("i", {"aria-hidden": "true"}), x.touchKo) : null),
     h("p", {class: ["lbw-line", x.noLevel ? "muted" : ""]}, x.line),
     x.noLevel ? null : h("div", {class: "lbw-near", title: "기준가까지 남은 거리 (3% 이상이면 막대가 비어요)"},
       h("span", {class: "lbw-now"}, "지금 ", h("b", {class: "num"}, x.now)),
@@ -126,7 +132,7 @@ export function waitView(ctx) {
     }
     const fetched = st.okAt;
     put(body, block, h("div", {class: "lbw-list", role: "list"}, waits.map((w) => waitCard(w, p, fetched))),
-      p.rule_state && p.rule_state !== "ok" ? h("p", {class: "note"}, `규칙봇 1분봉 파일을 ${p.rule_state === "missing" ? "아직 못 찾아" : "못 읽어"} 기준가를 못 보여 드려요 (봇이 보는 기준가는 그 파일의 신호봉 고가·저가)`) : null,
+      p.rule_state && p.rule_state !== "ok" ? h("p", {class: "note"}, `규칙봇 1분봉 파일을 ${p.rule_state === "missing" ? "아직 못 찾아" : "못 읽어"} 지금 가격을 못 보여 드려요 (돌파형의 기준가도 그 파일의 신호봉 고가·저가)`) : null,
       closeList("small"));
     tick();
   }

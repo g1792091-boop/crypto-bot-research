@@ -104,7 +104,7 @@ export function clockKo(ms) {
 export function waitHead(w) {
   if (!w) return null;
   const who = `${fmt.coin(w.symbol)} ${fmt.sideKo(w.side)}`;
-  if (w.touched === true) return `돌파함 · 진입 확인 중 · ${who}`;
+  if (w.touched === true) return `${w.kind === "pullback" ? "되돌림 닿음" : "돌파함"} · 진입 확인 중 · ${who}`;
   const tg = numOr(w.to_go);
   return `대기 중 · ${who} · ${tg == null ? "기준가 못 읽음" : tg > 0 ? `${fmt.pct(tg, 2, false)} 남음` : "기준가 넘음"}`;
 }
@@ -231,7 +231,7 @@ export function likelyView(ctx) {
         d && d.note_ko ? h("li", null, d.note_ko) : null,
         h("li", null, "큰 숫자는 '최근'(2025~26년), 작은 '5년'은 2020~26년 전체예요. '다음 진입일 확률'은 봇의 다음 진입이 이 매매법이었던 비율이에요."),
         h("li", null, "막대: 앞으로 24시간, 시간마다 1시간 안에 신호가 나온 비율 (밝은 칸이 지금). 주말 칸이 0인 건 봇이 주말에 진입하지 않아서예요."),
-        h("li", null, "⏳ 대기 중 = 신호는 나왔고 돌파를 기다리는 중 (진입 확정 아님). 그래서 맨 앞에 와요."),
+        h("li", null, "⏳ 대기 중 = 신호는 나왔고 정한 가격(추세판단 봇은 되돌림, 돌파형은 돌파)을 기다리는 중 (진입 확정 아님). 그래서 맨 앞에 와요."),
         d && d.cell ? h("li", null, samplesLine(d.cell)) : null)));
   }
   function draw(user) {

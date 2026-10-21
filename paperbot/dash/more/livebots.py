@@ -2524,10 +2524,11 @@ def team(p: dict, now: int, units=None) -> dict:
 TF_MS_LB = {"15m": 15 * 60_000, "30m": 30 * 60_000, "1h": HOUR, "4h": 4 * HOUR}
 
 
-def pending(p: dict, now: int, members: Optional[list] = None) -> dict:
-    """진입 대기: the combined bot's break signals still waiting (paperbot/livecheck.py pending_entries: the level the price
-    must trade beyond, the last 1m close, how far to go, the deadline), and when each timeframe's next bar closes (when
-    the bot next looks for signals) with how many settings run on it."""
+def pending(p: dict, now: int, members: Optional[list] = None, trend: bool = False) -> dict:
+    """진입 대기: the combined bot's signals still waiting (paperbot/livecheck.py pending_entries: ``kind`` "break" — the
+    level the price must trade beyond — or "pullback" — the 추세판단 봇's level the price must come back to —, the last 1m
+    close, how far to go, the deadline), and when each timeframe's next bar closes (when the bot next looks for signals)
+    with how many settings run on it ("now" / "break"; with ``trend`` every member enters on a pullback: "pull")."""
     from ... import livecheck as LC
     more = paths_more()
     try:
@@ -2556,8 +2557,8 @@ def pending(p: dict, now: int, members: Optional[list] = None) -> dict:
     for m in members or []:
         t = m.get("tf")
         if t in TF_MS_LB:
-            c = by_tf.setdefault(t, {"tf": t, "now": 0, "break": 0})
-            c["break" if m.get("entry") == "break" else "now"] += 1
+            c = by_tf.setdefault(t, {"tf": t, "now": 0, "break": 0, "pull": 0})
+            c["pull" if trend else "break" if m.get("entry") == "break" else "now"] += 1
     closes = [{**c, "next_ms": (now // TF_MS_LB[t] + 1) * TF_MS_LB[t]} for t, c in sorted(by_tf.items(), key=lambda kv: TF_MS_LB[kv[0]])]
     return {"state": "ok", "waits": waits, "closes": closes, "rule_state": rule_state, "rule_path": more["rule_db"]}
 
@@ -2627,7 +2628,8 @@ def whynow(p: dict, now: int) -> dict:
     last = (sig.get("rows") or [None])[0] if sig.get("state") == "ok" else None
     combo = read_combo(p["paper"], paths_more()["combo_config"])
     members = members_of(combo) if combo.get("state") == "ok" else []
-    pend = pending(p, now, members)
+    trend_on = combo.get("state") == "ok" and isinstance(combo.get("config"), dict) and combo["config"].get("trend") is not None
+    pend = pending(p, now, members, trend=trend_on)
     try:
         lk = likely_rows(load_likely(), now, members, pend.get("waits") or [])
         lk = {"state": "ok", **{k: lk[k] for k in ("cell", "bot", "note_ko")}, "top": lk["rows"][:LIKELY_TOP]}

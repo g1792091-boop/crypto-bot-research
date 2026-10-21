@@ -154,7 +154,7 @@ def test_a_wait_with_its_level_left_and_countdown(tmp_path, monkeypatch):
     assert not _bad(t), _bad(t)
     for words in ("⏳ 진입 대기", "BCH", "롱", "N03_ADX_GC · 15분", "101.00 위로 올라가면 진입", "지금 100.00", "1.00% 남음",
                   "신호 10/19 18:50 · 19:05까지", "15분봉 마감 19:15 KST · 바로 진입 0개 · 돌파 대기 1개 설정",
-                  "진입 대기 = 신호는 나왔고 돌파를 기다리는 중. 진입 확정이 아니에요. 시간 안에 못 넘으면 진입 없음.",
+                  "진입 대기 = 신호는 나왔고 정한 가격을 기다리는 중.", "추세판단 봇은 되돌림(롱이면 내려와야)을", "시간 안에 안 닿으면 진입 없음.",
                   "PAPERBOT_LIVE_WAIT_MSGS=0"):
         assert words in t, words
     assert re.search(r"[45]분 \d\d초 남음", t), t                                   # the countdown from left_ms (5 minutes)

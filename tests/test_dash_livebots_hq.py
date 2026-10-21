@@ -436,7 +436,7 @@ def test_the_wait_card_shows_the_level_the_price_the_distance_and_the_deadline(t
     out = _node(CARD, {"wait": n, "touched": touched, "short": short})
     t = out["wait"]["text"]
     for word in ("BCH", "롱", "N03_ADX_GC · 15분", "101.00 위로 올라가면 진입", "지금 100.00", "1.00% 남음",
-                 "진입 대기 = 신호는 나왔고 돌파를 기다리는 중. 진입 확정이 아니에요. 시간 안에 못 넘으면 진입 없음.",
+                 "진입 대기 = 신호는 나왔고 정한 가격(되돌림 또는 돌파)을 기다리는 중. 진입 확정이 아니에요. 시간 안에 안 닿으면 진입 없음.",
                  "텔레그램에도 ⏳ 진입 대기 알림이 한 번 가요 (끄기: PAPERBOT_LIVE_WAIT_MSGS=0)"):
         assert word in t, word
     assert re.search(r"00:0[45]:\d\d", t)                                         # the deadline: left_ms from the answer's time
@@ -450,8 +450,8 @@ def test_the_wait_card_shows_the_level_the_price_the_distance_and_the_deadline(t
       end: [M.waitEnd(w, 1000), M.waitEnd({...w, left_ms: null}, 1000), M.waitEnd(null, 1000)], words: M.waitWords(w), none: M.waitWords({...w, level: null, last: null, to_go: null})}));""", {"w": w})
     assert pure["c"] == [pytest.approx(0.5), 1, 0, None, None]
     assert pure["end"] == [1000 + 5 * MIN, w["until"], None]
-    assert pure["words"] == {"move": "101.00 위로 올라가면 진입", "last": "100.00", "left": "1.00% 남음"}
-    assert pure["none"] == {"move": None, "last": None, "left": None}
+    assert pure["words"] == {"move": "101.00 위로 올라가면 진입", "last": "100.00", "left": "1.00% 남음", "touch": "돌파함 · 진입 확인 중"}
+    assert pure["none"] == {"move": None, "last": None, "left": None, "touch": "돌파함 · 진입 확인 중"}
 
 
 def test_the_wait_card_never_invents_a_level_and_says_when_nothing_waits(tmp_path, monkeypatch):

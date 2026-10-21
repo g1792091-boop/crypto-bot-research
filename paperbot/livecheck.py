@@ -3205,6 +3205,13 @@ def _msg_put(conn, key: str, kind: str, first_ts: int, sent_ts: Optional[int] = 
 # bar size, the switched-off buckets, one position at a time, the weekend and the macro pause). Once the bot has
 # restated the wait (combo.py _restate: BROKE and then its entry's outcome, or FILTERED with its why) the same message
 # gets one result line at its end (wait_result_pass; Telegram editMessageText, never a second message).
+# The 추세판단 봇 (paperbot/trendbot.py, owners 10/21) waits the other way: a signal that passed its trend checks waits
+# its entry bar for a PULLBACK to a level below (long) / above (short) the signal's price (signal_log WAITING
+# "되돌림 기다림: …", the level in its data "trend" → "level"), from the minute after the signal to the entry bar's last
+# minute but one; touched → BROKE "되돌림 확인: …" and the entry is a SUBMITTED row "되돌림 확인" at the next minute
+# (bar_close = that minute); not touched → FILTERED "되돌림 안 옴(…)". Every wait carries its ``kind``: "break" or
+# "pullback", and the page and the ⏳ message say which (never "돌파" for a pullback).
+PULLBACK_HEAD = "되돌림 기다림"
 WAIT_TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": H1, "4h": 4 * H1}
 WAIT_MSGS_ENV = "PAPERBOT_LIVE_WAIT_MSGS"              # "0": no ⏳ message (the page still shows the waits)
 WAIT_EDIT_MAX_MS = 48 * H1                             # a wait sent longer ago than this is no longer edited
@@ -3219,13 +3226,17 @@ WAIT_SKIP_KO = (("in position", "이미 포지션 있음"), ("lower score", "같
                 ("stop rule", "손절 자리가 안 맞음"), ("sizing", "크기 계산이 거절함"), ("halted", "페이퍼 계좌 멈춤 중"),
                 ("early exit", "같은 분에 빠른 청산"), ("guard", "보호 장치"), ("no next bar", "다음 1분봉 없음"))
 WAIT_LAPSED = "→ ⌛ 시간 지남 · 진입 없음"
+PULL_LAPSED = "→ ⌛ 되돌림 안 옴 · 진입 없음"
 
 
 def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
-    """The break signals still waiting now, oldest first: coin, side, strategy, setting, timeframe, the signal bar's
-    close (t0) and the deadline (t0 + one bar), the level the price must trade beyond (the signal bar's 1m high / low
-    in the rule bot's bars, as the paper bot takes it; None before that bar is in the file), the last 1m close and how
-    far it still has to go (a fraction of the price, <= 0 once beyond)."""
+    """The signals still waiting now, oldest first: coin, side, strategy, setting, timeframe, ``kind`` ("break" or
+    "pullback", see above), the signal bar's close (t0) and the deadline, the level, the last 1m close and how far it
+    still has to go (a fraction of the price, <= 0 once there), ``touched`` (already there since the wait began).
+    break: the deadline is t0 + one bar, the level the signal bar's 1m high (long) / low (short) in the rule bot's bars
+    as the paper bot takes it (None before that bar is in the file), reached by trading beyond it.
+    pullback (the trend bot): the deadline is the entry bar's last minute it still looks at (t0 + one bar - 1 minute),
+    the level the bot's own (its WAITING row's data), reached by trading back to it (long: down to it)."""
     try:
         rows = paper_conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, data FROM signal_log WHERE status = 'WAITING' "
                                   "AND bar_close >= ? ORDER BY bar_close, id", (int(now_ms) - 4 * H1,)).fetchall()
@@ -3244,29 +3255,49 @@ def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
         except ValueError:
             d = {}
         side = int(side or 0)
+        pull = str(d.get("why") or "").startswith(PULLBACK_HEAD)
+        if pull:
+            until -= MIN                               # the trend bot's last looked-at minute ends here
+            if until <= now_ms:
+                continue
         level = last = last_ts = moved = None
+        if pull:
+            try:
+                level = float(((d.get("trend") or {}).get("level")))
+            except (TypeError, ValueError):
+                level = None
         if rule_conn is not None:
             try:
-                hi, lo = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ? AND ts < ?",
-                                           (sym, t0 - tf_ms, t0)).fetchone()
-                level = hi if side > 0 else lo
+                if not pull:
+                    hi, lo = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ? AND ts < ?",
+                                               (sym, t0 - tf_ms, t0)).fetchone()
+                    level = hi if side > 0 else lo
                 r = rule_conn.execute("SELECT ts, close FROM live_bars WHERE symbol = ? ORDER BY ts DESC LIMIT 1", (sym,)).fetchone()
                 if r:
                     last_ts, last = int(r[0]), float(r[1])
-                hi2, lo2 = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ?", (sym, t0)).fetchone()
-                moved = hi2 if side > 0 else lo2
+                # a pullback is looked for from the minute after the signal's (trendbot.py _pullbacks)
+                hi2, lo2 = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ?",
+                                             (sym, t0 + MIN if pull else t0)).fetchone()
+                moved = (lo2 if side > 0 else hi2) if pull else (hi2 if side > 0 else lo2)
             except sqlite3.Error:
                 pass
         level = float(level) if level is not None else None
+        if pull:
+            to_go = (side * (last - level) / last) if level is not None and last else None
+            touched = (moved <= level if side > 0 else moved >= level) if moved is not None and level is not None else None
+        else:
+            to_go = (side * (level - last) / last) if level is not None and last else None
+            touched = (moved > level if side > 0 else moved < level) if moved is not None and level is not None else None
         out.append({"key": f"{member}|{sym}|{t0}", "t0": t0, "until": until, "tf": tf, "member": member,
                     "strategy": d.get("strategy") or str(member).split("@")[0], "symbol": sym, "side": side,
-                    "level": level, "last": last, "last_ts": last_ts,
-                    "to_go": (side * (level - last) / last) if level is not None and last else None,
-                    "touched": (moved > level if side > 0 else moved < level) if moved is not None and level is not None else None})
+                    "kind": "pullback" if pull else "break", "level": level, "last": last, "last_ts": last_ts,
+                    "to_go": to_go, "touched": touched})
     return out
 
 
 def wait_text(w: dict, now_ms: int) -> str:
+    if w.get("kind") == "pullback":
+        return _pullback_text(w, now_ms)
     side = KO_SIDE.get(w["side"], "")
     where = "위로 올라가면" if w["side"] > 0 else "아래로 내려가면"
     lv = f"{w['level']:,.6g}" if w.get("level") is not None else "신호봉 끝"
@@ -3275,6 +3306,19 @@ def wait_text(w: dict, now_ms: int) -> str:
                                     else " (지금 그 가격 근처)" if w.get("to_go") is not None else ""),
              f"{kst(w['until'])}까지 못 넘으면 진입 없음 · {max(0, (w['until'] - now_ms) // MIN)}분 남음",
              "들어가면 🟢 진입 알림이 따로 와요 (봇의 다른 확인은 그대로: 신호봉 크기·끈 구간·한 번에 하나)"]
+    return "\n".join(lines)
+
+
+def _pullback_text(w: dict, now_ms: int) -> str:
+    """⏳ the trend bot's pullback wait: the price must come BACK to the level (long: down to it, short: up to it)."""
+    side = KO_SIDE.get(w["side"], "")
+    where = "아래로 내려오면" if w["side"] > 0 else "위로 올라오면"
+    lv = f"{w['level']:,.6g}" if w.get("level") is not None else "봇이 정한 가격"
+    lines = [f"⏳ 되돌림 대기 · {coin(w['symbol'])} {side} · {w['strategy']} {KO_TF.get(w['tf'], w['tf'])}",
+             f"{lv}까지 {where} 진입" + (f" (지금 {w['last']:,.6g} · {abs(w['to_go']):.2%} 남음)" if w.get("to_go") is not None and w["to_go"] > 0
+                                       else " (지금 그 가격 근처)" if w.get("to_go") is not None else ""),
+             f"{kst(w['until'])}까지 안 오면 진입 없음 · {max(0, (w['until'] - now_ms) // MIN)}분 남음",
+             "추세와 같은 방향 신호예요 · 들어가면 🟢 진입 알림이 따로 와요 (한 번에 하나 규칙은 그대로)"]
     return "\n".join(lines)
 
 
@@ -3384,9 +3428,13 @@ def wait_result(pc, key: str) -> Optional[str]:
     status, data, tf = row
     if status == "FILTERED":
         why = _why_of(data)
+        if why.startswith("되돌림 안 옴"):
+            return PULL_LAPSED
         return WAIT_LAPSED if why.startswith("돌파 없음") else f"→ 진입 안 함: {_why_ko(why)}"
     if status != "BROKE":
         return None
+    if _why_of(data).startswith("되돌림 확인"):
+        return _pull_result(pc, int(t0), tf, member, sym)
     m = re.search(r"(\d{12,})", _why_of(data))             # "돌파 확인: {entry minute ms} 분에 진입 신호"
     if not m:
         return None
@@ -3404,6 +3452,32 @@ def wait_result(pc, key: str) -> Optional[str]:
     if o[0] == "ENTERED":
         return f"→ ✅ 돌파! {kst(entry_t)}에 진입했어요 (🟢 진입 알림 참고)"
     return f"→ 돌파했지만 진입 안 함: {_skip_ko(o[1])}"
+
+
+def _pull_result(pc, t0: int, tf: str, member: str, sym: str) -> Optional[str]:
+    """The result of a pullback that was touched: its entry is the one signal_log row of the same setting and coin
+    inside the entry bar (bar_close strictly between t0 and t0 + one bar: the pulled entry's minute, never a bar close),
+    then the engine's outcome of it."""
+    tf_ms = WAIT_TF_MS.get(tf)
+    if tf_ms is None:
+        return None
+    try:
+        sub = pc.execute("SELECT bar_close, status, data FROM signal_log WHERE strategy = ? AND symbol = ? AND timeframe = ? "
+                         "AND bar_close > ? AND bar_close < ? ORDER BY bar_close, id LIMIT 1",
+                         (member, sym, tf, int(t0), int(t0) + tf_ms)).fetchone()
+    except sqlite3.Error:
+        return None
+    if sub is None:
+        return None
+    entry_t, st, data = int(sub[0]), sub[1], sub[2]
+    if st == "FILTERED":                                   # the weekend began, a macro release, late …
+        return f"→ 되돌림은 왔지만 진입 안 함: {_why_ko(_why_of(data))}"
+    o = _entry_outcome(pc, entry_t, tf, member, sym)
+    if o is None:
+        return None
+    if o[0] == "ENTERED":
+        return f"→ ✅ 되돌림! {kst(entry_t)}에 진입했어요 (🟢 진입 알림 참고)"
+    return f"→ 되돌림은 왔지만 진입 안 함: {_skip_ko(o[1])}"
 
 
 def wait_result_pass(src: Sources, conn, now_ms: int, edit: Optional[Callable]) -> list:

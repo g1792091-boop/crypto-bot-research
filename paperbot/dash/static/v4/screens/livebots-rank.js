@@ -43,7 +43,7 @@ export const SORTS = [
 const SORT_BY = Object.fromEntries(SORTS.map((x) => [x.id, x]));
 /** The five styles of the 5-year table (type badge colours: livebots-rank.css .lbr-type[data-t]). */
 export const TYPE_ID = {"추세": "trend", "되돌림": "pull", "돌파": "brk", "반전": "rev", "박스권": "box"};
-const STAGE_KO = [["entered", "진입"], ["filtered", "걸러짐"], ["waiting", "돌파 기다림"], ["skipped", "밀림"], ["rejected", "거절"]];
+const STAGE_KO = [["entered", "진입"], ["filtered", "걸러짐"], ["waiting", "가격 기다림"], ["skipped", "밀림"], ["rejected", "거절"]];
 
 // ---------------------------------------------------------------- pure functions (node tests: tests/test_dash_livebots_rank.py)
 const numOr = (x) => (x == null || x === "" || typeof x === "boolean" || !Number.isFinite(Number(x)) ? null : Number(x));
