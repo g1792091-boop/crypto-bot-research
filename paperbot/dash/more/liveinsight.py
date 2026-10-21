@@ -40,7 +40,7 @@ not in a replay (its rates are not stored). Results: won (the first lock was rea
 first start on this database (``trend_start``: exact), the groups are its roles (눌림 · 자리 · 돌파 · 횡보) and entry bars
 (30분 · 1시간 진입: ``trend_groups``), the chase block covers the members with it (all of them in its config), the
 supervisor's exits (JUDGE · TIME) get their own held-instead check (``sup_part``), and nothing of the old bot is shown as
-its reference: no coin-flip 75 %, no 6.2 entries a weekday (TREND_WEEKDAY_REF: none until measured), no 88 % money rule,
+its reference: no coin-flip 75 %, no 6.2 entries a weekday (TREND_WEEKDAY_REF: its own replay, 1.1), no 88 % money rule,
 the break-even worked out from its own config, the rule freeze 2 weeks from its own start. Another bot: all as before.
 
 Honest states (CONTRACT 1.6): a file or table not there = ``missing`` (수집 전), unreadable = ``error`` (못 읽음 + why),
@@ -127,8 +127,12 @@ SUP_KO = ("감독 청산: 첫 잠금(+10%) 전에 상위 봉 추세 판단이 �
 # a measured entries-per-weekday reference for the trend bot: none yet (a new rule set; WEEKDAY_ENTRIES above is the old
 # bot's replay). Set it only from a real measurement of this bot (e.g. its first two weeks), with its source in
 # TREND_WEEKDAY_REF_KO; None: the page shows no reference and the goal arithmetic waits for a whole weekday.
-TREND_WEEKDAY_REF: Optional[float] = None
-TREND_WEEKDAY_REF_KO: Optional[str] = None
+# Measured 10/21: the bot's own rules (deploy/combo.trend.json, no 쉬기) replayed minute by minute on Binance USD-M 1m
+# bars 2026-07-01 .. 10-20 KST: 89 entries on 80 weekdays (0 on weekends), signals recomputed as the rule bot does (5,055 of
+# 5,055 the same on a whole-history cross-check); the replay's scripts and outputs stayed in the session scratchpad.
+TREND_WEEKDAY_REF: Optional[float] = 1.11
+TREND_WEEKDAY_REF_KO: Optional[str] = ("7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자 · 평일 80일 89번 · "
+                                       "그 기간 시장의 숫자라 앞으로는 다를 수 있어요")
 TREND_SCALE_KO = "새 봇의 돈 늘리기 기준은 아직 없어요 · 2주 검토에서 두 분이 정해요 (예전 봇의 88% 기준은 쓰지 않아요)"
 TREND_BE_KO = ("본전 승률은 이 봇 설정의 숫자로 계산했어요: 이길 때 첫 잠금 +{w:.0%}, 질 때 손절 −{l:.0%}, 증거금 {m:.0%} "
                "(이길 때 더 가면 본전은 이보다 낮아져요)")

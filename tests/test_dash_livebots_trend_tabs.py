@@ -150,14 +150,17 @@ def test_map_has_no_band_and_splits_the_bots_own_trades(tw):
 def test_goal_drops_the_old_references(tw):
     d = I.goal(tw["p"], NOW, tw["more"])
     assert d["start"]["name"] == "추세판단 봇" and d["start"]["ms"] == T.T0 and d["start"]["how"] == "trend"
-    assert d["weekday_ref"] is None and d["record"]["weekday_ref"] is None and I.TREND_WEEKDAY_REF is None
+    # its own replay (7/1~10/20 on real bars, measured 10/21), never the old bot's 6.2
+    assert d["weekday_ref"] == I.TREND_WEEKDAY_REF == 1.11 and d["record"]["weekday_ref"] == 1.11
+    assert d["weekday_ref_ko"].startswith("7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자")
     assert abs(d["break_even"] - 0.8505) < 1e-3 and d["break_even_plain"] == [pytest.approx(5 / 6)] * 2   # its own config: 40 %, +10 % / -50 %
     assert "증거금 40%" in d["break_even_ko"] and d["record"]["break_even"] == d["break_even"]
     f = d["frozen"]
     assert f["until_ms"] == T.T0 + 14 * L.DAY and f["on"] and f["ko"].startswith("규칙 고정: 10/19까지") and "추세판단 봇 시작부터" in f["why_ko"]
     assert d["record"]["n"] == 1 and d["record"]["since_ms"] == T.T0
     need = d["accts"][0]["need"]
-    assert need["state"] == "unknown" and "참고값 6.2" not in need["src_ko"] and "6.2번" not in _flat(d)
+    # with its own 1.1 entries a weekday and +10 % / −50 % a trade, ×6 in the month is out of reach: said so, honestly
+    assert need["state"] == "impossible" and "승률 100%로도 모자람" in need["ko"] and "참고값 6.2" not in need["src_ko"] and "6.2번" not in _flat(d)
 
 
 def test_judge_in_the_trend_bots_words(tw):
@@ -301,7 +304,7 @@ def test_views_draw_the_trend_bots_answers(tmp_path, answers):
               "견줄 동전 승률 기준이 없어요", "같은 신호 · 방향만 동전 · 추세판단 봇 시작부터"):
         assert w in jd, w
     gl = out["gl"]
-    for w in ("추세판단 봇 시작 10/05 09:00", "새 봇이라 견줄 진입 횟수 기준이 아직 없어요", "본전 약 85%", "단순 합으로는 83%", "증거금 40%",
+    for w in ("추세판단 봇 시작 10/05 09:00", "1.1번 (7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자", "본전 약 85%", "단순 합으로는 83%", "증거금 40%",
               "규칙 고정: 10/19까지"):
         assert w in gl, w
     mp = out["mp"]
