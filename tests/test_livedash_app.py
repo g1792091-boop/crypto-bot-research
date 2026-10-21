@@ -238,6 +238,8 @@ def test_the_menus_of_both_sites_in_node():
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"
     # 성적 starts with 검토 (the 추세판단 봇's 2-week review), then 재현 비교 (its 7/1~10/20 replay against the live record)
     assert live["items"].index("review") + 1 == live["items"].index("expect") == live["items"].index("perf") - 1
+    # 기록 starts with 일지 (what the trend bot and the executors did, one feed)
+    assert live["items"].index("journal") + 1 == live["items"].index("trades")
     # every menu item of the live site is a tab of screens/livebots.js (part B's tabs once their files are there)
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(V4, "screens", "livebots.js"))
     have = {t for t, _ in tabs}
@@ -339,7 +341,7 @@ def test_every_api_path_the_live_page_can_call_is_served(tmp_path):
     for p in ("/api/v4/livebots", "/api/v4/livebots/positions", "/api/v4/livebots/positions/excursions", "/api/v4/livebots/replay/{}",
               "/api/v4/livebots/missed", "/api/v4/ticks", "/api/v4/movers", "/api/v4/topstats", "/api/v4/vplevels", "/api/candles",
               "/api/ticker", "/api/levels", "/api/events", "/api/liq", "/api/market", "/api/time", "/api/board", "/api/price-alerts",
-              "/api/v4/livebots/trendreview"):
+              "/api/v4/livebots/trendreview", "/api/v4/livebots/journal"):
         assert _matches(p, served), p
     # and none of the rule bot's machinery
     for p in ("/api/stream", "/api/rooms", "/api/office", "/api/summary", "/api/v4/bell", "/api/lab/intake", "/api/proposals"):

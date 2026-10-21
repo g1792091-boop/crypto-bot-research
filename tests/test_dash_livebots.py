@@ -699,7 +699,7 @@ def test_wiring_route_menu_find_inventory_and_module():
     # in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 지금 · 기록 · 성적 · 운영); part B's 위험 · 봇 상태 · 목표 ·
     # 규칙 점검 join once their files are there
     own = [t for t in tabs if t[0] not in ("risk", "health", "goal", "judge")]
-    assert own == [("trend", "관제"), ("tchart", "추세 차트"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("trades", "거래"), ("replay", "다시보기"),
+    assert own == [("trend", "관제"), ("tchart", "추세 차트"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("journal", "일지"), ("trades", "거래"), ("replay", "다시보기"),
                    ("signals", "신호"), ("missed", "못 탄 신호"), ("review", "검토"), ("expect", "재현 비교"), ("perf", "성적"), ("rank", "순위"), ("map", "지도"), ("cost", "비용"),
                    ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자")]
     # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에

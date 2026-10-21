@@ -22,6 +22,7 @@
 //   차트   the open positions on the price chart, big, with their lines in words (screens/livebots-chart.js)
 //   위험 · 봇 상태 · 목표 · 규칙 점검   part B's tabs (screens/livebots-risk.js, livebots-health.js, livebots-goal.js,
 //          livebots-judge.js; their routes in dash/more/liveinsight.py)
+//   일지   what the 추세판단 봇 and the executors did while the owners were away, one feed newest first (screens/livebots-journal.js)
 //   거래  the closed trades of each account, 10 a page, one opened in place, 최대 +% / 최대 −% per trade
 //          (screens/livebots-trades.js, its own endpoint and /api/v4/livebots/positions/excursions)
 //   다시보기 one closed trade replayed on its 1m bars (screens/livebots-replay.js)
@@ -62,6 +63,7 @@ import {costView} from "./livebots-cost.js";
 import {calView} from "./livebots-cal.js";
 import {teamView} from "./livebots-team.js";
 import {missedView} from "./livebots-missed.js";
+import {journalView} from "./livebots-journal.js";
 import {replayView} from "./livebots-replay.js";
 import {posView} from "./livebots-pos.js";
 import {riskView} from "./livebots-risk.js";
@@ -85,6 +87,7 @@ export const TABS = [
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
   {id: "risk", label: "위험", make: (ctx) => riskView(ctx), own: true},
   {id: "health", label: "봇 상태", make: (ctx) => healthView(ctx), own: true},
+  {id: "journal", label: "일지", make: (ctx) => journalView(ctx), own: true},
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},
   {id: "replay", label: "다시보기", make: (ctx) => replayView(ctx), own: true},
   {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},

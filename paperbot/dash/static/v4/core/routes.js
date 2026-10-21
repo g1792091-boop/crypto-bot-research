@@ -181,6 +181,8 @@ const SICON = {
   summary: () => SICON.terminal(),
   risk: () => SICON.alerts(),
   health: ICON.server,
+  // 일지: a line of three dots, each with its line of words
+  journal: () => [R(3, 1, 1, 14), R(2, 2, 3, 3), R(6, 3, 9, 1), R(2, 7, 3, 3), R(6, 8, 7, 1), R(2, 12, 3, 3), R(6, 13, 8, 1)],
   trades: () => SICON.digest(),
   replay: () => SICON.flow(),
   missed: () => SICON.signals(),
@@ -253,7 +255,7 @@ export function navGroups(feats) {
 export const LIVE_START = "trend";
 const LIVE_GROUPS = [
   {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
-  {id: "rec", ko: "기록", screens: ["trades", "replay", "signals", "missed"]},
+  {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
 ];
@@ -266,6 +268,7 @@ const LIVE_SCREENS = {
   chart: {ko: "차트", group: "now", title: "차트"},
   risk: {ko: "위험", group: "now", title: "위험"},
   health: {ko: "봇 상태", group: "now", title: "봇 상태"},
+  journal: {ko: "일지", group: "rec", title: "일지 (자리 비운 동안 있었던 일)"},
   trades: {ko: "거래", group: "rec", title: "거래"},
   replay: {ko: "다시보기", group: "rec", title: "거래 다시보기"},
   signals: {ko: "신호", group: "rec", title: "신호"},
