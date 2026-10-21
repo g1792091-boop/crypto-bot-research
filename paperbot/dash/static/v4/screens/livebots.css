@@ -20,6 +20,7 @@
 @import url("livebots-risk.css");
 @import url("livebots-health.css");
 @import url("livebots-goal.css");
+@import url("livebots-review.css");
 @import url("livebots-judge.css");
 
 /* the page column: the terminal takes the window from 760 px (a phone keeps the shell's 16 px gutter) */

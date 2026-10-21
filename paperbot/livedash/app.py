@@ -55,6 +55,8 @@ MODULES = ("livebots", "livemissed", "livetape", "livepos", "livewhy", "livetren
            "vplevels")
 # part B's 실거래 additions: registered when the module is there (an app without it still starts)
 OPTIONAL_MODULES = ("liveinsight",)
+# 실거래 › 검토 (#/review: the 추세판단 봇's 2-week review, dash/more/livereview.py)
+MODULES = MODULES + ("livereview",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 

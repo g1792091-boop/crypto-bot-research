@@ -27,6 +27,8 @@
 //   다시보기 one closed trade replayed on its 1m bars (screens/livebots-replay.js)
 //   신호   "왜 안 들어갔지?": the combined bot's signals and what became of each (screens/livebots-signals.js)
 //   못 탄 신호 the virtual results of the signals the bot did not take (screens/livebots-missed.js)
+//   검토   추세판단 봇's 2-week review (screens/livebots-review.js, /api/v4/livebots/trendreview): real vs coin flip, day by
+//          day, did each new rule help (가상), the record split, what to look at on the review day
 //   성적   rolling 20 / 40 win share, the 40-trade checkpoint, breakdowns, the coin-flip twin (screens/livebots-perf.js)
 //   순위   매매법 순위표: the strategies as cards and a list (screens/livebots-rank.js, /api/v4/livebots/rank)
 //   지도   기대 범위 띠 and the record by regime, coin, KST block and side next to 5 years (screens/livebots-map.js)
@@ -61,6 +63,7 @@ import {posView} from "./livebots-pos.js";
 import {riskView} from "./livebots-risk.js";
 import {healthView} from "./livebots-health.js";
 import {goalView} from "./livebots-goal.js";
+import {reviewView} from "./livebots-review.js";
 import {judgeView} from "./livebots-judge.js";
 import {trendView} from "./livebots-trend.js";
 import {tchartView} from "./livebots-tchart.js";
@@ -81,6 +84,7 @@ export const TABS = [
   {id: "replay", label: "다시보기", make: (ctx) => replayView(ctx), own: true},
   {id: "signals", label: "신호", make: (ctx) => signalsView(ctx), own: true},
   {id: "missed", label: "못 탄 신호", make: (ctx) => missedView(ctx), own: true},
+  {id: "review", label: "검토", make: (ctx, hub) => reviewView(ctx, hub), own: true},
   {id: "perf", label: "성적", make: (ctx) => perfView(ctx), own: true},
   {id: "goal", label: "목표", make: (ctx) => goalView(ctx), own: true},
   {id: "rank", label: "순위", make: (ctx) => rankView(ctx), own: true},
