@@ -36,6 +36,10 @@ else rounded to 8 decimals), else the run's; the ladder is the run's config. Fun
 8-hour funding time (UTC 00 / 08 / 16) the position held over (split evenly over several; with none, from the minute
 after the entry), and the answer says so whenever the trade paid any.
 
+추세판단 봇 (owners 10-21, livebots.trend_bot): both answers carry ``trend_bot`` and each trade ``prev`` (entered before
+its start: the bot before it's, 전환 전); its close of such a position at its first minute (SWITCH, 전환 전 포지션 정리) is
+not rebuilt, like a kill's: its minute is the record's, the locks up to it are checked.
+
 Honesty: the record is what the page shows as the result (entry, exit, net ROE, money); the rebuilt path is drawn on it.
 When the rebuilt exit or last lock differs from the record (reason, time, price beyond float noise, lock, stop) the answer
 carries ``check.state = "differs"`` with both values, never hidden. A trade whose bars are not there is not rebuilt
@@ -75,6 +79,11 @@ LIVE_TTL_S = 5.0
 CACHE_MAX = 64
 ACCOUNT = L.ACCOUNT
 EXT_REASONS = ("MANUAL", "HALT", "END")  # closes from outside the bars (a kill, a halt): their minute is the record's
+# the 추세판단 봇's close of the position the bot before it left (owners 10-21 night: at its first minute) is not one the
+# bars decide either: its minute is the record's, the locks up to it are still checked
+SWITCH_REASONS = ("SWITCH",)
+OUTSIDE_KO = "봇 밖의 이유(수동·멈춤)로 닫혀 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
+SWITCH_KO = "새 봇(추세판단 봇)이 켜지며 예전 봇의 포지션을 닫은 거래(전환 전 포지션 정리)라 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
 RULE_MISSING_KO = "규칙봇 1분봉 파일이 아직 없어요 (PAPERBOT_LIVE_RULE_DB 경로를 확인해 주세요)"
 RULE_NO_TABLE_KO = "규칙봇 파일은 있지만 1분봉 표(live_bars)가 아직 없어요"
 NO_BARS_KO = "이 거래 시간의 1분봉이 규칙봇 기록에 없어요"
@@ -233,7 +242,7 @@ def rebuild(t: dict, bars: list, rules: dict, ref_fill: bool, fund: list, until:
             out = close(o * (1 - side * slip), ts, "REV", "rev", fund_at(ts - 1))
             stopped = "exit"
             break
-        if reason in EXT_REASONS and ts >= x0:
+        if reason in EXT_REASONS + SWITCH_REASONS and ts >= x0:
             stopped = "outside"
             break
         entry_bar = ts == e0
@@ -292,7 +301,7 @@ def compare(t: dict, rb: dict) -> dict:
         items.append({"key": key, "ko": ko, "record": rec, "rebuilt": reb, "kind": kind})
 
     if rb.get("stopped") == "outside":
-        # a kill or a halt closed it: the minute is the record's; what the bars say is the lock it had by then
+        # a kill, a halt or the switch closed it: the minute is the record's; what the bars say is the lock it had by then
         pass
     elif x is None:
         add("exit", "청산", {"t": t.get("exit_time"), "price": t.get("exit_price"), "reason": reason}, None, "exit")
@@ -312,8 +321,7 @@ def compare(t: dict, rb: dict) -> dict:
             and not _same_px(rb["mfe"], t["mfe_price"]):
         add("mfe", "가장 유리했던 가격", t["mfe_price"], rb["mfe"], "price")
     return {"state": "differs" if items else "same", "items": items,
-            "why_ko": "봇 밖의 이유(수동·멈춤)로 닫혀 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
-            if rb.get("stopped") == "outside" else None}
+            "why_ko": (SWITCH_KO if reason in SWITCH_REASONS else OUTSIDE_KO) if rb.get("stopped") == "outside" else None}
 
 
 # ---------------------------------------------------------------- bars
@@ -456,6 +464,12 @@ def _sources(p: dict, now: int, bot: str = "paper") -> tuple:
     return pr, a, execs, b["path"], ((other or {}).get("label_ko") or "").split(" (")[0] or None, bots
 
 
+def _prev(t: dict, tb: Optional[dict]) -> bool:
+    """Entered before the 추세판단 봇's start (livebots.trend_bot ``since``): the bot before it's trade (전환 전)."""
+    since = (tb or {}).get("since")
+    return since is not None and t.get("entry_time") is not None and int(t["entry_time"]) < int(since)
+
+
 # ---------------------------------------------------------------- GET /api/v4/livebots/replay
 def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: int = 0, limit: int = LIST_DEFAULT,
                bot: str = "paper") -> dict:
@@ -465,10 +479,11 @@ def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: i
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     offset, limit = max(0, int(offset or 0)), max(1, min(LIST_MAX, int(limit or LIST_DEFAULT)))
     paper, a, execs, path, other_ko, bots = _sources(p, now, bot)
+    tb = L.trend_bot(path)
     head = {"now_ms": now, "account": ACCOUNT, "offset": offset, "limit": limit,
             "execs": [{"id": x["id"], "name_ko": x["name_ko"], "s": SHORT.get(x["id"], x["id"][:1].upper()),
                        "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko")} for x in execs],
-            "bot": bot if len(bots) > 1 else "paper", "papers": L.papers_out(bots)}
+            "bot": bot if len(bots) > 1 else "paper", "papers": L.papers_out(bots), "trend_bot": L.trend_out(tb)}
     if paper.get("state") != "ok":
         return {**head, **{k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")}, "rows": [], "n": 0}
     if not a or not a.get("known"):
@@ -486,7 +501,7 @@ def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: i
                                                "leverage", "pnl", "roe", "lock_roe", "entry_price", "exit_price")},
                      "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
                      "hold_ms": (t["exit_time"] - t["entry_time"]) if t.get("exit_time") is not None and t.get("entry_time") is not None else None,
-                     "execs": cells})
+                     "prev": _prev(t, tb), "execs": cells})
     return {**head, "state": "ok", "n": len(trades), "rows": rows, "newest_id": newest[0]["id"] if newest else None,
             "name_ko": paper.get("name_ko")}
 
@@ -572,14 +587,15 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
     cells = [_exec_cell(x, pairs, live_by, pt, bpath, other_ko) for x, pairs, live_by in exec_pairs(execs, ptrades, bpath)]
     done = now >= hi and all(c["state"] not in ("open", "unknown") for c in cells) and bars["state"] in ("ok", "none")
     lad = rules["ladder"]
+    tb = L.trend_bot(bpath)
     trade = {**{k: t.get(k) for k in ("id", "symbol", "side", "strategy_id", "timeframe", "entry_time", "exit_time", "exit_reason",
                                        "leverage", "qty", "margin", "fees", "funding", "pnl", "roe", "equity_after", "lock_roe",
                                        "stop_initial", "liq_price", "entry_price", "exit_price", "mfe_price", "mae_price", "signal_ts",
                                        "price_move")},
              "stop_final": t.get("stop_price"), "notional": notional or None, "hold_ms": hold, "win": (t.get("pnl") or 0) > 0,
-             "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"])}
+             "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "prev": _prev(t, tb)}
     return {
-        "state": "ok", "now_ms": now, "id": t["id"], "account": ACCOUNT, "trade": trade,
+        "state": "ok", "now_ms": now, "id": t["id"], "account": ACCOUNT, "trade": trade, "trend_bot": L.trend_out(tb),
         "setting": {k: rec["meta"].get(k) for k in ("member", "member_order", "stop_rule", "ref_price", "break_level")},
         "rules": {k: rules[k] for k in ("taker_fee", "taker_from", "slippage", "round_trip", "ladder")} | {
             "entry_bar": "ref" if ref else "open", "entry_bar_from": ref_from, "funding_frac": (t.get("funding") or 0) / notional if notional else None,

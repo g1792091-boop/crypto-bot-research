@@ -18,6 +18,17 @@
 :root:not([data-skin="classic"]) .lbm-hero .card-h h2 { text-shadow: 0 0 14px var(--head-glow); }
 .lbm-src:empty { display: none; }
 .lbm-noband { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+/* the trend bot before its first closed trade: one empty state and the replay's expectation (가상) */
+.lbm-fresh { min-width: 0; }
+.lbm-fnone { margin: 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px dashed var(--line-2); color: var(--ink-2); font-size: var(--t-sm);
+  overflow-wrap: anywhere; }
+.lbm-fexp { display: grid; gap: 8px; margin-top: 10px; padding: 12px 14px; border-radius: var(--r-md); min-width: 0;
+  border: 1px dashed var(--accent-line); background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.lbm-fhead { margin: 0; color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lbm-flist { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--t-sm); }
+.lbm-flist li { position: relative; padding-left: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.lbm-flist li::before { content: ""; position: absolute; left: 0; top: .7em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.lbm-fmore { justify-self: start; font-size: var(--t-xs); }
 
 .lbm-tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); min-width: 0; }
 .lbm-tile { position: relative; display: grid; align-content: start; gap: 6px; padding: 10px 12px 10px 15px; border-radius: var(--r-md);

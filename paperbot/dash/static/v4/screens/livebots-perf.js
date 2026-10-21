@@ -15,9 +15,12 @@
 // and no scorecard or ledger (their 5-year reference is the old bots'): the page says so in one card instead. Every record
 // is the trend bot's own, from its start ("추세판단 봇 시작 …부터" on top); the 40-trade card becomes 2주 검토까지 (the
 // 2-week rule freeze: days, trades so far, no threshold); 나눠 보기 gets 역할 (눌림 · 자리 · 돌파 · 횡보) and 봉 reads as the
-// entry bar; 그룹별 성적 groups by role and entry bar (livebots-rank.js groupBlock).
-import {h, s, put, ui, fmt, local, motion} from "../core/pb.js";
-import {acctKo, sourceState} from "./livebots-kit.js";
+// entry bar; 그룹별 성적 groups by role and entry bar (livebots-rank.js groupBlock). Before its first closed trade (the
+// server's ``empty``, owners 10/21 night: tables of zeros on the first day) one card says so, with what the 7/1~10/20 replay
+// says to expect (가상), in place of 승률 흐름 · 그룹별 성적 · 나눠 보기 · 동전 쌍둥이, the no-scorecard card (it points at
+// 나눠 보기) and the account switch; 2주 검토까지 stays.
+import {h, s, put, ui, fmt, local, motion, href} from "../core/pb.js";
+import {acctKo, sourceState, expectLines, expectHead} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
 import {scoreView, ledgerView} from "./livebots-score.js";
 import {groupBlock, cardSub} from "./livebots-rank.js";
@@ -46,6 +49,19 @@ export function reviewWords(rv, now) {
   const head = rv.done || left <= 0 ? `검토할 때예요 (${fmt.kst(rv.until)}에 2주가 끝났어요)` : `D-${daysLeft} · ${fmt.kst(rv.until)}까지 규칙 그대로`;
   const sub = `지금까지 닫힌 거래 ${fmt.int(rv.n || 0)}번` + (rv.n ? ` · 승률 ${fmt.pct(rv.win_rate, 1, false)} · 손익 ${fmt.money(rv.pnl, true)} USDT (연습)` : "");
   return {pct: gone / span, daysLeft, head, sub, done: !!rv.done || left <= 0};
+}
+
+/** The trend bot's one empty state before its first closed trade (the server's ``empty``): its words, and what the replay
+ *  says to expect (가상 · 재현: livebots-kit.js expectLines) with a link to 재현 비교. */
+export function freshCard(e, more) {
+  const ex = (e && e.expect) || {}, lines = expectLines(ex);
+  return ui.card({title: "새 봇 성적", sub: e && e.since != null ? `${fmt.kst(e.since)} 시작부터 · 닫힌 거래 기준` : "닫힌 거래 기준", cls: "lb-freshcard"},
+    h("p", {class: "lb-flat"}, (e && e.ko) || "새 봇 거래 아직 없음 · 첫 거래가 닫히면 채워져요"),
+    lines.length ? h("div", {class: "lb-fexp"},
+      h("p", {class: "lb-fhead"}, ui.pill("가상 · 재현", "thin"), ` ${expectHead(ex)}`),
+      h("ul", {class: "lb-flist"}, lines.map((x) => h("li", null, x))),
+      ex.note_ko ? ui.note(ex.note_ko) : null,
+      more ? h("a", {class: "lb-fmore", href: more}, "재현 비교 →") : null) : null);
 }
 
 /** The rolling win share chart (inline SVG drawn at the box's real width W, so its labels keep their token size): the 20 and
@@ -102,9 +118,11 @@ export function perfView(ctx) {
   // and the ledger (their reference is the old bots')
   const cpSlot = h("div", {class: "lb-slot stack"}, cpCard);
   const refSlot = h("div", {class: "lb-slot stack"}, score.el, ledger.el);
+  const freshSlot = h("div", {class: "lb-slot"});      // the trend bot before its first closed trade (draw)
+  const rollCard = ui.card({title: "승률 흐름", sub: "최근 20번 · 40번 닫힌 거래의 이긴 비율", cls: "lb-rollcard"}, head, chart, legend);
   const el = h("div", {class: "lb-perf stack"},
-    h("div", {class: "lb-tbar"}, seg, botTag), stateSlot,
-    ui.card({title: "승률 흐름", sub: "최근 20번 · 40번 닫힌 거래의 이긴 비율", cls: "lb-rollcard"}, head, chart, legend),
+    h("div", {class: "lb-tbar"}, seg, botTag), stateSlot, freshSlot,
+    rollCard,
     cpSlot,
     groups.el,
     refSlot,
@@ -164,6 +182,10 @@ export function perfView(ctx) {
     breaks(d);
     if (!d) { put(chart, motion.shimmer(3)); drawBreak(false); score.set(null); ledger.set(null); return; }
     drawTrend(d);
+    // the trend bot with no closed trade of its own yet: one empty state, never tables of zeros (the rest as before)
+    const fresh = d.trend_bot && d.empty ? d.empty : null;
+    put(freshSlot, fresh ? freshCard(fresh, (ctx.href || href)("livebots", "expect")) : null);
+    for (const x of [seg, rollCard, groups.el, refSlot, brkCard, flipCard]) x.hidden = !!fresh;
     score.set(d.scorecard || {state: "missing", reason_ko: "서버가 성적표를 보내지 않았어요"});
     ledger.set(d.ledger || {state: "missing", reason_ko: "서버가 장부를 보내지 않았어요"});
     const a = d.accts[st.acct];

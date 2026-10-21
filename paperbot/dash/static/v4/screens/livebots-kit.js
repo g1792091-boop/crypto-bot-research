@@ -1,7 +1,8 @@
 // 실거래 (#/livebots): the pieces every tab shares. Every number is the server's (/api/v4/livebots and its tabs,
 // dash/more/livebots.py); a source that is not there yet says 수집 전, one that could not be read says 못 읽음 with its reason
-// (never a zero). The three accounts: 페이퍼 (A+C 합본, COMBO@mix, 모의 · the one both executors follow), 바이비트 and MEXC
-// (실거래, real money). Captions: paper money carries the shared paper captions (ui.ASSUME_*), real money ui.ASSUME_LIVE_KO.
+// (never a zero). The three accounts: 페이퍼 (COMBO@mix, 모의 · the one both executors follow: 추세판단 봇 from 10/21, A+C
+// 합본 before; paperBotKo), 바이비트 and MEXC (실거래, real money). Captions: paper money carries the shared paper captions
+// (ui.ASSUME_*), real money ui.ASSUME_LIVE_KO.
 import {h, ui, fmt, serverNow} from "../core/pb.js";
 import {lightWords, lightCells, roeAt, netRoe} from "./livebots-calc.js";
 
@@ -30,6 +31,9 @@ export function setPapers(papers) {
   }
 }
 export const acctKo = (id) => (ACCT[id] ? ACCT[id].ko : id);
+/** The paper bot's name where a page labels it (tb: the server's trend_bot): the 추세판단 봇's own name, else the old
+ *  label 'A+C 합본' as before. */
+export const paperBotKo = (tb) => (tb ? tb.name || "추세판단 봇" : "A+C 합본");
 /** A small swatch + the account's name (its colour is a series token: lb-a-<id> in livebots.css). */
 export const acctTag = (id, o = {}) => h("span", {class: ["lb-acct", "lb-a-" + id], title: (ACCT[id] || {}).tip || id},
   h("i", {class: "lb-sw", "aria-hidden": "true"}), o.short ? (ACCT[id] || {}).s || id : acctKo(id));
@@ -166,7 +170,7 @@ export function acctLed(a, led) {
 
 /** An account card for the 요약 tab's account row: name, LED bar, halt / stale pills, notes. */
 export function acctCard(a, led, notes) {
-  const o = {title: acctKo(a.id), sub: a.kind === "paper" ? `${a.sub_ko || "A+C 합본"} · 모의` : a.sub_ko || "실행기", cls: "lb-now"};
+  const o = {title: acctKo(a.id), sub: a.kind === "paper" ? `${a.sub_ko || paperBotKo(null)} · 모의` : a.sub_ko || "실행기", cls: "lb-now"};
   if (a.state !== "ok") return ui.card(o, sourceState(a, a.kind === "paper" ? "페이퍼 DB" : `${acctKo(a.id)} 실행기 DB`), notesEl(notes));
   acctLed(a, led);
   const kill = a.kill_file && a.kill_file.present;
@@ -192,6 +196,37 @@ export function paperSinceNote(d) {
   const n = d.checkpoint && d.checkpoint.n != null ? Number(d.checkpoint.n) : null;
   return [`${tb.name || "추세판단 봇"} ${fmt.kst(tb.since)} 시작 · 위 잔고와 닫힌 거래는 계좌 전체 (그 전 예전 봇 거래 포함)`
     + (n != null ? ` · 새 봇 닫힌 거래 ${fmt.int(n)}번` : "")];
+}
+
+const okNum = (x) => x != null && x !== "" && Number.isFinite(Number(x));
+const MIN_MS = 60000, HOUR_MS = 3600000, DAY_MS = 86400000;
+/** A wait in the owners' words: "40분" / "약 17시간" / "약 3일" (null: "—"). */
+export function waitKo(ms) {
+  if (!okNum(ms)) return "—";
+  const m = Number(ms);
+  if (m < HOUR_MS) return `${Math.max(1, Math.round(m / MIN_MS))}분`;
+  if (m < 72 * HOUR_MS) return `약 ${Math.round(m / HOUR_MS)}시간`;
+  return `약 ${Math.round(m / DAY_MS)}일`;
+}
+/** The 7/1~10/20 replay's expectation of a fresh start, as lines (dash/more/livetrend.py expect_of: 관제's next.expect,
+ *  진입 가능성's expect, 성적 · 지도's empty.expect; [] when unread). 가상: the pages label it so. */
+export function expectLines(x) {
+  if (!x || x.state !== "ok") return [];
+  const out = [];
+  if (okNum(x.per_weekday)) {
+    out.push(`평일 하루 약 ${Number(x.per_weekday).toFixed(1)}번 진입` + (okNum(x.zero_days) && okNum(x.weekdays)
+      ? ` · 진입 없는 평일도 ${fmt.int(x.zero_days)}일 / ${fmt.int(x.weekdays)}일 (${fmt.pct(x.zero_share, 0, false)})` : ""));
+  }
+  if (okNum(x.wait_median_ms)) {
+    out.push(`아무 평일 시각에서 다음 진입까지 가운데값 ${waitKo(x.wait_median_ms)}` + (okNum(x.wait_q1_ms) && okNum(x.wait_q3_ms)
+      ? ` (4번 중 1번은 ${waitKo(x.wait_q1_ms)} 안, 4번 중 1번은 ${waitKo(x.wait_q3_ms)} 넘게)` : ""));
+  }
+  return out;
+}
+/** The replay's head line: '7/1~10/20 실제 1분봉으로 이 규칙을 다시 돌려 보면' (its window_kst; '지난 기간' without one). */
+export function expectHead(x) {
+  const win = ((x && x.window_kst) || []).map((d) => `${Number(String(d).slice(5, 7))}/${Number(String(d).slice(8, 10))}`).join("~");
+  return `${win || "지난 기간"} 실제 1분봉으로 이 규칙을 다시 돌려 보면`;
 }
 
 export const notesEl = (notes) => (notes && notes.length ? h("div", {class: "lb-notes"}, notes.map((t) => h("p", {class: "lb-warn"}, t))) : null);

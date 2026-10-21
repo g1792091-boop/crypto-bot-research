@@ -124,6 +124,9 @@ export function ruleParts(line) {
   return {head, parts: rest.split(" / ").map((x) => x.trim()).filter(Boolean)};
 }
 
+/** 고정 규칙's subtitle: the bot by its name (tr: the server's trend, the 추세판단 봇's), else the combined bot as before. */
+export const rulesSub = (tr) => `${tr ? tr.name || "추세판단 봇" : "합친 봇"}의 모든 설정이 같이 쓰는 규칙`;
+
 /** The trend bot's members grouped by role, in the owners' order: [{id, sub, members: [{strategy, tf, tf_ko, htf_ko, side_only}]}]. */
 export function roleGroups(tr) {
   const ms = (tr && tr.members) || [];
@@ -145,8 +148,9 @@ export function settingsView(ctx) {
   const lights = h("div", {class: "lb-lgrid"});
   const head = h("p", {class: "lb-ghead"});
   const list = ui.searchList({size: 10, placeholder: "매매법 찾기", row: (g) => groupRow(g), match: (g, q) => `${g.strategy} ${fmt.stratKo(g.strategy)}`.toLowerCase().includes(q)});
+  const ruleCard = ui.card({title: "고정 규칙", sub: rulesSub(null), cls: "lb-rulecard"}, rules);
   const el = h("div", {class: "lb-settings stack"}, stateSlot, trendSlot,
-    ui.card({title: "고정 규칙", sub: "합친 봇의 모든 설정이 같이 쓰는 규칙", cls: "lb-rulecard"}, rules),
+    ruleCard,
     ui.card({title: "실행기 신호등과 한도", sub: "실행기 설정 파일 그대로 (적힌 것만)", cls: "lb-execcard"}, lights),
     ui.card({title: "매매법과 설정", sub: "매매법마다 접어 두었어요 · 10개씩", cls: "lb-grpcard"}, head, list.el));
   function memberRow(m) {
@@ -188,6 +192,8 @@ export function settingsView(ctx) {
     const d = st.d;
     if (!d) { put(rules, motion.shimmer(3)); return; }
     drawTrend(d.trend);
+    const sub = ruleCard.firstChild && Array.from(ruleCard.firstChild.childNodes).find((n) => String(n.className || "") === "sub");
+    if (sub && sub.textContent !== rulesSub(d.trend)) sub.textContent = rulesSub(d.trend);
     if (!d.combo || d.combo.state !== "ok") { put(rules, sourceState(d.combo, "합친 봇 설정")); list.set([]); }
     else {
       put(rules, ui.kv(rulesList(d.rules)), ui.note(d.combo.source === "db" ? `봇이 지금 쓰는 설정 (봇 DB의 시작 기록, ${fmt.kst(d.combo.since_ms)})` : `설정 파일 ${d.combo.path} (봇이 아직 시작 기록을 남기기 전)`));

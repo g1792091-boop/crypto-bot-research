@@ -10,6 +10,9 @@
 //           exit, the executors' entry / exit ticks in their colours; ▶ 재생 / ❚❚ 멈춤, 1× 4× 16×, a scrubber (or a tap on
 //           the chart); the readout (time, price, net ROE, the stop in force, the best net ROE so far), the events lighting
 //           up as it plays; when the trade has closed, the result card (net ROE large, a loss as large as a win)
+// 추세판단 봇 (owners 10/21): a trade entered before its start (the server's ``prev``) carries the 거래 tab's 전환 전 tag in
+// the list and the head, and the result says it is the bot before it's (the position the new bot closed at its start:
+// 전환 전 포지션 정리, SWITCH; its close is not rebuilt, the server says why).
 // HONESTY: every number is the record's or the server's rebuild; no bars = 1분봉 없음 / 수집 전 / 못 읽음 (never a drawn
 // candle the rule bot did not record); a rebuild that ends differently from the record = 기록과 다름 with both values, the
 // record still shown as the result; paper money and real money each carry their caption; nothing here sends anything.
@@ -69,6 +72,15 @@ export function kstS(ms) {
   return `${fmt.kst(v)}:${String(sec).padStart(2, "0")}`;
 }
 const reasonKo = (r) => EXIT_KO[r] || String(r ?? "—");
+/** 전환 전: a trade entered before the 추세판단 봇's start (the server's ``prev``), the bot before it's (the 거래 tab's tag). */
+const prevPill = () => ui.pill("전환 전", "warn", "추세판단 봇이 켜지기 전에 들어간 거래예요 (예전 봇)");
+/** What a trade from before the switch is, in one line (null for the bot's own): the position the new bot closed at its
+ *  start (SWITCH) or another trade of the bot before it; never counted in the new bot's record. */
+export function prevKo(t) {
+  if (!t || !t.prev) return null;
+  return t.exit_reason === "SWITCH" ? "예전 봇이 연 포지션을 새 봇(추세판단 봇)이 켜지며 바로 닫았어요 (전환 전 포지션 정리) · 새 봇 성적에 세지 않아요"
+    : "새 봇(추세판단 봇)이 켜지기 전 예전 봇의 거래예요 · 새 봇 성적에 세지 않아요";
+}
 
 /** The value of a 기록과 다름 item in words (its kind: time / price / roe / reason / exit). */
 export function itemVal(kind, v) {
@@ -246,7 +258,8 @@ export function replayView(ctx) {
       onclick: () => choose(r.id, true)},
     h("span", {class: ["lbrp-wl", r.win ? "win" : "loss"]}, r.win ? "이김" : "짐"),
     h("span", {class: "lbrp-rmain"},
-      h("span", {class: "lbrp-rcoin"}, h("b", null, fmt.coin(r.symbol)), ui.sideTag(r.side), h("span", {class: "lbrp-rlev"}, fmt.lev(r.leverage))),
+      h("span", {class: "lbrp-rcoin"}, h("b", null, fmt.coin(r.symbol)), ui.sideTag(r.side), h("span", {class: "lbrp-rlev"}, fmt.lev(r.leverage)),
+        r.prev ? prevPill() : null),
       h("span", {class: "lbrp-rstrat"}, `${fmt.stratKo(r.strategy_id || "—")} · ${fmt.tfKo(r.timeframe)}`),
       h("span", {class: "lbrp-rtime"}, `${fmt.kst(r.exit_time)} · ${r.hold_ms == null ? "—" : fmt.dur(r.hold_ms / 1000)} · ${r.reason_ko || reasonKo(r.exit_reason)}`)),
     h("b", {class: ["num", "lbrp-rroe", fmt.tone(r.roe, roe)]}, roe),
@@ -261,6 +274,7 @@ export function replayView(ctx) {
       h("b", {class: "lbrp-tcoin"}, fmt.coin(t.symbol)), ui.sideTag(t.side), h("span", null, fmt.lev(t.leverage)),
       h("span", {class: "lbrp-tstrat"}, ko !== t.strategy_id && t.strategy_id ? `${ko} (${t.strategy_id})` : ko, ` · ${fmt.tfKo(t.timeframe)}`),
       h("span", {class: "lbrp-ttime"}, `${fmt.kst(t.entry_time)} → ${fmt.kst(t.exit_time)} · ${r.hold}`),
+      t.prev ? prevPill() : null,
       h("span", {class: "lbrp-tid"}, `#${fmt.int(t.id)}`));
   }
   function drawCheck(d) {
@@ -323,6 +337,7 @@ export function replayView(ctx) {
       h("b", {class: ["lbrp-big", "num", r.tone]}, r.big),
       h("p", {class: "lbrp-resl"}, acctTag("paper"), " ", h("b", null, r.reason), ` · ${r.hold} 보유 · `, h("span", {class: ["num", r.tone]}, r.pnl),
         t.lock_roe != null ? ` · 마지막 잠금 ${pctNice(t.lock_roe)}` : " · 잠금 없음"),
+      prevKo(t) ? h("p", {class: "lbrp-prev"}, prevPill(), ` ${prevKo(t)}`) : null,
       h("div", {class: "lbrp-resx"}, h("span", {class: "lbrp-resk"}, "실거래 실행기"), xs.length ? xs : h("span", {class: "muted"}, "실행기 기록 없음")));
   }
 
@@ -563,7 +578,7 @@ export function replayView(ctx) {
       g.font = `${l.bold ? 800 : 700} ${Math.round(o.fs)}px ${o.ff}`;
       const w = Math.ceil(g.measureText(l.text).width + 10);
       let x = l.axis ? l.x + 1 : l.x;
-      if (!l.axis && x + w > area.x1 - 2) x = l.x - w - 18;
+      if (!l.axis && x + w > area.x1 - 2) x = Math.max(1, l.x - w - 18);   // flipped, never past the left edge (a long word: 전환 전 포지션 정리)
       const dir = l.side && l.side < 0 ? -1 : 1;
       let r = null;
       for (let k = 0; k < 9; k++) {

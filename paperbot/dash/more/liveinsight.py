@@ -41,7 +41,9 @@ first start on this database (``trend_start``: exact), the groups are its roles 
 (30분 · 1시간 진입: ``trend_groups``), the chase block covers the members with it (all of them in its config), the
 supervisor's exits (JUDGE · TIME) get their own held-instead check (``sup_part``), and nothing of the old bot is shown as
 its reference: no coin-flip 75 %, no 6.2 entries a weekday (TREND_WEEKDAY_REF: its own replay, 1.1), no 88 % money rule,
-the break-even worked out from its own config, the rule freeze 2 weeks from its own start. Another bot: all as before.
+the break-even worked out from its own config, the rule freeze 2 weeks from its own start; 위험's paper loss streak and
+peak count its own trades only (새 봇 시작 뒤; the executors' are their real accounts' and stay whole). Another bot: all as
+before.
 
 Honest states (CONTRACT 1.6): a file or table not there = ``missing`` (수집 전), unreadable = ``error`` (못 읽음 + why),
 never a zero; small samples say so. Times are UTC ms, ratios are ratios (0.1 = 10 %), money is each account's USDT.
@@ -120,6 +122,7 @@ GROUP_KO = {"A": "A 그룹", "B": "B 그룹", "old": "예전 매매법", "none":
 # 추세판단 봇 (owners 10-21, docs/trend-bot-ko.md): the same three checks in its own words. The chase block is on the members
 # with no_chase (deploy/combo.trend.json: all of them); the fast stop (REV) stays; the supervisor's exits are new.
 TREND_START_KO = "추세판단 봇이 이 기록 파일에서 처음 켜진 때"
+RISK_FROM_KO = "새 봇 시작 뒤"            # 위험: the paper's streak and peak count the trend bot's own trades (the executors' stay whole)
 TREND_CHASE_KO = "추격 막기: {who}, 롱은 24시간 고점 쪽 10%·7일 범위 위 20% 안이면 (숏은 아래쪽) 진입하지 않는 규칙이에요"
 TREND_HOLD_KO = "감독 청산(추세 뒤집힘 · 시간 정리)은 붙잡았다면 계산에 넣지 않았어요: 손절과 계단 익절만으로 다시 계산했어요"
 SUP_KO = ("감독 청산: 첫 잠금(+10%) 전에 상위 봉 추세 판단이 반대로 바뀌면(추세 뒤집힘), 또는 진입 봉 {bars}개 안에 첫 잠금을 "
@@ -1184,6 +1187,16 @@ def _paper_risk(cx: dict, b: Optional[dict] = None) -> dict:
         return {"id": pid, "kind": "paper", **st}
     trades = a.get("trades") or []
     wallet, initial = a.get("wallet"), a.get("initial")
+    since = (cx.get("trend") or {}).get("since") if pid == "paper" else None
+    if since is not None:
+        # the trend bot (owners 10-21): the streak and the peak count its own trades only (entered since its start); the
+        # peak starts at the balance the bot before it left (after its last trade closed, the switch's close included;
+        # while its position is still open, the balance now: the new bot has not traded yet)
+        before = sorted((t for t in trades if (_i(t.get("entry_time")) or 0) < since), key=lambda t: (t.get("exit_time") or 0, t.get("id") or 0))
+        left = [t["equity_after"] for t in before if t.get("equity_after") is not None]
+        held = (_i((a.get("position") or {}).get("entry_time")) or since) < since
+        initial = wallet if held and wallet is not None else left[-1] if left else initial
+        trades = L.trend_since(trades, since)
     peak, peak_t = initial, None
     for t in sorted(trades, key=lambda t: (t.get("exit_time") or 0, t.get("id") or 0)):
         if t.get("equity_after") is not None and (peak is None or t["equity_after"] > peak):
@@ -1192,6 +1205,8 @@ def _paper_risk(cx: dict, b: Optional[dict] = None) -> dict:
         peak = wallet
     out = {"id": pid, "kind": "paper", "state": "ok", "balance": wallet, "streak": loss_streak(trades), "peak": peak, "peak_ms": peak_t,
            "drawdown": (1 - wallet / peak) if wallet is not None and peak else None, "position": None}
+    if since is not None:
+        out.update(from_ms=since, from_ko=RISK_FROM_KO, n=len(trades))
     if b is not None and len(cx["bots"]) > 1:
         out["label_ko"] = b["label_ko"]
     p = a.get("position")

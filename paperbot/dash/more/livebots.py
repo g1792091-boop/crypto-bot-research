@@ -535,7 +535,9 @@ def read_paper(path: str, accounts: Iterable[str], now_ms: int) -> dict:
             "curve": thin(curve), "trades": trades,
         }
     return {"state": "ok", "path": path, "as_of_ms": ts, "stale": ts is None or now_ms - ts > PAPER_STALE_MS,
-            "name_ko": cfg.get("name") if isinstance(cfg.get("name"), str) else None, "round_trip": rt,
+            # the config's name; the trend bot's without one is still the trend bot (never the old A+C label)
+            "name_ko": cfg.get("name") if isinstance(cfg.get("name"), str) and cfg.get("name")
+            else TREND_NAME_KO if cfg.get("trend") is not None else None, "round_trip": rt,
             "stop": cfg.get("stop") if isinstance(cfg.get("stop"), dict) else None,
             "ladder": ladder_numbers(ladder) if ladder else None,
             "leverage": cfg.get("leverage") if isinstance(cfg.get("leverage"), dict) else None, "margin": _f(cfg.get("margin")),
@@ -898,6 +900,20 @@ def trend_since(trades: list, since: Optional[int], key: str = "entry_time") -> 
     if since is None:
         return list(trades)
     return [t for t in trades if (_i(t.get(key)) or 0) >= int(since)]
+
+
+# 성적 · 지도 before the trend bot's first closed trade (owners 10-21 night: tables of zeros on the first day)
+TREND_EMPTY_KO = "새 봇 거래 아직 없음 · 첫 거래가 닫히면 채워져요"
+
+
+def trend_empty(tb: Optional[dict], n: int) -> Optional[dict]:
+    """The one empty state of a page while the trend bot has no closed trade of its own (``n``: its closed trades since its
+    start): {ko, since, expect (the 7/1~10/20 replay's expectation, 가상: livetrend.expect_of with the running config)}.
+    None for another bot or from the first closed trade on (the page as before)."""
+    if tb is None or n >= 1:
+        return None
+    from . import livetrend as LT                          # (livetrend imports this module)
+    return {"ko": TREND_EMPTY_KO, "since": tb["since"], "expect": LT.expect_of(tb.get("config"))}
 
 
 def live_ref(paper_path: Optional[str] = None) -> dict:
@@ -1916,7 +1932,8 @@ def _cum(trades: list) -> list:
 
 def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
     """GET /api/v4/livebots/perf: the records, plus 매매법 성적표 (``scorecard``: liveimprove's own functions over the paper
-    database now) and 개선 후보 장부 (``ledger``: liveimprove.db, read-only)."""
+    database now) and 개선 후보 장부 (``ledger``: liveimprove.db, read-only). The trend bot before its first closed trade:
+    ``empty`` (trend_empty: the page shows one empty state with the replay's expectation, not tables of zeros)."""
     more = more or paths_more()
     _configs, _follows, paper, execs = sources(p, now)
     tb = trend_bot(p["paper"])
@@ -1949,6 +1966,8 @@ def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
     return {"now_ms": now, "accts": out, "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None,
             "checkpoint": (checkpoint(mine, TREND_RULE_KO if tb else ref_ko) if a else None),
             "review": review_of(tb, mine, now) if tb and a is not None else None, "trend_bot": trend_out(tb),
+            # the trend bot before its first closed trade: one empty state instead of tables of zeros
+            "empty": trend_empty(tb, len(mine)) if a is not None else None,
             "flip": {"state": "ok", **perf_of(trend_since(flip.get("trades") or [], since))} if flip and flip.get("known") else None,
             "small": list(SMALL), "scorecard": scorecard(p, execs),
             # the ledger's candidates were found against the old bots' 5-year reference: not this bot's (TREND_LEDGER_KO)
@@ -2461,7 +2480,8 @@ def _cut_row(key: Any, label: str, trades: list, pnl_key: str = "pnl", roe_key: 
 def trend_map(p: dict, now: int, tb: dict, paper: dict, execs: list) -> dict:
     """지도 for the trend bot: each account's wins so far (no band: TREND_NO_REF_KO), and the paper account's trades since
     the trend bot's start by the judgment it entered on (4 of 4 judges or 3 of 4 on its side: the ENTERED signal's
-    ``trend.strength``), coin, KST 4-hour block, side and entry bar. Live split only, small samples flagged."""
+    ``trend.strength``), coin, KST 4-hour block, side and entry bar. Live split only, small samples flagged. Before its
+    first closed trade ``empty`` (trend_empty) says so once, with the replay's expectation."""
     since = tb["since"]
     a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
     trades = sorted(trend_since((a or {}).get("trades") or [], since), key=lambda t: (_i(t.get("exit_time")) or 0, _i(t.get("id")) or 0))
@@ -2509,7 +2529,8 @@ def trend_map(p: dict, now: int, tb: dict, paper: dict, execs: list) -> dict:
             "band": {"trend": True, "n_max": n_max, "ns": [], "fit": None, "honest": None, "break_even": None, "qs": list(BAND_QS),
                      "fit_band": None, "honest_band": None, "accounts": acts},
             "cuts": cuts, "cut_defs": [{"id": c, "ko": ko, "sub": sub} for c, ko, sub in TREND_MAP_CUTS],
-            "min_n": TREND_MAP_MIN_N, "small_n": SMALL[0], "n": len(trades), "symbols": syms, "reg5_names": None}
+            "min_n": TREND_MAP_MIN_N, "small_n": SMALL[0], "n": len(trades), "symbols": syms, "reg5_names": None,
+            "empty": trend_empty(tb, len(trades)) if a is not None else None}
 
 
 # ---------------------------------------------------------------- 비용 (실거래가 페이퍼보다 얼마나 덜 버나, owners 10/19)

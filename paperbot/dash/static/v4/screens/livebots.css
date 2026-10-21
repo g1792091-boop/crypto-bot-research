@@ -271,6 +271,14 @@
 }
 .lb-recs { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); min-width: 0; }
 .lb-rec { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); min-width: 0; align-content: start; }
+/* the trend bot before its first closed trade: one empty state and the replay's expectation (가상) */
+.lb-fexp { display: grid; gap: 8px; margin-top: 10px; padding: 12px 14px; border-radius: var(--r-md); min-width: 0;
+  border: 1px dashed var(--accent-line); background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.lb-fhead { margin: 0; color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lb-flist { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: var(--t-sm); }
+.lb-flist li { position: relative; padding-left: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.lb-flist li::before { content: ""; position: absolute; left: 0; top: .7em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.lb-fmore { justify-self: start; font-size: var(--t-xs); }
 
 /* ---------------------------------------------------------------- 안전 (livebots-safety.js) */
 .lb-safe { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; }

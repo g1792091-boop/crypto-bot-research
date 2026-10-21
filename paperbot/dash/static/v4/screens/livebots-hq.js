@@ -20,7 +20,8 @@
 //             and the next ladder step, 손익비 첫 잠금 기준; no position: the last signal and what became of it), 결과 카드 (the
 //             last closed live trade, else the paper's, labelled), 실시간 (the newest fills, alarms and the last signal)
 //   below     the checklist of /now (✓ / ✕ / ? with live countdowns), today's 24 h dial (KST) with the pause windows and
-//             today's entries, the 40-trade checkpoint ring with the owners' rule (text only, nothing judged before 40),
+//             today's entries (the 추세판단 봇's from its start only: started today, '새 봇 시작 HH:MM 뒤'), the 40-trade
+//             checkpoint ring with the owners' rule (text only, nothing judged before 40),
 //             the 27 strategies lit by this week's signals (/api/v4/livebots/rank), the one holding the position glowing
 // The summary (/api/v4/livebots) comes from livebots.js (set(d, state) every 5 s; that screen dims the page with the
 // answer's age when a refresh fails); /now, /calendar and /rank are polled here and each keeps its last answer, dimmed
@@ -34,7 +35,7 @@
 // numbers, the countdown) are exported pure functions (tests/test_dash_livebots_hq.py runs them in node).
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
-import {ACCT} from "./livebots-kit.js";
+import {ACCT, paperBotKo} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo} from "./livebots-likely.js";
 
@@ -207,6 +208,12 @@ export function firstLock(p, ladder) {
   return {lock, at, lockPrice: price(lock), atPrice: price(at), risk, rr: risk != null && risk < 0 ? lock / -risk : null};
 }
 
+/** The frame's side label: '추세판단 봇 · COMBO@MIX · 보기만 · 주문 없음' (tb: the summary's trend_bot; null: another bot, the
+ *  old 'A+C 합본'; undefined: no summary yet, no name). */
+export function sideBotKo(tb) {
+  return `${tb === undefined ? "" : `${paperBotKo(tb)} · `}COMBO@MIX · 보기만 · 주문 없음`;
+}
+
 /** A time's angle on the day's dial (0 = 00:00 KST at the top, clockwise, 360 = 24:00). */
 export const dayAngle = (ms, d0) => ((Number(ms) - Number(d0)) / DAY) * 360;
 /**
@@ -228,12 +235,21 @@ export function dayArcs(spans, items, d0) {
   }
   return out.sort((x, y) => x.a0 - y.a0);
 }
-/** Today's entries (the summary's fills of kind entry within the day) as dots: [{acct, sym, side, t, a, open}]. */
-export function dayDots(fills, d0) {
-  const d1 = Number(d0) + DAY;
-  return (fills || []).filter((f) => f && f.kind === "entry" && f.t != null && f.t >= d0 && f.t < d1)
+/** Today's entries (the summary's fills of kind entry within the day) as dots: [{acct, sym, side, t, a, open}]; with
+ *  ``since`` (the 추세판단 봇's start: the summary's trend_bot.since) only those from it on (before it: the bot before it's). */
+export function dayDots(fills, d0, since = null) {
+  const d1 = Number(d0) + DAY, from = Math.max(Number(d0), since == null ? -Infinity : Number(since));
+  return (fills || []).filter((f) => f && f.kind === "entry" && f.t != null && f.t >= from && f.t < d1)
     .map((f) => ({acct: f.acct, sym: f.symbol, side: f.side, t: f.t, a: dayAngle(f.t, d0), open: !!f.open}))
     .sort((x, y) => x.t - y.t);
+}
+/** The dial's '오늘 진입' line: '2번 (페이퍼(연습) · 바이비트)', '아직 없음'; the 추세판단 봇 started today (``since`` within the
+ *  day: the window was cut) says so: '새 봇 시작 23:28 뒤 아직 없음'. names: the accounts' names of the dots. */
+export function dayEntriesKo(dots, d0, since, names) {
+  const n = (dots || []).length;
+  const said = n ? `${fmt.int(n)}번 (${[...new Set(names || [])].join(" · ")})` : "아직 없음";
+  const cut = since != null && Number(since) > Number(d0) && Number(since) < Number(d0) + DAY;
+  return cut ? `새 봇 시작 ${fmt.hm(Number(since))} 뒤 ${said}` : said;
 }
 
 /** A tile's brightness 0-4 from this week's signals n against the busiest strategy's max (null: the count is unknown). */
@@ -1064,8 +1080,9 @@ export function hqView(ctx, hub) {
   const tIn = h("div", {class: "lbh-tin"}, tRunA, tRunB);
   const ticker = h("div", {class: "lbh-ticker", role: "marquee", "aria-label": "실거래 숫자 흐름"}, tIn);
   const side = (t) => h("span", {class: "lbh-side", "aria-hidden": "true"}, t);
+  const sideBot = side(sideBotKo(undefined));             // the paper bot's name from the first summary on (drawBot)
   const frame = h("div", {class: "lbh-frame"},
-    side("실거래 · LIVE · 진짜 돈 · 실거래 · LIVE"), side("A+C 합본 · COMBO@MIX · 보기만 · 주문 없음"),
+    side("실거래 · LIVE · 진짜 돈 · 실거래 · LIVE"), sideBot,
     banner,
     h("div", {class: "lbh-deck"}, R.bybit.el, center, R.mexc.el),
     pbar, ticker);
@@ -1121,8 +1138,15 @@ export function hqView(ctx, hub) {
   const tiles = panel("매매법 27개 · 이번 주 신호", "lbh-tilep", "최근 7일(한국 시간) · 밝을수록 신호가 많아요", tGrid, tRead, tLeg);
   const tHead = tiles.h2;
 
-  const foot = h("div", {class: "lbh-foot"}, ui.assumeLive("바이비트 · WOO X Pro"),
-    ui.assumeLine(["closed", "open"], "페이퍼(연습) A+C 합본 COMBO@mix · 게이지의 순ROE"));
+  const foot = h("div", {class: "lbh-foot"});
+  /** The paper bot's name on the frame's side label and the footer (the 추세판단 봇's own; before the first summary none). */
+  function drawBot() {
+    const tb = st.d ? st.d.trend_bot || null : undefined, k = tb === undefined ? "" : paperBotKo(tb);
+    if (foot.dataset.k === k && foot.firstChild) return;
+    foot.dataset.k = k;
+    sideBot.textContent = sideBotKo(tb);
+    put(foot, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed", "open"], `페이퍼(연습) ${k ? `${k} ` : ""}COMBO@mix · 게이지의 순ROE`));
+  }
   const root = h("div", {class: "lbh", dataset: {still: ""}},
     h("h2", {class: "lbh-sr"}, "실거래 한눈에"), cmd, frame,
     h("div", {class: "lbh-cards"}, waitP.el, likeP.el, entry.el, result.el, live.el),
@@ -1482,7 +1506,9 @@ export function hqView(ctx, hub) {
     const c = fCal.d, now = serverNow(), d0 = kstDayStart(now);
     const arcs = c ? dayArcs(c.spans, c.items, d0) : [];
     dArcs.replaceChildren(...arcs.map((x) => s("path", {class: ["lbh-darc", x.why === "weekend" ? "wk" : x.why === "usopen" ? "us" : "mc"], d: arcPath(120, 120, 84, x.a0, x.a1)})));
-    const dots = dayDots(st.d ? st.d.fills : [], d0);
+    // the 추세판단 봇: its own entries only (from its start; the ones before are the bot before it's)
+    const tb = st.d && st.d.trend_bot, since = tb && tb.since != null ? Number(tb.since) : null;
+    const dots = dayDots(st.d ? st.d.fills : [], d0, since);
     dDots.replaceChildren(...dots.map((x) => { const [cx, cy] = polar(120, 120, 84, x.a); return s("circle", {class: ["lbh-ddot", "lbh-x-" + x.acct, x.open ? "open" : ""], cx: cx.toFixed(2), cy: cy.toFixed(2), r: 6}); }));
     dDay.textContent = fmt.date(now);
     const rows = [];
@@ -1495,7 +1521,8 @@ export function hqView(ctx, hub) {
       const nx = c.now && c.now.next;
       if (nx) rows.push(h("p", null, h("span", {class: "k"}, "다음"), `${nx.ko || "쉼"} · ${fmt.kst(nx.from)}`));
     }
-    rows.push(h("p", null, h("i", {class: "sw dot", "aria-hidden": "true"}), h("span", {class: "k"}, "오늘 진입"), dots.length ? `${fmt.int(dots.length)}번 (${[...new Set(dots.map((x) => acctName(x.acct)))].join(" · ")})` : st.d ? "아직 없음" : "—"));
+    rows.push(h("p", null, h("i", {class: "sw dot", "aria-hidden": "true"}), h("span", {class: "k"}, "오늘 진입"),
+      st.d ? dayEntriesKo(dots, d0, since, dots.map((x) => acctName(x.acct))) : "—"));
     dLegend.replaceChildren(...rows);
     tickDial();
   }
@@ -1613,6 +1640,7 @@ export function hqView(ctx, hub) {
   function drawAll() {
     const d = st.d;
     for (const id of EXECS) setReactor(R[id], d ? by(d.accts, id) : null, d ? by(d.execs, id) : null);
+    drawBot();
     drawStatus();
     drawCenter();
     drawCkpt();

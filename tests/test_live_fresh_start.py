@@ -485,3 +485,219 @@ def test_trades_entered_before_the_start_are_tagged(tmp_path, monkeypatch):
     assert "전환 전" in out["text"] and "전환 전 포지션 정리" in out["text"]
     # another bot: no tag (only the exit reason's own words "전환 전 포지션 정리")
     assert out["other"].count("전환 전") == out["other"].count("전환 전 포지션 정리")
+
+
+# ================================================================ the leftovers of the switch night (한눈에 · 성적 · 지도 · 위험 · 설정 · 다시보기)
+def _js(tmp_path, body: str, now: int, **data) -> dict:
+    """``body`` in node with the tiny DOM, the clock at ``now`` (the world's), the screens as HQ · P · MP · RV · MO · RP · K
+    and each answer as D_<name>; ``shown(node)`` is the text a reader sees (hidden parts left out)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    loads = []
+    for k, v in data.items():
+        f = tmp_path / f"js-{k}.json"
+        f.write_text(json.dumps(json_finite(v), allow_nan=False, default=str), encoding="utf-8")
+        loads.append(f"const D_{k} = JSON.parse(fs.readFileSync({json.dumps(str(f))}, 'utf8'));")
+    mods = "".join(f"const {n} = await import('file://{SCREENS}/livebots-{f}.js');\n" for n, f in (
+        ("HQ", "hq"), ("P", "perf"), ("MP", "map"), ("RV", "risk"), ("MO", "more"), ("RP", "replay"), ("K", "kit")))
+    dom = os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    script = (f"Date.now = () => {int(now)};\nconst D = await import('file://{dom}'); const fs = await import('node:fs');\n" + mods
+              + "\n".join(loads) + "\n"
+              "globalThis.location = {hash: ''};\n"
+              "const tick = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 2)); };\n"
+              "const shown = (n) => { const out = []; const go = (x) => { if (x == null) return; if (x instanceof Text) { out.push(x.t); return; }"
+              " if (x.hidden === true) return; x.childNodes.forEach(go); }; go(n); return out.join(' ').replace(/\\s+/g, ' '); };\n"
+              "const mkCtx = (answers) => ({params: {query: {}, arg: ''}, alive: () => true, track() {}, listen() {}, on() {}, watch() {},"
+              " timeout() {}, href: (n, a) => '#/' + n + (a ? '/' + a : ''), every(ms, fn, o) { if (o && o.now === false) return; fn(); },"
+              " api: async (path) => { const k = Object.keys(answers).find((p) => String(path).startsWith(p));"
+              " if (k === undefined) throw Object.assign(new Error('x'), {status: 503}); return JSON.parse(JSON.stringify(answers[k])); }});\n"
+              + body)
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=90)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def _rows_of(db: str) -> list:
+    return L.read_paper(db, [L.ACCOUNT], 0)["accounts"][L.ACCOUNT]["trades"]
+
+
+def _old_losses(db: str) -> None:
+    """Two losses of the bot before it, closed before the trend bot's start (a streak of 2 on the whole account)."""
+    d = {"side": 1, "entry_price": 100.0, "exit_price": 99.0, "qty": 10.0, "margin": 300.0, "fees": 0.5, "strategy_id": "F3_BOS",
+         "timeframe": "30m", "stop_initial": 99.0, "stop_price": 99.0}
+    s = Store3(db)
+    for k, (pnl, eq) in enumerate(((-20.0, 980.0), (-10.0, 970.0))):
+        s.conn.execute("INSERT INTO trades (account_id, symbol, entry_time, exit_time, exit_reason, leverage, pnl, roe, equity_after, data) "
+                       "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (L.ACCOUNT, "SOLUSDT", T.T0 - (4 - k) * HOUR, T.T0 - (3 - k) * HOUR, "SL", 30, pnl, -0.5, eq, json.dumps(d)))
+    s.commit()
+    s.close()
+
+
+def test_hq_counts_the_new_bots_entries_and_names_it(tmp_path, monkeypatch):
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    now = since + 2 * MIN
+    d = json_finite(L.build(paths, now))
+    assert d["trend_bot"]["since"] == since
+    # the summary's fills still carry the bot before it's entry (요약 lists it); the dial leaves it out
+    assert [f["t"] for f in d["fills"] if f["kind"] == "entry" and f["acct"] == "paper"] == [B + 2 * MIN]
+    assert next(a for a in d["accts"] if a["id"] == "paper")["sub_ko"] == "추세판단 봇"
+    a = {"d": d, "now": L.whynow(paths, now), "cal": L.calendar(paths, now), "rank": L.rank(paths, now)}
+    out = _js(tmp_path, """const d0 = HQ.kstDayStart(Date.now()), since = D_a.d.trend_bot.since;
+    const mine = HQ.dayDots(D_a.d.fills, d0, since), all = HQ.dayDots(D_a.d.fills, d0);
+    const c = mkCtx({"/api/v4/livebots/now": D_a.now, "/api/v4/livebots/calendar": D_a.cal, "/api/v4/livebots/rank": D_a.rank});
+    const v = HQ.hqView(c, {get: () => null, state: () => "loading", at: () => 0, retry: () => {}});
+    const before = shown(v.el);
+    await tick(); v.set(D_a.d, "ok"); await tick();
+    console.log(JSON.stringify({d0, mine: mine.length, all: all.length,
+      words: [HQ.dayEntriesKo(mine, d0, since, []), HQ.dayEntriesKo(all, d0, null, all.map((x) => K.acctKo(x.acct))),
+              HQ.dayEntriesKo([], d0, d0 - 3600000, []), HQ.dayEntriesKo(all, d0, d0 + 3600000, ["바이비트", "바이비트"])],
+      side: [HQ.sideBotKo(undefined), HQ.sideBotKo(null), HQ.sideBotKo(D_a.d.trend_bot)], bot: [K.paperBotKo(null), K.paperBotKo({name: "추세판단 봇"})],
+      before, text: shown(v.el)}));""", now, a=a)
+    assert out["d0"] == kst(2026, 10, 5) and (out["mine"], out["all"]) == (0, 1)
+    assert out["words"] == ["새 봇 시작 09:40 뒤 아직 없음", "1번 (페이퍼(연습))", "아직 없음", "새 봇 시작 01:00 뒤 1번 (바이비트)"]
+    assert out["side"] == ["COMBO@MIX · 보기만 · 주문 없음", "A+C 합본 · COMBO@MIX · 보기만 · 주문 없음", "추세판단 봇 · COMBO@MIX · 보기만 · 주문 없음"]
+    assert out["bot"] == ["A+C 합본", "추세판단 봇"]
+    assert "A+C" not in out["before"]                        # before the first summary: no bot's name, never the old one
+    t = out["text"]
+    assert not BAD.search(t), BAD.search(t)
+    for words in ("오늘 24시간", "오늘 진입 새 봇 시작 09:40 뒤 아직 없음", "추세판단 봇 · COMBO@MIX · 보기만 · 주문 없음",
+                  "페이퍼(연습) 추세판단 봇 COMBO@mix · 게이지의 순ROE"):
+        assert words in t, words
+    assert "A+C" not in t
+
+
+def test_perf_and_map_say_once_that_the_new_bot_has_no_trade_yet(tmp_path, monkeypatch):
+    from paperbot.dash.more import liveinsight as LI
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    more = _more(w, tmp_path)
+    now = since + 2 * MIN
+    pf, mp = json_finite(L.perf(paths, now, more)), json_finite(L.map_view(paths, now))
+    for d in (pf, mp):
+        e = d["empty"]
+        assert e["ko"] == L.TREND_EMPTY_KO == "새 봇 거래 아직 없음 · 첫 거래가 닫히면 채워져요" and e["since"] == since
+        assert e["expect"]["state"] == "ok" and e["expect"]["per_weekday"] > 0                  # the replay's (가상)
+    # the switch closed the position from before: still none of its own (that close is the bot before it's)
+    H = T.T0 + HOUR
+    T._to(w, since + 2 * MIN, H + 2 * MIN)
+    w.store.commit()
+    L._cache.clear()
+    assert L.perf(paths, H + 3 * MIN, more)["empty"]["ko"] == L.TREND_EMPTY_KO and L.map_view(paths, H + 3 * MIN)["empty"]
+    # from its first closed trade on, or for another bot: none (the pages as before)
+    tb = L.trend_bot(w.cfg.db)
+    assert L.trend_empty(tb, 1) is None and L.trend_empty(None, 0) is None and L.trend_empty(tb, 0)["since"] == since
+    groups = LI.groups(paths, now, more)
+    out = _js(tmp_path, """const pv = P.perfView(mkCtx({"/api/v4/livebots/perf": D_pf, "/api/v4/livebots/groups": D_gr}));
+    const mv = MP.mapView(mkCtx({"/api/v4/livebots/map": D_mp}));
+    await tick();
+    console.log(JSON.stringify({pf: shown(pv.el), mp: shown(mv.el), card: shown(P.freshCard(D_pf.empty, "#/livebots/expect"))}));""",
+              now, pf=pf, mp=mp, gr=groups)
+    for k in ("pf", "mp"):
+        t = out[k]
+        assert not BAD.search(t), (k, BAD.search(t))
+        for words in (L.TREND_EMPTY_KO, "가상 · 재현", "7/1~10/20 실제 1분봉으로 이 규칙을 다시 돌려 보면", "평일 하루 약 1.1번 진입",
+                      "아무 평일 시각에서 다음 진입까지 가운데값", "재현 비교 →"):
+            assert words in t, (k, words)
+        assert t.count(L.TREND_EMPTY_KO) == 1, k
+    pft, mpt = out["pf"], out["mp"]
+    # 성적: the zero tables go (승률 흐름 · 그룹별 성적 · 나눠 보기 · 동전 쌍둥이 · the account switch); the 2-week review stays
+    for gone in ("승률 흐름", "그룹별 성적", "나눠 보기", "동전 쌍둥이 (참고)", "0번 · 승률", "계좌 고르기", "기준 없음"):
+        assert gone not in pft, gone
+    assert "2주 검토까지" in pft and "추세판단 봇 시작 10/05 09:40부터" in pft
+    # 지도: no wins chart, no splits of "거래 없음", no reading guide; the footer names the bot
+    for gone in ("진입 때 추세 판단", "거래 없음", "숫자 읽는 법", "거래가 쌓이면", "0승"):
+        assert gone not in mpt, gone
+    assert "추세판단 봇 시작 10/05 09:40부터" in mpt and "페이퍼(연습) 추세판단 봇의 닫힌 거래" in mpt and "A+C" not in mpt
+    assert out["card"].startswith("새 봇 성적 10/05 09:40 시작부터 · 닫힌 거래 기준 " + L.TREND_EMPTY_KO)
+
+
+def test_risk_counts_the_new_bots_trades_and_leaves_the_executors_whole(tmp_path, monkeypatch):
+    from paperbot.dash.more import liveinsight as LI
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    _old_losses(w.cfg.db)
+    more = _more(w, tmp_path)
+    now = since + 2 * MIN
+    assert LI.loss_streak(_rows_of(w.cfg.db)) == 2                      # the whole account: the bot before it's two losses
+    d = json_finite(LI.risk(paths, now, more))
+    by = {a["id"]: a for a in d["accts"]}
+    pa = by["paper"]
+    assert (pa["streak"], pa["n"], pa["from_ms"], pa["from_ko"]) == (0, 0, since, LI.RISK_FROM_KO) and LI.RISK_FROM_KO == "새 봇 시작 뒤"
+    # its position from before is still open: the new bot has not traded, nothing is down from its own peak
+    assert pa["peak"] == pa["balance"] and pa["drawdown"] == 0
+    for x in ("bybit", "mexc"):                                           # the executors' are their real accounts' (as before)
+        assert "from_ko" not in by[x] and "n" not in by[x]
+    # the switch's close (the bot before it's) is not the new bot's either: its peak starts at the balance it left
+    H = T.T0 + HOUR
+    T._to(w, since + 2 * MIN, H + 2 * MIN)
+    w.store.commit()
+    L._cache.clear()
+    sw = next(t for t in _rows_of(w.cfg.db) if t["exit_reason"] == "SWITCH")
+    d2 = json_finite(LI.risk(paths, H + 3 * MIN, more))
+    pa2 = next(a for a in d2["accts"] if a["id"] == "paper")
+    assert (pa2["streak"], pa2["n"]) == (0, 0) and pa2["peak"] == sw["equity_after"] == pa2["balance"] and pa2["drawdown"] == 0
+    out = _js(tmp_path, """const v = RV.riskView(mkCtx({"/api/v4/livebots/risk": D_r}));
+    await tick();
+    console.log(JSON.stringify({text: shown(v.el), w: [RV.fromWords(D_r.accts.find((a) => a.id === "paper")), RV.fromWords({}), RV.fromWords(null)]}));""",
+              now, r=d)
+    t = out["text"]
+    assert not BAD.search(t), BAD.search(t)
+    assert "연속 손실 0번 (새 봇 시작 뒤)" in t and "(새 봇 시작 뒤 최고" in t and t.count("(새 봇 시작 뒤)") == 1
+    assert out["w"] == ["연속 손실과 최고점은 새 봇 시작(10/05 09:40) 뒤 거래만 세요 · 새 봇 닫힌 거래 0번 · 잔고는 계좌 전체예요", None, None]
+
+
+def test_settings_and_the_labels_use_the_trend_bots_name(tmp_path, monkeypatch):
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    now = since + 2 * MIN
+    st = json_finite(L.settings(paths, now))
+    assert st["trend"]["name"] == "추세판단 봇" and st["rules"]["name"] == "추세판단 봇"
+    # a trend config without a name: still the trend bot's name (livebots TREND_NAME_KO), never the old A+C label
+    cfg = _cfg_json(w)
+    cfg["name"] = None
+    w.store.put_state("combo_run", T.T0, {"config": cfg})
+    w.store.commit()
+    L._cache.clear()
+    assert L.read_paper(w.cfg.db, [L.ACCOUNT], now)["name_ko"] == L.TREND_NAME_KO == L.trend_bot(w.cfg.db)["name"]
+    assert next(a for a in L.build(paths, now)["accts"] if a["id"] == "paper")["sub_ko"] == L.TREND_NAME_KO
+    out = _js(tmp_path, """const v = MO.settingsView(mkCtx({"/api/v4/livebots/settings": D_st}));
+    await tick();
+    console.log(JSON.stringify({text: shown(v.el), sub: [MO.rulesSub(D_st.trend), MO.rulesSub(null)]}));""", now, st=st)
+    t = out["text"]
+    assert not BAD.search(t), BAD.search(t)
+    assert "추세판단 봇의 모든 설정이 같이 쓰는 규칙" in t and "합친 봇의" not in t and "A+C" not in t
+    assert out["sub"] == ["추세판단 봇의 모든 설정이 같이 쓰는 규칙", "합친 봇의 모든 설정이 같이 쓰는 규칙"]
+
+
+def test_replay_tags_the_trade_from_before_and_says_the_switch(tmp_path, monkeypatch):
+    from paperbot.dash.more import livetape as R
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    more = _more(w, tmp_path)
+    H = T.T0 + HOUR
+    T._to(w, since + 2 * MIN, H + 2 * MIN)                   # its first minute closes the position from before (SWITCH)
+    w.store.commit()
+    L._cache.clear()
+    now = H + 3 * MIN
+    ls = json_finite(R.build_list(paths, now_ms=now))
+    (r,) = ls["rows"]
+    assert (r["exit_reason"], r["reason_ko"], r["prev"]) == ("SWITCH", "전환 전 포지션 정리", True) and ls["trend_bot"]["since"] == since
+    one = json_finite(R.build_one(paths, r["id"], now_ms=now, more=more))
+    assert one["trade"]["prev"] is True and one["trend_bot"]["since"] == since and one["exit"]["record"]["reason_ko"] == "전환 전 포지션 정리"
+    # the switch closed it, not the bars: its minute is the record's (never 기록과 다름), the locks up to it are checked
+    assert one["check"]["state"] == "same" and one["check"]["why_ko"] == R.SWITCH_KO and one["exit"]["stopped"] == "outside"
+    assert R._prev({"entry_time": B}, None) is False and R._prev({"entry_time": since}, {"since": since}) is False
+    out = _js(tmp_path, f"""const v = RP.replayView(mkCtx({{"/api/v4/livebots/replay/{r['id']}": D_one, "/api/v4/livebots/replay": D_ls}}));
+    await tick();
+    console.log(JSON.stringify({{text: shown(v.el), ko: [RP.prevKo(D_one.trade), RP.prevKo({{prev: true, exit_reason: "SL"}}), RP.prevKo({{prev: false}}), RP.prevKo(null)]}}));""",
+              now, one=one, ls=ls)
+    t = out["text"]
+    assert not BAD.search(t), BAD.search(t)
+    for words in ("전환 전 포지션 정리", "기록과 같음", "새 봇(추세판단 봇)이 켜지며 예전 봇의 포지션을 닫은 거래",
+                  "예전 봇이 연 포지션을 새 봇(추세판단 봇)이 켜지며 바로 닫았어요 (전환 전 포지션 정리) · 새 봇 성적에 세지 않아요"):
+        assert words in t, words
+    assert "기록과 다름" not in t
+    assert t.count("전환 전") - t.count("전환 전 포지션 정리") >= 3                 # the tag: the list row, the head, the result
+    assert out["ko"][1] == "새 봇(추세판단 봇)이 켜지기 전 예전 봇의 거래예요 · 새 봇 성적에 세지 않아요" and out["ko"][2:] == [None, None]

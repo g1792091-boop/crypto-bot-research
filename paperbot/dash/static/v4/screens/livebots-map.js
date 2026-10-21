@@ -18,9 +18,11 @@
 // wins so far, from the bot's start, no range); the split is the bot's own trades by the judgment it entered on (4 of 4 /
 // 3 of 4), coin, KST 4-hour block, side and entry bar (the server's cut_defs), each row with its money (연습) where the
 // 5-year number was, coloured by its sign from 10 trades on (grey before) and 표본 적음 under 20.
-// (The band chart, the ring and the side split are the same drawings.)
-import {h, s, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
+// (The band chart, the ring and the side split are the same drawings.) Before its first closed trade (the server's
+// ``empty``, owners 10/21 night: zeros everywhere on the first day) one card says so in their place, with what the 7/1~10/20
+// replay says to expect (가상).
+import {h, s, put, ui, fmt, motion, serverNow, href} from "../core/pb.js";
+import {acctKo, acctTag, sourceState, expectLines, expectHead} from "./livebots-kit.js";
 
 export const MAP_API = "/api/v4/livebots/map";
 const REFRESH_MS = 30 * 1000;
@@ -258,8 +260,9 @@ export function mapView(ctx) {
   const secSub = h("span", {class: "sub"}, "페이퍼(연습) 닫힌 거래를 장세·코인·시간대·방향으로 나눠 5년 백테스트 옆에");
   const howCard = ui.card({title: "숫자 읽는 법", sub: "맞춘 숫자와 현실 숫자 · 거래가 적을 때의 운", cls: "lbm-howcard"}, how);
   const footLine = h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) A+C 합본의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)"));
-  const body = h("div", {class: "lbm-body stack"}, hero,
-    h("div", {class: "lbm-sechead"}, h("h2", null, "어디서 벌고 어디서 잃나"), secSub),
+  const secHead = h("div", {class: "lbm-sechead"}, h("h2", null, "어디서 벌고 어디서 잃나"), secSub);
+  const freshSlot = h("div", {class: "lb-slot"});      // the trend bot before its first closed trade (draw)
+  const body = h("div", {class: "lbm-body stack"}, freshSlot, hero, secHead,
     cutSlot, cutGrid, howCard, footLine);
   const el = h("div", {class: "lbm stack"}, stateSlot, body);
   const part = (card, cls) => { const hd = card && card.firstChild; return hd ? Array.from(hd.childNodes).find((n) => String(n.className || "") === cls || n.tagName === cls) || null : null; };
@@ -274,12 +277,28 @@ export function mapView(ctx) {
     say(secSub, t ? "추세판단 봇 닫힌 거래를 진입 때 판단·코인·시간대·방향·진입 봉으로 나눠 (백테스트 기준 없음)"
       : "페이퍼(연습) 닫힌 거래를 장세·코인·시간대·방향으로 나눠 5년 백테스트 옆에");
     say(part(howCard, "sub"), t ? "기준이 없는 새 봇의 숫자 · 거래가 적을 때의 운" : "맞춘 숫자와 현실 숫자 · 거래가 적을 때의 운");
-    const fk = t ? "trend" : "old";
+    const fk = t ? `trend:${tb.name || ""}` : "old";
     if (footLine.dataset.k !== fk) {
       footLine.dataset.k = fk;
-      put(footLine, ui.assumeLine(["closed"], t ? "페이퍼(연습) 추세판단 봇의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)"
+      put(footLine, ui.assumeLine(["closed"], t ? `페이퍼(연습) ${tb.name || "추세판단 봇"}의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)`
         : "페이퍼(연습) A+C 합본의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)"));
     }
+  }
+  /** The trend bot before its first closed trade (the server's ``empty``): one card in place of the hero, the splits and
+   *  how to read them (all zeros on the first day), with what the replay says to expect (가상). Returns whether it is shown. */
+  function drawFresh(d) {
+    const e = trendOn(d) && d.empty ? d.empty : null;
+    for (const x of [hero, secHead, cutSlot, cutGrid, howCard]) x.hidden = !!e;
+    if (!e) { put(freshSlot); return false; }
+    const ex = e.expect || {}, lines = expectLines(ex), tb = d.trend_bot || {};
+    put(freshSlot, ui.card({title: "이긴 횟수 · 어디서 벌고 어디서 잃나", sub: `${tb.name || "추세판단 봇"} 시작 ${fmt.kst(e.since)}부터 · 닫힌 거래 기준`, cls: "lbm-fresh"},
+      h("p", {class: "lbm-fnone"}, e.ko || "새 봇 거래 아직 없음 · 첫 거래가 닫히면 채워져요"),
+      lines.length ? h("div", {class: "lbm-fexp"},
+        h("p", {class: "lbm-fhead"}, ui.pill("가상 · 재현", "thin"), ` ${expectHead(ex)}`),
+        h("ul", {class: "lbm-flist"}, lines.map((x) => h("li", null, x))),
+        ex.note_ko ? ui.note(ex.note_ko) : null,
+        h("a", {class: "lbm-fmore", href: (ctx.href || href)("livebots", "expect")}, "재현 비교 →")) : null));
+    return true;
   }
 
   // ---------------------------------------------------------------- 기대 범위 띠
@@ -573,6 +592,7 @@ export function mapView(ctx) {
     if (!d) { put(tiles, motion.shimmer(2)); put(chart, motion.shimmer(4, true)); put(cutGrid, motion.shimmer(4)); return; }
     const b = d.band;
     botWords(d);
+    if (drawFresh(d)) return;
     put(srcSlot, trendOn(d) ? h("p", {class: "lbm-noband"}, ui.pill("띠 없음", "thin"), ` 기대 범위 띠가 없는 이유: ${d.band_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}`)
       : !b ? sourceState({state: d.card && d.card.state === "error" ? "error" : "missing",
         reason_ko: (d.card && d.card.reason_ko) || "백테스트 기준표(deploy/combo.live-ac.expected.json)가 없어 띠를 그릴 수 없어요"}, "기대 범위 띠") : null);

@@ -22,7 +22,7 @@
 // board. Countdowns tick every second on the server's clock. HONESTY: unread = 못 읽음 + why, never a zero; paper money is
 // never shown as real money.
 import {h, put, ui, fmt, store, serverNow, href} from "../core/pb.js";
-import {sourceState} from "./livebots-kit.js";
+import {sourceState, waitKo, expectLines, expectHead} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/trend";
 // the judgment changes of the last 24 h: the 일지 tab's answer (dash/more/livejournal.py, its "trend" rows), every 60 s
@@ -132,14 +132,8 @@ export function nextCloses(now) {
   const n = Number(now);
   return {m30: n - (n % (30 * MIN)) + 30 * MIN, h1: n - (n % HOUR) + HOUR};
 }
-/** A wait in the owners' words: "40분" / "약 17시간" / "약 3일" (null: "—"). */
-export function waitKo(ms) {
-  if (!ok(ms)) return "—";
-  const m = Number(ms);
-  if (m < HOUR) return `${Math.max(1, Math.round(m / MIN))}분`;
-  if (m < 72 * HOUR) return `약 ${Math.round(m / HOUR)}시간`;
-  return `약 ${Math.round(m / DAY)}일`;
-}
+// waitKo, expectLines and expectHead (the replay's expectation in words) live in livebots-kit.js (성적 · 지도 say it too)
+export {waitKo, expectLines, expectHead};
 /** The higher bar's judgment against the position, in words: closed by the supervisor only on a bar closed after the
  *  entry, so a position opened against it (전환 전) waits for the next close (trendbot.py _before_step). */
 export function againstKo(p, j) {
@@ -158,20 +152,6 @@ export function idleKo(a, p, f) {
   if (f && f.state === "none") return "이 포지션을 따라간 기록 없음";
   if (f && f.state === "other") return f.ko;
   return "포지션 없음 (안 따라갔거나 이미 닫음)";
-}
-/** The replay's expectation of a fresh start, as lines (the next.expect part of the answer; [] when unread). */
-export function expectLines(x) {
-  if (!x || x.state !== "ok") return [];
-  const out = [];
-  if (ok(x.per_weekday)) {
-    out.push(`평일 하루 약 ${Number(x.per_weekday).toFixed(1)}번 진입` + (ok(x.zero_days) && ok(x.weekdays)
-      ? ` · 진입 없는 평일도 ${fmt.int(x.zero_days)}일 / ${fmt.int(x.weekdays)}일 (${fmt.pct(x.zero_share, 0, false)})` : ""));
-  }
-  if (ok(x.wait_median_ms)) {
-    out.push(`아무 평일 시각에서 다음 진입까지 가운데값 ${waitKo(x.wait_median_ms)}` + (ok(x.wait_q1_ms) && ok(x.wait_q3_ms)
-      ? ` (4번 중 1번은 ${waitKo(x.wait_q1_ms)} 안, 4번 중 1번은 ${waitKo(x.wait_q3_ms)} 넘게)` : ""));
-  }
-  return out;
 }
 /** The hero's state from the trend answer: {cls, head, sub}. */
 export function heroOf(t, now) {
@@ -487,10 +467,9 @@ export function trendView(ctx, hub) {
     if (!r || !r.n) {
       const ex = (st.t.next || {}).expect || {};
       const lines = expectLines(ex);
-      const win = (ex.window_kst || []).map((d) => `${Number(String(d).slice(5, 7))}/${Number(String(d).slice(8, 10))}`).join("~");
       put(recordBox, ui.empty("새 규칙으로 닫힌 거래가 아직 없어요"),
         lines.length ? h("div", {class: "ltr-exp"},
-          h("p", {class: "ltr-ehead"}, ui.pill("가상 · 재현", "thin"), ` ${win || "지난 기간"} 실제 1분봉으로 이 규칙을 다시 돌려 보면`),
+          h("p", {class: "ltr-ehead"}, ui.pill("가상 · 재현", "thin"), ` ${expectHead(ex)}`),
           h("ul", {class: "ltr-list ltr-rlist"}, lines.map((x) => h("li", null, x))),
           ex.note_ko ? h("p", {class: "ltr-sub"}, ex.note_ko) : null,
           h("a", {class: "ltr-more", href: (ctx.href || href)("livebots", "expect")}, "재현 비교 →")) : null);

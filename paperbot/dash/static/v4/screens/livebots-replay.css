@@ -143,6 +143,8 @@
 .lbrp-resl { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.5; }
 .lbrp-resl .up { color: var(--up); }
 .lbrp-resl .down { color: var(--down); }
+/* 전환 전: the bot before the 추세판단 봇's trade (the new bot's record leaves it out) */
+.lbrp-prev { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
 .lbrp-resx { display: grid; gap: 4px; min-width: 0; padding-top: 6px; border-top: 1px solid var(--line); }
 .lbrp-rx { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.5; }
 .lbrp-rx b.up { color: var(--up); }

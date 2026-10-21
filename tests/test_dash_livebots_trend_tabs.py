@@ -125,6 +125,7 @@ def test_perf_has_no_old_baseline_and_counts_from_the_start(tw):
     assert d["ledger"] == {"state": "missing", "reason_ko": L.TREND_LEDGER_KO}
     assert d["trend_bot"]["name"] == "추세판단 봇" and d["trend_bot"]["no_ref_ko"] == NO_REF
     assert d["flip"]["stats"]["trades"] == 1
+    assert d["empty"] is None                                                    # one closed trade of its own: the page as before
     txt = _flat(d)
     assert '"backtest"' not in txt and '"shake"' not in txt and "88% 이상" not in txt and "82~88%" not in txt
     b = L.build(tw["p"], NOW)                                                     # the summary every tab reads
@@ -134,7 +135,7 @@ def test_perf_has_no_old_baseline_and_counts_from_the_start(tw):
 
 def test_map_has_no_band_and_splits_the_bots_own_trades(tw):
     d = L.map_view(tw["p"], NOW)
-    assert d["kind"] == "trend" and d["band_ko"] == NO_REF
+    assert d["kind"] == "trend" and d["band_ko"] == NO_REF and d["empty"] is None          # its own trade: no empty state
     b = d["band"]
     assert b["trend"] and b["fit"] is None and b["honest"] is None and b["break_even"] is None and b["fit_band"] is None
     assert b["accounts"]["paper"]["n"] == 1 and b["accounts"]["paper"]["wins"] == 0

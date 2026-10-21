@@ -4,7 +4,8 @@
 //                 net ROE: the paper's own ladder formula; the executors' at the exchange's listed fee), a locked stop as
 //                 the gain it keeps, the liquidation price and how far it sits past the stop (the paper's; the executors
 //                 do not record one: said so)
-//   계좌          the loss streak now, the drawdown from the highest balance
+//   계좌          the loss streak now, the drawdown from the highest balance (추세판단 봇, owners 10/21: the paper's count its
+//                 own trades only, from its start: 새 봇 시작 뒤; the executors' are their real accounts' and stay whole)
 //   손절이 연달아 1, 2, 3, 4 stops in a row at the config's margin (30 %) and stop (-50 % net): the share of the account
 //                 left, compounded, and what it is in each account's money
 //   비상 정지     the kill file (/var/lib/paperbot/STOP) there or not, and the one command that stops both executors
@@ -42,6 +43,12 @@ export function liqWords(a, pos) {
   return parts.join(" · ");
 }
 
+/** The paper card's line while the 추세판단 봇 runs (the server's from_ms / from_ko / n): what the streak and the peak count. */
+export function fromWords(a) {
+  if (!a || !has(a.from_ms)) return null;
+  return `연속 손실과 최고점은 새 봇 시작(${fmt.kst(a.from_ms)}) 뒤 거래만 세요${has(a.n) ? ` · 새 봇 닫힌 거래 ${fmt.int(a.n)}번` : ""} · 잔고는 계좌 전체예요`;
+}
+
 // ================================================================ the view
 /** riskView(ctx) -> {el, set()}: its own endpoint, read now and every 30 s. */
 export function riskView(ctx) {
@@ -76,9 +83,10 @@ export function riskView(ctx) {
       : h("p", {class: "lbv-nopos"}, "지금 포지션 없음"),
     h("div", {class: "lbv-acc"},
       h("span", null, "연속 손실 ", h("b", {class: ["num", a.streak ? "down" : ""]}, `${fmt.int(a.streak || 0)}번`),
-        a.streak_from === "executor" ? h("small", {class: "muted"}, " (실행기 기록)") : null),
+        a.streak_from === "executor" ? h("small", {class: "muted"}, " (실행기 기록)") : a.from_ko ? h("small", {class: "muted"}, ` (${a.from_ko})`) : null),
       h("span", null, "최고점 대비 ", h("b", {class: ["num", has(a.drawdown) && a.drawdown > 0.0005 ? "down" : ""]}, dd),
-        has(a.peak) ? h("small", {class: "muted"}, ` (최고 ${fmt.money(a.peak)})`) : null)));
+        has(a.peak) ? h("small", {class: "muted"}, ` (${a.from_ko ? `${a.from_ko} ` : ""}최고 ${fmt.money(a.peak)})`) : null)),
+    a.from_ko && has(a.from_ms) ? h("p", {class: "lbv-from"}, fromWords(a)) : null);
   }
   function drawTable(d) {
     const rows = d.table || [];
