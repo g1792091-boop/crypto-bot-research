@@ -462,11 +462,12 @@ def team_db(folder: str, p: dict, now: int = NOW) -> str:
                              "worry": None, "luck": "p=0.07, 아직 결론 못 냄"},
                    "market": {"headline": "횡보장에서 8번 중 4번", "points": ["강하락 8번", "SOL 16번"], "worry": None, "luck": "칸마다 10번 미만"},
                    "lead": TEAM_LEAD}
-        T.tick(conn, src, R.FakeRunner(answers=answers), T.BUDGET_DEFAULT)
+        # the calls are charged at the world's clock (the usage of "today" is the world's day, not the day the tests run)
+        T.tick(conn, src, R.FakeRunner(answers=answers), T.BUDGET_DEFAULT, clock=lambda: now)
         T.quiet(conn, "weekly", "weekly:2026-10-12", now - 7 * DAY, "지난주 닫힌 거래가 없어 AI 회의 없이 넘어갑니다")
-        T.tick(conn, src, R.FakeRunner(answers=answers), T.BUDGET_DEFAULT)
+        T.tick(conn, src, R.FakeRunner(answers=answers), T.BUDGET_DEFAULT, clock=lambda: now)
         T.tick(conn, {**src, "now": now + H}, R.FakeRunner(answers=answers, fail={"risk": R.UsageLimitReached("5-hour limit reached")}),
-               T.BUDGET_DEFAULT, only="loss", force=True)
+               T.BUDGET_DEFAULT, only="loss", force=True, clock=lambda: now + H)
         T.put_state(conn, "auth", now, {"ok": True, "why": "claude.ai"})
         T.put_state(conn, "tick", now, {"result": {"state": "done"}, "dry": False})
     finally:
