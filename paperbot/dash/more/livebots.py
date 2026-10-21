@@ -2556,7 +2556,8 @@ def costs(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/costs: per executor, its closed trades next to the paper trade each followed: entry price gap
     (in the trade's favour positive), fees, funding, and the live P&L minus the paper's scaled to the live size. Plus the
     paper trades it did not follow and why (its own records). Read from the 거래 tab's own rows (trade_rows). Since 10/19
-    night also 체결 비교 per executor (``gaps``: fill_gaps) and 진입 방식 판단 (``entry_judge``)."""
+    night also 체결 비교 per executor (``gaps``: fill_gaps) and 진입 방식 판단 (``entry_judge``); since 10/21 night 수수료 줄이기
+    (``fees``: dash/more/livefees.py)."""
     tr = trade_rows(p, now)
     accts = tr.get("accts") or {}
     out = {}
@@ -2609,9 +2610,10 @@ def costs(p: dict, now: int) -> dict:
             cfg = configs[ex] if configs[ex].get("state") == "ok" else {}
             out[ex]["gaps"] = fill_gaps(p[dk], (accts.get(ex) or {}).get("rows") or [], cfg.get("exchange") or ex,
                                         cfg.get("ladder_from") or "paper")
+    from . import livefees as LF                         # 수수료 줄이기 (owners 10/21 night): added, nothing above changes
     return {"now_ms": now, "paper": {"state": pa.get("state"), "n": pa.get("n"), "reason_ko": pa.get("reason_ko")},
             "execs": [{"id": ex, "name_ko": ko} for ex, ko, _dk, _ck in slots(configs)], "accts": out, "match_ms": MATCH_MS,
-            "entry_judge": entry_judge(out, configs)}
+            "entry_judge": entry_judge(out, configs), "fees": LF.fees(p, now)}
 
 
 # ---------------------------------------------------------------- 체결 비교 (owners 10/19 night: each live fill against the paper's)
