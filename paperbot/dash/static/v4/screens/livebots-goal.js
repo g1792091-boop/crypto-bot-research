@@ -17,6 +17,10 @@
 //               the second one started, each live account since MEXC switched; numbers only, no verdict)
 // HONESTY: a number nobody has is '—' or its reason (수집 전 / 못 읽음), never 0; small samples say so; paper money (연습)
 // and real money (진짜 돈) carry their own captions; a failed refresh keeps the last answer dimmed with its age.
+// 추세판단 봇 (the server's trend_bot, owners 10/21): the start is "추세판단 봇 시작", the record counts from it, the old bot's
+// 6.2 entries a weekday is gone (the server's weekday_ref is the trend bot's own measured reference, none yet: no 참고 line),
+// the break-even is the arithmetic of the bot's own config (break_even_ko says how), the money rule has no threshold yet
+// (✓ / ✗ become · : facts only), and 규칙 고정 is 2 weeks from the bot's own start.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 
@@ -52,11 +56,23 @@ export function rangeWords(range, be) {
 /** A multiple in words: "×1.84"; under ×0.01 "×0.01 미만" (the arithmetic of a losing record goes to almost nothing). */
 export const multKo = (m) => (!has(m) ? "—" : m < 0.01 ? "×0.01 미만" : `×${fmt.num(m, 2)}`);
 
-/** 돈 늘리기 기준 as rows: [{mark: "✓" | "✗", ko, what}] from the server's scale checks (null without them). */
+/** 돈 늘리기 기준 as rows: [{mark: "✓" | "✗" | "·", ko, what}] from the server's scale checks (null without them). A check
+ *  without a threshold (ok null: the trend bot's facts, no rule yet) is "·", never a pass or a fail. */
 export function scaleRows(scale) {
   if (!scale || !Array.isArray(scale.checks)) return null;
-  return scale.checks.map((c) => ({mark: c.ok ? "✓" : "✗", ok: !!c.ok, ko: c.ko || "", what: c.what_ko || ""}));
+  return scale.checks.map((c) => ({mark: c.ok == null ? "·" : c.ok ? "✓" : "✗", ok: !!c.ok, none: c.ok == null, ko: c.ko || "", what: c.what_ko || ""}));
 }
+
+/** The break-even words: "본전 약 86% (복리; 단순 합으로는 82%~83%)" or one plain number when both ends are the same. */
+export function beWords(be, plain) {
+  if (!has(be)) return "본전 승률 모름";
+  const p = (plain || []).filter(has);
+  const pk = p.length === 2 && Math.abs(p[0] - p[1]) < 0.005 ? fmt.pct(p[0], 0, false) : p.map((x) => fmt.pct(x, 0, false)).join("~");
+  return `본전 약 ${fmt.pct(be, 0, false)}${pk ? ` (복리; 단순 합으로는 ${pk})` : ""}`;
+}
+
+/** The start in words: "추세판단 봇 시작 10/21 21:00" (the bot's own name; the old one's "규칙봇 15"). */
+export const startKo = (s) => (s && s.ms != null ? `${s.name || "규칙봇 15"} 시작 ${fmt.kst(s.ms)}` : null);
 
 /** The pace the rest of the month needs, in words (pace: the server's {need, reached, per_day, per_weekday, wins}). */
 export function paceWords(p) {
@@ -112,8 +128,10 @@ export function goalView(ctx) {
   const h2h = h("div", {class: "lbg-slot"});
   const h2hCard = ui.card({title: "손절 비교 (11/3 검토용)", sub: "바이비트 −50% · WOO X Pro −35% · 같은 신호, 손절만 다름", cls: "lbg-card lbg-h2h"}, h2h);
   h2hCard.hidden = true;                                  // one paper bot: no card (the page as before)
+  const recCard = ui.card({title: "지금까지 기록", sub: "페이퍼(연습) · 규칙봇 15 시작부터 닫힌 거래", cls: "lbg-card lbg-rec"}, rec);
+  const recSub = recCard.firstChild ? Array.from(recCard.firstChild.childNodes).find((n) => String(n.className || "") === "sub") : null;
   const body = h("div", {class: "lbg-body stack"}, head, cards,
-    ui.card({title: "지금까지 기록", sub: "페이퍼(연습) · 규칙봇 15 시작부터 닫힌 거래", cls: "lbg-card lbg-rec"}, rec),
+    recCard,
     ui.card({title: "지금 기록 그대로라면", sub: "계산일 뿐이에요 · 예측이 아니에요", cls: "lbg-card lbg-imply"}, imply),
     h2hCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습): 잔고는 닫힌 거래 기준"),
@@ -125,7 +143,7 @@ export function goalView(ctx) {
       a.follows_ko ? h("small", {class: "muted"}, ` 따라감 · ${a.follows_ko}`) : null];
     const sc = scaleRows(a.scale);
     const scaleEl = sc ? h("div", {class: "lbg-scale"}, h("b", null, "돈 늘리기 기준"), h("small", {class: "muted"}, " · 보여 주기만 해요"),
-      h("ul", null, sc.map((r) => h("li", {class: r.ok ? "up" : "down", title: r.what}, `${r.mark} ${r.ko}`))),
+      h("ul", null, sc.map((r) => h("li", {class: r.none ? "muted" : r.ok ? "up" : "down", title: r.what}, `${r.mark} ${r.none && r.what ? `${r.what}: ` : ""}${r.ko}`))),
       h("p", {class: ["lbg-scale-ko", a.scale.ok ? "up" : ""]}, a.scale.ko), ui.note(a.scale.note_ko || "")) : null;
     const nd = a.need;
     const needEl = nd ? h("div", {class: "lbg-need"}, h("p", {class: ["lbg-need-ko", nd.state === "impossible" ? "down" : nd.state === "reached" ? "up" : ""]}, nd.ko),
@@ -151,10 +169,18 @@ export function goalView(ctx) {
   }
   function drawRec(d) {
     const r = d.record || {};
+    const sk = startKo(d.start);
+    const rs = `페이퍼(연습) · ${sk ? `${(d.start && d.start.name) || "규칙봇 15"} 시작부터` : "지금 설정 매매법의"} 닫힌 거래`;
+    if (recSub && recSub.textContent !== rs) recSub.textContent = rs;
     if (r.state !== "ok") { put(rec, sourceState(r, "페이퍼 DB")); put(imply); return; }
     const b = barOf(r.win_rate, r.wilson90), be = barOf(d.break_even).at;
-    const plain = d.break_even_plain || [];
+    const plain = (d.break_even_plain || []).length === 2 && Math.abs(d.break_even_plain[0] - d.break_even_plain[1]) < 0.005
+      ? [d.break_even_plain[0] - 0.002, d.break_even_plain[1] + 0.002] : d.break_even_plain || [];
     const words = rangeWords(r.wilson90, d.break_even);
+    const refRow = has(r.weekday_ref)
+      ? ["참고", d.trend_bot ? `${fmt.num(r.weekday_ref, 1)}번 (${d.weekday_ref_ko || "이 봇의 기록으로 잰 숫자"})`
+        : `${fmt.num(r.weekday_ref, 1)}번 (15개를 고를 때 쓴 2주를 다시 돌린 숫자라 실제는 적을 수 있어요)`]
+      : ["참고", "새 봇이라 견줄 진입 횟수 기준이 아직 없어요 (이 봇의 기록이 쌓이면 그 숫자로 봐요)"];
     put(rec,
       h("div", {class: "lbg-win"}, h("span", {class: "k"}, "승률"), h("b", {class: "num"}, has(r.win_rate) ? fmt.pct(r.win_rate, 1, false) : "—"),
         h("span", {class: "s"}, `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패 · ${fmt.int(r.n)}번`), ui.smallSample(r.n, d.small_n || 20)),
@@ -164,15 +190,15 @@ export function goalView(ctx) {
         be != null ? h("em", {class: "lbg-be", style: {left: `${be}%`}}) : null,
         b.at != null ? h("i", {class: "lbg-pt", style: {left: `${b.at}%`}}) : null) : null,
       h("p", {class: "lbg-wl"}, r.wilson90 ? `90% 범위 ${fmt.pct(r.wilson90[0], 0, false)}~${fmt.pct(r.wilson90[1], 0, false)} (윌슨)` : "닫힌 거래가 아직 없어요",
-        ` · 본전 약 ${fmt.pct(d.break_even, 0, false)} (복리; 단순 합으로는 ${plain.map((x) => fmt.pct(x, 0, false)).join("~")})`,
+        ` · ${beWords(d.break_even, d.break_even_plain)}`,
         words ? ` · ${words}` : ""),
       ui.kv([["평일 하루 진입", has(r.per_weekday) ? `${fmt.num(r.per_weekday, 1)}번 (평일 ${fmt.num(r.weekdays, 1)}일에 ${fmt.int(r.weekday_entries)}번)`
         : `평일이 하루 지나면 계산해요 (지금 평일 ${fmt.num(r.weekdays, 1)}일에 ${fmt.int(r.weekday_entries)}번)`],
-        ["참고", `${fmt.num(r.weekday_ref, 1)}번 (15개를 고를 때 쓴 2주를 다시 돌린 숫자라 실제는 적을 수 있어요)`],
+        refRow,
         ["이긴 거래 평균", has(r.avg_win) ? h("b", {class: "num up"}, fmt.pct(r.avg_win, 1)) : "—"],
         ["진 거래 평균", has(r.avg_loss) ? h("b", {class: "num down"}, fmt.pct(r.avg_loss, 1)) : "—"],
         ["이 평균의 본전 승률", has(r.break_even_record) ? `약 ${fmt.pct(r.break_even_record, 1, false)} (단순 합)` : "—"]]),
-      ui.note("순ROE = 증거금 대비 손익 (수수료·슬리피지 포함) · 본전 숫자는 예전 분석 (이길 때 +10%, 질 때 −50%, 증거금 30%)"));
+      ui.note("순ROE = 증거금 대비 손익 (수수료·슬리피지 포함) · ", d.break_even_ko || "본전 숫자는 예전 분석 (이길 때 +10%, 질 때 −50%, 증거금 30%)"));
     const m = r.implied;
     if (!m) { put(imply, ui.empty("닫힌 거래와 평일이 조금 더 쌓이면 계산해요")); return; }
     put(imply, ui.kv([["거래 한 번에 계좌", h("b", {class: ["num", fmt.tone(m.per_trade, fmt.pct(m.per_trade, 2))]}, `${fmt.pct(m.per_trade, 2)} (복리 평균)`)],
@@ -204,7 +230,7 @@ export function goalView(ctx) {
     put(head, h("b", null, `목표: 한 달 +${fmt.num(d.target * 100, 0)}% (×${fmt.num(d.target_mult, 0)})`),
       h("span", {class: "muted"}, " · 두 분이 정한 목표예요 (예측 아님)"),
       h("span", {class: "lbg-month"}, ` · ${mo.label || ""} 남은 날 ${fmt.num(mo.days_left, 1)}일 (평일 ${fmt.num(mo.weekdays_left, 1)}일)`),
-      d.start && d.start.ms != null ? h("span", {class: "muted"}, ` · 규칙봇 15 시작 ${fmt.kst(d.start.ms)}`) : null,
+      startKo(d.start) ? h("span", {class: "muted"}, ` · ${startKo(d.start)}`) : null,
       d.frozen ? h("span", {class: ["lbg-frozen", d.frozen.on ? "on" : ""], title: d.frozen.why_ko || ""}, ` · ${d.frozen.ko}`) : null);
     put(cards, (d.accts || []).map((a) => acctCard(a, d)));
     drawRec(d);

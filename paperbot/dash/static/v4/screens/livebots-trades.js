@@ -170,7 +170,7 @@ export function tradesView(ctx) {
     const cs = st.d.cards || {};
     put(csum, cs.state && cs.state !== "ok" ? sourceState(cs, "손실 카드") : cardSummary(xs, cs.kinds, cs));
     pg.set(xs, !user);
-    put(cap, isPaper(st.acct) ? ui.assumeLine(["closed"], st.acct === "paper2" ? acctKo("paper2") : "페이퍼 A+C 합본") : ui.assumeLive(`${acctKo(st.acct)} · ≈ = 체결 기록 전 지갑 변화로 어림`));
+    put(cap, isPaper(st.acct) ? ui.assumeLine(["closed"], st.acct === "paper2" ? acctKo("paper2") : "페이퍼(연습)") : ui.assumeLive(`${acctKo(st.acct)} · ≈ = 체결 기록 전 지갑 변화로 어림`));
   }
   async function load() {
     let d;

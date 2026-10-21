@@ -64,9 +64,14 @@ export function bandLine(ctx) {
         : h("b", {class: "up"}, "없음"), unknown.length && unknown.length < execs.length ? h("span", {class: "muted"}, ` · ${unknown.map((x) => x.name_ko).join(" · ")} 모름`) : null);
       c.halt.title = execs.map((x) => `${x.name_ko}: ${!x.record || x.record.state !== "ok" ? "기록을 못 읽어 모름" : x.record.halted ? `멈춤 (${x.record.halt_reason || "이유 기록 없음"})` : "멈춤 아님"}`).join(" / ");
     }
-    const cp = d && d.checkpoint;
-    if (!cp) { put(c.goal, h("span", null, "40번 판단까지 "), dash()); c.goal.title = "페이퍼 거래 기록을 아직 못 읽음"; }
-    else {
+    const cp = d && d.checkpoint, tb = d && d.trend_bot;
+    if (!cp) { put(c.goal, h("span", null, tb ? "2주 검토까지 " : "40번 판단까지 "), dash()); c.goal.title = "페이퍼 거래 기록을 아직 못 읽음"; }
+    else if (tb && tb.freeze_until) {                     // the trend bot: no 40-trade rule, the 2-week review instead
+      const left = tb.freeze_until - Number(d.now_ms || Date.now()), days = Math.ceil(Math.max(0, left) / 86400000);
+      put(c.goal, h("span", null, "2주 검토까지 "), left > 0 ? h("b", {class: "num"}, `D-${fmt.int(days)}`) : h("b", null, "검토할 때"),
+        h("span", {class: "muted num"}, ` · 페이퍼(연습) ${fmt.int(cp.n)}번`));
+      c.goal.title = `${tb.name || "추세판단 봇"} 시작 ${fmt.kst(tb.since)}부터 2주(${fmt.kst(tb.freeze_until)}까지)는 규칙을 바꾸지 않고 기록을 모아요 · ${cp.rule_ko || ""}`;
+    } else {
       put(c.goal, h("span", null, `${fmt.int(cp.trades)}번 판단까지 `), cp.ready ? h("b", null, "도착") : h("b", {class: "num"}, `${fmt.int(cp.left)}번 남음`),
         h("span", {class: "muted num"}, ` · 페이퍼(연습) ${fmt.int(cp.n)}/${fmt.int(cp.trades)}`));
       c.goal.title = `페이퍼 닫힌 거래 ${fmt.int(cp.n)}번 · ${fmt.int(cp.trades)}번이 되면 두 분이 정해요: ${cp.rule_ko || `${cp.up_ko} / ${cp.mid_ko} / ${cp.low_ko}`} · 그 전의 승률은 판단이 아니에요 (참고)`;

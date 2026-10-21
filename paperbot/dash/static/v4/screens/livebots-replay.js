@@ -299,7 +299,7 @@ export function replayView(ctx) {
       b.state === "ok" && b.tf === "1m" ? "1분봉 = 봇이 실제로 걸어간 규칙봇 기록" : null].filter(Boolean);
     put(rules, h("p", null, parts.join(" · ")),
       (d.notes_ko || []).map((n) => h("p", {class: "note"}, n)));
-    put(foot, ui.assumeLine(["closed"], "페이퍼 A+C 합본 · 결과는 거래 기록 그대로"),
+    put(foot, ui.assumeLine(["closed"], "페이퍼(연습) · 결과는 거래 기록 그대로"),
       ui.assumeLive("실행기 손익 · ≈ = 체결 기록 전 지갑 변화로 어림 · 청산 기준가 = 실행기가 닫기 직전에 읽은 가격(체결가 아님)"));
   }
   function drawTimeline(d) {

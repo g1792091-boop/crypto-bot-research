@@ -20,6 +20,11 @@
 sha256과 다르면(설정이 바뀜) 그 표는 지난 봇 것이라 쓰지 않습니다(livecheck.ref_config_problem): 순위의 5년 숫자, 성적표, 기대 범위 띠,
 진입 가능성, 시작 안내의 참고선(REFS)과 40번 판단 기준(88% · 82%) 대신 그 이유 한 줄. 파일을 못 읽으면(개발 PC) 예전처럼 씁니다.
 
+추세판단 봇 (10/21, docs/trend-bot-ko.md): 페이퍼 봇의 시작 기록(``combo_run``)의 설정에 ``trend``가 있으면 그 봇은 새 규칙이라
+비교할 백테스트 기준이 아예 없습니다(``trend_bot``). 그때는 설정 파일을 못 읽어도 5년 기준표 · 참고선 · 88%/82% 기준을 쓰지 않고
+(``live_ref`` / ``ref_problem``: TREND_NO_REF_KO), 성적 · 지도 · 순위는 그 봇이 이 기록 파일에서 처음 켜진 때(``trend_since``)부터의
+거래만 셉니다. 그 봇이 아니면 모든 것이 예전 그대로입니다.
+
 거래 · 성적 · 안전 탭은 그 둘도 읽습니다(읽기만):손실 카드(거래), 매매법 성적표와 개선 후보 장부(성적; 성적표는 liveimprove의
 함수로 지금 계산: ``score`` 명령과 같은 숫자와 상태 말), 아침 점검 14일과 감시 알람(안전).
 
@@ -398,7 +403,9 @@ def _paper_trade(r: tuple) -> dict:
             "entry_price": _f(d.get("entry_price")), "exit_price": _f(d.get("exit_price")), "qty": _f(d.get("qty")),
             "margin": _f(d.get("margin")), "fees": _f(d.get("fees")), "funding": _f(d.get("funding")),
             "strategy_id": d.get("strategy_id"), "timeframe": d.get("timeframe"), "lock_roe": _f(d.get("lock_roe")),
-            "stop_initial": _f(d.get("stop_initial")), "stop_price": _f(d.get("stop_price")), "liq_price": _f(d.get("liq_price"))}
+            "stop_initial": _f(d.get("stop_initial")), "stop_price": _f(d.get("stop_price")), "liq_price": _f(d.get("liq_price")),
+            # the trend bot's supervisor writes why it closed (감독 청산: 추세 뒤집힘 / 시간 정리) into the trade's context
+            "exit_why": (d.get("context") or {}).get("exit_why") if isinstance(d.get("context"), dict) else None}
 
 
 def round_trip(taker_fee: Any) -> float:
@@ -797,13 +804,16 @@ def checkpoint(trades: list, rule_ko: str = "") -> dict:
     return out
 
 
-def ref_problem() -> str:
+def ref_problem(paper_path: Optional[str] = None) -> str:
     """'' when the 5-year reference (deploy/combo.live-ac.expected.json) may be shown against the live bot, else the
     guard's Korean reason (livecheck.ref_config_problem: made for another config than PAPERBOT_LIVE_COMBO_CONFIG's file).
     The start guide's reference lines (REFS) and the owners' 40-trade rule (CHECKPOINT) are that old config's too: they
-    go with it. A reference that cannot be read says nothing here (its own readers say so)."""
+    go with it. A reference that cannot be read says nothing here (its own readers say so). The trend bot running at
+    ``paper_path`` (default: PAPERBOT_LIVE_PAPER_DB): never usable (TREND_NO_REF_KO; a new rule set has no backtest)."""
     from ... import livecheck as LC
     from ... import liveimprove as LI
+    if trend_bot(paper_path or paths()["paper"]) is not None:
+        return TREND_NO_REF_KO
     try:
         LI.load_ref(combo_config=paths_more()["combo_config"])
     except LC.RefConfigMismatch as exc:
@@ -811,6 +821,93 @@ def ref_problem() -> str:
     except (OSError, ValueError):
         return ""
     return ""
+
+
+# ---------------------------------------------------------------- 추세판단 봇 (owners 10-21, docs/trend-bot-ko.md)
+TREND_NAME_KO = "추세판단 봇"
+TREND_FREEZE_DAYS = 14                 # owners 10-21 (#13 추천대로): the rules stay 2 weeks from the start, then the review
+# a new, untested rule set: no backtest, no start guide lines, no 88 % / 82 % rule (the owners decide at the review)
+TREND_NO_REF_KO = "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"
+TREND_RULE_KO = "새 규칙이라 88%·82% 같은 판단 기준이 없어요 · 2주 뒤 검토에서 두 분이 정해요"
+# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보), in their words (livetrend.ROLE is this)
+TREND_ROLE = {"N08_ICHI_WR": "눌림", "F9_FVG": "눌림", "N05_PSAR_POC": "자리", "F9_IFVG": "자리", "F3_BOS": "돌파", "F15_ORB": "돌파",
+              "N06_MACD_ORB": "돌파", "S3_CMO_SANDWICH": "횡보", "N20_EMA9_CHOP": "횡보"}
+TREND_ROLES = ("눌림", "자리", "돌파", "횡보")
+TREND_ROLE_SUB_KO = {"눌림": "추세 속 되돌림에서 들어가는 매매법", "자리": "가격이 모인 자리에서 들어가는 매매법",
+                     "돌파": "추세 초입의 돌파 (상위 ADX 30 미만이고 오를 때만)", "횡보": "쉬던 가격이 움직일 때 들어가는 매매법"}
+TREND_HTF = {"30m": "1h", "1h": "4h"}  # the entry bar -> the closed higher bar its trend is judged on
+TREND_TF_KO = {"30m": "30분 진입", "1h": "1시간 진입"}
+TREND_TF_SUB_KO = {"30m": "끝난 1시간봉 추세로 판단", "1h": "끝난 4시간봉 추세로 판단"}
+TREND_NO_PAUSE_KO = "쉬기 없음 · 하루 손실 한도 없음"
+TREND_LEDGER_KO = "개선 후보 장부는 예전 봇의 5년 기준표로 찾은 후보라 추세판단 봇에는 쓰지 않아요 · 2주 뒤 검토에서 새로 봐요"
+
+
+def trend_bot(path: Optional[str]) -> Optional[dict]:
+    """The trend bot's identity when the paper bot whose database is ``path`` runs it (its start record ``combo_run`` has a
+    config with a non-null ``trend``: livetrend.build's ``trend_on``), else None (another bot, or nothing readable: every
+    page then stays as it was). {name, since (its first start on this database: state ``combo`` trend_since, else state
+    ``trend`` since, else the start record's time), freeze_until (since + 2 weeks), rules (state ``trend`` rules: the
+    bot's own words), numbers, members [{order, label, strategy, tf, role, htf, side_only, no_chase}], config}."""
+    if not path:
+        return None
+    try:
+        conn = open_ro(path)
+    except (OSError, sqlite3.Error):
+        return None
+    try:
+        if "state" not in _tables(conn):
+            return None
+        got = {k: (_i(ts), _j(d)) for k, ts, d in conn.execute(
+            "SELECT k, ts, data FROM state WHERE k IN ('combo_run', 'combo', 'trend')").fetchall()}
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+    run_ts, run = got.get("combo_run") or (None, {})
+    cfg = run.get("config") if isinstance(run.get("config"), dict) else None
+    if not cfg or cfg.get("trend") is None:
+        return None
+    combo = (got.get("combo") or (None, {}))[1]
+    tr = (got.get("trend") or (None, {}))[1]
+    since = _i(combo.get("trend_since")) or _i(tr.get("since")) or run_ts
+    members = []
+    for i, m in enumerate(cfg.get("members") or [], 1):
+        if not isinstance(m, dict):
+            continue
+        name, tf = m.get("strategy") or m.get("pick"), m.get("tf")
+        side_only = next((c["side"] for c in m.get("when") or [] if isinstance(c, dict) and c.get("side") in ("long", "short")), None)
+        members.append({"order": i, "label": f"{name}@{tf}", "strategy": name, "tf": tf, "role": TREND_ROLE.get(name),
+                        "htf": TREND_HTF.get(tf), "side_only": side_only, "no_chase": bool(m.get("no_chase"))})
+    return {"name": cfg.get("name") or TREND_NAME_KO, "since": since,
+            "freeze_until": since + TREND_FREEZE_DAYS * DAY if since else None, "freeze_days": TREND_FREEZE_DAYS,
+            "rules": [str(x) for x in tr.get("rules") or [] if isinstance(x, str)],
+            "numbers": tr.get("numbers") if isinstance(tr.get("numbers"), dict) else {}, "members": members, "config": cfg}
+
+
+def trend_out(tb: Optional[dict]) -> Optional[dict]:
+    """The trend bot as a page shows it (no config): None for another bot."""
+    if tb is None:
+        return None
+    return {"trend": True, "name": tb["name"], "since": tb["since"], "freeze_until": tb["freeze_until"],
+            "freeze_days": tb["freeze_days"], "no_ref_ko": TREND_NO_REF_KO,
+            "members": [{k: m[k] for k in ("order", "strategy", "tf", "role", "side_only")} for m in tb["members"]]}
+
+
+def trend_since(trades: list, since: Optional[int], key: str = "entry_time") -> list:
+    """The trades entered at or after ``since`` (the trend bot's own trades; the database keeps the bots before it)."""
+    if since is None:
+        return list(trades)
+    return [t for t in trades if (_i(t.get(key)) or 0) >= int(since)]
+
+
+def live_ref(paper_path: Optional[str] = None) -> dict:
+    """The 5-year reference for the bot running at ``paper_path`` (liveimprove.load_ref and its config guard), or
+    livecheck.RefConfigMismatch (TREND_NO_REF_KO) when that bot is the trend bot: a new rule set has no backtest."""
+    from ... import livecheck as LC
+    from ... import liveimprove as LI
+    if trend_bot(paper_path or paths()["paper"]) is not None:
+        raise LC.RefConfigMismatch(TREND_NO_REF_KO)
+    return LI.load_ref()
 
 
 def acct_paper(paper: dict, account: str, now: int, id_: str = "paper", label: Optional[dict] = None) -> dict:
@@ -1173,8 +1270,11 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     marks = marks_of(paper, execs, ACCOUNT, papers=bots)
     events = sorted(((dict(e, ex=x["id"], ex_ko=x["name_ko"])) for x in execs for e in (x["record"].get("events") or [])),
                     key=lambda e: (e["ts"] or 0, e["id"] or 0), reverse=True)[:2 * EVENTS_KEEP]
-    ref_ko = ref_problem()
-    cp = checkpoint((pa or {}).get("trades") or [], ref_ko) if pa else None
+    ref_ko = ref_problem(p["paper"])
+    tb = trend_bot(p["paper"])
+    # the trend bot: its own trades only, and no 88 % / 82 % rule (TREND_RULE_KO)
+    cp = checkpoint(trend_since((pa or {}).get("trades") or [], tb["since"]) if tb else (pa or {}).get("trades") or [],
+                    TREND_RULE_KO if tb else ref_ko) if pa else None
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
     execs = [public(x) for x in execs]
     for x in execs:                                      # the page needs neither the raw reasons nor the full trade list here
@@ -1193,7 +1293,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
             "accts": accts, "fills": fills, "marks": marks, "events": events, "checkpoint": cp,
             "flip": {"stats": flip.get("stats")} if flip and flip.get("known") else None,
             "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None, "match_ms": MATCH_MS, "small": list(SMALL),
-            "papers": papers_out(bots)}
+            "papers": papers_out(bots), "trend_bot": trend_out(tb)}
 
 
 # ================================================================ the other tabs (거래 · 신호 · 성적 · 안전 · 그림자 · 설정)
@@ -1393,7 +1493,8 @@ def rules_of(combo: dict) -> dict:
     margin = c.get("margin", "leverage")
     return {"leverage_btc": _i(lev.get("BTCUSDT")), "leverage_alt": _i(lev.get("default")), "margin": margin if isinstance(margin, str) else _f(margin),
             "ladder": ladder_numbers(lad), "max_loss_frac": _f(c.get("max_loss_frac")),
-            "no_weekend": bool(c.get("no_weekend")), "macro_blackout_min": _i(c.get("macro_blackout_min")), "early_exit": c.get("early_exit"),
+            "no_weekend": bool(c.get("no_weekend")), "macro_blackout_min": _i(c.get("macro_blackout_min")),
+            "us_open_pause_min": _i(c.get("us_open_pause_min")), "early_exit": c.get("early_exit"),
             "one_position": True, "initial_equity": _f(c.get("initial_equity")), "name": c.get("name"),
             "stop": stop_ko(None, c.get("stop") if isinstance(c.get("stop"), dict) else None),
             "rank": c.get("rank"), "flip_twin": bool(c.get("flip_twin", True))}
@@ -1596,9 +1697,11 @@ def entered_meta(path: str, account: str) -> dict:
         sig = d.get("signal") if isinstance(d.get("signal"), dict) else {}
         meta = sig.get("meta") if isinstance(sig.get("meta"), dict) else {}
         det = d.get("detail") if isinstance(d.get("detail"), dict) else {}
+        tr = meta.get("trend") if isinstance(meta.get("trend"), dict) else {}      # the trend bot's judgment at the entry
         out[(sym, _i(step))] = {"member": meta.get("member"), "member_order": _i(meta.get("member_order")), "stop_rule": meta.get("stop_rule"),
                                 "score": _f(sig.get("score")), "source": meta.get("source"), "fill": _f(det.get("fill")),
-                                "ref_price": _f(meta.get("ref_price")), "break_level": _f(meta.get("break_level"))}
+                                "ref_price": _f(meta.get("ref_price")), "break_level": _f(meta.get("break_level")),
+                                "trend_strength": _i(tr.get("strength")), "trend_htf": tr.get("htf")}
     return out
 
 
@@ -1770,15 +1873,29 @@ def breakdown(trades: list, key) -> list:
     return sorted(({"key": k, **stats(v)} for k, v in by.items()), key=lambda r: (-r["trades"], str(r["key"])))
 
 
-def perf_of(trades: list, t_entry: str = "entry_time", t_exit: str = "exit_time") -> dict:
+def perf_of(trades: list, t_entry: str = "entry_time", t_exit: str = "exit_time", roles: bool = False) -> dict:
     """The record of one account: totals, the rolling 20 / 40 win share, and per strategy, coin, timeframe, side and KST hour
-    of the entry (표본 적음 flags from stats: under 20, then under 40)."""
+    of the entry (표본 적음 flags from stats: under 20, then under 40); ``roles`` (the trend bot): per role too (TREND_ROLE:
+    눌림 · 자리 · 돌파 · 횡보)."""
     norm = [{**t, "exit_time": t.get(t_exit), "entry_time": t.get(t_entry)} for t in trades]
     hour = lambda t: ((int(t["entry_time"]) + KST_MS) // HOUR) % 24 if t.get("entry_time") is not None else None   # noqa: E731
-    return {"stats": stats(t.get("pnl") for t in norm), "roll20": rolling(norm, 20), "roll40": rolling(norm, 40),
-            "by_strategy": breakdown(norm, lambda t: t.get("strategy_id")), "by_coin": breakdown(norm, lambda t: t.get("symbol")),
-            "by_tf": breakdown(norm, lambda t: t.get("timeframe")), "by_side": breakdown(norm, lambda t: t.get("side")),
-            "by_hour": breakdown(norm, hour), "curve": thin([[t["exit_time"], c] for t, c in zip(norm, _cum(norm))])}
+    out = {"stats": stats(t.get("pnl") for t in norm), "roll20": rolling(norm, 20), "roll40": rolling(norm, 40),
+           "by_strategy": breakdown(norm, lambda t: t.get("strategy_id")), "by_coin": breakdown(norm, lambda t: t.get("symbol")),
+           "by_tf": breakdown(norm, lambda t: t.get("timeframe")), "by_side": breakdown(norm, lambda t: t.get("side")),
+           "by_hour": breakdown(norm, hour), "curve": thin([[t["exit_time"], c] for t, c in zip(norm, _cum(norm))])}
+    if roles:
+        out["by_role"] = breakdown(norm, lambda t: TREND_ROLE.get(t.get("strategy_id")) if t.get("strategy_id") else None)
+    return out
+
+
+def review_of(tb: dict, trades: list, now: int) -> dict:
+    """The trend bot's 2-week review (owners 10-21: the rules stay unchanged 2 weeks from the start, then they look):
+    the trades so far and the days left. No threshold: a new rule set has none (TREND_RULE_KO)."""
+    st = stats(t.get("pnl") for t in trades)
+    fu = tb.get("freeze_until")
+    return {"since": tb.get("since"), "until": fu, "days": tb.get("freeze_days"), "n": st["trades"], "wins": st["wins"],
+            "win_rate": st["win_rate"], "pnl": st["pnl"], "left_ms": (fu - now) if fu else None,
+            "done": bool(fu and now >= fu), "rule_ko": TREND_RULE_KO}
 
 
 def _cum(trades: list) -> list:
@@ -1794,10 +1911,13 @@ def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
     database now) and 개선 후보 장부 (``ledger``: liveimprove.db, read-only)."""
     more = more or paths_more()
     _configs, _follows, paper, execs = sources(p, now)
+    tb = trend_bot(p["paper"])
+    since = tb["since"] if tb else None                    # the trend bot: its own trades only (the database keeps the bots before it)
     out = {}
     a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
+    mine = trend_since((a or {}).get("trades") or [], since)
     if a is not None:
-        out["paper"] = {"state": "ok", **perf_of(a.get("trades") or [])}
+        out["paper"] = {"state": "ok", **perf_of(mine, roles=bool(tb))}
     else:
         out["paper"] = {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")} if paper.get("state") != "ok" else {"state": "missing", "reason_ko": "기록 없음"}
     for x in execs:
@@ -1807,21 +1927,24 @@ def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
             continue
         m = pairs_of(x)                                    # its own paper bot's trades (livepapers)
         live = []
-        for t in r.get("trades") or []:                    # the live trade takes its paper partner's strategy and timeframe
+        for t in trend_since(r.get("trades") or [], since, "entry_ts"):   # the live trade takes its paper partner's strategy and timeframe
             pt = m.get(str(t["key"]))
             live.append({**t, "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None})
-        out[x["id"]] = {"state": "ok", **perf_of(live, "entry_ts", "exit_ts")}
+        out[x["id"]] = {"state": "ok", **perf_of(live, "entry_ts", "exit_ts", roles=bool(tb))}
     bots = paper_bots(p, paper, execs)
     for b in bots[1:]:                                     # the second paper bot's record next to the first's
         a2 = (b["read"].get("accounts") or {}).get(ACCOUNT) if b["read"].get("state") == "ok" else None
         out[b["id"]] = ({"state": "ok", **perf_of(a2.get("trades") or [])} if a2 and a2.get("known")
                         else {k: b["read"].get(k) for k in ("state", "reason_ko", "reason", "path")}) | {"label_ko": b["label_ko"]}
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
-    ref_ko = ref_problem()
+    ref_ko = ref_problem(p["paper"])
     return {"now_ms": now, "accts": out, "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None,
-            "checkpoint": checkpoint((a or {}).get("trades") or [], ref_ko) if a else None,
-            "flip": {"state": "ok", **perf_of(flip.get("trades") or [])} if flip and flip.get("known") else None, "small": list(SMALL),
-            "scorecard": scorecard(p, execs), "ledger": read_ledger(more["improve_db"]), "papers": papers_out(bots),
+            "checkpoint": (checkpoint(mine, TREND_RULE_KO if tb else ref_ko) if a else None),
+            "review": review_of(tb, mine, now) if tb and a is not None else None, "trend_bot": trend_out(tb),
+            "flip": {"state": "ok", **perf_of(trend_since(flip.get("trades") or [], since))} if flip and flip.get("known") else None,
+            "small": list(SMALL), "scorecard": scorecard(p, execs),
+            # the ledger's candidates were found against the old bots' 5-year reference: not this bot's (TREND_LEDGER_KO)
+            "ledger": {"state": "missing", "reason_ko": TREND_LEDGER_KO} if tb else read_ledger(more["improve_db"]), "papers": papers_out(bots),
             "compare": compare_papers(bots)}
 
 
@@ -1897,13 +2020,32 @@ def settings(p: dict, now: int) -> dict:
     if combo.get("state") != "ok":
         return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path")}, "execs": execs}
     members = members_of(combo)
+    tb = trend_bot(p["paper"]) if combo.get("source") == "db" else None
     groups: dict = {}
     for m in members:
-        groups.setdefault(m["strategy"], []).append(m)
+        groups.setdefault(m["strategy"], []).append({**m, "role": TREND_ROLE.get(m["strategy"])} if tb else m)
     return {"now_ms": now, "combo": {"state": "ok", "source": combo["source"], "path": combo["path"], "since_ms": combo.get("since_ms")},
             "rules": rules_of(combo), "execs": execs, "n_settings": len(members), "n_strategies": len(groups),
             "groups": [{"strategy": k, "n": len(v), "tfs": sorted({m["tf"] for m in v}), "members": v}
-                       for k, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]}
+                       for k, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))],
+            "trend": trend_rules(tb)}
+
+
+def trend_rules(tb: Optional[dict]) -> Optional[dict]:
+    """설정 › 추세 판단 규칙 (the trend bot only): its rules in its own words (state ``trend`` rules: TrendRules.describe), the
+    numbers they come from, the members with their role and entry bar (30분 진입: the closed 1h bar's trend, 1시간 진입: the
+    4h bar's), and the pauses it does not have (owners 10-21 night "쉬기는 빼주고", "10번은 없애고")."""
+    if tb is None:
+        return None
+    nums = tb.get("numbers") or {}
+    no_pause = nums.get("member_losses") is None and nums.get("coin_pause_h") is None and nums.get("daily_loss") is None
+    return {"name": tb["name"], "since": tb["since"], "freeze_until": tb["freeze_until"], "freeze_days": tb["freeze_days"],
+            "rules": tb["rules"], "rules_ko": None if tb["rules"] else "봇이 아직 규칙을 기록하지 않았어요 (켠 뒤 1~2분)",
+            "numbers": nums, "no_pause": no_pause if nums else None, "no_pause_ko": TREND_NO_PAUSE_KO if nums and no_pause else None,
+            "members": [{**m, "tf_ko": TREND_TF_KO.get(m["tf"], TF_KO.get(m["tf"], m["tf"])),
+                         "htf_ko": TREND_TF_SUB_KO.get(m["tf"])} for m in tb["members"]],
+            "roles": [{"id": r, "sub_ko": TREND_ROLE_SUB_KO[r], "n": sum(1 for m in tb["members"] if m.get("role") == r)}
+                      for r in TREND_ROLES]}
 
 
 # ---------------------------------------------------------------- 순위 (매매법 순위표, owners 10/19)
@@ -1979,18 +2121,20 @@ def rank(p: dict, now: int) -> dict:
     from ... import livecheck as LC
     ref_ko = None
     try:
-        from ... import liveimprove as LI
-        ref, ref_err = LI.load_ref(), None
+        ref, ref_err = live_ref(p["paper"]), None
     except LC.RefConfigMismatch as exc:              # another config's reference: no 5-year numbers at all
         ref, ref_err, ref_ko = None, None, str(exc)
     except (OSError, ValueError) as exc:
         ref, ref_err = None, f"{type(exc).__name__}: {exc}"
     members = members_of(combo)
+    tb = trend_bot(p["paper"])
+    since = tb["since"] if tb else None                  # the trend bot: its own trades only (the bots before it are not it)
     groups: dict = {}
     for m in members:
-        groups.setdefault(m["strategy"], []).append({**m, "bt": _bt_member(ref, m["order"])})
+        groups.setdefault(m["strategy"], []).append({**m, "bt": _bt_member(ref, m["order"]),
+                                                     **({"role": TREND_ROLE.get(m["strategy"])} if tb else {})})
     acc = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
-    ptrades = (acc or {}).get("trades") or []
+    ptrades = trend_since((acc or {}).get("trades") or [], since)
     pos = (acc or {}).get("position")
     live: dict = {}
     for x in execs:
@@ -1998,7 +2142,7 @@ def rank(p: dict, now: int) -> dict:
         if r.get("state") != "ok":
             continue
         m = pairs_of(x)                                  # a live trade takes the strategy of the paper trade IT followed
-        for t in r.get("trades") or []:
+        for t in trend_since(r.get("trades") or [], since, "entry_ts"):
             pt = m.get(str(t["key"]))
             live.setdefault((x["id"], pt.get("strategy_id") if pt else None), []).append(t)
     sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
@@ -2018,7 +2162,8 @@ def rank(p: dict, now: int) -> dict:
             "live": {x["id"]: _record(live.get((x["id"], name), [])) for x in execs if x["record"].get("state") == "ok"},
             "sig": sig_by.get(name) or {"week": {}, "today": {}, "last_ms": None, "last_stage": None, "last_ko": None},
             "bt": _bt_strategy(ref, name), "bt_rank": bt_rank.get(name),
-            "status": {k: sc.get(k) for k in ("status", "n", "win", "fit", "honest", "p")} if sc else None})
+            "status": {k: sc.get(k) for k in ("status", "n", "win", "fit", "honest", "p")} if sc else None,
+            **({"role": TREND_ROLE.get(name)} if tb else {})})
     unknown = sorted(k for k in {t.get("strategy_id") for t in ptrades} if k and k not in groups)
     for name in unknown:                   # traded under an earlier config: listed, marked, never mixed into the 27
         rows.append({"strategy": name, "in_config": False, "n_settings": 0, "tfs": sorted({t.get("timeframe") for t in ptrades if t.get("strategy_id") == name and t.get("timeframe")},
@@ -2038,7 +2183,7 @@ def rank(p: dict, now: int) -> dict:
             "scorecard": {k: card.get(k) for k in ("state", "reason_ko", "reason", "words", "small_n", "problems")},
             "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state")} for x in execs],
             "n_settings": len(members), "n_strategies": len(groups), "small": list(SMALL), "rows": rows,
-            "unknown_strategies": unknown,
+            "unknown_strategies": unknown, "trend_bot": trend_out(tb),
             "open": {k: pos.get(k) for k in ("strategy_id", "symbol", "side", "timeframe", "entry_time")} if pos else None}
 
 
@@ -2207,8 +2352,13 @@ def band(ref: Optional[dict], lines: dict) -> dict:
 def map_view(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/map: 기대 범위 띠 (paper and each executor's wins so far against the 5-year bands) and the paper
     account's record by BTC 4h regime, coin, KST 4-hour block and side, each next to its 5-year number (liveimprove's
-    own cuts: the same numbers and status words as ``score``)."""
+    own cuts: the same numbers and status words as ``score``). The trend bot (``trend_bot``): no band and no 5-year column
+    (a new rule set has no backtest: ``band_ko`` says so), its own trades since its start split by the judgment it entered
+    on, coin, KST 4-hour block, side and entry bar (``trend_map``)."""
     _configs, _follows, paper, execs = sources(p, now)
+    tb = trend_bot(p["paper"])
+    if tb is not None:
+        return trend_map(p, now, tb, paper, execs)
     got = live_card(p, execs, MAP_CUTS)
     ref = got.get("ref") if got.get("state") == "ok" else None
     if ref is None:
@@ -2264,6 +2414,74 @@ def _map_label(ref: Optional[dict], cut: str, k: Any) -> str:
     if cut == "side" and i is not None:
         return "롱" if i > 0 else "숏"
     return str(k)
+
+
+# the trend bot's own split (no 5-year column: a new rule set has no backtest): id, title, subtitle
+TREND_MAP_CUTS = (("judge", "진입 때 추세 판단", "판단 4개 중 진입 방향과 같은 쪽이 몇 개였나"), ("coin", "코인", "6개 코인"),
+                  ("hb", "시간대", "한국 시간 4시간씩"), ("side", "방향", "롱 · 숏"), ("tf", "진입 봉", "30분 진입 · 1시간 진입"))
+TREND_MAP_MIN_N = 10                   # the map's own floor (liveimprove SMALL_N): fewer trades in a row = 표본 적음, grey
+
+
+def _cut_row(key: Any, label: str, trades: list, pnl_key: str = "pnl", roe_key: str = "roe") -> dict:
+    s = stats(t.get(pnl_key) for t in trades)
+    roes = [r for r in (_f(t.get(roe_key)) for t in trades) if r is not None]
+    return {"key": key, "label": label, "n": s["trades"], "wins": s["wins"], "losses": s["losses"], "win": s["win_rate"],
+            "pnl": s["pnl"] if s["trades"] else None, "avg_roe": sum(roes) / len(roes) if roes else None,
+            "small": s["trades"] < TREND_MAP_MIN_N}
+
+
+def trend_map(p: dict, now: int, tb: dict, paper: dict, execs: list) -> dict:
+    """지도 for the trend bot: each account's wins so far (no band: TREND_NO_REF_KO), and the paper account's trades since
+    the trend bot's start by the judgment it entered on (4 of 4 judges or 3 of 4 on its side: the ENTERED signal's
+    ``trend.strength``), coin, KST 4-hour block, side and entry bar. Live split only, small samples flagged."""
+    since = tb["since"]
+    a = (paper.get("accounts") or {}).get(ACCOUNT) if paper.get("state") == "ok" else None
+    trades = sorted(trend_since((a or {}).get("trades") or [], since), key=lambda t: (_i(t.get("exit_time")) or 0, _i(t.get("id")) or 0))
+    meta = entered_meta(p["paper"], ACCOUNT) if a is not None else {}
+    vote_min = _i((tb.get("numbers") or {}).get("vote_min")) or 3
+    syms = [s for s in (tb["config"].get("symbols") or COINS)]
+    tfs = sorted({m["tf"] for m in tb["members"] if m.get("tf")} | {t.get("timeframe") for t in trades if t.get("timeframe")},
+                 key=lambda t: TF_ORDER.get(t, 99))
+
+    def strength(t):
+        v = (meta.get((t.get("symbol"), _i(t.get("entry_time")))) or {}).get("trend_strength")
+        return None if v is None else str(v)
+    keyf = {"judge": strength, "coin": lambda t: t.get("symbol"),
+            "hb": lambda t: str(((int(t["entry_time"]) + KST_MS) // HOUR % 24) // 4) if t.get("entry_time") is not None else None,
+            "side": lambda t: str(int(t["side"])) if t.get("side") is not None else None, "tf": lambda t: t.get("timeframe")}
+    keys = {"judge": [str(k) for k in range(4, vote_min - 1, -1)], "coin": syms, "hb": [str(k) for k in range(6)], "side": ["1", "-1"],
+            "tf": tfs}
+    label = {"judge": lambda k: "4개 모두 같은 쪽" if k == "4" else f"4개 중 {k}개", "coin": lambda k: str(k).replace("USDT", ""),
+             "hb": lambda k: f"{int(k) * 4:02d}~{int(k) * 4 + 4:02d}시", "side": lambda k: "롱" if k == "1" else "숏",
+             "tf": lambda k: TREND_TF_KO.get(k, TF_KO.get(k, k))}
+    cuts = {}
+    for cut, _ko, _sub in TREND_MAP_CUTS:
+        by: dict = {}
+        for t in trades:
+            by.setdefault(keyf[cut](t), []).append(t)
+        ks = keys[cut] + sorted(str(k) for k in by if k is not None and str(k) not in keys[cut])
+        rows = [_cut_row(k, label[cut](k), by.get(k, [])) for k in ks]
+        if by.get(None):                                     # a trade whose cut could not be read: said, never dropped silently
+            rows.append({**_cut_row(None, "기록 없음", by[None]), "unknown": True})
+        cuts[cut] = rows
+    lines = {}
+    if a is not None:
+        lines["paper"] = cum_wins(trades, "exit_time")
+    for x in execs:
+        if x["record"].get("state") == "ok":
+            lines[x["id"]] = cum_wins(trend_since(x["record"].get("trades") or [], since, "entry_ts"), "exit_ts")
+    n_max = max([10] + [v[-1][0] + 5 for v in lines.values() if v])
+    acts = {k: {"points": v, "n": v[-1][0] if v else 0, "wins": v[-1][1] if v else 0,
+                "rate": v[-1][1] / v[-1][0] if v else None, "p_honest": None, "p_fit": None} for k, v in lines.items()}
+    return {"now_ms": now, "kind": "trend", "trend_bot": trend_out(tb),
+            "paper": {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms")},
+            "card": {"state": "ok"}, "band_ko": TREND_NO_REF_KO,
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko")}
+                      for x in execs],
+            "band": {"trend": True, "n_max": n_max, "ns": [], "fit": None, "honest": None, "break_even": None, "qs": list(BAND_QS),
+                     "fit_band": None, "honest_band": None, "accounts": acts},
+            "cuts": cuts, "cut_defs": [{"id": c, "ko": ko, "sub": sub} for c, ko, sub in TREND_MAP_CUTS],
+            "min_n": TREND_MAP_MIN_N, "small_n": SMALL[0], "n": len(trades), "symbols": syms, "reg5_names": None}
 
 
 # ---------------------------------------------------------------- 비용 (실거래가 페이퍼보다 얼마나 덜 버나, owners 10/19)
@@ -2658,6 +2876,12 @@ LIKELY_MISSING_KO = "진입 가능성 기준표(deploy/combo.live-ac.likely.json
 LIKELY_NOTE_KO = ("5년 백테스트(지금 설정 95개, 실거래 규칙)에서 같은 요일·같은 한국 시각 뒤 1·4·24시간 안에 그 매매법의 진입 신호가 나온 "
                   "비율이에요. '최근'은 2025~26년만. 포지션이 비어 있을 때 기준이고, 예측이 아니라 과거 빈도예요. 오늘의 경제 발표 쉬는 "
                   "시간은 따로 빼지 않았어요.")
+# the trend bot (owners 10-21): the file is the old A+C bot's 5-year run (source.config); the trend bot enters only after its trend judge, its
+# entry checks and the pullback, so a signal's frequency is more than its entries (said, never hidden)
+LIKELY_TREND_NOTE_KO = ("예전 봇(A+C 합본, 설정 95개)의 5년 백테스트에서 같은 요일·같은 한국 시각 뒤 1·4·24시간 안에 그 매매법의 신호가 나온 "
+                        "비율이에요. 추세판단 봇은 신호가 나와도 추세 판단(1시간·4시간 추세)·진입 전 검사·되돌림을 모두 통과해야 들어가서, "
+                        "실제 진입은 이 숫자보다 꽤 적어요(봉도 다를 수 있어요). 새 규칙의 진입 빈도는 아직 잰 적이 없어요. 과거 빈도일 뿐 "
+                        "예측이 아니에요.")
 _likely_ref: dict = {}
 
 
@@ -2765,13 +2989,16 @@ def likely(p: dict, now: int) -> dict:
     combo = read_combo(p["paper"], paths_more()["combo_config"])
     members = members_of(combo) if combo.get("state") == "ok" else []
     out = likely_rows(ref, now, members, ((w.get("pending") or {}).get("waits")) or [])
+    tb = trend_bot(p["paper"])
+    if tb is not None:
+        out["note_ko"] = LIKELY_TREND_NOTE_KO
     sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
     sig_by = signals_by_strategy(sig)
     for r in out["rows"]:
         s = sig_by.get(r["strategy"]) or {}
         r["sig"] = {"week": (s.get("week") or {}).get("signals", 0), "today": (s.get("today") or {}).get("signals", 0),
                     "entered_week": (s.get("week") or {}).get("entered", 0), "last_ms": s.get("last_ms"), "last_ko": s.get("last_ko")}
-    return {"now_ms": now, "state": "ok", **out,
+    return {"now_ms": now, "state": "ok", **out, "trend_bot": trend_out(tb),
             "combo": {k: combo.get(k) for k in ("state", "reason_ko", "path")},
             "signals": {k: sig.get(k) for k in ("state", "reason_ko", "since_ms")},
             "ready": w.get("ready"), "head_ko": w.get("head_ko"), "blocked_ko": w.get("pending_blocked_ko"),
@@ -2904,8 +3131,8 @@ def live_card(p: dict, execs: list, cuts: tuple) -> dict:
     from ... import liveimprove as LI
     path = p["paper"]
     try:
-        ref = LI.load_ref()
-    except LC.RefConfigMismatch as exc:              # another config's reference: no scorecard against it
+        ref = live_ref(path)
+    except LC.RefConfigMismatch as exc:              # another config's reference (or the trend bot's: none): no scorecard
         return _missing(str(LI.EXPECTED), str(exc))
     except (OSError, ValueError) as exc:
         return {**_err(str(LI.EXPECTED), exc), "reason_ko": "백테스트 기준표(deploy/combo.live-ac.expected.json)를 못 읽었어요"}

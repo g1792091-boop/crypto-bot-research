@@ -11,19 +11,42 @@
 // they were made for (refs null + refs_ko, checkpoint.rule_ko: another config's, so neither the lines nor 88 / 82 %); no
 // pass / fail word before 40 (the scorecard's words are liveimprove's own test against the backtest, not the 40-trade
 // decision).
+// 추세판단 봇 (owners 10/21, the server's trend_bot): a new rule set has no backtest, so no reference line, no 88 / 82 %
+// and no scorecard or ledger (their 5-year reference is the old bots'): the page says so in one card instead. Every record
+// is the trend bot's own, from its start ("추세판단 봇 시작 …부터" on top); the 40-trade card becomes 2주 검토까지 (the
+// 2-week rule freeze: days, trades so far, no threshold); 나눠 보기 gets 역할 (눌림 · 자리 · 돌파 · 횡보) and 봉 reads as the
+// entry bar; 그룹별 성적 groups by role and entry bar (livebots-rank.js groupBlock).
 import {h, s, put, ui, fmt, local, motion} from "../core/pb.js";
 import {acctKo, sourceState} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
 import {scoreView, ledgerView} from "./livebots-score.js";
-import {groupBlock} from "./livebots-rank.js";
+import {groupBlock, cardSub} from "./livebots-rank.js";
 
 const IDS = ["paper", "bybit", "mexc"];
 const REFRESH_MS = 60 * 1000;
 const BREAK = [{id: "by_strategy", label: "매매법"}, {id: "by_coin", label: "코인"}, {id: "by_tf", label: "봉"}, {id: "by_side", label: "롱·숏"}, {id: "by_hour", label: "시간(한국)"}];
+/** The trend bot's splits: its roles first, the entry bar as such. */
+const BREAK_TREND = [{id: "by_role", label: "역할"}, {id: "by_strategy", label: "매매법"}, {id: "by_coin", label: "코인"},
+  {id: "by_tf", label: "진입 봉"}, {id: "by_side", label: "롱·숏"}, {id: "by_hour", label: "시간(한국)"}];
 const LO = 0.5, HI = 1;
+const DAY = 24 * 3600 * 1000;
 
 const keyKo = (b, k) => (b === "by_strategy" ? fmt.stratKo(k) : b === "by_coin" ? fmt.coin(k) : b === "by_tf" ? fmt.tfKo(k)
   : b === "by_side" ? fmt.sideKo(k) : b === "by_hour" ? `${String(k).padStart(2, "0")}시` : String(k));
+
+/** The splits a page offers: the trend bot's (with 역할) or the old ones. */
+export const breaksOf = (d) => (d && d.trend_bot ? BREAK_TREND : BREAK);
+
+/** 2주 검토까지 in numbers (the server's review): {pct (0..1 of the freeze gone), daysLeft, head, sub, done}; null without
+ *  one. A count of days and trades, never a verdict. */
+export function reviewWords(rv, now) {
+  if (!rv || rv.since == null || rv.until == null) return null;
+  const span = Math.max(1, rv.until - rv.since), gone = Math.max(0, Math.min(span, now - rv.since));
+  const left = Math.max(0, rv.until - now), daysLeft = Math.ceil(left / DAY);
+  const head = rv.done || left <= 0 ? `검토할 때예요 (${fmt.kst(rv.until)}에 2주가 끝났어요)` : `D-${daysLeft} · ${fmt.kst(rv.until)}까지 규칙 그대로`;
+  const sub = `지금까지 닫힌 거래 ${fmt.int(rv.n || 0)}번` + (rv.n ? ` · 승률 ${fmt.pct(rv.win_rate, 1, false)} · 손익 ${fmt.money(rv.pnl, true)} USDT (연습)` : "");
+  return {pct: gone / span, daysLeft, head, sub, done: !!rv.done || left <= 0};
+}
 
 /** The rolling win share chart (inline SVG drawn at the box's real width W, so its labels keep their token size): the 20 and
  *  40 lines and the reference lines. */
@@ -50,29 +73,56 @@ export function rollChart(acc, refs, W = 640) {
 
 /** perfView(ctx) -> {el, set()} */
 export function perfView(ctx) {
-  const st = {acct: local.get("lb-pacct", "paper"), brk: local.get("lb-pbrk", "by_strategy"), d: null, okAt: 0};
+  // the split remembered on this device; none yet: the first of the bot's own list (역할 for the trend bot)
+  const st = {acct: local.get("lb-pacct", "paper"), brk: local.get("lb-pbrk", null), d: null, okAt: 0};
   if (!IDS.includes(st.acct)) st.acct = "paper";
-  if (!BREAK.some((b) => b.id === st.brk)) st.brk = "by_strategy";
+  if (![...BREAK, ...BREAK_TREND].some((b) => b.id === st.brk)) st.brk = null;
+  let chosen = st.brk != null;
   const seg = ui.seg(IDS.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lb-pacct", id); draw(); }, {label: "계좌 고르기"});
-  const bseg = ui.seg(BREAK, st.brk, (id) => { st.brk = id; local.set("lb-pbrk", id); drawBreak(true); }, {label: "나눠 보기", scroll: true});
+  const pickBrk = (id) => { st.brk = id; chosen = true; local.set("lb-pbrk", id); drawBreak(true); };
+  let bseg = ui.seg(BREAK, st.brk || "by_strategy", pickBrk, {label: "나눠 보기", scroll: true}), bkind = "";
   const stateSlot = h("div", {class: "lb-slot"});
+  const botTag = h("span", {class: "lb-bottag"});
   const head = h("div", {class: "lb-phead"});
   const chart = h("div", {class: "lb-rollbox"});
   const cp = h("div", {class: "lb-cp"});
+  const rv = h("div", {class: "lb-cp"});
   const flip = h("div", {class: "lb-flip"});
+  const noref = h("div", {class: "lb-noref"});
   const pg = ui.pager({size: 10, row: (r) => brow(r), empty: () => (st.d ? ui.empty("닫힌 거래가 아직 없어요") : motion.shimmer(3))});
   const legend = h("div", {class: "lb-legend", role: "list"});
   const score = scoreView(ctx), ledger = ledgerView();
   const groups = groupBlock(ctx);
+  const cpCard = ui.card({title: "40번 판단까지", sub: "페이퍼 닫힌 거래 기준 · 두 분이 정하는 자리", cls: "lb-cpcard"}, cp);
+  const rvCard = ui.card({title: "2주 검토까지", sub: "규칙을 바꾸지 않고 기록을 모으는 기간 · 페이퍼 닫힌 거래", cls: "lb-cpcard lb-rvcard"}, rv);
+  const norefCard = ui.card({title: "매매법 성적표 · 개선 후보 장부", sub: "새 봇에는 아직 없어요", cls: "lb-norefcard"}, noref);
+  const brkCard = ui.card({title: "나눠 보기", sub: "표본 적음 = 20번 미만 (40번 미만도 조심)", cls: "lb-brkcard", acts: [bseg]}, pg.el);
+  const flipCard = ui.card({title: "동전 쌍둥이 (참고)", sub: "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌", cls: "lb-flipcard"}, flip);
+  // the trend bot's cards take the old ones' places (draw): 2주 검토까지 for 40번 판단까지, one plain card for the scorecard
+  // and the ledger (their reference is the old bots')
+  const cpSlot = h("div", {class: "lb-slot stack"}, cpCard);
+  const refSlot = h("div", {class: "lb-slot stack"}, score.el, ledger.el);
   const el = h("div", {class: "lb-perf stack"},
-    h("div", {class: "lb-tbar"}, seg), stateSlot,
+    h("div", {class: "lb-tbar"}, seg, botTag), stateSlot,
     ui.card({title: "승률 흐름", sub: "최근 20번 · 40번 닫힌 거래의 이긴 비율", cls: "lb-rollcard"}, head, chart, legend),
-    ui.card({title: "40번 판단까지", sub: "페이퍼 닫힌 거래 기준 · 두 분이 정하는 자리", cls: "lb-cpcard"}, cp),
+    cpSlot,
     groups.el,
-    score.el, ledger.el,
-    ui.card({title: "나눠 보기", sub: "표본 적음 = 20번 미만 (40번 미만도 조심)", cls: "lb-brkcard", acts: [bseg]}, pg.el),
-    ui.card({title: "동전 쌍둥이 (참고)", sub: "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌", cls: "lb-flipcard"}, flip),
+    refSlot,
+    brkCard, flipCard,
     h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이 · 매매법 성적표")));
+  const setSub = (card, text) => { const x = cardSub(card); if (x && x.textContent !== text) x.textContent = text; };
+
+  /** The splits' switch for this answer (rebuilt in its place only when the bot kind changes; the choice is kept when the
+   *  list has it). */
+  function breaks(d) {
+    const list = breaksOf(d), kind = d && d.trend_bot ? "trend" : "old";
+    if (kind === bkind) return;
+    bkind = kind;
+    if (!chosen || !list.some((b) => b.id === st.brk)) st.brk = list[0].id;
+    const nx = ui.seg(list, st.brk, pickBrk, {label: "나눠 보기", scroll: true});
+    if (bseg.parentNode) put(bseg.parentNode, nx);
+    bseg = nx;
+  }
 
   function brow(r) {
     const fl = smallFloor(r.trades);
@@ -84,10 +134,36 @@ export function perfView(ctx) {
     const a = st.d && st.d.accts[st.acct];
     pg.set(a && a.state === "ok" ? a[st.brk] || [] : st.d ? [] : undefined, !user);
   }
+  function drawTrend(d) {
+    const tb = d.trend_bot;
+    put(botTag, tb ? ui.pill(`${tb.name || "추세판단 봇"} 시작 ${fmt.kst(tb.since)}부터`, "thin", "이 화면의 모든 숫자는 이 봇이 켜진 뒤의 거래예요 (그 전 봇의 거래는 거래 탭에)") : null);
+    if (!tb) {
+      if (cpCard.parentNode !== cpSlot) put(cpSlot, cpCard);
+      if (score.el.parentNode !== refSlot) put(refSlot, score.el, ledger.el);
+      setSub(brkCard, "표본 적음 = 20번 미만 (40번 미만도 조심)");
+      setSub(flipCard, "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌");
+      return;
+    }
+    if (rvCard.parentNode !== cpSlot) put(cpSlot, rvCard);
+    if (norefCard.parentNode !== refSlot) put(refSlot, norefCard);
+    setSub(brkCard, "추세판단 봇 시작부터 · 표본 적음 = 20번 미만 (40번 미만도 조심)");
+    setSub(flipCard, "같은 순간 같은 신호에 방향만 동전으로 정한 페이퍼 계좌 · 추세판단 봇 시작부터");
+    const w = reviewWords(d.review, d.now_ms || Date.now());
+    put(rv, !w ? sourceState(d.accts.paper, "페이퍼 DB") : [
+      h("div", {class: "lb-cpbar", role: "img", "aria-label": `2주 중 ${fmt.pct(w.pct, 0, false)} 지남`}, h("i", {style: {width: `${(w.pct * 100).toFixed(1)}%`}})),
+      h("p", {class: "lb-cpn"}, h("b", {class: "num"}, w.head)),
+      h("ul", {class: "lb-cprules"}, h("li", {class: "lb-cpz"}, w.sub), h("li", {class: "lb-cpz"}, d.review.rule_ko || "")),
+      ui.note(w.done ? "2주가 지났어요: 두 분이 기록을 보고 규칙과 기준을 정할 때예요 (이 화면은 숫자만 보여 드려요)"
+        : `${fmt.kst(d.review.since)}에 시작 · 그동안 규칙(매매법·추세 판단·손절·계단 익절)은 바꾸지 않아요`)]);
+    put(noref, h("p", {class: "lb-flat"}, ui.pill("기준 없음", "thin"), ` ${tb.no_ref_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}`),
+      ui.note("매매법 성적표와 개선 후보 장부는 예전 봇의 5년 기준표로 만든 것이라 이 봇에는 쓰지 않아요. 매매법마다의 성적은 아래 '나눠 보기'의 매매법·역할에서 보세요."));
+  }
   function draw() {
     seg.set(st.acct);
     const d = st.d;
+    breaks(d);
     if (!d) { put(chart, motion.shimmer(3)); drawBreak(false); score.set(null); ledger.set(null); return; }
+    drawTrend(d);
     score.set(d.scorecard || {state: "missing", reason_ko: "서버가 성적표를 보내지 않았어요"});
     ledger.set(d.ledger || {state: "missing", reason_ko: "서버가 장부를 보내지 않았어요"});
     const a = d.accts[st.acct];

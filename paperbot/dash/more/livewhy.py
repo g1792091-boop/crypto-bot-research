@@ -420,12 +420,12 @@ def record_of(trades: list, meta: dict, member: Optional[str], strategy: str, tf
             "all": L._record(before)}
 
 
-def five_year(order: Optional[int], strategy: str) -> dict:
-    """The main bot's 5-year numbers of this setting and this strategy (livebots.rank's reading of the reference)."""
+def five_year(order: Optional[int], strategy: str, paper_path: Optional[str] = None) -> dict:
+    """The main bot's 5-year numbers of this setting and this strategy (livebots.rank's reading of the reference); none for
+    the trend bot (livebots.live_ref: a new rule set has no backtest)."""
     from ... import livecheck as LC
     try:
-        from ... import liveimprove as LI
-        ref = LI.load_ref()
+        ref = L.live_ref(paper_path)
     except LC.RefConfigMismatch as exc:
         return {"state": "missing", "reason_ko": str(exc)}
     except (OSError, ValueError) as exc:
@@ -485,7 +485,7 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
             "chart": chart, "conditions": cond,
             "checks": checks(cfg, member, int(entry), bar_close, side, symbol, signal["ref_price"], more["rule_db"]),
             "rivals": rivals(b["path"], L.ACCOUNT, bar_close, (tf, meta.get("member") or strategy, symbol)),
-            "record": rec, "five_year": five_year(order, strategy) if bot == "paper" else {"state": "missing", "reason_ko": REF_PAPER2_KO}}
+            "record": rec, "five_year": five_year(order, strategy, p["paper"]) if bot == "paper" else {"state": "missing", "reason_ko": REF_PAPER2_KO}}
 
 
 # ---------------------------------------------------------------- routes

@@ -13,6 +13,12 @@
 // HONESTY: nothing is drawn that the server did not send; a source that is not there says 수집 전 / 못 읽음 with its reason;
 // before the first trade only the bands are drawn ("거래가 쌓이면 여기에 선이 그려져요"); a failed refresh keeps the last
 // answer dimmed with its age. The pure functions below (bands, scales, tones, the ring) are tested in node.
+// 추세판단 봇 (the server's kind "trend", owners 10/21): a new rule set has no backtest, so there is no band, no 5-year
+// column and no status word; the page says why (band_ko) in the band's place. The hero becomes 이긴 횟수 (each account's
+// wins so far, from the bot's start, no range); the split is the bot's own trades by the judgment it entered on (4 of 4 /
+// 3 of 4), coin, KST 4-hour block, side and entry bar (the server's cut_defs), each row with its money (연습) where the
+// 5-year number was, coloured by its sign from 10 trades on (grey before) and 표본 적음 under 20.
+// (The band chart, the ring and the side split are the same drawings.)
 import {h, s, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
 
@@ -40,6 +46,9 @@ const STATUS_TIP = {
   "확실히 나쁨": "여러 줄을 함께 본 엄격한 기준으로도 현실 기대보다 확실히 덜 이김",
 };
 const TONE_KO = {hi: "5년만큼 이김", ok: "본전 위", lo: "현실 기대 근처 · 본전 아래", bad: "현실 기대 아래", small: "표본 적음", none: "아직 거래 없음"};
+/** The trend bot's colours: the row's money (연습) by its sign, from MIN_N trades on. */
+const TREND_TONE_KO = {ok: "번 쪽 (손익 +)", bad: "잃은 쪽 (손익 −)", lo: "본전", small: "표본 적음 (10번 미만)", none: "아직 거래 없음"};
+const SMALL_ROW = 20;                    // 표본 적음 under 20 trades (the site's floor)
 
 // ================================================================ pure functions (node tests)
 const f1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
@@ -167,7 +176,7 @@ export function bandGeom(band, W = 640, H = 300, ids = IDS) {
     honest: band.honest_band ? {area: area(band.honest_band), mid: line(band.honest_band, 1), low: line(band.honest_band, 0)} : null,
     fit: band.fit_band ? {area: area(band.fit_band), mid: line(band.fit_band, 1)} : null,
     be: band.break_even != null ? {x1: X(0), y1: Y(0), x2: X(nMax), y2: Y(band.break_even * nMax)} : null,
-    check: nMax >= CHECK_N ? X(CHECK_N) : null,
+    check: nMax >= CHECK_N && !band.trend ? X(CHECK_N) : null,          // the trend bot has no 40-trade rule
     lines: accts.map(([id, a]) => ({id, d: stepPath(a.points, X, Y)})),
     ends,
   };
@@ -198,6 +207,17 @@ export function cellTone(r, band) {
   if (hon != null && r.win >= hon) return {tone: "lo", gap};
   return {tone: hon == null && be == null ? "small" : "bad", gap};
 }
+
+/** A trend-bot row's colour (no reference: its money's sign), from minN trades on: "ok" (+), "bad" (−), "lo" (even),
+ *  "small" (fewer than minN: grey), "none" (no trade yet). */
+export function trendTone(r, minN = MIN_N) {
+  if (!r || !r.n) return {tone: "none", gap: null};
+  if (r.n < minN || r.pnl == null) return {tone: "small", gap: null};
+  return {tone: r.pnl > 0 ? "ok" : r.pnl < 0 ? "bad" : "lo", gap: null};
+}
+
+/** The splits a map draws: the server's own (the trend bot's cut_defs) or the 5-year ones. */
+export const cutsOf = (d) => (d && Array.isArray(d.cut_defs) && d.cut_defs.length ? d.cut_defs : CUTS);
 
 /** A ring segment (SVG path) between radii r0 < r1 from angle a0 to a1 (degrees, clockwise from 12 o'clock). */
 export function arcPath(cx, cy, r0, r1, a0, a1) {
@@ -235,13 +255,32 @@ export function mapView(ctx) {
   const how = h("div", {class: "lbm-how"});
   const hero = ui.card({title: "기대 범위 띠", sub: "거래 수에 따라 이긴 횟수가 있을 만한 범위 · 닫힌 거래 기준", cls: "lbm-hero"},
     srcSlot, tiles, chart, read, legend, alarm);
+  const secSub = h("span", {class: "sub"}, "페이퍼(연습) 닫힌 거래를 장세·코인·시간대·방향으로 나눠 5년 백테스트 옆에");
+  const howCard = ui.card({title: "숫자 읽는 법", sub: "맞춘 숫자와 현실 숫자 · 거래가 적을 때의 운", cls: "lbm-howcard"}, how);
+  const footLine = h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) A+C 합본의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)"));
   const body = h("div", {class: "lbm-body stack"}, hero,
-    h("div", {class: "lbm-sechead"}, h("h2", null, "어디서 벌고 어디서 잃나"),
-      h("span", {class: "sub"}, "페이퍼(연습) 닫힌 거래를 장세·코인·시간대·방향으로 나눠 5년 백테스트 옆에")),
-    cutSlot, cutGrid,
-    ui.card({title: "숫자 읽는 법", sub: "맞춘 숫자와 현실 숫자 · 거래가 적을 때의 운", cls: "lbm-howcard"}, how),
-    h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) A+C 합본의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)")));
+    h("div", {class: "lbm-sechead"}, h("h2", null, "어디서 벌고 어디서 잃나"), secSub),
+    cutSlot, cutGrid, howCard, footLine);
   const el = h("div", {class: "lbm stack"}, stateSlot, body);
+  const part = (card, cls) => { const hd = card && card.firstChild; return hd ? Array.from(hd.childNodes).find((n) => String(n.className || "") === cls || n.tagName === cls) || null : null; };
+  const say = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
+  const trendOn = (d) => !!(d && d.kind === "trend");
+  /** The words that depend on the bot running (the trend bot: no band, its own split). */
+  function botWords(d) {
+    const t = trendOn(d), tb = (d && d.trend_bot) || {};
+    say(part(hero, "H2"), t ? "이긴 횟수" : "기대 범위 띠");
+    say(part(hero, "sub"), t ? `${tb.name || "추세판단 봇"} 시작 ${fmt.kst(tb.since)}부터 · 닫힌 거래 기준 · 기대 범위 띠 없음`
+      : "거래 수에 따라 이긴 횟수가 있을 만한 범위 · 닫힌 거래 기준");
+    say(secSub, t ? "추세판단 봇 닫힌 거래를 진입 때 판단·코인·시간대·방향·진입 봉으로 나눠 (백테스트 기준 없음)"
+      : "페이퍼(연습) 닫힌 거래를 장세·코인·시간대·방향으로 나눠 5년 백테스트 옆에");
+    say(part(howCard, "sub"), t ? "기준이 없는 새 봇의 숫자 · 거래가 적을 때의 운" : "맞춘 숫자와 현실 숫자 · 거래가 적을 때의 운");
+    const fk = t ? "trend" : "old";
+    if (footLine.dataset.k !== fk) {
+      footLine.dataset.k = fk;
+      put(footLine, ui.assumeLine(["closed"], t ? "페이퍼(연습) 추세판단 봇의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)"
+        : "페이퍼(연습) A+C 합본의 닫힌 거래 · 실거래는 이긴 횟수만 (돈은 비용 탭)"));
+    }
+  }
 
   // ---------------------------------------------------------------- 기대 범위 띠
   function drawTiles(d) {
@@ -294,7 +333,7 @@ export function mapView(ctx) {
     const empty = !g.lines.length;
     const cross = s("g", {class: "lbm-cross", "aria-hidden": "true"});
     const svg = s("svg", {class: "lbm-svg", viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", tabindex: "0",
-      "aria-label": "기대 범위 띠: 거래 수에 따른 이긴 횟수와 현실 · 5년 백테스트 범위 (좌우 화살표로 읽기)"},
+      "aria-label": b.trend ? "이긴 횟수: 거래 수에 따른 이긴 횟수 (좌우 화살표로 읽기)" : "기대 범위 띠: 거래 수에 따른 이긴 횟수와 현실 · 5년 백테스트 범위 (좌우 화살표로 읽기)"},
     s("defs", null,
       s("filter", {id: "lbm-glow", x: "-10%", y: "-10%", width: "120%", height: "120%"},
         s("feGaussianBlur", {stdDeviation: "2.2", result: "b"}), s("feMerge", null, s("feMergeNode", {in: "b"}), s("feMergeNode", {in: "SourceGraphic"}))),
@@ -372,6 +411,11 @@ export function mapView(ctx) {
   function drawLegend(b) {
     const li = (cls, ...k) => h("span", {class: "lbm-li", role: "listitem"}, h("i", {class: ["lbm-key", cls], "aria-hidden": "true"}), ...k);
     const drawn = IDS.filter((id) => (b.accounts || {})[id] && (b.accounts[id].points || []).length);
+    if (b.trend) {                                         // no band: the lines only, and what a step means
+      put(legend, ...drawn.map((id) => h("span", {class: "lbm-li", role: "listitem"}, acctTag(id))));
+      put(alarm, "선이 한 칸 오르면 이긴 거래, 옆으로만 가면 진 거래예요. 비교할 범위가 없어서 경보선도 없어요 (거래가 적을 때는 운이 커요).");
+      return;
+    }
     put(legend,
       b.honest != null ? li("hon", `현실 기대 범위 (처음 보는 2025-26 승률 ${fmt.pct(b.honest, 1, false)} · 90%가 이 안)`) : null,
       b.fit != null ? li("fit", `5년 백테스트 범위 (맞춘 승률 ${fmt.pct(b.fit, 1, false)} · 낙관)`) : null,
@@ -384,11 +428,20 @@ export function mapView(ctx) {
   }
 
   // ---------------------------------------------------------------- 어디서 벌고 어디서 잃나
+  const toneFor = (r, b) => (trendOn(st.d) ? trendTone(r, st.d.min_n || MIN_N) : cellTone(r, b));
+  const toneWords = (t) => (trendOn(st.d) ? TREND_TONE_KO : TONE_KO)[t.tone] || "";
   function chipOf(r) {
     if (!r.n) return h("span", {class: "lbm-chip none"}, "거래 없음");
+    if (trendOn(st.d)) {                                   // no reference, no status word: the sample size only
+      return r.n < SMALL_ROW ? ui.smallSample(r.n, SMALL_ROW) : ui.pill(`${fmt.int(r.n)}번`, "thin", "닫힌 거래 수");
+    }
     return ui.pill(r.status || "—", STATUS_TONE[r.status] || "thin", STATUS_TIP[r.status] || null);
   }
   function rowTip(r, t) {
+    if (trendOn(st.d)) {
+      return [r.label, r.n ? `${fmt.int(r.n)}번 중 ${fmt.int(r.wins)}번 이김 · 평균 순ROE ${fmt.pct(r.avg_roe, 1)} · 손익 ${fmt.money(r.pnl, true)} USDT (연습)` : "거래 없음",
+        toneWords(t), "백테스트 기준 없음"].filter(Boolean).join(" · ");
+    }
     const parts = [`${r.label}`, r.bt_n != null ? `5년 ${fmt.int(r.bt_n)}번 · 승률 ${fmt.pct(r.bt_win, 1, false)}` : "5년 기록 없음"];
     if (r.n) {
       parts.push(`지금 ${fmt.int(r.n)}번 중 ${fmt.int(r.wins)}번 이김 · 평균 ROE ${fmt.pct(r.avg_roe, 1)}`);
@@ -409,12 +462,14 @@ export function mapView(ctx) {
       r.bt_win != null ? h("i", {class: "bt", style: {left: pc(r.bt_win)}}) : null);
   }
   function cutRow(r, b) {
-    const t = cellTone(r, b);
-    const hon = r.honest != null ? r.honest : b && b.honest;
-    return h("div", {class: ["lbm-row", "t-" + t.tone], role: "listitem", title: rowTip(r, t)},
+    const t = toneFor(r, b), trend = trendOn(st.d);
+    const hon = trend ? null : r.honest != null ? r.honest : b && b.honest;
+    const money = r.n && r.pnl != null ? fmt.money(r.pnl, true) : "—";
+    return h("div", {class: ["lbm-row", "t-" + t.tone, r.unknown ? "unk" : ""], role: "listitem", title: rowTip(r, t)},
       h("b", {class: "lbm-rl"}, r.label || String(r.key)),
-      h("span", {class: "lbm-bt"}, h("b", {class: "num"}, r.bt_win == null ? "—" : fmt.pct(r.bt_win, 1, false)),
-        h("small", {class: "num"}, r.bt_n == null ? "기록 없음" : `${fmt.int(r.bt_n)}번`)),
+      trend ? h("span", {class: "lbm-bt"}, h("b", {class: ["num", fmt.tone(r.pnl, money)]}, money), h("small", null, r.n ? "USDT" : "거래 없음"))
+        : h("span", {class: "lbm-bt"}, h("b", {class: "num"}, r.bt_win == null ? "—" : fmt.pct(r.bt_win, 1, false)),
+          h("small", {class: "num"}, r.bt_n == null ? "기록 없음" : `${fmt.int(r.bt_n)}번`)),
       h("span", {class: "lbm-now"},
         h("span", {class: "lbm-nv"}, h("b", {class: "num"}, r.n ? fmt.pct(r.win, 1, false) : "—"),
           h("small", {class: "num"}, r.n ? `${fmt.int(r.n)}번 · ROE ${fmt.pct(r.avg_roe, 1)}` : "아직 없음")),
@@ -428,10 +483,10 @@ export function mapView(ctx) {
     const segs = [];
     for (let k = 0; k < 6; k++) {
       const r = by[String(k)] || {key: k, n: null};
-      const t = cellTone(r, b);
+      const t = toneFor(r, b);
       segs.push(s("g", {class: ["seg", "t-" + t.tone, k === nowB ? "now" : ""]},
         s("path", {d: arcPath(c, c, r0, r1, k * 60 + 1.2, (k + 1) * 60 - 1.2)},
-          s("title", null, `${r.label || `${String(k * 4).padStart(2, "0")}~${String(k * 4 + 4).padStart(2, "0")}시`} · ${r.n ? `${fmt.int(r.n)}번 · 승률 ${fmt.pct(r.win, 0, false)}` : "거래 없음"} · ${TONE_KO[t.tone]}`)),
+          s("title", null, `${r.label || `${String(k * 4).padStart(2, "0")}~${String(k * 4 + 4).padStart(2, "0")}시`} · ${r.n ? `${fmt.int(r.n)}번 · 승률 ${fmt.pct(r.win, 0, false)}` : "거래 없음"} · ${toneWords(t)}`)),
         r.n ? s("text", {class: "sv", x: f1(c + (r0 + r1) / 2 * Math.cos(((k * 60 + 30 - 90) * Math.PI) / 180)),
           y: f1(c + (r0 + r1) / 2 * Math.sin(((k * 60 + 30 - 90) * Math.PI) / 180) + 4)}, fmt.pct(r.win, 0, false)) : null));
     }
@@ -463,20 +518,36 @@ export function mapView(ctx) {
   function drawCuts(d) {
     const b = d.band;
     const card = d.card || {};
+    const trend = trendOn(d);
     put(cutSlot, card.state && card.state !== "ok" ? sourceState(card, "매매법 성적표 (페이퍼 DB · 백테스트 기준표)") : null,
-      ...(card.problems || []).map((t) => h("p", {class: "lb-warn"}, t)));
-    put(cutGrid, CUTS.map((c) => {
+      ...(card.problems || []).map((t) => h("p", {class: "lb-warn"}, t)),
+      trend && d.paper && d.paper.state !== "ok" ? sourceState(d.paper, "페이퍼 DB") : null);
+    put(cutGrid, cutsOf(d).map((c) => {
       const rows = (d.cuts || {})[c.id] || [];
-      const head = h("div", {class: "lbm-rh", "aria-hidden": "true"}, h("span", null, "구분"), h("span", null, "5년"), h("span", null, "지금 (페이퍼)"), h("span", null, "판정"));
-      const list = rows.length ? h("div", {class: "lbm-rows", role: "list"}, head, rows.map((r) => cutRow(r, b))) : ui.empty("기준표에 이 구분이 없어요");
+      const head = h("div", {class: "lbm-rh", "aria-hidden": "true"}, h("span", null, "구분"), h("span", null, trend ? "손익 (연습)" : "5년"),
+        h("span", null, "지금 (페이퍼)"), h("span", null, trend ? "표본" : "판정"));
+      const list = rows.length ? h("div", {class: "lbm-rows", role: "list"}, head, rows.map((r) => cutRow(r, b)))
+        : ui.empty(trend ? "이 구분의 거래가 아직 없어요" : "기준표에 이 구분이 없어요");
       const extra = c.id === "hb" && rows.length ? h("div", {class: "lbm-ringw"}, ring(rows, b)) : c.id === "side" ? sideSplit(rows) : null;
-      return ui.card({title: c.ko, sub: c.sub, cls: `lbm-cut lbm-cut-${c.id}`}, extra ? h("div", {class: "lbm-wide"}, extra, list) : list);
+      return ui.card({title: c.ko, sub: c.sub, cls: `lbm-cut lbm-cut-${c.id}${trend ? " lbm-cut-trend" : ""}`}, extra ? h("div", {class: "lbm-wide"}, extra, list) : list);
     }));
   }
 
   // ---------------------------------------------------------------- 숫자 읽는 법
   function drawHow(d) {
     const b = d.band;
+    if (trendOn(d)) {
+      const mn = d.min_n || MIN_N;
+      put(how, h("ul", {class: "lbm-howl"},
+        h("li", {class: "cut"}, h("b", null, "견줄 기준이 없어요. "), `${d.band_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}. `,
+          "그래서 견줄 범위 없이, 이 봇이 켜진 뒤의 거래만 그대로 보여 드려요."),
+        h("li", {class: "luck"}, "거래가 적으면 운이 커요. 20번 미만은 '표본 적음'이고, 몇 번의 승패로 좋다·나쁘다를 정하지 않아요 (2주 뒤 검토에서 봐요)."),
+        h("li", {class: "cut"}, "표는 거래 ", h("b", null, `${fmt.int(mn)}번`), "부터 색을 칠해요 (그 전엔 회색): 손익이 + 면 초록, − 면 빨강. 판정 말은 없어요."),
+        h("li", {class: "hon"}, "'진입 때 추세 판단'은 진입할 때 상위 봉 판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO) 중 진입 방향과 같은 쪽이 몇 개였는지예요 (3개 이상이어야 들어가요).")),
+      h("div", {class: "lbm-tones", role: "list", "aria-label": "표 색"}, ["ok", "bad", "small"].map((k) =>
+        h("span", {class: ["lbm-tone", "t-" + k], role: "listitem"}, h("i", {"aria-hidden": "true"}), TREND_TONE_KO[k]))));
+      return;
+    }
     if (!b) { put(how, ui.note("백테스트 기준표가 없어서 숫자를 견줄 수 없어요")); return; }
     const q20 = bandAt(b, 20).honest;
     const items = [
@@ -501,8 +572,10 @@ export function mapView(ctx) {
     const d = st.d;
     if (!d) { put(tiles, motion.shimmer(2)); put(chart, motion.shimmer(4, true)); put(cutGrid, motion.shimmer(4)); return; }
     const b = d.band;
-    put(srcSlot, !b ? sourceState({state: d.card && d.card.state === "error" ? "error" : "missing",
-      reason_ko: (d.card && d.card.reason_ko) || "백테스트 기준표(deploy/combo.live-ac.expected.json)가 없어 띠를 그릴 수 없어요"}, "기대 범위 띠") : null);
+    botWords(d);
+    put(srcSlot, trendOn(d) ? h("p", {class: "lbm-noband"}, ui.pill("띠 없음", "thin"), ` 기대 범위 띠가 없는 이유: ${d.band_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}`)
+      : !b ? sourceState({state: d.card && d.card.state === "error" ? "error" : "missing",
+        reason_ko: (d.card && d.card.reason_ko) || "백테스트 기준표(deploy/combo.live-ac.expected.json)가 없어 띠를 그릴 수 없어요"}, "기대 범위 띠") : null);
     drawTiles(d);
     const lineSig = b ? IDS.map((id) => ((b.accounts || {})[id] || {}).n ?? "-").join(",") : "";
     drawChart(lineSig !== st.lineSig);

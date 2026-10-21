@@ -17,6 +17,9 @@
 // reference is 처음 보는 기간; under 20 trades 표본 적음; with few trades a ranking is mostly luck (the foot says so); paper
 // money is 연습 money (모의 caption), live money its own caption. Glow only for a real state (the open position), three
 // pulses then steady; nothing moves under prefers-reduced-motion.
+// 추세판단 봇 (the answer's trend_bot, owners 10/21): no 5-year number anywhere (기준 없음 + the server's reason, no 5-year order
+// in the select, no 5년 / 처음 보는 bars, the line's 백테스트 says 기준 없음), records from its start, the role on every card and
+// line, ordered by 페이퍼 손익 once traded and 이번 주 신호 before (pickSort -> pickTrend), 읽는 법 in its own words.
 // Two views behind one switch on top (owners 10/19): 진입 가능성 (screens/livebots-likely.js: which strategy is most likely to
 // enter next, /api/v4/livebots/likely; the default) | 성적 순위 (boardView below). The choice is remembered on this device
 // (local: localStorage inside try/catch); each view is built when first shown and polls only while it is the one shown.
@@ -125,6 +128,7 @@ export const anyTrades = (d) => sources(d).paper && ((d && d.rows) || []).some((
  * -> {sort, chosen, fallback, traded, note}: note is the one line that says why the order is the 5-year one (or null).
  */
 export function pickSort(choice, d) {
+  if (d && d.trend_bot) return pickTrend(choice, d);
   const ok = sources(d), rows = ((d && d.rows) || []).filter(inCfg);
   const has = (s) => rows.some((r) => telling(valueOf(r, s, ok), s));
   const traded = anyTrades(d);
@@ -143,6 +147,33 @@ export function pickSort(choice, d) {
   return {sort, chosen, fallback: sort !== chosen, traded, note};
 }
 
+/** The trend bot's entry bar -> the closed bar its trend is judged on. */
+const TREND_HTF_KO = {"30m": "끝난 1시간봉 추세로 판단", "1h": "끝난 4시간봉 추세로 판단"};
+/** The orders the trend bot can be ranked by (no 5-year ones: a new rule set has no backtest). */
+export const TREND_SORTS = SORTS.filter((x) => ["pnl", "win", "trades", "signals"].includes(x.id));
+const TREND_SORT = new Set(TREND_SORTS.map((x) => x.id));
+/** The orders a view offers for this answer. */
+export const sortsOf = (d) => (d && d.trend_bot ? TREND_SORTS : SORTS);
+
+/** pickSort for the trend bot: 페이퍼 손익 once it has paper trades, 이번 주 신호 before (never a 5-year order); a choice
+ *  with nothing to rank falls back to 이번 주 신호, saying why. */
+function pickTrend(choice, d) {
+  const ok = sources(d), rows = ((d && d.rows) || []).filter(inCfg);
+  const has = (s) => rows.some((r) => telling(valueOf(r, s, ok), s));
+  const traded = anyTrades(d);
+  const chosen = TREND_SORT.has(choice) ? choice : traded ? "pnl" : "signals";
+  const sort = has(chosen) ? chosen : has("signals") ? "signals" : chosen;
+  const paperWhy = !ok.paper ? (missWord(d && d.paper) === "수집 전" ? "페이퍼 기록이 아직 없어서" : "페이퍼 기록을 못 읽어서") : null;
+  let note = null;
+  if (sort !== chosen) {
+    note = chosen === "signals" ? null : paperWhy ? `${paperWhy} 이번 주 신호 순서예요` : `아직 거래 전이라 이번 주 신호 순서예요 (${SORT_BY[chosen].label} 순서는 거래가 생기면)`;
+  } else if (sort === "signals" && !TREND_SORT.has(choice) && !traded) {
+    note = paperWhy ? `${paperWhy} 이번 주 신호 순서예요` : "아직 거래 전이라 이번 주 신호 순서예요";
+  }
+  if (!has(sort)) note = ok.signals ? "이번 주 신호도 거래도 아직 없어서 순위를 낼 수 없어요" : "신호 기록을 못 읽어서 순위를 낼 수 없어요";
+  return {sort, chosen, fallback: sort !== chosen, traded, note};
+}
+
 /** A ratio as a bar width in percent (0..100, one decimal), or null. */
 export function barPct(x) {
   const v = numOr(x);
@@ -150,9 +181,9 @@ export function barPct(x) {
 }
 
 /** The card's bars: 5년 승률 (맞춘 숫자), 처음 보는 기간, and 지금 (paper) only when it has trades. */
-export function barsOf(r, ok) {
+export function barsOf(r, ok, trend = false) {
   const bt = (r && r.bt) || {}, p = (r && r.paper) || {};
-  const out = [{id: "fit", label: "5년", tip: "5년 승률 (5년 전부에 맞춘 숫자: 좋게 나와요)", v: numOr(bt.win)},
+  const out = trend ? [] : [{id: "fit", label: "5년", tip: "5년 승률 (5년 전부에 맞춘 숫자: 좋게 나와요)", v: numOr(bt.win)},
     {id: "honest", label: "처음 보는", tip: "처음 보는 기간 승률 (2020-24에만 맞추고 2025-26에 처음 돌린 숫자: 현실에 가까운 기준)", v: numOr(bt.honest_win)}];
   if (ok.paper && paperN(r) > 0) out.push({id: "now", label: "지금", tip: `지금 승률 (페이퍼 닫힌 거래 ${paperN(r)}번)`, v: numOr(p.win_rate)});
   return out.map((b) => ({...b, w: barPct(b.v)}));
@@ -252,10 +283,10 @@ function typeBadge(ko, small) {
 /** A line opened (rowDetail(row, answer, href)): 왜 이 매매법인가 (the 5-year line and the rule lines when strategies-defs.js has
  *  them), its settings, the 5-year numbers, the paper and live records, its signals. href(name, arg) -> a screen link. */
 export function rowDetail(r, d, href) {
-  const ok = sources(d), bt = r.bt, code = r.strategy;
+  const ok = sources(d), bt = r.bt, code = r.strategy, tb = d && d.trend_bot;
   const sec = (title, ...kids) => h("section", {class: "lbr-dsec"}, h("h4", null, title), ...kids);
   const parts = [];
-  const def = DS_DEFS[code], why = whyLine(r);
+  const def = DS_DEFS[code], why = tb ? null : whyLine(r);
   const lines = def && def.lines && def.lines.length ? def.lines : null;
   if (lines || why) {
     parts.push(h("section", {class: "lbr-dsec lbr-why"}, h("h4", null, "왜 이 매매법인가"),
@@ -269,7 +300,8 @@ export function rowDetail(r, d, href) {
     h("div", {class: "lbr-mh"}, h("b", {class: "num"}, `#${fmt.int(m.order)}`), h("span", {class: "lbr-tf"}, m.tf_ko || fmt.tfKo(m.tf)),
       h("span", null, m.entry_ko || "즉시"), m.invert ? ui.pill("방향 반대", "warn", "신호와 반대 방향으로 들어가요") : null,
       m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null,
-      h("span", {class: "lbr-mbt num"}, m.bt && m.bt.trades != null ? `5년 ${fmt.int(m.bt.trades)}번 · ${pc0(m.bt.win)}` : "5년 —")),
+      tb ? (m.role ? h("span", {class: "lbr-mbt"}, `역할 ${m.role} · ${TREND_HTF_KO[m.tf] || "상위 봉 추세로 판단"}`) : null)
+        : h("span", {class: "lbr-mbt num"}, m.bt && m.bt.trades != null ? `5년 ${fmt.int(m.bt.trades)}번 · ${pc0(m.bt.win)}` : "5년 —")),
     h("p", {class: "lbr-ml"}, h("span", {class: "muted"}, "손절 "), (m.stop && m.stop.ko) || "—"),
     (m.filter || []).length || m.disp ? h("p", {class: "lbr-ml"}, h("span", {class: "muted"}, "조건 "), [...(m.filter || []).map((f) => f.ko), m.disp].filter(Boolean).join(" · ")) : null,
     (m.off || []).length ? h("p", {class: "lbr-ml"}, h("span", {class: "muted"}, "끈 구간 "),
@@ -281,8 +313,10 @@ export function rowDetail(r, d, href) {
   } else if (r.in_config === false) {
     parts.push(sec("세팅", ui.note("지금 설정에는 이 매매법이 없어요: 예전 설정에서 거래한 기록이에요 (순위 밖)")));
   }
-  // 5 years
-  if (bt) {
+  // 5 years (the trend bot: none, said once)
+  if (tb) {
+    parts.push(sec("백테스트", h("p", {class: "lbr-ml"}, ui.pill("기준 없음", "thin"), ` ${tb.no_ref_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}`)));
+  } else if (bt) {
     const kv = [["유형", bt.type_ko || "—"], ["5년 거래", bt.trades != null ? `${fmt.int(bt.trades)}번 (1주 ${fmt.num(bt.per_week, 1)}번꼴)` : "—"],
       ["5년 승률 (맞춘 숫자)", pc0(bt.win)], ["2025-26 승률", bt.recent_n ? `${pc0(bt.recent_win)} (${fmt.int(bt.recent_n)}번)` : "—"],
       ["처음 보는 기간", bt.honest_n ? `${pc0(bt.honest_win)} (${fmt.int(bt.honest_n)}번)` : "—"],
@@ -336,18 +370,42 @@ export function rowDetail(r, d, href) {
 // /api/v4/livebots/groups (dash/more/liveinsight.py groups()): per account, group A (the 11 without the chase block) and
 // B (the 4 with it) since the 규칙봇 15 start, and 예전 매매법 (settings no longer in the config, their whole record); a
 // live trade takes its paper partner's group (짝 페이퍼 없음 when it has none). Shown on 성적 and 순위 (성적 순위).
+// The 추세판단 봇 (the answer's kind "trend", liveinsight trend_groups): its roles (눌림 · 자리 · 돌파 · 횡보) and entry bars
+// (30분 · 1시간 진입) since its own start, in the server's order, each row with its members; the card's words follow the bot.
 export const GROUPS_API = "/api/v4/livebots/groups";
 const GROUP_KEY = "lbrg-acct";
 const GROUP_ACCTS = [{id: "paper", label: "페이퍼"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}];
 
-/** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}]. */
+/** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}].
+ *  The trend bot (d.kind "trend"): the server's order (roles 눌림 · 자리 · 돌파 · 횡보, then 30분 · 1시간 진입), each row with
+ *  its cut (role / tf) and members, then 짝 페이퍼 없음 / 다른 페이퍼 봇 only when they have trades. */
 export function groupRows(d, acct) {
   const a = d && d.accts && d.accts[acct];
   if (!a || a.state !== "ok") return [];
   const defs = Object.fromEntries(((d && d.defs) || []).map((g) => [g.id, g]));
-  const ids = ["A", "B", "old", ...(a.groups.none && a.groups.none.n ? ["none"] : [])];
+  const extra = ["none", ...(d.kind === "trend" ? ["other"] : [])].filter((id) => a.groups[id] && a.groups[id].n);
+  const ids = d.kind === "trend" && Array.isArray(d.order) ? [...d.order, ...extra] : ["A", "B", "old", ...extra];
   return ids.map((id) => ({id, ko: (defs[id] || {}).ko || (id === "none" ? "짝 페이퍼 없음" : id), sub: (defs[id] || {}).sub_ko || "",
-    n_members: (defs[id] || {}).n_members, rec: a.groups[id] || {n: 0}}));
+    n_members: (defs[id] || {}).n_members, cut: (defs[id] || {}).cut || null, members: (defs[id] || {}).members || [],
+    rec: a.groups[id] || {n: 0}}));
+}
+
+/** A ui.card's subtitle element (its head's span.sub), to change the words in place; null without one. */
+export function cardSub(card) {
+  const head = card && card.firstChild;
+  return head ? Array.from(head.childNodes).find((n) => String(n.className || "") === "sub") || null : null;
+}
+
+/** The card's words for the bot running: {sub, note, start}. */
+export function groupWords(d) {
+  const s = (d && d.start) || {};
+  if (d && d.kind === "trend") {
+    return {sub: d.title_sub_ko || "역할별 · 진입 봉별", note: d.note_ko || "",
+      start: s.ms != null ? `${s.name || "추세판단 봇"} 시작 ${fmt.kst(s.ms)}부터 · ${s.how_ko || ""}` : s.how_ko || "시작 시각 모름"};
+  }
+  return {sub: "A 그룹 · B 그룹(추격 진입 막기) · 예전 매매법",
+    note: "A·B는 규칙봇 15 시작부터, 예전 매매법은 지금 설정에 없는 매매법의 기록 전체예요 · 실거래는 짝 페이퍼 거래의 그룹을 따라요 · 20번 미만은 대부분 운이에요",
+    start: s.ms != null ? `${s.name || "규칙봇 15"} 시작 ${fmt.kst(s.ms)}부터 · ${s.how_ko || ""}` : s.how_ko || "시작 시각 모름"};
 }
 
 /** groupBlock(ctx, {poll}) -> {el, set(), refresh()}: the card on its own endpoint, the account remembered on this device.
@@ -360,15 +418,17 @@ export function groupBlock(ctx, o = {}) {
   const stateSlot = h("div", {class: "lb-slot"});
   const head = h("p", {class: "lbrg-start"});
   const rows = h("div", {class: "lbrg-rows", role: "list"});
-  const el = ui.card({title: "그룹별 성적", sub: "A 그룹 · B 그룹(추격 진입 막기) · 예전 매매법", cls: "lbrg-card", acts: [seg]},
-    stateSlot, head, rows,
-    ui.note("A·B는 규칙봇 15 시작부터, 예전 매매법은 지금 설정에 없는 매매법의 기록 전체예요 · 실거래는 짝 페이퍼 거래의 그룹을 따라요 · 20번 미만은 대부분 운이에요"));
+  const note = ui.note(groupWords(null).note);
+  const el = ui.card({title: "그룹별 성적", sub: groupWords(null).sub, cls: "lbrg-card", acts: [seg]}, stateSlot, head, rows, note);
+  const sub = cardSub(el);
   const pc = (x) => (numOr(x) == null ? "—" : fmt.pct(x, 1, false));
   function row(g, small) {
     const r = g.rec || {};
     const live = st.acct !== "paper";
-    return h("div", {class: ["lbrg-row", "g-" + g.id], role: "listitem"},
-      h("span", {class: "lbrg-name"}, h("b", null, g.ko), h("small", null, g.sub + (g.n_members ? ` · ${fmt.int(g.n_members)}개` : ""))),
+    const who = g.members && g.members.length ? g.members.map((m) => `${fmt.stratKo(m.strategy)}${g.cut === "role" ? ` ${fmt.tfKo(m.tf)}` : ""}`).join(" · ") : "";
+    return h("div", {class: ["lbrg-row", "g-" + g.id, g.cut ? "c-" + g.cut : ""], role: "listitem"},
+      h("span", {class: "lbrg-name"}, h("b", null, g.ko), h("small", null, g.sub + (g.n_members ? ` · ${fmt.int(g.n_members)}개` : "")),
+        who ? h("small", {class: "lbrg-who"}, who) : null),
       h("span", {class: "lbrg-v"}, h("small", null, "거래"), h("b", {class: "num"}, `${fmt.int(r.n || 0)}번`)),
       h("span", {class: "lbrg-v"}, h("small", null, "이김"), h("b", {class: "num"}, fmt.int(r.wins || 0))),
       h("span", {class: "lbrg-v"}, h("small", null, "승률"), h("b", {class: "num"}, r.n ? pc(r.win_rate) : "—")),
@@ -381,8 +441,10 @@ export function groupBlock(ctx, o = {}) {
     seg.set(st.acct);
     const d = st.d;
     if (!d) { put(rows, motion.shimmer(3)); return; }
-    const s = d.start || {};
-    put(head, s.ms != null ? `규칙봇 15 시작 ${fmt.kst(s.ms)}부터 · ${s.how_ko || ""}` : s.how_ko || "시작 시각 모름");
+    const words = groupWords(d);
+    if (sub && sub.textContent !== words.sub) sub.textContent = words.sub;
+    put(note, words.note);
+    put(head, words.start);
     const a = (d.accts || {})[st.acct];
     if (!a || a.state !== "ok") { put(rows, sourceState(a, st.acct === "paper" ? "페이퍼 DB" : "실행기 DB")); return; }
     put(rows, groupRows(d, st.acct).map((g) => row(g, numOr(d.small_n) || 20)));
@@ -413,7 +475,7 @@ export function groupBlock(ctx, o = {}) {
 export const RANK_MODES = [{id: "likely", label: "진입 가능성"}, {id: "rank", label: "성적 순위"}];
 const MODE_KEY = "lb-rank-mode";
 const MODE_HINT = {likely: "다음 진입은 어느 매매법일까: 신호가 얼마나 자주 나오는지 (이길 확률 아님)",
-  rank: "매매법끼리 성적 비교: 페이퍼 손익 · 승률 · 5년 숫자"};
+  rank: "매매법끼리 성적 비교: 페이퍼 손익 · 승률 · 신호 (5년 숫자는 기준표가 있을 때만)"};
 /** A remembered mode, or the default 진입 가능성. */
 export const modeOf = (v) => (RANK_MODES.some((m) => m.id === v) ? v : "likely");
 
@@ -452,6 +514,8 @@ export function boardView(ctx) {
   const tiles = h("div", {class: "lbr-tiles"});
   const roster = h("div", {class: "lbr-roster", role: "list", "aria-label": "선수단"});
   const rosterKey = h("p", {class: "lbr-rkey"});
+  const hsub = h("span", {class: "lbr-hsub"}, "A+C 합본 · 두 실행기가 따라가는 페이퍼(연습)의 매매법들");
+  let selKind = "old";
   const sel = h("select", {class: "select lbr-sel", "aria-label": "순서 고르기"}, SORTS.map((x) => h("option", {value: x.id}, x.label)));
   sel.addEventListener("change", () => { st.choice = sel.value; local.set(SORT_KEY, sel.value); draw(true); });
   const sortNote = h("p", {class: "lbr-snote"});
@@ -461,9 +525,10 @@ export function boardView(ctx) {
   const listCount = h("span", {class: "lbr-lcount"});
   const foot = h("div", {class: "lbr-foot"});
   const grp = groupBlock(ctx, {poll: false});              // asked again only when this view's records change (load)
+  const listCard = ui.card({title: "전체 목록", sub: "줄을 누르면 세팅 · 5년 숫자 · 실거래 · 신호가 펼쳐져요", cls: "lbr-listcard", acts: [listCount]}, list.el);
   const body = h("div", {class: "lbr-body stack"},
     h("section", {class: "lbr-hero", "aria-label": "매매법 순위 요약"},
-      h("div", {class: "lbr-hhead"}, ui.plate("매매법 순위"), h("span", {class: "lbr-hsub"}, "A+C 합본 · 두 실행기가 따라가는 페이퍼(연습)의 매매법들")),
+      h("div", {class: "lbr-hhead"}, ui.plate("매매법 순위"), hsub),
       noteSlot, tiles,
       h("div", {class: "lbr-rhead"}, h("b", null, "선수단"), rosterKey), roster),
     h("section", {class: "lbr-arena", "aria-label": "상위 · 하위"},
@@ -471,9 +536,25 @@ export function boardView(ctx) {
         h("label", {class: "lbr-sort"}, h("span", null, "순서"), sel)),
       arena),
     grp.el,
-    ui.card({title: "전체 목록", sub: "줄을 누르면 세팅 · 5년 숫자 · 실거래 · 신호가 펼쳐져요", cls: "lbr-listcard", acts: [listCount]}, list.el),
+    listCard,
     foot);
   const el = h("div", {class: "lbr stack"}, stateSlot, body);
+  const listSub = cardSub(listCard);
+
+  /** The words that depend on the bot running: the hero line, the list's subtitle, the orders offered. */
+  function botWords(d) {
+    const tb = d && d.trend_bot;
+    const hs = tb ? `${tb.name || "추세판단 봇"} · 두 실행기가 따라가는 페이퍼(연습)의 매매법 · ${fmt.kst(tb.since)} 시작부터`
+      : "A+C 합본 · 두 실행기가 따라가는 페이퍼(연습)의 매매법들";
+    if (hsub.textContent !== hs) hsub.textContent = hs;
+    const ls = tb ? "줄을 누르면 세팅 · 역할 · 실거래 · 신호가 펼쳐져요" : "줄을 누르면 세팅 · 5년 숫자 · 실거래 · 신호가 펼쳐져요";
+    if (listSub && listSub.textContent !== ls) listSub.textContent = ls;
+    const kind = tb ? "trend" : "old";
+    if (kind !== selKind) {
+      selKind = kind;
+      sel.replaceChildren(...sortsOf(d).map((x) => h("option", {value: x.id}, x.label)));
+    }
+  }
 
   // ---------------------------------------------------------------- pieces
   function tile(k, v, sub, cls) {
@@ -535,29 +616,34 @@ export function boardView(ctx) {
     const {n: big, b} = bigNum(x, sort, ok, d, "lbr-bigv");
     const sg = ok.signals ? weekSignals(r) : null;
     const be = numOr(d.ref && d.ref.break_even);
+    const tb = d.trend_bot;
+    const bars = barsOf(r, ok, !!tb);
     const card = h("div", {class: ["lbr-card", r.open ? "lbr-hold" : "", enter ? "lbr-enter" : "", x.rank <= 3 ? "lbr-podium" : ""], role: "button", tabindex: "0",
       style: {"--h": stratHue(code) ?? 210, "--i": i}, dataset: {code, t: TYPE_ID[bt.type_ko] || "other"},
       "aria-label": `${fmt.int(x.rank)}위 ${ko} · ${SORT_BY[sort].big} ${b.text}${b.unit ? " " + b.unit : ""}${r.open ? " · 지금 포지션을 들고 있음" : ""} · 눌러서 목록에서 펼치기`,
       onclick: () => jump(code), onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); jump(code); } }},
     h("div", {class: "lbr-ctop"},
       h("span", {class: "lbr-jersey num", "aria-hidden": "true"}, fmt.int(x.rank), h("small", null, "위")),
-      h("span", {class: "lbr-ctags"}, typeBadge(bt.type_ko), statusChip(r, d, ok, paperN(r)))),
+      h("span", {class: "lbr-ctags"}, tb ? (r.role ? ui.pill(r.role, "thin", "추세판단 봇에서 이 매매법의 역할") : null) : typeBadge(bt.type_ko),
+        statusChip(r, d, ok, paperN(r)))),
     h("div", {class: "lbr-figwrap", "aria-hidden": "true"}, h("span", {class: "lbr-ring"}), stratFigure({strategy: code, size: 56, cls: "lbr-fig"})),
     h("div", {class: "lbr-cname"}, h("b", {title: ko}, ko), ko !== code ? h("code", null, code) : null),
     h("div", {class: "lbr-tfs"}, (r.tfs || []).map((tf) => h("span", {class: "lbr-tf"}, fmt.tfKo(tf))),
       r.n_settings ? h("span", {class: "lbr-nset"}, `세팅 ${fmt.int(r.n_settings)}`) : null),
     h("div", {class: "lbr-big"}, h("span", {class: "lbr-bigk"}, SORT_BY[sort].big),
       h("span", {class: "lbr-bigrow"}, big, b.unit ? h("small", {class: "lbr-bigu"}, b.unit) : null), h("span", {class: "lbr-bigs"}, b.sub)),
-    h("div", {class: "lbr-bars", "aria-label": "승률 막대 (0~100%)"}, barsOf(r, ok).map((bar) =>
+    tb && !bars.length ? h("p", {class: "lbr-nobar"}, "닫힌 거래가 생기면 승률 막대가 그려져요") : null,
+    bars.length ? h("div", {class: "lbr-bars", "aria-label": "승률 막대 (0~100%)"}, bars.map((bar) =>
       h("div", {class: ["lbr-bar", bar.id], title: bar.tip, "aria-label": `${bar.tip}: ${pc0(bar.v)}`},
         h("span", {class: "lbr-barl"}, bar.label),
         h("span", {class: "lbr-bart"}, bar.w != null ? h("i", {style: {width: bar.w + "%"}}) : null,
           be != null ? h("em", {class: "lbr-be", style: {left: barPct(be) + "%"}, "aria-hidden": "true"}) : null),
-        h("b", {class: "lbr-barv num"}, pc0(bar.v))))),
+        h("b", {class: "lbr-barv num"}, pc0(bar.v))))) : null,
     h("div", {class: "lbr-cfoot"},
       h("span", {class: "lbr-sig", title: "최근 7일(한국 시간) 이 매매법이 낸 신호"}, "이번 주 신호 ", h("b", {class: "num"}, sg == null ? "—" : fmt.int(sg))),
       sort !== "pnl" && ok.paper && paperN(r) ? h("span", {class: "lbr-sig"}, "손익 ", h("b", {class: ["num", fmt.tone(r.paper.pnl, fmt.money(r.paper.pnl))]}, fmt.money(r.paper.pnl, true))) : null,
-      sort === "pnl" || !ok.paper || !paperN(r) ? h("span", {class: "lbr-sig"}, "5년 ", h("b", {class: "num"}, bt.trades != null ? `${fmt.int(bt.trades)}번` : "—")) : null),
+      tb ? null
+        : sort === "pnl" || !ok.paper || !paperN(r) ? h("span", {class: "lbr-sig"}, "5년 ", h("b", {class: "num"}, bt.trades != null ? `${fmt.int(bt.trades)}번` : "—")) : null),
     h("div", {class: "lbr-chips"}, chips(r, d, ok, {status: false})));
     return card;
   }
@@ -589,7 +675,8 @@ export function boardView(ctx) {
     }},
     h("span", {class: "lbr-lrk num"}, x.rank == null ? "—" : fmt.int(x.rank)),
     stratFigure({strategy: code, size: 28, cls: "lbr-lfig"}),
-    h("span", {class: "lbr-lname"}, h("b", null, ko), ko !== code ? h("code", null, code) : null, typeBadge(r.bt && r.bt.type_ko, true)),
+    h("span", {class: "lbr-lname"}, h("b", null, ko), ko !== code ? h("code", null, code) : null,
+      d.trend_bot ? (r.role ? ui.pill(r.role, "thin", "추세판단 봇에서 이 매매법의 역할") : null) : typeBadge(r.bt && r.bt.type_ko, true)),
     h("span", {class: "lbr-lval"}, h("b", {class: ["num", b.tone]}, b.text, b.unit ? h("small", null, ` ${b.unit}`) : null), h("small", {class: "lbr-lvk"}, SORT_BY[sort].big)),
     h("span", {class: "lbr-lmeta"}, words.map((w, i) => h("span", {class: ["lbr-lw", i === words.length - 1 ? "end" : ""]}, w)), chips(r, d, ok)),
     h("span", {class: "lbr-chev", "aria-hidden": "true"}, "▾"));
@@ -619,6 +706,7 @@ export function boardView(ctx) {
   function draw(user) {
     const d = st.d;
     if (!d) { drawLoading(); return; }
+    botWords(d);
     if (!d.combo || d.combo.state !== "ok") {
       put(noteSlot, sourceState(d.combo, "합친 봇 설정"));
       put(tiles); put(roster); put(rosterKey); put(sortNote);
@@ -633,8 +721,11 @@ export function boardView(ctx) {
     const by = Object.fromEntries((d.rows || []).map((r) => [r.strategy, r]));
     const c = counts(d);
     // notes: the sources not read, the scorecard's own problems
+    const tb = d.trend_bot;
     put(noteSlot, !ok.paper ? sourceState(d.paper, "페이퍼 DB (거래 · 포지션)") : null, !ok.signals ? sourceState(d.signals, "신호 기록") : null,
-      !ok.ref ? sourceState(d.ref, "5년 기준표") : null,
+      tb ? h("p", {class: "lbr-noref"}, ui.pill("기준 없음", "thin"), ` ${tb.no_ref_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}`,
+        h("span", {class: "muted"}, ` · 숫자는 모두 ${fmt.kst(tb.since)} 시작부터의 이 봇 거래예요`))
+        : !ok.ref ? sourceState(d.ref, "5년 기준표") : null,
       ...((ok.card && d.scorecard.problems) || []).map((t) => h("p", {class: "lb-warn"}, t)),
       d.paper && d.paper.stale ? h("p", {class: "lb-warn"}, `페이퍼 봇 기록이 멈춰 있어요 (마지막 ${fmt.kst(d.paper.as_of_ms)})`) : null);
     put(tiles,
@@ -677,6 +768,18 @@ export function boardView(ctx) {
   }
   function footEls(d, c) {
     const be = numOr(d && d.ref && d.ref.break_even);
+    const tb = d && d.trend_bot;
+    if (tb) {
+      return [ui.card({title: "읽는 법", cls: "lbr-how"},
+        h("ul", {class: "lbr-howl"},
+          h("li", null, h("b", null, "백테스트 숫자가 없어요."), ` ${tb.no_ref_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}. 순위는 이 봇이 ${fmt.kst(tb.since)}에 켜진 뒤의 기록으로만 매겨요.`),
+          h("li", null, h("b", null, "거래가 적으면 순위는 대부분 운이에요."),
+            ` 추세 판단·진입 전 검사·되돌림을 다 통과해야 들어가서 거래가 드물어요. 닫힌 거래 ${fmt.int(smallMin(d))}번 미만은 '표본 적음'이에요.`),
+          h("li", null, h("b", null, "역할"), " = 눌림 · 자리 · 돌파 · 횡보 (두 분이 정한 이름). 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉 추세를 따라요."),
+          h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), " 순위는 두 실행기가 따라가는 페이퍼(모의) 거래로 매겨요. 바이비트 · WOO X Pro 기록은 줄을 펼치면 보여요."),
+          h("li", null, "막대: ", h("span", {class: "lbr-key now"}), "지금 승률(페이퍼, 거래가 있을 때) · 0~100%"))),
+      h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive("바이비트 · WOO X Pro (펼친 줄의 실거래)"))];
+    }
     return [ui.card({title: "읽는 법", cls: "lbr-how"},
       h("ul", {class: "lbr-howl"},
         h("li", null, h("b", null, "5년 승률은 맞춘 숫자예요."), " 5년 전부에 맞춰 고른 숫자라 실제보다 좋게 나와요. 현실에 가까운 기준은 ",

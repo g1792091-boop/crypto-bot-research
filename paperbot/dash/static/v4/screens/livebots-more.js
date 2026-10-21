@@ -7,6 +7,10 @@
 //           none ±30 min around US macro releases, the loss cap per stop), each executor's light and limits, and every
 //           setting grouped by strategy (timeframe, custom numbers, stop, entry mode, conditions, switched-off buckets),
 //           from the config the bot really runs (/api/v4/livebots/settings); folded, 10 strategies a page.
+//           추세판단 봇 (the server's ``trend``, owners 10/21): first a card 추세 판단 규칙: 쉬기 없음 · 하루 손실 한도 없음,
+//           the 2-week rule freeze from its start, its rules exactly as the bot wrote them (state trend rules: TrendRules.
+//           describe, each line split at its " / "), and its members by role (눌림 · 자리 · 돌파 · 횡보) with their entry
+//           bar (30분 진입 = the closed 1h bar's trend, 1시간 진입 = the 4h bar's); every setting row carries its role.
 import {h, s, put, ui, fmt, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
@@ -103,9 +107,30 @@ export function rulesList(r) {
     ["손절 한 번", r.max_loss_frac != null ? `잔고의 최대 ${pctOf(r.max_loss_frac)} (넘으면 크기를 줄임)` : "—"],
     ["주말", r.no_weekend ? "한국 시간 토·일에는 새로 진입하지 않음 (열린 포지션은 그대로)" : "주말에도 진입"],
     ["경제 발표", r.macro_blackout_min ? `미국 경제 발표 앞뒤 ${r.macro_blackout_min}분은 진입하지 않음` : "제한 없음"],
+    r.us_open_pause_min ? ["나스닥 개장", `미국 주식시장 개장 뒤 ${r.us_open_pause_min}분은 진입하지 않음`] : null,
     ["기본 손절", r.stop ? r.stop.ko : "—"],
     ["빠른 청산", r.early_exit ? (r.early_exit === "own" ? "같은 매매법의 반대 신호에 바로 청산" : "아무 매매법의 반대 신호에 바로 청산") : "없음 (손절과 계단 잠금만)"],
   ];
+}
+
+/** One rule line of the bot ("추세 판단: A / B / C") as {head, parts}: the words before the first ": " and the rest split
+ *  at " / " (the bot's own separator); a line without ": " is all parts. */
+export function ruleParts(line) {
+  const t = String(line || "");
+  const i = t.indexOf(": ");
+  const head = i > 0 ? t.slice(0, i) : "";
+  const rest = i > 0 ? t.slice(i + 2) : t;
+  return {head, parts: rest.split(" / ").map((x) => x.trim()).filter(Boolean)};
+}
+
+/** The trend bot's members grouped by role, in the owners' order: [{id, sub, members: [{strategy, tf, tf_ko, htf_ko, side_only}]}]. */
+export function roleGroups(tr) {
+  const ms = (tr && tr.members) || [];
+  const roles = (tr && tr.roles) || [];
+  const out = roles.map((r) => ({id: r.id, sub: r.sub_ko || "", members: ms.filter((m) => m.role === r.id)})).filter((g) => g.members.length);
+  const rest = ms.filter((m) => !roles.some((r) => r.id === m.role));
+  if (rest.length) out.push({id: "그 밖", sub: "역할이 정해지지 않은 매매법", members: rest});
+  return out;
 }
 
 /** settingsView(ctx) -> {el, set()} */
@@ -113,16 +138,20 @@ export function settingsView(ctx) {
   const st = {d: null, okAt: 0, q: ""};
   const stateSlot = h("div", {class: "lb-slot"});
   const rules = h("div", {class: "lb-rules"});
+  const trendBox = h("div", {class: "lb-trendrules stack"});
+  const trendCard = ui.card({title: "추세 판단 규칙", sub: "추세판단 봇이 지금 쓰는 규칙 · 봇이 남긴 글 그대로", cls: "lb-trendcard"}, trendBox);
+  const trendSlot = h("div", {class: "lb-slot stack"});   // the trend bot only (draw)
   const lights = h("div", {class: "lb-lgrid"});
   const head = h("p", {class: "lb-ghead"});
   const list = ui.searchList({size: 10, placeholder: "매매법 찾기", row: (g) => groupRow(g), match: (g, q) => `${g.strategy} ${fmt.stratKo(g.strategy)}`.toLowerCase().includes(q)});
-  const el = h("div", {class: "lb-settings stack"}, stateSlot,
+  const el = h("div", {class: "lb-settings stack"}, stateSlot, trendSlot,
     ui.card({title: "고정 규칙", sub: "합친 봇의 모든 설정이 같이 쓰는 규칙", cls: "lb-rulecard"}, rules),
     ui.card({title: "실행기 신호등과 한도", sub: "실행기 설정 파일 그대로 (적힌 것만)", cls: "lb-execcard"}, lights),
     ui.card({title: "매매법과 설정", sub: "매매법마다 접어 두었어요 · 10개씩", cls: "lb-grpcard"}, head, list.el));
   function memberRow(m) {
     return h("div", {class: "lb-mem", role: "listitem"},
-      h("div", {class: "lb-memh"}, h("b", null, `${m.order}번`), h("span", {class: "pp thin"}, m.tf_ko), h("span", null, m.entry_ko), m.invert ? ui.pill("반대 방향", "warn") : null,
+      h("div", {class: "lb-memh"}, h("b", null, `${m.order}번`), h("span", {class: "pp thin"}, m.tf_ko), m.role ? ui.pill(`역할 ${m.role}`, "thin", "추세판단 봇에서 이 매매법의 역할") : null,
+        h("span", null, m.entry_ko), m.invert ? ui.pill("반대 방향", "warn") : null,
         m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null, h("span", {class: "muted"}, `손절 ${m.stop.ko}`)),
       m.numbers ? h("div", {class: "lb-nums"}, Object.entries(m.numbers).map(([k, v]) => h("span", {class: "pp thin num"}, `${k} ${Array.isArray(v) ? v.join("/") : v}`)))
         : h("p", {class: "note"}, "기본 숫자 (규칙봇과 같은 신호)"),
@@ -135,9 +164,29 @@ export function settingsView(ctx) {
       ui.disclosure(`${fmt.stratKo(g.strategy)} · 설정 ${fmt.int(g.n)}개 · ${g.tfs.map((t) => fmt.tfKo(t)).join("/")}`, h("div", {class: "lb-mems"}, g.members.map(memberRow))),
       h("span", {class: "muted lb-gcode"}, g.strategy));
   }
+  function drawTrend(tr) {
+    if (!tr) { put(trendSlot); return; }
+    if (trendCard.parentNode !== trendSlot) put(trendSlot, trendCard);
+    const pills = [tr.no_pause_ko ? ui.pill(tr.no_pause_ko, "good", "손실 뒤 매매법 쉬기 · 코인 쉬기 · 하루 손실 한도를 모두 뺐어요 (10/21 두 분 결정)") : null,
+      tr.since != null ? ui.pill(`규칙 고정 ${fmt.kst(tr.since)} ~ ${fmt.kst(tr.freeze_until)}`, "thin", `시작부터 ${fmt.int(tr.freeze_days || 14)}일은 규칙을 바꾸지 않고 그 뒤 검토해요`) : null,
+      ui.pill("백테스트 기준 없음", "thin", "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토")];
+    const lines = (tr.rules || []).map(ruleParts);
+    const groups = roleGroups(tr);
+    put(trendBox,
+      h("div", {class: "lb-nums"}, ...pills),
+      lines.length ? h("div", {class: "lb-rules"}, ui.kv(lines.map((x) => [x.head || "규칙", h("ul", {class: "lb-limits"}, x.parts.map((p) => h("li", null, p)))])))
+        : ui.note(tr.rules_ko || "봇이 아직 규칙을 기록하지 않았어요"),
+      groups.length ? h("div", {class: "lb-lgrid"}, groups.map((g) => h("div", {class: "lb-light"},
+        h("b", null, `${g.id} · ${fmt.int(g.members.length)}개`), h("p", {class: "note"}, g.sub),
+        h("ul", {class: "lb-limits"}, g.members.map((m) => h("li", {title: m.htf_ko || ""}, h("b", null, fmt.stratKo(m.strategy)),
+          ` · ${m.tf_ko || fmt.tfKo(m.tf)}`, m.side_only ? ` · ${m.side_only === "short" ? "숏만" : "롱만"}` : "",
+          m.htf_ko ? h("span", {class: "muted"}, ` (${m.htf_ko})`) : null)))))) : null,
+      ui.note("진입 매매법은 신호만 내고, 들어갈지는 추세 판단 · 진입 전 검사 · 되돌림이 정해요. 더 자세한 것은 관제 탭의 '규칙'과 docs/trend-bot-ko.md"));
+  }
   function draw() {
     const d = st.d;
     if (!d) { put(rules, motion.shimmer(3)); return; }
+    drawTrend(d.trend);
     if (!d.combo || d.combo.state !== "ok") { put(rules, sourceState(d.combo, "합친 봇 설정")); list.set([]); }
     else {
       put(rules, ui.kv(rulesList(d.rules)), ui.note(d.combo.source === "db" ? `봇이 지금 쓰는 설정 (봇 DB의 시작 기록, ${fmt.kst(d.combo.since_ms)})` : `설정 파일 ${d.combo.path} (봇이 아직 시작 기록을 남기기 전)`));

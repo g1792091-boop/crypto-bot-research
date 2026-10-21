@@ -14,6 +14,12 @@
 // HONESTY: a replay is arithmetic on the recorded bars, never a trade (said on every card); funding is left out (said);
 // what could not be worked out says why; under 20 decided trades the card says it is mostly luck; the start of the
 // config is the server's (sure or not, and how it knows); a failed refresh keeps the last answer dimmed with its age.
+// 추세판단 봇 (the server's trend_bot, owners 10/21): every line says its own start ("추세판단 봇 시작 뒤"); a new card first,
+//   감독 청산 판정  every supervisor exit (추세 뒤집힘 · 시간 정리, before the first lock) held instead under the stop and the
+//                  ladder, the same replay as 빠른 손절 (which stays: the fast stop is still a rule; its note says the
+//                  supervisor is not in that replay);
+// 추격 막기 covers the members the server says (all of them in its config: no B group), each row with the member's role;
+// 동전 쌍둥이 has no 75 % line (that was the old rules' analysis: none for a new rule set).
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 import {acctKo, sourceState} from "./livebots-kit.js";
 
@@ -50,9 +56,12 @@ export function cfWords(cf) {
   return {kind: "none", tone: "", ko: `${what}${cf.why_ko ? ` · ${cf.why_ko}` : ""}`};
 }
 
+/** The bot's name for "… 시작 뒤" lines (the server's start name; the old one's "규칙봇 15"). */
+export const botName = (s) => (s && s.name) || "규칙봇 15";
+
 /** The early-exit verdict in one line (positive = the early exit saved: the real exit was better than holding). */
-export function revVerdict(t) {
-  if (!t || !t.n) return {ko: "규칙봇 15 시작 뒤 빠른 손절로 닫힌 거래가 아직 없어요", tone: ""};
+export function revVerdict(t, name = "규칙봇 15") {
+  if (!t || !t.n) return {ko: `${name} 시작 뒤 빠른 손절로 닫힌 거래가 아직 없어요`, tone: ""};
   if (!t.decided) return {ko: `빠른 손절 ${fmt.int(t.n)}번 · 붙잡았다면 어땠을지 아직 결정 난 게 없어요`, tone: ""};
   const v = t.delta_roe;
   if (t.verdict === "saved") return {ko: `빠른 손절이 지금까지 순ROE 합 ${pp(v)} 아꼈어요`, tone: "up"};
@@ -60,9 +69,19 @@ export function revVerdict(t) {
   return {ko: "빠른 손절이 지금까지 아낀 것도 손해 본 것도 없어요 (본전)", tone: ""};
 }
 
+/** The supervisor's verdict (the trend bot): positive = closing early saved (the real exit beat holding). */
+export function supVerdict(t, name = "추세판단 봇") {
+  if (!t || !t.n) return {ko: `${name} 시작 뒤 감독 청산으로 닫힌 거래가 아직 없어요`, tone: ""};
+  if (!t.decided) return {ko: `감독 청산 ${fmt.int(t.n)}번 · 붙잡았다면 어땠을지 아직 결정 난 게 없어요`, tone: ""};
+  const v = t.delta_roe;
+  if (t.verdict === "saved") return {ko: `감독 청산이 지금까지 순ROE 합 ${pp(v)} 아꼈어요`, tone: "up"};
+  if (t.verdict === "cost") return {ko: `감독 청산 때문에 지금까지 순ROE 합 ${pp(v)} 손해였어요`, tone: "down"};
+  return {ko: "감독 청산이 지금까지 아낀 것도 손해 본 것도 없어요 (본전)", tone: ""};
+}
+
 /** The chase-block verdict (a blocked loss saved, a blocked win cost). */
-export function chaseVerdict(t) {
-  if (!t || !t.n) return {ko: "규칙봇 15 시작 뒤 추격 막기에 걸린 신호가 아직 없어요", tone: ""};
+export function chaseVerdict(t, name = "규칙봇 15") {
+  if (!t || !t.n) return {ko: `${name} 시작 뒤 추격 막기에 걸린 신호가 아직 없어요`, tone: ""};
   if (!t.decided) return {ko: `막힌 신호 ${fmt.int(t.n)}개 · 들어갔다면 어땠을지 아직 결정 난 게 없어요`, tone: ""};
   const v = t.roe_sum;
   if (t.verdict === "saved") return {ko: `추격 막기가 손해를 순ROE 합 ${pp(-v)} 줄였어요`, tone: "up"};
@@ -93,27 +112,35 @@ export function judgeView(ctx) {
   twoCard.hidden = true;
   const revPg = ui.pager({size: 10, row: (r) => revRow(r), empty: () => (st.d ? ui.empty("빠른 손절로 닫힌 거래가 아직 없어요") : motion.shimmer(2))});
   const chasePg = ui.pager({size: 10, row: (r) => chaseRow(r), empty: () => (st.d ? ui.empty("추격 막기에 걸린 신호가 아직 없어요") : motion.shimmer(2))});
-  const body = h("div", {class: "lbj-body stack"}, head,
+  const supSlotIn = h("div", {class: "lbj-slot"});
+  const supPg = ui.pager({size: 10, row: (r) => revRow(r, true), empty: () => (st.d ? ui.empty("감독 청산으로 닫힌 거래가 아직 없어요") : motion.shimmer(2))});
+  const supCard = ui.card({title: "감독 청산 판정", sub: "추세가 뒤집혀서 · 시간이 다 돼서 일찍 닫은 거래를 붙잡고 있었다면", cls: "lbj-card lbj-sup"}, supSlotIn, supPg.el);
+  const supSlot = h("div", {class: "lb-slot stack"});      // the trend bot only (draw)
+  const chaseCard = ui.card({title: "추격 막기 판정", sub: "B 그룹이 막은 신호에 들어갔다면", cls: "lbj-card lbj-chase"}, chaseSlot, chasePg.el);
+  const twinCard = ui.card({title: "동전 쌍둥이 비교", sub: "같은 신호 · 방향만 동전 · 규칙봇 15 시작부터", cls: "lbj-card lbj-twin"}, twinSlot);
+  const body = h("div", {class: "lbj-body stack"}, head, supSlot,
     ui.card({title: "빠른 손절 판정", sub: "반대 신호로 일찍 닫은 거래를 붙잡고 있었다면", cls: "lbj-card lbj-rev"}, revSlot, revPg.el),
-    ui.card({title: "추격 막기 판정", sub: "B 그룹이 막은 신호에 들어갔다면", cls: "lbj-card lbj-chase"}, chaseSlot, chasePg.el),
-    ui.card({title: "동전 쌍둥이 비교", sub: "같은 신호 · 방향만 동전 · 규칙봇 15 시작부터", cls: "lbj-card lbj-twin"}, twinSlot),
+    chaseCard, twinCard,
     twoCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) 손익 · 다시 계산한 결과는 가상이에요"),
       ui.assumeLive("바이비트 · WOO X Pro: 따라간 거래의 크기로 셈")));
   const el = h("div", {class: "lbj stack"}, stateSlot, body);
 
   const money = (x) => (has(x) ? `${fmt.money(x, true)} USDT` : "—");
+  const cardPart = (card) => (card && card.firstChild ? Array.from(card.firstChild.childNodes).find((n) => String(n.className || "") === "sub") || null : null);
+  const say = (node, text) => { if (node && node.textContent !== text) node.textContent = text; };
   const num = (x, cls) => h("b", {class: ["num", fmt.tone(x, pp(x)), cls]}, pp(x));
   const chip = (n, unit, ko, cls) => h("span", {class: ["lbj-chip", cls]}, h("b", {class: "num"}, `${fmt.int(n)}${unit}`), ` ${ko}`);
 
-  function revRow(r) {
+  function revRow(r, sup = false) {
     const w = cfWords(r.cf);
-    return h("div", {class: ["lbj-row", "k-" + w.kind], role: "listitem"},
+    const how = sup ? (r.exit_reason === "TIME" ? "시간 정리" : r.exit_reason === "JUDGE" ? "추세 뒤집힘" : (r.exit_ko || "감독 청산")) : "빠른 손절";
+    return h("div", {class: ["lbj-row", "k-" + w.kind], role: "listitem", title: sup && r.why ? r.why : null},
       h("span", {class: "lbj-rt num muted"}, fmt.kst(r.exit_time)),
       h("span", {class: "lbj-rc"}, h("b", null, fmt.coin(r.symbol)), ui.sideTag(r.side),
         h("span", {class: "muted"}, ` ${fmt.stratKo(r.strategy_id)} · ${fmt.tfKo(r.timeframe)}`),
         r.group && r.group !== "old" ? h("span", {class: "lbj-g"}, r.group) : null),
-      h("span", {class: "lbj-rv"}, h("small", null, "실제 (빠른 손절)"), h("b", {class: ["num", fmt.tone(r.roe, fmt.pct(r.roe, 1))]}, fmt.pct(r.roe, 1))),
+      h("span", {class: "lbj-rv"}, h("small", null, `실제 (${how})`), h("b", {class: ["num", fmt.tone(r.roe, fmt.pct(r.roe, 1))]}, fmt.pct(r.roe, 1))),
       h("span", {class: ["lbj-rcf", w.tone]}, h("small", null, "붙잡았다면"), h("span", null, w.ko)),
       h("span", {class: "lbj-rv"}, h("small", null, has(r.delta_roe) ? (r.delta_roe >= 0 ? "아낌" : "손해") : "차이"),
         has(r.delta_roe) ? num(r.delta_roe) : h("b", {class: "num muted"}, "—")));
@@ -123,7 +150,7 @@ export function judgeView(ctx) {
     return h("div", {class: ["lbj-row", "k-" + w.kind], role: "listitem"},
       h("span", {class: "lbj-rt num muted"}, fmt.kst(r.t)),
       h("span", {class: "lbj-rc"}, h("b", null, fmt.coin(r.symbol)), ui.sideTag(r.side),
-        h("span", {class: "muted"}, ` ${fmt.stratKo(r.strategy)} · ${fmt.tfKo(r.tf)}`), h("span", {class: "lbj-g"}, "B")),
+        h("span", {class: "muted"}, ` ${fmt.stratKo(r.strategy)} · ${fmt.tfKo(r.tf)}`), r.group ? h("span", {class: "lbj-g"}, r.group) : null),
       h("span", {class: "lbj-rwhy muted"}, r.why || "추격 진입 막기"),
       h("span", {class: ["lbj-rcf", w.tone]}, h("small", null, "들어갔다면"), h("span", null, w.ko)),
       h("span", {class: "lbj-src", title: r.cf && r.cf.source === "missed" ? "1분 감시가 페이퍼 봇 엔진으로 계산한 가상 거래" : "이 화면이 1분봉으로 다시 계산"},
@@ -134,7 +161,7 @@ export function judgeView(ctx) {
     const a = d.rev || {};
     if (a.state !== "ok") { put(revSlot, h("p", {class: "lbj-rule"}, a.ko || ""), sourceState(a, "페이퍼 DB")); revPg.set([]); return; }
     const t = a.totals || {};
-    const v = revVerdict(t);
+    const v = revVerdict(t, botName(d.start));
     const live = LIVE.filter((id) => t.live && t.live[id] && t.live[id].n);
     put(revSlot, h("p", {class: "lbj-rule"}, a.ko),
       h("div", {class: ["lbj-hero", v.tone]}, h("b", {class: "lbj-big"}, v.ko),
@@ -145,14 +172,36 @@ export function judgeView(ctx) {
         chip(t.open, "번", "아직 모름", ""), t.unknown ? chip(t.unknown, "번", "계산 못 함", "thin") : null) : null,
       t.decided && t.decided < (d.small_n || 20) ? ui.note(`결정 난 거래 ${fmt.int(t.decided)}번이라 아직 우연이 커요 (${fmt.int(d.small_n || 20)}번 미만)`) : null,
       ui.note("붙잡았다면 = 같은 진입·같은 손절(−50%)·같은 계단 익절로 규칙봇 1분봉을 다시 계산한 가상 결과 · ", a.funding_ko || "",
-        " · 그동안 다른 진입을 못 했을 수 있는 건 셈에 넣지 않았어요"));
+        " · 그동안 다른 진입을 못 했을 수 있는 건 셈에 넣지 않았어요"),
+      a.hold_ko ? ui.note(a.hold_ko) : null);
     revPg.set(a.rows || [], true);
+  }
+  function drawSup(d) {
+    const a = d.sup;
+    if (!a) { put(supSlot); supPg.set([]); return; }
+    if (supCard.parentNode !== supSlot) put(supSlot, supCard);
+    if (a.state !== "ok") { put(supSlotIn, h("p", {class: "lbj-rule"}, a.ko || ""), sourceState(a, "페이퍼 DB")); supPg.set([]); return; }
+    const t = a.totals || {};
+    const v = supVerdict(t, botName(d.start));
+    const live = LIVE.filter((id) => t.live && t.live[id] && t.live[id].n);
+    const by = a.by_reason || {};
+    put(supSlotIn, h("p", {class: "lbj-rule"}, a.ko),
+      h("div", {class: ["lbj-hero", v.tone]}, h("b", {class: "lbj-big"}, v.ko),
+        t.decided ? h("span", {class: "lbj-money"}, `돈으로 (각 계좌 크기): 페이퍼 ${money(t.delta_pnl)}`,
+          ...live.map((id) => ` · ${acctKo(id)} ${money(t.live[id].delta_pnl)} (${fmt.int(t.live[id].n)}번)`)) : null),
+      t.n ? h("div", {class: "lbj-chips"}, chip(by.JUDGE || 0, "번", "추세 뒤집힘", "thin"), chip(by.TIME || 0, "번", "시간 정리", "thin"),
+        chip(t.lost, "번", "−50%에 닿았을 것 (일찍 닫아 아낌)", "up"), chip(t.won, "번", "이겼을 것 (일찍 닫아 놓침)", "down"),
+        chip(t.open, "번", "아직 모름", ""), t.unknown ? chip(t.unknown, "번", "계산 못 함", "thin") : null) : null,
+      t.decided && t.decided < (d.small_n || 20) ? ui.note(`결정 난 거래 ${fmt.int(t.decided)}번이라 아직 우연이 커요 (${fmt.int(d.small_n || 20)}번 미만)`) : null,
+      ui.note("붙잡았다면 = 감독 없이 같은 진입·같은 손절(−50%)·같은 계단 익절로 규칙봇 1분봉을 다시 계산한 가상 결과 · ", a.funding_ko || "",
+        " · 그동안 다른 진입을 못 했을 수 있는 건 셈에 넣지 않았어요"));
+    supPg.set(a.rows || [], true);
   }
   function drawChase(d) {
     const a = d.chase || {};
     if (a.state !== "ok") { put(chaseSlot, h("p", {class: "lbj-rule"}, a.ko || ""), sourceState(a, "페이퍼 DB 신호 기록")); chasePg.set([]); return; }
     const t = a.totals || {};
-    const v = chaseVerdict(t);
+    const v = chaseVerdict(t, botName(d.start));
     put(chaseSlot, h("p", {class: "lbj-rule"}, a.ko),
       h("div", {class: ["lbj-hero", v.tone]}, h("b", {class: "lbj-big"}, v.ko),
         t.pnl_n ? h("span", {class: "lbj-money"}, `막힌 신호에 들어갔다면 페이퍼 크기로 ${money(t.pnl)} (${fmt.int(t.pnl_n)}개)`) : null),
@@ -175,7 +224,9 @@ export function judgeView(ctx) {
     put(twinSlot, h("div", {class: "lbj-twin2"}, col("진짜 신호 (페이퍼)", tw.real, "real"), col("동전 쌍둥이", tw.flip, "flip")),
       words ? h("p", {class: ["lbj-gap", has(g) && Math.abs(g) >= 0.0005 ? (g > 0 ? "up" : "down") : ""]}, words) : null,
       tw.small ? h("p", {class: "lbj-luck"}, `거래 ${fmt.int(Math.min(tw.real.n, tw.flip.n))}개라 아직 우연이 커요 (${fmt.int(tw.small_n)}개 넘어야 조금 믿을 만)`) : null,
-      h("p", {class: "note"}, ui.pill("", "ref"), ` 참고 · 예전 분석에서 새 규칙의 동전 승률은 약 ${fmt.pct(tw.ref_flip_win, 0, false)}였어요 · 비교일 뿐 실력의 증거가 아니에요`));
+      has(tw.ref_flip_win)
+        ? h("p", {class: "note"}, ui.pill("", "ref"), ` 참고 · 예전 분석에서 새 규칙의 동전 승률은 약 ${fmt.pct(tw.ref_flip_win, 0, false)}였어요 · 비교일 뿐 실력의 증거가 아니에요`)
+        : h("p", {class: "note"}, ui.pill("", "ref"), " 견줄 동전 승률 기준이 없어요 (새 규칙이라 지난 분석이 없어요) · 비교일 뿐 실력의 증거가 아니에요"));
   }
   function drawTwo(d) {
     const c = d.compare;
@@ -203,7 +254,10 @@ export function judgeView(ctx) {
     put(head, h("b", null, "새 규칙이 실제로 도왔나?"), h("span", {class: "muted"}, ` · ${startWords(s)}`),
       d.paper && d.paper.state !== "ok" ? sourceState(d.paper, "페이퍼 DB") : null,
       s.combo && s.combo.state && s.combo.state !== "ok" ? sourceState(s.combo, "합친 봇 설정") : null);
-    drawRev(d); drawChase(d); drawTwin(d); drawTwo(d);
+    const trend = !!d.trend_bot;
+    say(cardPart(chaseCard), trend ? "추격 막기가 막은 신호에 들어갔다면" : "B 그룹이 막은 신호에 들어갔다면");
+    say(cardPart(twinCard), `같은 신호 · 방향만 동전 · ${botName(s)} 시작부터`);
+    drawSup(d); drawRev(d); drawChase(d); drawTwin(d); drawTwo(d);
   }
   async function load() {
     let d;

@@ -36,6 +36,13 @@ reference price (fill = reference x (1 + side x slippage), the config's ROE stop
 not in a replay (its rates are not stored). Results: won (the first lock was reached: +10 % or more), lost (the stop:
 -50 %), open (neither yet), or why it could not be told.
 
+추세판단 봇 (owners 10-21, docs/trend-bot-ko.md; livebots.trend_bot: its start record has ``trend``): the start is its own
+first start on this database (``trend_start``: exact), the groups are its roles (눌림 · 자리 · 돌파 · 횡보) and entry bars
+(30분 · 1시간 진입: ``trend_groups``), the chase block covers the members with it (all of them in its config), the
+supervisor's exits (JUDGE · TIME) get their own held-instead check (``sup_part``), and nothing of the old bot is shown as
+its reference: no coin-flip 75 %, no 6.2 entries a weekday (TREND_WEEKDAY_REF: none until measured), no 88 % money rule,
+the break-even worked out from its own config, the rule freeze 2 weeks from its own start. Another bot: all as before.
+
 Honest states (CONTRACT 1.6): a file or table not there = ``missing`` (수집 전), unreadable = ``error`` (못 읽음 + why),
 never a zero; small samples say so. Times are UTC ms, ratios are ratios (0.1 = 10 %), money is each account's USDT.
 """
@@ -110,6 +117,21 @@ FUNDING_KO = "펀딩비는 넣지 않았어요 (비율이 기록에 없어요 ·
 REV_KO = "빠른 손절: 첫 잠금(+10%) 전에 같은 매매법이 반대 신호를 내면 기다리지 않고 바로 닫는 규칙이에요"
 CHASE_KO = "추격 막기: B 그룹 4개만, 롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면 (숏은 아래쪽) 진입하지 않는 규칙이에요"
 GROUP_KO = {"A": "A 그룹", "B": "B 그룹", "old": "예전 매매법", "none": "짝 페이퍼 없음"}
+# 추세판단 봇 (owners 10-21, docs/trend-bot-ko.md): the same three checks in its own words. The chase block is on the members
+# with no_chase (deploy/combo.trend.json: all of them); the fast stop (REV) stays; the supervisor's exits are new.
+TREND_START_KO = "추세판단 봇이 이 기록 파일에서 처음 켜진 때"
+TREND_CHASE_KO = "추격 막기: {who}, 롱은 24시간 고점 쪽 10%·7일 범위 위 20% 안이면 (숏은 아래쪽) 진입하지 않는 규칙이에요"
+TREND_HOLD_KO = "감독 청산(추세 뒤집힘 · 시간 정리)은 붙잡았다면 계산에 넣지 않았어요: 손절과 계단 익절만으로 다시 계산했어요"
+SUP_KO = ("감독 청산: 첫 잠금(+10%) 전에 상위 봉 추세 판단이 반대로 바뀌면(추세 뒤집힘), 또는 진입 봉 {bars}개 안에 첫 잠금을 "
+          "못 가면(시간 정리) 닫는 규칙이에요")
+# a measured entries-per-weekday reference for the trend bot: none yet (a new rule set; WEEKDAY_ENTRIES above is the old
+# bot's replay). Set it only from a real measurement of this bot (e.g. its first two weeks), with its source in
+# TREND_WEEKDAY_REF_KO; None: the page shows no reference and the goal arithmetic waits for a whole weekday.
+TREND_WEEKDAY_REF: Optional[float] = None
+TREND_WEEKDAY_REF_KO: Optional[str] = None
+TREND_SCALE_KO = "새 봇의 돈 늘리기 기준은 아직 없어요 · 2주 검토에서 두 분이 정해요 (예전 봇의 88% 기준은 쓰지 않아요)"
+TREND_BE_KO = ("본전 승률은 이 봇 설정의 숫자로 계산했어요: 이길 때 첫 잠금 +{w:.0%}, 질 때 손절 −{l:.0%}, 증거금 {m:.0%} "
+               "(이길 때 더 가면 본전은 이보다 낮아져요)")
 GROUP_SUB_KO = {"A": "추격 막기 없음", "B": "추격 진입 막기", "old": "지금 설정에 없는 매매법 (시작 전 기록)",
                 "none": "페이퍼에 같은 거래가 없는 실거래"}
 
@@ -177,6 +199,9 @@ def run_members(paper_path: str, combo: dict) -> list:
         nc = bool(sp.get("no_chase"))
         out.append({"order": i, "label": labels[i - 1] if labels else _label_of(sp), "strategy": sp.get("strategy") or sp.get("pick"),
                     "tf": sp.get("tf"), "no_chase": nc, "group": "B" if nc else "A"})
+    if cfg.get("trend") is not None:                     # the trend bot: each member's role (눌림 · 자리 · 돌파 · 횡보)
+        for m in out:
+            m["role"] = L.TREND_ROLE.get(m["strategy"])
     return out
 
 
@@ -273,7 +298,8 @@ def context(p: dict, now: int, more: Optional[dict] = None, flip: bool = False) 
     configs, follows, paper, execs = L.sources(p, now)
     combo = L.read_combo(p["paper"], more["combo_config"])
     members = run_members(p["paper"], combo)
-    start = config_start(p["paper"], combo, members, now)
+    tb = L.trend_bot(p["paper"])
+    start = trend_start(tb, combo) if tb else config_start(p["paper"], combo, members, now)
     ok = paper.get("state") == "ok"
     meta = L.entered_meta(p["paper"], ACCOUNT) if ok else {}
     acc = (paper.get("accounts") or {}).get(ACCOUNT) if ok else None
@@ -282,7 +308,18 @@ def context(p: dict, now: int, more: Optional[dict] = None, flip: bool = False) 
     return {"p": p, "more": more, "now": now, "configs": configs, "paper": paper, "execs": execs, "combo": combo, "members": members,
             "start": start, "meta": meta, "acc": acc if acc and acc.get("known") else None,
             "flip": fl if fl and fl.get("known") else None, "flip_meta": L.entered_meta(p["paper"], FLIP) if flip and ok else {},
-            "cfg": combo.get("config") or {} if combo.get("state") == "ok" else {}, "bots": bots, "_bot": {}}
+            "cfg": combo.get("config") or {} if combo.get("state") == "ok" else {}, "bots": bots, "_bot": {}, "trend": tb}
+
+
+def trend_start(tb: dict, combo: dict) -> dict:
+    """The trend bot's start: its first start on this database (livebots.trend_bot ``since``: the bot's own trend_since),
+    exact, so every trade from it on is this bot's (config_start's shape)."""
+    run_ms = combo.get("since_ms") if combo.get("state") == "ok" and combo.get("source") == "db" else None
+    if tb.get("since") is None:
+        return {"ms": None, "how": "unknown", "sure": False, "run_ms": run_ms, "name": tb["name"], "trend": True,
+                "how_ko": "추세판단 봇이 언제 켜졌는지 기록에서 찾지 못했어요"}
+    return {"ms": tb["since"], "how": "trend", "sure": True, "run_ms": run_ms, "name": tb["name"], "trend": True,
+            "how_ko": TREND_START_KO}
 
 
 def bot_side(cx: dict, path: Optional[str]) -> dict:
@@ -327,8 +364,13 @@ def paper_state(cx: dict) -> dict:
 def start_out(cx: dict) -> dict:
     """The start as the page shows it, and the config in a few numbers (its name, settings, groups)."""
     ms = cx["members"]
-    return {**cx["start"], "n_members": len(ms), "n_a": sum(1 for m in ms if m["group"] == "A"),
-            "n_b": sum(1 for m in ms if m["group"] == "B"), "combo": _src(cx["combo"], "state", "reason_ko", "path", "source")}
+    out = {**cx["start"], "n_members": len(ms), "n_a": sum(1 for m in ms if m["group"] == "A"),
+           "n_b": sum(1 for m in ms if m["group"] == "B"), "combo": _src(cx["combo"], "state", "reason_ko", "path", "source")}
+    if cx.get("trend"):
+        tb = cx["trend"]
+        out.update(trend=True, freeze_until=tb["freeze_until"], freeze_days=tb["freeze_days"], no_ref_ko=L.TREND_NO_REF_KO,
+                   n_chase=sum(1 for m in ms if m.get("no_chase")))
+    return out
 
 
 # ================================================================ small statistics
@@ -495,18 +537,28 @@ def _run_of(cx: dict) -> dict:
     return {"taker_fee": c.get("taker_fee"), "config": c.get("config") or {}} if c.get("state") == "ok" else {}
 
 
-def rev_part(cx: dict) -> dict:
+def group_ko(t: dict, cx: dict) -> Optional[str]:
+    """The group a page shows next to a trade: the trend bot's role (눌림 · 자리 · 돌파 · 횡보), else A / B / old."""
+    if cx.get("trend"):
+        return L.TREND_ROLE.get(t.get("strategy_id") or t.get("strategy"))
+    return group_of(t, cx["meta"], cx["members"], cx["start"])
+
+
+def rev_part(cx: dict, reasons: tuple = ("REV",), ko: Optional[str] = None) -> dict:
     """빠른 손절 판정: every REV exit of the paper account since the start, held instead (module docstring), with what each
-    executor's matched trade gained or lost by it at its own size."""
+    executor's matched trade gained or lost by it at its own size. ``reasons`` ("JUDGE", "TIME": the trend bot's
+    supervisor, sup_part) the same for those exits. The trend bot: its supervisor is not in the replay (``hold_ko``)."""
     from . import livetape as T
     st = paper_state(cx)
-    base = {"ko": REV_KO, "funding_ko": FUNDING_KO, "rule_db": cx["more"]["rule_db"]}
+    base = {"ko": ko or REV_KO, "funding_ko": FUNDING_KO, "rule_db": cx["more"]["rule_db"]}
+    if cx.get("trend"):
+        base["hold_ko"] = TREND_HOLD_KO
     if st["state"] != "ok":
         return {**base, **st, "rows": [], "totals": None}
     if not (cx["cfg"].get("ladder")):
         return {**base, "state": "missing", "reason_ko": "봇 설정에 계단 익절 숫자가 없어 다시 계산하지 못해요", "rows": [], "totals": None}
     trades = since_start(cx["acc"].get("trades") or [], cx["start"], cx["meta"], cx["members"])
-    revs = [t for t in trades if t.get("exit_reason") == "REV"]
+    revs = [t for t in trades if t.get("exit_reason") in reasons]
     run = _run_of(cx)
     lives = []
     for x in cx["execs"]:
@@ -533,7 +585,8 @@ def rev_part(cx: dict) -> dict:
                                  "delta_pnl": delta * lt["margin"] if delta is not None and lt.get("margin") else None}
         rows.append({**{k: t.get(k) for k in ("id", "symbol", "side", "strategy_id", "timeframe", "entry_time", "exit_time", "leverage",
                                               "margin", "roe", "pnl", "entry_price", "exit_price", "stop_initial")},
-                     "member": trade_label(t, cx["meta"]), "group": group_of(t, cx["meta"], cx["members"], cx["start"]),
+                     "member": trade_label(t, cx["meta"]), "group": group_ko(t, cx), "exit_reason": t.get("exit_reason"),
+                     "exit_ko": L.EXIT_KO.get(t.get("exit_reason"), t.get("exit_reason")), "why": t.get("exit_why"),
                      "cf": cf, "delta_roe": delta, "delta_pnl": delta * t["margin"] if delta is not None and t.get("margin") else None,
                      "live": live})
     tot = {"n": len(rows), "won": sum(1 for r in rows if r["cf"]["state"] == "won"), "lost": sum(1 for r in rows if r["cf"]["state"] == "lost"),
@@ -615,8 +668,9 @@ def _virtual(row: dict, cx: dict, initial: float) -> dict:
 
 
 def chase_part(cx: dict) -> dict:
-    """추격 막기 판정: every chase-blocked B signal since the start and what it would have done (module docstring)."""
-    base = {"ko": CHASE_KO, "funding_ko": FUNDING_KO}
+    """추격 막기 판정: every chase-blocked B signal since the start and what it would have done (module docstring). The trend
+    bot: the members with the block (all of them in its config) in its words, each row with its member's role."""
+    base = {"ko": trend_chase_ko(cx) if cx.get("trend") else CHASE_KO, "funding_ko": FUNDING_KO}
     paper = cx["paper"]
     if paper.get("state") != "ok":
         return {**base, **_src(paper), "rows": [], "totals": None}
@@ -645,7 +699,7 @@ def chase_part(cx: dict) -> dict:
             cf = {"state": "unknown", "source": "missed", "why_ko": m.get("note") or m.get("error") or m.get("state_ko")}
         else:
             cf = {**_virtual(r, cx, initial), "source": "replay"}
-        rows.append({**r, "group": "B", "cf": cf})
+        rows.append({**r, "group": group_ko(r, cx) if cx.get("trend") else "B", "cf": cf})
     rows.reverse()                                       # newest first
     dec = [r for r in rows if r["cf"]["state"] in ("won", "lost") and r["cf"].get("roe") is not None]
     tot = {"n": len(rows), "won": sum(1 for r in rows if r["cf"]["state"] == "won"), "lost": sum(1 for r in rows if r["cf"]["state"] == "lost"),
@@ -659,6 +713,31 @@ def chase_part(cx: dict) -> dict:
     return {**base, "state": "ok", "rows": rows, "totals": tot, "small": tot["decided"] < SMALL_N,
             "missed": _src(missed, "state", "reason_ko", "reason", "path"),
             "scale": {x["id"]: (x["config"] or {}).get("qty_scale") for x in cx["execs"]}}
+
+
+def trend_chase_ko(cx: dict) -> str:
+    """The trend bot's chase rule in words, with whom it covers (the members with no_chase: all of them in its config)."""
+    ms = cx["members"]
+    n = sum(1 for m in ms if m.get("no_chase"))
+    if not ms:
+        return "추격 막기: 봇 설정을 못 읽어 어느 매매법에 켜져 있는지 몰라요"
+    if not n:
+        return f"추격 막기: 지금 설정의 매매법 {len(ms)}개 중 켠 것이 없어요"
+    return TREND_CHASE_KO.format(who=f"매매법 {len(ms)}개 모두" if n == len(ms) else f"매매법 {len(ms)}개 중 {n}개")
+
+
+def sup_part(cx: dict) -> Optional[dict]:
+    """감독 청산 판정 (the trend bot only): every supervisor exit (JUDGE: the higher bar's trend turned; TIME: no first lock
+    within its entry bars) since its start, held instead under the stop and the ladder (rev_part's replay), with what each
+    executor's matched trade gained or lost by it. None for another bot."""
+    if not cx.get("trend"):
+        return None
+    bars = _i((cx["trend"].get("numbers") or {}).get("time_bars")) or 4
+    out = rev_part(cx, ("JUDGE", "TIME"), SUP_KO.format(bars=bars))
+    out.pop("hold_ko", None)                             # the replay holds it under the stop and the ladder: said in its own note
+    if out.get("rows") is not None:
+        out["by_reason"] = {k: sum(1 for r in out["rows"] if r.get("exit_reason") == k) for k in ("JUDGE", "TIME")}
+    return out
 
 
 def _equity_at(trades: list, ms: Optional[int], initial: Optional[float]) -> Optional[float]:
@@ -691,7 +770,10 @@ def twin_part(cx: dict) -> dict:
     gap = (real["win_rate"] - flip["win_rate"]) if real["win_rate"] is not None and flip["win_rate"] is not None else None
     n = min(real["n"], flip["n"])
     return {"state": "ok", "real": real, "flip": flip, "gap": gap, "roe_gap": real["roe_sum"] - flip["roe_sum"],
-            "small": n < FLIP_SMALL_N, "small_n": FLIP_SMALL_N, "ref_flip_win": COIN_FLIP_WIN}
+            "small": n < FLIP_SMALL_N, "small_n": FLIP_SMALL_N,
+            # the 75 % is the old analysis of the old rules: never shown for the trend bot (no reference of its own)
+            "ref_flip_win": None if cx.get("trend") else COIN_FLIP_WIN,
+            **({"ref_ko": L.TREND_NO_REF_KO} if cx.get("trend") else {})}
 
 
 def judge(p: dict, now: int, more: Optional[dict] = None) -> dict:
@@ -699,7 +781,8 @@ def judge(p: dict, now: int, more: Optional[dict] = None) -> dict:
     cx = context(p, now, more, flip=True)
     return {"now_ms": now, "start": start_out(cx), "paper": paper_state(cx), "rev": rev_part(cx), "chase": chase_part(cx),
             "twin": twin_part(cx), "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state")} for x in cx["execs"]],
-            "small_n": SMALL_N, "papers": L.papers_out(cx["bots"]), "compare": L.compare_papers(cx["bots"])}
+            "small_n": SMALL_N, "papers": L.papers_out(cx["bots"]), "compare": L.compare_papers(cx["bots"]),
+            "sup": sup_part(cx), "trend_bot": L.trend_out(cx.get("trend"))}
 
 
 # ================================================================ 목표
@@ -789,14 +872,23 @@ def per_weekday_of(entries: list, since: Optional[int], now: int) -> Optional[fl
     return sum(1 for t in entries if t is not None and not L.kst_weekend(t)) / days if days >= WEEKDAY_MIN else None
 
 
-def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Optional[float]) -> dict:
+def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Optional[float],
+             ref_wd: Optional[float] = WEEKDAY_ENTRIES) -> dict:
     """목표에 필요한 승률 (owners 10/19, docs/live15-plan-ko.md): what win rate the rest of the month needs for the goal at
     this account's own numbers so far (average win and loss; fallbacks the first lock and the config's stop), next to the
-    win rate so far and its 90 % Wilson range; and the whole month's from its start (x6). Arithmetic, never a forecast."""
+    win rate so far and its 90 % Wilson range; and the whole month's from its start (x6). Arithmetic, never a forecast.
+    ``ref_wd``: the entries per weekday used before a whole weekday has gone by (the trend bot: TREND_WEEKDAY_REF, none
+    yet: then nothing is worked out until its own count exists)."""
     m = margin_share(cfg)
     w, w_src = (rec["avg_win"], "record") if rec.get("avg_win") is not None and rec["avg_win"] > 0 else (first_lock(cfg), "lock")
     l, l_src = (-rec["avg_loss"], "record") if rec.get("avg_loss") is not None and rec["avg_loss"] < 0 else (stop_roe(cfg), "stop")
-    pw, pw_src = (per_wd, "record") if per_wd is not None else (WEEKDAY_ENTRIES, "ref")
+    if per_wd is None and ref_wd is None:
+        return {"m": m, "w": w, "w_src": w_src, "l": l, "l_src": l_src, "per_weekday": None, "per_weekday_src": None,
+                "n_left": None, "n_month": None, "needed": needed, "now": rec.get("win_rate"),
+                "wilson90": wilson(rec.get("wins") or 0, rec.get("n") or 0), "month_p": None, "note_ko": GOAL_MATH_KO,
+                "src_ko": "평일 하루 진입 횟수가 아직 없어요 (새 봇이라 참고값도 없어요)", "month_ko": None, "state": "unknown", "p": None,
+                "ko": "평일 하루가 다 지나면 계산해요 (진입 횟수를 이 봇 기록으로 세야 해요)"}
+    pw, pw_src = (per_wd, "record") if per_wd is not None else (ref_wd, "ref")
     n_left = pw * mo["weekdays_left"]
     n_month = pw * (mo["weekdays_gone"] + mo["weekdays_left"])
     target = 1 + MONTHLY_TARGET
@@ -808,7 +900,7 @@ def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Op
            "note_ko": GOAL_MATH_KO,
            "src_ko": " · ".join([f"평균 이익 {'+' if w >= 0 else ''}{w * 100:.1f}%" + ("" if w_src == "record" else " (첫 잠금 기준)"),
                                  f"평균 손실 −{l * 100:.1f}%" + ("" if l_src == "record" else " (손절 기준)") if l is not None else "평균 손실 모름",
-                                 f"평일 하루 {pw:.1f}번" + ("" if pw_src == "record" else f" (참고값 {WEEKDAY_ENTRIES}: 평일 하루가 다 지나기 전)"),
+                                 f"평일 하루 {pw:.1f}번" + ("" if pw_src == "record" else f" (참고값 {ref_wd:g}: 평일 하루가 다 지나기 전)"),
                                  f"증거금 {m:.0%}" if m else "증거금 모름"]),
            "month_ko": f"한 달 전체로 보면 약 {p_month:.0%} 필요" if p_month is not None and 0 <= p_month <= 1 else
            "한 달 전체로 보면 승률 100%로도 모자람" if p_month is not None and p_month > 1 else None}
@@ -854,6 +946,13 @@ def scale_check(cx: dict, x: dict) -> dict:
          "n": gaps.get("entry_n") if gaps.get("state") == "ok" else 0,
          "ko": (f"진입 차이 평균 순ROE {cost * 100:+.1f}%p (잰 거래 {gaps.get('entry_n')}번)" if cost is not None else "진입 차이를 잰 거래가 아직 없어요"),
          "what_ko": "실거래 진입이 페이퍼보다 평균 순ROE 1%p 이하로 불리"}]
+    if cx.get("trend"):                                  # a new bot: the facts, no threshold of the old bot's (TREND_SCALE_KO)
+        facts = [{**{k: c[k] for k in ("id", "value", "ko")}, **({"n": c["n"]} if "n" in c else {}), "ok": None,
+                  "what_ko": {"trades": "추세판단 봇 시작 뒤 닫힌 실거래", "paper_win": "그 거래들이 따라간 페이퍼 승률",
+                              "gap": "실거래 진입이 페이퍼보다 얼마나 불리했나"}[c["id"]]} for c in checks]
+        facts[0]["ko"] = f"거래 {len(live)}번"
+        return {"ok": False, "none": True, "checks": facts, "ko": TREND_SCALE_KO,
+                "note_ko": "보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 기준은 2주 검토 때 두 분이 정해요"}
     ok = all(c["ok"] for c in checks)
     budget = _f((x["config"] or {}).get("budget_usd"))
     a, b = (f"${budget:,.0f}", f"${budget * 2:,.0f}") if budget else ("$100", "$200")
@@ -862,8 +961,20 @@ def scale_check(cx: dict, x: dict) -> dict:
             "note_ko": "보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 증거금 비중이나 배수는 올리지 않아요"}
 
 
-def frozen(now: int) -> dict:
-    """규칙 고정 기간 (RULES_FROZEN_UNTIL, Korea time): {until, days_left, on, ko}."""
+def frozen(now: int, tb: Optional[dict] = None) -> dict:
+    """규칙 고정 기간 (RULES_FROZEN_UNTIL, Korea time): {until, days_left, on, ko}. The trend bot (``tb``): 2 weeks from its own
+    start (livebots.trend_bot freeze_until, owners 10-21), then the review."""
+    if tb is not None and tb.get("freeze_until"):
+        fu = int(tb["freeze_until"])
+        last = _dt.date(1970, 1, 1) + _dt.timedelta(days=L.kst_day(fu - 1))       # the freeze's last Korea-time day
+        today = _dt.date(1970, 1, 1) + _dt.timedelta(days=L.kst_day(now))
+        left = (last - today).days
+        md = f"{last.month}/{last.day}"
+        ko = (f"규칙 고정: {md}까지 ({left}일 남음)" if left > 0 else f"규칙 고정: 오늘({md})까지" if left == 0
+              else f"규칙 고정 기간 끝남 ({md}까지였어요) · 검토할 때예요")
+        return {"until": last.isoformat(), "until_ms": fu, "days_left": left, "on": now < fu, "ko": ko,
+                "why_ko": f"추세판단 봇 시작부터 {tb.get('freeze_days') or L.TREND_FREEZE_DAYS}일은 규칙을 바꾸지 않고 기록을 모은 다음 "
+                          "검토해요: 바꾸면 무엇이 통했는지 알 수 없어요"}
     end = _dt.date.fromisoformat(RULES_FROZEN_UNTIL)
     today = _dt.date(1970, 1, 1) + _dt.timedelta(days=L.kst_day(now))
     left = (end - today).days
@@ -901,7 +1012,28 @@ def _paper_goal(cx: dict, b: Optional[dict], mo: dict, target: float, win_step: 
             "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in month_trades),
             "closed_n": len(month_trades), "pace": pace,
             "so_far_per_day": (mult ** (1 / mo["days_gone"]) - 1) if mult and mo["days_gone"] >= 0.5 else None,
-            "need": win_need(record(mine), pace.get("need"), mo, side["cfg"] or cx["cfg"], pwd)}
+            "need": win_need(record(mine), pace.get("need"), mo, side["cfg"] or cx["cfg"], pwd, weekday_ref(cx) if pid == "paper" else WEEKDAY_ENTRIES)}
+
+
+def weekday_ref(cx: dict) -> Optional[float]:
+    """The entries-per-weekday reference of the bot running: the old bot's replay (WEEKDAY_ENTRIES), or for the trend bot
+    TREND_WEEKDAY_REF (none until it is measured)."""
+    return TREND_WEEKDAY_REF if cx.get("trend") else WEEKDAY_ENTRIES
+
+
+def break_even_of(cx: dict) -> tuple:
+    """(compounded, [plain sum], words) break-even win rate: the owners' earlier analysis of the old rules (BREAK_EVEN at
+    30 % margin), or for the trend bot the arithmetic of its own config (first lock w, ROE stop l, margin m: p ln(1+mw) +
+    (1-p) ln(1-ml) = 0, and l / (w + l) as a plain sum); None when the config lacks a number."""
+    if not cx.get("trend"):
+        return BREAK_EVEN, list(BREAK_EVEN_PLAIN), None
+    cfg = cx["cfg"]
+    m, w, l = margin_share(cfg), first_lock(cfg), stop_roe(cfg)
+    if not m or not w or not l or m * l >= 1:
+        return None, [], "본전 승률을 셀 설정 숫자(증거금·첫 잠금·손절)가 없어요"
+    be = need_win(1.0, 1, m, w, l)
+    plain = l / (w + l)
+    return be, [plain, plain], TREND_BE_KO.format(w=w, l=l, m=m)
 
 
 def goal(p: dict, now: int, more: Optional[dict] = None) -> dict:
@@ -937,16 +1069,20 @@ def goal(p: dict, now: int, more: Optional[dict] = None) -> dict:
         mine = [t for t in r.get("trades") or [] if since is None or (t.get("entry_ts") or 0) >= since]
         entries = [t.get("entry_ts") for t in mine] + ([r["position"]["entry_time"]] if r.get("position") else [])
         pwd = per_weekday_of(entries, since if since is not None else r.get("since_ms"), now)
+        own = L.LP.same(x.get("paper_path") or cx["p"]["paper"], cx["p"]["paper"])   # it follows the main paper bot
         accts.append({"id": x["id"], "kind": "live", "state": "ok", "start_equity": eq0, "start_ms": t0, "late_start": late,
                       "now_equity": now_eq, "now_ms": eqs["rows"][-1][0], "change": now_eq - eq0 if eq0 is not None else None,
                       "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in trades), "closed_n": len(trades),
                       "pace": pace, "so_far_per_day": (mult ** (1 / days_gone) - 1) if mult and days_gone >= 0.5 else None,
-                      "need": win_need(record(mine), pace.get("need"), mo, own_cfg, pwd), "scale": scale,
-                      **({"follows_ko": x.get("follows_ko")} if x.get("follows_ko") else {})})
+                      "need": win_need(record(mine), pace.get("need"), mo, own_cfg, pwd, weekday_ref(cx) if own else WEEKDAY_ENTRIES),
+                      "scale": scale, **({"follows_ko": x.get("follows_ko")} if x.get("follows_ko") else {})})
+    be, be_plain, be_ko = break_even_of(cx)
     return {"now_ms": now, "start": start_out(cx), "target": MONTHLY_TARGET, "target_mult": target, "month": mo, "accts": accts,
             "record": goal_record(cx, mo), "margin": ms, "win_step": win_step, "loss_step": ms * stop_roe(cfg) if ms and stop_roe(cfg) else None,
-            "break_even": BREAK_EVEN, "break_even_plain": list(BREAK_EVEN_PLAIN), "weekday_ref": WEEKDAY_ENTRIES, "small_n": SMALL_N,
-            "frozen": frozen(now), "need_note_ko": GOAL_MATH_KO, "papers": L.papers_out(cx["bots"]), "h2h": head_to_head(cx)}
+            "break_even": be, "break_even_plain": be_plain, "break_even_ko": be_ko, "weekday_ref": weekday_ref(cx),
+            "weekday_ref_ko": TREND_WEEKDAY_REF_KO if cx.get("trend") else None, "small_n": SMALL_N,
+            "frozen": frozen(now, cx.get("trend")), "need_note_ko": GOAL_MATH_KO, "papers": L.papers_out(cx["bots"]), "h2h": head_to_head(cx),
+            "trend_bot": L.trend_out(cx.get("trend"))}
 
 
 def _h2h_live(x: dict, since: Optional[int]) -> dict:
@@ -1021,8 +1157,8 @@ def goal_record(cx: dict, mo: dict) -> dict:
         n_left = per_wd * mo["weekdays_left"]
         imply = {"per_trade": math.exp(g) - 1, "trades_left": n_left, "rest_mult": math.exp(g * n_left),
                  "month_mult": math.exp(g * per_wd * 21.7), "small": rec["n"] < SMALL_N}
-    return {"state": "ok", **rec, "wilson90": wilson(rec["wins"], rec["n"]), "break_even": BREAK_EVEN, "break_even_record": be_rec,
-            "entries": len(entries), "weekday_entries": len(wd), "weekdays": wdays, "per_weekday": per_wd, "weekday_ref": WEEKDAY_ENTRIES,
+    return {"state": "ok", **rec, "wilson90": wilson(rec["wins"], rec["n"]), "break_even": break_even_of(cx)[0], "break_even_record": be_rec,
+            "entries": len(entries), "weekday_entries": len(wd), "weekdays": wdays, "per_weekday": per_wd, "weekday_ref": weekday_ref(cx),
             "since_ms": since, "implied": imply}
 
 
@@ -1359,6 +1495,8 @@ def groups(p: dict, now: int, more: Optional[dict] = None) -> dict:
     """GET /api/v4/livebots/groups: per group A / B (since the start) and 예전 매매법 (settings no longer in the config, any
     time), for the paper account and each executor (a live trade takes its paper partner's group: livebots.match)."""
     cx = context(p, now, more)
+    if cx.get("trend"):
+        return trend_groups(cx, now)
     members = cx["members"]
     defs = [{"id": g, "ko": GROUP_KO[g], "sub_ko": GROUP_SUB_KO[g], "n_members": sum(1 for m in members if m["group"] == g) if g in ("A", "B") else None,
              "members": [{"order": m["order"], "strategy": m["strategy"], "tf": m["tf"]} for m in members if m["group"] == g] if g in ("A", "B") else []}
@@ -1413,6 +1551,70 @@ def groups(p: dict, now: int, more: Optional[dict] = None) -> dict:
             "execs": [{"id": x["id"], "name_ko": x["name_ko"]} for x in cx["execs"]], "small_n": SMALL_N}
 
 
+TREND_GROUP_NOTE_KO = ("추세판단 봇 시작부터의 거래만 셌어요 · 같은 거래가 역할 한 줄, 진입 봉 한 줄에 함께 들어가요 · "
+                       "실거래는 짝 페이퍼 거래의 매매법을 따라요 · 20번 미만은 대부분 운이에요")
+
+
+def trend_groups(cx: dict, now: int) -> dict:
+    """그룹별 성적 for the trend bot: by role (눌림 · 자리 · 돌파 · 횡보, livebots.TREND_ROLE) and by entry bar (30분 진입 = the
+    closed 1h bar's trend, 1시간 진입 = the 4h bar's), for the paper account and each executor, from the bot's start. A live
+    trade takes its paper partner's strategy and timeframe; one without a partner is 짝 페이퍼 없음, one that followed
+    another paper bot 다른 페이퍼 봇 (both shown only when they have trades)."""
+    tb, members, since = cx["trend"], cx["members"], cx["start"].get("ms")
+    tfs = sorted({m["tf"] for m in members if m.get("tf")}, key=lambda t: L.TF_ORDER.get(t, 99))
+    defs = [{"id": r, "cut": "role", "ko": r, "sub_ko": L.TREND_ROLE_SUB_KO[r],
+             "n_members": sum(1 for m in members if m.get("role") == r),
+             "members": [{"order": m["order"], "strategy": m["strategy"], "tf": m["tf"]} for m in members if m.get("role") == r]}
+            for r in L.TREND_ROLES]
+    defs += [{"id": tf, "cut": "tf", "ko": L.TREND_TF_KO.get(tf, L.TF_KO.get(tf, tf)), "sub_ko": L.TREND_TF_SUB_KO.get(tf, ""),
+              "n_members": sum(1 for m in members if m.get("tf") == tf),
+              "members": [{"order": m["order"], "strategy": m["strategy"], "tf": m["tf"]} for m in members if m.get("tf") == tf]}
+             for tf in tfs]
+    defs += [{"id": "none", "cut": "other", "ko": "짝 페이퍼 없음", "sub_ko": GROUP_SUB_KO["none"], "n_members": None, "members": []},
+             {"id": "other", "cut": "other", "ko": "다른 페이퍼 봇", "sub_ko": "추세판단 봇이 아닌 페이퍼를 따라간 실거래", "n_members": None,
+              "members": []}]
+    order = [d["id"] for d in defs if d["cut"] in ("role", "tf")]
+
+    def pick(trades: list, strat_tf) -> dict:
+        by: dict = {d["id"]: [] for d in defs}
+        for t in trades:
+            st = strat_tf(t)
+            if st in ("none", "other"):
+                by[st].append(t)
+                continue
+            role = L.TREND_ROLE.get(st[0])
+            if role in by:
+                by[role].append(t)
+            if st[1] in by:
+                by[st[1]].append(t)
+        return {g: {**record(v), "first_ms": min((x.get("entry_time") or x.get("entry_ts") or 0 for x in v), default=None)}
+                for g, v in by.items()}
+
+    out = {}
+    st = paper_state(cx)
+    ptrades = L.trend_since((cx["acc"] or {}).get("trades") or [], since)
+    out["paper"] = {"state": "ok", "groups": pick(ptrades, lambda t: (t.get("strategy_id"), t.get("timeframe")))} if st["state"] == "ok" else st
+    main = cx["p"]["paper"]
+    for x in cx["execs"]:
+        r = x["record"]
+        if r.get("state") != "ok":
+            out[x["id"]] = _src(r)
+            continue
+        pairs = L.pairs_of(x)
+
+        def of(t, pairs=pairs):
+            pt = pairs.get(str(t["key"]))
+            if pt is None:
+                return "none"
+            if not L.LP.same(pt["paper_path"], main):
+                return "other"
+            return pt.get("strategy_id"), pt.get("timeframe")
+        out[x["id"]] = {"state": "ok", "groups": pick(L.trend_since(r.get("trades") or [], since, "entry_ts"), of)}
+    return {"now_ms": now, "kind": "trend", "start": start_out(cx), "defs": defs, "order": order, "accts": out,
+            "title_sub_ko": "역할별 (눌림 · 자리 · 돌파 · 횡보) · 진입 봉별 (30분 · 1시간)", "note_ko": TREND_GROUP_NOTE_KO,
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"]} for x in cx["execs"]], "small_n": SMALL_N, "trend_bot": L.trend_out(tb)}
+
+
 # ================================================================ routes
 def register(app, ctx) -> dict:
     from ..app import json_finite
@@ -1425,7 +1627,7 @@ def register(app, ctx) -> dict:
 
     @app.get("/api/v4/livebots/judge")
     def get_livebots_judge():
-        """실거래 › 규칙 점검: 빠른 손절 · 추격 막기 · 동전 쌍둥이, since the 규칙봇 15 start (5 s cache)."""
+        """실거래 › 규칙 점검: 빠른 손절 · 추격 막기 · 동전 쌍둥이 (and the trend bot's 감독 청산), since the running bot's start (5 s cache)."""
         p = L.paths()
         return L._cached(key("judge", p), lambda: json_finite(judge(p, now_ms())))
 
@@ -1449,7 +1651,7 @@ def register(app, ctx) -> dict:
 
     @app.get("/api/v4/livebots/groups")
     def get_livebots_groups():
-        """실거래 › 성적 · 순위: A / B / 예전 매매법 per account since the 규칙봇 15 start (5 s cache)."""
+        """실거래 › 성적 · 순위: A / B / 예전 매매법 (the trend bot: roles and entry bars) per account since the start (5 s cache)."""
         p = L.paths()
         return L._cached(key("groups", p), lambda: json_finite(groups(p, now_ms())))
 

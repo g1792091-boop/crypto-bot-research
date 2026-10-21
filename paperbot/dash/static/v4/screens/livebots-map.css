@@ -17,6 +17,7 @@
 .lbm-hero .card-h h2 { font-size: var(--t-lg); }
 :root:not([data-skin="classic"]) .lbm-hero .card-h h2 { text-shadow: 0 0 14px var(--head-glow); }
 .lbm-src:empty { display: none; }
+.lbm-noband { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
 
 .lbm-tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); min-width: 0; }
 .lbm-tile { position: relative; display: grid; align-content: start; gap: 6px; padding: 10px 12px 10px 15px; border-radius: var(--r-md);
@@ -89,9 +90,11 @@
 :root[data-skin="classic"] .lbm-svg .acc { filter: none; }
 :root[data-skin="classic"] .lbm-hg0, :root[data-skin="classic"] .lbm-hg1 { stop-opacity: .22; }
 
-.lbm-read { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-height: 36px; padding: 7px 10px; border-radius: var(--r-sm);
-  background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); font-size: var(--t-xs); min-width: 0; }
-.lbm-read:empty { display: none; }
+/* scoped to the hero: 못 탄 신호 has a .lbm-read of its own */
+.lbm-hero .lbm-read { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-height: 36px; margin: 0; padding: 7px 10px;
+  border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-2); font-size: var(--t-xs);
+  line-height: 1.4; min-width: 0; }
+.lbm-hero .lbm-read:empty { display: none; }
 .lbm-rn { color: var(--ink); }
 .lbm-rv { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .lbm-rv b { color: var(--ink); }
@@ -128,11 +131,12 @@
   .lbm-cut-side .lbm-wide { grid-template-columns: minmax(0, .9fr) minmax(0, 1.4fr); }
 }
 .lbm-rows { display: grid; min-width: 0; }
-.lbm-rh, .lbm-row { display: grid; grid-template-columns: minmax(64px, .9fr) minmax(64px, .7fr) minmax(120px, 1.7fr) minmax(76px, auto); align-items: center;
-  gap: 4px 12px; }
+/* scoped to .lbm-rows: 못 탄 신호 (livebots-missed.css, loaded after this file) has a .lbm-row of its own (7 named areas) */
+.lbm-rows > .lbm-rh, .lbm-rows > .lbm-row { display: grid; grid-template-columns: minmax(64px, .9fr) minmax(64px, .7fr) minmax(120px, 1.7fr) minmax(76px, auto);
+  grid-template-areas: none; align-items: center; gap: 4px 12px; }
 .lbm-rh { padding: 0 8px 6px; color: var(--muted); font-size: var(--t-2xs); font-weight: 700; }
 .lbm-rh span:last-child { text-align: right; }
-.lbm-row { position: relative; min-height: 46px; padding: 7px 8px; border-top: 1px solid var(--line); font-size: var(--t-sm); --lbm-t: var(--muted); }
+.lbm-rows > .lbm-row { position: relative; min-height: 46px; padding: 7px 8px; border-top: 1px solid var(--line); font-size: var(--t-sm); --lbm-t: var(--muted); }
 .lbm-row:last-child { border-bottom: 1px solid var(--line); }
 .lbm-rl { min-width: 0; color: var(--ink); overflow-wrap: anywhere; }
 .lbm-bt, .lbm-nv { display: grid; gap: 1px; line-height: 1.25; min-width: 0; }
@@ -156,7 +160,8 @@
 :root:not([data-skin="classic"]) .lbm-row.t-hi .lbm-meter .fill, :root:not([data-skin="classic"]) .lbm-row.t-ok .lbm-meter .fill { box-shadow: 0 0 8px var(--up-glow); }
 :root:not([data-skin="classic"]) .lbm-row.t-bad .lbm-meter .fill { box-shadow: 0 0 8px var(--down-glow); }
 @media (max-width: 559px) {
-  .lbm-rh, .lbm-row { grid-template-columns: minmax(0, 1fr) calc(58px * var(--ts)) minmax(0, 1.3fr); gap: 4px 10px; }
+  .lbm-rows > .lbm-rh, .lbm-rows > .lbm-row { grid-template-columns: minmax(0, 1fr) calc(58px * var(--ts)) minmax(0, 1.3fr); gap: 4px 10px; }
+  .lbm-cut-trend .lbm-rows > .lbm-rh, .lbm-cut-trend .lbm-rows > .lbm-row { grid-template-columns: minmax(0, 1fr) calc(70px * var(--ts)) minmax(0, 1.3fr); }
   .lbm-rh span:last-child { display: none; }
   .lbm-row .lbm-rl { grid-column: 1; grid-row: 1; }
   .lbm-row .lbm-st { grid-column: 1; grid-row: 2; justify-self: start; }

@@ -44,14 +44,13 @@ MIN = 60_000
 HOUR = 3_600_000
 DAY = 86_400_000
 KST_MS = 9 * HOUR
-FREEZE_DAYS = 14                     # owners 10-21 (#13 추천대로): the rules stay 2 weeks from the start, then the review
+FREEZE_DAYS = L.TREND_FREEZE_DAYS          # owners 10-21 (#13 추천대로): the rules stay 2 weeks from the start, then the review
 STALE_MS = 5 * MIN                   # the paper bot steps every minute
 TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": HOUR, "4h": 4 * HOUR}
 HTF_OF = {"30m": "1h", "1h": "4h"}
 TRADES_KEEP = 30
-# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보), in their words
-ROLE = {"N08_ICHI_WR": "눌림", "F9_FVG": "눌림", "N05_PSAR_POC": "자리", "F9_IFVG": "자리", "F3_BOS": "돌파", "F15_ORB": "돌파",
-        "N06_MACD_ORB": "돌파", "S3_CMO_SANDWICH": "횡보", "N20_EMA9_CHOP": "횡보"}
+# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보), in their words: one table for every live page
+ROLE = L.TREND_ROLE
 # what stopped a signal, grouped for the funnel (livebots.why_cat ids -> the funnel's words), in this order
 BLOCK = (("trend", "추세 판단 (보류·반대·힘 약함·끝물)"), ("spot", "진입 자리 검사 (EMA20·RSI·돌파형 초입)"),
          ("chase", "추격 막기"), ("pause", "쉬는 시간 (주말·발표·나스닥)"), ("member_pause", "매매법 쉬는 중"),
