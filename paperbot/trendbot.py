@@ -24,7 +24,8 @@ the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coi
    entry bars after the entry without the first lock -> closed at that minute's open (the owners' config has none
    since 10-21 night: "시간청산 빼줘"); JUDGE: a higher bar closed after the entry is
    judged the other way (3 of 4, ``judge_exit``) -> closed. Exit reasons "TIME" / "JUDGE" (the executors follow them
-   like REV: only while their own position has no lock of its own, paperbot/executor.py).
+   like REV: only while their own position has no lock of its own, paperbot/executor.py). SWITCH: a position the
+   bot before this one opened on the database (entered before ``trend_since``) is closed at once before its first lock.
 6. The judgments of every coin (1h and 4h), the waits and the pauses are saved each minute as state ``trend`` (the
    live site shows them).
 
@@ -52,7 +53,8 @@ KST_MS = 9 * HOUR
 STATE_TREND = "trend"
 ENTRY_TFS = ("30m", "1h")
 KO_SIDE = {1: "롱", -1: "숏"}
-SUP_KO = {"JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)"}
+SUP_KO = {"JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)", "SWITCH": "전환 전 포지션 정리"}
+SWITCH_WHY = "새 봇 시작 전에 예전 규칙으로 열린 포지션이라 정리"
 SNAP_EVERY_MS = 5 * MIN
 TRADES_READ = 400
 RESEARCH_KEYS = ("pick", "numbers", "stop", "entry", "invert", "filter", "disp", "off", "cell")
@@ -368,6 +370,11 @@ class TrendRunner(C.ComboRunner):
             p = e.position
             if (p is None or p.lock_roe is not None or p.symbol not in bars or int(ts) <= int(p.entry_time)
                     or not hasattr(e, "supervise")):
+                continue
+            if int(p.entry_time) < int(self.since):
+                # opened on this database by the bot before this one (owners 10-21 night: "그 전 실거래봇 매매법으로
+                # 들어간거 ... 중지는 못시켜?"): closed at once, before the first lock (a locked one keeps its ladder)
+                e.supervise("SWITCH", SWITCH_WHY)
                 continue
             tf = p.signal.timeframe
             tfm = TF_MS.get(tf)

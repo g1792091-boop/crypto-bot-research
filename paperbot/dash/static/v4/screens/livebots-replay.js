@@ -29,7 +29,7 @@ const MAX_PX = 1400000;                  // the canvas at most this many pixels 
 const LIST_MS = 30 * 1000;
 const ONE_MS = 30 * 1000;                // a trade whose answer is not final yet (bars after the exit, an executor closing)
 const PAGE = 8;
-const EXIT_KO = {SL: "손절", LOCK: "잠금 익절", LIQ: "강제청산", REV: "빠른 청산", JUDGE: "감독 청산(추세 뒤집힘)", TIME: "감독 청산(시간 정리)",
+const EXIT_KO = {SL: "손절", LOCK: "잠금 익절", LIQ: "강제청산", REV: "빠른 청산", JUDGE: "감독 청산(추세 뒤집힘)", TIME: "감독 청산(시간 정리)", SWITCH: "전환 전 포지션 정리",
   HALT: "멈춤 청산", MANUAL: "수동 청산", END: "끝냄"};
 const STATE_KO = {matched: "따라감", missed: "안 따라감", before: "시작 전", open: "닫는 중", unknown: "모름"};
 const TF_KO = {"5m": "5분봉", "1h": "1시간봉"};

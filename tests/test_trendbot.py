@@ -403,6 +403,31 @@ def test_no_time_exit_when_time_bars_is_none(tmp_path):
     assert any("time_bars" in x for x in TJ.TrendRules.from_dict({"time_bars": 0}).problems())
 
 
+def test_a_position_opened_before_the_bot_started_is_closed_at_once(tmp_path):
+    # owners 10/21 night: the old bot's SOL short (opened before the switch) blocked the new bot's entries
+    w = World(tmp_path, trend={"time_bars": None})
+    B, p = _enter_long(w)
+    E = p.entry_time
+    _to(w, B + 3 * MIN, E + 10 * MIN)
+    assert w.engine().position is not None
+    w.run.since = E + MIN                          # as if this bot started after that entry (the switch)
+    w.step(E + 10 * MIN)
+    assert w.engine().position is None and w.engine(C.FLIP_ACCOUNT).position is None
+    t, = w.trades()
+    assert t["exit_reason"] == "SWITCH" and t["exit_time"] == E + 10 * MIN
+    assert t["context"]["exit_why"] == TB.SWITCH_WHY
+    assert any("전환 전 포지션 정리" in n[1] for n in w.note.messages)
+    # its own entries (after the start) are never closed that way
+    B2 = E + 30 * MIN
+    w.add_minutes(E + 11 * MIN, 19)
+    w.signal("N08_ICHI_WR", "BTCUSDT", 1, B2)
+    w.step(B2)
+    w.step(B2 + MIN, move={"BTCUSDT": -0.001})
+    w.step(B2 + 2 * MIN)
+    _to(w, B2 + 3 * MIN, B2 + 20 * MIN)
+    assert w.engine().position is not None and w.engine().position.entry_time == B2 + 2 * MIN
+
+
 def test_the_owners_config_has_no_time_exit():
     cfg = json.loads((Path(__file__).resolve().parent.parent / "deploy" / "combo.trend.json").read_text(encoding="utf-8"))
     assert cfg["trend"]["time_bars"] is None and cfg["trend"]["judge_exit"] is True

@@ -485,7 +485,8 @@ def own_exec_card(out: dict, x: dict, xp: dict, pp: Optional[dict], paired: bool
 
 
 EXIT_REASON_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "REV": "빠른 청산", "HALT": "멈춤 청산",
-                  "MANUAL": "수동 청산", "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)"}
+                  "MANUAL": "수동 청산", "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)",
+                  "SWITCH": "전환 전 포지션 정리"}
 
 
 def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
