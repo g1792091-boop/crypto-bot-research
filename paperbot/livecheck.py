@@ -3966,18 +3966,19 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
 
 
 # ---------------------------------------------------------------- 📋 the day ahead
-def us_open_span(w1: int, mins) -> Optional[tuple]:
-    """(from, to) ms of the paper bot's Nasdaq-open pause in the trading day that starts at ``w1`` (09:00 KST): the
-    NYSE open (09:30 New York, the KST date of ``w1``) and ``mins`` after it, on NYSE weekdays that are not holidays
-    (combo.py us_open_pause); None without the rule (config us_open_pause_min) or on a day without an open."""
-    if not mins:
+def us_open_span(w1: int, mins, pre=None) -> Optional[tuple]:
+    """(from, to) ms of the paper bot's Nasdaq-open pause in the trading day that starts at ``w1`` (09:00 KST): from
+    ``pre`` minutes before the NYSE open (09:30 New York, the KST date of ``w1``) to ``mins`` after it, on NYSE weekdays
+    that are not holidays (combo.py us_open_pause); None without the rule (config us_open_pause_min / us_open_pre_min)
+    or on a day without an open."""
+    if not mins and not pre:
         return None
     from .sessions import NY, NYSE_HOLIDAYS
     d = _dt.datetime.fromtimestamp((int(w1) + KST_MS) / 1000, _dt.timezone.utc).date()
     if d.weekday() >= 5 or d.strftime("%Y-%m-%d") in NYSE_HOLIDAYS:
         return None
     a = int(_dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=NY).timestamp() * 1000)
-    return a, a + int(mins) * MIN
+    return a - int(pre or 0) * MIN, a + int(mins or 0) * MIN
 
 
 def rest_line(w1: int, cfg: Optional[dict]) -> str:
@@ -3998,7 +3999,7 @@ def rest_line(w1: int, cfg: Optional[dict]) -> str:
             a, b = e.ts_ms - int(mins) * MIN, e.ts_ms + int(mins) * MIN
             when = kst(a) if (a + KST_MS) // DAY == (w1 + KST_MS) // DAY else "내일 " + kst(a)
             parts.append((a, f"{when}~{kst(b)} {EV.KIND_KO.get(e.kind, e.kind)}"))
-    us = us_open_span(w1, cfg.get("us_open_pause_min"))
+    us = us_open_span(w1, cfg.get("us_open_pause_min"), cfg.get("us_open_pre_min"))
     if us is not None:
         parts.append((us[0], f"{kst(us[0])}~{kst(us[1])} 나스닥 개장"))
     parts = [x for _t, x in sorted(parts, key=lambda p: p[0])]

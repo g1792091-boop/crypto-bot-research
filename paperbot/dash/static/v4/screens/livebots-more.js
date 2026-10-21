@@ -107,7 +107,8 @@ export function rulesList(r) {
     ["손절 한 번", r.max_loss_frac != null ? `잔고의 최대 ${pctOf(r.max_loss_frac)} (넘으면 크기를 줄임)` : "—"],
     ["주말", r.no_weekend ? "한국 시간 토·일에는 새로 진입하지 않음 (열린 포지션은 그대로)" : "주말에도 진입"],
     ["경제 발표", r.macro_blackout_min ? `미국 경제 발표 앞뒤 ${r.macro_blackout_min}분은 진입하지 않음` : "제한 없음"],
-    r.us_open_pause_min ? ["나스닥 개장", `미국 주식시장 개장 뒤 ${r.us_open_pause_min}분은 진입하지 않음`] : null,
+    r.us_open_pause_min || r.us_open_pre_min ? ["나스닥 개장", `미국 주식시장 개장 ${[r.us_open_pre_min ? `앞 ${r.us_open_pre_min}분` : "",
+      r.us_open_pause_min ? `뒤 ${r.us_open_pause_min}분` : ""].filter(Boolean).join("·")}은 진입하지 않음 (추세 판단·청산은 계속)`] : null,
     ["기본 손절", r.stop ? r.stop.ko : "—"],
     ["빠른 청산", r.early_exit ? (r.early_exit === "own" ? "같은 매매법의 반대 신호에 바로 청산" : "아무 매매법의 반대 신호에 바로 청산") : "없음 (손절과 계단 잠금만)"],
   ];

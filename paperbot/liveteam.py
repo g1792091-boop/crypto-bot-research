@@ -317,8 +317,8 @@ def _paper_rules(cfg: Optional[dict]) -> Optional[list]:
         out.append("한국 시간 주말 진입 없음")
     if c.macro_blackout_min:
         out.append(f"미국 경제 발표 앞뒤 {c.macro_blackout_min}분 진입 없음")
-    if c.us_open_pause_min:
-        out.append(f"나스닥 개장 뒤 {c.us_open_pause_min}분 진입 없음")
+    if c.us_open_pause_min or c.us_open_pre_min:
+        out.append(f"{C.us_open_ko(c.us_open_pause_min or 0, c.us_open_pre_min or 0)} 진입 없음")
     return out
 
 

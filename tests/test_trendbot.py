@@ -777,3 +777,38 @@ def test_the_owners_config_has_no_pauses_at_all(tmp_path):
     w.signal("N08_ICHI_WR", "BTCUSDT", 1, B)
     w.step(B)
     assert w.rows("N08_ICHI_WR@30m")[0][1] == "WAITING"
+
+
+def test_no_entry_from_30_minutes_before_the_nasdaq_open_but_the_bot_keeps_judging(tmp_path):
+    # owners 10/21 night: "나스닥 개장전 30분도 진입금지 ... 22시00분~23시00분 ... 진입만 금지인거지 추세하고 파악하는건 계속"
+    # T0 is Monday 2026-10-05 00:00 UTC; New York on summer time: 09:00 New York = 13:00 UTC = 22:00 KST
+    w = World(tmp_path, us_open_pause_min=30, us_open_pre_min=30)
+    _start(w)
+    B = T0 + 13 * 3_600_000                         # 22:00 KST: a 30m signal at the pause's first minute
+    w.add_minutes(T0, 13 * 60)
+    w.signal("N08_ICHI_WR", "BTCUSDT", 1, B)
+    seen, real = [], w.judge.judgment
+
+    def counting(sym, tf, t, bg=False):
+        seen.append((sym, tf, int(t), bg))
+        return real(sym, tf, t, bg)
+    w.judge.judgment = counting
+    w.step(B)
+    w.step(B + MIN, move={"BTCUSDT": -0.001})       # the pullback level is touched: still no entry
+    w.step(B + 2 * MIN)
+    assert w.engine().position is None
+    rows = w.rows("N08_ICHI_WR@30m")
+    assert [r[1] for r in rows] == ["FILTERED"]
+    assert json.loads(rows[0][2])["why"] == "나스닥 개장 앞 30분·뒤 30분 진입 안 함 (뉴욕 09:00~10:00, 09:30 개장)"
+    # the trend is still judged every minute of the pause (every coin's 1h and 4h: the live site's trend map)
+    assert {t for (_s, _tf, t, bg) in seen if bg} >= {B, B + MIN, B + 2 * MIN}
+    assert {(sym, tf) for (sym, tf, t, bg) in seen if t == B + MIN} >= {("BTCUSDT", "1h"), ("BTCUSDT", "4h")}
+    # 23:00 KST: entries again, the same way as any other hour
+    B2 = B + 60 * MIN
+    w.add_minutes(B + 3 * MIN, 57)
+    w.signal("N08_ICHI_WR", "BTCUSDT", 1, B2)
+    w.step(B2)
+    w.step(B2 + MIN, move={"BTCUSDT": -0.001})
+    w.step(B2 + 2 * MIN)
+    p = w.engine().position
+    assert p is not None and p.entry_time == B2 + 2 * MIN

@@ -69,6 +69,7 @@
  "no_weekend": true,
  "macro_blackout_min": 30,
  "us_open_pause_min": 30,
+ "us_open_pre_min": 30,
  "telegram": true,
  "name": "추세판단 봇"
 }

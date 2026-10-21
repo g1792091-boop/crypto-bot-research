@@ -392,10 +392,10 @@ def checks(cfg: dict, member: Optional[dict], entry: int, bar_close: int, side: 
         inside = near is not None and abs(near["gap_ms"]) <= mb * MIN
         ko = f"미국 경제 발표 앞뒤 {mb}분이 아님" if not inside else f"경제 발표 앞뒤 {mb}분 안이에요"
         add("macro", not inside, ko, near)
-    up = L._i(cfg.get("us_open_pause_min"))
-    if up:
-        why = C.us_open_pause(entry, up)
-        add("usopen", not why, f"나스닥 개장 뒤 {up}분이 아님" if not why else why)
+    up, pre = L._i(cfg.get("us_open_pause_min")), L._i(cfg.get("us_open_pre_min"))
+    if up or pre:
+        why = C.us_open_pause(entry, up or 0, pre or 0)
+        add("usopen", not why, f"{C.us_open_ko(up or 0, pre or 0)}이 아님" if not why else why)
     if member and member.get("no_chase"):
         ch = chase_numbers(rule_db, symbol, bar_close, side, ref_price)
         if ch.get("state") != "ok":

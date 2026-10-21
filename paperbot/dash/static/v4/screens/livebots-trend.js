@@ -211,7 +211,7 @@ export function trendView(ctx, hub) {
       t.bot && ok(t.bot.since) ? ui.pill(`새 규칙 시작 ${fmt.kst(t.bot.since)}`, "thin") : null,
       ui.pill(age != null ? `판단 ${fmt.dur(age / 1000)} 전` : "판단 시각 모름", age != null && age > 5 * MIN ? "warn" : "thin"),
       ui.pill(pz.paused ? "진입 쉬는 시간 (주말·발표·나스닥)" : pz.paused === false ? "진입 가능 시간" : "진입 시간 모름",
-        pz.paused ? "warn" : pz.paused === false ? "good" : "thin", "주말(한국 시간 토·일) · 미국 경제 발표 앞뒤 30분 · 나스닥 개장 뒤 30분은 진입 안 해요"));
+        pz.paused ? "warn" : pz.paused === false ? "good" : "thin", "주말(한국 시간 토·일) · 미국 경제 발표 앞뒤 30분 · 나스닥 개장 앞뒤 30분(한국 시간 22:00~23:00, 겨울 23:00~24:00)은 진입 안 해요 · 추세 판단은 계속"));
   }
   function drawMoney() {
     const s = st.s, t = st.t;

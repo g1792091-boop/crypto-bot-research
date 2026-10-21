@@ -1338,9 +1338,10 @@ def watch_beat(check_db: str) -> dict:
     return {"state": "ok", "path": check_db, "at": _i(rows[0][0]) if rows else None}
 
 
-def us_open_windows(now: int, mins: int, days: int = 9) -> tuple:
-    """([from, to) of the pause after each NYSE open from yesterday to ``days`` ahead (paperbot/combo.py us_open_pause, word
-    for word: each window's minutes are its), None) or ([], why) when it cannot be told."""
+def us_open_windows(now: int, mins: int, days: int = 9, pre: int = 0) -> tuple:
+    """([from, to) of the pause around each NYSE open from yesterday to ``days`` ahead: ``pre`` minutes before it to
+    ``mins`` after it (paperbot/combo.py us_open_pause, word for word: each window's minutes are its), None) or ([], why)
+    when it cannot be told."""
     try:
         from ...combo import us_open_pause
         from ...sessions import NY
@@ -1351,8 +1352,8 @@ def us_open_windows(now: int, mins: int, days: int = 9) -> tuple:
     for k in range(-1, days):
         d = base + _dt.timedelta(days=k)
         a = int(_dt.datetime(d.year, d.month, d.day, 9, 30, tzinfo=NY).timestamp() * 1000)
-        if us_open_pause(a, mins):
-            out.append((a, a + mins * MIN))
+        if us_open_pause(a - pre * MIN, mins, pre):
+            out.append((a - pre * MIN, a + mins * MIN))
     return out, None
 
 
@@ -1369,11 +1370,12 @@ def pause_part(p: dict, now: int, cfg: dict) -> dict:
     for it in cal.get("items") or []:
         if it.get("pause_from") is not None:
             wins.append({"from": it["pause_from"], "to": it["pause_to"] + 1, "why": "macro", "ko": f"{it['kind_ko']} 발표 앞뒤 {rules.get('macro_blackout_min')}분"})
-    us_min = _i(cfg.get("us_open_pause_min"))
+    us_min, us_pre = _i(cfg.get("us_open_pause_min")), _i(cfg.get("us_open_pre_min"))
     us_err = None
-    if us_min:
-        us, us_err = us_open_windows(now, us_min)
-        wins += [{"from": a, "to": b, "why": "usopen", "ko": f"나스닥 개장 뒤 {us_min}분"} for a, b in us]
+    if us_min or us_pre:
+        from ...combo import us_open_ko
+        us, us_err = us_open_windows(now, us_min or 0, pre=us_pre or 0)
+        wins += [{"from": a, "to": b, "why": "usopen", "ko": us_open_ko(us_min or 0, us_pre or 0)} for a, b in us]
     on = [w for w in wins if w["from"] <= now < w["to"]]
     t, guard = now, 0
     while guard < 50:
@@ -1384,7 +1386,7 @@ def pause_part(p: dict, now: int, cfg: dict) -> dict:
         guard += 1
     nxt = min((w for w in wins if w["from"] > t), key=lambda w: w["from"], default=None)
     return {"paused": bool(on), "why": [{"why": w["why"], "ko": w["ko"], "to": w["to"]} for w in on], "resume_ms": t if on else None,
-            "next": nxt, "rules": {**rules, "us_open_pause_min": us_min}, "us_error": us_err,
+            "next": nxt, "rules": {**rules, "us_open_pause_min": us_min, "us_open_pre_min": us_pre}, "us_error": us_err,
             "events": _src(cal.get("events") or {}, "state", "reason_ko", "low", "days_left")}
 
 

@@ -189,18 +189,30 @@ def kst_session(ms: int) -> str:
     raise AssertionError(hr)
 
 
-def us_open_pause(ts: int, mins: int) -> str:
-    """'' or why minute ts (ms) is inside the first ``mins`` minutes after the NYSE open (09:30 New York, DST aware,
-    weekdays, not on NYSE full-day holidays): no new entry then (owners 2026-10-19)."""
+def us_open_ko(mins: int, pre: int = 0) -> str:
+    """The NYSE-open pause in words: 나스닥 개장 뒤 30분 / 나스닥 개장 앞 30분·뒤 30분."""
+    parts = ([f"앞 {int(pre)}분"] if pre else []) + ([f"뒤 {int(mins)}분"] if mins else [])
+    return "나스닥 개장 " + "·".join(parts)
+
+
+def us_open_pause(ts: int, mins: int, pre: int = 0) -> str:
+    """'' or why minute ts (ms) is inside the NYSE-open pause: from ``pre`` minutes before the open (09:30 New York, DST
+    aware, weekdays, not on NYSE full-day holidays) to ``mins`` minutes after it: no new entry then (owners 2026-10-19
+    "나스닥 개장하고 30분"; 10-21 night "나스닥 개장전 30분도": pre 30, 22:00~23:00 KST on summer time). Only entries
+    stop: the trend judgment, the pullback watch, the supervisor and open positions go on."""
     from datetime import datetime, timezone
     from .sessions import NY, NYSE_HOLIDAYS
+    mins, pre = int(mins or 0), int(pre or 0)
     local = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).astimezone(NY)
     if local.weekday() >= 5 or local.strftime("%Y-%m-%d") in NYSE_HOLIDAYS:
         return ""
     since = (local - local.replace(hour=9, minute=30, second=0, microsecond=0)).total_seconds()
-    if not 0 <= since < mins * 60:
+    if not -pre * 60 <= since < mins * 60:
         return ""
-    return f"나스닥 개장 뒤 {mins}분 진입 안 함 (뉴욕 09:30 개장)"
+    if not pre:
+        return f"나스닥 개장 뒤 {mins}분 진입 안 함 (뉴욕 09:30 개장)"
+    a, b = 9 * 60 + 30 - pre, 9 * 60 + 30 + mins
+    return f"{us_open_ko(mins, pre)} 진입 안 함 (뉴욕 {a // 60:02d}:{a % 60:02d}~{b // 60:02d}:{b % 60:02d}, 09:30 개장)"
 
 
 def kst_weekend(ms: int) -> bool:
@@ -511,6 +523,8 @@ class ComboConfig:
                                                # (data/macro_events.csv, paperbot/events.py): owners 2026-10-18 "30"
     us_open_pause_min: Optional[int] = None    # no entry from the NYSE open (09:30 New York, weekdays, not on NYSE
                                                # holidays) to N minutes after it: owners 2026-10-19 "나스닥 개장하고 30분"
+    us_open_pre_min: Optional[int] = None      # ... and from N minutes before the open: owners 2026-10-21 night
+                                               # "나스닥 개장전 30분도 진입금지" (22:00~23:00 KST on summer time)
     no_weekend: bool = False            # no entry on KST Saturday / Sunday (owners 2026-10-18); a position runs on
     symbols: tuple = V3_SYMBOLS
     poll_s: float = 2.0
@@ -628,6 +642,10 @@ class ComboConfig:
                                                        and not isinstance(self.us_open_pause_min, bool)
                                                        and 0 < self.us_open_pause_min <= 240):
             out.append("us_open_pause_min은 1~240분(정수) 또는 null입니다")
+        if self.us_open_pre_min is not None and not (isinstance(self.us_open_pre_min, int)
+                                                     and not isinstance(self.us_open_pre_min, bool)
+                                                     and 0 < self.us_open_pre_min <= 240):
+            out.append("us_open_pre_min은 1~240분(정수) 또는 null입니다")
         if self.early_exit not in EARLY_EXITS:
             out.append('early_exit는 null(끔), "own"(같은 매매법의 반대 신호), "any"(아무 매매법의 반대 신호)입니다')
         if not isinstance(self.early_exit_until_lock, bool):
@@ -1392,8 +1410,8 @@ class ComboRunner:
             ev = self._macro_near(ts)
             if ev:
                 return ev
-        if self.cfg.us_open_pause_min:
-            why = us_open_pause(ts, int(self.cfg.us_open_pause_min))
+        if self.cfg.us_open_pause_min or self.cfg.us_open_pre_min:
+            why = us_open_pause(ts, int(self.cfg.us_open_pause_min or 0), int(self.cfg.us_open_pre_min or 0))
             if why:
                 return why
         m = self.by_label.get(sig.meta.get("member", sig.strategy_id))
@@ -1723,7 +1741,8 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
     nc = sum(m.no_chase for m in members)
     rest = ((["주말"] if cfg.no_weekend else [])
             + ([f"경제 발표 앞뒤 {cfg.macro_blackout_min}분"] if cfg.macro_blackout_min else [])
-            + ([f"나스닥 개장 뒤 {cfg.us_open_pause_min}분"] if cfg.us_open_pause_min else []))
+            + ([us_open_ko(cfg.us_open_pause_min or 0, cfg.us_open_pre_min or 0)]
+               if cfg.us_open_pause_min or cfg.us_open_pre_min else []))
     pause = ("진입 쉼 " + "·".join(rest) + ", ") if rest else ""
     kinds = ([f"{sum(m.custom for m in members)}개 커스텀값"] if any(m.custom for m in members) else []) \
         + ([f"{sum(bool(m.when) for m in members)}개 조건 있음"] if any(m.when for m in members) else [])
@@ -1938,9 +1957,12 @@ def cmd_check(args) -> int:
         print(f"- 경제 발표 앞뒤 {cfg.macro_blackout_min}분 진입 안 함: 앞으로 일정 {len(nxt)}개"
               + (f", 마지막 {nxt[-1].ts_utc}" if nxt else " (일정 없음: data/macro_events.csv를 채우세요)"))
         probs += [f"경제 발표 일정 파일: {p}" for p in EV.problems()]
-    if cfg.us_open_pause_min:
-        print(f"- 나스닥 개장 뒤 {cfg.us_open_pause_min}분 진입 안 함 (뉴욕 09:30, 평일, 미국 휴장일 제외; "
-              f"한국 시간 서머타임 22:30 / 겨울 23:30부터)")
+    if cfg.us_open_pause_min or cfg.us_open_pre_min:
+        pre, mins = int(cfg.us_open_pre_min or 0), int(cfg.us_open_pause_min or 0)
+        kst = lambda m: f"{m // 60 % 24:02d}:{m % 60:02d}"                     # noqa: E731  minutes of the KST day
+        summer, winter = (22 * 60 + 30 - pre, 22 * 60 + 30 + mins), (23 * 60 + 30 - pre, 23 * 60 + 30 + mins)
+        print(f"- {us_open_ko(mins, pre)} 진입 안 함 (뉴욕 09:30 개장, 평일, 미국 휴장일 제외; 한국 시간 서머타임 "
+              f"{kst(summer[0])}~{kst(summer[1])} / 겨울 {kst(winter[0])}~{kst(winter[1])}) · 추세 판단·청산은 계속")
     if cfg.trend is not None:
         from .trendjudge import TrendError, TrendRules
         try:

@@ -63,7 +63,7 @@ export function healthView(ctx) {
   const kill = h("div", {class: "lbd-slot"});
   const body = h("div", {class: "lbd-body stack"}, light,
     ui.card({title: "하나씩", sub: "마지막으로 기록을 남긴 때 · 한국 시간", cls: "lbd-card"}, list, limits),
-    ui.card({title: "진입 쉬는 시간", sub: "주말 · 미국 경제 발표 앞뒤 · 나스닥 개장 뒤 (열린 포지션은 그대로)", cls: "lbd-card"}, pause),
+    ui.card({title: "진입 쉬는 시간", sub: "주말 · 미국 경제 발표 앞뒤 · 나스닥 개장 앞뒤 (열린 포지션은 그대로)", cls: "lbd-card"}, pause),
     ui.card({title: "비상 정지", cls: "lbd-card"}, kill));
   const el = h("div", {class: "lbd stack"}, stateSlot, body);
 

@@ -1494,7 +1494,8 @@ def rules_of(combo: dict) -> dict:
     return {"leverage_btc": _i(lev.get("BTCUSDT")), "leverage_alt": _i(lev.get("default")), "margin": margin if isinstance(margin, str) else _f(margin),
             "ladder": ladder_numbers(lad), "max_loss_frac": _f(c.get("max_loss_frac")),
             "no_weekend": bool(c.get("no_weekend")), "macro_blackout_min": _i(c.get("macro_blackout_min")),
-            "us_open_pause_min": _i(c.get("us_open_pause_min")), "early_exit": c.get("early_exit"),
+            "us_open_pause_min": _i(c.get("us_open_pause_min")), "us_open_pre_min": _i(c.get("us_open_pre_min")),
+            "early_exit": c.get("early_exit"),
             "one_position": True, "initial_equity": _f(c.get("initial_equity")), "name": c.get("name"),
             "stop": stop_ko(None, c.get("stop") if isinstance(c.get("stop"), dict) else None),
             "rank": c.get("rank"), "flip_twin": bool(c.get("flip_twin", True))}

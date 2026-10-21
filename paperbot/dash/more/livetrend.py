@@ -107,12 +107,12 @@ def pause_now(cfg: dict, now: int) -> dict:
             e = near[0]
             return {"paused": True, "why": "macro", "ko": f"{EV.KIND_KO.get(e.kind, e.kind)} 발표 앞뒤 {int(mins)}분이라 진입 쉬는 중",
                     "until": int(e.ts_ms) + int(mins) * MIN, "event_ms": int(e.ts_ms)}
-    us = cfg.get("us_open_pause_min")
-    if us:
-        why = C.us_open_pause(int(now), int(us))
+    us, pre = int(cfg.get("us_open_pause_min") or 0), int(cfg.get("us_open_pre_min") or 0)
+    if us or pre:
+        why = C.us_open_pause(int(now), us, pre)
         if why:
             t = int(now) - int(now) % MIN
-            while C.us_open_pause(t, int(us)) and t < int(now) + 6 * HOUR:
+            while C.us_open_pause(t, us, pre) and t < int(now) + 6 * HOUR:
                 t += MIN
             return {"paused": True, "why": "usopen", "ko": why.replace(" 진입 안 함", "이라 진입 쉬는 중"), "until": t}
     return {"paused": False, "why": None, "ko": "쉬는 시간 아님"}
