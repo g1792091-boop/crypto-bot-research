@@ -37,8 +37,9 @@ else rounded to 8 decimals), else the run's; the ladder is the run's config. Fun
 after the entry), and the answer says so whenever the trade paid any.
 
 추세판단 봇 (owners 10-21, livebots.trend_bot): both answers carry ``trend_bot`` and each trade ``prev`` (entered before
-its start: the bot before it's, 전환 전); its close of such a position at its first minute (SWITCH, 전환 전 포지션 정리) is
-not rebuilt, like a kill's: its minute is the record's, the locks up to it are checked.
+its start: the bot before it's, 전환 전); its close of such a position at its first minute (SWITCH, 전환 전 포지션 정리) and
+its supervisor's closes (JUDGE, TIME) are not rebuilt, like a kill's: their minute is the record's, the locks up to it are
+checked.
 
 Honesty: the record is what the page shows as the result (entry, exit, net ROE, money); the rebuilt path is drawn on it.
 When the rebuilt exit or last lock differs from the record (reason, time, price beyond float noise, lock, stop) the answer
@@ -82,8 +83,12 @@ EXT_REASONS = ("MANUAL", "HALT", "END")  # closes from outside the bars (a kill,
 # the 추세판단 봇's close of the position the bot before it left (owners 10-21 night: at its first minute) is not one the
 # bars decide either: its minute is the record's, the locks up to it are still checked
 SWITCH_REASONS = ("SWITCH",)
+# nor are its supervisor's closes (JUDGE: the higher bar's judgment turned; TIME: no first lock within its bars): the
+# rebuild knows the stop and the ladder only
+SUP_REASONS = ("JUDGE", "TIME")
 OUTSIDE_KO = "봇 밖의 이유(수동·멈춤)로 닫혀 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
 SWITCH_KO = "새 봇(추세판단 봇)이 켜지며 예전 봇의 포지션을 닫은 거래(전환 전 포지션 정리)라 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
+SUP_KO = "감독 청산(추세 판단·시간 정리)은 1분봉이 아니라 추세판단 봇의 감독이 정해서 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
 RULE_MISSING_KO = "규칙봇 1분봉 파일이 아직 없어요 (PAPERBOT_LIVE_RULE_DB 경로를 확인해 주세요)"
 RULE_NO_TABLE_KO = "규칙봇 파일은 있지만 1분봉 표(live_bars)가 아직 없어요"
 NO_BARS_KO = "이 거래 시간의 1분봉이 규칙봇 기록에 없어요"
@@ -242,7 +247,7 @@ def rebuild(t: dict, bars: list, rules: dict, ref_fill: bool, fund: list, until:
             out = close(o * (1 - side * slip), ts, "REV", "rev", fund_at(ts - 1))
             stopped = "exit"
             break
-        if reason in EXT_REASONS + SWITCH_REASONS and ts >= x0:
+        if reason in EXT_REASONS + SWITCH_REASONS + SUP_REASONS and ts >= x0:
             stopped = "outside"
             break
         entry_bar = ts == e0
@@ -321,7 +326,8 @@ def compare(t: dict, rb: dict) -> dict:
             and not _same_px(rb["mfe"], t["mfe_price"]):
         add("mfe", "가장 유리했던 가격", t["mfe_price"], rb["mfe"], "price")
     return {"state": "differs" if items else "same", "items": items,
-            "why_ko": (SWITCH_KO if reason in SWITCH_REASONS else OUTSIDE_KO) if rb.get("stopped") == "outside" else None}
+            "why_ko": (SWITCH_KO if reason in SWITCH_REASONS else SUP_KO if reason in SUP_REASONS else OUTSIDE_KO)
+            if rb.get("stopped") == "outside" else None}
 
 
 # ---------------------------------------------------------------- bars

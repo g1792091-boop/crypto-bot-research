@@ -223,6 +223,19 @@ def test_settings_show_the_trend_rules(tw):
     assert all(m.get("role") for g in d["groups"] for m in g["members"])
 
 
+def test_replay_of_a_supervisor_close_is_not_flagged_as_different(tw):
+    """다시보기: the supervisor's close (JUDGE) is not one the bars decide: its minute is the record's, never 기록과 다름; the
+    old bot's trade before the start is tagged 전환 전 (``prev``), the bot's own is not."""
+    from paperbot.dash.more import livetape as R
+    now = NOW + 40 * T.MIN
+    ls = R.build_list(tw["p"], now_ms=now)
+    by = {r["exit_reason"]: r for r in ls["rows"]}
+    assert (by["JUDGE"]["prev"], by["LOCK"]["prev"]) == (False, True) and ls["trend_bot"]["since"] == T.T0
+    one = R.build_one(tw["p"], by["JUDGE"]["id"], now_ms=now, more=tw["more"])
+    assert one["bars"]["state"] == "ok" and one["exit"]["stopped"] == "outside" and one["exit"]["rebuilt"] is None
+    assert one["check"]["state"] == "same" and one["check"]["why_ko"] == R.SUP_KO and one["trade"]["prev"] is False
+
+
 def test_why_and_missed_do_not_borrow_the_old_bots_words(tw):
     assert WY.five_year(1, "N08_ICHI_WR", tw["p"]["paper"]) == {"state": "missing", "reason_ko": NO_REF}
     m = M.build(tw["p"], tw["more"], NOW)
