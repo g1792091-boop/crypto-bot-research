@@ -114,7 +114,8 @@ export function heroOf(t, now) {
   if (bot.stale) return {cls: "stop", head: "페이퍼 봇 기록이 멈췄어요", sub: "5분 넘게 새 기록이 없어요 · 봇 상태 탭을 보세요 (그동안 실행기는 새 진입을 안 해요)"};
   const p = t.position;
   if (p) {
-    const lockKo = p.locked ? `첫 잠금 +${Math.round(Number(p.lock_roe) * 100)}% · 계단 익절만` : `시간 정리까지 ${clock(Number(p.deadline) - now)}`;
+    const lockKo = p.locked ? `첫 잠금 +${Math.round(Number(p.lock_roe) * 100)}% · 계단 익절만`
+      : ok(p.deadline) ? `시간 정리까지 ${clock(Number(p.deadline) - now)}` : "첫 잠금 전 · 손절·추세 뒤집힘이 지켜봐요";
     return {cls: "hold", head: `${fmt.coin(p.symbol)} ${SIDE(p.side)} 보유 중`, sub: `${fmt.stratKo(p.strategy)} ${fmt.tfKo(p.tf)} · ${lockKo}`};
   }
   const pz = t.pause || {};
@@ -261,8 +262,9 @@ export function trendView(ctx, hub) {
     }
     const price = priceOf(t, p.symbol);
     const roe = ok(price) && ok(p.entry_price) && ok(p.leverage) ? Number(p.leverage) * Number(p.side) * (Number(price) / Number(p.entry_price) - 1) : null;
-    const total = Number(p.time_bars) * (TF_MIN[p.tf] || 60) * MIN;
-    const left = Number(p.deadline) - now;
+    const timed = ok(p.time_bars) && ok(p.deadline);          // no time_bars: no TIME exit (owners 10/21 night)
+    const total = timed ? Number(p.time_bars) * (TF_MIN[p.tf] || 60) * MIN : 0;
+    const left = timed ? Number(p.deadline) - now : null;
     const frac = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 0;
     const j = p.judge;
     const jc = judgeCell(j);
@@ -283,10 +285,11 @@ export function trendView(ctx, hub) {
         p.entry_judge ? h("dt", null, "진입 근거") : null,
         p.entry_judge ? h("dd", null, p.entry_judge, ok(p.entry_score) ? h("small", {class: "ltr-sub"}, ` · 점수 ${Number(p.entry_score).toFixed(2)}`) : null) : null),
       h("div", {class: "ltr-guards"},
-        h("div", {class: ["ltr-guard", p.locked ? "off" : left <= 0 ? "fire" : ""]},
+        h("div", {class: ["ltr-guard", p.locked || !timed ? "off" : left <= 0 ? "fire" : ""]},
           h("span", {class: "ltr-gk"}, "⏱ 시간 정리"),
-          p.locked ? h("b", null, "꺼짐 (첫 잠금 뒤)") : h("span", null, `진입 봉 ${p.time_bars}개 안에 첫 잠금 · 남은 시간 `, tick(timeNode, p.deadline, clock)),
-          p.locked ? null : h("span", {class: "ltr-bar"}, h("i", {style: {"--v": frac.toFixed(4)}}))),
+          !timed ? h("b", null, "없음 (10/21 밤에 뺌)") : p.locked ? h("b", null, "꺼짐 (첫 잠금 뒤)")
+            : h("span", null, `진입 봉 ${p.time_bars}개 안에 첫 잠금 · 남은 시간 `, tick(timeNode, p.deadline, clock)),
+          p.locked || !timed ? null : h("span", {class: "ltr-bar"}, h("i", {style: {"--v": frac.toFixed(4)}}))),
         h("div", {class: ["ltr-guard", p.locked || !p.judge_exit ? "off" : p.judge_against ? "fire" : ""]},
           h("span", {class: "ltr-gk"}, `🧭 ${fmt.tfKo(p.htf)} 추세`),
           h("span", null, h("b", {class: ["ltr-word", jc.cls]}, jc.word), ` · ${judgeKo}`)),

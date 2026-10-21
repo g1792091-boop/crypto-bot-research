@@ -13,6 +13,7 @@
 
 import dataclasses
 import json
+from pathlib import Path
 import types
 
 import numpy as np
@@ -388,6 +389,25 @@ def test_time_exit_after_four_entry_bars_without_the_first_lock(tmp_path):
     assert any("감독 청산(시간 정리)(진입 봉 4개" in n[1] for n in w.note.messages)
 
 
+def test_no_time_exit_when_time_bars_is_none(tmp_path):
+    # owners 10/21 night: "시간청산 빼줘" -> trend.time_bars null; the same position stays past the four entry bars
+    w = World(tmp_path, trend={"time_bars": None})
+    assert w.cfg.trend is not None
+    B, p = _enter_long(w)
+    E = p.entry_time
+    _to(w, B + 3 * MIN, E + 6 * 30 * MIN)
+    assert w.engine().position is not None and w.trades() == []
+    assert not any("시간 정리" in n[1] for n in w.note.messages)
+    rules = TJ.TrendRules.from_dict({"time_bars": None})
+    assert rules.problems() == [] and rules.describe()[-1].endswith("시간 정리 없음")
+    assert any("time_bars" in x for x in TJ.TrendRules.from_dict({"time_bars": 0}).problems())
+
+
+def test_the_owners_config_has_no_time_exit():
+    cfg = json.loads((Path(__file__).resolve().parent.parent / "deploy" / "combo.trend.json").read_text(encoding="utf-8"))
+    assert cfg["trend"]["time_bars"] is None and cfg["trend"]["judge_exit"] is True
+
+
 def test_judge_exit_when_a_later_higher_bar_turns_and_never_after_the_first_lock(tmp_path):
     w = World(tmp_path)
     B, p = _enter_long(w)
@@ -488,7 +508,8 @@ def test_the_deploy_config_and_refusals(tmp_path):
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "deploy", "combo.trend.json")
     cfg = C.ComboConfig.from_file(path)
     assert cfg.problems() == [] and cfg.db == "/var/lib/paperbot/combo/live-ac.db" and cfg.name == "추세판단 봇"
-    assert TJ.TrendRules.from_dict(cfg.trend) == TJ.TrendRules()
+    # the defaults, but no TIME exit (owners 10/21 night: "시간청산 빼줘")
+    assert TJ.TrendRules.from_dict(cfg.trend) == dataclasses.replace(TJ.TrendRules(), time_bars=None)
     ms = C.resolve_members(cfg.members, cfg.picks_file)
     assert [m.label for m in ms] == ["N08_ICHI_WR@30m", "N05_PSAR_POC@30m", "F3_BOS@30m", "F15_ORB@30m",
                                      "N06_MACD_ORB@30m", "S3_CMO_SANDWICH@30m", "N20_EMA9_CHOP@30m", "F9_FVG@1h",

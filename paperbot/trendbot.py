@@ -20,8 +20,9 @@ the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coi
    loss; with ``coin_pause_h`` set, after a losing trade no entry on that coin and side for that long; with
    ``daily_loss`` set, the account lost that share of the day's start in a KST day: no entry until the next KST day.
    Each pause starts with one Telegram line.
-5. 감독 (every minute, before the first lock only; never a reverse entry): TIME: ``time_bars`` (4) entry bars after
-   the entry without the first lock -> closed at that minute's open; JUDGE: a higher bar closed after the entry is
+5. 감독 (every minute, before the first lock only; never a reverse entry): TIME: with ``time_bars`` set, that many
+   entry bars after the entry without the first lock -> closed at that minute's open (the owners' config has none
+   since 10-21 night: "시간청산 빼줘"); JUDGE: a higher bar closed after the entry is
    judged the other way (3 of 4, ``judge_exit``) -> closed. Exit reasons "TIME" / "JUDGE" (the executors follow them
    like REV: only while their own position has no lock of its own, paperbot/executor.py).
 6. The judgments of every coin (1h and 4h), the waits and the pauses are saved each minute as state ``trend`` (the
@@ -372,7 +373,7 @@ class TrendRunner(C.ComboRunner):
             tfm = TF_MS.get(tf)
             if tfm is None:
                 continue
-            if int(ts) >= int(p.entry_time) + r.time_bars * tfm:
+            if r.time_bars is not None and int(ts) >= int(p.entry_time) + r.time_bars * tfm:
                 e.supervise("TIME", f"진입 봉 {r.time_bars}개({KO_TF.get(tf, tf)} {r.time_bars}개) 안에 첫 잠금 못 감")
                 continue
             htf = HTF_OF.get(tf)

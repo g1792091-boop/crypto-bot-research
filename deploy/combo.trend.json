@@ -28,7 +28,7 @@
   "rsi_short_min": 30,
   "breakout": ["F3_BOS", "F15_ORB", "N06_MACD_ORB"],
   "breakout_adx_max": 30,
-  "time_bars": 4,
+  "time_bars": null,
   "judge_exit": true,
   "member_losses": null,
   "member_pause_h": 24,

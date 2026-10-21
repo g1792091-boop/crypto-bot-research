@@ -161,8 +161,9 @@ def position_view(conn, st: dict, numbers: dict, now: int) -> Optional[dict]:
     meta = sig.get("meta") if isinstance(sig.get("meta"), dict) else {}
     tf, sym, side = sig.get("timeframe"), p.get("symbol"), int(p.get("side") or 0)
     et = int(p.get("entry_time") or 0)
-    bars = int(numbers.get("time_bars") or 4)
-    deadline = et + bars * TF_MS[tf] if tf in TF_MS else None
+    bars = numbers.get("time_bars", 4)              # None: no TIME exit (owners 10-21 night "시간청산 빼줘")
+    bars = int(bars) if bars is not None else None
+    deadline = et + bars * TF_MS[tf] if tf in TF_MS and bars is not None else None
     locked = p.get("lock_roe") is not None
     htf = HTF_OF.get(tf)
     j = ((st.get("coins") or {}).get(sym) or {}).get(htf) if htf else None

@@ -124,6 +124,8 @@ TREND_CHASE_KO = "추격 막기: {who}, 롱은 24시간 고점 쪽 10%·7일 범
 TREND_HOLD_KO = "감독 청산(추세 뒤집힘 · 시간 정리)은 붙잡았다면 계산에 넣지 않았어요: 손절과 계단 익절만으로 다시 계산했어요"
 SUP_KO = ("감독 청산: 첫 잠금(+10%) 전에 상위 봉 추세 판단이 반대로 바뀌면(추세 뒤집힘), 또는 진입 봉 {bars}개 안에 첫 잠금을 "
           "못 가면(시간 정리) 닫는 규칙이에요")
+SUP_NO_TIME_KO = ("감독 청산: 첫 잠금(+10%) 전에 상위 봉 추세 판단이 반대로 바뀌면(추세 뒤집힘) 닫는 규칙이에요 · 시간 정리는 "
+                  "10/21 밤에 뺐어요 (그 전 시간 정리 기록은 아래에 그대로)")
 # a measured entries-per-weekday reference for the trend bot: none yet (a new rule set; WEEKDAY_ENTRIES above is the old
 # bot's replay). Set it only from a real measurement of this bot (e.g. its first two weeks), with its source in
 # TREND_WEEKDAY_REF_KO; None: the page shows no reference and the goal arithmetic waits for a whole weekday.
@@ -736,8 +738,9 @@ def sup_part(cx: dict) -> Optional[dict]:
     executor's matched trade gained or lost by it. None for another bot."""
     if not cx.get("trend"):
         return None
-    bars = _i((cx["trend"].get("numbers") or {}).get("time_bars")) or 4
-    out = rev_part(cx, ("JUDGE", "TIME"), SUP_KO.format(bars=bars))
+    nums = cx["trend"].get("numbers") or {}
+    bars = _i(nums.get("time_bars", 4))
+    out = rev_part(cx, ("JUDGE", "TIME"), SUP_KO.format(bars=bars) if bars else SUP_NO_TIME_KO)
     out.pop("hold_ko", None)                             # the replay holds it under the stop and the ladder: said in its own note
     if out.get("rows") is not None:
         out["by_reason"] = {k: sum(1 for r in out["rows"] if r.get("exit_reason") == k) for k in ("JUDGE", "TIME")}

@@ -107,6 +107,17 @@ def test_the_open_position_and_the_supervisor(tmp_path):
     assert next(m for m in d["members"] if m["strategy"] == "N08_ICHI_WR")["trades"] == 0      # open, not a trade yet
 
 
+
+def test_no_time_deadline_when_the_time_exit_is_off(tmp_path):
+    # owners 10/21 night "시간청산 빼줘": trend.time_bars null -> the position has no TIME deadline (no countdown)
+    w = T.World(tmp_path, trend={"time_bars": None})
+    w.store.put_state("combo_run", T.T0, {"config": json.loads(json.dumps(C.dataclasses.asdict(w.cfg), default=str))})
+    B, p = T._enter_long(w)
+    w.store.commit()
+    pos = LT.build({"paper": w.cfg.db}, B + 5 * T.MIN)["position"]
+    assert pos["time_bars"] is None and pos["deadline"] is None and pos["time_left_ms"] is None
+    assert pos["supervised"] is True and pos["judge_exit"] is True
+
 def test_the_pause_now():
     cfg = {"no_weekend": True, "macro_blackout_min": None, "us_open_pause_min": None}
     sat = T.T0 + 5 * 86_400_000                                   # 2026-10-10 09:00 KST, a Saturday

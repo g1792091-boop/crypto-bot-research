@@ -76,7 +76,8 @@ class TrendRules:
     rsi_short_min: float = 30.0
     breakout: tuple = BREAKOUT        # strategies that take only an early trend
     breakout_adx_max: float = 30.0    # early trend: ADX below this and rising
-    time_bars: int = 4                # entry bars without the first lock: closed (TIME)
+    time_bars: Optional[int] = 4      # entry bars without the first lock: closed (TIME); None = no TIME exit (owners
+                                      # 10-21 night: "시간청산 빼줘")
     judge_exit: bool = True           # the higher bar's judgment turned against the position before the first lock: closed
     member_losses: Optional[int] = None  # losing trades in a row of one member ... (None = no member pause: owners
     member_pause_h: float = 24.0         # ... pause that member this long          10-21 night "쉬기는 빼주고")
@@ -124,7 +125,8 @@ class TrendRules:
         num("rsi_long_max", 50, 100)
         num("rsi_short_min", 0, 50)
         num("breakout_adx_max", 0, 100)
-        num("time_bars", 1, 48, True)
+        if self.time_bars is not None:
+            num("time_bars", 1, 48, True)
         if self.member_losses is not None:
             num("member_losses", 1, 10, True)
             num("member_pause_h", 0, 240)
@@ -163,7 +165,7 @@ class TrendRules:
                 f"하루(한국 시간) 계좌 -{self.daily_loss:.0%}면 그날 진입 안 함" if self.daily_loss is not None
                 else "하루 손실 한도 없음"]),
             f"감독(첫 잠금 전까지만): 상위 봉 판단이 반대로 바뀌면 청산({'켬' if self.judge_exit else '끔'}) / "
-            f"진입 봉 {self.time_bars}개 안에 첫 잠금 못 가면 청산",
+            + (f"진입 봉 {self.time_bars}개 안에 첫 잠금 못 가면 청산" if self.time_bars is not None else "시간 정리 없음"),
         ]
 
 
