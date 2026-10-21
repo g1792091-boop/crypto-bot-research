@@ -2709,10 +2709,12 @@ TEAM_OFF_KO = "sudo systemctl disable --now paperbot-liveteam.timer"
 def team(p: dict, now: int, units=None) -> dict:
     """GET /api/v4/livebots/team: the 실거래 분석 팀 (paperbot/liveteam.py) read-only from its own liveteam.db: the members,
     the newest meetings with every member's words, the lead's conclusion and the ideas, the AI used today and in 7 days,
-    whether its timer is on, the login check, and when the next meetings come."""
+    whether its timer is on, the login check, and when the next meetings come. The 추세판단 봇 (trend_bot): the members'
+    focus on it (liveteam.roles), its own trades for the next 거래 점검 (no 88 % rule), ``bot`` for the tab's words."""
     from ... import liveteam as T
     path = os.environ.get(T.DB_ENV) or T.DB_DEFAULT
-    roster = [{"id": k, **v} for k, v in T.ROLES.items()]
+    tb = trend_bot(p["paper"])                           # the 추세판단 봇: its members' focus, its own trades, 거래 점검
+    roster = [{"id": k, **v} for k, v in T.roles(tb is not None).items()]
     try:
         budget, budget_err = T.parse_budget(os.environ.get(T.BUDGET_ENV)), None
     except ValueError as exc:
@@ -2729,7 +2731,13 @@ def team(p: dict, now: int, units=None) -> dict:
     try:
         pc = open_ro(p["paper"])
         try:
-            got = pc.execute("SELECT COUNT(*) FROM trades WHERE account_id = ?", (ACCOUNT,)).fetchone() if "trades" in _tables(pc) else None
+            if "trades" not in _tables(pc):
+                got = None
+            elif tb:                                     # the trend bot's own trades (entered since its start)
+                got = pc.execute("SELECT COUNT(*) FROM trades WHERE account_id = ? AND entry_time >= ?",
+                                 (ACCOUNT, int(tb["since"] or 0))).fetchone()
+            else:
+                got = pc.execute("SELECT COUNT(*) FROM trades WHERE account_id = ?", (ACCOUNT,)).fetchone()
             paper_n = _i(got[0]) if got else None
         finally:
             pc.close()
@@ -2737,9 +2745,15 @@ def team(p: dict, now: int, units=None) -> dict:
         paper_n = None
     when = {"weekly_next_ms": nxt, "paper_n": paper_n, "checkpoint_every": T.CHECK_EVERY,
             "checkpoint_next": ((paper_n or 0) // T.CHECK_EVERY + 1) * T.CHECK_EVERY if paper_n is not None else None,
-            "loss_rule_ko": "실거래 실행기의 마지막 닫힌 거래 2개가 모두 손실이면 (3일 안)"}
+            "loss_rule_ko": "실거래 실행기의 마지막 닫힌 거래 2개가 모두 손실이면 (3일 안)",
+            "checkpoint_ko": T.TREND_CHECK_KO if tb else T.KIND_KO["checkpoint"]}
+    if tb:
+        when.update(checkpoint_sub_ko=f"새 봇 시작 뒤 페이퍼 닫힌 거래 {T.CHECK_EVERY}번마다 · 88% 같은 기준 없음",
+                    loss_rule_ko="실거래 실행기의 마지막 닫힌 거래 2개가 모두 손실이면 (3일 안, 새 봇 시작 뒤 거래만)")
     base = {"now_ms": now, "path": path, "roster": roster, "kinds": T.KIND_KO, "verdicts": list(T.VERDICTS), "timer": timer,
-            "budget": budget, "budget_error": budget_err, "when": when, "small_n": T.SMALL_N}
+            "budget": budget, "budget_error": budget_err, "when": when, "small_n": T.SMALL_N,
+            "bot": {"trend": True, "name": tb["name"], "since": tb["since"], "about_ko": T.TREND_ABOUT_KO,
+                    "idea_how_ko": T.TREND_IDEA_HOW_KO} if tb else None}
     try:
         conn = open_ro(path)
     except FileNotFoundError:
@@ -2771,11 +2785,13 @@ def team(p: dict, now: int, units=None) -> dict:
         by_m.setdefault(mid, []).append({"seq": _i(seq), "role": role, "name": r.get("name"), "title": r.get("title"), "ts": _i(ts),
                                          "text": text or "", "error": error, "tokens": _i(tok)})
     idea_by: dict = {}
+    trend_ms = {m[0] for m in ms if tb and (_i(m[4]) or 0) >= int(tb["since"] or 0)}     # meetings held on the trend bot
     for iid, mid, ts, idea, why, test, status in ideas:
-        idea_by.setdefault(mid, []).append({"id": _i(iid), "ts": _i(ts), "idea": idea, "why": why, "test": test, "status": status})
+        idea_by.setdefault(mid, []).append({"id": _i(iid), "ts": _i(ts), "idea": idea, "why": why, "test": test, "status": status,
+                                            **({"how_ko": T.TREND_IDEA_HOW_KO} if mid in trend_ms else {})})
     meetings = []
     for mid, kind, key, title, s0, s1, state, why, head, verdict, result, sent, calls, tokens, dry in ms:
-        meetings.append({"id": _i(mid), "kind": kind, "kind_ko": T.KIND_KO.get(kind, kind), "key": key, "title": title, "started_ts": _i(s0),
+        meetings.append({"id": _i(mid), "kind": kind, "kind_ko": T.kind_ko(kind, key), "key": key, "title": title, "started_ts": _i(s0),
                          "finished_ts": _i(s1), "state": state, "why": why, "headline": head, "verdict": verdict, "result": _j(result),
                          "sent": None if sent is None else bool(sent), "calls": _i(calls), "tokens": _i(tokens), "dry": bool(dry),
                          "messages": by_m.get(mid, []), "ideas": idea_by.get(mid, [])})

@@ -3,7 +3,9 @@
 // Four AI members read the packet of facts the code builds from the live records and explain it in plain Korean; they
 // never trade (no tools, no order key). 방패 (리스크) · 저울 (통계) · 나침반 (시장) speak in order, 등대 (팀장) writes the
 // conclusion. Meetings: 손실 회의 (a live executor's last two closed trades both lost), 판단 회의 (every 40 paper trades),
-// 주간 보고 (Mondays 10:00 KST; a week without trades is one quiet line, no AI).
+// 주간 보고 (Mondays 10:00 KST; a week without trades is one quiet line, no AI). The 추세판단 봇 (d.bot.trend, owners 10/21):
+// its checkpoints are 거래 점검 on its own trades (no 88 % rule: when.checkpoint_ko / checkpoint_sub_ko), the intro names
+// what the team reads of it (d.bot.about_ko) and an idea is tested by a shadow bot or at the review (idea.how_ko).
 //   본부      the four members as pixel characters on their coloured pads (core/figure.js figure: a stable hue each), name,
 //             title, focus, and the last line each really said (ui.bubble: stored lines only); the switch (timer on / off,
 //             the one command), the login check, the AI used today / in 7 days against the owners' caps, the next meetings
@@ -166,7 +168,7 @@ export function transcript(m) {
 export function ideaCard(i) {
   return h("div", {class: "lbt-idea"},
     h("div", {class: "lbt-ih"}, h("span", {class: "lbt-ibulb", "aria-hidden": "true"}, "?"), h("b", null, i.idea || "—"),
-      ui.pill(i.status || "제안", i.status === "제안" || !i.status ? "accent" : "thin", "두 분이 개선 후보 장부 순서대로 정해요")),
+      ui.pill(i.status || "제안", i.status === "제안" || !i.status ? "accent" : "thin", i.how_ko || "두 분이 개선 후보 장부 순서대로 정해요")),
     i.why ? h("p", null, h("span", {class: "muted"}, "근거 "), i.why) : null,
     i.test ? h("p", null, h("span", {class: "muted"}, "시험 방법 "), i.test) : null);
 }
@@ -240,10 +242,10 @@ export function teamView(ctx) {
       h("div", {class: "lbt-ntiles"},
         h("div", {class: "lbt-nt", dataset: {k: "weekly"}}, h("span", {class: "lbt-ntk"}, "주간 보고"), h("b", null, w.weekly_next_ms ? `${fmt.date(w.weekly_next_ms)} ${fmt.hm(w.weekly_next_ms)}` : "—"),
           h("span", {class: "lbt-nts"}, "매주 월요일 10:00 · 지난주 거래가 없으면 AI 없이 한 줄")),
-        h("div", {class: "lbt-nt", dataset: {k: "check"}}, h("span", {class: "lbt-ntk"}, "판단 회의"),
+        h("div", {class: "lbt-nt", dataset: {k: "check"}}, h("span", {class: "lbt-ntk"}, w.checkpoint_ko || "판단 회의"),
           h("b", {class: "num"}, cp ? `${fmt.int(cp.n)} / ${fmt.int(cp.next)}번` : "페이퍼 거래 수 못 읽음"),
           cp ? h("span", {class: "lbt-nbar", role: "img", "aria-label": `${cp.n} / ${cp.next}`}, h("i", {style: {width: (cp.ratio * 100).toFixed(1) + "%"}})) : null,
-          h("span", {class: "lbt-nts"}, `페이퍼 닫힌 거래 ${fmt.int(w.checkpoint_every || 40)}번마다`)),
+          h("span", {class: "lbt-nts"}, w.checkpoint_sub_ko || `페이퍼 닫힌 거래 ${fmt.int(w.checkpoint_every || 40)}번마다`)),
         h("div", {class: "lbt-nt", dataset: {k: "loss"}}, h("span", {class: "lbt-ntk"}, "손실 회의"), h("b", null, "두 번 연속 손실 때"),
           h("span", {class: "lbt-nts"}, w.loss_rule_ko || "실거래 실행기의 마지막 닫힌 거래 2개가 모두 손실이면"))));
   }
@@ -256,11 +258,12 @@ export function teamView(ctx) {
       put(intro, h("div", {class: "lbt-offline"}, h("span", null, "분석팀이 꺼져 있어요. 아래 기록은 켜져 있던 때의 것이에요."), cmdBox(timer.on_cmd, "다시 켜기")));
       return;
     }
+    const bot = d.bot || {}, cpk = (d.when && d.when.checkpoint_ko) || "판단 회의";
     put(intro, ui.card({title: tw.on ? "분석팀이 켜졌어요: 첫 회의를 기다려요" : "분석팀은 아직 꺼져 있어요", cls: "lbt-intro"},
       h("ul", {class: "lbt-introl"},
-        h("li", null, h("b", null, "무엇을 하나요? "), "실거래 기록(두 실행기, 페이퍼, 점검 기록, 5년 기준)을 코드가 모아 주면, AI 넷이 읽고 쉬운 말로 설명해요."),
+        h("li", null, h("b", null, "무엇을 하나요? "), `${bot.about_ko || "실거래 기록(두 실행기, 페이퍼, 점검 기록, 5년 기준)"}을 코드가 모아 주면, AI 넷이 읽고 쉬운 말로 설명해요.`),
         h("li", null, h("b", null, "누가? "), (d.roster || []).map((r) => `${r.name}(${r.title})`).join(" · "), " · 셋이 차례로 말하고 팀장이 결론을 써요."),
-        h("li", null, h("b", null, "언제? "), "실거래가 두 번 연속 지면 손실 회의, 페이퍼 거래 40번마다 판단 회의, 매주 월요일 10:00 주간 보고."),
+        h("li", null, h("b", null, "언제? "), `실거래가 두 번 연속 지면 손실 회의, ${bot.trend ? "새 봇 시작 뒤 " : ""}페이퍼 거래 40번마다 ${cpk}, 매주 월요일 10:00 주간 보고.`),
         h("li", null, h("b", null, "매매는? "), "안 해요. 읽기만 하고 주문 권한도 설정을 바꿀 방법도 없어요. 매매는 지금처럼 고정 규칙대로예요."),
         h("li", null, h("b", null, "비용은? "), `두 분의 Claude 요금제를 함께 써요. 하루 ${fmt.int(b.day)}번 · 7일 ${fmt.int(b.week)}번까지만 부르고, 한도에 걸리면 다음으로 미뤄요.`)),
       tw.on ? ui.note("켜져 있어요. 회의 때가 되면 여기에 기록이 생겨요.")
@@ -288,7 +291,8 @@ export function teamView(ctx) {
       h("div", {class: "lbt-cols"}, col("good", "잘된 점", r.good, "good"), col("worries", "걱정", r.worries, "worry"), col("watch", "다음에 볼 것", r.watch_next, "watch")),
       (m.ideas || []).length ? h("div", {class: "lbt-ideas"}, h("h4", null, `시험해 볼 아이디어 ${fmt.int(m.ideas.length)}개`),
         h("div", {class: "lbt-igrid"}, m.ideas.map(ideaCard)),
-        ui.note("아이디어는 시험해 볼 가설이에요. 채택은 두 분이 개선 후보 장부 순서대로 (2020-24로 정하고 2025-26에서 확인, 그다음 그림자 봇) 정해요.")) : null,
+        ui.note(d.bot && d.bot.idea_how_ko ? `아이디어는 시험해 볼 가설이에요. ${d.bot.idea_how_ko}.`
+          : "아이디어는 시험해 볼 가설이에요. 채택은 두 분이 개선 후보 장부 순서대로 (2020-24로 정하고 2025-26에서 확인, 그다음 그림자 봇) 정해요.")) : null,
       small ? h("p", {class: "lb-warn"}, `페이퍼 거래가 아직 ${fmt.int(d.when.paper_n)}번이라 우연이 큰 단계예요: 결론보다 기록으로 읽어 주세요`) : null,
       h("button", {type: "button", class: "linkish lbt-hopen", onclick: () => openMeeting(m.id)}, "이 회의에서 팀원들이 한 말 보기 ↓")));
   }
@@ -334,7 +338,7 @@ export function teamView(ctx) {
         h("li", null, h("b", null, "숫자는 코드가 모은 사실만 보고 말해요."), " 팀원은 기록에 없는 숫자를 만들지 않고 '자료 없음'이라고 써요."),
         h("li", null, h("b", null, `거래가 ${fmt.int(d && d.small_n || 20)}번 미만이면 결론을 안 내요.`), " 그 전 차이는 대부분 우연이에요."),
         h("li", null, "말풍선은 저장된 실제 발언이에요 (꾸민 문장 없음). 회의 중 표시는 기록이 '진행 중'일 때만 나와요."),
-        h("li", null, "아이디어는 가설일 뿐이에요. 채택은 두 분이 개선 후보 장부 순서대로 정해요.")),
+        h("li", null, d && d.bot && d.bot.idea_how_ko ? `아이디어는 가설일 뿐이에요. ${d.bot.idea_how_ko}.` : "아이디어는 가설일 뿐이에요. 채택은 두 분이 개선 후보 장부 순서대로 정해요.")),
       h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "AI가 인용한 페이퍼(연습 돈) 숫자"), ui.assumeLive("AI가 인용한 바이비트 · WOO X Pro 숫자"))));
   }
 

@@ -107,6 +107,15 @@
 - 실거래 사이트 **기록 › 일지**(10/21 밤, 기록의 첫 탭): 자리 비운 동안 있었던 일을 시간순 한 줄씩 — 추세 판단 바뀜(최근 72시간),
   신호와 그 결과(막힘 · 점검 탈락 · 되돌림 대기 · 옴/안 옴 · 진입), 진입 · 감독 청산 · 청산, 두 실행기 체결(페이퍼와 가격 차이),
   안전 기록. 24시간 · 3일 · 7일, 종류 · 코인으로 거르기.
+- 실거래 사이트 **분석팀**(AI, 설치 때는 꺼져 있음: `paperbot-liveteam.timer`; 지금 도는 페이퍼 봇이 이 봇이면): 팀원 넷(방패 리스크 ·
+  저울 통계 · 나침반 시장 · 등대 팀장)이 이 봇의 기록만 읽고 쉬운 말로 설명해요. 읽는 것: 새 봇 시작(10/21 23:28) 뒤 페이퍼 · 동전
+  쌍둥이 · 두 실행기 성적(그 전에 들어간 거래는 "예전 봇(규칙봇 15)"으로 따로 표시하고 성적에 안 넣음), 코인별 1시간·4시간 추세 판단,
+  되돌림 대기, 신호가 어디서 걸렸나, 감독 청산과 전환 전 포지션 정리, 비용 쪼개기, 7/1~10/20 재현과 새 규칙 가상 계산(둘 다
+  **가상**이라고 적어서), 두 분 결정(시간 정리 없음 · 쉬기 없음 · 나스닥 개장 앞뒤 22:00~23:00 · 실거래 지갑의 약 40%). 5년 기준표와
+  "40번 88%" 기준은 쓰지 않고, 점검 회의는 **40번째 거래 점검**(새 봇 거래 40번마다 숫자를 같이 보는 자리)이에요. 고정 규칙은
+  논의하지 않고, 아이디어는 그림자 봇(`deploy/combo.shadow-trend-*.json`)이나 11/04 2주 검토에서 시험해 볼 가설로만 남겨요(정하는 건
+  두 분). AI를 부르지 않고 팀원이 읽을 사실과 지시문을 미리 보기(아무것도 쓰지 않음):
+  `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liveteam preview weekly`
 
 ## 7. 서버 순서 (한 줄씩 붙여 넣기)
 
@@ -158,5 +167,5 @@
     되살리기: `systemctl unmask paperbot-paramshadow.timer` 후 `install.sh`)
   - 옛 −35% 페이퍼 봇: `systemctl disable --now paperbot-combo-mexc` (`install.sh`는 돌고 있던 것만 다시 켭니다)
   - AI 비용이 드는 것(쓰고 있지 않다면): `systemctl disable --now paperbot-agents.timer paperbot-evening.timer paperbot-debate paperbot-liveteam.timer`
-    (실거래 분석 팀은 아직 옛 규칙봇 15 기준으로 설명합니다)
+    (실거래 분석 팀은 이제 추세판단 봇 기준으로 설명합니다: 6의 "분석팀")
 - 끈 뒤 확인: `systemctl is-active paperbot-live3 paperbot-combo paperbot-executor paperbot-executor-mexc` → 네 줄 모두 `active`.

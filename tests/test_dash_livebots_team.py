@@ -220,6 +220,40 @@ console.log(JSON.stringify({ms: tick.ms, after: after.text.replace(/\\s+/g, " ")
     assert out["dim"] == 1 and out["rows"] == 4 and out["back"] == 0
 
 
+# ---------------------------------------------------------------- 추세판단 봇 (10-21): the tab follows the running bot
+def test_team_on_the_trend_bot(tmp_path, monkeypatch):
+    """The 추세판단 봇 runs (tests/test_liveteam.py trend_world): the members' focus on it, its own trades towards the next
+    거래 점검 (the bot before it's not counted, no 88 % rule), the intro and the ideas in its words; then a 40번째 거래 점검
+    held by liveteam.py itself (FakeRunner) as the tab shows it."""
+    import test_liveteam as TL
+    from paperbot.agents import runner as R
+    _w, since, paths, now = TL.trend_world(tmp_path, monkeypatch)
+    day1 = json_finite(L.team(paths, now, units=OFF))             # no liveteam.db yet
+    assert day1["state"] == "missing" and day1["bot"]["trend"] is True and day1["bot"]["since"] == since
+    assert (day1["when"]["paper_n"], day1["when"]["checkpoint_next"], day1["when"]["checkpoint_ko"]) == (1, 40, "거래 점검")
+    assert [r["focus"] for r in day1["roster"]] == [T.ROLES_TREND[k]["focus"] for k in ("risk", "stats", "market", "lead")]
+    t1 = _node(VIEW, day1)["text"]
+    for words in ("추세판단 봇의 기록(새 봇 시작 뒤 페이퍼·동전 쌍둥이·두 실행기", "새 봇 시작 뒤 페이퍼 거래 40번마다 거래 점검",
+                  "1 / 40번", "새 봇 시작 뒤 페이퍼 닫힌 거래 40번마다 · 88% 같은 기준 없음", "새 봇 시작 뒤 거래만",
+                  "아이디어는 가설일 뿐이에요. 그림자 봇으로 나란히 보거나 2주 검토에서 두 분이 정해요."):
+        assert words in t1, words
+    for old in ("판단 회의", "점검 기록, 5년 기준", "개선 후보 장부"):
+        assert old not in t1, old
+    assert not _bad_words(t1)
+    conn = T.connect(os.environ[T.DB_ENV])
+    T.tick(conn, TL.trend_41(T.sources(now, paths), since, now), R.FakeRunner(answers={"lead": TL.LEAD}), T.BUDGET_DEFAULT,
+           clock=lambda: now)
+    conn.close()
+    team = json_finite(L.team(paths, now, units=ON))
+    (m,) = team["meetings"]
+    assert m["kind_ko"] == "거래 점검" and m["title"].startswith("40번째 거래 점검 · ") and m["ideas"]
+    assert all(i["how_ko"] == T.TREND_IDEA_HOW_KO for i in m["ideas"])
+    t = _node(VIEW, team)["text"]
+    for words in ("거래 점검", "최근 결론", TL.LEAD["headline"], "아이디어는 시험해 볼 가설이에요. 그림자 봇으로 나란히 보거나 2주 검토에서 두 분이 정해요."):
+        assert words in t, words
+    assert "판단 회의" not in t and "개선 후보 장부" not in t and not _bad_words(t)
+
+
 # ---------------------------------------------------------------- static checks
 def test_css_tokens_sizes_prefix_and_motion():
     src = re.sub(r"/\*.*?\*/", "", _read(CSS), flags=re.S)
