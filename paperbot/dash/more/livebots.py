@@ -131,6 +131,7 @@ KIND_KO = {
 LEVEL_KO = {"WARN": "주의", "CRITICAL": "긴급"}
 # exit reasons: the paper engine's codes (paperbot/combo.py KO_EXIT) and what an executor's close was
 EXIT_KO = {"SL": "손절", "LOCK": "잠금 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산", "REV": "빠른 청산",
+           "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)",
            "END": "끝냄", "TP": "익절", "PAPER": "페이퍼 따라 청산", "OTHER": "기타 청산"}
 MISSING_KO = "아직 파일이 없어요 (봇을 아직 켜지 않았거나, 설정의 경로가 달라요)"
 NO_TABLE_KO = "파일은 있지만 아직 기록 표가 없어요 (봇이 첫 기록을 쓰기 전)"
@@ -1404,9 +1405,32 @@ def why_cat(status: str, why: str) -> tuple:
     _research_signal, _research_entry, _breaks)."""
     w = str(why or "")
     if status == "WAITING":
+        if w.startswith("되돌림 기다림"):                 # the trend bot's pullback wait (paperbot/trendbot.py _divert)
+            return "pullback_wait", "되돌림 기다림"
         return "waiting", "돌파 기다림"
     if status == "BROKE":
+        if w.startswith("되돌림 확인"):
+            return "pulled", "되돌림 확인 (진입 신호로 바뀜)"
         return "broke", "돌파 확인 (진입 신호로 바뀜)"
+    # the trend bot (paperbot/trendbot.py, trendjudge.check): its waits, its judge, its entry checks, its pauses
+    if w.startswith("되돌림 안 옴"):
+        return "nopull", "되돌림 안 옴"
+    if w.startswith("되돌림 확인이 늦음"):
+        return "late", "늦음"
+    if w.startswith("추세 판단을 못 읽어") or w.startswith("추세 판단에 쓸 가격"):
+        return "trend_unread", "추세 판단 못 읽음"
+    if w.startswith(("1시간 추세", "4시간 추세")):
+        return "trend", "추세 판단 (보류·반대·힘 약함·끝물)"
+    if w.startswith("돌파형은 추세 초입만") or "EMA20에서" in w or " RSI " in f" {w}":
+        return "spot", "진입 자리 검사"
+    if w.startswith("하루 손실 한도"):
+        return "daily", "하루 손실 한도"
+    if "번 연속: " in w and "까지 쉼" in w:
+        return "member_pause", "매매법 쉬는 중"
+    if "손실 뒤" in w and "시간 쉼" in w:
+        return "coin_pause", "코인·방향 쉬는 중"
+    if w.startswith("추세판단 봇은"):
+        return "config", "설정이 바뀜"
     if w.startswith("연구 조건 밖"):
         return "research", "연구 조건 밖"
     if w.startswith("끈 구간"):

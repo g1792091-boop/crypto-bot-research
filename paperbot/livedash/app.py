@@ -51,7 +51,7 @@ PUBLIC_PATHS = ("/login", "/api/login", "/static/login.css", "/static/login.js",
                 "/static/live/manifest.json", "/static/icon.svg", "/static/icon-192.png", "/static/icon-512.png",
                 "/static/apple-touch-icon.png")
 # dash/more modules the 실거래 screens call (each registers its own GET routes; read-only)
-MODULES = ("livebots", "livemissed", "livetape", "livepos", "livewhy", "ticks", "movers", "topstats", "vplevels")
+MODULES = ("livebots", "livemissed", "livetape", "livepos", "livewhy", "livetrend", "ticks", "movers", "topstats", "vplevels")
 # part B's 실거래 additions: registered when the module is there (an app without it still starts)
 OPTIONAL_MODULES = ("liveinsight",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"

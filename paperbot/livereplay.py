@@ -47,7 +47,8 @@ FIVE = 300_000
 H1 = 3_600_000
 H4 = 14_400_000
 DAY = 86_400_000
-IV_MS = {"1m": MIN, "5m": FIVE, "1h": H1, "4h": H4}
+IV_MS = {"1m": MIN, "5m": FIVE, "30m": 6 * FIVE, "1h": H1, "4h": H4}
+TREND_30M_BARS = 600                     # the trend bot's 30m entry bars fetched before the window (trendjudge.KEEP + room)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXCHANGE_FILE = os.path.join(ROOT, "research", "fullgrid", "exchange.json")
 CACHE_IV = ("1m", "5m")                  # intervals kept in the cache between nights
@@ -323,8 +324,10 @@ def replay_day(cfg_raw: dict, market: Market, w0: int, w1: int, *, live_bars: Op
                log: Optional[Callable[[str], None]] = None) -> ReplayResult:
     """Replay the combined bot over [w0, w1) (module docstring). ``cfg_raw``: the live bot's config (combo.json or the
     ``combo_run`` record); ``live_bars``: {minute: [live_bars row dicts]} of the rule bot (None or too few: Binance);
-    ``seed``: the ``day:<date>`` snapshot ({"engines": {...}}) taken at w0. Raises MarketDown when the market cannot
-    be read; any other error is a bug (raised)."""
+    ``seed``: the ``day:<date>`` snapshot ({"engines": {...}}) taken at w0, with the trend bot (``"trend"`` in the config,
+    paperbot/trendbot.py) also ``"trend_history"``: {"since": the live bot's first start, "trades": its COMBO@mix trades
+    (TradeRecord dicts) closed before w0} so its pauses (member, coin, daily loss) start as the live ones did. Raises
+    MarketDown when the market cannot be read; any other error is a bug (raised)."""
     from . import combo as C
     from . import rmember as RM
     from .engine import restore_engine
@@ -361,10 +364,13 @@ def replay_day(cfg_raw: dict, market: Market, w0: int, w1: int, *, live_bars: Op
 
         # ---- market data, fetched once
         say(f"fetching market data {len(syms)} coins")
-        m1, m5, h1, h4, fund, oi, mark = {}, {}, {}, {}, {}, {}, {}
+        m1, m5, h1, h4, fund, oi, mark, m30 = {}, {}, {}, {}, {}, {}, {}, {}
         lo1 = w0 - RM.RData.KEEP_1M * MIN - 2 * H1
+        trend = cfg.trend is not None
         for s in syms:
             m1[s] = _Series(market.klines(s, "1m", lo1, data_end), MIN)
+            if trend:
+                m30[s] = _Series(market.klines(s, "30m", w0 - TREND_30M_BARS * IV_MS["30m"], data_end), IV_MS["30m"])
             if keep5:
                 m5[s] = _Series(market.klines(s, "5m", w0 - keep5 * FIVE, data_end), FIVE)
             h1[s] = _Series(market.klines(s, "1h", w0 - (RM.RData.FETCH["1h"] + 2) * H1, data_end), H1)
@@ -459,8 +465,34 @@ def replay_day(cfg_raw: dict, market: Market, w0: int, w1: int, *, live_bars: Op
                 if aid in book.engines:
                     restore_engine(book.engines[aid], st)
             res.seeded = True
-        runner = C.ComboRunner(cfg, members, book, store, NullNotifier(), custom, clock, prices, _Fund(rates),
-                               fetch_5m=fetch_5m if keep5 else None, btc=btc, rdata=rdata)
+        extra, runner_cls = {}, C.ComboRunner
+        if trend:                                # 추세판단 봇: its judge on the same closed bars, served by the clock
+            from .trendbot import TrendRunner
+            from .trendjudge import Judge, Klines, TrendRules
+            series = {"30m": m30, "1h": h1, "4h": h4}
+
+            def jfetch(symbol, tf, limit):
+                ser = series[tf].get(symbol)
+                return [] if ser is None else ser.rows(0, clock.now + 1, clock.now, width=6)[-int(limit):]
+            runner_cls = TrendRunner
+            extra["judge"] = Judge(Klines(jfetch, clock), TrendRules.from_dict(cfg.trend))
+            hist = (seed or {}).get("trend_history") if isinstance(seed, dict) else None
+            for t in (hist or {}).get("trades") or []:
+                try:
+                    store.conn.execute(
+                        "INSERT INTO trades (account_id, symbol, entry_time, exit_time, exit_reason, leverage, pnl, roe, "
+                        "equity_after, data) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (C.ACCOUNT, t["symbol"], int(t["entry_time"]), int(t["exit_time"]), t["exit_reason"],
+                         int(t["leverage"]), float(t["pnl"]), float(t["roe"]), float(t["equity_after"]), json.dumps(t)))
+                except (KeyError, TypeError, ValueError):
+                    continue
+            store.commit()
+        runner = runner_cls(cfg, members, book, store, NullNotifier(), custom, clock, prices, _Fund(rates),
+                            fetch_5m=fetch_5m if keep5 else None, btc=btc, rdata=rdata, **extra)
+        if trend:
+            hist = (seed or {}).get("trend_history") if isinstance(seed, dict) else None
+            if hist and hist.get("since") is not None:
+                runner.since = int(hist["since"])
         runner.cursor = 0
         book.last_ts = w0 - MIN
         if custom is not None:
@@ -498,7 +530,8 @@ def replay_day(cfg_raw: dict, market: Market, w0: int, w1: int, *, live_bars: Op
             "ORDER BY ts LIMIT 20")]
         res.signals = signals_of(store.conn, w0, w1)
         res.outcomes = outcomes_of(store.conn, C.ACCOUNT)
-        res.trades = trades_of(store.conn, C.ACCOUNT, res.outcomes)
+        # (the trend bot's history before w0 is in the same table: only the trades that closed in the replay count)
+        res.trades = trades_of(store.conn, C.ACCOUNT, res.outcomes, since=w0 if cfg.trend is not None else None)
         p = acct.position
         if p is not None:
             res.open_position = {"entry_time": int(p.entry_time), "symbol": p.symbol, "side": int(p.side),

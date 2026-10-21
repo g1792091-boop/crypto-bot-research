@@ -163,7 +163,8 @@ EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wo
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
-           "REV": "빠른 청산(반대 신호)", "TP": "익절", "END": "끝"}
+           "REV": "빠른 청산(반대 신호)", "TP": "익절", "END": "끝", "JUDGE": "감독 청산(추세 뒤집힘)",
+           "TIME": "감독 청산(시간 정리)"}
 KO_DOW = "월화수목금토일"
 KO_STATUS = {"SUBMITTED": "진입 신호", "FILTERED": "걸러짐", "WAITING": "돌파 대기", "BROKE": "돌파 확인",
              "REJECTED": "거절"}
@@ -931,6 +932,24 @@ def bar_quality(bars: Optional[dict], w0: int, w1: int, late_s: float = 150.0) -
     return gaps, late
 
 
+def trend_history(live_conn, w0: int, days: int = 3) -> dict:
+    """The trend bot's (paperbot/trendbot.py) own history the replay needs for its pauses: its first start on this
+    database (state combo ``trend_since``) and its COMBO@mix trades closed in the ``days`` before w0 (TradeRecord dicts)."""
+    _ts, st = get_state(live_conn, "combo")
+    since = (st or {}).get("trend_since") if isinstance(st, dict) else None
+    trades = []
+    try:
+        for (data,) in live_conn.execute("SELECT data FROM trades WHERE account_id = ? AND exit_time < ? AND exit_time >= ? "
+                                         "ORDER BY exit_time", (ACCOUNT, int(w0), int(w0) - days * DAY)):
+            try:
+                trades.append(json.loads(data))
+            except (TypeError, ValueError):
+                continue
+    except sqlite3.Error:
+        pass
+    return {"since": since, "trades": trades}
+
+
 def parity_check(src: Sources, live_conn, w0: int, w1: int, now_ms: int, replay: Optional[Callable] = None,
                  budget_min: float = REPLAY_BUDGET_MIN, log=None, extra_ctx: Optional[Callable] = None) -> dict:
     """Replay the day and compare it with the record. ``replay(cfg_raw, w0, w1, live_bars, seed, taker_fee)`` returns
@@ -945,6 +964,8 @@ def parity_check(src: Sources, live_conn, w0: int, w1: int, now_ms: int, replay:
     taker = (run or {}).get("taker_fee")
     seed_key = "day:" + _dt.datetime.fromtimestamp(w0 / 1000, _dt.timezone.utc).strftime("%Y-%m-%d")
     _sts, seed = get_state(live_conn, seed_key)
+    if isinstance(cfg, dict) and cfg.get("trend") is not None:
+        seed = {**(seed or {}), "trend_history": trend_history(live_conn, w0)}
     bars = read_live_bars(src.rule_db, w0, w1 + 12 * H1)
     if replay is None:
         def replay(cfg_raw, a, b, live_bars, seed, taker_fee):

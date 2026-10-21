@@ -175,6 +175,7 @@ const SICON = {
   hq: () => SICON.livebots(),
   pos: () => SICON.positions(),
   summary: () => SICON.terminal(),
+  trend: () => SICON.grid(),
   risk: () => SICON.alerts(),
   health: ICON.server,
   trades: () => SICON.digest(),
@@ -246,7 +247,7 @@ export function navGroups(feats) {
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
 export const LIVE_START = "hq";
 const LIVE_GROUPS = [
-  {id: "now", ko: "지금", screens: ["hq", "pos", "summary", "chart", "risk", "health"]},
+  {id: "now", ko: "지금", screens: ["hq", "pos", "summary", "chart", "trend", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
@@ -256,6 +257,7 @@ const LIVE_SCREENS = {
   pos: {ko: "포지션", group: "now", title: "포지션"},
   summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},
   chart: {ko: "차트", group: "now", title: "차트"},
+  trend: {ko: "추세", group: "now", title: "추세 판단"},
   risk: {ko: "위험", group: "now", title: "위험"},
   health: {ko: "봇 상태", group: "now", title: "봇 상태"},
   trades: {ko: "거래", group: "rec", title: "거래"},

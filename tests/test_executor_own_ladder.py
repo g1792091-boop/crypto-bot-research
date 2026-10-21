@@ -258,7 +258,7 @@ def test_check_config_validates_the_own_ladder_and_says_it_in_words(tmp_path, ca
     assert lines[1] == "계단: 순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%)"
     assert lines[2] == "기준(ladder_basis \"net\"): 순ROE - 수수료·슬리피지 왕복을 뺀 ROE (페이퍼와 같은 정의)"
     assert lines[3] == "순ROE 비용: 바이비트 테이커 0.055% + 슬리피지 0.02% (한쪽), 왕복 0.15%, 펀딩은 계산에 넣지 않음"
-    assert "빠른 청산(반대 신호)은 자기 첫 잠금 전에만 따름" in lines[4]
+    assert "빠른 청산(반대 신호)과 감독 청산(추세 판단 뒤집힘·시간 정리)은 자기 첫 잠금 전에만 따름" in lines[4]
     rc, lines = check(exchange="mexc")
     assert rc == 0 and "순ROE 비용: MEXC 테이커 0.08% + 슬리피지 0.02% (한쪽), 왕복 0.2%, 펀딩은 계산에 넣지 않음" in lines
     # "own" without a ladder, with a broken one, unknown keys, bad costs: refused
@@ -599,6 +599,42 @@ def test_rev_after_its_own_first_lock_is_ignored(rig):
     assert rig.amt() == 0.05 and rig.stops() == [10_064.0] and rig.ex.trade["paper_exit"]["action"] == "stay"
     (_lv, text, _d), = rig.events("own_stay")
     assert "자기 잠금 +10%가 있어 빠른 청산을 따르지 않고" in text
+
+
+@pytest.mark.parametrize("reason,ko", [("JUDGE", "감독 청산(추세 판단 뒤집힘)"), ("TIME", "감독 청산(시간 정리)")])
+def test_trend_supervisor_exits_are_followed_like_rev_before_its_own_first_lock(tmp_path, reason, ko):
+    """추세판단 봇 (paperbot/trendbot.py): the supervisor's exits close the live position while it has no lock of its own."""
+    r = Rig(tmp_path)
+    try:
+        r.enter(BTC, 1, 10_000.0, 20, qty=0.5, fill=10_000.0)
+        r.next_minute()
+        r.price(BTC, 10_050.0)
+        r.loop()
+        assert r.ex.trade["own"]["lock"] is None
+        r.paper.exit(reason, 10_050.0)
+        r.loop()
+        assert r.amt() == 0 and r.ex.trade is None
+        assert r.trades()[0][1] == f"paper 청산 → 거래소 포지션 닫기 (paper {ko}, 자기 첫 잠금 전)"
+    finally:
+        r.close()
+
+
+@pytest.mark.parametrize("reason", ["JUDGE", "TIME"])
+def test_trend_supervisor_exits_after_its_own_first_lock_are_ignored(tmp_path, reason):
+    r = Rig(tmp_path)
+    try:
+        r.enter(BTC, 1, 10_010.0, 20, qty=0.5, fill=10_000.0)
+        r.next_minute()
+        r.price(BTC, 10_072.0)
+        r.loop()
+        assert r.ex.trade["own"]["lock"] == pytest.approx(0.1)
+        r.paper.exit(reason, 10_070.0)
+        r.loop(2)
+        assert r.amt() == 0.05 and r.ex.trade["paper_exit"]["action"] == "stay"
+        (_lv, text, _d), = r.events("own_stay")
+        assert "자기 잠금 +10%가 있어 감독 청산을 따르지 않고" in text
+    finally:
+        r.close()
 
 
 @pytest.mark.parametrize("reason,words", [("HALT", "paper 멈춤 청산"), ("MANUAL", "paper 수동 청산"), ("END", "paper END")])

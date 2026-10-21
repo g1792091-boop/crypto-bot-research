@@ -123,7 +123,11 @@ NET_COSTS = {"binance": {"taker_fee": 0.0005, "slippage": 0.0002}, "bybit": {"ta
 EX_KO = {"binance": "바이낸스", "bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro"}
 # what closed the paper position (paperbot/engine.py, combo.py exit reasons) and what "own" does with it
 PRICE_EXITS = ("SL", "LOCK", "TP", "LIQ")       # a price level on the paper's prices: the live position stays on its own
+# the fast stop (REV) and the trend bot's supervisor (JUDGE: the higher bar's judgment turned, TIME: no first lock in time,
+# paperbot/trendbot.py): followed only while the live position has no lock of its own (owners 10-17 "첫 잠금 전까지만")
+BEFORE_LOCK_EXITS = ("REV", "JUDGE", "TIME")
 PAPER_EXIT_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "REV": "빠른 청산(반대 신호)",
+                 "JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)",
                  "HALT": "멈춤 청산", "MANUAL": "수동 청산"}
 OWN_EXIT_WAIT_S = 30.0                    # "own": the paper position is gone but its trade record is not readable yet
 OWN_PAGE_MIN = 500                        # "own": 1m candles per request (every exchange answers at least this many)
@@ -2003,8 +2007,9 @@ class Executor:
         """"own": the paper position ``t`` follows is gone. The close reason when the live position follows the paper
         out, None when it stays on its own exchange stop and ladder:
         - the paper's exit was a price level on its own prices (SL, LOCK, TP, LIQ): stays;
-        - REV (the fast stop: a reverse signal of the strategy): followed while this position has no lock of its own,
-          ignored once it has one (owners 10-17 "첫 잠금 전까지만", judged on the LIVE position's own lock);
+        - REV (the fast stop: a reverse signal of the strategy) and the trend bot's supervisor exits (JUDGE, TIME;
+          paperbot/trendbot.py): followed while this position has no lock of its own, ignored once it has one (owners
+          10-17 "첫 잠금 전까지만", judged on the LIVE position's own lock);
         - any other paper exit (HALT, MANUAL, a reason not known here): followed;
         - the paper trade cannot be read yet: waits OWN_EXIT_WAIT_S (the exchange stop protects), then followed.
         The paper's own exit of ``t`` decides, also when the paper already holds ANOTHER position (``intent``). While
@@ -2039,10 +2044,10 @@ class Executor:
         lock = (t.get("own") or {}).get("lock")
         record = {"reason": reason, "exit_time": got.get("exit_time"), "exit_price": got.get("exit_price"), "seen": now,
                   "own_lock": lock}
-        if reason in PRICE_EXITS or (reason == "REV" and lock is not None):
+        if reason in PRICE_EXITS or (reason in BEFORE_LOCK_EXITS and lock is not None):
             t["paper_exit"] = {**record, "action": "stay"}
-            why = (f"자기 잠금 +{float(lock):.0%}가 있어 빠른 청산을 따르지 않고" if reason == "REV" else
-                   "거래소 기준으로")
+            why = (f"자기 잠금 +{float(lock):.0%}가 있어 {'빠른' if reason == 'REV' else '감독'} 청산을 따르지 않고"
+                   if reason in BEFORE_LOCK_EXITS else "거래소 기준으로")
             self._event(INFO, "own_stay", f"{sym} paper가 {ko}로 닫았습니다 → {why} 계속 들고 갑니다 (거래소 손절 "
                         f"{float(t['stop']):g}" + (f", 자기 잠금 +{float(lock):.0%}" if lock is not None else
                                                    ", 아직 자기 잠금 없음") + ")",
@@ -2051,7 +2056,7 @@ class Executor:
             self._own_skip(t, intent)
             return None
         t["paper_exit"] = {**record, "action": "close"}
-        return f"paper 청산 → 거래소 포지션 닫기 (paper {ko}" + (", 자기 첫 잠금 전" if reason == "REV" else "") + ")"
+        return f"paper 청산 → 거래소 포지션 닫기 (paper {ko}" + (", 자기 첫 잠금 전" if reason in BEFORE_LOCK_EXITS else "") + ")"
 
     def _own_skip(self, t: dict, intent: Optional[Intent]) -> None:
         """"own" (owners 10-20): the paper entered another position while this live position stays on its own stop and
@@ -2902,8 +2907,8 @@ def ladder_lines(cfg: ExecConfig) -> list:
     else:
         out += ["기준(ladder_basis \"net\"): 순ROE - 수수료·슬리피지 왕복을 뺀 ROE (페이퍼와 같은 정의)",
                 f"순ROE 비용: {own_cost_text(cfg)}, 펀딩은 계산에 넣지 않음"]
-    out.append("paper 청산: 손절·계단 익절(가격)은 따르지 않고 자기 손절·계단으로 계속, 빠른 청산(반대 신호)은 자기 첫 잠금 전에만 "
-               "따름, 그 밖의 청산(멈춤·수동)은 따름")
+    out.append("paper 청산: 손절·계단 익절(가격)은 따르지 않고 자기 손절·계단으로 계속, 빠른 청산(반대 신호)과 감독 청산(추세 판단 "
+               "뒤집힘·시간 정리)은 자기 첫 잠금 전에만 따름, 그 밖의 청산(멈춤·수동)은 따름")
     out.append("paper 새 진입: 실거래가 아직 자기 포지션을 들고 있으면 따라가지 않음(놓친 신호로 기록, 들고 있던 포지션은 닫지 않음). "
                "닫힌 뒤의 새 진입부터 따름")
     return out

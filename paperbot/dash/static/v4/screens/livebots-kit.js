@@ -58,7 +58,7 @@ export function realLine(d) {
 }
 
 /** Exit reasons in the owners' words (the server sends reason_ko too; this is for the short tags of a dense row). */
-export const EXIT_SHORT = {SL: "손절", LOCK: "잠금", LIQ: "청산", HALT: "멈춤", MANUAL: "수동", REV: "반대", TP: "익절", PAPER: "청산", OTHER: "청산", END: "끝"};
+export const EXIT_SHORT = {SL: "손절", LOCK: "잠금", LIQ: "청산", HALT: "멈춤", MANUAL: "수동", REV: "반대", JUDGE: "감독", TIME: "시간", TP: "익절", PAPER: "청산", OTHER: "청산", END: "끝"};
 
 const ago = (ms) => fmt.ago(ms, serverNow());
 

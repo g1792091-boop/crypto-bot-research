@@ -89,7 +89,7 @@ SMALL = 20                          # fewer closed trades than this: 표본 적�
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산", "REV": "빠른 청산",
-           "TP": "익절", "END": "끝"}
+           "TP": "익절", "END": "끝", "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)"}
 KO_STATE = {"open": "진행 중", "closed": "끝남", "no_data": "1분봉 없음", "refused": "진입 안 됨", "rebuild_failed": "다시 못 만듦",
             "error": "못 읽음"}
 KO_WHY = {"held": "포지션 있음 (한 번에 하나)", "lost": "같은 분 다른 신호에 밀림", "early": "빠른 청산 분 (갈아타지 않음)",

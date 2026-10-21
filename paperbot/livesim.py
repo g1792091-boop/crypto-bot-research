@@ -48,7 +48,7 @@ FUNDING_NOTE_KO = ("펀딩비는 빠져 있어요: 페이퍼 봇은 바이낸스
 REJECT_KO = {"sizing": "크기 계산이 거절했어요", "stop rule": "손절 자리가 강제청산 안쪽에 안 맞아요",
              "no next bar": "진입할 분의 1분봉이 없어요", "signal from the future": "신호 시각이 맞지 않아요"}
 EXIT_KO = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
-           "REV": "빠른 청산(반대 신호)"}
+           "REV": "빠른 청산(반대 신호)", "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)"}
 
 
 @dataclass

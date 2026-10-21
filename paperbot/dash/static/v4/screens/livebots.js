@@ -12,6 +12,8 @@
 //          /api/v4/livebots/positions)
 //   요약   the 실거래 터미널 (screens/livebots-term.js: the rule bot's terminal frame and parts, fed with the live records)
 //   차트   the open positions on the price chart, big, with their lines in words (screens/livebots-chart.js)
+//   추세   추세판단 봇 (owners 10/21): every coin's 1h / 4h judgment, the pullback waits, the pauses, the last 24 h of
+//          signals and the supervisor's exits (screens/livebots-trend.js, /api/v4/livebots/trend)
 //   위험 · 봇 상태 · 목표 · 규칙 점검   part B's tabs (screens/livebots-risk.js, livebots-health.js, livebots-goal.js,
 //          livebots-judge.js; their routes in dash/more/liveinsight.py)
 //   거래  the closed trades of each account, 10 a page, one opened in place, 최대 +% / 최대 −% per trade
@@ -54,6 +56,7 @@ import {riskView} from "./livebots-risk.js";
 import {healthView} from "./livebots-health.js";
 import {goalView} from "./livebots-goal.js";
 import {judgeView} from "./livebots-judge.js";
+import {trendView} from "./livebots-trend.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -63,6 +66,7 @@ export const TABS = [
   {id: "pos", label: "포지션", make: (ctx, hub) => posView(ctx, hub), own: true},
   {id: "summary", label: "요약", make: (ctx, hub) => termView(ctx, hub)},
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
+  {id: "trend", label: "추세", make: (ctx) => trendView(ctx), own: true},
   {id: "risk", label: "위험", make: (ctx) => riskView(ctx), own: true},
   {id: "health", label: "봇 상태", make: (ctx) => healthView(ctx), own: true},
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},

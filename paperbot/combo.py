@@ -114,7 +114,7 @@ DS_TFS_OF = {d[0]: d[2] for d in DS200_DEFS}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
-           "REV": "빠른 청산(반대 신호)"}
+           "REV": "빠른 청산(반대 신호)", "JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)"}
 EARLY_EXITS = (None, "own", "any")
 KO_EARLY = {None: "없음(고정 손절과 계단 익절만)", "own": "같은 매매법이 반대 신호를 내면 바로 청산",
             "any": "합친 매매법 중 하나라도 반대 신호를 내면 바로 청산"}
@@ -519,6 +519,8 @@ class ComboConfig:
     brackets_file: Optional[str] = None
     telegram: bool = True
     name: str = ""                      # shown in the messages: "[합친 봇 페이퍼 <name>]" (two paper bots side by side)
+    trend: Optional[dict] = None        # 추세판단 봇 (owners 10-21, paperbot/trendbot.py): the trend judge, entry checks,
+                                        # pullback entry, pauses and the supervisor; None = none of it (every other bot)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ComboConfig":
@@ -632,6 +634,9 @@ class ComboConfig:
             out.append("early_exit_until_lock은 true 또는 false입니다")
         elif self.early_exit_until_lock and not self.early_exit:
             out.append("early_exit_until_lock은 early_exit를 켰을 때만 씁니다")
+        if self.trend is not None:
+            from .trendbot import config_problems
+            out += config_problems(self)
         return out
 
 
@@ -864,7 +869,11 @@ class ComboEngine(PaperEngine):
 
 
 def make_cls(cfg: ComboConfig):
-    """The engine class AccountBook builds (accounts.AccountBook._make calls it like PaperEngine)."""
+    """The engine class AccountBook builds (accounts.AccountBook._make calls it like PaperEngine); the trend bot's
+    engine (paperbot/trendbot.py TrendEngine: the supervisor's exits) when the config has ``trend``."""
+    if cfg.trend is not None:
+        from .trendbot import TrendEngine
+        return functools.partial(TrendEngine, combo=cfg)
     return functools.partial(ComboEngine, combo=cfg)
 
 
@@ -1249,7 +1258,23 @@ class ComboRunner:
         self.store.put_state(STATE_KEY, ts, {
             "cursor": self.cursor, "queue": [{"bar_close": q.bar_close, "signal": q.signal} for q in self.queue],
             "breaks": self.breaks, "counts": self.counts, "version": VERSION,
-            "members": [m.label for m in self.members]})
+            "members": [m.label for m in self.members], **self._state_extra()})
+
+    # ---- hooks of the trend bot (paperbot/trendbot.py TrendRunner); nothing here for every other bot
+    def _state_extra(self) -> dict:
+        """More of the runner's own state, saved with the queue in the same commit."""
+        return {}
+
+    def _before_step(self, ts: int, bars: dict) -> None:
+        """Before the accounts step minute ts (the trend bot's supervisor)."""
+
+    def _after_step(self, ts: int, bars: dict) -> None:
+        """After the accounts stepped minute ts (the trend bot's pullback waits)."""
+
+    def _divert(self, sig: Signal, ts: int, bar_close: int, bars: dict) -> bool:
+        """True: this entry signal is not submitted now (the trend bot: filtered by its checks, or waiting for its
+        pullback). It still counts for the early exit."""
+        return False
 
     def _count(self, label: str, what: str) -> None:
         c = self.counts.setdefault(label, {})
@@ -1291,8 +1316,10 @@ class ComboRunner:
             self._submit_due(ts, minutes[ts])
             before = {aid: (e.position.entry_time if e.position else None, len(e.trades))
                       for aid, e in self.book.engines.items()}
+            self._before_step(ts, minutes[ts])
             self.book.step(ts, minutes[ts], self.funding.take(ts) if self.funding else None)
             self._tell(before)
+            self._after_step(ts, minutes[ts])
             for b in minutes[ts].values():
                 if self.custom is not None:
                     self.custom.add_1m(b)
@@ -1338,18 +1365,20 @@ class ComboRunner:
             age = now - int(sig.meta.get("ref_time") or q.bar_close)
             label = sig.meta.get("member", sig.strategy_id)
             exit_only = bool(sig.meta.get("exit_only"))
+            late = age > self.cfg.max_signal_age_s * 1000
+            held = (not exit_only and not late) and self._divert(sig, ts, q.bar_close, bars or {})
             for aid, e in self.book.engines.items():
                 s = sig if aid == ACCOUNT else replace(sig, side=flip_side(aid, sig), meta=dict(sig.meta))
                 if self.cfg.early_exit:
                     e.exit_signal(s)          # at its own minute, late or not: the paper replays every minute
-                if exit_only:
+                if exit_only or held:
                     continue
-                if age > self.cfg.max_signal_age_s * 1000:
+                if late:
                     e._record(s, "REJECTED", "late", ts, age_ms=age)
                     continue
                 e.submit(s)
-            if not exit_only:
-                self._count(label, "late" if age > self.cfg.max_signal_age_s * 1000 else "submitted")
+            if not exit_only and not held:
+                self._count(label, "late" if late else "submitted")
         self.queue = keep
 
     def _entry_block(self, sig: Signal, ts: int, bar_close: int, bars: dict) -> str:
@@ -1598,15 +1627,17 @@ class ComboRunner:
             self._count(m.label, "filtered")
         return ok
 
-    def _restate(self, sig: Signal, status: str, why: str, expect: tuple = ("SUBMITTED",)) -> None:
+    def _restate(self, sig: Signal, status: str, why: str, expect: tuple = ("SUBMITTED",),
+                 extra: Optional[dict] = None) -> None:
         """A later status of a signal already logged (signal_log keeps one row per bar, coin and member): a research
         member's signal filtered at its entry minute (its SUBMITTED row), or a break that never came (its WAITING
-        row). A row in another status belongs to another signal of the same bar and is left alone."""
+        row). A row in another status belongs to another signal of the same bar and is left alone. ``extra``: more
+        keys for the row's data (the trend bot's judgment and checks)."""
         cur = self.store.conn.execute(
             "SELECT data, status FROM signal_log WHERE bar_close = ? AND timeframe = ? AND strategy = ? AND symbol = ?",
             (sig.ts + 1, sig.timeframe, sig.meta.get("member", sig.strategy_id), sig.symbol)).fetchone()
         if cur is None:
-            self._log(sig, status, "custom", why)
+            self._log(sig, status, "custom", why, extra)
             return
         if cur[1] not in expect:
             return
@@ -1614,14 +1645,15 @@ class ComboRunner:
             data = json.loads(cur[0] or "{}")
         except ValueError:
             data = {}
+        data.update(extra or {})
         data["why"] = why
         self.store.conn.execute(
             "UPDATE signal_log SET status = ?, data = ? WHERE bar_close = ? AND timeframe = ? AND strategy = ? "
             "AND symbol = ?", (status, json.dumps(data, default=str), sig.ts + 1, sig.timeframe,
                                sig.meta.get("member", sig.strategy_id), sig.symbol))
 
-    def _log(self, sig: Signal, status: str, source: str, why: str = "") -> None:
-        data = {"source": source, "score": sig.meta.get("score_raw"), "strategy": sig.strategy_id}
+    def _log(self, sig: Signal, status: str, source: str, why: str = "", extra: Optional[dict] = None) -> None:
+        data = {"source": source, "score": sig.meta.get("score_raw"), "strategy": sig.strategy_id, **(extra or {})}
         if why:
             data["why"] = why
         self.store.log_signals([{
@@ -1667,8 +1699,10 @@ def stop_rule_ko(rule: Optional[str]) -> str:
 
 def exit_text(cfg: "ComboConfig", t) -> str:
     """The paper bot's own exit line (a TradeRecord)."""
+    why = (t.context or {}).get("exit_why") if isinstance(t.context, dict) else None
     return (f"{cfg.tag} 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
-            f"{KO_TF.get(t.timeframe, t.timeframe)}: {KO_EXIT.get(t.exit_reason, t.exit_reason)}, "
+            f"{KO_TF.get(t.timeframe, t.timeframe)}: {KO_EXIT.get(t.exit_reason, t.exit_reason)}"
+            + (f"({why})" if why else "") + f", "
             f"순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
 
 
@@ -1698,6 +1732,7 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
             f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
             f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
             f"{f'추격 진입 막기 {nc}개, ' if nc else ''}"
+            f"{'추세 판단(30분→1시간·1시간→4시간)·되돌림 진입·감독 청산, ' if cfg.trend is not None else ''}"
             f"포지션 1개, {pause}지갑 ${wallet:,.2f}")
 
 
@@ -1809,9 +1844,13 @@ def cmd_run(args) -> int:
                 rdata.ensure_1m(s, t_now - t_now % MIN - RM.RData.KEEP_1M * MIN, t_now - t_now % MIN)
             except Exception as exc:  # noqa: BLE001  fetched again at the first entry
                 notifier.send(WARN, f"{cfg.tag} {s} 1분봉 7일치를 못 받음(첫 진입 때 다시): {exc}"[:300])
-    runner = ComboRunner(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
-                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
-                         rdata=rdata)
+    runner_cls, extra = ComboRunner, {}
+    if cfg.trend is not None:                    # 추세판단 봇 (paperbot/trendbot.py)
+        from .trendbot import TrendRunner, make_judge
+        runner_cls, extra = TrendRunner, {"judge": make_judge(cfg, rest)}
+    runner = runner_cls(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
+                        lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
+                        rdata=rdata, **extra)
     if runner.cursor is None or book.last_ts is None:
         runner.start_at()
     # funding from the first minute not stepped yet: a rate already paid before a restart is never paid again
@@ -1880,7 +1919,8 @@ def cmd_check(args) -> int:
           f" / 증거금: {'배수%' if cfg.margin == 'leverage' else f'{float(cfg.margin):.0%}'}")
     lad = cfg.ladder_spec
     print(f"- 손절: {stop_text(cfg)} / 계단 익절: {lad.describe() if lad is not None else '설정 오류'}")
-    print(f"- 동시에 나온 신호: {' > '.join({'score': '진입 점수', 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
+    score_ko = "추세 점수(판단 강도+자리+최근 성적)" if cfg.trend is not None else "진입 점수"
+    print(f"- 동시에 나온 신호: {' > '.join({'score': score_ko, 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
     print(f"- 동전 쌍둥이 계좌: {'있음' if cfg.flip_twin else '없음'}")
     print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
           + (" (첫 잠금 +10% 전까지만, 잠긴 뒤에는 계단 익절만)" if cfg.early_exit and cfg.early_exit_until_lock else ""))
@@ -1899,6 +1939,13 @@ def cmd_check(args) -> int:
     if cfg.us_open_pause_min:
         print(f"- 나스닥 개장 뒤 {cfg.us_open_pause_min}분 진입 안 함 (뉴욕 09:30, 평일, 미국 휴장일 제외; "
               f"한국 시간 서머타임 22:30 / 겨울 23:30부터)")
+    if cfg.trend is not None:
+        from .trendjudge import TrendError, TrendRules
+        try:
+            for line in TrendRules.from_dict(cfg.trend).describe():
+                print(f"- {line}")
+        except (TrendError, TypeError):
+            pass                                   # the problem is in probs
     for m in members:
         print("  " + m.describe())
     for p in probs:

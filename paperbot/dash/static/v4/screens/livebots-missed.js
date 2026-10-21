@@ -33,7 +33,8 @@ export const FILTER_NOTE = "필터는 5년 시험에서 평균적으로 나쁜 �
   + "봐야 해요. 규칙을 바꿀지는 두 분이 정하고, 바꾸려면 13장 순서(백테스트 → 그림자 → 채택)를 따라요.";
 export const FUNDING = "펀딩비는 빠져 있어요: 페이퍼 봇은 바이낸스 펀딩비(8시간마다)를 내지만 그 비율은 어디에도 기록되지 않아서 "
   + "가상 결과에는 넣지 못했어요 (보통 8시간에 순ROE 0.3%p 안팎)";
-const EXIT_KO = {SL: "손절", LOCK: "계단 익절", LIQ: "강제청산", HALT: "멈춤 청산", MANUAL: "수동 청산", REV: "빠른 청산", TP: "익절", END: "끝"};
+const EXIT_KO = {SL: "손절", LOCK: "계단 익절", LIQ: "강제청산", HALT: "멈춤 청산", MANUAL: "수동 청산", REV: "빠른 청산", JUDGE: "감독 청산(추세 뒤집힘)",
+  TIME: "감독 청산(시간 정리)", TP: "익절", END: "끝"};
 const GROUP_LABEL = Object.fromEntries(GROUPS.map((g) => [g.id, g.label]));
 const RESULT_LABEL = Object.fromEntries(RESULTS.map((r) => [r.id, r.label]));
 
