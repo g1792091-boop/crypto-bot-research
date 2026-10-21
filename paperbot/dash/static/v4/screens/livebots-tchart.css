@@ -69,6 +69,10 @@
   pointer-events: auto; }
 .ltc-dot.short { background: var(--surface); border: 2px solid var(--ink); }
 .ltc-dot.open { animation: ltc-breathe 2.2s var(--ease) infinite; }
+.ltc-dot.before { opacity: .45; }
+/* the trend bot's start: left of it is the bot before it (전환 전) */
+.ltc-start { position: absolute; top: -3px; bottom: -3px; left: calc(var(--x) * 100%); z-index: 1; width: 0;
+  border-left: 2px dashed var(--accent); opacity: .9; }
 @keyframes ltc-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
 .ltc-x { position: absolute; top: 50%; left: calc(var(--x) * 100%); z-index: 2; transform: translate(-50%, -54%); color: var(--ink);
   font: 900 var(--t-sm)/1 var(--f-body); font-style: normal; pointer-events: auto;
@@ -81,6 +85,7 @@
   color: var(--muted); font-size: var(--t-2xs); line-height: 1.2; white-space: nowrap; }
 .ltc-tick.day { color: var(--ink); font-weight: 700; border-left-color: var(--ink-2); }
 .ltc-tick.now { left: auto; right: 0; padding: 0 0 0 4px; border: 0; color: var(--ink); font-weight: 700; }
+.ltc-tick.start { color: var(--accent); font-weight: 700; border-left: 2px dashed var(--accent); white-space: nowrap; }
 
 /* the cell in words */
 .ltc-read { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); margin-top: 12px; min-width: 0; }
@@ -117,6 +122,7 @@
 .ltc-sw.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); }
 .ltc-sw.dot.short { background: var(--surface); border: 2px solid var(--ink); }
 .ltc-sw.xx { width: auto; height: auto; background: none; color: var(--ink); font-weight: 900; font-style: normal; }
+.ltc-sw.start { width: 0; height: 13px; border-radius: 0; border-left: 2px dashed var(--accent); }
 .ltc-mk { display: inline-grid; place-items: center; flex: none; width: 10px; height: 10px; border-radius: 50%; color: var(--surface);
   font: 900 var(--t-2xs)/1 var(--f-body); font-style: normal; }
 .ltc-mk.in { background: var(--up); }
@@ -161,6 +167,7 @@
 .ltc-ew { min-width: 0; overflow-wrap: anywhere; }
 .ltc-ev.k-blocked .ltc-ew, .ltc-ev.k-other .ltc-ew, .ltc-ev.k-nopull .ltc-ew { color: var(--ink-2); }
 .ltc-ev.k-entered .ltc-ew b { color: var(--up); }
+.ltc-ev.before { opacity: .62; }
 .ltc-ev .num:not(.ltc-et) { text-align: right; min-width: 48px; }
 .ltc-esub { grid-column: 2 / -1; color: var(--ink-2); font-size: var(--t-2xs); line-height: 1.5; overflow-wrap: anywhere; }
 .ltc ul.ltc-how { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; }

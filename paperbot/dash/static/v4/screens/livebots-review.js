@@ -50,7 +50,8 @@ export function freezeView(bot) {
 /** The verdict chip of a what-if: {ko, cls}. */
 export function verdictChip(kind) {
   return ({helped: {ko: "도운 쪽", cls: "good"}, hurt: {ko: "손해 본 쪽", cls: "bad"}, luck: {ko: "운 범위 안", cls: "accent"},
-    small: {ko: "아직 판단 못 함", cls: "thin"}, none: {ko: "아직 없음", cls: "thin"}, na: {ko: "못 함", cls: "warn"}})[kind]
+    small: {ko: "아직 판단 못 함", cls: "thin"}, none: {ko: "아직 없음", cls: "thin"}, na: {ko: "못 함", cls: "warn"},
+    off: {ko: "뺀 규칙", cls: "thin"}})[kind]
     || {ko: "아직 판단 못 함", cls: "thin"};
 }
 

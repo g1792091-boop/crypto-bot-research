@@ -19,7 +19,8 @@ tabs already use, or a judgment change taken from the 추세 차트 tab's own re
                           청산 (the reason in the Telegram words: livecheck.KO_EXIT, net ROE, P&L), 감독 청산 (TIME /
                           JUDGE with the bot's why); the coin-flip twin COMBOFLIP@mix's trades too, flagged ``twin`` (the
                           page shows them behind a switch). The paper engine keeps no record of when each lock step moved
-                          (only the last lock, on the trade): an exit says how far its lock got
+                          (only the last lock, on the trade): an exit says how far its lock got. A trade entered before
+                          the trend bot's start is the bot before it's (``prev``, 전환 전): tagged, and counted apart
                  exec     each executor (its own database, livebots.sources): entries and exits with the gap to the paper's
                           price (in the trade's favour positive, livebots.pairs_of for the partner), its lock steps (its
                           own 'stop' / 'own_lock' records), the paper entries it did not follow and why (livebots.WHY,
@@ -77,11 +78,13 @@ SIDE_KO = {1: "롱", -1: "숏"}
 TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 # what stopped a signal before its checks (livebots.why_cat ids): the pauses and the chase block, in the owners' words
 BLOCK_KO = {"weekend": "주말이라 막힘", "macro": "경제 발표 앞뒤라 막힘", "usopen": "나스닥 개장 뒤라 막힘",
+            "usopen_pre": "나스닥 개장 앞뒤라 막힘",
             "chase": "추격 막기에 걸림", "chase_unread": "추격 판단을 못 해 막힘"}
 SUP = ("JUDGE", "TIME")
 OFF_KO = "지금 돌고 있는 페이퍼 봇은 추세판단 봇이 아니에요 (설정에 추세 판단이 없음) · 거래와 실행기 기록만 보여요"
 JUDGE_NOTE_KO = f"판단 기록은 최근 {JUDGE_H}시간만"
 SINCE_KO = "추세판단 봇이 켜지기 전 신호는 빼요"
+PREV_KO = f"추세판단 봇이 켜지기 전 예전 {LT.PREV_BOT_KO}의 거래"
 
 
 # ================================================================ small helpers
@@ -256,7 +259,8 @@ def signal_events(rows: list, outs: dict, now: int) -> tuple:
             cat, ko = L.why_cat(status, why)
             extra["cat"] = cat
             if cat in BLOCK_KO:
-                sub, words, tone = "blocked", BLOCK_KO[cat], "thin"
+                # the pause from 30 minutes before the open too (owners 10-21 night): its own words
+                sub, words, tone = "blocked", BLOCK_KO["usopen_pre" if cat == "usopen" and "개장 앞" in why else cat], "thin"
             elif cat == "trend":
                 sub, words, tone = "judge", "추세 판단에 걸림", "thin"
             elif cat == "spot":
@@ -301,14 +305,16 @@ def signal_events(rows: list, outs: dict, now: int) -> tuple:
 
 
 # ================================================================ the paper account's trades
-def trade_events(trades: list, positions: dict, entered: dict, t0: int) -> tuple:
+def trade_events(trades: list, positions: dict, entered: dict, t0: int, since: Optional[int] = None) -> tuple:
     """(events, counts) of the paper trades (TradeRecord fields + ``_id``, ``_acct``) and the open positions
     {account: Position dict} from ``t0`` on: entries, exits, supervisor exits; ``entered`` {(symbol, entry ms): the
     ENTERED outcome's signal meta} says whether an entry came after a pullback. The twin's rows carry ``twin`` and are
-    left out of the counts."""
+    left out of the counts. A trade or position entered before ``since`` (the trend bot's start) is the bot before it's:
+    ``prev`` on its rows, counted apart (``prev_entered``, ``prev_closed``)."""
     events = []
-    n_in = n_out = 0
+    n_in = n_out = p_in = p_out = 0
     pnl = 0.0
+    is_prev = lambda et: bool(since) and et is not None and int(et) < int(since)  # noqa: E731
     for t in trades:
         acct, tid = t["_acct"], t["_id"]
         twin = acct == FLIP
@@ -318,8 +324,13 @@ def trade_events(trades: list, positions: dict, entered: dict, t0: int) -> tuple
                 "tf": t.get("timeframe"), "strategy": t.get("strategy_id"), "leverage": _i(t.get("leverage"))}
         link = None if twin else _link("replay", id=tid)
         et, xt = _i(t.get("entry_time")), _i(t.get("exit_time"))
+        prev = is_prev(et)
+        base["prev"] = prev
         if et is not None and et >= t0:
-            n_in += 0 if twin else 1
+            if prev:
+                p_in += 0 if twin else 1
+            else:
+                n_in += 0 if twin else 1
             meta = {} if twin else entered.get((sym, et)) or {}
             events.append(_ev(f"t:{acct}:{tid}:e", et, "trade", "entry",
                               f"{who}{coin(sym)} {SIDE_KO.get(side, '')} 진입 · {t.get('leverage')}배 @ {price_ko(t.get('entry_price'))}",
@@ -330,7 +341,9 @@ def trade_events(trades: list, positions: dict, entered: dict, t0: int) -> tuple
         reason = t.get("exit_reason")
         ctx = t.get("context") if isinstance(t.get("context"), dict) else {}
         sup = reason in SUP
-        if not twin:
+        if not twin and prev:
+            p_out += 1
+        elif not twin:
             n_out += 1
             pnl += _f(t.get("pnl")) or 0.0
         words = LC.KO_EXIT.get(reason, L.EXIT_KO.get(reason, str(reason)))
@@ -352,19 +365,24 @@ def trade_events(trades: list, positions: dict, entered: dict, t0: int) -> tuple
         if et is None or et < t0:
             continue
         twin = acct == FLIP
-        n_in += 0 if twin else 1
+        prev = is_prev(et)
+        if prev:
+            p_in += 0 if twin else 1
+        else:
+            n_in += 0 if twin else 1
         sig = p.get("signal") if isinstance(p.get("signal"), dict) else {}
         meta = sig.get("meta") if isinstance(sig.get("meta"), dict) else {}
         sym, side = p.get("symbol"), int(p.get("side") or 0)
         lock = _f(p.get("lock_roe"))
         detail = _entry_detail(meta, meta.get("trend") if isinstance(meta.get("trend"), dict) else None, twin)
-        detail = " · ".join(x for x in (detail, "지금 열려 있어요" + (f" · 잠금 {pct_ko(lock, 0)}" if lock is not None else "")) if x)
+        detail = " · ".join(x for x in (detail, "지금 열려 있어요" + (f" · 잠금 {pct_ko(lock, 0)}" if lock is not None else ""),
+                                        "새 봇이 이어서 정리해요" if prev else None) if x)
         events.append(_ev(f"t:{acct}:open:{et}", et, "trade", "entry",
                           f"{'동전 쌍둥이 ' if twin else ''}{coin(sym)} {SIDE_KO.get(side, '')} 진입 · {p.get('leverage')}배 @ {price_ko(p.get('entry_price'))}",
                           detail, symbol=sym, side=side, tone="accent", link=None if twin else _link("pos"),
-                          acct="flip" if twin else "paper", twin=twin, open=True, tf=sig.get("timeframe"),
+                          acct="flip" if twin else "paper", twin=twin, open=True, prev=prev, tf=sig.get("timeframe"),
                           strategy=sig.get("strategy_id"), leverage=_i(p.get("leverage")), price=_f(p.get("entry_price"))))
-    return events, {"entered": n_in, "closed": n_out, "pnl": pnl}
+    return events, {"entered": n_in, "closed": n_out, "pnl": pnl, "prev_entered": p_in, "prev_closed": p_out}
 
 
 def _entry_detail(meta: dict, trend: Optional[dict], twin: bool) -> Optional[str]:
@@ -673,9 +691,12 @@ def build(p: dict, hours: int = 24, now_ms: Optional[int] = None, more: Optional
              "note_ko": None, "errors": []}
     state, reason_ko = pr["state"], pr.get("reason_ko")
     if pr["state"] == "ok":
-        tev, tc = trade_events(pr["trades"], pr["positions"], pr["entered"], t0)
+        tev, tc = trade_events(pr["trades"], pr["positions"], pr["entered"], t0, pr["since"])
         events += tev
         counts.update(tc)
+        if tc["prev_entered"] or tc["prev_closed"]:
+            notes.append(f"{PREV_KO}: 진입 {tc['prev_entered']}번 · 청산 {tc['prev_closed']}번은 '전환 전'으로 따로 표시해요 "
+                         "(위 진입·청산 숫자에 안 셈)")
         events += safety_events(pr, t0)
         if not pr["trend_on"]:
             state, reason_ko = "off", OFF_KO

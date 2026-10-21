@@ -184,4 +184,14 @@ export function acctCard(a, led, notes) {
     notesEl(notes));
 }
 
+/** The paper card's note while the 추세판단 봇 runs (the summary's trend_bot): its balance and closed trades are the
+ *  whole account's, the bot before it included; the new bot's own count from the checkpoint (its trades only). */
+export function paperSinceNote(d) {
+  const tb = d && d.trend_bot;
+  if (!tb || tb.since == null) return null;
+  const n = d.checkpoint && d.checkpoint.n != null ? Number(d.checkpoint.n) : null;
+  return [`${tb.name || "추세판단 봇"} ${fmt.kst(tb.since)} 시작 · 위 잔고와 닫힌 거래는 계좌 전체 (그 전 예전 봇 거래 포함)`
+    + (n != null ? ` · 새 봇 닫힌 거래 ${fmt.int(n)}번` : "")];
+}
+
 export const notesEl = (notes) => (notes && notes.length ? h("div", {class: "lb-notes"}, notes.map((t) => h("p", {class: "lb-warn"}, t))) : null);

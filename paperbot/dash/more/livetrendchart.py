@@ -9,7 +9,8 @@
                  A cell is the time its judgment was in force, from its bar's close to the next close, so an entry minute
                  sits in the cell the bot read. The newest cell is checked against the bot's own record (state ``trend``):
                  ``check`` same / differs
-        marks    the paper bot's entries (every coin, 72 h) and the supervisor's exits (감독 청산: JUDGE, TIME)
+        marks    the paper bot's entries (every coin, 72 h) and the supervisor's exits (감독 청산: JUDGE, TIME); ``before``:
+                 opened before the trend bot's start (``since``: the bot before it on this database, 전환 전)
         chart    the chosen coin: its 1h and 4h judgments over 7 days (the band under the candles), its signals of the last
                  3 days by what became of them (signal_log, the bot's own reason), the paper trades (entry, exit, the exit
                  reason in words), the open paper position, the waits now (the pullback level)
@@ -73,7 +74,7 @@ SUP_REASONS = ("JUDGE", "TIME")
 KIND_OF = {"pullback_wait": "wait", "waiting": "wait", "pulled": "touched", "broke": "touched", "nopull": "nopull",
            "trend": "blocked", "spot": "blocked"}
 KIND_KO = {"entered": "진입", "touched": "되돌림 닿음 · 진입 안 됨", "wait": "되돌림 기다림", "nopull": "되돌림 안 옴",
-           "blocked": "검사에 걸림", "other": "다른 이유로 안 함", "pending": "처리 전"}
+           "blocked": "검사에 걸림", "other": "다른 이유로 안 함", "pending": "처리 전", "prev": "전환 전 · 예전 봇 신호"}
 
 
 # ====================================================================== the judgments, every bar
@@ -277,10 +278,11 @@ def _trades(conn, since: int) -> list:
     return out
 
 
-def signals_of(conn, symbol: str, now: int, entries: set) -> list:
+def signals_of(conn, symbol: str, now: int, entries: set, since: Optional[int] = None) -> list:
     """The coin's signals of the last 3 days, oldest first, each with what became of it: entered (its pullback touched and
     the paper entered at that minute), touched (touched, no entry: one position at a time), wait, nopull, blocked (the
-    trend judgment or the entry spot checks), other (a pause, the chase block, unread), pending (not decided yet)."""
+    trend judgment or the entry spot checks), other (a pause, the chase block, unread), pending (not decided yet); prev:
+    a row of the bot before it on this database (before the trend bot's start ``since``: none of its words are this one's)."""
     rows = conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, status, data FROM signal_log WHERE symbol = ? "
                         "AND bar_close >= ? ORDER BY bar_close DESC, id DESC LIMIT ?",
                         (symbol, int(now) - SIG_SPAN_MS, SIG_KEEP)).fetchall()
@@ -297,11 +299,14 @@ def signals_of(conn, symbol: str, now: int, entries: set) -> list:
         tr = d.get("trend") if isinstance(d.get("trend"), dict) else {}
         judge = tr.get("judge")
         jtext = judge.get("text") if isinstance(judge, dict) else judge if isinstance(judge, str) else None
+        before = bool(since) and int(bc) < int(since)
         if status == "SUBMITTED":
             cat, ko, kd = "submitted", "처리 전", "pending"
         else:
             cat, ko = L.why_cat(status, why)
             kd = KIND_OF.get(cat, "other")
+        if before:
+            kd = "prev"
         entry_t = None
         if kd == "touched":
             ms = TJ.TF_MS.get(tf, HOUR)
@@ -314,7 +319,7 @@ def signals_of(conn, symbol: str, now: int, entries: set) -> list:
                     "side": int(side), "status": status, "cat": cat, "cat_ko": ko, "kind": kd, "kind_ko": KIND_KO[kd],
                     "why": L.why_words(why) if why else None, "judge": jtext,
                     "level": float(level) if isinstance(level, (int, float)) and math.isfinite(level) else None,
-                    "entry_time": entry_t})
+                    "entry_time": entry_t, "before": before})
     out.reverse()
     return out
 
@@ -386,12 +391,15 @@ def build(p: dict, symbol: str = "BTCUSDT", now_ms: Optional[int] = None, b: Opt
         if st is None:
             return {**base, "state": "missing", "reason_ko": "추세판단 봇이 아직 첫 판단을 기록하지 않았어요 (켠 뒤 1~2분)"}
         rules, rsrc = rules_of(st, cfg)
+        since = L._i(st.get("since"))                     # the trend bot's first start: what came before is the bot before it
         trades = _trades(conn, now - max(TRADE_SPAN_MS, (HEAT_H + 4) * HOUR)) if "trades" in tables else []
         pos = _position(conn)
+        for t in trades + ([pos] if pos else []):
+            t["before"] = bool(since) and t.get("entry_time") is not None and int(t["entry_time"]) < since
         entries = {int(t["entry_time"]) for t in trades if t.get("entry_time") is not None}
         if pos:
             entries.add(pos["entry_time"])
-        sigs = signals_of(conn, symbol, now, entries) if "signal_log" in tables else []
+        sigs = signals_of(conn, symbol, now, entries, since) if "signal_log" in tables else []
     except sqlite3.Error as exc:
         return {"state": "error", "reason_ko": "페이퍼 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200],
                 "now_ms": now, "symbol": symbol}
@@ -403,20 +411,21 @@ def build(p: dict, symbol: str = "BTCUSDT", now_ms: Optional[int] = None, b: Opt
         heat, band, pending = heat_rows(b, st, rules, now, symbol, budget)
     t0 = heat["t0"]
     marks = {"entries": [{"symbol": t["symbol"], "t": int(t["entry_time"]), "side": t["side"], "tf": t["tf"], "htf": t["htf"],
-                          "strategy": t["strategy"], "open": False} for t in trades
+                          "strategy": t["strategy"], "open": False, "before": t["before"]} for t in trades
                          if t.get("entry_time") is not None and int(t["entry_time"]) >= t0],
              "sup": [{"symbol": t["symbol"], "t": int(t["exit_time"]), "side": t["side"], "tf": t["tf"], "htf": t["htf"],
-                      "reason": t["reason"], "reason_ko": t["reason_ko"], "why": t["why"], "strategy": t["strategy"], "roe": t["roe"]}
+                      "reason": t["reason"], "reason_ko": t["reason_ko"], "why": t["why"], "strategy": t["strategy"], "roe": t["roe"],
+                      "before": t["before"]}
                      for t in trades if t["reason"] in SUP_REASONS and t.get("exit_time") is not None and int(t["exit_time"]) >= t0]}
     if pos and pos["entry_time"] >= t0:
         marks["entries"].append({"symbol": pos["symbol"], "t": pos["entry_time"], "side": pos["side"], "tf": pos["tf"],
-                                 "htf": pos["htf"], "strategy": pos["strategy"], "open": True})
+                                 "htf": pos["htf"], "strategy": pos["strategy"], "open": True, "before": pos["before"]})
     waits = [{"member": w.get("member"), "side": w.get("side"), "tf": w.get("tf"), "level": w.get("level"),
               "until": w.get("until"), "t0": w.get("t0"), "judge": w.get("judge")}
              for w in (st.get("waits") or []) if isinstance(w, dict) and w.get("symbol") == symbol
              and int(w.get("until") or 0) > now]
     nums = dataclasses.asdict(rules)
-    return {**base, "state": "ok", "ts": ts, "age_ms": now - int(ts), "pending": pending,
+    return {**base, "state": "ok", "ts": ts, "age_ms": now - int(ts), "pending": pending, "since": since,
             "rules": {"from": rsrc, **{k: nums[k] for k in ("vote_min", "adx_min", "adx_tired", "hold_1h", "hold_4h", "time_bars")}},
             "heat": heat, "marks": marks,
             "chart": {"symbol": symbol, "band": band, "signals": sigs,

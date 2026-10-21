@@ -492,6 +492,7 @@
 .lbh-darc { fill: none; stroke-width: 16; }
 .lbh-darc.wk { stroke: color-mix(in srgb, var(--warn) 70%, transparent); }
 .lbh-darc.mc { stroke: var(--series-m5); }
+.lbh-darc.us { stroke: color-mix(in srgb, var(--accent) 75%, transparent); }
 .lbh-dpast { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 3px var(--accent-glow)); }
 .lbh-dtk { stroke: var(--muted); stroke-width: 1; }
 .lbh-dtk.big { stroke: var(--ink-2); stroke-width: 2; }
@@ -509,6 +510,7 @@
 .lbh-dleg p { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
 .lbh-dleg .k { margin-right: 0; }
 .lbh-dleg .sw.wk { background: var(--warn); } .lbh-dleg .sw.mc { background: var(--series-m5); }
+.lbh-dleg .sw.us { background: var(--accent); }
 .lbh-dleg .sw.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--series-core); box-shadow: 4px 0 0 0 var(--series-m5); margin-right: 4px; }
 
 /* 40번 판단까지 */

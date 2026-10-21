@@ -85,6 +85,11 @@ NEED = ("what", "honest_ko", "window_kst", "window_ms", "setup", "entries", "fun
 REF_MISSING_KO = "재현 기준 파일(data/trend_replay_0701_1020.json)이 없어요"
 REF_BAD_KO = "재현 기준 파일을 읽지 못했어요"
 PAPER_SLIP_KO = "페이퍼의 미끄러짐은 규칙에 넣은 가정(한쪽 0.02%)이에요 · 실거래 칸이 거래소 체결로 잰 값이에요"
+# the replay ran with the 시간 정리 exit (trend.time_bars 4: no first lock within 4 entry bars -> closed); the owners took it
+# out on 10/21 night (time_bars null): every comparison with the replay says so (time_note_ko)
+TIME_GONE_KO = ("재현은 시간 정리(진입 봉 4개 안에 첫 잠금을 못 가면 청산)가 있던 규칙으로 돌린 숫자예요 · 10/21 밤 그 규칙을 "
+                "뺐어요: 재현의 시간 정리 {n}번은 지금 봇이라면 손절 · 계단 익절 · 추세 뒤집힘 청산으로 끝났을 거예요")
+TIME_KEPT_KO = "재현은 시간 정리(진입 봉 4개 안에 첫 잠금을 못 가면 청산)를 넣고 돌린 숫자예요 (지금 설정과 같음)"
 EXEC_BEFORE_KO = ("실거래의 '비용 전'은 주문 직전 본 가격 기준이에요 (페이퍼보다 늦게 들어간 차이는 비용 전 안에 들어 있어요 · "
                   "비용 탭에서 따로 봐요)")
 
@@ -267,14 +272,33 @@ def entries_of(ref: dict, times: list, since: int, now: int) -> dict:
     return {"replay": rep, "live": live, "band": band, "ko": entries_ko(live, band), "weekend_ko": weekend_ko(live, rep)}
 
 
+def weekdays_ko(d: float) -> str:
+    """The weekdays since the start in words: "평일 2.5일"; under one day in hours ("평일 3시간", "평일 30분"), never 0.0일."""
+    if d >= 1:
+        return f"평일 {d:.1f}일"
+    m = d * 24 * 60
+    return f"평일 {m:.0f}분" if m < 60 else f"평일 {m / 60:.0f}시간"
+
+
 def entries_ko(live: dict, band: Optional[dict]) -> str:
     if band is None:
         return "아직 평일이 지나지 않아 견줄 수 없어요 (재현에선 평일에만 들어갔어요)"
     d, k, lo, hi = live["weekdays"], live["entries"], band["lo"], band["hi"]
     rng = f"재현이라면 보통 {lo}~{hi}번" if lo != hi else f"재현이라면 보통 {lo}번"
     tail = {"inside": "그 안이에요", "above": "보통 범위보다 많아요", "below": "보통 범위보다 적어요"}[band["where"]]
-    few = f" (평일 {d:.1f}일뿐이라 범위가 넓어요)" if d < FEW_DAYS else ""
-    return f"평일 {d:.1f}일 동안 {k}번 들어갔어요 · {rng} · {tail}{few}"
+    if d < 1:                                            # the first day: a fraction of a weekday reads in hours
+        return f"새 규칙 시작 뒤 {weekdays_ko(d)} 동안 {k}번 들어갔어요 · {rng} · {tail} (아직 하루도 안 돼 진입이 없어도 보통이에요)"
+    few = f" ({weekdays_ko(d)}뿐이라 범위가 넓어요)" if d < FEW_DAYS else ""
+    return f"{weekdays_ko(d)} 동안 {k}번 들어갔어요 · {rng} · {tail}{few}"
+
+
+def time_note_ko(d: dict, cfg: Optional[dict]) -> str:
+    """The replay's 시간 정리 against the running config (``trend.time_bars`` null = taken out, 10/21 night)."""
+    tr = (cfg or {}).get("trend") if isinstance((cfg or {}).get("trend"), dict) else {}
+    if "time_bars" in tr and tr["time_bars"] is None:
+        n = (((d.get("trades") or {}).get("by_reason") or {}).get("TIME") or {}).get("n")
+        return TIME_GONE_KO.format(n=n if n is not None else "몇")
+    return TIME_KEPT_KO
 
 
 def weekend_ko(live: dict, rep: dict) -> str:
@@ -667,7 +691,8 @@ def build(p: dict, now_ms: Optional[int] = None, ref_path=None) -> dict:
     c_rep, c_paper = replay_costs(d), costs_of(paper)
     tr = d["trades"]
     return {**base, "state": "ok", "since": since,
-            "ref": {"what": d["what"], "honest_ko": list(d["honest_ko"]), "window_kst": d["window_kst"], "window_ms": d["window_ms"],
+            "ref": {"what": d["what"], "honest_ko": [*d["honest_ko"], time_note_ko(d, pr.get("cfg"))],
+                    "window_kst": d["window_kst"], "window_ms": d["window_ms"],
                     "setup": d["setup"], "path": "data/trend_replay_0701_1020.json"},
             "entries": entries, "funnel": funnel,
             "results": {"replay": {**res_rep, "file": {"n": tr.get("n"), "win_rate": tr.get("win_rate"), "roe_mean": tr.get("roe_mean"),

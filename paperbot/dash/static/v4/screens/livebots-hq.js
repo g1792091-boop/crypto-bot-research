@@ -362,7 +362,7 @@ export const glowOf = (lvl) => (lvl == null ? 0.6 : [0.55, 0.72, 0.84, 0.94, 1][
 export function pauseOf(now, cal) {
   const c = cal && cal.now;
   if (c && c.paused) return {ko: c.pause_ko || "진입 쉬는 시간", until: c.pause_until || null};
-  const it = ((now && now.items) || []).find((i) => (i.id === "weekend" || i.id === "macro") && i.ok === false);
+  const it = ((now && now.items) || []).find((i) => (i.id === "weekend" || i.id === "macro" || i.id === "usopen") && i.ok === false);
   return it ? {ko: it.ko, until: (now && now.pause_until) || (it.detail && it.detail.until) || null} : null;
 }
 
@@ -1142,7 +1142,7 @@ export function hqView(ctx, hub) {
     let tone = "wait", head = fNow.err && !n ? "지금 상태를 불러오지 못함" : "불러오는 중", until = null, untilKo = "";
     if (n) {
       const b0 = (n.items || []).find((i) => i.ok === false);
-      tone = n.ready ? "ok" : !b0 ? "warn" : b0.id === "position" ? "hold" : b0.id === "weekend" || b0.id === "macro" || b0.tone === "warn" ? "warn" : "stop";
+      tone = n.ready ? "ok" : !b0 ? "warn" : b0.id === "position" ? "hold" : b0.id === "weekend" || b0.id === "macro" || b0.id === "usopen" || b0.tone === "warn" ? "warn" : "stop";
       head = n.head_ko || "—";
       if (n.pause_until) { until = n.pause_until; untilKo = "다시 진입 가능까지"; }
       else if (n.next_pause && n.next_pause.from) { until = n.next_pause.from; untilKo = `다음 쉬는 시간(${n.next_pause.ko || "쉼"})까지`; }
@@ -1461,7 +1461,7 @@ export function hqView(ctx, hub) {
   function drawDial() {
     const c = fCal.d, now = serverNow(), d0 = kstDayStart(now);
     const arcs = c ? dayArcs(c.spans, c.items, d0) : [];
-    dArcs.replaceChildren(...arcs.map((x) => s("path", {class: ["lbh-darc", x.why === "weekend" ? "wk" : "mc"], d: arcPath(120, 120, 84, x.a0, x.a1)})));
+    dArcs.replaceChildren(...arcs.map((x) => s("path", {class: ["lbh-darc", x.why === "weekend" ? "wk" : x.why === "usopen" ? "us" : "mc"], d: arcPath(120, 120, 84, x.a0, x.a1)})));
     const dots = dayDots(st.d ? st.d.fills : [], d0);
     dDots.replaceChildren(...dots.map((x) => { const [cx, cy] = polar(120, 120, 84, x.a); return s("circle", {class: ["lbh-ddot", "lbh-x-" + x.acct, x.open ? "open" : ""], cx: cx.toFixed(2), cy: cy.toFixed(2), r: 6}); }));
     dDay.textContent = fmt.date(now);
@@ -1470,7 +1470,8 @@ export function hqView(ctx, hub) {
     else {
       if (c.events && c.events.state !== "ok") rows.push(h("p", {class: "warn"}, `경제 발표 일정: 못 읽음${c.events.reason_ko ? ` (${c.events.reason_ko})` : ""}`));
       const today = arcs.length ? arcs.map((x) => `${x.why === "weekend" ? "주말" : x.ko || "발표"} ${fmt.hm(Math.max(x.from, d0))}~${x.to >= d0 + DAY ? "24:00" : fmt.hm(x.to)}`).join(" · ") : "없음";
-      rows.push(h("p", null, h("i", {class: "sw wk", "aria-hidden": "true"}), h("i", {class: "sw mc", "aria-hidden": "true"}), h("span", {class: "k"}, "오늘 쉬는 시간"), today));
+      rows.push(h("p", null, h("i", {class: "sw wk", "aria-hidden": "true"}), h("i", {class: "sw mc", "aria-hidden": "true"}),
+        arcs.some((x) => x.why === "usopen") ? h("i", {class: "sw us", "aria-hidden": "true"}) : null, h("span", {class: "k"}, "오늘 쉬는 시간"), today));
       const nx = c.now && c.now.next;
       if (nx) rows.push(h("p", null, h("span", {class: "k"}, "다음"), `${nx.ko || "쉼"} · ${fmt.kst(nx.from)}`));
     }

@@ -289,7 +289,7 @@ def test_the_answer_entries_and_funnel(world):
     d = world["d"]
     assert d["state"] == "ok" and d["since"] == SINCE and d["name"] == "추세판단 봇"
     assert d["ref"]["window_kst"] == ["2026-07-01", "2026-10-20"] and len(d["ref"]["honest_ko"]) == 5
-    assert "시간 정리" in d["ref"]["honest_ko"][-1]           # the replay ran with the TIME exit the owners removed
+    assert d["ref"]["honest_ko"][-1] == X.TIME_KEPT_KO                # its config keeps the 시간 정리 the replay ran with
     e = d["entries"]
     assert e["replay"]["per_weekday"] == pytest.approx(1.113) and e["replay"]["hist"] == [[0, 27], [1, 27], [2, 18], [3, 7], [5, 1]]
     live = e["live"]

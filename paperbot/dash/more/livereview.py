@@ -97,6 +97,10 @@ WHATIF = (
      "되돌림으로 들어간 거래를 신호 가격에 바로 들어갔다면 (가상) · 진입가 차이는 실제 숫자"),
 )
 BLOCKED = {"trend": ("trend",), "spot": ("spot",), "nopull": ("nopull",)}
+# the owners took the 시간 정리 exit out on 10/21 night (trend.time_bars null): its tile says so, and judges only the trades
+# it closed before that
+TIME_OFF_RULE_KO = "10/21 밤 뺀 규칙 · 그 전엔 진입 봉 4개 안에 첫 잠금(+10%)을 못 가면 청산했어요"
+TIME_OFF_KO = "지금 봇에는 없는 규칙이라 새로 판정할 거래가 없어요"
 
 _lock = threading.Lock()
 _memo: "OrderedDict[str, tuple]" = OrderedDict()
@@ -598,11 +602,13 @@ def whatifs(sigs: list, trades: list, meta: dict, run: dict, cfg: dict, rule_db:
             worse = sum(1 for d in deltas if d < -1e-9)
             v = _tally([cf for _t, cf in pairs])
             act = [float(t["roe"]) for t, _cf in dec if _f(t.get("roe")) is not None]
-            items.append({**_head(wid), "state": "ok", "n": len(pairs), "held": v,
+            off = wid == "time" and isinstance(cfg.get("trend"), dict) and "time_bars" in cfg["trend"] and cfg["trend"]["time_bars"] is None
+            items.append({**_head(wid), **({"rule_ko": TIME_OFF_RULE_KO, "off": True} if off else {}), "state": "ok", "n": len(pairs), "held": v,
                           "actual": {"n": len(pairs), "roe_sum": sum(act), "roe_mean": sum(act) / len(act) if act else None,
                                      "decided": len(act)},
                           "delta": sum(deltas), "better": better, "worse": worse,
-                          "verdict": verdict_paired(better, worse, len(deltas), sum(deltas), len(pairs)),
+                          "verdict": {"kind": "off", "ko": TIME_OFF_KO} if off and not pairs
+                          else verdict_paired(better, worse, len(deltas), sum(deltas), len(pairs)),
                           "rows": [{"t": int(t["exit_time"]), "entry_time": int(t["entry_time"]), "symbol": t.get("symbol"),
                                     "side": t.get("side"), "strategy": t.get("strategy_id"), "tf": t.get("timeframe"), "roe": t.get("roe"),
                                     "why": (t.get("context") or {}).get("exit_why") if isinstance(t.get("context"), dict) else None,

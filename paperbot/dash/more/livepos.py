@@ -44,6 +44,7 @@ from collections import OrderedDict
 from typing import Optional
 
 from . import livebots as L
+from .livetrend import INHERITED_KO
 
 MIN = 60_000
 LADDER_AHEAD = 5                        # steps shown after the next one (the whole ladder never ends: every 5 % again)
@@ -259,7 +260,9 @@ def rules_out(facts: dict, rt: Optional[float]) -> dict:
             "early_exit": cfg.get("early_exit"), "early_exit_until_lock": cfg.get("early_exit_until_lock") is True,
             "margin": L._f(cfg.get("margin")) if not isinstance(cfg.get("margin"), str) else cfg.get("margin"),
             "leverage_btc": L._i(lev.get("BTCUSDT")), "leverage_alt": L._i(lev.get("default")), "round_trip": rt,
-            "n_members": len(facts.get("members") or []), "n_no_chase": sum(1 for m in facts.get("members") or [] if m.get("no_chase"))}
+            "n_members": len(facts.get("members") or []), "n_no_chase": sum(1 for m in facts.get("members") or [] if m.get("no_chase")),
+            # the 추세판단 봇 (docs/trend-bot-ko.md): its members by role (눌림 · 자리 · 돌파 · 횡보), never the old bot's A/B groups
+            "trend": cfg.get("trend") is not None}
 
 
 def setting_of(facts: dict, order: Optional[int], strategy: Optional[str] = None, tf: Optional[str] = None) -> Optional[dict]:
@@ -269,9 +272,10 @@ def setting_of(facts: dict, order: Optional[int], strategy: Optional[str] = None
     m = L.member_of(ms, order, strategy, tf)
     if m is None:
         return None
+    trend = (facts.get("cfg") or {}).get("trend") is not None
     return {"order": m.get("order") or order, "strategy": m.get("strategy"), "tf": m.get("tf"), "group": "B" if m.get("no_chase") else "A",
             "no_chase": bool(m.get("no_chase")), "no_chase_ko": m.get("no_chase_ko"), "entry_ko": m.get("entry_ko"),
-            "stop_ko": (m.get("stop") or {}).get("ko")}
+            "stop_ko": (m.get("stop") or {}).get("ko"), "role": L.TREND_ROLE.get(m.get("strategy")) if trend else None}
 
 
 # ---------------------------------------------------------------- one card
@@ -294,9 +298,11 @@ def _gap(pp: Optional[dict], xp: dict) -> Optional[dict]:
 
 
 def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, bars_state: dict, now: int, execs: list,
-               bot: Optional[dict] = None) -> dict:
+               bot: Optional[dict] = None, since: Optional[int] = None) -> dict:
     """The paper account's (or its coin-flip twin's) card. ``bot`` (livebots.paper_bots; two paper bots, owners 10-19):
-    its label, and its executors' cells only for the executors that follow it (the others "other")."""
+    its label, and its executors' cells only for the executors that follow it (the others "other"); an executor without
+    it says why from its own records (livebots.WHY). ``since``: the 추세판단 봇's start: a position entered before it is the
+    bot before it's (``inherited``, 전환 전)."""
     base = {"id": cid, "kind": "flip" if cid == "flip" else "paper", "account": acct,
             "name_ko": "동전 쌍둥이" if cid == "flip" else "페이퍼(연습)", "note_ko": FLIP_KO if cid == "flip" else None}
     if bot:
@@ -338,8 +344,11 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
         elif xp and xp.get("key") == pos.get("key"):
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "following", **(_gap(pos, xp) or {})})
         else:
+            why = ((x["record"].get("why") or {}).get(pos.get("key")) or {}) if x["record"].get("state") == "ok" else {}
+            kind = next((k for k, _ko in L.WHY if k in why), None)
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "none" if x["record"].get("state") == "ok" else "unknown",
-                          "reason_ko": None if x["record"].get("state") == "ok" else x["record"].get("reason_ko")})
+                          "reason_ko": None if x["record"].get("state") == "ok" else x["record"].get("reason_ko"),
+                          "why_ko": L.WHY_KO[kind] if kind else None, "why_text": why[kind].get("text") if kind else None})
     out["position"] = {
         "key": pos.get("key"), "symbol": pos.get("symbol"), "side": side, "leverage": lev, "qty": pos.get("qty"), "margin": margin,
         "entry": entry, "entry_time": pos.get("entry_time"), "strategy_id": pos.get("strategy_id"), "timeframe": pos.get("timeframe"),
@@ -357,6 +366,8 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
         # 진입 근거 (dash/more/livewhy.py): this paper entry's reference (the coin-flip twin's side is a coin flip: none)
         "why": why_ref(cid, pos.get("symbol"), pos.get("entry_time")) if cid in ("paper", "paper2") else None,
     }
+    inh = bool(since) and pos.get("entry_time") is not None and int(pos["entry_time"]) < int(since)
+    out["position"].update(inherited=inh, inherited_ko=INHERITED_KO if inh else None)
     return out
 
 
@@ -505,12 +516,15 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
         rw = raw_positions(b["path"], (L.ACCOUNT, L.FLIP_ACCOUNT)) if b["read"].get("state") == "ok" else {}
         per[L.LP.norm(b["path"])] = (b, f, rw)
     raw = per[L.LP.norm(p["paper"])][2]
+    tb = L.trend_bot(p["paper"])
+    since = tb["since"] if tb else None                    # the 추세판단 봇's start on the main paper database
     conn, bars_state = open_bars(more["rule_db"])
     try:
         cards = {}
         best: dict = {}
         for b, f, rw in per.values():
-            cards[b["id"]] = paper_card(b["id"], L.ACCOUNT, b["read"], rw, f, conn, bars_state, now, execs, bot=b if two else None)
+            cards[b["id"]] = paper_card(b["id"], L.ACCOUNT, b["read"], rw, f, conn, bars_state, now, execs, bot=b if two else None,
+                                        since=since if b["id"] == "paper" else None)
             best[L.LP.norm(b["path"])] = (cards[b["id"]].get("position") or {}).get("best_roe")
         for x in execs:
             b, f, _rw = per.get(L.LP.norm(x["paper_path"])) or per[L.LP.norm(p["paper"])]
@@ -523,7 +537,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two:
                 cards[x["id"]]["follows_ko"] = b["label_ko"].split(" (")[0]
-        cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [])
+        cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [], since=since)
     finally:
         if conn is not None:
             conn.close()

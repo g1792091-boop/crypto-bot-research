@@ -108,6 +108,7 @@ export function posCard(c, o = {}) {
     const el = ui.card({cls: "lbp-card none"}, h("div", {class: "lbp-top"}, tag, kindPill, follows, h("span", {class: "grow"}),
       c.halted ? ui.pill(`멈춤${c.halt_reason ? `: ${c.halt_reason}` : ""}`, "bad") : null),
     h("p", {class: "lbp-flat"}, "포지션 없음"),
+    c.kind === "live" && !c.halted ? h("p", {class: "note"}, `따라가는 중 · 다음 페이퍼 진입을 기다려요${c.stale ? " (기록 오래됨)" : ""}`) : null,
     h("p", {class: "note"}, c.wallet != null ? `잔고 ${c.kind === "live" ? fmt.usd(c.wallet) : `${fmt.money(c.wallet)} USDT`} · ` : "",
       c.as_of_ms ? `마지막 기록 ${ago(c.as_of_ms)}` : "", c.stale ? " · 기록 멈춤" : ""),
     c.note_ko ? h("p", {class: "note"}, c.note_ko) : null);
@@ -116,7 +117,9 @@ export function posCard(c, o = {}) {
   }
   const live = c.kind === "live";
   const st = p.setting;
-  const grp = st ? (st.group === "B" ? ui.pill("B그룹 · 추격 막기", "accent", st.no_chase_ko || "추격 진입 막기 매매법") : ui.pill("A그룹", "thin", "추격 진입 막기 없는 매매법")) : null;
+  // the 추세판단 봇's members by role (눌림 · 자리 · 돌파 · 횡보); the A/B groups were the bot before it's
+  const grp = st && st.role ? ui.pill(st.role, "accent", "추세판단 봇의 매매법 역할")
+    : st ? (st.group === "B" ? ui.pill("B그룹 · 추격 막기", "accent", st.no_chase_ko || "추격 진입 막기 매매법") : ui.pill("A그룹", "thin", "추격 진입 막기 없는 매매법")) : null;
   const stratLine = p.strategy_id
     ? `${fmt.stratKo(p.strategy_id)} · ${fmt.tfKo(p.timeframe)}봉${st ? ` · ${st.order}번 설정` : p.member_order ? ` · ${p.member_order}번 설정` : ""}`
     : live ? "매매법 모름 (따라가는 페이퍼 포지션을 못 찾았어요)" : "매매법 기록 없음";
@@ -166,15 +169,18 @@ export function posCard(c, o = {}) {
       p.gap.delay_ms != null ? ` · ${fmt.dur(p.gap.delay_ms / 1000)} 뒤 체결` : ""] : "페이퍼와 진입 차이: 따라가는 페이퍼 포지션이 없어요")
     : c.id === "paper" || c.id === "paper2" ? h("p", {class: "note lbp-gap"}, gaps.length ? gaps.map((g, i) => [i ? " · " : "", `${g.name_ko} `, h("b", {class: "num"}, fmt.price(g.live_entry)),
       " (", h("span", {class: ["num", fmt.tone(g.slip)]}, fmt.pct(g.slip, 3)), g.delay_ms != null ? `, ${fmt.dur(g.delay_ms / 1000)} 뒤` : "", ")"])
-      : "실행기가 따라 들어간 기록이 아직 없어요 (따라가는 중이 아니거나 아직 진입 확인 중)",
+      : (p.execs || []).length && (p.execs || []).every((x) => x.why_ko) ? "실거래 실행기는 이 포지션을 따라가지 않았어요 (이 손익은 페이퍼에만 남아요)"
+        : "실행기가 따라 들어간 기록이 아직 없어요 (따라가는 중이 아니거나 아직 진입 확인 중)",
     (p.execs || []).filter((x) => x.state !== "following").map((x) => ` · ${x.name_ko}: ${x.state === "unknown" ? `기록 못 읽음${x.reason_ko ? ` (${x.reason_ko})` : ""}`
-      : x.state === "other" ? "다른 페이퍼를 따라가요" : "이 포지션 없음"}`))
+      : x.state === "other" ? "다른 페이퍼를 따라가요" : x.why_ko ? `안 따라감 · ${x.why_ko}${x.why_text ? ` (실행기 기록: ${x.why_text})` : ""}` : "이 포지션 없음"}`))
       : null;
   const capText = live ? ui.ASSUME_LIVE_KO : ui.ASSUME_OPEN_KO;
   const el = ui.card({cls: `lbp-card ${live ? "live" : c.id}`},
     h("div", {class: "lbp-top"}, tag, kindPill, basisPill, follows, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
       ui.sideTag(p.side), h("span", {class: "muted"}, `격리 ${fmt.lev(p.leverage)}`), grp, p.status === "entering" ? ui.pill("진입 확인 중", "warn") : null),
     h("p", {class: "lbp-strat"}, stratLine, st && st.no_chase ? h("small", {class: "muted"}, " · 추격 진입 막기") : null),
+    p.inherited ? h("p", {class: "lbp-inh"}, p.inherited_ko || "전환 전 포지션",
+      h("small", null, " · 새 봇이 손절 · 계단 익절 · 추세 뒤집힘 청산(첫 잠금 전)으로 닫아요 · 닫힐 때까지 새 진입 없음 (한 번에 하나)")) : null,
     whyBox(o.api, p.why, {label: live ? "진입 근거 보기 (따라간 페이퍼 진입)" : "진입 근거 보기"}),
     h("div", {class: "pnl lbp-led"},
       h("div", null, h("span", {class: "k"}, "미실현 손익", live ? " ($)" : " (USDT)", " ", ui.infoTip(`${capText} · 마크 = 바이낸스 가격 (거래소 가격과 조금 다를 수 있어요)`, "미실현 손익")), uEl),
@@ -212,7 +218,8 @@ function rulesLine(r) {
     r.early_exit ? `빠른 손절: ${r.early_exit === "own" ? "같은 매매법" : "아무 매매법"} 반대 신호${r.early_exit_until_lock ? " (첫 잠금 전까지만)" : ""}` : "빠른 손절 없음",
     typeof r.margin === "number" ? `증거금 잔고의 ${fmt.pct(r.margin, 0, false)}` : null,
     r.leverage_btc ? `BTC ${fmt.lev(r.leverage_btc)} · 나머지 ${fmt.lev(r.leverage_alt)}` : null, "한 번에 포지션 하나",
-    r.n_members ? `매매법 ${fmt.int(r.n_members)}개${r.n_no_chase ? ` (B그룹 추격 막기 ${fmt.int(r.n_no_chase)}개)` : ""}` : null];
+    r.n_members ? `매매법 ${fmt.int(r.n_members)}개${!r.n_no_chase ? "" : r.trend ? (r.n_no_chase === r.n_members ? " (모두 추격 막기)" : ` (추격 막기 ${fmt.int(r.n_no_chase)}개)`)
+      : ` (B그룹 추격 막기 ${fmt.int(r.n_no_chase)}개)`}` : null];
   return h("p", {class: "lbp-rules"}, parts.filter(Boolean).join(" · "));
 }
 

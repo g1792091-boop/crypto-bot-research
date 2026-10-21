@@ -110,6 +110,7 @@
 .lbc-sw { display: inline-block; flex: none; width: 16px; height: 10px; border-radius: 3px; }
 .lbc-sw.weekend { background: var(--lbc-stripe), color-mix(in srgb, var(--muted) 12%, var(--surface-2)); box-shadow: inset 0 0 0 1px var(--line-2); }
 .lbc-sw.macro { background: var(--warn); box-shadow: 0 0 6px color-mix(in srgb, var(--warn) 60%, transparent); }
+.lbc-sw.usopen { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
 .lbc-sw.now { width: 2px; height: 13px; border-radius: 1px; background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
 
 /* ---------------------------------------------------------------- the release file runs out / bad lines */
@@ -167,6 +168,8 @@
   white-space: nowrap; }
 .lbc-blk.macro { z-index: 1; background: linear-gradient(180deg, var(--warn), color-mix(in srgb, var(--warn) 70%, var(--surface-2)));
   box-shadow: 0 0 0 1px var(--warn), 0 0 12px color-mix(in srgb, var(--warn) 55%, transparent); }
+.lbc-blk.usopen { z-index: 1; background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 65%, var(--surface-2)));
+  box-shadow: 0 0 0 1px var(--accent-line), 0 0 10px var(--accent-glow); }
 .lbc-past { position: absolute; z-index: 2; top: 0; bottom: 0; left: 0; width: calc(var(--x) * 100%); border-radius: var(--r-sm) 0 0 var(--r-sm);
   background: color-mix(in srgb, var(--bg) 58%, transparent); pointer-events: none; }
 .lbc-now { font-style: normal; position: absolute; z-index: 3; top: -6px; bottom: -6px; left: calc(var(--x) * 100%); width: 2px; margin-left: -1px; border-radius: 1px;
@@ -183,6 +186,7 @@
 
 /* the 7 days in numbers under the ribbon */
 .lbc-week { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; min-width: 0; margin-top: 4px; }
+.lbc-week.four { grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); }
 .lbc-wk { display: grid; align-content: start; gap: 3px; min-width: 0; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); }
 .lbc-wk > span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-xs); font-weight: 800; }
 .lbc-wk > b { color: var(--ink); font: 800 var(--t-lg)/1.25 var(--f-term); overflow-wrap: anywhere; }
@@ -193,7 +197,7 @@
 .lbc-wbar i { position: absolute; inset: 0 auto 0 0; width: calc(var(--v) * 100%); border-radius: 3px; background: var(--warn);
   box-shadow: 0 0 8px color-mix(in srgb, var(--warn) 50%, transparent); }
 @media (max-width: 559px) {
-  .lbc-week { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .lbc-week, .lbc-week.four { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .lbc-wk.main { grid-column: 1 / -1; }
 }
 

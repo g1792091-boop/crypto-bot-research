@@ -21,7 +21,7 @@ import {pnlPanel} from "./terminal-pnl.js";
 import {ages, MARKET_LABEL} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
 import {bandLine, fillsPanel, coinMarks, minePanel, tablePanel} from "./livebots-parts.js";
-import {liveLines, acctCard, lightRow, acctKo} from "./livebots-kit.js";
+import {liveLines, acctCard, lightRow, acctKo, paperSinceNote} from "./livebots-kit.js";
 import {posKeys} from "./livebots-calc.js";
 
 const PNL_IDS = ["bybit", "mexc", "paper"];
@@ -127,10 +127,10 @@ export function termView(ctx, src) {
   let sigBelow = null;
   function drawBelow(d) {
     const sig = JSON.stringify([d.accts.map((a) => [a.state, a.balance, a.initial, a.stale, a.halted, a.halt_reason, a.stats, a.curve, a.consecutive_losses,
-      a.kill_file, a.as_of_ms && Math.floor(a.as_of_ms / 60000)]), d.execs.map((x) => [x.light, x.notes])]);
+      a.kill_file, a.as_of_ms && Math.floor(a.as_of_ms / 60000)]), d.execs.map((x) => [x.light, x.notes]), d.trend_bot, (d.checkpoint || {}).n]);
     if (sig === sigBelow) return;
     sigBelow = sig;
-    const notesOf = (id) => ((d.execs || []).find((x) => x.id === id) || {}).notes;
+    const notesOf = (id) => (id === "paper" ? paperSinceNote(d) : ((d.execs || []).find((x) => x.id === id) || {}).notes);
     cards.replaceChildren(...d.accts.map((a) => acctCard(a, leds[a.id] || (leds[a.id] = ui.ledBar({label: `${acctKo(a.id)} 잔고`})), notesOf(a.id))));
     lights.replaceChildren(...(d.execs || []).map(lightRow));
   }

@@ -105,6 +105,14 @@ export function histRows(rep, live) {
     live: {days: l.get(k) || 0, share: ln ? (l.get(k) || 0) / ln : null}}));
 }
 
+/** The weekdays since the start in words: "평일 2.5일", under one day "평일 3시간" / "평일 30분" (never "0.0일"). */
+export function weekdaysKo(d) {
+  if (!has(d)) return "평일 —";
+  const x = Number(d);
+  if (x >= 1) return `평일 ${fmt.num(x, 1)}일`;
+  const m = x * 24 * 60;
+  return m < 60 ? `평일 ${Math.round(m)}분` : `평일 ${Math.round(m / 60)}시간`;
+}
 /** The entries scale: {max, lo, hi, mean, live} as fractions of 0..max (the band, the replay's mean, the live count). */
 export function entryScale(band, live) {
   if (!band) return null;
@@ -253,7 +261,7 @@ export function expectView(ctx) {
         big("재현 (가상) · 평일 하루", has(rep.per_weekday) ? `${fmt.num(rep.per_weekday, 2)}번` : "—",
           `평일 ${fmt.int(rep.weekdays)}일 · ${fmt.int(rep.entries)}번 · 가운데 ${fmt.num(rep.median, 0)}번 · 가장 많은 날 ${fmt.int(rep.max)}번`, "replay"),
         big("실제 (페이퍼) · 평일 하루", has(live.per_weekday) && live.weekdays >= 1 ? `${fmt.num(live.per_weekday, 2)}번` : "—",
-          `평일 ${fmt.num(live.weekdays, 1)}일 · ${fmt.int(live.entries)}번${live.weekdays < 1 ? " (평일 하루가 다 지나면 하루 평균을 셈)" : ""}`
+          `${weekdaysKo(live.weekdays)} · ${fmt.int(live.entries)}번${live.weekdays < 1 ? " (평일 하루가 다 지나면 하루 평균을 셈)" : ""}`
           + `${live.src === "trades" ? " · 진입 기록 표가 없어 거래로 셈" : ""}`, "live")),
       sc ? h("div", {class: ["lex-escale", band.where || ""]},
         h("div", {class: "lex-eline", role: "img", "aria-label": `재현이라면 보통 ${band.lo}~${band.hi}번 · 실제 ${live.entries}번`},
@@ -262,7 +270,7 @@ export function expectView(ctx) {
           h("span", {class: "lex-emark", style: {left: `${(sc.live * 100).toFixed(2)}%`}, title: `실제 ${live.entries}번`})),
         h("div", {class: "lex-ekeys num"}, h("span", null, "0번"), h("span", null, `${fmt.int(sc.max)}번`)),
         h("p", {class: "lex-say"}, h("b", null, e.ko || ""),
-          h("small", null, ` · 띠 = 재현의 평일 80일로 같은 날 수를 계산한 5~95% 범위 (하루 안에서는 고르게 나온다고 침) · 세로선 = 재현 평균 ${fmt.num(band.mean, 1)}번`)))
+          h("small", null, ` · 띠 = 재현의 평일 80일로 같은 날 수를 계산한 5~95% 범위 (하루 안에서는 고르게 나온다고 침) · 세로선 = 재현 평균 ${fmt.num(band.mean, band.mean < 1 ? 2 : 1)}번`)))
         : h("p", {class: "lex-say"}, e.ko || "아직 견줄 수 없어요"),
       h("p", {class: ["lex-note", live.weekend_entries ? "warn" : ""]}, e.weekend_ko || ""),
       h("h3", {class: "lex-h3"}, "하루에 몇 번? (평일)"),

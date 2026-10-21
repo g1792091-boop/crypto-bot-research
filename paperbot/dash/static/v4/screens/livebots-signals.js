@@ -173,11 +173,12 @@ export function signalsView(ctx) {
   const funnel = h("div", {class: "lb-funnel"});
   const reasons = h("div", {class: "lb-reasons"});
   const stateSlot = h("div", {class: "lb-slot"});
+  const sinceNote = h("p", {class: "note"});
   const listSeg = ui.seg(LIST, st.list, (id) => { st.list = id; drawList(true); }, {label: "목록 고르기"});
   const pg = ui.pager({size: 10, row: (r) => rowOf(r), empty: () => (st.d ? ui.empty("맞는 신호가 없어요") : motion.shimmer(3))});
   const wait = waitView(ctx);
   const el = h("div", {class: "lb-signals stack"}, wait.el,
-    ui.card({title: "신호가 어디까지 갔나", sub: "합친 봇(페이퍼)의 신호 · 한국 시간", cls: "lb-fcard", acts: [spanSeg]}, stateSlot, funnel,
+    ui.card({title: "신호가 어디까지 갔나", sub: "페이퍼 봇의 신호 · 한국 시간", cls: "lb-fcard", acts: [spanSeg]}, stateSlot, funnel, sinceNote,
       h("p", {class: "lb-rhead"}, "이유별"), reasons,
       ui.note("실거래 실행기는 페이퍼가 진입한 것만 따라가요 (신호등이 빨강이거나 멈춤이면 그것도 건너뜀: 거래 · 안전 탭)")),
     ui.card({title: "왜 안 들어갔지?", sub: "최근 신호 200개까지 · 10개씩", cls: "lb-scard", acts: [listSeg]}, pg.el));
@@ -186,6 +187,7 @@ export function signalsView(ctx) {
     return h("div", {class: ["lb-srow", r.stage], role: "listitem"},
       h("span", {class: "num muted lb-st"}, fmt.kst(r.t)), h("b", {class: "lb-tc"}, fmt.coin(r.symbol)), ui.sideTag(r.side),
       h("span", {class: "lb-ss", title: r.member}, `${fmt.stratKo(r.strategy)} · ${fmt.tfKo(r.tf)}`),
+      r.prev ? ui.pill("전환 전", "warn", "추세판단 봇이 켜지기 전, 예전 봇의 신호예요 (위 숫자에 안 셈)") : null,
       ui.pill(r.ko, TONE[r.stage] || "thin"),
       r.why && r.why !== r.ko ? h("span", {class: "lb-sw2 muted", title: r.why}, ui.moreText(r.why_ko || r.why, 2)) : null);
   }
@@ -198,6 +200,10 @@ export function signalsView(ctx) {
     put(stateSlot);
     const sg = d.stages[st.span] || {};
     const top = Math.max(1, sg.signals || 0);
+    const from = st.span === "today" ? d.today_ms : d.since_ms;
+    sinceNote.textContent = d.bot_since != null && d.bot_since > from
+      ? `추세판단 봇 시작 ${fmt.kst(d.bot_since)}부터 세요 · 그 전 신호는 예전 봇 것이라 아래 목록에만 '전환 전'으로 남아요` : "";
+    sinceNote.hidden = !sinceNote.textContent;
     put(funnel, STAGE.map(([k, ko]) => h("div", {class: ["lb-fstep", k]}, h("span", {class: "lb-fk"}, ko),
       h("span", {class: "lb-fbar"}, h("i", {style: {width: `${((sg[k] || 0) / top * 100).toFixed(1)}%`}})), h("b", {class: "num"}, fmt.int(sg[k] || 0)))));
     const cs = (d.counts[st.span] || []);

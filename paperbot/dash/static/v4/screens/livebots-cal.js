@@ -198,14 +198,17 @@ export function rowKo(r) {
   const n = r.blocks.filter((b) => b.why === "macro").length;
   return `${durKo(r.pauseMs)} 쉼${n > 1 ? ` · ${fmt.int(n)}번` : ""}`;
 }
-/** The next `days` days from now in numbers: {spanMs, pauseMs (overlaps once), share, weekendMs, macroN, macroMs}. */
+/** The next `days` days from now in numbers: {spanMs, pauseMs (overlaps once), share, weekendMs, macroN, macroMs, usN, usMs
+ *  (the Nasdaq-open windows)}. */
 export function weekSummary(spans, now, days = 7) {
   const a = Number(now), b = a + days * DAY;
   const parts = (spans || []).filter((x) => x && ok(x.from) && ok(x.to)).map((x) => clipSpan(x, a, b)).filter(Boolean);
   const len = (xs) => mergeSpans(xs).reduce((t, m) => t + (m.to - m.from), 0);
   const mac = parts.filter((x) => x.why === "macro");
+  const us = parts.filter((x) => x.why === "usopen");
   const pauseMs = len(parts);
-  return {spanMs: b - a, pauseMs, share: pauseMs / (b - a), weekendMs: len(parts.filter((x) => x.why === "weekend")), macroN: mac.length, macroMs: len(mac)};
+  return {spanMs: b - a, pauseMs, share: pauseMs / (b - a), weekendMs: len(parts.filter((x) => x.why === "weekend")), macroN: mac.length, macroMs: len(mac),
+    usN: us.length, usMs: len(us)};
 }
 
 // ---------------------------------------------------------------- pure: the file's coverage and the market tiles
@@ -282,9 +285,10 @@ export function calView(ctx) {
   const stateSlot = h("div", {class: "lb-slot"});
   const cover = h("div", {class: "lbc-cover-slot"});
   const ribbon = h("div", {class: "lbc-ribbon"}, motion.shimmer(4));
+  const legUs = h("span", {hidden: true}, h("i", {class: "lbc-sw usopen"}), "나스닥 개장 앞뒤");
   const legend = h("div", {class: "lbc-legend", "aria-hidden": "true"},
     h("span", null, h("i", {class: "lbc-sw weekend"}), "주말"), h("span", null, h("i", {class: "lbc-sw macro"}), "경제 발표 앞뒤"),
-    h("span", null, h("i", {class: "lbc-sw now"}), "지금"));
+    legUs, h("span", null, h("i", {class: "lbc-sw now"}), "지금"));
   const weekBox = h("div", {class: "lbc-week"});
   const tlCard = ui.card({title: "앞으로 7일 · 진입 쉬는 시간", sub: "한국 시간 · 하루 한 줄", cls: "lbc-tlcard", acts: [legend]}, ribbon, weekBox);
   const relBox = h("div", {class: "lbc-rels"}, motion.shimmer(3, true));
@@ -305,10 +309,19 @@ export function calView(ctx) {
       h("span", {class: ["lbc-chip", r.no_weekend ? "" : "off"]}, h("i", {class: "lbc-sw weekend", "aria-hidden": "true"}),
         r.no_weekend ? "주말 진입 안 함 · 토 0시 ~ 월 0시" : "주말에도 진입 (봇 설정)"),
       h("span", {class: ["lbc-chip", mins ? "" : "off"]}, h("i", {class: "lbc-sw macro", "aria-hidden": "true"}),
-        mins ? `경제 발표 앞뒤 ${fmt.int(mins)}분 진입 안 함 · CPI·FOMC·NFP·PCE` : "경제 발표 때도 진입 (봇 설정)")),
+        mins ? `경제 발표 앞뒤 ${fmt.int(mins)}분 진입 안 함 · CPI·FOMC·NFP·PCE` : "경제 발표 때도 진입 (봇 설정)"),
+      usChip(d)),
     h("p", {class: "lbc-rule"}, h("b", null, "봇이 스스로 지키는 규칙이에요. "),
       "쉬는 동안에도 이미 열린 포지션은 그대로 가고, 거래소에 걸어 둔 손절 주문이 지켜요. ",
       "진입할 수 있는 시간이어도 신호가 와야 들어가요 (신호등이 빨강이거나 포지션이 이미 있으면 안 들어가요).")];
+  }
+  // the Nasdaq open (when the running config has it): its Korea-time window moves with US summer time
+  function usChip(d) {
+    const r = d.rules || {};
+    if (!r.us_open_pause_min && !r.us_open_pre_min) return null;
+    const sp = (d.spans || []).find((x) => x && x.why === "usopen");
+    return h("span", {class: "lbc-chip"}, h("i", {class: "lbc-sw usopen", "aria-hidden": "true"}),
+      `${sp ? sp.ko : "나스닥 개장 앞뒤"} 진입 안 함` + (sp ? ` · 평일 ${fmt.hm(sp.from)}~${fmt.hm(sp.to)} (한국 시간, 미국 서머타임 따라 움직임)` : ""));
   }
   function heroNotesEl(d) {
     const out = [];
@@ -376,7 +389,11 @@ export function calView(ctx) {
       h("div", {class: "lbc-wk"}, h("span", null, h("i", {class: "lbc-sw weekend", "aria-hidden": "true"}), "주말"),
         h("b", {class: "num"}, r.no_weekend ? (w.weekendMs ? durKo(w.weekendMs) : "없음") : "쉬지 않음")),
       h("div", {class: "lbc-wk"}, h("span", null, h("i", {class: "lbc-sw macro", "aria-hidden": "true"}), "경제 발표 앞뒤"),
-        h("b", {class: "num"}, r.macro_blackout_min ? (w.macroN ? `${fmt.int(w.macroN)}번 · ${durKo(w.macroMs)}` : "없음") : "쉬지 않음")));
+        h("b", {class: "num"}, r.macro_blackout_min ? (w.macroN ? `${fmt.int(w.macroN)}번 · ${durKo(w.macroMs)}` : "없음") : "쉬지 않음")),
+      r.us_open_pause_min || r.us_open_pre_min ? h("div", {class: "lbc-wk"}, h("span", null, h("i", {class: "lbc-sw usopen", "aria-hidden": "true"}), "나스닥 개장 앞뒤"),
+        h("b", {class: "num"}, w.usN ? `${fmt.int(w.usN)}번 · ${durKo(w.usMs)}` : "없음")) : null);
+    legUs.hidden = !(r.us_open_pause_min || r.us_open_pre_min);
+    weekBox.classList.toggle("four", !legUs.hidden);
   }
 
   let cdEls = [];

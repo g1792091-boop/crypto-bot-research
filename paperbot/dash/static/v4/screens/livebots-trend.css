@@ -97,6 +97,13 @@ small.ltr-sub, .ltr-cell .ltr-sub { display: block; font-size: var(--t-2xs); }
 .ltr-word.down { color: var(--down); }
 .ltr-word.hold, .ltr-word.na { color: var(--muted); }
 .ltr-follow li { font-size: var(--t-sm); }
+/* 전환 전 포지션: opened by the bot before this one (never its trade) */
+.ltr-inh { display: grid; gap: 3px; margin-top: 10px; padding: 9px 11px; border-radius: var(--r-md); min-width: 0;
+  border: 1px solid var(--warn-line); background: color-mix(in srgb, var(--warn-soft) 70%, var(--surface-2));
+  font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }
+.ltr-inh > b { color: var(--warn); font-size: var(--t-xs); letter-spacing: .03em; }
+.ltr-inh.done { border-style: dashed; background: transparent; }
+.ltr-real { margin: 6px 0 0; }
 
 /* ---------------------------------------------------------------- 추세 지도 */
 .ltr-table { display: grid; gap: 6px; min-width: 0; }
@@ -135,6 +142,20 @@ small.ltr-sub, .ltr-cell .ltr-sub { display: block; font-size: var(--t-2xs); }
 .ltr-wlist .ltr-witem { display: grid; gap: 4px; padding: 9px 11px; border-radius: var(--r-md); border: 1px solid var(--accent-line);
   background: var(--accent-soft); }
 .ltr-wlist .ltr-witem .ltr-bar > i { transition: width 1s linear; }
+/* nothing waits: what the bot looks at next */
+.ltr-idle { display: grid; gap: 8px; padding: 12px 14px; border-radius: var(--r-md); border: 1px dashed var(--line-2); min-width: 0; }
+.ltr-ihead { margin: 0; color: var(--ink); font-weight: 700; font-size: var(--t-sm); }
+.ltr ul.ltr-ilist { gap: 7px; }
+.ltr-ilist li { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 2px 10px; line-height: 1.55; }
+.ltr-ilist li.warn { color: var(--warn); }
+.ltr-ik { color: var(--muted); font-size: var(--t-xs); padding-top: 1px; }
+.ltr-more { justify-self: start; color: var(--accent); font-size: var(--t-xs); font-weight: 700; text-decoration: none; }
+.ltr-more:hover { text-decoration: underline; }
+/* 최근 24시간 바뀐 판단 (under the map) */
+.ltr-chg { display: grid; gap: 6px; min-width: 0; }
+.ltr-chg:empty { display: none; }
+.ltr-clist li { line-height: 1.5; }
+.ltr-clist .ltr-word { font-size: var(--t-sm); }
 
 /* ---------------------------------------------------------------- 오늘 신호 흐름 */
 .ltr-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -163,6 +184,10 @@ small.ltr-sub, .ltr-cell .ltr-sub { display: block; font-size: var(--t-2xs); }
 .ltr-x-TIME { background: color-mix(in srgb, var(--accent) 55%, var(--muted)); }
 .ltr-x-HALT, .ltr-x-MANUAL { background: var(--muted); }
 .ltr-legend li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* no closed trade yet: what the replay (가상) says to expect */
+.ltr-exp { display: grid; gap: 8px; margin-top: 10px; padding: 12px 14px; border-radius: var(--r-md); min-width: 0;
+  border: 1px dashed var(--accent-line); background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.ltr-ehead { margin: 0; color: var(--ink-2); font-size: var(--t-xs); }
 .ltr-sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
 
 /* ---------------------------------------------------------------- 매매법 10개 */

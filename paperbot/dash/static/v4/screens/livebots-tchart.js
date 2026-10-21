@@ -14,7 +14,9 @@
 // bot's own functions and numbers, checked against the bot's record; the signals, trades and waits of the paper bot both
 // executors follow) every 30 s (a few seconds while bars are still coming in), and the site's /api/candles.
 // HONESTY: a cell the bot could not have judged, or bars not received, = 못 읽음 / 불러오는 중 with the reason, never a
-// colour of a guess; the recomputed judgment that differs from the bot's own record says so. Times in KST.
+// colour of a guess; the recomputed judgment that differs from the bot's own record says so. Times in KST. The bot's start
+// (``since``) is a line on the heat; the entries, exits and signals of the bot before it on the same paper account are
+// dimmed and said to be 전환 전 (owners 10/21: the switch night still shows the old bot's last day).
 import {h, put, ui, fmt, local, makeChart, candleOptions, tok, priceDec} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
@@ -137,6 +139,7 @@ export function sigMark(s) {
   if (k === "wait") return {...base, key: "warn", text: "", title: "되돌림 기다림"};
   if (k === "nopull") return {...base, key: "muted", text: "", title: "되돌림 안 옴"};
   if (k === "blocked") return {...base, key: "muted", text: "×", title: s.cat === "trend" ? "추세 판단에 걸림" : "진입 자리 검사에 걸림"};
+  if (k === "prev") return {...base, key: "line", text: "", title: "전환 전 · 예전 봇 신호"};
   return {...base, key: "line", text: "×", title: s.cat_ko || "다른 이유"};
 }
 /** The chart's markers for the coin's signals (of this entry timeframe), the paper trades and the open position, each on
@@ -157,7 +160,7 @@ export function chartMarks(c, tf, times) {
     const long = Number(x.side) > 0;
     const te = at(x.entry_time);
     if (te != null) out.push({time: te, position: long ? "belowBar" : "aboveBar", shape: long ? "arrowUp" : "arrowDown",
-      key: long ? "up" : "down", text: `진입 ${SIDE(x.side)}`, ord: 1});
+      key: long ? "up" : "down", text: `${x.before ? "전환 전 " : ""}진입 ${SIDE(x.side)}`, ord: 1});
     if (x.open) continue;
     const tx = at(x.exit_time);
     if (tx != null) out.push({time: tx, position: long ? "aboveBar" : "belowBar", shape: "square",
@@ -248,11 +251,15 @@ export function tchartView(ctx) {
       h("div", {class: ["ltc-nowi", t1h.length ? "on" : ""], role: "listitem"}, h("span", {class: "ltc-nowk"}, "1시간 진입 받는 곳 (4시간 판단)"),
         h("b", null, t1h.length ? t1h.join(" · ") : "없음 · 모두 쉼")));
     const marks = d.marks || {};
+    // the trend bot's start: a line down every row (what is left of it is the bot before it, 전환 전)
+    const sx = ok(d.since) ? markX(d.since, t0, t1) : null;
     // KST midnights: a thin line down every row
     const days = hourTicks(t0, n).filter((x) => x.day && x.i > 0).map((x) => x.i / n);
     const axis = h("div", {class: "ltc-axisrow", "aria-hidden": "true"}, h("div", {class: "ltc-lab"}),
       h("div", {class: "ltc-axis", style: {"--cols": n}}, hourTicks(t0, n).filter((x) => x.i < n - 6).map((x) => h("span", {class: ["ltc-tick", x.day ? "day" : ""],
-        style: {"--x": (x.i / n).toFixed(4)}}, x.ko)), h("span", {class: "ltc-tick now", style: {"--x": "1"}}, "지금")));
+        style: {"--x": (x.i / n).toFixed(4)}}, x.ko)),
+        sx != null && sx < 0.93 ? h("span", {class: "ltc-tick start", style: {"--x": sx.toFixed(4)}}, "새 봇 시작") : null,
+        h("span", {class: "ltc-tick now", style: {"--x": "1"}}, "지금")));
     const rows = COINS.map((sym) => {
       const row = (heat.coins || {})[sym] || {};
       const lines = ["1h", "4h"].map((tf) => {
@@ -271,19 +278,22 @@ export function tchartView(ctx) {
             dataset: {s: sym, tf, t: String(p.c.t)}, title: `${fmt.coin(sym)} ${fmt.tfKo(tf)} ${fmt.kst(p.c.t)} · ${x.word}`});
         });
         const dots = days.map((x) => h("i", {class: "ltc-day", style: {"--x": x.toFixed(4)}}));
+        if (sx != null) dots.push(h("i", {class: "ltc-start", style: {"--x": sx.toFixed(4)}, title: `${fmt.kst(d.since)} 추세판단 봇 시작`}));
         for (const m of marks.entries || []) {
           if (m.symbol !== sym || m.htf !== tf) continue;
           const xx = markX(m.t, t0, t1);
           if (xx == null) continue;
-          dots.push(h("i", {class: ["ltc-dot", Number(m.side) > 0 ? "long" : "short", m.open ? "open" : ""], style: {"--x": xx.toFixed(4)},
-            title: `${fmt.kst(m.t)} 페이퍼 진입 ${fmt.coin(sym)} ${SIDE(m.side)} · ${fmt.stratKo(m.strategy)} ${fmt.tfKo(m.tf)}${m.open ? " · 보유 중" : ""}`}));
+          dots.push(h("i", {class: ["ltc-dot", Number(m.side) > 0 ? "long" : "short", m.open ? "open" : "", m.before ? "before" : ""],
+            style: {"--x": xx.toFixed(4)}, title: `${m.before ? "전환 전 · " : ""}${fmt.kst(m.t)} 페이퍼 진입 ${fmt.coin(sym)} ${SIDE(m.side)} · `
+              + `${fmt.stratKo(m.strategy)} ${fmt.tfKo(m.tf)}${m.open ? " · 보유 중" : ""}`}));
         }
         for (const m of marks.sup || []) {
           if (m.symbol !== sym || m.htf !== tf) continue;
           const xx = markX(m.t, t0, t1);
           if (xx == null) continue;
           dots.push(h("i", {class: ["ltc-x", m.reason === "TIME" ? "time" : "judge"], style: {"--x": xx.toFixed(4)},
-            title: `${fmt.kst(m.t)} 감독 청산 ${fmt.coin(sym)} ${SIDE(m.side)} · ${m.reason_ko}${m.why ? ` · ${m.why}` : ""}`}, "×"));
+            title: `${fmt.kst(m.t)} 감독 청산 ${fmt.coin(sym)} ${SIDE(m.side)} · ${m.reason_ko}${m.why ? ` · ${m.why}` : ""}`
+              + (m.before ? " · 전환 전 포지션 (새 봇 성적엔 안 셈)" : "")}, "×"));
         }
         return h("div", {class: ["ltc-cells", r.stale ? "stale" : ""], style: {"--cols": n}, role: "presentation",
           title: r.stale ? r.reason_ko || "" : null}, kids, h("span", {class: "ltc-marks"}, dots));
@@ -487,16 +497,18 @@ export function tchartView(ctx) {
     if (!c || c.symbol !== st.sym) { put(events); return; }
     const items = [];
     for (const s of c.signals || []) {
-      items.push({t: Number(s.t), node: h("li", {class: ["ltc-ev", "k-" + s.kind]},
+      items.push({t: Number(s.t), node: h("li", {class: ["ltc-ev", "k-" + s.kind, s.before ? "before" : ""]},
         h("span", {class: "num ltc-et"}, fmt.kst(s.t)),
         h("span", {class: "ltc-ew"}, h("b", null, `${SIDE(s.side)} 신호`), ` ${fmt.stratKo(s.strategy)} ${fmt.tfKo(s.tf)}`),
-        ui.pill(s.kind_ko, s.kind === "entered" ? "good" : s.kind === "wait" ? "warn" : "thin"),
+        ui.pill(s.kind_ko, s.kind === "entered" ? "good" : s.kind === "wait" ? "warn" : "thin",
+          s.before ? "추세판단 봇이 켜지기 전, 예전 봇의 신호예요 (이 봇의 판단이 아님)" : null),
         s.why ? h("small", {class: "ltc-esub"}, s.why) : null)});
     }
     for (const x of c.trades || []) {
-      items.push({t: Number(x.exit_time), node: h("li", {class: "ltc-ev k-trade"},
+      items.push({t: Number(x.exit_time), node: h("li", {class: ["ltc-ev", "k-trade", x.before ? "before" : ""]},
         h("span", {class: "num ltc-et"}, fmt.kst(x.exit_time)),
-        h("span", {class: "ltc-ew"}, h("b", null, `${SIDE(x.side)} 거래 청산`), ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)} · 진입 ${fmt.kst(x.entry_time)}`),
+        h("span", {class: "ltc-ew"}, h("b", null, `${x.before ? "전환 전 " : ""}${SIDE(x.side)} 거래 청산`),
+          ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)} · 진입 ${fmt.kst(x.entry_time)}${x.before ? " · 예전 봇이 연 것" : ""}`),
         ui.pill(exitKo(x.reason), x.reason === "LOCK" ? "good" : x.reason === "SL" || x.reason === "LIQ" ? "bad" : "accent"),
         h("b", {class: ["num", fmt.tone(x.roe)]}, fmt.pct(x.roe, 1)),
         x.why || x.entry_judge ? h("small", {class: "ltc-esub"}, [x.why, x.entry_judge ? `진입 때 ${x.entry_judge}` : null].filter(Boolean).join(" · ")) : null)});
@@ -505,7 +517,9 @@ export function tchartView(ctx) {
       const p = c.position;
       items.push({t: Number(p.entry_time), node: h("li", {class: "ltc-ev k-open"}, h("span", {class: "num ltc-et"}, fmt.kst(p.entry_time)),
         h("span", {class: "ltc-ew"}, h("b", null, `${SIDE(p.side)} 보유 중`), ` ${fmt.stratKo(p.strategy)} ${fmt.tfKo(p.tf)} · 진입 ${fmt.price(p.entry_price)}`),
-        ui.pill("페이퍼 포지션", "accent"), p.entry_judge ? h("small", {class: "ltc-esub"}, `진입 때 ${p.entry_judge}`) : null)});
+        ui.pill(p.before ? "전환 전 포지션" : "페이퍼 포지션", p.before ? "warn" : "accent",
+          p.before ? "예전 봇이 연 포지션이에요 · 새 봇이 이어서 정리해요 (새 봇 성적엔 안 셈)" : null),
+        p.entry_judge ? h("small", {class: "ltc-esub"}, `진입 때 ${p.entry_judge}`) : null)});
     }
     for (const w of c.waits || []) {
       items.push({t: Number(w.t0) || 0, node: h("li", {class: "ltc-ev k-wait"}, h("span", {class: "num ltc-et"}, fmt.kst(w.t0)),
@@ -528,7 +542,8 @@ export function tchartView(ctx) {
       sw("up weak", "힘 약함 · 끝물 (진입 안 함)"), sw("na", "못 읽음"),
       h("li", null, h("i", {class: "ltc-sw dot", "aria-hidden": "true"}), "페이퍼 롱 진입"),
       h("li", null, h("i", {class: "ltc-sw dot short", "aria-hidden": "true"}), "숏 진입"),
-      h("li", null, h("i", {class: "ltc-sw xx", "aria-hidden": "true"}, "×"), "감독 청산"));
+      h("li", null, h("i", {class: "ltc-sw xx", "aria-hidden": "true"}, "×"), "감독 청산"),
+      h("li", null, h("i", {class: "ltc-sw start", "aria-hidden": "true"}), "새 봇 시작 (왼쪽 흐린 점 = 전환 전 예전 봇)"));
   }
   function chartLegend() {
     const sw = (cls, ko, txt) => h("li", null, h("i", {class: ["ltc-mk", cls], "aria-hidden": "true"}, txt || null), ko);

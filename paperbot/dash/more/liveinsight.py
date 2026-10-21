@@ -1448,7 +1448,7 @@ def health(p: dict, now: int, more: Optional[dict] = None) -> dict:
              "limit_ms": PAPER_HB_LATE_MS}, who="paper2", severity=sev, detail={"queue": pb2.get("queue"), "label_ko": b["label_ko"]})
         add("paper2_step", f"{nm} 봇 마지막 1분", _late(pb2["step"], now, PAPER_STEP_LATE_MS, MIN), who="paper2", severity=sev)
     configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
-    for ex, ko, dk, _ck in L.EXECS:
+    for ex, ko, dk, _ck in L.slots(configs):             # each slot by the exchange its config names (WOO X Pro)
         eb = exec_beat(p[dk])
         if eb.get("state") != "ok":
             add("exec", f"{ko} 실행기", {**_src(eb), "at": None, "late_ms": None, "limit_ms": EXEC_LATE_MS}, who=ex)

@@ -1542,7 +1542,7 @@ def why_cat(status: str, why: str) -> tuple:
     if w.startswith("경제 발표"):
         return "macro", "경제 발표 앞뒤"
     if w.startswith("나스닥 개장"):                       # combo.py us_open_pause (us_open_pause_min): a pause like the two above
-        return "usopen", "나스닥 개장 뒤"
+        return "usopen", "나스닥 개장 앞뒤" if w.startswith("나스닥 개장 앞") else "나스닥 개장 뒤"    # (us_open_pre_min, 10-21 night)
     if w.startswith("추격 진입 막기"):                     # combo.py _chase_block: a no_chase member's chase
         return "chase", "추격 진입 막기"
     if w.startswith("추격 판단"):                          # ... or one it could not tell (no entry either; before '못 읽음')
@@ -1606,7 +1606,10 @@ def outcome_cat(status: str, reason: str) -> tuple:
 
 def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) -> dict:
     """신호: every signal_log row of the combined bot and what became of it (its outcome for the account), counted per
-    reason for today (KST) and the last 7 days, and the newest ``keep`` rows."""
+    reason for today (KST) and the last 7 days, and the newest ``keep`` rows. The 추세판단 봇 (trend_bot): the counts start
+    at its start (``bot_since``); the rows before it stay in the list flagged ``prev`` (the bot before it, 전환 전)."""
+    tb = trend_bot(path)
+    bot_since = tb["since"] if tb else None
     try:
         conn = open_ro(path)
     except FileNotFoundError:
@@ -1655,8 +1658,10 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
         name = d.get("strategy") or str(strat).split("@")[0]
         row = {"id": _i(_id), "t": _i(bc), "tf": tf, "member": strat, "strategy": name, "symbol": sym, "side": _i(side), "status": status,
                "stage": stage, "cat": cat, "ko": ko, "why": d.get("why"), "why_ko": why_words(d.get("why")) if d.get("why") else None,
-               "source": d.get("source")}
+               "source": d.get("source"), "prev": bool(bot_since) and (_i(bc) or 0) < bot_since}
         out_rows.append(row)
+        if row["prev"]:
+            continue                                       # the bot before it: listed, never counted as this one's
         for span in ("week",) + (("today",) if (_i(bc) or 0) >= t0 else ()):
             c = counts[span].setdefault(cat, {"cat": cat, "ko": ko, "stage": stage, "n": 0})
             c["n"] += 1
@@ -1664,7 +1669,7 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
     for span in ("today", "week"):
         st_ = {"signals": 0, "filtered": 0, "entered": 0, "skipped": 0, "rejected": 0, "waiting": 0}
         for r in out_rows:
-            if span == "today" and (r["t"] or 0) < t0:
+            if (span == "today" and (r["t"] or 0) < t0) or r["prev"]:
                 continue
             if r["status"] == "BROKE":
                 continue                                   # its entry signal is a SUBMITTED row of its own
@@ -1672,7 +1677,7 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
             if r["stage"] in st_:
                 st_[r["stage"]] += 1
         stages[span] = st_
-    return {"state": "ok", "path": path, "since_ms": since, "today_ms": t0,
+    return {"state": "ok", "path": path, "since_ms": since, "today_ms": t0, "bot_since": bot_since,
             "counts": {k: sorted(v.values(), key=lambda c: -c["n"]) for k, v in counts.items()}, "stages": stages,
             "rows": out_rows[::-1][:keep], "n": len(out_rows)}
 
@@ -2214,13 +2219,17 @@ def weekend_span(ms: int) -> tuple:
 
 def calendar(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/calendar: the US macro releases around now (data/macro_events.csv: the same file and the same
-    ±macro_blackout_min window the paper bot uses), the KST weekend, whether an entry may be made now by these rules, the
-    pause windows of the next 7 days and how far ahead the release file reaches. The bot's own rules only: signals, the
+    ±macro_blackout_min window the paper bot uses), the KST weekend, the pause around each Nasdaq open when the running
+    config has one (us_open_pre_min / us_open_pause_min: combo.us_open_pause's windows, ``usopen``), whether an entry may
+    be made now by these rules, the pause windows of the next 7 days and how far ahead the release file reaches. The bot's own rules only: signals, the
     light and an open position decide the rest."""
     combo = read_combo(p["paper"], paths_more()["combo_config"])
     cfg = combo.get("config") or {} if combo.get("state") == "ok" else {}
     mins = _i(cfg.get("macro_blackout_min")) if combo.get("state") == "ok" else 30
     no_weekend = bool(cfg.get("no_weekend", True)) if combo.get("state") == "ok" else True
+    # the Nasdaq open (owners 10-19 "개장하고 30분", 10-21 night "개장전 30분도": combo.us_open_pause): only when the running
+    # config has it (an unread config draws the two rules above, said so on the page)
+    us_min, us_pre = (_i(cfg.get("us_open_pause_min")) or 0, _i(cfg.get("us_open_pre_min")) or 0)
     w = (mins or 0) * 60_000
     try:
         from ... import events as EV
@@ -2250,21 +2259,37 @@ def calendar(p: dict, now: int) -> dict:
     for x in items:
         if w and x["pause_to"] >= now and x["pause_from"] < now + CAL_TIMELINE_DAYS * DAY:
             spans.append({"from": x["pause_from"], "to": x["pause_to"], "why": "macro", "ko": f"{x['kind_ko']} 앞뒤 {mins}분", "kind": x["kind"]})
+    us_now, us_err = None, None
+    if us_min or us_pre:
+        from ... import combo as C
+        from .liveinsight import us_open_windows        # (liveinsight imports this module)
+        wins, us_err = us_open_windows(now, us_min, days=CAL_TIMELINE_DAYS + 1, pre=us_pre)
+        for a, b in wins:
+            sp = {"from": a, "to": b, "why": "usopen", "ko": C.us_open_ko(us_min, us_pre)}
+            if a <= now < b:
+                us_now = sp
+            if b >= now and a < now + CAL_TIMELINE_DAYS * DAY:
+                spans.append(sp)
     spans.sort(key=lambda s: s["from"])
-    edge = max([now] + [x for x in ((macro_now or {}).get("pause_to"), wk_b if wk_now else None) if x is not None])
+    ends = [x for x in ((macro_now or {}).get("pause_to"), wk_b if wk_now else None, (us_now or {}).get("to")) if x is not None]
+    edge = max([now] + ends)
     nxt = next((s for s in spans if s["from"] > edge), None)        # the next pause after the one now (if any)
     last = max((e.ts_ms for e in evs), default=None)
+    paused = bool(wk_now or macro_now or us_now)
+    pause_ko = None
+    if paused:
+        pause_ko = ("주말이라 진입 쉬는 중" if wk_now else f"{macro_now['kind_ko']} 발표 앞뒤 {mins}분이라 진입 쉬는 중" if macro_now
+                    else f"{us_now['ko']}이라 진입 쉬는 중")
     return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "path", "source")},
-            "rules": {"macro_blackout_min": mins, "no_weekend": no_weekend},
+            "rules": {"macro_blackout_min": mins, "no_weekend": no_weekend,
+                      **({"us_open_pause_min": us_min or None, "us_open_pre_min": us_pre or None, "us_error": us_err}
+                         if us_min or us_pre else {})},
             "events": {"state": "error" if ev_err else "ok", "reason": ev_err, "problems": problems,
                        "reason_ko": "경제 발표 일정 파일(data/macro_events.csv)을 못 읽었어요" if ev_err else None,
                        "last_ms": last, "days_left": (last - now) / DAY if last is not None else None,
                        "low": last is None or last - now < CAL_LOW_DAYS * DAY, "low_days": CAL_LOW_DAYS},
-            "now": {"weekend": wk_now, "macro": macro_now, "paused": bool(wk_now or macro_now),
-                    "pause_until": max(x for x in ((macro_now or {}).get("pause_to"), wk_b if wk_now else None) if x is not None)
-                    if (wk_now or macro_now) else None,
-                    "pause_ko": ("주말이라 진입 쉬는 중" if wk_now else f"{macro_now['kind_ko']} 발표 앞뒤 {mins}분이라 진입 쉬는 중") if (wk_now or macro_now) else None,
-                    "next": nxt},
+            "now": {"weekend": wk_now, "macro": macro_now, "usopen": us_now, "paused": paused,
+                    "pause_until": max(ends) if paused else None, "pause_ko": pause_ko, "next": nxt},
             "weekend": {"from": wk_a, "to": wk_b}, "items": items, "spans": spans,
             "timeline": {"from": now, "to": now + CAL_TIMELINE_DAYS * DAY}}
 
@@ -2785,7 +2810,7 @@ def pending(p: dict, now: int, members: Optional[list] = None, trend: bool = Fal
 # ---------------------------------------------------------------- 지금 (왜 지금 진입 안 하나, owners 10/19)
 def whynow(p: dict, now: int) -> dict:
     """GET /api/v4/livebots/now: what stands between now and the next live entry, in the order the bots check it: the
-    weekend and macro pause (calendar), the paper bot alive, a position already open (one at a time), each executor
+    weekend, macro and Nasdaq-open pause (calendar), the paper bot alive, a position already open (one at a time), each executor
     running, not halted, its light, then the only thing left: a signal. Read-only; never a guess."""
     from ... import livecheck as LC
     configs, follows, paper, execs = sources(p, now)
@@ -2804,6 +2829,9 @@ def whynow(p: dict, now: int) -> dict:
         m = cn.get("macro")
         add("macro", m is None, "미국 경제 발표 앞뒤 시간이 아님" if m is None else f"{m['kind_ko']} 발표 앞뒤 {rules['macro_blackout_min']}분이라 진입 쉼",
             {"until": m["pause_to"], "ts": m["ts"]} if m else None)
+    if rules.get("us_open_pause_min") or rules.get("us_open_pre_min"):
+        u = cn.get("usopen")
+        add("usopen", u is None, "나스닥 개장 앞뒤 시간이 아님" if u is None else f"{u['ko']}이라 진입 쉼", {"until": u["to"]} if u else None)
     if cal.get("events", {}).get("state") != "ok":
         add("macro_file", None, "경제 발표 일정 파일을 못 읽음(봇도 같은 파일을 봐요)")
     if paper.get("state") != "ok":
@@ -2865,7 +2893,7 @@ def whynow(p: dict, now: int) -> dict:
             "last_signal": {k: last.get(k) for k in ("t", "strategy", "tf", "symbol", "side", "stage", "ko")} if last else None,
             "signals": {k: sig.get(k) for k in ("state", "reason_ko", "stages")}, "next_pause": cn.get("next"),
             "pause_until": cn.get("pause_until"), "pending": pend, "likely": lk,
-            "pending_blocked_ko": next((i["ko"] for i in items if i["ok"] is False and i["id"] in ("weekend", "macro", "position", "paper")), None)}
+            "pending_blocked_ko": next((i["ko"] for i in items if i["ok"] is False and i["id"] in ("weekend", "macro", "usopen", "position", "paper")), None)}
 
 
 # ---------------------------------------------------------------- 진입 가능성 (owners 10/19 "각 매매법마다 진입 가능성 몇%, 순위별로")

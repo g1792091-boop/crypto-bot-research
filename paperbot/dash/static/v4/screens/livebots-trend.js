@@ -11,18 +11,27 @@
 //   오늘 신호 흐름 signals → checks passed → pullback touched → entered, and what stopped the rest
 //   매매법 10개  each entry member: role, timeframes, today's signals, its record since the start, its pause
 //   새 봇 성적 · 최근 거래 · 감독 청산 · 규칙 · 최근 24시간 신호
+// A fresh start (owners 10/21 "뭔가 허전해 보여서") says what the bot does meanwhile instead of empty boxes: a position
+// the bot before it opened (전환 전 포지션: closed by this bot, never its trade) and what each executor did with it, the
+// next bar closes and the directions the trend takes now, the next entry pause, the 7/1~10/20 replay's expectation (가상,
+// with the 시간 정리 exit it ran with), the judgment changes of the last 24 h (the 일지 tab's own rows); today's funnel and
+// the signals count from the bot's start.
 // Sources: /api/v4/livebots/trend (dash/more/livetrend.py, every 15 s) and the site's summary /api/v4/livebots (the money
 // and the executors' positions, every 5 s, handed in by screens/livebots.js); the price is the site's ticker (core/store.js
 // mark) when it has one, else the rule bot's last 1m close from the answer; the strategies' Korean names come with the
 // board. Countdowns tick every second on the server's clock. HONESTY: unread = 못 읽음 + why, never a zero; paper money is
 // never shown as real money.
-import {h, put, ui, fmt, store, serverNow} from "../core/pb.js";
+import {h, put, ui, fmt, store, serverNow, href} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/trend";
+// the judgment changes of the last 24 h: the 일지 tab's answer (dash/more/livejournal.py, its "trend" rows), every 60 s
+export const JOURNAL_API = "/api/v4/livebots/journal";
+const JOURNAL_MS = 60 * 1000;
+const CHANGES_KEEP = 6;
 const REFRESH_MS = 15 * 1000;
 const TICK_MS = 1000;
-const MIN = 60 * 1000, DAY = 24 * 60 * MIN;
+const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * 60 * MIN;
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const JUDGES = [["V39", "V3.9"], ["S6", "EMA·DMI·ADX"], ["OBV", "OBV"], ["N12", "일목·AO"]];
 export const DIR_KO = {1: "상승", "-1": "하락", 0: "보류"};
@@ -107,6 +116,63 @@ export function clock(ms) {
   const two = (n) => String(n).padStart(2, "0");
   return hh ? `${hh}:${two(mm)}:${two(ss)}` : `${mm}:${two(ss)}`;
 }
+/** The directions the trend takes now, in the map's words: ["BTC 30분 롱만", "ETH 1시간 숏만", ...]. */
+export function takingNow(t) {
+  const out = [];
+  for (const c of COINS) {
+    for (const tf of ["1h", "4h"]) {
+      const a = allows((((t && t.coins) || {})[c] || {})[tf], tf);
+      if (a.side) out.push(`${fmt.coin(c)} ${a.ko}`);
+    }
+  }
+  return out;
+}
+/** The next closes after now: {m30, h1} (ms; the entry signals come at a 30-minute or an hour close). */
+export function nextCloses(now) {
+  const n = Number(now);
+  return {m30: n - (n % (30 * MIN)) + 30 * MIN, h1: n - (n % HOUR) + HOUR};
+}
+/** A wait in the owners' words: "40분" / "약 17시간" / "약 3일" (null: "—"). */
+export function waitKo(ms) {
+  if (!ok(ms)) return "—";
+  const m = Number(ms);
+  if (m < HOUR) return `${Math.max(1, Math.round(m / MIN))}분`;
+  if (m < 72 * HOUR) return `약 ${Math.round(m / HOUR)}시간`;
+  return `약 ${Math.round(m / DAY)}일`;
+}
+/** The higher bar's judgment against the position, in words: closed by the supervisor only on a bar closed after the
+ *  entry, so a position opened against it (전환 전) waits for the next close (trendbot.py _before_step). */
+export function againstKo(p, j) {
+  const htfMs = (TF_MIN[p && p.htf] || 60) * MIN;
+  if (j && ok(j.bar_close) && p && ok(p.entry_time) && Number(j.bar_close) <= Number(p.entry_time)) {
+    return `진입 때부터 반대 · ${fmt.hm(Number(j.bar_close) + htfMs)}에 끝나는 ${fmt.tfKo(p.htf)}봉도 반대면 감독 청산`;
+  }
+  return "반대로 바뀜 · 감독 청산";
+}
+/** An executor without a position, in words: following and waiting, halted, or what it did with the paper's open one
+ *  (``f``: that executor's row of the answer's position.follow, from its own records). */
+export function idleKo(a, p, f) {
+  if (a && a.halted) return "포지션 없음 · 멈춤 (사람이 풀기 전엔 새 진입 안 함)";
+  if (!p) return `포지션 없음 · 따라가는 중 · 다음 페이퍼 진입을 기다려요${a && a.stale ? " (기록 오래됨)" : ""}`;
+  if (f && f.state === "skip") return `이 포지션 안 따라감 · ${f.ko}`;
+  if (f && f.state === "none") return "이 포지션을 따라간 기록 없음";
+  if (f && f.state === "other") return f.ko;
+  return "포지션 없음 (안 따라갔거나 이미 닫음)";
+}
+/** The replay's expectation of a fresh start, as lines (the next.expect part of the answer; [] when unread). */
+export function expectLines(x) {
+  if (!x || x.state !== "ok") return [];
+  const out = [];
+  if (ok(x.per_weekday)) {
+    out.push(`평일 하루 약 ${Number(x.per_weekday).toFixed(1)}번 진입` + (ok(x.zero_days) && ok(x.weekdays)
+      ? ` · 진입 없는 평일도 ${fmt.int(x.zero_days)}일 / ${fmt.int(x.weekdays)}일 (${fmt.pct(x.zero_share, 0, false)})` : ""));
+  }
+  if (ok(x.wait_median_ms)) {
+    out.push(`아무 평일 시각에서 다음 진입까지 가운데값 ${waitKo(x.wait_median_ms)}` + (ok(x.wait_q1_ms) && ok(x.wait_q3_ms)
+      ? ` (4번 중 1번은 ${waitKo(x.wait_q1_ms)} 안, 4번 중 1번은 ${waitKo(x.wait_q3_ms)} 넘게)` : ""));
+  }
+  return out;
+}
 /** The hero's state from the trend answer: {cls, head, sub}. */
 export function heroOf(t, now) {
   if (!t || t.state !== "ok") return {cls: "na", head: "추세판단 봇 기록을 기다리는 중", sub: ""};
@@ -129,13 +195,7 @@ export function heroOf(t, now) {
     return {cls: "wait", head: `되돌림 기다리는 신호 ${waits.length}개`,
       sub: `${fmt.coin(w.symbol)} ${SIDE(w.side)} ${fmt.stratKo(String(w.member || "").split("@")[0])} · ${fmt.price(w.level)} 닿으면 진입`};
   }
-  const trending = [];
-  for (const c of COINS) {
-    for (const tf of ["1h", "4h"]) {
-      const a = allows(((t.coins || {})[c] || {})[tf], tf);
-      if (a.side) trending.push(`${fmt.coin(c)} ${a.ko}`);
-    }
-  }
+  const trending = takingNow(t);
   return {cls: "go", head: "진입 가능 · 추세와 같은 방향 신호를 기다리는 중",
     sub: trending.length ? `지금 받는 방향: ${trending.slice(0, 6).join(" · ")}${trending.length > 6 ? " …" : ""}`
       : "지금은 모든 코인이 보류예요 (추세가 생기면 받아요)"};
@@ -145,7 +205,7 @@ export function heroOf(t, now) {
 /** trendView(ctx, hub) -> {el, set(summary)}: its own endpoint every 15 s, the countdowns every second (ctx.every: the
  *  router stops them); ``set`` gets the site's summary (money, the executors' positions) from screens/livebots.js. */
 export function trendView(ctx, hub) {
-  const st = {t: null, s: null, okAt: 0, busy: false, ticks: []};
+  const st = {t: null, s: null, okAt: 0, busy: false, ticks: [], j: null, jAt: 0};
   const stateSlot = h("div", {class: "lb-slot"});
   // the hero
   const head = h("h2", {class: "ltr-head"}, "불러오는 중");
@@ -159,6 +219,7 @@ export function trendView(ctx, hub) {
   // the cards
   const posBox = h("div", {class: "ltr-pos"});
   const grid = h("div", {class: "ltr-grid"});
+  const changes = h("div", {class: "ltr-chg"});
   const waits = h("div", {class: "ltr-waits"});
   const pauses = h("div", {class: "ltr-pauses"});
   const pauseHead = h("h3", {class: "ltr-h3"}, "쉬는 매매법 · 코인");
@@ -177,7 +238,7 @@ export function trendView(ctx, hub) {
       ui.card({title: "되돌림 기다리는 신호", sub: "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요", cls: "ltr-wcard"}, waits,
         pauseHead, pauses)),
     ui.card({title: "추세 지도", sub: "끝난 봉만 봐요 · 30분 진입은 1시간, 1시간 진입은 4시간 · 4개 중 3개 이상 같은 쪽이면 추세 · ADX 20 이상, 40 넘고 꺾이면 끝물",
-      cls: "ltr-judge", acts: [stamp]}, grid),
+      cls: "ltr-judge", acts: [stamp]}, grid, changes),
     h("div", {class: "ltr-two"},
       ui.card({title: "오늘 신호 흐름", sub: "한국 시간 오늘 · 진입 매매법 신호가 어디서 걸렸나", cls: "ltr-fcard"}, funnelBox),
       ui.card({title: "새 봇 성적", sub: "페이퍼(연습) · 새 규칙 시작 뒤 거래만 · 실거래 계좌는 위 지갑", cls: "ltr-rcard"}, recordBox)),
@@ -200,14 +261,17 @@ export function trendView(ctx, hub) {
   function drawHero() {
     const t = st.t, now = serverNow();
     const x = heroOf(t, now);
+    // a position the bot before it opened (전환 전): the bot only closes it (its record starts after it)
+    const inh = t && t.state === "ok" && t.position && t.position.inherited && x.cls === "hold" ? t.position : null;
     hero.className = `ltr-hero ${x.cls}`;
-    head.textContent = x.head;
+    head.textContent = inh ? `전환 전 포지션 정리 중 · ${fmt.coin(inh.symbol)} ${SIDE(inh.side)}` : x.head;
     sub.textContent = x.sub;
     if (!t || t.state !== "ok") { put(chips); return; }
     const fz = freezeKo(t.bot, now);
     const age = ok(t.ts) ? now - Number(t.ts) : null;
     const pz = t.pause || {};
     put(chips,
+      inh ? ui.pill(inh.inherited_ko || "전환 전 포지션", "warn", "새 봇이 켜지기 전에 열린 포지션이에요 · 새 봇이 손절 · 계단 익절 · 추세 뒤집힘 감독으로 닫아요 · 새 봇 성적에는 안 세요") : null,
       ui.pill(fz.ko, fz.days === 0 ? "warn" : "accent", "새 규칙은 2주 동안 바꾸지 않고 기록을 모은 뒤 검토해요"),
       t.bot && ok(t.bot.since) ? ui.pill(`새 규칙 시작 ${fmt.kst(t.bot.since)}`, "thin") : null,
       ui.pill(age != null ? `판단 ${fmt.dur(age / 1000)} 전` : "판단 시각 모름", age != null && age > 5 * MIN ? "warn" : "thin"),
@@ -232,24 +296,49 @@ export function trendView(ctx, hub) {
     if (pa && pa.state === "ok") items.push(tile("페이퍼(연습) 지갑", fmt.usd(pa.balance), "진짜 돈 아님", "paper"));
     const r = t && t.state === "ok" ? t.record : null;
     if (r) {
+      const ex = ((t.next || {}).expect) || {};
       items.push(tile("새 봇 성적", r.n ? `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패` : "아직 거래 없음",
-        r.n ? `승률 ${fmt.pct(r.win_rate, 0, false)} · ${signed(r.pnl)}` : "새 규칙 시작 뒤", "rec"));
+        r.n ? `승률 ${fmt.pct(r.win_rate, 0, false)} · ${signed(r.pnl)}`
+          : ex.state === "ok" && ok(ex.per_weekday) ? `새 규칙 시작 뒤 · 재현(가상)은 평일 하루 약 ${Number(ex.per_weekday).toFixed(1)}번` : "새 규칙 시작 뒤", "rec"));
     }
     put(money, items.length ? items : h("p", {class: "ltr-sub"}, "지갑 기록을 불러오는 중"));
   }
   function liveRows(p) {
     const accts = ((st.s && st.s.accts) || []).filter((a) => a.kind === "live");
     if (!accts.length) return h("p", {class: "ltr-sub"}, "실행기 기록을 불러오는 중");
-    return h("ul", {class: "ltr-list ltr-follow"}, accts.map((a) => {
+    const fol = p && Array.isArray(p.follow) ? p.follow : null;
+    const none = fol && fol.length && fol.every((f) => f.state === "skip" || f.state === "none");
+    return h("div", null, h("ul", {class: "ltr-list ltr-follow"}, accts.map((a) => {
       if (a.state !== "ok") return h("li", null, h("b", null, `${a.name_ko} `), "기록 못 읽음");
       const q = a.position;
-      if (!q) return h("li", null, h("b", null, `${a.name_ko} `), p ? "포지션 없음 (안 따라갔거나 이미 닫음)" : "포지션 없음");
+      const f = fol ? fol.find((x) => x.id === a.id) : null;
+      if (!q) {
+        return h("li", null, h("b", null, `${a.name_ko} `), idleKo(a, p, f),
+          f && f.text ? h("small", {class: "ltr-sub"}, `실행기 기록 ${ok(f.ts) ? fmt.hm(f.ts) + " " : ""}· ${f.text}`) : null);
+      }
       const price = priceOf(st.t, q.symbol);
       const roe = ok(price) && ok(q.entry) && ok(q.leverage) ? Number(q.leverage) * Number(q.side) * (Number(price) / Number(q.entry) - 1) : null;
       return h("li", null, h("b", null, `${a.name_ko} `), `${fmt.coin(q.symbol)} ${SIDE(q.side)} ${fmt.lev(q.leverage)} · 진입 ${fmt.price(q.entry)}`,
         roe != null ? h("span", {class: ["num", fmt.tone(roe)]}, ` · ROE ${fmt.pct(roe, 1)}`) : null,
         q.lock_roe != null ? ` · 자기 잠금 +${fmt.pct(q.lock_roe, 0, false)}` : " · 자기 잠금 전");
-    }));
+    })), none ? h("p", {class: "ltr-sub ltr-real"}, "실거래 두 계좌는 이 포지션을 들고 있지 않아요 · 이 포지션의 손익은 페이퍼(연습)에만 남아요") : null);
+  }
+  // 전환 전 포지션: opened by the bot before this one on the same paper account (answer: position.inherited, prev)
+  function inheritedNote(t, p) {
+    const prev = (t.prev || {}).bot_ko || "봇";
+    return h("div", {class: "ltr-inh", role: "note"},
+      h("b", null, "전환 전 포지션"),
+      h("span", null, `예전 ${prev}가 ${fmt.kst(p.entry_time)}에 연 포지션이에요 · 새 봇(${fmt.kst((t.bot || {}).since)} 시작)이 `
+        + "이어서 정리해요: 손절 · 계단 익절 · 추세 뒤집힘 청산(첫 잠금 전)"),
+      h("span", null, "닫힐 때까지 새 봇은 새로 들어가지 않아요 (한 번에 하나) · 이 거래는 새 봇 성적에 세지 않아요"));
+  }
+  function prevClosed(t) {
+    const xs = (t.prev || {}).closed || [];
+    if (!xs.length) return null;
+    return h("div", {class: "ltr-inh done", role: "note"}, h("b", null, "전환 전 포지션 정리됨"),
+      xs.map((x) => h("span", null, `${fmt.kst(x.exit_time)} · ${fmt.coin(x.symbol)} ${SIDE(x.side)} ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)} · `
+        + `${x.reason_ko || exitKo(x.reason)} · `, h("b", {class: ["num", fmt.tone(x.roe)]}, `순ROE ${fmt.pct(x.roe, 1)}`),
+        " (새 봇 성적엔 안 셈)")));
   }
   function drawPos() {
     const t = st.t, p = t && t.position, now = serverNow();
@@ -257,7 +346,7 @@ export function trendView(ctx, hub) {
     if (!p) {
       put(posBox, h("div", {class: "ltr-empty"}, h("b", null, "포지션 없음"),
         h("p", null, "추세와 같은 방향 신호가 오고, 진입 전 검사를 통과하고, 되돌림 가격에 닿으면 들어가요 (한 번에 하나).")),
-        h("h3", {class: "ltr-h3"}, "실거래 두 계좌"), liveRows(null));
+        prevClosed(t), h("h3", {class: "ltr-h3"}, "실거래 두 계좌"), liveRows(null));
       return;
     }
     const price = priceOf(t, p.symbol);
@@ -269,7 +358,7 @@ export function trendView(ctx, hub) {
     const j = p.judge;
     const jc = judgeCell(j);
     const judgeKo = !p.judge_exit ? "꺼짐(설정)" : p.locked ? "첫 잠금 뒤라 꺼짐" : !j || j.error ? "판단을 못 읽음 · 청산 미룸(손절은 거래소에 걸려 있음)"
-      : p.judge_against ? "반대로 바뀜 · 감독 청산" : Number(j.raw) === Number(p.side) ? "같은 방향 유지 중" : "보류 · 반대 3/4가 되면 청산";
+      : p.judge_against ? againstKo(p, j) : Number(j.raw) === Number(p.side) ? "같은 방향 유지 중" : "보류 · 반대 3/4가 되면 청산";
     const timeNode = h("b", {class: "num"});
     put(posBox,
       h("div", {class: "ltr-phead"},
@@ -277,6 +366,7 @@ export function trendView(ctx, hub) {
         h("b", {class: "ltr-pcoin"}, fmt.coin(p.symbol)),
         h("span", {class: "ltr-sub"}, ` ${fmt.lev(p.leverage)} · ${fmt.stratKo(p.strategy)} ${fmt.tfKo(p.tf)}`),
         p.role ? ui.pill(p.role, "thin") : null),
+      p.inherited ? inheritedNote(t, p) : null,
       h("dl", {class: "ltr-kv"},
         h("dt", null, "진입"), h("dd", {class: "num"}, `${fmt.price(p.entry_price)} · ${fmt.kst(p.entry_time)}`),
         h("dt", null, "지금"), h("dd", {class: "num"}, ok(price) ? fmt.price(price) : "—",
@@ -325,6 +415,25 @@ export function trendView(ctx, hub) {
     });
     put(grid, h("div", {class: "ltr-table", role: "table", "aria-label": "코인별 추세 판단"}, headRow, rows));
   }
+  // nothing waits: what the bot looks at next (the closes, the directions it takes now, an open position, the next pause)
+  function idleBox(t, now) {
+    const nc = nextCloses(now);
+    const take = takingNow(t);
+    const p = t.position, np = (t.next || {}).pause, pz = t.pause || {};
+    const left = h("span", {class: "num"});
+    const same = np && ok(np.until) && fmt.mmdd(np.from) === fmt.mmdd(np.until);
+    return h("div", {class: "ltr-idle"},
+      h("p", {class: "ltr-ihead"}, "지금 기다리는 신호 없음"),
+      h("ul", {class: "ltr-list ltr-ilist"},
+        h("li", null, h("span", {class: "ltr-ik"}, "다음 신호 볼 때"), `30분봉 ${fmt.hm(nc.m30)} · 1시간봉 ${fmt.hm(nc.h1)} (봉이 끝날 때 매매법 신호가 나와요)`),
+        h("li", null, h("span", {class: "ltr-ik"}, "지금 받는 방향"),
+          take.length ? take.join(" · ") : "없음 · 모든 코인이 보류·힘 약함·끝물이라 신호가 와도 안 들어가요"),
+        p ? h("li", {class: "warn"}, h("span", {class: "ltr-ik"}, "새 진입"),
+          p.inherited ? "안 해요 · 전환 전 포지션이 열려 있어요 (한 번에 하나) · 닫히면 받기 시작해요" : "안 해요 · 포지션이 열려 있어요 (한 번에 하나)") : null,
+        !pz.paused && np && ok(np.from) ? h("li", null, h("span", {class: "ltr-ik"}, "다음 쉬는 시간"),
+          h("span", null, `${np.ko} · ${fmt.kst(np.from)}~${ok(np.until) ? (same ? fmt.hm(np.until) : fmt.kst(np.until)) : ""} · `,
+            tick(left, np.from, (ms) => (ms > 0 ? `${clock(ms)} 뒤` : "지금")))) : null));
+  }
   function drawWaits() {
     const t = st.t, now = serverNow();
     const ws = (t.waits || []).filter((w) => Number(w.until) > now - MIN);
@@ -341,7 +450,7 @@ export function trendView(ctx, hub) {
           " · ", tick(leftNode, w.until, (ms) => (ms > 0 ? `${clock(ms)} 뒤 끝` : "끝남"))),
         h("span", {class: "ltr-bar"}, h("i", {style: {"--v": frac.toFixed(4)}})),
         w.judge ? h("small", {class: "ltr-sub"}, w.judge) : null);
-    })) : ui.empty("지금 기다리는 신호가 없어요"));
+    })) : idleBox(t, now));
     // the bot's own 쉬기 (a member after losses, a coin after a loss, the daily limit): off in the owners' config (10-21
     // night "쉬기는 빼주고"); shown only when a config turns one on
     const nb = t.numbers || {};
@@ -369,11 +478,23 @@ export function trendView(ctx, hub) {
         h("span", {class: "ltr-bar"}, h("i", {style: {"--v": ((Number(n) || 0) / top).toFixed(4)}}))))),
       (f.blocked || []).length ? h("ul", {class: "ltr-list ltr-blocks"}, f.blocked.map((b) => h("li", null,
         h("span", {class: "ltr-bk"}, b.ko), h("span", {class: "ltr-bar"}, h("i", {style: {"--v": (b.n / bmax).toFixed(4)}})), h("b", {class: "num"}, fmt.int(b.n)))))
-        : h("p", {class: "ltr-sub"}, f.signals ? "걸린 신호가 없어요" : "오늘은 아직 신호가 없어요"));
+        : h("p", {class: "ltr-sub"}, f.signals ? "걸린 신호가 없어요" : f.cut ? "새 봇이 켜진 뒤 아직 신호가 없어요" : "오늘은 아직 신호가 없어요"),
+      f.cut && ok(f.from) ? h("p", {class: "ltr-sub"}, `새 봇 시작 ${fmt.hm(f.from)}부터 세요 · 그 전 신호와 진입은 예전 봇 것이라 빼요`) : null);
   }
   function drawRecord() {
     const r = st.t.record;
-    if (!r || !r.n) { put(recordBox, ui.empty("새 규칙으로 닫힌 거래가 아직 없어요")); return; }
+    if (!r || !r.n) {
+      const ex = (st.t.next || {}).expect || {};
+      const lines = expectLines(ex);
+      const win = (ex.window_kst || []).map((d) => `${Number(String(d).slice(5, 7))}/${Number(String(d).slice(8, 10))}`).join("~");
+      put(recordBox, ui.empty("새 규칙으로 닫힌 거래가 아직 없어요"),
+        lines.length ? h("div", {class: "ltr-exp"},
+          h("p", {class: "ltr-ehead"}, ui.pill("가상 · 재현", "thin"), ` ${win || "지난 기간"} 실제 1분봉으로 이 규칙을 다시 돌려 보면`),
+          h("ul", {class: "ltr-list ltr-rlist"}, lines.map((x) => h("li", null, x))),
+          ex.note_ko ? h("p", {class: "ltr-sub"}, ex.note_ko) : null,
+          h("a", {class: "ltr-more", href: (ctx.href || href)("livebots", "expect")}, "재현 비교 →")) : null);
+      return;
+    }
     put(recordBox,
       h("div", {class: "ltr-stats"},
         ui.stat("거래", `${fmt.int(r.n)}번`, `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패`),
@@ -416,16 +537,18 @@ export function trendView(ctx, hub) {
     const sig = t.signals || {};
     const kos = {};
     for (const r of sig.rows || []) kos[r.cat] = r.cat_ko;
-    put(sigHead, countsInOrder(sig.counts).map((c) => ui.pill(`${kos[c.id] || c.id} ${fmt.int(c.n)}`, ["entered", "pulled"].includes(c.id) ? "good" : "thin")));
+    put(sigHead, countsInOrder(sig.counts).map((c) => ui.pill(`${kos[c.id] || c.id} ${fmt.int(c.n)}`, ["entered", "pulled"].includes(c.id) ? "good" : "thin")),
+      sig.cut && ok(sig.from) ? h("span", {class: "ltr-sub"}, `새 봇 시작 ${fmt.kst(sig.from)} 뒤 신호만 (그 전은 예전 봇)`) : null);
     put(sigList, (sig.rows || []).length ? ui.disclosure(`신호 ${fmt.int(sig.rows.length)}개 펼치기`, h("ul", {class: "ltr-list ltr-siglist"},
       sig.rows.slice(0, 60).map((r) => h("li", {class: "ltr-s-" + r.cat},
         h("span", {class: "num ltr-t"}, fmt.kst(r.bar_close)), " ",
         h("b", null, `${fmt.coin(r.symbol)} ${SIDE(r.side)}`), ` ${fmt.stratKo(r.strategy)} ${fmt.tfKo(r.tf)} · `,
         h("span", {class: "ltr-cat"}, r.cat_ko),
         r.why ? h("small", {class: "ltr-sub"}, r.why) : null))))
-      : ui.empty("최근 24시간 신호가 없어요"));
+      : ui.empty(sig.cut ? "새 봇이 켜진 뒤 아직 신호가 없어요 · 매매법 신호는 30분·1시간 봉이 끝날 때 나와요" : "최근 24시간 신호가 없어요"));
     put(sup, (t.sup || []).length ? h("ul", {class: "ltr-list"}, t.sup.map((x) => h("li", null,
       h("span", {class: "num ltr-t"}, fmt.kst(x.exit_time)), " ", h("b", null, `${fmt.coin(x.symbol)} ${SIDE(x.side)}`),
+      x.inherited ? [" ", ui.pill("전환 전 포지션", "warn", "새 봇이 켜지기 전에 열린 포지션 · 새 봇 성적에 안 셈")] : null,
       ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)} · ${x.reason_ko} · `,
       h("span", {class: ["num", fmt.tone(x.roe)]}, `순ROE ${fmt.pct(x.roe, 1)}`),
       x.why ? h("small", {class: "ltr-sub"}, x.why) : null)))
@@ -433,6 +556,30 @@ export function trendView(ctx, hub) {
     put(rules, (t.rules || []).length ? h("ul", {class: "ltr-list ltr-rlist"}, t.rules.map((x) => h("li", null, x)),
       h("li", {class: "ltr-sub"}, "2단계(준비 중): 급변 · 경제 발표 직전 손절 당기기 · 실행기가 거래소 손절을 같이 옮기는 시험 뒤에 넣어요"))
       : ui.empty("규칙 기록이 없어요"));
+  }
+  // the judgment changes of the last 24 h (the 일지 tab's "trend" rows: the 추세 차트 tab's recomputation)
+  function drawChanges() {
+    const j = st.j;
+    if (!j || !Array.isArray(j.events)) { put(changes); return; }
+    const rows = j.events.filter((e) => e && e.kind === "trend").sort((a, b) => b.t - a.t).slice(0, CHANGES_KEEP);
+    const jd = j.judge || {};
+    put(changes, h("h3", {class: "ltr-h3"}, "최근 24시간 바뀐 판단"),
+      rows.length ? h("ul", {class: "ltr-list ltr-clist"}, rows.map((e) => h("li", null,
+        h("span", {class: "num ltr-t"}, fmt.kst(e.t)), " ", h("b", {class: ["ltr-word", e.tone || "hold"]}, e.text),
+        e.detail ? h("small", {class: "ltr-sub"}, e.detail) : null)))
+        : h("p", {class: "ltr-sub"}, jd.pending ? "판단 기록을 불러오는 중이에요 (몇 초 뒤 보여요)"
+          : jd.state === "ok" || jd.state === "partial" ? "최근 24시간 동안 바뀐 판단이 없어요" : jd.reason_ko || "판단 기록을 못 읽었어요"),
+      h("a", {class: "ltr-more", href: (ctx.href || href)("livebots", "journal")}, "일지에서 더 보기 →"));
+  }
+  async function loadJournal() {
+    st.jAt = Date.now();
+    let d;
+    try { d = await ctx.api(`${JOURNAL_API}?hours=24`); }
+    catch (e) { return; }                         // the map stands without it; tried again next minute
+    if (!ctx.alive()) return;
+    st.j = d;
+    if (d && d.judge && d.judge.pending) st.jAt -= JOURNAL_MS - REFRESH_MS;     // still fetching bars: ask sooner
+    drawChanges();
   }
   function draw() {
     const t = st.t;
@@ -448,7 +595,7 @@ export function trendView(ctx, hub) {
     }
     cards.hidden = false;
     put(stateSlot);
-    drawPos(); drawGrid(); drawWaits(); drawFunnel(); drawRecord(); drawMembers(); drawTrades(); drawRest();
+    drawPos(); drawGrid(); drawWaits(); drawFunnel(); drawRecord(); drawMembers(); drawTrades(); drawRest(); drawChanges();
   }
   function onTick() {
     for (const k of st.ticks) k.node.textContent = k.fmtFn(k.until - serverNow());
@@ -470,6 +617,7 @@ export function trendView(ctx, hub) {
     ui.dim(main, false);
     st.t = d; st.okAt = Date.now();
     draw();
+    if (d && d.state === "ok" && Date.now() - st.jAt >= JOURNAL_MS) loadJournal();
   }
   if (hub && hub.get && hub.get()) st.s = hub.get();
   load().catch(() => {});

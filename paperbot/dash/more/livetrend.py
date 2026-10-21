@@ -24,6 +24,17 @@
         signals  the last 24 h of the entry members' signals by what became of them, with the bot's own reason
         sup      the supervisor's exits (감독 청산: 추세 판단 뒤집힘 · 시간 정리) of the last 7 days
         rules    the rules in the owners' words, as the bot describes them
+        next     what comes next while nothing happens (a fresh start looks empty otherwise): the next entry pause by the
+                 config's own rules (``next_pause``), and what the 7/1~10/20 replay says to expect (``expect``: entries a
+                 weekday, the weekdays without one, the wait from any weekday moment to the next entry; the replay ran
+                 with the 시간 정리 exit the owners took out on 10/21, said so)
+        prev     the paper position the bot before it opened before the switch (``position.inherited``: entered before
+                 ``since``; the trend bot closes it, it is never one of its trades) and the ones already closed since
+                 (``prev_closed``); each executor's part in the open position (``position.follow``: following it, or why
+                 not, from its own records)
+
+Everything of "the bot" counts from its first start (``since``): today's funnel, the members' signals today and the last
+24 h of signals start there when the bot is younger (``from``), so a switch day never shows the bot before it.
 
 The paper bot's database is PAPERBOT_LIVE_PAPER_DB (livebots.paths, the one both executors follow), read-only
 (livebots.open_ro: mode=ro, query_only), one snapshot. ``state``: "ok"; "off" when the bot running there is not the trend
@@ -64,6 +75,16 @@ EXIT_GROUP = (("LOCK", "계단 익절"), ("SL", "손절"), ("REV", "빠른 청�
 SIG_SPAN_MS = DAY
 SUP_SPAN_MS = 7 * DAY
 SIG_KEEP = 200
+# the paper bot in this slot before the trend bot (docs/trend-bot-ko.md: deploy/trend_switch.py turned 규칙봇 15 into the
+# 추세판단 봇 on the same database); a position it opened before the switch is closed by the trend bot (its stop, ladder,
+# supervisor), never counted as the trend bot's trade
+PREV_BOT_KO = "규칙봇 15"
+INHERITED_KO = f"전환 전 포지션 (예전 {PREV_BOT_KO}가 연 것, 새 봇이 이어서 정리)"
+PREV_SPAN_MS = DAY                   # the inherited positions closed since the start shown this long
+NEXT_PAUSE_DAYS = 8                  # the next entry pause looked for this far ahead (a weekend is always within 7 days)
+WAIT_STEP_MS = 30 * MIN              # the replay's wait to the next entry, sampled at every half hour of its weekdays
+# an executor's part in the open paper position, in words (follow_of)
+FOLLOW_KO = {"follow": "따라 들어감", "none": "따라간 기록 없음"}
 TREND_CATS = {"waiting", "broke", "pullback_wait", "pulled", "nopull", "trend", "spot", "trend_unread", "daily",
               "member_pause", "coin_pause"}
 
@@ -178,12 +199,14 @@ def position_view(conn, st: dict, numbers: dict, now: int) -> Optional[dict]:
             "judge_exit": bool(numbers.get("judge_exit", True))}
 
 
-def funnel(conn, now: int) -> dict:
+def funnel(conn, now: int, since: Optional[int] = None) -> dict:
     """Today's (KST) entry signals: how many came, passed the trend and spot checks (waited for their pullback),
-    touched it, entered; and what stopped the rest, in BLOCK's categories."""
+    touched it, entered; and what stopped the rest, in BLOCK's categories. From the bot's start when it started today
+    (``from``; the bot before it on this database is not this one)."""
     d0 = kst_day0(now)
+    lo = max(d0, int(since or 0))
     rows = conn.execute("SELECT status, data FROM signal_log WHERE bar_close >= ? AND bar_close <= ?",
-                        (d0, int(now) + MIN)).fetchall()
+                        (lo, int(now) + MIN)).fetchall()
     n = passed = touched = 0
     block: dict = {}
     for status, data in rows:
@@ -200,17 +223,17 @@ def funnel(conn, now: int) -> dict:
             g = BLOCK_OF.get(cat, "other")
             block[g] = block.get(g, 0) + 1
     entered = conn.execute("SELECT COUNT(*) FROM outcomes WHERE account_id = ? AND status = 'ENTERED' AND step_ts >= ?",
-                           (ACCOUNT, d0)).fetchone()[0]
+                           (ACCOUNT, lo)).fetchone()[0]
     one = conn.execute("SELECT COUNT(*) FROM outcomes WHERE account_id = ? AND status = 'SKIPPED' AND step_ts >= ?",
-                       (ACCOUNT, d0)).fetchone()[0]
+                       (ACCOUNT, lo)).fetchone()[0]
     if one:
         block["one"] = block.get("one", 0) + int(one)
-    return {"day0": d0, "signals": n, "passed": passed, "touched": touched, "entered": int(entered),
+    return {"day0": d0, "from": lo, "cut": lo > d0, "signals": n, "passed": passed, "touched": touched, "entered": int(entered),
             "blocked": [{"id": k, "ko": ko, "n": block[k]} for k, ko in BLOCK if block.get(k)]}
 
 
-def members_view(conn, cfg: dict, trades: list, pauses: dict, now: int) -> list:
-    d0 = kst_day0(now)
+def members_view(conn, cfg: dict, trades: list, pauses: dict, now: int, since: Optional[int] = None) -> list:
+    d0 = max(kst_day0(now), int(since or 0))           # today's signals, from the bot's start when that was today
     today: dict = {}
     for member, status, data in conn.execute("SELECT strategy, status, data FROM signal_log WHERE bar_close >= ?", (d0,)):
         if status == "SUBMITTED" and _json(data).get("why") == "되돌림 확인":
@@ -271,10 +294,12 @@ def trades_view(trades: list) -> list:
     return out
 
 
-def signals(conn, now: int) -> dict:
-    """The last 24 h of signal_log rows the bot decided on (FILTERED / WAITING / BROKE / SUBMITTED), newest first."""
+def signals(conn, now: int, since: Optional[int] = None) -> dict:
+    """The last 24 h of signal_log rows the bot decided on (FILTERED / WAITING / BROKE / SUBMITTED), newest first; from
+    the bot's start when it is younger than that (``from``)."""
+    lo = max(int(now) - SIG_SPAN_MS, int(since or 0))
     rows = conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, status, data FROM signal_log WHERE bar_close >= ? "
-                        "ORDER BY bar_close DESC, id DESC LIMIT ?", (int(now) - SIG_SPAN_MS, SIG_KEEP)).fetchall()
+                        "ORDER BY bar_close DESC, id DESC LIMIT ?", (lo, SIG_KEEP)).fetchall()
     out, counts = [], {}
     for bc, tf, member, sym, side, status, data in rows:
         d = _json(data)
@@ -289,10 +314,10 @@ def signals(conn, now: int) -> dict:
         out.append({"bar_close": int(bc), "tf": tf, "member": member, "strategy": d.get("strategy") or str(member).split("@")[0],
                     "symbol": sym, "side": int(side), "status": status, "cat": cat, "cat_ko": ko,
                     "why": L.why_words(why) if why else None, "judge": judge.get("text"), "score": tr.get("score")})
-    return {"rows": out, "counts": counts, "span_ms": SIG_SPAN_MS}
+    return {"rows": out, "counts": counts, "span_ms": SIG_SPAN_MS, "from": lo, "cut": lo > int(now) - SIG_SPAN_MS}
 
 
-def supervisor_exits(conn, now: int) -> list:
+def supervisor_exits(conn, now: int, since: Optional[int] = None) -> list:
     rows = conn.execute("SELECT data FROM trades WHERE account_id = ? AND exit_reason IN ('JUDGE', 'TIME') AND exit_time >= ? "
                         "ORDER BY exit_time DESC LIMIT 50", (ACCOUNT, int(now) - SUP_SPAN_MS)).fetchall()
     out = []
@@ -302,8 +327,115 @@ def supervisor_exits(conn, now: int) -> list:
         out.append({"symbol": t.get("symbol"), "side": t.get("side"), "strategy": t.get("strategy_id"), "tf": t.get("timeframe"),
                     "entry_time": t.get("entry_time"), "exit_time": t.get("exit_time"), "reason": t.get("exit_reason"),
                     "reason_ko": L.EXIT_KO.get(t.get("exit_reason"), t.get("exit_reason")), "why": ctx.get("exit_why"),
+                    "roe": t.get("roe"), "pnl": t.get("pnl"),
+                    "inherited": bool(since) and (L._i(t.get("entry_time")) or 0) < int(since)})
+    return out
+
+
+# ---------------------------------------------------------------- a fresh start (nothing closed yet, a position from before)
+def prev_closed(conn, since: Optional[int], now: int) -> list:
+    """The positions the bot before it opened (entered before ``since``) that closed since the start, newest first."""
+    if not since:
+        return []
+    rows = conn.execute("SELECT data FROM trades WHERE account_id = ? AND entry_time < ? AND exit_time >= ? AND exit_time >= ? "
+                        "ORDER BY exit_time DESC, id DESC LIMIT 5", (ACCOUNT, int(since), int(since), int(now) - PREV_SPAN_MS)).fetchall()
+    out = []
+    for (data,) in rows:
+        t = _json(data)
+        ctx = t.get("context") if isinstance(t.get("context"), dict) else {}
+        out.append({"symbol": t.get("symbol"), "side": t.get("side"), "strategy": t.get("strategy_id"), "tf": t.get("timeframe"),
+                    "entry_time": t.get("entry_time"), "exit_time": t.get("exit_time"), "reason": t.get("exit_reason"),
+                    "reason_ko": L.EXIT_KO.get(t.get("exit_reason"), t.get("exit_reason")), "why": ctx.get("exit_why"),
                     "roe": t.get("roe"), "pnl": t.get("pnl")})
     return out
+
+
+def follow_of(p: dict, key: str, now: int) -> Optional[list]:
+    """What each executor did with the paper position ``key`` (account|symbol|entry ms), from its own records: following
+    it, holding another position of its own, or why it did not follow (livebots.WHY, the strongest: the very words of the
+    거래 tab). None when this answer was not given the executors' paths."""
+    if not all(p.get(k) for k in ("bybit_db", "mexc_db", "bybit_config", "mexc_config")):
+        return None
+    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
+    out = []
+    for ex, ko, dk, _ck in L.slots(configs):
+        rec = L.read_exec(p[dk], now)
+        row = {"id": ex, "name_ko": ko}
+        if rec.get("state") != "ok":
+            out.append({**row, "state": rec.get("state") or "error", "ko": rec.get("reason_ko") or "실행기 기록을 못 읽었어요"})
+            continue
+        pos = rec.get("position")
+        if pos and pos.get("key") == key:
+            out.append({**row, "state": "follow", "ko": FOLLOW_KO["follow"], "entry": pos.get("entry"), "lock_roe": pos.get("lock_roe")})
+            continue
+        if pos:
+            out.append({**row, "state": "other", "ko": f"자기 포지션({str(pos.get('symbol') or '').replace('USDT', '')} "
+                                                       f"{'롱' if (pos.get('side') or 0) > 0 else '숏'})을 들고 있어요"})
+            continue
+        why = (rec.get("why") or {}).get(key) or {}
+        kind = next((k for k, _ko in L.WHY if k in why), None)
+        if kind:
+            out.append({**row, "state": "skip", "kind": kind, "ko": L.WHY_KO[kind], "text": why[kind].get("text"), "ts": why[kind].get("ts")})
+        else:
+            out.append({**row, "state": "none", "ko": FOLLOW_KO["none"]})
+    return out
+
+
+def next_pause(cfg: dict, now: int) -> Optional[dict]:
+    """The next entry pause after now (after the one in force, if any) by the config's own rules (pause_now, minute by
+    minute: 5-minute steps, then the exact minute): {"why", "ko", "from", "until"}; None when none within the days
+    looked at (or the rules have none)."""
+    t = int(now) - int(now) % MIN
+    cur = pause_now(cfg, t)
+    if cur.get("paused") is None:
+        return None
+    if cur.get("paused"):
+        t = int(cur.get("until") or t)
+    end = t + NEXT_PAUSE_DAYS * DAY
+    step = 5 * MIN
+    while t < end:
+        if pause_now(cfg, t + step).get("paused"):
+            a = t + MIN
+            while not pause_now(cfg, a).get("paused"):
+                a += MIN
+            x = pause_now(cfg, a)
+            return {"why": x.get("why"), "ko": str(x.get("ko") or "").split("이라 진입 쉬는 중")[0], "from": a, "until": x.get("until")}
+        t += step
+    return None
+
+
+def expect_of(cfg: Optional[dict] = None) -> dict:
+    """What the 7/1~10/20 replay (data/trend_replay_0701_1020.json, the 재현 비교 tab's file) says to expect from a
+    fresh start: entries a weekday, the weekdays without any, and the wait from any weekday half hour to the next entry
+    (median and quartiles: the first entry after a start can take that long). The replay ran with the 시간 정리 exit
+    (time_bars 4): ``note_ko`` says so against the running config ``cfg`` (taken out on 10/21 night: time_bars null)."""
+    from . import livereplayref as X                 # (livereplayref imports this module)
+    ref = X.load_ref()
+    if ref.get("state") != "ok":
+        return {"state": ref.get("state"), "reason_ko": ref.get("reason_ko")}
+    d = ref["d"]
+    wk = (d.get("entries") or {}).get("weekdays") or {}
+    hist = {int(k): int(v) for k, v in ((d.get("entries") or {}).get("hist_weekdays") or {}).items()}
+    days = sum(hist.values())
+    times = sorted(int(x["entry_time"]) for x in d.get("trade_list") or [] if x.get("entry_time") is not None)
+    w0, w1 = (int(x) for x in d["window_ms"])
+    waits, j, t = [], 0, w0
+    while t < w1:
+        while j < len(times) and times[j] < t:
+            j += 1
+        if j >= len(times):
+            break
+        if not L.kst_weekend(t):
+            waits.append(times[j] - t)
+        t += WAIT_STEP_MS
+    waits.sort()
+    q = (lambda f: waits[min(len(waits) - 1, int(f * len(waits)))]) if waits else (lambda f: None)
+    by = (d.get("trades") or {}).get("by_reason") or {}
+    note = X.time_note_ko(d, cfg)
+    return {"state": "ok", "window_kst": d.get("window_kst"), "per_weekday": L._f(wk.get("mean")), "weekdays": wk.get("days"),
+            "entries": wk.get("entries"), "zero_days": hist.get(0), "zero_share": hist.get(0, 0) / days if days else None,
+            "wait_median_ms": q(0.5), "wait_q1_ms": q(0.25), "wait_q3_ms": q(0.75), "time_exits": (by.get("TIME") or {}).get("n"),
+            "note_ko": note + (" · 한 포지션이 더 오래 열려 있을 수 있어 진입도 조금 적을 수 있어요" if note != X.TIME_KEPT_KO else "")}
 
 
 def build(p: dict, now_ms: Optional[int] = None) -> dict:
@@ -346,12 +478,19 @@ def build(p: dict, now_ms: Optional[int] = None) -> dict:
         trades = _trades(conn, since) if "trades" in tables else []
         out["prices"] = prices_of(L.paths_more()["rule_db"])
         out["position"] = position_view(conn, st, numbers, now)
-        out["funnel"] = funnel(conn, now) if {"signal_log", "outcomes"} <= tables else None
-        out["members"] = members_view(conn, cfg, trades, st.get("pauses") or {}, now) if "signal_log" in tables else []
+        pos = out["position"]
+        if pos is not None:                              # opened by the bot before it (before the switch): said so
+            pos["inherited"] = bool(since) and int(pos.get("entry_time") or 0) < int(since)
+            pos["inherited_ko"] = INHERITED_KO if pos["inherited"] else None
+            pos["follow"] = follow_of(p, f"{ACCOUNT}|{pos.get('symbol')}|{int(pos.get('entry_time') or 0)}", now)
+        out["funnel"] = funnel(conn, now, since) if {"signal_log", "outcomes"} <= tables else None
+        out["members"] = members_view(conn, cfg, trades, st.get("pauses") or {}, now, since) if "signal_log" in tables else []
         out["trades"] = trades_view(trades)
         out["record"] = record_view(trades, cfg.get("initial_equity"))
-        out["signals"] = signals(conn, now) if "signal_log" in tables else {"rows": [], "counts": {}, "span_ms": SIG_SPAN_MS}
-        out["sup"] = supervisor_exits(conn, now) if "trades" in tables else []
+        out["signals"] = signals(conn, now, since) if "signal_log" in tables else {"rows": [], "counts": {}, "span_ms": SIG_SPAN_MS}
+        out["sup"] = supervisor_exits(conn, now, since) if "trades" in tables else []
+        out["prev"] = {"bot_ko": PREV_BOT_KO, "closed": prev_closed(conn, since, now) if "trades" in tables else []}
+        out["next"] = {"pause": next_pause(cfg, now), "expect": expect_of(cfg)}
         return out
     except sqlite3.Error as exc:
         return {"state": "error", "reason_ko": "페이퍼 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200],
