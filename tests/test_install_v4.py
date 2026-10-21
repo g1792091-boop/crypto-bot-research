@@ -21,12 +21,15 @@ def _enable_block() -> str:
     return SH[start:end]
 
 
-def _run(tmp_path, env_value, enabled=()):
+def _run(tmp_path, env_value, enabled=(), masked=()):
     log = tmp_path / "systemctl.log"
-    # a fake systemctl: logs every call; is-enabled / is-active answer like the real one (FAKE: the enabled timers)
+    # a fake systemctl: logs every call; is-enabled / is-active answer like the real one (FAKE: the enabled timers,
+    # the masked ones answer "masked" with exit 1 like the real is-enabled)
     on = " ".join(enabled)
+    off = " ".join(masked)
     script = (f'systemctl() {{ echo "$*" >> "{log}"; case "$1" in '
-              f'is-enabled) for t in {on or "none"}; do [ "$t" = "$2" ] && {{ echo enabled; return 0; }}; done; '
+              f'is-enabled) for t in {off or "none"}; do [ "$t" = "$2" ] && {{ echo masked; return 1; }}; done; '
+              f'for t in {on or "none"}; do [ "$t" = "$2" ] && {{ echo enabled; return 0; }}; done; '
               f'echo disabled; return 1 ;; '
               f'is-active) for t in {on or "none"}; do [ "$t" = "$2" ] && {{ echo active; return 0; }}; done; '
               f'echo inactive; return 3 ;; esac; }}\n'
@@ -46,9 +49,18 @@ def test_install_sh_is_valid_bash():
 def test_without_the_variable_the_three_timers_are_switched_on(tmp_path):
     for value in (None, "0", ""):
         out, calls = _run(tmp_path, value)
-        assert calls == [f"enable --now {t}" for t in ENABLED], (value, calls)
+        assert [c for c in calls if not c.startswith("is-enabled")] == [f"enable --now {t}" for t in ENABLED], \
+            (value, calls)
         assert "리셋 중" not in out
         (tmp_path / "systemctl.log").unlink()
+
+
+def test_a_masked_custom_value_shadow_stays_off(tmp_path):
+    # owners 10/21 night: the custom-value shadow switched off with `systemctl mask --now` is not switched back on
+    out, calls = _run(tmp_path, None, masked=("paperbot-paramshadow.timer",))
+    assert [c for c in calls if not c.startswith("is-enabled")] == [f"enable --now {t}" for t in TIMERS], calls
+    assert "is-enabled paperbot-paramshadow.timer" in calls
+    assert "꺼 둔 상태(mask)라 켜지 않아요" in out
 
 
 def test_while_resetting_nothing_is_switched_and_each_timers_real_state_is_printed(tmp_path):

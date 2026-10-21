@@ -128,3 +128,16 @@
   텔레그램 없음, 실거래 사이트 그림자 탭): `systemctl start paperbot-combo-shadow@rule15`
 - 옛 −35% 페이퍼 봇(`paperbot-combo-mexc`)은 이제 따라가는 실행기가 없습니다. 비교용으로 그냥 둬도 되고, 끄려면:
   `systemctl stop paperbot-combo-mexc`
+
+## 9. 꺼도 되는 것 / 끄면 안 되는 것 (10/21 밤 질문)
+
+- **끄면 안 됨: 규칙봇 36 (`paperbot-live3`).** 이름은 "규칙봇"이지만 추세판단 봇이 쓰는 신호(멤버 10개)와 1분봉을 만드는
+  공장입니다. 끄면 추세판단 봇도, 따라가는 두 실행기도 멈춥니다. 리셋·중지 금지.
+- 꺼도 됨 (돈·주문과 무관, 하나씩 붙여 넣기):
+  - 후보 리그(커스텀값 봇 리그): `systemctl disable --now candleague-live candleague-dash candleague-watch.timer`
+  - 커스텀값 그림자: `systemctl mask --now paperbot-paramshadow.timer` (mask라서 `install.sh`를 다시 돌려도 안 켜집니다.
+    되살리기: `systemctl unmask paperbot-paramshadow.timer` 후 `install.sh`)
+  - 옛 −35% 페이퍼 봇: `systemctl disable --now paperbot-combo-mexc` (`install.sh`는 돌고 있던 것만 다시 켭니다)
+  - AI 비용이 드는 것(쓰고 있지 않다면): `systemctl disable --now paperbot-agents.timer paperbot-evening.timer paperbot-debate paperbot-liveteam.timer`
+    (실거래 분석 팀은 아직 옛 규칙봇 15 기준으로 설명합니다)
+- 끈 뒤 확인: `systemctl is-active paperbot-live3 paperbot-combo paperbot-executor paperbot-executor-mexc` → 네 줄 모두 `active`.

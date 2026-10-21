@@ -325,7 +325,13 @@ else
   systemctl enable --now paperbot-dscheck.timer >/dev/null 2>&1 || echo "dscheck timer could not be enabled: sudo systemctl enable --now paperbot-dscheck.timer"
   # The custom-value shadow (커스텀값 그림자) is read-only (paper3.db opened read-only, public bars, no order, no account
   # change, no Telegram of its own; a failure warns through paperbot-failed@): its timer is switched on here.
-  systemctl enable --now paperbot-paramshadow.timer >/dev/null 2>&1 || echo "paramshadow timer could not be enabled: sudo systemctl enable --now paperbot-paramshadow.timer"
+  # Owners 10/21 night ("커스텀값봇 … 중지시켜도 괜찮지 않아?"): switched off with `systemctl mask --now
+  # paperbot-paramshadow.timer` it stays off here (masked = the owners' choice; unmask to bring it back).
+  if [ "$(systemctl is-enabled paperbot-paramshadow.timer 2>/dev/null)" = "masked" ]; then
+    echo "커스텀값 그림자(paperbot-paramshadow)는 꺼 둔 상태(mask)라 켜지 않아요"
+  else
+    systemctl enable --now paperbot-paramshadow.timer >/dev/null 2>&1 || echo "paramshadow timer could not be enabled: sudo systemctl enable --now paperbot-paramshadow.timer"
+  fi
 fi
 # 실거래 일일 점검 and 실시간 감시 (paperbot/livecheck.py; docs/live1019-start-ko.md "실거래 일일 점검과 알람"):
 # read-only towards the paper bot and the executors (their databases opened read-only, executor.env never opened, no
