@@ -234,7 +234,7 @@ export function trendView(ctx, hub) {
   const stamp = h("span", {class: "ltr-stamp"});
   const cards = h("div", {class: "ltr-cards"},
     h("div", {class: "ltr-two ltr-top"},
-      ui.card({title: "포지션 · 감독", sub: "첫 잠금 전에는 시간 정리 · 추세 뒤집힘 · 빠른 청산이 지켜봐요", cls: "ltr-poscard"}, posBox),
+      ui.card({title: "포지션 · 감독", sub: "첫 잠금 전에는 손절 · 추세 뒤집힘 · 빠른 청산이 지켜봐요 (시간 정리는 10/21 밤에 뺌)", cls: "ltr-poscard"}, posBox),
       ui.card({title: "되돌림 기다리는 신호", sub: "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요", cls: "ltr-wcard"}, waits,
         pauseHead, pauses)),
     ui.card({title: "추세 지도", sub: "끝난 봉만 봐요 · 30분 진입은 1시간, 1시간 진입은 4시간 · 4개 중 3개 이상 같은 쪽이면 추세 · ADX 20 이상, 40 넘고 꺾이면 끝물",
@@ -245,7 +245,7 @@ export function trendView(ctx, hub) {
     ui.card({title: "매매법 10개", sub: "진입만 하는 매매법 · 추세 판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO)는 진입 안 함", cls: "ltr-mcard"}, membersBox),
     ui.card({title: "최근 거래", sub: "페이퍼 · 새 규칙 시작 뒤 · 청산 이유와 진입 때 추세 판단", cls: "ltr-tcard"}, tradesBox),
     h("div", {class: "ltr-two"},
-      ui.card({title: "감독 청산", sub: "최근 7일 · 추세 뒤집힘 · 시간 정리", cls: "ltr-supcard"}, sup),
+      ui.card({title: "감독 청산", sub: "최근 7일 · 추세 뒤집힘 (시간 정리는 10/21 밤에 뺌)", cls: "ltr-supcard"}, sup),
       ui.card({title: "규칙", sub: "봇이 지금 쓰는 숫자 (설정 파일 그대로)", cls: "ltr-rulecard"}, rules)),
     ui.card({title: "최근 24시간 신호", sub: "봇이 남긴 이유 그대로 · 한국 시간", cls: "ltr-scard"}, sigHead, sigList));
   const main = h("div", {class: "ltr-body"}, hero, cards);
