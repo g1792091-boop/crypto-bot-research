@@ -14,10 +14,12 @@ the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coi
    minute (the reference price = the book then, the executors follow with a market order as always): BROKE
    "되돌림 확인" and a new SUBMITTED row; no touch by the entry bar's second-to-last minute: FILTERED "되돌림 안 옴".
 3. 점수: the signals of one minute compete by ``trendjudge.score`` (judge strength + spot + the member's recent record).
-4. 쉬기 (only this bot's own trades, from its first start on this database, ``trend_since``): a member whose last
-   ``member_losses`` (2) trades lost pauses ``member_pause_h`` (24) h from the last loss; after a losing trade no
-   entry on that coin and side for ``coin_pause_h`` (2) h; with ``daily_loss`` set (off in the owners' config, 10-21
-   "10번은 없애고"), the account lost that share of the day's start in a KST day: no entry until the next KST day. Each pause starts with one Telegram line.
+4. 쉬기 (all OFF in the owners' config: 10-21 "10번은 없애고" took the daily limit, 10-21 night "쉬기는 빼주고" the
+   member and coin pauses; only this bot's own trades count, from its first start on this database, ``trend_since``):
+   with ``member_losses`` set, a member whose last that many trades lost pauses ``member_pause_h`` h from the last
+   loss; with ``coin_pause_h`` set, after a losing trade no entry on that coin and side for that long; with
+   ``daily_loss`` set, the account lost that share of the day's start in a KST day: no entry until the next KST day.
+   Each pause starts with one Telegram line.
 5. 감독 (every minute, before the first lock only; never a reverse entry): TIME: ``time_bars`` (4) entry bars after
    the entry without the first lock -> closed at that minute's open; JUDGE: a higher bar closed after the entry is
    judged the other way (3 of 4, ``judge_exit``) -> closed. Exit reasons "TIME" / "JUDGE" (the executors follow them
@@ -199,6 +201,8 @@ class TrendRunner(C.ComboRunner):
         for t in done:
             by_member.setdefault((t.get("strategy_id"), t.get("timeframe")), []).append(t)
         for (name, tf), ts_ in by_member.items():
+            if r.member_losses is None:
+                break                                 # no member pause (owners 10-21 night: "쉬기는 빼주고")
             last = ts_[:r.member_losses]
             if len(last) == r.member_losses and all(float(t["pnl"]) < 0 for t in last):
                 until = int(last[0]["exit_time"]) + int(r.member_pause_h * HOUR)
@@ -206,7 +210,7 @@ class TrendRunner(C.ComboRunner):
                     out["members"][f"{name}@{tf}"] = (f"{name} {KO_TF.get(tf, tf)} 손실 {r.member_losses}번 연속: "
                                                      f"{kst(until)}까지 쉼", until)
         seen: set = set()
-        for t in done:
+        for t in (done if r.coin_pause_h is not None else []):
             key = (t.get("symbol"), int(t.get("side")))
             if key in seen:
                 continue

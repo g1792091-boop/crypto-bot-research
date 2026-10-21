@@ -30,9 +30,9 @@
   "breakout_adx_max": 30,
   "time_bars": 4,
   "judge_exit": true,
-  "member_losses": 2,
+  "member_losses": null,
   "member_pause_h": 24,
-  "coin_pause_h": 2,
+  "coin_pause_h": null,
   "daily_loss": null,
   "record_n": 10,
   "record_min": 3

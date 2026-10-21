@@ -160,6 +160,7 @@ export function trendView(ctx, hub) {
   const grid = h("div", {class: "ltr-grid"});
   const waits = h("div", {class: "ltr-waits"});
   const pauses = h("div", {class: "ltr-pauses"});
+  const pauseHead = h("h3", {class: "ltr-h3"}, "쉬는 매매법 · 코인");
   const funnelBox = h("div", {class: "ltr-funnel"});
   const membersBox = h("div", {class: "ltr-members", role: "list"});
   const recordBox = h("div", {class: "ltr-record"});
@@ -173,7 +174,7 @@ export function trendView(ctx, hub) {
     h("div", {class: "ltr-two ltr-top"},
       ui.card({title: "포지션 · 감독", sub: "첫 잠금 전에는 시간 정리 · 추세 뒤집힘 · 빠른 청산이 지켜봐요", cls: "ltr-poscard"}, posBox),
       ui.card({title: "되돌림 기다리는 신호", sub: "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요", cls: "ltr-wcard"}, waits,
-        h("h3", {class: "ltr-h3"}, "쉬는 매매법 · 코인"), pauses)),
+        pauseHead, pauses)),
     ui.card({title: "추세 지도", sub: "끝난 봉만 봐요 · 30분 진입은 1시간, 1시간 진입은 4시간 · 4개 중 3개 이상 같은 쪽이면 추세 · ADX 20 이상, 40 넘고 꺾이면 끝물",
       cls: "ltr-judge", acts: [stamp]}, grid),
     h("div", {class: "ltr-two"},
@@ -209,7 +210,8 @@ export function trendView(ctx, hub) {
       ui.pill(fz.ko, fz.days === 0 ? "warn" : "accent", "새 규칙은 2주 동안 바꾸지 않고 기록을 모은 뒤 검토해요"),
       t.bot && ok(t.bot.since) ? ui.pill(`새 규칙 시작 ${fmt.kst(t.bot.since)}`, "thin") : null,
       ui.pill(age != null ? `판단 ${fmt.dur(age / 1000)} 전` : "판단 시각 모름", age != null && age > 5 * MIN ? "warn" : "thin"),
-      ui.pill(pz.paused ? "쉬는 시간" : pz.paused === false ? "쉬는 시간 아님" : "쉬는 시간 모름", pz.paused ? "warn" : pz.paused === false ? "good" : "thin"));
+      ui.pill(pz.paused ? "진입 쉬는 시간 (주말·발표·나스닥)" : pz.paused === false ? "진입 가능 시간" : "진입 시간 모름",
+        pz.paused ? "warn" : pz.paused === false ? "good" : "thin", "주말(한국 시간 토·일) · 미국 경제 발표 앞뒤 30분 · 나스닥 개장 뒤 30분은 진입 안 해요"));
   }
   function drawMoney() {
     const s = st.s, t = st.t;
@@ -337,6 +339,11 @@ export function trendView(ctx, hub) {
         h("span", {class: "ltr-bar"}, h("i", {style: {"--v": frac.toFixed(4)}})),
         w.judge ? h("small", {class: "ltr-sub"}, w.judge) : null);
     })) : ui.empty("지금 기다리는 신호가 없어요"));
+    // the bot's own 쉬기 (a member after losses, a coin after a loss, the daily limit): off in the owners' config (10-21
+    // night "쉬기는 빼주고"); shown only when a config turns one on
+    const nb = t.numbers || {};
+    const pausing = nb.member_losses != null || nb.coin_pause_h != null || nb.daily_loss != null;
+    pauseHead.hidden = pauses.hidden = !pausing;
     const pz = t.pauses || {};
     const items = [];
     if (pz.day) items.push(h("li", {class: "bad"}, h("b", null, "하루 손실 한도 "), pz.day[0], ` · ${fmt.kst(pz.day[1])}부터 다시`));

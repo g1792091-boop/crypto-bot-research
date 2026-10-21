@@ -421,7 +421,7 @@ def _rec(w, member, symbol, side, pnl, exit_t, tf="30m", wallet=1000.0):
 
 
 def test_a_member_with_two_losses_in_a_row_pauses_24_hours(tmp_path):
-    w = World(tmp_path)
+    w = World(tmp_path, trend={"member_losses": 2, "coin_pause_h": 2.0})     # off in the owners' config (10-21 night)
     _start(w)
     w.run.since = T0 - 3 * HOUR                     # the bot's own trades start here
     _rec(w, "N08_ICHI_WR", "ETHUSDT", 1, -50.0, T0 - 2 * HOUR)
@@ -444,7 +444,7 @@ def test_a_member_with_two_losses_in_a_row_pauses_24_hours(tmp_path):
 def test_the_coin_and_side_pause_and_the_daily_loss_limit(tmp_path):
     # the owners' config has no daily limit (10-21 "10번은 없애고"); a config that sets one gets it
     assert TJ.TrendRules().daily_loss is None and "하루 손실 한도 없음" in TJ.TrendRules().describe()[3]
-    w = World(tmp_path, trend={"daily_loss": 0.30})
+    w = World(tmp_path, trend={"daily_loss": 0.30, "member_losses": 2, "coin_pause_h": 2.0})
     _start(w)
     w.run.since = T0 - 3 * HOUR
     _rec(w, "F3_BOS", "BTCUSDT", 1, -100.0, T0 - 30 * MIN)
@@ -754,3 +754,26 @@ def test_review_a_failed_fetch_for_the_live_sites_picture_never_holds_back_a_dec
     with pytest.raises(TJ.TrendError):
         k.frame("LTCUSDT", "1h", now["t"], bg=True)
     assert len(calls) == 3
+
+
+def test_the_owners_config_has_no_pauses_at_all(tmp_path):
+    """Owners 10-21 night "쉬기는 빼주고": no member pause after losses, no coin pause, no daily limit (deploy config and
+    the defaults); two losses in a row of one member and a loss on the coin change nothing."""
+    import os
+    deploy = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "deploy")
+    t = json.load(open(os.path.join(deploy, "combo.trend.json"), encoding="utf-8"))["trend"]
+    assert t["member_losses"] is None and t["coin_pause_h"] is None and t["daily_loss"] is None
+    r = TJ.TrendRules.from_dict(t)
+    assert r.problems() == [] and r.describe()[3] == "쉬기: 매매법 쉬기 없음 / 코인 쉬기 없음 / 하루 손실 한도 없음"
+    assert TJ.TrendRules().member_losses is None and TJ.TrendRules().coin_pause_h is None
+    w = World(tmp_path)
+    _start(w)
+    w.run.since = T0 - 3 * HOUR
+    _rec(w, "N08_ICHI_WR", "BTCUSDT", 1, -50.0, T0 - 2 * HOUR)
+    _rec(w, "N08_ICHI_WR", "BTCUSDT", 1, -40.0, T0 - 20 * MIN)
+    assert w.run.pauses(T0) == {"day": None, "members": {}, "coins": {}}
+    B = T0 + 30 * MIN
+    w.add_minutes(T0, 30)
+    w.signal("N08_ICHI_WR", "BTCUSDT", 1, B)
+    w.step(B)
+    assert w.rows("N08_ICHI_WR@30m")[0][1] == "WAITING"

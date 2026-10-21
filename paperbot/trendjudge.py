@@ -78,9 +78,9 @@ class TrendRules:
     breakout_adx_max: float = 30.0    # early trend: ADX below this and rising
     time_bars: int = 4                # entry bars without the first lock: closed (TIME)
     judge_exit: bool = True           # the higher bar's judgment turned against the position before the first lock: closed
-    member_losses: int = 2            # losing trades in a row of one member ...
-    member_pause_h: float = 24.0      # ... pause that member this long
-    coin_pause_h: float = 2.0         # after a losing trade: no entry on that coin and side for this long
+    member_losses: Optional[int] = None  # losing trades in a row of one member ... (None = no member pause: owners
+    member_pause_h: float = 24.0         # ... pause that member this long          10-21 night "쉬기는 빼주고")
+    coin_pause_h: Optional[float] = None  # after a losing trade: no entry on that coin and side this long (None = none)
     daily_loss: Optional[float] = None  # the account lost this share in a KST day: no entry until the next day; None
                                         # = no daily limit (owners 10-21: "10번은 없애고")
     record_n: int = 10                # a member's recent trades read for the score
@@ -125,9 +125,11 @@ class TrendRules:
         num("rsi_short_min", 0, 50)
         num("breakout_adx_max", 0, 100)
         num("time_bars", 1, 48, True)
-        num("member_losses", 1, 10, True)
-        num("member_pause_h", 0, 240)
-        num("coin_pause_h", 0, 240)
+        if self.member_losses is not None:
+            num("member_losses", 1, 10, True)
+            num("member_pause_h", 0, 240)
+        if self.coin_pause_h is not None:
+            num("coin_pause_h", 0, 240)
         if self.daily_loss is not None:
             num("daily_loss", 0.01, 1)
         num("record_n", 1, 100, True)
@@ -153,9 +155,13 @@ class TrendRules:
             f"{', '.join(self.breakout)})은 ADX {self.breakout_adx_max:g} 미만이고 오를 때만 / 추격 막기 전체",
             f"진입 방식: 진입 봉 하나 동안 {self.pullback_atr:g} ATR 되돌림을 기다림(신호 봉이 {self.big_bar_atr:g} ATR 넘는 "
             f"장대봉이면 {self.pullback_big_atr:g} ATR), 안 오면 버림 / 동시 신호는 점수(판단 강도+자리+최근 성적)",
-            f"쉬기: 같은 매매법 손실 {self.member_losses}번 연속이면 {self.member_pause_h:g}시간 / 손실 뒤 같은 코인·같은 "
-            f"방향 {self.coin_pause_h:g}시간 / " + (f"하루(한국 시간) 계좌 -{self.daily_loss:.0%}면 그날 진입 안 함"
-                                                 if self.daily_loss is not None else "하루 손실 한도 없음"),
+            "쉬기: " + " / ".join([
+                f"같은 매매법 손실 {self.member_losses}번 연속이면 {self.member_pause_h:g}시간" if self.member_losses is not None
+                else "매매법 쉬기 없음",
+                f"손실 뒤 같은 코인·같은 방향 {self.coin_pause_h:g}시간" if self.coin_pause_h is not None
+                else "코인 쉬기 없음",
+                f"하루(한국 시간) 계좌 -{self.daily_loss:.0%}면 그날 진입 안 함" if self.daily_loss is not None
+                else "하루 손실 한도 없음"]),
             f"감독(첫 잠금 전까지만): 상위 봉 판단이 반대로 바뀌면 청산({'켬' if self.judge_exit else '끔'}) / "
             f"진입 봉 {self.time_bars}개 안에 첫 잠금 못 가면 청산",
         ]

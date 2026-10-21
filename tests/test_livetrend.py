@@ -197,6 +197,7 @@ const find = (n, c) => { if (!n || !n.childNodes) return null; if (String(n.clas
 const now = Date.now();
 console.log(JSON.stringify({text: w.text.replace(/\\s+/g, " "), classes: w.classes, ms: every.map((x) => x.ms),
   hidden: !!(find(v.el, "ltr-cards") || {}).hidden, hero: X.heroOf(d, now),
+  pausing: !(find(v.el, "ltr-pauses") || {}).hidden,
   cell: X.judgeCell({dir: 0, raw: 1, votes: {V39: 1, S6: 1, OBV: 1, N12: 0}, adx: 25, adx_prev: 24, strong: true}),
   na: X.judgeCell({error: "BTCUSDT 1시간 끝난 봉을 아직 못 받음"}), marks: [X.voteMark(1), X.voteMark(-1), X.voteMark(0)],
   order: X.countsInOrder({nopull: 2, entered: 1, zzz: 3, trend: 0}),
@@ -217,7 +218,7 @@ def test_the_view(tmp_path):
         assert bad not in t, bad
     for words in (
             # the hero: a pullback is waited for; the freeze, the start, the judgment's age, the pause
-            "되돌림 기다리는 신호 1개", "ETH 롱", "닿으면 진입", "규칙 고정 D-14", "새 규칙 시작", "판단 2분 전", "쉬는 시간 아님",
+            "되돌림 기다리는 신호 1개", "ETH 롱", "닿으면 진입", "규칙 고정 D-14", "새 규칙 시작", "판단 2분 전", "진입 가능 시간",
             # the wallets: real money from the summary (unread said so), the paper never as real money, the new bot's record
             "바이비트 실거래", "$101.50", "오늘 −$1.25 · 1번", "WOO X Pro", "실행기 기록을 못 읽었어요", "페이퍼(연습) 지갑", "진짜 돈 아님",
             "0승 1패",
@@ -227,7 +228,7 @@ def test_the_view(tmp_path):
             "추세 지도", "1시간 → 30분 진입", "4시간 → 1시간 진입", "BTC", "하락", "상승", "V3.9", "EMA·DMI·ADX", "일목·AO",
             "ADX 25 오름", "30분 롱만",
             # the waits and the pauses
-            "되돌림 기다리는 신호", "쉬는 매매법 · 코인", "BTC 롱 손실 뒤 2시간 쉼",
+            "되돌림 기다리는 신호",
             # today's funnel, the record, the members, the trades
             "오늘 신호 흐름", "검사 통과", "되돌림 닿음", "걸린 신호가 없어요", "새 봇 성적", "승률", "감독: 추세 뒤집힘 1번",
             "매매법 10개", "눌림", "돌파", "30분 진입 · 1시간 추세", "1시간 진입 · 4시간 추세", "거래 없음", "최근 거래", "감독(추세)",
@@ -237,6 +238,8 @@ def test_the_view(tmp_path):
             "규칙", "추세 판단: 30분 진입은 끝난 1시간봉", "2단계(준비 중)"):
         assert words in t, words
     assert "시작 $1,000" not in t and t.count("하루 손실 한도") == t.count("하루 손실 한도 없음") == 1   # owners 10/21 #10
+    # no 쉬기 in the owners' config (10-21 night): the pauses part is hidden, the rules say so
+    assert out["pausing"] is False and "매매법 쉬기 없음 / 코인 쉬기 없음" in t
     assert any("ltr-cell down" in c for c in cls) and any("ltr-cell up" in c for c in cls) and "ltr-hero wait" in cls
     assert out["ms"] == [15000, 1000] and out["hidden"] is False
     assert out["hero"]["cls"] == "wait" and out["hero"]["head"] == "되돌림 기다리는 신호 1개"
