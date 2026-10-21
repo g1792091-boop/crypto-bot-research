@@ -134,6 +134,14 @@ export function tradesView(ctx) {
       : h("p", {class: "note"}, "손실 카드는 페이퍼 거래마다 만들어요: 이 실거래는 짝 페이퍼 거래가 없어 카드가 없어요");
     return h("p", {class: "note"}, "이 손실의 카드는 아직 없어요 (감시가 청산 몇 분 뒤에 만들어요 · 7일보다 오래된 손실은 만들지 않아요)");
   }
+  /** Entered before the 추세판단 봇's start (the bot before it on the same paper account): a paper trade's entry, a live
+   *  trade's paper partner's (else its own entry). */
+  function prevTrade(r) {
+    const since = st.d && st.d.trend_bot ? Number(st.d.trend_bot.since) : null;
+    if (!since) return false;
+    const t = r.entry_time != null ? r.entry_time : r.paper && r.paper.entry_time != null ? r.paper.entry_time : r.entry_ts;
+    return t != null && Number(t) < since;
+  }
   function rowOf(r) {
     const open = st.open === r.key;
     const head = h("button", {type: "button", class: ["lb-trow", r.win ? "win" : "loss"], "aria-expanded": String(open),
@@ -141,7 +149,8 @@ export function tradesView(ctx) {
     h("span", {class: "num muted lb-tt"}, fmt.kst(r.exit_time)), h("b", {class: "lb-tc"}, fmt.coin(r.symbol)), ui.sideTag(r.side),
     h("span", {class: "lb-ts"}, r.strategy_id ? `${fmt.stratKo(r.strategy_id)} · ${fmt.tfKo(r.timeframe)}` : "매매법 모름"),
     h("span", {class: "lb-tpills"}, ui.pill(r.reason_ko || "—", r.exit_reason === "LOCK" || r.exit_reason === "TP" ? "good" : r.exit_reason === "SL" || r.exit_reason === "LIQ" ? "bad" : "thin"),
-      r.card ? ui.pill("카드", "thin", `손실 카드: ${r.card.label || ""}`) : null),
+      r.card ? ui.pill("카드", "thin", `손실 카드: ${r.card.label || ""}`) : null,
+      prevTrade(r) ? ui.pill("전환 전", "warn", "추세판단 봇이 켜지기 전에 들어간 거래예요 (예전 봇)") : null),
     excCell(r),
     h("span", {class: ["num", "lb-tr", fmt.tone(r.roe)]}, r.roe == null ? "—" : fmt.pct(r.roe, 1)),
     h("b", {class: ["num", "lb-tp", fmt.tone(r.pnl)]}, money(r.pnl, r.est)));

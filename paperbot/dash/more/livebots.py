@@ -1832,7 +1832,9 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
         out[x["id"]] = {"state": "ok", "rows": rows, "n": len(r.get("trades") or []), "qty_scale": x["config"].get("qty_scale")}
     return {"now_ms": now, "accts": out, "match_ms": MATCH_MS, "combo_state": combo.get("state"), "members_n": len(members),
             "cards": {**{k: cards.get(k) for k in ("state", "reason_ko", "reason", "path")}, "n": len(card_by),
-                      "kinds": [{"id": k, "ko": ko, "tone": tone} for k, ko, tone in CARD_KINDS]}}
+                      "kinds": [{"id": k, "ko": ko, "tone": tone} for k, ko, tone in CARD_KINDS]},
+            # the 추세판단 봇's start: the page tags the trades entered before it (전환 전, the bot before it)
+            "trend_bot": trend_out(trend_bot(p["paper"]))}
 
 
 def why_missed(rec: dict, pt: dict, account: str) -> dict:
@@ -2886,6 +2888,8 @@ def whynow(p: dict, now: int) -> dict:
         lk = _missing(str(LIKELY_FILE), str(exc))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         lk = _err(str(LIKELY_FILE), exc)
+    if lk.get("state") == "missing" and trend_on:         # the trend bot: never a bare 수집 전
+        lk = likely_trend(p["paper"], lk.get("reason_ko"))
     blocked = [i for i in items if i["ok"] is False]
     head = ("지금 진입할 수 있어요 · 신호를 기다리는 중" if not blocked else
             "지금은 새 진입 안 해요: " + blocked[0]["ko"])
@@ -2912,6 +2916,19 @@ LIKELY_TREND_NOTE_KO = ("예전 봇(A+C 합본, 설정 95개)의 5년 백테스�
                         "실제 진입은 이 숫자보다 꽤 적어요(봉도 다를 수 있어요). 새 규칙의 진입 빈도는 아직 잰 적이 없어요. 과거 빈도일 뿐 "
                         "예측이 아니에요.")
 _likely_ref: dict = {}
+
+
+# the 추세판단 봇: its new rules have no 5-year signal frequencies; 진입 가능성 shows what the trend takes now and the replay
+LIKELY_TREND_KO = "추세판단 봇은 새 규칙이라 매매법별 5년 신호 빈도표가 없어요 · 대신 지금 추세가 받는 방향과 재현(가상)의 진입 빈도예요"
+
+
+def likely_trend(path: str, reason_ko: Optional[str] = None) -> dict:
+    """진입 가능성 for the trend bot (no frequency table for its rules): {state "trend", reason_ko, taking, expect, ts}."""
+    from . import livetrend as LT                          # (livetrend imports this module)
+    now_ = LT.trend_now(path)
+    if now_ is None:
+        return _missing(path, "추세판단 봇이 아직 첫 판단을 기록하지 않았어요 (켠 뒤 1~2분)")
+    return {"state": "trend", "reason_ko": LIKELY_TREND_KO, "table_ko": reason_ko, **now_}
 
 
 def load_likely(path: Optional[str] = None) -> dict:
@@ -3006,12 +3023,20 @@ def likely(p: dict, now: int) -> dict:
     all 5 years), its waits now, its signals of the last 7 days, and what stops an entry now (/now's checks). Past
     frequency, never a forecast; read-only."""
     from ... import livecheck as LC
+
+    def none(why: str) -> dict:
+        tb = trend_bot(p["paper"])
+        if tb is None:
+            return {"now_ms": now, **_missing(os.path.normpath(LIKELY_FILE), why), "rows": []}
+        w = whynow(p, now)                               # the trend bot: what it takes now, the replay, what stops it
+        return {"now_ms": now, **likely_trend(p["paper"], why), "rows": [], "trend_bot": trend_out(tb),
+                "blocked_ko": w.get("pending_blocked_ko"), "next_pause": w.get("next_pause"), "pause_until": w.get("pause_until")}
     try:
         ref = load_likely()
     except FileNotFoundError:
-        return {"now_ms": now, **_missing(os.path.normpath(LIKELY_FILE), LIKELY_MISSING_KO), "rows": []}
+        return none(LIKELY_MISSING_KO)
     except LC.RefConfigMismatch as exc:                  # another config's frequencies: none shown
-        return {"now_ms": now, **_missing(os.path.normpath(LIKELY_FILE), str(exc)), "rows": []}
+        return none(str(exc))
     except (OSError, ValueError) as exc:
         return {"now_ms": now, **_err(os.path.normpath(LIKELY_FILE), exc), "rows": []}
     w = whynow(p, now)

@@ -35,6 +35,8 @@
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
 import {ACCT} from "./livebots-kit.js";
+import {expectLines} from "./livebots-trend.js";
+import {takingKo} from "./livebots-likely.js";
 
 export const NOW_API = "/api/v4/livebots/now";
 export const CAL_API = "/api/v4/livebots/calendar";
@@ -558,6 +560,10 @@ export function waitCard(n, fetchedAt) {
 /** A share already in percent (the likely file's numbers): "38%", under 10 one decimal "7.4%"; null -> "—". */
 export const pctK = (x) => (x == null || !Number.isFinite(Number(x)) ? "—" : fmt.pctOf(Number(x), Number(x) < 10 ? 1 : 0));
 export const LIKELY_FOOT_KO = "이길 확률이 아니라 신호가 나오는 빈도예요";
+// the panel's title and subtitle: the 5-year table, or the 추세판단 봇's (no table for its rules: the directions, the replay)
+export const LIKELY_HEAD = {table: ["진입 가능성 TOP 5", "4시간 안에 신호가 나온 빈도 · 5년 백테스트"],
+  trend: ["진입 가능성", "지금 추세가 받는 방향 · 재현(가상)"]};
+const LIKELY_TREND_FOOT_KO = "이길 확률이 아니라 진입이 얼마나 자주인지예요";
 const GROUP_KO = {mt: "월~목", fri: "금요일", sat: "토요일", sun: "일요일"};
 /**
  * The card: the whole bot's line ("4시간 안 진입 신호: 지금 같은 시간엔 38% (5년 42%) · 보통 4.5시간 뒤"), then the ranked rows
@@ -570,6 +576,16 @@ export function likelyCard(n, href) {
   const lk = n.likely;
   const foot = h("p", {class: "lbh-lfoot"}, `${LIKELY_FOOT_KO} · `, h("a", {href: href || "#/livebots/rank"}, "자세히: 순위 탭"));
   if (!lk) return h("div", {class: "lbh-lcard"}, h("p", {class: "lbh-wnone"}, ui.notYet("수집 전"), " 진입 가능성 정보가 아직 서버에 없어요"), foot);
+  if (lk.state === "trend") {                            // the 추세판단 봇: no table for its rules (dash/more/livebots.py likely_trend)
+    const take = takingKo(lk.taking), ex = expectLines(lk.expect);
+    return h("div", {class: "lbh-lcard"},
+      h("div", {class: "lbh-lbot"}, h("p", null, "지금 추세가 받는 방향 ", h("b", null, take.length ? `${take.length}곳` : "없음")),
+        h("span", {class: "lbh-lcell"}, take.length ? take.join(" · ") : "모든 코인이 보류·힘 약함·끝물이에요")),
+      ex.length ? h("ul", {class: "lbh-ltrend"}, ex.map((x) => h("li", null, x))) : null,
+      h("p", {class: "lbh-wnote"}, `가상(재현) 숫자 · ${lk.reason_ko || ""}`),
+      lk.expect && lk.expect.note_ko ? h("p", {class: "lbh-wnote"}, lk.expect.note_ko) : null,
+      h("p", {class: "lbh-lfoot"}, `${LIKELY_TREND_FOOT_KO} · `, h("a", {href: href || "#/livebots/rank"}, "자세히: 순위 탭")));
+  }
   if (lk.state !== "ok") {
     return h("div", {class: "lbh-lcard"}, h("p", {class: "lbh-wnone"}, ui.pill(lk.state === "error" ? "못 읽음" : "수집 전", lk.state === "error" ? "bad" : ""),
       ` 진입 가능성 기준표: ${lk.reason_ko || "읽지 못했어요"}`), foot);
@@ -805,8 +821,9 @@ export function hqView(ctx, hub) {
     const slot = h("div", {class: "lbh-slot"});
     const body = h("div", {class: "lbh-pb"}, ...kids);
     const h2 = h("h2", null, title);
-    const el = h("section", {class: ["lbh-p", cls], "aria-label": title}, h("header", {class: "lbh-ph"}, h2, sub ? h("span", {class: "lbh-phs"}, sub) : null), slot, body);
-    return {el, slot, body, h2};
+    const subEl = sub ? h("span", {class: "lbh-phs"}, sub) : null;
+    const el = h("section", {class: ["lbh-p", cls], "aria-label": title}, h("header", {class: "lbh-ph"}, h2, subEl), slot, body);
+    return {el, slot, body, h2, sub: subEl};
   };
   /** One polled source of this tab: keeps its last answer; a failed refresh dims its panels and says how old it is. */
   const feed = (path, draw, panels) => {
@@ -1057,7 +1074,7 @@ export function hqView(ctx, hub) {
   const wBody = h("div", {class: "lbh-wbody"});
   const waitP = panel("⏳ 진입 대기", "lbh-waitp", "신호는 나왔고 정한 가격을 기다리는 중", wBody);
   const lBody = h("div", {class: "lbh-lbody"});
-  const likeP = panel("진입 가능성 TOP 5", "lbh-likep", "4시간 안에 신호가 나온 빈도 · 5년 백테스트", lBody);
+  const likeP = panel(LIKELY_HEAD.table[0], "lbh-likep", LIKELY_HEAD.table[1], lBody);
   const eBody = h("div", {class: "lbh-ecard"});
   const entry = panel("진입 카드", "lbh-entry", "판정 이유까지 한눈에", eBody);
   const xBody = h("div", {class: "lbh-xcard"});
@@ -1307,6 +1324,9 @@ export function hqView(ctx, hub) {
 
   function drawLikely() {
     const n = fNow.d;
+    const [title, sub] = LIKELY_HEAD[n && n.likely && n.likely.state === "trend" ? "trend" : "table"];
+    likeP.h2.textContent = title;
+    if (likeP.sub) likeP.sub.textContent = sub;
     put(lBody, !n && fNow.err ? ui.empty("불러오지 못했어요") : likelyCard(n, ctx.href ? ctx.href("livebots", "rank") : "#/livebots/rank"));
   }
 

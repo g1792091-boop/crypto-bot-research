@@ -39,6 +39,14 @@
 .lbl-botn span { color: var(--muted); font-size: var(--t-2xs); }
 .lbl-botr { display: grid; gap: 8px; min-width: 0; }
 .lbl-botl { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.55; }
+/* the 추세판단 봇: what its trend takes now and the replay (가상) instead of the frequency table */
+.lbl-trend { display: grid; gap: 8px; min-width: 0; }
+.lbl-take { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.lbl-take b { color: var(--ink); }
+.lbl-texp { display: grid; gap: 4px; justify-items: start; padding: 10px 12px; border-radius: var(--r-md); border: 1px dashed var(--accent-line);
+  color: var(--ink-2); font-size: var(--t-sm); line-height: 1.55; min-width: 0; }
+.lbl-texp ul { margin: 0; padding-left: 18px; }
+.lbl-texp small { color: var(--muted); font-size: var(--t-xs); }
 .lbl-banner { display: grid; gap: 6px; min-width: 0; }
 .lbl-banner:empty { display: none; }
 .lbl-block { margin: 0; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--warn-line); background: var(--warn-soft); color: var(--ink);

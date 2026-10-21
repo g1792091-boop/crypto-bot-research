@@ -23,6 +23,7 @@
 // (✓ / ✗ become · : facts only), and 규칙 고정 is 2 weeks from the bot's own start.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
+import {weekdaysKo} from "./livebots-expect.js";
 
 export const GOAL_API = "/api/v4/livebots/goal";
 const REFRESH_MS = 60 * 1000;
@@ -193,7 +194,7 @@ export function goalView(ctx) {
         ` · ${beWords(d.break_even, d.break_even_plain)}`,
         words ? ` · ${words}` : ""),
       ui.kv([["평일 하루 진입", has(r.per_weekday) ? `${fmt.num(r.per_weekday, 1)}번 (평일 ${fmt.num(r.weekdays, 1)}일에 ${fmt.int(r.weekday_entries)}번)`
-        : `평일이 하루 지나면 계산해요 (지금 평일 ${fmt.num(r.weekdays, 1)}일에 ${fmt.int(r.weekday_entries)}번)`],
+        : `평일이 하루 지나면 계산해요 (지금 ${weekdaysKo(r.weekdays)}에 ${fmt.int(r.weekday_entries)}번)`],
         refRow,
         ["이긴 거래 평균", has(r.avg_win) ? h("b", {class: "num up"}, fmt.pct(r.avg_win, 1)) : "—"],
         ["진 거래 평균", has(r.avg_loss) ? h("b", {class: "num down"}, fmt.pct(r.avg_loss, 1)) : "—"],

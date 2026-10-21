@@ -381,6 +381,40 @@ def follow_of(p: dict, key: str, now: int) -> Optional[list]:
     return out
 
 
+def taking_now(st: dict) -> list:
+    """The directions the trend takes now from the bot's own judgments (state ``trend``): [{symbol, htf, entry, side}] for
+    each coin and judged timeframe that is a trend (up / down) with strength (ADX 20+) and not 끝물 (the map's '롱만' /
+    '숏만')."""
+    out = []
+    for sym, row in sorted(((st or {}).get("coins") or {}).items(), key=lambda kv: L.COINS.index(kv[0]) if kv[0] in L.COINS else 99):
+        for htf in ("1h", "4h"):
+            j = (row or {}).get(htf) if isinstance(row, dict) else None
+            if not isinstance(j, dict) or j.get("error"):
+                continue
+            d = int(j.get("dir") or 0)
+            if d and j.get("strong") is not False and not j.get("tired"):
+                out.append({"symbol": sym, "htf": htf, "entry": "30m" if htf == "1h" else "1h", "side": d})
+    return out
+
+
+def trend_now(path: str) -> Optional[dict]:
+    """{taking, ts, expect} of the trend bot at ``path`` (its judgments now and the replay's expectation), None when its
+    state cannot be read (read-only)."""
+    try:
+        conn = L.open_ro(path)
+    except (OSError, sqlite3.Error):
+        return None
+    try:
+        _rt, run = _state(conn, "combo_run")
+        ts, st = _state(conn, "trend")
+    finally:
+        conn.close()
+    if st is None:
+        return None
+    cfg = (run or {}).get("config") if isinstance(run, dict) else None
+    return {"taking": taking_now(st), "ts": ts, "expect": expect_of(cfg if isinstance(cfg, dict) else None)}
+
+
 def next_pause(cfg: dict, now: int) -> Optional[dict]:
     """The next entry pause after now (after the one in force, if any) by the config's own rules (pause_now, minute by
     minute: 5-minute steps, then the exact minute): {"why", "ko", "from", "until"}; None when none within the days

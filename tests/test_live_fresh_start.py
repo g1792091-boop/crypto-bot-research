@@ -11,6 +11,8 @@ On the trend bot's own world (tests/test_trendbot.py: TrendRunner and its fake j
   (Nasdaq open 22:00~23:00 KST, the weekend); the 7/1~10/20 replay's expectation, said to have run with the 시간 정리 exit;
 - 일정 · 한눈에 (livebots.calendar, whynow): the pause around each Nasdaq open is a pause window like the weekend and a
   release (it was missing: the next pause read as the weekend two days away);
+- 진입 가능성 (순위 · 한눈에): no 5-year frequency table for the new rules, the directions the trend takes now and the
+  replay (가상) instead of a bare 수집 전; 거래: the trades entered before the start tagged 전환 전;
 - the views in node (the tiny DOM): the hero and the position say 전환 전, the executors' rows say why they are flat, the
   empty boxes say what the bot looks at next, what to expect (가상) and the judgment changes of the last 24 h; the
   calendar draws the Nasdaq windows."""
@@ -384,3 +386,96 @@ def test_the_pages_words_in_node():
     assert out["note"] == ["추세판단 봇 10/21 20:20 시작 · 위 잔고와 닫힌 거래는 계좌 전체 (그 전 예전 봇 거래 포함) · 새 봇 닫힌 거래 0번"]
     assert out["none"] is None and out["wd"] == ["평일 30분", "평일 12시간", "평일 3.0일", "평일 —"]
     assert out["off"] == {"ko": "뺀 규칙", "cls": "thin"}
+
+
+# ================================================================ 진입 가능성 · 거래 on the switch night
+def test_taking_now_is_the_maps_long_only_and_short_only():
+    st = {"coins": {"ETHUSDT": {"1h": {"dir": 1, "strong": False}, "4h": {"dir": -1, "strong": True, "tired": True}},
+                    "BTCUSDT": {"1h": {"dir": 0}, "4h": {"dir": 1, "strong": True}}, "SOLUSDT": {"1h": {"error": "x"}, "4h": "?"}}}
+    assert LT.taking_now(st) == [{"symbol": "BTCUSDT", "htf": "4h", "entry": "1h", "side": 1}]     # coins in the site's order
+    assert LT.taking_now({}) == [] and LT.taking_now(None) == []
+
+
+def test_likely_says_what_the_trend_takes_now_instead_of_a_bare_table(tmp_path, monkeypatch):
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    monkeypatch.setattr(L, "LIKELY_FILE", str(tmp_path / "nope.json"))
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none.json"))
+    now = since + 2 * MIN
+    # 한눈에 (/now): the trend bot has no 5-year frequencies for its new rules, never a bare 수집 전
+    lk = json_finite(L.whynow(paths, now))["likely"]
+    assert (lk["state"], lk["reason_ko"], lk["table_ko"]) == ("trend", L.LIKELY_TREND_KO, L.LIKELY_MISSING_KO)
+    assert lk["taking"][0] == {"symbol": "BTCUSDT", "htf": "1h", "entry": "30m", "side": -1}       # the 1h judgment against the long
+    assert lk["expect"]["state"] == "ok" and lk["expect"]["per_weekday"] > 0
+    # 순위 › 진입 가능성: the same, what stops an entry now and the bot
+    d = json_finite(L.likely(paths, now))
+    assert d["state"] == "trend" and d["rows"] == [] and d["taking"] == lk["taking"] and d["trend_bot"]["since"] == since
+    assert d["blocked_ko"] and "포지션" in d["blocked_ko"]
+    # another bot keeps the answer as before (수집 전 + why)
+    monkeypatch.setattr(L, "trend_bot", lambda path: None)
+    assert json_finite(L.likely(paths, now))["state"] == "missing"
+    # the view: the directions, the replay (가상), no frequency windows, no "풀리면 이 순서예요"
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    js = os.path.join(SCREENS, "livebots-likely.js")
+    hq = os.path.join(SCREENS, "livebots-hq.js")
+    script = (f"const D = await import('{dom}');\nconst X = await import('file://{js}');\nconst Q = await import('file://{hq}');\n"
+              f"const d = {json.dumps(d)};\nconst lk = {json.dumps(lk)};\n"
+              """const ctx = {api: () => Promise.resolve(d), every() {}, watch() {}, alive: () => true, href: () => "#", track() {}};
+    const card = D.walk(Q.likelyCard({likely: lk}, "#/livebots/rank")).text.replace(/\\s+/g, " ");
+    const v = X.likelyView(ctx);
+    await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0));
+    const w = D.walk(v.el);
+    const hiddenSeg = (function f(n) { for (const c of (n && n.childNodes) || []) {
+      if (c.attributes && c.attributes["aria-label"] === "몇 시간 안에") return !!c.hidden; const x = f(c); if (x !== null) return x; } return null; })(v.el);
+    console.log(JSON.stringify({text: w.text.replace(/\\s+/g, " "), seg: hiddenSeg, card, head: Q.LIKELY_HEAD,
+      take: X.takingKo([{symbol: "SOLUSDT", entry: "30m", side: 1}, {symbol: "ETHUSDT", entry: "1h", side: -1}])}));""")
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    t = out["text"]
+    assert not BAD.search(t), BAD.search(t)
+    for words in (L.LIKELY_TREND_KO, "지금 추세가 받는 방향", "BTC 30분 진입 숏만", "가상 · 재현", "평일 하루 약 1.1번 진입",
+                  "지금은 진입 안 해요: "):
+        assert words in t, words
+    assert "풀리면 이 순서예요" not in t and out["seg"] is True and out["take"] == ["SOL 30분 진입 롱만", "ETH 1시간 진입 숏만"]
+    # 한눈에's card: the same in short, said to be 가상, the replay's 시간 정리 said; never the 5-year table's words
+    c = out["card"]
+    assert not BAD.search(c), BAD.search(c)
+    for words in ("지금 추세가 받는 방향", "BTC 30분 진입 숏만", "평일 하루 약 1.1번 진입", "가상(재현) 숫자", "시간 정리",
+                  "이길 확률이 아니라 진입이 얼마나 자주인지예요", "자세히: 순위 탭"):
+        assert words in c, words
+    assert "신호가 나오는 빈도" not in c and out["head"]["trend"] == ["진입 가능성", "지금 추세가 받는 방향 · 재현(가상)"]
+
+
+def test_trades_entered_before_the_start_are_tagged(tmp_path, monkeypatch):
+    w, B, p, since, paths = _switch(tmp_path, monkeypatch)
+    H = T.T0 + HOUR                                          # closed by the trend bot's supervisor at the first 1h close
+    T._to(w, since + 2 * MIN, H + 2 * MIN)
+    w.store.commit()
+    L._cache.clear()
+    d = json_finite(L.trade_rows(paths, H + 3 * MIN, _more(w, tmp_path)))
+    assert d["trend_bot"]["since"] == since
+    (r,) = d["accts"]["paper"]["rows"]
+    assert r["entry_time"] < since
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    dom = "file://" + os.path.join(ROOT, "tests", "anasyn_dom.mjs")
+    js = os.path.join(SCREENS, "livebots-trades.js")
+    script = (f"const D = await import('{dom}');\nconst X = await import('file://{js}');\nconst d = {json.dumps(d)};\n"
+              """const ctx = {params: {query: {acct: "paper"}}, every() {}, watch() {}, alive: () => true, href: () => "#", track() {},
+      api: (path) => (path === "/api/v4/livebots/trades" ? Promise.resolve(d) : Promise.reject(Object.assign(new Error("x"), {status: 503})))};
+    const v = X.tradesView(ctx);
+    await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0));
+    const w = D.walk(v.el);
+    const n = JSON.parse(JSON.stringify(d)); n.trend_bot = null;
+    const v2 = X.tradesView({...ctx, api: (path) => (path === "/api/v4/livebots/trades" ? Promise.resolve(n) : ctx.api(path))});
+    await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0));
+    console.log(JSON.stringify({text: w.text.replace(/\\s+/g, " "), other: D.walk(v2.el).text.replace(/\\s+/g, " ")}));""")
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert "전환 전" in out["text"] and "감독 청산" in out["text"]
+    assert "전환 전" not in out["other"]                        # another bot: no tag

@@ -384,6 +384,7 @@
 .lbh-wcl li { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
 .lbh-wcli { flex: none; width: 7px; height: 7px; transform: rotate(45deg); background: var(--accent); }
 .lbh-wnote { margin: 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.5; }
+.lbh-ltrend { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; }
 
 /* 진입 카드 */
 .lbh-ecard { display: grid; gap: 8px; min-width: 0; }

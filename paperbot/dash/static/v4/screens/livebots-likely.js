@@ -8,9 +8,11 @@
 //   시상대  the top three as podium cards; the rest a list of 10 a page
 // HONESTY: past frequency, never a forecast, and not a win rate (the 성적 순위 says how they did); a strategy missing from
 // the 5-year file says 5년 기준 없음 (never a 0); zeros on the weekend are real (the bot does not enter on weekends); what
-// stops an entry now is said on top; the file not there = 수집 전, not read = 못 읽음 + why.
+// stops an entry now is said on top; the file not there = 수집 전, not read = 못 읽음 + why. The 추세판단 봇 (state "trend":
+// no frequency table for its new rules) shows the directions its trend takes now and the 7/1~10/20 replay instead.
 import {h, s, put, ui, fmt, local, motion, stratFigure, stratHue} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
+import {expectLines} from "./livebots-trend.js";
 
 export const API = "/api/v4/livebots/likely";
 const REFRESH_MS = 30 * 1000;
@@ -139,6 +141,11 @@ function strip(hours, o = {}) {
 }
 const typeChip = (t) => (t ? h("span", {class: "lbl-type", dataset: {t: TYPE_ID[t] || "other"}}, t) : null);
 
+/** The trend bot's directions now in words: ["SOL 30분 진입 롱만", ...] (the answer's ``taking``). */
+export function takingKo(xs) {
+  return (xs || []).map((x) => `${fmt.coin(x.symbol)} ${x.entry === "30m" ? "30분" : "1시간"} 진입 ${Number(x.side) > 0 ? "롱" : "숏"}만`);
+}
+
 /** likelyView(ctx) -> {el}: 진입 가능성 순위 (its own endpoint every 30 s; the wait countdowns every second). */
 export function likelyView(ctx) {
   const st = {win: winOf(local.get(WIN_KEY, "w4")), d: null, key: "", okAt: 0, clocks: [], rows: []};
@@ -218,7 +225,7 @@ export function likelyView(ctx) {
     const parts = [];
     if (d.blocked_ko) {
       parts.push(h("p", {class: "lbl-block", role: "status"}, h("b", null, "지금은 진입 안 해요: "), d.blocked_ko,
-        d.pause_until ? ` (${fmt.kst(d.pause_until)}에 풀려요)` : "", h("span", {class: "lbl-blk2"}, " · 풀리면 이 순서예요")));
+        d.pause_until ? ` (${fmt.kst(d.pause_until)}에 풀려요)` : "", d.state === "trend" ? null : h("span", {class: "lbl-blk2"}, " · 풀리면 이 순서예요")));
     }
     const np = d.next_pause;
     if (np && np.from) parts.push(h("p", {class: "lbl-pause"}, `다음 쉬는 시간: ${np.ko || "쉼"} ${fmt.kst(np.from)}부터${np.to ? ` ${fmt.kst(np.to)}까지` : ""}`));
@@ -238,7 +245,19 @@ export function likelyView(ctx) {
     const d = st.d;
     st.clocks = [];
     seg.set(st.win);
+    seg.hidden = !!d && d.state === "trend";               // (no frequency windows for the trend bot)
     if (!d) { put(podium); put(foot); return; }
+    if (d.state === "trend") {                           // the trend bot: no table for its rules, what it takes now instead
+      const take = takingKo(d.taking), ex = expectLines(d.expect);
+      put(srcSlot);
+      put(botBox, h("div", {class: "lbl-trend"},
+        h("p", {class: "lbl-botl"}, d.reason_ko || ""),
+        h("p", {class: "lbl-take"}, h("b", null, "지금 추세가 받는 방향 "), take.length ? take.join(" · ") : "없음 · 모든 코인이 보류·힘 약함·끝물이에요"),
+        ex.length ? h("div", {class: "lbl-texp"}, ui.pill("가상 · 재현", "thin"), h("ul", null, ex.map((x) => h("li", null, x))),
+          d.expect && d.expect.note_ko ? h("small", null, d.expect.note_ko) : null) : null));
+      drawBanner(d); put(podium); put(restHead); pg.set([]); put(foot);
+      return;
+    }
     if (d.state !== "ok") {
       put(srcSlot, sourceState(d, "진입 가능성 기준표"));
       put(botBox); put(banner); put(podium); put(restHead); pg.set([]); drawFoot(null);
