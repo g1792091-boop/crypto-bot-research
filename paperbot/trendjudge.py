@@ -49,7 +49,8 @@ KEEP = 300                  # closed bars per frame (Ichimoku needs 78, the RMA 
 MIN_BARS = 120              # fewer closed bars than this: not judged
 FETCH = 499                 # rows per klines request (Binance weight 2 below 500)
 SETTLE_MS = 3_000           # a bar counts as closed this long after its close (the exchange's last trades of it)
-RETRY_MS = 20_000           # after a failed fetch no fetch at all for this long (doubling to RETRY_MAX_MS while it fails)
+RETRY_MS = 20_000           # after a failed fetch no fetch at all for this long (doubling to RETRY_MAX_MS while it fails),
+                            # counted from the end of the failed request; the live site's picture (``bg``) waits apart
 RETRY_MAX_MS = 120_000      # (Binance down: one short failed request per wait, never one per coin per minute)
 
 
@@ -80,7 +81,8 @@ class TrendRules:
     member_losses: int = 2            # losing trades in a row of one member ...
     member_pause_h: float = 24.0      # ... pause that member this long
     coin_pause_h: float = 2.0         # after a losing trade: no entry on that coin and side for this long
-    daily_loss: float = 0.30          # the account lost this share in a KST day: no entry until the next day
+    daily_loss: Optional[float] = None  # the account lost this share in a KST day: no entry until the next day; None
+                                        # = no daily limit (owners 10-21: "10번은 없애고")
     record_n: int = 10                # a member's recent trades read for the score
     record_min: int = 3               # fewer trades than this: the record counts 0
 
@@ -126,7 +128,8 @@ class TrendRules:
         num("member_losses", 1, 10, True)
         num("member_pause_h", 0, 240)
         num("coin_pause_h", 0, 240)
-        num("daily_loss", 0.01, 1)
+        if self.daily_loss is not None:
+            num("daily_loss", 0.01, 1)
         num("record_n", 1, 100, True)
         num("record_min", 1, 100, True)
         if not isinstance(self.judge_exit, bool):
@@ -151,7 +154,8 @@ class TrendRules:
             f"진입 방식: 진입 봉 하나 동안 {self.pullback_atr:g} ATR 되돌림을 기다림(신호 봉이 {self.big_bar_atr:g} ATR 넘는 "
             f"장대봉이면 {self.pullback_big_atr:g} ATR), 안 오면 버림 / 동시 신호는 점수(판단 강도+자리+최근 성적)",
             f"쉬기: 같은 매매법 손실 {self.member_losses}번 연속이면 {self.member_pause_h:g}시간 / 손실 뒤 같은 코인·같은 "
-            f"방향 {self.coin_pause_h:g}시간 / 하루(한국 시간) 계좌 -{self.daily_loss:.0%}면 그날 진입 안 함",
+            f"방향 {self.coin_pause_h:g}시간 / " + (f"하루(한국 시간) 계좌 -{self.daily_loss:.0%}면 그날 진입 안 함"
+                                                 if self.daily_loss is not None else "하루 손실 한도 없음"),
             f"감독(첫 잠금 전까지만): 상위 봉 판단이 반대로 바뀌면 청산({'켬' if self.judge_exit else '끔'}) / "
             f"진입 봉 {self.time_bars}개 안에 첫 잠금 못 가면 청산",
         ]
@@ -161,40 +165,52 @@ class TrendRules:
 class Klines:
     """Closed Binance klines per (coin, timeframe), oldest first, fetched when a newer closed bar is wanted.
     ``fetch(symbol, interval, limit)``: Binance rows [open_ms, open, high, low, close, volume, ...] (the newest last,
-    the bar still forming included); ``now_ms()``: the clock. Errors are kept in ``errors`` (never raised by a fetch)."""
+    the bar still forming included); ``now_ms()``: the clock. Errors are kept in ``errors`` (never raised by a fetch).
+    Back-off: a failed fetch for a decision (an entry check, the supervisor) stops every fetch for ``RETRY_MS``
+    (doubling); a failed fetch for the live site's picture (``bg``) stops only the picture's fetches, so it never costs a
+    signal its one check (review 10/21)."""
 
     def __init__(self, fetch: Callable[[str, str, int], list], now_ms: Callable[[], int], keep: int = KEEP):
         self.fetch, self.now_ms, self.keep = fetch, now_ms, keep
         self.rows: dict[tuple, list] = {}
-        self.wait_until = 0             # no fetch before this (ms) after a failure
-        self.fails = 0                  # failures in a row
+        self.wait_until = 0             # no fetch before this (ms) after a failed decision fetch
+        self.fails = 0                  # decision fetches failed in a row
+        self.bg_wait_until = 0          # no picture fetch before this (ms) after a failed picture fetch
+        self.bg_fails = 0
         self.errors: list[str] = []
 
-    def _load(self, symbol: str, tf: str) -> None:
-        key, ms, now = (symbol, tf), TF_MS[tf], self.now_ms()
+    def _load(self, symbol: str, tf: str, bg: bool = False) -> None:
+        key, ms, asked = (symbol, tf), TF_MS[tf], self.now_ms()
         try:
             got = self.fetch(symbol, tf, FETCH)
         except Exception as exc:  # noqa: BLE001  every fetch waits; the judgment is "not readable" meanwhile
-            self.fails += 1
-            self.wait_until = now + min(RETRY_MS * 2 ** (self.fails - 1), RETRY_MAX_MS)
+            now = self.now_ms()                       # after the failed request (its timeouts are not the wait)
+            if bg:
+                self.bg_fails += 1
+                self.bg_wait_until = now + min(RETRY_MS * 2 ** (self.bg_fails - 1), RETRY_MAX_MS)
+            else:
+                self.fails += 1
+                self.wait_until = now + min(RETRY_MS * 2 ** (self.fails - 1), RETRY_MAX_MS)
             self.errors.append(f"{symbol} {tf} 봉을 못 받음: {type(exc).__name__}: {exc}"[:300])
             return
-        self.fails = 0
+        self.fails = self.bg_fails = 0
+        self.wait_until = self.bg_wait_until = 0
         new = [(int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5])) for r in got
-               if int(r[0]) + ms + SETTLE_MS <= now]
+               if int(r[0]) + ms + SETTLE_MS <= asked]      # settled when it was asked for
         merged = {r[0]: r for r in self.rows.get(key, [])}
         merged.update({r[0]: r for r in new})
         self.rows[key] = [merged[k] for k in sorted(merged)][-(FETCH + self.keep):]
 
-    def frame(self, symbol: str, tf: str, t: int) -> pd.DataFrame:
+    def frame(self, symbol: str, tf: str, t: int, bg: bool = False) -> pd.DataFrame:
         """The last ``keep`` bars closed at or before ``t`` (ms), the last one closing at the tf boundary at or
-        before t. Raises TrendError when that bar is not readable (yet)."""
+        before t. Raises TrendError when that bar is not readable (yet). ``bg``: for the live site's picture only."""
         ms = TF_MS[tf]
         need = int(t) - int(t) % ms - ms                 # the open of the bar that closes at the boundary <= t
         key = (symbol, tf)
         have = self.rows.get(key, [])
-        if (not have or have[-1][0] < need) and self.now_ms() >= self.wait_until:
-            self._load(symbol, tf)
+        now = self.now_ms()
+        if (not have or have[-1][0] < need) and now >= self.wait_until and (not bg or now >= self.bg_wait_until):
+            self._load(symbol, tf, bg)
             have = self.rows.get(key, [])
         rows = [r for r in have if r[0] <= need][-self.keep:]
         if not rows or rows[-1][0] != need:
@@ -361,13 +377,14 @@ class Judge:
             self._mods = lib()
         return self._mods
 
-    def judgment(self, symbol: str, tf: str, t: int) -> Judgment:
-        """The judgment of the last ``tf`` bar closed at or before t. Raises TrendError."""
+    def judgment(self, symbol: str, tf: str, t: int, bg: bool = False) -> Judgment:
+        """The judgment of the last ``tf`` bar closed at or before t. Raises TrendError. ``bg``: for the live site's
+        picture (its failed fetches never hold back a decision's)."""
         key = (symbol, tf, int(t) - int(t) % TF_MS[tf])
         got = self._j.get(key)
         if got is None:
             fg, pi = self.mods()
-            got = judge_frame(self.k.frame(symbol, tf, t), symbol, tf, self.rules, fg, pi)
+            got = judge_frame(self.k.frame(symbol, tf, t, bg), symbol, tf, self.rules, fg, pi)
             self._j[key] = got
             if len(self._j) > 400:
                 for k in sorted(self._j, key=lambda x: x[2])[:200]:

@@ -33,7 +33,7 @@
   "member_losses": 2,
   "member_pause_h": 24,
   "coin_pause_h": 2,
-  "daily_loss": 0.30,
+  "daily_loss": null,
   "record_n": 10,
   "record_min": 3
  },

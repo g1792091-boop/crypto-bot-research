@@ -1,4 +1,4 @@
-// 실거래 › 관제 (#/livebots/hq, the screen's first tab; owners 10/19: "좀 간지나는것도 좀 만들어주면 안돼?? 멋있게 만들고싶은데",
+// 실거래 › 한눈에 (#/hq; 관제 and the first tab 10/19-10/21, now second after 추세판단 봇's 관제; owners 10/19: "좀 간지나는것도 좀 만들어주면 안돼?? 멋있게 만들고싶은데",
 // with three phone videos of another team's dashboard as the look they like: a neon frame, mono-caps status line, hero
 // wallet digits with DAY n and a × badge, a scrolling ticker, an entry card, an exchange-style result card and a
 // rotating particle torus).
@@ -1103,7 +1103,7 @@ export function hqView(ctx, hub) {
   const foot = h("div", {class: "lbh-foot"}, ui.assumeLive("바이비트 · WOO X Pro"),
     ui.assumeLine(["closed", "open"], "페이퍼(연습) A+C 합본 COMBO@mix · 게이지의 순ROE"));
   const root = h("div", {class: "lbh", dataset: {still: ""}},
-    h("h2", {class: "lbh-sr"}, "실거래 관제"), cmd, frame,
+    h("h2", {class: "lbh-sr"}, "실거래 한눈에"), cmd, frame,
     h("div", {class: "lbh-cards"}, waitP.el, likeP.el, entry.el, result.el, live.el),
     h("div", {class: "lbh-row"}, why.el, dial.el, ckpt.el), tiles.el, foot);
 

@@ -699,16 +699,17 @@ def test_wiring_route_menu_find_inventory_and_module():
     # in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 지금 · 기록 · 성적 · 운영); part B's 위험 · 봇 상태 · 목표 ·
     # 규칙 점검 join once their files are there
     own = [t for t in tabs if t[0] not in ("risk", "health", "goal", "judge")]
-    assert own == [("hq", "관제"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("trend", "추세"), ("trades", "거래"), ("replay", "다시보기"),
+    assert own == [("trend", "관제"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("trades", "거래"), ("replay", "다시보기"),
                    ("signals", "신호"), ("missed", "못 탄 신호"), ("perf", "성적"), ("rank", "순위"), ("map", "지도"), ("cost", "비용"),
                    ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자")]
-    assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq")' in _read(SCREENS, "livebots.js")   # owners 10/19: 관제 first
+    # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에
+    assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "trend")' in _read(SCREENS, "livebots.js")
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):
         assert word in inv, word
     css = _read(SCREENS, "livebots.css")
-    for part in ("hq", "rank", "map", "cost", "cal", "team", "likely", "missed", "replay"):
+    for part in ("trend", "hq", "rank", "map", "cost", "cal", "team", "likely", "missed", "replay"):
         assert f'@import url("livebots-{part}.css");' in css, part
         own = re.sub(r"/\*.*?\*/", "", _read(SCREENS, f"livebots-{part}.css"), flags=re.S)
         assert not re.search(r"#[0-9a-fA-F]{3,8}\b", own) and not re.search(r"font-size:\s*\d", own), part

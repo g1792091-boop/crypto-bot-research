@@ -1,24 +1,49 @@
-// 실거래 › 추세 (#/livebots/trend; owners 10/21 추세판단 봇: "추세형 매매법은 진입 안 하고 추세만 보는 거"). What the paper bot
-// both executors follow judged, read-only (dash/more/livetrend.py, /api/v4/livebots/trend, every 30 s):
-//   추세 판단   every coin's last closed 1h (for the 30m entries) and 4h (for the 1h entries) judgment: 상승 / 하락 / 보류,
-//              the four judges (V3.9 · EMA·DMI·ADX · OBV 추세형 · 일목·AO) as ▲ ▼ –, ADX and rising or falling, 끝물, 힘 약함
-//   기다리는 신호  the signals waiting for their pullback: the level, until when
-//   쉬는 중     the daily loss stop, the members and the coin-sides taking a break
-//   최근 24시간  the entry members' signals by what became of them, with the bot's own reason
-//   감독 청산    the supervisor's exits of the last 7 days (추세 판단 뒤집힘 · 시간 정리) and why
-// HONESTY: unread = 못 읽음 + why (never a guess); the judgment of a coin the bot could not read says so; nothing here
-// changes the bot.
-import {h, put, ui, fmt, serverNow} from "../core/pb.js";
+// 실거래 › 관제 (#/trend, the live site's first screen; owners 10/21 "대시보드 다시 만들어야겠네 야무지게 필요한부분들 전부다
+// 포함해서 멋있게"): the 추세판단 봇 both executors follow, everything on one screen, read-only:
+//   지금        the hero: what the bot is doing now (보유 중 · 되돌림 기다림 · 진입 가능 · 쉬는 시간 · 기록 멈춤), the rule freeze
+//              countdown (2 weeks, then the review), the money (바이비트 · WOO X Pro · 페이퍼, today), the bot's record since it
+//              started
+//   포지션 · 감독 the open paper position and what can close it: 시간 정리 countdown (4 entry bars), the higher bar's judgment
+//              now (반대 3/4 = 감독 청산), the fast stop, the first lock; each executor's own position next to it
+//   추세 지도    every coin's last closed 1h (30m entries) and 4h (1h entries) judgment: 상승 / 하락 / 보류, the four judges,
+//              ADX on a 0-60 meter, 끝물 / 힘 약함, and which entries it allows now
+//   되돌림 대기  the signals waiting for their pullback: the level, the price now and how far, the time left; the pauses
+//   오늘 신호 흐름 signals → checks passed → pullback touched → entered, and what stopped the rest
+//   매매법 10개  each entry member: role, timeframes, today's signals, its record since the start, its pause
+//   새 봇 성적 · 최근 거래 · 감독 청산 · 규칙 · 최근 24시간 신호
+// Sources: /api/v4/livebots/trend (dash/more/livetrend.py, every 15 s) and the site's summary /api/v4/livebots (the money
+// and the executors' positions, every 5 s, handed in by screens/livebots.js); the price is the site's ticker (core/store.js
+// mark) when it has one, else the rule bot's last 1m close from the answer; the strategies' Korean names come with the
+// board. Countdowns tick every second on the server's clock. HONESTY: unread = 못 읽음 + why, never a zero; paper money is
+// never shown as real money.
+import {h, put, ui, fmt, store, serverNow} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/trend";
-const REFRESH_MS = 30 * 1000;
+const REFRESH_MS = 15 * 1000;
+const TICK_MS = 1000;
+const MIN = 60 * 1000, DAY = 24 * 60 * MIN;
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const JUDGES = [["V39", "V3.9"], ["S6", "EMA·DMI·ADX"], ["OBV", "OBV"], ["N12", "일목·AO"]];
 export const DIR_KO = {1: "상승", "-1": "하락", 0: "보류"};
+const TF_ENTRY = {"1h": "30m", "4h": "1h"};
+const TF_MIN = {"15m": 15, "30m": 30, "1h": 60, "4h": 240};
 const CAT_ORDER = ["entered", "pulled", "pullback_wait", "nopull", "trend", "spot", "member_pause", "coin_pause", "daily",
   "chase", "chase_unread", "weekend", "macro", "usopen", "trend_unread", "late", "when", "submitted", "config", "other"];
+const EXIT_CLS = {LOCK: "good", SL: "bad", LIQ: "bad", REV: "warn", JUDGE: "accent", TIME: "accent"};
+export const EXIT_SHORT_KO = {SL: "손절", LOCK: "계단 익절", LIQ: "강제청산", REV: "빠른 청산", JUDGE: "감독(추세)", TIME: "감독(시간)",
+  HALT: "멈춤", MANUAL: "수동"};
+const exitKo = (r) => EXIT_SHORT_KO[r] || r || "—";
 const SIDE = (s) => (Number(s) > 0 ? "롱" : "숏");
+const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
+const signed = (x) => `${Number(x) >= 0 ? "+" : "−"}${fmt.usd(Math.abs(Number(x)))}`;
+/** A coin's price now: the ticker's mark, else the answer's last 1m close (null when neither). */
+const priceOf = (t, sym) => {
+  const m = store.mark(sym);
+  if (ok(m)) return Number(m);
+  const p = ((t && t.prices) || {})[sym];
+  return p && ok(p.price) ? Number(p.price) : null;
+};
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_livetrend.py)
 /** {cls, word, sub} of one judgment ({error} when unread). */
@@ -29,7 +54,8 @@ export function judgeCell(j) {
   let word = DIR_KO[d] ?? "보류";
   if (d === 0 && raw) word = `보류 (${DIR_KO[raw]} 유지 확인 중)`;
   const adx = Number(j.adx), prev = Number(j.adx_prev);
-  const bits = [`상승 ${(Object.values(j.votes || {})).filter((v) => v > 0).length}·하락 ${(Object.values(j.votes || {})).filter((v) => v < 0).length}`];
+  const votes = Object.values(j.votes || {});
+  const bits = [`상승 ${votes.filter((v) => v > 0).length}·하락 ${votes.filter((v) => v < 0).length}`];
   if (Number.isFinite(adx)) bits.push(`ADX ${Math.round(adx)} ${adx > prev ? "오름" : "내림"}`);
   if (j.tired) bits.push("끝물");
   else if (j.strong === false) bits.push("힘 약함");
@@ -44,93 +70,379 @@ export function countsInOrder(counts) {
   const keys = [...CAT_ORDER.filter((k) => c[k]), ...Object.keys(c).filter((k) => !CAT_ORDER.includes(k) && c[k])];
   return keys.map((k) => ({id: k, n: c[k]}));
 }
+/** What a higher-bar judgment allows now: {side: 1 | -1 | 0, ko} ("30분 롱만" / "30분 쉼 · 보류"). */
+export function allows(j, tf) {
+  const e = TF_ENTRY[tf] === "30m" ? "30분" : "1시간";
+  if (!j || j.error) return {side: 0, ko: `${e} 쉼 · 판단 못 읽음`};
+  const d = Number(j.dir);
+  if (!d) return {side: 0, ko: `${e} 쉼 · 보류`};
+  if (j.strong === false) return {side: 0, ko: `${e} 쉼 · 힘 약함`};
+  if (j.tired) return {side: 0, ko: `${e} 쉼 · 끝물`};
+  return {side: d, ko: `${e} ${SIDE(d)}만`};
+}
+/** The ADX meter's fill (0..1 over 0-60) and its zone ("weak" < 20, "ok", "hot" > 40). */
+export function adxMeter(adx) {
+  const v = Number(adx);
+  if (adx == null || !Number.isFinite(v)) return {fill: 0, zone: "na"};
+  return {fill: Math.max(0, Math.min(1, v / 60)), zone: v < 20 ? "weak" : v > 40 ? "hot" : "ok"};
+}
+/** How far the price still is from a wait's level, as a share of the price (0 once there): a long waits for lower. */
+export function waitGap(w, price) {
+  if (!w || !ok(w.level) || !ok(price) || Number(price) <= 0) return null;
+  const g = Number(w.side) > 0 ? (Number(price) - Number(w.level)) / Number(price) : (Number(w.level) - Number(price)) / Number(price);
+  return Math.max(0, g);
+}
+/** The rule freeze: {days, ko} ("규칙 고정 D-12 · 11/04 검토" / "… 검토할 때예요"). */
+export function freezeKo(bot, now) {
+  if (!bot || !ok(bot.freeze_until)) return {days: null, ko: "규칙 고정 기간 모름"};
+  const left = Number(bot.freeze_until) - Number(now);
+  if (left <= 0) return {days: 0, ko: `규칙 고정 2주 끝 · ${fmt.mmdd(bot.freeze_until)}부터 검토할 때예요`};
+  return {days: Math.ceil(left / DAY), ko: `규칙 고정 D-${Math.ceil(left / DAY)} · ${fmt.mmdd(bot.freeze_until)} 검토`};
+}
+/** "1:02:03" / "12:05" / "0:59" (a countdown, whole seconds rounded up). */
+export function clock(ms) {
+  if (!ok(ms)) return "—";
+  const t = Math.max(0, Math.ceil(Number(ms) / 1000));
+  const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = t % 60;
+  const two = (n) => String(n).padStart(2, "0");
+  return hh ? `${hh}:${two(mm)}:${two(ss)}` : `${mm}:${two(ss)}`;
+}
+/** The hero's state from the trend answer: {cls, head, sub}. */
+export function heroOf(t, now) {
+  if (!t || t.state !== "ok") return {cls: "na", head: "추세판단 봇 기록을 기다리는 중", sub: ""};
+  const bot = t.bot || {};
+  if (bot.stale) return {cls: "stop", head: "페이퍼 봇 기록이 멈췄어요", sub: "5분 넘게 새 기록이 없어요 · 봇 상태 탭을 보세요 (그동안 실행기는 새 진입을 안 해요)"};
+  const p = t.position;
+  if (p) {
+    const lockKo = p.locked ? `첫 잠금 +${Math.round(Number(p.lock_roe) * 100)}% · 계단 익절만` : `시간 정리까지 ${clock(Number(p.deadline) - now)}`;
+    return {cls: "hold", head: `${fmt.coin(p.symbol)} ${SIDE(p.side)} 보유 중`, sub: `${fmt.stratKo(p.strategy)} ${fmt.tfKo(p.tf)} · ${lockKo}`};
+  }
+  const pz = t.pause || {};
+  if (pz.paused) {
+    return {cls: "pause", head: pz.ko,
+      sub: ok(pz.until) ? `${fmt.kst(pz.until)}까지 (${clock(Number(pz.until) - now)} 남음) · 열린 포지션은 그대로` : ""};
+  }
+  const waits = (t.waits || []).filter((w) => Number(w.until) > now);
+  if (waits.length) {
+    const w = waits[0];
+    return {cls: "wait", head: `되돌림 기다리는 신호 ${waits.length}개`,
+      sub: `${fmt.coin(w.symbol)} ${SIDE(w.side)} ${fmt.stratKo(String(w.member || "").split("@")[0])} · ${fmt.price(w.level)} 닿으면 진입`};
+  }
+  const trending = [];
+  for (const c of COINS) {
+    for (const tf of ["1h", "4h"]) {
+      const a = allows(((t.coins || {})[c] || {})[tf], tf);
+      if (a.side) trending.push(`${fmt.coin(c)} ${a.ko}`);
+    }
+  }
+  return {cls: "go", head: "진입 가능 · 추세와 같은 방향 신호를 기다리는 중",
+    sub: trending.length ? `지금 받는 방향: ${trending.slice(0, 6).join(" · ")}${trending.length > 6 ? " …" : ""}`
+      : "지금은 모든 코인이 보류예요 (추세가 생기면 받아요)"};
+}
 
 // ---------------------------------------------------------------- the view
-export function trendView(ctx) {
-  const st = {d: null, okAt: 0, busy: false};
+/** trendView(ctx, hub) -> {el, set(summary)}: its own endpoint every 15 s, the countdowns every second (ctx.every: the
+ *  router stops them); ``set`` gets the site's summary (money, the executors' positions) from screens/livebots.js. */
+export function trendView(ctx, hub) {
+  const st = {t: null, s: null, okAt: 0, busy: false, ticks: []};
   const stateSlot = h("div", {class: "lb-slot"});
-  const grid = h("div", {class: "lbt-grid"});
-  const waits = h("div", {class: "lbt-waits"});
-  const pauses = h("div", {class: "lbt-pauses"});
-  const sigHead = h("div", {class: "lbt-chips"});
-  const sigList = h("div", {class: "lbt-sigs"});
-  const sup = h("div", {class: "lbt-sup"});
-  const rules = h("div", {class: "lbt-rules"});
-  const stamp = h("span", {class: "lbt-stamp"});
-  const main = h("div", {class: "lbt-body"},
-    ui.card({title: "코인별 추세 판단", sub: "끝난 봉만 봐요 · 30분 진입은 1시간, 1시간 진입은 4시간 · 4개 중 3개 이상 같은 쪽이면 추세", cls: "lbt-judge", acts: [stamp]}, grid),
-    h("div", {class: "lbt-two"},
-      ui.card({title: "되돌림 기다리는 신호", sub: "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요", cls: "lbt-wcard"}, waits),
-      ui.card({title: "쉬는 중", sub: "하루 손실 한도 · 손실 2번 연속 매매법 · 손실 뒤 코인·방향", cls: "lbt-pcard"}, pauses)),
-    ui.card({title: "최근 24시간 신호", sub: "진입 매매법의 신호가 어떻게 됐나 · 봇이 남긴 이유 그대로 · 한국 시간", cls: "lbt-scard"}, sigHead, sigList),
-    ui.card({title: "감독 청산", sub: "첫 잠금 전에만 · 상위 봉 판단 뒤집힘 · 진입 봉 4개 안에 첫 잠금 못 감 · 최근 7일", cls: "lbt-supcard"}, sup),
-    ui.card({title: "규칙", sub: "봇이 지금 쓰는 숫자 (설정 파일 그대로)", cls: "lbt-rcard"}, rules));
-  const el = h("div", {class: "lbt stack"}, stateSlot, main,
-    ui.note("보기만 하는 화면 · 판단은 봇이 1분마다 다시 읽고 이 화면은 30초마다 새로 읽어요 · 판단 4개의 선은 각 매매법 차트 화면과 같은 계산이에요"));
+  // the hero
+  const head = h("h2", {class: "ltr-head"}, "불러오는 중");
+  const sub = h("p", {class: "ltr-hsub"});
+  const chips = h("div", {class: "ltr-hchips"});
+  const money = h("div", {class: "ltr-money", role: "list", "aria-label": "지갑"});
+  const hero = h("section", {class: "ltr-hero na", "aria-label": "지금"},
+    h("div", {class: "ltr-orb", "aria-hidden": "true"}, h("i")),
+    h("div", {class: "ltr-hmain"}, h("p", {class: "ltr-kick"}, "추세판단 봇 · 바이비트 · WOO X Pro가 따라가는 페이퍼(−50%)"), head, sub, chips),
+    money);
+  // the cards
+  const posBox = h("div", {class: "ltr-pos"});
+  const grid = h("div", {class: "ltr-grid"});
+  const waits = h("div", {class: "ltr-waits"});
+  const pauses = h("div", {class: "ltr-pauses"});
+  const funnelBox = h("div", {class: "ltr-funnel"});
+  const membersBox = h("div", {class: "ltr-members", role: "list"});
+  const recordBox = h("div", {class: "ltr-record"});
+  const tradesBox = h("div", {class: "ltr-trades"});
+  const sigHead = h("div", {class: "ltr-chips"});
+  const sigList = h("div", {class: "ltr-sigs"});
+  const sup = h("div", {class: "ltr-sup"});
+  const rules = h("div", {class: "ltr-rules"});
+  const stamp = h("span", {class: "ltr-stamp"});
+  const cards = h("div", {class: "ltr-cards"},
+    h("div", {class: "ltr-two ltr-top"},
+      ui.card({title: "포지션 · 감독", sub: "첫 잠금 전에는 시간 정리 · 추세 뒤집힘 · 빠른 청산이 지켜봐요", cls: "ltr-poscard"}, posBox),
+      ui.card({title: "되돌림 기다리는 신호", sub: "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요", cls: "ltr-wcard"}, waits,
+        h("h3", {class: "ltr-h3"}, "쉬는 매매법 · 코인"), pauses)),
+    ui.card({title: "추세 지도", sub: "끝난 봉만 봐요 · 30분 진입은 1시간, 1시간 진입은 4시간 · 4개 중 3개 이상 같은 쪽이면 추세 · ADX 20 이상, 40 넘고 꺾이면 끝물",
+      cls: "ltr-judge", acts: [stamp]}, grid),
+    h("div", {class: "ltr-two"},
+      ui.card({title: "오늘 신호 흐름", sub: "한국 시간 오늘 · 진입 매매법 신호가 어디서 걸렸나", cls: "ltr-fcard"}, funnelBox),
+      ui.card({title: "새 봇 성적", sub: "페이퍼(연습) · 새 규칙 시작 뒤 거래만 · 실거래 계좌는 위 지갑", cls: "ltr-rcard"}, recordBox)),
+    ui.card({title: "매매법 10개", sub: "진입만 하는 매매법 · 추세 판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO)는 진입 안 함", cls: "ltr-mcard"}, membersBox),
+    ui.card({title: "최근 거래", sub: "페이퍼 · 새 규칙 시작 뒤 · 청산 이유와 진입 때 추세 판단", cls: "ltr-tcard"}, tradesBox),
+    h("div", {class: "ltr-two"},
+      ui.card({title: "감독 청산", sub: "최근 7일 · 추세 뒤집힘 · 시간 정리", cls: "ltr-supcard"}, sup),
+      ui.card({title: "규칙", sub: "봇이 지금 쓰는 숫자 (설정 파일 그대로)", cls: "ltr-rulecard"}, rules)),
+    ui.card({title: "최근 24시간 신호", sub: "봇이 남긴 이유 그대로 · 한국 시간", cls: "ltr-scard"}, sigHead, sigList));
+  const main = h("div", {class: "ltr-body"}, hero, cards);
+  const el = h("div", {class: "ltr stack"}, stateSlot, main,
+    ui.note("보기만 하는 화면 · 판단은 봇이 1분마다 다시 읽고 이 화면은 15초마다 새로 읽어요 · 남은 시간은 1초마다 줄어요 · 판단 4개는 각 매매법 차트 화면과 같은 계산"));
 
-  function draw(d) {
-    if (!d || d.state !== "ok") {
-      main.hidden = true;
-      put(stateSlot, d && d.state === "off"
-        ? h("div", {class: "lb-state"}, ui.pill("꺼짐", "thin"), h("span", null, ` ${d.reason_ko}`))
-        : sourceState(d, "추세 판단"));
+  // ---------------------------------------------------------------- parts
+  const tick = (node, until, fmtFn) => {
+    st.ticks.push({node, until: Number(until), fmtFn});
+    node.textContent = fmtFn(Number(until) - serverNow());
+    return node;
+  };
+  function drawHero() {
+    const t = st.t, now = serverNow();
+    const x = heroOf(t, now);
+    hero.className = `ltr-hero ${x.cls}`;
+    head.textContent = x.head;
+    sub.textContent = x.sub;
+    if (!t || t.state !== "ok") { put(chips); return; }
+    const fz = freezeKo(t.bot, now);
+    const age = ok(t.ts) ? now - Number(t.ts) : null;
+    const pz = t.pause || {};
+    put(chips,
+      ui.pill(fz.ko, fz.days === 0 ? "warn" : "accent", "새 규칙은 2주 동안 바꾸지 않고 기록을 모은 뒤 검토해요"),
+      t.bot && ok(t.bot.since) ? ui.pill(`새 규칙 시작 ${fmt.kst(t.bot.since)}`, "thin") : null,
+      ui.pill(age != null ? `판단 ${fmt.dur(age / 1000)} 전` : "판단 시각 모름", age != null && age > 5 * MIN ? "warn" : "thin"),
+      ui.pill(pz.paused ? "쉬는 시간" : pz.paused === false ? "쉬는 시간 아님" : "쉬는 시간 모름", pz.paused ? "warn" : pz.paused === false ? "good" : "thin"));
+  }
+  function drawMoney() {
+    const s = st.s, t = st.t;
+    const accts = (s && s.accts) || [];
+    const tile = (k, v, sub2, cls, title) => h("div", {class: ["ltr-tile", cls || ""], role: "listitem", title},
+      h("span", {class: "ltr-tk"}, k), h("b", {class: "ltr-tv num"}, v), sub2 ? h("span", {class: "ltr-ts num"}, sub2) : null);
+    const items = [];
+    for (const a of accts.filter((x) => x.kind === "live")) {
+      if (a.state !== "ok") { items.push(tile(a.name_ko, "못 읽음", a.reason_ko || "", "na")); continue; }
+      const td = a.today || {};
+      const tone = ok(td.pnl) && td.pnl < 0 ? "down" : ok(td.pnl) && td.pnl > 0 ? "up" : "";
+      items.push(tile(`${a.name_ko} 실거래`, ok(a.balance) ? fmt.usd(a.balance) : "—",
+        `오늘 ${ok(td.pnl) ? signed(td.pnl) : "—"} · ${fmt.int(td.trades || 0)}번` + (a.halted ? " · 멈춤" : "") + (a.stale ? " · 기록 오래됨" : ""),
+        a.halted ? "bad" : tone, "거래소 실제 잔고 (실행기 기록)"));
+    }
+    const pa = accts.find((x) => x.id === "paper");
+    if (pa && pa.state === "ok") items.push(tile("페이퍼(연습) 지갑", fmt.usd(pa.balance), "진짜 돈 아님", "paper"));
+    const r = t && t.state === "ok" ? t.record : null;
+    if (r) {
+      items.push(tile("새 봇 성적", r.n ? `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패` : "아직 거래 없음",
+        r.n ? `승률 ${fmt.pct(r.win_rate, 0, false)} · ${signed(r.pnl)}` : "새 규칙 시작 뒤", "rec"));
+    }
+    put(money, items.length ? items : h("p", {class: "ltr-sub"}, "지갑 기록을 불러오는 중"));
+  }
+  function liveRows(p) {
+    const accts = ((st.s && st.s.accts) || []).filter((a) => a.kind === "live");
+    if (!accts.length) return h("p", {class: "ltr-sub"}, "실행기 기록을 불러오는 중");
+    return h("ul", {class: "ltr-list ltr-follow"}, accts.map((a) => {
+      if (a.state !== "ok") return h("li", null, h("b", null, `${a.name_ko} `), "기록 못 읽음");
+      const q = a.position;
+      if (!q) return h("li", null, h("b", null, `${a.name_ko} `), p ? "포지션 없음 (안 따라갔거나 이미 닫음)" : "포지션 없음");
+      const price = priceOf(st.t, q.symbol);
+      const roe = ok(price) && ok(q.entry) && ok(q.leverage) ? Number(q.leverage) * Number(q.side) * (Number(price) / Number(q.entry) - 1) : null;
+      return h("li", null, h("b", null, `${a.name_ko} `), `${fmt.coin(q.symbol)} ${SIDE(q.side)} ${fmt.lev(q.leverage)} · 진입 ${fmt.price(q.entry)}`,
+        roe != null ? h("span", {class: ["num", fmt.tone(roe)]}, ` · ROE ${fmt.pct(roe, 1)}`) : null,
+        q.lock_roe != null ? ` · 자기 잠금 +${fmt.pct(q.lock_roe, 0, false)}` : " · 자기 잠금 전");
+    }));
+  }
+  function drawPos() {
+    const t = st.t, p = t && t.position, now = serverNow();
+    if (!t || t.state !== "ok") { put(posBox); return; }
+    if (!p) {
+      put(posBox, h("div", {class: "ltr-empty"}, h("b", null, "포지션 없음"),
+        h("p", null, "추세와 같은 방향 신호가 오고, 진입 전 검사를 통과하고, 되돌림 가격에 닿으면 들어가요 (한 번에 하나).")),
+        h("h3", {class: "ltr-h3"}, "실거래 두 계좌"), liveRows(null));
       return;
     }
-    main.hidden = false;
-    put(stateSlot, d.age_ms > 5 * 60 * 1000
-      ? h("div", {class: "lb-state bad"}, ui.pill("오래됨", "warn"), h("span", null, ` 판단이 ${fmt.ago(d.ts, serverNow())} 기록이에요 (봇이 멈췄는지 봇 상태를 보세요)`))
-      : null);
-    stamp.textContent = `${fmt.kst(d.ts)} 기준`;
-    // 추세 판단: one row a coin, 1h and 4h
-    const head = h("div", {class: "lbt-row lbt-hrow", role: "row"}, h("span", {role: "columnheader"}, "코인"),
-      h("span", {role: "columnheader"}, "1시간 (30분 진입용)"), h("span", {role: "columnheader"}, "4시간 (1시간 진입용)"));
-    const rows = COINS.filter((c) => d.coins && d.coins[c]).map((c) => {
+    const price = priceOf(t, p.symbol);
+    const roe = ok(price) && ok(p.entry_price) && ok(p.leverage) ? Number(p.leverage) * Number(p.side) * (Number(price) / Number(p.entry_price) - 1) : null;
+    const total = Number(p.time_bars) * (TF_MIN[p.tf] || 60) * MIN;
+    const left = Number(p.deadline) - now;
+    const frac = total > 0 ? Math.max(0, Math.min(1, 1 - left / total)) : 0;
+    const j = p.judge;
+    const jc = judgeCell(j);
+    const judgeKo = !p.judge_exit ? "꺼짐(설정)" : p.locked ? "첫 잠금 뒤라 꺼짐" : !j || j.error ? "판단을 못 읽음 · 청산 미룸(손절은 거래소에 걸려 있음)"
+      : p.judge_against ? "반대로 바뀜 · 감독 청산" : Number(j.raw) === Number(p.side) ? "같은 방향 유지 중" : "보류 · 반대 3/4가 되면 청산";
+    const timeNode = h("b", {class: "num"});
+    put(posBox,
+      h("div", {class: "ltr-phead"},
+        h("span", {class: ["side", Number(p.side) > 0 ? "long" : "short"]}, SIDE(p.side)),
+        h("b", {class: "ltr-pcoin"}, fmt.coin(p.symbol)),
+        h("span", {class: "ltr-sub"}, ` ${fmt.lev(p.leverage)} · ${fmt.stratKo(p.strategy)} ${fmt.tfKo(p.tf)}`),
+        p.role ? ui.pill(p.role, "thin") : null),
+      h("dl", {class: "ltr-kv"},
+        h("dt", null, "진입"), h("dd", {class: "num"}, `${fmt.price(p.entry_price)} · ${fmt.kst(p.entry_time)}`),
+        h("dt", null, "지금"), h("dd", {class: "num"}, ok(price) ? fmt.price(price) : "—",
+          roe != null ? h("span", {class: fmt.tone(roe)}, ` · ROE ${fmt.pct(roe, 1)} (수수료 전)`) : null),
+        h("dt", null, p.locked ? "잠금선" : "손절선"), h("dd", {class: "num"}, fmt.price(p.stop), p.locked ? ` · +${fmt.pct(p.lock_roe, 0, false)} 잠금` : " · 순ROE −50%"),
+        p.entry_judge ? h("dt", null, "진입 근거") : null,
+        p.entry_judge ? h("dd", null, p.entry_judge, ok(p.entry_score) ? h("small", {class: "ltr-sub"}, ` · 점수 ${Number(p.entry_score).toFixed(2)}`) : null) : null),
+      h("div", {class: "ltr-guards"},
+        h("div", {class: ["ltr-guard", p.locked ? "off" : left <= 0 ? "fire" : ""]},
+          h("span", {class: "ltr-gk"}, "⏱ 시간 정리"),
+          p.locked ? h("b", null, "꺼짐 (첫 잠금 뒤)") : h("span", null, `진입 봉 ${p.time_bars}개 안에 첫 잠금 · 남은 시간 `, tick(timeNode, p.deadline, clock)),
+          p.locked ? null : h("span", {class: "ltr-bar"}, h("i", {style: {"--v": frac.toFixed(4)}}))),
+        h("div", {class: ["ltr-guard", p.locked || !p.judge_exit ? "off" : p.judge_against ? "fire" : ""]},
+          h("span", {class: "ltr-gk"}, `🧭 ${fmt.tfKo(p.htf)} 추세`),
+          h("span", null, h("b", {class: ["ltr-word", jc.cls]}, jc.word), ` · ${judgeKo}`)),
+        h("div", {class: ["ltr-guard", p.locked ? "off" : ""]},
+          h("span", {class: "ltr-gk"}, "↩ 빠른 청산"),
+          h("span", null, p.locked ? "꺼짐 (첫 잠금 뒤)" : "같은 매매법이 반대 신호를 내면 바로 청산 (갈아타지 않음)"))),
+      h("h3", {class: "ltr-h3"}, "실거래 두 계좌"), liveRows(p));
+  }
+  function drawGrid() {
+    const t = st.t;
+    stamp.textContent = ok(t.ts) ? `${fmt.kst(t.ts)} 기준` : "";
+    const headRow = h("div", {class: "ltr-row ltr-hrow", role: "row"}, h("span", {role: "columnheader"}, "코인"),
+      h("span", {role: "columnheader"}, "1시간 → 30분 진입"), h("span", {role: "columnheader"}, "4시간 → 1시간 진입"));
+    const rows = COINS.filter((c) => t.coins && t.coins[c]).map((c) => {
+      const price = priceOf(t, c);
       const cell = (tf) => {
-        const j = d.coins[c][tf];
+        const j = t.coins[c][tf];
         const x = judgeCell(j);
-        return h("div", {class: ["lbt-cell", x.cls], role: "cell"},
-          h("b", {class: "lbt-word"}, x.word),
-          h("small", {class: "lbt-sub"}, x.sub),
-          j && j.votes ? h("span", {class: "lbt-votes"}, JUDGES.map(([k, ko]) => h("span", {class: ["lbt-vote", Number(j.votes[k]) > 0 ? "up" : Number(j.votes[k]) < 0 ? "down" : ""], title: ko},
+        const a = allows(j, tf);
+        const m = adxMeter(j && !j.error ? j.adx : null);
+        return h("div", {class: ["ltr-cell", x.cls], role: "cell"},
+          h("div", {class: "ltr-ctop"}, h("b", {class: "ltr-word"}, x.word),
+            h("span", {class: ["ltr-allow", a.side > 0 ? "up" : a.side < 0 ? "down" : ""]}, a.ko)),
+          h("small", {class: "ltr-sub"}, x.sub),
+          j && !j.error ? h("span", {class: ["ltr-adx", m.zone], title: `ADX ${Math.round(Number(j.adx))} (20 미만 힘 약함 · 40 넘고 꺾이면 끝물)`},
+            h("i", {style: {"--v": m.fill.toFixed(4)}})) : null,
+          j && j.votes ? h("span", {class: "ltr-votes"}, JUDGES.map(([k, ko]) => h("span", {class: ["ltr-vote", Number(j.votes[k]) > 0 ? "up" : Number(j.votes[k]) < 0 ? "down" : ""], title: ko},
             voteMark(j.votes[k]), h("i", null, ko)))) : null);
       };
-      return h("div", {class: "lbt-row", role: "row"}, h("b", {class: "lbt-coin", role: "rowheader"}, fmt.coin(c)), cell("1h"), cell("4h"));
+      return h("div", {class: "ltr-row", role: "row"},
+        h("div", {class: "ltr-coin", role: "rowheader"}, h("b", null, fmt.coin(c)), price != null ? h("small", {class: "num"}, fmt.price(price)) : null),
+        cell("1h"), cell("4h"));
     });
-    put(grid, h("div", {class: "lbt-table", role: "table", "aria-label": "코인별 추세 판단"}, head, rows));
-    // 기다리는 신호
-    const now = serverNow();
-    put(waits, (d.waits || []).length ? h("ul", {class: "lbt-list"}, d.waits.map((w) => h("li", null,
-      h("b", null, `${fmt.coin(w.symbol)} ${SIDE(w.side)}`), ` ${fmt.stratKo(String(w.member || "").split("@")[0])} ${fmt.tfKo(w.tf)} · `,
-      h("span", {class: "num"}, fmt.price(w.level)), " 닿으면 진입 · ",
-      h("span", {class: "num"}, Number(w.until) > now ? `${fmt.hm(w.until)}까지 (${fmt.dur((Number(w.until) - now) / 1000)} 남음)` : "끝남"),
-      w.judge ? h("small", {class: "lbt-sub"}, w.judge) : null)))
-      : ui.empty("지금 기다리는 신호가 없어요"));
-    // 쉬는 중
-    const pz = d.pauses || {};
+    put(grid, h("div", {class: "ltr-table", role: "table", "aria-label": "코인별 추세 판단"}, headRow, rows));
+  }
+  function drawWaits() {
+    const t = st.t, now = serverNow();
+    const ws = (t.waits || []).filter((w) => Number(w.until) > now - MIN);
+    put(waits, ws.length ? h("ul", {class: "ltr-list ltr-wlist"}, ws.map((w) => {
+      const price = priceOf(t, w.symbol);
+      const gap = waitGap(w, price);
+      const span = Number(w.until) - Number(w.t0);
+      const frac = span > 0 ? Math.max(0, Math.min(1, (now - Number(w.t0)) / span)) : 1;
+      const leftNode = h("span", {class: "num"});
+      return h("li", {class: "ltr-witem"},
+        h("div", null, h("b", null, `${fmt.coin(w.symbol)} ${SIDE(w.side)}`), ` ${fmt.stratKo(String(w.member || "").split("@")[0])} ${fmt.tfKo(w.tf)}`),
+        h("div", {class: "ltr-sub"}, h("span", {class: "num"}, fmt.price(w.level)), " 닿으면 진입",
+          gap != null ? h("span", {class: "num"}, ` · 지금 ${fmt.price(price)} (${(gap * 100).toFixed(2)}% 남음)`) : null,
+          " · ", tick(leftNode, w.until, (ms) => (ms > 0 ? `${clock(ms)} 뒤 끝` : "끝남"))),
+        h("span", {class: "ltr-bar"}, h("i", {style: {"--v": frac.toFixed(4)}})),
+        w.judge ? h("small", {class: "ltr-sub"}, w.judge) : null);
+    })) : ui.empty("지금 기다리는 신호가 없어요"));
+    const pz = t.pauses || {};
     const items = [];
     if (pz.day) items.push(h("li", {class: "bad"}, h("b", null, "하루 손실 한도 "), pz.day[0], ` · ${fmt.kst(pz.day[1])}부터 다시`));
-    for (const [label, v] of Object.entries(pz.members || {})) items.push(h("li", null, h("b", null, `${fmt.stratKo(label.split("@")[0])} ${fmt.tfKo(label.split("@")[1])} `), v[0]));
-    for (const c of pz.coins || []) items.push(h("li", null, c[2]));      // the bot's words already name the coin and side
-    put(pauses, items.length ? h("ul", {class: "lbt-list"}, items) : ui.empty("쉬는 매매법·코인이 없어요"));
-    // 최근 24시간
-    const sig = d.signals || {};
+    for (const [label, v] of Object.entries(pz.members || {})) {
+      items.push(h("li", null, h("b", null, `${fmt.stratKo(label.split("@")[0])} ${fmt.tfKo(label.split("@")[1])} `), v[0]));
+    }
+    for (const c of pz.coins || []) items.push(h("li", null, c[2]));
+    put(pauses, items.length ? h("ul", {class: "ltr-list"}, items) : h("p", {class: "ltr-sub"}, "쉬는 매매법·코인이 없어요"));
+  }
+  function drawFunnel() {
+    const f = st.t.funnel;
+    if (!f) { put(funnelBox, ui.empty("신호 기록을 못 읽었어요")); return; }
+    const steps = [["신호", f.signals, "진입 매매법 신호"], ["검사 통과", f.passed, "추세 판단 · 진입 자리 · 쉬기를 통과"],
+      ["되돌림 닿음", f.touched, "기다린 가격에 닿음"], ["진입", f.entered, "페이퍼가 들어감"]];
+    const top = Math.max(1, Number(f.signals) || 0);
+    const bmax = Math.max(1, ...(f.blocked || []).map((b) => b.n));
+    put(funnelBox,
+      h("div", {class: "ltr-steps"}, steps.map(([k, n, title], i) => h("div", {class: ["ltr-step", i === 3 ? "last" : ""], title},
+        h("b", {class: "num"}, fmt.int(n || 0)), h("span", null, k),
+        h("span", {class: "ltr-bar"}, h("i", {style: {"--v": ((Number(n) || 0) / top).toFixed(4)}}))))),
+      (f.blocked || []).length ? h("ul", {class: "ltr-list ltr-blocks"}, f.blocked.map((b) => h("li", null,
+        h("span", {class: "ltr-bk"}, b.ko), h("span", {class: "ltr-bar"}, h("i", {style: {"--v": (b.n / bmax).toFixed(4)}})), h("b", {class: "num"}, fmt.int(b.n)))))
+        : h("p", {class: "ltr-sub"}, f.signals ? "걸린 신호가 없어요" : "오늘은 아직 신호가 없어요"));
+  }
+  function drawRecord() {
+    const r = st.t.record;
+    if (!r || !r.n) { put(recordBox, ui.empty("새 규칙으로 닫힌 거래가 아직 없어요")); return; }
+    put(recordBox,
+      h("div", {class: "ltr-stats"},
+        ui.stat("거래", `${fmt.int(r.n)}번`, `${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패`),
+        ui.stat("승률", fmt.pct(r.win_rate, 0, false), r.n < 20 ? "표본 적음" : ""),
+        ui.stat("순손익", signed(r.pnl), `순ROE 합 ${fmt.pct(r.roe_sum, 0)}`),
+        ui.stat("최고 / 최저", `${fmt.pct(r.best, 0)} / ${fmt.pct(r.worst, 0)}`, "순ROE")),
+      h("div", {class: "ltr-stack", role: "img", "aria-label": "청산 이유 나눔"}, (r.by_exit || []).map((b) =>
+        h("i", {class: "ltr-x-" + b.id, style: {"--v": (b.n / Math.max(1, r.n)).toFixed(4)}, title: `${b.ko} ${b.n}번`}))),
+      h("ul", {class: "ltr-list ltr-legend"}, (r.by_exit || []).map((b) => h("li", null,
+        h("i", {class: "ltr-sw ltr-x-" + b.id, "aria-hidden": "true"}), `${b.ko} ${fmt.int(b.n)}번 · ${fmt.int(b.wins)}승 · `,
+        h("span", {class: ["num", fmt.tone(b.pnl)]}, signed(b.pnl))))));
+  }
+  function drawMembers() {
+    const ms = st.t.members || [];
+    put(membersBox, ms.length ? ms.map((m) => h("div", {class: ["ltr-mem", m.paused ? "paused" : ""], role: "listitem"},
+      h("div", {class: "ltr-mtop"}, h("b", null, fmt.stratKo(m.strategy)), m.role ? ui.pill(m.role, "thin") : null,
+        m.side_only ? ui.pill(m.side_only === "short" ? "숏만" : "롱만", "warn") : null),
+      h("span", {class: "ltr-sub"}, `${fmt.tfKo(m.tf)} 진입 · ${fmt.tfKo(m.htf)} 추세`),
+      h("div", {class: "ltr-mrow"},
+        h("span", null, "오늘 신호 ", h("b", {class: "num"}, fmt.int(m.today))),
+        h("span", null, m.trades ? `${fmt.int(m.wins)}승 ${fmt.int(m.losses)}패` : "거래 없음"),
+        m.trades ? h("span", {class: ["num", fmt.tone(m.roe_sum)]}, `순ROE 합 ${fmt.pct(m.roe_sum, 0)}`) : null),
+      m.paused ? h("span", {class: "ltr-mpause"}, `쉬는 중 · ${fmt.kst(m.paused.until)}까지`)
+        : m.last ? h("span", {class: "ltr-sub"}, "마지막 ", ui.pill(exitKo(m.last.exit_reason), EXIT_CLS[m.last.exit_reason] || "thin"),
+          h("span", {class: ["num", fmt.tone(m.last.roe)]}, ` ${fmt.pct(m.last.roe, 1)}`)) : null))
+      : ui.empty("매매법 목록을 못 읽었어요"));
+  }
+  function drawTrades() {
+    const ts = st.t.trades || [];
+    put(tradesBox, ts.length ? h("ul", {class: "ltr-list ltr-tlist"}, ts.slice(0, 12).map((x) => h("li", {class: "ltr-trow"},
+      h("span", {class: "num ltr-t"}, fmt.kst(x.exit_time)),
+      h("span", {class: "ltr-tw"}, h("b", null, `${fmt.coin(x.symbol)} ${SIDE(x.side)}`), ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)}`),
+      ui.pill(exitKo(x.reason), EXIT_CLS[x.reason] || "thin"),
+      h("b", {class: ["num", fmt.tone(x.roe)]}, fmt.pct(x.roe, 1)),
+      x.why || x.entry_judge ? h("small", {class: "ltr-sub ltr-tsub"}, [x.why, x.entry_judge ? `진입 때 ${x.entry_judge}` : null].filter(Boolean).join(" · ")) : null)))
+      : ui.empty("새 규칙으로 닫힌 거래가 아직 없어요"));
+  }
+  function drawRest() {
+    const t = st.t;
+    const sig = t.signals || {};
     const kos = {};
     for (const r of sig.rows || []) kos[r.cat] = r.cat_ko;
     put(sigHead, countsInOrder(sig.counts).map((c) => ui.pill(`${kos[c.id] || c.id} ${fmt.int(c.n)}`, ["entered", "pulled"].includes(c.id) ? "good" : "thin")));
-    put(sigList, (sig.rows || []).length ? h("ul", {class: "lbt-list lbt-siglist"}, sig.rows.slice(0, 40).map((r) => h("li", {class: "lbt-s-" + r.cat},
-      h("span", {class: "num lbt-t"}, fmt.kst(r.bar_close)), " ",
-      h("b", null, `${fmt.coin(r.symbol)} ${SIDE(r.side)}`), ` ${fmt.stratKo(r.strategy)} ${fmt.tfKo(r.tf)} · `,
-      h("span", {class: "lbt-cat"}, r.cat_ko),
-      r.why ? h("small", {class: "lbt-sub"}, r.why) : null)))
+    put(sigList, (sig.rows || []).length ? ui.disclosure(`신호 ${fmt.int(sig.rows.length)}개 펼치기`, h("ul", {class: "ltr-list ltr-siglist"},
+      sig.rows.slice(0, 60).map((r) => h("li", {class: "ltr-s-" + r.cat},
+        h("span", {class: "num ltr-t"}, fmt.kst(r.bar_close)), " ",
+        h("b", null, `${fmt.coin(r.symbol)} ${SIDE(r.side)}`), ` ${fmt.stratKo(r.strategy)} ${fmt.tfKo(r.tf)} · `,
+        h("span", {class: "ltr-cat"}, r.cat_ko),
+        r.why ? h("small", {class: "ltr-sub"}, r.why) : null))))
       : ui.empty("최근 24시간 신호가 없어요"));
-    // 감독 청산
-    put(sup, (d.sup || []).length ? h("ul", {class: "lbt-list"}, d.sup.map((t) => h("li", null,
-      h("span", {class: "num lbt-t"}, fmt.kst(t.exit_time)), " ", h("b", null, `${fmt.coin(t.symbol)} ${SIDE(t.side)}`),
-      ` ${fmt.stratKo(t.strategy)} ${fmt.tfKo(t.tf)} · ${t.reason_ko} · `,
-      h("span", {class: ["num", fmt.tone(t.roe)]}, `순ROE ${fmt.pct(t.roe, 1)}`),
-      t.why ? h("small", {class: "lbt-sub"}, t.why) : null)))
+    put(sup, (t.sup || []).length ? h("ul", {class: "ltr-list"}, t.sup.map((x) => h("li", null,
+      h("span", {class: "num ltr-t"}, fmt.kst(x.exit_time)), " ", h("b", null, `${fmt.coin(x.symbol)} ${SIDE(x.side)}`),
+      ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)} · ${x.reason_ko} · `,
+      h("span", {class: ["num", fmt.tone(x.roe)]}, `순ROE ${fmt.pct(x.roe, 1)}`),
+      x.why ? h("small", {class: "ltr-sub"}, x.why) : null)))
       : ui.empty("최근 7일 감독 청산이 없어요"));
-    put(rules, (d.rules || []).length ? h("ul", {class: "lbt-list"}, d.rules.map((x) => h("li", null, x))) : ui.empty("규칙 기록이 없어요"));
+    put(rules, (t.rules || []).length ? h("ul", {class: "ltr-list ltr-rlist"}, t.rules.map((x) => h("li", null, x)),
+      h("li", {class: "ltr-sub"}, "2단계(준비 중): 급변 · 경제 발표 직전 손절 당기기 · 실행기가 거래소 손절을 같이 옮기는 시험 뒤에 넣어요"))
+      : ui.empty("규칙 기록이 없어요"));
+  }
+  function draw() {
+    const t = st.t;
+    st.ticks = [];
+    drawHero();
+    drawMoney();
+    if (!t || t.state !== "ok") {
+      cards.hidden = true;
+      put(stateSlot, t && t.state === "off"
+        ? h("div", {class: "lb-state"}, ui.pill("꺼짐", "thin"), h("span", null, ` ${t.reason_ko}`))
+        : sourceState(t, "추세판단 봇"));
+      return;
+    }
+    cards.hidden = false;
+    put(stateSlot);
+    drawPos(); drawGrid(); drawWaits(); drawFunnel(); drawRecord(); drawMembers(); drawTrades(); drawRest();
+  }
+  function onTick() {
+    for (const k of st.ticks) k.node.textContent = k.fmtFn(k.until - serverNow());
+    if (st.t && st.t.state === "ok" && (st.t.position || (st.t.pause || {}).paused)) sub.textContent = heroOf(st.t, serverNow()).sub;
   }
 
   async function load() {
@@ -140,16 +452,32 @@ export function trendView(ctx) {
     try { d = await ctx.api(API); }
     catch (e) {
       if (!ctx.alive() || (e && e.name === "AbortError")) return;
-      if (st.d) { put(stateSlot, ui.staleNote(e, st.okAt, () => load().catch(() => {}))); ui.dim(main, true); }
-      else { put(stateSlot, ui.errorBox(e, () => load())); main.hidden = true; }
+      if (st.t) { put(stateSlot, ui.staleNote(e, st.okAt, () => load().catch(() => {}))); ui.dim(main, true); }
+      else put(stateSlot, ui.errorBox(e, () => load()));
       throw e;
     } finally { st.busy = false; }
     if (!ctx.alive()) return;
     ui.dim(main, false);
-    st.d = d; st.okAt = Date.now();
-    draw(d);
+    st.t = d; st.okAt = Date.now();
+    draw();
   }
+  if (hub && hub.get && hub.get()) st.s = hub.get();
   load().catch(() => {});
   ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
-  return {el, set() {}};
+  ctx.every(TICK_MS, onTick, {now: false});
+  // the Korean names come with the board, the live price with the ticker: draw again when they arrive
+  if (ctx.watch) {
+    ctx.watch("board", () => { if (st.t && st.t.state === "ok") draw(); });
+    ctx.watch("ticker", () => {
+      if (!st.t || st.t.state !== "ok") return;
+      st.ticks = st.ticks.filter((k) => !posBox.contains(k.node) && !waits.contains(k.node));
+      drawPos(); drawWaits();
+    });
+  }
+  return {el, set(s) {
+    if (!s) return;
+    st.s = s;
+    drawMoney();
+    if (st.t && st.t.state === "ok") { st.ticks = st.ticks.filter((k) => !posBox.contains(k.node)); drawPos(); }
+  }};
 }

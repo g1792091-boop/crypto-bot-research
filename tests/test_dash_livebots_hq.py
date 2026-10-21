@@ -1,4 +1,4 @@
-"""실거래 › 관제 (#/livebots/hq, screens/livebots-hq.js + livebots-hq.css): the control room of the two real-money executors.
+"""실거래 › 한눈에 (#/livebots/hq, 관제 until 10/21, screens/livebots-hq.js + livebots-hq.css): the control room of the two real-money executors.
 
 - the geometry and the rules are pure functions, run here in node on the hand-made live world (tests/livebots_world.py):
   the light ring (20 squares, the threshold), the gauge (stop → entry → next lock steps, the needle on the step scale), the
@@ -330,7 +330,7 @@ def test_the_view_renders_the_live_world_honestly(world):
     out = _node(VIEW, a)
     t = out["text"]
     assert not re.search(r"\b(null|undefined|NaN)\b", t)
-    for word in ("실거래 관제", "진짜 돈", "바이비트", "MEXC", "101.50", "102.80", "×1.02", "신호등 · 근거 쌓는 중 6/20", "멈춤", "기준 85%", "기준 90%",
+    for word in ("실거래 한눈에", "진짜 돈", "바이비트", "MEXC", "101.50", "102.80", "×1.02", "신호등 · 근거 쌓는 중 6/20", "멈춤", "기준 85%", "기준 90%",
                  "왜 지금 진입 안 하나", "이미 포지션이 있어 새 진입 안 함", "진입 카드", "결과 카드", "실시간", "40번 판단까지", "남은 34번",
                  "88% 이상이면 금액 늘리기 검토", "82~88%면 그대로 지켜보기", "82% 미만이면 멈추고 다시 생각", "매매법 2개 · 이번 주 신호",
                  "따라감 · COMBO@mix", "손익비", "첫 잠금 기준", "거래소 손절", "실거래 합계 $204.30"):

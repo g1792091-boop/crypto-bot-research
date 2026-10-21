@@ -16,8 +16,8 @@ the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coi
 3. 점수: the signals of one minute compete by ``trendjudge.score`` (judge strength + spot + the member's recent record).
 4. 쉬기 (only this bot's own trades, from its first start on this database, ``trend_since``): a member whose last
    ``member_losses`` (2) trades lost pauses ``member_pause_h`` (24) h from the last loss; after a losing trade no
-   entry on that coin and side for ``coin_pause_h`` (2) h; the account lost ``daily_loss`` (30 %) of the day's start
-   in a KST day: no entry until the next KST day. Each pause starts with one Telegram line.
+   entry on that coin and side for ``coin_pause_h`` (2) h; with ``daily_loss`` set (off in the owners' config, 10-21
+   "10번은 없애고"), the account lost that share of the day's start in a KST day: no entry until the next KST day. Each pause starts with one Telegram line.
 5. 감독 (every minute, before the first lock only; never a reverse entry): TIME: ``time_bars`` (4) entry bars after
    the entry without the first lock -> closed at that minute's open; JUDGE: a higher bar closed after the entry is
    judged the other way (3 of 4, ``judge_exit``) -> closed. Exit reasons "TIME" / "JUDGE" (the executors follow them
@@ -185,9 +185,11 @@ class TrendRunner(C.ComboRunner):
         out: dict = {"day": None, "members": {}, "coins": {}}
         day0 = int(ts) - (int(ts) + KST_MS) % DAY
         today = [t for t in trades if int(t["exit_time"]) >= day0 and int(t["exit_time"]) <= int(ts)]
-        if today:
-            prev = next((t for t in trades if int(t["exit_time"]) < day0), None)
-            start = float(prev["equity_after"]) if prev else float(self.cfg.initial_equity)
+        if today and r.daily_loss is not None:
+            # the wallet before today's first closed trade (review 10/21: never the config's initial equity, the
+            # database's wallet carries over from the bots before this one)
+            first = today[-1]
+            start = float(first["equity_after"]) - float(first["pnl"])
             lost = sum(float(t["pnl"]) for t in today)
             if start > 0 and lost <= -r.daily_loss * start:
                 out["day"] = (f"하루 손실 한도: 오늘(한국 시간) 계좌 {lost / start:+.0%}라 오늘은 진입 안 함"
@@ -285,16 +287,18 @@ class TrendRunner(C.ComboRunner):
         trades = self._trades()
         sc, parts = score(self.rules, side, j, s, float(price), self._record_of(sig, trades))
         until = int(bar_close) + TF_MS[sig.timeframe]
-        meta = {**sig.meta, "trend": {"htf": htf, "judge": j.text(self.rules), "strength": j.strength(side),
+        meta = {**sig.meta, "trend": {"htf": htf, "dir": side, "judge": j.text(self.rules), "strength": j.strength(side),
                                       "score": parts, "level": info["level"], "pullback_atr": info["pullback_atr"],
                                       "big_bar": info["big_bar"], "far_htf_atr": info["far_htf_atr"],
                                       "far_etf_atr": info["far_etf_atr"]}}
+        # the judgment it entered on rides in ctx too: the trade record keeps ctx (the live site's 최근 거래)
+        meta["ctx"] = {**(sig.meta.get("ctx") or {}), "trend": {"judge": j.text(self.rules), "score": float(sc), "htf": htf}}
         nsig = replace(sig, score=float(sc), meta=meta)
         label = sig.meta.get("member", sig.strategy_id)
         self.pulls.append({"member": label, "t0": int(ts), "until": until, "level": float(info["level"]),
                            "signal": dataclasses.asdict(nsig)})
         self._restate(sig, "WAITING", f"되돌림 기다림: {info['level']:.6g}까지({info['pullback_atr']:g} ATR"
-                      + (", 장대봉이라 깊게" if info["big_bar"] else "") + f", {kst(until)}까지) · {j.text(self.rules)}",
+                      + (", 장대봉이라 깊게" if info["big_bar"] else "") + f", {kst(until - MIN)}까지) · {j.text(self.rules)}",
                       extra={"trend": {**info, "score": sc, "score_parts": parts}})
         self._count(label, "waiting")
         return True
@@ -305,7 +309,9 @@ class TrendRunner(C.ComboRunner):
 
     def _pullbacks(self, ts: int, bars: dict) -> None:
         """Minute ts traded at a waiting signal's pullback level -> its entry is the next minute (queued); past its
-        entry bar it lapses."""
+        entry bar it lapses. The signal's own minute (t0) is not looked at: its 1m bar began before the signal's
+        price was taken, so a dip before the signal would count (review 10/21); the wait looks from t0 + 1 minute to
+        the entry bar's last minute (``until`` - 1 minute)."""
         if not self.pulls:
             return
         keep, now, px = [], self.now_ms(), None
@@ -316,12 +322,12 @@ class TrendRunner(C.ComboRunner):
                 continue
             if ts >= int(p["until"]) - MIN:           # the entry bar's last minute: an entry then would open at the
                 # next bar's close, where the same member's next signal has its own row; the wait ends one minute early
-                self._restate(sig, "FILTERED", f"되돌림 안 옴({kst(p['until'])}까지 {float(p['level']):.6g}에 안 닿음)",
+                self._restate(sig, "FILTERED", f"되돌림 안 옴({kst(int(p['until']) - MIN)}까지 {float(p['level']):.6g}에 안 닿음)",
                               expect=("WAITING",))
                 self._count(p["member"], "no_pullback")
                 continue
             bar = bars.get(sig.symbol)
-            if ts < int(p["t0"]) or bar is None:
+            if ts <= int(p["t0"]) or bar is None:
                 keep.append(p)
                 continue
             lvl = float(p["level"])
@@ -379,7 +385,10 @@ class TrendRunner(C.ComboRunner):
                 continue
             finally:
                 self._klines_errors()
-            if j.bar_close > int(p.entry_time) and j.raw == -int(p.side):
+            # against the direction the entry was judged with: the bot's own side; the coin-flip twin's random side
+            # is no judgment of its own, so it closes at the same event as the bot (review 10/21)
+            want = int(((p.signal.meta or {}).get("trend") or {}).get("dir") or p.side)
+            if j.bar_close > int(p.entry_time) and j.raw == -want:
                 e.supervise("JUDGE", f"{KO_TF[htf]} 판단이 {KO_DIR[j.raw]}로 바뀜({j.vote_text()})")
 
     # ---- what the live site shows
@@ -393,7 +402,7 @@ class TrendRunner(C.ComboRunner):
             row = {}
             for tf in ("1h", "4h"):
                 try:
-                    row[tf] = self.judge.judgment(sym, tf, ts).to_dict(self.rules)
+                    row[tf] = self.judge.judgment(sym, tf, ts, bg=True).to_dict(self.rules)
                 except Exception as exc:  # noqa: BLE001  shown as unreadable
                     row[tf] = {"error": str(exc)[:200]}
             coins[sym] = row

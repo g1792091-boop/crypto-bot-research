@@ -12,7 +12,7 @@ export const ALIAS = {
 };
 /** The 실거래 site's tabs (core/routes.js LIVE_SCREENS; the rule bot's page no longer lists 실거래: it moved to its own site). */
 export const LIVE_ALIAS = {
-  hq: "관제 한눈 지금 control", pos: "포지션 진입가 익절가 손절가 최대 position", summary: "요약 터미널 terminal", chart: "차트 선 chart",
+  trend: "관제 추세 판단 되돌림 감독 지금 control trend", hq: "한눈에 지갑 빛 실행기 계좌", pos: "포지션 진입가 익절가 손절가 최대 position", summary: "요약 터미널 terminal", chart: "차트 선 chart",
   risk: "위험 청산 손절 risk", health: "봇 상태 살아 있나 실행기 health", trades: "거래 체결 기록 trades", replay: "다시보기 재생 replay",
   signals: "신호 왜 안 들어갔지 signal", missed: "못 탄 신호 놓친 missed", perf: "성적 승률 performance", goal: "목표 goal",
   rank: "순위 매매법 진입 가능성 rank", judge: "규칙 점검 빠른 손절 추격 동전 쌍둥이", map: "지도 기대 범위 map", cost: "비용 미끄러짐 수수료 cost",

@@ -190,7 +190,7 @@ class FakeJudge:
         self.fail = None
         self.k = types.SimpleNamespace(errors=[])
 
-    def judgment(self, sym, tf, t):
+    def judgment(self, sym, tf, t, bg=False):
         if self.fail:
             raise TJ.TrendError(self.fail)
         j = self.j.get((sym, tf)) or J(tf=tf)
@@ -410,13 +410,13 @@ def test_judge_exit_when_a_later_higher_bar_turns_and_never_after_the_first_lock
 
 
 # ---------------------------------------------------------------- the pauses
-def _rec(w, member, symbol, side, pnl, exit_t, tf="30m"):
+def _rec(w, member, symbol, side, pnl, exit_t, tf="30m", wallet=1000.0):
     w.store.trade(C.ACCOUNT, TradeRecord(
         strategy_id=member, symbol=symbol, timeframe=tf, side=side, signal_ts=exit_t - HOUR - 1,
         entry_time=exit_t - HOUR, entry_price=PX[symbol], exit_time=exit_t, exit_price=PX[symbol], exit_reason="SL",
         qty=1.0, leverage=40, tier="best", margin=400.0, stop_price=0.0, tp_price=float("nan"), liq_price=0.0,
         fees=0.0, funding=0.0, pnl=pnl, roe=pnl / 400.0, price_move=0.0, mae_price=0.0, mfe_price=0.0,
-        equity_after=1000.0 + pnl, score=1.0, stop_initial=0.0, lock_roe=None))
+        equity_after=wallet + pnl, score=1.0, stop_initial=0.0, lock_roe=None))
     w.store.commit()
 
 
@@ -442,7 +442,9 @@ def test_a_member_with_two_losses_in_a_row_pauses_24_hours(tmp_path):
 
 
 def test_the_coin_and_side_pause_and_the_daily_loss_limit(tmp_path):
-    w = World(tmp_path)
+    # the owners' config has no daily limit (10-21 "10번은 없애고"); a config that sets one gets it
+    assert TJ.TrendRules().daily_loss is None and "하루 손실 한도 없음" in TJ.TrendRules().describe()[3]
+    w = World(tmp_path, trend={"daily_loss": 0.30})
     _start(w)
     w.run.since = T0 - 3 * HOUR
     _rec(w, "F3_BOS", "BTCUSDT", 1, -100.0, T0 - 30 * MIN)
@@ -619,3 +621,136 @@ def test_the_morning_replay_runs_the_trend_bot(tmp_path):
                         workdir=str(tmp_path))
     assert res.minutes > 0 and res.trades == [] and not res.seeded           # the history is not one of the day's trades
     assert not [e for e in res.errors if "Traceback" in e]
+
+
+def test_without_a_daily_limit_a_bad_day_does_not_stop_entries(tmp_path):
+    w = World(tmp_path)                                  # trend={}: the owners' rules, no daily limit
+    _start(w)
+    w.run.since = T0 - 3 * HOUR
+    _rec(w, "S3_CMO_SANDWICH", "ETHUSDT", -1, -350.0, T0 - 20 * MIN, tf="1h")
+    B = T0 + 30 * MIN
+    w.add_minutes(T0, 30)
+    w.signal("F3_BOS", "BTCUSDT", 1, B)
+    w.step(B)
+    assert w.rows("F3_BOS@30m")[0][1] == "WAITING" and w.run.pauses(B)["day"] is None
+
+
+# ---------------------------------------------------------------- the review of 10/21 (each finding reproduced)
+def test_review_the_coin_flip_twin_closes_at_the_bots_judge_event_not_against_its_own_side(tmp_path):
+    """The twin's random side is no judgment: JUDGE closes it when the trend the entry was judged with turns (the bot's
+    own event), never at the first 1h close just because its side is against an unchanged trend."""
+    w = World(tmp_path)
+    B, p = _enter_long(w)
+    tw = w.engine(C.FLIP_ACCOUNT)
+    assert tw.position is not None and tw.position.side == -1 and tw.position.entry_time == p.entry_time
+    assert tw.position.signal.meta["trend"]["dir"] == 1 == p.signal.meta["trend"]["dir"]
+    _to(w, B + 3 * MIN, T0 + HOUR + 2 * MIN)                 # the 1h close at T0 + 1 h: still up, nothing turned
+    assert w.engine().position is not None and tw.position is not None and not tw.trades
+    w.judge.j[("BTCUSDT", "1h")] = J(dir=-1, votes={"V39": -1, "S6": -1, "OBV": -1, "N12": 1})
+    _to(w, T0 + HOUR + 2 * MIN, T0 + HOUR + 4 * MIN)         # the trend turned: both close at the same event
+    assert [t.exit_reason for t in w.engine().trades] == ["JUDGE"] and [t.exit_reason for t in tw.trades] == ["JUDGE"]
+    assert w.engine().trades[0].exit_time == tw.trades[0].exit_time
+
+
+def test_review_a_pulled_entry_is_not_handed_to_the_early_exit_again(tmp_path):
+    """The pulled entry had its early-exit turn at its signal's minute; again with its entry ts it would re-draw the
+    coin-flip twin's side (a second chance of a fast stop)."""
+    w = World(tmp_path)
+    seen = []
+    for aid, e in w.book.engines.items():
+        orig = e.exit_signal
+
+        def rec(sig, _orig=orig, _aid=aid):
+            seen.append((_aid, sig.ts, bool(sig.meta.get("pulled"))))
+            _orig(sig)
+        e.exit_signal = rec
+    B, _p = _enter_long(w)
+    assert seen and all(not pulled for _aid, _ts, pulled in seen)
+    assert {ts for _aid, ts, _pulled in seen} == {B - 1}                 # once, the signal's own (ts = bar close - 1)
+
+
+def test_review_a_dip_in_the_signals_own_minute_is_not_its_pullback(tmp_path):
+    """Minute B's 1m bar began before the signal's price was taken (B + 20 s): its low is no pullback; the wait looks
+    from B + 1 min, and its words say the real end (the entry bar's last minute)."""
+    w = World(tmp_path)
+    _start(w)
+    B = T0 + 30 * MIN
+    w.add_minutes(T0, 30)
+    w.signal("N08_ICHI_WR", "BTCUSDT", 1, B)
+    w.step(B, move={"BTCUSDT": -0.001})                      # minute B dips 0.1 % (past the 0.25 ATR level) ...
+    w.px["BTCUSDT"] = PX["BTCUSDT"]                          # ... and is back by its end; minute B + 1 stays up
+    w.step(B + MIN)
+    w.step(B + 2 * MIN)
+    rows = w.rows("N08_ICHI_WR@30m")
+    assert w.engine().position is None and [r[1] for r in rows] == ["WAITING"]
+    assert "10-05 09:59까지)" in json.loads(rows[0][2])["why"]          # B + 30 min - 1 min, KST
+    w.step(B + 3 * MIN, move={"BTCUSDT": -0.001})            # a real pullback after the signal
+    w.step(B + 4 * MIN)
+    p = w.engine().position
+    assert p is not None and p.signal.meta["pull_minute"] == B + 3 * MIN and p.entry_time == B + 4 * MIN
+
+
+def test_review_the_replay_gets_every_trade_since_the_bot_started(tmp_path):
+    """The member pause reads a member's last 2 trades and the score its last 10: the replay's history is every trade
+    since the bot started (not 3 days), the bot's own count at most, oldest first."""
+    from paperbot import livecheck as LC
+    DAY = 24 * HOUR
+    w = World(tmp_path)
+    _start(w)
+    since = w.run.since
+    w.store.put_state(C.STATE_KEY, T0, {**(w.store.get_state(C.STATE_KEY) or (0, {}))[1], "trend_since": since})
+    w.store.commit()
+    _rec(w, "F3_BOS", "BTCUSDT", 1, -5.0, T0 + 30 * MIN)            # entered before the bot started: not its trade
+    for k in range(5):
+        _rec(w, "N08_ICHI_WR", "ETHUSDT", 1, -5.0, T0 + (k + 1) * DAY)
+    w0 = T0 + 7 * DAY
+    _rec(w, "N08_ICHI_WR", "ETHUSDT", 1, -5.0, w0 + HOUR)           # after w0: the replay's own day
+    hist = LC.trend_history(w.store.conn, w0)
+    assert hist["since"] == since
+    assert [t["exit_time"] for t in hist["trades"]] == [T0 + (k + 1) * DAY for k in range(5)]    # 6 days back too
+
+
+def test_review_the_daily_limit_starts_from_the_wallet_before_the_days_first_trade(tmp_path):
+    """The database's wallet carries over from the bots before (5,000 here, not the config's 1,000): -700 is -14 %."""
+    w = World(tmp_path, trend={"daily_loss": 0.30})
+    _start(w)
+    w.run.since = T0 - 3 * HOUR
+    _rec(w, "F3_BOS", "BTCUSDT", 1, -400.0, T0 - 30 * MIN, wallet=5000.0)
+    _rec(w, "F3_BOS", "SOLUSDT", 1, -300.0, T0 - 20 * MIN, wallet=4600.0)
+    assert w.run.pauses(T0)["day"] is None
+    _rec(w, "F3_BOS", "ETHUSDT", 1, -900.0, T0 - 10 * MIN, wallet=4300.0)      # -1,600 of 5,000 = -32 %
+    day = w.run.pauses(T0)["day"]
+    assert day is not None and "계좌 -32%" in day[0]
+
+
+def test_review_a_failed_fetch_for_the_live_sites_picture_never_holds_back_a_decision():
+    """The picture's failed fetch waits apart (the next minute's entry check still fetches), and every wait is counted
+    from the end of the failed request (its timeouts are not the wait)."""
+    now = {"t": T0 + 2 * HOUR + 10_000}
+    calls = []
+    rows = [[T0 + 2 * HOUR - (TJ.KEEP + 5 - k) * HOUR, 1.0, 1.0, 1.0, 1.0, 1.0] for k in range(TJ.KEEP + 5)]
+
+    def fetch(sym, tf, n):
+        calls.append((sym, tf))
+        if now.get("down"):
+            now["t"] += 10_500                                # 2 attempts x 5 s timeouts + 0.5 s
+            raise OSError("down")
+        return rows
+    k = TJ.Klines(fetch, lambda: now["t"])
+    now["down"] = True
+    with pytest.raises(TJ.TrendError):
+        k.frame("BTCUSDT", "1h", now["t"], bg=True)           # the live site's picture: fails
+    assert k.bg_wait_until == now["t"] + TJ.RETRY_MS and k.wait_until == 0      # from the end of the failed request
+    with pytest.raises(TJ.TrendError):
+        k.frame("ETHUSDT", "1h", now["t"], bg=True)           # the picture waits
+    assert len(calls) == 1
+    now["down"] = False
+    df = k.frame("ETHUSDT", "1h", now["t"])                    # a decision does not wait for the picture
+    assert len(calls) == 2 and len(df) == TJ.KEEP and k.bg_wait_until == 0
+    now["down"] = True
+    with pytest.raises(TJ.TrendError):
+        k.frame("SOLUSDT", "1h", now["t"])                     # a decision fails: every fetch waits
+    assert k.wait_until == now["t"] + TJ.RETRY_MS
+    with pytest.raises(TJ.TrendError):
+        k.frame("LTCUSDT", "1h", now["t"], bg=True)
+    assert len(calls) == 3

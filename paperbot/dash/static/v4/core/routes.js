@@ -79,7 +79,7 @@ export const LANDING_MIN_PX = 900;
  *  switched-off screen (900 > 760), so the router may also send a PC-only screen opened on a phone here (no loop).
  *  The 설정 panel's automatic 첫 화면 shows this same screen (core/settings.js autoStart). */
 export function mainLanding() {
-  if (LIVE) return LIVE_START;          // the 실거래 site opens on 관제 (owners 10/19)
+  if (LIVE) return LIVE_START;          // the 실거래 site opens on 관제 (owners 10/19; 추세판단 봇's since 10/21)
   const wide = typeof matchMedia !== "function" || matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
   return wide ? "terminal" : "chart";
 }
@@ -172,10 +172,10 @@ const SICON = {
     R(3, 3, 2, 2), R(11, 3, 2, 2), R(3, 11, 2, 2), R(11, 11, 2, 2)],
   faq: () => [R(5, 1, 6, 2), R(3, 3, 3, 3), R(10, 3, 3, 4), R(8, 7, 3, 2), R(7, 9, 2, 2), R(7, 12, 2, 2)],
   // the 실거래 site's tabs (LIVE_SCREENS, 찾기): the nearest drawing of a rule-bot screen
-  hq: () => SICON.livebots(),
+  trend: () => SICON.livebots(),
+  hq: () => SICON.grid(),
   pos: () => SICON.positions(),
   summary: () => SICON.terminal(),
-  trend: () => SICON.grid(),
   risk: () => SICON.alerts(),
   health: ICON.server,
   trades: () => SICON.digest(),
@@ -245,19 +245,19 @@ export function navGroups(feats) {
 // menu, in four groups (the strip's thin lines, the phone's bottom bar). Every item opens screens/livebots.js on its tab
 // (`mod`; the router hands it {name: "livebots", arg: <tab>}), so the screens, their css scope ([data-screen="livebots"])
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
-export const LIVE_START = "hq";
+export const LIVE_START = "trend";
 const LIVE_GROUPS = [
-  {id: "now", ko: "지금", screens: ["hq", "pos", "summary", "chart", "trend", "risk", "health"]},
+  {id: "now", ko: "지금", screens: ["trend", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
 ];
 const LIVE_SCREENS = {
-  hq: {ko: "관제", group: "now", title: "관제"},
+  trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇)"},
+  hq: {ko: "한눈에", group: "now", title: "한눈에 (실행기 두 계좌)"},
   pos: {ko: "포지션", group: "now", title: "포지션"},
   summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},
   chart: {ko: "차트", group: "now", title: "차트"},
-  trend: {ko: "추세", group: "now", title: "추세 판단"},
   risk: {ko: "위험", group: "now", title: "위험"},
   health: {ko: "봇 상태", group: "now", title: "봇 상태"},
   trades: {ko: "거래", group: "rec", title: "거래"},

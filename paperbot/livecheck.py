@@ -933,21 +933,26 @@ def bar_quality(bars: Optional[dict], w0: int, w1: int, late_s: float = 150.0) -
 
 
 def trend_history(live_conn, w0: int, days: int = 3) -> dict:
-    """The trend bot's (paperbot/trendbot.py) own history the replay needs for its pauses: its first start on this
-    database (state combo ``trend_since``) and its COMBO@mix trades closed in the ``days`` before w0 (TradeRecord dicts)."""
+    """The trend bot's (paperbot/trendbot.py) own history the replay needs for its pauses and scores: its first start
+    on this database (state combo ``trend_since``) and its COMBO@mix trades entered since then and closed before w0,
+    the newest ``TRADES_READ`` (what the bot itself reads: a member's last 2 for its pause, its last 10 for the score;
+    review 10/21: a 3-day window missed older ones), oldest first (TradeRecord dicts). Without ``trend_since`` the
+    ``days`` before w0."""
+    from .trendbot import TRADES_READ
     _ts, st = get_state(live_conn, "combo")
     since = (st or {}).get("trend_since") if isinstance(st, dict) else None
+    lo = int(since) if since is not None else int(w0) - days * DAY
     trades = []
     try:
-        for (data,) in live_conn.execute("SELECT data FROM trades WHERE account_id = ? AND exit_time < ? AND exit_time >= ? "
-                                         "ORDER BY exit_time", (ACCOUNT, int(w0), int(w0) - days * DAY)):
+        for (data,) in live_conn.execute("SELECT data FROM trades WHERE account_id = ? AND exit_time < ? AND entry_time >= ? "
+                                         "ORDER BY exit_time DESC, id DESC LIMIT ?", (ACCOUNT, int(w0), lo, TRADES_READ)):
             try:
                 trades.append(json.loads(data))
             except (TypeError, ValueError):
                 continue
     except sqlite3.Error:
         pass
-    return {"since": since, "trades": trades}
+    return {"since": since, "trades": trades[::-1]}
 
 
 def parity_check(src: Sources, live_conn, w0: int, w1: int, now_ms: int, replay: Optional[Callable] = None,

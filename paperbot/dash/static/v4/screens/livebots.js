@@ -5,15 +5,17 @@
 // separate 실거래 site (paperbot/livedash, port 8093, core/site.js LIVE), where every tab below is a menu item (#/<tab>,
 // core/routes.js LIVE_SCREENS: 지금 · 기록 · 성적 · 운영) and the head shows the tabs of the item's group. On the rule bot's
 // dashboard (port 8080) #/livebots only says where it moved, with the link built from this very host.
-//   관제   the control room (screens/livebots-hq.js, owners 10/19 "간지나게"): the two real wallets, the open position's gauge,
-//          "왜 지금 진입 안 하나", the day's pause dial, the light rings and the strategies at work, at a glance
+//   관제   추세판단 봇's control room (screens/livebots-trend.js, /api/v4/livebots/trend; owners 10/21 "대시보드 다시
+//          만들어야겠네 야무지게 필요한부분들 전부다 포함해서"), the site's first screen: what the bot is doing now, the wallets,
+//          the open position and its supervisor, every coin's 1h / 4h judgment, the pullback waits, the pauses, today's signal
+//          flow, the ten entry strategies, the new bot's record, the supervisor's exits, the rules
+//   한눈에 the executors at a glance (screens/livebots-hq.js, owners 10/19 "간지나게"; 관제 until 10/21): the two real
+//          wallets, the open position's gauge, "왜 지금 진입 안 하나", the day's pause dial, the light rings
 //   포지션 each account's open position as a Binance-style card: 진입가 · 손절가 · 익절가 (the next ladder step) and the whole
 //          ladder, 최대 +% / 최대 −% since the entry, the fast-stop state, the paper-vs-live entry gap (screens/livebots-pos.js,
 //          /api/v4/livebots/positions)
 //   요약   the 실거래 터미널 (screens/livebots-term.js: the rule bot's terminal frame and parts, fed with the live records)
 //   차트   the open positions on the price chart, big, with their lines in words (screens/livebots-chart.js)
-//   추세   추세판단 봇 (owners 10/21): every coin's 1h / 4h judgment, the pullback waits, the pauses, the last 24 h of
-//          signals and the supervisor's exits (screens/livebots-trend.js, /api/v4/livebots/trend)
 //   위험 · 봇 상태 · 목표 · 규칙 점검   part B's tabs (screens/livebots-risk.js, livebots-health.js, livebots-goal.js,
 //          livebots-judge.js; their routes in dash/more/liveinsight.py)
 //   거래  the closed trades of each account, 10 a page, one opened in place, 최대 +% / 최대 −% per trade
@@ -62,11 +64,11 @@ export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
 // in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 지금 · 기록 · 성적 · 운영)
 export const TABS = [
-  {id: "hq", label: "관제", make: (ctx, hub) => hqView(ctx, hub)},
+  {id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true},
+  {id: "hq", label: "한눈에", make: (ctx, hub) => hqView(ctx, hub)},
   {id: "pos", label: "포지션", make: (ctx, hub) => posView(ctx, hub), own: true},
   {id: "summary", label: "요약", make: (ctx, hub) => termView(ctx, hub)},
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
-  {id: "trend", label: "추세", make: (ctx) => trendView(ctx), own: true},
   {id: "risk", label: "위험", make: (ctx) => riskView(ctx), own: true},
   {id: "health", label: "봇 상태", make: (ctx) => healthView(ctx), own: true},
   {id: "trades", label: "거래", make: (ctx) => tradesView(ctx), own: true},
@@ -85,7 +87,7 @@ export const TABS = [
   {id: "team", label: "분석팀", make: (ctx) => teamView(ctx), own: true},
   {id: "shadows", label: "그림자", make: (ctx) => shadowsView(ctx), own: true},
 ];
-const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
+const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "trend");
 // what the page already heard (module level: a tab change re-mounts the screen, the same record must not sound again);
 // seen null = the next answer is the baseline (the first look, and the first look after the page was hidden)
 const heard = {state: null};

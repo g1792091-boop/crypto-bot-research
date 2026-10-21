@@ -1369,8 +1369,10 @@ class ComboRunner:
             held = (not exit_only and not late) and self._divert(sig, ts, q.bar_close, bars or {})
             for aid, e in self.book.engines.items():
                 s = sig if aid == ACCOUNT else replace(sig, side=flip_side(aid, sig), meta=dict(sig.meta))
-                if self.cfg.early_exit:
-                    e.exit_signal(s)          # at its own minute, late or not: the paper replays every minute
+                # at its own minute, late or not: the paper replays every minute. A pulled entry (trendbot.py) had its
+                # turn at its signal's minute; again with its entry ts it would re-draw the coin-flip twin's side
+                if self.cfg.early_exit and not sig.meta.get("pulled"):
+                    e.exit_signal(s)
                 if exit_only or held:
                     continue
                 if late:
