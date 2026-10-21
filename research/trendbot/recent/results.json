@@ -1,0 +1,1765 @@
+{
+ "what": "추세판단 봇 7/1~10/20 KST 재현: A0 예전 재현(확인용), A1 지금 규칙(시간 정리 없음, 나스닥 22:00~23:00), A2 A1+시간 정리 4봉, A3 A1+바로 진입, A4 A1+판단 4/4, B1 A1+지정가 진입, B2 B1+계단 익절 지정가(낙관적 상한)",
+ "notes": [
+  "3.5개월·한 시장·거래 47~101번: 규칙 사이 차이는 운의 범위 안, 번다는 근거 아님",
+  "잰 것: 바이낸스 1분봉, 규칙봇 코드로 다시 계산한 신호, 저장소의 판단·검사 함수",
+  "가정: 미끄러짐 한쪽 0.02%, WOO X Pro 지정가 0.02%, 같은 1분봉 안 손절 먼저, 펀딩 없음, 발표 막기는 10월만",
+  "wallet: 7/1 00:00 KST $1,000, 창 안에서 진입한 거래만, 증거금 40% 복리",
+  "twin: 같은 진입·무작위 방향, 시드 1000+d, 200번; mean_roe_5_50_95 = 거래당 평균 순ROE의 분위"
+ ],
+ "window_kst": [
+  "2026-07-01",
+  "2026-10-20"
+ ],
+ "weekdays": 80,
+ "costs_per_side": {
+  "paper": {
+   "taker": 0.0005,
+   "maker": 0.0002,
+   "slip": 0.0002
+  },
+  "bybit": {
+   "taker": 0.00044,
+   "maker": 0.0002,
+   "slip": 0.0002
+  },
+  "wooxpro": {
+   "taker": 0.00042,
+   "maker": 0.0002,
+   "slip": 0.0002
+  }
+ },
+ "variants": {
+  "A0": {
+   "setup": {
+    "entry": "pullback",
+    "lock_maker": false,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 0,
+    "time_bars": 4,
+    "vote_min": 3
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2391,
+    "4_passed_check": 175,
+    "5_pullback_touched": 119,
+    "6_entered": 89,
+    "info:passed_check_while_position_open": 32,
+    "x_block_at_signal:chase": 1148,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 63,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 197,
+    "x_check:adx_tired": 14,
+    "x_check:breakout_not_early": 56,
+    "x_check:etf_ema_far": 10,
+    "x_check:htf_ema_far": 26,
+    "x_check:htf_hold(held<2/raw flip)": 164,
+    "x_check:htf_hold(votes<min)": 1011,
+    "x_check:htf_opposite": 738,
+    "x_no_pullback": 56,
+    "x_skip_in_position": 26,
+    "x_skip_lower_score": 4
+   },
+   "trades": 89,
+   "entries_per_weekday": 1.113,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "taker": 89
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.494,
+     "mean_roe": -0.0492,
+     "median_roe": -0.0088,
+     "mean_roe_before_cost": -0.0044,
+     "win_rate_before_cost": 0.562,
+     "mean_cost_slippage": 0.0128,
+     "mean_cost_fees": 0.032,
+     "mean_roe_90ci_bootstrap": [
+      -0.0874,
+      -0.0121
+     ],
+     "halves_mean_roe": [
+      -0.081,
+      -0.012
+     ],
+     "halves_trades": [
+      48,
+      41
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 41,
+       "mean_roe": 0.13
+      },
+      "TIME": {
+       "n": 36,
+       "mean_roe": -0.1374
+      },
+      "SL": {
+       "n": 9,
+       "mean_roe": -0.5
+      },
+      "REV": {
+       "n": 3,
+       "mean_roe": -0.0886
+      }
+     },
+     "wallet": {
+      "end": 118.5,
+      "low": 118.5,
+      "high": 1042.4,
+      "worst_drawdown": 0.886,
+      "longest_losing_run": 6
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0918,
+       -0.0549,
+       -0.0228
+      ],
+      "wallet_end_5_50_95": [
+       23.8,
+       94.5,
+       308.2
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.385
+     }
+    },
+    "bybit": {
+     "win_rate": 0.494,
+     "mean_roe": -0.0454,
+     "median_roe": -0.0052,
+     "mean_roe_before_cost": -0.0044,
+     "win_rate_before_cost": 0.562,
+     "mean_cost_slippage": 0.0128,
+     "mean_cost_fees": 0.0282,
+     "mean_roe_90ci_bootstrap": [
+      -0.0835,
+      -0.0083
+     ],
+     "halves_mean_roe": [
+      -0.0771,
+      -0.0082
+     ],
+     "halves_trades": [
+      48,
+      41
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 41,
+       "mean_roe": 0.1338
+      },
+      "TIME": {
+       "n": 36,
+       "mean_roe": -0.1335
+      },
+      "SL": {
+       "n": 9,
+       "mean_roe": -0.4961
+      },
+      "REV": {
+       "n": 3,
+       "mean_roe": -0.085
+      }
+     },
+     "wallet": {
+      "end": 136.4,
+      "low": 136.4,
+      "high": 1043.9,
+      "worst_drawdown": 0.869,
+      "longest_losing_run": 6
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.088,
+       -0.0511,
+       -0.0189
+      ],
+      "wallet_end_5_50_95": [
+       27.4,
+       108.8,
+       354.2
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.385
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.494,
+     "mean_roe": -0.0441,
+     "median_roe": -0.004,
+     "mean_roe_before_cost": -0.0044,
+     "win_rate_before_cost": 0.562,
+     "mean_cost_slippage": 0.0128,
+     "mean_cost_fees": 0.0269,
+     "mean_roe_90ci_bootstrap": [
+      -0.0822,
+      -0.007
+     ],
+     "halves_mean_roe": [
+      -0.0758,
+      -0.007
+     ],
+     "halves_trades": [
+      48,
+      41
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 41,
+       "mean_roe": 0.1351
+      },
+      "TIME": {
+       "n": 36,
+       "mean_roe": -0.1322
+      },
+      "SL": {
+       "n": 9,
+       "mean_roe": -0.4948
+      },
+      "REV": {
+       "n": 3,
+       "mean_roe": -0.0838
+      }
+     },
+     "wallet": {
+      "end": 142.9,
+      "low": 142.9,
+      "high": 1044.4,
+      "worst_drawdown": 0.863,
+      "longest_losing_run": 6
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0867,
+       -0.0498,
+       -0.0177
+      ],
+      "wallet_end_5_50_95": [
+       28.7,
+       114.1,
+       371.0
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.385
+     }
+    }
+   }
+  },
+  "A1": {
+   "setup": {
+    "entry": "pullback",
+    "lock_maker": false,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 30,
+    "time_bars": null,
+    "vote_min": 3
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2336,
+    "4_passed_check": 171,
+    "5_pullback_touched": 115,
+    "6_entered": 78,
+    "info:passed_check_while_position_open": 44,
+    "x_block_at_signal:chase": 1108,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 158,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 193,
+    "x_check:adx_tired": 14,
+    "x_check:breakout_not_early": 54,
+    "x_check:etf_ema_far": 10,
+    "x_check:htf_ema_far": 24,
+    "x_check:htf_hold(held<2/raw flip)": 156,
+    "x_check:htf_hold(votes<min)": 983,
+    "x_check:htf_opposite": 731,
+    "x_no_pullback": 56,
+    "x_skip_in_position": 33,
+    "x_skip_lower_score": 4
+   },
+   "trades": 78,
+   "entries_per_weekday": 0.975,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "taker": 78
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.705,
+     "mean_roe": -0.0313,
+     "median_roe": 0.1045,
+     "mean_roe_before_cost": 0.0132,
+     "win_rate_before_cost": 0.705,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0318,
+     "mean_roe_90ci_bootstrap": [
+      -0.0806,
+      0.0169
+     ],
+     "halves_mean_roe": [
+      -0.0628,
+      0.0035
+     ],
+     "halves_trades": [
+      41,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 54,
+       "mean_roe": 0.1231
+      },
+      "SL": {
+       "n": 15,
+       "mean_roe": -0.5001
+      },
+      "REV": {
+       "n": 7,
+       "mean_roe": -0.1262
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3535
+      }
+     },
+     "wallet": {
+      "end": 233.5,
+      "low": 218.3,
+      "high": 1042.4,
+      "worst_drawdown": 0.791,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0666,
+       -0.0294,
+       0.0141
+      ],
+      "wallet_end_5_50_95": [
+       74.1,
+       254.0,
+       1073.9
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.52
+     }
+    },
+    "bybit": {
+     "win_rate": 0.705,
+     "mean_roe": -0.0275,
+     "median_roe": 0.1085,
+     "mean_roe_before_cost": 0.0132,
+     "win_rate_before_cost": 0.705,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.028,
+     "mean_roe_90ci_bootstrap": [
+      -0.0767,
+      0.0207
+     ],
+     "halves_mean_roe": [
+      -0.0589,
+      0.0073
+     ],
+     "halves_trades": [
+      41,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 54,
+       "mean_roe": 0.1269
+      },
+      "SL": {
+       "n": 15,
+       "mean_roe": -0.4962
+      },
+      "REV": {
+       "n": 7,
+       "mean_roe": -0.1224
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3493
+      }
+     },
+     "wallet": {
+      "end": 263.8,
+      "low": 237.8,
+      "high": 1043.9,
+      "worst_drawdown": 0.772,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0628,
+       -0.0256,
+       0.0179
+      ],
+      "wallet_end_5_50_95": [
+       83.9,
+       287.0,
+       1209.8
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.52
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.705,
+     "mean_roe": -0.0263,
+     "median_roe": 0.1097,
+     "mean_roe_before_cost": 0.0132,
+     "win_rate_before_cost": 0.705,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0267,
+     "mean_roe_90ci_bootstrap": [
+      -0.0755,
+      0.022
+     ],
+     "halves_mean_roe": [
+      -0.0577,
+      0.0085
+     ],
+     "halves_trades": [
+      41,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 54,
+       "mean_roe": 0.1282
+      },
+      "SL": {
+       "n": 15,
+       "mean_roe": -0.495
+      },
+      "REV": {
+       "n": 7,
+       "mean_roe": -0.1212
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3479
+      }
+     },
+     "wallet": {
+      "end": 274.8,
+      "low": 244.6,
+      "high": 1044.4,
+      "worst_drawdown": 0.766,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0615,
+       -0.0243,
+       0.0192
+      ],
+      "wallet_end_5_50_95": [
+       87.4,
+       298.8,
+       1258.7
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.52
+     }
+    }
+   }
+  },
+  "A2": {
+   "setup": {
+    "entry": "pullback",
+    "lock_maker": false,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 30,
+    "time_bars": 4,
+    "vote_min": 3
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2336,
+    "4_passed_check": 171,
+    "5_pullback_touched": 115,
+    "6_entered": 86,
+    "info:passed_check_while_position_open": 31,
+    "x_block_at_signal:chase": 1108,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 158,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 193,
+    "x_check:adx_tired": 14,
+    "x_check:breakout_not_early": 54,
+    "x_check:etf_ema_far": 10,
+    "x_check:htf_ema_far": 24,
+    "x_check:htf_hold(held<2/raw flip)": 156,
+    "x_check:htf_hold(votes<min)": 983,
+    "x_check:htf_opposite": 731,
+    "x_no_pullback": 56,
+    "x_skip_in_position": 25,
+    "x_skip_lower_score": 4
+   },
+   "trades": 86,
+   "entries_per_weekday": 1.075,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "taker": 86
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.5,
+     "mean_roe": -0.0405,
+     "median_roe": 0.0041,
+     "mean_roe_before_cost": 0.0042,
+     "win_rate_before_cost": 0.57,
+     "mean_cost_slippage": 0.0128,
+     "mean_cost_fees": 0.032,
+     "mean_roe_90ci_bootstrap": [
+      -0.0795,
+      -0.0048
+     ],
+     "halves_mean_roe": [
+      -0.0755,
+      -0.0003
+     ],
+     "halves_trades": [
+      46,
+      40
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 40,
+       "mean_roe": 0.1307
+      },
+      "TIME": {
+       "n": 36,
+       "mean_roe": -0.1374
+      },
+      "SL": {
+       "n": 7,
+       "mean_roe": -0.5001
+      },
+      "REV": {
+       "n": 3,
+       "mean_roe": -0.0886
+      }
+     },
+     "wallet": {
+      "end": 177.8,
+      "low": 177.8,
+      "high": 1042.4,
+      "worst_drawdown": 0.829,
+      "longest_losing_run": 7
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0835,
+       -0.0543,
+       -0.0156
+      ],
+      "wallet_end_5_50_95": [
+       37.0,
+       105.4,
+       418.5
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.275
+     }
+    },
+    "bybit": {
+     "win_rate": 0.5,
+     "mean_roe": -0.0367,
+     "median_roe": 0.0077,
+     "mean_roe_before_cost": 0.0042,
+     "win_rate_before_cost": 0.57,
+     "mean_cost_slippage": 0.0128,
+     "mean_cost_fees": 0.0281,
+     "mean_roe_90ci_bootstrap": [
+      -0.0757,
+      -0.001
+     ],
+     "halves_mean_roe": [
+      -0.0716,
+      0.0035
+     ],
+     "halves_trades": [
+      46,
+      40
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 40,
+       "mean_roe": 0.1345
+      },
+      "TIME": {
+       "n": 36,
+       "mean_roe": -0.1335
+      },
+      "SL": {
+       "n": 7,
+       "mean_roe": -0.4961
+      },
+      "REV": {
+       "n": 3,
+       "mean_roe": -0.085
+      }
+     },
+     "wallet": {
+      "end": 203.5,
+      "low": 203.5,
+      "high": 1043.9,
+      "worst_drawdown": 0.805,
+      "longest_losing_run": 7
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0797,
+       -0.0505,
+       -0.0117
+      ],
+      "wallet_end_5_50_95": [
+       42.4,
+       120.8,
+       478.4
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.275
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.5,
+     "mean_roe": -0.0354,
+     "median_roe": 0.0089,
+     "mean_roe_before_cost": 0.0042,
+     "win_rate_before_cost": 0.57,
+     "mean_cost_slippage": 0.0128,
+     "mean_cost_fees": 0.0269,
+     "mean_roe_90ci_bootstrap": [
+      -0.0744,
+      0.0003
+     ],
+     "halves_mean_roe": [
+      -0.0703,
+      0.0047
+     ],
+     "halves_trades": [
+      46,
+      40
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 40,
+       "mean_roe": 0.1357
+      },
+      "TIME": {
+       "n": 36,
+       "mean_roe": -0.1322
+      },
+      "SL": {
+       "n": 7,
+       "mean_roe": -0.4948
+      },
+      "REV": {
+       "n": 3,
+       "mean_roe": -0.0838
+      }
+     },
+     "wallet": {
+      "end": 212.9,
+      "low": 212.9,
+      "high": 1044.4,
+      "worst_drawdown": 0.796,
+      "longest_losing_run": 7
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0784,
+       -0.0492,
+       -0.0104
+      ],
+      "wallet_end_5_50_95": [
+       44.4,
+       126.4,
+       500.2
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.275
+     }
+    }
+   }
+  },
+  "A3": {
+   "setup": {
+    "entry": "now",
+    "lock_maker": false,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 30,
+    "time_bars": null,
+    "vote_min": 3
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2336,
+    "4_passed_check": 171,
+    "5_entry_now": 171,
+    "6_entered": 101,
+    "info:passed_check_while_position_open": 53,
+    "x_block_at_signal:chase": 1108,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 158,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 193,
+    "x_check:adx_tired": 14,
+    "x_check:breakout_not_early": 54,
+    "x_check:etf_ema_far": 10,
+    "x_check:htf_ema_far": 24,
+    "x_check:htf_hold(held<2/raw flip)": 156,
+    "x_check:htf_hold(votes<min)": 983,
+    "x_check:htf_opposite": 731,
+    "x_skip_in_position": 53,
+    "x_skip_lower_score": 17
+   },
+   "trades": 101,
+   "entries_per_weekday": 1.262,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "taker": 101
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.663,
+     "mean_roe": -0.0628,
+     "median_roe": 0.1025,
+     "mean_roe_before_cost": -0.0182,
+     "win_rate_before_cost": 0.683,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0319,
+     "mean_roe_90ci_bootstrap": [
+      -0.1094,
+      -0.0199
+     ],
+     "halves_mean_roe": [
+      -0.0609,
+      -0.0648
+     ],
+     "halves_trades": [
+      52,
+      49
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 68,
+       "mean_roe": 0.1168
+      },
+      "SL": {
+       "n": 26,
+       "mean_roe": -0.5
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1607
+      },
+      "JUDGE": {
+       "n": 1,
+       "mean_roe": -0.3222
+      }
+     },
+     "wallet": {
+      "end": 38.7,
+      "low": 34.4,
+      "high": 1070.5,
+      "worst_drawdown": 0.968,
+      "longest_losing_run": 4
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0692,
+       -0.0321,
+       0.0063
+      ],
+      "wallet_end_5_50_95": [
+       31.5,
+       150.6,
+       795.4
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.925
+     }
+    },
+    "bybit": {
+     "win_rate": 0.663,
+     "mean_roe": -0.059,
+     "median_roe": 0.1061,
+     "mean_roe_before_cost": -0.0182,
+     "win_rate_before_cost": 0.683,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.028,
+     "mean_roe_90ci_bootstrap": [
+      -0.1055,
+      -0.0161
+     ],
+     "halves_mean_roe": [
+      -0.0571,
+      -0.061
+     ],
+     "halves_trades": [
+      52,
+      49
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 68,
+       "mean_roe": 0.1206
+      },
+      "SL": {
+       "n": 26,
+       "mean_roe": -0.4962
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1569
+      },
+      "JUDGE": {
+       "n": 1,
+       "mean_roe": -0.3186
+      }
+     },
+     "wallet": {
+      "end": 45.4,
+      "low": 39.7,
+      "high": 1071.9,
+      "worst_drawdown": 0.963,
+      "longest_losing_run": 4
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0654,
+       -0.0282,
+       0.0102
+      ],
+      "wallet_end_5_50_95": [
+       37.0,
+       176.3,
+       929.2
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.925
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.673,
+     "mean_roe": -0.0577,
+     "median_roe": 0.1073,
+     "mean_roe_before_cost": -0.0182,
+     "win_rate_before_cost": 0.683,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0268,
+     "mean_roe_90ci_bootstrap": [
+      -0.1043,
+      -0.0148
+     ],
+     "halves_mean_roe": [
+      -0.0558,
+      -0.0597
+     ],
+     "halves_trades": [
+      52,
+      49
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 68,
+       "mean_roe": 0.1219
+      },
+      "SL": {
+       "n": 26,
+       "mean_roe": -0.4949
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1556
+      },
+      "JUDGE": {
+       "n": 1,
+       "mean_roe": -0.3174
+      }
+     },
+     "wallet": {
+      "end": 47.9,
+      "low": 41.7,
+      "high": 1072.4,
+      "worst_drawdown": 0.961,
+      "longest_losing_run": 4
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0641,
+       -0.027,
+       0.0114
+      ],
+      "wallet_end_5_50_95": [
+       39.0,
+       185.9,
+       978.5
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.925
+     }
+    }
+   }
+  },
+  "A4": {
+   "setup": {
+    "entry": "pullback",
+    "lock_maker": false,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 30,
+    "time_bars": null,
+    "vote_min": 4
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2336,
+    "4_passed_check": 95,
+    "5_pullback_touched": 64,
+    "6_entered": 47,
+    "info:passed_check_while_position_open": 24,
+    "x_block_at_signal:chase": 1108,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 158,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 63,
+    "x_check:adx_tired": 10,
+    "x_check:breakout_not_early": 27,
+    "x_check:etf_ema_far": 4,
+    "x_check:htf_ema_far": 19,
+    "x_check:htf_hold(held<2/raw flip)": 102,
+    "x_check:htf_hold(votes<min)": 1643,
+    "x_check:htf_opposite": 373,
+    "x_no_pullback": 31,
+    "x_skip_in_position": 15,
+    "x_skip_lower_score": 2
+   },
+   "trades": 47,
+   "entries_per_weekday": 0.588,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "taker": 47
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.638,
+     "mean_roe": -0.0635,
+     "median_roe": 0.0974,
+     "mean_roe_before_cost": -0.0191,
+     "win_rate_before_cost": 0.638,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0317,
+     "mean_roe_90ci_bootstrap": [
+      -0.1309,
+      0.0053
+     ],
+     "halves_mean_roe": [
+      -0.1132,
+      0.0036
+     ],
+     "halves_trades": [
+      27,
+      20
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 30,
+       "mean_roe": 0.1245
+      },
+      "SL": {
+       "n": 12,
+       "mean_roe": -0.5001
+      },
+      "REV": {
+       "n": 5,
+       "mean_roe": -0.1437
+      }
+     },
+     "wallet": {
+      "end": 213.3,
+      "low": 174.9,
+      "high": 1042.4,
+      "worst_drawdown": 0.832,
+      "longest_losing_run": 4
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0803,
+       -0.0255,
+       0.0224
+      ],
+      "wallet_end_5_50_95": [
+       155.0,
+       478.3,
+       1265.3
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.855
+     }
+    },
+    "bybit": {
+     "win_rate": 0.638,
+     "mean_roe": -0.0597,
+     "median_roe": 0.101,
+     "mean_roe_before_cost": -0.0191,
+     "win_rate_before_cost": 0.638,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0279,
+     "mean_roe_90ci_bootstrap": [
+      -0.1271,
+      0.0091
+     ],
+     "halves_mean_roe": [
+      -0.1093,
+      0.0073
+     ],
+     "halves_trades": [
+      27,
+      20
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 30,
+       "mean_roe": 0.1283
+      },
+      "SL": {
+       "n": 12,
+       "mean_roe": -0.4963
+      },
+      "REV": {
+       "n": 5,
+       "mean_roe": -0.1396
+      }
+     },
+     "wallet": {
+      "end": 229.8,
+      "low": 186.7,
+      "high": 1043.9,
+      "worst_drawdown": 0.821,
+      "longest_losing_run": 4
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0765,
+       -0.0217,
+       0.0262
+      ],
+      "wallet_end_5_50_95": [
+       167.0,
+       514.5,
+       1358.9
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.855
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.638,
+     "mean_roe": -0.0584,
+     "median_roe": 0.1022,
+     "mean_roe_before_cost": -0.0191,
+     "win_rate_before_cost": 0.638,
+     "mean_cost_slippage": 0.0127,
+     "mean_cost_fees": 0.0266,
+     "mean_roe_90ci_bootstrap": [
+      -0.1258,
+      0.0104
+     ],
+     "halves_mean_roe": [
+      -0.108,
+      0.0086
+     ],
+     "halves_trades": [
+      27,
+      20
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 30,
+       "mean_roe": 0.1295
+      },
+      "SL": {
+       "n": 12,
+       "mean_roe": -0.495
+      },
+      "REV": {
+       "n": 5,
+       "mean_roe": -0.1382
+      }
+     },
+     "wallet": {
+      "end": 235.5,
+      "low": 190.9,
+      "high": 1044.4,
+      "worst_drawdown": 0.817,
+      "longest_losing_run": 4
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0752,
+       -0.0204,
+       0.0275
+      ],
+      "wallet_end_5_50_95": [
+       171.2,
+       527.1,
+       1391.5
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.855
+     }
+    }
+   }
+  },
+  "B1": {
+   "setup": {
+    "entry": "limit",
+    "lock_maker": false,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 30,
+    "time_bars": null,
+    "vote_min": 3
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2336,
+    "4_passed_check": 171,
+    "5_pullback_touched": 112,
+    "6_entered": 77,
+    "info:limit_missed_touched_not_through": 3,
+    "info:passed_check_while_position_open": 41,
+    "x_block_at_signal:chase": 1108,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 158,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 193,
+    "x_check:adx_tired": 14,
+    "x_check:breakout_not_early": 54,
+    "x_check:etf_ema_far": 10,
+    "x_check:htf_ema_far": 24,
+    "x_check:htf_hold(held<2/raw flip)": 156,
+    "x_check:htf_hold(votes<min)": 983,
+    "x_check:htf_opposite": 731,
+    "x_no_pullback": 59,
+    "x_skip_in_position": 31,
+    "x_skip_lower_score": 4
+   },
+   "trades": 77,
+   "entries_per_weekday": 0.963,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "maker": 77
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.701,
+     "mean_roe": -0.028,
+     "median_roe": 0.1147,
+     "mean_roe_before_cost": 0.0007,
+     "win_rate_before_cost": 0.701,
+     "mean_cost_slippage": 0.0064,
+     "mean_cost_fees": 0.0224,
+     "mean_roe_90ci_bootstrap": [
+      -0.0788,
+      0.0212
+     ],
+     "halves_mean_roe": [
+      -0.0378,
+      -0.0174
+     ],
+     "halves_trades": [
+      40,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 53,
+       "mean_roe": 0.1308
+      },
+      "SL": {
+       "n": 16,
+       "mean_roe": -0.4841
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1104
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3395
+      }
+     },
+     "wallet": {
+      "end": 262.2,
+      "low": 233.0,
+      "high": 1046.0,
+      "worst_drawdown": 0.777,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0614,
+       -0.02,
+       0.0148
+      ],
+      "wallet_end_5_50_95": [
+       93.6,
+       354.7,
+       1134.0
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.64
+     }
+    },
+    "bybit": {
+     "win_rate": 0.701,
+     "mean_roe": -0.0261,
+     "median_roe": 0.1165,
+     "mean_roe_before_cost": 0.0007,
+     "win_rate_before_cost": 0.701,
+     "mean_cost_slippage": 0.0064,
+     "mean_cost_fees": 0.0204,
+     "mean_roe_90ci_bootstrap": [
+      -0.0769,
+      0.0231
+     ],
+     "halves_mean_roe": [
+      -0.0359,
+      -0.0155
+     ],
+     "halves_trades": [
+      40,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 53,
+       "mean_roe": 0.1327
+      },
+      "SL": {
+       "n": 16,
+       "mean_roe": -0.4822
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1085
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3374
+      }
+     },
+     "wallet": {
+      "end": 278.5,
+      "low": 245.8,
+      "high": 1046.8,
+      "worst_drawdown": 0.765,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0595,
+       -0.018,
+       0.0167
+      ],
+      "wallet_end_5_50_95": [
+       99.5,
+       376.6,
+       1203.1
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.64
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.701,
+     "mean_roe": -0.0254,
+     "median_roe": 0.1171,
+     "mean_roe_before_cost": 0.0007,
+     "win_rate_before_cost": 0.701,
+     "mean_cost_slippage": 0.0064,
+     "mean_cost_fees": 0.0198,
+     "mean_roe_90ci_bootstrap": [
+      -0.0762,
+      0.0237
+     ],
+     "halves_mean_roe": [
+      -0.0352,
+      -0.0149
+     ],
+     "halves_trades": [
+      40,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 53,
+       "mean_roe": 0.1333
+      },
+      "SL": {
+       "n": 16,
+       "mean_roe": -0.4815
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1078
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3367
+      }
+     },
+     "wallet": {
+      "end": 284.2,
+      "low": 250.2,
+      "high": 1047.0,
+      "worst_drawdown": 0.761,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0589,
+       -0.0174,
+       0.0174
+      ],
+      "wallet_end_5_50_95": [
+       101.5,
+       384.2,
+       1227.0
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.64
+     }
+    }
+   },
+   "vs_A1": {
+    "A1_entries": 78,
+    "entries": 77,
+    "lost": 3,
+    "new": 2,
+    "same_signal": 75,
+    "paper": {
+     "sum_roe_A1": -2.445,
+     "sum_roe": -2.156,
+     "lost_sum_roe_in_A1": -0.268,
+     "new_sum_roe": 0.235,
+     "same_signal_sum_roe_A1": -2.176,
+     "same_signal_sum_roe": -2.391,
+     "same_signal_mean_before_cost_A1": 0.0156,
+     "same_signal_mean_before_cost": -0.0032
+    },
+    "bybit": {
+     "sum_roe_A1": -2.147,
+     "sum_roe": -2.008,
+     "lost_sum_roe_in_A1": -0.257,
+     "new_sum_roe": 0.239,
+     "same_signal_sum_roe_A1": -1.89,
+     "same_signal_sum_roe": -2.248,
+     "same_signal_mean_before_cost_A1": 0.0156,
+     "same_signal_mean_before_cost": -0.0032
+    },
+    "wooxpro": {
+     "sum_roe_A1": -2.048,
+     "sum_roe": -1.959,
+     "lost_sum_roe_in_A1": -0.254,
+     "new_sum_roe": 0.241,
+     "same_signal_sum_roe_A1": -1.794,
+     "same_signal_sum_roe": -2.2,
+     "same_signal_mean_before_cost_A1": 0.0156,
+     "same_signal_mean_before_cost": -0.0032
+    },
+    "lost_detail": [
+     {
+      "signal": "F15_ORB@30m SOLUSDT 08-07 14:30 KST",
+      "A1_reason": "SL",
+      "A1_roe": -0.5004,
+      "fate_here": "x_skip_in_position(touched, not through)"
+     },
+     {
+      "signal": "N20_EMA9_CHOP@30m LTCUSDT 08-27 13:00 KST",
+      "A1_reason": "LOCK",
+      "A1_roe": 0.1061,
+      "fate_here": "x_no_pullback(touched, not through)"
+     },
+     {
+      "signal": "N20_EMA9_CHOP@30m SOLUSDT 09-29 10:00 KST",
+      "A1_reason": "LOCK",
+      "A1_roe": 0.1261,
+      "fate_here": "x_skip_lower_score"
+     }
+    ],
+    "new_detail": [
+     {
+      "signal": "N06_MACD_ORB@30m SOLUSDT 09-29 10:00 KST",
+      "reason": "LOCK",
+      "roe": 0.1151,
+      "fate_in_A1": "x_skip_lower_score"
+     },
+     {
+      "signal": "N20_EMA9_CHOP@30m BTCUSDT 09-03 06:30 KST",
+      "reason": "LOCK",
+      "roe": 0.1201,
+      "fate_in_A1": "x_skip_in_position"
+     }
+    ],
+    "same_signal_same_exit_reason": 69,
+    "same_signal_mean_entry_gap_roe": 0.0086,
+    "same_signal_share_A1_price_better": 0.547
+   }
+  },
+  "B2": {
+   "setup": {
+    "entry": "limit",
+    "lock_maker": true,
+    "us_open_pause_min": 30,
+    "us_open_pre_min": 30,
+    "time_bars": null,
+    "vote_min": 3
+   },
+   "funnel": {
+    "1_member_signal": 4923,
+    "2_inside_when": 4923,
+    "3_after_pauses_chase": 2336,
+    "4_passed_check": 171,
+    "5_pullback_touched": 112,
+    "6_entered": 77,
+    "info:limit_missed_touched_not_through": 3,
+    "info:passed_check_while_position_open": 41,
+    "x_block_at_signal:chase": 1108,
+    "x_block_at_signal:macro": 15,
+    "x_block_at_signal:us_open": 158,
+    "x_block_at_signal:weekend": 1306,
+    "x_check:adx<20": 193,
+    "x_check:adx_tired": 14,
+    "x_check:breakout_not_early": 54,
+    "x_check:etf_ema_far": 10,
+    "x_check:htf_ema_far": 24,
+    "x_check:htf_hold(held<2/raw flip)": 156,
+    "x_check:htf_hold(votes<min)": 983,
+    "x_check:htf_opposite": 731,
+    "x_no_pullback": 59,
+    "x_skip_in_position": 31,
+    "x_skip_lower_score": 4
+   },
+   "trades": 77,
+   "entries_per_weekday": 0.963,
+   "weekend_entries": 0,
+   "entry_kinds": {
+    "maker": 77
+   },
+   "by_cost": {
+    "paper": {
+     "win_rate": 0.701,
+     "mean_roe": -0.017,
+     "median_roe": 0.1296,
+     "mean_roe_before_cost": 0.0007,
+     "win_rate_before_cost": 0.701,
+     "mean_cost_slippage": 0.002,
+     "mean_cost_fees": 0.0158,
+     "mean_roe_90ci_bootstrap": [
+      -0.0691,
+      0.0333
+     ],
+     "halves_mean_roe": [
+      -0.0274,
+      -0.0058
+     ],
+     "halves_trades": [
+      40,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 53,
+       "mean_roe": 0.1467
+      },
+      "SL": {
+       "n": 16,
+       "mean_roe": -0.4841
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1104
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3395
+      }
+     },
+     "wallet": {
+      "end": 361.0,
+      "low": 294.8,
+      "high": 1052.0,
+      "worst_drawdown": 0.72,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0517,
+       -0.0093,
+       0.0263
+      ],
+      "wallet_end_5_50_95": [
+       123.3,
+       483.7,
+       1586.3
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.625
+     }
+    },
+    "bybit": {
+     "win_rate": 0.701,
+     "mean_roe": -0.0164,
+     "median_roe": 0.1296,
+     "mean_roe_before_cost": 0.0007,
+     "win_rate_before_cost": 0.701,
+     "mean_cost_slippage": 0.002,
+     "mean_cost_fees": 0.0152,
+     "mean_roe_90ci_bootstrap": [
+      -0.0683,
+      0.0337
+     ],
+     "halves_mean_roe": [
+      -0.0268,
+      -0.0053
+     ],
+     "halves_trades": [
+      40,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 53,
+       "mean_roe": 0.1467
+      },
+      "SL": {
+       "n": 16,
+       "mean_roe": -0.4822
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1085
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3374
+      }
+     },
+     "wallet": {
+      "end": 369.0,
+      "low": 300.2,
+      "high": 1052.0,
+      "worst_drawdown": 0.715,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0509,
+       -0.0086,
+       0.0268
+      ],
+      "wallet_end_5_50_95": [
+       126.8,
+       495.1,
+       1616.3
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.63
+     }
+    },
+    "wooxpro": {
+     "win_rate": 0.701,
+     "mean_roe": -0.0162,
+     "median_roe": 0.1296,
+     "mean_roe_before_cost": 0.0007,
+     "win_rate_before_cost": 0.701,
+     "mean_cost_slippage": 0.002,
+     "mean_cost_fees": 0.015,
+     "mean_roe_90ci_bootstrap": [
+      -0.0681,
+      0.0338
+     ],
+     "halves_mean_roe": [
+      -0.0265,
+      -0.0051
+     ],
+     "halves_trades": [
+      40,
+      37
+     ],
+     "exits": {
+      "LOCK": {
+       "n": 53,
+       "mean_roe": 0.1467
+      },
+      "SL": {
+       "n": 16,
+       "mean_roe": -0.4815
+      },
+      "REV": {
+       "n": 6,
+       "mean_roe": -0.1078
+      },
+      "JUDGE": {
+       "n": 2,
+       "mean_roe": -0.3367
+      }
+     },
+     "wallet": {
+      "end": 371.7,
+      "low": 302.0,
+      "high": 1052.0,
+      "worst_drawdown": 0.713,
+      "longest_losing_run": 2
+     },
+     "twin": {
+      "draws": 200,
+      "mean_roe_5_50_95": [
+       -0.0507,
+       -0.0084,
+       0.027
+      ],
+      "wallet_end_5_50_95": [
+       127.9,
+       498.9,
+       1626.4
+      ],
+      "share_of_draws_with_mean_at_or_above_bot": 0.63
+     }
+    }
+   },
+   "vs_A1": {
+    "A1_entries": 78,
+    "entries": 77,
+    "lost": 3,
+    "new": 2,
+    "same_signal": 75,
+    "paper": {
+     "sum_roe_A1": -2.445,
+     "sum_roe": -1.313,
+     "lost_sum_roe_in_A1": -0.268,
+     "new_sum_roe": 0.27,
+     "same_signal_sum_roe_A1": -2.176,
+     "same_signal_sum_roe": -1.583,
+     "same_signal_mean_before_cost_A1": 0.0156,
+     "same_signal_mean_before_cost": -0.0032
+    },
+    "bybit": {
+     "sum_roe_A1": -2.147,
+     "sum_roe": -1.266,
+     "lost_sum_roe_in_A1": -0.257,
+     "new_sum_roe": 0.27,
+     "same_signal_sum_roe_A1": -1.89,
+     "same_signal_sum_roe": -1.536,
+     "same_signal_mean_before_cost_A1": 0.0156,
+     "same_signal_mean_before_cost": -0.0032
+    },
+    "wooxpro": {
+     "sum_roe_A1": -2.048,
+     "sum_roe": -1.251,
+     "lost_sum_roe_in_A1": -0.254,
+     "new_sum_roe": 0.27,
+     "same_signal_sum_roe_A1": -1.794,
+     "same_signal_sum_roe": -1.521,
+     "same_signal_mean_before_cost_A1": 0.0156,
+     "same_signal_mean_before_cost": -0.0032
+    },
+    "lost_detail": [
+     {
+      "signal": "F15_ORB@30m SOLUSDT 08-07 14:30 KST",
+      "A1_reason": "SL",
+      "A1_roe": -0.5004,
+      "fate_here": "x_skip_in_position(touched, not through)"
+     },
+     {
+      "signal": "N20_EMA9_CHOP@30m LTCUSDT 08-27 13:00 KST",
+      "A1_reason": "LOCK",
+      "A1_roe": 0.1061,
+      "fate_here": "x_no_pullback(touched, not through)"
+     },
+     {
+      "signal": "N20_EMA9_CHOP@30m SOLUSDT 09-29 10:00 KST",
+      "A1_reason": "LOCK",
+      "A1_roe": 0.1261,
+      "fate_here": "x_skip_lower_score"
+     }
+    ],
+    "new_detail": [
+     {
+      "signal": "N06_MACD_ORB@30m SOLUSDT 09-29 10:00 KST",
+      "reason": "LOCK",
+      "roe": 0.13,
+      "fate_in_A1": "x_skip_lower_score"
+     },
+     {
+      "signal": "N20_EMA9_CHOP@30m BTCUSDT 09-03 06:30 KST",
+      "reason": "LOCK",
+      "roe": 0.14,
+      "fate_in_A1": "x_skip_in_position"
+     }
+    ],
+    "same_signal_same_exit_reason": 69,
+    "same_signal_mean_entry_gap_roe": 0.0086,
+    "same_signal_share_A1_price_better": 0.547
+   }
+  }
+ },
+ "parity_A0": {
+  "reference": "data/trend_replay_0701_1020.json trade_list",
+  "trades_reference": 89,
+  "trades_A0": 89,
+  "same_entries_exits_reasons": true,
+  "max_abs_roe_diff": 0.0,
+  "reference_summary": {
+   "n": 89,
+   "win_rate": 0.494,
+   "roe_mean": -0.0492,
+   "roe_mean_before_costs": -0.0044
+  }
+ },
+ "time_exit_A2_vs_A1": {
+  "same_signal": 76,
+  "A2_time_exits_on_same_signal": 31,
+  "their_A2_mean_roe": -0.1412,
+  "their_A1_mean_roe": -0.109,
+  "their_A1_exits": {
+   "JUDGE": {
+    "n": 2,
+    "mean_roe": -0.3535
+   },
+   "LOCK": {
+    "n": 18,
+    "mean_roe": 0.1031
+   },
+   "REV": {
+    "n": 3,
+    "mean_roe": -0.176
+   },
+   "SL": {
+    "n": 8,
+    "mean_roe": -0.5001
+   }
+  },
+  "their_A1_wins": 18,
+  "A1_only": 2,
+  "A2_only": 10
+ }
+}
