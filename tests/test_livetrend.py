@@ -74,7 +74,7 @@ def test_the_answer(tmp_path):
     pulled = next(r for r in d["signals"]["rows"] if r["cat"] == "pulled")
     assert pulled["cat_ko"] == "되돌림 확인 (진입 신호로 바뀜)" and pulled["why"].startswith("되돌림 확인: ")
     (s,) = d["sup"]
-    assert s["reason"] == "JUDGE" and s["reason_ko"] == "감독 청산(추세 뒤집힘)" and s["why"].startswith("1시간 판단이 하락로")
+    assert s["reason"] == "JUDGE" and s["reason_ko"] == "감독 청산(추세 뒤집힘)" and s["why"].startswith("1시간 판단이 하락으로")
     assert d["rules"] == T.RULES.describe()
     # the bot, the pause now, today's funnel, the members, the trades and the record since the start
     assert d["bot"]["since"] == T.T0 and d["bot"]["freeze_until"] == T.T0 + 14 * 86_400_000 and d["bot"]["stale"] is False
@@ -242,10 +242,10 @@ def test_the_view(tmp_path):
             "되돌림 기다리는 신호",
             # today's funnel, the record, the members, the trades
             "오늘 신호 흐름", "검사 통과", "되돌림 닿음", "걸린 신호가 없어요", "새 봇 성적", "승률", "감독: 추세 뒤집힘 1번",
-            "매매법 10개", "눌림", "돌파", "30분 진입 · 1시간 추세", "1시간 진입 · 4시간 추세", "거래 없음", "최근 거래", "감독(추세)",
+            "진입 매매법 3개", "눌림", "돌파", "30분 진입 · 1시간 추세", "1시간 진입 · 4시간 추세", "거래 없음", "최근 거래", "감독(추세)",
             "진입 때 1시간 상승",
             # the signals, the supervisor's exits, the rules
-            "최근 24시간 신호", "진입 신호 1", "되돌림 기다림 1", "감독 청산", "감독 청산(추세 뒤집힘)", "1시간 판단이 하락로 바뀜",
+            "최근 24시간 신호", "진입 신호 1", "되돌림 기다림 1", "감독 청산", "감독 청산(추세 뒤집힘)", "1시간 판단이 하락으로 바뀜",
             "규칙", "추세 판단: 30분 진입은 끝난 1시간봉", "2단계(준비 중)"):
         assert words in t, words
     assert "시작 $1,000" not in t and t.count("하루 손실 한도") == t.count("하루 손실 한도 없음") == 1   # owners 10/21 #10

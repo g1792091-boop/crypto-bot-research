@@ -186,7 +186,8 @@ def chart_of(ctx: dict, side: int, tf: str) -> dict:
     if hreg:
         t = along(hreg)
         htf = HTF.get(tf)
-        add(f"장세 (상위 {L.TF_KO.get(htf, htf)}봉)", REGIME_KO.get(hreg, hreg),
+        hk = str(L.TF_KO.get(htf, htf))
+        add(f"장세 (상위 {hk if hk.endswith('봉') else hk + '봉'})", REGIME_KO.get(hreg, hreg),     # 4h -> 일봉 (not 일봉봉)
             "진입 방향과 같은 추세" if t == "good" else "진입 방향과 반대 추세" if t == "bad" else "", t)
     adx = L._f(ctx.get("adx"))
     if adx is not None:

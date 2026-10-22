@@ -525,8 +525,12 @@ def test_rolling_chart_in_node(tmp_path):
     assert {"r20", "r40", "band"} <= set(" ".join(o["cls"]).split())
 
 
-def test_signals_and_perf_routes(client):
+def test_signals_and_perf_routes(client, monkeypatch):
     client.post("/api/login", json={"password": PW})
+    import time as _time
+    import types
+    # the routes read the clock: the world's day (10/19), so "today" is the world's whatever day the test runs
+    monkeypatch.setattr(L, "time", types.SimpleNamespace(time=lambda: NOW / 1000, strftime=_time.strftime, gmtime=_time.gmtime))
     sg = client.get("/api/v4/livebots/signals").json()
     assert sg["state"] == "ok" and sg["stages"]["today"]["entered"] == 6
     pf = client.get("/api/v4/livebots/perf").json()
@@ -564,8 +568,10 @@ def test_safety_shows_the_lights_history(tmp_path):
 def test_shadows_from_the_same_start_or_not_there_yet(world, tmp_path, monkeypatch):
     monkeypatch.setenv("PAPERBOT_LIVE_SHADOW_DIR", str(tmp_path / "nowhere"))
     sh = L.shadows(world, NOW)
-    assert [x["state"] for x in sh["shadows"]] == ["missing"] * 6                      # the old bots' (규칙봇 15 too)
-    assert [x["state"] for x in sh["trend"]["shadows"]] == ["off"] * 3 and sh["trend"]["on"] is False   # not the trend bot here
+    from paperbot.dash.more import liveshadow as LS
+    # the old bots' (규칙봇 15 and, since 10/22, the 10/21 추세판단 봇's three too), the live trend bot's own
+    assert len(L.SHADOWS) == 9 and [x["state"] for x in sh["shadows"]] == ["missing"] * len(L.SHADOWS)
+    assert [x["state"] for x in sh["trend"]["shadows"]] == ["off"] * len(LS.TREND_SHADOWS) and sh["trend"]["on"] is False   # not the trend bot here
     assert sh["start_ko"].startswith("sudo systemctl start paperbot-combo-shadow@b")
     d = tmp_path / "sh"
     d.mkdir()
@@ -574,7 +580,8 @@ def test_shadows_from_the_same_start_or_not_there_yet(world, tmp_path, monkeypat
         fh.write(b"garbage" * 100)
     monkeypatch.setenv("PAPERBOT_LIVE_SHADOW_DIR", str(d))
     sh = L.shadows(world, NOW)
-    b, nocut, ac32, chase, trend4h, rule15 = sh["shadows"]
+    b, nocut, ac32, chase, trend4h, rule15, *trend1021 = sh["shadows"]
+    assert [x["id"] for x in trend1021] == ["trend-time", "trend-now", "trend-vote4"] and {x["state"] for x in trend1021} == {"missing"}
     assert b["state"] == "ok" and b["name_ko"] == "그림자 B 안정형" and b["stats"]["trades"] == 4 and b["stats"]["pnl"] == pytest.approx(-15.0)
     assert b["since_ms"] == W.T0 and b["main"]["stats"]["trades"] == 6                     # the live paper over the same start
     assert nocut["state"] == "error" and ac32["state"] == chase["state"] == trend4h["state"] == rule15["state"] == "missing"
@@ -607,7 +614,7 @@ def test_settings_fall_back_to_the_config_file_then_say_missing(tmp_path, monkey
 def test_the_last_three_routes(client):
     client.post("/api/login", json={"password": PW})
     assert len(client.get("/api/v4/livebots/safety").json()["execs"]) == 2
-    assert len(client.get("/api/v4/livebots/shadows").json()["shadows"]) == 6
+    assert len(client.get("/api/v4/livebots/shadows").json()["shadows"]) == len(L.SHADOWS) == 9
     assert client.get("/api/v4/livebots/settings").json()["n_settings"] == 3
 
 

@@ -141,10 +141,15 @@ function strip(hours, o = {}) {
 }
 const typeChip = (t) => (t ? h("span", {class: "lbl-type", dataset: {t: TYPE_ID[t] || "other"}}, t) : null);
 
-/** The trend bot's directions now in words: ["SOL 30분 진입 롱만", ...] (the answer's ``taking``). */
+const ENTRY_KO = {"30m": "30분", "1h": "1시간", "4h": "4시간"};
+/** The trend bot's directions now in words: ["SOL 30분 진입 롱만", "BTC 4시간 진입 롱·숏 (보류 허용)", ...] (the answer's
+ *  ``taking``; side 0 = a 보류 its config takes both ways, 10/22 보류 허용). */
 export function takingKo(xs) {
-  return (xs || []).map((x) => `${fmt.coin(x.symbol)} ${x.entry === "30m" ? "30분" : "1시간"} 진입 ${Number(x.side) > 0 ? "롱" : "숏"}만`);
+  return (xs || []).map((x) => `${fmt.coin(x.symbol)} ${ENTRY_KO[x.entry] || fmt.tfKo(x.entry)} 진입 `
+    + (Number(x.side) > 0 ? "롱만" : Number(x.side) < 0 ? "숏만" : "롱·숏 (보류 허용)"));
 }
+/** No direction taken now, in words (``hold``: the config takes a 보류 too, so only weak / late trends stop it). */
+export const takingNoneKo = (hold) => (hold ? "모든 코인이 힘 약함·끝물이에요" : "모든 코인이 보류·힘 약함·끝물이에요");
 
 /** likelyView(ctx) -> {el}: 진입 가능성 순위 (its own endpoint every 30 s; the wait countdowns every second). */
 export function likelyView(ctx) {
@@ -238,7 +243,7 @@ export function likelyView(ctx) {
         d && d.note_ko ? h("li", null, d.note_ko) : null,
         h("li", null, "큰 숫자는 '최근'(2025~26년), 작은 '5년'은 2020~26년 전체예요. '다음 진입일 확률'은 봇의 다음 진입이 이 매매법이었던 비율이에요."),
         h("li", null, "막대: 앞으로 24시간, 시간마다 1시간 안에 신호가 나온 비율 (밝은 칸이 지금). 주말 칸이 0인 건 봇이 주말에 진입하지 않아서예요."),
-        h("li", null, "⏳ 대기 중 = 신호는 나왔고 정한 가격(추세판단 봇은 되돌림, 돌파형은 돌파)을 기다리는 중 (진입 확정 아님). 그래서 맨 앞에 와요."),
+        h("li", null, "⏳ 대기 중 = 신호는 나왔고 정한 가격(되돌림 또는 돌파)을 기다리는 중 (진입 확정 아님). 그래서 맨 앞에 와요."),
         d && d.cell ? h("li", null, samplesLine(d.cell)) : null)));
   }
   function draw(user) {
@@ -252,7 +257,7 @@ export function likelyView(ctx) {
       put(srcSlot);
       put(botBox, h("div", {class: "lbl-trend"},
         h("p", {class: "lbl-botl"}, d.reason_ko || ""),
-        h("p", {class: "lbl-take"}, h("b", null, "지금 추세가 받는 방향 "), take.length ? take.join(" · ") : "없음 · 모든 코인이 보류·힘 약함·끝물이에요"),
+        h("p", {class: "lbl-take"}, h("b", null, "지금 추세가 받는 방향 "), take.length ? take.join(" · ") : `없음 · ${takingNoneKo(d.hold_entry)}`),
         ex.length ? h("div", {class: "lbl-texp"}, ui.pill("가상 · 재현", "thin"), h("ul", null, ex.map((x) => h("li", null, x))),
           d.expect && d.expect.note_ko ? h("small", null, d.expect.note_ko) : null) : null));
       drawBanner(d); put(podium); put(restHead); pg.set([]); put(foot);

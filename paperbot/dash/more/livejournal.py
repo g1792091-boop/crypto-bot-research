@@ -8,14 +8,16 @@ tabs already use, or a judgment change taken from the 추세 차트 tab's own re
                                                    judgments are still being fetched)
         events   newest first (at most MAX_EVENTS), each {id, t, kind, sub, tone, symbol, side, text (one sentence),
                  detail, link {tab, q}} and the fields of its kind:
-                 trend    a coin's 1h (30m entries read it) or 4h (1h entries) judgment changed: 상승 / 하락 / 보류 with the
-                          votes and ADX (dash/more/livetrendchart.py ``history`` over the same bars and the same cache as
+                 trend    a coin's 1h (30m entries read it), 4h (1h entries) or daily (4h entries, owners 10-22) judgment
+                          changed: 상승 / 하락 / 보류 with the votes and ADX (dash/more/livetrendchart.py ``history`` over the same bars and the same cache as
                           the 추세 차트 tab: at most FETCH_PER_BUILD fetches an answer); the last JUDGE_H hours only
                  signal   an entry member's signal and what became of it: 막힘 (주말 · 추격 · 발표 · 나스닥), 추세 판단에 걸림,
-                          점검 탈락 + the bot's why, 되돌림 기다리는 중 (level, deadline), 되돌림 옴 → 진입, 되돌림 안 옴,
+                          점검 탈락 + the bot's why, 점검 통과 → 진입 (바로 진입: the owners' config since 10-22), and with
+                          a config that waits 되돌림 기다리는 중 (level, deadline), 되돌림 옴 → 진입, 되돌림 안 옴,
                           한 포지션이라 못 탐 (signal_log + the account's outcomes; livebots.why_cat / why_words, the wait
                           words of livecheck's ⏳ message); only the trend bot's own signals (from its first start)
-                 trade    the paper account COMBO@mix: 진입 (member, coin, side, price, leverage; a pullback entry says so),
+                 trade    the paper account COMBO@mix: 진입 (member, coin, side, price, leverage; a pullback entry and an
+                          entry on a 보류 judgment, 10-22 보류 허용, say so),
                           청산 (the reason in the Telegram words: livecheck.KO_EXIT, net ROE, P&L), 감독 청산 (TIME /
                           JUDGE with the bot's why); the coin-flip twin COMBOFLIP@mix's trades too, flagged ``twin`` (the
                           page shows them behind a switch). The paper engine keeps no record of when each lock step moved
@@ -29,8 +31,9 @@ tabs already use, or a judgment change taken from the 추세 차트 tab's own re
                  safety   starts (the paper bot: ``runs`` rows when there are any, else its last start record; the trend
                           bot's first start; each executor), an executor stopped by SIGTERM, the morning checks and the
                           watcher's alarms (livecheck.db: livebots.read_checks), the paper bot's warnings (``alerts``)
-        counts   the span in one line: signals, passed the checks (= waited for a pullback), pullback touched, paper
-                 entries, paper exits and their net P&L, judgment changes (None for what was not read: never a zero)
+        counts   the span in one line: signals, passed the checks (waited for a pullback, or went in at once), waited
+                 (``waits``), pullback touched, paper entries, paper exits and their net P&L, judgment changes (None for
+                 what was not read: never a zero)
         judge    {state, covers_h, from, read, of, pending, note_ko, errors}: how much of the judgments could be read
         sources  the paper database, each executor and the live checks: state and reason
         capped   when more than MAX_EVENTS rows: the signals and judgment changes are cut oldest first (the trades,
@@ -75,7 +78,7 @@ DIR_KO = {1: "상승", -1: "하락", 0: "보류"}
 FROM_KO = {1: "상승에서", -1: "하락에서", 0: "보류에서"}
 TO_KO = {1: "상승으로", -1: "하락으로", 0: "보류로"}
 SIDE_KO = {1: "롱", -1: "숏"}
-TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 # what stopped a signal before its checks (livebots.why_cat ids): the pauses and the chase block, in the owners' words
 BLOCK_KO = {"weekend": "주말이라 막힘", "macro": "경제 발표 앞뒤라 막힘", "usopen": "나스닥 개장 뒤라 막힘",
             "usopen_pre": "나스닥 개장 앞뒤라 막힘",
@@ -178,7 +181,7 @@ def changes_of(sym: str, tf: str, cells: list, t_from: int, adx_min: float = 20.
 
 
 def judgments(st: dict, cfg: dict, now: int, t_from: int, b=None) -> tuple:
-    """(events, info): every coin's 1h and 4h judgment changes from ``t_from`` on, recomputed by the 추세 차트 tab's
+    """(events, info): every coin's 1h, 4h and 1d judgment changes from ``t_from`` on, recomputed by the 추세 차트 tab's
     ``history`` over its own bars and cache (livetrendchart.bars(): closed bars through the trend bot's Klines, at most
     FETCH_PER_BUILD fetches an answer, none until a new bar closes)."""
     rules, _src = LTC.rules_of(st, cfg)
@@ -241,7 +244,7 @@ def signal_events(rows: list, outs: dict, now: int) -> tuple:
         if _pull_entry(bc, tf, status, L._j(data).get("why")):
             pulls.setdefault((member, sym, tf), []).append((int(bc), status, L._j(data).get("why")))
     events = []
-    n = passed = touched = waiting = 0
+    n = passed = waited = touched = waiting = 0
     for rid, bc, tf, member, sym, side, status, data in rows:
         d = L._j(data)
         why = str(d.get("why") or "")
@@ -267,11 +270,13 @@ def signal_events(rows: list, outs: dict, now: int) -> tuple:
                 sub, words, tone = "check", "점검 탈락", "thin"
             elif cat == "nopull":
                 passed += 1
+                waited += 1
                 sub, words, tone = "nopull", "되돌림 안 옴 · 진입 없음", "thin"
             else:
                 sub, words, tone = "other", f"진입 안 함: {ko}", "thin"
         elif status == "WAITING":
             passed += 1
+            waited += 1
             pull = why.startswith(LC.PULLBACK_HEAD)          # (a break wait is the bots' before the trend bot's)
             until = bc + ms - (MIN if pull else 0)
             extra["until"] = until
@@ -285,6 +290,7 @@ def signal_events(rows: list, outs: dict, now: int) -> tuple:
                 sub, words, tone = "wait", f"{'되돌림' if pull else '돌파'} 기다림 · 결과 기록 전", "thin"
         elif status == "BROKE":
             passed += 1
+            waited += 1
             touched += 1
             mine = sorted(x for x in pulls.get((member, sym, tf), []) if bc < x[0] < bc + ms)
             if mine and mine[0][1] == "FILTERED":
@@ -297,11 +303,15 @@ def signal_events(rows: list, outs: dict, now: int) -> tuple:
                     extra["entry_t"] = mine[0][0]
         elif status == "SUBMITTED":
             sub, words, tone = _outcome_line(outs.get((bc, tf, member, sym)), False)
+            if why.startswith(LT.PASSED_NOW):                # 바로 진입 (owners 10-22): passed, entered at its own minute
+                passed += 1
+                extra["held"] = LT.held_of(tr)
+                words = "점검 통과" + (" (보류 진입)" if extra["held"] else "") + (" → " + words if sub != "wait" else " · 바로 진입 중")
         else:
             sub, words, tone = "other", str(status), "thin"
         events.append(_ev(f"s:{rid}", bc, "signal", sub, f"{coin(sym)} {SIDE_KO.get(side, '')} 신호 · {words}", detail,
                           symbol=sym, side=side, tone=tone, link=_link("signals"), **extra))
-    return events, {"signals": n, "passed": passed, "waits": passed, "touched": touched, "waiting": waiting}
+    return events, {"signals": n, "passed": passed, "waits": waited, "touched": touched, "waiting": waiting}
 
 
 # ================================================================ the paper account's trades
@@ -386,15 +396,18 @@ def trade_events(trades: list, positions: dict, entered: dict, t0: int, since: O
 
 
 def _entry_detail(meta: dict, trend: Optional[dict], twin: bool) -> Optional[str]:
-    """How an entry came about: a pullback (its level), the judgment it entered on; the twin's: what it is (its side is
-    a coin's, so neither the pullback nor the judgment is its own)."""
+    """How an entry came about: a pullback (its level), on a 보류 judgment (10-22 보류 허용), the judgment it entered on;
+    the twin's: what it is (its side is a coin's, so neither the pullback nor the judgment is its own)."""
     if twin:
         return "비교용 · 같은 때 같은 코인, 방향만 동전"
     parts = []
     if meta.get("pulled"):
         lv = _f(meta.get("pull_level"))
         parts.append("되돌림 진입" + (f" ({price_ko(lv)} 닿음)" if lv is not None else ""))
-    j = _judge_text(trend or {}) or _judge_text(meta.get("trend") or {})
+    tr_meta = meta.get("trend") if isinstance(meta.get("trend"), dict) else {}
+    if LT.held_of(tr_meta if "held" in tr_meta else trend or tr_meta):
+        parts.append(LT.HELD_KO)
+    j = _judge_text(trend or {}) or _judge_text(tr_meta)
     if j:
         parts.append(j)
     return " · ".join(parts) or None
@@ -737,6 +750,8 @@ def build(p: dict, hours: int = 24, now_ms: Optional[int] = None, more: Optional
     return {"state": state, "reason_ko": reason_ko, "reason": pr.get("reason"), "now_ms": now, "hours": hours, "t0": t0,
             "hours_all": list(HOURS), "name": pr.get("name"), "since": pr.get("since"), "events": kept, "capped": capped,
             "counts": counts, "judge": judge, "notes": notes, "coins": present, "kinds": [{"id": k, "ko": ko} for k, ko in KINDS],
+            # the running config waits for a pullback (trend.pullback_wait; the owners' since 10-22 enters at once)
+            "pullback_wait": L.trend_waits(pr.get("cfg")) if pr.get("trend_on") else None,
             "sources": {"paper": {k: pr.get(k) for k in ("state", "reason_ko", "reason", "path")}, "execs": xsrc,
                         "checks": {k: checks.get(k) for k in ("state", "reason_ko", "reason", "path")}}}
 

@@ -98,3 +98,16 @@ def test_the_screens_word_a_pullback_wait(tmp_path):
     assert out["st"]["line"] == "2,496.3까지 올라오면 진입 (되돌림)" and out["st"]["left"] == "한 번 닿았어요"
     assert out["br"]["move"] == "2,501.0 위로 올라가면 진입" and out["br"]["touch"] == "돌파함 · 진입 확인 중"
     assert "되돌림 진입 7개 설정" in out["c1"] and "돌파" not in out["c1"] and "되돌림 진입 3개" in out["c2"]
+
+
+def test_a_config_that_enters_at_once_leaves_no_wait(tmp_path):
+    """The owners' 10/22 design (trend.pullback_wait false: 바로 진입; the pullback wait is the shadow trend-wait's, which
+    sends no Telegram): its signal that passed is a SUBMITTED row "추세 판단 통과: 바로 진입 …", never a WAITING one, so
+    the watcher has no ⏳ to send and the site no wait to show. A 4h member's daily judgment has a Korean name."""
+    import test_dash_livebots_trend1022 as N
+    w, B = N._world_new(tmp_path)
+    pc, rc = sqlite3.connect(w.cfg.db), _rule(tmp_path)
+    assert LC.pending_entries(pc, rc, B + 2 * MIN) == []
+    (status,) = {r[0] for r in pc.execute("SELECT status FROM signal_log")}
+    assert status == "SUBMITTED"
+    assert LC.KO_TF["1d"] == "일봉" and LC.KO_TF["4h"] == "4시간"

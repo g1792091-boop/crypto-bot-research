@@ -37,7 +37,7 @@ import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
 import {ACCT, paperBotKo} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
-import {takingKo} from "./livebots-likely.js";
+import {takingKo, takingNoneKo} from "./livebots-likely.js";
 
 export const NOW_API = "/api/v4/livebots/now";
 export const CAL_API = "/api/v4/livebots/calendar";
@@ -596,7 +596,7 @@ export function likelyCard(n, href) {
     const take = takingKo(lk.taking), ex = expectLines(lk.expect);
     return h("div", {class: "lbh-lcard"},
       h("div", {class: "lbh-lbot"}, h("p", null, "지금 추세가 받는 방향 ", h("b", null, take.length ? `${take.length}곳` : "없음")),
-        h("span", {class: "lbh-lcell"}, take.length ? take.join(" · ") : "모든 코인이 보류·힘 약함·끝물이에요")),
+        h("span", {class: "lbh-lcell"}, take.length ? take.join(" · ") : takingNoneKo(lk.hold_entry))),
       ex.length ? h("ul", {class: "lbh-ltrend"}, ex.map((x) => h("li", null, x))) : null,
       h("p", {class: "lbh-wnote"}, `가상(재현) 숫자 · ${lk.reason_ko || ""}`),
       lk.expect && lk.expect.note_ko ? h("p", {class: "lbh-wnote"}, lk.expect.note_ko) : null,

@@ -1,15 +1,18 @@
 // 실거래 › 관제 (#/trend, the live site's first screen; owners 10/21 "대시보드 다시 만들어야겠네 야무지게 필요한부분들 전부다
 // 포함해서 멋있게"): the 추세판단 봇 both executors follow, everything on one screen, read-only:
-//   지금        the hero: what the bot is doing now (보유 중 · 되돌림 기다림 · 진입 가능 · 쉬는 시간 · 기록 멈춤), the rule freeze
+//   지금        the hero: what the bot is doing now (보유 중 · 되돌림 기다림 (only while a signal waits: a config with
+//              trend.pullback_wait; the owners' since 10/22 enters at once) · 진입 가능 · 쉬는 시간 · 기록 멈춤), the rule freeze
 //              countdown (2 weeks, then the review), the money (바이비트 · WOO X Pro · 페이퍼, today), the bot's record since it
 //              started
 //   포지션 · 감독 the open paper position and what can close it: 시간 정리 countdown (4 entry bars), the higher bar's judgment
 //              now (반대 3/4 = 감독 청산), the fast stop, the first lock; each executor's own position next to it
-//   추세 지도    every coin's last closed 1h (30m entries) and 4h (1h entries) judgment: 상승 / 하락 / 보류, the four judges,
-//              ADX on a 0-60 meter, 끝물 / 힘 약함, and which entries it allows now
-//   되돌림 대기  the signals waiting for their pullback: the level, the price now and how far, the time left; the pauses
-//   오늘 신호 흐름 signals → checks passed → pullback touched → entered, and what stopped the rest
-//   매매법 10개  each entry member: role, timeframes, today's signals, its record since the start, its pause
+//   추세 지도    every coin's last closed 1h (30m entries), 4h (1h entries) and daily (4h entries, 10/22) judgment, the ones
+//              the config's members read: 상승 / 하락 / 보류, the four judges, ADX on a 0-60 meter, 끝물 / 힘 약함, and which
+//              entries it allows now (보류 허용, trend.hold_entry: a 보류 takes both sides, only the other direction stops)
+//   되돌림 대기  the signals waiting for their pullback (a config that waits): the level, the price now and how far, the
+//              time left; else (바로 진입) what the bot looks at next; the pauses
+//   오늘 신호 흐름 signals → checks passed → pullback touched (a config that waits) → entered, and what stopped the rest
+//   진입 매매법  each entry member: role, timeframes, today's signals, its record since the start, its pause
 //   새 봇 성적 · 최근 거래 · 감독 청산 · 규칙 · 최근 24시간 신호
 // A fresh start (owners 10/21 "뭔가 허전해 보여서") says what the bot does meanwhile instead of empty boxes: a position
 // the bot before it opened (전환 전 포지션: closed by this bot, never its trade) and what each executor did with it, the
@@ -35,10 +38,16 @@ const MIN = 60 * 1000, HOUR = 60 * MIN, DAY = 24 * 60 * MIN;
 const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const JUDGES = [["V39", "V3.9"], ["S6", "EMA·DMI·ADX"], ["OBV", "OBV"], ["N12", "일목·AO"]];
 export const DIR_KO = {1: "상승", "-1": "하락", 0: "보류"};
-const TF_ENTRY = {"1h": "30m", "4h": "1h"};
-const TF_MIN = {"15m": 15, "30m": 30, "1h": 60, "4h": 240};
-const CAT_ORDER = ["entered", "pulled", "pullback_wait", "nopull", "trend", "spot", "member_pause", "coin_pause", "daily",
-  "chase", "chase_unread", "weekend", "macro", "usopen", "trend_unread", "late", "when", "submitted", "config", "other"];
+const TF_ENTRY = {"1h": "30m", "4h": "1h", "1d": "4h"};         // the judged bar -> the entries that read it (1d: 10/22)
+const JUDGED = ["1h", "4h", "1d"];
+const ENTRY_KO = {"30m": "30분", "1h": "1시간", "4h": "4시간"};
+const MAP_HEAD_KO = {"1h": "1시간 → 30분 진입", "4h": "4시간 → 1시간 진입", "1d": "일봉 → 4시간 진입"};
+const TF_MIN = {"15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440};
+const CAT_ORDER = ["entered", "submitted", "pulled", "pullback_wait", "nopull", "trend", "spot", "member_pause", "coin_pause", "daily",
+  "chase", "chase_unread", "weekend", "macro", "usopen", "trend_unread", "late", "when", "config", "other"];
+export const HELD_KO = "보류 진입";             // an entry on a 보류 judgment (10/22 보류 허용: the answer's entry_held)
+/** A timeframe as a bar's name: "1시간봉" / "일봉" (never "일봉봉"). */
+const barKo = (tf) => { const k = fmt.tfKo(tf); return k.endsWith("봉") ? k : `${k}봉`; };
 const EXIT_CLS = {LOCK: "good", SL: "bad", LIQ: "bad", REV: "warn", JUDGE: "accent", TIME: "accent"};
 export const EXIT_SHORT_KO = {SL: "손절", LOCK: "계단 익절", LIQ: "강제청산", REV: "빠른 청산", JUDGE: "감독(추세)", TIME: "감독(시간)",
   HALT: "멈춤", MANUAL: "수동"};
@@ -79,14 +88,16 @@ export function countsInOrder(counts) {
   const keys = [...CAT_ORDER.filter((k) => c[k]), ...Object.keys(c).filter((k) => !CAT_ORDER.includes(k) && c[k])];
   return keys.map((k) => ({id: k, n: c[k]}));
 }
-/** What a higher-bar judgment allows now: {side: 1 | -1 | 0, ko} ("30분 롱만" / "30분 쉼 · 보류"). */
-export function allows(j, tf) {
-  const e = TF_ENTRY[tf] === "30m" ? "30분" : "1시간";
+/** What a higher-bar judgment allows now: {side: 1 | -1 | 0, both, ko} ("30분 롱만" / "30분 쉼 · 보류"); ``hold`` (the
+ *  config's trend.hold_entry, 10/22 보류 허용): a 보류 with strength and not 끝물 takes both sides ("30분 롱·숏 (보류 허용)"). */
+export function allows(j, tf, hold) {
+  const e = ENTRY_KO[TF_ENTRY[tf]] || "진입";
   if (!j || j.error) return {side: 0, ko: `${e} 쉼 · 판단 못 읽음`};
   const d = Number(j.dir);
-  if (!d) return {side: 0, ko: `${e} 쉼 · 보류`};
+  if (!d && !hold) return {side: 0, ko: `${e} 쉼 · 보류`};
   if (j.strong === false) return {side: 0, ko: `${e} 쉼 · 힘 약함`};
   if (j.tired) return {side: 0, ko: `${e} 쉼 · 끝물`};
+  if (!d) return {side: 0, both: true, ko: `${e} 롱·숏 (보류 허용)`};
   return {side: d, ko: `${e} ${SIDE(d)}만`};
 }
 /** The ADX meter's fill (0..1 over 0-60) and its zone ("weak" < 20, "ok", "hot" > 40). */
@@ -116,21 +127,33 @@ export function clock(ms) {
   const two = (n) => String(n).padStart(2, "0");
   return hh ? `${hh}:${two(mm)}:${two(ss)}` : `${mm}:${two(ss)}`;
 }
-/** The directions the trend takes now, in the map's words: ["BTC 30분 롱만", "ETH 1시간 숏만", ...]. */
+/** The judged bars the running config's members read (their entry bar's higher bar), in order; without members the ones
+ *  the coins carry (1h · 4h · 1d). */
+export function judgedTfs(t) {
+  const ms = (t && t.members) || [];
+  const want = new Set(ms.map((m) => m.htf || {"30m": "1h", "1h": "4h", "4h": "1d"}[m.tf]).filter(Boolean));
+  if (want.size) return JUDGED.filter((tf) => want.has(tf));
+  const have = new Set(Object.values((t && t.coins) || {}).flatMap((r) => Object.keys(r || {})));
+  const out = JUDGED.filter((tf) => have.has(tf));
+  return out.length ? out : ["1h", "4h"];
+}
+/** The entry bars in words, from the judged ones: "30분·1시간·4시간". */
+export const entryTfsKo = (t) => judgedTfs(t).map((tf) => ENTRY_KO[TF_ENTRY[tf]]).join("·");
+/** The directions the trend takes now, in the map's words: ["BTC 30분 롱만", "ETH 1시간 숏만", "SOL 4시간 롱·숏 (보류 허용)", ...]. */
 export function takingNow(t) {
   const out = [];
   for (const c of COINS) {
-    for (const tf of ["1h", "4h"]) {
-      const a = allows((((t && t.coins) || {})[c] || {})[tf], tf);
-      if (a.side) out.push(`${fmt.coin(c)} ${a.ko}`);
+    for (const tf of judgedTfs(t)) {
+      const a = allows((((t && t.coins) || {})[c] || {})[tf], tf, t && t.hold_entry);
+      if (a.side || a.both) out.push(`${fmt.coin(c)} ${a.ko}`);
     }
   }
   return out;
 }
-/** The next closes after now: {m30, h1} (ms; the entry signals come at a 30-minute or an hour close). */
+/** The next closes after now: {m30, h1, h4} (ms; the entry signals come at a 30-minute, an hour or a 4-hour close). */
 export function nextCloses(now) {
   const n = Number(now);
-  return {m30: n - (n % (30 * MIN)) + 30 * MIN, h1: n - (n % HOUR) + HOUR};
+  return {m30: n - (n % (30 * MIN)) + 30 * MIN, h1: n - (n % HOUR) + HOUR, h4: n - (n % (4 * HOUR)) + 4 * HOUR};
 }
 // waitKo, expectLines and expectHead (the replay's expectation in words) live in livebots-kit.js (성적 · 지도 say it too)
 export {waitKo, expectLines, expectHead};
@@ -139,7 +162,7 @@ export {waitKo, expectLines, expectHead};
 export function againstKo(p, j) {
   const htfMs = (TF_MIN[p && p.htf] || 60) * MIN;
   if (j && ok(j.bar_close) && p && ok(p.entry_time) && Number(j.bar_close) <= Number(p.entry_time)) {
-    return `진입 때부터 반대 · ${fmt.hm(Number(j.bar_close) + htfMs)}에 끝나는 ${fmt.tfKo(p.htf)}봉도 반대면 감독 청산`;
+    return `진입 때부터 반대 · ${fmt.hm(Number(j.bar_close) + htfMs)}에 끝나는 ${barKo(p.htf)}도 반대면 감독 청산`;
   }
   return "반대로 바뀜 · 감독 청산";
 }
@@ -178,7 +201,7 @@ export function heroOf(t, now) {
   const trending = takingNow(t);
   return {cls: "go", head: "진입 가능 · 추세와 같은 방향 신호를 기다리는 중",
     sub: trending.length ? `지금 받는 방향: ${trending.slice(0, 6).join(" · ")}${trending.length > 6 ? " …" : ""}`
-      : "지금은 모든 코인이 보류예요 (추세가 생기면 받아요)"};
+      : t.hold_entry ? "지금 받는 곳이 없어요 (모두 힘 약함·끝물이거나 못 읽음)" : "지금은 모든 코인이 보류예요 (추세가 생기면 받아요)"};
 }
 
 // ---------------------------------------------------------------- the view
@@ -212,17 +235,21 @@ export function trendView(ctx, hub) {
   const sup = h("div", {class: "ltr-sup"});
   const rules = h("div", {class: "ltr-rules"});
   const stamp = h("span", {class: "ltr-stamp"});
+  // the waits card and the map's line follow the running config (trend.pullback_wait, trend.hold_entry: drawWaits, drawGrid)
+  const wTitle = h("span", null, "되돌림 기다리는 신호");
+  const wSub = h("span", null, "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요");
+  const mapSub = h("span", null, "끝난 봉만 봐요 · 4개 중 3개 이상 같은 쪽이면 추세 · ADX 20 이상, 40 넘고 꺾이면 끝물");
+  const memTitle = h("span", null, "진입 매매법");
   const cards = h("div", {class: "ltr-cards"},
     h("div", {class: "ltr-two ltr-top"},
       ui.card({title: "포지션 · 감독", sub: "첫 잠금 전에는 손절 · 추세 뒤집힘 · 빠른 청산이 지켜봐요 (시간 정리는 10/21 밤에 뺌)", cls: "ltr-poscard"}, posBox),
-      ui.card({title: "되돌림 기다리는 신호", sub: "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요", cls: "ltr-wcard"}, waits,
+      ui.card({title: wTitle, label: "다음 진입", sub: wSub, cls: "ltr-wcard"}, waits,
         pauseHead, pauses)),
-    ui.card({title: "추세 지도", sub: "끝난 봉만 봐요 · 30분 진입은 1시간, 1시간 진입은 4시간 · 4개 중 3개 이상 같은 쪽이면 추세 · ADX 20 이상, 40 넘고 꺾이면 끝물",
-      cls: "ltr-judge", acts: [stamp]}, grid, changes),
+    ui.card({title: "추세 지도", sub: mapSub, cls: "ltr-judge", acts: [stamp]}, grid, changes),
     h("div", {class: "ltr-two"},
       ui.card({title: "오늘 신호 흐름", sub: "한국 시간 오늘 · 진입 매매법 신호가 어디서 걸렸나", cls: "ltr-fcard"}, funnelBox),
       ui.card({title: "새 봇 성적", sub: "페이퍼(연습) · 새 규칙 시작 뒤 거래만 · 실거래 계좌는 위 지갑", cls: "ltr-rcard"}, recordBox)),
-    ui.card({title: "매매법 10개", sub: "진입만 하는 매매법 · 추세 판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO)는 진입 안 함", cls: "ltr-mcard"}, membersBox),
+    ui.card({title: memTitle, label: "진입 매매법", sub: "진입만 하는 매매법 · 추세 판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO)는 진입 안 함", cls: "ltr-mcard"}, membersBox),
     ui.card({title: "최근 거래", sub: "페이퍼 · 새 규칙 시작 뒤 · 청산 이유와 진입 때 추세 판단", cls: "ltr-tcard"}, tradesBox),
     h("div", {class: "ltr-two"},
       ui.card({title: "감독 청산", sub: "최근 7일 · 추세 뒤집힘 (시간 정리는 10/21 밤에 뺌)", cls: "ltr-supcard"}, sup),
@@ -326,7 +353,9 @@ export function trendView(ctx, hub) {
     if (!t || t.state !== "ok") { put(posBox); return; }
     if (!p) {
       put(posBox, h("div", {class: "ltr-empty"}, h("b", null, "포지션 없음"),
-        h("p", null, "추세와 같은 방향 신호가 오고, 진입 전 검사를 통과하고, 되돌림 가격에 닿으면 들어가요 (한 번에 하나).")),
+        h("p", null, t.pullback_wait === false
+          ? `추세와 같은 방향 신호가 오고 진입 전 검사를 통과하면 그 분에 바로 들어가요 (한 번에 하나${t.hold_entry ? " · 보류여도 반대 방향만 아니면 받아요" : ""}).`
+          : "추세와 같은 방향 신호가 오고, 진입 전 검사를 통과하고, 되돌림 가격에 닿으면 들어가요 (한 번에 하나).")),
         prevClosed(t), h("h3", {class: "ltr-h3"}, "실거래 두 계좌"), liveRows(null));
       return;
     }
@@ -354,7 +383,8 @@ export function trendView(ctx, hub) {
           roe != null ? h("span", {class: fmt.tone(roe)}, ` · ROE ${fmt.pct(roe, 1)} (수수료 전)`) : null),
         h("dt", null, p.locked ? "잠금선" : "손절선"), h("dd", {class: "num"}, fmt.price(p.stop), p.locked ? ` · +${fmt.pct(p.lock_roe, 0, false)} 잠금` : " · 순ROE −50%"),
         p.entry_judge ? h("dt", null, "진입 근거") : null,
-        p.entry_judge ? h("dd", null, p.entry_judge, ok(p.entry_score) ? h("small", {class: "ltr-sub"}, ` · 점수 ${Number(p.entry_score).toFixed(2)}`) : null) : null),
+        p.entry_judge ? h("dd", null, p.entry_held ? [ui.pill(HELD_KO, "warn", "상위 봉 판단이 보류일 때 들어간 거래예요 (보류 허용: 반대 방향만 막음)"), " "] : null,
+          p.entry_judge, ok(p.entry_score) ? h("small", {class: "ltr-sub"}, ` · 점수 ${Number(p.entry_score).toFixed(2)}`) : null) : null),
       h("div", {class: "ltr-guards"},
         h("div", {class: ["ltr-guard", p.locked || !timed ? "off" : left <= 0 ? "fire" : ""]},
           h("span", {class: "ltr-gk"}, "⏱ 시간 정리"),
@@ -372,14 +402,17 @@ export function trendView(ctx, hub) {
   function drawGrid() {
     const t = st.t;
     stamp.textContent = ok(t.ts) ? `${fmt.kst(t.ts)} 기준` : "";
+    const tfs = judgedTfs(t);
+    mapSub.textContent = `끝난 봉만 봐요 · ${tfs.map((tf) => `${ENTRY_KO[TF_ENTRY[tf]]} 진입은 ${fmt.tfKo(tf)}`).join(", ")} · `
+      + `4개 중 3개 이상 같은 쪽이면 추세${t.hold_entry ? " · 보류여도 반대 방향만 아니면 진입" : ""} · ADX 20 이상, 40 넘고 꺾이면 끝물`;
     const headRow = h("div", {class: "ltr-row ltr-hrow", role: "row"}, h("span", {role: "columnheader"}, "코인"),
-      h("span", {role: "columnheader"}, "1시간 → 30분 진입"), h("span", {role: "columnheader"}, "4시간 → 1시간 진입"));
+      tfs.map((tf) => h("span", {role: "columnheader"}, MAP_HEAD_KO[tf])));
     const rows = COINS.filter((c) => t.coins && t.coins[c]).map((c) => {
       const price = priceOf(t, c);
       const cell = (tf) => {
         const j = t.coins[c][tf];
         const x = judgeCell(j);
-        const a = allows(j, tf);
+        const a = allows(j, tf, t.hold_entry);
         const m = adxMeter(j && !j.error ? j.adx : null);
         return h("div", {class: ["ltr-cell", x.cls], role: "cell"},
           h("div", {class: "ltr-ctop"}, h("b", {class: "ltr-word"}, x.word),
@@ -392,9 +425,9 @@ export function trendView(ctx, hub) {
       };
       return h("div", {class: "ltr-row", role: "row"},
         h("div", {class: "ltr-coin", role: "rowheader"}, h("b", null, fmt.coin(c)), price != null ? h("small", {class: "num"}, fmt.price(price)) : null),
-        cell("1h"), cell("4h"));
+        tfs.map(cell));
     });
-    put(grid, h("div", {class: "ltr-table", role: "table", "aria-label": "코인별 추세 판단"}, headRow, rows));
+    put(grid, h("div", {class: "ltr-table", role: "table", "aria-label": "코인별 추세 판단", style: {"--cols": String(tfs.length)}}, headRow, rows));
   }
   // nothing waits: what the bot looks at next (the closes, the directions it takes now, an open position, the next pause)
   function idleBox(t, now) {
@@ -403,12 +436,16 @@ export function trendView(ctx, hub) {
     const p = t.position, np = (t.next || {}).pause, pz = t.pause || {};
     const left = h("span", {class: "num"});
     const same = np && ok(np.until) && fmt.mmdd(np.from) === fmt.mmdd(np.until);
+    const ents = new Set(judgedTfs(t).map((tf) => TF_ENTRY[tf]));
+    const closes = [["30m", "30분봉", nc.m30], ["1h", "1시간봉", nc.h1], ["4h", "4시간봉", nc.h4]].filter(([tf]) => ents.has(tf));
     return h("div", {class: "ltr-idle"},
-      h("p", {class: "ltr-ihead"}, "지금 기다리는 신호 없음"),
+      h("p", {class: "ltr-ihead"}, t.pullback_wait === false ? "지금 들어갈 신호 없음 · 검사를 통과한 신호는 그 분에 바로 들어가요" : "지금 기다리는 신호 없음"),
       h("ul", {class: "ltr-list ltr-ilist"},
-        h("li", null, h("span", {class: "ltr-ik"}, "다음 신호 볼 때"), `30분봉 ${fmt.hm(nc.m30)} · 1시간봉 ${fmt.hm(nc.h1)} (봉이 끝날 때 매매법 신호가 나와요)`),
+        h("li", null, h("span", {class: "ltr-ik"}, "다음 신호 볼 때"),
+          `${closes.map(([, ko, at]) => `${ko} ${fmt.hm(at)}`).join(" · ")} (봉이 끝날 때 매매법 신호가 나와요)`),
         h("li", null, h("span", {class: "ltr-ik"}, "지금 받는 방향"),
-          take.length ? take.join(" · ") : "없음 · 모든 코인이 보류·힘 약함·끝물이라 신호가 와도 안 들어가요"),
+          take.length ? take.join(" · ") : t.hold_entry ? "없음 · 모든 코인이 힘 약함·끝물이라 신호가 와도 안 들어가요"
+            : "없음 · 모든 코인이 보류·힘 약함·끝물이라 신호가 와도 안 들어가요"),
         p ? h("li", {class: "warn"}, h("span", {class: "ltr-ik"}, "새 진입"),
           p.inherited ? "안 해요 · 전환 전 포지션이 열려 있어요 (한 번에 하나) · 닫히면 받기 시작해요" : "안 해요 · 포지션이 열려 있어요 (한 번에 하나)") : null,
         !pz.paused && np && ok(np.from) ? h("li", null, h("span", {class: "ltr-ik"}, "다음 쉬는 시간"),
@@ -418,6 +455,11 @@ export function trendView(ctx, hub) {
   function drawWaits() {
     const t = st.t, now = serverNow();
     const ws = (t.waits || []).filter((w) => Number(w.until) > now - MIN);
+    // 바로 진입 (trend.pullback_wait false, the owners' config since 10/22): no pullback card unless a wait is still left
+    const pull = t.pullback_wait !== false || ws.length > 0;
+    wTitle.textContent = pull ? "되돌림 기다리는 신호" : "다음 진입";
+    wSub.textContent = pull ? "추세와 같은 방향 신호 · 진입 봉 하나 동안 기다리고 안 오면 버려요"
+      : "추세와 같은 방향 신호가 검사를 통과하면 그 분에 바로 들어가요 (되돌림 안 기다림)";
     put(waits, ws.length ? h("ul", {class: "ltr-list ltr-wlist"}, ws.map((w) => {
       const price = priceOf(t, w.symbol);
       const gap = waitGap(w, price);
@@ -449,12 +491,13 @@ export function trendView(ctx, hub) {
   function drawFunnel() {
     const f = st.t.funnel;
     if (!f) { put(funnelBox, ui.empty("신호 기록을 못 읽었어요")); return; }
+    const pull = st.t.pullback_wait !== false || Number(f.touched) > 0;      // 바로 진입: no pullback step
     const steps = [["신호", f.signals, "진입 매매법 신호"], ["검사 통과", f.passed, "추세 판단 · 진입 자리 · 쉬기를 통과"],
-      ["되돌림 닿음", f.touched, "기다린 가격에 닿음"], ["진입", f.entered, "페이퍼가 들어감"]];
+      pull ? ["되돌림 닿음", f.touched, "기다린 가격에 닿음"] : null, ["진입", f.entered, "페이퍼가 들어감"]].filter(Boolean);
     const top = Math.max(1, Number(f.signals) || 0);
     const bmax = Math.max(1, ...(f.blocked || []).map((b) => b.n));
     put(funnelBox,
-      h("div", {class: "ltr-steps"}, steps.map(([k, n, title], i) => h("div", {class: ["ltr-step", i === 3 ? "last" : ""], title},
+      h("div", {class: "ltr-steps", style: {"--n": String(steps.length)}}, steps.map(([k, n, title], i) => h("div", {class: ["ltr-step", i === steps.length - 1 ? "last" : ""], title},
         h("b", {class: "num"}, fmt.int(n || 0)), h("span", null, k),
         h("span", {class: "ltr-bar"}, h("i", {style: {"--v": ((Number(n) || 0) / top).toFixed(4)}}))))),
       (f.blocked || []).length ? h("ul", {class: "ltr-list ltr-blocks"}, f.blocked.map((b) => h("li", null,
@@ -489,6 +532,7 @@ export function trendView(ctx, hub) {
   }
   function drawMembers() {
     const ms = st.t.members || [];
+    memTitle.textContent = ms.length ? `진입 매매법 ${ms.length}개` : "진입 매매법";
     put(membersBox, ms.length ? ms.map((m) => h("div", {class: ["ltr-mem", m.paused ? "paused" : ""], role: "listitem"},
       h("div", {class: "ltr-mtop"}, h("b", null, fmt.stratKo(m.strategy)), m.role ? ui.pill(m.role, "thin") : null,
         m.side_only ? ui.pill(m.side_only === "short" ? "숏만" : "롱만", "warn") : null),
@@ -509,7 +553,7 @@ export function trendView(ctx, hub) {
       h("span", {class: "ltr-tw"}, h("b", null, `${fmt.coin(x.symbol)} ${SIDE(x.side)}`), ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)}`),
       ui.pill(exitKo(x.reason), EXIT_CLS[x.reason] || "thin"),
       h("b", {class: ["num", fmt.tone(x.roe)]}, fmt.pct(x.roe, 1)),
-      x.why || x.entry_judge ? h("small", {class: "ltr-sub ltr-tsub"}, [x.why, x.entry_judge ? `진입 때 ${x.entry_judge}` : null].filter(Boolean).join(" · ")) : null)))
+      x.why || x.entry_judge ? h("small", {class: "ltr-sub ltr-tsub"}, [x.why, x.entry_judge ? `진입 때 ${x.entry_judge}${x.entry_held ? ` (${HELD_KO})` : ""}` : null].filter(Boolean).join(" · ")) : null)))
       : ui.empty("새 규칙으로 닫힌 거래가 아직 없어요"));
   }
   function drawRest() {
@@ -517,7 +561,7 @@ export function trendView(ctx, hub) {
     const sig = t.signals || {};
     const kos = {};
     for (const r of sig.rows || []) kos[r.cat] = r.cat_ko;
-    put(sigHead, countsInOrder(sig.counts).map((c) => ui.pill(`${kos[c.id] || c.id} ${fmt.int(c.n)}`, ["entered", "pulled"].includes(c.id) ? "good" : "thin")),
+    put(sigHead, countsInOrder(sig.counts).map((c) => ui.pill(`${kos[c.id] || c.id} ${fmt.int(c.n)}`, ["entered", "submitted", "pulled"].includes(c.id) ? "good" : "thin")),
       sig.cut && ok(sig.from) ? h("span", {class: "ltr-sub"}, `새 봇 시작 ${fmt.kst(sig.from)} 뒤 신호만 (그 전은 예전 봇)`) : null);
     put(sigList, (sig.rows || []).length ? ui.disclosure(`신호 ${fmt.int(sig.rows.length)}개 펼치기`, h("ul", {class: "ltr-list ltr-siglist"},
       sig.rows.slice(0, 60).map((r) => h("li", {class: "ltr-s-" + r.cat},
@@ -525,7 +569,7 @@ export function trendView(ctx, hub) {
         h("b", null, `${fmt.coin(r.symbol)} ${SIDE(r.side)}`), ` ${fmt.stratKo(r.strategy)} ${fmt.tfKo(r.tf)} · `,
         h("span", {class: "ltr-cat"}, r.cat_ko),
         r.why ? h("small", {class: "ltr-sub"}, r.why) : null))))
-      : ui.empty(sig.cut ? "새 봇이 켜진 뒤 아직 신호가 없어요 · 매매법 신호는 30분·1시간 봉이 끝날 때 나와요" : "최근 24시간 신호가 없어요"));
+      : ui.empty(sig.cut ? `새 봇이 켜진 뒤 아직 신호가 없어요 · 매매법 신호는 ${entryTfsKo(t)} 봉이 끝날 때 나와요` : "최근 24시간 신호가 없어요"));
     put(sup, (t.sup || []).length ? h("ul", {class: "ltr-list"}, t.sup.map((x) => h("li", null,
       h("span", {class: "num ltr-t"}, fmt.kst(x.exit_time)), " ", h("b", null, `${fmt.coin(x.symbol)} ${SIDE(x.side)}`),
       x.inherited ? [" ", ui.pill("전환 전 포지션", "warn", "새 봇이 켜지기 전에 열린 포지션 · 새 봇 성적에 안 셈")] : null,

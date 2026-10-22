@@ -6,7 +6,8 @@
 //   첫 줄        규칙 고정 2주 as a ring (day N of 14, D-day, the review date); 진짜 방향 vs 동전 방향: the paper account and
 //               its coin-flip twin since the start side by side (trades, 첫 잠금까지 간 비율, net P&L, net ROE sum) with
 //               the band a coin leaves to luck drawn on a 0-100 % scale, in plain words; both real executors since the start
-//   하루하루      per KST day: 신호 → 검사 통과 → 되돌림 닿음 → 진입 as one stacked bar, the day's paper P&L (and the coin's);
+//   하루하루      per KST day: 신호 → 검사 통과 → 되돌림 닿음 (a config that waits: trend.pullback_wait; the owners' since
+//               10/22 enters at once) → 진입 as one stacked bar, the day's paper P&L (and the coin's);
 //               the cumulative line of both (순ROE 합 or USDT)
 //   새 규칙이 도왔나? (가상)  one tile per new rule: what it is, a verdict that never overclaims (아직 판단 못 함 under 20,
 //               운 범위 안 inside the band), the virtual numbers next to the bot's own, the newest rows behind 펼치기
@@ -68,12 +69,17 @@ export function headline(d) {
 
 /** One day's funnel as a stacked bar: entered, touched (not entered), passed (not touched), stopped; fractions of
  *  ``top`` (the busiest day's signals). */
-export function funnelParts(day, top) {
+export function funnelParts(day, top, pull = true) {
   const n = Math.max(0, Number(day.signals) || 0), p = Math.min(n, Number(day.passed) || 0);
-  const t = Math.min(p, Number(day.touched) || 0), e = Math.min(t, Number(day.entered) || 0);
+  const t = pull ? Math.min(p, Number(day.touched) || 0) : p, e = Math.min(t, Number(day.entered) || 0);
   const all = Math.max(1, Number(top) || n || 1);
-  return [["entered", e], ["touched", t - e], ["passed", p - t], ["stopped", n - p]].map(([k, v]) => ({k, n: v, frac: v / all}));
+  // 바로 진입 (pull false): a signal that passed goes in at its minute, no pullback step
+  const parts = pull ? [["entered", e], ["touched", t - e], ["passed", p - t], ["stopped", n - p]]
+    : [["entered", e], ["passed", p - e], ["stopped", n - p]];
+  return parts.map(([k, v]) => ({k, n: v, frac: v / all}));
 }
+/** The answer's config waits for a pullback (trend.pullback_wait; missing = the 10/21 design: it waits), or waits came. */
+export const pullOf = (d) => !d || d.pullback_wait !== false || Number((d.funnel || {}).touched) > 0;
 
 /** The cumulative lines in a W x H box: {real, flip, zero, lo, hi, t0, t1} (SVG path data; key 1 = USDT, 2 = net ROE). */
 export function curvePaths(curve, key, W, H, now) {
@@ -159,8 +165,9 @@ export function reviewView(ctx, hub) {
   const splitSeg = ui.seg(SPLITS.map(([id, label]) => ({id, label})), "role", (id) => { st.split = id; drawSplit(); }, {label: "나눠 보기", scroll: true});
   const splitBox = h("div", {class: "lrv-split"});
   const checkBox = h("ol", {class: "lrv-check"});
+  const daysSub = h("span", null, "한국 시간 하루씩 · 신호 → 검사 통과 → 되돌림 닿음 → 진입, 그날 닫힌 거래의 페이퍼 손익");
   const cards = h("div", {class: "lrv-cards"},
-    ui.card({title: "하루하루", sub: "한국 시간 하루씩 · 신호 → 검사 통과 → 되돌림 닿음 → 진입, 그날 닫힌 거래의 페이퍼 손익", cls: "lrv-dcard"},
+    ui.card({title: "하루하루", label: "하루하루", sub: daysSub, cls: "lrv-dcard"},
       daysBox, h("div", {class: "lrv-chead"}, h("h3", {class: "lrv-h3"}, "누적 · 진짜 방향 vs 동전 방향 (페이퍼)"), curveSeg), curveBox),
     ui.card({title: "새 규칙이 도왔나?", sub: "가상 · 규칙에 걸린 신호와 감독 청산을 1분봉으로 다시 계산해 봇이 실제로 한 것과 견줘요", cls: "lrv-wcard",
       acts: [ui.pill("가상", "warn", "실제 체결이 아니라 1분봉으로 다시 계산한 결과")]}, rulesHead, rulesBox),
@@ -251,20 +258,23 @@ export function reviewView(ctx, hub) {
     if (!days) { put(daysBox, sourceState(st.d.signals_state, "신호 기록")); return; }
     const top = Math.max(1, ...days.map((x) => Number(x.signals) || 0));
     const f = st.d.funnel || {};
+    const pull = pullOf(st.d);
+    daysSub.textContent = `한국 시간 하루씩 · 신호 → 검사 통과 → ${pull ? "되돌림 닿음 → " : ""}진입, 그날 닫힌 거래의 페이퍼 손익`;
     put(daysBox,
-      h("div", {class: "lrv-flow"}, [["신호", f.signals, "진입 매매법 신호"], ["검사 통과", f.passed, "추세 판단 · 진입 자리 검사를 통과해 되돌림을 기다림"],
-        ["되돌림 닿음", f.touched, "기다린 가격에 닿음"], ["진입", f.entered, "페이퍼가 들어감"]].map(([k, n, title], i) =>
+      h("div", {class: "lrv-flow"}, [["신호", f.signals, "진입 매매법 신호", 0],
+        ["검사 통과", f.passed, pull ? "추세 판단 · 진입 자리 검사를 통과해 되돌림을 기다림" : "추세 판단 · 진입 자리 검사를 통과해 그 분에 바로 진입", 1],
+        pull ? ["되돌림 닿음", f.touched, "기다린 가격에 닿음", 2] : null, ["진입", f.entered, "페이퍼가 들어감", 3]].filter(Boolean).map(([k, n, title, i]) =>
         h("div", {class: ["lrv-fstep", "s" + i], title}, h("b", {class: "num"}, fmt.int(n || 0)), h("span", null, k)))),
       (f.blocked || []).length ? h("p", {class: "lrv-blocked"}, "걸린 곳: ", f.blocked.map((b, i) => [i ? " · " : "", `${b.ko} `, h("b", {class: "num"}, fmt.int(b.n))])) : null,
       h("ul", {class: "lrv-dlist", role: "list"}, days.slice().reverse().map((x) => h("li", {class: ["lrv-day", x.today ? "today" : ""]},
         h("span", {class: "lrv-dd num"}, dayKo(x.d0), x.today ? h("small", null, " 오늘") : null),
-        h("span", {class: "lrv-dbar", role: "img", "aria-label": `신호 ${x.signals} · 통과 ${x.passed} · 닿음 ${x.touched} · 진입 ${x.entered}`},
-          funnelParts(x, top).filter((p) => p.n > 0).map((p) => h("i", {class: "lrv-seg-" + p.k, style: {"--v": p.frac.toFixed(4)}}))),
-        h("span", {class: "lrv-dn num"}, `${fmt.int(x.signals)} → ${fmt.int(x.passed)} → ${fmt.int(x.touched)} → ${fmt.int(x.entered)}`),
+        h("span", {class: "lrv-dbar", role: "img", "aria-label": `신호 ${x.signals} · 통과 ${x.passed}${pull ? ` · 닿음 ${x.touched}` : ""} · 진입 ${x.entered}`},
+          funnelParts(x, top, pull).filter((p) => p.n > 0).map((p) => h("i", {class: "lrv-seg-" + p.k, style: {"--v": p.frac.toFixed(4)}}))),
+        h("span", {class: "lrv-dn num"}, [x.signals, x.passed, pull ? x.touched : null, x.entered].filter((v) => v != null).map((v) => fmt.int(v)).join(" → ")),
         h("span", {class: "lrv-dp"}, x.n ? h("b", {class: ["num", fmt.tone(x.pnl, signed(x.pnl))]}, signed(x.pnl)) : h("span", {class: "lrv-mute"}, "거래 없음"),
           x.n ? h("small", {class: "num"}, ` ${fmt.int(x.n)}번`) : null,
           x.flip_n ? h("small", {class: "lrv-mute num"}, ` · 동전 ${signed(x.flip_pnl)}`) : null)))),
-      h("div", {class: "lrv-legend", "aria-hidden": "true"}, [["entered", "진입"], ["touched", "되돌림 닿음"], ["passed", "검사 통과"], ["stopped", "걸림"]].map(([k, ko]) =>
+      h("div", {class: "lrv-legend", "aria-hidden": "true"}, [["entered", "진입"], pull ? ["touched", "되돌림 닿음"] : null, ["passed", "검사 통과"], ["stopped", "걸림"]].filter(Boolean).map(([k, ko]) =>
         h("span", null, h("i", {class: "lrv-seg-" + k}), ko))));
   }
   function drawCurve() {

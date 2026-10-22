@@ -148,7 +148,7 @@ export function pickSort(choice, d) {
 }
 
 /** The trend bot's entry bar -> the closed bar its trend is judged on. */
-const TREND_HTF_KO = {"30m": "끝난 1시간봉 추세로 판단", "1h": "끝난 4시간봉 추세로 판단"};
+const TREND_HTF_KO = {"30m": "끝난 1시간봉 추세로 판단", "1h": "끝난 4시간봉 추세로 판단", "4h": "끝난 일봉 추세로 판단"};
 /** The orders the trend bot can be ranked by (no 5-year ones: a new rule set has no backtest). */
 export const TREND_SORTS = SORTS.filter((x) => ["pnl", "win", "trades", "signals"].includes(x.id));
 const TREND_SORT = new Set(TREND_SORTS.map((x) => x.id));
@@ -298,7 +298,7 @@ export function rowDetail(r, d, href) {
   const ms = r.members || [];
   const mrow = (m) => h("li", {class: "lbr-m"},
     h("div", {class: "lbr-mh"}, h("b", {class: "num"}, `#${fmt.int(m.order)}`), h("span", {class: "lbr-tf"}, m.tf_ko || fmt.tfKo(m.tf)),
-      h("span", null, m.entry_ko || "즉시"), m.invert ? ui.pill("방향 반대", "warn", "신호와 반대 방향으로 들어가요") : null,
+      h("span", null, tb ? (tb.pullback_wait === false ? "바로 진입" : "되돌림 진입") : m.entry_ko || "즉시"), m.invert ? ui.pill("방향 반대", "warn", "신호와 반대 방향으로 들어가요") : null,
       m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null,
       tb ? (m.role ? h("span", {class: "lbr-mbt"}, `역할 ${m.role} · ${TREND_HTF_KO[m.tf] || "상위 봉 추세로 판단"}`) : null)
         : h("span", {class: "lbr-mbt num"}, m.bt && m.bt.trades != null ? `5년 ${fmt.int(m.bt.trades)}번 · ${pc0(m.bt.win)}` : "5년 —")),
@@ -370,14 +370,14 @@ export function rowDetail(r, d, href) {
 // /api/v4/livebots/groups (dash/more/liveinsight.py groups()): per account, group A (the 11 without the chase block) and
 // B (the 4 with it) since the 규칙봇 15 start, and 예전 매매법 (settings no longer in the config, their whole record); a
 // live trade takes its paper partner's group (짝 페이퍼 없음 when it has none). Shown on 성적 and 순위 (성적 순위).
-// The 추세판단 봇 (the answer's kind "trend", liveinsight trend_groups): its roles (눌림 · 자리 · 돌파 · 횡보) and entry bars
-// (30분 · 1시간 진입) since its own start, in the server's order, each row with its members; the card's words follow the bot.
+// The 추세판단 봇 (the answer's kind "trend", liveinsight trend_groups): its roles (눌림 · 자리 · 돌파 · 횡보 · 추세) and entry
+// bars (30분 · 1시간 · 4시간 진입) since its own start, in the server's order, each row with its members; the card's words follow the bot.
 export const GROUPS_API = "/api/v4/livebots/groups";
 const GROUP_KEY = "lbrg-acct";
 const GROUP_ACCTS = [{id: "paper", label: "페이퍼"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}];
 
 /** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}].
- *  The trend bot (d.kind "trend"): the server's order (roles 눌림 · 자리 · 돌파 · 횡보, then 30분 · 1시간 진입), each row with
+ *  The trend bot (d.kind "trend"): the server's order (roles 눌림 · 자리 · 돌파 · 횡보 · 추세, then its entry bars), each row with
  *  its cut (role / tf) and members, then 짝 페이퍼 없음 / 다른 페이퍼 봇 only when they have trades. */
 export function groupRows(d, acct) {
   const a = d && d.accts && d.accts[acct];
@@ -774,8 +774,9 @@ export function boardView(ctx) {
         h("ul", {class: "lbr-howl"},
           h("li", null, h("b", null, "백테스트 숫자가 없어요."), ` ${tb.no_ref_ko || "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"}. 순위는 이 봇이 ${fmt.kst(tb.since)}에 켜진 뒤의 기록으로만 매겨요.`),
           h("li", null, h("b", null, "거래가 적으면 순위는 대부분 운이에요."),
-            ` 추세 판단·진입 전 검사·되돌림을 다 통과해야 들어가서 거래가 드물어요. 닫힌 거래 ${fmt.int(smallMin(d))}번 미만은 '표본 적음'이에요.`),
-          h("li", null, h("b", null, "역할"), " = 눌림 · 자리 · 돌파 · 횡보 (두 분이 정한 이름). 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉 추세를 따라요."),
+            ` 추세 판단·진입 전 검사${tb.pullback_wait === false ? "를" : "·되돌림을"} 다 통과해야 들어가서 거래가 드물어요. 닫힌 거래 ${fmt.int(smallMin(d))}번 미만은 '표본 적음'이에요.`),
+          h("li", null, h("b", null, "역할"), " = 눌림 · 자리 · 돌파 · 횡보 · 추세 (두 분이 정한 이름). 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉, 4시간 진입은 끝난 일봉 추세를 따라요."
+            + (tb.hold_entry ? " 보류여도 반대 방향만 아니면 들어가요." : "")),
           h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), " 순위는 두 실행기가 따라가는 페이퍼(모의) 거래로 매겨요. 바이비트 · WOO X Pro 기록은 줄을 펼치면 보여요."),
           h("li", null, "막대: ", h("span", {class: "lbr-key now"}), "지금 승률(페이퍼, 거래가 있을 때) · 0~100%"))),
       h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive("바이비트 · WOO X Pro (펼친 줄의 실거래)"))];

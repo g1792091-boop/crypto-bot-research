@@ -9,8 +9,9 @@ the rest)? Read-only, like every 실거래 tab: nothing here changes a rule (tha
         entries  진입 횟수: the replay's entries a weekday and the histogram of its 80 weekdays against the paper's entries
                  since the start (KST weekdays, a partial day as its fraction; weekend entries apart), with the band the
                  replay leaves for that many weekdays (``entries_band``: exact, 5 %-95 %)
-        funnel   깔때기: signals -> after the pauses and the chase block -> passed the checks -> pullback touched ->
-                 entered, the replay's against the paper's since the start (livereview's own funnel, never the bot's
+        funnel   깔때기: signals -> after the pauses and the chase block -> passed the checks -> pullback touched (the
+                 paper's only while its config waits: the owners' enters at once since 10-22) -> entered, the replay's
+                 against the paper's since the start (livereview's own funnel, never the bot's
                  rules again), and where the rest stopped in livetrend.BLOCK's categories
         results  거래 결과: n, win rate (net P&L > 0), mean / median net ROE, the exits by reason with their median hold:
                  the replay, the paper, each executor (an executor's close that followed the paper takes the paper
@@ -301,6 +302,33 @@ def time_note_ko(d: dict, cfg: Optional[dict]) -> str:
     return TIME_KEPT_KO
 
 
+# the replay ran on the 10/21 design (its members: 30m and 1h entries, 보류 = no entry, the pullback wait); the owners' 10/22
+# design (deploy/combo.trend.json: 18 members, 4h entries on the closed daily bar, 보류 허용, 바로 진입) differs: every
+# comparison with the replay says how, from the running config (design_note_ko)
+DESIGN_KO = "재현은 10/21 설계(진입 매매법 {n}개 · 30분·1시간 진입 · 보류면 진입 안 함 · 되돌림 기다림)로 돌린 숫자예요"
+
+
+def design_note_ko(d: dict, cfg: Optional[dict]) -> Optional[str]:
+    """How the running config differs from the design the replay ran on: its 4h entries, 보류 허용, 바로 진입 (and then its
+    member count); None for a config of the replay's design."""
+    tr = (cfg or {}).get("trend") if isinstance((cfg or {}).get("trend"), dict) else {}
+    members = [m for m in (cfg or {}).get("members") or [] if isinstance(m, dict)]
+    n_ref = (d.get("setup") or {}).get("members")
+    diffs = []
+    if any(m.get("tf") == "4h" for m in members):
+        diffs.append("4시간 진입(끝난 일봉 판단)")
+    if tr.get("hold_entry"):
+        diffs.append("보류 허용")
+    if tr.get("pullback_wait", True) is False:
+        diffs.append("바로 진입(되돌림 안 기다림)")
+    if not diffs:
+        return None
+    if members and isinstance(n_ref, int) and len(members) != n_ref:
+        diffs.insert(0, f"진입 매매법 {len(members)}개")
+    return (DESIGN_KO.format(n=n_ref if isinstance(n_ref, int) else "10") + f" · 지금 봇과 다른 점: {' · '.join(diffs)} · 진입 "
+            "횟수·결과가 다를 수 있어 참고로만 봐요")
+
+
 def weekend_ko(live: dict, rep: dict) -> str:
     n = live["weekend_entries"]
     if n:
@@ -527,9 +555,14 @@ def cum_of(rows: list) -> list:
 
 
 # ================================================================ 깔때기
-def funnel_view(ref: dict, f: Optional[dict], skipped: Optional[int], entered_known: bool) -> dict:
+NO_PULL_KO = "바로 진입이라 없음 (되돌림 안 기다림)"
+
+
+def funnel_view(ref: dict, f: Optional[dict], skipped: Optional[int], entered_known: bool, pull: bool = True) -> dict:
     """The replay's stages and the paper's since the start (livereview.funnel_of), each as a count, its share of the signals
-    and of the stage before; where the rest stopped, in livetrend.BLOCK's categories."""
+    and of the stage before; where the rest stopped, in livetrend.BLOCK's categories. ``pull`` false (the running config
+    enters at once, owners 10-22): the paper has no pullback stage (NO_PULL_KO, never a 0), its entries against the checks
+    passed."""
     rf = ref["funnel"]
     rep = [{"id": sid, "ko": ko, "n": rf.get(fk)} for sid, ko, fk in STAGES]
     rblock: dict = {}
@@ -551,11 +584,16 @@ def funnel_view(ref: dict, f: Optional[dict], skipped: Optional[int], entered_kn
     after = f["signals"] - sum(blk.get(k, 0) for k in AT_SIGNAL)
     live = [{"id": "signals", "n": f["signals"]}, {"id": "after_time", "n": after}, {"id": "passed", "n": f["passed"]},
             {"id": "touched", "n": f["touched"]}, {"id": "entered", "n": f["entered"] if entered_known else None}]
+    if not pull and not f["touched"]:
+        live[3] = {"id": "touched", "n": None, "why_ko": NO_PULL_KO}
     for x, (_sid, ko, _fk) in zip(live, STAGES):
         x["ko"] = ko
-        if x["n"] is None:
+        if x["n"] is None and "why_ko" not in x:
             x["why_ko"] = "진입 기록 표(outcomes)가 없어 모름"
-    out.update(state="ok", live=_shares(live), live_blocked=f.get("blocked") or [], skipped={"replay": one, "live": skipped})
+    live = _shares(live)
+    if live[3]["n"] is None and live[4]["n"] is not None and live[2]["n"]:
+        live[4]["of_prev"] = live[4]["n"] / live[2]["n"]           # 바로 진입: the entries out of the checks passed
+    out.update(state="ok", live=live, live_blocked=f.get("blocked") or [], skipped={"replay": one, "live": skipped})
     return out
 
 
@@ -668,7 +706,8 @@ def build(p: dict, now_ms: Optional[int] = None, ref_path=None) -> dict:
     entries["live"]["src"] = "outcomes" if pr["entered"] is not None else "trades"
     # 깔때기
     f = LR.funnel_of(pr["sigs"], pr["entered"] or [], [int(x) for x in pr["skipped"] or []]) if pr["sigs"] is not None else None
-    funnel = funnel_view(d, f, len(pr["skipped"]) if pr["skipped"] is not None else None, pr["entered"] is not None)
+    funnel = funnel_view(d, f, len(pr["skipped"]) if pr["skipped"] is not None else None, pr["entered"] is not None,
+                         L.trend_waits(pr.get("cfg")))
     # 거래 결과 with the band the replay leaves for each live account's n
     accts = {"replay": rep, "paper": paper, **{x["id"]: x["rows"] for x in execs if x["state"] == "ok"}}
     k_plot = max(len(rep), *(len(v) for v in accts.values()))
@@ -691,7 +730,8 @@ def build(p: dict, now_ms: Optional[int] = None, ref_path=None) -> dict:
     c_rep, c_paper = replay_costs(d), costs_of(paper)
     tr = d["trades"]
     return {**base, "state": "ok", "since": since,
-            "ref": {"what": d["what"], "honest_ko": [*d["honest_ko"], time_note_ko(d, pr.get("cfg"))],
+            "ref": {"what": d["what"], "honest_ko": [*d["honest_ko"], time_note_ko(d, pr.get("cfg")),
+                                                     *filter(None, [design_note_ko(d, pr.get("cfg"))])],
                     "window_kst": d["window_kst"], "window_ms": d["window_ms"],
                     "setup": d["setup"], "path": "data/trend_replay_0701_1020.json"},
             "entries": entries, "funnel": funnel,

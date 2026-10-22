@@ -831,15 +831,28 @@ TREND_FREEZE_DAYS = 14                 # owners 10-21 (#13 추천대로): the ru
 # a new, untested rule set: no backtest, no start guide lines, no 88 % / 82 % rule (the owners decide at the review)
 TREND_NO_REF_KO = "새 규칙이라 비교할 백테스트 기준이 없어요 · 2주 뒤 검토"
 TREND_RULE_KO = "새 규칙이라 88%·82% 같은 판단 기준이 없어요 · 2주 뒤 검토에서 두 분이 정해요"
-# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보), in their words (livetrend.ROLE is this)
-TREND_ROLE = {"N08_ICHI_WR": "눌림", "F9_FVG": "눌림", "N05_PSAR_POC": "자리", "F9_IFVG": "자리", "F3_BOS": "돌파", "F15_ORB": "돌파",
-              "N06_MACD_ORB": "돌파", "S3_CMO_SANDWICH": "횡보", "N20_EMA9_CHOP": "횡보"}
-TREND_ROLES = ("눌림", "자리", "돌파", "횡보")
+# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보; 10-22: 추세 for F7_RF_TRIPLE), in their words
+# (livetrend.ROLE is this); the 10-21 design's members stay so their trades still show a role
+TREND_ROLE = {"N08_ICHI_WR": "눌림", "F9_FVG": "눌림", "V39_ALL": "눌림", "N05_PSAR_POC": "자리", "F9_IFVG": "자리", "F9_OB": "자리",
+              "F16_FIB382": "자리", "F16_FIB500": "자리", "F16_FIB618": "자리", "F16_FIB764": "자리", "F6_VWAP_FAIL": "자리",
+              "F10_OTE": "자리", "F3_BOS": "돌파", "F15_ORB": "돌파", "N06_MACD_ORB": "돌파", "S3_CMO_SANDWICH": "횡보",
+              "N20_EMA9_CHOP": "횡보", "F7_RF_TRIPLE": "추세"}
+TREND_ROLES = ("눌림", "자리", "돌파", "횡보", "추세")
 TREND_ROLE_SUB_KO = {"눌림": "추세 속 되돌림에서 들어가는 매매법", "자리": "가격이 모인 자리에서 들어가는 매매법",
-                     "돌파": "추세 초입의 돌파 (상위 ADX 30 미만이고 오를 때만)", "횡보": "쉬던 가격이 움직일 때 들어가는 매매법"}
-TREND_HTF = {"30m": "1h", "1h": "4h"}  # the entry bar -> the closed higher bar its trend is judged on
-TREND_TF_KO = {"30m": "30분 진입", "1h": "1시간 진입"}
-TREND_TF_SUB_KO = {"30m": "끝난 1시간봉 추세로 판단", "1h": "끝난 4시간봉 추세로 판단"}
+                     "돌파": "추세 초입의 돌파 (상위 ADX 30 미만이고 오를 때만)", "횡보": "쉬던 가격이 움직일 때 들어가는 매매법",
+                     "추세": "레인지 필터·하이킨아시·상위 봉 하이킨아시 방향이 처음 같이 맞춰질 때 따라 들어가는 매매법"}
+TREND_HTF = {"30m": "1h", "1h": "4h", "4h": "1d"}  # the entry bar -> the closed higher bar its trend is judged on (4h: 10-22)
+TREND_TF_KO = {"30m": "30분 진입", "1h": "1시간 진입", "4h": "4시간 진입"}
+TREND_TF_SUB_KO = {"30m": "끝난 1시간봉 추세로 판단", "1h": "끝난 4시간봉 추세로 판단", "4h": "끝난 일봉 추세로 판단"}
+TREND_JUDGED_TFS = ("1h", "4h", "1d")  # the higher bars the bot judges (state ``trend`` coins; 1d since 10-22)
+TREND_ENTRY_OF = {v: k for k, v in TREND_HTF.items()}   # a judged bar -> the entries that read it
+
+
+def trend_waits(cfg: Optional[dict]) -> bool:
+    """The trend bot at ``cfg`` waits for a pullback after a signal passes (``trend.pullback_wait``, true when missing:
+    the 10-21 design; the owners' config since 10-22 enters at once, the shadow trend-wait still waits)."""
+    t = (cfg or {}).get("trend") if isinstance(cfg, dict) else None
+    return bool(t.get("pullback_wait", True)) if isinstance(t, dict) else True
 TREND_NO_PAUSE_KO = "쉬기 없음 · 하루 손실 한도 없음"
 TREND_LEDGER_KO = "개선 후보 장부는 예전 봇의 5년 기준표로 찾은 후보라 추세판단 봇에는 쓰지 않아요 · 2주 뒤 검토에서 새로 봐요"
 
@@ -890,8 +903,11 @@ def trend_out(tb: Optional[dict]) -> Optional[dict]:
     """The trend bot as a page shows it (no config): None for another bot."""
     if tb is None:
         return None
+    t = (tb.get("config") or {}).get("trend")
     return {"trend": True, "name": tb["name"], "since": tb["since"], "freeze_until": tb["freeze_until"],
             "freeze_days": tb["freeze_days"], "no_ref_ko": TREND_NO_REF_KO,
+            # its entry style (10-22: 바로 진입, 보류 허용), so a page says what this config does, never the 10-21 design's
+            "pullback_wait": trend_waits(tb.get("config")), "hold_entry": bool(isinstance(t, dict) and t.get("hold_entry")),
             "members": [{k: m[k] for k in ("order", "strategy", "tf", "role", "side_only")} for m in tb["members"]]}
 
 
@@ -1313,8 +1329,8 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
 
 
 # ================================================================ the other tabs (거래 · 신호 · 성적 · 안전 · 그림자 · 설정)
-TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
-TF_ORDER = {"5m": 0, "15m": 1, "30m": 2, "1h": 3, "4h": 4}
+TF_KO = {"5m": "5분", "15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
+TF_ORDER = {"5m": 0, "15m": 1, "30m": 2, "1h": 3, "4h": 4, "1d": 5}
 SIDE_KO = {1: "롱", -1: "숏"}
 COINS = ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")      # paperbot/rmember.py SYMS (the index of `sym`)
 DOW_KO = "월화수목금토일"
@@ -1332,8 +1348,12 @@ SIGNALS_KEEP = 200                     # recent signal rows sent (the page pages
 TRADES_KEEP = 500                      # closed trades per account sent to 거래 (newest first)
 SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocut.db", "그림자 끄는 구간 없음"), ("ac32", "shadow-ac32.db", "그림자 32개"),
            ("chase", "shadow-chase.db", "그림자 어중간한 추격 막기"), ("trend4h", "shadow-trend4h.db", "그림자 4시간 역추세만"),
-           ("rule15", "shadow-rule15.db", "그림자 규칙봇 15(옛 규칙)"))
-# the old bots' shadows above (A+C 합본 · 규칙봇 15); the 추세판단 봇's own three are dash/more/liveshadow.py TREND_SHADOWS
+           ("rule15", "shadow-rule15.db", "그림자 규칙봇 15(옛 규칙)"),
+           ("trend-time", "shadow-trend-time.db", "그림자 시간 정리 있음(10/21 추세판단 봇)"),
+           ("trend-now", "shadow-trend-now.db", "그림자 되돌림 없이 바로 진입(10/21 추세판단 봇)"),
+           ("trend-vote4", "shadow-trend-vote4.db", "그림자 판단 4개 모두 같은 쪽(10/21 추세판단 봇)"))
+# the old bots' shadows above (A+C 합본 · 규칙봇 15 · the 10/21 추세판단 봇's three, configs gone with the 10/22 design); the
+# live 추세판단 봇's own are dash/more/liveshadow.py TREND_SHADOWS
 # the live checks' own files (read-only here): paperbot/livecheck.py (morning check, watcher, loss cards) and
 # paperbot/liveimprove.py (weekly scorecard, the improvement ledger)
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
@@ -1539,7 +1559,7 @@ def why_cat(status: str, why: str) -> tuple:
         return "late", "늦음"
     if w.startswith("추세 판단을 못 읽어") or w.startswith("추세 판단에 쓸 가격"):
         return "trend_unread", "추세 판단 못 읽음"
-    if w.startswith(("1시간 추세", "4시간 추세")):
+    if w.startswith(("1시간 추세", "4시간 추세", "일봉 추세")):          # 일봉: the 4h entries (10-22)
         return "trend", "추세 판단 (보류·반대·힘 약함·끝물)"
     if w.startswith("돌파형은 추세 초입만") or "EMA20에서" in w or " RSI " in f" {w}":
         return "spot", "진입 자리 검사"
@@ -2079,7 +2099,7 @@ def settings(p: dict, now: int) -> dict:
 def trend_rules(tb: Optional[dict]) -> Optional[dict]:
     """설정 › 추세 판단 규칙 (the trend bot only): its rules in its own words (state ``trend`` rules: TrendRules.describe), the
     numbers they come from, the members with their role and entry bar (30분 진입: the closed 1h bar's trend, 1시간 진입: the
-    4h bar's), and the pauses it does not have (owners 10-21 night "쉬기는 빼주고", "10번은 없애고")."""
+    4h bar's, 4시간 진입: the daily bar's), and the pauses it does not have (owners 10-21 night "쉬기는 빼주고", "10번은 없애고")."""
     if tb is None:
         return None
     nums = tb.get("numbers") or {}
@@ -2090,7 +2110,8 @@ def trend_rules(tb: Optional[dict]) -> Optional[dict]:
             "members": [{**m, "tf_ko": TREND_TF_KO.get(m["tf"], TF_KO.get(m["tf"], m["tf"])),
                          "htf_ko": TREND_TF_SUB_KO.get(m["tf"])} for m in tb["members"]],
             "roles": [{"id": r, "sub_ko": TREND_ROLE_SUB_KO[r], "n": sum(1 for m in tb["members"] if m.get("role") == r)}
-                      for r in TREND_ROLES]}
+                      for r in TREND_ROLES],
+            "pullback_wait": trend_waits(tb.get("config"))}
 
 
 # ---------------------------------------------------------------- 순위 (매매법 순위표, owners 10/19)
@@ -2483,7 +2504,7 @@ def _map_label(ref: Optional[dict], cut: str, k: Any) -> str:
 
 # the trend bot's own split (no 5-year column: a new rule set has no backtest): id, title, subtitle
 TREND_MAP_CUTS = (("judge", "진입 때 추세 판단", "판단 4개 중 진입 방향과 같은 쪽이 몇 개였나"), ("coin", "코인", "6개 코인"),
-                  ("hb", "시간대", "한국 시간 4시간씩"), ("side", "방향", "롱 · 숏"), ("tf", "진입 봉", "30분 진입 · 1시간 진입"))
+                  ("hb", "시간대", "한국 시간 4시간씩"), ("side", "방향", "롱 · 숏"), ("tf", "진입 봉", "30분 · 1시간 · 4시간 진입"))
 TREND_MAP_MIN_N = 10                   # the map's own floor (liveimprove SMALL_N): fewer trades in a row = 표본 적음, grey
 
 
@@ -2517,7 +2538,9 @@ def trend_map(p: dict, now: int, tb: dict, paper: dict, execs: list) -> dict:
             "side": lambda t: str(int(t["side"])) if t.get("side") is not None else None, "tf": lambda t: t.get("timeframe")}
     keys = {"judge": [str(k) for k in range(4, vote_min - 1, -1)], "coin": syms, "hb": [str(k) for k in range(6)], "side": ["1", "-1"],
             "tf": tfs}
-    label = {"judge": lambda k: "4개 모두 같은 쪽" if k == "4" else f"4개 중 {k}개", "coin": lambda k: str(k).replace("USDT", ""),
+    # fewer than vote_min on its side: the entry went on a 보류 (owners 10-22 보류 허용: trend.hold_entry)
+    label = {"judge": lambda k: "4개 모두 같은 쪽" if k == "4" else f"4개 중 {k}개" + (" (보류 진입)" if str(k).isdigit() and int(k) < vote_min else ""),
+             "coin": lambda k: str(k).replace("USDT", ""),
              "hb": lambda k: f"{int(k) * 4:02d}~{int(k) * 4 + 4:02d}시", "side": lambda k: "롱" if k == "1" else "숏",
              "tf": lambda k: TREND_TF_KO.get(k, TF_KO.get(k, k))}
     cuts = {}
@@ -2525,7 +2548,7 @@ def trend_map(p: dict, now: int, tb: dict, paper: dict, execs: list) -> dict:
         by: dict = {}
         for t in trades:
             by.setdefault(keyf[cut](t), []).append(t)
-        ks = keys[cut] + sorted(str(k) for k in by if k is not None and str(k) not in keys[cut])
+        ks = keys[cut] + sorted((str(k) for k in by if k is not None and str(k) not in keys[cut]), reverse=cut == "judge")
         rows = [_cut_row(k, label[cut](k), by.get(k, [])) for k in ks]
         if by.get(None):                                     # a trade whose cut could not be read: said, never dropped silently
             rows.append({**_cut_row(None, "기록 없음", by[None]), "unknown": True})
@@ -2827,11 +2850,12 @@ def team(p: dict, now: int, units=None) -> dict:
 TF_MS_LB = {"15m": 15 * 60_000, "30m": 30 * 60_000, "1h": HOUR, "4h": 4 * HOUR}
 
 
-def pending(p: dict, now: int, members: Optional[list] = None, trend: bool = False) -> dict:
+def pending(p: dict, now: int, members: Optional[list] = None, trend: bool = False, pull: bool = True) -> dict:
     """진입 대기: the combined bot's signals still waiting (paperbot/livecheck.py pending_entries: ``kind`` "break" — the
     level the price must trade beyond — or "pullback" — the 추세판단 봇's level the price must come back to —, the last 1m
     close, how far to go, the deadline), and when each timeframe's next bar closes (when the bot next looks for signals)
-    with how many settings run on it ("now" / "break"; with ``trend`` every member enters on a pullback: "pull")."""
+    with how many settings run on it ("now" / "break"; with ``trend`` every member enters on a pullback, "pull", when its
+    config waits (``pull``: trend_waits), else at its signal, "now": the owners' config since 10-22)."""
     from ... import livecheck as LC
     more = paths_more()
     try:
@@ -2861,7 +2885,7 @@ def pending(p: dict, now: int, members: Optional[list] = None, trend: bool = Fal
         t = m.get("tf")
         if t in TF_MS_LB:
             c = by_tf.setdefault(t, {"tf": t, "now": 0, "break": 0, "pull": 0})
-            c["pull" if trend else "break" if m.get("entry") == "break" else "now"] += 1
+            c[("pull" if pull else "now") if trend else "break" if m.get("entry") == "break" else "now"] += 1
     closes = [{**c, "next_ms": (now // TF_MS_LB[t] + 1) * TF_MS_LB[t]} for t, c in sorted(by_tf.items(), key=lambda kv: TF_MS_LB[kv[0]])]
     return {"state": "ok", "waits": waits, "closes": closes, "rule_state": rule_state, "rule_path": more["rule_db"]}
 
@@ -2935,7 +2959,7 @@ def whynow(p: dict, now: int) -> dict:
     combo = read_combo(p["paper"], paths_more()["combo_config"])
     members = members_of(combo) if combo.get("state") == "ok" else []
     trend_on = combo.get("state") == "ok" and isinstance(combo.get("config"), dict) and combo["config"].get("trend") is not None
-    pend = pending(p, now, members, trend=trend_on)
+    pend = pending(p, now, members, trend=trend_on, pull=trend_on and trend_waits(combo.get("config")))
     try:
         lk = likely_rows(load_likely(), now, members, pend.get("waits") or [])
         lk = {"state": "ok", **{k: lk[k] for k in ("cell", "bot", "note_ko")}, "top": lk["rows"][:LIKELY_TOP]}
@@ -2967,12 +2991,26 @@ LIKELY_NOTE_KO = ("5년 백테스트(지금 설정 95개, 실거래 규칙)에�
                   "비율이에요. '최근'은 2025~26년만. 포지션이 비어 있을 때 기준이고, 예측이 아니라 과거 빈도예요. 오늘의 경제 발표 쉬는 "
                   "시간은 따로 빼지 않았어요.")
 # the trend bot (owners 10-21): the file is the old A+C bot's 5-year run (source.config); the trend bot enters only after its trend judge, its
-# entry checks and the pullback, so a signal's frequency is more than its entries (said, never hidden)
-LIKELY_TREND_NOTE_KO = ("예전 봇(A+C 합본, 설정 95개)의 5년 백테스트에서 같은 요일·같은 한국 시각 뒤 1·4·24시간 안에 그 매매법의 신호가 나온 "
-                        "비율이에요. 추세판단 봇은 신호가 나와도 추세 판단(1시간·4시간 추세)·진입 전 검사·되돌림을 모두 통과해야 들어가서, "
-                        "실제 진입은 이 숫자보다 꽤 적어요(봉도 다를 수 있어요). 새 규칙의 진입 빈도는 아직 잰 적이 없어요. 과거 빈도일 뿐 "
-                        "예측이 아니에요.")
+# entry checks (and the pullback, when its config waits: likely_trend_note), so a signal's frequency is more than its entries
+# (said, never hidden)
+LIKELY_TREND_NOTE_HEAD_KO = ("예전 봇(A+C 합본, 설정 95개)의 5년 백테스트에서 같은 요일·같은 한국 시각 뒤 1·4·24시간 안에 그 매매법의 신호가 "
+                             "나온 비율이에요. ")
+LIKELY_TREND_NOTE_TAIL_KO = ("실제 진입은 이 숫자보다 꽤 적어요(봉도 다를 수 있어요). 새 규칙의 진입 빈도는 아직 잰 적이 없어요. 과거 빈도일 뿐 "
+                             "예측이 아니에요.")
+LIKELY_TREND_NOTE_KO = (LIKELY_TREND_NOTE_HEAD_KO + "추세판단 봇은 신호가 나와도 추세 판단(1시간·4시간·일봉 추세)·진입 전 검사·되돌림을 모두 "
+                        "통과해야 들어가서, " + LIKELY_TREND_NOTE_TAIL_KO)
 _likely_ref: dict = {}
+
+
+def likely_trend_note(tb: Optional[dict]) -> str:
+    """진입 가능성's note for the trend bot ``tb`` (trend_bot): the judged bars its members read and the pullback only when
+    its config waits (trend_waits; the owners' config since 10-22 enters at once)."""
+    tb = tb or {}
+    htfs = sorted({m.get("htf") for m in tb.get("members") or [] if m.get("htf")}, key=lambda t: TF_ORDER.get(t, 99))
+    judged = "·".join(TF_KO.get(t, t) for t in htfs) or "상위 봉"
+    pull = trend_waits(tb.get("config"))
+    return (LIKELY_TREND_NOTE_HEAD_KO + f"추세판단 봇은 신호가 나와도 추세 판단({judged} 추세)·진입 전 검사"
+            + ("·되돌림을 모두 통과해야" if pull else "를 통과해야") + " 들어가서, " + LIKELY_TREND_NOTE_TAIL_KO)
 
 
 # the 추세판단 봇: its new rules have no 5-year signal frequencies; 진입 가능성 shows what the trend takes now and the replay
@@ -3102,7 +3140,7 @@ def likely(p: dict, now: int) -> dict:
     out = likely_rows(ref, now, members, ((w.get("pending") or {}).get("waits")) or [])
     tb = trend_bot(p["paper"])
     if tb is not None:
-        out["note_ko"] = LIKELY_TREND_NOTE_KO
+        out["note_ko"] = likely_trend_note(tb)
     sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
     sig_by = signals_by_strategy(sig)
     for r in out["rows"]:

@@ -27,15 +27,17 @@ hand.
 추세판단 봇 (owners 10/21, docs/trend-bot-ko.md; the running paper bot's config has ``trend``: ``is_trend``): the packet
 describes that bot instead (``facts_trend``), from the live site's own read-only readers (dash/more/livetrend.py 관제,
 livereview.py 검토, livereplayref.py 재현 비교, livebots.py): its rules (TrendRules.describe() and the config) and the
-owners' decisions (no 시간 정리 exit, no pauses or daily limit, the Nasdaq-open 22:00~23:00 KST window, real size about
-40 % of each real wallet via qty_scale, the 2-week freeze to the review), its record since its own start only
-(``trend_since``: the paper, its coin-flip twin, each executor; a trade entered before is the bot before it's, kept apart
-as ``old_bot_trades``), each coin's trend now, the waits, where the signals stopped (funnel), the supervisor's exits and
-the switch close, the costs split against the 7/1~10/20 replay and what the replay leads to expect (labelled 가상), and
-the new rules' what-ifs (가상). No 5-year reference and no 40-trade 88 % rule: a checkpoint is "N번째 거래 점검" on its
-own trades. The members' prompts (``system_prompt(role, trend=True)``) speak of its parts (judgment, checks, pullback,
-supervisor, costs); an idea is a hypothesis to test with a shadow bot (deploy/combo.shadow-trend-*.json) or at the
-2-week review. Any other config: everything as before.
+owners' decisions (the 10-22 design: 18 entry members, 4h entries on the closed daily bar, 보류 허용, 바로 진입 with the
+pullback wait compared in the shadow trend-wait; no 시간 정리 exit, no pauses or daily limit, the Nasdaq-open 22:00~23:00
+KST window, real size about 40 % of each real wallet via qty_scale, the 2-week freeze to the review), its record since
+its own start only (``trend_since``: the paper, its coin-flip twin, each executor; a trade entered before is the bot
+before it's, kept apart as ``old_bot_trades``), each coin's trend now (1h, 4h and daily), the waits, where the signals
+stopped (funnel), the supervisor's exits and the switch close, the costs split against the 7/1~10/20 replay and what the
+replay leads to expect (labelled 가상), and the new rules' what-ifs (가상). No 5-year reference and no 40-trade 88 % rule:
+a checkpoint is "N번째 거래 점검" on its own trades. The members' prompts (``system_prompt(role, trend=True)``) speak of
+its parts (judgment, checks, the entry: at once or after a pullback as fixed_rules says, supervisor, costs); an idea is a
+hypothesis to test with a shadow bot (deploy/combo.shadow-trend-*.json) or at the 2-week review. Any other config:
+everything as before.
 
 Budget (the owners' Claude plan, shared with their chats): LIVETEAM_BUDGET="day=12,week=40,tokens_day=900000"
 (calls per KST day, calls per 7 KST days, tokens per KST day). A meeting starts only when all its calls fit, each call
@@ -107,6 +109,21 @@ FIXED_PAPER = ("매매법 15개(규칙봇 기본값, 30분·1시간)", "BTC 40�
 FIXED_EXEC = ("거래소에 거는 손절", "연패·낙폭으로 저절로 멈추지 않음(비상 정지 파일 /var/lib/paperbot/STOP으로만 멈춤)",
               "손절 한 번 최대 잔고의 35%", "신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)")
 FIXED = FIXED_PAPER + FIXED_EXEC
+# ... and for the 추세판단 봇 (a trend config that cannot be read): the owners' 10-22 design (deploy/combo.trend.json)
+FIXED_TREND_PAPER = ("진입 매매법 18개(30분 진입 4개는 끝난 1시간봉 추세, 1시간 진입 7개는 끝난 4시간봉 추세, 4시간 진입 7개는 끝난 일봉 "
+                     "추세를 따름) · 판단만 하는 매매법 4개(V3.9 · EMA·DMI·ADX · OBV 추세형 · 일목·AO)는 진입 안 함",
+                     "추세 판단: 판단 4개 중 3개 이상 같은 쪽 / ADX 20 이상, 40 넘고 꺾이면 끝물 / 보류여도 진입, 반대 방향만 막음",
+                     "진입 전 검사: 상위 봉 EMA20에서 진입 방향 1.5 ATR 넘게 멀면 안 함 / 진입 봉 EMA20에서 1.5 ATR 안 / RSI 롱 70 미만·"
+                     "숏 30 초과 / 돌파형(F3_BOS, F15_ORB, N06_MACD_ORB)은 추세 초입만 / 추격 막기 전체",
+                     "진입: 검사를 통과한 신호의 그 분에 시장가(되돌림 안 기다림, 실행기도 그때 시장가로 따라감)",
+                     "감독 청산: 첫 잠금 전에 상위 봉 추세 판단이 반대로 바뀌면 청산 · 시간 정리 없음",
+                     "BTC 40배 · 나머지 30배", "증거금 잔고의 40%", "한 번에 포지션 하나",
+                     "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
+                     "계단 익절(순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%))",
+                     "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
+                     "추격 진입 막기 18개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
+                     "코인 6개(BTC ETH SOL DOGE LTC BCH)", "한국 시간 주말 진입 없음", "미국 경제 발표 앞뒤 30분 진입 없음",
+                     "나스닥 개장 앞 30분·뒤 30분 진입 없음", "청산 뒤 반대로 갈아타지 않음")
 # what the owners knew when they started a bot without a 5-year reference (keyed by its config name; its guide)
 START_BASIS = {"규칙봇 15": ("docs/live15-start-ko.md '근거와 한계': 규칙봇의 지난 2주 실제 진입을 새 규칙으로 다시 판정하면 58승 4패(94%), "
                             "평일 하루 6.2번 진입, 최대 낙폭 20%(증거금 40%로 계산). 이 2주는 15개를 고를 때 쓴 바로 그 기간이라 앞으로는 "
@@ -128,11 +145,19 @@ CHECK_RULE_TREND = ("새 규칙이라 40번 판단 기준(88%/82%)이 없음(그
 HOW_RARE_TREND = "새 규칙이라 연패가 얼마나 드문지 정한 숫자가 없습니다(5년 기준표 없음)"
 TREND_WORDS = ("wins = 순손익이 0보다 큰 거래(실행기와 같은 셈). flip = 같은 순간 같은 크기로 들어가되 방향만 동전으로 정한 비교용 페이퍼 "
                "계좌(진짜 방향이 동전보다 나은지 보는 잣대). luck = 두 승률 차이가 운으로도 생기는 크기인지(90%). break_even = 이길 때 "
-               "첫 잠금만큼, 질 때 손절만큼일 때 본전이 되는 승률. replay·whatif = 실제 거래가 아닌 다시 계산한 숫자(가상)")
+               "첫 잠금만큼, 질 때 손절만큼일 때 본전이 되는 승률. replay·whatif = 실제 거래가 아닌 다시 계산한 숫자(가상). "
+               "entry_on_hold = 상위 봉 판단이 보류일 때 들어간 거래(보류 허용)")
 TREND_IDEA_HOW_KO = "그림자 봇으로 나란히 보거나 2주 검토에서 두 분이 정해요"
 TREND_ABOUT_KO = "추세판단 봇의 기록(새 봇 시작 뒤 페이퍼·동전 쌍둥이·두 실행기, 추세 판단, 걸린 신호, 감독 청산, 비용, 7/1~10/20 재현(가상))"
 # what the owners decided for a trend config that cannot be read (docs/trend-bot-ko.md 2-3)
+TREND_DESIGN_KO = ("새 설계(10/22): 진입 매매법 18개(30분 4개 · 1시간 7개 · 4시간 7개, 모두 추격 막기, 규칙봇 기본값 신호) · 성적과 "
+                   "2주 검토는 새 설계 시작부터 새로 셈")
+TREND_DAILY_KO = "4시간 진입은 끝난 일봉 추세로 판단(10/22 '일봉 추세보고 4시간봉 진입'; 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉)"
+TREND_HOLD_KO = "보류 허용(10/22): 상위 봉 판단이 보류여도 진입하고 반대 방향일 때만 막음(힘 약함·끝물·진입 전 검사는 그대로)"
+TREND_NOW_KO = ("바로 진입(10/22 '바로 진입으로 가자'): 검사를 통과한 신호는 그 분에 진입 · 되돌림 기다림은 그림자 trend-wait로 나란히 "
+                "비교(주문 없음)")
 TREND_DECISIONS_FIXED = ("규칙 고정: 새 봇 시작부터 2주는 규칙을 바꾸지 않고 기록을 모은 다음 2주 검토에서 두 분이 정함",
+                         TREND_DESIGN_KO, TREND_DAILY_KO, TREND_HOLD_KO, TREND_NOW_KO,
                          "시간 정리 청산 없음(10/21 밤 '시간청산 빼줘'): 첫 잠금 전에는 손절·추세 뒤집힘 감독 청산·빠른 청산만",
                          "쉬기 없음: 손실 뒤 매매법·코인 쉬기 없음, 하루 손실 한도 없음(10/21 '쉬기는 빼주고', '10번은 없애고')",
                          "나스닥 개장 앞 30분·뒤 30분 진입 없음(10/21 밤 '나스닥 개장전 30분도 진입금지로 하자'): 미국 서머타임에는 "
@@ -148,8 +173,9 @@ ROLES_TREND = {
                        "본전 승률, 7/1~10/20 재현(가상)의 보통 범위 안인지, 새 규칙이 도왔는지(가상 계산). 5년 기준표는 없음. 다른 사람이 "
                        "성급하게 결론 내면 반박하는 역할"},
     "market": {"name": "나침반", "title": "시장 담당",
-               "focus": "코인별 1시간·4시간 추세 판단(상승·하락·보류, 힘 약함·끝물), 신호가 어디서 걸렸나(추세 판단·진입 자리 검사·추격 막기·"
-                        "쉬는 시간·되돌림 안 옴), 되돌림 기다림, 코인·시간대·롱/숏, 다가오는 미국 경제 발표와 나스닥 개장"},
+               "focus": "코인별 1시간·4시간·일봉 추세 판단(상승·하락·보류, 힘 약함·끝물), 신호가 어디서 걸렸나(추세 판단·진입 자리 검사·"
+                        "추격 막기·쉬는 시간), 코인·시간대·롱/숏, 다가오는 미국 경제 발표와 나스닥 개장. 되돌림 기다림·되돌림 안 옴은 "
+                        "되돌림을 기다리는 설정(그림자 trend-wait)의 것"},
     "lead": dict(ROLES["lead"]),
 }
 SHADOW_TREND_GLOB = "combo.shadow-trend-*.json"   # the trend bot's shadow configs in deploy/ (read only, may not exist yet)
@@ -408,11 +434,17 @@ def _trend_rules(cfg: Optional[dict]) -> Optional[list]:
     except Exception:  # noqa: BLE001  an unreadable trend section: the combined bot's lines only
         return None
     members = [m for m in cfg.get("members") or [] if isinstance(m, dict)]
-    n30, n1h = (sum(1 for m in members if m.get("tf") == tf) for tf in ("30m", "1h"))
-    out = [f"진입 매매법 {len(members)}개(30분 진입 {n30}개는 끝난 1시간봉 추세, 1시간 진입 {n1h}개는 끝난 4시간봉 추세를 따름) · "
-           f"판단만 하는 매매법 4개({TREND_JUDGES_KO})는 진입 안 함"] + list(said)
+    # 4h entries on the closed daily bar since 10-22 (said only when the config has them)
+    parts = [f"{ko} 진입 {n}개는 끝난 {hk} 추세" for ko, n, hk in
+             (("30분", sum(1 for m in members if m.get("tf") == "30m"), "1시간봉"),
+              ("1시간", sum(1 for m in members if m.get("tf") == "1h"), "4시간봉"),
+              ("4시간", sum(1 for m in members if m.get("tf") == "4h"), "일봉")) if n or ko != "4시간"]
+    out = [f"진입 매매법 {len(members)}개({', '.join(parts)}를 따름) · 판단만 하는 매매법 4개({TREND_JUDGES_KO})는 진입 안 함"] + list(said)
+    waits = (cfg.get("trend") or {}).get("pullback_wait", True) is not False
+    entry = ("진입: 되돌림 가격에 닿은 다음 분에 시장가(실행기도 그때 시장가로 따라감)" if waits
+             else "진입: 검사를 통과한 신호의 그 분에 시장가(되돌림 안 기다림, 실행기도 그때 시장가로 따라감)")
     for r in base[1:]:
-        out.append("진입: 되돌림 가격에 닿은 다음 분에 시장가(실행기도 그때 시장가로 따라감)" if r == "시장가 진입" else r)
+        out.append(entry if r == "시장가 진입" else r)
     out += ["전환 전 포지션 정리: 새 봇 시작 전에 예전 규칙으로 열린 포지션은 첫 잠금 전이면 바로 닫음",
             "청산 뒤 반대로 갈아타지 않음"]
     return out
@@ -443,14 +475,16 @@ def _exec_rules(infos: list) -> list:
     return out
 
 
-def fixed_rules(cfg: Optional[dict], infos: Optional[list], second: Optional[dict] = None) -> list:
+def fixed_rules(cfg: Optional[dict], infos: Optional[list], second: Optional[dict] = None, trend_bot: bool = False) -> list:
     """The owners' fixed rules of the live side as the running configs say them (the paper bot's config, the executors'
-    configs that could be read); a part whose config cannot be read: the owners' decisions (FIXED_PAPER / FIXED_EXEC).
-    ``second`` (bot_world, owners 10-19): the second paper bot's rules where they differ from the first's (its stop), and
-    which executor follows which paper bot. The 추세판단 봇's config (``trend``): its own rules (_trend_rules)."""
+    configs that could be read); a part whose config cannot be read: the owners' decisions (FIXED_PAPER / FIXED_EXEC; the
+    추세판단 봇's, ``trend_bot`` or a ``trend`` config: FIXED_TREND_PAPER, the 10-22 design). ``second`` (bot_world, owners
+    10-19): the second paper bot's rules where they differ from the first's (its stop), and which executor follows which
+    paper bot. The 추세판단 봇's config (``trend``): its own rules (_trend_rules)."""
     readable = [e for e in (infos or []) if not e.problem]
+    is_t = trend_bot or (isinstance(cfg, dict) and cfg.get("trend") is not None)
     trend = _trend_rules(cfg) if isinstance(cfg, dict) and cfg.get("trend") is not None else None
-    out = list(trend or _paper_rules(cfg) or FIXED_PAPER)
+    out = list(trend or (FIXED_TREND_PAPER if is_t else _paper_rules(cfg) or FIXED_PAPER))
     if second:
         mine = _paper_rules(second.get("config")) or []
         diff = [r for r in mine if r not in out and not r.startswith("매매법 ")]
@@ -553,6 +587,18 @@ def trend_decisions(cfg: Optional[dict], now: int, since: Optional[int]) -> list
         return list(TREND_DECISIONS_FIXED)
     review = kst_md(int(since) + TREND_REVIEW_DAYS * DAY) if since else None
     out = [f"규칙 고정: 새 봇 시작부터 2주는 규칙을 바꾸지 않고 기록을 모은 다음 {review + ' ' if review else ''}2주 검토에서 두 분이 정함"]
+    # the 10-22 design, as far as this config has it
+    members = [m for m in cfg.get("members") or [] if isinstance(m, dict)]
+    if r.design:
+        n = {tf: sum(1 for m in members if m.get("tf") == tf) for tf in ("30m", "1h", "4h")}
+        out.append(f"새 설계({r.design}): 진입 매매법 {len(members)}개(30분 {n['30m']}개 · 1시간 {n['1h']}개 · 4시간 {n['4h']}개) · "
+                   "성적과 2주 검토는 새 설계 시작부터 새로 셈")
+    if any(m.get("tf") == "4h" for m in members):
+        out.append(TREND_DAILY_KO)
+    if r.hold_entry:
+        out.append(TREND_HOLD_KO)
+    out.append(TREND_NOW_KO if not r.pullback_wait else
+               "되돌림 진입: 검사를 통과한 신호는 진입 봉 하나 동안 되돌림을 기다렸다가 진입, 안 오면 버림")
     out.append("시간 정리 청산 없음(10/21 밤 '시간청산 빼줘'): 첫 잠금 전에는 손절(순ROE -50%)·추세 뒤집힘 감독 청산·빠른 청산만"
                if r.time_bars is None else f"설정에 시간 정리 청산이 있음: 진입 봉 {r.time_bars}개 안에 첫 잠금을 못 가면 청산")
     if r.member_losses is None and r.coin_pause_h is None and r.daily_loss is None:
@@ -564,7 +610,8 @@ def trend_decisions(cfg: Optional[dict], now: int, since: Optional[int]) -> list
         from . import combo as C
         when = _windows_ko(now, us, pre)
         out.append(f"{C.us_open_ko(us, pre)} 진입 없음" + ("(10/21 밤 '나스닥 개장전 30분도 진입금지로 하자')" if pre else "")
-                   + (f": {when}" if when else "") + " · 그 시간에도 추세 판단·되돌림 확인·감독 청산·손절·익절은 그대로")
+                   + (f": {when}" if when else "") + " · 그 시간에도 추세 판단·" + ("되돌림 확인·" if r.pullback_wait else "")
+                   + "감독 청산·손절·익절은 그대로")
     out.append("실거래 크기: 각 실거래 지갑의 약 40%를 증거금으로(실행기 수량 = 페이퍼 수량 × qty_scale, sizing에 지금 숫자)")
     return out
 
@@ -841,8 +888,12 @@ def _trend_record(rv: dict, lt: dict) -> dict:
     return out
 
 
+ENTRY_KO = {"30m": "30분", "1h": "1시간", "4h": "4시간"}
+
+
 def _trend_now(lt: dict) -> dict:
-    """Each coin's last closed 1h and 4h judgment (the bot's own, state ``trend``) and the directions it takes now."""
+    """Each coin's last closed 1h, 4h and daily judgment (the bot's own, state ``trend``; 1d since 10-22, the 4h entries
+    read it) and the directions it takes now (보류 허용: a 보류 takes both sides)."""
     if not _ok(lt):
         return _not_ok(lt)
     from .dash.more import livetrend as LT
@@ -850,17 +901,24 @@ def _trend_now(lt: dict) -> dict:
     cells = {}
     for sym, row in coins.items():
         cell = {}
-        for tf in ("1h", "4h"):
+        for tf in LT.JUDGED:
             j = row.get(tf) if isinstance(row, dict) else None
+            if j is None and tf == "1d":
+                continue                                  # a bot before 10-22 wrote no daily judgment
             cell[tf] = (j.get("text") or (f"못 읽음: {_clip(j.get('error'), 120)}" if j.get("error") else None)) if isinstance(j, dict) else None
         cells[_coin(sym)] = cell
-    taking = [f"{_coin(x['symbol'])} {'30분' if x['entry'] == '30m' else '1시간'} 진입 {_side(x['side'])}만" for x in LT.taking_now({"coins": coins})]
+    hold = bool(lt.get("hold_entry"))
+    entries = {m.get("tf") for m in lt.get("members") or [] if m.get("tf")} or None
+    taking = [f"{_coin(x['symbol'])} {ENTRY_KO.get(x['entry'], x['entry'])} 진입 "
+              + (f"{_side(x['side'])}만" if x["side"] else "롱·숏(보류 허용)") for x in LT.taking_now({"coins": coins}, entries, hold)]
     bot = lt.get("bot") or {}
     return {"as_of_kst": kst_text(lt.get("ts")), "coins": cells,
-            "taking_now": taking or ["지금 진입을 받는 추세가 없음(모두 보류·힘 약함·끝물)"],
+            "taking_now": taking or [f"지금 진입을 받는 추세가 없음(모두 {'' if hold else '보류·'}힘 약함·끝물)"],
             "paper_bot_stale": bot.get("stale"),
-            "words": "상승·하락 = 판단 4개 중 3개 이상 같은 쪽(유지 확인됨), 보류 = 진입 안 함. ADX 20 미만 = 힘 약함, 40 넘고 꺾이면 끝물"
-                     "(진입 안 함). taking_now = 지금 진입을 받는 코인·방향(30분 진입은 1시간 판단, 1시간 진입은 4시간 판단)"}
+            "words": "상승·하락 = 판단 4개 중 3개 이상 같은 쪽(유지 확인됨), 보류 = "
+                     + ("반대 방향만 아니면 진입(보류 허용)" if hold else "진입 안 함")
+                     + ". ADX 20 미만 = 힘 약함, 40 넘고 꺾이면 끝물(진입 안 함). taking_now = 지금 진입을 받는 코인·방향(30분 진입은 "
+                       "1시간 판단, 1시간 진입은 4시간 판단, 4시간 진입은 일봉 판단)"}
 
 
 def _trend_position(lt: dict) -> Optional[dict]:
@@ -871,6 +929,7 @@ def _trend_position(lt: dict) -> Optional[dict]:
     return {"coin": _coin(p.get("symbol")), "side": _side(p.get("side")), "member": f"{p.get('strategy')}@{p.get('tf')}",
             "role": p.get("role"), "entry_kst": kst_text(p.get("entry_time")), "leverage": p.get("leverage"),
             "locked": p.get("locked"), "lock_roe": _r(p.get("lock_roe")), "entry_judge": p.get("entry_judge"),
+            "entry_on_hold": bool(p.get("entry_held")),
             "higher_bar_now": j.get("text") or j.get("error"), "against_now": p.get("judge_against"),
             "supervised": p.get("supervised"), "old_bot": bool(p.get("inherited")), "old_bot_ko": p.get("inherited_ko"),
             "executors": [{"name": f.get("name_ko"), "state": f.get("state"), "what": f.get("ko")} for f in p.get("follow") or []] or None}
@@ -880,8 +939,10 @@ def _trend_funnel(lt: dict, rv: dict, window: Optional[tuple]) -> dict:
     """Where the signals went: today (관제), since the start and in the meeting's window (검토's days)."""
     def blocked(f):
         return [{"why": b.get("ko"), "n": b.get("n")} for b in f.get("blocked") or []]
-    out = {"words": "signals = 진입 매매법 신호, passed = 추세 판단·진입 자리 검사를 통과해 되돌림을 기다린 신호, touched = 되돌림 "
-                    "가격에 닿음, entered = 진입, blocked = 나머지가 걸린 곳(한 번에 하나 = 이미 포지션이 있어 못 탐)"}
+    waits = not _ok(lt) or lt.get("pullback_wait") is not False
+    out = {"words": "signals = 진입 매매법 신호, passed = 추세 판단·진입 자리 검사를 통과한 신호("
+                    + ("되돌림을 기다린 신호" if waits else "그 분에 바로 들어간 신호: 이 봇은 되돌림을 기다리지 않음") + "), touched = 되돌림 "
+                    "가격에 닿음(되돌림을 기다리는 설정만), entered = 진입, blocked = 나머지가 걸린 곳(한 번에 하나 = 이미 포지션이 있어 못 탐)"}
     f = lt.get("funnel") if _ok(lt) else None
     if isinstance(f, dict):
         out["today"] = {**{k: f.get(k) for k in ("signals", "passed", "touched", "entered")}, "from_kst": kst_text(f.get("from")),
@@ -1030,6 +1091,8 @@ def _trend_trades(src: dict, window: tuple, since: Optional[int], lt: dict) -> t
         t = seen.get((r.get("symbol"), r.get("entry_time")))
         if t:
             line.update(entry_judge=t.get("entry_judge"), exit_why=t.get("why"))
+            if t.get("entry_held"):
+                line["entry_on_hold"] = True               # entered on a 보류 judgment (10-22 보류 허용)
         mine.append(line)
     old = [{**_trade_line(r), "bot": f"예전 봇({TREND_PREV_BOT}): 이 봇 성적 아님"} for r in closed if (r.get("entry_time") or 0) < int(since)]
     return mine[:TRADE_KEEP], old[:12]
@@ -1048,7 +1111,7 @@ def facts_trend(src: dict, kind: str, window: Optional[tuple] = None, focus: Opt
     pause = lt.get("pause") if _ok(lt) else None
     nxt = ((lt.get("next") or {}).get("pause") if _ok(lt) else None) or {}
     out = {"meeting": meeting_label(kind, focus, True), "now_kst": kst_text(now), "bot": trend_bot_facts(world, now),
-           "fixed_rules": fixed_rules(cfg, world.get("infos"), world.get("second")),
+           "fixed_rules": fixed_rules(cfg, world.get("infos"), world.get("second"), trend_bot=True),
            "owners_decisions": trend_decisions(cfg, now, since), "sizing": sizing_of(summ, cfg),
            "accounts": [_acct_now(a) for a in summ.get("accts") or []], "record": _trend_record(rv, lt),
            "trend_now": _trend_now(lt),
@@ -1194,15 +1257,17 @@ def trend_prompt(role: str) -> str:
     r = ROLES_TREND[role]
     common = (f"당신은 두 분(코딩과 통계를 모르는 한국인 운영자)의 암호화폐 실거래 봇 '추세판단 봇'을 지켜보는 '실거래 분석 팀'의 "
               f"{r['title']} '{r['name']}'입니다. 맡은 것: {r['focus']}.\n\n"
-              "이 봇: 판단만 하는 매매법 4개가 끝난 1시간·4시간봉으로 코인마다 추세(상승·하락·보류)를 정하고, 진입 매매법"
-              "(bot.entry_members)의 신호 중 그 추세와 같은 쪽만 진입 전 검사(EMA20에서 너무 뻗었나·RSI·돌파형은 추세 초입만·추격 "
-              "막기)를 거친 뒤, 진입 봉 하나 동안 가격이 조금 유리하게 되돌아오기(되돌림)를 기다렸다가 들어갑니다. 첫 잠금 전에는 "
-              "감독이 상위 봉 추세가 반대로 바뀌면 닫습니다. 손절·계단 익절과 숫자는 fixed_rules 그대로. 거래마다 비용(미끄러짐·"
-              "수수료)이 얼마나 빠지는지는 costs에 있습니다(재현 숫자는 가상).\n\n"
+              "이 봇: 판단만 하는 매매법 4개가 끝난 1시간봉·4시간봉·일봉으로 코인마다 추세(상승·하락·보류)를 정하고(30분 진입은 "
+              "1시간봉, 1시간 진입은 4시간봉, 4시간 진입은 일봉), 진입 매매법(bot.entry_members)의 신호 중 그 추세를 거스르지 않는 "
+              "쪽만(보류도 받는지는 fixed_rules의 추세 판단 줄) 진입 전 검사(EMA20에서 너무 뻗었나·RSI·돌파형은 추세 초입만·추격 "
+              "막기)를 거쳐 들어갑니다. 그 분에 바로 들어가는지, 진입 봉 하나 동안 되돌림을 기다렸다가 들어가는지는 fixed_rules의 "
+              "'진입' 줄 그대로입니다. 첫 잠금 전에는 감독이 상위 봉 추세가 반대로 바뀌면 닫습니다. 손절·계단 익절과 숫자는 "
+              "fixed_rules 그대로. 거래마다 비용(미끄러짐·수수료)이 얼마나 빠지는지는 costs에 있습니다(재현 숫자는 가상).\n\n"
               "지킬 것:\n"
               "1. 읽기만 합니다. 매매 권한이 없습니다. 진입·청산·건너뛰기·크기·레버리지·코인을 바꾸라는 말은 하지 않습니다.\n"
-              "2. 고정 규칙(fixed_rules)과 두 분의 결정(owners_decisions: 시간 정리 청산 없음, 쉬기·하루 손실 한도 없음, 나스닥 개장 "
-              "앞뒤 진입 없음, 실거래 크기 각 지갑의 약 40%)은 두 분이 정한 것이라 바꾸자고 하지 않습니다. 규칙은 2주 검토"
+              "2. 고정 규칙(fixed_rules)과 두 분의 결정(owners_decisions: 10/22 새 설계와 그 보류 허용·진입 방식, 시간 정리 청산 없음, "
+              "쉬기·하루 손실 한도 없음, 나스닥 개장 앞뒤 진입 없음, 실거래 크기 각 지갑의 약 40%)은 두 분이 정한 것이라 바꾸자고 "
+              "하지 않습니다. 규칙은 2주 검토"
               "(bot.review_kst) 전에는 그대로입니다.\n"
               "3. 패킷(JSON)에 있는 숫자만 씁니다. 없는 숫자는 '자료 없음'이라고 씁니다. 추측한 숫자를 만들지 않습니다.\n"
               f"4. 새 봇 시작 뒤 거래가 {SMALL_N}번보다 적으면 결론을 내리지 말고 '아직 우연이 큰 단계'라고 분명히 씁니다.\n"
@@ -1212,7 +1277,8 @@ def trend_prompt(role: str) -> str:
               "6. 페이퍼(연습 돈)와 실거래(진짜 돈)를 섞지 않습니다. 새 봇 시작(bot.since_kst) 전에 들어간 거래는 예전 봇 것이라"
               "(old_bot_trades) 이 봇 성적에 넣지 않습니다.\n"
               "7. 쉬운 한국어로, 짧게. 전문용어는 풀어서. 매매법은 코드 그대로 부릅니다(화면이 이름으로 바꿔 보여줍니다).\n"
-              "8. 이 봇의 부품으로 말합니다: 추세 판단, 진입 전 검사, 되돌림 기다림, 감독 청산, 비용. 어느 부품이 신호를 막았는지는 "
+              "8. 이 봇의 부품으로 말합니다: 추세 판단, 진입 전 검사, 진입 방식(바로 진입 또는 되돌림 기다림: fixed_rules), 감독 청산, "
+              "비용. 어느 부품이 신호를 막았는지는 "
               "funnel·signals_24h로, 도왔는지는 whatif(가상)로만 말합니다.\n")
     if role == "lead":
         return common + (

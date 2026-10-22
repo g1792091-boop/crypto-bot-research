@@ -53,7 +53,7 @@ def _read(path):
 # ---------------------------------------------------------------- synthetic Binance klines (a market with regimes)
 ANCHOR = T.T0 - 120 * 86_400_000              # 4h-aligned: every timeframe's bars line up
 _PATHS: dict = {}
-TF_N = {"30m": 1, "1h": 2, "4h": 8}
+TF_N = {"30m": 1, "1h": 2, "4h": 8, "1d": 48}
 
 
 def _base(symbol: str):
@@ -155,14 +155,16 @@ def test_history_equals_judge_frame_bar_by_bar(tf, rules, step):
 
 def test_the_newest_cell_is_the_bots_own_judgment():
     """On the bot's own frame (trendjudge.Judge over Klines: the last 300 closed bars) the newest recomputed cell over 499
-    bars is the same judgment, for every coin and both timeframes."""
+    bars is the same judgment, for every coin and every judged timeframe (1h, 4h, 1d: the synthetic market has only its
+    120 days of daily bars, so both frames hold them all)."""
     now = {"t": T.T0 + 7 * HOUR + 20_000}
     judge = TJ.Judge(TJ.Klines(Fetch(now), lambda: now["t"]), RULES)
     b = TC.Bars(Fetch(now), lambda: now["t"])
     for sym in T.SYMS:
         for tf in TC.TFS:
             df, info = b.frame(sym, tf, now["t"], [99])
-            assert info["state"] == "ok" and not info["stale"] and len(df) == TC.FRAME_BARS - 1     # 499 rows, the forming one out
+            want = TC.FRAME_BARS - 1 if tf != "1d" else (T.T0 - ANCHOR) // 86_400_000           # 499 rows, the forming one out
+            assert info["state"] == "ok" and not info["stale"] and len(df) == want
             cell = TC.cells_of(b.history(sym, tf, df, RULES), now["t"] - HOUR, tf)[-1]
             j = judge.judgment(sym, tf, now["t"])
             assert TC._check(cell, j.to_dict(RULES)) == "same", (sym, tf)
@@ -199,30 +201,35 @@ def test_the_answer(tmp_path):
     d = TC.build(p, "BTCUSDT", now["t"], b)
     # the first answer: FETCH_PER_BUILD fetches, the chosen coin first; the rest is 불러오는 중, never a made-up cell
     assert d["state"] == "ok" and d["pending"] is True and len(f.calls) == TC.FETCH_PER_BUILD
-    assert f.calls[:2] == [("BTCUSDT", "1h", TJ.FETCH), ("BTCUSDT", "4h", TJ.FETCH)]
+    assert f.calls[:3] == [("BTCUSDT", "1h", TJ.FETCH), ("BTCUSDT", "4h", TJ.FETCH), ("BTCUSDT", "1d", TJ.FETCH)]
     waiting = [s for s, row in d["heat"]["coins"].items() if row["1h"]["state"] == "pending"]
     assert waiting == ["SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"][-len(waiting):] and all(
         d["heat"]["coins"][s]["1h"]["cells"] == [] for s in waiting)
     d = TC.build(p, "BTCUSDT", now["t"], b)
-    assert d["pending"] is False and len(f.calls) == 12
+    assert d["pending"] is False and len(f.calls) == 18
     d = TC.build(p, "BTCUSDT", now["t"] + 5 * MIN, b)
-    assert len(f.calls) == 12                                     # no new bar closed: no fetch
+    assert len(f.calls) == 18                                     # no new bar closed: no fetch
     heat = d["heat"]
     assert list(heat["coins"]) == list(TC.COINS) and heat["hours"] == 72
     assert heat["t1"] == T.T0 + 2 * HOUR and heat["t0"] == heat["t1"] - 72 * HOUR
     for sym, row in heat["coins"].items():
-        c1, c4 = row["1h"]["cells"], row["4h"]["cells"]
+        c1, c4, cd = row["1h"]["cells"], row["4h"]["cells"], row["1d"]["cells"]
         assert len(c1) == 72 and c1[0]["t"] == heat["t0"] and c1[-1]["t"] == T.T0 + HOUR      # the cell in force now
         assert c4[0]["t"] <= heat["t0"] < c4[0]["t"] + 4 * HOUR and c4[-1]["t"] == T.T0 and len(c4) == 19
+        # the daily row (4h entries, owners 10-22): 4 days over the 72 hours, the newest closed at T0 (UTC midnight);
+        # the synthetic market's 120 days are just enough for the newest (trendjudge.MIN_BARS): the older ones 못 읽음
+        assert [c["t"] for c in cd] == [T.T0 - k * 86_400_000 for k in (3, 2, 1, 0)] and cd[-1]["kind"] != "na"
+        assert all(c["kind"] == "na" for c in cd[:-1])
         assert all(c["kind"] in ("up", "down", "hold", "hold up", "hold down", "up weak", "down weak", "up tired", "down tired")
                    for c in c1 + c4)
         assert row["1h"]["stale"] is False and row["1h"]["check"] in ("same", "differs")
-    assert d["rules"] == {"from": "bot", "vote_min": 3, "adx_min": 20.0, "adx_tired": 40.0, "hold_1h": 2, "hold_4h": 1, "time_bars": 4}
+    assert d["rules"] == {"from": "bot", "vote_min": 3, "adx_min": 20.0, "adx_tired": 40.0, "hold_1h": 2, "hold_4h": 1, "hold_1d": 1,
+                          "hold_entry": False, "pullback_wait": True, "time_bars": 4}
     # the heatmap's marks: the BTC long (30m: on the 1h row) and its supervisor exit (JUDGE at T0 + 1h)
     (e,) = d["marks"]["entries"]
     assert (e["symbol"], e["side"], e["tf"], e["htf"], e["t"], e["open"]) == ("BTCUSDT", 1, "30m", "1h", T.T0 + 32 * MIN, False)
     (x,) = d["marks"]["sup"]
-    assert (x["reason"], x["reason_ko"], x["htf"]) == ("JUDGE", "감독(추세)", "1h") and x["why"].startswith("1시간 판단이 하락로")
+    assert (x["reason"], x["reason_ko"], x["htf"]) == ("JUDGE", "감독(추세)", "1h") and x["why"].startswith("1시간 판단이 하락으로")
     # the chosen coin: its signal entered after its pullback, its trade, the band of both timeframes over 7 days
     c = d["chart"]
     (s,) = c["signals"]
@@ -240,7 +247,7 @@ def test_the_answer(tmp_path):
     # the next hour: the 1h bars of the six coins once (4h not yet)
     now["t"] = T.T0 + 2 * HOUR + 10_000
     d = TC.build(p, "BTCUSDT", now["t"], b)
-    assert len(f.calls) == 18 and {x[1] for x in f.calls[12:]} == {"1h"}
+    assert len(f.calls) == 24 and {x[1] for x in f.calls[18:]} == {"1h"}
     assert d["heat"]["coins"]["ETHUSDT"]["1h"]["cells"][-1]["t"] == T.T0 + 2 * HOUR
 
 
@@ -413,19 +420,21 @@ def test_the_view(tmp_path):
     t, cls = out["text"], out["classes"]
     for bad in ("null", "undefined", "NaN", "[object"):
         assert bad not in t, bad
-    for words in ("추세 흐름 · 최근 72시간", "30분 진입 받는 곳 (1시간 판단)", "1시간 진입 받는 곳 (4시간 판단)", "BTC", "ETH", "BCH",
-                  "1시간", "4시간", "지금", "BTC · 1시간 판단 지금", "BTC · 4시간 판단 지금", "에 씀", "V3.9", "일목·AO",
+    for words in ("추세 흐름 · 최근 72시간", "30분 진입 받는 곳 (1시간 판단)", "1시간 진입 받는 곳 (4시간 판단)",
+                  "4시간 진입 받는 곳 (일봉 판단)", "BTC", "ETH", "BCH", "1시간", "4시간", "일봉", "지금", "BTC · 1시간 판단 지금",
+                  "BTC · 4시간 판단 지금", "BTC · 일봉 판단 지금", "에 씀", "V3.9", "일목·AO", "4시간 진입은 일봉 줄",
                   "상승 (그 방향 진입 받음)", "보류 · 3/4는 나왔지만 유지 확인 중", "힘 약함 · 끝물 (진입 안 함)", "못 읽음", "페이퍼 롱 진입", "숏 진입", "감독 청산",
-                  "차트", "BTC 30분봉 · 아래 띠 = 그 봉이 끝날 때 봇이 본 1시간 판단", "1시간 지금", "4시간 지금", "끝날 때 본 1시간 판단",
+                  "차트", "BTC 30분봉 · 아래 띠 = 그 봉이 끝날 때 봇이 본 1시간 판단", "1시간 지금", "4시간 지금", "일봉 지금",
+                  "끝날 때 본 1시간 판단",
                   "진입한 신호", "되돌림 기다림", "되돌림 대기 가격", "EMA20", "아래 띠: 높으면 진입 받는 추세",
                   "이 코인 최근 3일", "롱 신호", "진입", "롱 거래 청산", "감독(추세)", "진입 때 1시간 상승", "되돌림 확인: ",
                   "읽는 법", "칸 하나 = 끝난 봉 하나의 판단이 쓰인 시간", "봇은 끝난 봉 300개로 판단"):
         assert words in t, words
-    assert re.search(r"봇 기록과 (같음 \d+/12|다름 \d+줄)", t)
+    assert re.search(r"봇 기록과 (같음 \d+/1[28]|다름 \d+줄)", t)
     assert out["hidden"] is False and out["every"] == [30000]
     assert "/api/v4/livebots/trendchart?symbol=BTCUSDT" in out["asked"] and "/api/candles?symbol=BTCUSDT&interval=30m&limit=300" in out["asked"]
-    # 6 coins x (72 hourly cells + 19 four-hour cells); the BTC entry dot and its supervisor exit on the 1h row
-    assert out["cells"] == 6 * (72 + 19) and out["dots"] == 1 and out["xs"] == 1
+    # 6 coins x (72 hourly cells + 19 four-hour cells + 4 daily cells); the BTC entry dot and its supervisor exit on the 1h row
+    assert out["cells"] == 6 * (72 + 19 + 4) and out["dots"] == 1 and out["xs"] == 1
     assert any(c.startswith("ltc-coin sel") for c in cls) and any("ltc-c " in c and " now" in c for c in cls)
     assert any(c.startswith("ltc-c up") or c.startswith("ltc-c down") for c in cls)
     calls = out["calls"]

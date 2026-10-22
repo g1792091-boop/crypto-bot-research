@@ -312,7 +312,7 @@ export function expectView(ctx) {
       h("p", {class: "lex-blk"}, h("b", null, "재현에서 걸린 곳: "), blocked(f.replay_blocked, rep[0] && rep[0].n) || "—"),
       live ? h("p", {class: "lex-blk"}, h("b", null, "실제에서 걸린 곳: "), blocked(f.live_blocked, live[0] && live[0].n) || "아직 없음") : null,
       f.skipped && has(f.skipped.live) ? h("p", {class: "lex-note"},
-        `되돌림에 닿았지만 이미 포지션이 있어 못 탄 신호: 재현 ${fmt.int(f.skipped.replay)}개 · 실제 ${fmt.int(f.skipped.live)}개`) : null);
+        `검사를 통과했지만(재현은 되돌림에 닿은 뒤) 이미 포지션이 있거나 같은 때 다른 신호가 먼저라 못 탄 신호: 재현 ${fmt.int(f.skipped.replay)}개 · 실제 ${fmt.int(f.skipped.live)}개`) : null);
   }
 
   function exitBar(rec) {

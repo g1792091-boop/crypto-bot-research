@@ -83,8 +83,8 @@ export function waitView(ctx) {
   const slot = h("div", {class: "lb-slot"});
   const body = h("div", {class: "lbw-body"}, motion.shimmer(2));
   const el = ui.card({title: "⏳ 진입 대기", sub: "신호는 나왔고 정한 가격을 기다리는 진입 (되돌림 · 돌파) · 한국 시간", cls: "lbw-card"}, slot, body,
-    ui.note("진입 대기 = 신호는 나왔고 정한 가격을 기다리는 중. 추세판단 봇은 되돌림(롱이면 내려와야)을, 돌파형 설정은 돌파(롱이면 올라가야)를 "
-      + "기다려요. 진입 확정이 아니에요. 시간 안에 안 닿으면 진입 없음. 텔레그램에도 ⏳ 알림이 한 번 가요 (끄기: PAPERBOT_LIVE_WAIT_MSGS=0)."));
+    ui.note("진입 대기 = 신호는 나왔고 정한 가격을 기다리는 중. 되돌림을 기다리는 설정은 되돌림(롱이면 내려와야)을, 돌파형 설정은 돌파(롱이면 "
+      + "올라가야)를 기다려요 (바로 진입하는 설정은 기다림 없음). 진입 확정이 아니에요. 시간 안에 안 닿으면 진입 없음. 텔레그램에도 ⏳ 알림이 한 번 가요 (끄기: PAPERBOT_LIVE_WAIT_MSGS=0)."));
 
   function tick() {
     const now = Date.now();

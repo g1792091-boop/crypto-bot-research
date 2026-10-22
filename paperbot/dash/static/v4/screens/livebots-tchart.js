@@ -1,15 +1,16 @@
 // 실거래 › 추세 차트 (#/tchart; owners 10/21 "대시보드 화면들 더 멋있게 모든 필요한 화면 부분들 다 추가로 만들어줘"): the
 // 추세판단 봇's judgments over time and its signals on the price chart, read-only:
-//   추세 흐름  a heatmap: the six coins × the 1시간 judgment (30m entries read it) and the 4시간 judgment (1h entries) over
-//             the last 72 hours, one cell per closed bar, placed over the time its judgment was in force (from its bar's
+//   추세 흐름  a heatmap: the six coins × the 1시간 judgment (30m entries read it), the 4시간 judgment (1h entries) and the
+//             일봉 judgment (4h entries, owners 10/22) over the last 72 hours, one cell per closed bar, placed over the time its judgment was in force (from its bar's
 //             close to the next close): 상승 / 하락 (a trend the bot takes), 보류 (a lighter tint of the side while 3 of 4
 //             agree but the hold is not met: 유지 확인 중), 힘 약함 / 끝물 (hatched: no entry), 못 읽음 (grey); a dot =
 //             a paper entry on the row it read, × = a supervisor exit (감독 청산). A row picks the coin of the chart; a
 //             cell shows its numbers below (and on hover).
-//   차트      the chosen coin's 30분 or 1시간 candles (/api/candles, ~150 bars shown), EMA20, a thin band under them in the
+//   차트      the chosen coin's 30분, 1시간 or 4시간 candles (/api/candles, ~150 bars shown), EMA20, a thin band under them in the
 //             colour of the higher bar's judgment the bot read at each bar's close (tall = a trend it takes, short = no
 //             entry), the coin's signals of the last 3 days by what became of them, the paper trades (entry ▲▼, exit ■
-//             with its reason in words), a wait's pullback level as a dashed line, the crosshair's bar in words.
+//             with its reason in words), a wait's pullback level as a dashed line (a config that waits: trend.pullback_wait;
+//             the owners' since 10/22 enters at once), the crosshair's bar in words.
 // Sources: /api/v4/livebots/trendchart?symbol= (dash/more/livetrendchart.py: the judgments recomputed bar by bar with the
 // bot's own functions and numbers, checked against the bot's record; the signals, trades and waits of the paper bot both
 // executors follow) every 30 s (a few seconds while bars are still coming in), and the site's /api/candles.
@@ -26,10 +27,12 @@ const REFRESH_MS = 30 * 1000;
 const QUICK_MS = 4 * 1000;                 // while the server is still fetching bars (``pending``)
 const HOUR = 3600 * 1000;
 export const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
-const TF_MS = {"30m": 30 * 60 * 1000, "1h": HOUR, "4h": 4 * HOUR};
-const HTF = {"30m": "1h", "1h": "4h"};
-const ENTRY = {"1h": "30m", "4h": "1h"};
-const ENTRY_TFS = [{id: "30m", label: "30분"}, {id: "1h", label: "1시간"}];
+const TF_MS = {"30m": 30 * 60 * 1000, "1h": HOUR, "4h": 4 * HOUR, "1d": 24 * HOUR};
+const HTF = {"30m": "1h", "1h": "4h", "4h": "1d"};          // 4h entries on the closed daily bar (owners 10/22)
+const ENTRY = {"1h": "30m", "4h": "1h", "1d": "4h"};
+const ENTRY_TFS = [{id: "30m", label: "30분"}, {id: "1h", label: "1시간"}, {id: "4h", label: "4시간"}];
+const ENTRY_KO = {"30m": "30분", "1h": "1시간", "4h": "4시간"};
+export const JUDGED = ["1h", "4h", "1d"];                   // the heatmap's rows per coin
 const SHOW_BARS = 150, FETCH_BARS = 300;  // EMA20 settles over the 150 bars before the ones shown
 const JUDGES = [["V3.9", 0], ["EMA·DMI·ADX", 1], ["OBV", 2], ["일목·AO", 3]];
 const SIDE = (s) => (Number(s) > 0 ? "롱" : "숏");
@@ -40,9 +43,10 @@ export const EXIT_KO = {LOCK: "계단 익절", SL: "손절", REV: "빠른 청산
 export const exitKo = (r) => EXIT_KO[r] || String(r ?? "—");
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_livetrendchart.py)
-/** {cls, word, sub, allow: {side, ko}} of one heat cell (``tf`` = the judged timeframe, 1h / 4h; ``rules`` the numbers). */
+/** {cls, word, sub, allow: {side, both, ko}} of one heat cell (``tf`` = the judged timeframe, 1h / 4h / 1d; ``rules`` the
+ *  numbers: with hold_entry (10/22 보류 허용) a 보류 with strength and not 끝물 takes both sides). */
 export function cellInfo(c, tf, rules) {
-  const e = ENTRY[tf] === "30m" ? "30분" : "1시간";
+  const e = ENTRY_KO[ENTRY[tf]] || "진입";
   const r = rules || {};
   if (!c || c.kind === "na" || c.kind == null) {
     return {cls: "na", word: "못 읽음", sub: (c && c.why) || "봉을 아직 못 받음", allow: {side: 0, ko: `${e} 쉼 · 판단 못 읽음`}};
@@ -53,8 +57,10 @@ export function cellInfo(c, tf, rules) {
   if (Number.isFinite(adx)) bits.push(`ADX ${Math.round(adx)} ${adx > prev ? "오름" : "내림"}`);
   if (base === "hold") {
     const lean = mod === "up" ? "상승" : mod === "down" ? "하락" : null;
+    const weak = !(adx >= Number(r.adx_min ?? 20)), tired = adx > Number(r.adx_tired ?? 40) && adx < prev;
     return {cls: mod ? `hold ${mod}` : "hold", word: lean ? `보류 (${lean} 유지 확인 중)` : "보류", sub: bits.join(" · "),
-      allow: {side: 0, ko: `${e} 쉼 · 보류`}};
+      allow: !r.hold_entry ? {side: 0, ko: `${e} 쉼 · 보류`} : weak ? {side: 0, ko: `${e} 쉼 · 힘 약함`}
+        : tired ? {side: 0, ko: `${e} 쉼 · 끝물`} : {side: 0, both: true, ko: `${e} 롱·숏 (보류 허용)`}};
   }
   const side = base === "up" ? 1 : -1;
   const word = side > 0 ? "상승" : "하락";
@@ -177,6 +183,7 @@ export function takingNow(heat, tf, now, rules) {
     const c = (row.cells || []).find((x) => Number(x.t) <= now && now < Number(x.t) + TF_MS[tf]);
     const a = cellInfo(c, tf, rules).allow;
     if (a.side) out.push(`${fmt.coin(sym)} ${SIDE(a.side)}`);
+    else if (a.both) out.push(`${fmt.coin(sym)} 롱·숏`);
   }
   return out;
 }
@@ -184,7 +191,7 @@ export function takingNow(heat, tf, now, rules) {
 export function checkCount(heat) {
   const out = {same: 0, differs: 0, of: 0, list: []};
   for (const sym of COINS) {
-    for (const tf of ["1h", "4h"]) {
+    for (const tf of JUDGED) {
       const row = ((heat && heat.coins && heat.coins[sym]) || {})[tf];
       if (!row || !row.check) continue;
       out.of += 1;
@@ -204,6 +211,8 @@ export function tchartView(ctx) {
   if (q.sym && COINS.includes(q.sym)) st.sym = q.sym;
   if (!COINS.includes(st.sym)) st.sym = "BTCUSDT";
   if (!HTF[st.tf]) st.tf = "30m";
+  // the chart legend's pullback marks: only for a config that waits (trend.pullback_wait; hidden in draw() for 바로 진입, 10/22)
+  const pullLegend = [];
   const stateSlot = h("div", {class: "lb-slot"});
   // ---- 추세 흐름
   const nowChips = h("div", {class: "ltc-now", role: "list", "aria-label": "지금 진입 받는 방향"});
@@ -244,12 +253,12 @@ export function tchartView(ctx) {
     put(checkSlot, cc.of ? ui.pill(cc.differs ? `봇 기록과 다름 ${cc.differs}줄` : `봇 기록과 같음 ${cc.same}/${cc.of}`,
       cc.differs ? "warn" : "good", cc.differs ? `다시 계산한 지금 칸이 봇이 남긴 판단과 달라요: ${cc.list.join(", ")}`
         : "다시 계산한 지금 칸이 봇이 남긴 판단(상승·하락·보류와 판단 4개)과 같아요") : null);
-    const t30 = takingNow(heat, "1h", now, rules()), t1h = takingNow(heat, "4h", now, rules());
-    put(nowChips,
-      h("div", {class: ["ltc-nowi", t30.length ? "on" : ""], role: "listitem"}, h("span", {class: "ltc-nowk"}, "30분 진입 받는 곳 (1시간 판단)"),
-        h("b", null, t30.length ? t30.join(" · ") : "없음 · 모두 쉼")),
-      h("div", {class: ["ltc-nowi", t1h.length ? "on" : ""], role: "listitem"}, h("span", {class: "ltc-nowk"}, "1시간 진입 받는 곳 (4시간 판단)"),
-        h("b", null, t1h.length ? t1h.join(" · ") : "없음 · 모두 쉼")));
+    put(nowChips, JUDGED.map((tf) => {
+      const tk = takingNow(heat, tf, now, rules());
+      return h("div", {class: ["ltc-nowi", tk.length ? "on" : ""], role: "listitem"},
+        h("span", {class: "ltc-nowk"}, `${ENTRY_KO[ENTRY[tf]]} 진입 받는 곳 (${fmt.tfKo(tf)} 판단)`),
+        h("b", null, tk.length ? tk.join(" · ") : "없음 · 모두 쉼"));
+    }));
     const marks = d.marks || {};
     // the trend bot's start: a line down every row (what is left of it is the bot before it, 전환 전)
     const sx = ok(d.since) ? markX(d.since, t0, t1) : null;
@@ -262,7 +271,7 @@ export function tchartView(ctx) {
         h("span", {class: "ltc-tick now", style: {"--x": "1"}}, "지금")));
     const rows = COINS.map((sym) => {
       const row = (heat.coins || {})[sym] || {};
-      const lines = ["1h", "4h"].map((tf) => {
+      const lines = JUDGED.map((tf) => {
         const r = row[tf] || {state: "pending", reason_ko: "불러오는 중"};
         if (r.state !== "ok") {
           return h("div", {class: ["ltc-cells", "ltc-off", r.state], style: {"--cols": n}, title: r.reason_ko || ""},
@@ -299,11 +308,11 @@ export function tchartView(ctx) {
           title: r.stale ? r.reason_ko || "" : null}, kids, h("span", {class: "ltc-marks"}, dots));
       });
       const sel = sym === st.sym;
-      const head = h("div", {class: "ltc-lab"},
+      const head = h("div", {class: "ltc-lab", style: {"--rows": String(JUDGED.length)}},
         h("button", {type: "button", class: "ltc-name", "aria-pressed": String(sel), title: `${fmt.coin(sym)} 차트 보기`,
           onclick: () => pick(sym, null)}, fmt.coin(sym)),
-        h("span", {class: "ltc-tf"}, "1시간"), h("span", {class: "ltc-tf"}, "4시간"));
-      return h("div", {class: ["ltc-coin", sel ? "sel" : ""], role: "group", "aria-label": `${fmt.coin(sym)} 1시간·4시간 판단`},
+        JUDGED.map((tf) => h("span", {class: "ltc-tf"}, fmt.tfKo(tf))));
+      return h("div", {class: ["ltc-coin", sel ? "sel" : ""], role: "group", "aria-label": `${fmt.coin(sym)} ${JUDGED.map(fmt.tfKo).join("·")} 판단`},
         head, h("div", {class: "ltc-lines"}, lines));
     });
     const first = !heatBox.childNodes.length;
@@ -342,7 +351,7 @@ export function tchartView(ctx) {
       return;
     }
     const row = (heat.coins || {})[st.sym] || {};
-    put(read, ["1h", "4h"].map((tf) => {
+    put(read, JUDGED.map((tf) => {
       const r = row[tf] || {};
       const c = (r.cells || []).find((x) => Number(x.t) <= now && now < Number(x.t) + TF_MS[tf]);
       if (r.state !== "ok" || !c) {
@@ -462,7 +471,7 @@ export function tchartView(ctx) {
     const d = st.d;
     if (!d || d.state !== "ok") { put(coinNow); return; }
     const row = ((d.heat || {}).coins || {})[st.sym] || {}, now = Number(d.now_ms);
-    put(coinNow, ["1h", "4h"].map((tf) => {
+    put(coinNow, JUDGED.map((tf) => {
       const r = row[tf] || {};
       const c = (r.cells || []).find((x) => Number(x.t) <= now && now < Number(x.t) + TF_MS[tf]);
       const x = cellInfo(r.state === "ok" ? c : null, tf, rules());
@@ -511,7 +520,7 @@ export function tchartView(ctx) {
           ` ${fmt.stratKo(x.strategy)} ${fmt.tfKo(x.tf)} · 진입 ${fmt.kst(x.entry_time)}${x.before ? " · 예전 봇이 연 것" : ""}`),
         ui.pill(exitKo(x.reason), x.reason === "LOCK" ? "good" : x.reason === "SL" || x.reason === "LIQ" ? "bad" : "accent"),
         h("b", {class: ["num", fmt.tone(x.roe)]}, fmt.pct(x.roe, 1)),
-        x.why || x.entry_judge ? h("small", {class: "ltc-esub"}, [x.why, x.entry_judge ? `진입 때 ${x.entry_judge}` : null].filter(Boolean).join(" · ")) : null)});
+        x.why || x.entry_judge ? h("small", {class: "ltc-esub"}, [x.why, x.entry_judge ? `진입 때 ${x.entry_judge}${x.entry_held ? " (보류 진입)" : ""}` : null].filter(Boolean).join(" · ")) : null)});
     }
     if (c.position) {
       const p = c.position;
@@ -519,7 +528,7 @@ export function tchartView(ctx) {
         h("span", {class: "ltc-ew"}, h("b", null, `${SIDE(p.side)} 보유 중`), ` ${fmt.stratKo(p.strategy)} ${fmt.tfKo(p.tf)} · 진입 ${fmt.price(p.entry_price)}`),
         ui.pill(p.before ? "전환 전 포지션" : "페이퍼 포지션", p.before ? "warn" : "accent",
           p.before ? "예전 봇이 연 포지션이에요 · 새 봇이 이어서 정리해요 (새 봇 성적엔 안 셈)" : null),
-        p.entry_judge ? h("small", {class: "ltc-esub"}, `진입 때 ${p.entry_judge}`) : null)});
+        p.entry_judge ? h("small", {class: "ltc-esub"}, `진입 때 ${p.entry_judge}${p.entry_held ? " (보류 진입)" : ""}`) : null)});
     }
     for (const w of c.waits || []) {
       items.push({t: Number(w.t0) || 0, node: h("li", {class: "ltc-ev k-wait"}, h("span", {class: "num ltc-et"}, fmt.kst(w.t0)),
@@ -547,16 +556,18 @@ export function tchartView(ctx) {
   }
   function chartLegend() {
     const sw = (cls, ko, txt) => h("li", null, h("i", {class: ["ltc-mk", cls], "aria-hidden": "true"}, txt || null), ko);
+    const pl = (x) => { pullLegend.push(x); return x; };
     return h("ul", {class: "ltc-legend ltc-clegend", "aria-label": "차트 표시 설명"},
-      sw("in", "진입한 신호"), sw("wait", "되돌림 기다림"), sw("miss", "되돌림 안 옴"), sw("blk", "추세 판단·진입 자리에 걸림", "×"),
-      sw("arr", "페이퍼 진입 ▲▼"), sw("ex", "청산 (이유를 글로)"), sw("dash", "되돌림 대기 가격"), sw("ema", "EMA20"),
+      sw("in", "진입한 신호"), pl(sw("wait", "되돌림 기다림")), pl(sw("miss", "되돌림 안 옴")), sw("blk", "추세 판단·진입 자리에 걸림", "×"),
+      sw("arr", "페이퍼 진입 ▲▼"), sw("ex", "청산 (이유를 글로)"), pl(sw("dash", "되돌림 대기 가격")), sw("ema", "EMA20"),
       sw("band", "아래 띠: 높으면 진입 받는 추세, 낮으면 진입 안 함"));
   }
   function howTo() {
     return h("ul", {class: "ltc-how"},
-      h("li", null, "칸 하나 = 끝난 봉 하나의 판단이 쓰인 시간이에요. 14:00에 끝난 1시간봉 판단은 14:00~15:00 칸, 4시간 줄은 칸이 4시간."),
-      h("li", null, "30분 진입은 1시간 줄, 1시간 진입은 4시간 줄을 봐요. 진입 점은 그 진입이 본 줄에 찍혀요."),
-      h("li", null, "판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO) 중 3개 이상 같은 쪽이면 상승/하락. 1시간은 끝난 봉 2개 연속, 4시간은 1개여야 해요 (아니면 연한 색 = 유지 확인 중)."),
+      h("li", null, "칸 하나 = 끝난 봉 하나의 판단이 쓰인 시간이에요. 14:00에 끝난 1시간봉 판단은 14:00~15:00 칸, 4시간 줄은 칸이 4시간, 일봉 줄은 하루(한국 시간 09:00부터)."),
+      h("li", null, "30분 진입은 1시간 줄, 1시간 진입은 4시간 줄, 4시간 진입은 일봉 줄을 봐요. 진입 점은 그 진입이 본 줄에 찍혀요."),
+      h("li", null, "판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO) 중 3개 이상 같은 쪽이면 상승/하락. 1시간은 끝난 봉 2개 연속, 4시간·일봉은 1개여야 해요 (아니면 연한 색 = 유지 확인 중)."),
+      h("li", null, "보류 허용 설정(10/22 새 설계)이면 보류여도 반대 방향만 아니면 들어가요: 힘 약함·끝물이 아닌 보류 칸은 롱·숏 둘 다 받아요."),
       h("li", null, "ADX 20 미만은 힘 약함, 40 넘고 꺾이면 끝물: 색은 남지만 빗금이고 진입은 안 해요."),
       h("li", null, "차트 아래 띠는 그 봉이 끝날 때 봇이 본 상위 봉 판단이에요. 신호는 그 봉에, 거래는 진입·청산한 봉에 찍혀요."),
       h("li", {class: "ltc-sub"}, "봇은 끝난 봉 300개로 판단하고, 이 화면은 같은 함수로 더 긴 기록(최대 499개)에서 봉마다 다시 계산해요. 지금 칸은 봇이 남긴 판단과 맞춰 보고, 다르면 위에 '봇 기록과 다름'이라고 써요."));
@@ -604,6 +615,7 @@ export function tchartView(ctx) {
       return;
     }
     cards.hidden = false;
+    for (const x of pullLegend) x.hidden = (d.rules || {}).pullback_wait === false;
     put(stateSlot, d.rules && d.rules.from !== "bot" ? h("div", {class: "lb-state"}, ui.pill("기본값", "warn"),
       h("span", null, d.rules.from === "config" ? " 봇이 쓴 숫자 기록이 없어 설정 파일의 추세 숫자로 계산했어요" : " 봇 설정에서 숫자를 못 읽어 기본 숫자로 계산했어요")) : null);
     drawHeat();

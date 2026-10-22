@@ -140,9 +140,12 @@ SUP_NO_TIME_KO = ("감독 청산: 첫 잠금(+10%) 전에 상위 봉 추세 판�
 # Measured 10/21: the bot's own rules (deploy/combo.trend.json, no 쉬기) replayed minute by minute on Binance USD-M 1m
 # bars 2026-07-01 .. 10-20 KST: 89 entries on 80 weekdays (0 on weekends), signals recomputed as the rule bot does (5,055 of
 # 5,055 the same on a whole-history cross-check); the replay's scripts and outputs stayed in the session scratchpad.
+# That replay is the 10/21 design (10 members, pullback wait); the 10/22 design (18 members, 4h on the daily bar, 보류 허용,
+# 바로 진입) has no replay of its own yet, only a calculation (~3-4 a weekday, docs/newlive-design-ko.md): the words say so.
 TREND_WEEKDAY_REF: Optional[float] = 1.11
 TREND_WEEKDAY_REF_KO: Optional[str] = ("7/1~10/20 실제 바이낸스 1분봉으로 이 봇 규칙을 다시 돌린 숫자 · 평일 80일 89번 · "
-                                       "그 기간 시장의 숫자라 앞으로는 다를 수 있어요")
+                                       "10/21 설계(매매법 10개 · 되돌림 기다림) 기준이에요 · 10/22 새 설계(18개 · 바로 진입)는 "
+                                       "평일 하루 약 3~4번으로 계산했지만 실측은 아니에요 · 그 기간 시장의 숫자라 앞으로는 다를 수 있어요")
 TREND_SCALE_KO = "새 봇의 돈 늘리기 기준은 아직 없어요 · 2주 검토에서 두 분이 정해요 (예전 봇의 88% 기준은 쓰지 않아요)"
 # 목표 for the trend bot (owners 10/21 night: the goal tab rebuilt for it). The old bot's break-even (BREAK_EVEN 86 %, 82-83 %
 # plain: +10 % wins, -50 % losses at 30 % margin) is not this bot's: its wins and losses are its own averages, from its
@@ -1805,8 +1808,9 @@ TREND_GROUP_NOTE_KO = ("추세판단 봇 시작부터의 거래만 셌어요 · 
 
 
 def trend_groups(cx: dict, now: int) -> dict:
-    """그룹별 성적 for the trend bot: by role (눌림 · 자리 · 돌파 · 횡보, livebots.TREND_ROLE) and by entry bar (30분 진입 = the
-    closed 1h bar's trend, 1시간 진입 = the 4h bar's), for the paper account and each executor, from the bot's start. A live
+    """그룹별 성적 for the trend bot: by role (눌림 · 자리 · 돌파 · 횡보 · 추세, livebots.TREND_ROLE) and by entry bar (30분 진입 =
+    the closed 1h bar's trend, 1시간 진입 = the 4h bar's, 4시간 진입 = the daily bar's, owners 10-22), for the paper account
+    and each executor, from the bot's start. A live
     trade takes its paper partner's strategy and timeframe; one without a partner is 짝 페이퍼 없음, one that followed
     another paper bot 다른 페이퍼 봇 (both shown only when they have trades)."""
     tb, members, since = cx["trend"], cx["members"], cx["start"].get("ms")
@@ -1860,7 +1864,8 @@ def trend_groups(cx: dict, now: int) -> dict:
             return pt.get("strategy_id"), pt.get("timeframe")
         out[x["id"]] = {"state": "ok", "groups": pick(L.trend_since(r.get("trades") or [], since, "entry_ts"), of)}
     return {"now_ms": now, "kind": "trend", "start": start_out(cx), "defs": defs, "order": order, "accts": out,
-            "title_sub_ko": "역할별 (눌림 · 자리 · 돌파 · 횡보) · 진입 봉별 (30분 · 1시간)", "note_ko": TREND_GROUP_NOTE_KO,
+            "title_sub_ko": f"역할별 ({' · '.join(L.TREND_ROLES)}) · 진입 봉별 ({' · '.join(L.TF_KO.get(t, t) for t in tfs)})",
+            "note_ko": TREND_GROUP_NOTE_KO,
             "execs": [{"id": x["id"], "name_ko": x["name_ko"]} for x in cx["execs"]], "small_n": SMALL_N, "trend_bot": L.trend_out(tb)}
 
 

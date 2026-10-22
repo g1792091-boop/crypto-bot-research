@@ -2,7 +2,8 @@
 // away?"): one feed, newest first with a line for each Korea-time day, of everything the 추세판단 봇 and the two
 // real-money executors (바이비트 · WOO X Pro) did, from /api/v4/livebots/journal (dash/more/livejournal.py; every 60 s,
 // every 15 s while the judgments are still being fetched). Read-only, like every 실거래 tab.
-//   첫 줄    the span (24시간 · 3일 · 7일) and its count in one line: 신호 · 점검 통과 · 되돌림 대기 (옴) · 진입 · 청산 (순손익) ·
+//   첫 줄    the span (24시간 · 3일 · 7일) and its count in one line: 신호 · 점검 통과 · 되돌림 대기 (옴; only a config that
+//            waits, trend.pullback_wait, or waits in the span: the owners' since 10/22 enters at once) · 진입 · 청산 (순손익) ·
 //            판단 바뀜; a count tapped shows its rows; what was not read says so (꺼짐 / 못 읽음 as —, never a 0)
 //   고르기   전체 · 추세 · 신호 · 거래 · 실행기 · 안전 (with how many), a coin, 동전 쌍둥이도 보기 (the coin-flip twin's trades)
 //   일지     20 rows a page: the Korea time, the kind's dot on a line, one sentence in the bots' own words (the 신호 tab's
@@ -57,19 +58,21 @@ export function countLine(d) {
   const why = off ? "추세판단 봇이 아니라 신호·판단 기록이 없어요" : "읽지 못했어요";
   const n = (x) => (has(x) ? fmt.int(x) : "—");
   const judgeH = d && d.judge ? d.judge.covers_h : 72;
+  const now = d && d.pullback_wait === false;              // 바로 진입 (10/22): a signal that passed goes in at its minute
   return [
     {id: "signals", ko: "신호", v: n(c.signals), kind: "signal", title: has(c.signals) ? "진입 매매법이 낸 신호" : why},
-    {id: "passed", ko: "점검 통과", v: n(c.passed), kind: "signal", title: has(c.passed) ? "추세 판단과 진입 자리 검사를 통과 (그 신호는 모두 되돌림을 기다려요)" : why},
-    {id: "waits", ko: "되돌림 대기", v: n(c.waits), sub: has(c.touched) ? `옴 ${fmt.int(c.touched)}` : null, kind: "signal",
+    {id: "passed", ko: "점검 통과", v: n(c.passed), kind: "signal", title: !has(c.passed) ? why
+      : now ? "추세 판단과 진입 자리 검사를 통과 (그 분에 바로 진입해요)" : "추세 판단과 진입 자리 검사를 통과 (그 신호는 모두 되돌림을 기다려요)"},
+    now && !Number(c.waits) ? null : {id: "waits", ko: "되돌림 대기", v: n(c.waits), sub: has(c.touched) ? `옴 ${fmt.int(c.touched)}` : null, kind: "signal",
       title: has(c.waits) ? "되돌림을 기다린 신호 · 옴 = 기다린 가격에 닿음" + (c.waiting ? ` · 지금 기다리는 중 ${fmt.int(c.waiting)}` : "") : why},
     {id: "entered", ko: "진입", v: n(c.entered), kind: "trade", title: has(c.entered) ? "페이퍼(연습) 진입" : "페이퍼 기록을 읽지 못했어요"},
     {id: "closed", ko: "청산", v: n(c.closed), sub: has(c.closed) && c.closed ? signed(c.pnl) : null, kind: "trade",
       tone: has(c.closed) && c.closed ? fmt.tone(c.pnl, signed(c.pnl)) : "",
       title: has(c.closed) ? "페이퍼(연습) 청산과 그 순손익 (진짜 돈 아님)" : "페이퍼 기록을 읽지 못했어요"},
     {id: "changes", ko: "판단 바뀜", v: n(c.changes), kind: "trend",
-      title: has(c.changes) ? `코인별 1시간·4시간 추세 판단이 바뀐 수 (최근 ${judgeH}시간 안)` + (d.judge && d.judge.state !== "ok" ? " · 일부 코인은 아직 못 읽음" : "")
+      title: has(c.changes) ? `코인별 1시간·4시간·일봉 추세 판단이 바뀐 수 (최근 ${judgeH}시간 안)` + (d.judge && d.judge.state !== "ok" ? " · 일부 코인은 아직 못 읽음" : "")
         : off ? why : "판단 기록을 아직 못 읽었어요"},
-  ];
+  ].filter(Boolean);
 }
 
 /** The Korea-time day of a time (days since 1970-01-01 KST). */

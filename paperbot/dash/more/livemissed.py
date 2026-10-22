@@ -38,10 +38,18 @@ RESULTS = (("all", "전체"), ("win", "이겼을 신호"), ("loss", "졌을 신�
 MISSING_KO = "1분 감시가 아직 기록 전이에요 (못 탄 신호는 1분 감시가 매번 계산해요)"
 NO_TABLE_KO = "점검 파일은 있지만 못 탄 신호 표가 아직 없어요 (1분 감시가 아직 기록 전)"
 SMALL_KO = "20번 미만은 대부분 운이에요"
-# the trend bot (owners 10-21): its blocks (the trend judge, the entry checks, the pullback) were never measured on the
-# 5-year data, so the old line "필터는 5년 시험에서 …" is not its; said instead
-TREND_FILTER_NOTE_KO = ("추세판단 봇이 막는 규칙(추세 판단 · 진입 전 검사 · 되돌림)은 새 규칙이라 아직 숫자로 확인하지 않았어요. 이긴 것만 "
-                        "보면 아쉬움만 커져요: 진 것과 같이 봐야 해요. 규칙은 시작부터 2주 동안 바꾸지 않고, 그 뒤 두 분이 검토해요.")
+# the trend bot (owners 10-21): its blocks (the trend judge, the entry checks, the pullback while its config waits) were
+# never measured on the 5-year data, so the old line "필터는 5년 시험에서 …" is not its; said instead (trend_filter_note)
+TREND_FILTER_TAIL_KO = ("은 새 규칙이라 아직 숫자로 확인하지 않았어요. 이긴 것만 보면 아쉬움만 커져요: 진 것과 같이 봐야 해요. 규칙은 "
+                        "시작부터 2주 동안 바꾸지 않고, 그 뒤 두 분이 검토해요.")
+TREND_FILTER_NOTE_KO = "추세판단 봇이 막는 규칙(추세 판단 · 진입 전 검사 · 되돌림)" + TREND_FILTER_TAIL_KO
+
+
+def trend_filter_note(tb: Optional[dict]) -> str:
+    """TREND_FILTER_NOTE_KO for a config that waits for its pullback; without it (바로 진입, owners 10-22) no 되돌림."""
+    if L.trend_waits((tb or {}).get("config")):
+        return TREND_FILTER_NOTE_KO
+    return "추세판단 봇이 막는 규칙(추세 판단 · 진입 전 검사)" + TREND_FILTER_TAIL_KO
 
 
 def _LM():
@@ -114,7 +122,7 @@ def build(p: dict, more: dict, now: int, span: str = "7d", group: str = "all", r
     tb = L.trend_bot(p["paper"])                         # the trend bot: its blocks were never measured on 5 years (said)
     base = {"now_ms": now, "span": span, "group": group, "result": result, "spans": [{"id": k, "ko": ko} for k, ko in SPANS],
             "groups_ko": [{"id": g, "ko": LM.GROUP_KO[g]} for g in LM.GROUPS], "results": [{"id": k, "ko": ko} for k, ko in RESULTS],
-            "note_ko": LM.NOTE_KO, "filter_note_ko": TREND_FILTER_NOTE_KO if tb else LM.FILTER_NOTE_KO, "funding_ko": FUNDING_NOTE_KO,
+            "note_ko": LM.NOTE_KO, "filter_note_ko": trend_filter_note(tb) if tb else LM.FILTER_NOTE_KO, "funding_ko": FUNDING_NOTE_KO,
             "small_ko": SMALL_KO, "small_n": LM.SMALL, "trend_bot": L.trend_out(tb)}
     m = read_missed(more["check_db"], now, span)
     if m.get("state") != "ok":

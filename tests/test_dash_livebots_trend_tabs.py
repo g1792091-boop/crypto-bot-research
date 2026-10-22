@@ -193,7 +193,7 @@ def test_judge_chase_scope_when_every_member_has_the_block(tw):
 
 def test_groups_are_roles_and_entry_bars(tw):
     d = I.groups(tw["p"], NOW, tw["more"])
-    assert d["kind"] == "trend" and d["order"] == ["눌림", "자리", "돌파", "횡보", "30m", "1h"]
+    assert d["kind"] == "trend" and d["order"] == ["눌림", "자리", "돌파", "횡보", "추세", "30m", "1h"]
     defs = {g["id"]: g for g in d["defs"]}
     assert defs["30m"]["ko"] == "30분 진입" and defs["1h"]["ko"] == "1시간 진입" and defs["돌파"]["n_members"] == 1
     g = d["accts"]["paper"]["groups"]
@@ -214,7 +214,9 @@ def test_likely_says_a_signal_is_not_an_entry(tw):
     d = L.likely(tw["p"], NOW)
     if d.get("state") != "ok":
         pytest.skip(f"the frequency file is not usable here: {d.get('reason_ko')}")
-    assert d["note_ko"] == L.LIKELY_TREND_NOTE_KO and "추세 판단" in d["note_ko"] and "되돌림" in d["note_ko"]
+    # this config waits for a pullback and judges on 1h / 4h only (its members: 30m and 1h); the note says just that
+    assert d["note_ko"] == L.likely_trend_note(L.trend_bot(tw["p"]["paper"])) and "추세 판단(1시간·4시간 추세)" in d["note_ko"]
+    assert "되돌림" in d["note_ko"]
     assert "지금 설정 95개" not in d["note_ko"]
 
 
@@ -223,7 +225,8 @@ def test_settings_show_the_trend_rules(tw):
     tr = d["trend"]
     assert tr["rules"] == T.RULES.describe() and tr["no_pause"] is True and tr["no_pause_ko"] == "쉬기 없음 · 하루 손실 한도 없음"
     assert [(m["strategy"], m["role"], m["tf_ko"], m["htf_ko"]) for m in tr["members"]][0] == ("N08_ICHI_WR", "눌림", "30분 진입", "끝난 1시간봉 추세로 판단")
-    assert [r["id"] for r in tr["roles"]] == ["눌림", "자리", "돌파", "횡보"] and tr["freeze_until"] == T.T0 + 14 * L.DAY
+    assert [r["id"] for r in tr["roles"]] == ["눌림", "자리", "돌파", "횡보", "추세"] and tr["freeze_until"] == T.T0 + 14 * L.DAY
+    assert tr["pullback_wait"] is True                                   # this config waits (the 10/21 design's default)
     assert all(m.get("role") for g in d["groups"] for m in g["members"])
 
 
@@ -313,7 +316,7 @@ def test_views_draw_the_trend_bots_answers(tmp_path, answers):
             assert w not in out[k], (k, w)
     pf = out["pf"]
     for w in ("추세판단 봇 시작 10/05 09:00부터", "2주 검토까지", "D-14", NO_REF, "기준 없음", "역할", "그룹별 성적", "눌림", "30분 진입",
-              "1시간 진입", "역할별 (눌림 · 자리 · 돌파 · 횡보)", L.TREND_RULE_KO, "동전 쌍둥이"):
+              "1시간 진입", "역할별 (눌림 · 자리 · 돌파 · 횡보 · 추세) · 진입 봉별 (30분 · 1시간)", L.TREND_RULE_KO, "동전 쌍둥이"):
         assert w in pf, w
     assert "40번 판단까지" not in pf and "매매법 성적표" in pf and "개선 후보 장부" in pf and "백테스트 91" not in pf
     jd = out["jd"]
@@ -338,7 +341,8 @@ def test_views_draw_the_trend_bots_answers(tmp_path, answers):
     for w in ("추세 판단 규칙", "쉬기 없음 · 하루 손실 한도 없음", "규칙 고정", "백테스트 기준 없음", "추세 판단", "진입 전 검사", "감독(첫 잠금 전까지만)",
               "눌림 · 1개", "돌파 · 1개", "횡보 · 1개", "30분 진입", "끝난 4시간봉 추세로 판단", "역할 눌림"):
         assert w in st, w
-    assert out["grp"] == [["눌림", "role", 1], ["자리", "role", 0], ["돌파", "role", 0], ["횡보", "role", 0], ["30m", "tf", 1], ["1h", "tf", 0]]
+    assert out["grp"] == [["눌림", "role", 1], ["자리", "role", 0], ["돌파", "role", 0], ["횡보", "role", 0], ["추세", "role", 0],
+                          ["30m", "tf", 1], ["1h", "tf", 0]]
     assert out["words"]["start"].startswith("추세판단 봇 시작 10/05 09:00부터") and "A 그룹" not in out["words"]["sub"]
     assert out["pick"]["sort"] == "pnl" and out["sorts"] == ["pnl", "win", "trades", "signals"]
     assert out["rv"]["daysLeft"] == 14 and out["rv"]["head"].startswith("D-14") and not out["rv"]["done"]

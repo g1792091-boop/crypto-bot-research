@@ -443,7 +443,7 @@ def test_judge_exit_when_a_later_higher_bar_turns_and_never_after_the_first_lock
     w.step(H)
     t, = w.trades()
     assert t["exit_reason"] == "JUDGE" and t["exit_time"] == H
-    assert t["context"]["exit_why"] == "1시간 판단이 하락로 바뀜(상승 1·하락 3·중립 0)"
+    assert t["context"]["exit_why"] == "1시간 판단이 하락으로 바뀜(상승 1·하락 3·중립 0)"
     # with the first lock: the ladder alone decides
     (tmp_path / "b").mkdir()
     w2 = World(tmp_path / "b")
@@ -939,6 +939,7 @@ def test_the_new_design_enters_a_4h_signal_at_once_on_the_daily_judgment_even_on
     assert "1d" in asked and "4h" not in asked                                   # judged on the daily bar only
     tr = p.signal.meta["trend"]
     assert tr["htf"] == "1d" and tr["held"] is True and tr["dir"] == 1 and tr["judge"].startswith("일봉 보류(상승 유지 확인 중)")
+    assert p.signal.meta["ctx"]["trend"]["held"] is True                     # the trade record keeps it (ctx)
     (bc, st, d), = w.rows("S3_CMO_SANDWICH@4h")
     assert (bc, st) == (B, "SUBMITTED") and json.loads(d)["why"].startswith("추세 판단 통과: 바로 진입 (보류지만 반대 아님) · 일봉 보류")
     # the live site's state: every coin's 1h, 4h and daily judgment
@@ -949,7 +950,7 @@ def test_the_new_design_enters_a_4h_signal_at_once_on_the_daily_judgment_even_on
     w.judge.j[("BTCUSDT", "1d")] = J(dir=-1, tf="1d")
     _to(w, B + MIN, T0 + DAY + MIN)
     t, = w.trades()
-    assert t["exit_reason"] == "JUDGE" and t["exit_time"] == T0 + DAY and "일봉 판단이 하락로 바뀜" in t["context"]["exit_why"]
+    assert t["exit_reason"] == "JUDGE" and t["exit_time"] == T0 + DAY and "일봉 판단이 하락으로 바뀜" in t["context"]["exit_why"]
 
 
 def test_the_new_design_refuses_the_other_way_on_the_daily_bar(tmp_path):

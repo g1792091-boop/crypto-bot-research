@@ -2,8 +2,9 @@
 추세판단 봇's (paperbot/trendbot.py) judgments over time and its signals on the price chart, read-only.
 
     GET /api/v4/livebots/trendchart?symbol=BTCUSDT   (5 s cache per coin; the page asks every 30 s)
-        heat     every coin's judgment of every closed 1h bar (the one 30m entries read) and 4h bar (1h entries) of the last
-                 72 hours, recomputed bar by bar with the bot's own functions and numbers (``history``: trendjudge
+        heat     every coin's judgment of every closed 1h bar (the one 30m entries read), 4h bar (1h entries) and daily bar
+                 (4h entries, owners 10-22) of the last 72 hours, recomputed bar by bar with the bot's own functions and
+                 numbers (``history``: trendjudge
                  vote_arrays + raw_votes over the frame, the hold ``TrendRules.hold``, ADX ``adx_min``, 끝물 ``adx_tired``
                  and falling; tests/test_livetrendchart.py checks it equals ``judge_frame`` of the frame up to each bar).
                  A cell is the time its judgment was in force, from its bar's close to the next close, so an entry minute
@@ -11,9 +12,10 @@
                  ``check`` same / differs
         marks    the paper bot's entries (every coin, 72 h) and the supervisor's exits (감독 청산: JUDGE, TIME); ``before``:
                  opened before the trend bot's start (``since``: the bot before it on this database, 전환 전)
-        chart    the chosen coin: its 1h and 4h judgments over 7 days (the band under the candles), its signals of the last
-                 3 days by what became of them (signal_log, the bot's own reason), the paper trades (entry, exit, the exit
-                 reason in words), the open paper position, the waits now (the pullback level)
+        chart    the chosen coin: its 1h, 4h and daily judgments over 7 days (the band under the candles), its signals of the
+                 last 3 days by what became of them (signal_log, the bot's own reason), the paper trades (entry, exit, the
+                 exit reason in words, ``entry_held``: entered on a 보류), the open paper position, the waits now (the
+                 pullback level; a config that waits only: trend.pullback_wait)
 The candles themselves come from the site's /api/candles (the page asks for them).
 
 Rules: the running config's numbers (state ``trend`` → ``numbers``, as the bot wrote them), else the config's ``trend``
@@ -54,17 +56,17 @@ MIN = 60_000
 HOUR = 3_600_000
 DAY = 86_400_000
 COINS = L.COINS                              # BTC ETH SOL DOGE LTC BCH (the trend bot's six)
-TFS = ("1h", "4h")                           # the judged timeframes
-ENTRY_OF = {"1h": "30m", "4h": "1h"}         # judged timeframe -> the entries that read it
+TFS = L.TREND_JUDGED_TFS                     # the judged timeframes (1h, 4h, 1d: owners 10-22)
+ENTRY_OF = L.TREND_ENTRY_OF                  # judged timeframe -> the entries that read it
 HTF_OF = TJ.HTF_OF                           # entry timeframe -> judged timeframe
 HEAT_H = 72                                  # the heatmap's hours
 BAND_H = 168                                 # the chosen coin's band under the candles (150 1h bars fit)
 SIG_SPAN_MS = 3 * DAY                        # the chosen coin's signals
 TRADE_SPAN_MS = 7 * DAY                      # the chosen coin's trades
 FRAME_BARS = TJ.FETCH                        # bars per frame (one request of trendjudge.FETCH rows)
-FETCH_PER_BUILD = 6                          # Binance requests per answer at most (cold start: two answers)
+FETCH_PER_BUILD = 9                          # Binance requests per answer at most (cold start: two answers of 18)
 REFETCH_MS = 60_000                          # one coin and timeframe: at most one fetch a minute
-HIST_KEEP = 48                               # computed histories kept (12 coin-timeframes, a few bars each)
+HIST_KEEP = 72                               # computed histories kept (18 coin-timeframes, a few bars each)
 SIG_KEEP = 300
 # the paper engine's exit codes in the owners' short words (screens/livebots-trend.js EXIT_SHORT_KO)
 EXIT_SHORT_KO = {"LOCK": "계단 익절", "SL": "손절", "REV": "빠른 청산", "JUDGE": "감독(추세)", "TIME": "감독(시간)", "LIQ": "강제청산",
@@ -256,7 +258,8 @@ def _position(conn) -> Optional[dict]:
     tf = sig.get("timeframe")
     return {"symbol": p.get("symbol"), "side": int(p.get("side") or 0), "strategy": sig.get("strategy_id"), "tf": tf,
             "htf": HTF_OF.get(tf), "entry_time": int(p.get("entry_time") or 0), "entry_price": p.get("entry_price"),
-            "stop": p.get("stop_price"), "locked": p.get("lock_roe") is not None, "entry_judge": tr.get("judge")}
+            "stop": p.get("stop_price"), "locked": p.get("lock_roe") is not None, "entry_judge": tr.get("judge"),
+            "entry_held": LT.held_of(tr)}
 
 
 def _trades(conn, since: int) -> list:
@@ -274,15 +277,18 @@ def _trades(conn, since: int) -> list:
                     "tf": tf, "htf": HTF_OF.get(tf), "entry_time": t.get("entry_time"), "entry_price": t.get("entry_price"),
                     "exit_time": t.get("exit_time"), "exit_price": t.get("exit_price"), "reason": t.get("exit_reason"),
                     "reason_ko": EXIT_SHORT_KO.get(t.get("exit_reason"), L.EXIT_KO.get(t.get("exit_reason"), t.get("exit_reason"))),
-                    "why": ctx.get("exit_why"), "roe": t.get("roe"), "pnl": t.get("pnl"), "entry_judge": tr.get("judge")})
+                    "why": ctx.get("exit_why"), "roe": t.get("roe"), "pnl": t.get("pnl"), "entry_judge": tr.get("judge"),
+                    "entry_held": LT.held_of(tr)})
     return out
 
 
 def signals_of(conn, symbol: str, now: int, entries: set, since: Optional[int] = None) -> list:
     """The coin's signals of the last 3 days, oldest first, each with what became of it: entered (its pullback touched and
-    the paper entered at that minute), touched (touched, no entry: one position at a time), wait, nopull, blocked (the
-    trend judgment or the entry spot checks), other (a pause, the chase block, unread), pending (not decided yet); prev:
-    a row of the bot before it on this database (before the trend bot's start ``since``: none of its words are this one's)."""
+    the paper entered at that minute, or, 바로 진입 since 10-22, the paper entered at its own minute), touched (touched, no
+    entry: one position at a time), wait, nopull, blocked (the trend judgment or the entry spot checks), other (a pause,
+    the chase block, unread, a 바로 진입 signal another one beat), pending (not decided yet); prev: a row of the bot
+    before it on this database (before the trend bot's start ``since``: none of its words are this one's). ``entries``:
+    this coin's paper entry minutes."""
     rows = conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, status, data FROM signal_log WHERE symbol = ? "
                         "AND bar_close >= ? ORDER BY bar_close DESC, id DESC LIMIT ?",
                         (symbol, int(now) - SIG_SPAN_MS, SIG_KEEP)).fetchall()
@@ -300,14 +306,21 @@ def signals_of(conn, symbol: str, now: int, entries: set, since: Optional[int] =
         judge = tr.get("judge")
         jtext = judge.get("text") if isinstance(judge, dict) else judge if isinstance(judge, str) else None
         before = bool(since) and int(bc) < int(since)
+        now_in = status == "SUBMITTED" and str(why or "").startswith(LT.PASSED_NOW)     # 바로 진입 (trendbot._enter_now)
+        entry_t = None
         if status == "SUBMITTED":
-            cat, ko, kd = "submitted", "처리 전", "pending"
+            cat, ko, kd = "submitted", "바로 진입 신호" if now_in else "처리 전", "pending"
+            if now_in:                       # entered at its own minute, else another signal or the open position won
+                mine = [t for t in entries if int(bc) <= t <= int(bc) + 2 * MIN]
+                if mine:
+                    kd, entry_t = "entered", min(mine)
+                elif int(bc) < int(now) - 2 * MIN:
+                    kd = "other"
         else:
             cat, ko = L.why_cat(status, why)
             kd = KIND_OF.get(cat, "other")
         if before:
             kd = "prev"
-        entry_t = None
         if kd == "touched":
             ms = TJ.TF_MS.get(tf, HOUR)
             mine = [t for t in pulled.get((member, tf), []) if int(bc) < t <= int(bc) + ms + 2 * MIN]
@@ -339,7 +352,7 @@ def _check(cell: Optional[dict], bot: Optional[dict]) -> Optional[str]:
 
 
 def heat_rows(b: Bars, st: dict, rules: TJ.TrendRules, now: int, symbol: str, budget: list) -> tuple:
-    """(heat, band of the chosen coin, pending): every coin's 1h and 4h cells over HEAT_H hours (the chosen coin first,
+    """(heat, band of the chosen coin, pending): every coin's 1h, 4h and 1d cells over HEAT_H hours (the chosen coin first,
     so its chart is never the one waiting), its band over BAND_H."""
     t1 = int(now) - int(now) % HOUR + HOUR
     t0 = t1 - HEAT_H * HOUR
@@ -396,8 +409,8 @@ def build(p: dict, symbol: str = "BTCUSDT", now_ms: Optional[int] = None, b: Opt
         pos = _position(conn)
         for t in trades + ([pos] if pos else []):
             t["before"] = bool(since) and t.get("entry_time") is not None and int(t["entry_time"]) < since
-        entries = {int(t["entry_time"]) for t in trades if t.get("entry_time") is not None}
-        if pos:
+        entries = {int(t["entry_time"]) for t in trades if t.get("entry_time") is not None and t.get("symbol") == symbol}
+        if pos and pos.get("symbol") == symbol:
             entries.add(pos["entry_time"])
         sigs = signals_of(conn, symbol, now, entries, since) if "signal_log" in tables else []
     except sqlite3.Error as exc:
@@ -426,7 +439,8 @@ def build(p: dict, symbol: str = "BTCUSDT", now_ms: Optional[int] = None, b: Opt
              and int(w.get("until") or 0) > now]
     nums = dataclasses.asdict(rules)
     return {**base, "state": "ok", "ts": ts, "age_ms": now - int(ts), "pending": pending, "since": since,
-            "rules": {"from": rsrc, **{k: nums[k] for k in ("vote_min", "adx_min", "adx_tired", "hold_1h", "hold_4h", "time_bars")}},
+            "rules": {"from": rsrc, **{k: nums[k] for k in ("vote_min", "adx_min", "adx_tired", "hold_1h", "hold_4h", "hold_1d",
+                                                            "hold_entry", "pullback_wait", "time_bars")}},
             "heat": heat, "marks": marks,
             "chart": {"symbol": symbol, "band": band, "signals": sigs,
                       "trades": [t for t in trades if t["symbol"] == symbol],
@@ -440,7 +454,7 @@ def register(app, ctx) -> dict:
 
     @app.get("/api/v4/livebots/trendchart")
     def get_livebots_trendchart(symbol: str = "BTCUSDT"):
-        """실거래 › 추세 차트: every coin's 1h / 4h judgment of the last 72 h recomputed bar by bar with the bot's own rules,
+        """실거래 › 추세 차트: every coin's 1h / 4h / 1d judgment of the last 72 h recomputed bar by bar with the bot's own rules,
         the chosen coin's band, signals, trades and waits (5 s cache per coin)."""
         if symbol not in COINS:
             raise HTTPException(400, "unknown symbol")

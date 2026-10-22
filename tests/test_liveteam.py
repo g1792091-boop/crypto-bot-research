@@ -248,37 +248,47 @@ def test_the_packet_describes_the_running_bot_live15(monkeypatch):
 
 
 def test_the_packet_describes_the_running_bot_trend(monkeypatch):
-    """The config the live side runs since 10/21 (deploy/combo.trend.json): the 추세판단 봇's own rules and the owners'
-    decisions; no 5-year reference, no 40-trade rule. Without its database its start is not known: said, never guessed."""
+    """The config the live side runs since 10/21, its 10/22 design (deploy/combo.trend.json: 18 members, 4h entries on the
+    closed daily bar, 보류 허용, 바로 진입): the 추세판단 봇's own rules and the owners' decisions; no 5-year reference, no
+    40-trade rule. Without its database its start is not known: said, never guessed."""
     from paperbot.trendjudge import TrendRules
     world, cfg = _config_world(monkeypatch, "combo.trend.json")
     assert T.is_trend(world) and world["ref_ko"] == L.TREND_NO_REF_KO and "trend" not in world
     pk = T.facts({"now": NOW, "bot": world}, "weekly", window=(NOW - 7 * DAY, NOW))
     rules, said = pk["fixed_rules"], TrendRules.from_dict(cfg["trend"]).describe()
-    assert rules[0] == ("진입 매매법 10개(30분 진입 7개는 끝난 1시간봉 추세, 1시간 진입 3개는 끝난 4시간봉 추세를 따름) · "
-                        "판단만 하는 매매법 4개(V3.9 · EMA·DMI·ADX · OBV 추세형 · 일목·AO)는 진입 안 함")
+    assert rules[0] == ("진입 매매법 18개(30분 진입 4개는 끝난 1시간봉 추세, 1시간 진입 7개는 끝난 4시간봉 추세, 4시간 진입 7개는 "
+                        "끝난 일봉 추세를 따름) · 판단만 하는 매매법 4개(V3.9 · EMA·DMI·ADX · OBV 추세형 · 일목·AO)는 진입 안 함")
     assert rules[1:6] == said and said[3] == "쉬기: 매매법 쉬기 없음 / 코인 쉬기 없음 / 하루 손실 한도 없음"
-    assert said[4].endswith("시간 정리 없음") and "되돌림을 기다림" in said[2]
-    for r in ("BTC 40배 · 나머지 30배", "증거금 잔고의 40%", "한 번에 포지션 하나", "진입: 되돌림 가격에 닿은 다음 분에 시장가(실행기도 그때 시장가로 따라감)",
+    assert said[4].endswith("시간 정리 없음") and "되돌림을 기다리지 않고" in said[2] and "보류여도 진입, 반대 방향만 막음" in said[0]
+    assert "4시간 진입은 끝난 일봉" in said[0]
+    for r in ("BTC 40배 · 나머지 30배", "증거금 잔고의 40%", "한 번에 포지션 하나",
+              "진입: 검사를 통과한 신호의 그 분에 시장가(되돌림 안 기다림, 실행기도 그때 시장가로 따라감)",
               "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
               "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
-              "추격 진입 막기 10개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
+              "추격 진입 막기 18개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
               "한국 시간 주말 진입 없음", "미국 경제 발표 앞뒤 30분 진입 없음", "나스닥 개장 앞 30분·뒤 30분 진입 없음",
               "전환 전 포지션 정리: 새 봇 시작 전에 예전 규칙으로 열린 포지션은 첫 잠금 전이면 바로 닫음", "청산 뒤 반대로 갈아타지 않음") + EXEC_RULES:
         assert r in rules, r
     assert "시장가 진입" not in rules and not any(r.startswith("매매법 ") for r in rules)
-    # the owners' decisions, from the config: no TIME exit, no pauses, the Nasdaq window in Korea time (summer time ends 11/1)
+    assert not any("되돌림 가격에 닿은" in r for r in rules)
+    # the owners' decisions, from the config: the 10/22 design, no TIME exit, no pauses, the Nasdaq window in Korea time
+    # (summer time ends 11/1)
     d = pk["owners_decisions"]
     assert d[0].startswith("규칙 고정: 새 봇 시작부터 2주는 규칙을 바꾸지 않고")
+    assert d[1] == ("새 설계(2026-10-22): 진입 매매법 18개(30분 4개 · 1시간 7개 · 4시간 7개) · 성적과 2주 검토는 새 설계 시작부터 "
+                    "새로 셈")
+    assert d[2:5] == [T.TREND_DAILY_KO, T.TREND_HOLD_KO, T.TREND_NOW_KO] and "그림자 trend-wait" in T.TREND_NOW_KO
     assert "시간 정리 청산 없음(10/21 밤 '시간청산 빼줘'): 첫 잠금 전에는 손절(순ROE -50%)·추세 뒤집힘 감독 청산·빠른 청산만" in d
     assert "쉬기 없음: 손실 뒤 매매법·코인 쉬기 없음, 하루 손실 한도 없음(10/21 '쉬기는 빼주고', '10번은 없애고')" in d
     nas = next(x for x in d if x.startswith("나스닥 개장 앞 30분·뒤 30분 진입 없음"))
     assert "'나스닥 개장전 30분도 진입금지로 하자'" in nas and "지금은 한국 22:00~23:00, 11/02부터 23:00~24:00" in nas
+    assert "되돌림 확인" not in nas and nas.endswith("추세 판단·감독 청산·손절·익절은 그대로")
     assert d[-1].startswith("실거래 크기: 각 실거래 지갑의 약 40%를 증거금으로")
     bot = pk["bot"]
     assert (bot["kind"], bot["name"], bot["reference"], bot["break_even"]) == ("trend", "추세판단 봇", L.TREND_NO_REF_KO, 0.833)
     assert bot["since_kst"] is None and "trend_since" in bot["since_note"] and "start_basis" not in bot
-    assert len(bot["entry_members"]) == 10 and "N20_EMA9_CHOP@30m (숏만)" in bot["entry_members"]
+    assert len(bot["entry_members"]) == 18 and {"F7_RF_TRIPLE@4h", "V39_ALL@1h", "N06_MACD_ORB@30m"} <= set(bot["entry_members"])
+    assert not any("숏만" in m for m in bot["entry_members"])
     assert pk["checkpoint_rule"] == T.CHECK_RULE_TREND and pk["meeting"] == "주간 보고"
     assert "expect" not in pk and "strategies" not in pk and pk["tests_available"]["how"].startswith("그림자 봇")
     # the live site's answers not read here: said, never a zero
@@ -292,6 +302,58 @@ def test_the_packet_describes_the_running_bot_trend(monkeypatch):
     assert T.due_checkpoint({"now": NOW, "bot": world, "trades": {"accts": {"paper": {"n": 81, "rows": rows}}}}) is None
     assert T.due_checkpoint({"now": NOW, "bot": {**world, "trend": {"since": NOW - 100 * H}},
                              "trades": {"accts": {"paper": {"n": 81, "rows": rows}}}})[0] == "checkpoint:trend-2026-10-15:80"
+
+
+def test_the_trend_packet_follows_the_entry_style():
+    """The owners' 10/22 design (바로 진입, 보류 허용, 4h entries on the closed daily bar) against a config that waits for
+    its pullback (the 10/21 design, the shadow trend-wait): the decisions, the rules, the fallback of an unreadable trend
+    config, the judgments of the 관제 answer (1h · 4h · 1d) and the prompt say what the running config does."""
+    with open(os.path.join(ROOT, "deploy", "combo.trend.json"), encoding="utf-8") as fh:
+        new = json.load(fh)
+    with open(os.path.join(ROOT, "deploy", "combo.shadow-trend-wait.json"), encoding="utf-8") as fh:
+        wait = json.load(fh)
+    d_new, d_wait = T.trend_decisions(new, NOW, None), T.trend_decisions(wait, NOW, None)
+    assert T.TREND_NOW_KO in d_new and T.TREND_HOLD_KO in d_new and T.TREND_DAILY_KO in d_new
+    assert T.TREND_NOW_KO not in d_wait and any(x.startswith("되돌림 진입: 검사를 통과한 신호는 진입 봉 하나 동안") for x in d_wait)
+    nas_new = next(x for x in d_new if x.startswith("나스닥"))
+    nas_wait = next(x for x in d_wait if x.startswith("나스닥"))
+    assert "되돌림 확인" not in nas_new and "추세 판단·되돌림 확인·감독 청산" in nas_wait
+    old = {"trend": {"time_bars": None}, "members": [{"strategy": "N08_ICHI_WR", "tf": "30m"}], "us_open_pause_min": 0}
+    d_old = T.trend_decisions(old, NOW, None)                      # the 10/21 design: no 10/22 lines, the pullback said
+    assert not any(x.startswith(("새 설계", "4시간 진입", "보류 허용", "바로 진입")) for x in d_old)
+    assert any(x.startswith("되돌림 진입") for x in d_old)
+    # a trend config that cannot be read: the 10/22 decisions, and the 10/22 design's rules (never 규칙봇 15's)
+    fixed = T.trend_decisions(None, NOW, None)
+    assert fixed == list(T.TREND_DECISIONS_FIXED) and fixed[1:5] == [T.TREND_DESIGN_KO, T.TREND_DAILY_KO, T.TREND_HOLD_KO, T.TREND_NOW_KO]
+    fr = T.fixed_rules(None, None, trend_bot=True)
+    assert fr[:len(T.FIXED_TREND_PAPER)] == list(T.FIXED_TREND_PAPER) and fr[0].startswith("진입 매매법 18개(")
+    assert "4시간 진입 7개는 끝난 일봉 추세" in fr[0] and not any(r.startswith("매매법 15개") for r in fr)
+    assert T.fixed_rules(None, None) == list(T.FIXED)
+    # the rules from each config: the entry line follows pullback_wait; 4h said only when the config has it
+    r_new, r_wait = T.fixed_rules(new, None), T.fixed_rules(wait, None)
+    assert "진입: 검사를 통과한 신호의 그 분에 시장가(되돌림 안 기다림, 실행기도 그때 시장가로 따라감)" in r_new
+    assert "진입: 되돌림 가격에 닿은 다음 분에 시장가(실행기도 그때 시장가로 따라감)" in r_wait
+    r_old = T._trend_rules({**old, **{k: new[k] for k in new if k not in ("members", "trend")}})
+    assert r_old[0].startswith("진입 매매법 1개(30분 진입 1개는 끝난 1시간봉 추세, 1시간 진입 0개는 끝난 4시간봉 추세를 따름)")
+    # 관제's judgments: 1h, 4h and the daily bar; 보류 허용 takes a strong 보류 both ways (the members' bars only)
+    lt = {"state": "ok", "ts": NOW, "hold_entry": True, "members": [{"tf": "30m"}, {"tf": "4h"}],
+          "coins": {"BTCUSDT": {"1h": {"dir": 1, "strong": True, "text": "1시간 상승(…)"}, "4h": {"dir": -1, "strong": True, "text": "4시간 하락(…)"},
+                                "1d": {"dir": 0, "strong": True, "text": "일봉 보류(…)"}},
+                    "ETHUSDT": {"1h": {"error": "못 받음"}, "4h": {"dir": 0, "strong": True, "text": "4시간 보류(…)"}}}}
+    tn = T._trend_now(lt)
+    assert tn["coins"]["BTC"] == {"1h": "1시간 상승(…)", "4h": "4시간 하락(…)", "1d": "일봉 보류(…)"}
+    assert tn["coins"]["ETH"] == {"1h": "못 읽음: 못 받음", "4h": "4시간 보류(…)"}          # no daily judgment written: left out
+    assert tn["taking_now"] == ["BTC 30분 진입 롱만", "BTC 4시간 진입 롱·숏(보류 허용)"]
+    assert "보류 = 반대 방향만 아니면 진입(보류 허용)" in tn["words"] and "4시간 진입은 일봉 판단" in tn["words"]
+    tn = T._trend_now({**lt, "hold_entry": False, "coins": {"BTCUSDT": {"1d": {"dir": 0, "strong": True, "text": "일봉 보류(…)"}}}})
+    assert tn["taking_now"] == ["지금 진입을 받는 추세가 없음(모두 보류·힘 약함·끝물)"] and "보류 = 진입 안 함" in tn["words"]
+    f = T._trend_funnel({**lt, "pullback_wait": False}, {"state": "missing"}, None)
+    assert "그 분에 바로 들어간 신호" in f["words"] and "되돌림을 기다린 신호" not in f["words"]
+    assert "되돌림을 기다린 신호" in T._trend_funnel({**lt, "pullback_wait": True}, {"state": "missing"}, None)["words"]
+    sp = T.trend_prompt("market")
+    assert "1시간봉·4시간봉·일봉" in sp and "4시간 진입은 일봉" in sp and "fixed_rules의 '진입' 줄" in sp
+    assert "진입 봉 하나 동안 가격이 조금 유리하게 되돌아오기(되돌림)를 기다렸다가 들어갑니다" not in sp
+    assert "1시간·4시간·일봉 추세 판단" in T.ROLES_TREND["market"]["focus"] and "그림자 trend-wait" in T.ROLES_TREND["market"]["focus"]
 
 
 # ---------------------------------------------------------------- 추세판단 봇 (10-21): its world, its packet, its meetings
@@ -355,7 +417,7 @@ def test_the_trend_packet_on_its_own_world(tmp_path, monkeypatch):
     assert [b["exit"] for b in rec["by_exit"]] == ["감독: 추세 뒤집힘"]
     (t,) = pk["trades"]
     assert (t["coin"], t["side"], t["strategy"], t["exit"]) == ("ETHUSDT", "롱", "N08_ICHI_WR", "감독 청산(추세 뒤집힘)")
-    assert t["entry_judge"].startswith("1시간 상승") and t["exit_why"].startswith("1시간 판단이 하락로")
+    assert t["entry_judge"].startswith("1시간 상승") and t["exit_why"].startswith("1시간 판단이 하락으로")
     (o,) = pk["old_bot_trades"]
     assert (o["coin"], o["exit"], o["bot"]) == ("BTCUSDT", "전환 전 포지션 정리", "예전 봇(규칙봇 15): 이 봇 성적 아님")
     # its parts: the trend now, where the signals went, the supervisor, the members

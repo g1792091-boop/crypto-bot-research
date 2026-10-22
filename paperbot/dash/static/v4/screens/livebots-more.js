@@ -7,8 +7,9 @@
 //           from the config the bot really runs (/api/v4/livebots/settings); folded, 10 strategies a page.
 //           추세판단 봇 (the server's ``trend``, owners 10/21): first a card 추세 판단 규칙: 쉬기 없음 · 하루 손실 한도 없음,
 //           the 2-week rule freeze from its start, its rules exactly as the bot wrote them (state trend rules: TrendRules.
-//           describe, each line split at its " / "), and its members by role (눌림 · 자리 · 돌파 · 횡보) with their entry
-//           bar (30분 진입 = the closed 1h bar's trend, 1시간 진입 = the 4h bar's); every setting row carries its role.
+//           describe, each line split at its " / "), and its members by role (눌림 · 자리 · 돌파 · 횡보 · 추세) with their
+//           entry bar (30분 진입 = the closed 1h bar's trend, 1시간 진입 = the 4h bar's, 4시간 진입 = the daily bar's, 10/22);
+//           every setting row carries its role and its entry (바로 진입 / 되돌림 진입: the config's trend.pullback_wait).
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 export {shadowsView, twoLines} from "./livebots-shadow.js";
@@ -86,6 +87,10 @@ export function roleGroups(tr) {
   return out;
 }
 
+/** A setting's entry in words: the combined bot's (즉시 · 돌파 확인); the trend bot's (tr: the server's trend) by its config:
+ *  바로 진입 (trend.pullback_wait false, the owners' since 10/22) or 되돌림 진입. */
+export const entryKo = (m, tr) => (tr ? (tr.pullback_wait === false ? "바로 진입" : "되돌림 진입") : m.entry_ko);
+
 /** settingsView(ctx) -> {el, set()} */
 export function settingsView(ctx) {
   const st = {d: null, okAt: 0, q: ""};
@@ -105,7 +110,7 @@ export function settingsView(ctx) {
   function memberRow(m) {
     return h("div", {class: "lb-mem", role: "listitem"},
       h("div", {class: "lb-memh"}, h("b", null, `${m.order}번`), h("span", {class: "pp thin"}, m.tf_ko), m.role ? ui.pill(`역할 ${m.role}`, "thin", "추세판단 봇에서 이 매매법의 역할") : null,
-        h("span", null, m.entry_ko), m.invert ? ui.pill("반대 방향", "warn") : null,
+        h("span", null, entryKo(m, st.d && st.d.trend)), m.invert ? ui.pill("반대 방향", "warn") : null,
         m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null, h("span", {class: "muted"}, `손절 ${m.stop.ko}`)),
       m.numbers ? h("div", {class: "lb-nums"}, Object.entries(m.numbers).map(([k, v]) => h("span", {class: "pp thin num"}, `${k} ${Array.isArray(v) ? v.join("/") : v}`)))
         : h("p", {class: "note"}, "기본 숫자 (규칙봇과 같은 신호)"),
@@ -135,7 +140,8 @@ export function settingsView(ctx) {
         h("ul", {class: "lb-limits"}, g.members.map((m) => h("li", {title: m.htf_ko || ""}, h("b", null, fmt.stratKo(m.strategy)),
           ` · ${m.tf_ko || fmt.tfKo(m.tf)}`, m.side_only ? ` · ${m.side_only === "short" ? "숏만" : "롱만"}` : "",
           m.htf_ko ? h("span", {class: "muted"}, ` (${m.htf_ko})`) : null)))))) : null,
-      ui.note("진입 매매법은 신호만 내고, 들어갈지는 추세 판단 · 진입 전 검사 · 되돌림이 정해요. 더 자세한 것은 관제 탭의 '규칙'과 docs/trend-bot-ko.md"));
+      ui.note(`진입 매매법은 신호만 내고, 들어갈지는 ${tr.pullback_wait === false ? "추세 판단 · 진입 전 검사가 정해요 (통과하면 그 분에 바로 진입)"
+        : "추세 판단 · 진입 전 검사 · 되돌림이 정해요"}. 더 자세한 것은 관제 탭의 '규칙'과 docs/trend-bot-ko.md`));
   }
   function draw() {
     const d = st.d;

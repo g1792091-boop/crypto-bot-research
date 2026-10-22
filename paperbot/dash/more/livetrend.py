@@ -10,16 +10,19 @@
         prices   each coin's last 1m close (the rule bot's live_bars, ``PAPERBOT_LIVE_RULE_DB``) and its minute
         position the paper position with the supervisor's view: the TIME deadline (entry + time_bars entry bars), the
                  higher bar's judgment now for its coin and whether it is against the position, locked or not, the
-                 judgment and score it entered on
-        coins    every coin's last closed 1h and 4h judgment (the bot's state ``trend``, written each minute it runs):
-                 상승 / 하락 / 보류, the four judges, ADX and whether it is rising, 끝물, 힘 약함
-        waits    the signals waiting for their pullback (level, until)
+                 judgment and score it entered on (``entry_held``: on a 보류, owners 10-22 "보류 허용")
+        coins    every coin's last closed 1h, 4h and daily judgment (the bot's state ``trend``, written each minute it
+                 runs; 1d since 10-22, the 4h entries read it): 상승 / 하락 / 보류, the four judges, ADX and whether it is
+                 rising, 끝물, 힘 약함
+        waits    the signals waiting for their pullback (level, until): only a config that waits (``pullback_wait``, the
+                 config's trend.pullback_wait; the owners' since 10-22 enters at once, the shadow trend-wait waits)
         pauses   the members and the coin-sides taking a break (and the daily loss stop when the config has one)
-        funnel   today's (KST) entry signals: how many, passed the checks, pullback touched, entered, and what stopped the
-                 rest (the bot's own reasons in categories)
-        members  each entry member of the config: its role (눌림 · 자리 · 돌파 · 횡보), its signals today, its record since
-                 the bot started, its pause
+        funnel   today's (KST) entry signals: how many, passed the checks, pullback touched (a config that waits),
+                 entered, and what stopped the rest (the bot's own reasons in categories)
+        members  each entry member of the config: its role (눌림 · 자리 · 돌파 · 횡보 · 추세), its signals today, its record
+                 since the bot started, its pause
         trades   the paper trades since the bot started, newest first, with the exit reason and the judgment of the entry
+                 (``entry_held``: entered on a 보류)
         record   the paper account since the bot started: trades, wins, net P&L, by exit reason
         signals  the last 24 h of the entry members' signals by what became of them, with the bot's own reason
         sup      the supervisor's exits (감독 청산: 추세 판단 뒤집힘 · 시간 정리) of the last 7 days
@@ -57,10 +60,13 @@ DAY = 86_400_000
 KST_MS = 9 * HOUR
 FREEZE_DAYS = L.TREND_FREEZE_DAYS          # owners 10-21 (#13 추천대로): the rules stay 2 weeks from the start, then the review
 STALE_MS = 5 * MIN                   # the paper bot steps every minute
-TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": HOUR, "4h": 4 * HOUR}
-HTF_OF = {"30m": "1h", "1h": "4h"}
+TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": HOUR, "4h": 4 * HOUR, "1d": DAY}
+HTF_OF = L.TREND_HTF                 # 30m -> 1h, 1h -> 4h, 4h -> 1d (owners 10-22)
+JUDGED = L.TREND_JUDGED_TFS          # the judged bars of state ``trend`` (1h, 4h, 1d)
+HELD_KO = "보류 진입"                 # an entry on a 보류 judgment (owners 10-22 "보류 허용": only the other direction stops it)
+PASSED_NOW = "추세 판단 통과"         # the SUBMITTED row of a signal that passed and entered at once (trendbot._enter_now)
 TRADES_KEEP = 30
-# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보), in their words: one table for every live page
+# the entry members' roles (owners 10-21: 눌림 · 자리 · 돌파 · 횡보; 10-22: 추세), in their words: one table for every live page
 ROLE = L.TREND_ROLE
 # what stopped a signal, grouped for the funnel (livebots.why_cat ids -> the funnel's words), in this order
 BLOCK = (("trend", "추세 판단 (보류·반대·힘 약함·끝물)"), ("spot", "진입 자리 검사 (EMA20·RSI·돌파형 초입)"),
@@ -107,6 +113,33 @@ def _state(conn, key: str):
 
 def kst_day0(ms: int) -> int:
     return int(ms) - (int(ms) + KST_MS) % DAY
+
+
+def held_of(tr: Optional[dict]) -> bool:
+    """The entry went on a 보류 judgment (owners 10-22 "보류 허용"): the signal meta's ``trend.held``, else (a closed trade's
+    context keeps only the judgment's words, trendbot ``ctx``) its words "<봉> 보류(…)" (trendjudge.Judgment.text)."""
+    tr = tr if isinstance(tr, dict) else {}
+    if isinstance(tr.get("held"), bool):
+        return tr["held"]
+    j = tr.get("judge")
+    text = j.get("text") if isinstance(j, dict) else j
+    return isinstance(text, str) and " " in text and text.split(" ", 1)[1].startswith("보류")
+
+
+def entry_style(cfg: Optional[dict], numbers: Optional[dict] = None) -> dict:
+    """{pullback_wait, hold_entry} of the running bot: the numbers it wrote (state ``trend``), else its config's ``trend``
+    section; a missing key = the 10-21 design (waits for a pullback, 보류 = no entry)."""
+    t = (cfg or {}).get("trend") if isinstance(cfg, dict) else None
+    t = t if isinstance(t, dict) else {}
+    n = numbers if isinstance(numbers, dict) else {}
+    pick = lambda k, d: n[k] if isinstance(n.get(k), bool) else bool(t.get(k, d))  # noqa: E731
+    return {"pullback_wait": pick("pullback_wait", True), "hold_entry": pick("hold_entry", False)}
+
+
+def entry_tfs(cfg: Optional[dict]) -> Optional[set]:
+    """The entry bars of the config's members (None when it has none readable: every judged bar counts)."""
+    tfs = {m.get("tf") for m in (cfg or {}).get("members") or [] if isinstance(m, dict) and m.get("tf") in HTF_OF}
+    return tfs or None
 
 
 def pause_now(cfg: dict, now: int) -> dict:
@@ -195,14 +228,16 @@ def position_view(conn, st: dict, numbers: dict, now: int) -> Optional[dict]:
             "stop": p.get("stop_price"), "lock_roe": p.get("lock_roe"), "locked": locked, "leverage": p.get("leverage"),
             "time_bars": bars, "deadline": deadline, "time_left_ms": None if deadline is None else deadline - int(now),
             "htf": htf, "judge": j, "judge_against": against, "supervised": not locked,
-            "entry_judge": tr.get("judge"), "entry_score": tr.get("score"), "pull_level": meta.get("pull_level"),
+            "entry_judge": tr.get("judge"), "entry_score": tr.get("score"), "entry_held": held_of(tr),
+            "pull_level": meta.get("pull_level"),
             "judge_exit": bool(numbers.get("judge_exit", True))}
 
 
 def funnel(conn, now: int, since: Optional[int] = None) -> dict:
-    """Today's (KST) entry signals: how many came, passed the trend and spot checks (waited for their pullback),
-    touched it, entered; and what stopped the rest, in BLOCK's categories. From the bot's start when it started today
-    (``from``; the bot before it on this database is not this one)."""
+    """Today's (KST) entry signals: how many came, passed the trend and spot checks (waited for their pullback, or went
+    in at once: SUBMITTED "추세 판단 통과: 바로 진입 …", the owners' config since 10-22), touched it, entered; and what
+    stopped the rest, in BLOCK's categories. From the bot's start when it started today (``from``; the bot before it on
+    this database is not this one)."""
     d0 = kst_day0(now)
     lo = max(d0, int(since or 0))
     rows = conn.execute("SELECT status, data FROM signal_log WHERE bar_close >= ? AND bar_close <= ?",
@@ -215,7 +250,7 @@ def funnel(conn, now: int, since: Optional[int] = None) -> dict:
             continue                                     # the entry row of a pullback: counted at its signal
         n += 1
         cat, _ko = L.why_cat(status, why) if status != "SUBMITTED" else ("submitted", "")
-        if status in ("WAITING", "BROKE") or cat == "nopull":
+        if status in ("WAITING", "BROKE") or cat == "nopull" or (status == "SUBMITTED" and str(why or "").startswith(PASSED_NOW)):
             passed += 1
         if status == "BROKE":
             touched += 1
@@ -290,7 +325,7 @@ def trades_view(trades: list) -> list:
                     "exit_time": t.get("exit_time"), "entry_price": t.get("entry_price"), "exit_price": t.get("exit_price"),
                     "reason": t.get("exit_reason"), "reason_ko": L.EXIT_KO.get(t.get("exit_reason"), t.get("exit_reason")),
                     "why": ctx.get("exit_why"), "roe": t.get("roe"), "pnl": t.get("pnl"), "lock_roe": t.get("lock_roe"),
-                    "entry_judge": tr.get("judge"), "entry_score": tr.get("score")})
+                    "entry_judge": tr.get("judge"), "entry_score": tr.get("score"), "entry_held": held_of(tr)})
     return out
 
 
@@ -381,19 +416,23 @@ def follow_of(p: dict, key: str, now: int) -> Optional[list]:
     return out
 
 
-def taking_now(st: dict) -> list:
+def taking_now(st: dict, entries: Optional[set] = None, hold: bool = False) -> list:
     """The directions the trend takes now from the bot's own judgments (state ``trend``): [{symbol, htf, entry, side}] for
-    each coin and judged timeframe that is a trend (up / down) with strength (ADX 20+) and not 끝물 (the map's '롱만' /
-    '숏만')."""
+    each coin and judged timeframe (1h, 4h, 1d; only those the ``entries`` bars read, when given) that is a trend (up /
+    down) with strength (ADX 20+) and not 끝물 (the map's '롱만' / '숏만'). ``hold`` (the config's trend.hold_entry, owners
+    10-22 "보류 허용"): a 보류 with strength and not 끝물 takes both sides (``side`` 0: '롱·숏')."""
     out = []
     for sym, row in sorted(((st or {}).get("coins") or {}).items(), key=lambda kv: L.COINS.index(kv[0]) if kv[0] in L.COINS else 99):
-        for htf in ("1h", "4h"):
+        for htf in JUDGED:
+            entry = L.TREND_ENTRY_OF.get(htf)
+            if entries is not None and entry not in entries:
+                continue
             j = (row or {}).get(htf) if isinstance(row, dict) else None
             if not isinstance(j, dict) or j.get("error"):
                 continue
             d = int(j.get("dir") or 0)
-            if d and j.get("strong") is not False and not j.get("tired"):
-                out.append({"symbol": sym, "htf": htf, "entry": "30m" if htf == "1h" else "1h", "side": d})
+            if (d or hold) and j.get("strong") is not False and not j.get("tired"):
+                out.append({"symbol": sym, "htf": htf, "entry": entry, "side": d})
     return out
 
 
@@ -412,7 +451,9 @@ def trend_now(path: str) -> Optional[dict]:
     if st is None:
         return None
     cfg = (run or {}).get("config") if isinstance(run, dict) else None
-    return {"taking": taking_now(st), "ts": ts, "expect": expect_of(cfg if isinstance(cfg, dict) else None)}
+    cfg = cfg if isinstance(cfg, dict) else None
+    style = entry_style(cfg, st.get("numbers"))
+    return {"taking": taking_now(st, entry_tfs(cfg), style["hold_entry"]), "ts": ts, "expect": expect_of(cfg), **style}
 
 
 def next_pause(cfg: dict, now: int) -> Optional[dict]:
@@ -466,10 +507,12 @@ def expect_of(cfg: Optional[dict] = None) -> dict:
     q = (lambda f: waits[min(len(waits) - 1, int(f * len(waits)))]) if waits else (lambda f: None)
     by = (d.get("trades") or {}).get("by_reason") or {}
     note = X.time_note_ko(d, cfg)
+    design = X.design_note_ko(d, cfg)                 # the replay's 10/21 design against the running one (10/22: differs)
     return {"state": "ok", "window_kst": d.get("window_kst"), "per_weekday": L._f(wk.get("mean")), "weekdays": wk.get("days"),
             "entries": wk.get("entries"), "zero_days": hist.get(0), "zero_share": hist.get(0, 0) / days if days else None,
             "wait_median_ms": q(0.5), "wait_q1_ms": q(0.25), "wait_q3_ms": q(0.75), "time_exits": (by.get("TIME") or {}).get("n"),
-            "note_ko": note + (" · 한 포지션이 더 오래 열려 있을 수 있어 진입도 조금 적을 수 있어요" if note != X.TIME_KEPT_KO else "")}
+            "note_ko": note + (" · 한 포지션이 더 오래 열려 있을 수 있어 진입도 조금 적을 수 있어요" if note != X.TIME_KEPT_KO else "")
+            + (f" · {design}" if design else "")}
 
 
 def build(p: dict, now_ms: Optional[int] = None) -> dict:
@@ -502,7 +545,7 @@ def build(p: dict, now_ms: Optional[int] = None) -> dict:
         last_step = (hb or {}).get("last_step") if isinstance(hb, dict) else None
         out = {**base, "state": "ok", "ts": ts, "age_ms": now - int(ts), "coins": st.get("coins") or {},
                "waits": st.get("waits") or [], "pauses": st.get("pauses") or {}, "rules": st.get("rules") or [],
-               "numbers": numbers, "since": since,
+               "numbers": numbers, "since": since, **entry_style(cfg, numbers),
                "bot": {"name": base["name"], "since": since,
                        "freeze_until": int(since) + FREEZE_DAYS * DAY if since else None, "freeze_days": FREEZE_DAYS,
                        "last_step": last_step, "heartbeat_ms": hb_ts,

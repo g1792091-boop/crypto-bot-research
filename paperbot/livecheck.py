@@ -146,6 +146,8 @@ RULE_DB = "/var/lib/paperbot/paper3.db"
 SHADOW_GLOB = "/var/lib/paperbot/combo/shadow-*.db"
 SHADOW_NAMES = {"shadow-b": "그림자 B 안정형", "shadow-nocut": "그림자 끄는 구간 없음", "shadow-ac32": "그림자 32개",
                 # the 추세판단 봇's own (deploy/combo.shadow-trend-*.json; the live site's 그림자 tab compares them by ROE)
+                "shadow-trend-wait": "그림자 되돌림 기다림",
+                # the 10/21 design's (stopped with the 10/22 design; their databases stay)
                 "shadow-trend-time": "그림자 시간 정리 있음", "shadow-trend-now": "그림자 되돌림 없이 바로 진입",
                 "shadow-trend-vote4": "그림자 판단 4개 모두 같은 쪽"}
 # (name, executor config, systemd unit, fallbacks when the config cannot be read: db, light N, light share; the live
@@ -164,7 +166,7 @@ def running_combo_config() -> str:
 
 EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro"}
 KO_SIDE = {1: "롱", -1: "숏"}
-KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
+KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}      # 1d: the 추세판단 봇's daily judgment (10/22)
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
            "REV": "빠른 청산(반대 신호)", "TP": "익절", "END": "끝", "JUDGE": "감독 청산(추세 뒤집힘)",
            "TIME": "감독 청산(시간 정리)", "SWITCH": "전환 전 포지션 정리"}
@@ -3208,12 +3210,15 @@ def _msg_put(conn, key: str, kind: str, first_ts: int, sent_ts: Optional[int] = 
 # bar size, the switched-off buckets, one position at a time, the weekend and the macro pause). Once the bot has
 # restated the wait (combo.py _restate: BROKE and then its entry's outcome, or FILTERED with its why) the same message
 # gets one result line at its end (wait_result_pass; Telegram editMessageText, never a second message).
-# The 추세판단 봇 (paperbot/trendbot.py, owners 10/21) waits the other way: a signal that passed its trend checks waits
-# its entry bar for a PULLBACK to a level below (long) / above (short) the signal's price (signal_log WAITING
-# "되돌림 기다림: …", the level in its data "trend" → "level"), from the minute after the signal to the entry bar's last
-# minute but one; touched → BROKE "되돌림 확인: …" and the entry is a SUBMITTED row "되돌림 확인" at the next minute
-# (bar_close = that minute); not touched → FILTERED "되돌림 안 옴(…)". Every wait carries its ``kind``: "break" or
-# "pullback", and the page and the ⏳ message say which (never "돌파" for a pullback).
+# The 추세판단 봇 (paperbot/trendbot.py, owners 10/21) with a config that waits (trend.pullback_wait true: the 10/21 design;
+# since the owners' 10/22 design the live bot enters at once and only the shadow trend-wait waits, without Telegram) waits
+# the other way: a signal that passed its trend checks waits its entry bar for a PULLBACK to a level below (long) / above
+# (short) the signal's price (signal_log WAITING "되돌림 기다림: …", the level in its data "trend" → "level"), from the
+# minute after the signal to the entry bar's last minute but one; touched → BROKE "되돌림 확인: …" and the entry is a
+# SUBMITTED row "되돌림 확인" at the next minute (bar_close = that minute); not touched → FILTERED "되돌림 안 옴(…)". A
+# config that does not wait leaves no WAITING row (its SUBMITTED row "추세 판단 통과: 바로 진입 …" is the entry): no ⏳
+# message, nothing on the page. Every wait carries its ``kind``: "break" or "pullback", and the page and the ⏳ message
+# say which (never "돌파" for a pullback).
 PULLBACK_HEAD = "되돌림 기다림"
 WAIT_TF_MS = {"15m": 15 * MIN, "30m": 30 * MIN, "1h": H1, "4h": 4 * H1}
 WAIT_MSGS_ENV = "PAPERBOT_LIVE_WAIT_MSGS"              # "0": no ⏳ message (the page still shows the waits)

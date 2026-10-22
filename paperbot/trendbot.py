@@ -311,7 +311,8 @@ class TrendRunner(C.ComboRunner):
                                       "big_bar": info["big_bar"], "far_htf_atr": info["far_htf_atr"],
                                       "far_etf_atr": info["far_etf_atr"]}}
         # the judgment it entered on rides in ctx too: the trade record keeps ctx (the live site's 최근 거래)
-        meta["ctx"] = {**(sig.meta.get("ctx") or {}), "trend": {"judge": j.text(self.rules), "score": float(sc), "htf": htf}}
+        meta["ctx"] = {**(sig.meta.get("ctx") or {}), "trend": {"judge": j.text(self.rules), "score": float(sc), "htf": htf,
+                                                                 "held": j.dir == 0}}
         nsig = replace(sig, score=float(sc), meta=meta)
         label = sig.meta.get("member", sig.strategy_id)
         if not self.rules.pullback_wait:
@@ -428,7 +429,7 @@ class TrendRunner(C.ComboRunner):
             # is no judgment of its own, so it closes at the same event as the bot (review 10/21)
             want = int(((p.signal.meta or {}).get("trend") or {}).get("dir") or p.side)
             if j.bar_close > int(p.entry_time) and j.raw == -want:
-                e.supervise("JUDGE", f"{KO_TF[htf]} 판단이 {KO_DIR[j.raw]}로 바뀜({j.vote_text()})")
+                e.supervise("JUDGE", f"{KO_TF[htf]} 판단이 {KO_DIR[j.raw]}으로 바뀜({j.vote_text()})")
 
     # ---- what the live site shows
     def _snapshot(self, ts: int) -> None:

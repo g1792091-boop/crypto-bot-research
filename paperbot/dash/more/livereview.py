@@ -11,19 +11,22 @@ this is what they open on the review day: did the new rules work, and did each n
                  sides noisy), drawn as a band around the coin's rate; inside = the gap is within luck
         execs    both real executors' closed trades entered since the start (their own databases: n, wins, P&L, real
                  money only when the executor runs on mainnet), whether one holds a position now
-        days     per KST day from the start: signals, passed the checks (waited for a pullback), pullback touched,
-                 entered, the paper's closed trades and P&L of the day (and the twin's); ``curve``: the cumulative P&L
+        days     per KST day from the start: signals, passed the checks (waited for a pullback, or went in at once:
+                 바로 진입, the owners' config since 10-22), pullback touched (a config that waits), entered, the paper's closed trades and P&L of the day (and the twin's); ``curve``: the cumulative P&L
                  and net ROE sum of both accounts, trade by trade
         funnel   the same funnel over the whole span and what stopped the rest (livetrend.BLOCK's categories)
         whatif   새 규칙이 도왔나? (가상, below)
         split    the paper record by role (livetrend.ROLE), member, coin, side, exit reason and entry timeframe
 
 What-ifs (가상: arithmetic on the rule bot's 1m bars, never a trade; funding left out; as if the account were flat):
-    trend   the signals the trend judge stopped (보류 · 반대 · 힘 약함 · 끝물), entered at the signal's price
+    trend   the signals the trend judge stopped (보류 · 반대 · 힘 약함 · 끝물; with 보류 허용, owners 10-22 trend.hold_entry,
+            no 보류: ``rule_ko`` says so), entered at the signal's price
     spot    the signals the entry checks stopped (EMA20 · RSI · 돌파형 초입), entered at the signal's price
     nopull  the signals whose pullback never came, entered at the signal's price
     judge / time   the supervisor's exits (추세 뒤집힘 · 시간 정리), held instead
     pull    the pulled entries entered at the signal's price instead; and the entry price the pullback won (real numbers)
+nopull and pull exist only while a config waits for its pullback (trend.pullback_wait): the owners' config enters at once
+since 10-22, so their tiles say so (``off``, like time since 10-21 night) and judge only what came before.
 The replay is the 규칙 점검 tab's (dash/more/liveinsight.py ``_hold``: dash/more/livetape.py ``rebuild`` with the engine's
 own functions, the result booked by ``booked_roe``), here on 1m bars read once per coin per answer: the same net ROE stop
 (``_virtual``'s rule: ladder.roe_price from the signal's price, the fill = that price with the slippage against) and the
@@ -76,14 +79,14 @@ OPEN_TTL_S = 60.0                    # an undecided replay is worked out again a
 LOCKED_TTL_S = 300.0                 # one past its first lock, still running
 NODATA_TTL_S = 600.0                 # no bar at its entry minute (bars can come late)
 HOLD_MAX_MS = 14 * DAY               # liveinsight.HOLD_MAX_MS: a virtual trade is followed at most this long
-ROLES = ("눌림", "자리", "돌파", "횡보")
+ROLES = L.TREND_ROLES                # 눌림 · 자리 · 돌파 · 횡보 · 추세 (owners 10-22)
 OTHER_ROLE = "그 밖"
 FUNDING_KO = "펀딩비는 넣지 않았어요 (비율이 기록에 없어요)"
 NOTE_KO = ("가상 = 규칙봇 1분봉으로 다시 계산한 결과예요(실제 체결 아님) · 같은 손절(순ROE −50%) · 같은 계단 익절 · "
            "계좌가 비어 있었다고 치고(한 번에 하나 규칙은 빼고) · " + FUNDING_KO)
 # the what-ifs in the order the page shows them: (id, title, the rule in words, how the virtual result is made)
 WHATIF = (
-    ("trend", "추세 판단", "상위 봉(30분 진입은 1시간, 1시간 진입은 4시간) 판단이 보류·반대·힘 약함·끝물이면 진입 안 함",
+    ("trend", "추세 판단", "상위 봉(30분 진입은 1시간, 1시간 진입은 4시간, 4시간 진입은 일봉) 판단이 보류·반대·힘 약함·끝물이면 진입 안 함",
      "추세 판단에 걸린 신호를 신호 가격에 들어갔다면 (가상)"),
     ("spot", "진입 자리 검사", "상위 EMA20에서 너무 뻗음 · 진입 봉 EMA20에서 멂 · RSI 과열/침체 · 돌파형은 추세 초입만",
      "진입 자리 검사에 걸린 신호를 신호 가격에 들어갔다면 (가상)"),
@@ -101,6 +104,13 @@ BLOCKED = {"trend": ("trend",), "spot": ("spot",), "nopull": ("nopull",)}
 # it closed before that
 TIME_OFF_RULE_KO = "10/21 밤 뺀 규칙 · 그 전엔 진입 봉 4개 안에 첫 잠금(+10%)을 못 가면 청산했어요"
 TIME_OFF_KO = "지금 봇에는 없는 규칙이라 새로 판정할 거래가 없어요"
+# owners 10-22: 보류 허용 (trend.hold_entry: a 보류 no longer stops a signal) and 바로 진입 (trend.pullback_wait false: no
+# pullback wait; the shadow trend-wait still waits): the tiles say what the running config does
+TREND_HOLD_RULE_KO = ("상위 봉(30분 진입은 1시간, 1시간 진입은 4시간, 4시간 진입은 일봉) 판단이 반대·힘 약함·끝물이면 진입 안 함 "
+                      "(보류는 받음: 10/22 보류 허용)")
+PULL_OFF_RULE_KO = {"nopull": "10/22부터 바로 진입이라 되돌림을 기다리지 않아요 · 그 전엔 진입 봉 하나 동안 0.25 ATR 되돌림을 기다리고, 안 오면 버렸어요",
+                    "pull": "10/22부터 바로 진입이라 되돌림 가격에 들어가지 않아요 · 그 전엔 신호 가격이 아니라 되돌림 가격에 들어갔어요"}
+PULL_OFF_KO = "지금 봇은 바로 진입이라 새로 판정할 신호가 없어요 (되돌림 기다림은 그림자 trend-wait에서 비교해요)"
 
 _lock = threading.Lock()
 _memo: "OrderedDict[str, tuple]" = OrderedDict()
@@ -234,7 +244,8 @@ def _counts(sigs: list) -> dict:
         if s["cat"] == "entered":
             continue
         n += 1
-        if s["status"] in ("WAITING", "BROKE") or s["cat"] == "nopull":
+        if (s["status"] in ("WAITING", "BROKE") or s["cat"] == "nopull"
+                or (s["status"] == "SUBMITTED" and str(s["why"] or "").startswith(LT.PASSED_NOW))):     # 바로 진입 (10-22)
             passed += 1
         if s["status"] == "BROKE":
             touched += 1
@@ -316,7 +327,7 @@ def split_of(trades: list, cfg: dict) -> dict:
             "coin": rows(lambda t: t.get("symbol"), list(L.COINS)),
             "side": rows(lambda t: int(t.get("side") or 0), [1, -1]),
             "exit": rows(_exit_group, [k for k, _ko in LT.EXIT_GROUP], {k: {"ko": ko} for k, ko in LT.EXIT_GROUP}),
-            "tf": rows(lambda t: t.get("timeframe"), ["30m", "1h"])}
+            "tf": rows(lambda t: t.get("timeframe"), ["30m", "1h", "4h"])}
 
 
 # ================================================================ the replays (가상)
@@ -583,15 +594,20 @@ def whatifs(sigs: list, trades: list, meta: dict, run: dict, cfg: dict, rule_db:
 
     base = _tally(base_cf)
     actual = rec_of(trades)
+    t_cfg = cfg.get("trend") if isinstance(cfg.get("trend"), dict) else {}
+    no_pull = t_cfg.get("pullback_wait", True) is False           # 바로 진입 (owners 10-22): the pullback tiles say so
     items = []
     for wid, _ko, _rule, _how in WHATIF:
         if wid in BLOCKED:
             out, capped, n_all = groups[wid]
             v = _tally([cf for _s, cf in out])
-            items.append({**_head(wid), "state": "ok", "n": n_all, "capped": capped, "virt": v,
+            off = no_pull and wid == "nopull"
+            head = {**_head(wid), **({"rule_ko": TREND_HOLD_RULE_KO} if wid == "trend" and t_cfg.get("hold_entry") else {}),
+                    **({"rule_ko": PULL_OFF_RULE_KO[wid], "off": True} if off else {})}
+            items.append({**head, "state": "ok", "n": n_all, "capped": capped, "virt": v,
                           "base": {k: base[k] for k in ("n", "decided", "won", "win_rate", "roe_sum", "roe_mean")},
                           "actual": {k: actual[k] for k in ("n", "wins", "win_rate", "roe_sum", "roe_mean")},
-                          "verdict": verdict_blocked(v, base),
+                          "verdict": {"kind": "off", "ko": PULL_OFF_KO} if off and not n_all else verdict_blocked(v, base),
                           "rows": [{"t": s["t"], "symbol": s["symbol"], "side": s["side"], "strategy": s["strategy"], "tf": s["tf"],
                                     "why": L.why_words(s["why"]), "cf": _cf_out(cf)} for s, cf in out[:ROWS_KEEP]]})
         elif wid in ("judge", "time"):
@@ -620,13 +636,15 @@ def whatifs(sigs: list, trades: list, meta: dict, run: dict, cfg: dict, rule_db:
             better = sum(1 for d in deltas if d > 1e-9)
             worse = sum(1 for d in deltas if d < -1e-9)
             gains = [x["gain"] for x in pulls if x["gain"] is not None]
-            items.append({**_head(wid), "state": "ok", "n": len(pulls), "of": len(trades),
+            items.append({**_head(wid), **({"rule_ko": PULL_OFF_RULE_KO[wid], "off": True} if no_pull else {}),
+                          "state": "ok", "n": len(pulls), "of": len(trades),
                           "gain": {"n": len(gains), "sum": sum(gains), "mean": sum(gains) / len(gains) if gains else None},
                           "held": _tally([x["held"] for x in pulls]), "at": _tally([x["at"] for x in pulls]),
                           "delta": sum(deltas), "better": better, "worse": worse,
                           "flips": {"won_lost": sum(1 for x in dec if x["held"]["state"] == "won" and x["at"]["state"] == "lost"),
                                     "lost_won": sum(1 for x in dec if x["held"]["state"] == "lost" and x["at"]["state"] == "won")},
-                          "verdict": verdict_paired(better, worse, len(deltas), sum(deltas), len(pulls)),
+                          "verdict": {"kind": "off", "ko": PULL_OFF_KO} if no_pull and not pulls
+                          else verdict_paired(better, worse, len(deltas), sum(deltas), len(pulls)),
                           "rows": [{"t": int(x["t"]["entry_time"]), "symbol": x["t"].get("symbol"), "side": x["t"].get("side"),
                                     "strategy": x["t"].get("strategy_id"), "tf": x["t"].get("timeframe"), "sig_t": x["sig"]["t"],
                                     "sig_price": x["price"], "entry_price": x["t"].get("entry_price"), "gain": x["gain"],
@@ -709,7 +727,7 @@ def build(p: dict, now_ms: Optional[int] = None, more: Optional[dict] = None, bu
            "record": {"real": r_rec, "flip": f_rec, "luck": luck_of(r_rec, f_rec), "small_n": SMALL_N, "more_n": MORE_N,
                       "flip_on": "trades" in tables and (cfg.get("flip_twin", True) is not False)},
            "execs": exec_since(p, since, now), "curve": {"real": curve_of(real, since), "flip": curve_of(flip, since)},
-           "split": split_of(real, cfg), "small_n": SMALL_N}
+           "split": split_of(real, cfg), "small_n": SMALL_N, **LT.entry_style(cfg, (st or {}).get("numbers"))}
     if sigs is None:
         out.update(days=None, funnel=None, signals_state={"state": "missing", "reason_ko": "신호 기록 표(signal_log)가 아직 없어요"})
         out["whatif"] = {"items": [_na(w[0], "missing", "신호 기록 표(signal_log)가 아직 없어요") if w[0] in BLOCKED or w[0] == "pull"

@@ -164,9 +164,10 @@ def test_the_answer(world):
     # the judgment changes: the 추세 차트 tab's recomputation, its link
     ch = [e for e in ev if e["kind"] == "trend"]
     assert ch and all(e["sub"] == "change" and e["frm"] != e["to"] and e["link"] == {"tab": "tchart", "q": {"sym": e["symbol"]}} for e in ch)
-    assert all(re.match(r"^\w+ (1시간|4시간) 판단이 (상승|하락|보류)에서 (상승으로|하락으로|보류로) 바뀌었어요$", e["text"]) for e in ch)
+    assert all(re.match(r"^\w+ (1시간|4시간|일봉) 판단이 (상승|하락|보류)에서 (상승으로|하락으로|보류로) 바뀌었어요$", e["text"]) for e in ch)
     assert all(re.match(r"^상승 \d·하락 \d·중립 \d · ADX \d+ (오름|내림)", e["detail"]) and "진입이 이 판단을 봐요" in e["detail"] for e in ch)
-    assert d["judge"] == {"state": "ok", "covers_h": 72, "from": d["t0"], "read": 12, "of": 12, "pending": False, "note_ko": None,
+    # 6 coins x (1h, 4h and, since 10/22, the daily bar the 4h entries read)
+    assert d["judge"] == {"state": "ok", "covers_h": 72, "from": d["t0"], "read": 18, "of": 18, "pending": False, "note_ko": None,
                           "errors": [], "stale": False}
     # the executor: its fills against the paper's price, the follow it skipped, its lock step, its halt, its start
     ex = [e for e in ev if e["kind"] == "exec"]
@@ -471,7 +472,7 @@ def test_the_view_states_and_notes(answer):
             "capped": {"total": 650, "kept": 400, "cut": 250, "kinds": ["signal", "trend"], "low_from": answer["now_ms"] - 50 * 3600000, "hi_from": None}}
     out = _node(VIEW, busy)
     t = out["text"]
-    assert "판단 기록은 최근 72시간만 (그 전 판단 바뀜은 안 보여요)" in t and "추세 판단을 불러오는 중이에요 · 6/12" in t
+    assert "판단 기록은 최근 72시간만 (그 전 판단 바뀜은 안 보여요)" in t and "추세 판단을 불러오는 중이에요 · 6/18" in t
     assert "기록이 많아 250개를 뺐어요 (전체 650개) · 신호·판단 바뀜은 " in t and "거래·실행기·안전은 모두 있어요" in t
     out = _node(VIEW, {**answer, "hours": 168, "t0": answer["now_ms"] - 168 * 3600000})
     assert out["span"].startswith("최근 7일 · ") and "BCH 롱" not in out["text"] and "신호 —" in out["text"]

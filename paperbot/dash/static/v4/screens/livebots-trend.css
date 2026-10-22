@@ -107,7 +107,8 @@ small.ltr-sub, .ltr-cell .ltr-sub { display: block; font-size: var(--t-2xs); }
 
 /* ---------------------------------------------------------------- 추세 지도 */
 .ltr-table { display: grid; gap: 6px; min-width: 0; }
-.ltr-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: stretch; min-width: 0; }
+/* one column per judged bar the members read (--cols on the table: 1h · 4h · 1d since 10/22) */
+.ltr-row { display: grid; grid-template-columns: 64px repeat(var(--cols, 2), minmax(0, 1fr)); gap: 8px; align-items: stretch; min-width: 0; }
 .ltr-hrow { color: var(--muted); font-size: var(--t-xs); }
 .ltr-coin { display: grid; align-content: center; gap: 1px; font-size: var(--t-sm); white-space: nowrap; min-width: 0; }
 .ltr-coin small { color: var(--muted); font-size: var(--t-2xs); overflow: hidden; text-overflow: ellipsis; }
@@ -158,7 +159,7 @@ small.ltr-sub, .ltr-cell .ltr-sub { display: block; font-size: var(--t-2xs); }
 .ltr-clist .ltr-word { font-size: var(--t-sm); }
 
 /* ---------------------------------------------------------------- 오늘 신호 흐름 */
-.ltr-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.ltr-steps { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 6px; }
 .ltr-step { position: relative; display: grid; gap: 3px; padding: 9px 10px; border-radius: var(--r-md); background: var(--surface-2);
   border: 1px solid var(--line); min-width: 0; font-size: var(--t-xs); color: var(--ink-2); }
 .ltr-step b { color: var(--ink); font-size: calc(22px * var(--ts)); line-height: 1.2; }
@@ -235,7 +236,8 @@ small.ltr-sub, .ltr-cell .ltr-sub { display: block; font-size: var(--t-2xs); }
   .ltr-tsub { grid-column: 1 / -1; }
 }
 @media (max-width: 420px) {
-  .ltr-row { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+  .ltr-row { grid-template-columns: 44px repeat(var(--cols, 2), minmax(0, 1fr)); gap: 6px; }
+  .ltr-allow { white-space: normal; }
   .ltr-coin { font-size: var(--t-xs); }
   .ltr-cell { padding: 6px 7px; }
 }
