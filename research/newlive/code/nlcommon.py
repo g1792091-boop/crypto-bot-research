@@ -188,5 +188,5 @@ def parse_label(label):
     return name, tf, (pick or None)
 
 
-def sig_path(label):
-    return f"{SIG}/{label.replace('@', '_at_').replace('#', '__')}.npz"
+def sig_path(label, base=None):
+    return f"{base or SIG}/{label.replace('@', '_at_').replace('#', '__')}.npz"
