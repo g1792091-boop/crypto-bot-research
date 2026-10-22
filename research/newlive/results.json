@@ -143,7 +143,7 @@
   },
   "validate_custom.json": {
    "window_utc": [
-    "2026-10-19 00:00:00",
+    "2026-10-14 00:00:00",
     "2026-10-21 00:00:00"
    ],
    "picks": {
@@ -187,9 +187,9 @@
       "rf_period": 80,
       "rf_mult": 9.0
      },
-     "combo_signals": 6,
-     "full_series_signals": 6,
-     "both": 6,
+     "combo_signals": 18,
+     "full_series_signals": 18,
+     "both": 18,
      "only_combo": [],
      "only_full_series": []
     },
@@ -201,16 +201,16 @@
       "fvg_min_atr": 1.0,
       "zone_life": 40
      },
-     "combo_signals": 4,
-     "full_series_signals": 4,
-     "both": 4,
+     "combo_signals": 15,
+     "full_series_signals": 15,
+     "both": 15,
      "only_combo": [],
      "only_full_series": []
     }
    },
    "errors": [],
    "n_errors": 0,
-   "elapsed_s": 102.9
+   "elapsed_s": 345.6
   }
  },
  "candidates": 78,
