@@ -1754,8 +1754,17 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
             f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
             f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
             f"{f'추격 진입 막기 {nc}개, ' if nc else ''}"
-            f"{'추세 판단(30분→1시간·1시간→4시간)·되돌림 진입·감독 청산, ' if cfg.trend is not None else ''}"
+            f"{trend_start_text(cfg.trend) if cfg.trend is not None else ''}"
             f"포지션 1개, {pause}지갑 ${wallet:,.2f}")
+
+
+def trend_start_text(trend: dict) -> str:
+    """The trend bot's part of the start line: the judged frames, 보류, the entry style."""
+    t = trend if isinstance(trend, dict) else {}
+    return ("추세 판단(30분→1시간·1시간→4시간·4시간→일봉)"
+            + ("·보류 허용" if t.get("hold_entry") else "")
+            + ("·되돌림 진입" if t.get("pullback_wait", True) else "·바로 진입") + "·감독 청산"
+            + (f"(설계 {t['design']})" if t.get("design") else "") + ", ")
 
 
 # ====================================================================== start

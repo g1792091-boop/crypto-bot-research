@@ -1,13 +1,14 @@
 // 실거래 › 그림자 (#/livebots/shadows; /api/v4/livebots/shadows: dash/more/liveshadow.py and livebots.shadows).
-//   추세판단 봇 그림자 (owners 10/21: rule variants side by side, at no money cost, so the 11/04 review decides with
-//   numbers): three paper bots that each change ONE rule of the live trend bot (시간 정리 있음 · 되돌림 없이 바로 진입 ·
-//   판단 4개 모두 같은 쪽), each next to the live paper (COMBO@mix) counted from that shadow's own start. Each starts with
+//   추세판단 봇 그림자 (owners 10/21: rule variants side by side, at no money cost, so the 2-week review decides with
+//   numbers): paper bots that each change ONE rule of the live trend bot (since the 10/22 design one: 되돌림 기다림),
+//   each next to the live paper (COMBO@mix) counted from that shadow's own start. Each starts with
 //   its own fresh wallet, so they are compared by trade and net ROE, never by dollars: closed trades, win rate, mean and
 //   summed net ROE, entries a KST weekday, the exit reasons, the deepest fall of the summed net ROE and both summed-ROE
 //   lines; each card says its one difference in plain words and what its own start record really differs in; under 20
 //   closed trades on either side: 표본 적음 · 아직 판단 못 함. Not on yet: 아직 안 켬 and the one command that starts it,
 //   never a zero.
-//   예전 봇 비교용 (folded): the old bots' shadows (A+C 합본 · 규칙봇 15) as before (trades, win rate, money, both lines),
+//   예전 봇 비교용 (folded): the old bots' shadows (A+C 합본 · 규칙봇 15 · the 10/21 trend design's three) as before
+//   (trades, win rate, money, both lines),
 //   next to the live paper only over the old bot's days (they compare with the old bot, not this one).
 // The page starts and stops nothing: it shows the commands to paste on the server.
 import {h, s, put, ui, fmt, motion} from "../core/pb.js";
@@ -124,7 +125,7 @@ function trendCard(x, W, t) {
 
 function trendHead(t) {
   return ui.card({title: "추세판단 봇 그림자 비교", sub: t.review_ms ? `${fmt.date(t.review_ms)} 검토용 · 모의` : "모의", cls: "lb-tsh-top"},
-    h("p", {class: "lb-flat"}, "실거래 봇의 규칙을 하나만 바꾼 페이퍼 봇 3개가 같은 시장에서 같이 돌아요 (돈 · 주문 · 텔레그램 없음). ",
+    h("p", {class: "lb-flat"}, `실거래 봇의 규칙을 하나만 바꾼 페이퍼 봇 ${fmt.int((t.shadows || []).length)}개가 같은 시장에서 같이 돌아요 (돈 · 주문 · 텔레그램 없음). `,
       "그림자마다 켠 때부터 새 지갑이라 달러가 아니라 거래 수 · 이긴 비율 · 순ROE로 견주고, 실거래 페이퍼도 그 그림자를 켠 때부터만 세요."),
     t.on ? null : ui.note(t.main_ko || ""),
     t.start_all_ko ? howTo("안 켠 것 한 번에 켜기 (서버에서, 한 줄):", t.start_all_ko) : null,

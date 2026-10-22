@@ -4,8 +4,9 @@
 #   paperbot-combo-shadow@b      deploy/combo.shadow-b.json      B 안정형 (the plateau settings, 37)
 #   paperbot-combo-shadow@nocut  deploy/combo.shadow-nocut.json  live-ac's 95 settings without the switch-off buckets
 #   paperbot-combo-shadow@ac32   deploy/combo.shadow-ac32.json   the previous 32 strategies / 101 settings
-# and the 추세판단 봇's own (owners 10/21, docs/trend-bot-ko.md 10: deploy/combo.trend.json with ONE change each, for the
-# 11/04 review): @trend-time (trend.time_bars 4), @trend-now (trend.pullback_wait false), @trend-vote4 (trend.vote_min 4).
+# and the 추세판단 봇's own (docs/trend-bot-ko.md: deploy/combo.trend.json with ONE change, for the 2-week review):
+# @trend-wait (trend.pullback_wait true, owners 10/22: the live bot enters at once). The 10/21 design's @trend-time,
+# @trend-now and @trend-vote4 left with the 10/22 design (their configs are gone: stop them; their databases stay).
 # Paper only: no orders, and no executor follows a shadow. Instance <name> writes only
 # /var/lib/paperbot/combo/shadow-<name>.db (never live-ac.db, the executors' paper_db, and never another shadow's).
 # No Telegram: "telegram": false in each config, and the Telegram lines of live.env are removed below. The first

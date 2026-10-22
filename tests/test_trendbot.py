@@ -533,13 +533,18 @@ def test_the_deploy_config_and_refusals(tmp_path):
     path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "deploy", "combo.trend.json")
     cfg = C.ComboConfig.from_file(path)
     assert cfg.problems() == [] and cfg.db == "/var/lib/paperbot/combo/live-ac.db" and cfg.name == "추세판단 봇"
-    # the defaults, but no TIME exit (owners 10/21 night: "시간청산 빼줘")
-    assert TJ.TrendRules.from_dict(cfg.trend) == dataclasses.replace(TJ.TrendRules(), time_bars=None)
+    # the defaults, but no TIME exit (owners 10/21 night: "시간청산 빼줘"), and the 10/22 design: 보류 허용, 바로 진입
+    assert TJ.TrendRules.from_dict(cfg.trend) == dataclasses.replace(
+        TJ.TrendRules(), time_bars=None, hold_entry=True, pullback_wait=False, design="2026-10-22")
     ms = C.resolve_members(cfg.members, cfg.picks_file)
-    assert [m.label for m in ms] == ["N08_ICHI_WR@30m", "N05_PSAR_POC@30m", "F3_BOS@30m", "F15_ORB@30m",
-                                     "N06_MACD_ORB@30m", "S3_CMO_SANDWICH@30m", "N20_EMA9_CHOP@30m", "F9_FVG@1h",
-                                     "F9_IFVG@1h", "S3_CMO_SANDWICH@1h"]
-    assert all(m.no_chase for m in ms) and ms[6].when == ((("side", -1),),)
+    # owners 10/22: 18 entry members, 30m on the closed 1h, 1h on the closed 4h, 4h on the closed daily bar
+    assert [m.label for m in ms] == ["N06_MACD_ORB@30m", "S3_CMO_SANDWICH@30m", "N05_PSAR_POC@30m", "F16_FIB382@30m",
+                                     "V39_ALL@1h", "F9_IFVG@1h", "F16_FIB382@1h", "F16_FIB500@1h", "F6_VWAP_FAIL@1h",
+                                     "F3_BOS@1h", "F15_ORB@1h",
+                                     "F15_ORB@4h", "F10_OTE@4h", "F16_FIB618@4h", "F16_FIB764@4h", "F9_IFVG@4h",
+                                     "F9_OB@4h", "F7_RF_TRIPLE@4h"]
+    assert all(m.no_chase and not m.when for m in ms)
+    assert TB.config_problems(cfg) == []
     assert C.make_cls(cfg).func is TB.TrendEngine and C.make_cls(dataclasses.replace(cfg, trend=None)).func is C.ComboEngine
     bad = tcfg(tmp_path, members=[{"strategy": "N08_ICHI_WR", "tf": "15m"}], rank=["order"],
                trend={"adx_min": 50, "nope": 1})
@@ -547,7 +552,7 @@ def test_the_deploy_config_and_refusals(tmp_path):
     probs = " | ".join(tcfg(tmp_path, members=[{"strategy": "N08_ICHI_WR", "tf": "15m"},
                                                {"strategy": "F3_BOS", "tf": "30m", "numbers": {}}],
                             rank=["order"], trend={"adx_min": 50}).problems())
-    for want in ("30m 또는 1h만", "기본값 신호만", '"score"로 시작', "adx_tired는 adx_min보다"):
+    for want in ("30m·1h·4h만", "기본값 신호만", '"score"로 시작', "adx_tired는 adx_min보다"):
         assert want in probs, probs
 
 
@@ -575,7 +580,7 @@ def test_the_switch_shows_then_writes_and_keeps_the_old_files(tmp_path, capsys):
     args = ["--combo", str(combo), "--exec", str(woo), "--exec", str(bybit)]
     assert S.main(args) == 0
     out = capsys.readouterr().out
-    assert "규칙봇 15 → 추세판단 봇 · 매매법 14개 → 진입 10개" in out and "보여 주기만" in out
+    assert "규칙봇 15 → 추세판단 봇 · 매매법 14개 → 진입 18개" in out and "보여 주기만" in out
     assert "paper_db /var/lib/paperbot/combo/live15-mexc.db → /var/lib/paperbot/combo/live-ac.db" in out
     assert "paper_db 그대로 /var/lib/paperbot/combo/live-ac.db" in out
     assert {p: p.read_text(encoding="utf-8") for p in before} == before            # nothing written
@@ -593,6 +598,18 @@ def test_the_switch_shows_then_writes_and_keeps_the_old_files(tmp_path, capsys):
     # again: nothing left to change
     assert S.main(args + ["--write"]) == 0
     assert "이미 추세판단 봇 설정" in capsys.readouterr().out
+    # the 10/21 trend bot -> the 10/22 design (owners 10/22): the same file swap, the record restarts with the design
+    old = json.loads(open(os.path.join(deploy, "combo.trend.json"), encoding="utf-8").read())
+    old["members"] = old["members"][:10]
+    for k in ("hold_1d", "hold_entry", "pullback_wait", "design"):
+        old["trend"].pop(k)
+    combo.write_text(json.dumps(old), encoding="utf-8")
+    assert S.main(args + ["--write"]) == 0
+    out = capsys.readouterr().out
+    assert ("추세판단 봇 10/21 설계 → 추세판단 봇 새 설계 2026-10-22 · 진입 10개 → 진입 18개 · 성적은 새 설계 시작부터 새로 셈"
+            in out) and "실행기는 두 분이 정할 때만 켬" in out
+    assert json.loads(combo.read_text(encoding="utf-8")) == json.loads(open(os.path.join(deploy, "combo.trend.json"),
+                                                                           encoding="utf-8").read())
     # a config of another database: refused
     other = tmp_path / "other.json"
     other.write_text(json.dumps({**json.loads(before[combo]), "db": "/var/lib/paperbot/combo/x.db"}), encoding="utf-8")
@@ -858,3 +875,138 @@ def test_no_entry_from_30_minutes_before_the_nasdaq_open_but_the_bot_keeps_judgi
     w.step(B2 + 2 * MIN)
     p = w.engine().position
     assert p is not None and p.entry_time == B2 + 2 * MIN
+
+
+# ---------------------------------------------------------------- the 10/22 design (owners: 18 members, 4h entries on the
+# closed daily bar, 보류 허용, 바로 진입, the record restarts with the design)
+DAY = 86_400_000
+NEW = {"time_bars": None, "hold_entry": True, "pullback_wait": False, "design": "2026-10-22"}
+HOLD = {"V39": 0, "S6": 0, "OBV": 0, "N12": 0}
+
+
+def test_hold_entry_lets_a_hold_pass_but_never_the_other_way():
+    hold = dataclasses.replace(RULES, hold_entry=True)
+    j0 = J(dir=0, raw=1, votes=HOLD)
+    assert TJ.check(RULES, "N08_ICHI_WR", "30m", 1, 60000.0, j0, S())[0].startswith("1시간 추세 보류")
+    assert TJ.check(hold, "N08_ICHI_WR", "30m", 1, 60000.0, j0, S())[0] == ""
+    # a raw turn the other way not held yet is still 보류: it does not stop the entry (as the 10/22 calculation did)
+    assert TJ.check(hold, "N08_ICHI_WR", "30m", 1, 60000.0, dataclasses.replace(j0, raw=-1), S())[0] == ""
+    # the other direction still stops it, and every other check still applies to a 보류
+    assert TJ.check(hold, "N08_ICHI_WR", "30m", 1, 60000.0, J(dir=-1), S())[0].startswith("1시간 추세가 하락이라 롱 안 함")
+    assert TJ.check(hold, "N08_ICHI_WR", "30m", 1, 60000.0, dataclasses.replace(j0, adx=18.0), S())[0].startswith(
+        "1시간 추세 힘 약함")
+    assert TJ.check(hold, "F3_BOS", "30m", 1, 60000.0, dataclasses.replace(j0, adx=33.0), S())[0].startswith(
+        "돌파형은 추세 초입만")
+    assert TJ.check(hold, "N08_ICHI_WR", "30m", 1, 60000.0, j0, S(rsi=71.0))[0].startswith("30분 RSI 71 과열")
+    assert "보류여도 진입, 반대 방향만 막음" in hold.describe()[0] and "보류면 진입 안 함" in RULES.describe()[0]
+    assert TJ.TrendRules.from_dict({"hold_entry": "yes"}).problems() == ["trend.hold_entry는 true 또는 false입니다"]
+
+
+def test_a_4h_entry_is_judged_on_the_closed_daily_bar():
+    assert TJ.HTF_OF == {"30m": "1h", "1h": "4h", "4h": "1d"} and TJ.KO_TF["1d"] == "일봉" and TJ.TF_MS["1d"] == DAY
+    r = dataclasses.replace(RULES, hold_1d=2)
+    assert (r.hold("1h"), r.hold("4h"), r.hold("1d")) == (2, 1, 2) and RULES.hold("1d") == 1
+    up = frame(drift=(0.002, 0.002), tf="1d")
+    j = TJ.judge_frame(up, "BTCUSDT", "1d", RULES)
+    assert j.dir == 1 and j.held == (1,) and j.bar_close == int(up["ts"].iloc[-1].value // 1_000_000) + DAY
+    assert j.text(RULES).startswith("일봉 상승")
+    assert TJ.judge_frame(up, "BTCUSDT", "1d", r).held == (1, 1)
+    why, _ = TJ.check(RULES, "F9_IFVG", "4h", 1, 60000.0, J(tf="1d", dir=-1), S(tf="4h"))
+    assert why.startswith("일봉 추세가 하락이라 롱 안 함")
+    assert TJ.TrendRules.from_dict({"hold_1d": 0}).problems() == ["trend.hold_1d는 1~6입니다"]
+    # daily bars from Binance: closed ones only, the day's bar counts once it closed (UTC midnight)
+    rows = [[T0 - (300 - k) * DAY, 1, 2, 0.5, 1.5, 10] for k in range(300)] + [[T0, 1, 2, 0.5, 1.5, 10]]
+    k = TJ.Klines(lambda s, tf, n: rows, lambda: T0 + 5_000)
+    df = k.frame("BTCUSDT", "1d", T0 + 5_000)
+    assert int(df["ts"].iloc[-1].value // 1_000_000) == T0 - DAY and len(df) == TJ.KEEP
+
+
+def test_the_new_design_enters_a_4h_signal_at_once_on_the_daily_judgment_even_on_hold(tmp_path):
+    w = World(tmp_path, members=[{"strategy": "N08_ICHI_WR", "tf": "30m"}, {"strategy": "S3_CMO_SANDWICH", "tf": "4h"}],
+              trend=NEW)
+    asked = []
+    judgment = w.judge.judgment
+    w.judge.judgment = lambda sym, tf, t, bg=False: (asked.append(tf) if not bg else None) or judgment(sym, tf, t, bg)
+    w.judge.j[("BTCUSDT", "1d")] = J(dir=0, raw=1, votes=HOLD, tf="1d")         # the daily bar: 보류
+    w.judge.s[("BTCUSDT", "4h")] = S(tf="4h")
+    _start(w)
+    B = T0 + 4 * HOUR
+    w.add_minutes(T0, 240)
+    w.signal("S3_CMO_SANDWICH", "BTCUSDT", 1, B, tf="4h")
+    w.step(B)
+    p = w.engine().position
+    assert p is not None and p.entry_time == B and p.side == 1 and p.signal.timeframe == "4h" and not w.run.pulls
+    assert "1d" in asked and "4h" not in asked                                   # judged on the daily bar only
+    tr = p.signal.meta["trend"]
+    assert tr["htf"] == "1d" and tr["held"] is True and tr["dir"] == 1 and tr["judge"].startswith("일봉 보류(상승 유지 확인 중)")
+    (bc, st, d), = w.rows("S3_CMO_SANDWICH@4h")
+    assert (bc, st) == (B, "SUBMITTED") and json.loads(d)["why"].startswith("추세 판단 통과: 바로 진입 (보류지만 반대 아님) · 일봉 보류")
+    # the live site's state: every coin's 1h, 4h and daily judgment
+    _ts, stt = w.store.get_state(TB.STATE_TREND)
+    assert set(stt["coins"]["ETHUSDT"]) == {"1h", "4h", "1d"} and stt["coins"]["ETHUSDT"]["1d"]["text"].startswith("일봉 상승")
+    assert "4시간 진입은 끝난 일봉" in stt["rules"][0] and "바로 진입" in stt["rules"][2]
+    # the supervisor watches the daily bar for a 4h entry: a daily bar closed after the entry the other way -> JUDGE
+    w.judge.j[("BTCUSDT", "1d")] = J(dir=-1, tf="1d")
+    _to(w, B + MIN, T0 + DAY + MIN)
+    t, = w.trades()
+    assert t["exit_reason"] == "JUDGE" and t["exit_time"] == T0 + DAY and "일봉 판단이 하락로 바뀜" in t["context"]["exit_why"]
+
+
+def test_the_new_design_refuses_the_other_way_on_the_daily_bar(tmp_path):
+    w = World(tmp_path, members=[{"strategy": "S3_CMO_SANDWICH", "tf": "4h"}], trend=NEW)
+    w.judge.j[("BTCUSDT", "1d")] = J(dir=-1, tf="1d")
+    _start(w)
+    B = T0 + 4 * HOUR
+    w.add_minutes(T0, 240)
+    w.signal("S3_CMO_SANDWICH", "BTCUSDT", 1, B, tf="4h")
+    w.step(B)
+    assert w.engine().position is None
+    (bc, st, d), = w.rows("S3_CMO_SANDWICH@4h")
+    assert st == "FILTERED" and json.loads(d)["why"].startswith("일봉 추세가 하락이라 롱 안 함")
+
+
+def test_a_new_design_name_restarts_the_record_on_the_same_database(tmp_path):
+    w = World(tmp_path, trend={"time_bars": None})
+    _start(w)
+    first = w.run.since
+    w.restart()
+    assert w.run.since == first and w.run.design == ""                         # the same bot: its record goes on
+    w.now = T0 + 2 * HOUR
+    w.cfg = dataclasses.replace(w.cfg, trend=NEW)
+    w.restart()
+    assert w.run.since == T0 + 2 * HOUR and w.run.design == "2026-10-22"       # the new design: from now
+    w.step(T0)                                                                 # saves the state
+    assert w.store.get_state(C.STATE_KEY)[1]["trend_design"] == "2026-10-22"
+    w.now = T0 + 5 * HOUR
+    w.restart()
+    assert w.run.since == T0 + 2 * HOUR                                        # the same design again: kept
+    assert C.trend_start_text(NEW) == ("추세 판단(30분→1시간·1시간→4시간·4시간→일봉)·보류 허용·바로 진입·감독 청산"
+                                       "(설계 2026-10-22), ")
+    assert C.trend_start_text({}) == "추세 판단(30분→1시간·1시간→4시간·4시간→일봉)·되돌림 진입·감독 청산, "
+    assert TJ.TrendRules.from_dict({"design": 7}).problems() == ["trend.design은 40자 안의 글자입니다"]
+
+
+def test_the_new_entry_timeframes_in_the_config(tmp_path):
+    ok = tcfg(tmp_path, members=[{"strategy": "F9_IFVG", "tf": "4h"}, {"strategy": "F9_IFVG", "tf": "1h"}])
+    assert TB.config_problems(ok) == []
+    bad = tcfg(tmp_path, members=[{"strategy": "F9_IFVG", "tf": "15m"}])
+    assert any("진입 봉은 30m·1h·4h만 됩니다" in x for x in TB.config_problems(bad))
+
+
+def test_the_morning_replay_judges_a_4h_entry_on_daily_bars(tmp_path):
+    """The 10/22 config replayed (paperbot/livereplay.py): a 4h member's signal gets its judgment from daily bars served
+    by the replay's clock (never 'judgment unreadable' for want of a daily series)."""
+    import os
+    from paperbot import livereplay as LR
+    deploy = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "deploy")
+    raw = json.load(open(os.path.join(deploy, "combo.trend.json"), encoding="utf-8"))
+    m = _Market()
+    m.t0 = T0 - 200 * 86_400_000                         # 200 days of 1m walk: enough daily bars for the judge
+    rng = np.random.default_rng(4)
+    m.c = 60000 * np.exp(np.cumsum(rng.normal(0, 0.0002, int((T0 + 2 * 86_400_000 - m.t0) // MIN))))
+    asked = []
+    real = m.klines
+    m.klines = lambda s, iv, a, b: (asked.append(iv), real(s, iv, a, b))[1]
+    assert LR.IV_MS["1d"] == 86_400_000
+    res = LR.replay_day(raw, m, T0, T0 + HOUR, seed={}, now_ms=T0 + 2 * HOUR, workdir=str(tmp_path))
+    assert "1d" in asked and not [e for e in res.errors if "Traceback" in e]

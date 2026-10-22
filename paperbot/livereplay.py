@@ -47,8 +47,9 @@ FIVE = 300_000
 H1 = 3_600_000
 H4 = 14_400_000
 DAY = 86_400_000
-IV_MS = {"1m": MIN, "5m": FIVE, "30m": 6 * FIVE, "1h": H1, "4h": H4}
+IV_MS = {"1m": MIN, "5m": FIVE, "30m": 6 * FIVE, "1h": H1, "4h": H4, "1d": DAY}
 TREND_30M_BARS = 600                     # the trend bot's 30m entry bars fetched before the window (trendjudge.KEEP + room)
+TREND_1D_BARS = 520                      # its daily bars (a 4h entry's judgment since 10-22: trendjudge.FETCH + room)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXCHANGE_FILE = os.path.join(ROOT, "research", "fullgrid", "exchange.json")
 CACHE_IV = ("1m", "5m")                  # intervals kept in the cache between nights
@@ -364,13 +365,15 @@ def replay_day(cfg_raw: dict, market: Market, w0: int, w1: int, *, live_bars: Op
 
         # ---- market data, fetched once
         say(f"fetching market data {len(syms)} coins")
-        m1, m5, h1, h4, fund, oi, mark, m30 = {}, {}, {}, {}, {}, {}, {}, {}
+        m1, m5, h1, h4, fund, oi, mark, m30, d1 = {}, {}, {}, {}, {}, {}, {}, {}, {}
         lo1 = w0 - RM.RData.KEEP_1M * MIN - 2 * H1
         trend = cfg.trend is not None
         for s in syms:
             m1[s] = _Series(market.klines(s, "1m", lo1, data_end), MIN)
             if trend:
                 m30[s] = _Series(market.klines(s, "30m", w0 - TREND_30M_BARS * IV_MS["30m"], data_end), IV_MS["30m"])
+                if any(m.tf == "4h" for m in members):
+                    d1[s] = _Series(market.klines(s, "1d", w0 - TREND_1D_BARS * DAY, data_end), DAY)
             if keep5:
                 m5[s] = _Series(market.klines(s, "5m", w0 - keep5 * FIVE, data_end), FIVE)
             h1[s] = _Series(market.klines(s, "1h", w0 - (RM.RData.FETCH["1h"] + 2) * H1, data_end), H1)
@@ -469,7 +472,7 @@ def replay_day(cfg_raw: dict, market: Market, w0: int, w1: int, *, live_bars: Op
         if trend:                                # 추세판단 봇: its judge on the same closed bars, served by the clock
             from .trendbot import TrendRunner
             from .trendjudge import Judge, Klines, TrendRules
-            series = {"30m": m30, "1h": h1, "4h": h4}
+            series = {"30m": m30, "1h": h1, "4h": h4, "1d": d1}
 
             def jfetch(symbol, tf, limit):
                 ser = series[tf].get(symbol)

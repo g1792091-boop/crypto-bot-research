@@ -1,11 +1,12 @@
-"""실거래 › 그림자, the 추세판단 봇's shadows (owners 10/21: rule variants side by side, at no money cost, so the 11/04 review
-decides with numbers; docs/trend-bot-ko.md "그림자 비교 봇"). Read-only, part of GET /api/v4/livebots/shadows (``trend``).
+"""실거래 › 그림자, the 추세판단 봇's shadows (owners 10/21: rule variants side by side, at no money cost, so the 2-week
+review decides with numbers; docs/trend-bot-ko.md "그림자 비교 봇"). Read-only, part of GET /api/v4/livebots/shadows
+(``trend``).
 
 Each shadow is deploy/combo.trend.json with ONE change, its own database (/var/lib/paperbot/combo/shadow-<id>.db, the same
 store3 shape, account COMBO@mix), no Telegram, run by paperbot-combo-shadow@<id> (deploy/paperbot-combo-shadow@.service):
-    trend-time   trend.time_bars 4          시간 정리 있음 (the live bot has none since 10/21 night)
-    trend-now    trend.pullback_wait false  되돌림 안 기다리고 신호에 바로 진입
-    trend-vote4  trend.vote_min 4           판단 4개가 모두 같은 쪽일 때만
+    trend-wait   trend.pullback_wait true   되돌림 기다림 (owners 10-22: the live bot enters at once since its new design)
+The 10/21 design's three (trend-time, trend-now, trend-vote4: its old members) are the old bots' shadows now
+(livebots.SHADOWS, folded): their configs left the repository with the new design.
 
 A shadow starts fresh with its own $1,000 wallet when it is first turned on, the live paper's wallet carries over from the
 bots before it: they are compared by trade, never by dollars. Each shadow counts from its own start (its first start on
@@ -40,16 +41,10 @@ WAIT_KO = "켜면 약 2분 기다렸다가 돌기 시작해요 (바이낸스 요
 NOT_TREND_KO = "실거래 페이퍼가 지금 추세판단 봇이 아니라 견줄 수 없어요"
 # (id, database file, name, the one config key, its value, the one difference, the live bot's way) in the owners' words
 TREND_SHADOWS = (
-    {"id": "trend-time", "file": "shadow-trend-time.db", "name_ko": "시간 정리 있음", "key": "trend.time_bars", "value": 4,
-     "diff_ko": "진입 봉 4개(30분 진입이면 2시간, 1시간 진입이면 4시간) 안에 첫 잠금(+10%)을 못 가면 청산(시간 정리)",
-     "live_ko": "실거래 봇은 시간 정리 없음 (10/21 밤에 뺌)"},
-    {"id": "trend-now", "file": "shadow-trend-now.db", "name_ko": "되돌림 없이 바로 진입", "key": "trend.pullback_wait",
-     "value": False,
-     "diff_ko": "검사를 통과한 신호에 되돌림을 기다리지 않고 그 분에 바로 진입",
-     "live_ko": "실거래 봇은 진입 봉 하나 동안 0.25 ATR 되돌림을 기다리고, 안 오면 버려요"},
-    {"id": "trend-vote4", "file": "shadow-trend-vote4.db", "name_ko": "판단 4개 모두 같은 쪽", "key": "trend.vote_min", "value": 4,
-     "diff_ko": "추세 판단 4개(V3.9 · EMA·DMI·ADX · OBV · 일목·AO)가 모두 같은 쪽일 때만 추세로 봄 (감독 청산도 4개 모두 반대일 때)",
-     "live_ko": "실거래 봇은 4개 중 3개"},
+    {"id": "trend-wait", "file": "shadow-trend-wait.db", "name_ko": "되돌림 기다림", "key": "trend.pullback_wait",
+     "value": True,
+     "diff_ko": "검사를 통과한 신호에서 진입 봉 하나 동안 0.25 ATR 되돌림을 기다렸다가 진입(장대봉이면 0.5 ATR), 안 오면 버림",
+     "live_ko": "실거래 봇은 검사를 통과한 신호에 그 분에 바로 진입 (10/22 새 설계)"},
 )
 SKIP_KEYS = ("db", "name", "telegram", "paper_db")       # what every shadow sets itself (deploy/paperbot-combo-shadow@.service)
 
@@ -150,7 +145,7 @@ def _unit_word(active: str) -> Optional[bool]:
 
 
 def trend_shadows(p: dict, now: int, shadow_dir: str, units: Optional[Callable] = None) -> dict:
-    """The ``trend`` part of /api/v4/livebots/shadows: the live trend bot and its three shadows, each from its own start."""
+    """The ``trend`` part of /api/v4/livebots/shadows: the live trend bot and its shadows, each from its own start."""
     if units is None:
         from ... import livecheck as LC
         units = LC.unit_state

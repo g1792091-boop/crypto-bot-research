@@ -6,16 +6,17 @@ entry members, one position, BTC 40x / others 30x, margin 40 %, the -50 % net st
 the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coin-flip twin); this adds:
 
 1. 추세 판단 (paperbot/trendjudge.py): an entry member's signal goes on only when the last closed higher bar (30m -> 1h,
-   1h -> 4h) is a trend on the signal's side (3 of the 4 judges, held, ADX 20+, not 끝물) and the entry checks pass
-   (not stretched from the higher EMA20, near the entry bar's EMA20, RSI, breakout members only early). Else the
+   1h -> 4h, 4h -> 1d since 10-22) is a trend on the signal's side (3 of the 4 judges, held, ADX 20+, not 끝물; with
+   ``hold_entry`` (owners 10-22 "보류 허용") a 보류 passes too, only the other direction stops it) and the entry checks
+   pass (not stretched from the higher EMA20, near the entry bar's EMA20, RSI, breakout members only early). Else the
    signal is logged FILTERED with the reason and the numbers read (signal_log data ``trend``).
-2. 되돌림 진입 (안 ①): a signal that passed waits one entry bar for the price to come back ``pullback_atr`` (0.25) ATR
+2. 진입: owners 10-22 "바로 진입으로 가자": ``pullback_wait`` false, a signal that passed goes to the accounts at its own
+   minute like the combined bot's (``_enter_now``): its SUBMITTED row stays, with the judgment and the checks read.
+   되돌림 진입 (안 ①, 10-21; since 10-22 the shadow trend-wait only, deploy/combo.shadow-trend-wait.json): with
+   ``pullback_wait`` true a signal that passed waits one entry bar for the price to come back ``pullback_atr`` (0.25) ATR
    (0.5 after a long signal bar): WAITING "되돌림 기다림"; the first 1m bar that trades there -> the entry is the next
    minute (the reference price = the book then, the executors follow with a market order as always): BROKE
    "되돌림 확인" and a new SUBMITTED row; no touch by the entry bar's second-to-last minute: FILTERED "되돌림 안 옴".
-   With ``pullback_wait`` false (the shadow trend-now only, deploy/combo.shadow-trend-now.json; the owners' config
-   waits) a signal that passed goes to the accounts at its own minute like the combined bot's: its SUBMITTED row stays,
-   with the judgment and the checks read (``_enter_now``).
 3. 점수: the signals of one minute compete by ``trendjudge.score`` (judge strength + spot + the member's recent record).
 4. 쉬기 (all OFF in the owners' config: 10-21 "10번은 없애고" took the daily limit, 10-21 night "쉬기는 빼주고" the
    member and coin pauses; only this bot's own trades count, from its first start on this database, ``trend_since``):
@@ -23,13 +24,15 @@ the first lock, the weekend / macro / NYSE-open pauses, the chase block, the coi
    loss; with ``coin_pause_h`` set, after a losing trade no entry on that coin and side for that long; with
    ``daily_loss`` set, the account lost that share of the day's start in a KST day: no entry until the next KST day.
    Each pause starts with one Telegram line.
+   A new ``trend.design`` name (owners 10-22: the new design "2026-10-22") on a database a trend bot ran on before starts
+   the record anew (``trend_since`` = now): the live site, the pauses and the score's member records count from then.
 5. 감독 (every minute, before the first lock only; never a reverse entry): TIME: with ``time_bars`` set, that many
    entry bars after the entry without the first lock -> closed at that minute's open (the owners' config has none
    since 10-21 night: "시간청산 빼줘"); JUDGE: a higher bar closed after the entry is
    judged the other way (3 of 4, ``judge_exit``) -> closed. Exit reasons "TIME" / "JUDGE" (the executors follow them
    like REV: only while their own position has no lock of its own, paperbot/executor.py). SWITCH: a position the
    bot before this one opened on the database (entered before ``trend_since``) is closed at once before its first lock.
-6. The judgments of every coin (1h and 4h), the waits and the pauses are saved each minute as state ``trend`` (the
+6. The judgments of every coin (1h, 4h and daily), the waits and the pauses are saved each minute as state ``trend`` (the
    live site shows them).
 
 Stop tightening on events (급변, BTC 급변, macro / funding) is the next step (owners 10-21 plan): it needs the executors
@@ -54,7 +57,7 @@ HOUR = 3_600_000
 DAY = 86_400_000
 KST_MS = 9 * HOUR
 STATE_TREND = "trend"
-ENTRY_TFS = ("30m", "1h")
+ENTRY_TFS = ("30m", "1h", "4h")                 # 4h on the closed daily bar (owners 10-22)
 KO_SIDE = {1: "롱", -1: "숏"}
 SUP_KO = {"JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)", "SWITCH": "전환 전 포지션 정리"}
 SWITCH_WHY = "새 봇 시작 전에 예전 규칙으로 열린 포지션이라 정리"
@@ -78,7 +81,7 @@ def config_problems(cfg) -> list[str]:
         if not isinstance(m, dict):
             continue
         if m.get("tf") not in ENTRY_TFS:
-            out.append(f"추세판단 봇 members {i}번째({m.get('strategy')}): 진입 봉은 30m 또는 1h만 됩니다")
+            out.append(f"추세판단 봇 members {i}번째({m.get('strategy')}): 진입 봉은 30m·1h·4h만 됩니다")
         bad = [k for k in RESEARCH_KEYS if m.get(k) is not None]
         if bad:
             out.append(f"추세판단 봇 members {i}번째({m.get('strategy')}): 규칙봇 기본값 신호만 씁니다({', '.join(bad)} 빼기)")
@@ -138,6 +141,11 @@ class TrendRunner(C.ComboRunner):
         self.pulls: list = list(st.get("pulls", []))
         self.told: dict = dict(st.get("told", {}))
         self.since: int = int(st.get("trend_since") or self.now_ms())
+        self.design: str = self.rules.design
+        if st.get("trend_since") and (st.get("trend_design") or "") != self.design:
+            # a new design on this database (owners 10-22): its record, pauses and member records start now; a position
+            # the bot before it opened is closed before its first lock (SWITCH)
+            self.since = int(self.now_ms())
         self.jfails = 0
         self._snap: Optional[tuple] = None
         self._jnoted: set = set()
@@ -152,7 +160,7 @@ class TrendRunner(C.ComboRunner):
 
     def _state_extra(self) -> dict:
         return {"pulls": getattr(self, "pulls", []), "told": getattr(self, "told", {}),
-                "trend_since": getattr(self, "since", None)}
+                "trend_since": getattr(self, "since", None), "trend_design": getattr(self, "design", "")}
 
     # ---- this bot's own closed trades
     def _trades(self) -> list:
@@ -271,7 +279,7 @@ class TrendRunner(C.ComboRunner):
             return False                              # the entry after its pullback: submitted now
         htf = HTF_OF.get(sig.timeframe)
         if htf is None:
-            self._filtered(sig, "추세판단 봇은 30분·1시간 진입만 받아요")
+            self._filtered(sig, "추세판단 봇은 30분·1시간·4시간 진입만 받아요")
             return True
         price = sig.meta.get("ref_price")
         if not price and sig.symbol in bars:
@@ -298,6 +306,7 @@ class TrendRunner(C.ComboRunner):
         sc, parts = score(self.rules, side, j, s, float(price), self._record_of(sig, trades))
         until = int(bar_close) + TF_MS[sig.timeframe]
         meta = {**sig.meta, "trend": {"htf": htf, "dir": side, "judge": j.text(self.rules), "strength": j.strength(side),
+                                      "held": j.dir == 0,
                                       "score": parts, "level": info["level"], "pullback_atr": info["pullback_atr"],
                                       "big_bar": info["big_bar"], "far_htf_atr": info["far_htf_atr"],
                                       "far_etf_atr": info["far_etf_atr"]}}
@@ -316,13 +325,14 @@ class TrendRunner(C.ComboRunner):
         return True
 
     def _enter_now(self, sig: Signal, nsig: Signal, label: str, j, info: dict, sc: float, parts: dict) -> bool:
-        """``pullback_wait`` false (the shadow trend-now): the signal that passed goes to every account now, at its own
+        """``pullback_wait`` false (the owners' config since 10-22): the signal that passed goes to every account now, at its own
         minute, as combo.ComboRunner._submit_due would submit it (the coin-flip twin its side by ``flip_side``), with
         its judgment and score; its SUBMITTED row keeps the numbers read. Returns True: _submit_due submits nothing more
         (the signal's early-exit turn there is unchanged)."""
         for aid, e in self.book.engines.items():
             e.submit(nsig if aid == C.ACCOUNT else replace(nsig, side=C.flip_side(aid, nsig), meta=dict(nsig.meta)))
-        self._restate(sig, "SUBMITTED", f"추세 판단 통과: 되돌림 안 기다리고 바로 진입 · {j.text(self.rules)}",
+        self._restate(sig, "SUBMITTED", "추세 판단 통과: 바로 진입" + (" (보류지만 반대 아님)" if j.dir == 0 else "")
+                      + f" · {j.text(self.rules)}",
                       extra={"trend": {**info, "score": sc, "score_parts": parts}})
         self._count(label, "submitted")
         return True
@@ -422,14 +432,14 @@ class TrendRunner(C.ComboRunner):
 
     # ---- what the live site shows
     def _snapshot(self, ts: int) -> None:
-        """State ``trend``: every coin's 1h and 4h judgment, the waits and the pauses (the live minute only)."""
+        """State ``trend``: every coin's 1h, 4h and daily judgment, the waits and the pauses (the live minute only)."""
         now = self.now_ms()
         if now - int(ts) > 10 * MIN:
             return                                    # a catch-up: only the live minute is shown
         coins: dict = {}
         for sym in self.cfg.symbols:
             row = {}
-            for tf in ("1h", "4h"):
+            for tf in ("1h", "4h", "1d"):
                 try:
                     row[tf] = self.judge.judgment(sym, tf, ts, bg=True).to_dict(self.rules)
                 except Exception as exc:  # noqa: BLE001  shown as unreadable

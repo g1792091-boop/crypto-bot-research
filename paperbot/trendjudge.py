@@ -2,17 +2,19 @@
 
 The four trend-type strategies never enter. Their indicator STATES on the last CLOSED higher bar decide the direction
 (owners: "추세형 매매법은 진입 안 하고 추세만 보는 거"):
-- a 30m entry reads the last closed 1h bar, a 1h entry the last closed 4h bar (a 30m entry never reads 4h);
+- a 30m entry reads the last closed 1h bar, a 1h entry the last closed 4h bar, a 4h entry the last closed daily bar
+  (owners 10-22: "일봉 추세보고 4시간봉 진입"; a 30m entry never reads 4h);
 - each judge is +1 / -1 / 0 on that bar, with the same indicator functions and numbers as its chart view
   (paperbot/strategy_view_defs), so the dashboard's lines show what the bot read:
     V39  V3.9's supertrend (10, 3) direction             pi.exchange_supertrend      view "슈퍼트렌드(10·3) 상승"
     S6   close vs EMA20 and +DI vs -DI (14, 14), both    fg.ema, fg.dmi_adx          view "종가가 EMA20 위", "+DI가 -DI 위"
     OBV  OBV vs its 30-bar average                       pi.obv, pi.pine_sma         view "OBV가 30봉 평균 위"
     N12  close above (below) the whole Ichimoku cloud visible at the bar (9, 26, 52, 26) and AO (5, 34) above (below) 0
-- direction: ``vote_min`` (3) or more of the four on one side, else 보류 (no entry);
+- direction: ``vote_min`` (3) or more of the four on one side, else 보류 (no entry; with ``hold_entry`` (owners 10-22
+  "보류 허용") a 보류 does not stop an entry: only the opposite direction does);
 - strength: ADX (14, 14) of that bar at least ``adx_min`` (20); above ``adx_tired`` (40) and lower than the bar
   before = 끝물 (no entry). A high ADX is never a reason to enter;
-- hold: the same direction on the last ``hold`` closed bars (1h: 2, 4h: 1), else 보류.
+- hold: the same direction on the last ``hold`` closed bars (1h: 2, 4h: 1, 1d: 1), else 보류.
 
 The entry checks (``check``) of an entry member's signal, all on closed bars and the signal's reference price:
 the higher bar's direction = the signal's side, its strength, not 끝물; a breakout member (BOS, ORB, MACD·시가범위)
@@ -20,8 +22,9 @@ only early in the trend (ADX below ``breakout_adx_max`` and rising); the price a
 beyond the higher bar's EMA20 in the trade's direction and within ``etf_ema_atr`` (1.5) ATR of the entry bar's EMA20;
 entry-bar RSI below 70 for a long, above 30 for a short. A pass returns the pullback to wait for: ``pullback_atr``
 (0.25) entry-bar ATR from the reference price, ``pullback_big_atr`` (0.5) when the signal bar's range is over
-``big_bar_atr`` (2) ATR (a long bar is never chased: a deeper pullback). With ``pullback_wait`` false (the shadow
-trend-now only; the owners' config waits) the runner enters at the signal's own minute instead (paperbot/trendbot.py).
+``big_bar_atr`` (2) ATR (a long bar is never chased: a deeper pullback). With ``pullback_wait`` false (the owners'
+config since 10-22 "바로 진입으로 가자"; the shadow trend-wait waits) the runner enters at the signal's own minute instead
+(paperbot/trendbot.py).
 
 Bars: Binance USDT-M klines (public; volume for OBV), only bars closed ``SETTLE_MS`` before now, the last ``KEEP`` closed
 bars at or before the time asked (``Klines.frame``): the same answer for the same minute on a replay.
@@ -38,9 +41,9 @@ import numpy as np
 import pandas as pd
 
 MIN = 60_000
-TF_MS = {"30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000}
-HTF_OF = {"30m": "1h", "1h": "4h"}             # the entry timeframe -> the timeframe its trend is judged on
-KO_TF = {"30m": "30분", "1h": "1시간", "4h": "4시간"}
+TF_MS = {"30m": 1_800_000, "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000}
+HTF_OF = {"30m": "1h", "1h": "4h", "4h": "1d"}  # the entry timeframe -> the timeframe its trend is judged on
+KO_TF = {"30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 JUDGES = ("V39", "S6", "OBV", "N12")
 KO_JUDGE = {"V39": "V3.9", "S6": "EMA·DMI·ADX", "OBV": "OBV 추세형", "N12": "일목·AO"}
 JUDGE_STRATEGY = {"V39": "V39_ALL", "S6": "S6_EMA_DMI_ADX", "OBV": "OBV_S", "N12": "N12_ICHI_AO"}
@@ -68,13 +71,16 @@ class TrendRules:
     adx_tired: float = 40.0           # above this and lower than the bar before: 끝물
     hold_1h: int = 2                  # closed 1h bars the direction must have held
     hold_4h: int = 1
+    hold_1d: int = 1                  # closed daily bars (owners 10-22: 4h entries on the daily trend)
+    hold_entry: bool = False          # True: a 보류 judgment does not stop an entry, only the opposite direction does
+                                      # (owners 10-22 "보류 허용"); False: 보류 = no entry
     htf_ema_atr: float = 1.5          # price at most this many higher-bar ATR beyond its EMA20, in the trade's direction
     etf_ema_atr: float = 1.5          # price within this many entry-bar ATR of the entry bar's EMA20 (either side)
     big_bar_atr: float = 2.0          # a signal bar longer than this many ATR: the deeper pullback
     pullback_atr: float = 0.25        # the pullback waited for (entry-bar ATR from the reference price)
     pullback_big_atr: float = 0.5
     pullback_wait: bool = True        # False: a signal that passed enters at its own minute like the combined bot's, no
-                                      # pullback wait (the shadow trend-now, owners 10-21: rule variants for the 11/04 review)
+                                      # pullback wait (the owners' config since 10-22; True: the shadow trend-wait)
     rsi_long_max: float = 70.0        # entry-bar RSI(14): no long at or above, no short at or below rsi_short_min
     rsi_short_min: float = 30.0
     breakout: tuple = BREAKOUT        # strategies that take only an early trend
@@ -89,6 +95,8 @@ class TrendRules:
                                         # = no daily limit (owners 10-21: "10번은 없애고")
     record_n: int = 10                # a member's recent trades read for the score
     record_min: int = 3               # fewer trades than this: the record counts 0
+    design: str = ""                  # the design's name (owners 10-22 new design: "2026-10-22"); a name other than the
+                                      # database's = a new bot there: its record (trend_since) restarts (paperbot/trendbot.py)
 
     @classmethod
     def from_dict(cls, d: Optional[dict]) -> "TrendRules":
@@ -106,7 +114,7 @@ class TrendRules:
         return cls(**d)
 
     def hold(self, htf: str) -> int:
-        return self.hold_4h if htf == "4h" else self.hold_1h
+        return self.hold_1d if htf == "1d" else self.hold_4h if htf == "4h" else self.hold_1h
 
     def problems(self) -> list[str]:
         out = []
@@ -122,6 +130,7 @@ class TrendRules:
         num("adx_tired", 0, 100)
         num("hold_1h", 1, 6, True)
         num("hold_4h", 1, 6, True)
+        num("hold_1d", 1, 6, True)
         for k in ("htf_ema_atr", "etf_ema_atr", "big_bar_atr", "pullback_big_atr"):
             num(k, 0.05, 10)
         num("pullback_atr", 0, 5)
@@ -141,6 +150,10 @@ class TrendRules:
         num("record_min", 1, 100, True)
         if not isinstance(self.judge_exit, bool):
             out.append("trend.judge_exit는 true 또는 false입니다")
+        if not isinstance(self.design, str) or len(self.design) > 40:
+            out.append("trend.design은 40자 안의 글자입니다")
+        if not isinstance(self.hold_entry, bool):
+            out.append("trend.hold_entry는 true 또는 false입니다")
         if not isinstance(self.pullback_wait, bool):
             out.append("trend.pullback_wait는 true 또는 false입니다")
         if not (isinstance(self.breakout, tuple) and all(isinstance(s, str) for s in self.breakout)):
@@ -154,10 +167,12 @@ class TrendRules:
     def describe(self) -> list[str]:
         """The rules in the owners' words (check-config, the start message, the docs)."""
         return [
-            f"추세 판단: 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉 / 판단 4개(V3.9·EMA·DMI·ADX·OBV 추세형·일목·AO) 중 "
+            f"추세 판단: 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉, 4시간 진입은 끝난 일봉 / "
+            f"판단 4개(V3.9·EMA·DMI·ADX·OBV 추세형·일목·AO) 중 "
             + (f"{self.vote_min}개 이상" if self.vote_min != 4 else "4개 모두")
             + f" 같은 쪽 / ADX {self.adx_min:g} 이상, {self.adx_tired:g} 넘고 꺾이면 끝물 / "
-            f"유지 1시간봉 {self.hold_1h}개·4시간봉 {self.hold_4h}개 / 보류면 진입 안 함",
+            f"유지 1시간봉 {self.hold_1h}개·4시간봉 {self.hold_4h}개·일봉 {self.hold_1d}개 / "
+            + ("보류여도 진입, 반대 방향만 막음" if self.hold_entry else "보류면 진입 안 함"),
             f"진입 전 검사: 상위 봉 EMA20에서 진입 방향 {self.htf_ema_atr:g} ATR 넘게 멀면 안 함 / 진입 봉 EMA20에서 "
             f"{self.etf_ema_atr:g} ATR 안 / RSI 롱 {self.rsi_long_max:g} 미만·숏 {self.rsi_short_min:g} 초과 / 돌파형("
             f"{', '.join(self.breakout)})은 ADX {self.breakout_adx_max:g} 미만이고 오를 때만 / 추격 막기 전체",
@@ -431,8 +446,10 @@ def check(rules: TrendRules, strategy: str, tf: str, side: int, price: float, j:
     info = {"judge": j.to_dict(rules), "spot": dataclasses.asdict(s), "price": price, "far_htf_atr": far_h,
             "far_etf_atr": far_e}
     if j.dir == 0:
-        return f"{hk} 추세 보류({j.vote_text()}" + (f", {KO_DIR[j.raw]} 유지 확인 중" if j.raw else "") + ")", info
-    if j.dir != side:
+        if not rules.hold_entry:
+            return f"{hk} 추세 보류({j.vote_text()}" + (f", {KO_DIR[j.raw]} 유지 확인 중" if j.raw else "") + ")", info
+        # 보류 허용 (owners 10-22): a 보류 does not stop the entry; the strength, 끝물 and spot checks below still apply
+    elif j.dir != side:
         return f"{hk} 추세가 {KO_DIR[j.dir]}이라 {word} 안 함({j.vote_text()})", info
     if not j.adx >= rules.adx_min:
         return f"{hk} 추세 힘 약함(ADX {j.adx:.0f}, {rules.adx_min:g} 미만)", info

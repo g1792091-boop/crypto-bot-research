@@ -14,6 +14,10 @@ What changes (the files' owners and modes stay: written in place):
 Every other value stays. Nothing restarts here: the paper bot reads its config when it starts (bash deploy/install.sh
 restarts it with the new code), each executor when it starts (``systemctl start`` after, only with no position).
 
+The same command moves a running 추세판단 봇 to a newer design (owners 10/22: 18 entry members, 4h entries on the daily
+bar, 보류 허용, 바로 진입): the config is replaced the same way; its new ``trend.design`` name restarts the bot's record
+on the same database (paperbot/trendbot.py). The executors stay as they are (off until the owners decide).
+
 Back: ``cp <file>.before-trend-<time> <file>`` for each file, then the same restarts.
 Standard library only (the server's python3, as root).
 """
@@ -55,6 +59,11 @@ def plan_combo(current: str, want: str) -> tuple:
         return None, "이미 추세판단 봇 설정"
     old_ms = [f"{m.get('strategy')}@{m.get('tf')}" for m in cur.get("members") or [] if isinstance(m, dict)]
     new_ms = [f"{m.get('strategy')}@{m.get('tf')}" for m in new.get("members") or [] if isinstance(m, dict)]
+    design = (new.get("trend") or {}).get("design")
+    if cur.get("trend") is not None:                  # a running trend bot -> its newer design
+        old_d = (cur.get("trend") or {}).get("design") or "10/21 설계"
+        return want, (f"{cur.get('name') or '이름 없음'} {old_d} → {new.get('name')} 새 설계 {design or '(이름 없음)'} · "
+                      f"진입 {len(old_ms)}개 → 진입 {len(new_ms)}개 · 성적은 새 설계 시작부터 새로 셈 · db 그대로 {new.get('db')}")
     return want, (f"{cur.get('name') or '이름 없음'} → {new.get('name')} · 매매법 {len(old_ms)}개 → 진입 {len(new_ms)}개 "
                   f"(추세 판단 4개는 진입 안 함) · db 그대로 {new.get('db')}")
 
@@ -101,8 +110,8 @@ def main(argv=None) -> int:
     if not a.write:
         print("보여 주기만 했습니다. 바꾸려면 끝에 --write 를 붙여 다시 실행하세요.")
     else:
-        print("다음: check-config → bash deploy/install.sh → (두 실행기 모두 포지션 없음) systemctl start paperbot-executor "
-              "paperbot-executor-mexc  (docs/trend-bot-ko.md)")
+        print("다음: check-config → (페이퍼 포지션 없음) bash deploy/install.sh · 실행기는 두 분이 정할 때만 켬 "
+              "(docs/trend-bot-ko.md)")
     return 1 if bad else 0
 
 
