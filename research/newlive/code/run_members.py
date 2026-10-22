@@ -223,7 +223,7 @@ def candidates(v, sig, mk, specs):
         sc, parts = score(rules, side, j, s, price, [])
         rec.update(score_base=parts["strength"] + parts["spot"], level=float(info["level"]), big=bool(info["big_bar"]),
                    strength=int(j.strength(side)), order=m["order"], name=m["name"])
-        until = ts + TF_MS[tf]
+        until = ts + int(v.get("wait_bars", 1)) * TF_MS[tf]      # wait_bars: research only (owners 10/22 shadow "2봉 기다림")
         a, b = i0 + 1, M.i(until - MIN)
         b = min(b, M.n - 1)
         lvl = rec["level"]
