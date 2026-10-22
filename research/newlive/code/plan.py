@@ -1,4 +1,4 @@
-"""The pre-registered selection (research/newlive/PREREG.md + PREREG_AMEND_1.md, classify.json), run once:
+"""The pre-registered selection (research/newlive/PREREG.md + PREREG_AMEND_1.md + PREREG_AMEND_2.md, classify.json), run once:
 1. solo runs of every candidate (classify primary 돌파 / 자리 / 눌림 on 30m and 1h, default numbers, plus the league's
    30m / 1h picks of those strategies), J4, paper costs, signal bar closes 2021-01-01 .. the data end, measures per
    period (select / confirm / live by entry time), the select-period coin-flip twin (200 draws, default_rng(20261022));
@@ -23,6 +23,7 @@ START = ms("2021-01-01")
 CLASSES = ("돌파", "자리", "눌림")
 OUTD = f"{RUNS}/plan"
 NL_REPO = f"{REPO}/research/newlive"
+OWNER_ADDED = ("S3_CMO_SANDWICH@30m", "S3_CMO_SANDWICH@1h")
 REASONS = ["LOCK", "SL", "JUDGE", "REV", "TIME", "LIQ", "END"]
 
 
@@ -39,12 +40,16 @@ def candidate_list():
     for tf in ("30m", "1h"):
         for n in names:
             out.append({"label": label_of(n, tf), "name": n, "tf": tf, "pick": None, "cls": cl[n]["primary"],
-                        "breakout": n in brk})
+                        "breakout": n in brk, "owner_added": False})
     picks = C.load_picks(C.CANDIDATES_FILE)
     for pid, c in sorted(picks.items()):
         if c["tf"] in ("30m", "1h") and c["name"] in names:
             out.append({"label": label_of(c["name"], c["tf"], pid), "name": c["name"], "tf": c["tf"], "pick": pid,
-                        "cls": cl[c["name"]]["primary"], "breakout": c["name"] in brk})
+                        "cls": cl[c["name"]]["primary"], "breakout": c["name"] in brk, "owner_added": False})
+    for lab in OWNER_ADDED:                           # PREREG_AMEND_2: solo runs, never in B0 / B1 / B3
+        n, tf, _ = parse_label(lab)
+        out.append({"label": lab, "name": n, "tf": tf, "pick": None, "cls": cl[n]["primary"], "breakout": False,
+                    "owner_added": True})
     return out
 
 
@@ -198,11 +203,12 @@ def main():
     order = {c["label"]: i for i, c in enumerate(cands)}
     rows.sort(key=lambda r: order[r["label"]])
     rank = sorted(rows, key=lambda r: (-r["periods"]["select"]["growth_log"], order[r["label"]]))
-    passing = [r for r in rank if r["pass"]]
+    pool_ = [r for r in rank if not r["owner_added"]]
+    passing = [r for r in pool_ if r["pass"]]
     B1 = one_per_cell(passing)[:12]
-    B0 = one_per_cell(rank)[:10]
+    B0 = one_per_cell(pool_)[:10]
     B3, acc = [], 0.0
-    for r in one_per_cell(rank):
+    for r in one_per_cell(pool_):
         B3.append(r)
         acc += r["periods"]["select"]["per_weekday"] or 0
         if acc >= 4.0:
@@ -215,12 +221,16 @@ def main():
         baskets["B1"] = basket("B1", mem(B1), bdraws)
     baskets["B0"] = basket("B0", mem(B0), bdraws)
     baskets["B3"] = basket("B3", mem(B3), bdraws)
+    s3 = [{"label": lab, "breakout": False} for lab in OWNER_ADDED]
+    for k, bs in (("B1", B1), ("B0", B0), ("B3", B3)):
+        if bs:
+            baskets[f"{k}+S3"] = basket(f"{k}+S3", mem(bs) + s3, bdraws)
     chosen = "B1" if B1 else "B0"
     baskets[f"{chosen}_J4L"] = basket(f"{chosen}_J4L", mem(B1 if B1 else B0), bdraws, judge="J4L")
     for nm, mm in (("B0", mem(B0)), ("C0", R.current_members())):
         for cost in ("bybit", "woo"):
             baskets[f"{nm}_{cost}"] = basket(f"{nm}_{cost}", mm, 0, cost=cost)
-    for k in ("C0", "B1", "B0", "B3", f"{chosen}_J4L"):
+    for k in ("C0", "B1", "B0", "B3", "B1+S3", "B0+S3", "B3+S3", f"{chosen}_J4L"):
         if k in baskets:
             baskets[k]["verdicts_confirm"] = verdicts(baskets[k], baskets["C0"])
     t_b = time.time() - t1
@@ -237,13 +247,15 @@ def main():
             val[f] = json.load(open(f"{NL}/{f}"))
     out = {"prereg_sha256": {"PREREG.md": sha256(f"{NL_REPO}/PREREG.md"),
                              "PREREG_AMEND_1.md": sha256(f"{NL_REPO}/PREREG_AMEND_1.md"),
+                             "PREREG_AMEND_2.md": sha256(f"{NL_REPO}/PREREG_AMEND_2.md"),
                              "classify.json": sha256(f"{NL_REPO}/classify.json"),
                              "candidates_owner.json": sha256(f"{REPO}/candleague/data/candidates_owner.json")},
            "data": data_manifest(), "periods_utc": {k: [str(pd.Timestamp(a, unit="ms")), str(pd.Timestamp(b, unit="ms"))]
                                                     for k, (a, b) in PERIODS.items()},
            "seed": SEED, "solo_draws": SOLO_DRAWS, "basket_draws": bdraws, "validation": val,
            "candidates": len(cands), "solo": rows, "ranking_by_select_growth": [r["label"] for r in rank],
-           "passing": [r["label"] for r in passing],
+           "passing": [r["label"] for r in passing], "owner_added": list(OWNER_ADDED),
+           "owner_added_pass": {r["label"]: r["pass"] for r in rows if r["owner_added"]},
            "B1": [r["label"] for r in B1], "B0": [r["label"] for r in B0], "B3": [r["label"] for r in B3],
            "B3_sum_select_per_weekday": acc, "chosen_for_J4L": chosen, "baskets": baskets, "judge_sets": judge_cmp,
            "direction_accuracy": da,
@@ -254,7 +266,7 @@ def main():
     tab = []
     for r in rank:
         row = {"rank": len(tab) + 1, "label": r["label"], "name": r["name"], "tf": r["tf"], "pick": r["pick"] or "",
-               "class": r["cls"], "breakout": r["breakout"], "pass": r["pass"]}
+               "class": r["cls"], "breakout": r["breakout"], "owner_added": r["owner_added"], "pass": r["pass"]}
         for p in PERIODS:
             m = r["periods"][p]
             row.update({f"{p}_entries": m["entries"], f"{p}_per_wd": m["per_weekday"], f"{p}_win": m.get("win_pct"),

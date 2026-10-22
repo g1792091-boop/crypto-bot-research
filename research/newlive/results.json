@@ -2,6 +2,7 @@
  "prereg_sha256": {
   "PREREG.md": "783874cad1bd6523ca40c3f9e920c1d33e1414b52bca84986f12ac2eb164dbe7",
   "PREREG_AMEND_1.md": "d168d89175407d22ea6554065ca6de5292092fbaf1b9c4b8e996345f4ba3f62b",
+  "PREREG_AMEND_2.md": "9302128c74d110b119d9f3aafae9ef4e2c0b7df7a8d7136090b9ec9d9d485915",
   "classify.json": "92a06993d4a3cc01e0792c42071145af62a20b720b07510e0d701b99808e0670",
   "candidates_owner.json": "7fc01e0307271f566c9cf452a391ef6128850b983d56ba229b1a3cef7b96d2b8"
  },
@@ -212,7 +213,7 @@
    "elapsed_s": 102.9
   }
  },
- "candidates": 76,
+ "candidates": 78,
  "solo": [
   {
    "label": "DOGE@30m",
@@ -221,6 +222,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 711,
@@ -313,7 +315,7 @@
     "in_position": 214,
     "lower_score": 52
    },
-   "run_s": 2.4,
+   "run_s": 2.34,
    "twin_s": 0.1
   },
   {
@@ -323,6 +325,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 72,
@@ -410,6 +413,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 944,
@@ -505,8 +509,8 @@
     "in_position": 322,
     "lower_score": 71
    },
-   "run_s": 4.13,
-   "twin_s": 0.09
+   "run_s": 4.15,
+   "twin_s": 0.1
   },
   {
    "label": "F13_FVG_PD@30m",
@@ -515,6 +519,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 274,
@@ -608,7 +613,7 @@
     "in_position": 34,
     "lower_score": 8
    },
-   "run_s": 1.11,
+   "run_s": 1.05,
    "twin_s": 0.04
   },
   {
@@ -618,6 +623,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 33,
@@ -695,7 +701,7 @@
     "in_position": 6,
     "lower_score": 1
    },
-   "run_s": 0.82,
+   "run_s": 0.77,
    "twin_s": 0.01
   },
   {
@@ -705,6 +711,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 43,
@@ -783,7 +790,7 @@
     "in_position": 3,
     "lower_score": 1
    },
-   "run_s": 0.73,
+   "run_s": 0.69,
    "twin_s": 0.01
   },
   {
@@ -793,6 +800,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 40,
@@ -871,8 +879,8 @@
     "in_position": 4,
     "lower_score": 1
    },
-   "run_s": 0.94,
-   "twin_s": 0.01
+   "run_s": 0.88,
+   "twin_s": 0.03
   },
   {
    "label": "F16_FIB382@30m",
@@ -881,6 +889,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 502,
@@ -975,7 +984,7 @@
     "in_position": 90,
     "lower_score": 18
    },
-   "run_s": 1.89,
+   "run_s": 1.95,
    "twin_s": 0.06
   },
   {
@@ -985,6 +994,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 643,
@@ -1080,7 +1090,7 @@
     "in_position": 127,
     "lower_score": 26
    },
-   "run_s": 2.3,
+   "run_s": 2.37,
    "twin_s": 0.07
   },
   {
@@ -1090,6 +1100,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 591,
@@ -1186,8 +1197,8 @@
     "in_position": 115,
     "lower_score": 28
    },
-   "run_s": 2.3,
-   "twin_s": 0.09
+   "run_s": 2.1,
+   "twin_s": 0.07
   },
   {
    "label": "F16_FIB764@30m",
@@ -1196,6 +1207,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 438,
@@ -1290,8 +1302,8 @@
     "in_position": 67,
     "lower_score": 17
    },
-   "run_s": 1.79,
-   "twin_s": 0.06
+   "run_s": 1.78,
+   "twin_s": 0.05
   },
   {
    "label": "F3_BOS@30m",
@@ -1300,6 +1312,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 70,
@@ -1378,7 +1391,7 @@
     "in_position": 8,
     "lower_score": 1
    },
-   "run_s": 1.12,
+   "run_s": 1.0,
    "twin_s": 0.01
   },
   {
@@ -1388,6 +1401,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 225,
@@ -1468,7 +1482,7 @@
     "in_position": 19,
     "lower_score": 8
    },
-   "run_s": 1.02,
+   "run_s": 0.9,
    "twin_s": 0.03
   },
   {
@@ -1478,6 +1492,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 1131,
@@ -1574,8 +1589,8 @@
     "lower_score": 87,
     "block_at_entry": 2
    },
-   "run_s": 4.98,
-   "twin_s": 0.12
+   "run_s": 4.88,
+   "twin_s": 0.15
   },
   {
    "label": "F4_PULL@30m",
@@ -1584,6 +1599,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 1380,
@@ -1679,8 +1695,8 @@
     "in_position": 1077,
     "lower_score": 79
    },
-   "run_s": 5.73,
-   "twin_s": 0.16
+   "run_s": 6.06,
+   "twin_s": 0.15
   },
   {
    "label": "F4_PULL_RSI@30m",
@@ -1689,6 +1705,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 44,
@@ -1780,7 +1797,7 @@
     "in_position": 7,
     "lower_score": 1
    },
-   "run_s": 0.19,
+   "run_s": 0.2,
    "twin_s": 0.01
   },
   {
@@ -1790,6 +1807,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 711,
@@ -1884,8 +1902,8 @@
     "lower_score": 27,
     "block_at_entry": 1
    },
-   "run_s": 3.52,
-   "twin_s": 0.08
+   "run_s": 3.56,
+   "twin_s": 0.11
   },
   {
    "label": "F8_VWICK@30m",
@@ -1894,6 +1912,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 306,
@@ -1987,7 +2006,7 @@
     "in_position": 47,
     "lower_score": 7
    },
-   "run_s": 1.24,
+   "run_s": 1.19,
    "twin_s": 0.04
   },
   {
@@ -1997,6 +2016,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 417,
@@ -2092,7 +2112,7 @@
     "in_position": 48,
     "lower_score": 12
    },
-   "run_s": 1.75,
+   "run_s": 1.9,
    "twin_s": 0.05
   },
   {
@@ -2102,6 +2122,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 670,
@@ -2197,8 +2218,8 @@
     "in_position": 143,
     "lower_score": 34
    },
-   "run_s": 2.9,
-   "twin_s": 0.08
+   "run_s": 2.92,
+   "twin_s": 0.1
   },
   {
    "label": "F9_IFVG@30m",
@@ -2207,6 +2228,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 234,
@@ -2302,7 +2324,7 @@
     "lower_score": 9
    },
    "run_s": 1.48,
-   "twin_s": 0.03
+   "twin_s": 0.04
   },
   {
    "label": "F9_OB@30m",
@@ -2311,6 +2333,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 772,
@@ -2406,7 +2429,7 @@
     "in_position": 196,
     "lower_score": 41
    },
-   "run_s": 3.5,
+   "run_s": 3.36,
    "twin_s": 0.09
   },
   {
@@ -2416,6 +2439,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 120,
@@ -2496,7 +2520,7 @@
     "in_position": 14,
     "lower_score": 2
    },
-   "run_s": 0.54,
+   "run_s": 0.51,
    "twin_s": 0.02
   },
   {
@@ -2506,6 +2530,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 46,
@@ -2597,7 +2622,7 @@
     "in_position": 5,
     "lower_score": 1
    },
-   "run_s": 0.39,
+   "run_s": 0.41,
    "twin_s": 0.01
   },
   {
@@ -2607,6 +2632,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -2645,6 +2671,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -2684,6 +2711,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 301,
@@ -2775,7 +2803,7 @@
     "in_position": 69,
     "lower_score": 16
    },
-   "run_s": 0.88,
+   "run_s": 0.82,
    "twin_s": 0.03
   },
   {
@@ -2785,6 +2813,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -2821,6 +2850,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 605,
@@ -2914,7 +2944,7 @@
     "in_position": 248,
     "lower_score": 39
    },
-   "run_s": 3.17,
+   "run_s": 3.31,
    "twin_s": 0.07
   },
   {
@@ -2924,6 +2954,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 70,
@@ -3016,8 +3047,8 @@
     "in_position": 9,
     "lower_score": 2
    },
-   "run_s": 1.16,
-   "twin_s": 0.01
+   "run_s": 1.09,
+   "twin_s": 0.02
   },
   {
    "label": "S5_DONCHIAN_MFI@30m",
@@ -3026,6 +3057,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 1,
@@ -3094,6 +3126,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 1047,
@@ -3187,7 +3220,7 @@
     "in_position": 625,
     "lower_score": 71
    },
-   "run_s": 3.18,
+   "run_s": 3.4,
    "twin_s": 0.11
   },
   {
@@ -3197,6 +3230,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 22,
@@ -3283,6 +3317,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 136,
@@ -3359,7 +3394,7 @@
     "in_position": 21,
     "lower_score": 1
    },
-   "run_s": 0.56,
+   "run_s": 0.59,
    "twin_s": 0.02
   },
   {
@@ -3369,6 +3404,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 29,
@@ -3454,6 +3490,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 524,
@@ -3548,7 +3585,7 @@
     "lower_score": 17,
     "block_at_entry": 1
    },
-   "run_s": 1.78,
+   "run_s": 1.96,
    "twin_s": 0.06
   },
   {
@@ -3558,6 +3595,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 152,
@@ -3648,7 +3686,7 @@
     "in_position": 22,
     "lower_score": 2
    },
-   "run_s": 0.55,
+   "run_s": 0.56,
    "twin_s": 0.02
   },
   {
@@ -3658,6 +3696,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 20,
@@ -3732,7 +3771,7 @@
     "entered": 26,
     "no_pullback": 9
    },
-   "run_s": 0.49,
+   "run_s": 0.6,
    "twin_s": 0.01
   },
   {
@@ -3742,6 +3781,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 25,
@@ -3818,7 +3858,7 @@
     "no_pullback": 26,
     "in_position": 1
    },
-   "run_s": 0.55,
+   "run_s": 0.72,
    "twin_s": 0.01
   },
   {
@@ -3828,6 +3868,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 30,
@@ -3903,7 +3944,7 @@
     "no_pullback": 25,
     "in_position": 3
    },
-   "run_s": 0.79,
+   "run_s": 0.74,
    "twin_s": 0.01
   },
   {
@@ -3913,6 +3954,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 181,
@@ -4003,7 +4045,7 @@
     "in_position": 26,
     "lower_score": 3
    },
-   "run_s": 0.81,
+   "run_s": 0.77,
    "twin_s": 0.02
   },
   {
@@ -4013,6 +4055,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 267,
@@ -4104,8 +4147,8 @@
     "in_position": 35,
     "lower_score": 2
    },
-   "run_s": 0.99,
-   "twin_s": 0.03
+   "run_s": 1.0,
+   "twin_s": 0.04
   },
   {
    "label": "F16_FIB618@1h",
@@ -4114,6 +4157,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 310,
@@ -4206,7 +4250,7 @@
     "lower_score": 5,
     "block_at_entry": 1
    },
-   "run_s": 1.04,
+   "run_s": 0.99,
    "twin_s": 0.04
   },
   {
@@ -4216,6 +4260,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 305,
@@ -4309,7 +4354,7 @@
     "lower_score": 9,
     "block_at_entry": 1
    },
-   "run_s": 1.01,
+   "run_s": 1.03,
    "twin_s": 0.04
   },
   {
@@ -4319,6 +4364,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 17,
@@ -4394,7 +4440,7 @@
     "entered": 24,
     "no_pullback": 9
    },
-   "run_s": 0.45,
+   "run_s": 0.41,
    "twin_s": 0.01
   },
   {
@@ -4404,6 +4450,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 213,
@@ -4496,7 +4543,7 @@
     "lower_score": 5
    },
    "run_s": 0.7,
-   "twin_s": 0.04
+   "twin_s": 0.03
   },
   {
    "label": "F3_HHHL@1h",
@@ -4505,6 +4552,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 451,
@@ -4599,7 +4647,7 @@
     "lower_score": 23,
     "block_at_entry": 1
    },
-   "run_s": 2.03,
+   "run_s": 2.0,
    "twin_s": 0.05
   },
   {
@@ -4609,6 +4657,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 1496,
@@ -4701,7 +4750,7 @@
     "lower_score": 82,
     "block_at_entry": 2
    },
-   "run_s": 4.55,
+   "run_s": 4.76,
    "twin_s": 0.15
   },
   {
@@ -4711,6 +4760,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 55,
@@ -4787,7 +4837,7 @@
     "in_position": 5,
     "lower_score": 1
    },
-   "run_s": 0.2,
+   "run_s": 0.17,
    "twin_s": 0.01
   },
   {
@@ -4797,6 +4847,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 490,
@@ -4889,8 +4940,8 @@
     "in_position": 88,
     "lower_score": 10
    },
-   "run_s": 2.21,
-   "twin_s": 0.05
+   "run_s": 2.19,
+   "twin_s": 0.06
   },
   {
    "label": "F8_VWICK@1h",
@@ -4899,6 +4950,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 193,
@@ -4989,7 +5041,7 @@
     "in_position": 15,
     "lower_score": 8
    },
-   "run_s": 0.71,
+   "run_s": 0.66,
    "twin_s": 0.03
   },
   {
@@ -4999,6 +5051,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 196,
@@ -5092,7 +5145,7 @@
     "in_position": 22,
     "lower_score": 1
    },
-   "run_s": 0.8,
+   "run_s": 0.87,
    "twin_s": 0.03
   },
   {
@@ -5102,6 +5155,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 296,
@@ -5194,7 +5248,7 @@
     "in_position": 59,
     "lower_score": 12
    },
-   "run_s": 1.26,
+   "run_s": 1.47,
    "twin_s": 0.04
   },
   {
@@ -5204,6 +5258,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 177,
@@ -5298,7 +5353,7 @@
     "lower_score": 2,
     "block_at_entry": 1
    },
-   "run_s": 0.82,
+   "run_s": 0.89,
    "twin_s": 0.03
   },
   {
@@ -5308,6 +5363,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 388,
@@ -5401,8 +5457,8 @@
     "in_position": 57,
     "lower_score": 7
    },
-   "run_s": 1.55,
-   "twin_s": 0.05
+   "run_s": 1.71,
+   "twin_s": 0.06
   },
   {
    "label": "N05_PSAR_POC@1h",
@@ -5411,6 +5467,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 70,
@@ -5500,7 +5557,7 @@
     "in_position": 6
    },
    "run_s": 0.29,
-   "twin_s": 0.02
+   "twin_s": 0.01
   },
   {
    "label": "N06_MACD_ORB@1h",
@@ -5509,6 +5566,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 25,
@@ -5583,7 +5641,7 @@
     "entered": 29,
     "no_pullback": 11
    },
-   "run_s": 0.23,
+   "run_s": 0.29,
    "twin_s": 0.01
   },
   {
@@ -5593,6 +5651,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -5632,6 +5691,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 1,
@@ -5692,7 +5752,7 @@
     "entered": 1
    },
    "run_s": 0.02,
-   "twin_s": 0.0
+   "twin_s": 0.01
   },
   {
    "label": "N19_FIB_CHOP@1h",
@@ -5701,6 +5761,7 @@
    "pick": null,
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 103,
@@ -5791,7 +5852,7 @@
     "in_position": 13,
     "lower_score": 1
    },
-   "run_s": 0.3,
+   "run_s": 0.31,
    "twin_s": 0.02
   },
   {
@@ -5801,6 +5862,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -5837,6 +5899,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 707,
@@ -5929,8 +5992,8 @@
     "in_position": 259,
     "lower_score": 32
    },
-   "run_s": 2.29,
-   "twin_s": 0.07
+   "run_s": 2.43,
+   "twin_s": 0.08
   },
   {
    "label": "S4_BB_BBP@1h",
@@ -5939,6 +6002,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 13,
@@ -6015,7 +6079,7 @@
     "no_pullback": 8,
     "in_position": 2
    },
-   "run_s": 0.38,
+   "run_s": 0.45,
    "twin_s": 0.01
   },
   {
@@ -6025,6 +6089,7 @@
    "pick": null,
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -6054,7 +6119,7 @@
     "block": 388,
     "check": 104
    },
-   "run_s": 0.03,
+   "run_s": 0.04,
    "twin_s": 0.0
   },
   {
@@ -6064,6 +6129,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 488,
@@ -6153,8 +6219,8 @@
     "in_position": 171,
     "lower_score": 19
    },
-   "run_s": 1.5,
-   "twin_s": 0.05
+   "run_s": 1.62,
+   "twin_s": 0.07
   },
   {
    "label": "V45_AMB@1h",
@@ -6163,6 +6229,7 @@
    "pick": null,
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 193,
@@ -6252,7 +6319,7 @@
     "in_position": 57,
     "lower_score": 5
    },
-   "run_s": 0.67,
+   "run_s": 0.68,
    "twin_s": 0.03
   },
   {
@@ -6262,6 +6329,7 @@
    "pick": "core-DOGE-1h-1",
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 32,
@@ -6338,7 +6406,7 @@
     "in_position": 3,
     "lower_score": 2
    },
-   "run_s": 0.24,
+   "run_s": 0.15,
    "twin_s": 0.01
   },
   {
@@ -6348,6 +6416,7 @@
    "pick": "core-DOGE-30m-1",
    "cls": "눌림",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 48,
@@ -6423,7 +6492,7 @@
     "lower_score": 3,
     "in_position": 3
    },
-   "run_s": 0.19,
+   "run_s": 0.17,
    "twin_s": 0.01
   },
   {
@@ -6433,6 +6502,7 @@
    "pick": "core-N19_FIB_CHOP-30m-1",
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -6472,6 +6542,7 @@
    "pick": "core-S4_BB_BBP-1h-2",
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -6511,6 +6582,7 @@
    "pick": "core-S4_BB_BBP-30m-1",
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 0,
@@ -6550,6 +6622,7 @@
    "pick": "ds-F10_OTE-1h-1",
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 345,
@@ -6641,7 +6714,7 @@
     "in_position": 65,
     "lower_score": 10
    },
-   "run_s": 1.08,
+   "run_s": 1.24,
    "twin_s": 0.05
   },
   {
@@ -6651,6 +6724,7 @@
    "pick": "ds-F15_LON_BRK-1h-1",
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 26,
@@ -6727,7 +6801,7 @@
     "no_pullback": 29,
     "in_position": 1
    },
-   "run_s": 0.68,
+   "run_s": 0.74,
    "twin_s": 0.01
   },
   {
@@ -6737,6 +6811,7 @@
    "pick": "ds-F3_BOS-1h-1",
    "cls": "돌파",
    "breakout": true,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 2,
@@ -6811,7 +6886,7 @@
     "entered": 5,
     "no_pullback": 1
    },
-   "run_s": 0.13,
+   "run_s": 0.14,
    "twin_s": 0.01
   },
   {
@@ -6821,6 +6896,7 @@
    "pick": "ds-F6_VWAP_FAIL-1h-1",
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 453,
@@ -6913,7 +6989,7 @@
     "in_position": 80,
     "lower_score": 11
    },
-   "run_s": 1.99,
+   "run_s": 2.1,
    "twin_s": 0.05
   },
   {
@@ -6923,6 +6999,7 @@
    "pick": "ds-F9_FVG-1h-1",
    "cls": "자리",
    "breakout": false,
+   "owner_added": false,
    "periods": {
     "select": {
      "entries": 100,
@@ -7016,6 +7093,214 @@
    },
    "run_s": 0.41,
    "twin_s": 0.02
+  },
+  {
+   "label": "S3_CMO_SANDWICH@30m",
+   "name": "S3_CMO_SANDWICH",
+   "tf": "30m",
+   "pick": null,
+   "cls": "횡보·역추세",
+   "breakout": false,
+   "owner_added": true,
+   "periods": {
+    "select": {
+     "entries": 163,
+     "weekdays": 1043,
+     "per_weekday": 0.1563,
+     "win_pct": 72.39,
+     "roe_mean": -0.027575147328111598,
+     "pre_mean": 0.016448902164995883,
+     "payoff": 0.29441486036054465,
+     "growth_log": -2.8661410813232178,
+     "usd": 56.918145829169774,
+     "worst_dd": 0.9651966729083434,
+     "exits": {
+      "LOCK": 117,
+      "SL": 37,
+      "JUDGE": 4,
+      "REV": 5
+     },
+     "long_short": [
+      59,
+      104
+     ],
+     "cost_mean": 0.044024049493107474,
+     "twin": {
+      "draws": 200,
+      "log_p5_50_90_95": [
+       -6.0262315092779435,
+       -3.965766588146071,
+       -2.136767728367869,
+       -1.4637685316305644
+      ],
+      "usd_p5_50_95": [
+       2.414576162674674,
+       18.953501512338143,
+       231.36273200319837
+      ],
+      "rank_pct": 79.5
+     }
+    },
+    "confirm": {
+     "entries": 51,
+     "weekdays": 456,
+     "per_weekday": 0.1118,
+     "win_pct": 78.43,
+     "roe_mean": 0.007913202548065401,
+     "pre_mean": 0.05245025792679765,
+     "payoff": 0.29945060900098414,
+     "growth_log": -0.088542022534536,
+     "usd": 915.2646481875684,
+     "worst_dd": 0.5941729798092117,
+     "exits": {
+      "LOCK": 39,
+      "SL": 8,
+      "JUDGE": 1,
+      "REV": 3
+     },
+     "long_short": [
+      15,
+      36
+     ],
+     "cost_mean": 0.044537055378732246
+    },
+    "live": {
+     "entries": 2,
+     "weekdays": 14,
+     "per_weekday": 0.1429,
+     "win_pct": 100.0,
+     "roe_mean": 0.0767250513723192,
+     "pre_mean": 0.11875136913135187,
+     "payoff": null,
+     "growth_log": 0.06032876280229259,
+     "usd": 1062.1856962945585,
+     "worst_dd": 0.0,
+     "exits": {
+      "LOCK": 2
+     },
+     "long_short": [
+      1,
+      1
+     ],
+     "cost_mean": 0.042026317759032664
+    }
+   },
+   "pass": false,
+   "n_signals": 4353,
+   "funnel": {
+    "check": 2006,
+    "block": 1970,
+    "entered": 216,
+    "no_pullback": 133,
+    "in_position": 20,
+    "lower_score": 8
+   },
+   "run_s": 0.58,
+   "twin_s": 0.02
+  },
+  {
+   "label": "S3_CMO_SANDWICH@1h",
+   "name": "S3_CMO_SANDWICH",
+   "tf": "1h",
+   "pick": null,
+   "cls": "횡보·역추세",
+   "breakout": false,
+   "owner_added": true,
+   "periods": {
+    "select": {
+     "entries": 58,
+     "weekdays": 1043,
+     "per_weekday": 0.0556,
+     "win_pct": 68.97,
+     "roe_mean": -0.05724144522614415,
+     "pre_mean": -0.013634199882658559,
+     "payoff": 0.2770857509813741,
+     "growth_log": -1.7861431646925627,
+     "usd": 167.60535092350776,
+     "worst_dd": 0.8684818938412753,
+     "exits": {
+      "LOCK": 40,
+      "SL": 17,
+      "REV": 1
+     },
+     "long_short": [
+      25,
+      33
+     ],
+     "cost_mean": 0.0436072453434856,
+     "twin": {
+      "draws": 200,
+      "log_p5_50_90_95": [
+       -3.335273089059562,
+       -1.9443288781736348,
+       -0.9543872378499697,
+       -0.7105286581082473
+      ],
+      "usd_p5_50_95": [
+       35.60486158542163,
+       143.0832173928161,
+       491.3843544597111
+      ],
+      "rank_pct": 57.99999999999999
+     }
+    },
+    "confirm": {
+     "entries": 30,
+     "weekdays": 456,
+     "per_weekday": 0.0658,
+     "win_pct": 70.0,
+     "roe_mean": -0.058949046896395324,
+     "pre_mean": -0.015276775937159481,
+     "payoff": 0.23459285196986698,
+     "growth_log": -0.8938816825463891,
+     "usd": 409.06480725462285,
+     "worst_dd": 0.7252698019769146,
+     "exits": {
+      "LOCK": 20,
+      "SL": 6,
+      "REV": 4
+     },
+     "long_short": [
+      9,
+      21
+     ],
+     "cost_mean": 0.043672270959235836
+    },
+    "live": {
+     "entries": 2,
+     "weekdays": 14,
+     "per_weekday": 0.1429,
+     "win_pct": 50.0,
+     "roe_mean": -0.19716215787299085,
+     "pre_mean": -0.15501419999999877,
+     "payoff": 0.21201442676336218,
+     "growth_log": -0.18179119526598203,
+     "usd": 833.7754184954289,
+     "worst_dd": 0.20016829197839292,
+     "exits": {
+      "LOCK": 1,
+      "SL": 1
+     },
+     "long_short": [
+      0,
+      2
+     ],
+     "cost_mean": 0.04214795787299205
+    }
+   },
+   "pass": false,
+   "n_signals": 2093,
+   "funnel": {
+    "block": 1003,
+    "check": 924,
+    "entered": 90,
+    "no_pullback": 67,
+    "in_position": 7,
+    "block_at_entry": 1,
+    "lower_score": 1
+   },
+   "run_s": 0.27,
+   "twin_s": 0.01
   }
  ],
  "ranking_by_select_growth": [
@@ -7048,12 +7333,14 @@
   "F15_ASIA_BRK@30m",
   "F15_LON_BRK@30m",
   "N05_PSAR_POC@1h",
+  "S3_CMO_SANDWICH@1h",
   "S4_BB_BBP@30m",
   "F13_FVG_PD@30m",
   "F4_PULL_RSI@1h",
   "DOGE@30m#core-DOGE-30m-1",
   "N06_MACD_ORB@30m",
   "DOGE@1h",
+  "S3_CMO_SANDWICH@30m",
   "F8_VWICK@30m",
   "F16_FIB382@1h",
   "F3_BOS@30m",
@@ -7111,6 +7398,14 @@
   "V39_ALL@30m",
   "F9_OB@30m"
  ],
+ "owner_added": [
+  "S3_CMO_SANDWICH@30m",
+  "S3_CMO_SANDWICH@1h"
+ ],
+ "owner_added_pass": {
+  "S3_CMO_SANDWICH@30m": false,
+  "S3_CMO_SANDWICH@1h": false
+ },
  "B1": [
   "F13_FVG_PD@30m",
   "F8_VWICK@30m",
@@ -7995,7 +8290,7 @@
      }
     }
    },
-   "run_s": 8.5,
+   "run_s": 8.8,
    "verdicts_confirm": {
     "벌었다": false,
     "지금보다_낫다": null,
@@ -9265,7 +9560,7 @@
      }
     }
    },
-   "run_s": 0.3,
+   "run_s": 0.4,
    "verdicts_confirm": {
     "벌었다": false,
     "지금보다_낫다": true,
@@ -11591,7 +11886,4063 @@
      }
     }
    },
-   "run_s": 19.9,
+   "run_s": 20.6,
+   "verdicts_confirm": {
+    "벌었다": false,
+    "지금보다_낫다": false,
+    "운보다_낫다": false
+   }
+  },
+  "B1+S3": {
+   "name": "B1+S3",
+   "judge": "J4",
+   "cost": "paper",
+   "members": [
+    {
+     "label": "F13_FVG_PD@30m",
+     "order": 1,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F8_VWICK@30m",
+     "order": 2,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB500@1h",
+     "order": 3,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB382@30m",
+     "order": 4,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB764@1h",
+     "order": 5,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F9_BREAKER@30m",
+     "order": 6,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F6_VWAP_FAIL@1h#ds-F6_VWAP_FAIL-1h-1",
+     "order": 7,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB764@30m",
+     "order": 8,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "DOGE@30m",
+     "order": 9,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB500@30m",
+     "order": 10,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F9_FVG@30m",
+     "order": 11,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "V39_ALL@30m",
+     "order": 12,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S3_CMO_SANDWICH@30m",
+     "order": 13,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S3_CMO_SANDWICH@1h",
+     "order": 14,
+     "breakout": false,
+     "when_raw": null
+    }
+   ],
+   "periods": {
+    "select": {
+     "entries": 3739,
+     "weekdays": 1043,
+     "per_weekday": 3.5849,
+     "win_pct": 73.79,
+     "roe_mean": -0.029221440175411145,
+     "pre_mean": 0.014869122387795057,
+     "payoff": 0.2687041444658207,
+     "growth_log": -67.90810751274,
+     "usd": 3.220205821008379e-27,
+     "worst_dd": 1.0,
+     "exits": {
+      "LOCK": 2784,
+      "SL": 846,
+      "JUDGE": 42,
+      "REV": 67
+     },
+     "long_short": [
+      1643,
+      2096
+     ],
+     "cost_mean": 0.0440905625632062,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -107.9947066165929,
+       -97.84285637477026,
+       -89.81205661305027,
+       -87.81838458785715
+      ],
+      "usd_p5_50_95": [
+       1.2545698365752945e-44,
+       3.216528344259919e-40,
+       7.260393575804477e-36
+      ],
+      "rank_pct": 100.0
+     }
+    },
+    "confirm": {
+     "entries": 1340,
+     "weekdays": 456,
+     "per_weekday": 2.9386,
+     "win_pct": 71.94,
+     "roe_mean": -0.04347613065027235,
+     "pre_mean": 0.0007260231963483218,
+     "payoff": 0.2581849188522634,
+     "growth_log": -32.23173240396241,
+     "usd": 1.0044688536313278e-11,
+     "worst_dd": 0.999999999999995,
+     "exits": {
+      "LOCK": 964,
+      "SL": 319,
+      "JUDGE": 23,
+      "REV": 34
+     },
+     "long_short": [
+      556,
+      784
+     ],
+     "cost_mean": 0.04420215384662066,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -34.50257790740311,
+       -28.66675215673233,
+       -24.042336311064716,
+       -22.75580776152177
+      ],
+      "usd_p5_50_95": [
+       1.0368616301481763e-12,
+       3.549667908429479e-10,
+       1.3100210010477077e-07
+      ],
+      "rank_pct": 14.899999999999999
+     }
+    },
+    "live": {
+     "entries": 38,
+     "weekdays": 14,
+     "per_weekday": 2.7143,
+     "win_pct": 73.68,
+     "roe_mean": -0.017053084990153733,
+     "pre_mean": 0.029026181289144495,
+     "payoff": 0.2983873665037744,
+     "growth_log": -0.46252025717525136,
+     "usd": 629.6946515474992,
+     "worst_dd": 0.6057518089459182,
+     "exits": {
+      "LOCK": 27,
+      "SL": 7,
+      "JUDGE": 1,
+      "REV": 2,
+      "END": 1
+     },
+     "long_short": [
+      16,
+      22
+     ],
+     "cost_mean": 0.04607926627929823,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -1.8786273722452569,
+       -0.8848709035529352,
+       -0.11068121668512595,
+       0.06673402376045576
+      ],
+      "usd_p5_50_95": [
+       152.799698984978,
+       412.76745665174633,
+       1069.0111088037781
+      ],
+      "rank_pct": 76.2
+     }
+    }
+   },
+   "funnel": {
+    "block": 75480,
+    "check": 59320,
+    "no_pullback": 6537,
+    "entered": 5117,
+    "in_position": 4433,
+    "lower_score": 1109,
+    "block_at_entry": 2
+   },
+   "by_member": {
+    "DOGE@30m": {
+     "select": {
+      "entries": 455,
+      "weekdays": 1043,
+      "per_weekday": 0.4362,
+      "win_pct": 74.29,
+      "roe_mean": -0.026940657722993748,
+      "pre_mean": 0.016711271148134834,
+      "payoff": 0.2703715174297861,
+      "growth_log": -8.035388576154636,
+      "usd": 0.32379868555797214,
+      "worst_dd": 0.9999100314248147,
+      "exits": {
+       "LOCK": 342,
+       "SL": 109,
+       "JUDGE": 4
+      },
+      "long_short": [
+       168,
+       287
+      ],
+      "cost_mean": 0.04365192887112858
+     },
+     "confirm": {
+      "entries": 120,
+      "weekdays": 456,
+      "per_weekday": 0.2632,
+      "win_pct": 71.67,
+      "roe_mean": -0.055941153773892395,
+      "pre_mean": -0.011917253706728395,
+      "payoff": 0.23653558724420587,
+      "growth_log": -3.5525027839294165,
+      "usd": 28.652837977256183,
+      "worst_dd": 0.988300328445092,
+      "exits": {
+       "LOCK": 86,
+       "SL": 32,
+       "JUDGE": 2
+      },
+      "long_short": [
+       51,
+       69
+      ],
+      "cost_mean": 0.044023900067163994
+     },
+     "live": {
+      "entries": 3,
+      "weekdays": 14,
+      "per_weekday": 0.2143,
+      "win_pct": 66.67,
+      "roe_mean": -0.09547563430889962,
+      "pre_mean": -0.04428161435906741,
+      "payoff": 0.21333202644686086,
+      "growth_log": -0.13943985209281196,
+      "usd": 869.8453410078184,
+      "worst_dd": 0.19983181195760924,
+      "exits": {
+       "LOCK": 2,
+       "SL": 1
+      },
+      "long_short": [
+       2,
+       1
+      ],
+      "cost_mean": 0.05119401994983222
+     }
+    },
+    "F13_FVG_PD@30m": {
+     "select": {
+      "entries": 80,
+      "weekdays": 1043,
+      "per_weekday": 0.0767,
+      "win_pct": 78.75,
+      "roe_mean": -0.003974648367318304,
+      "pre_mean": 0.04007215037380682,
+      "payoff": 0.2595933892461493,
+      "growth_log": -0.6098614110041607,
+      "usd": 543.4261767441199,
+      "worst_dd": 0.8772897848615607,
+      "exits": {
+       "LOCK": 63,
+       "SL": 16,
+       "JUDGE": 1
+      },
+      "long_short": [
+       45,
+       35
+      ],
+      "cost_mean": 0.04404679874112512
+     },
+     "confirm": {
+      "entries": 25,
+      "weekdays": 456,
+      "per_weekday": 0.0548,
+      "win_pct": 68.0,
+      "roe_mean": -0.06422676528703325,
+      "pre_mean": -0.01840845825041626,
+      "payoff": 0.27176541533295945,
+      "growth_log": -0.8377043054342106,
+      "usd": 432.7027374060625,
+      "worst_dd": 0.6845898679687252,
+      "exits": {
+       "LOCK": 17,
+       "SL": 7,
+       "JUDGE": 1
+      },
+      "long_short": [
+       8,
+       17
+      ],
+      "cost_mean": 0.045818307036617004
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": 0.010481791373673943,
+      "pre_mean": 0.05943808241389681,
+      "payoff": 1.0829035568472078,
+      "growth_log": -0.0026970447206600134,
+      "usd": 997.3065890369163,
+      "worst_dd": 0.10114684360761028,
+      "exits": {
+       "LOCK": 1,
+       "JUDGE": 1
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04895629104022289
+     }
+    },
+    "F16_FIB382@30m": {
+     "select": {
+      "entries": 316,
+      "weekdays": 1043,
+      "per_weekday": 0.303,
+      "win_pct": 75.63,
+      "roe_mean": -0.024994113188217214,
+      "pre_mean": 0.019468038834288194,
+      "payoff": 0.2511694259519756,
+      "growth_log": -5.079430350869441,
+      "usd": 6.22345319107796,
+      "worst_dd": 0.993776546808922,
+      "exits": {
+       "LOCK": 238,
+       "SL": 69,
+       "JUDGE": 4,
+       "REV": 5
+      },
+      "long_short": [
+       143,
+       173
+      ],
+      "cost_mean": 0.0444621520225054
+     },
+     "confirm": {
+      "entries": 150,
+      "weekdays": 456,
+      "per_weekday": 0.3289,
+      "win_pct": 73.33,
+      "roe_mean": -0.04018960901595976,
+      "pre_mean": 0.0043031285307041445,
+      "payoff": 0.24608379168818237,
+      "growth_log": -3.3820419477826356,
+      "usd": 33.97800254290609,
+      "worst_dd": 0.9709964365214002,
+      "exits": {
+       "LOCK": 111,
+       "SL": 35,
+       "JUDGE": 3,
+       "REV": 1
+      },
+      "long_short": [
+       56,
+       94
+      ],
+      "cost_mean": 0.044492737546663906
+     },
+     "live": {
+      "entries": 4,
+      "weekdays": 14,
+      "per_weekday": 0.2857,
+      "win_pct": 75.0,
+      "roe_mean": -0.035112312646680036,
+      "pre_mean": 0.007033530030030044,
+      "payoff": 0.2397792216415705,
+      "growth_log": -0.08308201048171729,
+      "usd": 920.2756718741192,
+      "worst_dd": 0.20016829197839348,
+      "exits": {
+       "LOCK": 3,
+       "SL": 1
+      },
+      "long_short": [
+       2,
+       2
+      ],
+      "cost_mean": 0.04214584267671008
+     }
+    },
+    "F16_FIB500@1h": {
+     "select": {
+      "entries": 172,
+      "weekdays": 1043,
+      "per_weekday": 0.1649,
+      "win_pct": 73.26,
+      "roe_mean": -0.04757271174230209,
+      "pre_mean": -0.0028751985936468164,
+      "payoff": 0.23261518392970665,
+      "growth_log": -4.461578061478397,
+      "usd": 11.544131556544984,
+      "worst_dd": 0.9893795749726294,
+      "exits": {
+       "LOCK": 126,
+       "SL": 45,
+       "REV": 1
+      },
+      "long_short": [
+       82,
+       90
+      ],
+      "cost_mean": 0.04469751314865526
+     },
+     "confirm": {
+      "entries": 83,
+      "weekdays": 456,
+      "per_weekday": 0.182,
+      "win_pct": 65.06,
+      "roe_mean": -0.09631024287612582,
+      "pre_mean": -0.051535321960934036,
+      "payoff": 0.23421093372965252,
+      "growth_log": -3.911383030831144,
+      "usd": 20.012803588488737,
+      "worst_dd": 0.9862021064813963,
+      "exits": {
+       "LOCK": 54,
+       "SL": 28,
+       "REV": 1
+      },
+      "long_short": [
+       39,
+       44
+      ],
+      "cost_mean": 0.0447749209151918
+     },
+     "live": {
+      "entries": 1,
+      "weekdays": 14,
+      "per_weekday": 0.0714,
+      "win_pct": 100.0,
+      "roe_mean": 0.12611041620000027,
+      "pre_mean": 0.16796759999999855,
+      "payoff": null,
+      "growth_log": 0.04921309041875484,
+      "usd": 1050.4441664800001,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 1
+      },
+      "long_short": [
+       0,
+       1
+      ],
+      "cost_mean": 0.04185718379999829
+     }
+    },
+    "F16_FIB500@30m": {
+     "select": {
+      "entries": 374,
+      "weekdays": 1043,
+      "per_weekday": 0.3586,
+      "win_pct": 73.26,
+      "roe_mean": -0.03334538870540972,
+      "pre_mean": 0.010477722758631862,
+      "payoff": 0.26559039204185236,
+      "growth_log": -7.41933555889446,
+      "usd": 0.5995473771210005,
+      "worst_dd": 0.9996575082016449,
+      "exits": {
+       "LOCK": 278,
+       "SL": 85,
+       "JUDGE": 5,
+       "REV": 6
+      },
+      "long_short": [
+       173,
+       201
+      ],
+      "cost_mean": 0.04382311146404157
+     },
+     "confirm": {
+      "entries": 120,
+      "weekdays": 456,
+      "per_weekday": 0.2632,
+      "win_pct": 70.83,
+      "roe_mean": -0.05254978404583342,
+      "pre_mean": -0.008698914278874054,
+      "payoff": 0.252988994853589,
+      "growth_log": -3.3738027826367625,
+      "usd": 34.259109369753176,
+      "worst_dd": 0.9809588476831487,
+      "exits": {
+       "LOCK": 84,
+       "SL": 31,
+       "JUDGE": 3,
+       "REV": 2
+      },
+      "long_short": [
+       52,
+       68
+      ],
+      "cost_mean": 0.043850869766959365
+     },
+     "live": {
+      "entries": 1,
+      "weekdays": 14,
+      "per_weekday": 0.0714,
+      "win_pct": 100.0,
+      "roe_mean": 0.11623460971815275,
+      "pre_mean": 0.15836869889245264,
+      "payoff": null,
+      "growth_log": 0.04544538031352474,
+      "usd": 1046.4938438872612,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 1
+      },
+      "long_short": [
+       1,
+       0
+      ],
+      "cost_mean": 0.04213408917429989
+     }
+    },
+    "F16_FIB764@1h": {
+     "select": {
+      "entries": 215,
+      "weekdays": 1043,
+      "per_weekday": 0.2061,
+      "win_pct": 76.28,
+      "roe_mean": -0.015224386266856337,
+      "pre_mean": 0.02909518434392723,
+      "payoff": 0.26792096120699943,
+      "growth_log": -2.6582090448137423,
+      "usd": 70.0736081223352,
+      "worst_dd": 0.9299263918776648,
+      "exits": {
+       "LOCK": 168,
+       "SL": 47
+      },
+      "long_short": [
+       121,
+       94
+      ],
+      "cost_mean": 0.04431957061078355
+     },
+     "confirm": {
+      "entries": 73,
+      "weekdays": 456,
+      "per_weekday": 0.1601,
+      "win_pct": 71.23,
+      "roe_mean": -0.061315810085622084,
+      "pre_mean": -0.017213972282567307,
+      "payoff": 0.23149539586628326,
+      "growth_log": -2.3353614318575975,
+      "usd": 96.7754984564853,
+      "worst_dd": 0.9151610638274722,
+      "exits": {
+       "LOCK": 52,
+       "SL": 21
+      },
+      "long_short": [
+       38,
+       35
+      ],
+      "cost_mean": 0.04410183780305478
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": -0.19716215787299318,
+      "pre_mean": -0.1550141999999971,
+      "payoff": 0.21201442676336105,
+      "growth_log": -0.18179119526598445,
+      "usd": 833.775418495427,
+      "worst_dd": 0.20016829197839503,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.042147957872996064
+     }
+    },
+    "F16_FIB764@30m": {
+     "select": {
+      "entries": 246,
+      "weekdays": 1043,
+      "per_weekday": 0.2359,
+      "win_pct": 73.98,
+      "roe_mean": -0.03297314043158447,
+      "pre_mean": 0.010973611930933888,
+      "payoff": 0.2558986904425206,
+      "growth_log": -4.830757659178017,
+      "usd": 7.980472496560103,
+      "worst_dd": 0.992235969071423,
+      "exits": {
+       "LOCK": 183,
+       "SL": 55,
+       "JUDGE": 7,
+       "REV": 1
+      },
+      "long_short": [
+       116,
+       130
+      ],
+      "cost_mean": 0.04394675236251835
+     },
+     "confirm": {
+      "entries": 79,
+      "weekdays": 456,
+      "per_weekday": 0.1732,
+      "win_pct": 74.68,
+      "roe_mean": -0.028378806114446646,
+      "pre_mean": 0.014836014545347794,
+      "payoff": 0.2585992004478332,
+      "growth_log": -1.3990469023462184,
+      "usd": 246.83210696870236,
+      "worst_dd": 0.883485514764458,
+      "exits": {
+       "LOCK": 59,
+       "SL": 17,
+       "JUDGE": 3
+      },
+      "long_short": [
+       32,
+       47
+      ],
+      "cost_mean": 0.04321482065979444
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 0.0,
+      "roe_mean": -0.5000001299200032,
+      "pre_mean": -0.4580000000000012,
+      "payoff": null,
+      "growth_log": -0.4462872767745292,
+      "usd": 639.9998885464995,
+      "worst_dd": 0.3600001114535005,
+      "exits": {
+       "SL": 2
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.042000129920002016
+     }
+    },
+    "F6_VWAP_FAIL@1h#ds-F6_VWAP_FAIL-1h-1": {
+     "select": {
+      "entries": 316,
+      "weekdays": 1043,
+      "per_weekday": 0.303,
+      "win_pct": 69.62,
+      "roe_mean": -0.032819646539963054,
+      "pre_mean": 0.010992080512916376,
+      "payoff": 0.3182761265687673,
+      "growth_log": -6.085529149510354,
+      "usd": 2.275559894217417,
+      "worst_dd": 0.9979966901029077,
+      "exits": {
+       "LOCK": 223,
+       "SL": 63,
+       "JUDGE": 1,
+       "REV": 29
+      },
+      "long_short": [
+       135,
+       181
+      ],
+      "cost_mean": 0.04381172705287944
+     },
+     "confirm": {
+      "entries": 111,
+      "weekdays": 456,
+      "per_weekday": 0.2434,
+      "win_pct": 68.47,
+      "roe_mean": -0.023966156304315873,
+      "pre_mean": 0.02029797238945807,
+      "payoff": 0.36076728141795855,
+      "growth_log": -1.6668944316917051,
+      "usd": 188.83258847992147,
+      "worst_dd": 0.8389081048747457,
+      "exits": {
+       "LOCK": 77,
+       "SL": 18,
+       "REV": 16
+      },
+      "long_short": [
+       44,
+       67
+      ],
+      "cost_mean": 0.044264128693773934
+     },
+     "live": {
+      "entries": 5,
+      "weekdays": 14,
+      "per_weekday": 0.3571,
+      "win_pct": 100.0,
+      "roe_mean": 0.12475530915288151,
+      "pre_mean": 0.17235121564818923,
+      "payoff": null,
+      "growth_log": 0.24320534649104894,
+      "usd": 1275.3304818711342,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 5
+      },
+      "long_short": [
+       2,
+       3
+      ],
+      "cost_mean": 0.04759590649530772
+     }
+    },
+    "F8_VWICK@30m": {
+     "select": {
+      "entries": 159,
+      "weekdays": 1043,
+      "per_weekday": 0.1524,
+      "win_pct": 75.47,
+      "roe_mean": -0.020429414976844782,
+      "pre_mean": 0.02339072067363064,
+      "payoff": 0.2655152189941007,
+      "growth_log": -2.2754115741361938,
+      "usd": 102.7546085918516,
+      "worst_dd": 0.897650772805047,
+      "exits": {
+       "LOCK": 121,
+       "SL": 32,
+       "JUDGE": 6
+      },
+      "long_short": [
+       83,
+       76
+      ],
+      "cost_mean": 0.04382013565047543
+     },
+     "confirm": {
+      "entries": 67,
+      "weekdays": 456,
+      "per_weekday": 0.1469,
+      "win_pct": 71.64,
+      "roe_mean": -0.04952177240471091,
+      "pre_mean": -0.0054586189571275675,
+      "payoff": 0.2503801268286754,
+      "growth_log": -1.79169240571584,
+      "usd": 166.67784429350374,
+      "worst_dd": 0.8941288080361227,
+      "exits": {
+       "LOCK": 48,
+       "SL": 17,
+       "JUDGE": 2
+      },
+      "long_short": [
+       38,
+       29
+      ],
+      "cost_mean": 0.04406315344758333
+     },
+     "live": {
+      "entries": 1,
+      "weekdays": 14,
+      "per_weekday": 0.0714,
+      "win_pct": 0.0,
+      "roe_mean": -0.5004207299459862,
+      "pre_mean": -0.4579999999999962,
+      "payoff": null,
+      "growth_log": -0.2233539384170174,
+      "usd": 799.8317080216056,
+      "worst_dd": 0.20016829197839447,
+      "exits": {
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       1
+      ],
+      "cost_mean": 0.04242072994598997
+     }
+    },
+    "F9_BREAKER@30m": {
+     "select": {
+      "entries": 254,
+      "weekdays": 1043,
+      "per_weekday": 0.2435,
+      "win_pct": 75.2,
+      "roe_mean": -0.019242471634544893,
+      "pre_mean": 0.025518583595050402,
+      "payoff": 0.2736714448832984,
+      "growth_log": -3.5273033079231895,
+      "usd": 29.384048852162437,
+      "worst_dd": 0.9811239363245244,
+      "exits": {
+       "LOCK": 192,
+       "SL": 54,
+       "JUDGE": 2,
+       "REV": 6
+      },
+      "long_short": [
+       95,
+       159
+      ],
+      "cost_mean": 0.04476105522959529
+     },
+     "confirm": {
+      "entries": 114,
+      "weekdays": 456,
+      "per_weekday": 0.25,
+      "win_pct": 76.32,
+      "roe_mean": -0.006521862695020898,
+      "pre_mean": 0.03747129996380842,
+      "payoff": 0.2898488906901475,
+      "growth_log": -0.8999238257218778,
+      "usd": 406.60063107053065,
+      "worst_dd": 0.8578168906061122,
+      "exits": {
+       "LOCK": 87,
+       "SL": 19,
+       "JUDGE": 3,
+       "REV": 5
+      },
+      "long_short": [
+       44,
+       70
+      ],
+      "cost_mean": 0.0439931626588293
+     },
+     "live": {
+      "entries": 5,
+      "weekdays": 14,
+      "per_weekday": 0.3571,
+      "win_pct": 60.0,
+      "roe_mean": 0.024145747385604356,
+      "pre_mean": 0.07182894980354648,
+      "payoff": 1.1021570846597528,
+      "growth_log": 0.04434090394167876,
+      "usd": 1045.3386542206829,
+      "worst_dd": 0.044310953947048204,
+      "exits": {
+       "LOCK": 3,
+       "REV": 1,
+       "END": 1
+      },
+      "long_short": [
+       4,
+       1
+      ],
+      "cost_mean": 0.04768320241794212
+     }
+    },
+    "F9_FVG@30m": {
+     "select": {
+      "entries": 364,
+      "weekdays": 1043,
+      "per_weekday": 0.349,
+      "win_pct": 70.05,
+      "roe_mean": -0.038923637458621894,
+      "pre_mean": 0.004764776045462218,
+      "payoff": 0.29521250910208724,
+      "growth_log": -8.059923932566484,
+      "usd": 0.31595083795685325,
+      "worst_dd": 0.9998046313296792,
+      "exits": {
+       "LOCK": 260,
+       "SL": 84,
+       "JUDGE": 7,
+       "REV": 13
+      },
+      "long_short": [
+       164,
+       200
+      ],
+      "cost_mean": 0.0436884135040841
+     },
+     "confirm": {
+      "entries": 149,
+      "weekdays": 456,
+      "per_weekday": 0.3268,
+      "win_pct": 68.46,
+      "roe_mean": -0.05706713480262877,
+      "pre_mean": -0.012835138135478767,
+      "payoff": 0.2693850105590085,
+      "growth_log": -4.432597150840065,
+      "usd": 11.883586093925793,
+      "worst_dd": 0.9892055329747774,
+      "exits": {
+       "LOCK": 102,
+       "SL": 38,
+       "JUDGE": 3,
+       "REV": 6
+      },
+      "long_short": [
+       70,
+       79
+      ],
+      "cost_mean": 0.04423199666715
+     },
+     "live": {
+      "entries": 6,
+      "weekdays": 14,
+      "per_weekday": 0.4286,
+      "win_pct": 100.0,
+      "roe_mean": 0.10463639264247106,
+      "pre_mean": 0.1512385726603214,
+      "payoff": null,
+      "growth_log": 0.24497962238266768,
+      "usd": 1277.595278591933,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 5,
+       "REV": 1
+      },
+      "long_short": [
+       2,
+       4
+      ],
+      "cost_mean": 0.04660218001785033
+     }
+    },
+    "S3_CMO_SANDWICH@1h": {
+     "select": {
+      "entries": 37,
+      "weekdays": 1043,
+      "per_weekday": 0.0355,
+      "win_pct": 75.68,
+      "roe_mean": -0.007554277934997991,
+      "pre_mean": 0.03740729367875656,
+      "payoff": 0.2997299446844571,
+      "growth_log": -0.3469691370682113,
+      "usd": 706.8271426790102,
+      "worst_dd": 0.5288110054334431,
+      "exits": {
+       "LOCK": 28,
+       "SL": 8,
+       "REV": 1
+      },
+      "long_short": [
+       18,
+       19
+      ],
+      "cost_mean": 0.04496157161375455
+     },
+     "confirm": {
+      "entries": 18,
+      "weekdays": 456,
+      "per_weekday": 0.0395,
+      "win_pct": 61.11,
+      "roe_mean": -0.1224154624943646,
+      "pre_mean": -0.0784061122211702,
+      "payoff": 0.19589365767412778,
+      "growth_log": -1.0295708169161122,
+      "usd": 357.1602148021636,
+      "worst_dd": 0.6583065228200592,
+      "exits": {
+       "LOCK": 10,
+       "SL": 5,
+       "REV": 3
+      },
+      "long_short": [
+       6,
+       12
+      ],
+      "cost_mean": 0.04400935027319441
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": -0.19716215787299085,
+      "pre_mean": -0.15501419999999877,
+      "payoff": 0.21201442676336218,
+      "growth_log": -0.18179119526598203,
+      "usd": 833.7754184954289,
+      "worst_dd": 0.20016829197839292,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04214795787299205
+     }
+    },
+    "S3_CMO_SANDWICH@30m": {
+     "select": {
+      "entries": 74,
+      "weekdays": 1043,
+      "per_weekday": 0.0709,
+      "win_pct": 68.92,
+      "roe_mean": -0.062019165036058616,
+      "pre_mean": -0.018066639204139666,
+      "payoff": 0.2633493550255705,
+      "growth_log": -2.421516383720331,
+      "usd": 88.78688034868411,
+      "worst_dd": 0.9371779368114213,
+      "exits": {
+       "LOCK": 51,
+       "SL": 22,
+       "REV": 1
+      },
+      "long_short": [
+       27,
+       47
+      ],
+      "cost_mean": 0.043952525831918915
+     },
+     "confirm": {
+      "entries": 21,
+      "weekdays": 456,
+      "per_weekday": 0.0461,
+      "win_pct": 80.95,
+      "roe_mean": 0.01599071682174067,
+      "pre_mean": 0.0610255635691431,
+      "payoff": 0.2801588588354017,
+      "growth_log": 0.03545065886931032,
+      "usd": 1036.086525186198,
+      "worst_dd": 0.4125434932445985,
+      "exits": {
+       "LOCK": 17,
+       "SL": 3,
+       "JUDGE": 1
+      },
+      "long_short": [
+       3,
+       18
+      ],
+      "cost_mean": 0.045034846747402435
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "V39_ALL@30m": {
+     "select": {
+      "entries": 677,
+      "weekdays": 1043,
+      "per_weekday": 0.6491,
+      "win_pct": 75.04,
+      "roe_mean": -0.02836415496554247,
+      "pre_mean": 0.015951818764493406,
+      "payoff": 0.2537589895224946,
+      "growth_log": -12.096893365422378,
+      "usd": 0.005576811473451565,
+      "worst_dd": 0.9999955383599498,
+      "exits": {
+       "LOCK": 511,
+       "SL": 157,
+       "JUDGE": 5,
+       "REV": 4
+      },
+      "long_short": [
+       273,
+       404
+      ],
+      "cost_mean": 0.04431597373003588
+     },
+     "confirm": {
+      "entries": 210,
+      "weekdays": 456,
+      "per_weekday": 0.4605,
+      "win_pct": 76.19,
+      "roe_mean": -0.027623291738367323,
+      "pre_mean": 0.01669853845035821,
+      "payoff": 0.2391559103089921,
+      "growth_log": -3.654661247128136,
+      "usd": 25.870259623725097,
+      "worst_dd": 0.9861413476277999,
+      "exits": {
+       "LOCK": 160,
+       "SL": 48,
+       "JUDGE": 2
+      },
+      "long_short": [
+       75,
+       135
+      ],
+      "cost_mean": 0.04432183018872554
+     },
+     "live": {
+      "entries": 4,
+      "weekdays": 14,
+      "per_weekday": 0.2857,
+      "win_pct": 100.0,
+      "roe_mean": 0.1080740744881953,
+      "pre_mean": 0.15705442125092783,
+      "payoff": null,
+      "growth_log": 0.16873791229577595,
+      "usd": 1183.809836260266,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 4
+      },
+      "long_short": [
+       2,
+       2
+      ],
+      "cost_mean": 0.04898034676273254
+     }
+    }
+   },
+   "run_s": 19.3,
+   "verdicts_confirm": {
+    "벌었다": false,
+    "지금보다_낫다": false,
+    "운보다_낫다": false
+   }
+  },
+  "B0+S3": {
+   "name": "B0+S3",
+   "judge": "J4",
+   "cost": "paper",
+   "members": [
+    {
+     "label": "N06_MACD_ORB@1h",
+     "order": 1,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "N15_KC_AO@1h",
+     "order": 2,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N14_ICHI_RSI@30m",
+     "order": 3,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N15_KC_AO@30m",
+     "order": 4,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N21_ST_RSI_ADX@30m",
+     "order": 5,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N14_ICHI_RSI@1h",
+     "order": 6,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N21_ST_RSI_ADX@1h",
+     "order": 7,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S5_DONCHIAN_MFI@1h",
+     "order": 8,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "N19_FIB_CHOP@30m#core-N19_FIB_CHOP-30m-1",
+     "order": 9,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S4_BB_BBP@1h#core-S4_BB_BBP-1h-2",
+     "order": 10,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "S3_CMO_SANDWICH@30m",
+     "order": 11,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S3_CMO_SANDWICH@1h",
+     "order": 12,
+     "breakout": false,
+     "when_raw": null
+    }
+   ],
+   "periods": {
+    "select": {
+     "entries": 240,
+     "weekdays": 1043,
+     "per_weekday": 0.2301,
+     "win_pct": 73.33,
+     "roe_mean": -0.026558782145991586,
+     "pre_mean": 0.017409643504545252,
+     "payoff": 0.2833099937446999,
+     "growth_log": -4.119249198429319,
+     "usd": 16.25671542859466,
+     "worst_dd": 0.991871243263186,
+     "exits": {
+      "LOCK": 175,
+      "SL": 55,
+      "JUDGE": 4,
+      "REV": 6
+     },
+     "long_short": [
+      89,
+      151
+     ],
+     "cost_mean": 0.04396842565053683,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -8.822995249700336,
+       -6.24659511647287,
+       -4.33655994672798,
+       -3.7516678293830825
+      ],
+      "usd_p5_50_95": [
+       0.14730647910284558,
+       1.9370383105283524,
+       23.478554959395677
+      ],
+      "rank_pct": 92.4
+     }
+    },
+    "confirm": {
+     "entries": 82,
+     "weekdays": 456,
+     "per_weekday": 0.1798,
+     "win_pct": 73.17,
+     "roe_mean": -0.03191760432787579,
+     "pre_mean": 0.012412651478273421,
+     "payoff": 0.2650589565133596,
+     "growth_log": -1.525245701692554,
+     "usd": 217.56759357150554,
+     "worst_dd": 0.8978382388869206,
+     "exits": {
+      "LOCK": 58,
+      "SL": 16,
+      "JUDGE": 1,
+      "REV": 7
+     },
+     "long_short": [
+      24,
+      58
+     ],
+     "cost_mean": 0.0443302558061492,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -3.8496321392953012,
+       -2.4210437562739053,
+       -1.2642535895088989,
+       -0.9655102889240859
+      ],
+      "usd_p5_50_95": [
+       21.28756585719867,
+       88.82885338324216,
+       380.7888378268307
+      ],
+      "rank_pct": 83.89999999999999
+     }
+    },
+    "live": {
+     "entries": 4,
+     "weekdays": 14,
+     "per_weekday": 0.2857,
+     "win_pct": 75.0,
+     "roe_mean": -0.06021855325033581,
+     "pre_mean": -0.01813141543432345,
+     "payoff": 0.1728855350527783,
+     "growth_log": -0.12146243246368946,
+     "usd": 885.6243234478543,
+     "worst_dd": 0.20016829197839292,
+     "exits": {
+      "LOCK": 3,
+      "SL": 1
+     },
+     "long_short": [
+      1,
+      3
+     ],
+     "cost_mean": 0.04208713781601236,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -0.40175722018102106,
+       -0.09192485049138704,
+       0.1882959541104258,
+       0.18836993722594456
+      ],
+      "usd_p5_50_95": [
+       669.1431804318265,
+       912.1736963744801,
+       1207.280050582361
+      ],
+      "rank_pct": 42.699999999999996
+     }
+    }
+   },
+   "funnel": {
+    "block": 7498,
+    "check": 4395,
+    "entered": 326,
+    "no_pullback": 214,
+    "in_position": 36,
+    "lower_score": 10,
+    "block_at_entry": 1
+   },
+   "by_member": {
+    "N06_MACD_ORB@1h": {
+     "select": {
+      "entries": 24,
+      "weekdays": 1043,
+      "per_weekday": 0.023,
+      "win_pct": 87.5,
+      "roe_mean": 0.03744144573085239,
+      "pre_mean": 0.08301478461737302,
+      "payoff": 0.22840726446190343,
+      "growth_log": 0.2642734031706462,
+      "usd": 1302.4842509493674,
+      "worst_dd": 0.3600355375161749,
+      "exits": {
+       "LOCK": 21,
+       "SL": 3
+      },
+      "long_short": [
+       7,
+       17
+      ],
+      "cost_mean": 0.04557333888652063
+     },
+     "confirm": {
+      "entries": 3,
+      "weekdays": 456,
+      "per_weekday": 0.0066,
+      "win_pct": 33.33,
+      "roe_mean": -0.30681002528976886,
+      "pre_mean": -0.260628750263312,
+      "payoff": 0.15627129152466457,
+      "growth_log": -0.4147810563649133,
+      "usd": 660.4848738347298,
+      "worst_dd": 0.35950226254488393,
+      "exits": {
+       "LOCK": 1,
+       "SL": 2
+      },
+      "long_short": [
+       1,
+       2
+      ],
+      "cost_mean": 0.04618127502645684
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "N15_KC_AO@1h": {
+     "select": {
+      "entries": 1,
+      "weekdays": 1043,
+      "per_weekday": 0.001,
+      "win_pct": 100.0,
+      "roe_mean": 0.10381621841547098,
+      "pre_mean": 0.14415376401494817,
+      "payoff": null,
+      "growth_log": 0.04068741333615475,
+      "usd": 1041.5264873661886,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 1
+      },
+      "long_short": [
+       0,
+       1
+      ],
+      "cost_mean": 0.040337545599477186
+     },
+     "confirm": {
+      "entries": 0,
+      "weekdays": 456,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "S3_CMO_SANDWICH@1h": {
+     "select": {
+      "entries": 52,
+      "weekdays": 1043,
+      "per_weekday": 0.0499,
+      "win_pct": 69.23,
+      "roe_mean": -0.0554186464713792,
+      "pre_mean": -0.012295484742987852,
+      "payoff": 0.27678735090036943,
+      "growth_log": -1.558068933612902,
+      "usd": 210.5422499574288,
+      "worst_dd": 0.8347897735470559,
+      "exits": {
+       "LOCK": 36,
+       "SL": 15,
+       "REV": 1
+      },
+      "long_short": [
+       23,
+       29
+      ],
+      "cost_mean": 0.04312316172839134
+     },
+     "confirm": {
+      "entries": 29,
+      "weekdays": 456,
+      "per_weekday": 0.0636,
+      "win_pct": 68.97,
+      "roe_mean": -0.06464026969282272,
+      "pre_mean": -0.02090603027982022,
+      "payoff": 0.23410321135276277,
+      "growth_log": -0.9354444256974217,
+      "usd": 392.4114290493304,
+      "worst_dd": 0.7252698019769146,
+      "exits": {
+       "LOCK": 19,
+       "SL": 6,
+       "REV": 4
+      },
+      "long_short": [
+       9,
+       20
+      ],
+      "cost_mean": 0.043734239413002494
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": -0.19716215787299085,
+      "pre_mean": -0.15501419999999877,
+      "payoff": 0.21201442676336218,
+      "growth_log": -0.18179119526598203,
+      "usd": 833.7754184954289,
+      "worst_dd": 0.20016829197839292,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04214795787299205
+     }
+    },
+    "S3_CMO_SANDWICH@30m": {
+     "select": {
+      "entries": 163,
+      "weekdays": 1043,
+      "per_weekday": 0.1563,
+      "win_pct": 72.39,
+      "roe_mean": -0.027575147328111598,
+      "pre_mean": 0.016448902164995883,
+      "payoff": 0.29441486036054465,
+      "growth_log": -2.8661410813232178,
+      "usd": 56.918145829169774,
+      "worst_dd": 0.9651966729083434,
+      "exits": {
+       "LOCK": 117,
+       "SL": 37,
+       "JUDGE": 4,
+       "REV": 5
+      },
+      "long_short": [
+       59,
+       104
+      ],
+      "cost_mean": 0.044024049493107474
+     },
+     "confirm": {
+      "entries": 50,
+      "weekdays": 456,
+      "per_weekday": 0.1096,
+      "win_pct": 78.0,
+      "roe_mean": 0.003555086841507007,
+      "pre_mean": 0.04811997100246286,
+      "payoff": 0.2930967170695632,
+      "growth_log": -0.17502021963021935,
+      "usd": 839.4400474302603,
+      "worst_dd": 0.5941729798092117,
+      "exits": {
+       "LOCK": 38,
+       "SL": 8,
+       "JUDGE": 1,
+       "REV": 3
+      },
+      "long_short": [
+       14,
+       36
+      ],
+      "cost_mean": 0.04456488416095583
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 100.0,
+      "roe_mean": 0.0767250513723192,
+      "pre_mean": 0.11875136913135187,
+      "payoff": null,
+      "growth_log": 0.06032876280229259,
+      "usd": 1062.1856962945585,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 2
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.042026317759032664
+     }
+    }
+   },
+   "run_s": 1.2,
+   "verdicts_confirm": {
+    "벌었다": false,
+    "지금보다_낫다": true,
+    "운보다_낫다": false
+   }
+  },
+  "B3+S3": {
+   "name": "B3+S3",
+   "judge": "J4",
+   "cost": "paper",
+   "members": [
+    {
+     "label": "N06_MACD_ORB@1h",
+     "order": 1,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "N15_KC_AO@1h",
+     "order": 2,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N14_ICHI_RSI@30m",
+     "order": 3,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N15_KC_AO@30m",
+     "order": 4,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N21_ST_RSI_ADX@30m",
+     "order": 5,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N14_ICHI_RSI@1h",
+     "order": 6,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N21_ST_RSI_ADX@1h",
+     "order": 7,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S5_DONCHIAN_MFI@1h",
+     "order": 8,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "N19_FIB_CHOP@30m#core-N19_FIB_CHOP-30m-1",
+     "order": 9,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S4_BB_BBP@1h#core-S4_BB_BBP-1h-2",
+     "order": 10,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "S4_BB_BBP@30m#core-S4_BB_BBP-30m-1",
+     "order": 11,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F3_BOS@1h#ds-F3_BOS-1h-1",
+     "order": 12,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "S5_DONCHIAN_MFI@30m",
+     "order": 13,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F15_ORB@1h",
+     "order": 14,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F15_ASIA_BRK@1h",
+     "order": 15,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F4_PULL_RSI@30m",
+     "order": 16,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F15_ORB@30m",
+     "order": 17,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F15_LON_BRK@1h#ds-F15_LON_BRK-1h-1",
+     "order": 18,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "DOGE@1h#core-DOGE-1h-1",
+     "order": 19,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "V45_AMB@30m",
+     "order": 20,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F10_M2022@30m",
+     "order": 21,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F10_M2022@1h",
+     "order": 22,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F9_FVG@1h#ds-F9_FVG-1h-1",
+     "order": 23,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F15_ASIA_BRK@30m",
+     "order": 24,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F15_LON_BRK@30m",
+     "order": 25,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "N05_PSAR_POC@1h",
+     "order": 26,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F13_FVG_PD@30m",
+     "order": 27,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F4_PULL_RSI@1h",
+     "order": 28,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "DOGE@30m#core-DOGE-30m-1",
+     "order": 29,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N06_MACD_ORB@30m",
+     "order": 30,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "F8_VWICK@30m",
+     "order": 31,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB382@1h",
+     "order": 32,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F3_BOS@30m",
+     "order": 33,
+     "breakout": true,
+     "when_raw": null
+    },
+    {
+     "label": "N19_FIB_CHOP@1h",
+     "order": 34,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F9_BREAKER@1h",
+     "order": 35,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F8_VWICK@1h",
+     "order": 36,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "N05_PSAR_POC@30m",
+     "order": 37,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F9_IFVG@1h",
+     "order": 38,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F13_FVG_PD@1h",
+     "order": 39,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB500@1h",
+     "order": 40,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "V45_AMB@1h",
+     "order": 41,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F10_OTE@1h#ds-F10_OTE-1h-1",
+     "order": 42,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F9_IFVG@30m",
+     "order": 43,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F16_FIB382@30m",
+     "order": 44,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "F3_BOS_ZONE@30m",
+     "order": 45,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S3_CMO_SANDWICH@30m",
+     "order": 46,
+     "breakout": false,
+     "when_raw": null
+    },
+    {
+     "label": "S3_CMO_SANDWICH@1h",
+     "order": 47,
+     "breakout": false,
+     "when_raw": null
+    }
+   ],
+   "periods": {
+    "select": {
+     "entries": 2952,
+     "weekdays": 1043,
+     "per_weekday": 2.8303,
+     "win_pct": 72.66,
+     "roe_mean": -0.037417153903342104,
+     "pre_mean": 0.006517077294569343,
+     "payoff": 0.264451811255996,
+     "growth_log": -64.014560676901,
+     "usd": 1.5806275108092975e-25,
+     "worst_dd": 1.0,
+     "exits": {
+      "LOCK": 2169,
+      "SL": 708,
+      "JUDGE": 32,
+      "REV": 43
+     },
+     "long_short": [
+      1357,
+      1595
+     ],
+     "cost_mean": 0.04393423119791144,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -84.44110945949224,
+       -75.69923794489895,
+       -68.14186339796633,
+       -65.97387161589504
+      ],
+      "usd_p5_50_95": [
+       2.1266308806946745e-34,
+       1.3311857999253843e-30,
+       2.2279816388318959e-26
+      ],
+      "rank_pct": 97.6
+     }
+    },
+    "confirm": {
+     "entries": 1173,
+     "weekdays": 456,
+     "per_weekday": 2.5724,
+     "win_pct": 72.46,
+     "roe_mean": -0.040103251400227746,
+     "pre_mean": 0.004036723115821242,
+     "payoff": 0.25933901372169826,
+     "growth_log": -26.53561758240929,
+     "usd": 2.990389162212246e-09,
+     "worst_dd": 0.9999999999976263,
+     "exits": {
+      "LOCK": 854,
+      "SL": 277,
+      "JUDGE": 16,
+      "REV": 26
+     },
+     "long_short": [
+      508,
+      665
+     ],
+     "cost_mean": 0.04413997451604899,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -31.6179757763395,
+       -26.50557428258726,
+       -21.98609629250819,
+       -20.91556777692455
+      ],
+      "usd_p5_50_95": [
+       1.855613790279785e-11,
+       3.0815935000484283e-09,
+       8.250577129707508e-07
+      ],
+      "rank_pct": 49.3
+     }
+    },
+    "live": {
+     "entries": 29,
+     "weekdays": 14,
+     "per_weekday": 2.0714,
+     "win_pct": 65.52,
+     "roe_mean": -0.07350750431859163,
+     "pre_mean": -0.028542401000491952,
+     "payoff": 0.2671687526265738,
+     "growth_log": -1.0667859677031852,
+     "usd": 344.1127314109454,
+     "worst_dd": 0.7174348116577287,
+     "exits": {
+      "LOCK": 19,
+      "SL": 8,
+      "JUDGE": 1,
+      "END": 1
+     },
+     "long_short": [
+      9,
+      20
+     ],
+     "cost_mean": 0.04496510331809968,
+     "twin": {
+      "draws": 1000,
+      "log_p5_50_90_95": [
+       -1.4736776114908827,
+       -0.7337508596353975,
+       -0.07788338723631572,
+       0.15691505938788844
+      ],
+      "usd_p5_50_95": [
+       229.08146152718138,
+       480.1048028531299,
+       1169.8962379778866
+      ],
+      "rank_pct": 24.5
+     }
+    }
+   },
+   "funnel": {
+    "block": 124403,
+    "check": 89367,
+    "no_pullback": 4333,
+    "entered": 4154,
+    "in_position": 2383,
+    "lower_score": 710,
+    "block_at_entry": 2
+   },
+   "by_member": {
+    "DOGE@1h#core-DOGE-1h-1": {
+     "select": {
+      "entries": 24,
+      "weekdays": 1043,
+      "per_weekday": 0.023,
+      "win_pct": 70.83,
+      "roe_mean": -0.05565915225983809,
+      "pre_mean": -0.011477943740789975,
+      "payoff": 0.25464221716654417,
+      "growth_log": -0.7211805725865126,
+      "usd": 486.1779486625914,
+      "worst_dd": 0.5458225617980557,
+      "exits": {
+       "LOCK": 17,
+       "SL": 7
+      },
+      "long_short": [
+       8,
+       16
+      ],
+      "cost_mean": 0.04418120851904811
+     },
+     "confirm": {
+      "entries": 8,
+      "weekdays": 456,
+      "per_weekday": 0.0175,
+      "win_pct": 50.0,
+      "roe_mean": -0.16465631739570313,
+      "pre_mean": -0.11789544437080024,
+      "payoff": 0.3423853713460517,
+      "growth_log": -0.6299547191217406,
+      "usd": 532.6159177774107,
+      "worst_dd": 0.4889297906906882,
+      "exits": {
+       "LOCK": 4,
+       "SL": 4
+      },
+      "long_short": [
+       4,
+       4
+      ],
+      "cost_mean": 0.04676087302490292
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "DOGE@30m#core-DOGE-30m-1": {
+     "select": {
+      "entries": 38,
+      "weekdays": 1043,
+      "per_weekday": 0.0364,
+      "win_pct": 65.79,
+      "roe_mean": -0.06944183979402797,
+      "pre_mean": -0.026880953301518868,
+      "payoff": 0.28317760486146587,
+      "growth_log": -1.3530106808708982,
+      "usd": 258.4609446766949,
+      "worst_dd": 0.7732496775363555,
+      "exits": {
+       "LOCK": 27,
+       "SL": 11
+      },
+      "long_short": [
+       15,
+       23
+      ],
+      "cost_mean": 0.04256088649250909
+     },
+     "confirm": {
+      "entries": 4,
+      "weekdays": 456,
+      "per_weekday": 0.0088,
+      "win_pct": 100.0,
+      "roe_mean": 0.09824479500827854,
+      "pre_mean": 0.1402687183411258,
+      "payoff": null,
+      "growth_log": 0.15326158556728992,
+      "usd": 1165.6298510117597,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 4
+      },
+      "long_short": [
+       3,
+       1
+      ],
+      "cost_mean": 0.042023923332847275
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F10_M2022@1h": {
+     "select": {
+      "entries": 10,
+      "weekdays": 1043,
+      "per_weekday": 0.0096,
+      "win_pct": 70.0,
+      "roe_mean": -0.062082891219109225,
+      "pre_mean": -0.020040467128760064,
+      "payoff": 0.25124150876396706,
+      "growth_log": -0.3272723754880752,
+      "usd": 720.8873642357556,
+      "worst_dd": 0.42420093352841515,
+      "exits": {
+       "LOCK": 7,
+       "SL": 3
+      },
+      "long_short": [
+       4,
+       6
+      ],
+      "cost_mean": 0.042042424090349154
+     },
+     "confirm": {
+      "entries": 7,
+      "weekdays": 456,
+      "per_weekday": 0.0154,
+      "win_pct": 85.71,
+      "roe_mean": 0.011418915820560966,
+      "pre_mean": 0.05523186724534938,
+      "payoff": 0.19328840245838538,
+      "growth_log": 0.004340478804815091,
+      "usd": 1004.3499123266718,
+      "worst_dd": 0.20016829197839536,
+      "exits": {
+       "LOCK": 6,
+       "SL": 1
+      },
+      "long_short": [
+       5,
+       2
+      ],
+      "cost_mean": 0.043812951424788416
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F10_M2022@30m": {
+     "select": {
+      "entries": 31,
+      "weekdays": 1043,
+      "per_weekday": 0.0297,
+      "win_pct": 74.19,
+      "roe_mean": -0.047206412703798925,
+      "pre_mean": -0.004315605950628603,
+      "payoff": 0.22055561450875988,
+      "growth_log": -0.7937788441946778,
+      "usd": 452.13302281011374,
+      "worst_dd": 0.7251802246402826,
+      "exits": {
+       "LOCK": 23,
+       "SL": 8
+      },
+      "long_short": [
+       13,
+       18
+      ],
+      "cost_mean": 0.042890806753170335
+     },
+     "confirm": {
+      "entries": 11,
+      "weekdays": 456,
+      "per_weekday": 0.0241,
+      "win_pct": 63.64,
+      "roe_mean": -0.07545645539281115,
+      "pre_mean": -0.031187361611214704,
+      "payoff": 0.2982193431422078,
+      "growth_log": -0.4159598063988771,
+      "usd": 659.7067859429219,
+      "worst_dd": 0.3676378717421165,
+      "exits": {
+       "LOCK": 7,
+       "SL": 3,
+       "JUDGE": 1
+      },
+      "long_short": [
+       5,
+       6
+      ],
+      "cost_mean": 0.04426909378159644
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F10_OTE@1h#ds-F10_OTE-1h-1": {
+     "select": {
+      "entries": 213,
+      "weekdays": 1043,
+      "per_weekday": 0.2042,
+      "win_pct": 77.0,
+      "roe_mean": -0.015726100726441587,
+      "pre_mean": 0.02839100432147222,
+      "payoff": 0.2578404279544076,
+      "growth_log": -2.7511551847246603,
+      "usd": 63.85405535586465,
+      "worst_dd": 0.9818627993747927,
+      "exits": {
+       "LOCK": 165,
+       "SL": 48
+      },
+      "long_short": [
+       101,
+       112
+      ],
+      "cost_mean": 0.0441171050479138
+     },
+     "confirm": {
+      "entries": 76,
+      "weekdays": 456,
+      "per_weekday": 0.1667,
+      "win_pct": 78.95,
+      "roe_mean": -0.00831154825552098,
+      "pre_mean": 0.03578871534216495,
+      "payoff": 0.2455938867245997,
+      "growth_log": -0.7006356330353672,
+      "usd": 496.2697580637103,
+      "worst_dd": 0.7612998879928063,
+      "exits": {
+       "LOCK": 60,
+       "SL": 16
+      },
+      "long_short": [
+       39,
+       37
+      ],
+      "cost_mean": 0.044100263597685936
+     },
+     "live": {
+      "entries": 5,
+      "weekdays": 14,
+      "per_weekday": 0.3571,
+      "win_pct": 40.0,
+      "roe_mean": -0.2594777282678238,
+      "pre_mean": -0.21727371939122686,
+      "payoff": 0.20370214131701483,
+      "growth_log": -0.5901336729701137,
+      "usd": 554.2531911122092,
+      "worst_dd": 0.44574680888779095,
+      "exits": {
+       "LOCK": 2,
+       "SL": 3
+      },
+      "long_short": [
+       0,
+       5
+      ],
+      "cost_mean": 0.042204008876596893
+     }
+    },
+    "F13_FVG_PD@1h": {
+     "select": {
+      "entries": 63,
+      "weekdays": 1043,
+      "per_weekday": 0.0604,
+      "win_pct": 77.78,
+      "roe_mean": -0.022268840206492675,
+      "pre_mean": 0.02110969353528499,
+      "payoff": 0.22792088071250147,
+      "growth_log": -0.9349961225950771,
+      "usd": 392.58738774883716,
+      "worst_dd": 0.7223659683785306,
+      "exits": {
+       "LOCK": 50,
+       "SL": 13
+      },
+      "long_short": [
+       30,
+       33
+      ],
+      "cost_mean": 0.04337853374177766
+     },
+     "confirm": {
+      "entries": 35,
+      "weekdays": 456,
+      "per_weekday": 0.0768,
+      "win_pct": 80.0,
+      "roe_mean": -0.010227597142976164,
+      "pre_mean": 0.03424221523833241,
+      "payoff": 0.22247276851822245,
+      "growth_log": -0.3123228685769045,
+      "usd": 731.7452325422518,
+      "worst_dd": 0.6206400182192426,
+      "exits": {
+       "LOCK": 29,
+       "SL": 6
+      },
+      "long_short": [
+       15,
+       20
+      ],
+      "cost_mean": 0.04446981238130857
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F13_FVG_PD@30m": {
+     "select": {
+      "entries": 184,
+      "weekdays": 1043,
+      "per_weekday": 0.1764,
+      "win_pct": 74.46,
+      "roe_mean": -0.020326976611114017,
+      "pre_mean": 0.023548007053704877,
+      "payoff": 0.2837608865440459,
+      "growth_log": -2.688089818191693,
+      "usd": 68.0107282279718,
+      "worst_dd": 0.9775920096239312,
+      "exits": {
+       "LOCK": 136,
+       "SL": 40,
+       "JUDGE": 6,
+       "REV": 2
+      },
+      "long_short": [
+       100,
+       84
+      ],
+      "cost_mean": 0.043874983664818894
+     },
+     "confirm": {
+      "entries": 67,
+      "weekdays": 456,
+      "per_weekday": 0.1469,
+      "win_pct": 67.16,
+      "roe_mean": -0.058737584771923694,
+      "pre_mean": -0.015242497242943309,
+      "payoff": 0.2861219304560601,
+      "growth_log": -2.0368937273063934,
+      "usd": 130.4332434814261,
+      "worst_dd": 0.8845553942518194,
+      "exits": {
+       "LOCK": 46,
+       "SL": 16,
+       "JUDGE": 5
+      },
+      "long_short": [
+       31,
+       36
+      ],
+      "cost_mean": 0.04349508752898039
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": 0.010481791373673943,
+      "pre_mean": 0.05943808241389681,
+      "payoff": 1.0829035568472078,
+      "growth_log": -0.0026970447206600134,
+      "usd": 997.3065890369163,
+      "worst_dd": 0.10114684360761028,
+      "exits": {
+       "LOCK": 1,
+       "JUDGE": 1
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04895629104022289
+     }
+    },
+    "F15_ASIA_BRK@1h": {
+     "select": {
+      "entries": 9,
+      "weekdays": 1043,
+      "per_weekday": 0.0086,
+      "win_pct": 88.89,
+      "roe_mean": 0.05325705585242485,
+      "pre_mean": 0.09649805534447349,
+      "payoff": 0.24472762966962774,
+      "growth_log": 0.1586010262086049,
+      "usd": 1171.8703078593542,
+      "worst_dd": 0.20016829197839492,
+      "exits": {
+       "LOCK": 8,
+       "SL": 1
+      },
+      "long_short": [
+       3,
+       6
+      ],
+      "cost_mean": 0.04324099949204865
+     },
+     "confirm": {
+      "entries": 2,
+      "weekdays": 456,
+      "per_weekday": 0.0044,
+      "win_pct": 100.0,
+      "roe_mean": 0.1063121142412074,
+      "pre_mean": 0.15528766329607313,
+      "payoff": null,
+      "growth_log": 0.08322100470158263,
+      "usd": 1086.7819659333716,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 2
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.04897554905486573
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F15_ASIA_BRK@30m": {
+     "select": {
+      "entries": 13,
+      "weekdays": 1043,
+      "per_weekday": 0.0125,
+      "win_pct": 30.77,
+      "roe_mean": -0.27733628276246514,
+      "pre_mean": -0.2340029572358745,
+      "payoff": 0.22134466666192543,
+      "growth_log": -1.6302032819387686,
+      "usd": 195.88974923119687,
+      "worst_dd": 0.8041102507688032,
+      "exits": {
+       "LOCK": 5,
+       "SL": 8
+      },
+      "long_short": [
+       3,
+       10
+      ],
+      "cost_mean": 0.04333332552659071
+     },
+     "confirm": {
+      "entries": 12,
+      "weekdays": 456,
+      "per_weekday": 0.0263,
+      "win_pct": 75.0,
+      "roe_mean": -0.02812050033550371,
+      "pre_mean": 0.019667616627953948,
+      "payoff": 0.2584221022997161,
+      "growth_log": -0.21773080743296472,
+      "usd": 804.3419353963643,
+      "worst_dd": 0.3606266197528123,
+      "exits": {
+       "LOCK": 9,
+       "SL": 3
+      },
+      "long_short": [
+       7,
+       5
+      ],
+      "cost_mean": 0.04778811696345764
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F15_LON_BRK@1h#ds-F15_LON_BRK-1h-1": {
+     "select": {
+      "entries": 19,
+      "weekdays": 1043,
+      "per_weekday": 0.0182,
+      "win_pct": 68.42,
+      "roe_mean": -0.07487149216454425,
+      "pre_mean": -0.028573130224102947,
+      "payoff": 0.22408208000981344,
+      "growth_log": -0.7031450282822722,
+      "usd": 495.0259823068068,
+      "worst_dd": 0.5546516775600729,
+      "exits": {
+       "LOCK": 13,
+       "SL": 5,
+       "REV": 1
+      },
+      "long_short": [
+       7,
+       12
+      ],
+      "cost_mean": 0.04629836194044129
+     },
+     "confirm": {
+      "entries": 3,
+      "weekdays": 456,
+      "per_weekday": 0.0066,
+      "win_pct": 66.67,
+      "roe_mean": -0.09620450051533082,
+      "pre_mean": -0.053981066666668465,
+      "payoff": 0.21162915095749357,
+      "growth_log": -0.1403764183459881,
+      "usd": 869.0310545920581,
+      "worst_dd": 0.20016829197839636,
+      "exits": {
+       "LOCK": 2,
+       "SL": 1
+      },
+      "long_short": [
+       2,
+       1
+      ],
+      "cost_mean": 0.042223433848662346
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F15_LON_BRK@30m": {
+     "select": {
+      "entries": 29,
+      "weekdays": 1043,
+      "per_weekday": 0.0278,
+      "win_pct": 72.41,
+      "roe_mean": -0.056014309852363525,
+      "pre_mean": -0.011844504695209162,
+      "payoff": 0.22597966412462123,
+      "growth_log": -0.859735578674479,
+      "usd": 423.2739901912276,
+      "worst_dd": 0.7320182102308679,
+      "exits": {
+       "LOCK": 21,
+       "SL": 8
+      },
+      "long_short": [
+       9,
+       20
+      ],
+      "cost_mean": 0.04416980515715436
+     },
+     "confirm": {
+      "entries": 7,
+      "weekdays": 456,
+      "per_weekday": 0.0154,
+      "win_pct": 57.14,
+      "roe_mean": -0.1522800419828379,
+      "pre_mean": -0.10592665240819556,
+      "payoff": 0.2175939129638724,
+      "growth_log": -0.4996977377550812,
+      "usd": 606.71401874131,
+      "worst_dd": 0.39328598125868997,
+      "exits": {
+       "LOCK": 4,
+       "SL": 3
+      },
+      "long_short": [
+       3,
+       4
+      ],
+      "cost_mean": 0.046353389574642336
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F15_ORB@1h": {
+     "select": {
+      "entries": 13,
+      "weekdays": 1043,
+      "per_weekday": 0.0125,
+      "win_pct": 76.92,
+      "roe_mean": -0.025332553466877624,
+      "pre_mean": 0.0175671004945072,
+      "payoff": 0.23398339997856973,
+      "growth_log": -0.21335618980298698,
+      "usd": 807.8683315009639,
+      "worst_dd": 0.3823557747210815,
+      "exits": {
+       "LOCK": 10,
+       "SL": 3
+      },
+      "long_short": [
+       9,
+       4
+      ],
+      "cost_mean": 0.04289965396138483
+     },
+     "confirm": {
+      "entries": 7,
+      "weekdays": 456,
+      "per_weekday": 0.0154,
+      "win_pct": 85.71,
+      "roe_mean": 0.018651385097828394,
+      "pre_mean": 0.06465610285707135,
+      "payoff": 0.21014997576768724,
+      "growth_log": 0.02333173209220782,
+      "usd": 1023.6060462067816,
+      "worst_dd": 0.2001682919783958,
+      "exits": {
+       "LOCK": 6,
+       "SL": 1
+      },
+      "long_short": [
+       2,
+       5
+      ],
+      "cost_mean": 0.04600471775924297
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F15_ORB@30m": {
+     "select": {
+      "entries": 27,
+      "weekdays": 1043,
+      "per_weekday": 0.0259,
+      "win_pct": 74.07,
+      "roe_mean": -0.00888341056363453,
+      "pre_mean": 0.03344149210586279,
+      "payoff": 0.32157178442506157,
+      "growth_log": -0.2608188054703438,
+      "usd": 770.4205029494984,
+      "worst_dd": 0.5378956353015305,
+      "exits": {
+       "LOCK": 21,
+       "SL": 5,
+       "JUDGE": 1
+      },
+      "long_short": [
+       6,
+       21
+      ],
+      "cost_mean": 0.04232490266949732
+     },
+     "confirm": {
+      "entries": 7,
+      "weekdays": 456,
+      "per_weekday": 0.0154,
+      "win_pct": 57.14,
+      "roe_mean": -0.16216976857098886,
+      "pre_mean": -0.1204061643257088,
+      "payoff": 0.18185287474214096,
+      "growth_log": -0.5263903279209972,
+      "usd": 590.7334799037714,
+      "worst_dd": 0.4389386343879659,
+      "exits": {
+       "LOCK": 4,
+       "SL": 3
+      },
+      "long_short": [
+       3,
+       4
+      ],
+      "cost_mean": 0.04176360424528005
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F16_FIB382@1h": {
+     "select": {
+      "entries": 116,
+      "weekdays": 1043,
+      "per_weekday": 0.1112,
+      "win_pct": 76.72,
+      "roe_mean": -0.01349401816611489,
+      "pre_mean": 0.02997669936156968,
+      "payoff": 0.2654368355536538,
+      "growth_log": -1.3252983687879318,
+      "usd": 265.72366361243036,
+      "worst_dd": 0.9273784089242674,
+      "exits": {
+       "LOCK": 91,
+       "SL": 25
+      },
+      "long_short": [
+       53,
+       63
+      ],
+      "cost_mean": 0.043470717527684555
+     },
+     "confirm": {
+      "entries": 38,
+      "weekdays": 456,
+      "per_weekday": 0.0833,
+      "win_pct": 68.42,
+      "roe_mean": -0.03336935037922253,
+      "pre_mean": 0.011810365675554888,
+      "payoff": 0.3352592157200547,
+      "growth_log": -0.756563419704698,
+      "usd": 469.27636499386364,
+      "worst_dd": 0.6567031603867237,
+      "exits": {
+       "LOCK": 26,
+       "SL": 9,
+       "REV": 3
+      },
+      "long_short": [
+       19,
+       19
+      ],
+      "cost_mean": 0.04517971605477741
+     },
+     "live": {
+      "entries": 1,
+      "weekdays": 14,
+      "per_weekday": 0.0714,
+      "win_pct": 100.0,
+      "roe_mean": 0.16722905663607426,
+      "pre_mean": 0.2090492554410095,
+      "payoff": null,
+      "growth_log": 0.06474939514061341,
+      "usd": 1066.8916226544295,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 1
+      },
+      "long_short": [
+       0,
+       1
+      ],
+      "cost_mean": 0.04182019880493523
+     }
+    },
+    "F16_FIB382@30m": {
+     "select": {
+      "entries": 386,
+      "weekdays": 1043,
+      "per_weekday": 0.3701,
+      "win_pct": 76.68,
+      "roe_mean": -0.01395127577021941,
+      "pre_mean": 0.03046455206370892,
+      "payoff": 0.2632167550978203,
+      "growth_log": -4.320577746719197,
+      "usd": 13.292201797626532,
+      "worst_dd": 0.9920356471509846,
+      "exits": {
+       "LOCK": 296,
+       "SL": 76,
+       "JUDGE": 3,
+       "REV": 11
+      },
+      "long_short": [
+       159,
+       227
+      ],
+      "cost_mean": 0.04441582783392833
+     },
+     "confirm": {
+      "entries": 167,
+      "weekdays": 456,
+      "per_weekday": 0.3662,
+      "win_pct": 71.86,
+      "roe_mean": -0.0594998520714215,
+      "pre_mean": -0.015253955218561698,
+      "payoff": 0.2224797211747576,
+      "growth_log": -5.1536547950622555,
+      "usd": 5.778247776791121,
+      "worst_dd": 0.994828830805887,
+      "exits": {
+       "LOCK": 120,
+       "SL": 45,
+       "JUDGE": 1,
+       "REV": 1
+      },
+      "long_short": [
+       57,
+       110
+      ],
+      "cost_mean": 0.044245896852859797
+     },
+     "live": {
+      "entries": 4,
+      "weekdays": 14,
+      "per_weekday": 0.2857,
+      "win_pct": 100.0,
+      "roe_mean": 0.1133066545215611,
+      "pre_mean": 0.15887811494369408,
+      "payoff": null,
+      "growth_log": 0.1768950929669162,
+      "usd": 1193.5058793985775,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 4
+      },
+      "long_short": [
+       3,
+       1
+      ],
+      "cost_mean": 0.04557146042213297
+     }
+    },
+    "F16_FIB500@1h": {
+     "select": {
+      "entries": 161,
+      "weekdays": 1043,
+      "per_weekday": 0.1544,
+      "win_pct": 77.02,
+      "roe_mean": -0.021942504022145468,
+      "pre_mean": 0.022364259206996303,
+      "payoff": 0.24002508867649222,
+      "growth_log": -2.4062707428093004,
+      "usd": 90.15086422923693,
+      "worst_dd": 0.9408351284643314,
+      "exits": {
+       "LOCK": 124,
+       "SL": 36,
+       "REV": 1
+      },
+      "long_short": [
+       80,
+       81
+      ],
+      "cost_mean": 0.044306763229141774
+     },
+     "confirm": {
+      "entries": 63,
+      "weekdays": 456,
+      "per_weekday": 0.1382,
+      "win_pct": 61.9,
+      "roe_mean": -0.11538611238033458,
+      "pre_mean": -0.07149037616875072,
+      "payoff": 0.23205067008950683,
+      "growth_log": -3.485080840541954,
+      "usd": 30.65128046292271,
+      "worst_dd": 0.9706940650810846,
+      "exits": {
+       "LOCK": 39,
+       "SL": 23,
+       "REV": 1
+      },
+      "long_short": [
+       28,
+       35
+      ],
+      "cost_mean": 0.04389573621158383
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F3_BOS@1h#ds-F3_BOS-1h-1": {
+     "select": {
+      "entries": 2,
+      "weekdays": 1043,
+      "per_weekday": 0.0019,
+      "win_pct": 50.0,
+      "roe_mean": -0.19078526291781797,
+      "pre_mean": -0.15678778763527856,
+      "payoff": 0.21725375671011168,
+      "growth_log": -0.175411677279958,
+      "usd": 839.1115065113202,
+      "worst_dd": 0.1949906647814199,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.03399747528253941
+     },
+     "confirm": {
+      "entries": 1,
+      "weekdays": 456,
+      "per_weekday": 0.0022,
+      "win_pct": 0.0,
+      "roe_mean": -0.5004207299459872,
+      "pre_mean": -0.45800000000000285,
+      "payoff": null,
+      "growth_log": -0.22335393841701795,
+      "usd": 799.8317080216051,
+      "worst_dd": 0.20016829197839492,
+      "exits": {
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       1
+      ],
+      "cost_mean": 0.04242072994598431
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F3_BOS@30m": {
+     "select": {
+      "entries": 42,
+      "weekdays": 1043,
+      "per_weekday": 0.0403,
+      "win_pct": 64.29,
+      "roe_mean": -0.10282586293404948,
+      "pre_mean": -0.06081818974117243,
+      "payoff": 0.20920240961731426,
+      "growth_log": -2.056212014644494,
+      "usd": 127.93767922983353,
+      "worst_dd": 0.8953305918537672,
+      "exits": {
+       "LOCK": 28,
+       "SL": 13,
+       "JUDGE": 1
+      },
+      "long_short": [
+       18,
+       24
+      ],
+      "cost_mean": 0.04200767319287706
+     },
+     "confirm": {
+      "entries": 29,
+      "weekdays": 456,
+      "per_weekday": 0.0636,
+      "win_pct": 79.31,
+      "roe_mean": -0.017111925321385824,
+      "pre_mean": 0.025629585733786608,
+      "payoff": 0.21646947830947708,
+      "growth_log": -0.35196547057689037,
+      "usd": 703.3044062524958,
+      "worst_dd": 0.6069186912810655,
+      "exits": {
+       "LOCK": 23,
+       "SL": 5,
+       "REV": 1
+      },
+      "long_short": [
+       9,
+       20
+      ],
+      "cost_mean": 0.042741511055172425
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F3_BOS_ZONE@30m": {
+     "select": {
+      "entries": 153,
+      "weekdays": 1043,
+      "per_weekday": 0.1467,
+      "win_pct": 71.24,
+      "roe_mean": -0.05233591902933661,
+      "pre_mean": -0.008211646314329414,
+      "payoff": 0.24739383511480695,
+      "growth_log": -4.273683115445287,
+      "usd": 13.930381349349574,
+      "worst_dd": 0.9913276060979005,
+      "exits": {
+       "LOCK": 110,
+       "SL": 39,
+       "JUDGE": 1,
+       "REV": 3
+      },
+      "long_short": [
+       71,
+       82
+      ],
+      "cost_mean": 0.0441242727150072
+     },
+     "confirm": {
+      "entries": 62,
+      "weekdays": 456,
+      "per_weekday": 0.136,
+      "win_pct": 77.42,
+      "roe_mean": -0.007766304733123549,
+      "pre_mean": 0.03506498245801084,
+      "payoff": 0.2704901660911838,
+      "growth_log": -0.5684793155959789,
+      "usd": 566.3860786292528,
+      "worst_dd": 0.6054922073337695,
+      "exits": {
+       "LOCK": 48,
+       "SL": 13,
+       "REV": 1
+      },
+      "long_short": [
+       22,
+       40
+      ],
+      "cost_mean": 0.04283128719113437
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F4_PULL_RSI@1h": {
+     "select": {
+      "entries": 42,
+      "weekdays": 1043,
+      "per_weekday": 0.0403,
+      "win_pct": 59.52,
+      "roe_mean": -0.09701429177281282,
+      "pre_mean": -0.0537981451203987,
+      "payoff": 0.33348776680724923,
+      "growth_log": -2.0592840896272313,
+      "usd": 127.5452481835573,
+      "worst_dd": 0.8886293586726237,
+      "exits": {
+       "LOCK": 26,
+       "SL": 16
+      },
+      "long_short": [
+       20,
+       22
+      ],
+      "cost_mean": 0.04321614665241412
+     },
+     "confirm": {
+      "entries": 17,
+      "weekdays": 456,
+      "per_weekday": 0.0373,
+      "win_pct": 88.24,
+      "roe_mean": 0.036962500683843255,
+      "pre_mean": 0.08140261299899727,
+      "payoff": 0.2172788809824424,
+      "growth_log": 0.1898827655710511,
+      "usd": 1209.1078402807982,
+      "worst_dd": 0.20025388019450108,
+      "exits": {
+       "LOCK": 15,
+       "SL": 2
+      },
+      "long_short": [
+       10,
+       7
+      ],
+      "cost_mean": 0.04444011231515402
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F4_PULL_RSI@30m": {
+     "select": {
+      "entries": 25,
+      "weekdays": 1043,
+      "per_weekday": 0.024,
+      "win_pct": 80.0,
+      "roe_mean": -0.005606879797704205,
+      "pre_mean": 0.03904448169394366,
+      "payoff": 0.23598033552825093,
+      "growth_log": -0.19717915495403282,
+      "usd": 821.0435261203793,
+      "worst_dd": 0.5390713694207274,
+      "exits": {
+       "LOCK": 20,
+       "SL": 5
+      },
+      "long_short": [
+       14,
+       11
+      ],
+      "cost_mean": 0.044651361491647855
+     },
+     "confirm": {
+      "entries": 18,
+      "weekdays": 456,
+      "per_weekday": 0.0395,
+      "win_pct": 55.56,
+      "roe_mean": -0.09797430330293438,
+      "pre_mean": -0.05532112739317715,
+      "payoff": 0.37043424759592447,
+      "growth_log": -0.8699480354722369,
+      "usd": 418.9733204327111,
+      "worst_dd": 0.6491283021085683,
+      "exits": {
+       "LOCK": 11,
+       "SL": 6,
+       "JUDGE": 1
+      },
+      "long_short": [
+       6,
+       12
+      ],
+      "cost_mean": 0.04265317590975722
+     },
+     "live": {
+      "entries": 1,
+      "weekdays": 14,
+      "per_weekday": 0.0714,
+      "win_pct": 100.0,
+      "roe_mean": 0.09629872906722958,
+      "pre_mean": 0.13841486537732317,
+      "payoff": null,
+      "growth_log": 0.03779613317752995,
+      "usd": 1038.5194916268917,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 1
+      },
+      "long_short": [
+       1,
+       0
+      ],
+      "cost_mean": 0.04211613631009359
+     }
+    },
+    "F8_VWICK@1h": {
+     "select": {
+      "entries": 126,
+      "weekdays": 1043,
+      "per_weekday": 0.1208,
+      "win_pct": 73.81,
+      "roe_mean": -0.031435640717994255,
+      "pre_mean": 0.012422933277492202,
+      "payoff": 0.264379084784361,
+      "growth_log": -2.4240546306377055,
+      "usd": 88.56180309500047,
+      "worst_dd": 0.9168692887219304,
+      "exits": {
+       "LOCK": 95,
+       "SL": 30,
+       "JUDGE": 1
+      },
+      "long_short": [
+       77,
+       49
+      ],
+      "cost_mean": 0.043858573995486455
+     },
+     "confirm": {
+      "entries": 41,
+      "weekdays": 456,
+      "per_weekday": 0.0899,
+      "win_pct": 75.61,
+      "roe_mean": -0.023665932569377584,
+      "pre_mean": 0.0216496933549527,
+      "payoff": 0.25902365714263886,
+      "growth_log": -0.661580867738018,
+      "usd": 516.0349063941005,
+      "worst_dd": 0.7296514504631304,
+      "exits": {
+       "LOCK": 32,
+       "SL": 9
+      },
+      "long_short": [
+       21,
+       20
+      ],
+      "cost_mean": 0.045315625924330284
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F8_VWICK@30m": {
+     "select": {
+      "entries": 225,
+      "weekdays": 1043,
+      "per_weekday": 0.2157,
+      "win_pct": 76.89,
+      "roe_mean": -0.010248545417563438,
+      "pre_mean": 0.03345159526424674,
+      "payoff": 0.26965842462773604,
+      "growth_log": -2.153239910259121,
+      "usd": 116.10737026415543,
+      "worst_dd": 0.927470117027446,
+      "exits": {
+       "LOCK": 176,
+       "SL": 40,
+       "JUDGE": 9
+      },
+      "long_short": [
+       106,
+       119
+      ],
+      "cost_mean": 0.04370014068181017
+     },
+     "confirm": {
+      "entries": 103,
+      "weekdays": 456,
+      "per_weekday": 0.2259,
+      "win_pct": 70.87,
+      "roe_mean": -0.039321545827395735,
+      "pre_mean": 0.004988384965954054,
+      "payoff": 0.28422334041444863,
+      "growth_log": -2.2965315635958308,
+      "usd": 100.60718890354742,
+      "worst_dd": 0.9214893320616376,
+      "exits": {
+       "LOCK": 74,
+       "SL": 23,
+       "JUDGE": 5,
+       "REV": 1
+      },
+      "long_short": [
+       46,
+       57
+      ],
+      "cost_mean": 0.04430993079334978
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": -0.187265556872991,
+      "pre_mean": -0.14498379999999922,
+      "payoff": 0.2515675483979097,
+      "growth_log": -0.1742249302521713,
+      "usd": 840.107910720579,
+      "worst_dd": 0.20016829197839447,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.04228175687299178
+     }
+    },
+    "F9_BREAKER@1h": {
+     "select": {
+      "entries": 127,
+      "weekdays": 1043,
+      "per_weekday": 0.1218,
+      "win_pct": 71.65,
+      "roe_mean": -0.041202982483922734,
+      "pre_mean": 0.004036377753726383,
+      "payoff": 0.27362532593171107,
+      "growth_log": -3.0043682983668205,
+      "usd": 49.57005792668493,
+      "worst_dd": 0.9614500125395065,
+      "exits": {
+       "LOCK": 92,
+       "SL": 32,
+       "JUDGE": 1,
+       "REV": 2
+      },
+      "long_short": [
+       49,
+       78
+      ],
+      "cost_mean": 0.045239360237649115
+     },
+     "confirm": {
+      "entries": 55,
+      "weekdays": 456,
+      "per_weekday": 0.1206,
+      "win_pct": 72.73,
+      "roe_mean": -0.04726696983125075,
+      "pre_mean": -0.0014370537690990433,
+      "payoff": 0.2312927943406157,
+      "growth_log": -1.3831819364622726,
+      "usd": 250.7793183200655,
+      "worst_dd": 0.8593355044798291,
+      "exits": {
+       "LOCK": 40,
+       "SL": 13,
+       "REV": 2
+      },
+      "long_short": [
+       20,
+       35
+      ],
+      "cost_mean": 0.04582991606215171
+     },
+     "live": {
+      "entries": 1,
+      "weekdays": 14,
+      "per_weekday": 0.0714,
+      "win_pct": 0.0,
+      "roe_mean": -0.5004109265853159,
+      "pre_mean": -0.4440000000000044,
+      "payoff": null,
+      "growth_log": -0.22334903571734174,
+      "usd": 799.8356293658736,
+      "worst_dd": 0.2001643706341264,
+      "exits": {
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       1
+      ],
+      "cost_mean": 0.056410926585311494
+     }
+    },
+    "F9_FVG@1h#ds-F9_FVG-1h-1": {
+     "select": {
+      "entries": 43,
+      "weekdays": 1043,
+      "per_weekday": 0.0412,
+      "win_pct": 74.42,
+      "roe_mean": -0.03452033290486276,
+      "pre_mean": 0.010046808215722321,
+      "payoff": 0.2424950337875132,
+      "growth_log": -0.8616621131515788,
+      "usd": 422.45932324981163,
+      "worst_dd": 0.7009321988685171,
+      "exits": {
+       "LOCK": 33,
+       "SL": 10
+      },
+      "long_short": [
+       23,
+       20
+      ],
+      "cost_mean": 0.04456714112058507
+     },
+     "confirm": {
+      "entries": 7,
+      "weekdays": 456,
+      "per_weekday": 0.0154,
+      "win_pct": 57.14,
+      "roe_mean": -0.1465670527330467,
+      "pre_mean": -0.10447433899971001,
+      "payoff": 0.23733806344032002,
+      "growth_log": -0.4846223426059058,
+      "usd": 615.9297632756334,
+      "worst_dd": 0.48824171472484057,
+      "exits": {
+       "LOCK": 4,
+       "SL": 3
+      },
+      "long_short": [
+       2,
+       5
+      ],
+      "cost_mean": 0.042092713733336715
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "F9_IFVG@1h": {
+     "select": {
+      "entries": 105,
+      "weekdays": 1043,
+      "per_weekday": 0.1007,
+      "win_pct": 72.38,
+      "roe_mean": -0.03855129845687404,
+      "pre_mean": 0.00511632432111767,
+      "payoff": 0.27050807990809067,
+      "growth_log": -2.374949174946442,
+      "usd": 93.01921679719817,
+      "worst_dd": 0.9366232225418979,
+      "exits": {
+       "LOCK": 76,
+       "SL": 27,
+       "REV": 2
+      },
+      "long_short": [
+       48,
+       57
+      ],
+      "cost_mean": 0.04366762277799171
+     },
+     "confirm": {
+      "entries": 53,
+      "weekdays": 456,
+      "per_weekday": 0.1162,
+      "win_pct": 64.15,
+      "roe_mean": -0.08603418392459651,
+      "pre_mean": -0.04267308012542926,
+      "payoff": 0.27350947765857575,
+      "growth_log": -2.2787010381417927,
+      "usd": 102.41715632830211,
+      "worst_dd": 0.9095689247825891,
+      "exits": {
+       "LOCK": 34,
+       "SL": 17,
+       "REV": 2
+      },
+      "long_short": [
+       26,
+       27
+      ],
+      "cost_mean": 0.04336110379916724
+     },
+     "live": {
+      "entries": 3,
+      "weekdays": 14,
+      "per_weekday": 0.2143,
+      "win_pct": 66.67,
+      "roe_mean": -0.10231547622197347,
+      "pre_mean": -0.055869576107149634,
+      "payoff": 0.19279523049009287,
+      "growth_log": -0.14733777328553485,
+      "usd": 863.0024290145878,
+      "worst_dd": 0.19983181195760802,
+      "exits": {
+       "LOCK": 2,
+       "SL": 1
+      },
+      "long_short": [
+       1,
+       2
+      ],
+      "cost_mean": 0.04644590011482382
+     }
+    },
+    "F9_IFVG@30m": {
+     "select": {
+      "entries": 171,
+      "weekdays": 1043,
+      "per_weekday": 0.164,
+      "win_pct": 64.91,
+      "roe_mean": -0.050348967904744586,
+      "pre_mean": -0.006154326912057895,
+      "payoff": 0.33335432910109475,
+      "growth_log": -4.551822496004435,
+      "usd": 10.547963234869378,
+      "worst_dd": 0.9916360639505188,
+      "exits": {
+       "LOCK": 113,
+       "SL": 38,
+       "JUDGE": 4,
+       "REV": 16
+      },
+      "long_short": [
+       65,
+       106
+      ],
+      "cost_mean": 0.04419464099268668
+     },
+     "confirm": {
+      "entries": 74,
+      "weekdays": 456,
+      "per_weekday": 0.1623,
+      "win_pct": 68.92,
+      "roe_mean": -0.04143187937720389,
+      "pre_mean": 0.0022213206995201516,
+      "payoff": 0.3006827782964395,
+      "growth_log": -1.6798914158972107,
+      "usd": 186.39421438914312,
+      "worst_dd": 0.888243655091882,
+      "exits": {
+       "LOCK": 50,
+       "SL": 15,
+       "JUDGE": 2,
+       "REV": 7
+      },
+      "long_short": [
+       32,
+       42
+      ],
+      "cost_mean": 0.04365320007672402
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": 0.017033039003182877,
+      "pre_mean": 0.06594620215475078,
+      "payoff": 1.4601090600668192,
+      "growth_log": 0.012270200737691,
+      "usd": 1012.3457884933624,
+      "worst_dd": 0.029615655037454558,
+      "exits": {
+       "LOCK": 1,
+       "END": 1
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.04891316315156791
+     }
+    },
+    "N05_PSAR_POC@1h": {
+     "select": {
+      "entries": 48,
+      "weekdays": 1043,
+      "per_weekday": 0.046,
+      "win_pct": 68.75,
+      "roe_mean": -0.06334836209227658,
+      "pre_mean": -0.019305988782117867,
+      "payoff": 0.2602480284403522,
+      "growth_log": -1.589731529219939,
+      "usd": 203.98036715205615,
+      "worst_dd": 0.8568196679219835,
+      "exits": {
+       "LOCK": 34,
+       "SL": 14
+      },
+      "long_short": [
+       27,
+       21
+      ],
+      "cost_mean": 0.0440423733101587
+     },
+     "confirm": {
+      "entries": 14,
+      "weekdays": 456,
+      "per_weekday": 0.0307,
+      "win_pct": 71.43,
+      "roe_mean": -0.05800898308289302,
+      "pre_mean": -0.014001520973475623,
+      "payoff": 0.2372998547943761,
+      "growth_log": -0.42931408502678403,
+      "usd": 650.9554417121421,
+      "worst_dd": 0.4411993200568819,
+      "exits": {
+       "LOCK": 10,
+       "SL": 4
+      },
+      "long_short": [
+       5,
+       9
+      ],
+      "cost_mean": 0.04400746210941738
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "N05_PSAR_POC@30m": {
+     "select": {
+      "entries": 79,
+      "weekdays": 1043,
+      "per_weekday": 0.0757,
+      "win_pct": 64.56,
+      "roe_mean": -0.09805191574864346,
+      "pre_mean": -0.0545701567558815,
+      "payoff": 0.22262343650982977,
+      "growth_log": -3.7268436830266003,
+      "usd": 24.068684469895615,
+      "worst_dd": 0.9775832925441246,
+      "exits": {
+       "LOCK": 52,
+       "SL": 24,
+       "JUDGE": 2,
+       "REV": 1
+      },
+      "long_short": [
+       47,
+       32
+      ],
+      "cost_mean": 0.043481758992761944
+     },
+     "confirm": {
+      "entries": 29,
+      "weekdays": 456,
+      "per_weekday": 0.0636,
+      "win_pct": 75.86,
+      "roe_mean": 0.0036359782618489754,
+      "pre_mean": 0.04566936272838134,
+      "payoff": 0.3309555712997551,
+      "growth_log": -0.10327033756486875,
+      "usd": 901.8831276341344,
+      "worst_dd": 0.40980926337764034,
+      "exits": {
+       "LOCK": 22,
+       "SL": 5,
+       "REV": 2
+      },
+      "long_short": [
+       17,
+       12
+      ],
+      "cost_mean": 0.04203338446653236
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "N06_MACD_ORB@1h": {
+     "select": {
+      "entries": 20,
+      "weekdays": 1043,
+      "per_weekday": 0.0192,
+      "win_pct": 90.0,
+      "roe_mean": 0.055477872265425075,
+      "pre_mean": 0.10181594465870913,
+      "payoff": 0.2343815899623284,
+      "growth_log": 0.37403912367119974,
+      "usd": 1453.5940192788548,
+      "worst_dd": 0.20016829197839692,
+      "exits": {
+       "LOCK": 18,
+       "SL": 2
+      },
+      "long_short": [
+       7,
+       13
+      ],
+      "cost_mean": 0.04633807239328406
+     },
+     "confirm": {
+      "entries": 2,
+      "weekdays": 456,
+      "per_weekday": 0.0044,
+      "win_pct": 0.0,
+      "roe_mean": -0.4992220773252768,
+      "pre_mean": -0.4510000000000036,
+      "payoff": null,
+      "growth_log": -0.44550969011822883,
+      "usd": 640.4977374551161,
+      "worst_dd": 0.35950226254488393,
+      "exits": {
+       "SL": 2
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04822207732527313
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "N06_MACD_ORB@30m": {
+     "select": {
+      "entries": 23,
+      "weekdays": 1043,
+      "per_weekday": 0.0221,
+      "win_pct": 52.17,
+      "roe_mean": -0.16929949940051053,
+      "pre_mean": -0.12684137617397695,
+      "payoff": 0.23729044839363142,
+      "growth_log": -1.8089824261099863,
+      "usd": 163.8207517364335,
+      "worst_dd": 0.8361792482635665,
+      "exits": {
+       "LOCK": 12,
+       "SL": 10,
+       "REV": 1
+      },
+      "long_short": [
+       5,
+       18
+      ],
+      "cost_mean": 0.042458123226533584
+     },
+     "confirm": {
+      "entries": 23,
+      "weekdays": 456,
+      "per_weekday": 0.0504,
+      "win_pct": 91.3,
+      "roe_mean": 0.07642942358419784,
+      "pre_mean": 0.12147249968679139,
+      "payoff": 0.26279254818674125,
+      "growth_log": 0.6247127297751602,
+      "usd": 1867.7093430763284,
+      "worst_dd": 0.19983573061387605,
+      "exits": {
+       "LOCK": 21,
+       "SL": 2
+      },
+      "long_short": [
+       9,
+       14
+      ],
+      "cost_mean": 0.04504307610259353
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    },
+    "N19_FIB_CHOP@1h": {
+     "select": {
+      "entries": 67,
+      "weekdays": 1043,
+      "per_weekday": 0.0642,
+      "win_pct": 64.18,
+      "roe_mean": -0.07905709364705175,
+      "pre_mean": -0.03604321562343826,
+      "payoff": 0.2832556758730556,
+      "growth_log": -2.6761457389587147,
+      "usd": 68.82792436719004,
+      "worst_dd": 0.936194189042234,
+      "exits": {
+       "LOCK": 46,
+       "SL": 21
+      },
+      "long_short": [
+       17,
+       50
+      ],
+      "cost_mean": 0.0430138780236135
+     },
+     "confirm": {
+      "entries": 17,
+      "weekdays": 456,
+      "per_weekday": 0.0373,
+      "win_pct": 82.35,
+      "roe_mean": -0.003684626012182477,
+      "pre_mean": 0.04191544652132986,
+      "payoff": 0.20532762658539638,
+      "growth_log": -0.10731173012857653,
+      "usd": 898.2456191196175,
+      "worst_dd": 0.24203135940860165,
+      "exits": {
+       "LOCK": 14,
+       "SL": 3
+      },
+      "long_short": [
+       8,
+       9
+      ],
+      "cost_mean": 0.045600072533512344
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": -0.18626995617299325,
+      "pre_mean": -0.13698240000000306,
+      "payoff": 0.25554660298306625,
+      "growth_log": -0.1734669216865417,
+      "usd": 840.7449611272879,
+      "worst_dd": 0.20016829197839636,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.04928755617299022
+     }
+    },
+    "S3_CMO_SANDWICH@1h": {
+     "select": {
+      "entries": 38,
+      "weekdays": 1043,
+      "per_weekday": 0.0364,
+      "win_pct": 71.05,
+      "roe_mean": -0.042210764511953346,
+      "pre_mean": 0.0013131531671710895,
+      "payoff": 0.28045791781099577,
+      "growth_log": -0.9181413266370563,
+      "usd": 399.26044661271465,
+      "worst_dd": 0.7494152131044365,
+      "exits": {
+       "LOCK": 27,
+       "SL": 10,
+       "REV": 1
+      },
+      "long_short": [
+       20,
+       18
+      ],
+      "cost_mean": 0.04352391767912444
+     },
+     "confirm": {
+      "entries": 19,
+      "weekdays": 456,
+      "per_weekday": 0.0417,
+      "win_pct": 63.16,
+      "roe_mean": -0.0926296452417685,
+      "pre_mean": -0.048568684040945644,
+      "payoff": 0.23058527757236197,
+      "growth_log": -0.8349453803032989,
+      "usd": 433.8981801727762,
+      "worst_dd": 0.5848916766739882,
+      "exits": {
+       "LOCK": 12,
+       "SL": 4,
+       "REV": 3
+      },
+      "long_short": [
+       7,
+       12
+      ],
+      "cost_mean": 0.044060961200822854
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 50.0,
+      "roe_mean": -0.19716215787299085,
+      "pre_mean": -0.15501419999999877,
+      "payoff": 0.21201442676336218,
+      "growth_log": -0.18179119526598203,
+      "usd": 833.7754184954289,
+      "worst_dd": 0.20016829197839292,
+      "exits": {
+       "LOCK": 1,
+       "SL": 1
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04214795787299205
+     }
+    },
+    "S3_CMO_SANDWICH@30m": {
+     "select": {
+      "entries": 106,
+      "weekdays": 1043,
+      "per_weekday": 0.1016,
+      "win_pct": 70.75,
+      "roe_mean": -0.041883511900576605,
+      "pre_mean": 0.0020001271408650787,
+      "payoff": 0.28555824630069965,
+      "growth_log": -2.5489683758564334,
+      "usd": 78.16225849640425,
+      "worst_dd": 0.9408801472318279,
+      "exits": {
+       "LOCK": 74,
+       "SL": 27,
+       "JUDGE": 3,
+       "REV": 2
+      },
+      "long_short": [
+       37,
+       69
+      ],
+      "cost_mean": 0.04388363904144167
+     },
+     "confirm": {
+      "entries": 31,
+      "weekdays": 456,
+      "per_weekday": 0.068,
+      "win_pct": 70.97,
+      "roe_mean": -0.01786585006895111,
+      "pre_mean": 0.02704712447778017,
+      "payoff": 0.34507750298592343,
+      "growth_log": -0.40675674912669946,
+      "usd": 665.8061285271284,
+      "worst_dd": 0.6258947147227234,
+      "exits": {
+       "LOCK": 22,
+       "SL": 6,
+       "JUDGE": 1,
+       "REV": 2
+      },
+      "long_short": [
+       8,
+       23
+      ],
+      "cost_mean": 0.04491297454673129
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 100.0,
+      "roe_mean": 0.0767250513723192,
+      "pre_mean": 0.11875136913135187,
+      "payoff": null,
+      "growth_log": 0.06032876280229259,
+      "usd": 1062.1856962945585,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 2
+      },
+      "long_short": [
+       1,
+       1
+      ],
+      "cost_mean": 0.042026317759032664
+     }
+    },
+    "V45_AMB@1h": {
+     "select": {
+      "entries": 158,
+      "weekdays": 1043,
+      "per_weekday": 0.1515,
+      "win_pct": 69.62,
+      "roe_mean": -0.06371732327326413,
+      "pre_mean": -0.01988509712432358,
+      "payoff": 0.24951002424033053,
+      "growth_log": -5.274162657620963,
+      "usd": 5.122243985027328,
+      "worst_dd": 0.9979299303707262,
+      "exits": {
+       "LOCK": 111,
+       "SL": 47
+      },
+      "long_short": [
+       94,
+       64
+      ],
+      "cost_mean": 0.043832226148940556
+     },
+     "confirm": {
+      "entries": 58,
+      "weekdays": 456,
+      "per_weekday": 0.1272,
+      "win_pct": 82.76,
+      "roe_mean": 0.016984320973020644,
+      "pre_mean": 0.06086241141950926,
+      "payoff": 0.24944104229195774,
+      "growth_log": 0.09867494737561533,
+      "usd": 1103.707478231782,
+      "worst_dd": 0.4553919137857245,
+      "exits": {
+       "LOCK": 48,
+       "SL": 10
+      },
+      "long_short": [
+       33,
+       25
+      ],
+      "cost_mean": 0.04387809044648861
+     },
+     "live": {
+      "entries": 2,
+      "weekdays": 14,
+      "per_weekday": 0.1429,
+      "win_pct": 100.0,
+      "roe_mean": 0.09459477295062386,
+      "pre_mean": 0.1364803041351076,
+      "payoff": null,
+      "growth_log": 0.0741750213701171,
+      "usd": 1076.995286192263,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 2
+      },
+      "long_short": [
+       0,
+       2
+      ],
+      "cost_mean": 0.04188553118448373
+     }
+    },
+    "V45_AMB@30m": {
+     "select": {
+      "entries": 16,
+      "weekdays": 1043,
+      "per_weekday": 0.0153,
+      "win_pct": 68.75,
+      "roe_mean": -0.07096650151289893,
+      "pre_mean": -0.02807067018992103,
+      "payoff": 0.24806276514694675,
+      "growth_log": -0.5834690728971187,
+      "usd": 557.9594034635135,
+      "worst_dd": 0.5654878690118542,
+      "exits": {
+       "LOCK": 11,
+       "SL": 5
+      },
+      "long_short": [
+       11,
+       5
+      ],
+      "cost_mean": 0.0428958313229779
+     },
+     "confirm": {
+      "entries": 6,
+      "weekdays": 456,
+      "per_weekday": 0.0132,
+      "win_pct": 100.0,
+      "roe_mean": 0.123328099021634,
+      "pre_mean": 0.16773328681709407,
+      "payoff": null,
+      "growth_log": 0.28758217167782124,
+      "usd": 1333.2001389546087,
+      "worst_dd": 0.0,
+      "exits": {
+       "LOCK": 6
+      },
+      "long_short": [
+       3,
+       3
+      ],
+      "cost_mean": 0.044405187795460065
+     },
+     "live": {
+      "entries": 0,
+      "weekdays": 14,
+      "per_weekday": 0.0,
+      "growth_log": 0.0,
+      "usd": 1000.0
+     }
+    }
+   },
+   "run_s": 20.0,
    "verdicts_confirm": {
     "벌었다": false,
     "지금보다_낫다": false,
@@ -12612,7 +16963,7 @@
      }
     }
    },
-   "run_s": 17.8,
+   "run_s": 18.2,
    "verdicts_confirm": {
     "벌었다": false,
     "지금보다_낫다": false,
@@ -12831,7 +17182,7 @@
      }
     }
    },
-   "run_s": 0.4
+   "run_s": 0.3
   },
   "B0_woo": {
    "name": "B0_woo",
@@ -13809,7 +18160,7 @@
      }
     }
    },
-   "run_s": 7.7
+   "run_s": 8.0
   },
   "C0_woo": {
    "name": "C0_woo",
@@ -14573,7 +18924,7 @@
      }
     }
    },
-   "run_s": 7.6
+   "run_s": 7.7
   }
  },
  "judge_sets": {
@@ -14763,10 +19114,10 @@
   }
  },
  "timing_s": {
-  "solo_all": 47.5,
-  "solo_mean_run": 1.194078947368421,
-  "solo_mean_twin": 0.035131578947368416,
-  "baskets": 81.8,
-  "total": 144.4
+  "solo_all": 48.3,
+  "solo_mean_run": 1.1935897435897431,
+  "solo_mean_twin": 0.03641025641025641,
+  "baskets": 124.1,
+  "total": 186.7
  }
 }
