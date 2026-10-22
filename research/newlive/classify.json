@@ -1,0 +1,1837 @@
+{
+ "S2_ST_ROC": {
+  "name_ko": "슈퍼트렌드·ROC",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·6) 상승이고 ROC(9)가 0 위. 이번 봉에 슈퍼트렌드 상승 전환이나 ROC 0 상향 돌파가 나면 롱(숏은 반대)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.supertrend",
+   "state_rule": "+1: 슈퍼트렌드(10·6) 상승이고 ROC(9)>0, -1: 하락이고 ROC<0, 그 밖 0 (fg_indicators.roc)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.61,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "신호가 슈퍼트렌드 방향 전환이나 ROC 부호 전환이다. 추세 상태가 바뀌는 순간에 들어간다",
+  "view_def": "paperbot/strategy_view_defs/S2_ST_ROC.py"
+ },
+ "S5_DONCHIAN_MFI": {
+  "name_ko": "돈치안·MFI",
+  "group": "core",
+  "entry_rule": "종가가 직전 20봉 돈치안 상단을 위로 뚫고 MFI(14)가 30을 위로 넘는다(3봉 안). 숏은 하단 이탈과 MFI 70 하향",
+  "primary": "돌파",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 1.0,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "20봉 최고가(채널 상단) 돌파가 진입 조건이다",
+  "view_def": "paperbot/strategy_view_defs/S5_DONCHIAN_MFI.py"
+ },
+ "S6_EMA_DMI_ADX": {
+  "name_ko": "EMA·DMI·ADX",
+  "group": "core",
+  "entry_rule": "ADX 25 이상에서 종가의 EMA20 상향교차와 +DI의 -DI 상향교차가 2봉 안에 같이 나면 롱(숏은 반대)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "paperbot.trendjudge.vote_arrays",
+   "state_rule": "지금 추세판단 봇의 S6: 종가>EMA20이고 +DI>-DI면 +1, 반대면 -1 (fg_indicators.ema, fg_indicators.dmi_adx)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.57,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "EMA20 위아래 전환과 DI 교차, 둘 다 추세 방향 상태의 변화다",
+  "view_def": "paperbot/strategy_view_defs/S6_EMA_DMI_ADX.py"
+ },
+ "N01_ST_EMA": {
+  "name_ko": "슈퍼트렌드·EMA",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·6) 상승 중 EMA5가 EMA20을 상향교차(2봉 안). 이번 봉에 교차나 슈퍼트렌드 상승 전환",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.supertrend",
+   "state_rule": "+1: 슈퍼트렌드(10·6) 상승이고 EMA5>EMA20, -1: 반대, 그 밖 0 (fg_indicators.ema)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.62,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "이평 교차와 슈퍼트렌드 전환이 신호다",
+  "view_def": "paperbot/strategy_view_defs/N01_ST_EMA.py"
+ },
+ "N02_ST_KST": {
+  "name_ko": "슈퍼트렌드·KST",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·6) 상승 중 KST가 시그널선을 상향교차(2봉 안). 이번 봉에 교차나 슈퍼트렌드 상승 전환",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.supertrend",
+   "state_rule": "+1/-1: 슈퍼트렌드(10·6) 방향 (KST 선>시그널 상태를 더할 수 있음, fg_indicators.kst)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.63,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "KST 교차를 추세 방향으로만 쓰는 추세 추종이다. 상승 중 KST가 꺾였다 다시 교차하면 눌림 성격도 있다",
+  "view_def": "paperbot/strategy_view_defs/N02_ST_KST.py"
+ },
+ "N03_ADX_GC": {
+  "name_ko": "ADX·골든크로스",
+  "group": "core",
+  "entry_rule": "EMA50이 EMA200을 상향교차(골든크로스)하고 ADX가 25를 위로 넘는 일이 3봉 안에 같이 나면 롱(데드크로스면 숏)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.ema",
+   "state_rule": "+1: EMA50>EMA200, -1: EMA50<EMA200 (ADX 25 이상은 fg_indicators.dmi_adx로 강도)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.99,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "골든·데드크로스 자체가 추세 방향 전환이다",
+  "view_def": "paperbot/strategy_view_defs/N03_ADX_GC.py"
+ },
+ "N04_ST_KLINGER": {
+  "name_ko": "슈퍼트렌드·클링거",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·6) 상승 중 클링거가 시그널선을 상향교차(2봉 안). 이번 봉에 교차나 슈퍼트렌드 상승 전환",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.supertrend",
+   "state_rule": "+1/-1: 슈퍼트렌드(10·6) 방향 (클링거>시그널 상태를 더할 수 있음, fg_indicators.klinger_oscillator)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.61,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "N02와 같은 구조다. 클링거 교차를 추세 방향으로만 쓴다",
+  "view_def": "paperbot/strategy_view_defs/N04_ST_KLINGER.py"
+ },
+ "N07_ICHI_CMO": {
+  "name_ko": "일목·CMO",
+  "group": "core",
+  "entry_rule": "전환선이 기준선을 상향교차(3봉 안), 상승 구름(선행 A>B), CMO(14)가 0을 상향교차(3봉 안)하고 0 위",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.ichimoku",
+   "state_rule": "+1: 상승 구름이고 전환선>기준선(CMO>0을 더할 수 있음), -1: 반대, 그 밖 0"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.69,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "전환·기준선 교차와 CMO 0선 교차, 모두 추세 방향 전환 신호다",
+  "view_def": "paperbot/strategy_view_defs/N07_ICHI_CMO.py"
+ },
+ "N08_ICHI_WR": {
+  "name_ko": "일목·윌리엄스%R",
+  "group": "core",
+  "entry_rule": "전환선이 기준선을 상향교차(3봉 안), 상승 구름, 윌리엄스%R이 -80을 위로 넘음(3봉 안, 과매도 탈출)",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.ichimoku",
+   "state_rule": "+1: 상승 구름이고 전환선>기준선, -1: 반대, 그 밖 0"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.58,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "주 신호는 전환선·기준선 교차(추세 전환)다. %R 과매도 탈출이 함께라 눌림 성격도 있다",
+  "view_def": "paperbot/strategy_view_defs/N08_ICHI_WR.py"
+ },
+ "N09_ALLIG_AROON": {
+  "name_ko": "앨리게이터·아룬",
+  "group": "core",
+  "entry_rule": "앨리게이터 입술(SMA5)이 이빨·턱(SMA8·13) 위로 처음 올라오고 아룬 업이 다운을 상향교차(2봉 안)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.aroon",
+   "state_rule": "+1: SMA5>SMA8·SMA13이고 아룬 업>=다운, -1: 반대, 그 밖 0 (fg_indicators.sma)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.91,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "이평 정렬의 시작과 아룬 교차, 추세 방향 전환이다",
+  "view_def": "paperbot/strategy_view_defs/N09_ALLIG_AROON.py"
+ },
+ "N10_HA_PSAR": {
+  "name_ko": "하이킨아시·PSAR",
+  "group": "core",
+  "entry_rule": "하이킨아시가 양봉으로 바뀌고(아래꼬리 없음) PSAR가 가격 아래. 이번 봉에 색 전환이나 PSAR 상승 전환",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.parabolic_sar",
+   "state_rule": "+1: PSAR 상승(가격 아래)이고 하이킨아시 양봉, -1: 반대, 그 밖 0 (fg_fast.heikin_ashi)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.58,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "하이킨아시 색 전환과 PSAR 방향 전환이 신호다",
+  "view_def": "paperbot/strategy_view_defs/N10_HA_PSAR.py"
+ },
+ "N12_ICHI_AO": {
+  "name_ko": "일목·AO",
+  "group": "core",
+  "entry_rule": "전환선이 기준선을 상향교차(3봉 안), 상승 구름, AO가 0을 상향교차하거나 0 위에서 다시 오름(3봉 안), 지금 AO 0 위·상승",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "paperbot.trendjudge.vote_arrays",
+   "state_rule": "지금 추세판단 봇의 N12: 종가가 구름 전체 위이고 AO>0이면 +1, 구름 아래이고 AO<0이면 -1"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.86,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "전환·기준선 교차와 AO 0선 교차는 추세 전환이다. AO가 0 위에서 다시 오르는 경우는 눌림 뒤 재개다",
+  "view_def": "paperbot/strategy_view_defs/N12_ICHI_AO.py"
+ },
+ "N14_ICHI_RSI": {
+  "name_ko": "일목·RSI",
+  "group": "core",
+  "entry_rule": "전환선이 기준선을 상향교차(3봉 안), 상승 구름, 지금 RSI(14) 30 아래이고 반등(3봉 안)",
+  "primary": "눌림",
+  "secondary": "횡보·역추세",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.0,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "상승 구름 안에서 RSI 과매도 반등을 산다(추세 속 RSI 눌림). 구름은 26봉 늦은 값이고 추세 비율 0.0이라 역추세에 가깝다",
+  "view_def": "paperbot/strategy_view_defs/N14_ICHI_RSI.py"
+ },
+ "N17_KC_RSI": {
+  "name_ko": "켈트너·RSI",
+  "group": "core",
+  "entry_rule": "저가가 켈트너 하단(EMA20-2ATR) 근처에 닿고 RSI(14) 30 이하가 2봉 안에 같이 나면 롱(상단과 RSI 70이면 숏)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.0,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "추세 조건 없이 밴드 끝과 과매도·과매수에서 반대로 들어가는 평균회귀다",
+  "view_def": "paperbot/strategy_view_defs/N17_KC_RSI.py"
+ },
+ "N18_VWMA_MACD": {
+  "name_ko": "VWMA·MACD",
+  "group": "core",
+  "entry_rule": "MACD가 시그널을 상향교차, 종가가 VWMA20 위, 히스토그램 상승, MACD 0 위가 2봉 안에 같이",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.macd",
+   "state_rule": "+1: MACD>0이고 종가>VWMA20, -1: MACD<0이고 종가<VWMA20, 그 밖 0 (fg_indicators.vwma)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.86,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "MACD 교차를 0선 위(상승 추세)에서만 따라간다. 0선 위 재교차라 눌림 뒤 재개 성격도 있다",
+  "view_def": "paperbot/strategy_view_defs/N18_VWMA_MACD.py"
+ },
+ "N21_ST_RSI_ADX": {
+  "name_ko": "슈퍼트렌드·RSI·ADX",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·6) 상승 중 ADX가 25 아래로 내려가는 봉에 RSI가 30 아래에서 반등하면 롱(숏은 반대)",
+  "primary": "눌림",
+  "secondary": "횡보·역추세",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": null,
+  "trend_ratio_source": "측정값 없음",
+  "why": "상승 추세 속 RSI 과매도 반등이다(눌림). ADX가 25 아래로 꺾일 때라 추세가 식는 횡보 진입 성격도 있다. 신호가 매우 드물다",
+  "view_def": "paperbot/strategy_view_defs/N21_ST_RSI_ADX.py"
+ },
+ "N22_VORTEX_PSAR": {
+  "name_ko": "볼텍스·PSAR",
+  "group": "core",
+  "entry_rule": "볼텍스 VI+가 VI-를 상향교차하고 종가가 PSAR 위면 롱(숏은 반대)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.vortex_indicator",
+   "state_rule": "+1: VI+>VI-이고 종가>PSAR, -1: 반대, 그 밖 0 (fg_fast.parabolic_sar)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.51,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "VI 교차와 PSAR 위치, 추세 방향 상태의 변화다",
+  "view_def": "paperbot/strategy_view_defs/N22_VORTEX_PSAR.py"
+ },
+ "N23_HA_ST": {
+  "name_ko": "하이킨아시·슈퍼트렌드",
+  "group": "core",
+  "entry_rule": "하이킨아시 양봉(아래꼬리 없음)과 슈퍼트렌드(10·6) 상승이 처음 같이 성립한 봉에 롱(숏은 반대)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_fast.supertrend_v2",
+   "state_rule": "+1: 슈퍼트렌드(10·6) 상승이고 하이킨아시 양봉, -1: 반대, 그 밖 0 (fg_fast.heikin_ashi)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.72,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "하이킨아시 색과 슈퍼트렌드 방향이 같아지는 순간에 들어간다",
+  "view_def": "paperbot/strategy_view_defs/N23_HA_ST.py"
+ },
+ "N24_DMI": {
+  "name_ko": "DMI",
+  "group": "core",
+  "entry_rule": "ADX 25 이상에서 +DI가 -DI를 상향교차하면 롱, ADX 25 이하에서 -DI가 +DI를 상향교차하면 숏",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.adx_dmi",
+   "state_rule": "+1: +DI>-DI, -1: -DI>+DI (ADX는 강도)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.58,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "DI 교차가 곧 추세 방향 전환이다",
+  "view_def": "paperbot/strategy_view_defs/N24_DMI.py"
+ },
+ "N25_DST_CCI": {
+  "name_ko": "더블 슈퍼트렌드·CCI",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·6)·(20·6)가 둘 다 상승이거나 엇갈릴 때 CCI(20)가 -100을 위로 넘으면 롱(둘 다 하락이거나 엇갈릴 때 +100 하향이면 숏)",
+  "primary": "눌림",
+  "secondary": "횡보·역추세",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.16,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "신호의 약 85%는 두 슈퍼트렌드가 같은 방향일 때 CCI 과매도 탈출을 산다(추세 속 눌림). 엇갈림 구간 신호는 박스 평균회귀다",
+  "view_def": "paperbot/strategy_view_defs/N25_DST_CCI.py"
+ },
+ "S1_EMA_RSI_CHOP": {
+  "name_ko": "EMA·RSI·초피",
+  "group": "core",
+  "entry_rule": "3봉 안에 EMA5의 EMA20 상향교차, RSI 30 아래에서 반등, EMA34 기울기 0 위 전환이 모두 나오고 지금 EMA5>EMA20·기울기 상승",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.chop_zone_proxy",
+   "state_rule": "+1: EMA5>EMA20이고 EMA34 기울기 방향>0, -1: 반대, 그 밖 0 (fg_indicators.ema)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.83,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "이평 교차와 기울기 전환이 신호다. RSI 과매도 직후라 눌림 뒤 재개 성격도 있다",
+  "view_def": "paperbot/strategy_view_defs/S1_EMA_RSI_CHOP.py"
+ },
+ "S3_CMO_SANDWICH": {
+  "name_ko": "CMO·샌드위치 캔들",
+  "group": "core",
+  "entry_rule": "직전 5봉 하락 뒤 스틱 샌드위치(음-양-음, 저가가 같음) 반전 캔들과 CMO(14) 0 상향교차가 3봉 안. 숏은 반대",
+  "primary": "횡보·역추세",
+  "secondary": "추세(판단용)",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.cmo",
+   "state_rule": "+1: CMO(14)>0, -1: CMO<0 (반전 캔들은 상태가 아님)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.46,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "앞 5봉 움직임을 뒤집는 반전 캔들이 핵심이라 역추세다. CMO 0선 교차는 확인용이다",
+  "view_def": "paperbot/strategy_view_defs/S3_CMO_SANDWICH.py"
+ },
+ "S4_BB_BBP": {
+  "name_ko": "볼린저 스퀴즈·BBP",
+  "group": "core",
+  "entry_rule": "직전 5봉 안에 볼린저 폭이 100봉 하위 20%(스퀴즈)였고 종가가 상단 밴드를 위로 뚫음, 불베어파워>0",
+  "primary": "돌파",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.97,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "스퀴즈가 풀리며 밴드를 뚫는 돌파다",
+  "view_def": "paperbot/strategy_view_defs/S4_BB_BBP.py"
+ },
+ "N05_PSAR_POC": {
+  "name_ko": "PSAR·POC 캔들",
+  "group": "core",
+  "entry_rule": "저가가 POC(100봉 매물대 중심) 근처에 닿고 관통형 반전 캔들, 종가가 PSAR 위면 롱(POC 저항·먹구름형이면 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.71,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "미리 정한 가격대(POC)에 닿을 때의 반응을 산다. PSAR 위 조건이라 추세 쪽 자리다",
+  "view_def": "paperbot/strategy_view_defs/N05_PSAR_POC.py"
+ },
+ "N06_MACD_ORB": {
+  "name_ko": "MACD·시가범위 돌파",
+  "group": "core",
+  "entry_rule": "그날(UTC) 첫 봉 고가를 종가로 돌파(2봉 안), MACD 시그널 상향교차(2봉 안), MACD·히스토 0 위, 돌파 거리 1.5 ATR 이하",
+  "primary": "돌파",
+  "secondary": "추세(판단용)",
+  "judge_state": {
+   "possible": true,
+   "function": "fg_indicators.macd",
+   "state_rule": "+1: MACD>0이고 히스토그램>0, -1: 반대 (시가 범위 돌파는 판단 상태가 아님)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.91,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "하루 시가 범위 돌파가 진입이다. MACD는 확인용이다",
+  "view_def": "paperbot/strategy_view_defs/N06_MACD_ORB.py"
+ },
+ "N11_BREAKAWAY": {
+  "name_ko": "브레이크어웨이 패턴",
+  "group": "core",
+  "entry_rule": "직전 하락 뒤 5봉 브레이크어웨이(큰 음봉, 아래로 벌어짐, 작은 봉 2개, 큰 양봉) 반전 패턴이 완성된 봉에 롱(숏은 반대)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.29,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "앞 움직임을 뒤집는 반전 캔들 패턴이다. 추세 조건이 없다",
+  "view_def": "paperbot/strategy_view_defs/N11_BREAKAWAY.py"
+ },
+ "N13_3OUTSIDE": {
+  "name_ko": "쓰리 아웃사이드",
+  "group": "core",
+  "entry_rule": "직전 5봉 하락 뒤 쓰리 아웃사이드 업(장악형 + 확인 양봉), 2봉 안에 종가가 패턴 3봉 고가를 돌파하면 롱(숏은 반대)",
+  "primary": "횡보·역추세",
+  "secondary": "돌파",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.61,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "짧은 하락을 뒤집는 반전 패턴이다. 패턴 고가 돌파로 확인한다. 추세 조건이 없다",
+  "view_def": "paperbot/strategy_view_defs/N13_3OUTSIDE.py"
+ },
+ "N15_KC_AO": {
+  "name_ko": "켈트너·AO",
+  "group": "core",
+  "entry_rule": "직전 봉 저가가 켈트너 하단 아래, 이번 봉 종가는 하단 위로 복귀, AO>0이고 상승이면 롱(숏은 반대)",
+  "primary": "눌림",
+  "secondary": "횡보·역추세",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.89,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "AO 0 위(상승 모멘텀)에서 급히 내려온 꼬리를 산다(눌림). 밴드 밖에서 안으로 돌아오는 평균회귀 성격도 있다",
+  "view_def": "paperbot/strategy_view_defs/N15_KC_AO.py"
+ },
+ "N16_BBRSI": {
+  "name_ko": "볼린저 RSI",
+  "group": "core",
+  "entry_rule": "RSI를 볼린저 밴드에 얹은 선이 하단 밖에서 안으로 들어오며 시그널 상향교차, 또는 저점 다이버전스, 그리고 양봉",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.45,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "밴드 하단 복귀와 다이버전스, 평균회귀·반전이다",
+  "view_def": "paperbot/strategy_view_defs/N16_BBRSI.py"
+ },
+ "N19_FIB_CHOP": {
+  "name_ko": "피보나치·초피",
+  "group": "core",
+  "entry_rule": "직전 34봉(최근 3봉 제외) 범위의 50% 선에 저가가 닿고 종가는 위, 양봉, EMA34 기울기 상승(초록·파랑)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.94,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "피보나치 50% 되돌림 선이라는 미리 정한 자리에서 산다. 기울기 상승 조건으로 추세 방향이다",
+  "view_def": "paperbot/strategy_view_defs/N19_FIB_CHOP.py"
+ },
+ "N20_EMA9_CHOP": {
+  "name_ko": "EMA9·초피(숏)",
+  "group": "core",
+  "entry_rule": "ADX 20 미만(노랑·빨강 구간)에서 종가가 EMA9를 아래로 뚫으면 숏. 롱은 없음",
+  "primary": "추세(판단용)",
+  "secondary": "횡보·역추세",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "숏 전용이라 코드에 +1 상태가 없다. EMA9 위·아래는 fg_indicators.ema로 셀 수 있으나 이 매매법의 상태가 아니다"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "short",
+  "trend_ratio": 0.54,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "신호는 EMA9 아래 전환(짧은 추세 전환)이지만 ADX 20 미만 횡보장에서만 낸다. 어느 쪽이든 새 봇에서 진입은 안 한다",
+  "view_def": "paperbot/strategy_view_defs/N20_EMA9_CHOP.py"
+ },
+ "V39_ALL": {
+  "name_ko": "V3.9",
+  "group": "core",
+  "entry_rule": "슈퍼트렌드(10·3)·(10·6)·DMI20·기울기가 모두 상승인 추세에서 MACD 히스토가 0 아래에서 오르고 스토캐스틱이 50 아래에서 골든크로스(또는 DI16 교차, AC 첫 반등)",
+  "primary": "눌림",
+  "secondary": "추세(판단용)",
+  "judge_state": {
+   "possible": true,
+   "function": "paperbot.trendjudge.vote_arrays",
+   "state_rule": "지금 추세판단 봇의 V39: 슈퍼트렌드(10·3) 방향 +1/-1 (pine_indicators.exchange_supertrend)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.59,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "추세 상태는 조건이고 진입 순간은 MACD 음수 반등과 스토캐스틱 저점 교차, 곧 되돌림의 끝이다. 코드로는 눌림형이다",
+  "view_def": "paperbot/strategy_view_defs/V39_ALL.py"
+ },
+ "V45_AMB": {
+  "name_ko": "V4.5",
+  "group": "core",
+  "entry_rule": "상위 봉 슈퍼트렌드(14·6) 상승, 지금 봉은 두 슈퍼트렌드가 엇갈리고 EMA34 기울기 하락(되돌림 중), 스토캐스틱 저점 골든크로스와 MACD 음수 반등",
+  "primary": "눌림",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.09,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "상위 봉 추세 방향으로, 아래 봉이 거꾸로 내려왔다가 돌아서는 순간을 산다. 추세 비율이 낮은 것은 직전 20봉 하락 뒤에 산다는 뜻이다",
+  "view_def": "paperbot/strategy_view_defs/V45_AMB.py"
+ },
+ "OBV_S": {
+  "name_ko": "OBV 추세형",
+  "group": "core",
+  "entry_rule": "OBV가 30봉 평균 위, AC>0, STC 70 아래에서 스토캐스틱(11·15·9) 골든크로스면 롱(숏은 반대)",
+  "primary": "추세(판단용)",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": true,
+   "function": "paperbot.trendjudge.vote_arrays",
+   "state_rule": "지금 추세판단 봇의 OBV: OBV>30봉 평균이면 +1, 아래면 -1 (pine_indicators.obv, pine_indicators.pine_sma)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.58,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "OBV 추세 상태가 핵심 조건이다. 스토캐스틱 교차는 깊이 조건이 없는 타이밍이라 눌림으로 보기 어렵다",
+  "view_def": "paperbot/strategy_view_defs/OBV_S.py"
+ },
+ "OBV_B": {
+  "name_ko": "OBV 돌파형",
+  "group": "core",
+  "entry_rule": "OBV가 9봉 평균을 위로 교차, AC>0이고 상승, STC 70 미만이면 롱(숏은 반대)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "pine_indicators.obv",
+   "state_rule": "+1: OBV>9봉 평균, -1: 아래 (pine_indicators.pine_sma)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.27,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "OBV와 그 평균의 위아래 전환이 신호다. 이름은 돌파형이지만 가격 수준 돌파가 아니다",
+  "view_def": "paperbot/strategy_view_defs/OBV_B.py"
+ },
+ "DOGE": {
+  "name_ko": "도지 봇(친구분)",
+  "group": "core",
+  "entry_rule": "빠른 EMA>느린 EMA(0.15% 이상), 종가가 장기·단기 EMA 위, 초피 61.8 미만, RSI26>52에서 스토캐스틱RSI K<45 골든크로스면 롱(숏은 반대)",
+  "primary": "눌림",
+  "secondary": "추세(판단용)",
+  "judge_state": {
+   "possible": true,
+   "function": "doge_strategy.compute_indicators",
+   "state_rule": "+1: 빠른 EMA>느린 EMA(0.15% 이상)이고 종가>장기 EMA, -1: 반대, 그 밖 0"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.93,
+  "trend_ratio_source": "profiles.json trend_share (거래 기준, 15m·30m·1h·4h 평균)",
+  "why": "추세 정렬 조건 안에서 스토캐스틱RSI가 낮은 곳(K<45)에서 다시 오를 때 산다",
+  "view_def": "paperbot/strategy_view_defs/DOGE.py"
+ },
+ "F1_RSI_DIV": {
+  "name_ko": "RSI 다이버전스",
+  "group": "deepseek",
+  "entry_rule": "확인된 스윙 저점 두 개에서 가격은 낮아졌는데 RSI(14)는 높아지면 롱(고점은 숏). 스윙 확인 3봉 뒤",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.24,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "가격 움직임 반대로 들어가는 다이버전스 반전이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F1_RSI_DIV.py"
+ },
+ "F1_MOM_DIV": {
+  "name_ko": "모멘텀 다이버전스",
+  "group": "deepseek",
+  "entry_rule": "스윙 저점 두 개에서 가격은 낮아졌는데 모멘텀(10)은 높아지면 롱(고점은 숏)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.16,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "다이버전스 반전이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F1_MOM_DIV.py"
+ },
+ "F1_PVT_DIV": {
+  "name_ko": "PVT 다이버전스",
+  "group": "deepseek",
+  "entry_rule": "스윙 저점 두 개에서 가격은 낮아졌는데 PVT는 높아지면 롱(고점은 숏)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.39,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "거래량 지표 다이버전스 반전이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F1_PVT_DIV.py"
+ },
+ "F2_DEMARK": {
+  "name_ko": "디마크 피벗",
+  "group": "deepseek",
+  "entry_rule": "전날(UTC) 값으로 만든 지지선 S1에 저가가 닿고 종가가 위로 회복하면 롱(저항선 R1은 숏)",
+  "primary": "횡보·역추세",
+  "secondary": "자리",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.26,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "추세 조건 없이 지지에서 사고 저항에서 파는 범위 끝 반응이다. 디마크 소진(TD)이 아니라 피벗이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F2_DEMARK.py"
+ },
+ "F3_BOS": {
+  "name_ko": "구조 돌파(BOS)",
+  "group": "deepseek",
+  "entry_rule": "구조가 이미 상승일 때 종가가 마지막 확인된 스윙 고점을 넘으면 롱(하락 구조에서 스윙 저점 이탈은 숏)",
+  "primary": "돌파",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.96,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "스윙 구조 돌파(이어짐)에 들어간다",
+  "view_def": "paperbot/strategy_view_defs/DS_F3_BOS.py"
+ },
+ "F3_BOS_ZONE": {
+  "name_ko": "BOS 구간 되돌림",
+  "group": "deepseek",
+  "entry_rule": "구조 돌파 뒤 마지막 스윙 저점 봉의 범위(수요 구간)에 50봉 안 다시 닿고 반전 양봉, EMA200 위면 롱(숏은 반대)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.58,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "돌파가 남긴 수요·공급 구간에 되돌아올 때 산다",
+  "view_def": "paperbot/strategy_view_defs/DS_F3_BOS_ZONE.py"
+ },
+ "F3_HHHL": {
+  "name_ko": "고점·저점 높아짐",
+  "group": "deepseek",
+  "entry_rule": "새 스윙 저점이 확인될 때 직전 저점보다 높고(HL) 마지막 두 고점도 높아졌으면(HH) 롱(LH·LL이면 숏)",
+  "primary": "눌림",
+  "secondary": "추세(판단용)",
+  "judge_state": {
+   "possible": true,
+   "function": "lib_c.structure",
+   "state_rule": "+1: 마지막 고점>직전 고점이고 마지막 저점>직전 저점, -1: 둘 다 낮아짐, 그 밖 0"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.85,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "상승 구조에서 되돌림 저점이 높게 확인된 뒤 산다(눌림 끝)",
+  "view_def": "paperbot/strategy_view_defs/DS_F3_HHHL.py"
+ },
+ "F4_PULL": {
+  "name_ko": "EMA 정렬 눌림",
+  "group": "deepseek",
+  "entry_rule": "직전 봉에 EMA9>50>200 정렬, 이번 봉 저가가 EMA50에 닿고 종가는 EMA50 위면 롱(숏은 반대)",
+  "primary": "눌림",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.49,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "정렬된 상승 추세에서 EMA50까지 눌렸다가 같은 봉에 회복할 때 산다",
+  "view_def": "paperbot/strategy_view_defs/DS_F4_PULL.py"
+ },
+ "F4_PULL_RSI": {
+  "name_ko": "EMA 눌림·RSI",
+  "group": "deepseek",
+  "entry_rule": "EMA20>EMA50, 종가 EMA50 위에서 RSI(14)가 40을 아래에서 위로 넘으면 롱(숏은 RSI 60 하향)",
+  "primary": "눌림",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.2,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "상승 추세 속 RSI 눌림에서 다시 오를 때 산다",
+  "view_def": "paperbot/strategy_view_defs/DS_F4_PULL_RSI.py"
+ },
+ "F4_FAN": {
+  "name_ko": "EMA 피보나치 리본",
+  "group": "deepseek",
+  "entry_rule": "EMA 8>13>21>34>55 정렬이 처음 성립한 봉에 롱(반대 정렬이면 숏)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "pine_indicators.pine_ema",
+   "state_rule": "+1: EMA 8>13>21>34>55 정렬, -1: 반대 정렬, 그 밖 0"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.82,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "이평 정렬 상태가 새로 생기는 순간, 추세 방향 전환이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F4_FAN.py"
+ },
+ "F5_BOX": {
+  "name_ko": "박스권",
+  "group": "deepseek",
+  "entry_rule": "ADX<20이고 48봉 박스 폭이 3 ATR 이상일 때 박스 아래 15% 안 양봉이면 롱, 위 15% 안 음봉이면 숏",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.03,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "박스 아래에서 사고 위에서 파는 범위 매매다",
+  "view_def": "paperbot/strategy_view_defs/DS_F5_BOX.py"
+ },
+ "F5_BOX_RSI": {
+  "name_ko": "박스권·RSI",
+  "group": "deepseek",
+  "entry_rule": "같은 박스 아래 15% 안에서 RSI<30이면 롱, 위 15% 안에서 RSI>70이면 숏",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.0,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "박스 끝 과매도·과매수 반대 매매다",
+  "view_def": "paperbot/strategy_view_defs/DS_F5_BOX_RSI.py"
+ },
+ "F5_BOX_HTF": {
+  "name_ko": "박스권(상위 봉)",
+  "group": "deepseek",
+  "entry_rule": "F5_BOX 신호 중 상위 봉 ADX도 20 미만일 때만",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.03,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "박스 범위 매매에 상위 봉 횡보 조건을 더한 것이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F5_BOX_HTF.py"
+ },
+ "F6_VWAP_CROSS": {
+  "name_ko": "VWAP 교차",
+  "group": "deepseek",
+  "entry_rule": "같은 날(UTC) 안에서 종가가 VWAP를 아래에서 위로 넘으면 롱, 위에서 아래로 내려가면 숏",
+  "primary": "추세(판단용)",
+  "secondary": "돌파",
+  "judge_state": {
+   "possible": true,
+   "function": "lib_c.daily_vwap",
+   "state_rule": "+1: 종가>그날 VWAP, -1: 아래 (매일 00:00 UTC에 새로 시작)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.55,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "가격이 VWAP 위인지 아래인지라는 방향 상태가 바뀌는 순간이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F6_VWAP_CROSS.py"
+ },
+ "F6_VWAP_FAIL": {
+  "name_ko": "VWAP 복귀 실패",
+  "group": "deepseek",
+  "entry_rule": "종가가 VWAP 아래로 이탈한 뒤 10봉 안에 고가가 VWAP에 닿고 종가는 다시 아래, 음봉이면 숏(롱은 반대)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.62,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "이탈한 VWAP 선에 되돌아와 막히는 자리에서 이탈 방향으로 들어간다",
+  "view_def": "paperbot/strategy_view_defs/DS_F6_VWAP_FAIL.py"
+ },
+ "F7_RF_TRIPLE": {
+  "name_ko": "레인지 필터 3중 일치",
+  "group": "deepseek",
+  "entry_rule": "레인지 필터 방향 상승, 하이킨아시 양봉, 상위 봉 하이킨아시 양봉이 처음 같이 성립하면 롱(셋 다 반대면 숏)",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "lib_c.range_filter_dir",
+   "state_rule": "+1: 레인지 필터 상승, 하이킨아시 양봉, 상위 봉 하이킨아시 양봉, -1: 셋 다 반대, 그 밖 0 (lib_c.heikin_bull, lib_c.htf_value)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.88,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "세 가지 방향 상태가 같아지는 순간이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F7_RF_TRIPLE.py"
+ },
+ "F7_RF_ONLY": {
+  "name_ko": "레인지 필터 방향 전환",
+  "group": "deepseek",
+  "entry_rule": "레인지 필터(100·3) 방향이 -1에서 +1로 바뀌면 롱, +1에서 -1이면 숏",
+  "primary": "추세(판단용)",
+  "secondary": null,
+  "judge_state": {
+   "possible": true,
+   "function": "lib_c.range_filter_dir",
+   "state_rule": "+1/-1: 레인지 필터 방향"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.7,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "레인지 필터 방향 전환 그 자체다",
+  "view_def": "paperbot/strategy_view_defs/DS_F7_RF_ONLY.py"
+ },
+ "F8_VWICK": {
+  "name_ko": "버진 윅",
+  "group": "deepseek",
+  "entry_rule": "큰 몸통 양봉(몸통 70%, 1.3 ATR 이상)의 저가에 50봉 안 처음 닿고 종가가 그 위면 롱(음봉 고가는 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.52,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "큰 봉이 남긴 꼬리 끝이라는 미리 정한 자리에서 산다",
+  "view_def": "paperbot/strategy_view_defs/DS_F8_VWICK.py"
+ },
+ "F9_FVG": {
+  "name_ko": "FVG 되돌림",
+  "group": "deepseek",
+  "entry_rule": "상승 FVG(0.5 ATR 이상)에 50봉 안 처음 닿은 봉의 종가가 갭 중간 이상이면 롱(하락 FVG는 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.76,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "공정가치 갭 구간에 되돌아올 때 갭 방향으로 들어간다",
+  "view_def": "paperbot/strategy_view_defs/DS_F9_FVG.py"
+ },
+ "F9_IFVG": {
+  "name_ko": "반전 FVG",
+  "group": "deepseek",
+  "entry_rule": "상승 FVG가 종가로 뚫려 숏 구간이 된 뒤 그 구간에 처음 닿고 종가가 중간 이하면 숏(반대도 같음)",
+  "primary": "자리",
+  "secondary": "돌파",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.57,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "뚫린 갭을 반대편에서 다시 시험하는 자리다",
+  "view_def": "paperbot/strategy_view_defs/DS_F9_IFVG.py"
+ },
+ "F9_OB": {
+  "name_ko": "오더 블록",
+  "group": "deepseek",
+  "entry_rule": "음봉 다음에 그 고가를 갭으로 넘는 변위가 나오면 그 음봉 범위가 롱 구간. 처음 닿고 종가가 중간 이상이면 롱(숏은 반대)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.52,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "오더 블록 구간에 되돌아올 때 산다",
+  "view_def": "paperbot/strategy_view_defs/DS_F9_OB.py"
+ },
+ "F9_BREAKER": {
+  "name_ko": "브레이커 블록",
+  "group": "deepseek",
+  "entry_rule": "오더 블록이 종가로 뚫리면 반대 구간(브레이커)이 되고, 처음 닿고 종가가 중간 이하면 숏(반대도 같음)",
+  "primary": "자리",
+  "secondary": "돌파",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.76,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "뚫린 오더 블록을 반대편에서 다시 시험하는 자리다",
+  "view_def": "paperbot/strategy_view_defs/DS_F9_BREAKER.py"
+ },
+ "F10_M2022": {
+  "name_ko": "ICT 2022 모델",
+  "group": "deepseek",
+  "entry_rule": "스윕 뒤 회복(레이드), 20봉 안 변위 구조 전환, 그 구간 FVG에 처음 닿고 종가가 중간 이상이면 롱(숏은 반대)",
+  "primary": "자리",
+  "secondary": "횡보·역추세",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.74,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "진입은 FVG 자리에서 한다. 다만 준비 단계가 전저점 스윕 뒤 반전이라 역추세 설계다",
+  "view_def": "paperbot/strategy_view_defs/DS_F10_M2022.py"
+ },
+ "F10_OTE": {
+  "name_ko": "ICT OTE(62~79% 되돌림)",
+  "group": "deepseek",
+  "entry_rule": "임펄스(3 ATR 이상, 30봉 안)의 62~79% 되돌림 구간에 처음 닿고 종가가 79% 선 위면 롱(숏은 반대)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.52,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "임펄스의 깊은 되돌림 구간이라는 정한 자리에서 임펄스 방향으로 들어간다",
+  "view_def": "paperbot/strategy_view_defs/DS_F10_OTE.py"
+ },
+ "F11_TSOUP": {
+  "name_ko": "터틀 수프",
+  "group": "deepseek",
+  "entry_rule": "새 20봉 저점(이전 저점은 4봉 이상 전)을 찍고 같은 봉 종가는 이전 저점 위로 회복하면 롱(고점은 숏)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.09,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "가짜 돌파를 반대로 매매한다",
+  "view_def": "paperbot/strategy_view_defs/DS_F11_TSOUP.py"
+ },
+ "F11_RAID": {
+  "name_ko": "유동성 레이드",
+  "group": "deepseek",
+  "entry_rule": "마지막 스윙 저점을 저가로 처음 깨고 같은 봉 종가는 그 위면 롱(스윙 고점은 숏)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.32,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "스윙 저점 스윕 뒤 반전, 역추세다",
+  "view_def": "paperbot/strategy_view_defs/DS_F11_RAID.py"
+ },
+ "F11_PO3": {
+  "name_ko": "파워 오브 3",
+  "group": "deepseek",
+  "entry_rule": "00~08시(UTC) 범위의 한쪽을 08~20시 봉이 넘은 뒤 3봉 안에 종가가 범위 안으로 돌아오면 넘은 반대로 진입(하루 1번)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.23,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "범위 스윕 뒤 반대로 들어가는 실패 돌파 역매매다",
+  "view_def": "paperbot/strategy_view_defs/DS_F11_PO3.py"
+ },
+ "F12_MSS": {
+  "name_ko": "구조 전환(MSS)",
+  "group": "deepseek",
+  "entry_rule": "구조가 하락일 때 종가가 마지막 확인된 스윙 고점을 넘으면 롱(상승 구조에서 스윙 저점 이탈은 숏)",
+  "primary": "추세(판단용)",
+  "secondary": "돌파",
+  "judge_state": {
+   "possible": true,
+   "function": "lib_c.structure",
+   "state_rule": "+1: 마지막 구조 돌파가 위, -1: 아래 (bos·mss 이벤트로 상태를 이어 붙임; 함수가 상태 배열을 직접 주지는 않음)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.72,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "구조 상태가 하락에서 상승으로 바뀌는 순간이다. 같은 방향 돌파(BOS)와 달리 방향 전환이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F12_MSS.py"
+ },
+ "F12_MSS_DISP": {
+  "name_ko": "구조 전환·변위",
+  "group": "deepseek",
+  "entry_rule": "F12_MSS 중 돌파 봉 몸통이 1.2 ATR 이상(변위)일 때만",
+  "primary": "추세(판단용)",
+  "secondary": "돌파",
+  "judge_state": {
+   "possible": true,
+   "function": "lib_c.structure",
+   "state_rule": "+1: 마지막 구조 돌파가 위, -1: 아래 (F12_MSS와 같은 상태)"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.84,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "큰 봉으로 구조가 뒤집히는 순간이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F12_MSS_DISP.py"
+ },
+ "F13_FVG_PD": {
+  "name_ko": "FVG·프리미엄/디스카운트",
+  "group": "deepseek",
+  "entry_rule": "F9_FVG 신호 중 롱은 스윙 범위 중간 아래(디스카운트), 숏은 중간 위(프리미엄)일 때만",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.44,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "FVG 자리에 싼 구간 조건을 더한 것이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F13_FVG_PD.py"
+ },
+ "F13_RAID_PD": {
+  "name_ko": "레이드·프리미엄/디스카운트",
+  "group": "deepseek",
+  "entry_rule": "F11_RAID 신호 중 롱은 디스카운트, 숏은 프리미엄일 때만",
+  "primary": "횡보·역추세",
+  "secondary": "자리",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.3,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "스윕 반전에 구간 조건을 더한 것이다. 바탕이 역추세다",
+  "view_def": "paperbot/strategy_view_defs/DS_F13_RAID_PD.py"
+ },
+ "F14_SMT": {
+  "name_ko": "SMT 다이버전스",
+  "group": "deepseek",
+  "entry_rule": "BTC가 20봉 저점을 새로 깼는데 이 코인은 안 깼으면 롱, BTC가 새 고점인데 이 코인은 못 넘으면 숏(BTC는 매매 안 함)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.3,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "코인 사이의 괴리를 보고 시장 움직임 반대로 들어가는 다이버전스 반전이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F14_SMT.py"
+ },
+ "F15_ASIA_BRK": {
+  "name_ko": "아시아 레인지 돌파",
+  "group": "deepseek",
+  "entry_rule": "전날 20~24시(ET) 아시아 범위를 오늘 00~08시(ET) 봉 종가가 처음 벗어난 방향으로 진입(하루 1번)",
+  "primary": "돌파",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.85,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "세션 범위 돌파다",
+  "view_def": "paperbot/strategy_view_defs/DS_F15_ASIA_BRK.py"
+ },
+ "F15_ASIA_SWEEP": {
+  "name_ko": "아시아 레인지 스윕",
+  "group": "deepseek",
+  "entry_rule": "같은 시간에 아시아 고가를 넘었다가 종가는 안으로 돌아오면 숏(저가 쪽은 롱, 하루 1번)",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.27,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "세션 범위 스윕 뒤 반대로 들어가는 역추세다",
+  "view_def": "paperbot/strategy_view_defs/DS_F15_ASIA_SWEEP.py"
+ },
+ "F15_LON_BRK": {
+  "name_ko": "런던 레인지 돌파",
+  "group": "deepseek",
+  "entry_rule": "02~05시(ET) 런던 범위를 05~12시(ET) 봉 종가가 처음 벗어난 방향으로 진입(하루 1번)",
+  "primary": "돌파",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.83,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "세션 범위 돌파다",
+  "view_def": "paperbot/strategy_view_defs/DS_F15_LON_BRK.py"
+ },
+ "F15_OPEN0930": {
+  "name_ko": "뉴욕 09:30 시가 편향",
+  "group": "deepseek",
+  "entry_rule": "09:30(ET)이 든 봉의 시가보다 1시간 뒤 마감하는 봉의 종가가 높으면 롱, 낮으면 숏(하루 1번)",
+  "primary": "기타",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.6,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "정해진 시각의 시가와 비교하는 시간대 매매다. 첫 1시간 방향을 따라간다",
+  "view_def": "paperbot/strategy_view_defs/DS_F15_OPEN0930.py"
+ },
+ "F15_OPEN0000": {
+  "name_ko": "자정 시가 편향",
+  "group": "deepseek",
+  "entry_rule": "00:00(ET) 시가보다 1시간 뒤 마감하는 봉의 종가가 높으면 롱, 낮으면 숏(하루 1번)",
+  "primary": "기타",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.54,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "정해진 시각 기준 시간대 매매다",
+  "view_def": "paperbot/strategy_view_defs/DS_F15_OPEN0000.py"
+ },
+ "F15_ORB": {
+  "name_ko": "시가 범위 돌파",
+  "group": "deepseek",
+  "entry_rule": "UTC 하루 첫 2개 봉의 고저 범위를 이후 종가가 처음 벗어난 방향으로 진입(하루 1번)",
+  "primary": "돌파",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.69,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "시가 범위 돌파(ORB)다",
+  "view_def": "paperbot/strategy_view_defs/DS_F15_ORB.py"
+ },
+ "F16_FIB382": {
+  "name_ko": "피보나치 38.2% 되돌림",
+  "group": "deepseek",
+  "entry_rule": "임펄스(3 ATR 이상, 30봉 안)의 38.2% 되돌림 선에 처음 닿고 종가가 선 위면 롱(하락 임펄스는 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.78,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "피보나치 되돌림 선이라는 정한 자리에서 임펄스 방향으로 들어간다",
+  "view_def": "paperbot/strategy_view_defs/DS_F16_FIB382.py"
+ },
+ "F16_FIB500": {
+  "name_ko": "피보나치 50% 되돌림",
+  "group": "deepseek",
+  "entry_rule": "임펄스의 50% 되돌림 선에 처음 닿고 종가가 선 위면 롱(하락 임펄스는 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.69,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "피보나치 되돌림 자리다",
+  "view_def": "paperbot/strategy_view_defs/DS_F16_FIB500.py"
+ },
+ "F16_FIB618": {
+  "name_ko": "피보나치 61.8% 되돌림",
+  "group": "deepseek",
+  "entry_rule": "임펄스의 61.8% 되돌림 선에 처음 닿고 종가가 선 위면 롱(하락 임펄스는 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.57,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "피보나치 되돌림 자리다",
+  "view_def": "paperbot/strategy_view_defs/DS_F16_FIB618.py"
+ },
+ "F16_FIB764": {
+  "name_ko": "피보나치 76.4% 되돌림",
+  "group": "deepseek",
+  "entry_rule": "임펄스의 76.4% 되돌림 선에 처음 닿고 종가가 선 위면 롱(하락 임펄스는 숏)",
+  "primary": "자리",
+  "secondary": "눌림",
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.4,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "피보나치 되돌림 자리다(가장 깊은 선)",
+  "view_def": "paperbot/strategy_view_defs/DS_F16_FIB764.py"
+ },
+ "F17_Z": {
+  "name_ko": "Z점수 평균회귀",
+  "group": "deepseek",
+  "entry_rule": "Z점수(20봉)가 처음 -2 아래로 내려오면 롱, 처음 +2 위로 오르면 숏",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.03,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "평균에서 멀어진 쪽의 반대로 들어가는 평균회귀다",
+  "view_def": "paperbot/strategy_view_defs/DS_F17_Z.py"
+ },
+ "F17_Z_HL": {
+  "name_ko": "Z점수·반감기",
+  "group": "deepseek",
+  "entry_rule": "F17_Z 신호 중 100봉 회귀로 본 반감기가 20봉 이하일 때만",
+  "primary": "횡보·역추세",
+  "secondary": null,
+  "judge_state": {
+   "possible": false,
+   "function": null,
+   "state_rule": "추세형이 아니라 판단 상태를 정하지 않음"
+  },
+  "live_tfs": [
+   "15m",
+   "30m",
+   "1h",
+   "4h"
+  ],
+  "side": "both",
+  "trend_ratio": 0.03,
+  "trend_ratio_source": "이번에 계산 (신호 기준, data/pre2021 2020-01~2021-08, 규칙봇 봉 평균)",
+  "why": "평균회귀에 회귀 속도 조건을 더한 것이다",
+  "view_def": "paperbot/strategy_view_defs/DS_F17_Z_HL.py"
+ }
+}
