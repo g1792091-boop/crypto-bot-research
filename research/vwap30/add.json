@@ -1,0 +1,2917 @@
+{
+ "data_end": 1792713600000,
+ "variants": {
+  "A 혼자": {
+   "17일": {
+    "n": 41,
+    "wins": 35,
+    "losses": 6,
+    "win": 0.8537,
+    "per_month": 72.6,
+    "avg_net_pct": 0.2158,
+    "mult": 2.0526,
+    "maxdd": -0.295,
+    "month_pace": 3.574,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 41,
+      "wins": 35
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4183,
+    "wins": 3013,
+    "losses": 1170,
+    "win": 0.7203,
+    "per_month": 72.1,
+    "avg_net_pct": -0.1354,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.38,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 4183,
+      "wins": 3013
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1413,
+    "wins": 989,
+    "losses": 424,
+    "win": 0.6999,
+    "per_month": 67.4,
+    "avg_net_pct": -0.1023,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.461,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 1413,
+      "wins": 989
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 41,
+    "wins": 35,
+    "losses": 6,
+    "win": 0.8537,
+    "per_month": 72.6,
+    "avg_net_pct": 0.2158,
+    "mult": 2.5237,
+    "maxdd": -0.3841,
+    "month_pace": 5.153,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 41,
+      "wins": 35
+     }
+    }
+   }
+  },
+  "V3.9 1시간 혼자(그대로)": {
+   "17일": {
+    "n": 17,
+    "wins": 16,
+    "losses": 1,
+    "win": 0.9412,
+    "per_month": 30.1,
+    "avg_net_pct": 0.2399,
+    "mult": 1.3483,
+    "maxdd": -0.1387,
+    "month_pace": 1.698,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 17,
+      "wins": 16
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 2640,
+    "wins": 2071,
+    "losses": 569,
+    "win": 0.7845,
+    "per_month": 45.5,
+    "avg_net_pct": -0.1815,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.551,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 2640,
+      "wins": 2071
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 901,
+    "wins": 675,
+    "losses": 226,
+    "win": 0.7492,
+    "per_month": 43.0,
+    "avg_net_pct": -0.1848,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.535,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 901,
+      "wins": 675
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 17,
+    "wins": 16,
+    "losses": 1,
+    "win": 0.9412,
+    "per_month": 30.1,
+    "avg_net_pct": 0.2399,
+    "mult": 1.4768,
+    "maxdd": -0.185,
+    "month_pace": 1.995,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 17,
+      "wins": 16
+     }
+    }
+   }
+  },
+  "PSAR·POC 캔들 30분 혼자(그대로)": {
+   "17일": {
+    "n": 16,
+    "wins": 15,
+    "losses": 1,
+    "win": 0.9375,
+    "per_month": 28.3,
+    "avg_net_pct": 0.4372,
+    "mult": 1.8131,
+    "maxdd": -0.0717,
+    "month_pace": 2.869,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 16,
+      "wins": 15
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 1745,
+    "wins": 1294,
+    "losses": 451,
+    "win": 0.7415,
+    "per_month": 30.1,
+    "avg_net_pct": -0.1189,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.718,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 1745,
+      "wins": 1294
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 623,
+    "wins": 429,
+    "losses": 194,
+    "win": 0.6886,
+    "per_month": 29.7,
+    "avg_net_pct": -0.1395,
+    "mult": 0.0001,
+    "maxdd": -0.9999,
+    "month_pace": 0.64,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 623,
+      "wins": 429
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 16,
+    "wins": 15,
+    "losses": 1,
+    "win": 0.9375,
+    "per_month": 28.3,
+    "avg_net_pct": 0.4372,
+    "mult": 2.1916,
+    "maxdd": -0.0956,
+    "month_pace": 4.014,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 16,
+      "wins": 15
+     }
+    }
+   }
+  },
+  "CMO·샌드위치 캔들 30분 혼자(그대로)": {
+   "17일": {
+    "n": 11,
+    "wins": 9,
+    "losses": 2,
+    "win": 0.8182,
+    "per_month": 19.5,
+    "avg_net_pct": 0.2353,
+    "mult": 1.2474,
+    "maxdd": -0.065,
+    "month_pace": 1.479,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 11,
+      "wins": 9
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 1715,
+    "wins": 1250,
+    "losses": 465,
+    "win": 0.7289,
+    "per_month": 29.5,
+    "avg_net_pct": -0.1216,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.694,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 1715,
+      "wins": 1250
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 548,
+    "wins": 377,
+    "losses": 171,
+    "win": 0.688,
+    "per_month": 26.1,
+    "avg_net_pct": -0.1462,
+    "mult": 0.0003,
+    "maxdd": -0.9998,
+    "month_pace": 0.682,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 548,
+      "wins": 377
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 11,
+    "wins": 9,
+    "losses": 2,
+    "win": 0.8182,
+    "per_month": 19.5,
+    "avg_net_pct": 0.2353,
+    "mult": 1.3386,
+    "maxdd": -0.0866,
+    "month_pace": 1.676,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 11,
+      "wins": 9
+     }
+    }
+   }
+  },
+  "OBV 추세형 30분 혼자(그대로)": {
+   "17일": {
+    "n": 21,
+    "wins": 16,
+    "losses": 5,
+    "win": 0.7619,
+    "per_month": 37.2,
+    "avg_net_pct": -0.0393,
+    "mult": 0.9973,
+    "maxdd": -0.3269,
+    "month_pace": 0.995,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 21,
+      "wins": 16
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 2425,
+    "wins": 1743,
+    "losses": 682,
+    "win": 0.7188,
+    "per_month": 41.8,
+    "avg_net_pct": -0.1645,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.56,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 2425,
+      "wins": 1743
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 789,
+    "wins": 548,
+    "losses": 241,
+    "win": 0.6946,
+    "per_month": 37.6,
+    "avg_net_pct": -0.1452,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.58,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 789,
+      "wins": 548
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 21,
+    "wins": 16,
+    "losses": 5,
+    "win": 0.7619,
+    "per_month": 37.2,
+    "avg_net_pct": -0.0393,
+    "mult": 0.9768,
+    "maxdd": -0.4198,
+    "month_pace": 0.959,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 21,
+      "wins": 16
+     }
+    }
+   }
+  },
+  "쓰리 아웃사이드 30분 혼자(그대로)": {
+   "17일": {
+    "n": 27,
+    "wins": 18,
+    "losses": 9,
+    "win": 0.6667,
+    "per_month": 47.8,
+    "avg_net_pct": -0.1485,
+    "mult": 0.6422,
+    "maxdd": -0.4652,
+    "month_pace": 0.456,
+    "by_member": {
+     "쓰리 아웃사이드 30분": {
+      "n": 27,
+      "wins": 18
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 2217,
+    "wins": 1643,
+    "losses": 574,
+    "win": 0.7411,
+    "per_month": 38.2,
+    "avg_net_pct": -0.1165,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.639,
+    "by_member": {
+     "쓰리 아웃사이드 30분": {
+      "n": 2217,
+      "wins": 1643
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 882,
+    "wins": 603,
+    "losses": 279,
+    "win": 0.6837,
+    "per_month": 42.1,
+    "avg_net_pct": -0.1632,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.508,
+    "by_member": {
+     "쓰리 아웃사이드 30분": {
+      "n": 882,
+      "wins": 603
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 27,
+    "wins": 18,
+    "losses": 9,
+    "win": 0.6667,
+    "per_month": 47.8,
+    "avg_net_pct": -0.1485,
+    "mult": 0.5295,
+    "maxdd": -0.5801,
+    "month_pace": 0.324,
+    "by_member": {
+     "쓰리 아웃사이드 30분": {
+      "n": 27,
+      "wins": 18
+     }
+    }
+   }
+  },
+  "CMO·샌드위치 캔들 1시간 혼자(그대로)": {
+   "17일": {
+    "n": 11,
+    "wins": 10,
+    "losses": 1,
+    "win": 0.9091,
+    "per_month": 19.5,
+    "avg_net_pct": 0.2386,
+    "mult": 1.2288,
+    "maxdd": -0.0979,
+    "month_pace": 1.44,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 11,
+      "wins": 10
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 827,
+    "wins": 647,
+    "losses": 180,
+    "win": 0.7823,
+    "per_month": 14.2,
+    "avg_net_pct": -0.1578,
+    "mult": 0.0001,
+    "maxdd": -1.0,
+    "month_pace": 0.846,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 827,
+      "wins": 647
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 275,
+    "wins": 206,
+    "losses": 69,
+    "win": 0.7491,
+    "per_month": 13.1,
+    "avg_net_pct": -0.1528,
+    "mult": 0.0206,
+    "maxdd": -0.9825,
+    "month_pace": 0.831,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 275,
+      "wins": 206
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 11,
+    "wins": 10,
+    "losses": 1,
+    "win": 0.9091,
+    "per_month": 19.5,
+    "avg_net_pct": 0.2386,
+    "mult": 1.3089,
+    "maxdd": -0.1305,
+    "month_pace": 1.611,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 11,
+      "wins": 10
+     }
+    }
+   }
+  },
+  "OBV 돌파형 4시간 혼자(그대로)": {
+   "17일": {
+    "n": 8,
+    "wins": 7,
+    "losses": 1,
+    "win": 0.875,
+    "per_month": 14.2,
+    "avg_net_pct": 0.0837,
+    "mult": 1.107,
+    "maxdd": -0.15,
+    "month_pace": 1.197,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 8,
+      "wins": 7
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 996,
+    "wins": 874,
+    "losses": 122,
+    "win": 0.8775,
+    "per_month": 17.2,
+    "avg_net_pct": -0.0881,
+    "mult": 0.0038,
+    "maxdd": -0.998,
+    "month_pace": 0.908,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 996,
+      "wins": 874
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 312,
+    "wins": 255,
+    "losses": 57,
+    "win": 0.8173,
+    "per_month": 14.9,
+    "avg_net_pct": -0.255,
+    "mult": 0.0115,
+    "maxdd": -0.99,
+    "month_pace": 0.808,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 312,
+      "wins": 255
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 8,
+    "wins": 7,
+    "losses": 1,
+    "win": 0.875,
+    "per_month": 14.2,
+    "avg_net_pct": 0.0837,
+    "mult": 1.1312,
+    "maxdd": -0.2,
+    "month_pace": 1.244,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 8,
+      "wins": 7
+     }
+    }
+   }
+  },
+  "OBV 추세형 4시간 혼자(그대로)": {
+   "17일": {
+    "n": 5,
+    "wins": 3,
+    "losses": 2,
+    "win": 0.6,
+    "per_month": 8.9,
+    "avg_net_pct": -1.1192,
+    "mult": 0.7796,
+    "maxdd": -0.2775,
+    "month_pace": 0.643,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 5,
+      "wins": 3
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 423,
+    "wins": 374,
+    "losses": 49,
+    "win": 0.8842,
+    "per_month": 7.3,
+    "avg_net_pct": -0.0163,
+    "mult": 0.3317,
+    "maxdd": -0.8303,
+    "month_pace": 0.981,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 423,
+      "wins": 374
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 124,
+    "wins": 104,
+    "losses": 20,
+    "win": 0.8387,
+    "per_month": 5.9,
+    "avg_net_pct": -0.0274,
+    "mult": 0.3901,
+    "maxdd": -0.6842,
+    "month_pace": 0.956,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 124,
+      "wins": 104
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 5,
+    "wins": 3,
+    "losses": 2,
+    "win": 0.6,
+    "per_month": 8.9,
+    "avg_net_pct": -1.1192,
+    "mult": 0.7079,
+    "maxdd": -0.36,
+    "month_pace": 0.542,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 5,
+      "wins": 3
+     }
+    }
+   }
+  },
+  "EMA·DMI·ADX 4시간 혼자(그대로)": {
+   "17일": {
+    "n": 7,
+    "wins": 7,
+    "losses": 0,
+    "win": 1.0,
+    "per_month": 12.4,
+    "avg_net_pct": 0.3993,
+    "mult": 1.1814,
+    "maxdd": 0.0,
+    "month_pace": 1.343,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 7,
+      "wins": 7
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 387,
+    "wins": 346,
+    "losses": 41,
+    "win": 0.8941,
+    "per_month": 6.7,
+    "avg_net_pct": -0.033,
+    "mult": 0.3844,
+    "maxdd": -0.7319,
+    "month_pace": 0.984,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 387,
+      "wins": 346
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 132,
+    "wins": 122,
+    "losses": 10,
+    "win": 0.9242,
+    "per_month": 6.3,
+    "avg_net_pct": 0.0698,
+    "mult": 1.1446,
+    "maxdd": -0.4357,
+    "month_pace": 1.006,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 132,
+      "wins": 122
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 7,
+    "wins": 7,
+    "losses": 0,
+    "win": 1.0,
+    "per_month": 12.4,
+    "avg_net_pct": 0.3993,
+    "mult": 1.2477,
+    "maxdd": 0.0,
+    "month_pace": 1.48,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 7,
+      "wins": 7
+     }
+    }
+   }
+  },
+  "A + V3.9 1시간 그대로": {
+   "17일": {
+    "n": 49,
+    "wins": 42,
+    "losses": 7,
+    "win": 0.8571,
+    "per_month": 86.8,
+    "avg_net_pct": 0.1992,
+    "mult": 2.101,
+    "maxdd": -0.3559,
+    "month_pace": 3.724,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 13,
+      "wins": 12
+     },
+     "VWAP 개선판": {
+      "n": 36,
+      "wins": 30
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 5295,
+    "wins": 3968,
+    "losses": 1327,
+    "win": 0.7494,
+    "per_month": 91.2,
+    "avg_net_pct": -0.1449,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.317,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 1790,
+      "wins": 1426
+     },
+     "VWAP 개선판": {
+      "n": 3505,
+      "wins": 2542
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1758,
+    "wins": 1286,
+    "losses": 472,
+    "win": 0.7315,
+    "per_month": 83.9,
+    "avg_net_pct": -0.1132,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.411,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 584,
+      "wins": 451
+     },
+     "VWAP 개선판": {
+      "n": 1174,
+      "wins": 835
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 49,
+    "wins": 42,
+    "losses": 7,
+    "win": 0.8571,
+    "per_month": 86.8,
+    "avg_net_pct": 0.1992,
+    "mult": 2.5826,
+    "maxdd": -0.4572,
+    "month_pace": 5.368,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 13,
+      "wins": 12
+     },
+     "VWAP 개선판": {
+      "n": 36,
+      "wins": 30
+     }
+    }
+   }
+  },
+  "A + V3.9 1시간 A 조건": {
+   "17일": {
+    "n": 46,
+    "wins": 40,
+    "losses": 6,
+    "win": 0.8696,
+    "per_month": 81.5,
+    "avg_net_pct": 0.2407,
+    "mult": 2.4004,
+    "maxdd": -0.3052,
+    "month_pace": 4.716,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 9,
+      "wins": 9
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 31
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4849,
+    "wins": 3561,
+    "losses": 1288,
+    "win": 0.7344,
+    "per_month": 83.5,
+    "avg_net_pct": -0.1578,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.313,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 1158,
+      "wins": 890
+     },
+     "VWAP 개선판": {
+      "n": 3691,
+      "wins": 2671
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1618,
+    "wins": 1169,
+    "losses": 449,
+    "win": 0.7225,
+    "per_month": 77.2,
+    "avg_net_pct": -0.105,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.436,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 399,
+      "wins": 303
+     },
+     "VWAP 개선판": {
+      "n": 1219,
+      "wins": 866
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 46,
+    "wins": 40,
+    "losses": 6,
+    "win": 0.8696,
+    "per_month": 81.5,
+    "avg_net_pct": 0.2407,
+    "mult": 3.1053,
+    "maxdd": -0.3959,
+    "month_pace": 7.44,
+    "by_member": {
+     "V3.9 1시간": {
+      "n": 9,
+      "wins": 9
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 31
+     }
+    }
+   }
+  },
+  "A + PSAR·POC 캔들 30분 그대로": {
+   "17일": {
+    "n": 49,
+    "wins": 43,
+    "losses": 6,
+    "win": 0.8776,
+    "per_month": 86.8,
+    "avg_net_pct": 0.2843,
+    "mult": 3.1594,
+    "maxdd": -0.2307,
+    "month_pace": 7.671,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 11,
+      "wins": 10
+     },
+     "VWAP 개선판": {
+      "n": 38,
+      "wins": 33
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4969,
+    "wins": 3607,
+    "losses": 1362,
+    "win": 0.7259,
+    "per_month": 85.6,
+    "avg_net_pct": -0.1396,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.317,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 1142,
+      "wins": 848
+     },
+     "VWAP 개선판": {
+      "n": 3827,
+      "wins": 2759
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1689,
+    "wins": 1190,
+    "losses": 499,
+    "win": 0.7046,
+    "per_month": 80.6,
+    "avg_net_pct": -0.1039,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.391,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 387,
+      "wins": 272
+     },
+     "VWAP 개선판": {
+      "n": 1302,
+      "wins": 918
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 49,
+    "wins": 43,
+    "losses": 6,
+    "win": 0.8776,
+    "per_month": 86.8,
+    "avg_net_pct": 0.2843,
+    "mult": 4.4628,
+    "maxdd": -0.3032,
+    "month_pace": 14.143,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 11,
+      "wins": 10
+     },
+     "VWAP 개선판": {
+      "n": 38,
+      "wins": 33
+     }
+    }
+   }
+  },
+  "A + PSAR·POC 캔들 30분 A 조건": {
+   "17일": {
+    "n": 46,
+    "wins": 39,
+    "losses": 7,
+    "win": 0.8478,
+    "per_month": 81.5,
+    "avg_net_pct": 0.2305,
+    "mult": 2.3605,
+    "maxdd": -0.3456,
+    "month_pace": 4.578,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 7,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 33
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4517,
+    "wins": 3242,
+    "losses": 1275,
+    "win": 0.7177,
+    "per_month": 77.8,
+    "avg_net_pct": -0.1408,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.341,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 541,
+      "wins": 379
+     },
+     "VWAP 개선판": {
+      "n": 3976,
+      "wins": 2863
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1536,
+    "wins": 1073,
+    "losses": 463,
+    "win": 0.6986,
+    "per_month": 73.3,
+    "avg_net_pct": -0.1044,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.418,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 188,
+      "wins": 125
+     },
+     "VWAP 개선판": {
+      "n": 1348,
+      "wins": 948
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 46,
+    "wins": 39,
+    "losses": 7,
+    "win": 0.8478,
+    "per_month": 81.5,
+    "avg_net_pct": 0.2305,
+    "mult": 3.0277,
+    "maxdd": -0.443,
+    "month_pace": 7.114,
+    "by_member": {
+     "PSAR·POC 캔들 30분": {
+      "n": 7,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 33
+     }
+    }
+   }
+  },
+  "A + CMO·샌드위치 캔들 30분 그대로": {
+   "17일": {
+    "n": 47,
+    "wins": 41,
+    "losses": 6,
+    "win": 0.8723,
+    "per_month": 83.2,
+    "avg_net_pct": 0.2368,
+    "mult": 2.4998,
+    "maxdd": -0.2142,
+    "month_pace": 5.067,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 8,
+      "wins": 7
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4933,
+    "wins": 3587,
+    "losses": 1346,
+    "win": 0.7271,
+    "per_month": 85.0,
+    "avg_net_pct": -0.1308,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.33,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 1065,
+      "wins": 786
+     },
+     "VWAP 개선판": {
+      "n": 3868,
+      "wins": 2801
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1629,
+    "wins": 1130,
+    "losses": 499,
+    "win": 0.6937,
+    "per_month": 77.7,
+    "avg_net_pct": -0.1297,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.348,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 321,
+      "wins": 219
+     },
+     "VWAP 개선판": {
+      "n": 1308,
+      "wins": 911
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 47,
+    "wins": 41,
+    "losses": 6,
+    "win": 0.8723,
+    "per_month": 83.2,
+    "avg_net_pct": 0.2368,
+    "mult": 3.278,
+    "maxdd": -0.2876,
+    "month_pace": 8.188,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 8,
+      "wins": 7
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + CMO·샌드위치 캔들 30분 A 조건": {
+   "17일": {
+    "n": 46,
+    "wins": 40,
+    "losses": 6,
+    "win": 0.8696,
+    "per_month": 81.5,
+    "avg_net_pct": 0.2285,
+    "mult": 2.378,
+    "maxdd": -0.295,
+    "month_pace": 4.638,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 5,
+      "wins": 5
+     },
+     "VWAP 개선판": {
+      "n": 41,
+      "wins": 35
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4558,
+    "wins": 3306,
+    "losses": 1252,
+    "win": 0.7253,
+    "per_month": 78.5,
+    "avg_net_pct": -0.128,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.366,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 566,
+      "wins": 411
+     },
+     "VWAP 개선판": {
+      "n": 3992,
+      "wins": 2895
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1496,
+    "wins": 1037,
+    "losses": 459,
+    "win": 0.6932,
+    "per_month": 71.4,
+    "avg_net_pct": -0.1222,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.394,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 150,
+      "wins": 101
+     },
+     "VWAP 개선판": {
+      "n": 1346,
+      "wins": 936
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 46,
+    "wins": 40,
+    "losses": 6,
+    "win": 0.8696,
+    "per_month": 81.5,
+    "avg_net_pct": 0.2285,
+    "mult": 3.0679,
+    "maxdd": -0.3841,
+    "month_pace": 7.282,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 5,
+      "wins": 5
+     },
+     "VWAP 개선판": {
+      "n": 41,
+      "wins": 35
+     }
+    }
+   }
+  },
+  "A + OBV 추세형 30분 그대로": {
+   "17일": {
+    "n": 47,
+    "wins": 40,
+    "losses": 7,
+    "win": 0.8511,
+    "per_month": 83.2,
+    "avg_net_pct": 0.1332,
+    "mult": 1.7865,
+    "maxdd": -0.3255,
+    "month_pace": 2.795,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 12,
+      "wins": 8
+     },
+     "VWAP 개선판": {
+      "n": 35,
+      "wins": 32
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 5313,
+    "wins": 3855,
+    "losses": 1458,
+    "win": 0.7256,
+    "per_month": 91.5,
+    "avg_net_pct": -0.14,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.303,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 1514,
+      "wins": 1102
+     },
+     "VWAP 개선판": {
+      "n": 3799,
+      "wins": 2753
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1758,
+    "wins": 1236,
+    "losses": 522,
+    "win": 0.7031,
+    "per_month": 83.9,
+    "avg_net_pct": -0.1138,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.362,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 493,
+      "wins": 340
+     },
+     "VWAP 개선판": {
+      "n": 1265,
+      "wins": 896
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 47,
+    "wins": 40,
+    "losses": 7,
+    "win": 0.8511,
+    "per_month": 83.2,
+    "avg_net_pct": 0.1332,
+    "mult": 2.0769,
+    "maxdd": -0.4192,
+    "month_pace": 3.649,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 12,
+      "wins": 8
+     },
+     "VWAP 개선판": {
+      "n": 35,
+      "wins": 32
+     }
+    }
+   }
+  },
+  "A + OBV 추세형 30분 A 조건": {
+   "17일": {
+    "n": 45,
+    "wins": 40,
+    "losses": 5,
+    "win": 0.8889,
+    "per_month": 79.7,
+    "avg_net_pct": 0.2276,
+    "mult": 2.3187,
+    "maxdd": -0.2685,
+    "month_pace": 4.435,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 8,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4751,
+    "wins": 3426,
+    "losses": 1325,
+    "win": 0.7211,
+    "per_month": 81.8,
+    "avg_net_pct": -0.1353,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.338,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 793,
+      "wins": 563
+     },
+     "VWAP 개선판": {
+      "n": 3958,
+      "wins": 2863
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1591,
+    "wins": 1119,
+    "losses": 472,
+    "win": 0.7033,
+    "per_month": 75.9,
+    "avg_net_pct": -0.1033,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.42,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 259,
+      "wins": 178
+     },
+     "VWAP 개선판": {
+      "n": 1332,
+      "wins": 941
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 45,
+    "wins": 40,
+    "losses": 5,
+    "win": 0.8889,
+    "per_month": 79.7,
+    "avg_net_pct": 0.2276,
+    "mult": 2.9632,
+    "maxdd": -0.3518,
+    "month_pace": 6.848,
+    "by_member": {
+     "OBV 추세형 30분": {
+      "n": 8,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + 쓰리 아웃사이드 30분 그대로": {
+   "17일": {
+    "n": 56,
+    "wins": 44,
+    "losses": 12,
+    "win": 0.7857,
+    "per_month": 99.2,
+    "avg_net_pct": 0.0983,
+    "mult": 1.4435,
+    "maxdd": -0.4692,
+    "month_pace": 1.916,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 38,
+      "wins": 32
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 18,
+      "wins": 12
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 5276,
+    "wins": 3854,
+    "losses": 1422,
+    "win": 0.7305,
+    "per_month": 90.9,
+    "avg_net_pct": -0.1294,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.311,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 3753,
+      "wins": 2697
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 1523,
+      "wins": 1157
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1838,
+    "wins": 1272,
+    "losses": 566,
+    "win": 0.6921,
+    "per_month": 87.7,
+    "avg_net_pct": -0.1387,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.288,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 1223,
+      "wins": 858
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 615,
+      "wins": 414
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 56,
+    "wins": 44,
+    "losses": 12,
+    "win": 0.7857,
+    "per_month": 99.2,
+    "avg_net_pct": 0.0983,
+    "mult": 1.5319,
+    "maxdd": -0.5862,
+    "month_pace": 2.128,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 38,
+      "wins": 32
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 18,
+      "wins": 12
+     }
+    }
+   }
+  },
+  "A + 쓰리 아웃사이드 30분 A 조건": {
+   "17일": {
+    "n": 45,
+    "wins": 37,
+    "losses": 8,
+    "win": 0.8222,
+    "per_month": 79.7,
+    "avg_net_pct": 0.175,
+    "mult": 1.8525,
+    "maxdd": -0.351,
+    "month_pace": 2.98,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 38,
+      "wins": 32
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 7,
+      "wins": 5
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4658,
+    "wins": 3345,
+    "losses": 1313,
+    "win": 0.7181,
+    "per_month": 80.2,
+    "avg_net_pct": -0.1429,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.323,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 3956,
+      "wins": 2840
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 702,
+      "wins": 505
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1608,
+    "wins": 1114,
+    "losses": 494,
+    "win": 0.6928,
+    "per_month": 76.7,
+    "avg_net_pct": -0.1162,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.38,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 1308,
+      "wins": 917
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 300,
+      "wins": 197
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 45,
+    "wins": 37,
+    "losses": 8,
+    "win": 0.8222,
+    "per_month": 79.7,
+    "avg_net_pct": 0.175,
+    "mult": 2.1859,
+    "maxdd": -0.4502,
+    "month_pace": 3.995,
+    "by_member": {
+     "VWAP 개선판": {
+      "n": 38,
+      "wins": 32
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 7,
+      "wins": 5
+     }
+    }
+   }
+  },
+  "A + CMO·샌드위치 캔들 1시간 그대로": {
+   "17일": {
+    "n": 42,
+    "wins": 37,
+    "losses": 5,
+    "win": 0.881,
+    "per_month": 74.4,
+    "avg_net_pct": 0.2432,
+    "mult": 2.2991,
+    "maxdd": -0.295,
+    "month_pace": 4.369,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 5,
+      "wins": 5
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 32
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4498,
+    "wins": 3282,
+    "losses": 1216,
+    "win": 0.7297,
+    "per_month": 77.5,
+    "avg_net_pct": -0.1373,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.361,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 469,
+      "wins": 378
+     },
+     "VWAP 개선판": {
+      "n": 4029,
+      "wins": 2904
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1503,
+    "wins": 1063,
+    "losses": 440,
+    "win": 0.7073,
+    "per_month": 71.7,
+    "avg_net_pct": -0.1056,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.437,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 153,
+      "wins": 119
+     },
+     "VWAP 개선판": {
+      "n": 1350,
+      "wins": 944
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 42,
+    "wins": 37,
+    "losses": 5,
+    "win": 0.881,
+    "per_month": 74.4,
+    "avg_net_pct": 0.2432,
+    "mult": 2.9388,
+    "maxdd": -0.3841,
+    "month_pace": 6.748,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 5,
+      "wins": 5
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 32
+     }
+    }
+   }
+  },
+  "A + CMO·샌드위치 캔들 1시간 A 조건": {
+   "17일": {
+    "n": 40,
+    "wins": 37,
+    "losses": 3,
+    "win": 0.925,
+    "per_month": 70.8,
+    "avg_net_pct": 0.2974,
+    "mult": 2.6961,
+    "maxdd": -0.1755,
+    "month_pace": 5.793,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 3,
+      "wins": 3
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4307,
+    "wins": 3124,
+    "losses": 1183,
+    "win": 0.7253,
+    "per_month": 74.2,
+    "avg_net_pct": -0.1325,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.375,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 218,
+      "wins": 178
+     },
+     "VWAP 개선판": {
+      "n": 4089,
+      "wins": 2946
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1441,
+    "wins": 1009,
+    "losses": 432,
+    "win": 0.7002,
+    "per_month": 68.8,
+    "avg_net_pct": -0.1146,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.436,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 72,
+      "wins": 51
+     },
+     "VWAP 개선판": {
+      "n": 1369,
+      "wins": 958
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 40,
+    "wins": 37,
+    "losses": 3,
+    "win": 0.925,
+    "per_month": 70.8,
+    "avg_net_pct": 0.2974,
+    "mult": 3.6439,
+    "maxdd": -0.2371,
+    "month_pace": 9.876,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 3,
+      "wins": 3
+     },
+     "VWAP 개선판": {
+      "n": 37,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + OBV 돌파형 4시간 그대로": {
+   "17일": {
+    "n": 41,
+    "wins": 36,
+    "losses": 5,
+    "win": 0.878,
+    "per_month": 72.6,
+    "avg_net_pct": 0.2463,
+    "mult": 2.2482,
+    "maxdd": -0.2865,
+    "month_pace": 4.199,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 2,
+      "wins": 2
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4440,
+    "wins": 3329,
+    "losses": 1111,
+    "win": 0.7498,
+    "per_month": 76.5,
+    "avg_net_pct": -0.1205,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.403,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 736,
+      "wins": 647
+     },
+     "VWAP 개선판": {
+      "n": 3704,
+      "wins": 2682
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1462,
+    "wins": 1057,
+    "losses": 405,
+    "win": 0.723,
+    "per_month": 69.8,
+    "avg_net_pct": -0.1066,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.467,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 227,
+      "wins": 190
+     },
+     "VWAP 개선판": {
+      "n": 1235,
+      "wins": 867
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 41,
+    "wins": 36,
+    "losses": 5,
+    "win": 0.878,
+    "per_month": 72.6,
+    "avg_net_pct": 0.2463,
+    "mult": 2.8532,
+    "maxdd": -0.3742,
+    "month_pace": 6.404,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 2,
+      "wins": 2
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + OBV 돌파형 4시간 A 조건": {
+   "17일": {
+    "n": 40,
+    "wins": 35,
+    "losses": 5,
+    "win": 0.875,
+    "per_month": 70.8,
+    "avg_net_pct": 0.2441,
+    "mult": 2.2214,
+    "maxdd": -0.295,
+    "month_pace": 4.111,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4248,
+    "wins": 3109,
+    "losses": 1139,
+    "win": 0.7319,
+    "per_month": 73.2,
+    "avg_net_pct": -0.1318,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.391,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 292,
+      "wins": 254
+     },
+     "VWAP 개선판": {
+      "n": 3956,
+      "wins": 2855
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1432,
+    "wins": 1018,
+    "losses": 414,
+    "win": 0.7109,
+    "per_month": 68.3,
+    "avg_net_pct": -0.1041,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.456,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 108,
+      "wins": 86
+     },
+     "VWAP 개선판": {
+      "n": 1324,
+      "wins": 932
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 40,
+    "wins": 35,
+    "losses": 5,
+    "win": 0.875,
+    "per_month": 70.8,
+    "avg_net_pct": 0.2441,
+    "mult": 2.8081,
+    "maxdd": -0.3841,
+    "month_pace": 6.226,
+    "by_member": {
+     "OBV 돌파형 4시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + OBV 추세형 4시간 그대로": {
+   "17일": {
+    "n": 42,
+    "wins": 36,
+    "losses": 6,
+    "win": 0.8571,
+    "per_month": 74.4,
+    "avg_net_pct": 0.1513,
+    "mult": 1.8374,
+    "maxdd": -0.3689,
+    "month_pace": 2.937,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 3,
+      "wins": 2
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4306,
+    "wins": 3145,
+    "losses": 1161,
+    "win": 0.7304,
+    "per_month": 74.2,
+    "avg_net_pct": -0.1289,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.384,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 292,
+      "wins": 258
+     },
+     "VWAP 개선판": {
+      "n": 4014,
+      "wins": 2887
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1430,
+    "wins": 1014,
+    "losses": 416,
+    "win": 0.7091,
+    "per_month": 68.2,
+    "avg_net_pct": -0.1029,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.458,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 79,
+      "wins": 67
+     },
+     "VWAP 개선판": {
+      "n": 1351,
+      "wins": 947
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 42,
+    "wins": 36,
+    "losses": 6,
+    "win": 0.8571,
+    "per_month": 74.4,
+    "avg_net_pct": 0.1513,
+    "mult": 2.1691,
+    "maxdd": -0.4706,
+    "month_pace": 3.941,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 3,
+      "wins": 2
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + OBV 추세형 4시간 A 조건": {
+   "17일": {
+    "n": 42,
+    "wins": 35,
+    "losses": 7,
+    "win": 0.8333,
+    "per_month": 74.4,
+    "avg_net_pct": 0.1068,
+    "mult": 1.6565,
+    "maxdd": -0.4311,
+    "month_pace": 2.445,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 2,
+      "wins": 1
+     },
+     "VWAP 개선판": {
+      "n": 40,
+      "wins": 34
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4247,
+    "wins": 3083,
+    "losses": 1164,
+    "win": 0.7259,
+    "per_month": 73.2,
+    "avg_net_pct": -0.1374,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.377,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 197,
+      "wins": 171
+     },
+     "VWAP 개선판": {
+      "n": 4050,
+      "wins": 2912
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1426,
+    "wins": 1008,
+    "losses": 418,
+    "win": 0.7069,
+    "per_month": 68.0,
+    "avg_net_pct": -0.1034,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.458,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 60,
+      "wins": 50
+     },
+     "VWAP 개선판": {
+      "n": 1366,
+      "wins": 958
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 42,
+    "wins": 35,
+    "losses": 7,
+    "win": 0.8333,
+    "per_month": 74.4,
+    "avg_net_pct": 0.1068,
+    "mult": 1.8859,
+    "maxdd": -0.5397,
+    "month_pace": 3.076,
+    "by_member": {
+     "OBV 추세형 4시간": {
+      "n": 2,
+      "wins": 1
+     },
+     "VWAP 개선판": {
+      "n": 40,
+      "wins": 34
+     }
+    }
+   }
+  },
+  "A + EMA·DMI·ADX 4시간 그대로": {
+   "17일": {
+    "n": 45,
+    "wins": 39,
+    "losses": 6,
+    "win": 0.8667,
+    "per_month": 79.7,
+    "avg_net_pct": 0.2341,
+    "mult": 2.2193,
+    "maxdd": -0.295,
+    "month_pace": 4.104,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 6,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 33
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4320,
+    "wins": 3161,
+    "losses": 1159,
+    "win": 0.7317,
+    "per_month": 74.4,
+    "avg_net_pct": -0.1304,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.382,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 325,
+      "wins": 292
+     },
+     "VWAP 개선판": {
+      "n": 3995,
+      "wins": 2869
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1435,
+    "wins": 1027,
+    "losses": 408,
+    "win": 0.7157,
+    "per_month": 68.5,
+    "avg_net_pct": -0.0917,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.48,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 106,
+      "wins": 98
+     },
+     "VWAP 개선판": {
+      "n": 1329,
+      "wins": 929
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 45,
+    "wins": 39,
+    "losses": 6,
+    "win": 0.8667,
+    "per_month": 79.7,
+    "avg_net_pct": 0.2341,
+    "mult": 2.7998,
+    "maxdd": -0.3841,
+    "month_pace": 6.193,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 6,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 33
+     }
+    }
+   }
+  },
+  "A + EMA·DMI·ADX 4시간 A 조건": {
+   "17일": {
+    "n": 45,
+    "wins": 39,
+    "losses": 6,
+    "win": 0.8667,
+    "per_month": 79.7,
+    "avg_net_pct": 0.2341,
+    "mult": 2.2193,
+    "maxdd": -0.295,
+    "month_pace": 4.104,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 6,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 33
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 4234,
+    "wins": 3074,
+    "losses": 1160,
+    "win": 0.726,
+    "per_month": 72.9,
+    "avg_net_pct": -0.1346,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.377,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 184,
+      "wins": 161
+     },
+     "VWAP 개선판": {
+      "n": 4050,
+      "wins": 2913
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1427,
+    "wins": 1014,
+    "losses": 413,
+    "win": 0.7106,
+    "per_month": 68.1,
+    "avg_net_pct": -0.0946,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.469,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 74,
+      "wins": 68
+     },
+     "VWAP 개선판": {
+      "n": 1353,
+      "wins": 946
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 45,
+    "wins": 39,
+    "losses": 6,
+    "win": 0.8667,
+    "per_month": 79.7,
+    "avg_net_pct": 0.2341,
+    "mult": 2.7998,
+    "maxdd": -0.3841,
+    "month_pace": 6.193,
+    "by_member": {
+     "EMA·DMI·ADX 4시간": {
+      "n": 6,
+      "wins": 6
+     },
+     "VWAP 개선판": {
+      "n": 39,
+      "wins": 33
+     }
+    }
+   }
+  },
+  "A + 상위 3개 그대로": {
+   "17일": {
+    "n": 60,
+    "wins": 52,
+    "losses": 8,
+    "win": 0.8667,
+    "per_month": 106.3,
+    "avg_net_pct": 0.2259,
+    "mult": 2.8795,
+    "maxdd": -0.2935,
+    "month_pace": 6.509,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 4,
+      "wins": 3
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 8,
+      "wins": 7
+     },
+     "V3.9 1시간": {
+      "n": 13,
+      "wins": 12
+     },
+     "VWAP 개선판": {
+      "n": 35,
+      "wins": 30
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 6309,
+    "wins": 4752,
+    "losses": 1557,
+    "win": 0.7532,
+    "per_month": 108.7,
+    "avg_net_pct": -0.1353,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.271,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 723,
+      "wins": 551
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 834,
+      "wins": 624
+     },
+     "V3.9 1시간": {
+      "n": 1590,
+      "wins": 1276
+     },
+     "VWAP 개선판": {
+      "n": 3162,
+      "wins": 2301
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 2046,
+    "wins": 1470,
+    "losses": 576,
+    "win": 0.7185,
+    "per_month": 97.6,
+    "avg_net_pct": -0.1324,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.295,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 208,
+      "wins": 136
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 279,
+      "wins": 195
+     },
+     "V3.9 1시간": {
+      "n": 517,
+      "wins": 399
+     },
+     "VWAP 개선판": {
+      "n": 1042,
+      "wins": 740
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 60,
+    "wins": 52,
+    "losses": 8,
+    "win": 0.8667,
+    "per_month": 106.3,
+    "avg_net_pct": 0.2259,
+    "mult": 3.9157,
+    "maxdd": -0.3871,
+    "month_pace": 11.218,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 4,
+      "wins": 3
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 8,
+      "wins": 7
+     },
+     "V3.9 1시간": {
+      "n": 13,
+      "wins": 12
+     },
+     "VWAP 개선판": {
+      "n": 35,
+      "wins": 30
+     }
+    }
+   }
+  },
+  "A + 상위 3개 A 조건": {
+   "17일": {
+    "n": 54,
+    "wins": 46,
+    "losses": 8,
+    "win": 0.8519,
+    "per_month": 95.6,
+    "avg_net_pct": 0.2197,
+    "mult": 2.5392,
+    "maxdd": -0.3988,
+    "month_pace": 5.209,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 4,
+      "wins": 3
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 5,
+      "wins": 4
+     },
+     "V3.9 1시간": {
+      "n": 9,
+      "wins": 9
+     },
+     "VWAP 개선판": {
+      "n": 36,
+      "wins": 30
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 5381,
+    "wins": 3958,
+    "losses": 1423,
+    "win": 0.7356,
+    "per_month": 92.7,
+    "avg_net_pct": -0.1496,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.285,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 439,
+      "wins": 325
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 424,
+      "wins": 299
+     },
+     "V3.9 1시간": {
+      "n": 1080,
+      "wins": 838
+     },
+     "VWAP 개선판": {
+      "n": 3438,
+      "wins": 2496
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1765,
+    "wins": 1256,
+    "losses": 509,
+    "win": 0.7116,
+    "per_month": 84.2,
+    "avg_net_pct": -0.1209,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.356,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 114,
+      "wins": 73
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 141,
+      "wins": 95
+     },
+     "V3.9 1시간": {
+      "n": 375,
+      "wins": 286
+     },
+     "VWAP 개선판": {
+      "n": 1135,
+      "wins": 802
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 54,
+    "wins": 46,
+    "losses": 8,
+    "win": 0.8519,
+    "per_month": 95.6,
+    "avg_net_pct": 0.2197,
+    "mult": 3.3322,
+    "maxdd": -0.5031,
+    "month_pace": 8.43,
+    "by_member": {
+     "CMO·샌드위치 캔들 30분": {
+      "n": 4,
+      "wins": 3
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 5,
+      "wins": 4
+     },
+     "V3.9 1시간": {
+      "n": 9,
+      "wins": 9
+     },
+     "VWAP 개선판": {
+      "n": 36,
+      "wins": 30
+     }
+    }
+   }
+  },
+  "A + 9개 전부 그대로": {
+   "17일": {
+    "n": 64,
+    "wins": 53,
+    "losses": 11,
+    "win": 0.8281,
+    "per_month": 113.4,
+    "avg_net_pct": 0.0623,
+    "mult": 1.4246,
+    "maxdd": -0.5325,
+    "month_pace": 1.872,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 2,
+      "wins": 2
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 2,
+      "wins": 2
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 5,
+      "wins": 5
+     },
+     "OBV 돌파형 4시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "OBV 추세형 30분": {
+      "n": 6,
+      "wins": 4
+     },
+     "OBV 추세형 4시간": {
+      "n": 2,
+      "wins": 1
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 2,
+      "wins": 2
+     },
+     "V3.9 1시간": {
+      "n": 8,
+      "wins": 7
+     },
+     "VWAP 개선판": {
+      "n": 21,
+      "wins": 19
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 15,
+      "wins": 10
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 7805,
+    "wins": 6003,
+    "losses": 1802,
+    "win": 0.7691,
+    "per_month": 134.5,
+    "avg_net_pct": -0.1248,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.227,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 186,
+      "wins": 153
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 586,
+      "wins": 452
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 164,
+      "wins": 150
+     },
+     "OBV 돌파형 4시간": {
+      "n": 411,
+      "wins": 357
+     },
+     "OBV 추세형 30분": {
+      "n": 930,
+      "wins": 705
+     },
+     "OBV 추세형 4시간": {
+      "n": 100,
+      "wins": 88
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 621,
+      "wins": 469
+     },
+     "V3.9 1시간": {
+      "n": 1284,
+      "wins": 1026
+     },
+     "VWAP 개선판": {
+      "n": 2526,
+      "wins": 1833
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 997,
+      "wins": 770
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 2480,
+    "wins": 1822,
+    "losses": 658,
+    "win": 0.7347,
+    "per_month": 118.3,
+    "avg_net_pct": -0.1163,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.253,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 71,
+      "wins": 59
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 159,
+      "wins": 103
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 61,
+      "wins": 58
+     },
+     "OBV 돌파형 4시간": {
+      "n": 125,
+      "wins": 106
+     },
+     "OBV 추세형 30분": {
+      "n": 279,
+      "wins": 198
+     },
+     "OBV 추세형 4시간": {
+      "n": 26,
+      "wins": 24
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 190,
+      "wins": 132
+     },
+     "V3.9 1시간": {
+      "n": 377,
+      "wins": 297
+     },
+     "VWAP 개선판": {
+      "n": 820,
+      "wins": 587
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 372,
+      "wins": 258
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 64,
+    "wins": 53,
+    "losses": 11,
+    "win": 0.8281,
+    "per_month": 113.4,
+    "avg_net_pct": 0.0623,
+    "mult": 1.4869,
+    "maxdd": -0.6527,
+    "month_pace": 2.019,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 2,
+      "wins": 2
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 2,
+      "wins": 2
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 5,
+      "wins": 5
+     },
+     "OBV 돌파형 4시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "OBV 추세형 30분": {
+      "n": 6,
+      "wins": 4
+     },
+     "OBV 추세형 4시간": {
+      "n": 2,
+      "wins": 1
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 2,
+      "wins": 2
+     },
+     "V3.9 1시간": {
+      "n": 8,
+      "wins": 7
+     },
+     "VWAP 개선판": {
+      "n": 21,
+      "wins": 19
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 15,
+      "wins": 10
+     }
+    }
+   }
+  },
+  "A + 9개 전부 A 조건": {
+   "17일": {
+    "n": 57,
+    "wins": 52,
+    "losses": 5,
+    "win": 0.9123,
+    "per_month": 101.0,
+    "avg_net_pct": 0.2261,
+    "mult": 3.1213,
+    "maxdd": -0.3936,
+    "month_pace": 7.508,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 3,
+      "wins": 3
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 6,
+      "wins": 6
+     },
+     "OBV 돌파형 4시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "OBV 추세형 30분": {
+      "n": 6,
+      "wins": 5
+     },
+     "OBV 추세형 4시간": {
+      "n": 1,
+      "wins": 0
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 3,
+      "wins": 3
+     },
+     "V3.9 1시간": {
+      "n": 5,
+      "wins": 5
+     },
+     "VWAP 개선판": {
+      "n": 27,
+      "wins": 25
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 4,
+      "wins": 3
+     }
+    }
+   },
+   "2020-03~2024-12": {
+    "n": 6191,
+    "wins": 4633,
+    "losses": 1558,
+    "win": 0.7483,
+    "per_month": 106.7,
+    "avg_net_pct": -0.146,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.252,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 113,
+      "wins": 90
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 368,
+      "wins": 280
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 121,
+      "wins": 107
+     },
+     "OBV 돌파형 4시간": {
+      "n": 209,
+      "wins": 182
+     },
+     "OBV 추세형 30분": {
+      "n": 536,
+      "wins": 397
+     },
+     "OBV 추세형 4시간": {
+      "n": 101,
+      "wins": 86
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 340,
+      "wins": 242
+     },
+     "V3.9 1시간": {
+      "n": 941,
+      "wins": 725
+     },
+     "VWAP 개선판": {
+      "n": 2978,
+      "wins": 2163
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 484,
+      "wins": 361
+     }
+    }
+   },
+   "2025-01~2026-09": {
+    "n": 1980,
+    "wins": 1439,
+    "losses": 541,
+    "win": 0.7268,
+    "per_month": 94.5,
+    "avg_net_pct": -0.1161,
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "month_pace": 0.34,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 28,
+      "wins": 19
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 91,
+      "wins": 64
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 51,
+      "wins": 47
+     },
+     "OBV 돌파형 4시간": {
+      "n": 71,
+      "wins": 58
+     },
+     "OBV 추세형 30분": {
+      "n": 150,
+      "wins": 107
+     },
+     "OBV 추세형 4시간": {
+      "n": 29,
+      "wins": 24
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 101,
+      "wins": 69
+     },
+     "V3.9 1시간": {
+      "n": 300,
+      "wins": 232
+     },
+     "VWAP 개선판": {
+      "n": 947,
+      "wins": 684
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 212,
+      "wins": 135
+     }
+    }
+   },
+   "17일 증거금40%": {
+    "n": 57,
+    "wins": 52,
+    "losses": 5,
+    "win": 0.9123,
+    "per_month": 101.0,
+    "avg_net_pct": 0.2261,
+    "mult": 4.3637,
+    "maxdd": -0.5005,
+    "month_pace": 13.591,
+    "by_member": {
+     "CMO·샌드위치 캔들 1시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "CMO·샌드위치 캔들 30분": {
+      "n": 3,
+      "wins": 3
+     },
+     "EMA·DMI·ADX 4시간": {
+      "n": 6,
+      "wins": 6
+     },
+     "OBV 돌파형 4시간": {
+      "n": 1,
+      "wins": 1
+     },
+     "OBV 추세형 30분": {
+      "n": 6,
+      "wins": 5
+     },
+     "OBV 추세형 4시간": {
+      "n": 1,
+      "wins": 0
+     },
+     "PSAR·POC 캔들 30분": {
+      "n": 3,
+      "wins": 3
+     },
+     "V3.9 1시간": {
+      "n": 5,
+      "wins": 5
+     },
+     "VWAP 개선판": {
+      "n": 27,
+      "wins": 25
+     },
+     "쓰리 아웃사이드 30분": {
+      "n": 4,
+      "wins": 3
+     }
+    }
+   }
+  }
+ }
+}
