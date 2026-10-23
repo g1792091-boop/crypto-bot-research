@@ -1,0 +1,268 @@
+{
+ "A 그대로": {
+  "17일": {
+   "n": 41,
+   "wins": 35,
+   "losses": 6,
+   "win": 0.8537,
+   "avg_win_roe": 13.2,
+   "avg_loss_roe": -32.9,
+   "avg_net_pct": 0.2158,
+   "mult": 2.0526,
+   "maxdd": -0.295,
+   "per_month": 72.6
+  },
+  "2020-03~2024-12": {
+   "n": 4183,
+   "wins": 3013,
+   "losses": 1170,
+   "win": 0.7203,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -46.8,
+   "avg_net_pct": -0.1354,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 72.1
+  },
+  "2025-01~2026-09": {
+   "n": 1413,
+   "wins": 989,
+   "losses": 424,
+   "win": 0.6999,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -39.7,
+   "avg_net_pct": -0.1023,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 67.4
+  }
+ },
+ "H1 4시간 추세가 같은 방향일 때만(중립=횡보)": {
+  "17일": {
+   "n": 30,
+   "wins": 23,
+   "losses": 7,
+   "win": 0.7667,
+   "avg_win_roe": 13.8,
+   "avg_loss_roe": -31.4,
+   "avg_net_pct": 0.1083,
+   "mult": 1.2549,
+   "maxdd": -0.2858,
+   "per_month": 53.1
+  },
+  "2020-03~2024-12": {
+   "n": 2905,
+   "wins": 2090,
+   "losses": 815,
+   "win": 0.7194,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -47.7,
+   "avg_net_pct": -0.1464,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 50.0
+  },
+  "2025-01~2026-09": {
+   "n": 990,
+   "wins": 690,
+   "losses": 300,
+   "win": 0.697,
+   "avg_win_roe": 12.8,
+   "avg_loss_roe": -40.1,
+   "avg_net_pct": -0.1068,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 47.2
+  }
+ },
+ "H2 1시간 추세가 같은 방향일 때만": {
+  "17일": {
+   "n": 31,
+   "wins": 26,
+   "losses": 5,
+   "win": 0.8387,
+   "avg_win_roe": 14.0,
+   "avg_loss_roe": -38.7,
+   "avg_net_pct": 0.1825,
+   "mult": 1.5421,
+   "maxdd": -0.2941,
+   "per_month": 54.9
+  },
+  "2020-03~2024-12": {
+   "n": 2747,
+   "wins": 1974,
+   "losses": 773,
+   "win": 0.7186,
+   "avg_win_roe": 12.7,
+   "avg_loss_roe": -46.9,
+   "avg_net_pct": -0.1357,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 47.3
+  },
+  "2025-01~2026-09": {
+   "n": 966,
+   "wins": 679,
+   "losses": 287,
+   "win": 0.7029,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -39.7,
+   "avg_net_pct": -0.0991,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 46.1
+  }
+ },
+ "H3 4시간 ADX 20 미만 금지": {
+  "17일": {
+   "n": 31,
+   "wins": 26,
+   "losses": 5,
+   "win": 0.8387,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -32.9,
+   "avg_net_pct": 0.1757,
+   "mult": 1.5384,
+   "maxdd": -0.2726,
+   "per_month": 54.9
+  },
+  "2020-03~2024-12": {
+   "n": 2996,
+   "wins": 2162,
+   "losses": 834,
+   "win": 0.7216,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -46.4,
+   "avg_net_pct": -0.1281,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 51.6
+  },
+  "2025-01~2026-09": {
+   "n": 1004,
+   "wins": 713,
+   "losses": 291,
+   "win": 0.7102,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -40.5,
+   "avg_net_pct": -0.0932,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 47.9
+  }
+ },
+ "H4 초피니스 61.8 초과 금지": {
+  "17일": {
+   "n": 37,
+   "wins": 31,
+   "losses": 6,
+   "win": 0.8378,
+   "avg_win_roe": 12.9,
+   "avg_loss_roe": -34.2,
+   "avg_net_pct": 0.1761,
+   "mult": 1.6707,
+   "maxdd": -0.2636,
+   "per_month": 65.5
+  },
+  "2020-03~2024-12": {
+   "n": 3822,
+   "wins": 2743,
+   "losses": 1079,
+   "win": 0.7177,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -46.5,
+   "avg_net_pct": -0.1384,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 65.8
+  },
+  "2025-01~2026-09": {
+   "n": 1303,
+   "wins": 921,
+   "losses": 382,
+   "win": 0.7068,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -39.8,
+   "avg_net_pct": -0.0944,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 62.2
+  }
+ },
+ "H5 효율 비율 0.3 미만 금지": {
+  "17일": {
+   "n": 9,
+   "wins": 7,
+   "losses": 2,
+   "win": 0.7778,
+   "avg_win_roe": 13.4,
+   "avg_loss_roe": -36.0,
+   "avg_net_pct": 0.0809,
+   "mult": 1.0458,
+   "maxdd": -0.1573,
+   "per_month": 15.9
+  },
+  "2020-03~2024-12": {
+   "n": 837,
+   "wins": 602,
+   "losses": 235,
+   "win": 0.7192,
+   "avg_win_roe": 13.1,
+   "avg_loss_roe": -46.7,
+   "avg_net_pct": -0.1243,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 14.4
+  },
+  "2025-01~2026-09": {
+   "n": 280,
+   "wins": 203,
+   "losses": 77,
+   "win": 0.725,
+   "avg_win_roe": 12.3,
+   "avg_loss_roe": -41.0,
+   "avg_net_pct": -0.0782,
+   "mult": 0.0794,
+   "maxdd": -0.9522,
+   "per_month": 13.4
+  }
+ },
+ "H6 1시간 볼린저 폭 하위 30% 금지": {
+  "17일": {
+   "n": 27,
+   "wins": 22,
+   "losses": 5,
+   "win": 0.8148,
+   "avg_win_roe": 12.9,
+   "avg_loss_roe": -40.2,
+   "avg_net_pct": 0.1017,
+   "mult": 1.1961,
+   "maxdd": -0.2284,
+   "per_month": 47.8
+  },
+  "2020-03~2024-12": {
+   "n": 2840,
+   "wins": 2076,
+   "losses": 764,
+   "win": 0.731,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -49.6,
+   "avg_net_pct": -0.1378,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 48.9
+  },
+  "2025-01~2026-09": {
+   "n": 991,
+   "wins": 701,
+   "losses": 290,
+   "win": 0.7074,
+   "avg_win_roe": 12.4,
+   "avg_loss_roe": -40.9,
+   "avg_net_pct": -0.1077,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 47.3
+  }
+ }
+}

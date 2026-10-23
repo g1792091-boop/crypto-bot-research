@@ -57,7 +57,8 @@ def rows_tf(coin, tf, lib):
     R = pd.DataFrame({"t": t, "coin": COINS.index(coin), "tf": tf, "side": s, "atrf": atr / p0, "e": e,
                       "j4h": F.j4h_raw3.to_numpy(), "cva": F.close_vwap_atr.to_numpy(), "adx": F.adx.to_numpy(),
                       "back1": first_back, "btc_bar": btc_bar, "btc4": btc4,
-                      "atrp": F.atrp.to_numpy(), "atrp_q80": F.atrp_q80.to_numpy(), "chase": F.chase.to_numpy(bool)})
+                      "atrp": F.atrp.to_numpy(), "atrp_q80": F.atrp_q80.to_numpy(), "chase": F.chase.to_numpy(bool),
+                      "j1h": F.j1h_raw3.to_numpy()})
     return R[ok].reset_index(drop=True)
 
 
