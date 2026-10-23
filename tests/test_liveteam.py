@@ -521,3 +521,29 @@ def test_the_owners_preview_of_the_trend_packet(tmp_path, monkeypatch, capsys):
     assert pk["bot"]["kind"] == "trend" and pk["replay"]["label"].startswith("가상") and "owners_decisions" in pk
     assert out.count("===== ") == 4 and T.system_prompt("lead", True) in out and "--- 주간 보고 회의입니다" in out
     assert not os.path.exists(db) and not os.path.exists(os.environ[T.DB_ENV])
+
+
+def test_the_team_is_told_the_vwap_bot_is_another_bot(tmp_path):
+    """Owners 10-23 (docs/vwap-bot-ko.md): Bybit follows 'VWAP 개선판', MEXC the 추세판단 봇. The second paper bot is not
+    the trend bot with another stop: its own strategies, gates and hold limit are said whole, and its break-even is the
+    research's 5-year one (its 2 ATR stop gives no config number)."""
+    import vwap_world as VW
+    w = VW.VwapWorld(str(tmp_path / "w"))
+    try:
+        infos = w.infos()
+        sec = T.second_paper(w.p["paper"], infos)
+        assert sec["label"] == "VWAP 개선판 (바이비트가 따라감)" and sec["first_label"] == "추세판단 봇 (MEXC가 따라감)"
+        assert sec["follows"] == {"바이비트": "VWAP 개선판", "MEXC": "추세판단 봇"}
+        trend = VW.deploy_config("combo.trend.json")
+        rules = T.fixed_rules(trend, infos, sec, trend_bot=True)
+        two = next(r for r in rules if r.startswith("두 번째 페이퍼 봇"))
+        assert two.startswith("두 번째 페이퍼 봇 VWAP 개선판 (바이비트가 따라감): 첫 번째와 다른 봇(매매법 F6_VWAP_FAIL 30m, "
+                              "S3_CMO_SANDWICH 1h) · ")
+        assert "손절 2 ATR" in two and "4시간 추세 판단이 반대면 진입 안 함" in two and "보유 한도 96봉" in two
+        assert "나머지 규칙은 첫 번째와 같음" not in two
+        assert "따라가는 페이퍼: 바이비트는 VWAP 개선판 · MEXC는 추세판단 봇" in rules
+        facts = T.bot_facts({"config": trend, "second": sec})
+        assert facts["second"]["break_even"] is None and facts["second"]["break_even_5y"] == pytest.approx(0.786)
+        assert not [r for r in T._paper_rules(trend) if "보유 한도" in r or "4시간 추세 판단" in r]
+    finally:
+        w.close()

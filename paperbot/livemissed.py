@@ -23,6 +23,19 @@ The groups ("왜 못 탔나", column ``grp``; COMBO@mix, the paper account both 
             reasons: dash/more/livebots.py read_exec, match, why_missed)
 Other refusals (the engine's "stop rule" / "sizing") are not listed: the simulation would refuse them the same way.
 
+The second paper bot (owners 10-23, docs/vwap-bot-ko.md: 'VWAP 개선판', livecheck.Sources.paper2_db, once its file is there,
+followed by an executor or not): its own rows, column ``paper`` = its database's name ('vwap'; NULL or '' = the main bot,
+as every row before), keys "vwap#<the usual key>" (its executors' rows "exec:<executor>|COMBO@mix#vwap|…"), simulated
+with ITS config (its combo_run record: 2 ATR stop, its ladder, 30x, margin 40 %, the 96-bar hold limit: TIME exits in its
+words, data ``time_ko``). Its groups (VWAP_GROUPS): one / pause / late / exec as above, and
+  gate      VWAP 조건이 막음: signal_log FILTERED by its entry gates (combo.py _entry_block, paperbot/entrygates.py):
+            "<N>시간 추세 반대: …" (gate_vote), "변동성 높음: …" (gate_vol), and a gate that could not read its bars
+            ("… 추세 판단을 못 읽음(진입 안 함)" / "변동성 판단에 쓸 …봉을 못 읽음", gate_unread: simulated like the others: the
+            signal itself is known, only the gate's answer is not); what the gates read stays in the row's detail
+            (``gates``, row_out).
+read_rows(conn, since, paper=None) is the main bot's rows only (every screen as it was); paper='vwap' its rows. The
+pass's work (MAX_SIMS, BUDGET_S) is shared: the main bot first, each at least half when both have work.
+
 How a signal is simulated (paperbot/livesim.py, the paper bot's own ComboEngine of the config it runs, its taker fee, the
 rule bot's 1m bars, the account's wallet at that moment as if it were flat; funding not included: livesim FUNDING_NOTE_KO):
 - an outcome (one, late): the Signal exactly as the engine received it (outcomes.data), from the outcome's minute;
@@ -48,6 +61,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import re
 import sqlite3
 import sys
 import time
@@ -65,18 +80,26 @@ COMBO_CONFIG = "/etc/paperbot/combo.json"
 REASONS = {"in position": "held", "lower score than entered signal": "lost", "early exit this minute": "early"}
 GROUPS = ("one", "research", "nobreak", "pause", "late", "exec")
 SIM_GROUPS = GROUPS[:-1]
+# the second paper bot (owners 10-23, 'VWAP 개선판', docs/vwap-bot-ko.md): its rows (column ``paper`` = its database's name,
+# keys "vwap#…") use the groups that fit it and one of its own: ``gate``, the signals its entry gates kept out (the 4h vote
+# against the side, the volatility gate, a gate that could not read its bars). GROUPS (the main bot's screen) stays as it is.
+GATE = "gate"
+VWAP_GROUPS = ("one", "pause", "late", GATE, "exec")
+ALL_GROUPS = GROUPS + (GATE,)
 GROUP_KO = {"one": "한 번에 하나", "research": "연구 조건 밖", "nobreak": "돌파 없음", "pause": "쉬는 시간",
-            "late": "늦음·재시작", "exec": "실행기가 안 따라감"}
+            "late": "늦음·재시작", "exec": "실행기가 안 따라감", GATE: "VWAP 조건이 막음"}
 GROUP_SHORT = {"one": "한 번에 하나", "research": "연구 조건", "nobreak": "돌파 없음", "pause": "쉬는 시간", "late": "늦음",
-               "exec": "실행기 안 따라감"}
+               "exec": "실행기 안 따라감", GATE: "VWAP 조건"}
 # the one-line read: who blocked, and what "blocking" was
 GROUP_SUBJ = {"one": "한 번에 하나 규칙이 막은 신호", "research": "연구 조건이 막은 신호", "nobreak": "돌파를 안 기다리고 바로 탔다면",
-              "pause": "쉬는 시간(주말·미국 지표)이 막은 신호", "late": "늦어서 못 탄 신호", "exec": "실행기가 안 따라간 페이퍼 거래"}
+              "pause": "쉬는 시간(주말·미국 지표)이 막은 신호", "late": "늦어서 못 탄 신호", "exec": "실행기가 안 따라간 페이퍼 거래",
+              GATE: "VWAP 조건(4시간 추세·변동성)이 막은 신호"}
 GROUP_VERB = {"one": "막은 게", "research": "막은 게", "nobreak": "돌파를 기다린 게", "pause": "쉰 게", "late": "안 탄 게",
-              "exec": "안 따라간 게"}
+              "exec": "안 따라간 게", GATE: "막은 게"}
 HOW_KO = {"one": "따로 탔다면 (가상)", "research": "그때 들어갔다면 (가상 · 계좌가 비어 있었다고 치고)",
           "nobreak": "돌파를 안 기다리고 바로 탔다면 (가상)", "pause": "그때 들어갔다면 (가상 · 계좌가 비어 있었다고 치고)",
-          "late": "제때 들어갔다면 (가상 · 계좌가 비어 있었다고 치고)", "exec": "페이퍼 거래의 결과 (실행기는 안 탐 · 가상 아님)"}
+          "late": "제때 들어갔다면 (가상 · 계좌가 비어 있었다고 치고)", "exec": "페이퍼 거래의 결과 (실행기는 안 탐 · 가상 아님)",
+          GATE: "조건을 안 보고 그때 들어갔다면 (가상 · 계좌가 비어 있었다고 치고)"}
 WINDOW_DAYS = 7                     # the KST days a pass looks back
 MAX_SIMS = 60                       # simulations (and rebuild attempts) per pass
 BUDGET_S = 10.0                     # seconds of simulation per pass
@@ -90,13 +113,16 @@ KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산", "REV": "빠른 청산",
            "TP": "익절", "END": "끝", "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)"}
+# TIME of a bot with a hold limit and no trend supervisor ('VWAP 개선판'): its rows keep the words in their data
+# (``time_ko``, livepapers.time_exit_ko of the bot's own config) and row_out uses them
 KO_STATE = {"open": "진행 중", "closed": "끝남", "no_data": "1분봉 없음", "refused": "진입 안 됨", "rebuild_failed": "다시 못 만듦",
             "error": "못 읽음"}
 KO_WHY = {"held": "포지션 있음 (한 번에 하나)", "lost": "같은 분 다른 신호에 밀림", "early": "빠른 청산 분 (갈아타지 않음)",
           "filter": "연구 조건 밖", "disp": "신호봉 크기", "off": "끈 구간", "when": "조건 밖", "unread": "조건을 못 읽음",
           "config": "설정이 바뀜", "nobreak": "돌파 없음", "weekend": "주말", "macro": "경제 발표 앞뒤", "late": "늦음",
           "late_break": "돌파 확인이 늦음", "usopen": "나스닥 개장 뒤", "chase": "추격 진입 막기",
-          "chase_unread": "추격 판단 못 함", "own_busy": "실거래가 자기 포지션(거래소 기준) 중"}
+          "chase_unread": "추격 판단 못 함", "own_busy": "실거래가 자기 포지션(거래소 기준) 중",
+          "gate_vote": "4시간 추세 반대", "gate_vol": "변동성 높음", "gate_unread": "조건 판단에 쓸 봉을 못 읽음"}
 NOTE_KO = ("가상 결과예요: 페이퍼 봇과 같은 엔진·같은 1분봉으로 계산했지만 실제 체결이 아니에요. 1포지션 규칙은 그대로이고, 이건 "
            "바꾸자는 뜻이 아니라 보기만 하는 거예요. 거래가 적을 때는 대부분 운이에요.")
 FILTER_NOTE_KO = ("필터는 5년 시험에서 평균적으로 나쁜 자리를 걸렀기 때문에 넣은 거예요. 이긴 것만 보면 아쉬움만 커져요: 진 것과 같이 봐야 "
@@ -141,7 +167,8 @@ CREATE TABLE IF NOT EXISTS missed (
     data TEXT,
     path TEXT,
     grp TEXT NOT NULL DEFAULT 'one',
-    executor TEXT
+    executor TEXT,
+    paper TEXT
 );
 CREATE TABLE IF NOT EXISTS missed_meta (
     k TEXT PRIMARY KEY,
@@ -151,14 +178,17 @@ CREATE TABLE IF NOT EXISTS missed_meta (
 """
 SCHEMA_INDEXES = ("CREATE INDEX IF NOT EXISTS missed_t ON missed (t)",
                   "CREATE INDEX IF NOT EXISTS missed_grp ON missed (grp, t)")
-ADDED_COLS = (("grp", "TEXT NOT NULL DEFAULT 'one'"), ("executor", "TEXT"))      # columns the first version did not have
+# columns the first version did not have; ``paper`` (owners 10-23): NULL or '' = the main paper bot (every row before),
+# else the second paper bot's database name ('vwap')
+ADDED_COLS = (("grp", "TEXT NOT NULL DEFAULT 'one'"), ("executor", "TEXT"), ("paper", "TEXT"))
 SCHEMA = SCHEMA_TABLES + ";\n" + ";\n".join(SCHEMA_INDEXES) + ";\n"
 COLS = ("key", "t", "step_ts", "member", "strategy", "tf", "symbol", "side", "why_kind", "why", "state", "entry_ts", "entry_price",
         "stop", "leverage", "margin", "exit_ts", "exit_price", "reason", "roe_net", "pnl", "best_roe", "last_ts", "wallet",
         "taken_id", "taken_state", "taken_roe", "taken_pnl", "taken", "error", "sims", "first_ts", "updated_ts", "signal",
-        "detail", "data", "path", "grp", "executor")
-READ_COLS = tuple(c for c in COLS if c not in ("signal", "detail", "path"))     # what the screen and ``show`` read
-LIGHT_COLS = ("key", "t", "step_ts", "state", "updated_ts", "taken_state", "taken_roe", "why_kind", "grp")
+        "detail", "data", "path", "grp", "executor", "paper")
+# what the screen and ``show`` read (the detail too, for what a VWAP row's gates read; the signal and path are not)
+READ_COLS = tuple(c for c in COLS if c not in ("signal", "path"))
+LIGHT_COLS = ("key", "t", "step_ts", "state", "updated_ts", "taken_state", "taken_roe", "why_kind", "grp", "paper")
 FINAL = ("closed", "refused")       # never simulated again
 
 
@@ -221,10 +251,20 @@ def _dur(ms: Optional[int]) -> str:
     return f"{m // 1440}일 {(m % 1440) // 60}시간"
 
 
-def classify(why: str) -> Optional[tuple]:
+def classify(why: str, gates: bool = False) -> Optional[tuple]:
     """(group, kind) of a FILTERED signal_log row from the bot's own why (combo.py _allowed, _submit_due, _research_signal,
-    _research_entry, _breaks), None for anything else."""
+    _research_entry, _breaks), None for anything else. ``gates`` (the second paper bot, owners 10-23: combo.py
+    _entry_block with paperbot/entrygates.py): "<N>시간 추세 반대: …" (gate_vote), "변동성 높음: …" (gate_vol), "<N>시간 추세
+    판단을 못 읽음(진입 안 함)…" / "변동성 판단에 쓸 …봉을 못 읽음(진입 안 함)…" (gate_unread: the signal itself is known
+    and is simulated like the others; only what the gate would have said is not)."""
     w = str(why or "")
+    if gates:
+        if re.match(r"^\S+ 추세 반대", w):
+            return GATE, "gate_vote"
+        if w.startswith("변동성 높음"):
+            return GATE, "gate_vol"
+        if re.match(r"^\S+ 추세 판단을 못 읽음", w) or w.startswith("변동성 판단에 쓸"):
+            return GATE, "gate_unread"
     if w.startswith("연구 조건 밖: 신호봉 크기"):
         return "research", "disp"
     if w.startswith("연구 조건 밖"):
@@ -268,10 +308,11 @@ SIGLOG_SQL = ("SELECT id, bar_close, timeframe, strategy, symbol, side, atr, ref
               "WHERE timeframe IN ('15m', '30m', '1h', '4h') AND bar_close >= ? AND status = 'FILTERED' ORDER BY bar_close, id")
 
 
-def read_paper(pc, since: int, trades_since: Optional[int] = None) -> dict:
+def read_paper(pc, since: int, trades_since: Optional[int] = None, gates: bool = False) -> dict:
     """One snapshot of the paper bot's database: the candidates since ``since`` (outcomes SKIPPED for the one-position rule
     and REJECTED late, signal_log FILTERED rows), its closed trades (``trades_since``: those that closed from then on and
-    the last one before, for the wallet; None: all), its open position and last marks, its ``combo_run`` record."""
+    the last one before, for the wallet; None: all), its open position and last marks, its ``combo_run`` record.
+    ``gates``: the second paper bot's (classify: its gate group; what its gates read stays in the row's detail)."""
     q = "SELECT id, symbol, entry_time, exit_time, exit_reason, pnl, roe, equity_after, data FROM trades WHERE account_id = ? "
     pc.execute("BEGIN")
     try:
@@ -314,14 +355,15 @@ def read_paper(pc, since: int, trades_since: Optional[int] = None) -> dict:
                       "side": int(sig.get("side") or 0), "signal": sig, "detail": det, "why_raw": ""})
     for r in srows:
         d = _j(r.get("data"))
-        gk = classify(d.get("why"))
+        gk = classify(d.get("why"), gates)
         if gk is None:
             continue
         bc = int(r["bar_close"])
         cands.append({"key": f"{r['strategy']}|{r['symbol']}|{bc}", "bad": False, "grp": gk[0], "src": "siglog", "step_ts": bc,
                       "symbol": r["symbol"], "kind": gk[1], "t": bc, "member": r["strategy"],
                       "strategy": d.get("strategy") or str(r["strategy"]).split("@")[0], "tf": r["timeframe"],
-                      "side": int(r.get("side") or 0), "signal": {"siglog": {k: r[k] for k in scols}}, "detail": {},
+                      "side": int(r.get("side") or 0), "signal": {"siglog": {k: r[k] for k in scols}},
+                      "detail": {"gates": d["gates"]} if gates and isinstance(d.get("gates"), dict) else {},
                       "why_raw": str(d.get("why") or "")})
     cands.sort(key=lambda c: (c["step_ts"], c["key"]))
     trades = []
@@ -547,6 +589,7 @@ def _base(c: dict, old: Optional[dict], now_ms: int) -> dict:
     row = dict(old) if old else {}
     row.update(key=c["key"], t=c["t"], step_ts=c["step_ts"], member=c["member"], strategy=c["strategy"], tf=c["tf"],
                symbol=c["symbol"], side=c["side"], why_kind=c["kind"], grp=c["grp"], executor=c.get("executor"),
+               paper=c.get("paper"),
                signal=json.dumps(c["signal"], default=str, ensure_ascii=False),
                detail=json.dumps({**(c["detail"] or {}), "why_raw": c.get("why_raw") or ""}, default=str, ensure_ascii=False))
     row.setdefault("first_ts", int(now_ms))
@@ -621,7 +664,8 @@ def _cand_of(row: dict) -> dict:
     return {"key": row["key"], "bad": not sig, "grp": row.get("grp") or "one", "src": "siglog" if "siglog" in sig else "outcome",
             "step_ts": int(row["step_ts"]), "symbol": row["symbol"], "kind": row["why_kind"], "t": int(row["t"]),
             "member": row["member"], "strategy": row["strategy"], "tf": row["tf"], "side": int(row["side"]), "signal": sig,
-            "detail": {k: v for k, v in det.items() if k != "why_raw"}, "why_raw": det.get("why_raw") or ""}
+            "detail": {k: v for k, v in det.items() if k != "why_raw"}, "why_raw": det.get("why_raw") or "",
+            "paper": row.get("paper") or None}
 
 
 def _due(row: dict, now_ms: int, since: int) -> bool:
@@ -664,21 +708,47 @@ def _sim_one(c: dict, row: dict, rig, rig_err, rc, mm, src) -> None:
         row["error"] = str(exc)[:300] if isinstance(exc, MissedError) else f"{type(exc).__name__}: {exc}"[:300]
 
 
-def _pass(src, conn, now_ms: int, cap: int, budget_s: float, res: dict, t0: float) -> None:
+def paper_tag(path: str) -> str:
+    """The second paper bot's name in the table: its database's name without the extension ('vwap')."""
+    return os.path.splitext(os.path.basename(str(path or "")))[0]
+
+
+def paper2_of(src) -> Optional[str]:
+    """The second paper bot's database (``src.paper2_db``, livecheck.paper2_default) when it is there and is not the
+    main one; None otherwise (then the pass is what it always was)."""
+    from . import livepapers as LP
+    p2 = getattr(src, "paper2_db", None) or ""
+    if not p2 or not os.path.exists(p2) or LP.same(p2, getattr(src, "paper_db", "") or ""):
+        return None
+    return p2
+
+
+def _config2_file() -> str:
+    """The second paper bot's config file when its database has no run record (the live site's default)."""
+    try:
+        from .dash.more.livebots import ENV_MORE
+        var, default = ENV_MORE["combo2_config"]
+    except Exception:  # noqa: BLE001
+        var, default = "PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-vwap.json"
+    return os.environ.get(var) or default
+
+
+def _prep(src, conn, now_ms: int, since: int, path: str, tag: Optional[str], config_file: str) -> Optional[dict]:
+    """One paper bot's work of a pass: its snapshot (read_paper), its engine rules (its own combo_run config), its rows
+    already stored, its jobs (the oldest unfinished first); ``tag``: the second paper bot's name (its keys "tag#…", its
+    rows' ``paper``), None for the main one. None when its database cannot be read."""
     from . import livecheck as LC
+    from . import livepapers as LP
     from . import livesim as LS
-    since = window_start(now_ms)
-    pc = LC.open_ro(getattr(src, "paper_db", ""))
+    pc = LC.open_ro(path)
     if pc is None:
-        _meta_put(conn, now_ms, {"state": "no_paper", "now": now_ms, "paper_db": getattr(src, "paper_db", "")})
-        return
+        return None
     look = since - OPEN_DAYS * DAY                 # the rows still worked on: open ones are followed OPEN_DAYS
     try:
-        paper = read_paper(pc, since, trades_since=look)
+        paper = read_paper(pc, since, trades_since=look, gates=tag is not None)
     finally:
         pc.close()
-    _first_put(conn, now_ms, since)
-    cfg_raw, fee, cfg_src = config_of(paper, getattr(src, "combo_config", COMBO_CONFIG))
+    cfg_raw, fee, cfg_src = config_of(paper, config_file)
     rig, rig_err = None, None
     if cfg_raw is None:
         rig_err = "페이퍼 봇 설정을 못 읽음 (기록에도 설정 파일에도 없음)"
@@ -687,58 +757,112 @@ def _pass(src, conn, now_ms: int, cap: int, budget_s: float, res: dict, t0: floa
             rig = LS.rig_of(cfg_raw, taker_fee=fee)
         except Exception as exc:  # noqa: BLE001  every row says so
             rig_err = f"페이퍼 봇 설정으로 엔진을 못 만듦: {type(exc).__name__}: {exc}"[:300]
-    mm = member_map(cfg_raw or {})
-    initial = rig.initial if rig is not None else (_f((cfg_raw or {}).get("initial_equity")) or 1000.0)
-    rt = rig.settings.round_trip_cost if rig is not None else 0.0014
-    trades, pos, marks = paper["trades"], paper["pos"], paper["marks"]
-    have = _existing(conn, look)
+    if tag is not None:
+        for c in paper["cands"]:
+            c["key"], c["paper"] = f"{tag}#{c['key']}", tag
+    time_ko = LP.time_exit_ko(cfg_raw) if tag is not None else None
+    have = {k: r for k, r in _existing(conn, look).items() if (r.get("paper") or None) == tag}
     cands = {c["key"]: c for c in paper["cands"]}
-    # the oldest unfinished first: new signals, open virtual trades, rows due a retry
     jobs = [(c["step_ts"], "new", c["key"]) for c in paper["cands"] if c["key"] not in have]
     jobs += [(int(r["step_ts"]), "resim", k) for k, r in have.items() if r["grp"] != "exec" and _due(r, now_ms, since)]
     jobs.sort()
+    return {"path": path, "tag": tag, "paper": paper, "cfg": cfg_raw, "cfg_src": cfg_src, "rig": rig, "rig_err": rig_err,
+            "mm": member_map(cfg_raw or {}), "look": look, "have": have, "cands": cands, "jobs": jobs,
+            "time_ko": time_ko if time_ko and time_ko != KO_EXIT["TIME"] else None,
+            "initial": rig.initial if rig is not None else (_f((cfg_raw or {}).get("initial_equity")) or 1000.0),
+            "rt": rig.settings.round_trip_cost if rig is not None else 0.0014}
+
+
+def _run(w: dict, src, conn, now_ms: int, cap: int, deadline: float, res: dict, sub: dict) -> None:
+    """Simulate ``w``'s jobs, at most ``cap`` and until ``deadline`` (time.monotonic()); counts into ``res`` (the pass)
+    and ``sub`` (this paper bot)."""
+    from . import livecheck as LC
+    trades, pos, marks = w["paper"]["trades"], w["paper"]["pos"], w["paper"]["marks"]
     rc = LC.open_ro(getattr(src, "rule_db", ""))
     try:
-        for i, (_t, kind, key) in enumerate(jobs):
-            if i >= cap or time.monotonic() - t0 > budget_s:
-                res["capped"], res["left"] = True, len(jobs) - i
+        for i, (_t, kind, key) in enumerate(w["jobs"]):
+            if i >= cap or time.monotonic() > deadline:
+                left = len(w["jobs"]) - i
+                res["capped"], res["left"] = True, res["left"] + left
+                sub["capped"], sub["left"] = True, left
                 break
-            old = _full(conn, key) if key in have else None
-            c = cands.get(key) or _cand_of(old)
+            old = _full(conn, key) if key in w["have"] else None
+            c = w["cands"].get(key) or _cand_of(old)
             row = _base(c, old, now_ms)
-            taken = taken_of(c["kind"], c["step_ts"], c["detail"], trades, pos, marks, rt) if c["grp"] == "one" else None
+            taken = taken_of(c["kind"], c["step_ts"], c["detail"], trades, pos, marks, w["rt"]) if c["grp"] == "one" else None
             _with_taken(row, taken)
             row["why"] = why_of(c, taken)
             if row.get("wallet") is None:
-                row["wallet"] = wallet_at(trades, c["step_ts"], initial, inclusive=c["kind"] == "early")
+                row["wallet"] = wallet_at(trades, c["step_ts"], w["initial"], inclusive=c["kind"] == "early")
             row["sims"] = int(row.get("sims") or 0) + 1
             row["updated_ts"] = now_ms
-            _sim_one(c, row, rig, rig_err, rc, mm, src)
+            _sim_one(c, row, w["rig"], w["rig_err"], rc, w["mm"], src)
+            if w["time_ko"]:                         # this bot's TIME words with the row (row_out)
+                row["data"] = json.dumps({**_j(row.get("data")), "time_ko": w["time_ko"]}, default=str, ensure_ascii=False)
             res["errors"] += int(row["state"] == "error")
             _upsert(conn, row)
-            res["new" if kind == "new" else "resim"] += 1
-            res["closed"] += int(row["state"] == "closed")
+            for d in (res, sub):
+                d["new" if kind == "new" else "resim"] += 1
+                d["closed"] += int(row["state"] == "closed")
     finally:
         if rc is not None:
             rc.close()
-    # the trade that had the place (group one), while it is still open (no simulation: a lookup)
-    for key, light in _existing(conn, look).items():
+
+
+def _taken_pass(w: dict, conn, since: int, res: dict) -> None:
+    """The trade that had the place (group one), while it is still open (no simulation: a lookup), of ``w``'s rows."""
+    trades, pos, marks = w["paper"]["trades"], w["paper"]["pos"], w["paper"]["marks"]
+    for key, light in _existing(conn, w["look"]).items():
+        if (light.get("paper") or None) != w["tag"]:
+            continue
         if light["grp"] != "one" or light["taken_state"] == "closed" or (light["taken_state"] is None and int(light["t"]) < since):
             continue
         row = _full(conn, key)
         c = _cand_of(row)
-        taken = taken_of(row["why_kind"], int(row["step_ts"]), c["detail"], trades, pos, marks, rt)
+        taken = taken_of(row["why_kind"], int(row["step_ts"]), c["detail"], trades, pos, marks, w["rt"])
         if (taken or {}).get("state") != row["taken_state"] or (taken and taken.get("roe") != row["taken_roe"]):
             row = _with_taken(row, taken)
             row["why"] = why_of(c, taken)
             _upsert(conn, row)
             res["taken"] += 1
-    exec_states = _exec_pass(src, conn, now_ms, since, trades, pos, marks, rt, res)
+
+
+def _pass(src, conn, now_ms: int, cap: int, budget_s: float, res: dict, t0: float) -> None:
+    since = window_start(now_ms)
+    main = _prep(src, conn, now_ms, since, getattr(src, "paper_db", ""), None, getattr(src, "combo_config", COMBO_CONFIG))
+    if main is None:
+        _meta_put(conn, now_ms, {"state": "no_paper", "now": now_ms, "paper_db": getattr(src, "paper_db", "")})
+        return
+    _first_put(conn, now_ms, since)
+    # the second paper bot (owners 10-23, 'VWAP 개선판'): its own rows, simulated with its own config. The pass's work is
+    # shared, the main bot first: each gets half of it at least, and what one does not need goes to the other
+    p2 = paper2_of(src)
+    second = _prep(src, conn, now_ms, since, p2, paper_tag(p2), _config2_file()) if p2 else None
+    if second is not None:
+        conn.execute("INSERT OR IGNORE INTO missed_meta VALUES (?,?,?)",
+                     (f"first:{second['tag']}", int(now_ms), json.dumps({"since": int(since)})))
+    need2 = len(second["jobs"]) if second is not None else 0
+    cap1 = cap - min(need2, cap // 2)
+    sub1 = {"new": 0, "resim": 0, "closed": 0, "capped": False, "left": 0}
+    _run(main, src, conn, now_ms, cap1, t0 + budget_s * (cap1 / cap if cap else 1.0), res, sub1)
+    sub2 = None
+    if second is not None:
+        sub2 = {"new": 0, "resim": 0, "closed": 0, "capped": False, "left": 0}
+        _run(second, src, conn, now_ms, cap - sub1["new"] - sub1["resim"], t0 + budget_s, res, sub2)
+    for w in (main, second):
+        if w is not None:
+            _taken_pass(w, conn, since, res)
+    p = main["paper"]
+    exec_states = _exec_pass(src, conn, now_ms, since, p["trades"], p["pos"], p["marks"], main["rt"], res)
     conn.execute("DELETE FROM missed WHERE t < ?", (now_ms - KEEP_DAYS * DAY,))
     res["rows"] = int(conn.execute("SELECT COUNT(*) FROM missed").fetchone()[0])
-    _meta_put(conn, now_ms, {"state": "ok", "now": now_ms, "since": since, "config": cfg_src, "rig_error": rig_err,
+    if second is not None:
+        res[second["tag"]] = {**sub2, "config": second["cfg_src"], "rig_error": second["rig_err"]}
+    rig = main["rig"]
+    _meta_put(conn, now_ms, {"state": "ok", "now": now_ms, "since": since, "config": main["cfg_src"], "rig_error": main["rig_err"],
                              "funding": "excluded", "notes": rig.notes if rig is not None else [], "executors": exec_states,
                              **{k: res[k] for k in ("new", "resim", "closed", "errors", "left", "capped", "taken", "exec", "rows")},
+                             **({"papers": {second["tag"]: res[second["tag"]]}} if second is not None else {}),
                              "elapsed_s": round(time.monotonic() - t0, 3)})
 
 
@@ -769,6 +893,7 @@ def _exec_pass(src, conn, now_ms: int, since: int, trades: list, pos: Optional[d
     main = getattr(src, "paper_db", None) or PAPER_DB
     paper = _exec_paper(trades, pos, marks, rt, since, now_ms)
     others: dict = {}
+    time_kos: dict = {}
 
     def paper_of(path: str) -> list:
         """Another paper bot's window (read once a pass, read-only)."""
@@ -780,6 +905,8 @@ def _exec_pass(src, conn, now_ms: int, since: int, trades: list, pos: Optional[d
                 try:
                     d = read_paper(pc, since, since)
                     got = _exec_paper(d["trades"], d["pos"], d["marks"], rt, since, now_ms)
+                    tko = LP.time_exit_ko((d.get("run") or {}).get("config"))
+                    time_kos[k] = tko if tko != KO_EXIT["TIME"] else None
                 except sqlite3.Error:
                     got = []
                 finally:
@@ -825,7 +952,9 @@ def _exec_pass(src, conn, now_ms: int, since: int, trades: list, pos: Optional[d
                            last_ts=None, wallet=None, error=None, updated_ts=now_ms,
                            signal=json.dumps({"paper": t["id"]} if is_main else {"paper": t["id"], "paper_db": path}),
                            detail=json.dumps({"why_text": w.get("why_text")}, ensure_ascii=False),
-                           data=json.dumps({"why": ""}), path=None)
+                           data=json.dumps({"why": ""} if is_main or not time_kos.get(LP.norm(path))
+                                           else {"why": "", "time_ko": time_kos[LP.norm(path)]}, ensure_ascii=False),
+                           path=None, paper=None if is_main else paper_tag(path))
                 _with_taken(row, None)
                 _upsert(conn, row)
                 res["exec"] += 1
@@ -842,28 +971,43 @@ def row_out(d: dict) -> dict:
     entry, exit_ts, last = d.get("entry_ts"), d.get("exit_ts"), d.get("last_ts")
     hold = (int(exit_ts) - int(entry)) if (st == "closed" and entry is not None and exit_ts is not None) else \
         (int(last) + MIN - int(entry)) if (st == "open" and entry is not None and last is not None) else None
+    tko = data.get("time_ko")                           # the second paper bot's TIME words ('VWAP 개선판': 보유 한도 청산)
+
+    def reason_ko(r):
+        return tko if (r == "TIME" and tko) else KO_EXIT.get(r, r)
     if taken is not None:
-        taken["reason_ko"] = KO_EXIT.get(taken.get("reason"), taken.get("reason"))
+        taken["reason_ko"] = reason_ko(taken.get("reason"))
+    gates = _j(d.get("detail")).get("gates") if d.get("detail") else None
     return {"key": d.get("key"), "t": d.get("t"), "step_ts": d.get("step_ts"), "member": d.get("member"), "strategy": d.get("strategy"),
             "tf": d.get("tf"), "symbol": d.get("symbol"), "side": d.get("side"), "grp": grp, "grp_ko": GROUP_KO.get(grp, grp),
             "how_ko": HOW_KO.get(grp, ""), "executor": d.get("executor"), "why_kind": d.get("why_kind"),
             "why_kind_ko": KO_WHY.get(d.get("why_kind"), d.get("why_kind")), "why": d.get("why"), "state": st,
             "state_ko": KO_STATE.get(st, st), "entry_ts": entry, "entry_price": _f(d.get("entry_price")), "stop": _f(d.get("stop")),
             "leverage": d.get("leverage"), "margin": _f(d.get("margin")), "exit_ts": exit_ts, "exit_price": _f(d.get("exit_price")),
-            "reason": d.get("reason"), "reason_ko": KO_EXIT.get(d.get("reason"), d.get("reason")), "roe": _f(d.get("roe_net")),
+            "reason": d.get("reason"), "reason_ko": reason_ko(d.get("reason")), "roe": _f(d.get("roe_net")),
             "pnl": _f(d.get("pnl")), "best_roe": _f(d.get("best_roe")), "last_ts": last, "hold_ms": hold,
             "win": (st == "closed" and (_f(d.get("pnl")) or 0) > 0), "lock": _f(data.get("lock")), "stop_now": _f(data.get("stop_now")),
             "stop_rule": data.get("stop_rule") or "", "note": data.get("why") or "", "error": d.get("error") or "",
-            "taken": taken, "updated_ts": d.get("updated_ts"), "sims": d.get("sims")}
+            "taken": taken, "updated_ts": d.get("updated_ts"), "sims": d.get("sims"),
+            # owners 10-23: whose row ('vwap': the second paper bot; None: the main one) and what its gates read
+            "paper": d.get("paper") or None, "gates": gates if isinstance(gates, dict) else None}
 
 
-def read_rows(conn, since: int, limit: Optional[int] = None) -> list:
+def read_rows(conn, since: int, limit: Optional[int] = None, paper: Optional[str] = None) -> list:
     """The rows of signals from ``since`` on, newest first (``row_out``; the stored signal and path are not read). An older
-    table without ``grp`` / ``executor`` (before the watcher's first pass of this version) reads as group ``one``."""
+    table without ``grp`` / ``executor`` (before the watcher's first pass of this version) reads as group ``one``.
+    ``paper``: None = the main paper bot's rows only (``paper`` NULL or '': every row before the second bot, and every
+    screen as it was); 'vwap' = the second paper bot's rows (owners 10-23)."""
     have = {r[1] for r in conn.execute("PRAGMA table_info(missed)")}
     sel = [c if c in have else ("'one' AS grp" if c == "grp" else f"NULL AS {c}") for c in READ_COLS]
-    q = f"SELECT {', '.join(sel)} FROM missed WHERE t >= ? ORDER BY t DESC, key" + (" LIMIT ?" if limit else "")
-    cur = conn.execute(q, (int(since),) + ((int(limit),) if limit else ()))
+    if "paper" not in have:
+        where, args = ("1 = 1", ()) if paper is None else ("0 = 1", ())
+    elif paper is None:
+        where, args = "(paper IS NULL OR paper = '')", ()
+    else:
+        where, args = "paper = ?", (str(paper),)
+    q = f"SELECT {', '.join(sel)} FROM missed WHERE t >= ? AND {where} ORDER BY t DESC, key" + (" LIMIT ?" if limit else "")
+    cur = conn.execute(q, (int(since),) + args + ((int(limit),) if limit else ()))
     return [row_out(dict(zip(READ_COLS, r))) for r in cur.fetchall()]
 
 
@@ -906,15 +1050,18 @@ def read_ko(grp: str, b: dict) -> str:
     return line + (" · 표본 적음 · 대부분 운" if b.get("small") else "")
 
 
-def summary_of(rows: list, trades: list, pos_entry: Optional[int], since: int) -> dict:
+def summary_of(rows: list, trades: list, pos_entry: Optional[int], since: int, groups_: Optional[tuple] = None) -> dict:
     """The cards of the screen: the paper trades actually taken (entered since ``since``: the closed ones, and the open
     position), each group's rows of the same span (``row_out`` shape) with its one-line read, and every simulated group
-    together (``all``; the executors' rows are paper results, not in it)."""
+    together (``all``; the executors' rows are paper results, not in it). ``groups_``: the groups to list (default
+    GROUPS, plus ``gate`` when a row has it: the second paper bot's, VWAP_GROUPS)."""
     rs = [r for r in rows if (r.get("t") or 0) >= since]
     tk = [{**t, "state": "closed"} for t in trades if (t.get("entry_time") or 0) >= since]
     taken = block_of(tk, 1 if pos_entry is not None and pos_entry >= since else 0)
     groups = []
-    for g in GROUPS:
+    if groups_ is None:
+        groups_ = GROUPS + ((GATE,) if any(r.get("grp") == GATE for r in rs) else ())
+    for g in groups_:
         b = block_of([r for r in rs if (r.get("grp") or "one") == g])
         groups.append({"id": g, "ko": GROUP_KO[g], "subj": GROUP_SUBJ[g], "how_ko": HOW_KO[g], **b, "read_ko": read_ko(g, b)})
     return {"taken": taken, "groups": groups, "all": block_of([r for r in rs if (r.get("grp") or "one") != "exec"]),
@@ -945,20 +1092,36 @@ def taken_ko(t: Optional[dict]) -> str:
     return f"{head} {_pct(t.get('roe'))}"
 
 
-def morning_line(conn, trades: list, pos_entry: Optional[int], w0: int, w1: int) -> Optional[str]:
+def morning_line(conn, trades: list, pos_entry: Optional[int], w0: int, w1: int, paper: Optional[str] = None) -> Optional[str]:
     """The morning check's one quiet line for the checked day [w0, w1) (livecheck.db ``missed``, read as it is; None when
     the day has no such row or the table is not there): "어제 못 탄 신호 n개(가상): 한 번에 하나 a승 b패 · 연구 조건 c승 d패
-    · … · 실행기 안 따라감 n번(페이퍼 a승 b패) · 실제로 탄 거래 x승 y패". Only groups with signals; open ones as "진행 n"."""
+    · … · 실행기 안 따라감 n번(페이퍼 a승 b패) · 실제로 탄 거래 x승 y패". Only groups with signals; open ones as "진행 n".
+    ``paper`` (owners 10-23, the second paper bot's rows: 'vwap'; ``trades`` / ``pos_entry`` its own): its gate group
+    first, "VWAP 조건이 막은 신호 어제 n개(가상): a승 b패 · 그 밖에 못 탄 신호 … · 실제로 탄 거래 x승 y패"."""
     if conn is None:
         return None
     try:
-        rows = [r for r in read_rows(conn, w0) if (r.get("t") or 0) < w1]
+        rows = [r for r in read_rows(conn, w0, paper=paper) if (r.get("t") or 0) < w1]
     except sqlite3.Error:
         return None
     if not rows:
         return None
+    if paper is not None:
+        gate = block_of([r for r in rows if r["grp"] == GATE])
+        rest = [r for r in rows if r["grp"] != GATE]
+        head = (f"VWAP 조건이 막은 신호 어제 {gate['n']}개(가상): {gate['wins']}승 {gate['losses']}패"
+                + (f" 진행 {gate['open']}" if gate["open"] else ""))
+        tail = morning_line_parts(rest, trades, pos_entry, w0, w1, groups=tuple(g for g in VWAP_GROUPS if g != GATE))
+        return " · ".join([head] + ([f"그 밖에 {' · '.join(tail['parts'])}"] if tail["parts"] else []) + [tail["taken"]])
+    out = morning_line_parts(rows, trades, pos_entry, w0, w1)
+    return f"어제 못 탄 신호 {out['n']}개(가상): " + " · ".join(out["parts"] + [out["taken"]])
+
+
+def morning_line_parts(rows: list, trades: list, pos_entry: Optional[int], w0: int, w1: int, groups: tuple = GROUPS) -> dict:
+    """The pieces of morning_line: {"n" (simulated signals of the groups), "parts" (a piece per group with rows),
+    "taken" (실제로 탄 거래 …)}."""
     parts, n = [], 0
-    for g in GROUPS:
+    for g in groups:
         grp = [r for r in rows if r["grp"] == g]
         b = block_of(grp)
         if not b["n"]:
@@ -976,13 +1139,13 @@ def morning_line(conn, trades: list, pos_entry: Optional[int], w0: int, w1: int)
             parts.append(f"{label} {b['wins']}승 {b['losses']}패{more}")
     tk = block_of([{**t, "state": "closed"} for t in trades if w0 <= (t.get("entry_time") or 0) < w1],
                   1 if pos_entry is not None and w0 <= pos_entry < w1 else 0)
-    parts.append(f"실제로 탄 거래 {tk['wins']}승 {tk['losses']}패" + (f" 진행 {tk['open']}" if tk["open"] else ""))
-    return f"어제 못 탄 신호 {n}개(가상): " + " · ".join(parts)
+    return {"n": n, "parts": parts,
+            "taken": f"실제로 탄 거래 {tk['wins']}승 {tk['losses']}패" + (f" 진행 {tk['open']}" if tk["open"] else "")}
 
 
 def show_text(db: str, paper_db: str, now_ms: int, days: Optional[int] = WINDOW_DAYS, limit: int = 30,
-              group: Optional[str] = None) -> tuple:
-    """(exit code, text) of ``show``."""
+              group: Optional[str] = None, paper: Optional[str] = None) -> tuple:
+    """(exit code, text) of ``show``. ``paper``: the second paper bot's rows ('vwap'; ``paper_db`` is then its database)."""
     from . import livecheck as LC
     conn = LC.open_ro(db)
     if conn is None:
@@ -992,8 +1155,9 @@ def show_text(db: str, paper_db: str, now_ms: int, days: Optional[int] = WINDOW_
         if "missed" not in tables:
             return 1, "1분 감시가 아직 못 탄 신호를 계산하기 전이에요 (missed 표가 없음)"
         meta = {k: (ts, _j(d)) for k, ts, d in conn.execute("SELECT k, ts, data FROM missed_meta")} if "missed_meta" in tables else {}
-        since = window_start(now_ms, days) if days else int((meta.get("first") or (0, {}))[1].get("since") or 0)
-        rows = read_rows(conn, since)
+        first = meta.get(f"first:{paper}" if paper else "first") or (0, {})
+        since = window_start(now_ms, days) if days else int(first[1].get("since") or 0)
+        rows = read_rows(conn, since, paper=paper)
     finally:
         conn.close()
     trades, pos_entry, paper_ok = [], None, False
@@ -1065,14 +1229,18 @@ def main(argv: Optional[list] = None) -> int:
     common(s)
     s.add_argument("--days", type=int, default=WINDOW_DAYS, help="KST days (0: everything recorded)")
     s.add_argument("--limit", type=int, default=30)
-    s.add_argument("--group", choices=GROUPS, default=None, help="rows of one group only (the summary stays whole)")
+    s.add_argument("--group", choices=ALL_GROUPS, default=None, help="rows of one group only (the summary stays whole)")
+    s.add_argument("--vwap", action="store_true", help="the second paper bot's rows ('VWAP 개선판', PAPERBOT_LIVE_PAPER2_DB)")
     r = sub.add_parser("run", help="one pass now (the 1-minute watcher does it every minute)")
     common(r)
     a = ap.parse_args(argv)
     now = int(time.time() * 1000)
     src = _sources(a)
     if a.cmd == "show":
-        code, text = show_text(a.db, src.paper_db, now, a.days or None, a.limit, a.group)
+        if getattr(a, "vwap", False):
+            code, text = show_text(a.db, src.paper2_db, now, a.days or None, a.limit, a.group, paper=paper_tag(src.paper2_db))
+        else:
+            code, text = show_text(a.db, src.paper_db, now, a.days or None, a.limit, a.group)
         print(text)
         return code
     from . import livecheck as LC

@@ -418,6 +418,7 @@ def _paper_rules(cfg: Optional[dict]) -> Optional[list]:
         out.append(f"미국 경제 발표 앞뒤 {c.macro_blackout_min}분 진입 없음")
     if c.us_open_pause_min or c.us_open_pre_min:
         out.append(f"{C.us_open_ko(c.us_open_pause_min or 0, c.us_open_pre_min or 0)} 진입 없음")
+    out += C.gate_lines(c)                  # 'VWAP 개선판' (owners 10-23): its entry gates and hold limit; others: none
     return out
 
 
@@ -486,10 +487,19 @@ def fixed_rules(cfg: Optional[dict], infos: Optional[list], second: Optional[dic
     trend = _trend_rules(cfg) if isinstance(cfg, dict) and cfg.get("trend") is not None else None
     out = list(trend or (FIXED_TREND_PAPER if is_t else _paper_rules(cfg) or FIXED_PAPER))
     if second:
+        from .livecheck import family_of
         mine = _paper_rules(second.get("config")) or []
-        diff = [r for r in mine if r not in out and not r.startswith("매매법 ")]
-        out.append(f"두 번째 페이퍼 봇 {second.get('label')}: " + (" · ".join(diff) if diff else "규칙을 못 읽음")
-                   + " (나머지 규칙은 첫 번째와 같음)")
+        f1, f2 = family_of(cfg), family_of(second.get("config"))
+        if f2 is not None and f2 != f1:
+            # a different bot (owners 10-23, 'VWAP 개선판': other strategies, its own gates and hold limit): all its rules
+            mem = [f"{m.get('strategy')} {m.get('tf')}" for m in (second.get("config") or {}).get("members") or []
+                   if isinstance(m, dict)]
+            out.append(f"두 번째 페이퍼 봇 {second.get('label')}: 첫 번째와 다른 봇(매매법 {', '.join(mem)}) · "
+                       + (" · ".join(r for r in mine if not r.startswith("매매법 ")) if mine else "규칙을 못 읽음"))
+        else:
+            diff = [r for r in mine if r not in out and not r.startswith("매매법 ")]
+            out.append(f"두 번째 페이퍼 봇 {second.get('label')}: " + (" · ".join(diff) if diff else "규칙을 못 읽음")
+                       + " (나머지 규칙은 첫 번째와 같음)")
         out.append("따라가는 페이퍼: " + " · ".join(f"{k}는 {v}" for k, v in (second.get("follows") or {}).items()))
     return out + (_exec_rules(readable) if readable else list(FIXED_EXEC))
 
@@ -518,6 +528,14 @@ def bot_facts(world: Optional[dict]) -> dict:
         s2, f2 = float(c2.stop["roe"]), float(c2.ladder_spec.first_lock)
         out["second"] = {"name": (sec.get("config") or {}).get("name"), "label": sec.get("label"), "break_even": round(s2 / (s2 + f2), 3),
                          "why": "손절만 다른 같은 봇: 손절이 좁으면 지는 거래의 손실이 작고 지는 거래는 늘어요(본전 승률이 낮아짐)"}
+    elif c2 is not None and (c2.vote_gate is not None or c2.vol_gate is not None):
+        # 'VWAP 개선판' (owners 10-23): its stop is 2 ATR, so its break-even is not a config number; the research's 5 years
+        # (research/vwap30/scale.json: 5,805 paper trades, average win +10.76 %, average loss -39.43 % net ROE) put it at 78.6 %
+        out["second"] = {"name": (sec.get("config") or {}).get("name"), "label": sec.get("label"), "break_even": None,
+                         "break_even_5y": 0.786,
+                         "why": "다른 매매법의 다른 봇(VWAP 개선판): 손절이 2 ATR이라 본전 승률을 설정만으로 정할 수 없어요. 5년 연구 "
+                                "기준(페이퍼 5,805번: 평균 이익 +10.76% · 평균 손실 -39.43%)으로는 78.6%이고, 두 분 기준은 실거래 "
+                                "50번 승률 80% 이상이면 금액 늘리기(docs/vwap-bot-ko.md 6장)"}
     return out
 
 
