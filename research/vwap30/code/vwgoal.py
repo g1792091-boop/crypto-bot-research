@@ -166,9 +166,10 @@ def stats(D, per, X, flip=None):
     return {"n": int(len(idx)), "per_day": round(len(idx) / days, 3), "win": round(float(wins.mean()), 4) if len(r) else None,
             "avg_unit_net_pct": round(float((r / X).mean() * 100), 4) if len(r) else None,
             "growth": round(float(lg.sum()), 3), "ruin_trades": int((r <= -1).sum()), "maxdd": round(dd, 4),
-            "m30_x5": round(float((mm >= 5).mean()), 4), "m30_x10": round(float((mm >= 10).mean()), 4),
-            "m30_x20": round(float((mm >= 20).mean()), 4), "m30_lose90": round(float((mm <= 0.1).mean()), 4),
-            "m30_median": round(float(np.median(mm)), 4), "m30_best": round(float(mm.max()), 2)}
+            "mult": round(float(np.exp(lg.sum())), 4),
+            **({"m30_x5": round(float((mm >= 5).mean()), 4), "m30_x10": round(float((mm >= 10).mean()), 4),
+                "m30_x20": round(float((mm >= 20).mean()), 4), "m30_lose90": round(float((mm <= 0.1).mean()), 4),
+                "m30_median": round(float(np.median(mm)), 4), "m30_best": round(float(mm.max()), 2)} if len(mm) else {})}
 
 
 def run():
