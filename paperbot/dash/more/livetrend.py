@@ -72,10 +72,13 @@ ROLE = L.TREND_ROLE
 BLOCK = (("trend", "추세 판단 (보류·반대·힘 약함·끝물)"), ("spot", "진입 자리 검사 (EMA20·RSI·돌파형 초입)"),
          ("chase", "추격 막기"), ("pause", "쉬는 시간 (주말·발표·나스닥)"), ("member_pause", "매매법 쉬는 중"),
          ("coin_pause", "코인·방향 쉬는 중"), ("daily", "하루 손실 한도"), ("nopull", "되돌림 안 옴"),
-         ("one", "한 번에 하나 (이미 포지션)"), ("unread", "판단·조건 못 읽음"), ("other", "그 밖"))
+         ("one", "한 번에 하나 (이미 포지션)"), ("unread", "판단·조건 못 읽음"),
+         # the 'VWAP 개선판' gates (owners 10-23, livebots.why_cat): never the trend bot's judge in a funnel
+         ("vote_gate", "4시간 추세 반대 (VWAP 조건)"), ("vol_high", "변동성 높음 (VWAP 조건)"), ("other", "그 밖"))
 BLOCK_OF = {"trend": "trend", "spot": "spot", "chase": "chase", "chase_unread": "chase", "weekend": "pause", "macro": "pause",
             "usopen": "pause", "member_pause": "member_pause", "coin_pause": "coin_pause", "daily": "daily", "nopull": "nopull",
-            "trend_unread": "unread", "unread": "unread", "when": "other", "late": "other", "config": "other", "other": "other"}
+            "trend_unread": "unread", "unread": "unread", "when": "other", "late": "other", "config": "other", "other": "other",
+            "vote_gate": "vote_gate", "vol_high": "vol_high"}
 EXIT_GROUP = (("LOCK", "계단 익절"), ("SL", "손절"), ("REV", "빠른 청산"), ("JUDGE", "감독: 추세 뒤집힘"), ("TIME", "감독: 시간 정리"),
               ("LIQ", "강제청산"), ("OTHER", "그 밖"))
 SIG_SPAN_MS = DAY
@@ -393,11 +396,20 @@ def follow_of(p: dict, key: str, now: int) -> Optional[list]:
         return None
     configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
     out = []
+    pk = L.parse_key(key)
     for ex, ko, dk, _ck in L.slots(configs):
         rec = L.read_exec(p[dk], now)
         row = {"id": ex, "name_ko": ko}
         if rec.get("state") != "ok":
             out.append({**row, "state": rec.get("state") or "error", "ko": rec.get("reason_ko") or "실행기 기록을 못 읽었어요"})
+            continue
+        # owners 10-23: an executor that followed another paper bot when this position was entered (the 'VWAP 개선판') never
+        # took it; its own position is that bot's (the same account name: a key alone cannot tell them apart)
+        segs = L.LP.segments(rec.get("starts") or [], p["paper"])
+        if p.get("paper") and not L.LP.followed_at(segs, p["paper"], pk[2] if pk else None):
+            other = L.LP.paper_at(segs, pk[2] if pk else None)
+            name = _paper_name(other)
+            out.append({**row, "state": "other_bot", "bot_ko": name, "ko": f"{L.josa(name, '을', '를')} 따라가는 중"})
             continue
         pos = rec.get("position")
         if pos and pos.get("key") == key:
@@ -414,6 +426,22 @@ def follow_of(p: dict, key: str, now: int) -> Optional[list]:
         else:
             out.append({**row, "state": "none", "ko": FOLLOW_KO["none"]})
     return out
+
+
+def _paper_name(path: Optional[str]) -> str:
+    """A paper bot's short name from its start record (livepapers.bot_short of its config: "VWAP 개선판"), else "다른 페이퍼 봇"."""
+    if not path:
+        return "다른 페이퍼 봇"
+    try:
+        conn = L.open_ro(path)
+    except (OSError, sqlite3.Error):
+        return "다른 페이퍼 봇"
+    try:
+        _ts, run = _state(conn, "combo_run")
+    finally:
+        conn.close()
+    cfg = (run or {}).get("config") if isinstance(run, dict) else None
+    return L.LP.bot_short(cfg.get("name"), cfg.get("stop")) if isinstance(cfg, dict) else "다른 페이퍼 봇"
 
 
 def taking_now(st: dict, entries: Optional[set] = None, hold: bool = False) -> list:

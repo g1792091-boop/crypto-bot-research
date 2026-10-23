@@ -11,7 +11,7 @@
 // HONESTY: liveimprove's numbers and words only; a file not there yet says 수집 전, one that cannot be read 못 읽음 + why;
 // small samples are 표본 작음 (no verdict); paper money keeps its caption.
 import {h, put, ui, fmt, local} from "../core/pb.js";
-import {sourceState} from "./livebots-kit.js";
+import {sourceState, mainFollowKo} from "./livebots-kit.js";
 
 const SORTS = [{id: "n", label: "거래 많은 순"}, {id: "status", label: "상태"}, {id: "excess", label: "기대 대비"}, {id: "win", label: "승률"},
   {id: "pnl", label: "손익"}];
@@ -71,8 +71,12 @@ export function scoreView(ctx) {
     : st.d.state === "ok" ? ui.empty("페이퍼 닫힌 거래가 아직 없어요") : null)});
   const el = ui.card({title: "매매법 성적표", sub: "페이퍼(두 실행기가 따라가는 계좌) 닫힌 거래 · 백테스트 기준과 비교 · 지금 계산", cls: "lb-sccard"},
     head, h("div", {class: "lb-scbar"}, sseg, h("div", {class: "seg"}, emptyBtn)), pg.el, notes);
+  const sub = el.firstChild ? Array.from(el.firstChild.childNodes).find((n) => String(n.className || "") === "sub") || null : null;
   function draw(user) {
     const d = st.d;
+    // two paper bots (owners 10/23): who follows the paper scored here, by name; one: the usual words
+    const sw = `페이퍼(${mainFollowKo() || "두 실행기가 따라가는"} 계좌) 닫힌 거래 · 백테스트 기준과 비교 · 지금 계산`;
+    if (sub && sub.textContent !== sw) sub.textContent = sw;
     emptyBtn.setAttribute("aria-pressed", String(st.empty));
     if (!d) { put(head); put(notes); pg.set(undefined); return; }
     if (d.state !== "ok") { put(head, sourceState(d, "매매법 성적표")); put(notes); pg.set([]); return; }

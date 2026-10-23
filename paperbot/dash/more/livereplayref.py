@@ -662,11 +662,12 @@ def _execs(p: dict, since: int, now: int) -> list:
     """Both executors since the start: [{id, name_ko, state, real, mode, rows}] (livebots.sources: their own records and
     the paper trade each close followed)."""
     try:
-        _configs, _follows, _paper, execs = L.sources(p, now)
+        _configs, _follows, paper, execs = L.sources(p, now)
     except (OSError, sqlite3.Error, ValueError) as exc:
         why = f"{type(exc).__name__}: {exc}"[:200]
         return [{"id": ex, "name_ko": ko, "state": "error", "reason_ko": "실행기 기록을 읽지 못했어요", "reason": why, "rows": []}
                 for ex, ko, _dk, _ck in L.EXECS]
+    bots = L.paper_bots(p, paper, execs)
     out = []
     for x in execs:
         r = x["record"]
@@ -677,10 +678,15 @@ def _execs(p: dict, since: int, now: int) -> list:
         pairs = L.pairs_of(x)
         dk = next(d for ex, _ko, d, _ck in L.EXECS if ex == x["id"])
         ok = _cost_ok(p[dk])
+        # only the trades it made while it followed the trend bot (owners 10-23: an executor moved to the 'VWAP 개선판'
+        # is never held against the trend bot's replay for its VWAP trades)
         rows = [exec_row(t, pairs.get(str(t["key"])), ok.get(str(t["key"])))
-                for t in r.get("trades") or [] if (t.get("entry_ts") or 0) >= since and t.get("pnl") is not None]
+                for t in L.era_trades(x, p["paper"], since) if t.get("pnl") is not None]
         out.append({**base, "state": "ok", "mode": r.get("mode"), "real": r.get("mode") == "mainnet", "rows": rows,
                     "other_paper": not L.LP.same(x["paper_path"], p["paper"]), "notes": x.get("notes") or []})
+        era = L.era_of(x, p["paper"], bots)
+        if era:
+            out[-1]["era"] = era
     return out
 
 
@@ -719,6 +725,8 @@ def build(p: dict, now_ms: Optional[int] = None, ref_path=None) -> dict:
     ex_out = []
     for x in execs:
         head = {k: x.get(k) for k in ("id", "name_ko", "state", "reason_ko", "reason", "mode", "real", "other_paper", "notes")}
+        if x.get("era"):
+            head["era"] = x["era"]                         # it follows (or followed) another bot: its trades of that bot left out
         if x["state"] != "ok":
             ex_out.append({**head, "record": None, "costs": None, "costs_ko": live_costs_ko(x)})
             continue

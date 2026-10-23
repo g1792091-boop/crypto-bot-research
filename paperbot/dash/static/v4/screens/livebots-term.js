@@ -66,12 +66,28 @@ export function termView(ctx, src) {
   const mine = minePanel(ctx, st);
   const table = tablePanel(ctx, st, pick);
   let pnlId = local.get("lb-pnl-acct", "bybit");
-  if (!PNL_IDS.includes(pnlId)) pnlId = "bybit";
-  const pseg = ui.seg(PNL_IDS.map((id) => ({id, label: acctKo(id)})), pnlId, (id) => { pnlId = id; local.set("lb-pnl-acct", id); pnl.refresh(true); },
-    {label: "수익 차트 계좌"});
-  pseg.classList.add("lb-pseg");
+  if (![...PNL_IDS, "paper2"].includes(pnlId)) pnlId = "bybit";
+  const pickPnl = (id) => { pnlId = id; local.set("lb-pnl-acct", id); pnl.refresh(true); };
+  const psegOf = (ids) => {
+    const x = ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(pnlId) ? pnlId : "bybit", pickPnl, {label: "수익 차트 계좌"});
+    x.classList.add("lb-pseg");
+    return x;
+  };
+  let pseg = psegOf(PNL_IDS), psegKey = PNL_IDS.map((id) => `${id}:${acctKo(id)}`).join();
+  const psegBox = h("span", {class: "lb-segbox"}, pseg);          // the switch is rebuilt in here (pnlIds)
+  /** The P&L chart's accounts: the second paper bot too while the summary has it (owners 10/23), named by its bot. */
+  function pnlIds(d) {
+    const ids = d && (d.accts || []).some((a) => a.id === "paper2") ? [...PNL_IDS, "paper2"] : PNL_IDS;
+    if (d && !ids.includes(pnlId)) pnlId = "bybit";
+    const key = ids.map((id) => `${id}:${acctKo(id)}`).join();
+    if (key === psegKey) return;
+    psegKey = key;
+    const nx = psegOf(ids);
+    psegBox.replaceChildren(nx);
+    pseg = nx;
+  }
   const pnl = pnlPanel(ctx, {
-    who: () => acctKo(pnlId), key: () => pnlId, winKey: "lb-pnl-win", lead: pseg, retry: () => src.retry(),
+    who: () => acctKo(pnlId), key: () => pnlId, winKey: "lb-pnl-win", lead: psegBox, retry: () => src.retry(),
     info: `고른 계좌가 닫은 거래의 실현 손익 합 (열린 포지션 빼고, 아래 표에 따로) · 한국 시간 · 막대 = 그 시간(또는 그날) 손익 · 최대 낙폭 = 이 선이 그 전 최고점에서 가장 깊게 내려간 만큼 · `
       + `바이비트·WOO X Pro: ${ui.ASSUME_LIVE_KO} · 페이퍼: ${ui.ASSUME_KO}`,
     curve: () => { const a = acct(pnlId); return a && a.state === "ok" ? {start: a.start, now: st.d.now_ms, hours: a.hours || []} : null; },
@@ -95,8 +111,9 @@ export function termView(ctx, src) {
   const con = consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}],
     foot: "실행기 두 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌", maxHeight: "260px", max: 120});
   con.showEmpty("불러오는 중");
+  const secHead = h("h2", {class: "lb-sec"}, "세 계좌");    // two paper bots: 네 계좌 (drawBelow)
   const below = h("div", {class: "lb-below"},
-    h("h2", {class: "lb-sec"}, "세 계좌"), cards,
+    secHead, cards,
     h("div", {class: "lb-pair2"},
       ui.card({title: "신호등", sub: "페이퍼의 최근 성적이 기준을 넘을 때만 새 진입을 따라가요", cls: "lb-lights"}, lights,
         ui.note("칸은 페이퍼의 닫힌 거래, 왼쪽이 오래된 것 · 이김 = 손익이 0보다 큼 (실행기와 같은 규칙) · 빨강이어도 페이퍼는 계속 거래하고, 다시 기준을 넘으면 실거래도 따라가요")),
@@ -131,6 +148,8 @@ export function termView(ctx, src) {
     if (sig === sigBelow) return;
     sigBelow = sig;
     const notesOf = (id) => (id === "paper" ? paperSinceNote(d) : ((d.execs || []).find((x) => x.id === id) || {}).notes);
+    const nk = d.accts.length === 4 ? "네 계좌" : "세 계좌";
+    if (secHead.textContent !== nk) secHead.textContent = nk;
     cards.replaceChildren(...d.accts.map((a) => acctCard(a, leds[a.id] || (leds[a.id] = ui.ledBar({label: `${acctKo(a.id)} 잔고`})), notesOf(a.id))));
     lights.replaceChildren(...(d.execs || []).map(lightRow));
   }
@@ -153,7 +172,7 @@ export function termView(ctx, src) {
     /** A new answer (d) or a failed refresh (d null, state "failed"): every part redraws only what changed. */
     set(d, state) {
       st.state = state;
-      if (d) st.d = d;
+      if (d) { st.d = d; pnlIds(d); }
       band.set(st.d, state);
       fills.set(st.d, state);
       watch.onBoard(st.d, state === "failed" && !st.d);

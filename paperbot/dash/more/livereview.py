@@ -206,20 +206,51 @@ def luck_of(real: dict, flip: dict) -> dict:
 
 
 def exec_since(p: dict, since: int, now: int) -> list:
-    """Both executors' closed trades entered since the start (their own records), their names from their configs."""
+    """Both executors' closed trades entered since the start while they followed the trend bot (their own records and start
+    records: livepapers segments; owners 10-23, an executor moved to the 'VWAP 개선판' counts here only its trend-bot
+    trades, ``other`` says which bot it follows now, since when and how many of its trades are that bot's), their names
+    from their configs."""
+    from ... import livepapers as LP
     configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
     out = []
-    for ex, ko, dk, _ck in L.slots(configs):
+    for ex, ko, dk, ck in L.slots(configs):
         r = L.read_exec(p[dk], now)
         if r.get("state") != "ok":
             out.append({"id": ex, "name_ko": ko, "state": r.get("state"), "reason_ko": r.get("reason_ko"), "reason": r.get("reason")})
             continue
-        xs = [t for t in r.get("trades") or [] if (t.get("entry_ts") or 0) >= since and t.get("pnl") is not None]
-        out.append({"id": ex, "name_ko": ko, "state": "ok", "mode": r.get("mode"), "real": r.get("mode") == "mainnet",
-                    "n": len(xs), "wins": sum(1 for t in xs if t["pnl"] > 0), "pnl": sum(t["pnl"] for t in xs),
-                    "open": r.get("position") is not None, "stale": r.get("stale"), "halted": bool(r.get("halted")),
-                    "balance": r.get("last_equity"), "estimated": sum(1 for t in xs if t.get("est"))})
+        main = p.get("paper")
+        segs = LP.segments(r.get("starts") or [], main) if main else [[None, None]]
+        mine = (lambda t: LP.followed_at(segs, main, t.get("entry_ts"))) if main else (lambda t: True)      # noqa: E731
+        xs = [t for t in r.get("trades") or [] if (t.get("entry_ts") or 0) >= since and t.get("pnl") is not None and mine(t)]
+        here = LP.same(LP.current(segs), main) if main else True
+        row = {"id": ex, "name_ko": ko, "state": "ok", "mode": r.get("mode"), "real": r.get("mode") == "mainnet",
+               "n": len(xs), "wins": sum(1 for t in xs if t["pnl"] > 0), "pnl": sum(t["pnl"] for t in xs),
+               # its open position is the trend bot's only while it follows the trend bot
+               "open": r.get("position") is not None and here, "stale": r.get("stale"), "halted": bool(r.get("halted")),
+               "balance": r.get("last_equity"), "estimated": sum(1 for t in xs if t.get("est"))}
+        if main and len(segs) > 1:
+            rest = [t for t in r.get("trades") or [] if (t.get("entry_ts") or 0) >= since and t.get("pnl") is not None and not mine(t)]
+            ref = LP.current(segs) if not here else next((sp for _f, sp in reversed(segs) if not LP.same(sp, main)), None)
+            row["other"] = {"bot_ko": _bot_name(ref), "now": not here, "since": segs[-1][0] if not here else None, "n": len(rest)}
+        out.append(row)
     return out
+
+
+def _bot_name(path: Optional[str]) -> str:
+    """A paper bot's short name from its start record (livecheck.paper_name: "VWAP 개선판"), else "다른 페이퍼 봇"."""
+    if not path:
+        return "다른 페이퍼 봇"
+    try:
+        conn = L.open_ro(path)
+    except (OSError, sqlite3.Error):
+        return "다른 페이퍼 봇"
+    try:
+        _ts, run = LT._state(conn, "combo_run")
+    finally:
+        conn.close()
+    cfg = (run or {}).get("config") if isinstance(run, dict) else None
+    from ... import livepapers as LP
+    return LP.bot_short((cfg or {}).get("name"), (cfg or {}).get("stop")) if isinstance(cfg, dict) else "다른 페이퍼 봇"
 
 
 # ================================================================ signals: the days and the funnel

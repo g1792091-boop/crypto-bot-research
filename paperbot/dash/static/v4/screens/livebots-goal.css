@@ -59,6 +59,10 @@
 .lbg-scale ul { margin: 4px 0; padding: 0; list-style: none; }
 .lbg-scale li { margin: 2px 0; overflow-wrap: anywhere; }
 .lbg-scale-ko { margin: 4px 0 0; color: var(--ink-2); overflow-wrap: anywhere; }
+.lbg-scale-ko.down { color: var(--down); }
+/* an executor on the other paper bot (owners 10/23): which bot, from when its numbers count, its own light */
+.lbg-era { margin-top: 6px; display: grid; gap: 2px; font-size: var(--t-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.lbg-era p { margin: 0; }
 .lbg-frozen.on { color: var(--ink); font-weight: 600; }
 /* 손절 비교 (owners 10/19 final: Bybit -50 % against MEXC -35 %, for the 11/3 review): one plain table, numbers only */
 .lbg-h2h-why, .lbg-h2h-gap { margin: 0; color: var(--ink); font-size: var(--t-sm); line-height: 1.55; overflow-wrap: anywhere; }

@@ -86,6 +86,8 @@
 .lb-fr .term-fn { min-width: 0; }
 .lb-cr .term-fn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 .lb-pseg { margin: 2px 0 6px; }
+/* a switch rebuilt in place when the summary names a second paper bot (perf, term): the holder takes no room */
+.lb-segbox { display: contents; }
 .lb-pseg button { padding: 0 10px; }
 .lb-t .nm a { color: inherit; text-decoration: none; }
 .lb-t .nm a:hover { text-decoration: underline; }

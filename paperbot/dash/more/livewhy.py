@@ -21,7 +21,9 @@ that entry's ``why`` reference), from the records, in the order the bots decided
 - ``checks``    what the bot checked before it entered, with the numbers it saw: the KST weekend, the US macro releases
                 around the minute (the nearest one), the NYSE open pause, a B setting's chase test (24-hour and 7-day
                 range places of the reference price, combo.chase_hours / chase_check on the rule bot's 1m bars), one
-                position at a time
+                position at a time. The 'VWAP 개선판' (owners 10-23, a config with entry gates): its own checks instead
+                (``gate_checks``: the pauses, the 4h vote and the signal bar's ATR% against its 30-day point as its gates
+                read them at the entry, one position, its hold limit), no A / B group, no 5-year reference of another bot
 - ``rivals``    other signals of the same bar close in the bot's own signal_log and what became of them
 - ``record``    this setting's and this strategy's closed trades in this bot before this entry; the main bot's 5-year
                 numbers of the setting and the strategy (deploy/combo.live-ac.expected.json: whole-period fit = optimistic,
@@ -56,6 +58,13 @@ TAG_KO = "손실 카드와 같은 설명용 표시 (진입 연구에서 수익�
 ENTRY_TAGS = ("추세 반대 진입", "상위 봉 추세 반대", "횡보장 진입", "추세 약함 (ADX 20 미만)", "DI 방향 반대", "많이 오른/내린 뒤 추격",
               "최근 범위 끝에서 진입", "돌파 진입")
 REF_PAPER2_KO = "5년 기준표는 −50% 봇(규칙봇 15) 것이라 이 봇(손절이 달라요)에는 보여 드리지 않아요"
+# a second paper bot that is another bot (owners 10-23: the 'VWAP 개선판'), not the twin the line above is about
+REF_OTHER_KO = ("5년 기준표(deploy/combo.live-ac.expected.json)는 예전 봇 것이라 {name}에는 보여 드리지 않아요 · 이 봇의 연구 숫자는 "
+                "research/vwap30/QA_KO.md")
+# the 'VWAP 개선판' (paperbot/entrygates.py, combo.py): what its gates read at the entry rides with the entry (since 10-23,
+# commit 7ac1d51); an entry recorded before that has no numbers, said so (never made up)
+GATES_NONE_KO = "이 진입은 조건 기록 전이라 숫자가 없어요"
+SIDE_WORD = {1: "롱", -1: "숏"}
 
 _lock = threading.Lock()
 _cond: "OrderedDict[tuple, dict]" = OrderedDict()
@@ -368,22 +377,9 @@ def nearest_macro(ts: int) -> Optional[dict]:
     return {"kind": e.kind, "kind_ko": EV.KIND_KO.get(e.kind, e.kind), "ts": int(e.ts_ms), "gap_ms": int(e.ts_ms) - int(ts)}
 
 
-def checks(cfg: dict, member: Optional[dict], entry: int, bar_close: int, side: int, symbol: str, ref_price: Optional[float],
-           rule_db: str) -> list:
-    """What the bot checked before this entry (paperbot/combo.py ``_entry_block`` order, then one position at a time),
-    each {id, ok, ko, detail}: ok True = passed (it entered, so every rule that was on passed; the numbers say by how much)."""
+def _pauses(cfg: dict, entry: int, add) -> None:
+    """The weekend, the US macro releases and the NYSE open (paperbot/combo.py ``_entry_block``'s first three) at ``entry``."""
     from ... import combo as C
-    out = []
-
-    def add(id_, ok, ko, detail=None):
-        out.append({"id": id_, "ok": ok, "ko": ko, "detail": detail})
-    if member and (member.get("filter") or member.get("off") or member.get("when")):
-        parts = [f["ko"] for f in member.get("filter") or []]
-        if member.get("off"):
-            parts.append(f"끄는 구간 {len(member['off'])}개에 안 걸림")
-        if member.get("when"):
-            parts.append("설정의 조건 안")
-        add("member", True, "설정의 조건 통과: " + " · ".join(parts))
     if cfg.get("no_weekend"):
         dow = L.DOW_KO[((int(entry) + L.KST_MS) // L.DAY + 3) % 7]
         add("weekend", not C.kst_weekend(entry), f"주말 아님 (한국 시간 {dow}요일)" if not C.kst_weekend(entry) else "주말인데 진입 기록이 있어요")
@@ -397,6 +393,24 @@ def checks(cfg: dict, member: Optional[dict], entry: int, bar_close: int, side: 
     if up or pre:
         why = C.us_open_pause(entry, up or 0, pre or 0)
         add("usopen", not why, f"{C.us_open_ko(up or 0, pre or 0)}이 아님" if not why else why)
+
+
+def checks(cfg: dict, member: Optional[dict], entry: int, bar_close: int, side: int, symbol: str, ref_price: Optional[float],
+           rule_db: str) -> list:
+    """What the bot checked before this entry (paperbot/combo.py ``_entry_block`` order, then one position at a time),
+    each {id, ok, ko, detail}: ok True = passed (it entered, so every rule that was on passed; the numbers say by how much)."""
+    out = []
+
+    def add(id_, ok, ko, detail=None):
+        out.append({"id": id_, "ok": ok, "ko": ko, "detail": detail})
+    if member and (member.get("filter") or member.get("off") or member.get("when")):
+        parts = [f["ko"] for f in member.get("filter") or []]
+        if member.get("off"):
+            parts.append(f"끄는 구간 {len(member['off'])}개에 안 걸림")
+        if member.get("when"):
+            parts.append("설정의 조건 안")
+        add("member", True, "설정의 조건 통과: " + " · ".join(parts))
+    _pauses(cfg, entry, add)
     if member and member.get("no_chase"):
         ch = chase_numbers(rule_db, symbol, bar_close, side, ref_price)
         if ch.get("state") != "ok":
@@ -405,6 +419,60 @@ def checks(cfg: dict, member: Optional[dict], entry: int, bar_close: int, side: 
             add("chase", ch["chase"] is False, "추격 진입 막기 통과 (고점 추격 롱 · 저점 추격 숏 아님)" if ch["chase"] is False else
                 f"추격 진입 막기: {ch['why_ko'] or '판단 못 함'}", ch)
     add("one", True, "포지션이 비어 있었어요 (한 번에 하나)")
+    return out
+
+
+def gate_checks(cfg: dict, entry: int, side: int, tf: Optional[str], gates: Any) -> list:
+    """What the 'VWAP 개선판' checked before this entry (paperbot/combo.py ``_entry_block``'s order: the KST weekend, a US
+    macro release, the NYSE open, then its entry gates: the higher bar's vote and the signal bar's volatility; then one
+    position at a time), with the numbers its gates read at the entry (``gates``: entrygates' ``vote`` {up, down, raw,
+    with_side, text} and ``vol`` {atr_pct, q_pct: percent numbers, days, q}), and the hold limit it runs under. No A / B
+    group, no trend-bot check, no chase test (its config has none). An entry recorded before the gates' numbers were kept
+    says so (GATES_NONE_KO), never a made-up number."""
+    out = []
+
+    def add(id_, ok, ko, detail=None, **kw):
+        out.append({"id": id_, "ok": ok, "ko": ko, "detail": detail, **kw})
+    _pauses(cfg, entry, add)
+    vote_cfg = cfg.get("vote_gate") if isinstance(cfg.get("vote_gate"), dict) else None
+    vol_cfg = cfg.get("vol_gate") if isinstance(cfg.get("vol_gate"), dict) else None
+    g = gates if isinstance(gates, dict) else None
+    if g is None and (vote_cfg or vol_cfg):
+        add("gates", None, GATES_NONE_KO)
+    else:
+        if vote_cfg:
+            v = g.get("vote") if isinstance(g.get("vote"), dict) else {}
+            tfk = L.GATE_TF_KO.get(v.get("tf") or vote_cfg.get("tf") or "4h", "4시간")
+            up, down, raw = L._i(v.get("up")), L._i(v.get("down")), L._i(v.get("raw"))
+            if up is None or down is None or raw is None:
+                add("vote", None, f"{tfk} 추세: 읽은 숫자가 기록에 없어요", v or None)
+            else:
+                votes = f"상승 {up}·하락 {down}·중립 {4 - up - down}"
+                ok = raw != -side
+                add("vote", ok, f"{tfk} 추세: {votes} → {SIDE_WORD.get(side, '')} 통과" + (" (보류는 진입)" if raw == 0 else "")
+                    if ok else f"{tfk} 추세: {votes} → 반대인데 진입 기록이 있어요", v)
+        if vol_cfg:
+            v = g.get("vol") if isinstance(g.get("vol"), dict) else {}
+            atr, q = L._f(v.get("atr_pct")), L._f(v.get("q_pct"))
+            days, qn = L._i(v.get("days") or vol_cfg.get("days")) or 30, L._f(v.get("q") or vol_cfg.get("q")) or 0.8
+            tfk = L.GATE_TF_KO.get(v.get("tf") or tf or "", v.get("tf") or tf or "")
+            if atr is None:
+                add("vol", None, "변동성: 읽은 숫자가 기록에 없어요", v or None)
+            elif q is None:                                  # entrygates: fewer than half the window known -> it passes
+                add("vol", True, f"변동성 {tfk} ATR {atr:.2f}% · {days}일 {qn:.0%} 위치 아직 모름 → 통과 (모를 때는 막지 않아요)", v)
+            else:
+                ok = atr <= q
+                add("vol", ok, f"변동성 {tfk} ATR {atr:.2f}% · {days}일 {qn:.0%} 위치 {q:.2f}% → "
+                    + ("통과" if ok else "높은데 진입 기록이 있어요"), v)
+    add("one", True, "포지션이 비어 있었어요 (한 번에 하나)")
+    n = cfg.get("max_hold_bars")
+    if isinstance(n, int) and not isinstance(n, bool):
+        tfs = sorted({str(m.get("tf")) for m in cfg.get("members") or [] if isinstance(m, dict) and m.get("tf") in L.HOLD_TF_MIN},
+                     key=lambda t: L.HOLD_TF_MIN[t])
+        each = " / ".join(f"{L.GATE_TF_KO[t]}봉 {L.hold_ko(n * L.HOLD_TF_MIN[t])}" for t in tfs)
+        mine = L.hold_ko(n * L.HOLD_TF_MIN[tf]) if tf in L.HOLD_TF_MIN else None
+        add("hold", None, f"보유 한도 {n}봉" + (f" = {each}" if each else "") + ", 지나면 시장가 정리",
+            {"bars": n, "tf": tf, "hold_ko": mine}, info=True)
     return out
 
 
@@ -447,7 +515,7 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
     b = next((x for x in bots if x["id"] == bot), None)
     if b is None:
         return {**base, "state": "missing", "reason_ko": "그 페이퍼 봇이 지금 화면에 없어요"}
-    base["bot_ko"] = (b.get("label_ko") or "").split(" (")[0] or ("페이퍼(연습)" if bot == "paper" else bot)
+    base["bot_ko"] = b.get("short_ko") or ("페이퍼(연습)" if bot == "paper" else bot)
     e = entered(b["path"], L.ACCOUNT, symbol, int(entry))
     if e.get("state") != "ok":
         return {**base, **{k: e.get(k) for k in ("state", "reason_ko", "reason", "path")}}
@@ -468,9 +536,14 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
               "atr": L._f(sig.get("atr")), "source": meta.get("source"), "source_ko": SOURCE_KO.get(meta.get("source"), meta.get("source")),
               "score": score, "score_used": "score" in rank, "order": order, "member": meta.get("member"),
               "break_level": L._f(meta.get("break_level"))}
+    gate = isinstance(cfg.get("vote_gate"), dict) or isinstance(cfg.get("vol_gate"), dict)
+    if gate:                                             # the 'VWAP 개선판': the strategy in the owners' words (combo.member_ko)
+        from ... import combo as C
+        signal["strategy_ko"] = C.member_ko(strategy)
     setting = None
     if member:
-        setting = {**member, "group": "B" if member.get("no_chase") else "A"}
+        # the A / B groups were 규칙봇 15's (B = the chase-blocked four): never on a gate bot's entry (owners 10-23)
+        setting = {**member, "group": None if gate else "B" if member.get("no_chase") else "A"}
     rule = rule_row(more["rule_db"], bar_close, tf, strategy, symbol) if (meta.get("source") or "rule") == "rule" else \
         {"state": "none", "reason_ko": "커스텀값 신호라 규칙봇 신호 기록이 없어요"}
     chart = chart_of(rule.get("ctx") or {}, side, tf) if rule.get("state") == "ok" else {k: rule.get(k) for k in ("state", "reason_ko", "reason", "path")}
@@ -480,13 +553,18 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
     trades = (acc or {}).get("trades") or []
     label = meta.get("member")
     rec = record_of(trades, L.entered_meta(b["path"], L.ACCOUNT) if label else {}, label, strategy, tf, int(entry))
+    if bot == "paper":
+        five = five_year(order, strategy, p["paper"])
+    else:                                                # the twin of 10-19 (its stop differs) or another bot (10-23)
+        five = {"state": "missing", "reason_ko": REF_PAPER2_KO if L.twins(bots) else REF_OTHER_KO.format(name=base["bot_ko"])}
     return {**base, "state": "ok", "signal": signal, "setting": setting,
             "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path", "source")},
             "rule": {k: rule.get(k) for k in ("state", "reason_ko", "reason", "path", "status", "close", "bid", "ask", "delay_ms")},
             "chart": chart, "conditions": cond,
-            "checks": checks(cfg, member, int(entry), bar_close, side, symbol, signal["ref_price"], more["rule_db"]),
+            "checks": gate_checks(cfg, int(entry), side, tf, meta.get("gates")) if gate else
+            checks(cfg, member, int(entry), bar_close, side, symbol, signal["ref_price"], more["rule_db"]),
             "rivals": rivals(b["path"], L.ACCOUNT, bar_close, (tf, meta.get("member") or strategy, symbol)),
-            "record": rec, "five_year": five_year(order, strategy, p["paper"]) if bot == "paper" else {"state": "missing", "reason_ko": REF_PAPER2_KO}}
+            "record": rec, "five_year": five, **({"gate": True} if gate else {})}
 
 
 # ---------------------------------------------------------------- routes

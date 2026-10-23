@@ -209,6 +209,20 @@ def slots(configs: Optional[dict] = None) -> list:
     return out
 
 
+def josa(word: Any, with_final: str, without: str) -> str:
+    """``word`` with the Korean particle its last sound takes ("VWAP 개선판을", "추세판단 봇을", "페이퍼 −35%를"): a Hangul
+    syllable by its final consonant, a digit or % by how it is read, anything else the form without."""
+    w = str(word or "").rstrip()
+    if not w:
+        return w
+    c = w[-1]
+    if "가" <= c <= "힣":
+        return w + (with_final if (ord(c) - 0xAC00) % 28 else without)
+    if c.isdigit():
+        return w + (with_final if c in "013678" else without)
+    return w + without
+
+
 def thin(points: list, n: int = CURVE_MAX) -> list:
     """At most ``n`` points, evenly picked; the first and the last always kept."""
     if len(points) <= n:
@@ -542,7 +556,35 @@ def read_paper(path: str, accounts: Iterable[str], now_ms: int) -> dict:
             "stop": cfg.get("stop") if isinstance(cfg.get("stop"), dict) else None,
             "ladder": ladder_numbers(ladder) if ladder else None,
             "leverage": cfg.get("leverage") if isinstance(cfg.get("leverage"), dict) else None, "margin": _f(cfg.get("margin")),
-            "taker_fee": _f(run_d.get("taker_fee")), "started_ms": _i(run[0]) if run else None, "accounts": out_acc}
+            "taker_fee": _f(run_d.get("taker_fee")), "started_ms": _i(run[0]) if run else None, "accounts": out_acc,
+            # the whole config the bot runs, for this module's own words (its TIME exit, twins): never sent to a page
+            "_cfg": cfg}
+
+
+def cfg_of(read: Optional[dict]) -> dict:
+    """The config of the paper bot behind a read_paper answer (its start record ``combo_run``), {} when unknown."""
+    c = (read or {}).get("_cfg") if (read or {}).get("state") == "ok" else None
+    return c if isinstance(c, dict) else {}
+
+
+def no_private(d: dict) -> dict:
+    """A read_paper answer without what is only for this module (``_cfg``)."""
+    return {k: v for k, v in d.items() if not str(k).startswith("_")}
+
+
+def hold_bot(cfg: Optional[dict]) -> bool:
+    """A bot whose TIME exit is its hold limit (``max_hold_bars``, no trend supervisor: the 'VWAP 개선판')."""
+    return LP.time_exit_ko(cfg) == LP.TIME_HOLD_KO
+
+
+def exit_words(reason: Any, cfg: Optional[dict] = None, why: Any = None) -> str:
+    """A paper exit reason in words by the bot that made it (livepapers.exit_ko with EXIT_KO): TIME is the trend bot's
+    감독 청산(시간 정리), or a hold-limit bot's 보유 한도 청산 with its why ("96봉(48시간) 지남", combo.exit_text's words).
+    Without a config (or for any other reason) EXIT_KO's word, as always."""
+    words = LP.exit_ko(reason, cfg, EXIT_KO)
+    if reason == "TIME" and hold_bot(cfg) and isinstance(why, str) and why:
+        return f"{words}({why})"
+    return words
 
 
 # ---------------------------------------------------------------- the order executors (executor.py tables)
@@ -1005,11 +1047,12 @@ def fills_of(paper: dict, execs: list, account: str, limit: int = FILLS_KEEP, pa
     srcs = [("paper", paper)] + [(b["id"], b["read"]) for b in (papers or []) if b["id"] != "paper" and b.get("followers")]
     for aid, pr in srcs:
         a = (pr.get("accounts") or {}).get(account) if pr.get("state") == "ok" else None
+        cfg = cfg_of(pr)                                 # its own words for TIME (the trend bot's supervisor / a hold limit)
         for t in (a or {}).get("trades") or []:
             base = {"acct": aid, "symbol": t["symbol"], "side": t["side"], "lev": t["leverage"]}
             out.append({**base, "key": f"{aid}:e:{t['id']}", "kind": "entry", "t": t["entry_time"], "price": t["entry_price"]})
             out.append({**base, "key": f"{aid}:x:{t['id']}", "kind": "exit", "t": t["exit_time"], "price": t["exit_price"], "pnl": t["pnl"],
-                        "roe": t["roe"], "reason": t["exit_reason"], "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"])})
+                        "roe": t["roe"], "reason": t["exit_reason"], "reason_ko": exit_words(t["exit_reason"], cfg, t.get("exit_why"))})
         p = (a or {}).get("position")
         if p:
             out.append({"acct": aid, "symbol": p["symbol"], "side": p["side"], "lev": p["leverage"], "key": f"{aid}:e:{p['key']}",
@@ -1021,12 +1064,14 @@ def fills_of(paper: dict, execs: list, account: str, limit: int = FILLS_KEEP, pa
         pairs = pairs_of(x)
         for t in r.get("trades") or []:
             base = {"acct": x["id"], "symbol": t["symbol"], "side": t["side"], "lev": t["leverage"]}
-            reason = t["exit_reason"]
-            if reason == "PAPER" and str(t["key"]) in pairs:
-                reason = pairs[str(t["key"])]["exit_reason"] or reason
+            reason, pt = t["exit_reason"], pairs.get(str(t["key"]))
+            if reason == "PAPER" and pt:
+                reason = pt["exit_reason"] or reason
+            words = exit_words(reason, cfg_of(_paper_of(x, pt["paper_path"])), pt.get("exit_why")) if pt and reason == pt["exit_reason"] \
+                else EXIT_KO.get(reason, reason)
             out.append({**base, "key": f"{x['id']}:e:{t['key']}", "kind": "entry", "t": t["entry_ts"], "price": t["entry_price"]})
             out.append({**base, "key": f"{x['id']}:x:{t['key']}", "kind": "exit", "t": t["exit_ts"], "price": t["exit_ref"], "pnl": t["pnl"],
-                        "roe": t["roe"], "est": t["est"], "reason": reason, "reason_ko": EXIT_KO.get(reason, reason)})
+                        "roe": t["roe"], "est": t["est"], "reason": reason, "reason_ko": words})
         q = r.get("position")
         if q and q.get("entry_time"):
             out.append({"acct": x["id"], "symbol": q["symbol"], "side": q["side"], "lev": q["leverage"], "key": f"{x['id']}:e:{q['key']}",
@@ -1104,9 +1149,39 @@ def followed_at(x: dict, path: str, t: Optional[int]) -> bool:
     return LP.followed_at(x["segs"], path, t)
 
 
+def era_trades(x: dict, path: str, since: Optional[int] = None, key: str = "entry_ts") -> list:
+    """The executor's closed trades entered while it followed the paper database ``path`` (livepapers segments: owners
+    10-23, one executor may move to the 'VWAP 개선판' and its trades from then on are that bot's), from ``since`` on. With
+    one paper bot every trade is the main bot's and this is trend_since."""
+    r = x["record"]
+    if r.get("state") != "ok":
+        return []
+    return [t for t in r.get("trades") or [] if followed_at(x, path, t.get(key))
+            and (since is None or (_i(t.get(key)) or 0) >= int(since))]
+
+
+def era_of(x: dict, path: str, bots: Optional[list] = None) -> Optional[dict]:
+    """When the executor followed another paper bot than ``path`` at some time (owners 10-23): {other_ko (that bot's
+    short name: the one it follows now when it is another), now_other (it follows another one now), since (when it moved
+    to the one it follows now, else None), other_n (its closed trades on another bot, left out of ``path``'s numbers)};
+    None while every segment is ``path`` (one paper bot: the pages as before)."""
+    segs = x.get("segs") or []
+    if all(LP.same(sp, path) for _f, sp in segs):
+        return None
+    r = x["record"]
+    trades = (r.get("trades") or []) if r.get("state") == "ok" else []
+    other = [t for t in trades if not followed_at(x, path, t.get("entry_ts"))]
+    cur = LP.current(segs)
+    now_other = not LP.same(cur, path)
+    ref = cur if now_other else next((sp for _f, sp in reversed(segs) if not LP.same(sp, path)), None)
+    b = next((b for b in bots or [] if LP.same(b["path"], ref)), None)
+    return {"other_ko": (b or {}).get("short_ko") or "다른 페이퍼 봇", "now_other": now_other,
+            "since": segs[-1][0] if now_other else None, "other_n": len(other)}
+
+
 def other_cell(x: dict, label_ko: Optional[str]) -> dict:
     """A paper trade of a paper bot the executor did not follow then (owners 10-19: two paper bots)."""
-    return {"state": "other", "why_ko": f"이때 {x['name_ko']}는 {label_ko or '다른 페이퍼'}를 따라갔어요"}
+    return {"state": "other", "why_ko": f"이때 {x['name_ko']}는 {josa(label_ko or '다른 페이퍼', '을', '를')} 따라갔어요"}
 
 
 def paper_bots(p: dict, paper: dict, execs: list) -> list:
@@ -1156,11 +1231,38 @@ def _eq_before(trades: list, ms: Optional[int], initial: Optional[float]) -> Opt
     return eq
 
 
+def members_key(cfg: Optional[dict]) -> Optional[tuple]:
+    """A config's entry members as a sorted tuple of (strategy, timeframe); None when the config or its members are not
+    known."""
+    ms = [m for m in (cfg or {}).get("members") or [] if isinstance(m, dict)]
+    if not ms:
+        return None
+    return tuple(sorted((str(m.get("strategy") or m.get("pick")), str(m.get("tf"))) for m in ms))
+
+
+def twins(bots: list) -> bool:
+    """The two paper bots are twins (owners 10-19: 규칙봇 15 at -50 % and at -35 %): the same entry members in both
+    configs, so they enter on the same signals and only the stop tells them apart. Two different bots (owners 10-23: the
+    추세판단 봇 and the 'VWAP 개선판') or a config not known yet: False (no stop-only words, no shared entries)."""
+    if len(bots) < 2:
+        return False
+    keys = [members_key(cfg_of(b["read"])) for b in bots[:2]]
+    return keys[0] is not None and keys[0] == keys[1]
+
+
+# 두 봇 나란히 (owners 10-23): two different bots have different signals; their numbers side by side, nothing paired
+PLAIN_WORDS_KO = "두 봇 나란히: 매매법이 서로 달라요 · 같은 기간의 숫자만 나란히 보여요 (같은 진입을 짝짓지 않아요)"
+PLAIN_NOTE_KO = ("두 봇은 매매법·손절·진입 조건이 모두 달라요. 어느 쪽이 낫다고 정하지 않아요 · 거래가 적을 때는 대부분 운이에요")
+TWIN_NOTE_KO = "두 봇은 같은 신호로 들어가고 손절 자리만 달라요. 한쪽이 먼저 손절되면 그 뒤 다른 진입을 혼자 할 수 있어요 (한 번에 포지션 하나)"
+
+
 def compare_papers(bots: list) -> Optional[dict]:
     """두 페이퍼 비교 (owners 10-19, docs/live15-mexc-ko.md): the two paper bots side by side since the second one started
     (its account's first record): closed trades, wins, win rate, net ROE sum, equity then and now, the deepest drop of the
-    closed-trade equity, and the entries both made (same coin, side and entry minute) whose results parted (one won where
-    the other lost, or another exit). None with one paper bot."""
+    closed-trade equity, and for twins (``twins``: the same members, only the stop differs) the entries both made (same
+    coin, side and entry minute) whose results parted (one won where the other lost, or another exit). Two different bots
+    (owners 10-23): the same numbers side by side (``twin`` False), no shared entries (their signals are their own). None
+    with one paper bot."""
     if len(bots) < 2:
         return None
     accs = []
@@ -1175,6 +1277,10 @@ def compare_papers(bots: list) -> Optional[dict]:
                 "reason_ko": st.get("reason_ko") if st.get("state") != "ok" else "이 페이퍼 DB에 아직 계좌 기록이 없어요"}
     since = accs[1].get("since_ms") or bots[1]["read"].get("started_ms") \
         or min((t["entry_time"] for t in accs[1].get("trades") or [] if t.get("entry_time") is not None), default=None)
+    if cfg_of(bots[0]["read"]).get("trend") is not None:  # the trend bot: from its own start (never the bot before it on its file)
+        tb = trend_bot(bots[0]["path"])
+        if tb and tb.get("since") is not None and (since is None or tb["since"] > since):
+            since = tb["since"]
     rows, mine = [], []
     for b, a in zip(bots, accs):
         allt = sorted(a.get("trades") or [], key=lambda t: (t.get("exit_time") or 0, t.get("id") or 0))
@@ -1195,6 +1301,11 @@ def compare_papers(bots: list) -> Optional[dict]:
                      "stop_ko": b.get("stop_ko"), "n": st["trades"], "wins": st["wins"], "losses": st["losses"], "win_rate": st["win_rate"],
                      "roe_sum": sum(t.get("roe") or 0.0 for t in ts), "pnl": st["pnl"], "start_equity": eq0, "equity": wallet,
                      "change": (wallet / eq0 - 1) if wallet is not None and eq0 else None, "max_dd": dd, "open": bool(a.get("position"))})
+    if not twins(bots):                                  # two different bots: side by side only (their names, no stop-only words)
+        for r, b in zip(rows, bots):
+            r["short_ko"] = b.get("short_ko")
+        return {"state": "ok", "twin": False, "since_ms": since, "rows": rows, "shared": None, "parted": None, "only": None,
+                "parted_rows": [], "words_ko": PLAIN_WORDS_KO, "note_ko": PLAIN_NOTE_KO}
     key = lambda t: (t.get("symbol"), t.get("side"), t.get("entry_time"))           # noqa: E731
     by0, by1 = {key(t): t for t in mine[0]}, {key(t): t for t in mine[1]}
     shared = [k for k in by0 if k in by1]
@@ -1211,8 +1322,7 @@ def compare_papers(bots: list) -> Optional[dict]:
     words = (f"같은 진입 {len(shared)}번 중 결과가 갈린 거래 {len(parted)}번"
              + (f" · 한쪽만 들어간 거래: {s0} {only[bots[0]['id']]}번, {s1} {only[bots[1]['id']]}번" if any(only.values()) else ""))
     return {"state": "ok", "since_ms": since, "rows": rows, "shared": len(shared), "parted": len(parted), "only": only,
-            "parted_rows": parted[:PARTED_KEEP], "words_ko": words,
-            "note_ko": "두 봇은 같은 신호로 들어가고 손절 자리만 달라요. 한쪽이 먼저 손절되면 그 뒤 다른 진입을 혼자 할 수 있어요 (한 번에 포지션 하나)"}
+            "parted_rows": parted[:PARTED_KEEP], "words_ko": words, "note_ko": TWIN_NOTE_KO}
 
 
 def sources(p: dict, now: int) -> tuple:
@@ -1297,7 +1407,8 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     # each executor borrows the next lock of the paper position IT follows (its own paper bot's)
     accts = [acct_paper(paper, ACCOUNT, now, label=bots[0] if len(bots) > 1 else None)]
     accts += [acct_paper(b["read"], ACCOUNT, now, b["id"], b) for b in bots[1:]]
-    accts += [acct_exec(x, (own_account(x) or {}).get("position"), now) for x in execs]
+    accts += [acct_exec(x, (own_account(x) or {}).get("position"), now) | ({"follows_ko": x["follows_ko"]} if x.get("follows_ko") else {})
+              for x in execs]                            # two paper bots: each executor says which one it follows
     fills = fills_of(paper, execs, ACCOUNT, papers=bots)
     marks = marks_of(paper, execs, ACCOUNT, papers=bots)
     events = sorted(((dict(e, ex=x["id"], ex_ko=x["name_ko"])) for x in execs for e in (x["record"].get("events") or [])),
@@ -1316,7 +1427,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
         if rec.get("trades") is not None:
             rec["trades_n"] = len(rec.pop("trades"))
         rec.pop("curve", None)
-    paper_out = {k: v for k, v in paper.items() if k != "accounts"}
+    paper_out = {k: v for k, v in no_private(paper).items() if k != "accounts"}
     if paper.get("state") == "ok":
         paper_out["accounts"] = {}
         for aid, a in paper["accounts"].items():
@@ -1523,23 +1634,74 @@ def members_of(combo: dict) -> list:
     return [describe_member(sp, i, cfg.get("stop")) for i, sp in enumerate(cfg.get("members") or [], 1)]
 
 
+# the entry gates and the hold limit of a combined bot ('VWAP 개선판', owners 10-23): the same words as the bot's own start
+# message (paperbot/combo.py gate_lines with entrygates.vote_text / vol_text), worked out here from the config dict (this
+# module reads the bots' records, never their code); tests/test_dash_live_vwap_existing.py holds them to gate_lines
+GATE_TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
+HOLD_TF_MIN = {"15m": 15, "30m": 30, "1h": 60, "4h": 240}          # combo.TF_MIN: a member's bar in minutes
+
+
+def hold_ko(minutes: int) -> str:
+    """combo.hold_ko: "48시간" / "90분"."""
+    return f"{minutes // 60}시간" if minutes % 60 == 0 else f"{minutes}분"
+
+
+def gate_words(c: Optional[dict]) -> list:
+    """[{id, ko}] of the config's entry gates (``vote_gate``, ``vol_gate``) and hold limit (``max_hold_bars``) in the
+    owners' words (combo.gate_lines); [] when it has none (every bot before the 'VWAP 개선판')."""
+    c = c if isinstance(c, dict) else {}
+    out = []
+    v = c.get("vote_gate")
+    if isinstance(v, dict):
+        v = {"tf": "4h", "vote_min": 3, **v}
+        out.append({"id": "vote_gate", "ko": f"{GATE_TF_KO.get(v['tf'], v['tf'])} 추세 판단이 반대면 진입 안 함"
+                                              f"(4개 중 {v['vote_min']}개 반대; 보류는 진입)"})
+    v = c.get("vol_gate")
+    if isinstance(v, dict):
+        v = {"atr": 14, "days": 30, "q": 0.8, **v}
+        q = float(v["q"])
+        out.append({"id": "vol_gate", "ko": f"변동성(ATR{v['atr']}%)이 지난 {v['days']}일의 {q:.0%} 위치보다 크면 진입 안 함"
+                                             f"(상위 {1 - q:.0%} 금지)"})
+    n = c.get("max_hold_bars")
+    if isinstance(n, int) and not isinstance(n, bool):
+        tfs = sorted({str(m.get("tf")) for m in c.get("members") or [] if isinstance(m, dict) and m.get("tf") in HOLD_TF_MIN},
+                     key=lambda tf: HOLD_TF_MIN[tf])
+        each = " · ".join(f"{GATE_TF_KO[tf]} {hold_ko(n * HOLD_TF_MIN[tf])}" for tf in tfs)
+        out.append({"id": "max_hold", "ko": f"보유 한도 {n}봉" + (f"({each})" if each else "") + ", 넘으면 시장가 청산"})
+    return out
+
+
 def rules_of(combo: dict) -> dict:
-    """The fixed rules every setting shares, from the config."""
+    """The fixed rules every setting shares, from the config. A config with entry gates or a hold limit (the 'VWAP
+    개선판') carries them too (``vote_gate``, ``vol_gate``, ``max_hold_bars`` and their words ``gates``); every other config's
+    answer is as it was."""
     c = combo.get("config") or {}
     lev = c.get("leverage") if isinstance(c.get("leverage"), dict) else {"BTCUSDT": 40, "default": 30}
     lad = c.get("ladder") if isinstance(c.get("ladder"), dict) else {}
     margin = c.get("margin", "leverage")
-    return {"leverage_btc": _i(lev.get("BTCUSDT")), "leverage_alt": _i(lev.get("default")), "margin": margin if isinstance(margin, str) else _f(margin),
-            "ladder": ladder_numbers(lad), "max_loss_frac": _f(c.get("max_loss_frac")),
-            "no_weekend": bool(c.get("no_weekend")), "macro_blackout_min": _i(c.get("macro_blackout_min")),
-            "us_open_pause_min": _i(c.get("us_open_pause_min")), "us_open_pre_min": _i(c.get("us_open_pre_min")),
-            "early_exit": c.get("early_exit"),
-            "one_position": True, "initial_equity": _f(c.get("initial_equity")), "name": c.get("name"),
-            "stop": stop_ko(None, c.get("stop") if isinstance(c.get("stop"), dict) else None),
-            "rank": c.get("rank"), "flip_twin": bool(c.get("flip_twin", True))}
+    out = {"leverage_btc": _i(lev.get("BTCUSDT")), "leverage_alt": _i(lev.get("default")), "margin": margin if isinstance(margin, str) else _f(margin),
+           "ladder": ladder_numbers(lad), "max_loss_frac": _f(c.get("max_loss_frac")),
+           "no_weekend": bool(c.get("no_weekend")), "macro_blackout_min": _i(c.get("macro_blackout_min")),
+           "us_open_pause_min": _i(c.get("us_open_pause_min")), "us_open_pre_min": _i(c.get("us_open_pre_min")),
+           "early_exit": c.get("early_exit"),
+           "one_position": True, "initial_equity": _f(c.get("initial_equity")), "name": c.get("name"),
+           "stop": stop_ko(None, c.get("stop") if isinstance(c.get("stop"), dict) else None),
+           "rank": c.get("rank"), "flip_twin": bool(c.get("flip_twin", True))}
+    gates = gate_words(c)
+    if gates:
+        out.update(vote_gate=c.get("vote_gate") if isinstance(c.get("vote_gate"), dict) else None,
+                   vol_gate=c.get("vol_gate") if isinstance(c.get("vol_gate"), dict) else None,
+                   max_hold_bars=_i(c.get("max_hold_bars")), gates=gates, time_ko=LP.time_exit_ko(c))
+    return out
 
 
 # ---------------------------------------------------------------- the paper bot's signals and outcomes (신호 · 거래)
+# the 'VWAP 개선판' gates' reasons (paperbot/entrygates.py EntryGates._vote_block / _vol_block: "4시간 추세 반대: …",
+# "4시간 추세 판단을 못 읽음(진입 안 함): …", "변동성 높음: ATR …"), their own categories (never the trend bot's judge)
+GATE_TFS = ("15분 ", "30분 ", "1시간 ", "4시간 ", "일봉 ")
+VOL_GATE_KO = "변동성 높음 (VWAP 조건)"
+
+
 def why_cat(status: str, why: str) -> tuple:
     """(category id, Korean) of a FILTERED / WAITING / BROKE signal_log row (paperbot/combo.py: _allowed, _submit_due,
     _research_signal, _research_entry, _breaks)."""
@@ -1552,6 +1714,14 @@ def why_cat(status: str, why: str) -> tuple:
         if w.startswith("되돌림 확인"):
             return "pulled", "되돌림 확인 (진입 신호로 바뀜)"
         return "broke", "돌파 확인 (진입 신호로 바뀜)"
+    # the 'VWAP 개선판' entry gates (paperbot/entrygates.py, owners 10-23): the higher bar's vote against the side (3 of 4,
+    # never the trend bot's 보류 · 힘 약함 · 끝물) and a volatile signal bar; a gate that could not read its bars blocks too
+    if w.startswith(GATE_TFS) and " 추세 반대: " in w:
+        return "vote_gate", f"{w.split(' ', 1)[0]} 추세 반대 (VWAP 조건)"
+    if w.startswith(GATE_TFS) and "추세 판단을 못 읽음" in w:
+        return "trend_unread", "추세 판단 못 읽음"
+    if w.startswith("변동성 높음"):
+        return "vol_high", VOL_GATE_KO
     # the trend bot (paperbot/trendbot.py, trendjudge.check): its waits, its judge, its entry checks, its pauses
     if w.startswith("되돌림 안 옴"):
         return "nopull", "되돌림 안 옴"
@@ -1676,11 +1846,12 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
         k = (_i(sig.get("ts")), sig.get("timeframe"), meta.get("member") or sig.get("strategy_id"), sym)
         if k[0] is None:
             continue
-        oc[(k[0] + 1, k[1], k[2], k[3])] = (st, reason, _i(step))
+        oc[(k[0] + 1, k[1], k[2], k[3])] = (st, reason, _i(step), meta.get("gates"))
     t0 = kst_day_start(kst_day(now))
     out_rows, counts = [], {"today": {}, "week": {}}
     for _id, bc, tf, strat, sym, side, status, data in rows:
         d = _j(data)
+        o = None
         if status in ("FILTERED", "WAITING", "BROKE"):
             cat, ko = why_cat(status, d.get("why"))
             stage = "filtered" if status == "FILTERED" else status.lower()
@@ -1697,6 +1868,9 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
         row = {"id": _i(_id), "t": _i(bc), "tf": tf, "member": strat, "strategy": name, "symbol": sym, "side": _i(side), "status": status,
                "stage": stage, "cat": cat, "ko": ko, "why": d.get("why"), "why_ko": why_words(d.get("why")) if d.get("why") else None,
                "source": d.get("source"), "prev": bool(bot_since) and (_i(bc) or 0) < bot_since}
+        g = d.get("gates") if isinstance(d.get("gates"), dict) else (o[3] if o else None)
+        if isinstance(g, dict):                          # what the 'VWAP 개선판' gates read (only its rows have it)
+            row["gates_ko"] = gates_text(g)
         out_rows.append(row)
         if row["prev"]:
             continue                                       # the bot before it: listed, never counted as this one's
@@ -1718,6 +1892,35 @@ def read_signals(path: str, account: str, now: int, keep: int = SIGNALS_KEEP) ->
     return {"state": "ok", "path": path, "since_ms": since, "today_ms": t0, "bot_since": bot_since,
             "counts": {k: sorted(v.values(), key=lambda c: -c["n"]) for k, v in counts.items()}, "stages": stages,
             "rows": out_rows[::-1][:keep], "n": len(out_rows)}
+
+
+def gates_text(g: Any) -> Optional[str]:
+    """What the 'VWAP 개선판' gates read for a signal (its row's ``gates``: combo.gates_text's words, "4시간 상승(상승 3·
+    하락 0·중립 1) · 변동성 30분 ATR 0.45% (30일 80% 위치 0.62%)"), None when the row has none."""
+    if not isinstance(g, dict):
+        return None
+    parts = [str((g.get(k) or {}).get("text") or "") for k in ("vote", "vol") if isinstance(g.get(k), dict)]
+    return " · ".join(x for x in parts if x) or None
+
+
+def bots_out(bots: list) -> list:
+    """The paper bots a page can switch between: [{id, short_ko, label_ko}] (two only)."""
+    return [{"id": b["id"], "short_ko": b["short_ko"], "label_ko": b["label_ko"]} for b in bots]
+
+
+def signals(p: dict, now: int, bot: str = "paper") -> dict:
+    """GET /api/v4/livebots/signals?bot=paper|paper2: read_signals of the main paper bot, or of the second one (owners
+    10-23: the 'VWAP 개선판', its filtered signals with the gates' words). With one paper bot: exactly read_signals of the
+    main one (``bot`` ignored). With two: plus ``bot`` (the one shown) and ``bots`` (the switch); a VWAP row carries the
+    gates' words (``gates_ko``)."""
+    _c, _f2, paper, execs = sources(p, now)
+    bots = paper_bots(p, paper, execs)
+    if len(bots) < 2:
+        return read_signals(p["paper"], ACCOUNT, now)
+    b = next((x for x in bots if x["id"] == bot), bots[0])
+    out = read_signals(b["path"], ACCOUNT, now)
+    out.update(bot=b["id"], bot_ko=b["short_ko"], bots=bots_out(bots))
+    return out
 
 
 def entered_meta(path: str, account: str) -> dict:
@@ -1769,7 +1972,11 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
         if not t:
             return None
         from ... import livecheck as LC
-        return card_by.get(LC.card_key(ACCOUNT, t.get("symbol"), t.get("entry_time"), None if LP.same(path or p["paper"], p["paper"]) else path))
+        c = card_by.get(LC.card_key(ACCOUNT, t.get("symbol"), t.get("entry_time"), None if LP.same(path or p["paper"], p["paper"]) else path))
+        if c is not None and c.get("exit_reason") == "TIME":       # its own bot's words (a hold limit is no supervisor)
+            pr = (execs[0]["_papers"] if execs else {}).get(LP.norm(path or p["paper"])) or paper
+            c = {**c, "exit_ko": exit_words("TIME", cfg_of(pr))}
+        return c
     metas: dict = {}
 
     def meta_of(path: str) -> dict:
@@ -1820,13 +2027,14 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                                       "diff": (lt["pnl"] - t["pnl"] * (x["config"].get("qty_scale") or 0)) if lt.get("pnl") is not None and x["config"].get("qty_scale") else None}
                 elif not followed_at(x, path, t.get("entry_time")):
                     other = next((o for o in bots if LP.same(o["path"], LP.paper_at(x["segs"], t.get("entry_time")))), None)
-                    cells[x["id"]] = other_cell(x, (other or {}).get("label_ko", "").split(" (")[0] or None)
+                    cells[x["id"]] = other_cell(x, (other or {}).get("short_ko") or None)
                 else:
                     cells[x["id"]] = why_missed(x["record"], t, ACCOUNT)
             rows.append({**{k: t.get(k) for k in ("id", "symbol", "side", "entry_time", "exit_time", "exit_reason", "leverage", "pnl", "roe",
                                                    "entry_price", "exit_price", "qty", "margin", "fees", "funding", "strategy_id", "timeframe",
                                                    "lock_roe", "stop_initial", "stop_price", "liq_price")},
-                         "key": f"{b['id']}:{t['id']}", "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
+                         "key": f"{b['id']}:{t['id']}", "reason_ko": exit_words(t["exit_reason"], cfg_of(pr), t.get("exit_why")),
+                         "win": (t["pnl"] or 0) > 0,
                          "why": {"bot": b["id"], "symbol": t["symbol"], "entry": t["entry_time"]} if t.get("entry_time") is not None else None,
                          **setting(t["symbol"], t["entry_time"], path, t.get("strategy_id"), t.get("timeframe")), "live": cells,
                          "card": card_of(t, path)})
@@ -1848,11 +2056,14 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
             reason = t["exit_reason"]
             if reason == "PAPER" and pt:
                 reason = pt["exit_reason"] or reason
+            # the paper's reason in its own bot's words (a TIME of the trend bot's supervisor or of a hold limit)
+            words = exit_words(reason, cfg_of(_paper_of(x, pt["paper_path"])), pt.get("exit_why")) \
+                if pt and reason == pt["exit_reason"] else EXIT_KO.get(reason, reason)
             scale = x["config"].get("qty_scale")
             slip = (t["side"] * (pt["entry_price"] - t["entry_price"]) / pt["entry_price"]) if pt and pt.get("entry_price") and t.get("entry_price") else None
             rows.append({**{k: t.get(k) for k in ("key", "symbol", "side", "qty", "leverage", "entry_price", "pnl", "roe", "margin", "est",
                                                    "commission", "funding", "slippage", "stop_initial", "stop_final", "exit_raw")},
-                         "entry_time": t["entry_ts"], "exit_time": t["exit_ts"], "exit_reason": reason, "reason_ko": EXIT_KO.get(reason, reason),
+                         "entry_time": t["entry_ts"], "exit_time": t["exit_ts"], "exit_reason": reason, "reason_ko": words,
                          "win": (t["pnl"] or 0) > 0, "locked": bool(t.get("stop_final") and t.get("entry_price") and (t["stop_final"] - t["entry_price"]) * t["side"] > 0),
                          "paper": ({k: pt.get(k) for k in ("id", "entry_time", "exit_time", "entry_price", "exit_price", "pnl", "roe", "exit_reason", "lock_roe",
                                                              "strategy_id", "timeframe", "fees", "funding", "qty")}
@@ -1967,22 +2178,29 @@ def perf(p: dict, now: int, more: Optional[dict] = None) -> dict:
         out["paper"] = {"state": "ok", **perf_of(mine, roles=bool(tb))}
     else:
         out["paper"] = {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path")} if paper.get("state") != "ok" else {"state": "missing", "reason_ko": "기록 없음"}
+    bots = paper_bots(p, paper, execs)
     for x in execs:
         r = x["record"]
         if r.get("state") != "ok":
             out[x["id"]] = {k: r.get(k) for k in ("state", "reason_ko", "reason", "path")}
             continue
         m = pairs_of(x)                                    # its own paper bot's trades (livepapers)
+        # the trend bot's numbers: the trades it entered while it followed the trend bot (owners 10-23: an executor moved
+        # to the 'VWAP 개선판' keeps its trend-bot trades here, its VWAP trades are that bot's)
+        its = era_trades(x, p["paper"], since) if tb else trend_since(r.get("trades") or [], since, "entry_ts")
         live = []
-        for t in trend_since(r.get("trades") or [], since, "entry_ts"):   # the live trade takes its paper partner's strategy and timeframe
+        for t in its:                                      # the live trade takes its paper partner's strategy and timeframe
             pt = m.get(str(t["key"]))
             live.append({**t, "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None})
         out[x["id"]] = {"state": "ok", **perf_of(live, "entry_ts", "exit_ts", roles=bool(tb))}
-    bots = paper_bots(p, paper, execs)
+        era = era_of(x, p["paper"], bots) if tb else None
+        if era:
+            out[x["id"]]["era"] = era
     for b in bots[1:]:                                     # the second paper bot's record next to the first's
         a2 = (b["read"].get("accounts") or {}).get(ACCOUNT) if b["read"].get("state") == "ok" else None
         out[b["id"]] = ({"state": "ok", **perf_of(a2.get("trades") or [])} if a2 and a2.get("known")
-                        else {k: b["read"].get(k) for k in ("state", "reason_ko", "reason", "path")}) | {"label_ko": b["label_ko"]}
+                        else {k: b["read"].get(k) for k in ("state", "reason_ko", "reason", "path")}) | {"label_ko": b["label_ko"],
+                                                                                                       "short_ko": b["short_ko"]}
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
     ref_ko = ref_problem(p["paper"])
     return {"now_ms": now, "accts": out, "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None,
@@ -2076,24 +2294,54 @@ def shadows(p: dict, now: int, units=None) -> dict:
 
 
 # ---------------------------------------------------------------- 설정
-def settings(p: dict, now: int) -> dict:
-    """GET /api/v4/livebots/settings: the combined bot's fixed rules and its settings grouped by strategy (from the config it
-    runs), each executor's light threshold and risk limits."""
-    combo = read_combo(p["paper"], paths_more()["combo_config"])
-    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
-    execs = [{"id": ex, "name_ko": ko, "config": configs[ex]} for ex, ko, _dk, _ck in slots(configs)]
-    if combo.get("state") != "ok":
-        return {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path")}, "execs": execs}
-    members = members_of(combo)
-    tb = trend_bot(p["paper"]) if combo.get("source") == "db" else None
+def _groups(members: list, roles: bool = False) -> list:
+    """The settings grouped by strategy, the most settings first (a trend bot's carry their role)."""
     groups: dict = {}
     for m in members:
-        groups.setdefault(m["strategy"], []).append({**m, "role": TREND_ROLE.get(m["strategy"])} if tb else m)
-    return {"now_ms": now, "combo": {"state": "ok", "source": combo["source"], "path": combo["path"], "since_ms": combo.get("since_ms")},
-            "rules": rules_of(combo), "execs": execs, "n_settings": len(members), "n_strategies": len(groups),
-            "groups": [{"strategy": k, "n": len(v), "tfs": sorted({m["tf"] for m in v}), "members": v}
-                       for k, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))],
-            "trend": trend_rules(tb)}
+        groups.setdefault(m["strategy"], []).append({**m, "role": TREND_ROLE.get(m["strategy"])} if roles else m)
+    return [{"strategy": k, "n": len(v), "tfs": sorted({m["tf"] for m in v}), "members": v}
+            for k, v in sorted(groups.items(), key=lambda kv: (-len(kv[1]), str(kv[0])))]
+
+
+def settings(p: dict, now: int) -> dict:
+    """GET /api/v4/livebots/settings: the combined bot's fixed rules and its settings grouped by strategy (from the config it
+    runs), each executor's light threshold and risk limits. With a second paper bot (owners 10-23: the 'VWAP 개선판' next to
+    the 추세판단 봇) also its rules and settings (``bots``: its own config, its entry gates and hold limit in words) and
+    which bot each executor follows (``follows_ko``); with one paper bot the answer is as before."""
+    more = paths_more()
+    combo = read_combo(p["paper"], more["combo_config"])
+    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
+    execs = [{"id": ex, "name_ko": ko, "config": configs[ex]} for ex, ko, _dk, _ck in slots(configs)]
+    _c, _f2, paper, srcs = sources(p, now)
+    bots = paper_bots(p, paper, srcs)
+    second = []
+    if len(bots) > 1:                                    # who follows which bot, and the second bot's own rules
+        by_ex = {x["id"]: x for x in srcs}
+        for e in execs:
+            x = by_ex.get(e["id"]) or {}
+            if x.get("follows_ko"):
+                e["follows_ko"] = x["follows_ko"]
+        for b in bots[1:]:
+            c2 = read_combo(b["path"], more.get("combo2_config") or "-")
+            item = {"id": b["id"], "short_ko": b["short_ko"], "label_ko": b["label_ko"], "followers": b["followers"],
+                    "combo": {k: c2.get(k) for k in ("state", "reason_ko", "reason", "path", "source", "since_ms")}}
+            if c2.get("state") == "ok":
+                m2 = members_of(c2)
+                item.update(rules=rules_of(c2), n_settings=len(m2), groups=_groups(m2),
+                            n_strategies=len({m["strategy"] for m in m2}))
+            second.append(item)
+    if combo.get("state") != "ok":
+        out = {"now_ms": now, "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path")}, "execs": execs}
+        return {**out, "bots": second} if second else out
+    members = members_of(combo)
+    tb = trend_bot(p["paper"]) if combo.get("source") == "db" else None
+    groups = _groups(members, roles=bool(tb))
+    out = {"now_ms": now, "combo": {"state": "ok", "source": combo["source"], "path": combo["path"], "since_ms": combo.get("since_ms")},
+           "rules": rules_of(combo), "execs": execs, "n_settings": len(members), "n_strategies": len(groups),
+           "groups": groups, "trend": trend_rules(tb)}
+    if second:
+        out.update(bots=second, name_ko=bots[0]["short_ko"])
+    return out
 
 
 def trend_rules(tb: Optional[dict]) -> Optional[dict]:
@@ -2210,6 +2458,10 @@ def rank(p: dict, now: int) -> dict:
         m = pairs_of(x)                                  # a live trade takes the strategy of the paper trade IT followed
         for t in trend_since(r.get("trades") or [], since, "entry_ts"):
             pt = m.get(str(t["key"]))
+            if pt is not None and not LP.same(pt["paper_path"], p["paper"]):
+                continue            # it followed another paper bot then (owners 10-23: S3_CMO / F6_VWAP are in both bots)
+            if pt is None and not followed_at(x, p["paper"], t.get("entry_ts")):
+                continue
             live.setdefault((x["id"], pt.get("strategy_id") if pt else None), []).append(t)
     sig = read_signals(p["paper"], ACCOUNT, now, keep=RANK_SIG_KEEP)
     sig_by = signals_by_strategy(sig)
@@ -2556,17 +2808,29 @@ def trend_map(p: dict, now: int, tb: dict, paper: dict, execs: list) -> dict:
     lines = {}
     if a is not None:
         lines["paper"] = cum_wins(trades, "exit_time")
+    bots = paper_bots(p, paper, execs)
+    for b in bots[1:]:                                   # the second paper bot's own wins so far, next to the others (owners 10-23)
+        a2 = (b["read"].get("accounts") or {}).get(ACCOUNT) if b["read"].get("state") == "ok" else None
+        if a2 and a2.get("known"):
+            lines[b["id"]] = cum_wins(a2.get("trades") or [], "exit_time")
+    eras = {}
     for x in execs:
-        if x["record"].get("state") == "ok":
-            lines[x["id"]] = cum_wins(trend_since(x["record"].get("trades") or [], since, "entry_ts"), "exit_ts")
+        if x["record"].get("state") == "ok":            # its trades while it followed the trend bot (era_trades)
+            lines[x["id"]] = cum_wins(era_trades(x, p["paper"], since), "exit_ts")
+            era = era_of(x, p["paper"], bots)
+            if era:
+                eras[x["id"]] = era
     n_max = max([10] + [v[-1][0] + 5 for v in lines.values() if v])
     acts = {k: {"points": v, "n": v[-1][0] if v else 0, "wins": v[-1][1] if v else 0,
                 "rate": v[-1][1] / v[-1][0] if v else None, "p_honest": None, "p_fit": None} for k, v in lines.items()}
+    for b in bots[1:]:
+        if b["id"] in acts:
+            acts[b["id"]]["label_ko"] = b["short_ko"]
     return {"now_ms": now, "kind": "trend", "trend_bot": trend_out(tb),
             "paper": {k: paper.get(k) for k in ("state", "reason_ko", "reason", "path", "as_of_ms")},
             "card": {"state": "ok"}, "band_ko": TREND_NO_REF_KO,
-            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko")}
-                      for x in execs],
+            "execs": [{"id": x["id"], "name_ko": x["name_ko"], "state": x["record"].get("state"), "reason_ko": x["record"].get("reason_ko"),
+                       **({"era": eras[x["id"]]} if x["id"] in eras else {})} for x in execs],
             "band": {"trend": True, "n_max": n_max, "ns": [], "fit": None, "honest": None, "break_even": None, "qs": list(BAND_QS),
                      "fit_band": None, "honest_band": None, "accounts": acts},
             "cuts": cuts, "cut_defs": [{"id": c, "ko": ko, "sub": sub} for c, ko, sub in TREND_MAP_CUTS],
@@ -2931,7 +3195,7 @@ def whynow(p: dict, now: int) -> dict:
     for b in paper_bots(p, paper, execs)[1:]:            # the second paper bot, while an executor follows it
         if not b["follower_ids"]:
             continue
-        pr, who, nm = b["read"], ",".join(b["follower_ids"]), b["label_ko"].split(" (")[0]
+        pr, who, nm = b["read"], ",".join(b["follower_ids"]), b["short_ko"]
         if pr.get("state") != "ok":
             add("paper2", False, f"{nm} 봇 기록을 못 읽음", {"reason_ko": pr.get("reason_ko")}, who=who)
             continue
@@ -3556,10 +3820,12 @@ def register(app, ctx) -> dict:
         return _cached(key("trades", p), lambda: json_finite(trade_rows(p, int(time.time() * 1000))))
 
     @app.get("/api/v4/livebots/signals")
-    def get_livebots_signals():
-        """실거래 › 신호: the combined bot's signals of the last 7 KST days and what became of each (5 s cache)."""
+    def get_livebots_signals(bot: str = "paper"):
+        """실거래 › 신호: the combined bot's signals of the last 7 KST days and what became of each; ``bot`` paper2: the second
+        paper bot's (5 s cache)."""
         p = paths()
-        return _cached(key("signals", p), lambda: json_finite(read_signals(p["paper"], ACCOUNT, int(time.time() * 1000))))
+        b = bot if bot in ("paper", "paper2") else "paper"
+        return _cached(key("signals:" + b, p), lambda: json_finite(signals(p, int(time.time() * 1000), b)))
 
     @app.get("/api/v4/livebots/perf")
     def get_livebots_perf():

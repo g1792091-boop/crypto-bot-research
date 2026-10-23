@@ -377,12 +377,18 @@ export function costView(ctx) {
           : "체결로 비용을 못 잼 (기준가가 없거나 체결 수량이 안 맞음)"));
   }
   function feeExEl(x, span) {
+    // an executor on the other paper bot (owners 10/23, the server's since_ko): its "since" is that bot's, from its move
+    const own = span === "since" && x.since_ko ? `${x.since_ko}${has(x.since_ms) ? ` (${fmt.kst(x.since_ms)})` : ""}` : null;
     const head = h("div", {class: "lbk-fhead"}, acctTag(x.id),
-      h("span", {class: "lbk-real"}, x.state === "ok" && x.real === false ? "테스트넷 · 진짜 돈 아님" : "실거래 · 진짜 돈"));
+      h("span", {class: "lbk-real"}, x.state === "ok" && x.real === false ? "테스트넷 · 진짜 돈 아님" : "실거래 · 진짜 돈"),
+      own ? h("small", {class: "muted"}, own) : null);
     const box = (...kids) => h("section", {class: ["lbk-fex", x.state === "ok" ? "" : "off", "lbk-a-" + x.id], "aria-label": acctKo(x.id)}, head, ...kids);
     if (x.state !== "ok") return box(sourceState(x, `${acctKo(x.id)} 실행기 DB`));
     const b = x[span];
-    if (!b || !b.n) return box(h("p", {class: "lbk-none"}, span === "since" ? "추세판단 봇 시작 뒤 닫힌 거래가 아직 없어요" : "닫힌 거래가 아직 없어요"));
+    if (!b || !b.n) {
+      return box(h("p", {class: "lbk-none"}, span !== "since" ? "닫힌 거래가 아직 없어요"
+        : x.since_ko ? `${x.since_ko} 닫힌 거래가 아직 없어요` : "추세판단 봇 시작 뒤 닫힌 거래가 아직 없어요"));
+    }
     const left = [b.est ? `지갑 변화로 어림한 거래 ${fmt.int(b.est)}번` : "", b.unmeasured ? `비용을 못 잰 거래 ${fmt.int(b.unmeasured)}번` : ""].filter(Boolean);
     const count = h("p", {class: "lbk-fcount"}, `닫힌 거래 ${fmt.int(b.n)}번 · 체결로 비용을 잰 거래 `, h("b", {class: "num"}, `${fmt.int(b.measured)}번`),
       left.length ? ` · ${left.join(" · ")}은 합에서 뺐어요` : "", " ", ui.smallSample(b.measured, (st.d.fees || {}).small_n || 20));

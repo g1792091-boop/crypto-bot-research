@@ -232,6 +232,8 @@ export function judgeView(ctx) {
     const c = d.compare;
     twoCard.hidden = !c;                                  // one paper bot: no card (the page as before)
     if (!c) { put(twoSlot); return; }
+    // two different bots (the server's twin false, owners 10/23): side by side by name, no "손절만 다름"
+    say(cardPart(twoCard), c.twin === false ? "두 봇 나란히 · 매매법이 서로 달라요 · 둘 다 돌던 때부터" : "같은 신호 · 손절만 다름 · 두 번째 봇 시작부터");
     if (c.state !== "ok") { put(twoSlot, sourceState(c, "두 번째 페이퍼 기록")); return; }
     const col = (x) => h("div", {class: ["lbj-tcol", x.id]}, h("b", {class: "lbj-tt"}, x.label_ko || x.id),
       ui.kv([["거래", `${fmt.int(x.n)}번`], ["이김", `${fmt.int(x.wins)}번`], ["승률", has(x.win_rate) ? fmt.pct(x.win_rate, 1, false) : "—"],

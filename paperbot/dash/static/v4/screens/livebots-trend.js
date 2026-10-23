@@ -25,7 +25,7 @@
 // board. Countdowns tick every second on the server's clock. HONESTY: unread = 못 읽음 + why, never a zero; paper money is
 // never shown as real money.
 import {h, put, ui, fmt, store, serverNow, href} from "../core/pb.js";
-import {sourceState, waitKo, expectLines, expectHead} from "./livebots-kit.js";
+import {sourceState, waitKo, expectLines, expectHead, mainFollowKo, papersNow, josaObj} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/trend";
 // the judgment changes of the last 24 h: the 일지 tab's answer (dash/more/livejournal.py, its "trend" rows), every 60 s
@@ -166,6 +166,17 @@ export function againstKo(p, j) {
   }
   return "반대로 바뀜 · 감독 청산";
 }
+const KICK = "추세판단 봇 · 바이비트 · WOO X Pro가 따라가는 페이퍼(−50%)";
+/** The hero's kicker: who follows this bot (two paper bots, owners 10/23: only its own followers; one: the usual line). */
+export const kickKo = () => { const f = mainFollowKo(); return f ? `추세판단 봇 · ${f} 페이퍼(−50%)` : KICK; };
+/** The other paper bot an executor follows now (the summary's follows_ko against the main bot's name), null when it follows
+ *  this one (or with one paper bot). */
+export function otherBotOf(a) {
+  const ps = papersNow();
+  if (!ps || !a || !a.follows_ko) return null;
+  const main = ps.find((b) => b.id === "paper") || {};
+  return a.follows_ko !== main.short_ko ? a.follows_ko : null;
+}
 /** An executor without a position, in words: following and waiting, halted, or what it did with the paper's open one
  *  (``f``: that executor's row of the answer's position.follow, from its own records). */
 export function idleKo(a, p, f) {
@@ -215,9 +226,10 @@ export function trendView(ctx, hub) {
   const sub = h("p", {class: "ltr-hsub"});
   const chips = h("div", {class: "ltr-hchips"});
   const money = h("div", {class: "ltr-money", role: "list", "aria-label": "지갑"});
+  const kick = h("p", {class: "ltr-kick"}, kickKo());
   const hero = h("section", {class: "ltr-hero na", "aria-label": "지금"},
     h("div", {class: "ltr-orb", "aria-hidden": "true"}, h("i")),
-    h("div", {class: "ltr-hmain"}, h("p", {class: "ltr-kick"}, "추세판단 봇 · 바이비트 · WOO X Pro가 따라가는 페이퍼(−50%)"), head, sub, chips),
+    h("div", {class: "ltr-hmain"}, kick, head, sub, chips),
     money);
   // the cards
   const posBox = h("div", {class: "ltr-pos"});
@@ -295,9 +307,11 @@ export function trendView(ctx, hub) {
       if (a.state !== "ok") { items.push(tile(a.name_ko, "못 읽음", a.reason_ko || "", "na")); continue; }
       const td = a.today || {};
       const tone = ok(td.pnl) && td.pnl < 0 ? "down" : ok(td.pnl) && td.pnl > 0 ? "up" : "";
+      const other = otherBotOf(a);                       // its wallet follows the other paper bot now (owners 10/23)
       items.push(tile(`${a.name_ko} 실거래`, ok(a.balance) ? fmt.usd(a.balance) : "—",
-        `오늘 ${ok(td.pnl) ? signed(td.pnl) : "—"} · ${fmt.int(td.trades || 0)}번` + (a.halted ? " · 멈춤" : "") + (a.stale ? " · 기록 오래됨" : ""),
-        a.halted ? "bad" : tone, "거래소 실제 잔고 (실행기 기록)"));
+        `오늘 ${ok(td.pnl) ? signed(td.pnl) : "—"} · ${fmt.int(td.trades || 0)}번` + (a.halted ? " · 멈춤" : "") + (a.stale ? " · 기록 오래됨" : "")
+          + (other ? ` · ${other} 따라감` : ""),
+        a.halted ? "bad" : tone, other ? `거래소 실제 잔고 (실행기 기록) · 지금은 ${other}${josaObj(other)} 따라가요` : "거래소 실제 잔고 (실행기 기록)"));
     }
     const pa = accts.find((x) => x.id === "paper");
     if (pa && pa.state === "ok") items.push(tile("페이퍼(연습) 지갑", fmt.usd(pa.balance), "진짜 돈 아님", "paper"));
@@ -319,6 +333,11 @@ export function trendView(ctx, hub) {
       if (a.state !== "ok") return h("li", null, h("b", null, `${a.name_ko} `), "기록 못 읽음");
       const q = a.position;
       const f = fol ? fol.find((x) => x.id === a.id) : null;
+      const other = otherBotOf(a);
+      if (other) {                                      // it follows the other paper bot (owners 10/23): its position is that bot's
+        return h("li", null, h("b", null, `${a.name_ko} `), `${other}${josaObj(other)} 따라가는 중`,
+          q ? h("small", {class: "ltr-sub"}, `그 봇 포지션 ${fmt.coin(q.symbol)} ${SIDE(q.side)} (이 화면 숫자에 안 셈)`) : null);
+      }
       if (!q) {
         return h("li", null, h("b", null, `${a.name_ko} `), idleKo(a, p, f),
           f && f.text ? h("small", {class: "ltr-sub"}, `실행기 기록 ${ok(f.ts) ? fmt.hm(f.ts) + " " : ""}· ${f.text}`) : null);
@@ -659,6 +678,8 @@ export function trendView(ctx, hub) {
   return {el, set(s) {
     if (!s) return;
     st.s = s;
+    const kk = kickKo();
+    if (kick.textContent !== kk) kick.textContent = kk;
     drawMoney();
     if (st.t && st.t.state === "ok") { st.ticks = st.ticks.filter((k) => !posBox.contains(k.node)); drawPos(); }
   }};

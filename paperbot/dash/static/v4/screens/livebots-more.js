@@ -10,6 +10,9 @@
 //           describe, each line split at its " / "), and its members by role (눌림 · 자리 · 돌파 · 횡보 · 추세) with their
 //           entry bar (30분 진입 = the closed 1h bar's trend, 1시간 진입 = the 4h bar's, 4시간 진입 = the daily bar's, 10/22);
 //           every setting row carries its role and its entry (바로 진입 / 되돌림 진입: the config's trend.pullback_wait).
+//           A second paper bot (owners 10/23: the 'VWAP 개선판', the server's ``bots``): its own card after the trend bot's,
+//           its fixed rules from its own config with its entry gates and hold limit in the owners' words (the server's
+//           rules.gates), its settings, who follows it; each executor's card says which paper bot it follows.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 export {shadowsView, twoLines} from "./livebots-shadow.js";
@@ -47,9 +50,13 @@ export function ladderKo(lad) {
     + ` (닿은 순ROE - ${pctOf(l.next_gap)})`;
 }
 
-/** The fixed rules in the owners' words, from the config's own numbers. */
+/** The fixed rules in the owners' words, from the config's own numbers (a bot with entry gates, the 'VWAP 개선판': its
+ *  gates and hold limit too, the server's rules.gates words; it has no trend judgment that keeps going in a pause). */
 export function rulesList(r) {
-  return [
+  const gates = Array.isArray(r.gates) && r.gates.length ? r.gates : null;
+  const entryGates = gates ? gates.filter((g) => g.id !== "max_hold") : [];
+  const hold = gates ? gates.find((g) => g.id === "max_hold") : null;
+  const out = [
     ["배수", `BTC ${r.leverage_btc ?? "—"}배 · 나머지 ${r.leverage_alt ?? "—"}배 (고정)`],
     ["증거금", typeof r.margin === "number" ? `잔고의 ${pctOf(r.margin)}` : r.margin === "leverage" ? "배수와 같은 %" : "—"],
     ["포지션", "한 번에 하나"],
@@ -58,10 +65,15 @@ export function rulesList(r) {
     ["주말", r.no_weekend ? "한국 시간 토·일에는 새로 진입하지 않음 (열린 포지션은 그대로)" : "주말에도 진입"],
     ["경제 발표", r.macro_blackout_min ? `미국 경제 발표 앞뒤 ${r.macro_blackout_min}분은 진입하지 않음` : "제한 없음"],
     r.us_open_pause_min || r.us_open_pre_min ? ["나스닥 개장", `미국 주식시장 개장 ${[r.us_open_pre_min ? `앞 ${r.us_open_pre_min}분` : "",
-      r.us_open_pause_min ? `뒤 ${r.us_open_pause_min}분` : ""].filter(Boolean).join("·")}은 진입하지 않음 (추세 판단·청산은 계속)`] : null,
+      r.us_open_pause_min ? `뒤 ${r.us_open_pause_min}분` : ""].filter(Boolean).join("·")}은 진입하지 않음 (${gates ? "열린 포지션 청산은 계속" : "추세 판단·청산은 계속"})`] : null,
     ["기본 손절", r.stop ? r.stop.ko : "—"],
-    ["빠른 청산", r.early_exit ? (r.early_exit === "own" ? "같은 매매법의 반대 신호에 바로 청산" : "아무 매매법의 반대 신호에 바로 청산") : "없음 (손절과 계단 잠금만)"],
+    ["빠른 청산", r.early_exit ? (r.early_exit === "own" ? "같은 매매법의 반대 신호에 바로 청산" : "아무 매매법의 반대 신호에 바로 청산")
+      : hold ? "없음 (손절 · 계단 잠금 · 보유 한도만)" : "없음 (손절과 계단 잠금만)"],
   ];
+  if (!gates) return out;
+  return [...out,
+    entryGates.length ? ["진입 조건", h("ul", {class: "lb-limits"}, entryGates.map((g) => h("li", null, g.ko)))] : null,
+    hold ? ["보유 한도", hold.ko] : null].filter(Boolean);
 }
 
 /** One rule line of the bot ("추세 판단: A / B / C") as {head, parts}: the words before the first ": " and the rest split
@@ -103,14 +115,15 @@ export function settingsView(ctx) {
   const head = h("p", {class: "lb-ghead"});
   const list = ui.searchList({size: 10, placeholder: "매매법 찾기", row: (g) => groupRow(g), match: (g, q) => `${g.strategy} ${fmt.stratKo(g.strategy)}`.toLowerCase().includes(q)});
   const ruleCard = ui.card({title: "고정 규칙", sub: rulesSub(null), cls: "lb-rulecard"}, rules);
+  const botsSlot = h("div", {class: "lb-slot stack"});   // a second paper bot's card (draw)
   const el = h("div", {class: "lb-settings stack"}, stateSlot, trendSlot,
-    ruleCard,
+    ruleCard, botsSlot,
     ui.card({title: "실행기 신호등과 한도", sub: "실행기 설정 파일 그대로 (적힌 것만)", cls: "lb-execcard"}, lights),
     ui.card({title: "매매법과 설정", sub: "매매법마다 접어 두었어요 · 10개씩", cls: "lb-grpcard"}, head, list.el));
-  function memberRow(m) {
+  function memberRow(m, tr = st.d && st.d.trend) {
     return h("div", {class: "lb-mem", role: "listitem"},
       h("div", {class: "lb-memh"}, h("b", null, `${m.order}번`), h("span", {class: "pp thin"}, m.tf_ko), m.role ? ui.pill(`역할 ${m.role}`, "thin", "추세판단 봇에서 이 매매법의 역할") : null,
-        h("span", null, entryKo(m, st.d && st.d.trend)), m.invert ? ui.pill("반대 방향", "warn") : null,
+        h("span", null, entryKo(m, tr)), m.invert ? ui.pill("반대 방향", "warn") : null,
         m.no_chase ? ui.pill("추격 진입 막기", "thin", m.no_chase_ko || "") : null, h("span", {class: "muted"}, `손절 ${m.stop.ko}`)),
       m.numbers ? h("div", {class: "lb-nums"}, Object.entries(m.numbers).map(([k, v]) => h("span", {class: "pp thin num"}, `${k} ${Array.isArray(v) ? v.join("/") : v}`)))
         : h("p", {class: "note"}, "기본 숫자 (규칙봇과 같은 신호)"),
@@ -118,10 +131,23 @@ export function settingsView(ctx) {
       m.disp ? h("p", {class: "note"}, `신호봉: ${m.disp}`) : null,
       m.off.length ? ui.disclosure(`끄는 구간 ${fmt.int(m.off.length)}개`, h("p", {class: "note"}, m.off.map((o) => o.ko).join(" · "))) : null);
   }
-  function groupRow(g) {
+  function groupRow(g, tr) {
     return h("div", {class: "lb-grp", role: "listitem"},
-      ui.disclosure(`${fmt.stratKo(g.strategy)} · 설정 ${fmt.int(g.n)}개 · ${g.tfs.map((t) => fmt.tfKo(t)).join("/")}`, h("div", {class: "lb-mems"}, g.members.map(memberRow))),
+      ui.disclosure(`${fmt.stratKo(g.strategy)} · 설정 ${fmt.int(g.n)}개 · ${g.tfs.map((t) => fmt.tfKo(t)).join("/")}`,
+        h("div", {class: "lb-mems"}, g.members.map((m) => memberRow(m, tr === undefined ? st.d && st.d.trend : tr)))),
       h("span", {class: "muted lb-gcode"}, g.strategy));
+  }
+  /** A second paper bot's card (owners 10/23): its rules, gates and hold limit, its settings (never the trend bot's roles). */
+  function botCard(b) {
+    const who = (b.followers || []).length ? `${b.followers.join(" · ")}가 따라가요` : "따라가는 실행기 없음";
+    const c = b.combo || {};
+    return ui.card({title: `${b.short_ko || "두 번째 페이퍼 봇"} 규칙`, sub: `두 번째 페이퍼(연습) 봇 · ${who}`, cls: "lb-rulecard lb-botcard"},
+      c.state !== "ok" ? sourceState(c, `${b.short_ko || "두 번째"} 봇 설정`) : [
+        h("div", {class: "lb-rules"}, ui.kv(rulesList(b.rules || {}))),
+        ui.note(c.source === "db" ? `봇이 지금 쓰는 설정 (봇 DB의 시작 기록, ${fmt.kst(c.since_ms)})` : `설정 파일 ${c.path || "—"} (봇이 아직 시작 기록을 남기기 전)`),
+        h("p", {class: "lb-ghead"}, `매매법 ${fmt.int(b.n_strategies || 0)}개 · 설정 ${fmt.int(b.n_settings || 0)}개`),
+        h("div", {class: "lb-mems", role: "list"}, (b.groups || []).map((g) => groupRow(g, null))),
+        ui.note("자세한 것은 docs/vwap-bot-ko.md 2장 (설정 파일 deploy/combo.vwap.json 그대로)")]);
   }
   function drawTrend(tr) {
     if (!tr) { put(trendSlot); return; }
@@ -147,6 +173,7 @@ export function settingsView(ctx) {
     const d = st.d;
     if (!d) { put(rules, motion.shimmer(3)); return; }
     drawTrend(d.trend);
+    put(botsSlot, (d.bots || []).map(botCard));
     const sub = ruleCard.firstChild && Array.from(ruleCard.firstChild.childNodes).find((n) => String(n.className || "") === "sub");
     if (sub && sub.textContent !== rulesSub(d.trend)) sub.textContent = rulesSub(d.trend);
     if (!d.combo || d.combo.state !== "ok") { put(rules, sourceState(d.combo, "합친 봇 설정")); list.set([]); }
@@ -159,6 +186,7 @@ export function settingsView(ctx) {
       const c = x.config || {};
       if (c.state !== "ok") return h("div", {class: "lb-light"}, h("b", null, x.name_ko), sourceState(c, "실행기 설정"));
       return h("div", {class: "lb-light"}, h("b", null, x.name_ko),
+        x.follows_ko ? h("p", {class: "note"}, `따라가는 페이퍼 봇: ${x.follows_ko}`) : null,
         h("p", {class: "lb-lline"}, c.signal_light_n ? `신호등: 페이퍼 최근 ${fmt.int(c.signal_light_n)}번 중 ${pctOf(c.signal_light_min_win)} 이상 이겼을 때만 새 진입을 따라감` : "신호등 꺼짐: 모든 진입을 따라감"),
         h("p", {class: "note"}, `크기 비율 ×${c.qty_scale == null ? "—" : fmt.num(c.qty_scale, 2)} (페이퍼 수량 × 이 비율)`),
         c.limits && c.limits.length ? h("ul", {class: "lb-limits"}, c.limits.map((l) => h("li", {title: l.what_ko}, h("b", null, l.ko)))) : ui.note("적힌 위험 한도 없음"));

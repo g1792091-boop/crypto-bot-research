@@ -69,11 +69,11 @@ export function bandLine(ctx) {
     else if (tb && tb.freeze_until) {                     // the trend bot: no 40-trade rule, the 2-week review instead
       const left = tb.freeze_until - Number(d.now_ms || Date.now()), days = Math.ceil(Math.max(0, left) / 86400000);
       put(c.goal, h("span", null, "2주 검토까지 "), left > 0 ? h("b", {class: "num"}, `D-${fmt.int(days)}`) : h("b", null, "검토할 때"),
-        h("span", {class: "muted num"}, ` · 페이퍼(연습) ${fmt.int(cp.n)}번`));
+        h("span", {class: "muted num"}, ` · ${d.papers ? acctKo("paper") : "페이퍼(연습)"} ${fmt.int(cp.n)}번`));      // (two paper bots: by its name)
       c.goal.title = `${tb.name || "추세판단 봇"} 시작 ${fmt.kst(tb.since)}부터 2주(${fmt.kst(tb.freeze_until)}까지)는 규칙을 바꾸지 않고 기록을 모아요 · ${cp.rule_ko || ""}`;
     } else {
       put(c.goal, h("span", null, `${fmt.int(cp.trades)}번 판단까지 `), cp.ready ? h("b", null, "도착") : h("b", {class: "num"}, `${fmt.int(cp.left)}번 남음`),
-        h("span", {class: "muted num"}, ` · 페이퍼(연습) ${fmt.int(cp.n)}/${fmt.int(cp.trades)}`));
+        h("span", {class: "muted num"}, ` · ${d.papers ? acctKo("paper") : "페이퍼(연습)"} ${fmt.int(cp.n)}/${fmt.int(cp.trades)}`));
       c.goal.title = `페이퍼 닫힌 거래 ${fmt.int(cp.n)}번 · ${fmt.int(cp.trades)}번이 되면 두 분이 정해요: ${cp.rule_ko || `${cp.up_ko} / ${cp.mid_ko} / ${cp.low_ko}`} · 그 전의 승률은 판단이 아니에요 (참고)`;
     }
   }
@@ -227,7 +227,7 @@ const TAB_NOTE = {
 export function tablePanel(ctx, st, onPick) {
   const t = {tab: local.get("lb-tab", "pos"), acct: local.get("lb-tacct", ""), d: null, state: "loading"};
   if (!["pos", "fills", "stops"].includes(t.tab)) t.tab = "pos";
-  if (t.acct && !IDS.includes(t.acct)) t.acct = "";
+  if (t.acct && ![...IDS, "paper2"].includes(t.acct)) t.acct = "";
   const tabs = ui.seg([{id: "pos", label: "포지션"}, {id: "fills", label: "체결"}, {id: "stops", label: "손절 주문"}], t.tab,
     (id) => { t.tab = id; local.set("lb-tab", id); render(true); }, {label: "아래 표"});
   const posBtn = tabs.querySelector('[data-id="pos"]');
@@ -318,6 +318,17 @@ export function tablePanel(ctx, st, onPick) {
     tbl.replaceChildren(body);
     if (user) motion.swap(tbl);
   }
-  return {el, set(d, s) { if (d) t.d = d; t.state = s; render(false); }, setSym() { render(false); }, onTicker() { if (t.tab !== "fills") render(false); }};
+  /** The account choices for this summary: the second paper bot too while there is one (owners 10/23), by its name. */
+  function options(d) {
+    const ids = (d && (d.accts || []).some((a) => a.id === "paper2")) ? ["paper", "paper2", "bybit", "mexc"] : IDS;
+    const key = ids.map((id) => `${id}:${acctKo(id)}`).join();
+    if (sel.dataset.k === key) return;
+    sel.dataset.k = key;
+    sel.replaceChildren(h("option", {value: ""}, "ALL"), ...ids.map((id) => h("option", {value: id}, acctKo(id))));
+    if (t.acct && !ids.includes(t.acct)) t.acct = "";
+    sel.value = t.acct;
+  }
+  return {el, set(d, s) { if (d) { t.d = d; options(d); } t.state = s; render(false); }, setSym() { render(false); },
+    onTicker() { if (t.tab !== "fills") render(false); }};
 }
 

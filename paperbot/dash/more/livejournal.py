@@ -536,11 +536,37 @@ def _gap_words(gap: Optional[float], lev, what: str, none_ko: str = "짝 거래 
     return f"페이퍼 {what}가보다 {pct_ko(abs(gap), 3, False)} {'유리' if gap > 0 else '불리'}{roe}"
 
 
-def exec_events(execs: list, paper_by: dict, t0: int) -> tuple:
+def _bot_ko(x: dict, bots: list, path: Optional[str]) -> Optional[str]:
+    """The short name of the paper bot at ``path`` (livebots.paper_bots: "VWAP 개선판"), None when it is not one of them."""
+    b = next((b for b in bots or [] if L.LP.same(b["path"], path)), None)
+    return b["short_ko"] if b else None
+
+
+def _sides_of(read: dict) -> dict:
+    """{(symbol, entry ms): side} of a paper read's entries (its closed trades and its open position)."""
+    a = (read.get("accounts") or {}).get(ACCOUNT) if read.get("state") == "ok" else None
+    out = {(t.get("symbol"), _i(t.get("entry_time"))): int(t.get("side") or 0) for t in (a or {}).get("trades") or []}
+    pos = (a or {}).get("position")
+    if isinstance(pos, dict) and _i(pos.get("entry_time")) is not None:
+        out[(pos.get("symbol"), int(pos["entry_time"]))] = int(pos.get("side") or 0)
+    return out
+
+
+def exec_events(execs: list, paper_by: dict, t0: int, main: Optional[str] = None, bots: Optional[list] = None) -> tuple:
     """(events, sources) of the executors (livebots.sources' entries): fills with the gap to the paper's price, lock steps,
-    skipped follows, halts and warnings, starts. ``paper_by`` {(symbol, entry ms): side} of the paper's entries (the
-    side of a skipped follow)."""
+    skipped follows, halts and warnings, starts. ``paper_by`` {(symbol, entry ms): side} of the main paper's entries (the
+    side of a skipped follow). With a second, different paper bot (``bots``, owners 10-23: an executor following the
+    'VWAP 개선판'): a fill or a skip of that bot's entry says which bot (``bot_ko``), its side and its exit words are that
+    bot's; the main bot's rows are as before."""
     events, srcs = [], []
+    other_by: dict = {}
+
+    def theirs(x: dict, t_ms: Optional[int]) -> tuple:
+        """(path, short name) of the paper bot the executor followed at ``t_ms`` when it is not the main one, else (None, None)."""
+        if main is None or len(bots or []) < 2:
+            return None, None
+        path = L.LP.paper_at(x.get("segs") or [[None, main]], t_ms)
+        return (path, _bot_ko(x, bots, path) or "다른 페이퍼 봇") if not L.LP.same(path, main) else (None, None)
     for x in execs:
         ex, name, r = x["id"], x["name_ko"], x["record"]
         if r.get("state") != "ok":
@@ -554,13 +580,15 @@ def exec_events(execs: list, paper_by: dict, t0: int) -> tuple:
             sym, side, lev = t.get("symbol"), int(t.get("side") or 0), t.get("leverage")
             pt = pairs.get(str(t.get("key")))
             et, xt = _i(t.get("entry_ts")), _i(t.get("exit_ts"))
+            _op, okb = theirs(x, et)
+            btag = {"bot_ko": okb} if okb else {}
             if et is not None and et >= t0:
                 pe = t.get("paper_entry") or (pt or {}).get("entry_price")
                 gap = side * (pe - t["entry_price"]) / pe if pe and t.get("entry_price") else None
                 events.append(_ev(f"x:{ex}:{t['key']}:e", et, "exec", "fill_in",
                                   f"{name} {coin(sym)} {SIDE_KO.get(side, '')} 진입 체결 @ {price_ko(t.get('entry_price'))}",
-                                  _gap_words(gap, lev, "진입"), symbol=sym, side=side, tone="accent",
-                                  link=_link("trades", acct=ex), gap=gap, leverage=_i(lev), **tag))
+                                  _gap_words(gap, lev, "진입") + (f" · {okb} 따라감" if okb else ""), symbol=sym, side=side, tone="accent",
+                                  link=_link("trades", acct=ex), gap=gap, leverage=_i(lev), **tag, **btag))
             if xt is not None and xt >= t0:
                 reason = t.get("exit_reason")
                 if reason == "PAPER" and pt:
@@ -576,24 +604,30 @@ def exec_events(execs: list, paper_by: dict, t0: int) -> tuple:
                     else:
                         gap = side * (t["exit_ref"] - pt["exit_price"]) / pt["exit_price"]
                 pnl = _f(t.get("pnl"))
-                words = L.EXIT_KO.get(reason, str(reason or "청산"))
+                # the paper's reason in its own bot's words (a TIME of the trend bot's supervisor or of a hold limit)
+                words = L.exit_words(reason, L.cfg_of(L._paper_of(x, pt["paper_path"])), pt.get("exit_why")) \
+                    if pt and reason == pt.get("exit_reason") else L.EXIT_KO.get(reason, str(reason or "청산"))
                 detail = [_gap_words(gap, lev, "청산", none_ko)]
                 if t.get("est"):
                     detail.append("손익은 지갑 변화로 어림 (체결 기록 전)")
+                if okb:
+                    detail.append(f"{okb} 따라감")
                 events.append(_ev(f"x:{ex}:{t['key']}:x", xt, "exec", "fill_out",
                                   f"{name} {coin(sym)} {SIDE_KO.get(side, '')} 청산 · {words} · {money_ko(pnl)}",
                                   " · ".join(detail), symbol=sym, side=side,
                                   tone="up" if (pnl or 0) > 0 else "down" if (pnl or 0) < 0 else "",
-                                  link=_link("trades", acct=ex), gap=gap, pnl=pnl, reason=reason, est=bool(t.get("est")), **tag))
+                                  link=_link("trades", acct=ex), gap=gap, pnl=pnl, reason=reason, est=bool(t.get("est")), **tag, **btag))
         q = r.get("position")
         if q and q.get("entry_time") is not None and int(q["entry_time"]) >= t0:
             sym, side = q.get("symbol"), int(q.get("side") or 0)
             pe = q.get("paper_entry")
             gap = side * (pe - q["entry"]) / pe if pe and q.get("entry") else None
+            _op, okb = theirs(x, q.get("paper_time") if q.get("paper_time") is not None else q["entry_time"])
             events.append(_ev(f"x:{ex}:{q.get('key')}:e", q["entry_time"], "exec", "fill_in",
                               f"{name} {coin(sym)} {SIDE_KO.get(side, '')} 진입 체결 @ {price_ko(q.get('entry'))}",
-                              _gap_words(gap, q.get("leverage"), "진입") + " · 지금 열려 있어요", symbol=sym, side=side,
-                              tone="accent", link=_link("pos"), gap=gap, leverage=_i(q.get("leverage")), open=True, **tag))
+                              _gap_words(gap, q.get("leverage"), "진입") + (f" · {okb} 따라감" if okb else "") + " · 지금 열려 있어요",
+                              symbol=sym, side=side, tone="accent", link=_link("pos"), gap=gap, leverage=_i(q.get("leverage")), open=True,
+                              **tag, **({"bot_ko": okb} if okb else {})))
         # the paper entries it did not follow: the strongest recorded reason per entry (livebots.why_missed's order)
         for key, kinds in (r.get("why") or {}).items():
             got = next(((k, kinds[k]) for k, _ko in L.WHY if k in kinds), None)
@@ -601,11 +635,18 @@ def exec_events(execs: list, paper_by: dict, t0: int) -> tuple:
             if got is None or pk is None or (got[1].get("ts") or 0) < t0:
                 continue
             kind, rec = got
-            side = paper_by.get((pk[1], pk[2]))
+            op, okb = theirs(x, pk[2])                   # owners 10-23: an entry of the bot it followed then (its side, its name)
+            if okb:
+                if op not in other_by:
+                    other_by[op] = _sides_of(L._paper_of(x, op))
+                side = other_by[op].get((pk[1], pk[2]))
+            else:
+                side = paper_by.get((pk[1], pk[2]))
             events.append(_ev(f"x:{ex}:skip:{key}", rec["ts"], "exec", "skip",
-                              f"{name} · {coin(pk[1])}{' ' + SIDE_KO[side] if side in SIDE_KO else ''} 페이퍼 진입을 안 따라갔어요",
+                              f"{name} · {coin(pk[1])}{' ' + SIDE_KO[side] if side in SIDE_KO else ''} "
+                              + (f"{okb} 진입을 안 따라갔어요" if okb else "페이퍼 진입을 안 따라갔어요"),
                               f"{L.WHY_KO[kind]} · {rec.get('text') or ''}".rstrip(" ·"), symbol=pk[1], side=side, tone="warn",
-                              link=_link("cost"), why=kind, **tag))
+                              link=_link("cost"), why=kind, **tag, **({"bot_ko": okb} if okb else {})))
         for e in r.get("events") or []:
             ts = e.get("ts")
             if ts is None or ts < t0 or e.get("kind") in L.WHY_KO or e.get("kind") in ("entry", "exit"):
@@ -638,8 +679,10 @@ def exec_events(execs: list, paper_by: dict, t0: int) -> tuple:
                               txt, symbol=sym, tone="good", link=_link("trades", acct=ex), **tag))
         for ts, pdb in r.get("starts") or []:
             if ts is not None and ts >= t0:
+                bk = _bot_ko(x, bots, pdb) if pdb and len(bots or []) > 1 else None      # two bots: which one, by its name
                 events.append(_ev(f"x:{ex}:start:{ts}", ts, "safety", "start", f"{name} 실행기가 켜졌어요",
-                                  f"따라가는 페이퍼 DB {pdb}" if pdb else None, tone="accent", link=_link("safety"), **tag))
+                                  (f"따라가는 페이퍼: {bk} ({pdb})" if bk else f"따라가는 페이퍼 DB {pdb}") if pdb else None,
+                                  tone="accent", link=_link("safety"), **tag))
     return events, srcs
 
 
@@ -741,7 +784,7 @@ def build(p: dict, hours: int = 24, now_ms: Optional[int] = None, more: Optional
     if isinstance(pos, dict) and _i(pos.get("entry_time")) is not None:
         paper_by[(pos.get("symbol"), int(pos["entry_time"]))] = int(pos.get("side") or 0)
     _configs, _follows, _paper, execs = L.sources(p, now)
-    xev, xsrc = exec_events(execs, paper_by, t0)
+    xev, xsrc = exec_events(execs, paper_by, t0, p["paper"], L.paper_bots(p, _paper, execs))
     events += xev
     checks = L.read_checks(more["check_db"], now)
     events += check_events(checks, t0)

@@ -273,7 +273,11 @@ def setting_of(facts: dict, order: Optional[int], strategy: Optional[str] = None
     if m is None:
         return None
     trend = (facts.get("cfg") or {}).get("trend") is not None
-    return {"order": m.get("order") or order, "strategy": m.get("strategy"), "tf": m.get("tf"), "group": "B" if m.get("no_chase") else "A",
+    cfg = facts.get("cfg") or {}
+    # the A / B groups were 규칙봇 15's: none on a bot with entry gates (owners 10-23, the 'VWAP 개선판')
+    gate = isinstance(cfg.get("vote_gate"), dict) or isinstance(cfg.get("vol_gate"), dict)
+    return {"order": m.get("order") or order, "strategy": m.get("strategy"), "tf": m.get("tf"),
+            "group": None if gate else "B" if m.get("no_chase") else "A",
             "no_chase": bool(m.get("no_chase")), "no_chase_ko": m.get("no_chase_ko"), "entry_ko": m.get("entry_ko"),
             "stop_ko": (m.get("stop") or {}).get("ko"), "role": L.TREND_ROLE.get(m.get("strategy")) if trend else None}
 
@@ -536,7 +540,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
             if xpos and xpos.get("paired") and follow:
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two:
-                cards[x["id"]]["follows_ko"] = b["label_ko"].split(" (")[0]
+                cards[x["id"]]["follows_ko"] = b["short_ko"]
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [], since=since)
     finally:
         if conn is not None:

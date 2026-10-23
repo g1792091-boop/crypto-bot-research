@@ -119,7 +119,8 @@ export function posCard(c, o = {}) {
   const st = p.setting;
   // the 추세판단 봇's members by role (눌림 · 자리 · 돌파 · 횡보); the A/B groups were the bot before it's
   const grp = st && st.role ? ui.pill(st.role, "accent", "추세판단 봇의 매매법 역할")
-    : st ? (st.group === "B" ? ui.pill("B그룹 · 추격 막기", "accent", st.no_chase_ko || "추격 진입 막기 매매법") : ui.pill("A그룹", "thin", "추격 진입 막기 없는 매매법")) : null;
+    : st ? (st.group === "B" ? ui.pill("B그룹 · 추격 막기", "accent", st.no_chase_ko || "추격 진입 막기 매매법")
+      : st.group === "A" ? ui.pill("A그룹", "thin", "추격 진입 막기 없는 매매법") : null) : null;     // (no group: the VWAP bot)
   const stratLine = p.strategy_id
     ? `${fmt.stratKo(p.strategy_id)} · ${fmt.tfKo(p.timeframe)}봉${st ? ` · ${st.order}번 설정` : p.member_order ? ` · ${p.member_order}번 설정` : ""}`
     : live ? "매매법 모름 (따라가는 페이퍼 포지션을 못 찾았어요)" : "매매법 기록 없음";

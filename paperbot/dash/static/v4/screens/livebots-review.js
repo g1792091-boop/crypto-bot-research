@@ -17,7 +17,19 @@
 // virtual result carries 가상; under 20 trades 표본 적음: 대부분 운; what could not be worked out says why (못 함 /
 // 수집 전), never a zero; a failed refresh keeps the last answer dimmed with its age.
 import {h, s, put, ui, fmt, serverNow, href} from "../core/pb.js";
-import {acctKo, sourceState} from "./livebots-kit.js";
+import {acctKo, sourceState, mainFollowKo, josaObj} from "./livebots-kit.js";
+
+const KICK = "2주 검토 · 추세판단 봇 · 바이비트 · WOO X Pro가 따라가는 페이퍼(연습)";
+/** The hero's kicker: who follows the trend bot (two paper bots, owners 10/23: only its own followers; one: as before). */
+export const kickKo = () => { const f = mainFollowKo(); return f ? `2주 검토 · 추세판단 봇 · ${f} 페이퍼(연습)` : KICK; };
+/** An executor's other paper bot on its tile (the server's execs[].other): "지금은 VWAP 개선판을 따라가요 · 그 봇 거래 3번은 안
+ *  셈"; null without one. */
+export function otherKo(o) {
+  if (!o) return null;
+  const bot = o.bot_ko || "다른 페이퍼 봇";
+  return `${o.now ? `${o.since != null ? `${fmt.kst(o.since)}부터 ` : ""}${bot}${josaObj(bot)} 따라가요` : `한때 ${bot}${josaObj(bot)} 따라갔어요`}`
+    + (o.n ? ` · 그 봇 거래 ${fmt.int(o.n)}번은 안 셈` : "");
+}
 
 export const API = "/api/v4/livebots/trendreview";
 const REFRESH_MS = 60 * 1000;
@@ -147,7 +159,7 @@ export function reviewView(ctx, hub) {
     h("div", {class: "lrv-ring-c"}, ringNum, ringOf));
   const fzBig = h("b", {class: "lrv-fz-big"}, "—");
   const fzSub = h("span", {class: "lrv-fz-sub"}, "");
-  const kick = h("p", {class: "lrv-kick"}, "2주 검토 · 추세판단 봇 · 바이비트 · WOO X Pro가 따라가는 페이퍼(연습)");
+  const kick = h("p", {class: "lrv-kick"}, kickKo());
   const head = h("h2", {class: "lrv-head"}, "불러오는 중");
   const hsub = h("p", {class: "lrv-hsub"});
   const duel = h("div", {class: "lrv-duel"});
@@ -249,7 +261,8 @@ export function reviewView(ctx, hub) {
         h("span", {class: "lrv-tk"}, `${name} ${x.real ? "실거래" : `실행기 · ${x.mode || "모드 모름"}`} · 새 규칙 뒤`),
         h("b", {class: "lrv-tv num"}, x.n ? signed(x.pnl) : "거래 없음"),
         h("span", {class: "lrv-ts num"}, [x.n ? `${fmt.int(x.n)}번 · ${fmt.int(x.wins)}승` : null, has(a.balance) ? `지갑 ${fmt.usd(a.balance)}` : null,
-          x.open ? "포지션 있음" : null, x.halted ? "멈춤" : null, x.estimated ? `${fmt.int(x.estimated)}번은 지갑 변화로 어림` : null].filter(Boolean).join(" · ") || "새 규칙 뒤 따라간 거래만"));
+          x.open ? "포지션 있음" : null, x.halted ? "멈춤" : null, x.estimated ? `${fmt.int(x.estimated)}번은 지갑 변화로 어림` : null].filter(Boolean).join(" · ") || "새 규칙 뒤 따라간 거래만"),
+        x.other ? h("span", {class: "lrv-ts lrv-other"}, otherKo(x.other)) : null);
     });
     put(live, tiles.length ? tiles : h("p", {class: "lrv-ts"}, "실행기 기록을 불러오는 중"));
   }
@@ -459,6 +472,8 @@ export function reviewView(ctx, hub) {
   return {el, set(sm) {
     if (!sm) return;
     st.s = sm;
+    const kk = kickKo();
+    if (kick.textContent !== kk) kick.textContent = kk;
     if (st.d && st.d.state === "ok") drawLive();
   }};
 }

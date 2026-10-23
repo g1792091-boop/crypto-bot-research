@@ -16,8 +16,10 @@
 // HONESTY: every replay number carries 가상(재현); paper money is 페이퍼(연습), the executors' 실거래 only on mainnet; under
 // 20 trades 표본 적음 · 아직 판단 못 함; a value not read is — or 수집 전 / 못 읽음 with why, never a zero; a failed
 // refresh keeps the last answer dimmed with its age.
+// Two different paper bots (owners 10/23): an executor's numbers here are only its trades on the 추세판단 봇 (the server's
+// era); one that follows, or followed, the 'VWAP 개선판' says so on its card instead of the twin-era note.
 import {h, s, put, ui, fmt, serverNow} from "../core/pb.js";
-import {acctKo, sourceState} from "./livebots-kit.js";
+import {acctKo, sourceState, eraWords} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/replayref";
 const REFRESH_MS = 60 * 1000;
@@ -233,7 +235,7 @@ export function expectView(ctx) {
     const ref = d.ref || {};
     const w = ref.window_kst || [];
     put(win, ui.pill("가상(재현)", "warn"), ` ${w[0] || "—"} ~ ${w[1] || "—"} (한국 시간) · 바이낸스 1분봉으로 규칙 그대로 다시 돌린 결과   `,
-      ui.pill("실제", "accent"), ` 새 규칙 시작 ${fmt.kst(d.since)} 뒤 · 페이퍼와 두 실행기`);
+      ui.pill("실제", "accent"), ` 새 규칙 시작 ${fmt.kst(d.since)} 뒤 · 페이퍼와 두 실행기${((d.results || {}).execs || []).some((x) => x.era) ? " (추세판단 봇을 따라간 거래만)" : ""}`);
     put(tiles, accounts().map((a) => {
       const r = a.rec || {};
       if (a.state !== "ok") {
@@ -332,7 +334,8 @@ export function expectView(ctx) {
     const v = r.verdict || {};
     const sc = a.id === "replay" ? null : bandScale(r.band, r.roe_mean, replay && replay.roe_mean);
     return h("article", {class: ["lex-rbox", "lex-a-" + a.id, a.id === "replay" ? "ref" : ""]}, name,
-      a.x && a.x.other_paper ? h("p", {class: "lex-note warn"}, "이 실행기는 지금 다른 페이퍼를 따라가요 (짝 거래·청산 이유는 그 페이퍼 기준)") : null,
+      a.x && a.x.era ? h("p", {class: "lex-note warn"}, eraWords(accName(a.id), a.x.era))
+        : a.x && a.x.other_paper ? h("p", {class: "lex-note warn"}, "이 실행기는 지금 다른 페이퍼를 따라가요 (짝 거래·청산 이유는 그 페이퍼 기준)") : null,
       h("dl", {class: "lex-nums"},
         h("div", null, h("dt", null, "거래"), h("dd", {class: "num"}, `${fmt.int(r.n)}번`, r.estimated ? h("small", null, ` (${fmt.int(r.estimated)}번 어림)`) : null)),
         h("div", null, h("dt", null, "이긴 비율"), h("dd", {class: "num"}, share(r.win_rate), h("small", null, ` ${fmt.int(r.wins)}승`))),

@@ -22,12 +22,19 @@
 // ``empty``, owners 10/21 night: zeros everywhere on the first day) one card says so in their place, with what the 7/1~10/20
 // replay says to expect (가상).
 import {h, s, put, ui, fmt, motion, serverNow, href} from "../core/pb.js";
-import {acctKo, acctTag, sourceState, expectLines, expectHead} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, expectLines, expectHead, eraWords} from "./livebots-kit.js";
 
 export const MAP_API = "/api/v4/livebots/map";
 const REFRESH_MS = 30 * 1000;
 const IDS = ["paper", "bybit", "mexc"];
 const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro"};
+/** The accounts of an answer's band: the second paper bot's line too while the server sends it (owners 10/23: the 'VWAP
+ *  개선판', its own wins from its own start, named by its bot); one paper bot: the three as before. */
+export const idsOf = (b) => (b && b.accounts && b.accounts.paper2 ? ["paper", "paper2", "bybit", "mexc"] : IDS);
+/** A line's short label: the account's (페이퍼 · 바이비트 · WOO X Pro); with a second paper bot both paper lines by their
+ *  bots' names (acctKo: the summary's names). */
+const shortOf = (id, b) => (id === "paper2" ? ((b && b.accounts && b.accounts.paper2 && b.accounts.paper2.label_ko) || acctKo(id))
+  : id === "paper" && b && b.accounts && b.accounts.paper2 ? acctKo(id) : SHORT[id] || id);
 /** liveimprove SMALL_N: a cut is judged (and coloured here) from this many live trades. */
 export const MIN_N = 10;
 const SMALL_ACCT = 20;                   // an account's line: fewer closed trades than this is mostly luck (표본 적음)
@@ -96,7 +103,7 @@ const WHERE_CHIP = {below: ["범위 아래", "warn"], inside: ["범위 안", "th
 /** "페이퍼 48번 중 31번 이김 (64.6%) · 현실 기대 범위 아래" (and its tone: warn below the honest 5 % edge). */
 export function acctSentence(id, acc, band) {
   const w = whereOf(acc, band);
-  const name = SHORT[id] || id;
+  const name = shortOf(id, band);
   if (w.where === "none") return {text: `${name} 아직 닫힌 거래 없음`, tone: "none", where: "none"};
   const head = `${name} ${fmt.int(w.n)}번 중 ${fmt.int(w.wins)}번 이김 (${fmt.pct(w.rate, 1, false)})`;
   if (w.where === "unknown") return {text: head, tone: "", where: "unknown"};
@@ -165,7 +172,7 @@ export function bandGeom(band, W = 640, H = 300, ids = IDS) {
   for (let n = 0; n <= nMax; n += xStep) xt.push(n);
   const yt = [];
   for (let w = 0; w <= yMax + 1e-9; w += yStep) yt.push(w);
-  const ends = accts.map(([id, a]) => ({id, n: a.n, wins: a.wins, x: X(a.n), y: Y(a.wins), label: `${SHORT[id] || id} ${a.wins}/${a.n}`}));
+  const ends = accts.map(([id, a]) => ({id, n: a.n, wins: a.wins, x: X(a.n), y: Y(a.wins), label: `${shortOf(id, band)} ${a.wins}/${a.n}`}));
   const ly = spread(ends.map((e) => e.y), 16, pad.t + 6, H - pad.b - 4);
   ends.forEach((e, k) => {
     e.ly = ly[k];
@@ -305,10 +312,11 @@ export function mapView(ctx) {
   function drawTiles(d) {
     const b = d.band;
     const ex = Object.fromEntries((d.execs || []).map((x) => [x.id, x]));
-    const srcOf = (id) => (id === "paper" ? d.paper : ex[id] || {state: "missing"});
-    put(tiles, IDS.map((id) => {
+    const srcOf = (id) => (id === "paper" ? d.paper : id === "paper2" ? {state: "ok"} : ex[id] || {state: "missing"});
+    put(tiles, idsOf(b).map((id) => {
       const src = srcOf(id);
       const tag = acctTag(id);
+      const era = eraWords(acctKo(id), (ex[id] || {}).era);      // an executor that moved to another bot: its trend-bot trades only
       if (!src || src.state !== "ok") {
         return h("div", {class: ["lbm-tile", "lbm-a-" + id, "off"]}, h("div", {class: "lbm-th"}, tag,
           h("span", {class: "lbm-chips"}, ui.pill(src && src.state === "error" ? "못 읽음" : "수집 전", src && src.state === "error" ? "bad" : "thin"))),
@@ -321,10 +329,12 @@ export function mapView(ctx) {
       const g = w.where !== "none" ? gaugeGeom(w.q, w.n, w.wins) : null;
       const lim = w.q && w.q.honest ? `현실 범위 ${fmt.int(w.q.honest[0])}~${fmt.int(w.q.honest[2])}승` : null;
       return h("div", {class: ["lbm-tile", "lbm-a-" + id, "w-" + w.where]},
-        h("div", {class: "lbm-th"}, tag, id === "paper" ? null : h("span", {class: "lbm-kind real"}, "진짜 돈"),
+        h("div", {class: "lbm-th"}, tag, id === "paper" || id === "paper2" ? null : h("span", {class: "lbm-kind real"}, "진짜 돈"),
           h("span", {class: "lbm-chips"}, w.n ? ui.smallSample(w.n, SMALL_ACCT) : null,
             chip ? ui.pill(chip[0], chip[1], w.where === "below" ? "현실 기대 범위의 아래쪽 끝(하위 5%)보다 적게 이겼어요: 감시 경보가 보는 선" : null) : null)),
         h("p", {class: ["lbm-ts", sen.tone]}, sen.text),
+        id === "paper2" ? h("p", {class: "lbm-tl"}, "두 번째 페이퍼 봇 · 이 봇 시작부터 (아래 나눠 보기는 추세판단 봇만)") : null,
+        era ? h("p", {class: "lbm-tl"}, era) : null,
         g ? gaugeEl(g, w) : null,
         w.n && lim ? h("p", {class: "lbm-tl"}, lim,
           w.q.be != null ? ` · 본전 ${fmt.num(w.q.be, 1)}승` : "", w.q.fit ? ` · 5년 범위 ${fmt.int(w.q.fit[0])}~${fmt.int(w.q.fit[2])}승` : "") : null);
@@ -346,7 +356,7 @@ export function mapView(ctx) {
     if (!b) { put(chart); put(read); return; }
     const W = Math.max(300, Math.round(chart.clientWidth || 640));
     const H = W < 560 ? 268 : 340;
-    const ids = IDS.filter((id) => (b.accounts || {})[id]);
+    const ids = idsOf(b).filter((id) => (b.accounts || {})[id]);
     const g = bandGeom(b, W, H, ids);
     st.geom = g;
     const empty = !g.lines.length;
@@ -419,8 +429,8 @@ export function mapView(ctx) {
   function drawRead(b, n) {
     const r = readAt(b, n);
     const sp = (cls, ...k) => h("span", {class: cls}, ...k);
-    const acc = IDS.filter((id) => (b.accounts || {})[id] && (b.accounts[id].points || []).length)
-      .map((id) => sp(["lbm-rv", "lbm-a-" + id], h("i", {class: "lb-sw", "aria-hidden": "true"}), `${SHORT[id]} `,
+    const acc = idsOf(b).filter((id) => (b.accounts || {})[id] && (b.accounts[id].points || []).length)
+      .map((id) => sp(["lbm-rv", "lbm-a-" + id], h("i", {class: "lb-sw", "aria-hidden": "true"}), `${shortOf(id, b)} `,
         h("b", {class: "num"}, r.accts[id] == null ? "—" : `${fmt.int(r.accts[id])}승`)));
     put(read, h("b", {class: "lbm-rn num"}, `${fmt.int(n)}번째 거래`),
       r.honest ? sp("lbm-rv hon", "현실 ", h("b", {class: "num"}, `${fmt.int(r.honest[0])}~${fmt.int(r.honest[2])}승`)) : null,
@@ -429,7 +439,7 @@ export function mapView(ctx) {
   }
   function drawLegend(b) {
     const li = (cls, ...k) => h("span", {class: "lbm-li", role: "listitem"}, h("i", {class: ["lbm-key", cls], "aria-hidden": "true"}), ...k);
-    const drawn = IDS.filter((id) => (b.accounts || {})[id] && (b.accounts[id].points || []).length);
+    const drawn = idsOf(b).filter((id) => (b.accounts || {})[id] && (b.accounts[id].points || []).length);
     if (b.trend) {                                         // no band: the lines only, and what a step means
       put(legend, ...drawn.map((id) => h("span", {class: "lbm-li", role: "listitem"}, acctTag(id))));
       put(alarm, "선이 한 칸 오르면 이긴 거래, 옆으로만 가면 진 거래예요. 비교할 범위가 없어서 경보선도 없어요 (거래가 적을 때는 운이 커요).");
@@ -597,7 +607,7 @@ export function mapView(ctx) {
       : !b ? sourceState({state: d.card && d.card.state === "error" ? "error" : "missing",
         reason_ko: (d.card && d.card.reason_ko) || "백테스트 기준표(deploy/combo.live-ac.expected.json)가 없어 띠를 그릴 수 없어요"}, "기대 범위 띠") : null);
     drawTiles(d);
-    const lineSig = b ? IDS.map((id) => ((b.accounts || {})[id] || {}).n ?? "-").join(",") : "";
+    const lineSig = b ? idsOf(b).map((id) => ((b.accounts || {})[id] || {}).n ?? "-").join(",") : "";
     drawChart(lineSig !== st.lineSig);
     st.lineSig = lineSig;
     if (b) drawLegend(b); else { put(legend); put(alarm); }

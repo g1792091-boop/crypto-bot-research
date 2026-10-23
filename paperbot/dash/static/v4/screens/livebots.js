@@ -48,7 +48,7 @@
 // buttons, only view switches).
 import {h, put, ui, serverNow, sound, LIVE, LIVE_PORT, siteUrl, GROUPS} from "../core/pb.js";
 import {liveEvents} from "./livebots-calc.js";
-import {realLine, setPapers} from "./livebots-kit.js";
+import {realLine, setPapers, followLine} from "./livebots-kit.js";
 import {termView} from "./livebots-term.js";
 import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
@@ -122,7 +122,7 @@ function movedCard(ctx) {
   const tab = ctx.params.arg && TABS.some((t) => t.id === ctx.params.arg) ? ctx.params.arg : "";
   const url = siteUrl(LIVE_PORT, tab ? `#/${tab}` : "");
   return ui.card({title: "실거래 화면은 따로 옮겼어요", cls: "lb-moved"},
-    h("p", {class: "lb-moved-p"}, "바이비트 · WOO X Pro 실거래 봇과 그 둘이 따라가는 페이퍼(연습) 화면은 이제 따로 된 실거래 사이트에서 봐요. 같은 비밀번호로 들어가요."),
+    h("p", {class: "lb-moved-p"}, "바이비트 · WOO X Pro 실거래 봇과 그 봇들이 따라가는 페이퍼(연습) 화면은 이제 따로 된 실거래 사이트에서 봐요. 같은 비밀번호로 들어가요."),
     url ? h("a", {class: "btn-line lb-moved-a", href: url}, `${url} →`) : h("p", {class: "note"}, `같은 서버 주소의 ${LIVE_PORT} 포트로 들어가세요`),
     ui.note("이 규칙봇(모의) 대시보드에는 실거래 메뉴가 없어요 · 실거래 사이트는 보기만 해요 (주문 버튼 없음)"));
 }
@@ -143,8 +143,10 @@ export async function mount(el, ctx) {
     {label: group ? `${group.ko} 보기` : "실거래 보기", scroll: true});
   // the real-money strip on every tab (owners 10/19: never taken for the rule bot's paper screens), from the summary answer
   const real = h("div", {class: "lb-real", role: "note", "aria-label": "진짜 돈 화면"}, realLine(null));
-  const head = h("div", {class: "lb-head"},
-    h("h1", null, tab.label), h("span", {class: "sub"}, "바이비트 · WOO X Pro 실행기와 그 둘이 따라가는 페이퍼(연습)"), mine.length > 1 ? seg : null);
+  // two paper bots (owners 10/23): who follows which, from the summary (followLine); one: the usual line
+  const HEAD_SUB = "바이비트 · WOO X Pro 실행기와 그 둘이 따라가는 페이퍼(연습)";
+  const sub = h("span", {class: "sub"}, HEAD_SUB);
+  const head = h("div", {class: "lb-head"}, h("h1", null, tab.label), sub, mine.length > 1 ? seg : null);
   const staleSlot = h("div", {class: "lb-slot"});
   const body = h("div", {class: "lb-body"});
   el.classList.add("lb-scr", "lb-tab-" + st.tab);
@@ -175,6 +177,8 @@ export async function mount(el, ctx) {
     ui.dim(body, false);
     st.d = d; st.state = "ok"; st.okAt = serverNow();
     setPapers(d.papers);                 // two paper bots: their labels everywhere (null with one: the usual names)
+    const two = followLine(d.papers);
+    if (sub.textContent !== (two ? `실행기 두 개 · ${two}` : HEAD_SUB)) sub.textContent = two ? `실행기 두 개 · ${two}` : HEAD_SUB;
     put(real, realLine(d));
     view.set(d, "ok");
     // 소리 · 빛: only what really arrived since the last answer (core/sound.js playLive; its gate, cooldown and switches)
