@@ -129,6 +129,23 @@ BEFORE_LOCK_EXITS = ("REV", "JUDGE", "TIME")
 PAPER_EXIT_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "REV": "빠른 청산(반대 신호)",
                  "JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)",
                  "HALT": "멈춤 청산", "MANUAL": "수동 청산"}
+
+
+def paper_time_ko(paper_db: str) -> str:
+    """The words for the followed paper bot's TIME exit (owners 10-23): 'VWAP 개선판' closes on its hold limit
+    ("보유 한도 청산", paperbot/livepapers.time_exit_ko of its run record's config), the 추세판단 봇's supervisor on time
+    (PAPER_EXIT_KO). Words only: read once, read-only; any error gives PAPER_EXIT_KO's (what it always said)."""
+    try:
+        conn = P.open_ro(paper_db)
+        try:
+            row = conn.execute("SELECT data FROM state WHERE k = 'combo_run'").fetchone()
+        finally:
+            conn.close()
+        cfg = (json.loads(row[0]) or {}).get("config") if row and row[0] else None
+        from .livepapers import time_exit_ko
+        return str(time_exit_ko(cfg if isinstance(cfg, dict) else None))
+    except Exception:  # noqa: BLE001  words only: never in the way of the executor
+        return PAPER_EXIT_KO["TIME"]
 OWN_EXIT_WAIT_S = 30.0                    # "own": the paper position is gone but its trade record is not readable yet
 OWN_PAGE_MIN = 500                        # "own": 1m candles per request (every exchange answers at least this many)
 OWN_LOOKBACK_MS = 3 * 86_400_000          # "own": candles read back at most this far (a longer gap: from there on)
@@ -1002,6 +1019,7 @@ class Executor:
         self.new_signals: list = []
         self.brackets: dict = {}
         self.paper_taker = cfg.paper_taker_fee
+        self.time_ko = PAPER_EXIT_KO["TIME"]    # the followed paper bot's TIME in words (start: paper_time_ko)
         self.paper_errors = 0
         self.db_failed = False
         self.stopping = False                   # SIGTERM: finish the loop in progress, then stop
@@ -1152,6 +1170,7 @@ class Executor:
         # a record only (no order depends on it): which paper database this start follows, so the live checks and the
         # 실거래 site can pair each live trade with the paper bot it really followed when an executor's paper_db is
         # switched (owners 10-19: MEXC follows the -35 % paper bot, docs/live15-mexc-ko.md)
+        self.time_ko = paper_time_ko(self.cfg.paper_db)      # words only (an "own" exit's record and event)
         own = {}
         if self.own:                             # a record of the rule it runs (the dashboard and the checks read it)
             own = {"ladder_from": "own", "ladder": dict(self.cfg.ladder or {}), "ladder_basis": self.cfg.ladder_basis,
@@ -2040,13 +2059,16 @@ class Executor:
                         "예전처럼 따라 닫습니다", {"key": t["key"]})
             return "paper 청산 → 거래소 포지션 닫기 (paper 청산 이유를 못 읽음)"
         reason = str(got.get("reason") or "")
-        ko = PAPER_EXIT_KO.get(reason, reason or "이유 없음")
+        ko = self.time_ko if reason == "TIME" else PAPER_EXIT_KO.get(reason, reason or "이유 없음")
         lock = (t.get("own") or {}).get("lock")
         record = {"reason": reason, "exit_time": got.get("exit_time"), "exit_price": got.get("exit_price"), "seen": now,
                   "own_lock": lock}
         if reason in PRICE_EXITS or (reason in BEFORE_LOCK_EXITS and lock is not None):
             t["paper_exit"] = {**record, "action": "stay"}
-            why = (f"자기 잠금 +{float(lock):.0%}가 있어 {'빠른' if reason == 'REV' else '감독'} 청산을 따르지 않고"
+            # the words of the exit it does not follow: the VWAP bot's TIME is its hold limit (no supervisor there)
+            what = (self.time_ko if reason == "TIME" and self.time_ko != PAPER_EXIT_KO["TIME"]
+                    else f"{'빠른' if reason == 'REV' else '감독'} 청산")
+            why = (f"자기 잠금 +{float(lock):.0%}가 있어 {what}을 따르지 않고"
                    if reason in BEFORE_LOCK_EXITS else "거래소 기준으로")
             self._event(INFO, "own_stay", f"{sym} paper가 {ko}로 닫았습니다 → {why} 계속 들고 갑니다 (거래소 손절 "
                         f"{float(t['stop']):g}" + (f", 자기 잠금 +{float(lock):.0%}" if lock is not None else
@@ -2907,8 +2929,11 @@ def ladder_lines(cfg: ExecConfig) -> list:
     else:
         out += ["기준(ladder_basis \"net\"): 순ROE - 수수료·슬리피지 왕복을 뺀 ROE (페이퍼와 같은 정의)",
                 f"순ROE 비용: {own_cost_text(cfg)}, 펀딩은 계산에 넣지 않음"]
-    out.append("paper 청산: 손절·계단 익절(가격)은 따르지 않고 자기 손절·계단으로 계속, 빠른 청산(반대 신호)과 감독 청산(추세 판단 "
-               "뒤집힘·시간 정리)은 자기 첫 잠금 전에만 따름, 그 밖의 청산(멈춤·수동)은 따름")
+    tko = paper_time_ko(cfg.paper_db)          # the followed paper bot's TIME (owners 10-23: 'VWAP 개선판' = hold limit)
+    before = ("빠른 청산(반대 신호)과 감독 청산(추세 판단 뒤집힘·시간 정리)" if tko == PAPER_EXIT_KO["TIME"]
+              else f"빠른 청산(반대 신호)·감독 청산(추세 판단 뒤집힘)·{tko}")
+    out.append(f"paper 청산: 손절·계단 익절(가격)은 따르지 않고 자기 손절·계단으로 계속, {before}은 자기 첫 잠금 전에만 따름, "
+               "그 밖의 청산(멈춤·수동)은 따름")
     out.append("paper 새 진입: 실거래가 아직 자기 포지션을 들고 있으면 따라가지 않음(놓친 신호로 기록, 들고 있던 포지션은 닫지 않음). "
                "닫힌 뒤의 새 진입부터 따름")
     return out
