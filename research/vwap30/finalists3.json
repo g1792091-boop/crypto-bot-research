@@ -1,0 +1,255 @@
+{
+ "made": "2026-10-23 04:57:12Z",
+ "finalists": [
+  {
+   "name": "묶음 A",
+   "members": [
+    {
+     "label": "F15_ORB_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F10_M2022_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F5_BOX_RSI_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+     "exit": 22,
+     "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1",
+     "exit": 12,
+     "exit_ko": "손절 2ATR · 익절 2ATR"
+    },
+    {
+     "label": "S5_DONCHIAN_MFI_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N03_ADX_GC_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "N03_ADX_GC_at_1h",
+     "exit": 7,
+     "exit_ko": "손절 1.5ATR · 익절 2ATR"
+    },
+    {
+     "label": "N08_ICHI_WR_at_1h",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "F4_PULL_RSI_at_30m",
+     "exit": 3,
+     "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F15_OPEN0000_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F6_VWAP_CROSS_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "OBV_S_at_1h",
+     "exit": 3,
+     "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N08_ICHI_WR_at_30m",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "V39_ALL_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N24_DMI_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F12_MSS_DISP_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F9_IFVG_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "DOGE_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "DOGE_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    }
+   ]
+  },
+  {
+   "name": "묶음 V",
+   "members": [
+    {
+     "label": "F6_VWAP_FAIL_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N23_HA_ST_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N09_ALLIG_AROON_at_1h",
+     "exit": 18,
+     "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F10_M2022_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F6_VWAP_CROSS_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N03_ADX_GC_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F15_ORB_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "exit": 22,
+     "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "DOGE_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "F16_FIB764_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "F4_PULL_RSI_at_30m",
+     "exit": 3,
+     "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N12_ICHI_AO_at_1h",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F5_BOX_RSI_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+     "exit": 22,
+     "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N03_ADX_GC_at_1h",
+     "exit": 7,
+     "exit_ko": "손절 1.5ATR · 익절 2ATR"
+    },
+    {
+     "label": "N08_ICHI_WR_at_1h",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "DOGE_at_30m__core-DOGE-30m-1",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "S2_ST_ROC_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N24_DMI_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "V39_ALL_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F9_IFVG_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    }
+   ]
+  }
+ ]
+}
