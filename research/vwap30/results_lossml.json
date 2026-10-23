@@ -1,0 +1,274 @@
+{
+ "params": {
+  "n_estimators": 300,
+  "learning_rate": 0.03,
+  "num_leaves": 15,
+  "min_child_samples": 200,
+  "subsample": 0.8,
+  "subsample_freq": 1,
+  "colsample_bytree": 0.8,
+  "reg_lambda": 1.0,
+  "random_state": 20261023,
+  "verbose": -1
+ },
+ "features": [
+  "side",
+  "kst_hour",
+  "kst_dow",
+  "vwap_age_h",
+  "wick_frac",
+  "body_atr",
+  "close_vwap_atr",
+  "brk_depth_atr",
+  "bars_since_brk",
+  "relvol",
+  "vwap_slope_atr",
+  "adx",
+  "atrp",
+  "day_pos",
+  "ema4h50",
+  "ema1d20",
+  "p24",
+  "p7",
+  "chase",
+  "fund_pay",
+  "btc_bar",
+  "btc4h_raw3",
+  "j1h_V39",
+  "j1h_S6",
+  "j1h_OBV",
+  "j1h_N12",
+  "j1h_raw3",
+  "j4h_V39",
+  "j4h_S6",
+  "j4h_OBV",
+  "j4h_N12",
+  "j4h_raw3",
+  "atrp_rank",
+  "coin"
+ ],
+ "result": {
+  "B1": {
+   "exit_ko": "B1 규칙봇(2ATR + 계단 30배)",
+   "auc_select_in_sample": 0.7154,
+   "auc_confirm": 0.61,
+   "loss_share_confirm": 0.3161,
+   "base_confirm_all_signals": {
+    "win": 0.6839,
+    "avgR": -0.1011
+   },
+   "skip": [
+    {
+     "skip_share_select": 0.0,
+     "kept_signals_confirm": 9080,
+     "win_all_signals": 0.6839,
+     "avgR_all_signals": -0.1011,
+     "acct_n": 2814,
+     "acct_per_weekday": 4.7724,
+     "acct_win": 0.7001,
+     "acct_avgR": -0.0846,
+     "acct_payoff": 0.3052,
+     "acct_growth": -4.9799,
+     "acct_maxdd": -0.9935
+    },
+    {
+     "skip_share_select": 0.1,
+     "kept_signals_confirm": 7680,
+     "win_all_signals": 0.7107,
+     "avgR_all_signals": -0.0889,
+     "acct_n": 2759,
+     "acct_per_weekday": 4.6586,
+     "acct_win": 0.7177,
+     "acct_avgR": -0.0763,
+     "acct_payoff": 0.2849,
+     "acct_growth": -4.4091,
+     "acct_maxdd": -0.9885
+    },
+    {
+     "skip_share_select": 0.2,
+     "kept_signals_confirm": 6422,
+     "win_all_signals": 0.7297,
+     "avgR_all_signals": -0.0794,
+     "acct_n": 2582,
+     "acct_per_weekday": 4.4398,
+     "acct_win": 0.7293,
+     "acct_avgR": -0.072,
+     "acct_payoff": 0.2701,
+     "acct_growth": -3.8933,
+     "acct_maxdd": -0.9804
+    },
+    {
+     "skip_share_select": 0.3,
+     "kept_signals_confirm": 5271,
+     "win_all_signals": 0.7429,
+     "avgR_all_signals": -0.0741,
+     "acct_n": 2362,
+     "acct_per_weekday": 4.0963,
+     "acct_win": 0.7396,
+     "acct_avgR": -0.0734,
+     "acct_payoff": 0.2503,
+     "acct_growth": -3.6163,
+     "acct_maxdd": -0.9735
+    },
+    {
+     "skip_share_select": 0.5,
+     "kept_signals_confirm": 3110,
+     "win_all_signals": 0.7682,
+     "avgR_all_signals": -0.0634,
+     "acct_n": 1706,
+     "acct_per_weekday": 2.954,
+     "acct_win": 0.7632,
+     "acct_avgR": -0.0656,
+     "acct_payoff": 0.2211,
+     "acct_growth": -2.3333,
+     "acct_maxdd": -0.9041
+    }
+   ],
+   "top_features": [
+    [
+     "atrp",
+     16201.1
+    ],
+    [
+     "vwap_slope_atr",
+     2496.3
+    ],
+    [
+     "atrp_rank",
+     2398.9
+    ],
+    [
+     "adx",
+     2126.9
+    ],
+    [
+     "btc_bar",
+     2041.8
+    ],
+    [
+     "p7",
+     1873.7
+    ],
+    [
+     "brk_depth_atr",
+     1854.4
+    ],
+    [
+     "day_pos",
+     1846.4
+    ]
+   ]
+  },
+  "B3": {
+   "exit_ko": "손절 2ATR · 익절 1ATR · 96봉",
+   "auc_select_in_sample": 0.7297,
+   "auc_confirm": 0.5178,
+   "loss_share_confirm": 0.3371,
+   "base_confirm_all_signals": {
+    "win": 0.6629,
+    "avgR": -0.113
+   },
+   "skip": [
+    {
+     "skip_share_select": 0.0,
+     "kept_signals_confirm": 9080,
+     "win_all_signals": 0.6629,
+     "avgR_all_signals": -0.113,
+     "acct_n": 2631,
+     "acct_per_weekday": 4.3501,
+     "acct_win": 0.6739,
+     "acct_avgR": -0.0991,
+     "acct_payoff": 0.3359,
+     "acct_growth": -5.4278,
+     "acct_maxdd": -0.9959
+    },
+    {
+     "skip_share_select": 0.1,
+     "kept_signals_confirm": 8154,
+     "win_all_signals": 0.6659,
+     "avgR_all_signals": -0.108,
+     "acct_n": 2525,
+     "acct_per_weekday": 4.2035,
+     "acct_win": 0.6784,
+     "acct_avgR": -0.0928,
+     "acct_payoff": 0.3372,
+     "acct_growth": -4.8924,
+     "acct_maxdd": -0.993
+    },
+    {
+     "skip_share_select": 0.2,
+     "kept_signals_confirm": 7226,
+     "win_all_signals": 0.6691,
+     "avgR_all_signals": -0.1031,
+     "acct_n": 2414,
+     "acct_per_weekday": 4.0175,
+     "acct_win": 0.6765,
+     "acct_avgR": -0.0949,
+     "acct_payoff": 0.3378,
+     "acct_growth": -4.7777,
+     "acct_maxdd": -0.992
+    },
+    {
+     "skip_share_select": 0.3,
+     "kept_signals_confirm": 6320,
+     "win_all_signals": 0.6698,
+     "avgR_all_signals": -0.1016,
+     "acct_n": 2300,
+     "acct_per_weekday": 3.8162,
+     "acct_win": 0.6787,
+     "acct_avgR": -0.0918,
+     "acct_payoff": 0.3379,
+     "acct_growth": -4.4101,
+     "acct_maxdd": -0.9887
+    },
+    {
+     "skip_share_select": 0.5,
+     "kept_signals_confirm": 4332,
+     "win_all_signals": 0.6752,
+     "avgR_all_signals": -0.094,
+     "acct_n": 1918,
+     "acct_per_weekday": 3.2079,
+     "acct_win": 0.6877,
+     "acct_avgR": -0.079,
+     "acct_payoff": 0.339,
+     "acct_growth": -3.1837,
+     "acct_maxdd": -0.9597
+    }
+   ],
+   "top_features": [
+    [
+     "vwap_slope_atr",
+     2512.5
+    ],
+    [
+     "atrp_rank",
+     2303.2
+    ],
+    [
+     "atrp",
+     2118.9
+    ],
+    [
+     "p7",
+     1883.0
+    ],
+    [
+     "relvol",
+     1813.5
+    ],
+    [
+     "brk_depth_atr",
+     1807.0
+    ],
+    [
+     "adx",
+     1802.6
+    ],
+    [
+     "day_pos",
+     1757.7
+    ]
+   ]
+  }
+ }
+}
