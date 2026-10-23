@@ -5,7 +5,8 @@ points the signal's way. Select on 2020-03 .. 2024-12 (two halves), finalists fr
     python3 -I vwgate.py check              kernel vs vwacct.trades on 200 random cells
     python3 -I vwgate.py scan [--procs 3]   select-period grid -> OUT8/scan/{label}.npz (+ OUT8/states.npz)
     python3 -I vwgate.py select             -> OUT8/select8.json, research/vwap30/finalists8.json (+ sha256)
-    python3 -I vwgate.py confirm            -> research/vwap30/results8.json"""
+    python3 -I vwgate.py amend1             -> research/vwap30/finalists8a.json (+ sha256), PREREG8_AMEND1.md
+    python3 -I vwgate.py confirm            -> research/vwap30/results8.json (both frozen files)"""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # python3 -I leaves the script's folder out
 from vwcommon import *
@@ -340,8 +341,8 @@ def family(lab):
     return lab.split("_at_")[0]
 
 
-def select():
-    load_ctx()
+def rows_df():
+    """Every select-period row (single judges of every trigger + VWAP 30m judge pairs) and VWAP 30m's top 20 judges."""
     allrows = []
     for lab in LABELS:
         Z = np.load(os.path.join(OUT8, "scan", f"{lab}.npz"))
@@ -358,17 +359,28 @@ def select():
     pout = T.scan(PG)[:-1]
     pnames = [f"P|{a}&{b}" for a, b in pairs]
     df = pd.concat([df, pd.DataFrame(table(pout, pnames, VWAP30), columns=COLS)], ignore_index=True)
-    print("rows", len(df), flush=True)
-    ok = (df.per_weekday >= MIN_WD) & (df.n >= MIN_N) & (df.R_A > 0) & (df.R_B > 0)
-    el = df[ok].sort_values("score", ascending=False)
+    return df, vw, top, T, G, gi
+
+
+def top_distinct(el, k, label):
     fin, fams = [], set()
     for r in el.itertuples():
         if family(r.trigger) in fams:
             continue
         fams.add(family(r.trigger))
-        fin.append({"name": f"순위 {len(fin) + 1}", "trigger": r.trigger, "gate": r.gate, "exit": int(r.exit)})
-        if len(fin) == 5:
+        fin.append({"name": f"{label} {len(fin) + 1}", "trigger": r.trigger, "gate": r.gate, "exit": int(r.exit)})
+        if len(fin) == k:
             break
+    return fin
+
+
+def select():
+    load_ctx()
+    df, vw, top, T, G, gi = rows_df()
+    print("rows", len(df), flush=True)
+    ok = (df.per_weekday >= MIN_WD) & (df.n >= MIN_N) & (df.R_A > 0) & (df.R_B > 0)
+    el = df[ok].sort_values("score", ascending=False)
+    fin = top_distinct(el, 5, "순위")
 
     def named(name, gate):
         x = df[(df.trigger == VWAP30) & (df.gate == gate)]
@@ -435,6 +447,25 @@ def gate_row(T, G, gate, gi):
     return G[gi[gate]]
 
 
+def select_amend1():
+    """PREREG8_AMEND1.md: the same ranking with >= 1 a weekday instead of 3 (select period only)."""
+    load_ctx()
+    df = rows_df()[0]
+    ok = (df.per_weekday >= 1.0) & (df.n >= MIN_N) & (df.R_A > 0) & (df.R_B > 0)
+    el = df[ok].sort_values("score", ascending=False)
+    fin = top_distinct(el, 5, "평일 1번 순위")
+    fp = os.path.join(RES_DIR, "finalists8a.json")
+    json.dump({"made": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + "Z", "finalists": fin,
+               "eligible_wd1": int(ok.sum()), "top30_wd1": el.head(30).to_dict("records")},
+              open(fp, "w"), ensure_ascii=False, indent=1, default=float)
+    open(fp + ".sha256", "w").write(hashlib.sha256(open(fp, "rb").read()).hexdigest() + "  finalists8a.json\n")
+    for f in fin:
+        r = el[(el.trigger == f["trigger"]) & (el.gate == f["gate"]) & (el.exit == f["exit"])].iloc[0]
+        print("finalist", f, "| wd", round(r.per_weekday, 3), "n", r.n, "R_A", round(r.R_A, 3), "R_B", round(r.R_B, 3),
+              "score", round(r.score, 3), flush=True)
+    print("eligible at >= 1 a weekday", ok.sum())
+
+
 # ---------------------------------------------------------------- confirm (once)
 
 def month_odds2(o, m):
@@ -472,17 +503,21 @@ def build_one(f, gi, cache):
 
 
 def confirm():
-    fp = os.path.join(RES_DIR, "finalists8.json")
-    want = open(fp + ".sha256").read().split()[0]
-    got = hashlib.sha256(open(fp, "rb").read()).hexdigest()
-    assert want == got, "finalists8.json changed after it was frozen"
+    fins, shas = [], {}
+    for nm in ("finalists8.json", "finalists8a.json"):
+        fp = os.path.join(RES_DIR, nm)
+        want = open(fp + ".sha256").read().split()[0]
+        got = hashlib.sha256(open(fp, "rb").read()).hexdigest()
+        assert want == got, f"{nm} changed after it was frozen"
+        fins += json.load(open(fp))["finalists"]
+        shas[nm] = got
     load_ctx()
     PERIODS["c2025"] = (ms("2025-01-01"), ms("2026-01-01"))
     PERIODS["c2026"] = (ms("2026-01-01"), ms("2026-10-01"))
     gi = {g: i for i, g in enumerate(GATES)}
     cache, res = {}, []
     rng = np.random.default_rng(SEED8)
-    for f in json.load(open(fp))["finalists"]:
+    for f in fins:
         o = build_one(f, gi, cache)
         m = wd_mask(o)
         row = dict(f)
@@ -501,7 +536,7 @@ def confirm():
               "R", row["select"]["avgR"], "| confirm n", row["confirm"]["n"], "wd", row["confirm"]["per_weekday"], "win",
               row["confirm"]["win"], "R", row["confirm"]["avgR"], "g", g, "q", round(q, 2), "->", row["verdict"],
               "| live n", row["live"]["n"], "R", row["live"]["avgR"], flush=True)
-    json.dump({"made": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + "Z", "finalists_sha256": got, "finalists": res},
+    json.dump({"made": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + "Z", "finalists_sha256": shas, "finalists": res},
               open(os.path.join(RES_DIR, "results8.json"), "w"), ensure_ascii=False, indent=1, default=float)
     print("written results8.json")
 
@@ -512,4 +547,4 @@ if __name__ == "__main__":
     if cmd == "scan":
         scan(int(sys.argv[sys.argv.index("--procs") + 1]) if "--procs" in sys.argv else 3)
     else:
-        {"select": select, "confirm": confirm, "check": check}[cmd]()
+        {"select": select, "amend1": select_amend1, "confirm": confirm, "check": check}[cmd]()

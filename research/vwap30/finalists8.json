@@ -1,0 +1,164 @@
+{
+ "made": "2026-10-23 06:37:36Z",
+ "finalists": [
+  {
+   "name": "두 분 예시 (자격 미달, 고르기 성장 1등 청산)",
+   "trigger": "F6_VWAP_FAIL_at_30m",
+   "gate": "J|1h|OBV",
+   "exit": 21
+  },
+  {
+   "name": "친구 판단 (자격 미달, 고르기 성장 1등 청산)",
+   "trigger": "F6_VWAP_FAIL_at_30m",
+   "gate": "I|own|1h|FRIEND3",
+   "exit": 21
+  },
+  {
+   "name": "묶음",
+   "members": [
+    {
+     "trigger": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "gate": "L|N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1|7d",
+     "exit": 22
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "L|F11_PO3_at_30m|24h",
+     "exit": 8
+    },
+    {
+     "trigger": "F6_VWAP_FAIL_at_1h__ds-F6_VWAP_FAIL-1h-1",
+     "gate": "L|N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2|24h",
+     "exit": 8
+    },
+    {
+     "trigger": "F3_BOS_ZONE_at_1h",
+     "gate": "L|F7_RF_ONLY_at_30m|7d",
+     "exit": 22
+    },
+    {
+     "trigger": "F7_RF_ONLY_at_1h",
+     "gate": "L|N13_3OUTSIDE_at_30m__core-N13_3OUTSIDE-30m-1|24h",
+     "exit": 22
+    },
+    {
+     "trigger": "F1_PVT_DIV_at_1h",
+     "gate": "L|N17_KC_RSI_at_1h|7d",
+     "exit": 22
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "I|own|1d|OBV",
+     "exit": 20
+    },
+    {
+     "trigger": "F15_ASIA_BRK_at_1h",
+     "gate": "L|N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2|7d",
+     "exit": 3
+    },
+    {
+     "trigger": "F6_VWAP_FAIL_at_1h",
+     "gate": "L|N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2|24h",
+     "exit": 3
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "L|F11_PO3_at_1h|7d",
+     "exit": 8
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "L|F11_PO3_at_1h|24h",
+     "exit": 8
+    },
+    {
+     "trigger": "F3_BOS_ZONE_at_1h",
+     "gate": "L|F7_RF_TRIPLE_at_30m|7d",
+     "exit": 22
+    },
+    {
+     "trigger": "F3_BOS_ZONE_at_1h",
+     "gate": "L|F7_RF_TRIPLE_at_30m|24h",
+     "exit": 22
+    },
+    {
+     "trigger": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "gate": "L|OBV_B_at_1h|24h",
+     "exit": 22
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "I|own|4h|DON20",
+     "exit": 20
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "L|V45_AMB_at_30m|24h",
+     "exit": 20
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "L|F4_PULL_at_30m|7d",
+     "exit": 20
+    },
+    {
+     "trigger": "N12_ICHI_AO_at_1h",
+     "gate": "L|F7_RF_ONLY_at_1h|24h",
+     "exit": 8
+    },
+    {
+     "trigger": "OBV_S_at_1h",
+     "gate": "L|F16_FIB764_at_1h|7d",
+     "exit": 3
+    },
+    {
+     "trigger": "S6_EMA_DMI_ADX_at_1h",
+     "gate": "I|BTC|4h|DON20",
+     "exit": 20
+    },
+    {
+     "trigger": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "gate": "L|N10_HA_PSAR_at_1h|7d",
+     "exit": 22
+    },
+    {
+     "trigger": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "gate": "L|N10_HA_PSAR_at_1h|24h",
+     "exit": 22
+    },
+    {
+     "trigger": "F6_VWAP_FAIL_at_30m",
+     "gate": "P|L|N04_ST_KLINGER_at_1h__core-N04_ST_KLINGER-1h-3|24h&L|N05_PSAR_POC_at_1h|7d",
+     "exit": 20
+    },
+    {
+     "trigger": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "gate": "L|F4_FAN_at_1h|24h",
+     "exit": 22
+    }
+   ]
+  }
+ ],
+ "vwap_top20": [
+  "L|F9_IFVG_at_1h|24h",
+  "L|N19_FIB_CHOP_at_30m|24h",
+  "L|N04_ST_KLINGER_at_1h__core-N04_ST_KLINGER-1h-3|24h",
+  "L|N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2|24h",
+  "L|N12_ICHI_AO_at_30m|7d",
+  "L|N05_PSAR_POC_at_1h|7d",
+  "L|OBV_B_at_30m|24h",
+  "L|N02_ST_KST_at_30m__core-N02_ST_KST-30m-2|7d",
+  "L|F3_BOS_ZONE_at_1h|24h",
+  "L|N01_ST_EMA_at_30m|7d",
+  "L|F12_MSS_DISP_at_1h|7d",
+  "L|N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3|24h",
+  "L|F5_BOX_RSI_at_1h|24h",
+  "L|N03_ADX_GC_at_1h|7d",
+  "L|F2_DEMARK_at_30m|7d",
+  "J|1h|S6",
+  "L|F4_FAN_at_30m__ds-F4_FAN-30m-3|24h",
+  "L|F11_PO3_at_30m|24h",
+  "L|N12_ICHI_AO_at_30m|24h",
+  "L|F11_PO3_at_1h|24h"
+ ]
+}
