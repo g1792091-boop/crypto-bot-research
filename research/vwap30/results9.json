@@ -1,0 +1,958 @@
+{
+ "made": "2026-10-23 07:39:45Z",
+ "finalists_sha256": "0e0522e899fa4218559ce1e67aac3dc7c6a136d2dbb74a4109a81470226a0d6e",
+ "finalists": [
+  {
+   "name": "A 평일 3번 이상",
+   "exit": 10,
+   "q": 98,
+   "theta": -0.01750747673213482,
+   "valid": {
+    "n": 1520,
+    "per_weekday": 3.8677,
+    "per_day": 2.7636,
+    "win": 0.8401,
+    "avgR": -0.0235,
+    "avg_winR": 0.1378,
+    "avg_lossR": -0.8709,
+    "payoff": 0.1582,
+    "pf": 0.8315,
+    "avg_win_pct": 0.441,
+    "avg_loss_pct": -2.735,
+    "growth": -0.7665,
+    "mult": 0.4647,
+    "cagr": -0.3989,
+    "maxdd": -0.6023,
+    "mon_median": -0.0283,
+    "mon_x6": 0.0,
+    "mon_worst": -0.1658,
+    "mon_best": 0.0462,
+    "mon_pos": 0.3158,
+    "months": 19,
+    "ruin": false,
+    "lev_med": 0.4499
+   },
+   "confirm": {
+    "n": 1120,
+    "per_weekday": 2.4508,
+    "per_day": 1.7555,
+    "win": 0.825,
+    "avgR": -0.0106,
+    "avg_winR": 0.1725,
+    "avg_lossR": -0.8739,
+    "payoff": 0.1974,
+    "pf": 0.9304,
+    "avg_win_pct": 0.4132,
+    "avg_loss_pct": -2.2824,
+    "growth": -0.2845,
+    "mult": 0.7524,
+    "cagr": -0.1503,
+    "maxdd": -0.4065,
+    "mon_median": -0.0021,
+    "mon_x6": 0.0,
+    "mon_worst": -0.1345,
+    "mon_best": 0.1343,
+    "mon_pos": 0.4545,
+    "months": 22,
+    "ruin": false,
+    "lev_med": 0.5375
+   },
+   "c2025": {
+    "n": 762,
+    "per_weekday": 2.9084,
+    "per_day": 2.0877,
+    "win": 0.8491,
+    "avgR": -0.0008,
+    "avg_winR": 0.1458,
+    "avg_lossR": -0.8254,
+    "payoff": 0.1766,
+    "pf": 0.9935,
+    "avg_win_pct": 0.4163,
+    "avg_loss_pct": -2.7209,
+    "growth": -0.0366,
+    "mult": 0.9641,
+    "cagr": -0.036,
+    "maxdd": -0.1953,
+    "mon_median": 0.0064,
+    "mon_x6": 0.0,
+    "mon_worst": -0.1237,
+    "mon_best": 0.1343,
+    "mon_pos": 0.5385,
+    "months": 13,
+    "ruin": false,
+    "lev_med": 0.5003
+   },
+   "c2026": {
+    "n": 358,
+    "per_weekday": 1.8265,
+    "per_day": 1.3114,
+    "win": 0.7737,
+    "avgR": -0.0316,
+    "avg_winR": 0.2349,
+    "avg_lossR": -0.9427,
+    "payoff": 0.2491,
+    "pf": 0.852,
+    "avg_win_pct": 0.4057,
+    "avg_loss_pct": -1.6599,
+    "growth": -0.2479,
+    "mult": 0.7804,
+    "cagr": -0.2823,
+    "maxdd": -0.3452,
+    "mon_median": -0.0183,
+    "mon_x6": 0.0,
+    "mon_worst": -0.1345,
+    "mon_best": 0.1122,
+    "mon_pos": 0.3,
+    "months": 10,
+    "ruin": false,
+    "lev_med": 1.2248
+   },
+   "live": {
+    "n": 23,
+    "per_weekday": 1.5333,
+    "per_day": 1.15,
+    "win": 0.6087,
+    "avgR": -0.1756,
+    "avg_winR": 0.3544,
+    "avg_lossR": -1.0,
+    "payoff": 0.3544,
+    "pf": 0.5512,
+    "avg_win_pct": 0.4456,
+    "avg_loss_pct": -1.7626,
+    "growth": -0.083,
+    "mult": 0.9203,
+    "cagr": -0.7805,
+    "maxdd": -0.0936,
+    "mon_median": -0.0797,
+    "mon_x6": 0.0,
+    "mon_worst": -0.0797,
+    "mon_best": -0.0797,
+    "mon_pos": 0.0,
+    "months": 1,
+    "ruin": false,
+    "lev_med": 1.5644
+   },
+   "twin": {
+    "p50": -1.261,
+    "p90": -0.914,
+    "p95": -0.825,
+    "share_below": 0.9995
+   },
+   "verdict": "통하지 않음",
+   "month_odds": {
+    "9": {
+     "x2": 0.0241,
+     "x5": 0.0,
+     "x10": 0.0,
+     "x20": 0.0,
+     "lose90": 0.1595,
+     "median": 0.5054
+    },
+    "15": {
+     "x2": 0.0345,
+     "x5": 0.0069,
+     "x10": 0.0,
+     "x20": 0.0,
+     "lose90": 0.4733,
+     "median": 0.1323
+    },
+    "20": {
+     "x2": 0.0362,
+     "x5": 0.0026,
+     "x10": 0.0,
+     "x20": 0.0,
+     "lose90": 0.6293,
+     "median": 0.0074
+    },
+    "30": {
+     "x2": 0.0319,
+     "x5": 0.0,
+     "x10": 0.0,
+     "x20": 0.0,
+     "lose90": 0.7922,
+     "median": 0.0
+    }
+   },
+   "confirm_members_top": {
+    "N17_KC_RSI_at_30m~반대": 91,
+    "N17_KC_RSI_at_1h~반대": 91,
+    "N17_KC_RSI_at_30m": 24,
+    "N17_KC_RSI_at_1h": 24,
+    "F2_DEMARK_at_1h": 23,
+    "F7_RF_TRIPLE_at_30m": 19,
+    "F6_VWAP_CROSS_at_1h": 18,
+    "F17_Z_at_1h~반대": 18,
+    "F6_VWAP_CROSS_at_1h~반대": 16,
+    "N18_VWMA_MACD_at_1h": 14
+   }
+  },
+  {
+   "name": "B 평일 1번 이상",
+   "exit": 4,
+   "q": 99.5,
+   "theta": 0.03877342492341995,
+   "valid": {
+    "n": 492,
+    "per_weekday": 1.2519,
+    "per_day": 0.8945,
+    "win": 0.5285,
+    "avgR": -0.0278,
+    "avg_winR": 0.84,
+    "avg_lossR": -1.0003,
+    "payoff": 0.8398,
+    "pf": 0.9411,
+    "avg_win_pct": 1.8405,
+    "avg_loss_pct": -2.1368,
+    "growth": -0.3666,
+    "mult": 0.6931,
+    "cagr": -0.2161,
+    "maxdd": -0.5906,
+    "mon_median": -0.0227,
+    "mon_x6": 0.0,
+    "mon_worst": -0.1912,
+    "mon_best": 0.1998,
+    "mon_pos": 0.3684,
+    "months": 19,
+    "ruin": false,
+    "lev_med": 0.9985
+   },
+   "confirm": {
+    "n": 412,
+    "per_weekday": 0.9015,
+    "per_day": 0.6458,
+    "win": 0.4951,
+    "avgR": -0.1354,
+    "avg_winR": 0.7465,
+    "avg_lossR": -1.0004,
+    "payoff": 0.7462,
+    "pf": 0.7319,
+    "avg_win_pct": 1.3449,
+    "avg_loss_pct": -1.771,
+    "growth": -1.1868,
+    "mult": 0.3052,
+    "cagr": -0.4931,
+    "maxdd": -0.734,
+    "mon_median": -0.0534,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2186,
+    "mon_best": 0.0857,
+    "mon_pos": 0.1818,
+    "months": 22,
+    "ruin": false,
+    "lev_med": 1.2788
+   },
+   "c2025": {
+    "n": 287,
+    "per_weekday": 1.0954,
+    "per_day": 0.7863,
+    "win": 0.5017,
+    "avgR": -0.1112,
+    "avg_winR": 0.7719,
+    "avg_lossR": -1.0004,
+    "payoff": 0.7715,
+    "pf": 0.7769,
+    "avg_win_pct": 1.4643,
+    "avg_loss_pct": -1.8352,
+    "growth": -0.6889,
+    "mult": 0.5021,
+    "cagr": -0.4981,
+    "maxdd": -0.5728,
+    "mon_median": -0.0515,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2186,
+    "mon_best": 0.0681,
+    "mon_pos": 0.1538,
+    "months": 13,
+    "ruin": false,
+    "lev_med": 1.2099
+   },
+   "c2026": {
+    "n": 125,
+    "per_weekday": 0.6378,
+    "per_day": 0.4579,
+    "win": 0.48,
+    "avgR": -0.1911,
+    "avg_winR": 0.6856,
+    "avg_lossR": -1.0003,
+    "payoff": 0.6854,
+    "pf": 0.6326,
+    "avg_win_pct": 1.0583,
+    "avg_loss_pct": -1.6297,
+    "growth": -0.4979,
+    "mult": 0.6078,
+    "cagr": -0.4863,
+    "maxdd": -0.4181,
+    "mon_median": -0.0552,
+    "mon_x6": 0.0,
+    "mon_worst": -0.1438,
+    "mon_best": 0.0857,
+    "mon_pos": 0.2,
+    "months": 10,
+    "ruin": false,
+    "lev_med": 1.4771
+   },
+   "live": {
+    "n": 2,
+    "per_weekday": 0.1333,
+    "per_day": 0.1,
+    "win": 0.5,
+    "avgR": -0.2537,
+    "avg_winR": 0.4926,
+    "avg_lossR": -1.0,
+    "payoff": 0.4926,
+    "pf": 0.4926,
+    "avg_win_pct": 0.7045,
+    "avg_loss_pct": -1.2259,
+    "growth": -0.0104,
+    "mult": 0.9897,
+    "cagr": -0.173,
+    "maxdd": -0.02,
+    "mon_median": -0.0103,
+    "mon_x6": 0.0,
+    "mon_worst": -0.0103,
+    "mon_best": -0.0103,
+    "mon_pos": 0.0,
+    "months": 1,
+    "ruin": false,
+    "lev_med": 1.5149
+   },
+   "twin": {
+    "p50": -1.023,
+    "p90": -0.551,
+    "p95": -0.435,
+    "share_below": 0.3305
+   },
+   "verdict": "통하지 않음",
+   "month_odds": {
+    "9": {
+     "x2": 0.0353,
+     "x5": 0.0138,
+     "x10": 0.0,
+     "x20": 0.0,
+     "lose90": 0.0552,
+     "median": 0.6009
+    },
+    "15": {
+     "x2": 0.044,
+     "x5": 0.0129,
+     "x10": 0.0095,
+     "x20": 0.0017,
+     "lose90": 0.2716,
+     "median": 0.3415
+    },
+    "20": {
+     "x2": 0.0491,
+     "x5": 0.0121,
+     "x10": 0.0095,
+     "x20": 0.0034,
+     "lose90": 0.4086,
+     "median": 0.1783
+    },
+    "30": {
+     "x2": 0.0371,
+     "x5": 0.0009,
+     "x10": 0.0,
+     "x20": 0.0,
+     "lose90": 0.6612,
+     "median": 0.0169
+    }
+   },
+   "confirm_members_top": {
+    "F17_Z_HL_at_1h~반대": 20,
+    "N17_KC_RSI_at_1h~반대": 15,
+    "N17_KC_RSI_at_30m~반대": 12,
+    "F6_VWAP_CROSS_at_1h": 12,
+    "N10_HA_PSAR_at_1h": 10,
+    "F6_VWAP_CROSS_at_1h~반대": 9,
+    "S2_ST_ROC_at_1h": 9,
+    "F7_RF_TRIPLE_at_1h~반대": 9,
+    "V39_ALL_at_1h~반대": 8,
+    "F13_RAID_PD_at_1h~반대": 7
+   }
+  }
+ ],
+ "after_confirm_grid": [
+  {
+   "exit": 1,
+   "q": 50,
+   "n": 4591,
+   "per_weekday": 10.046,
+   "growth": -11.093
+  },
+  {
+   "exit": 1,
+   "q": 60,
+   "n": 4476,
+   "per_weekday": 9.794,
+   "growth": -10.588
+  },
+  {
+   "exit": 1,
+   "q": 70,
+   "n": 4293,
+   "per_weekday": 9.394,
+   "growth": -10.385
+  },
+  {
+   "exit": 1,
+   "q": 80,
+   "n": 3950,
+   "per_weekday": 8.643,
+   "growth": -8.237
+  },
+  {
+   "exit": 1,
+   "q": 90,
+   "n": 3091,
+   "per_weekday": 6.764,
+   "growth": -5.753
+  },
+  {
+   "exit": 1,
+   "q": 95,
+   "n": 2192,
+   "per_weekday": 4.796,
+   "growth": -4.563
+  },
+  {
+   "exit": 1,
+   "q": 98,
+   "n": 1075,
+   "per_weekday": 2.352,
+   "growth": -2.655
+  },
+  {
+   "exit": 1,
+   "q": 99,
+   "n": 585,
+   "per_weekday": 1.28,
+   "growth": -0.812
+  },
+  {
+   "exit": 1,
+   "q": 99.5,
+   "n": 288,
+   "per_weekday": 0.63,
+   "growth": -0.593
+  },
+  {
+   "exit": 4,
+   "q": 50,
+   "n": 4407,
+   "per_weekday": 9.643,
+   "growth": -12.638
+  },
+  {
+   "exit": 4,
+   "q": 60,
+   "n": 4329,
+   "per_weekday": 9.473,
+   "growth": -12.263
+  },
+  {
+   "exit": 4,
+   "q": 70,
+   "n": 4208,
+   "per_weekday": 9.208,
+   "growth": -11.529
+  },
+  {
+   "exit": 4,
+   "q": 80,
+   "n": 3989,
+   "per_weekday": 8.729,
+   "growth": -11.248
+  },
+  {
+   "exit": 4,
+   "q": 90,
+   "n": 3408,
+   "per_weekday": 7.457,
+   "growth": -8.429
+  },
+  {
+   "exit": 4,
+   "q": 95,
+   "n": 2560,
+   "per_weekday": 5.602,
+   "growth": -6.08
+  },
+  {
+   "exit": 4,
+   "q": 98,
+   "n": 1436,
+   "per_weekday": 3.142,
+   "growth": -3.351
+  },
+  {
+   "exit": 4,
+   "q": 99,
+   "n": 789,
+   "per_weekday": 1.726,
+   "growth": -2.104
+  },
+  {
+   "exit": 4,
+   "q": 99.5,
+   "n": 412,
+   "per_weekday": 0.902,
+   "growth": -1.187
+  },
+  {
+   "exit": 8,
+   "q": 50,
+   "n": 1122,
+   "per_weekday": 2.455,
+   "growth": -3.228
+  },
+  {
+   "exit": 8,
+   "q": 60,
+   "n": 1122,
+   "per_weekday": 2.455,
+   "growth": -3.228
+  },
+  {
+   "exit": 8,
+   "q": 70,
+   "n": 1106,
+   "per_weekday": 2.42,
+   "growth": -3.026
+  },
+  {
+   "exit": 8,
+   "q": 80,
+   "n": 1092,
+   "per_weekday": 2.389,
+   "growth": -2.572
+  },
+  {
+   "exit": 8,
+   "q": 90,
+   "n": 1031,
+   "per_weekday": 2.256,
+   "growth": -1.505
+  },
+  {
+   "exit": 8,
+   "q": 95,
+   "n": 856,
+   "per_weekday": 1.873,
+   "growth": -1.867
+  },
+  {
+   "exit": 8,
+   "q": 98,
+   "n": 650,
+   "per_weekday": 1.422,
+   "growth": -2.066
+  },
+  {
+   "exit": 8,
+   "q": 99,
+   "n": 407,
+   "per_weekday": 0.891,
+   "growth": 0.216
+  },
+  {
+   "exit": 8,
+   "q": 99.5,
+   "n": 273,
+   "per_weekday": 0.597,
+   "growth": -0.751
+  },
+  {
+   "exit": 10,
+   "q": 50,
+   "n": 4934,
+   "per_weekday": 10.796,
+   "growth": -4.65
+  },
+  {
+   "exit": 10,
+   "q": 60,
+   "n": 4857,
+   "per_weekday": 10.628,
+   "growth": -4.464
+  },
+  {
+   "exit": 10,
+   "q": 70,
+   "n": 4663,
+   "per_weekday": 10.204,
+   "growth": -3.891
+  },
+  {
+   "exit": 10,
+   "q": 80,
+   "n": 4139,
+   "per_weekday": 9.057,
+   "growth": -3.648
+  },
+  {
+   "exit": 10,
+   "q": 90,
+   "n": 2930,
+   "per_weekday": 6.411,
+   "growth": -2.493
+  },
+  {
+   "exit": 10,
+   "q": 95,
+   "n": 1961,
+   "per_weekday": 4.291,
+   "growth": -1.113
+  },
+  {
+   "exit": 10,
+   "q": 98,
+   "n": 1120,
+   "per_weekday": 2.451,
+   "growth": -0.284
+  },
+  {
+   "exit": 10,
+   "q": 99,
+   "n": 698,
+   "per_weekday": 1.527,
+   "growth": -0.285
+  },
+  {
+   "exit": 10,
+   "q": 99.5,
+   "n": 399,
+   "per_weekday": 0.873,
+   "growth": -0.242
+  }
+ ],
+ "importance": {
+  "1": [
+   [
+    "label",
+    48352
+   ],
+   [
+    "atrf",
+    42591
+   ],
+   [
+    "b1440",
+    25675
+   ],
+   [
+    "b240",
+    22591
+   ],
+   [
+    "b60",
+    18808
+   ],
+   [
+    "dow",
+    15480
+   ],
+   [
+    "r1440",
+    11904
+   ],
+   [
+    "hour",
+    11822
+   ],
+   [
+    "coin",
+    6671
+   ],
+   [
+    "I|BTC|4h|DMI",
+    6495
+   ],
+   [
+    "r240",
+    6486
+   ],
+   [
+    "r60",
+    6331
+   ],
+   [
+    "I|BTC|1h|DMI",
+    4779
+   ],
+   [
+    "L|DOGE_at_30m__core-DOGE-30m-1|7d",
+    4358
+   ],
+   [
+    "I|BTC|1h|RSI26",
+    3917
+   ],
+   [
+    "L|N20_EMA9_CHOP_at_30m|7d",
+    3084
+   ],
+   [
+    "I|BTC|1d|ICHI",
+    3055
+   ],
+   [
+    "I|BTC|1h|ICHI",
+    2953
+   ],
+   [
+    "L|F14_SMT_at_1h|7d",
+    2837
+   ],
+   [
+    "I|own|1d|DON20",
+    2756
+   ]
+  ],
+  "4": [
+   [
+    "label",
+    50938
+   ],
+   [
+    "atrf",
+    36150
+   ],
+   [
+    "b1440",
+    26575
+   ],
+   [
+    "b240",
+    19807
+   ],
+   [
+    "dow",
+    18844
+   ],
+   [
+    "b60",
+    18423
+   ],
+   [
+    "hour",
+    14819
+   ],
+   [
+    "r1440",
+    12264
+   ],
+   [
+    "coin",
+    9914
+   ],
+   [
+    "r60",
+    5758
+   ],
+   [
+    "r240",
+    5644
+   ],
+   [
+    "I|BTC|4h|DMI",
+    5243
+   ],
+   [
+    "L|DOGE_at_30m__core-DOGE-30m-1|7d",
+    4963
+   ],
+   [
+    "I|BTC|1h|RSI26",
+    4754
+   ],
+   [
+    "I|BTC|1h|DMI",
+    4279
+   ],
+   [
+    "I|BTC|1d|ICHI",
+    4266
+   ],
+   [
+    "I|BTC|4h|ICHI",
+    4174
+   ],
+   [
+    "I|BTC|1h|ICHI",
+    3895
+   ],
+   [
+    "I|BTC|1d|DMI",
+    3066
+   ],
+   [
+    "I|BTC|1d|FRIEND3",
+    3000
+   ]
+  ],
+  "8": [
+   [
+    "dow",
+    24606
+   ],
+   [
+    "coin",
+    15795
+   ],
+   [
+    "L|N15_KC_AO_at_30m|7d",
+    12482
+   ],
+   [
+    "I|own|1d|EMA21_52",
+    8103
+   ],
+   [
+    "L|N05_PSAR_POC_at_30m|7d",
+    7893
+   ],
+   [
+    "L|S6_EMA_DMI_ADX_at_30m|7d",
+    6543
+   ],
+   [
+    "L|V45_AMB_at_1h|7d",
+    6469
+   ],
+   [
+    "L|S6_EMA_DMI_ADX_at_1h|7d",
+    6390
+   ],
+   [
+    "I|own|1d|DMI",
+    6177
+   ],
+   [
+    "I|own|1d|ST10_3",
+    6104
+   ],
+   [
+    "b1440",
+    6069
+   ],
+   [
+    "L|N19_FIB_CHOP_at_1h|7d",
+    5996
+   ],
+   [
+    "I|BTC|1d|DMI",
+    5882
+   ],
+   [
+    "atrf",
+    5723
+   ],
+   [
+    "I|BTC|1d|EMA200",
+    5512
+   ],
+   [
+    "I|BTC|1d|MACD",
+    5447
+   ],
+   [
+    "I|BTC|4h|DMI",
+    5197
+   ],
+   [
+    "L|N06_MACD_ORB_at_1h|7d",
+    4793
+   ],
+   [
+    "L|F12_MSS_DISP_at_1h|7d",
+    4603
+   ],
+   [
+    "L|F3_BOS_ZONE_at_1h|7d",
+    4580
+   ]
+  ],
+  "10": [
+   [
+    "atrf",
+    20388
+   ],
+   [
+    "b1440",
+    7337
+   ],
+   [
+    "dow",
+    4775
+   ],
+   [
+    "r1440",
+    4446
+   ],
+   [
+    "b240",
+    3724
+   ],
+   [
+    "L|DOGE_at_30m__core-DOGE-30m-1|7d",
+    3505
+   ],
+   [
+    "coin",
+    2954
+   ],
+   [
+    "I|BTC|4h|FRIEND3",
+    2813
+   ],
+   [
+    "label",
+    2805
+   ],
+   [
+    "r240",
+    2323
+   ],
+   [
+    "hour",
+    2216
+   ],
+   [
+    "b60",
+    1983
+   ],
+   [
+    "I|BTC|4h|ICHI",
+    1568
+   ],
+   [
+    "I|BTC|1h|ST10_3",
+    1565
+   ],
+   [
+    "L|F15_LON_BRK_at_30m|7d",
+    1506
+   ],
+   [
+    "L|V39_ALL_at_30m|7d",
+    1485
+   ],
+   [
+    "L|F7_RF_ONLY_at_30m|7d",
+    1434
+   ],
+   [
+    "L|N12_ICHI_AO_at_1h|7d",
+    1388
+   ],
+   [
+    "L|N09_ALLIG_AROON_at_1h|7d",
+    1375
+   ],
+   [
+    "L|N15_KC_AO_at_30m|7d",
+    1366
+   ]
+  ]
+ }
+}
