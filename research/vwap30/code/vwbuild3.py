@@ -64,7 +64,6 @@ def outcomes3(P, s, atrf, coin, tfmin, hmax):
     RMUp = np.concatenate([np.zeros((n, 1)), RMU[:, :-1]], axis=1)
     rows = np.arange(n)
     a2 = atrf[:, None]
-    tn = np.minimum(HOLD_BARS * tfmin, hmax) - 1
     ret = np.zeros((n, len(EXITS3)), np.float32)
     tt = np.zeros((n, len(EXITS3)), np.int16)
     t_stop, t_tgt = {}, {}
@@ -74,6 +73,7 @@ def outcomes3(P, s, atrf, coin, tfmin, hmax):
     lp_h = np.where(np.isnan(lp_h), -np.inf, lp_h / 30.0 + COST_RT)
     for e in EXITS3:
         j = e["id"]
+        tn = np.minimum(e["time"] * tfmin, hmax) - 1             # the exit's holding cap (bars of the signal timeframe)
         if e["kind"] == "grid":
             k = e["stop"]
             if k not in t_stop:
@@ -123,7 +123,7 @@ def job(path):
     Z = np.load(path)
     tf = "30m" if "_at_30m" in label else "1h"
     k = TF_MIN[tf]
-    W = HOLD_BARS * k
+    W = max(e["time"] for e in EXITS3) * k
     out = {q: [] for q in ("t", "coin", "side", "atrf", "ret", "tx", "ret_o", "tx_o")}
     for ci, coin in enumerate(COINS):
         m = Z["coin"] == ci

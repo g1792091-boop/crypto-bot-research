@@ -1,0 +1,4224 @@
+{
+ "made": "2026-10-23 05:03:47Z",
+ "finalists_sha256": "1e0dd181bfce6f43f6a61e5f22e30883953a81a9d684d048b66d625134e57e5a",
+ "finalists": [
+  {
+   "name": "묶음 A",
+   "members": [
+    {
+     "label": "F15_ORB_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F10_M2022_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F5_BOX_RSI_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+     "exit": 22,
+     "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1",
+     "exit": 12,
+     "exit_ko": "손절 2ATR · 익절 2ATR"
+    },
+    {
+     "label": "S5_DONCHIAN_MFI_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N03_ADX_GC_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "N03_ADX_GC_at_1h",
+     "exit": 7,
+     "exit_ko": "손절 1.5ATR · 익절 2ATR"
+    },
+    {
+     "label": "N08_ICHI_WR_at_1h",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "F4_PULL_RSI_at_30m",
+     "exit": 3,
+     "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F15_OPEN0000_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F6_VWAP_CROSS_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "OBV_S_at_1h",
+     "exit": 3,
+     "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N08_ICHI_WR_at_30m",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "V39_ALL_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N24_DMI_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F12_MSS_DISP_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F9_IFVG_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "DOGE_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "DOGE_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    }
+   ],
+   "select": {
+    "n": 1554,
+    "per_weekday": 1.2304,
+    "per_day": 0.8795,
+    "win": 0.1963,
+    "avgR": 0.3104,
+    "avg_winR": 4.2745,
+    "avg_lossR": -0.6576,
+    "payoff": 6.4997,
+    "pf": 1.5872,
+    "avg_win_pct": 9.8169,
+    "avg_loss_pct": -1.5974,
+    "growth": 5.4631,
+    "mult": 235.8178,
+    "cagr": 2.0933,
+    "maxdd": -0.6156,
+    "mon_median": 0.0373,
+    "mon_x6": 0.0,
+    "mon_worst": -0.266,
+    "mon_best": 3.1165,
+    "mon_pos": 0.5424,
+    "months": 59,
+    "ruin": false,
+    "lev_med": 0.9559
+   },
+   "select_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.5936,
+    "mon_worst": -1.0
+   },
+   "confirm": {
+    "n": 621,
+    "per_weekday": 1.3589,
+    "per_day": 0.9734,
+    "win": 0.1498,
+    "avgR": -0.166,
+    "avg_winR": 2.7661,
+    "avg_lossR": -0.6825,
+    "payoff": 4.053,
+    "pf": 0.7139,
+    "avg_win_pct": 4.5223,
+    "avg_loss_pct": -1.2272,
+    "growth": -2.4277,
+    "mult": 0.0882,
+    "cagr": -0.7509,
+    "maxdd": -0.9304,
+    "mon_median": -0.0336,
+    "mon_x6": 0.0,
+    "mon_worst": -0.4851,
+    "mon_best": 0.134,
+    "mon_pos": 0.3182,
+    "months": 22,
+    "ruin": false,
+    "lev_med": 1.2074
+   },
+   "confirm_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.5735,
+    "mon_worst": -0.9976
+   },
+   "c2025": {
+    "n": 377,
+    "per_weekday": 1.4389,
+    "per_day": 1.0329,
+    "win": 0.1485,
+    "avgR": -0.2252,
+    "avg_winR": 2.3766,
+    "avg_lossR": -0.6791,
+    "payoff": 3.4995,
+    "pf": 0.6105,
+    "avg_win_pct": 4.457,
+    "avg_loss_pct": -1.3356,
+    "growth": -1.8514,
+    "mult": 0.157,
+    "cagr": -0.8432,
+    "maxdd": -0.8434,
+    "mon_median": -0.0275,
+    "mon_x6": 0.0,
+    "mon_worst": -0.4851,
+    "mon_best": 0.134,
+    "mon_pos": 0.2308,
+    "months": 13,
+    "ruin": false,
+    "lev_med": 1.0971
+   },
+   "c2025_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.7944,
+    "mon_worst": -0.9976
+   },
+   "c2026": {
+    "n": 245,
+    "per_weekday": 1.25,
+    "per_day": 0.8974,
+    "win": 0.151,
+    "avgR": -0.0754,
+    "avg_winR": 3.3502,
+    "avg_lossR": -0.6848,
+    "payoff": 4.8923,
+    "pf": 0.8703,
+    "avg_win_pct": 4.6609,
+    "avg_loss_pct": -1.0576,
+    "growth": -0.5816,
+    "mult": 0.559,
+    "cagr": -0.5407,
+    "maxdd": -0.6651,
+    "mon_median": -0.0478,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2912,
+    "mon_best": 0.1248,
+    "mon_pos": 0.4,
+    "months": 10,
+    "ruin": false,
+    "lev_med": 1.3638
+   },
+   "c2026_rb9": {
+    "mult": 0.0001,
+    "maxdd": -1.0,
+    "mon_median": -0.5268,
+    "mon_worst": -0.9847
+   },
+   "live": {
+    "n": 17,
+    "per_weekday": 1.1333,
+    "per_day": 0.85,
+    "win": 0.1765,
+    "avgR": 0.3683,
+    "avg_winR": 5.0134,
+    "avg_lossR": -0.627,
+    "payoff": 7.9955,
+    "pf": 1.7133,
+    "avg_win_pct": 4.2372,
+    "avg_loss_pct": -0.8604,
+    "growth": 0.0939,
+    "mult": 1.0985,
+    "cagr": 4.5572,
+    "maxdd": -0.1221,
+    "mon_median": 0.0985,
+    "mon_x6": 0.0,
+    "mon_worst": 0.0985,
+    "mon_best": 0.0985,
+    "mon_pos": 1.0,
+    "months": 1,
+    "ruin": false,
+    "lev_med": 1.6392
+   },
+   "live_rb9": {
+    "mult": 0.7567,
+    "maxdd": -0.5422,
+    "mon_median": -0.2433,
+    "mon_worst": -0.2433
+   },
+   "twin": {
+    "p10": -2.844,
+    "p50": -1.839,
+    "p90": -0.849,
+    "share_below": 0.226
+   },
+   "verdict": "통하지 않음",
+   "sizing_confirm": [
+    {
+     "r": 0.005,
+     "ruin": false,
+     "mult": 0.5825,
+     "cagr": -0.2661,
+     "maxdd": -0.4614,
+     "mon_median": -0.0072,
+     "mon_x6": 0.0,
+     "mon_worst": -0.1508,
+     "mon_best": 0.049,
+     "lev_med": 0.3019
+    },
+    {
+     "r": 0.01,
+     "ruin": false,
+     "mult": 0.3238,
+     "cagr": -0.4756,
+     "maxdd": -0.7192,
+     "mon_median": -0.0152,
+     "mon_x6": 0.0,
+     "mon_worst": -0.2801,
+     "mon_best": 0.0853,
+     "lev_med": 0.6037
+    },
+    {
+     "r": 0.02,
+     "ruin": false,
+     "mult": 0.0882,
+     "cagr": -0.7509,
+     "maxdd": -0.9304,
+     "mon_median": -0.0336,
+     "mon_x6": 0.0,
+     "mon_worst": -0.4851,
+     "mon_best": 0.134,
+     "lev_med": 1.2074
+    },
+    {
+     "r": 0.03,
+     "ruin": false,
+     "mult": 0.0207,
+     "cagr": -0.8914,
+     "maxdd": -0.9846,
+     "mon_median": -0.0557,
+     "mon_x6": 0.0,
+     "mon_worst": -0.634,
+     "mon_best": 0.1937,
+     "lev_med": 1.8111
+    },
+    {
+     "r": 0.05,
+     "ruin": false,
+     "mult": 0.0008,
+     "cagr": -0.9835,
+     "maxdd": -0.9995,
+     "mon_median": -0.1212,
+     "mon_x6": 0.0,
+     "mon_worst": -0.8185,
+     "mon_best": 0.2961,
+     "lev_med": 3.0186
+    },
+    {
+     "r": 0.075,
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -0.9989,
+     "maxdd": -1.0,
+     "mon_median": -0.2191,
+     "mon_x6": 0.0,
+     "mon_worst": -0.927,
+     "mon_best": 0.3884,
+     "lev_med": 4.5279
+    },
+    {
+     "r": 0.1,
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -0.9999,
+     "maxdd": -1.0,
+     "mon_median": -0.3424,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9717,
+     "mon_best": 0.4381,
+     "lev_med": 6.0371
+    },
+    {
+     "r": 0.15,
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.6259,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9962,
+     "mon_best": 0.4126,
+     "lev_med": 9.0557
+    },
+    {
+     "r": 0.2,
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.7913,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9996,
+     "mon_best": 0.2503,
+     "lev_med": 12.0743
+    },
+    {
+     "r": "rb9",
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.5735,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9976,
+     "mon_best": 0.2317,
+     "lev_med": 9.0
+    },
+    {
+     "r": "owners",
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.7872,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9999,
+     "mon_best": 0.0701,
+     "lev_med": 12.0
+    }
+   ],
+   "by_member_confirm": {
+    "DOGE_at_1h": {
+     "n": 6,
+     "win": 0.667,
+     "avgR": 1.6373
+    },
+    "DOGE_at_30m": {
+     "n": 35,
+     "win": 0.4,
+     "avgR": -0.0433
+    },
+    "F10_M2022_at_1h": {
+     "n": 15,
+     "win": 0.333,
+     "avgR": 0.2877
+    },
+    "F12_MSS_DISP_at_30m": {
+     "n": 37,
+     "win": 0.081,
+     "avgR": -0.6831
+    },
+    "F15_OPEN0000_at_30m": {
+     "n": 9,
+     "win": 0.222,
+     "avgR": -0.047
+    },
+    "F15_ORB_at_30m": {
+     "n": 72,
+     "win": 0.181,
+     "avgR": -0.3282
+    },
+    "F4_PULL_RSI_at_30m": {
+     "n": 13,
+     "win": 0.0,
+     "avgR": -0.5631
+    },
+    "F5_BOX_RSI_at_30m": {
+     "n": 5,
+     "win": 0.0,
+     "avgR": -1.0007
+    },
+    "F6_VWAP_CROSS_at_1h": {
+     "n": 210,
+     "win": 0.062,
+     "avgR": -0.1154
+    },
+    "F9_IFVG_at_1h": {
+     "n": 30,
+     "win": 0.033,
+     "avgR": -0.3692
+    },
+    "N03_ADX_GC_at_1h": {
+     "n": 5,
+     "win": 0.2,
+     "avgR": -0.5868
+    },
+    "N03_ADX_GC_at_30m": {
+     "n": 5,
+     "win": 0.2,
+     "avgR": -0.3839
+    },
+    "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3": {
+     "n": 6,
+     "win": 0.667,
+     "avgR": 0.7635
+    },
+    "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2": {
+     "n": 24,
+     "win": 0.25,
+     "avgR": 0.5123
+    },
+    "N08_ICHI_WR_at_1h": {
+     "n": 3,
+     "win": 0.0,
+     "avgR": -0.3929
+    },
+    "N08_ICHI_WR_at_30m": {
+     "n": 5,
+     "win": 0.0,
+     "avgR": -0.4463
+    },
+    "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1": {
+     "n": 7,
+     "win": 0.143,
+     "avgR": -0.6585
+    },
+    "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1": {
+     "n": 25,
+     "win": 0.12,
+     "avgR": -0.1976
+    },
+    "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1": {
+     "n": 5,
+     "win": 0.4,
+     "avgR": -0.2681
+    },
+    "N24_DMI_at_1h": {
+     "n": 37,
+     "win": 0.216,
+     "avgR": -0.2686
+    },
+    "OBV_S_at_1h": {
+     "n": 11,
+     "win": 0.091,
+     "avgR": -0.3285
+    },
+    "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1": {
+     "n": 11,
+     "win": 0.182,
+     "avgR": -0.2046
+    },
+    "S5_DONCHIAN_MFI_at_30m": {
+     "n": 29,
+     "win": 0.241,
+     "avgR": -0.0958
+    },
+    "V39_ALL_at_1h": {
+     "n": 16,
+     "win": 0.125,
+     "avgR": 0.131
+    }
+   }
+  },
+  {
+   "name": "묶음 V",
+   "members": [
+    {
+     "label": "F6_VWAP_FAIL_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N23_HA_ST_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N09_ALLIG_AROON_at_1h",
+     "exit": 18,
+     "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F10_M2022_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F6_VWAP_CROSS_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N03_ADX_GC_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F15_ORB_at_30m",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "exit": 22,
+     "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "DOGE_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "F16_FIB764_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "F4_PULL_RSI_at_30m",
+     "exit": 3,
+     "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N12_ICHI_AO_at_1h",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F5_BOX_RSI_at_30m",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+     "exit": 22,
+     "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "N03_ADX_GC_at_1h",
+     "exit": 7,
+     "exit_ko": "손절 1.5ATR · 익절 2ATR"
+    },
+    {
+     "label": "N08_ICHI_WR_at_1h",
+     "exit": 8,
+     "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "DOGE_at_30m__core-DOGE-30m-1",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "S2_ST_ROC_at_1h",
+     "exit": 21,
+     "exit_ko": "손절 3ATR · 익절 없음"
+    },
+    {
+     "label": "N24_DMI_at_1h",
+     "exit": 20,
+     "exit_ko": "손절 2ATR · 익절 없음"
+    },
+    {
+     "label": "V39_ALL_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    },
+    {
+     "label": "F9_IFVG_at_1h",
+     "exit": 13,
+     "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전"
+    }
+   ],
+   "select": {
+    "n": 1041,
+    "per_weekday": 0.8242,
+    "per_day": 0.5891,
+    "win": 0.3007,
+    "avgR": 0.3804,
+    "avg_winR": 3.0529,
+    "avg_lossR": -0.7687,
+    "payoff": 3.9717,
+    "pf": 1.7076,
+    "avg_win_pct": 8.1746,
+    "avg_loss_pct": -2.3372,
+    "growth": 6.4475,
+    "mult": 631.1193,
+    "cagr": 2.7914,
+    "maxdd": -0.4068,
+    "mon_median": 0.0692,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2446,
+    "mon_best": 1.5473,
+    "mon_pos": 0.7458,
+    "months": 59,
+    "ruin": false,
+    "lev_med": 0.7807
+   },
+   "select_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.4465,
+    "mon_worst": -1.0
+   },
+   "confirm": {
+    "n": 447,
+    "per_weekday": 0.9781,
+    "per_day": 0.7006,
+    "win": 0.2237,
+    "avgR": -0.1024,
+    "avg_winR": 2.2393,
+    "avg_lossR": -0.7773,
+    "payoff": 2.881,
+    "pf": 0.8303,
+    "avg_win_pct": 4.9207,
+    "avg_loss_pct": -1.9004,
+    "growth": -1.1577,
+    "mult": 0.3142,
+    "cagr": -0.4846,
+    "maxdd": -0.721,
+    "mon_median": -0.043,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2412,
+    "mon_best": 0.3495,
+    "mon_pos": 0.3636,
+    "months": 22,
+    "ruin": false,
+    "lev_med": 0.8968
+   },
+   "confirm_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.775,
+    "mon_worst": -0.9979
+   },
+   "c2025": {
+    "n": 261,
+    "per_weekday": 0.9962,
+    "per_day": 0.7151,
+    "win": 0.2146,
+    "avgR": -0.0972,
+    "avg_winR": 2.3356,
+    "avg_lossR": -0.7618,
+    "payoff": 3.0658,
+    "pf": 0.8375,
+    "avg_win_pct": 5.4235,
+    "avg_loss_pct": -2.093,
+    "growth": -0.6387,
+    "mult": 0.528,
+    "cagr": -0.4723,
+    "maxdd": -0.6309,
+    "mon_median": -0.0409,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2412,
+    "mon_best": 0.3055,
+    "mon_pos": 0.3846,
+    "months": 13,
+    "ruin": false,
+    "lev_med": 0.8094
+   },
+   "c2025_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.8354,
+    "mon_worst": -0.9979
+   },
+   "c2026": {
+    "n": 193,
+    "per_weekday": 0.9847,
+    "per_day": 0.707,
+    "win": 0.2228,
+    "avgR": -0.1744,
+    "avg_winR": 2.0175,
+    "avg_lossR": -0.8028,
+    "payoff": 2.5131,
+    "pf": 0.7204,
+    "avg_win_pct": 4.1734,
+    "avg_loss_pct": -1.6201,
+    "growth": -0.7757,
+    "mult": 0.4604,
+    "cagr": -0.6458,
+    "maxdd": -0.6153,
+    "mon_median": -0.0599,
+    "mon_x6": 0.0,
+    "mon_worst": -0.2314,
+    "mon_best": 0.0686,
+    "mon_pos": 0.4,
+    "months": 10,
+    "ruin": false,
+    "lev_med": 1.0964
+   },
+   "c2026_rb9": {
+    "mult": 0.0,
+    "maxdd": -1.0,
+    "mon_median": -0.7634,
+    "mon_worst": -0.9639
+   },
+   "live": {
+    "n": 16,
+    "per_weekday": 1.0667,
+    "per_day": 0.8,
+    "win": 0.1875,
+    "avgR": 0.0086,
+    "avg_winR": 2.9649,
+    "avg_lossR": -0.6737,
+    "payoff": 4.4011,
+    "pf": 1.0156,
+    "avg_win_pct": 4.922,
+    "avg_loss_pct": -1.2566,
+    "growth": -0.0086,
+    "mult": 0.9915,
+    "cagr": -0.145,
+    "maxdd": -0.1226,
+    "mon_median": -0.0085,
+    "mon_x6": 0.0,
+    "mon_worst": -0.0085,
+    "mon_best": -0.0085,
+    "mon_pos": 0.0,
+    "months": 1,
+    "ruin": false,
+    "lev_med": 1.2212
+   },
+   "live_rb9": {
+    "mult": 0.5401,
+    "maxdd": -0.7143,
+    "mon_median": -0.4599,
+    "mon_worst": -0.4599
+   },
+   "twin": {
+    "p10": -1.483,
+    "p50": -0.71,
+    "p90": 0.058,
+    "share_below": 0.218
+   },
+   "verdict": "통하지 않음",
+   "sizing_confirm": [
+    {
+     "r": 0.005,
+     "ruin": false,
+     "mult": 0.7828,
+     "cagr": -0.1308,
+     "maxdd": -0.2428,
+     "mon_median": -0.0091,
+     "mon_x6": 0.0,
+     "mon_worst": -0.0652,
+     "mon_best": 0.0818,
+     "lev_med": 0.2242
+    },
+    {
+     "r": 0.01,
+     "ruin": false,
+     "mult": 0.5943,
+     "cagr": -0.2576,
+     "maxdd": -0.4426,
+     "mon_median": -0.0193,
+     "mon_x6": 0.0,
+     "mon_worst": -0.1271,
+     "mon_best": 0.1673,
+     "lev_med": 0.4484
+    },
+    {
+     "r": 0.02,
+     "ruin": false,
+     "mult": 0.3142,
+     "cagr": -0.4846,
+     "maxdd": -0.721,
+     "mon_median": -0.043,
+     "mon_x6": 0.0,
+     "mon_worst": -0.2412,
+     "mon_best": 0.3495,
+     "lev_med": 0.8968
+    },
+    {
+     "r": 0.03,
+     "ruin": false,
+     "mult": 0.1493,
+     "cagr": -0.6634,
+     "maxdd": -0.8734,
+     "mon_median": -0.0729,
+     "mon_x6": 0.0,
+     "mon_worst": -0.343,
+     "mon_best": 0.5466,
+     "lev_med": 1.3453
+    },
+    {
+     "r": 0.05,
+     "ruin": false,
+     "mult": 0.0252,
+     "cagr": -0.8784,
+     "maxdd": -0.9801,
+     "mon_median": -0.1467,
+     "mon_x6": 0.0,
+     "mon_worst": -0.5131,
+     "mon_best": 0.9846,
+     "lev_med": 2.2421
+    },
+    {
+     "r": 0.075,
+     "ruin": false,
+     "mult": 0.0017,
+     "cagr": -0.9743,
+     "maxdd": -0.9987,
+     "mon_median": -0.2563,
+     "mon_x6": 0.0,
+     "mon_worst": -0.6752,
+     "mon_best": 1.6099,
+     "lev_med": 3.3631
+    },
+    {
+     "r": 0.1,
+     "ruin": false,
+     "mult": 0.0001,
+     "cagr": -0.9959,
+     "maxdd": -0.9999,
+     "mon_median": -0.3613,
+     "mon_x6": 0.0,
+     "mon_worst": -0.7923,
+     "mon_best": 2.3117,
+     "lev_med": 4.4842
+    },
+    {
+     "r": 0.15,
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.5462,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9225,
+     "mon_best": 3.8804,
+     "lev_med": 6.7263
+    },
+    {
+     "r": 0.2,
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.6988,
+     "mon_x6": 0.0455,
+     "mon_worst": -0.9743,
+     "mon_best": 5.5251,
+     "lev_med": 8.9684
+    },
+    {
+     "r": "rb9",
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.775,
+     "mon_x6": 0.0,
+     "mon_worst": -0.9979,
+     "mon_best": 2.7889,
+     "lev_med": 9.0
+    },
+    {
+     "r": "owners",
+     "ruin": false,
+     "mult": 0.0,
+     "cagr": -1.0,
+     "maxdd": -1.0,
+     "mon_median": -0.9349,
+     "mon_x6": 0.0,
+     "mon_worst": -1.0,
+     "mon_best": 3.4271,
+     "lev_med": 12.0
+    }
+   ],
+   "by_member_confirm": {
+    "DOGE_at_1h": {
+     "n": 3,
+     "win": 0.333,
+     "avgR": -0.6251
+    },
+    "DOGE_at_30m__core-DOGE-30m-1": {
+     "n": 1,
+     "win": 0.0,
+     "avgR": -0.9977
+    },
+    "F10_M2022_at_1h": {
+     "n": 3,
+     "win": 0.333,
+     "avgR": 0.5066
+    },
+    "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1": {
+     "n": 5,
+     "win": 0.2,
+     "avgR": -0.3569
+    },
+    "F15_ORB_at_30m": {
+     "n": 10,
+     "win": 0.2,
+     "avgR": 0.2575
+    },
+    "F16_FIB764_at_30m": {
+     "n": 37,
+     "win": 0.324,
+     "avgR": -0.1309
+    },
+    "F4_PULL_RSI_at_30m": {
+     "n": 2,
+     "win": 0.0,
+     "avgR": -0.6058
+    },
+    "F5_BOX_RSI_at_30m": {
+     "n": 2,
+     "win": 0.0,
+     "avgR": -0.9959
+    },
+    "F6_VWAP_CROSS_at_1h": {
+     "n": 60,
+     "win": 0.133,
+     "avgR": 0.1442
+    },
+    "F6_VWAP_FAIL_at_30m": {
+     "n": 122,
+     "win": 0.336,
+     "avgR": -0.1655
+    },
+    "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1": {
+     "n": 7,
+     "win": 0.143,
+     "avgR": -0.0704
+    },
+    "F9_FVG_at_1h__ds-F9_FVG-1h-1": {
+     "n": 9,
+     "win": 0.0,
+     "avgR": -0.437
+    },
+    "F9_IFVG_at_1h": {
+     "n": 7,
+     "win": 0.0,
+     "avgR": -0.4732
+    },
+    "N03_ADX_GC_at_30m": {
+     "n": 5,
+     "win": 0.0,
+     "avgR": -1.0067
+    },
+    "N09_ALLIG_AROON_at_1h": {
+     "n": 26,
+     "win": 0.038,
+     "avgR": -0.2958
+    },
+    "N12_ICHI_AO_at_1h": {
+     "n": 5,
+     "win": 0.0,
+     "avgR": -0.4698
+    },
+    "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1": {
+     "n": 3,
+     "win": 0.0,
+     "avgR": -0.7367
+    },
+    "N23_HA_ST_at_1h": {
+     "n": 131,
+     "win": 0.229,
+     "avgR": 0.0318
+    },
+    "N24_DMI_at_1h": {
+     "n": 2,
+     "win": 0.0,
+     "avgR": -1.0001
+    },
+    "S2_ST_ROC_at_1h": {
+     "n": 3,
+     "win": 0.667,
+     "avgR": -0.0174
+    },
+    "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1": {
+     "n": 3,
+     "win": 0.0,
+     "avgR": -0.8549
+    },
+    "V39_ALL_at_1h": {
+     "n": 1,
+     "win": 0.0,
+     "avgR": -0.1597
+    }
+   }
+  }
+ ],
+ "select": {
+  "scan": {
+   "DOGE_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 1.128,
+    "n": 556,
+    "per_weekday": 0.4402,
+    "win": 0.3489,
+    "avgR": 0.1947,
+    "payoff": 2.4559,
+    "growth": 1.5868,
+    "maxdd": -0.4092
+   },
+   "DOGE_at_1h__core-DOGE-1h-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.984,
+    "n": 424,
+    "per_weekday": 0.3357,
+    "win": 0.2406,
+    "avgR": 0.1872,
+    "payoff": 3.9476,
+    "growth": 0.8419,
+    "maxdd": -0.4491
+   },
+   "DOGE_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -0.032,
+    "n": 974,
+    "per_weekday": 0.7712,
+    "win": 0.3409,
+    "avgR": 0.0388,
+    "payoff": 2.0536,
+    "growth": 0.061,
+    "maxdd": -0.4986
+   },
+   "DOGE_at_30m__core-DOGE-30m-1": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.439,
+    "n": 488,
+    "per_weekday": 0.3864,
+    "win": 0.3934,
+    "avgR": 0.1131,
+    "payoff": 1.8556,
+    "growth": 0.7469,
+    "maxdd": -0.4946
+   },
+   "F10_M2022_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.576,
+    "n": 319,
+    "per_weekday": 0.2526,
+    "win": 0.2947,
+    "avgR": 0.3171,
+    "payoff": 3.4956,
+    "growth": 1.5827,
+    "maxdd": -0.249
+   },
+   "F10_M2022_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.524,
+    "n": 509,
+    "per_weekday": 0.403,
+    "win": 0.3143,
+    "avgR": -0.0192,
+    "payoff": 2.1165,
+    "growth": -0.5093,
+    "maxdd": -0.5836
+   },
+   "F10_OTE_at_1h": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.153,
+    "n": 1356,
+    "per_weekday": 1.0736,
+    "win": 0.104,
+    "avgR": 0.0494,
+    "payoff": 9.7207,
+    "growth": 0.1503,
+    "maxdd": -0.7881
+   },
+   "F10_OTE_at_1h__ds-F10_OTE-1h-1": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.531,
+    "n": 976,
+    "per_weekday": 0.7728,
+    "win": 0.1199,
+    "avgR": 0.0413,
+    "payoff": 8.3252,
+    "growth": 0.2433,
+    "maxdd": -0.5007
+   },
+   "F10_OTE_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.572,
+    "n": 1128,
+    "per_weekday": 0.8931,
+    "win": 0.3254,
+    "avgR": -0.0157,
+    "payoff": 2.0221,
+    "growth": -0.9829,
+    "maxdd": -0.8028
+   },
+   "F11_PO3_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.433,
+    "n": 630,
+    "per_weekday": 0.4988,
+    "win": 0.3238,
+    "avgR": 0.0187,
+    "payoff": 2.1482,
+    "growth": -0.1431,
+    "maxdd": -0.6257
+   },
+   "F11_PO3_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.297,
+    "n": 1283,
+    "per_weekday": 1.0158,
+    "win": 0.2416,
+    "avgR": -0.0212,
+    "payoff": 3.05,
+    "growth": -1.6381,
+    "maxdd": -0.8733
+   },
+   "F11_RAID_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.938,
+    "n": 659,
+    "per_weekday": 0.5218,
+    "win": 0.3445,
+    "avgR": 0.0616,
+    "payoff": 2.0899,
+    "growth": 0.4347,
+    "maxdd": -0.6365
+   },
+   "F11_RAID_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.19,
+    "n": 1225,
+    "per_weekday": 0.9699,
+    "win": 0.3233,
+    "avgR": -0.0431,
+    "payoff": 1.9514,
+    "growth": -1.7552,
+    "maxdd": -0.8565
+   },
+   "F11_TSOUP_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.348,
+    "n": 846,
+    "per_weekday": 0.6698,
+    "win": 0.2317,
+    "avgR": -0.0109,
+    "payoff": 3.2686,
+    "growth": -1.0077,
+    "maxdd": -0.8111
+   },
+   "F11_TSOUP_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.301,
+    "n": 1208,
+    "per_weekday": 0.9565,
+    "win": 0.3303,
+    "avgR": -0.0449,
+    "payoff": 1.8857,
+    "growth": -1.7112,
+    "maxdd": -0.9757
+   },
+   "F12_MSS_DISP_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.5,
+    "n": 638,
+    "per_weekday": 0.5051,
+    "win": 0.2508,
+    "avgR": 0.2101,
+    "payoff": 3.838,
+    "growth": 1.5903,
+    "maxdd": -0.5989
+   },
+   "F12_MSS_DISP_at_1h__ds-F12_MSS_DISP-1h-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.147,
+    "n": 402,
+    "per_weekday": 0.3183,
+    "win": 0.2438,
+    "avgR": 0.1657,
+    "payoff": 3.7989,
+    "growth": 0.8557,
+    "maxdd": -0.5707
+   },
+   "F12_MSS_DISP_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.645,
+    "n": 1174,
+    "per_weekday": 0.9295,
+    "win": 0.2547,
+    "avgR": 0.1157,
+    "payoff": 3.3851,
+    "growth": 1.397,
+    "maxdd": -0.5449
+   },
+   "F12_MSS_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.237,
+    "n": 788,
+    "per_weekday": 0.6239,
+    "win": 0.2462,
+    "avgR": 0.0943,
+    "payoff": 3.4527,
+    "growth": 0.6424,
+    "maxdd": -0.5991
+   },
+   "F12_MSS_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.257,
+    "n": 1190,
+    "per_weekday": 0.9422,
+    "win": 0.3303,
+    "avgR": -0.0183,
+    "payoff": 1.9699,
+    "growth": -1.0868,
+    "maxdd": -0.7629
+   },
+   "F13_FVG_PD_at_1h": {
+    "best": 12,
+    "exit_ko": "손절 2ATR · 익절 2ATR",
+    "pass": false,
+    "twin_p90": -0.5,
+    "n": 856,
+    "per_weekday": 0.6778,
+    "win": 0.5339,
+    "avgR": 0.0083,
+    "payoff": 0.8886,
+    "growth": -0.0108,
+    "maxdd": -0.4622
+   },
+   "F13_FVG_PD_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.554,
+    "n": 865,
+    "per_weekday": 0.6849,
+    "win": 0.3156,
+    "avgR": -0.0491,
+    "payoff": 2.0029,
+    "growth": -1.3213,
+    "maxdd": -0.8734
+   },
+   "F13_RAID_PD_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.807,
+    "n": 657,
+    "per_weekday": 0.5202,
+    "win": 0.3455,
+    "avgR": 0.0463,
+    "payoff": 2.0341,
+    "growth": 0.2514,
+    "maxdd": -0.611
+   },
+   "F13_RAID_PD_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.028,
+    "n": 1213,
+    "per_weekday": 0.9604,
+    "win": 0.3388,
+    "avgR": 0.003,
+    "payoff": 1.9607,
+    "growth": -0.6451,
+    "maxdd": -0.7101
+   },
+   "F14_SMT_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.807,
+    "n": 749,
+    "per_weekday": 0.593,
+    "win": 0.2737,
+    "avgR": 0.1018,
+    "payoff": 3.034,
+    "growth": 0.8919,
+    "maxdd": -0.8123
+   },
+   "F14_SMT_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.246,
+    "n": 2024,
+    "per_weekday": 1.6025,
+    "win": 0.1364,
+    "avgR": 0.0164,
+    "payoff": 6.7024,
+    "growth": 0.1147,
+    "maxdd": -0.6139
+   },
+   "F15_ASIA_BRK_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 2.261,
+    "n": 680,
+    "per_weekday": 0.5384,
+    "win": 0.275,
+    "avgR": 0.2334,
+    "payoff": 3.4983,
+    "growth": 2.1322,
+    "maxdd": -0.3934
+   },
+   "F15_ASIA_BRK_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.782,
+    "n": 927,
+    "per_weekday": 0.734,
+    "win": 0.3258,
+    "avgR": 0.0371,
+    "payoff": 2.1884,
+    "growth": 0.0842,
+    "maxdd": -0.7077
+   },
+   "F15_ASIA_SWEEP_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.869,
+    "n": 564,
+    "per_weekday": 0.4466,
+    "win": 0.3351,
+    "avgR": 0.0615,
+    "payoff": 2.1819,
+    "growth": 0.3562,
+    "maxdd": -0.5049
+   },
+   "F15_ASIA_SWEEP_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.56,
+    "n": 922,
+    "per_weekday": 0.73,
+    "win": 0.3373,
+    "avgR": -0.0692,
+    "payoff": 1.7506,
+    "growth": -1.6851,
+    "maxdd": -0.8206
+   },
+   "F15_LON_BRK_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.097,
+    "n": 603,
+    "per_weekday": 0.4774,
+    "win": 0.335,
+    "avgR": 0.1306,
+    "payoff": 2.3965,
+    "growth": 1.0962,
+    "maxdd": -0.3462
+   },
+   "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 1.048,
+    "n": 615,
+    "per_weekday": 0.4869,
+    "win": 0.3333,
+    "avgR": 0.1425,
+    "payoff": 2.4505,
+    "growth": 1.2535,
+    "maxdd": -0.3798
+   },
+   "F15_LON_BRK_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.446,
+    "n": 983,
+    "per_weekday": 0.7783,
+    "win": 0.3184,
+    "avgR": -0.0007,
+    "payoff": 2.1381,
+    "growth": -0.6508,
+    "maxdd": -0.8519
+   },
+   "F15_OPEN0000_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.915,
+    "n": 698,
+    "per_weekday": 0.5527,
+    "win": 0.2436,
+    "avgR": 0.1079,
+    "payoff": 3.5537,
+    "growth": 0.6572,
+    "maxdd": -0.5712
+   },
+   "F15_OPEN0000_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -0.165,
+    "n": 984,
+    "per_weekday": 0.7791,
+    "win": 0.2419,
+    "avgR": 0.057,
+    "payoff": 3.373,
+    "growth": 0.0566,
+    "maxdd": -0.7608
+   },
+   "F15_OPEN0930_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.895,
+    "n": 701,
+    "per_weekday": 0.555,
+    "win": 0.2411,
+    "avgR": 0.0892,
+    "payoff": 3.5214,
+    "growth": 0.4231,
+    "maxdd": -0.5836
+   },
+   "F15_OPEN0930_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.161,
+    "n": 890,
+    "per_weekday": 0.7047,
+    "win": 0.3404,
+    "avgR": 0.0373,
+    "payoff": 2.0532,
+    "growth": 0.1343,
+    "maxdd": -0.6976
+   },
+   "F15_ORB_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 2.482,
+    "n": 703,
+    "per_weekday": 0.5566,
+    "win": 0.293,
+    "avgR": 0.2397,
+    "payoff": 3.2384,
+    "growth": 2.2202,
+    "maxdd": -0.5159
+   },
+   "F15_ORB_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 1.99,
+    "n": 1091,
+    "per_weekday": 0.8638,
+    "win": 0.2704,
+    "avgR": 0.2987,
+    "payoff": 3.8178,
+    "growth": 3.8388,
+    "maxdd": -0.5623
+   },
+   "F16_FIB382_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.812,
+    "n": 574,
+    "per_weekday": 0.4545,
+    "win": 0.3345,
+    "avgR": 0.0569,
+    "payoff": 2.1689,
+    "growth": 0.3032,
+    "maxdd": -0.5283
+   },
+   "F16_FIB382_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -1.21,
+    "n": 1313,
+    "per_weekday": 1.0396,
+    "win": 0.2475,
+    "avgR": -0.0182,
+    "payoff": 2.9652,
+    "growth": -1.6482,
+    "maxdd": -0.9133
+   },
+   "F16_FIB500_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.436,
+    "n": 558,
+    "per_weekday": 0.4418,
+    "win": 0.328,
+    "avgR": 0.0098,
+    "payoff": 2.0803,
+    "growth": -0.2432,
+    "maxdd": -0.6044
+   },
+   "F16_FIB500_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.232,
+    "n": 1879,
+    "per_weekday": 1.4877,
+    "win": 0.1064,
+    "avgR": -0.0266,
+    "payoff": 7.661,
+    "growth": -1.5428,
+    "maxdd": -0.854
+   },
+   "F16_FIB618_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.398,
+    "n": 1017,
+    "per_weekday": 0.8052,
+    "win": 0.1268,
+    "avgR": 0.0112,
+    "payoff": 7.1482,
+    "growth": -0.2215,
+    "maxdd": -0.7021
+   },
+   "F16_FIB618_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.604,
+    "n": 1033,
+    "per_weekday": 0.8179,
+    "win": 0.3456,
+    "avgR": 0.0119,
+    "payoff": 1.9299,
+    "growth": -0.3267,
+    "maxdd": -0.7141
+   },
+   "F16_FIB764_at_1h": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.721,
+    "n": 1137,
+    "per_weekday": 0.9002,
+    "win": 0.1055,
+    "avgR": 0.1174,
+    "payoff": 11.0658,
+    "growth": 1.2816,
+    "maxdd": -0.5474
+   },
+   "F16_FIB764_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.021,
+    "n": 1060,
+    "per_weekday": 0.8393,
+    "win": 0.333,
+    "avgR": 0.0422,
+    "payoff": 2.1367,
+    "growth": 0.2352,
+    "maxdd": -0.6639
+   },
+   "F17_Z_HL_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.495,
+    "n": 1175,
+    "per_weekday": 0.9303,
+    "win": 0.1362,
+    "avgR": 0.0203,
+    "payoff": 6.7758,
+    "growth": 0.1045,
+    "maxdd": -0.6081
+   },
+   "F17_Z_HL_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.48,
+    "n": 1170,
+    "per_weekday": 0.9264,
+    "win": 0.3291,
+    "avgR": -0.0293,
+    "payoff": 1.9454,
+    "growth": -1.3057,
+    "maxdd": -0.9249
+   },
+   "F17_Z_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.877,
+    "n": 1280,
+    "per_weekday": 1.0135,
+    "win": 0.143,
+    "avgR": 0.0343,
+    "payoff": 6.7246,
+    "growth": 0.4826,
+    "maxdd": -0.4615
+   },
+   "F17_Z_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.371,
+    "n": 1265,
+    "per_weekday": 1.0016,
+    "win": 0.3494,
+    "avgR": -0.0094,
+    "payoff": 1.8335,
+    "growth": -0.8576,
+    "maxdd": -0.8145
+   },
+   "F1_MOM_DIV_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 2.337,
+    "n": 711,
+    "per_weekday": 0.5629,
+    "win": 0.2827,
+    "avgR": 0.3378,
+    "payoff": 3.7552,
+    "growth": 3.303,
+    "maxdd": -0.4671
+   },
+   "F1_MOM_DIV_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.61,
+    "n": 1124,
+    "per_weekday": 0.8899,
+    "win": 0.3194,
+    "avgR": -0.0644,
+    "payoff": 1.9203,
+    "growth": -2.0281,
+    "maxdd": -0.9086
+   },
+   "F1_PVT_DIV_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.905,
+    "n": 654,
+    "per_weekday": 0.5178,
+    "win": 0.2401,
+    "avgR": 0.0425,
+    "payoff": 3.3464,
+    "growth": -0.0688,
+    "maxdd": -0.7536
+   },
+   "F1_PVT_DIV_at_1h__ds-F1_PVT_DIV-1h-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.854,
+    "n": 435,
+    "per_weekday": 0.3444,
+    "win": 0.2621,
+    "avgR": 0.041,
+    "payoff": 2.9755,
+    "growth": -0.001,
+    "maxdd": -0.4617
+   },
+   "F1_PVT_DIV_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -0.994,
+    "n": 1736,
+    "per_weekday": 1.3745,
+    "win": 0.106,
+    "avgR": -0.0386,
+    "payoff": 7.3253,
+    "growth": -1.8008,
+    "maxdd": -0.896
+   },
+   "F1_RSI_DIV_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.724,
+    "n": 568,
+    "per_weekday": 0.4497,
+    "win": 0.3433,
+    "avgR": 0.1129,
+    "payoff": 2.2581,
+    "growth": 0.6184,
+    "maxdd": -0.5334
+   },
+   "F1_RSI_DIV_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -0.905,
+    "n": 1847,
+    "per_weekday": 1.4624,
+    "win": 0.1099,
+    "avgR": -0.0471,
+    "payoff": 6.7605,
+    "growth": -2.1258,
+    "maxdd": -0.9224
+   },
+   "F2_DEMARK_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.416,
+    "n": 1339,
+    "per_weekday": 1.0602,
+    "win": 0.1225,
+    "avgR": -0.0313,
+    "payoff": 6.4313,
+    "growth": -1.1955,
+    "maxdd": -0.7716
+   },
+   "F2_DEMARK_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.31,
+    "n": 1539,
+    "per_weekday": 1.2185,
+    "win": 0.2534,
+    "avgR": 0.0282,
+    "payoff": 3.0598,
+    "growth": -0.5313,
+    "maxdd": -0.9354
+   },
+   "F3_BOS_ZONE_at_1h": {
+    "best": 22,
+    "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.858,
+    "n": 1198,
+    "per_weekday": 0.9485,
+    "win": 0.0668,
+    "avgR": 0.1988,
+    "payoff": 18.4464,
+    "growth": 1.5274,
+    "maxdd": -0.6837
+   },
+   "F3_BOS_ZONE_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.425,
+    "n": 1613,
+    "per_weekday": 1.2771,
+    "win": 0.111,
+    "avgR": 0.0023,
+    "payoff": 8.07,
+    "growth": -0.4913,
+    "maxdd": -0.6861
+   },
+   "F3_BOS_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.98,
+    "n": 1242,
+    "per_weekday": 0.9834,
+    "win": 0.095,
+    "avgR": 0.0032,
+    "payoff": 9.6341,
+    "growth": -0.3271,
+    "maxdd": -0.4825
+   },
+   "F3_BOS_at_1h__ds-F3_BOS-1h-1": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.069,
+    "n": 902,
+    "per_weekday": 0.7142,
+    "win": 0.102,
+    "avgR": 0.0531,
+    "payoff": 10.4387,
+    "growth": 0.5852,
+    "maxdd": -0.5217
+   },
+   "F3_BOS_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.219,
+    "n": 1145,
+    "per_weekday": 0.9066,
+    "win": 0.331,
+    "avgR": 0.0535,
+    "payoff": 2.1899,
+    "growth": 0.4367,
+    "maxdd": -0.7202
+   },
+   "F3_HHHL_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.496,
+    "n": 667,
+    "per_weekday": 0.5281,
+    "win": 0.3223,
+    "avgR": 0.0312,
+    "payoff": 2.2021,
+    "growth": -0.059,
+    "maxdd": -0.7208
+   },
+   "F3_HHHL_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -0.258,
+    "n": 1156,
+    "per_weekday": 0.9153,
+    "win": 0.3573,
+    "avgR": 0.0528,
+    "payoff": 1.9539,
+    "growth": 0.5249,
+    "maxdd": -0.6884
+   },
+   "F4_FAN_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.656,
+    "n": 817,
+    "per_weekday": 0.6469,
+    "win": 0.2448,
+    "avgR": 0.1346,
+    "payoff": 3.6407,
+    "growth": 1.2271,
+    "maxdd": -0.6104
+   },
+   "F4_FAN_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.884,
+    "n": 1181,
+    "per_weekday": 0.9351,
+    "win": 0.3209,
+    "avgR": 0.0593,
+    "payoff": 2.3088,
+    "growth": 0.5813,
+    "maxdd": -0.8584
+   },
+   "F4_FAN_at_30m__ds-F4_FAN-30m-3": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.869,
+    "n": 993,
+    "per_weekday": 0.7862,
+    "win": 0.3243,
+    "avgR": 0.1041,
+    "payoff": 2.4247,
+    "growth": 1.3608,
+    "maxdd": -0.5149
+   },
+   "F4_PULL_RSI_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.821,
+    "n": 209,
+    "per_weekday": 0.1655,
+    "win": 0.3971,
+    "avgR": 0.2053,
+    "payoff": 2.0653,
+    "growth": 0.7078,
+    "maxdd": -0.2348
+   },
+   "F4_PULL_RSI_at_30m": {
+    "best": 3,
+    "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.119,
+    "n": 493,
+    "per_weekday": 0.3903,
+    "win": 0.0832,
+    "avgR": 0.0811,
+    "payoff": 12.5926,
+    "growth": 0.1299,
+    "maxdd": -0.6869
+   },
+   "F4_PULL_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.429,
+    "n": 726,
+    "per_weekday": 0.5748,
+    "win": 0.2493,
+    "avgR": 0.0703,
+    "payoff": 3.2941,
+    "growth": 0.195,
+    "maxdd": -0.5953
+   },
+   "F4_PULL_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.285,
+    "n": 1068,
+    "per_weekday": 0.8456,
+    "win": 0.3109,
+    "avgR": 0.0031,
+    "payoff": 2.2275,
+    "growth": -0.5897,
+    "maxdd": -0.5567
+   },
+   "F5_BOX_HTF_at_1h": {
+    "best": 22,
+    "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.524,
+    "n": 297,
+    "per_weekday": 0.2352,
+    "win": 0.0875,
+    "avgR": 0.0605,
+    "payoff": 11.4866,
+    "growth": -0.0202,
+    "maxdd": -0.5586
+   },
+   "F5_BOX_HTF_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.603,
+    "n": 338,
+    "per_weekday": 0.2676,
+    "win": 0.3698,
+    "avgR": 0.0845,
+    "payoff": 1.9405,
+    "growth": 0.373,
+    "maxdd": -0.3656
+   },
+   "F5_BOX_RSI_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.099,
+    "n": 125,
+    "per_weekday": 0.099,
+    "win": 0.376,
+    "avgR": 0.3438,
+    "payoff": 2.6095,
+    "growth": 0.7458,
+    "maxdd": -0.2367
+   },
+   "F5_BOX_RSI_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.936,
+    "n": 204,
+    "per_weekday": 0.1615,
+    "win": 0.3922,
+    "avgR": 0.2784,
+    "payoff": 2.3027,
+    "growth": 1.0031,
+    "maxdd": -0.2205
+   },
+   "F5_BOX_at_1h": {
+    "best": 15,
+    "exit_ko": "손절 3ATR · 규칙봇 계단",
+    "pass": false,
+    "twin_p90": -0.301,
+    "n": 717,
+    "per_weekday": 0.5677,
+    "win": 0.8731,
+    "avgR": -0.0278,
+    "payoff": 0.1127,
+    "growth": -0.419,
+    "maxdd": -0.3609
+   },
+   "F5_BOX_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.714,
+    "n": 614,
+    "per_weekday": 0.4861,
+    "win": 0.3355,
+    "avgR": 0.0352,
+    "payoff": 2.0917,
+    "growth": 0.0614,
+    "maxdd": -0.5107
+   },
+   "F6_VWAP_CROSS_at_1h": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.462,
+    "n": 1643,
+    "per_weekday": 1.3009,
+    "win": 0.1004,
+    "avgR": 0.0751,
+    "payoff": 10.7934,
+    "growth": 1.0787,
+    "maxdd": -0.4615
+   },
+   "F6_VWAP_CROSS_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.0,
+    "n": 1240,
+    "per_weekday": 0.9818,
+    "win": 0.3121,
+    "avgR": -0.0742,
+    "payoff": 1.9561,
+    "growth": -2.5654,
+    "maxdd": -0.9456
+   },
+   "F6_VWAP_FAIL_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.774,
+    "n": 875,
+    "per_weekday": 0.6928,
+    "win": 0.2274,
+    "avgR": 0.128,
+    "payoff": 3.9676,
+    "growth": 0.767,
+    "maxdd": -0.7099
+   },
+   "F6_VWAP_FAIL_at_1h__ds-F6_VWAP_FAIL-1h-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.828,
+    "n": 861,
+    "per_weekday": 0.6817,
+    "win": 0.2265,
+    "avgR": 0.0998,
+    "payoff": 3.8617,
+    "growth": 0.4612,
+    "maxdd": -0.5911
+   },
+   "F6_VWAP_FAIL_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.027,
+    "n": 1180,
+    "per_weekday": 0.9343,
+    "win": 0.3102,
+    "avgR": -0.0634,
+    "payoff": 2.0103,
+    "growth": -2.2032,
+    "maxdd": -0.9149
+   },
+   "F7_RF_ONLY_at_1h": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.775,
+    "n": 1336,
+    "per_weekday": 1.0578,
+    "win": 0.0988,
+    "avgR": 0.1546,
+    "payoff": 13.2736,
+    "growth": 2.2158,
+    "maxdd": -0.6161
+   },
+   "F7_RF_ONLY_at_1h__ds-F7_RF_ONLY-1h-3": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.343,
+    "n": 1407,
+    "per_weekday": 1.114,
+    "win": 0.1087,
+    "avgR": 0.0919,
+    "payoff": 10.3503,
+    "growth": 1.1447,
+    "maxdd": -0.7066
+   },
+   "F7_RF_ONLY_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.839,
+    "n": 1432,
+    "per_weekday": 1.1338,
+    "win": 0.2507,
+    "avgR": 0.0491,
+    "payoff": 3.1891,
+    "growth": -0.0152,
+    "maxdd": -0.8531
+   },
+   "F7_RF_ONLY_at_30m__ds-F7_RF_ONLY-30m-1": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.082,
+    "n": 675,
+    "per_weekday": 0.5344,
+    "win": 0.3259,
+    "avgR": -0.0161,
+    "payoff": 2.015,
+    "growth": -0.5912,
+    "maxdd": -0.6095
+   },
+   "F7_RF_TRIPLE_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.932,
+    "n": 683,
+    "per_weekday": 0.5408,
+    "win": 0.3206,
+    "avgR": 0.0621,
+    "payoff": 2.3227,
+    "growth": 0.2581,
+    "maxdd": -0.5555
+   },
+   "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1": {
+    "best": 8,
+    "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.882,
+    "n": 1697,
+    "per_weekday": 1.3436,
+    "win": 0.0925,
+    "avgR": 0.1077,
+    "payoff": 12.3055,
+    "growth": 2.0125,
+    "maxdd": -0.645
+   },
+   "F7_RF_TRIPLE_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.141,
+    "n": 1271,
+    "per_weekday": 1.0063,
+    "win": 0.3242,
+    "avgR": -0.0353,
+    "payoff": 1.9707,
+    "growth": -1.5751,
+    "maxdd": -0.8732
+   },
+   "F8_VWICK_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.0,
+    "n": 848,
+    "per_weekday": 0.6714,
+    "win": 0.1333,
+    "avgR": 0.0471,
+    "payoff": 7.4378,
+    "growth": 0.1814,
+    "maxdd": -0.5768
+   },
+   "F8_VWICK_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.176,
+    "n": 939,
+    "per_weekday": 0.7435,
+    "win": 0.3301,
+    "avgR": 0.0242,
+    "payoff": 2.1071,
+    "growth": -0.078,
+    "maxdd": -0.7604
+   },
+   "F9_BREAKER_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.874,
+    "n": 605,
+    "per_weekday": 0.479,
+    "win": 0.319,
+    "avgR": 0.0365,
+    "payoff": 2.2562,
+    "growth": 0.0352,
+    "maxdd": -0.6119
+   },
+   "F9_BREAKER_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.345,
+    "n": 1117,
+    "per_weekday": 0.8844,
+    "win": 0.3295,
+    "avgR": 0.0133,
+    "payoff": 2.0777,
+    "growth": -0.3862,
+    "maxdd": -0.7071
+   },
+   "F9_FVG_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.54,
+    "n": 782,
+    "per_weekday": 0.6192,
+    "win": 0.2353,
+    "avgR": 0.088,
+    "payoff": 3.6287,
+    "growth": 0.2252,
+    "maxdd": -0.6168
+   },
+   "F9_FVG_at_1h__ds-F9_FVG-1h-1": {
+    "best": 22,
+    "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 1.926,
+    "n": 1068,
+    "per_weekday": 0.8456,
+    "win": 0.0768,
+    "avgR": 0.3171,
+    "payoff": 18.3657,
+    "growth": 3.1904,
+    "maxdd": -0.7273
+   },
+   "F9_FVG_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.417,
+    "n": 1160,
+    "per_weekday": 0.9184,
+    "win": 0.3345,
+    "avgR": 0.0196,
+    "payoff": 2.0518,
+    "growth": -0.2149,
+    "maxdd": -0.7424
+   },
+   "F9_IFVG_at_1h": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 1.277,
+    "n": 1118,
+    "per_weekday": 0.8852,
+    "win": 0.1181,
+    "avgR": 0.1487,
+    "payoff": 10.721,
+    "growth": 2.1561,
+    "maxdd": -0.3695
+   },
+   "F9_IFVG_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 1.03,
+    "n": 1288,
+    "per_weekday": 1.0198,
+    "win": 0.2578,
+    "avgR": 0.1455,
+    "payoff": 3.4537,
+    "growth": 1.3352,
+    "maxdd": -0.7385
+   },
+   "F9_OB_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.829,
+    "n": 614,
+    "per_weekday": 0.4861,
+    "win": 0.3208,
+    "avgR": 0.0394,
+    "payoff": 2.2468,
+    "growth": 0.0503,
+    "maxdd": -0.4185
+   },
+   "F9_OB_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.038,
+    "n": 1167,
+    "per_weekday": 0.924,
+    "win": 0.3265,
+    "avgR": -0.0351,
+    "payoff": 1.95,
+    "growth": -1.4807,
+    "maxdd": -0.8742
+   },
+   "N01_ST_EMA_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.264,
+    "n": 1028,
+    "per_weekday": 0.8139,
+    "win": 0.1119,
+    "avgR": 0.0408,
+    "payoff": 9.0923,
+    "growth": 0.4571,
+    "maxdd": -0.3488
+   },
+   "N01_ST_EMA_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.294,
+    "n": 1388,
+    "per_weekday": 1.099,
+    "win": 0.2363,
+    "avgR": 0.0842,
+    "payoff": 3.5916,
+    "growth": 0.6398,
+    "maxdd": -0.818
+   },
+   "N02_ST_KST_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.881,
+    "n": 1069,
+    "per_weekday": 0.8464,
+    "win": 0.101,
+    "avgR": 0.0539,
+    "payoff": 10.7744,
+    "growth": 0.6049,
+    "maxdd": -0.4325
+   },
+   "N02_ST_KST_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.066,
+    "n": 1123,
+    "per_weekday": 0.8892,
+    "win": 0.3126,
+    "avgR": 0.0034,
+    "payoff": 2.2109,
+    "growth": -0.616,
+    "maxdd": -0.8173
+   },
+   "N02_ST_KST_at_30m__core-N02_ST_KST-30m-2": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.284,
+    "n": 1146,
+    "per_weekday": 0.9074,
+    "win": 0.2565,
+    "avgR": 0.076,
+    "payoff": 3.1974,
+    "growth": 0.5295,
+    "maxdd": -0.5423
+   },
+   "N03_ADX_GC_at_1h": {
+    "best": 7,
+    "exit_ko": "손절 1.5ATR · 익절 2ATR",
+    "pass": true,
+    "twin_p90": -0.072,
+    "n": 162,
+    "per_weekday": 0.1283,
+    "win": 0.5741,
+    "avgR": 0.2239,
+    "payoff": 1.1349,
+    "growth": 0.6882,
+    "maxdd": -0.111
+   },
+   "N03_ADX_GC_at_1h__core-N03_ADX_GC-1h-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.583,
+    "n": 236,
+    "per_weekday": 0.1869,
+    "win": 0.2754,
+    "avgR": 0.3097,
+    "payoff": 3.7941,
+    "growth": 0.9678,
+    "maxdd": -0.4635
+   },
+   "N03_ADX_GC_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.848,
+    "n": 274,
+    "per_weekday": 0.2169,
+    "win": 0.3029,
+    "avgR": 0.2534,
+    "payoff": 3.1663,
+    "growth": 1.0787,
+    "maxdd": -0.5377
+   },
+   "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.875,
+    "n": 224,
+    "per_weekday": 0.1774,
+    "win": 0.3705,
+    "avgR": 0.2946,
+    "payoff": 2.5383,
+    "growth": 1.1213,
+    "maxdd": -0.2063
+   },
+   "N04_ST_KLINGER_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.63,
+    "n": 1375,
+    "per_weekday": 1.0887,
+    "win": 0.112,
+    "avgR": 0.034,
+    "payoff": 8.8271,
+    "growth": 0.2817,
+    "maxdd": -0.5462
+   },
+   "N04_ST_KLINGER_at_1h__core-N04_ST_KLINGER-1h-3": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.252,
+    "n": 635,
+    "per_weekday": 0.5028,
+    "win": 0.3307,
+    "avgR": 0.0228,
+    "payoff": 2.0972,
+    "growth": -0.0678,
+    "maxdd": -0.4554
+   },
+   "N04_ST_KLINGER_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.124,
+    "n": 1250,
+    "per_weekday": 0.9897,
+    "win": 0.3328,
+    "avgR": 0.0097,
+    "payoff": 2.0356,
+    "growth": -0.4923,
+    "maxdd": -0.8258
+   },
+   "N05_PSAR_POC_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 2.156,
+    "n": 485,
+    "per_weekday": 0.384,
+    "win": 0.2495,
+    "avgR": 0.2142,
+    "payoff": 3.8742,
+    "growth": 1.2963,
+    "maxdd": -0.6212
+   },
+   "N05_PSAR_POC_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.12,
+    "n": 903,
+    "per_weekday": 0.715,
+    "win": 0.2414,
+    "avgR": -0.0161,
+    "payoff": 3.0742,
+    "growth": -1.1208,
+    "maxdd": -0.8767
+   },
+   "N06_MACD_ORB_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.51,
+    "n": 507,
+    "per_weekday": 0.4014,
+    "win": 0.3057,
+    "avgR": 0.0008,
+    "payoff": 2.2737,
+    "growth": -0.319,
+    "maxdd": -0.5842
+   },
+   "N06_MACD_ORB_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.81,
+    "n": 832,
+    "per_weekday": 0.6587,
+    "win": 0.2981,
+    "avgR": -0.0143,
+    "payoff": 2.3047,
+    "growth": -0.8322,
+    "maxdd": -0.7172
+   },
+   "N07_ICHI_CMO_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.443,
+    "n": 578,
+    "per_weekday": 0.4576,
+    "win": 0.2526,
+    "avgR": 0.1669,
+    "payoff": 3.6279,
+    "growth": 1.1821,
+    "maxdd": -0.5094
+   },
+   "N07_ICHI_CMO_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -0.074,
+    "n": 939,
+    "per_weekday": 0.7435,
+    "win": 0.328,
+    "avgR": 0.0537,
+    "payoff": 2.2196,
+    "growth": 0.4032,
+    "maxdd": -0.589
+   },
+   "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.508,
+    "n": 484,
+    "per_weekday": 0.3832,
+    "win": 0.3285,
+    "avgR": 0.1201,
+    "payoff": 2.428,
+    "growth": 0.6183,
+    "maxdd": -0.5186
+   },
+   "N08_ICHI_WR_at_1h": {
+    "best": 8,
+    "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.628,
+    "n": 214,
+    "per_weekday": 0.1694,
+    "win": 0.1028,
+    "avgR": 0.2459,
+    "payoff": 13.7037,
+    "growth": 0.7672,
+    "maxdd": -0.2693
+   },
+   "N08_ICHI_WR_at_30m": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": -0.49,
+    "n": 476,
+    "per_weekday": 0.3769,
+    "win": 0.1134,
+    "avgR": 0.03,
+    "payoff": 8.4648,
+    "growth": 0.0548,
+    "maxdd": -0.4163
+   },
+   "N09_ALLIG_AROON_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.961,
+    "n": 853,
+    "per_weekday": 0.6754,
+    "win": 0.129,
+    "avgR": 0.1032,
+    "payoff": 9.452,
+    "growth": 1.2562,
+    "maxdd": -0.4087
+   },
+   "N09_ALLIG_AROON_at_1h__core-N09_ALLIG_AROON-1h-1": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.243,
+    "n": 346,
+    "per_weekday": 0.274,
+    "win": 0.3237,
+    "avgR": 0.1301,
+    "payoff": 2.5113,
+    "growth": 0.559,
+    "maxdd": -0.3326
+   },
+   "N09_ALLIG_AROON_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.258,
+    "n": 997,
+    "per_weekday": 0.7894,
+    "win": 0.324,
+    "avgR": -0.046,
+    "payoff": 1.9394,
+    "growth": -1.5475,
+    "maxdd": -0.8426
+   },
+   "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.323,
+    "n": 441,
+    "per_weekday": 0.3492,
+    "win": 0.3583,
+    "avgR": 0.0928,
+    "payoff": 2.0601,
+    "growth": 0.5404,
+    "maxdd": -0.5299
+   },
+   "N10_HA_PSAR_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.052,
+    "n": 818,
+    "per_weekday": 0.6477,
+    "win": 0.2347,
+    "avgR": 0.078,
+    "payoff": 3.5961,
+    "growth": 0.3198,
+    "maxdd": -0.6581
+   },
+   "N10_HA_PSAR_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -1.033,
+    "n": 2290,
+    "per_weekday": 1.8131,
+    "win": 0.1057,
+    "avgR": -0.0392,
+    "payoff": 7.3948,
+    "growth": -2.4526,
+    "maxdd": -0.9583
+   },
+   "N11_BREAKAWAY_at_1h": {
+    "best": null
+   },
+   "N11_BREAKAWAY_at_30m": {
+    "best": 5,
+    "exit_ko": "손절 1.5ATR · 규칙봇 계단",
+    "pass": false,
+    "twin_p90": -0.103,
+    "n": 172,
+    "per_weekday": 0.1362,
+    "win": 0.7384,
+    "avgR": -0.0545,
+    "payoff": 0.2785,
+    "growth": -0.1991,
+    "maxdd": -0.219
+   },
+   "N12_ICHI_AO_at_1h": {
+    "best": 8,
+    "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.987,
+    "n": 965,
+    "per_weekday": 0.7641,
+    "win": 0.0984,
+    "avgR": 0.2181,
+    "payoff": 13.8667,
+    "growth": 2.5307,
+    "maxdd": -0.5852
+   },
+   "N12_ICHI_AO_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.159,
+    "n": 932,
+    "per_weekday": 0.7379,
+    "win": 0.3283,
+    "avgR": 0.0619,
+    "payoff": 2.2459,
+    "growth": 0.5698,
+    "maxdd": -0.5471
+   },
+   "N12_ICHI_AO_at_30m__core-N12_ICHI_AO-30m-3": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.179,
+    "n": 456,
+    "per_weekday": 0.361,
+    "win": 0.2434,
+    "avgR": 0.159,
+    "payoff": 3.7646,
+    "growth": 0.8145,
+    "maxdd": -0.4146
+   },
+   "N13_3OUTSIDE_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.925,
+    "n": 513,
+    "per_weekday": 0.4062,
+    "win": 0.2593,
+    "avgR": 0.1527,
+    "payoff": 3.4495,
+    "growth": 0.9763,
+    "maxdd": -0.5242
+   },
+   "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1": {
+    "best": 22,
+    "exit_ko": "손절 0.75ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 2.388,
+    "n": 615,
+    "per_weekday": 0.4869,
+    "win": 0.0667,
+    "avgR": 0.599,
+    "payoff": 27.1713,
+    "growth": 2.3956,
+    "maxdd": -0.6213
+   },
+   "N13_3OUTSIDE_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.991,
+    "n": 895,
+    "per_weekday": 0.7086,
+    "win": 0.3263,
+    "avgR": 0.0346,
+    "payoff": 2.1766,
+    "growth": 0.0511,
+    "maxdd": -0.6581
+   },
+   "N13_3OUTSIDE_at_30m__core-N13_3OUTSIDE-30m-1": {
+    "best": 8,
+    "exit_ko": "손절 1.5ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 1.352,
+    "n": 518,
+    "per_weekday": 0.4101,
+    "win": 0.1042,
+    "avgR": 0.3407,
+    "payoff": 15.607,
+    "growth": 1.247,
+    "maxdd": -0.6002
+   },
+   "N14_ICHI_RSI_at_1h": {
+    "best": null
+   },
+   "N14_ICHI_RSI_at_30m": {
+    "best": null
+   },
+   "N15_KC_AO_at_1h": {
+    "best": null
+   },
+   "N15_KC_AO_at_30m": {
+    "best": null
+   },
+   "N16_BBRSI_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.392,
+    "n": 523,
+    "per_weekday": 0.4141,
+    "win": 0.3231,
+    "avgR": -0.0635,
+    "payoff": 1.8875,
+    "growth": -0.9091,
+    "maxdd": -0.6944
+   },
+   "N16_BBRSI_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.351,
+    "n": 1160,
+    "per_weekday": 0.9184,
+    "win": 0.2491,
+    "avgR": -0.0452,
+    "payoff": 2.8287,
+    "growth": -2.0476,
+    "maxdd": -0.9392
+   },
+   "N17_KC_RSI_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.22,
+    "n": 692,
+    "per_weekday": 0.5479,
+    "win": 0.3208,
+    "avgR": -0.0463,
+    "payoff": 1.9638,
+    "growth": -0.9649,
+    "maxdd": -0.7724
+   },
+   "N17_KC_RSI_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.798,
+    "n": 1272,
+    "per_weekday": 1.0071,
+    "win": 0.3302,
+    "avgR": -0.0565,
+    "payoff": 1.8486,
+    "growth": -2.0214,
+    "maxdd": -0.9416
+   },
+   "N18_VWMA_MACD_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.785,
+    "n": 788,
+    "per_weekday": 0.6239,
+    "win": 0.2411,
+    "avgR": 0.0914,
+    "payoff": 3.5288,
+    "growth": 0.4903,
+    "maxdd": -0.6338
+   },
+   "N18_VWMA_MACD_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -0.002,
+    "n": 1162,
+    "per_weekday": 0.92,
+    "win": 0.3201,
+    "avgR": 0.0543,
+    "payoff": 2.3007,
+    "growth": 0.4017,
+    "maxdd": -0.5066
+   },
+   "N19_FIB_CHOP_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.726,
+    "n": 447,
+    "per_weekday": 0.3539,
+    "win": 0.2327,
+    "avgR": 0.1351,
+    "payoff": 3.8856,
+    "growth": 0.6405,
+    "maxdd": -0.4517
+   },
+   "N19_FIB_CHOP_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.479,
+    "n": 710,
+    "per_weekday": 0.5622,
+    "win": 0.3127,
+    "avgR": 0.0748,
+    "payoff": 2.4525,
+    "growth": 0.3283,
+    "maxdd": -0.5812
+   },
+   "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1": {
+    "best": 12,
+    "exit_ko": "손절 2ATR · 익절 2ATR",
+    "pass": true,
+    "twin_p90": -0.07,
+    "n": 245,
+    "per_weekday": 0.194,
+    "win": 0.6408,
+    "avgR": 0.1897,
+    "payoff": 0.8572,
+    "growth": 0.8889,
+    "maxdd": -0.1324
+   },
+   "N20_EMA9_CHOP_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": 0.354,
+    "n": 991,
+    "per_weekday": 0.7846,
+    "win": 0.1443,
+    "avgR": 0.0061,
+    "payoff": 6.0728,
+    "growth": -0.1223,
+    "maxdd": -0.5465
+   },
+   "N20_EMA9_CHOP_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.345,
+    "n": 992,
+    "per_weekday": 0.7854,
+    "win": 0.3276,
+    "avgR": -0.0347,
+    "payoff": 1.9404,
+    "growth": -1.1699,
+    "maxdd": -0.7009
+   },
+   "N22_VORTEX_PSAR_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.777,
+    "n": 653,
+    "per_weekday": 0.517,
+    "win": 0.3185,
+    "avgR": 0.0155,
+    "payoff": 2.1907,
+    "growth": -0.2164,
+    "maxdd": -0.5858
+   },
+   "N22_VORTEX_PSAR_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.106,
+    "n": 1234,
+    "per_weekday": 0.977,
+    "win": 0.3169,
+    "avgR": 0.0125,
+    "payoff": 2.1975,
+    "growth": -0.5434,
+    "maxdd": -0.7671
+   },
+   "N23_HA_ST_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.465,
+    "n": 685,
+    "per_weekday": 0.5424,
+    "win": 0.3255,
+    "avgR": 0.0823,
+    "payoff": 2.3373,
+    "growth": 0.6132,
+    "maxdd": -0.5299
+   },
+   "N23_HA_ST_at_1h__core-N23_HA_ST-1h-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.053,
+    "n": 821,
+    "per_weekday": 0.65,
+    "win": 0.2619,
+    "avgR": 0.1496,
+    "payoff": 3.3963,
+    "growth": 1.5127,
+    "maxdd": -0.6132
+   },
+   "N23_HA_ST_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.716,
+    "n": 1235,
+    "per_weekday": 0.9778,
+    "win": 0.3393,
+    "avgR": 0.0888,
+    "payoff": 2.2244,
+    "growth": 1.1455,
+    "maxdd": -0.747
+   },
+   "N24_DMI_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.634,
+    "n": 720,
+    "per_weekday": 0.5701,
+    "win": 0.2611,
+    "avgR": 0.1592,
+    "payoff": 3.4571,
+    "growth": 1.4661,
+    "maxdd": -0.3829
+   },
+   "N24_DMI_at_30m": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -1.15,
+    "n": 1360,
+    "per_weekday": 1.0768,
+    "win": 0.2632,
+    "avgR": 0.0967,
+    "payoff": 3.1719,
+    "growth": 1.2682,
+    "maxdd": -0.8055
+   },
+   "N25_DST_CCI_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.272,
+    "n": 603,
+    "per_weekday": 0.4774,
+    "win": 0.3433,
+    "avgR": 0.0276,
+    "payoff": 1.9976,
+    "growth": -0.0043,
+    "maxdd": -0.7565
+   },
+   "N25_DST_CCI_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.135,
+    "n": 1153,
+    "per_weekday": 0.9129,
+    "win": 0.301,
+    "avgR": -0.0448,
+    "payoff": 2.1646,
+    "growth": -1.6967,
+    "maxdd": -0.8672
+   },
+   "OBV_B_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.619,
+    "n": 767,
+    "per_weekday": 0.6073,
+    "win": 0.2634,
+    "avgR": 0.1451,
+    "payoff": 3.3548,
+    "growth": 1.3164,
+    "maxdd": -0.6105
+   },
+   "OBV_B_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -1.376,
+    "n": 2199,
+    "per_weekday": 1.7411,
+    "win": 0.106,
+    "avgR": -0.0466,
+    "payoff": 7.1553,
+    "growth": -2.6313,
+    "maxdd": -0.9694
+   },
+   "OBV_S_at_1h": {
+    "best": 3,
+    "exit_ko": "손절 1ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 1.444,
+    "n": 989,
+    "per_weekday": 0.7831,
+    "win": 0.088,
+    "avgR": 0.224,
+    "payoff": 14.8327,
+    "growth": 2.5724,
+    "maxdd": -0.5776
+   },
+   "OBV_S_at_1h__core-OBV_S-1h-3": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.625,
+    "n": 626,
+    "per_weekday": 0.4956,
+    "win": 0.2476,
+    "avgR": 0.1526,
+    "payoff": 3.6616,
+    "growth": 1.0599,
+    "maxdd": -0.6365
+   },
+   "OBV_S_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.046,
+    "n": 923,
+    "per_weekday": 0.7308,
+    "win": 0.3131,
+    "avgR": -0.0453,
+    "payoff": 2.0415,
+    "growth": -1.3736,
+    "maxdd": -0.8215
+   },
+   "OBV_S_at_30m__core-OBV_S-30m-2": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -1.398,
+    "n": 1886,
+    "per_weekday": 1.4933,
+    "win": 0.1055,
+    "avgR": -0.0152,
+    "payoff": 8.0449,
+    "growth": -1.1817,
+    "maxdd": -0.7496
+   },
+   "S1_EMA_RSI_CHOP_at_1h": {
+    "best": null
+   },
+   "S1_EMA_RSI_CHOP_at_30m": {
+    "best": null
+   },
+   "S2_ST_ROC_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.89,
+    "n": 634,
+    "per_weekday": 0.502,
+    "win": 0.3344,
+    "avgR": 0.1939,
+    "payoff": 2.6151,
+    "growth": 1.7453,
+    "maxdd": -0.4163
+   },
+   "S2_ST_ROC_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -0.542,
+    "n": 2513,
+    "per_weekday": 1.9897,
+    "win": 0.1043,
+    "avgR": -0.0111,
+    "payoff": 8.2584,
+    "growth": -1.2516,
+    "maxdd": -0.8528
+   },
+   "S3_CMO_SANDWICH_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.222,
+    "n": 454,
+    "per_weekday": 0.3595,
+    "win": 0.2533,
+    "avgR": 0.2486,
+    "payoff": 3.9432,
+    "growth": 1.1486,
+    "maxdd": -0.4962
+   },
+   "S3_CMO_SANDWICH_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": -0.112,
+    "n": 771,
+    "per_weekday": 0.6105,
+    "win": 0.3048,
+    "avgR": -0.0378,
+    "payoff": 2.1505,
+    "growth": -1.0849,
+    "maxdd": -0.7066
+   },
+   "S4_BB_BBP_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.839,
+    "n": 751,
+    "per_weekday": 0.5946,
+    "win": 0.229,
+    "avgR": 0.0502,
+    "payoff": 3.5862,
+    "growth": -0.1844,
+    "maxdd": -0.7358
+   },
+   "S4_BB_BBP_at_1h__core-S4_BB_BBP-1h-2": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.24,
+    "n": 229,
+    "per_weekday": 0.1813,
+    "win": 0.2533,
+    "avgR": 0.2861,
+    "payoff": 4.0781,
+    "growth": 0.9795,
+    "maxdd": -0.3158
+   },
+   "S4_BB_BBP_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.247,
+    "n": 1104,
+    "per_weekday": 0.8741,
+    "win": 0.3071,
+    "avgR": 0.0571,
+    "payoff": 2.4527,
+    "growth": 0.4272,
+    "maxdd": -0.6436
+   },
+   "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": 0.479,
+    "n": 278,
+    "per_weekday": 0.2201,
+    "win": 0.3165,
+    "avgR": 0.1965,
+    "payoff": 2.7861,
+    "growth": 0.7899,
+    "maxdd": -0.3782
+   },
+   "S5_DONCHIAN_MFI_at_1h": {
+    "best": 20,
+    "exit_ko": "손절 2ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.067,
+    "n": 209,
+    "per_weekday": 0.1655,
+    "win": 0.2344,
+    "avgR": 0.1439,
+    "payoff": 3.8964,
+    "growth": 0.2948,
+    "maxdd": -0.5102
+   },
+   "S5_DONCHIAN_MFI_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": true,
+    "twin_p90": -0.047,
+    "n": 370,
+    "per_weekday": 0.293,
+    "win": 0.327,
+    "avgR": 0.044,
+    "payoff": 2.2018,
+    "growth": 0.0544,
+    "maxdd": -0.3414
+   },
+   "S6_EMA_DMI_ADX_at_1h": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 1.23,
+    "n": 437,
+    "per_weekday": 0.346,
+    "win": 0.3295,
+    "avgR": 0.1445,
+    "payoff": 2.5121,
+    "growth": 0.843,
+    "maxdd": -0.5702
+   },
+   "S6_EMA_DMI_ADX_at_30m": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -0.479,
+    "n": 1269,
+    "per_weekday": 1.0048,
+    "win": 0.1221,
+    "avgR": -0.0122,
+    "payoff": 6.8876,
+    "growth": -0.6085,
+    "maxdd": -0.7292
+   },
+   "V39_ALL_at_1h": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.583,
+    "n": 1189,
+    "per_weekday": 0.9414,
+    "win": 0.0976,
+    "avgR": 0.059,
+    "payoff": 10.7663,
+    "growth": 0.6257,
+    "maxdd": -0.4904
+   },
+   "V39_ALL_at_30m": {
+    "best": 21,
+    "exit_ko": "손절 3ATR · 익절 없음",
+    "pass": false,
+    "twin_p90": 0.377,
+    "n": 1061,
+    "per_weekday": 0.8401,
+    "win": 0.3157,
+    "avgR": 0.0088,
+    "payoff": 2.1969,
+    "growth": -0.5193,
+    "maxdd": -0.7793
+   },
+   "V45_AMB_at_1h": {
+    "best": 18,
+    "exit_ko": "손절 3ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": false,
+    "twin_p90": -0.06,
+    "n": 677,
+    "per_weekday": 0.536,
+    "win": 0.1108,
+    "avgR": -0.0399,
+    "payoff": 6.9977,
+    "growth": -0.7284,
+    "maxdd": -0.6648
+   },
+   "V45_AMB_at_30m": {
+    "best": 13,
+    "exit_ko": "손절 2ATR · 익절 없음 · +1ATR 뒤 본전",
+    "pass": true,
+    "twin_p90": 0.02,
+    "n": 1298,
+    "per_weekday": 1.0277,
+    "win": 0.1017,
+    "avgR": 0.0658,
+    "payoff": 10.3757,
+    "growth": 0.8811,
+    "maxdd": -0.5912
+   },
+   "F6_VWAP_FAIL_at_4h#1차": {
+    "best": 83,
+    "exit_ko": "손절 0.75ATR · 익절 없음 · 96봉 · 본전(+1ATR 뒤) (1차)",
+    "twin_p90": 4.511,
+    "pass": false,
+    "n": 649,
+    "per_weekday": 0.5139,
+    "win": 0.0832,
+    "avgR": 0.5074,
+    "payoff": 20.3472,
+    "growth": 3.7203,
+    "maxdd": -0.673
+   }
+  },
+  "passed": [
+   "DOGE_at_1h",
+   "DOGE_at_30m",
+   "DOGE_at_30m__core-DOGE-30m-1",
+   "F10_M2022_at_1h",
+   "F12_MSS_DISP_at_1h",
+   "F12_MSS_DISP_at_30m",
+   "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1",
+   "F15_OPEN0000_at_30m",
+   "F15_ORB_at_30m",
+   "F16_FIB764_at_30m",
+   "F1_MOM_DIV_at_1h",
+   "F3_BOS_at_30m",
+   "F3_HHHL_at_30m",
+   "F4_FAN_at_30m__ds-F4_FAN-30m-3",
+   "F4_PULL_RSI_at_30m",
+   "F5_BOX_RSI_at_30m",
+   "F6_VWAP_CROSS_at_1h",
+   "F7_RF_ONLY_at_1h",
+   "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1",
+   "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+   "F9_IFVG_at_1h",
+   "F9_IFVG_at_30m",
+   "N01_ST_EMA_at_1h",
+   "N01_ST_EMA_at_30m",
+   "N02_ST_KST_at_30m__core-N02_ST_KST-30m-2",
+   "N03_ADX_GC_at_1h",
+   "N03_ADX_GC_at_30m",
+   "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3",
+   "N07_ICHI_CMO_at_30m",
+   "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2",
+   "N08_ICHI_WR_at_1h",
+   "N08_ICHI_WR_at_30m",
+   "N09_ALLIG_AROON_at_1h",
+   "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1",
+   "N12_ICHI_AO_at_1h",
+   "N12_ICHI_AO_at_30m",
+   "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+   "N18_VWMA_MACD_at_30m",
+   "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1",
+   "N23_HA_ST_at_1h",
+   "N23_HA_ST_at_1h__core-N23_HA_ST-1h-1",
+   "N23_HA_ST_at_30m",
+   "N24_DMI_at_1h",
+   "N24_DMI_at_30m",
+   "OBV_B_at_1h",
+   "OBV_S_at_1h",
+   "S2_ST_ROC_at_1h",
+   "S4_BB_BBP_at_30m",
+   "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+   "S5_DONCHIAN_MFI_at_30m",
+   "V39_ALL_at_1h",
+   "V45_AMB_at_30m"
+  ],
+  "A": {
+   "members": [
+    "F15_ORB_at_30m",
+    "F10_M2022_at_1h",
+    "F5_BOX_RSI_at_30m",
+    "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+    "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1",
+    "S5_DONCHIAN_MFI_at_30m",
+    "N03_ADX_GC_at_30m",
+    "N03_ADX_GC_at_1h",
+    "N08_ICHI_WR_at_1h",
+    "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2",
+    "F4_PULL_RSI_at_30m",
+    "F15_OPEN0000_at_30m",
+    "F6_VWAP_CROSS_at_1h",
+    "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+    "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1",
+    "OBV_S_at_1h",
+    "N08_ICHI_WR_at_30m",
+    "V39_ALL_at_1h",
+    "N24_DMI_at_1h",
+    "F12_MSS_DISP_at_30m",
+    "F9_IFVG_at_1h",
+    "DOGE_at_30m",
+    "DOGE_at_1h",
+    "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3"
+   ],
+   "steps": [
+    {
+     "add": "F15_ORB_at_30m",
+     "growth": 3.839,
+     "per_weekday": 0.864,
+     "why": "성장"
+    },
+    {
+     "add": "F10_M2022_at_1h",
+     "growth": 4.904,
+     "per_weekday": 0.819,
+     "why": "성장"
+    },
+    {
+     "add": "F5_BOX_RSI_at_30m",
+     "growth": 5.871,
+     "per_weekday": 0.831,
+     "why": "성장"
+    },
+    {
+     "add": "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+     "growth": 6.662,
+     "per_weekday": 0.911,
+     "why": "성장"
+    },
+    {
+     "add": "N19_FIB_CHOP_at_30m__core-N19_FIB_CHOP-30m-1",
+     "growth": 7.155,
+     "per_weekday": 0.945,
+     "why": "성장"
+    },
+    {
+     "add": "S5_DONCHIAN_MFI_at_30m",
+     "growth": 7.371,
+     "per_weekday": 0.945,
+     "why": "성장"
+    },
+    {
+     "add": "N03_ADX_GC_at_30m",
+     "growth": 8.042,
+     "per_weekday": 0.943,
+     "why": "성장"
+    },
+    {
+     "add": "N03_ADX_GC_at_1h",
+     "growth": 8.313,
+     "per_weekday": 0.96,
+     "why": "성장"
+    },
+    {
+     "add": "N08_ICHI_WR_at_1h",
+     "growth": 8.59,
+     "per_weekday": 0.971,
+     "why": "성장"
+    },
+    {
+     "add": "N07_ICHI_CMO_at_30m__core-N07_ICHI_CMO-30m-2",
+     "growth": 8.59,
+     "per_weekday": 0.964,
+     "why": "성장"
+    },
+    {
+     "add": "F4_PULL_RSI_at_30m",
+     "growth": 8.217,
+     "per_weekday": 1.033,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F15_OPEN0000_at_30m",
+     "growth": 7.746,
+     "per_weekday": 1.055,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F6_VWAP_CROSS_at_1h",
+     "growth": 7.56,
+     "per_weekday": 1.268,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+     "growth": 7.269,
+     "per_weekday": 1.258,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N09_ALLIG_AROON_at_30m__core-N09_ALLIG_AROON-30m-1",
+     "growth": 7.157,
+     "per_weekday": 1.261,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "OBV_S_at_1h",
+     "growth": 6.697,
+     "per_weekday": 1.291,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N08_ICHI_WR_at_30m",
+     "growth": 6.099,
+     "per_weekday": 1.309,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "V39_ALL_at_1h",
+     "growth": 5.676,
+     "per_weekday": 1.345,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N24_DMI_at_1h",
+     "growth": 5.58,
+     "per_weekday": 1.282,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F12_MSS_DISP_at_30m",
+     "growth": 5.598,
+     "per_weekday": 1.265,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F9_IFVG_at_1h",
+     "growth": 6.196,
+     "per_weekday": 1.253,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "DOGE_at_30m",
+     "growth": 6.022,
+     "per_weekday": 1.23,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "DOGE_at_1h",
+     "growth": 5.678,
+     "per_weekday": 1.217,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N03_ADX_GC_at_30m__core-N03_ADX_GC-30m-3",
+     "growth": 5.463,
+     "per_weekday": 1.23,
+     "why": "3번 채우기(통과)"
+    }
+   ]
+  },
+  "V": {
+   "members": [
+    "F6_VWAP_FAIL_at_30m",
+    "N23_HA_ST_at_1h",
+    "N09_ALLIG_AROON_at_1h",
+    "F10_M2022_at_1h",
+    "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+    "F6_VWAP_CROSS_at_1h",
+    "N03_ADX_GC_at_30m",
+    "F15_ORB_at_30m",
+    "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+    "DOGE_at_1h",
+    "F16_FIB764_at_30m",
+    "F4_PULL_RSI_at_30m",
+    "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1",
+    "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1",
+    "N12_ICHI_AO_at_1h",
+    "F5_BOX_RSI_at_30m",
+    "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+    "N03_ADX_GC_at_1h",
+    "N08_ICHI_WR_at_1h",
+    "DOGE_at_30m__core-DOGE-30m-1",
+    "S2_ST_ROC_at_1h",
+    "N24_DMI_at_1h",
+    "V39_ALL_at_1h",
+    "F9_IFVG_at_1h"
+   ],
+   "steps": [
+    {
+     "add": "N23_HA_ST_at_1h",
+     "growth": 1.193,
+     "per_weekday": 0.692,
+     "why": "성장"
+    },
+    {
+     "add": "N09_ALLIG_AROON_at_1h",
+     "growth": 2.2,
+     "per_weekday": 0.709,
+     "why": "성장"
+    },
+    {
+     "add": "F10_M2022_at_1h",
+     "growth": 2.31,
+     "per_weekday": 0.707,
+     "why": "성장"
+    },
+    {
+     "add": "S4_BB_BBP_at_30m__core-S4_BB_BBP-30m-1",
+     "growth": 2.636,
+     "per_weekday": 0.716,
+     "why": "성장"
+    },
+    {
+     "add": "F6_VWAP_CROSS_at_1h",
+     "growth": 3.015,
+     "per_weekday": 0.79,
+     "why": "성장"
+    },
+    {
+     "add": "N03_ADX_GC_at_30m",
+     "growth": 3.444,
+     "per_weekday": 0.796,
+     "why": "성장"
+    },
+    {
+     "add": "F15_ORB_at_30m",
+     "growth": 3.829,
+     "per_weekday": 0.806,
+     "why": "성장"
+    },
+    {
+     "add": "F9_FVG_at_1h__ds-F9_FVG-1h-1",
+     "growth": 4.04,
+     "per_weekday": 0.828,
+     "why": "성장"
+    },
+    {
+     "add": "DOGE_at_1h",
+     "growth": 4.194,
+     "per_weekday": 0.819,
+     "why": "성장"
+    },
+    {
+     "add": "F16_FIB764_at_30m",
+     "growth": 4.686,
+     "per_weekday": 0.806,
+     "why": "성장"
+    },
+    {
+     "add": "F4_PULL_RSI_at_30m",
+     "growth": 5.133,
+     "per_weekday": 0.809,
+     "why": "성장"
+    },
+    {
+     "add": "F7_RF_TRIPLE_at_1h__ds-F7_RF_TRIPLE-1h-1",
+     "growth": 5.391,
+     "per_weekday": 0.818,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F15_LON_BRK_at_1h__ds-F15_LON_BRK-1h-1",
+     "growth": 5.59,
+     "per_weekday": 0.81,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N12_ICHI_AO_at_1h",
+     "growth": 5.833,
+     "per_weekday": 0.822,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F5_BOX_RSI_at_30m",
+     "growth": 5.92,
+     "per_weekday": 0.82,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N13_3OUTSIDE_at_1h__core-N13_3OUTSIDE-1h-1",
+     "growth": 5.975,
+     "per_weekday": 0.821,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N03_ADX_GC_at_1h",
+     "growth": 6.015,
+     "per_weekday": 0.822,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N08_ICHI_WR_at_1h",
+     "growth": 6.015,
+     "per_weekday": 0.822,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "DOGE_at_30m__core-DOGE-30m-1",
+     "growth": 6.011,
+     "per_weekday": 0.834,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "S2_ST_ROC_at_1h",
+     "growth": 6.15,
+     "per_weekday": 0.826,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "N24_DMI_at_1h",
+     "growth": 6.168,
+     "per_weekday": 0.826,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "V39_ALL_at_1h",
+     "growth": 6.44,
+     "per_weekday": 0.825,
+     "why": "3번 채우기(통과)"
+    },
+    {
+     "add": "F9_IFVG_at_1h",
+     "growth": 6.447,
+     "per_weekday": 0.824,
+     "why": "3번 채우기(통과)"
+    }
+   ]
+  },
+  "step3": {
+   "A": {
+    "select": {
+     "n": 1554,
+     "growth": 5.4631,
+     "growth_yr": 1.1292,
+     "ruin": false,
+     "per_weekday": 1.2304,
+     "per_day": 0.8795,
+     "win": 0.1963,
+     "avgR": 0.3104,
+     "avg_winR": 4.2745,
+     "avg_lossR": -0.6576,
+     "payoff": 6.4997,
+     "pf": 1.5872,
+     "avg_win_pct": 9.8169,
+     "avg_loss_pct": -1.5974,
+     "mult": 235.8178,
+     "cagr": 2.0933,
+     "maxdd": -0.6156,
+     "mon_median": 0.0373,
+     "mon_x6": 0.0,
+     "mon_worst": -0.266,
+     "mon_best": 3.1165,
+     "mon_pos": 0.5424,
+     "months": 59,
+     "lev_med": 0.9559
+    },
+    "sizing": [
+     {
+      "r": 0.005,
+      "ruin": false,
+      "mult": 7.4295,
+      "cagr": 0.5137,
+      "maxdd": -0.1884,
+      "mon_median": 0.0119,
+      "mon_x6": 0.0,
+      "mon_worst": -0.0728,
+      "mon_best": 0.6963,
+      "lev_med": 0.239
+     },
+     {
+      "r": 0.01,
+      "ruin": false,
+      "mult": 32.3281,
+      "cagr": 1.0513,
+      "maxdd": -0.3548,
+      "mon_median": 0.0221,
+      "mon_x6": 0.0,
+      "mon_worst": -0.1413,
+      "mon_best": 1.4487,
+      "lev_med": 0.4779
+     },
+     {
+      "r": 0.02,
+      "ruin": false,
+      "mult": 235.8178,
+      "cagr": 2.0933,
+      "maxdd": -0.6156,
+      "mon_median": 0.0373,
+      "mon_x6": 0.0,
+      "mon_worst": -0.266,
+      "mon_best": 3.1165,
+      "lev_med": 0.9559
+     },
+     {
+      "r": 0.03,
+      "ruin": false,
+      "mult": 706.4506,
+      "cagr": 2.8808,
+      "maxdd": -0.7873,
+      "mon_median": 0.0458,
+      "mon_x6": 0.0,
+      "mon_worst": -0.3753,
+      "mon_best": 4.9914,
+      "lev_med": 1.4338
+     },
+     {
+      "r": 0.05,
+      "ruin": false,
+      "mult": 920.2419,
+      "cagr": 3.0988,
+      "maxdd": -0.9469,
+      "mon_median": 0.0434,
+      "mon_x6": 0.0169,
+      "mon_worst": -0.5536,
+      "mon_best": 9.3023,
+      "lev_med": 2.3897
+     },
+     {
+      "r": 0.075,
+      "ruin": false,
+      "mult": 80.4644,
+      "cagr": 1.4769,
+      "maxdd": -0.9934,
+      "mon_median": 0.0077,
+      "mon_x6": 0.0339,
+      "mon_worst": -0.7136,
+      "mon_best": 15.551,
+      "lev_med": 3.5846
+     },
+     {
+      "r": 0.1,
+      "ruin": false,
+      "mult": 0.6109,
+      "cagr": -0.0969,
+      "maxdd": -0.9995,
+      "mon_median": -0.0575,
+      "mon_x6": 0.0508,
+      "mon_worst": -0.8211,
+      "mon_best": 22.4363,
+      "lev_med": 4.7794
+     },
+     {
+      "r": 0.15,
+      "ruin": false,
+      "mult": 0.0,
+      "cagr": -0.9649,
+      "maxdd": -1.0,
+      "mon_median": -0.253,
+      "mon_x6": 0.0508,
+      "mon_worst": -0.9355,
+      "mon_best": 36.5928,
+      "lev_med": 7.1691
+     },
+     {
+      "r": 0.2,
+      "ruin": false,
+      "mult": 0.0,
+      "cagr": -0.9997,
+      "maxdd": -1.0,
+      "mon_median": -0.4535,
+      "mon_x6": 0.0508,
+      "mon_worst": -0.9791,
+      "mon_best": 48.7841,
+      "lev_med": 9.5589
+     },
+     {
+      "r": "rb9",
+      "ruin": true,
+      "mult": 0.0,
+      "cagr": -1.0,
+      "maxdd": -1.0,
+      "mon_median": -0.5936,
+      "mon_x6": 0.0508,
+      "mon_worst": -1.0,
+      "mon_best": 92.0466,
+      "lev_med": 9.0
+     },
+     {
+      "r": "owners",
+      "ruin": true,
+      "mult": 0.0,
+      "cagr": -1.0,
+      "maxdd": -1.0,
+      "mon_median": -0.8766,
+      "mon_x6": 0.0508,
+      "mon_worst": -1.0,
+      "mon_best": 43.0012,
+      "lev_med": 12.0
+     }
+    ]
+   },
+   "V": {
+    "select": {
+     "n": 1041,
+     "growth": 6.4475,
+     "growth_yr": 1.3327,
+     "ruin": false,
+     "per_weekday": 0.8242,
+     "per_day": 0.5891,
+     "win": 0.3007,
+     "avgR": 0.3804,
+     "avg_winR": 3.0529,
+     "avg_lossR": -0.7687,
+     "payoff": 3.9717,
+     "pf": 1.7076,
+     "avg_win_pct": 8.1746,
+     "avg_loss_pct": -2.3372,
+     "mult": 631.1193,
+     "cagr": 2.7914,
+     "maxdd": -0.4068,
+     "mon_median": 0.0692,
+     "mon_x6": 0.0,
+     "mon_worst": -0.2446,
+     "mon_best": 1.5473,
+     "mon_pos": 0.7458,
+     "months": 59,
+     "lev_med": 0.7807
+    },
+    "sizing": [
+     {
+      "r": 0.005,
+      "ruin": false,
+      "mult": 6.5205,
+      "cagr": 0.4734,
+      "maxdd": -0.1159,
+      "mon_median": 0.0207,
+      "mon_x6": 0.0,
+      "mon_worst": -0.0663,
+      "mon_best": 0.3234,
+      "lev_med": 0.1952
+     },
+     {
+      "r": 0.01,
+      "ruin": false,
+      "mult": 35.1644,
+      "cagr": 1.0873,
+      "maxdd": -0.2204,
+      "mon_median": 0.0399,
+      "mon_x6": 0.0,
+      "mon_worst": -0.1291,
+      "mon_best": 0.6879,
+      "lev_med": 0.3903
+     },
+     {
+      "r": 0.02,
+      "ruin": false,
+      "mult": 631.1193,
+      "cagr": 2.7914,
+      "maxdd": -0.4068,
+      "mon_median": 0.0692,
+      "mon_x6": 0.0,
+      "mon_worst": -0.2446,
+      "mon_best": 1.5473,
+      "lev_med": 0.7807
+     },
+     {
+      "r": 0.03,
+      "ruin": false,
+      "mult": 6557.1025,
+      "cagr": 5.1509,
+      "maxdd": -0.5738,
+      "mon_median": 0.0956,
+      "mon_x6": 0.0,
+      "mon_worst": -0.3473,
+      "mon_best": 2.5909,
+      "lev_med": 1.171
+     },
+     {
+      "r": 0.05,
+      "ruin": false,
+      "mult": 184845.7497,
+      "cagr": 11.2654,
+      "maxdd": -0.804,
+      "mon_median": 0.1199,
+      "mon_x6": 0.0169,
+      "mon_worst": -0.5183,
+      "mon_best": 5.2706,
+      "lev_med": 1.9516
+     },
+     {
+      "r": 0.075,
+      "ruin": false,
+      "mult": 1545859.5084,
+      "cagr": 18.0257,
+      "maxdd": -0.9384,
+      "mon_median": 0.1189,
+      "mon_x6": 0.0169,
+      "mon_worst": -0.6773,
+      "mon_best": 9.7905,
+      "lev_med": 2.9274
+     },
+     {
+      "r": 0.1,
+      "ruin": false,
+      "mult": 1997730.1293,
+      "cagr": 19.0614,
+      "maxdd": -0.9838,
+      "mon_median": 0.0991,
+      "mon_x6": 0.0169,
+      "mon_worst": -0.7887,
+      "mon_best": 15.6145,
+      "lev_med": 3.9033
+     },
+     {
+      "r": 0.15,
+      "ruin": false,
+      "mult": 33560.8014,
+      "cagr": 7.6202,
+      "maxdd": -0.9993,
+      "mon_median": 0.0177,
+      "mon_x6": 0.0508,
+      "mon_worst": -0.9153,
+      "mon_best": 30.6661,
+      "lev_med": 5.8549
+     },
+     {
+      "r": 0.2,
+      "ruin": false,
+      "mult": 3.1032,
+      "cagr": 0.2637,
+      "maxdd": -1.0,
+      "mon_median": -0.1547,
+      "mon_x6": 0.0847,
+      "mon_worst": -0.969,
+      "mon_best": 48.4517,
+      "lev_med": 7.8065
+     },
+     {
+      "r": "rb9",
+      "ruin": true,
+      "mult": 0.0,
+      "cagr": -1.0,
+      "maxdd": -1.0,
+      "mon_median": -0.4465,
+      "mon_x6": 0.0678,
+      "mon_worst": -1.0,
+      "mon_best": 51.3729,
+      "lev_med": 9.0
+     },
+     {
+      "r": "owners",
+      "ruin": true,
+      "mult": 0.0,
+      "cagr": -1.0,
+      "maxdd": -1.0,
+      "mon_median": -0.7992,
+      "mon_x6": 0.0339,
+      "mon_worst": -1.0,
+      "mon_best": 12.0518,
+      "lev_med": 12.0
+     }
+    ]
+   }
+  },
+  "luck19": {
+   "labels": 184,
+   "stretches": 2408,
+   "top_q": {
+    "0.1": 0.589,
+    "0.25": 0.806,
+    "0.5": 1.187,
+    "0.75": 1.765,
+    "0.9": 2.774
+   },
+   "share_top_ge_0686": 0.833,
+   "median_label_median": -0.438,
+   "top_next19_median": -0.544,
+   "top_next19_pos": 0.136,
+   "live_days": 16,
+   "live_1006_end_top5": [
+    [
+     "V39_ALL_at_1h",
+     0.929
+    ],
+    [
+     "F1_PVT_DIV_at_1h",
+     0.598
+    ],
+    [
+     "N05_PSAR_POC_at_30m",
+     0.455
+    ],
+    [
+     "N04_ST_KLINGER_at_1h__core-N04_ST_KLINGER-1h-3",
+     0.433
+    ],
+    [
+     "N12_ICHI_AO_at_30m",
+     0.334
+    ]
+   ],
+   "live_vwap_rank": 7,
+   "share_topL_ge_live_top": 0.666,
+   "topL_median": 1.167
+  },
+  "n_configs": 8832
+ }
+}
