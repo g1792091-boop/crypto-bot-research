@@ -76,7 +76,7 @@ def tw(tmp_path, monkeypatch):
     _old_trade(w.cfg.db)
     no = str(tmp_path / "none")
     p = {"paper": w.cfg.db, "paper2": no + "-p2.db", "bybit_db": no + "-b.db", "mexc_db": no + "-m.db",
-         "bybit_config": no + "-b.json", "mexc_config": no + "-m.json"}
+         "bybit_config": no + "-b.json", "mexc_config": no + "-m.json", "flipster_db": no + "-f.db", "flipster_config": no + "-f.json"}
     more = {**L.paths_more(), "combo_config": "/nonexistent/combo.json", "check_db": no + "-check.db", "improve_db": no + "-imp.db",
             "rule_db": w.cfg.paper_db, "shadow_dir": no}
     for k, (var, _d) in L.ENV.items():

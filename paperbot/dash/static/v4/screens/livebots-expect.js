@@ -19,7 +19,7 @@
 // Two different paper bots (owners 10/23): an executor's numbers here are only its trades on the 추세판단 봇 (the server's
 // era); one that follows, or followed, the 'VWAP 개선판' says so on its card instead of the twin-era note.
 import {h, s, put, ui, fmt, serverNow} from "../core/pb.js";
-import {acctKo, sourceState, eraWords} from "./livebots-kit.js";
+import {acctKo, sourceState, eraWords, execsKo} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/replayref";
 const REFRESH_MS = 60 * 1000;
@@ -208,7 +208,7 @@ export function expectView(ctx) {
         zoomSeg, curveBox)));
   const foot = h("div", {class: "lb-foot"},
     ui.assumeLine(["closed"], "페이퍼(연습) 손익은 진짜 돈이 아니에요 · 재현 = 지난 기간을 규칙 그대로 다시 계산한 가상 결과(실제 체결 아님)"),
-    ui.assumeLive("바이비트 · WOO X Pro: 새 규칙 시작 뒤 들어간 거래만 셈 · 실제 돈은 실행기가 메인넷일 때만"));
+    ui.assumeLive(`${execsKo()}: 새 규칙 시작 뒤 들어간 거래만 셈 · 실제 돈은 실행기가 메인넷일 때만`));
   const body = h("div", {class: "lex-body"}, hero, cards, foot);
   const el = h("div", {class: "lex stack"}, stateSlot, body);
 
@@ -234,8 +234,9 @@ export function expectView(ctx) {
     hsub.textContent = "새 규칙이 재현(가상)처럼 가고 있나요? · 핵심은 아래 비용 쪼개기";
     const ref = d.ref || {};
     const w = ref.window_kst || [];
+    const rx = (d.results || {}).execs || [];               // (the third executor, 플립스터, while the server has it)
     put(win, ui.pill("가상(재현)", "warn"), ` ${w[0] || "—"} ~ ${w[1] || "—"} (한국 시간) · 바이낸스 1분봉으로 규칙 그대로 다시 돌린 결과   `,
-      ui.pill("실제", "accent"), ` 새 규칙 시작 ${fmt.kst(d.since)} 뒤 · 페이퍼와 두 실행기${((d.results || {}).execs || []).some((x) => x.era) ? " (추세판단 봇을 따라간 거래만)" : ""}`);
+      ui.pill("실제", "accent"), ` 새 규칙 시작 ${fmt.kst(d.since)} 뒤 · 페이퍼와 ${rx.length > 2 ? "세" : "두"} 실행기${rx.some((x) => x.era) ? " (추세판단 봇을 따라간 거래만)" : ""}`);
     put(tiles, accounts().map((a) => {
       const r = a.rec || {};
       if (a.state !== "ok") {

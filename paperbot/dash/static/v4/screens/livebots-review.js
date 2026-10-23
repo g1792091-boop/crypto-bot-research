@@ -17,7 +17,7 @@
 // virtual result carries 가상; under 20 trades 표본 적음: 대부분 운; what could not be worked out says why (못 함 /
 // 수집 전), never a zero; a failed refresh keeps the last answer dimmed with its age.
 import {h, s, put, ui, fmt, serverNow, href} from "../core/pb.js";
-import {acctKo, sourceState, mainFollowKo, josaObj} from "./livebots-kit.js";
+import {acctKo, sourceState, mainFollowKo, josaObj, execsKo} from "./livebots-kit.js";
 
 const KICK = "2주 검토 · 추세판단 봇 · 바이비트 · WOO X Pro가 따라가는 페이퍼(연습)";
 /** The hero's kicker: who follows the trend bot (two paper bots, owners 10/23: only its own followers; one: as before). */
@@ -188,7 +188,7 @@ export function reviewView(ctx, hub) {
       ui.card({title: "검토 날 볼 것", sub: "순서대로 · 지금 어디쯤인지 같이 적었어요", cls: "lrv-ccard"}, checkBox)));
   const foot = h("div", {class: "lb-foot"},
     ui.assumeLine(["closed"], "페이퍼(연습) 손익은 진짜 돈이 아니에요 · 가상 = 1분봉으로 다시 계산한 결과(실제 체결 아님)"),
-    ui.assumeLive("바이비트 · WOO X Pro: 새 규칙 시작 뒤 들어간 거래만 셈"));
+    ui.assumeLive(`${execsKo()}: 새 규칙 시작 뒤 들어간 거래만 셈`));
   const body = h("div", {class: "lrv-body"}, hero, cards, foot);
   const el = h("div", {class: "lrv stack"}, stateSlot, body);
 

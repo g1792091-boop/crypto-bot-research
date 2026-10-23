@@ -211,7 +211,7 @@ def exec_since(p: dict, since: int, now: int) -> list:
     trades, ``other`` says which bot it follows now, since when and how many of its trades are that bot's), their names
     from their configs."""
     from ... import livepapers as LP
-    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
+    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.installed(p)}
     out = []
     for ex, ko, dk, ck in L.slots(configs):
         r = L.read_exec(p[dk], now)

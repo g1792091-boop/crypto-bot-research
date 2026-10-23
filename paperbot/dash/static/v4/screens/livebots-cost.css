@@ -4,6 +4,7 @@
 .lbk-body { min-width: 0; }
 .lbk-a-bybit { --lbk-c: var(--series-core); }
 .lbk-a-mexc { --lbk-c: var(--series-m5); }
+.lbk-a-flipster { --lbk-c: var(--series-fl); }
 .lbk-intro { margin: 0 2px; font-size: var(--t-sm); line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
 .lbk-intro b { font-weight: 800; }
 :root:not([data-skin="classic"]) .lbk-intro b { text-shadow: 0 0 14px var(--head-glow); }

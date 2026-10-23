@@ -4,9 +4,10 @@
 // every time it turned red (or could not read the paper), the halt log, and its WARN / CRITICAL log, 10 a page. Between
 // them the live checks (livebots-checks.js, livecheck.db): 아침 점검 of the last 14 days and the watcher's 감시 알람.
 // HONESTY: the executors' own records only; an executor that could not be read says 못 읽음 and why; the page changes
-// nothing (no 'clear halt' button: that stays a command on the server, with a name and a note).
+// nothing (no 'clear halt' button: that stays a command on the server, with a name and a note). The third executor
+// (플립스터, owners 10/23) has its card and its log choice while the server has it (livebots-kit.js execIds).
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
-import {lightRow, sourceState, notesEl} from "./livebots-kit.js";
+import {lightRow, sourceState, notesEl, acctKo, execIds, execsNow, execsKo} from "./livebots-kit.js";
 import {checksView} from "./livebots-checks.js";
 
 const REFRESH_MS = 30 * 1000;
@@ -16,14 +17,18 @@ export function safetyView(ctx) {
   const st = {d: null, okAt: 0, ex: local.get("lb-sex", "all")};
   const stateSlot = h("div", {class: "lb-slot"});
   const cards = h("div", {class: "lb-safe"});
-  const exSeg = ui.seg([{id: "all", label: "전부"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}], st.ex, (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); },
-    {label: "실행기 고르기"});
+  // the log's choice: every executor of the answer (rebuilt in place when the third, 플립스터, comes: draw)
+  const segOf = (ids) => ui.seg([{id: "all", label: "전부"}, ...ids.map((id) => ({id, label: acctKo(id)}))], st.ex,
+    (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); }, {label: "실행기 고르기"});
+  const logSub = (ids) => `실행기 ${ids.length > 2 ? "세" : "두"} 개 · 거래소 요청 재시도는 뺌 · 10개씩`;
+  let exIds = execsNow(), exSeg = segOf(exIds);
   const pg = ui.pager({size: 10, row: (e) => evRow(e), empty: () => (st.d ? ui.empty("주의 · 긴급 기록이 아직 없어요") : motion.shimmer(3))});
   const checks = checksView();
+  const logCard = ui.card({title: "주의 · 긴급 기록", sub: logSub(exIds), cls: "lb-logcard", acts: [exSeg]}, pg.el);
   const el = h("div", {class: "lb-safety stack"}, stateSlot, cards, checks.el,
-    ui.card({title: "주의 · 긴급 기록", sub: "실행기 두 개 · 거래소 요청 재시도는 뺌 · 10개씩", cls: "lb-logcard", acts: [exSeg]}, pg.el),
+    logCard,
     ui.note("멈춤 풀기는 이 화면에 없어요: 서버에서 이름과 메모를 남기는 명령으로만 풀어요 (clear-halt)"),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro 실행기 기록"), ui.assumeLine(["closed"], "아침 점검의 페이퍼 손익")));
+    h("div", {class: "lb-foot"}, ui.assumeLive(`${execsKo()} 실행기 기록`), ui.assumeLine(["closed"], "아침 점검의 페이퍼 손익")));
 
   function evRow(e) {
     return h("div", {class: "lb-ev", role: "listitem"},
@@ -65,6 +70,16 @@ export function safetyView(ctx) {
   function draw() {
     const d = st.d;
     if (!d) { put(cards, motion.shimmer(4)); drawLog(false); checks.set(null); return; }
+    const ids = execIds(d);
+    if (ids.join() !== exIds.join()) {
+      exIds = ids;
+      if (st.ex !== "all" && !ids.includes(st.ex)) st.ex = "all";
+      const nx = segOf(ids);
+      exSeg.replaceWith(nx);
+      exSeg = nx;
+      const sub = logCard.firstChild && Array.from(logCard.firstChild.childNodes).find((n) => String(n.className || "") === "sub");
+      if (sub) sub.textContent = logSub(ids);
+    }
     put(cards, (d.execs || []).map(card));
     checks.set(d.checks || {state: "missing", reason_ko: "서버가 점검 기록을 보내지 않았어요"});
     drawLog(false);

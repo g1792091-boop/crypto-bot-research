@@ -12,7 +12,7 @@
 // HONESTY: what is not recorded is said (never a 0); paper (연습) and real (진짜 돈) money carry their own captions; a
 // failed refresh keeps the last answer dimmed with its age.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, execsNow, execsKo} from "./livebots-kit.js";
 
 export const RISK_API = "/api/v4/livebots/risk";
 const REFRESH_MS = 30 * 1000;
@@ -60,9 +60,9 @@ export function riskView(ctx) {
   const kill = h("div", {class: "lbv-slot"});
   const body = h("div", {class: "lbv-body stack"}, head, cards,
     ui.card({title: "손절이 연달아 오면", sub: "설정의 증거금 · 손절로 계산 (복리)", cls: "lbv-card lbv-next"}, table),
-    ui.card({title: "비상 정지", sub: "두 실행기를 한 번에 멈추는 파일", cls: "lbv-card lbv-kill"}, kill),
+    ui.card({title: "비상 정지", sub: `${execsNow().length > 2 ? "세" : "두"} 실행기를 한 번에 멈추는 파일`, cls: "lbv-card lbv-kill"}, kill),
     h("div", {class: "lb-foot"}, ui.assumeLine(["open"], "페이퍼(연습): 손절 손익은 잠금 계산과 같은 순ROE 식"),
-      ui.assumeLive("바이비트 · WOO X Pro: 손절 손익은 거래소 기본 수수료로 어림")));
+      ui.assumeLive(`${execsKo()}: 손절 손익은 거래소 기본 수수료로 어림`)));
   const el = h("div", {class: "lbv stack"}, stateSlot, body);
 
   function acctCard(a) {
@@ -105,7 +105,7 @@ export function riskView(ctx) {
     const k = d.kill || {};
     put(kill, h("div", {class: "lbv-files"}, (k.files || []).map((f) => h("p", {class: ["lbv-file", f.present ? "on" : ""]},
       h("i", {class: "lbv-dot", "aria-hidden": "true"}), h("span", null, "비상 정지 파일"),
-      f.present ? h("b", null, "있음 · 두 실행기 멈춤") : h("b", null, "없음"), ` ${f.path}`,
+      f.present ? h("b", null, `있음 · ${execsNow().length > 2 ? "세" : "두"} 실행기 멈춤`) : h("b", null, "없음"), ` ${f.path}`,
       f.from_config ? null : h("small", {class: "muted"}, " (실행기 설정을 못 읽어 기본 경로)")))),
     h("p", {class: "lbv-what"}, k.what_ko || ""),
     h("div", {class: "lbv-cmd"}, h("span", {class: "muted"}, "멈추는 명령 (서버에서)"), h("code", null, k.cmd || "sudo touch /var/lib/paperbot/STOP")));

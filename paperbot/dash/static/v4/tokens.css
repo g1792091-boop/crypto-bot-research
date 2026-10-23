@@ -156,6 +156,8 @@
   --series-ds: var(--term-cyan);
   --series-m5: hsl(300 var(--av-s) var(--av-ring-l));
   --series-coin: var(--ink-2);
+  /* the 실거래 site's third executor (플립스터, owners 10/23; screens/livebots*.css): one more avatar hue, both skins */
+  --series-fl: hsl(20 var(--av-s) var(--av-ring-l));
   /* 매매법 비교 (conv-b, screens/compare.js): the 2-4 picks' lines, each also named and drawn in its own dash; they
      follow the skin through the tokens they point at (never up / down) */
   --pick-1: var(--series-core);

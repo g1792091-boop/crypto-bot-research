@@ -97,7 +97,8 @@ def world(tmp_path_factory):
     w, now = RV._world(folder)
     db, cfg = _bybit(str(folder), w, now)
     p = {"paper": w.cfg.db, "paper2": str(folder / "none2.db"), "bybit_db": db, "bybit_config": cfg,
-         "mexc_db": str(folder / "none-mexc.db"), "mexc_config": str(folder / "none-mexc.json")}
+         "mexc_db": str(folder / "none-mexc.db"), "mexc_config": str(folder / "none-mexc.json"),
+         "flipster_db": str(folder / "none-flipster.db"), "flipster_config": str(folder / "none-flipster.json")}
     clock = {"t": now}
     fetch = TCT.Fetch(clock)
     b = TC.Bars(fetch, lambda: clock["t"])

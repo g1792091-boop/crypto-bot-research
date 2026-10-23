@@ -13,6 +13,8 @@
     PAPERBOT_LIVE_MEXC_DB       /var/lib/paperbot/exec/executor-mexc-live.db    MEXC 실행기
     PAPERBOT_LIVE_BYBIT_CONFIG  /etc/paperbot/executor.json                     (키 없음: 계좌 · 신호등 · 크기 비율 · 위험 한도만 씀)
     PAPERBOT_LIVE_MEXC_CONFIG   /etc/paperbot/executor-mexc.json
+    PAPERBOT_LIVE_FLIPSTER_DB   /var/lib/paperbot/exec/executor-flipster-live.db 플립스터 실행기 (세 번째, 설치됐을 때만 보임)
+    PAPERBOT_LIVE_FLIPSTER_CONFIG /etc/paperbot/executor-flipster.json
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
@@ -45,6 +47,10 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 그때 따라간 페이퍼의 거래와만 비교해요. 두 실행기가 같은 페이퍼를 따라가면(10/20 상태) 모든 것이 예전과 같아요. 두 번째 페이퍼 봇
 (PAPERBOT_LIVE_PAPER2_DB) 파일이 있거나 실행기가 다른 페이퍼를 따라가면 그 페이퍼도 계좌 하나로 보여요(``paper2``).
 
+세 번째 실행기 (owners 10-23, docs/flipster-ko.md: 플립스터가 'VWAP 개선판'을 따라감): 그 칸(``flipster``)은 이 서버에 설치됐을 때만,
+곧 그 설정 파일(PAPERBOT_LIVE_FLIPSTER_CONFIG)이나 그 DB(PAPERBOT_LIVE_FLIPSTER_DB) 중 하나라도 있을 때만 모든 화면에 나와요
+(``installed``; 실거래 점검 paperbot/livecheck.py와 같은 규칙). 둘 다 없으면 화면 · 답은 예전 그대로(실행기 두 개)예요.
+
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
 from __future__ import annotations
@@ -73,16 +79,24 @@ ENV = {
     "mexc_db": ("PAPERBOT_LIVE_MEXC_DB", "/var/lib/paperbot/exec/executor-mexc-live.db"),
     "bybit_config": ("PAPERBOT_LIVE_BYBIT_CONFIG", "/etc/paperbot/executor.json"),
     "mexc_config": ("PAPERBOT_LIVE_MEXC_CONFIG", "/etc/paperbot/executor-mexc.json"),
+    # the third slot (owners 10-23: Flipster follows the 'VWAP 개선판' paper bot, docs/flipster-ko.md): on the page only
+    # once it is installed (``installed``)
+    "flipster_db": ("PAPERBOT_LIVE_FLIPSTER_DB", "/var/lib/paperbot/exec/executor-flipster-live.db"),
+    "flipster_config": ("PAPERBOT_LIVE_FLIPSTER_CONFIG", "/etc/paperbot/executor-flipster.json"),
 }
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
 # the live watcher reports a second bot only from the VWAP default (livecheck.paper2_default), never this old one.
 LEGACY_PAPER2 = "/var/lib/paperbot/combo/live15-mexc.db"
-# (id, Korean name, db key, config key)
+# (id, Korean name, db key, config key): the two slots every page has
 EXECS = (("bybit", "바이비트", "bybit_db", "bybit_config"), ("mexc", "MEXC", "mexc_db", "mexc_config"))
+# the slots a server has only once they are installed (``installed``: their config file or their database is there);
+# owners 10-23: the third, 플립스터, follows the 'VWAP 개선판' paper bot (docs/flipster-ko.md)
+OPTIONAL_EXECS = (("flipster", "플립스터", "flipster_db", "flipster_config"),)
+ALL_EXECS = EXECS + OPTIONAL_EXECS
 # the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
 # and config path stay "mexc" so every page and check keeps working)
-EX_NAME = {"bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "binance": "바이낸스"}
+EX_NAME = {"bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "binance": "바이낸스", "flipster": "플립스터"}
 LIGHT_N_DEFAULT = 0                    # executor.ExecConfig.signal_light_n: 0 = the light is off
 LIGHT_MIN_DEFAULT = 0.85               # executor.ExecConfig.signal_light_min_win
 MATCH_MS = 5 * 60_000                  # a live trade and a paper trade of the same coin and side within 5 minutes
@@ -187,12 +201,26 @@ def paths(env: Optional[dict] = None) -> dict:
     out = {k: (env.get(var) or default) for k, (var, default) in ENV.items()}
     if not env.get(ENV["paper2"][0]) and not os.path.exists(out["paper2"]) and os.path.exists(LEGACY_PAPER2):
         out["paper2"] = LEGACY_PAPER2          # before the VWAP bot's file is there: the page as it was (the -35 % bot)
-    for _ex, _ko, dk, ck in EXECS:
+    for _ex, _ko, dk, ck in ALL_EXECS:
         if not env.get(ENV[dk][0]):
             db = _config_db(out[ck])
             if db:
                 out[dk] = db
     return out
+
+
+def installed(p: dict) -> tuple:
+    """The executor slots of this server, in EXECS order: the two first always; an optional slot (the third, 플립스터)
+    once its config file or its database is there (``p``: paths()). Neither there: the pages, the answers, the checks and
+    the messages are as they were with two executors."""
+    return EXECS + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2])))
+
+
+def shown_paths(p: dict) -> dict:
+    """``p`` as an answer shows it: an optional slot's two paths only once it is installed (else as it was)."""
+    have = {s[0] for s in installed(p)}
+    drop = {k for s in OPTIONAL_EXECS if s[0] not in have for k in (s[2], s[3])}
+    return {k: v for k, v in p.items() if k not in drop}
 
 
 def _config_db(path: str) -> Optional[str]:
@@ -206,9 +234,12 @@ def _config_db(path: str) -> Optional[str]:
 
 
 def slots(configs: Optional[dict] = None) -> list:
-    """EXECS with each slot's name taken from the exchange its config names (the slot's own name when unread)."""
+    """EXECS with each slot's name taken from the exchange its config names (the slot's own name when unread); an
+    optional slot only when ``configs`` has it (the callers read the configs of ``installed`` slots)."""
     out = []
-    for ex, ko, dk, ck in EXECS:
+    for ex, ko, dk, ck in ALL_EXECS:
+        if ex not in (configs or {}) and (ex, ko, dk, ck) in OPTIONAL_EXECS:
+            continue
         c = (configs or {}).get(ex) or {}
         name = EX_NAME.get(c.get("exchange")) if c.get("state") == "ok" else None
         out.append((ex, name or ko, dk, ck))
@@ -1336,7 +1367,7 @@ def sources(p: dict, now: int) -> tuple:
     (PAPERBOT_LIVE_PAPER_DB); each executor carries the paper database it follows now (``paper_path``), when it followed
     which (``segs``, livepapers.segments from its own start records) and every paper database it ever followed
     (``_papers``, read once and shared; with the second paper bot's file when it is there)."""
-    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
+    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in installed(p)}
     follows = {ex: (c.get("account") if c.get("state") == "ok" and c.get("account") else ACCOUNT) for ex, c in configs.items()}
     want = [ACCOUNT, FLIP_ACCOUNT, *follows.values()]
     paper = read_paper(p["paper"], want, now)
@@ -1438,7 +1469,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
         paper_out["accounts"] = {}
         for aid, a in paper["accounts"].items():
             paper_out["accounts"][aid] = {k: v for k, v in a.items() if k not in ("trades", "curve")}
-    return {"now_ms": now, "paths": p, "account": ACCOUNT, "flip_account": FLIP_ACCOUNT, "paper": paper_out, "execs": execs,
+    return {"now_ms": now, "paths": shown_paths(p), "account": ACCOUNT, "flip_account": FLIP_ACCOUNT, "paper": paper_out, "execs": execs,
             "accts": accts, "fills": fills, "marks": marks, "events": events, "checkpoint": cp,
             "flip": {"stats": flip.get("stats")} if flip and flip.get("known") else None,
             "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None, "match_ms": MATCH_MS, "small": list(SMALL),
@@ -2316,7 +2347,7 @@ def settings(p: dict, now: int) -> dict:
     which bot each executor follows (``follows_ko``); with one paper bot the answer is as before."""
     more = paths_more()
     combo = read_combo(p["paper"], more["combo_config"])
-    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
+    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in installed(p)}
     execs = [{"id": ex, "name_ko": ko, "config": configs[ex]} for ex, ko, _dk, _ck in slots(configs)]
     _c, _f2, paper, srcs = sources(p, now)
     bots = paper_bots(p, paper, srcs)
@@ -2854,7 +2885,8 @@ def costs(p: dict, now: int) -> dict:
     tr = trade_rows(p, now)
     accts = tr.get("accts") or {}
     out = {}
-    for ex, _ko, _dk, _ck in EXECS:
+    have = installed(p)
+    for ex, _ko, _dk, _ck in have:
         a = accts.get(ex) or {}
         if a.get("state") != "ok":
             out[ex] = {k: a.get(k) for k in ("state", "reason_ko", "reason", "path")}
@@ -2897,8 +2929,8 @@ def costs(p: dict, now: int) -> dict:
                                "paper_fees": (r.get("paper") or {}).get("fees"), "paper_funding": (r.get("paper") or {}).get("funding")}
                             for r in rows[:60]]}
     pa = accts.get("paper") or {}
-    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in EXECS}
-    for ex, _ko, dk, _ck in EXECS:                      # 체결 비교 (owners 10/19 night): added, nothing above changes
+    configs = {ex: read_config(p[ck]) for ex, _ko, _dk, ck in have}
+    for ex, _ko, dk, _ck in have:                       # 체결 비교 (owners 10/19 night): added, nothing above changes
         if (out.get(ex) or {}).get("state") == "ok":
             cfg = configs[ex] if configs[ex].get("state") == "ok" else {}
             out[ex]["gaps"] = fill_gaps(p[dk], (accts.get(ex) or {}).get("rows") or [], cfg.get("exchange") or ex,

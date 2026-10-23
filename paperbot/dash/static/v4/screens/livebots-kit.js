@@ -2,7 +2,8 @@
 // dash/more/livebots.py); a source that is not there yet says 수집 전, one that could not be read says 못 읽음 with its reason
 // (never a zero). The three accounts: 페이퍼 (COMBO@mix, 모의 · the one both executors follow: 추세판단 봇 from 10/21, A+C
 // 합본 before; paperBotKo), 바이비트 and MEXC (실거래, real money). Captions: paper money carries the shared paper captions
-// (ui.ASSUME_*), real money ui.ASSUME_LIVE_KO.
+// (ui.ASSUME_*), real money ui.ASSUME_LIVE_KO. The executor slots of a page: execIds / execsNow (the third, 플립스터, only
+// while the server has it installed; else the two as before).
 import {h, ui, fmt, serverNow, bus} from "../core/pb.js";
 import {lightWords, lightCells, roeAt, netRoe} from "./livebots-calc.js";
 
@@ -14,7 +15,43 @@ export const ACCT = {
   mexc: {ko: "WOO X Pro", s: "W", tip: "WOO X Pro 실행기 (실거래 · 진짜 돈)"},
   // the second paper bot (owners 10/19, docs/live15-mexc-ko.md): only on the page while there is one (the summary's papers)
   paper2: {ko: "페이퍼 2(연습)", s: "P2", tip: "두 번째 페이퍼(연습) 봇 (모의 돈)"},
+  // the third executor (owners 10/23, docs/flipster-ko.md: it follows the VWAP 개선판): only on the page while the server has
+  // it installed (execIds)
+  flipster: {ko: "플립스터", s: "F", tip: "플립스터 실행기 (실거래 · 진짜 돈)"},
 };
+/** Every executor slot the page knows, in the server's order (dash/more/livebots.py ALL_EXECS). Which of them a server has
+ *  (livebots.installed: the third, 플립스터, once its config file or its database is there): execIds / execsNow. */
+export const EXEC_SLOTS = ["bybit", "mexc", "flipster"];
+const EXECS0 = ["bybit", "mexc"];
+let EXECS_NOW = EXECS0, execsKey = EXECS0.join();
+/** The executor ids of the last summary (setExecs); the two before the first one. */
+export const execsNow = () => EXECS_NOW;
+/** The summary's executors (its ``execs``), called with every summary: a tab that built its parts for two adds the third
+ *  when it comes (bus "lb:execs"); without it every list stays the two as before. */
+export function setExecs(execs) {
+  const ids = Array.isArray(execs) ? EXEC_SLOTS.filter((id) => execs.some((x) => x && x.id === id)) : [];
+  const now = ids.length ? ids : EXECS0;
+  if (now.join() === execsKey) return;
+  execsKey = now.join();
+  EXECS_NOW = now;
+  bus.emit("lb:execs", EXECS_NOW);
+}
+/** The executor ids of an answer, in the server's order: its own ``execs`` ([{id}] or ids), else its accounts (``accts``:
+ *  a list or a map by id); an answer that names none: execsNow(). */
+export function execIds(d) {
+  let have = null;
+  if (d && Array.isArray(d.execs)) have = d.execs.map((x) => (x && typeof x === "object" ? x.id : x));
+  else if (d && Array.isArray(d.accts)) have = d.accts.map((a) => a && a.id);
+  else if (d && d.accts && typeof d.accts === "object") have = Object.keys(d.accts);
+  const ids = have ? EXEC_SLOTS.filter((id) => have.includes(id)) : [];
+  return ids.length ? ids : EXECS_NOW;
+}
+/** The executors' names in one line ("바이비트 · WOO X Pro", "… · 플립스터"). */
+export const execsKo = (ids = EXECS_NOW, sep = " · ") => ids.map((id) => acctKo(id)).join(sep);
+/** "두 실행기가 따라가는" (with the third installed "세 실행기가 따라가는"): who follows the one paper bot. */
+export const allFollowKo = () => `${EXECS_NOW.length > 2 ? "세" : "두"} 실행기가 따라가는`;
+/** "세 계좌" / "네 계좌" / "다섯 계좌": the accounts a page lists (three: one paper bot and two executors, as before). */
+export const acctsKo = (n) => `${{4: "네", 5: "다섯", 6: "여섯"}[n] || "세"} 계좌`;
 const ACCT0 = {paper: {...ACCT.paper}, paper2: {...ACCT.paper2}};
 let PAPERS = null, papersKey = "null";
 /** The summary's two paper bots (setPapers), null with one (owners 10/23: the 추세판단 봇 and the 'VWAP 개선판'). */
@@ -98,11 +135,12 @@ function realOf(a) {
 
 /**
  * The thin real-money strip over every 실거래 tab (owners 10/19): '진짜 돈 · 바이비트 $X · MEXC $Y · 포지션 n/1·n/1 · 보기만
- * 하는 화면(주문 버튼 없음)'. d: the summary answer (/api/v4/livebots), null before the first one (dashes, never a zero).
+ * 하는 화면(주문 버튼 없음)' (플립스터 $Z too while the server has it). d: the summary answer (/api/v4/livebots), null before
+ * the first one (dashes, never a zero).
  */
 export function realLine(d) {
   const by = Object.fromEntries(((d && d.accts) || []).map((a) => [a.id, a]));
-  const ids = ["bybit", "mexc"].map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
+  const ids = execIds(d).map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
   const sep = () => h("span", {class: "lb-real-s", "aria-hidden": "true"}, "·");
   return [h("b", {class: "lb-real-k"}, "진짜 돈"),
     ...ids.flatMap((x) => [sep(), h("span", {class: ["lb-real-a", x.unk ? "unk" : ""]}, `${ACCT[x.id].ko} `, h("b", {class: "num"}, x.bal))]),

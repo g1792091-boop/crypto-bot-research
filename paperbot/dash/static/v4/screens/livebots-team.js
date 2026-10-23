@@ -18,7 +18,7 @@
 // says is running); a file not there yet = 수집 전 with what the team is and how to turn it on (installed off); one not
 // read = 못 읽음 + why; usage counts only from the team's own records; AI opinion, 참고 only: trading follows the fixed rules.
 import {h, s, put, ui, fmt, motion, figure, serverNow} from "../core/pb.js";
-import {sourceState} from "./livebots-kit.js";
+import {sourceState, execsKo} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/team";
 const REFRESH_MS = 60 * 1000;
@@ -339,7 +339,7 @@ export function teamView(ctx) {
         h("li", null, h("b", null, `거래가 ${fmt.int(d && d.small_n || 20)}번 미만이면 결론을 안 내요.`), " 그 전 차이는 대부분 우연이에요."),
         h("li", null, "말풍선은 저장된 실제 발언이에요 (꾸민 문장 없음). 회의 중 표시는 기록이 '진행 중'일 때만 나와요."),
         h("li", null, d && d.bot && d.bot.idea_how_ko ? `아이디어는 가설일 뿐이에요. ${d.bot.idea_how_ko}.` : "아이디어는 가설일 뿐이에요. 채택은 두 분이 개선 후보 장부 순서대로 정해요.")),
-      h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "AI가 인용한 페이퍼(연습 돈) 숫자"), ui.assumeLive("AI가 인용한 바이비트 · WOO X Pro 숫자"))));
+      h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "AI가 인용한 페이퍼(연습 돈) 숫자"), ui.assumeLive(`AI가 인용한 ${execsKo()} 숫자`))));
   }
 
   function drawLoading() {

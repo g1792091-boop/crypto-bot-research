@@ -14,7 +14,7 @@
 // a source that is not there yet says 수집 전, one that cannot be read 못 읽음 with why; when the server had to cut rows it
 // says which and from when; a failed refresh keeps the last answer dimmed with its age.
 import {h, put, ui, fmt, local, serverNow, href} from "../core/pb.js";
-import {acctKo, sourceState} from "./livebots-kit.js";
+import {acctKo, sourceState, execsKo} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/journal";
 const REFRESH_MS = 60 * 1000;
@@ -161,7 +161,7 @@ export function journalView(ctx) {
     h("div", {class: "ljr-feed"}, pg.el));
   const foot = h("div", {class: "lb-foot"},
     ui.assumeLine(["closed", "open"], "페이퍼(연습) 손익은 진짜 돈이 아니에요"),
-    ui.assumeLive("바이비트 · WOO X Pro 줄의 손익만 진짜 돈"));
+    ui.assumeLive(`${execsKo()} 줄의 손익만 진짜 돈`));
   const body = h("div", {class: "ljr-body"}, hero, feed, foot);
   const el = h("div", {class: "ljr stack"}, stateSlot, body);
   let shown = [];

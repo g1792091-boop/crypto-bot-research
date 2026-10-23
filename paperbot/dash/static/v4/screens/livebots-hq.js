@@ -33,9 +33,11 @@
 // hidden page or under reduced motion.
 // The geometry and the rules (ring segments, gauge angles, dial arcs, tile brightness, DAY n, ×, milestones, the cards'
 // numbers, the countdown) are exported pure functions (tests/test_dash_livebots_hq.py runs them in node).
+// The third executor (플립스터, owners 10/23) gets its own reactor, ticker item and gauge row while the server has it
+// (livebots-kit.js execIds): the deck then puts the centre on top and the three reactors in a row; else as before.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
-import {ACCT, paperBotKo} from "./livebots-kit.js";
+import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo, takingNoneKo} from "./livebots-likely.js";
 
@@ -44,7 +46,6 @@ export const CAL_API = "/api/v4/livebots/calendar";
 export const RANK_API = "/api/v4/livebots/rank";
 const NOW_MS = 15 * 1000, CAL_MS = 30 * 1000, RANK_MS = 30 * 1000;
 export const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
-const EXECS = ["bybit", "mexc"];
 const DAY = 86400000, KST = 9 * 3600000;
 const SPIN = 0.00011;                                // the ring's turn (rad / ms): about one turn in a minute
 const FRAME_MS = 33;                                 // at most about 30 frames a second
@@ -408,7 +409,7 @@ export function freshMilestones(before, reached, seen, firstWinAt = null, now = 
     : k === "win1" && firstWinAt != null && now - firstWinAt <= recentMs && firstWinAt <= now + 60000));
 }
 
-/** The last closed trade for the result card: the newest live exit (바이비트 / MEXC), else the paper's (labelled), with its
+/** The last closed trade for the result card: the newest live exit (바이비트 / MEXC / 플립스터), else the paper's (labelled), with its
  *  entry (the same trade's entry fill): {exit, entry, paper} or null. */
 export function lastClosed(fills) {
   const xs = (fills || []).filter((f) => f && f.kind === "exit" && f.t != null).sort((a, b) => b.t - a.t);
@@ -475,14 +476,15 @@ export function tickerItems(d, nowAns, cal) {
   const out = [];
   if (!d) return out;
   const accts = d.accts || [];
-  for (const id of EXECS) {
+  const ids = execIds(d);
+  for (const id of ids) {
     const a = by(accts, id);
     const m = multOf(a);
     out.push({k: id, text: !a ? `${acctName(id)} —` : a.state !== "ok" ? `${acctName(id)} ${a.state === "error" ? "못 읽음" : "수집 전"}`
       : `${acctName(id)} ${a.balance == null ? "잔고 기록 전" : usd0(a.balance)}${m != null ? ` ×${fmt.num(m, 2)}` : ""}${a.halted ? " · 멈춤" : ""}`,
     tone: a && a.state === "ok" && a.halted ? "down" : null});
   }
-  const both = EXECS.map((id) => by(accts, id));
+  const both = ids.map((id) => by(accts, id));
   if (both.every((a) => a && a.state === "ok" && a.balance != null)) out.push({k: "sum", text: `실거래 합계 ${usd0(both.reduce((x, a) => x + Number(a.balance), 0))}`});
   const t = liveToday(accts);
   if (t) out.push({k: "today", text: t.trades ? `오늘 실거래 ${fmt.int(t.trades)}번 ${usdS(t.pnl)}` : "오늘 실거래 닫힌 거래 없음", tone: t.trades ? fmt.tone(t.pnl, fmt.money(t.pnl)) : null});
@@ -874,18 +876,19 @@ export function hqView(ctx, hub) {
   const sLive = h("span", {class: "lbh-live"}, h("i", {"aria-hidden": "true"}), h("b", null, "LIVE TRADE"));
   const sDay = h("span", {class: "lbh-dayt"});
   const sSum = h("span", {class: "lbh-sum"});
+  const sNames = h("span", null, execsKo());
   const vHead = h("b", {class: "lbh-vh"}, "불러오는 중");
   const vSub = h("span", {class: "lbh-vs"});
   const verdict = h("div", {class: "lbh-verdict", role: "status"}, h("i", {class: "lbh-vdot", "aria-hidden": "true"}), h("div", {class: "lbh-vt"}, vHead, vSub));
   const clockT = h("b", {class: "num"}, "—");
   const cmd = h("div", {class: "lbh-cmd"},
     h("div", {class: "lbh-caps"}, sLive, h("span", {class: "lbh-sep", "aria-hidden": "true"}, "·"), sDay, h("span", {class: "lbh-sep", "aria-hidden": "true"}, "·"),
-      h("span", null, "바이비트 · WOO X Pro"), sSum),
+      sNames, sSum),
     verdict, h("div", {class: "lbh-clock", "aria-label": "한국 시간"}, clockT, h("span", null, "KST · 한국 시간")));
   const banner = h("div", {class: "lbh-banner", role: "status", hidden: true});
 
-  // ---- reactors
-  const R = Object.fromEntries(EXECS.map((id) => [id, reactor(id)]));
+  // ---- reactors (the third executor's when it comes: addReactors)
+  const R = Object.fromEntries(execsNow().map((id) => [id, reactor(id)]));
   function reactor(id) {
     const led = h("i", {class: "lbh-led", "aria-hidden": "true"});
     const ledKo = h("b", {class: "lbh-ledko"}, "불러오는 중");
@@ -1025,9 +1028,9 @@ export function hqView(ctx, hub) {
     seen = local.get(MS_KEY, []);
     if (!Array.isArray(seen)) seen = [];
     let changed = false;
-    for (const id of EXECS) {
+    for (const id of execIds(d)) {
       const a = by(d.accts, id);
-      if (!a || a.state !== "ok") continue;
+      if (!a || a.state !== "ok" || !R[id]) continue;
       const tag = `${id}|${a.since_ms || 0}|`;
       const reached = milestonesOf(a);
       const mine = seen.filter((k) => k.startsWith(tag)).map((k) => k.slice(tag.length));
@@ -1083,10 +1086,24 @@ export function hqView(ctx, hub) {
   const ticker = h("div", {class: "lbh-ticker", role: "marquee", "aria-label": "실거래 숫자 흐름"}, tIn);
   const side = (t) => h("span", {class: "lbh-side", "aria-hidden": "true"}, t);
   const sideBot = side(sideBotKo(undefined));             // the paper bot's name from the first summary on (drawBot)
+  const [first, ...rest] = execsNow();                // the first reactor · the centre · the others (as before: 바이비트 · WOO X Pro)
+  const deck = h("div", {class: "lbh-deck"}, R[first].el, center, ...rest.map((id) => R[id].el));
+  /** The reactors of the summary's executors: the third (플립스터) is added after the others when it comes; with three the
+   *  deck puts the centre on top and the reactors in a row (livebots-hq.css .lbh-deck.three). */
+  function addReactors(ids) {
+    for (const id of ids) {
+      if (R[id]) continue;
+      R[id] = reactor(id);
+      deck.append(R[id].el);
+    }
+    for (const id of EXEC_SLOTS) if (R[id]) R[id].el.hidden = !ids.includes(id);
+    deck.classList.toggle("three", ids.length > 2);
+  }
+  addReactors(execsNow());
   const frame = h("div", {class: "lbh-frame"},
     side("실거래 · LIVE · 진짜 돈 · 실거래 · LIVE"), sideBot,
     banner,
-    h("div", {class: "lbh-deck"}, R.bybit.el, center, R.mexc.el),
+    deck,
     pbar, ticker);
 
   // ---- the cards: ⏳ 진입 대기 · 진입 카드 · 결과 카드 · 실시간
@@ -1145,10 +1162,12 @@ export function hqView(ctx, hub) {
   function drawBot() {
     const tb = st.d ? st.d.trend_bot || null : undefined, nm = st.d && st.d.paper ? st.d.paper.name_ko : null;
     const k = tb === undefined ? "" : paperBotKo(tb, nm);
-    if (foot.dataset.k === k && foot.firstChild) return;
+    const names = execsKo(execIds(st.d));
+    if (foot.dataset.k === k && foot.dataset.x === names && foot.firstChild) return;
     foot.dataset.k = k;
+    foot.dataset.x = names;
     sideBot.textContent = sideBotKo(tb, nm);
-    put(foot, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed", "open"], `페이퍼(연습) ${k ? `${k} ` : ""}COMBO@mix · 게이지의 순ROE`));
+    put(foot, ui.assumeLive(names), ui.assumeLine(["closed", "open"], `페이퍼(연습) ${k ? `${k} ` : ""}COMBO@mix · 게이지의 순ROE`));
   }
   const root = h("div", {class: "lbh", dataset: {still: ""}},
     h("h2", {class: "lbh-sr"}, "실거래 한눈에"), cmd, frame,
@@ -1170,7 +1189,9 @@ export function hqView(ctx, hub) {
   // ---- drawing
   function drawStatus() {
     const d = st.d, accts = (d && d.accts) || [];
-    const exs = EXECS.map((id) => by(accts, id));
+    const ids = execIds(d);
+    const exs = ids.map((id) => by(accts, id));
+    if (sNames.textContent !== execsKo(ids)) sNames.textContent = execsKo(ids);
     const fresh = exs.some((a) => a && a.state === "ok" && !a.stale);
     sLive.dataset.on = fresh ? "1" : "";
     sLive.lastChild.textContent = fresh ? "LIVE TRADE" : d ? "실거래 기록 멈춤" : "실거래";
@@ -1180,7 +1201,7 @@ export function hqView(ctx, hub) {
     sDay.title = days.length ? "실거래를 켠 날이 DAY 01 (한국 시간)" : "실행기 시작 기록이 아직 없어요";
     const both = exs.every((a) => a && a.state === "ok" && a.balance != null);
     sSum.textContent = both ? ` · 합계 ${usd0(exs.reduce((x, a) => x + Number(a.balance), 0))}` : "";
-    sSum.title = both ? "바이비트 + WOO X Pro 잔고 (진짜 돈만, 페이퍼 빼고)" : "";
+    sSum.title = both ? `${execsKo(ids, " + ")} 잔고 (진짜 돈만, 페이퍼 빼고)` : "";
     // the verdict: /now's own words
     const n = fNow.d;
     let tone = "wait", head = fNow.err && !n ? "지금 상태를 불러오지 못함" : "불러오는 중", until = null, untilKo = "";
@@ -1217,7 +1238,7 @@ export function hqView(ctx, hub) {
     };
     const items = n.items || [];
     const common = items.filter((i) => !i.who);
-    const groups = EXECS.map((id) => ({id, xs: items.filter((i) => i.who === id)})).filter((g) => g.xs.length);
+    const groups = EXEC_SLOTS.map((id) => ({id, xs: items.filter((i) => i.who === id)})).filter((g) => g.xs.length);
     put(whyList, h("ul", {class: "lbh-wul"}, common.map(row)),
       groups.length ? h("div", {class: "lbh-wex"}, groups.map((g) => h("div", {class: ["lbh-wg", "lbh-x-" + g.id]},
         h("b", {class: "lbh-wgh"}, h("i", {class: "sw", "aria-hidden": "true"}), ACCT[g.id].ko, h("span", {class: "lbh-real sm"}, "진짜 돈")), h("ul", {class: "lbh-wul"}, g.xs.map(row))))) : null);
@@ -1233,7 +1254,7 @@ export function hqView(ctx, hub) {
     const accts = (st.d && st.d.accts) || [];
     const pa = by(accts, "paper");
     const pp = pa && pa.state === "ok" ? pa.position : null;
-    const lives = EXECS.map((id) => by(accts, id)).filter((a) => a && a.state === "ok" && a.position);
+    const lives = execIds(st.d).map((id) => by(accts, id)).filter((a) => a && a.state === "ok" && a.position);
     return {lead: pp ? {p: pp, kind: "paper", a: pa} : lives.length ? {p: lives[0].position, kind: "live", a: lives[0]} : null, lives, pa};
   }
   function drawCenter() {
@@ -1307,7 +1328,7 @@ export function hqView(ctx, hub) {
     const nx = p.next_lock;
     gNext.textContent = nx && nx.at != null ? `다음 잠금: 순ROE ${fmt.pct(nx.at, 0, false)}${nx.price ? ` (${fmt.price(nx.price)})` : ""}에 닿으면 ${fmt.pct(nx.lock, 0, false)}로 잠가요${nx.from === "paper" ? " · 페이퍼 기준" : ""}` : "";
     // the real money: each executor's own position and its stop order on the exchange
-    gEx.replaceChildren(...EXECS.map((id) => {
+    gEx.replaceChildren(...execIds(st.d).map((id) => {
       const a = by((st.d && st.d.accts) || [], id);
       const head = h("span", {class: ["lbh-gexn", "lbh-x-" + id]}, h("i", {class: "sw", "aria-hidden": "true"}), ACCT[id].ko);
       if (!a || a.state !== "ok") return h("div", {class: "lbh-gexr unk"}, head, h("span", null, a && a.state === "error" ? "못 읽음" : "수집 전"));
@@ -1646,8 +1667,9 @@ export function hqView(ctx, hub) {
   }
 
   function drawAll() {
-    const d = st.d;
-    for (const id of EXECS) setReactor(R[id], d ? by(d.accts, id) : null, d ? by(d.execs, id) : null);
+    const d = st.d, ids = execIds(d);
+    addReactors(ids);
+    for (const id of ids) setReactor(R[id], d ? by(d.accts, id) : null, d ? by(d.execs, id) : null);
     drawBot();
     drawStatus();
     drawCenter();

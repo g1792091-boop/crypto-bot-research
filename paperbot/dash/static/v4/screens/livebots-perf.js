@@ -20,15 +20,15 @@
 // says to expect (가상), in place of 승률 흐름 · 그룹별 성적 · 나눠 보기 · 동전 쌍둥이, the no-scorecard card (it points at
 // 나눠 보기) and the account switch; 2주 검토까지 stays.
 import {h, s, put, ui, fmt, local, motion, href} from "../core/pb.js";
-import {acctKo, sourceState, expectLines, expectHead, eraWords} from "./livebots-kit.js";
+import {acctKo, sourceState, expectLines, expectHead, eraWords, EXEC_SLOTS, execIds, execsNow, execsKo} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
 import {scoreView, ledgerView} from "./livebots-score.js";
 import {groupBlock, cardSub} from "./livebots-rank.js";
 
-const IDS = ["paper", "bybit", "mexc"];
 /** The accounts of an answer: the second paper bot too while the server sends it (owners 10/23: the 'VWAP 개선판', its own
- *  record from its own start), named by its bot (acctKo); one paper bot: the three as before. */
-export const idsOf = (d) => (d && d.accts && d.accts.paper2 ? ["paper", "paper2", "bybit", "mexc"] : IDS);
+ *  record from its own start), named by its bot (acctKo), and the third executor (플립스터) while the server has it
+ *  (execIds); one paper bot and two executors: the three as before. */
+export const idsOf = (d) => ["paper", ...(d && d.accts && d.accts.paper2 ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
 const REFRESH_MS = 60 * 1000;
 const BREAK = [{id: "by_strategy", label: "매매법"}, {id: "by_coin", label: "코인"}, {id: "by_tf", label: "봉"}, {id: "by_side", label: "롱·숏"}, {id: "by_hour", label: "시간(한국)"}];
 /** The trend bot's splits: its roles first, the entry bar as such. */
@@ -94,11 +94,11 @@ export function rollChart(acc, refs, W = 640) {
 export function perfView(ctx) {
   // the split remembered on this device; none yet: the first of the bot's own list (역할 for the trend bot)
   const st = {acct: local.get("lb-pacct", "paper"), brk: local.get("lb-pbrk", null), d: null, okAt: 0};
-  if (![...IDS, "paper2"].includes(st.acct)) st.acct = "paper";
+  if (!["paper", "paper2", ...EXEC_SLOTS].includes(st.acct)) st.acct = "paper";
   if (![...BREAK, ...BREAK_TREND].some((b) => b.id === st.brk)) st.brk = null;
   let chosen = st.brk != null;
   const pickAcct = (id) => { st.acct = id; local.set("lb-pacct", id); draw(); };
-  let ids = IDS, seg = ui.seg(ids.map((id) => ({id, label: acctKo(id)})), IDS.includes(st.acct) ? st.acct : "paper", pickAcct, {label: "계좌 고르기"});
+  let ids = idsOf(null), seg = ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(st.acct) ? st.acct : "paper", pickAcct, {label: "계좌 고르기"});
   let segKey = ids.map((id) => `${id}:${acctKo(id)}`).join();
   const segBox = h("span", {class: "lb-segbox"}, seg);           // the switch is rebuilt in here (accounts)
   const eraNote = h("p", {class: "note lb-era", hidden: true});
@@ -134,7 +134,7 @@ export function perfView(ctx) {
     groups.el,
     refSlot,
     brkCard, flipCard,
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이 · 매매법 성적표")));
+    h("div", {class: "lb-foot"}, ui.assumeLive(execsKo()), ui.assumeLine(["closed"], "페이퍼 · 동전 쌍둥이 · 매매법 성적표")));
   const setSub = (card, text) => { const x = cardSub(card); if (x && x.textContent !== text) x.textContent = text; };
 
   /** The splits' switch for this answer (rebuilt in its place only when the bot kind changes; the choice is kept when the

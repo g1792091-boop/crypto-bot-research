@@ -24,11 +24,10 @@
 // '—' or its reason (체결 기록 전), never 0; ≈ marks a wallet estimate; a failed refresh keeps the last answer dimmed with
 // its age. The pure functions below are tested in node.
 import {h, s, put, ui, fmt, local, motion} from "../core/pb.js";
-import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, EXEC_SLOTS, execIds, execsNow, execsKo} from "./livebots-kit.js";
 
 export const COST_API = "/api/v4/livebots/costs";
 const REFRESH_MS = 30 * 1000;
-const EX = ["bybit", "mexc"];
 const BARS_N = 20;
 export const EMPTY_KO = "실거래 거래가 아직 없어요 · 첫 거래가 닫히면 채워져요";
 
@@ -205,13 +204,15 @@ export function replayFeeKo(rp) {
 // ================================================================ the view
 /** costView(ctx) -> {el, set()}: its own endpoint, read now and every 30 s. */
 export function costView(ctx) {
-  const st = {d: null, okAt: 0, sig: "", acct: local.get("lbk-acct", "bybit")};
-  if (!EX.includes(st.acct)) st.acct = "bybit";
+  const st = {d: null, okAt: 0, sig: "", acct: local.get("lbk-acct", "bybit"), ex: execsNow()};
+  if (!EXEC_SLOTS.includes(st.acct)) st.acct = "bybit";
   const stateSlot = h("div", {class: "lb-slot"});
   const paperSlot = h("div", {class: "lb-slot"});
   const cards = h("div", {class: "lbk-cards"});
-  const seg = ui.seg(EX.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lbk-acct", id); drawList(true); },
-    {label: "실행기 고르기"});
+  // the executors of the answer (the third, 플립스터, while the server has it: the switch is rebuilt in place, draw)
+  const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(st.acct) ? st.acct : "bybit",
+    (id) => { st.acct = id; local.set("lbk-acct", id); drawList(true); }, {label: "실행기 고르기"});
+  let seg = segOf(st.ex);
   const judge = h("div", {class: "lbk-judge"});
   const listSum = h("div", {class: "lbk-lsum"});
   const listSlot = h("div", {class: "lb-slot"});
@@ -229,7 +230,7 @@ export function costView(ctx) {
     ui.card({title: "진입 방식 판단", sub: "페이퍼 체결을 따라가기 vs 신호 때 바로 들어가기 · 숫자만", cls: "lbk-jcard"}, judge),
     ui.card({title: "최근 실거래", sub: "닫힌 거래 · 새것부터 10개씩 · 한국 시간", cls: "lbk-listcard", acts: [seg]}, listSlot, listSum,
       listHead, pg.el),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro · ≈ = 체결 기록 전 지갑 변화로 어림"),
+    h("div", {class: "lb-foot"}, ui.assumeLive(`${execsKo()} · ≈ = 체결 기록 전 지갑 변화로 어림`),
       ui.assumeLine(["closed"], "페이퍼(연습) 손익은 실거래 크기(설정의 크기 비율)로 줄여 견줌")));
   const el = h("div", {class: "lbk stack"}, stateSlot, body);
 
@@ -442,8 +443,16 @@ export function costView(ctx) {
     const d = st.d;
     if (!d) { put(cards, motion.shimmer(4, true)); put(judge, motion.shimmer(2)); drawFees(); drawList(false); return; }
     const p = d.paper || {};
+    const ids = execIds(d);
+    if (ids.join() !== st.ex.join()) {
+      st.ex = ids;
+      if (!ids.includes(st.acct)) st.acct = "bybit";
+      const nx = segOf(ids);
+      seg.replaceWith(nx);
+      seg = nx;
+    }
     put(paperSlot, p.state && p.state !== "ok" ? sourceState(p, "페이퍼 DB (짝 맞출 페이퍼 거래)") : null);
-    put(cards, EX.map(exCard));
+    put(cards, ids.map(exCard));
     drawFees();
     put(judge, judgeEl(d));
     cards.querySelectorAll(".lbk-bars").forEach((b) => b.redraw && b.redraw());

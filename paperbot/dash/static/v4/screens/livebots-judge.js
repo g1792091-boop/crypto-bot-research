@@ -21,11 +21,11 @@
 // 추격 막기 covers the members the server says (all of them in its config: no B group), each row with the member's role;
 // 동전 쌍둥이 has no 75 % line (that was the old rules' analysis: none for a new rule set).
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctKo, sourceState} from "./livebots-kit.js";
+import {acctKo, sourceState, EXEC_SLOTS, execsKo} from "./livebots-kit.js";
 
 export const JUDGE_API = "/api/v4/livebots/judge";
 const REFRESH_MS = 60 * 1000;
-const LIVE = ["bybit", "mexc"];
+const LIVE = EXEC_SLOTS;                  // the executors with live rows (the third, 플립스터, only while the server has it)
 
 
 // ================================================================ pure functions (node tests: tests/test_dash_liveinsight.py)
@@ -123,7 +123,7 @@ export function judgeView(ctx) {
     chaseCard, twinCard,
     twoCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습) 손익 · 다시 계산한 결과는 가상이에요"),
-      ui.assumeLive("바이비트 · WOO X Pro: 따라간 거래의 크기로 셈")));
+      ui.assumeLive(`${execsKo()}: 따라간 거래의 크기로 셈`)));
   const el = h("div", {class: "lbj stack"}, stateSlot, body);
 
   const money = (x) => (has(x) ? `${fmt.money(x, true)} USDT` : "—");
