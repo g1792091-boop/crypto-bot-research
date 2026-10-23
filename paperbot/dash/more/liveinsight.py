@@ -176,13 +176,28 @@ VWAP_WEEKDAY_REF = 3.38
 VWAP_WEEKDAY_REF_KO = ("2020-03~2026-09 이 봇 설정으로 다시 계산한 숫자 · 평일 1,718일 5,805번 (research/vwap30/month2.json) · "
                        "그 기간 시장의 숫자라 앞으로는 다를 수 있어요")
 # its money rule (docs/vwap-bot-ko.md 6장): 50 live trades at 80 % or more and close to the paper -> more money; a win rate
-# below 71 % (the break-even of this structure) that goes on -> stop and look again. Information only, nothing changes.
+# below the break-even win rate (|average loss| / (average win + |average loss|) of its own trades) that goes on -> stop and
+# look again. Information only, nothing changes. The five-year reference: the live config's 5,805 paper trades, average
+# win +10.76 % and average loss -39.43 % net ROE -> 78.6 % (research/vwap30/scale.json "breakeven_win"; the guide's first
+# "71 %" was not supported by them, corrected 10-23)
 VWAP_SCALE_TRADES = 50
 VWAP_SCALE_WIN = 0.80
-VWAP_STOP_WIN = 0.71
+VWAP_BREAKEVEN_5Y = 0.786
 VWAP_SCALE_KO = "키울 때예요 (docs/vwap-bot-ko.md 6장): 실거래 {n}번 승률 {w:.0%} · 페이퍼와 비슷한지는 두 분이 봐요"
 VWAP_SCALE_NOTE_KO = ("보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 기준: 실거래 50번 승률 80% 이상이고 페이퍼와 비슷하면 돈을 늘림, "
-                      "71%(이 구조의 본전선) 아래가 이어지면 멈추고 다시 봄")
+                      "승률이 본전 승률(평균 이익·손실로 계산; 5년 기록으로는 약 79%) 아래가 이어지면 멈추고 다시 봄 · "
+                      "5년 기록에서는 50번 80% 이상 뒤에도 다음 50번이 평균 손해였어요: 순손익 합과 'VWAP 성적' 화면의 동전 쌍둥이 비교도 같이 봐요")
+
+
+def breakeven_win(pnls) -> Optional[float]:
+    """|average loss| / (average win + |average loss|) of closed trades' results (None without a win and a loss): the win
+    rate at which they would break even."""
+    v = [float(x) for x in pnls if x is not None]
+    wins, losses = [x for x in v if x > 0], [x for x in v if x <= 0]
+    if not wins or not losses:
+        return None
+    aw, al = sum(wins) / len(wins), -sum(losses) / len(losses)
+    return al / (aw + al) if aw + al > 0 else None
 # 두 봇 나란히 (owners 10-23: the trend bot and the VWAP bot are different bots; the 11/3 stop test was the twins')
 PLAIN_H2H_KO = "두 봇 나란히 · 매매법이 서로 달라요 · 어느 쪽이 낫다고 정하지 않아요"
 
@@ -1045,11 +1060,15 @@ def vwap_scale(x: dict, live: list, paired: list, pw: int, pwr: Optional[float],
                since: Optional[int]) -> dict:
     """돈 늘리기 기준 of an executor that follows the 'VWAP 개선판' (docs/vwap-bot-ko.md 6장, VWAP_SCALE_*): (a) 50 closed
     live trades since it moved to the bot, (b) their win rate 80 % or more; the followed paper trades' win rate and the
-    entry gap are facts next to them (페이퍼와 비슷한지: no number in the guide, the owners look); a win rate under 71 % over
-    20 trades or more says so (멈추고 다시 볼 기준). Information only."""
+    entry gap are facts next to them (페이퍼와 비슷한지: no number in the guide, the owners look); a win rate under the break-even
+    win rate over 20 trades or more says so (멈추고 다시 볼 기준): the live trades' own (breakeven_win), else the followed paper
+    trades', else the five-year 78.6 %. Information only."""
     n = len(live)
     w = sum(1 for t in live if (L._f(t.get("pnl")) or 0) > 0)
     lwr = w / n if n else None
+    be_live, be_paper = breakeven_win(L._f(t.get("pnl")) for t in live), breakeven_win(L._f(t.get("pnl")) for t in paired)
+    be, be_from = ((be_live, "실거래") if be_live is not None else (be_paper, "따라간 페이퍼") if be_paper is not None
+                   else (VWAP_BREAKEVEN_5Y, "5년 기록"))
     checks = [
         {"id": "trades", "ok": n >= VWAP_SCALE_TRADES, "value": n, "need": VWAP_SCALE_TRADES, "ko": f"거래 {n}/{VWAP_SCALE_TRADES}번",
          "what_ko": f"옮긴 뒤 닫힌 실거래 {VWAP_SCALE_TRADES}번 이상"},
@@ -1061,13 +1080,16 @@ def vwap_scale(x: dict, live: list, paired: list, pw: int, pwr: Optional[float],
          "what_ko": "페이퍼와 결과가 비슷한지 (숫자 기준은 없어요)"},
         {"id": "gap", "ok": None, "value": cost, "n": gaps.get("entry_n") if gaps.get("state") == "ok" else 0,
          "ko": (f"진입 차이 평균 순ROE {cost * 100:+.1f}%p (잰 거래 {gaps.get('entry_n')}번)" if cost is not None else "진입 차이를 잰 거래가 아직 없어요"),
-         "what_ko": "실거래 진입이 페이퍼보다 얼마나 불리했나"}]
+         "what_ko": "실거래 진입이 페이퍼보다 얼마나 불리했나"},
+        {"id": "breakeven", "ok": (lwr > be) if (lwr is not None and n >= SMALL_N) else None, "value": be, "n": n,
+         "ko": f"본전 승률 {be:.0%} ({be_from} 평균 이익·손실로 계산 · 5년 기록 {VWAP_BREAKEVEN_5Y:.0%})",
+         "what_ko": "승률이 본전 승률보다 높은지 (20번 미만은 판단 안 함)"}]
     ok = bool(checks[0]["ok"] and checks[1]["ok"])
-    out = {"ok": ok, "vwap": True, "since_ms": since, "checks": checks,
+    out = {"ok": ok, "vwap": True, "since_ms": since, "checks": checks, "breakeven": be, "breakeven_from": be_from,
            "ko": VWAP_SCALE_KO.format(n=n, w=lwr or 0) if ok else "아직 아니에요: " + " · ".join(c["ko"] for c in checks[:2] if not c["ok"]),
            "note_ko": VWAP_SCALE_NOTE_KO}
-    if lwr is not None and n >= SMALL_N and lwr < VWAP_STOP_WIN:
-        out["warn_ko"] = (f"실거래 승률 {lwr:.0%}: 이 구조의 본전선 {VWAP_STOP_WIN:.0%}보다 낮아요 · 이어지면 멈추고 다시 봐요 "
+    if lwr is not None and n >= SMALL_N and lwr < be:
+        out["warn_ko"] = (f"실거래 승률 {lwr:.0%}: 본전 승률 {be:.0%}({be_from} 평균으로 계산)보다 낮아요 · 이어지면 멈추고 다시 봐요 "
                           f"(멈추기: {STOP_CMD})")
     return out
 
