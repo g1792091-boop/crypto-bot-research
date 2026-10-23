@@ -8,6 +8,7 @@ import hmac
 import json
 import pathlib
 import socket
+import sqlite3
 from urllib.parse import urlparse
 
 import pytest
@@ -18,8 +19,8 @@ from paperbot import risk as R
 from paperbot.executor import ExecConfig, ExecStore, Executor, Intent, Refused
 from paperbot.mainnet import FLAG, FLAG_VALUE, check_permissions
 from paperbot.notify import ListNotifier
-from paperbot.testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, RateLimited, TestnetError, TransientError,
-                              covers, live_stops, move_stop, place_stop)
+from paperbot.testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, ProtectionError, RateLimited, TestnetError,
+                              TransientError, covers, live_stops, move_stop, place_stop)
 
 T0 = 1_800_000_000_000
 BTC, DOGE = "BTCUSDT", "DOGEUSDT"
@@ -44,11 +45,19 @@ class Clock:
         return self.t
 
 
-def make(fake=None, clock=None, db=None, **kw):
+def ticking(clock):
+    """A sleep that moves the test clock (the fake's lags and the protective budget run on it)."""
+    def tick(s):
+        clock.t += int(round(s * 1000))
+    return tick
+
+
+def make(fake=None, clock=None, db=None, advance=False, **kw):
     clock = clock or Clock()
     fake = fake or FakeFlipster()
     fake.clock = clock
-    c = FL.FlipsterClient("fk", "fs", send=fake, clock_ms=clock, sleep=lambda s: None, ledger=FL.IdLedger(db), **kw)
+    c = FL.FlipsterClient("fk", "fs", send=fake, clock_ms=clock, sleep=ticking(clock) if advance else (lambda s: None),
+                          ledger=FL.IdLedger(db), **kw)
     return c, fake, clock
 
 
@@ -474,13 +483,17 @@ def test_the_ledger_lives_in_the_executor_database_and_is_trimmed(tmp_path):
     store = ExecStore(db)
     c, fake, clock = make(db=db)
     ready(c)
-    c.market(BTC, "BUY", 1.0, client_id="pbOld")
+    c.market(BTC, "BUY", 2.0, client_id="pbOld")
+    c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbOldX")
     store.event(clock.t, "INFO", "x", "an executor write in between")
     store.commit()
     clock.t += FL.LEDGER_KEEP_MS + 60_000
     c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbNew")
     cids = [r[0] for r in store.conn.execute("SELECT cid FROM flipster_ids ORDER BY sent_ms")]
-    assert cids == ["pbNew"]
+    assert cids == ["pbOld", "pbNew"]                       # an opening order's row stays: a replay starts there
+    clock.t += FL.LEDGER_OPEN_KEEP_MS
+    c.market(BTC, "BUY", 1.0, client_id="pbNewer")
+    assert [r[0] for r in store.conn.execute("SELECT cid FROM flipster_ids")] == ["pbNewer"]
     store.close()                                           # the executor's clean close still leaves WAL mode
     import sqlite3
     conn = sqlite3.connect(db)
@@ -887,7 +900,7 @@ class Source:
 
 
 class World:
-    def __init__(self, tmp_path, fake=None, **cfg_kw):
+    def __init__(self, tmp_path, fake=None, advance=False, **cfg_kw):
         self.clock = Clock()
         self.fake = fake or FakeFlipster(wallet=10_000.0)
         self.fake.clock = self.clock
@@ -902,7 +915,8 @@ class World:
                               paper_env_file=str(tmp_path / "live.env"), **cfg_kw)
         self.store = ExecStore(self.cfg.db)
         kw = dict(send=self.fake, clock_ms=self.clock, sleep=lambda s: None)
-        self.client = FL.FlipsterClient("fk", "fs", ledger=FL.IdLedger(self.cfg.db), **kw)
+        self.client = FL.FlipsterClient("fk", "fs", ledger=FL.IdLedger(self.cfg.db),
+                                        **{**kw, "sleep": ticking(self.clock) if advance else kw["sleep"]})
         self.keycheck = FL.FlipsterKeyCheckClient("fk", "fs", attested=True, **kw)
         self.ex = Executor(self.cfg, self.client, self.src, self.store, self.note, now_ms=self.clock,
                            sleep=lambda s: None, keycheck=self.keycheck, env=dict(LIVE_ENV))
@@ -1042,20 +1056,64 @@ def edit_route(fake, path, f, method="GET"):
 
 
 @pytest.mark.parametrize("history_lag", [0, 5_000])
-def test_a_new_stop_the_pending_list_shows_late_is_confirmed_never_taken_for_cancelled(history_lag):
-    """1: the pending list lags (the docs warn of processing delays): its order history row (NEW) or, the history
-    lagging too, its NEW execution row says it rests. The old reading ("no fill, so cancelled") made place_stop raise
-    ProtectionError and the executor close a protected position."""
-    c, fake, clock = make()
+def test_a_new_stop_the_pending_list_shows_late_is_waited_for_never_taken_for_cancelled(history_lag):
+    """1: the pending list lags (the docs warn of processing delays). The old reading ("no fill, so cancelled") made
+    place_stop raise ProtectionError and the executor close a protected position; round 2: stop_close waits for the
+    list (about 5 s, within the protective budget) and place_stop confirms from it."""
+    c, fake, clock = make(advance=True)
     ready(c)
     c.market(BTC, "BUY", 5.0, client_id="pbE")
     fake.pending_lag_ms, fake.history_lag_ms = 2_000, history_lag
+    t0 = clock.t
     st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbLag")
     assert st["algoStatus"] == "NEW" and st["triggerPrice"] == "95" and st["quantity"] == "5"
-    assert live_stops(c, BTC) == []                         # not listed yet
-    assert c.algo_order(algo_id=st["algoId"])["algoStatus"] == "NEW"
-    clock.t += 6_000
+    assert 2_000 <= clock.t - t0 <= FL.PROTECT_WAIT_S * 1000
     assert [x["algoId"] for x in live_stops(c, BTC)] == [st["algoId"]]
+
+
+def test_a_stop_the_pending_list_does_not_show_is_never_confirmed_from_its_record():
+    """3 (round 2): a NEW order record of a stop the list does not show is "not settled": neither fired nor cancelled,
+    and never confirmed live (the record can lag behind a cancel as the list lags behind a placement)."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 5.0, client_id="pbE")
+    fake.pending_lag_ms = 30_000
+    t0 = clock.t
+    with pytest.raises(ProtectionError, match="UNCONFIRMED"):
+        place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbLag")
+    assert clock.t - t0 <= FL.PROTECT_WAIT_S * 1000
+    sid = c.ledger.get("pbLag")["order_id"]
+    assert c.algo_order(algo_id=sid)["algoStatus"] == FL.UNCONFIRMED and len(fake.live_stops(BTC)) == 1
+
+
+def test_a_cancelled_new_stop_whose_history_still_says_new_never_lets_a_move_cancel_the_old_stop():
+    """3 (round 2): the lag the other way. The exchange cancels the new stop right after accepting it; the order
+    history still shows its NEW row and the CANCELED execution is not written yet. Read as resting, move_stop would
+    cancel the old stop and leave the position without one."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 5.0, client_id="pbE")
+    old = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbS1")
+    fake.kill_new_stops, fake.history_status_lag_ms, fake.exec_lag_ms = True, 60_000, 60_000
+    with pytest.raises(ProtectionError, match="UNCONFIRMED"):
+        move_stop(c, BTC, "SELL", 97.0, 5.0, [old["algoId"]], client_id="pbS2")
+    assert [o["orderId"] for o in fake.live_stops(BTC)] == [old["algoId"]] and not fake.unprotected()
+    clock.t += 60_000                                        # the records catch up: cancelled, on an explicit record
+    assert c.algo_order(client_id="pbS2")["algoStatus"] == "CANCELED"
+
+
+def test_executor_keeps_the_old_stop_when_the_new_one_is_cancelled_behind_a_stale_history(tmp_path):
+    w = World(tmp_path, advance=True)
+    w.paper(stop=95.0)
+    w.loop()
+    assert w.stops() == [(95.0, 5.0)]
+    w.fake.kill_new_stops, w.fake.history_status_lag_ms, w.fake.exec_lag_ms = True, 60_000, 60_000
+    w.fake.set_price(BTC, 105.0)
+    w.paper(stop=101.1)
+    w.loop()
+    kinds = [k for (k,) in w.store.conn.execute("SELECT kind FROM events")]
+    assert "move_failed" in kinds and "protect_failed" not in kinds
+    assert w.fake.pos[BTC] == 5 and w.stops() == [(95.0, 5.0)] and not w.fake.unprotected()
 
 
 def test_a_stop_is_cancelled_only_on_an_explicit_record():
@@ -1071,7 +1129,7 @@ def test_a_stop_is_cancelled_only_on_an_explicit_record():
 
 
 def test_a_refused_cancel_of_a_live_stop_is_not_already_finished():
-    c, fake, clock = make()
+    c, fake, clock = make(advance=True)
     ready(c)
     c.market(BTC, "BUY", 5.0, client_id="pbE")
     fake.pending_lag_ms = 2_000
@@ -1087,7 +1145,7 @@ def test_a_refused_cancel_of_a_live_stop_is_not_already_finished():
 
 
 def test_executor_keeps_a_position_whose_new_stop_the_pending_list_shows_late(tmp_path):
-    w = World(tmp_path)
+    w = World(tmp_path, advance=True)
     w.fake.pending_lag_ms, w.fake.history_lag_ms = 2_000, 2_000
     w.paper(stop=95.0)
     w.loop()
@@ -1174,9 +1232,10 @@ def test_an_older_identical_stop_pending_is_never_taken_for_a_lost_one():
     assert old["algoId"] in json.loads(c.ledger.get("pbLostStop")["before_ids"])
 
 
-def test_retry_after_is_honoured_and_a_429_never_leaves_two_stops():
-    """6: a 429 asks for 20 s: waited (at most 60 s). A stop or a close answered 429 is looked up before it is sent
-    again: one that ran anyway is found, never doubled."""
+def test_retry_after_is_honoured_and_a_429_never_sends_an_order_twice():
+    """6 (round 1); 2 and 5 (round 2): a read's 429 asks for 20 s: waited; past RETRY_AFTER_MAX_S it is not waited
+    here but raised (the executor waits it out). An order answered 429 is never sent again by the client: a stop or a
+    close is looked up by its client id (one that ran anyway is found), an opening order is an unknown outcome."""
     c, fake, clock = make()
     pauses = []
 
@@ -1189,15 +1248,22 @@ def test_retry_after_is_honoured_and_a_429_never_leaves_two_stops():
     assert pauses == [20.0]
     fake.fail("GET", "/api/v1/account", ("429", 600))
     pauses.clear()
-    c.account()
-    assert pauses == [FL.RETRY_AFTER_MAX_S]
+    with pytest.raises(RateLimited) as e:
+        c.account()
+    assert e.value.retry_after == 600 and pauses == []
     ready(c)
     c.market(BTC, "BUY", 5.0, client_id="pbE")
     fake.fail("POST", "/api/v1/trade/order", "429_after")   # it ran; the answer says 429
     st = c.stop_close(BTC, "SELL", 95.0, 5.0, client_id="pbS1")
     assert st["algoStatus"] == "NEW" and len(fake.live_stops(BTC)) == 1 and len(posts(fake, "STOP_MARKET")) == 1
-    fake.fail("POST", "/api/v1/trade/order", ("429", 20))   # refused: not there, sent again once
-    st2 = c.stop_close(BTC, "SELL", 96.0, 5.0, client_id="pbS2")
+    fake.fail("POST", "/api/v1/trade/order", ("429", 20))   # refused, but it looks the same: never sent again here
+    with pytest.raises(FL.RateLimitedUnknown):
+        c.stop_close(BTC, "SELL", 96.0, 5.0, client_id="pbS2")
+    assert len(posts(fake, "STOP_MARKET")) == 2 and c.ledger.get("pbS2")["state"] == "sent"
+    with pytest.raises(TransientError):                     # looked up: unknown until the settle window has passed
+        c.algo_order(client_id="pbS2")
+    clock.t += FL.SETTLE_MS
+    st2 = c.stop_close(BTC, "SELL", 96.0, 5.0, client_id="pbS2")     # found absent by then: sent again, once
     assert st2["algoStatus"] == "NEW" and len(fake.live_stops(BTC)) == 2 and len(posts(fake, "STOP_MARKET")) == 3
     fake.fail("POST", "/api/v1/trade/order", "429_after")   # a close that ran: found, not sent again
     x = c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbX")
@@ -1208,23 +1274,255 @@ def test_retry_after_is_honoured_and_a_429_never_leaves_two_stops():
     assert len(posts(fake, "MARKET")) == 3
 
 
-def test_a_missing_smallest_order_value_is_an_error_shown_by_specs_and_check():
-    """7: never 0 from a missing notionalMinOrderAmount."""
+def test_a_partial_cut_answered_429_that_ran_is_found_never_cut_twice():
+    """2 (round 2, probe5 B): a cut of 1 from 2 answered 429 although it ran; the history shows it 3 s later (past
+    its 1 s Retry-After). The old client looked once, found nothing and sent it again: 2 -> 0."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 2.0, client_id="pbE")
+    fake.history_lag_ms = 3_000
+    fake.fail("POST", "/api/v1/trade/order", "429_after")
+    o = c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbX1")
+    assert (o["status"], o["executedQty"]) == ("FILLED", "1") and fake.amt(BTC) == 1.0
+    assert len(posts(fake, "MARKET")) == 2 and c.ledger.get("pbX1")["how"] == "search"
+
+
+def test_a_stop_answered_429_that_rests_is_found_never_placed_twice():
+    """2 (round 2, probe5 C): the stop rests although it was answered 429; the pending list and the history show it
+    3 s late; a second stop would be refused (two_stops off)."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 1.0, client_id="pbE")
+    fake.pending_lag_ms = fake.history_lag_ms = 3_000
+    fake.two_stops = False
+    fake.fail("POST", "/api/v1/trade/order", "429_after")
+    st = place_stop(c, BTC, "SELL", 95.0, 1.0, client_id="pbS1")
+    assert st["algoStatus"] == "NEW" and len(fake.live_stops(BTC)) == 1 and len(posts(fake, "STOP_MARKET")) == 1
+    assert c.ledger.get("pbS1")["state"] == "placed" and c.algo_order(client_id="pbS1")["algoStatus"] == "NEW"
+
+
+def test_a_full_close_answered_429_that_ran_is_found_and_reads_filled():
+    """2 (round 2, probe5 D)."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 1.0, client_id="pbE")
+    fake.history_lag_ms = 3_000
+    fake.fail("POST", "/api/v1/trade/order", "429_after")
+    o = c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbX2")
+    assert o["status"] == "FILLED" and fake.amt(BTC) == 0 and c.ledger.get("pbX2")["state"] == "placed"
+    clock.t += 30_000
+    assert c.order(BTC, client_id="pbX2")["status"] == "FILLED" and len(posts(fake, "MARKET")) == 2
+
+
+def test_a_close_answered_429_not_found_in_time_stays_unknown_and_never_goes_past_the_position():
+    """2 (round 2): not found within the protective budget: RateLimitedUnknown, its row stays "sent" (never
+    "refused"); the same close sent again after the settle window is sized from the position then."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 1.0, client_id="pbE")
+    fake.history_lag_ms = 40_000                             # shown only after the settle window
+    fake.fail("POST", "/api/v1/trade/order", "429_after")
+    t0 = clock.t
+    with pytest.raises(FL.RateLimitedUnknown):
+        c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbX")
+    assert clock.t - t0 <= FL.PROTECT_WAIT_S * 1000 and fake.amt(BTC) == 0
+    assert c.ledger.get("pbX")["state"] == "sent"
+    with pytest.raises(TransientError):                     # looked up: unknown, never "not found" yet
+        c.order(BTC, client_id="pbX")
+    clock.t += FL.SETTLE_MS
+    with pytest.raises(TestnetError) as e:                  # sent again only up to the position now: none left
+        c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbX")
+    assert e.value.code == -2022 and len(posts(fake, "MARKET")) == 2
+
+
+def test_protective_calls_end_within_their_budget():
+    """5 (round 2): a stop answered 429 whose look-ups are throttled too: every wait shares PROTECT_WAIT_S, then
+    RateLimited (the executor's protective handling takes over); a Retry-After longer than the budget is not waited."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 5.0, client_id="pbE")
+    real = fake._place
+
+    def place(q, body):                                      # from the stop's 429 on, its look-ups are throttled too
+        if q["type"] == "STOP_MARKET":
+            fake.fail("GET", "/api/v1/trade/order", ("429", 3), times=100)    # the pending list and the history
+            return 429, b'{"error":{"type":"TooManyRequests","message":"Too Many Requests"}}', {"Retry-After": "3"}
+        return real(q, body)
+    fake._place = place
+    t0 = clock.t
+    with pytest.raises(FL.RateLimitedUnknown):
+        c.stop_close(BTC, "SELL", 95.0, 5.0, client_id="pbS")
+    assert 3_000 <= clock.t - t0 <= FL.PROTECT_WAIT_S * 1000
+    assert c.ledger.get("pbS")["state"] == "sent" and len(posts(fake, "STOP_MARKET")) == 1
+    fake.fails.clear()
+    fake._place = real
+    fake.fail("POST", "/api/v1/trade/order", ("429", 60))
+    t0 = clock.t
+    with pytest.raises(RateLimited):
+        c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbX")
+    assert clock.t - t0 <= 1_000 and fake.amt(BTC) == 5
+
+
+def test_executor_closes_a_position_whose_stop_stays_throttled(tmp_path):
+    """5 (round 2): the stop after the entry is answered 429 with Retry-After 60: the client gives up within its
+    budget, Guarded looks it up once more, and Executor._protect closes the position (it never waits a minute)."""
+    w = World(tmp_path, advance=True)
+    real, seen = w.fake._place, []
+
+    def place(q, body):
+        if q["type"] == "STOP_MARKET" and not seen:
+            seen.append(1)
+            return 429, b'{"error":{"type":"TooManyRequests","message":"Too Many Requests"}}', {"Retry-After": "60"}
+        return real(q, body)
+    w.fake._place = place
+    w.paper(stop=95.0)
+    t0 = w.clock.t
+    w.loop()
+    kinds = [k for (k,) in w.store.conn.execute("SELECT kind FROM events")]
+    assert "protect_failed" in kinds and w.fake.pos[BTC] == 0 and not w.fake.pending
+    assert w.clock.t - t0 <= 3_000 + 2 * FL.PROTECT_WAIT_S * 1000
+
+
+def test_a_missing_smallest_order_value_refuses_new_entries_only():
+    """7 (round 1) / 4 (round 2): never 0 from a missing notionalMinOrderAmount, and never a start that fails for it:
+    that coin takes no new entry (a clear reason) while a position on it is still protected and closed."""
     c, fake, clock = make()
+    ready(c, (BTC, DOGE))
+    c.market(DOGE, "BUY", 100.0, client_id="pbD")           # opened before the value went missing
     edit_route(fake, "/api/v1/market/contract",
                lambda d: [{k: v for k, v in r.items() if not (r["symbol"] == "DOGEUSDT.PERP"
                                                               and k == "notionalMinOrderAmount")} for r in d])
-    with pytest.raises(TestnetError) as e:
-        c.spec(DOGE)
-    assert e.value.code == "BAD_SPEC" and "notionalMinOrderAmount" in e.value.msg
+    c.specs.clear()
+    c.contract_ms = None
+    sp = c.spec(DOGE)
+    assert sp["min_notional"] is None and "notionalMinOrderAmount" in sp["problem"]
     assert c.spec(BTC)["min_notional"] == 5.0
     text = FL.specs_text(c)
-    assert "DOGEUSDT: 계약 정보를 쓸 수 없습니다" in text and "notionalMinOrderAmount" in text and "BTCUSDT: API" in text
+    assert "DOGEUSDT: API 거래 가능" in text and "최소 주문 없음 → 새 진입 안 함" in text and "BTCUSDT: API" in text
+    for call in (lambda: c.leverage(DOGE, 10), lambda: c.market(DOGE, "BUY", 100.0, client_id="pbD2")):
+        with pytest.raises(TestnetError) as e:
+            call()
+        assert e.value.code == "BAD_SPEC" and "새 진입" in e.value.msg
+    assert len(posts(fake, "MARKET")) == 1
+    st = place_stop(c, DOGE, "SELL", 95.0, 100.0, client_id="pbDs")       # protection and the close still work
+    assert st["algoStatus"] == "NEW"
+    assert c.market(DOGE, "SELL", 100.0, reduce_only=True, client_id="pbDx")["status"] == "FILLED"
+    assert not any(ok for ok, line in c.account_setup([DOGE])[1:])
     d = FL.FlipsterDrill(c, wait=lambda s: None, elapsed=lambda: clock.t / 1000)
     with pytest.raises(AssertionError):
         d.check()
     step = next(r for r in d.log if r["step"].startswith("계약 정보"))
     assert not step["ok"] and "notionalMinOrderAmount" in step["detail"][DOGE]["error"]
+
+
+def test_executor_starts_with_a_coin_missing_its_smallest_order_value_and_refuses_only_its_entries(tmp_path):
+    """4 (round 2): Executor.start() reads every coin's spec; a BAD_SPEC there was a restart loop."""
+    fake = FakeFlipster(wallet=10_000.0)
+    edit_route(fake, "/api/v1/market/contract",
+               lambda d: [{k: v for k, v in r.items() if not (r["symbol"] == "ETHUSDT.PERP"
+                                                              and k == "notionalMinOrderAmount")} for r in d])
+    w = World(tmp_path, fake=fake)
+    et = w.clock.t - 60_000
+    w.src.intent = Intent(key=f"COMBO@mix|ETHUSDT|{et}", symbol="ETHUSDT", side=1, qty=5.0, leverage=20, stop=95.0,
+                          entry_price=100.0, entry_time=et)
+    w.loop()
+    assert w.fake.pos["ETHUSDT"] == 0 and w.ex.trade is None and not posts(w.fake, "MARKET")
+    texts = [t for k, t in w.store.conn.execute("SELECT kind, text FROM events") if k == "leverage_refused"]
+    assert texts and "최소 주문 금액" in texts[0]
+    w.src.intent = None
+    w.paper(stop=95.0)                                       # the other coins still trade
+    w.loop()
+    assert w.fake.pos[BTC] == 5 and w.stops() == [(95.0, 5.0)]
+
+
+def test_a_replay_starts_only_where_the_coin_is_known_flat():
+    """1 (round 2, probe4): B's window (5 s before its entry) holds A's close; reading back for A's entry also reads
+    an older short's close by a stop whose fill carries a child id (no ledger row). Replayed from there, that fill
+    opened a phantom long and B booked -2.5 for a true -5. Each replay now starts at one of OUR opening fills."""
+    D, H, T = 86_400_000, 3_600_000, T0
+
+    def x(eid, oid, side, qty, px, ms):
+        return {"execId": eid, "orderId": oid, "symbol": "BTCUSDT.PERP", "side": side, "execType": "TRADE",
+                "lastQty": str(qty), "lastPrice": str(px), "execFee": "0", "transactTime": str(ms * 1_000_000 + 7),
+                "settlementCurrency": "USDT"}
+    rows = [x("z1", "zE", "SELL", 1, 100, T - 10 * D),       # Z: a short (ours, opening)
+            x("z2", "zC", "BUY", 1, 90, T - 6 * D),          # ... closed by a stop's child order (no ledger row)
+            x("a1", "aE", "BUY", 1, 100, T - H),             # A: long
+            x("a2", "aC", "SELL", 1, 110, T - 2_000),        # ... closed 2 s before B's entry (ours, reduce-only)
+            x("b1", "bE", "BUY", 1, 100, T + 1_000),         # B: long
+            x("b2", "bC", "SELL", 1, 95, T + H)]             # ... closed (ours, reduce-only): true P&L -5
+
+    def client(rows, ledger_rows):
+        led = FL.IdLedger(None)
+        for cid, oid, ro, sent in ledger_rows:
+            led.put(cid, BTC, "X", "MARKET", "1", ro, None, sent)
+            led.bind(cid, oid)
+        c = FL.FlipsterClient("k", "s", send=lambda *a: None, sleep=lambda s: None, ledger=led)
+        c._execs = lambda sym, lo, hi, order_id=None, exec_type=None: [
+            r for r in rows if lo <= int(r["transactTime"]) // 1_000_000 <= hi]
+        return c
+    led = [("z", "zE", False, T - 10 * D - 50), ("a", "aE", False, T - H - 50), ("ac", "aC", True, T - 2_050),
+           ("b", "bE", False, T + 950), ("bc", "bC", True, T + H - 50)]
+    fills = client(rows, led).user_trades(BTC, T - 5_000, T + H + 5_000)
+    got = {f["orderId"]: (f["realizedPnl"], f["realizedSource"], f.get("realizedCheck") == "mismatch") for f in fills}
+    assert got == {"aC": ("10", "replay", False), "bE": ("0", "open", False), "bC": ("-5", "replay", False)}
+    # a piece that does not end flat before the next start (a fill missing): its fills are never a final number
+    gap = [x("a1", "aE", "BUY", 2, 100, T - H), x("a2", "aC", "SELL", 1, 110, T - 2_000)] + rows[4:]
+    fills = client(gap, led).user_trades(BTC, T - 5_000, T + H + 5_000)
+    assert {f["orderId"]: f.get("realizedCheck") == "mismatch" for f in fills} == {"aC": True, "bE": False,
+                                                                                  "bC": False}
+    # no start found within REPLAY_BACK_MS: the carried fills are "mismatch"
+    fills = client(rows[3:], led[3:]).user_trades(BTC, T - 5_000, T + H + 5_000)
+    assert {f["orderId"]: f.get("realizedCheck") == "mismatch" for f in fills} == {"aC": True, "bE": False,
+                                                                                  "bC": False}
+
+
+def test_a_neighbours_close_and_an_older_stop_fill_never_change_a_trades_pnl():
+    """1 (round 2): probe4 on the fake exchange (a fired stop's fill carries a new MARKET order's id)."""
+    c, fake, clock = make()
+    ready(c)
+    D, H = 86_400_000, 3_600_000
+    T = clock.t + 11 * D
+    c.market(BTC, "SELL", 1.0, client_id="pbZe")
+    fake.own_fills = False
+    place_stop(c, BTC, "BUY", 105.0, 1.0, client_id="pbZs")
+    clock.t += 4 * D
+    fake.set_price(BTC, 106.0)                                # fires: a child BUY at 106, no ledger row
+    assert fake.pos[BTC] == 0
+    fake.own_fills = True
+    for t, px, side, ro, cid in ((T - H, 100.0, "BUY", False, "pbAe"), (T - 2_000, 110.0, "SELL", True, "pbAx"),
+                                 (T + 1_000, 100.0, "BUY", False, "pbBe"), (T + H, 95.0, "SELL", True, "pbBx")):
+        clock.t = t
+        fake.set_price(BTC, px)
+        c.market(BTC, side, 1.0, reduce_only=ro, client_id=cid)
+    ids = {c.ledger.get(cid)["order_id"] for cid in ("pbBe", "pbBx")}
+    mine = [f for f in c.user_trades(BTC, T - 5_000, T + H + 5_000) if f["orderId"] in ids]
+    assert len(mine) == 2 and sum(float(f["realizedPnl"]) for f in mine) == pytest.approx(-5.0)
+    assert not any(f.get("realizedCheck") == "mismatch" for f in mine)
+
+
+def test_the_ledger_migrates_once_when_opened_and_reads_never_write(tmp_path):
+    """6 (round 2, probe6): an old ledger (no before_ids / last_ms) is migrated when it is opened (the executor's
+    start), so a read while the executor's own connection holds a write never waits for a lock."""
+    p = str(tmp_path / "old.db")
+    old = FL.LEDGER_SCHEMA.replace(",\n    before_ids TEXT,\n    last_ms INTEGER", "")
+    assert "before_ids" not in old
+    con = sqlite3.connect(p)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.executescript(old)
+    con.execute("INSERT INTO flipster_ids VALUES ('pbAe','BTCUSDT','BUY','MARKET','0.01',0,NULL,1800000000000,NULL,"
+                "'sent',NULL,NULL)")
+    con.commit()
+    led = FL.IdLedger(p, timeout_s=0.3)
+    con.execute("INSERT INTO flipster_meta VALUES ('x', 1, 'y')")       # a write held open
+    try:
+        r = led.get("pbAe")
+    finally:
+        con.commit()
+    assert (r["state"], r["before_ids"], r["last_ms"]) == ("sent", None, 1800000000000)
+    assert led.put("pbS", BTC, "SELL", "STOP_MARKET", "0.01", True, "95", 1800000001000, before=["a"])
+    assert FL.IdLedger(p).get("pbS")["before_ids"] == '["a"]'
+    con.close()
 
 
 def test_cancelled_spelled_with_two_ls_is_read_as_canceled():

@@ -44,19 +44,21 @@ hard-coded size).
                                the order history and the executions of that orderId
   stop_close(...)              ledger intent row (with the orderIds pending before it), then POST /api/v1/trade/order
                                type STOP_MARKET, closing side, reduceOnly, price = the trigger, quantity = the
-                               position's
+                               position's; then waited for in the pending list (about 5 s)
   algo_order / open_algo_orders GET /api/v1/trade/order (pending STOP_MARKET rows); a stop the pending list does not
                                show (any more, or not yet): its order history row and its executions, and only an
                                explicit record decides (fired: fills / TRIGGERED / FILLED; cancelled: CANCELED /
-                               REJECTED; a NEW row or NEW executions only: still resting)
+                               REJECTED; a NEW row or NEW executions only: UNCONFIRMED, neither fired nor live)
   cancel_algo / cancel / ...   DELETE /api/v1/trade/order {symbol, orderId} (cancel_all / cancel_all_algo: each
                                pending order / stop of the symbol)
   position / positions         GET  /api/v1/account/position  positionSide LONG / SHORT, positionAmount (base asset)
   user_trades                  GET  /api/v1/trade/execution/history execType TRADE -> fills; realized P&L replayed from
                                the fills' own prices (paperbot/mexc.py fills_from_deals; our reduce-only orders from the
-                               ledger mark the closing fills), from earlier fills when the position opened before the
-                               window (a trade read in 7-day pieces). Flipster gives no per-fill P&L: the drill checks
-                               the replay against the wallet change
+                               ledger mark the closing fills), each replay starting at the first fill of one of OUR
+                               opening orders (a known flat point), read back for a position opened before the window
+                               (a trade read in 7-day pieces); a fill no such start covers is "mismatch", never a final
+                               number. Flipster gives no per-fill P&L: the drill checks the replay against the wallet
+                               change
   income                       the execution history's FUNDING rows (FUNDING_FEE, ``income`` = -execFee). The docs offer
                                no deposit / withdrawal history: no TRANSFER rows (a transfer moves no loss baseline; the
                                live configs set no daily-loss or drawdown halt)
@@ -74,12 +76,34 @@ order time) not one of the orders already pending when it was sent (a stop's row
 bound to the cid and returned. Several: an "unknown" error (never "not found"). None: "not found" only 25 s after the
 last send (the history is surely written by then), a TransientError before. No row at all: not found. An opening order
 is never sent twice (a cid already in the ledger is looked up, never sent again; Guarded never resends one either); a
-reduce-only order is sent again only after its earlier send was found to be absent past the 25 s. A 429 "throttles or
-rejects" (the docs): it may still run, so an opening order's 429 is an unknown outcome (never resent), and a stop's or
-a close's is waited out (Retry-After), looked up, and sent again only when the look-up does not find it. A row is
-written durably before an opening order goes out (not possible: the entry is refused, nothing sent); a stop or a close
-still goes out when the database cannot be written (its row is kept in memory: protection first). Rows older than 30
-days are trimmed.
+reduce-only order is sent again only after its earlier send was found to be absent past the 25 s, and then sized from
+the position at that moment (never past it). A 429 "throttles or rejects" (the docs): it may still run, so no order is
+ever sent again after one inside this client: an opening order's 429 is an unknown outcome; a stop's or a close's is
+looked up by its cid (after the Retry-After, then every 2 s, within the protective budget below) and, not found by
+then, raised as RateLimitedUnknown with its row left "sent" (never "refused": a later look-up still finds it). A row
+is written durably before an opening order goes out (not possible: the entry is refused, nothing sent); a stop or a
+close still goes out when the database cannot be written (its row is kept in memory: protection first). The columns
+added after the first version are added when the ledger is opened (the executor's start), so a read never writes.
+Rows older than 30 days are trimmed, except our opening orders' rows (kept 98 days: user_trades starts its replay at
+them).
+
+Protective work (a stop, a reduce-only close, the look-up of one by its cid) has a budget: every wait inside one call
+(a Retry-After, the look-ups after a 429, the wait for a new stop to show in the pending list, the read-back) shares
+PROTECT_WAIT_S (10 s); the client's own request pacing never holds it back (at most its one-second window, within the
+budget). A wait that does not fit raises RateLimited at once, before anything more is sent, and the executor's own
+handling takes over (Guarded looks the cid up once more; then Executor._protect closes a position whose stop cannot
+be placed, a failed move keeps the old stop, a failed close is tried again).
+
+A stop is confirmed only from the pending list. Flipster's docs warn of processing delays, and the order history can
+lag behind a cancel just as the list lags behind a placement: a NEW history row (or NEW executions only) of a stop the
+list does not show is "not settled" (UNCONFIRMED), never "resting" and never "cancelled". stop_close waits about 5 s for
+the list; a stop still not listed makes place_stop raise ProtectionError (a new position is closed, a move keeps the
+old stop). The read-only paths take UNCONFIRMED as "not fired".
+
+A coin whose contract info lacks the smallest order value (notionalMinOrderAmount) is never read as $0: it refuses new
+entries with that reason (leverage() and an opening market order; specs, check and the preflight show it) while the
+executor starts and its open position is still protected and closed. A missing step, tick or maximum leverage is a
+BAD_SPEC error (a stop and a close need them).
 
 maxSlippagePrice is never sent. A close must close (a price cap could leave part of the position open). The docs mark it
 optional for every order, the paper rules assume a plain market fill and the owners trade market orders only, so an
@@ -93,8 +117,8 @@ real taker fee (Flipster charges its full fee; the payback app pays back outside
 realized P&L replayed from the fills against the wallet change; the ledger's history search finding a just-sent order
 by its cid; the sign of the FUNDING rows (compared with the app); which price the 1m candles are of; that the leverage
 read-back shows the set leverage (the position list may show no row for a coin without a position: then the setting is
-checked on the drill's position); that a new stop is in the pending list at once (a stop confirmed from its order record
-while the list lags would read as missing in the executor's next loop).
+checked on the drill's position); that a new stop shows in the pending list within about 5 s (a stop not listed by
+then is not confirmed: the executor closes a new position, a move keeps the old stop).
 
 Safety:
 - ``FlipsterClient`` talks to trading-api.flipster.io only (class-level allowlist, https only, checked at construction;
@@ -105,8 +129,9 @@ Safety:
   no withdrawal, server IP bound" is the owners' statement FLIPSTER_LIVE_KEY_CHECKED=TRADE_ONLY_NO_WITHDRAW_IP_BOUND
   (refused without it), shown as a warning at every start.
 - An order that was accepted (it has an orderId) is never reported as not executed; a lost answer is looked up through
-  the ledger; an opening order is never sent twice (an opening order's 429 is an unknown outcome too: looked up, never
-  resent). A stop is reported cancelled only on an explicit record, never because nothing was found yet.
+  the ledger; an opening order is never sent twice, and no order is sent again after a 429 (looked up by its cid). A
+  stop is reported cancelled only on an explicit record, never because nothing was found yet, and confirmed live only
+  from the pending list.
 - The rate budget is waited out before a request is signed: api-expires never passes while it waits.
 - A position's size, the account equity and the stop list are never read as 0 / flat / empty from a missing or garbled
   field: such an answer is an error.
@@ -116,6 +141,7 @@ Safety:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import hmac
 import http.client
@@ -182,6 +208,7 @@ HISTORY_DEPTH = 24                                    # a full history page is r
 HISTORY_REQUESTS = 64                                 # ... and with at most this many requests
 REPLAY_PIECE_MS = 7 * 86_400_000                      # user_trades: a position opened before the window is replayed
 REPLAY_BACK_MS = 91 * 86_400_000                      # from earlier fills, read back a week at a time, at most 91 days
+LEDGER_OPEN_KEEP_MS = REPLAY_BACK_MS + REPLAY_PIECE_MS   # an opening order's ledger row is kept this long (the anchor)
 BALANCE_CACHE_MS = 60_000                             # the assets list (only the start gates read it)
 REMAINING = "RemainingPositionsExist"                 # PUT trade-mode while a position is open (the docs' name)
 REMAINING_CODE = "REMAINING_POSITIONS"
@@ -191,15 +218,32 @@ AMBIGUOUS = "AMBIGUOUS_ORDER"                         # ledger: several orders f
 RATE_WINDOWS = ((1_000, 8), (60_000, 240))
 READ_RETRIES = 3                                      # a read refused for the rate (429): read again after a pause
 READ_PAUSE_S = 1.0
-# a Retry-After is waited out up to this inside one request (a longer one: the error goes up and the executor's loop
-# waits it out, its RateLimited handling)
+# a read's (or a RETRY_WRITES write's) Retry-After up to this is waited out inside the request and the request sent
+# again; a longer one is not waited here: req() raises the RateLimited with its Retry-After at once (the executor's
+# Guarded retry or its loop waits it out)
 RETRY_AFTER_MAX_S = 60.0
 # writes sent again after a 429 without a look-up: the ones that change nothing when they run twice (settings,
-# cancels). The docs say a 429 "throttles or rejects": it may still run. An order is never sent again blindly: a stop
-# or a close is looked up by its client id first (_send), an opening order never again (an unknown outcome)
+# cancels). The docs say a 429 "throttles or rejects": it may still run. An order is never sent again by this client
+# after a 429: a stop or a close is looked up by its client id (_send), an opening order is an unknown outcome
 RETRY_WRITES = frozenset({"leverage_set", "trade_mode", "cancel"})
+# protective work (a stop, a reduce-only close, the look-up of one by its client id): every wait inside one call (a
+# Retry-After, the look-ups after a 429, the wait for a new stop to be listed, the read-back; the pace only for its
+# one-second window, never past this) shares this many seconds; a wait that does not fit raises RateLimited at once,
+# before anything more is sent. The executor's own handling then takes over: Guarded looks the order up once more by
+# its client id (about 1 s + 3.5 s of backoff), then Executor._protect closes the position when its stop cannot be
+# placed, a failed move keeps the old stop, a failed close is tried again (each a new protective call, its own budget)
+PROTECT_WAIT_S = 10.0
+BUDGET_CODE = "PROTECT_BUDGET"
+LOOKUP_PAUSE_S = 2.0                                  # after a 429 on a stop or a close: looked up this often
+LIST_WAITS = (0.3, 0.7, 1.0, 1.5, 1.5)               # a new stop must show in the pending list within these (5 s)
+UNCONFIRMED = "UNCONFIRMED"                           # a stop not listed whose record says only NEW: not settled
 EXPIRED_WORDS = ("expire", "timestamp", "recvwindow")
 NOT_FOUND_WORDS = ("notfound", "not found", "notexist", "not exist", "unknownorder", "unknown order")
+
+
+class RateLimitedUnknown(RateLimited):
+    """A stop or a close answered 429 that may still have run ("throttles or rejects"), not found by the look-ups the
+    protective budget allowed: its client id stays unknown (looked up again, never "refused", never resent blindly)."""
 
 
 def hosts_for(mode: str) -> tuple:
@@ -300,6 +344,12 @@ def signature(secret: str, method: str, path: str, expires: int, body: Optional[
     return hmac.new(secret.encode(), msg, hashlib.sha256).hexdigest()
 
 
+def _exec_key(r: dict) -> tuple:
+    """An execution's place in time: its nanosecond transactTime, then its execId."""
+    t = str(r.get("transactTime") or "")
+    return (int(t) if t.isdigit() else to_ms(t, "transactTime") * 1_000_000, str(r.get("execId")))
+
+
 def fills_from_execs(rows: list, symbol: str, reduce_ids: set) -> list:
     """Flipster TRADE executions -> Binance userTrades-like fills. Flipster's fills carry no open/close flag and no
     realized P&L: in one-way mode a fill opposite to the running position closes it, so the realized P&L is replayed
@@ -330,6 +380,13 @@ def fills_from_execs(rows: list, symbol: str, reduce_ids: set) -> list:
         f.pop("vol", None)
         f["reduceOnly"] = f["orderId"] in reduce_ids
     return out
+
+
+def min_order_text(sp: dict) -> str:
+    """The smallest order value in words; missing: said plainly (that coin takes no new entry)."""
+    if sp.get("min_notional") is None:
+        return f"없음 → 새 진입 안 함({sp.get('problem')})"
+    return f"${sp['min_notional']:g}"
 
 
 def permission_record(attested: bool, account_read: bool) -> dict:
@@ -399,9 +456,21 @@ class IdLedger:
         self.meta: dict = {}
         self.failed: Optional[str] = None      # the last write that did not reach the file
         self.migrated = False
+        if path is not None and os.path.exists(path):
+            # once, when the ledger is opened (the executor's start): later reads never write. A database busy right
+            # now: the first write migrates instead (a read of a column not there yet is an error, never "no row")
+            try:
+                conn = sqlite3.connect(path, timeout=max(timeout_s, 5.0))
+                try:
+                    self._migrate(conn)
+                finally:
+                    conn.close()
+            except sqlite3.Error as e:
+                self.failed = f"{type(e).__name__}: {e}"
 
     # ------------------------------------------------------------ storage
     def _migrate(self, conn) -> None:
+        """Columns added after the first version, added in place (a write: at open and before a write only)."""
         if self.migrated:
             return
         have = {r[1] for r in conn.execute("PRAGMA table_info(flipster_ids)")}
@@ -436,7 +505,6 @@ class IdLedger:
         try:
             conn = sqlite3.connect(uri, uri=True, timeout=self.timeout_s)
             try:
-                self._migrate(conn)
                 return conn.execute(sql, args).fetchall()
             finally:
                 conn.close()
@@ -479,10 +547,6 @@ class IdLedger:
         row = self.get(cid)
         return False if row is None else self._save({**row, **kw})
 
-    def sending(self, cid: str, now_ms: int) -> bool:
-        """The order is sent again (after a 429 the look-up did not find): its look-up window follows this send."""
-        return self._change(cid, last_ms=int(now_ms), state="sent")
-
     def bind(self, cid: str, order_id: str, how: str = "answer") -> bool:
         return self._change(cid, order_id=str(order_id), state="placed", how=how)
 
@@ -508,23 +572,32 @@ class IdLedger:
         got = self._read(f"SELECT {', '.join(LEDGER_COLS)} FROM flipster_ids WHERE order_id = ?", (oid,))
         return self._row(got[0]) if got else None
 
-    def reduce_only_ids(self, order_ids) -> set:
-        """Which of these orderIds are our reduce-only orders (closes, stops)."""
+    def known_orders(self, order_ids) -> dict:
+        """Which of these orderIds are ours: orderId -> (reduce_only, type, sent_ms)."""
         ids = {str(x) for x in order_ids}
-        out = {r["order_id"] for r in self.rows.values() if r.get("order_id") in ids and r.get("reduce_only")}
-        rest = sorted(ids - out)
+        out = {r["order_id"]: (bool(r.get("reduce_only")), r.get("type"), int(r["sent_ms"])) for r in self.rows.values()
+               if r.get("order_id") in ids}
+        rest = sorted(ids - set(out))
         for i in range(0, len(rest), 400):
             part = rest[i:i + 400]
             marks = ",".join("?" * len(part))
-            out |= {str(t[0]) for t in self._read(
-                f"SELECT order_id FROM flipster_ids WHERE reduce_only = 1 AND order_id IN ({marks})", tuple(part))}
+            for oid, ro, typ, sent in self._read(f"SELECT order_id, reduce_only, type, sent_ms FROM flipster_ids "
+                                                 f"WHERE order_id IN ({marks})", tuple(part)):
+                out[str(oid)] = (bool(ro), typ, int(sent))
         return out
 
+    def reduce_only_ids(self, order_ids) -> set:
+        """Which of these orderIds are our reduce-only orders (closes, stops)."""
+        return {o for o, k in self.known_orders(order_ids).items() if k[0]}
+
     def trim(self, now_ms: int) -> None:
-        cut = int(now_ms) - LEDGER_KEEP_MS
-        for cid in [c for c, r in self.rows.items() if r["sent_ms"] < cut]:
+        """Rows older than 30 days go; an opening order's row stays as long as user_trades may replay from it."""
+        cut, keep_open = int(now_ms) - LEDGER_KEEP_MS, int(now_ms) - LEDGER_OPEN_KEEP_MS
+        for cid in [c for c, r in self.rows.items()
+                    if r["sent_ms"] < (keep_open if (not r["reduce_only"] and r["type"] == MARKET) else cut)]:
             self.rows.pop(cid, None)
-        self._write("DELETE FROM flipster_ids WHERE sent_ms < ?", (cut,))
+        self._write("DELETE FROM flipster_ids WHERE sent_ms < ? "
+                    "AND NOT (reduce_only = 0 AND type = ? AND sent_ms >= ?)", (cut, MARKET, keep_open))
 
     def put_meta(self, k: str, v: str, ts: int) -> bool:
         self.meta[k] = v
@@ -584,10 +657,35 @@ class FlipsterClient:
         self.trade_mode_source = ""
         self.balance_cache: Optional[tuple] = None
         self.kline_source = "kline"
+        self.deadline: Optional[int] = None   # protective work: the clock (ms) every wait inside must end by
 
     # ------------------------------------------------------------ transport
     def _now(self) -> int:
         return int(self.clock_ms() + self.offset_ms)
+
+    @contextlib.contextmanager
+    def _protective(self):
+        """A stop or a reduce-only close: every wait inside shares PROTECT_WAIT_S (nested calls share the outer one)."""
+        outer = self.deadline is None
+        if outer:
+            self.deadline = int(self.clock_ms() + PROTECT_WAIT_S * 1000)
+        try:
+            yield
+        finally:
+            if outer:
+                self.deadline = None
+
+    def _left_s(self) -> float:
+        return float("inf") if self.deadline is None else (self.deadline - self.clock_ms()) / 1000.0
+
+    def _wait(self, s: float) -> None:
+        """Sleep ``s`` seconds; in protective work only within its budget, else RateLimited (code PROTECT_BUDGET) at
+        once, before anything more is sent."""
+        if s > self._left_s():
+            raise RateLimited(429, BUDGET_CODE, f"손절·청산 주문의 기다림이 {PROTECT_WAIT_S:g}초를 넘어 멈춥니다(요청 한도)",
+                              1.0)
+        if s > 0:
+            self.sleep(s)
 
     def _recent(self, window_ms: int) -> list:
         now = self.clock_ms()
@@ -595,13 +693,17 @@ class FlipsterClient:
 
     def _pace(self) -> None:
         """Never past the client's own request budget (RATE_WINDOWS): wait until the oldest request of a full window
-        leaves it."""
+        leaves it. Protective work is never held back by this self-imposed budget (Guarded's protecting() skips its
+        pacing too): at most the one-second window is waited for, and only when that fits its budget; a 429 the
+        exchange answers is handled where it comes."""
         for window, limit in RATE_WINDOWS:
             lst = self._recent(window)
             if len(lst) >= limit:
-                wait = (min(lst) + window - self.clock_ms()) / 1000.0
+                wait = min((min(lst) + window - self.clock_ms()) / 1000.0, window / 1000.0)
+                if self.deadline is not None and (window > 1_000 or wait > self._left_s()):
+                    continue
                 if wait > 0:
-                    self.sleep(min(wait, window / 1000.0))
+                    self.sleep(wait)
         longest = max(w for w, _ in RATE_WINDOWS)
         self.hits = self._recent(longest) + [self.clock_ms()]
 
@@ -621,22 +723,24 @@ class FlipsterClient:
 
     def req(self, method: str, path: str, params=None, limit_key: Optional[str] = None):
         """One signed request. ``params``: the GET query or the JSON body. A read (GET) refused for the rate (429) is
-        read again after its Retry-After (at most RETRY_AFTER_MAX_S, at most READ_RETRIES times); so is a RETRY_WRITES
-        write. Any other write is never sent again here (_send looks an order up first; the executor decides)."""
+        read again after its Retry-After (at most READ_RETRIES times); so is a RETRY_WRITES write. A Retry-After longer
+        than RETRY_AFTER_MAX_S (or, in protective work, than the budget left) is not waited here: the RateLimited goes
+        up. Any other write is never sent again here (_send looks an order up; the executor decides)."""
         for attempt in range(READ_RETRIES + 1):
             try:
                 return self._req_once(method, path, params, limit_key)
             except RateLimited as e:
                 again = method == "GET" or (limit_key or "") in RETRY_WRITES
-                if not again or e.status != 429 or attempt == READ_RETRIES:
+                if not again or e.status != 429 or e.code == BUDGET_CODE or attempt == READ_RETRIES \
+                        or float(e.retry_after or 0) > RETRY_AFTER_MAX_S:
                     raise
-                self.sleep(self._retry_after(e, attempt))
+                self._wait(self._retry_after(e, attempt))
         raise AssertionError("unreachable")
 
     @staticmethod
     def _retry_after(e: RateLimited, attempt: int) -> float:
-        """The wait a 429 asks for (Retry-After), at least a growing pause, at most RETRY_AFTER_MAX_S."""
-        return min(max(float(getattr(e, "retry_after", 0) or 0), READ_PAUSE_S * (attempt + 1)), RETRY_AFTER_MAX_S)
+        """The wait a 429 asks for (Retry-After), at least a growing pause."""
+        return max(float(getattr(e, "retry_after", 0) or 0), READ_PAUSE_S * (attempt + 1))
 
     def _req_once(self, method: str, path: str, params=None, limit_key: Optional[str] = None):
         audit = {"method": method, "path": path, "params": dict(params or {})}
@@ -767,25 +871,47 @@ class FlipsterClient:
 
     @staticmethod
     def _spec_row(row: dict, tradable: bool) -> dict:
-        """Every value a decision reads must be there: a missing one is an error, never 0 (the smallest order value
-        too: an order below it would be refused, the executor's entry check needs it)."""
+        """The units a stop and a close need (unitOrderQty, tickSize) and maxLeverage must be there: missing or garbled,
+        the contract cannot be used (BAD_SPEC). The smallest order value (notionalMinOrderAmount) is needed for a NEW
+        entry only: missing or garbled, it is never read as 0; the spec carries ``problem`` (min_notional None) and the
+        coin refuses new entries (leverage() and an opening market order) with that reason, while a position on it is
+        still protected and closed (the executor starts and runs: never a restart loop)."""
         step, tick = _dec(row.get("unitOrderQty"), "unitOrderQty"), _dec(row.get("tickSize"), "tickSize")
         lev = _dec(row.get("maxLeverage"), "maxLeverage")
-        mn = _dec(row.get("notionalMinOrderAmount"), "notionalMinOrderAmount")
-        if step <= 0 or tick <= 0 or lev <= 0 or mn < 0:
+        if step <= 0 or tick <= 0 or lev <= 0:
             raise TestnetError(400, "BAD_SPEC", f"{row.get('symbol')}: 계약 단위 정보가 이상합니다")
+        problem, mn = None, None
+        try:
+            mn = _dec(row.get("notionalMinOrderAmount"), "notionalMinOrderAmount")
+            if mn < 0:
+                raise TransientError(200, None, f"플립스터 응답의 notionalMinOrderAmount 값이 이상합니다: {mn}")
+        except TestnetError as e:
+            problem, mn = e.msg, None
         mx = row.get("notionalMaxOrderAmount")
-        return {"qty_step": float(step), "min_qty": float(step), "tick": float(tick), "min_notional": float(mn),
+        return {"qty_step": float(step), "min_qty": float(step), "tick": float(tick),
+                "min_notional": None if mn is None else float(mn), "problem": problem,
                 "max_notional": float(_dec(mx, "notionalMaxOrderAmount")) if mx not in (None, "") else None,
                 "max_leverage": float(lev), "status": "Trading" if tradable else "NOT_TRADABLE",
                 "tradable": tradable, "tick_str": _num(tick), "qty_step_str": _num(step),
                 "funding_interval_hours": row.get("fundingIntervalHours"),
                 "init_margin_rate": row.get("initMarginRate"), "maint_margin_rate": row.get("maintMarginRate")}
 
+    def _no_entries(self, symbol: str) -> None:
+        """A coin whose contract info lacks the smallest order value takes no new entry (a clear reason, never a 0). The
+        contract info is read again first (at most every 5 s): a value that came back lifts it."""
+        if not self._spec(symbol).get("problem"):
+            return
+        self._load_contracts()
+        problem = self._spec(symbol).get("problem")
+        if problem:
+            raise TestnetError(400, "BAD_SPEC", f"{symbol}: 플립스터 계약 정보에 최소 주문 금액이 없어 새 진입을 하지 않습니다"
+                                                f"({problem}). 열린 포지션의 손절·청산은 그대로 합니다")
+
     def spec(self, symbol: str) -> dict:
         """The contract's live spec (cached): qty_step = unitOrderQty (also the smallest order), tick = tickSize,
         min_notional = notionalMinOrderAmount, status "Trading" only when the symbol is in the tradable list. A contract
-        whose info lacks one of them: TestnetError BAD_SPEC naming the field (specs and check print it)."""
+        whose units are missing: TestnetError BAD_SPEC naming the field; one without the smallest order value: a spec
+        with ``problem`` (no new entries; specs and check print it)."""
         if symbol not in self.specs:
             self._load_contracts()
         if symbol not in self.specs and symbol in self.spec_problems:
@@ -982,6 +1108,7 @@ class FlipsterClient:
             raise TestnetError(400, "LEVERAGE_MAX", f"{symbol}: 레버리지 {lev}배가 최대 {sp['max_leverage']:g}배를 넘습니다")
         if not sp.get("tradable"):
             raise TestnetError(400, "NOT_TRADING", f"{symbol}: API 거래 가능 종목이 아니라 거래하지 않습니다")
+        self._no_entries(symbol)
         if self.trade_mode != ONE_WAY:
             raise TestnetError(400, "NOT_ONE_WAY", "플립스터 거래 모드가 단방향(ONE_WAY)으로 확인되지 않아 진입하지 않습니다")
         rows = self._position_rows(symbol)
@@ -1005,9 +1132,9 @@ class FlipsterClient:
             sp = self._spec(s)
             row = self._settings(s)
             lev = f"{row.get('marginType')} {row.get('leverage')}" if row else "?(포지션 목록에 줄 없음)"
-            out.append((bool(sp.get("tradable")),
+            out.append((bool(sp.get("tradable")) and not sp.get("problem"),
                         f"{s}: {'API 거래 가능' if sp.get('tradable') else 'API 거래 불가'}, 수량 단위 {sp['qty_step_str']}, "
-                        f"가격 단위 {sp['tick_str']}, 최소 주문 ${sp['min_notional']:g}, 최대 {sp['max_leverage']:g}배, "
+                        f"가격 단위 {sp['tick_str']}, 최소 주문 {min_order_text(sp)}, 최대 {sp['max_leverage']:g}배, "
                         f"지금 레버리지 {lev}"))
         return out
 
@@ -1222,7 +1349,8 @@ class FlipsterClient:
             raise TestnetError(404, NOT_FOUND[0], f"주문 {cid}이 없습니다" + (" (거절된 주문)" if row else ""))
         if row.get("order_id"):
             return row, str(row["order_id"])
-        hits = self._search(row)
+        with self._protective() if row["reduce_only"] else contextlib.nullcontext():   # a stop's or a close's look-up
+            hits = self._search(row)
         if len(hits) == 1:
             oid = str(hits[0]["orderId"])
             self.ledger.bind(cid, oid, how="search")
@@ -1243,15 +1371,29 @@ class FlipsterClient:
                client_id: Optional[str] = None) -> dict:
         """Market order (IOC on Flipster), then read back from its fills. reduce_only: closes only. Never
         maxSlippagePrice, never timeInForce (module docstring). An opening order is never sent twice: a client id
-        already in the ledger is looked up instead; its rate-limit answer is an unknown outcome (looked up)."""
+        already in the ledger is looked up instead; its rate-limit answer is an unknown outcome (looked up). An opening
+        order on a coin whose contract info lacks the smallest order value is refused (BAD_SPEC); a close never is. A
+        reduce-only order is protective work: its waits share PROTECT_WAIT_S (then RateLimited)."""
         if side not in ("BUY", "SELL"):
             raise TestnetError(400, "BAD_SIDE", f"주문 방향 {side!r}")
-        q = self._qty(symbol, qty)
-        self._check_qty(symbol, q, qty, "주문")
+        if not reduce_only:
+            self._no_entries(symbol)
+            return self._market(symbol, side, qty, False, client_id)
+        with self._protective():
+            return self._market(symbol, side, qty, True, client_id)
+
+    def _market(self, symbol: str, side: str, qty: float, reduce_only: bool, client_id: Optional[str]) -> dict:
         cid = client_id or new_cid()
+        again = self.ledger.get(cid) is not None
         earlier = self._earlier(cid, reduce_only)
         if earlier is not None:                            # the same order: read it, never send it again
             return self._read_back(symbol, earlier[1], earlier[0], None)
+        if again and reduce_only:
+            # the same close once more (refused before, or its earlier send found absent past SETTLE_MS): sized from
+            # the position now, never past it (a throttled send that ran after all must not close twice)
+            qty = self._reduce_left(symbol, side, qty)
+        q = self._qty(symbol, qty)
+        self._check_qty(symbol, q, qty, "주문")
         body = {"symbol": fx(symbol), "side": side, "type": MARKET, "quantity": _num(q)}
         if reduce_only:
             body["reduceOnly"] = True
@@ -1263,14 +1405,16 @@ class FlipsterClient:
             raise TestnetError(500, "LEDGER", why)
         row = self.ledger.get(cid)
         try:
-            if reduce_only:                                # a 429: looked up before it is sent again (_send)
+            if reduce_only:                                # a 429: looked up, never sent again here (_send)
                 data, found = self._send(cid, body, "market")
             else:
                 data, found = self.req("POST", ORDER, body, limit_key="market"), None
+        except RateLimitedUnknown:
+            raise                                          # it may have run: the cid stays "sent" (looked up later)
         except RateLimited as e:
-            if e.status == 429:                            # an opening order: never sent again (it may still run)
+            if e.status == 429 and e.code != BUDGET_CODE:  # an opening order: never sent again (it may still run)
                 raise TransientError(e.status, e.code, f"진입 주문에 요청 한도 답(결과 모름, 다시 보내지 않음): {e.msg}") from e
-            self.ledger.refused(cid, str(e))
+            self.ledger.refused(cid, str(e))               # 403 / 418, or the budget before it was sent: nothing ran
             raise
         except TransientError:
             raise                                          # unknown outcome: looked up by the cid (the ledger)
@@ -1287,6 +1431,14 @@ class FlipsterClient:
         self.ledger.bind(cid, oid)
         self.order_symbol[oid] = symbol
         return self._read_back(symbol, oid, {**row, "order_id": oid}, order)
+
+    def _reduce_left(self, symbol: str, side: str, qty: float) -> float:
+        """A close sent once more: at most the position now; none to reduce on that side: refused before sending."""
+        amt = float(self.position(symbol)["positionAmt"])
+        if (side == "SELL" and amt <= 0) or (side == "BUY" and amt >= 0):
+            raise TestnetError(400, -2022, f"ReduceOnly Order is rejected ({symbol}: 줄일 포지션이 없어 같은 번호의 "
+                                           "청산을 다시 보내지 않습니다)")
+        return min(float(qty), abs(amt))
 
     def _earlier(self, cid: str, reduce_only: bool) -> Optional[tuple]:
         """A client id already in the ledger (and not refused): (row, orderId) of the order it placed. None: no such
@@ -1306,39 +1458,48 @@ class FlipsterClient:
                                                    f"않습니다: {e.msg}") from e
 
     def _send(self, cid: str, body: dict, limit_key: str) -> tuple:
-        """POST a stop or a close whose intent row is written: (answer, None), or (None, (row, orderId)) when a look-up
-        found it. A 429 is waited out (its Retry-After). The docs say a 429 "throttles or rejects": the order may still
-        run, so it is looked up by its client id (pending list and order history) and sent again only when it is not
-        there. Two can still exist only if the throttled one shows up after that look-up: both are reduce-only (they
-        cannot open anything) and the executor cancels an extra stop. Still 429 after READ_RETRIES: an unknown outcome
-        (TransientError, looked up again by the caller)."""
-        for attempt in range(READ_RETRIES + 1):
+        """POST a stop or a close whose intent row is written, ONCE: (answer, None), or (None, (row, orderId)) when it
+        was answered 429 and a look-up found it. The docs say a 429 "throttles or rejects": the order may still run, so
+        it is never sent again here. It is looked up by its client id (pending list and order history) after its
+        Retry-After, then every LOOKUP_PAUSE_S, while the protective budget lasts. Not found by then:
+        RateLimitedUnknown, and the row stays "sent": a later look-up finds it, or calls it absent only SETTLE_MS after
+        the send (only then may a reduce-only order go out again, sized from the position then). 403 / 418, or the
+        budget used up before the send: the RateLimited as it came (nothing was sent, or nothing ran)."""
+        try:
+            return self.req("POST", ORDER, body, limit_key=limit_key), None
+        except RateLimited as e:
+            if e.status != 429 or e.code == BUDGET_CODE:
+                raise
+            first = e
+        pause = max(float(first.retry_after or 0), READ_PAUSE_S)
+        why = "찾는 동안 기다릴 시간이 다 됨"
+        while True:
             try:
-                return self.req("POST", ORDER, body, limit_key=limit_key), None
-            except RateLimited as e:
-                if e.status != 429:
-                    raise
-                if attempt == READ_RETRIES:
-                    raise TransientError(429, e.code, f"주문에 요청 한도 답이 계속 옵니다(결과 모름, 번호로 다시 찾음): "
-                                                      f"{e.msg}") from e
-                self.sleep(self._retry_after(e, attempt))
+                self._wait(pause)
                 row = self.ledger.get(cid)
                 hits = self._search(row) if row is not None else []
-                if len(hits) > 1:
-                    raise UnknownOutcome(409, AMBIGUOUS, f"주문 {cid}: 요청 한도 답 뒤에 맞는 주문이 {len(hits)}개라 "
-                                                         "어느 것인지 모릅니다")
-                if hits:
-                    oid = str(hits[0]["orderId"])
-                    self.ledger.bind(cid, oid, how="search")
-                    self.order_symbol[oid] = row["symbol"]
-                    return None, ({**row, "order_id": oid}, oid)
-                self.ledger.sending(cid, self._now())     # sent again: the look-up window follows the last send
-        raise AssertionError("unreachable")
+            except RateLimited as e:
+                why = str(e)[:120]                         # the budget (or a 418) ends the look-ups
+                break
+            except TestnetError as e:                      # a failed read: looked up again while the budget lasts
+                why, hits = str(e)[:120], []
+            if len(hits) > 1:
+                raise UnknownOutcome(409, AMBIGUOUS, f"주문 {cid}: 요청 한도 답 뒤에 맞는 주문이 {len(hits)}개라 "
+                                                     "어느 것인지 모릅니다")
+            if hits:
+                oid = str(hits[0]["orderId"])
+                self.ledger.bind(cid, oid, how="search")
+                self.order_symbol[oid] = row["symbol"]
+                return None, ({**row, "order_id": oid}, oid)
+            pause = LOOKUP_PAUSE_S
+        raise RateLimitedUnknown(429, first.code, f"주문 {cid}에 요청 한도 답(429): 들어갔는지 아직 모릅니다. 다시 보내지 "
+                                                  f"않고 번호로 찾습니다({why}): {first.msg}", 1.0)
 
     def _read_back(self, symbol: str, oid: str, row: dict, answer: Optional[dict]) -> dict:
         """The accepted order, its fills read until they account for what the order record says was filled (a few
-        short waits). It WAS accepted (it has an orderId): a failed or garbled read (the answer's own included) never
-        escapes as if it had not run; the last state seen is returned and the executor settles it from the position."""
+        short waits; inside a protective call, within its budget). It WAS accepted (it has an orderId): a failed or
+        garbled read (the answer's own included) never escapes as if it had not run; the last state seen is returned
+        and the executor settles it from the position."""
         best = {"orderId": oid, "clientOrderId": row.get("cid") or "", "symbol": symbol, "side": row.get("side"),
                 "type": row.get("type"), "origQty": row.get("qty"), "executedQty": "0", "avgPrice": "0",
                 "status": "NEW", "reduceOnly": bool(row.get("reduce_only"))}
@@ -1348,9 +1509,8 @@ class FlipsterClient:
             except TestnetError as e:
                 best, answer = {**best, "readBack": f"답을 읽지 못함: {e}"}, None
         for w in (0.0,) + ORDER_WAITS:
-            if w:
-                self.sleep(w)
             try:
+                self._wait(w)
                 record = answer if isinstance(answer, dict) and status_of(answer) in FINAL_STATUS else \
                     (self._record(symbol, oid, row.get("sent_ms")) or answer)
                 fills = self._fills_of(symbol, oid, row.get("sent_ms"))
@@ -1437,7 +1597,16 @@ class FlipsterClient:
                    client_id: Optional[str] = None) -> dict:
         """Protective stop resting on Flipster: a closing-side STOP_MARKET, reduceOnly, ``price`` = the trigger. ``qty``
         the position's size (two can coexist while a stop is moved); None: the position's size now. A level the last
-        price is already past is refused before anything is sent (the executor's -2021: close at market)."""
+        price is already past is refused before anything is sent (the executor's -2021: close at market). Protective
+        work: every wait inside shares PROTECT_WAIT_S; past it RateLimited (RateLimitedUnknown when the stop may have
+        gone in: its client id is looked up, never sent again blindly). After the send the stop is waited for in the
+        pending list (LIST_WAITS, within the budget): place_stop confirms a stop from the list, never from a NEW order
+        record alone (_finished_stop)."""
+        with self._protective():
+            return self._stop_close(symbol, side, trigger, qty, client_id)
+
+    def _stop_close(self, symbol: str, side: str, trigger: float, qty: Optional[float],
+                    client_id: Optional[str]) -> dict:
         sp = self._spec(symbol)
         trig = _price_str(trigger, sp["tick_str"])
         if qty is None:
@@ -1461,15 +1630,16 @@ class FlipsterClient:
         self.ledger.put(cid, symbol, side, STOP, _num(q), True, trig, self._now(), before=before)
         try:
             data, found = self._send(cid, body, "stop_place")
-        except TransientError:
-            raise                                          # unknown outcome: looked up by the cid (the ledger)
+        except (TransientError, RateLimitedUnknown):
+            raise                                          # it may be in: the cid stays "sent" (looked up later)
         except RateLimited as e:
-            self.ledger.refused(cid, str(e))               # 403 / 418: refused, nothing ran
+            self.ledger.refused(cid, str(e))               # 403 / 418, or the budget before it was sent: nothing ran
             raise
         except TestnetError as e:
             self.ledger.refused(cid, str(e))
             raise self._would_trigger(e, symbol, side, float(trig)) from e
         if found is not None:                              # a 429 that still ran: that stop, never a second copy
+            self._await_listed(symbol, found[1])
             return self.algo_order(algo_id=found[1])
         order = data.get("order") if isinstance(data, dict) else None
         sid = order.get("orderId") if isinstance(order, dict) else None
@@ -1478,9 +1648,26 @@ class FlipsterClient:
         sid = str(sid)
         self.ledger.bind(cid, sid)
         self.order_symbol[sid] = symbol
+        self._await_listed(symbol, sid)
         return {"algoId": sid, "clientAlgoId": cid, "symbol": symbol, "side": side, "orderType": STOP,
                 "algoType": "CONDITIONAL", "triggerPrice": _num(Decimal(trig)), "quantity": _num(q),
                 "closePosition": False, "reduceOnly": True, "workingType": WORKING_TYPE, "algoStatus": "NEW"}
+
+    def _await_listed(self, symbol: str, sid: str) -> None:
+        """A stop just placed: waited for (LIST_WAITS, about 5 s, within the protective budget) until the pending list
+        shows it, or its record says it ended (fired at once, cancelled). Best effort, never an error here: place_stop
+        reads it next, and a stop the list does not show is not confirmed (UNCONFIRMED: the executor closes a new
+        position, or keeps the old stop of a move)."""
+        for w in (0.0,) + LIST_WAITS:
+            try:
+                self._wait(w)
+                if any(str(r.get("orderId")) == sid for r in self._pending(symbol)):
+                    return
+                done = self._finished_stop(sid, symbol, self.ledger.by_order(sid))
+            except TestnetError:
+                return
+            if done is not None and done["algoStatus"] != UNCONFIRMED:
+                return
 
     def _would_trigger(self, e: TestnetError, symbol: str, side: str, trig: float) -> TestnetError:
         """A refused stop while the last price is already past it: the executor's "would immediately trigger" (-2021:
@@ -1502,9 +1689,11 @@ class FlipsterClient:
         - fired (TRIGGERED): TRADE executions under its own orderId, a TRIGGERED execution, a FILLED row or cumQty > 0
           (``actualOrderId``: its own id when its fills carry it); a PARTIALLY_FILLED row: firing (TRIGGERING);
         - ended without firing (CANCELED): a CANCELED / REJECTED row ("CANCELLED" too) or such an execution;
-        - still live: a NEW / PENDING_NEW row, or NEW executions only: answered as resting (NEW, from that record and
-          the ledger row), so a new stop the pending list shows late is confirmed (place_stop) and never taken for a
-          cancelled one (a false "not live" would close a position that is protected).
+        - a NEW / PENDING_NEW row, or NEW executions only: not settled (UNCONFIRMED). Neither fired nor cancelled (the
+          executor's read-only checks take it as "not fired", so nothing is booked or cleared from it) and never
+          confirmed live: the history can lag behind a cancel as the list can lag behind a placement, so place_stop
+          confirms a new stop only from the pending list (stop_close waits for it about 5 s) and raises
+          ProtectionError otherwise (the executor closes a new position; a move keeps the old stop).
         None: no record at all. Anything else (a status the docs do not list): an error, never "cancelled"."""
         sent = lrow["sent_ms"] if lrow else None
         lo, hi = self._window(sent)
@@ -1526,11 +1715,17 @@ class FlipsterClient:
         if st in ("CANCELED", "REJECTED") or kinds & {"CANCELED", "REJECTED"}:
             return self._algo_dict(base, "CANCELED", "", lrow)
         if st in ("NEW", "PENDING_NEW") or (rec is None and kinds == {"NEW"}):
-            return self._algo_dict(base, "NEW", "", lrow)
+            return self._algo_dict(base, UNCONFIRMED, "", lrow)
         raise TransientError(200, None, f"손절 {sid}의 상태를 알 수 없습니다(주문 기록 {st or '없음'}, 체결 기록 "
                                         f"{sorted(kinds)})")
 
     def algo_order(self, algo_id=None, client_id: Optional[str] = None) -> dict:
+        """A stop by its id or client id (the pending list, else its records: _finished_stop). Its reads share the
+        protective budget (place_stop confirms a new stop with it): a long Retry-After raises RateLimited at once."""
+        with self._protective():
+            return self._algo_order(algo_id, client_id)
+
+    def _algo_order(self, algo_id, client_id: Optional[str]) -> dict:
         lrow = None
         if algo_id is None:
             lrow, algo_id = self._resolve(str(client_id))
@@ -1649,29 +1844,66 @@ class FlipsterClient:
         """Account fills (Binance userTrades shape) from the TRADE executions: price, qty, realizedPnl (replayed, see
         fills_from_execs), commission (execFee: + paid), commissionAsset, orderId, side, time.
 
-        Flipster gives no per-fill P&L, so a closing fill whose position opened before ``start_ms`` (the executor reads
-        a trade held for more than a week in 7-day pieces) cannot be replayed from the window alone. Then the replay
-        starts earlier: the window is extended back a week at a time (at most REPLAY_BACK_MS) until every fill in it is
-        known, and only the fills in [start_ms, end_ms] are answered. A fill still unknown after that is marked
-        ``realizedCheck`` "mismatch": the executor then keeps the trade's wallet change instead of booking a realized 0
-        as final (its fills would still add up)."""
+        Flipster gives no per-fill P&L, so it is replayed from the fills, and a replay is only as good as the point it
+        starts from. It starts only where the coin is known to be flat: the first fill of one of OUR opening market
+        orders (the ledger; the executor opens a position only on a flat coin and never adds to it). The fills are
+        replayed in pieces, each from such a start to the next. Fills before the window's first start belong to a
+        position opened earlier (the closing piece of a trade read in 7-day pieces, or the end of the trade before):
+        the replay then starts at the latest of our opening fills before them, read back a week at a time (at most
+        REPLAY_BACK_MS); fills of orders not in the ledger (a stop's own market order, a liquidation, a close by hand)
+        are netted in one-way mode, never taken as a start. ``realizedCheck`` "mismatch" (never a final number: the
+        executor keeps the trade's wallet change) marks: the fills before the first start when none is found, every
+        fill of a piece that does not end flat before the next start (a fill missing or extra), and a closing fill the
+        replay cannot place."""
         lo, hi = int(start_ms), int(end_ms)
-        rows = self._execs(symbol, lo, hi, exec_type="TRADE")
-        mine = {str(r.get("execId")) for r in rows}
-        first = lo
+        win = self._execs(symbol, lo, hi, exec_type="TRADE")
+        if not win:
+            return []
+        mine = {str(r.get("execId")) for r in win}
+        rows, first = sorted(win, key=_exec_key), lo
         while True:
-            reduce_ids = self.ledger.reduce_only_ids({str(r.get("orderId")) for r in rows})
-            fills = [f for f in fills_from_execs(rows, symbol, reduce_ids) if f["execId"] in mine]
-            unknown = [f for f in fills if f["realizedSource"] == "unknown"]
-            if not unknown or lo - first >= REPLAY_BACK_MS:
+            starts = self._starts(rows, first)
+            h = next(i for i, r in enumerate(rows) if str(r.get("execId")) in mine)     # the window's first fill
+            anchor = max((i for i in starts if i <= h), default=None)
+            if anchor is not None or lo - first >= REPLAY_BACK_MS:
                 break
             seen = {str(r.get("execId")) for r in rows}
             older = self._execs(symbol, first - REPLAY_PIECE_MS, first - 1, exec_type="TRADE")
-            rows = [r for r in older if str(r.get("execId")) not in seen] + rows
+            rows = sorted([r for r in older if str(r.get("execId")) not in seen] + rows, key=_exec_key)
             first -= REPLAY_PIECE_MS
-        for f in unknown:
-            f["realizedCheck"] = "mismatch"
-        return fills
+        cut = h if anchor is None else anchor
+        rows = rows[cut:]
+        marks = sorted({0} | {i - cut for i in starts if i >= cut})
+        reduce_ids = self.ledger.reduce_only_ids({str(r.get("orderId")) for r in rows})
+        out = []
+        for n, a in enumerate(marks):
+            b = marks[n + 1] if n + 1 < len(marks) else len(rows)
+            piece = rows[a:b]
+            fills = fills_from_execs(piece, symbol, reduce_ids)
+            flat_start = a > 0 or anchor is not None
+            net = sum((_dec(r.get("lastQty"), "lastQty") * (1 if r.get("side") == "BUY" else -1) for r in piece),
+                      Decimal(0))
+            bad = not flat_start or (b < len(rows) and net != 0)
+            for f in fills:
+                if bad or f["realizedSource"] == "unknown":
+                    f["realizedCheck"] = "mismatch"
+            out += fills
+        return [f for f in out if f["execId"] in mine]
+
+    def _starts(self, rows: list, first: int) -> list:
+        """Indexes (rows in time order) of the first fill of each of OUR opening market orders sent at least
+        MATCH_BEFORE_MS after ``first`` (so every fill of it is in the rows): the coin was flat just before it."""
+        known = self.ledger.known_orders({str(r.get("orderId")) for r in rows})
+        out, seen = [], set()
+        for i, r in enumerate(rows):
+            oid = str(r.get("orderId"))
+            if oid in seen:
+                continue
+            seen.add(oid)
+            k = known.get(oid)
+            if k is not None and not k[0] and k[1] == MARKET and k[2] - MATCH_BEFORE_MS >= first:
+                out.append(i)
+        return out
 
     def income(self, symbol: Optional[str], income_type: Optional[str], start_ms: int, end_ms: int,
                limit: int = 1000) -> list:
@@ -1894,7 +2126,9 @@ class FlipsterDrill:
             px = c.price(s)
             rows[s] = {"tradable": sp["tradable"], "qty_step": sp["qty_step_str"], "tick": sp["tick_str"],
                        "min_notional": sp["min_notional"], "max_leverage": sp["max_leverage"],
-                       "min_order_usd": round(max(sp["min_qty"] * px, sp["min_notional"]), 4)}
+                       "min_order_usd": round(max(sp["min_qty"] * px, sp["min_notional"] or 0), 4)}
+            if sp.get("problem"):                           # e.g. no smallest order value: no new entry on it
+                rows[s]["error"] = f"최소 주문 금액 없음 → 새 진입 안 함: {sp['problem']}"
         self._step("계약 정보(6개 코인, API 거래 가능)", all("error" not in r and r["tradable"] and (
             r["max_leverage"] or 0) >= (40 if s == "BTCUSDT" else 30) for s, r in rows.items()), rows)
         a = c.account()
@@ -2250,7 +2484,7 @@ def specs_text(c: FlipsterClient, symbols=COINS) -> str:
             continue
         px = c.price(s)
         lines.append(f"{s}: {'API 거래 가능' if sp['tradable'] else 'API 거래 불가'}, 수량 단위 {sp['qty_step_str']} "
-                     f"(지금 약 ${sp['qty_step'] * px:,.4f}), 최소 주문 ${sp['min_notional']:g}, 가격 단위 {sp['tick_str']}, "
+                     f"(지금 약 ${sp['qty_step'] * px:,.4f}), 최소 주문 {min_order_text(sp)}, 가격 단위 {sp['tick_str']}, "
                      f"최대 {sp['max_leverage']:g}배, 펀딩 {sp.get('funding_interval_hours')}시간마다")
     return "\n".join(lines)
 

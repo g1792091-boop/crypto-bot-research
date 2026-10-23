@@ -26,6 +26,9 @@ Unknowns of the real exchange are switches:
 - ``settings_rows``: whether the position list shows a row (leverage, margin type) for a coin without a position;
 - ``pending_lag_ms`` / ``history_lag_ms``: an order shows in the pending list / the order history only this long after
   it was made (the docs warn of processing delays);
+- ``history_status_lag_ms``: an order that ended shows its earlier row (NEW) in the order history this long after it
+  ended; ``exec_lag_ms``: an execution row shows this long after it happened;
+- ``kill_new_stops``: a STOP_MARKET is accepted (its answer NEW) and cancelled by the exchange right after;
 - ``spelling``: "CANCELED" (the enum) or "CANCELLED" (the Place Order prose) in statuses and execution types;
 - ``error_style`` 0 / 1 / 2: three wordings each for "order not found", "request expired" and RemainingPositionsExist.
 
@@ -97,6 +100,10 @@ class FakeFlipster:
         self.settings_rows = True
         self.pending_lag_ms = 0
         self.history_lag_ms = 0
+        self.history_status_lag_ms = 0
+        self.exec_lag_ms = 0
+        self.kill_new_stops = False
+        self.earlier: dict = {}                    # orderId -> its row before it ended (history_status_lag_ms)
         self.spelling = "CANCELED"
         self.error_style = 0
         self.partial = None                        # a fraction: the next market order fills only that much
@@ -275,6 +282,7 @@ class FakeFlipster:
         return filled
 
     def _finish(self, order, status, cum, avg):
+        self.earlier[order["orderId"]] = dict(order)
         order = {**order, "status": status, "cumQty": str(cum), "leavesQty": "0",
                  "avgPrice": repr(avg) if avg else "0", "transactTime": self.ns(), "orderCancelReason": "",
                  "orderRejectReason": "", "conditionalOrderType": order.get("conditionalOrderType", "INVALID")}
@@ -392,7 +400,7 @@ class FakeFlipster:
             return self._ok({})
         if (m, path) == ("GET", "/api/v1/trade/order/history"):
             lo, hi = int(q["startTime"]), int(q["endTime"])
-            rows = [o for o in list(self.orders.values()) + list(self.pending.values())
+            rows = [self._as_of(o) for o in list(self.orders.values()) + list(self.pending.values())
                     if o["symbol"] == q.get("symbol", o["symbol"]) and lo <= int(o["orderTime"]) <= hi
                     and self._shown(o, self.history_lag_ms)]
             rows.sort(key=lambda o: (int(o["orderTime"]), o["orderId"]), reverse=True)
@@ -402,10 +410,19 @@ class FakeFlipster:
             rows = [e for e in self.execs if lo <= int(e["transactTime"]) <= hi
                     and (not q.get("symbol") or e["symbol"] == q["symbol"])
                     and (not q.get("orderId") or e["orderId"] == q["orderId"])
-                    and (not q.get("execType") or e["execType"] == q["execType"])]
+                    and (not q.get("execType") or e["execType"] == q["execType"])
+                    and (not self.exec_lag_ms
+                         or self.now() - int(e["transactTime"]) // 1_000_000 >= self.exec_lag_ms)]
             rows.sort(key=lambda e: (int(e["transactTime"]), e["execId"]), reverse=True)
             return self._page(rows, q, "execId")
         return self._error(404, "NotFound", "404 Route Not Found")
+
+    def _as_of(self, o):
+        """An order that ended less than history_status_lag_ms ago: its earlier row."""
+        if self.history_status_lag_ms and o["orderId"] in self.earlier and o.get("transactTime") \
+                and self.now() - int(o["transactTime"]) // 1_000_000 < self.history_status_lag_ms:
+            return self.earlier[o["orderId"]]
+        return o
 
     def _page(self, rows, q, key):
         count = int(q.get("count", PAGE))
@@ -475,9 +492,12 @@ class FakeFlipster:
             order.update(triggerPrice=q["price"], price=q["price"])
             self.pending[oid] = order
             self._event(order, "NEW")
+            answer = self._spell(self._public(order))
             if past:
                 self._fire(oid, self.prices[s])
-            return self._ok({"order": self._spell(self._public(order))})
+            elif self.kill_new_stops:
+                self._cancel(oid)                          # accepted, then cancelled by the exchange
+            return self._ok({"order": answer})
         if reduce:
             assert "maxSlippagePrice" not in q, q                  # a close must close
         self._event(order, "NEW")
