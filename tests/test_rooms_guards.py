@@ -710,9 +710,13 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     with open(BACKUP_SH, encoding="utf-8") as fh:
         script = fh.read()
     # the small databases first; the order executor's records (mainnet and testnet) are in exec/; since 10-19 also
-    # the live Bybit and MEXC executors' records and the live paper bot's combo/live-ac.db
+    # the live Bybit and MEXC executors' records and the live paper bot's combo/live-ac.db; since 10-20 the WOO X Pro
+    # executor's records, the -35 % paper bot's and since 10-23 the 'VWAP 개선판' paper bot's (the same list as offsite)
     assert ("for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live "
-            "exec/executor-mexc-live combo/live-ac livecheck liveimprove shadow200/shadow200 debate/debate daily3 paper3; do") in script
+            "exec/executor-mexc-live exec/executor-wooxpro-live combo/live-ac combo/live15-mexc combo/vwap livecheck "
+            "liveimprove shadow200/shadow200 debate/debate daily3 paper3; do") in script
+    from paperbot.offsite import DB_NAMES
+    assert script.split("for f in ", 1)[1].split("; do", 1)[0].split() == list(DB_NAMES)
     assert "VACUUM INTO" in script and "sqlite3 -bail -readonly" in script and ".backup" not in script.split(
         "\nlib=")[1]
     lib, bk = tmp_path / "lib", tmp_path / "bk"
