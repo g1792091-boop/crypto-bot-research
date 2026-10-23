@@ -1179,7 +1179,9 @@ class FlipsterClient:
         sent = self._now()
         durable = self.ledger.put(cid, symbol, side, MARKET, _num(q), reduce_only, None, sent)
         if not durable and not reduce_only:
-            raise TestnetError(500, "LEDGER", f"주문 장부에 쓰지 못해 진입 주문을 보내지 않았습니다({self.ledger.failed})")
+            why = f"주문 장부에 쓰지 못해 진입 주문을 보내지 않았습니다({self.ledger.failed})"
+            self.ledger.refused(cid, why)                 # never sent: a look-up answers "not found"
+            raise TestnetError(500, "LEDGER", why)
         row = self.ledger.get(cid)
         try:
             data = self.req("POST", ORDER, body, limit_key="market")

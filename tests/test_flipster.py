@@ -452,6 +452,9 @@ def test_an_entry_is_refused_when_the_ledger_cannot_be_written_but_a_stop_still_
         with pytest.raises(TestnetError) as e:
             c.market(BTC, "BUY", 1.0, client_id="pbNoLedger")
         assert e.value.code == "LEDGER" and not posts(fake) and "locked" in c.ledger.failed
+        with pytest.raises(TestnetError) as e:
+            c.order(BTC, client_id="pbNoLedger")              # never sent: not found at once
+        assert e.value.code == NOT_FOUND[0] and not isinstance(e.value, TransientError)
         fake.pos[BTC] = 1                                    # a position to protect (opened elsewhere)
         fake.entry[BTC] = 100.0
         st = c.stop_close(BTC, "SELL", 95.0, 1.0, client_id="pbStopNoLedger")
