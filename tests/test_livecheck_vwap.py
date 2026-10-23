@@ -306,7 +306,7 @@ def test_the_morning_check_has_the_vwap_bots_own_part(morning):
                        f"{LC.fmt_roe(v['v2'].roe)}) · 아직 표본 적음 · 참고: 5년 기준 본전 승률 79%")
     assert part[4] == "- 늘리기 기준(두 분): 실거래 50번 승률 80% 이상이고 페이퍼와 비슷할 때 · 지금 실거래 바이비트 1번 0승(0%)"
     assert part[5].startswith("- 바이비트(VWAP 개선판 따라간 거래): 거래 1번 · 0승(0%) · 실현 -$")
-    assert part[6] == "  그 전 추세판단 봇 따라간 거래 2번 · 2승 · 실현 +$1.60"
+    assert part[6] == "  그 밖에 추세판단 봇 따라간 거래 2번 · 2승 · 실현 +$1.60"
     assert part[7].startswith("  신호등 빨강(최근 4번 2승 50%, 기준 75%)")
     assert part[8] == "- 조건이 막은 신호(어제) 4개: 4시간 추세 반대 1 · 변동성 높음 1 · 주말·발표·나스닥 1 · 못 읽음 1"
     assert part[9].startswith("- VWAP 조건이 막은 신호 어제 3개(가상): 2승 1패")
@@ -323,6 +323,19 @@ def test_the_morning_score_lines_never_mix_the_two_bots(morning):
     by = {x["name"]: x for x in r["report"]["executors"]}
     assert by["bybit"]["era"]["n"] == 1 and by["bybit"]["before"]["n"] == 2 and by["bybit"]["trades"] == 3
     assert "era" not in by["mexc"]
+
+
+def test_the_paper_only_morning_part(tmp_path):
+    w = VW.VwapWorld(str(tmp_path / "w"), follow=False, until=T0 + DAY + 9 * MIN)
+    try:
+        r = LC.run_check(w.src(), day="2026-10-19", now_ms=T0 + DAY + 10 * MIN, no_replay=True, notifier=ListNotifier())
+        text = r["text"]
+        assert "- 추세판단 봇(바이비트·MEXC가 따라감): 거래 6번" in text and "- 바이비트: 거래 2번 · 2승(100%)" in text
+        part = text[text.index("\nVWAP 개선판 (따라가는 실행기 없음)\n"):].strip().split("\n")
+        assert part[4] == "- 늘리기 기준(두 분): 실거래 50번 승률 80% 이상이고 페이퍼와 비슷할 때 · 아직 따라가는 실행기 없음"
+        assert part[5].startswith("- 조건이 막은 신호(어제) 4개") and not [ln for ln in part if "신호등" in ln]
+    finally:
+        w.close()
 
 
 def test_the_monday_week_lines_split_each_executor_by_the_bot_it_followed(morning):
@@ -432,6 +445,11 @@ def test_the_vwap_bots_missed_signals_are_its_own_rows(world):
     assert rows["gate_vote"]["gates"]["vote"]["text"] == "4시간 하락(상승 0·하락 3·중립 1)"
     assert rows["gate_vol"]["gates"]["vol"]["text"] == "변동성 30분 ATR 0.51% (30일 80% 위치 0.43%)"
     assert rows["gate_vote"]["why_kind_ko"] == "4시간 추세 반대" and rows["gate_vol"]["reason"] == "SL"
+    code, text = LM.show_text(w.src().db, w.p["vwap"], NOW, 7, 30, None, paper="vwap")
+    assert code == 0 and "- VWAP 조건이 막음 3개" in text and "[VWAP 조건] ETH 롱 VWAP_FAIL" not in text
+    assert "[VWAP 조건] ETH 롱 F6_VWAP_FAIL 30분 · 4시간 추세 반대: 상승 0·하락 3·중립 1" in text
+    code, main = LM.show_text(w.src().db, w.p["paper"], NOW, 7, 30, None)
+    assert code == 0 and "VWAP" not in main
 
 
 def test_the_shared_budget_takes_the_main_bot_first_and_leaves_the_vwap_bot_its_half(world):

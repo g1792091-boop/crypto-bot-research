@@ -8,6 +8,9 @@
     python -m paperbot.livecheck preview --two    two paper bots (docs/live15-mexc-ko.md): Bybit follows 규칙봇 15
                                                   (-50 %), MEXC its -35 % twin (deploy/combo.live15-mexc.json): the
                                                   switch, one entry in both, the -35 % stop alone, the morning check
+    python -m paperbot.livecheck preview --vwap   two different paper bots (docs/vwap-bot-ko.md): the 추세판단 봇 and
+                                                  'VWAP 개선판' ITSELF (VwapBot: the real bot on deploy/combo.vwap.json),
+                                                  paper-only first, then Bybit follows it and WOO X Pro the trend bot
 
 It writes small databases in the real schemas into a temporary folder (the paper bot's paperbot.store3, the rule
 bot's 1m bars, and the executors' own tables, copied here as ``EXEC_SCHEMA`` so this module never imports the

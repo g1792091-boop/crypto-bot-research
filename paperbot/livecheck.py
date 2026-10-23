@@ -100,6 +100,13 @@ owners' private chats, comma-separated, in TELEGRAM_CHAT_*; paperbot/notify.py),
 rule bot. A new token there whose chats are still live.env's room (where the new bot is not), or an empty CRITICAL
 chat line, reaches no one: after 10 minutes the watcher says so once through live.env's own bot (tg_pass), and
 ``show`` ends with where the live messages go. Of those two files only the Telegram lines are read.
+A second, different paper bot (owners 10-23, docs/vwap-bot-ko.md: 'VWAP 개선판', its file PAPERBOT_LIVE_PAPER2_DB, default
+/var/lib/paperbot/combo/vwap.db, as the live site's): from the moment its file is there its trades are told too, never
+merged with the 추세판단 봇's (another key: "COMBO@mix#vwap|…"), each message naming its bot and listing only that bot's
+executors ("페이퍼만 (따라가는 실행기 없음)" while none follows it; what it held when the watcher first saw its file is never
+told), its TIME exit in its own words ("보유 한도 청산(96봉(48시간) 지남)"), its entries with what its gates read, each
+executor's light from its own bot, its own alarm unit (paperbot-combo-vwap), the pauses of both bots in one message when
+their rules agree, and its own part of the morning check (bot_section). With one paper bot every message is as it was.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
 ``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
 getUpdates; the token is never printed; sends nothing).
@@ -746,6 +753,8 @@ def cost_row(ex: ExecInfo, et: dict, pt: Optional[dict], fills: list) -> dict:
         pe, px = pt.get("entry_price"), pt.get("exit_price")
         row.update(paper_entry=pe, paper_exit=px, paper_roe=pt["roe"], strategy=pt.get("strategy", ""),
                    tf=pt.get("tf", ""), paper_reason=pt.get("reason"), paper_exit_ts=pt.get("exit_time"))
+        if pt.get("reason") == "TIME" and pt.get("time_ko"):        # 'VWAP 개선판': its hold limit's words (with_bot)
+            row["paper_reason_ko"] = exit_reason_text(pt)
         if pe and avg_in:
             row["entry_bps"] = side * (float(avg_in) - float(pe)) / float(pe) * 1e4
         if px and avg_out:
@@ -1374,7 +1383,7 @@ def exec_score_lines(r: dict) -> tuple[list, bool]:
     out = [line]
     if era and r.get("before", {}).get("n"):
         b = r["before"]
-        out.append(f"  그 전 {'·'.join(b['names']) or '다른 페이퍼'} 따라간 거래 {b['n']}번 · {b['wins']}승 · 실현 {usd(b['pnl'])}")
+        out.append(f"  그 밖에 {'·'.join(b['names']) or '다른 페이퍼'} 따라간 거래 {b['n']}번 · {b['wins']}승 · 실현 {usd(b['pnl'])}")
     if (r.get("light") or {}).get("state", "off") != "off":       # no light (owners 10-19): no light line
         sk = f" · 신호등이 거른 진입 {r.get('light_skips', 0)}번" + \
             (f"(어제 {r['light_skips_day']}번)" if r.get("light_skips_day") else "")
@@ -1490,7 +1499,8 @@ def own_lines(execs: list) -> list:
         if x.get("matched"):
             gap = (int(x["exit_ts"]) - int(x["paper_exit_ts"])) // MIN if x.get("paper_exit_ts") and x.get("exit_ts") \
                 else None
-            paper = (f" · 페이퍼 {KO_EXIT.get(x.get('paper_reason'), x.get('paper_reason') or '')} {pct(x.get('paper_roe'))}"
+            paper = (f" · 페이퍼 {x.get('paper_reason_ko') or KO_EXIT.get(x.get('paper_reason'), x.get('paper_reason') or '')} "
+                     f"{pct(x.get('paper_roe'))}"
                      + (f" ({'+' if gap >= 0 else ''}{gap}분)" if gap is not None else ""))
         out.append(f"- {r['label']} {kst(int(x['exit_ts']))} {coin(x['symbol'])} {KO_SIDE.get(x['side'], '')}: "
                    f"{usd(float(x['pnl'] or 0))} ({lock}){paper}")
@@ -4874,6 +4884,8 @@ def reference_notes(exp: Optional[dict], src: Sources, ref_ko: str = "") -> list
 def _sources(a) -> Sources:
     src = Sources(db=a.db, paper_db=a.paper_db, rule_db=a.rule_db, combo_config=a.combo_config, cache=a.cache,
                   shadow_glob=a.shadows, expected=a.expected)
+    if getattr(a, "paper2_db", None):
+        src.paper2_db = a.paper2_db
     return src
 
 
@@ -5026,6 +5038,8 @@ def main(argv: Optional[list] = None) -> int:
         p.add_argument("--combo-config", default=running_combo_config(),
                        help="the config the paper bot runs (default: PAPERBOT_LIVE_COMBO_CONFIG, else /etc/paperbot/combo.json)")
         p.add_argument("--cache", default=DEFAULT_CACHE, help="kline cache between nights")
+        p.add_argument("--paper2-db", default=None, help="the second paper bot's database ('VWAP 개선판'; default: "
+                                                       "PAPERBOT_LIVE_PAPER2_DB, else /var/lib/paperbot/combo/vwap.db)")
         p.add_argument("--shadows", default=SHADOW_GLOB)
         p.add_argument("--expected", default=EXPECTED_FILE, help="the backtest reference (combo.live-ac.expected.json)")
     r = sub.add_parser("run", help="the morning check of one day (09:00 to 09:00 KST)")

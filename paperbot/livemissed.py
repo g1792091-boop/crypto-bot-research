@@ -23,6 +23,19 @@ The groups ("왜 못 탔나", column ``grp``; COMBO@mix, the paper account both 
             reasons: dash/more/livebots.py read_exec, match, why_missed)
 Other refusals (the engine's "stop rule" / "sizing") are not listed: the simulation would refuse them the same way.
 
+The second paper bot (owners 10-23, docs/vwap-bot-ko.md: 'VWAP 개선판', livecheck.Sources.paper2_db, once its file is there,
+followed by an executor or not): its own rows, column ``paper`` = its database's name ('vwap'; NULL or '' = the main bot,
+as every row before), keys "vwap#<the usual key>" (its executors' rows "exec:<executor>|COMBO@mix#vwap|…"), simulated
+with ITS config (its combo_run record: 2 ATR stop, its ladder, 30x, margin 40 %, the 96-bar hold limit: TIME exits in its
+words, data ``time_ko``). Its groups (VWAP_GROUPS): one / pause / late / exec as above, and
+  gate      VWAP 조건이 막음: signal_log FILTERED by its entry gates (combo.py _entry_block, paperbot/entrygates.py):
+            "<N>시간 추세 반대: …" (gate_vote), "변동성 높음: …" (gate_vol), and a gate that could not read its bars
+            ("… 추세 판단을 못 읽음(진입 안 함)" / "변동성 판단에 쓸 …봉을 못 읽음", gate_unread: simulated like the others: the
+            signal itself is known, only the gate's answer is not); what the gates read stays in the row's detail
+            (``gates``, row_out).
+read_rows(conn, since, paper=None) is the main bot's rows only (every screen as it was); paper='vwap' its rows. The
+pass's work (MAX_SIMS, BUDGET_S) is shared: the main bot first, each at least half when both have work.
+
 How a signal is simulated (paperbot/livesim.py, the paper bot's own ComboEngine of the config it runs, its taker fee, the
 rule bot's 1m bars, the account's wallet at that moment as if it were flat; funding not included: livesim FUNDING_NOTE_KO):
 - an outcome (one, late): the Signal exactly as the engine received it (outcomes.data), from the outcome's minute;
