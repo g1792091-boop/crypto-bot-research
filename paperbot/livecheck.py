@@ -4969,7 +4969,8 @@ def cmd_chat_ids(a) -> int:
 
 def cmd_preview(a) -> int:
     from .livepreview import main as preview_main
-    return preview_main("ac" if getattr(a, "old", False) else "two" if getattr(a, "two", False) else "live15")
+    return preview_main("ac" if getattr(a, "old", False) else "two" if getattr(a, "two", False)
+                        else "vwap" if getattr(a, "vwap", False) else "live15")
 
 
 def cmd_show(a) -> int:
@@ -5033,6 +5034,8 @@ def main(argv: Optional[list] = None) -> int:
                                                       "규칙봇 15's")
     pv.add_argument("--two", action="store_true", help="two paper bots: Bybit follows 규칙봇 15 (-50%%), MEXC its -35%% "
                                                          "twin (docs/live15-mexc-ko.md)")
+    pv.add_argument("--vwap", action="store_true", help="the 추세판단 봇 and 'VWAP 개선판' (docs/vwap-bot-ko.md): the VWAP bot "
+                                                          "paper-only, then Bybit follows it, WOO X Pro the trend bot")
     c = sub.add_parser("chat-ids", help="the owners' private chat ids the bot in effect has seen (getUpdates; sends "
                                         "nothing, never prints the token)")
     s = sub.add_parser("show", help="print a stored check and where the live messages go")

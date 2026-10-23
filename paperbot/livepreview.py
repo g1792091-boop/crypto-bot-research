@@ -75,6 +75,9 @@ class Profile:
 
 LIVE15 = Profile("live15", "combo.live15.json", ((0, 0.85), (0, 0.90)), None, None, V39, CMO)
 AC = Profile("ac", "combo.live-ac.json", ((20, 0.85), (20, 0.90)), 3, 0.5, LON, ASIA)
+# the 추세판단 봇 (deploy/combo.trend.json; owners 10-22: both executors follow it, no light) for the 'VWAP 개선판' scene
+TREND = Profile("trend", "combo.trend.json", ((0, 0.85), (0, 0.90)), None, None, ("S3_CMO_SANDWICH", "30m", 2),
+                ("V39_ALL", "1h", 5))
 
 
 # ====================================================================== the world
@@ -134,9 +137,11 @@ class World:
                                   max_loss=0.35)]
 
     def src(self) -> LC.Sources:
+        # the second paper bot's file is this world's own (none unless a scene makes it): never the server's real one
         return LC.Sources(db=os.path.join(self.root, "livecheck.db"), paper_db=self.paper, rule_db=self.rule,
                           combo_config=os.path.join(LC.ROOT, "deploy", self.prof.config),
-                          shadow_glob=os.path.join(self.root, "shadow-*.db"), executors=self.infos)
+                          shadow_glob=os.path.join(self.root, "shadow-*.db"), executors=self.infos,
+                          paper2_db=os.path.join(self.root, "vwap.db"))
 
     # ---- the paper bot
     def paper_trade(self, entry: int, exit_: int, roe: float, symbol=BTC, side=1, strat=None, price=67_250.0,
@@ -263,6 +268,136 @@ class World:
         return got.items
 
 
+# ====================================================================== 'VWAP 개선판' itself (owners 10-23)
+VWAP_CONFIG = "combo.vwap.json"
+VWAP_PX = {"BTCUSDT": 67_250.0, "ETHUSDT": 2_415.0, "SOLUSDT": 182.35, "DOGEUSDT": 0.2045, "LTCUSDT": 92.4, "BCHUSDT": 512.0}
+
+
+def gate_read(side: int, tf: str, up: int = 3, down: int = 0, atr_pct: float = 0.45, q_pct: float = 0.62) -> dict:
+    """What the VWAP bot's entry gates read at a signal (paperbot/entrygates.py EntryGates.check's ``info``: the 4h vote
+    and the signal bar's ATR% against its 30-day 80 % point, PERCENT numbers), in the gates' own words."""
+    from .entrygates import vol_words, vote_words
+    raw = 1 if up >= 3 else -1 if down >= 3 else 0
+    return {"vote": {"tf": "4h", "bar_close": None, "votes": None, "up": up, "down": down, "raw": raw, "with_side": raw * side,
+                     "text": vote_words("4h", raw, up, down)},
+            "vol": {"tf": tf, "atr_pct": atr_pct, "q_pct": q_pct, "days": 30, "q": 0.8,
+                    "text": vol_words(tf, atr_pct / 100, q_pct / 100, {"days": 30, "q": 0.8})}}
+
+
+class ScriptGates:
+    """The VWAP bot's entry gates answering from a script instead of Binance (paperbot/entrygates.EntryGates.check's
+    shape): ``set(symbol, bar_close, why, info)``; anything else passes with gate_read's numbers."""
+
+    def __init__(self):
+        self.script: dict = {}
+        self.asked: list = []
+
+    def set(self, symbol: str, bar_close: int, why: str = "", info: Optional[dict] = None) -> None:
+        self.script[(symbol, int(bar_close))] = (why, info)
+
+    def check(self, symbol: str, tf: str, side: int, bar_close: int) -> tuple:
+        self.asked.append((symbol, tf, int(side), int(bar_close)))
+        why, info = self.script.get((symbol, int(bar_close)), ("", None))
+        return why, (info if info is not None else gate_read(int(side), tf))
+
+    def block(self, symbol: str, tf: str, side: int, bar_close: int) -> str:
+        return self.check(symbol, tf, side, bar_close)[0]
+
+
+class VwapBot:
+    """'VWAP 개선판' itself (docs/vwap-bot-ko.md): paperbot/combo.py's ComboRunner with the owners' config
+    (deploy/combo.vwap.json: VWAP 복귀 실패 30분 and CMO·샌드위치 캔들 1시간, 2 ATR stop, its ladder, 30x, margin 40 %, the
+    96-bar hold limit) and its own database (combo_run as the bot writes it), over a rule-bot database written here
+    (store3's writers: 1m bars of the coins in ``px`` and the rule bot's signal_log rows). Every entry, lock, exit
+    ("TIME" with its "96봉(48시간) 지남"), outcome and FILTERED row is the bot's own; its entry gates answer from a script
+    (ScriptGates: no network). ``move(symbol, t, price)``: the price walks there linearly by minute t."""
+
+    def __init__(self, db: str, rule_db: str, start: int, px: Optional[dict] = None, cfg_over: Optional[dict] = None):
+        import dataclasses
+        from . import combo as C
+        from .notify import ListNotifier
+        with open(os.path.join(LC.ROOT, "deploy", VWAP_CONFIG), encoding="utf-8") as fh:
+            raw = json.load(fh)
+        raw.update(paper_db=rule_db, db=db, telegram=False, **(cfg_over or {}))
+        self.C = C
+        self.cfg = C.ComboConfig.from_dict(raw)
+        self.members = C.resolve_members(self.cfg.members, self.cfg.picks_file)
+        self.settings = C.settings_of(self.cfg, taker_fee=0.0005)
+        syms = list(self.cfg.symbols)
+        brackets, src = LR.file_brackets(syms)
+        self.store = Store3(db)
+        self.book = C.build_book(self.cfg, self.settings, brackets, self.store, ListNotifier(), LR.file_specs(syms))
+        self.store.put_state("combo_run", start - 10 * MIN, {"version": C.VERSION, "brackets": src,
+                                                             "taker_fee": self.settings.taker_fee,
+                                                             "members": [m.describe() for m in self.members],
+                                                             "config": dataclasses.asdict(self.cfg)})
+        self.store.commit()
+        self.rule = Store3(rule_db)
+        self.px = dict(px or VWAP_PX)
+        self.knots = {s: [(start - 10 * MIN, p)] for s, p in self.px.items()}
+        self.gates = ScriptGates()
+        self.now = start - 10 * MIN
+        self.run = C.ComboRunner(self.cfg, self.members, self.book, self.store, ListNotifier(), None,
+                                 now_ms=lambda: self.now, prices=lambda: {}, gates=self.gates)
+        self.t = start - 10 * MIN                 # the next minute to write
+        self.run_to(start)
+
+    def price(self, sym: str, t: int) -> float:
+        k = self.knots[sym]
+        if t <= k[0][0]:
+            return k[0][1]
+        for (a, pa), (b, pb) in zip(k, k[1:]):
+            if a <= t <= b:
+                return pa + (pb - pa) * (t - a) / (b - a)
+        return k[-1][1]
+
+    def move(self, sym: str, t: int, price: float) -> None:
+        """From the last knot (or now) the price walks linearly to ``price`` at minute ``t``."""
+        last = self.knots[sym][-1]
+        if last[0] < self.t:
+            self.knots[sym].append((self.t, self.price(sym, self.t)))
+        self.knots[sym].append((int(t), float(price)))
+
+    def signal(self, strategy: str, symbol: str, side: int, bar_close: int, tf: Optional[str] = None,
+               atr_frac: float = 0.008) -> None:
+        """The rule bot's signal_log row of a bar closing at ``bar_close`` (reference price 20 s after it)."""
+        tf = tf or {"F6_VWAP_FAIL": "30m", "S3_CMO_SANDWICH": "1h"}.get(strategy, "30m")
+        ref = self.price(symbol, bar_close)
+        self.rule.log_signals([{"bar_close": bar_close, "timeframe": tf, "strategy": strategy, "symbol": symbol,
+                                "side": side, "atr": ref * atr_frac, "ref_price": ref, "ref_time": bar_close + 20_000,
+                                "delay_ms": 20_000, "status": "SUBMITTED", "data": {"ctx": {}}}])
+        self.rule.commit()
+
+    def run_to(self, t_end: int) -> "VwapBot":
+        """Write the 1m bars of every minute before ``t_end`` and let the bot step them (its clock 65 s after the last
+        minute opened: a signal whose bar closed at the last minute's open is on time)."""
+        rows = []
+        while self.t < t_end:
+            t = self.t
+            for s in self.px:
+                o, c = self.price(s, t), self.price(s, t + MIN)
+                hi, lo = max(o, c) * 1.00005, min(o, c) * 0.99995
+                rows.append({"ts": t, "symbol": s, "open": o, "high": hi, "low": lo, "close": c, "volume": 10.0,
+                             "mark_open": o, "mark_high": hi, "mark_low": lo, "mark_close": c, "close_time": t + MIN - 1,
+                             "processed_at": t + MIN + 5_000})
+            self.t += MIN
+        if rows:
+            self.rule.live_bars(rows)
+            self.rule.commit()
+        self.now = self.t - MIN + 65_000
+        for _ in range(20):
+            if not self.run.poll():
+                break
+        return self
+
+    def engine(self, aid: Optional[str] = None):
+        return self.book.engines[aid or self.C.ACCOUNT]
+
+    def close(self) -> None:
+        self.store.close()
+        self.rule.close()
+
+
 def _history(w: World, start: int, wins: int, losses_at=(3, 9, 15), n: int = 20, strat=None, loss: Optional[float] = None):
     """``n`` closed paper trades before ``start``, losses at the given positions (``loss``: their net ROE)."""
     t = start - n * 12 * H1
@@ -281,6 +416,8 @@ def scenes(world: str = "live15") -> list:
     try:
         if world == "two":
             out += _two_paper_scene(os.path.join(tmp, "m"))
+        elif world == "vwap":
+            out += _vwap_scene(os.path.join(tmp, "v"))
         elif world == "ac":
             out += _trade_scene(os.path.join(tmp, "a"))
             out += _pause_scene(os.path.join(tmp, "p"), AC)
@@ -570,6 +707,232 @@ def _two_paper_scene(path: str) -> list:
     return out
 
 
+def live_close(w: World, name: str, key: str, t, fill: float, qty: float, fee: float = 0.00055) -> float:
+    """An executor closes with its paper trade ``t`` (a TradeRecord): 2 bps worse than the paper's exit price, its fees
+    paid; returns its pnl."""
+    side = int(t.side)
+    px = round(float(t.exit_price) * (1 - side * 0.0002), 6)
+    pnl = round(side * qty * (px - fill) - qty * (fill + px) * fee, 2)
+    w.x_close(name, key, int(t.exit_time) + 2000, pnl, fill, px, qty, fee, side=side)
+    return pnl
+
+
+def _vwap_scene(path: str) -> list:
+    """Two different paper bots (owners 10-23, docs/vwap-bot-ko.md): the 추세판단 봇 (deploy/combo.trend.json, the main
+    paper) and 'VWAP 개선판' itself (VwapBot: the real bot on its own config). The VWAP bot runs paper-only first (its
+    trades before the watcher first saw its file are never told; then "페이퍼만"), Bybit switches to it (WOO X Pro stays on
+    the trend bot), one minute both bots enter BTC (two 🟢, each with its own executor), the VWAP bot's lock, win, loss
+    card and 96-bar hold-limit exit, the signals its gates kept out, the morning check's VWAP part, its stalled-bot alarm
+    and the weekend pause of both bots."""
+    w = _mk(path, TREND)
+    out = []
+    w.infos[1].exchange = "wooxpro"                       # the second slot trades WOO X Pro (owners 10-20)
+    with open(os.path.join(LC.ROOT, "deploy", TREND.config), encoding="utf-8") as fh:
+        tcfg = json.load(fh)
+    st = Store3(w.paper)
+    st.put_state("combo_run", T0 - 3 * DAY, {"config": tcfg, "taker_fee": 0.0005})
+    st.commit()
+    st.conn.close()
+    vpath = os.path.join(path, "vwap.db")
+    day0 = T0 - 41 * H1                                    # Monday 10/19 00:00 KST
+    vb = VwapBot(vpath, w.rule, day0 + 9 * H1)
+    coins = (BTC, ETH, SOL, "DOGEUSDT", "LTCUSDT", "BCHUSDT")
+    # its first 20 trades, paper-only (16 won: its light, 20 / 75 %, is green at the switch)
+    slots = [day0 + h * H1 for h in range(10, 22)] + [day0 + 24 * H1 + h * H1 for h in range(0, 8)]
+    for k, b in enumerate(slots):
+        sym = coins[k % 6]
+        p0 = vb.price(sym, b)
+        vb.run_to(b)
+        vb.signal("S3_CMO_SANDWICH" if k % 3 == 2 else "F6_VWAP_FAIL", sym, 1, b)
+        vb.run_to(b + MIN)                                # entered on time (a signal stepped later is "late")
+        if k in (3, 9, 13, 17):
+            vb.move(sym, b + 30 * MIN, p0 * 0.98)                       # 2 ATR stop (1.6 %)
+        else:
+            vb.move(sym, b + 20 * MIN, p0 * 1.007)                      # the first lock (+10 %), then back to it
+            vb.move(sym, b + 40 * MIN, p0 * 1.004)
+        vb.move(sym, b + 55 * MIN, vb.price(sym, b + 55 * MIN))
+        vb.run_to(b + 55 * MIN)
+    _history(w, T0, 18, losses_at=(6, 14))
+    st = Store3(w.paper)
+    hist = st.conn.execute("SELECT entry_time, symbol FROM trades WHERE account_id = ? ORDER BY entry_time DESC LIMIT 3",
+                           (LC.ACCOUNT,)).fetchall()
+    st.conn.close()
+    for et, sym in hist:                                  # Bybit followed the trend bot before the switch
+        k = f"{LC.ACCOUNT}|{sym}|{et}"
+        w.x_open("bybit", k, sym, 1, int(et) + 3000, 67_262.0, 0.0144, 66_517.0)
+        w.x_close("bybit", k, int(et) + H1, 2.1, 67_262.0, 67_655.0, 0.0144, 0.00055)
+    for name in ("bybit", "mexc"):
+        w.x_state(name, T0 - 3 * H1)
+        w.x_event(name, T0 - 2 * DAY, "start", "시작", {"paper_db": w.paper})
+    vb.run_to(T0 - 2 * H1)
+    w.tick(T0 - 2 * H1, bars=False)
+    w.watch(T0 - 2 * H1)                                 # the first look: its file is new, nothing of it is sent
+    # 🟢 🔒 ✅ paper-only: no executor follows it yet
+    b = T0 - 90 * MIN
+    vb.run_to(b)
+    p0 = vb.price(SOL, b)
+    vb.signal("F6_VWAP_FAIL", SOL, 1, b)
+    vb.run_to(b + MIN)
+    w.tick(b + MIN, bars=False)
+    out += [("🟢 진입 (VWAP · 페이퍼만)", lv, t) for lv, t in w.watch(b + MIN)]
+    vb.move(SOL, b + 20 * MIN, p0 * 1.007)
+    vb.run_to(b + 21 * MIN)
+    w.tick(b + 21 * MIN, bars=False)
+    out += [("🔒 잠금 시작 (VWAP · 페이퍼만)", lv, t) for lv, t in w.watch(b + 21 * MIN)]
+    vb.move(SOL, b + 40 * MIN, p0 * 1.004)
+    vb.move(SOL, b + 50 * MIN, p0 * 1.004)
+    vb.run_to(b + 50 * MIN)
+    w.tick(b + 50 * MIN, bars=False)
+    out += [("✅ 청산 (VWAP · 페이퍼만)", lv, t) for lv, t in w.watch(b + 50 * MIN)]
+    # ▶️ the switch: Bybit started with the VWAP bot's database (deploy/vwap_switch.py: light 20 / 75 %)
+    w.infos[0].paper_db, w.infos[0].light_n, w.infos[0].light_min = vpath, 20, 0.75
+    w.x_event("bybit", T0 - 30 * MIN, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {vpath})", {"paper_db": vpath})
+    vb.run_to(T0 - 29 * MIN)
+    w.tick(T0 - 29 * MIN, bars=False)
+    out += [("▶️ 실행기 켜짐 (VWAP 개선판으로 바꿈)", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
+    # 🟢 🟢 the same minute, the same coin, two bots: two messages, each with its own executor
+    vb.run_to(T0)
+    p0 = vb.price(BTC, T0)
+    vb.signal("F6_VWAP_FAIL", BTC, 1, T0)
+    vb.run_to(T0 + MIN)
+    vp = vb.engine().position
+    key = f"{LC.ACCOUNT}|{BTC}|{T0}"
+    fill = round(vp.entry_price * 1.0002, 1)
+    bqty = round(107.87 * 0.4 * 30 / fill, 4)
+    bstop = round(fill * vp.stop_price / vp.entry_price, 1)
+    w.x_open("bybit", key, BTC, 1, T0 + 3000, fill, bqty, bstop, lev=30)
+    w.x_state("bybit", T0 + MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": bqty,
+                                        "entry_ts": T0 + 3000, "stop_initial": bstop, "stop": bstop, "stop_algo_id": "b1"})
+    tstop = round(p0 * (1 - 0.0111), 1)
+    w.open_position(T0, symbol=BTC, price=p0, stop=tstop, strat=TREND.main, lev=40)
+    wfill = round(p0 * 1.0003, 1)
+    w.x_open("mexc", key, BTC, 1, T0 + 4000, wfill, 0.0144, round(wfill * (1 - 0.0111), 1))
+    w.x_state("mexc", T0 + MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": 0.0144,
+                                       "entry_ts": T0 + 4000, "stop_initial": round(wfill * (1 - 0.0111), 1),
+                                       "stop": round(wfill * (1 - 0.0111), 1), "stop_algo_id": "w1"})
+    w.tick(T0 + MIN, bars=False)
+    out += [("🟢 진입 (같은 분 두 봇)", lv, t) for lv, t in w.watch(T0 + MIN)]
+    # 🔒 the VWAP bot's first lock (Bybit's stop follows it)
+    vb.move(BTC, T0 + 20 * MIN, p0 * 1.007)
+    vb.run_to(T0 + 21 * MIN)
+    vp = vb.engine().position
+    w.x_state("bybit", T0 + 21 * MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": bqty,
+                                             "entry_ts": T0 + 3000, "stop_initial": bstop,
+                                             "stop": round(fill * vp.stop_price / vp.entry_price, 1), "stop_algo_id": "b2"})
+    w.tick(T0 + 21 * MIN, bars=False)
+    out += [("🔒 잠금 시작 (VWAP)", lv, t) for lv, t in w.watch(T0 + 21 * MIN)]
+    # ✅ back to the lock: the VWAP bot and Bybit close
+    vb.move(BTC, T0 + 40 * MIN, p0 * 1.004)
+    vb.move(BTC, T0 + 50 * MIN, p0 * 1.004)
+    vb.run_to(T0 + 50 * MIN)
+    vt = vb.engine().trades[-1]
+    eqs = {"bybit": 107.87}
+    pnl = live_close(w, "bybit", key, vt, fill, bqty)
+    eqs["bybit"] = round(eqs["bybit"] + pnl, 2)
+    w.x_state("bybit", T0 + 50 * MIN, trade=None, last_equity=eqs["bybit"], peak_equity=eqs["bybit"])
+    w.tick(T0 + 50 * MIN, bars=False)
+    out += [("✅ 청산 (VWAP)", lv, t) for lv, t in w.watch(T0 + 50 * MIN)]
+    # ✅ the trend bot's own win (WOO X Pro with it)
+    x = T0 + 2 * H1
+    w.position = None
+    w.paper_trade(T0, x, 0.171, symbol=BTC, price=p0, lock=0.17, mfe=p0 * (1 + 0.205 / 40), stop=tstop, lev=40)
+    w.x_close("mexc", key, x + 2000, round(0.0144 * wfill / 40 * 0.165, 2), wfill, round(wfill * (1 + 0.165 / 40), 1), 0.0144, 0.00042)
+    w.x_state("mexc", x + MIN, trade=None, last_equity=108.9, peak_equity=108.9)
+    vb.run_to(x + 2 * MIN)
+    w.tick(x + 2 * MIN, bars=False)
+    out += [("✅ 청산 (추세판단 봇)", lv, t) for lv, t in w.watch(x + 2 * MIN)]
+    # ❌ the VWAP bot's 2 ATR stop (Bybit with it): its loss card
+    b = T0 + 3 * H1
+    vb.run_to(b)
+    p1 = vb.price(ETH, b)
+    vb.signal("F6_VWAP_FAIL", ETH, 1, b)
+    vb.run_to(b + MIN)
+    vp = vb.engine().position
+    ekey = f"{LC.ACCOUNT}|{ETH}|{b}"
+    efill = round(vp.entry_price * 1.0002, 2)
+    eqty = round(eqs["bybit"] * 0.4 * 30 / efill * 0.95, 3)
+    w.x_open("bybit", ekey, ETH, 1, b + 3000, efill, eqty, round(efill * vp.stop_price / vp.entry_price, 2), lev=30)
+    vb.move(ETH, b + 30 * MIN, p1 * 0.98)
+    vb.run_to(b + 40 * MIN)
+    vt = vb.engine().trades[-1]
+    pnl = live_close(w, "bybit", ekey, vt, efill, eqty)
+    eqs["bybit"] = round(eqs["bybit"] + pnl, 2)
+    w.x_state("bybit", b + 40 * MIN, trade=None, last_equity=eqs["bybit"], peak_equity=111.9)
+    w.tick(b + 40 * MIN, bars=False)
+    out += [("❌ 청산 = 손실 카드 (VWAP)", lv, t) for lv, t in w.watch(b + 40 * MIN)]
+    # ✅ the 96-bar hold limit: LTC long at 21:00 KST, 48 hours below its first lock; meanwhile the gates keep signals out
+    b = T0 + 4 * H1
+    vb.run_to(b)
+    p2 = vb.price("LTCUSDT", b)
+    vb.signal("F6_VWAP_FAIL", "LTCUSDT", 1, b)
+    vb.run_to(b + MIN)
+    vp = vb.engine().position
+    lkey = f"{LC.ACCOUNT}|LTCUSDT|{b}"
+    lfill = round(vp.entry_price * 1.0002, 2)
+    lqty = round(eqs["bybit"] * 0.4 * 30 / lfill, 2)
+    w.x_open("bybit", lkey, "LTCUSDT", 1, b + 3000, lfill, lqty, round(lfill * vp.stop_price / vp.entry_price, 2), lev=30)
+    w.x_state("bybit", b + MIN, trade={"key": lkey, "symbol": "LTCUSDT", "side": 1, "status": "open", "qty": lqty,
+                                       "entry_ts": b + 3000, "stop_initial": round(lfill * vp.stop_price / vp.entry_price, 2),
+                                       "stop": round(lfill * vp.stop_price / vp.entry_price, 2), "stop_algo_id": "b3"})
+    w.tick(b + MIN, bars=False)
+    w.watch(b + MIN)                                      # its 🟢 (shown above already: one is enough)
+    vb.move("LTCUSDT", b + 3 * H1, p2 * 1.0025)
+    d3 = day0 + 3 * DAY                                   # Thursday 10/22 00:00 KST
+    # (when, strategy, coin, side, the gate's why ('' = passes, then one position holds it), what it read, would win)
+    blocked = ((d3 + 11 * H1, "F6_VWAP_FAIL", BTC, 1, "4시간 추세 반대: 상승 0·하락 3·중립 1",
+                gate_read(1, "30m", up=0, down=3), True),
+               (d3 + 12 * H1, "F6_VWAP_FAIL", ETH, -1, "변동성 높음: ATR 0.512% > 지난 30일 80% 위치 0.433%",
+                gate_read(-1, "30m", atr_pct=0.512, q_pct=0.433), False),
+               (d3 + 13 * H1, "S3_CMO_SANDWICH", SOL, 1, "4시간 추세 판단을 못 읽음(진입 안 함): 바이낸스 응답 없음",
+                {"vote": {"tf": "4h", "error": "바이낸스 응답 없음"}}, True),
+               (d3 + 14 * H1, "F6_VWAP_FAIL", "DOGEUSDT", 1, "", None, True))
+    for t, strat, sym, side, why, info, won in blocked:
+        vb.run_to(t)
+        if why:
+            vb.gates.set(sym, t, why, info)
+        q = vb.price(sym, t)
+        vb.signal(strat, sym, side, t)
+        if won:                                           # what each would have done (the 못 탄 신호 pass simulates it)
+            vb.move(sym, t + 25 * MIN, q * (1 + side * 0.007))
+            vb.move(sym, t + 50 * MIN, q * (1 + side * 0.004))
+        else:
+            vb.move(sym, t + 30 * MIN, q * (1 - side * 0.02))
+        vb.run_to(t + MIN)
+    vb.run_to(b + 48 * H1 + 5 * MIN)
+    vt = vb.engine().trades[-1]
+    pnl = live_close(w, "bybit", lkey, vt, lfill, lqty)
+    eqs["bybit"] = round(eqs["bybit"] + pnl, 2)
+    w.x_state("bybit", vt.exit_time + MIN, trade=None, last_equity=eqs["bybit"], peak_equity=111.9)
+    w.x_equity("bybit", vt.exit_time + MIN, eqs["bybit"])
+    w.x_equity("mexc", vt.exit_time + MIN, 108.9)
+    w.tick(b + 48 * H1 + 5 * MIN, bars=False)
+    out += [("✅ 청산 = 보유 한도 (VWAP)", lv, t) for lv, t in w.watch(b + 48 * H1 + 5 * MIN)]
+    # 📋 the morning check of Thursday 10/22 09:00 ~ Friday 09:00 (its VWAP part)
+    d4 = d3 + DAY + 9 * H1                                # Friday 10/23 09:00 KST
+    vb.run_to(d4 + 9 * MIN)
+    w.tick(d4 + 9 * MIN, bars=False)
+    w.watch(d4 + 9 * MIN)                                 # the watcher's last pass before it (못 탄 신호 included)
+    got = Collect()
+    r = LC.run_check(w.src(), day=LC.default_day(d4 + 10 * MIN), now_ms=d4 + 10 * MIN, no_replay=True, notifier=got)
+    out.append(("📋 아침 점검 (VWAP 개선판 부분)", r["level"], r["text"]))
+    # 🚨 the VWAP bot stopped writing while Bybit follows it
+    now = d4 + 2 * H1
+    vb.run_to(now)
+    st = Store3(vpath)
+    st.put_state("heartbeat", now - 15 * MIN, {})
+    st.commit()
+    st.conn.close()
+    w.tick(now, bars=False)
+    out += [("🚨 알람(VWAP 페이퍼 멈춤)", lv, t) for lv, t in w.watch(now) if "VWAP 개선판 페이퍼 봇" in t]
+    # ⏸ the weekend: both bots' rules are the same (deploy/combo.trend.json and combo.vwap.json): one message
+    sat = d3 + 2 * DAY                                    # Saturday 10/24 00:00 KST
+    vb.run_to(sat + MIN)
+    w.tick(sat + MIN, bars=False)
+    out += [("⏸ 진입 쉼 (두 봇)", lv, t) for lv, t in w.watch(sat + MIN) if t.startswith(("⏸", "🔔"))]
+    vb.close()
+    return out
+
+
 def _halt_scene15(path: str) -> list:
     """규칙봇 15: no halt for a losing run or a drawdown; a halt still comes from an executor's own safety stop (here a
     position found on the wrong side: loud) or from the STOP file (a person's stop: quiet ⏹)."""
@@ -811,6 +1174,7 @@ def _setup_scene(path: str, prof: Profile = None) -> list:
 
 # ====================================================================== print
 KINDS = (("▶️", "실행기 켜짐"), ("⏹", "실행기 꺼짐(사람이 끔)"), ("⏳", "진입 대기"), ("🟢 진입", "진입"), ("🔒", "잠금 시작"),
+         ("⚠", "참고(따라가는 실행기 없는 페이퍼)"),
          ("✅ 청산", "청산(이김)"), ("✅ 텔레그램", "텔레그램 설정 맞춰짐"), ("🚨 ❌", "손실 카드(소리)"),
          ("❌", "손실 카드"), ("🚦", "신호등 바뀜"), ("🏁", "40번 도달"), ("📉", "참고"), ("🎉", "좋은 소식"), ("✅", "다시 정상"), ("📋", "아침 점검"),
          ("🚨 실거래 일일 점검", "아침 점검(확인할 것 있음)"), ("⏸", "진입 쉼 시작"), ("🔔", "진입 쉼 끝"))
