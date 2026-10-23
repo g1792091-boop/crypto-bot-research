@@ -24,11 +24,11 @@
 // enter next, /api/v4/livebots/likely; the default) | 성적 순위 (boardView below). The choice is remembered on this device
 // (local: localStorage inside try/catch); each view is built when first shown and polls only while it is the one shown.
 import {h, put, ui, fmt, local, motion, stratFigure, stratHue} from "../core/pb.js";
-import {sourceState, mainFollowKo} from "./livebots-kit.js";
+import {sourceState, mainFollowKo, acctKo, EXEC_SLOTS, execIds, execsNow, execsKo, allFollowKo} from "./livebots-kit.js";
 
 /** Who follows the ranked paper bot, in words: "두 실행기가 따라가는" with one paper bot; with two (owners 10/23) only its own
  *  followers ("바이비트가 따라가는"). */
-const followKo = () => mainFollowKo() || "두 실행기가 따라가는";
+const followKo = () => mainFollowKo() || allFollowKo();
 /** With two paper bots the live rows are only each executor's trades on this bot (the server's rank: paper first). */
 const liveOnlyKo = () => (mainFollowKo() ? " (각 실행기가 이 봇을 따라간 거래만)" : "");
 import {likelyView} from "./livebots-likely.js";
@@ -380,7 +380,8 @@ export function rowDetail(r, d, href) {
 // bars (30분 · 1시간 · 4시간 진입) since its own start, in the server's order, each row with its members; the card's words follow the bot.
 export const GROUPS_API = "/api/v4/livebots/groups";
 const GROUP_KEY = "lbrg-acct";
-const GROUP_ACCTS = [{id: "paper", label: "페이퍼"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}];
+/** The accounts of the card's switch: the paper, then the executors (execIds: the third, 플립스터, while the server has it). */
+const groupAccts = (d) => [{id: "paper", label: "페이퍼"}, ...(d ? execIds(d) : execsNow()).map((id) => ({id, label: acctKo(id)}))];
 
 /** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}].
  *  The trend bot (d.kind "trend"): the server's order (roles 눌림 · 자리 · 돌파 · 횡보 · 추세, then its entry bars), each row with
@@ -419,8 +420,10 @@ export function groupWords(d) {
  *  when its own records changed, so the hidden switch view polls nothing extra). */
 export function groupBlock(ctx, o = {}) {
   const st = {d: null, okAt: 0, acct: local.get(GROUP_KEY, "paper")};
-  if (!GROUP_ACCTS.some((x) => x.id === st.acct)) st.acct = "paper";
-  const seg = ui.seg(GROUP_ACCTS, st.acct, (id) => { st.acct = id; local.set(GROUP_KEY, id); draw(); }, {label: "계좌 고르기"});
+  if (!["paper", ...EXEC_SLOTS].includes(st.acct)) st.acct = "paper";
+  const segOf = (accts) => ui.seg(accts, accts.some((x) => x.id === st.acct) ? st.acct : "paper",
+    (id) => { st.acct = id; local.set(GROUP_KEY, id); draw(); }, {label: "계좌 고르기"});
+  let segKey = groupAccts(null).map((x) => x.id).join(), seg = segOf(groupAccts(null));
   const stateSlot = h("div", {class: "lb-slot"});
   const head = h("p", {class: "lbrg-start"});
   const rows = h("div", {class: "lbrg-rows", role: "list"});
@@ -444,8 +447,15 @@ export function groupBlock(ctx, o = {}) {
       r.n ? ui.smallSample(r.n, small) : h("span"));
   }
   function draw() {
-    seg.set(st.acct);
     const d = st.d;
+    const accts = groupAccts(d);
+    if (accts.map((x) => x.id).join() !== segKey) {     // the third executor came (or went): its choice too
+      segKey = accts.map((x) => x.id).join();
+      const nx = segOf(accts);
+      seg.replaceWith(nx);
+      seg = nx;
+    }
+    seg.set(st.acct);
     if (!d) { put(rows, motion.shimmer(3)); return; }
     const words = groupWords(d);
     if (sub && sub.textContent !== words.sub) sub.textContent = words.sub;
@@ -783,9 +793,9 @@ export function boardView(ctx) {
             ` 추세 판단·진입 전 검사${tb.pullback_wait === false ? "를" : "·되돌림을"} 다 통과해야 들어가서 거래가 드물어요. 닫힌 거래 ${fmt.int(smallMin(d))}번 미만은 '표본 적음'이에요.`),
           h("li", null, h("b", null, "역할"), " = 눌림 · 자리 · 돌파 · 횡보 · 추세 (두 분이 정한 이름). 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉, 4시간 진입은 끝난 일봉 추세를 따라요."
             + (tb.hold_entry ? " 보류여도 반대 방향만 아니면 들어가요." : "")),
-          h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), ` 순위는 ${followKo()} 페이퍼(모의) 거래로 매겨요. 바이비트 · WOO X Pro 기록은 줄을 펼치면 보여요${liveOnlyKo()}.`),
+          h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), ` 순위는 ${followKo()} 페이퍼(모의) 거래로 매겨요. ${execsKo()} 기록은 줄을 펼치면 보여요${liveOnlyKo()}.`),
           h("li", null, "막대: ", h("span", {class: "lbr-key now"}), "지금 승률(페이퍼, 거래가 있을 때) · 0~100%"))),
-      h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive("바이비트 · WOO X Pro (펼친 줄의 실거래)"))];
+      h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive(`${execsKo()} (펼친 줄의 실거래)`))];
     }
     return [ui.card({title: "읽는 법", cls: "lbr-how"},
       h("ul", {class: "lbr-howl"},
@@ -793,12 +803,12 @@ export function boardView(ctx) {
           h("b", null, "처음 보는 기간"), " 승률이에요 (2020-24에만 맞추고 2025-26에 처음 돌려 본 숫자)."),
         h("li", null, h("b", null, "거래가 적으면 순위는 대부분 운이에요."),
           ` 매매법이 ${c ? fmt.int(c.strategies) : "여러"}개라 하나가 1주에 ${c && c.perWeek != null ? fmt.num(c.perWeek, 1) + "번꼴" : "1번도 안 되게"} 거래해요 (5년 평균). 닫힌 거래 ${fmt.int(smallMin(d))}번 미만은 '표본 적음'이에요.`),
-        h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), ` 순위는 ${followKo()} 페이퍼(모의) 거래로 매겨요. 바이비트 · WOO X Pro 기록은 줄을 펼치면 보여요${liveOnlyKo()}.`),
+        h("li", null, h("b", null, "페이퍼 = 연습 돈, 실거래 = 진짜 돈."), ` 순위는 ${followKo()} 페이퍼(모의) 거래로 매겨요. ${execsKo()} 기록은 줄을 펼치면 보여요${liveOnlyKo()}.`),
         h("li", null, "5년 기여도 = 5년 시험에서 전체가 불어난 몫 중 이 매매법이 낸 몫. 같은 숫자면 5년 기여도가 큰 쪽이 먼저예요."),
         h("li", null, "막대: ", h("span", {class: "lbr-key fit"}), "5년(맞춘 숫자) · ", h("span", {class: "lbr-key honest"}), "처음 보는 기간 · ",
           h("span", {class: "lbr-key now"}), "지금(페이퍼, 거래가 있을 때) · 0~100%", be != null ? `, 세로 줄 = 본전 승률 약 ${fmt.pct(be, 0, false)}` : ""),
         d && sources(d).card ? h("li", null, "상태 말(표본 작음 · 기대 안 · 주의 · 확실히 나쁨)은 성적 탭의 매매법 성적표와 같은 계산이에요.") : null)),
-    h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive("바이비트 · WOO X Pro (펼친 줄의 실거래)"))];
+    h("div", {class: "lb-foot"}, ui.assumeLine(["closed", "open"], "페이퍼(연습 돈) 손익 · 순ROE"), ui.assumeLive(`${execsKo()} (펼친 줄의 실거래)`))];
   }
   const namesKey = (d) => ((d && d.rows) || []).map((r) => fmt.stratKo(r.strategy)).join("|");
 

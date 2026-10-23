@@ -32,7 +32,7 @@
 // month is the one wallet), the VWAP executor's own light and reference; 손절 비교 becomes 두 봇 나란히 (the server's
 // h2h.twin false: no 11/3 stop test, each column by its bot's name).
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctKo, acctTag, sourceState, eraWords, josaObj, lightLine} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, eraWords, josaObj, lightLine, execsKo} from "./livebots-kit.js";
 import {weekdaysKo} from "./livebots-expect.js";
 
 export const GOAL_API = "/api/v4/livebots/goal";
@@ -233,7 +233,7 @@ export function goalView(ctx) {
     ui.card({title: "지금 기록 그대로라면", sub: "계산일 뿐이에요 · 예측이 아니에요", cls: "lbg-card lbg-imply"}, imply),
     h2hCard,
     h("div", {class: "lb-foot"}, ui.assumeLine(["closed"], "페이퍼(연습): 잔고는 닫힌 거래 기준"),
-      ui.assumeLive("바이비트 · WOO X Pro: 잔고 기록 기준 · 입출금 뺌")));
+      ui.assumeLive(`${execsKo()}: 잔고 기록 기준 · 입출금 뺌`)));
   const el = h("div", {class: "lbg stack"}, stateSlot, body);
 
   function progressEl(a, d) {

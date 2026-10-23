@@ -270,7 +270,8 @@ def world(tmp_path_factory):
     paper = str(tmp / "live-ac.db")
     pts = _paper_world(paper)
     p = {"paper": paper, "paper2": str(tmp / "none-paper2.db"), "bybit_db": str(tmp / "bybit.db"), "mexc_db": str(tmp / "woo.db"),
-         "bybit_config": str(tmp / "executor.json"), "mexc_config": str(tmp / "executor-mexc.json")}
+         "bybit_config": str(tmp / "executor.json"), "mexc_config": str(tmp / "executor-mexc.json"),
+         "flipster_db": str(tmp / "none-flipster.db"), "flipster_config": str(tmp / "none-flipster.json")}
     # 바이비트 (mainnet): the BTC lock on its own exchange stop, the ETH close after the paper's (시간 정리), the SOL one
     # still a wallet estimate
     _exec_world(p["bybit_db"], p["bybit_config"], paper, "bybit", "mainnet",

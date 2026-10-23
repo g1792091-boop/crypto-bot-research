@@ -13,6 +13,7 @@
 .lbg-a-paper { --lbg-c: var(--series-ds); }
 .lbg-a-bybit { --lbg-c: var(--series-core); }
 .lbg-a-mexc { --lbg-c: var(--series-m5); }
+.lbg-a-flipster { --lbg-c: var(--series-fl); }
 .lbg-acct.off { border-style: dashed; }
 .lbg-ah { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
 .lbg-ah .lb-acct { font: 800 var(--t-md)/1.3 var(--f-body); color: var(--ink); }

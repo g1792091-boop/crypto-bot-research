@@ -95,7 +95,7 @@ export function cardBlock(c, o = {}) {
     when ? h("p", {class: "lb-cline muted"}, when) : null,
     h("h4", {class: "lb-ch4"}, "백테스트와 비교"), h("ul", {class: "lb-cbt"}, bt),
     h("h4", {class: "lb-ch4"}, "노이즈 손절 (청산 뒤 4시간)"), noiseLine(c.noise),
-    h("h4", {class: "lb-ch4"}, "실행기 두 개"), ex,
+    h("h4", {class: "lb-ch4"}, `실행기 ${(c.executors || []).length > 2 ? "세" : "두"} 개`), ex,
     c.text ? ui.disclosure(c.sent ? "텔레그램으로 간 카드 글 보기" : "카드 글 보기", h("pre", {class: "lb-ctext"}, c.text)) : null);
 }
 

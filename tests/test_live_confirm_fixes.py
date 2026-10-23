@@ -94,8 +94,18 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                              "/etc/paperbot/executor.json",
                              "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
                              "/etc/paperbot/executor-mexc.json"]), differ
+    # the third executor (Flipster, owners 10-23, docs/flipster-ko.md): the same unit again, its own config
+    third = _unit("deploy/paperbot-executor-flipster.service")
+    differ = sorted(set(unit) ^ set(third))
+    assert differ == sorted(["Description=paperbot order executor (testnet unless every mainnet gate passes)",
+                             "Description=paperbot order executor 3 (Flipster; mainnet: every gate must pass)",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor.json",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor-flipster.json"]), differ
     for svc in sorted(os.listdir(os.path.join(REPO, "deploy"))):
-        if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service"):
+        if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service",
+                                                   "paperbot-executor-flipster.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor

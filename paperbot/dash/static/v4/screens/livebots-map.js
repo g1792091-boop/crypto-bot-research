@@ -22,15 +22,17 @@
 // ``empty``, owners 10/21 night: zeros everywhere on the first day) one card says so in their place, with what the 7/1~10/20
 // replay says to expect (가상).
 import {h, s, put, ui, fmt, motion, serverNow, href} from "../core/pb.js";
-import {acctKo, acctTag, sourceState, expectLines, expectHead, eraWords} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, expectLines, expectHead, eraWords, EXEC_SLOTS, execsNow} from "./livebots-kit.js";
 
 export const MAP_API = "/api/v4/livebots/map";
 const REFRESH_MS = 30 * 1000;
 const IDS = ["paper", "bybit", "mexc"];
-const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro"};
+const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro", flipster: "플립스터"};
 /** The accounts of an answer's band: the second paper bot's line too while the server sends it (owners 10/23: the 'VWAP
- *  개선판', its own wins from its own start, named by its bot); one paper bot: the three as before. */
-export const idsOf = (b) => (b && b.accounts && b.accounts.paper2 ? ["paper", "paper2", "bybit", "mexc"] : IDS);
+ *  개선판', its own wins from its own start, named by its bot), the third executor's (플립스터) while the server has it;
+ *  one paper bot and two executors: the three as before. */
+export const idsOf = (b) => ["paper", ...(b && b.accounts && b.accounts.paper2 ? ["paper2"] : []),
+  ...EXEC_SLOTS.filter((id) => execsNow().includes(id) || (b && b.accounts && b.accounts[id]))];
 /** A line's short label: the account's (페이퍼 · 바이비트 · WOO X Pro); with a second paper bot both paper lines by their
  *  bots' names (acctKo: the summary's names). */
 const shortOf = (id, b) => (id === "paper2" ? ((b && b.accounts && b.accounts.paper2 && b.accounts.paper2.label_ko) || acctKo(id))

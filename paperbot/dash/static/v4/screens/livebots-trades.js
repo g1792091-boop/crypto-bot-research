@@ -16,13 +16,15 @@
 // HONESTY: every number is a record's; a field the record does not have is '—' or left out; real money and paper money each
 // carry their own caption; no buttons that change anything; cards not collected yet say 수집 전, never '없음'.
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
-import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, EXEC_SLOTS, execIds, execsNow} from "./livebots-kit.js";
 import {cardBlock, cardSummary} from "./livebots-cards.js";
 import {replayHref} from "./livebots-replay.js";
 import {whyBox} from "./livebots-why.js";
 
 export const EXC_API = "/api/v4/livebots/positions/excursions";
-const IDS = ["paper", "bybit", "mexc"];
+/** The tables of the answer: the paper bots (the second while there is one), then the executors (execIds: the third,
+ *  플립스터, while the server has it). */
+const idsOf = (d) => ["paper", ...(d && d.accts && d.accts.paper2 ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
 const EX_NONE = {missing: "수집 전", error: "못 읽음", none: "1분봉 없음"};
 
 /** A row's 최대 +% / 최대 −% (pure; node tests): {state, mfe, mae, src, why} from the excursions answer x, its account and
@@ -51,10 +53,11 @@ export function filterRows(rows, f) {
 export function tradesView(ctx) {
   const q = ctx.params.query || {};
   const want = q.acct || local.get("lb-tacct2", "bybit");
-  const st = {acct: IDS.includes(want) ? want : "bybit", f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false, ids: IDS};
+  const ids0 = idsOf(null);
+  const st = {acct: ids0.includes(want) ? want : "bybit", f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false, ids: ids0};
   const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lb-tacct2", id); st.f = F0(); st.open = null; resSeg.set("all"); draw(true); },
     {label: "계좌 고르기"});
-  let seg = segOf(IDS);
+  let seg = segOf(ids0);
   const coinSel = h("select", {class: "select", "aria-label": "코인"});
   const stratSel = h("select", {class: "select", "aria-label": "매매법"});
   const resSeg = ui.seg([{id: "all", label: "전부"}, {id: "win", label: "이김"}, {id: "loss", label: "짐"}], "all", (id) => { st.f.res = id; draw(false); }, {label: "이김·짐"});
@@ -203,13 +206,15 @@ export function tradesView(ctx) {
     const sig = JSON.stringify({...d, now_ms: 0});
     if (st.d && sig === st.sig) { put(stateSlot); return; }
     st.d = d; st.sig = sig;
-    // two paper bots (owners 10/19): the second one's table is a choice too, only while there is one
-    const ids = d.accts && d.accts.paper2 ? ["paper", "paper2", "bybit", "mexc"] : IDS;
-    if (ids.length !== st.ids.length) {
+    // two paper bots (owners 10/19): the second one's table is a choice too, only while there is one; the third executor's
+    // (플립스터, owners 10/23) only while the server has it
+    const ids = idsOf(d);
+    if (ids.join() !== st.ids.join()) {
       st.ids = ids;
       if (!ids.includes(st.acct)) st.acct = "bybit";
       const want2 = local.get("lb-tacct2", "");
       if (q.acct === "paper2" || (!q.acct && want2 === "paper2" && ids.includes("paper2"))) st.acct = "paper2";
+      else if (EXEC_SLOTS.includes(q.acct || want2) && ids.includes(q.acct || want2)) st.acct = q.acct || want2;
       const next = segOf(ids);
       seg.replaceWith(next);
       seg = next;

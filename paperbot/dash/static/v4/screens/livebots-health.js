@@ -10,7 +10,7 @@
 // HONESTY: a file not there = 수집 전, unreadable = 못 읽음 + why (never "정상"); the ages tick with the server clock between
 // answers; a failed refresh keeps the last answer dimmed with its age.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {sourceState} from "./livebots-kit.js";
+import {sourceState, execsNow} from "./livebots-kit.js";
 
 export const HEALTH_API = "/api/v4/livebots/health";
 const REFRESH_MS = 15 * 1000;
@@ -104,7 +104,7 @@ export function healthView(ctx) {
       d.combo && d.combo.state !== "ok" ? sourceState(d.combo, "합친 봇 설정 (쉬는 시간 규칙)") : null);
     const k = d.kill || {};
     put(kill, (k.files || []).map((f) => h("p", {class: ["lbd-kill", f.present ? "on" : ""]}, h("i", {class: ["lbd-dot", f.present ? "bad" : "ok"], "aria-hidden": "true"}),
-      h("b", null, f.present ? "비상 정지 파일 있음 (두 실행기 멈춤)" : "비상 정지 파일 없음"), ` ${f.path}`)),
+      h("b", null, f.present ? `비상 정지 파일 있음 (${execsNow().length > 2 ? "세" : "두"} 실행기 멈춤)` : "비상 정지 파일 없음"), ` ${f.path}`)),
     h("p", {class: "lbd-cmd"}, h("span", {class: "muted"}, "멈추는 명령 "), h("code", null, k.cmd || "sudo touch /var/lib/paperbot/STOP")));
   }
   function tick() {

@@ -666,7 +666,7 @@ def _execs(p: dict, since: int, now: int) -> list:
     except (OSError, sqlite3.Error, ValueError) as exc:
         why = f"{type(exc).__name__}: {exc}"[:200]
         return [{"id": ex, "name_ko": ko, "state": "error", "reason_ko": "실행기 기록을 읽지 못했어요", "reason": why, "rows": []}
-                for ex, ko, _dk, _ck in L.EXECS]
+                for ex, ko, _dk, _ck in L.installed(p)]
     bots = L.paper_bots(p, paper, execs)
     out = []
     for x in execs:
@@ -676,7 +676,7 @@ def _execs(p: dict, since: int, now: int) -> list:
             out.append({**base, "state": r.get("state"), "reason_ko": r.get("reason_ko"), "reason": r.get("reason"), "rows": []})
             continue
         pairs = L.pairs_of(x)
-        dk = next(d for ex, _ko, d, _ck in L.EXECS if ex == x["id"])
+        dk = next(d for ex, _ko, d, _ck in L.ALL_EXECS if ex == x["id"])
         ok = _cost_ok(p[dk])
         # only the trades it made while it followed the trend bot (owners 10-23: an executor moved to the 'VWAP 개선판'
         # is never held against the trend bot's replay for its VWAP trades)

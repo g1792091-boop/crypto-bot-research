@@ -9,7 +9,8 @@
 //           Premium / Discount light and blink, a flash when a live bot really fills on that coin), the table 포지션 / 체결 /
 //           손절 주문 of the three accounts
 //   right   이 코인 포지션 and 수익 차트 (terminal-pnl.js: per account, 24시간 / 7일 / 전체, 오늘 수익, 수익 캘린더)
-//   below   the three accounts' LED balance bars, the two signal lights, the executors' WARN / CRITICAL console
+//   below   the three accounts' LED balance bars, the two signal lights, the executors' WARN / CRITICAL console (the third
+//           executor, 플립스터, its bar, light and console tab too while the server has it: livebots-kit.js execIds)
 // HONESTY: what the terminal promised stays true here: every glow answers a real change, nothing moves under reduced motion
 // or on a hidden page, no order buttons; paper money (모의) and real money (실거래) each carry their own caption and are
 // never added together.
@@ -21,10 +22,12 @@ import {pnlPanel} from "./terminal-pnl.js";
 import {ages, MARKET_LABEL} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
 import {bandLine, fillsPanel, coinMarks, minePanel, tablePanel} from "./livebots-parts.js";
-import {liveLines, acctCard, lightRow, acctKo, paperSinceNote} from "./livebots-kit.js";
+import {liveLines, acctCard, lightRow, acctKo, paperSinceNote, ACCT, EXEC_SLOTS, execIds, execsNow, execsKo, acctsKo}
+  from "./livebots-kit.js";
 import {posKeys} from "./livebots-calc.js";
 
-const PNL_IDS = ["bybit", "mexc", "paper"];
+/** The P&L chart's accounts: the executors (execIds: the third while the server has it), then the paper. */
+const pnlBase = (d) => [...(d ? execIds(d) : execsNow()), "paper"];
 const LIVE_TF = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
 
 /** termView(ctx, src) -> {el, set(d, state)}; src: {state() -> "loading" | "ok" | "failed", at() -> ms of the last good answer,
@@ -57,7 +60,7 @@ export function termView(ctx, src) {
   const fills = fillsPanel(ctx);
   const chart = termChart(ctx, st, (tf) => { st.tf = tf; local.set("lb-tf", tf); }, {
     key: "live", label: "실거래 차트",
-    keyTitle: "페이퍼(연습, P) · 바이비트(B) · WOO X Pro(W)의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김",
+    keyTitle: `페이퍼(연습, P) · ${execsNow().map((id) => `${acctKo(id)}(${ACCT[id].s})`).join(" · ")}의 진입선, 손절·잠금선, 페이퍼의 첫 손절과 다음 잠금 자리 (설정의 계단 잠금대로) · 왼쪽 이름표를 누르면 그 선만 숨김`,
     more: (sym, tf) => ctx.href("livebots", "chart", {sym, tf}),
     lines: (sym, mark) => liveLines(st.d ? st.d.accts : [], sym, mark),
     posKeys: (sym) => posKeys(st.d ? st.d.accts : [], sym),
@@ -66,18 +69,18 @@ export function termView(ctx, src) {
   const mine = minePanel(ctx, st);
   const table = tablePanel(ctx, st, pick);
   let pnlId = local.get("lb-pnl-acct", "bybit");
-  if (![...PNL_IDS, "paper2"].includes(pnlId)) pnlId = "bybit";
+  if (![...EXEC_SLOTS, "paper", "paper2"].includes(pnlId)) pnlId = "bybit";
   const pickPnl = (id) => { pnlId = id; local.set("lb-pnl-acct", id); pnl.refresh(true); };
   const psegOf = (ids) => {
     const x = ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(pnlId) ? pnlId : "bybit", pickPnl, {label: "수익 차트 계좌"});
     x.classList.add("lb-pseg");
     return x;
   };
-  let pseg = psegOf(PNL_IDS), psegKey = PNL_IDS.map((id) => `${id}:${acctKo(id)}`).join();
+  let pseg = psegOf(pnlBase(null)), psegKey = pnlBase(null).map((id) => `${id}:${acctKo(id)}`).join();
   const psegBox = h("span", {class: "lb-segbox"}, pseg);          // the switch is rebuilt in here (pnlIds)
   /** The P&L chart's accounts: the second paper bot too while the summary has it (owners 10/23), named by its bot. */
   function pnlIds(d) {
-    const ids = d && (d.accts || []).some((a) => a.id === "paper2") ? [...PNL_IDS, "paper2"] : PNL_IDS;
+    const ids = d && (d.accts || []).some((a) => a.id === "paper2") ? [...pnlBase(d), "paper2"] : pnlBase(d);
     if (d && !ids.includes(pnlId)) pnlId = "bybit";
     const key = ids.map((id) => `${id}:${acctKo(id)}`).join();
     if (key === psegKey) return;
@@ -89,7 +92,7 @@ export function termView(ctx, src) {
   const pnl = pnlPanel(ctx, {
     who: () => acctKo(pnlId), key: () => pnlId, winKey: "lb-pnl-win", lead: psegBox, retry: () => src.retry(),
     info: `고른 계좌가 닫은 거래의 실현 손익 합 (열린 포지션 빼고, 아래 표에 따로) · 한국 시간 · 막대 = 그 시간(또는 그날) 손익 · 최대 낙폭 = 이 선이 그 전 최고점에서 가장 깊게 내려간 만큼 · `
-      + `바이비트·WOO X Pro: ${ui.ASSUME_LIVE_KO} · 페이퍼: ${ui.ASSUME_KO}`,
+      + `${execsKo(execsNow(), "·")}: ${ui.ASSUME_LIVE_KO} · 페이퍼: ${ui.ASSUME_KO}`,
     curve: () => { const a = acct(pnlId); return a && a.state === "ok" ? {start: a.start, now: st.d.now_ms, hours: a.hours || []} : null; },
     cal: () => { const a = acct(pnlId); return a && a.state === "ok" ? a.calendar || null : null; },
     state: () => { const a = acct(pnlId); return !st.d ? (st.state === "failed" ? "failed" : "loading") : !a ? "none" : a.state === "ok" ? (st.state === "failed" ? "failed" : "ok") : a.state === "error" ? "failed" : "none"; },
@@ -100,7 +103,8 @@ export function termView(ctx, src) {
   const left = h("aside", {class: "term-col term-left", "aria-label": "실시간 큰 체결, 시장 강제청산, 실거래 체결"}, big.el, liq.el, fills.el);
   const mid = h("div", {class: "term-mid"}, watch.el, chart.el, table.el);
   const right = h("aside", {class: "term-col term-right", "aria-label": "이 코인 포지션과 수익"}, mine.el, pnl.el);
-  const foot = h("div", {class: "term-foot lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"),
+  let footKo = execsKo();
+  const foot = h("div", {class: "term-foot lb-foot"}, ui.assumeLive(footKo),
     ui.assumeLine(["closed", "open"], `페이퍼(P) · '시장' 표시 = 바이낸스 ${MARKET_LABEL}`));
   const root = h("div", {class: "term lb-term"}, top.el, h("div", {class: "term-grid"}, left, mid, right), foot);
 
@@ -108,16 +112,20 @@ export function termView(ctx, src) {
   const leds = {};
   const cards = h("div", {class: "lb-nowgrid"});
   const lights = h("div", {class: "lb-lgrid"});
-  const con = consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, {id: "bybit", label: "바이비트"}, {id: "mexc", label: "WOO X Pro"}],
-    foot: "실행기 두 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌", maxHeight: "260px", max: 120});
+  // the console's tabs: every executor of the summary (the third, 플립스터, while the server has it: rebuilt when it comes)
+  const conFoot = (ids) => `실행기 ${ids.length > 2 ? "세" : "두"} 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌`;
+  const conOf = (ids) => consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, ...ids.map((id) => ({id, label: acctKo(id)}))],
+    foot: conFoot(ids), maxHeight: "260px", max: 120});
+  let conIds = execsNow(), con = conOf(conIds);
   con.showEmpty("불러오는 중");
+  const conBox = h("div", {class: "lb-con"}, con);
   const secHead = h("h2", {class: "lb-sec"}, "세 계좌");    // two paper bots: 네 계좌 (drawBelow)
   const below = h("div", {class: "lb-below"},
     secHead, cards,
     h("div", {class: "lb-pair2"},
       ui.card({title: "신호등", sub: "페이퍼의 최근 성적이 기준을 넘을 때만 새 진입을 따라가요", cls: "lb-lights"}, lights,
         ui.note("칸은 페이퍼의 닫힌 거래, 왼쪽이 오래된 것 · 이김 = 손익이 0보다 큼 (실행기와 같은 규칙) · 빨강이어도 페이퍼는 계속 거래하고, 다시 기준을 넘으면 실거래도 따라가요")),
-      h("div", {class: "lb-con"}, con)));
+      conBox));
   const el = h("div", {class: "lb-sum"}, h("h2", {class: "term-sr"}, "실거래 터미널"), root, below);
 
   const still = () => { root.dataset.still = document.hidden ? "1" : ""; };
@@ -148,20 +156,27 @@ export function termView(ctx, src) {
     if (sig === sigBelow) return;
     sigBelow = sig;
     const notesOf = (id) => (id === "paper" ? paperSinceNote(d) : ((d.execs || []).find((x) => x.id === id) || {}).notes);
-    const nk = d.accts.length === 4 ? "네 계좌" : "세 계좌";
+    const nk = acctsKo(d.accts.length);
     if (secHead.textContent !== nk) secHead.textContent = nk;
     cards.replaceChildren(...d.accts.map((a) => acctCard(a, leds[a.id] || (leds[a.id] = ui.ledBar({label: `${acctKo(a.id)} 잔고`})), notesOf(a.id))));
     lights.replaceChildren(...(d.execs || []).map(lightRow));
   }
   let sigCon = null;
   function drawConsole(d) {
+    const ids = execIds(d);
+    if (ids.join() !== conIds.join()) {                  // the third executor came (or went): its own tab
+      conIds = ids;
+      con = conOf(ids);
+      conBox.replaceChildren(con);
+      sigCon = null;
+    }
     const ev = (d.events || []).slice(0, 120);
     const sig = ev.map((e) => `${e.ex}:${e.id}`).join(",") + "|" + d.execs.map((x) => x.record.state).join(",");
     if (sig === sigCon) return;
     sigCon = sig;
     const unread = (d.execs || []).filter((x) => x.record.state !== "ok");
     con.setFoot(unread.length ? `${unread.map((x) => `${x.name_ko} 기록: ${x.record.state === "error" ? "못 읽음" : "수집 전"} (${x.record.reason_ko || ""})`).join(" · ")}`
-      : "실행기 두 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌");
+      : conFoot(conIds));
     if (!ev.length) { con.setLines([]); con.showEmpty(unread.length === (d.execs || []).length ? "실행기 기록을 아직 못 읽었어요" : "주의 · 긴급 기록이 아직 없어요"); return; }
     con.setLines(ev.map((e) => ({id: `${e.ex}:${e.id}`, type: e.level === "CRITICAL" ? "bad" : "ev", tabs: [e.ex], ts: e.ts,
       text: `[${e.ex_ko} · ${e.level_ko}] ${e.kind_ko}: ${e.text}`})));
@@ -172,7 +187,11 @@ export function termView(ctx, src) {
     /** A new answer (d) or a failed refresh (d null, state "failed"): every part redraws only what changed. */
     set(d, state) {
       st.state = state;
-      if (d) { st.d = d; pnlIds(d); }
+      if (d) {
+        st.d = d; pnlIds(d);
+        const ko = execsKo(execIds(d));
+        if (ko !== footKo) { footKo = ko; foot.firstChild.replaceWith(ui.assumeLive(ko)); }
+      }
       band.set(st.d, state);
       fills.set(st.d, state);
       watch.onBoard(st.d, state === "failed" && !st.d);

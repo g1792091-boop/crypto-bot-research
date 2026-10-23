@@ -12,7 +12,7 @@ import {watchList} from "./terminal-feed.js";
 import {termChart} from "./terminal-chart.js";
 import {tickStream} from "./terminal-live.js";
 import {coinMarks} from "./livebots-parts.js";
-import {liveLines, acctKo, acctTag, sourceState} from "./livebots-kit.js";
+import {liveLines, acctKo, acctTag, sourceState, execsKo} from "./livebots-kit.js";
 import {posKeys, roeAt, netRoe, distTo} from "./livebots-calc.js";
 
 const TFS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"];
@@ -46,7 +46,7 @@ export function chartView(ctx, hub) {
   const el = h("div", {class: "term lb-chartv"}, watch.el, h("div", {class: "lb-cbig"}, chart.el),
     ui.card({title: "선 읽기", sub: "차트의 선을 말로 · 거리는 지금 마크 가격에서", cls: "lb-linecard"}, cards),
     ui.card({title: "이 코인 최근 거래", sub: "세 계좌의 닫힌 거래 (차트의 표시)", cls: "lb-recentcard"}, recent),
-    h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed", "open"], "페이퍼(P)")));
+    h("div", {class: "lb-foot"}, ui.assumeLive(execsKo()), ui.assumeLine(["closed", "open"], "페이퍼(P)")));
 
   const row = (k, v, extra) => h("div", {class: "lb-lrow"}, h("span", {class: "lb-lk"}, k), h("b", {class: "num"}, v), extra ? h("span", {class: "lb-lx muted num"}, extra) : null);
   const dist = (mk, price) => { const x = distTo(mk, price); return x == null ? "마크 없음" : `지금에서 ${fmt.pct(x, 2, false)}`; };

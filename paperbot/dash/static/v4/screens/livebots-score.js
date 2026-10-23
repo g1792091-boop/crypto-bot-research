@@ -11,11 +11,10 @@
 // HONESTY: liveimprove's numbers and words only; a file not there yet says 수집 전, one that cannot be read 못 읽음 + why;
 // small samples are 표본 작음 (no verdict); paper money keeps its caption.
 import {h, put, ui, fmt, local} from "../core/pb.js";
-import {sourceState, mainFollowKo} from "./livebots-kit.js";
+import {sourceState, mainFollowKo, acctKo, allFollowKo} from "./livebots-kit.js";
 
 const SORTS = [{id: "n", label: "거래 많은 순"}, {id: "status", label: "상태"}, {id: "excess", label: "기대 대비"}, {id: "win", label: "승률"},
   {id: "pnl", label: "손익"}];
-const EX_KO = {bybit: "바이비트", mexc: "WOO X Pro"};
 /** The status words' tones (liveimprove: SMALL, OK, WATCH, BAD in that order). */
 const TONE = ["thin", "good", "warn", "bad"];
 export const toneOf = (words, w) => TONE[(words || []).indexOf(w)] || "thin";
@@ -37,7 +36,7 @@ export function sortRows(rows, by, words) {
 const pc = (x, d = 0) => (x == null ? "—" : fmt.pct(x, d, false));
 
 function execCell(name, e, ok) {
-  const ko = EX_KO[name] || name;
+  const ko = acctKo(name);                               // 바이비트 · WOO X Pro · 플립스터 (the site's names)
   if (!ok) return h("span", {class: "muted"}, `${ko} 기록 못 읽음`);
   if (!e || !e.n) return h("span", {class: "muted"}, `${ko} 따라간 거래 없음`);
   return h("span", null, `${ko} ${fmt.int(e.n)}번`, e.leak != null ? h("b", {class: ["num", fmt.tone(e.leak)]}, ` ${fmt.num(e.leak * 100, 1, true)}%p`) : "");
@@ -75,7 +74,7 @@ export function scoreView(ctx) {
   function draw(user) {
     const d = st.d;
     // two paper bots (owners 10/23): who follows the paper scored here, by name; one: the usual words
-    const sw = `페이퍼(${mainFollowKo() || "두 실행기가 따라가는"} 계좌) 닫힌 거래 · 백테스트 기준과 비교 · 지금 계산`;
+    const sw = `페이퍼(${mainFollowKo() || allFollowKo()} 계좌) 닫힌 거래 · 백테스트 기준과 비교 · 지금 계산`;
     if (sub && sub.textContent !== sw) sub.textContent = sw;
     emptyBtn.setAttribute("aria-pressed", String(st.empty));
     if (!d) { put(head); put(notes); pg.set(undefined); return; }

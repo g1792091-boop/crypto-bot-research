@@ -47,6 +47,9 @@ ROWS_KEEP = 12                           # trades listed per span (newest first)
 #            the API's maker_pct: once the owners read it off, it goes here)
 #   mexc     docs/mexc-ko.md (MEXC notice 2026-06-01): API futures maker 0.06 %, taker 0.08 %
 #   binance  docs/trade-review-system.md: USDⓈ-M VIP0 maker 0.02 %, taker 0.05 %
+#   flipster docs/flipster-ko.md (owners 10-23, the third slot): no rate is settled by its docs (the owners sign up through
+#            a payback app: Flipster charges its full taker fee, the payback comes back later, outside the bot); the drill
+#            measures the real fee, then it goes here. Until then both are None (모름), never guessed
 RATES = {
     "bybit": {"taker": 0.00055, "maker": 0.0002, "src": "docs/live1019-start-ko.md",
               "src_ko": "일반 등급(VIP0) 무기한 선물 · 10/19 확인"},
@@ -54,6 +57,8 @@ RATES = {
                 "src_ko": "시장가 0.06% · TetherMax 가입 할인이면 0.042% · 메이커 요율은 문서에 없어요 (drill 결과의 maker_pct로 확인)"},
     "mexc": {"taker": 0.0008, "maker": 0.0006, "src": "docs/mexc-ko.md", "src_ko": "API 주문 요율 · MEXC 공지 2026-06-01"},
     "binance": {"taker": 0.0005, "maker": 0.0002, "src": "docs/trade-review-system.md", "src_ko": "USDⓈ-M VIP0"},
+    "flipster": {"taker": None, "maker": None, "src": "docs/flipster-ko.md",
+                 "src_ko": "플립스터 요율은 아직 확인 전이에요 (드릴이 실제 수수료를 재요 · 페이백은 봇 밖에서 나중에 들어와요)"},
 }
 RATES_KO = "기본 등급 요율 · 두 분 계정 등급에 따라 다를 수 있어요"
 LIMIT_RISK_KO = ("지정가 주문은 안 채워질 수 있어요: 안 채워졌으면 그 거래는 없었던 거고, 그 위험(놓친 이익·피한 손실)은 이 숫자에 "
@@ -219,7 +224,7 @@ def block(rows: list, maker: Optional[float]) -> dict:
 
 def exec_part(x: dict, p: dict, since: Optional[int]) -> dict:
     """One executor (livebots.sources entry): its exchange and the documented rates, and the two spans."""
-    dk = next(d for ex, _ko, d, _ck in L.EXECS if ex == x["id"])
+    dk = next(d for ex, _ko, d, _ck in L.ALL_EXECS if ex == x["id"])
     cfg = x.get("config") or {}
     r = x["record"]
     exchange = (cfg.get("exchange") if cfg.get("state") == "ok" else None) or r.get("exchange")

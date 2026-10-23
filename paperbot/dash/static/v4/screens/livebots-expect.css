@@ -21,6 +21,7 @@
 .lex-a-paper { --lex-c: var(--series-coin); }
 .lex-a-bybit { --lex-c: var(--series-core); }
 .lex-a-mexc { --lex-c: var(--series-m5); }
+.lex-a-flipster { --lex-c: var(--series-fl); }
 .lex-sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--lex-c, var(--accent)); flex: none; }
 .lex-a-replay .lex-sw { background: transparent; border: 2px dashed var(--lex-c); }
 
@@ -228,6 +229,7 @@
 .lex-l-paper { --lex-c: var(--series-coin); stroke-width: 2.6; }
 .lex-l-bybit { --lex-c: var(--series-core); }
 .lex-l-mexc { --lex-c: var(--series-m5); }
+.lex-l-flipster { --lex-c: var(--series-fl); }
 .lex-xlab { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0 0 70px; color: var(--muted); font-size: var(--t-2xs); }
 
 @media (max-width: 760px) {

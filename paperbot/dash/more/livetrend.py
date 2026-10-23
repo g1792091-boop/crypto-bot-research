@@ -394,7 +394,7 @@ def follow_of(p: dict, key: str, now: int) -> Optional[list]:
     거래 tab). None when this answer was not given the executors' paths."""
     if not all(p.get(k) for k in ("bybit_db", "mexc_db", "bybit_config", "mexc_config")):
         return None
-    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
+    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.installed(p)}
     out = []
     pk = L.parse_key(key)
     for ex, ko, dk, _ck in L.slots(configs):

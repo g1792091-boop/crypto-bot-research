@@ -1623,7 +1623,8 @@ def _live_risk(x: dict) -> dict:
 
 
 def kill_state(cx: dict) -> dict:
-    """The kill file every executor config names (one file stops both), whether it is there now, the command."""
+    """The kill file every executor config names (one file stops them all), whether it is there now, the command; "세
+    실행기" once the third (플립스터) is installed (livebots.installed), else "두 실행기" as before."""
     paths = sorted({(c.get("kill_file") or {}).get("path") for c in cx["configs"].values() if c.get("state") == "ok" and c.get("kill_file")} - {None})
     items = []
     for path in paths or [DEFAULT_KILL]:
@@ -1633,7 +1634,7 @@ def kill_state(cx: dict) -> dict:
             present = None
         items.append({"path": path, "present": present, "from_config": bool(paths)})
     return {"files": items, "any": any(i["present"] for i in items), "cmd": STOP_CMD,
-            "what_ko": "두 실행기가 모두 멈춰요: 열린 포지션을 닫고 새 진입을 하지 않아요 (다시 켤지는 두 분이: 파일 지우기 → 실행기 끄기 → clear-halt)"}
+            "what_ko": f"{'세' if len(cx['configs']) > 2 else '두'} 실행기가 모두 멈춰요: 열린 포지션을 닫고 새 진입을 하지 않아요 (다시 켤지는 두 분이: 파일 지우기 → 실행기 끄기 → clear-halt)"}
 
 
 def risk(p: dict, now: int, more: Optional[dict] = None) -> dict:
@@ -1835,7 +1836,7 @@ def health(p: dict, now: int, more: Optional[dict] = None) -> dict:
             {"state": "missing", "reason_ko": "심장 박동 기록이 아직 없어요 (아직 켜지기 전)", "at": None, "late_ms": None,
              "limit_ms": PAPER_HB_LATE_MS}, who="paper2", severity=sev, detail={"queue": pb2.get("queue"), "label_ko": b["label_ko"]})
         add("paper2_step", f"{nm} 마지막 1분", _late(pb2["step"], now, PAPER_STEP_LATE_MS, MIN), who="paper2", severity=sev)
-    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
+    configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.installed(p)}
     for ex, ko, dk, _ck in L.slots(configs):             # each slot by the exchange its config names (WOO X Pro)
         eb = exec_beat(p[dk])
         if eb.get("state") != "ok":

@@ -7,8 +7,11 @@
                                                                             <file>.before-vwap-<time>
     python3 deploy/vwap_switch.py --exec bybit --back [--write]            back to the newest .before-vwap-<time> copy
 
-``--exec``: bybit (/etc/paperbot/executor.json, paperbot-executor) or wooxpro (/etc/paperbot/executor-mexc.json,
-paperbot-executor-mexc). ``--balance``: that exchange account's futures balance now (USDT, from the app).
+``--exec``: bybit (/etc/paperbot/executor.json, paperbot-executor), wooxpro (/etc/paperbot/executor-mexc.json,
+paperbot-executor-mexc) or flipster (/etc/paperbot/executor-flipster.json, paperbot-executor-flipster: the third executor,
+owners 10-23, docs/flipster-ko.md; its config is copied from deploy/executor.live-flipster.json first, which already
+follows the VWAP bot, so here it only gets ``budget_usd`` and ``qty_scale`` before its first start). ``--balance``: that
+exchange account's futures balance now (USDT, from the app).
 
 Refuses to write while that executor runs (stop it first, only while it holds no position: a running executor whose
 paper has no such position closes it) and while the VWAP paper bot has no record yet (start paperbot-combo-vwap first).
@@ -37,7 +40,8 @@ import sys
 import time
 
 EXECS = {"bybit": ("바이비트", "/etc/paperbot/executor.json", "paperbot-executor"),
-         "wooxpro": ("WOO X Pro", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc")}
+         "wooxpro": ("WOO X Pro", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc"),
+         "flipster": ("플립스터", "/etc/paperbot/executor-flipster.json", "paperbot-executor-flipster")}
 VWAP_DB = "/var/lib/paperbot/combo/vwap.db"
 ACCOUNT = "COMBO@mix"
 LADDER = {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}

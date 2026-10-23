@@ -1,0 +1,45 @@
+# The third order executor (owners 10-23, docs/flipster-ko.md: "플립스터로 확정할게 만들어줘"): the same program, sandbox and
+# user as paperbot-executor.service, its own config /etc/paperbot/executor-flipster.json ("exchange": "flipster", made by
+# the owners from deploy/executor.live-flipster.json; install.sh never writes it) and its own database
+# /var/lib/paperbot/exec/executor-flipster-live.db. It follows the 'VWAP 개선판' paper bot (/var/lib/paperbot/combo/vwap.db,
+# account COMBO@mix); the other two executors stay as they are. Mainnet only (Flipster has no testnet). Its keys
+# (FLIPSTER_LIVE_KEY, FLIPSTER_LIVE_SECRET) are in the same root-only key file. Everything below the header of
+# paperbot-executor.service applies unchanged: own user paperbot-exec, root-only key file, exit 2 = a gate refused (not
+# restarted), SIGTERM lets the loop in progress finish.
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it, after the drill and the config:
+#   sudo systemctl start paperbot-executor-flipster    (and `enable` only after the first days went as expected)
+[Unit]
+Description=paperbot order executor 3 (Flipster; mainnet: every gate must pass)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot-exec
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor-flipster.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+# Real money first (owners 2026-10-19: the live bots share the server with the experiments): in a server-wide
+# memory shortage the kernel kills experiments long before the executors (the shadows have +500).
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env
+# no core dump (it would hold the keys)
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

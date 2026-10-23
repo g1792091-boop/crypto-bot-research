@@ -15,6 +15,7 @@ def _oom(unit: str):
 def test_live_chain_is_protected_from_the_oom_killer():
     assert _oom("paperbot-executor.service") == -900
     assert _oom("paperbot-executor-mexc.service") == -900
+    assert _oom("paperbot-executor-flipster.service") == -900   # the third executor (Flipster, owners 10-23)
     assert _oom("paperbot-combo.service") == -500
     assert _oom("paperbot-combo-mexc.service") == -500       # the -35 % paper bot MEXC follows (docs/live15-mexc-ko.md)
     assert _oom("paperbot-combo-vwap.service") == -500       # the 'VWAP 개선판' paper bot one executor follows (10-23)
@@ -23,8 +24,9 @@ def test_live_chain_is_protected_from_the_oom_killer():
 
 def test_experiments_are_not_protected():
     for unit in sorted(DEPLOY.glob("paperbot-*.service")):
-        if unit.name in {"paperbot-executor.service", "paperbot-executor-mexc.service", "paperbot-combo.service",
-                         "paperbot-combo-mexc.service", "paperbot-combo-vwap.service", "paperbot-live3.service"}:
+        if unit.name in {"paperbot-executor.service", "paperbot-executor-mexc.service", "paperbot-executor-flipster.service",
+                         "paperbot-combo.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
+                         "paperbot-live3.service"}:
             continue
         v = _oom(unit.name)
         assert v is None or v >= 0, unit.name

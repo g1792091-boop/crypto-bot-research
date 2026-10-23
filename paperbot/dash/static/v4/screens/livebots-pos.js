@@ -22,13 +22,13 @@
 // Data: GET /api/v4/livebots/positions (dash/more/livepos.py; asked every 10 s, the server caches 5 s). HONESTY: no file =
 // 수집 전, unreadable = 못 읽음 + why, a value the records do not have is '—' with the reason; no order buttons.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctTag, sourceState} from "./livebots-kit.js";
+import {acctTag, sourceState, execsKo} from "./livebots-kit.js";
 import {netRoe, unrealized, distTo} from "./livebots-calc.js";
 import {whyBox} from "./livebots-why.js";
 
 export const POS_API = "/api/v4/livebots/positions";
 const REFRESH_MS = 10 * 1000;
-const NAME = {paper: "페이퍼(연습)", bybit: "바이비트", mexc: "WOO X Pro", flip: "동전 쌍둥이"};
+const NAME = {paper: "페이퍼(연습)", bybit: "바이비트", mexc: "WOO X Pro", flipster: "플립스터", flip: "동전 쌍둥이"};
 
 /** A card's mark-dependent numbers (pure; node tests): unrealized money, net ROE, distances, the meter's places. */
 export function atMark(p, mark) {
@@ -230,7 +230,7 @@ export function posView(ctx) {
   const rules = h("div", {class: "lbp-head"});
   const stateSlot = h("div", {class: "lb-slot"});
   const grid = h("div", {class: "lbp-grid"}, motion.shimmer(2));
-  const foot = h("div", {class: "lb-foot"}, ui.assumeLive("바이비트 · WOO X Pro · 마크 = 바이낸스 가격"),
+  const foot = h("div", {class: "lb-foot"}, ui.assumeLive(`${execsKo()} · 마크 = 바이낸스 가격`),
     ui.assumeLine(["open"], "페이퍼(연습) · 동전 쌍둥이 (참고)"));
   const el = h("div", {class: "lbp stack"}, rules, stateSlot, grid, foot);
   const roll = () => { for (const c of st.cards) c.el.update(c.sym ? ctx.store.mark(c.sym) : null); };
