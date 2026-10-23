@@ -7,7 +7,9 @@ key's permissions from /v5/user/query-api); everything below applies to both (do
 "binance". ``"exchange": "mexc"`` trades MEXC USDT-M perpetuals (contract API v1) through paperbot/mexc.py, mainnet only
 (MEXC has no futures testnet), keys MEXC_LIVE_KEY / MEXC_LIVE_SECRET (docs/mexc-ko.md). ``"exchange": "wooxpro"``
 trades WOO X Pro USDT perpetuals through paperbot/wooxpro.py, mainnet only, keys WOOXPRO_LIVE_KEY / WOOXPRO_LIVE_SECRET /
-WOOXPRO_LIVE_MEMO (owners 10-20, docs/wooxpro-ko.md).
+WOOXPRO_LIVE_MEMO (owners 10-20, docs/wooxpro-ko.md). ``"exchange": "flipster"`` trades Flipster USDT perpetuals through
+paperbot/flipster.py, mainnet only, keys FLIPSTER_LIVE_KEY / FLIPSTER_LIVE_SECRET; Flipster has no client order id, so
+its client ids live in a ledger table of this executor's own database (owners 10-23, docs/flipster-ko.md).
 On the server it runs as its own user, paperbot-exec (never paperbot, the agents' and the dashboard's user): run
 these commands with ``sudo -u paperbot-exec`` (docs/live-safety.md 1-9, 3).
 
@@ -85,6 +87,7 @@ from dataclasses import dataclass, field, fields
 from typing import Callable, Mapping, Optional
 
 from . import bybit as BY
+from . import flipster as FL
 from . import livepnl as P
 from . import mexc as MX
 from . import risk as R
@@ -106,7 +109,7 @@ SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
-EXCHANGES = ("binance", "bybit", "mexc", "wooxpro")
+EXCHANGES = ("binance", "bybit", "mexc", "wooxpro", "flipster")
 # owners 10-20 ("거래소 기준으로 익절해야지"): "paper" = the exchange stop follows the paper's lock steps (as before);
 # "own" = the executor runs the take-profit ladder on its OWN position: its fill, its own exchange's prices, its own costs
 LADDER_FROM = ("paper", "own")
@@ -117,10 +120,13 @@ LADDER_KEYS = ("first_lock", "trigger_gap", "step", "next_trigger", "next_gap")
 COST_KEYS = ("taker_fee", "slippage")
 # the net ROE of the "own" ladder: each exchange's taker fee per side plus slippage per side (a config's ``net_costs``
 # replaces one); Bybit's taker 0.055 %, MEXC's API taker 0.08 % (owners 10-20), Binance's VIP0 0.05 %, WOO X Pro's
-# 0.06 % before the TetherMax sign-up discount (0.042 % after it: deploy/executor.live-wooxpro.json)
+# 0.06 % before the TetherMax sign-up discount (0.042 % after it: deploy/executor.live-wooxpro.json); Flipster's 0.06 %
+# is the owners' figure for its full taker fee (its API docs name no rate; the payback app pays back outside the bot),
+# until the drill's fee_rate_pct measures it (docs/flipster-ko.md)
 NET_COSTS = {"binance": {"taker_fee": 0.0005, "slippage": 0.0002}, "bybit": {"taker_fee": 0.00055, "slippage": 0.0002},
-             "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}, "wooxpro": {"taker_fee": 0.0006, "slippage": 0.0002}}
-EX_KO = {"binance": "바이낸스", "bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro"}
+             "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}, "wooxpro": {"taker_fee": 0.0006, "slippage": 0.0002},
+             "flipster": {"taker_fee": 0.0006, "slippage": 0.0002}}
+EX_KO = {"binance": "바이낸스", "bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "flipster": "플립스터"}
 # what closed the paper position (paperbot/engine.py, combo.py exit reasons) and what "own" does with it
 PRICE_EXITS = ("SL", "LOCK", "TP", "LIQ")       # a price level on the paper's prices: the live position stays on its own
 # the fast stop (REV) and the trend bot's supervisor (JUDGE: the higher bar's judgment turned, TIME: no first lock in time,
@@ -197,7 +203,7 @@ class ExecConfig:
     entry_unknown_s: float = 60.0        # an entry whose outcome is unknown: wait this long for it to show up
     transfer_every_s: float = 60.0       # deposits/withdrawals read this often (and before a money halt)
     exchange: str = "binance"            # "binance" | "bybit" (paperbot/bybit.py) | "mexc" (paperbot/mexc.py) |
-                                         # "wooxpro" (paperbot/wooxpro.py)
+                                         # "wooxpro" (paperbot/wooxpro.py) | "flipster" (paperbot/flipster.py)
     bybit_host: Optional[str] = None     # bybit: another allowed host of the mode (mainnet: "api.bytick.com")
     mexc_host: Optional[str] = None      # mexc: "api.mexc.com" (default) or "contract.mexc.com"
     mexc_market_type: int = 5            # mexc: market order type 5 (market) or 6 (market converted to the price)
@@ -244,7 +250,8 @@ class ExecConfig:
         if self.mode == MODE_MAINNET and self.budget_usd is None:
             out.append("실거래(mainnet)는 정한 금액 budget_usd(예: 500)가 필요합니다")
         if self.exchange not in EXCHANGES:
-            out.append(f"exchange={self.exchange!r}: \"binance\", \"bybit\", \"mexc\", \"wooxpro\"만 있습니다")
+            out.append(f"exchange={self.exchange!r}: \"binance\", \"bybit\", \"mexc\", \"wooxpro\", \"flipster\"만 "
+                       "있습니다")
         elif self.bybit_host is not None and (self.exchange != "bybit" or self.bybit_host not in BY.hosts_for(self.mode)):
             out.append(f"bybit_host={self.bybit_host!r}: exchange가 \"bybit\"일 때 그 모드의 주소"
                        f"({', '.join(BY.hosts_for(self.mode))})만 씁니다")
@@ -260,6 +267,8 @@ class ExecConfig:
             out.append("MEXC에는 선물 테스트넷이 없습니다: \"exchange\": \"mexc\"는 \"mode\": \"mainnet\"만 됩니다")
         if self.exchange == "wooxpro" and self.mode != MODE_MAINNET:
             out.append("WOO X Pro에는 선물 테스트넷이 없습니다: \"exchange\": \"wooxpro\"는 \"mode\": \"mainnet\"만 됩니다")
+        if self.exchange == "flipster" and self.mode != MODE_MAINNET:
+            out.append("플립스터에는 테스트넷이 없습니다: \"exchange\": \"flipster\"는 \"mode\": \"mainnet\"만 됩니다")
         if self.risk.kill_file and self.db and not _kill_file_visible(self.risk.kill_file, self.db):
             out.append(f"비상 정지 파일 {self.risk.kill_file}은 실행기 DB가 있는 폴더나 그 위 폴더에 둡니다"
                        "(예: /var/lib/paperbot/STOP). /tmp·/home 같은 곳은 서비스 안에서 보이지 않아 "
@@ -299,7 +308,8 @@ class ExecConfig:
         out = []
         for ex, c in self.net_costs.items():
             if ex not in EXCHANGES:
-                out.append(f"net_costs의 거래소 {ex!r}: \"binance\", \"bybit\", \"mexc\", \"wooxpro\"만 있습니다")
+                out.append(f"net_costs의 거래소 {ex!r}: \"binance\", \"bybit\", \"mexc\", \"wooxpro\", \"flipster\"만 "
+                           "있습니다")
             elif not isinstance(c, dict) or set(c) != set(COST_KEYS) or any(
                     isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 0.005 for v in c.values()):
                 out.append(f"net_costs의 {ex}: taker_fee와 slippage(한쪽, 0~0.005 사이 비율, 예: 0.00055)만 적습니다")
@@ -350,6 +360,9 @@ def refuse_unless_allowed(cfg: ExecConfig, client) -> None:
         return
     if cfg.exchange == "wooxpro":
         WX.refuse_unless_allowed(cfg.mode, client)
+        return
+    if cfg.exchange == "flipster":
+        FL.refuse_unless_allowed(cfg.mode, client, cfg.db)       # its client-id ledger: in this executor's database
         return
     host = urllib.parse.urlparse(getattr(client, "base", "") or "").hostname or ""
     if cfg.mode == MODE_TESTNET:
@@ -961,6 +974,8 @@ class Executor:
             MX.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
         elif cfg.exchange == "wooxpro":
             WX.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
+        elif cfg.exchange == "flipster":
+            FL.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
         elif cfg.mode == MODE_MAINNET:
             key, secret = trading_keys(MODE_MAINNET, env, paper_env)        # flag, separate names, no reuse
             if (client.key, client.secret) != (key, secret):
@@ -2678,7 +2693,7 @@ def _notifier() -> Notifier:
 
 
 def _prefixes(exchange: str) -> dict:
-    return {"bybit": BY.PREFIX, "mexc": MX.PREFIX, "wooxpro": WX.PREFIX}.get(exchange, PREFIX)
+    return {"bybit": BY.PREFIX, "mexc": MX.PREFIX, "wooxpro": WX.PREFIX, "flipster": FL.PREFIX}.get(exchange, PREFIX)
 
 
 def _clients(cfg: ExecConfig, env: Optional[Mapping] = None):
@@ -2691,6 +2706,8 @@ def _clients(cfg: ExecConfig, env: Optional[Mapping] = None):
                           market_type=cfg.mexc_market_type)
     if cfg.exchange == "wooxpro":
         return WX.clients(cfg.mode, env, read_env_file(cfg.paper_env_file))
+    if cfg.exchange == "flipster":           # the client-id ledger lives in the executor's own database
+        return FL.clients(cfg.mode, env, read_env_file(cfg.paper_env_file), db=cfg.db)
     key, secret = trading_keys(cfg.mode, env, read_env_file(cfg.paper_env_file))
     if cfg.mode == MODE_MAINNET:
         return MainnetClient(key, secret), KeyCheckClient(key, secret)

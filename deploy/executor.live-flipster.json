@@ -1,0 +1,52 @@
+{
+  "exchange": "flipster",
+  "mode": "mainnet",
+  "account": "COMBO@mix",
+  "paper_db": "/var/lib/paperbot/combo/vwap.db",
+  "db": "/var/lib/paperbot/exec/executor-flipster-live.db",
+  "budget_usd": 100,
+  "qty_scale": 0.1,
+  "entry_source": "paper",
+  "stop_from": "ratio",
+  "signal_light_n": 20,
+  "signal_light_min_win": 0.75,
+  "ladder_from": "own",
+  "ladder": {
+    "first_lock": 0.1,
+    "trigger_gap": 0.02,
+    "step": 0.05
+  },
+  "ladder_basis": "net",
+  "net_costs": {
+    "bybit": {
+      "taker_fee": 0.00044,
+      "slippage": 0.0002
+    },
+    "mexc": {
+      "taker_fee": 0.0008,
+      "slippage": 0.0002
+    },
+    "wooxpro": {
+      "taker_fee": 0.00042,
+      "slippage": 0.0002
+    },
+    "flipster": {
+      "taker_fee": 0.0006,
+      "slippage": 0.0002
+    }
+  },
+  "risk": {
+    "max_leverage": 40,
+    "max_notional_usd": 10000,
+    "max_loss_frac": 0.2,
+    "allowed_symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "DOGEUSDT",
+      "LTCUSDT",
+      "BCHUSDT"
+    ],
+    "kill_file": "/var/lib/paperbot/STOP"
+  }
+}
