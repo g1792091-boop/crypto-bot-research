@@ -1,0 +1,180 @@
+{
+ "data_end": 1792713600000,
+ "17일": {
+  "V3.9 1시간 (규칙봇처럼 매일)": {
+   "n": 27,
+   "wins": 26,
+   "losses": 1,
+   "win": 0.963,
+   "avg_win_roe_pct": 11.5,
+   "avg_loss_roe_pct": -46.2,
+   "breakeven_win": 0.8007,
+   "avg_net_pct": 0.3123,
+   "mult_margin30": 1.8805,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.5,
+    "ROE -20% 이상 물림": 0.2692,
+    "ROE -30% 이상 물림": 0.2308,
+    "ROE -40% 이상 물림": 0.1154
+   },
+   "wins_mae_median_pct": -10.5,
+   "losses_mae_median_pct": -46.5
+  },
+  "V3.9 1시간 (평일·발표·개장 금지)": {
+   "n": 17,
+   "wins": 16,
+   "losses": 1,
+   "win": 0.9412,
+   "avg_win_roe_pct": 10.5,
+   "avg_loss_roe_pct": -46.2,
+   "breakeven_win": 0.8144,
+   "avg_net_pct": 0.2399,
+   "mult_margin30": 1.3483,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.4375,
+    "ROE -20% 이상 물림": 0.25,
+    "ROE -30% 이상 물림": 0.1875,
+    "ROE -40% 이상 물림": 0.0625
+   },
+   "wins_mae_median_pct": -8.9,
+   "losses_mae_median_pct": -46.5
+  },
+  "VWAP 개선판 A": {
+   "n": 41,
+   "wins": 35,
+   "losses": 6,
+   "win": 0.8537,
+   "avg_win_roe_pct": 13.2,
+   "avg_loss_roe_pct": -32.9,
+   "breakeven_win": 0.7133,
+   "avg_net_pct": 0.2158,
+   "mult_margin30": 2.0526,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.6286,
+    "ROE -20% 이상 물림": 0.3143,
+    "ROE -30% 이상 물림": 0.0571,
+    "ROE -40% 이상 물림": 0.0286
+   },
+   "wins_mae_median_pct": -12.0,
+   "losses_mae_median_pct": -27.8
+  }
+ },
+ "2020-03~2024-12": {
+  "V3.9 1시간 (규칙봇처럼 매일)": {
+   "n": 3783,
+   "wins": 2988,
+   "losses": 795,
+   "win": 0.7898,
+   "avg_win_roe_pct": 12.6,
+   "avg_loss_roe_pct": -68.5,
+   "breakeven_win": 0.8444,
+   "avg_net_pct": -0.1475,
+   "mult_margin30": 0.0,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.7075,
+    "ROE -20% 이상 물림": 0.3882,
+    "ROE -30% 이상 물림": 0.238,
+    "ROE -40% 이상 물림": 0.1483
+   },
+   "wins_mae_median_pct": -15.8,
+   "losses_mae_median_pct": -65.6
+  },
+  "V3.9 1시간 (평일·발표·개장 금지)": {
+   "n": 2640,
+   "wins": 2071,
+   "losses": 569,
+   "win": 0.7845,
+   "avg_win_roe_pct": 12.6,
+   "avg_loss_roe_pct": -71.2,
+   "breakeven_win": 0.8494,
+   "avg_net_pct": -0.1815,
+   "mult_margin30": 0.0,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.7001,
+    "ROE -20% 이상 물림": 0.381,
+    "ROE -30% 이상 물림": 0.2429,
+    "ROE -40% 이상 물림": 0.1468
+   },
+   "wins_mae_median_pct": -15.8,
+   "losses_mae_median_pct": -67.2
+  },
+  "VWAP 개선판 A": {
+   "n": 4183,
+   "wins": 3013,
+   "losses": 1170,
+   "win": 0.7203,
+   "avg_win_roe_pct": 12.5,
+   "avg_loss_roe_pct": -46.8,
+   "breakeven_win": 0.7887,
+   "avg_net_pct": -0.1354,
+   "mult_margin30": 0.0,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.6359,
+    "ROE -20% 이상 물림": 0.3143,
+    "ROE -30% 이상 물림": 0.1673,
+    "ROE -40% 이상 물림": 0.088
+   },
+   "wins_mae_median_pct": -13.6,
+   "losses_mae_median_pct": -47.5
+  }
+ },
+ "2025-01~2026-09": {
+  "V3.9 1시간 (규칙봇처럼 매일)": {
+   "n": 1252,
+   "wins": 946,
+   "losses": 306,
+   "win": 0.7556,
+   "avg_win_roe_pct": 12.6,
+   "avg_loss_roe_pct": -58.5,
+   "breakeven_win": 0.8229,
+   "avg_net_pct": -0.1596,
+   "mult_margin30": 0.0,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.6712,
+    "ROE -20% 이상 물림": 0.3605,
+    "ROE -30% 이상 물림": 0.204,
+    "ROE -40% 이상 물림": 0.1131
+   },
+   "wins_mae_median_pct": -14.3,
+   "losses_mae_median_pct": -59.0
+  },
+  "V3.9 1시간 (평일·발표·개장 금지)": {
+   "n": 901,
+   "wins": 675,
+   "losses": 226,
+   "win": 0.7492,
+   "avg_win_roe_pct": 12.8,
+   "avg_loss_roe_pct": -60.4,
+   "breakeven_win": 0.8249,
+   "avg_net_pct": -0.1848,
+   "mult_margin30": 0.0,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.6622,
+    "ROE -20% 이상 물림": 0.3526,
+    "ROE -30% 이상 물림": 0.1985,
+    "ROE -40% 이상 물림": 0.1156
+   },
+   "wins_mae_median_pct": -14.2,
+   "losses_mae_median_pct": -61.2
+  },
+  "VWAP 개선판 A": {
+   "n": 1413,
+   "wins": 989,
+   "losses": 424,
+   "win": 0.6999,
+   "avg_win_roe_pct": 12.6,
+   "avg_loss_roe_pct": -39.7,
+   "breakeven_win": 0.7586,
+   "avg_net_pct": -0.1023,
+   "mult_margin30": 0.0,
+   "wins_first_against": {
+    "ROE -10% 이상 물림": 0.6127,
+    "ROE -20% 이상 물림": 0.2659,
+    "ROE -30% 이상 물림": 0.1163,
+    "ROE -40% 이상 물림": 0.0475
+   },
+   "wins_mae_median_pct": -12.4,
+   "losses_mae_median_pct": -41.3
+  }
+ }
+}
