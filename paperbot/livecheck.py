@@ -2038,14 +2038,17 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
     else:
         hb = step = None
     hb = hb if hb is not None else step               # a database written before the heartbeat existed
+    all_paths = bot_paths(src, exec_segs(src, infos))
+    two = len(all_paths) > 1                         # two paper bots (owners 10-23): the alarms name the bot
+    main_ko = f"{paper_name(src.paper_db)} " if two else ""
     judged.add("paper_stale")
     if hb is None or now_ms - hb > STALE_PAPER_MS:
         conds.append(Cond("paper_stale", CRITICAL,
-                          "페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다\n"
+                          f"{main_ko}페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다\n"
                           f"마지막 기록: {_ago(now_ms, hb)}\n"
                           "실행기는 페이퍼가 멈추면 새 진입을 하지 않습니다(열린 포지션은 거래소 손절이 지킴)\n"
                           "지금 할 일: sudo systemctl status paperbot-combo · sudo journalctl -u paperbot-combo -n 50",
-                          recover="✅ 페이퍼 봇 기록이 다시 들어옵니다"))
+                          recover=f"✅ {main_ko}페이퍼 봇 기록이 다시 들어옵니다"))
     rc, bar = open_ro(src.rule_db), None
     if rc is not None:
         try:
@@ -2073,8 +2076,6 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
     # ---- a second paper bot an executor follows (owners 10-19: the -35 % bot MEXC follows): its heartbeat too
     ps = PaperSet(src.paper_db, paper)
     second: dict = {}
-    all_paths = bot_paths(src, exec_segs(src, infos))
-    two = len(all_paths) > 1                         # two paper bots (owners 10-23): the alarms name the bot
 
     def second_entries(path: str) -> list:
         k = LP.norm(path)
@@ -2167,7 +2168,7 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
             judged.add(f"halt:{ex.name}:")
             if risk.get("halted"):
                 by_hand = set(risk.get("halt_kinds") or []) == {"kill"}       # the STOP file: a person's stop
-                text = halt_text(ex, risk, c, own or [], src.db)
+                text = halt_text(ex, risk, c, own or [], src.db, paper_ko=paper_name(own_path) if two else None)
                 conds.append(Cond(f"halt:{ex.name}:{int(risk.get('halted_ts') or 0)}", INFO if by_hand else CRITICAL,
                                   ("⏹ " + text.replace("실행기가 멈췄습니다", "실행기 꺼짐 (사람이 끔)", 1)) if by_hand
                                   else text, recover=f"✅ {ex.label} 실행기 멈춤이 풀렸습니다"))
@@ -2176,8 +2177,9 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                 judged.add(f"vs_paper:{ex.name}")
                 bad = exec_vs_paper(c, paper, paper_for=lambda t, segs=segs: ps.at(segs, t), ex=ex)
                 if len(bad) >= VS_PAPER_MAX:
+                    own_ko = f"({paper_name(own_path)})" if two else ""     # two paper bots: the one it follows
                     conds.append(Cond(f"vs_paper:{ex.name}", CRITICAL,
-                                      f"{ex.label} 실거래가 페이퍼가 이긴 거래에서 {len(bad)}번 졌습니다"
+                                      f"{ex.label} 실거래가 페이퍼{own_ko}가 이긴 거래에서 {len(bad)}번 졌습니다"
                                       f"(최근 {VS_PAPER_N}번 중)\n"
                                       + "\n".join(f"- {kst_dt(t['entry_time'])} {coin(t['symbol'])} "
                                                   f"{KO_SIDE.get(t['side'], '')} {t.get('strategy_ko') or t['strategy']}: "
@@ -3098,7 +3100,9 @@ def halt_guide(ex: ExecInfo, risk: dict) -> tuple[str, tuple]:
     return "안내:", HALT_GUIDE_NO_AUTO
 
 
-def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
+def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str, paper_ko: Optional[str] = None) -> str:
+    """⑤ the halt summary. ``paper``: the closed trades of the paper bot the executor follows; ``paper_ko``: its name
+    when two paper bots run (owners 10-23)."""
     halted_ts = int(risk.get("halted_ts") or 0)
     kinds = set(risk.get("halt_kinds") or [])
     try:
@@ -3130,7 +3134,7 @@ def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
             roe = f"{float(pnl) / margin:+.1%}" if (pnl is not None and margin) else "-"
             pt = by.get(key)
             lines.append(f"- {kst_dt(int(xts))} {coin(sym)} {KO_SIDE.get(side, '')} "
-                         f"{(pt or {}).get('strategy', '')} {roe} ({usd(float(pnl or 0))})"
+                         f"{(pt or {}).get('strategy_ko') or (pt or {}).get('strategy', '')} {roe} ({usd(float(pnl or 0))})"
                          + (f" · 카드: {labels[key]}" if key in labels else ""))
     eq = risk.get("last_equity")
     if eq is not None and ex.budget:
@@ -3139,11 +3143,12 @@ def halt_text(ex: ExecInfo, risk: dict, c, paper: list, out_db: str) -> str:
         lines.append(f"잔고 {money(float(eq))}")
     last20 = paper[-20:]
     light = f" · {light_text(light_state(paper, ex.light_n, ex.light_min))}" if ex.light_on else ""
+    pk = f"페이퍼({paper_ko})" if paper_ko else "페이퍼"
     if len(paper) >= 20:
         w = sum(1 for t in last20 if t["pnl"] > 0)
-        lines.append(f"페이퍼 최근 20번 {w}승({w / 20:.0%}){light}")
+        lines.append(f"{pk} 최근 20번 {w}승({w / 20:.0%}){light}")
     else:
-        lines.append(f"페이퍼 거래 {len(paper)}번(표본 작음){light}")
+        lines.append(f"{pk} 거래 {len(paper)}번(표본 작음){light}")
     head, guide = halt_guide(ex, risk)
     lines += [head] + [f"- {g}" for g in guide]
     lines += ["지금 할 일: 두 분이 같이 원인을 본 뒤 이 순서로 풉니다(live-safety.md 3-5)",
@@ -3512,9 +3517,10 @@ def own_lock_text(ex: ExecInfo, ev: dict, side: int) -> str:
                                                             is not None else "") + " · 거래소 기준"])
 
 
-def own_exit_text(ex: ExecInfo, et: dict, pt: Optional[dict]) -> str:
+def own_exit_text(ex: ExecInfo, et: dict, pt: Optional[dict], paper_ko: Optional[str] = None) -> str:
     """✅ / ❌ an "own" executor's trade that closed apart from the paper: its own stop or lock (거래소 기준), with what
-    the paper did (its exit and the time between, or still open)."""
+    the paper did (its exit and the time between, or still open). ``paper_ko``: that paper bot's name when two run."""
+    pp = f"페이퍼({paper_ko})" if paper_ko else "페이퍼"
     sym, side = et["symbol"], int(et.get("side") or 0)
     qty, px, lev = float(et.get("qty") or 0), float(et.get("entry_price") or 0), max(int(et.get("leverage") or 1), 1)
     margin = qty * px / lev
@@ -3532,18 +3538,20 @@ def own_exit_text(ex: ExecInfo, et: dict, pt: Optional[dict]) -> str:
                        f"순ROE {fmt_roe(roe)}"), f"{fmt_usd(pnl)} · {how}"]
     if pt is not None:
         gap = (int(et["exit_ts"]) - int(pt["exit_time"])) // MIN
-        lines.append(f"페이퍼: {kst(int(pt['exit_time']))} {exit_reason_text(pt)} {fmt_roe(pt.get('roe'))}"
+        lines.append(f"{pp}: {kst(int(pt['exit_time']))} {exit_reason_text(pt)} {fmt_roe(pt.get('roe'))}"
                      f" ({abs(gap)}분 {'먼저' if gap >= 0 else '뒤'})")
     else:
-        lines.append("페이퍼: 아직 열림 (따로 닫혀요)")
+        lines.append(f"{pp}: 아직 열림 (따로 닫혀요)")
     lines.append("알람 아님: 거래소 기준 익절이라 페이퍼와 닫는 때가 다를 수 있어요")
     return "\n".join(lines)
 
 
-def own_pass(ex: ExecInfo, c, conn, now_ms: int, send: Callable, paper_for: Callable) -> list:
+def own_pass(ex: ExecInfo, c, conn, now_ms: int, send: Callable, paper_for: Callable,
+             name_for: Optional[Callable] = None) -> list:
     """An "own" executor's messages (owners 10-20): 🔒 its FIRST own lock of each trade (its "own_lock" records), and
     ✅ / ❌ a trade it closed apart from the paper (own_exit), one each (trade_msgs kinds "lock:<name>", "exit:<name>");
-    older than TRADE_SEND_MS when first seen: recorded, never sent. Never loud."""
+    older than TRADE_SEND_MS when first seen: recorded, never sent. Never loud. ``name_for(entry ms)``: the name of the
+    paper bot it followed then, when two run (owners 10-23)."""
     out = []
     firsts: dict = {}
     for ev in exec_events(c, "own_lock"):
@@ -3577,7 +3585,7 @@ def own_pass(ex: ExecInfo, c, conn, now_ms: int, send: Callable, paper_for: Call
         parts = key.split("|")
         pt = next((p for p in paper_for(et.get("entry_ts")) or [] if len(parts) == 3 and p["symbol"] == parts[1]
                    and str(p["entry_time"]) == parts[2]), None)      # its own paper trade (closed), by key only
-        text = own_exit_text(ex, et, pt)
+        text = own_exit_text(ex, et, pt, name_for(et.get("entry_ts")) if name_for is not None else None)
         if send(INFO, text) is not False:
             _msg_put(conn, key, kind, now_ms, now_ms, INFO, text)
             out.append((kind, key, INFO, text))
@@ -4341,7 +4349,8 @@ def trade_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Calla
         # ---- "own" executors (owners 10-20, 거래소 기준): their own first lock, and a trade they closed apart from the paper
         for ex in infos:
             if ex.own and conns[ex.name] is not None:
-                out += own_pass(ex, conns[ex.name], conn, now_ms, send, lambda t, ex=ex: ps.at(segs[ex.name], t))
+                out += own_pass(ex, conns[ex.name], conn, now_ms, send, lambda t, ex=ex: ps.at(segs[ex.name], t),
+                                (lambda t, ex=ex: paper_name(LP.paper_at(segs[ex.name], t))) if two else None)
         conn.execute("DELETE FROM trade_msgs WHERE first_ts < ?", (now_ms - 30 * DAY,))
         conn.commit()
     finally:

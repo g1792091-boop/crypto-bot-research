@@ -2070,7 +2070,8 @@ class Executor:
                     else f"{'빠른' if reason == 'REV' else '감독'} 청산")
             why = (f"자기 잠금 +{float(lock):.0%}가 있어 {what}을 따르지 않고"
                    if reason in BEFORE_LOCK_EXITS else "거래소 기준으로")
-            self._event(INFO, "own_stay", f"{sym} paper가 {ko}로 닫았습니다 → {why} 계속 들고 갑니다 (거래소 손절 "
+            ro = "으로" if ko == self.time_ko != PAPER_EXIT_KO["TIME"] else "로"     # "보유 한도 청산으로"
+            self._event(INFO, "own_stay", f"{sym} paper가 {ko}{ro} 닫았습니다 → {why} 계속 들고 갑니다 (거래소 손절 "
                         f"{float(t['stop']):g}" + (f", 자기 잠금 +{float(lock):.0%}" if lock is not None else
                                                    ", 아직 자기 잠금 없음") + ")",
                         {"key": t["key"], **record})

@@ -209,6 +209,26 @@ def test_a_stalled_paper_only_bot_is_a_quiet_note(tmp_path):
         w.close()
 
 
+def test_the_main_bots_alarm_and_a_halt_name_their_bot_when_two_run(world):
+    w = world
+    st = w.st["bybit"]
+    st.put_state("bot", NOW + 15 * MIN, {"trade": None, "done": [], "loops": 1, "mode": "mainnet", "account": "COMBO@mix",
+                                        "risk": {"halted": True, "halt_reason": "비상 정지 파일이 있습니다", "halt_kinds": ["kill"],
+                                                 "halted_ts": NOW + 10 * MIN, "last_equity": 80.0}})
+    st.commit()
+    w.vb.run_to(NOW + 15 * MIN)
+    conds, _j, _s = LC.watch_conditions(w.src(), NOW + 15 * MIN, UNITS, exists=lambda p: False)
+    by = {x.key: x for x in conds}
+    assert by["paper_stale"].text.startswith("추세판단 봇 페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다")
+    assert by["paper_stale"].recover == "✅ 추세판단 봇 페이퍼 봇 기록이 다시 들어옵니다"
+    halt = next(x for x in conds if x.key.startswith("halt:bybit:")).text
+    assert "\n페이퍼(VWAP 개선판) 거래 4번(표본 작음)" in halt
+    # one paper bot: the alarm as it always was
+    conds, _j, _s = LC.watch_conditions(w.src(paper2_db=str(w.folder) + "/none.db", executors=[
+        x for x in w.infos() if x.name == "mexc"]), NOW + 15 * MIN, UNITS, exists=lambda p: False)
+    assert next(x for x in conds if x.key == "paper_stale").text.startswith("페이퍼 봇이 10분 넘게")
+
+
 def test_the_unit_of_a_paper_bot_by_its_file():
     assert "sudo systemctl status paperbot-combo-vwap" in LC.paper_unit_todo("/var/lib/paperbot/combo/vwap.db")
     assert "sudo systemctl status paperbot-combo-mexc" in LC.paper_unit_todo("/var/lib/paperbot/combo/live15-mexc.db")
@@ -303,6 +323,27 @@ def test_the_morning_score_lines_never_mix_the_two_bots(morning):
     by = {x["name"]: x for x in r["report"]["executors"]}
     assert by["bybit"]["era"]["n"] == 1 and by["bybit"]["before"]["n"] == 2 and by["bybit"]["trades"] == 3
     assert "era" not in by["mexc"]
+
+
+def test_the_monday_week_lines_split_each_executor_by_the_bot_it_followed(morning):
+    w, r = morning
+    src = w.src()
+    w1 = T0 + DAY
+    pc = LC.open_ro(src.paper_db)
+    paper = LC.paper_report(pc, T0, w1)
+    pc.close()
+    ps = LC.PaperSet(src.paper_db, paper["trades"])
+    segs = LC.exec_segs(src, src.executors)
+    execs = [LC.exec_report(ex, paper["trades"], T0, w1, w1, ps=ps) for ex in src.executors]
+    lines = LC.week_lines(None, "2026-10-19", w1, execs, paper, src.executors, {}, ps=ps, segs=segs,
+                          bots=LC.bot_paths(src, segs))
+    assert lines[1] == "- 추세판단 봇: 거래 6번 · 5승(83%) · 손익 +$5.00"
+    assert lines[2].startswith("- VWAP 개선판: 거래 4번 · 2승(50%) · 손익 -$")
+    assert lines[3].startswith("- 바이비트(추세판단 봇): 거래 2번 · 2승 · 실현 +$1.60")
+    assert lines[4].startswith("- 바이비트(VWAP 개선판): 거래 1번 · 0승 · 실현 -$")
+    assert lines[5].startswith("- MEXC(추세판단 봇): 거래 3번 · 3승 · 실현 +$2.40")
+    one = LC.week_lines(None, "2026-10-19", w1, execs, paper, src.executors, {})         # one paper bot: as always
+    assert one[1] == "- 페이퍼: 거래 6번 · 5승(83%) · 손익 +$5.00" and one[2].startswith("- 바이비트: 거래 3번")
 
 
 def test_mexc_may_be_the_one_that_switches(tmp_path):
