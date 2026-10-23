@@ -398,3 +398,30 @@ def test_runner_keeps_the_picture_at_the_first_live_minute_and_after_each_30m_cl
     w2.now = T0 + 3 * 3_600_000
     w2.run.poll()
     assert w2.store.get_state(C.GATES_NOW_KEY) is None
+
+
+def test_status_counts_the_kept_out_signals_and_shows_the_picture(tmp_path, capsys):
+    stub = Stub(lambda s, side: "4시간 추세 반대: 상승 0·하락 3·중립 1" if s == "BTCUSDT" else "")
+    w = _world(tmp_path, stub, max_hold_bars=4)
+    B = T0 + 15 * MIN
+    w.add_minutes(T0, 15)
+    w.signal("V39_ALL", "BTCUSDT", 1, B)
+    w.signal("V39_ALL", "ETHUSDT", 1, B)
+    w.add_minutes(B, 1)
+    w.now = B + 65_000
+    w.run.poll()
+    w.add_minutes(B + MIN, 61)
+    w.now = B + 62 * MIN + 5_000
+    w.run.poll()
+    w.store.put_state("combo_run", B, {"config": {"vote_gate": {}, "vol_gate": {}, "max_hold_bars": 4}})
+    w.store.put_state(C.GATES_NOW_KEY, B, {"at": B + MIN, "coins": {"BTCUSDT": {
+        "vote": {"text": "4시간 하락(상승 0·하락 3·중립 1)"},
+        "vol": {"30m": {"high": True, "text": "변동성 30분 ATR 0.90% (30일 80% 위치 0.60%)"}}}}})
+    w.store.commit()
+    assert C.main(["status", "--db", w.cfg.db]) == 0
+    out = capsys.readouterr().out
+    assert "진입 안 한 신호(이유별, 전체 / 지난 24시간): 추세 반대 1 / " in out
+    assert "보유 한도 청산" in out                                   # the ETH trade ran out of its 4 bars
+    assert "BTC: 4시간 하락(상승 0·하락 3·중립 1) · 변동성 높음 · 변동성 30분 ATR 0.90% (30일 80% 위치 0.60%)" in out
+    assert C.gate_group("변동성 높음: ATR 0.9%") == "변동성 높음" and C.gate_group("주말(한국 시간 토·일) 진입 안 함") == "주말"
+    assert C.gate_group("경제 발표 앞뒤 30분: CPI 2026-10-14") == "경제 발표" and C.gate_group("xyz") == "기타"

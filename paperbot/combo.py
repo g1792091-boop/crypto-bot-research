@@ -2125,6 +2125,53 @@ def cmd_check(args) -> int:
     return 0 if not probs else 1
 
 
+GATE_GROUPS = (("추세 반대", ("추세 반대",)), ("변동성 높음", ("변동성 높음",)), ("주말", ("주말",)),
+               ("경제 발표", ("경제 발표",)), ("나스닥 개장", ("나스닥 개장",)), ("못 읽음", ("못 읽음",)))
+
+
+def gate_group(why: str) -> str:
+    """A FILTERED reason (_entry_block's words) in a few words for the status command's count; anything else "기타"."""
+    for name, keys in GATE_GROUPS:
+        if any(k in why for k in keys):
+            return name
+    return "기타"
+
+
+def _gate_status(conn) -> None:
+    """The VWAP bot's part of ``status``: how many signals each reason kept out (all, and the last 24 hours), and the
+    newest picture of what the gates read for every coin (state gates_now)."""
+    now = int(time.time() * 1000)
+    tot: dict = {}
+    day: dict = {}
+    for ts, d in conn.execute("SELECT bar_close, data FROM signal_log WHERE status = 'FILTERED'"):
+        try:
+            why = str((json.loads(d) or {}).get("why") or "")
+        except (TypeError, ValueError):
+            why = ""
+        g = gate_group(why)
+        tot[g] = tot.get(g, 0) + 1
+        if ts is not None and now - int(ts) <= 86_400_000:
+            day[g] = day.get(g, 0) + 1
+    if tot:
+        print("진입 안 한 신호(이유별, 전체 / 지난 24시간): " + " · ".join(f"{g} {tot[g]} / {day.get(g, 0)}" for g in sorted(tot)))
+    else:
+        print("진입 안 한 신호: 아직 없음")
+    st = conn.execute("SELECT ts, data FROM state WHERE k = ?", (GATES_NOW_KEY,)).fetchone()
+    if st is None:
+        print("지금 코인별 조건: 아직 없음(켜진 뒤 첫 1분, 그다음 30분마다)")
+        return
+    pic = json.loads(st[1])
+    at = pic.get("at")
+    print(f"지금 코인별 조건 ({time.strftime('%m-%d %H:%M', time.gmtime(int(at) / 1000 + 9 * 3600)) if at else '?'} KST):"
+          if not pic.get("error") else f"지금 코인별 조건: 못 읽음 ({pic['error']})")
+    for sym, row in (pic.get("coins") or {}).items():
+        v = row.get("vote") or {}
+        parts = [v.get("text") or f"{v.get('tf', '')} 판단 못 읽음"]
+        for tf, x in (row.get("vol") or {}).items():
+            parts.append(("변동성 높음 · " if x.get("high") else "") + (x.get("text") or f"{tf} 변동성 못 읽음"))
+        print(f"  {sym.replace('USDT', '')}: " + " · ".join(parts))
+
+
 def cmd_status(args) -> int:
     from .livepnl import open_ro
     conn = open_ro(args.db)
@@ -2157,12 +2204,18 @@ def cmd_status(args) -> int:
         for mem in sorted(set(sigs) | set(outs)):
             o = outs.get(mem, {})
             print(f"  {mem}: {sigs.get(mem, 0)} / {o.get('ENTERED', 0)} / {o.get('SKIPPED', 0)} / {o.get('REJECTED', 0)}")
+        run = conn.execute("SELECT data FROM state WHERE k = 'combo_run'").fetchone()
+        rcfg = (json.loads(run[0]).get("config") or {}) if run else {}
+        hold_bot = rcfg.get("trend") is None and bool(rcfg.get("max_hold_bars"))
         for r in conn.execute("SELECT data FROM trades WHERE account_id = ? ORDER BY exit_time DESC LIMIT 10",
                               (ACCOUNT,)):
             t = json.loads(r[0])
+            why = TIME_HOLD_KO if (t["exit_reason"] == "TIME" and hold_bot) else KO_EXIT.get(t["exit_reason"], t["exit_reason"])
             print(f"  {time.strftime('%m-%d %H:%M', time.gmtime(t['entry_time'] / 1000 + 9 * 3600))} {t['symbol']} "
                   f"{KO_SIDE.get(t['side'], t['side'])} {t['strategy_id']} {t['timeframe']} {t['leverage']}배 "
-                  f"{KO_EXIT.get(t['exit_reason'], t['exit_reason'])} 순ROE {t['roe']:+.1%} ${t['pnl']:+,.2f}")
+                  f"{why} 순ROE {t['roe']:+.1%} ${t['pnl']:+,.2f}")
+        if rcfg.get("vote_gate") is not None or rcfg.get("vol_gate") is not None:
+            _gate_status(conn)
     finally:
         conn.close()
     return 0
