@@ -108,6 +108,7 @@ if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
   for db in /var/lib/paperbot/exec/*.db; do
     [ -f "$db" ] || continue
     systemctl is-active --quiet paperbot-executor-mexc 2>/dev/null && continue   # the MEXC executor runs: leave them
+    systemctl is-active --quiet paperbot-executor-flipster 2>/dev/null && continue   # the Flipster executor runs: leave them
     runuser -u paperbot-exec -- sqlite3 "$db" 'PRAGMA journal_mode=DELETE;' >/dev/null \
       || echo "could not switch $db to rollback mode: the nightly backup may fail to read it until the executor was started and stopped once"
   done
@@ -294,6 +295,11 @@ if [ -n "${SHADOWS// /}" ]; then
 fi
 # the second executor (MEXC, its own config executor-mexc.json): installed only, never enabled or started here
 install -m 644 "$APP/deploy/paperbot-executor-mexc.service" /etc/systemd/system/paperbot-executor-mexc.service
+# the third executor (Flipster, owners 10-23, docs/flipster-ko.md: it follows the 'VWAP 개선판'): installed only, never
+# enabled or started here. Like the other two executors' configs, /etc/paperbot/executor-flipster.json is never written
+# here: the owners copy deploy/executor.live-flipster.json there themselves (the guide), so the live site, the checks and
+# the messages keep showing two executors until they do.
+install -m 644 "$APP/deploy/paperbot-executor-flipster.service" /etc/systemd/system/paperbot-executor-flipster.service
 systemctl daemon-reload
 # The order executor is installed only: never enabled, started or restarted here (docs/live-safety.md).
 if systemctl is-active --quiet paperbot-executor 2>/dev/null; then
@@ -303,6 +309,10 @@ fi
 if systemctl is-active --quiet paperbot-executor-mexc 2>/dev/null; then
   echo "paperbot-executor-mexc is running the previous code; restart it yourself when ready:"
   echo "  sudo systemctl restart paperbot-executor-mexc"
+fi
+if systemctl is-active --quiet paperbot-executor-flipster 2>/dev/null; then
+  echo "paperbot-executor-flipster is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-executor-flipster"
 fi
 # New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then

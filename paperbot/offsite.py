@@ -69,7 +69,8 @@ API = "https://api.telegram.org"
 # the databases deploy/paperbot-backup.sh copies (keep the two lists the same: tests/test_offsite.py
 # compares them); a copy is <basename>.db
 DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet",
-            "exec/executor-bybit-live", "exec/executor-mexc-live", "exec/executor-wooxpro-live", "combo/live-ac",
+            "exec/executor-bybit-live", "exec/executor-mexc-live", "exec/executor-wooxpro-live",
+            "exec/executor-flipster-live", "combo/live-ac",
             "combo/live15-mexc", "combo/vwap", "livecheck", "liveimprove",
             "shadow200/shadow200",
             "debate/debate", "daily3", "paper3")
@@ -815,7 +816,7 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "다음 순서 (docs/offsite-backup.md 9-5):",
         "1) 봇과 작업을 모두 멈춥니다 (새 서버에서 아직 켜지 않았다면 'not loaded' 같은 말이 나와도 괜찮습니다):",
         "   sudo systemctl stop paperbot-live3 paperbot-dash paperbot-liq paperbot-executor paperbot-executor-mexc \\",
-        "     paperbot-combo paperbot-debate \\",
+        "     paperbot-executor-flipster paperbot-combo paperbot-debate \\",
         "     paperbot-agents.timer paperbot-agents.service paperbot-daily3.timer paperbot-checkpoint.timer \\",
         "     paperbot-checkpoint.service paperbot-backup.timer paperbot-offsite.timer",
         "2) 데이터베이스를 제자리에 넣고, 남아 있을 수 있는 -wal/-shm 파일을 지웁니다:",
