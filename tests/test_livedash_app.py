@@ -231,7 +231,9 @@ def test_the_menus_of_both_sites_in_node():
     paper, live = _node(body, False), _node(body, True)
     assert "livebots" not in paper["items"] and paper["groups"] == ["거래", "성적", "매매법", "AI 직원", "서버"]
     assert paper["tag"]["text"] == "모의" and paper["href"] == "#/livebots/replay?id=7" and paper["mod"] is None
-    assert live["groups"] == ["지금", "기록", "성적", "운영"] and live["land"] == "trend" and live["tag"]["text"] == "실거래"
+    # 지금 · 기록 · 성적 · 운영, then VWAP 봇 (owners 10/23: the 'VWAP 개선판' paper bot's tabs, tests/test_dash_livevwap.py)
+    assert live["groups"] == ["지금", "기록", "성적", "운영", "VWAP 봇"] and live["land"] == "trend" and live["tag"]["text"] == "실거래"
+    assert live["items"][-3:] == ["vwap", "vwperf", "vwblock"]
     assert live["items"][:4] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
                                                      "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"

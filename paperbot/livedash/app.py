@@ -61,6 +61,9 @@ MODULES = MODULES + ("livereview",)
 MODULES = MODULES + ("livereplayref",)
 # 실거래 › 일지 (#/journal: what the 추세판단 봇 and the executors did, one feed; dash/more/livejournal.py)
 MODULES = MODULES + ("livejournal",)
+# 실거래 › VWAP 봇 (#/vwap · #/vwperf · #/vwblock: the 'VWAP 개선판' paper bot and the executor that follows it, owners 10-23;
+# dash/more/livevwap.py)
+MODULES = MODULES + ("livevwap",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 
