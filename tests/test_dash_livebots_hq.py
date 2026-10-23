@@ -340,6 +340,22 @@ def test_the_view_renders_the_live_world_honestly(world):
     assert "101.50" in out["after"]                                                          # a failed refresh keeps the last answer
 
 
+def test_the_view_without_the_88_rule_and_with_strategies_on_two_bars(world):
+    """The 추세판단 봇 (owners 10/22): no 88 / 82 % rule (checkpoint rule_ko), so the bar under the frame never shows it;
+    18 entries on 15 strategies: the tiles' heading says both counts (one tile per strategy)."""
+    a = answers(world)
+    a["d"]["checkpoint"]["rule_ko"] = "새 규칙이라 88%·82% 같은 판단 기준이 없어요 · 2주 뒤 검토에서 두 분이 정해요"
+    rows = [r for r in a["rank"]["rows"] if r.get("in_config") is not False]
+    rows[0]["n_settings"] = 2                                       # one strategy on two entry bars
+    a["rank"]["trend_bot"] = {"trend": True}                        # (another bot keeps "매매법 N개": its settings are variants)
+    n = sum(int(r.get("n_settings") or 0) for r in rows)
+    out = _node(VIEW, a)
+    t = out["text"]
+    assert "88% 이상 금액 늘리기 검토" not in t and "88% 이상이면 금액 늘리기 검토" not in t
+    assert "새 규칙이라 88%·82% 같은 판단 기준이 없어요 · 2주 뒤 검토에서 두 분이 정해요 · 40번 전에는 판단 안 함" in t
+    assert f"매매법 {len(rows)}종 · 진입 {n}개 · 이번 주 신호" in t
+
+
 def test_the_view_says_what_it_cannot_read(tmp_path):
     p = W.build_world(str(tmp_path / "w"))
     with open(p["mexc_db"], "wb") as fh:

@@ -1073,9 +1073,11 @@ export function hqView(ctx, hub) {
   const pbFill = h("i", {class: "lbh-pbf"});
   const pbText = h("span", {class: "lbh-pbt"}, "40번 판단까지");
   const pbNum = h("b", {class: "lbh-pbn num"}, "—");
+  const PB_RULE = "88% 이상 금액 늘리기 검토 · 82~88% 지켜보기 · 82% 미만 멈추고 다시 생각 · 40번 전에는 판단 안 함";
+  const pbRule = h("p", {class: "lbh-pbrule"}, PB_RULE);
   const pbar = h("div", {class: "lbh-pbar", role: "progressbar", "aria-label": "40번 판단까지 페이퍼(연습) 거래 수", "aria-valuemin": "0", "aria-valuemax": "40"},
     h("div", {class: "lbh-pbh"}, h("i", {class: "lbh-pbic", "aria-hidden": "true"}), pbText, pbNum), h("div", {class: "lbh-pbtrack"}, pbFill),
-    h("p", {class: "lbh-pbrule"}, "88% 이상 금액 늘리기 검토 · 82~88% 지켜보기 · 82% 미만 멈추고 다시 생각 · 40번 전에는 판단 안 함"));
+    pbRule);
   const tRunA = h("div", {class: "lbh-trun"}), tRunB = h("div", {class: "lbh-trun", "aria-hidden": "true"});
   const tIn = h("div", {class: "lbh-tin"}, tRunA, tRunB);
   const ticker = h("div", {class: "lbh-ticker", role: "marquee", "aria-label": "실거래 숫자 흐름"}, tIn);
@@ -1565,6 +1567,8 @@ export function hqView(ctx, hub) {
     pbar.setAttribute("aria-valuemax", String(goal));
     if (n != null) pbar.setAttribute("aria-valuenow", String(n)); else pbar.removeAttribute("aria-valuenow");
     pbText.textContent = `${fmt.int(goal)}번 판단까지 · 페이퍼(연습) 거래`;
+    // a config without the 88 / 82 % rule (the 추세판단 봇: rule_ko) never shows that rule under the bar either
+    pbRule.textContent = cp && cp.rule_ko ? `${cp.rule_ko} · ${fmt.int(goal)}번 전에는 판단 안 함` : PB_RULE;
     pbNum.textContent = unk ? unk : `${fmt.int(n)}/${fmt.int(goal)} · ${fmt.pct(pct, 0, false)}`;
     pbar.classList.toggle("unk", !!unk);
     pbar.classList.toggle("done", !!(cp && cp.ready));
@@ -1581,7 +1585,10 @@ export function hqView(ctx, hub) {
       return;
     }
     const ts = tilesOf(rk);
-    tHead.textContent = `매매법 ${fmt.int(ts.length)}개 · 이번 주 신호`;
+    // one tile per strategy; a strategy on two entry bars (the 추세판단 봇's 18 entries on 15 strategies) says both counts
+    const nSet = ts.reduce((a, t) => a + (Number(t.settings) || 0), 0);
+    tHead.textContent = rk.trend_bot && nSet > ts.length ? `매매법 ${fmt.int(ts.length)}종 · 진입 ${fmt.int(nSet)}개 · 이번 주 신호`
+      : `매매법 ${fmt.int(ts.length)}개 · 이번 주 신호`;
     const sig = JSON.stringify(ts.map((t) => [t.code, t.n, t.lvl, t.hold, t.today])) + "|" + ts.map((t) => stratName(t.code)).join(",") + "|" + st.pick;
     if (sig !== tSig) {
       tSig = sig;
