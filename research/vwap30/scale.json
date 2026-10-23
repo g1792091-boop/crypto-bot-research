@@ -1,0 +1,135 @@
+{
+ "data_end": 1792713600000,
+ "trades": 5805,
+ "margin": 0.4,
+ "n": 50,
+ "win_rate": 0.7201,
+ "avg_win_roe": 0.1076,
+ "avg_loss_roe": -0.3943,
+ "breakeven_win": 0.7856,
+ "stretches": {
+  "count": 5756,
+  "share_80_or_more": 0.1878,
+  "share_925_or_more": 0.001,
+  "share_under_71": 0.4494
+ },
+ "corr_past_next_win": 0.3939,
+ "overlapping": {
+  "71% 미만": {
+   "n": 2557,
+   "next_win": 0.6898,
+   "next_roe_per_trade": -0.03682,
+   "next_mult_median": 0.3574,
+   "next_up_share": 0.0946
+  },
+  "71~80%": {
+   "n": 2076,
+   "next_win": 0.7274,
+   "next_roe_per_trade": -0.03106,
+   "next_mult_median": 0.3854,
+   "next_up_share": 0.1267
+  },
+  "80% 이상": {
+   "n": 1073,
+   "next_win": 0.7695,
+   "next_roe_per_trade": -0.0302,
+   "next_mult_median": 0.4264,
+   "next_up_share": 0.096
+  },
+  "전체": {
+   "n": 5706,
+   "next_win": 0.7185,
+   "next_roe_per_trade": -0.03348,
+   "next_mult_median": 0.3801,
+   "next_up_share": 0.1066
+  }
+ },
+ "thresholds": {
+  "승률 75% 이상": {
+   "n": 1954,
+   "share": 0.3424,
+   "next_win": 0.7519,
+   "next_roe_per_trade": -0.0304,
+   "next_mult_median": 0.4087,
+   "next_up_share": 0.1095
+  },
+  "승률 80% 이상": {
+   "n": 1073,
+   "share": 0.188,
+   "next_win": 0.7695,
+   "next_roe_per_trade": -0.0302,
+   "next_mult_median": 0.4264,
+   "next_up_share": 0.096
+  },
+  "승률 85% 이상": {
+   "n": 246,
+   "share": 0.0431,
+   "next_win": 0.7858,
+   "next_roe_per_trade": -0.028,
+   "next_mult_median": 0.4487,
+   "next_up_share": 0.1667
+  },
+  "승률 88% 이상": {
+   "n": 148,
+   "share": 0.0259,
+   "next_win": 0.8176,
+   "next_roe_per_trade": -0.0155,
+   "next_mult_median": 0.6088,
+   "next_up_share": 0.223
+  },
+  "승률 90% 이상": {
+   "n": 109,
+   "share": 0.0191,
+   "next_win": 0.8361,
+   "next_roe_per_trade": -0.00995,
+   "next_mult_median": 0.6138,
+   "next_up_share": 0.2294
+  },
+  "지난 50번 순ROE 합 플러스": {
+   "n": 950,
+   "share": 0.1665,
+   "next_win": 0.7359,
+   "next_roe_per_trade": -0.02586,
+   "next_mult_median": 0.4426,
+   "next_up_share": 0.1747
+  },
+  "지난 50번 순ROE 합 마이너스": {
+   "n": 4756,
+   "share": 0.8335,
+   "next_win": 0.715,
+   "next_roe_per_trade": -0.035,
+   "next_mult_median": 0.3698,
+   "next_up_share": 0.0929
+  }
+ },
+ "blocks": {
+  "71% 미만": {
+   "n": 54,
+   "next_win": 0.6889,
+   "next_roe_per_trade": -0.03725,
+   "next_mult_median": 0.3809,
+   "next_up_share": 0.1111
+  },
+  "71~80%": {
+   "n": 41,
+   "next_win": 0.7351,
+   "next_roe_per_trade": -0.02834,
+   "next_mult_median": 0.4512,
+   "next_up_share": 0.0732
+  },
+  "80% 이상": {
+   "n": 20,
+   "next_win": 0.766,
+   "next_roe_per_trade": -0.03249,
+   "next_mult_median": 0.4042,
+   "next_up_share": 0.15
+  },
+  "전체": {
+   "n": 115,
+   "next_win": 0.7188,
+   "next_roe_per_trade": -0.03324,
+   "next_mult_median": 0.398,
+   "next_up_share": 0.1043
+  }
+ }
+}
