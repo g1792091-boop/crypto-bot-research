@@ -1,0 +1,23 @@
+{
+ "made": "2026-10-23 05:33:56Z",
+ "finalists": [
+  {
+   "name": "지정가 진입 1등",
+   "variant": "k0_m30",
+   "exit": 7,
+   "exit_ko": "손절 1.5ATR · 익절 2ATR"
+  },
+  {
+   "name": "지정가 진입 + 규칙봇 청산(2ATR + 계단)",
+   "variant": "k0.25_m60",
+   "exit": 10,
+   "exit_ko": "손절 2ATR · 규칙봇 계단"
+  },
+  {
+   "name": "기준선: 지금 규칙봇(시장가 + 2ATR + 계단)",
+   "variant": "mkt",
+   "exit": 10,
+   "exit_ko": "손절 2ATR · 규칙봇 계단"
+  }
+ ]
+}
