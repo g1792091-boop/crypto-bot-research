@@ -1,0 +1,230 @@
+{
+ "A 그대로": {
+  "17일": {
+   "n": 41,
+   "wins": 35,
+   "losses": 6,
+   "win": 0.8537,
+   "avg_win_roe": 13.2,
+   "avg_loss_roe": -32.9,
+   "avg_net_pct": 0.2158,
+   "mult": 2.0526,
+   "maxdd": -0.295,
+   "per_month": 72.6
+  },
+  "2020-03~2024-12": {
+   "n": 4183,
+   "wins": 3013,
+   "losses": 1170,
+   "win": 0.7203,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -46.8,
+   "avg_net_pct": -0.1354,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 72.1
+  },
+  "2025-01~2026-09": {
+   "n": 1413,
+   "wins": 989,
+   "losses": 424,
+   "win": 0.6999,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -39.7,
+   "avg_net_pct": -0.1023,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 67.4
+  }
+ },
+ "G1 A + 횡보(ADX 15 미만) 빼기": {
+  "17일": {
+   "n": 37,
+   "wins": 29,
+   "losses": 8,
+   "win": 0.7838,
+   "avg_win_roe": 13.5,
+   "avg_loss_roe": -36.5,
+   "avg_net_pct": 0.09,
+   "mult": 1.2292,
+   "maxdd": -0.4042,
+   "per_month": 65.5
+  },
+  "2020-03~2024-12": {
+   "n": 3726,
+   "wins": 2674,
+   "losses": 1052,
+   "win": 0.7177,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -47.0,
+   "avg_net_pct": -0.1417,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 64.2
+  },
+  "2025-01~2026-09": {
+   "n": 1247,
+   "wins": 879,
+   "losses": 368,
+   "win": 0.7049,
+   "avg_win_roe": 12.7,
+   "avg_loss_roe": -40.4,
+   "avg_net_pct": -0.0995,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 59.5
+  }
+ },
+ "G2 A + 횡보(ADX 20 미만) 빼기": {
+  "17일": {
+   "n": 31,
+   "wins": 27,
+   "losses": 4,
+   "win": 0.871,
+   "avg_win_roe": 13.0,
+   "avg_loss_roe": -43.8,
+   "avg_net_pct": 0.1894,
+   "mult": 1.5778,
+   "maxdd": -0.3202,
+   "per_month": 54.9
+  },
+  "2020-03~2024-12": {
+   "n": 2822,
+   "wins": 2023,
+   "losses": 799,
+   "win": 0.7169,
+   "avg_win_roe": 12.6,
+   "avg_loss_roe": -47.4,
+   "avg_net_pct": -0.1475,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 48.6
+  },
+  "2025-01~2026-09": {
+   "n": 940,
+   "wins": 650,
+   "losses": 290,
+   "win": 0.6915,
+   "avg_win_roe": 12.8,
+   "avg_loss_roe": -40.4,
+   "avg_net_pct": -0.1216,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 44.8
+  }
+ },
+ "G3 A + 추격 진입 빼기": {
+  "17일": {
+   "n": 22,
+   "wins": 17,
+   "losses": 5,
+   "win": 0.7727,
+   "avg_win_roe": 10.7,
+   "avg_loss_roe": -29.6,
+   "avg_net_pct": 0.0519,
+   "mult": 1.0705,
+   "maxdd": -0.2157,
+   "per_month": 39.0
+  },
+  "2020-03~2024-12": {
+   "n": 3033,
+   "wins": 2195,
+   "losses": 838,
+   "win": 0.7237,
+   "avg_win_roe": 12.4,
+   "avg_loss_roe": -46.0,
+   "avg_net_pct": -0.1248,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 52.2
+  },
+  "2025-01~2026-09": {
+   "n": 1052,
+   "wins": 731,
+   "losses": 321,
+   "win": 0.6949,
+   "avg_win_roe": 12.4,
+   "avg_loss_roe": -39.5,
+   "avg_net_pct": -0.1137,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 50.2
+  }
+ },
+ "G4 A + VWAP에서 1ATR 넘게 멀면 빼기": {
+  "17일": {
+   "n": 37,
+   "wins": 27,
+   "losses": 10,
+   "win": 0.7297,
+   "avg_win_roe": 12.9,
+   "avg_loss_roe": -31.7,
+   "avg_net_pct": 0.0292,
+   "mult": 1.0141,
+   "maxdd": -0.3108,
+   "per_month": 65.5
+  },
+  "2020-03~2024-12": {
+   "n": 3633,
+   "wins": 2610,
+   "losses": 1023,
+   "win": 0.7184,
+   "avg_win_roe": 12.4,
+   "avg_loss_roe": -47.1,
+   "avg_net_pct": -0.1446,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 62.6
+  },
+  "2025-01~2026-09": {
+   "n": 1240,
+   "wins": 859,
+   "losses": 381,
+   "win": 0.6927,
+   "avg_win_roe": 12.7,
+   "avg_loss_roe": -39.7,
+   "avg_net_pct": -0.1126,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 59.2
+  }
+ },
+ "G5 A + ADX 20 미만 빼기 + 추격 빼기": {
+  "17일": {
+   "n": 14,
+   "wins": 12,
+   "losses": 2,
+   "win": 0.8571,
+   "avg_win_roe": 9.0,
+   "avg_loss_roe": -38.5,
+   "avg_net_pct": 0.0741,
+   "mult": 1.0742,
+   "maxdd": -0.1198,
+   "per_month": 24.8
+  },
+  "2020-03~2024-12": {
+   "n": 1892,
+   "wins": 1360,
+   "losses": 532,
+   "win": 0.7188,
+   "avg_win_roe": 12.5,
+   "avg_loss_roe": -45.5,
+   "avg_net_pct": -0.1264,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 32.6
+  },
+  "2025-01~2026-09": {
+   "n": 636,
+   "wins": 430,
+   "losses": 206,
+   "win": 0.6761,
+   "avg_win_roe": 12.4,
+   "avg_loss_roe": -40.0,
+   "avg_net_pct": -0.1528,
+   "mult": 0.0,
+   "maxdd": -1.0,
+   "per_month": 30.3
+  }
+ }
+}
