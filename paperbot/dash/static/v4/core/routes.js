@@ -126,6 +126,8 @@ const ICON = {
   perf: () => [R(1, 14, 14, 1), R(2, 9, 3, 5), R(7, 5, 3, 9), R(12, 2, 3, 12)],
   ops: () => [R(7, 0, 2, 3), R(7, 13, 2, 3), R(0, 7, 3, 2), R(13, 7, 3, 2), R(2, 2, 2, 2), R(12, 2, 2, 2), R(2, 12, 2, 2),
     R(12, 12, 2, 2), R(4, 3, 8, 2), R(4, 11, 8, 2), R(3, 4, 2, 8), R(11, 4, 2, 8)],
+  // VWAP 봇: a candle crossing its average line (the VWAP)
+  vwap: () => [R(1, 11, 3, 1), R(4, 10, 3, 1), R(7, 9, 2, 1), R(9, 8, 3, 1), R(12, 7, 3, 1), R(7, 2, 2, 13), R(6, 4, 4, 7)],
 };
 export const icon =(group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
@@ -199,6 +201,11 @@ const SICON = {
   settings: ICON.ops,
   team: () => SICON.office(),
   shadows: () => SICON.league(),
+  // VWAP 봇 (LIVE_GROUPS "vwap"): 관제 the group's drawing, 성적 the board's bars, 막은 신호 a bar crossed out
+  vwap: ICON.vwap,
+  vwperf: () => SICON.board(),
+  vwblock: () => [R(1, 9, 4, 6), R(6, 4, 4, 11), R(11, 11, 4, 4), R(1, 1, 2, 2), R(3, 3, 2, 2), R(5, 5, 2, 2), R(7, 7, 2, 2), R(9, 9, 2, 2),
+    R(11, 11, 2, 2), R(13, 13, 2, 2)],
 };
 export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
@@ -258,6 +265,9 @@ const LIVE_GROUPS = [
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
+  // the second paper bot 'VWAP 개선판' and the executor that will follow it (owners 10/23, docs/vwap-bot-ko.md): its own
+  // group, last (the number keys of the four groups stay); each tab says 꺼짐 until the bot runs (screens/livebots-vwap.js)
+  {id: "vwap", ko: "VWAP 봇", screens: ["vwap", "vwperf", "vwblock"]},
 ];
 const LIVE_SCREENS = {
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇)"},
@@ -286,6 +296,9 @@ const LIVE_SCREENS = {
   settings: {ko: "설정", group: "ops", title: "봇 설정"},
   team: {ko: "분석팀", group: "ops", title: "분석팀"},
   shadows: {ko: "그림자", group: "ops", title: "그림자 봇"},
+  vwap: {ko: "VWAP 관제", group: "vwap", title: "VWAP 관제 (VWAP 개선판)"},
+  vwperf: {ko: "VWAP 성적", group: "vwap", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)"},
+  vwblock: {ko: "VWAP 막은 신호", group: "vwap", title: "VWAP 막은 신호 (막지 않았다면)"},
 };
 if (LIVE) {
   // put in place (the same objects every module already imported): the menu, the screens, the strip's groups

@@ -74,6 +74,8 @@ import {expectView} from "./livebots-expect.js";
 import {judgeView} from "./livebots-judge.js";
 import {trendView} from "./livebots-trend.js";
 import {tchartView} from "./livebots-tchart.js";
+// VWAP 봇 (owners 10/23: the 'VWAP 개선판' paper bot and its executor; menu group "vwap"): 관제 · 성적 · 막은 신호
+import {vwapView, vwperfView, vwblockView} from "./livebots-vwap.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -105,6 +107,9 @@ export const TABS = [
   {id: "settings", label: "설정", make: (ctx) => settingsView(ctx), own: true},
   {id: "team", label: "분석팀", make: (ctx) => teamView(ctx), own: true},
   {id: "shadows", label: "그림자", make: (ctx) => shadowsView(ctx), own: true},
+  {id: "vwap", label: "VWAP 관제", make: (ctx, hub) => vwapView(ctx, hub), own: true},
+  {id: "vwperf", label: "VWAP 성적", make: (ctx) => vwperfView(ctx), own: true},
+  {id: "vwblock", label: "VWAP 막은 신호", make: (ctx) => vwblockView(ctx), own: true},
 ];
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "trend");
 // what the page already heard (module level: a tab change re-mounts the screen, the same record must not sound again);
