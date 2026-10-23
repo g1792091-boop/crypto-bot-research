@@ -1,0 +1,23 @@
+{
+ "made": "2026-10-23 05:50:21Z",
+ "finalists": [
+  {
+   "name": "친구 조합 1등",
+   "kind": "atr",
+   "label": "FR_ROC_at_30m",
+   "rule": "FR_ROC",
+   "tf": "30m",
+   "exit": 19,
+   "exit_ko": "손절 3ATR · +1ATR 뒤 0.5ATR 따라가기"
+  },
+  {
+   "name": "친구 방식 청산 1등",
+   "kind": "fr",
+   "label": "FR_EMA_L10_at_1h",
+   "rule": "FR_EMA",
+   "tf": "1h",
+   "exit": 0,
+   "exit_ko": "친구 방식 10배: 손절 ROE −12% · 익절 ROE +10%"
+  }
+ ]
+}
