@@ -9,16 +9,13 @@ VWAP bot (column ``paper``, group ``gate``, its own config, the shared budget)."
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 
 import pytest
 
 from paperbot import livecheck as LC
 from paperbot import livemissed as LM
-from paperbot import livepapers as LP
 from paperbot.notify import ListNotifier
-from tests import livebots_world as W
 from tests import vwap_world as VW
 
 H, MIN, DAY, T0, NOW = VW.H, VW.MIN, VW.DAY, VW.T0, VW.NOW
