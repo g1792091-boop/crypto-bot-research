@@ -1,0 +1,29 @@
+{
+ "made": "2026-10-23 04:23:51Z",
+ "finalists": [
+  {
+   "name": "단계1 전체 1등",
+   "book": "1h",
+   "exit": 497,
+   "bundle": [],
+   "rule": 0,
+   "exit_ko": "손절 3ATR · 익절 없음 · VWAP 재돌파 청산(여유 0ATR)"
+  },
+  {
+   "name": "단계1 30분 1등",
+   "book": "30m",
+   "exit": 499,
+   "bundle": [],
+   "rule": 0,
+   "exit_ko": "손절 3ATR · 익절 없음 · VWAP 재돌파 청산(여유 0.25ATR)"
+  },
+  {
+   "name": "기준선: 평일만 + 규칙봇 방식(30분)",
+   "book": "30m",
+   "exit": 256,
+   "bundle": [],
+   "rule": 0,
+   "exit_ko": "손절 2ATR · 규칙봇 계단"
+  }
+ ]
+}

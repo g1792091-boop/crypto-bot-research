@@ -109,24 +109,37 @@ def stake(book, idx, D, r):
     """Exposure as a multiple of the balance: risk r (or 'owners')."""
     if r == "owners":
         return OWNERS_MARGIN * book.lev_owner[idx]
+    if r == "rb9":                                      # the rule bot: margin 30 % of the balance at 30x
+        return np.full(len(idx), 9.0)
     return np.minimum(r / D, LEV_CAP)
 
 
-def metrics(book, mask, j, per, r=0.02, flip=None, full=True):
+_WD = {}
+
+
+def weekdays(a, b):
+    """KST weekdays (Mon-Fri) in [a, b)."""
+    if (a, b) not in _WD:
+        d = pd.date_range(pd.Timestamp(a + KST, unit="ms").normalize(), pd.Timestamp(b - 1 + KST, unit="ms").normalize())
+        _WD[(a, b)] = int((d.dayofweek < 5).sum())
+    return _WD[(a, b)]
+
+
+def metrics(book, mask, j, per, r=0.02, flip=None, full=True, take=None):
     a, b = PERIODS[per]
     m = mask & (book.entry >= a) & (book.entry < b)
-    idx, net, ext, D = trades(book, m, j, flip)
+    idx, net, ext, D = (take or trades)(book, m, j, flip)
     R = net / D
     x = stake(book, idx, D, r) * net
     ruin = bool((x <= -1).any())
     lg = np.log1p(np.maximum(x, -1 + 1e-12))
     days = (b - a) / DAY
     yrs = days / 365.25
-    out = {"n": int(len(idx)), "growth": float(lg.sum()), "growth_yr": float(lg.sum() / yrs), "ruin": ruin}
+    n_wd = weekdays(a, b)
+    out = {"n": int(len(idx)), "growth": float(lg.sum()), "growth_yr": float(lg.sum() / yrs), "ruin": ruin,
+           "per_weekday": len(idx[book.wd[idx]]) / max(n_wd, 1)}
     if not full:
         return out
-    kst_days = pd.date_range(pd.Timestamp(a + KST, unit="ms").normalize(), pd.Timestamp(b - 1 + KST, unit="ms").normalize())
-    n_wd = int((kst_days.dayofweek < 5).sum())
     win, loss = R[R > 0], R[R <= 0]
     eq = np.exp(np.cumsum(lg))
     peak = np.maximum.accumulate(np.r_[1.0, eq])[1:]
@@ -137,7 +150,7 @@ def metrics(book, mask, j, per, r=0.02, flip=None, full=True):
     emon = np.asarray(em.year * 12 + em.month - 1)
     mon = np.array([np.expm1(lg[emon == q].sum()) for q in mon_all])
     out.update({
-        "per_weekday": len(idx[book.wd[idx]]) / max(n_wd, 1), "per_day": len(idx) / days,
+        "per_day": len(idx) / days,
         "win": float((net > 0).mean()) if len(net) else np.nan,
         "avgR": float(R.mean()) if len(R) else np.nan,
         "avg_winR": float(win.mean()) if len(win) else np.nan, "avg_lossR": float(loss.mean()) if len(loss) else np.nan,
