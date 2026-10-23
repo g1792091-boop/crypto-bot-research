@@ -31,7 +31,8 @@ from paperbot.trendjudge import HTF_OF, JUDGES, Judgment, Spot, TrendRules, chec
 from paperbot.ladder2 import ComboLadder
 from paperbot.margin import BracketTier, liquidation_price
 
-CFG = json.load(open(f"{REPO}/deploy/combo.trend.json"))
+# the 10/21 design this study replays, frozen (deploy/combo.trend.json became the 10/22 design: 18 members, 4h entries)
+CFG = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "combo.trend.1021.json")))
 PRI = list(C.V3_SYMBOLS)
 TF_MIN = {"30m": 30, "1h": 60}
 MMR = BracketTier(50_000, 50, 0.005, 0.0)        # Brackets.example() first tier (live: Binance's table; liq only on gaps)

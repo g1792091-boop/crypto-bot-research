@@ -1,0 +1,75 @@
+{
+ "paper_db": "/var/lib/paperbot/paper3.db",
+ "db": "/var/lib/paperbot/combo/live-ac.db",
+ "members": [
+  {"strategy": "N08_ICHI_WR", "tf": "30m", "no_chase": true},
+  {"strategy": "N05_PSAR_POC", "tf": "30m", "no_chase": true},
+  {"strategy": "F3_BOS", "tf": "30m", "no_chase": true},
+  {"strategy": "F15_ORB", "tf": "30m", "no_chase": true},
+  {"strategy": "N06_MACD_ORB", "tf": "30m", "no_chase": true},
+  {"strategy": "S3_CMO_SANDWICH", "tf": "30m", "no_chase": true},
+  {"strategy": "N20_EMA9_CHOP", "tf": "30m", "no_chase": true, "when": [{"side": "short"}]},
+  {"strategy": "F9_FVG", "tf": "1h", "no_chase": true},
+  {"strategy": "F9_IFVG", "tf": "1h", "no_chase": true},
+  {"strategy": "S3_CMO_SANDWICH", "tf": "1h", "no_chase": true}
+ ],
+ "trend": {
+  "vote_min": 3,
+  "adx_min": 20,
+  "adx_tired": 40,
+  "hold_1h": 2,
+  "hold_4h": 1,
+  "htf_ema_atr": 1.5,
+  "etf_ema_atr": 1.5,
+  "big_bar_atr": 2.0,
+  "pullback_atr": 0.25,
+  "pullback_big_atr": 0.5,
+  "rsi_long_max": 70,
+  "rsi_short_min": 30,
+  "breakout": ["F3_BOS", "F15_ORB", "N06_MACD_ORB"],
+  "breakout_adx_max": 30,
+  "time_bars": null,
+  "judge_exit": true,
+  "member_losses": null,
+  "member_pause_h": 24,
+  "coin_pause_h": null,
+  "daily_loss": null,
+  "record_n": 10,
+  "record_min": 3
+ },
+ "leverage": {
+  "BTCUSDT": 40,
+  "default": 30
+ },
+ "margin": 0.4,
+ "initial_equity": 1000,
+ "max_loss_frac": 0.35,
+ "loss_cap": "shrink",
+ "stop": {
+  "mode": "roe",
+  "roe": 0.5,
+  "net": true
+ },
+ "liq_buffer_atr": 0.0,
+ "ladder": {
+  "first_lock": 0.10,
+  "trigger_gap": 0.01,
+  "step": 0.05,
+  "next_trigger": 0.15,
+  "next_gap": 0.03
+ },
+ "rank": [
+  "score",
+  "timeframe",
+  "order"
+ ],
+ "flip_twin": true,
+ "early_exit": "own",
+ "early_exit_until_lock": true,
+ "no_weekend": true,
+ "macro_blackout_min": 30,
+ "us_open_pause_min": 30,
+ "us_open_pre_min": 30,
+ "telegram": true,
+ "name": "추세판단 봇"
+}
