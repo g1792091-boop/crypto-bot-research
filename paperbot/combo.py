@@ -1267,6 +1267,7 @@ class ComboRunner:
                  btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None, gates=None):
         self.cfg, self.members, self.book, self.store = cfg, members, book, store
         self.gates = gates                  # paperbot/entrygates.EntryGates (vote_gate / vol_gate), None = off
+        self._gate_info: dict = {}          # what the gates read for the signal in hand (_entry_block -> _submit_due)
         self.notifier, self.custom, self.now_ms, self.prices, self.funding = notifier, custom, now_ms, prices, funding
         self.fetch_5m = fetch_5m
         self.btc = btc
@@ -1395,9 +1396,13 @@ class ComboRunner:
                 keep.append(q)
                 continue
             sig = _sig_from(q.signal)
+            self._gate_info = {}
             why = "" if sig.meta.get("exit_only") else self._entry_block(sig, ts, q.bar_close, bars or {})
+            if self._gate_info:                       # what the entry gates read: kept with the signal and the trade
+                gi = self._gate_info
+                sig = replace(sig, meta={**sig.meta, "gates": gi, "ctx": {**(sig.meta.get("ctx") or {}), "gates": gi}})
             if why:
-                self._restate(sig, "FILTERED", why)
+                self._restate(sig, "FILTERED", why, extra={"gates": self._gate_info} if self._gate_info else None)
                 self._count(sig.meta.get("member", sig.strategy_id), "filtered")
                 if not self.cfg.early_exit:
                     continue
@@ -1443,7 +1448,7 @@ class ComboRunner:
             if why:
                 return why
         if self.gates is not None:
-            why = self.gates.block(sig.symbol, sig.timeframe, int(sig.side), int(bar_close))
+            why, self._gate_info = self.gates.check(sig.symbol, sig.timeframe, int(sig.side), int(bar_close))
             if why:
                 return why
         m = self.by_label.get(sig.meta.get("member", sig.strategy_id))
@@ -1758,10 +1763,40 @@ def exit_text(cfg: "ComboConfig", t) -> str:
             f"순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
 
 
+MEMBER_KO = {"F6_VWAP_FAIL": "VWAP 복귀 실패", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들"}   # the VWAP bot's two (10-23)
+
+
+def member_ko(strategy: str) -> str:
+    """A strategy's name in the owners' words (the rule bot's names; the code when none is known)."""
+    if strategy in MEMBER_KO:
+        return MEMBER_KO[strategy]
+    try:
+        from .agents.roster3 import STRATEGY_KO
+        return STRATEGY_KO.get(strategy, strategy)
+    except Exception:  # noqa: BLE001  display only
+        return strategy
+
+
+def gates_text(g: Optional[dict]) -> str:
+    """What the entry gates read at an entry ("4시간 상승(상승 3·하락 0·중립 1) · 변동성 30분 ATR 0.45% (30일 80% 위치
+    0.62%)"); '' when the bot has none."""
+    if not isinstance(g, dict):
+        return ""
+    parts = [str((g.get(k) or {}).get("text") or "") for k in ("vote", "vol")]
+    return " · ".join(x for x in parts if x)
+
+
 def entry_text(cfg: "ComboConfig", p) -> str:
-    """The paper bot's own entry line (an open Position)."""
+    """The paper bot's own entry line (an open Position). A bot with entry gates (the VWAP bot) names the strategy in
+    the owners' words and says what the gates read; every other bot's line is as before."""
     m = p.signal.meta
     rule = stop_rule_ko(m.get("stop_rule"))
+    if isinstance(m.get("gates"), dict):
+        g = gates_text(m.get("gates"))
+        return (f"{cfg.tag} 진입 {p.symbol.replace('USDT', '')} {KO_SIDE.get(p.side, p.side)} · "
+                f"{member_ko(p.signal.strategy_id)} {KO_TF.get(p.signal.timeframe, p.signal.timeframe)} · {p.leverage}배, "
+                f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g}" + (f" ({rule})" if rule else "")
+                + (f" · {g}" if g else ""))
     return (f"{cfg.tag} 진입 {p.symbol} {KO_SIDE.get(p.side, p.side)} {p.signal.strategy_id} "
             f"{KO_TF.get(p.signal.timeframe, p.signal.timeframe)} ({m.get('member')}), {p.leverage}배, "
             f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g}" + (f" ({rule})" if rule else "")
@@ -1778,6 +1813,8 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
     pause = ("진입 쉼 " + "·".join(rest) + ", ") if rest else ""
     kinds = ([f"{sum(m.custom for m in members)}개 커스텀값"] if any(m.custom for m in members) else []) \
         + ([f"{sum(bool(m.when) for m in members)}개 조건 있음"] if any(m.when for m in members) else [])
+    if cfg.vote_gate is not None or cfg.vol_gate is not None:      # a short list (the VWAP bot): the names themselves
+        kinds = [" · ".join(f"{member_ko(m.name)} {KO_TF.get(m.tf, m.tf)}" for m in members)] + kinds
     return (f"{cfg.tag} 시작: 매매법 {len(members)}개" + (f"({', '.join(kinds)})" if kinds else "") + ", "
             f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 증거금 "
             f"{'배수%' if cfg.margin == 'leverage' else f'잔고의 {float(cfg.margin):.0%}'}, 손절 {stop_text(cfg)}, "

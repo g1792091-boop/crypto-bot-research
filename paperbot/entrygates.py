@@ -90,6 +90,18 @@ def vol_text(vol: dict) -> str:
             f"(상위 {1 - float(v['q']):.0%} 금지)")
 
 
+def vote_words(tf: str, raw: int, up: int, down: int) -> str:
+    """"4시간 상승(상승 3·하락 0·중립 1)" — the 4h judgment in the owners' words."""
+    word = {1: "상승", -1: "하락"}.get(int(raw), "보류")
+    return f"{KO_GATE_TF[tf]} {word}(상승 {up}·하락 {down}·중립 {4 - up - down})"
+
+
+def vol_words(tf: str, atrp: float, qv: float, v: dict) -> str:
+    """"변동성 30분 ATR 0.45% (30일 80% 위치 0.62%)"."""
+    q = f"{qv:.2%}" if math.isfinite(qv) else "아직 모름"
+    return f"변동성 {KO_GATE_TF[tf]} ATR {atrp:.2%} ({int(v['days'])}일 {float(v['q']):.0%} 위치 {q})"
+
+
 def window_bars(tf: str, days: int) -> int:
     """Bars of ``days`` days on ``tf`` (research vwbuild.features: int(30 * 1440 / k))."""
     return int(days * 1440 * 60_000 / TF_GATE_MS[tf])
@@ -166,8 +178,9 @@ class BarCache:
 
 
 class EntryGates:
-    """``block(symbol, tf, side, bar_close)``: '' or why the signal of the ``tf`` bar closing at ``bar_close`` (ms) takes
-    no entry. ``judge``: a trendjudge.Judge for ``vote``; ``bars``: a BarCache for ``vol``."""
+    """``check(symbol, tf, side, bar_close)``: ('' or why the signal of the ``tf`` bar closing at ``bar_close`` (ms) takes
+    no entry, what each gate read: {"vote": {...}, "vol": {...}} for the records, the messages and the live site);
+    ``block``: the reason alone. ``judge``: a trendjudge.Judge for ``vote``; ``bars``: a BarCache for ``vol``."""
 
     def __init__(self, vote: Optional[dict] = None, vol: Optional[dict] = None, judge: Optional[Judge] = None,
                  bars: Optional[BarCache] = None):
@@ -181,25 +194,32 @@ class EntryGates:
         self._vol: dict = {}
 
     def block(self, symbol: str, tf: str, side: int, bar_close: int) -> str:
-        if self.vote is not None:
-            why = self._vote_block(symbol, int(side), int(bar_close))
-            if why:
-                return why
-        if self.vol is not None:
-            return self._vol_block(symbol, tf, int(bar_close))
-        return ""
+        return self.check(symbol, tf, side, bar_close)[0]
 
-    def _vote_block(self, symbol: str, side: int, bar_close: int) -> str:
+    def check(self, symbol: str, tf: str, side: int, bar_close: int) -> tuple[str, dict]:
+        info: dict = {}
+        if self.vote is not None:
+            why = self._vote_block(symbol, int(side), int(bar_close), info)
+            if why:
+                return why, info
+        if self.vol is not None:
+            return self._vol_block(symbol, tf, int(bar_close), info), info
+        return "", info
+
+    def _vote_block(self, symbol: str, side: int, bar_close: int, info: Optional[dict] = None) -> str:
         tf = self.vote["tf"]
         try:
             j = self.judge.judgment(symbol, tf, bar_close)
         except TrendError as exc:
             return f"{KO_GATE_TF[tf]} 추세 판단을 못 읽음(진입 안 함): {exc}"[:200]
+        if info is not None:
+            info["vote"] = {"tf": tf, "bar_close": j.bar_close, "votes": dict(j.votes), "up": j.up, "down": j.down,
+                            "raw": j.raw, "with_side": j.raw * side, "text": vote_words(tf, j.raw, j.up, j.down)}
         if j.raw == -side:
             return f"{KO_GATE_TF[tf]} 추세 반대: {j.vote_text()}"
         return ""
 
-    def _vol_block(self, symbol: str, tf: str, bar_close: int) -> str:
+    def _vol_block(self, symbol: str, tf: str, bar_close: int, info: Optional[dict] = None) -> str:
         v = self.vol
         key = (symbol, tf, bar_close)
         got = self._vol.get(key)
@@ -215,6 +235,10 @@ class EntryGates:
                 for k in sorted(self._vol, key=lambda x: x[2])[:200]:
                     self._vol.pop(k, None)
         atrp, qv = got
+        if info is not None:
+            info["vol"] = {"tf": tf, "atr_pct": round(atrp * 100, 4),
+                           "q_pct": round(qv * 100, 4) if math.isfinite(qv) else None,
+                           "days": int(v["days"]), "q": float(v["q"]), "text": vol_words(tf, atrp, qv, v)}
         if math.isfinite(qv) and atrp > qv:
             return (f"변동성 높음: ATR {atrp:.3%} > 지난 {int(v['days'])}일 {float(v['q']):.0%} 위치 {qv:.3%}")
         return ""

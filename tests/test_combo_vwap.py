@@ -133,7 +133,9 @@ def test_vol_gate_blocks_the_top_20_percent_only_and_reads_closed_bars():
     assert len(calm.calls) == 2 and calm.calls[0][2] == sig - M30 - (1440 + G.WARM - 1) * M30   # 1740 bars: 2 pages
     spiky = Feed(_bars30(2000, sig - M30, spike=3))
     g2 = G.EntryGates(vol={}, bars=G.BarCache(spiky, lambda: now[0]))
-    assert g2.block("ETHUSDT", "30m", -1, sig).startswith("변동성 높음: ATR ")
+    why, info = g2.check("ETHUSDT", "30m", -1, sig)
+    assert why.startswith("변동성 높음: ATR ") and info["vol"]["atr_pct"] > info["vol"]["q_pct"]
+    assert info["vol"]["text"].startswith("변동성 30분 ATR ") and "(30일 80% 위치 " in info["vol"]["text"]
     # next bar: one short read from the last bar held (no full reload)
     spiky.rows = _bars30(2001, sig, spike=3)
     now[0] = sig + M30 + 61_000
@@ -180,7 +182,9 @@ def test_vote_gate_blocks_only_the_side_against_the_4h_vote():
     b4 = T0 - T0 % H4                                        # a 4h close; the signal's 30m bar closes there too
     now = [b4 + 61_000]
     up = _vote_gate(_bars4h(400, b4 - H4, 0.01), now)
-    assert up.block("BTCUSDT", "30m", 1, b4) == ""
+    why, info = up.check("BTCUSDT", "30m", 1, b4)
+    assert why == "" and info["vote"]["text"] == "4시간 상승(상승 4·하락 0·중립 0)" and info["vote"]["with_side"] == 1
+    assert info["vote"]["bar_close"] == b4 and "vol" not in info
     assert up.block("BTCUSDT", "30m", -1, b4) == "4시간 추세 반대: 상승 4·하락 0·중립 0"
     down = _vote_gate(_bars4h(400, b4 - H4, -0.01), now)
     assert down.block("BTCUSDT", "30m", 1, b4).startswith("4시간 추세 반대")
@@ -215,13 +219,20 @@ def test_vote_gate_equals_the_research_judge_files_raw3():
 
 
 # ---------------------------------------------------------------- in the runner
+INFO = {"vote": {"tf": "4h", "up": 3, "down": 0, "raw": 1, "text": "4시간 상승(상승 3·하락 0·중립 1)"},
+        "vol": {"tf": "15m", "atr_pct": 0.3, "q_pct": 0.5, "text": "변동성 15분 ATR 0.30% (30일 80% 위치 0.50%)"}}
+
+
 class Stub:
     def __init__(self, why):
         self.why, self.asked = why, []
 
-    def block(self, symbol, tf, side, bar_close):
+    def check(self, symbol, tf, side, bar_close):
         self.asked.append((symbol, tf, side, bar_close))
-        return self.why(symbol, side)
+        return self.why(symbol, side), INFO
+
+    def block(self, symbol, tf, side, bar_close):
+        return self.check(symbol, tf, side, bar_close)[0]
 
 
 def _world(tmp_path, gates=None, **kw):
@@ -243,10 +254,17 @@ def test_runner_filters_a_gated_signal_and_enters_the_next_coin(tmp_path):
     w.now = B + 65_000
     w.run.poll()
     assert sorted(stub.asked) == [("BTCUSDT", "15m", 1, B), ("ETHUSDT", "15m", 1, B)]
-    assert w.engine().position.symbol == "ETHUSDT"
-    st = dict(w.store.conn.execute("SELECT symbol, status FROM signal_log").fetchall())
-    assert st == {"BTCUSDT": "FILTERED", "ETHUSDT": "ENTERED"} or st["BTCUSDT"] == "FILTERED"
+    p = w.engine().position
+    assert p.symbol == "ETHUSDT"
+    # what the gates read rides with the entry (the trade record keeps ctx) and with the filtered signal's row
+    assert p.signal.meta["gates"] == INFO and p.signal.meta["ctx"]["gates"] == INFO
+    rows = {r[0]: (r[1], json.loads(r[2])) for r in w.store.conn.execute("SELECT symbol, status, data FROM signal_log")}
+    assert rows["BTCUSDT"][0] == "FILTERED" and rows["BTCUSDT"][1]["gates"] == INFO
+    assert rows["BTCUSDT"][1]["why"].startswith("4시간 추세 반대")
     assert w.run.counts["V39_ALL@15m"]["filtered"] == 1
+    text = C.entry_text(w.cfg, p)
+    assert text.startswith("[합친 봇 페이퍼] 진입 ETH 롱 · V3.9 15분 · ") or text.startswith("[합친 봇 페이퍼] 진입 ETH 롱 · ")
+    assert text.endswith("· 4시간 상승(상승 3·하락 0·중립 1) · 변동성 15분 ATR 0.30% (30일 80% 위치 0.50%)")
 
 
 def test_weekend_is_checked_before_the_gates(tmp_path):
