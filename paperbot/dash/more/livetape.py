@@ -89,6 +89,17 @@ SUP_REASONS = ("JUDGE", "TIME")
 OUTSIDE_KO = "봇 밖의 이유(수동·멈춤)로 닫혀 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
 SWITCH_KO = "새 봇(추세판단 봇)이 켜지며 예전 봇의 포지션을 닫은 거래(전환 전 포지션 정리)라 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
 SUP_KO = "감독 청산(추세 판단·시간 정리)은 1분봉이 아니라 추세판단 봇의 감독이 정해서 청산 자체는 다시 계산하지 않았어요. 그때까지의 잠금만 맞춰 봤어요"
+# the same TIME code in a bot with a hold limit and no supervisor (owners 10-23: the 'VWAP 개선판', combo max_hold_bars):
+# the time decided it, not the bars
+HOLD_KO = ("보유 한도({n}봉)에 닿아 시장가로 정리한 거래예요. 1분봉이 아니라 시간이 정한 청산이라 청산 자체는 다시 계산하지 않았어요. "
+           "그때까지의 잠금만 맞춰 봤어요")
+
+
+def sup_ko(reason: Optional[str], cfg: Optional[dict] = None) -> str:
+    """Why a TIME / JUDGE close is not rebuilt, by the bot: the trend bot's supervisor (SUP_KO) or a hold limit (HOLD_KO)."""
+    if reason == "TIME" and L.hold_bot(cfg):
+        return HOLD_KO.format(n=(cfg or {}).get("max_hold_bars"))
+    return SUP_KO
 RULE_MISSING_KO = "규칙봇 1분봉 파일이 아직 없어요 (PAPERBOT_LIVE_RULE_DB 경로를 확인해 주세요)"
 RULE_NO_TABLE_KO = "규칙봇 파일은 있지만 1분봉 표(live_bars)가 아직 없어요"
 NO_BARS_KO = "이 거래 시간의 1분봉이 규칙봇 기록에 없어요"
@@ -295,9 +306,9 @@ def _same_px(a: Optional[float], b: Optional[float]) -> bool:
     return abs(a - b) <= PRICE_TOL * max(abs(a), abs(b), 1e-12)
 
 
-def compare(t: dict, rb: dict) -> dict:
+def compare(t: dict, rb: dict, cfg: Optional[dict] = None) -> dict:
     """The rebuilt path against the record: {"state": "same" | "differs" | "unchecked", "items": [{key, ko, record, rebuilt,
-    kind}], "why_ko"}."""
+    kind}], "why_ko"} (``cfg``: the bot's config, for the words of its TIME close)."""
     items = []
     x = rb.get("exit")
     reason = t.get("exit_reason")
@@ -326,7 +337,7 @@ def compare(t: dict, rb: dict) -> dict:
             and not _same_px(rb["mfe"], t["mfe_price"]):
         add("mfe", "가장 유리했던 가격", t["mfe_price"], rb["mfe"], "price")
     return {"state": "differs" if items else "same", "items": items,
-            "why_ko": (SWITCH_KO if reason in SWITCH_REASONS else SUP_KO if reason in SUP_REASONS else OUTSIDE_KO)
+            "why_ko": (SWITCH_KO if reason in SWITCH_REASONS else sup_ko(reason, cfg) if reason in SUP_REASONS else OUTSIDE_KO)
             if rb.get("stopped") == "outside" else None}
 
 
@@ -417,10 +428,12 @@ def stops_of(t: dict, rb: dict) -> list:
 
 
 # ---------------------------------------------------------------- the executors
-def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict, path: Optional[str] = None, other_ko: Optional[str] = None) -> dict:
+def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict, path: Optional[str] = None, other_ko: Optional[str] = None,
+               cfg: Optional[dict] = None) -> dict:
     """What one executor did with the paper trade ``pt``: matched (its own trade: entry, exit reference, the exchange stop
     it recorded, its own result), or why not (livebots ``why_missed``: the executor's own records), or "other": it followed
-    the other paper bot then (owners 10-19, ``path``: this trade's paper database)."""
+    the other paper bot then (owners 10-19, ``path``: this trade's paper database). ``cfg``: the paper bot's config (the
+    words of its TIME close)."""
     r = x["record"]
     base = {"id": x["id"], "name_ko": x["name_ko"], "s": SHORT.get(x["id"], x["id"][:1].upper())}
     if r.get("state") != "ok":
@@ -440,7 +453,8 @@ def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict, path: Optional[str
             "entry_ts": lt["entry_ts"], "entry_price": lt["entry_price"], "exit_ts": lt["exit_ts"], "exit_ref": lt["exit_ref"],
             "stop_initial": lt["stop_initial"], "stop_final": lt["stop_final"], "pnl": lt["pnl"], "roe": lt["roe"], "est": lt["est"],
             "margin": lt["margin"], "commission": lt["commission"], "funding": lt["funding"], "reason": reason,
-            "reason_ko": EXIT_KO.get(reason, reason), "exit_raw": lt["exit_raw"], "slip_vs_paper": slip,
+            "reason_ko": L.exit_words(reason, cfg, pt.get("exit_why")) if reason == pt.get("exit_reason") else EXIT_KO.get(reason, reason),
+            "exit_raw": lt["exit_raw"], "slip_vs_paper": slip,
             "locked": bool(lt.get("stop_final") and lt.get("entry_price") and (lt["stop_final"] - lt["entry_price"]) * lt["side"] > 0)}
 
 
@@ -467,7 +481,7 @@ def _sources(p: dict, now: int, bot: str = "paper") -> tuple:
     other = next((x for x in bots if x["id"] != b["id"]), None)
     pr = b["read"]
     a = (pr.get("accounts") or {}).get(ACCOUNT) if pr.get("state") == "ok" else None
-    return pr, a, execs, b["path"], ((other or {}).get("label_ko") or "").split(" (")[0] or None, bots
+    return pr, a, execs, b["path"], (other or {}).get("short_ko") or None, bots
 
 
 def _prev(t: dict, tb: Optional[dict]) -> bool:
@@ -497,15 +511,16 @@ def build_list(p: Optional[dict] = None, now_ms: Optional[int] = None, offset: i
     trades = a.get("trades") or []
     newest = sorted(trades, key=lambda t: (t["exit_time"] or 0, t["id"] or 0), reverse=True)
     prs = exec_pairs(execs, trades, path)
+    cfg = L.cfg_of(paper)                                # the bot's own words for its TIME close (owners 10-23)
     rows = []
     for t in newest[offset:offset + limit]:
         cells = []
         for x, pairs, live_by in prs:
-            c = _exec_cell(x, pairs, live_by, t, path, other_ko)
+            c = _exec_cell(x, pairs, live_by, t, path, other_ko, cfg)
             cells.append({k: c.get(k) for k in ("id", "s", "name_ko", "state", "pnl", "roe", "est", "reason_ko", "why_ko")})
         rows.append({**{k: t.get(k) for k in ("id", "symbol", "side", "strategy_id", "timeframe", "entry_time", "exit_time", "exit_reason",
                                                "leverage", "pnl", "roe", "lock_roe", "entry_price", "exit_price")},
-                     "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "win": (t["pnl"] or 0) > 0,
+                     "reason_ko": L.exit_words(t["exit_reason"], cfg, t.get("exit_why")), "win": (t["pnl"] or 0) > 0,
                      "hold_ms": (t["exit_time"] - t["entry_time"]) if t.get("exit_time") is not None and t.get("entry_time") is not None else None,
                      "prev": _prev(t, tb), "execs": cells})
     return {**head, "state": "ok", "n": len(trades), "rows": rows, "newest_id": newest[0]["id"] if newest else None,
@@ -529,6 +544,8 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
         return None
     notes: list = []
     rules = rules_of(t, rec["run"])
+    run_cfg = (rec["run"] or {}).get("config") if isinstance((rec["run"] or {}).get("config"), dict) else {}
+    words = lambda r: L.exit_words(r, run_cfg, t.get("exit_why") if r == t["exit_reason"] else None)   # noqa: E731  its own bot's words
     hold = max(0, int(t["exit_time"]) - int(t["entry_time"]))
     tf, tf_ms = tier_of(hold)
     e0 = int(t["entry_time"]) - int(t["entry_time"]) % MIN
@@ -568,7 +585,7 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
             check = {"state": "unchecked", "items": [], "why_ko": "진입부터 청산까지의 1분봉이 없어 다시 계산하지 못했어요"}
         else:
             rb = rebuild(t, inside, rules, bool(ref), fund, until=hi - MIN)
-            check = compare(t, rb)
+            check = compare(t, rb, run_cfg)
             path = path_of(rb["minutes"], tf_ms, int(t["side"]), float(t["entry_price"]), float(t["leverage"]), rules["round_trip"], shown)
             stops = stops_of(t, rb)
             bars["missing"] = rb["missing"]
@@ -590,7 +607,7 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
     _paper, a, execs, bpath, other_ko, _bots = _sources(p, now, bot)
     ptrades = (a or {}).get("trades") or []
     pt = next((x for x in ptrades if x["id"] == t["id"]), None) or t
-    cells = [_exec_cell(x, pairs, live_by, pt, bpath, other_ko) for x, pairs, live_by in exec_pairs(execs, ptrades, bpath)]
+    cells = [_exec_cell(x, pairs, live_by, pt, bpath, other_ko, run_cfg) for x, pairs, live_by in exec_pairs(execs, ptrades, bpath)]
     done = now >= hi and all(c["state"] not in ("open", "unknown") for c in cells) and bars["state"] in ("ok", "none")
     lad = rules["ladder"]
     tb = L.trend_bot(bpath)
@@ -599,7 +616,7 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
                                        "stop_initial", "liq_price", "entry_price", "exit_price", "mfe_price", "mae_price", "signal_ts",
                                        "price_move")},
              "stop_final": t.get("stop_price"), "notional": notional or None, "hold_ms": hold, "win": (t.get("pnl") or 0) > 0,
-             "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"]), "prev": _prev(t, tb)}
+             "reason_ko": words(t["exit_reason"]), "prev": _prev(t, tb)}
     return {
         "state": "ok", "now_ms": now, "id": t["id"], "account": ACCOUNT, "trade": trade, "trend_bot": L.trend_out(tb),
         "setting": {k: rec["meta"].get(k) for k in ("member", "member_order", "stop_rule", "ref_price", "break_level")},
@@ -609,8 +626,8 @@ def build_one(p: Optional[dict], trade_id: int, now_ms: Optional[int] = None, mo
             "ladder_ko": ladder_ko(lad)},
         "bars": bars, "path": path, "stops": stops, "locks": (rb or {}).get("locks") or [],
         "exit": {"record": {"t": t["exit_time"], "price": t.get("exit_price"), "reason": t["exit_reason"],
-                            "reason_ko": EXIT_KO.get(t["exit_reason"], t["exit_reason"])},
-                 "rebuilt": ({**rb_exit, "reason_ko": EXIT_KO.get(rb_exit["reason"], rb_exit["reason"])} if rb_exit else None),
+                            "reason_ko": words(t["exit_reason"])},
+                 "rebuilt": ({**rb_exit, "reason_ko": L.exit_words(rb_exit["reason"], run_cfg)} if rb_exit else None),
                  "stopped": rb.get("stopped") if rb else None},
         "check": check, "execs": cells, "notes_ko": notes, "final": done,
         "first_stop_roe": _roe_at(side, t, t.get("stop_initial"), rules, 0.0),

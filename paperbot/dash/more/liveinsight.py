@@ -167,6 +167,29 @@ GRID_KO = ("가상 계산이에요: 한 달 진입 {n:.0f}번이 그 승률·이
 PROGRESS_KO = "×6 경로: 한 달 평일 {wd:.0f}일에 ×6이 되는 속도를 평일만큼 나눠 그은 선이에요 (진입은 평일에만 해요)"
 GROUP_SUB_KO = {"A": "추격 막기 없음", "B": "추격 진입 막기", "old": "지금 설정에 없는 매매법 (시작 전 기록)",
                 "none": "페이퍼에 같은 거래가 없는 실거래"}
+# 'VWAP 개선판' (owners 10-23, docs/vwap-bot-ko.md): a second, different paper bot one executor may follow. Its own numbers,
+# never the trend bot's or the old A+C bot's (a config with an entry gate is this bot: livebots.gate_words):
+# entries a weekday: the live config (deploy/combo.vwap.json) replayed 2020-03 .. 2026-09 on Binance bars, each month
+# started fresh: 5,805 trades on 1,718 KST weekdays (no weekend entries) = 3.38 (research/vwap30/month2.json "trades",
+# QA_KO.md '증거금을 낮추거나 신호등을 켜면 달라지나?')
+VWAP_WEEKDAY_REF = 3.38
+VWAP_WEEKDAY_REF_KO = ("2020-03~2026-09 이 봇 설정으로 다시 계산한 숫자 · 평일 1,718일 5,805번 (research/vwap30/month2.json) · "
+                       "그 기간 시장의 숫자라 앞으로는 다를 수 있어요")
+# its money rule (docs/vwap-bot-ko.md 6장): 50 live trades at 80 % or more and close to the paper -> more money; a win rate
+# below 71 % (the break-even of this structure) that goes on -> stop and look again. Information only, nothing changes.
+VWAP_SCALE_TRADES = 50
+VWAP_SCALE_WIN = 0.80
+VWAP_STOP_WIN = 0.71
+VWAP_SCALE_KO = "키울 때예요 (docs/vwap-bot-ko.md 6장): 실거래 {n}번 승률 {w:.0%} · 페이퍼와 비슷한지는 두 분이 봐요"
+VWAP_SCALE_NOTE_KO = ("보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 기준: 실거래 50번 승률 80% 이상이고 페이퍼와 비슷하면 돈을 늘림, "
+                      "71%(이 구조의 본전선) 아래가 이어지면 멈추고 다시 봄")
+# 두 봇 나란히 (owners 10-23: the trend bot and the VWAP bot are different bots; the 11/3 stop test was the twins')
+PLAIN_H2H_KO = "두 봇 나란히 · 매매법이 서로 달라요 · 어느 쪽이 낫다고 정하지 않아요"
+
+
+def gate_bot(cfg: Optional[dict]) -> bool:
+    """The config is the 'VWAP 개선판' kind: it has an entry gate (vote_gate / vol_gate)."""
+    return isinstance(cfg, dict) and (isinstance(cfg.get("vote_gate"), dict) or isinstance(cfg.get("vol_gate"), dict))
 
 _lock = threading.Lock()
 _holds: "OrderedDict[str, tuple]" = OrderedDict()
@@ -906,7 +929,8 @@ def per_weekday_of(entries: list, since: Optional[int], now: int) -> Optional[fl
     return sum(1 for t in entries if t is not None and not L.kst_weekend(t)) / days if days >= WEEKDAY_MIN else None
 
 
-AVG_SUFFIX_KO = {"record": "", "own": "", "lock": " (첫 잠금 기준)", "stop": " (손절 기준)", "replay": " (재현 · 가상)", "none": ""}
+AVG_SUFFIX_KO = {"record": "", "own": "", "lock": " (첫 잠금 기준)", "stop": " (손절 기준)", "replay": " (재현 · 가상)", "none": "",
+                 "cap": " (손절 한 번 한도 기준)"}
 
 
 def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Optional[float],
@@ -923,6 +947,12 @@ def win_need(rec: dict, needed: Optional[float], mo: dict, cfg: dict, per_wd: Op
     else:
         w, w_src = (rec["avg_win"], "record") if rec.get("avg_win") is not None and rec["avg_win"] > 0 else (first_lock(cfg), "lock")
         l, l_src = (-rec["avg_loss"], "record") if rec.get("avg_loss") is not None and rec["avg_loss"] < 0 else (stop_roe(cfg), "stop")
+        if l is None and gate_bot(cfg):
+            # the 'VWAP 개선판' stops at 2 ATR (no ROE stop): before its own losses, the most one stop may cost (its
+            # max_loss_frac of the account at its margin: 20 % / 40 % = net ROE -50 %, docs/vwap-bot-ko.md 크기)
+            mlf, m0 = _f(cfg.get("max_loss_frac")), margin_share(cfg)
+            if mlf and m0:
+                l, l_src = mlf / m0, "cap"
     if per_wd is None and ref_wd is None:
         return {"m": m, "w": w, "w_src": w_src, "l": l, "l_src": l_src, "per_weekday": None, "per_weekday_src": None,
                 "n_left": None, "n_month": None, "needed": needed, "now": rec.get("win_rate"),
@@ -968,16 +998,24 @@ def scale_check(cx: dict, x: dict) -> dict:
     won 88 %+, (c) the live entry gap averages at most 1 net-ROE point a trade (체결 비교, livebots.fill_gaps). Information
     only: nothing changes by itself; never margin or leverage, only the money put in."""
     r = x["record"]
-    since = cx["start"].get("ms") if cx["start"].get("sure") else None
-    live = [t for t in r.get("trades") or [] if since is None or (t.get("entry_ts") or 0) >= since]
+    main = cx["p"]["paper"]
+    path = x.get("paper_path") or main
+    own = L.LP.same(path, main)
+    # its own era (owners 10-23): the trades it entered while it followed the bot it follows now; on the main bot since its
+    # start, on another bot (the 'VWAP 개선판') since it moved to it (its current segment)
+    since = (cx["start"].get("ms") if cx["start"].get("sure") else None) if own else (x.get("segs") or [[None]])[-1][0]
+    live = L.era_trades(x, path, since)
     pairs = L.pairs_of(x)
     paired = [pairs[str(t["key"])] for t in live if str(t["key"]) in pairs]
     pw = sum(1 for t in paired if (t.get("pnl") or 0) > 0)
     pwr = pw / len(paired) if paired else None
-    gaps = L.fill_gaps(r["path"], L.gap_rows(x, since), (x["config"] or {}).get("exchange") or x["id"],
+    rows = [g for g in L.gap_rows(x, since) if L.followed_at(x, path, g.get("entry_time"))]
+    gaps = L.fill_gaps(r["path"], rows, (x["config"] or {}).get("exchange") or x["id"],
                        (x["config"] or {}).get("ladder_from") or "paper") if r.get("path") else {}
     er = gaps.get("entry_roe") if gaps.get("state") == "ok" else None
     cost = -er if er is not None else None                     # in the trade's favour positive -> a cost is negative
+    if not own and gate_bot(bot_side(cx, path)["cfg"]):
+        return vwap_scale(x, live, paired, pw, pwr, cost, gaps, since)
     checks = [
         {"id": "trades", "ok": len(live) >= SCALE_TRADES, "value": len(live), "need": SCALE_TRADES,
          "ko": f"거래 {len(live)}/{SCALE_TRADES}번", "what_ko": f"규칙봇 15 시작 뒤 닫힌 실거래 {SCALE_TRADES}번 이상"},
@@ -1001,6 +1039,37 @@ def scale_check(cx: dict, x: dict) -> dict:
     return {"ok": ok, "checks": checks,
             "ko": SCALE_KO.format(a=a, b=b) if ok else "아직 아니에요: " + " · ".join(c["ko"] for c in checks if not c["ok"]),
             "note_ko": "보여 주기만 해요 · 저절로 바뀌는 것은 없어요 · 증거금 비중이나 배수는 올리지 않아요"}
+
+
+def vwap_scale(x: dict, live: list, paired: list, pw: int, pwr: Optional[float], cost: Optional[float], gaps: dict,
+               since: Optional[int]) -> dict:
+    """돈 늘리기 기준 of an executor that follows the 'VWAP 개선판' (docs/vwap-bot-ko.md 6장, VWAP_SCALE_*): (a) 50 closed
+    live trades since it moved to the bot, (b) their win rate 80 % or more; the followed paper trades' win rate and the
+    entry gap are facts next to them (페이퍼와 비슷한지: no number in the guide, the owners look); a win rate under 71 % over
+    20 trades or more says so (멈추고 다시 볼 기준). Information only."""
+    n = len(live)
+    w = sum(1 for t in live if (L._f(t.get("pnl")) or 0) > 0)
+    lwr = w / n if n else None
+    checks = [
+        {"id": "trades", "ok": n >= VWAP_SCALE_TRADES, "value": n, "need": VWAP_SCALE_TRADES, "ko": f"거래 {n}/{VWAP_SCALE_TRADES}번",
+         "what_ko": f"옮긴 뒤 닫힌 실거래 {VWAP_SCALE_TRADES}번 이상"},
+        {"id": "live_win", "ok": lwr is not None and lwr >= VWAP_SCALE_WIN - 1e-9, "value": lwr, "need": VWAP_SCALE_WIN, "n": n,
+         "ko": f"실거래 승률 {lwr:.0%} ({n}번 중 {w}번)" if lwr is not None else "닫힌 실거래가 아직 없어요",
+         "what_ko": f"그 실거래 승률 {VWAP_SCALE_WIN:.0%} 이상"},
+        {"id": "paper_win", "ok": None, "value": pwr, "n": len(paired),
+         "ko": (f"따라간 페이퍼 승률 {pwr:.0%} ({len(paired)}번 중 {pw}번)" if pwr is not None else "따라간 페이퍼 거래가 아직 없어요"),
+         "what_ko": "페이퍼와 결과가 비슷한지 (숫자 기준은 없어요)"},
+        {"id": "gap", "ok": None, "value": cost, "n": gaps.get("entry_n") if gaps.get("state") == "ok" else 0,
+         "ko": (f"진입 차이 평균 순ROE {cost * 100:+.1f}%p (잰 거래 {gaps.get('entry_n')}번)" if cost is not None else "진입 차이를 잰 거래가 아직 없어요"),
+         "what_ko": "실거래 진입이 페이퍼보다 얼마나 불리했나"}]
+    ok = bool(checks[0]["ok"] and checks[1]["ok"])
+    out = {"ok": ok, "vwap": True, "since_ms": since, "checks": checks,
+           "ko": VWAP_SCALE_KO.format(n=n, w=lwr or 0) if ok else "아직 아니에요: " + " · ".join(c["ko"] for c in checks[:2] if not c["ok"]),
+           "note_ko": VWAP_SCALE_NOTE_KO}
+    if lwr is not None and n >= SMALL_N and lwr < VWAP_STOP_WIN:
+        out["warn_ko"] = (f"실거래 승률 {lwr:.0%}: 이 구조의 본전선 {VWAP_STOP_WIN:.0%}보다 낮아요 · 이어지면 멈추고 다시 봐요 "
+                          f"(멈추기: {STOP_CMD})")
+    return out
 
 
 def frozen(now: int, tb: Optional[dict] = None) -> dict:
@@ -1056,8 +1125,11 @@ def _paper_goal(cx: dict, b: Optional[dict], mo: dict, target: float, win_step: 
            "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in month_trades),
            "closed_n": len(month_trades), "pace": pace,
            "so_far_per_day": (mult ** (1 / mo["days_gone"]) - 1) if mult and mo["days_gone"] >= 0.5 else None,
-           "need": win_need(rec, pace.get("need"), mo, side["cfg"] or cx["cfg"], pwd, weekday_ref(cx) if pid == "paper" else WEEKDAY_ENTRIES,
+           "need": win_need(rec, pace.get("need"), mo, side["cfg"] or cx["cfg"], pwd,
+                            weekday_ref(cx) if pid == "paper" else VWAP_WEEKDAY_REF if gate_bot(side["cfg"]) else WEEKDAY_ENTRIES,
                             avg=trend_avg_of(rec, rep_of(cx)) if trend else None)}
+    if pid != "paper" and gate_bot(side["cfg"]):         # the 'VWAP 개선판': its own reference, said where it comes from
+        out["weekday_ref_ko"] = VWAP_WEEKDAY_REF_KO
     if trend:                                            # 이번 달 x6 경로 (owners 10/21 night): from the bot's own start
         f_ms, f_ko = _from_of(cx, mo)
         out["progress"] = path_progress(_equity_at(trades, f_ms, a.get("initial")), wallet, f_ms, cx["now"], mo, f_ko)
@@ -1183,11 +1255,16 @@ def goal_path(cx: dict, mo: dict) -> dict:
         if r.get("state") != "ok":
             actual.append({"id": x["id"], "kind": "live", **_src(r)})
             continue
-        ts = [t for t in r.get("trades") or [] if since is None or (t.get("entry_ts") or 0) >= since]
+        # the trend bot's path: only the trades the executor made while it followed the trend bot (owners 10-23: the
+        # 'VWAP 개선판' trades of an executor that moved are that bot's, never under this x6 path)
+        ts = L.era_trades(x, cx["p"]["paper"], since)
         lr = record(ts)
         actual.append({"id": x["id"], "kind": "live", "state": "ok", "real": r.get("mode") == "mainnet", "n": lr["n"],
                        "win_rate": lr["win_rate"], "roe_mean": _roe_mean(ts), "small": lr["small"],
                        "est": sum(1 for t in ts if t.get("est"))})
+        era = L.era_of(x, cx["p"]["paper"], cx["bots"])
+        if era:
+            actual[-1]["era"] = era
     # the need the actual rows are held against: the bot's own speed once it is measured over GRID_LIVE_DAYS weekdays
     need = rows[1] if rows[1].get("roe") is not None and not rows[1].get("few") else rows[0]
     return {"target_mult": target, "month_weekdays": wd_month, "margin": m, "rows": rows, "actual": actual,
@@ -1293,20 +1370,29 @@ def goal(p: dict, now: int, more: Optional[dict] = None) -> dict:
         mult = now_eq / eq0 if eq0 else None
         days_gone = max(0.0, (now - (t0 or mo["from_ms"])) / DAY)
         pace = _pace(mult, target, mo["days_left"], mo["weekdays_left"], win_step)
-        since = cx["start"].get("ms") if cx["start"].get("sure") else None
-        mine = [t for t in r.get("trades") or [] if since is None or (t.get("entry_ts") or 0) >= since]
+        path = x.get("paper_path") or cx["p"]["paper"]
+        own = L.LP.same(path, cx["p"]["paper"])          # it follows the main paper bot
+        # its own era (owners 10-23): on the main bot since its start; on another bot (the 'VWAP 개선판') since it moved to it,
+        # with that bot's numbers (never the trend bot's start, nor the old A+C bot's 6.2 entries a weekday)
+        since = (cx["start"].get("ms") if cx["start"].get("sure") else None) if own else (x.get("segs") or [[None]])[-1][0]
+        mine = L.era_trades(x, path, since)
         entries = [t.get("entry_ts") for t in mine] + ([r["position"]["entry_time"]] if r.get("position") else [])
         pwd = per_weekday_of(entries, since if since is not None else r.get("since_ms"), now)
-        own = L.LP.same(x.get("paper_path") or cx["p"]["paper"], cx["p"]["paper"])   # it follows the main paper bot
         trend = bool(cx.get("trend")) and own
+        vwap = not own and gate_bot(own_cfg)
         rec = record(mine)
+        ref_wd = weekday_ref(cx) if own else VWAP_WEEKDAY_REF if vwap else WEEKDAY_ENTRIES
         accts.append({"id": x["id"], "kind": "live", "state": "ok", "start_equity": eq0, "start_ms": t0, "late_start": late,
                       "now_equity": now_eq, "now_ms": eqs["rows"][-1][0], "change": now_eq - eq0 if eq0 is not None else None,
                       "ret": (mult - 1) if mult is not None else None, "closed_pnl": sum(t["pnl"] or 0 for t in trades), "closed_n": len(trades),
                       "pace": pace, "so_far_per_day": (mult ** (1 / days_gone) - 1) if mult and days_gone >= 0.5 else None,
-                      "need": win_need(rec, pace.get("need"), mo, own_cfg, pwd, weekday_ref(cx) if own else WEEKDAY_ENTRIES,
+                      "need": win_need(rec, pace.get("need"), mo, own_cfg, pwd, ref_wd,
                                        avg=trend_avg_of(rec, rep_of(cx)) if trend else None),
                       "scale": scale, **({"follows_ko": x.get("follows_ko")} if x.get("follows_ko") else {})})
+        era = L.era_of(x, cx["p"]["paper"], cx["bots"]) if not own or len(x.get("segs") or []) > 1 else None
+        if era:                                          # its numbers count from its own era (said on the card)
+            accts[-1].update(era={**era, "from_ms": since, "bot_ko": x.get("follows_ko")},
+                             light=x.get("light"), **({"weekday_ref_ko": VWAP_WEEKDAY_REF_KO} if vwap else {}))
         if trend:                                        # 이번 달 x6 경로 (owners 10/21 night): real money, deposits taken out
             f_ms, f_ko = _from_of(cx, mo)
             e0, et, elate = _eq_from(eqs["rows"], f_ms)
@@ -1349,8 +1435,11 @@ def head_to_head(cx: dict) -> Optional[dict]:
     c = L.compare_papers(cx["bots"])
     if c is None:
         return None
+    twin = c.get("twin") is not False and L.twins(cx["bots"])
     if c.get("state") != "ok":
-        return {**c, "review_ko": H2H_REVIEW_KO}
+        return {**c, "review_ko": H2H_REVIEW_KO if twin else PLAIN_H2H_KO, **({} if twin else {"twin": False})}
+    if not twin:
+        return _plain_h2h(cx, c)
     rows = {r["id"]: r for r in c["rows"]}
     switch = max((x["switched_ms"] for x in cx["execs"] if x.get("paper_id") == "paper2" and x.get("switched_ms")), default=None)
     sides = []
@@ -1365,6 +1454,34 @@ def head_to_head(cx: dict) -> Optional[dict]:
     return {"state": "ok", "since_ms": c["since_ms"], "live_since_ms": switch, "sides": sides, "words_ko": c["words_ko"],
             "small": n_min < SMALL_N, "small_n": SMALL_N, "review_ko": H2H_REVIEW_KO, "note_ko": H2H_NOTE_KO,
             **({} if switch is not None else {"live_ko": "실거래 비교는 두 번째 실행기(WOO X Pro)가 두 번째 페이퍼로 옮긴 뒤부터 나와요"})}
+
+
+def _plain_h2h(cx: dict, c: dict) -> dict:
+    """두 봇 나란히 (owners 10-23: the 추세판단 봇 and the 'VWAP 개선판' are different bots): each bot's paper record since the
+    second one started (compare_papers) and the live accounts following each, all counted from the switch (the last move
+    of an executor to the second bot) and only their trades on that bot; no stop words, no review date, no verdict."""
+    rows = {r["id"]: r for r in c["rows"]}
+    switch = max((x["switched_ms"] for x in cx["execs"] if x.get("paper_id") == "paper2" and x.get("switched_ms")), default=None)
+    sides = []
+    for b in cx["bots"][:2]:
+        r = rows.get(b["id"]) or {}
+        live = []
+        for x in cx["execs"]:
+            if switch is None or x.get("paper_id") != b["id"]:
+                continue
+            one = _h2h_live(x, switch)
+            if one.get("state") == "ok":                 # only its trades on this bot (it may have followed the other before)
+                rec = record(L.era_trades(x, b["path"], switch))
+                one.update({k: rec[k] for k in ("n", "wins", "losses", "win_rate", "pnl")})
+            live.append(one)
+        sides.append({"id": b["id"], "name": b.get("name"), "short_ko": b.get("short_ko"), "stop_short": b.get("stop_short"),
+                      "stop_ko": b.get("stop_ko"), "label_ko": b.get("label_ko"), "followers": b.get("followers"),
+                      "paper": {k: r.get(k) for k in ("n", "wins", "losses", "win_rate", "roe_sum", "change", "max_dd", "open")},
+                      "live": live})
+    n_min = min(s["paper"]["n"] or 0 for s in sides)
+    return {"state": "ok", "twin": False, "since_ms": c["since_ms"], "live_since_ms": switch, "sides": sides, "words_ko": c["words_ko"],
+            "small": n_min < SMALL_N, "small_n": SMALL_N, "review_ko": PLAIN_H2H_KO, "note_ko": c.get("note_ko"),
+            **({} if switch is not None else {"live_ko": "실거래 비교는 실행기 하나가 두 번째 봇으로 옮긴 뒤부터 나와요"})}
 
 
 def goal_record(cx: dict, mo: dict) -> dict:
@@ -1665,31 +1782,34 @@ def health(p: dict, now: int, more: Optional[dict] = None) -> dict:
             if st["state"] == "late":
                 st["state"] = "quiet"
             add("signal", "규칙봇 마지막 신호", st, detail=sig, severity="warn")
+    _c, _f2, paper, execs = L.sources(p, now)
+    bots = L.paper_bots(p, paper, execs)
+    # two paper bots (owners 10-23: the 추세판단 봇 and the 'VWAP 개선판'): each by its name; one: "페이퍼 봇" as before
+    main_ko = _bot_word(bots[0]["short_ko"]) if len(bots) > 1 else "페이퍼 봇"
     pb = paper_beat(p["paper"])
     if pb.get("state") != "ok":
-        add("paper_hb", "페이퍼 봇 심장 박동", {**_src(pb), "at": None, "late_ms": None, "limit_ms": PAPER_HB_LATE_MS})
+        add("paper_hb", f"{main_ko} 심장 박동", {**_src(pb), "at": None, "late_ms": None, "limit_ms": PAPER_HB_LATE_MS})
     else:
         hb = pb["heartbeat"]
-        add("paper_hb", "페이퍼 봇 심장 박동", _late(hb, now, PAPER_HB_LATE_MS) if hb is not None else
+        add("paper_hb", f"{main_ko} 심장 박동", _late(hb, now, PAPER_HB_LATE_MS) if hb is not None else
             {"state": "missing", "reason_ko": "심장 박동 기록이 아직 없어요 (예전 버전이거나 아직 켜지기 전)", "at": None, "late_ms": None,
              "limit_ms": PAPER_HB_LATE_MS}, detail={"queue": pb.get("queue")})
-        add("paper_step", "페이퍼 봇 마지막 1분", _late(pb["step"], now, PAPER_STEP_LATE_MS, MIN))
+        add("paper_step", f"{main_ko} 마지막 1분", _late(pb["step"], now, PAPER_STEP_LATE_MS, MIN))
     # the second paper bot (owners 10-19, docs/live15-mexc-ko.md): its own heartbeat and last minute; it holds an executor
     # back only while one follows it, else it is a comparison (a warning, not a fault)
-    _c, _f2, paper, execs = L.sources(p, now)
-    for b in L.paper_bots(p, paper, execs)[1:]:
-        nm = b["label_ko"].split(" (")[0]
+    for b in bots[1:]:
+        nm = _bot_word(b["short_ko"])                    # "VWAP 개선판 봇" (a name ending in 봇 keeps one)
         sev = "bad" if b["follower_ids"] else "warn"
         pb2 = paper_beat(b["path"])
         if pb2.get("state") != "ok":
-            add("paper2_hb", f"{nm} 봇 심장 박동", {**_src(pb2), "at": None, "late_ms": None, "limit_ms": PAPER_HB_LATE_MS},
+            add("paper2_hb", f"{nm} 심장 박동", {**_src(pb2), "at": None, "late_ms": None, "limit_ms": PAPER_HB_LATE_MS},
                 who="paper2", severity=sev, detail={"label_ko": b["label_ko"]})
             continue
         hb2 = pb2["heartbeat"]
-        add("paper2_hb", f"{nm} 봇 심장 박동", _late(hb2, now, PAPER_HB_LATE_MS) if hb2 is not None else
+        add("paper2_hb", f"{nm} 심장 박동", _late(hb2, now, PAPER_HB_LATE_MS) if hb2 is not None else
             {"state": "missing", "reason_ko": "심장 박동 기록이 아직 없어요 (아직 켜지기 전)", "at": None, "late_ms": None,
              "limit_ms": PAPER_HB_LATE_MS}, who="paper2", severity=sev, detail={"queue": pb2.get("queue"), "label_ko": b["label_ko"]})
-        add("paper2_step", f"{nm} 봇 마지막 1분", _late(pb2["step"], now, PAPER_STEP_LATE_MS, MIN), who="paper2", severity=sev)
+        add("paper2_step", f"{nm} 마지막 1분", _late(pb2["step"], now, PAPER_STEP_LATE_MS, MIN), who="paper2", severity=sev)
     configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.EXECS}
     for ex, ko, dk, _ck in L.slots(configs):             # each slot by the exchange its config names (WOO X Pro)
         eb = exec_beat(p[dk])
@@ -1709,6 +1829,12 @@ def health(p: dict, now: int, more: Optional[dict] = None) -> dict:
             "limits": {"bars_ms": BARS_LATE_MS, "paper_hb_ms": PAPER_HB_LATE_MS, "paper_step_ms": PAPER_STEP_LATE_MS, "exec_ms": EXEC_LATE_MS,
                        "signal_ms": SIG_QUIET_MS, "watch_ms": WATCH_LATE_MS},
             "combo": _src(combo, "state", "reason_ko", "path", "source")}
+
+
+def _bot_word(name: str) -> str:
+    """A paper bot's name with "봇" once: "VWAP 개선판 봇", "추세판단 봇", "규칙봇 15 −35% 봇"."""
+    n = str(name or "페이퍼").strip()
+    return n if n.endswith("봇") else f"{n} 봇"
 
 
 def health_summary(items: list, kill: dict) -> dict:
@@ -1823,9 +1949,11 @@ def trend_groups(cx: dict, now: int) -> dict:
               "n_members": sum(1 for m in members if m.get("tf") == tf),
               "members": [{"order": m["order"], "strategy": m["strategy"], "tf": m["tf"]} for m in members if m.get("tf") == tf]}
              for tf in tfs]
+    second = next((b for b in cx["bots"][1:]), None)    # owners 10-23: the other bot by its name (the 'VWAP 개선판')
     defs += [{"id": "none", "cut": "other", "ko": "짝 페이퍼 없음", "sub_ko": GROUP_SUB_KO["none"], "n_members": None, "members": []},
-             {"id": "other", "cut": "other", "ko": "다른 페이퍼 봇", "sub_ko": "추세판단 봇이 아닌 페이퍼를 따라간 실거래", "n_members": None,
-              "members": []}]
+             {"id": "other", "cut": "other", "ko": f"다른 봇 ({second['short_ko']})" if second else "다른 페이퍼 봇",
+              "sub_ko": "추세판단 봇이 아닌 페이퍼를 따라간 실거래 (그 봇의 거래라 위 줄에 안 셈)" if second
+              else "추세판단 봇이 아닌 페이퍼를 따라간 실거래", "n_members": None, "members": []}]
     order = [d["id"] for d in defs if d["cut"] in ("role", "tf")]
 
     def pick(trades: list, strat_tf) -> dict:

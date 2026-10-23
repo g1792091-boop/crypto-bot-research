@@ -231,9 +231,19 @@ def exec_part(x: dict, p: dict, since: Optional[int]) -> dict:
         return {**head, **{k: ex.get(k) for k in ("state", "reason_ko", "reason", "path")}}
     maker = head["rates"]["maker"]
     rows = [trade_cost(t, ex["trades"].get(str(t["key"])), maker) for t in r.get("trades") or []]
-    mine = [row for row, t in zip(rows, r.get("trades") or []) if since is not None and (t.get("entry_ts") or 0) >= since]
-    return {**head, "state": "ok", "mode": r.get("mode"), "real": r.get("mode") == "mainnet",
-            "since": block(mine, maker) if since is not None else None, "all": block(rows, maker)}
+    # "since": its trades of the bot it follows now (owners 10-23): the trend bot's since the trend bot's start, or, for an
+    # executor moved to another paper bot (the 'VWAP 개선판'), that bot's since it moved (``since_ms`` / ``since_ko``)
+    path = x.get("paper_path") or p["paper"]
+    own = L.LP.same(path, p["paper"])
+    frm = since if own else (x.get("segs") or [[None]])[-1][0]
+    keep = (lambda t: frm is not None and (t.get("entry_ts") or 0) >= frm and L.followed_at(x, path, t.get("entry_ts"))) \
+        if (since is not None or not own) else (lambda t: False)
+    mine = [row for row, t in zip(rows, r.get("trades") or []) if keep(t)]
+    out = {**head, "state": "ok", "mode": r.get("mode"), "real": r.get("mode") == "mainnet",
+           "since": block(mine, maker) if (since is not None or not own) else None, "all": block(rows, maker)}
+    if not own:
+        out.update(since_ms=frm, since_ko=f"{x.get('follows_ko') or '다른 페이퍼 봇'} 따라간 때부터")
+    return out
 
 
 # ================================================================ the paper bot (its assumed rates)

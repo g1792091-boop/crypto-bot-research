@@ -536,7 +536,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
             if xpos and xpos.get("paired") and follow:
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two:
-                cards[x["id"]]["follows_ko"] = b["label_ko"].split(" (")[0]
+                cards[x["id"]]["follows_ko"] = b["short_ko"]
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [], since=since)
     finally:
         if conn is not None:
