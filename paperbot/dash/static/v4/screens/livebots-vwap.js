@@ -17,7 +17,7 @@
 // screens/livebots.js). Before the bot runs every tab says so (꺼짐, how to turn it on) and nothing else. HONESTY: unread =
 // 못 읽음 + why, never a zero; paper money is never shown as real money; small samples say so; the research's numbers are
 // labelled as what they are (the 17 days were picked from that very period; 5 years lost money per trade).
-import {h, put, ui, fmt, store, serverNow, local, LIVE, GROUPS} from "../core/pb.js";
+import {h, put, ui, fmt, store, serverNow, local} from "../core/pb.js";
 import {sourceState, lightRow} from "./livebots-kit.js";
 
 export const API = "/api/v4/livebots/vwap";
@@ -37,19 +37,6 @@ const GROUP_TONE = {vote: "bad", vol: "warn", pause: "", unread: "thin", other: 
 const CHECK_KO = {ok: "충족", no: "아직 아님", wait: "기다림", info: "참고", bad: "본전 아래"};
 const CHECK_TONE = {ok: "good", no: "bad", wait: "thin", info: "accent", bad: "bad"};
 const UNIT = "paperbot-combo-vwap";
-
-// ---------------------------------------------------------------- the phone's bottom bar (this tab's css: screens/livebots.css
-// @imports livebots-vwap.css with the other tabs')
-/** The phone's bottom bar has a cell per menu group: static/live/live.css says four, the VWAP 봇 group makes five. Until that
- *  file counts it, the bar takes the number of groups here (every 실거래 screen loads this module through livebots.js). */
-function fitBotbar() {
-  try {
-    if (!LIVE || typeof document === "undefined" || typeof document.getElementById !== "function") return;
-    const bb = document.getElementById("botbar");
-    if (bb && bb.style) bb.style.gridTemplateColumns = `repeat(${GROUPS.length}, minmax(0, 1fr))`;
-  } catch (e) { /* not a page */ }
-}
-fitBotbar();
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_dash_livevwap.py)
 /** "31시간 20분" / "45분" / "0분" (ms). */

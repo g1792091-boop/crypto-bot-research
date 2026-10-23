@@ -332,9 +332,12 @@ def missed_db(path: str, rows: list, paper_col: bool = True) -> str:
     from paperbot import livemissed as LM
     conn = sqlite3.connect(path)
     try:
-        LM._schema(conn)
-        if paper_col:
+        LM._schema(conn)                              # since the Telegram side's VWAP rows: with the column ``paper``
+        have = {r[1] for r in conn.execute("PRAGMA table_info(missed)")}
+        if paper_col and "paper" not in have:
             conn.execute("ALTER TABLE missed ADD COLUMN paper TEXT")
+        if not paper_col and "paper" in have:         # an older livecheck.db (before that version): no such column
+            conn.execute("ALTER TABLE missed DROP COLUMN paper")
         for r in rows:
             row = {"t": r["step_ts"], "member": None, "strategy": None, "tf": None, "why": r.get("why_kind"), "sims": 1,
                    "first_ts": NOW - H, "updated_ts": NOW - MIN, "signal": "{}", "grp": "one", **r}

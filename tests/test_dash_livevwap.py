@@ -489,16 +489,14 @@ def test_the_virtual_results_before_the_watchers_new_version(w, tmp_path, monkey
     assert v == {"state": "pending", "reason_ko": "아직 계산 전 (감시가 새 버전으로 돌아야 생겨요)", "reason": None, "path": old}
     gone = VW.blocked(w["p"], NOW, {**_more(w), "check_db": str(tmp_path / "none.db")})["virtual"]
     assert gone["state"] == "missing" and gone["reason_ko"]
-    # the contract's livemissed.read_rows(conn, since, limit=None, paper=None) is used once it is there
+    # the watcher's own livemissed.read_rows(conn, since, limit=None, paper=None) (the contract), asked for 'vwap' rows
     from paperbot import livemissed as LM
     seen = {}
     real = LM.read_rows
 
     def read_rows(conn, since, limit=None, paper=None):
         seen["paper"] = paper
-        rows = real(conn, since, limit)
-        keys = {r[0] for r in conn.execute("SELECT key FROM missed WHERE paper = ?", (paper,))} if paper else None
-        return [{**r, "paper": paper} for r in rows if keys is None or r["key"] in keys]
+        return real(conn, since, limit, paper=paper)
     monkeypatch.setattr(LM, "read_rows", read_rows)
     v = VW.blocked(w["p"], NOW, _more(w))["virtual"]
     assert seen["paper"] == "vwap" and v["n"] == 7 and v["kinds"][0]["id"] == "gate_vote"
