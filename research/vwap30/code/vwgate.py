@@ -6,7 +6,8 @@ points the signal's way. Select on 2020-03 .. 2024-12 (two halves), finalists fr
     python3 -I vwgate.py scan [--procs 3]   select-period grid -> OUT8/scan/{label}.npz (+ OUT8/states.npz)
     python3 -I vwgate.py select             -> OUT8/select8.json, research/vwap30/finalists8.json (+ sha256)
     python3 -I vwgate.py amend1             -> research/vwap30/finalists8a.json (+ sha256), PREREG8_AMEND1.md
-    python3 -I vwgate.py confirm            -> research/vwap30/results8.json (both frozen files)"""
+    python3 -I vwgate.py confirm            -> research/vwap30/results8.json (both frozen files)
+    python3 -I vwgate.py after              참고 after the verdicts: the whole grid on confirm -> results8_after.json"""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # python3 -I leaves the script's folder out
 from vwcommon import *
@@ -466,6 +467,69 @@ def select_amend1():
     print("eligible at >= 1 a weekday", ok.sum())
 
 
+def cscan_job(lab):
+    fp = os.path.join(OUT8, "cscan", f"{lab}.npz")
+    if not os.path.exists(fp):
+        T = Trig(lab)
+        use = T.wd & (T.entry >= CONF[0]) & (T.entry < CONF[1])
+        out = _scan(T.entry, T.ext, T.net, T.D, use, T.side, np.ascontiguousarray(T.gates()), ms("2026-01-01"))
+        np.savez(fp, out=out.astype(np.float32))
+    return lab
+
+
+def after(procs=3):
+    """참고, after the verdicts: the whole grid on the confirm period. Does a good select score carry over?"""
+    os.makedirs(os.path.join(OUT8, "cscan"), exist_ok=True)
+    load_ctx()
+    _GRID.clear()
+    with Pool(procs) as pool:
+        for lab in pool.imap_unordered(cscan_job, LABELS):
+            pass
+    wd_c = weekdays(*CONF)
+    S, C = [], []
+    for lab in LABELS:
+        a = np.load(os.path.join(OUT8, "scan", f"{lab}.npz"))["out"].astype(float)
+        b = np.load(os.path.join(OUT8, "cscan", f"{lab}.npz"))["out"].astype(float)
+        keep = np.array([not (g.startswith("L|") and g.split("|")[1] == lab) for g in GATES + ["none"]])
+        S.append(a[keep].reshape(-1, 6))
+        C.append(b[keep].reshape(-1, 6))
+        if lab == VWAP30:
+            vw_s, vw_c = a, b
+    S, C = np.concatenate(S), np.concatenate(C)
+    nS, nC = S[:, 0] + S[:, 1], C[:, 0] + C[:, 1]
+    with np.errstate(all="ignore"):
+        rS, rC = (S[:, 2] + S[:, 3]) / nS, (C[:, 2] + C[:, 3]) / nC
+        sc = np.minimum(S[:, 4] / YR_A, S[:, 5] / YR_B)
+    gC = C[:, 4] + C[:, 5]
+    base = (nS >= MIN_N) & (nC >= 50)
+    out = {"cells": int(base.sum())}
+    for nm, m in (("all", base), ("both_halves_pos", base & (S[:, 2] > 0) & (S[:, 3] > 0)),
+                  ("both_halves_pos_wd1", base & (S[:, 2] > 0) & (S[:, 3] > 0) & (nS / weekdays(*SEL) >= 1))):
+        out[nm] = {"cells": int(m.sum()), "confirm_R_mean": round(float(np.nanmean(rC[m])), 4),
+                   "confirm_R_pos_share": round(float(np.mean(rC[m] > 0)), 4),
+                   "confirm_growth_pos_share": round(float(np.mean(gC[m] > 0)), 4)}
+    o = np.argsort(-np.where(base, sc, -np.inf))
+    for k in (100, 1000, 10000):
+        t = o[:k]
+        out[f"top{k}_by_select_score"] = {"confirm_R_mean": round(float(np.nanmean(rC[t])), 4),
+                                          "confirm_R_pos_share": round(float(np.mean(rC[t] > 0)), 4),
+                                          "confirm_per_weekday_mean": round(float(np.mean(nC[t] / wd_c)), 3)}
+    ok = base & np.isfinite(sc) & np.isfinite(rC)
+    out["rank_corr_select_score_vs_confirm_R"] = round(float(pd.Series(sc[ok]).corr(pd.Series(rC[ok]), method="spearman")), 4)
+    # VWAP 30m: no judge vs each judge, by exit (confirm R)
+    with np.errstate(all="ignore"):
+        vr = (vw_c[:, :, 2] + vw_c[:, :, 3]) / (vw_c[:, :, 0] + vw_c[:, :, 1])
+        vs = (vw_s[:, :, 2] + vw_s[:, :, 3]) / (vw_s[:, :, 0] + vw_s[:, :, 1])
+    keep = np.array([not (g.startswith("L|") and g.split("|")[1] == VWAP30) for g in GATES])
+    out["vwap30"] = {"none_confirm_R_by_exit": [round(float(x), 4) for x in vr[-1]],
+                     "judged_confirm_R_mean_by_exit": [round(float(np.nanmean(vr[:-1][keep, j])), 4) for j in range(vr.shape[1])],
+                     "judged_share_better_than_none": round(float(np.nanmean(vr[:-1][keep] > vr[-1][None, :])), 4),
+                     "select_judged_share_better_than_none": round(float(np.nanmean(vs[:-1][keep] > vs[-1][None, :])), 4),
+                     "best_confirm_R_any_cell": round(float(np.nanmax(vr[:-1][keep])), 4)}
+    json.dump(out, open(os.path.join(RES_DIR, "results8_after.json"), "w"), ensure_ascii=False, indent=1)
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+
+
 # ---------------------------------------------------------------- confirm (once)
 
 def month_odds2(o, m):
@@ -547,4 +611,4 @@ if __name__ == "__main__":
     if cmd == "scan":
         scan(int(sys.argv[sys.argv.index("--procs") + 1]) if "--procs" in sys.argv else 3)
     else:
-        {"select": select, "amend1": select_amend1, "confirm": confirm, "check": check}[cmd]()
+        {"select": select, "amend1": select_amend1, "confirm": confirm, "check": check, "after": after}[cmd]()
