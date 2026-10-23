@@ -8,6 +8,7 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # python3 -I leaves the script's folder out
 import vwadd as AD
 from vwadd import *
+from vwacct import _take
 from multiprocessing import Pool
 
 AD.PHOTO = [("V39_ALL", "1h", "V3.9 1시간")]
