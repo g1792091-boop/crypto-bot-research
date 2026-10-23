@@ -437,18 +437,21 @@ def card_key(account: str, symbol, entry_time, paper_db: Optional[str] = None) -
 
 
 def paper_name(path: str) -> str:
-    """A paper bot's short name for the messages: "페이퍼 −35%" from its run's config (combo_run), else its file name."""
+    """A paper bot's short name for the messages from its run's config (combo_run): its name ("VWAP 개선판"), else its
+    stop ("페이퍼 −35%"), else its file name."""
     c = open_ro(path)
-    stop = None
+    stop = name = None
     if c is not None:
         try:
             _ts, run = get_state(c, "combo_run")
             cfg = (run or {}).get("config") if isinstance(run, dict) else None
             stop = (cfg or {}).get("stop") if isinstance(cfg, dict) else None
+            name = (cfg or {}).get("name") if isinstance(cfg, dict) else None
         finally:
             c.close()
-    s = LP.stop_short(stop)
-    return f"페이퍼 {s}" if s else f"페이퍼 {os.path.splitext(os.path.basename(path))[0]}"
+    if name or LP.stop_short(stop):
+        return LP.bot_short(name, stop)
+    return f"페이퍼 {os.path.splitext(os.path.basename(path))[0]}"
 
 
 def exec_trades(conn) -> list:

@@ -129,10 +129,40 @@ def stop_words(stop: Any) -> Optional[str]:
     return stop_short(stop)
 
 
-def label(stop: Any, followers: list) -> str:
-    """"페이퍼 −35% (MEXC가 따라감)" / "페이퍼 −50% (바이비트·MEXC가 따라감)" / "페이퍼 −35% (따라가는 실행기 없음)"."""
+def bot_short(name: Any, stop: Any) -> str:
+    """A paper bot's short name on the site and in the messages: its config's ``name`` ("추세판단 봇", "VWAP 개선판",
+    owners 10-23: two different bots, each executor following one), else the stop ("페이퍼 −35%"; the 10-19 twins had
+    the same rules and only the stop told them apart), else "페이퍼"."""
+    if isinstance(name, str) and name.strip():
+        return name.strip()
     s = stop_short(stop)
-    head = f"페이퍼 {s}" if s else "페이퍼"
+    return f"페이퍼 {s}" if s else "페이퍼"
+
+
+def label(stop: Any, followers: list, name: Any = None) -> str:
+    """"VWAP 개선판 (바이비트가 따라감)" / "페이퍼 −50% (바이비트·MEXC가 따라감)" / "페이퍼 −35% (따라가는 실행기 없음)"."""
+    head = bot_short(name, stop)
     if not followers:
         return f"{head} (따라가는 실행기 없음)"
     return f"{head} ({'·'.join(followers)}가 따라감)"            # 바이비트가, MEXC가
+
+
+# a paper bot's TIME exit (combo exit reason "TIME"): the trend bot's supervisor closing a position that went nowhere
+# (paperbot/trendbot.py), or a bot's hold limit (combo ``max_hold_bars``: 'VWAP 개선판' 96 bars of the trade's own bar)
+TIME_TREND_KO = "감독 청산(시간 정리)"
+TIME_HOLD_KO = "보유 한도 청산"
+
+
+def time_exit_ko(cfg: Any) -> str:
+    """The words for a paper bot's TIME exit from its config (combo_run config dict): the hold limit's for a bot with
+    ``max_hold_bars`` and no trend supervisor, the trend bot's otherwise (and when the config is unknown)."""
+    if isinstance(cfg, dict) and cfg.get("trend") is None and cfg.get("max_hold_bars"):
+        return TIME_HOLD_KO
+    return TIME_TREND_KO
+
+
+def exit_ko(reason: Any, cfg: Any, table: dict) -> str:
+    """A paper exit reason in words: ``table`` (the caller's own KO_EXIT) with TIME by the bot (time_exit_ko)."""
+    if reason == "TIME":
+        return time_exit_ko(cfg)
+    return table.get(reason, reason) if isinstance(reason, str) else str(reason)

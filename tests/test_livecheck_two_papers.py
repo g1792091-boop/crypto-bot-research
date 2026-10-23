@@ -49,7 +49,7 @@ def test_each_executor_follows_its_own_paper_bot_from_its_start_records(world):
     c = LC.open_ro(by.db)
     assert ps.segs(by, c) == [[None, p["paper"]]]
     c.close()
-    assert LC.paper_name(p["paper"]) == "페이퍼 −50%" and LC.paper_name(p["paper2"]) == "페이퍼 −35%"
+    assert LC.paper_name(p["paper"]) == "규칙봇 15" and LC.paper_name(p["paper2"]) == "규칙봇 15 −35%"
     assert LC.card_key("COMBO@mix", "LTCUSDT", 5) == "COMBO@mix|LTCUSDT|5"
     assert LC.card_key("COMBO@mix", "LTCUSDT", 5, p["paper2"]) == "COMBO@mix#live15-mexc|LTCUSDT|5"
     # an executor that never recorded a paper database (older code) follows the main one; a config edited but not
@@ -104,7 +104,7 @@ def test_a_silent_minus_35_bot_is_an_alarm_while_mexc_follows_it(world, tmp_path
     s.close()
     conds, _j, _s = LC.watch_conditions(src, NOW, UNITS, exists=lambda path: False)
     c = next(x for x in conds if x.key == "paper2_stale:live15-mexc")
-    assert c.level == LC.CRITICAL and "페이퍼 −35% 페이퍼 봇이 10분 넘게" in c.text and "paperbot-combo-mexc" in c.text
+    assert c.level == LC.CRITICAL and "규칙봇 15 −35% 페이퍼 봇이 10분 넘게" in c.text and "paperbot-combo-mexc" in c.text
     assert "MEXC" in c.text
 
 
@@ -118,11 +118,11 @@ def test_loss_cards_name_only_the_executors_that_followed_that_paper_bot(world):
     t3 = f"COMBO@mix|SOLUSDT|{T0 + 3 * H}"
     u5 = f"COMBO@mix#live15-mexc|LTCUSDT|{T0 + 5 * H}"
     assert set(cards) == {t3, u5}                 # u3 (before MEXC followed the -35 % bot) has no card; t5 won
-    assert [o["name"] for o in cards[t3]["executors"]] == ["bybit", "mexc"] and cards[t3]["paper_ko"] == "페이퍼 −50%"
+    assert [o["name"] for o in cards[t3]["executors"]] == ["bybit", "mexc"] and cards[t3]["paper_ko"] == "규칙봇 15"
     assert [(o["name"], o["status"]) for o in cards[u5]["executors"]] == [("mexc", "followed")]
     assert cards[u5]["executors"][0]["pnl"] == pytest.approx(-4.3) and cards[u5]["paper_db"] == p["paper2"]
-    assert "페이퍼 −35% · S2_ST_ROC" in cards[u5]["text"] and "바이비트" not in cards[u5]["text"]
-    assert "(페이퍼 −35%)" in LC.card_line(cards[u5], NOW)
+    assert "규칙봇 15 −35% · S2_ST_ROC" in cards[u5]["text"] and "바이비트" not in cards[u5]["text"]
+    assert "(규칙봇 15 −35%)" in LC.card_line(cards[u5], NOW)
 
 
 def test_one_entry_of_both_bots_is_one_message_with_a_line_per_paper_bot(world):
@@ -136,7 +136,7 @@ def test_one_entry_of_both_bots_is_one_message_with_a_line_per_paper_bot(world):
     entry = [t for k, _key, _lv, t in got if k == "entry"]
     assert len(entry) == 1
     text = entry[0]
-    assert "페이퍼 −50% 62,000 · 손절" in text and "페이퍼 −35% 62,000 · 손절 61,544 (-0.73%)" in text
+    assert "규칙봇 15 62,000 · 손절" in text and "규칙봇 15 −35% 62,000 · 손절 61,544 (-0.73%)" in text
     assert "바이비트 ✅" in text and "MEXC     ✅" in text
 
 
@@ -144,8 +144,8 @@ def test_the_morning_check_lists_both_paper_bots(world):
     p, src = world
     r = LC.run_check(src, day="2026-10-19", now_ms=T0 + DAY + 10 * MIN, no_replay=True, notifier=ListNotifier())
     text = r["text"]
-    assert "- 페이퍼 −50%(바이비트가 따라감): 거래 6번" in text
-    assert "- 페이퍼 −35%(MEXC가 따라감): 거래 6번 · 4승(67%)" in text
+    assert "- 규칙봇 15(바이비트가 따라감): 거래 6번" in text
+    assert "- 규칙봇 15 −35%(MEXC가 따라감): 거래 6번 · 4승(67%)" in text
     assert r["report"]["other_papers"][0]["path"] == p["paper2"]
 
 
@@ -200,13 +200,13 @@ def test_the_analysis_team_is_told_both_stops(world):
     from paperbot import liveteam as T
     p, src = world
     sec = T.second_paper(p["paper"], src.executors)
-    assert sec["label"] == "페이퍼 −35% (MEXC가 따라감)" and sec["first_label"] == "페이퍼 −50% (바이비트가 따라감)"
-    assert sec["follows"] == {"바이비트": "페이퍼 −50%", "MEXC": "페이퍼 −35%"}
+    assert sec["label"] == "규칙봇 15 −35% (MEXC가 따라감)" and sec["first_label"] == "규칙봇 15 (바이비트가 따라감)"
+    assert sec["follows"] == {"바이비트": "규칙봇 15", "MEXC": "규칙봇 15 −35%"}
     cfg = TW.deploy_config("combo.live15.json")
     rules = T.fixed_rules(cfg, src.executors, sec)
     two = next(r for r in rules if r.startswith("두 번째 페이퍼 봇"))
     assert "손절 순ROE -35%(수수료·슬리피지 포함: 40배 가격 0.73%, 30배 가격 1.03%)" in two and "-50%" not in two
-    assert "따라가는 페이퍼: 바이비트는 페이퍼 −50% · MEXC는 페이퍼 −35%" in rules
+    assert "따라가는 페이퍼: 바이비트는 규칙봇 15 · MEXC는 규칙봇 15 −35%" in rules
     assert "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)" in rules
     facts = T.bot_facts({"config": cfg, "second": sec})
     assert facts["break_even"] == pytest.approx(0.833) and facts["second"]["break_even"] == pytest.approx(0.778)
@@ -223,14 +223,14 @@ def test_the_two_paper_preview(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", no_network)
     items = PV.scenes("two")
     text = PV.render(items)
-    assert "▶️ MEXC 실행기 켜짐 · 잔고 $107.87 · 따라가는 페이퍼: 페이퍼 −35%" in text
-    assert "페이퍼 −50% 67,250 · 손절 66,504 (-1.11%)" in text and "페이퍼 −35% 67,250 · 손절 66,756 (-0.74%)" in text
+    assert "▶️ MEXC 실행기 켜짐 · 잔고 $107.87 · 따라가는 페이퍼: 규칙봇 15 −35%" in text
+    assert "규칙봇 15 67,250 · 손절 66,504 (-1.11%)" in text and "규칙봇 15 −35% 67,250 · 손절 66,756 (-0.74%)" in text
     card = next(t for _s, _lv, t in items if t.startswith("❌") or t.startswith("🚨 ❌"))
-    assert "페이퍼 −35% · V39_ALL" in card and "MEXC" in card and "바이비트" not in card
+    assert "규칙봇 15 −35% · V39_ALL" in card and "MEXC" in card and "바이비트" not in card
     win = next(t for _s, _lv, t in items if t.startswith("✅ 청산"))
     assert "바이비트" in win and "MEXC" not in win
     morning = items[-1][2]
-    assert "- 페이퍼 −50%(바이비트가 따라감)" in morning and "- 페이퍼 −35%(MEXC가 따라감)" in morning
+    assert "- 규칙봇 15(바이비트가 따라감)" in morning and "- 규칙봇 15 −35%(MEXC가 따라감)" in morning
     assert LC.main(["preview", "--two"]) == 0
 
 

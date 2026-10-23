@@ -301,8 +301,8 @@ def test_max_hold_closes_at_the_open_of_the_minute_it_runs_out(tmp_path):
     t = json.loads(w.store.conn.execute("SELECT data FROM trades WHERE account_id = ?", (C.ACCOUNT,)).fetchone()[0])
     assert t["exit_reason"] == "TIME" and t["exit_time"] == B + 60 * MIN
     assert abs(t["exit_price"] - w.px["BTCUSDT"] * (1 - 0.0002)) < 1e-6
-    assert t["context"]["exit_why"] == "보유 4봉(1시간) 한도"
-    assert "감독 청산(시간 정리)(보유 4봉(1시간) 한도)" in C.exit_text(w.cfg, w.engine().trades[-1])
+    assert t["context"]["exit_why"] == "4봉(1시간) 지남"
+    assert "보유 한도 청산(4봉(1시간) 지남)" in C.exit_text(w.cfg, w.engine().trades[-1])
 
 
 def test_max_hold_minute_may_enter_the_next_signal(tmp_path):
@@ -349,3 +349,52 @@ def test_unit_and_install_never_start_it():
     units = next(x for x in inst.splitlines() if x.startswith("UNITS="))
     assert "paperbot-combo-vwap" in units.split('"')[1].split()          # stopped for the code swap, started again
     assert "combo/vwap" in (Path(ROOT) / "deploy" / "paperbot-backup.sh").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------- the live site's picture (state gates_now)
+def test_picture_reads_every_coin_and_says_what_it_cannot_read():
+    b4 = T0 - T0 % H4
+    at = b4 + 3 * MIN                                       # two minutes after a 30m close (and a 4h close)
+    now = [at + 5_000]
+    k = Klines(lambda s, tf, n: [r for r in _bars4h(400, b4 - H4, 0.01) if r[0] <= now[0]][-n:], lambda: now[0])
+    f = Feed(_bars30(2000, b4 - M30, spike=3))
+    down = Feed([])
+    down.fail = True
+    feeds = {"BTCUSDT": f, "ETHUSDT": down}
+    bars = G.BarCache(lambda s, tf, t, n: feeds[s](s, tf, t, n), lambda: now[0])
+    g = G.EntryGates(vote={}, vol={}, judge=Judge(k, TrendRules(vote_min=3)), bars=bars)
+    pic = G.picture(g, ["BTCUSDT", "ETHUSDT"], ["30m"], at)
+    assert pic["at"] == at and pic["tfs"] == ["30m"] and pic["vote"] == G.VOTE_DEFAULT and pic["vol"] == G.VOL_DEFAULT
+    btc = pic["coins"]["BTCUSDT"]
+    assert btc["vote"]["raw"] == 1 and btc["vote"]["tf"] == "4h" and btc["vote"]["text"].startswith("4시간 상승")
+    v = btc["vol"]["30m"]
+    assert v["bar_close"] == b4 and v["high"] is True and v["atr_pct"] > v["q_pct"]
+    eth = pic["coins"]["ETHUSDT"]
+    assert eth["vote"]["raw"] == 1                          # the 4h read is one feed for every coin here
+    assert eth["vol"]["30m"]["error"].startswith("변동성 판단에 쓸 30분봉을 못 읽음") and "down" in eth["vol"]["30m"]["error"]
+
+
+class PicGates:
+    vote = None
+    vol = None
+
+
+def test_runner_keeps_the_picture_at_the_first_live_minute_and_after_each_30m_close(tmp_path):
+    w = World(tmp_path)
+    w.run.picture_gates = PicGates()
+    w.now = T0 + 5_000
+    w.run.poll()
+    w.add_minutes(T0, 40)
+    w.now = T0 + 40 * MIN + 5_000
+    w.run.poll()
+    st = w.store.get_state(C.GATES_NOW_KEY)
+    assert st is not None and st[0] == T0 + 32 * MIN       # the first live minute (31), then 30m close + 2 (32)
+    assert st[1]["at"] == T0 + 33 * MIN and set(st[1]["coins"]) == set(w.cfg.symbols)
+    # a catch-up (minutes far behind the clock) writes nothing
+    (tmp_path / "b").mkdir()
+    w2 = World(tmp_path / "b")
+    w2.run.picture_gates = PicGates()
+    w2.add_minutes(T0, 5)
+    w2.now = T0 + 3 * 3_600_000
+    w2.run.poll()
+    assert w2.store.get_state(C.GATES_NOW_KEY) is None

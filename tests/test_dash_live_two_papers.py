@@ -61,12 +61,12 @@ def test_the_summary_names_both_paper_bots_and_who_follows_which(two, monkeypatc
     monkeypatch.setattr(L, "paths_more", lambda env=None: more)
     d = L.build(p, NOW)
     assert [a["id"] for a in d["accts"]] == ["paper", "paper2", "bybit", "mexc"]
-    assert [(b["id"], b["label_ko"]) for b in d["papers"]] == [("paper", "페이퍼 −50% (바이비트가 따라감)"), ("paper2", "페이퍼 −35% (MEXC가 따라감)")]
+    assert [(b["id"], b["label_ko"]) for b in d["papers"]] == [("paper", "규칙봇 15 (바이비트가 따라감)"), ("paper2", "규칙봇 15 −35% (MEXC가 따라감)")]
     x = _by(d["execs"])
-    assert x["mexc"]["follows_ko"] == "페이퍼 −35% · 규칙봇 15 −35%" and x["bybit"]["follows_ko"] == "페이퍼 −50% · 규칙봇 15"
+    assert x["mexc"]["follows_ko"] == "규칙봇 15 −35%" and x["bybit"]["follows_ko"] == "규칙봇 15"
     assert x["mexc"]["segs"] == [[None, p["paper"]], [TW.SWITCH, p["paper2"]]] and x["mexc"]["switched_ms"] == TW.SWITCH
     a = _by(d["accts"])
-    assert a["paper2"]["label_ko"] == "페이퍼 −35% (MEXC가 따라감)" and a["paper2"]["stats"]["trades"] == 6
+    assert a["paper2"]["label_ko"] == "규칙봇 15 −35% (MEXC가 따라감)" and a["paper2"]["stats"]["trades"] == 6
     # each executor's open position borrows the next lock of the paper position IT follows
     assert a["mexc"]["position"]["next_lock"]["lock"] == pytest.approx(0.10)          # the -35 % bot: not locked yet
     assert a["bybit"]["position"]["next_lock"]["lock"] == pytest.approx(0.12)         # the -50 % bot: locked +10 % already
@@ -82,13 +82,13 @@ def test_trades_pair_each_live_trade_with_the_paper_trade_it_followed(two):
     assert mx["LTCUSDT"]["paper"]["exit_reason"] == "SL" and mx["LTCUSDT"]["paper"]["paper_id"] == "paper2"
     assert mx["LTCUSDT"]["reason_ko"] == "손절" and mx["ETHUSDT"]["paper"]["paper_id"] == "paper"
     main = _by(tr["paper"]["rows"], "symbol")
-    assert main["LTCUSDT"]["live"]["mexc"] == {"state": "other", "why_ko": "이때 MEXC는 페이퍼 −35%를 따라갔어요"}
+    assert main["LTCUSDT"]["live"]["mexc"] == {"state": "other", "why_ko": "이때 MEXC는 규칙봇 15 −35%를 따라갔어요"}
     assert main["LTCUSDT"]["live"]["bybit"]["state"] == "missed"
     second = tr["paper2"]
-    assert second["label_ko"] == "페이퍼 −35% (MEXC가 따라감)" and second["n"] == 6
+    assert second["label_ko"] == "규칙봇 15 −35% (MEXC가 따라감)" and second["n"] == 6
     rows2 = {(r["symbol"], r["entry_time"]): r for r in second["rows"]}
     assert rows2[("LTCUSDT", T0 + 5 * H)]["live"]["mexc"]["state"] == "matched"
-    assert rows2[("ETHUSDT", T0 + 2 * H)]["live"]["mexc"] == {"state": "other", "why_ko": "이때 MEXC는 페이퍼 −50%를 따라갔어요"}
+    assert rows2[("ETHUSDT", T0 + 2 * H)]["live"]["mexc"] == {"state": "other", "why_ko": "이때 MEXC는 규칙봇 15를 따라갔어요"}
     assert rows2[("SOLUSDT", T0 + 7 * H + 30 * MIN)]["live"]["bybit"]["state"] == "other"
     assert rows2[("LTCUSDT", T0 + 5 * H)]["key"].startswith("paper2:")
     c = L.costs(p, NOW)["accts"]["mexc"]
@@ -112,15 +112,15 @@ def test_positions_risk_health_groups_and_replay_use_each_executors_own_paper(tw
     p, more = two
     cards = _by(P.build(p, more, NOW)["cards"])
     assert list(cards) == ["paper", "paper2", "bybit", "mexc", "flip"]
-    assert cards["mexc"]["position"]["stop_rule_cfg"] == {"roe": 0.35, "net": True} and cards["mexc"]["follows_ko"] == "페이퍼 −35%"
+    assert cards["mexc"]["position"]["stop_rule_cfg"] == {"roe": 0.35, "net": True} and cards["mexc"]["follows_ko"] == "규칙봇 15 −35%"
     assert cards["bybit"]["position"]["stop_rule_cfg"] == {"roe": 0.5, "net": True}
     assert _by(cards["paper"]["position"]["execs"])["mexc"]["state"] == "other"
     assert _by(cards["paper2"]["position"]["execs"])["mexc"]["state"] == "following"
     rk = _by(I.risk(p, NOW, more)["accts"])
     assert rk["mexc"]["stop_roe"] == pytest.approx(0.35) and rk["mexc"]["next"][0]["left"] == pytest.approx(1 - 0.4 * 0.35)
-    assert rk["bybit"]["next"][0]["left"] == pytest.approx(0.80) and rk["paper2"]["label_ko"].startswith("페이퍼 −35%")
+    assert rk["bybit"]["next"][0]["left"] == pytest.approx(0.80) and rk["paper2"]["label_ko"].startswith("규칙봇 15 −35%")
     hb = [i for i in I.health(p, NOW, more)["items"] if i["id"].startswith("paper2")]
-    assert [i["ko"] for i in hb] == ["페이퍼 −35% 봇 심장 박동", "페이퍼 −35% 봇 마지막 1분"] and hb[0]["severity"] == "bad"
+    assert [i["ko"] for i in hb] == ["규칙봇 15 −35% 봇 심장 박동", "규칙봇 15 −35% 봇 마지막 1분"] and hb[0]["severity"] == "bad"
     g = I.groups(p, NOW, more)["accts"]["mexc"]
     assert g["state"] == "ok" and sum(v["n"] for v in g["groups"].values()) == 5
     lst = TP.build_list(p, NOW, bot="paper2")

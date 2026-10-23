@@ -244,6 +244,32 @@ class EntryGates:
         return ""
 
 
+def picture(gates: EntryGates, symbols, tfs, at_ms: int) -> dict:
+    """What the gates read for every coin at ``at_ms`` (ms, a minute's open): the vote on the last closed ``vote.tf``
+    bar and the ATR% against its quantile on the last closed bar of each timeframe in ``tfs``. For the live site's
+    'VWAP 개선판' screen (state ``gates_now``): which side a signal could take now, and why not. A part that cannot
+    be read says so ({"error": ...}); nothing here blocks or allows an entry (EntryGates.check does that per signal).
+    Use a gates object of its own (make_gates once more): its caches and back-off never touch the entry checks."""
+    coins: dict = {}
+    for sym in symbols:
+        row: dict = {}
+        if gates.vote is not None:
+            info: dict = {}
+            why = gates._vote_block(sym, 1, int(at_ms), info)
+            row["vote"] = info.get("vote") or {"tf": gates.vote["tf"], "error": why or "읽지 못함"}
+        if gates.vol is not None:
+            row["vol"] = {}
+            for tf in tfs:
+                close = int(at_ms) - int(at_ms) % TF_GATE_MS[tf]
+                info = {}
+                why = gates._vol_block(sym, tf, close, info)
+                v = info.get("vol")
+                row["vol"][tf] = {**v, "bar_close": close, "high": bool(why)} if v else \
+                    {"tf": tf, "bar_close": close, "error": why or "읽지 못함"}
+        coins[sym] = row
+    return {"at": int(at_ms), "coins": coins, "vote": gates.vote, "vol": gates.vol, "tfs": list(tfs)}
+
+
 def make_gates(vote: Optional[dict], vol: Optional[dict], rest) -> Optional[EntryGates]:
     """The gates on Binance's public klines: their own client (5 s timeout, one retry), so a failing endpoint costs
     seconds, never the minute. None when both are off."""

@@ -116,6 +116,8 @@ KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
            "REV": "빠른 청산(반대 신호)", "JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)",
            "SWITCH": "전환 전 포지션 정리"}
+TIME_HOLD_KO = "보유 한도 청산"      # TIME in a bot with max_hold_bars and no trend supervisor ('VWAP 개선판')
+GATES_NOW_KEY = "gates_now"         # state: what the entry gates read for every coin (the live site's VWAP screen)
 EARLY_EXITS = (None, "own", "any")
 KO_EARLY = {None: "없음(고정 손절과 계단 익절만)", "own": "같은 매매법이 반대 신호를 내면 바로 청산",
             "any": "합친 매매법 중 하나라도 반대 신호를 내면 바로 청산"}
@@ -797,7 +799,7 @@ class ComboEngine(PaperEngine):
         if hold and p.symbol in bars and bars[p.symbol].open_time - p.entry_time >= hold * MIN:
             bar = bars[p.symbol]
             ctx = dict(p.signal.meta.get("ctx") or {})
-            ctx["exit_why"] = f"보유 {self.combo.max_hold_bars}봉({hold_ko(hold)}) 한도"
+            ctx["exit_why"] = f"{self.combo.max_hold_bars}봉({hold_ko(hold)}) 지남"
             p.signal = replace(p.signal, meta={**p.signal.meta, "ctx": ctx})
             self._close_market(bar.open, bar.open_time, "TIME")
         trig, self._exit_on = self._exit_on, []
@@ -1264,9 +1266,11 @@ class ComboRunner:
     def __init__(self, cfg: ComboConfig, members: list[Member], book: AccountBook, store: Store3, notifier: Notifier,
                  custom: Optional[CustomSignals], now_ms: Callable[[], int], prices: Callable[[], dict],
                  funding: Optional[FundingFeed] = None, fetch_5m: Optional[Callable] = None,
-                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None, gates=None):
+                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None, gates=None, picture_gates=None):
         self.cfg, self.members, self.book, self.store = cfg, members, book, store
         self.gates = gates                  # paperbot/entrygates.EntryGates (vote_gate / vol_gate), None = off
+        self.picture_gates = picture_gates  # the same gates again, own caches: the live site's picture (gates_now)
+        self._pic_ts: Optional[int] = None
         self._gate_info: dict = {}          # what the gates read for the signal in hand (_entry_block -> _submit_due)
         self.notifier, self.custom, self.now_ms, self.prices, self.funding = notifier, custom, now_ms, prices, funding
         self.fetch_5m = fetch_5m
@@ -1380,6 +1384,8 @@ class ComboRunner:
                 self._custom(boundary)
             self._save_state(ts)                 # the queue and the cursor with the engines, in one commit
             self.book.save(ts)
+            if self.picture_gates is not None:
+                self._gates_picture(ts, now)
             n += 1
         if rows and not minutes:
             self._save_state(self.book.last_ts or 0)
@@ -1387,6 +1393,22 @@ class ComboRunner:
         self.store.put_state("heartbeat", now, {"last_step": self.book.last_ts, "queue": len(self.queue)})
         self.store.commit()
         return n
+
+    def _gates_picture(self, ts: int, now: int) -> None:
+        """State ``gates_now`` for the live site (paperbot/entrygates.picture): what the entry gates read for every coin,
+        two minutes after each 30-minute close (that close's entries are in by then) and at the first live minute after
+        a start; live minutes only (a catch-up shows nothing old). Its own gates object: a slow or failing read here
+        never touches an entry check."""
+        if now - int(ts) > 10 * MIN or (self._pic_ts is not None and int(ts) % (30 * MIN) != 2 * MIN):
+            return
+        from .entrygates import picture
+        tfs = sorted({m.tf for m in self.members}, key=lambda tf: TF_MIN.get(tf, 0))
+        try:
+            pic = picture(self.picture_gates, self.cfg.symbols, tfs, int(ts) + MIN)
+        except Exception as exc:  # noqa: BLE001  the site says it could not read; the bot goes on
+            pic = {"at": int(ts) + MIN, "error": f"{type(exc).__name__}: {exc}"[:300]}
+        self._pic_ts = int(ts)
+        self.store.put_state(GATES_NOW_KEY, int(ts), pic)
 
     def _submit_due(self, ts: int, bars: Optional[dict] = None) -> None:
         """Signals whose bar closed at or before this minute's open go in now (the engine fills them in this step)."""
@@ -1754,11 +1776,23 @@ def stop_rule_ko(rule: Optional[str]) -> str:
     return r
 
 
+def exit_ko(cfg: "ComboConfig", reason: str) -> str:
+    """An exit reason in words; TIME is the hold limit's (보유 한도 청산) in a bot with ``max_hold_bars`` and no trend
+    supervisor (paperbot/livepapers.time_exit_ko says the same from a config dict)."""
+    if reason == "TIME" and cfg.trend is None and cfg.max_hold_bars:
+        return TIME_HOLD_KO
+    return KO_EXIT.get(reason, reason)
+
+
 def exit_text(cfg: "ComboConfig", t) -> str:
     """The paper bot's own exit line (a TradeRecord)."""
     why = (t.context or {}).get("exit_why") if isinstance(t.context, dict) else None
+    if cfg.vote_gate or cfg.vol_gate:              # the VWAP bot: the owners' words, as its entry line
+        return (f"{cfg.tag} 청산 {t.symbol.replace('USDT', '')} {KO_SIDE.get(t.side, t.side)} · {member_ko(t.strategy_id)} "
+                f"{KO_TF.get(t.timeframe, t.timeframe)} · {exit_ko(cfg, t.exit_reason)}" + (f"({why})" if why else "")
+                + f" · 순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
     return (f"{cfg.tag} 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
-            f"{KO_TF.get(t.timeframe, t.timeframe)}: {KO_EXIT.get(t.exit_reason, t.exit_reason)}"
+            f"{KO_TF.get(t.timeframe, t.timeframe)}: {exit_ko(cfg, t.exit_reason)}"
             + (f"({why})" if why else "") + f", "
             f"순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
 
@@ -1979,6 +2013,7 @@ def cmd_run(args) -> int:
     if cfg.vote_gate is not None or cfg.vol_gate is not None:      # 'VWAP 개선판' (paperbot/entrygates.py)
         from .entrygates import make_gates
         extra["gates"] = make_gates(cfg.vote_gate, cfg.vol_gate, rest)
+        extra["picture_gates"] = make_gates(cfg.vote_gate, cfg.vol_gate, rest)   # the site's picture, own caches
     runner = runner_cls(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
                         rdata=rdata, **extra)

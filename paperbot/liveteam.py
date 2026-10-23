@@ -349,7 +349,7 @@ def is_trend(world: Optional[dict]) -> bool:
     return bool(w.get("trend")) or (isinstance(cfg, dict) and cfg.get("trend") is not None)
 
 
-COMBO2_CONFIG_ENV, COMBO2_CONFIG = "PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-mexc.json"
+COMBO2_CONFIG_ENV, COMBO2_CONFIG = "PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-vwap.json"
 
 
 def second_paper(main: str, infos: list) -> Optional[dict]:

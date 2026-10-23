@@ -8,7 +8,7 @@
 
 어디서 읽나 (환경 변수로 바꿀 수 있음, 기본값 = 10/19 시작 안내 docs/live1019-start-ko.md):
     PAPERBOT_LIVE_PAPER_DB      /var/lib/paperbot/combo/live-ac.db              페이퍼 봇 (store3 표)
-    PAPERBOT_LIVE_PAPER2_DB     /var/lib/paperbot/combo/live15-mexc.db          두 번째 페이퍼 봇 (손절 -35%, 있을 때만 보임)
+    PAPERBOT_LIVE_PAPER2_DB     /var/lib/paperbot/combo/vwap.db                 두 번째 페이퍼 봇 ('VWAP 개선판', 있을 때만 보임)
     PAPERBOT_LIVE_BYBIT_DB      /var/lib/paperbot/exec/executor-bybit-live.db   바이비트 실행기
     PAPERBOT_LIVE_MEXC_DB       /var/lib/paperbot/exec/executor-mexc-live.db    MEXC 실행기
     PAPERBOT_LIVE_BYBIT_CONFIG  /etc/paperbot/executor.json                     (키 없음: 계좌 · 신호등 · 크기 비율 · 위험 한도만 씀)
@@ -65,9 +65,10 @@ ACCOUNT = "COMBO@mix"                 # paperbot/combo.py ACCOUNT (the account b
 FLIP_ACCOUNT = "COMBOFLIP@mix"         # paperbot/combo.py FLIP_ACCOUNT (coin-flip twin: same moments, random side; 참고)
 ENV = {
     "paper": ("PAPERBOT_LIVE_PAPER_DB", "/var/lib/paperbot/combo/live-ac.db"),
-    # the second paper bot (owners 10-19, docs/live15-mexc-ko.md: 규칙봇 15 with the -35 % stop, MEXC follows it): shown
-    # next to the first one once its file exists; nothing of it shows before (the one-paper page stays as it was)
-    "paper2": ("PAPERBOT_LIVE_PAPER2_DB", "/var/lib/paperbot/combo/live15-mexc.db"),
+    # the second paper bot (owners 10-23, docs/vwap-bot-ko.md: 'VWAP 개선판', one executor follows it; before, 10-19:
+    # 규칙봇 15 at -35 %, live15-mexc.db): shown next to the first one once its file exists, or once an executor follows
+    # another paper database; nothing of it shows before (the one-paper page stays as it was)
+    "paper2": ("PAPERBOT_LIVE_PAPER2_DB", "/var/lib/paperbot/combo/vwap.db"),
     "bybit_db": ("PAPERBOT_LIVE_BYBIT_DB", "/var/lib/paperbot/exec/executor-bybit-live.db"),
     "mexc_db": ("PAPERBOT_LIVE_MEXC_DB", "/var/lib/paperbot/exec/executor-mexc-live.db"),
     "bybit_config": ("PAPERBOT_LIVE_BYBIT_CONFIG", "/etc/paperbot/executor.json"),
@@ -1126,7 +1127,7 @@ def paper_bots(p: dict, paper: dict, execs: list) -> list:
         stop = pr.get("stop") if pr.get("state") == "ok" else None
         out.append({"id": pid, "path": path, "read": pr, "name": pr.get("name_ko"), "stop": stop, "stop_short": LP.stop_short(stop),
                     "stop_ko": LP.stop_words(stop), "followers": fol, "follower_ids": [x["id"] for x in execs if LP.same(x["paper_path"], path)],
-                    "label_ko": LP.label(stop, fol)})
+                    "label_ko": LP.label(stop, fol, pr.get("name_ko")), "short_ko": LP.bot_short(pr.get("name_ko"), stop)})
     return out
 
 
@@ -1139,7 +1140,7 @@ def papers_out(bots: list) -> Optional[list]:
     """The paper bots for the page (no records): None with one paper bot (nothing new on the page)."""
     if len(bots) < 2:
         return None
-    return [{k: b.get(k) for k in ("id", "path", "name", "stop", "stop_short", "stop_ko", "followers", "follower_ids", "label_ko")}
+    return [{k: b.get(k) for k in ("id", "path", "name", "stop", "stop_short", "stop_ko", "followers", "follower_ids", "label_ko", "short_ko")}
             | {"state": b["read"].get("state"), "as_of_ms": b["read"].get("as_of_ms"), "stale": b["read"].get("stale")} for b in bots]
 
 
@@ -1275,8 +1276,7 @@ def sources(p: dict, now: int) -> tuple:
         for x in execs:
             b = next((b for b in bots if LP.same(b["path"], x["paper_path"])), None)
             x["paper_id"] = b["id"] if b else None
-            x["follows_ko"] = " · ".join(v for v in (f"페이퍼 {b['stop_short']}" if b.get("stop_short") else "페이퍼", b.get("name")) if v) \
-                if b else x["paper_path"]
+            x["follows_ko"] = b["short_ko"] if b else x["paper_path"]
             if len(x["segs"]) > 1:
                 x["switched_ms"] = x["segs"][-1][0]
     return configs, follows, paper, execs
@@ -1359,7 +1359,7 @@ SHADOWS = (("b", "shadow-b.db", "그림자 B 안정형"), ("nocut", "shadow-nocu
 ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"),
             "combo_config": ("PAPERBOT_LIVE_COMBO_CONFIG", "/etc/paperbot/combo.json"),
             # the second paper bot's config file (its database's combo_run is read first; docs/live15-mexc-ko.md)
-            "combo2_config": ("PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-mexc.json"),
+            "combo2_config": ("PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-vwap.json"),
             "check_db": ("PAPERBOT_LIVE_CHECK_DB", "/var/lib/paperbot/livecheck.db"),
             "improve_db": ("PAPERBOT_LIVE_IMPROVE_DB", "/var/lib/paperbot/liveimprove.db"),
             "rule_db": ("PAPERBOT_LIVE_RULE_DB", "/var/lib/paperbot/paper3.db")}
