@@ -1,0 +1,51 @@
+# 'VWAP 개선판' 페이퍼 봇 (owners 10/23 "이대로 만들어줘", docs/vwap-bot-ko.md): VWAP 복귀 실패 30분 + CMO·샌드위치 1시간,
+# 4시간 추세 반대 금지, 변동성 상위 20% 금지, 2 ATR 손절, 12→10 계단, 보유 96봉, 증거금 40% x 30배
+# (deploy/combo.vwap.json). The same program, user and sandbox as paperbot-combo.service, its own config
+# /etc/paperbot/combo-vwap.json and its own database /var/lib/paperbot/combo/vwap.db (account COMBO@mix in that file).
+# ONE live executor follows it once its config says "paper_db": "/var/lib/paperbot/combo/vwap.db" (the owners pick
+# Bybit or WOO X Pro and switch it while it holds no position); the other keeps following the 추세판단 봇. Paper only:
+# no orders. The entry gates read Binance's public 4h / 30m / 1h klines (paperbot/entrygates.py, about one small request
+# per signal).
+#
+# install.sh installs this unit but never enables or starts it. A person starts it after writing
+# /etc/paperbot/combo-vwap.json (docs/vwap-bot-ko.md):
+#   sudo systemctl enable --now paperbot-combo-vwap
+# Telegram: its start and error lines and its own entry / exit lines ("[합친 봇 페이퍼 VWAP 개선판] ...") go to the owners'
+# chats. Restart is safe: the account, its signal queue and the last minute are in its database; missed minutes are
+# replayed from paper3.db, missed signals are recorded late and never traded.
+[Unit]
+Description=paperbot combined bot 'VWAP 개선판' (VWAP fail 30m + CMO 1h, its own config combo-vwap.json; no orders)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.combo run --config /etc/paperbot/combo-vwap.json
+Restart=always
+RestartSec=15
+NotifyAccess=main
+WatchdogSec=600
+TimeoutStartSec=20min
+TimeoutStopSec=60
+Nice=5
+MemoryMax=1500M
+# a live executor follows this paper bot: in a server-wide memory shortage experiments go first (owners 2026-10-19)
+OOMScoreAdjust=-500
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot/combo
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target

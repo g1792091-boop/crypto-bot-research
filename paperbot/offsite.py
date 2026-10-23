@@ -70,7 +70,7 @@ API = "https://api.telegram.org"
 # compares them); a copy is <basename>.db
 DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet",
             "exec/executor-bybit-live", "exec/executor-mexc-live", "exec/executor-wooxpro-live", "combo/live-ac",
-            "combo/live15-mexc", "livecheck", "liveimprove",
+            "combo/live15-mexc", "combo/vwap", "livecheck", "liveimprove",
             "shadow200/shadow200",
             "debate/debate", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)

@@ -1,0 +1,902 @@
+{
+ "data_end": 1792713600000,
+ "gates": {
+  "signals": 1714,
+  "by_tf": {
+   "30m": 1612,
+   "1h": 102
+  },
+  "unreadable": 0,
+  "vote_agree": 1714,
+  "vol_agree": 1714,
+  "vote_differ": [],
+  "vol_differ": []
+ },
+ "research": {
+  "n": 40,
+  "wins": 37,
+  "losses": 3,
+  "mult_margin30": 2.6961,
+  "mult_margin40": 3.6439,
+  "by_tf": {
+   "30m": 37,
+   "1h": 3
+  }
+ },
+ "m30": {
+  "research_n": 40,
+  "live_n": 40,
+  "matched": 39,
+  "same_exit": 14,
+  "r_diff_pct_median": 0.02,
+  "r_diff_pct_mean": 0.0218,
+  "only_research": [
+   [
+    1791797400000,
+    "DOGEUSDT",
+    -1
+   ]
+  ],
+  "only_live": [
+   [
+    1791801000000,
+    "LTCUSDT",
+    -1
+   ]
+  ],
+  "live_wins": 37,
+  "live_losses": 3,
+  "live_mult": 2.9008,
+  "live_maxdd": -0.1712,
+  "live_reasons": {
+   "LOCK": 37,
+   "SL": 3
+  },
+  "outcomes": {
+   "ENTERED: ok": 40,
+   "SKIPPED: in position": 52,
+   "SKIPPED: lower score than entered signal": 15
+  },
+  "counts": {
+   "F6_VWAP_FAIL@30m": {
+    "submitted": 96,
+    "filtered": 133
+   },
+   "S3_CMO_SANDWICH@1h": {
+    "submitted": 11,
+    "filtered": 7
+   }
+  },
+  "open_at_end": null,
+  "rows": [
+   {
+    "entry": "2026-10-06 04:30",
+    "coin": "ETH",
+    "side": -1,
+    "exit_research": "2026-10-06 12:32",
+    "exit_live": "2026-10-06 12:32",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.347
+   },
+   {
+    "entry": "2026-10-06 15:00",
+    "coin": "SOL",
+    "side": 1,
+    "exit_research": "2026-10-06 17:10",
+    "exit_live": "2026-10-06 17:10",
+    "reason": "LOCK",
+    "r_research_pct": 0.47,
+    "r_live_pct": 0.469
+   },
+   {
+    "entry": "2026-10-06 17:30",
+    "coin": "BTC",
+    "side": 1,
+    "exit_research": "2026-10-06 20:20",
+    "exit_live": "2026-10-06 20:20",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-07 00:00",
+    "coin": "ETH",
+    "side": 1,
+    "exit_research": "2026-10-07 00:59",
+    "exit_live": "2026-10-07 00:59",
+    "reason": "SL",
+    "r_research_pct": -0.859,
+    "r_live_pct": -0.858
+   },
+   {
+    "entry": "2026-10-07 01:00",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-07 07:14",
+    "exit_live": "2026-10-07 07:14",
+    "reason": "LOCK",
+    "r_research_pct": 0.809,
+    "r_live_pct": 0.81
+   },
+   {
+    "entry": "2026-10-07 11:00",
+    "coin": "ETH",
+    "side": -1,
+    "exit_research": "2026-10-07 11:03",
+    "exit_live": "2026-10-07 11:03",
+    "reason": "LOCK",
+    "r_research_pct": 1.145,
+    "r_live_pct": 1.146
+   },
+   {
+    "entry": "2026-10-07 11:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-07 13:37",
+    "exit_live": "2026-10-07 13:37",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-07 17:00",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-07 18:36",
+    "exit_live": "2026-10-07 18:36",
+    "reason": "LOCK",
+    "r_research_pct": 0.329,
+    "r_live_pct": 0.33
+   },
+   {
+    "entry": "2026-10-07 19:30",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-07 19:50",
+    "exit_live": "2026-10-07 19:50",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-08 11:00",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-08 12:23",
+    "exit_live": "2026-10-08 12:23",
+    "reason": "LOCK",
+    "r_research_pct": 0.235,
+    "r_live_pct": 0.235
+   },
+   {
+    "entry": "2026-10-08 13:00",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-08 13:22",
+    "exit_live": "2026-10-08 13:22",
+    "reason": "LOCK",
+    "r_research_pct": 1.126,
+    "r_live_pct": 1.127
+   },
+   {
+    "entry": "2026-10-08 13:30",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-08 13:42",
+    "exit_live": "2026-10-08 13:42",
+    "reason": "LOCK",
+    "r_research_pct": 1.306,
+    "r_live_pct": 1.307
+   },
+   {
+    "entry": "2026-10-08 14:00",
+    "coin": "DOGE",
+    "side": -1,
+    "exit_research": "2026-10-08 20:13",
+    "exit_live": "2026-10-08 20:13",
+    "reason": "LOCK",
+    "r_research_pct": 0.055,
+    "r_live_pct": 0.055
+   },
+   {
+    "entry": "2026-10-08 23:00",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-09 00:14",
+    "exit_live": "2026-10-09 00:14",
+    "reason": "LOCK",
+    "r_research_pct": 0.667,
+    "r_live_pct": 0.687
+   },
+   {
+    "entry": "2026-10-09 20:00",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-09 22:36",
+    "exit_live": "2026-10-09 22:36",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-12 01:00",
+    "coin": "ETH",
+    "side": 1,
+    "exit_research": "2026-10-12 01:30",
+    "exit_live": "2026-10-12 01:33",
+    "reason": "LOCK",
+    "r_research_pct": 0.322,
+    "r_live_pct": 0.17
+   },
+   {
+    "entry": "2026-10-12 15:00",
+    "coin": "ETH",
+    "side": 1,
+    "exit_research": "2026-10-12 15:58",
+    "exit_live": "2026-10-12 16:16",
+    "reason": "LOCK",
+    "r_research_pct": 0.197,
+    "r_live_pct": 0.344
+   },
+   {
+    "entry": "2026-10-12 17:30",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-12 18:28",
+    "exit_live": "2026-10-12 18:37",
+    "reason": "LOCK",
+    "r_research_pct": 0.238,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-12 21:30",
+    "coin": "DOGE",
+    "side": -1,
+    "exit_research": "2026-10-12 21:36",
+    "exit_live": "2026-10-12 21:36",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-13 20:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-13 21:20",
+    "exit_live": "2026-10-13 21:21",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-14 00:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-14 00:49",
+    "exit_live": "2026-10-14 00:49",
+    "reason": "LOCK",
+    "r_research_pct": 0.319,
+    "r_live_pct": 0.319
+   },
+   {
+    "entry": "2026-10-14 04:00",
+    "coin": "DOGE",
+    "side": -1,
+    "exit_research": "2026-10-14 18:33",
+    "exit_live": "2026-10-14 18:33",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-15 10:30",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-15 11:26",
+    "exit_live": "2026-10-15 11:26",
+    "reason": "LOCK",
+    "r_research_pct": 0.833,
+    "r_live_pct": 0.854
+   },
+   {
+    "entry": "2026-10-15 20:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-15 23:11",
+    "exit_live": "2026-10-15 23:11",
+    "reason": "SL",
+    "r_research_pct": -1.659,
+    "r_live_pct": -1.66
+   },
+   {
+    "entry": "2026-10-16 10:30",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-16 12:44",
+    "exit_live": "2026-10-16 12:44",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-16 14:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-16 22:11",
+    "exit_live": "2026-10-16 22:11",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-19 00:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-19 00:39",
+    "exit_live": "2026-10-19 00:39",
+    "reason": "LOCK",
+    "r_research_pct": 0.254,
+    "r_live_pct": 0.254
+   },
+   {
+    "entry": "2026-10-19 12:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-19 14:51",
+    "exit_live": "2026-10-19 14:51",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-20 00:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-20 03:28",
+    "exit_live": "2026-10-20 03:28",
+    "reason": "SL",
+    "r_research_pct": -1.615,
+    "r_live_pct": -1.614
+   },
+   {
+    "entry": "2026-10-20 06:00",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-20 06:51",
+    "exit_live": "2026-10-20 06:55",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-20 11:30",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-20 13:01",
+    "exit_live": "2026-10-20 13:01",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-20 16:00",
+    "coin": "BTC",
+    "side": 1,
+    "exit_research": "2026-10-20 23:03",
+    "exit_live": "2026-10-20 23:04",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-21 01:30",
+    "coin": "LTC",
+    "side": 1,
+    "exit_research": "2026-10-21 01:34",
+    "exit_live": "2026-10-21 01:34",
+    "reason": "LOCK",
+    "r_research_pct": 0.278,
+    "r_live_pct": 0.278
+   },
+   {
+    "entry": "2026-10-21 10:30",
+    "coin": "ETH",
+    "side": -1,
+    "exit_research": "2026-10-21 15:05",
+    "exit_live": "2026-10-21 15:24",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-21 16:30",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-21 17:52",
+    "exit_live": "2026-10-21 17:52",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-21 18:30",
+    "coin": "DOGE",
+    "side": 1,
+    "exit_research": "2026-10-21 22:08",
+    "exit_live": "2026-10-21 22:08",
+    "reason": "LOCK",
+    "r_research_pct": 0.298,
+    "r_live_pct": 0.298
+   },
+   {
+    "entry": "2026-10-21 23:30",
+    "coin": "SOL",
+    "side": 1,
+    "exit_research": "2026-10-21 23:46",
+    "exit_live": "2026-10-21 23:46",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-22 00:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-22 00:12",
+    "exit_live": "2026-10-22 00:12",
+    "reason": "LOCK",
+    "r_research_pct": 0.252,
+    "r_live_pct": 0.252
+   },
+   {
+    "entry": "2026-10-22 05:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-22 06:16",
+    "exit_live": "2026-10-22 06:38",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.686
+   }
+  ]
+ },
+ "m40": {
+  "research_n": 40,
+  "live_n": 40,
+  "matched": 39,
+  "same_exit": 14,
+  "r_diff_pct_median": 0.02,
+  "r_diff_pct_mean": 0.0218,
+  "only_research": [
+   [
+    1791797400000,
+    "DOGEUSDT",
+    -1
+   ]
+  ],
+  "only_live": [
+   [
+    1791801000000,
+    "LTCUSDT",
+    -1
+   ]
+  ],
+  "live_wins": 37,
+  "live_losses": 3,
+  "live_mult": 4.0137,
+  "live_maxdd": -0.2319,
+  "live_reasons": {
+   "LOCK": 37,
+   "SL": 3
+  },
+  "outcomes": {
+   "ENTERED: ok": 40,
+   "SKIPPED: in position": 52,
+   "SKIPPED: lower score than entered signal": 15
+  },
+  "counts": {
+   "F6_VWAP_FAIL@30m": {
+    "submitted": 96,
+    "filtered": 133
+   },
+   "S3_CMO_SANDWICH@1h": {
+    "submitted": 11,
+    "filtered": 7
+   }
+  },
+  "open_at_end": null,
+  "rows": [
+   {
+    "entry": "2026-10-06 04:30",
+    "coin": "ETH",
+    "side": -1,
+    "exit_research": "2026-10-06 12:32",
+    "exit_live": "2026-10-06 12:32",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.347
+   },
+   {
+    "entry": "2026-10-06 15:00",
+    "coin": "SOL",
+    "side": 1,
+    "exit_research": "2026-10-06 17:10",
+    "exit_live": "2026-10-06 17:10",
+    "reason": "LOCK",
+    "r_research_pct": 0.47,
+    "r_live_pct": 0.469
+   },
+   {
+    "entry": "2026-10-06 17:30",
+    "coin": "BTC",
+    "side": 1,
+    "exit_research": "2026-10-06 20:20",
+    "exit_live": "2026-10-06 20:20",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-07 00:00",
+    "coin": "ETH",
+    "side": 1,
+    "exit_research": "2026-10-07 00:59",
+    "exit_live": "2026-10-07 00:59",
+    "reason": "SL",
+    "r_research_pct": -0.859,
+    "r_live_pct": -0.858
+   },
+   {
+    "entry": "2026-10-07 01:00",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-07 07:14",
+    "exit_live": "2026-10-07 07:14",
+    "reason": "LOCK",
+    "r_research_pct": 0.809,
+    "r_live_pct": 0.81
+   },
+   {
+    "entry": "2026-10-07 11:00",
+    "coin": "ETH",
+    "side": -1,
+    "exit_research": "2026-10-07 11:03",
+    "exit_live": "2026-10-07 11:03",
+    "reason": "LOCK",
+    "r_research_pct": 1.145,
+    "r_live_pct": 1.146
+   },
+   {
+    "entry": "2026-10-07 11:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-07 13:37",
+    "exit_live": "2026-10-07 13:37",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-07 17:00",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-07 18:36",
+    "exit_live": "2026-10-07 18:36",
+    "reason": "LOCK",
+    "r_research_pct": 0.329,
+    "r_live_pct": 0.33
+   },
+   {
+    "entry": "2026-10-07 19:30",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-07 19:50",
+    "exit_live": "2026-10-07 19:50",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-08 11:00",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-08 12:23",
+    "exit_live": "2026-10-08 12:23",
+    "reason": "LOCK",
+    "r_research_pct": 0.235,
+    "r_live_pct": 0.235
+   },
+   {
+    "entry": "2026-10-08 13:00",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-08 13:22",
+    "exit_live": "2026-10-08 13:22",
+    "reason": "LOCK",
+    "r_research_pct": 1.126,
+    "r_live_pct": 1.127
+   },
+   {
+    "entry": "2026-10-08 13:30",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-08 13:42",
+    "exit_live": "2026-10-08 13:42",
+    "reason": "LOCK",
+    "r_research_pct": 1.306,
+    "r_live_pct": 1.307
+   },
+   {
+    "entry": "2026-10-08 14:00",
+    "coin": "DOGE",
+    "side": -1,
+    "exit_research": "2026-10-08 20:13",
+    "exit_live": "2026-10-08 20:13",
+    "reason": "LOCK",
+    "r_research_pct": 0.055,
+    "r_live_pct": 0.055
+   },
+   {
+    "entry": "2026-10-08 23:00",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-09 00:14",
+    "exit_live": "2026-10-09 00:14",
+    "reason": "LOCK",
+    "r_research_pct": 0.667,
+    "r_live_pct": 0.687
+   },
+   {
+    "entry": "2026-10-09 20:00",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-09 22:36",
+    "exit_live": "2026-10-09 22:36",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-12 01:00",
+    "coin": "ETH",
+    "side": 1,
+    "exit_research": "2026-10-12 01:30",
+    "exit_live": "2026-10-12 01:33",
+    "reason": "LOCK",
+    "r_research_pct": 0.322,
+    "r_live_pct": 0.17
+   },
+   {
+    "entry": "2026-10-12 15:00",
+    "coin": "ETH",
+    "side": 1,
+    "exit_research": "2026-10-12 15:58",
+    "exit_live": "2026-10-12 16:16",
+    "reason": "LOCK",
+    "r_research_pct": 0.197,
+    "r_live_pct": 0.344
+   },
+   {
+    "entry": "2026-10-12 17:30",
+    "coin": "BCH",
+    "side": -1,
+    "exit_research": "2026-10-12 18:28",
+    "exit_live": "2026-10-12 18:37",
+    "reason": "LOCK",
+    "r_research_pct": 0.238,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-12 21:30",
+    "coin": "DOGE",
+    "side": -1,
+    "exit_research": "2026-10-12 21:36",
+    "exit_live": "2026-10-12 21:36",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-13 20:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-13 21:20",
+    "exit_live": "2026-10-13 21:21",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-14 00:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-14 00:49",
+    "exit_live": "2026-10-14 00:49",
+    "reason": "LOCK",
+    "r_research_pct": 0.319,
+    "r_live_pct": 0.319
+   },
+   {
+    "entry": "2026-10-14 04:00",
+    "coin": "DOGE",
+    "side": -1,
+    "exit_research": "2026-10-14 18:33",
+    "exit_live": "2026-10-14 18:33",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-15 10:30",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-15 11:26",
+    "exit_live": "2026-10-15 11:26",
+    "reason": "LOCK",
+    "r_research_pct": 0.833,
+    "r_live_pct": 0.854
+   },
+   {
+    "entry": "2026-10-15 20:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-15 23:11",
+    "exit_live": "2026-10-15 23:11",
+    "reason": "SL",
+    "r_research_pct": -1.659,
+    "r_live_pct": -1.66
+   },
+   {
+    "entry": "2026-10-16 10:30",
+    "coin": "BTC",
+    "side": -1,
+    "exit_research": "2026-10-16 12:44",
+    "exit_live": "2026-10-16 12:44",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-16 14:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-16 22:11",
+    "exit_live": "2026-10-16 22:11",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-19 00:30",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-19 00:39",
+    "exit_live": "2026-10-19 00:39",
+    "reason": "LOCK",
+    "r_research_pct": 0.254,
+    "r_live_pct": 0.254
+   },
+   {
+    "entry": "2026-10-19 12:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-19 14:51",
+    "exit_live": "2026-10-19 14:51",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-20 00:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-20 03:28",
+    "exit_live": "2026-10-20 03:28",
+    "reason": "SL",
+    "r_research_pct": -1.615,
+    "r_live_pct": -1.614
+   },
+   {
+    "entry": "2026-10-20 06:00",
+    "coin": "LTC",
+    "side": -1,
+    "exit_research": "2026-10-20 06:51",
+    "exit_live": "2026-10-20 06:55",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-20 11:30",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-20 13:01",
+    "exit_live": "2026-10-20 13:01",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-20 16:00",
+    "coin": "BTC",
+    "side": 1,
+    "exit_research": "2026-10-20 23:03",
+    "exit_live": "2026-10-20 23:04",
+    "reason": "LOCK",
+    "r_research_pct": 0.5,
+    "r_live_pct": 0.52
+   },
+   {
+    "entry": "2026-10-21 01:30",
+    "coin": "LTC",
+    "side": 1,
+    "exit_research": "2026-10-21 01:34",
+    "exit_live": "2026-10-21 01:34",
+    "reason": "LOCK",
+    "r_research_pct": 0.278,
+    "r_live_pct": 0.278
+   },
+   {
+    "entry": "2026-10-21 10:30",
+    "coin": "ETH",
+    "side": -1,
+    "exit_research": "2026-10-21 15:05",
+    "exit_live": "2026-10-21 15:24",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.354
+   },
+   {
+    "entry": "2026-10-21 16:30",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-21 17:52",
+    "exit_live": "2026-10-21 17:52",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-21 18:30",
+    "coin": "DOGE",
+    "side": 1,
+    "exit_research": "2026-10-21 22:08",
+    "exit_live": "2026-10-21 22:08",
+    "reason": "LOCK",
+    "r_research_pct": 0.298,
+    "r_live_pct": 0.298
+   },
+   {
+    "entry": "2026-10-21 23:30",
+    "coin": "SOL",
+    "side": 1,
+    "exit_research": "2026-10-21 23:46",
+    "exit_live": "2026-10-21 23:46",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.353
+   },
+   {
+    "entry": "2026-10-22 00:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-22 00:12",
+    "exit_live": "2026-10-22 00:12",
+    "reason": "LOCK",
+    "r_research_pct": 0.252,
+    "r_live_pct": 0.252
+   },
+   {
+    "entry": "2026-10-22 05:00",
+    "coin": "BCH",
+    "side": 1,
+    "exit_research": "2026-10-22 06:16",
+    "exit_live": "2026-10-22 06:38",
+    "reason": "LOCK",
+    "r_research_pct": 0.333,
+    "r_live_pct": 0.686
+   }
+  ]
+ }
+}

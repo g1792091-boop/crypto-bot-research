@@ -536,6 +536,12 @@ class ComboConfig:
     name: str = ""                      # shown in the messages: "[합친 봇 페이퍼 <name>]" (two paper bots side by side)
     trend: Optional[dict] = None        # 추세판단 봇 (owners 10-21, paperbot/trendbot.py): the trend judge, entry checks,
                                         # pullback entry, pauses and the supervisor; None = none of it (every other bot)
+    vote_gate: Optional[dict] = None    # 'VWAP 개선판' (owners 10-23, paperbot/entrygates.py): {"tf": "4h", "vote_min": 3}
+                                        # no entry when the trend judges' vote on the last closed tf bar is against
+    vol_gate: Optional[dict] = None     # ... {"atr": 14, "days": 30, "q": 0.8}: no entry when the signal bar's ATR% is
+                                        # above its 30-day 80 % point; None = off (both)
+    max_hold_bars: Optional[int] = None  # ... a position open this many bars of its own timeframe (30m: 96 = 48 h, 1h: 96
+                                         # = 96 h) is closed at the next minute's open (exit "TIME"); None = no limit
 
     @classmethod
     def from_dict(cls, d: dict) -> "ComboConfig":
@@ -656,6 +662,14 @@ class ComboConfig:
         if self.trend is not None:
             from .trendbot import config_problems
             out += config_problems(self)
+        if self.vote_gate is not None or self.vol_gate is not None:
+            from .entrygates import gate_problems
+            tfs = [str(m.get("tf", "")) for m in self.members if isinstance(m, dict)]
+            out += gate_problems(self.vote_gate, self.vol_gate, tfs)
+        if self.max_hold_bars is not None and not (isinstance(self.max_hold_bars, int)
+                                                   and not isinstance(self.max_hold_bars, bool)
+                                                   and 1 <= self.max_hold_bars <= 1000):
+            out.append("max_hold_bars는 1~1000봉(정수) 또는 null입니다(그 매매법 봉 기준, 예: 96)")
         return out
 
 
@@ -774,7 +788,18 @@ class ComboEngine(PaperEngine):
 
     def step(self, bars: dict[str, Bar], funding: Optional[dict[str, float]] = None) -> None:
         """``early_exit``: a signal against the open position (its coin, the other side, a bar closed after the entry;
-        "own": the same member) closes it at this minute's open, and this minute enters nothing."""
+        "own": the same member) closes it at this minute's open, and this minute enters nothing.
+        ``max_hold_bars``: a position open that many bars of its own timeframe is closed at this minute's open ("TIME",
+        the research's close of the last minute of its window); a signal of this minute may still enter (the research's
+        next trade)."""
+        p = self.position
+        hold = hold_minutes(self.combo, p.signal.timeframe) if p is not None else None
+        if hold and p.symbol in bars and bars[p.symbol].open_time - p.entry_time >= hold * MIN:
+            bar = bars[p.symbol]
+            ctx = dict(p.signal.meta.get("ctx") or {})
+            ctx["exit_why"] = f"보유 {self.combo.max_hold_bars}봉({hold_ko(hold)}) 한도"
+            p.signal = replace(p.signal, meta={**p.signal.meta, "ctx": ctx})
+            self._close_market(bar.open, bar.open_time, "TIME")
         trig, self._exit_on = self._exit_on, []
         p = self.position
         if trig and p is not None and self.combo.early_exit_until_lock and p.lock_roe is not None:
@@ -1239,8 +1264,9 @@ class ComboRunner:
     def __init__(self, cfg: ComboConfig, members: list[Member], book: AccountBook, store: Store3, notifier: Notifier,
                  custom: Optional[CustomSignals], now_ms: Callable[[], int], prices: Callable[[], dict],
                  funding: Optional[FundingFeed] = None, fetch_5m: Optional[Callable] = None,
-                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None):
+                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None, gates=None):
         self.cfg, self.members, self.book, self.store = cfg, members, book, store
+        self.gates = gates                  # paperbot/entrygates.EntryGates (vote_gate / vol_gate), None = off
         self.notifier, self.custom, self.now_ms, self.prices, self.funding = notifier, custom, now_ms, prices, funding
         self.fetch_5m = fetch_5m
         self.btc = btc
@@ -1404,7 +1430,8 @@ class ComboRunner:
 
     def _entry_block(self, sig: Signal, ts: int, bar_close: int, bars: dict) -> str:
         """'' or why minute ts takes no entry from this signal: the KST weekend, a US macro release, the NYSE open,
-        then a no_chase member's chase (in that order; the first reason is the one logged)."""
+        the entry gates (higher-bar vote, volatility), then a no_chase member's chase (in that order; the first reason
+        is the one logged)."""
         if self.cfg.no_weekend and kst_weekend(ts):
             return "주말(한국 시간 토·일) 진입 안 함"
         if self.cfg.macro_blackout_min:
@@ -1413,6 +1440,10 @@ class ComboRunner:
                 return ev
         if self.cfg.us_open_pause_min or self.cfg.us_open_pre_min:
             why = us_open_pause(ts, int(self.cfg.us_open_pause_min or 0), int(self.cfg.us_open_pre_min or 0))
+            if why:
+                return why
+        if self.gates is not None:
+            why = self.gates.block(sig.symbol, sig.timeframe, int(sig.side), int(bar_close))
             if why:
                 return why
         m = self.by_label.get(sig.meta.get("member", sig.strategy_id))
@@ -1755,7 +1786,36 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
             f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
             f"{f'추격 진입 막기 {nc}개, ' if nc else ''}"
             f"{trend_start_text(cfg.trend) if cfg.trend is not None else ''}"
+            + "".join(f"{line}, " for line in gate_lines(cfg)) +
             f"포지션 1개, {pause}지갑 ${wallet:,.2f}")
+
+
+def gate_lines(cfg: "ComboConfig") -> list[str]:
+    """The entry gates and the time limit in the owners' words (empty when all are off)."""
+    out = []
+    if cfg.vote_gate is not None or cfg.vol_gate is not None:
+        from .entrygates import vol_text, vote_text
+        if isinstance(cfg.vote_gate, dict):
+            out.append(vote_text(cfg.vote_gate))
+        if isinstance(cfg.vol_gate, dict):
+            out.append(vol_text(cfg.vol_gate))
+    if isinstance(cfg.max_hold_bars, int) and not isinstance(cfg.max_hold_bars, bool):
+        tfs = sorted({str(m.get("tf")) for m in cfg.members if isinstance(m, dict) and m.get("tf") in TF_MIN},
+                     key=lambda tf: TF_MIN[tf])
+        each = " · ".join(f"{KO_TF.get(tf, tf)} {hold_ko(cfg.max_hold_bars * TF_MIN[tf])}" for tf in tfs)
+        out.append(f"보유 한도 {cfg.max_hold_bars}봉" + (f"({each})" if each else "") + ", 넘으면 시장가 청산")
+    return out
+
+
+def hold_minutes(cfg: "ComboConfig", tf: str) -> Optional[int]:
+    """``max_hold_bars`` of a position's own timeframe in minutes (None: no limit)."""
+    if not cfg.max_hold_bars or tf not in TF_MIN:
+        return None
+    return int(cfg.max_hold_bars) * TF_MIN[tf]
+
+
+def hold_ko(minutes: int) -> str:
+    return f"{minutes // 60}시간" if minutes % 60 == 0 else f"{minutes}분"
 
 
 def trend_start_text(trend: dict) -> str:
@@ -1879,6 +1939,9 @@ def cmd_run(args) -> int:
     if cfg.trend is not None:                    # 추세판단 봇 (paperbot/trendbot.py)
         from .trendbot import TrendRunner, make_judge
         runner_cls, extra = TrendRunner, {"judge": make_judge(cfg, rest)}
+    if cfg.vote_gate is not None or cfg.vol_gate is not None:      # 'VWAP 개선판' (paperbot/entrygates.py)
+        from .entrygates import make_gates
+        extra["gates"] = make_gates(cfg.vote_gate, cfg.vol_gate, rest)
     runner = runner_cls(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
                         rdata=rdata, **extra)
@@ -1960,6 +2023,8 @@ def cmd_check(args) -> int:
         print(f"- 추격 진입 막기: {len(nc)}개 매매법 ({', '.join(m.label for m in nc)}) — {CHASE_KO}")
     if cfg.no_weekend:
         print("- 주말(한국 시간 토·일)에는 새로 진입하지 않음(열린 포지션은 손절·익절까지 그대로)")
+    for line in gate_lines(cfg):
+        print(f"- {line}")
     if cfg.macro_blackout_min:
         from . import events as EV
         now = int(time.time() * 1000)
