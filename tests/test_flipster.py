@@ -457,6 +457,10 @@ def test_an_entry_is_refused_when_the_ledger_cannot_be_written_but_a_stop_still_
         st = c.stop_close(BTC, "SELL", 95.0, 1.0, client_id="pbStopNoLedger")
         assert st["algoStatus"] == "NEW" and c.ledger.get("pbStopNoLedger")["order_id"] == st["algoId"]
         assert c.algo_order(client_id="pbStopNoLedger")["algoStatus"] == "NEW"     # the row kept in memory
+        store.conn.rollback()
+        assert c.ledger.bind("pbStopNoLedger", st["algoId"])        # a later write stores the whole row
+        assert store.conn.execute("SELECT order_id, type, reduce_only FROM flipster_ids WHERE cid = ?",
+                                  ("pbStopNoLedger",)).fetchone() == (st["algoId"], "STOP_MARKET", 1)
     finally:
         store.conn.rollback()
         store.close()

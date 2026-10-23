@@ -401,38 +401,36 @@ class IdLedger:
         return r
 
     # ------------------------------------------------------------ rows
+    def _save(self, row: dict) -> bool:
+        """The whole row (memory, then the file): a row whose earlier write failed is complete once a later one
+        succeeds."""
+        self.rows[row["cid"]] = row
+        return self._write(f"INSERT OR REPLACE INTO flipster_ids ({', '.join(LEDGER_COLS)}) "
+                           f"VALUES ({','.join('?' * len(LEDGER_COLS))})",
+                           tuple(int(row[k]) if k == "reduce_only" else row[k] for k in LEDGER_COLS))
+
     def put(self, cid: str, symbol: str, side: str, otype: str, qty: str, reduce_only: bool, trig: Optional[str],
             sent_ms: int) -> bool:
         """The intent row, before the order is sent. True when it is durable (or there is no file to write)."""
-        row = {"cid": cid, "symbol": symbol, "side": side, "type": otype, "qty": str(qty),
-               "reduce_only": bool(reduce_only), "trig": trig, "sent_ms": int(sent_ms), "order_id": None,
-               "state": "sent", "how": None, "note": None}
-        self.rows[cid] = row
         self.trim(sent_ms)
-        return self._write("INSERT OR REPLACE INTO flipster_ids (cid, symbol, side, type, qty, reduce_only, trig, "
-                           "sent_ms, order_id, state, how, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                           tuple(row[k] if k != "reduce_only" else int(row[k]) for k in LEDGER_COLS))
+        return self._save({"cid": cid, "symbol": symbol, "side": side, "type": otype, "qty": str(qty),
+                           "reduce_only": bool(reduce_only), "trig": trig, "sent_ms": int(sent_ms), "order_id": None,
+                           "state": "sent", "how": None, "note": None})
+
+    def _change(self, cid: str, **kw) -> bool:
+        row = self.get(cid)
+        return False if row is None else self._save({**row, **kw})
 
     def bind(self, cid: str, order_id: str, how: str = "answer") -> bool:
-        row = self.get(cid)
-        if row is not None:
-            self.rows[cid] = {**row, "order_id": str(order_id), "state": "placed", "how": how}
-        return self._write("UPDATE flipster_ids SET order_id = ?, state = 'placed', how = ? WHERE cid = ?",
-                           (str(order_id), how, cid))
+        return self._change(cid, order_id=str(order_id), state="placed", how=how)
 
     def refused(self, cid: str, why: str) -> bool:
         """The exchange refused the order: nothing was placed (a look-up answers "not found" at once)."""
-        row = self.get(cid)
-        if row is not None:
-            self.rows[cid] = {**row, "state": "refused", "note": why[:200]}
-        return self._write("UPDATE flipster_ids SET state = 'refused', note = ? WHERE cid = ?", (why[:200], cid))
+        return self._change(cid, state="refused", note=why[:200])
 
     def forget_order(self, cid: str) -> None:
         """Drill only: the row as if the order's answer had been lost (its orderId unknown)."""
-        row = self.get(cid)
-        if row is not None:
-            self.rows[cid] = {**row, "order_id": None, "state": "sent", "how": None}
-        self._write("UPDATE flipster_ids SET order_id = NULL, state = 'sent', how = NULL WHERE cid = ?", (cid,))
+        self._change(cid, order_id=None, state="sent", how=None)
 
     def get(self, cid: str) -> Optional[dict]:
         if cid in self.rows:
