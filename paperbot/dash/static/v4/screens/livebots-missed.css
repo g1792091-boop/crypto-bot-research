@@ -29,6 +29,10 @@
 .lbm-blk.g-pause, .lbm-g.g-pause { --gc: var(--warn); }
 .lbm-blk.g-late, .lbm-g.g-late { --gc: var(--ink-2); }
 .lbm-blk.g-exec, .lbm-g.g-exec { --gc: var(--series-m5); }
+/* the 'VWAP 개선판' (kind "plain"): its own reasons (livebots.why_cat's categories) */
+.lbm-blk.g-vote_gate, .lbm-g.g-vote_gate, .lbm-blk.g-vol_high, .lbm-g.g-vol_high { --gc: var(--series-ds); }
+.lbm-blk.g-macro, .lbm-g.g-macro, .lbm-blk.g-usopen, .lbm-g.g-usopen, .lbm-blk.g-weekend, .lbm-g.g-weekend { --gc: var(--warn); }
+.lbm-blk.g-unread, .lbm-g.g-unread, .lbm-blk.g-trend_unread, .lbm-g.g-trend_unread, .lbm-blk.g-other, .lbm-g.g-other { --gc: var(--ink-2); }
 .lbm-blk[class*="g-"] { border-style: dashed; border-color: color-mix(in srgb, var(--gc) 55%, transparent); }
 .lbm-blk[class*="g-"] h3 { color: var(--gc); }
 .lbm-blk { display: grid; align-content: start; gap: 6px; min-width: 0; padding: 12px; border-radius: var(--r-md); border: 1px solid var(--line);
@@ -110,6 +114,9 @@
   background: var(--surface); }
 .lbm-foot p { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.6; }
 .lbm-foot p:first-child { color: var(--ink); }
+/* two paper bots: the switch on top, the other bot's gates' words under its why (kind "plain") */
+.lbm-bots { margin-bottom: 10px; }
+.lbm-why .lbm-gates { display: block; margin-top: 2px; color: var(--muted); font-size: var(--t-2xs); overflow-wrap: anywhere; }
 
 @media (prefers-reduced-motion: reduce) {
   .lbm-cards.swap { animation: none; }

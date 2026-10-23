@@ -27,8 +27,12 @@
 // next to the replay (가상), the paper (연습) and each executor (진짜 돈); 무엇이면 닿나 (grid): the month's multiple by win
 // rate x average win at the bot's average loss, the cells that reach x6 marked, labelled 가상 계산; per account the
 // wallet against the x6 path this month (progress, from the bot's start when it started this month).
+// Two different paper bots (owners 10/23: the 추세판단 봇 and the 'VWAP 개선판'): an executor that follows, or followed, the
+// other bot says so on its card (the server's era: its win-rate need and money rule count from its own era, the wallet's
+// month is the one wallet), the VWAP executor's own light and reference; 손절 비교 becomes 두 봇 나란히 (the server's
+// h2h.twin false: no 11/3 stop test, each column by its bot's name).
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctKo, acctTag, sourceState} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, eraWords, josaObj, lightLine} from "./livebots-kit.js";
 import {weekdaysKo} from "./livebots-expect.js";
 
 export const GOAL_API = "/api/v4/livebots/goal";
@@ -151,13 +155,33 @@ export function progressWords(pr, target = 5) {
     at: progressOf(pr.mult - 1, target), path: progressOf(pr.path_now - 1, target), tone: has(pr.vs_path) ? (pr.vs_path >= 0 ? "up" : "down") : ""};
 }
 
+/** An account's other paper bot on the 목표 card (the server's era), null without one: the executor that follows the other
+ *  bot now counts its need and money rule from its move (the month's return is its one wallet, all of it). */
+export function goalEraKo(a) {
+  const e = a && a.era;
+  if (!e) return null;
+  const name = acctKo(a.id);
+  if (e.now_other) {
+    const bot = e.bot_ko || e.other_ko || "다른 페이퍼 봇", at = e.from_ms != null ? e.from_ms : e.since;
+    return `${name}는 ${at != null ? `${fmt.kst(at)}부터 ` : ""}${bot}${josaObj(bot)} 따라가요 · 필요한 승률과 돈 늘리기 기준은 그때부터의 거래로 셌어요 `
+      + "(이번 달 수익률은 지갑 하나라 그 전 거래도 들어 있어요)";
+  }
+  return `${eraWords(name, e)} · 이번 달 수익률은 지갑 하나라 들어 있어요`;
+}
+
+/** A ui.card's head part: its title (h2) or its sub line (the span "sub"), null when missing. */
+const cardHead = (card, which) => (card && card.firstChild ? Array.from(card.firstChild.childNodes)
+  .find((n) => (which === "title" ? String(n.tagName || "").toLowerCase() === "h2" : String(n.className || "") === "sub")) || null : null);
+
 /** 손절 비교 (the server's h2h) as a plain table: {head: [two column titles], rows: [{k, cells: [two texts], tones: [two
  *  "up" | "down" | ""]}]}, null without two paper bots. Each column is one stop: its paper bot and the live account that
  *  follows it (the first one; "—" when none). */
 export function h2hTable(x) {
   if (!x || x.state !== "ok" || !Array.isArray(x.sides) || x.sides.length < 2) return null;
   const S = x.sides.slice(0, 2);
-  const head = S.map((s) => `손절 ${s.stop_short || "?"} · ${(s.followers || []).join("·") || "따라가는 실행기 없음"}`);
+  const who = (s) => (s.followers || []).join("·") || "따라가는 실행기 없음";
+  // two different bots (twin false): each column by its bot's name, never as a stop of one bot
+  const head = S.map((s) => (x.twin === false ? `${s.short_ko || s.name || s.id} · ${who(s)}` : `손절 ${s.stop_short || "?"} · ${who(s)}`));
   const wl = (r) => (has(r.n) ? `${fmt.int(r.n)}번 (${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패)` : "—");
   const pct = (v, sign = true) => (has(v) ? fmt.pct(v, 1, sign) : "—");
   const of = {paper: (s) => s.paper || {}, live: (s) => (s.live || [])[0]};
@@ -192,7 +216,9 @@ export function goalView(ctx) {
   const rec = h("div", {class: "lbg-slot"});
   const imply = h("div", {class: "lbg-slot"});
   const h2h = h("div", {class: "lbg-slot"});
-  const h2hCard = ui.card({title: "손절 비교 (11/3 검토용)", sub: "바이비트 −50% · WOO X Pro −35% · 같은 신호, 손절만 다름", cls: "lbg-card lbg-h2h"}, h2h);
+  const H2H_TITLE = "손절 비교 (11/3 검토용)", H2H_SUB = "바이비트 −50% · WOO X Pro −35% · 같은 신호, 손절만 다름";
+  const h2hCard = ui.card({title: H2H_TITLE, sub: H2H_SUB, cls: "lbg-card lbg-h2h"}, h2h);
+  const h2hTitle = cardHead(h2hCard, "title"), h2hSub = cardHead(h2hCard, "sub");
   h2hCard.hidden = true;                                  // one paper bot: no card (the page as before)
   const recCard = ui.card({title: "지금까지 기록", sub: "페이퍼(연습) · 규칙봇 15 시작부터 닫힌 거래", cls: "lbg-card lbg-rec"}, rec);
   const recSub = recCard.firstChild ? Array.from(recCard.firstChild.childNodes).find((n) => String(n.className || "") === "sub") : null;
@@ -262,7 +288,13 @@ export function goalView(ctx) {
     const sc = scaleRows(a.scale);
     const scaleEl = sc ? h("div", {class: "lbg-scale"}, h("b", null, "돈 늘리기 기준"), h("small", {class: "muted"}, " · 보여 주기만 해요"),
       h("ul", null, sc.map((r) => h("li", {class: r.none ? "muted" : r.ok ? "up" : "down", title: r.what}, `${r.mark} ${r.none && r.what ? `${r.what}: ` : ""}${r.ko}`))),
-      h("p", {class: ["lbg-scale-ko", a.scale.ok ? "up" : ""]}, a.scale.ko), ui.note(a.scale.note_ko || "")) : null;
+      h("p", {class: ["lbg-scale-ko", a.scale.ok ? "up" : ""]}, a.scale.ko),
+      a.scale.warn_ko ? h("p", {class: "lbg-scale-ko down"}, a.scale.warn_ko) : null, ui.note(a.scale.note_ko || "")) : null;
+    const ew = goalEraKo(a);
+    const lw = a.era && a.light ? lightLine(a.light) : null;       // the executor on the other bot: its own light (its config)
+    const eraEl = ew ? h("div", {class: "lbg-era"}, h("p", {class: "note"}, ew),
+      lw ? h("p", {class: "muted"}, `신호등 (이 실행기 설정): ${lw}`) : null,
+      a.weekday_ref_ko ? h("small", {class: "muted"}, `평일 하루 진입 참고: ${a.weekday_ref_ko}`) : null) : null;
     const nd = a.need;
     const needEl = nd ? h("div", {class: "lbg-need"}, h("p", {class: ["lbg-need-ko", nd.state === "impossible" ? "down" : nd.state === "reached" ? "up" : ""]}, nd.ko),
       nd.month_ko ? h("p", {class: "muted"}, nd.month_ko) : null,
@@ -270,7 +302,7 @@ export function goalView(ctx) {
     if (a.state !== "ok") {
       return h("section", {class: ["card", "lbg-acct", "off", "lbg-a-" + a.id]}, h("div", {class: "lbg-ah"}, ...name),
         sourceState(a, a.kind === "paper" ? "페이퍼 DB" : `${acctKo(a.id)} 잔고 기록`),
-        has(a.closed_n) && a.closed_n ? ui.note(`이번 달 닫힌 거래 ${fmt.int(a.closed_n)}번 · ${fmt.money(a.closed_pnl, true)} USDT`) : null, scaleEl);
+        has(a.closed_n) && a.closed_n ? ui.note(`이번 달 닫힌 거래 ${fmt.int(a.closed_n)}번 · ${fmt.money(a.closed_pnl, true)} USDT`) : null, eraEl, scaleEl);
     }
     const prog = progressOf(a.ret, d.target);
     const retTxt = has(a.ret) ? fmt.pct(a.ret, 1) : "—";
@@ -284,7 +316,7 @@ export function goalView(ctx) {
       has(a.so_far_per_day) ? h("p", {class: "lbg-sofar"}, `지금까지 하루 평균 ${fmt.pct(a.so_far_per_day, 1)} (복리)`) : null,
       progressEl(a, d),
       a.late_start ? ui.note(`이 계좌는 ${fmt.kst(a.start_ms)} 첫 잔고 기록부터 셌어요`) : null,
-      ui.note(`이번 달 닫힌 거래 ${fmt.int(a.closed_n || 0)}번 · ${fmt.money(a.closed_pnl, true)} USDT`), needEl, scaleEl);
+      ui.note(`이번 달 닫힌 거래 ${fmt.int(a.closed_n || 0)}번 · ${fmt.money(a.closed_pnl, true)} USDT`), eraEl, needEl, scaleEl);
   }
   function drawRec(d) {
     const r = d.record || {};
@@ -330,6 +362,11 @@ export function goalView(ctx) {
     const x = d.h2h;
     h2hCard.hidden = !x;
     if (!x) { put(h2h); return; }
+    const plain = x.twin === false;                       // two different bots: side by side, no stop test
+    const names = plain && Array.isArray(x.sides) ? x.sides.map((sd) => sd.short_ko || sd.name || sd.id).join(" · ") : "";
+    const tt = plain ? "두 봇 나란히" : H2H_TITLE, ss = plain ? `${names} · 매매법이 서로 달라요 · 같은 기간 숫자만` : H2H_SUB;
+    if (h2hTitle && h2hTitle.textContent !== tt) h2hTitle.textContent = tt;
+    if (h2hSub && h2hSub.textContent !== ss) h2hSub.textContent = ss;
     if (x.state !== "ok") { put(h2h, sourceState(x, "두 번째 페이퍼 기록"), ui.note(x.review_ko || "")); return; }
     const t = h2hTable(x);
     put(h2h, h("p", {class: "lbg-h2h-why"}, x.review_ko),
@@ -338,7 +375,9 @@ export function goalView(ctx) {
         h("tbody", null, t.rows.map((r) => h("tr", null, h("td", {class: "l"}, r.k),
           ...r.cells.map((c, i) => h("td", {class: ["num", r.tones[i]]}, c))))))),
       h("p", {class: "lbg-h2h-gap"}, x.words_ko || ""),
-      ui.note(`페이퍼: ${fmt.kst(x.since_ms)}부터` + (x.live_since_ms != null ? ` · 실거래: ${fmt.kst(x.live_since_ms)}부터 (WOO X Pro가 옮긴 때)` : ` · ${x.live_ko || ""}`)),
+      ui.note(`페이퍼: ${fmt.kst(x.since_ms)}부터` + (x.live_since_ms != null
+        ? ` · 실거래: ${fmt.kst(x.live_since_ms)}부터 (${plain ? `${((x.sides[1] || {}).followers || []).join("·") || "실행기"}가 옮긴 때 · 각 봇 거래만` : "WOO X Pro가 옮긴 때"})`
+        : ` · ${x.live_ko || ""}`)),
       ui.smallSample(Math.min(...x.sides.map((s) => (s.paper || {}).n || 0)), x.small_n || 20),
       ui.note(x.note_ko || ""));
   }

@@ -8,6 +8,8 @@
 .lbm-l-paper { color: var(--series-coin); }
 .lbm-l-bybit { color: var(--series-core); }
 .lbm-l-mexc { color: var(--series-m5); }
+.lbm-a-paper2 { --lbm-c: var(--series-ds); }        /* the second paper bot (only while the server sends it) */
+.lbm-l-paper2 { color: var(--series-ds); }
 
 /* ---------------------------------------------------------------- 기대 범위 띠 */
 .lbm-hero { position: relative; overflow: hidden; }

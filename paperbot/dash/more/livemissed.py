@@ -114,6 +114,9 @@ def result_of(r: dict) -> str:
 
 PLAIN_KO = ("이 봇의 못 탄 신호는 1분 감시가 아직 가상으로 따라가 보지 않아요 (가상 결과는 추세판단 봇 신호만 계산해요) · 그래서 왜 못 "
             "탔는지와 그때 조건이 읽은 숫자만 보여요 · 실행기가 안 따라간 거래는 페이퍼 거래의 실제 결과예요")
+# its gates are the owners' 10/23 rules (docs/vwap-bot-ko.md 2장), not the 5-year filters of FILTER_NOTE_KO: said as such
+PLAIN_FILTER_KO = ("조건(4시간 추세 반대 · 변동성 높음 · 쉬는 시간 · 한 번에 하나)은 설정 그대로예요 (docs/vwap-bot-ko.md 2장). 여기는 "
+                   "보기만 해요: 규칙을 바꿀지는 두 분이 정하고, 바꾸려면 13장 순서(백테스트 → 그림자 → 채택)를 따라요.")
 PLAIN_ONE = {"in position": ("one", "한 번에 하나 (포지션 있음)"), "lower score than entered signal": ("one", "같은 때 다른 신호에 밀림"),
              "late": ("late", "늦음")}
 
@@ -175,7 +178,8 @@ def plain(p: dict, now: int, span: str, group: str, bots: list, b: dict, execs: 
     since = LM.window_start(now) if span == "7d" else 0
     rows, st = plain_rows(b["path"], since)
     base = {"now_ms": now, "span": span, "spans": [{"id": k, "ko": ko} for k, ko in SPANS], "kind": "plain", "bot": b["id"],
-            "bot_ko": b["short_ko"], "bots": L.bots_out(bots), "note_ko": PLAIN_KO, "small_ko": SMALL_KO, "since_ms": since}
+            "bot_ko": b["short_ko"], "bots": L.bots_out(bots), "note_ko": PLAIN_KO, "filter_note_ko": PLAIN_FILTER_KO,
+            "small_ko": SMALL_KO, "since_ms": since}
     if st is not None:
         return {**base, **{k: st.get(k) for k in ("state", "reason_ko", "reason", "path")}, "rows": [], "n_rows": 0, "groups": [],
                 "group": "all"}

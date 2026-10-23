@@ -208,10 +208,10 @@ export function firstLock(p, ladder) {
   return {lock, at, lockPrice: price(lock), atPrice: price(at), risk, rr: risk != null && risk < 0 ? lock / -risk : null};
 }
 
-/** The frame's side label: '추세판단 봇 · COMBO@MIX · 보기만 · 주문 없음' (tb: the summary's trend_bot; null: another bot, the
- *  old 'A+C 합본'; undefined: no summary yet, no name). */
-export function sideBotKo(tb) {
-  return `${tb === undefined ? "" : `${paperBotKo(tb)} · `}COMBO@MIX · 보기만 · 주문 없음`;
+/** The frame's side label: '추세판단 봇 · COMBO@MIX · 보기만 · 주문 없음' (tb: the summary's trend_bot; null: another bot, its
+ *  config name (name: the summary's paper.name_ko) or the old 'A+C 합본'; undefined: no summary yet, no name). */
+export function sideBotKo(tb, name) {
+  return `${tb === undefined ? "" : `${paperBotKo(tb, name)} · `}COMBO@MIX · 보기만 · 주문 없음`;
 }
 
 /** A time's angle on the day's dial (0 = 00:00 KST at the top, clockwise, 360 = 24:00). */
@@ -1143,10 +1143,11 @@ export function hqView(ctx, hub) {
   const foot = h("div", {class: "lbh-foot"});
   /** The paper bot's name on the frame's side label and the footer (the 추세판단 봇's own; before the first summary none). */
   function drawBot() {
-    const tb = st.d ? st.d.trend_bot || null : undefined, k = tb === undefined ? "" : paperBotKo(tb);
+    const tb = st.d ? st.d.trend_bot || null : undefined, nm = st.d && st.d.paper ? st.d.paper.name_ko : null;
+    const k = tb === undefined ? "" : paperBotKo(tb, nm);
     if (foot.dataset.k === k && foot.firstChild) return;
     foot.dataset.k = k;
-    sideBot.textContent = sideBotKo(tb);
+    sideBot.textContent = sideBotKo(tb, nm);
     put(foot, ui.assumeLive("바이비트 · WOO X Pro"), ui.assumeLine(["closed", "open"], `페이퍼(연습) ${k ? `${k} ` : ""}COMBO@mix · 게이지의 순ROE`));
   }
   const root = h("div", {class: "lbh", dataset: {still: ""}},

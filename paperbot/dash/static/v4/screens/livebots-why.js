@@ -11,6 +11,10 @@
 //   5 같은 때 다른 신호, 6 성적 (this setting / strategy in this bot before this entry; the 5-year numbers apart, labelled)
 // HONESTY: a part without its record says why (수집 전 / 못 읽음); descriptive marks are never called a rule; no buttons that
 // change anything.
+// The 'VWAP 개선판' (owners 10/23; the server's ``gate``): the strategy in the owners' words (signal.strategy_ko), no A / B
+// group, its checks in its own order with the numbers its gates read ("4시간 추세: 상승 3·하락 0·중립 1 → 롱 통과", "변동성
+// 30분 ATR 0.45% · 30일 80% 위치 0.62% → 통과"), the hold limit as information (·, not a pass); an entry recorded before the
+// gates' numbers were kept says so, never a made-up number (the server's words).
 import {h, put, ui, fmt} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
@@ -49,12 +53,15 @@ function recLine(r, what) {
   return `${what}: ${fmt.int(r.n)}번 ${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패 (승률 ${fmt.pct(r.win_rate, 0, false)} · 손익 ${fmt.money(r.pnl, true)} USDT)`;
 }
 
+/** A setting's group in words ("A그룹 · "), '' for a bot without groups (the server's group null: the VWAP bot). */
+const groupKo = (st) => (st.group === "B" ? "B그룹 (추격 진입 막기) · " : st.group === "A" ? "A그룹 · " : "");
+
 function signalPart(d) {
   const s = d.signal || {}, st = d.setting;
   const delay = s.ref_time && s.bar_close ? (s.ref_time - s.bar_close) / 1000 : s.delay_ms != null ? s.delay_ms / 1000 : null;
   const pairs = [
-    ["매매법", `${fmt.stratKo(s.strategy)} (${s.strategy}) · ${fmt.tfKo(s.tf)}봉`],
-    ["설정", st ? `${st.order}번 설정 · ${st.group === "B" ? "B그룹 (추격 진입 막기)" : "A그룹"} · ${st.entry_ko} 진입${st.invert ? " · 반대 방향" : ""}`
+    ["매매법", `${s.strategy_ko || fmt.stratKo(s.strategy)} (${s.strategy}) · ${fmt.tfKo(s.tf)}봉`],
+    ["설정", st ? `${st.order}번 설정 · ${groupKo(st)}${st.entry_ko} 진입${st.invert ? " · 반대 방향" : ""}`
       : s.order ? `${s.order}번 설정 (지금 설정 파일과 달라 자세한 내용은 못 보여 드려요)` : "설정 기록 없음"],
     ["손절 방식", st && st.stop ? st.stop.ko : null],
     ["신호 봉", s.bar_close ? `${fmt.kst(s.bar_close)} 마감 · ${s.side_ko || fmt.sideKo(s.side)} 신호` : null],
@@ -107,13 +114,16 @@ function checkDetail(x) {
       + `숏은 24시간 ${fmt.pct(l.h24_lo, 0, false)}·7일 ${fmt.pct(l.d7_lo, 0, false)}까지 막아요)`;
   }
   if (x.id === "chase") return t.reason_ko || null;
+  if (x.id === "hold" && t.hold_ko) return `이 거래는 ${fmt.tfKo(t.tf)}봉이라 ${t.hold_ko}`;
   return null;
 }
 
 function checksPart(d) {
   const xs = d.checks || [];
-  return sec(4, "진입 전에 통과한 검사", h("ul", {class: "lbw-checks"}, xs.map((x) => h("li", {class: x.ok === false ? "off" : x.ok ? "on" : "na"},
-    yes(x.ok), h("span", null, x.ko, checkDetail(x) ? h("small", {class: "muted"}, ` · ${checkDetail(x)}`) : null)))),
+  // x.info: a rule it runs under, not a check it passed (the VWAP bot's hold limit): a dot, never ✓
+  return sec(4, "진입 전에 통과한 검사", h("ul", {class: "lbw-checks"}, xs.map((x) => h("li", {class: x.info ? "na info" : x.ok === false ? "off" : x.ok ? "on" : "na"},
+    x.info ? h("i", {class: "lbw-ok na", "aria-label": "알아 둘 것"}, "·") : yes(x.ok),
+    h("span", null, x.ko, checkDetail(x) ? h("small", {class: "muted"}, ` · ${checkDetail(x)}`) : null)))),
   d.combo && d.combo.state !== "ok" ? sourceState(d.combo, "봇 설정") : null);
 }
 
@@ -149,8 +159,8 @@ export function whyBody(d) {
   }
   const s = d.signal || {};
   return h("div", {class: "lbw-in"},
-    h("p", {class: "lbw-head"}, h("b", null, `${fmt.stratKo(s.strategy)} · ${fmt.tfKo(s.tf)}봉`), " ", ui.sideTag(s.side), " ",
-      d.setting ? ui.pill(d.setting.group === "B" ? "B그룹" : "A그룹", d.setting.group === "B" ? "accent" : "thin") : null,
+    h("p", {class: "lbw-head"}, h("b", null, `${s.strategy_ko || fmt.stratKo(s.strategy)} · ${fmt.tfKo(s.tf)}봉`), " ", ui.sideTag(s.side), " ",
+      d.setting && d.setting.group ? ui.pill(d.setting.group === "B" ? "B그룹" : "A그룹", d.setting.group === "B" ? "accent" : "thin") : null,
       h("small", {class: "muted"}, ` ${d.bot_ko || ""} · ${fmt.kst(s.bar_close)} 봉 마감 신호 → ${fmt.hm(d.entry)} 진입`)),
     signalPart(d), condPart(d), chartPart(d), checksPart(d), rivalsPart(d), recordPart(d));
 }

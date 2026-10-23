@@ -11,6 +11,9 @@
 // deadline; the next bar closes per timeframe when nothing waits; the reason a wait cannot become an entry now (weekend,
 // macro, a position open, the paper bot down). HONESTY: a wait is not an entry; a level the rule bot's bars cannot give
 // is 기준가 못 읽음 (never a made-up price); the countdown is the real deadline (it says 시간 지남 · 진입 없음 at 0).
+// Two paper bots (owners 10/23: the 추세판단 봇 and the 'VWAP 개선판'): a switch on top (the server's ``bots``; the main
+// bot first, always the one shown on arrival) shows the other bot's signals and why its filter said no (?bot=paper2: its
+// gates' words under each row, gates_ko); the ⏳ card is the main bot's waits only, so it steps aside for the other bot.
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
@@ -18,6 +21,13 @@ const REFRESH_MS = 30 * 1000;
 const STAGE = [["signals", "신호"], ["filtered", "걸러짐"], ["waiting", "가격 기다림 (되돌림·돌파)"], ["skipped", "밀림·건너뜀"], ["rejected", "거절"], ["entered", "진입"]];
 const TONE = {entered: "good", filtered: "thin", waiting: "accent", broke: "accent", skipped: "warn", rejected: "bad", submitted: "thin", other: "thin"};
 const LIST = [{id: "all", label: "전부"}, {id: "out", label: "안 들어감"}, {id: "entered", label: "진입"}];
+
+/** The answer's address for a paper bot: the main one's as always (one paper bot: the only one), the other by ?bot=. */
+export const signalsApi = (bot) => (bot && bot !== "paper" ? `/api/v4/livebots/signals?bot=${encodeURIComponent(bot)}` : "/api/v4/livebots/signals");
+
+/** A ui.card's head part: its title (h2) or its sub line (the span "sub"), null when missing. */
+const cardHead = (card, which) => (card && card.firstChild ? Array.from(card.firstChild.childNodes)
+  .find((n) => (which === "title" ? String(n.tagName || "").toLowerCase() === "h2" : String(n.className || "") === "sub")) || null : null);
 
 /** Rows for a list filter: "all", "entered", or "out" (every signal that did not become an entry). */
 export const rowsFor = (rows, f) => (rows || []).filter((r) => f === "all" || (f === "entered" ? r.stage === "entered" : r.stage !== "entered" && r.status !== "BROKE"));
@@ -167,7 +177,7 @@ export function waitView(ctx) {
 
 /** signalsView(ctx) -> {el, set()} */
 export function signalsView(ctx) {
-  const st = {span: local.get("lb-sspan", "today"), list: "out", d: null, okAt: 0};
+  const st = {span: local.get("lb-sspan", "today"), list: "out", d: null, okAt: 0, bot: "paper", botKey: "", seq: 0};
   if (!["today", "week"].includes(st.span)) st.span = "today";
   const spanSeg = ui.seg([{id: "today", label: "오늘"}, {id: "week", label: "최근 7일"}], st.span, (id) => { st.span = id; local.set("lb-sspan", id); draw(); }, {label: "기간"});
   const funnel = h("div", {class: "lb-funnel"});
@@ -177,10 +187,13 @@ export function signalsView(ctx) {
   const listSeg = ui.seg(LIST, st.list, (id) => { st.list = id; drawList(true); }, {label: "목록 고르기"});
   const pg = ui.pager({size: 10, row: (r) => rowOf(r), empty: () => (st.d ? ui.empty("맞는 신호가 없어요") : motion.shimmer(3))});
   const wait = waitView(ctx);
-  const el = h("div", {class: "lb-signals stack"}, wait.el,
-    ui.card({title: "신호가 어디까지 갔나", sub: "페이퍼 봇의 신호 · 한국 시간", cls: "lb-fcard", acts: [spanSeg]}, stateSlot, funnel, sinceNote,
-      h("p", {class: "lb-rhead"}, "이유별"), reasons,
-      ui.note("실거래 실행기는 페이퍼가 진입한 것만 따라가요 (신호등이 빨강이거나 멈춤이면 그것도 건너뜀: 거래 · 안전 탭)")),
+  const botBar = h("div", {class: "lb-tbar lb-sbots", hidden: true});
+  const FNOTE = "실거래 실행기는 페이퍼가 진입한 것만 따라가요 (신호등이 빨강이거나 멈춤이면 그것도 건너뜀: 거래 · 안전 탭)";
+  const fnote = ui.note(FNOTE);
+  const fcard = ui.card({title: "신호가 어디까지 갔나", sub: "페이퍼 봇의 신호 · 한국 시간", cls: "lb-fcard", acts: [spanSeg]}, stateSlot, funnel, sinceNote,
+    h("p", {class: "lb-rhead"}, "이유별"), reasons, fnote);
+  const fsub = cardHead(fcard, "sub");
+  const el = h("div", {class: "lb-signals stack"}, botBar, wait.el, fcard,
     ui.card({title: "왜 안 들어갔지?", sub: "최근 신호 200개까지 · 10개씩", cls: "lb-scard", acts: [listSeg]}, pg.el));
 
   function rowOf(r) {
@@ -189,12 +202,34 @@ export function signalsView(ctx) {
       h("span", {class: "lb-ss", title: r.member}, `${fmt.stratKo(r.strategy)} · ${fmt.tfKo(r.tf)}`),
       r.prev ? ui.pill("전환 전", "warn", "추세판단 봇이 켜지기 전, 예전 봇의 신호예요 (위 숫자에 안 셈)") : null,
       ui.pill(r.ko, TONE[r.stage] || "thin"),
-      r.why && r.why !== r.ko ? h("span", {class: "lb-sw2 muted", title: r.why}, ui.moreText(r.why_ko || r.why, 2)) : null);
+      r.why && r.why !== r.ko ? h("span", {class: "lb-sw2 muted", title: r.why}, ui.moreText(r.why_ko || r.why, 2)) : null,
+      r.gates_ko ? h("span", {class: "lb-sw2 lb-sgate muted", title: "VWAP 개선판 조건이 읽은 값"}, `조건이 읽은 값: ${r.gates_ko}`) : null);
+  }
+  /** The bot switch from the answer (two paper bots only; rebuilt in place when the bots' names change). */
+  function bots(d) {
+    const list = d && Array.isArray(d.bots) && d.bots.length > 1 ? d.bots : null;
+    const key = list ? list.map((b) => `${b.id}:${b.short_ko}`).join() : "";
+    if (key !== st.botKey) {
+      st.botKey = key;
+      put(botBar, list ? [h("span", {class: "muted lb-sbk"}, "어느 봇의 신호"),
+        ui.seg(list.map((b) => ({id: b.id, label: b.short_ko})), st.bot, (id) => {
+          if (id === st.bot) return;
+          st.bot = id; st.d = null; wait.el.hidden = id !== "paper"; draw(); load().catch(() => {});
+        }, {label: "페이퍼 봇 고르기"})] : null);
+    }
+    botBar.hidden = !list;
+    if (!list && st.bot !== "paper") st.bot = "paper";
+    wait.el.hidden = st.bot !== "paper";              // the ⏳ waits are the main bot's (/now)
+    const bk = list && d.bot_ko ? d.bot_ko : null;
+    const fs = bk ? `${bk}의 신호 · 한국 시간` : "페이퍼 봇의 신호 · 한국 시간";
+    if (fsub && fsub.textContent !== fs) fsub.textContent = fs;
+    fnote.textContent = bk ? "실거래 실행기는 자기가 따라가는 페이퍼 봇이 진입한 것만 따라가요 (신호등이 빨강이거나 멈춤이면 그것도 건너뜀: 거래 · 안전 탭)" : FNOTE;
   }
   function drawList(user) { pg.set(st.d && st.d.state === "ok" ? rowsFor(st.d.rows, st.list) : st.d ? [] : undefined, !user); }
   function draw() {
     spanSeg.set(st.span);
     const d = st.d;
+    if (d) bots(d);
     if (!d) { put(funnel, motion.shimmer(2)); put(reasons); drawList(false); return; }
     if (d.state !== "ok") { put(stateSlot, sourceState(d, "페이퍼 DB (신호 기록)")); put(funnel); put(reasons); drawList(false); return; }
     put(stateSlot);
@@ -214,9 +249,14 @@ export function signalsView(ctx) {
     drawList(false);
   }
   async function load() {
-    try { st.d = await ctx.api("/api/v4/livebots/signals"); st.okAt = Date.now(); }
+    const seq = ++st.seq;
+    try {
+      const d = await ctx.api(signalsApi(st.bot));
+      if (seq !== st.seq) return;                     // the switch moved on while this was on its way
+      st.d = d; st.okAt = Date.now();
+    }
     catch (e) {
-      if (!ctx.alive() || (e && e.name === "AbortError")) return;
+      if (!ctx.alive() || (e && e.name === "AbortError") || seq !== st.seq) return;
       put(stateSlot, st.d ? ui.staleNote(e, st.okAt, () => load()) : ui.errorBox(e, () => load()));
       throw e;
     }

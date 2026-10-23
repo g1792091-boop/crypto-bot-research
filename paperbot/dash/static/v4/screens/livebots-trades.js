@@ -135,12 +135,21 @@ export function tradesView(ctx) {
     return h("p", {class: "note"}, "이 손실의 카드는 아직 없어요 (감시가 청산 몇 분 뒤에 만들어요 · 7일보다 오래된 손실은 만들지 않아요)");
   }
   /** Entered before the 추세판단 봇's start (the bot before it on the same paper account): a paper trade's entry, a live
-   *  trade's paper partner's (else its own entry). */
+   *  trade's paper partner's (else its own entry). Never a trade of the second paper bot (owners 10/23: the 'VWAP 개선판'
+   *  has its own account and start), nor a live trade that followed it. */
   function prevTrade(r) {
     const since = st.d && st.d.trend_bot ? Number(st.d.trend_bot.since) : null;
-    if (!since) return false;
+    if (!since || st.acct === "paper2" || (r.paper && r.paper.paper_id === "paper2")) return false;
     const t = r.entry_time != null ? r.entry_time : r.paper && r.paper.entry_time != null ? r.paper.entry_time : r.entry_ts;
     return t != null && Number(t) < since;
+  }
+  /** The paper bot a live trade followed, when this account followed more than one (owners 10/23: an executor moved to the
+   *  'VWAP 개선판'): its pill on each row; null otherwise (one bot: rows as before). */
+  function botPill(r) {
+    if (isPaper(st.acct) || !r.paper || !r.paper.paper_id) return null;
+    const rows = ((st.d && st.d.accts[st.acct]) || {}).rows || [];
+    if (new Set(rows.map((x) => x.paper && x.paper.paper_id).filter(Boolean)).size < 2) return null;
+    return ui.pill(acctKo(r.paper.paper_id), "thin", "이 거래가 따라간 페이퍼 봇");
   }
   function rowOf(r) {
     const open = st.open === r.key;
@@ -150,7 +159,7 @@ export function tradesView(ctx) {
     h("span", {class: "lb-ts"}, r.strategy_id ? `${fmt.stratKo(r.strategy_id)} · ${fmt.tfKo(r.timeframe)}` : "매매법 모름"),
     h("span", {class: "lb-tpills"}, ui.pill(r.reason_ko || "—", r.exit_reason === "LOCK" || r.exit_reason === "TP" ? "good" : r.exit_reason === "SL" || r.exit_reason === "LIQ" ? "bad" : "thin"),
       r.card ? ui.pill("카드", "thin", `손실 카드: ${r.card.label || ""}`) : null,
-      prevTrade(r) ? ui.pill("전환 전", "warn", "추세판단 봇이 켜지기 전에 들어간 거래예요 (예전 봇)") : null),
+      prevTrade(r) ? ui.pill("전환 전", "warn", "추세판단 봇이 켜지기 전에 들어간 거래예요 (예전 봇)") : null, botPill(r)),
     excCell(r),
     h("span", {class: ["num", "lb-tr", fmt.tone(r.roe)]}, r.roe == null ? "—" : fmt.pct(r.roe, 1)),
     h("b", {class: ["num", "lb-tp", fmt.tone(r.pnl)]}, money(r.pnl, r.est)));

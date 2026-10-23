@@ -13,6 +13,10 @@
 // HONESTY: never a "good ones only" view without the totals of both sides next to it; the watcher's file or table not there
 // yet = 수집 전, unreadable = 못 읽음 + why (never an empty list); a refresh that fails keeps the last answer, dimmed, with its
 // age; no virtual price is ever made up (1분봉 없음 / 다시 못 만듦 with the reason).
+// Two paper bots (owners 10/23: the 추세판단 봇 and the 'VWAP 개선판'): a switch on top (the server's ``bots``; the main bot
+// on arrival, never remembered). The other bot's answer is ``kind`` "plain": its not-taken signals by why (its gates' own
+// reasons) with what the gates read, and its paper trades an executor following it did not take (the paper result) — the
+// watcher simulates only the main bot's signals, so it shows no virtual result and says so (the server's note_ko).
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
 
@@ -107,6 +111,21 @@ export function sameKey(d) {
   return JSON.stringify({...d, now_ms: 0, pass: p, rows: (d.rows || []).map(({updated_ts: _u, sims: _s, ...r}) => r)});
 }
 
+/** The answer's address: the main paper bot's as always, the other one's with &bot= (its group by its own reasons). */
+export function missedUrl(st) {
+  const bot = st.bot && st.bot !== "paper" ? st.bot : null;
+  return bot ? `${API}?span=${encodeURIComponent(st.span)}&group=${encodeURIComponent(st.pgroup || "all")}&bot=${encodeURIComponent(bot)}`
+    : `${API}?span=${encodeURIComponent(st.span)}&group=${encodeURIComponent(st.group)}&result=${encodeURIComponent(st.result)}`;
+}
+/** A plain answer's row result: the paper result of a trade an executor did not take, else none (never a made-up one). */
+export function plainResult(r) {
+  if (r && r.state === "closed") return {...resultOf(r), how: "페이퍼 거래의 결과 (실행기는 안 탐 · 가상 아님)"};
+  return {icon: "", text: "가상 결과 없음", tone: "thin", why: "이 봇의 신호는 1분 감시가 가상으로 따라가 보지 않아요"};
+}
+/** A plain answer's group chips: [{id, label}] (전체 first, then its own reasons by count). */
+export const plainChips = (d) => [{id: "all", label: `전체 ${fmt.int((d && d.counts && d.counts.all) || 0)}`},
+  ...((d && d.groups) || []).map((g) => ({id: g.id, label: `${g.ko} ${fmt.int(g.n || 0)}`}))];
+
 /** The watcher's last pass in words. */
 export function passLine(p, now = Date.now()) {
   if (!p) return "";
@@ -119,8 +138,8 @@ export function passLine(p, now = Date.now()) {
 /** missedView(ctx) -> {el}: its own endpoint every 30 s; the span, group and result chosen are remembered on this device. */
 export function missedView(ctx) {
   const st = {span: spanOf(local.get(SPAN_KEY, "7d")), group: groupOf(local.get(GROUP_KEY, "all")), result: resOf(local.get(RESULT_KEY, "all")),
-    d: null, key: "", okAt: 0};
-  const choose = (k, store, v) => { st[k] = v; local.set(store, v); st.key = ""; load(true).catch(() => {}); };
+    d: null, key: "", okAt: 0, bot: "paper", pgroup: "all", botKey: ""};
+  const choose = (k, store, v) => { st[k] = v; if (store) local.set(store, v); st.key = ""; load(true).catch(() => {}); };
   const spanSeg = ui.seg(SPANS, st.span, (id) => choose("span", SPAN_KEY, spanOf(id)), {label: "기간"});
   const groupSlot = h("div", {class: "lbm-gseg"});
   const resSeg = ui.seg(RESULTS, st.result, (id) => choose("result", RESULT_KEY, resOf(id)), {label: "결과"});
@@ -132,16 +151,20 @@ export function missedView(ctx) {
   const tot = h("p", {class: "lbm-tot", role: "status"});
   const pg = ui.pager({size: PAGE, row: (r) => rowEl(r), empty: () => (st.d ? ui.empty(st.result === "all" ? "이 기간·이 그룹에 못 탄 신호가 없어요"
     : `이 그룹에 ${RESULT_LABEL[st.result]}이 없어요 (위 숫자가 전체예요)`) : motion.shimmer(3))});
+  const rbar = h("div", {class: "lbm-rbar"}, resSeg);
   const listCard = ui.card({title: "신호 하나씩", sub: "최신 먼저 · 10개씩 · 한국 시간", cls: "lbm-list"},
-    groupSlot, h("div", {class: "lbm-rbar"}, resSeg), tot, pg.el);
+    groupSlot, rbar, tot, pg.el);
   const foot = h("div", {class: "lbm-foot", role: "note"});
-  const body = h("div", {class: "lbm-body"},
+  const SUB = "봇이 안 들어간 신호를, 왜 못 탔는지 그룹마다, 페이퍼 봇과 같은 엔진으로 따라가 봤어요";
+  const subEl = h("p", {class: "lbm-sub"}, SUB);
+  const botBar = h("div", {class: "lb-tbar lbm-bots", hidden: true});
+  const body = h("div", {class: "lbm-body"}, botBar,
     h("section", {class: "lbm-head", "aria-label": "못 탄 신호는 어땠을까"},
       h("div", {class: "lbm-htop"}, h("h2", null, "못 탄 신호는 어땠을까?"), spanSeg),
-      h("p", {class: "lbm-sub"}, "봇이 안 들어간 신호를, 왜 못 탔는지 그룹마다, 페이퍼 봇과 같은 엔진으로 따라가 봤어요"),
-      srcSlot, cards, small, passEl),
+      subEl, srcSlot, cards, small, passEl),
     listCard);
   const el = h("div", {class: "lbm"}, stateSlot, body, foot);
+  const plainOn = () => !!(st.d && st.d.kind === "plain");
 
   function card(cls, title, b, unit, extra, read) {
     const w = blockWords(b, unit);
@@ -173,7 +196,45 @@ export function missedView(ctx) {
     const anySmall = (s.taken && s.taken.small) || (s.groups || []).some((g) => g.n && g.small);
     put(small, anySmall ? [h("b", null, "표본 적음"), ` · 닫힌 것 ${SMALL_N}번 미만은 대부분 운이에요. 이긴 것만 보지 말고 진 것과 같이 보세요`] : null);
   }
+  /** A plain answer's group card: how many, and that there is no virtual result (the paper result for the executors' misses). */
+  function plainCard(g) {
+    return h("div", {class: ["lbm-blk", `g-${g.id}`, "plain"], role: "listitem", "aria-label": g.ko},
+      h("h3", null, g.ko), h("b", {class: "lbm-n num"}, `${fmt.int(g.n || 0)}${g.id === "exec" ? "번" : "개"}`),
+      h("p", {class: "lbm-read"}, g.id === "exec" ? "페이퍼 거래의 결과는 목록에 (가상 아님)" : "왜 못 탔는지와 그때 조건이 읽은 숫자만 (가상 결과 없음)"));
+  }
+  function drawPlain(d, user) {
+    put(srcSlot, h("p", {class: "lbm-warn lbm-plainnote"}, d.note_ko || ""));
+    const gs = d.groups || [];
+    put(cards, gs.length ? gs.map(plainCard) : h("div", {class: "lbm-blk none", role: "listitem"}, h("h3", null, "못 탄 신호"),
+      h("p", {class: "lbm-read"}, "이 기간에 없어요")));
+    put(small); put(passEl);
+    put(groupSlot, ui.seg(plainChips(d), d.group || "all", (id) => choose("pgroup", null, id), {label: "왜 못 탔나", scroll: true}));
+    const g = gs.find((x) => x.id === d.group);
+    put(tot, h("b", null, `${g ? g.ko : "전체"}: ${fmt.int(d.n_rows || 0)}개${d.n_rows > (d.rows || []).length ? ` · 최신 ${fmt.int((d.rows || []).length)}개만 보여요` : ""}`));
+    pg.set(d.rows || [], !user);
+    if (user) motion.swap(cards);
+  }
+  /** The bot switch from the answer (two paper bots only; rebuilt in place when the bots' names change). */
+  function drawBots(d) {
+    const list = d && Array.isArray(d.bots) && d.bots.length > 1 ? d.bots : null;
+    const key = list ? list.map((b) => `${b.id}:${b.short_ko}`).join() : "";
+    if (key !== st.botKey) {
+      st.botKey = key;
+      put(botBar, list ? [h("span", {class: "muted lb-sbk"}, "어느 봇의 신호"),
+        ui.seg(list.map((b) => ({id: b.id, label: b.short_ko})), st.bot, (id) => {
+          if (id === st.bot) return;
+          st.bot = id; st.pgroup = "all"; choose("bot", null, id);
+        }, {label: "페이퍼 봇 고르기"})] : null);
+    }
+    botBar.hidden = !list;
+    if (!list) st.bot = "paper";
+    const plain = !!(d && d.kind === "plain");
+    rbar.hidden = plain;
+    subEl.textContent = plain ? `${d.bot_ko || "이 봇"}의 못 탄 신호를 왜 못 탔는지 그룹마다 모았어요 · 그때 조건이 읽은 숫자와 함께`
+      : list && d.bot_ko ? `${d.bot_ko} · ${SUB}` : SUB;
+  }
   function rowEl(r) {
+    if (plainOn()) return plainRow(r);
     const x = resultOf(r);
     return h("div", {class: ["lbm-row", r.state, x.tone], role: "listitem"},
       h("span", {class: "lbm-t num"}, fmt.kst(r.t)),
@@ -187,7 +248,25 @@ export function missedView(ctx) {
       h("span", {class: "lbm-hold num", title: "들고 있던 시간 (진행 중이면 지금까지)"}, holdText(r)),
       h("span", {class: ["lbm-tk", r.taken && r.taken.state === "open" ? "open" : ""]}, r.grp === "one" ? takenText(r.taken) : ""));
   }
+  function plainRow(r) {
+    const x = plainResult(r);
+    return h("div", {class: ["lbm-row", "plain", r.state, x.tone], role: "listitem"},
+      h("span", {class: "lbm-t num"}, fmt.kst(r.t)),
+      h("span", {class: "lbm-c"}, h("b", null, fmt.coin(r.symbol)), ui.sideTag(r.side)),
+      h("span", {class: "lbm-s", title: r.member || ""}, `${fmt.stratKo(r.strategy)} · ${fmt.tfKo(r.tf)}`),
+      h("span", {class: "lbm-why"}, h("span", {class: ["lbm-g", `g-${r.grp}`]}, r.grp_ko || r.grp), " ",
+        r.why && r.why !== r.grp_ko ? h("span", {title: r.why}, r.why_ko || r.why) : null,      // (한 번에 하나: its group says it)
+        r.gates_ko ? h("small", {class: "lbm-gates"}, `조건이 읽은 값: ${r.gates_ko}`) : null),
+      h("span", {class: ["lbm-res", x.tone], title: x.why || ""},
+        x.icon ? h("i", {"aria-hidden": "true"}, x.icon) : null, h("b", {class: "num"}, x.text), x.how ? h("small", {class: "lbm-how"}, x.how) : null),
+      h("span", {class: "lbm-hold num"}, ""),
+      h("span", {class: "lbm-tk"}, ""));
+  }
   function drawFoot(d) {
+    if (d && d.kind === "plain") {
+      put(foot, h("p", null, d.note_ko || ""), d.filter_note_ko ? h("p", null, d.filter_note_ko) : null);
+      return;
+    }
     put(foot, h("p", null, (d && d.note_ko) || NOTE), h("p", null, (d && d.filter_note_ko) || FILTER_NOTE),
       !(d && d.funding_included) ? h("p", null, (d && d.funding_ko) || FUNDING) : null);
   }
@@ -198,14 +277,16 @@ export function missedView(ctx) {
   function draw(user) {
     const d = st.d;
     spanSeg.set(st.span); resSeg.set(st.result);
+    if (d) drawBots(d);
     drawFoot(d);
     listCard.hidden = !!d && d.state !== "ok";        // 수집 전 / 못 읽음: no list (an empty list would read as "nothing missed")
     if (!d) { put(cards, motion.shimmer(3)); put(small); put(passEl); put(tot); drawGroups(null); pg.set(undefined); return; }
     if (d.state !== "ok") {
-      put(srcSlot, sourceState(d, "못 탄 신호 기록 (livecheck.db)"));
+      put(srcSlot, sourceState(d, d.kind === "plain" ? `${d.bot_ko || "두 번째"} 페이퍼 DB (신호 기록)` : "못 탄 신호 기록 (livecheck.db)"));
       put(cards); put(small); put(passEl); put(tot); pg.set([]);
       return;
     }
+    if (d.kind === "plain") { drawPlain(d, user); return; }
     put(srcSlot, d.pass && d.pass.rig_error ? h("p", {class: "lbm-warn"}, `계산을 못 했어요: ${d.pass.rig_error}`) : null);
     drawCards(d);
     drawPass(d);
@@ -222,7 +303,7 @@ export function missedView(ctx) {
   }
   async function load(user) {
     let d;
-    const want = `${API}?span=${encodeURIComponent(st.span)}&group=${encodeURIComponent(st.group)}&result=${encodeURIComponent(st.result)}`;
+    const want = missedUrl(st);
     try { d = await ctx.api(want); }
     catch (e) {
       if (!ctx.alive() || (e && e.name === "AbortError")) return;
@@ -231,7 +312,7 @@ export function missedView(ctx) {
       if (!st.d) body.hidden = true;
       throw e;
     }
-    const now = `${API}?span=${encodeURIComponent(st.span)}&group=${encodeURIComponent(st.group)}&result=${encodeURIComponent(st.result)}`;
+    const now = missedUrl(st);
     if (!ctx.alive() || now !== want) return;          // the choice changed while it loaded: the newer load draws
     put(stateSlot);
     ui.dim(body, false);

@@ -564,7 +564,7 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
             "checks": gate_checks(cfg, int(entry), side, tf, meta.get("gates")) if gate else
             checks(cfg, member, int(entry), bar_close, side, symbol, signal["ref_price"], more["rule_db"]),
             "rivals": rivals(b["path"], L.ACCOUNT, bar_close, (tf, meta.get("member") or strategy, symbol)),
-            "record": rec, "five_year": five}
+            "record": rec, "five_year": five, **({"gate": True} if gate else {})}
 
 
 # ---------------------------------------------------------------- routes

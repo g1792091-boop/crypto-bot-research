@@ -1407,7 +1407,8 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     # each executor borrows the next lock of the paper position IT follows (its own paper bot's)
     accts = [acct_paper(paper, ACCOUNT, now, label=bots[0] if len(bots) > 1 else None)]
     accts += [acct_paper(b["read"], ACCOUNT, now, b["id"], b) for b in bots[1:]]
-    accts += [acct_exec(x, (own_account(x) or {}).get("position"), now) for x in execs]
+    accts += [acct_exec(x, (own_account(x) or {}).get("position"), now) | ({"follows_ko": x["follows_ko"]} if x.get("follows_ko") else {})
+              for x in execs]                            # two paper bots: each executor says which one it follows
     fills = fills_of(paper, execs, ACCOUNT, papers=bots)
     marks = marks_of(paper, execs, ACCOUNT, papers=bots)
     events = sorted(((dict(e, ex=x["id"], ex_ko=x["name_ko"])) for x in execs for e in (x["record"].get("events") or [])),
