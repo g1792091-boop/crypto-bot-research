@@ -33,7 +33,7 @@ const SIDE = (x) => (Number(x) > 0 ? "롱" : "숏");
 const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 const signedUsd = (x) => (ok(x) ? `${Number(x) >= 0 ? "+" : "−"}${fmt.usd(Math.abs(Number(x)))}` : "—");
 const STAGE_TONE = {entered: "good", skipped: "thin", late: "warn", rejected: "warn", filtered: "bad", submitted: "thin", other: "thin"};
-const GROUP_TONE = {vote: "bad", vol: "warn", pause: "accent", unread: "thin", other: "thin"};
+const GROUP_TONE = {vote: "bad", vol: "warn", pause: "", unread: "thin", other: "thin"};
 const CHECK_KO = {ok: "충족", no: "아직 아님", wait: "기다림", info: "참고", bad: "본전 아래"};
 const CHECK_TONE = {ok: "good", no: "bad", wait: "thin", info: "accent", bad: "bad"};
 const UNIT = "paperbot-combo-vwap";
@@ -465,6 +465,7 @@ export function vwperfView(ctx) {
   const skillBox = h("div", {class: "lvw-skill"});
   const checkBox = h("div", {class: "lvw-checks"});
   const refBox = h("div", {class: "lvw-ref"});
+  const noteBox = h("div", {class: "lvw-notes"});
   const splitHead = h("div", {class: "lvw-splithead"});
   const splitBox = h("div", {class: "lvw-split"});
   const tradeBox = h("div", {class: "lvw-trades"});
@@ -474,6 +475,7 @@ export function vwperfView(ctx) {
       h("div", {class: "lvw-cmpgrid"}, cmpBox, chartBox), skillBox),
     ui.card({title: "키우기 · 멈추기", sub: "실행기가 이 봇을 따라간 뒤의 실거래만 · docs/vwap-bot-ko.md 6장", cls: "lvw-checkcard"}, checkBox),
     ui.card({title: "연구 숫자와 나란히", sub: "연구 계산은 참고예요 · 실제가 이 숫자를 따라간다는 약속이 아니에요", cls: "lvw-refcard"}, refBox),
+    ui.card({title: "연구 노트", sub: "페이퍼 기록으로 지금 계산 · 물림(이기기 전에 얼마나 밀렸나)과 신호등이 진 거래를 골라내는지", cls: "lvw-notecard"}, noteBox),
     ui.card({title: "나눠 보기", sub: "어디서 이기고 어디서 지나 · 칸마다 10번 미만은 표본 적음", cls: "lvw-splitcard"}, splitHead, splitBox),
     ui.card({title: "거래", sub: "새것부터 · 진입 때 조건 숫자와 실행기의 결과", cls: "lvw-tradecard"}, tradeBox));
   const main = h("div", {class: "lvw-body"}, cards);
@@ -557,6 +559,27 @@ export function vwperfView(ctx) {
         h("li", null, `50번 연속 구간에서 승률 80% 이상은 ${rateKo(y5.share_80)}였고, 그 뒤 50번은 평균 승률 ${rateKo(y5.next_win_80)} · 거래당 순ROE ${pctKo(y5.next_roe_80)} · 가운데 ×${ok(y5.next_mult_80) ? Number(y5.next_mult_80).toFixed(2) : "—"}였어요`),
         h("li", {class: "lvw-sub"}, `출처: ${y5.src || ""} · ${p17.src || ""}`)));
   }
+  function drawNotes() {
+    const n = st.d.notes || {}, dp = n.dips || {}, lt = n.light || {};
+    const dip = (x) => (x ? `${fmt.int(x.n)}번${ok(x.share) ? ` (${rateKo(x.share, 0)})` : ""}` : "—");
+    const [d20, d40] = dp.dips || [];
+    const rec = (r) => (r && r.n ? `${fmt.int(r.n)}번 · ${fmt.int(r.wins)}승 ${fmt.int(r.losses)}패 · 승률 ${rateKo(r.win_rate)} · 순ROE 합 ${pctKo(r.roe_sum)}` : "없음");
+    const rule = lt.rule || {};
+    put(noteBox,
+      h("div", {class: "lvw-note"}, h("b", null, "물림 (진입 뒤 가장 깊이 밀린 순ROE)"),
+        h("ul", {class: "lvw-list lvw-rlist"},
+          h("li", null, `이긴 거래 ${fmt.int(dp.wins)}번 중 먼저 −20% 넘게 물린 거래 ${dip(d20)} · −40% 넘게 ${dip(d40)}`),
+          h("li", null, `이긴 거래의 평균 최저 ${pctKo(dp.mae_win)} · 진 거래의 평균 최저 ${pctKo(dp.mae_loss)}`),
+          h("li", null, `진 거래 중 먼저 +10%까지 갔던 거래 ${fmt.int(dp.loss_up10)}번`),
+          dp.ref ? h("li", {class: "lvw-sub"}, `${dp.ref.ko} (${dp.ref.src})`) : null),
+        dp.small ? h("p", {class: "lvw-sub"}, "거래 20번 미만 · 표본 적음") : null),
+      h("div", {class: "lvw-note"}, h("b", null, `신호등 시험 (최근 ${fmt.int(rule.n)}번 중 ${rateKo(rule.min_win, 0)} 이상일 때만 따라감)`),
+        h("ul", {class: "lvw-list lvw-rlist"},
+          h("li", null, `따라갔을 거래 ${rec(lt.follow)}`),
+          h("li", null, `걸렀을 거래 ${rec(lt.hold)}`),
+          lt.ref ? h("li", {class: "lvw-sub"}, `${lt.ref.ko} (${lt.ref.src})`) : null),
+        lt.small ? h("p", {class: "lvw-sub"}, `페이퍼 거래가 ${fmt.int((rule.n || 20) * 2)}번이 안 돼 아직 대부분 '근거 쌓는 중'(모두 따라감)이에요 · 표본 적음`) : null));
+  }
   function drawSplit() {
     const d = st.d, sp = (d.splits || {})[st.acct] || [];
     const accts = [{id: "paper", label: "페이퍼"}, {id: "flip", label: "동전 쌍둥이"}];
@@ -585,7 +608,7 @@ export function vwperfView(ctx) {
         ui.pill(t.reason_ko, t.reason === "LOCK" ? "good" : t.reason === "SL" ? "bad" : "accent", t.why || ""),
         h("b", {class: ["num", "lvw-troe", fmt.tone(t.roe)]}, pctKo(t.roe))),
       h("div", {class: "lvw-tmeta num"}, `${fmt.kst(t.entry_time)} → ${fmt.kst(t.exit_time)} (${holdKo(t.hold_ms)}) · ${fmt.price(t.entry_price)} → ${fmt.price(t.exit_price)}`,
-        t.why ? ` · ${t.why}` : ""),
+        t.why ? ` · ${t.why}` : "", ok(t.mae) ? ` · 물림 ${pctKo(t.mae)} · 최고 ${pctKo(t.mfe)}` : ""),
       h("div", {class: "lvw-tg"}, gatesLine(t.gates)),
       cols.length ? h("div", {class: "lvw-tlive"}, cols.map((c) => {
         const cell = (t.live || {})[c.id];
@@ -602,7 +625,7 @@ export function vwperfView(ctx) {
     put(slot, stateOf(d));
     if (!d || d.state !== "ok") { cards.hidden = true; return; }
     cards.hidden = false;
-    drawCmp(); drawChecks(); drawRef(); drawSplit(); drawTrades();
+    drawCmp(); drawChecks(); drawRef(); drawNotes(); drawSplit(); drawTrades();
   }
   poller(ctx, PERF_API, SLOW_MS, st, slot, main, draw);
   return {el, set() {}};

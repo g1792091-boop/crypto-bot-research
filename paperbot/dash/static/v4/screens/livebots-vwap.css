@@ -8,7 +8,7 @@
 .lvw-cards > .card, .lvw-two > .card { min-width: 0; }
 /* numbers wrap like words here (a long line of them must never push the page sideways); the short ones stay whole */
 .lvw .num { white-space: normal; }
-.lvw-tv, .lvw-t, .lvw-troe, .lvw-ctr .num, .lvw-btr .num, .lvw-sroe { white-space: nowrap; }
+.lvw-tv, .lvw-t, .lvw-troe, .lvw-ctr .num, .lvw-btr .num, .lvw-sroe, .lvw .lb-lstate { white-space: nowrap; }
 .lvw-two { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; align-items: start; }
 @media (min-width: 900px) { .lvw-two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
 @media (min-width: 1100px) { .lvw-two.lvw-top { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } }
@@ -213,13 +213,18 @@ small.lvw-sub { font-size: var(--t-2xs); }
 
 /* ---------------------------------------------------------------- 성적: 연구 숫자와 나란히 */
 .lvw-rtab { display: grid; min-width: 0; font-size: var(--t-sm); }
-.lvw-rtr { display: grid; grid-template-columns: minmax(0, 1.4fr) 70px 110px minmax(0, 1.5fr) minmax(0, 1.6fr); gap: 4px 10px; align-items: baseline;
+.lvw-rtr { display: grid; grid-template-columns: minmax(0, 1.4fr) 70px 150px minmax(0, 1.5fr) minmax(0, 1.6fr); gap: 4px 10px; align-items: baseline;
   padding: 7px 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .lvw-rtr > * { min-width: 0; overflow-wrap: anywhere; }
 .lvw-rth { color: var(--muted); font-size: var(--t-xs); }
 .lvw-rtr.ref > b { color: var(--ink-2); }
 .lvw-rtr.now > b { color: var(--ink); }
 .lvw-ref .lvw-rlist { margin-top: 10px; }
+.lvw-notes { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+@media (min-width: 1100px) { .lvw-notes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.lvw-note { display: grid; gap: 8px; align-content: start; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line);
+  background: var(--surface-2); min-width: 0; font-size: var(--t-sm); }
+.lvw-note p { margin: 0; }
 
 /* ---------------------------------------------------------------- 성적: 나눠 보기 · 거래 */
 .lvw-splithead { display: grid; gap: 6px; margin-bottom: 10px; min-width: 0; }
@@ -263,7 +268,7 @@ small.lvw-sub { font-size: var(--t-2xs); }
   transition: width .6s var(--ease); }
 .lvw-bbar.vote > i { background: var(--down); }
 .lvw-bbar.vol > i { background: var(--warn); }
-.lvw-bbar.pause > i { background: var(--accent); }
+.lvw-bbar.pause > i { background: var(--ink-2); }
 .lvw-vhead { margin: 0 0 10px; font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
 .lvw-vhead b.up { color: var(--up); }
 .lvw-vhead b.down { color: var(--down); }

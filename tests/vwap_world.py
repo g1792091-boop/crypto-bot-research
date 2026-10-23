@@ -26,7 +26,7 @@ VWAP paper (COMBO@mix, $1,000):
   E3 LTC long  VWAP 30m  10/23 15:00  +0.3 % in 48 h        -> TIME 10/25 15:00 (~+4.8 %)
   F4 BCH long  VWAP 30m  10/24 12:00  Saturday              -> FILTERED (주말, the runner's own)
   F5 BTC short VWAP 30m  10/26 09:30  30m bars unread       -> FILTERED (gate_unread)
-  E4 BCH long  CMO 1h    10/26 10:00  +1.0 % then back      -> LOCK (~+20 %)   WOO X Pro follows
+  E4 BCH long  CMO 1h    10/26 10:00  −0.8 %, +1.8 %, back  -> LOCK (~+20 %, after −28 % first)   WOO X Pro follows
   E5 SOL short VWAP 30m  10/26 17:30  −0.65 % then back     -> LOCK            WOO X Pro follows
   F6 BTC long  VWAP 30m  10/26 22:30  NYSE open             -> FILTERED (나스닥, the runner's own)
   E6 ETH long  VWAP 30m  10/26 23:30  +0.7 % then back      -> LOCK            WOO X Pro misses it (late)
@@ -97,7 +97,7 @@ PLAN = [
     ("F4", VWAP, "BCHUSDT", 1, K(3, 12), "", _gi(1, 1, 3, 0, "30m", 0.3, 0.5), []),
     ("F5", VWAP, "BTCUSDT", -1, K(5, 9, 30), "변동성 판단에 쓸 30분봉을 못 읽음(진입 안 함): BTCUSDT 30m 봉을 못 받음: OSError: down",
      _gi(0, 0, 2, 1, "30m", None, None), []),
-    ("E4", CMO, "BCHUSDT", 1, K(5, 10), "", _gi(1, 1, 3, 1, "1h", 0.55, 0.70), [(120, 0.010), (60, -0.006)]),
+    ("E4", CMO, "BCHUSDT", 1, K(5, 10), "", _gi(1, 1, 3, 1, "1h", 0.55, 0.70), [(30, -0.008), (120, 0.018), (60, -0.006)]),
     ("E5", VWAP, "SOLUSDT", -1, K(5, 17, 30), "", _gi(0, 0, 1, 2, "30m", 0.61, 0.70), [(40, -0.0065), (40, 0.004)]),
     ("F6", VWAP, "BTCUSDT", 1, K(5, 22, 30), "", _gi(1, 1, 3, 0, "30m", 0.3, 0.5), []),
     ("E6", VWAP, "ETHUSDT", 1, K(5, 23, 30), "", _gi(1, 1, 4, 0, "30m", 0.40, 0.55), [(40, 0.007), (40, -0.004)]),

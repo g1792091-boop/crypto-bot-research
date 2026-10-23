@@ -354,6 +354,44 @@ def test_the_research_numbers_are_read_now_or_said_written(w, tmp_path, monkeypa
     assert "적어 둔 값" in s["src"] and s["breakeven_win"] == VW.SCALE_DEFAULT["breakeven_win"]
 
 
+def test_the_research_notes_dips_and_the_light(w):
+    d = VW.perf(w["p"], NOW, _more(w))
+    rt = L.round_trip(0.0005)
+    worst = {}
+    for t in V.paper_trades(w["p"]["paper2"]):
+        worst[(t["symbol"], t["entry_time"])] = (t["leverage"] * (t["side"] * (t["mae_price"] / t["entry_price"] - 1) - rt), t["pnl"] > 0,
+                                                 t["leverage"] * (t["side"] * (t["mfe_price"] / t["entry_price"] - 1) - rt))
+    dp = d["notes"]["dips"]
+    wins = [m for m, won, _b in worst.values() if won]
+    assert dp["wins"] == len(wins) == 5 and dp["losses"] == 2
+    assert [x["n"] for x in dp["dips"]] == [sum(1 for m in wins if m < -0.2), sum(1 for m in wins if m < -0.4)] == [1, 0]
+    assert dp["mae_win"] == pytest.approx(sum(wins) / len(wins)) and tuple(dp["ref"]["rows"][0]) == ("17일", 0.31)
+    # E4 (BCH, CMO 1h) went about −28 % against before its lock: the trade row says so too
+    e4 = next(t for t in d["trades"] if t["symbol"] == "BCHUSDT")
+    assert e4["mae"] == pytest.approx(worst[("BCHUSDT", K(5, 10))][0]) and e4["mae"] < -0.2 and e4["mfe"] == pytest.approx(worst[("BCHUSDT", K(5, 10))][2])
+    # the exit itself was reached: never a best below the trade's own result, nor a worst above it
+    for t in d["trades"]:
+        assert t["mfe"] >= t["roe"] - 1e-12 and t["mae"] <= t["roe"] + 1e-12
+    x = VW.excursion({"entry_price": 100.0, "leverage": 10, "side": 1, "mae_price": 99.0, "mfe_price": 101.0, "roe": 0.2}, 0.001)
+    assert x["mfe"] == pytest.approx(0.2) and x["mae"] == pytest.approx(10 * (-0.01 - 0.001))
+    lt = d["notes"]["light"]
+    assert lt["rule"] == {"n": 20, "min_win": 0.75} and lt["follow"]["n"] == 7 and lt["hold"]["n"] == 0 and lt["small"] is True
+    # the light at every entry from the trades closed before it (the executor's rule: 15 of the last 20)
+    ts, eq = [], 1000.0
+    for i, won in enumerate([True] * 14 + [False] * 6 + [True, False, True, True, False, True, True, True, True, True]):
+        pnl = 10.0 if won else -40.0
+        eq += pnl
+        ts.append({"id": i, "entry_time": i * 100, "exit_time": i * 100 + 50, "pnl": pnl, "roe": pnl / 400, "equity_after": eq})
+    v = VW.light_view(ts, 20, 0.75)
+    hold = []
+    for i, t in enumerate(ts):
+        last = [x["pnl"] > 0 for x in ts[:i]][-20:]
+        if len(last) == 20 and sum(last) < 15:
+            hold.append(t)
+    assert v["hold"]["n"] == len(hold) > 0 and v["follow"]["n"] == len(ts) - len(hold)
+    assert v["hold"]["wins"] == sum(1 for t in hold if t["pnl"] > 0)
+
+
 def test_the_splits(w):
     d = VW.perf(w["p"], NOW, _more(w))
     ts = V.paper_trades(w["p"]["paper2"])
@@ -542,6 +580,8 @@ def test_the_views_in_node(w, tmp_path):
     for word in ("페이퍼 vs 동전 쌍둥이", "본전 승률 (이 평균으로)", "77.7%", "손익비 (PF)", "가장 깊은 낙폭", "실력 vs 운", "키우기 · 멈추기",
                  "3 / 50번", "본전 승률 (멈추기 선)", "실거래 평균 익절·손절로 계산", "5년 기록 78.6% (참고)", "본전 아래", "순ROE 합 플러스",
                  "페이퍼가 동전 쌍둥이보다 나음", "페이퍼와 비슷한가", "결과가 같은 거래 3/3", "5년 기록에서 50번 80% 이상 뒤 다음 50번도 평균 손해였어요",
+                 "연구 노트", "물림 (진입 뒤 가장 깊이 밀린 순ROE)", "먼저 −20% 넘게 물린 거래 1번 (20%)", "신호등 시험 (최근 20번 중 75% 이상일 때만 따라감)",
+                 "따라갔을 거래 7번", "걸렀을 거래 없음", "물림 −",
                  "연구 숫자와 나란히", "17일 연구 (고른 기간)", "37승 3패 · 92.5%", "5년 페이퍼 (같은 규칙)", "5,805번", "72.0%", "WOO X Pro 실거래 (VWAP 뒤)",
                  "−0.133%", "79개월 중 플러스 6달", "나눠 보기", "VWAP 복귀 실패 30분", "보유 한도 청산", "96봉(48시간) 지남", "WOO X Pro: 다른 페이퍼",
                  "안 따라감", "페이퍼 진입을 늦게 봐서 건너뛰었어요"):

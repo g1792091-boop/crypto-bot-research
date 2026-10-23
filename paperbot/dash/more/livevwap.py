@@ -113,6 +113,16 @@ VIRTUAL_PENDING_KO = "아직 계산 전 (감시가 새 버전으로 돌아야 �
 VIRTUAL_NOTE_KO = ("막은 신호가 이겼을 거면 그 막기가 돈을 잃게 한 거고, 졌을 거면 도운 거예요. 가상 결과(같은 엔진·같은 1분봉, 실제 체결 "
                    "아님)이고, 표본이 적으면 아무것도 결정하지 않아요. 조건을 바꿀지는 두 분이 정해요")
 SESSIONS_ORDER = ("asia", "europe", "us", "dawn")
+# 연구 노트: research/vwap30/QA_KO.md "V3.9 1시간" table, (비교) A (VWAP 개선판 30분 alone, the rule bot's way, margin 30 %):
+# the share of its wins that first went more than −20 % net ROE against before they won
+DIP_REF = {"dip": -0.20, "rows": [("17일", 0.31), ("2020~2024", 0.31), ("2025~2026", 0.27)],
+           "ko": "연구: VWAP 개선판 30분만(규칙봇 방식)은 이긴 거래 중 먼저 −20% 넘게 물린 게 17일 31% · 2020~2024 31% · 2025~2026 27%",
+           "src": "research/vwap30/QA_KO.md (v39.json 표의 비교 줄)"}
+DIPS = (-0.20, -0.40)
+# research/vwap30/month2.json "light": the executor's light (20 / 75 %) on the bot's 5-year paper trades
+LIGHT_REF = {"n": 20, "min_win": 0.75, "copied_share": 0.5011, "green_win": 0.7329, "red_win": 0.7072,
+             "ko": "5년: 신호등이 따라간 거래 승률 73.3% · 걸렀을 거래 70.7% (거래의 50.1%를 따라감) — 진 거래를 골라내지 못하고 거래 수만 줄였어요",
+             "src": "research/vwap30/month2.json"}
 HOLD_BUCKETS = ((HOUR, "1시간 안"), (4 * HOUR, "1~4시간"), (12 * HOUR, "4~12시간"), (24 * HOUR, "12~24시간"),
                 (48 * HOUR, "24~48시간"), (None, "48시간 넘게"))
 ATR_BUCKETS = ((0.6, "0.6 미만"), (0.8, "0.6~0.8"), (1.0, "0.8~1.0"), (None, "1.0 이상"))
@@ -237,6 +247,7 @@ def _trade_of(r: tuple) -> dict:
     d = L._j(r[9])
     ctx = d.get("context") if isinstance(d.get("context"), dict) else {}
     t["gates"] = ctx.get("gates") if isinstance(ctx.get("gates"), dict) else None
+    t["mae_price"], t["mfe_price"] = L._f(d.get("mae_price")), L._f(d.get("mfe_price"))    # the engine's worst / best price
     return t
 
 
@@ -874,6 +885,50 @@ def research_view(ref: dict, paper: dict, follows: list) -> dict:
             "live": [{"id": c["id"], "name_ko": c["name_ko"], **c["record"]} for c in follows]}
 
 
+def excursion(t: dict, rt: float) -> dict:
+    """A closed trade's worst and best net ROE while it was open (the engine's mae_price / mfe_price, at the trade's
+    leverage, the round trip's costs taken off as the paper's ladder does; funding left out): {"mae", "mfe"} (None when
+    the record has no price). The exit itself was reached, so its own net ROE bounds both (the engine folds a bar's
+    high / low in before it exits, but a TIME or slipped exit can sit just outside them)."""
+    e, lev, side = L._f(t.get("entry_price")), L._i(t.get("leverage")), L._i(t.get("side"))
+    if not e or not lev or not side:
+        return {"mae": None, "mfe": None}
+    roe = lambda px: lev * (side * (px / e - 1) - rt) if px else None          # noqa: E731
+    mae, mfe, done = roe(L._f(t.get("mae_price"))), roe(L._f(t.get("mfe_price"))), L._f(t.get("roe"))
+    if done is not None:
+        mae = min(mae, done) if mae is not None else None
+        mfe = max(mfe, done) if mfe is not None else None
+    return {"mae": mae, "mfe": mfe}
+
+
+def dips_view(trades: list, rt: float) -> dict:
+    """연구 노트 · 물림: how deep the trades went against before they closed (QA_KO's "물림"): of the wins, how many first
+    went below −20 % / −40 % net ROE, the mean worst of wins and of losses, the losses that were at +10 % first."""
+    xs = [(t, excursion(t, rt)) for t in trades]
+    wins = [(t, x) for t, x in xs if (L._f(t.get("pnl")) or 0) > 0 and x["mae"] is not None]
+    loss = [(t, x) for t, x in xs if (L._f(t.get("pnl")) or 0) <= 0 and x["mae"] is not None]
+    mean = lambda v: sum(v) / len(v) if v else None                              # noqa: E731
+    return {"wins": len(wins), "losses": len(loss), "small": len(wins) + len(loss) < SMALL_N,
+            "dips": [{"at": d, "n": sum(1 for _t, x in wins if x["mae"] < d), "share": (sum(1 for _t, x in wins if x["mae"] < d) / len(wins)) if wins else None}
+                     for d in DIPS],
+            "mae_win": mean([x["mae"] for _t, x in wins]), "mae_loss": mean([x["mae"] for _t, x in loss]),
+            "loss_up10": sum(1 for _t, x in loss if x["mfe"] is not None and x["mfe"] >= 0.10), "ref": DIP_REF}
+
+
+def light_view(trades: list, n: int, min_win: float) -> dict:
+    """연구 노트 · 신호등: the executor's light (livebots.light, its own n and share) at every entry of the paper, from the
+    trades closed before it: the trades it would have followed (green, or fewer than n closed: building) against the ones
+    it would have held back (red), each with its record. Does the light pick the losers? (5 years: it did not, LIGHT_REF.)"""
+    done = sorted(trades, key=lambda t: (t.get("exit_time") or 0, t.get("id") or 0))
+    by: dict = {"follow": [], "hold": []}
+    for t in sorted(trades, key=lambda t: (t.get("entry_time") or 0, t.get("id") or 0)):
+        before = [x["pnl"] for x in reversed(done) if (x.get("exit_time") or 0) <= (t.get("entry_time") or 0)]
+        st = L.light(n, min_win, before).get("state")
+        by["hold" if st == "red" else "follow"].append(t)
+    out = {k: {kk: v[kk] for kk in ("n", "wins", "losses", "win_rate", "roe_sum")} for k, v in ((k, record(ts)) for k, ts in by.items())}
+    return {**out, "rule": {"n": n, "min_win": min_win}, "ref": LIGHT_REF, "small": len(trades) < 2 * int(n or 20)}
+
+
 def _hold_key(ms: Optional[int]) -> Optional[str]:
     if ms is None:
         return None
@@ -943,6 +998,7 @@ def trades_view(snap: dict, cfg: dict, since: Optional[int], loc: dict, follows:
     its part (followed: its own result; not followed while following: why, from its own records; followed another paper
     then: said so)."""
     path = loc["bot"]["path"]
+    rt = L.round_trip(snap.get("taker_fee"))
     ex_by = {x["id"]: x for x in loc["execs"]}
     rev = {c["id"]: L.rev_pairs(ex_by[c["id"]]) for c in follows if c["id"] in ex_by}
     live_by = {c["id"]: {str(t["key"]): t for t in ex_by[c["id"]]["record"].get("trades") or []} for c in follows
@@ -977,7 +1033,7 @@ def trades_view(snap: dict, cfg: dict, since: Optional[int], loc: dict, follows:
                     "reason": t.get("exit_reason"), "reason_ko": exit_ko(t.get("exit_reason"), cfg), "why": t.get("exit_why"),
                     "roe": t.get("roe"), "pnl": t.get("pnl"), "win": (t.get("pnl") or 0) > 0, "lock_roe": t.get("lock_roe"),
                     "hold_ms": (t["exit_time"] - t["entry_time"]) if t.get("exit_time") is not None and t.get("entry_time") is not None else None,
-                    "gates": g, "live": cells})
+                    "gates": g, "live": cells, **excursion(t, rt)})
     return out
 
 
@@ -1042,10 +1098,14 @@ def perf(p: Optional[dict] = None, now_ms: Optional[int] = None, more: Optional[
     checks = [checklist(ex_by[f["id"]], loc["bot"]["path"], paper, flip, ref) for f in fol if f["id"] in ex_by]
     mine = [t for t in snap["trades"][ACCOUNT] if (t.get("entry_time") or 0) >= int(since or 0)]
     twin = [t for t in snap["trades"][FLIP] if (t.get("entry_time") or 0) >= int(since or 0)]
+    # the light of the follower (its config's own numbers), else the guide's for the executor that will follow (20 / 75 %)
+    rule = next(((f["light_rule"]["n"], f["light_rule"]["min_win"]) for f in fol if f["state"] == "following" and f["light_rule"].get("n")),
+                (LIGHT_REF["n"], LIGHT_REF["min_win"]))
+    notes = {"dips": dips_view(mine, L.round_trip(snap.get("taker_fee"))), "light": light_view(mine, *rule)}
     return {**head, "bot": {**head["bot"], **bot_status(snap, now)}, "since_ms": since, "paper": paper, "flip": flip,
             "skill": skill_view(paper, flip), "followers": fol, "checklist": checks, "no_follower_ko": NO_FOLLOWER_KO,
             "scale_ko": SCALE_KO, "honest_ko": SCALE_HONEST_KO, "stop_ko": STOP_KO, "research": research_view(ref, paper, checks),
-            "splits": {"paper": splits(mine, cfg), "flip": splits(twin, cfg)}, "split_min_n": SPLIT_MIN_N,
+            "notes": notes, "splits": {"paper": splits(mine, cfg), "flip": splits(twin, cfg)}, "split_min_n": SPLIT_MIN_N,
             "trades": trades_view(snap, cfg, since, loc, fol)}
 
 
