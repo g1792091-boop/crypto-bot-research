@@ -16,7 +16,7 @@ import pytest
 from fakeflipster import FakeFlipster
 from paperbot import flipster as FL
 from paperbot import risk as R
-from paperbot.executor import ExecConfig, ExecStore, Executor, Intent, Refused
+from paperbot.executor import ExecConfig, ExecStore, Executor, Guarded, Intent, Refused
 from paperbot.mainnet import FLAG, FLAG_VALUE, check_permissions
 from paperbot.notify import ListNotifier
 from paperbot.testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, ProtectionError, RateLimited, TestnetError,
@@ -1287,9 +1287,10 @@ def test_a_partial_cut_answered_429_that_ran_is_found_never_cut_twice():
     assert len(posts(fake, "MARKET")) == 2 and c.ledger.get("pbX1")["how"] == "search"
 
 
-def test_a_stop_answered_429_that_rests_is_found_never_placed_twice():
+def test_a_stop_answered_429_that_rests_is_found_even_when_its_second_send_is_refused():
     """2 (round 2, probe5 C): the stop rests although it was answered 429; the pending list and the history show it
-    3 s late; a second stop would be refused (two_stops off)."""
+    3 s late, so the first look-up misses it and the stop is sent once more (round 3); a second stop is refused here
+    (two_stops off): the look-ups go on and find the first."""
     c, fake, clock = make(advance=True)
     ready(c)
     c.market(BTC, "BUY", 1.0, client_id="pbE")
@@ -1297,8 +1298,76 @@ def test_a_stop_answered_429_that_rests_is_found_never_placed_twice():
     fake.two_stops = False
     fake.fail("POST", "/api/v1/trade/order", "429_after")
     st = place_stop(c, BTC, "SELL", 95.0, 1.0, client_id="pbS1")
-    assert st["algoStatus"] == "NEW" and len(fake.live_stops(BTC)) == 1 and len(posts(fake, "STOP_MARKET")) == 1
-    assert c.ledger.get("pbS1")["state"] == "placed" and c.algo_order(client_id="pbS1")["algoStatus"] == "NEW"
+    assert st["algoStatus"] == "NEW" and len(fake.live_stops(BTC)) == 1 and len(posts(fake, "STOP_MARKET")) == 2
+    row = c.ledger.get("pbS1")
+    assert (row["state"], row["order_id"]) == ("placed", st["algoId"]) and FL.IdLedger.sends(row) == 2
+    assert c.algo_order(client_id="pbS1")["algoStatus"] == "NEW"
+
+
+def test_a_stop_whose_429_was_a_refusal_is_sent_once_more_and_the_trade_is_kept():
+    """1 (round 3, probe7): the 429 really refused the stop. Never sent again, place_stop failed after the budget and
+    the executor closed a new position for it; now the stop, in neither list at the first look-up, goes out once
+    more under the same cid."""
+    c, fake, clock = make(advance=True)
+    ready(c)
+    c.market(BTC, "BUY", 1.0, client_id="pbE")
+    g = Guarded(c, ticking(clock), retries=4)
+    fake.fail("POST", "/api/v1/trade/order", "429")         # refused: nothing placed
+    t0 = clock.t
+    st = place_stop(g, BTC, "SELL", 95.0, 1.0, client_id="pbS1")
+    assert st["algoStatus"] == "NEW" and [o["orderId"] for o in fake.live_stops(BTC)] == [st["algoId"]]
+    assert len(posts(fake, "STOP_MARKET")) == 2 and clock.t - t0 <= FL.PROTECT_WAIT_S * 1000 and fake.amt(BTC) == 1
+    row = c.ledger.get("pbS1")
+    assert row["order_id"] == st["algoId"] and row["note"] == FL.RESENT
+    fake.fail("POST", "/api/v1/trade/order", "429")         # a close is still never sent again by the client
+    fake.fail("POST", "/api/v1/trade/order", "429")
+    with pytest.raises(FL.RateLimitedUnknown):
+        c.market(BTC, "SELL", 1.0, reduce_only=True, client_id="pbX")
+    assert len(posts(fake, "MARKET")) == 2 and fake.amt(BTC) == 1
+
+
+def test_executor_keeps_a_trade_whose_first_stop_was_refused_with_a_429(tmp_path):
+    w = World(tmp_path, advance=True)
+    real, seen = w.fake._place, []
+
+    def place(q, body):                                      # the first stop: refused with a 429, nothing placed
+        if q["type"] == "STOP_MARKET" and not seen:
+            seen.append(1)
+            return 429, b'{"error":{"type":"TooManyRequests","message":"Too Many Requests"}}', {"Retry-After": "1"}
+        return real(q, body)
+    w.fake._place = place
+    w.paper(stop=95.0)
+    w.loop()
+    kinds = [k for (k,) in w.store.conn.execute("SELECT kind FROM events")]
+    assert "protect_failed" not in kinds and w.ex.trade["status"] == "open"
+    assert w.fake.pos[BTC] == 5 and w.stops() == [(95.0, 5.0)]
+    stop_posts = [i for i, x in enumerate(w.fake.calls, start=1) if x[1] == "POST" and b"STOP_MARKET" in (x[4] or b"")]
+    assert len(stop_posts) == 2 and all(u[0] <= stop_posts[1] for u in w.fake.unprotected())   # only until the resend
+
+
+def test_executor_cleans_up_the_extra_stop_of_a_429_that_ran(tmp_path):
+    """1 (round 3): the first stop ran although answered 429 and the lists show it 3 s late: the first look-up misses
+    it and the stop goes out once more. Two reduce-only stops rest for a moment; the executor cancels the extra one
+    and never closes the position."""
+    w = World(tmp_path, advance=True)
+    w.fake.pending_lag_ms = w.fake.history_lag_ms = 3_000
+    real, seen = w.fake._place, []
+
+    def place(q, body):                                      # the first stop: it ran, the answer says 429
+        out = real(q, body)
+        if q["type"] == "STOP_MARKET" and not seen:
+            seen.append(1)
+            return 429, b'{"error":{"type":"TooManyRequests","message":"throttled"}}', {"Retry-After": "1"}
+        return out
+    w.fake._place = place
+    w.paper(stop=95.0)
+    w.loop()
+    assert w.fake.pos[BTC] == 5 and len(w.fake.live_stops(BTC)) == 2 and len(posts(w.fake, "STOP_MARKET")) == 2
+    w.loop()
+    kinds = [k for (k,) in w.store.conn.execute("SELECT kind FROM events")]
+    assert "extra_stops" in kinds and "protect_failed" not in kinds and "no_stop" not in kinds
+    assert w.fake.pos[BTC] == 5 and w.stops() == [(95.0, 5.0)] and not w.fake.unprotected()
+    assert w.ex.trade["stop_algo_id"] == w.fake.live_stops(BTC)[0]["orderId"]
 
 
 def test_a_full_close_answered_429_that_ran_is_found_and_reads_filled():
@@ -1522,6 +1591,31 @@ def test_the_ledger_migrates_once_when_opened_and_reads_never_write(tmp_path):
     assert (r["state"], r["before_ids"], r["last_ms"]) == ("sent", None, 1800000000000)
     assert led.put("pbS", BTC, "SELL", "STOP_MARKET", "0.01", True, "95", 1800000001000, before=["a"])
     assert FL.IdLedger(p).get("pbS")["before_ids"] == '["a"]'
+    con.close()
+
+
+def test_a_ledger_busy_when_opened_reads_its_missing_columns_as_empty_until_a_write_migrates(tmp_path):
+    """2 (round 3): the executor's own connection holds a write while the ledger is opened: the migration waits, then
+    gives up; reads then take the missing columns as empty (never "no such column"), and the next write migrates."""
+    p = str(tmp_path / "old.db")
+    old = FL.LEDGER_SCHEMA.replace(",\n    before_ids TEXT,\n    last_ms INTEGER", "")
+    con = sqlite3.connect(p)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.executescript(old)
+    con.execute("INSERT INTO flipster_ids VALUES ('pbAe','BTCUSDT','BUY','MARKET','0.01',0,NULL,1800000000000,'o1',"
+                "'placed','answer',NULL)")
+    con.commit()
+    con.execute("INSERT INTO flipster_meta VALUES ('x', 1, 'y')")       # a write held open at the start
+    try:
+        led = FL.IdLedger(p, timeout_s=0.2, open_timeout_s=0.2)
+        assert led.failed and not led.migrated
+        for r in (led.get("pbAe"), led.by_order("o1")):
+            assert (r["cid"], r["before_ids"], r["last_ms"]) == ("pbAe", None, 1800000000000)
+        assert led.known_orders(["o1"]) == {"o1": (False, "MARKET", 1800000000000)}
+    finally:
+        con.commit()
+    assert led.put("pbS", BTC, "SELL", "STOP_MARKET", "0.01", True, "95", 1800000001000, before=["a"])
+    assert led.migrated and FL.IdLedger(p).get("pbS")["before_ids"] == '["a"]'
     con.close()
 
 

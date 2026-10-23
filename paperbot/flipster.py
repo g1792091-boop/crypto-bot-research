@@ -77,15 +77,18 @@ bound to the cid and returned. Several: an "unknown" error (never "not found"). 
 last send (the history is surely written by then), a TransientError before. No row at all: not found. An opening order
 is never sent twice (a cid already in the ledger is looked up, never sent again; Guarded never resends one either); a
 reduce-only order is sent again only after its earlier send was found to be absent past the 25 s, and then sized from
-the position at that moment (never past it). A 429 "throttles or rejects" (the docs): it may still run, so no order is
-ever sent again after one inside this client: an opening order's 429 is an unknown outcome; a stop's or a close's is
-looked up by its cid (after the Retry-After, then every 2 s, within the protective budget below) and, not found by
-then, raised as RateLimitedUnknown with its row left "sent" (never "refused": a later look-up still finds it). A row
-is written durably before an opening order goes out (not possible: the entry is refused, nothing sent); a stop or a
-close still goes out when the database cannot be written (its row is kept in memory: protection first). The columns
-added after the first version are added when the ledger is opened (the executor's start), so a read never writes.
-Rows older than 30 days are trimmed, except our opening orders' rows (kept 98 days: user_trades starts its replay at
-them).
+the position at that moment (never past it). A 429 "throttles or rejects" (the docs): it may still run. An opening
+order's 429 is an unknown outcome (never sent again); a close's is looked up by its cid (after the Retry-After, then
+every 2 s, within the protective budget below) and never sent again inside this client; a stop's is looked up the same
+way, and a stop the first look-up finds in neither the pending list nor the history is sent ONCE more under the same
+cid (the row records the second send; either order may be bound to it; a surplus reduce-only stop is cancelled by the
+executor, Executor._cover). Not found by the end of the budget: RateLimitedUnknown, the row left "sent" (never
+"refused": a later look-up still finds it). A row is written durably before an opening order goes out (not possible:
+the entry is refused, nothing sent); a stop or a close still goes out when the database cannot be written (its row is
+kept in memory: protection first). The columns added after the first version are added when the ledger is opened (the
+executor's start) or, the database busy then, by the next write; a read never writes (a column not there yet reads as
+empty). Rows older than 30 days are trimmed, except our opening orders' rows (kept 98 days: user_trades starts its
+replay at them).
 
 Protective work (a stop, a reduce-only close, the look-up of one by its cid) has a budget: every wait inside one call
 (a Retry-After, the look-ups after a 429, the wait for a new stop to show in the pending list, the read-back) shares
@@ -129,9 +132,9 @@ Safety:
   no withdrawal, server IP bound" is the owners' statement FLIPSTER_LIVE_KEY_CHECKED=TRADE_ONLY_NO_WITHDRAW_IP_BOUND
   (refused without it), shown as a warning at every start.
 - An order that was accepted (it has an orderId) is never reported as not executed; a lost answer is looked up through
-  the ledger; an opening order is never sent twice, and no order is sent again after a 429 (looked up by its cid). A
-  stop is reported cancelled only on an explicit record, never because nothing was found yet, and confirmed live only
-  from the pending list.
+  the ledger; an opening order is never sent twice; after a 429 a close is never sent again and a stop at most once
+  more, each looked up by its cid first. A stop is reported cancelled only on an explicit record, never because nothing
+  was found yet, and confirmed live only from the pending list.
 - The rate budget is waited out before a request is signed: api-expires never passes while it waits.
 - A position's size, the account equity and the stop list are never read as 0 / flat / empty from a missing or garbled
   field: such an answer is an error.
@@ -223,8 +226,8 @@ READ_PAUSE_S = 1.0
 # Guarded retry or its loop waits it out)
 RETRY_AFTER_MAX_S = 60.0
 # writes sent again after a 429 without a look-up: the ones that change nothing when they run twice (settings,
-# cancels). The docs say a 429 "throttles or rejects": it may still run. An order is never sent again by this client
-# after a 429: a stop or a close is looked up by its client id (_send), an opening order is an unknown outcome
+# cancels). The docs say a 429 "throttles or rejects": it may still run. An order is never sent again by req(): a stop
+# or a close is looked up by its client id (_send; a stop not found is sent once more), an opening order is unknown
 RETRY_WRITES = frozenset({"leverage_set", "trade_mode", "cancel"})
 # protective work (a stop, a reduce-only close, the look-up of one by its client id): every wait inside one call (a
 # Retry-After, the look-ups after a 429, the wait for a new stop to be listed, the read-back; the pace only for its
@@ -237,13 +240,14 @@ BUDGET_CODE = "PROTECT_BUDGET"
 LOOKUP_PAUSE_S = 2.0                                  # after a 429 on a stop or a close: looked up this often
 LIST_WAITS = (0.3, 0.7, 1.0, 1.5, 1.5)               # a new stop must show in the pending list within these (5 s)
 UNCONFIRMED = "UNCONFIRMED"                           # a stop not listed whose record says only NEW: not settled
+RESENT = "429 뒤 같은 번호로 한 번 더 보냄"              # ledger note: a stop sent twice under one cid
 EXPIRED_WORDS = ("expire", "timestamp", "recvwindow")
 NOT_FOUND_WORDS = ("notfound", "not found", "notexist", "not exist", "unknownorder", "unknown order")
 
 
 class RateLimitedUnknown(RateLimited):
     """A stop or a close answered 429 that may still have run ("throttles or rejects"), not found by the look-ups the
-    protective budget allowed: its client id stays unknown (looked up again, never "refused", never resent blindly)."""
+    protective budget allowed: its client id stays unknown (looked up again, never "refused")."""
 
 
 def hosts_for(mode: str) -> tuple:
@@ -449,7 +453,7 @@ class IdLedger:
     the executor's own connection (paperbot/executor.py ExecStore) can still switch the file out of WAL mode at a clean
     stop. A read that fails is an error (TransientError), never "no row"."""
 
-    def __init__(self, path: Optional[str] = None, timeout_s: float = 2.0):
+    def __init__(self, path: Optional[str] = None, timeout_s: float = 2.0, open_timeout_s: float = 5.0):
         self.path = path
         self.timeout_s = timeout_s
         self.rows: dict = {}          # cid -> row: written by this process (all rows when there is no file)
@@ -457,10 +461,10 @@ class IdLedger:
         self.failed: Optional[str] = None      # the last write that did not reach the file
         self.migrated = False
         if path is not None and os.path.exists(path):
-            # once, when the ledger is opened (the executor's start): later reads never write. A database busy right
-            # now: the first write migrates instead (a read of a column not there yet is an error, never "no row")
+            # once, when the ledger is opened (the executor's start): reads never write. A database busy right now:
+            # the next write migrates instead, and until then a read takes a column not there yet as empty (_rows)
             try:
-                conn = sqlite3.connect(path, timeout=max(timeout_s, 5.0))
+                conn = sqlite3.connect(path, timeout=open_timeout_s)
                 try:
                     self._migrate(conn)
                 finally:
@@ -499,13 +503,16 @@ class IdLedger:
         return True
 
     def _read(self, sql: str, args: tuple = ()) -> list:
+        return self._read_with(lambda conn: conn.execute(sql, args).fetchall())
+
+    def _read_with(self, run) -> list:
         if self.path is None or not os.path.exists(self.path):
             return []
         uri = "file:" + urllib.parse.quote(os.path.abspath(self.path)) + "?mode=rw"
         try:
             conn = sqlite3.connect(uri, uri=True, timeout=self.timeout_s)
             try:
-                return conn.execute(sql, args).fetchall()
+                return run(conn)
             finally:
                 conn.close()
         except sqlite3.OperationalError as e:
@@ -514,6 +521,18 @@ class IdLedger:
             raise TransientError(0, None, f"주문 장부(flipster_ids)를 읽지 못했습니다: {e}") from e
         except sqlite3.Error as e:
             raise TransientError(0, None, f"주문 장부(flipster_ids)를 읽지 못했습니다: {e}") from e
+
+    def _rows(self, where: str, args: tuple) -> list:
+        """Whole ledger rows matching ``where``. A column added after the first version that is not there yet (the
+        database was busy when the ledger was opened and nothing was written since) reads as empty: a read never
+        migrates (a write would wait on the executor's own lock)."""
+        def run(conn):
+            have = {r[1] for r in conn.execute("PRAGMA table_info(flipster_ids)")}
+            if not have:
+                return []
+            cols = [c if c in have else f"NULL AS {c}" for c in LEDGER_COLS]
+            return conn.execute(f"SELECT {', '.join(cols)} FROM flipster_ids WHERE {where}", args).fetchall()
+        return [self._row(t) for t in self._read_with(run)]
 
     @staticmethod
     def _row(t) -> dict:
@@ -547,6 +566,16 @@ class IdLedger:
         row = self.get(cid)
         return False if row is None else self._save({**row, **kw})
 
+    def resent(self, cid: str, now_ms: int) -> bool:
+        """A stop sent a second time under the same cid (after a 429 the look-up did not find it): its look-up
+        window follows this send, and either of the two orders may be bound to it (sends())."""
+        return self._change(cid, last_ms=int(now_ms), note=RESENT)
+
+    @staticmethod
+    def sends(row: dict) -> int:
+        """How many orders this row's cid may have placed: 2 for a stop sent again, else 1."""
+        return 2 if int(row.get("last_ms") or row["sent_ms"]) > int(row["sent_ms"]) else 1
+
     def bind(self, cid: str, order_id: str, how: str = "answer") -> bool:
         return self._change(cid, order_id=str(order_id), state="placed", how=how)
 
@@ -561,16 +590,16 @@ class IdLedger:
     def get(self, cid: str) -> Optional[dict]:
         if cid in self.rows:
             return dict(self.rows[cid])
-        got = self._read(f"SELECT {', '.join(LEDGER_COLS)} FROM flipster_ids WHERE cid = ?", (cid,))
-        return self._row(got[0]) if got else None
+        got = self._rows("cid = ?", (cid,))
+        return got[0] if got else None
 
     def by_order(self, order_id) -> Optional[dict]:
         oid = str(order_id)
         hit = next((r for r in self.rows.values() if r.get("order_id") == oid), None)
         if hit is not None:
             return dict(hit)
-        got = self._read(f"SELECT {', '.join(LEDGER_COLS)} FROM flipster_ids WHERE order_id = ?", (oid,))
-        return self._row(got[0]) if got else None
+        got = self._rows("order_id = ?", (oid,))
+        return got[0] if got else None
 
     def known_orders(self, order_ids) -> dict:
         """Which of these orderIds are ours: orderId -> (reduce_only, type, sent_ms)."""
@@ -1351,7 +1380,7 @@ class FlipsterClient:
             return row, str(row["order_id"])
         with self._protective() if row["reduce_only"] else contextlib.nullcontext():   # a stop's or a close's look-up
             hits = self._search(row)
-        if len(hits) == 1:
+        if hits and len(hits) <= IdLedger.sends(row):      # a stop sent twice: either order is it (pending first)
             oid = str(hits[0]["orderId"])
             self.ledger.bind(cid, oid, how="search")
             self.order_symbol[oid] = row["symbol"]
@@ -1457,14 +1486,22 @@ class FlipsterClient:
             raise TransientError(e.status, e.code, f"이 번호({cid})로 이미 보낸 주문의 결과를 모릅니다. 다시 보내지 "
                                                    f"않습니다: {e.msg}") from e
 
-    def _send(self, cid: str, body: dict, limit_key: str) -> tuple:
-        """POST a stop or a close whose intent row is written, ONCE: (answer, None), or (None, (row, orderId)) when it
-        was answered 429 and a look-up found it. The docs say a 429 "throttles or rejects": the order may still run, so
-        it is never sent again here. It is looked up by its client id (pending list and order history) after its
-        Retry-After, then every LOOKUP_PAUSE_S, while the protective budget lasts. Not found by then:
-        RateLimitedUnknown, and the row stays "sent": a later look-up finds it, or calls it absent only SETTLE_MS after
-        the send (only then may a reduce-only order go out again, sized from the position then). 403 / 418, or the
-        budget used up before the send: the RateLimited as it came (nothing was sent, or nothing ran)."""
+    def _send(self, cid: str, body: dict, limit_key: str, stop: bool = False) -> tuple:
+        """POST a stop or a close whose intent row is written: (answer, None), or (None, (row, orderId)) when it was
+        answered 429 and a look-up found it. The docs say a 429 "throttles or rejects": the order may still run, so it
+        is looked up by its client id (pending list and order history) after its Retry-After, then every
+        LOOKUP_PAUSE_S, while the protective budget lasts.
+
+        A close is never sent again here (a second partial close would cut twice). A stop (``stop``) that the first
+        look-up finds in neither the pending list nor the history is sent ONCE more under the same cid (ledger:
+        resent, either order may be bound to it): a second reduce-only stop cannot open anything and the executor
+        cancels a surplus one (Executor._cover), while a stop that never goes in would close a new position. A refused
+        or unanswered second send goes back to looking (the first may be the one that rests).
+
+        Not found by the end of the budget: RateLimitedUnknown, and the row stays "sent": a later look-up finds it, or
+        calls it absent only SETTLE_MS after the last send (only then may a close go out again, sized from the
+        position then). 403 / 418, or the budget used up before the first send: the RateLimited as it came (nothing
+        was sent, or nothing ran)."""
         try:
             return self.req("POST", ORDER, body, limit_key=limit_key), None
         except RateLimited as e:
@@ -1473,6 +1510,7 @@ class FlipsterClient:
             first = e
         pause = max(float(first.retry_after or 0), READ_PAUSE_S)
         why = "찾는 동안 기다릴 시간이 다 됨"
+        again = stop
         while True:
             try:
                 self._wait(pause)
@@ -1482,8 +1520,8 @@ class FlipsterClient:
                 why = str(e)[:120]                         # the budget (or a 418) ends the look-ups
                 break
             except TestnetError as e:                      # a failed read: looked up again while the budget lasts
-                why, hits = str(e)[:120], []
-            if len(hits) > 1:
+                why, hits, row = str(e)[:120], None, None
+            if hits and len(hits) > IdLedger.sends(row):
                 raise UnknownOutcome(409, AMBIGUOUS, f"주문 {cid}: 요청 한도 답 뒤에 맞는 주문이 {len(hits)}개라 "
                                                      "어느 것인지 모릅니다")
             if hits:
@@ -1492,8 +1530,24 @@ class FlipsterClient:
                 self.order_symbol[oid] = row["symbol"]
                 return None, ({**row, "order_id": oid}, oid)
             pause = LOOKUP_PAUSE_S
-        raise RateLimitedUnknown(429, first.code, f"주문 {cid}에 요청 한도 답(429): 들어갔는지 아직 모릅니다. 다시 보내지 "
-                                                  f"않고 번호로 찾습니다({why}): {first.msg}", 1.0)
+            if not again or hits is None:
+                continue
+            again = False                                  # a stop in neither list: sent once more, same cid
+            self.ledger.resent(cid, self._now())
+            try:
+                return self.req("POST", ORDER, body, limit_key=limit_key), None
+            except RateLimited as e:
+                if e.status != 429:
+                    why = str(e)[:120]
+                    break
+                if e.code == BUDGET_CODE:                  # not sent again: the first send alone may rest
+                    why = str(e)[:120]
+                    break
+                pause = max(float(e.retry_after or 0), READ_PAUSE_S)
+            except TestnetError as e:                      # refused or unanswered: either send may be the one
+                why = str(e)[:120]
+        raise RateLimitedUnknown(429, first.code, f"주문 {cid}에 요청 한도 답(429): 들어갔는지 아직 모릅니다. 번호로 "
+                                                  f"찾습니다({why}): {first.msg}", 1.0)
 
     def _read_back(self, symbol: str, oid: str, row: dict, answer: Optional[dict]) -> dict:
         """The accepted order, its fills read until they account for what the order record says was filled (a few
@@ -1599,9 +1653,9 @@ class FlipsterClient:
         the position's size (two can coexist while a stop is moved); None: the position's size now. A level the last
         price is already past is refused before anything is sent (the executor's -2021: close at market). Protective
         work: every wait inside shares PROTECT_WAIT_S; past it RateLimited (RateLimitedUnknown when the stop may have
-        gone in: its client id is looked up, never sent again blindly). After the send the stop is waited for in the
-        pending list (LIST_WAITS, within the budget): place_stop confirms a stop from the list, never from a NEW order
-        record alone (_finished_stop)."""
+        gone in: its client id is looked up; after a 429 it is sent at most once more, _send). After the send the stop
+        is waited for in the pending list (LIST_WAITS, within the budget): place_stop confirms a stop from the list,
+        never from a NEW order record alone (_finished_stop)."""
         with self._protective():
             return self._stop_close(symbol, side, trigger, qty, client_id)
 
@@ -1629,7 +1683,7 @@ class FlipsterClient:
         before = [str(r["orderId"]) for r in self._pending(symbol)]
         self.ledger.put(cid, symbol, side, STOP, _num(q), True, trig, self._now(), before=before)
         try:
-            data, found = self._send(cid, body, "stop_place")
+            data, found = self._send(cid, body, "stop_place", stop=True)
         except (TransientError, RateLimitedUnknown):
             raise                                          # it may be in: the cid stays "sent" (looked up later)
         except RateLimited as e:
