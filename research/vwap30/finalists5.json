@@ -1,0 +1,23 @@
+{
+ "made": "2026-10-23 05:44:39Z",
+ "finalists": [
+  {
+   "name": "VWAP 기준 바꾸기 1등",
+   "variant": "D08",
+   "exit": 19,
+   "exit_ko": "손절 3ATR · +1ATR 뒤 0.5ATR 따라가기"
+  },
+  {
+   "name": "규칙봇 청산 중 1등",
+   "variant": "R48",
+   "exit": 10,
+   "exit_ko": "손절 2ATR · 규칙봇 계단"
+  },
+  {
+   "name": "기준선: 지금(D00) + 규칙봇 청산",
+   "variant": "D00",
+   "exit": 10,
+   "exit_ko": "손절 2ATR · 규칙봇 계단"
+  }
+ ]
+}
