@@ -311,9 +311,9 @@ def put_state(conn, k: str, now: int, data: dict) -> None:
 # ---------------------------------------------------------------- the running bot (its configs, read-only)
 def bot_world(p: Optional[dict] = None) -> dict:
     """The configs the live side runs, read-only: the paper bot's (its own ``combo_run`` record, else the config file the
-    live side runs: livecheck.combo_config), both executors' (livecheck.load_executors: plain JSON, never a key file; the
-    dashboard's paths) and why the 5-year reference does not apply when it was made for another config
-    (livecheck.usable_expected; '' = it applies)."""
+    live side runs: livecheck.combo_config), the executors' (livecheck.load_executors: plain JSON, never a key file; the
+    dashboard's paths; the third, 플립스터, once installed: livebots.installed) and why the 5-year reference does not apply
+    when it was made for another config (livecheck.usable_expected; '' = it applies)."""
     from . import livecheck as LC
     from .dash.more import livebots as L
     p = p or L.paths()
@@ -323,8 +323,9 @@ def bot_world(p: Optional[dict] = None) -> dict:
     finally:
         if conn is not None:
             conn.close()
+    names = {ex for ex, _ko, _dk, _ck in L.installed(p)}
     specs = tuple((name, p.get(f"{name}_config") or path, unit, p.get(f"{name}_db") or db, n, share)
-                  for name, path, unit, db, n, share in LC.EXECUTORS)
+                  for name, path, unit, db, n, share in LC.EXECUTORS + LC.OPTIONAL_EXECUTORS if name in names)
     _exp, ref_ko = LC.usable_expected(LC.Sources())
     out = {"config": cfg, "infos": LC.load_executors(specs), "ref_ko": ref_ko}
     # owners 10-19 (docs/live15-mexc-ko.md): a second paper bot (규칙봇 15 at -35 %) and which executor follows which:
@@ -1161,7 +1162,8 @@ def due_loss(src: dict) -> Optional[tuple]:
     tr = (src.get("trades") or {}).get("accts") or {}
     trend = is_trend(src.get("bot"))
     since = trend_since_of(src) if trend else None
-    for ex in ("bybit", "mexc"):
+    from .dash.more import livebots as L
+    for ex, _ko, _dk, _ck in L.ALL_EXECS:                # the third (플립스터) has rows only once installed
         a = tr.get(ex) or {}
         rows = [r for r in (a.get("rows") or []) if r.get("exit_time") is not None and r.get("pnl") is not None
                 and (since is None or (r.get("entry_time") or 0) >= since)]      # the trend bot: its own trades only

@@ -107,6 +107,10 @@ executors ("페이퍼만 (따라가는 실행기 없음)" while none follows it;
 told), its TIME exit in its own words ("보유 한도 청산(96봉(48시간) 지남)"), its entries with what its gates read, each
 executor's light from its own bot, its own alarm unit (paperbot-combo-vwap), the pauses of both bots in one message when
 their rules agree, and its own part of the morning check (bot_section). With one paper bot every message is as it was.
+A third executor (owners 10-23, docs/flipster-ko.md: 플립스터, unit paperbot-executor-flipster, config
+/etc/paperbot/executor-flipster.json, database executor-flipster-live.db; it follows 'VWAP 개선판') is checked, told and
+scored like the other two once it is installed on this server: its config file or its database is there (the live
+site's rule, paperbot/dash/more/livebots.py ``installed``). Neither there: every check and message is as it was with two.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
 ``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
 getUpdates; the token is never printed; sends nothing).
@@ -164,7 +168,13 @@ EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",
               "/var/lib/paperbot/exec/executor-bybit-live.db", 0, 0.85),
              ("mexc", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc",
               "/var/lib/paperbot/exec/executor-mexc-live.db", 0, 0.90))
-ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.00042}   # WOO X Pro: the API's rate (10-20)
+# the executors a server has only once they are installed (``installed_specs``: the config file or the database is there;
+# the live site's rule, livebots.installed); owners 10-23: the third, 플립스터, follows the 'VWAP 개선판' paper bot
+OPTIONAL_EXECUTORS = (("flipster", "/etc/paperbot/executor-flipster.json", "paperbot-executor-flipster",
+                       "/var/lib/paperbot/exec/executor-flipster-live.db", 0, 0.85),)
+# WOO X Pro: the API's rate (10-20). Flipster: its docs settle no rate (the owners' payback comes back later, outside the
+# bot); 0.06 % a side is an assumption until the drill measures the real fee, then it goes here
+ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.00042, "flipster": 0.0006}
 
 
 def running_combo_config() -> str:
@@ -172,7 +182,7 @@ def running_combo_config() -> str:
     return os.environ.get(COMBO_CONFIG_ENV) or COMBO_CONFIG
 
 
-EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro"}
+EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro", "flipster": "플립스터"}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}      # 1d: the 추세판단 봇's daily judgment (10/22)
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
@@ -324,7 +334,7 @@ def light_text(L: dict) -> str:
 # ---------------------------------------------------------------- executors
 @dataclass
 class ExecInfo:
-    name: str                       # "bybit" | "mexc"
+    name: str                       # "bybit" | "mexc" | "flipster" (the third, once installed)
     config: str
     unit: str
     db: str
@@ -367,10 +377,17 @@ class ExecInfo:
         return ASSUMED_FEE.get(self.exchange or self.name, ASSUMED_FEE["binance"])
 
 
-def load_executors(specs=EXECUTORS) -> list[ExecInfo]:
-    """The executors' configs as plain JSON (the executor module and its key file are never touched)."""
+def installed_specs(specs=EXECUTORS, optional=OPTIONAL_EXECUTORS) -> tuple:
+    """The executors of this server: ``specs`` always, an optional one (the third, 플립스터) once its config file or its
+    database is there; neither there: the two as before."""
+    return tuple(specs) + tuple(x for x in optional if os.path.exists(x[1]) or os.path.exists(x[3]))
+
+
+def load_executors(specs=None) -> list[ExecInfo]:
+    """The executors' configs as plain JSON (the executor module and its key file are never touched); ``specs`` None:
+    this server's (installed_specs)."""
     out = []
-    for name, path, unit, db, n, share in specs:
+    for name, path, unit, db, n, share in (installed_specs() if specs is None else specs):
         e = ExecInfo(name=name, config=path, unit=unit, db=db, light_n=n, light_min=share, exchange=name)
         try:
             with open(path, encoding="utf-8") as fh:
@@ -2160,7 +2177,7 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                     conds.append(Cond(f"dd:{ex.name}", CRITICAL,
                                       f"{ex.label} 실거래 잔고가 최고점보다 {dd:.0%} 줄었습니다\n"
                                       f"잔고 {money(float(eq))} · 최고 {money(float(peak))}\n"
-                                      + dd_halt_words(ex),
+                                      + dd_halt_words(ex, len(infos)),
                                       recover=f"✅ {ex.label} 잔고가 최고점 대비 {DD_CLEAR:.0%} 안으로 돌아왔습니다"))
                 start = ex.budget
                 if start is None:
@@ -2290,15 +2307,21 @@ def paper_unit_todo(path: str) -> str:
             f"(기록 파일 {os.path.basename(str(path))})")
 
 
-def dd_halt_words(ex: ExecInfo) -> str:
+def every_ko(n: int) -> str:
+    """What the STOP file stops: "두 실행기 모두", "세 실행기 모두" once the third (플립스터) is installed."""
+    return f"{'세' if n > 2 else '두'} 실행기 모두"
+
+
+def dd_halt_words(ex: ExecInfo, n: int = 2) -> str:
     """The drawdown alarm's last lines: the executor's own drawdown halt when its config has one; none since owners
-    10-19 (the live configs): said so, with both ways to stop; config unreadable: neither claimed."""
+    10-19 (the live configs): said so, with both ways to stop (``n``: how many executors the STOP file stops); config
+    unreadable: neither claimed."""
     stop = f"멈추려면 sudo systemctl stop {ex.unit}, 포지션은 거래소 손절이 지킴"
     if ex.max_dd is not None:
         return f"{ex.max_dd:.0%}가 되면 실행기가 스스로 멈춥니다\n지금 할 일: 두 분이 계속할지 정하세요({stop})"
     if ex.auto_halts is False:
         return ("잔고가 줄어도 실행기는 스스로 멈추지 않습니다(낙폭 멈춤 없음)\n"
-                f"지금 할 일: 두 분이 계속할지 정하세요({stop} · 두 실행기 모두 바로 닫고 멈추려면 sudo touch {ex.kill_file})")
+                f"지금 할 일: 두 분이 계속할지 정하세요({stop} · {every_ko(n)} 바로 닫고 멈추려면 sudo touch {ex.kill_file})")
     return f"지금 할 일: 두 분이 계속할지 정하세요({stop})"
 
 
@@ -2468,7 +2491,8 @@ VS_PAPER_N, VS_PAPER_MAX = 20, 2   # an executor lost where the paper won, 2+ ti
 DISK_MIN, DISK_CLEAR = 2 * 1024 ** 3, int(2.5 * 1024 ** 3)
 MEM_MIN, MEM_CLEAR = 500 * 1024 ** 2, 700 * 1024 ** 2
 PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot-executor.service",
-                   "paperbot-executor-mexc.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service")
+                   "paperbot-executor-mexc.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
+                   "paperbot-executor-flipster.service")
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
 UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
 REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
@@ -2742,7 +2766,7 @@ def streak_todo(infos: Optional[list]) -> str:
             return f"따로 할 일은 없습니다. {min(ns)}연패면 실행기가 스스로 멈춥니다(9장)"
         if all(ex.auto_halts is False for ex in infos):
             return ("연패해도 실행기는 스스로 멈추지 않습니다. 계속할지 두 분이 정하세요"
-                    f"(두 실행기 모두 바로 닫고 멈추려면 sudo touch {infos[0].kill_file})")
+                    f"({every_ko(len(infos))} 바로 닫고 멈추려면 sudo touch {infos[0].kill_file})")
     return "계속할지 두 분이 정하세요(손실 카드들의 판정을 같이 보세요)"
 
 
@@ -3234,7 +3258,8 @@ def experiment(unit: str) -> bool:
 
 def memory_lines(units: list, keep: tuple = ()) -> list:
     """The biggest memory users, the experiments to stop first; the bots that trade are never suggested. ``keep``: more
-    units never to stop (owners 10-23: the second paper bot's, paperbot-combo-vwap, once its file is there)."""
+    units never to stop (owners 10-23: the second paper bot's, paperbot-combo-vwap, once its file is there; the third
+    executor's, paperbot-executor-flipster, once installed)."""
     more = "".join(f", {u}" for u in keep)
     if not units:
         return ["(서비스별 메모리를 읽지 못함)",
@@ -3287,6 +3312,9 @@ def health_conditions(host: Host, src: Sources) -> tuple[list, set]:
         p2 = getattr(src, "paper2_db", "") or ""
         keep = tuple(u for u in [unit_of(p2) if p2 and os.path.exists(p2) else None]
                      if u and u not in ("paperbot-combo", "paperbot-combo-mexc"))
+        # the third executor once installed (owners 10-23: 플립스터) is never suggested either
+        opt = {x[0] for x in OPTIONAL_EXECUTORS}
+        keep += tuple(ex.unit for ex in (src.executors or load_executors()) if ex.name in opt)
         if mem < MEM_MIN or (prev and mem < MEM_CLEAR):
             conds.append(Cond("memory", CRITICAL,
                               f"메모리 부족 · 남은 메모리 {_gb(mem)}\n"
@@ -3300,7 +3328,7 @@ def health_conditions(host: Host, src: Sources) -> tuple[list, set]:
 ENTRY_WAIT_MS = 3 * MIN            # a trade message waits this long at most for the executors to act
 TRADE_SEND_MS = 30 * MIN           # an entry / exit older than this when first seen is recorded, not sent
 PRICE_DP = {"BTCUSDT": 0, "ETHUSDT": 2, "SOLUSDT": 2, "DOGEUSDT": 5, "LTCUSDT": 2, "BCHUSDT": 2}
-PAD = {"paper": "페이퍼   ", "bybit": "바이비트 ", "mexc": "MEXC     "}
+PAD = {"paper": "페이퍼   ", "bybit": "바이비트 ", "mexc": "MEXC     ", "flipster": "플립스터 "}
 
 
 def pad_of(name: Optional[str], label: str) -> str:
@@ -4995,7 +5023,8 @@ def cmd_chat_ids(a) -> int:
 def cmd_preview(a) -> int:
     from .livepreview import main as preview_main
     return preview_main("ac" if getattr(a, "old", False) else "two" if getattr(a, "two", False)
-                        else "vwap" if getattr(a, "vwap", False) else "live15")
+                        else "vwap" if getattr(a, "vwap", False) else "flipster" if getattr(a, "flipster", False)
+                        else "live15")
 
 
 def cmd_show(a) -> int:
@@ -5063,6 +5092,8 @@ def main(argv: Optional[list] = None) -> int:
                                                          "twin (docs/live15-mexc-ko.md)")
     pv.add_argument("--vwap", action="store_true", help="the 추세판단 봇 and 'VWAP 개선판' (docs/vwap-bot-ko.md): the VWAP bot "
                                                           "paper-only, then Bybit follows it, WOO X Pro the trend bot")
+    pv.add_argument("--flipster", action="store_true", help="three executors (docs/flipster-ko.md): Bybit and WOO X Pro "
+                                                              "follow the 추세판단 봇, 플립스터 the 'VWAP 개선판'")
     c = sub.add_parser("chat-ids", help="the owners' private chat ids the bot in effect has seen (getUpdates; sends "
                                         "nothing, never prints the token)")
     s = sub.add_parser("show", help="print a stored check and where the live messages go")
