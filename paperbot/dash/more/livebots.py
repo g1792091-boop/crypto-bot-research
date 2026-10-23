@@ -74,6 +74,10 @@ ENV = {
     "bybit_config": ("PAPERBOT_LIVE_BYBIT_CONFIG", "/etc/paperbot/executor.json"),
     "mexc_config": ("PAPERBOT_LIVE_MEXC_CONFIG", "/etc/paperbot/executor-mexc.json"),
 }
+# the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
+# yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
+# the live watcher reports a second bot only from the VWAP default (livecheck.paper2_default), never this old one.
+LEGACY_PAPER2 = "/var/lib/paperbot/combo/live15-mexc.db"
 # (id, Korean name, db key, config key)
 EXECS = (("bybit", "바이비트", "bybit_db", "bybit_config"), ("mexc", "MEXC", "mexc_db", "mexc_config"))
 # the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
@@ -181,6 +185,8 @@ def paths(env: Optional[dict] = None) -> dict:
     its own database), else the start guide's path."""
     env = os.environ if env is None else env
     out = {k: (env.get(var) or default) for k, (var, default) in ENV.items()}
+    if not env.get(ENV["paper2"][0]) and not os.path.exists(out["paper2"]) and os.path.exists(LEGACY_PAPER2):
+        out["paper2"] = LEGACY_PAPER2          # before the VWAP bot's file is there: the page as it was (the -35 % bot)
     for _ex, _ko, dk, ck in EXECS:
         if not env.get(ENV[dk][0]):
             db = _config_db(out[ck])

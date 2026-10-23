@@ -93,6 +93,15 @@ cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
 ```
 
 - 끝에 `VWAP 개선판 페이퍼 봇(paperbot-combo-vwap) 설치만 했습니다` 줄이 나옵니다.
+- 사이트 설정 한 줄 확인(한 번만):
+
+```bash
+sudo grep -n PAPER2 /etc/paperbot/dash.env
+```
+
+- 아무것도 안 나오거나 `#`로 시작하는 줄만 나오면 그대로 둡니다.
+- `PAPERBOT_LIVE_PAPER2_DB=/var/lib/paperbot/combo/live15-mexc.db`처럼 `#` 없이 예전 −35% 봇을 가리키는 줄이 나오면 그 줄을 지우고
+  `sudo systemctl restart paperbot-livedash`를 합니다. 그대로 두면 사이트의 VWAP 화면이 계속 "꺼져 있어요"로 보입니다.
 
 ### B. VWAP 페이퍼 봇 켜기 — 언제든 (돈·주문 없음)
 
@@ -119,6 +128,8 @@ sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo status --db /va
 - `마지막 1분봉: (지금에 가까운 시각) KST`, `COMBO@mix: 지갑 $1,000.00, 거래 0번 …`. 이때부터 페이퍼로 돌기 시작합니다.
 
 ### C. 실행기 하나 옮기기 — 그 실행기에 포지션이 없을 때만
+
+A(설치)를 먼저 끝낸 뒤에 합니다. 텔레그램 감시가 새 버전이어야 두 봇의 메시지가 따로 나오고, 같은 진입 메시지가 두 번 오지 않습니다.
 
 아래는 바이비트 예입니다. WOO X Pro로 하실 때는 표의 이름으로 바꿔 넣으세요.
 

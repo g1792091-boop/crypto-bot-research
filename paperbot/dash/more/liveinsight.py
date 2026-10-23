@@ -189,15 +189,18 @@ VWAP_SCALE_NOTE_KO = ("보여 주기만 해요 · 저절로 바뀌는 것은 없
                       "5년 기록에서는 50번 80% 이상 뒤에도 다음 50번이 평균 손해였어요: 순손익 합과 'VWAP 성적' 화면의 동전 쌍둥이 비교도 같이 봐요")
 
 
-def breakeven_win(pnls) -> Optional[float]:
-    """|average loss| / (average win + |average loss|) of closed trades' results (None without a win and a loss): the win
-    rate at which they would break even."""
-    v = [float(x) for x in pnls if x is not None]
-    wins, losses = [x for x in v if x > 0], [x for x in v if x <= 0]
+def breakeven_win(roes) -> Optional[float]:
+    """|average loss| / (average win + |average loss|) of closed trades' net ROE (None without a win and a loss): the win
+    rate at which they would break even. ROE, not dollars, so a bigger account later (qty_scale, more money) does not move
+    it, and it is the same number as the VWAP 성적 screen and the morning check (livevwap, livecheck.break_even)."""
+    v = [float(x) for x in roes if x is not None]
+    wins, losses = [x for x in v if x > 0], [x for x in v if x < 0]
     if not wins or not losses:
         return None
     aw, al = sum(wins) / len(wins), -sum(losses) / len(losses)
     return al / (aw + al) if aw + al > 0 else None
+
+
 # 두 봇 나란히 (owners 10-23: the trend bot and the VWAP bot are different bots; the 11/3 stop test was the twins')
 PLAIN_H2H_KO = "두 봇 나란히 · 매매법이 서로 달라요 · 어느 쪽이 낫다고 정하지 않아요"
 
@@ -1066,7 +1069,7 @@ def vwap_scale(x: dict, live: list, paired: list, pw: int, pwr: Optional[float],
     n = len(live)
     w = sum(1 for t in live if (L._f(t.get("pnl")) or 0) > 0)
     lwr = w / n if n else None
-    be_live, be_paper = breakeven_win(L._f(t.get("pnl")) for t in live), breakeven_win(L._f(t.get("pnl")) for t in paired)
+    be_live, be_paper = breakeven_win(L._f(t.get("roe")) for t in live), breakeven_win(L._f(t.get("roe")) for t in paired)
     be, be_from = ((be_live, "실거래") if be_live is not None else (be_paper, "따라간 페이퍼") if be_paper is not None
                    else (VWAP_BREAKEVEN_5Y, "5년 기록"))
     checks = [

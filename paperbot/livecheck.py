@@ -4782,6 +4782,10 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
     # executors with it; a twin of the main bot (owners 10-19, the same strategies) keeps its line under 성적표
     segs = exec_segs(src, infos)
     paths = bot_paths(src, segs)
+    if len(paths) < 2:          # one paper bot now: every executor's score line as it always was (all its trades), even
+        for r in execs:         # when its own start records show an older switch (the 10-19 -35 % stretch)
+            r.pop("era", None)
+            r.pop("before", None)
     roots = roots_of(paths, lambda p: ccfg if ps.is_main(p) else ps.cfg(p))
     diff = [p for p in paths[1:] if LP.same(roots[p], p)]
     for r in execs:
