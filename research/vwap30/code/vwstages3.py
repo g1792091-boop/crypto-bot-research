@@ -105,7 +105,7 @@ def basket_metrics(ones, per="select", full=False):
     return metrics(b, wd_mask(b), 0, per, full=full)
 
 
-def greedy(cands, start, pool_all):
+def greedy(cands, start, pool_all, max_total=24):
     """cands: {name: One}; start: [names]. Adds the member that raises select growth most (<= 12); then, if under 3 a
     weekday, the one that lowers it least, first from cands, then from pool_all."""
     chosen = list(start)
@@ -125,7 +125,7 @@ def greedy(cands, start, pool_all):
         cur = best[1]
         steps.append({"add": best[0], "growth": round(cur["growth"], 3), "per_weekday": round(cur["per_weekday"], 3), "why": "성장"})
     for pool, tag in ((cands, "3번 채우기(통과)"), (pool_all, "3번 채우기(전체)")):
-        while cur["per_weekday"] < MIN_WD and len(chosen) < 24:
+        while cur["per_weekday"] < MIN_WD and len(chosen) < max_total:
             best = None
             for nm, o in pool.items():
                 if nm in chosen:
