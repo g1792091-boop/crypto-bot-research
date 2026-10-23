@@ -3,29 +3,35 @@
 Answers in the shapes of Flipster's API reference (api-docs.flipster.io): plain JSON objects and lists, errors as
 HTTP 4xx with {"error": {"type", "message", "code"}}, 429 with Retry-After. Every request's signature is checked as
 the Quick Tutorial defines it: hex HMAC-SHA256(secret, METHOD + path (+ "?" + query exactly as sent) + api-expires +
-the body bytes as sent), and api-expires (unix seconds) must not have passed (401 "Request expired"). Symbols are
-"BTCUSDT.PERP"; quantities are base-asset amounts on ``unitOrderQty`` (SPECS: test data only, the client reads every
-value from /api/v1/market/contract); times are nanosecond strings.
+the body bytes as sent), and api-expires (unix seconds) must not have passed. Symbols are "BTCUSDT.PERP"; quantities
+are base-asset amounts on ``unitOrderQty`` (SPECS: test data only, the client reads every value from
+/api/v1/market/contract); times are nanosecond strings with a sub-millisecond part (never ms x 10^6), increasing.
 
 Covers what paperbot/flipster.py uses: server time, contract info, tradable symbols, ticker (last and mark price), 1m
 klines (built from every ``set_price``), account summary and balances, trade mode (refused with RemainingPositionsExist
 while a position is open), leverage / margin type (the answer's position row; settings rows in the position list),
 positions (one-way), MARKET orders (IOC: ``partial`` fills a fraction and cancels the rest, the answer's quantity then
-the filled amount and the status CANCELED), STOP_MARKET orders (pending until the trigger price is crossed, then filled
-at that price), pending orders, cancels, order history, execution history (TRADE / TRIGGERED / FUNDING rows, newest
-first, ``count`` 64 a page with hasNext), fee-rate levels.
+the filled amount and the status CANCELED), STOP_MARKET orders (pending until the trigger price is crossed, then
+filled at that price), pending orders (no orderTime, no reduceOnly: the docs' schema), cancels, the order history
+(final orders AND the open ones as NEW rows, newest first, ``count`` 64 a page with hasNext), the execution history
+(NEW rows when an order is accepted, TRADE, CANCELED, TRIGGERED and FUNDING rows), fee-rate levels.
 
 Unknowns of the real exchange are switches:
 - ``two_stops``: whether a second STOP_MARKET can rest on a symbol next to the first (else refused);
 - ``stop_price``: "last" or "mark": which price fires a STOP_MARKET;
-- ``own_fills``: whether a fired stop's fills carry its own orderId (else a new MARKET order's, plus a TRIGGERED row);
+- ``own_fills``: whether a fired stop's fills carry its own orderId (else a new MARKET order's);
+- ``triggered_rows``: whether a fired stop writes a TRIGGERED execution row;
 - ``past_stop``: "trigger" (a stop already past the price fires at once) or "refuse";
 - ``flat_cancels``: whether resting stops are cancelled when their position closes;
 - ``settings_rows``: whether the position list shows a row (leverage, margin type) for a coin without a position;
-- ``history_lag_ms``: an order shows in the order history only this long after it was made.
+- ``pending_lag_ms`` / ``history_lag_ms``: an order shows in the pending list / the order history only this long after
+  it was made (the docs warn of processing delays);
+- ``spelling``: "CANCELED" (the enum) or "CANCELLED" (the Place Order prose) in statuses and execution types;
+- ``error_style`` 0 / 1 / 2: three wordings each for "order not found", "request expired" and RemainingPositionsExist.
 
 Failures are injected per request with ``fail(method, path, kind, times)``: "drop_before" / "drop_after" (TimeoutError
-before / after executing), "503_before", "429", "403", ("err", status, type, msg) (refused, not executed).
+before / after executing), "503_before", "429" or ("429", seconds) (Retry-After), "429_after" (executed, then answered
+429), "403", ("err", status, type, msg) (refused, not executed).
 """
 
 from __future__ import annotations
@@ -46,6 +52,15 @@ SPECS = {   # test data only
     "BCHUSDT": {"step": "0.01", "tick": "0.01", "min": "5", "lev": "50"},
 }
 PAGE = 64
+ERRORS = {   # (status, type, message) per error_style
+    "not_found": ((404, "OrderNotFound", "Order not found"), (400, "ORDER_NOT_FOUND", "order does not exist"),
+                  (400, "BadRequest", "Unknown order sent")),
+    "expired": ((401, "Unauthorized", "Request expired"), (401, "ExpiredRequest", "api-expires has passed"),
+                (400, "InvalidTimestamp", "timestamp outside of the allowed window")),
+    "remaining": ((400, "RemainingPositionsExist", "Close all positions first"),
+                  (400, "REMAINING_POSITIONS_EXIST", "positions remain"),
+                  (400, "BadRequest", "RemainingPositionsExist: close all positions first")),
+}
 
 
 def perp(s):
@@ -66,19 +81,24 @@ class FakeFlipster:
         self.pos = {s: Decimal(0) for s in SPECS}  # signed base quantity
         self.entry = {s: 0.0 for s in SPECS}
         self.pending: dict = {}                    # orderId -> pending order (stops)
-        self.orders: dict = {}                     # orderId -> final order (history)
+        self.orders: dict = {}                     # orderId -> final order
         self.execs: list = []
         self.bars: dict = {}                       # (symbol, minute ms) -> [o, h, l, c]
         self.calls: list = []
         self.fails: list = []
         self.n = 0
+        self.last_ns = 0
         self.two_stops = True
         self.stop_price = "last"
         self.own_fills = True
+        self.triggered_rows = True
         self.past_stop = "trigger"
         self.flat_cancels = True
         self.settings_rows = True
+        self.pending_lag_ms = 0
         self.history_lag_ms = 0
+        self.spelling = "CANCELED"
+        self.error_style = 0
         self.partial = None                        # a fraction: the next market order fills only that much
         self.rate_limit = None                     # (window ms, max requests): beyond it, 429
         self.coverage: list = []                   # (call index, symbol, position, covered by a stop)
@@ -89,7 +109,13 @@ class FakeFlipster:
         return self.clock() if self.clock else 1_800_000_000_000
 
     def ns(self, ms=None):
-        return str((self.now() if ms is None else ms) * 1_000_000)
+        """A nanosecond time inside millisecond ``ms`` (now): a sub-millisecond part, increasing."""
+        ms = self.now() if ms is None else ms
+        t = max(ms * 1_000_000 + 1 + (self.n * 7919) % 400_000, self.last_ns + 1)
+        if t // 1_000_000 != ms:
+            t = ms * 1_000_000 + 999_999
+        self.last_ns = max(self.last_ns, t)
+        return str(t)
 
     def fail(self, method, path, kind, times=1):
         self.fails.append([method, path, kind, times])
@@ -112,9 +138,10 @@ class FakeFlipster:
     def add_funding(self, symbol, amount, time=None):
         """A funding payment: ``amount`` + received (the row's execFee is + paid, like a fee)."""
         self.wallet += amount
+        t = self.ns(time)
         self.execs.append({"execId": self._uid(), "orderId": "", "symbol": perp(symbol), "side": "BUY",
                            "orderType": "MARKET", "timeInForce": "IOC", "status": "FILLED", "execType": "FUNDING",
-                           "settlementCurrency": "USDT", "orderTime": self.ns(time), "transactTime": self.ns(time),
+                           "settlementCurrency": "USDT", "orderTime": t, "transactTime": t,
                            "lastPrice": "0", "lastQty": "0", "execFee": f"{-amount:.8f}",
                            "conditionalOrderType": "INVALID"})
 
@@ -132,6 +159,9 @@ class FakeFlipster:
         assert u.scheme == "https" and u.hostname == "trading-api.flipster.io", url
         path, query = u.path, u.query
         self.calls.append((self.now(), method, path, query, body))
+        exp = headers.get("api-expires", "")
+        if not exp.isdigit() or int(exp) < self.now() // 1000:     # checked first: an expired request never runs
+            return self._error(*ERRORS["expired"][self.error_style])
         for f in self.fails:
             if f[0] == method and path.startswith(f[1]) and f[3] > 0:
                 f[3] -= 1
@@ -140,9 +170,13 @@ class FakeFlipster:
                     raise TimeoutError("dropped")
                 if kind == "503_before":
                     return 503, b"Service Unavailable", {}
-                if kind == "429":
+                if kind == "429" or (isinstance(kind, tuple) and kind[0] == "429"):
+                    after = kind[1] if isinstance(kind, tuple) else 1
                     return 429, json.dumps({"error": {"type": "TooManyRequests", "message": "Too Many Requests",
-                                                      "code": 429}}).encode(), {"Retry-After": "1"}
+                                                      "code": 429}}).encode(), {"Retry-After": str(after)}
+                if kind == "429_after":                       # "throttles": it ran, the answer says 429
+                    self._route(method, path, query, body)
+                    return 429, b'{"error":{"type":"TooManyRequests","message":"throttled"}}', {"Retry-After": "1"}
                 if kind == "403":
                     return 403, b"<html>forbidden</html>", {}
                 if isinstance(kind, tuple) and kind[0] == "err":
@@ -155,11 +189,8 @@ class FakeFlipster:
             recent = [c for c in self.calls if self.now() - c[0] < window]
             if len(recent) > most:
                 return 429, b'{"error":{"type":"TooManyRequests","message":"Too Many Requests"}}', {"Retry-After": "1"}
-        exp = headers.get("api-expires", "")
         if headers.get("api-key") != self.key:
             return self._error(401, "Unauthorized", "Invalid api key")
-        if not exp.isdigit() or int(exp) < self.now() // 1000:
-            return self._error(401, "Unauthorized", "Request expired")
         signed = path + (f"?{query}" if query else "")
         msg = method.encode() + signed.encode() + exp.encode() + (body or b"")
         if headers.get("api-signature") != hmac.new(self.secret.encode(), msg, hashlib.sha256).hexdigest():
@@ -190,6 +221,14 @@ class FakeFlipster:
         self.n += 1
         return str(uuid.UUID(int=self.n))
 
+    def _spell(self, row):
+        """Statuses and execution types as this exchange spells them."""
+        out = dict(row)
+        for k in ("status", "execType"):
+            if out.get(k) == "CANCELED":
+                out[k] = self.spelling
+        return out
+
     # ------------------------------------------------------------ state
     def _upnl(self, s):
         n = self.pos[s]
@@ -198,6 +237,15 @@ class FakeFlipster:
     def _margin(self, s):
         n = self.pos[s]
         return abs(float(n)) * self.entry[s] / self.levs[s][1] if n else 0.0
+
+    def _event(self, order, kind, qty="0", price="0", fee="0"):
+        self.execs.append({"execId": self._uid(), "orderId": order["orderId"], "symbol": order["symbol"],
+                           "side": order["side"], "orderType": order["orderType"], "price": order.get("price"),
+                           "quantity": order["quantity"], "timeInForce": order["timeInForce"],
+                           "status": "FILLED" if kind == "TRADE" else ("CANCELED" if kind == "CANCELED" else "NEW"),
+                           "execType": kind, "settlementCurrency": "USDT", "orderTime": order["orderTime"],
+                           "transactTime": self.ns(), "lastPrice": price, "lastQty": qty, "execFee": fee,
+                           "conditionalOrderType": "INVALID"})
 
     def _fill(self, s, side, qty, price, order):
         """Fill ``qty`` of ``order`` at ``price``: one-way netting (reduceOnly never past the position)."""
@@ -220,16 +268,10 @@ class FakeFlipster:
         filled = qty if not order.get("reduceOnly") else qty - rest
         fee = float(filled) * price * self.fee
         self.wallet += realized - fee
-        t = self.ns()
-        self.execs.append({"execId": self._uid(), "orderId": order["orderId"], "symbol": perp(s), "side": side,
-                           "orderType": order["orderType"], "price": order.get("price"), "quantity": order["quantity"],
-                           "timeInForce": order["timeInForce"], "status": "FILLED", "execType": "TRADE",
-                           "settlementCurrency": "USDT", "orderTime": order["orderTime"], "transactTime": t,
-                           "lastPrice": repr(price), "lastQty": str(filled), "execFee": f"{fee:.8f}",
-                           "cumQty": str(filled), "avgPrice": repr(price), "conditionalOrderType": "INVALID"})
+        self._event(order, "TRADE", str(filled), repr(price), f"{fee:.8f}")
         if self.pos[s] == 0 and self.flat_cancels:
             for oid in [o for o, r in self.pending.items() if r["symbol"] == perp(s) and r.get("reduceOnly")]:
-                self._finish(self.pending.pop(oid), "CANCELED", Decimal(0), None)
+                self._cancel(oid)
         return filled
 
     def _finish(self, order, status, cum, avg):
@@ -238,6 +280,11 @@ class FakeFlipster:
                  "orderRejectReason": "", "conditionalOrderType": order.get("conditionalOrderType", "INVALID")}
         self.orders[order["orderId"]] = order
         return order
+
+    def _cancel(self, oid):
+        o = self.pending.pop(oid)
+        self._event(o, "CANCELED")
+        self._finish(o, "CANCELED", Decimal(0), None)
 
     def _trigger(self, s):
         for oid, o in sorted(self.pending.items()):
@@ -252,20 +299,21 @@ class FakeFlipster:
         o = self.pending.pop(oid)
         s = o["symbol"][:-5]
         q = Decimal(o["quantity"])
-        self.execs.append({"execId": self._uid(), "orderId": oid, "symbol": o["symbol"], "side": o["side"],
-                           "orderType": "STOP_MARKET", "timeInForce": "GTC", "status": "FILLED",
-                           "execType": "TRIGGERED",
-                           "settlementCurrency": "USDT", "orderTime": o["orderTime"], "transactTime": self.ns(),
-                           "lastPrice": "0", "lastQty": "0", "execFee": "0", "conditionalOrderType": "INVALID"})
+        if self.triggered_rows:
+            self._event(o, "TRIGGERED")
         if self.own_fills:
             filled = self._fill(s, o["side"], q, px, o)
             self._finish(o, "FILLED", filled, px)
         else:
             child = {"orderId": self._uid(), "symbol": o["symbol"], "side": o["side"], "orderType": "MARKET",
                      "quantity": o["quantity"], "timeInForce": "IOC", "orderTime": self.ns(), "reduceOnly": True}
+            self._event(child, "NEW")
             filled = self._fill(s, o["side"], q, px, child)
             self._finish(child, "FILLED", filled, px)
             self._finish(o, "FILLED", Decimal(0), None)
+
+    def _shown(self, o, lag_ms):
+        return self.now() - int(o["orderTime"]) // 1_000_000 >= lag_ms
 
     # ------------------------------------------------------------ routes
     def _route(self, m, path, query, body):
@@ -285,10 +333,11 @@ class FakeFlipster:
                              "askPrice": repr(self.prices[s])})
         if (m, path) == ("GET", "/api/v1/market/kline"):
             s = q["symbol"][:-5]
-            lo, hi = int(q["startTime"]) // 1_000_000, int(q["endTime"]) // 1_000_000
-            assert q["interval"] == "1" and hi > lo and 100 <= int(q.get("limit", 100)) <= 1000
+            assert q["interval"] == "1" and int(q["endTime"]) > int(q["startTime"])
+            assert 100 <= int(q.get("limit", 100)) <= 1000
             rows = [[str(t * 1_000_000), repr(b[0]), repr(b[1]), repr(b[2]), repr(b[3]), "1", "1"]
-                    for (sym, t), b in sorted(self.bars.items()) if sym == s and lo <= t <= hi]
+                    for (sym, t), b in sorted(self.bars.items())
+                    if sym == s and int(q["startTime"]) <= t * 1_000_000 <= int(q["endTime"])]
             return self._ok(rows[:int(q.get("limit", 100))])
         if (m, path) == ("GET", "/api/v1/market/fee-rate"):
             return self._ok([{"level": 1, "requiredTradeVolume": "1000000", "requiredAssetBalance": "0",
@@ -308,7 +357,7 @@ class FakeFlipster:
         if (m, path) == ("PUT", "/api/v1/account/trade-mode"):
             assert set(q) == {"tradeMode"} and q["tradeMode"] in ("ONE_WAY", "MULTIPLE_POSITIONS")
             if any(self.pos.values()):
-                return self._error(400, "RemainingPositionsExist", "Close all positions first")
+                return self._error(*ERRORS["remaining"][self.error_style])
             self.mode = q["tradeMode"]
             return self._ok({"tradeMode": self.mode})
         if (m, path) == ("POST", "/api/v1/trade/leverage"):
@@ -332,19 +381,20 @@ class FakeFlipster:
         if (m, path) == ("POST", "/api/v1/trade/order"):
             return self._place(q, body)
         if (m, path) == ("GET", "/api/v1/trade/order"):
-            rows = [self._public(o) for o in self.pending.values() if not q.get("symbol") or o["symbol"] == q["symbol"]]
+            rows = [self._pending_row(o) for o in self.pending.values()
+                    if (not q.get("symbol") or o["symbol"] == q["symbol"]) and self._shown(o, self.pending_lag_ms)]
             return self._ok({"orders": rows})
         if (m, path) == ("DELETE", "/api/v1/trade/order"):
             o = self.pending.get(q.get("orderId"))
             if o is None or o["symbol"] != q.get("symbol"):
-                return self._error(404, "OrderNotFound", "Order not found")
-            self._finish(self.pending.pop(q["orderId"]), "CANCELED", Decimal(0), None)
+                return self._error(*ERRORS["not_found"][self.error_style])
+            self._cancel(q["orderId"])
             return self._ok({})
         if (m, path) == ("GET", "/api/v1/trade/order/history"):
             lo, hi = int(q["startTime"]), int(q["endTime"])
-            rows = [o for o in self.orders.values() if o["symbol"] == q.get("symbol", o["symbol"])
-                    and lo <= int(o["orderTime"]) <= hi
-                    and self.now() - int(o["orderTime"]) // 1_000_000 >= self.history_lag_ms]
+            rows = [o for o in list(self.orders.values()) + list(self.pending.values())
+                    if o["symbol"] == q.get("symbol", o["symbol"]) and lo <= int(o["orderTime"]) <= hi
+                    and self._shown(o, self.history_lag_ms)]
             rows.sort(key=lambda o: (int(o["orderTime"]), o["orderId"]), reverse=True)
             return self._page(rows, q, "orderId")
         if (m, path) == ("GET", "/api/v1/trade/execution/history"):
@@ -362,8 +412,8 @@ class FakeFlipster:
         if q.get("before"):
             i = next((i for i, r in enumerate(rows) if r[key] == q["before"]), len(rows))
             rows = rows[i + 1:]
-        return self._ok({"history": [self._public(r) for r in rows[:count]], "hasPrev": bool(q.get("before")),
-                         "hasNext": len(rows) > count})
+        return self._ok({"history": [self._spell(self._public(r)) for r in rows[:count]],
+                         "hasPrev": bool(q.get("before")), "hasNext": len(rows) > count})
 
     def _contract(self, s):
         sp = SPECS[s]
@@ -385,6 +435,10 @@ class FakeFlipster:
     @staticmethod
     def _public(o):
         return {k: v for k, v in o.items() if k not in ("reduceOnly",)}
+
+    def _pending_row(self, o):
+        """The pending list's schema: no orderTime, no reduceOnly."""
+        return self._spell({k: v for k, v in o.items() if k not in ("reduceOnly", "orderTime")})
 
     def _place(self, q, body):
         s = q["symbol"][:-5]
@@ -408,7 +462,7 @@ class FakeFlipster:
         oid = self._uid()
         order = {"orderId": oid, "symbol": q["symbol"], "side": q["side"], "orderType": q["type"],
                  "quantity": q["quantity"], "timeInForce": "IOC" if q["type"] == "MARKET" else "GTC",
-                 "orderTime": self.ns(), "reduceOnly": reduce, "leavesQty": q["quantity"]}
+                 "orderTime": self.ns(), "reduceOnly": reduce, "leavesQty": q["quantity"], "status": "NEW"}
         if q["type"] == "STOP_MARKET":
             assert reduce and "maxSlippagePrice" not in q and q.get("price"), q
             px = self.prices[s] if self.stop_price == "last" else self.marks[s]
@@ -418,20 +472,24 @@ class FakeFlipster:
                 return self._error(400, "InvalidTriggerPrice", "trigger price would trigger immediately")
             if not self.two_stops and self.live_stops(s):
                 return self._error(400, "TooManyConditionalOrders", "only one stop order per symbol")
-            order.update(triggerPrice=q["price"], price=q["price"], status="NEW")
+            order.update(triggerPrice=q["price"], price=q["price"])
             self.pending[oid] = order
+            self._event(order, "NEW")
             if past:
                 self._fire(oid, self.prices[s])
-            return self._ok({"order": self._public(order)})
+            return self._ok({"order": self._spell(self._public(order))})
         if reduce:
             assert "maxSlippagePrice" not in q, q                  # a close must close
+        self._event(order, "NEW")
         want = qty if self.partial is None else (qty * Decimal(str(self.partial)) / Decimal(sp["step"])
                                                  ).to_integral_value() * Decimal(sp["step"])
         self.partial = None
         filled = self._fill(s, q["side"], want, self.prices[s], order) if want > 0 else Decimal(0)
         status = "FILLED" if filled == qty else "CANCELED"
+        if status == "CANCELED":
+            self._event(order, "CANCELED")
         done = self._finish(order, status, filled, self.prices[s] if filled else None)
         # the IOC answer: an unfilled part is cancelled, ``quantity`` is then the filled amount (Place Order docs)
         ans = {k: v for k, v in done.items() if k in ("orderId", "symbol", "side", "orderType", "timeInForce")}
         ans.update(quantity=str(filled), status=status, leavesQty="0", price=repr(self.prices[s]))
-        return self._ok({"order": ans})
+        return self._ok({"order": self._spell(ans)})
