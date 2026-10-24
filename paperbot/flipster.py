@@ -127,7 +127,7 @@ Safety:
 - ``FlipsterClient`` talks to trading-api.flipster.io only (class-level allowlist, https only, checked at construction;
   the executor checks again, and that its ledger is in the executor's own database). Mainnet only.
 - Keys: FLIPSTER_LIVE_KEY / FLIPSTER_LIVE_SECRET behind PAPERBOT_LIVE_MAINNET=I_UNDERSTAND; never the paper runner's
-  key, a Binance, Bybit, MEXC or WOO X Pro key.
+  key, a Binance, Bybit, MEXC, WOO X Pro or DeepCoin key.
 - Key gate: the API does not report a key's permissions. The gate proves the key reads the account; "read + trade only,
   no withdrawal, server IP bound" is the owners' statement FLIPSTER_LIVE_KEY_CHECKED=TRADE_ONLY_NO_WITHDRAW_IP_BOUND
   (refused without it), shown as a warning at every start.
@@ -178,6 +178,8 @@ FLIPSTER_HOSTS = ("trading-api.flipster.io",)
 API = "/api/v1"
 ORDER = API + "/trade/order"
 LIVE_KEY_NAMES = ("FLIPSTER_LIVE_KEY", "FLIPSTER_LIVE_SECRET")
+# paperbot/deepcoin.py's key names (it imports this module, so they are spelled out here)
+DEEPCOIN_KEY_NAMES = ("DEEPCOIN_LIVE_KEY", "DEEPCOIN_LIVE_SECRET", "DEEPCOIN_LIVE_PASSPHRASE")
 KEY_CHECKED = "FLIPSTER_LIVE_KEY_CHECKED"             # the owners' statement: what the API cannot report
 KEY_CHECKED_VALUE = "TRADE_ONLY_NO_WITHDRAW_IP_BOUND"
 DRILL_CONFIRM = "REAL_ORDER"
@@ -2003,7 +2005,7 @@ def _values(env, names) -> set:
 
 def trading_keys(mode: str, env, paper_env=None) -> tuple[str, str]:
     """The Flipster key and secret, or Refused. Mainnet only, behind PAPERBOT_LIVE_MAINNET=I_UNDERSTAND. Never the paper
-    runner's key, a Binance, Bybit, MEXC or WOO X Pro key."""
+    runner's key, a Binance, Bybit, MEXC, WOO X Pro or DeepCoin key."""
     if mode != MODE_MAINNET:
         raise Refused(f"플립스터에는 테스트넷이 없습니다: \"exchange\": \"flipster\"는 \"mode\": \"mainnet\"만 됩니다"
                       f"(지금 {mode!r})")
@@ -2024,6 +2026,9 @@ def trading_keys(mode: str, env, paper_env=None) -> tuple[str, str]:
         raise Refused(f"{LIVE_KEY_NAMES[0]}/{LIVE_KEY_NAMES[1]}가 MEXC 키(MEXC_*)와 같습니다. 거래소마다 다른 키를 씁니다")
     if {key, secret} & _values(env, WX.LIVE_KEY_NAMES + (WX.MEMO_NAME,)):
         raise Refused(f"{LIVE_KEY_NAMES[0]}/{LIVE_KEY_NAMES[1]}가 WOO X Pro 키(WOOXPRO_*)와 같습니다. 거래소마다 다른 키를 "
+                      "씁니다")
+    if {key, secret} & _values(env, DEEPCOIN_KEY_NAMES):
+        raise Refused(f"{LIVE_KEY_NAMES[0]}/{LIVE_KEY_NAMES[1]}가 딥코인 키(DEEPCOIN_*)와 같습니다. 거래소마다 다른 키를 "
                       "씁니다")
     return key, secret
 

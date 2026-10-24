@@ -6,8 +6,8 @@ application): the third executor, following the paper bot "VWAP 개선판" (docs
     python -m paperbot.deepcoin specs                      # the 6 coins' live contract specs (public, no key needed)
     python -m paperbot.deepcoin check                      # read-only checks + leverage 40/30 isolated (no order)
     python -m paperbot.deepcoin drill --confirm-order REAL_ORDER [--symbol DOGEUSDT] [--side short]   # + one
-                                                           # smallest-size order cycle and the stop-trigger test
-                                                           # (--no-trigger-test skips it)
+                                                           # small order cycle on one side and the stop-trigger test
+                                                           # (--no-trigger-test skips it); run once per side
 
 Sources (read as data, 2026-10-24): DeepCoin's own API docs, www.deepcoin.com/docs (Access Guide / authentication,
 Error Codes, Rate Limit Rules, Changelog, DeepCoinMarket_*, DeepCoinAccount_*, DeepCoinTrade_*): base URL
@@ -40,7 +40,8 @@ unchanged.
                                mrgPosition merge, and the executor sees ONE net position per coin. one_way() checks the
                                positions: a coin holding a long and a short at once, or a split position: Refused
   isolated(symbol)             POST /deepcoin/account/set-leverage mgnMode isolated, mrgPosition merge (BTC 40x, others
-                               30x), read back with GET /deepcoin/account/leverage-info
+                               30x), read back with GET /deepcoin/account/leverage-info (again after a pause while it
+                               lags); a coin it cannot set never stops the start (leverage() sets it before an entry)
   market(...)                  POST /deepcoin/trade/order ordType market, tdMode isolated, mrgPosition merge, sz in
                                contracts, clOrdId: open = buy/long or sell/short; close (reduce only) = sell/long or
                                buy/short with reduceOnly true; read back with GET /deepcoin/trade/order?ordId=
@@ -82,7 +83,20 @@ that instId with the same side, posSide, size and trigger price (within half a t
 that were not pending before it and that no other id of ours holds. Exactly one (two after a stop sent twice, below):
 that stop. More: an unknown outcome, never "not found". None: "not found" only 25 s after the last send. This record
 lives in the process; after a restart no stop is looked up by its id: the executor reads the resting stops from the
-list (a surplus one is cancelled, Executor._cover).
+list (a surplus one is cancelled, Executor._cover); a stop id the process has not seen is looked for on every coin, and
+a coin that cannot be read makes the answer unknown, never "not found".
+
+Answers to an order or a stop (POST trade/order, trade/trigger-order). Refused (nothing ran) only on a code of the docs'
+Error Codes page (the key, the signature, the timestamp, the IP: answered before anything runs; only the two timestamp
+codes 50102 / 50112 are a clock refusal, re-synced and sent again by the executor) or on the request's own sCode. Any
+other answer after the send (an undocumented code such as 50013 "System is busy", whatever its message says; 403 / 418;
+5xx; a body that is not DeepCoin's shape; a timeout) may come from an order that ran: an unknown outcome
+(TransientError), looked up by the clOrdId (a stop: by what was sent), an opening order never sent again. A failure
+before an opening order went out (the look-up of its clOrdId, the instrument read): NotSent (nothing was sent; the
+executor's Guarded calls again, which looks the id up again first). Words in a message are read on reads only (a rate
+word: 429; "order not found": not found); a setting or a cancel keeps its code as it came. set-leverage: refused only on
+its sCode or a documented code; an undocumented answer and a read-back that still shows another value after a pause are
+TransientError (tried again), never a refusal.
 
 Rate limits and 429. Each request waits for its endpoint's own budget (80 % of the docs' numbers, per second and per
 minute) BEFORE its timestamp and signature are made: never sent stale. A read answered 429 is read again after its
@@ -101,9 +115,13 @@ does not show is decided by its trigger-history row only, and only an explicit r
 errorCode 0: fired (TRIGGERED; the order it placed is found by its fills: under the stop's own ordId, else the one
 order of the coin with the stop's side and posSide created right after the trigger and no clOrdId of ours); errorCode
 not 0: it fired but its order failed (REJECTED: not fired, gone); triggerTime 0 and errorCode 0: ended without firing
-(CANCELED; the history holds finished trigger orders only: the drill checks that a resting stop is not in it). No row
-anywhere: a stop of ours is UNCONFIRMED (neither live nor fired nor cancelled: place_stop raises ProtectionError, a
-move keeps the old stop); someone else's: not found. A missing errorCode or triggerTime is an error, never "cancelled".
+(CANCELED. The history page says it holds triggered orders, but also "triggerTime of 0 indicates the order has not been
+triggered yet": whether a resting order shows there is not settled, and the drill checks that a resting stop is not in
+it). No row anywhere: a stop of ours is UNCONFIRMED (neither live nor fired nor cancelled: place_stop raises
+ProtectionError, a move keeps the old stop); someone else's: not found. A missing errorCode or triggerTime is an error,
+never "cancelled". A trigger order's kind is its triggerOrderType in the pending list and its ordType in the history
+(TPSL, Tracking ... are never our stop); a row whose kind is missing, or of a kind that can be ours whose side or
+posSide cannot be read, is an error, never "not a stop".
 Why "last" (triggerPxType): the paper engine judges its stops on the last price, the other exchanges' stops trigger on
 it (Binance CONTRACT_PRICE, Bybit LastPrice, WOO X Pro price_type 1) and the executor's own ladder reads the last
 price's 1m candles; the drill watches the last and the mark price while its test stop fires and says which crossed.
@@ -112,7 +130,8 @@ A coin whose instrument row lacks minSz (the smallest order), lever (the maximum
 0: it refuses new entries with that reason (leverage() and an opening order; specs, check and the preflight show it)
 while the executor starts and its open position is still protected and closed. A missing ctVal, lotSz or tickSz is a
 BAD_SPEC error for that coin (a stop and a close need them). DeepCoin states its minimum in contracts (minSz): the spec's
-min_notional is 0 (no minimum value is published), its min_qty is minSz x ctVal.
+min_notional is 0 (no minimum value is published), its min_qty is minSz x ctVal. A coin whose cached state is not live
+(suspend, preopen, settlement: the funding settlement passes in moments) is read again in leverage() before an entry.
 
 What only a live run can confirm (docs/deepcoin-ko.md; the drill checks each): two reduce-only trigger orders resting at
 once (the stop protocol needs it for a moment: new stop -> confirmed -> old one cancelled); a stop actually firing and
@@ -122,7 +141,9 @@ for a USDT perpetual (the instruments list says "SwapU"; the Trigger Order page 
 order fills fully; the real taker fee against the fee endpoint (DeepCoin charges its full fee; the payback app pays back
 outside the bot); the fee sign (+ paid) and whether an order's ``pnl`` is before fees (the P&L from the fills against
 the fill prices and the wallet change); the server time offset; a just-sent order found by its clOrdId (GET order and
-the lists); the leverage and isolated margin on the drill's position; how long a new stop takes to be listed.
+the lists); the leverage and isolated margin on the drill's position; how long a new stop takes to be listed; a
+reduce-only market close (every run closes half of its position with one) on each side (one run per side: long, then
+--side short).
 
 Safety:
 - ``DeepCoinClient`` talks to api.deepcoin.com only (class-level allowlist, https only, checked at construction; the
@@ -132,10 +153,13 @@ Safety:
 - Key gate: the API does not report a key's permissions. The gate proves the key reads the account; "trade only, no
   withdrawal, server IP bound" is the owners' statement DEEPCOIN_LIVE_KEY_CHECKED=TRADE_ONLY_NO_WITHDRAW_IP_BOUND
   (refused without it), shown as a warning at every start.
-- An order that was accepted (it has an ordId) is never reported as not executed; a lost answer is looked up by its
-  clOrdId (a stop: by what was sent); an opening order is never sent twice; after a 429 a close is never sent again by
-  the client and a stop at most once more, each looked up first. A stop is reported cancelled only on an explicit
-  record, and confirmed live only from the pending list.
+- An order that was accepted (it has an ordId) is never reported as not executed, and an order or a stop is reported
+  refused only on a documented code or its own sCode; a lost or undocumented answer is looked up by its clOrdId (a
+  stop: by what was sent); an opening order is never sent twice; after a 429 a close is never sent again by the client
+  and a stop at most once more, each looked up first. A stop is reported cancelled only on an explicit record, and
+  confirmed live only from the pending list.
+- The drill closes and cancels only what it made, only after its own entry was sent, and cancels a stop only once
+  the position reads flat.
 - The rate budget is waited out before a request is signed: DC-ACCESS-TIMESTAMP is never stale.
 - A position's size, the account equity and the stop list are never read as 0 / flat / empty from a missing or garbled
   field: such an answer is an error. A coin holding a long and a short at once is an error, never netted.
@@ -170,7 +194,7 @@ from .mainnet import (FLAG, FLAG_VALUE, LIVE_KEY_NAMES as BINANCE_LIVE_KEY_NAMES
                       PAPER_KEY_NAMES, TESTNET_KEY_NAMES as BINANCE_TESTNET_KEY_NAMES, Refused, check_permissions,
                       read_env_file)
 from .testnet import (BAD_TIMESTAMP, NOT_FOUND, WOULD_TRIGGER, RateLimited, TestnetError, TransientError,
-                      UnknownOutcome, cancel_everything, covers, hide_process_memory, live_stops, move_stop,
+                      UnknownOutcome, covers, hide_process_memory, live_stops, move_stop,
                       place_stop, round_stop, urllib_send)
 
 SETTLE = "USDT"
@@ -187,7 +211,7 @@ PASSPHRASE_NAME = "DEEPCOIN_LIVE_PASSPHRASE"          # chosen by the owners whe
 KEY_CHECKED = "DEEPCOIN_LIVE_KEY_CHECKED"             # the owners' statement: what the API cannot report
 KEY_CHECKED_VALUE = "TRADE_ONLY_NO_WITHDRAW_IP_BOUND"
 DRILL_CONFIRM = "REAL_ORDER"
-DRILL_ORDER_USDT = 6.0                                # the drill's order: about $6 (above every coin's minSz)
+DRILL_ORDER_USDT = 6.0                                # the drill's order: $6 or more, two halves of minSz or more
 DRILL_MIN_GAP_S = 0.5                                 # the drill's requests at least this far apart
 DRILL_PAUSE_S = 3.0
 TRIGGER_GAP = 0.001                                   # the trigger test's stop: 0.1 % from the last price
@@ -221,15 +245,20 @@ MATCH_BEFORE_MS = 3_000                               # ... and was created at m
 FIND_WINDOW_MS = 7 * 86_400_000                       # a fired stop's order: looked for in the fills of the last week
 CHILD_AFTER_MS = 60_000                               # ... created from 2 s before its trigger time to 60 s after
 SPEC_CACHE_MS = 5_000
+# the Error Codes page: every code there is answered before anything runs (the key, the signature, the timestamp)
 TIME_CODES = ("50102", "50112")                       # the request timestamp expired / invalid: refused, not executed
 IP_CODES = ("50110",)                                 # "Invalid IP": the key is bound to another IP
 AUTH_CODES = ("50101", "50103", "50104", "50105", "50106", "50107", "50108", "50109", "50111", "50113", "50114")
 FROZEN_CODES = ("50100",)
+REQUEST_CODES = ("50115",)                            # "Invalid request type" (HTTP 405)
+DOCUMENTED_CODES = TIME_CODES + IP_CODES + AUTH_CODES + FROZEN_CODES + REQUEST_CODES
+KEY_REFUSED = ("AUTH", "IP", "FROZEN")                # the key itself refused: nothing on the account would work
 NOT_FOUND_SCODES = ("24", "1033201232")               # OrderNotFound (ccxt), "Order not found" (Cancel Trigger Order)
 NO_POSITION_SCODES = ("31",)                          # NotEnoughPositionToClose (ccxt): a close with nothing to close
+# words read in the message of an undocumented code: on a read only (a write's answer is never guessed from words)
 NOT_FOUND_WORDS = ("notfound", "not found", "notexist", "not exist", "does not exist")
 RATE_WORDS = ("too many", "frequen", "rate limit", "ratelimit", "limit exceeded")
-EXPIRED_WORDS = ("timestamp", "expired")
+PLACE_KEYS = frozenset({"order", "trigger"})          # the POSTs that place an order or a stop
 # requests per (second, minute) for each endpoint (the docs' Rate Limit Rules: private per UID, public per IP; GET and
 # POST of one path share one budget); the client keeps to RATE_SHARE of each and handles a 429 where it comes
 DOC_RATE = {
@@ -249,13 +278,28 @@ PROTECT_WAIT_S = 10.0                                 # protective work: every w
 BUDGET_CODE = "PROTECT_BUDGET"
 LOOKUP_PAUSE_S = 2.0                                  # after a 429 on a stop or a close: looked up this often
 LIST_WAITS = (0.3, 0.7, 1.0, 1.5, 1.5)               # a new stop must show in the pending list within these (5 s)
+LEV_WAITS = (0.5, 1.0, 1.5)                           # a leverage just set, not read back yet: read again after these
 UNCONFIRMED = "UNCONFIRMED"                           # a stop of ours in neither the list nor the history: not settled
 AMBIGUOUS = "AMBIGUOUS_ORDER"                         # several stops fit a lost answer (never "not found")
+MISMATCH = "LEVERAGE_MISMATCH"                        # the leverage read back is not the one set (yet)
+NOT_SENT = "NOT_SENT"                                 # an opening order not sent: a check before it failed
 
 
 class RateLimitedUnknown(RateLimited):
     """A stop or a close answered 429 that may still have run, not found by the look-ups the protective budget allowed:
     its outcome stays unknown (looked up again, never "refused")."""
+
+
+class NotSent(RateLimited):
+    """A failure before an opening order was sent (the look-up of its clOrdId, the instrument read): nothing went out.
+    A RateLimited, so the executor's Guarded waits and calls again, and the call looks the id up again before any send;
+    the entry is never held as the unknown outcome of an order that was never sent. Never raised once the order may
+    have gone out."""
+
+
+def definite(e: Exception) -> bool:
+    """A refusal that says nothing ran: the request's own sCode, or a code of the docs' Error Codes page."""
+    return getattr(e, "dc_scode", None) is not None or getattr(e, "dc_code", None) in DOCUMENTED_CODES
 
 
 def hosts_for(mode: str) -> tuple:
@@ -501,6 +545,7 @@ class DeepCoinClient:
         self.list_delay_ms: dict = {}    # stop ordId -> ms until the pending list showed it (the drill reports it)
         self.pos_rows: dict = {}         # symbol -> the last position row (margin mode for a close or a stop)
         self.lev: dict = {}              # symbol -> leverage set by leverage() / isolated()
+        self.lev_problems: dict = {}     # symbol -> why isolated() could not set it (leverage() tries before an entry)
         self.one_side = False            # one_way(): no coin holds a long and a short at once (checked this run)
         self.kline_source = "last"
         self.deadline: Optional[int] = None   # protective work: the clock (ms) every wait inside must end by
@@ -620,6 +665,8 @@ class DeepCoinClient:
         code = data.get("code") if isinstance(data, dict) else None
         code = None if code is None else str(code)
         msg = str((data.get("msg") if isinstance(data, dict) else None) or (raw or b"")[:200])
+        # an order or a stop: refused only on a documented code or its own sCode; any other answer may have run
+        placing = method == "POST" and (limit_key or path) in PLACE_KEYS
         err: Optional[TestnetError] = None
         if status >= 500 or status in (0, 408):
             # a server error: the request may have run (an order is looked up, never resent)
@@ -631,13 +678,16 @@ class DeepCoinClient:
             except ValueError:
                 after = 1.0
             err = RateLimited(429, code, f"rate limited: {msg}"[:300], after)
+        elif status in (403, 418) and placing:
+            # whether a blocked order reached the exchange is not said: looked up, never "nothing ran"
+            err = TransientError(status, code, f"HTTP {status} (차단·허용 안 된 IP), 주문 결과 모름: {msg}"[:300])
         elif status in (403, 418):
             # a firewall block or a ban: never retried in the request, the loop waits (the executor's 418 handling)
             err = RateLimited(418, code, f"HTTP {status} (차단·허용 안 된 IP): {msg}"[:300], 300.0)
         elif code is not None and code != OK_CODE:
-            err = self._error(code, msg, status)
+            err = self._error(code, msg, status, read=method == "GET", placing=placing)
         elif status != 200:
-            err = TestnetError(status, code, msg)
+            err = (TransientError if placing else TestnetError)(status, code, msg)
         elif not isinstance(data, dict) or code != OK_CODE:
             err = TransientError(status, None, f"응답이 딥코인 형식(code \"0\")이 아닙니다: {msg}"[:200])
         else:
@@ -652,7 +702,13 @@ class DeepCoinClient:
             raise err
         return data.get("data")
 
-    def _error(self, code: str, msg: str, status: int) -> TestnetError:
+    def _error(self, code: str, msg: str, status: int, read: bool = True, placing: bool = False) -> TestnetError:
+        """A top-level code that is not "0". The Error Codes page's codes (the key, the signature, the timestamp, the
+        IP, a frozen key, the request type) are answered before anything runs: refused. Any other code is not
+        documented: on an order or a stop (``placing``) it is an unknown outcome (TransientError: looked up by its
+        clOrdId, a stop by what was sent; e.g. 50013 "System is busy" after the order ran), never a refusal and never a
+        clock refusal sent again. Only a read (GET) reads words in the message (a rate word: 429; "order not found":
+        not found); another write keeps the code as it came."""
         text = f"{msg} (딥코인 code {code})"
         low = msg.lower().replace("_", " ")
         if code in TIME_CODES:
@@ -663,12 +719,14 @@ class DeepCoinClient:
             err = TestnetError(401, "AUTH", f"키·서명·패스프레이즈가 거절됐습니다: {text}")
         elif code in FROZEN_CODES:
             err = TestnetError(400, "FROZEN", f"API 키가 막혀 있습니다: {text}")
-        elif any(w in low for w in RATE_WORDS):
+        elif code in REQUEST_CODES:
+            err = TestnetError(405, code, text)
+        elif placing:
+            err = TransientError(status, code, f"주문에 문서에 없는 답이 왔습니다(들어갔는지 모름, 찾아봅니다): {text}"[:300])
+        elif read and any(w in low for w in RATE_WORDS):
             self.rate_answers += 1
             err = RateLimited(429, code, text, 1.0)
-        elif any(w in low for w in EXPIRED_WORDS) and "time" in low:
-            err = TestnetError(400, BAD_TIMESTAMP, text)
-        elif "order" in low and any(w.replace(" ", "") in low.replace(" ", "") for w in NOT_FOUND_WORDS):
+        elif read and "order" in low and any(w.replace(" ", "") in low.replace(" ", "") for w in NOT_FOUND_WORDS):
             err = TestnetError(404, NOT_FOUND[0], text)
         else:
             err = TestnetError(status if status and status != 200 else 400, code, text)
@@ -677,16 +735,15 @@ class DeepCoinClient:
 
     @staticmethod
     def _s_error(scode: str, smsg: str) -> TestnetError:
-        """An order-level refusal (code "0", data.sCode not 0): nothing ran."""
+        """A refusal of the request itself (code "0", data.sCode not 0): nothing ran. Told apart by the code only."""
         text = f"{smsg} (딥코인 sCode {scode})"
-        low = smsg.lower().replace("_", "")
-        if scode in NOT_FOUND_SCODES or any(w in low for w in NOT_FOUND_WORDS):
+        if scode in NOT_FOUND_SCODES:
             err = TestnetError(404, NOT_FOUND[0], text)
-        elif scode in NO_POSITION_SCODES or "notenoughposition" in low.replace(" ", ""):
+        elif scode in NO_POSITION_SCODES:
             err = TestnetError(400, -2022, f"ReduceOnly Order is rejected (딥코인: {text})")
         else:
             err = TestnetError(400, scode, text)
-        err.dc_code = scode
+        err.dc_code = err.dc_scode = scode
         return err
 
     def _audit(self, audit: dict, status: int = 0, data=None, err: Optional[Exception] = None) -> None:
@@ -934,19 +991,40 @@ class DeepCoinClient:
         return int(_dec(row.get("lever"), "lever"))
 
     def _set_leverage(self, symbol: str, lev: int) -> None:
-        """Isolated ``lev`` (merge), then read back. Already so: nothing is sent."""
+        """Isolated ``lev`` (merge), then read back; already so: nothing is sent. The read-back can lag the answer: it
+        is read again after LEV_WAITS (3 s). Refused only on a definite answer (the request's own sCode, a documented
+        code); an undocumented one may have set it, and the read-back decides. Still another value after the waits:
+        TransientError LEVERAGE_MISMATCH (tried again later), never a refusal."""
         if self._lev_info(symbol) == lev:
             return
-        self.req("POST", ACC + "/set-leverage", {"instId": fx(symbol), "lever": str(lev), "mgnMode": ISOLATED,
-                                                 "mrgPosition": MERGE}, limit_key="set_leverage")
+        answer = None
+        try:
+            self.req("POST", ACC + "/set-leverage", {"instId": fx(symbol), "lever": str(lev), "mgnMode": ISOLATED,
+                                                     "mrgPosition": MERGE}, limit_key="set_leverage")
+        except (TransientError, RateLimited):
+            raise
+        except TestnetError as e:
+            if definite(e):
+                raise
+            answer = e
         got = self._lev_info(symbol)
+        for w in LEV_WAITS:
+            if got == lev:
+                return
+            self._wait(w)
+            got = self._lev_info(symbol)
         if got != lev:
-            raise TestnetError(400, "LEVERAGE_MISMATCH", f"{symbol}: 격리 {lev}배로 맞추지 못했습니다(읽은 값 {got})")
+            raise TransientError(200, MISMATCH, f"{symbol}: 격리 {lev}배로 맞춘 것을 확인하지 못했습니다(읽은 값 {got}"
+                                                + (f", 답 {answer.msg}" if answer is not None else "") + ")")
 
     def isolated(self, symbol: str) -> None:
         """Isolated margin with the owners' leverage (BTC 40x, others 30x), read back. A position open on the symbol:
-        TestnetError -4048 unless it is isolated already (the executor warns and keeps protecting it). Not possible
-        otherwise: Refused (the executor does not start)."""
+        TestnetError -4048 unless it is isolated already (the executor warns and keeps protecting it). The key refused
+        (IP, signature, a frozen key): Refused (the executor does not start: nothing would work). Any other failure is
+        this coin's only (a refusal of the value, an undocumented answer, a read-back that does not show it yet, the
+        endpoint not answering): kept in ``lev_problems`` (check shows it) and never stops the start, so an open
+        position elsewhere is still protected; leverage() sets and reads back the paper's leverage before every entry
+        on the coin and refuses that entry when it cannot."""
         sp = self._spec(symbol)
         rows = self._position_rows(symbol)
         if rows:
@@ -956,17 +1034,25 @@ class DeepCoinClient:
         lev = int(min(FIXED_LEVERAGE.get(symbol, DEFAULT_LEVERAGE), sp.get("max_leverage") or 10 ** 6))
         try:
             self._set_leverage(symbol, lev)
-        except (TransientError, RateLimited):
-            raise
         except TestnetError as e:
-            raise Refused(f"딥코인 {symbol}을 격리 {lev}배로 맞출 수 없어 거래하지 않습니다: {e.msg}") from e
+            if e.code in KEY_REFUSED:
+                raise Refused(f"딥코인 {symbol}을 격리 {lev}배로 맞출 수 없어 거래하지 않습니다: {e.msg}") from e
+            if e.code == BAD_TIMESTAMP:
+                raise                                      # the clock: the executor re-syncs and calls again
+            self.lev_problems[symbol] = f"격리 {lev}배를 못 맞춤: {e.msg}"
+            return None
+        self.lev_problems.pop(symbol, None)
         self.lev[symbol] = lev
 
     def leverage(self, symbol: str, lev: int) -> dict:
         """Set the symbol's isolated leverage and read it back. Refused (TestnetError) unless this process checked the
-        positions (one_way) and the contract is live: the executor never opens a position otherwise."""
+        positions (one_way) and the contract is live: the executor never opens a position otherwise. A coin that is
+        not live in the cached instruments (e.g. "settlement", the funding settlement) is read again first."""
         lev = int(lev)
         sp = self._spec(symbol)
+        if not sp.get("tradable"):
+            self._load_instruments()                       # at most every SPEC_CACHE_MS
+            sp = self._spec(symbol)
         if sp.get("max_leverage") and lev > sp["max_leverage"]:
             raise TestnetError(400, "LEVERAGE_MAX", f"{symbol}: 레버리지 {lev}배가 최대 {sp['max_leverage']:g}배를 넘습니다")
         if not sp.get("tradable"):
@@ -982,6 +1068,7 @@ class DeepCoinClient:
                 return {"symbol": symbol, "leverage": lev, "marginType": "isolated"}
             raise TestnetError(400, "POSITION_OPEN", f"{symbol}: 포지션이 있어 레버리지를 바꾸지 않습니다")
         self._set_leverage(symbol, lev)
+        self.lev_problems.pop(symbol, None)
         self.lev[symbol] = lev
         return {"symbol": symbol, "leverage": lev, "marginType": "isolated"}
 
@@ -997,10 +1084,12 @@ class DeepCoinClient:
         for s in symbols:
             sp = self._spec(s)
             lev = self._lev_info(s)
-            out.append((bool(sp.get("tradable")) and not sp.get("problem"),
+            problem = self.lev_problems.get(s)
+            out.append((bool(sp.get("tradable")) and not sp.get("problem") and not problem,
                         f"{s}: 상태 {sp.get('status')}, 1계약 {sp['ct_val']} {sp.get('base_coin') or ''}, 수량 단위 "
                         f"{sp['lot_sz']}계약, 최소 주문 {min_order_text(sp)}, 가격 단위 {sp['tick_str']}, 최대 "
-                        f"{sp['max_leverage'] or 0:g}배, 지금 격리 레버리지 {lev if lev is not None else '?'}"))
+                        f"{sp['max_leverage'] or 0:g}배, 지금 격리 레버리지 {lev if lev is not None else '?'}"
+                        + (f" ({problem}: 진입 직전에 다시 맞추고, 안 되면 그 진입만 하지 않음)" if problem else "")))
         return out
 
     # ------------------------------------------------------------ order records
@@ -1098,37 +1187,53 @@ class DeepCoinClient:
         reduce_only: sell/long (closes a long) or buy/short (a short) with reduceOnly true, in the position's margin
         mode: it can never open or flip a position. An opening order is never sent twice (its clOrdId is looked up
         first; a 429 is an unknown outcome); a reduce-only order is protective work (its waits share
-        PROTECT_WAIT_S)."""
+        PROTECT_WAIT_S). Answers (see _error): refused only on a documented code or the order's own sCode; anything
+        else that came after the send (an undocumented code, 403, 5xx, a garbled answer, a timeout) is an unknown
+        outcome looked up by the clOrdId. A failure before an opening order was sent: NotSent."""
         if side not in ("BUY", "SELL"):
             raise TestnetError(400, "BAD_SIDE", f"주문 방향 {side!r}")
         if not reduce_only:
-            self._no_entries(symbol)
             return self._market(symbol, side, qty, False, client_id)
         with self._protective():
             return self._market(symbol, side, qty, True, client_id)
 
+    @contextlib.contextmanager
+    def _not_sent(self, ext: str):
+        """The steps before an opening order whose id this process never sent (the clOrdId look-up, the instrument
+        read): a failure there sent nothing (NotSent), never the unknown outcome of a sent order."""
+        try:
+            yield
+        except TransientError as e:
+            raise NotSent(getattr(e, "status", 0), NOT_SENT, f"진입 주문 {ext}을 보내기 전 확인이 안 돼 보내지 않았습니다: "
+                                                             f"{e.msg}"[:300], 1.0) from e
+
     def _market(self, symbol: str, side: str, qty: float, reduce_only: bool, client_id: Optional[str]) -> dict:
         ext = ext_id(client_id)
-        earlier = self._earlier(symbol, ext, reduce_only)
-        if earlier is not None:                            # the same order: read it, never send it again
-            return self._read_back(symbol, str(earlier["ordId"]), self._placeholder(symbol, side, qty, reduce_only,
-                                                                                     ext), earlier)
-        if ext in self.sent and reduce_only:
-            # the same close once more (its earlier send found absent past SETTLE_MS): sized from the position now,
-            # never past it (a throttled send that ran after all must not close twice)
-            qty = self._reduce_left(symbol, side, qty)
-        sz = self._contracts(symbol, qty)
-        self._check_size(symbol, sz, qty, "주문", entry=not reduce_only)
-        lside = side.lower()
-        if reduce_only:
-            ps = LONG if side == "SELL" else SHORT
-            body = {"instId": fx(symbol), "tdMode": self._margin_of(symbol), "side": lside, "posSide": ps,
-                    "mrgPosition": MERGE, "ordType": "market", "sz": _num(sz), "reduceOnly": True, "clOrdId": ext}
-        else:
-            ps = LONG if side == "BUY" else SHORT
-            body = {"instId": fx(symbol), "tdMode": ISOLATED, "side": lside, "posSide": ps, "mrgPosition": MERGE,
-                    "ordType": "market", "sz": _num(sz), "clOrdId": ext}
-        placeholder = self._placeholder(symbol, side, float(self._base(symbol, sz)), reduce_only, ext)
+        fresh = not reduce_only and ext not in self.sent   # an opening id this process never sent
+        with self._not_sent(ext) if fresh else contextlib.nullcontext():
+            if not reduce_only:
+                self._no_entries(symbol)
+            earlier = self._earlier(symbol, ext, reduce_only)
+            if earlier is not None:                        # the same order: read it, never send it again
+                return self._read_back(symbol, str(earlier["ordId"]), self._placeholder(symbol, side, qty,
+                                                                                         reduce_only, ext), earlier)
+            if ext in self.sent and reduce_only:
+                # the same close once more (its earlier send found absent past SETTLE_MS): sized from the position
+                # now, never past it (a throttled send that ran after all must not close twice)
+                qty = self._reduce_left(symbol, side, qty)
+            sz = self._contracts(symbol, qty)
+            self._check_size(symbol, sz, qty, "주문", entry=not reduce_only)
+            lside = side.lower()
+            if reduce_only:
+                ps = LONG if side == "SELL" else SHORT
+                body = {"instId": fx(symbol), "tdMode": self._margin_of(symbol), "side": lside, "posSide": ps,
+                        "mrgPosition": MERGE, "ordType": "market", "sz": _num(sz), "reduceOnly": True,
+                        "clOrdId": ext}
+            else:
+                ps = LONG if side == "BUY" else SHORT
+                body = {"instId": fx(symbol), "tdMode": ISOLATED, "side": lside, "posSide": ps, "mrgPosition": MERGE,
+                        "ordType": "market", "sz": _num(sz), "clOrdId": ext}
+            placeholder = self._placeholder(symbol, side, float(self._base(symbol, sz)), reduce_only, ext)
         now = self._now()
         prev = self.sent.get(ext)
         self.sent[ext] = {"symbol": symbol, "first": (prev or {}).get("first", now), "last": now,
@@ -1136,14 +1241,10 @@ class DeepCoinClient:
         self._trim()
         try:
             data, found = self._send_order(symbol, ext, body, reduce_only)
-        except RateLimited as e:
-            if e.status == 418 or e.code == BUDGET_CODE:   # nothing was sent, or nothing ran
-                self._unsend(ext, prev)
-            raise
-        except TransientError:
-            raise                                          # unknown outcome: looked up by its clOrdId
+        except (TransientError, RateLimited):
+            raise                                          # it may have run: looked up by its clOrdId, never refused
         except TestnetError:
-            self._unsend(ext, prev)                         # refused: nothing placed
+            self._unsend(ext, prev)                         # refused (a documented code, its own sCode): nothing ran
             raise
         if found is not None:
             return self._read_back(symbol, str(found["ordId"]), placeholder, found)
@@ -1329,30 +1430,40 @@ class DeepCoinClient:
         p = {"instType": "SWAP", "instId": fx(symbol), "limit": PAGE_ROWS}
         if oid is not None:
             p["ordId"] = str(oid)
-        rows = self._rows(self.req("GET", TRD + "/trigger-orders-history", p, limit_key="trigger_history"),
-                          "조건 주문 기록")
+        try:
+            data = self.req("GET", TRD + "/trigger-orders-history", p, limit_key="trigger_history")
+        except TestnetError as e:
+            if oid is not None and e.code in NOT_FOUND and not isinstance(e, TransientError):
+                return []                                  # an id the history does not know, answered as an error
+            raise
+        rows = self._rows(data, "조건 주문 기록")
         return [r for r in rows if r.get("instId") in (None, "", fx(symbol))
                 and (oid is None or str(r.get("ordId")) == str(oid))]
 
     @staticmethod
-    def _kind(row: dict) -> str:
-        """The trigger order's kind: triggerOrderType in the pending list, ordType in the history."""
-        k = row.get("triggerOrderType")
-        if k in (None, ""):
-            k = row.get("ordType")
-        return str(k or "")
+    def _kind(row: dict, pending: bool) -> str:
+        """The trigger order's kind: triggerOrderType in the pending list, ordType in the history (Get Pending Trigger
+        Orders / Get Triggered Order History; the pending list's own ordType is the price type, market or limit).
+        Missing: TransientError, never a guess (a position TP/SL must not read as our stop, nor ours as another
+        kind)."""
+        k = row.get("triggerOrderType" if pending else "ordType")
+        if k in (None, "") or not isinstance(k, str):
+            raise TransientError(200, None, f"조건 주문 {row.get('ordId')}의 종류(" + (
+                "triggerOrderType" if pending else "ordType") + f")가 없습니다: {k!r}")
+        return k
 
-    def _is_stop(self, row: dict) -> bool:
-        """A closing trigger order of a kind that can be ours (Conditional; a TPSL, tracking ... one never is)."""
-        try:
-            closing = side_of(row) in CLOSING
-        except TestnetError:
+    def _is_stop(self, row: dict, pending: bool) -> bool:
+        """A closing trigger order of a kind that can be ours (Conditional; a TPSL, tracking ... one never is). A row
+        of any kind not known as another's whose side or posSide cannot be read: TransientError, never "not a stop"
+        (a resting stop read as none would make the executor place more stops or close a protected position)."""
+        if self._kind(row, pending) in OTHER_TRIGGERS:
             return False
-        return closing and self._kind(row) not in OTHER_TRIGGERS
+        return side_of(row) in CLOSING
 
     def _algo_dict(self, row: dict, symbol: str, status: str = "NEW", actual: str = "") -> dict:
         sid = str(self._need(row, "ordId", "조건 주문"))
-        stop = self._is_stop(row)
+        pending = status == "NEW"                          # a pending-list row; the others are history rows
+        kind, stop = self._kind(row, pending), self._is_stop(row, pending)
         trig = row.get("triggerPx")
         if status == "NEW" and stop:                       # a resting stop's level and size are never 0 from a gap
             if _dec(trig, "triggerPx") <= 0 or _dec(row.get("sz"), "sz") <= 0:
@@ -1370,7 +1481,7 @@ class DeepCoinClient:
                 "triggerPrice": _num(_dec(trig, "triggerPx")) if trig not in (None, "") else "0", "quantity": qty,
                 "closePosition": False, "reduceOnly": stop, "workingType": WORKING_TYPE.get(
                     str(row.get("triggerPxType") or ""), str(row.get("triggerPxType") or "")),
-                "priceProtect": False, "algoStatus": status, "dcKind": self._kind(row), "actualOrderId": actual,
+                "priceProtect": False, "algoStatus": status, "dcKind": kind, "actualOrderId": actual,
                 "createTime": to_ms(row["cTime"]) if row.get("cTime") not in (None, "") else None}
 
     def stop_close(self, symbol: str, side: str, trigger: float, qty: Optional[float] = None,
@@ -1380,7 +1491,9 @@ class DeepCoinClient:
         stop is moved; None: the position's size now). A level the last price is already past is refused before
         anything is sent (the executor's -2021: close at market). Protective work: every wait inside shares
         PROTECT_WAIT_S (then RateLimited; RateLimitedUnknown when the stop may have gone in). After the send the stop is
-        waited for in the pending list (LIST_WAITS, within the budget): place_stop confirms a stop from the list only."""
+        waited for in the pending list (LIST_WAITS, within the budget): place_stop confirms a stop from the list only.
+        Refused only on a documented code or the stop's own sCode; any other answer after the send (an undocumented
+        code, 403, 5xx, a timeout) is an unknown outcome, looked up by what was sent."""
         with self._protective():
             return self._stop_close(symbol, side, trigger, qty, client_id)
 
@@ -1413,9 +1526,9 @@ class DeepCoinClient:
         self._trim()
         try:
             data, found = self._send_stop(key, body)
-        except (TransientError, RateLimitedUnknown):
+        except (TransientError, RateLimited):
             raise                                          # it may be in: looked up by what was sent
-        except TestnetError as e:                          # refused (or 403 / 418, the budget before it was sent)
+        except TestnetError as e:                          # refused (a documented code, its own sCode): nothing placed
             self.stop_intents.pop(key, None)
             raise self._would_trigger(e, symbol, side, float(trig)) from e
         if found is not None:                              # a 429 that still ran: that stop, never a second copy
@@ -1447,7 +1560,7 @@ class DeepCoinClient:
         look-up (after the Retry-After) that finds it in neither list sends it ONCE more (a second reduce-only stop
         cannot open anything and the executor cancels a surplus one, while a stop that never goes in would close a new
         position); then the look-ups go on (either send may be the one that rests) while the budget lasts. Not found
-        by then: RateLimitedUnknown. 403 / 418, or the budget used up before the first send: as it came."""
+        by then: RateLimitedUnknown. Any other error: as it came (a 403 / 418 after the send is a TransientError)."""
         try:
             return self.req("POST", TRIGGER, body, limit_key="trigger"), None
         except RateLimited as e:
@@ -1495,25 +1608,23 @@ class DeepCoinClient:
     def _search_stop(self, key: str) -> list:
         """Trigger orders that fit a stop whose answer was lost (module docstring): same side, posSide, size and
         trigger (half a tick), created from MATCH_BEFORE_MS before the send, not resting before it, held by no other id
-        of ours; the pending list first, then the trigger history."""
+        of ours; the pending list first, then the trigger history. A row that could be it but cannot be read (its kind,
+        side, posSide, size or level): TransientError, never skipped as "not it"."""
         intent = self.stop_intents.get(key)
         if intent is None:
             return []
         sym = intent["symbol"]
         half_tick = Decimal(self._spec(sym)["tick_str"]) / 2
         found: dict = {}
-        for r in self._triggers(sym) + self._trigger_history(sym):
+        rows = [(r, True) for r in self._triggers(sym)] + [(r, False) for r in self._trigger_history(sym)]
+        for r, pending in rows:
             sid = str(r.get("ordId") or "")
-            if not sid or sid in found or sid in intent["before"]:
+            if not sid or sid in found or sid in intent["before"] or self._kind(r, pending) in OTHER_TRIGGERS:
                 continue
-            if str(r.get("side") or "").lower() != intent["side"] or str(r.get("posSide") or "").lower() \
-                    != intent["posSide"]:
+            if side_of(r) != (intent["side"], intent["posSide"]):
                 continue
-            try:
-                if Decimal(str(r.get("sz"))) != Decimal(intent["sz"]) or \
-                        abs(Decimal(str(r.get("triggerPx"))) - Decimal(intent["trig"])) > half_tick:
-                    continue
-            except (InvalidOperation, ValueError):
+            if _dec(r.get("sz"), "sz") != Decimal(intent["sz"]) or \
+                    abs(_dec(r.get("triggerPx"), "triggerPx") - Decimal(intent["trig"])) > half_tick:
                 continue
             if r.get("cTime") not in (None, "", "0"):
                 t = to_ms(r["cTime"])
@@ -1611,10 +1722,14 @@ class DeepCoinClient:
     def _child_order(self, symbol: str, sid: str, row: dict, fired_ms: int) -> str:
         """The order a fired stop placed: fills under the stop's own ordId, else the one order of the coin with the
         stop's side and posSide, created from 2 s before its trigger time to CHILD_AFTER_MS after, no clOrdId of ours.
-        Not found or not one: "" (the executor's P&L then reads every fill of the trade's window)."""
+        Not found or not one: "" (the executor's P&L then reads every fill of the trade's window). A failed read of the
+        fills under the stop's own ordId still leaves the order history to look in."""
         try:
             if self._fills(symbol, fired_ms - 60_000, fired_ms + CHILD_AFTER_MS, ord_id=sid):
                 return sid
+        except TestnetError:
+            pass
+        try:
             side, ps = side_of(row)
             cands = []
             for r in self._history(symbol):
@@ -1631,7 +1746,9 @@ class DeepCoinClient:
 
     def algo_order(self, algo_id=None, client_id: Optional[str] = None) -> dict:
         """A stop by its ordId (or the executor's id: _resolve_stop): the pending list, else its trigger-history row.
-        Its reads share the protective budget (place_stop confirms a new stop with it)."""
+        Its reads share the protective budget (place_stop confirms a new stop with it). An ordId this process has not
+        seen (after a restart) is looked for on every coin: a coin whose lists cannot be read is skipped, and then
+        the answer is unknown (TransientError), never "not found"."""
         with self._protective():
             return self._algo_order(algo_id, client_id)
 
@@ -1640,12 +1757,26 @@ class DeepCoinClient:
             algo_id = self._resolve_stop(ext_id(client_id))
         sid = str(algo_id)
         sym = self.order_symbol.get(sid)
-        for s in ([sym] if sym else list(COINS)):
-            row = next((r for r in self._triggers(s) if str(r.get("ordId")) == sid), None)
+        coins = [sym] if sym else list(COINS)
+        unread: dict = {}                                  # coin -> the error that hid its lists (the scan only)
+        for s in coins:
+            try:
+                row = next((r for r in self._triggers(s) if str(r.get("ordId")) == sid), None)
+            except TestnetError as e:
+                if sym:
+                    raise
+                unread[s] = e
+                continue
             if row is not None:
                 return self._algo_dict(row, s, "NEW")
-        for s in ([sym] if sym else list(COINS)):
-            done = self._finished_stop(sid, s)
+        for s in [s for s in coins if s not in unread]:   # never a history row for a coin whose list was not read
+            try:
+                done = self._finished_stop(sid, s)
+            except TestnetError as e:
+                if sym:
+                    raise
+                unread[s] = e
+                continue
             if done is not None:
                 return done
         key = self.cid_by_stop.get(sid)
@@ -1658,6 +1789,10 @@ class DeepCoinClient:
                     "quantity": _num(self._base(s, intent["sz"])) if intent.get("sz") else "0",
                     "closePosition": False, "reduceOnly": True, "workingType": WORKING_TYPE[TRIGGER_PX_TYPE],
                     "algoStatus": UNCONFIRMED, "actualOrderId": ""}
+        if unread:
+            first = next(iter(unread.values()))
+            raise TransientError(getattr(first, "status", 0), None, f"조건 주문 {sid}: {', '.join(unread)}의 목록을 읽지 "
+                                                                    f"못해 있는지 모릅니다({first})"[:300])
         raise TestnetError(404, NOT_FOUND[0], f"조건 주문 {sid}이 없습니다")
 
     def cancel_algo(self, algo_id=None, client_id: Optional[str] = None) -> dict:
@@ -1687,11 +1822,20 @@ class DeepCoinClient:
         CONDITIONAL (never counted as a stop that covers a position)."""
         return [self._algo_dict(r, symbol) for r in self._triggers(symbol)]
 
+    def placed_stops(self, symbol: str) -> list:
+        """The resting trigger orders of the coin that this client placed: an ordId it was answered, or a lost answer
+        found by what was sent (the drill's clean-up cancels these and nothing else)."""
+        mine = {sid for sid in self.stop_by_cid.values() if self.order_symbol.get(sid) == symbol}
+        for key, intent in list(self.stop_intents.items()):
+            if intent.get("symbol") == symbol and key not in self.stop_by_cid:
+                mine |= {str(r["ordId"]) for r in self._search_stop(key)}
+        return [o for o in self.open_algo_orders(symbol) if o["algoId"] in mine]
+
     def cancel_all_algo(self, symbol: str) -> dict:
         """Each resting conditional trigger order of the coin cancelled by its ordId (a position TP/SL set in the app,
         kind TPSL, belongs to its position and goes with it)."""
         for r in self._triggers(symbol):
-            if self._kind(r) in OTHER_TRIGGERS:
+            if self._kind(r, True) in OTHER_TRIGGERS:
                 continue
             try:
                 self.req("POST", TRD + "/cancel-trigger-order", {"instId": fx(symbol), "ordId": str(r["ordId"])},
@@ -1781,7 +1925,13 @@ class DeepCoinClient:
              "limit": PAGE_ROWS}
         if ord_id is not None:
             p["ordId"] = str(ord_id)
-        rows = self._rows(self.req("GET", TRD + "/fills", p, limit_key="fills"), "체결")
+        try:
+            data = self.req("GET", TRD + "/fills", p, limit_key="fills")
+        except TestnetError as e:
+            if ord_id is not None and e.code in NOT_FOUND and not isinstance(e, TransientError):
+                return []                                  # an ordId with no fills, answered as an error
+            raise
+        rows = self._rows(data, "체결")
         if len(rows) >= PAGE_ROWS:
             if depth >= HISTORY_DEPTH or hi_ms - lo_ms < 2:
                 raise TransientError(0, None, f"{symbol}: 체결이 너무 많아 나눠 읽지 못했습니다")
@@ -2007,14 +2157,16 @@ def pace(c: DeepCoinClient, gap_s: float = DRILL_MIN_GAP_S, sleep=time.sleep, cl
 class DeepCoinDrill:
     """The DeepCoin micro drill on the REAL account. ``check()`` reads (time, instruments, account, fee rate, open
     orders and stops, funding bills, positions one side per coin) and sets the isolated leverage (BTC 40x, the others
-    30x): no order. ``order_cycle()`` (only behind the explicit confirmation) runs one smallest-size cycle on one coin:
+    30x): no order. ``order_cycle()`` (only behind the explicit confirmation) runs one small-size cycle on one coin:
     a plain market entry, found by its clOrdId (GET order, and again through the lists with its answer treated as
     lost), the leverage and margin read on the position, a reduce-only trigger stop (how long until it is listed; not
-    in the trigger history while it rests; found again by what was sent), the stop moved (new first, then the old one
-    cancelled: two must rest at once; how the cancelled one reads), then the trigger test (the stop moved to 0.1 % from
-    the last price and left to fire for real; which price fired it and whose ordId its fills carry) or a reduce-only
-    close, flat with no order and no stop left, and the P&L from the fills (DeepCoin's pnl) checked against the fill
-    prices and the wallet change, with the fee rate measured on the fills against the fee endpoint."""
+    in the trigger history while it rests; found again by what was sent), half of the position closed with a
+    reduce-only market order (always, whatever the trigger test does), the stop moved to the half left (new first,
+    then the old one cancelled: two must rest at once; how the cancelled one reads), then the trigger test (the stop
+    moved to 0.1 % from the last price and left to fire for real; which price fired it and whose ordId its fills carry)
+    or a reduce-only close of the rest, flat with no order and no stop left, and the P&L from the fills (DeepCoin's pnl)
+    checked against the fill prices and the wallet change, with the fee rate measured on the fills against the fee
+    endpoint. One run tests one side (``side``): the drill is done once a long and a short run are both [OK]."""
     client: DeepCoinClient
     symbols: tuple = COINS
     symbol: Optional[str] = None
@@ -2028,6 +2180,8 @@ class DeepCoinDrill:
     say: Optional[Callable[[str], None]] = None            # each step printed as it happens (the CLI prints)
     log: list = field(default_factory=list)
     fee_api: Optional[float] = None
+    entry_sent: bool = False                               # set just before the cycle's entry goes out: from then on a
+    entry_qty: float = 0.0                                 # stop part-way cleans up what the drill made (leave_flat)
 
     def add(self, name: str, ok: bool, detail) -> None:
         row = {"step": name, "ok": bool(ok), "detail": detail}
@@ -2059,16 +2213,19 @@ class DeepCoinDrill:
         return check()
 
     def smallest(self) -> str:
-        """The coin whose smallest order is the cheapest."""
+        """The coin whose drill order (drill_qty) is the cheapest."""
         c = self.client
         return min(self.symbols, key=lambda s: self.drill_qty(c.spec(s), c.price(s)) * c.price(s))
 
     @staticmethod
     def drill_qty(spec: dict, price: float) -> float:
-        """The fewest contracts (on lotSz, at least minSz) worth at least DRILL_ORDER_USDT."""
+        """The fewest contracts (on lotSz) worth at least DRILL_ORDER_USDT that split into two equal halves of at
+        least minSz each: the cycle closes one half with a reduce-only market order and the other later (whether
+        DeepCoin takes a close, or leaves a position, under minSz is not said)."""
         step = spec["qty_step"]
         need = math.ceil(DRILL_ORDER_USDT / (price * step) - 1e-9) * step if price > 0 else 0.0
-        return round(max(spec["min_qty"], need), 12)
+        half = max(spec["min_qty"], math.ceil(need / 2 / step - 1e-9) * step)
+        return round(2 * half, 12)
 
     def check(self) -> list:
         c = self.client
@@ -2119,7 +2276,13 @@ class DeepCoinDrill:
         levs = {}
         for s in self.symbols:
             want = int(min(FIXED_LEVERAGE.get(s, DEFAULT_LEVERAGE), c.spec(s)["max_leverage"] or 10 ** 6))
-            levs[s] = c.leverage(s, want)["leverage"] if not any(p["symbol"] == s for p in pos) else "포지션 있음"
+            if any(p["symbol"] == s for p in pos):
+                levs[s] = "포지션 있음"
+                continue
+            try:
+                levs[s] = c.leverage(s, want)["leverage"]
+            except TestnetError as e:                       # this coin only: shown with the others
+                levs[s] = f"못 맞춤: {e.msg}"
         self._step("격리 레버리지 BTC 40배, 나머지 30배(다시 읽어 확인)",
                    all(v == (40 if s == "BTCUSDT" else 30) for s, v in levs.items()), levs)
         if self.keycheck is not None:
@@ -2183,8 +2346,9 @@ class DeepCoinDrill:
         qty = self.drill_qty(spec, c.price(s))
         ext = ext_id(None)
         sent_s = self.elapsed()
+        self.entry_sent, self.entry_qty = True, qty         # from here a stop part-way cleans up (only what it made)
         o = self._settle(s, c.market(s, buy, qty, client_id=ext))
-        self._step(f"시장가 진입이 다 체결됨(가장 작은 주문, 약 ${DRILL_ORDER_USDT:.0f})",
+        self._step(f"시장가 진입이 다 체결됨(작은 주문: 약 ${DRILL_ORDER_USDT:.0f} 이상, 절반이 최소 주문 이상)",
                    o.get("status") == "FILLED" and abs(float(o.get("executedQty") or 0) - qty) < spec["qty_step"] / 2,
                    {"status": o.get("status"), "avg": o.get("avgPrice"), "qty": o.get("executedQty"),
                     "contracts": _num(c._contracts(s, qty)), "fee": o.get("commission"), "orderId": o.get("orderId")})
@@ -2222,6 +2386,20 @@ class DeepCoinDrill:
         again = c.algo_order(client_id=key1)
         self._step("답을 잃은 손절 찾기(보낸 내용: 방향·수량·발동 가격, 보내기 전 목록 제외)",
                    again.get("algoId") == st1["algoId"], {"found": again.get("algoId"), "want": st1["algoId"]})
+        # one reduce-only market close in every run (the trigger test may close the rest by itself): half of it
+        mine = {str(o["orderId"])}
+        part = round(abs(amt) / 2, 12)
+        rest = abs(amt) - part
+        x1 = self._settle(s, c.market(s, sell, part, reduce_only=True, client_id=ext_id(None)))
+        p2 = self._until(lambda: (lambda x: x if abs(abs(float(x["positionAmt"])) - rest) < spec["qty_step"] / 2
+                                  else None)(c.position(s))) or c.position(s)
+        self._step("줄이기 전용 시장가로 절반 청산(나머지는 손절 발동 시험이나 마지막 청산으로)",
+                   x1.get("status") == "FILLED" and abs(float(x1.get("executedQty") or 0) - part) < spec["qty_step"] / 2
+                   and abs(abs(float(p2["positionAmt"])) - rest) < spec["qty_step"] / 2,
+                   {"status": x1.get("status"), "avg": x1.get("avgPrice"), "qty": x1.get("executedQty"),
+                    "positionAmt": p2["positionAmt"], "orderId": x1.get("orderId")})
+        mine.add(str(x1["orderId"]))
+        amt = float(p2["positionAmt"])
         stop2 = round_stop(entry * (1 - self.side * self.stop_frac / 2), spec["tick"], self.side)
         seen = {}
         orig = c.cancel_algo
@@ -2235,15 +2413,16 @@ class DeepCoinDrill:
         finally:
             c.cancel_algo = orig
         after = self._until(lambda: (lambda x: x if len(x) == 1 else None)(live_stops(c, s))) or live_stops(c, s)
-        self._step("손절 옮기기(새 손절 → 확인 → 옛 손절 취소, 빈틈 없음: 두 개가 같이 걸려야 함)",
+        self._step("손절 옮기기(남은 크기로; 새 손절 → 확인 → 옛 손절 취소, 빈틈 없음: 두 개가 같이 걸려야 함)",
                    mv["result"] == "moved" and seen.get("during") == 2 and len(after) == 1
-                   and after[0]["algoId"] == mv["stop"]["algoId"] and float(after[0]["triggerPrice"]) == stop2,
-                   {"during": seen.get("during"), "after": [(x["algoId"], x["triggerPrice"]) for x in after]})
+                   and after[0]["algoId"] == mv["stop"]["algoId"] and float(after[0]["triggerPrice"]) == stop2
+                   and covers(after[0], amt) and abs(float(after[0]["quantity"]) - abs(amt)) < spec["qty_step"] / 2,
+                   {"during": seen.get("during"),
+                    "after": [(x["algoId"], x["triggerPrice"], x["quantity"]) for x in after], "positionAmt": amt})
         old = self._until(lambda: (lambda o: o if o.get("algoStatus") == "CANCELED" else None)(
             self._algo_or_empty(st1["algoId"])), tries=8, pause=1.0) or self._algo_or_empty(st1["algoId"])
         self._step("취소한 손절이 발동 기록에 '발동 안 함'으로 남음(CANCELED)", old.get("algoStatus") == "CANCELED",
                    {"status": old.get("algoStatus")}, fatal=False)
-        mine = {str(o["orderId"])}
         fired = None
         if self.trigger_test:
             fired = self._trigger_test(s, sell, amt, mv["stop"]["algoId"], spec)
@@ -2251,10 +2430,11 @@ class DeepCoinDrill:
                 mine.add(str(fired["actualOrderId"]))
         if float(c.position(s)["positionAmt"]) != 0:
             x = self._settle(s, c.market(s, sell, abs(amt), reduce_only=True, client_id=ext_id(None)))
-            self._step("줄이기 전용 시장가로 청산", x.get("status") == "FILLED",
+            self._step("줄이기 전용 시장가로 나머지 청산", x.get("status") == "FILLED",
                        {"status": x.get("status"), "avg": x.get("avgPrice"), "qty": x.get("executedQty")})
             mine.add(str(x["orderId"]))
-        cancel_everything(c, s)
+        if self._until(lambda: float(c.position(s)["positionAmt"]) == 0):   # its stops go only once it reads flat
+            cancel_own(c, s)
         clean = self._until(lambda: float(c.position(s)["positionAmt"]) == 0 and not c.open_orders(s)
                             and not c.open_algo_orders(s))
         self._step("포지션 없음, 주문·조건 주문 없음", clean,
@@ -2423,17 +2603,37 @@ def row_text(row: dict) -> str:
     return ("[OK]  " if row["ok"] else "[FAIL]") + f" {row['step']}: {row['detail']}"
 
 
-def leave_flat(c: DeepCoinClient, sym: str, add) -> None:
-    """After a drill stopped part-way: close the drill coin's position (reduce-only) and cancel its orders and
-    stops, each on its own so one failure does not skip the other. ``add(step, ok, detail)`` records the result."""
+def cancel_own(c: DeepCoinClient, sym: str) -> None:
+    """The drill's clean-up: cancel the stops and the orders that this client placed on the coin (never another's)."""
+    for o in c.placed_stops(sym):
+        try:
+            c.cancel_algo(algo_id=o["algoId"])
+        except TestnetError as e:
+            if e.code not in NOT_FOUND or isinstance(e, TransientError):
+                raise
+    for o in c.open_orders(sym):
+        if o.get("clientOrderId") in c.sent:
+            c.cancel(sym, o["orderId"])
+
+
+def leave_flat(c: DeepCoinClient, sym: str, add, side: int, most: float) -> None:
+    """After a drill stopped part-way, only once its own entry was sent: close what is left of the drill's position
+    (reduce-only, at most ``most`` and only on the drill's ``side``), then, once the position reads flat, cancel the
+    stops and orders the drill placed (cancel_own). A position that is still open keeps its stops. Each part on its
+    own, so one failure does not skip the reading after it. ``add(step, ok, detail)`` records the result."""
     try:
         amt = float(c.position(sym)["positionAmt"])
-        if amt:
-            c.market(sym, "SELL" if amt > 0 else "BUY", abs(amt), reduce_only=True)
-    except Exception as e:                     # noqa: BLE001 - the cancel below must still run
+        close = min(abs(amt), float(most)) if amt * side > 0 else 0.0
+        if close:
+            c.market(sym, "SELL" if amt > 0 else "BUY", close, reduce_only=True)
+    except Exception as e:                     # noqa: BLE001 - the position is read again below
         add("정리: 포지션 닫기 실패(앱에서 직접 확인하세요)", False, f"{type(e).__name__}: {e}")
     try:
-        cancel_everything(c, sym)
+        amt = float(c.position(sym)["positionAmt"])
+        if amt == 0:
+            cancel_own(c, sym)
+        else:                                  # never a position without its stop
+            add("정리: 포지션이 남아 있어 손절을 그대로 둡니다(앱에서 직접 확인하세요)", False, {"positionAmt": amt})
     except Exception as e:                     # noqa: BLE001
         add("정리: 주문·손절 취소 실패(앱에서 직접 확인하세요)", False, f"{type(e).__name__}: {e}")
     try:
@@ -2474,8 +2674,9 @@ def specs_text(c: DeepCoinClient, symbols=COINS) -> str:
 def main(argv: Optional[list[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("cmd", choices=["check", "drill", "reconcile", "specs"])
-    ap.add_argument("--symbol", default=None, help="drill order coin (default: the cheapest smallest order)")
-    ap.add_argument("--side", choices=["long", "short"], default="long")
+    ap.add_argument("--symbol", default=None, help="drill order coin (default: the cheapest drill order)")
+    ap.add_argument("--side", choices=["long", "short"], default="long",
+                    help="the cycle's side (the drill is done once a long and a short run both passed)")
     ap.add_argument("--confirm-order", default="", help=f"{DRILL_CONFIRM}: run the one real order cycle")
     ap.add_argument("--no-trigger-test", action="store_true", help="close by hand instead of letting the stop fire")
     args = ap.parse_args(argv)
@@ -2505,8 +2706,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def run_drill(c: DeepCoinClient, d: DeepCoinDrill, cmd: str, confirmed: bool, pause=time.sleep,
               signals: bool = False) -> bool:
-    """check, then (drill + the confirmation only) the order cycle. Any stop part-way (a failed step, an error, Ctrl+C,
-    a closed terminal) leaves the drill coin flat with no order or stop left. True when every step is [OK]."""
+    """check, then (drill + the confirmation only) the order cycle. A stop part-way (a failed step, an error, Ctrl+C,
+    a closed terminal) after the cycle's entry was sent closes what the drill opened and cancels what it placed
+    (leave_flat); before it nothing is touched (a coin that was not empty is never the drill's to close). True when
+    every step is [OK]; the order cycle tests one side, so the last line asks for the other side's run too."""
     orders = cmd == "drill" and confirmed
     ok = True
     try:
@@ -2524,12 +2727,18 @@ def run_drill(c: DeepCoinClient, d: DeepCoinDrill, cmd: str, confirmed: bool, pa
                 signal.signal(sig, signal.SIG_IGN)   # the clean-up itself runs to its end
         d.add("멈춤", False, f"{type(e).__name__}: {e}")
         ok = False
-        if orders and d.symbol:
-            leave_flat(c, d.symbol, d.add)
+        if orders and d.entry_sent:
+            leave_flat(c, d.symbol, d.add, d.side, d.entry_qty)
+        elif orders:
+            d._note("진입 주문을 보내기 전에 멈췄습니다: 계정에는 손대지 않았습니다(정리할 것 없음)")
     ok = ok and all(r["ok"] for r in d.log)
     bad = [r["step"] for r in d.log if not r["ok"]]
     if d.say:
-        d.say(f"끝: {cmd} " + ("모두 [OK]" if ok else f"[FAIL] {len(bad)}개 — {', '.join(bad)}"))
+        text = "모두 [OK]" if ok else f"[FAIL] {len(bad)}개 — {', '.join(bad)}"
+        if orders:
+            this, other = ("롱", "숏(--side short)") if d.side > 0 else ("숏", "롱(--side long)")
+            text += f" (이번은 {this} 쪽입니다. {other}도 모두 [OK]여야 drill이 끝납니다)"
+        d.say(f"끝: {cmd} {text}")
     return ok
 
 

@@ -32,11 +32,21 @@ Unknowns of the real exchange are switches:
 - ``kill_new_stops``: a trigger order is accepted and cancelled by the exchange right after;
 - ``partial``: the next market order fills only that fraction (the rest cancelled);
 - ``pnl_net_of_fees``: an order's ``pnl`` net of its fee (the docs do not say);
-- ``rate_limit``: (window ms, max requests): beyond it, 429.
+- ``rate_limit``: (window ms, max requests): beyond it, 429;
+- ``unknown_ids``: "empty" (GET order / fills / trigger history for an ordId or clOrdId nobody has: an empty list) or
+  "error" (answered code "51603" "Order does not exist": the docs do not say which);
+- ``states``: symbol -> instrument state ("live" when absent; suspend / preopen / settlement, the docs' others);
+- ``lev_lag_ms``: leverage-info shows the leverage set before a set-leverage until this long after it;
+- ``oversize``: "refuse" (the default: a reduce-only market order or a firing trigger order bigger than the position is
+  refused as a whole, sCode 31 or the trigger's history row errorCode 31, nothing closed) or "cap" (it closes the
+  position); the docs do not say;
+- ``history_resting``: the trigger history also lists resting trigger orders (triggerTime 0, errorCode 0): the history
+  page's note "triggerTime of 0 indicates the order has not been triggered yet" leaves it open (the drill checks).
 
 Failures are injected per request with ``fail(method, path, kind, times)``: "drop_before" / "drop_after" (TimeoutError
 before / after executing), "503_before", "429" or ("429", seconds), "429_after" (executed, then answered 429), "403",
-("err", http status, code, msg) and ("scode", sCode, sMsg) (refused, not executed).
+("err", http status, code, msg) and ("scode", sCode, sMsg) (refused, not executed); "403_after" and
+("err_after", http status, code, msg) (executed, then answered with that: an order that ran, answered non-zero).
 """
 
 from __future__ import annotations
@@ -115,6 +125,12 @@ class FakeDeepCoin:
         self.partial = None
         self.pnl_net_of_fees = False
         self.rate_limit = None
+        self.unknown_ids = "empty"
+        self.states: dict = {}
+        self.lev_lag_ms = 0
+        self.lev_was: dict = {}                    # (symbol, mgnMode) -> (leverage before the last set, set at ms)
+        self.oversize = "refuse"
+        self.history_resting = False
         self.coverage: list = []                   # (call index, symbol, contracts, covered by a closing trigger)
         self.trigger_bodies: list = []
         self.order_bodies: list = []
@@ -189,7 +205,13 @@ class FakeDeepCoin:
                     return 429, b'{"code":"429","msg":"Too Many Requests"}', {"Retry-After": "1"}
                 if kind == "403":
                     return 403, b"<html>403 Forbidden</html>", {}
+                if kind == "403_after":                    # it ran; the answer is a block page
+                    self._route(method, path, query, body)
+                    return 403, b"<html>403 Forbidden</html>", {}
                 if isinstance(kind, tuple) and kind[0] == "err":
+                    return kind[1], json.dumps({"code": kind[2], "msg": kind[3], "data": None}).encode(), {}
+                if isinstance(kind, tuple) and kind[0] == "err_after":     # it ran; the answer says something else
+                    self._route(method, path, query, body)
                     return kind[1], json.dumps({"code": kind[2], "msg": kind[3], "data": None}).encode(), {}
                 if isinstance(kind, tuple) and kind[0] == "scode":
                     return self._ok({"ordId": "", "clOrdId": "", "tag": "", "sCode": kind[1], "sMsg": kind[2]})
@@ -248,6 +270,10 @@ class FakeDeepCoin:
 
     def _refuse(self, scode, smsg, **extra):
         return self._ok({"ordId": "", "clOrdId": "", "tag": "", "sCode": scode, "sMsg": smsg, **extra})
+
+    def _unknown(self):
+        """An id nobody has, answered as an error (``unknown_ids`` "error")."""
+        return self._code("51603", "Order does not exist")
 
     # ------------------------------------------------------------ state
     def _bill(self, typ, chg, ms=None):
@@ -335,14 +361,18 @@ class FakeDeepCoin:
                  fillTime=str(self.now()))
         return filled
 
+    def _history_row(self, t, error, msg, trigger_time):
+        """A trigger-history row (cTime / triggerTime in seconds, as in the docs' example)."""
+        return {"instType": "SWAP", "instId": t["instId"], "ordId": t["ordId"], "px": "0", "sz": t["sz"],
+                "triggerPx": t["triggerPx"], "triggerPxType": t["triggerPxType"], "ordType": "Conditional",
+                "side": t["side"], "posSide": t["posSide"], "tdMode": t["tdMode"], "lever": t["lever"],
+                "triggerTime": trigger_time, "uTime": str(self.now()), "cTime": str(int(t["cTime"]) // 1000),
+                "errorCode": error, "errorMsg": msg}
+
     def _end_trigger(self, oid, error="0", msg="", fired=False):
         t = self.triggers.pop(oid)
-        row = {"instType": "SWAP", "instId": t["instId"], "ordId": oid, "px": "0", "sz": t["sz"],
-               "triggerPx": t["triggerPx"], "triggerPxType": t["triggerPxType"], "ordType": "Conditional",
-               "side": t["side"], "posSide": t["posSide"], "tdMode": t["tdMode"], "lever": t["lever"],
-               "triggerTime": str(self.now() // 1000) if fired else "0", "uTime": str(self.now()),
-               "cTime": str(int(t["cTime"]) // 1000), "errorCode": error, "errorMsg": msg, "_ended": self.now()}
-        self.trig_hist[oid] = row
+        row = self._history_row(t, error, msg, str(self.now() // 1000) if fired else "0")
+        self.trig_hist[oid] = {**row, "_ended": self.now()}
 
     def _fire_due(self, s):
         for oid, t in sorted(self.triggers.items()):
@@ -360,6 +390,9 @@ class FakeDeepCoin:
         if (t["side"], t["posSide"]) in CLOSING and not (p and p["pos"]):
             self._end_trigger(oid, "31", "NotEnoughPositionToClose:Position=0", fired=True)
             return
+        if (t["side"], t["posSide"]) in CLOSING and self.oversize == "refuse" and Decimal(t["sz"]) > p["pos"]:
+            self._end_trigger(oid, "31", f"NotEnoughPositionToClose:Position={num(p['pos'])}", fired=True)
+            return                                           # refused as a whole: the position stays open
         q = {"instId": t["instId"], "sz": t["sz"], "side": t["side"], "posSide": t["posSide"], "tdMode": t["tdMode"],
              "reduceOnly": (t["side"], t["posSide"]) in CLOSING}
         child = self._new_order(q, source="13")
@@ -417,12 +450,17 @@ class FakeDeepCoin:
             if int(q["lever"]) > int(SPECS[s]["lever"]):
                 return self._ok({"instId": "", "lever": "", "mgnMode": "", "mrgPosition": "", "sCode": "199",
                                  "sMsg": f"LeverageTooHigh:Amount[0]>Leverage[{SPECS[s]['lever']}]"})
+            self.lev_was[(s, q["mgnMode"])] = (self.levs[s][q["mgnMode"]], now)
             self.levs[s][q["mgnMode"]] = int(q["lever"])
             return self._ok({"instId": q["instId"], "lever": q["lever"], "mgnMode": q["mgnMode"],
                              "mrgPosition": q["mrgPosition"], "sCode": "0", "sMsg": ""})
         if (m, path) == ("GET", "/deepcoin/account/leverage-info"):
             s = sym(q["instId"])
-            return self._ok({"instId": q["instId"], "lever": self.levs[s][q["mgnMode"]], "mgnMode": q["mgnMode"],
+            lev = self.levs[s][q["mgnMode"]]
+            was, at = self.lev_was.get((s, q["mgnMode"]), (lev, None))
+            if at is not None and now - at < self.lev_lag_ms:          # the read-back has not caught up yet
+                lev = was
+            return self._ok({"instId": q["instId"], "lever": lev, "mgnMode": q["mgnMode"],
                              "mrgPosition": q["mrgPosition"]})
         if (m, path) == ("GET", "/deepcoin/account/trade-fee"):
             return self._ok([{"level": "Lv1", "feeGroup": "", "category": "", "instType": "SWAP", "maker": "0.0002",
@@ -448,6 +486,8 @@ class FakeDeepCoin:
                 return self._code("51", "ordId or clOrdId is required")
             done = [o for o in rows if o["state"] in ("filled", "canceled")]        # history first, then pending
             got = sorted(done or rows, key=lambda o: int(o["cTime"]))[-1:]
+            if not got and self.unknown_ids == "error":
+                return self._unknown()
             return self._ok([self._public(o) for o in got])
         if (m, path) == ("GET", "/deepcoin/trade/v2/orders-pending"):
             assert "index" in q, q
@@ -468,6 +508,8 @@ class FakeDeepCoin:
                     and (not q.get("end") or int(f["ts"]) < int(q["end"]))
                     and now - int(f["ts"]) >= self.fill_lag_ms]
             rows.sort(key=lambda f: (int(f["ts"]), int(f["billId"])), reverse=True)
+            if q.get("ordId") and self.unknown_ids == "error" and not any(f["ordId"] == q["ordId"] for f in self.fills):
+                return self._unknown()
             return self._ok(rows[:int(q.get("limit", 100))])
         if (m, path) == ("POST", "/deepcoin/trade/cancel-order"):
             o = self.orders.get(q.get("ordId"))
@@ -486,9 +528,14 @@ class FakeDeepCoin:
         if (m, path) == ("GET", "/deepcoin/trade/trigger-orders-history"):
             assert q.get("instType") == "SWAP" and q.get("instId"), q
             rows = [{k: v for k, v in r.items() if k != "_ended"} for r in self.trig_hist.values()
-                    if r["instId"] == q["instId"] and now - r["_ended"] >= self.trigger_history_lag_ms
-                    and (not q.get("ordId") or r["ordId"] == q["ordId"])]
+                    if r["instId"] == q["instId"] and now - r["_ended"] >= self.trigger_history_lag_ms]
+            if self.history_resting:                       # resting ones too, "not triggered yet"
+                rows += [self._history_row(t, "0", "", "0") for t in self.triggers.values()
+                         if t["instId"] == q["instId"]]
+            rows = [r for r in rows if not q.get("ordId") or r["ordId"] == q["ordId"]]
             rows.sort(key=lambda r: int(r["uTime"]), reverse=True)
+            if q.get("ordId") and not rows and self.unknown_ids == "error":
+                return self._unknown()
             return self._ok(rows[:int(q.get("limit", 100))])
         if (m, path) == ("POST", "/deepcoin/trade/cancel-trigger-order"):
             t = self.triggers.get(q.get("ordId"))
@@ -509,7 +556,8 @@ class FakeDeepCoin:
         sp = SPECS[s]
         return {"instType": "SWAP", "instId": inst(s), "uly": inst(s)[:-5], "baseCcy": s[:-4], "quoteCcy": "USDT",
                 "ctVal": sp["ctVal"], "ctValCcy": s[:-4], "listTime": "0", "lever": sp["lever"], "tickSz": sp["tickSz"],
-                "lotSz": sp["lotSz"], "minSz": sp["minSz"], "ctType": "linear", "alias": "", "state": "live",
+                "lotSz": sp["lotSz"], "minSz": sp["minSz"], "ctType": "linear", "alias": "",
+                "state": self.states.get(s, "live"),
                 "maxLmtSz": sp["maxMktSz"], "maxMktSz": sp["maxMktSz"], "settleCcy": "USDT",
                 "expTime": "1635148800000", "productGroup": "SwapU", "symbol": s, "assetType": "crypto"}
 
@@ -562,6 +610,8 @@ class FakeDeepCoin:
             p = self.pos.get((s, q["posSide"]))
             if not p or not p["pos"]:
                 return self._refuse("31", "NotEnoughPositionToClose:Position=0")
+            if self.oversize == "refuse" and Decimal(q["sz"]) > p["pos"]:
+                return self._refuse("31", f"NotEnoughPositionToClose:Position={num(p['pos'])}")
         o = self._new_order(q)
         want = Decimal(q["sz"])
         if self.partial is not None:

@@ -744,7 +744,8 @@ def test_keys_gates_and_reuse_refusals():
             FL.trading_keys("mainnet", env)
     for name, needle in (("BINANCE_API_KEY", "paper"), ("LIVE_API_KEY", "바이낸스"), ("TESTNET_API_SECRET", "바이낸스"),
                          ("BYBIT_LIVE_API_KEY", "바이비트"), ("MEXC_LIVE_KEY", "MEXC"),
-                         ("WOOXPRO_LIVE_SECRET", "WOO X Pro")):
+                         ("WOOXPRO_LIVE_SECRET", "WOO X Pro"), ("DEEPCOIN_LIVE_KEY", "딥코인"),
+                         ("DEEPCOIN_LIVE_SECRET", "딥코인"), ("DEEPCOIN_LIVE_PASSPHRASE", "딥코인")):
         with pytest.raises(Refused, match=needle):
             FL.trading_keys("mainnet", {**LIVE_ENV, name: "fk"})
     with pytest.raises(Refused, match="paper"):
