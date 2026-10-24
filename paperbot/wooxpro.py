@@ -5,6 +5,7 @@ Binance, Bybit and MEXC paths are unchanged. Owners 10-20: "바이비트 + WOO X
     python -m paperbot.wooxpro specs                       # the 6 coins' live contract specs (public, no key needed)
     python -m paperbot.wooxpro check                       # read-only checks + one-way mode + leverage 40/30 (no order)
     python -m paperbot.wooxpro check --leverage 35         # ... every coin at 35x, and the largest position 35x allows
+    python -m paperbot.wooxpro check --leverage 35 --stop-net-roe 0.5   # ... and the liquidation against the stop
     python -m paperbot.wooxpro drill --confirm-order REAL_ORDER [--symbol DOGEUSDT]   # + one smallest-size order cycle
                                                            # and the stop-trigger test (--no-trigger-test skips it)
 
@@ -132,6 +133,18 @@ FIXED_LEVERAGE = MX.FIXED_LEVERAGE                    # owners 2026-10-17: BTC 4
 DEFAULT_LEVERAGE = MX.DEFAULT_LEVERAGE
 COINS = MX.COINS
 PREFIX = {MODE_MAINNET: "[WOO X Pro 실거래 실행기]"}
+# the liquidation before a stop (owners 10-24, WOO X Pro 2: 35x, a stop 1.30 % away): the stop must sit at least this
+# much of the price nearer than the estimated liquidation (room for the mark-last gap, the fees and the stop's market
+# fill in a fast move), else the executor does not enter (``check --leverage --stop-net-roe`` shows it per coin)
+LIQ_ROOM = 0.002
+WOO_COST = {"taker_fee": 0.00042, "slippage": 0.0002}   # the executors' net_costs for WOO X Pro (one side)
+
+
+def liq_distance(lev: float, mmr: float) -> float:
+    """How far (a fraction of the entry price) an isolated position at ``lev`` is from its liquidation: its margin
+    1 / ``lev`` less the maintenance margin ratio of its size's bracket (the bracket's maintenance amount ``cum`` is
+    left out: a little nearer than the exchange's own; the fees are what LIQ_ROOM is for)."""
+    return 1.0 / float(lev) - float(mmr)
 
 BUY_OPEN, BUY_CLOSE, SELL_CLOSE, SELL_OPEN = 1, 2, 3, 4   # buy open long / buy close short / sell close long / ...
 CLOSE_CODES = (BUY_CLOSE, SELL_CLOSE)
@@ -613,18 +626,34 @@ class WooXProClient:
         risk limit (GET /contract/public/leverage-bracket), the brackets from the smallest up while their maximum
         leverage is at least ``lev``; None when not even the first allows ``lev``. Public, no key (``check
         --leverage``: owners 10-24, WOO X Pro 2 trades 35x on every coin)."""
+        cap = None
+        for blev, _lo, hi, _mmr in self.risk_brackets(symbol):
+            if blev < int(lev):
+                break
+            cap = hi
+        return cap
+
+    def risk_brackets(self, symbol: str) -> list:
+        """WOO X Pro's public leverage risk limit of ``symbol`` (GET /contract/public/leverage-bracket, no key): its
+        brackets from the smallest up as (max leverage, notional floor, notional cap, maintenance margin ratio)."""
         data = self.req("GET", PUBLIC + "/leverage-bracket", {"symbol": symbol}, signed=False, limit_key="leverage_bracket")
         rules = data.get("rules") if isinstance(data, dict) else None
         row = next((r for r in rules or [] if isinstance(r, dict) and r.get("symbol") == symbol), None)
         rows = row.get("brackets") if isinstance(row, dict) else None
         if not isinstance(rows, list) or not rows or not all(isinstance(b, dict) for b in rows):
             raise TransientError(200, None, f"{symbol}: 레버리지 위험 한도 응답이 이상합니다")
-        cap = None
-        for b in sorted(rows, key=lambda b: _dec(b.get("notional_floor"), "notional_floor")):
-            if _int(b.get("initial_leverage")) < int(lev):
-                break
-            cap = float(_dec(b.get("notional_cap"), "notional_cap"))
-        return cap
+        out = [(_int(b.get("initial_leverage")), float(_dec(b.get("notional_floor"), "notional_floor")),
+                float(_dec(b.get("notional_cap"), "notional_cap")),
+                float(_dec(b.get("maint_margin_ratio"), "maint_margin_ratio"))) for b in rows]
+        return sorted(out, key=lambda r: r[1])
+
+    def maint_margin_ratio(self, symbol: str, notional: float) -> Optional[float]:
+        """The maintenance margin ratio of the bracket a ``notional`` (USDT) position of ``symbol`` falls in; None
+        past the last bracket (the executor's liquidation check before a "roe" entry, owners 10-24)."""
+        for _lev, _lo, hi, mmr in self.risk_brackets(symbol):
+            if notional <= hi:
+                return mmr
+        return None
 
     def leverage_brackets(self) -> list:
         """Signal mode needs Binance-like notional brackets: not offered (the executor follows the paper position)."""
@@ -1406,6 +1435,8 @@ class WooXProDrill:
     log: list = field(default_factory=list)
     leverage: Optional[int] = None    # check --leverage N (owners 10-24, WOO X Pro 2: 35): every coin isolated at N
                                       # instead of BTC 40x / the others 30x, and the largest position N allows
+    stop_net_roe: Optional[float] = None   # with leverage: the stop's net ROE (0.5) -> liquidation vs stop per coin
+    margin: float = 0.4                    # ... for the position margin x N x the balance (the paper's margin 40 %)
 
     def add(self, name: str, ok: bool, detail) -> None:
         row = {"step": name, "ok": bool(ok), "detail": detail}
@@ -1470,8 +1501,10 @@ class WooXProDrill:
                                          "unrealized": a["totalUnrealizedProfit"], "available": a["availableBalance"],
                                          "positionMargin": a["positionMargin"], "assets": a["assets"],
                                          "positions": [(p["symbol"], p["positionAmt"]) for p in pos]})
+        taker = None
         try:
             fee = c.fee_rate(self.symbol or "DOGEUSDT")
+            taker = fee["taker"]
             self._step("수수료율(API로 읽음, 편도)", True, {"taker_pct": round(fee["taker"] * 100, 4),
                                                        "maker_pct": round(fee["maker"] * 100, 4)}, fatal=False)
         except TestnetError as e:
@@ -1508,6 +1541,8 @@ class WooXProDrill:
                     caps[s] = f"못 읽음: {e}"
             self._step(f"{self.leverage}배로 열 수 있는 포지션 크기(거래소 위험 한도)",
                        all(str(v).endswith("까지") for v in caps.values()), caps, fatal=False)
+            if self.stop_net_roe is not None:
+                self._liq_step(float(a["totalMarginBalance"] or 0), taker)
         else:
             for s in self.symbols:
                 want = int(min(FIXED_LEVERAGE.get(s, DEFAULT_LEVERAGE), c.spec(s)["max_leverage"] or 10 ** 6))
@@ -1521,6 +1556,41 @@ class WooXProDrill:
             self._step("키 확인(선물 계정·포지션 모드 읽기, 두 분 확인 문구)", not probs,
                        probs or (perm or {}).get("warnings"), fatal=False)
         return self.log
+
+    def _liq_step(self, equity: float, taker: Optional[float]) -> None:
+        """check --leverage N --stop-net-roe R: per coin, the position margin x N x the balance opens, its bracket's
+        maintenance margin ratio, the estimated liquidation (liq_distance) against the stop (R / N less the round
+        trip: the fee rate read above, else WOO_COST, and WOO_COST's slippage), and up to which balance that holds."""
+        L, c = self.leverage, self.client
+        fee = taker if taker is not None else WOO_COST["taker_fee"]
+        stop = self.stop_net_roe / L - 2 * (fee + WOO_COST["slippage"])
+        notional = equity * self.margin * L
+        out, ok = {}, True
+        for s in self.symbols:
+            try:
+                rows = c.risk_brackets(s)
+            except TestnetError as e:
+                out[s], ok = f"못 읽음: {e}", False
+                continue
+            here = next((r for r in rows if notional <= r[2]), None)
+            safe = 0.0                                       # the largest position N opens with the stop first
+            for blev, _lo, hi, mmr in rows:
+                if blev < L or liq_distance(L, mmr) <= stop + LIQ_ROOM:
+                    break
+                safe = hi
+            upto = f" · 잔고 ${safe / (self.margin * L):,.0f}까지 같음" if safe else ""
+            if here is None or here[0] < L:
+                out[s], ok = f"포지션 ${notional:,.0f}는 {L}배로 못 엶(거래소가 거절, 실행기는 진입 안 함){upto}", False
+                continue
+            d = liq_distance(L, here[3])
+            if d > stop + LIQ_ROOM:
+                out[s] = f"청산 약 {d:.2%}(유지증거금률 {here[3]:.2%}) · 손절 {stop:.2%} → 손절이 먼저{upto}"
+            else:
+                out[s], ok = (f"청산 약 {d:.2%}(유지증거금률 {here[3]:.2%}) · 손절 {stop:.2%} → 청산이 먼저이거나 너무 붙음: "
+                              f"실행기가 진입하지 않음{upto}"), False
+        self._step(f"{L}배 청산가와 손절(잔고 ${equity:,.0f} × {self.margin:.0%} × {L}배 = 포지션 ${notional:,.0f}, 손절 = 순ROE "
+                   f"-{self.stop_net_roe:.0%} = 가격 {stop:.2%}, 테이커 {fee:.3%} + 슬리피지 {WOO_COST['slippage']:.2%})",
+                   ok, out, fatal=False)
 
     def _settle(self, s: str, x: dict) -> dict:
         c = self.client
@@ -1777,6 +1847,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--leverage", type=int, default=None,
                     help="every coin isolated at this leverage instead of BTC 40x / the others 30x, and the largest "
                          "position it allows (WOO X Pro 2, docs/friend-bot-ko.md: 35)")
+    ap.add_argument("--stop-net-roe", type=float, default=None,
+                    help="with --leverage: the stop's net ROE (0.5 = -50 %%): per coin, the liquidation at that "
+                         "leverage for margin 40 %% of the balance against the stop")
     args = ap.parse_args(argv)
     if args.cmd == "specs":                 # public data only: no key needed
         c = public_client()
@@ -1795,7 +1868,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
     pace(c)
     d = WooXProDrill(c, symbol=args.symbol, side=1 if args.side == "long" else -1, keycheck=kc,
-                     trigger_test=not args.no_trigger_test, say=say, leverage=args.leverage)
+                     trigger_test=not args.no_trigger_test, say=say, leverage=args.leverage,
+                     stop_net_roe=args.stop_net_roe if args.leverage else None)
     # a closed terminal (SIGHUP) or a stop (SIGTERM) mid-drill: leave the account flat before exiting
     for sig in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, _interrupt)

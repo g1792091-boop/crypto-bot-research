@@ -212,9 +212,11 @@ class ExecConfig:
     sweep_every: int = 20                # loops between full sweeps of every allowed symbol
     stop_from: str = "ratio"             # "ratio": same stop distance (%) from the actual fill as the paper
                                          # stop from the paper fill; "price": the paper's stop price itself;
-                                         # "roe" (owners 10-24, WOO X Pro 2): ``stop_roe`` of the screen's ROE before
-                                         # fees from its own fill at the leverage it trades (0.20 at 35x: 0.5714 %)
-    stop_roe: Optional[float] = None     # "roe": the stop's ROE before fees as the exchange screen shows it (0.20)
+                                         # "roe" (owners 10-24, WOO X Pro 2): ``stop_roe`` of ROE from its own fill
+                                         # at the leverage it trades, before the liquidation (else no entry)
+    stop_roe: Optional[float] = None     # "roe": the stop's ROE, the screen's before fees (0.20 at 35x: 0.5714 %) ...
+    stop_net: bool = False               # ... or with true the net ROE after its own round trip (``net_costs``, the
+                                         # paper's {"roe": 0.5, "net": true}): 0.5 / 35 - 0.124 % = 1.3046 %
     entry_source: str = "paper"          # "paper": follow the paper position; "signal": enter when submitted
     direct_poll_s: float = 1.5           # signal mode: paper3.db polling between loops
     direct_max_age_s: float = 20.0       # signal mode: a signal seen later than this after it was ready -> paper path
@@ -281,6 +283,14 @@ class ExecConfig:
             out.append("stop_from \"roe\"는 ladder_from \"own\"(거래소 기준 익절)과 함께만 씁니다")
         if self.stop_roe is not None and self.stop_from != "roe":
             out.append("stop_roe는 stop_from \"roe\"일 때만 씁니다")
+        if not isinstance(self.stop_net, bool):
+            out.append("stop_net은 true(순ROE, 이 거래소 비용 포함) 또는 false(화면 ROE, 수수료 전)입니다")
+        elif self.stop_net and self.stop_from != "roe":
+            out.append("stop_net은 stop_from \"roe\"일 때만 씁니다")
+        elif self.stop_net and isinstance(self.stop_roe, (int, float)) and 0 < self.stop_roe < 1:
+            rt, top = self.own_round_trip(), self.risk.max_leverage or 125
+            if rt is not None and self.stop_roe / top <= rt:
+                out.append(f"stop_roe {self.stop_roe:g}(순ROE)는 {top}배에서 왕복 비용 {rt:.3%}보다 가까워 손절 자리가 없습니다")
         if self.entry_source not in ENTRY_SOURCES:
             out.append("entry_source는 \"paper\" 또는 \"signal\"입니다")
         if not 0.5 <= float(self.direct_poll_s) <= 5:
@@ -2494,6 +2504,8 @@ class Executor:
             self._mark_done(it.key)
             self._event(WARN, "entry_skip", f"{it.symbol} 가격 {price:g}이 이미 paper 손절선 {stop:g}을 지나 진입하지 않습니다")
             return
+        if self.cfg.stop_from == "roe" and hasattr(self.raw, "maint_margin_ratio") and not self._liq_ok(it, dec, price, stop):
+            return
         open_side = "BUY" if it.side > 0 else "SELL"
         t = {"key": it.key, "base": hashlib.sha1(it.key.encode()).hexdigest()[:12], "symbol": it.symbol,
              "side": it.side, "qty": dec.qty, "risk_qty": dec.qty, "leverage": dec.leverage, "stop": stop,
@@ -2583,16 +2595,45 @@ class Executor:
             amt = float(self.c.position(symbol)["positionAmt"])
         return amt
 
+    def _liq_ok(self, it: Intent, dec, price: float, stop: float) -> bool:
+        """"roe" (owners 10-24, WOO X Pro 2): the stop must come before the liquidation. The liquidation is estimated
+        from the exchange's leverage risk limit (the maintenance margin ratio of this position's size): 1 / leverage
+        minus that ratio from the price (WX.liq_distance); the stop must sit at least WX.LIQ_ROOM nearer. Otherwise the
+        entry is refused and said; the stop is never moved. A risk limit that cannot be read now (TransientError) is
+        retried on the next loop like any other read."""
+        notional = dec.qty * price
+        stop_d = abs(price - stop) / price
+        try:
+            mmr = self.c._retry("거래소 위험 한도", self.raw.maint_margin_ratio, it.symbol, notional)
+        except (TransientError, RateLimited):
+            raise
+        except TestnetError as e:
+            mmr, why = None, f"거래소 위험 한도(유지증거금률)를 읽지 못했습니다: {e}"
+        else:
+            why = f"포지션 ${notional:,.0f}가 거래소 위험 한도의 마지막 구간을 넘습니다" if mmr is None else ""
+        if mmr is not None:
+            liq_d = WX.liq_distance(dec.leverage, mmr)
+            if liq_d > stop_d + WX.LIQ_ROOM:
+                return True
+            why = (f"{dec.leverage}배 포지션 ${notional:,.0f}의 청산가가 약 {liq_d:.2%} 거리(유지증거금률 {mmr:.2%})라 "
+                   f"손절 {stop_d:.2%}보다 {WX.LIQ_ROOM:.1%} 넘게 멀지 않습니다(청산이 손절보다 먼저 올 수 있음)")
+        self._mark_done(it.key)
+        self._event(WARN, "liq_inside_stop", f"{it.symbol} 진입하지 않습니다: {why}. 손절은 옮기지 않습니다",
+                    {"key": it.key, "mmr": mmr, "notional": round(notional, 2), "stop_frac": round(stop_d, 6)})
+        return False
+
     def _stop_level(self, paper_stop: float, paper_entry: float, live_ref: Optional[float], tick: float,
                     side: int, lev: Optional[float] = None) -> float:
         """The exchange stop for a paper stop. "ratio" keeps the paper's distance from its fill (the testnet
         price is not the real market price, and a live fill is never exactly the paper fill); "price" copies
-        the paper price; "roe" (owners 10-24) is ``stop_roe`` of the screen's ROE before fees from ``live_ref`` (its
-        own fill) at ``lev``, the leverage it trades: 0.20 / 35 = 0.5714 % of the fill, whatever slippage the paper
-        assumed. Rounded to the tick, never looser."""
+        the paper price; "roe" (owners 10-24) is ``stop_roe`` of ROE from ``live_ref`` (its own fill) at ``lev``, the
+        leverage it trades, whatever slippage the paper assumed: the screen's before fees (0.20 / 35 = 0.5714 % of the
+        fill) or, ``stop_net``, the net ROE after its own round trip (0.50 / 35 - 0.124 % = 1.3046 %). Rounded to the
+        tick, never looser."""
         level = paper_stop
         if self.cfg.stop_from == "roe" and live_ref and lev:
-            level = live_ref * (1 - side * float(self.cfg.stop_roe) / float(lev))
+            dist = float(self.cfg.stop_roe) / float(lev) - ((self.cfg.own_round_trip() or 0.0) if self.cfg.stop_net else 0.0)
+            level = live_ref * (1 - side * max(dist, 0.0))
         elif self.cfg.stop_from in ("ratio", "roe") and live_ref and paper_entry:
             level = live_ref * paper_stop / paper_entry
         return round_stop(level, tick, side)
@@ -3276,8 +3317,18 @@ def guard_lines(cfg: ExecConfig) -> list:
     if cfg.label:
         out.append(f"이름: {cfg.label} (알림 머리말 {exec_prefix(cfg)})")
     if cfg.stop_from == "roe" and isinstance(cfg.stop_roe, (int, float)) and 0 < cfg.stop_roe < 1:
-        out.append(f"손절: 이 실행기의 체결가에서 화면 ROE -{cfg.stop_roe:.0%}(수수료 전) 자리, 거래하는 배수로 계산 (35배면 가격 "
-                   f"{cfg.stop_roe / 35:.4%}). 페이퍼의 손절 가격은 쓰지 않음")
+        lev = cfg.risk.max_leverage or 35
+        if cfg.stop_net is True and cfg.own_round_trip() is not None:
+            rt = cfg.own_round_trip()
+            d = cfg.stop_roe / lev - rt
+            out.append(f"손절: 이 실행기의 체결가에서 순ROE -{cfg.stop_roe:.0%}(이 거래소 비용 왕복 {rt:.3%} 포함, 펀딩 제외) 자리, "
+                       f"거래하는 배수로 계산 ({lev}배면 가격 {d:.4%}, 화면 ROE 약 -{d * lev:.2%}). 페이퍼의 손절 가격은 쓰지 않음")
+        else:
+            out.append(f"손절: 이 실행기의 체결가에서 화면 ROE -{cfg.stop_roe:.0%}(수수료 전) 자리, 거래하는 배수로 계산 ({lev}배면 "
+                       f"가격 {cfg.stop_roe / lev:.4%}). 페이퍼의 손절 가격은 쓰지 않음")
+        if cfg.exchange == "wooxpro":
+            out.append(f"청산가 확인: 진입 전에 거래소 위험 한도(그 크기의 유지증거금률)로 청산가를 어림해, 손절이 청산가보다 "
+                       f"{WX.LIQ_ROOM:.1%} 넘게 가깝지 않으면 진입하지 않고 알림 (손절은 옮기지 않음)")
     if cfg.own_keys is True:
         out.append("키: 이 실행기 자기 키 파일만 - 다른 거래소 키가 있거나, 이 DB가 처음 켤 때 묶인 키와 다르거나(새 키는 "
                    "untie-key), 다른 실행기 DB에 기록된 키면 켜지지 않음")

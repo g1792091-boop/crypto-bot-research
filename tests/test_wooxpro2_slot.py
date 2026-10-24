@@ -132,15 +132,15 @@ class World:
 def test_the_template_is_the_paper_bot_and_the_safety_the_owners_were_told(tmp_path):
     """deploy/executor.live-wooxpro2.json (the owners' final settings of 10-24): WOO X Pro, its own name, database and
     paper bot (friend.db, COMBO@mix), the other live templates' costs and protections, the paper's ladder (12 % -> 10 %
-    locked, then every 5 %) on its own fill, its stop at the screen's ROE -20 % before fees from its own fill (0.5714 %
-    at 35x, the paper's leverage), no signal light, 잔고 바닥 70 %, 원금 회수 안내; the money (budget_usd, qty_scale) is
-    left empty so it cannot start before the owners set it."""
+    locked, then every 5 %) on its own fill, its stop at net ROE -50 % (its own WOO X Pro costs) from its own fill
+    (1.3046 % at 35x, the paper's leverage), no signal light, 잔고 바닥 70 %, 원금 회수 안내; the money (budget_usd,
+    qty_scale) is left empty so it cannot start before the owners set it."""
     raw = json.loads(TEMPLATE.read_text(encoding="utf-8"))
     cfg = ExecConfig.from_file(str(TEMPLATE))
     assert (cfg.exchange, cfg.label, cfg.mode, cfg.account) == ("wooxpro", "WOO X Pro 2", "mainnet", "COMBO@mix")
     assert (cfg.paper_db, cfg.db) == ("/var/lib/paperbot/combo/friend.db", "/var/lib/paperbot/exec/executor-wooxpro2-live.db")
-    assert (cfg.ladder_from, cfg.ladder_basis, cfg.stop_from, cfg.stop_roe, cfg.entry_source) == (
-        "own", "net", "roe", 0.2, "paper")
+    assert (cfg.ladder_from, cfg.ladder_basis, cfg.stop_from, cfg.stop_roe, cfg.stop_net, cfg.entry_source) == (
+        "own", "net", "roe", 0.5, True, "paper")
     assert cfg.ladder == {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}
     assert cfg.ladder_spec().describe() == "순ROE 12%에서 10% 잠금, 이후 5%씩"
     assert cfg.risk.max_leverage == 35                     # 35x on every coin: the paper's; another is refused, never cut
@@ -153,10 +153,14 @@ def test_the_template_is_the_paper_bot_and_the_safety_the_owners_were_told(tmp_p
     assert cfg.problems() == ["qty_scale은 0보다 커야 합니다", "실거래(mainnet)는 정한 금액 budget_usd(예: 500)가 필요합니다"]
     filled = ExecConfig.from_dict({**raw, "budget_usd": 300, "qty_scale": 0.3})
     assert filled.problems() == []
-    # one stop-out: margin 40 % x (screen -20 % + 35 x WOO X Pro's 0.124 % round trip) = 9.7 % of the balance; the
-    # executor's own loss check (the paper rules' 0.14 % round trip) reads 9.96 %: far inside max_loss_frac 0.35
-    assert 0.4 * (0.20 + 35 * filled.own_round_trip()) == pytest.approx(0.09736)
-    assert 0.4 * 35 * (0.2 / 35 + 2 * (0.0005 + 0.0002)) == pytest.approx(0.0996) and 0.0996 < raw["risk"]["max_loss_frac"]
+    # one stop-out: margin 40 % x net ROE -50 % = 20 % of the balance (the screen's -45.66 % + 35 x WOO X Pro's 0.124 %
+    # round trip); the executor's own loss check (the paper rules' 0.14 % round trip) reads 20.2 %: inside 0.35
+    dist = 0.5 / 35 - filled.own_round_trip()
+    assert dist == pytest.approx(0.0130457, abs=1e-7) and 0.4 * 35 * (dist + filled.own_round_trip()) == pytest.approx(0.2)
+    own_check = 0.4 * 35 * (dist + 2 * (0.0005 + 0.0002))
+    assert own_check == pytest.approx(0.2022, abs=1e-4) and own_check < raw["risk"]["max_loss_frac"]
+    # 잔고 바닥 70 %: one stop 80 %, two in a row 64 % (the floor), three 51 %
+    assert [round(0.8 ** n, 3) for n in (1, 2, 3)] == [0.8, 0.64, 0.512]
 
 
 def test_the_new_fields_are_checked_and_absent_means_as_before(tmp_path):
@@ -171,52 +175,63 @@ def test_the_new_fields_are_checked_and_absent_means_as_before(tmp_path):
     assert E.guard_lines(plain) == []
 
 
-# ---------------------------------------------------------------- the owners' trade settings (10-24): 35x, -20 %, 10/5
+# ---------------------------------------------------------------- the owners' trade settings (10-24): 35x, -50 %, 10/5
 LADDER_10_5 = {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}
+NET_STOP = 0.5 / 35 - 2 * (0.00042 + 0.0002)                 # 1.3046 % of the fill: net ROE -50 % at WOO X Pro's costs
 
 
 def _roe_cfg(tmp_path, **kw) -> ExecConfig:
-    """The template's trade rules: the stop at the screen's ROE -20 % before fees from its own fill, its own 10/5 ladder."""
-    return _cfg(tmp_path, stop_from="roe", stop_roe=0.2, ladder_from="own", ladder=dict(LADDER_10_5), **kw)
+    """The template's trade rules: the stop at net ROE -50 % (its own costs) from its own fill, its own 10/5 ladder."""
+    base = dict(stop_from="roe", stop_roe=0.5, stop_net=True, ladder_from="own", ladder=dict(LADDER_10_5),
+                net_costs={"wooxpro": {"taker_fee": 0.00042, "slippage": 0.0002}})
+    base.update(kw)
+    return _cfg(tmp_path, **base)
 
 
 def _paper_at(w, symbol, side, raw, qty, lev=35):
-    """The paper's entry as '친구 매매법' makes it (paperbot/combo.py, stop {"mode": "roe", "roe": 0.2, "net": false}):
-    its stop 0.2 / 35 from the signal's raw price, its own fill 0.02 % slippage past that price."""
-    w.paper(symbol=symbol, side=side, qty=qty, lev=lev, entry=raw * (1 + side * 0.0002), stop=raw * (1 - side * 0.2 / lev))
+    """The paper's entry as '친구 매매법' makes it (stop {"mode": "roe", "roe": 0.5, "net": true}): its stop 0.5 / 35 less
+    the paper rules' 0.14 % round trip from the signal's raw price, its own fill 0.02 % slippage past that price."""
+    w.paper(symbol=symbol, side=side, qty=qty, lev=lev, entry=raw * (1 + side * 0.0002),
+            stop=raw * (1 - side * (0.5 / lev - 0.0014)))
 
 
-def test_stop_roe_is_checked_and_needs_the_own_ladder(tmp_path):
+def test_the_stop_settings_are_checked(tmp_path):
     assert _roe_cfg(tmp_path).problems() == []
-    assert _cfg(tmp_path, stop_from="roe", ladder_from="own", ladder=dict(LADDER_10_5)).problems() == [
+    assert _roe_cfg(tmp_path, stop_net=False, stop_roe=0.2).problems() == []       # the screen's ROE before fees
+    assert _roe_cfg(tmp_path, stop_roe=None, stop_net=False).problems() == [
         "stop_from \"roe\"는 stop_roe(화면 ROE 손절, 수수료 전, 0~1 사이 비율, 예: -20% → 0.2)가 있어야 합니다"]
     for bad in (0, 1.2, -0.2, True, "0.2"):
-        assert _cfg(tmp_path, stop_from="roe", stop_roe=bad, ladder_from="own", ladder=dict(LADDER_10_5)).problems()
-    assert _cfg(tmp_path, stop_from="roe", stop_roe=0.2).problems() == [
+        assert _roe_cfg(tmp_path, stop_roe=bad).problems()
+    assert _roe_cfg(tmp_path, ladder_from="paper", ladder=None).problems() == [
         "stop_from \"roe\"는 ladder_from \"own\"(거래소 기준 익절)과 함께만 씁니다"]
     assert _cfg(tmp_path, stop_roe=0.2).problems() == ["stop_roe는 stop_from \"roe\"일 때만 씁니다"]
+    assert _cfg(tmp_path, stop_net=True).problems() == ["stop_net은 stop_from \"roe\"일 때만 씁니다"]
+    assert _roe_cfg(tmp_path, stop_net="yes").problems() == [
+        "stop_net은 true(순ROE, 이 거래소 비용 포함) 또는 false(화면 ROE, 수수료 전)입니다"]
+    assert _roe_cfg(tmp_path, stop_roe=0.04).problems() == [                  # 0.04 / 40 = 0.1 % < the 0.124 % costs
+        "stop_roe 0.04(순ROE)는 40배에서 왕복 비용 0.124%보다 가까워 손절 자리가 없습니다"]
     assert _cfg(tmp_path, stop_from="x").problems() == ["stop_from은 \"ratio\", \"price\" 또는 \"roe\"입니다"]
-    assert _cfg(tmp_path).stop_roe is None                 # every other executor: as before
+    assert (_cfg(tmp_path).stop_roe, _cfg(tmp_path).stop_net) == (None, False)    # every other executor: as before
 
 
-def test_the_stop_is_the_screens_minus_20_percent_from_its_own_fill(tmp_path):
-    """Long and short: 0.2 / 35 = 0.5714 % from the executor's own fill (rounded to the tick, at most one tick tighter,
-    never looser), wherever the paper filled. "ratio" would copy the paper's distance from the paper's fill, which
-    '친구 매매법' measures from the signal's raw price, 0.02 % before its fill: 0.5913 %, the screen's -20.7 %."""
+def test_the_stop_is_net_roe_minus_50_percent_from_its_own_fill(tmp_path):
+    """Long and short: 0.5 / 35 - 0.124 % = 1.3046 % from the executor's own fill (screen ROE -45.66 %), rounded to
+    the tick at most one tick tighter, never looser, wherever the paper filled. "ratio" would copy the paper's distance
+    from the paper's fill (its own 0.14 % costs, its stop from the raw price 0.02 % before its fill): 1.3082 %."""
     fake = FakeWooX(prices={BTC: 60_000.0, ETH: 2_510.0}, wallet=10_000.0)
     w = World(tmp_path, cfg=_roe_cfg(tmp_path), fake=fake)
-    exact = 0.2 / 35
+    assert NET_STOP == pytest.approx(0.0130457, abs=1e-7) and NET_STOP * 35 == pytest.approx(0.4566, abs=1e-4)
     _paper_at(w, BTC, 1, 60_000.0, 0.1)
     w.loop()
     t = w.ex.trade
     (plan,) = fake.live_stops(BTC)
     assert (t["entry_price"], t["leverage"], fake.levs[BTC]) == (60_000.0, 35, ["isolated", 35])
-    assert t["stop"] == t["stop_initial"] == pytest.approx(float(plan["trigger_price"])) == 59_657.2
-    assert exact - 0.1 / 60_000 <= (60_000.0 - t["stop"]) / 60_000.0 <= exact
+    assert t["stop"] == t["stop_initial"] == pytest.approx(float(plan["trigger_price"])) == pytest.approx(59_217.3)
+    assert NET_STOP - 0.1 / 60_000 <= (60_000.0 - t["stop"]) / 60_000.0 <= NET_STOP
     paper = w.src.intent
     ratio = E.round_stop(60_000.0 * paper.stop / paper.entry_price, 0.1, 1)
-    assert (60_000.0 - ratio) / 60_000.0 == pytest.approx(0.005913, abs=2e-6)
-    fake.set_price(BTC, 59_650.0)                          # the price reaches it: the exchange stop closes the position
+    assert (60_000.0 - ratio) / 60_000.0 == pytest.approx(0.013082, abs=3e-6)
+    fake.set_price(BTC, 59_200.0)                          # the price reaches it: the exchange stop closes the position
     w.src.intent = None
     w.loop(2)
     assert w.ex.trade is None and fake.pos[BTC] == 0
@@ -228,14 +243,18 @@ def test_the_stop_is_the_screens_minus_20_percent_from_its_own_fill(tmp_path):
     t = w.ex.trade
     (plan,) = fake.live_stops(ETH)
     assert (t["entry_price"], t["leverage"]) == (2_510.0, 35)
-    assert t["stop"] == pytest.approx(float(plan["trigger_price"])) == 2_524.34
-    assert exact - 0.01 / 2_510 <= (t["stop"] - 2_510.0) / 2_510.0 <= exact
+    assert t["stop"] == pytest.approx(float(plan["trigger_price"])) == pytest.approx(2_542.74)
+    assert NET_STOP - 0.01 / 2_510 <= (t["stop"] - 2_510.0) / 2_510.0 <= NET_STOP
+    # the screen's ROE before fees (stop_net false): 0.2 / 35 = 0.5714 %, the same rounding
+    w.ex.cfg = _roe_cfg(tmp_path, stop_net=False, stop_roe=0.2)
+    assert w.ex._stop_level(0.0, 0.0, 60_000.0, 0.1, 1, 35) == pytest.approx(59_657.2)
     w.close()
 
 
-def test_a_full_size_entry_is_not_cut_one_stop_is_a_tenth_of_the_balance(tmp_path):
+def test_a_full_size_entry_is_not_cut_one_stop_is_a_fifth_of_the_balance(tmp_path):
     """Margin 40 % at 35x (the paper's $1,000 wallet, qty_scale 1): its loss at the stop with the paper rules' costs is
-    about 10 % of the balance, far inside max_loss_frac 0.35, so the size is the paper's (no cut)."""
+    about 20 % of the balance, inside max_loss_frac 0.35, so the size is the paper's (no cut); its liquidation (about
+    2.36 % away at the fake's 0.5 % maintenance ratio) is past the stop."""
     fake = FakeWooX(prices={BTC: 60_000.0}, wallet=1_000.0)
     w = World(tmp_path, cfg=_roe_cfg(tmp_path, budget_usd=1_000.0), fake=fake)
     _paper_at(w, BTC, 1, 60_000.0, 1_000 * 0.4 * 35 / 60_012.0)
@@ -243,9 +262,33 @@ def test_a_full_size_entry_is_not_cut_one_stop_is_a_tenth_of_the_balance(tmp_pat
     (lv, text), = w.events("entry_check")
     assert lv == INFO and text.startswith("진입 검사(BTCUSDT): allow")
     t = w.ex.trade
-    assert t["qty"] == pytest.approx(0.233) and t["leverage"] == 35
+    assert t["qty"] == pytest.approx(0.233) and t["leverage"] == 35 and not w.events("liq_inside_stop")
     loss = t["qty"] * ((60_000.0 - t["stop"]) + (60_000.0 + t["stop"]) * 0.0007)
-    assert loss / 1_000.0 == pytest.approx(0.0995, abs=5e-4) and loss / 1_000.0 < 0.35
+    assert loss / 1_000.0 == pytest.approx(0.2018, abs=5e-4) and loss / 1_000.0 < 0.35
+    w.close()
+
+
+def test_a_liquidation_before_the_stop_refuses_the_entry_and_never_moves_the_stop(tmp_path):
+    """The maintenance ratio of the position's size puts the liquidation at 1 / 35 - 1.5 % = 1.36 %: not 0.2 % past the
+    1.30 % stop: no entry (no leverage set, no order), said on Telegram. A size past the last bracket: the same."""
+    fake = FakeWooX(prices={BTC: 60_000.0, ETH: 2_510.0}, wallet=1_000.0)
+    fake.brackets[BTC] = [(100, 0, 10_000, 0.005), (50, 10_000, 1_000_000, 0.015)]
+    fake.brackets[ETH] = [(100, 0, 1_000, 0.005)]
+    w = World(tmp_path, cfg=_roe_cfg(tmp_path, budget_usd=1_000.0), fake=fake)
+    _paper_at(w, BTC, 1, 60_000.0, 1_000 * 0.4 * 35 / 60_012.0)
+    w.loop(2)
+    assert w.ex.trade is None and fake.pos[BTC] == 0 and not fake.live_stops() and fake.levs[BTC] == ["isolated", 40]
+    (lv, text), = w.events("liq_inside_stop")
+    assert lv == E.WARN and text.startswith("BTCUSDT 진입하지 않습니다: 35배 포지션 $13,980의 청산가가 약 1.36% 거리"
+                                           "(유지증거금률 1.50%)라 손절 1.30%보다 0.2% 넘게 멀지 않습니다")
+    assert text.endswith("손절은 옮기지 않습니다")
+    assert any(m[0] == E.WARN and m[1].startswith("[WOO X Pro 2 실거래 실행기] BTCUSDT 진입하지 않습니다") for m in w.said())
+    w.clock.t += 60_000
+    _paper_at(w, ETH, -1, 2_500.0, 2.0)
+    w.loop(2)
+    assert w.ex.trade is None and fake.pos[ETH] == 0
+    (_lv, text), = [e for e in w.events("liq_inside_stop") if e[1].startswith("ETHUSDT")]
+    assert "포지션 $5,020가 거래소 위험 한도의 마지막 구간을 넘습니다" in text
     w.close()
 
 
@@ -284,15 +327,19 @@ def test_35x_or_no_trade_never_another_leverage(tmp_path):
     o.close()
 
 
-def test_the_check_at_35x_says_every_coin_and_the_largest_position_35x_allows():
-    """``paperbot.wooxpro check --leverage 35`` (docs/friend-bot-ko.md 7-4): every coin isolated at 35x, read back, and
-    each coin's largest position at 35x from WOO X Pro's leverage risk limit; a coin below 35x stops the check."""
+def test_the_check_at_35x_says_every_coin_the_largest_position_and_the_liquidation_against_the_stop():
+    """``paperbot.wooxpro check --leverage 35 --stop-net-roe 0.5`` (docs/friend-bot-ko.md 7-4): every coin isolated at
+    35x, read back; each coin's largest position at 35x from WOO X Pro's leverage risk limit; and for the position
+    margin 40 % of the balance opens at 35x, its liquidation against the stop and up to which balance that holds. A coin
+    below 35x stops the check."""
     clock = Clock()
-    fake = FakeWooX()
+    fake = FakeWooX()                                      # balance $10,000: positions of $140,000
     fake.clock = clock
     fake.brackets["DOGEUSDT"] = [(25, 0, 50_000), (10, 50_000, 500_000)]
+    fake.brackets["LTCUSDT"] = [(50, 0, 100_000, 0.005), (50, 100_000, 1_000_000, 0.015)]
     c = WX.WooXProClient("wk", "ws", "wm", send=fake, clock_ms=clock, sleep=lambda s: None)
-    d = WX.WooXProDrill(c, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000, leverage=35)
+    d = WX.WooXProDrill(c, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000, leverage=35,
+                        stop_net_roe=0.5)
     d.check()
     steps = {r["step"]: r for r in d.log}
     assert steps["계약 정보(6개 코인), 최대 배수 35배 이상"]["ok"]
@@ -300,10 +347,23 @@ def test_the_check_at_35x_says_every_coin_and_the_largest_position_35x_allows():
     assert lev["ok"] and lev["detail"] == {s: 35 for s in WX.COINS}
     assert all(fake.levs[s] == ["isolated", 35] for s in WX.COINS)
     caps = steps["35배로 열 수 있는 포지션 크기(거래소 위험 한도)"]
-    assert not caps["ok"] and caps["detail"]["DOGEUSDT"] == "35배 안 됨"
     # the fake's limits: 100x coins keep 50x (>= 35x) up to $1M, the 50x coins drop to 25x past $200k
-    assert caps["detail"] == {"BTCUSDT": "$1,000,000까지", "ETHUSDT": "$1,000,000까지", "SOLUSDT": "$200,000까지",
-                              "DOGEUSDT": "35배 안 됨", "LTCUSDT": "$200,000까지", "BCHUSDT": "$200,000까지"}
+    assert not caps["ok"] and caps["detail"] == {
+        "BTCUSDT": "$1,000,000까지", "ETHUSDT": "$1,000,000까지", "SOLUSDT": "$200,000까지", "DOGEUSDT": "35배 안 됨",
+        "LTCUSDT": "$1,000,000까지", "BCHUSDT": "$200,000까지"}
+    taker = c.fee_rate("DOGEUSDT")["taker"]
+    stop = 0.5 / 35 - 2 * (taker + 0.0002)
+    (liq,) = [r for r in d.log if r["step"].startswith("35배 청산가와 손절(")]
+    assert liq["step"] == (f"35배 청산가와 손절(잔고 $10,000 × 40% × 35배 = 포지션 $140,000, 손절 = 순ROE -50% = 가격 {stop:.2%}, "
+                           f"테이커 {taker:.3%} + 슬리피지 0.02%)")
+    assert not liq["ok"] and liq["detail"] == {
+        "BTCUSDT": f"청산 약 2.36%(유지증거금률 0.50%) · 손절 {stop:.2%} → 손절이 먼저 · 잔고 $71,429까지 같음",
+        "ETHUSDT": f"청산 약 2.36%(유지증거금률 0.50%) · 손절 {stop:.2%} → 손절이 먼저 · 잔고 $71,429까지 같음",
+        "SOLUSDT": f"청산 약 2.36%(유지증거금률 0.50%) · 손절 {stop:.2%} → 손절이 먼저 · 잔고 $14,286까지 같음",
+        "DOGEUSDT": "포지션 $140,000는 35배로 못 엶(거래소가 거절, 실행기는 진입 안 함)",
+        "LTCUSDT": f"청산 약 1.36%(유지증거금률 1.50%) · 손절 {stop:.2%} → 청산이 먼저이거나 너무 붙음: 실행기가 진입하지 않음"
+                   " · 잔고 $7,143까지 같음",
+        "BCHUSDT": f"청산 약 2.36%(유지증거금률 0.50%) · 손절 {stop:.2%} → 손절이 먼저 · 잔고 $14,286까지 같음"}
     assert "격리 레버리지 BTC 40배, 나머지 30배(다시 읽어 확인)" not in steps
     fake.max_lev["SOLUSDT"] = 30                           # a fresh run (the client keeps the contract specs it read)
     c = WX.WooXProClient("wk", "ws", "wm", send=fake, clock_ms=clock, sleep=lambda s: None)
@@ -312,7 +372,7 @@ def test_the_check_at_35x_says_every_coin_and_the_largest_position_35x_allows():
         d.check()
     assert d.log[-1]["detail"]["SOLUSDT"]["max_leverage"] == 30 and not d.log[-1]["ok"]
     plain = WX.WooXProDrill(c, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000)
-    assert plain.leverage is None                          # the other WOO X Pro's check: as before
+    assert (plain.leverage, plain.stop_net_roe) == (None, None)   # the other WOO X Pro's check: as before
 
 
 def test_its_name_in_every_message_and_the_first_woo_x_pro_keeps_its_own(tmp_path):
@@ -532,7 +592,10 @@ def test_check_config_and_preflight_say_the_name_the_key_rule_and_the_floor(tmp_
     out = capsys.readouterr().out
     assert "이름: WOO X Pro 2 (알림 머리말 [WOO X Pro 2 실거래 실행기])" in out
     assert "계단: 순ROE 12%에서 10% 잠금, 이후 5%씩" in out and "신호등: 꺼짐" in out
-    assert "손절: 이 실행기의 체결가에서 화면 ROE -20%(수수료 전) 자리, 거래하는 배수로 계산 (35배면 가격 0.5714%)" in out
+    assert ("손절: 이 실행기의 체결가에서 순ROE -50%(이 거래소 비용 왕복 0.124% 포함, 펀딩 제외) 자리, 거래하는 배수로 계산 "
+            "(35배면 가격 1.3046%, 화면 ROE 약 -45.66%). 페이퍼의 손절 가격은 쓰지 않음") in out
+    assert ("청산가 확인: 진입 전에 거래소 위험 한도(그 크기의 유지증거금률)로 청산가를 어림해, 손절이 청산가보다 0.2% 넘게 "
+            "가깝지 않으면 진입하지 않고 알림 (손절은 옮기지 않음)") in out
     assert "잔고 바닥: 켜짐 - 잔고가 시작 금액(처음 돌 때 기록)의 70%에 닿으면 새 진입 멈춤" in out
     assert "원금 회수 안내: 켜짐 - 잔고가 시작 금액의 2배가 되면 텔레그램 한 번" in out and out.rstrip().endswith("준비됨")
     plain = json.loads((ROOT / "deploy" / "executor.live-wooxpro.json").read_text(encoding="utf-8"))
@@ -680,11 +743,11 @@ V4 = os.path.dirname(SCREENS)
 # '친구 매매법' as its run record says it (the hand-made record of this world; the bot itself is paperbot/combo.py)
 FRIEND_CFG = {"name": "친구 매매법", "members": [{"strategy": "FRIEND_ROC", "tf": "15m"}],
               "leverage": {"BTCUSDT": 35, "default": 35}, "margin": 0.4, "initial_equity": 1000,
-              "stop": {"mode": "roe", "roe": 0.2, "net": False},
+              "stop": {"mode": "roe", "roe": 0.5, "net": True},
               "ladder": {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}, "no_weekend": True}
 # (coin, side, entry ms, hours held, reason, raw entry, raw exit): F1 a win, F2 a stop, F3 seen late by WOO X Pro 2
 FRIEND = (("ETHUSDT", -1, V.K(5, 10, 15), 2, "LOCK", 2500.0, 2491.0),
-          ("SOLUSDT", 1, V.K(5, 14, 30), 3, "SL", 150.0, 149.14),
+          ("SOLUSDT", 1, V.K(5, 14, 30), 3, "SL", 150.0, 148.07),
           ("LTCUSDT", 1, V.K(6, 2, 45), 1, "LOCK", 80.0, 80.3))
 FPOS = ("BCHUSDT", -1, V.K(6, 11, 15), 512.0)                     # the open one: WOO X Pro 2 holds it too
 
@@ -699,7 +762,7 @@ def friend_db(path: str) -> dict:
         eq += d["pnl"]
         out.append(d)
     sym, side, et, px = FPOS
-    stop = round(px * (1 - side * 0.2 / 35), 2)
+    stop = round(px * (1 - side * (0.5 / 35 - 0.0014)), 2)
     pos = {"symbol": sym, "side": side, "qty": 400 * 35 / px, "entry_price": px, "entry_time": et, "leverage": 35,
            "tier": "best", "margin": 400.0, "margin_initial": 400.0, "stop_price": stop, "tp_price": None, "liq_price": 0.0,
            "entry_fee": 0.2, "stop_initial": stop, "lock_roe": None,

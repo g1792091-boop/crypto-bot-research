@@ -1067,9 +1067,9 @@ def _deepcoin_scene(path: str) -> list:
 
 # '친구 매매법' (owners 10-24, docs/friend-bot-ko.md) as its run record says it: the preview's own hand-made record (the
 # paper bot itself is paperbot/combo.py on deploy/combo.friend.json; only the words the messages read are here)
-# (the owners' final settings of 10-24: 35x on every coin, the screen's ROE -20 % before fees, the 10/5 ladder)
+# (the owners' final settings of 10-24: 35x on every coin, the stop at net ROE -50 %, the 10/5 ladder)
 FRIEND_CFG = {"name": "친구 매매법", "members": [{"strategy": "FRIEND_ROC", "tf": "15m"}], "leverage": {"default": 35},
-              "margin": 0.4, "stop": {"mode": "roe", "roe": 0.2, "net": False},
+              "margin": 0.4, "stop": {"mode": "roe", "roe": 0.5, "net": True},
               "ladder": {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}, "no_weekend": True,
               "macro_blackout_min": 30, "us_open_pause_min": 30, "us_open_pre_min": 30}
 FRIEND = ("FRIEND_ROC", "15m", 0)
@@ -1086,8 +1086,8 @@ class FriendPaper:
         s.conn.close()
 
     def open(self, entry: int, symbol: str, side: int, price: float, wallet: float = 1000.0) -> float:
-        """Its position at margin 40 %, 35x, the stop at the screen's ROE -20 % (before fees); returns the stop."""
-        stop = round(price * (1 - side * 0.2 / 35), 2)
+        """Its position at margin 40 %, 35x, the stop at net ROE -50 % (its 0.14 % round trip); returns the stop."""
+        stop = round(price * (1 - side * (0.5 / 35 - 0.0014)), 2)
         sig = asdict(Signal(ts=entry - 1, symbol=symbol, timeframe=FRIEND[1], strategy_id=FRIEND[0], side=side,
                             stop_price=stop, meta={"member_order": FRIEND[2]}))
         m = 0.4 * wallet
@@ -1112,7 +1112,7 @@ class FriendPaper:
         s.outcome(LC.ACCOUNT, SignalOutcome(Signal(ts=p["entry_time"] - 1, symbol=p["symbol"], timeframe=FRIEND[1],
                                                    strategy_id=FRIEND[0], side=side, stop_price=p["stop_price"],
                                                    meta={"member": "FRIEND_ROC@15m", "member_order": 0,
-                                                         "stop_rule": "ROE -20% before fees at 35x"}),
+                                                         "stop_rule": "ROE -50% net at 35x"}),
                                             "ENTERED", "", p["entry_time"]))
         s.commit()
         s.conn.close()
@@ -1183,7 +1183,7 @@ def _wooxpro2_scene(path: str) -> list:
     key = f"{LC.ACCOUNT}|{ETH}|{e}"
     fill = round(price * 0.9998, 2)
     fqty = round(100.0 * 0.4 * 35 / fill, 2)
-    fstop = round(fill * (1 + 0.2 / 35), 2)              # its own stop: the screen's -20 % from its own fill (stop_roe)
+    fstop = round(fill * (1 + 0.5 / 35 - 0.00124), 2)    # its own stop: net ROE -50 % at its own costs from its fill
     w.x_open("wooxpro2", key, ETH, -1, e + 3000, fill, fqty, fstop, lev=35)
     w.x_state("wooxpro2", e + MIN, trade={"key": key, "symbol": ETH, "side": -1, "status": "open", "qty": fqty,
                                           "entry_ts": e + 3000, "stop_initial": fstop, "stop": fstop, "stop_algo_id": "w1"})

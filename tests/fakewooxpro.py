@@ -22,7 +22,8 @@ Unknowns of the real exchange are switches:
 - ``placed_cid``: whether the market order a stop placed carries client_order_id "PLAN_<stop id>";
 - ``flat_cancels``: whether resting stops are cancelled when their position closes.
 - ``max_lev``: each contract's max_leverage (SPECS by default); ``brackets``: its leverage risk limit, [(max leverage,
-  notional floor, notional cap)] from the smallest (default: max_lev up to 200,000 USDT, half of it up to 1,000,000);
+  notional floor, notional cap[, maintenance margin ratio, 0.005 if left out])] from the smallest (default: max_lev up
+  to 200,000 USDT at 0.5 %, half of it up to 1,000,000 at 1 %);
   an opening order whose position would pass the cap of the leverage it is set to is refused with 40029 (the docs'
   "The order's leverage is too large."; what the real exchange answers there only a live order shows).
 
@@ -79,7 +80,7 @@ class FakeWooX:
         self.flat_cancels = True
         self.coverage: list = []                   # (call index, symbol, position contracts, covered by a stop)
         self.max_lev = {s: SPECS[s]["lev"] for s in SPECS}
-        self.brackets: dict = {}                   # symbol -> [(max leverage, notional floor, notional cap)]
+        self.brackets: dict = {}                   # symbol -> [(max leverage, notional floor, notional cap[, mmr])]
 
     # ------------------------------------------------------------ helpers for tests
     def now(self):
@@ -254,8 +255,9 @@ class FakeWooX:
             return self._ok({"timestamp": ts, "symbol": q.get("symbol"), "rate_value": "0.0001"})
         if (m, path) == ("GET", "/contract/public/leverage-bracket"):
             s = q["symbol"]
-            rows = [{"bracket": i + 1, "initial_leverage": lv, "notional_floor": str(lo), "notional_cap": str(hi),
-                     "maint_margin_ratio": "0.01", "cum": "0"} for i, (lv, lo, hi) in enumerate(self._brackets(s))]
+            rows = [{"bracket": i + 1, "initial_leverage": b[0], "notional_floor": str(b[1]), "notional_cap": str(b[2]),
+                     "maint_margin_ratio": str(b[3] if len(b) > 3 else 0.005), "cum": "0"}
+                    for i, b in enumerate(self._brackets(s))]
             return self._ok({"rules": [{"symbol": s, "brackets": rows}]})
         if (m, path) == ("GET", "/contract/public/details"):
             rows = [self._detail(s) for s in SPECS if not q.get("symbol") or q["symbol"] == s]
@@ -375,12 +377,12 @@ class FakeWooX:
 
     def _brackets(self, s):
         lev = self.max_lev[s]
-        return self.brackets.get(s) or [(lev, 0, 200_000), (max(1, lev // 2), 200_000, 1_000_000)]
+        return self.brackets.get(s) or [(lev, 0, 200_000, 0.005), (max(1, lev // 2), 200_000, 1_000_000, 0.01)]
 
     def _cap(self, s, lev):
         """The largest position value at ``lev`` (its brackets from the smallest up), 0 when none allows it."""
         cap = 0
-        for lv, _lo, hi in self._brackets(s):
+        for lv, _lo, hi, *_mmr in self._brackets(s):
             if lv < lev:
                 break
             cap = hi

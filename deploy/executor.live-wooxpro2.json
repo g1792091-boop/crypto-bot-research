@@ -10,7 +10,8 @@
   "qty_scale": null,
   "entry_source": "paper",
   "stop_from": "roe",
-  "stop_roe": 0.2,
+  "stop_roe": 0.5,
+  "stop_net": true,
   "signal_light_n": 0,
   "ladder_from": "own",
   "ladder": {
