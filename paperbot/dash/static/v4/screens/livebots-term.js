@@ -10,7 +10,7 @@
 //           손절 주문 of the three accounts
 //   right   이 코인 포지션 and 수익 차트 (terminal-pnl.js: per account, 24시간 / 7일 / 전체, 오늘 수익, 수익 캘린더)
 //   below   the three accounts' LED balance bars, the two signal lights, the executors' WARN / CRITICAL console (the third
-//           executor, 플립스터, its bar, light and console tab too while the server has it: livebots-kit.js execIds)
+//           executor, 딥코인, its bar, light and console tab too while the server has it: livebots-kit.js execIds)
 // HONESTY: what the terminal promised stays true here: every glow answers a real change, nothing moves under reduced motion
 // or on a hidden page, no order buttons; paper money (모의) and real money (실거래) each carry their own caption and are
 // never added together.
@@ -112,7 +112,7 @@ export function termView(ctx, src) {
   const leds = {};
   const cards = h("div", {class: "lb-nowgrid"});
   const lights = h("div", {class: "lb-lgrid"});
-  // the console's tabs: every executor of the summary (the third, 플립스터, while the server has it: rebuilt when it comes)
+  // the console's tabs: every executor of the summary (the third, 딥코인, while the server has it: rebuilt when it comes)
   const conFoot = (ids) => `실행기 ${ids.length > 2 ? "세" : "두"} 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌`;
   const conOf = (ids) => consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, ...ids.map((id) => ({id, label: acctKo(id)}))],
     foot: conFoot(ids), maxHeight: "260px", max: 120});

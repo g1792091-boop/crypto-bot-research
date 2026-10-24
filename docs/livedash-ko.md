@@ -254,19 +254,24 @@ curl -s -o /dev/null -w '%{http_code}\n' http://(Tailscale 주소):8093/login   
 - 관제의 실행기 칸에 "따라감 · 페이퍼 −35% · 규칙봇 15 MEXC −35%", 포지션·거래·다시보기 탭에 두 번째 페이퍼 표가 생겨요.
 - 실행기 설정의 `paper_db`를 바꾸고 아직 다시 켜지 않았으면 안전 탭에 "다시 켜야 적용돼요"라고 나와요.
 
-### 세 번째 실행기 (플립스터, 10/23)
+### 세 번째 실행기 (딥코인, 10/24)
 
-플립스터 실행기는 'VWAP 개선판'을 따라가요(켜는 순서: `docs/flipster-ko.md`). 바이비트 · WOO X Pro 칸은 그대로예요.
+딥코인 실행기는 'VWAP 개선판'을 따라가요(켜는 순서: `docs/deepcoin-ko.md`). 바이비트 · WOO X Pro 칸은 그대로예요.
+(10/23에는 이 자리를 플립스터로 만들었지만, 플립스터 API가 신청해야 열리는 방식이라 10/24 딥코인으로 바꿨어요. 그 설정 파일과
+기록 파일은 서버에 만들어진 적이 없어서 이름만 바뀌었어요. 예전 `paperbot-executor-flipster` 서비스 파일이 서버에 있으면
+`install.sh`가 지워요: 꺼져 있고 자동 시작도 아닐 때만이고, 아니면 그대로 두고 그렇다고 알려 줘요.)
 
-- **언제 보이나**: 서버에 그 설정 파일(`/etc/paperbot/executor-flipster.json`)이나 그 기록 파일
-  (`/var/lib/paperbot/exec/executor-flipster-live.db`) 중 하나라도 있을 때부터예요. 둘 다 없으면 모든 화면이 예전과 똑같이
+- **언제 보이나**: 서버에 그 설정 파일(`/etc/paperbot/executor-deepcoin.json`)이나 그 기록 파일
+  (`/var/lib/paperbot/exec/executor-deepcoin-live.db`) 중 하나라도 있을 때부터예요. 둘 다 없으면 모든 화면이 예전과 똑같이
   실행기 두 개예요. `install.sh`는 이 설정 파일을 만들지 않아요(두 분이 템플릿을 복사할 때 생겨요). 실거래 점검·텔레그램
   (`paperbot/livecheck.py`)도 같은 규칙이에요.
 - **보이면**: 진짜 돈 줄 · 요약 띠 · 한눈에(실행기 셋이면 가운데가 위로, 실행기 칸 셋이 한 줄) · 포지션 · 거래 · 비용 · 안전 ·
-  성적 · VWAP 봇 탭에 **플립스터** 칸이 생겨요. 색은 `--series-fl`(주황 계열), 짧은 글자는 **F**.
-- **수수료**: 플립스터 문서에 정해진 요율이 없어서 비용 탭의 요율은 **모름**이에요(드릴이 실제 수수료를 재요). 아침 점검의
-  "가정" 요율은 그때까지 0.06%예요.
-- 경로를 바꿀 때만 `dash.env`에 `PAPERBOT_LIVE_FLIPSTER_DB`, `PAPERBOT_LIVE_FLIPSTER_CONFIG`를 적어요.
+  성적 · VWAP 봇 탭에 **딥코인** 칸이 생겨요. 칸 이름은 그 설정의 거래소(`"exchange": "deepcoin"`)에서 와요. 색은
+  `--series-dc`(주황 계열), 짧은 글자는 **D**.
+- **수수료**: 딥코인 API 문서에서 요율은 요율 조회(`GET /deepcoin/account/trade-fee`) 응답 예시(Lv1)에만 나와요: 시장가
+  0.05% · 지정가 0.02%. 비용 탭의 거래소 요율과 아침 점검의 "가정" 요율(0.05%)은 그 숫자이고, 두 분 계정의 실제 요율과
+  수수료는 드릴이 재요. 페이백 앱 환급은 봇 밖에서 나중에 들어와요.
+- 경로를 바꿀 때만 `dash.env`에 `PAPERBOT_LIVE_DEEPCOIN_DB`, `PAPERBOT_LIVE_DEEPCOIN_CONFIG`를 적어요.
 
 ### 비용 탭에 더한 것
 

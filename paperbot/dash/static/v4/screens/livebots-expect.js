@@ -234,7 +234,7 @@ export function expectView(ctx) {
     hsub.textContent = "새 규칙이 재현(가상)처럼 가고 있나요? · 핵심은 아래 비용 쪼개기";
     const ref = d.ref || {};
     const w = ref.window_kst || [];
-    const rx = (d.results || {}).execs || [];               // (the third executor, 플립스터, while the server has it)
+    const rx = (d.results || {}).execs || [];               // (the third executor, 딥코인, while the server has it)
     put(win, ui.pill("가상(재현)", "warn"), ` ${w[0] || "—"} ~ ${w[1] || "—"} (한국 시간) · 바이낸스 1분봉으로 규칙 그대로 다시 돌린 결과   `,
       ui.pill("실제", "accent"), ` 새 규칙 시작 ${fmt.kst(d.since)} 뒤 · 페이퍼와 ${rx.length > 2 ? "세" : "두"} 실행기${rx.some((x) => x.era) ? " (추세판단 봇을 따라간 거래만)" : ""}`);
     put(tiles, accounts().map((a) => {

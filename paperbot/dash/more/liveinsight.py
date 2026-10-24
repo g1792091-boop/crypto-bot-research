@@ -1624,7 +1624,7 @@ def _live_risk(x: dict) -> dict:
 
 def kill_state(cx: dict) -> dict:
     """The kill file every executor config names (one file stops them all), whether it is there now, the command; "세
-    실행기" once the third (플립스터) is installed (livebots.installed), else "두 실행기" as before."""
+    실행기" once the third (딥코인) is installed (livebots.installed), else "두 실행기" as before."""
     paths = sorted({(c.get("kill_file") or {}).get("path") for c in cx["configs"].values() if c.get("state") == "ok" and c.get("kill_file")} - {None})
     items = []
     for path in paths or [DEFAULT_KILL]:

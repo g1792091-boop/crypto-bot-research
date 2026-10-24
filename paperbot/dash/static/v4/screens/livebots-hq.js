@@ -33,7 +33,7 @@
 // hidden page or under reduced motion.
 // The geometry and the rules (ring segments, gauge angles, dial arcs, tile brightness, DAY n, ×, milestones, the cards'
 // numbers, the countdown) are exported pure functions (tests/test_dash_livebots_hq.py runs them in node).
-// The third executor (플립스터, owners 10/23) gets its own reactor, ticker item and gauge row while the server has it
+// The third executor (딥코인, owners 10/24) gets its own reactor, ticker item and gauge row while the server has it
 // (livebots-kit.js execIds): the deck then puts the centre on top and the three reactors in a row; else as before.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
@@ -409,7 +409,7 @@ export function freshMilestones(before, reached, seen, firstWinAt = null, now = 
     : k === "win1" && firstWinAt != null && now - firstWinAt <= recentMs && firstWinAt <= now + 60000));
 }
 
-/** The last closed trade for the result card: the newest live exit (바이비트 / MEXC / 플립스터), else the paper's (labelled), with its
+/** The last closed trade for the result card: the newest live exit (바이비트 / MEXC / 딥코인), else the paper's (labelled), with its
  *  entry (the same trade's entry fill): {exit, entry, paper} or null. */
 export function lastClosed(fills) {
   const xs = (fills || []).filter((f) => f && f.kind === "exit" && f.t != null).sort((a, b) => b.t - a.t);
@@ -1088,7 +1088,7 @@ export function hqView(ctx, hub) {
   const sideBot = side(sideBotKo(undefined));             // the paper bot's name from the first summary on (drawBot)
   const [first, ...rest] = execsNow();                // the first reactor · the centre · the others (as before: 바이비트 · WOO X Pro)
   const deck = h("div", {class: "lbh-deck"}, R[first].el, center, ...rest.map((id) => R[id].el));
-  /** The reactors of the summary's executors: the third (플립스터) is added after the others when it comes; with three the
+  /** The reactors of the summary's executors: the third (딥코인) is added after the others when it comes; with three the
    *  deck puts the centre on top and the reactors in a row (livebots-hq.css .lbh-deck.three). */
   function addReactors(ids) {
     for (const id of ids) {

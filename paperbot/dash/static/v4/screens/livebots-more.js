@@ -14,7 +14,7 @@
 //           its fixed rules from its own config with its entry gates and hold limit in the owners' words (the server's
 //           rules.gates), its settings, who follows it; each executor's card says which paper bot it follows.
 import {h, put, ui, fmt, motion} from "../core/pb.js";
-import {sourceState} from "./livebots-kit.js";
+import {josa, sourceState} from "./livebots-kit.js";
 export {shadowsView, twoLines} from "./livebots-shadow.js";
 
 const REFRESH_MS = 60 * 1000;
@@ -139,7 +139,7 @@ export function settingsView(ctx) {
   }
   /** A second paper bot's card (owners 10/23): its rules, gates and hold limit, its settings (never the trend bot's roles). */
   function botCard(b) {
-    const who = (b.followers || []).length ? `${b.followers.join(" · ")}가 따라가요` : "따라가는 실행기 없음";
+    const who = (b.followers || []).length ? `${josa(b.followers.join(" · "), "이", "가")} 따라가요` : "따라가는 실행기 없음";
     const c = b.combo || {};
     return ui.card({title: `${b.short_ko || "두 번째 페이퍼 봇"} 규칙`, sub: `두 번째 페이퍼(연습) 봇 · ${who}`, cls: "lb-rulecard lb-botcard"},
       c.state !== "ok" ? sourceState(c, `${b.short_ko || "두 번째"} 봇 설정`) : [

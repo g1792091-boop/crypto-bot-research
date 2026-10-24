@@ -10,7 +10,7 @@
 # lost for good), the order executor's records (exec/executor.db for mainnet, exec/executor-testnet.db: its
 # trades, fills, halts and open-position state; copied as executor.db / executor-testnet.db; the live Bybit and MEXC
 # executors' exec/executor-bybit-live.db, exec/executor-mexc-live.db and exec/executor-wooxpro-live.db (owners 10-20), the
-# Flipster executor's exec/executor-flipster-live.db (owners 10-23; skipped while it is not there) and the live
+# DeepCoin executor's exec/executor-deepcoin-live.db (owners 10-24; skipped while it is not there) and the live
 # paper bots' combo/live-ac.db, combo/live15-mexc.db and combo/vwap.db (10-23), the live checks' livecheck.db and the owners' improvement ledger liveimprove.db
 # since 10-19), the debate room's
 # debate/debate.db (rounds, graded claims, the paid-API spend counter; group paperbot reads it), then daily3.db
@@ -27,7 +27,7 @@ mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
 # keep this list the same as DB_NAMES in paperbot/offsite.py (tests/test_offsite.py checks it)
-for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live exec/executor-mexc-live exec/executor-wooxpro-live exec/executor-flipster-live combo/live-ac combo/live15-mexc combo/vwap livecheck liveimprove shadow200/shadow200 debate/debate daily3 paper3; do
+for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live exec/executor-mexc-live exec/executor-wooxpro-live exec/executor-deepcoin-live combo/live-ac combo/live15-mexc combo/vwap livecheck liveimprove shadow200/shadow200 debate/debate daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
   n=$(basename "$f")

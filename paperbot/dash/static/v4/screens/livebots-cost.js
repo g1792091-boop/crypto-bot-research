@@ -209,7 +209,7 @@ export function costView(ctx) {
   const stateSlot = h("div", {class: "lb-slot"});
   const paperSlot = h("div", {class: "lb-slot"});
   const cards = h("div", {class: "lbk-cards"});
-  // the executors of the answer (the third, 플립스터, while the server has it: the switch is rebuilt in place, draw)
+  // the executors of the answer (the third, 딥코인, while the server has it: the switch is rebuilt in place, draw)
   const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(st.acct) ? st.acct : "bybit",
     (id) => { st.acct = id; local.set("lbk-acct", id); drawList(true); }, {label: "실행기 고르기"});
   let seg = segOf(st.ex);

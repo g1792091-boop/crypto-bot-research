@@ -11,8 +11,8 @@
     python -m paperbot.livecheck preview --vwap   two different paper bots (docs/vwap-bot-ko.md): the 추세판단 봇 and
                                                   'VWAP 개선판' ITSELF (VwapBot: the real bot on deploy/combo.vwap.json),
                                                   paper-only first, then Bybit follows it and WOO X Pro the trend bot
-    python -m paperbot.livecheck preview --flipster  three executors (docs/flipster-ko.md): Bybit and WOO X Pro follow the
-                                                  추세판단 봇, the third, 플립스터, follows 'VWAP 개선판' ITSELF: its
+    python -m paperbot.livecheck preview --deepcoin  three executors (docs/deepcoin-ko.md): Bybit and WOO X Pro follow the
+                                                  추세판단 봇, the third, 딥코인, follows 'VWAP 개선판' ITSELF: its
                                                   start, one minute both bots enter, both win, the morning check
 
 It writes small databases in the real schemas into a temporary folder (the paper bot's paperbot.store3, the rule
@@ -117,7 +117,7 @@ NO_TG = {"base": None, "over": None, "over_exists": False, "over_mtime": None}
 class World:
     """One paper bot, the rule bot's bars, two executors (Bybit $100, MEXC $100) as ``prof`` sets them up: 규칙봇 15 (no
     light, no loss-streak or drawdown halt) or the A+C bot (light 20 / 85% and 20 / 90%, 3 losses, 50%). ``three``: the
-    third executor too (플립스터 $100, owners 10-23: its own config and database, the VWAP bot's light 20 / 75 %; the
+    third executor too (딥코인 $100, owners 10-24: its own config and database, the VWAP bot's light 20 / 75 %; the
     scene points it at its paper bot)."""
 
     def __init__(self, root: str, prof: Profile = None, three: bool = False):
@@ -127,7 +127,7 @@ class World:
         self.rule = os.path.join(root, "paper3.db")
         self.dbs = {"bybit": os.path.join(root, "bybit.db"), "mexc": os.path.join(root, "mexc.db")}
         if three:
-            self.dbs["flipster"] = os.path.join(root, "flipster.db")
+            self.dbs["deepcoin"] = os.path.join(root, "deepcoin.db")
         for p in self.dbs.values():
             c = sqlite3.connect(p)
             c.executescript(EXEC_SCHEMA)
@@ -146,8 +146,8 @@ class World:
                                   kill_file=kill, max_dd=prof.dd, max_streak=prof.streak,
                                   max_loss=0.35)]
         if three:
-            self.infos.append(LC.ExecInfo("flipster", "/etc/paperbot/executor-flipster.json", "paperbot-executor-flipster",
-                                          self.dbs["flipster"], 20, 0.75, exchange="flipster", budget=100.0,
+            self.infos.append(LC.ExecInfo("deepcoin", "/etc/paperbot/executor-deepcoin.json", "paperbot-executor-deepcoin",
+                                          self.dbs["deepcoin"], 20, 0.75, exchange="deepcoin", budget=100.0,
                                           kill_file=kill, max_loss=0.2))
 
     def src(self) -> LC.Sources:
@@ -432,8 +432,8 @@ def scenes(world: str = "live15") -> list:
             out += _two_paper_scene(os.path.join(tmp, "m"))
         elif world == "vwap":
             out += _vwap_scene(os.path.join(tmp, "v"))
-        elif world == "flipster":
-            out += _flipster_scene(os.path.join(tmp, "f"))
+        elif world == "deepcoin":
+            out += _deepcoin_scene(os.path.join(tmp, "d"))
         elif world == "ac":
             out += _trade_scene(os.path.join(tmp, "a"))
             out += _pause_scene(os.path.join(tmp, "p"), AC)
@@ -949,10 +949,10 @@ def _vwap_scene(path: str) -> list:
     return out
 
 
-def _flipster_scene(path: str) -> list:
-    """Three executors (owners 10-23, docs/flipster-ko.md): 바이비트 and WOO X Pro follow the 추세판단 봇 (deploy/combo.trend.json,
-    the main paper), the third, 플립스터, follows 'VWAP 개선판' itself (VwapBot: the real bot on its own config). 플립스터
-    starts on the VWAP bot (▶️), one minute both bots enter BTC (two 🟢: the VWAP one with 플립스터 alone, the trend one with
+def _deepcoin_scene(path: str) -> list:
+    """Three executors (owners 10-24, docs/deepcoin-ko.md): 바이비트 and WOO X Pro follow the 추세판단 봇 (deploy/combo.trend.json,
+    the main paper), the third, 딥코인, follows 'VWAP 개선판' itself (VwapBot: the real bot on its own config). 딥코인
+    starts on the VWAP bot (▶️), one minute both bots enter BTC (two 🟢: the VWAP one with 딥코인 alone, the trend one with
     바이비트 and WOO X Pro), both win (✅, each with its own executors) and the morning check has the three executors."""
     w = _mk(path, TREND, three=True)
     out = []
@@ -981,20 +981,20 @@ def _flipster_scene(path: str) -> list:
         vb.move(sym, b + 55 * MIN, vb.price(sym, b + 55 * MIN))
         vb.run_to(b + 55 * MIN)
     _history(w, T0, 18, losses_at=(6, 14))
-    for name in ("bybit", "mexc", "flipster"):
+    for name in ("bybit", "mexc", "deepcoin"):
         w.x_state(name, T0 - 3 * H1)
     for name in ("bybit", "mexc"):                        # the two follow the trend bot as before
         w.x_event(name, T0 - 2 * DAY, "start", "시작", {"paper_db": w.paper})
     vb.run_to(T0 - 2 * H1)
     w.tick(T0 - 2 * H1, bars=False)
     w.watch(T0 - 2 * H1)                                 # the first look: the VWAP bot's file is new, nothing of it is sent
-    # ▶️ 플립스터 started on the VWAP bot (its config: deploy/executor.live-flipster.json, vwap.db)
+    # ▶️ 딥코인 started on the VWAP bot (its config: deploy/executor.live-deepcoin.json, vwap.db)
     w.infos[2].paper_db = vpath
-    w.x_event("flipster", T0 - 30 * MIN, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {vpath})", {"paper_db": vpath})
+    w.x_event("deepcoin", T0 - 30 * MIN, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {vpath})", {"paper_db": vpath})
     vb.run_to(T0 - 29 * MIN)
     w.tick(T0 - 29 * MIN, bars=False)
-    out += [("▶️ 실행기 켜짐 (플립스터 · VWAP 개선판)", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
-    # 🟢 🟢 the same minute, the same coin, two bots: the VWAP one with 플립스터, the trend one with 바이비트 and WOO X Pro
+    out += [("▶️ 실행기 켜짐 (딥코인 · VWAP 개선판)", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
+    # 🟢 🟢 the same minute, the same coin, two bots: the VWAP one with 딥코인, the trend one with 바이비트 and WOO X Pro
     vb.run_to(T0)
     p0 = vb.price(BTC, T0)
     vb.signal("F6_VWAP_FAIL", BTC, 1, T0)
@@ -1004,9 +1004,9 @@ def _flipster_scene(path: str) -> list:
     ffill = round(vp.entry_price * 1.0003, 1)
     fqty = round(107.87 * 0.4 * 30 / ffill, 4)
     fstop = round(ffill * vp.stop_price / vp.entry_price, 1)
-    w.x_open("flipster", key, BTC, 1, T0 + 3000, ffill, fqty, fstop, lev=30)
-    w.x_state("flipster", T0 + MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": fqty,
-                                           "entry_ts": T0 + 3000, "stop_initial": fstop, "stop": fstop, "stop_algo_id": "f1"})
+    w.x_open("deepcoin", key, BTC, 1, T0 + 3000, ffill, fqty, fstop, lev=30)
+    w.x_state("deepcoin", T0 + MIN, trade={"key": key, "symbol": BTC, "side": 1, "status": "open", "qty": fqty,
+                                           "entry_ts": T0 + 3000, "stop_initial": fstop, "stop": fstop, "stop_algo_id": "d1"})
     tstop = round(p0 * (1 - 0.0111), 1)
     w.open_position(T0, symbol=BTC, price=p0, stop=tstop, strat=TREND.main, lev=40)
     fills = {"bybit": round(p0 * 1.0002, 1), "mexc": round(p0 * 1.0003, 1)}
@@ -1017,16 +1017,16 @@ def _flipster_scene(path: str) -> list:
                                          "entry_ts": T0 + 4000, "stop_initial": stop, "stop": stop, "stop_algo_id": name[0] + "1"})
     w.tick(T0 + MIN, bars=False)
     out += [("🟢 진입 (같은 분 두 봇 · 실행기 셋)", lv, t) for lv, t in w.watch(T0 + MIN)]
-    # ✅ the VWAP bot's lock and exit: 플립스터 closes with it
+    # ✅ the VWAP bot's lock and exit: 딥코인 closes with it
     vb.move(BTC, T0 + 20 * MIN, p0 * 1.007)
     vb.move(BTC, T0 + 40 * MIN, p0 * 1.004)
     vb.move(BTC, T0 + 50 * MIN, p0 * 1.004)
     vb.run_to(T0 + 50 * MIN)
     vt = vb.engine().trades[-1]
-    feq = round(107.87 + live_close(w, "flipster", key, vt, ffill, fqty, fee=LC.ASSUMED_FEE["flipster"]), 2)
-    w.x_state("flipster", T0 + 50 * MIN, trade=None, last_equity=feq, peak_equity=feq)
+    feq = round(107.87 + live_close(w, "deepcoin", key, vt, ffill, fqty, fee=LC.ASSUMED_FEE["deepcoin"]), 2)
+    w.x_state("deepcoin", T0 + 50 * MIN, trade=None, last_equity=feq, peak_equity=feq)
     w.tick(T0 + 50 * MIN, bars=False)
-    out += [("✅ 청산 (VWAP · 플립스터)", lv, t) for lv, t in w.watch(T0 + 50 * MIN)]
+    out += [("✅ 청산 (VWAP · 딥코인)", lv, t) for lv, t in w.watch(T0 + 50 * MIN)]
     # ✅ the trend bot's own win: 바이비트 and WOO X Pro close with it
     x = T0 + 2 * H1
     w.position = None
@@ -1040,7 +1040,7 @@ def _flipster_scene(path: str) -> list:
     out += [("✅ 청산 (추세판단 봇 · 바이비트 · WOO X Pro)", lv, t) for lv, t in w.watch(x + 2 * MIN)]
     # 📋 the morning check of Tuesday 10/20 09:00 ~ Wednesday 09:00: the three executors, each with its own paper bot
     w0, w1 = LC.window_of("2026-10-20")
-    for name, eq in (("bybit", 108.9), ("mexc", 108.9), ("flipster", feq)):
+    for name, eq in (("bybit", 108.9), ("mexc", 108.9), ("deepcoin", feq)):
         w.x_equity(name, w1 - MIN, eq)
     vb.run_to(w1 + 9 * MIN)
     w.tick(w1 + 9 * MIN, bars=False)

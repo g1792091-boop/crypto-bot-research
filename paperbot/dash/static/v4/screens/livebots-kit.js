@@ -2,7 +2,7 @@
 // dash/more/livebots.py); a source that is not there yet says 수집 전, one that could not be read says 못 읽음 with its reason
 // (never a zero). The three accounts: 페이퍼 (COMBO@mix, 모의 · the one both executors follow: 추세판단 봇 from 10/21, A+C
 // 합본 before; paperBotKo), 바이비트 and MEXC (실거래, real money). Captions: paper money carries the shared paper captions
-// (ui.ASSUME_*), real money ui.ASSUME_LIVE_KO. The executor slots of a page: execIds / execsNow (the third, 플립스터, only
+// (ui.ASSUME_*), real money ui.ASSUME_LIVE_KO. The executor slots of a page: execIds / execsNow (the third, 딥코인, only
 // while the server has it installed; else the two as before).
 import {h, ui, fmt, serverNow, bus} from "../core/pb.js";
 import {lightWords, lightCells, roeAt, netRoe} from "./livebots-calc.js";
@@ -15,13 +15,13 @@ export const ACCT = {
   mexc: {ko: "WOO X Pro", s: "W", tip: "WOO X Pro 실행기 (실거래 · 진짜 돈)"},
   // the second paper bot (owners 10/19, docs/live15-mexc-ko.md): only on the page while there is one (the summary's papers)
   paper2: {ko: "페이퍼 2(연습)", s: "P2", tip: "두 번째 페이퍼(연습) 봇 (모의 돈)"},
-  // the third executor (owners 10/23, docs/flipster-ko.md: it follows the VWAP 개선판): only on the page while the server has
+  // the third executor (owners 10/24, docs/deepcoin-ko.md: it follows the VWAP 개선판): only on the page while the server has
   // it installed (execIds)
-  flipster: {ko: "플립스터", s: "F", tip: "플립스터 실행기 (실거래 · 진짜 돈)"},
+  deepcoin: {ko: "딥코인", s: "D", tip: "딥코인 실행기 (실거래 · 진짜 돈)"},
 };
 /** Every executor slot the page knows, in the server's order (dash/more/livebots.py ALL_EXECS). Which of them a server has
- *  (livebots.installed: the third, 플립스터, once its config file or its database is there): execIds / execsNow. */
-export const EXEC_SLOTS = ["bybit", "mexc", "flipster"];
+ *  (livebots.installed: the third, 딥코인, once its config file or its database is there): execIds / execsNow. */
+export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin"];
 const EXECS0 = ["bybit", "mexc"];
 let EXECS_NOW = EXECS0, execsKey = EXECS0.join();
 /** The executor ids of the last summary (setExecs); the two before the first one. */
@@ -46,7 +46,7 @@ export function execIds(d) {
   const ids = have ? EXEC_SLOTS.filter((id) => have.includes(id)) : [];
   return ids.length ? ids : EXECS_NOW;
 }
-/** The executors' names in one line ("바이비트 · WOO X Pro", "… · 플립스터"). */
+/** The executors' names in one line ("바이비트 · WOO X Pro", "… · 딥코인"). */
 export const execsKo = (ids = EXECS_NOW, sep = " · ") => ids.map((id) => acctKo(id)).join(sep);
 /** "두 실행기가 따라가는" (with the third installed "세 실행기가 따라가는"): who follows the one paper bot. */
 export const allFollowKo = () => `${EXECS_NOW.length > 2 ? "세" : "두"} 실행기가 따라가는`;
@@ -62,7 +62,7 @@ export function mainFollowKo() {
   if (!PAPERS) return null;
   const b = PAPERS.find((x) => x.id === "paper") || {};
   const f = b.followers || [];
-  return f.length ? `${f.join(" · ")}가 따라가는` : "따라가는 실행기 없는";
+  return f.length ? `${josa(f.join(" · "), "이", "가")} 따라가는` : "따라가는 실행기 없는";
 }
 /**
  * Two paper bots (the summary's ``papers``, null with one): each paper account takes its bot's name (short_ko: "추세판단 봇",
@@ -81,7 +81,7 @@ export function setPapers(papers) {
     if (!ACCT[b.id]) continue;
     const short = b.short_ko || (b.label_ko || "").split(" (")[0] || ACCT0[b.id].ko;
     ACCT[b.id].ko = short;
-    const who = (b.followers || []).length ? `${b.followers.join("·")}가 따라감` : "따라가는 실행기 없음";
+    const who = (b.followers || []).length ? `${josa(b.followers.join("·"), "이", "가")} 따라감` : "따라가는 실행기 없음";
     ACCT[b.id].tip = `${short} 페이퍼(연습)${b.name && b.name !== short ? ` ${b.name}` : ""}${b.stop_ko ? ` · 손절 ${b.stop_ko}` : ""} · ${who}`;
   }
 }
@@ -102,6 +102,12 @@ export function josaObj(w) {
   if (/[0-9]/.test(c)) return "013678".includes(c) ? "을" : "를";
   return "를";
 }
+/** A name with the particle its last sound takes, by the same rule (the server's livepapers.josa): josa("딥코인", "이",
+ *  "가") "딥코인이", "바이비트가", "WOO X Pro가" (a Latin name: the form without). */
+export const josa = (w, withFinal, without) => {
+  const t = String(w || "").trim();
+  return t && t + (josaObj(t) === "을" ? withFinal : without);
+};
 /** An executor's own light in one line ("근거 쌓는 중 6/20 · 기준: 최근 20번 중 75% 이상 (15번 이상 이김)"): the 목표
  *  card of an executor on the other paper bot (its config's light, not the trend bot's). */
 export function lightLine(l) {
@@ -115,8 +121,8 @@ export function eraWords(name, era) {
   if (!era) return null;
   const bot = era.other_ko || "다른 페이퍼 봇";
   const n = era.other_n ? ` · 그 봇 거래 ${fmt.int(era.other_n)}번은 여기 안 셈` : "";
-  return era.now_other ? `${name}는 ${era.since != null ? `${fmt.kst(era.since)}부터 ` : ""}${bot}${josaObj(bot)} 따라가요${n}`
-    : `${name}는 한때 ${bot}${josaObj(bot)} 따라갔어요${n}`;
+  return era.now_other ? `${josa(name, "은", "는")} ${era.since != null ? `${fmt.kst(era.since)}부터 ` : ""}${bot}${josaObj(bot)} 따라가요${n}`
+    : `${josa(name, "은", "는")} 한때 ${bot}${josaObj(bot)} 따라갔어요${n}`;
 }
 /** The paper bot's name where a page labels it (tb: the server's trend_bot): the 추세판단 봇's own name, else the paper's
  *  own config name (name: the summary's paper.name_ko), else the old label 'A+C 합본' as before. */
@@ -135,7 +141,7 @@ function realOf(a) {
 
 /**
  * The thin real-money strip over every 실거래 tab (owners 10/19): '진짜 돈 · 바이비트 $X · MEXC $Y · 포지션 n/1·n/1 · 보기만
- * 하는 화면(주문 버튼 없음)' (플립스터 $Z too while the server has it). d: the summary answer (/api/v4/livebots), null before
+ * 하는 화면(주문 버튼 없음)' (딥코인 $Z too while the server has it). d: the summary answer (/api/v4/livebots), null before
  * the first one (dashes, never a zero).
  */
 export function realLine(d) {
@@ -260,7 +266,7 @@ export function acctLed(a, led) {
 export function acctCard(a, led, notes) {
   // two paper bots (owners 10/23): the title is the bot's name already, so the sub says what it is and who follows it
   const pb = a.kind === "paper" && PAPERS ? PAPERS.find((b) => b.id === a.id) : null;
-  const o = {title: acctKo(a.id), sub: pb ? `페이퍼(연습) · ${(pb.followers || []).length ? `${pb.followers.join("·")}가 따라감` : "따라가는 실행기 없음"} · 모의`
+  const o = {title: acctKo(a.id), sub: pb ? `페이퍼(연습) · ${(pb.followers || []).length ? `${josa(pb.followers.join("·"), "이", "가")} 따라감` : "따라가는 실행기 없음"} · 모의`
     : a.kind === "paper" ? `${a.sub_ko || paperBotKo(null)} · 모의` : a.sub_ko || "실행기", cls: "lb-now"};
   if (a.kind === "live" && a.follows_ko) o.sub = `${o.sub} · ${a.follows_ko} 따라감`;       // two paper bots: which one it follows
   if (a.state !== "ok") return ui.card(o, sourceState(a, a.kind === "paper" ? "페이퍼 DB" : `${acctKo(a.id)} 실행기 DB`), notesEl(notes));

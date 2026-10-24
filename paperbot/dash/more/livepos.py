@@ -55,11 +55,12 @@ ENGINE_KO = "엔진 기록 (페이퍼 엔진이 1분봉 고가·저가로 따라
 EXEC_LIQ_KO = "실행기 기록에 청산가가 없어요 (거래소 앱에서 확인)"
 FLIP_KO = "동전 쌍둥이 (참고): 같은 순간 같은 신호에 방향만 무작위로 들어가는 비교용 페이퍼"
 EXEC_COST_KO = "순ROE는 페이퍼 비용(수수료·슬리피지 왕복) 가정, 펀딩 뺌"
-EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro", "flipster": "플립스터"}
+EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro", "deepcoin": "딥코인",
+         "flipster": "플립스터"}                         # Flipster: the third slot's exchange of 10-23, still one the executor runs
 OWN_KO = "거래소 기준"
 OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 이 거래소의 1분봉 고가·저가 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)"
-# the third executor (플립스터) has a card only once it is installed (livebots.installed: sources() reads it then)
-CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("flipster", None), ("flip", L.FLIP_ACCOUNT))
+# the third executor (딥코인) has a card only once it is installed (livebots.installed: sources() reads it then)
+CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("flip", L.FLIP_ACCOUNT))
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()
@@ -345,7 +346,7 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
             continue
         if bot and not L.LP.same(x.get("paper_path"), bot["path"]):
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "other",
-                          "reason_ko": f"{x['name_ko']}는 다른 페이퍼({x.get('follows_ko') or '다른 페이퍼'})를 따라가요"})
+                          "reason_ko": f"{L.josa(x['name_ko'], '은', '는')} 다른 페이퍼({x.get('follows_ko') or '다른 페이퍼'})를 따라가요"})
         elif xp and xp.get("key") == pos.get("key"):
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "following", **(_gap(pos, xp) or {})})
         else:

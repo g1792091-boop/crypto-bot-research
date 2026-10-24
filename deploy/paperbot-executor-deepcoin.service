@@ -1,0 +1,46 @@
+# The third order executor, DeepCoin (owners 10-24, docs/deepcoin-ko.md: "그냥 다른거래소 쓸래"; on 10-23 this slot was
+# planned for Flipster, whose API turned out to open only on request): the same program, sandbox and user as
+# paperbot-executor.service, its own config /etc/paperbot/executor-deepcoin.json ("exchange": "deepcoin", made by the
+# owners from deploy/executor.live-deepcoin.json; install.sh never writes it) and its own database
+# /var/lib/paperbot/exec/executor-deepcoin-live.db. It runs the DeepCoin executor following the 'VWAP 개선판' paper bot
+# (/var/lib/paperbot/combo/vwap.db, account COMBO@mix); the other two executors stay as they are. Mainnet only (DeepCoin
+# has no testnet). Its keys (DEEPCOIN_LIVE_KEY, DEEPCOIN_LIVE_SECRET, DEEPCOIN_LIVE_PASSPHRASE) are in the same root-only
+# key file. Everything below the header of paperbot-executor.service applies unchanged: own user paperbot-exec,
+# root-only key file, exit 2 = a gate refused (not restarted), SIGTERM lets the loop in progress finish.
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it, after the drill and the config:
+#   sudo systemctl start paperbot-executor-deepcoin    (and `enable` only after the first days went as expected)
+[Unit]
+Description=paperbot order executor 3 (DeepCoin; mainnet: every gate must pass)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot-exec
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor-deepcoin.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+# Real money first (owners 2026-10-19: the live bots share the server with the experiments): in a server-wide
+# memory shortage the kernel kills experiments long before the executors (the shadows have +500).
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env
+# no core dump (it would hold the keys)
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

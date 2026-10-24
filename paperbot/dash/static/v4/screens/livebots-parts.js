@@ -6,8 +6,8 @@
 //   tablePanel   the bottom table: 포지션 / 체결 / 손절 주문 of the three accounts (계좌 filter, 롱·숏 bar, 실거래 미실현 합계)
 // HONESTY: every number is the server's (dash/more/livebots.py) or the mark of the dashboard's own ticker; an account that
 // could not be read says 못 읽음 (never 0 or '포지션 없음'); a row lights only when it really arrived after the first look;
-// paper money (모의) and real money (실거래) are never added together; no order buttons. The third executor (플립스터, owners
-// 10/23) has its chip, rows and choice too while the server has it (livebots-kit.js execIds); else the two as before.
+// paper money (모의) and real money (실거래) are never added together; no order buttons. The third executor (딥코인, owners
+// 10/24) has its chip, rows and choice too while the server has it (livebots-kit.js execIds); else the two as before.
 import {h, put, ui, fmt, store, motion, local} from "../core/pb.js";
 import {panel, ratioBar, ping, ageCell} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";

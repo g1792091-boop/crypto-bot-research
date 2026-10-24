@@ -12,7 +12,7 @@
 .lbh .up { color: var(--up); } .lbh .down { color: var(--down); } .lbh .warn { color: var(--warn); } .lbh .muted { color: var(--muted); }
 .lbh-x-bybit { --rc: var(--series-core); }
 .lbh-x-mexc { --rc: var(--series-m5); }
-.lbh-x-flipster { --rc: var(--series-fl); }
+.lbh-x-deepcoin { --rc: var(--series-dc); }
 .lbh-x-paper { --rc: var(--series-coin); }
 .lbh .sw { display: inline-block; flex: none; width: 4px; height: 12px; border-radius: 2px; background: var(--rc); vertical-align: -1px; }
 .lbh-real { display: inline-flex; align-items: center; flex: none; padding: 0 7px; border-radius: 999px; border: 1px solid var(--warn-line); background: var(--warn-soft);
@@ -88,7 +88,7 @@
   .lbh-deck { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; }
   .lbh-center { grid-column: auto; order: 0; }
 }
-/* three executors (the third, 플립스터, only while the server has it): the centre on top, the reactors in a row; a phone
+/* three executors (the third, 딥코인, only while the server has it): the centre on top, the reactors in a row; a phone
    keeps two a row and the third across */
 .lbh-deck.three > .lbh-reactor:last-child { grid-column: 1 / -1; }
 @media (min-width: 900px) {

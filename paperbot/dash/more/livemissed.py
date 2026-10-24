@@ -197,7 +197,7 @@ def plain(p: dict, now: int, span: str, group: str, bots: list, b: dict, execs: 
             if w.get("state") != "missed":
                 continue
             rows.append({"t": t.get("entry_time"), "tf": t.get("timeframe"), "member": None, "strategy": t.get("strategy_id"),
-                         "symbol": t.get("symbol"), "side": t.get("side"), "grp": "exec", "grp_ko": f"{x['name_ko']}가 안 따라감",
+                         "symbol": t.get("symbol"), "side": t.get("side"), "grp": "exec", "grp_ko": f"{L.josa(x['name_ko'], '이', '가')} 안 따라감",
                          "why": w.get("why_ko"), "why_ko": w.get("why_ko"), "gates_ko": None, "state": "closed", "roe": t.get("roe"),
                          "pnl": t.get("pnl"), "win": (t.get("pnl") or 0) > 0, "reason_ko": L.exit_words(t.get("exit_reason"), cfg, t.get("exit_why")),
                          "ex": x["id"]})

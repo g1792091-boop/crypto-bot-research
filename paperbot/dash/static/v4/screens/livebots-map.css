@@ -5,11 +5,11 @@
 .lbm-a-paper { --lbm-c: var(--series-coin); }
 .lbm-a-bybit { --lbm-c: var(--series-core); }
 .lbm-a-mexc { --lbm-c: var(--series-m5); }
-.lbm-a-flipster { --lbm-c: var(--series-fl); }
+.lbm-a-deepcoin { --lbm-c: var(--series-dc); }
 .lbm-l-paper { color: var(--series-coin); }
 .lbm-l-bybit { color: var(--series-core); }
 .lbm-l-mexc { color: var(--series-m5); }
-.lbm-l-flipster { color: var(--series-fl); }
+.lbm-l-deepcoin { color: var(--series-dc); }
 .lbm-a-paper2 { --lbm-c: var(--series-ds); }        /* the second paper bot (only while the server sends it) */
 .lbm-l-paper2 { color: var(--series-ds); }
 

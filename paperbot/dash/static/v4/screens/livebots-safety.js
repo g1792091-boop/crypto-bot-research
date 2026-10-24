@@ -5,7 +5,7 @@
 // them the live checks (livebots-checks.js, livecheck.db): 아침 점검 of the last 14 days and the watcher's 감시 알람.
 // HONESTY: the executors' own records only; an executor that could not be read says 못 읽음 and why; the page changes
 // nothing (no 'clear halt' button: that stays a command on the server, with a name and a note). The third executor
-// (플립스터, owners 10/23) has its card and its log choice while the server has it (livebots-kit.js execIds).
+// (딥코인, owners 10/24) has its card and its log choice while the server has it (livebots-kit.js execIds).
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
 import {lightRow, sourceState, notesEl, acctKo, execIds, execsNow, execsKo} from "./livebots-kit.js";
 import {checksView} from "./livebots-checks.js";
@@ -17,7 +17,7 @@ export function safetyView(ctx) {
   const st = {d: null, okAt: 0, ex: local.get("lb-sex", "all")};
   const stateSlot = h("div", {class: "lb-slot"});
   const cards = h("div", {class: "lb-safe"});
-  // the log's choice: every executor of the answer (rebuilt in place when the third, 플립스터, comes: draw)
+  // the log's choice: every executor of the answer (rebuilt in place when the third, 딥코인, comes: draw)
   const segOf = (ids) => ui.seg([{id: "all", label: "전부"}, ...ids.map((id) => ({id, label: acctKo(id)}))], st.ex,
     (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); }, {label: "실행기 고르기"});
   const logSub = (ids) => `실행기 ${ids.length > 2 ? "세" : "두"} 개 · 거래소 요청 재시도는 뺌 · 10개씩`;
