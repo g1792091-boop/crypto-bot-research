@@ -1,0 +1,648 @@
+{
+ "prereg10_sha256": "6267dca6d1e72d90141e5d21c5cc073c887e992efa8af02061e3483d4a20305f",
+ "owner_trades": {
+  "10/21 20:15 롱": {
+   "1일봉 EMA 같은 방향": false,
+   "4시간 ADX 20 이상": true,
+   "BTC 15분 EMA 같은 방향": true,
+   "15분 EMA 둘 다 진입 방향으로 기울기": true,
+   "all_four": false,
+   "block": ""
+  },
+  "10/23 00:00 숏": {
+   "1일봉 EMA 같은 방향": true,
+   "4시간 ADX 20 이상": true,
+   "BTC 15분 EMA 같은 방향": true,
+   "15분 EMA 둘 다 진입 방향으로 기울기": true,
+   "all_four": true,
+   "block": ""
+  }
+ },
+ "pass_share": {
+  "M 조건 없음": 1.0,
+  "+ 1일봉 EMA 같은 방향": 0.5199,
+  "+ 4시간 ADX 20 이상": 0.6924,
+  "+ BTC 15분 EMA 같은 방향": 0.8382,
+  "+ 15분 EMA 둘 다 진입 방향으로 기울기": 0.8972,
+  "T4 네 조건 모두": 0.2721
+ },
+ "arms": {
+  "M 조건 없음": {
+   "oct2026": {
+    "n": 180,
+    "per_weekday": 10.59,
+    "win": 0.6778,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.725,
+    "roe_pct": -1.405,
+    "roe_pct_no_payback": -4.051,
+    "mult40": 0.2701,
+    "maxdd40": -0.811,
+    "twin": 0.6565
+   },
+   "last19": {
+    "n": 158,
+    "per_weekday": 10.53,
+    "win": 0.6835,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.725,
+    "roe_pct": -1.239,
+    "roe_pct_no_payback": -3.885,
+    "mult40": 0.3533,
+    "maxdd40": -0.805
+   },
+   "select": {
+    "n": 18907,
+    "per_weekday": 14.97,
+    "win": 0.6657,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.725,
+    "roe_pct_no_payback": -4.371,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.7575
+   },
+   "confirm": {
+    "n": 6167,
+    "per_weekday": 13.49,
+    "win": 0.6613,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.862,
+    "roe_pct_no_payback": -4.508,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.471
+   },
+   "months": {
+    "median_all": 0.078,
+    "up_all": 0,
+    "n_all": 79,
+    "median_2025": 0.067,
+    "up_2025": 0,
+    "x2_all": 0
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0001,
+    "to_10pct_or_less": 1.0
+   },
+   "direction": {
+    "oct2026": {
+     "signals": 619,
+     "1시간": 0.4766,
+     "4시간": 0.475,
+     "24시간": 0.3489
+    },
+    "last19": {
+     "signals": 552,
+     "1시간": 0.4819,
+     "4시간": 0.4819,
+     "24시간": 0.3533
+    },
+    "select": {
+     "signals": 46434,
+     "1시간": 0.4702,
+     "4시간": 0.4747,
+     "24시간": 0.4742
+    },
+    "confirm": {
+     "signals": 17028,
+     "1시간": 0.4746,
+     "4시간": 0.4668,
+     "24시간": 0.471
+    }
+   }
+  },
+  "+ 1일봉 EMA 같은 방향": {
+   "oct2026": {
+    "n": 110,
+    "per_weekday": 6.47,
+    "win": 0.6636,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.3,
+    "breakeven_win": 0.719,
+    "roe_pct": -1.639,
+    "roe_pct_no_payback": -4.285,
+    "mult40": 0.4045,
+    "maxdd40": -0.704
+   },
+   "last19": {
+    "n": 94,
+    "per_weekday": 6.27,
+    "win": 0.6596,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.2,
+    "breakeven_win": 0.718,
+    "roe_pct": -1.737,
+    "roe_pct_no_payback": -4.383,
+    "mult40": 0.4446,
+    "maxdd40": -0.704
+   },
+   "select": {
+    "n": 12032,
+    "per_weekday": 9.53,
+    "win": 0.6725,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.724,
+    "roe_pct": -1.544,
+    "roe_pct_no_payback": -4.19,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 3868,
+    "per_weekday": 8.46,
+    "win": 0.6621,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.838,
+    "roe_pct_no_payback": -4.484,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.196,
+    "up_all": 2,
+    "n_all": 79,
+    "median_2025": 0.191,
+    "up_2025": 0,
+    "x2_all": 1
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0,
+    "to_10pct_or_less": 0.929
+   },
+   "direction": {
+    "oct2026": {
+     "signals": 303,
+     "1시간": 0.4653,
+     "4시간": 0.4488,
+     "24시간": 0.2013
+    },
+    "last19": {
+     "signals": 264,
+     "1시간": 0.4583,
+     "4시간": 0.4205,
+     "24시간": 0.1705
+    },
+    "select": {
+     "signals": 23862,
+     "1시간": 0.4712,
+     "4시간": 0.4807,
+     "24시간": 0.47
+    },
+    "confirm": {
+     "signals": 8719,
+     "1시간": 0.4833,
+     "4시간": 0.4702,
+     "24시간": 0.4782
+    }
+   }
+  },
+  "+ 4시간 ADX 20 이상": {
+   "oct2026": {
+    "n": 150,
+    "per_weekday": 8.82,
+    "win": 0.6933,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.725,
+    "roe_pct": -0.948,
+    "roe_pct_no_payback": -3.594,
+    "mult40": 0.4457,
+    "maxdd40": -0.672
+   },
+   "last19": {
+    "n": 135,
+    "per_weekday": 9.0,
+    "win": 0.7037,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.725,
+    "roe_pct": -0.642,
+    "roe_pct_no_payback": -3.288,
+    "mult40": 0.5726,
+    "maxdd40": -0.65
+   },
+   "select": {
+    "n": 15676,
+    "per_weekday": 12.41,
+    "win": 0.6683,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.647,
+    "roe_pct_no_payback": -4.293,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 5065,
+    "per_weekday": 11.08,
+    "win": 0.662,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.84,
+    "roe_pct_no_payback": -4.486,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.128,
+    "up_all": 1,
+    "n_all": 79,
+    "median_2025": 0.104,
+    "up_2025": 0,
+    "x2_all": 0
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0003,
+    "to_10pct_or_less": 0.995
+   },
+   "direction": {
+    "oct2026": {
+     "signals": 459,
+     "1시간": 0.4902,
+     "4시간": 0.5033,
+     "24시간": 0.3137
+    },
+    "last19": {
+     "signals": 434,
+     "1시간": 0.4885,
+     "4시간": 0.5,
+     "24시간": 0.3157
+    },
+    "select": {
+     "signals": 32251,
+     "1시간": 0.4712,
+     "4시간": 0.4741,
+     "24시간": 0.4679
+    },
+    "confirm": {
+     "signals": 11483,
+     "1시간": 0.4775,
+     "4시간": 0.4705,
+     "24시간": 0.4759
+    }
+   }
+  },
+  "+ BTC 15분 EMA 같은 방향": {
+   "oct2026": {
+    "n": 157,
+    "per_weekday": 9.24,
+    "win": 0.7134,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.725,
+    "roe_pct": -0.344,
+    "roe_pct_no_payback": -2.99,
+    "mult40": 0.6339,
+    "maxdd40": -0.659
+   },
+   "last19": {
+    "n": 141,
+    "per_weekday": 9.4,
+    "win": 0.7163,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.725,
+    "roe_pct": -0.262,
+    "roe_pct_no_payback": -2.908,
+    "mult40": 0.6966,
+    "maxdd40": -0.659
+   },
+   "select": {
+    "n": 15735,
+    "per_weekday": 12.46,
+    "win": 0.6653,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.741,
+    "roe_pct_no_payback": -4.387,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 5245,
+    "per_weekday": 11.48,
+    "win": 0.662,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.842,
+    "roe_pct_no_payback": -4.488,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.124,
+    "up_all": 0,
+    "n_all": 79,
+    "median_2025": 0.124,
+    "up_2025": 0,
+    "x2_all": 0
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0,
+    "to_10pct_or_less": 1.0
+   },
+   "direction": {
+    "oct2026": {
+     "signals": 549,
+     "1시간": 0.4809,
+     "4시간": 0.4882,
+     "24시간": 0.3151
+    },
+    "last19": {
+     "signals": 505,
+     "1시간": 0.4891,
+     "4시간": 0.4891,
+     "24시간": 0.3228
+    },
+    "select": {
+     "signals": 38672,
+     "1시간": 0.4651,
+     "4시간": 0.469,
+     "24시간": 0.4668
+    },
+    "confirm": {
+     "signals": 14422,
+     "1시간": 0.4713,
+     "4시간": 0.4654,
+     "24시간": 0.4716
+    }
+   }
+  },
+  "+ 15분 EMA 둘 다 진입 방향으로 기울기": {
+   "oct2026": {
+    "n": 175,
+    "per_weekday": 10.29,
+    "win": 0.6914,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.4,
+    "breakeven_win": 0.72,
+    "roe_pct": -0.861,
+    "roe_pct_no_payback": -3.507,
+    "mult40": 0.4146,
+    "maxdd40": -0.685
+   },
+   "last19": {
+    "n": 154,
+    "per_weekday": 10.27,
+    "win": 0.7013,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.4,
+    "breakeven_win": 0.72,
+    "roe_pct": -0.553,
+    "roe_pct_no_payback": -3.199,
+    "mult40": 0.5603,
+    "maxdd40": -0.663
+   },
+   "select": {
+    "n": 17750,
+    "per_weekday": 14.05,
+    "win": 0.6664,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.708,
+    "roe_pct_no_payback": -4.354,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 5846,
+    "per_weekday": 12.79,
+    "win": 0.6613,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.86,
+    "roe_pct_no_payback": -4.506,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.083,
+    "up_all": 1,
+    "n_all": 79,
+    "median_2025": 0.081,
+    "up_2025": 0,
+    "x2_all": 0
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0,
+    "to_10pct_or_less": 1.0
+   },
+   "direction": {
+    "oct2026": {
+     "signals": 565,
+     "1시간": 0.485,
+     "4시간": 0.4814,
+     "24시간": 0.3487
+    },
+    "last19": {
+     "signals": 501,
+     "1시간": 0.493,
+     "4시간": 0.487,
+     "24시간": 0.3553
+    },
+    "select": {
+     "signals": 41535,
+     "1시간": 0.4672,
+     "4시간": 0.4727,
+     "24시간": 0.4746
+    },
+    "confirm": {
+     "signals": 15393,
+     "1시간": 0.4709,
+     "4시간": 0.4663,
+     "24시간": 0.4727
+    }
+   }
+  },
+  "T4 네 조건 모두": {
+   "oct2026": {
+    "n": 81,
+    "per_weekday": 4.76,
+    "win": 0.7037,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.1,
+    "breakeven_win": 0.717,
+    "roe_pct": -0.402,
+    "roe_pct_no_payback": -3.048,
+    "mult40": 0.7762,
+    "maxdd40": -0.396,
+    "twin": 0.445
+   },
+   "last19": {
+    "n": 70,
+    "per_weekday": 4.67,
+    "win": 0.7,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.0,
+    "breakeven_win": 0.717,
+    "roe_pct": -0.485,
+    "roe_pct_no_payback": -3.131,
+    "mult40": 0.7847,
+    "maxdd40": -0.396
+   },
+   "select": {
+    "n": 7099,
+    "per_weekday": 5.62,
+    "win": 0.6711,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.724,
+    "roe_pct": -1.586,
+    "roe_pct_no_payback": -4.232,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.953
+   },
+   "confirm": {
+    "n": 2316,
+    "per_weekday": 5.07,
+    "win": 0.6606,
+    "avg_win_pct": 8.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.723,
+    "roe_pct": -1.885,
+    "roe_pct_no_payback": -4.531,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.8295
+   },
+   "months": {
+    "median_all": 0.415,
+    "up_all": 6,
+    "n_all": 79,
+    "median_2025": 0.371,
+    "up_2025": 1,
+    "x2_all": 0
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0,
+    "to_10pct_or_less": 0.758
+   },
+   "direction": {
+    "oct2026": {
+     "signals": 207,
+     "1시간": 0.4783,
+     "4시간": 0.4589,
+     "24시간": 0.1498
+    },
+    "last19": {
+     "signals": 187,
+     "1시간": 0.4706,
+     "4시간": 0.4439,
+     "24시간": 0.1444
+    },
+    "select": {
+     "signals": 12276,
+     "1시간": 0.4699,
+     "4시간": 0.4765,
+     "24시간": 0.4654
+    },
+    "confirm": {
+     "signals": 4543,
+     "1시간": 0.4779,
+     "4시간": 0.4783,
+     "24시간": 0.4878
+    }
+   },
+   "doge": {
+    "oct2026": {
+     "n": 25,
+     "per_weekday": 1.47,
+     "win": 0.48,
+     "avg_win_pct": 8.3,
+     "avg_loss_pct": -20.6,
+     "breakeven_win": 0.712,
+     "roe_pct": -6.708,
+     "roe_pct_no_payback": -9.354,
+     "mult40": 0.484,
+     "maxdd40": -0.516
+    },
+    "last19": {
+     "n": 25,
+     "per_weekday": 1.67,
+     "win": 0.48,
+     "avg_win_pct": 8.3,
+     "avg_loss_pct": -20.6,
+     "breakeven_win": 0.712,
+     "roe_pct": -6.708,
+     "roe_pct_no_payback": -9.354,
+     "mult40": 0.484,
+     "maxdd40": -0.516
+    },
+    "select": {
+     "n": 1699,
+     "per_weekday": 1.35,
+     "win": 0.6633,
+     "avg_win_pct": 8.3,
+     "avg_loss_pct": -21.7,
+     "breakeven_win": 0.724,
+     "roe_pct": -1.812,
+     "roe_pct_no_payback": -4.458,
+     "mult40": 0.0,
+     "maxdd40": -1.0
+    },
+    "confirm": {
+     "n": 715,
+     "per_weekday": 1.56,
+     "win": 0.6587,
+     "avg_win_pct": 8.3,
+     "avg_loss_pct": -21.7,
+     "breakeven_win": 0.724,
+     "roe_pct": -1.943,
+     "roe_pct_no_payback": -4.589,
+     "mult40": 0.0011,
+     "maxdd40": -0.999
+    },
+    "months": {
+     "median_all": 0.753,
+     "up_all": 17,
+     "n_all": 79,
+     "median_2025": 0.748,
+     "up_2025": 2,
+     "x2_all": 0
+    },
+    "goal90": {
+     "x51": 0.0,
+     "x10": 0.0,
+     "x4": 0.0,
+     "to_10pct_or_less": 0.024
+    }
+   }
+  }
+ },
+ "verdict": {
+  "select_positive": false,
+  "confirm_positive": false,
+  "confirm_twin_975": false,
+  "earns": false,
+  "text": "아님"
+ }
+}
