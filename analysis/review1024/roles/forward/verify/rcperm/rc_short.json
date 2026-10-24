@@ -1,0 +1,72 @@
+{
+ "base_15m_H2": {
+  "n": 5361,
+  "short": -0.017225704705107547,
+  "long": -0.05068052303378378,
+  "short_ci_day": [
+   -0.0343752631037244,
+   0.0007480391139613736
+  ],
+  "follow_c_N07_ICHI_CMO@4h": {
+   "n": 2586,
+   "mean": -0.009609790334188104,
+   "short_share": 0.9632606199770379
+  },
+  "follow_Jdir@4h": {
+   "n": 3986,
+   "mean": -0.030547208026658758,
+   "short_share": 0.8046349364565163
+  }
+ },
+ "base_1h_H2": {
+  "n": 1311,
+  "short": 0.009318858392183466,
+  "long": -0.07072290097385205,
+  "short_ci_day": [
+   -0.037174630368288254,
+   0.05236617403358284
+  ],
+  "follow_c_N07_ICHI_CMO@4h": {
+   "n": 622,
+   "mean": 0.018973438076991617,
+   "short_share": 0.9616
+  },
+  "follow_Jdir@4h": {
+   "n": 970,
+   "mean": -0.014388629997630072,
+   "short_share": 0.8006166495375129
+  }
+ },
+ "base_4h_H2": {
+  "n": 313,
+  "short": 0.02552104195750032,
+  "long": -0.0795830168420575,
+  "short_ci_day": [
+   -0.05929477983591869,
+   0.09489131916600058
+  ],
+  "follow_c_T5_ST10_3@1d": {
+   "n": 312,
+   "mean": 0.032508069341509745,
+   "short_share": 0.8498402555910544
+  },
+  "follow_Jlive@1d": {
+   "n": 188,
+   "mean": 0.020752027409121472,
+   "short_share": 1.0
+  },
+  "follow_l_OBV_S@1d": {
+   "n": 312,
+   "mean": 0.02552104195750032,
+   "short_share": 1.0
+  }
+ },
+ "short_matched": {
+  "actual": 0.03390378385483294,
+  "n": 574,
+  "null_mean": 0.009224578933899457,
+  "null_p95": 0.02175690729538334,
+  "p": 0.0003,
+  "note": "random same-size, same-side-mix subsets of each cell's own H2 signals (signal-level, no clustering, so this p is if anything too small)"
+ }
+}

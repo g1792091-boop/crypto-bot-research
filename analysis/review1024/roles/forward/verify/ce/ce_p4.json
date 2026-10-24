@@ -1,0 +1,163 @@
+{
+ "members": 18,
+ "candidates": 303,
+ "reproduce": {
+  "all": {
+   "n": 49,
+   "mean": 0.02164,
+   "win": 0.8367,
+   "final_x40": 1.1783,
+   "maxdd40": 0.5248,
+   "worst": -1.0,
+   "n_le_-0.9": 1
+  },
+  "all_coinflip": {
+   "n": 36,
+   "mean": -0.11779,
+   "win": 0.6389,
+   "final_x40": 0.1171,
+   "maxdd40": 0.9083,
+   "worst": -0.9045,
+   "n_le_-0.9": 1
+  },
+  "all_w35": {
+   "n": 61,
+   "mean": -0.00795,
+   "win": 0.7869,
+   "final_x40": 0.5704,
+   "maxdd40": 0.7474,
+   "worst": -0.5,
+   "n_le_-0.9": 0
+  },
+  "H1": {
+   "n": 17,
+   "mean": 0.01564,
+   "win": 0.7647,
+   "final_x40": 1.0572,
+   "maxdd40": 0.3514,
+   "worst": -0.482,
+   "n_le_-0.9": 0
+  },
+  "H1_coinflip": {
+   "n": 17,
+   "mean": -0.06243,
+   "win": 0.7059,
+   "final_x40": 0.5444,
+   "maxdd40": 0.5738,
+   "worst": -0.9045,
+   "n_le_-0.9": 1
+  },
+  "H1_w35": {
+   "n": 18,
+   "mean": 0.05556,
+   "win": 0.8889,
+   "final_x40": 1.3959,
+   "maxdd40": 0.2,
+   "worst": -0.5,
+   "n_le_-0.9": 0
+  },
+  "H2": {
+   "n": 32,
+   "mean": 0.02482,
+   "win": 0.875,
+   "final_x40": 1.1145,
+   "maxdd40": 0.5248,
+   "worst": -1.0,
+   "n_le_-0.9": 1
+  },
+  "H2_coinflip": {
+   "n": 19,
+   "mean": -0.16731,
+   "win": 0.5789,
+   "final_x40": 0.2151,
+   "maxdd40": 0.7849,
+   "worst": -0.884,
+   "n_le_-0.9": 0
+  },
+  "H2_w35": {
+   "n": 43,
+   "mean": -0.03453,
+   "win": 0.7442,
+   "final_x40": 0.4086,
+   "maxdd40": 0.7474,
+   "worst": -0.5,
+   "n_le_-0.9": 0
+  }
+ },
+ "taken_hold_min": {
+  "mean": 340.1020408163265,
+  "median": 182.0,
+  "max": 2376,
+  "sum_hours": 277.75
+ },
+ "taken_by_tf": [
+  {
+   "tf": "1h",
+   "count": 27,
+   "mean": -0.0001
+  },
+  {
+   "tf": "30m",
+   "count": 8,
+   "mean": 0.0823
+  },
+  {
+   "tf": "4h",
+   "count": 14,
+   "mean": 0.029
+  }
+ ],
+ "taken_by_side": [
+  {
+   "side": -1,
+   "count": 32,
+   "mean": 0.0564
+  },
+  {
+   "side": 1,
+   "count": 17,
+   "mean": -0.0438
+  }
+ ],
+ "taken_by_coin": [
+  {
+   "coin": 0,
+   "count": 16,
+   "mean": 0.0126
+  },
+  {
+   "coin": 1,
+   "count": 8,
+   "mean": 0.1014
+  },
+  {
+   "coin": 2,
+   "count": 8,
+   "mean": -0.0243
+  },
+  {
+   "coin": 3,
+   "count": 11,
+   "mean": -0.052
+  },
+  {
+   "coin": 4,
+   "count": 1,
+   "mean": 0.1667
+  },
+  {
+   "coin": 5,
+   "count": 5,
+   "mean": 0.1293
+  }
+ ],
+ "taken_blk": {
+  "0": 35,
+  "1": 12,
+  "3": 1,
+  "2": 1
+ },
+ "sanity_max_abs_diff_r": 1.7384688064114862e-09,
+ "sanity_k_equal": true,
+ "share_2atr_beyond_liq_30x_mmr0.5": 0.25412541254125415
+}
