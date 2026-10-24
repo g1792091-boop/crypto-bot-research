@@ -109,6 +109,7 @@ if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
     [ -f "$db" ] || continue
     systemctl is-active --quiet paperbot-executor-mexc 2>/dev/null && continue   # the MEXC executor runs: leave them
     systemctl is-active --quiet paperbot-executor-deepcoin 2>/dev/null && continue   # the DeepCoin executor runs: leave them
+    systemctl is-active --quiet paperbot-executor-wooxpro2 2>/dev/null && continue   # the WOO X Pro 2 executor runs: leave them
     runuser -u paperbot-exec -- sqlite3 "$db" 'PRAGMA journal_mode=DELETE;' >/dev/null \
       || echo "could not switch $db to rollback mode: the nightly backup may fail to read it until the executor was started and stopped once"
   done
