@@ -1,0 +1,7 @@
+last 19 days, G with-rows: 2386; kept by the study's rule (all exits closed): 2324; w35 closed both sides: 2344; w35 still open: 42
+  strict (study rule): signals 2324 trades 117 mean -0.02547 flip -0.07138 last entry 2026-10-24 09:45:00
+  loose (w35 closed): signals 2344 trades 115 mean -0.02771 flip -0.06496 last entry 2026-10-24 09:45:00
+
+real	1m4.641s
+user	0m46.830s
+sys	0m16.404s

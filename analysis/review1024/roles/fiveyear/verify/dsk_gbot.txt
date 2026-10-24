@@ -1,0 +1,6 @@
+SEL: mine signals 123068 trades 15836 per_day 14.462 mean -0.02495 (pb 0.00151) win 0.7396 flip -0.04741 | study signals 123068 trades 15978 per_day 14.592 mean -0.02391 (pb 0.00255) win 0.7411 flip -0.04754
+CONF: mine signals 120498 trades 10563 per_day 10.521 mean -0.03531 (pb -0.00885) win 0.7368 flip -0.04344 | study signals 120498 trades 10766 per_day 10.723 mean -0.03484 (pb -0.00838) win 0.7371 flip -0.04294
+  bootstrap m0.4 payback: mine P(x6) 0.0540 P(-50 first) 0.9485 P(-90 first) 0.7730 median 0.0435 | study 0.0605 0.9440 0.7650 0.0390
+LATE: mine signals 36332 trades 2485 per_day 8.424 mean -0.03424 (pb -0.00778) win 0.7400 flip -0.05796 | study signals 36332 trades 2551 per_day 8.648 mean -0.03306 (pb -0.00660) win 0.7405 flip -0.05639
+FWD: mine signals 2324 trades 117 per_day 6.158 mean -0.02547 (pb 0.00099) win 0.7521 flip -0.07138 | study signals 2324 trades 121 per_day 6.368 mean -0.04302 (pb -0.01656) win 0.7190 flip -0.05620
+  bootstrap m0.4 payback: mine P(x6) 0.1057 P(-50 first) 0.7875 P(-90 first) 0.3187 median 0.3468 | study 0.0467 0.9327 0.6505 0.0832

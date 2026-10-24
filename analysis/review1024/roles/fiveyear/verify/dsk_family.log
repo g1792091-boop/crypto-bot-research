@@ -1,0 +1,81 @@
+18:08:39 BTCUSDT signals 1985823
+18:08:42 BTCUSDT 15m -> 1h rows 1073456 14s
+18:08:43 BTCUSDT 15m -> 4h rows 1073456 16s
+18:08:45 BTCUSDT 15m -> 1d rows 1073456 17s
+18:08:46 BTCUSDT 30m -> 1h rows 552071 19s
+18:08:47 BTCUSDT 30m -> 4h rows 552071 19s
+18:08:48 BTCUSDT 30m -> 1d rows 552071 20s
+18:08:48 BTCUSDT 1h -> 4h rows 286932 21s
+18:08:49 BTCUSDT 1h -> 1d rows 286932 21s
+18:08:49 BTCUSDT 4h -> 1d rows 73364 22s
+18:08:59 ETHUSDT signals 2003676
+18:09:01 ETHUSDT 15m -> 1h rows 1084836 33s
+18:09:02 ETHUSDT 15m -> 4h rows 1084836 35s
+18:09:03 ETHUSDT 15m -> 1d rows 1084836 36s
+18:09:04 ETHUSDT 30m -> 1h rows 555788 37s
+18:09:05 ETHUSDT 30m -> 4h rows 555788 38s
+18:09:06 ETHUSDT 30m -> 1d rows 555788 38s
+18:09:06 ETHUSDT 1h -> 4h rows 288801 39s
+18:09:07 ETHUSDT 1h -> 1d rows 288801 39s
+18:09:07 ETHUSDT 4h -> 1d rows 74251 40s
+18:09:16 SOLUSDT signals 1981213
+18:09:19 SOLUSDT 15m -> 1h rows 1073422 51s
+18:09:20 SOLUSDT 15m -> 4h rows 1073422 53s
+18:09:22 SOLUSDT 15m -> 1d rows 1073422 54s
+18:09:23 SOLUSDT 30m -> 1h rows 550097 56s
+18:09:24 SOLUSDT 30m -> 4h rows 550097 56s
+18:09:25 SOLUSDT 30m -> 1d rows 550097 57s
+18:09:25 SOLUSDT 1h -> 4h rows 284194 58s
+18:09:26 SOLUSDT 1h -> 1d rows 284194 58s
+18:09:26 SOLUSDT 4h -> 1d rows 73500 58s
+18:09:35 DOGEUSDT signals 1999935
+18:09:38 DOGEUSDT 15m -> 1h rows 1083700 70s
+18:09:40 DOGEUSDT 15m -> 4h rows 1083700 72s
+18:09:41 DOGEUSDT 15m -> 1d rows 1083700 74s
+18:09:43 DOGEUSDT 30m -> 1h rows 555841 75s
+18:09:43 DOGEUSDT 30m -> 4h rows 555841 76s
+18:09:44 DOGEUSDT 30m -> 1d rows 555841 77s
+18:09:45 DOGEUSDT 1h -> 4h rows 286657 78s
+18:09:46 DOGEUSDT 1h -> 1d rows 286657 78s
+18:09:46 DOGEUSDT 4h -> 1d rows 73737 78s
+18:09:54 LTCUSDT signals 2006691
+18:09:58 LTCUSDT 15m -> 1h rows 1086651 90s
+18:10:00 LTCUSDT 15m -> 4h rows 1086651 93s
+18:10:03 LTCUSDT 15m -> 1d rows 1086651 95s
+18:10:04 LTCUSDT 30m -> 1h rows 556592 97s
+18:10:05 LTCUSDT 30m -> 4h rows 556592 98s
+18:10:06 LTCUSDT 30m -> 1d rows 556592 99s
+18:10:07 LTCUSDT 1h -> 4h rows 289340 99s
+18:10:08 LTCUSDT 1h -> 1d rows 289340 100s
+18:10:08 LTCUSDT 4h -> 1d rows 74108 100s
+18:10:16 BCHUSDT signals 2007987
+18:10:19 BCHUSDT 15m -> 1h rows 1090598 112s
+18:10:21 BCHUSDT 15m -> 4h rows 1090598 114s
+18:10:23 BCHUSDT 15m -> 1d rows 1090598 116s
+18:10:24 BCHUSDT 30m -> 1h rows 554862 117s
+18:10:25 BCHUSDT 30m -> 4h rows 554862 117s
+18:10:26 BCHUSDT 30m -> 1d rows 554862 118s
+18:10:27 BCHUSDT 1h -> 4h rows 288435 119s
+18:10:27 BCHUSDT 1h -> 1d rows 288435 120s
+18:10:27 BCHUSDT 4h -> 1d rows 74092 120s
+18:10:29 done 122 s
+eligible with-cells 108391 BH pass on SELECT paired t 374
+picked: cells 374, with CONF n>0 374: CONF beats twin 0.8289; n>=30 374: 0.8289; cell-avg CONF -0.03339 twin -0.04416; trade-weighted -0.03555 twin -0.04448
+others: cells 108017, with CONF n>0 108017: CONF beats twin 0.5581; n>=30 108017: 0.5581; cell-avg CONF -0.03970 twin -0.04095; trade-weighted -0.04024 twin -0.04178
+CONF BH among picked: 0  CONF one-sided p<0.05: 66
+G cells (SEL mean + payback > 0): 321
+picked set == flip_picked.csv: True only mine 0 only study 0
+  max |SEL_nW - study| = 0
+  max |SEL_mW - study| = 4.96e-07
+  max |SEL_mWo - study| = 3.55e-06
+  max |SEL_tFlip - study| = 4.99e-05
+  max |CONF_nW - study| = 0
+  max |CONF_mW - study| = 4.99e-07
+  max |CONF_mWo - study| = 4.98e-07
+  max |FWD_mW - study| = 4.94e-06
+SEL: picked mean (with - twin) 0.04568; drift-only expectation 0.00064; share of cells where actual > drift-only 1.000
+CONF: picked mean (with - twin) 0.01077; drift-only expectation 0.00042; share of cells where actual > drift-only 0.824
+
+real	2m10.514s
+user	2m33.839s
+sys	0m31.127s

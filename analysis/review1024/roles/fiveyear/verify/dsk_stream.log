@@ -1,0 +1,67 @@
+18:11:49 SOLUSDT latch re-derivation done
+18:11:49 BTCUSDT latch re-derivation done
+18:11:49 ETHUSDT latch re-derivation done
+18:12:17 BTCUSDT 15m cuts 83 strategies 21 32s
+18:12:20 SOLUSDT 15m cuts 87 strategies 21 35s
+18:12:21 ETHUSDT 15m cuts 87 strategies 21 36s
+18:12:39 BTCUSDT 30m cuts 47 strategies 11 54s
+18:12:42 ETHUSDT 30m cuts 47 strategies 11 57s
+18:12:43 SOLUSDT 30m cuts 47 strategies 11 58s
+18:13:26 BTCUSDT 1h cuts 95 strategies 23 101s
+18:13:29 ETHUSDT 1h cuts 95 strategies 23 104s
+18:13:29 SOLUSDT 1h cuts 95 strategies 23 104s
+18:14:22 BTCUSDT 4h cuts 103 strategies 46 157s
+18:14:24 ETHUSDT 4h cuts 103 strategies 46 159s
+18:14:26 SOLUSDT 4h cuts 103 strategies 46 161s
+18:15:14 BTCUSDT 1d cuts 97 strategies 33 209s
+18:15:14 done BTCUSDT
+18:15:16 DOGEUSDT latch re-derivation done
+18:15:16 ETHUSDT 1d cuts 100 strategies 33 211s
+18:15:16 done ETHUSDT
+18:15:17 SOLUSDT 1d cuts 96 strategies 33 212s
+18:15:17 done SOLUSDT
+18:15:19 LTCUSDT latch re-derivation done
+18:15:20 BCHUSDT latch re-derivation done
+18:15:40 DOGEUSDT 15m cuts 87 strategies 21 26s
+18:15:43 BCHUSDT 15m cuts 87 strategies 21 26s
+18:15:44 LTCUSDT 15m cuts 87 strategies 21 27s
+18:15:53 DOGEUSDT 30m cuts 47 strategies 11 40s
+18:15:57 BCHUSDT 30m cuts 47 strategies 11 40s
+18:15:57 LTCUSDT 30m cuts 47 strategies 11 41s
+18:16:36 DOGEUSDT 1h cuts 95 strategies 23 83s
+18:16:40 LTCUSDT 1h cuts 95 strategies 23 83s
+18:16:40 BCHUSDT 1h cuts 95 strategies 23 83s
+18:17:34 DOGEUSDT 4h cuts 102 strategies 46 141s
+18:17:37 LTCUSDT 4h cuts 102 strategies 46 141s
+18:17:37 BCHUSDT 4h cuts 102 strategies 46 140s
+18:19:13 DOGEUSDT 1d cuts 99 strategies 33 240s
+18:19:13 done DOGEUSDT
+18:19:26 LTCUSDT 1d cuts 99 strategies 33 249s
+18:19:26 done LTCUSDT
+18:19:27 BCHUSDT 1d cuts 98 strategies 33 250s
+18:19:27 done BCHUSDT
+                     rows       cmp  diff_last  diff_5  lookahead  missing
+part           tf                                                         
+cstate         1d   20615     20615          0       0          0        0
+               1h    9120      9120          0       0          0        0
+               4h   23370     23370          0       0          0        0
+judge          1d    3534      3534          0       0          0        0
+               1h    3420      3420          0       0          0        0
+               4h    3690      3690          0       0          0        0
+latch_all_bars 1d     264    636636          0       0          0        0
+               1h     312  18064124          0       0          0        0
+               4h     312   4515784          0       0          0        0
+signal         15m  10878     54390          1       3          0        0
+               1d   19437     97185          0       0          0        0
+               1h   13110     65550          0       0          0        0
+               30m   3102     15510          0       0          0        0
+               4h   28290    141450          0       0          0        0
+signal comparisons at a stored signal bar: 10220
+rows with a difference: 3
+                             rows  lookahead
+part   tf  name                             
+signal 15m O4_STOCHRSI_ZONE     3          0
+
+real	7m43.678s
+user	19m13.468s
+sys	0m10.799s

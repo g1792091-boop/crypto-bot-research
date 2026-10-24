@@ -1,0 +1,57 @@
+{
+ "signals": 95,
+ "mean_roe": 0.0272504072942722,
+ "mean_roe_pb": 0.0499304072942722,
+ "taken": 39,
+ "acct40_nopb": [
+  1.0651180857712885,
+  0.5138825384274031
+ ],
+ "acct40_twin_nopb": [
+  0.4901592388913314,
+  0.5468202311590804
+ ],
+ "taken_mean_nopb": 0.01549226249783085,
+ "flip_same_trades_p_ge_obs_nopb": 0.2211,
+ "flip_same_trades_median_nopb": 0.7210932264701722,
+ "flip_bot_p_final_ge_obs_nopb": 0.3684,
+ "flip_bot_median_final_nopb": 0.899630200331439,
+ "flip_bot_p_mean_ge_obs_nopb": 0.3632,
+ "acct40_pb": [
+  1.5166983274849573,
+  0.41289117328664227
+ ],
+ "acct40_twin_pb": [
+  0.7030419467050011,
+  0.3611915599426905
+ ],
+ "taken_mean_pb": 0.03817226249783086,
+ "flip_same_trades_p_ge_obs_pb": 0.22275,
+ "flip_same_trades_median_pb": 1.0384818373743419,
+ "flip_bot_p_final_ge_obs_pb": 0.3386,
+ "flip_bot_median_final_pb": 1.2371710531505562,
+ "flip_bot_p_mean_ge_obs_pb": 0.3388,
+ "fam_long_pooled": -0.06484380317914559,
+ "fam_short_pooled": -0.026849951760103886,
+ "fam_short_share_pooled": 0.6339007432270439,
+ "fam_short_share_mean_of_cells": 0.6444442761745185,
+ "market_move": {
+  "BTCUSDT": -0.05827843505140906,
+  "ETHUSDT": -0.12554290322819317,
+  "SOLUSDT": -0.15328589367936374,
+  "DOGEUSDT": -0.182193084487681,
+  "LTCUSDT": -0.20994786529519516,
+  "BCHUSDT": -0.11718774898811224
+ },
+ "S5y": null,
+ "five_signals": 14871,
+ "five_mean": -0.034811838043441144,
+ "conf_signals": 6425,
+ "conf_mean": -0.035057745731244275,
+ "conf_excl_fwd_signals": 6341,
+ "conf_excl_fwd_mean": -0.03575032363604157
+}
+
+real	0m15.154s
+user	0m11.936s
+sys	0m3.469s

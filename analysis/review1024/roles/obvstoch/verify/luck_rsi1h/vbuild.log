@@ -1,0 +1,68 @@
+18:37:10 ETHUSDT built 7s {'walk_w35_repro': 1.0, '1h_OBV30_vs_c_OBV_S': 1.0, '1h_OBV20_vs_c_VO1': 1.0, '4h_OBV30_vs_c_OBV_S': 1.0, '4h_OBV20_vs_c_VO1': 1.0, '15m_SRSI_KD_mine_vs_O4': 1.0, '30m_SRSI_KD_mine_vs_O4': 1.0, '1h_SRSI_KD_mine_vs_O4': 1.0}
+18:37:11 BTCUSDT built 7s {'walk_w35_repro': 1.0, '1h_OBV30_vs_c_OBV_S': 1.0, '1h_OBV20_vs_c_VO1': 1.0, '4h_OBV30_vs_c_OBV_S': 1.0, '4h_OBV20_vs_c_VO1': 1.0, '15m_SRSI_KD_mine_vs_O4': 1.0, '30m_SRSI_KD_mine_vs_O4': 1.0, '1h_SRSI_KD_mine_vs_O4': 1.0}
+18:37:13 SOLUSDT built 3s {'walk_w35_repro': 1.0, '1h_OBV30_vs_c_OBV_S': 1.0, '1h_OBV20_vs_c_VO1': 1.0, '4h_OBV30_vs_c_OBV_S': 1.0, '4h_OBV20_vs_c_VO1': 1.0, '15m_SRSI_KD_mine_vs_O4': 1.0, '30m_SRSI_KD_mine_vs_O4': 1.0, '1h_SRSI_KD_mine_vs_O4': 1.0}
+18:37:13 DOGEUSDT built 3s {'walk_w35_repro': 1.0, '1h_OBV30_vs_c_OBV_S': 1.0, '1h_OBV20_vs_c_VO1': 1.0, '4h_OBV30_vs_c_OBV_S': 1.0, '4h_OBV20_vs_c_VO1': 1.0, '15m_SRSI_KD_mine_vs_O4': 1.0, '30m_SRSI_KD_mine_vs_O4': 1.0, '1h_SRSI_KD_mine_vs_O4': 1.0}
+18:37:16 LTCUSDT built 3s {'walk_w35_repro': 1.0, '1h_OBV30_vs_c_OBV_S': 1.0, '1h_OBV20_vs_c_VO1': 1.0, '4h_OBV30_vs_c_OBV_S': 1.0, '4h_OBV20_vs_c_VO1': 1.0, '15m_SRSI_KD_mine_vs_O4': 1.0, '30m_SRSI_KD_mine_vs_O4': 1.0, '1h_SRSI_KD_mine_vs_O4': 1.0}
+18:37:16 BCHUSDT built 3s {'walk_w35_repro': 1.0, '1h_OBV30_vs_c_OBV_S': 1.0, '1h_OBV20_vs_c_VO1': 1.0, '4h_OBV30_vs_c_OBV_S': 1.0, '4h_OBV20_vs_c_VO1': 1.0, '15m_SRSI_KD_mine_vs_O4': 1.0, '30m_SRSI_KD_mine_vs_O4': 1.0, '1h_SRSI_KD_mine_vs_O4': 1.0}
+{
+ "ETHUSDT": {
+  "walk_w35_repro": 1.0,
+  "1h_OBV30_vs_c_OBV_S": 1.0,
+  "1h_OBV20_vs_c_VO1": 1.0,
+  "4h_OBV30_vs_c_OBV_S": 1.0,
+  "4h_OBV20_vs_c_VO1": 1.0,
+  "15m_SRSI_KD_mine_vs_O4": 1.0,
+  "30m_SRSI_KD_mine_vs_O4": 1.0,
+  "1h_SRSI_KD_mine_vs_O4": 1.0
+ },
+ "BTCUSDT": {
+  "walk_w35_repro": 1.0,
+  "1h_OBV30_vs_c_OBV_S": 1.0,
+  "1h_OBV20_vs_c_VO1": 1.0,
+  "4h_OBV30_vs_c_OBV_S": 1.0,
+  "4h_OBV20_vs_c_VO1": 1.0,
+  "15m_SRSI_KD_mine_vs_O4": 1.0,
+  "30m_SRSI_KD_mine_vs_O4": 1.0,
+  "1h_SRSI_KD_mine_vs_O4": 1.0
+ },
+ "SOLUSDT": {
+  "walk_w35_repro": 1.0,
+  "1h_OBV30_vs_c_OBV_S": 1.0,
+  "1h_OBV20_vs_c_VO1": 1.0,
+  "4h_OBV30_vs_c_OBV_S": 1.0,
+  "4h_OBV20_vs_c_VO1": 1.0,
+  "15m_SRSI_KD_mine_vs_O4": 1.0,
+  "30m_SRSI_KD_mine_vs_O4": 1.0,
+  "1h_SRSI_KD_mine_vs_O4": 1.0
+ },
+ "DOGEUSDT": {
+  "walk_w35_repro": 1.0,
+  "1h_OBV30_vs_c_OBV_S": 1.0,
+  "1h_OBV20_vs_c_VO1": 1.0,
+  "4h_OBV30_vs_c_OBV_S": 1.0,
+  "4h_OBV20_vs_c_VO1": 1.0,
+  "15m_SRSI_KD_mine_vs_O4": 1.0,
+  "30m_SRSI_KD_mine_vs_O4": 1.0,
+  "1h_SRSI_KD_mine_vs_O4": 1.0
+ },
+ "LTCUSDT": {
+  "walk_w35_repro": 1.0,
+  "1h_OBV30_vs_c_OBV_S": 1.0,
+  "1h_OBV20_vs_c_VO1": 1.0,
+  "4h_OBV30_vs_c_OBV_S": 1.0,
+  "4h_OBV20_vs_c_VO1": 1.0,
+  "15m_SRSI_KD_mine_vs_O4": 1.0,
+  "30m_SRSI_KD_mine_vs_O4": 1.0,
+  "1h_SRSI_KD_mine_vs_O4": 1.0
+ },
+ "BCHUSDT": {
+  "walk_w35_repro": 1.0,
+  "1h_OBV30_vs_c_OBV_S": 1.0,
+  "1h_OBV20_vs_c_VO1": 1.0,
+  "4h_OBV30_vs_c_OBV_S": 1.0,
+  "4h_OBV20_vs_c_VO1": 1.0,
+  "15m_SRSI_KD_mine_vs_O4": 1.0,
+  "30m_SRSI_KD_mine_vs_O4": 1.0,
+  "1h_SRSI_KD_mine_vs_O4": 1.0
+ }
+}

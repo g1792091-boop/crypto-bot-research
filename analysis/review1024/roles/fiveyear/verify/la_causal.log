@@ -1,0 +1,37 @@
+17:40:30 BTCUSDT 1h states cut-tested [21313, 23110, 29863, 36652, 54168]
+17:40:36 BTCUSDT 4h states cut-tested [1809, 6996, 7465, 9118, 14399]
+17:40:37 BTCUSDT 1d states cut-tested [809, 1055, 1070, 1103, 1244]
+17:41:01 ETHUSDT 1h states cut-tested [20994, 25240, 29863, 32410, 34124]
+17:41:06 ETHUSDT 4h states cut-tested [1139, 6659, 7465, 7596, 11094]
+17:41:07 ETHUSDT 1d states cut-tested [520, 746, 1244, 1679, 2373]
+17:41:33 SOLUSDT 1h states cut-tested [26775, 27693, 33908, 36538, 40655]
+17:41:38 SOLUSDT 4h states cut-tested [1766, 5855, 6693, 7291, 9509]
+17:41:39 SOLUSDT 1d states cut-tested [467, 484, 1115, 1146, 2103]
+17:41:57 DOGEUSDT 1h states cut-tested [2252, 23478, 24406, 27566, 33182]
+17:42:01 DOGEUSDT 4h states cut-tested [3341, 3769, 3987, 6891, 6953]
+17:42:02 DOGEUSDT 1d states cut-tested [595, 1012, 1148, 1565, 1961]
+17:42:31 LTCUSDT 1h states cut-tested [7967, 29762, 38668, 49268, 52745]
+17:42:34 LTCUSDT 4h states cut-tested [537, 2862, 3295, 7440, 7847]
+17:42:36 LTCUSDT 1d states cut-tested [817, 913, 1239, 1934, 2252]
+17:42:56 BCHUSDT 1h states cut-tested [4812, 10970, 29863, 35127, 46548]
+17:43:00 BCHUSDT 4h states cut-tested [1058, 2318, 2786, 7465, 14684]
+17:43:01 BCHUSDT 1d states cut-tested [679, 1048, 1244, 1523, 2461]
+17:43:13 BTCUSDT 15m signals cut-tested [91498, 43100, 188453]
+17:43:24 BTCUSDT 30m signals cut-tested [11371, 17661, 45829]
+17:43:30 BTCUSDT 1h signals cut-tested [51826, 9711, 56476]
+17:43:36 BTCUSDT 4h signals cut-tested [5210, 4730, 11878]
+17:43:50 ETHUSDT 15m signals cut-tested [40830, 59435, 47167]
+17:44:02 ETHUSDT 30m signals cut-tested [58582, 19178, 84318]
+17:44:09 ETHUSDT 1h signals cut-tested [19449, 42281, 17323]
+17:44:14 ETHUSDT 4h signals cut-tested [12859, 7090, 12910]
+17:44:28 SOLUSDT 15m signals cut-tested [150116, 91425, 210326]
+17:44:38 SOLUSDT 30m signals cut-tested [38626, 80444, 97013]
+17:44:44 SOLUSDT 1h signals cut-tested [44716, 7024, 25027]
+17:44:50 SOLUSDT 4h signals cut-tested [11138, 6169, 10833]
+          n_cmp  n_diff
+part                   
+signal  1090800       0
+state    313200       0
+rows with differences: 0
+Series([], )
+17:44:51 done 289s

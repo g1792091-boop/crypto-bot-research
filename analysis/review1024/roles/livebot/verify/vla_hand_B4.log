@@ -1,0 +1,18 @@
+25 done 22 s
+50 done 26 s
+75 done 28 s
+100 done 30 s
+125 done 31 s
+150 done 33 s
+175 done 35 s
+200 done 36 s
+B4 kind vote3 n 200
+ higher bar closed at or before signal: 1.0
+ judge dir (trailing window, closed bar) == file j_dir: 1.0
+ judge allows the trade side (closed bar): 1.0
+ judge with the still-open bar (peek) == file j_dir: 0.91
+ full-series raw == trailing-window raw: 1.0
+ member signal on truncated bars == trade side: 1.0  (None: 0 )
+ forced minute equal: 1.0  exit bar raw from window ok: 1.0  binding reverse signal causal: 1.0
+ roe equal (|d|<1e-6): 1.0  max |d|: 4.962748446080134e-07  k equal: 1.0
+ mean roe file -0.043030104 mine -0.04303011042738407

@@ -1,0 +1,130 @@
+{
+ "A_top5_family": [
+  {
+   "cell": "OBV30@4h>SRSI_X@1h|a2",
+   "n": 95,
+   "mean": 0.02725,
+   "t": 1.22304,
+   "p": 0.11066,
+   "opp": -0.02515,
+   "pb": 0.04993,
+   "long_share": 0.28421
+  },
+  {
+   "cell": "OBV20@4h>SRSI_X@1h|a2",
+   "n": 88,
+   "mean": 0.01894,
+   "t": 0.7531,
+   "p": 0.2257,
+   "opp": -0.02347,
+   "pb": 0.04162,
+   "long_share": 0.29545
+  },
+  {
+   "cell": "OBV50@4h>SRSI_X@1h|a2",
+   "n": 112,
+   "mean": 0.01846,
+   "t": 0.86266,
+   "p": 0.19416,
+   "opp": -0.00939,
+   "pb": 0.04114,
+   "long_share": 0.20536
+  },
+  {
+   "cell": "OBV30@4h>SRSI_X@1h|w35",
+   "n": 95,
+   "mean": 0.01581,
+   "t": 0.58708,
+   "p": 0.27858,
+   "opp": -0.03993,
+   "pb": 0.04227,
+   "long_share": 0.28421
+  },
+  {
+   "cell": "OBV20@4h>SRSI_X@1h|w35",
+   "n": 88,
+   "mean": 0.01413,
+   "t": 0.53536,
+   "p": 0.2962,
+   "opp": -0.04599,
+   "pb": 0.04059,
+   "long_share": 0.29545
+  }
+ ],
+ "A_target_rank_in_family": 1,
+ "A_target_rank_all_n30": 2,
+ "A_top3_all_n30": [
+  {
+   "cell": "OBVSL10@4h>CCI@1h|a2",
+   "n": 69,
+   "mean": 0.02746,
+   "t": 0.96187,
+   "p": 0.16806
+  },
+  {
+   "cell": "OBV30@4h>SRSI_X@1h|a2",
+   "n": 95,
+   "mean": 0.02725,
+   "t": 1.22304,
+   "p": 0.11066
+  },
+  {
+   "cell": "J3A@4h>SRSI_KD@1h|a2",
+   "n": 83,
+   "mean": 0.02397,
+   "t": 0.71524,
+   "p": 0.23723
+  }
+ ],
+ "A_family_cells_pos": 8,
+ "A_all_n30_pos": 31,
+ "A_all_n30_cells": 916,
+ "B_family_min_p": 0.11065670975975561,
+ "B_family_min_q": 0.9999999602721308,
+ "B_family_target_q": 0.9999999602721308,
+ "B_family_bonferroni_target": 1.0,
+ "B_all_n30_min_q": 1.0,
+ "B_all_n30_target_q": 1.0,
+ "B_all_n30_count_q_le_0.10": 0,
+ "C_target_t": 1.2230430956261549,
+ "C_maxt_family_p": 0.8845,
+ "C_maxt_all_p": 0.9975,
+ "C_maxt_family_95": 4.647089273346775,
+ "C_maxt_all_95": 17.122415717143713,
+ "D_per_bar_p_family_best_ge_obs": 0.1965,
+ "D_per_bar_p_all_best_ge_obs": 0.8905,
+ "D_per_bar_p_target_ge_obs": 0.08525,
+ "D_per_bar_family_best_median": 0.013373307901604093,
+ "D_per_bar_family_best_95": 0.04060534694438402,
+ "D_per_bar_all_best_median": 0.04455709788366259,
+ "D_per_bar_all_best_95": 0.07546396548602755,
+ "D_per_bar_target_mean_null": 0.0012048569377848732,
+ "D_per_coin_day_p_family_best_ge_obs": 0.20125,
+ "D_per_coin_day_p_all_best_ge_obs": 0.87,
+ "D_per_coin_day_p_target_ge_obs": 0.093,
+ "D_per_coin_day_family_best_median": 0.012615885929595345,
+ "D_per_coin_day_family_best_95": 0.041836714020648355,
+ "D_per_coin_day_all_best_median": 0.047531241609957864,
+ "D_per_coin_day_all_best_95": 0.08162652819471362,
+ "D_per_coin_day_target_mean_null": 0.0008661633923337304,
+ "D_obs_family_best": 0.0272504072942722,
+ "D_obs_all_best_n30": 0.0274574123930348,
+ "E_target_long_share": 0.28421052631578947,
+ "E_target_all_long_mean": -0.02152999467216432,
+ "E_target_all_short_mean": 0.02363093673423129,
+ "E_same_mix_random_pick": 0.010795724650308324,
+ "E_actual": 0.0272504072942722,
+ "E_coinflip_50_50": 0.0010504710310334838,
+ "E_actual_long_mean": 0.033172177306065954,
+ "E_actual_short_mean": 0.02489911626017762,
+ "E_n_long": 27,
+ "E_n_short": 68,
+ "E_days_with": 18,
+ "E_top_day_sum_share_of_total": 0.3728088263787984,
+ "E_mean_without_best_day": 0.01887983044874746,
+ "E_mean_without_best2_days": 0.012069842755758705
+}
+
+real	0m25.389s
+user	0m24.716s
+sys	0m1.158s

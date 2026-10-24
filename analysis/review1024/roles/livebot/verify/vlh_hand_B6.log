@@ -1,0 +1,20 @@
+LTCUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+BTCUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+SOLUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+BCHUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+ETHUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '4.0e-06'} live_bars from 2026-10-05 18:35:00 gaps after 0
+DOGEUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+25 done 21 s
+50 done 23 s
+75 done 24 s
+
+B6 fwd: n=87
+ signal time = a bar close and = entry minute: 1.0
+ higher bar closed at or before t: 1.0  age min/max (min): 0 1200
+ judge (closed bar, trailing 300) == file j_dir: 1.0  == trade side: 1.0  peek == file: 0.9195402298850575
+ member signal on truncated bars == side: 1.0
+ binding forced minute (<= the exit) equal: 1.0  trades with a binding forced minute: 8
+ own roe |d|<1e-4: 1.0  max |d| 4.5122667124974924e-07  k equal 1.0
+ twin roe |d|<1e-4: 1.0  max |d| 4.276950067994001e-07
+ mean roe file 0.817% mine 0.817%; twin file -2.690% mine -2.690% twin-free -2.903%
+ always short (study twin) 2.57%, always short (twin w/o forced exit) 2.36%, short share 0.609

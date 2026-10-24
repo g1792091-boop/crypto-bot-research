@@ -1,0 +1,66 @@
+--- family raw: total 246416, BH pass 0
+       cells   pos  t2  t3  bh      tmax      pmin
+cond                                              
+A     108532  1597  31   4   0  4.825343  0.000016
+ALL      461     2   1   0   0  2.607368  0.006953
+N      29032   393   8   1   0  4.989786  0.000056
+W     108391   932  18   2   0  3.045576  0.002307
+BH threshold for rank 1: 4.058178040386988e-07  smallest p: 1.649661381562633e-05
+--- family with payback: total 246416, BH pass 2
+       cells    pos    t2   t3  bh      tmax          pmin
+cond                                                      
+A     108532  13818  1260  156   2  6.813807  5.262995e-08
+ALL      461     77    11    1   0  3.570887  5.921778e-04
+N      29032   3869   254   38   0  6.502290  2.710235e-06
+W     108391  11478   826  105   0  4.847685  2.683746e-05
+BH threshold for rank 1: 4.058178040386988e-07  smallest p: 5.2629945301226814e-08
+--- shortlist W membership identical (same order): True  same set: True
+                                     cell  SEL_t_mine  SEL_t_study  CONF_m_mine  CONF_m_study  CONF_n  CONF_mALL  CONF_t  CONF_tFlip  CONF_mWo
+0          F5_BOX_HTF@30m|l:N03_ADX_GC@1d      3.0456       3.0456      -0.0497       -0.0497   356.0    -0.0412 -2.6829     -0.3324   -0.0375
+1         T1_EMA20_50@4h|c:N12_ICHI_AO@1d      3.0329       3.0329      -0.0310       -0.0310   183.0    -0.0127 -1.3909     -0.1187   -0.0261
+2          F10_M2022@1h|c:N07_ICHI_CMO@1d      2.8719       2.8719      -0.0217       -0.0217   102.0    -0.0352 -0.7450      0.8160   -0.0638
+3            N01_ST_EMA@4h|c:N23_HA_ST@1d      2.7142       2.7142      -0.0466       -0.0466   172.0    -0.0221 -2.1064     -0.1211   -0.0417
+4     F12_MSS_DISP@1h|c:N04_ST_KLINGER@4h      2.5645       2.5645      -0.0298       -0.0298   391.0    -0.0210 -1.5672      0.4626   -0.0434
+5     S5_DONCHIAN_MFI@30m|c:N03_ADX_GC@1d      2.1617       2.1617      -0.0700       -0.0700   125.0    -0.0646 -2.1714     -0.3452   -0.0507
+6       T12_HMA55@4h|l:S1_EMA_RSI_CHOP@1d      1.9338       1.9338      -0.0248       -0.0248   149.0    -0.0307 -1.0432      0.0078   -0.0251
+7     N10_HA_PSAR@4h|l:S1_EMA_RSI_CHOP@1d      1.9302       1.9302      -0.0098       -0.0098   114.0    -0.0340 -0.4614      1.4904   -0.0615
+8            N03_ADX_GC@1h|c:T5_ST10_2@1d      1.8272       1.8272      -0.0258       -0.0258    63.0    -0.0270 -0.6495      0.0727   -0.0307
+9       T5_ST10_2@4h|l:S1_EMA_RSI_CHOP@1d      1.6084       1.6084      -0.0358       -0.0358   136.0    -0.0262 -1.8546     -0.7426   -0.0120
+10            T5_ST14_4@4h|l:T12_HMA21@1d      1.6034       1.6034       0.0026        0.0026   193.0    -0.0091  0.1077      0.7862   -0.0270
+11           F12_MSS@4h|c:N07_ICHI_CMO@1d      1.5733       1.5733      -0.0295       -0.0295   218.0    -0.0193 -1.7597     -0.7151   -0.0102
+12      F12_MSS_DISP@4h|l:T4_MACDHIST0@1d      1.4987       1.4987       0.0179        0.0179   154.0     0.0134  0.6960      2.1128   -0.0706
+13  N06_MACD_ORB@15m|l:S1_EMA_RSI_CHOP@1d      1.4841       1.4841       0.0029        0.0029   332.0    -0.0449  0.1766      2.9463   -0.0636
+14             T1_EMA9_21@4h|l:N24_DMI@1d      1.4370       1.4370      -0.0278       -0.0278   806.0    -0.0273 -2.3666      0.4580   -0.0374
+15                 O7_MFI14@4h|j:V4OF4@1d      1.3952       1.3952      -0.0643       -0.0643    95.0    -0.0535 -1.9977     -0.5600   -0.0385
+16          T5_ST14_4@1h|c:N10_HA_PSAR@1d      1.3872       1.3872      -0.0482       -0.0482   343.0    -0.0464 -2.2383     -1.2008   -0.0056
+17       T9_DMI14_ADX25@4h|c:S2_ST_ROC@1d      1.3640       1.3640      -0.0119       -0.0119   116.0    -0.0339 -0.5431      0.9721   -0.0508
+18       N06_MACD_ORB@4h|c:N08_ICHI_WR@1d      1.3623       1.3623      -0.0850       -0.0850   177.0    -0.0427 -3.1340     -1.8892   -0.0022
+19            F4_PULL_RSI@4h|l:T8_PSAR@1d      1.3566       1.3566       0.0068        0.0068    61.0    -0.0092  0.1871      2.1063   -0.1156
+max |SEL_t diff| 4.894323729609518e-05  max |CONF_m diff| 4.982623131657982e-07
+picked 20: etf mix {'4h': 13, '1h': 4, '30m': 2, '15m': 1}  htf mix {'1d': 19, '4h': 1}  role mix {'trend': 10, 'reversal': 4, 'breakout': 3, 'range': 1, 'timing': 1, 'pullback': 1}
+picked 20 CONF cell-average -0.02907, trade-weighted -0.03000; their unfiltered entries (CONF_mALL) cell-average -0.02937; coin-flip twin of the with-trades -0.04070
+picked 20: CONF positive 4  CONF positive with payback 9  CONF one-sided p<0.05 0
+eligible with-cells with a CONF read: 108391;  trade-weighted CONF mean -0.04023; cell-average -0.03968
+  of them SELECT mean > 0: 932, CONF cell-average -0.02941
+--- picked 20 with-cells (CONF cell-average) vs 20 random cells
+                       null  draws  null_mean  null_p05  null_p50  null_p95   picked  p_null_ge_picked  premium_vs_null_mean
+0              all_eligible  10000   -0.03855  -0.04383  -0.03848  -0.03355 -0.02907            0.0018               0.00947
+1                   sel_pos  10000   -0.03081  -0.03880  -0.03081  -0.02296 -0.02907            0.3611               0.00174
+2       sel_pos_mix_matched  10000   -0.02799  -0.03484  -0.02796  -0.02121 -0.02907            0.6076              -0.00108
+3  all_eligible_mix_matched  10000   -0.03498  -0.04042  -0.03499  -0.02957 -0.02907            0.0366               0.00590
+--- eligible with-cells: Spearman(SEL t, CONF mean) = 0.130 (n=108391)
+    SELECT-positive only: 0.120 (n=932)
+CONF mean (cell-average) and etf mix by SELECT-t decile (0 = lowest):
+       SEL_t   SEL_m  CONF_m  share4h  share15m
+dec                                            
+0   -16.3608 -0.0428 -0.0406   0.0000    0.7487
+1   -12.4788 -0.0426 -0.0408   0.0000    0.5799
+2   -10.4434 -0.0422 -0.0405   0.0001    0.4867
+3    -8.9319 -0.0418 -0.0408   0.0021    0.3959
+4    -7.6704 -0.0413 -0.0409   0.0060    0.3185
+5    -6.4766 -0.0406 -0.0406   0.0173    0.2699
+6    -5.3474 -0.0397 -0.0400   0.0450    0.2142
+7    -4.2593 -0.0390 -0.0392   0.1200    0.1733
+8    -2.9344 -0.0373 -0.0382   0.2823    0.1667
+9    -1.1191 -0.0194 -0.0352   0.4647    0.0901
+Spearman within (etf, htf): [('15m', '1d', 11685, np.float64(-0.038), np.float64(-0.04163)), ('15m', '1h', 12905, np.float64(0.06), np.float64(-0.03964)), ('15m', '4h', 12739, np.float64(0.023), np.float64(-0.04066)), ('1h', '1d', 11495, np.float64(0.149), np.float64(-0.04028)), ('1h', '4h', 12462, np.float64(0.159), np.float64(-0.03993)), ('30m', '1d', 11628, np.float64(0.029), np.float64(-0.04166)), ('30m', '1h', 12650, np.float64(0.007), np.float64(-0.03951)), ('30m', '4h', 12664, np.float64(0.015), np.float64(-0.04085)), ('4h', '1d', 10163, np.float64(0.188), np.float64(-0.03179))]

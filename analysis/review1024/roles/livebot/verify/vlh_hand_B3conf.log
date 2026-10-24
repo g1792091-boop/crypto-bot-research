@@ -1,0 +1,36 @@
+BTCUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+BCHUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+DOGEUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+SOLUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+LTCUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '0.0e+00'} live_bars from 2026-10-05 18:35:00 gaps after 0
+25 done 15 s
+ETHUSDT grid vs live_bars on 24805 overlap minutes, max rel diff {'o': '0.0e+00', 'h': '0.0e+00', 'l': '0.0e+00', 'c': '4.0e-06'} live_bars from 2026-10-05 18:35:00 gaps after 0
+50 done 19 s
+75 done 20 s
+100 done 22 s
+125 done 24 s
+150 done 28 s
+175 done 29 s
+200 done 31 s
+
+B3 conf+late: n=150
+ signal time = a bar close and = entry minute: 1.0
+ higher bar closed at or before t: 1.0  age min/max (min): 0 1200
+ judge (closed bar, trailing 300) == file j_dir: 1.0  == trade side: 1.0  peek == file: 0.92
+ member signal on truncated bars == side: 1.0
+ binding forced minute (<= the exit) equal: 1.0  trades with a binding forced minute: 4
+ own roe |d|<1e-4: 1.0  max |d| 3.105685622895038e-06  k equal 1.0
+ twin roe |d|<1e-4: 1.0  max |d| 4.09891030617171e-07
+ mean roe file -3.717% mine -3.717%; twin file -2.270% mine -2.270% twin-free -2.010%
+ always short (study twin) -1.82%, always short (twin w/o forced exit) -1.82%, short share 0.473
+
+B3 fwd: n=72
+ signal time = a bar close and = entry minute: 1.0
+ higher bar closed at or before t: 1.0  age min/max (min): 0 1200
+ judge (closed bar, trailing 300) == file j_dir: 1.0  == trade side: 1.0  peek == file: 0.9583333333333334
+ member signal on truncated bars == side: 1.0
+ binding forced minute (<= the exit) equal: 1.0  trades with a binding forced minute: 2
+ own roe |d|<1e-4: 1.0  max |d| 4.5122667124974924e-07  k equal 1.0
+ twin roe |d|<1e-4: 1.0  max |d| 3.212496975102397e-07
+ mean roe file 0.965% mine 0.965%; twin file -2.846% mine -2.846% twin-free -2.846%
+ always short (study twin) 0.18%, always short (twin w/o forced exit) 0.18%, short share 0.778

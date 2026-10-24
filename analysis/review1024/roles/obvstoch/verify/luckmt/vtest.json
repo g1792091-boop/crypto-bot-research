@@ -1,0 +1,28 @@
+{
+ "reproduction": {
+  "SEL": {
+   "max_abs_diff_roe": 3.4442011516422344e-07,
+   "max_abs_diff_against": 5.001914257091178e-08,
+   "max_abs_diff_trendonly": 4.991383324021159e-08,
+   "n_equal": true
+  },
+  "CONF": {
+   "max_abs_diff_roe": 4.7245836257148177e-07,
+   "max_abs_diff_against": 5.008074342727209e-08,
+   "max_abs_diff_trendonly": 5.0026573383821216e-08,
+   "n_equal": true
+  },
+  "FIVE": {
+   "max_abs_diff_roe": 2.768564224264747e-07,
+   "max_abs_diff_against": 5.0026997530649986e-08,
+   "max_abs_diff_trendonly": 5.010651221715179e-08,
+   "n_equal": true
+  },
+  "FWD": {
+   "max_abs_diff_roe": 4.835363275612625e-07,
+   "max_abs_diff_against": 5.003591705826649e-07,
+   "max_abs_diff_trendonly": 4.973819302256377e-08,
+   "n_equal": true
+  }
+ }
+}

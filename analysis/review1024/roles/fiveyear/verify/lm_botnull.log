@@ -1,0 +1,20 @@
+B rebuilt with the cached path: trades 2482, CONF mean -0.02702 (study -0.02775, 2487), win 0.7486
+pools: eligible 106469 selpos 908 mix-groups eligible 56389 selpos mix 815
+0 7s cache 58
+25 49s cache 266
+50 78s cache 330
+75 104s cache 365
+100 128s cache 391
+125 153s cache 405
+150 177s cache 415
+175 199s cache 424
+200 221s cache 430
+225 242s cache 432
+250 264s cache 441
+275 285s cache 443
+           null  bots  trades_med     mean      p05      p50      p95  share_ge_B  share_pb_ge_0   B_conf
+0       mix_all   300      8276.0 -0.04006 -0.04466 -0.04016 -0.03489     0.00000        0.00000 -0.02775
+1    mix_selpos   300      2778.0 -0.03178 -0.03868 -0.03190 -0.02479     0.18667        0.18667 -0.02775
+2  same_entries   300      3877.0 -0.03432 -0.03941 -0.03428 -0.02913     0.01333        0.01333 -0.02775
+3        selpos   300      3303.5 -0.03243 -0.04038 -0.03249 -0.02507     0.17667        0.17667 -0.02775
+done 304s

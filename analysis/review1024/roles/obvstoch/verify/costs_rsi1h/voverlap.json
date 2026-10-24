@@ -1,0 +1,31 @@
+{
+ "PRE": {
+  "n": 56,
+  "same_coin_overlapping": 1
+ },
+ "SEL": {
+  "n": 270,
+  "same_coin_overlapping": 13
+ },
+ "CONF": {
+  "n": 249,
+  "same_coin_overlapping": 12
+ },
+ "YTD": {
+  "n": 86,
+  "same_coin_overlapping": 5
+ },
+ "FWD": {
+  "n": 4,
+  "same_coin_overlapping": 0
+ },
+ "FIVE": {
+  "n": 575,
+  "same_coin_overlapping": 26
+ },
+ "CONF_stop_beyond_liq_real": 86,
+ "CONF_stop_beyond_floor_3.21pct": 38,
+ "CONF_stopd_median_pct": 1.96243457471267,
+ "CONF_hold_min_median": 119.0,
+ "CONF_hold_min_mean": 254.17670682730923
+}

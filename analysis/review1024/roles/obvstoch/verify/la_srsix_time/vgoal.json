@@ -1,0 +1,42 @@
+{
+ "ok_FWD_pb_m57": {
+  "p_x6": 0.22725,
+  "p_lose50_first": 0.2979,
+  "p_lose90_first": 0.0083,
+  "median_x": 2.069176327367171,
+  "days": 20,
+  "trades": 39
+ },
+ "ok_FWD_pb_m40": {
+  "p_x6": 0.0613,
+  "p_lose50_first": 0.11425,
+  "p_lose90_first": 5e-05,
+  "median_x": 1.9007085126802843,
+  "days": 20,
+  "trades": 39
+ },
+ "ok_CONF_pb_m40": {
+  "p_x6": 0.0218,
+  "p_lose50_first": 0.76565,
+  "p_lose90_first": 0.21225,
+  "median_x": 0.37709252777270175,
+  "days": 1026,
+  "trades": 2642
+ },
+ "late_FWD_pb_m57": {
+  "p_x6": 0.02565,
+  "p_lose50_first": 0.8482,
+  "p_lose90_first": 0.362,
+  "median_x": 0.23448400572281602,
+  "days": 20,
+  "trades": 43
+ },
+ "late_FWD_pb_m40": {
+  "p_x6": 0.0041,
+  "p_lose50_first": 0.698,
+  "p_lose90_first": 0.0791,
+  "median_x": 0.4587793879269819,
+  "days": 20,
+  "trades": 43
+ }
+}

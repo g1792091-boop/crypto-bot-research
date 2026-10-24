@@ -1,0 +1,32 @@
+{
+ "BTCUSDT": {
+  "n1h": 59726,
+  "n4h": 14931,
+  "la_differs_share": 0.7499748853095805
+ },
+ "ETHUSDT": {
+  "n1h": 59726,
+  "n4h": 14931,
+  "la_differs_share": 0.7499748853095805
+ },
+ "SOLUSDT": {
+  "n1h": 53551,
+  "n4h": 13387,
+  "la_differs_share": 0.7499579839778903
+ },
+ "DOGEUSDT": {
+  "n1h": 55133,
+  "n4h": 13782,
+  "la_differs_share": 0.7499319826601129
+ },
+ "LTCUSDT": {
+  "n1h": 59525,
+  "n4h": 14880,
+  "la_differs_share": 0.7499370012599748
+ },
+ "BCHUSDT": {
+  "n1h": 59726,
+  "n4h": 14931,
+  "la_differs_share": 0.7499748853095805
+ }
+}

@@ -1,0 +1,22 @@
+{
+ "SEL": {
+  "mean_pb_roe": 0.02371914417239134,
+  "breakeven_extra_roundtrip_cost_pct": 0.07906381390797113,
+  "breakeven_extra_per_side_pct": 0.03953190695398556
+ },
+ "CONF": {
+  "mean_pb_roe": 0.00885740924867126,
+  "breakeven_extra_roundtrip_cost_pct": 0.029524697495570868,
+  "breakeven_extra_per_side_pct": 0.014762348747785434
+ },
+ "YTD": {
+  "mean_pb_roe": 0.010684121008915429,
+  "breakeven_extra_roundtrip_cost_pct": 0.03561373669638476,
+  "breakeven_extra_per_side_pct": 0.01780686834819238
+ },
+ "FIVE": {
+  "mean_pb_roe": 0.014702279293705172,
+  "breakeven_extra_roundtrip_cost_pct": 0.0490075976456839,
+  "breakeven_extra_per_side_pct": 0.02450379882284195
+ }
+}

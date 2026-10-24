@@ -1,0 +1,80 @@
+{
+ "no_payback": {
+  "acct_m40": {
+   "n": 197,
+   "days": 1026.0,
+   "per_day": 0.192,
+   "mean_roe": -0.015104381824361378,
+   "win": 0.7868020304568528,
+   "final_x": 0.07227654802957008,
+   "max_dd": 0.9549896782003793,
+   "worst_roe": -1.0,
+   "open_at_end": 0
+  },
+  "max_trade_roe": 0.39764885790646076,
+  "q99_trade_roe": 0.2520000122487541,
+  "goal_m40": {
+   "p_target": 0.0,
+   "p_lose50_first": 0.056,
+   "p_lose90_first": 0.0,
+   "median_final_x": 0.9631307890689572,
+   "days_in_sample": 1026,
+   "trades_in_sample": 197
+  },
+  "goal_m70": {
+   "p_target": 0.0,
+   "p_lose50_first": 0.25825,
+   "p_lose90_first": 0.00975,
+   "median_final_x": 0.8852794817373113,
+   "days_in_sample": 1026,
+   "trades_in_sample": 197
+  },
+  "goal_m100": {
+   "p_target": 0.00025,
+   "p_lose50_first": 0.42825,
+   "p_lose90_first": 0.10425,
+   "median_final_x": 0.7465945077050646,
+   "days_in_sample": 1026,
+   "trades_in_sample": 197
+  }
+ },
+ "payback": {
+  "acct_m40": {
+   "n": 197,
+   "days": 1026.0,
+   "per_day": 0.192,
+   "mean_roe": 0.007575617646155732,
+   "win": 0.7918781725888325,
+   "final_x": 0.44523395965057294,
+   "max_dd": 0.8539004012329638,
+   "worst_roe": -0.9773200521540641,
+   "open_at_end": 0
+  },
+  "max_trade_roe": 0.42032885790646074,
+  "q99_trade_roe": 0.2746800122487541,
+  "goal_m40": {
+   "p_target": 0.0,
+   "p_lose50_first": 0.04225,
+   "p_lose90_first": 0.0,
+   "median_final_x": 1.0143334954300496,
+   "days_in_sample": 1026,
+   "trades_in_sample": 197
+  },
+  "goal_m70": {
+   "p_target": 0.0,
+   "p_lose50_first": 0.223,
+   "p_lose90_first": 0.0055,
+   "median_final_x": 0.9751129133821343,
+   "days_in_sample": 1026,
+   "trades_in_sample": 197
+  },
+  "goal_m100": {
+   "p_target": 0.001,
+   "p_lose50_first": 0.392,
+   "p_lose90_first": 0.09225,
+   "median_final_x": 0.873630615552303,
+   "days_in_sample": 1026,
+   "trades_in_sample": 197
+  }
+ }
+}

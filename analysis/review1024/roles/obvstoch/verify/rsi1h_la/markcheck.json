@@ -1,0 +1,26 @@
+{
+ "SEL": {
+  "n": 270,
+  "last": 0.104,
+  "mark": 1.282,
+  "last_pb": 2.372,
+  "mark_pb": 3.55,
+  "n_absdiff_gt_20pp": 11
+ },
+ "CONF<=09-28": {
+  "n": 243,
+  "last": -1.47,
+  "mark": -0.958,
+  "last_pb": 0.798,
+  "mark_pb": 1.31,
+  "n_absdiff_gt_20pp": 6
+ },
+ "FIVE<=09-28": {
+  "n": 569,
+  "last": -0.829,
+  "mark": 0.204,
+  "last_pb": 1.439,
+  "mark_pb": 2.472,
+  "n_absdiff_gt_20pp": 20
+ }
+}

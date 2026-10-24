@@ -1,0 +1,61 @@
+18:22:10 cell rows 2869528 68s
+18:22:17 BTCUSDT rewalked 110771
+18:22:20 ETHUSDT rewalked 118865
+18:22:23 SOLUSDT rewalked 118917
+18:22:25 DOGEUSDT rewalked 119019
+18:22:27 LTCUSDT rewalked 118563
+18:22:29 BCHUSDT rewalked 121075
+18:22:30 base check max |r diff| 3.5542985082903655e-09
+{'period': 'SEL', 'variant': 'base', 'cells': 374, 'beat_share': 1.0, 'cell_avg_own': np.float64(-0.0126), 'cell_avg_opp': np.float64(-0.0583), 'pooled_distinct_signals': 568753, 'pooled_own': np.float64(-0.0301), 'pooled_opp': np.float64(-0.0497), 'pooled_gap': np.float64(0.0196)}
+{'period': 'SEL', 'variant': 'cost2x', 'cells': 374, 'beat_share': 1.0, 'cell_avg_own': np.float64(-0.0557), 'cell_avg_opp': np.float64(-0.1055), 'pooled_distinct_signals': 568753, 'pooled_own': np.float64(-0.0728), 'pooled_opp': np.float64(-0.0949), 'pooled_gap': np.float64(0.0221)}
+{'period': 'SEL', 'variant': 'woo_real', 'cells': 374, 'beat_share': 1.0, 'cell_avg_own': np.float64(-0.0292), 'cell_avg_opp': np.float64(-0.0768), 'pooled_distinct_signals': 568753, 'pooled_own': np.float64(-0.0468), 'pooled_opp': np.float64(-0.0674), 'pooled_gap': np.float64(0.0205)}
+{'period': 'SEL', 'variant': 'late1', 'cells': 374, 'beat_share': 1.0, 'cell_avg_own': np.float64(-0.0255), 'cell_avg_opp': np.float64(-0.0494), 'pooled_distinct_signals': 568753, 'pooled_own': np.float64(-0.0342), 'pooled_opp': np.float64(-0.0485), 'pooled_gap': np.float64(0.0143)}
+{'period': 'SEL', 'variant': 'late2', 'cells': 374, 'beat_share': 0.9866, 'cell_avg_own': np.float64(-0.0251), 'cell_avg_opp': np.float64(-0.0516), 'pooled_distinct_signals': 568753, 'pooled_own': np.float64(-0.0349), 'pooled_opp': np.float64(-0.0495), 'pooled_gap': np.float64(0.0146)}
+{'period': 'SEL', 'variant': 'late1_woo', 'cells': 374, 'beat_share': 0.9973, 'cell_avg_own': np.float64(-0.0407), 'cell_avg_opp': np.float64(-0.0677), 'pooled_distinct_signals': 568753, 'pooled_own': np.float64(-0.0504), 'pooled_opp': np.float64(-0.0664), 'pooled_gap': np.float64(0.016)}
+{'period': 'CONF', 'variant': 'base', 'cells': 374, 'beat_share': 0.8289, 'cell_avg_own': np.float64(-0.0334), 'cell_avg_opp': np.float64(-0.0442), 'pooled_distinct_signals': 535064, 'pooled_own': np.float64(-0.0384), 'pooled_opp': np.float64(-0.0435), 'pooled_gap': np.float64(0.005)}
+{'period': 'CONF', 'variant': 'cost2x', 'cells': 374, 'beat_share': 0.9198, 'cell_avg_own': np.float64(-0.0745), 'cell_avg_opp': np.float64(-0.0889), 'pooled_distinct_signals': 535064, 'pooled_own': np.float64(-0.0816), 'pooled_opp': np.float64(-0.0879), 'pooled_gap': np.float64(0.0063)}
+{'period': 'CONF', 'variant': 'woo_real', 'cells': 374, 'beat_share': 0.8636, 'cell_avg_own': np.float64(-0.0501), 'cell_avg_opp': np.float64(-0.0632), 'pooled_distinct_signals': 535064, 'pooled_own': np.float64(-0.0556), 'pooled_opp': np.float64(-0.0612), 'pooled_gap': np.float64(0.0056)}
+{'period': 'CONF', 'variant': 'late1', 'cells': 374, 'beat_share': 0.6952, 'cell_avg_own': np.float64(-0.0366), 'cell_avg_opp': np.float64(-0.0413), 'pooled_distinct_signals': 535064, 'pooled_own': np.float64(-0.0395), 'pooled_opp': np.float64(-0.0428), 'pooled_gap': np.float64(0.0032)}
+{'period': 'CONF', 'variant': 'late2', 'cells': 374, 'beat_share': 0.6898, 'cell_avg_own': np.float64(-0.0377), 'cell_avg_opp': np.float64(-0.0417), 'pooled_distinct_signals': 535064, 'pooled_own': np.float64(-0.0392), 'pooled_opp': np.float64(-0.0433), 'pooled_gap': np.float64(0.0041)}
+{'period': 'CONF', 'variant': 'late1_woo', 'cells': 374, 'beat_share': 0.7166, 'cell_avg_own': np.float64(-0.0539), 'cell_avg_opp': np.float64(-0.059), 'pooled_distinct_signals': 535064, 'pooled_own': np.float64(-0.0566), 'pooled_opp': np.float64(-0.0602), 'pooled_gap': np.float64(0.0035)}
+{'period': 'LATE', 'variant': 'base', 'cells': 374, 'beat_share': 0.7701, 'cell_avg_own': np.float64(-0.0312), 'cell_avg_opp': np.float64(-0.0472), 'pooled_distinct_signals': 158828, 'pooled_own': np.float64(-0.0385), 'pooled_opp': np.float64(-0.0427), 'pooled_gap': np.float64(0.0042)}
+{'period': 'LATE', 'variant': 'cost2x', 'cells': 374, 'beat_share': 0.8235, 'cell_avg_own': np.float64(-0.069), 'cell_avg_opp': np.float64(-0.0965), 'pooled_distinct_signals': 158828, 'pooled_own': np.float64(-0.0804), 'pooled_opp': np.float64(-0.0885), 'pooled_gap': np.float64(0.0081)}
+{'period': 'LATE', 'variant': 'woo_real', 'cells': 374, 'beat_share': 0.8128, 'cell_avg_own': np.float64(-0.0458), 'cell_avg_opp': np.float64(-0.0669), 'pooled_distinct_signals': 158828, 'pooled_own': np.float64(-0.0554), 'pooled_opp': np.float64(-0.0608), 'pooled_gap': np.float64(0.0055)}
+{'period': 'LATE', 'variant': 'late1', 'cells': 374, 'beat_share': 0.7834, 'cell_avg_own': np.float64(-0.0295), 'cell_avg_opp': np.float64(-0.0479), 'pooled_distinct_signals': 158828, 'pooled_own': np.float64(-0.0382), 'pooled_opp': np.float64(-0.0424), 'pooled_gap': np.float64(0.0042)}
+{'period': 'LATE', 'variant': 'late2', 'cells': 374, 'beat_share': 0.7594, 'cell_avg_own': np.float64(-0.0307), 'cell_avg_opp': np.float64(-0.047), 'pooled_distinct_signals': 158828, 'pooled_own': np.float64(-0.0379), 'pooled_opp': np.float64(-0.0427), 'pooled_gap': np.float64(0.0048)}
+{'period': 'LATE', 'variant': 'late1_woo', 'cells': 374, 'beat_share': 0.7834, 'cell_avg_own': np.float64(-0.0457), 'cell_avg_opp': np.float64(-0.0678), 'pooled_distinct_signals': 158828, 'pooled_own': np.float64(-0.055), 'pooled_opp': np.float64(-0.0606), 'pooled_gap': np.float64(0.0056)}
+{'period': 'FWD', 'variant': 'base', 'cells': 372, 'beat_share': 0.3656, 'cell_avg_own': np.float64(-0.0559), 'cell_avg_opp': np.float64(-0.0224), 'pooled_distinct_signals': 9738, 'pooled_own': np.float64(-0.0332), 'pooled_opp': np.float64(-0.0501), 'pooled_gap': np.float64(0.017)}
+{'period': 'FWD', 'variant': 'cost2x', 'cells': 372, 'beat_share': 0.3952, 'cell_avg_own': np.float64(-0.0946), 'cell_avg_opp': np.float64(-0.0705), 'pooled_distinct_signals': 9738, 'pooled_own': np.float64(-0.0704), 'pooled_opp': np.float64(-0.0915), 'pooled_gap': np.float64(0.021)}
+{'period': 'FWD', 'variant': 'woo_real', 'cells': 372, 'beat_share': 0.3656, 'cell_avg_own': np.float64(-0.0741), 'cell_avg_opp': np.float64(-0.0386), 'pooled_distinct_signals': 9738, 'pooled_own': np.float64(-0.0467), 'pooled_opp': np.float64(-0.065), 'pooled_gap': np.float64(0.0182)}
+{'period': 'FWD', 'variant': 'late1', 'cells': 372, 'beat_share': 0.4409, 'cell_avg_own': np.float64(-0.0504), 'cell_avg_opp': np.float64(-0.0281), 'pooled_distinct_signals': 9738, 'pooled_own': np.float64(-0.033), 'pooled_opp': np.float64(-0.0481), 'pooled_gap': np.float64(0.0151)}
+{'period': 'FWD', 'variant': 'late2', 'cells': 372, 'beat_share': 0.4167, 'cell_avg_own': np.float64(-0.0527), 'cell_avg_opp': np.float64(-0.0276), 'pooled_distinct_signals': 9738, 'pooled_own': np.float64(-0.0331), 'pooled_opp': np.float64(-0.0474), 'pooled_gap': np.float64(0.0142)}
+{'period': 'FWD', 'variant': 'late1_woo', 'cells': 372, 'beat_share': 0.4113, 'cell_avg_own': np.float64(-0.0722), 'cell_avg_opp': np.float64(-0.0469), 'pooled_distinct_signals': 9735, 'pooled_own': np.float64(-0.0476), 'pooled_opp': np.float64(-0.0644), 'pooled_gap': np.float64(0.0168)}
+18:22:46 BTCUSDT rewalked 41129
+18:22:48 ETHUSDT rewalked 38799
+18:22:49 SOLUSDT rewalked 41435
+18:22:50 DOGEUSDT rewalked 42137
+18:22:51 LTCUSDT rewalked 39346
+18:22:52 BCHUSDT rewalked 43644
+base CONF {'trades': 10766, 'per_day': 10.7231, 'mean_roe': np.float64(-0.0348), 'mean_roe_pb': np.float64(-0.0084), 'flip_mean_roe': np.float64(-0.0429), 'px6_m04_pb': 0.0605, 'pl50_m04_pb': 0.944, 'pl90_m04_pb': 0.765, 'med_m04_pb': 0.039}
+base LATE {'trades': 2551, 'per_day': 8.6475, 'mean_roe': np.float64(-0.0331), 'mean_roe_pb': np.float64(-0.0066), 'flip_mean_roe': np.float64(-0.0564)}
+base FWD {'trades': 121, 'per_day': 6.3684, 'mean_roe': np.float64(-0.043), 'mean_roe_pb': np.float64(-0.0166), 'flip_mean_roe': np.float64(-0.0562), 'px6_m04_pb': 0.0467, 'pl50_m04_pb': 0.9327, 'pl90_m04_pb': 0.6505, 'med_m04_pb': 0.0832}
+cost2x CONF {'trades': 9798, 'per_day': 9.759, 'mean_roe': np.float64(-0.0798), 'mean_roe_pb': np.float64(-0.0533), 'flip_mean_roe': np.float64(-0.089), 'px6_m04_pb': 0.0005, 'pl50_m04_pb': 0.9995, 'pl90_m04_pb': 0.9988, 'med_m04_pb': 0.0002}
+cost2x LATE {'trades': 2304, 'per_day': 7.8102, 'mean_roe': np.float64(-0.0706), 'mean_roe_pb': np.float64(-0.0441), 'flip_mean_roe': np.float64(-0.1078)}
+cost2x FWD {'trades': 118, 'per_day': 6.2105, 'mean_roe': np.float64(-0.0743), 'mean_roe_pb': np.float64(-0.0479), 'flip_mean_roe': np.float64(-0.1153), 'px6_m04_pb': 0.003, 'pl50_m04_pb': 0.9955, 'pl90_m04_pb': 0.9497, 'med_m04_pb': 0.0081}
+woo_real CONF {'trades': 10307, 'per_day': 10.2659, 'mean_roe': np.float64(-0.0493), 'mean_roe_pb': np.float64(-0.0228), 'flip_mean_roe': np.float64(-0.0602), 'px6_m04_pb': 0.0135, 'pl50_m04_pb': 0.986, 'pl90_m04_pb': 0.9325, 'med_m04_pb': 0.0065}
+woo_real LATE {'trades': 2426, 'per_day': 8.2237, 'mean_roe': np.float64(-0.0409), 'mean_roe_pb': np.float64(-0.0144), 'flip_mean_roe': np.float64(-0.0754)}
+woo_real FWD {'trades': 121, 'per_day': 6.3684, 'mean_roe': np.float64(-0.0382), 'mean_roe_pb': np.float64(-0.0117), 'flip_mean_roe': np.float64(-0.0623), 'px6_m04_pb': 0.046, 'pl50_m04_pb': 0.914, 'pl90_m04_pb': 0.5637, 'med_m04_pb': 0.1228}
+late1 CONF {'trades': 10601, 'per_day': 10.5588, 'mean_roe': np.float64(-0.0377), 'mean_roe_pb': np.float64(-0.0113), 'flip_mean_roe': np.float64(-0.0441), 'px6_m04_pb': 0.0508, 'pl50_m04_pb': 0.952, 'pl90_m04_pb': 0.8193, 'med_m04_pb': 0.027}
+late1 LATE {'trades': 2511, 'per_day': 8.5119, 'mean_roe': np.float64(-0.0322), 'mean_roe_pb': np.float64(-0.0057), 'flip_mean_roe': np.float64(-0.0595)}
+late1 FWD {'trades': 119, 'per_day': 6.2632, 'mean_roe': np.float64(-0.0305), 'mean_roe_pb': np.float64(-0.004), 'flip_mean_roe': np.float64(-0.076), 'px6_m04_pb': 0.039, 'pl50_m04_pb': 0.887, 'pl90_m04_pb': 0.4017, 'med_m04_pb': 0.2067}
+late2 CONF {'trades': 10444, 'per_day': 10.4024, 'mean_roe': np.float64(-0.0353), 'mean_roe_pb': np.float64(-0.0088), 'flip_mean_roe': np.float64(-0.043), 'px6_m04_pb': 0.0583, 'pl50_m04_pb': 0.9437, 'pl90_m04_pb': 0.7682, 'med_m04_pb': 0.0411}
+late2 LATE {'trades': 2464, 'per_day': 8.3525, 'mean_roe': np.float64(-0.0303), 'mean_roe_pb': np.float64(-0.0038), 'flip_mean_roe': np.float64(-0.0574)}
+late2 FWD {'trades': 128, 'per_day': 6.7368, 'mean_roe': np.float64(-0.0673), 'mean_roe_pb': np.float64(-0.0409), 'flip_mean_roe': np.float64(-0.0644), 'px6_m04_pb': 0.0, 'pl50_m04_pb': 0.9972, 'pl90_m04_pb': 0.9285, 'med_m04_pb': 0.0106}
+late1_woo CONF {'trades': 10183, 'per_day': 10.1424, 'mean_roe': np.float64(-0.053), 'mean_roe_pb': np.float64(-0.0265), 'flip_mean_roe': np.float64(-0.0632), 'px6_m04_pb': 0.0115, 'pl50_m04_pb': 0.99, 'pl90_m04_pb': 0.9485, 'med_m04_pb': 0.0041}
+late1_woo LATE {'trades': 2412, 'per_day': 8.1763, 'mean_roe': np.float64(-0.0428), 'mean_roe_pb': np.float64(-0.0163), 'flip_mean_roe': np.float64(-0.0802)}
+late1_woo FWD {'trades': 128, 'per_day': 6.7368, 'mean_roe': np.float64(-0.047), 'mean_roe_pb': np.float64(-0.0206), 'flip_mean_roe': np.float64(-0.1234), 'px6_m04_pb': 0.0152, 'pl50_m04_pb': 0.9645, 'pl90_m04_pb': 0.747, 'med_m04_pb': 0.0507}
+18:22:57 done 115s
+
+real	1m57.187s
+user	1m30.793s
+sys	0m26.166s

@@ -1,0 +1,12 @@
+Part A: 100 trades of bot G re-checked by hand ({'CONF': 60, 'SEL': 15, 'FWD': 15, 'LATE': 10}), missing raw minutes in entry bars: 0
+  entry_min_is_t: 100 / 100
+  bar_close_is_t: 100 / 100
+  bar_equal_raw: 100 / 100
+  entry_fires_cut: 100 / 100
+  htf_close_le_t: 100 / 100
+  htf_next_close_gt_t: 100 / 100
+  htf_utc_arith: 100 / 100
+  state_equal: 100 / 100
+  with_side: 100 / 100
+  me_equal: 100 / 100
+  opp_equal: 100 / 100

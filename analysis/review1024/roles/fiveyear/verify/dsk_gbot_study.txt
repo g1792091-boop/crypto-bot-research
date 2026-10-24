@@ -1,0 +1,6 @@
+study functions now: CONF signals 120498 trades 10766 mean -0.03484 flip -0.04294
+study functions now: FWD signals 2324 trades 121 mean -0.04302 flip -0.05620
+CONF: taken trades study 10766 mine 10563 common 9632
+  first differing trades: [(4, 2105025, 1, 'T1_EMA50_200', '15m'), (5, 2105025, 1, 'T1_EMA50_200', '15m'), (3, 2105070, -1, 'V45_AMB', '30m')]
+FWD: taken trades study 121 mine 117 common 100
+  first differing trades: [(0, 3566745, -1, 'OBV_B', '15m'), (2, 3566745, -1, 'OBV_B', '15m'), (1, 3566760, -1, 'V1_BB_BREAK', '1h')]

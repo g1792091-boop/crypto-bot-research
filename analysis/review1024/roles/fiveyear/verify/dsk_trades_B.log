@@ -1,0 +1,17 @@
+18:20:41 B BTCUSDT signals 155 with 64
+18:21:39 B ETHUSDT signals 162 with 59
+18:22:25 B SOLUSDT signals 140 with 55
+18:23:11 B DOGEUSDT signals 127 with 60
+18:24:04 B LTCUSDT signals 126 with 49
+18:25:02 B BCHUSDT signals 146 with 55
+Part B: F12_MSS_DISP@4h signals 2021-01 .. 10-24: 837; 1d latch cut == stored: 837 / 837
+  with-trend signals 342; the 4h signal fires on bars cut at the signal bar: 342 / 342
+  SEL: signals 181 trades 136 mean 0.03731 (pb 0.06377) win 0.816 signal-level mean 0.02913 opp -0.07875 | study signals 181 trades 136 mean 0.03732 (pb 0.06378) win 0.816
+  CONF: signals 154 trades 124 mean 0.01718 (pb 0.04364) win 0.806 signal-level mean 0.01791 opp -0.07061 | study signals 154 trades 124 mean 0.01700 (pb 0.04346) win 0.806
+  LATE: signals 51 trades 39 mean 0.07316 (pb 0.09962) win 0.872 signal-level mean 0.07112 opp -0.07933 | study signals 51 trades 39 mean 0.07316 (pb 0.09962) win 0.872
+  FWD: signals 6 trades 3 mean 0.10286 (pb 0.12932) win 1.000 signal-level mean 0.12248 opp -0.30000 | study signals 6 trades 3 mean 0.10286 (pb 0.12932) win 1.000
+18:25:02 done 318s
+
+real	5m19.270s
+user	4m59.953s
+sys	0m17.333s

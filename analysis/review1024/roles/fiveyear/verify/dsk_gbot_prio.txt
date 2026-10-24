@@ -1,0 +1,9 @@
+exact study order: CONF trades 10563 mean -0.03531 flip -0.04344; FWD trades 117 mean -0.02547 flip -0.07138
+30 random priority orders (same 321 cells, same signals):
+           CONF_n   CONF_m  CONF_flip      FWD_n    FWD_m  FWD_flip
+mean  10594.06667 -0.03585   -0.04540  122.63333 -0.05341  -0.06356
+std      86.87642  0.00156    0.00157    8.02360  0.01641   0.01165
+min   10415.00000 -0.03901   -0.04862  102.00000 -0.08848  -0.08233
+50%   10584.50000 -0.03549   -0.04534  122.50000 -0.05052  -0.06427
+max   10777.00000 -0.03222   -0.04276  135.00000 -0.02360  -0.03747
+FWD mean below the coin flip in 8 of 30 orders; CONF mean above the coin flip in 30 of 30

@@ -1,0 +1,13 @@
+17:41:57 BTCUSDT done
+17:42:00 SOLUSDT done
+17:42:02 skip (raw gap or past the raw end) DOGEUSDT 15m 1611000000000 AssertionError('gap in raw minutes')
+17:42:02 DOGEUSDT done
+17:42:04 BCHUSDT done
+bar_minutes_before_entry    1.000000
+bar_close_equal             1.000000
+htf_closed                  1.000000
+r_equal                     0.993056
+k_equal                     0.993056
+dtype: float64
+144 trades;         coin   tf       name  side                t_utc  with_v4of4  bar_minutes_before_entry  bar_close_equal     htf_bar_open_utc  htf_closed  entry_open_raw    r_grid  r_hand  k_grid  k_hand  r_equal  k_equal
+89  DOGEUSDT  15m  S4_BB_BBP     1  2021-01-18 20:00:00       False                      True             True  2021-01-18 19:00:00        True        0.009212  0.002788     NaN     244      -9    False    False

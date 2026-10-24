@@ -1,0 +1,55 @@
+B rows (all periods) 8148
+SEL: trades 2373 (study 2373), per_day 2.167 (2.167), mean 0.01936 (0.01936), pb 0.04582 (0.04582), win 0.8104 (0.8104), twin -0.05185 (-0.05185), long share 0.540
+CONF: trades 2487 (study 2487), per_day 2.477 (2.477), mean -0.02775 (-0.02775), pb -0.00129 (-0.00129), win 0.7475 (0.7475), twin -0.03914 (-0.03914), long share 0.545
+LATE: trades 658 (study 658), per_day 2.231 (2.231), mean -0.04508 (-0.04508), pb -0.01862 (-0.01862), win 0.7280 (0.7280), twin -0.04044 (-0.04044), long share 0.529
+FWD: trades 41 (study 41), per_day 2.158 (2.158), mean -0.03891 (-0.03891), pb -0.01245 (-0.01245), win 0.7561 (0.7561), twin -0.04440 (-0.04440), long share 0.439
+CONF mean raw: -0.02775, month-clustered se 0.00677 (t -4.10, 33 months), 95% CI [-0.0410, -0.0145]; day-block bootstrap 95% [-0.0386, -0.0171]
+CONF mean with payback: -0.00129, month-clustered se 0.00677 (t -0.19, 33 months), 95% CI [-0.0146, 0.0120]; day-block bootstrap 95% [-0.0121, 0.0094]
+CONF paired (taken trades) side - opposite side: 0.01238 (opposite on the same trades -0.04013), month-clustered t 1.29, one-sided p 0.1028
+CONF taken trades by cell:
+                                         size    mean
+cell                                                 
+T1_EMA9_21@4h|l:N24_DMI@1d|W              429 -0.0278
+F12_MSS_DISP@1h|c:N04_ST_KLINGER@4h|W     267 -0.0358
+N06_MACD_ORB@15m|l:S1_EMA_RSI_CHOP@1d|W   242 -0.0068
+T5_ST14_4@1h|c:N10_HA_PSAR@1d|W           204 -0.0535
+F5_BOX_HTF@30m|l:N03_ADX_GC@1d|W          179 -0.0406
+T1_EMA20_50@4h|c:N12_ICHI_AO@1d|W         143 -0.0102
+T5_ST14_4@4h|l:T12_HMA21@1d|W             129  0.0012
+T12_HMA55@4h|l:S1_EMA_RSI_CHOP@1d|W       120 -0.0249
+N01_ST_EMA@4h|c:N23_HA_ST@1d|W            112 -0.0248
+F12_MSS@4h|c:N07_ICHI_CMO@1d|W             97 -0.0576
+N10_HA_PSAR@4h|l:S1_EMA_RSI_CHOP@1d|W      86 -0.0066
+S5_DONCHIAN_MFI@30m|c:N03_ADX_GC@1d|W      77 -0.0739
+T5_ST10_2@4h|l:S1_EMA_RSI_CHOP@1d|W        77 -0.0442
+N06_MACD_ORB@4h|c:N08_ICHI_WR@1d|W         62 -0.0670
+F10_M2022@1h|c:N07_ICHI_CMO@1d|W           56 -0.0284
+O7_MFI14@4h|j:V4OF4@1d|W                   52 -0.0201
+T9_DMI14_ADX25@4h|c:S2_ST_ROC@1d|W         49 -0.0329
+F12_MSS_DISP@4h|l:T4_MACDHIST0@1d|W        45  0.0513
+N03_ADX_GC@1h|c:T5_ST10_2@1d|W             38  0.0224
+F4_PULL_RSI@4h|l:T8_PSAR@1d|W              23 -0.0072
+CONF taken trades by entry tf: {'size': {'15m': 242, '1h': 565, '30m': 256, '4h': 1424}, 'mean': {'15m': -0.0068, '1h': -0.0375, '30m': -0.0506, '4h': -0.0233}}
+same 20 strategies, cond ALL, SEL: trades 6710 per_day 6.13 mean -0.02182 pb 0.00464 twin -0.04335
+same 20 strategies, cond ALL, CONF: trades 5773 per_day 5.75 mean -0.03662 pb -0.01016 twin -0.03815 month-se 0.0044
+same 20 strategies, cond ALL, LATE: trades 1418 per_day 4.81 mean -0.04224 pb -0.01578 twin -0.04107
+same 20 strategies, cond ALL, FWD: trades 90 per_day 4.74 mean -0.01835 pb 0.00811 twin -0.09443
+same 20 strategies, cond A, SEL: trades 3032 per_day 2.77 mean -0.02828 pb -0.00182 twin -0.03980
+same 20 strategies, cond A, CONF: trades 3083 per_day 3.07 mean -0.02828 pb -0.00182 twin -0.03777 month-se 0.0059
+same 20 strategies, cond A, LATE: trades 811 per_day 2.75 mean -0.02381 pb 0.00265 twin -0.04675
+same 20 strategies, cond A, FWD: trades 59 per_day 3.11 mean 0.00944 pb 0.03590 twin -0.14278
+study bootstrap (CONF, margin 0.4):
+    payback  p_target  p_lose50_first  p_lose90_first  median_final_x
+20    False     0.002         0.84625         0.22275         0.26792
+21     True     0.017         0.61775         0.06350         0.59763
+seed 11 payback False: P(x6) 0.0013 P(-50 first) 0.8413 P(-90 first) 0.2120 median x 0.271
+seed 11 payback True: P(x6) 0.0175 P(-50 first) 0.6285 P(-90 first) 0.0605 median x 0.600
+seed 22 payback False: P(x6) 0.0030 P(-50 first) 0.8407 P(-90 first) 0.2340 median x 0.264
+seed 22 payback True: P(x6) 0.0215 P(-50 first) 0.6268 P(-90 first) 0.0625 median x 0.585
+seed 33 payback False: P(x6) 0.0015 P(-50 first) 0.8482 P(-90 first) 0.2235 median x 0.269
+seed 33 payback True: P(x6) 0.0187 P(-50 first) 0.6192 P(-90 first) 0.0670 median x 0.597
+CONF compounded at margin 0.4 with payback: final x 1.87e-08, max dd 1.000
+growth-optimal margin (add 0.0000): 0.00, 30-day median x 1.000
+growth-optimal margin (add 0.0265): 0.00, 30-day median x 1.000
+shift for 30-day median x6 (raw): +9.25 ROE pts, margin 0.72, mean per trade then 0.0648
+shift for 30-day median x6 (payback): +6.75 ROE pts, margin 0.73, mean per trade then 0.0662

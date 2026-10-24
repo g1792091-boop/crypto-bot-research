@@ -1,0 +1,36 @@
+{
+ "BTCUSDT": {
+  "k_maxabs_vs_lib": 2.177529268010403e-10,
+  "k_nan_pattern_same": true,
+  "obv30_state_eq_shared": 1.0
+ },
+ "ETHUSDT": {
+  "k_maxabs_vs_lib": 2.2239987629291136e-10,
+  "k_nan_pattern_same": true,
+  "obv30_state_eq_shared": 1.0
+ },
+ "SOLUSDT": {
+  "k_maxabs_vs_lib": 2.2582469227927504e-10,
+  "k_nan_pattern_same": true,
+  "obv30_state_eq_shared": 1.0
+ },
+ "DOGEUSDT": {
+  "k_maxabs_vs_lib": 2.1672263983418816e-10,
+  "k_nan_pattern_same": true,
+  "obv30_state_eq_shared": 1.0
+ },
+ "LTCUSDT": {
+  "k_maxabs_vs_lib": 2.1651658244081773e-10,
+  "k_nan_pattern_same": true,
+  "obv30_state_eq_shared": 1.0
+ },
+ "BCHUSDT": {
+  "k_maxabs_vs_lib": 2.268976118102728e-10,
+  "k_nan_pattern_same": true,
+  "obv30_state_eq_shared": 1.0
+ },
+ "x1_vs_grid_L_r_maxabs": 1.835989416054673e-09,
+ "x1_vs_grid_L_k_eq": 1.0,
+ "x1_vs_grid_S_r_maxabs": 1.8490466657805626e-09,
+ "x1_vs_grid_S_k_eq": 1.0
+}

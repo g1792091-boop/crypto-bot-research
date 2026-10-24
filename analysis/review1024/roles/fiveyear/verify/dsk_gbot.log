@@ -1,0 +1,20 @@
+18:11:52 cell 0 S4_BB_BBP 1h 4h c T12_HMA55 5057
+18:12:05 cell 40 T1_EMA20_50 1h 4h l S2_ST_ROC 2699
+18:12:07 cell 80 F4_FAN 4h 1d l S5_DONCHIAN_MFI 761
+18:12:10 cell 120 S4_BB_BBP 1h 1d l N18_VWMA_MACD 4737
+18:12:20 cell 160 F12_MSS_DISP 1h 1d l N02_ST_KST 1697
+18:12:29 cell 200 T11_AROON25 1h 4h l N04_ST_KLINGER 6633
+18:12:36 cell 240 VO1_OBV_X_MA20 4h 1d c T8_PSAR 4643
+18:12:38 cell 280 T3_MACD8_21_5 4h 1d l S6_EMA_DMI_ADX 4350
+18:12:47 cell 320 F16_FIB500 15m 1h c S2_ST_ROC 9040
+18:12:49 rows 246490
+SEL: mine signals 123068 trades 15836 per_day 14.462 mean -0.02495 (pb 0.00151) win 0.7396 flip -0.04741 | study signals 123068 trades 15978 per_day 14.592 mean -0.02391 (pb 0.00255) win 0.7411 flip -0.04754
+CONF: mine signals 120498 trades 10563 per_day 10.521 mean -0.03531 (pb -0.00885) win 0.7368 flip -0.04344 | study signals 120498 trades 10766 per_day 10.723 mean -0.03484 (pb -0.00838) win 0.7371 flip -0.04294
+  bootstrap m0.4 payback: mine P(x6) 0.0540 P(-50 first) 0.9485 P(-90 first) 0.7730 median 0.0435 | study 0.0605 0.9440 0.7650 0.0390
+LATE: mine signals 36332 trades 2485 per_day 8.424 mean -0.03424 (pb -0.00778) win 0.7400 flip -0.05796 | study signals 36332 trades 2551 per_day 8.648 mean -0.03306 (pb -0.00660) win 0.7405 flip -0.05639
+FWD: mine signals 2324 trades 117 per_day 6.158 mean -0.02547 (pb 0.00099) win 0.7521 flip -0.07138 | study signals 2324 trades 121 per_day 6.368 mean -0.04302 (pb -0.01656) win 0.7190 flip -0.05620
+  bootstrap m0.4 payback: mine P(x6) 0.1057 P(-50 first) 0.7875 P(-90 first) 0.3187 median 0.3468 | study 0.0467 0.9327 0.6505 0.0832
+
+real	1m6.820s
+user	0m47.591s
+sys	0m18.768s

@@ -1,0 +1,337 @@
+{
+ "trades": [
+  {
+   "trade": "BCHUSDT 2020-06-10 07:00 UTC side -1",
+   "signal_bar_raw": {
+    "open": 257.93,
+    "high": 257.99,
+    "low": 256.84,
+    "close": 257.33,
+    "minutes": 60,
+    "last_minute": "2020-06-10 06:59:00"
+   },
+   "prev_bar_close_raw": 257.93,
+   "rsi_prev_now": [
+    71.175,
+    66.744
+   ],
+   "trend_4h_bar_used": {
+    "open": "2020-06-10 00:00:00",
+    "close": "2020-06-10 04:00:00",
+    "obv_minus_sma20": -4803.177299999632
+   },
+   "next_4h_bar_not_used": {
+    "close": "2020-06-10 08:00:00",
+    "obv_minus_sma20": -94343.83889999986
+   },
+   "entry_minute": "2020-06-10 07:00:00",
+   "entry_open_raw": 257.32,
+   "atr14_1h": 1.5557665187787346,
+   "stop_price": 260.4315330375575,
+   "first_lock_at": "2020-06-10 07:17:00",
+   "final_lock_net_roe": 0.75,
+   "best_net_roe": 0.7928948235659877,
+   "exit_minute": "2020-06-10 07:18:00",
+   "minutes_held": 18,
+   "exit_minute_raw": {
+    "o": 250.64,
+    "h": 255.92,
+    "l": 250.23
+   },
+   "hand_roe": 0.7415968288512359,
+   "study_roe": 0.7415968179702759,
+   "last_hi_lo_in_trade": [
+    257.66,
+    250.2
+   ],
+   "mark_hi_lo_in_trade": [
+    257.45099977,
+    250.63292551
+   ]
+  },
+  {
+   "trade": "SOLUSDT 2021-09-18 15:00 UTC side -1",
+   "signal_bar_raw": {
+    "open": 162.848,
+    "high": 163.9,
+    "low": 160.55,
+    "close": 161.643,
+    "minutes": 60,
+    "last_minute": "2021-09-18 14:59:00"
+   },
+   "prev_bar_close_raw": 162.878,
+   "rsi_prev_now": [
+    70.796,
+    67.573
+   ],
+   "trend_4h_bar_used": {
+    "open": "2021-09-18 08:00:00",
+    "close": "2021-09-18 12:00:00",
+    "obv_minus_sma20": -2333341.75
+   },
+   "next_4h_bar_not_used": {
+    "close": "2021-09-18 16:00:00",
+    "obv_minus_sma20": 2690472.699999988
+   },
+   "entry_minute": "2021-09-18 15:00:00",
+   "entry_open_raw": 161.642,
+   "atr14_1h": 3.821994509070409,
+   "stop_price": 169.2859890181408,
+   "first_lock_at": "2021-09-18 20:05:00",
+   "final_lock_net_roe": 0.8,
+   "best_net_roe": 0.8681644844780428,
+   "exit_minute": "2021-09-18 20:06:00",
+   "minutes_held": 306,
+   "exit_minute_raw": {
+    "o": 158.624,
+    "h": 159.4,
+    "l": 158.528
+   },
+   "hand_roe": 0.5259266997438777,
+   "study_roe": 0.5259267054498196,
+   "last_hi_lo_in_trade": [
+    165.498,
+    156.78
+   ],
+   "mark_hi_lo_in_trade": [
+    165.24858175,
+    157.69949544
+   ]
+  },
+  {
+   "trade": "BCHUSDT 2026-03-22 02:00 UTC side +1",
+   "signal_bar_raw": {
+    "open": 458.24,
+    "high": 460.07,
+    "low": 457.74,
+    "close": 459.48,
+    "minutes": 60,
+    "last_minute": "2026-03-22 01:59:00"
+   },
+   "prev_bar_close_raw": 458.25,
+   "rsi_prev_now": [
+    28.744,
+    32.895
+   ],
+   "trend_4h_bar_used": {
+    "open": "2026-03-21 20:00:00",
+    "close": "2026-03-22 00:00:00",
+    "obv_minus_sma20": 393.7422500029206
+   },
+   "next_4h_bar_not_used": {
+    "close": "2026-03-22 04:00:00",
+    "obv_minus_sma20": 78761.3320999965
+   },
+   "entry_minute": "2026-03-22 02:00:00",
+   "entry_open_raw": 459.47,
+   "atr14_1h": 3.2183427766982993,
+   "stop_price": 453.0333144466034,
+   "first_lock_at": "2026-03-22 03:27:00",
+   "final_lock_net_roe": 0.55,
+   "best_net_roe": 0.5987501164385017,
+   "exit_minute": "2026-03-22 03:28:00",
+   "minutes_held": 88,
+   "exit_minute_raw": {
+    "o": 466.13,
+    "h": 466.23,
+    "l": 463.77
+   },
+   "hand_roe": 0.39764884758526076,
+   "study_roe": 0.3976488579064607,
+   "last_hi_lo_in_trade": [
+    469.21,
+    458.08
+   ],
+   "mark_hi_lo_in_trade": [
+    466.52098821,
+    458.08
+   ]
+  },
+  {
+   "trade": "LTCUSDT 2025-08-14 15:00 UTC side +1",
+   "signal_bar_raw": {
+    "open": 123.01,
+    "high": 124.24,
+    "low": 122.24,
+    "close": 123.91,
+    "minutes": 60,
+    "last_minute": "2025-08-14 14:59:00"
+   },
+   "prev_bar_close_raw": 123.0,
+   "rsi_prev_now": [
+    28.284,
+    32.746
+   ],
+   "trend_4h_bar_used": {
+    "open": "2025-08-14 08:00:00",
+    "close": "2025-08-14 12:00:00",
+    "obv_minus_sma20": 1791099.5134500042
+   },
+   "next_4h_bar_not_used": {
+    "close": "2025-08-14 16:00:00",
+    "obv_minus_sma20": -128379.71134999394
+   },
+   "entry_minute": "2025-08-14 15:00:00",
+   "entry_open_raw": 123.91,
+   "atr14_1h": 2.183395050511979,
+   "stop_price": 119.54320989897603,
+   "first_lock_at": null,
+   "final_lock_net_roe": null,
+   "best_net_roe": -0.008146654830115108,
+   "exit_minute": "2025-08-14 18:22:00",
+   "minutes_held": 202,
+   "exit_minute_raw": {
+    "o": 120.18,
+    "h": 120.22,
+    "l": 119.7
+   },
+   "hand_roe": -1.0,
+   "study_roe": -1.0000000521540642,
+   "last_hi_lo_in_trade": [
+    124.03,
+    119.7
+   ],
+   "mark_hi_lo_in_trade": [
+    124.02543928,
+    119.78615196
+   ]
+  },
+  {
+   "trade": "LTCUSDT 2022-03-14 04:00 UTC side +1",
+   "signal_bar_raw": {
+    "open": 101.46,
+    "high": 102.01,
+    "low": 101.24,
+    "close": 101.91,
+    "minutes": 60,
+    "last_minute": "2022-03-14 03:59:00"
+   },
+   "prev_bar_close_raw": 101.46,
+   "rsi_prev_now": [
+    29.008,
+    33.717
+   ],
+   "trend_4h_bar_used": {
+    "open": "2022-03-14 00:00:00",
+    "close": "2022-03-14 04:00:00",
+    "obv_minus_sma20": 50600.363400012255
+   },
+   "next_4h_bar_not_used": {
+    "close": "2022-03-14 08:00:00",
+    "obv_minus_sma20": 310382.7428500131
+   },
+   "entry_minute": "2022-03-14 04:00:00",
+   "entry_open_raw": 101.9,
+   "atr14_1h": 1.02259072849025,
+   "stop_price": 99.8548185430195,
+   "first_lock_at": "2022-03-14 04:11:00",
+   "final_lock_net_roe": 0.35,
+   "best_net_roe": 0.40735348380765035,
+   "exit_minute": "2022-03-14 04:13:00",
+   "minutes_held": 13,
+   "exit_minute_raw": {
+    "o": 103.41,
+    "h": 103.42,
+    "l": 103.13
+   },
+   "hand_roe": 0.35,
+   "study_roe": 0.3500000014901161,
+   "last_hi_lo_in_trade": [
+    103.42,
+    101.84
+   ],
+   "mark_hi_lo_in_trade": [
+    103.4,
+    101.85457432
+   ]
+  },
+  {
+   "trade": "SOLUSDT 2026-10-07 06:00 UTC side +1",
+   "signal_bar_raw": {
+    "open": 118.01,
+    "high": 118.83,
+    "low": 118.01,
+    "close": 118.78,
+    "minutes": 60,
+    "last_minute": "2026-10-07 05:59:00"
+   },
+   "prev_bar_close_raw": 118.01,
+   "rsi_prev_now": [
+    29.731,
+    39.293
+   ],
+   "trend_4h_bar_used": {
+    "open": "2026-10-07 00:00:00",
+    "close": "2026-10-07 04:00:00",
+    "obv_minus_sma20": 2385999.674999997
+   },
+   "next_4h_bar_not_used": {
+    "close": "2026-10-07 08:00:00",
+    "obv_minus_sma20": 3546327.1079999954
+   },
+   "entry_minute": "2026-10-07 06:00:00",
+   "entry_open_raw": 118.79,
+   "atr14_1h": 0.8354547156216809,
+   "stop_price": 117.11909056875665,
+   "first_lock_at": null,
+   "final_lock_net_roe": null,
+   "best_net_roe": 0.025936627662263578,
+   "exit_minute": "2026-10-07 10:07:00",
+   "minutes_held": 247,
+   "exit_minute_raw": {
+    "o": 117.61,
+    "h": 117.61,
+    "l": 116.61
+   },
+   "hand_roe": -0.45918234647109063,
+   "study_roe": -0.4591823369264602,
+   "last_hi_lo_in_trade": [
+    119.04,
+    116.61
+   ],
+   "mark_hi_lo_in_trade": null
+  }
+ ],
+ "doge_gaps_top": [
+  {
+   "from": "2024-10-28 19:59:00",
+   "to": "2024-10-28 21:14:00",
+   "missing_min": "74"
+  },
+  {
+   "from": "2021-03-02 01:00:00",
+   "to": "2021-03-02 02:00:00",
+   "missing_min": "59"
+  },
+  {
+   "from": "2022-05-28 16:39:00",
+   "to": "2022-05-28 17:15:00",
+   "missing_min": "35"
+  },
+  {
+   "from": "2022-05-01 22:25:00",
+   "to": "2022-05-01 22:55:00",
+   "missing_min": "29"
+  },
+  {
+   "from": "2023-09-12 08:33:00",
+   "to": "2023-09-12 08:53:00",
+   "missing_min": "19"
+  },
+  {
+   "from": "2025-08-29 06:17:00",
+   "to": "2025-08-29 06:37:00",
+   "missing_min": "19"
+  },
+  {
+   "from": "2024-10-28 16:20:00",
+   "to": "2024-10-28 16:35:00",
+   "missing_min": "14"
+  },
+  {
+   "from": "2020-09-27 11:16:00",
+   "to": "2020-09-27 11:31:00",
+   "missing_min": "14"
+  }
+ ]
+}
