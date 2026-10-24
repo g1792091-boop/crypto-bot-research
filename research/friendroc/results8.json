@@ -1,0 +1,496 @@
+{
+ "PREREG5 1등 (15분, 손절 -50%, 계단 10/5, ADX + 조용한 봉)": {
+  "select": {
+   "n": 4889,
+   "roe_pct": 0.372,
+   "sd_pct": 27.4,
+   "m5": {
+    "mult": 1.5653,
+    "per_month_pct": 0.77,
+    "maxdd": -0.631,
+    "month_median": 0.982,
+    "months_up": 28,
+    "months": 58
+   },
+   "m10": {
+    "mult": 0.9574,
+    "per_month_pct": -0.08,
+    "maxdd": -0.889,
+    "month_median": 0.952,
+    "months_up": 28,
+    "months": 58
+   },
+   "m15": {
+    "mult": 0.2225,
+    "per_month_pct": -2.56,
+    "maxdd": -0.973,
+    "month_median": 0.91,
+    "months_up": 27,
+    "months": 58
+   },
+   "m20": {
+    "mult": 0.019,
+    "per_month_pct": -6.6,
+    "maxdd": -0.995,
+    "month_median": 0.858,
+    "months_up": 26,
+    "months": 58
+   },
+   "m25": {
+    "mult": 0.0006,
+    "per_month_pct": -12.05,
+    "maxdd": -1.0,
+    "month_median": 0.797,
+    "months_up": 25,
+    "months": 58
+   },
+   "m30": {
+    "mult": 0.0,
+    "per_month_pct": -18.7,
+    "maxdd": -1.0,
+    "month_median": 0.729,
+    "months_up": 23,
+    "months": 58
+   },
+   "m40": {
+    "mult": 0.0,
+    "per_month_pct": -34.46,
+    "maxdd": -1.0,
+    "month_median": 0.581,
+    "months_up": 21,
+    "months": 58
+   }
+  },
+  "confirm": {
+   "n": 1592,
+   "roe_pct": 0.217,
+   "sd_pct": 27.4,
+   "m5": {
+    "mult": 1.0219,
+    "per_month_pct": 0.1,
+    "maxdd": -0.519,
+    "month_median": 0.995,
+    "months_up": 11,
+    "months": 22
+   },
+   "m10": {
+    "mult": 0.768,
+    "per_month_pct": -1.25,
+    "maxdd": -0.809,
+    "month_median": 0.977,
+    "months_up": 9,
+    "months": 22
+   },
+   "m15": {
+    "mult": 0.4205,
+    "per_month_pct": -4.05,
+    "maxdd": -0.938,
+    "month_median": 0.946,
+    "months_up": 8,
+    "months": 22
+   },
+   "m20": {
+    "mult": 0.1659,
+    "per_month_pct": -8.21,
+    "maxdd": -0.984,
+    "month_median": 0.904,
+    "months_up": 8,
+    "months": 22
+   },
+   "m25": {
+    "mult": 0.0467,
+    "per_month_pct": -13.6,
+    "maxdd": -0.997,
+    "month_median": 0.851,
+    "months_up": 7,
+    "months": 22
+   },
+   "m30": {
+    "mult": 0.0092,
+    "per_month_pct": -20.03,
+    "maxdd": -0.999,
+    "month_median": 0.789,
+    "months_up": 7,
+    "months": 22
+   },
+   "m40": {
+    "mult": 0.0001,
+    "per_month_pct": -35.03,
+    "maxdd": -1.0,
+    "month_median": 0.645,
+    "months_up": 7,
+    "months": 22
+   }
+  },
+  "oct2026": {
+   "n": 45,
+   "roe_pct": 1.831,
+   "sd_pct": 25.6,
+   "m5": {
+    "mult": 1.0382,
+    "per_month_pct": 5.32,
+    "maxdd": -0.058,
+    "month_median": 1.038,
+    "months_up": 1,
+    "months": 1
+   },
+   "m10": {
+    "mult": 1.0696,
+    "per_month_pct": 9.76,
+    "maxdd": -0.116,
+    "month_median": 1.07,
+    "months_up": 1,
+    "months": 1
+   },
+   "m15": {
+    "mult": 1.0934,
+    "per_month_pct": 13.15,
+    "maxdd": -0.172,
+    "month_median": 1.093,
+    "months_up": 1,
+    "months": 1
+   },
+   "m20": {
+    "mult": 1.1087,
+    "per_month_pct": 15.34,
+    "maxdd": -0.227,
+    "month_median": 1.109,
+    "months_up": 1,
+    "months": 1
+   },
+   "m25": {
+    "mult": 1.1148,
+    "per_month_pct": 16.22,
+    "maxdd": -0.281,
+    "month_median": 1.115,
+    "months_up": 1,
+    "months": 1
+   },
+   "m30": {
+    "mult": 1.1112,
+    "per_month_pct": 15.71,
+    "maxdd": -0.333,
+    "month_median": 1.111,
+    "months_up": 1,
+    "months": 1
+   },
+   "m40": {
+    "mult": 1.0743,
+    "per_month_pct": 10.43,
+    "maxdd": -0.432,
+    "month_median": 1.074,
+    "months_up": 1,
+    "months": 1
+   }
+  },
+  "last19": {
+   "n": 41,
+   "roe_pct": 0.645,
+   "sd_pct": 26.4,
+   "m5": {
+    "mult": 1.0097,
+    "per_month_pct": 1.55,
+    "maxdd": -0.058,
+    "month_median": 1.01,
+    "months_up": 1,
+    "months": 1
+   },
+   "m10": {
+    "mult": 1.0119,
+    "per_month_pct": 1.91,
+    "maxdd": -0.116,
+    "month_median": 1.012,
+    "months_up": 1,
+    "months": 1
+   },
+   "m15": {
+    "mult": 1.0065,
+    "per_month_pct": 1.04,
+    "maxdd": -0.172,
+    "month_median": 1.006,
+    "months_up": 1,
+    "months": 1
+   },
+   "m20": {
+    "mult": 0.9932,
+    "per_month_pct": -1.09,
+    "maxdd": -0.227,
+    "month_median": 0.993,
+    "months_up": 0,
+    "months": 1
+   },
+   "m25": {
+    "mult": 0.9721,
+    "per_month_pct": -4.43,
+    "maxdd": -0.281,
+    "month_median": 0.972,
+    "months_up": 0,
+    "months": 1
+   },
+   "m30": {
+    "mult": 0.9435,
+    "per_month_pct": -8.89,
+    "maxdd": -0.333,
+    "month_median": 0.944,
+    "months_up": 0,
+    "months": 1
+   },
+   "m40": {
+    "mult": 0.8653,
+    "per_month_pct": -20.69,
+    "maxdd": -0.432,
+    "month_median": 0.865,
+    "months_up": 0,
+    "months": 1
+   }
+  },
+  "best_margin_on_select": 0.05
+ },
+ "거래당 1등 (15분, 손절 -75%, 계단 20/10, ADX + 조용한 봉)": {
+  "select": {
+   "n": 3469,
+   "roe_pct": 1.093,
+   "sd_pct": 42.7,
+   "m5": {
+    "mult": 2.9811,
+    "per_month_pct": 1.9,
+    "maxdd": -0.53,
+    "month_median": 1.028,
+    "months_up": 33,
+    "months": 58
+   },
+   "m10": {
+    "mult": 1.6992,
+    "per_month_pct": 0.92,
+    "maxdd": -0.835,
+    "month_median": 1.031,
+    "months_up": 32,
+    "months": 58
+   },
+   "m15": {
+    "mult": 0.1707,
+    "per_month_pct": -3.0,
+    "maxdd": -0.96,
+    "month_median": 1.008,
+    "months_up": 30,
+    "months": 58
+   },
+   "m20": {
+    "mult": 0.0027,
+    "per_month_pct": -9.66,
+    "maxdd": -0.999,
+    "month_median": 0.957,
+    "months_up": 27,
+    "months": 58
+   },
+   "m25": {
+    "mult": 0.0,
+    "per_month_pct": -18.63,
+    "maxdd": -1.0,
+    "month_median": 0.861,
+    "months_up": 26,
+    "months": 58
+   },
+   "m30": {
+    "mult": 0.0,
+    "per_month_pct": -29.27,
+    "maxdd": -1.0,
+    "month_median": 0.753,
+    "months_up": 20,
+    "months": 58
+   },
+   "m40": {
+    "mult": 0.0,
+    "per_month_pct": -52.48,
+    "maxdd": -1.0,
+    "month_median": 0.554,
+    "months_up": 16,
+    "months": 58
+   }
+  },
+  "confirm": {
+   "n": 1050,
+   "roe_pct": 1.873,
+   "sd_pct": 41.6,
+   "m5": {
+    "mult": 2.1213,
+    "per_month_pct": 3.65,
+    "maxdd": -0.41,
+    "month_median": 1.007,
+    "months_up": 13,
+    "months": 22
+   },
+   "m10": {
+    "mult": 2.7944,
+    "per_month_pct": 5.03,
+    "maxdd": -0.677,
+    "month_median": 1.001,
+    "months_up": 11,
+    "months": 22
+   },
+   "m15": {
+    "mult": 2.2315,
+    "per_month_pct": 3.9,
+    "maxdd": -0.844,
+    "month_median": 0.983,
+    "months_up": 11,
+    "months": 22
+   },
+   "m20": {
+    "mult": 1.0508,
+    "per_month_pct": 0.24,
+    "maxdd": -0.952,
+    "month_median": 0.952,
+    "months_up": 11,
+    "months": 22
+   },
+   "m25": {
+    "mult": 0.2826,
+    "per_month_pct": -5.85,
+    "maxdd": -0.99,
+    "month_median": 0.887,
+    "months_up": 11,
+    "months": 22
+   },
+   "m30": {
+    "mult": 0.0418,
+    "per_month_pct": -14.05,
+    "maxdd": -0.999,
+    "month_median": 0.802,
+    "months_up": 10,
+    "months": 22
+   },
+   "m40": {
+    "mult": 0.0001,
+    "per_month_pct": -34.8,
+    "maxdd": -1.0,
+    "month_median": 0.617,
+    "months_up": 10,
+    "months": 22
+   }
+  },
+  "oct2026": {
+   "n": 26,
+   "roe_pct": 2.305,
+   "sd_pct": 39.1,
+   "m5": {
+    "mult": 1.0252,
+    "per_month_pct": 3.51,
+    "maxdd": -0.083,
+    "month_median": 1.025,
+    "months_up": 1,
+    "months": 1
+   },
+   "m10": {
+    "mult": 1.0402,
+    "per_month_pct": 5.6,
+    "maxdd": -0.164,
+    "month_median": 1.04,
+    "months_up": 1,
+    "months": 1
+   },
+   "m15": {
+    "mult": 1.0439,
+    "per_month_pct": 6.12,
+    "maxdd": -0.242,
+    "month_median": 1.044,
+    "months_up": 1,
+    "months": 1
+   },
+   "m20": {
+    "mult": 1.0356,
+    "per_month_pct": 4.96,
+    "maxdd": -0.316,
+    "month_median": 1.036,
+    "months_up": 1,
+    "months": 1
+   },
+   "m25": {
+    "mult": 1.015,
+    "per_month_pct": 2.09,
+    "maxdd": -0.387,
+    "month_median": 1.015,
+    "months_up": 1,
+    "months": 1
+   },
+   "m30": {
+    "mult": 0.9821,
+    "per_month_pct": -2.47,
+    "maxdd": -0.454,
+    "month_median": 0.982,
+    "months_up": 0,
+    "months": 1
+   },
+   "m40": {
+    "mult": 0.8812,
+    "per_month_pct": -16.05,
+    "maxdd": -0.576,
+    "month_median": 0.881,
+    "months_up": 0,
+    "months": 1
+   }
+  },
+  "last19": {
+   "n": 22,
+   "roe_pct": -1.558,
+   "sd_pct": 41.3,
+   "m5": {
+    "mult": 0.9783,
+    "per_month_pct": -3.45,
+    "maxdd": -0.083,
+    "month_median": 0.978,
+    "months_up": 0,
+    "months": 1
+   },
+   "m10": {
+    "mult": 0.9477,
+    "per_month_pct": -8.24,
+    "maxdd": -0.164,
+    "month_median": 0.948,
+    "months_up": 0,
+    "months": 1
+   },
+   "m15": {
+    "mult": 0.9086,
+    "per_month_pct": -14.23,
+    "maxdd": -0.242,
+    "month_median": 0.909,
+    "months_up": 0,
+    "months": 1
+   },
+   "m20": {
+    "mult": 0.8617,
+    "per_month_pct": -21.22,
+    "maxdd": -0.316,
+    "month_median": 0.862,
+    "months_up": 0,
+    "months": 1
+   },
+   "m25": {
+    "mult": 0.8077,
+    "per_month_pct": -28.98,
+    "maxdd": -0.387,
+    "month_median": 0.808,
+    "months_up": 0,
+    "months": 1
+   },
+   "m30": {
+    "mult": 0.7478,
+    "per_month_pct": -37.23,
+    "maxdd": -0.454,
+    "month_median": 0.748,
+    "months_up": 0,
+    "months": 1
+   },
+   "m40": {
+    "mult": 0.6152,
+    "per_month_pct": -54.08,
+    "maxdd": -0.576,
+    "month_median": 0.615,
+    "months_up": 0,
+    "months": 1
+   }
+  },
+  "best_margin_on_select": 0.05
+ }
+}
