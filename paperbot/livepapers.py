@@ -139,12 +139,28 @@ def bot_short(name: Any, stop: Any) -> str:
     return f"페이퍼 {s}" if s else "페이퍼"
 
 
+def josa(word: Any, with_final: str, without: str) -> str:
+    """``word`` with the Korean particle its last sound takes ("VWAP 개선판을", "추세판단 봇을", "페이퍼 −35%를", "딥코인이",
+    "바이비트가"): a Hangul syllable by its final consonant, a digit or % by how it is read, anything else (a Latin name:
+    "WOO X Pro가", "MEXC는") the form without."""
+    w = str(word or "").rstrip()
+    if not w:
+        return w
+    c = w[-1]
+    if "가" <= c <= "힣":
+        return w + (with_final if (ord(c) - 0xAC00) % 28 else without)
+    if c.isdigit():
+        return w + (with_final if c in "013678" else without)
+    return w + without
+
+
 def label(stop: Any, followers: list, name: Any = None) -> str:
-    """"VWAP 개선판 (바이비트가 따라감)" / "페이퍼 −50% (바이비트·MEXC가 따라감)" / "페이퍼 −35% (따라가는 실행기 없음)"."""
+    """"VWAP 개선판 (바이비트가 따라감)" / "페이퍼 −50% (바이비트·MEXC가 따라감)" / "VWAP 개선판 (딥코인이 따라감)" /
+    "페이퍼 −35% (따라가는 실행기 없음)"."""
     head = bot_short(name, stop)
     if not followers:
         return f"{head} (따라가는 실행기 없음)"
-    return f"{head} ({'·'.join(followers)}가 따라감)"            # 바이비트가, MEXC가
+    return f"{head} ({josa('·'.join(followers), '이', '가')} 따라감)"      # 바이비트가, MEXC가, 딥코인이
 
 
 # a paper bot's TIME exit (combo exit reason "TIME"): the trend bot's supervisor closing a position that went nowhere

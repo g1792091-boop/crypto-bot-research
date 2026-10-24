@@ -312,7 +312,7 @@ def put_state(conn, k: str, now: int, data: dict) -> None:
 def bot_world(p: Optional[dict] = None) -> dict:
     """The configs the live side runs, read-only: the paper bot's (its own ``combo_run`` record, else the config file the
     live side runs: livecheck.combo_config), the executors' (livecheck.load_executors: plain JSON, never a key file; the
-    dashboard's paths; the third, 플립스터, once installed: livebots.installed) and why the 5-year reference does not apply
+    dashboard's paths; the third, 딥코인, once installed: livebots.installed) and why the 5-year reference does not apply
     when it was made for another config (livecheck.usable_expected; '' = it applies)."""
     from . import livecheck as LC
     from .dash.more import livebots as L
@@ -378,8 +378,8 @@ def second_paper(main: str, infos: list) -> Optional[dict]:
             c2.close()
     names = {LP.norm(main): LC.paper_name(main), LP.norm(other): LC.paper_name(other)}
     fol = lambda path: "·".join(k for k, v in cur.items() if LP.same(v, path))           # noqa: E731
-    return {"config": cfg2, "label": f"{names[LP.norm(other)]} ({fol(other)}가 따라감)",
-            "first_label": f"{names[LP.norm(main)]}" + (f" ({fol(main)}가 따라감)" if fol(main) else ""),
+    return {"config": cfg2, "label": f"{names[LP.norm(other)]} ({LP.josa(fol(other), '이', '가')} 따라감)",
+            "first_label": f"{names[LP.norm(main)]}" + (f" ({LP.josa(fol(main), '이', '가')} 따라감)" if fol(main) else ""),
             "follows": {k: names.get(LP.norm(v), v) for k, v in cur.items()}}
 
 
@@ -453,6 +453,7 @@ def _trend_rules(cfg: Optional[dict]) -> Optional[list]:
 
 
 def _exec_rules(infos: list) -> list:
+    from . import livepapers as LP
     out = ["거래소에 거는 손절"]
     streaks = sorted({e.max_streak for e in infos if e.max_streak})
     dds = sorted({e.max_dd for e in infos if e.max_dd is not None})
@@ -470,7 +471,7 @@ def _exec_rules(infos: list) -> list:
     if not lit:
         out.append("신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)")
     for e in lit:
-        out.append(f"신호등: {e.label}는 페이퍼 최근 {e.light_n}번 중 {e.light_min:.0%} 이상 이겼을 때만 새 진입을 따라감")
+        out.append(f"신호등: {LP.josa(e.label, '은', '는')} 페이퍼 최근 {e.light_n}번 중 {e.light_min:.0%} 이상 이겼을 때만 새 진입을 따라감")
     money = [f"{e.label} ${e.budget:,.0f}" for e in infos if e.budget]
     if money:
         out.append("실거래 금액 " + " · ".join(money))
@@ -488,6 +489,7 @@ def fixed_rules(cfg: Optional[dict], infos: Optional[list], second: Optional[dic
     trend = _trend_rules(cfg) if isinstance(cfg, dict) and cfg.get("trend") is not None else None
     out = list(trend or (FIXED_TREND_PAPER if is_t else _paper_rules(cfg) or FIXED_PAPER))
     if second:
+        from . import livepapers as LP
         from .livecheck import family_of
         mine = _paper_rules(second.get("config")) or []
         f1, f2 = family_of(cfg), family_of(second.get("config"))
@@ -501,7 +503,7 @@ def fixed_rules(cfg: Optional[dict], infos: Optional[list], second: Optional[dic
             diff = [r for r in mine if r not in out and not r.startswith("매매법 ")]
             out.append(f"두 번째 페이퍼 봇 {second.get('label')}: " + (" · ".join(diff) if diff else "규칙을 못 읽음")
                        + " (나머지 규칙은 첫 번째와 같음)")
-        out.append("따라가는 페이퍼: " + " · ".join(f"{k}는 {v}" for k, v in (second.get("follows") or {}).items()))
+        out.append("따라가는 페이퍼: " + " · ".join(f"{LP.josa(k, '은', '는')} {v}" for k, v in (second.get("follows") or {}).items()))
     return out + (_exec_rules(readable) if readable else list(FIXED_EXEC))
 
 
@@ -1163,7 +1165,7 @@ def due_loss(src: dict) -> Optional[tuple]:
     trend = is_trend(src.get("bot"))
     since = trend_since_of(src) if trend else None
     from .dash.more import livebots as L
-    for ex, _ko, _dk, _ck in L.ALL_EXECS:                # the third (플립스터) has rows only once installed
+    for ex, _ko, _dk, _ck in L.ALL_EXECS:                # the third (딥코인) has rows only once installed
         a = tr.get(ex) or {}
         rows = [r for r in (a.get("rows") or []) if r.get("exit_time") is not None and r.get("pnl") is not None
                 and (since is None or (r.get("entry_time") or 0) >= since)]      # the trend bot: its own trades only

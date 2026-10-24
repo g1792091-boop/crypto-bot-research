@@ -177,7 +177,7 @@ export async function mount(el, ctx) {
     ui.dim(body, false);
     st.d = d; st.state = "ok"; st.okAt = serverNow();
     setPapers(d.papers);                 // two paper bots: their labels everywhere (null with one: the usual names)
-    setExecs(d.execs);                   // the third executor (플립스터) everywhere while the server has it (else the two)
+    setExecs(d.execs);                   // the third executor (딥코인) everywhere while the server has it (else the two)
     const two = followLine(d.papers), three = execIds(d).length > 2;
     const head = two ? `실행기 ${three ? "세" : "두"} 개 · ${two}` : three ? `${execsKo(execIds(d))} 실행기와 그 셋이 따라가는 페이퍼(연습)` : HEAD_SUB;
     if (sub.textContent !== head) sub.textContent = head;

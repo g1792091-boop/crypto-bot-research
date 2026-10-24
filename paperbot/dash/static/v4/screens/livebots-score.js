@@ -36,7 +36,7 @@ export function sortRows(rows, by, words) {
 const pc = (x, d = 0) => (x == null ? "—" : fmt.pct(x, d, false));
 
 function execCell(name, e, ok) {
-  const ko = acctKo(name);                               // 바이비트 · WOO X Pro · 플립스터 (the site's names)
+  const ko = acctKo(name);                               // 바이비트 · WOO X Pro · 딥코인 (the site's names)
   if (!ok) return h("span", {class: "muted"}, `${ko} 기록 못 읽음`);
   if (!e || !e.n) return h("span", {class: "muted"}, `${ko} 따라간 거래 없음`);
   return h("span", null, `${ko} ${fmt.int(e.n)}번`, e.leak != null ? h("b", {class: ["num", fmt.tone(e.leak)]}, ` ${fmt.num(e.leak * 100, 1, true)}%p`) : "");

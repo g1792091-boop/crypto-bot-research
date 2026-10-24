@@ -32,7 +32,7 @@
 // month is the one wallet), the VWAP executor's own light and reference; 손절 비교 becomes 두 봇 나란히 (the server's
 // h2h.twin false: no 11/3 stop test, each column by its bot's name).
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctKo, acctTag, sourceState, eraWords, josaObj, lightLine, execsKo} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, eraWords, josa, josaObj, lightLine, execsKo} from "./livebots-kit.js";
 import {weekdaysKo} from "./livebots-expect.js";
 
 export const GOAL_API = "/api/v4/livebots/goal";
@@ -163,7 +163,7 @@ export function goalEraKo(a) {
   const name = acctKo(a.id);
   if (e.now_other) {
     const bot = e.bot_ko || e.other_ko || "다른 페이퍼 봇", at = e.from_ms != null ? e.from_ms : e.since;
-    return `${name}는 ${at != null ? `${fmt.kst(at)}부터 ` : ""}${bot}${josaObj(bot)} 따라가요 · 필요한 승률과 돈 늘리기 기준은 그때부터의 거래로 셌어요 `
+    return `${josa(name, "은", "는")} ${at != null ? `${fmt.kst(at)}부터 ` : ""}${bot}${josaObj(bot)} 따라가요 · 필요한 승률과 돈 늘리기 기준은 그때부터의 거래로 셌어요 `
       + "(이번 달 수익률은 지갑 하나라 그 전 거래도 들어 있어요)";
   }
   return `${eraWords(name, e)} · 이번 달 수익률은 지갑 하나라 들어 있어요`;
@@ -376,7 +376,7 @@ export function goalView(ctx) {
           ...r.cells.map((c, i) => h("td", {class: ["num", r.tones[i]]}, c))))))),
       h("p", {class: "lbg-h2h-gap"}, x.words_ko || ""),
       ui.note(`페이퍼: ${fmt.kst(x.since_ms)}부터` + (x.live_since_ms != null
-        ? ` · 실거래: ${fmt.kst(x.live_since_ms)}부터 (${plain ? `${((x.sides[1] || {}).followers || []).join("·") || "실행기"}가 옮긴 때 · 각 봇 거래만` : "WOO X Pro가 옮긴 때"})`
+        ? ` · 실거래: ${fmt.kst(x.live_since_ms)}부터 (${plain ? `${josa(((x.sides[1] || {}).followers || []).join("·") || "실행기", "이", "가")} 옮긴 때 · 각 봇 거래만` : "WOO X Pro가 옮긴 때"})`
         : ` · ${x.live_ko || ""}`)),
       ui.smallSample(Math.min(...x.sides.map((s) => (s.paper || {}).n || 0)), x.small_n || 20),
       ui.note(x.note_ko || ""));

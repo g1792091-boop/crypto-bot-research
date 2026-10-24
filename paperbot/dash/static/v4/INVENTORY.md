@@ -728,13 +728,16 @@ and **모의** on every screen of the rule bot's dashboard; every tab starts wit
 보기만 하는 화면(주문 버튼 없음)** (livebots-kit.js `realLine`, from the summary answer; 수집 전 / 못 읽음 when unknown, dashes
 before the first answer); the paper account is named **페이퍼(연습)** wherever it sits next to the real accounts.
 
-The third executor, **플립스터** (owners 10/23, docs/flipster-ko.md: it follows the 'VWAP 개선판'), is on the 실거래 site only
-while the server has it installed: its config file (`PAPERBOT_LIVE_FLIPSTER_CONFIG`, /etc/paperbot/executor-flipster.json) or
-its database (`PAPERBOT_LIVE_FLIPSTER_DB`, /var/lib/paperbot/exec/executor-flipster-live.db) is there (dash/more/livebots.py
-`installed`; the live checks' rule too). Every screen takes the executor ids from one list (livebots-kit.js `EXEC_SLOTS`,
-`execIds` of an answer, `execsNow` of the last summary, `setExecs`): with the third not installed every list, word and answer
-is the two executors' as before; with it, its strip amount, band chip, reactor (한눈에: the centre on top, three reactors in a
-row), tables, choices, cards and console tab are added (colour `--series-fl`, letter F).
+The third executor, **딥코인** (owners 10/24, docs/deepcoin-ko.md: it follows the 'VWAP 개선판'; planned for Flipster on
+10/23, whose API opens only on request), is on the 실거래 site only while the server has it installed: its config file
+(`PAPERBOT_LIVE_DEEPCOIN_CONFIG`, /etc/paperbot/executor-deepcoin.json) or its database (`PAPERBOT_LIVE_DEEPCOIN_DB`,
+/var/lib/paperbot/exec/executor-deepcoin-live.db) is there (dash/more/livebots.py `installed`; the live checks' rule too).
+Its name on the server's answers comes from its config's exchange (`EX_NAME`, like the second slot's WOO X Pro). Every
+screen takes the executor ids from one list (livebots-kit.js `EXEC_SLOTS`, `execIds` of an answer, `execsNow` of the last
+summary, `setExecs`): with the third not installed every list, word and answer is the two executors' as before; with it,
+its strip amount, band chip, reactor (한눈에: the centre on top, three reactors in a row), tables, choices, cards and console
+tab are added (colour `--series-dc`, letter D). A name ending in a consonant (딥코인) takes 이 / 은 where the others take
+가 / 는: livebots-kit.js `josa` (the server's livepapers.josa).
 
 | Addition | Screen / place | Server (read-only) |
 |---|---|---|

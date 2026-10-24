@@ -14,7 +14,7 @@
 .lbv-a-paper { --lbv-c: var(--series-ds); }
 .lbv-a-bybit { --lbv-c: var(--series-core); }
 .lbv-a-mexc { --lbv-c: var(--series-m5); }
-.lbv-a-flipster { --lbv-c: var(--series-fl); }
+.lbv-a-deepcoin { --lbv-c: var(--series-dc); }
 .lbv-acct.off { border-style: dashed; }
 .lbv-ah { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
 .lbv-ah .lb-acct { font: 800 var(--t-md)/1.3 var(--f-body); color: var(--ink); }

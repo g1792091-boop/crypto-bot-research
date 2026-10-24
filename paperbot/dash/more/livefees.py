@@ -47,9 +47,10 @@ ROWS_KEEP = 12                           # trades listed per span (newest first)
 #            the API's maker_pct: once the owners read it off, it goes here)
 #   mexc     docs/mexc-ko.md (MEXC notice 2026-06-01): API futures maker 0.06 %, taker 0.08 %
 #   binance  docs/trade-review-system.md: USDⓈ-M VIP0 maker 0.02 %, taker 0.05 %
-#   flipster docs/flipster-ko.md (owners 10-23, the third slot): no rate is settled by its docs (the owners sign up through
-#            a payback app: Flipster charges its full taker fee, the payback comes back later, outside the bot); the drill
-#            measures the real fee, then it goes here. Until then both are None (모름), never guessed
+#   deepcoin the DeepCoin API docs (owners 10-24, the third slot; docs/deepcoin-ko.md): the fee-rate endpoint's example
+#            answer (GET /deepcoin/account/trade-fee, tier Lv1) reads taker 0.05 %, maker 0.02 %; no fee schedule is settled
+#            there, so these are the example's numbers until the drill reads the account's own rate and measures the real
+#            fee (the owners' payback app pays part of it back later, outside the bot: the exchange charges its full fee)
 RATES = {
     "bybit": {"taker": 0.00055, "maker": 0.0002, "src": "docs/live1019-start-ko.md",
               "src_ko": "일반 등급(VIP0) 무기한 선물 · 10/19 확인"},
@@ -57,8 +58,8 @@ RATES = {
                 "src_ko": "시장가 0.06% · TetherMax 가입 할인이면 0.042% · 메이커 요율은 문서에 없어요 (drill 결과의 maker_pct로 확인)"},
     "mexc": {"taker": 0.0008, "maker": 0.0006, "src": "docs/mexc-ko.md", "src_ko": "API 주문 요율 · MEXC 공지 2026-06-01"},
     "binance": {"taker": 0.0005, "maker": 0.0002, "src": "docs/trade-review-system.md", "src_ko": "USDⓈ-M VIP0"},
-    "flipster": {"taker": None, "maker": None, "src": "docs/flipster-ko.md",
-                 "src_ko": "플립스터 요율은 아직 확인 전이에요 (드릴이 실제 수수료를 재요 · 페이백은 봇 밖에서 나중에 들어와요)"},
+    "deepcoin": {"taker": 0.0005, "maker": 0.0002, "src": "docs/deepcoin-ko.md",
+                 "src_ko": "딥코인 API 문서의 요율 조회 예시(Lv1) · 두 분 계정 요율은 드릴이 재요 · 페이백은 봇 밖에서 나중에 들어와요"},
 }
 RATES_KO = "기본 등급 요율 · 두 분 계정 등급에 따라 다를 수 있어요"
 LIMIT_RISK_KO = ("지정가 주문은 안 채워질 수 있어요: 안 채워졌으면 그 거래는 없었던 거고, 그 위험(놓친 이익·피한 손실)은 이 숫자에 "

@@ -1023,7 +1023,7 @@ def trades_view(snap: dict, cfg: dict, since: Optional[int], loc: dict, follows:
                 then = LP.paper_at(x["segs"], t.get("entry_time"))
                 other = next((b for b in loc["bots"] if LP.same(b["path"], then)), None)
                 name = (other or {}).get("short_ko") or "다른 페이퍼"
-                cells[c["id"]] = {"state": "other", "why_ko": f"이때 {x['name_ko']}는 {name}{obj_ko(name)} 따라갔어요"}
+                cells[c["id"]] = {"state": "other", "why_ko": f"이때 {L.josa(x['name_ko'], '은', '는')} {name}{obj_ko(name)} 따라갔어요"}
             else:
                 cells[c["id"]] = L.why_missed(x["record"], t, ACCOUNT)
         g = gates_view(t.get("gates"), t.get("side"))

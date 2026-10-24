@@ -8,8 +8,8 @@
     python3 deploy/vwap_switch.py --exec bybit --back [--write]            back to the newest .before-vwap-<time> copy
 
 ``--exec``: bybit (/etc/paperbot/executor.json, paperbot-executor), wooxpro (/etc/paperbot/executor-mexc.json,
-paperbot-executor-mexc) or flipster (/etc/paperbot/executor-flipster.json, paperbot-executor-flipster: the third executor,
-owners 10-23, docs/flipster-ko.md; its config is copied from deploy/executor.live-flipster.json first, which already
+paperbot-executor-mexc) or deepcoin (/etc/paperbot/executor-deepcoin.json, paperbot-executor-deepcoin: the third executor,
+owners 10-24, docs/deepcoin-ko.md; its config is copied from deploy/executor.live-deepcoin.json first, which already
 follows the VWAP bot, so here it only gets ``budget_usd`` and ``qty_scale`` before its first start). ``--balance``: that
 exchange account's futures balance now (USDT, from the app).
 
@@ -41,7 +41,7 @@ import time
 
 EXECS = {"bybit": ("바이비트", "/etc/paperbot/executor.json", "paperbot-executor"),
          "wooxpro": ("WOO X Pro", "/etc/paperbot/executor-mexc.json", "paperbot-executor-mexc"),
-         "flipster": ("플립스터", "/etc/paperbot/executor-flipster.json", "paperbot-executor-flipster")}
+         "deepcoin": ("딥코인", "/etc/paperbot/executor-deepcoin.json", "paperbot-executor-deepcoin")}
 VWAP_DB = "/var/lib/paperbot/combo/vwap.db"
 ACCOUNT = "COMBO@mix"
 LADDER = {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}

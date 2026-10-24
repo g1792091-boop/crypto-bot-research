@@ -26,7 +26,7 @@ import {scoreView, ledgerView} from "./livebots-score.js";
 import {groupBlock, cardSub} from "./livebots-rank.js";
 
 /** The accounts of an answer: the second paper bot too while the server sends it (owners 10/23: the 'VWAP 개선판', its own
- *  record from its own start), named by its bot (acctKo), and the third executor (플립스터) while the server has it
+ *  record from its own start), named by its bot (acctKo), and the third executor (딥코인) while the server has it
  *  (execIds); one paper bot and two executors: the three as before. */
 export const idsOf = (d) => ["paper", ...(d && d.accts && d.accts.paper2 ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
 const REFRESH_MS = 60 * 1000;

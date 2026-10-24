@@ -13,8 +13,8 @@
     PAPERBOT_LIVE_MEXC_DB       /var/lib/paperbot/exec/executor-mexc-live.db    MEXC 실행기
     PAPERBOT_LIVE_BYBIT_CONFIG  /etc/paperbot/executor.json                     (키 없음: 계좌 · 신호등 · 크기 비율 · 위험 한도만 씀)
     PAPERBOT_LIVE_MEXC_CONFIG   /etc/paperbot/executor-mexc.json
-    PAPERBOT_LIVE_FLIPSTER_DB   /var/lib/paperbot/exec/executor-flipster-live.db 플립스터 실행기 (세 번째, 설치됐을 때만 보임)
-    PAPERBOT_LIVE_FLIPSTER_CONFIG /etc/paperbot/executor-flipster.json
+    PAPERBOT_LIVE_DEEPCOIN_DB   /var/lib/paperbot/exec/executor-deepcoin-live.db 딥코인 실행기 (세 번째, 설치됐을 때만 보임)
+    PAPERBOT_LIVE_DEEPCOIN_CONFIG /etc/paperbot/executor-deepcoin.json
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
@@ -47,9 +47,10 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 그때 따라간 페이퍼의 거래와만 비교해요. 두 실행기가 같은 페이퍼를 따라가면(10/20 상태) 모든 것이 예전과 같아요. 두 번째 페이퍼 봇
 (PAPERBOT_LIVE_PAPER2_DB) 파일이 있거나 실행기가 다른 페이퍼를 따라가면 그 페이퍼도 계좌 하나로 보여요(``paper2``).
 
-세 번째 실행기 (owners 10-23, docs/flipster-ko.md: 플립스터가 'VWAP 개선판'을 따라감): 그 칸(``flipster``)은 이 서버에 설치됐을 때만,
-곧 그 설정 파일(PAPERBOT_LIVE_FLIPSTER_CONFIG)이나 그 DB(PAPERBOT_LIVE_FLIPSTER_DB) 중 하나라도 있을 때만 모든 화면에 나와요
-(``installed``; 실거래 점검 paperbot/livecheck.py와 같은 규칙). 둘 다 없으면 화면 · 답은 예전 그대로(실행기 두 개)예요.
+세 번째 실행기 (owners 10-24, docs/deepcoin-ko.md: 딥코인이 'VWAP 개선판'을 따라감; 10-23에 정한 플립스터는 API가 신청제라 바꿈):
+그 칸(``deepcoin``)은 이 서버에 설치됐을 때만, 곧 그 설정 파일(PAPERBOT_LIVE_DEEPCOIN_CONFIG)이나 그 DB(PAPERBOT_LIVE_DEEPCOIN_DB)
+중 하나라도 있을 때만 모든 화면에 나와요(``installed``; 실거래 점검 paperbot/livecheck.py와 같은 규칙). 둘 다 없으면 화면 · 답은
+예전 그대로(실행기 두 개)예요. 칸 이름은 그 설정의 거래소(``EX_NAME``)를 따라요.
 
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
@@ -79,10 +80,10 @@ ENV = {
     "mexc_db": ("PAPERBOT_LIVE_MEXC_DB", "/var/lib/paperbot/exec/executor-mexc-live.db"),
     "bybit_config": ("PAPERBOT_LIVE_BYBIT_CONFIG", "/etc/paperbot/executor.json"),
     "mexc_config": ("PAPERBOT_LIVE_MEXC_CONFIG", "/etc/paperbot/executor-mexc.json"),
-    # the third slot (owners 10-23: Flipster follows the 'VWAP 개선판' paper bot, docs/flipster-ko.md): on the page only
+    # the third slot (owners 10-24: DeepCoin follows the 'VWAP 개선판' paper bot, docs/deepcoin-ko.md): on the page only
     # once it is installed (``installed``)
-    "flipster_db": ("PAPERBOT_LIVE_FLIPSTER_DB", "/var/lib/paperbot/exec/executor-flipster-live.db"),
-    "flipster_config": ("PAPERBOT_LIVE_FLIPSTER_CONFIG", "/etc/paperbot/executor-flipster.json"),
+    "deepcoin_db": ("PAPERBOT_LIVE_DEEPCOIN_DB", "/var/lib/paperbot/exec/executor-deepcoin-live.db"),
+    "deepcoin_config": ("PAPERBOT_LIVE_DEEPCOIN_CONFIG", "/etc/paperbot/executor-deepcoin.json"),
 }
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
@@ -91,12 +92,14 @@ LEGACY_PAPER2 = "/var/lib/paperbot/combo/live15-mexc.db"
 # (id, Korean name, db key, config key): the two slots every page has
 EXECS = (("bybit", "바이비트", "bybit_db", "bybit_config"), ("mexc", "MEXC", "mexc_db", "mexc_config"))
 # the slots a server has only once they are installed (``installed``: their config file or their database is there);
-# owners 10-23: the third, 플립스터, follows the 'VWAP 개선판' paper bot (docs/flipster-ko.md)
-OPTIONAL_EXECS = (("flipster", "플립스터", "flipster_db", "flipster_config"),)
+# owners 10-24: the third, 딥코인, follows the 'VWAP 개선판' paper bot (docs/deepcoin-ko.md)
+OPTIONAL_EXECS = (("deepcoin", "딥코인", "deepcoin_db", "deepcoin_config"),)
 ALL_EXECS = EXECS + OPTIONAL_EXECS
 # the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
-# and config path stay "mexc" so every page and check keeps working)
-EX_NAME = {"bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "binance": "바이낸스", "flipster": "플립스터"}
+# and config path stay "mexc" so every page and check keeps working). Flipster: the third slot's exchange of 10-23, still
+# an exchange the executor can run (a slot config naming it reads 플립스터)
+EX_NAME = {"bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "binance": "바이낸스", "deepcoin": "딥코인",
+           "flipster": "플립스터"}
 LIGHT_N_DEFAULT = 0                    # executor.ExecConfig.signal_light_n: 0 = the light is off
 LIGHT_MIN_DEFAULT = 0.85               # executor.ExecConfig.signal_light_min_win
 MATCH_MS = 5 * 60_000                  # a live trade and a paper trade of the same coin and side within 5 minutes
@@ -210,7 +213,7 @@ def paths(env: Optional[dict] = None) -> dict:
 
 
 def installed(p: dict) -> tuple:
-    """The executor slots of this server, in EXECS order: the two first always; an optional slot (the third, 플립스터)
+    """The executor slots of this server, in EXECS order: the two first always; an optional slot (the third, 딥코인)
     once its config file or its database is there (``p``: paths()). Neither there: the pages, the answers, the checks and
     the messages are as they were with two executors."""
     return EXECS + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2])))
@@ -246,18 +249,8 @@ def slots(configs: Optional[dict] = None) -> list:
     return out
 
 
-def josa(word: Any, with_final: str, without: str) -> str:
-    """``word`` with the Korean particle its last sound takes ("VWAP 개선판을", "추세판단 봇을", "페이퍼 −35%를"): a Hangul
-    syllable by its final consonant, a digit or % by how it is read, anything else the form without."""
-    w = str(word or "").rstrip()
-    if not w:
-        return w
-    c = w[-1]
-    if "가" <= c <= "힣":
-        return w + (with_final if (ord(c) - 0xAC00) % 28 else without)
-    if c.isdigit():
-        return w + (with_final if c in "013678" else without)
-    return w + without
+# ``word`` with the Korean particle its last sound takes ("VWAP 개선판을", "추세판단 봇을", "딥코인은"; livepapers.josa)
+josa = LP.josa
 
 
 def thin(points: list, n: int = CURVE_MAX) -> list:
@@ -1218,7 +1211,7 @@ def era_of(x: dict, path: str, bots: Optional[list] = None) -> Optional[dict]:
 
 def other_cell(x: dict, label_ko: Optional[str]) -> dict:
     """A paper trade of a paper bot the executor did not follow then (owners 10-19: two paper bots)."""
-    return {"state": "other", "why_ko": f"이때 {x['name_ko']}는 {josa(label_ko or '다른 페이퍼', '을', '를')} 따라갔어요"}
+    return {"state": "other", "why_ko": f"이때 {josa(x['name_ko'], '은', '는')} {josa(label_ko or '다른 페이퍼', '을', '를')} 따라갔어요"}
 
 
 def paper_bots(p: dict, paper: dict, execs: list) -> list:

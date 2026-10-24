@@ -25,7 +25,7 @@ import {acctKo, sourceState, EXEC_SLOTS, execsKo} from "./livebots-kit.js";
 
 export const JUDGE_API = "/api/v4/livebots/judge";
 const REFRESH_MS = 60 * 1000;
-const LIVE = EXEC_SLOTS;                  // the executors with live rows (the third, 플립스터, only while the server has it)
+const LIVE = EXEC_SLOTS;                  // the executors with live rows (the third, 딥코인, only while the server has it)
 
 
 // ================================================================ pure functions (node tests: tests/test_dash_liveinsight.py)

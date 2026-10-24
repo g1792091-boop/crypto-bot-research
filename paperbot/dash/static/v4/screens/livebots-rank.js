@@ -380,7 +380,7 @@ export function rowDetail(r, d, href) {
 // bars (30분 · 1시간 · 4시간 진입) since its own start, in the server's order, each row with its members; the card's words follow the bot.
 export const GROUPS_API = "/api/v4/livebots/groups";
 const GROUP_KEY = "lbrg-acct";
-/** The accounts of the card's switch: the paper, then the executors (execIds: the third, 플립스터, while the server has it). */
+/** The accounts of the card's switch: the paper, then the executors (execIds: the third, 딥코인, while the server has it). */
 const groupAccts = (d) => [{id: "paper", label: "페이퍼"}, ...(d ? execIds(d) : execsNow()).map((id) => ({id, label: acctKo(id)}))];
 
 /** The rows of one account: A, B, 예전 매매법, and 짝 페이퍼 없음 only when it has trades: [{id, ko, sub, n_members, rec}].

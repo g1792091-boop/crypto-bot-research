@@ -23,7 +23,7 @@ import {whyBox} from "./livebots-why.js";
 
 export const EXC_API = "/api/v4/livebots/positions/excursions";
 /** The tables of the answer: the paper bots (the second while there is one), then the executors (execIds: the third,
- *  플립스터, while the server has it). */
+ *  딥코인, while the server has it). */
 const idsOf = (d) => ["paper", ...(d && d.accts && d.accts.paper2 ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
 const EX_NONE = {missing: "수집 전", error: "못 읽음", none: "1분봉 없음"};
 
@@ -207,7 +207,7 @@ export function tradesView(ctx) {
     if (st.d && sig === st.sig) { put(stateSlot); return; }
     st.d = d; st.sig = sig;
     // two paper bots (owners 10/19): the second one's table is a choice too, only while there is one; the third executor's
-    // (플립스터, owners 10/23) only while the server has it
+    // (딥코인, owners 10/24) only while the server has it
     const ids = idsOf(d);
     if (ids.join() !== st.ids.join()) {
       st.ids = ids;
