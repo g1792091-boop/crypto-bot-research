@@ -257,6 +257,13 @@ if [ ! -f /etc/paperbot/executor.env ] && [ -f "$APP/deploy/executor.env.example
   install -o root -g root -m 600 "$APP/deploy/executor.env.example" /etc/paperbot/executor.env
 fi
 [ -f /etc/paperbot/executor.env ] && chmod 600 /etc/paperbot/executor.env && chown root:root /etc/paperbot/executor.env
+# The fourth executor's own key file (WOO X Pro 2, owners 10-24, docs/friend-bot-ko.md): root only too, its template
+# with every value empty (nothing secret is written here), so the owners' sudoedit fills a root-only file instead of
+# creating one with an editor's default permissions. Its unit loads it INSTEAD of executor.env.
+if [ ! -f /etc/paperbot/executor-wooxpro2.env ] && [ -f "$APP/deploy/executor-wooxpro2.env.example" ]; then
+  install -o root -g root -m 600 "$APP/deploy/executor-wooxpro2.env.example" /etc/paperbot/executor-wooxpro2.env
+fi
+[ -f /etc/paperbot/executor-wooxpro2.env ] && chmod 600 /etc/paperbot/executor-wooxpro2.env && chown root:root /etc/paperbot/executor-wooxpro2.env
 
 echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-livedash.service paperbot-daily3.service paperbot-daily3.timer \
@@ -300,6 +307,10 @@ install -m 644 "$APP/deploy/paperbot-executor-mexc.service" /etc/systemd/system/
 # here: the owners copy deploy/executor.live-deepcoin.json there themselves (the guide), so the live site, the checks and
 # the messages keep showing two executors until they do.
 install -m 644 "$APP/deploy/paperbot-executor-deepcoin.service" /etc/systemd/system/paperbot-executor-deepcoin.service
+# the fourth executor (WOO X Pro 2, owners 10-24, docs/friend-bot-ko.md: a second WOO X Pro account follows the paper bot
+# '친구 매매법'): installed only, never enabled or started here; /etc/paperbot/executor-wooxpro2.json is never written here
+# (the owners copy deploy/executor.live-wooxpro2.json), so the site, the checks and the messages stay as they are until then.
+install -m 644 "$APP/deploy/paperbot-executor-wooxpro2.service" /etc/systemd/system/paperbot-executor-wooxpro2.service
 # Until 10-24 this slot was Flipster's (paperbot-executor-flipster, installed by install.sh from 10-23, never started:
 # its API opens only on request, so the owners switched to DeepCoin). Its unit file goes only while that unit is inactive
 # and not enabled; a running or enabled one is left as it is (a person decides).
@@ -325,6 +336,10 @@ fi
 if systemctl is-active --quiet paperbot-executor-deepcoin 2>/dev/null; then
   echo "paperbot-executor-deepcoin is running the previous code; restart it yourself when ready:"
   echo "  sudo systemctl restart paperbot-executor-deepcoin"
+fi
+if systemctl is-active --quiet paperbot-executor-wooxpro2 2>/dev/null; then
+  echo "paperbot-executor-wooxpro2 is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-executor-wooxpro2"
 fi
 # New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then
