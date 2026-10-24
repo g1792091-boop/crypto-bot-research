@@ -1,8 +1,9 @@
-"""'친구 매매법' paper bot (owners 2026-10-24, deploy/combo.friend.json, docs/friend-bot-ko.md): the config as the
-brief says it and its problems, the member in the combined bot's runner (computed at its bar close, entered at the next
-minute, one position, the same blocks, the gates' reasons recorded), the stop exactly at net ROE -75 % and never moved by
-the liquidation buffer, the entry message's signal values, the loss review (its line and its row), and that the other
-bots' configs load and say exactly what they said before (texts of commit eebb24a)."""
+"""'친구 매매법' paper bot (owners 2026-10-24, the structure of the live start as they chose it by the last 19 days:
+deploy/combo.friend.json, docs/friend-bot-ko.md): the config and its problems, the member in the combined bot's runner
+(computed at its bar close, entered at the next minute, one position, the same blocks, a gate's reason recorded), the
+stop exactly at net ROE -50 % at 35x and never moved, Binance's brackets cutting a size but never refusing it, the
+entry message's signal values, the loss review (its line and its row), the screen's -20 % stop before fees as an
+option, and that the other bots' configs load and say exactly what they said before (texts of commit eebb24a)."""
 
 from __future__ import annotations
 
@@ -21,10 +22,16 @@ from test_combo import MIN, PX, SYMS, T0, World, cfg_of
 ROOT = Path(__file__).resolve().parents[1]
 M15 = 15 * MIN
 FRIEND = [{"strategy": "FRIEND_ROC", "tf": "15m"}]
-KW = dict(members=FRIEND, leverage={"BTCUSDT": 30, "default": 30}, margin=0.4, max_loss_frac=0.35,
-          stop={"mode": "roe", "roe": 0.75, "net": True}, liq_buffer_atr=0.0,
-          ladder={"first_lock": 0.20, "trigger_gap": 0.02, "step": 0.10}, rank=["order"], name="친구 매매법",
+KW = dict(members=FRIEND, leverage={"BTCUSDT": 35, "default": 35}, margin=0.4, max_loss_frac=0.25,
+          stop={"mode": "roe", "roe": 0.5, "net": True}, liq_buffer_atr=0.0,
+          ladder={"first_lock": 0.10, "trigger_gap": 0.02, "step": 0.05}, rank=["order"], name="친구 매매법",
           no_weekend=True, macro_blackout_min=30, us_open_pause_min=30, us_open_pre_min=30, telegram=True)
+# the owners' first rule of 10/24 night (an hour in the deploy file): the 1h bar's RSI26 + ROC9, the screen's -20 % stop
+NIGHT1 = {"members": [{"strategy": "FRIEND_ROC", "tf": "15m", "higher": "rsi_roc_1h"}], "max_loss_frac": 0.15,
+          "stop": {"mode": "roe", "roe": 0.2, "net": False}}
+# the structure of 10/24 evening (30x, net ROE -75 %): Binance's second LTC / BCH bracket refuses entries at a grown size
+OLD_KW = {**KW, "members": FRIEND, "leverage": {"BTCUSDT": 30, "default": 30}, "max_loss_frac": 0.35,
+          "stop": {"mode": "roe", "roe": 0.75, "net": True}, "ladder": {"first_lock": 0.20, "trigger_gap": 0.02, "step": 0.10}}
 
 
 def _deploy(name):
@@ -32,36 +39,41 @@ def _deploy(name):
 
 
 # ---------------------------------------------------------------- the config
-def test_deploy_config_is_the_brief_and_valid():
+def test_deploy_config_is_the_owners_choice_and_valid():
     raw = _deploy("combo.friend.json")
     cfg = C.ComboConfig.from_dict(raw)
     assert cfg.problems() == []
-    assert cfg.name == "친구 매매법" and cfg.members == FRIEND
-    assert cfg.leverage == {"BTCUSDT": 30, "default": 30} and cfg.margin == 0.4 and cfg.initial_equity == 1000
-    assert cfg.stop == {"mode": "roe", "roe": 0.75, "net": True} and cfg.stop_net
-    assert cfg.ladder == {"first_lock": 0.20, "trigger_gap": 0.02, "step": 0.10} and cfg.rank == ("order",)
+    assert cfg.name == "친구 매매법" and cfg.members == FRIEND                    # the friend's original rule (roc_any)
+    assert cfg.leverage == {"BTCUSDT": 35, "default": 35} and cfg.margin == 0.4 and cfg.initial_equity == 1000
+    assert cfg.stop == {"mode": "roe", "roe": 0.5, "net": True} and cfg.stop_net           # net ROE -50 %
+    assert cfg.ladder == {"first_lock": 0.10, "trigger_gap": 0.02, "step": 0.05} and cfg.rank == ("order",)
     assert cfg.no_weekend and cfg.macro_blackout_min == cfg.us_open_pause_min == cfg.us_open_pre_min == 30
-    assert cfg.adx_gate == {"tf": "4h", "min": 20} and cfg.quiet_gate == {"bars": 20, "max_ratio": 0.64}
+    assert cfg.adx_gate is None and cfg.quiet_gate is None and C.gate_lines(cfg) == []         # no extra gate
     assert cfg.max_hold_bars is None and cfg.telegram is True
     assert cfg.paper_db == _deploy("combo.vwap.json")["paper_db"] and cfg.db == "/var/lib/paperbot/combo/friend.db"
-    # the choices that keep the paper equal to the research: one position, nothing else in the way
     assert cfg.vote_gate is None and cfg.vol_gate is None and cfg.early_exit is None and cfg.trend is None
     assert cfg.liq_buffer_atr == 0.0 and cfg.loss_cap == "shrink"
-    assert 0.4 * 0.75 < cfg.max_loss_frac < 0.4               # a stop-out loses 30 % of the wallet: the cap never cuts it
+    assert 0.4 * 0.5 < cfg.max_loss_frac < 0.4 * 0.75        # a stop-out loses 20 % of the wallet: never cut
     assert cfg.flip_twin is True                              # the coin-flip yardstick, its own account
     members = C.resolve_members(cfg.members, cfg.picks_file)
-    assert [(m.kind, m.name, m.tf, m.label, m.custom) for m in members] == [("friend", "FRIEND_ROC", "15m",
-                                                                            "FRIEND_ROC@15m", False)]
+    assert [(m.kind, m.name, m.tf, m.label, m.higher) for m in members] == [
+        ("friend", "FRIEND_ROC", "15m", "FRIEND_ROC@15m", "roc_any")]
     assert C.friend_bot(cfg)
+    assert C.stop_text(cfg) == "순ROE -50%(수수료·슬리피지 포함: 35배 가격 1.29%)"
     text = C.start_text(cfg, members, 1000.0)
-    assert text == ("[합친 봇 페이퍼 친구 매매법] 시작: 매매법 1개(친구 매매법(EMA·RSI·ROC) 15분), BTC 30배·나머지 30배, "
-                    "증거금 잔고의 40%, 손절 순ROE -75%(수수료·슬리피지 포함: 30배 가격 2.36%), 계단 익절 순ROE 22%에서 "
-                    "20% 잠금, 이후 10%씩, 빠른 청산 없음(고정 손절과 계단 익절만), 4시간 ADX(14)가 20 미만이면 진입 안 함"
-                    "(추세 약함), 신호 봉 거래량이 앞 20봉 평균의 0.64배보다 크면 진입 안 함(조용한 봉만), 포지션 1개, "
-                    "진입 쉼 주말·경제 발표 앞뒤 30분·나스닥 개장 앞 30분·뒤 30분, 지갑 $1,000.00")
+    assert text == ("[합친 봇 페이퍼 친구 매매법] 시작: 매매법 1개(친구 매매법(EMA·RSI·ROC) 15분), BTC 35배·나머지 35배, "
+                    "증거금 잔고의 40%, 손절 순ROE -50%(수수료·슬리피지 포함: 35배 가격 1.29%), 계단 익절 순ROE 12%에서 "
+                    "10% 잠금, 이후 5%씩, 빠른 청산 없음(고정 손절과 계단 익절만), 포지션 1개, 진입 쉼 주말·경제 발표 앞뒤 "
+                    "30분·나스닥 개장 앞 30분·뒤 30분, 지갑 $1,000.00")
     assert members[0].describe() == ("1. FRIEND_ROC 15분 - 친구 매매법(EMA·RSI·ROC): EMA21·EMA52·RSI26·ROC9, 상위 봉 "
                                      "1시간·4시간 중 하나라도 ROC9이 같은 쪽 (이 봇이 바이낸스 끝난 봉으로 계산)")
-    assert members[0].higher == "roc_any"                     # the deploy file keeps today's rule (owners not picked)
+    # the first rule of that night stays an option: valid, its words
+    night = C.ComboConfig.from_dict({**raw, **NIGHT1})
+    assert night.problems() == [] and C.stop_text(night) == "ROE -20%(수수료 전: 35배 가격 0.57%)"
+    nm = C.resolve_members(night.members, night.picks_file)
+    assert nm[0].label == "FRIEND_ROC@15m~rsi_roc_1h" and nm[0].describe().endswith(
+        "끝난 1시간봉 RSI26·ROC9이 같은 쪽(4시간봉은 안 봄) (이 봇이 바이낸스 끝난 봉으로 계산)")
+    assert "매매법 1개(친구 매매법(EMA·RSI·ROC) 15분 1시간 RSI·ROC)" in C.start_text(night, nm, 1000.0)
 
 
 def test_member_refusals_and_the_rule_bots_rows_never_read(tmp_path):
@@ -89,7 +101,10 @@ def test_the_higher_bar_rule_is_a_member_option(tmp_path):
     same = C.resolve_members([{"strategy": "FRIEND_ROC", "tf": "15m", "higher": "roc_any"}], core=[])[0]
     assert same.label == "FRIEND_ROC@15m"
     assert b.describe().endswith("상위 봉 1시간·4시간 둘 다 RSI26·ROC9이 같은 쪽 (이 봇이 바이낸스 끝난 봉으로 계산)")
-    for bad, text in [([{"strategy": "FRIEND_ROC", "tf": "15m", "higher": "rsi_any"}], "roc_any, rsi_roc_all"),
+    c = C.resolve_members([{"strategy": "FRIEND_ROC", "tf": tf, "higher": "rsi_roc_1h"} for tf in ("15m", "30m")], core=[])
+    assert [m.label for m in c] == ["FRIEND_ROC@15m~rsi_roc_1h", "FRIEND_ROC@30m~rsi_roc_1h"]
+    for bad, text in [([{"strategy": "FRIEND_ROC", "tf": "15m", "higher": "rsi_any"}], "roc_any, rsi_roc_all, rsi_roc_1h"),
+                      ([{"strategy": "FRIEND_ROC", "tf": "1h", "higher": "rsi_roc_1h"}], "15m/30m에서만"),
                       ([{"strategy": "V39_ALL", "tf": "15m", "higher": "roc_any"}], "FRIEND_ROC에만"),
                       ([{"strategy": "FRIEND_ROC", "tf": "15m"},
                         {"strategy": "FRIEND_ROC", "tf": "15m", "higher": "roc_any"}], "두 번")]:
@@ -128,8 +143,8 @@ def test_40x_with_a_net_minus_50_stop_is_valid_and_every_coin_enters():
 
 
 def test_net_stop_minus_75_at_30x_is_valid_and_one_past_liquidation_is_not(tmp_path):
-    assert cfg_of(tmp_path, **KW).problems() == []
-    probs = cfg_of(tmp_path, **{**KW, "stop": {"mode": "roe", "roe": 0.95, "net": True}}).problems()
+    assert cfg_of(tmp_path, **KW).problems() == [] and cfg_of(tmp_path, **OLD_KW).problems() == []
+    probs = cfg_of(tmp_path, **{**OLD_KW, "stop": {"mode": "roe", "roe": 0.95, "net": True}}).problems()
     assert any("강제청산 가격보다 멀어" in p for p in probs)
     for name in ("combo.trend.json", "combo.live15.json", "combo.live15-mexc.json", "combo.vwap.json"):
         assert C.ComboConfig.from_dict(_deploy(name)).problems() == []
@@ -140,21 +155,25 @@ def test_run_record_keeps_the_running_bots_keys_as_before():
         cfg = C.ComboConfig.from_dict(_deploy(name))
         assert "adx_gate" not in C.run_config(cfg) and "quiet_gate" not in C.run_config(cfg)
     rc = C.run_config(C.ComboConfig.from_dict(_deploy("combo.friend.json")))
-    assert rc["adx_gate"] == {"tf": "4h", "min": 20} and rc["quiet_gate"] == {"bars": 20, "max_ratio": 0.64}
+    assert "adx_gate" not in rc and "quiet_gate" not in rc                       # off in the chosen structure
+    rc = C.run_config(C.ComboConfig.from_dict({**_deploy("combo.friend.json"), "adx_gate": {"tf": "4h", "min": 20}}))
+    assert rc["adx_gate"] == {"tf": "4h", "min": 20} and "quiet_gate" not in rc
 
 
 # ---------------------------------------------------------------- the stop and the liquidation buffer
-def _engine(equity):
+def _engine(equity, **over):
     from paperbot.livereplay import file_brackets, file_specs
-    cfg = C.ComboConfig.from_dict({**_deploy("combo.friend.json"), "paper_db": "-", "db": "-", "telegram": False,
-                                   "initial_equity": equity})
+    cfg = C.ComboConfig.from_dict({**_deploy("combo.friend.json"), "telegram": False, "initial_equity": equity, **over})
     br, _ = file_brackets(list(SYMS))
     return cfg, C.ComboEngine(C.settings_of(cfg), br, combo=cfg, symbol_specs=file_specs(list(SYMS)))
 
 
 @pytest.mark.parametrize("sym", SYMS)
 @pytest.mark.parametrize("side", [1, -1])
-def test_the_stop_is_net_minus_75_percent_and_every_coin_enters_at_the_start(sym, side):
+def test_the_stop_is_net_minus_50_at_35x_and_every_coin_enters_at_the_start(sym, side):
+    """Net ROE -50 % at 35x: the stop (0.5 / 35 - the round trip) = about 1.29 % from the reference price (the entry
+    minute's open, research p0; the paper's fill is 0.02 % slippage past it), the research walk's roe_stop -0.50 with the
+    costs; a stop-out costs 50 % of the margin, 20 % of the wallet."""
     cfg, e = _engine(1000.0)
     m = C.resolve_members(cfg.members, cfg.picks_file)[0]
     px = PX[sym]
@@ -164,18 +183,50 @@ def test_the_stop_is_net_minus_75_percent_and_every_coin_enters_at_the_start(sym
     p = e.position
     assert p is not None, e.outcomes[-1]
     rt = e.s.round_trip_cost
-    assert p.stop_price == pytest.approx(px * (1 - side * (0.75 / 30 - rt)), rel=1e-12)       # never moved
-    assert p.leverage == 30 and p.margin == pytest.approx(400.0, rel=0.01)
-    # a stop-out loses net ROE -75 %: 30 % of the wallet (fees and slippage of both sides inside)
-    from paperbot.ladder import net_roe
-    assert net_roe(side, p.entry_price, p.stop_price * (1 - side * e.s.slippage_frac), 30, 0.0) - 30 * 2 * e.s.taker_fee \
-        == pytest.approx(-0.75, abs=0.002)
+    assert p.stop_price == pytest.approx(px * (1 - side * (0.5 / 35 - rt)), rel=1e-12)       # never moved
+    assert p.signal.meta["stop_rule"] == "ROE -50% net at 35x"
+    assert p.leverage == 35 and p.margin == pytest.approx(400.0, rel=0.01)
+    exit_px = p.stop_price * (1 - side * e.s.slippage_frac)
+    net = side * (exit_px - p.entry_price) * p.qty - p.entry_fee - exit_px * p.qty * e.s.taker_fee
+    assert net / p.margin == pytest.approx(-0.50, abs=0.002)
+    assert -net / 1000.0 == pytest.approx(0.20, abs=0.002)                                   # 20 % of the wallet
+
+
+def test_the_screens_minus_20_stop_option_is_measured_from_the_reference_price():
+    """The option of the first rule that night (``"net": false``): the stop 0.2 / 35 = 0.5714 % from the reference price,
+    as research frladder35 with roe_stop -0.20 - 35 x cost (the price -0.2 / 35 from p0)."""
+    cfg, e = _engine(1000.0, **NIGHT1)
+    m = C.resolve_members(cfg.members, cfg.picks_file)[0]
+    px = PX["ETHUSDT"]
+    e.submit(C.make_signal(cfg, m, T0, "ETHUSDT", -1, px * 0.003, None, T0, 0, {}, "friend"))
+    e.step({"ETHUSDT": Bar("ETHUSDT", T0, T0 + MIN - 1, px, px, px, px)})
+    p = e.position
+    assert p.stop_price == pytest.approx(px * (1 + 0.20 / 35), rel=1e-12)
+    assert p.signal.meta["stop_rule"] == "ROE -20% at 35x" and C.stop_rule_ko("ROE -20% at 35x") == "ROE -20%, 35배"
+
+
+def test_at_35x_brackets_cut_a_big_size_and_never_refuse():
+    """Binance's brackets at 35x with the net -50 % stop (1.29 %): the stop stays inside liquidation (with the 0.2 %
+    room) at every size up to a tier whose highest leverage is below 35 (LTC / BCH above $160,000, DOGE above $750,000,
+    SOL above $1,000,000), and there the size is cut to the largest one that allows 35x (wallets about $11,400 / $53,600 /
+    $71,400: the size is 14 x the wallet), never refused (frlive_parity3.json "tiers")."""
+    for equity, notional in ((11_000.0, 11_000 * 14), (20_000.0, 160_000)):
+        cfg, e = _engine(equity)
+        m = C.resolve_members(cfg.members, cfg.picks_file)[0]
+        px = PX["LTCUSDT"]
+        e.submit(C.make_signal(cfg, m, T0, "LTCUSDT", -1, px * 0.003, None, T0, 0, {}, "friend"))
+        e.step({"LTCUSDT": Bar("LTCUSDT", T0, T0 + MIN - 1, px, px, px, px)})
+        p = e.position
+        assert p is not None and p.qty * p.entry_price == pytest.approx(notional, rel=0.002)
+        assert p.stop_price == pytest.approx(px * (1 + (0.5 / 35 - e.s.round_trip_cost)), rel=1e-12)
+        assert p.liq_price > p.stop_price * 1.002
 
 
 def test_a_stop_too_close_to_liquidation_is_refused_and_recorded_never_moved():
-    """Binance's second LTC tier (maintenance 1 % above $50,000) puts the -75 % stop past the liquidation price of a
-    large position: the entry is refused and said, as every combined bot's (the stop stays where the rule puts it)."""
-    cfg, e = _engine(10_000.0)                       # $120,000 notional at 40 % x 30
+    """The earlier structure (30x, net -75 %): Binance's second LTC tier (maintenance 1 % above $50,000) puts the stop
+    past the liquidation price of a large position: the entry is refused and said (the stop stays where the rule puts it)."""
+    cfg, e = _engine(10_000.0, members=FRIEND, leverage={"BTCUSDT": 30, "default": 30},
+                     stop={"mode": "roe", "roe": 0.75, "net": True})          # $120,000 notional at 40 % x 30
     m = C.resolve_members(cfg.members, cfg.picks_file)[0]
     px = PX["LTCUSDT"]
     e.submit(C.make_signal(cfg, m, T0, "LTCUSDT", 1, px * 0.003, None, T0, 0, {}, "friend"))
@@ -188,7 +239,7 @@ def test_a_stop_too_close_to_liquidation_is_refused_and_recorded_never_moved():
 def test_the_runner_says_a_refusal_for_the_liquidation_price(tmp_path):
     from paperbot.livereplay import file_brackets
     B = T0 + M15
-    w = _world(tmp_path, {B: [("LTCUSDT", 1)]}, initial_equity=10_000)
+    w = _world(tmp_path, {B: [("LTCUSDT", 1)]}, **{**OLD_KW, "initial_equity": 10_000})
     for e in w.book.engines.values():
         e.brackets = file_brackets(list(SYMS))[0]                   # Binance's own brackets
     w.add_minutes(T0, 15)
@@ -205,8 +256,8 @@ def test_the_runner_says_a_refusal_for_the_liquidation_price(tmp_path):
 
 # ---------------------------------------------------------------- the member in the runner
 VALS = {"bar_close": T0 + M15, "e21": 60010.5, "e52": 59980.25, "rsi": 55.31, "roc": 0.31, "roc_prev": -0.12,
-        "higher": [{"close": T0, "roc": 0.84}, {"close": T0, "roc": -0.2}], "warm": True, "tf": "15m",
-        "higher_tf": ["1h", "4h"], "vol_ratio": 0.41, "adx4h": 27.4, "close": 60000.0}
+        "higher": [{"close": T0, "roc": 0.84}, {"close": T0, "roc": -0.2}], "higher_mode": "roc_any", "warm": True,
+        "tf": "15m", "higher_tf": ["1h", "4h"], "vol_ratio": 0.41, "adx4h": 27.4, "close": 60000.0}
 
 
 class StubFriend:
@@ -268,15 +319,15 @@ def test_signal_at_the_bar_close_enters_at_the_next_minute_open(tmp_path):
     w.now = B + 65_000
     w.run.poll()
     p = w.engine().position
-    assert p.symbol == "BTCUSDT" and p.entry_time == B and p.leverage == 30          # ties: BTC before ETH
+    assert p.symbol == "BTCUSDT" and p.entry_time == B and p.leverage == 35          # ties: BTC before ETH
     assert p.entry_price == pytest.approx(PX["BTCUSDT"] * 1.0002)                   # the minute's open + slippage
-    rt = w.engine().s.round_trip_cost
-    assert p.stop_price == pytest.approx(PX["BTCUSDT"] * (1 - (0.75 / 30 - rt)))
+    assert p.stop_price == pytest.approx(PX["BTCUSDT"] * (1 - (0.5 / 35 - w.engine().s.round_trip_cost)))
     assert p.signal.meta["friend"]["adx4h"] == 27.4 and p.signal.meta["ctx"]["gates"]["adx"]["adx"] == 27.4
     outs = dict(w.store.conn.execute("SELECT status, reason FROM outcomes WHERE account_id = ?", (C.ACCOUNT,)).fetchall())
     assert outs == {"ENTERED": "ok", "SKIPPED": "lower score than entered signal"}
     text = C.entry_text(w.cfg, p)
-    assert text.startswith("[합친 봇 페이퍼 친구 매매법] 진입 BTC 롱 · 친구 매매법(EMA·RSI·ROC) 15분 · 30배, 증거금 $")
+    assert text.startswith("[합친 봇 페이퍼 친구 매매법] 진입 BTC 롱 · 친구 매매법(EMA·RSI·ROC) 15분 · 35배, 증거금 $")
+    assert text.split("\n")[0].endswith(" (순ROE -50%(수수료·슬리피지 포함), 35배)")
     assert text.split("\n")[1] == ("신호 봉: 15분봉 10/05 09:00~09:15 KST · EMA21 60010.5 > EMA52 59980.2 · RSI26 55.3 · "
                                    "ROC9 -0.12 → +0.31 · 1시간 ROC9 +0.84 · 4시간 ROC9 -0.20 · 4시간 ADX 27 · 거래량 0.41배")
     assert text in [t for _lv, t in w.note.messages]
@@ -399,18 +450,18 @@ def test_a_losing_exit_gets_its_line_and_row_a_winning_one_neither(tmp_path):
     w.now = B + 65_000
     w.run.poll()
     assert w.engine().position is not None
-    w.add_minutes(B + MIN, 3, move={"BTCUSDT": -0.01, "ETHUSDT": 0.002})   # BTC down 1 % a minute: the -75 % stop
+    w.add_minutes(B + MIN, 3, move={"BTCUSDT": -0.01, "ETHUSDT": 0.002})   # BTC down 1 % a minute: the -50 % stop
     w.now = B + 4 * MIN + 5_000
     w.run.poll()
     t = w.engine().trades[-1]
     assert t.exit_reason == "SL" and t.roe < 0
     row = w.store.conn.execute("SELECT symbol, side, exit_reason, roe, btc_with_pct, best_roe, hours, adx4h, vol_ratio, "
                                "line FROM loss_review").fetchall()
-    assert len(row) == 1 and row[0][:3] == ("BTCUSDT", 1, "SL") and row[0][4] < -2 and row[0][7] == 27.4
+    assert len(row) == 1 and row[0][:3] == ("BTCUSDT", 1, "SL") and row[0][4] < -0.5 and row[0][7] == 27.4
     assert row[0][8] == 0.41 and row[0][6] == pytest.approx((t.exit_time - t.entry_time) / 3_600_000)
     exits = [x for _lv, x in w.note.messages if " 청산 " in x]
     assert exits[-1].split("\n")[0].startswith("[합친 봇 페이퍼 친구 매매법] 청산 BTC 롱 · 친구 매매법(EMA·RSI·ROC) 15분 · 손절 · "
-                                               "순ROE -7")
+                                               "순ROE -5")
     assert exits[-1].split("\n")[1] == row[0][9] and row[0][9].startswith("손실 이유 후보: BTC가 거래 동안 반대로 -")
     status = FS.loss_status(w.store.conn, B + DAY_MS)
     assert status[0].startswith("손실 리뷰(지난 7일): 손실 1번 (시작부터 1번) · BTC가 반대로 감 1 ·")
@@ -449,7 +500,7 @@ def test_a_winning_exit_has_no_loss_line(tmp_path):
     w.add_minutes(B, 1)
     w.now = B + 65_000
     w.run.poll()
-    w.add_minutes(B + MIN, 2, move={"ETHUSDT": 0.006})               # +1.2 %: best net ROE above 22 % -> lock 20 %
+    w.add_minutes(B + MIN, 2, move={"ETHUSDT": 0.006})               # +1.2 %: best net ROE above 32 % -> lock 30 %
     w.add_minutes(B + 3 * MIN, 1, move={"ETHUSDT": -0.02})           # back down through the lock
     w.now = B + 4 * MIN + 5_000
     w.run.poll()

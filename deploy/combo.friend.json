@@ -8,23 +8,23 @@
   }
  ],
  "leverage": {
-  "BTCUSDT": 30,
-  "default": 30
+  "BTCUSDT": 35,
+  "default": 35
  },
  "margin": 0.4,
  "initial_equity": 1000,
- "max_loss_frac": 0.35,
+ "max_loss_frac": 0.25,
  "loss_cap": "shrink",
  "stop": {
   "mode": "roe",
-  "roe": 0.75,
+  "roe": 0.5,
   "net": true
  },
  "liq_buffer_atr": 0.0,
  "ladder": {
-  "first_lock": 0.2,
+  "first_lock": 0.1,
   "trigger_gap": 0.02,
-  "step": 0.1
+  "step": 0.05
  },
  "rank": [
   "order"
@@ -37,14 +37,8 @@
  "us_open_pre_min": 30,
  "vote_gate": null,
  "vol_gate": null,
- "adx_gate": {
-  "tf": "4h",
-  "min": 20
- },
- "quiet_gate": {
-  "bars": 20,
-  "max_ratio": 0.64
- },
+ "adx_gate": null,
+ "quiet_gate": null,
  "max_hold_bars": null,
  "telegram": true,
  "name": "친구 매매법"
