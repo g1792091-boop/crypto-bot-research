@@ -518,8 +518,9 @@ def main(argv=None) -> int:
     F["v4_fees"] = float(T4["fees"].sum())
     F["v4_funding"] = float(T4["funding"].sum())
     F["v4_gross"] = float(T4["gross"].sum())
-    # the engine puts 2 bp of slippage into every fill price (entry and exit), so "gross" still carries it
-    F["v4_slip_model"] = float(((T4["qty"] * T4["entry_price"]).abs() + (T4["qty"] * T4["exit_price"]).abs()).sum() * 0.0002)
+    # the engine puts 2 bp of slippage into every market fill (entries, stops, locks; not the maker TP exit), so "gross" still carries it
+    _tp = T4["exit_reason"].eq("TP")
+    F["v4_slip_model"] = float(((T4["qty"] * T4["entry_price"]).abs().sum() + (T4["qty"] * T4["exit_price"]).abs()[~_tp].sum()) * 0.0002)
 
     # ---------------------------------------------------------------- market effect
     pool = Pool(a.randpool)
