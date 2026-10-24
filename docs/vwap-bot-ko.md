@@ -175,7 +175,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --confi
 ```
 
 - 예전 설정은 `/etc/paperbot/executor-deepcoin.json.before-vwap-<시각>`으로 남습니다.
-- check-config에서 볼 줄: 계단 `순ROE 12%에서 10% 잠금, 이후 5%씩`, `순ROE 비용: 딥코인 테이커 0.06% + 슬리피지 0.02% …`,
+- check-config에서 볼 줄: 계단 `순ROE 12%에서 10% 잠금, 이후 5%씩`, `순ROE 비용: 딥코인 테이커 0.05% + 슬리피지 0.02% …`,
   `신호등: 켜짐 - paper 최근 20번 중 75% 이상 이겼을 때만 진입을 따라감`, 마지막 줄 **`준비됨`**. preflight도 통과해야 합니다.
 
 4) 켜기 → 확인:
