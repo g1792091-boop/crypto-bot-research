@@ -124,6 +124,7 @@ SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
+STOP_FROM = ("ratio", "price", "roe")
 EXCHANGES = ("binance", "bybit", "mexc", "wooxpro", "flipster", "deepcoin")
 # owners 10-20 ("거래소 기준으로 익절해야지"): "paper" = the exchange stop follows the paper's lock steps (as before);
 # "own" = the executor runs the take-profit ladder on its OWN position: its fill, its own exchange's prices, its own costs
@@ -210,7 +211,10 @@ class ExecConfig:
     retries: int = 4
     sweep_every: int = 20                # loops between full sweeps of every allowed symbol
     stop_from: str = "ratio"             # "ratio": same stop distance (%) from the actual fill as the paper
-                                         # stop from the paper fill; "price": the paper's stop price itself
+                                         # stop from the paper fill; "price": the paper's stop price itself;
+                                         # "roe" (owners 10-24, WOO X Pro 2): ``stop_roe`` of the screen's ROE before
+                                         # fees from its own fill at the leverage it trades (0.20 at 35x: 0.5714 %)
+    stop_roe: Optional[float] = None     # "roe": the stop's ROE before fees as the exchange screen shows it (0.20)
     entry_source: str = "paper"          # "paper": follow the paper position; "signal": enter when submitted
     direct_poll_s: float = 1.5           # signal mode: paper3.db polling between loops
     direct_max_age_s: float = 20.0       # signal mode: a signal seen later than this after it was ready -> paper path
@@ -268,8 +272,15 @@ class ExecConfig:
             out.append("따라 할 paper 계좌(account, 예: V45_AMB@15m)가 비어 있거나 형식이 다릅니다")
         if not (isinstance(self.qty_scale, (int, float)) and self.qty_scale > 0):
             out.append("qty_scale은 0보다 커야 합니다")
-        if self.stop_from not in ("ratio", "price"):
-            out.append("stop_from은 \"ratio\" 또는 \"price\"입니다")
+        if self.stop_from not in STOP_FROM:
+            out.append("stop_from은 \"ratio\", \"price\" 또는 \"roe\"입니다")
+        elif self.stop_from == "roe" and not (isinstance(self.stop_roe, (int, float)) and not isinstance(self.stop_roe, bool)
+                                              and 0 < self.stop_roe < 1):
+            out.append("stop_from \"roe\"는 stop_roe(화면 ROE 손절, 수수료 전, 0~1 사이 비율, 예: -20% → 0.2)가 있어야 합니다")
+        elif self.stop_from == "roe" and self.ladder_from != "own":
+            out.append("stop_from \"roe\"는 ladder_from \"own\"(거래소 기준 익절)과 함께만 씁니다")
+        if self.stop_roe is not None and self.stop_from != "roe":
+            out.append("stop_roe는 stop_from \"roe\"일 때만 씁니다")
         if self.entry_source not in ENTRY_SOURCES:
             out.append("entry_source는 \"paper\" 또는 \"signal\"입니다")
         if not 0.5 <= float(self.direct_poll_s) <= 5:
@@ -2458,7 +2469,8 @@ class Executor:
             price = self.c.price(it.symbol)
             qty = _round_down(it.qty * self.cfg.qty_scale, spec["qty_step"])
             rules = v3_settings(taker_fee=self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE)
-            stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side)
+            # ("roe": at the paper's leverage, the only one it trades: a lower cap refuses the entry below)
+            stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side, int(it.leverage))
             # the loss at the stop must fit today's remaining loss limit and the paper rules' share of LIVE equity
             # (or the config's own share, risk.max_loss_frac)
             frac = self.cfg.risk.max_loss_frac if self.cfg.risk.max_loss_frac is not None else rules.max_loss_frac
@@ -2469,6 +2481,14 @@ class Executor:
                     {"key": it.key, "qty": dec.qty, "leverage": dec.leverage, "direct": it.direct})
         if not dec.ok:
             self._mark_done(it.key)
+            return
+        if self.cfg.stop_from == "roe" and dec.leverage != int(it.leverage):
+            # its stop is a screen ROE at the paper's leverage: another leverage is another trade, never made quietly
+            self._mark_done(it.key)
+            self._event(WARN, "leverage_refused", f"{it.symbol} paper는 {int(it.leverage)}배인데 이 실행기 설정의 상한 "
+                        f"risk.max_leverage가 {self.cfg.risk.max_leverage}배라 진입하지 않습니다(다른 배수로는 거래하지 "
+                        "않습니다). 설정을 고친 뒤 다시 시작하세요", {"key": it.key, "paper": int(it.leverage),
+                                                         "cap": self.cfg.risk.max_leverage})
             return
         if (price - stop) * it.side <= 0:
             self._mark_done(it.key)
@@ -2530,7 +2550,7 @@ class Executor:
             t["entry_price"] = float(o.get("avgPrice") or 0) or \
                 float(self.c.position(it.symbol).get("entryPrice") or 0) or price
             t["stop"] = t["stop_initial"] = self._stop_level(it.stop, it.entry_price, t["entry_price"], spec["tick"],
-                                                             it.side)
+                                                             it.side, dec.leverage)
             if self.own:                                    # its own ladder starts at its own fill (exchange clock)
                 self._own_state(t, fill_ms=sent + int(getattr(self.raw, "offset_ms", 0) or 0))
             if it.signal_ready:
@@ -2564,12 +2584,16 @@ class Executor:
         return amt
 
     def _stop_level(self, paper_stop: float, paper_entry: float, live_ref: Optional[float], tick: float,
-                    side: int) -> float:
+                    side: int, lev: Optional[float] = None) -> float:
         """The exchange stop for a paper stop. "ratio" keeps the paper's distance from its fill (the testnet
         price is not the real market price, and a live fill is never exactly the paper fill); "price" copies
-        the paper price. Rounded to the tick, never looser."""
+        the paper price; "roe" (owners 10-24) is ``stop_roe`` of the screen's ROE before fees from ``live_ref`` (its
+        own fill) at ``lev``, the leverage it trades: 0.20 / 35 = 0.5714 % of the fill, whatever slippage the paper
+        assumed. Rounded to the tick, never looser."""
         level = paper_stop
-        if self.cfg.stop_from == "ratio" and live_ref and paper_entry:
+        if self.cfg.stop_from == "roe" and live_ref and lev:
+            level = live_ref * (1 - side * float(self.cfg.stop_roe) / float(lev))
+        elif self.cfg.stop_from in ("ratio", "roe") and live_ref and paper_entry:
             level = live_ref * paper_stop / paper_entry
         return round_stop(level, tick, side)
 
@@ -3251,6 +3275,9 @@ def guard_lines(cfg: ExecConfig) -> list:
     out = []
     if cfg.label:
         out.append(f"이름: {cfg.label} (알림 머리말 {exec_prefix(cfg)})")
+    if cfg.stop_from == "roe" and isinstance(cfg.stop_roe, (int, float)) and 0 < cfg.stop_roe < 1:
+        out.append(f"손절: 이 실행기의 체결가에서 화면 ROE -{cfg.stop_roe:.0%}(수수료 전) 자리, 거래하는 배수로 계산 (35배면 가격 "
+                   f"{cfg.stop_roe / 35:.4%}). 페이퍼의 손절 가격은 쓰지 않음")
     if cfg.own_keys is True:
         out.append("키: 이 실행기 자기 키 파일만 - 다른 거래소 키가 있거나, 이 DB가 처음 켤 때 묶인 키와 다르거나(새 키는 "
                    "untie-key), 다른 실행기 DB에 기록된 키면 켜지지 않음")

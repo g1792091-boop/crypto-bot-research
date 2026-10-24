@@ -21,6 +21,10 @@ Unknowns of the real exchange are switches:
 - ``history_plans``: whether order-history shows the stop's own row with its executive_order_id;
 - ``placed_cid``: whether the market order a stop placed carries client_order_id "PLAN_<stop id>";
 - ``flat_cancels``: whether resting stops are cancelled when their position closes.
+- ``max_lev``: each contract's max_leverage (SPECS by default); ``brackets``: its leverage risk limit, [(max leverage,
+  notional floor, notional cap)] from the smallest (default: max_lev up to 200,000 USDT, half of it up to 1,000,000);
+  an opening order whose position would pass the cap of the leverage it is set to is refused with 40029 (the docs'
+  "The order's leverage is too large."; what the real exchange answers there only a live order shows).
 
 Failures are injected per request with ``fail(method, path, kind, times)``: "drop_before" / "drop_after" (TimeoutError
 before / after executing), "503_before", "429", "403", ("ret", code, msg) (refused, not executed).
@@ -74,6 +78,8 @@ class FakeWooX:
         self.placed_cid = True
         self.flat_cancels = True
         self.coverage: list = []                   # (call index, symbol, position contracts, covered by a stop)
+        self.max_lev = {s: SPECS[s]["lev"] for s in SPECS}
+        self.brackets: dict = {}                   # symbol -> [(max leverage, notional floor, notional cap)]
 
     # ------------------------------------------------------------ helpers for tests
     def now(self):
@@ -246,6 +252,11 @@ class FakeWooX:
         if (m, path) == ("GET", "/contract/public/funding-rate"):
             ts = self.now() if self.time_source in ("system", "funding") else 0
             return self._ok({"timestamp": ts, "symbol": q.get("symbol"), "rate_value": "0.0001"})
+        if (m, path) == ("GET", "/contract/public/leverage-bracket"):
+            s = q["symbol"]
+            rows = [{"bracket": i + 1, "initial_leverage": lv, "notional_floor": str(lo), "notional_cap": str(hi),
+                     "maint_margin_ratio": "0.01", "cum": "0"} for i, (lv, lo, hi) in enumerate(self._brackets(s))]
+            return self._ok({"rules": [{"symbol": s, "brackets": rows}]})
         if (m, path) == ("GET", "/contract/public/details"):
             rows = [self._detail(s) for s in SPECS if not q.get("symbol") or q["symbol"] == s]
             rows.append({"symbol": "BTCUSD", "product_type": 1, "quote_currency": "USD", "contract_size": "1",
@@ -290,7 +301,7 @@ class FakeWooX:
         if (m, path) == ("POST", "/contract/private/submit-leverage"):
             s = q["symbol"]
             assert isinstance(q["leverage"], str) and q["open_type"] in ("isolated", "cross")
-            if int(q["leverage"]) > SPECS[s]["lev"]:
+            if int(q["leverage"]) > self.max_lev[s]:
                 return self._error(40029, "The order's leverage is too large.")
             if self.pos[s] and self.levs[s][0] != q["open_type"]:
                 return self._error(40022, "The position is not isolated")
@@ -358,9 +369,22 @@ class FakeWooX:
         sp = SPECS[s]
         return {"symbol": s, "product_type": 1, "base_currency": s[:-4], "quote_currency": "USDT",
                 "last_price": repr(self.prices[s]), "contract_size": sp["cs"], "min_leverage": "1",
-                "max_leverage": str(sp["lev"]), "price_precision": sp["pp"], "vol_precision": sp["vp"],
+                "max_leverage": str(self.max_lev[s]), "price_precision": sp["pp"], "vol_precision": sp["vp"],
                 "max_volume": "100000000", "market_max_volume": "100000000", "min_volume": sp["min"],
                 "funding_interval_hours": 8, "status": "Trading"}
+
+    def _brackets(self, s):
+        lev = self.max_lev[s]
+        return self.brackets.get(s) or [(lev, 0, 200_000), (max(1, lev // 2), 200_000, 1_000_000)]
+
+    def _cap(self, s, lev):
+        """The largest position value at ``lev`` (its brackets from the smallest up), 0 when none allows it."""
+        cap = 0
+        for lv, _lo, hi in self._brackets(s):
+            if lv < lev:
+                break
+            cap = hi
+        return cap
 
     def _check_cid(self, cid):
         if cid is None:
@@ -383,6 +407,9 @@ class FakeWooX:
             assert q.get("open_type") == "isolated" and q.get("leverage") == str(self.levs[s][1]), q
             if self.levs[s][0] != "isolated":
                 return self._error(40022, "The position is not isolated")
+            value = (abs(self.pos[s]) + size) * float(SPECS[s]["cs"]) * self.prices[s]
+            if value > self._cap(s, self.levs[s][1]):
+                return self._error(40029, "The order's leverage is too large.")
         else:
             n = self.pos[s]
             if not ((side == 3 and n > 0) or (side == 2 and n < 0)):

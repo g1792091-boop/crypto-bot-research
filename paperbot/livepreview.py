@@ -1067,9 +1067,10 @@ def _deepcoin_scene(path: str) -> list:
 
 # '친구 매매법' (owners 10-24, docs/friend-bot-ko.md) as its run record says it: the preview's own hand-made record (the
 # paper bot itself is paperbot/combo.py on deploy/combo.friend.json; only the words the messages read are here)
-FRIEND_CFG = {"name": "친구 매매법", "members": [{"strategy": "FRIEND_ROC", "tf": "15m"}], "leverage": {"default": 30},
-              "margin": 0.4, "stop": {"mode": "roe", "roe": 0.75, "net": True},
-              "ladder": {"first_lock": 0.2, "trigger_gap": 0.02, "step": 0.1}, "no_weekend": True,
+# (the owners' final settings of 10-24: 35x on every coin, the screen's ROE -20 % before fees, the 10/5 ladder)
+FRIEND_CFG = {"name": "친구 매매법", "members": [{"strategy": "FRIEND_ROC", "tf": "15m"}], "leverage": {"default": 35},
+              "margin": 0.4, "stop": {"mode": "roe", "roe": 0.2, "net": False},
+              "ladder": {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}, "no_weekend": True,
               "macro_blackout_min": 30, "us_open_pause_min": 30, "us_open_pre_min": 30}
 FRIEND = ("FRIEND_ROC", "15m", 0)
 
@@ -1085,13 +1086,13 @@ class FriendPaper:
         s.conn.close()
 
     def open(self, entry: int, symbol: str, side: int, price: float, wallet: float = 1000.0) -> float:
-        """Its position at margin 40 %, 30x, the net ROE -75 % stop; returns the stop."""
-        stop = round(price * (1 - side * (0.75 / 30 - 0.0014)), 2)
+        """Its position at margin 40 %, 35x, the stop at the screen's ROE -20 % (before fees); returns the stop."""
+        stop = round(price * (1 - side * 0.2 / 35), 2)
         sig = asdict(Signal(ts=entry - 1, symbol=symbol, timeframe=FRIEND[1], strategy_id=FRIEND[0], side=side,
                             stop_price=stop, meta={"member_order": FRIEND[2]}))
         m = 0.4 * wallet
-        self.position = {"signal": sig, "symbol": symbol, "side": side, "qty": m * 30 / price, "entry_price": price,
-                         "entry_time": entry, "leverage": 30, "tier": "best", "margin": m, "margin_initial": m,
+        self.position = {"signal": sig, "symbol": symbol, "side": side, "qty": m * 35 / price, "entry_price": price,
+                         "entry_time": entry, "leverage": 35, "tier": "best", "margin": m, "margin_initial": m,
                          "stop_price": stop, "tp_price": None, "liq_price": 0.0, "entry_fee": 0.2, "stop_initial": stop,
                          "lock_roe": None}
         return stop
@@ -1101,17 +1102,17 @@ class FriendPaper:
         side, price, m = p["side"], p["entry_price"], p["margin"]
         rec = TradeRecord(strategy_id=FRIEND[0], symbol=p["symbol"], timeframe=FRIEND[1], side=side,
                           signal_ts=p["entry_time"] - 1, entry_time=p["entry_time"], entry_price=price, exit_time=exit_,
-                          exit_price=price * (1 + side * (roe + 0.042) / 30), exit_reason=reason, qty=p["qty"],
-                          leverage=30, tier="best", margin=m, stop_price=p["stop_price"], tp_price=float("nan"),
-                          liq_price=price * (1 - side / 30), fees=0.4, funding=0.0, pnl=roe * m, roe=roe,
-                          price_move=roe / 30, mae_price=price, mfe_price=price * (1 + side * 0.009),
+                          exit_price=price * (1 + side * (roe + 0.049) / 35), exit_reason=reason, qty=p["qty"],
+                          leverage=35, tier="best", margin=m, stop_price=p["stop_price"], tp_price=float("nan"),
+                          liq_price=price * (1 - side / 35), fees=0.4, funding=0.0, pnl=roe * m, roe=roe,
+                          price_move=roe / 35, mae_price=price, mfe_price=price * (1 + side * 0.009),
                           equity_after=1000 + roe * m, score=3.0, stop_initial=p["stop_initial"], lock_roe=lock)
         s = Store3(self.db)
         s.trade(LC.ACCOUNT, rec)
         s.outcome(LC.ACCOUNT, SignalOutcome(Signal(ts=p["entry_time"] - 1, symbol=p["symbol"], timeframe=FRIEND[1],
                                                    strategy_id=FRIEND[0], side=side, stop_price=p["stop_price"],
                                                    meta={"member": "FRIEND_ROC@15m", "member_order": 0,
-                                                         "stop_rule": "ROE -75% net at 30x"}),
+                                                         "stop_rule": "ROE -20% before fees at 35x"}),
                                             "ENTERED", "", p["entry_time"]))
         s.commit()
         s.conn.close()
@@ -1178,21 +1179,21 @@ def _wooxpro2_scene(path: str) -> list:
     # 🟢 '친구 매매법' enters ETH short (a closed 15m bar), WOO X Pro 2 alone with it
     e = T0 + 15 * MIN
     price = 2_415.0
-    pstop = fb.open(e, ETH, -1, price)
+    fb.open(e, ETH, -1, price)
     key = f"{LC.ACCOUNT}|{ETH}|{e}"
     fill = round(price * 0.9998, 2)
-    fqty = round(100.0 * 0.4 * 30 / fill, 2)
-    fstop = round(fill * pstop / price, 2)
-    w.x_open("wooxpro2", key, ETH, -1, e + 3000, fill, fqty, fstop, lev=30)
+    fqty = round(100.0 * 0.4 * 35 / fill, 2)
+    fstop = round(fill * (1 + 0.2 / 35), 2)              # its own stop: the screen's -20 % from its own fill (stop_roe)
+    w.x_open("wooxpro2", key, ETH, -1, e + 3000, fill, fqty, fstop, lev=35)
     w.x_state("wooxpro2", e + MIN, trade={"key": key, "symbol": ETH, "side": -1, "status": "open", "qty": fqty,
                                           "entry_ts": e + 3000, "stop_initial": fstop, "stop": fstop, "stop_algo_id": "w1"})
     vb.run_to(e + MIN)
     fb.tick(e + MIN)
     w.tick(e + MIN, bars=False)
     out += [("🟢 진입 (친구 매매법 · WOO X Pro 2)", lv, t) for lv, t in w.watch(e + MIN)]
-    # ✅ its ladder: a win at +20 % locked; WOO X Pro 2 closes on its own stop (거래소 기준)
+    # ✅ its ladder (12 % -> 10 % locked, then every 5 %): a win at +20 % locked; WOO X Pro 2 closes on its own stop
     x = e + 2 * H1
-    t = fb.close(x, 0.21)
+    t = fb.close(x, 0.2)
     weq = round(100.0 + live_close(w, "wooxpro2", key, t, fill, fqty, fee=LC.ASSUMED_FEE["wooxpro"]), 2)
     w.x_state("wooxpro2", x + MIN, trade=None, last_equity=weq, peak_equity=weq)
     vb.run_to(x + 2 * MIN)
