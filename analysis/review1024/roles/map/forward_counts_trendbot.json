@@ -1,0 +1,175 @@
+{
+ "F10_M2022@15m": {
+  "FILTERED": 4
+ },
+ "F10_M2022@30m": {
+  "FILTERED": 6
+ },
+ "F10_OTE@4h": {
+  "SUBMITTED": 1
+ },
+ "F15_ASIA_BRK@30m": {
+  "FILTERED": 7,
+  "SUBMITTED": 1
+ },
+ "F15_LON_BRK@1h": {
+  "FILTERED": 12
+ },
+ "F15_OPEN0930@15m": {
+  "FILTERED": 6
+ },
+ "F15_OPEN0930@30m": {
+  "FILTERED": 6
+ },
+ "F15_ORB@1h": {
+  "FILTERED": 12
+ },
+ "F15_ORB@30m": {
+  "FILTERED": 6,
+  "SUBMITTED": 6
+ },
+ "F15_ORB@4h": {
+  "FILTERED": 9
+ },
+ "F16_FIB382@1h": {
+  "FILTERED": 9
+ },
+ "F16_FIB382@30m": {
+  "FILTERED": 9,
+  "SUBMITTED": 2
+ },
+ "F16_FIB500@1h": {
+  "FILTERED": 6,
+  "SUBMITTED": 1
+ },
+ "F16_FIB764@4h": {
+  "SUBMITTED": 1
+ },
+ "F1_RSI_DIV@1h": {
+  "FILTERED": 3
+ },
+ "F3_BOS@1h": {
+  "FILTERED": 6
+ },
+ "F3_BOS@30m": {
+  "FILTERED": 15,
+  "SUBMITTED": 2
+ },
+ "F4_FAN@30m": {
+  "BROKE": 3,
+  "FILTERED": 4
+ },
+ "F4_PULL@1h": {
+  "FILTERED": 18
+ },
+ "F5_BOX@15m": {
+  "BROKE": 4,
+  "FILTERED": 26,
+  "SUBMITTED": 4
+ },
+ "F5_BOX_HTF@1h": {
+  "FILTERED": 2
+ },
+ "F6_VWAP_FAIL@1h": {
+  "FILTERED": 32,
+  "SUBMITTED": 1
+ },
+ "F7_RF_ONLY@1h": {
+  "SUBMITTED": 1
+ },
+ "F7_RF_TRIPLE@1h": {
+  "FILTERED": 11
+ },
+ "F7_RF_TRIPLE@4h": {
+  "FILTERED": 6,
+  "SUBMITTED": 1
+ },
+ "F9_FVG@1h": {
+  "FILTERED": 2,
+  "SUBMITTED": 4
+ },
+ "F9_IFVG@15m": {
+  "FILTERED": 29
+ },
+ "F9_IFVG@1h": {
+  "FILTERED": 16,
+  "SUBMITTED": 2
+ },
+ "F9_IFVG@30m": {
+  "FILTERED": 8
+ },
+ "F9_IFVG@4h": {
+  "FILTERED": 2,
+  "SUBMITTED": 2
+ },
+ "F9_OB@4h": {
+  "FILTERED": 2,
+  "SUBMITTED": 1
+ },
+ "N02_ST_KST@1h": {
+  "FILTERED": 6
+ },
+ "N02_ST_KST@30m": {
+  "FILTERED": 7
+ },
+ "N03_ADX_GC@15m": {
+  "FILTERED": 6
+ },
+ "N03_ADX_GC@30m": {
+  "FILTERED": 1
+ },
+ "N05_PSAR_POC@30m": {
+  "FILTERED": 5,
+  "SUBMITTED": 1
+ },
+ "N06_MACD_ORB@1h": {
+  "FILTERED": 3
+ },
+ "N06_MACD_ORB@30m": {
+  "FILTERED": 14,
+  "SUBMITTED": 3
+ },
+ "N08_ICHI_WR@15m": {
+  "BROKE": 1,
+  "FILTERED": 25,
+  "SUBMITTED": 1
+ },
+ "N08_ICHI_WR@1h": {
+  "BROKE": 2,
+  "FILTERED": 1,
+  "SUBMITTED": 2
+ },
+ "N08_ICHI_WR@30m": {
+  "FILTERED": 8,
+  "SUBMITTED": 5
+ },
+ "N12_ICHI_AO@30m": {
+  "FILTERED": 3,
+  "SUBMITTED": 5
+ },
+ "N13_3OUTSIDE@1h": {
+  "FILTERED": 1
+ },
+ "N20_EMA9_CHOP@30m": {
+  "FILTERED": 2,
+  "SUBMITTED": 4
+ },
+ "OBV_S@30m": {
+  "FILTERED": 1
+ },
+ "S3_CMO_SANDWICH@1h": {
+  "FILTERED": 1,
+  "SUBMITTED": 4
+ },
+ "S3_CMO_SANDWICH@30m": {
+  "FILTERED": 4,
+  "SUBMITTED": 1
+ },
+ "S6_EMA_DMI_ADX@1h": {
+  "SUBMITTED": 2
+ },
+ "V39_ALL@1h": {
+  "FILTERED": 5,
+  "SUBMITTED": 8
+ }
+}

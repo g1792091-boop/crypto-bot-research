@@ -1,0 +1,535 @@
+{
+ "E_nan_lookahead": {
+  "grid_BTCUSDT_nan_or_leak": 0,
+  "states_BTCUSDT_1h_adx_nan_last_index": 25,
+  "states_BTCUSDT_1h_ema20_nan": 19,
+  "states_BTCUSDT_4h_adx_nan_last_index": 25,
+  "states_BTCUSDT_4h_ema20_nan": 19,
+  "states_BTCUSDT_1d_adx_nan_last_index": 25,
+  "states_BTCUSDT_1d_ema20_nan": 19,
+  "grid_ETHUSDT_nan_or_leak": 0,
+  "states_ETHUSDT_1h_adx_nan_last_index": 25,
+  "states_ETHUSDT_1h_ema20_nan": 19,
+  "states_ETHUSDT_4h_adx_nan_last_index": 25,
+  "states_ETHUSDT_4h_ema20_nan": 19,
+  "states_ETHUSDT_1d_adx_nan_last_index": 25,
+  "states_ETHUSDT_1d_ema20_nan": 19,
+  "grid_SOLUSDT_nan_or_leak": 0,
+  "states_SOLUSDT_1h_adx_nan_last_index": 25,
+  "states_SOLUSDT_1h_ema20_nan": 19,
+  "states_SOLUSDT_4h_adx_nan_last_index": 25,
+  "states_SOLUSDT_4h_ema20_nan": 19,
+  "states_SOLUSDT_1d_adx_nan_last_index": 25,
+  "states_SOLUSDT_1d_ema20_nan": 19,
+  "grid_DOGEUSDT_nan_or_leak": 0,
+  "states_DOGEUSDT_1h_adx_nan_last_index": 25,
+  "states_DOGEUSDT_1h_ema20_nan": 19,
+  "states_DOGEUSDT_4h_adx_nan_last_index": 25,
+  "states_DOGEUSDT_4h_ema20_nan": 19,
+  "states_DOGEUSDT_1d_adx_nan_last_index": 25,
+  "states_DOGEUSDT_1d_ema20_nan": 19,
+  "grid_LTCUSDT_nan_or_leak": 0,
+  "states_LTCUSDT_1h_adx_nan_last_index": 25,
+  "states_LTCUSDT_1h_ema20_nan": 19,
+  "states_LTCUSDT_4h_adx_nan_last_index": 25,
+  "states_LTCUSDT_4h_ema20_nan": 19,
+  "states_LTCUSDT_1d_adx_nan_last_index": 25,
+  "states_LTCUSDT_1d_ema20_nan": 19,
+  "grid_BCHUSDT_nan_or_leak": 0,
+  "states_BCHUSDT_1h_adx_nan_last_index": 25,
+  "states_BCHUSDT_1h_ema20_nan": 19,
+  "states_BCHUSDT_4h_adx_nan_last_index": 25,
+  "states_BCHUSDT_4h_ema20_nan": 19,
+  "states_BCHUSDT_1d_adx_nan_last_index": 25,
+  "states_BCHUSDT_1d_ema20_nan": 19,
+  "forward_rule_htf_bar_after_signal": {
+   "1h": 0,
+   "4h": 0,
+   "1d": 0
+  },
+  "forward_rule_nan_counts_15m_4h": {
+   "w35_r": 3499,
+   "w30_r": 3499,
+   "w35s20_r": 3499,
+   "a2_r": 3499,
+   "w35_opp_r": 3499,
+   "j1h_dir": 3499,
+   "j4h_dir": 3499,
+   "j1d_dir": 3499
+  },
+  "forward_rule_open_at_end_w35": 554,
+  "loader_states_lookahead_or_stale": 0
+ },
+ "D_grid": {
+  "ladder_equals_LadderSpec": true,
+  "forward_direct_vs_grid": {
+   "w35": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "w35_opp": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "w30": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "w30_opp": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "w35s20": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "w35s20_opp": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "a2": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   },
+   "a2_opp": {
+    "rows": 48112,
+    "r_equal": 1.0,
+    "k_equal": 1.0
+   }
+  },
+  "reference_walk_vs_grid": {
+   "n": 1554,
+   "r_equal": 1.0,
+   "k_equal": 1.0,
+   "why_equal": 1.0,
+   "by_variant": {
+    "a2_1h": {
+     "r_eq": 1.0,
+     "k_eq": 1.0,
+     "why_eq": 1.0
+    },
+    "w30": {
+     "r_eq": 1.0,
+     "k_eq": 1.0,
+     "why_eq": 1.0
+    },
+    "w35": {
+     "r_eq": 1.0,
+     "k_eq": 1.0,
+     "why_eq": 1.0
+    },
+    "w35s20": {
+     "r_eq": 1.0,
+     "k_eq": 1.0,
+     "why_eq": 1.0
+    }
+   }
+  },
+  "house_trades_vs_a2": {
+   "trades": 12082,
+   "same_sign": 0.9534845224300612,
+   "roe_corr": 0.8801320328546025,
+   "house_mean_roe": -0.04046650699686476,
+   "a2_30x_mean_roe": -0.032632171331317156,
+   "house_leverage_counts": {
+    "30.0": 9833,
+    "20.0": 1746,
+    "40.0": 389,
+    "50.0": 114
+   },
+   "house_exit_reasons": {
+    "LOCK": 7224,
+    "SL": 4858
+   },
+   "note": "not expected equal: the paper bot fills at its reference price + slippage, uses quality leverage (20-50x), Binance taker fees and real funding; a2 is 30x with the WOO cost and no funding in October"
+  }
+ },
+ "B2_judge_vs_trendbot_log": {
+  "rows_with_logged_judge": 97,
+  "bar_close_equal": 1.0,
+  "votes_equal": 1.0,
+  "raw3_equal": 1.0,
+  "dir_equal": 1.0,
+  "adx_abs_diff_median": 0.0,
+  "adx_abs_diff_max": 1.00000000458067e-06,
+  "spot_rsi_abs_diff_max": 0.0,
+  "spot_ema20_rel_diff_max": 0.0,
+  "design_1022_from_kst": "2026-10-23 01:00:00",
+  "reason_rows": 95,
+  "reason_equal": 1.0,
+  "reason_mismatches": []
+ },
+ "B3_judge_vs_trendbot_snapshot": {
+  "ts_kst": "2026-10-24 23:25:00",
+  "rows": [
+   {
+    "coin": "BTCUSDT",
+    "htf": "1h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 23:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "BTCUSDT",
+    "htf": "4h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 21:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "BTCUSDT",
+    "htf": "1d",
+    "found": true,
+    "bar_close_kst": "2026-10-24 09:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "ETHUSDT",
+    "htf": "1h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 23:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "ETHUSDT",
+    "htf": "4h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 21:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "ETHUSDT",
+    "htf": "1d",
+    "found": true,
+    "bar_close_kst": "2026-10-24 09:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "SOLUSDT",
+    "htf": "1h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 23:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "SOLUSDT",
+    "htf": "4h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 21:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "SOLUSDT",
+    "htf": "1d",
+    "found": true,
+    "bar_close_kst": "2026-10-24 09:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "DOGEUSDT",
+    "htf": "1h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 23:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "DOGEUSDT",
+    "htf": "4h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 21:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "DOGEUSDT",
+    "htf": "1d",
+    "found": true,
+    "bar_close_kst": "2026-10-24 09:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "LTCUSDT",
+    "htf": "1h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 23:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "LTCUSDT",
+    "htf": "4h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 21:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "LTCUSDT",
+    "htf": "1d",
+    "found": true,
+    "bar_close_kst": "2026-10-24 09:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "BCHUSDT",
+    "htf": "1h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 23:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "BCHUSDT",
+    "htf": "4h",
+    "found": true,
+    "bar_close_kst": "2026-10-24 21:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   },
+   {
+    "coin": "BCHUSDT",
+    "htf": "1d",
+    "found": true,
+    "bar_close_kst": "2026-10-24 09:00:00",
+    "votes_eq": true,
+    "raw_eq": true,
+    "dir_eq": true,
+    "adx_diff": 0.0
+   }
+  ]
+ },
+ "B1_judge_300bar_window": {
+  "n": 900,
+  "votes_equal": 1.0,
+  "raw3_equal": 1.0,
+  "dir_equal": 1.0,
+  "bar_close_equal": 1.0,
+  "adx_abs_diff_median": 1.437327794562293e-07,
+  "adx_abs_diff_max": 9.546629371470772e-07,
+  "by_htf_dir_equal": {
+   "1d": 1.0,
+   "1h": 1.0,
+   "4h": 1.0
+  }
+ },
+ "C_spot_checks": [
+  {
+   "signal": "F9_OB 15m ETHUSDT 롱 봉마감 2023-03-29 19:30:00 KST",
+   "htf_bar": "1h 봉 2023-03-29 18:00:00 ~ 2023-03-29 19:00:00 KST (마감 <= 신호 마감: True)",
+   "next_htf_bar_close_after_signal": true,
+   "S6_by_hand": 1,
+   "S6_table": 1,
+   "OBV_by_hand": 1,
+   "OBV_table": 1,
+   "EMA50_200_by_hand": 1,
+   "EMA50_200_table": 1,
+   "ROC9_sign_by_hand": 1,
+   "ROC9_table": 1,
+   "close": 1813.79,
+   "ema20": 1780.002213,
+   "+DI": 40.976,
+   "-DI": 7.243,
+   "adx_table": 44.57,
+   "judge_votes_table": {
+    "V39": 1,
+    "S6": 1,
+    "OBV": 1,
+    "N12": 1
+   },
+   "raw3": 1,
+   "dir": 1,
+   "cut_at_bar_states_differ": [],
+   "cut_at_bar_judges_differ": []
+  },
+  {
+   "signal": "V45_AMB 15m LTCUSDT 숏 봉마감 2023-09-28 18:30:00 KST",
+   "htf_bar": "1h 봉 2023-09-28 17:00:00 ~ 2023-09-28 18:00:00 KST (마감 <= 신호 마감: True)",
+   "next_htf_bar_close_after_signal": true,
+   "S6_by_hand": 0,
+   "S6_table": 0,
+   "OBV_by_hand": 1,
+   "OBV_table": 1,
+   "EMA50_200_by_hand": -1,
+   "EMA50_200_table": -1,
+   "ROC9_sign_by_hand": 1,
+   "ROC9_table": 1,
+   "close": 63.86,
+   "ema20": 63.702556,
+   "+DI": 23.804,
+   "-DI": 24.423,
+   "adx_table": 16.926,
+   "judge_votes_table": {
+    "V39": -1,
+    "S6": 0,
+    "OBV": 1,
+    "N12": 0
+   },
+   "raw3": 0,
+   "dir": 0,
+   "cut_at_bar_states_differ": [],
+   "cut_at_bar_judges_differ": []
+  },
+  {
+   "signal": "N17_KC_RSI 15m DOGEUSDT 롱 봉마감 2025-06-06 05:15:00 KST",
+   "htf_bar": "1h 봉 2025-06-06 04:00:00 ~ 2025-06-06 05:00:00 KST (마감 <= 신호 마감: True)",
+   "next_htf_bar_close_after_signal": true,
+   "S6_by_hand": -1,
+   "S6_table": -1,
+   "OBV_by_hand": -1,
+   "OBV_table": -1,
+   "EMA50_200_by_hand": -1,
+   "EMA50_200_table": -1,
+   "ROC9_sign_by_hand": -1,
+   "ROC9_table": -1,
+   "close": 0.17387,
+   "ema20": 0.185914,
+   "+DI": 7.503,
+   "-DI": 49.218,
+   "adx_table": 34.84,
+   "judge_votes_table": {
+    "V39": -1,
+    "S6": -1,
+    "OBV": -1,
+    "N12": -1
+   },
+   "raw3": -1,
+   "dir": -1,
+   "cut_at_bar_states_differ": [],
+   "cut_at_bar_judges_differ": []
+  },
+  {
+   "signal": "F4_PULL 15m LTCUSDT 롱 봉마감 2025-09-07 06:30:00 KST",
+   "htf_bar": "1h 봉 2025-09-07 05:00:00 ~ 2025-09-07 06:00:00 KST (마감 <= 신호 마감: True)",
+   "next_htf_bar_close_after_signal": true,
+   "S6_by_hand": 1,
+   "S6_table": 1,
+   "OBV_by_hand": 1,
+   "OBV_table": 1,
+   "EMA50_200_by_hand": 1,
+   "EMA50_200_table": 1,
+   "ROC9_sign_by_hand": 1,
+   "ROC9_table": 1,
+   "close": 112.37,
+   "ema20": 111.924098,
+   "+DI": 18.2,
+   "-DI": 15.651,
+   "adx_table": 13.172,
+   "judge_votes_table": {
+    "V39": -1,
+    "S6": 1,
+    "OBV": 1,
+    "N12": 0
+   },
+   "raw3": 0,
+   "dir": 0,
+   "cut_at_bar_states_differ": [],
+   "cut_at_bar_judges_differ": []
+  },
+  {
+   "signal": "O4_STOCHRSI_ZONE 15m LTCUSDT 롱 봉마감 2026-07-15 12:30:00 KST",
+   "htf_bar": "1h 봉 2026-07-15 11:00:00 ~ 2026-07-15 12:00:00 KST (마감 <= 신호 마감: True)",
+   "next_htf_bar_close_after_signal": true,
+   "S6_by_hand": 1,
+   "S6_table": 1,
+   "OBV_by_hand": 1,
+   "OBV_table": 1,
+   "EMA50_200_by_hand": 1,
+   "EMA50_200_table": 1,
+   "ROC9_sign_by_hand": 1,
+   "ROC9_table": 1,
+   "close": 44.81,
+   "ema20": 44.651083,
+   "+DI": 30.009,
+   "-DI": 16.392,
+   "adx_table": 34.635,
+   "judge_votes_table": {
+    "V39": 1,
+    "S6": 1,
+    "OBV": 1,
+    "N12": 1
+   },
+   "raw3": 1,
+   "dir": 1,
+   "cut_at_bar_states_differ": [],
+   "cut_at_bar_judges_differ": []
+  }
+ ],
+ "A_match_xrp_rows_skipped": 3510,
+ "A_match": {
+  "window_utc": [
+   "2026-10-05 18:45:00",
+   "2026-10-24 14:00:00.001000"
+  ],
+  "cells": 293,
+  "logged": 47350,
+  "recomputed": 47350,
+  "both": 47350,
+  "recall_all": 1.0,
+  "precision_all": 1.0,
+  "cells_recall_ge_0.95": 293,
+  "cells_recall_lt_0.80": [],
+  "by_set": {
+   "core": {
+    "recall": 1.0,
+    "precision": 1.0
+   },
+   "ds": {
+    "recall": 1.0,
+    "precision": 1.0
+   }
+  }
+ }
+}
