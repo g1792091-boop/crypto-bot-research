@@ -1,0 +1,1016 @@
+{
+ "cuts": {
+  "d_e52_atr_min": 0.703,
+  "vol_ratio_max": 0.6385
+ },
+ "candidates": {
+  "P 친구 그대로(15분)": {
+   "oct2026": {
+    "n": 64,
+    "per_weekday": 3.76,
+    "per_month": 88.6,
+    "win": 0.7812,
+    "avg_win_pct": 13.4,
+    "avg_loss_pct": -47.2,
+    "roe_pct": 0.12,
+    "gross_roe_pct": 3.84,
+    "longest_losing_run": 2,
+    "hold_min_median": 163,
+    "m40": {
+     "mult": 0.7,
+     "maxdd": -0.763,
+     "month_avg_pct": 4.3
+    },
+    "m20": {
+     "mult": 0.926,
+     "maxdd": -0.478,
+     "month_avg_pct": 2.1
+    }
+   },
+   "last19": {
+    "n": 58,
+    "per_weekday": 3.87,
+    "per_month": 92.9,
+    "win": 0.7759,
+    "avg_win_pct": 13.7,
+    "avg_loss_pct": -46.9,
+    "roe_pct": 0.11,
+    "gross_roe_pct": 3.83,
+    "longest_losing_run": 2,
+    "hold_min_median": 168,
+    "m40": {
+     "mult": 0.718,
+     "maxdd": -0.763,
+     "month_avg_pct": 4.3
+    },
+    "m20": {
+     "mult": 0.931,
+     "maxdd": -0.478,
+     "month_avg_pct": 2.1
+    }
+   },
+   "select": {
+    "n": 9614,
+    "per_weekday": 7.61,
+    "per_month": 165.6,
+    "win": 0.7435,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -48.2,
+    "roe_pct": -2.76,
+    "gross_roe_pct": 0.96,
+    "longest_losing_run": 6,
+    "hold_min_median": 41,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -182.7
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -91.3
+    }
+   },
+   "confirm": {
+    "n": 2693,
+    "per_weekday": 5.89,
+    "per_month": 128.5,
+    "win": 0.7334,
+    "avg_win_pct": 12.7,
+    "avg_loss_pct": -48.8,
+    "roe_pct": -3.67,
+    "gross_roe_pct": 0.05,
+    "longest_losing_run": 5,
+    "hold_min_median": 73,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -188.5
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -94.3
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.066,
+    "up": 0.013,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 75,
+    "worst": 0.0
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.055,
+    "up": 0.0,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 20,
+    "worst": 0.013
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.333,
+    "up": 0.038,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 57,
+    "worst": 0.032
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.307,
+    "up": 0.048,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 16,
+    "worst": 0.146
+   }
+  },
+  "15분 + 4시간 ADX 20 미만 금지": {
+   "oct2026": {
+    "n": 62,
+    "per_weekday": 3.65,
+    "per_month": 85.8,
+    "win": 0.8226,
+    "avg_win_pct": 12.7,
+    "avg_loss_pct": -46.4,
+    "roe_pct": 2.23,
+    "gross_roe_pct": 5.95,
+    "longest_losing_run": 2,
+    "hold_min_median": 163,
+    "m40": {
+     "mult": 1.279,
+     "maxdd": -0.653,
+     "month_avg_pct": 76.7
+    },
+    "m20": {
+     "mult": 1.226,
+     "maxdd": -0.372,
+     "month_avg_pct": 38.3
+    }
+   },
+   "last19": {
+    "n": 55,
+    "per_weekday": 3.67,
+    "per_month": 88.1,
+    "win": 0.8,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -46.4,
+    "roe_pct": 1.04,
+    "gross_roe_pct": 4.76,
+    "longest_losing_run": 2,
+    "hold_min_median": 159,
+    "m40": {
+     "mult": 0.934,
+     "maxdd": -0.653,
+     "month_avg_pct": 36.8
+    },
+    "m20": {
+     "mult": 1.045,
+     "maxdd": -0.372,
+     "month_avg_pct": 18.4
+    }
+   },
+   "select": {
+    "n": 8653,
+    "per_weekday": 6.85,
+    "per_month": 149.1,
+    "win": 0.7459,
+    "avg_win_pct": 13.0,
+    "avg_loss_pct": -48.1,
+    "roe_pct": -2.51,
+    "gross_roe_pct": 1.21,
+    "longest_losing_run": 6,
+    "hold_min_median": 38,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -149.7
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -74.9
+    }
+   },
+   "confirm": {
+    "n": 2481,
+    "per_weekday": 5.43,
+    "per_month": 118.4,
+    "win": 0.7445,
+    "avg_win_pct": 12.8,
+    "avg_loss_pct": -49.0,
+    "roe_pct": -2.97,
+    "gross_roe_pct": 0.75,
+    "longest_losing_run": 5,
+    "hold_min_median": 63,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -140.5
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -70.3
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.104,
+    "up": 0.025,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 70,
+    "worst": 0.001
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.1,
+    "up": 0.0,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 19,
+    "worst": 0.013
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.391,
+    "up": 0.089,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 49,
+    "worst": 0.049
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.384,
+    "up": 0.048,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 13,
+    "worst": 0.145
+   }
+  },
+  "15분 + 조용한 봉만": {
+   "oct2026": {
+    "n": 52,
+    "per_weekday": 3.06,
+    "per_month": 71.9,
+    "win": 0.7885,
+    "avg_win_pct": 12.5,
+    "avg_loss_pct": -46.4,
+    "roe_pct": 0.07,
+    "gross_roe_pct": 3.79,
+    "longest_losing_run": 2,
+    "hold_min_median": 172,
+    "m40": {
+     "mult": 0.756,
+     "maxdd": -0.594,
+     "month_avg_pct": 2.0
+    },
+    "m20": {
+     "mult": 0.939,
+     "maxdd": -0.325,
+     "month_avg_pct": 1.0
+    }
+   },
+   "last19": {
+    "n": 45,
+    "per_weekday": 3.0,
+    "per_month": 72.1,
+    "win": 0.7778,
+    "avg_win_pct": 12.5,
+    "avg_loss_pct": -46.0,
+    "roe_pct": -0.51,
+    "gross_roe_pct": 3.21,
+    "longest_losing_run": 2,
+    "hold_min_median": 185,
+    "m40": {
+     "mult": 0.703,
+     "maxdd": -0.594,
+     "month_avg_pct": -14.7
+    },
+    "m20": {
+     "mult": 0.898,
+     "maxdd": -0.325,
+     "month_avg_pct": -7.3
+    }
+   },
+   "select": {
+    "n": 5664,
+    "per_weekday": 4.48,
+    "per_month": 97.6,
+    "win": 0.7511,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -48.9,
+    "roe_pct": -2.47,
+    "gross_roe_pct": 1.25,
+    "longest_losing_run": 6,
+    "hold_min_median": 57,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -96.3
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -48.1
+    }
+   },
+   "confirm": {
+    "n": 1802,
+    "per_weekday": 3.94,
+    "per_month": 86.0,
+    "win": 0.7553,
+    "avg_win_pct": 12.7,
+    "avg_loss_pct": -48.7,
+    "roe_pct": -2.34,
+    "gross_roe_pct": 1.38,
+    "longest_losing_run": 5,
+    "hold_min_median": 93,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -80.4
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -40.2
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.218,
+    "up": 0.063,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 59,
+    "worst": 0.009
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.258,
+    "up": 0.0,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 13,
+    "worst": 0.027
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.565,
+    "up": 0.127,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 33,
+    "worst": 0.127
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.603,
+    "up": 0.048,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 7,
+    "worst": 0.201
+   }
+  },
+  "15분 + 조용한 봉 + EMA52에서 떨어짐": {
+   "oct2026": {
+    "n": 50,
+    "per_weekday": 2.94,
+    "per_month": 69.2,
+    "win": 0.84,
+    "avg_win_pct": 12.4,
+    "avg_loss_pct": -45.0,
+    "roe_pct": 3.21,
+    "gross_roe_pct": 6.93,
+    "longest_losing_run": 2,
+    "hold_min_median": 163,
+    "m40": {
+     "mult": 1.517,
+     "maxdd": -0.416,
+     "month_avg_pct": 88.8
+    },
+    "m20": {
+     "mult": 1.306,
+     "maxdd": -0.22,
+     "month_avg_pct": 44.4
+    }
+   },
+   "last19": {
+    "n": 44,
+    "per_weekday": 2.93,
+    "per_month": 70.5,
+    "win": 0.8409,
+    "avg_win_pct": 12.4,
+    "avg_loss_pct": -44.3,
+    "roe_pct": 3.39,
+    "gross_roe_pct": 7.11,
+    "longest_losing_run": 2,
+    "hold_min_median": 168,
+    "m40": {
+     "mult": 1.494,
+     "maxdd": -0.416,
+     "month_avg_pct": 95.5
+    },
+    "m20": {
+     "mult": 1.286,
+     "maxdd": -0.22,
+     "month_avg_pct": 47.7
+    }
+   },
+   "select": {
+    "n": 5008,
+    "per_weekday": 3.97,
+    "per_month": 86.3,
+    "win": 0.7602,
+    "avg_win_pct": 13.0,
+    "avg_loss_pct": -48.8,
+    "roe_pct": -1.83,
+    "gross_roe_pct": 1.89,
+    "longest_losing_run": 6,
+    "hold_min_median": 59,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -63.2
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -31.6
+    }
+   },
+   "confirm": {
+    "n": 1665,
+    "per_weekday": 3.64,
+    "per_month": 79.4,
+    "win": 0.758,
+    "avg_win_pct": 12.5,
+    "avg_loss_pct": -48.7,
+    "roe_pct": -2.3,
+    "gross_roe_pct": 1.42,
+    "longest_losing_run": 5,
+    "hold_min_median": 94,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -73.2
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -36.6
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.31,
+    "up": 0.165,
+    "x2": 2,
+    "x4": 1,
+    "half_or_less": 54,
+    "worst": 0.009
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.291,
+    "up": 0.19,
+    "x2": 1,
+    "x4": 0,
+    "half_or_less": 14,
+    "worst": 0.009
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.636,
+    "up": 0.19,
+    "x2": 1,
+    "x4": 0,
+    "half_or_less": 25,
+    "worst": 0.119
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.625,
+    "up": 0.238,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 8,
+    "worst": 0.119
+   }
+  },
+  "4시간봉 + ADX 필터 · 손절 -50% · 계단 10/5": {
+   "oct2026": {
+    "n": 14,
+    "per_weekday": 0.82,
+    "per_month": 19.4,
+    "win": 0.9286,
+    "avg_win_pct": 13.4,
+    "avg_loss_pct": -50.0,
+    "roe_pct": 8.86,
+    "gross_roe_pct": 12.58,
+    "longest_losing_run": 1,
+    "hold_min_median": 122,
+    "m40": {
+     "mult": 1.571,
+     "maxdd": -0.2,
+     "month_avg_pct": 68.6
+    },
+    "m20": {
+     "mult": 1.268,
+     "maxdd": -0.1,
+     "month_avg_pct": 34.3
+    }
+   },
+   "last19": {
+    "n": 11,
+    "per_weekday": 0.73,
+    "per_month": 17.6,
+    "win": 0.9091,
+    "avg_win_pct": 14.3,
+    "avg_loss_pct": -50.0,
+    "roe_pct": 8.47,
+    "gross_roe_pct": 12.19,
+    "longest_losing_run": 1,
+    "hold_min_median": 128,
+    "m40": {
+     "mult": 1.392,
+     "maxdd": -0.2,
+     "month_avg_pct": 59.7
+    },
+    "m20": {
+     "mult": 1.193,
+     "maxdd": -0.1,
+     "month_avg_pct": 29.8
+    }
+   },
+   "select": {
+    "n": 1149,
+    "per_weekday": 0.91,
+    "per_month": 19.8,
+    "win": 0.7598,
+    "avg_win_pct": 13.0,
+    "avg_loss_pct": -47.8,
+    "roe_pct": -1.61,
+    "gross_roe_pct": 2.11,
+    "longest_losing_run": 5,
+    "hold_min_median": 53,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -12.7
+    },
+    "m20": {
+     "mult": 0.004,
+     "maxdd": -0.996,
+     "month_avg_pct": -6.4
+    }
+   },
+   "confirm": {
+    "n": 399,
+    "per_weekday": 0.87,
+    "per_month": 19.0,
+    "win": 0.7719,
+    "avg_win_pct": 12.5,
+    "avg_loss_pct": -49.5,
+    "roe_pct": -1.66,
+    "gross_roe_pct": 2.06,
+    "longest_losing_run": 4,
+    "hold_min_median": 99,
+    "m40": {
+     "mult": 0.006,
+     "maxdd": -0.997,
+     "month_avg_pct": -12.6
+    },
+    "m20": {
+     "mult": 0.145,
+     "maxdd": -0.891,
+     "month_avg_pct": -6.3
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.798,
+    "up": 0.291,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 14,
+    "worst": 0.162
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.881,
+    "up": 0.381,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 3,
+    "worst": 0.177
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.924,
+    "up": 0.342,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 2,
+    "worst": 0.426
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.974,
+    "up": 0.381,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 1,
+    "worst": 0.45
+   }
+  },
+  "4시간봉 + ADX 필터 · 손절 -75% · 계단 10/5": {
+   "oct2026": {
+    "n": 14,
+    "per_weekday": 0.82,
+    "per_month": 19.4,
+    "win": 0.9286,
+    "avg_win_pct": 13.4,
+    "avg_loss_pct": -75.0,
+    "roe_pct": 7.07,
+    "gross_roe_pct": 10.79,
+    "longest_losing_run": 1,
+    "hold_min_median": 135,
+    "m40": {
+     "mult": 1.375,
+     "maxdd": -0.3,
+     "month_avg_pct": 54.8
+    },
+    "m20": {
+     "mult": 1.197,
+     "maxdd": -0.15,
+     "month_avg_pct": 27.4
+    }
+   },
+   "last19": {
+    "n": 11,
+    "per_weekday": 0.73,
+    "per_month": 17.6,
+    "win": 0.9091,
+    "avg_win_pct": 14.3,
+    "avg_loss_pct": -75.0,
+    "roe_pct": 6.2,
+    "gross_roe_pct": 9.92,
+    "longest_losing_run": 1,
+    "hold_min_median": 153,
+    "m40": {
+     "mult": 1.218,
+     "maxdd": -0.3,
+     "month_avg_pct": 43.7
+    },
+    "m20": {
+     "mult": 1.126,
+     "maxdd": -0.15,
+     "month_avg_pct": 21.8
+    }
+   },
+   "select": {
+    "n": 1106,
+    "per_weekday": 0.88,
+    "per_month": 19.1,
+    "win": 0.8237,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -69.0,
+    "roe_pct": -1.56,
+    "gross_roe_pct": 2.16,
+    "longest_losing_run": 4,
+    "hold_min_median": 62,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -11.9
+    },
+    "m20": {
+     "mult": 0.002,
+     "maxdd": -0.998,
+     "month_avg_pct": -5.9
+    }
+   },
+   "confirm": {
+    "n": 381,
+    "per_weekday": 0.83,
+    "per_month": 18.2,
+    "win": 0.8373,
+    "avg_win_pct": 12.4,
+    "avg_loss_pct": -72.7,
+    "roe_pct": -1.46,
+    "gross_roe_pct": 2.26,
+    "longest_losing_run": 3,
+    "hold_min_median": 108,
+    "m40": {
+     "mult": 0.002,
+     "maxdd": -0.999,
+     "month_avg_pct": -10.6
+    },
+    "m20": {
+     "mult": 0.137,
+     "maxdd": -0.915,
+     "month_avg_pct": -5.3
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.736,
+    "up": 0.367,
+    "x2": 4,
+    "x4": 0,
+    "half_or_less": 19,
+    "worst": 0.075
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.887,
+    "up": 0.381,
+    "x2": 1,
+    "x4": 0,
+    "half_or_less": 5,
+    "worst": 0.193
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.89,
+    "up": 0.43,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 2,
+    "worst": 0.312
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.977,
+    "up": 0.476,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 1,
+    "worst": 0.485
+   }
+  },
+  "4시간봉 + ADX 필터 · 손절 -90% · 계단 10/5": {
+   "oct2026": {
+    "n": 14,
+    "per_weekday": 0.82,
+    "per_month": 19.4,
+    "win": 0.9286,
+    "avg_win_pct": 13.4,
+    "avg_loss_pct": -90.0,
+    "roe_pct": 6.0,
+    "gross_roe_pct": 9.72,
+    "longest_losing_run": 1,
+    "hold_min_median": 135,
+    "m40": {
+     "mult": 1.257,
+     "maxdd": -0.36,
+     "month_avg_pct": 46.5
+    },
+    "m20": {
+     "mult": 1.155,
+     "maxdd": -0.18,
+     "month_avg_pct": 23.3
+    }
+   },
+   "last19": {
+    "n": 11,
+    "per_weekday": 0.73,
+    "per_month": 17.6,
+    "win": 0.9091,
+    "avg_win_pct": 14.3,
+    "avg_loss_pct": -90.0,
+    "roe_pct": 4.83,
+    "gross_roe_pct": 8.55,
+    "longest_losing_run": 1,
+    "hold_min_median": 153,
+    "m40": {
+     "mult": 1.114,
+     "maxdd": -0.36,
+     "month_avg_pct": 34.1
+    },
+    "m20": {
+     "mult": 1.087,
+     "maxdd": -0.18,
+     "month_avg_pct": 17.0
+    }
+   },
+   "select": {
+    "n": 1085,
+    "per_weekday": 0.86,
+    "per_month": 18.7,
+    "win": 0.8415,
+    "avg_win_pct": 13.0,
+    "avg_loss_pct": -81.7,
+    "roe_pct": -2.02,
+    "gross_roe_pct": 1.7,
+    "longest_losing_run": 3,
+    "hold_min_median": 65,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -15.1
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -7.5
+    }
+   },
+   "confirm": {
+    "n": 371,
+    "per_weekday": 0.81,
+    "per_month": 17.7,
+    "win": 0.8679,
+    "avg_win_pct": 12.5,
+    "avg_loss_pct": -84.6,
+    "roe_pct": -0.35,
+    "gross_roe_pct": 3.37,
+    "longest_losing_run": 3,
+    "hold_min_median": 117,
+    "m40": {
+     "mult": 0.007,
+     "maxdd": -0.998,
+     "month_avg_pct": -2.5
+    },
+    "m20": {
+     "mult": 0.29,
+     "maxdd": -0.835,
+     "month_avg_pct": -1.2
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.656,
+    "up": 0.342,
+    "x2": 5,
+    "x4": 0,
+    "half_or_less": 27,
+    "worst": 0.097
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.82,
+    "up": 0.429,
+    "x2": 2,
+    "x4": 0,
+    "half_or_less": 6,
+    "worst": 0.173
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.899,
+    "up": 0.38,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 6,
+    "worst": 0.363
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.955,
+    "up": 0.476,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 2,
+    "worst": 0.472
+   }
+  },
+  "4시간봉 + ADX 필터 · 손절 -90% · 계단 30/10": {
+   "oct2026": {
+    "n": 10,
+    "per_weekday": 0.59,
+    "per_month": 13.8,
+    "win": 0.9,
+    "avg_win_pct": 33.4,
+    "avg_loss_pct": -90.0,
+    "roe_pct": 21.09,
+    "gross_roe_pct": 24.81,
+    "longest_losing_run": 1,
+    "hold_min_median": 150,
+    "m40": {
+     "mult": 1.975,
+     "maxdd": -0.36,
+     "month_avg_pct": 116.7
+    },
+    "m20": {
+     "mult": 1.467,
+     "maxdd": -0.18,
+     "month_avg_pct": 58.4
+    }
+   },
+   "last19": {
+    "n": 8,
+    "per_weekday": 0.53,
+    "per_month": 12.8,
+    "win": 0.875,
+    "avg_win_pct": 32.4,
+    "avg_loss_pct": -90.0,
+    "roe_pct": 17.08,
+    "gross_roe_pct": 20.8,
+    "longest_losing_run": 1,
+    "hold_min_median": 150,
+    "m40": {
+     "mult": 1.5,
+     "maxdd": -0.36,
+     "month_avg_pct": 87.6
+    },
+    "m20": {
+     "mult": 1.272,
+     "maxdd": -0.18,
+     "month_avg_pct": 43.8
+    }
+   },
+   "select": {
+    "n": 939,
+    "per_weekday": 0.74,
+    "per_month": 16.2,
+    "win": 0.722,
+    "avg_win_pct": 32.8,
+    "avg_loss_pct": -89.7,
+    "roe_pct": -1.27,
+    "gross_roe_pct": 2.45,
+    "longest_losing_run": 5,
+    "hold_min_median": 236,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -8.2
+    },
+    "m20": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -4.1
+    }
+   },
+   "confirm": {
+    "n": 301,
+    "per_weekday": 0.66,
+    "per_month": 14.4,
+    "win": 0.7243,
+    "avg_win_pct": 32.5,
+    "avg_loss_pct": -89.0,
+    "roe_pct": -0.97,
+    "gross_roe_pct": 2.75,
+    "longest_losing_run": 3,
+    "hold_min_median": 370,
+    "m40": {
+     "mult": 0.0,
+     "maxdd": -1.0,
+     "month_avg_pct": -5.5
+    },
+    "m20": {
+     "mult": 0.077,
+     "maxdd": -0.964,
+     "month_avg_pct": -2.8
+    }
+   },
+   "months_all_m40": {
+    "n": 79,
+    "median": 0.555,
+    "up": 0.278,
+    "x2": 10,
+    "x4": 2,
+    "half_or_less": 38,
+    "worst": 0.061
+   },
+   "months_2025_m40": {
+    "n": 21,
+    "median": 0.722,
+    "up": 0.381,
+    "x2": 2,
+    "x4": 0,
+    "half_or_less": 9,
+    "worst": 0.146
+   },
+   "months_all_m20": {
+    "n": 79,
+    "median": 0.864,
+    "up": 0.354,
+    "x2": 2,
+    "x4": 0,
+    "half_or_less": 6,
+    "worst": 0.315
+   },
+   "months_2025_m20": {
+    "n": 21,
+    "median": 0.942,
+    "up": 0.381,
+    "x2": 0,
+    "x4": 0,
+    "half_or_less": 2,
+    "worst": 0.462
+   }
+  }
+ }
+}
