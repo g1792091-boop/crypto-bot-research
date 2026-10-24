@@ -1,6 +1,6 @@
 {
  "cost_multiple": 1.0,
- "n_perm": 2,
+ "n_perm": 1000,
  "actual": {
   "topk": [
    {
@@ -62,19 +62,19 @@
   "study_cells_n2": 574
  },
  "coinday": {
-  "p_best": 0.0,
-  "p_top1_h2": 0.0,
-  "p_topk_h2": 0.0,
-  "p_topk_h2_eq": 0.0,
-  "null_topk_h2_med": 0.0075259988370817155,
-  "null_topk_h2_p95": 0.01484318428847473
+  "p_best": 0.03,
+  "p_top1_h2": 0.099,
+  "p_topk_h2": 0.008,
+  "p_topk_h2_eq": 0.1,
+  "null_topk_h2_med": 0.0007257071847561747,
+  "null_topk_h2_p95": 0.02533349217846988
  },
  "day": {
-  "p_best": 0.0,
-  "p_top1_h2": 0.0,
-  "p_topk_h2": 0.0,
-  "p_topk_h2_eq": 0.0,
-  "null_topk_h2_med": -0.018700017360970378,
-  "null_topk_h2_p95": -0.005844560661353172
+  "p_best": 0.069,
+  "p_top1_h2": 0.339,
+  "p_topk_h2": 0.05,
+  "p_topk_h2_eq": 0.235,
+  "null_topk_h2_med": -0.008268385659903288,
+  "null_topk_h2_p95": 0.03374244645237922
  }
 }
