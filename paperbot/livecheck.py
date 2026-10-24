@@ -512,7 +512,9 @@ def paper_name(path: str) -> str:
 # from the moment it first sees the file (``first_seen``), marked "페이퍼만" while no executor follows it.
 PAPER_ONLY_KO = "페이퍼만 (따라가는 실행기 없음)"
 # the paper bot's own systemd unit by its database's name (an alarm's next step); another file: a general line
-PAPER_UNITS = {"vwap": "paperbot-combo-vwap", "live15-mexc": "paperbot-combo-mexc", "live-ac": "paperbot-combo"}
+PAPER_UNITS = {"vwap": "paperbot-combo-vwap", "live15-mexc": "paperbot-combo-mexc", "live-ac": "paperbot-combo",
+               # '친구 매매법' (owners 10-24, docs/friend-bot-ko.md): its alarms once WOO X Pro 2 follows it
+               "friend": "paperbot-combo-friend"}
 # the 'VWAP 개선판' guide (docs/vwap-bot-ko.md 6): more money after 50 live trades at 80 % or more; the research's 5-year
 # break-even win rate (research/vwap30/scale.json: 5,805 paper trades, average win +10.76 % ROE, average loss -39.43 %)
 SCALE_N, SCALE_WIN = 50, 0.80
@@ -3345,7 +3347,12 @@ def health_conditions(host: Host, src: Sources) -> tuple[list, set]:
                      if u and u not in ("paperbot-combo", "paperbot-combo-mexc"))
         # the third executor once installed (owners 10-24: 딥코인) is never suggested either
         opt = {x[0] for x in OPTIONAL_EXECUTORS}
-        keep += tuple(ex.unit for ex in (src.executors or load_executors()) if ex.name in opt)
+        oxs = [ex for ex in (src.executors or load_executors()) if ex.name in opt]
+        for ex in oxs:                           # ... nor the paper bot one follows (owners 10-24: '친구 매매법')
+            u = unit_of(ex.paper_db) if ex.paper_db and os.path.exists(ex.paper_db) else None
+            if u and u not in keep and u not in ("paperbot-combo", "paperbot-combo-mexc"):
+                keep += (u,)
+        keep += tuple(ex.unit for ex in oxs)
         if mem < MEM_MIN or (prev and mem < MEM_CLEAR):
             conds.append(Cond("memory", CRITICAL,
                               f"메모리 부족 · 남은 메모리 {_gb(mem)}\n"

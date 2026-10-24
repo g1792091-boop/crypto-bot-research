@@ -887,3 +887,20 @@ def test_the_team_reads_the_fourth_executor_once_installed(w4, tmp_path, monkeyp
     assert [e.name for e in T.bot_world(w4["p4"])["infos"]] == ["bybit", "mexc", "deepcoin", "wooxpro2"]
     assert [e.label for e in T.bot_world(w4["p4"])["infos"]][-1] == "WOO X Pro 2"
     assert [e.name for e in T.bot_world(w4["p0"])["infos"]] == ["bybit", "mexc", "deepcoin"]
+
+
+def test_its_paper_bot_has_its_unit_and_low_memory_never_suggests_either(tmp_path):
+    assert LC.unit_of("/var/lib/paperbot/combo/friend.db") == "paperbot-combo-friend"
+    assert "paperbot-combo-friend" in LC.paper_unit_todo("/var/lib/paperbot/combo/friend.db")
+    friend = tmp_path / "friend.db"
+    friend.write_bytes(b"")
+    ex =LC.ExecInfo("wooxpro2", "", "paperbot-executor-wooxpro2", "", 0, 0.85, exchange="wooxpro", paper_db=str(friend))
+    src = LC.Sources(db=str(tmp_path / "lc.db"), executors=[ex], paper2_db=str(tmp_path / "none-vwap.db"))
+    host = LC.Host(disk_free=lambda p: 40 * 1024 ** 3, mem_available=lambda: 100 * 1024 ** 2,
+                   unit_memory=lambda: [("paperbot-agents.service", 900 * 1024 ** 2)], paths=(str(tmp_path),))
+    conds, _judged = LC.health_conditions(host, src)
+    mem = next(c for c in conds if c.key == "memory")
+    assert "paperbot-combo-mexc, paperbot-combo-friend, paperbot-executor-wooxpro2" in mem.text
+    friend.unlink()                                   # its paper bot's file not there: only the executor, as for 딥코인
+    conds, _judged = LC.health_conditions(host, src)
+    assert next(c for c in conds if c.key == "memory").text.count("paperbot-combo-friend") == 0
