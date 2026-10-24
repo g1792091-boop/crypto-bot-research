@@ -18,6 +18,8 @@ the 30-day verdict, paperbot/runinfo.py):
   (``paramshadow.param_module(name).signals(df, tf, **numbers)`` for the 36, ``research/fullgrid/ds_defs.py``
   ``signals`` for DeepSeek) on the same chart frames as the rule bot (``recorder.build_frames`` for the 36,
   ``dssig.frame`` for DeepSeek), from 5m bars built from those same 1m bars (history from Binance at start);
+- the friend's strategy (member ``FRIEND_ROC``, owners 2026-10-24, paperbot/friendsig.py): computed here at each close
+  of its timeframe from Binance's closed klines, as research/friendroc/code/frfamily.py computes it;
 - its own database (paperbot.store3 schema, paperbot.accounts state): the executor follows it unchanged with
   ``"paper_db": <this db>, "account": "COMBO@mix", "entry_source": "paper"``.
 
@@ -128,6 +130,8 @@ SESSIONS = {"asia": (9, 17), "europe": (17, 22), "us": (22, 6), "dawn": (6, 9)} 
 KO_SESSION = {"asia": "아시아(09-17시)", "europe": "유럽(17-22시)", "us": "미국(22-06시)", "dawn": "새벽(06-09시)"}
 WHEN_KEYS = ("symbol", "side", "session", "weekend", "btc_trend")
 SIDES = {"long": 1, "short": -1}
+FRIEND = "FRIEND_ROC"               # the friend's strategy (paperbot/friendsig.py FRIEND), computed by this bot
+FRIEND_HIGHER = ("roc_any", "rsi_roc_all")   # its member key ``higher`` (friendsig.HIGHER_MODES): the first = default
 
 
 class ComboError(ValueError):
@@ -140,7 +144,7 @@ class Member:
     """One strategy of the account. ``numbers`` None: the rule bot's default numbers (its signal_log rows);
     a dict: custom numbers, computed here."""
     label: str
-    kind: str                  # "core" (the 36) | "ds" (DeepSeek)
+    kind: str                  # "core" (the 36) | "ds" (DeepSeek) | "friend" (FRIEND_ROC, paperbot/friendsig.py)
     name: str
     tf: str
     numbers: Optional[dict]
@@ -149,6 +153,7 @@ class Member:
     when: Optional[tuple] = None       # conditions (parse_when): ((("symbol", ("SOLUSDT",)), ("side", 1)), ...)
     research: Optional[RM.RSpec] = None   # a setting of the 5-year search (paperbot/rmember.py)
     no_chase: bool = False     # owners 2026-10-19 "고점 추격 롱, 저점 추격 숏 안 하게": chase_check before the entry
+    higher: Optional[str] = None   # FRIEND_ROC only (FRIEND_HIGHER): its higher-bar rule, "roc_any" by default
 
     @property
     def custom(self) -> bool:
@@ -161,6 +166,9 @@ class Member:
     def describe(self) -> str:
         what = "기본값(규칙봇 신호)" if not self.custom else \
             "커스텀값 " + ", ".join(f"{k}={v}" for k, v in sorted(self.numbers.items()))
+        if self.kind == "friend":
+            from .friendsig import FRIEND_KO, higher_words
+            what = f"{FRIEND_KO}: EMA21·EMA52·RSI26·ROC9, {higher_words(self.tf, self.higher)} (이 봇이 바이낸스 끝난 봉으로 계산)"
         out = f"{self.order}. {self.name} {KO_TF.get(self.tf, self.tf)} - {what}" + (f" [{self.pick}]" if self.pick else "")
         if self.when:
             out += " | 조건: " + " 또는 ".join(describe_condition(c) for c in self.when)
@@ -441,7 +449,7 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
         if not isinstance(sp, dict):
             raise ComboError(f"members {i}번째 항목이 {{...}} 형식이 아닙니다")
         unknown = sorted(set(sp) - {"pick", "strategy", "tf", "numbers", "when", "stop", "entry", "invert", "filter",
-                                    "disp", "off", "cell", "no_chase"})
+                                    "disp", "off", "cell", "no_chase", "higher"})
         if unknown:
             raise ComboError(f"members {i}번째 항목에 알 수 없는 이름: {', '.join(unknown)}")
         pick = sp.get("pick")
@@ -456,12 +464,14 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
             name, tf = sp.get("strategy"), sp.get("tf")
             if not name or not tf:
                 raise ComboError(f"members {i}번째 항목에 strategy와 tf가 필요합니다(또는 pick)")
-            kind = "core" if name in core else ("ds" if name in DS200_IDS else None)
+            kind = "friend" if name == FRIEND else ("core" if name in core else ("ds" if name in DS200_IDS else None))
             if kind is None:
                 raise ComboError(f"{name}은(는) 규칙봇 36개에도 딥시크 44개에도 없는 매매법입니다")
             numbers = sp.get("numbers")
             if numbers is not None and not isinstance(numbers, dict):
                 raise ComboError(f"{name}의 numbers는 {{이름: 값}} 형식입니다")
+            if kind == "friend" and numbers is not None:
+                raise ComboError(f"{name}은(는) 숫자를 바꾸지 않습니다(친구 규칙 그대로: EMA21·52, RSI26, ROC9)")
         if tf not in V3_TRADE_TFS:
             raise ComboError(f"{name}의 봉 {tf}: 15m/30m/1h/4h만 됩니다")
         if kind == "ds" and tf not in DS_TFS_OF.get(name, ()):
@@ -480,12 +490,21 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
             full = {**want, **numbers}
             # a research member always computes its own signals (the search's), even on the default numbers
             numbers = None if (research is None and all(_same(full[k], want[k]) for k in want)) else full
-        key = (kind, name, tf, json.dumps(numbers, sort_keys=True), research)
+        higher = sp.get("higher")
+        if higher is not None and kind != "friend":
+            raise ComboError(f"{name}: higher는 {FRIEND}에만 씁니다(상위 봉 확인 방식)")
+        if kind == "friend":
+            higher = FRIEND_HIGHER[0] if higher is None else higher
+            if higher not in FRIEND_HIGHER:
+                raise ComboError(f"{name}의 higher는 {', '.join(FRIEND_HIGHER)} 중 하나입니다")
+        key = (kind, name, tf, json.dumps(numbers, sort_keys=True), research, higher)
         if key in seen:
             raise ComboError(f"{name} {tf}가 같은 숫자로 두 번 들어 있습니다(조건이 여럿이면 when 목록에 함께 적습니다)")
         seen.add(key)
         label = pick or (f"{name}@{tf}" if numbers is None else f"{name}@{tf}~" +
                          hashlib.sha1(json.dumps(numbers, sort_keys=True).encode()).hexdigest()[:6])
+        if kind == "friend" and higher != FRIEND_HIGHER[0]:
+            label = f"{name}@{tf}~{higher}"           # the default rule keeps the plain label
         if research is not None:
             label = f"{name}@{tf}#{i}~{RM.spec_tag(research)}"
             if sp.get("when"):
@@ -497,7 +516,7 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
         if no_chase and research is not None:
             raise ComboError(f"{label}: 연구 설정에는 no_chase를 함께 쓰지 않습니다(off의 pos/posside를 씁니다)")
         out.append(Member(label=label, kind=kind, name=name, tf=tf, numbers=numbers, order=i, pick=pick, when=when,
-                          research=research, no_chase=no_chase))
+                          research=research, no_chase=no_chase, higher=higher))
     return out
 
 
@@ -544,6 +563,10 @@ class ComboConfig:
                                         # above its 30-day 80 % point; None = off (both)
     max_hold_bars: Optional[int] = None  # ... a position open this many bars of its own timeframe (30m: 96 = 48 h, 1h: 96
                                          # = 96 h) is closed at the next minute's open (exit "TIME"); None = no limit
+    adx_gate: Optional[dict] = None     # '친구 매매법' (owners 10-24, paperbot/friendsig.py): {"tf": "4h", "min": 20} no entry
+                                        # when ADX(14) of the last closed tf bar is below min (research F4)
+    quiet_gate: Optional[dict] = None   # ... {"bars": 20, "max_ratio": 0.64}: no entry when the signal bar's volume is above
+                                        # 0.64 x the mean of the 20 bars before it (research V); None = off (both)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ComboConfig":
@@ -591,6 +614,14 @@ class ComboConfig:
     def ladder_spec(self) -> Optional[ComboLadder]:
         return ComboLadder.of(self.ladder)
 
+    def _net_stop_fits(self, roe: float, lev: int) -> bool:
+        """A net ROE stop can sit inside the liquidation price at all: its distance from the fill (roe / lev - round
+        trip + entry slippage) plus the buffer (``liq_buffer_min_frac``) is inside the isolated liquidation distance at
+        the six coins' lowest first-tier maintenance rate (0.4 %, BTC / ETH). The sizing checks every entry against the
+        coin's real brackets and refuses (records) one that does not fit; the stop is never moved."""
+        s = v3_settings()
+        return roe / lev - s.round_trip_cost + s.slippage_frac + float(self.liq_buffer_min_frac) < 1 / lev - 0.004
+
     def problems(self) -> list[str]:
         out = []
         if not self.paper_db:
@@ -623,6 +654,9 @@ class ComboConfig:
                 worst = max(self.lev_of(s) for s in self.symbols) if self.symbols else 1
                 if not float(r) / worst > 2 * rt:
                     out.append(f"stop.roe {float(r):.0%}(수수료 포함)는 {worst}배에서 수수료보다 작아 손절 자리가 없습니다")
+                elif not self._net_stop_fits(float(r), worst):
+                    out.append(f"stop.roe {float(r):.0%}(수수료 포함)는 {worst}배에서 강제청산 가격보다 멀어 "
+                               f"모든 진입이 거절됩니다")
         elif not (0 < self.stop_atr <= 10):
             out.append("stop.atr는 0~10입니다")
         unknown = sorted(set(self.stop) - {"mode", "atr", "min_atr", "roe", "net"})
@@ -668,6 +702,9 @@ class ComboConfig:
             from .entrygates import gate_problems
             tfs = [str(m.get("tf", "")) for m in self.members if isinstance(m, dict)]
             out += gate_problems(self.vote_gate, self.vol_gate, tfs)
+        if self.adx_gate is not None or self.quiet_gate is not None:
+            from .friendsig import gate_problems as friend_gate_problems
+            out += friend_gate_problems(self.adx_gate, self.quiet_gate)
         if self.max_hold_bars is not None and not (isinstance(self.max_hold_bars, int)
                                                    and not isinstance(self.max_hold_bars, bool)
                                                    and 1 <= self.max_hold_bars <= 1000):
@@ -958,7 +995,7 @@ def make_signal(cfg: ComboConfig, member: Member, bar_close: int, symbol: str, s
 
 def rule_rows(conn, cursor: int, members: list[Member], symbols) -> tuple[list[tuple[Member, dict]], int]:
     """New SUBMITTED signal_log rows of the default members (id > cursor) and the new cursor."""
-    want = {(m.name, m.tf): m for m in members if not m.custom}
+    want = {(m.name, m.tf): m for m in members if not m.custom and m.kind != "friend"}
     top = int(conn.execute("SELECT COALESCE(MAX(id), 0) FROM signal_log").fetchone()[0])
     if not want or top <= cursor:
         return [], top
@@ -1266,9 +1303,15 @@ class ComboRunner:
     def __init__(self, cfg: ComboConfig, members: list[Member], book: AccountBook, store: Store3, notifier: Notifier,
                  custom: Optional[CustomSignals], now_ms: Callable[[], int], prices: Callable[[], dict],
                  funding: Optional[FundingFeed] = None, fetch_5m: Optional[Callable] = None,
-                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None, gates=None, picture_gates=None):
+                 btc: Optional[BtcTrend] = None, rdata: Optional[RM.RData] = None, gates=None, picture_gates=None,
+                 friend=None):
         self.cfg, self.members, self.book, self.store = cfg, members, book, store
-        self.gates = gates                  # paperbot/entrygates.EntryGates (vote_gate / vol_gate), None = off
+        self.gates = gates                  # paperbot/entrygates.EntryGates (vote_gate / vol_gate) or friendsig.FriendGates
+                                            # (adx_gate / quiet_gate) or both (friendsig.GateChain), None = off
+        self.friend = friend                # paperbot/friendsig.FriendSignals (FRIEND_ROC members), None = none
+        self.friend_wait: dict = {}         # bar close -> {(member label, symbol)} whose bars Binance has not given yet
+        self.loss_review = any(m.kind == "friend" for m in members)   # the friend bot's loss lines and rows
+        self._loss_lines: dict = {}         # (entry ms, symbol) -> the loss line of a trade closed this minute
         self.picture_gates = picture_gates  # the same gates again, own caches: the live site's picture (gates_now)
         self._pic_ts: Optional[int] = None
         self._gate_info: dict = {}          # what the gates read for the signal in hand (_entry_block -> _submit_due)
@@ -1363,11 +1406,15 @@ class ComboRunner:
             self.funding.poll(now)
         n = 0
         for ts in sorted(minutes):
+            if self.friend is not None:
+                self._friend_try(final=ts)       # a signal of the bar that closed at ts enters at ts: its last try
             self._submit_due(ts, minutes[ts])
             before = {aid: (e.position.entry_time if e.position else None, len(e.trades))
                       for aid, e in self.book.engines.items()}
             self._before_step(ts, minutes[ts])
             self.book.step(ts, minutes[ts], self.funding.take(ts) if self.funding else None)
+            if self.loss_review:
+                self._loss_review(ts, minutes[ts], before)
             self._tell(before)
             self._after_step(ts, minutes[ts])
             for b in minutes[ts].values():
@@ -1382,12 +1429,16 @@ class ComboRunner:
             boundary = ts + MIN
             if boundary % FIVE == 0 and self.custom is not None and self.custom.members:
                 self._custom(boundary)
+            if self.friend is not None:
+                self._friend_due(boundary)
+                self._friend_try()
             self._save_state(ts)                 # the queue and the cursor with the engines, in one commit
             self.book.save(ts)
             if self.picture_gates is not None:
                 self._gates_picture(ts, now)
             n += 1
-        if rows and not minutes:
+        late = self._friend_try() if self.friend is not None and self.friend_wait else 0
+        if (rows and not minutes) or late:
             self._save_state(self.book.last_ts or 0)
             self.book.save(self.book.last_ts or 0)
         self.store.put_state("heartbeat", now, {"last_step": self.book.last_ts, "queue": len(self.queue)})
@@ -1423,6 +1474,8 @@ class ComboRunner:
             if self._gate_info:                       # what the entry gates read: kept with the signal and the trade
                 gi = self._gate_info
                 sig = replace(sig, meta={**sig.meta, "gates": gi, "ctx": {**(sig.meta.get("ctx") or {}), "gates": gi}})
+            if self.loss_review and not why and not sig.meta.get("exit_only"):
+                sig = self._entry_facts(sig, ts, q.bar_close, bars or {})
             if why:
                 self._restate(sig, "FILTERED", why, extra={"gates": self._gate_info} if self._gate_info else None)
                 self._count(sig.meta.get("member", sig.strategy_id), "filtered")
@@ -1498,6 +1551,131 @@ class ComboRunner:
         if chase is None:
             return why + "(진입 안 함)"
         return "추격 진입 막기: " + why if chase else ""
+
+    # ---- the friend's strategy (paperbot/friendsig.py)
+    def _friend_due(self, boundary: int) -> None:
+        """A close of a FRIEND_ROC member's timeframe: its coins wait for their bars (read at the next try)."""
+        due = self.friend.due(boundary)
+        if not due or self.now_ms() - boundary > self.cfg.max_signal_age_s * 1000:
+            return                                   # catch-up: these would be late anyway
+        self.friend_wait[int(boundary)] = {(m.label, s) for m in due for s in self.friend.symbols}
+
+    def _friend_try(self, final: Optional[int] = None) -> int:
+        """The FRIEND_ROC signals of the closes waiting for their bars: read once the bar has settled at Binance
+        (``SETTLE_MS`` after its close), tried again at each poll while a bar is not there yet; at the minute that would
+        enter them (``final``) the last try, then what is still missing is given up and said. Returns the signals
+        queued."""
+        if not self.friend_wait:
+            return 0
+        from .friendsig import SETTLE_MS as F_SETTLE
+        now, n, px = self.now_ms(), 0, None
+        for b in sorted(self.friend_wait):
+            last = final is not None and b <= final
+            if not last and now < b + F_SETTLE:
+                continue
+            got, left = self.friend.compute(b, self.friend_wait[b])
+            for e in self.friend.errors:
+                self.store.alert(now, WARN, f"[combo] friend signal: {e}"[:300])
+            self.friend.errors.clear()
+            if got and px is None:
+                try:
+                    px = self.prices()
+                except Exception:  # noqa: BLE001  without a price the fill is the next minute's open
+                    px = {}
+            ready = self.now_ms()
+            for g in got:
+                m: Member = g["member"]
+                bid, ask = (px or {}).get(g["symbol"], (None, None))
+                ref = ask if g["side"] > 0 else bid
+                sig = make_signal(self.cfg, m, b, g["symbol"], g["side"], g["atr"], ref, ready, ready - b, g["ctx"],
+                                  "friend")
+                vals = g["values"]
+                sig = replace(sig, meta={**sig.meta, "friend": vals, "ctx": {**sig.meta["ctx"], "friend": vals}})
+                self._queue(m, sig, b, "friend")
+                n += 1
+            if left and not last:
+                self.friend_wait[b] = left
+                continue
+            del self.friend_wait[b]
+            if left:
+                self._friend_failed(b, left)
+        return n
+
+    def _friend_failed(self, bar_close: int, left: set) -> None:
+        """A close whose bars could not be read before its entry minute: no signal from those coins, an alert each time,
+        Telegram on the 1st / 10th / 100th."""
+        self.ffails = getattr(self, "ffails", 0) + 1
+        coins = ", ".join(s.replace("USDT", "") for s in self.cfg.symbols if any(x == s for _l, x in left))
+        err = self.friend.bars.errors[-1] if self.friend.bars.errors else "끝난 봉을 아직 못 받음"
+        when = time.strftime("%m-%d %H:%M", time.gmtime(bar_close / 1000 + 9 * 3600))
+        msg = f"{self.cfg.tag} 친구 매매법 신호 봉을 못 읽어 건너뜀({self.ffails}번째): {when} KST {coins} · {err}"[:300]
+        self.store.alert(self.now_ms(), WARN, msg)
+        if self.ffails in (1, 10, 100) or self.ffails % 1000 == 0:
+            self.notifier.send(WARN, msg)
+
+    def _entry_facts(self, sig: Signal, ts: int, bar_close: int, bars: dict) -> Signal:
+        """The loss review's entry values, kept in the signal's context (so the trade record has them): the 24 h range
+        position of the entry minute's open (the rule bot's 1m bars in paper3.db, combo.chase_hours), BTC's open of the
+        entry minute, the nearest US macro release."""
+        from .friendsig import entry_facts
+        from .livepnl import open_ro
+        bar = bars.get(sig.symbol)
+        price = bar.open if bar is not None else sig.meta.get("ref_price")
+        btc = bars.get("BTCUSDT")
+        try:
+            conn = open_ro(self.cfg.paper_db)
+            try:
+                hours = chase_hours(conn, sig.symbol, bar_close)
+            finally:
+                conn.close()
+        except Exception:  # noqa: BLE001  review values only: the range position stays unknown
+            hours = {}
+        try:
+            facts = entry_facts(hours, bar_close, int(sig.side), price, btc.open if btc is not None else None, ts)
+        except Exception as exc:  # noqa: BLE001  review values only: never in the way of the entry
+            facts = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+        return replace(sig, meta={**sig.meta, "ctx": {**(sig.meta.get("ctx") or {}), "entry": facts}})
+
+    def _loss_review(self, ts: int, bars: dict, before: dict) -> None:
+        """Each losing trade of the account closed in minute ts: its loss review row (friendsig.loss_facts, table
+        loss_review) and the line for its exit message; then an entry the liquidation buffer refused (_liq_refused)."""
+        from .friendsig import loss_facts, loss_line, store_loss
+        e = self.book.engines.get(ACCOUNT)
+        if e is None:
+            return
+        btc = bars.get("BTCUSDT")
+        for t in e.trades[before.get(ACCOUNT, (None, 0))[1]:]:
+            if t.roe > 0:
+                continue
+            try:
+                f = loss_facts(t, btc.close if btc is not None else None, e.s.round_trip_cost)
+                line = loss_line(f)
+                store_loss(self.store.conn, ACCOUNT, t, f, line)
+            except Exception as exc:  # noqa: BLE001  the review never stops the minute
+                self.store.alert(self.now_ms(), WARN, f"[combo] loss review: {type(exc).__name__}: {exc}"[:300])
+                continue
+            self._loss_lines[(int(t.entry_time), t.symbol)] = line
+        self._liq_refused(ts)
+
+    def _liq_refused(self, ts: int) -> None:
+        """An entry of minute ts refused because the net ROE stop would sit too close to (or past) the liquidation price
+        at the paper's size (the coin's Binance bracket: LTC and BCH once the wallet has about doubled): said as an alert
+        each time, on Telegram the 1st / 10th / 100th time. The stop is never moved."""
+        rows = self.store.conn.execute("SELECT symbol, data FROM outcomes WHERE account_id = ? AND step_ts = ? AND "
+                                       "status = 'REJECTED' AND reason = 'sizing'", (ACCOUNT, int(ts))).fetchall()
+        for sym, d in rows:
+            try:
+                det = json.loads(d).get("detail") or {}
+            except (TypeError, ValueError):
+                det = {}
+            if not any("too close to liq" in str(r) for r in det.get("reasons") or []):
+                continue
+            self.lfails = getattr(self, "lfails", 0) + 1
+            msg = (f"{self.cfg.tag} 진입 거절({self.lfails}번째): {sym.replace('USDT', '')} - 손절 자리가 강제청산 가격에 너무 "
+                   f"가까움(지금 크기의 바이낸스 유지증거금 구간). 손절은 옮기지 않고 이 신호는 건너뜀")
+            self.store.alert(self.now_ms(), WARN, msg)
+            if self.lfails in (1, 10, 100) or self.lfails % 1000 == 0:
+                self.notifier.send(WARN, msg)
 
     def _macro_near(self, ts: int) -> str:
         """'' or why minute ts is inside the macro blackout (an entry in that minute is not made)."""
@@ -1744,13 +1922,21 @@ class ComboRunner:
     # ---- messages
     def _tell(self, before: dict) -> None:
         e = self.book.engines.get(ACCOUNT)
+        lines, self._loss_lines = self._loss_lines, {}
         if e is None or not self.cfg.telegram:
             return
-        if os.environ.get("PAPERBOT_COMBO_TRADE_MSGS", "").strip() == "0":
-            return          # the live watcher's 🟢 / ✅ / ❌ messages (paperbot/livecheck.py) take their place
         was_entry, was_n = before.get(ACCOUNT, (None, 0))
+        if os.environ.get("PAPERBOT_COMBO_TRADE_MSGS", "").strip() == "0":
+            # the live watcher's 🟢 / ✅ / ❌ messages (paperbot/livecheck.py) take their place; the friend bot's loss
+            # review line still goes, on its own (the watcher's ❌ has no such line)
+            for t in e.trades[was_n:]:
+                line = lines.get((int(t.entry_time), t.symbol))
+                if line:
+                    self.notifier.send(INFO, f"{self.cfg.tag} {t.symbol.replace('USDT', '')} {KO_SIDE.get(t.side, t.side)} "
+                                             f"순ROE {t.roe:+.1%} · {line}")
+            return
         for t in e.trades[was_n:]:
-            self.notifier.send(INFO, exit_text(self.cfg, t))
+            self.notifier.send(INFO, exit_text(self.cfg, t, lines.get((int(t.entry_time), t.symbol), "")))
         p = e.position
         if p is not None and p.entry_time != was_entry:
             self.notifier.send(INFO, entry_text(self.cfg, p))
@@ -1784,20 +1970,28 @@ def exit_ko(cfg: "ComboConfig", reason: str) -> str:
     return KO_EXIT.get(reason, reason)
 
 
-def exit_text(cfg: "ComboConfig", t) -> str:
-    """The paper bot's own exit line (a TradeRecord)."""
+def friend_bot(cfg: "ComboConfig") -> bool:
+    """A bot with the friend's strategy (FRIEND_ROC): its own entry words and the loss line of its losing exits."""
+    return any(isinstance(m, dict) and m.get("strategy") == FRIEND for m in (cfg.members or []))
+
+
+def exit_text(cfg: "ComboConfig", t, loss: str = "") -> str:
+    """The paper bot's own exit line (a TradeRecord); ``loss``: the friend bot's loss review line of a losing trade,
+    on a line of its own."""
     why = (t.context or {}).get("exit_why") if isinstance(t.context, dict) else None
-    if cfg.vote_gate or cfg.vol_gate:              # the VWAP bot: the owners' words, as its entry line
+    if cfg.vote_gate or cfg.vol_gate or friend_bot(cfg):     # the VWAP / friend bot: the owners' words, as its entry
         return (f"{cfg.tag} 청산 {t.symbol.replace('USDT', '')} {KO_SIDE.get(t.side, t.side)} · {member_ko(t.strategy_id)} "
                 f"{KO_TF.get(t.timeframe, t.timeframe)} · {exit_ko(cfg, t.exit_reason)}" + (f"({why})" if why else "")
-                + f" · 순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
+                + f" · 순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}"
+                + (f"\n{loss}" if loss else ""))
     return (f"{cfg.tag} 청산 {t.symbol} {KO_SIDE.get(t.side, t.side)} {t.strategy_id} "
             f"{KO_TF.get(t.timeframe, t.timeframe)}: {exit_ko(cfg, t.exit_reason)}"
             + (f"({why})" if why else "") + f", "
             f"순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}")
 
 
-MEMBER_KO = {"F6_VWAP_FAIL": "VWAP 복귀 실패", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들"}   # the VWAP bot's two (10-23)
+MEMBER_KO = {"F6_VWAP_FAIL": "VWAP 복귀 실패", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들",   # the VWAP bot's two (10-23)
+             FRIEND: "친구 매매법(EMA·RSI·ROC)"}                                       # the friend bot's (10-24)
 
 
 def member_ko(strategy: str) -> str:
@@ -1816,7 +2010,7 @@ def gates_text(g: Optional[dict]) -> str:
     0.62%)"); '' when the bot has none."""
     if not isinstance(g, dict):
         return ""
-    parts = [str((g.get(k) or {}).get("text") or "") for k in ("vote", "vol")]
+    parts = [str((g.get(k) or {}).get("text") or "") for k in ("vote", "vol", "adx", "quiet")]
     return " · ".join(x for x in parts if x)
 
 
@@ -1825,6 +2019,12 @@ def entry_text(cfg: "ComboConfig", p) -> str:
     the owners' words and says what the gates read; every other bot's line is as before."""
     m = p.signal.meta
     rule = stop_rule_ko(m.get("stop_rule"))
+    if isinstance(m.get("friend"), dict):          # the friend bot: the signal bar's values, to check it on TradingView
+        from .friendsig import signal_words
+        return (f"{cfg.tag} 진입 {p.symbol.replace('USDT', '')} {KO_SIDE.get(p.side, p.side)} · "
+                f"{member_ko(p.signal.strategy_id)} {KO_TF.get(p.signal.timeframe, p.signal.timeframe)} · {p.leverage}배, "
+                f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g}" + (f" ({rule})" if rule else "")
+                + f"\n신호 봉: {signal_words(m['friend'])}")
     if isinstance(m.get("gates"), dict):
         g = gates_text(m.get("gates"))
         return (f"{cfg.tag} 진입 {p.symbol.replace('USDT', '')} {KO_SIDE.get(p.side, p.side)} · "
@@ -1847,8 +2047,9 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
     pause = ("진입 쉼 " + "·".join(rest) + ", ") if rest else ""
     kinds = ([f"{sum(m.custom for m in members)}개 커스텀값"] if any(m.custom for m in members) else []) \
         + ([f"{sum(bool(m.when) for m in members)}개 조건 있음"] if any(m.when for m in members) else [])
-    if cfg.vote_gate is not None or cfg.vol_gate is not None:      # a short list (the VWAP bot): the names themselves
-        kinds = [" · ".join(f"{member_ko(m.name)} {KO_TF.get(m.tf, m.tf)}" for m in members)] + kinds
+    if cfg.vote_gate is not None or cfg.vol_gate is not None or friend_bot(cfg):   # a short list (VWAP, friend): names
+        kinds = [" · ".join(f"{member_ko(m.name)} {KO_TF.get(m.tf, m.tf)}"
+                            + (" 상위 봉 둘 다 RSI·ROC" if m.higher == "rsi_roc_all" else "") for m in members)] + kinds
     return (f"{cfg.tag} 시작: 매매법 {len(members)}개" + (f"({', '.join(kinds)})" if kinds else "") + ", "
             f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 증거금 "
             f"{'배수%' if cfg.margin == 'leverage' else f'잔고의 {float(cfg.margin):.0%}'}, 손절 {stop_text(cfg)}, "
@@ -1870,6 +2071,12 @@ def gate_lines(cfg: "ComboConfig") -> list[str]:
             out.append(vote_text(cfg.vote_gate))
         if isinstance(cfg.vol_gate, dict):
             out.append(vol_text(cfg.vol_gate))
+    if cfg.adx_gate is not None or cfg.quiet_gate is not None:
+        from .friendsig import adx_text, quiet_text
+        if isinstance(cfg.adx_gate, dict):
+            out.append(adx_text(cfg.adx_gate))
+        if isinstance(cfg.quiet_gate, dict):
+            out.append(quiet_text(cfg.quiet_gate))
     if isinstance(cfg.max_hold_bars, int) and not isinstance(cfg.max_hold_bars, bool):
         tfs = sorted({str(m.get("tf")) for m in cfg.members if isinstance(m, dict) and m.get("tf") in TF_MIN},
                      key=lambda tf: TF_MIN[tf])
@@ -2014,6 +2221,11 @@ def cmd_run(args) -> int:
         from .entrygates import make_gates
         extra["gates"] = make_gates(cfg.vote_gate, cfg.vol_gate, rest)
         extra["picture_gates"] = make_gates(cfg.vote_gate, cfg.vol_gate, rest)   # the site's picture, own caches
+    if friend_bot(cfg) or cfg.adx_gate is not None or cfg.quiet_gate is not None:   # '친구 매매법' (friendsig.py)
+        from .friendsig import GateChain, make_friend
+        extra["friend"], fgates = make_friend(cfg, members, rest)
+        if fgates is not None:
+            extra["gates"] = GateChain(extra["gates"], fgates) if extra.get("gates") is not None else fgates
     runner = runner_cls(cfg, members, book, store, notifier, custom, lambda: int(time.time() * 1000),
                         lambda: book_prices(rest, syms), None, fetch_5m=lambda s, a, b: fetch_5m(rest, s, a, b), btc=btc,
                         rdata=rdata, **extra)
@@ -2024,7 +2236,7 @@ def cmd_run(args) -> int:
     if custom is not None:                       # closed 5m bars up to now; later gaps are filled at each boundary
         custom.fill_gaps(runner.fetch_5m, now - now % FIVE)
     store.put_state("combo_run", now, {"version": VERSION, "brackets": src, "taker_fee": settings.taker_fee,
-                                       "members": [m.describe() for m in members], "config": dataclasses.asdict(cfg)})
+                                       "members": [m.describe() for m in members], "config": run_config(cfg)})
     store.commit()
     notifier.send(INFO, start_text(cfg, members, book.engines[ACCOUNT].wallet))
     stop = {"flag": False}
@@ -2055,6 +2267,19 @@ def cmd_run(args) -> int:
     finally:
         store.close()
     return 0
+
+
+LATER_KEYS = ("adx_gate", "quiet_gate")     # config keys of 10-24: in a run record only when set
+
+
+def run_config(cfg: ComboConfig) -> dict:
+    """The config as the run record (state ``combo_run``) keeps it: every field, except a key added later that is off
+    (null), so the running bots' records stay as before (the live site compares them key by key)."""
+    d = dataclasses.asdict(cfg)
+    for k in LATER_KEYS:
+        if d.get(k) is None:
+            d.pop(k, None)
+    return d
 
 
 def stop_text(cfg: ComboConfig) -> str:
@@ -2097,6 +2322,9 @@ def cmd_check(args) -> int:
         print("- 주말(한국 시간 토·일)에는 새로 진입하지 않음(열린 포지션은 손절·익절까지 그대로)")
     for line in gate_lines(cfg):
         print(f"- {line}")
+    if friend_bot(cfg):
+        print("- 손실 리뷰: 진 거래마다 청산 메시지에 '손실 이유 후보' 한 줄(BTC 움직임·손절 전 최고·보유 시간·4시간 ADX·"
+              "거래량·24시간 범위 위치·경제 발표), 같은 값을 기록 loss_review 표에")
     if cfg.macro_blackout_min:
         from . import events as EV
         now = int(time.time() * 1000)
@@ -2126,7 +2354,8 @@ def cmd_check(args) -> int:
 
 
 GATE_GROUPS = (("추세 반대", ("추세 반대",)), ("변동성 높음", ("변동성 높음",)), ("주말", ("주말",)),
-               ("경제 발표", ("경제 발표",)), ("나스닥 개장", ("나스닥 개장",)), ("못 읽음", ("못 읽음",)))
+               ("경제 발표", ("경제 발표",)), ("나스닥 개장", ("나스닥 개장",)), ("못 읽음", ("못 읽음",)),
+               ("ADX 약함", ("ADX 약함",)), ("거래량 많음", ("거래량 많음",)))      # the last two: the friend bot's gates
 
 
 def gate_group(why: str) -> str:
@@ -2137,9 +2366,10 @@ def gate_group(why: str) -> str:
     return "기타"
 
 
-def _gate_status(conn) -> None:
+def _gate_status(conn, picture: bool = True) -> None:
     """The VWAP bot's part of ``status``: how many signals each reason kept out (all, and the last 24 hours), and the
-    newest picture of what the gates read for every coin (state gates_now)."""
+    newest picture of what the gates read for every coin (state gates_now; ``picture`` False: the friend bot, which
+    keeps none)."""
     now = int(time.time() * 1000)
     tot: dict = {}
     day: dict = {}
@@ -2156,6 +2386,8 @@ def _gate_status(conn) -> None:
         print("진입 안 한 신호(이유별, 전체 / 지난 24시간): " + " · ".join(f"{g} {tot[g]} / {day.get(g, 0)}" for g in sorted(tot)))
     else:
         print("진입 안 한 신호: 아직 없음")
+    if not picture:
+        return
     st = conn.execute("SELECT ts, data FROM state WHERE k = ?", (GATES_NOW_KEY,)).fetchone()
     if st is None:
         print("지금 코인별 조건: 아직 없음(켜진 뒤 첫 1분, 그다음 30분마다)")
@@ -2216,6 +2448,12 @@ def cmd_status(args) -> int:
                   f"{why} 순ROE {t['roe']:+.1%} ${t['pnl']:+,.2f}")
         if rcfg.get("vote_gate") is not None or rcfg.get("vol_gate") is not None:
             _gate_status(conn)
+        elif rcfg.get("adx_gate") is not None or rcfg.get("quiet_gate") is not None:
+            _gate_status(conn, picture=False)
+        if any(isinstance(m, dict) and m.get("strategy") == FRIEND for m in rcfg.get("members") or []):
+            from .friendsig import loss_status
+            for line in loss_status(conn, int(time.time() * 1000)):
+                print(line)
     finally:
         conn.close()
     return 0
