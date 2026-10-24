@@ -91,9 +91,10 @@ Error Codes page (the key, the signature, the timestamp, the IP: answered before
 codes 50102 / 50112 are a clock refusal, re-synced and sent again by the executor) or on the request's own sCode. Any
 other answer after the send (an undocumented code such as 50013 "System is busy", whatever its message says; 403 / 418;
 5xx; a body that is not DeepCoin's shape; a timeout) may come from an order that ran: an unknown outcome
-(TransientError), looked up by the clOrdId (a stop: by what was sent), an opening order never sent again. A failure
-before an opening order went out (the look-up of its clOrdId, the instrument read): NotSent (nothing was sent; the
-executor's Guarded calls again, which looks the id up again first). Words in a message are read on reads only (a rate
+(TransientError), looked up by the clOrdId (a stop: by what was sent), an opening order never sent again. The checks
+before an opening order goes out (the instrument read, the look-up of its clOrdId) are tried again for a few seconds
+while they fail; still failing: NotSent, a refusal (nothing was sent: the executor drops that entry as refused, never
+holds it as an unknown outcome). Words in a message are read on reads only (a rate
 word: 429; "order not found": not found); a setting or a cancel keeps its code as it came. set-leverage: refused only on
 its sCode or a documented code; an undocumented answer and a read-back that still shows another value after a pause are
 TransientError (tried again), never a refusal.
@@ -119,9 +120,13 @@ not 0: it fired but its order failed (REJECTED: not fired, gone); triggerTime 0 
 triggered yet": whether a resting order shows there is not settled, and the drill checks that a resting stop is not in
 it). No row anywhere: a stop of ours is UNCONFIRMED (neither live nor fired nor cancelled: place_stop raises
 ProtectionError, a move keeps the old stop); someone else's: not found. A missing errorCode or triggerTime is an error,
-never "cancelled". A trigger order's kind is its triggerOrderType in the pending list and its ordType in the history
-(TPSL, Tracking ... are never our stop); a row whose kind is missing, or of a kind that can be ours whose side or
-posSide cannot be read, is an error, never "not a stop".
+never "cancelled". A trigger order's kind is its triggerOrderType in the pending list and its ordType in the history.
+A readable row that cannot be ours (another coin's, a documented kind we never send such as TPSL, posSide net, an
+opening side) is simply not ours. A row that may be ours (its kind, side or posSide missing or not a documented value)
+is an error, never "not a stop", wherever it may protect something: the coin holds a position or the row is a stop this
+process placed; on a flat coin open_algo_orders lists it as not a stop (``dcUnreadable``), so one garbled row on a coin
+without a position never stops the executor's loop; a lost answer's search raises on it only when it was made inside
+the send's window.
 Why "last" (triggerPxType): the paper engine judges its stops on the last price, the other exchanges' stops trigger on
 it (Binance CONTRACT_PRICE, Bybit LastPrice, WOO X Pro price_type 1) and the executor's own ladder reads the last
 price's 1m candles; the drill watches the last and the mark price while its test stop fires and says which crossed.
@@ -227,10 +232,12 @@ OK_CODE = "0"
 ISOLATED, CROSS = "isolated", "cross"
 MERGE = "merge"
 LONG, SHORT = "long", "short"
+NET = "net"                                           # a posSide of the docs' trigger history; never one we send
 CLOSING = (("sell", LONG), ("buy", SHORT))            # side + posSide that close a position
 TRIGGER_PX_TYPE = "last"                              # which price fires our stops (module docstring: why)
 WORKING_TYPE = {"last": "CONTRACT_PRICE", "mark": "MARK_PRICE", "index": "INDEX_PRICE"}
 PRODUCT_GROUP = "Swap"                                # trigger-order productGroup (Trigger Order page; ccxt): the drill
+OUR_KIND = "Conditional"                              # the kind of the trigger orders this client sends
 OTHER_TRIGGERS = ("TPSL", "Serial", "Indicator", "Complex", "Tracking", "Line")   # kinds that are never our stop
 ORDER_FINAL = ("FILLED", "CANCELED", "REJECTED", "EXPIRED")      # the Binance-shaped statuses this client answers
 ORDER_WAITS = (0.1, 0.2, 0.4, 0.8)                    # a market order is read back again after these (s)
@@ -279,6 +286,7 @@ BUDGET_CODE = "PROTECT_BUDGET"
 LOOKUP_PAUSE_S = 2.0                                  # after a 429 on a stop or a close: looked up this often
 LIST_WAITS = (0.3, 0.7, 1.0, 1.5, 1.5)               # a new stop must show in the pending list within these (5 s)
 LEV_WAITS = (0.5, 1.0, 1.5)                           # a leverage just set, not read back yet: read again after these
+NOT_SENT_WAITS = (0.5, 1.0, 2.0)                      # the checks before an entry failed: tried again after these
 UNCONFIRMED = "UNCONFIRMED"                           # a stop of ours in neither the list nor the history: not settled
 AMBIGUOUS = "AMBIGUOUS_ORDER"                         # several stops fit a lost answer (never "not found")
 MISMATCH = "LEVERAGE_MISMATCH"                        # the leverage read back is not the one set (yet)
@@ -290,11 +298,11 @@ class RateLimitedUnknown(RateLimited):
     its outcome stays unknown (looked up again, never "refused")."""
 
 
-class NotSent(RateLimited):
-    """A failure before an opening order was sent (the look-up of its clOrdId, the instrument read): nothing went out.
-    A RateLimited, so the executor's Guarded waits and calls again, and the call looks the id up again before any send;
-    the entry is never held as the unknown outcome of an order that was never sent. Never raised once the order may
-    have gone out."""
+class NotSent(TestnetError):
+    """The checks before an opening order is sent (the instrument read, the look-up of its clOrdId) failed on every
+    try (NOT_SENT_WAITS): nothing went out. A refusal, neither a TransientError nor a RateLimited: the executor drops
+    that entry as refused (entry_refused), never holds it as the unknown outcome of an order that was never sent.
+    Never raised once the order may have gone out."""
 
 
 def definite(e: Exception) -> bool:
@@ -318,6 +326,15 @@ def _dec(v, what: str = "value") -> Decimal:
     if not d.is_finite():
         raise TransientError(200, None, f"딥코인 응답의 {what} 값이 이상합니다: {v!r}")
     return d
+
+
+def _soft(v) -> Decimal:
+    """A number shown only (a trigger order that is not ours): unreadable -> 0, never an error."""
+    try:
+        d = Decimal(str(v))
+    except (InvalidOperation, ValueError):
+        return Decimal(0)
+    return d if d.is_finite() else Decimal(0)
 
 
 _f, _num, _int, _price_str, _id60 = MX._f, MX._num, MX._int, MX._price_str, MX._id60
@@ -1197,43 +1214,48 @@ class DeepCoinClient:
         with self._protective():
             return self._market(symbol, side, qty, True, client_id)
 
-    @contextlib.contextmanager
-    def _not_sent(self, ext: str):
-        """The steps before an opening order whose id this process never sent (the clOrdId look-up, the instrument
-        read): a failure there sent nothing (NotSent), never the unknown outcome of a sent order."""
-        try:
-            yield
-        except TransientError as e:
-            raise NotSent(getattr(e, "status", 0), NOT_SENT, f"진입 주문 {ext}을 보내기 전 확인이 안 돼 보내지 않았습니다: "
-                                                             f"{e.msg}"[:300], 1.0) from e
+    def _before_send(self, symbol: str, ext: str) -> Optional[dict]:
+        """An opening id this process never sent: the checks before the send (the instrument read, the look-up of its
+        clOrdId: an id DeepCoin already has is read, never sent again), tried again after NOT_SENT_WAITS while they
+        fail. Still failing: NotSent, a refusal: nothing was sent (never the unknown outcome of a sent order)."""
+        for w in NOT_SENT_WAITS + (None,):
+            try:
+                self._no_entries(symbol)
+                return self._earlier(symbol, ext, False)
+            except TransientError as e:
+                if w is None:
+                    raise NotSent(getattr(e, "status", 0), NOT_SENT, f"진입 주문 {ext}을 보내기 전 확인이 안 돼 보내지 "
+                                                                     f"않았습니다: {e.msg}"[:300]) from e
+            self._wait(w)
+        raise AssertionError("unreachable")
 
     def _market(self, symbol: str, side: str, qty: float, reduce_only: bool, client_id: Optional[str]) -> dict:
         ext = ext_id(client_id)
-        fresh = not reduce_only and ext not in self.sent   # an opening id this process never sent
-        with self._not_sent(ext) if fresh else contextlib.nullcontext():
+        if not reduce_only and ext not in self.sent:       # an opening id this process never sent
+            earlier = self._before_send(symbol, ext)
+        else:
             if not reduce_only:
                 self._no_entries(symbol)
             earlier = self._earlier(symbol, ext, reduce_only)
-            if earlier is not None:                        # the same order: read it, never send it again
-                return self._read_back(symbol, str(earlier["ordId"]), self._placeholder(symbol, side, qty,
-                                                                                         reduce_only, ext), earlier)
-            if ext in self.sent and reduce_only:
-                # the same close once more (its earlier send found absent past SETTLE_MS): sized from the position
-                # now, never past it (a throttled send that ran after all must not close twice)
-                qty = self._reduce_left(symbol, side, qty)
-            sz = self._contracts(symbol, qty)
-            self._check_size(symbol, sz, qty, "주문", entry=not reduce_only)
-            lside = side.lower()
-            if reduce_only:
-                ps = LONG if side == "SELL" else SHORT
-                body = {"instId": fx(symbol), "tdMode": self._margin_of(symbol), "side": lside, "posSide": ps,
-                        "mrgPosition": MERGE, "ordType": "market", "sz": _num(sz), "reduceOnly": True,
-                        "clOrdId": ext}
-            else:
-                ps = LONG if side == "BUY" else SHORT
-                body = {"instId": fx(symbol), "tdMode": ISOLATED, "side": lside, "posSide": ps, "mrgPosition": MERGE,
-                        "ordType": "market", "sz": _num(sz), "clOrdId": ext}
-            placeholder = self._placeholder(symbol, side, float(self._base(symbol, sz)), reduce_only, ext)
+        if earlier is not None:                            # the same order: read it, never send it again
+            return self._read_back(symbol, str(earlier["ordId"]), self._placeholder(symbol, side, qty, reduce_only,
+                                                                                     ext), earlier)
+        if ext in self.sent and reduce_only:
+            # the same close once more (its earlier send found absent past SETTLE_MS): sized from the position now,
+            # never past it (a throttled send that ran after all must not close twice)
+            qty = self._reduce_left(symbol, side, qty)
+        sz = self._contracts(symbol, qty)
+        self._check_size(symbol, sz, qty, "주문", entry=not reduce_only)
+        lside = side.lower()
+        if reduce_only:
+            ps = LONG if side == "SELL" else SHORT
+            body = {"instId": fx(symbol), "tdMode": self._margin_of(symbol), "side": lside, "posSide": ps,
+                    "mrgPosition": MERGE, "ordType": "market", "sz": _num(sz), "reduceOnly": True, "clOrdId": ext}
+        else:
+            ps = LONG if side == "BUY" else SHORT
+            body = {"instId": fx(symbol), "tdMode": ISOLATED, "side": lside, "posSide": ps, "mrgPosition": MERGE,
+                    "ordType": "market", "sz": _num(sz), "clOrdId": ext}
+        placeholder = self._placeholder(symbol, side, float(self._base(symbol, sz)), reduce_only, ext)
         now = self._now()
         prev = self.sent.get(ext)
         self.sent[ext] = {"symbol": symbol, "first": (prev or {}).get("first", now), "last": now,
@@ -1418,10 +1440,12 @@ class DeepCoinClient:
                                    limit_key="trigger_pending"), "조건 주문")
         out = []
         for r in rows:
-            if r.get("ordId") in (None, ""):
-                raise TransientError(200, None, "조건 주문 응답에 ordId가 없습니다")
             if r.get("instId") not in (None, "", fx(symbol)):
-                continue
+                continue                                   # another coin's row: never part of this coin's answer
+            if r.get("ordId") in (None, ""):
+                if self._ours(r, True) is False:
+                    continue                               # readable and not ours: its id is not needed
+                raise TransientError(200, None, "조건 주문 응답에 ordId가 없습니다")
             self.order_symbol[str(r["ordId"])] = symbol
             out.append(r)
         return out
@@ -1442,47 +1466,62 @@ class DeepCoinClient:
 
     @staticmethod
     def _kind(row: dict, pending: bool) -> str:
-        """The trigger order's kind: triggerOrderType in the pending list, ordType in the history (Get Pending Trigger
-        Orders / Get Triggered Order History; the pending list's own ordType is the price type, market or limit).
-        Missing: TransientError, never a guess (a position TP/SL must not read as our stop, nor ours as another
-        kind)."""
+        """The trigger order's kind as the row says it: triggerOrderType in the pending list, ordType in the history
+        (Get Pending Trigger Orders / Get Triggered Order History; the pending list's own ordType is the price type,
+        market or limit); "" when missing."""
         k = row.get("triggerOrderType" if pending else "ordType")
-        if k in (None, "") or not isinstance(k, str):
-            raise TransientError(200, None, f"조건 주문 {row.get('ordId')}의 종류(" + (
-                "triggerOrderType" if pending else "ordType") + f")가 없습니다: {k!r}")
-        return k
+        return k if isinstance(k, str) else ""
+
+    @classmethod
+    def _ours(cls, row: dict, pending: bool) -> Optional[bool]:
+        """Can this trigger row be one of our stops? False: readable and not ours (a documented kind we never send, a
+        posSide net, an opening side). True: a closing Conditional (long or short). None: a field it needs is missing
+        or not a documented value (the kind, side, posSide), so it may be ours: the caller decides (never "not a
+        stop" on a coin it may protect)."""
+        kind = cls._kind(row, pending)
+        if kind in OTHER_TRIGGERS:
+            return False
+        side, ps = str(row.get("side") or "").lower(), str(row.get("posSide") or "").lower()
+        if kind != OUR_KIND or side not in ("buy", "sell") or ps not in (LONG, SHORT, NET):
+            return None
+        return ps != NET and (side, ps) in CLOSING
 
     def _is_stop(self, row: dict, pending: bool) -> bool:
-        """A closing trigger order of a kind that can be ours (Conditional; a TPSL, tracking ... one never is). A row
-        of any kind not known as another's whose side or posSide cannot be read: TransientError, never "not a stop"
-        (a resting stop read as none would make the executor place more stops or close a protected position)."""
-        if self._kind(row, pending) in OTHER_TRIGGERS:
-            return False
-        return side_of(row) in CLOSING
+        """A closing trigger order of the kind we send. A row that may be ours but cannot be read: TransientError, never
+        "not a stop" (a resting stop read as none would make the executor place more stops or close a protected
+        position)."""
+        ours = self._ours(row, pending)
+        if ours is None:
+            raise TransientError(200, None, f"조건 주문 {row.get('ordId')}을 읽을 수 없습니다(종류 {self._kind(row, pending)!r}, "
+                                            f"side {row.get('side')!r}, posSide {row.get('posSide')!r})")
+        return ours
 
     def _algo_dict(self, row: dict, symbol: str, status: str = "NEW", actual: str = "") -> dict:
         sid = str(self._need(row, "ordId", "조건 주문"))
         pending = status == "NEW"                          # a pending-list row; the others are history rows
-        kind, stop = self._kind(row, pending), self._is_stop(row, pending)
+        stop = self._is_stop(row, pending)
         trig = row.get("triggerPx")
         if status == "NEW" and stop:                       # a resting stop's level and size are never 0 from a gap
             if _dec(trig, "triggerPx") <= 0 or _dec(row.get("sz"), "sz") <= 0:
                 raise TransientError(200, None, f"조건 주문 {sid}의 발동 가격이나 수량이 이상합니다({trig!r}, "
                                                 f"{row.get('sz')!r})")
-            trig = _num(_dec(trig, "triggerPx"))
-            qty = _num(self._base(symbol, row.get("sz")))
-        else:
+            trig, qty = _num(_dec(trig, "triggerPx")), _num(self._base(symbol, row.get("sz")))
+        elif stop:
             qty = _num(self._base(symbol, row.get("sz"))) if row.get("sz") not in (None, "") else "0"
+            trig = _num(_dec(trig, "triggerPx")) if trig not in (None, "") else "0"
+        else:                                              # not ours: shown as it reads, never an error
+            qty, trig = _num(_soft(row.get("sz")) * Decimal(self._spec(symbol)["ct_val"])), _num(_soft(trig))
         side = str(row.get("side") or "").upper()
         self.order_symbol[sid] = symbol
+        made = row.get("cTime")
         return {"algoId": sid, "clientAlgoId": self.cid_by_stop.get(sid, ""), "symbol": symbol, "side": side,
                 "positionSide": str(row.get("posSide") or ""), "orderType": "STOP_MARKET" if stop else "CONDITIONAL",
-                "algoType": "CONDITIONAL",
-                "triggerPrice": _num(_dec(trig, "triggerPx")) if trig not in (None, "") else "0", "quantity": qty,
+                "algoType": "CONDITIONAL", "triggerPrice": trig, "quantity": qty,
                 "closePosition": False, "reduceOnly": stop, "workingType": WORKING_TYPE.get(
                     str(row.get("triggerPxType") or ""), str(row.get("triggerPxType") or "")),
-                "priceProtect": False, "algoStatus": status, "dcKind": kind, "actualOrderId": actual,
-                "createTime": to_ms(row["cTime"]) if row.get("cTime") not in (None, "") else None}
+                "priceProtect": False, "algoStatus": status, "dcKind": self._kind(row, pending),
+                "actualOrderId": actual,
+                "createTime": to_ms(made) if made not in (None, "") and (stop or _soft(made) > 0) else None}
 
     def stop_close(self, symbol: str, side: str, trigger: float, qty: Optional[float] = None,
                    client_id: Optional[str] = None) -> dict:
@@ -1608,8 +1647,10 @@ class DeepCoinClient:
     def _search_stop(self, key: str) -> list:
         """Trigger orders that fit a stop whose answer was lost (module docstring): same side, posSide, size and
         trigger (half a tick), created from MATCH_BEFORE_MS before the send, not resting before it, held by no other id
-        of ours; the pending list first, then the trigger history. A row that could be it but cannot be read (its kind,
-        side, posSide, size or level): TransientError, never skipped as "not it"."""
+        of ours; the pending list first, then the trigger history. A row that is readable and cannot be it (made outside
+        the send's window, a kind we never send, a posSide net, another side) is simply not it; one that may be it but
+        cannot be read (its kind, side or posSide missing or undocumented; its size or level garbled): TransientError,
+        never skipped as "not it"."""
         intent = self.stop_intents.get(key)
         if intent is None:
             return []
@@ -1619,17 +1660,21 @@ class DeepCoinClient:
         rows = [(r, True) for r in self._triggers(sym)] + [(r, False) for r in self._trigger_history(sym)]
         for r, pending in rows:
             sid = str(r.get("ordId") or "")
-            if not sid or sid in found or sid in intent["before"] or self._kind(r, pending) in OTHER_TRIGGERS:
+            if not sid or sid in found or sid in intent["before"]:
                 continue
-            if side_of(r) != (intent["side"], intent["posSide"]):
+            made = _soft(r.get("cTime"))
+            if made > 0 and not intent["first"] - MATCH_BEFORE_MS <= to_ms(made) <= intent["last"] + SETTLE_MS:
+                continue                                   # made outside the send's window: not it, whatever it says
+            ours = self._ours(r, pending)
+            if ours is False or (ours and side_of(r) != (intent["side"], intent["posSide"])):
                 continue
+            if ours is None:
+                raise TransientError(200, None, f"손절 {key}: 조건 주문 {sid}이 이 손절일 수 있는데 읽을 수 없습니다(종류 "
+                                                f"{self._kind(r, pending)!r}, side {r.get('side')!r}, posSide "
+                                                f"{r.get('posSide')!r})")
             if _dec(r.get("sz"), "sz") != Decimal(intent["sz"]) or \
                     abs(_dec(r.get("triggerPx"), "triggerPx") - Decimal(intent["trig"])) > half_tick:
                 continue
-            if r.get("cTime") not in (None, "", "0"):
-                t = to_ms(r["cTime"])
-                if not intent["first"] - MATCH_BEFORE_MS <= t <= intent["last"] + SETTLE_MS:
-                    continue
             other = self.cid_by_stop.get(sid)
             if other is not None and other != key:
                 continue
@@ -1819,8 +1864,26 @@ class DeepCoinClient:
 
     def open_algo_orders(self, symbol: str) -> list:
         """Every resting trigger order of the coin: ours (closing, Conditional) as STOP_MARKET, any other kind as
-        CONDITIONAL (never counted as a stop that covers a position)."""
-        return [self._algo_dict(r, symbol) for r in self._triggers(symbol)]
+        CONDITIONAL (never counted as a stop that covers a position). Rows of other coins never enter the answer. A row
+        that may be one of our stops but cannot be read is an error (never "no stop") while it may protect something:
+        the coin holds a position, or the row's ordId is a stop this process placed. On a coin without a position it
+        protects nothing: it is listed as CONDITIONAL with ``dcUnreadable`` (the executor's sweep of the other coins
+        goes on; it is never cancelled as a stray stop)."""
+        out, unread = [], []
+        for r in self._triggers(symbol):
+            try:
+                out.append(self._algo_dict(r, symbol))
+            except TransientError as e:
+                unread.append((r, e))
+        if unread:
+            if any(str(r.get("ordId")) in self.cid_by_stop for r, _ in unread) or self._position_rows(symbol):
+                raise unread[0][1]
+            out += [{"algoId": str(r.get("ordId")), "clientAlgoId": "", "symbol": symbol,
+                     "side": str(r.get("side") or "").upper(), "positionSide": str(r.get("posSide") or ""),
+                     "orderType": "CONDITIONAL", "algoType": "CONDITIONAL", "triggerPrice": "0", "quantity": "0",
+                     "closePosition": False, "reduceOnly": False, "algoStatus": "NEW",
+                     "dcKind": self._kind(r, True), "dcUnreadable": e.msg} for r, e in unread]
+        return out
 
     def placed_stops(self, symbol: str) -> list:
         """The resting trigger orders of the coin that this client placed: an ordId it was answered, or a lost answer

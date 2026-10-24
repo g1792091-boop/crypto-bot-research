@@ -266,23 +266,27 @@ def test_a_stop_that_ran_but_was_answered_otherwise_is_found_and_never_doubled(k
 
 
 def test_a_failure_before_an_opening_order_is_sent_says_nothing_was_sent():
-    """Review 10-24 (9): the look-up of a new clOrdId or the instrument read failing sent nothing: NotSent (a
-    RateLimited: the executor's Guarded calls again, looking the id up first), never the unknown outcome of a send."""
-    c, fake, clock = make()
+    """Review 10-24 (9): the look-up of a new clOrdId or the instrument read failing sent nothing. They are tried again
+    for a few seconds; still failing: NotSent, a refusal (never the unknown outcome of a send, never a RateLimited that
+    the executor would send again)."""
+    c, fake, clock = make(advance=True)
     ready(c, (DOGE,))
-    fake.fail("GET", ORDER, "503_before")
-    with pytest.raises(DC.NotSent) as e:
-        c.market(DOGE, "BUY", 100.0, client_id="pbN")
-    assert isinstance(e.value, RateLimited) and not isinstance(e.value, TransientError) and e.value.status != 418
-    assert "pbN" not in c.sent and not posts(fake)
-    fake.fail("GET", ORDER, "503_before")
-    o = Guarded(c, lambda s: None).market(DOGE, "BUY", 100.0, client_id="pbN")
+    fake.fail("GET", ORDER, "503_before")                      # once: tried again, then sent once
+    o = c.market(DOGE, "BUY", 100.0, client_id="pbN")
     assert o["status"] == "FILLED" and len(posts(fake)) == 1 and fake.amt(DOGE) == 100
+    fake.fail("GET", ORDER, "503_before", times=99)            # on every try: refused, nothing sent
+    t0 = clock.t
+    with pytest.raises(DC.NotSent) as e:
+        c.market(DOGE, "BUY", 100.0, client_id="pbN1")
+    assert not isinstance(e.value, (TransientError, RateLimited)) and e.value.code == DC.NOT_SENT
+    assert "pbN1" not in c.sent and len(posts(fake)) == 1 and clock.t - t0 >= 3_000
+    fake.fails.clear()
     c.specs.clear()
     c.spec_ms = None
-    fake.fail("GET", "/deepcoin/market/instruments", "503_before")
+    fake.fail("GET", "/deepcoin/market/instruments", "503_before", times=99)
     with pytest.raises(DC.NotSent):
         c.market(DOGE, "BUY", 100.0, client_id="pbN2")
+    fake.fails.clear()
     fake.fail("POST", ORDER, "drop_after")                     # an id this process sent: its look-up failing is unknown
     with pytest.raises(TransientError):
         c.market(DOGE, "BUY", 100.0, client_id="pbM")
@@ -955,8 +959,8 @@ def test_a_trigger_row_whose_kind_or_side_cannot_be_read_is_an_error_never_no_st
     ready(c)
     c.market(BTC, "BUY", 5.0, client_id="pbE")
     st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbS")
-    for bad in ({"posSide": ""}, {"side": None}, {"posSide": "net"}, {"triggerOrderType": ""},
-                {"triggerOrderType": None, "ordType": "market"}):
+    for bad in ({"posSide": ""}, {"side": None}, {"posSide": "both"}, {"triggerOrderType": ""},
+                {"triggerOrderType": None, "ordType": "market"}, {"triggerOrderType": "conditional?"}):
         edit_route(fake, PENDING, lambda d, b=bad: [{**r, **b} for r in d])
         with pytest.raises(TransientError):
             live_stops(c, BTC)
@@ -979,6 +983,66 @@ def test_a_trigger_row_whose_kind_or_side_cannot_be_read_is_an_error_never_no_st
         c.algo_order(algo_id=st["algoId"])
     fake._route = FakeDeepCoin._route.__get__(fake)
     assert c.algo_order(algo_id=st["algoId"])["algoStatus"] == "CANCELED"
+
+
+def history_row(symbol, ordId, ms, **kw):
+    """A trigger-history row as the docs show it (cTime in seconds), of a stop that ended long ago by default."""
+    return {"instType": "SWAP", "instId": DC.fx(symbol), "ordId": ordId, "px": "0", "sz": "5", "triggerPx": "50",
+            "triggerPxType": "last", "ordType": "Conditional", "side": "sell", "posSide": "net", "tdMode": "cross",
+            "lever": "1", "triggerTime": "0", "uTime": str(ms), "cTime": str(ms // 1000), "errorCode": "0",
+            "errorMsg": "", "_ended": ms, **kw}
+
+
+@pytest.mark.parametrize("old", [{}, {"posSide": "", "side": None}, {"ordType": "", "sz": "x"}])
+def test_a_lost_stop_is_found_next_to_an_old_history_row_that_cannot_be_ours(old):
+    """probe5 N5 (re-review 10-24): a readable row that cannot be ours (posSide net, a documented value) or a row made
+    long before the send is "not it": it never turns a lost stop answer into an unknown outcome (the executor would
+    close a new position whose stop rests)."""
+    c, fake, clock = make(advance=True)
+    ready(c, (DOGE,))
+    c.market(DOGE, "BUY", 100.0, client_id="pbn5entry")
+    fake.trig_hist["1"] = history_row(DOGE, "1", T0 - 10 ** 6, **old)
+    fake.fail("POST", TRIG, "drop_after")
+    st = place_stop(Guarded(c, ticking(clock)), DOGE, "SELL", 90.0, 100.0, client_id="pbn5stop")
+    assert st["algoStatus"] == "NEW" and len(posts(fake, TRIG)) == 1 and len(fake.live_stops(DOGE)) == 1
+    fake.trig_hist["2"] = history_row(DOGE, "2", clock.t, posSide="")      # made inside a send's window: may be it
+    c.forget_stop("pbn5stop")
+    with pytest.raises(TransientError):
+        c._search_stop("pbn5stop")
+
+
+def test_rows_that_cannot_be_ours_or_belong_to_another_coin_never_break_the_stop_list():
+    """Re-review 10-24 (2): readable and not ours (posSide net, another kind) is not a stop; another coin's row is not
+    in this coin's answer; an unreadable row on a coin without a position protects nothing and is listed as not a
+    stop. An unreadable row that may be our stop on a coin with a position (or a stop this process placed) is still an
+    error, never "no stop"."""
+    c, fake, clock = make()
+    ready(c, (BTC, ETH))
+    c.market(BTC, "BUY", 5.0, client_id="pbE")
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbS")
+    base = {"instType": "SWAP", "ordPx": "0", "sz": "5", "ordType": "", "side": "sell", "posSide": "long",
+            "tdMode": "isolated", "triggerPxType": "last", "lever": "30", "cTime": str(T0), "uTime": str(T0)}
+    net = {**base, "instId": "BTC-USDT-SWAP", "ordId": "901", "triggerPx": "90", "triggerOrderType": "Conditional",
+           "posSide": "net"}
+    garbled_eth = {**base, "instId": "ETH-USDT-SWAP", "ordId": "902", "triggerPx": "x", "posSide": ""}   # no kind
+    garbled_btc = {**garbled_eth, "instId": "BTC-USDT-SWAP", "ordId": "903"}
+    edit_route(fake, PENDING, lambda d: d + [net, garbled_eth])            # every coin's answer carries both
+    assert [a["algoId"] for a in live_stops(c, BTC)] == [st["algoId"]]
+    assert {a["algoId"]: a["orderType"] for a in c.open_algo_orders(BTC)} == {st["algoId"]: "STOP_MARKET",
+                                                                                  "901": "CONDITIONAL"}
+    eth = c.open_algo_orders(ETH)                              # flat: the garbled row is listed, never a stop
+    assert [(a["algoId"], a["orderType"], bool(a.get("dcUnreadable"))) for a in eth] == [("902", "CONDITIONAL", True)]
+    assert live_stops(c, ETH) == []
+    fake._route = FakeDeepCoin._route.__get__(fake)
+    edit_route(fake, PENDING, lambda d: d + [garbled_btc])
+    with pytest.raises(TransientError):                       # BTC holds a position: it may be its stop
+        live_stops(c, BTC)
+    fake._route = FakeDeepCoin._route.__get__(fake)
+    c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbX")
+    edit_route(fake, PENDING, lambda d: [{**r, "posSide": ""} for r in d])
+    with pytest.raises(TransientError):                       # flat, but a stop this process placed
+        live_stops(c, BTC)
+    fake._route = FakeDeepCoin._route.__get__(fake)
 
 
 # ------------------------------------------------------------------ 429 and the protective budget
@@ -1873,3 +1937,35 @@ def test_executor_resizes_a_stop_bigger_than_the_position_so_that_it_can_fire(tm
     w.clock.t += 10_000
     w.fake.set_price(BTC, 94.0)
     assert w.fake.amt(BTC) == 0
+
+
+def test_executor_follows_the_ladder_and_the_exit_next_to_odd_trigger_rows(tmp_path):
+    """Re-review 10-24 (2): a garbled trigger row on a coin without a position and a posSide-net row on the traded coin
+    never stop the loop's sweep (the ladder moves and the paper exit go on)."""
+    w = World(tmp_path)
+    w.paper(stop=95.0)
+    w.loop()
+    odd = [{"instType": "SWAP", "instId": "ETH-USDT-SWAP", "ordId": "902", "triggerPx": "x", "ordPx": "0", "sz": "1",
+            "ordType": "", "side": "sell", "posSide": "", "tdMode": "isolated", "triggerPxType": "last", "lever": "30",
+            "cTime": str(T0), "uTime": str(T0)},
+           {"instType": "SWAP", "instId": "BTC-USDT-SWAP", "ordId": "901", "triggerPx": "90", "ordPx": "0", "sz": "5",
+            "ordType": "", "side": "sell", "posSide": "net", "tdMode": "cross", "triggerOrderType": "Conditional",
+            "triggerPxType": "last", "lever": "1", "cTime": str(T0), "uTime": str(T0)}]
+    edit_route(w.fake, PENDING, lambda d: d + odd)
+    w.fake.set_price(BTC, 105.0)
+    w.paper(stop=101.1)
+    w.loop()
+    assert w.stops() == [(101.1, 5.0)] and "reconcile_failed" not in w.kinds()
+    w.src.intent = None
+    w.loop(2)
+    assert w.fake.amt(BTC) == 0 and w.ex.trade is None and not w.fake.live_stops(BTC)
+
+
+def test_executor_drops_an_entry_whose_checks_before_the_send_keep_failing(tmp_path):
+    """Re-review 10-24 (3): nothing was sent, so the entry is refused at once, never held as "entering"."""
+    w = World(tmp_path)
+    w.fake.fail("GET", "/deepcoin/trade/order", "503_before", times=10 ** 6)
+    w.paper(stop=95.0)
+    w.loop()
+    assert w.ex.trade is None and "entry_refused" in w.kinds() and "entry_unknown" not in w.kinds()
+    assert not posts(w.fake) and w.fake.amt(BTC) == 0
