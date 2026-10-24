@@ -1,14 +1,15 @@
-"""친구 매매법 (owners 2026-10-24 "실거래 해야된다니까"; research/friendroc RESULTS_KO.md last sections, results7.json
-"거래당 1등": 15m, net ROE stop -75 %, ladder 20 / 10, filters F4 + V; docs/friend-bot-ko.md): the friend's EMA / RSI /
-ROC rules as a member of the combined bot (paperbot/combo.py member ``FRIEND_ROC``), two entry gates any combined bot
-may use (config ``adx_gate`` / ``quiet_gate``; off = null, the default) and the loss review of its losing trades.
+"""친구 매매법 (owners 2026-10-24 "실거래 해야된다니까", the structure of the live start: deploy/combo.friend.json,
+docs/friend-bot-ko.md): the friend's EMA / RSI / ROC rules as a member of the combined bot (paperbot/combo.py member
+``FRIEND_ROC``), two entry gates any combined bot may use (config ``adx_gate`` / ``quiet_gate``; off = null, the default)
+and the loss review of its losing trades.
 
 The signal (research/friendroc/code/frfamily.py ``tf_signals``), on CLOSED bars of the member's timeframe:
-- long: EMA21 > EMA52, RSI26 > 50, ROC9 crosses 0 upward (the bar before <= 0, this bar > 0) and ROC9 > 0 on the last
-  closed bar of either higher timeframe; short mirrored (EMA21 < EMA52, RSI26 < 50, crosses downward, < 0 on either);
-- the member key ``higher`` (owners 10-24 night, the friend's exact rule as an option; the default is the one above):
-  "roc_any" ROC9 on either higher bar as above; "rsi_roc_all" RSI26 > 50 and ROC9 > 0 on BOTH higher bars for a long
-  (RSI26 < 50 and ROC9 < 0 on both for a short); the 15m part is the same in both;
+- long: EMA21 > EMA52, RSI26 > 50, ROC9 crosses 0 upward (the bar before <= 0, this bar > 0) and the higher-bar rule;
+  short mirrored (EMA21 < EMA52, RSI26 < 50, crosses downward);
+- the higher-bar rule, the member key ``higher`` (HIGHER_MODES): "roc_any" (the default) ROC9 > 0 on the last closed bar
+  of either higher timeframe (frfamily.tf_signals); "rsi_roc_all" RSI26 > 50 and ROC9 > 0 on BOTH (research frand.py);
+  "rsi_roc_1h" (the owners' first rule of 10-24 night, an option; 15m / 30m members) RSI26 > 50 and ROC9 > 0 on the last closed 1h bar only, the
+  4h bar not read for it (research frhtrend.raw15 + frhtrend2.add_rsi); a short mirrored (< 50, < 0) in each;
 - the higher timeframes (frfamily.TFS): 15m and 30m -> 1h | 4h, 1h -> 4h | 1d, 4h -> 1d | 3d, the 3d bars built from
   daily bars on the research's grid from 2020-01-01 00:00 UTC; a higher bar counts when its close <= the signal bar's;
 - the repository's indicator library as the research calls it (paperbot.sweepsig.lib().fg): ema(c, 21), ema(c, 52),
@@ -58,8 +59,9 @@ GRID_T0 = 1_577_836_800_000          # 2020-01-01 00:00 UTC: the research's bar 
 TF_MS = {**TF_GATE_MS, "3d": 3 * DAY}
 KO_TF = {**KO_GATE_TF, "3d": "3일"}
 HIGHER = {"15m": ("1h", "4h"), "30m": ("1h", "4h"), "1h": ("4h", "1d"), "4h": ("1d", "3d")}   # research frfamily.TFS
-HIGHER_MODES = ("roc_any", "rsi_roc_all")   # the member's ``higher``: either bar's ROC9 (default) / both bars' RSI26 + ROC9
-KO_HIGHER = {"roc_any": "ROC9이 같은 쪽", "rsi_roc_all": "RSI26·ROC9이 같은 쪽"}
+HIGHER_MODES = ("roc_any", "rsi_roc_all", "rsi_roc_1h")   # the member's ``higher`` (module docstring); the first = default
+ONE_HIGHER = {"rsi_roc_1h": "1h"}    # modes that read one higher bar only: the timeframe it must be (15m / 30m members)
+KO_HIGHER = {"roc_any": "ROC9이 같은 쪽", "rsi_roc_all": "RSI26·ROC9이 같은 쪽", "rsi_roc_1h": "RSI26·ROC9이 같은 쪽"}
 WARM_SIGNAL, WARM_HIGHER = 200, 60   # research WARM15 / WARMH: bars before the one read
 SIGNAL_BARS = 1500                   # closed signal bars read (one Binance page)
 HIGHER_BARS = 1500                   # closed higher bars read (ROC9 needs 10; RSI26 forgets its start long before 1500)
@@ -80,6 +82,8 @@ def lib():
 def higher_words(tf: str, mode: Optional[str]) -> str:
     """The higher-bar rule in the owners' words: "상위 봉 1시간·4시간 중 하나라도 ROC9이 같은 쪽"."""
     names = "·".join(KO_TF[h] for h in HIGHER.get(tf, ()))
+    if mode in ONE_HIGHER:
+        return f"끝난 {KO_TF[ONE_HIGHER[mode]]}봉 {KO_HIGHER[mode]}(4시간봉은 안 봄)"
     if mode == "rsi_roc_all":
         return f"상위 봉 {names} 둘 다 {KO_HIGHER[mode]}"
     return f"상위 봉 {names} 중 하나라도 {KO_HIGHER['roc_any']}"
@@ -112,10 +116,11 @@ def indicators(close, fg=None) -> dict:
 def friend_signal(close, higher, bar_close: int, fg=None, mode: str = "roc_any") -> tuple[int, dict]:
     """The side (+1 long, -1 short, 0 none) of the last bar of ``close`` (the signal bar, closing at ``bar_close``) by
     research frfamily.tf_signals, and the values read. ``close``: closes of the signal timeframe's closed bars, oldest
-    first. ``higher``: two (close_ms, close) array pairs of the higher timeframes, oldest first; only a bar closed at or
-    before ``bar_close`` counts, the last such one is read (fewer than 60 bars before it: unknown). ``mode`` (HIGHER_MODES):
-    "roc_any" ROC9 > 0 on either higher bar for a long (< 0 for a short); "rsi_roc_all" RSI26 > 50 and ROC9 > 0 on both
-    higher bars for a long (RSI26 < 50 and ROC9 < 0 on both for a short)."""
+    first. ``higher``: (close_ms, close) array pairs of the higher timeframes, oldest first (two; one for a mode of
+    ONE_HIGHER, only the first is read); only a bar closed at or before ``bar_close`` counts, the last such one is read
+    (fewer than 60 bars before it: unknown). ``mode`` (HIGHER_MODES): "roc_any" ROC9 > 0 on either higher bar for a long
+    (< 0 for a short); "rsi_roc_all" RSI26 > 50 and ROC9 > 0 on both higher bars for a long (RSI26 < 50 and ROC9 < 0 on
+    both for a short); "rsi_roc_1h" the same on the first higher bar (1h) alone."""
     if mode not in HIGHER_MODES:
         raise ValueError(f"higher mode {mode!r}")
     fg = fg if fg is not None else lib().fg
@@ -125,7 +130,8 @@ def friend_signal(close, higher, bar_close: int, fg=None, mode: str = "roc_any")
     e21, e52, rsi, roc = (float(I[k][-1]) if n else math.nan for k in ("e21", "e52", "rsi", "roc"))
     rocp = float(I["roc"][-2]) if n >= 2 else math.nan
     hr, hs, hinfo = [], [], []
-    for tc, hc in higher:
+    with_rsi = mode != "roc_any"
+    for tc, hc in (list(higher)[:1] if mode in ONE_HIGHER else higher):
         tc = np.asarray(tc, dtype=np.int64)
         hc = np.asarray(hc, dtype=float)
         j = int(np.searchsorted(tc, int(bar_close), side="right")) - 1
@@ -135,20 +141,20 @@ def friend_signal(close, higher, bar_close: int, fg=None, mode: str = "roc_any")
                 warnings.simplefilter("ignore")
                 hser = pd.Series(hc[:j + 1])
                 r = float(fg.roc(hser, 9).to_numpy(float)[-1])
-                if mode == "rsi_roc_all":
+                if with_rsi:
                     s = float(fg.rsi(hser, 26).to_numpy(float)[-1])
         hr.append(r)
         hs.append(s)
         hinfo.append({"close": int(tc[j]) if j >= 0 else None, "roc": _finite(r)}
-                     | ({"rsi": _finite(s)} if mode == "rsi_roc_all" else {}))
+                     | ({"rsi": _finite(s)} if with_rsi else {}))
     # NaN compares False everywhere, as the research's numpy masks
     up = e21 > e52 and rsi > 50 and rocp <= 0 and roc > 0
     dn = e21 < e52 and rsi < 50 and rocp >= 0 and roc < 0
     if mode == "roc_any":
         h_up, h_dn = hr[0] > 0 or hr[1] > 0, hr[0] < 0 or hr[1] < 0
     else:
-        h_up = all(s > 50 and r > 0 for s, r in zip(hs, hr))
-        h_dn = all(s < 50 and r < 0 for s, r in zip(hs, hr))
+        h_up = bool(hr) and all(s > 50 and r > 0 for s, r in zip(hs, hr))
+        h_dn = bool(hr) and all(s < 50 and r < 0 for s, r in zip(hs, hr))
     warm = n - 1 >= WARM_SIGNAL
     side = 0
     if warm and up and h_up:
@@ -280,13 +286,14 @@ class FriendSignals:
         if a is None or int(a[-1, 0]) + TF_MS[tf] != int(bar_close):
             return None
         hi = []
-        for htf in HIGHER[tf]:
+        higher = HIGHER[tf][:1] if mode in ONE_HIGHER else HIGHER[tf]
+        for htf in higher:
             b = self.bars.closed(symbol, htf, bar_close, HIGHER_BARS_3D if htf == "3d" else HIGHER_BARS)
             if b is None:
                 return None
             hi.append((b[:, 0].astype(np.int64) + TF_MS[htf], b[:, 4]))
         side, vals = friend_signal(a[:, 4], hi, bar_close, self.fg, mode)
-        vals["tf"], vals["higher_tf"] = tf, list(HIGHER[tf])
+        vals["tf"], vals["higher_tf"] = tf, list(higher)
         vals["vol_ratio"] = _finite(volume_ratio(a[:, 5]))          # None: unknown (the gate reads its own)
         out = {"side": side, "atr": math.nan, "values": vals}
         if side:

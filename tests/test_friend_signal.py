@@ -56,13 +56,14 @@ def roc_loop(x, n):
 def plain_side(c15, i, higher, bar_close, mode="roc_any"):
     """Long: EMA21 > EMA52, RSI26 > 50, ROC9 from <= 0 to > 0, and on the higher bars (the last closed one of each
     timeframe, 60 bars before it at least) "roc_any": ROC9 > 0 on either, "rsi_roc_all": RSI26 > 50 and ROC9 > 0 on
-    both; short mirrored; 200 signal bars before at least."""
+    both, "rsi_roc_1h": RSI26 > 50 and ROC9 > 0 on the 1h bar (the first) alone; short mirrored; 200 signal bars before
+    at least."""
     if i < 200:
         return 0
     x = list(c15[:i + 1])
     e21, e52, rsi, roc = ema_loop(x, 21)[-1], ema_loop(x, 52)[-1], rsi_loop(x, 26)[-1], roc_loop(x, 9)
     hv, hr = [], []
-    for tc, hc in higher:
+    for tc, hc in (higher[:1] if mode == "rsi_roc_1h" else higher):
         j = max([k for k in range(len(tc)) if tc[k] <= bar_close], default=-1)
         hv.append(roc_loop(list(hc[:j + 1]), 9)[-1] if j >= 60 else math.nan)
         hr.append(rsi_loop(list(hc[:j + 1]), 26)[-1] if j >= 60 else math.nan)
@@ -100,7 +101,7 @@ def test_signal_equals_the_plain_implementation(seed, mode):
     for i in range(1150, 1400):
         side, vals = FS.friend_signal(c[:i + 1], [S["1h"], S["4h"]], int(t15[i]), mode=mode)
         assert side == plain_side(c, i, [S["1h"], S["4h"]], int(t15[i]), mode), i
-        assert vals["higher_mode"] == mode and (("rsi" in vals["higher"][0]) == (mode == "rsi_roc_all"))
+        assert vals["higher_mode"] == mode and (("rsi" in vals["higher"][0]) == (mode != "roc_any"))
         sides[side] = sides.get(side, 0) + 1
         if side:
             x = list(c[:i + 1])
@@ -108,7 +109,7 @@ def test_signal_equals_the_plain_implementation(seed, mode):
             assert vals["rsi"] == pytest.approx(rsi_loop(x, 26)[-1], rel=1e-9)
             assert vals["roc_prev"] <= 0 < vals["roc"] if side > 0 else vals["roc_prev"] >= 0 > vals["roc"]
     assert sides.get(0, 0) > 100                         # most bars are no signal ...
-    assert sides.get(1, 0) + sides.get(-1, 0) >= (3 if mode == "roc_any" else 1)   # ... and signals to compare
+    assert sides.get(1, 0) + sides.get(-1, 0) >= (3 if mode != "rsi_roc_all" else 1)   # ... and signals to compare
 
 
 def test_1500_bars_give_the_full_history_values():
@@ -196,6 +197,46 @@ def test_rsi_roc_all_needs_rsi_and_roc_on_both_higher_bars():
         FS.friend_signal(c, [up1, up4], bc, mode="both")
     words = FS.signal_words({**vals, "tf": "15m", "higher_tf": ["1h", "4h"]})
     assert " · 1시간 RSI26 " in words and "·ROC9 +" in words
+
+
+def test_rsi_roc_1h_reads_the_closed_1h_bar_alone():
+    """The owners' final rule: RSI26 > 50 and ROC9 > 0 on the last closed 1h bar (short: < 50, < 0); the 4h bar is not
+    read; a 1h bar still forming at the signal bar's close is never read."""
+    c, bc = _up_case()
+    rise = {k: 100.0 + 0.1 * (k - 60) for k in range(60, 80)}
+    fall = {k: 100.0 - 0.1 * (k - 60) for k in range(60, 80)}
+    up1 = _higher(bc, 80, rise, H1)
+    down4 = _higher(bc - H4 // 2, 80, fall, H4)
+    side, vals = FS.friend_signal(c, [up1, down4], bc, mode="rsi_roc_1h")
+    assert side == 1 and len(vals["higher"]) == 1 and vals["higher"][0]["rsi"] > 50 and vals["higher"][0]["roc"] > 0
+    assert FS.friend_signal(c, [up1], bc, mode="rsi_roc_1h")[0] == 1                 # no 4h bars needed
+    assert FS.friend_signal(c, [up1, down4], bc, mode="rsi_roc_all")[0] == 0
+    # ROC9 > 0 but RSI26 < 50 on the 1h bar: no long
+    dip = {k: 100.0 - 0.5 * (k - 40) for k in range(40, 71)} | {k: 85.0 + 0.1 * (k - 70) for k in range(71, 80)}
+    assert FS.friend_signal(c, [_higher(bc, 80, dip, H1)], bc, mode="rsi_roc_1h")[0] == 0
+    # the 1h bar closing after the signal bar (forming at it) is not read: the one closing at bc falls
+    late = _higher(bc + H1, 81, {**fall, 80: 130.0}, H1)
+    side, vals = FS.friend_signal(c, [late], bc, mode="rsi_roc_1h")
+    assert side == 0 and vals["higher"][0]["close"] == bc and vals["higher"][0]["roc"] < 0
+    assert FS.friend_signal(c, [], bc, mode="rsi_roc_1h")[0] == 0                    # nothing read: no signal
+    assert FS.higher_words("15m", "rsi_roc_1h") == "끝난 1시간봉 RSI26·ROC9이 같은 쪽(4시간봉은 안 봄)"
+
+
+def test_the_member_reads_no_4h_bar_for_rsi_roc_1h():
+    rows = {"15m": _rows(1700, T - M15, M15), "1h": _rows(1600, T - H1, H1), "4h": _rows(1600, T - H4, H4)}
+    feed = Feed(rows)
+    kb = FS.KlineBars(feed, lambda: T + 5_000)
+    m = C.resolve_members([{"strategy": "FRIEND_ROC", "tf": "15m", "higher": "rsi_roc_1h"}], core=[])[0]
+    fs = FS.FriendSignals([m], ["ETHUSDT"], kb)
+    r = fs.read("15m", "ETHUSDT", T, "rsi_roc_1h")
+    assert r is not None and r["values"]["higher_tf"] == ["1h"] and r["values"]["higher_mode"] == "rsi_roc_1h"
+    assert {tf for _s, tf, _t, _n in feed.calls} <= {"15m", "1h", "4h"}
+    if not r["side"]:
+        assert "4h" not in {tf for _s, tf, _t, _n in feed.calls}           # a non-signal bar never asks for 4h bars
+    want = FS.friend_signal(np.array(rows["15m"])[-1500:, 4],
+                            [(np.array(rows["1h"])[:, 0].astype(np.int64) + H1, np.array(rows["1h"])[:, 4])], T,
+                            mode="rsi_roc_1h")
+    assert r["side"] == want[0] and r["values"]["higher"] == want[1]["higher"]
 
 
 def test_last_open_and_the_3d_grid_from_2020():

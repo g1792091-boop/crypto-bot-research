@@ -131,7 +131,8 @@ KO_SESSION = {"asia": "아시아(09-17시)", "europe": "유럽(17-22시)", "us":
 WHEN_KEYS = ("symbol", "side", "session", "weekend", "btc_trend")
 SIDES = {"long": 1, "short": -1}
 FRIEND = "FRIEND_ROC"               # the friend's strategy (paperbot/friendsig.py FRIEND), computed by this bot
-FRIEND_HIGHER = ("roc_any", "rsi_roc_all")   # its member key ``higher`` (friendsig.HIGHER_MODES): the first = default
+FRIEND_HIGHER = ("roc_any", "rsi_roc_all", "rsi_roc_1h")   # its member key ``higher`` (friendsig.HIGHER_MODES): the
+FRIEND_ONE_HIGHER = {"rsi_roc_1h": ("15m", "30m")}         # first = default; one-higher-bar modes: the member timeframes
 
 
 class ComboError(ValueError):
@@ -497,6 +498,8 @@ def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Option
             higher = FRIEND_HIGHER[0] if higher is None else higher
             if higher not in FRIEND_HIGHER:
                 raise ComboError(f"{name}의 higher는 {', '.join(FRIEND_HIGHER)} 중 하나입니다")
+            if higher in FRIEND_ONE_HIGHER and tf not in FRIEND_ONE_HIGHER[higher]:
+                raise ComboError(f"{name} {tf}: higher {higher}는 {'/'.join(FRIEND_ONE_HIGHER[higher])}에서만 씁니다")
         key = (kind, name, tf, json.dumps(numbers, sort_keys=True), research, higher)
         if key in seen:
             raise ComboError(f"{name} {tf}가 같은 숫자로 두 번 들어 있습니다(조건이 여럿이면 when 목록에 함께 적습니다)")
@@ -2049,7 +2052,8 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
         + ([f"{sum(bool(m.when) for m in members)}개 조건 있음"] if any(m.when for m in members) else [])
     if cfg.vote_gate is not None or cfg.vol_gate is not None or friend_bot(cfg):   # a short list (VWAP, friend): names
         kinds = [" · ".join(f"{member_ko(m.name)} {KO_TF.get(m.tf, m.tf)}"
-                            + (" 상위 봉 둘 다 RSI·ROC" if m.higher == "rsi_roc_all" else "") for m in members)] + kinds
+                            + {"rsi_roc_all": " 상위 봉 둘 다 RSI·ROC", "rsi_roc_1h": " 1시간 RSI·ROC"}.get(m.higher or "", "")
+                            for m in members)] + kinds
     return (f"{cfg.tag} 시작: 매매법 {len(members)}개" + (f"({', '.join(kinds)})" if kinds else "") + ", "
             f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 증거금 "
             f"{'배수%' if cfg.margin == 'leverage' else f'잔고의 {float(cfg.margin):.0%}'}, 손절 {stop_text(cfg)}, "
@@ -2288,8 +2292,10 @@ def stop_text(cfg: ComboConfig) -> str:
         lv = sorted({cfg.lev_of(s) for s in cfg.symbols}, reverse=True)
         moves = ", ".join(f"{v}배 가격 {float(cfg.stop['roe']) / v - rt:.2%}" for v in lv)
         return f"순ROE -{float(cfg.stop['roe']):.0%}(수수료·슬리피지 포함: {moves})"
-    if cfg.stop_mode == "roe":
-        return f"ROE -{float(cfg.stop['roe']):.0%}"
+    if cfg.stop_mode == "roe":                     # the exchange screen's ROE before fees (the friend bot's -20 % option)
+        lv = sorted({cfg.lev_of(s) for s in cfg.symbols}, reverse=True)
+        moves = ", ".join(f"{v}배 가격 {float(cfg.stop['roe']) / v:.2%}" for v in lv)
+        return f"ROE -{float(cfg.stop['roe']):.0%}(수수료 전: {moves})"
     if cfg.stop_mode == "atr_fit":
         return f"{cfg.stop_atr:g} ATR(안 맞으면 강제청산 안쪽으로 당김)"
     return f"{cfg.stop_atr:g} ATR"
