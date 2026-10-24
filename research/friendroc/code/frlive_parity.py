@@ -1,6 +1,7 @@
 """참고 read (after the fact, not a test of the strategy): the live paper bot's own code (paperbot/friendsig.py, and
-paperbot/combo.py ComboRunner + ComboEngine with deploy/combo.friend.json) against the research's chosen setting
-(frpay.py "거래당 1등": 15m signal bars, net ROE stop -75 %, ladder 20 / 10, filters F4 + V).
+paperbot/combo.py ComboRunner + ComboEngine with the friend bot's structure of 10/24 evening, EARLIER below: what
+deploy/combo.friend.json held before the owners' rules of that night, frlive_parity2.py / frlive_parity3.py) against the research's
+setting of then (frpay.py "거래당 1등": 15m signal bars, net ROE stop -75 %, ladder 20 / 10, filters F4 + V).
 
 1. signals: every 15m bar close of the six coins from 2026-06-01 to the data end through FriendSignals.read (the
    research's own bars, vwcommon.bars over the research 1m grid, served as Binance would serve them: closed bars only,
@@ -34,6 +35,10 @@ from paperbot.notify import NullNotifier
 from paperbot.store3 import Store3
 
 DEPLOY = os.path.join(REPO, "deploy", "combo.friend.json")
+EARLIER = {"members": [{"strategy": "FRIEND_ROC", "tf": "15m"}], "leverage": {"BTCUSDT": 30, "default": 30},
+           "max_loss_frac": 0.35, "stop": {"mode": "roe", "roe": 0.75, "net": True},
+           "ladder": {"first_lock": 0.2, "trigger_gap": 0.02, "step": 0.1},
+           "adx_gate": {"tf": "4h", "min": 20}, "quiet_gate": {"bars": 20, "max_ratio": 0.64}}   # the structure of 10/24 evening
 SIG_FROM = ms("2026-06-01")
 REPLAY_FROM = ms("2026-09-01")
 TFS = ("15m", "1h", "4h")
@@ -178,8 +183,9 @@ def one_tier(brackets):
     return out
 
 
-def replay(A, taker, tag, flat=False):
-    cfg_raw = json.load(open(DEPLOY, encoding="utf-8"))
+def replay(A, taker, tag, flat=False, over=None):
+    """The deploy file (with ``over`` on top) replayed minute by minute (module docstring, 2)."""
+    cfg_raw = {**json.load(open(DEPLOY, encoding="utf-8")), **(over or {})}
     tmp = tempfile.mkdtemp(prefix=f"frlivepar_{tag}_", dir=OUT)
     try:
         cfg_raw.update(paper_db=os.path.join(tmp, "paper3.db"), db=os.path.join(tmp, "friend.db"), telegram=False)
@@ -323,7 +329,7 @@ def main():
         for tag, taker, flat in RUNS:
             if "--only" in sys.argv and tag not in sys.argv:
                 continue
-            live = replay(A, taker, tag, flat)
+            live = replay(A, taker, tag, flat, EARLIER)
             out[tag] = compare(res, live)
             print(tag, {k: v for k, v in out[tag].items() if k not in ("rows", "loss_lines", "alerts")}, flush=True)
             json.dump(out, open(path, "w"), ensure_ascii=False, indent=1, default=str)
