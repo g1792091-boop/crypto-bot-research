@@ -1,0 +1,5 @@
+bot,per_day,mean_roe,sd_roe,need_shift_roe_pts,need_mean_roe,margin_at_need,need_shift_with_payback_pts,margin_at_need_pb
+B_sel_with20,2.477,-0.02775,0.2769,9.25,6.475,0.72,6.75,0.73
+C_friend_30m,3.887,-0.04268,0.2787,9.5,5.232,0.59,6.75,0.58
+D_trendbot18,4.789,-0.0437,0.2822,9.25,4.88,0.54,6.5,0.53
+E_timing_v4of4,6.101,-0.03853,0.2795,8,4.147,0.47,5.5,0.49

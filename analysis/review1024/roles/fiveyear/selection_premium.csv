@@ -1,0 +1,4 @@
+cond,shortlist_cells,shortlist_conf_pos,shortlist_conf_mean_cellavg,shortlist_sel_mean_cellavg,family_conf_mean,conf_bh_pass,shortlist_fwd_mean_cellavg
+W,20,4,-0.029075,0.037275,-0.040233,0,-0.031444
+A,20,2,-0.037527,0.04184,-0.0418,0,0.04242
+N,20,2,-0.032225,0.043325,-0.041081,0,-0.0095545

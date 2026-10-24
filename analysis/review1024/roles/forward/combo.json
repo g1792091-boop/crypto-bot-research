@@ -1,0 +1,54 @@
+{
+ "sets": {
+  "a2_E_top10": [
+   "S4_BB_BBP|4h@1d:l_VO1_OBV_X_MA20",
+   "F15_ASIA_SWEEP|1h@4h:c_N07_ICHI_CMO",
+   "F15_ASIA_SWEEP|30m@1h:c_N01_ST_EMA",
+   "C4_THREE_SAME|4h@1d:c_V39_ALL",
+   "N13_3OUTSIDE|30m@1h:l_V39_ALL",
+   "F14_SMT|1h@4h:c_N02_ST_KST",
+   "V2_BB_REVERT|4h@1d:l_N24_DMI",
+   "O6_WR14|1h@4h:c_N07_ICHI_CMO",
+   "O1_RSI14_REV30|15m@1h:l_O9_CMO14",
+   "V39_ALL|1h@4h:l_F3_HHHL"
+  ],
+  "a2_E_top1": [
+   "S4_BB_BBP|4h@1d:l_VO1_OBV_X_MA20"
+  ],
+  "a2_F_top5": [
+   "other|4h@1d:c_T5_ST10_3",
+   "breakout|4h@1d:Jlive",
+   "range|4h@1d:l_OBV_S",
+   "timing|1h@4h:c_N07_ICHI_CMO",
+   "reversal|1h@4h:c_N07_ICHI_CMO"
+  ],
+  "a2_F_top1": [
+   "other|4h@1d:c_T5_ST10_3"
+  ],
+  "w35_E_top10": [
+   "F1_RSI_DIV|1h@4h:l_N08_ICHI_WR",
+   "F1_PVT_DIV|1h@4h:l_N08_ICHI_WR",
+   "N13_3OUTSIDE|30m@1h:l_V39_ALL",
+   "O1_RSI14_REV30|15m@1h:c_O9_CMO14",
+   "F14_SMT|1h@4h:c_S2_ST_ROC",
+   "F4_PULL|1h@4h:c_N09_ALLIG_AROON",
+   "F11_TSOUP|30m@1h:l_F6_VWAP_CROSS",
+   "F15_ASIA_SWEEP|1h@4h:c_N07_ICHI_CMO",
+   "N06_MACD_ORB|15m@1h:l_F3_HHHL",
+   "F15_ORB|15m@1h:c_N08_ICHI_WR"
+  ],
+  "w35_E_top1": [
+   "F1_RSI_DIV|1h@4h:l_N08_ICHI_WR"
+  ],
+  "w35_F_top5": [
+   "reversal|1h@1d:c_F3_HHHL",
+   "range|15m@1h:c_F7_RF_TRIPLE",
+   "breakout|15m@1h:Jlive",
+   "breakout|1h@1d:c_F3_HHHL",
+   "breakout|30m@1h:J4of4"
+  ],
+  "w35_F_top1": [
+   "reversal|1h@1d:c_F3_HHHL"
+  ]
+ }
+}

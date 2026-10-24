@@ -1,0 +1,15 @@
+exchange,design,entry_kst,symbol,member,side,paper_exit,paper_roe,paper_pct_of_equity,taken_live,live_pct_of_wallet,entry_delay_s,entry_bp_vs_paper,live_exit
+bybit,10-21,2026-10-21 23:00:00,SOLUSDT,N20_EMA9_CHOP@30m,-1,JUDGE,-0.3406,-13.62,False,,,,
+bybit,10-22,2026-10-23 01:00:00,DOGEUSDT,F9_IFVG@4h,-1,LOCK,0.1061,4.244,False,,,,
+bybit,10-22,2026-10-23 04:00:00,SOLUSDT,F16_FIB382@30m,-1,LOCK,0.1061,4.244,False,,,,
+bybit,10-22,2026-10-23 07:00:00,DOGEUSDT,F16_FIB500@1h,-1,SL,-0.4994,-19.98,False,,,,
+bybit,10-22,2026-10-23 17:00:00,LTCUSDT,V39_ALL@1h,-1,LOCK,0.1014,4.057,True,3.298,74.51,1.371,거래소 손절(또는 잠금) 발동
+bybit,10-22,2026-10-23 20:00:00,BTCUSDT,N05_PSAR_POC@30m,-1,LOCK,0.113,4.48,True,4.885,75.98,6.224,손절/잠금 가격이 이미 지나 시장가로 닫음
+bybit,10-22,2026-10-23 23:30:00,BCHUSDT,F16_FIB382@30m,1,LOCK,0.1059,4.236,True,3.145,74.81,15.5,거래소 손절(또는 잠금) 발동
+woo,10-21,2026-10-21 23:00:00,SOLUSDT,N20_EMA9_CHOP@30m,-1,JUDGE,-0.3406,-13.62,False,,,,
+woo,10-22,2026-10-23 01:00:00,DOGEUSDT,F9_IFVG@4h,-1,LOCK,0.1061,4.244,False,,,,
+woo,10-22,2026-10-23 04:00:00,SOLUSDT,F16_FIB382@30m,-1,LOCK,0.1061,4.244,False,,,,
+woo,10-22,2026-10-23 07:00:00,DOGEUSDT,F16_FIB500@1h,-1,SL,-0.4994,-19.98,False,,,,
+woo,10-22,2026-10-23 17:00:00,LTCUSDT,V39_ALL@1h,-1,LOCK,0.1014,4.057,True,3.061,73.29,1.371,거래소 손절(또는 잠금) 발동
+woo,10-22,2026-10-23 20:00:00,BTCUSDT,N05_PSAR_POC@30m,-1,LOCK,0.113,4.48,True,3.217,74.17,5.084,거래소 손절(또는 잠금) 발동
+woo,10-22,2026-10-23 23:30:00,BCHUSDT,F16_FIB382@30m,1,LOCK,0.1059,4.236,True,2.63,75.47,20.3,거래소 손절(또는 잠금) 발동

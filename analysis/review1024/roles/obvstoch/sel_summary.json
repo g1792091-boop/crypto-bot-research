@@ -1,0 +1,17 @@
+{
+ "cells": 1080,
+ "cells_n_ge_200": 1060,
+ "positive_mean_roe": 1,
+ "bh_abs_F_pass": 0,
+ "bh_d_F_pass": 0,
+ "bh_abs_A_pass": 0,
+ "bh_d_A_pass": 0,
+ "wy_F_pass_05": 0,
+ "wy_A_pass_05": 0,
+ "mean_of_cell_means": -0.04132698642517847,
+ "mean_of_opp": -0.03574018709718574,
+ "share_d_pos": 0.2537735849056604,
+ "perm_max_T_95": 3.6007911924775797,
+ "obs_max_T": 2.190832809734842,
+ "pick_kind": "best_not_significant"
+}

@@ -1,0 +1,17 @@
+bot,period,blk0,margin,payback,exposure_x,p_target,p_lose50_first,p_lose90_first,median_final_x,days_in_sample,trades_in_sample
+H_friendmap_dir_sel,CONF,False,0.1,False,3.5,0,0.00175,0,0.876,1004,1428
+H_friendmap_dir_sel,CONF,False,0.1,True,3.5,0,0.00025,0,0.98132,1004,1428
+H_friendmap_dir_sel,CONF,False,0.2,False,7,0,0.2085,0,0.74131,1004,1428
+H_friendmap_dir_sel,CONF,False,0.2,True,7,0,0.07875,0,0.9282,1004,1428
+H_friendmap_dir_sel,CONF,False,0.4,False,14,0.00025,0.65875,0.03825,0.47132,1004,1428
+H_friendmap_dir_sel,CONF,False,0.4,True,14,0.003,0.443,0.007,0.74363,1004,1428
+H_friendmap_dir_sel,CONF,False,0.6,False,21,0.004,0.84825,0.285,0.247,1004,1428
+H_friendmap_dir_sel,CONF,False,0.6,True,21,0.02475,0.68825,0.13775,0.5004,1004,1428
+H_friendmap_dir_sel,FWD,False,0.1,False,3.5,0,0,0,0.87675,20,21
+H_friendmap_dir_sel,FWD,False,0.1,True,3.5,0,0,0,0.95385,20,21
+H_friendmap_dir_sel,FWD,False,0.2,False,7,0,0.08125,0,0.75122,20,21
+H_friendmap_dir_sel,FWD,False,0.2,True,7,0,0.0225,0,0.88973,20,21
+H_friendmap_dir_sel,FWD,False,0.4,False,14,0,0.5725,0.003,0.51044,20,21
+H_friendmap_dir_sel,FWD,False,0.4,True,14,0,0.327,0,0.71365,20,21
+H_friendmap_dir_sel,FWD,False,0.6,False,21,0,0.8125,0.12125,0.3069,20,21
+H_friendmap_dir_sel,FWD,False,0.6,True,21,0.001,0.62325,0.04125,0.51135,20,21

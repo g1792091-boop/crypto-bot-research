@@ -1,0 +1,22 @@
+{
+ "match_stored_judge": 1.0,
+ "real_gap": 0.04570500387653987,
+ "real_with": -0.024048200309238925,
+ "placebo_mean_gap": 0.020095879836793416,
+ "placebo_q05": -0.018812862672241415,
+ "placebo_q95": 0.05817944213417034,
+ "p_gap": 0.133,
+ "placebo_mean_with": -0.035792089309916064,
+ "p_with": 0.149,
+ "always_short_on_signals": -0.012109130640104103,
+ "always_long_on_signals": -0.0786425227921194,
+ "with_set_coinflip_twin": -0.07372663647062139,
+ "against_set_flipped_to_trend_side": -0.028057317629344186,
+ "n_draws": 1000,
+ "always_short_all": -0.012109130640104103,
+ "with_all": -0.024048200309238925,
+ "always_short_H1": -0.016658116460243302,
+ "with_H1": -0.020048877214356386,
+ "always_short_H2": -0.007263390573686661,
+ "with_H2": -0.028132279472203328
+}

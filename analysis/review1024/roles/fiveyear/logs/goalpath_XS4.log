@@ -1,0 +1,6 @@
+16:12:48 X_S4_BB_BBP@1h|j:DIR@4h cells 1 rows 4015
+  period   blk0  trades  per_day  mean_roe  mean_roe_pb  opp_mean_roe     win  final_x_m0.4  opp_final_x_m0.4  max_dd_m0.4
+0    SEL  False    1363   1.2447   -0.0125       0.0140       -0.0487  0.7506        0.0000            0.0000       1.0000
+1   CONF  False    1193   1.1882   -0.0331      -0.0066       -0.0516  0.7376        0.0000            0.0000       1.0000
+2   LATE  False     320   1.0847   -0.0414      -0.0149       -0.0481  0.7375        0.0005            0.0004       0.9996
+3    FWD  False      19   1.0000   -0.0528      -0.0263       -0.0212  0.7368        0.5883            0.7748       0.4748

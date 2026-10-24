@@ -1,0 +1,6 @@
+16:12:32 G_flip_portfolio cells 321 rows 246490
+  period   blk0  trades  per_day  mean_roe  mean_roe_pb  opp_mean_roe     win  final_x_m0.4  opp_final_x_m0.4  max_dd_m0.4
+0    SEL  False   15978  14.5918   -0.0239       0.0025       -0.0475  0.7411        0.0000             0.000       1.0000
+1   CONF  False   10766  10.7231   -0.0348      -0.0084       -0.0429  0.7371        0.0000             0.000       1.0000
+2   LATE  False    2551   8.6475   -0.0331      -0.0066       -0.0564  0.7405        0.0000             0.000       1.0000
+3    FWD  False     121   6.3684   -0.0430      -0.0166       -0.0562  0.7190        0.0504             0.019       0.9737

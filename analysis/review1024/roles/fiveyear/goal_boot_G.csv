@@ -1,0 +1,17 @@
+bot,period,blk0,margin,payback,exposure_x,p_target,p_lose50_first,p_lose90_first,median_final_x,days_in_sample,trades_in_sample
+G_flip_portfolio,CONF,False,0.1,False,3.5,0,0.90475,0.02925,0.28582,1004,10766
+G_flip_portfolio,CONF,False,0.1,True,3.5,0,0.40475,0.00025,0.67275,1004,10766
+G_flip_portfolio,CONF,False,0.2,False,7,0,0.98925,0.724,0.06229,1004,10766
+G_flip_portfolio,CONF,False,0.2,True,7,0.00925,0.79925,0.159,0.3474,1004,10766
+G_flip_portfolio,CONF,False,0.4,False,14,0.002,0.998,0.98675,0.001168,1004,10766
+G_flip_portfolio,CONF,False,0.4,True,14,0.0605,0.944,0.765,0.038961,1004,10766
+G_flip_portfolio,CONF,False,0.6,False,21,0.0105,0.991,0.9895,5.1007e-06,1004,10766
+G_flip_portfolio,CONF,False,0.6,True,21,0.08675,0.93725,0.89975,0.0011281,1004,10766
+G_flip_portfolio,FWD,False,0.1,False,3.5,0,0.72925,0,0.42585,20,121
+G_flip_portfolio,FWD,False,0.1,True,3.5,0,0.309,0,0.68977,20,121
+G_flip_portfolio,FWD,False,0.2,False,7,0,0.95325,0.36375,0.15407,20,121
+G_flip_portfolio,FWD,False,0.2,True,7,0.00275,0.75225,0.07,0.40442,20,121
+G_flip_portfolio,FWD,False,0.4,False,14,0.00625,0.99025,0.923,0.011632,20,121
+G_flip_portfolio,FWD,False,0.4,True,14,0.04675,0.93275,0.6505,0.083176,20,121
+G_flip_portfolio,FWD,False,0.6,False,21,0.0225,0.98,0.9685,0.00037684,20,121
+G_flip_portfolio,FWD,False,0.6,True,21,0.08825,0.929,0.866,0.0075464,20,121

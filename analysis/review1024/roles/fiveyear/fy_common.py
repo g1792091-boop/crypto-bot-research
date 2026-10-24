@@ -81,7 +81,7 @@ NMON = 70                         # months 2021-01 .. 2026-10 (month clusters fo
 
 def month_of(t):
     d = pd.to_datetime(np.asarray(t, np.int64), unit="ms", utc=True)
-    m = ((d.year - 2021) * 12 + d.month - 1).to_numpy()
+    m = np.array((d.year - 2021) * 12 + d.month - 1, dtype=np.int64)
     m[(m < 0) | (m >= NMON)] = -1
     return m
 

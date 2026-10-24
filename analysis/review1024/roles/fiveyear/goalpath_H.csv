@@ -1,0 +1,5 @@
+signals,trades,per_day,mean_roe,mean_roe_pb,win,mean_roe_all_signals,opp_mean_roe,long_share,a2_mean,s20_mean,w30_mean,final_x_m0.4,max_dd_m0.4,opp_final_x_m0.4,final_x_pb_m0.4,bot,cells,period,blk0,growth_opt_margin,median_30d_x_at_opt,growth_opt_margin_pb,median_30d_x_at_opt_pb
+2481,1592,1.4539,-0.015212,0.011248,0.74623,-0.0062535,-0.052306,0.5157,-0.0053759,-0.034414,-0.010571,1.2218e-09,1,1.8292e-20,0.032618,H_friendmap_dir_sel,2,SEL,False,,,,
+2263,1428,1.4223,-0.029193,-0.0027329,0.7444,-0.0211,-0.044447,0.47759,-0.026357,-0.038531,-0.025381,3.0162e-12,1,5.7859e-16,1.5114e-05,H_friendmap_dir_sel,2,CONF,False,0,1,0,1
+672,378,1.2814,-0.038215,-0.011755,0.73545,-0.023893,-0.047041,0.44444,-0.036509,-0.039125,-0.03267,0.0002116,0.99985,8.7435e-05,0.012764,H_friendmap_dir_sel,2,LATE,False,,,,
+41,21,1.1053,-0.039051,-0.012591,0.71429,-0.055105,-0.016499,0.14286,-0.030965,-0.012105,-0.044316,0.63146,0.43625,0.78927,0.79274,H_friendmap_dir_sel,2,FWD,False,0,1,0,1

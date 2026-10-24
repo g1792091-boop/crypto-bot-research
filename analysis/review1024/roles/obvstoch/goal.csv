@@ -1,0 +1,25 @@
+cell,reverse,why,period,payback,trades,per_day,mean_roe_taken,trades_per_30d,best_margin_by_growth,median_30d_x_at_best_margin,margin_needed_for_x6_median,lev_x_margin_needed,p_x6_m10,p_lose50_m10,p_lose90_m10,median_x_m10,p_x6_m40,p_lose50_m40,p_lose90_m40,median_x_m40,p_x6_mbest,p_lose50_mbest,p_lose90_mbest,median_x_mbest
+OBV30@1h>SRSI_KD@30m|w35,False,"L1 friend literal (30m entry, 1h OBV trend)",CONF,False,3907,3.80799,-0.043275,114.24,0.01,0.951331,,,0,0.36525,0,0.583215,0.00025,0.97975,0.71925,0.0617441,0,0,0,0.951487
+OBV30@1h>SRSI_KD@30m|w35,False,"L1 friend literal (30m entry, 1h OBV trend)",CONF,True,3907,3.80799,-0.016815,114.24,0.01,0.980536,,,0,0.07825,0,0.789208,0.0085,0.88525,0.35475,0.213386,0,0,0,0.98062
+OBV30@1h>SRSI_KD@30m|w35,False,"L1 friend literal (30m entry, 1h OBV trend)",FWD,False,50,2.6362,-0.0416917,79.0861,0.01,0.96727,,,0,0.05025,0,0.710658,0,0.944,0.30575,0.170835,0,0,0,0.969047
+OBV30@1h>SRSI_KD@30m|w35,False,"L1 friend literal (30m entry, 1h OBV trend)",FWD,True,50,2.6362,-0.0152317,79.0861,0.01,0.987731,,,0,0.0015,0,0.869005,0.00025,0.76375,0.06775,0.38837,0,0,0,0.988639
+OBV30@4h>SRSI_KD@1h|w35,False,"L2 friend literal (1h entry, 4h OBV trend)",CONF,False,2784,2.71345,-0.0407486,81.4035,0.01,0.967065,,,0,0.14575,0,0.696641,0.00075,0.9225,0.42275,0.151864,0,0,0,0.967421
+OBV30@4h>SRSI_KD@1h|w35,False,"L2 friend literal (1h entry, 4h OBV trend)",CONF,True,2784,2.71345,-0.0142886,81.4035,0.01,0.988126,,,0,0.03175,0,0.866592,0.0095,0.76525,0.17775,0.369435,0,0,0,0.988465
+OBV30@4h>SRSI_KD@1h|w35,False,"L2 friend literal (1h entry, 4h OBV trend)",FWD,False,34,1.79262,-0.0457263,53.7786,0.01,0.975504,,,0,0.0245,0,0.785993,0,0.8365,0.15125,0.291717,0,0,0,0.977938
+OBV30@4h>SRSI_KD@1h|w35,False,"L2 friend literal (1h entry, 4h OBV trend)",FWD,True,34,1.79262,-0.0192663,53.7786,0.01,0.989489,,,0,0.0045,0,0.89855,0.00175,0.65325,0.048,0.504652,0,0,0,0.99113
+OBV30@4h>SRSI_X@1h|a2,False,"friend family, best of the 160 in the last 19 days",CONF,False,2642,2.57505,-0.031831,77.2515,0.01,0.975329,,,0,0.11175,0,0.758583,0.00325,0.88475,0.38275,0.18446,0,0,0,0.976279
+OBV30@4h>SRSI_X@1h|a2,False,"friend family, best of the 160 in the last 19 days",CONF,True,2642,2.57505,-0.00915096,77.2515,0.01,0.992572,,,0,0.039,0,0.904495,0.0195,0.7645,0.2115,0.381728,0,0,0,0.993639
+OBV30@4h>SRSI_X@1h|a2,False,"friend family, best of the 160 in the last 19 days",FWD,False,39,2.05624,0.0154923,61.6872,0.27,1.14408,,,0,0,0,1.08113,0.00775,0.277,0.00175,1.11084,0,0.091,0,1.14477
+OBV30@4h>SRSI_X@1h|a2,False,"friend family, best of the 160 in the last 19 days",FWD,True,39,2.05624,0.0381723,61.6872,0.58,2.08989,,,0,0,0,1.23227,0.06175,0.1115,0.00025,1.88753,0.222,0.298,0.012,2.03728
+OBVSL10@4h>CCI@1h|a2,False,"best of all 1,080 cells in the last 19 days (n>=30)",CONF,False,2096,2.04288,-0.0316634,61.2865,0.01,0.980481,,,0,0.04875,0,0.800313,0.0025,0.8375,0.257,0.261968,0,0,0,0.980751
+OBVSL10@4h>CCI@1h|a2,False,"best of all 1,080 cells in the last 19 days (n>=30)",CONF,True,2096,2.04288,-0.00898342,61.2865,0.01,0.994208,,,0,0.016,0,0.920601,0.0135,0.70225,0.1305,0.460577,0,0,0,0.994548
+OBVSL10@4h>CCI@1h|a2,False,"best of all 1,080 cells in the last 19 days (n>=30)",FWD,False,32,1.68717,-0.00661897,50.6151,0.01,0.99649,,,0,0,0,0.953247,0,0.43475,0.0005,0.666557,0,0,0,0.996599
+OBVSL10@4h>CCI@1h|a2,False,"best of all 1,080 cells in the last 19 days (n>=30)",FWD,True,32,1.68717,0.016061,50.6151,0.23,1.10036,,,0,0,0,1.06278,0,0.1665,0,1.03485,0,0.0075,0,1.0947
+OBV20@4h>RSI@1h|a2,False,S1/S2 top pick in 2021-23 (not confirmed),CONF,False,197,0.192008,-0.0151044,5.76023,0.01,0.999108,,,0,0,0,0.997331,0,0.056,0,0.963131,0,0,0,0.999912
+OBV20@4h>RSI@1h|a2,False,S1/S2 top pick in 2021-23 (not confirmed),CONF,True,197,0.192008,0.00757562,5.76023,0.09,1.00208,,,0,0,0,1.01065,0,0.04225,0,1.01433,0,0,0,1.00975
+OBV20@4h>RSI@1h|a2,False,S1/S2 top pick in 2021-23 (not confirmed),FWD,False,3,0.158172,-0.0697274,4.74517,0.01,0.996678,,,0,0,0,0.975791,0,0.04875,0,0.882939,0,0,0,0.997793
+OBV20@4h>RSI@1h|a2,False,S1/S2 top pick in 2021-23 (not confirmed),FWD,True,3,0.158172,-0.0470474,4.74517,0.01,0.997751,,,0,0,0,0.984799,0,0.0325,0,0.925713,0,0,0,0.998578
+ICHI@4h>MFI@30m|a2,True,reverse track with payback: only pick positive on CONF (not confirmed),CONF,False,1435,1.39864,-0.0195762,41.9591,0.01,0.991672,,,0,0.002,0,0.908786,0.00075,0.5725,0.02275,0.557398,0,0,0,0.991837
+ICHI@4h>MFI@30m|a2,True,reverse track with payback: only pick positive on CONF (not confirmed),CONF,True,1435,1.39864,0.00310376,41.9591,0.04,1.00283,,,0,0,0,0.999736,0.00675,0.405,0.00825,0.821818,0,0,0,1.0035
+ICHI@4h>MFI@30m|a2,True,reverse track with payback: only pick positive on CONF (not confirmed),FWD,False,21,1.10721,-0.025897,33.2162,0.01,0.991357,,,0,0,0,0.919949,0,0.38625,0.0005,0.64945,0,0,0,0.992376
+ICHI@4h>MFI@30m|a2,True,reverse track with payback: only pick positive on CONF (not confirmed),FWD,True,21,1.10721,-0.00321698,33.2162,0.01,0.998854,,,0,0,0,0.987184,0,0.1975,0,0.865388,0,0,0,0.999324
