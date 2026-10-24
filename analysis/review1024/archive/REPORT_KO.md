@@ -607,6 +607,7 @@
 - K10: `paperbot/dash/data/size5y.json`, `docs/size5y.md`, `research/vwap30/results.json`
 - 오늘 다른 담당: `../rulebot/REPORT_KO.md`, `../league/REPORT_KO.md`, `../combos/REPORT_KO.md`, `../other/REPORT_KO.md`, `../friend2/REPORT_KO.md`
 - 확인자 작업 스크립트(저장소 밖, 세션 작업 폴더): `/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/archchk/`, `/tmp/claude-0/-home-user-crypto-bot-research/e767230a-7665-5629-9ef1-f23e97e5705f/scratchpad/f4chk/`
+
 ---
 
 ## 10. 추가로 읽은 브랜치 (10/25)
