@@ -1,0 +1,50 @@
+# '친구 매매법' 페이퍼 봇 (owners 10/24 "실거래 해야된다니까", docs/friend-bot-ko.md): 친구 매매법(EMA·RSI·ROC) 15분,
+# 4시간 ADX 20 미만 금지, 신호 봉 거래량이 앞 20봉 평균의 0.64배 넘으면 금지, 순ROE -75% 손절, 22→20 이후 10%씩 계단,
+# 증거금 40% x 30배 (deploy/combo.friend.json). The same program, user and sandbox as paperbot-combo-vwap.service, its
+# own config /etc/paperbot/combo-friend.json and its own database /var/lib/paperbot/combo/friend.db (account COMBO@mix in
+# that file). The second WOO X Pro executor (paperbot-executor-wooxpro2) follows it. Paper only: no orders. The signal
+# and its gates read Binance's public 15m / 1h / 4h klines (paperbot/friendsig.py: a few small requests per 15m close).
+#
+# install.sh installs this unit but never enables or starts it. A person starts it after writing
+# /etc/paperbot/combo-friend.json (docs/friend-bot-ko.md):
+#   sudo systemctl enable --now paperbot-combo-friend
+# Telegram: its start and error lines and its own entry / exit lines ("[합친 봇 페이퍼 친구 매매법] ...", a losing exit
+# with its "손실 이유 후보" line) go to the owners' chats. Restart is safe: the account, its signal queue and the last
+# minute are in its database; missed minutes are replayed from paper3.db, missed signals are recorded late and never
+# traded.
+[Unit]
+Description=paperbot combined bot '친구 매매법' (friend's EMA/RSI/ROC 15m, its own config combo-friend.json; no orders)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/live.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.combo run --config /etc/paperbot/combo-friend.json
+Restart=always
+RestartSec=15
+NotifyAccess=main
+WatchdogSec=600
+TimeoutStartSec=20min
+TimeoutStopSec=60
+Nice=5
+MemoryMax=1500M
+# a live executor follows this paper bot: in a server-wide memory shortage experiments go first (owners 2026-10-19)
+OOMScoreAdjust=-500
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot/combo
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/debate.env -/var/lib/paperbot/exec -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot
+
+[Install]
+WantedBy=multi-user.target

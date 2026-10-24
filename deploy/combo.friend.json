@@ -1,0 +1,45 @@
+{
+ "paper_db": "/var/lib/paperbot/paper3.db",
+ "db": "/var/lib/paperbot/combo/friend.db",
+ "members": [
+  {
+   "strategy": "FRIEND_ROC",
+   "tf": "15m"
+  }
+ ],
+ "leverage": {
+  "BTCUSDT": 35,
+  "default": 35
+ },
+ "margin": 0.4,
+ "initial_equity": 1000,
+ "max_loss_frac": 0.25,
+ "loss_cap": "shrink",
+ "stop": {
+  "mode": "roe",
+  "roe": 0.5,
+  "net": true
+ },
+ "liq_buffer_atr": 0.0,
+ "ladder": {
+  "first_lock": 0.1,
+  "trigger_gap": 0.02,
+  "step": 0.05
+ },
+ "rank": [
+  "order"
+ ],
+ "flip_twin": true,
+ "early_exit": null,
+ "no_weekend": true,
+ "macro_blackout_min": 30,
+ "us_open_pause_min": 30,
+ "us_open_pre_min": 30,
+ "vote_gate": null,
+ "vol_gate": null,
+ "adx_gate": null,
+ "quiet_gate": null,
+ "max_hold_bars": null,
+ "telegram": true,
+ "name": "친구 매매법"
+}
