@@ -273,6 +273,25 @@ curl -s -o /dev/null -w '%{http_code}\n' http://(Tailscale 주소):8093/login   
   수수료는 드릴이 재요. 페이백 앱 환급은 봇 밖에서 나중에 들어와요.
 - 경로를 바꿀 때만 `dash.env`에 `PAPERBOT_LIVE_DEEPCOIN_DB`, `PAPERBOT_LIVE_DEEPCOIN_CONFIG`를 적어요.
 
+### 네 번째 실행기 (WOO X Pro 2, 10/24)
+
+WOO X Pro 2 실행기는 두 번째 WOO X Pro 계정으로 '친구 매매법'을 따라가요(켜는 순서: `docs/friend-bot-ko.md`). 바이비트 ·
+WOO X Pro · 딥코인 칸은 그대로예요.
+
+- **언제 보이나**: 서버에 그 설정 파일(`/etc/paperbot/executor-wooxpro2.json`)이나 그 기록 파일
+  (`/var/lib/paperbot/exec/executor-wooxpro2-live.db`) 중 하나라도 있을 때부터예요. 둘 다 없으면 모든 화면이 예전과 똑같아요.
+  실거래 점검·텔레그램도 같은 규칙이에요.
+- **이름**: 실행기 둘이 WOO X Pro를 쓰니 거래소 이름으로는 갈라지지 않아요. 이 칸 이름은 그 설정의 `"label": "WOO X Pro 2"`에서
+  와요. 두 분의 WOO X Pro 칸은 예전처럼 **WOO X Pro**예요. 색은 `--series-w2`(남보라 계열), 짧은 글자는 **W2**.
+- **보이면**: 진짜 돈 줄 · 요약 띠 · 한눈에(실행기 넷이면 실행기 칸 넷이 가운데 아래 한 줄, 휴대폰은 두 칸씩) · 포지션 · 거래 ·
+  비용 · 안전 · 성적 탭에 **WOO X Pro 2** 칸이 생겨요. "실행기 네 개", "네 실행기가 모두 멈춰요"처럼 수를 세는 말도 넷이 돼요.
+- **'친구 매매법' 페이퍼**: 따로 계좌 칸으로 나오지 않아요. 'VWAP 개선판' 자리를 차지하지도 않아요. 그 실행기 칸에
+  "따라감 · 친구 매매법"으로 나오고, 그 실행기의 거래·포지션은 '친구 매매법' 기록과 짝지어 보여요. 다른 페이퍼 표의 그 실행기 칸은
+  "이때 WOO X Pro 2는 …을 따라갔어요"예요.
+- **수수료**: WOO X Pro 요율 그대로예요(TetherMax 할인 0.042%).
+- 경로를 바꿀 때만 `dash.env`에 `PAPERBOT_LIVE_WOOXPRO2_DB`, `PAPERBOT_LIVE_WOOXPRO2_CONFIG`, `PAPERBOT_LIVE_PAPER3_DB`
+  (기본 `/var/lib/paperbot/combo/friend.db`)를 적어요.
+
 ### 비용 탭에 더한 것
 
 - **체결 비교**(거래소마다): 진입·청산 체결 차이를 가격 %와 순ROE로, 실제 수수료를 가정(0.05%+0.02%)·거래소 기본 요율 옆에.

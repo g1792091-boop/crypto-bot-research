@@ -48,7 +48,7 @@
 // buttons, only view switches).
 import {h, put, ui, serverNow, sound, LIVE, LIVE_PORT, siteUrl, GROUPS} from "../core/pb.js";
 import {liveEvents} from "./livebots-calc.js";
-import {realLine, setPapers, setExecs, execIds, execsKo, followLine} from "./livebots-kit.js";
+import {realLine, setPapers, setExecs, execIds, execsKo, followLine, countKo} from "./livebots-kit.js";
 import {termView} from "./livebots-term.js";
 import {chartView} from "./livebots-chart.js";
 import {tradesView} from "./livebots-trades.js";
@@ -178,8 +178,9 @@ export async function mount(el, ctx) {
     st.d = d; st.state = "ok"; st.okAt = serverNow();
     setPapers(d.papers);                 // two paper bots: their labels everywhere (null with one: the usual names)
     setExecs(d.execs);                   // the third executor (딥코인) everywhere while the server has it (else the two)
-    const two = followLine(d.papers), three = execIds(d).length > 2;
-    const head = two ? `실행기 ${three ? "세" : "두"} 개 · ${two}` : three ? `${execsKo(execIds(d))} 실행기와 그 셋이 따라가는 페이퍼(연습)` : HEAD_SUB;
+    const two = followLine(d.papers), n = execIds(d).length, three = n > 2;
+    const head = two ? `실행기 ${countKo(n)} 개 · ${two}`
+      : three ? `${execsKo(execIds(d))} 실행기와 그 ${n > 3 ? "넷" : "셋"}이 따라가는 페이퍼(연습)` : HEAD_SUB;
     if (sub.textContent !== head) sub.textContent = head;
     put(real, realLine(d));
     view.set(d, "ok");

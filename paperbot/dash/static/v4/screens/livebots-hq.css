@@ -13,6 +13,7 @@
 .lbh-x-bybit { --rc: var(--series-core); }
 .lbh-x-mexc { --rc: var(--series-m5); }
 .lbh-x-deepcoin { --rc: var(--series-dc); }
+.lbh-x-wooxpro2 { --rc: var(--series-w2); }
 .lbh-x-paper { --rc: var(--series-coin); }
 .lbh .sw { display: inline-block; flex: none; width: 4px; height: 12px; border-radius: 2px; background: var(--rc); vertical-align: -1px; }
 .lbh-real { display: inline-flex; align-items: center; flex: none; padding: 0 7px; border-radius: 999px; border: 1px solid var(--warn-line); background: var(--warn-soft);
@@ -95,6 +96,12 @@
   .lbh-deck.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lbh-deck.three .lbh-center { grid-column: 1 / -1; order: -1; }
   .lbh-deck.three > .lbh-reactor:last-child { grid-column: auto; }
+}
+/* four executors (the fourth, WOO X Pro 2, only while the server has it): two a row on a phone (none across), the four in
+   one row under the centre on a wide screen */
+.lbh-deck.four > .lbh-reactor:last-child { grid-column: auto; }
+@media (min-width: 900px) {
+  .lbh-deck.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* a reactor (one executor) */

@@ -60,7 +60,9 @@ EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wo
 OWN_KO = "거래소 기준"
 OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 이 거래소의 1분봉 고가·저가 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)"
 # the third executor (딥코인) has a card only once it is installed (livebots.installed: sources() reads it then)
-CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("flip", L.FLIP_ACCOUNT))
+# ... and the fourth (WOO X Pro 2, owners 10-24) the same way
+CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("wooxpro2", None),
+         ("flip", L.FLIP_ACCOUNT))
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()
@@ -533,7 +535,12 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
                                         since=since if b["id"] == "paper" else None)
             best[L.LP.norm(b["path"])] = (cards[b["id"]].get("position") or {}).get("best_roe")
         for x in execs:
-            b, f, _rw = per.get(L.LP.norm(x["paper_path"])) or per[L.LP.norm(p["paper"])]
+            key = L.LP.norm(x["paper_path"])
+            if key not in per and key in x["_papers"]:   # its own paper bot that is not one of the page's (owners 10-24:
+                ob = {"id": None, "path": x["paper_path"], "read": x["_papers"][key],    # '친구 매매법'): its own record
+                      "short_ko": x.get("follows_ko") or x["paper_path"]}
+                per[key] = (ob, combo_facts(p, {**more, "combo2_config": None}, x["paper_path"]), {})   # never the VWAP file
+            b, f, _rw = per.get(key) or per[L.LP.norm(p["paper"])]
             own = b["read"]
             follow = (own.get("accounts") or {}).get(x["follows"], {}).get("position") if own.get("state") == "ok" else None
             fp = {**follow, "_best_roe": best.get(L.LP.norm(b["path"])) if x["follows"] == L.ACCOUNT else None} if follow else None
@@ -541,7 +548,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
             xpos = cards[x["id"]].get("position")
             if xpos and xpos.get("paired") and follow:
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
-            if two:
+            if two or b["id"] is None:
                 cards[x["id"]]["follows_ko"] = b["short_ko"]
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [], since=since)
     finally:

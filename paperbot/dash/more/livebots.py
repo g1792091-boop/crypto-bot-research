@@ -15,6 +15,9 @@
     PAPERBOT_LIVE_MEXC_CONFIG   /etc/paperbot/executor-mexc.json
     PAPERBOT_LIVE_DEEPCOIN_DB   /var/lib/paperbot/exec/executor-deepcoin-live.db 딥코인 실행기 (세 번째, 설치됐을 때만 보임)
     PAPERBOT_LIVE_DEEPCOIN_CONFIG /etc/paperbot/executor-deepcoin.json
+    PAPERBOT_LIVE_WOOXPRO2_DB   /var/lib/paperbot/exec/executor-wooxpro2-live.db WOO X Pro 2 실행기 (네 번째, 설치됐을 때만 보임)
+    PAPERBOT_LIVE_WOOXPRO2_CONFIG /etc/paperbot/executor-wooxpro2.json
+    PAPERBOT_LIVE_PAPER3_DB     /var/lib/paperbot/combo/friend.db               세 번째 페이퍼 봇 ('친구 매매법': WOO X Pro 2가 따라감)
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
@@ -52,6 +55,12 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 중 하나라도 있을 때만 모든 화면에 나와요(``installed``; 실거래 점검 paperbot/livecheck.py와 같은 규칙). 둘 다 없으면 화면 · 답은
 예전 그대로(실행기 두 개)예요. 칸 이름은 그 설정의 거래소(``EX_NAME``)를 따라요.
 
+네 번째 실행기 (owners 10-24, docs/friend-bot-ko.md: 두 번째 WOO X Pro 계정이 '친구 매매법'을 따라감): 그 칸(``wooxpro2``)도
+설치됐을 때만(PAPERBOT_LIVE_WOOXPRO2_CONFIG 또는 PAPERBOT_LIVE_WOOXPRO2_DB) 나오고, 이름은 그 설정의 ``label``("WOO X Pro 2"; 두
+실행기가 WOO X Pro를 쓰니 거래소 이름만으로는 갈라지지 않아요)이에요. 그 실행기의 카드 · 거래 · 포지션은 다른 실행기와 같이 나와요.
+그 페이퍼 봇(PAPERBOT_LIVE_PAPER3_DB, friend.db)은 계좌 칸으로 따로 나오지 않아요: 실행기가 따라가는 봇 이름으로만 나오고(``follows_ko``),
+두 번째 페이퍼 봇('VWAP 개선판') 자리를 차지하지 않아요(``paper_bots``). 둘 다 없으면 모든 답이 예전 그대로예요.
+
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
 from __future__ import annotations
@@ -84,6 +93,11 @@ ENV = {
     # once it is installed (``installed``)
     "deepcoin_db": ("PAPERBOT_LIVE_DEEPCOIN_DB", "/var/lib/paperbot/exec/executor-deepcoin-live.db"),
     "deepcoin_config": ("PAPERBOT_LIVE_DEEPCOIN_CONFIG", "/etc/paperbot/executor-deepcoin.json"),
+    # the fourth slot (owners 10-24: WOO X Pro 2, a second WOO X Pro account, follows '친구 매매법', docs/friend-bot-ko.md):
+    # on the page only once it is installed; its paper bot's file is never a page account (paper_bots)
+    "wooxpro2_db": ("PAPERBOT_LIVE_WOOXPRO2_DB", "/var/lib/paperbot/exec/executor-wooxpro2-live.db"),
+    "wooxpro2_config": ("PAPERBOT_LIVE_WOOXPRO2_CONFIG", "/etc/paperbot/executor-wooxpro2.json"),
+    "paper3": ("PAPERBOT_LIVE_PAPER3_DB", "/var/lib/paperbot/combo/friend.db"),
 }
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
@@ -93,7 +107,9 @@ LEGACY_PAPER2 = "/var/lib/paperbot/combo/live15-mexc.db"
 EXECS = (("bybit", "바이비트", "bybit_db", "bybit_config"), ("mexc", "MEXC", "mexc_db", "mexc_config"))
 # the slots a server has only once they are installed (``installed``: their config file or their database is there);
 # owners 10-24: the third, 딥코인, follows the 'VWAP 개선판' paper bot (docs/deepcoin-ko.md)
-OPTIONAL_EXECS = (("deepcoin", "딥코인", "deepcoin_db", "deepcoin_config"),)
+OPTIONAL_EXECS = (("deepcoin", "딥코인", "deepcoin_db", "deepcoin_config"),
+                  # owners 10-24: the fourth, WOO X Pro 2 (its config's label), follows '친구 매매법'
+                  ("wooxpro2", "WOO X Pro 2", "wooxpro2_db", "wooxpro2_config"))
 ALL_EXECS = EXECS + OPTIONAL_EXECS
 # the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
 # and config path stay "mexc" so every page and check keeps working). Flipster: the third slot's exchange of 10-23, still
@@ -134,7 +150,9 @@ WHY = (("light_red", "신호등 빨강이라 따라가지 않았어요"),
        ("entry_refused", "거래소가 진입 주문을 거절했어요"),
        ("entry_unfilled", "진입 주문이 체결되지 않았어요"),
        ("light_unread", "신호등이 페이퍼 기록을 읽지 못해 미뤘어요"),
-       ("direct_skip", "빠른 진입을 건너뛰었어요"))
+       ("direct_skip", "빠른 진입을 건너뛰었어요"),
+       # 잔고 바닥 (owners 10-24, docs/friend-bot-ko.md): an executor with a floor stops new entries until clear-floor
+       ("floor_skip", "잔고 바닥 멈춤(새 진입 없음) 동안이라 따라가지 않았어요"))
 WHY_KO = dict(WHY)
 KIND_KO = {
     "halt": "멈춤", "halted": "멈춘 채 시작", "halt_cleared": "멈춤 풀림", "light_red": "신호등 빨강",
@@ -154,6 +172,9 @@ KIND_KO = {
     "own_prices": "거래소 1분봉 못 읽음", "own_lock": "거래소 기준 잠금", "own_stay": "거래소 기준으로 계속",
     "own_busy": "자기 포지션 중이라 안 따라감",
     "paper_exit_unknown": "페이퍼 청산 이유 모름", "paper_exit_unread": "페이퍼 청산 기록 못 읽음",
+    # 잔고 바닥 / 원금 회수 안내 / the key file (owners 10-24, docs/friend-bot-ko.md)
+    "floor_hit": "잔고 바닥 멈춤", "floor_skip": "바닥 멈춤이라 안 따라감", "floor_start": "시작 금액 기록",
+    "floor_cleared": "바닥 멈춤 풀림", "double": "원금 회수 안내", "key_untied": "키 묶음 풀림",
 }
 LEVEL_KO = {"WARN": "주의", "CRITICAL": "긴급"}
 # exit reasons: the paper engine's codes (paperbot/combo.py KO_EXIT) and what an executor's close was
@@ -220,9 +241,12 @@ def installed(p: dict) -> tuple:
 
 
 def shown_paths(p: dict) -> dict:
-    """``p`` as an answer shows it: an optional slot's two paths only once it is installed (else as it was)."""
+    """``p`` as an answer shows it: an optional slot's two paths only once it is installed, the third paper bot's file
+    only once it is there (else as it was)."""
     have = {s[0] for s in installed(p)}
     drop = {k for s in OPTIONAL_EXECS if s[0] not in have for k in (s[2], s[3])}
+    if not (p.get("paper3") and os.path.exists(p["paper3"])):
+        drop.add("paper3")
     return {k: v for k, v in p.items() if k not in drop}
 
 
@@ -237,14 +261,15 @@ def _config_db(path: str) -> Optional[str]:
 
 
 def slots(configs: Optional[dict] = None) -> list:
-    """EXECS with each slot's name taken from the exchange its config names (the slot's own name when unread); an
-    optional slot only when ``configs`` has it (the callers read the configs of ``installed`` slots)."""
+    """EXECS with each slot's name taken from its config: its ``label`` when it has one (owners 10-24: "WOO X Pro 2"),
+    else the exchange it names (the slot's own name when unread); an optional slot only when ``configs`` has it (the
+    callers read the configs of ``installed`` slots)."""
     out = []
     for ex, ko, dk, ck in ALL_EXECS:
         if ex not in (configs or {}) and (ex, ko, dk, ck) in OPTIONAL_EXECS:
             continue
         c = (configs or {}).get(ex) or {}
-        name = EX_NAME.get(c.get("exchange")) if c.get("state") == "ok" else None
+        name = (c.get("label") or EX_NAME.get(c.get("exchange"))) if c.get("state") == "ok" else None
         out.append((ex, name or ko, dk, ck))
     return out
 
@@ -436,6 +461,8 @@ def read_config(path: str) -> dict:
         except OSError:
             present = None
         out["kill_file"] = {"path": kill, "present": present}
+    if isinstance(raw.get("label"), str) and raw["label"].strip():     # its own name (owners 10-24); else nothing new
+        out["label"] = raw["label"].strip()
     return out
 
 
@@ -1219,7 +1246,10 @@ def paper_bots(p: dict, paper: dict, execs: list) -> list:
     "followers", "label_ko"}]. The second only when there is one: another paper database an executor follows now, else the
     -35 % bot's file (PAPERBOT_LIVE_PAPER2_DB) once it is there. One paper bot: one item (the page as before)."""
     main = p["paper"]
-    second = next((x["paper_path"] for x in execs if not LP.same(x["paper_path"], main)), None)
+    # the third paper bot's file (owners 10-24, '친구 매매법' that WOO X Pro 2 follows) never takes the second's place
+    third = p.get("paper3") if p.get("paper3") and not LP.same(p.get("paper3"), p.get("paper2")) else None
+    second = next((x["paper_path"] for x in execs if not LP.same(x["paper_path"], main)
+                   and not LP.same(x["paper_path"], third)), None)
     if second is None and p.get("paper2") and not LP.same(p["paper2"], main) and os.path.exists(p["paper2"]):
         second = p["paper2"]
     papers = execs[0]["_papers"] if execs else {LP.norm(main): paper}
@@ -1416,10 +1446,23 @@ def sources(p: dict, now: int) -> tuple:
         for x in execs:
             b = next((b for b in bots if LP.same(b["path"], x["paper_path"])), None)
             x["paper_id"] = b["id"] if b else None
-            x["follows_ko"] = b["short_ko"] if b else x["paper_path"]
+            x["follows_ko"] = b["short_ko"] if b else _bot_ko(x)
             if len(x["segs"]) > 1:
                 x["switched_ms"] = x["segs"][-1][0]
+    else:                                               # one paper bot on the page: an executor on another (the third's)
+        for x in execs:                                 # still names its own
+            if not LP.same(x["paper_path"], p["paper"]):
+                x["follows_ko"] = _bot_ko(x)
     return configs, follows, paper, execs
+
+
+def _bot_ko(x: dict) -> str:
+    """The short name of the paper bot an executor follows that is not one of the page's paper bots (owners 10-24:
+    '친구 매매법'), from its own record; its path when that cannot be read."""
+    pr = _paper_of(x)
+    if pr.get("state") != "ok":
+        return x["paper_path"]
+    return LP.bot_short(pr.get("name_ko"), pr.get("stop"))
 
 
 def public(x: dict) -> dict:

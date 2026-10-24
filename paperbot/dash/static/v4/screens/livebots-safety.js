@@ -7,7 +7,7 @@
 // nothing (no 'clear halt' button: that stays a command on the server, with a name and a note). The third executor
 // (딥코인, owners 10/24) has its card and its log choice while the server has it (livebots-kit.js execIds).
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
-import {lightRow, sourceState, notesEl, acctKo, execIds, execsNow, execsKo} from "./livebots-kit.js";
+import {lightRow, sourceState, notesEl, acctKo, execIds, execsNow, execsKo, countKo} from "./livebots-kit.js";
 import {checksView} from "./livebots-checks.js";
 
 const REFRESH_MS = 30 * 1000;
@@ -20,7 +20,7 @@ export function safetyView(ctx) {
   // the log's choice: every executor of the answer (rebuilt in place when the third, 딥코인, comes: draw)
   const segOf = (ids) => ui.seg([{id: "all", label: "전부"}, ...ids.map((id) => ({id, label: acctKo(id)}))], st.ex,
     (id) => { st.ex = id; local.set("lb-sex", id); drawLog(true); }, {label: "실행기 고르기"});
-  const logSub = (ids) => `실행기 ${ids.length > 2 ? "세" : "두"} 개 · 거래소 요청 재시도는 뺌 · 10개씩`;
+  const logSub = (ids) => `실행기 ${countKo(ids.length)} 개 · 거래소 요청 재시도는 뺌 · 10개씩`;
   let exIds = execsNow(), exSeg = segOf(exIds);
   const pg = ui.pager({size: 10, row: (e) => evRow(e), empty: () => (st.d ? ui.empty("주의 · 긴급 기록이 아직 없어요") : motion.shimmer(3))});
   const checks = checksView();

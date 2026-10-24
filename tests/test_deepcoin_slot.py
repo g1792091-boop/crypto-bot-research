@@ -290,7 +290,8 @@ def test_the_screens_in_node(w3, answers, tmp_path):
 
 def test_the_house_rules_of_the_third_slot():
     kit = FW._read(SCREENS, "livebots-kit.js")
-    assert 'export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin"];' in kit and 'deepcoin: {ko: "딥코인", s: "D"' in kit
+    # (the fourth slot, WOO X Pro 2, owners 10-24: tests/test_wooxpro2_slot.py)
+    assert 'export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin", "wooxpro2"];' in kit and 'deepcoin: {ko: "딥코인", s: "D"' in kit
     shorts = re.findall(r'^  \w+: \{ko: "[^"]+", s: "(\w+)"', kit, re.M)
     assert "D" in shorts and len(shorts) == len(set(shorts)), shorts                 # its letter is its own
     # nothing of the slot's 10-23 name is left on the screens (a config naming flipster is read by the server: EX_NAME)

@@ -511,3 +511,379 @@ def test_the_backups_and_the_restore_know_its_database():
     assert "paperbot-executor-wooxpro2" in text.split("2)")[0]          # stopped before its file goes back
     # not backed up (not installed): the restore's words as before
     assert "wooxpro2" not in off.next_steps(dest, ["executor-deepcoin-live.db", "paper3.db"])
+
+
+# ================================================================ the live site: the four-executor world
+from paperbot import livecheck as LC  # noqa: E402
+from paperbot import livepreview as LPV  # noqa: E402
+from paperbot import liveteam as T  # noqa: E402
+from paperbot.dash.app import json_finite  # noqa: E402
+from paperbot.dash.more import liveinsight as LI  # noqa: E402
+from paperbot.dash.more import livebots as L  # noqa: E402
+from paperbot.dash.more import livepos as LPOS  # noqa: E402
+from paperbot.dash.more import livevwap as VW  # noqa: E402
+from paperbot.store3 import Store3  # noqa: E402
+from tests import test_dash_livebots_fees as FW  # noqa: E402
+from tests import vwap_site_world as V  # noqa: E402
+
+NOW, MIN, H, DAY = V.NOW, V.MIN, V.H, V.DAY
+SCREENS, DOM, BAD = FW.SCREENS, FW.DOM, FW.BAD
+V4 = os.path.dirname(SCREENS)
+# '친구 매매법' as its run record says it (the hand-made record of this world; the bot itself is paperbot/combo.py)
+FRIEND_CFG = {"name": "친구 매매법", "members": [{"strategy": "FRIEND_ROC", "tf": "15m"}], "leverage": {"default": 30},
+              "margin": 0.4, "initial_equity": 1000, "stop": {"mode": "roe", "roe": 0.75, "net": True},
+              "ladder": {"first_lock": 0.2, "trigger_gap": 0.02, "step": 0.1}, "no_weekend": True}
+# (coin, side, entry ms, hours held, reason, raw entry, raw exit): F1 a win, F2 a stop, F3 seen late by WOO X Pro 2
+FRIEND = (("ETHUSDT", -1, V.K(5, 10, 15), 2, "LOCK", 2500.0, 2481.0),
+          ("SOLUSDT", 1, V.K(5, 14, 30), 3, "SL", 150.0, 146.4),
+          ("LTCUSDT", 1, V.K(6, 2, 45), 1, "LOCK", 80.0, 80.6))
+FPOS = ("BCHUSDT", -1, V.K(6, 11, 15), 512.0)                     # the open one: WOO X Pro 2 holds it too
+
+
+def friend_db(path: str) -> dict:
+    """friend.db in the store3 schema: its run record, three closed trades, its open position."""
+    s = Store3(path)
+    s.put_state("combo_run", V.K(4, 9), {"taker_fee": FW.FEE, "config": FRIEND_CFG})
+    eq, out = 1000.0, []
+    for sym, side, et, held, reason, e, x in FRIEND:
+        d = FW._paper_trade(s.conn, sym, side, et, et + held * H, reason, e, x, "FRIEND_ROC", "15m", 30, eq)
+        eq += d["pnl"]
+        out.append(d)
+    sym, side, et, px = FPOS
+    stop = round(px * (1 - side * (0.75 / 30 - 0.0014)), 2)
+    pos = {"symbol": sym, "side": side, "qty": 400 * 30 / px, "entry_price": px, "entry_time": et, "leverage": 30,
+           "tier": "best", "margin": 400.0, "margin_initial": 400.0, "stop_price": stop, "tp_price": None, "liq_price": 0.0,
+           "entry_fee": 0.2, "stop_initial": stop, "lock_roe": None,
+           "signal": {"ts": et - 1, "symbol": sym, "timeframe": "15m", "strategy_id": "FRIEND_ROC", "side": side,
+                      "stop_price": stop, "meta": {"member_order": 0}}}
+    s.put_state("accounts", NOW - MIN, {"engines": {V.ACC: {"wallet": eq, "position": pos}}})
+    s.put_state("heartbeat", NOW - 2000, {})
+    s.close()
+    return {"path": path, "trades": out, "position": pos}
+
+
+@pytest.fixture(scope="module")
+def w4(tmp_path_factory):
+    """The four-executor world (module docstring): ``p4`` its paths; ``p3`` the three-executor world of
+    tests/test_deepcoin_slot.py (no key of the fourth slot); ``p0`` with the fourth slot's keys and the third paper bot's
+    but none of their files (a server where they are not installed); ``p2`` / ``p20``: the two-executor world without and
+    with those keys."""
+    folder = str(tmp_path_factory.mktemp("fourth") / "w")
+    w = V.build(folder, switch=False)
+    p2 = dict(w["p"])
+    vt, vwap = w["vt"], p2["paper2"]
+    p3 = {**p2, "deepcoin_db": os.path.join(folder, "executor-deepcoin-live.db"),
+          "deepcoin_config": os.path.join(folder, "executor-deepcoin.json")}
+    dc = V.exec_db(p3["deepcoin_db"], p3["deepcoin_config"], "deepcoin", vwap, [], vwap_closed=[vt["E4"], vt["E5"], vt["E7"]],
+                   late=[vt["E6"]], open_pos=V.paper_position(vwap), light=(20, 0.75),
+                   extra={"ladder_from": "own", "risk": {"max_loss_frac": 0.2}})
+    fr = friend_db(os.path.join(folder, "friend.db"))
+    p4 = {**p3, "wooxpro2_db": os.path.join(folder, "executor-wooxpro2-live.db"),
+          "wooxpro2_config": os.path.join(folder, "executor-wooxpro2.json"), "paper3": fr["path"]}
+    w2 = V.exec_db(p4["wooxpro2_db"], p4["wooxpro2_config"], "wooxpro", fr["path"], fr["trades"][:2], late=[fr["trades"][2]],
+                   open_pos=fr["position"], light=(0, 0.85),
+                   extra={"label": "WOO X Pro 2", "ladder_from": "own", "own_keys": True, "equity_floor_frac": 0.7,
+                          "double_notice": True, "risk": {"max_loss_frac": 0.35}})
+    no = os.path.join(folder, "none")
+    off = {"wooxpro2_db": no + "-wooxpro2.db", "wooxpro2_config": no + "-wooxpro2.json", "paper3": no + "-friend.db"}
+    p0 = {**p3, **off}
+    p20 = {**p2, **off, "deepcoin_db": no + "-deepcoin.db", "deepcoin_config": no + "-deepcoin.json"}
+    return {**w, "p4": p4, "p3": p3, "p2": p2, "p0": p0, "p20": p20, "dc": dc, "w2": w2, "fr": fr, "folder": folder}
+
+
+@pytest.fixture(autouse=True)
+def _fresh():
+    L._cache.clear()
+    yield
+    L._cache.clear()
+
+
+def _flat(x) -> str:
+    return json.dumps(json_finite(x), sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _answers(p: dict, more: dict) -> dict:
+    """The site's answers that name the executors, at the world's clock."""
+    return {"build": L.build(p, NOW), "trades": L.trade_rows(p, NOW, more), "perf": L.perf(p, NOW, more),
+            "safety": L.safety(p, NOW, more=more), "settings": L.settings(p, NOW), "costs": L.costs(p, NOW),
+            "map": L.map_view(p, NOW), "now": L.whynow(p, NOW), "pos": LPOS.build(p, more, NOW), "risk": LI.risk(p, NOW, more),
+            "health": LI.health(p, NOW, more), "goal": LI.goal(p, NOW, more), "judge": LI.judge(p, NOW, more),
+            "groups": LI.groups(p, NOW, more), "vwap": VW.control(p, NOW, more), "vwperf": VW.perf(p, NOW, more)}
+
+
+@pytest.fixture(scope="module")
+def answers(w4):
+    more = dict(w4["more"])
+    out = {}
+    for k in ("p2", "p20", "p3", "p0", "p4"):
+        L._cache.clear()
+        out[k] = _answers(w4[k], more)
+    return out
+
+
+def test_not_installed_every_answer_is_as_before(w4, answers):
+    """The fourth slot's keys and the third paper bot's, their files not there: the very same answers as without the keys,
+    with two executors and with three."""
+    assert L.installed(w4["p0"]) == L.installed(w4["p3"]) and [s[0] for s in L.installed(w4["p0"])] == ["bybit", "mexc", "deepcoin"]
+    assert L.installed(w4["p20"]) == L.EXECS
+    assert _flat(answers["p0"]) == _flat(answers["p3"]) and _flat(answers["p20"]) == _flat(answers["p2"])
+    for k in ("p0", "p20"):
+        words = _flat(answers[k])
+        assert "wooxpro2" not in words and "WOO X Pro 2" not in words and "친구 매매법" not in words and "friend.db" not in words
+    assert sorted(answers["p0"]["build"]["paths"]) == sorted(w4["p3"])        # the answer's paths: as they were
+
+
+def test_the_slot_shows_once_its_config_or_its_database_is_there(w4):
+    p4, folder = w4["p4"], w4["folder"]
+    assert [s[0] for s in L.installed(p4)] == ["bybit", "mexc", "deepcoin", "wooxpro2"]
+    for p, rec, cfg in (({**p4, "wooxpro2_db": os.path.join(folder, "none-w.db")}, "missing", "ok"),
+                        ({**p4, "wooxpro2_config": os.path.join(folder, "none-w.json")}, "ok", "missing")):
+        assert [s[0] for s in L.installed(p)][-1] == "wooxpro2"
+        _c, _f, _paper, execs = L.sources(p, NOW)
+        x = execs[-1]
+        assert (x["id"], x["record"]["state"], x["config"]["state"]) == ("wooxpro2", rec, cfg)
+        assert x["name_ko"] == ("WOO X Pro 2" if cfg == "ok" else "WOO X Pro 2")       # its config's label, else its slot's name
+    d = L.paths({})
+    assert (d["wooxpro2_db"], d["wooxpro2_config"], d["paper3"]) == (
+        "/var/lib/paperbot/exec/executor-wooxpro2-live.db", "/etc/paperbot/executor-wooxpro2.json",
+        "/var/lib/paperbot/combo/friend.db")
+    assert (L.ENV["wooxpro2_db"][0], L.ENV["wooxpro2_config"][0], L.ENV["paper3"][0]) == (
+        "PAPERBOT_LIVE_WOOXPRO2_DB", "PAPERBOT_LIVE_WOOXPRO2_CONFIG", "PAPERBOT_LIVE_PAPER3_DB")
+    assert L.paths({"PAPERBOT_LIVE_WOOXPRO2_CONFIG": p4["wooxpro2_config"]})["wooxpro2_db"] == p4["wooxpro2_db"]
+    assert L.shown_paths(w4["p0"]) == w4["p3"] and L.shown_paths(p4) == p4
+    env = (ROOT / "deploy" / "dash.env.example").read_text(encoding="utf-8")
+    for line in ("#PAPERBOT_LIVE_WOOXPRO2_DB=/var/lib/paperbot/exec/executor-wooxpro2-live.db",
+                 "#PAPERBOT_LIVE_WOOXPRO2_CONFIG=/etc/paperbot/executor-wooxpro2.json",
+                 "#PAPERBOT_LIVE_PAPER3_DB=/var/lib/paperbot/combo/friend.db"):
+        assert line in env
+
+
+def test_its_name_is_its_label_and_the_first_woo_x_pro_keeps_its_own():
+    ok = lambda ex, **k: {"state": "ok", "exchange": ex, **k}                       # noqa: E731
+    got = L.slots({"bybit": ok("bybit"), "mexc": ok("wooxpro"), "deepcoin": ok("deepcoin"),
+                   "wooxpro2": ok("wooxpro", label="WOO X Pro 2")})
+    assert [ko for _x, ko, _d, _c in got] == ["바이비트", "WOO X Pro", "딥코인", "WOO X Pro 2"]
+    assert L.slots({"wooxpro2": {"state": "missing"}})[-1][:2] == ("wooxpro2", "WOO X Pro 2")
+    assert "label" not in L.read_config(str(ROOT / "deploy" / "executor.live-wooxpro.json"))       # nothing new for the others
+    assert L.read_config(str(TEMPLATE))["label"] == "WOO X Pro 2"
+
+
+def test_the_site_with_four_executors(w4, answers):
+    a = answers["p4"]
+    b = a["build"]
+    assert [(x["id"], x["name_ko"], x.get("follows_ko")) for x in b["execs"]] == [
+        ("bybit", "바이비트", "추세판단 봇"), ("mexc", "WOO X Pro", "추세판단 봇"), ("deepcoin", "딥코인", "VWAP 개선판"),
+        ("wooxpro2", "WOO X Pro 2", "친구 매매법")]
+    w2 = next(x for x in b["accts"] if x["id"] == "wooxpro2")
+    assert w2["state"] == "ok" and w2["kind"] == "live" and w2["name_ko"] == "WOO X Pro 2"
+    assert w2["position"]["symbol"] == "BCHUSDT" and w2["follows_ko"] == "친구 매매법"
+    # the page's paper bots are the two as before: '친구 매매법' never takes the VWAP bot's place, nor an account of its own
+    assert [x["id"] for x in b["papers"]] == ["paper", "paper2"] and b["papers"][1]["name"] == "VWAP 개선판"
+    assert not [x for x in b["accts"] if x["id"] == "paper3"] and sorted(b["paths"]) == sorted(w4["p4"])
+    # 거래: its own table, each trade paired with the paper trade it followed (friend.db), the late one said why
+    t = a["trades"]["accts"]
+    rows = t["wooxpro2"]["rows"]
+    assert sorted(r["key"] for r in rows) == sorted(x["key"] for x in w4["w2"]["live"])
+    assert all(r["paper"] and r["paper"]["exit_reason"] in ("LOCK", "SL") for r in rows)
+    assert {r["paper"]["exit_reason"] for r in rows} == {"LOCK", "SL"}
+    assert all(r["live"]["wooxpro2"]["state"] == "other" for r in t["paper"]["rows"])
+    assert all(r["live"]["wooxpro2"]["why_ko"].startswith("이때 WOO X Pro 2는 ") for r in t["paper"]["rows"])
+    # 포지션 · 비용 · 안전 · 설정 · 봇 상태 · 위험 · 성적
+    assert [x["id"] for x in a["pos"]["cards"]] == ["paper", "paper2", "bybit", "mexc", "deepcoin", "wooxpro2", "flip"]
+    card = next(x for x in a["pos"]["cards"] if x["id"] == "wooxpro2")
+    assert card["position"] and card["position"]["symbol"] == "BCHUSDT" and card["follows_ko"] == "친구 매매법"
+    c = a["costs"]
+    assert c["execs"][-1] == {"id": "wooxpro2", "name_ko": "WOO X Pro 2"} and c["accts"]["wooxpro2"]["n"] == 2
+    fee = next(x for x in c["fees"]["execs"] if x["id"] == "wooxpro2")
+    assert fee["exchange"] == "wooxpro" and fee["rates"]["taker_disc"] == 0.00042           # WOO X Pro's own rates
+    assert [x["id"] for x in a["safety"]["execs"]] == ["bybit", "mexc", "deepcoin", "wooxpro2"]
+    assert [(x["id"], x.get("follows_ko")) for x in a["settings"]["execs"]][-1] == ("wooxpro2", "친구 매매법")
+    assert [(i["who"], i["ko"]) for i in a["health"]["items"] if i.get("id") == "exec"][-1] == ("wooxpro2", "WOO X Pro 2 실행기")
+    assert a["risk"]["kill"]["what_ko"].startswith("네 실행기가 모두 멈춰요")
+    assert answers["p3"]["risk"]["kill"]["what_ko"].startswith("세 실행기가 모두 멈춰요")
+    assert "wooxpro2" in a["perf"]["accts"] and "wooxpro2" in a["groups"]["accts"]
+    assert [x["id"] for x in a["vwap"]["followers"]] == ["deepcoin"]                # the VWAP bot's page: its own executor only
+    # the late paper entry: why it was not followed, from the executor's own record
+    words = _flat(a)
+    assert "WOO X Pro 2" in words and not re.search(r"WOO X Pro 2(이|은|을|과|으로)(?![가-힣])", words)
+
+
+def test_a_floor_skip_has_its_words(w4):
+    assert L.WHY_KO["floor_skip"] == "잔고 바닥 멈춤(새 진입 없음) 동안이라 따라가지 않았어요"
+    assert L.KIND_KO["floor_hit"] == "잔고 바닥 멈춤" and L.KIND_KO["double"] == "원금 회수 안내"
+
+
+SCREENS_JS = """
+const view = async (sum, tr, sf, co) => {
+  K.setPapers(sum.papers); K.setExecs(sum.execs);
+  const band = P.bandLine(mkCtx(null)); band.set(sum, "ok");
+  const hub = {get: () => sum, state: () => "ok", at: () => sum.now_ms, retry: () => {}};
+  const hq = await run(HQ.hqView, (p) => (p.endsWith('/now') ? D_now : {}), hub);
+  hq.set(sum, "ok");
+  const hqw = D.walk(hq.el);
+  const t = await run(TR.tradesView, tr), s = await run(SF.safetyView, sf), c = await run(CO.costView, co);
+  return {real: texts(ui.note(K.realLine(sum))), band: texts(band.el), hq: hqw.text.replace(/\\s+/g, ' '),
+    reactors: hqw.classes.filter((x) => x.split(' ').includes('lbh-reactor')).length, deck: hqw.classes.find((x) => x.startsWith('lbh-deck')),
+    trades: texts(t.el), safety: texts(s.el), cost: texts(c.el), costCards: D.walk(c.el).classes.filter((x) => /lbk-a-wooxpro2/.test(x)).length};
+};
+const three = await view(D_s3, D_t3, D_f3, D_c3);
+const four = await view(D_s4, D_t4, D_f4, D_c4);
+const ids4 = [K.execsNow(), K.execIds(D_s4), K.execIds(D_t4), K.execIds(D_c4), PE.idsOf(D_p4), MA.idsOf({accounts: {wooxpro2: {}}}),
+  K.execsKo(), K.acctsKo(6), K.countKo(4), K.countKo(3), K.countKo(2)];
+console.log(JSON.stringify({three, four, ids4}));
+""".replace("NOW", str(NOW))
+
+
+def _node(tmp_path, body: str, **data) -> dict:
+    import shutil
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    loads = []
+    for k, v in data.items():
+        f = tmp_path / f"{k}.json"
+        f.write_text(json.dumps(json_finite(v), allow_nan=False, default=str), encoding="utf-8")
+        loads.append(f"const D_{k} = JSON.parse(fs.readFileSync({json.dumps(str(f))}, 'utf8'));")
+    script = (f"const D = await import('file://{DOM}'); const fs = await import('node:fs');\n"
+              "for (const [k, f] of Object.entries({after: (p, i, x) => p.childNodes.splice(i + 1, 0, x), before: (p, i, x) => p.childNodes.splice(i, 0, x),"
+              " replaceWith: (p, i, x) => p.childNodes.splice(i, 1, x)})) if (!Node.prototype[k]) Node.prototype[k] = function (x) {"
+              " const p = this.parentNode; if (!p) return; f(p, p.childNodes.indexOf(this), x); x.parentNode = p; };\n"
+              f"Date.now = () => {NOW};\n"
+              f"const K = await import('file://{SCREENS}/livebots-kit.js'); const P = await import('file://{SCREENS}/livebots-parts.js');\n"
+              f"const HQ = await import('file://{SCREENS}/livebots-hq.js'); const TR = await import('file://{SCREENS}/livebots-trades.js');\n"
+              f"const SF = await import('file://{SCREENS}/livebots-safety.js'); const CO = await import('file://{SCREENS}/livebots-cost.js');\n"
+              f"const PE = await import('file://{SCREENS}/livebots-perf.js'); const MA = await import('file://{SCREENS}/livebots-map.js');\n"
+              f"const {{ui}} = await import('file://{V4}/core/pb.js');\n" + "\n".join(loads) + "\n"
+              "const tick = () => new Promise((r) => setTimeout(r, 10));\n"
+              "const texts = (n) => D.walk(n).text.replace(/\\s+/g, ' ');\n"
+              "const mkCtx = (a) => ({params: {query: {}}, alive: () => true, track() {}, listen() {}, on() {}, watch() {}, timeout() {}, every() {},"
+              " href: (n, x) => '#/' + n + (x ? '/' + x : ''), api: async (p) => JSON.parse(JSON.stringify(typeof a === 'function' ? a(p) : a))});\n"
+              "const run = async (V, a, hub) => { const v = hub ? V(mkCtx(a), hub) : V(mkCtx(a)); await tick(); await tick(); return v; };\n" + body)
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_the_screens_in_node(w4, answers, tmp_path):
+    a3, a4 = answers["p0"], answers["p4"]
+    out = _node(tmp_path, SCREENS_JS, s3=a3["build"], t3=a3["trades"], f3=a3["safety"], c3=a3["costs"],
+                s4=a4["build"], t4=a4["trades"], f4=a4["safety"], c4=a4["costs"], p4=a4["perf"], now=a4["now"])
+    three, four = out["three"], out["four"]
+    for k, t in three.items():                             # not installed: nothing of it anywhere
+        assert "WOO X Pro 2" not in str(t), k
+    assert three["reactors"] == 3 and "four" not in three["deck"].split() and "three" in three["deck"].split()
+    ids = out["ids4"]
+    assert ids[:4] == [["bybit", "mexc", "deepcoin", "wooxpro2"]] * 4
+    assert ids[4] == ["paper", "paper2", "bybit", "mexc", "deepcoin", "wooxpro2"] and ids[5][-1] == "wooxpro2"
+    assert ids[6] == "바이비트 · WOO X Pro · 딥코인 · WOO X Pro 2" and ids[7] == "여섯 계좌" and ids[8:] == ["네", "세", "두"]
+    assert four["reactors"] == 4 and {"three", "four"} <= set(four["deck"].split())
+    assert "WOO X Pro 2 $" in four["real"] and "WOO X Pro 2 $" in four["band"]
+    assert "바이비트 · WOO X Pro · 딥코인 · WOO X Pro 2" in four["hq"]
+    assert "WOO X Pro 2" in four["trades"]                               # its table is a choice
+    assert "실행기 네 개" in four["safety"] and four["costCards"] >= 1 and "WOO X Pro 2 실거래 · 진짜 돈" in four["cost"]
+    for k, t in four.items():
+        assert not BAD.search(str(t)), (k, BAD.search(str(t)))
+
+
+def test_the_house_rules_of_the_fourth_slot():
+    kit = FW._read(SCREENS, "livebots-kit.js")
+    assert 'export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin", "wooxpro2"];' in kit
+    assert 'wooxpro2: {ko: "WOO X Pro 2", s: "W2"' in kit
+    shorts = re.findall(r'^  \w+: \{ko: "[^"]+", s: "(\w+)"', kit, re.M)
+    assert "W2" in shorts and len(shorts) == len(set(shorts)), shorts
+    css = FW._read(V4, "tokens.css")
+    assert "--series-w2: hsl(250 var(--av-s) var(--av-ring-l));" in css
+    for f, cls in (("livebots.css", ".lb-a-wooxpro2 .lb-sw"), ("livebots-hq.css", ".lbh-x-wooxpro2"), ("livebots-cost.css", ".lbk-a-wooxpro2"),
+                   ("livebots-map.css", ".lbm-a-wooxpro2"), ("livebots-risk.css", ".lbv-a-wooxpro2"), ("livebots-goal.css", ".lbg-a-wooxpro2"),
+                   ("livebots-expect.css", ".lex-a-wooxpro2")):
+        assert cls in FW._read(SCREENS, f), (f, cls)
+    hq = FW._read(SCREENS, "livebots-hq.css")
+    assert ".lbh-deck.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in hq
+    # the words that count the executors: one helper, two and three exactly as before
+    for f in sorted(os.listdir(SCREENS)):
+        if f.startswith("livebots") and f.endswith(".js"):
+            assert not re.search(r'length > 2 \? "세" : "두"', FW._read(SCREENS, f)), f
+
+
+# ================================================================ the live checks and the Telegram messages
+def test_livecheck_reads_the_fourth_executor_only_once_installed(tmp_path, monkeypatch):
+    cfg, db = tmp_path / "executor-wooxpro2.json", tmp_path / "executor-wooxpro2-live.db"
+    spec = LC.OPTIONAL_EXECUTORS[:1] + (("wooxpro2", str(cfg), "paperbot-executor-wooxpro2", str(db), 0, 0.85),)
+    spec = tuple((n, str(tmp_path / f"{n}.json"), u, str(tmp_path / f"{n}.db"), k, s) if n == "deepcoin" else (n, c, u, d, k, s)
+                 for n, c, u, d, k, s in spec)
+    monkeypatch.setattr(LC, "OPTIONAL_EXECUTORS", spec)
+    base = tuple((n, str(tmp_path / f"{n}.json"), u, str(tmp_path / f"{n}.db"), k, s) for n, _p, u, _d, k, s in LC.EXECUTORS)
+    assert LC.installed_specs(base, spec) == base
+    raw = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    raw.update(db=str(db), budget_usd=300, qty_scale=0.3)
+    cfg.write_text(json.dumps(raw), encoding="utf-8")
+    infos = LC.load_executors(LC.installed_specs(base, spec))
+    assert [e.name for e in infos] == ["bybit", "mexc", "wooxpro2"]
+    f = infos[-1]
+    assert (f.label, f.unit, f.db, f.paper_db, f.light_n, f.budget, f.max_loss, f.exchange) == (
+        "WOO X Pro 2", "paperbot-executor-wooxpro2", str(db), "/var/lib/paperbot/combo/friend.db", 0, 300.0, 0.35, "wooxpro")
+    assert f.fee == LC.ASSUMED_FEE["wooxpro"] and LC.pad_of("wooxpro2", f.label) == "WOO X Pro 2 "
+    assert LC.ExecInfo("mexc", "", "", "", 0, 0.9, exchange="wooxpro").label == "WOO X Pro"      # the first keeps its name
+    # this server's own: the start guide's paths
+    assert [x[0] for x in LC.OPTIONAL_EXECUTORS] == ["deepcoin", "wooxpro2"]
+    monkeypatch.undo()
+    assert LC.OPTIONAL_EXECUTORS[1] == ("wooxpro2", "/etc/paperbot/executor-wooxpro2.json", "paperbot-executor-wooxpro2",
+                                        "/var/lib/paperbot/exec/executor-wooxpro2-live.db", 0, 0.85)
+    # the STOP file stops all four; never suggested to stop under low memory
+    assert LC.every_ko(2) == "두 실행기 모두" and LC.every_ko(3) == "세 실행기 모두" and LC.every_ko(4) == "네 실행기 모두"
+    assert "paperbot-executor-wooxpro2.service" in LC.PROTECTED_UNITS and not LC.experiment("paperbot-executor-wooxpro2.service")
+    four = [LC.ExecInfo(n, "", "", "", 0, 0.85, kill_file="/var/lib/paperbot/STOP") for n in ("bybit", "mexc", "deepcoin", "wooxpro2")]
+    assert "(네 실행기 모두 바로 닫고 멈추려면 sudo touch /var/lib/paperbot/STOP)" in LC.streak_todo(four)
+    lines = LC.memory_lines([("paperbot-agents.service", 900 * 1024 ** 2)], ("paperbot-executor-wooxpro2",))
+    assert lines[1].endswith("paperbot-combo-mexc, paperbot-executor-wooxpro2")
+
+
+def test_the_morning_check_says_its_floor():
+    r = {"label": "WOO X Pro 2", "trades": 2, "wins": 1, "pnl": 3.0, "equity": 69.0, "halted": False,
+         "floor": {"start": 100.0, "hit": True, "frac": 0.7}}
+    lines, _small = LC.exec_score_lines(r)
+    assert lines[-1] == "  잔고 바닥 멈춤 중: 새 진입 없음(시작 금액 $100.00의 70%에 닿음, 풀기: clear-floor)"
+    assert not [x for x in LC.exec_score_lines({**r, "floor": {"start": 100.0, "hit": False}})[0] if "잔고 바닥" in x]
+    assert not [x for x in LC.exec_score_lines({k: v for k, v in r.items() if k != "floor"})[0] if "잔고 바닥" in x]
+
+
+@pytest.fixture(scope="module")
+def preview():
+    return LPV.scenes("wooxpro2")
+
+
+def test_the_preview_with_four_executors(preview):
+    texts = [t for _title, _lv, t in preview]
+    assert texts[0] == "▶️ WOO X Pro 2 실행기 켜짐 · 잔고 $107.87 · 따라가는 페이퍼: 친구 매매법"
+    entry = next(t for t in texts if t.startswith("🟢 진입"))
+    assert "친구 매매법" in entry and "WOO X Pro 2 ✅" in entry
+    assert "바이비트" not in entry and "딥코인" not in entry and "WOO X Pro ✅" not in entry       # its own executor only
+    exit_ = next(t for t in texts if t.startswith("✅ 청산"))
+    assert "친구 매매법" in exit_ and "WOO X Pro 2 +$" in exit_ and "잔고 $" in exit_
+    morning = next(t for t in texts if t.startswith("📋"))
+    for word in ("- WOO X Pro 2 1번 +$", "수수료 0.042%(가정 0.042%)", "- 바이비트: 어제 닫힌 거래 없음", "- 딥코인: 어제 닫힌 거래 없음",
+                 "친구 매매법 (WOO X Pro 2가 따라감)", "- WOO X Pro 2(친구 매매법 따라간 거래): 거래 1번", "VWAP 개선판 (딥코인이 따라감)",
+                 "(모든 봇 같음)"):
+        assert word in morning, word
+    friend = morning.split("친구 매매법 (WOO X Pro 2가 따라감)")[1]
+    assert "5년 기준" not in friend and "늘리기 기준" not in friend         # the VWAP bot's own reference lines are its own
+    vwap = morning.split("VWAP 개선판 (딥코인이 따라감)")[1].split("친구 매매법")[0]
+    assert "참고: 5년 기준 본전 승률 79%" in vwap and "늘리기 기준(두 분)" in vwap
+    for t in texts:
+        assert not re.search(r"\b(None|null|undefined|nan)\b", t), t
+
+
+def test_the_preview_flag(monkeypatch):
+    seen = []
+    monkeypatch.setattr(LPV, "main", lambda world="live15": seen.append(world) or 0)
+    for flags, world in (({"wooxpro2": True}, "wooxpro2"), ({"deepcoin": True}, "deepcoin"), ({}, "live15")):
+        LC.cmd_preview(argparse.Namespace(**{"old": False, "two": False, "vwap": False, "deepcoin": False, "wooxpro2": False,
+                                             **flags}))
+        assert seen[-1] == world
+
+
+def test_the_team_reads_the_fourth_executor_once_installed(w4, tmp_path, monkeypatch):
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", str(tmp_path / "none-combo.json"))
+    assert [e.name for e in T.bot_world(w4["p4"])["infos"]] == ["bybit", "mexc", "deepcoin", "wooxpro2"]
+    assert [e.label for e in T.bot_world(w4["p4"])["infos"]][-1] == "WOO X Pro 2"
+    assert [e.name for e in T.bot_world(w4["p0"])["infos"]] == ["bybit", "mexc", "deepcoin"]

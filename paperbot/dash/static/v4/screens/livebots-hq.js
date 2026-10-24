@@ -1089,7 +1089,8 @@ export function hqView(ctx, hub) {
   const [first, ...rest] = execsNow();                // the first reactor · the centre · the others (as before: 바이비트 · WOO X Pro)
   const deck = h("div", {class: "lbh-deck"}, R[first].el, center, ...rest.map((id) => R[id].el));
   /** The reactors of the summary's executors: the third (딥코인) is added after the others when it comes; with three the
-   *  deck puts the centre on top and the reactors in a row (livebots-hq.css .lbh-deck.three). */
+   *  deck puts the centre on top and the reactors in a row (livebots-hq.css .lbh-deck.three), with four (WOO X Pro 2) the
+   *  four in a row (.four; a phone two a row). */
   function addReactors(ids) {
     for (const id of ids) {
       if (R[id]) continue;
@@ -1098,6 +1099,7 @@ export function hqView(ctx, hub) {
     }
     for (const id of EXEC_SLOTS) if (R[id]) R[id].el.hidden = !ids.includes(id);
     deck.classList.toggle("three", ids.length > 2);
+    deck.classList.toggle("four", ids.length > 3);
   }
   addReactors(execsNow());
   const frame = h("div", {class: "lbh-frame"},

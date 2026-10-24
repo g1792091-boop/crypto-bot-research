@@ -63,6 +63,7 @@
 .lb-a-mexc .lb-sw { background: var(--series-m5); }
 .lb-a-paper2 .lb-sw { background: var(--series-ds); }      /* the second paper bot (only while there is one) */
 .lb-a-deepcoin .lb-sw { background: var(--series-dc); }    /* the third executor (only while the server has it) */
+.lb-a-wooxpro2 .lb-sw { background: var(--series-w2); }    /* the fourth, WOO X Pro 2 (only while the server has it) */
 
 /* the terminal under the real-money strip and the screen's head: one window high on a PC (strip and head about 80 px) */
 @media (min-width: 1200px) and (min-height: 640px) {

@@ -105,7 +105,8 @@ RULE_NO_TABLE_KO = "규칙봇 파일은 있지만 1분봉 표(live_bars)가 아�
 NO_BARS_KO = "이 거래 시간의 1분봉이 규칙봇 기록에 없어요"
 EXIT_KO = L.EXIT_KO
 SHORT = {"bybit": "B", "mexc": "W", "paper": "P",           # the second slot runs WOO X Pro (owners 10-20)
-         "deepcoin": "D"}                                   # the third, once installed (owners 10-24)
+         "deepcoin": "D",                                   # the third, once installed (owners 10-24)
+         "wooxpro2": "W2"}                                  # the fourth (WOO X Pro 2), once installed
 
 _lock = threading.Lock()
 _one: "OrderedDict[str, tuple]" = OrderedDict()
