@@ -712,10 +712,10 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     # the small databases first; the order executor's records (mainnet and testnet) are in exec/; since 10-19 also
     # the live Bybit and MEXC executors' records and the live paper bot's combo/live-ac.db; since 10-20 the WOO X Pro
     # executor's records, the -35 % paper bot's and since 10-23 the 'VWAP 개선판' paper bot's; since 10-24 the DeepCoin
-    # executor's (the same list as offsite)
+    # executor's and the '친구 매매법' paper bot's (the same list as offsite)
     assert ("for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live "
             "exec/executor-mexc-live exec/executor-wooxpro-live exec/executor-deepcoin-live combo/live-ac combo/live15-mexc "
-            "combo/vwap livecheck liveimprove shadow200/shadow200 debate/debate daily3 paper3; do") in script
+            "combo/vwap livecheck liveimprove combo/friend shadow200/shadow200 debate/debate daily3 paper3; do") in script
     from paperbot.offsite import DB_NAMES
     assert script.split("for f in ", 1)[1].split("; do", 1)[0].split() == list(DB_NAMES)
     assert "VACUUM INTO" in script and "sqlite3 -bail -readonly" in script and ".backup" not in script.split(
@@ -730,6 +730,7 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
         _small_db(str(lib / "exec" / f"{name}.db"))
     (lib / "combo").mkdir()                                   # 10-19: the live paper bot's records
     _small_db(str(lib / "combo" / "live-ac.db"))
+    _small_db(str(lib / "combo" / "friend.db"))                # 10-24: the '친구 매매법' paper bot's
     (lib / "debate").mkdir()                                  # A3: the debate room's debate.db (its own folder)
     _small_db(str(lib / "debate" / "debate.db"))
     db = str(lib / "agents3.db")
@@ -749,7 +750,7 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     [day] = os.listdir(bk)
     assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "debate.db", "executor-bybit-live.db",
                                             "executor-mexc-live.db", "executor-testnet.db", "executor.db",
-                                            "inbox.db", "liq.db", "live-ac.db", "paper3.db"]
+                                            "friend.db", "inbox.db", "liq.db", "live-ac.db", "paper3.db"]
     c = sqlite3.connect(str(bk / day / "agents3.db"))
     assert c.execute("SELECT COUNT(*) FROM messages WHERE text = ?", ("y" * 5000,)).fetchone()[0] == 1
     assert c.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -765,7 +766,7 @@ def test_backup_unit_copies_every_database_read_only_and_fails_on_a_failed_copy(
     assert r.returncode == 1 and "inbox.db" in r.stderr
     assert sorted(os.listdir(bk / day)) == ["agents3.db", "daily3.db", "debate.db", "executor-bybit-live.db",
                                             "executor-mexc-live.db", "executor-testnet.db", "executor.db",
-                                            "inbox.db", "liq.db", "live-ac.db", "paper3.db"]
+                                            "friend.db", "inbox.db", "liq.db", "live-ac.db", "paper3.db"]
     c = sqlite3.connect(str(bk / day / "inbox.db"))
     assert c.execute("SELECT COUNT(*) FROM t").fetchone()[0] == 3    # this morning's good copy
     c.close()

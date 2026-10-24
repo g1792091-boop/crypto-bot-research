@@ -1008,8 +1008,8 @@ def test_live_trading_databases_are_backed_up_and_restored_to_their_folders():
     """10-19 live start: the Bybit and MEXC executors' records and the live paper bot's DB are real-money history.
     They are in the nightly and off-site backup, and a restore puts them back where the services read them: the
     executor DBs to the executor user's folder, live-ac.db to the paper bot's combo folder (install.sh's line)."""
-    for f in ("exec/executor-bybit-live", "exec/executor-mexc-live", "combo/live-ac"):
-        assert f in off.DB_NAMES
+    for f in ("exec/executor-bybit-live", "exec/executor-mexc-live", "combo/live-ac", "combo/friend"):
+        assert f in off.DB_NAMES                               # combo/friend: the '친구 매매법' paper bot (10-24)
     bases = [f.rsplit("/", 1)[-1] for f in off.DB_NAMES]
     assert len(bases) == len(set(bases))                       # a copy is <basename>.db: no two may share one
     dest = Path("/root/restore-out/20261019")
