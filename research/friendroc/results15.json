@@ -1,0 +1,938 @@
+{
+ "prereg11_sha256": "9c8634b288d4d44474d54d3cf5372787db0c4a110115d55fd8a76ed06cae3544",
+ "fee_roe_pct": 4.34,
+ "runs": {
+  "A 손거래 방식 · 계단 (순ROE) · 손절 −20": {
+   "oct2026": {
+    "n": 133,
+    "per_weekday": 7.82,
+    "win": 0.5789,
+    "avg_win_pct": 14.6,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.598,
+    "roe_pct": -0.697,
+    "roe_pct_no_payback": -3.343,
+    "mult40": 0.4782,
+    "maxdd40": -0.71,
+    "twin": 0.5845
+   },
+   "last19": {
+    "n": 114,
+    "per_weekday": 7.6,
+    "win": 0.5877,
+    "avg_win_pct": 14.8,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.595,
+    "roe_pct": -0.272,
+    "roe_pct_no_payback": -2.918,
+    "mult40": 0.6437,
+    "maxdd40": -0.71
+   },
+   "select": {
+    "n": 15920,
+    "per_weekday": 12.6,
+    "win": 0.5574,
+    "avg_win_pct": 15.5,
+    "avg_loss_pct": -21.6,
+    "breakeven_win": 0.581,
+    "roe_pct": -0.884,
+    "roe_pct_no_payback": -3.53,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 1.0
+   },
+   "confirm": {
+    "n": 4907,
+    "per_weekday": 10.74,
+    "win": 0.546,
+    "avg_win_pct": 15.3,
+    "avg_loss_pct": -21.6,
+    "breakeven_win": 0.586,
+    "roe_pct": -1.468,
+    "roe_pct_no_payback": -4.114,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.4365
+   },
+   "months": {
+    "median_all": 0.15,
+    "up_all": 3,
+    "n_all": 79,
+    "median_2025": 0.112,
+    "up_2025": 0,
+    "x2_all": 1
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0031,
+    "x4": 0.0347,
+    "to_10pct_or_less": 0.984
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.4211,
+     "lock": 0.5714,
+     "open": 1,
+     "lock_mean_roe_pct": 12.12,
+     "lock_ge_20_share": 0.0789,
+     "hold_median_min": 61
+    },
+    "last19": {
+     "stop": 0.4123,
+     "lock": 0.5789,
+     "open": 1,
+     "lock_mean_roe_pct": 12.33,
+     "lock_ge_20_share": 0.0909,
+     "hold_median_min": 66
+    },
+    "select": {
+     "stop": 0.4393,
+     "lock": 0.5607,
+     "open": 0,
+     "lock_mean_roe_pct": 12.77,
+     "lock_ge_20_share": 0.1334,
+     "hold_median_min": 21
+    },
+    "confirm": {
+     "stop": 0.4516,
+     "lock": 0.5484,
+     "open": 0,
+     "lock_mean_roe_pct": 12.54,
+     "lock_ge_20_share": 0.1048,
+     "hold_median_min": 33
+    }
+   },
+   "doge": {
+    "oct2026": {
+     "n": 74,
+     "per_weekday": 4.35,
+     "win": 0.4865,
+     "avg_win_pct": 13.8,
+     "avg_loss_pct": -21.3,
+     "breakeven_win": 0.606,
+     "roe_pct": -4.203,
+     "roe_pct_no_payback": -6.849,
+     "mult40": 0.2348,
+     "maxdd40": -0.765
+    },
+    "last19": {
+     "n": 65,
+     "per_weekday": 4.33,
+     "win": 0.4923,
+     "avg_win_pct": 13.8,
+     "avg_loss_pct": -21.2,
+     "breakeven_win": 0.605,
+     "roe_pct": -3.956,
+     "roe_pct_no_payback": -6.602,
+     "mult40": 0.299,
+     "maxdd40": -0.728
+    },
+    "select": {
+     "n": 6302,
+     "per_weekday": 4.99,
+     "win": 0.5471,
+     "avg_win_pct": 15.9,
+     "avg_loss_pct": -21.5,
+     "breakeven_win": 0.574,
+     "roe_pct": -1.016,
+     "roe_pct_no_payback": -3.662,
+     "mult40": 0.0,
+     "maxdd40": -1.0
+    },
+    "confirm": {
+     "n": 2404,
+     "per_weekday": 5.26,
+     "win": 0.5354,
+     "avg_win_pct": 15.4,
+     "avg_loss_pct": -21.6,
+     "breakeven_win": 0.583,
+     "roe_pct": -1.778,
+     "roe_pct_no_payback": -4.424,
+     "mult40": 0.0,
+     "maxdd40": -1.0
+    },
+    "months": {
+     "median_all": 0.445,
+     "up_all": 12,
+     "n_all": 79,
+     "median_2025": 0.289,
+     "up_2025": 2,
+     "x2_all": 2
+    },
+    "goal90": {
+     "x51": 0.0,
+     "x10": 0.0,
+     "x4": 0.0332,
+     "to_10pct_or_less": 0.697
+    }
+   },
+   "verdict": {
+    "select_positive": false,
+    "confirm_positive": false,
+    "confirm_twin_975": false,
+    "earns": false,
+    "text": "아님"
+   }
+  },
+  "B + 네 조건 · 계단 (순ROE) · 손절 −20": {
+   "oct2026": {
+    "n": 53,
+    "per_weekday": 3.12,
+    "win": 0.5283,
+    "avg_win_pct": 14.3,
+    "avg_loss_pct": -21.1,
+    "breakeven_win": 0.595,
+    "roe_pct": -2.378,
+    "roe_pct_no_payback": -5.024,
+    "mult40": 0.5224,
+    "maxdd40": -0.562,
+    "twin": 0.25
+   },
+   "last19": {
+    "n": 44,
+    "per_weekday": 2.93,
+    "win": 0.5227,
+    "avg_win_pct": 14.7,
+    "avg_loss_pct": -21.0,
+    "breakeven_win": 0.587,
+    "roe_pct": -2.313,
+    "roe_pct_no_payback": -4.959,
+    "mult40": 0.5887,
+    "maxdd40": -0.562
+   },
+   "select": {
+    "n": 6295,
+    "per_weekday": 4.98,
+    "win": 0.5581,
+    "avg_win_pct": 15.8,
+    "avg_loss_pct": -21.6,
+    "breakeven_win": 0.577,
+    "roe_pct": -0.721,
+    "roe_pct_no_payback": -3.367,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.996
+   },
+   "confirm": {
+    "n": 2009,
+    "per_weekday": 4.4,
+    "win": 0.5625,
+    "avg_win_pct": 15.3,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.585,
+    "roe_pct": -0.844,
+    "roe_pct_no_payback": -3.49,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "twin": 0.969
+   },
+   "months": {
+    "median_all": 0.544,
+    "up_all": 17,
+    "n_all": 79,
+    "median_2025": 0.577,
+    "up_2025": 5,
+    "x2_all": 6
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0103,
+    "x4": 0.0858,
+    "to_10pct_or_less": 0.488
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.4528,
+     "lock": 0.5283,
+     "open": 1,
+     "lock_mean_roe_pct": 11.7,
+     "lock_ge_20_share": 0.1071,
+     "hold_median_min": 108
+    },
+    "last19": {
+     "stop": 0.4545,
+     "lock": 0.5227,
+     "open": 1,
+     "lock_mean_roe_pct": 12.1,
+     "lock_ge_20_share": 0.1304,
+     "hold_median_min": 120
+    },
+    "select": {
+     "stop": 0.4388,
+     "lock": 0.5612,
+     "open": 0,
+     "lock_mean_roe_pct": 13.03,
+     "lock_ge_20_share": 0.1412,
+     "hold_median_min": 22
+    },
+    "confirm": {
+     "stop": 0.4365,
+     "lock": 0.5635,
+     "open": 0,
+     "lock_mean_roe_pct": 12.66,
+     "lock_ge_20_share": 0.1087,
+     "hold_median_min": 30
+    }
+   },
+   "doge": {
+    "oct2026": {
+     "n": 20,
+     "per_weekday": 1.18,
+     "win": 0.4,
+     "avg_win_pct": 13.5,
+     "avg_loss_pct": -20.5,
+     "breakeven_win": 0.602,
+     "roe_pct": -6.875,
+     "roe_pct_no_payback": -9.521,
+     "mult40": 0.5452,
+     "maxdd40": -0.455
+    },
+    "last19": {
+     "n": 20,
+     "per_weekday": 1.33,
+     "win": 0.4,
+     "avg_win_pct": 13.5,
+     "avg_loss_pct": -20.5,
+     "breakeven_win": 0.602,
+     "roe_pct": -6.875,
+     "roe_pct_no_payback": -9.521,
+     "mult40": 0.5452,
+     "maxdd40": -0.455
+    },
+    "select": {
+     "n": 1623,
+     "per_weekday": 1.29,
+     "win": 0.5459,
+     "avg_win_pct": 16.6,
+     "avg_loss_pct": -21.5,
+     "breakeven_win": 0.564,
+     "roe_pct": -0.684,
+     "roe_pct_no_payback": -3.33,
+     "mult40": 0.0,
+     "maxdd40": -1.0
+    },
+    "confirm": {
+     "n": 685,
+     "per_weekday": 1.5,
+     "win": 0.5504,
+     "avg_win_pct": 15.5,
+     "avg_loss_pct": -21.5,
+     "breakeven_win": 0.581,
+     "roe_pct": -1.145,
+     "roe_pct_no_payback": -3.791,
+     "mult40": 0.0057,
+     "maxdd40": -0.994
+    },
+    "months": {
+     "median_all": 0.88,
+     "up_all": 22,
+     "n_all": 79,
+     "median_2025": 0.78,
+     "up_2025": 6,
+     "x2_all": 1
+    },
+    "goal90": {
+     "x51": 0.0,
+     "x10": 0.0,
+     "x4": 0.008,
+     "to_10pct_or_less": 0.003
+    }
+   },
+   "verdict": {
+    "select_positive": false,
+    "confirm_positive": false,
+    "confirm_twin_975": false,
+    "earns": false,
+    "text": "아님"
+   }
+  },
+  "A 손거래 방식 · 계단 (화면) · 손절 −20": {
+   "oct2026": {
+    "n": 161,
+    "per_weekday": 9.47,
+    "win": 0.6335,
+    "avg_win_pct": 11.0,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.664,
+    "roe_pct": -1.01,
+    "roe_pct_no_payback": -3.656,
+    "mult40": 0.3683,
+    "maxdd40": -0.771
+   },
+   "last19": {
+    "n": 142,
+    "per_weekday": 9.47,
+    "win": 0.6479,
+    "avg_win_pct": 10.7,
+    "avg_loss_pct": -21.7,
+    "breakeven_win": 0.669,
+    "roe_pct": -0.688,
+    "roe_pct_no_payback": -3.334,
+    "mult40": 0.5021,
+    "maxdd40": -0.731
+   },
+   "select": {
+    "n": 17651,
+    "per_weekday": 13.98,
+    "win": 0.6197,
+    "avg_win_pct": 11.4,
+    "avg_loss_pct": -21.3,
+    "breakeven_win": 0.652,
+    "roe_pct": -1.044,
+    "roe_pct_no_payback": -3.69,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 5660,
+    "per_weekday": 12.39,
+    "win": 0.6168,
+    "avg_win_pct": 10.9,
+    "avg_loss_pct": -21.4,
+    "breakeven_win": 0.662,
+    "roe_pct": -1.448,
+    "roe_pct_no_payback": -4.094,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.142,
+    "up_all": 1,
+    "n_all": 79,
+    "median_2025": 0.124,
+    "up_2025": 0,
+    "x2_all": 1
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0,
+    "x4": 0.0076,
+    "to_10pct_or_less": 1.0
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.3665,
+     "lock": 0.6273,
+     "open": 1,
+     "lock_mean_roe_pct": 8.41,
+     "lock_ge_20_share": 0.0495,
+     "hold_median_min": 46
+    },
+    "last19": {
+     "stop": 0.3521,
+     "lock": 0.6408,
+     "open": 1,
+     "lock_mean_roe_pct": 8.2,
+     "lock_ge_20_share": 0.0549,
+     "hold_median_min": 48
+    },
+    "select": {
+     "stop": 0.3718,
+     "lock": 0.6282,
+     "open": 0,
+     "lock_mean_roe_pct": 8.53,
+     "lock_ge_20_share": 0.0699,
+     "hold_median_min": 17
+    },
+    "confirm": {
+     "stop": 0.3765,
+     "lock": 0.6235,
+     "open": 0,
+     "lock_mean_roe_pct": 8.13,
+     "lock_ge_20_share": 0.0507,
+     "hold_median_min": 25
+    }
+   }
+  },
+  "B + 네 조건 · 계단 (화면) · 손절 −20": {
+   "oct2026": {
+    "n": 68,
+    "per_weekday": 4.0,
+    "win": 0.6324,
+    "avg_win_pct": 10.5,
+    "avg_loss_pct": -21.1,
+    "breakeven_win": 0.667,
+    "roe_pct": -1.095,
+    "roe_pct_no_payback": -3.741,
+    "mult40": 0.6444,
+    "maxdd40": -0.402
+   },
+   "last19": {
+    "n": 59,
+    "per_weekday": 3.93,
+    "win": 0.6441,
+    "avg_win_pct": 10.3,
+    "avg_loss_pct": -21.0,
+    "breakeven_win": 0.67,
+    "roe_pct": -0.809,
+    "roe_pct_no_payback": -3.455,
+    "mult40": 0.7332,
+    "maxdd40": -0.367
+   },
+   "select": {
+    "n": 6733,
+    "per_weekday": 5.33,
+    "win": 0.6179,
+    "avg_win_pct": 11.8,
+    "avg_loss_pct": -21.3,
+    "breakeven_win": 0.644,
+    "roe_pct": -0.864,
+    "roe_pct_no_payback": -3.51,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 2180,
+    "per_weekday": 4.77,
+    "win": 0.6252,
+    "avg_win_pct": 11.2,
+    "avg_loss_pct": -21.5,
+    "breakeven_win": 0.658,
+    "roe_pct": -1.074,
+    "roe_pct_no_payback": -3.72,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.507,
+    "up_all": 15,
+    "n_all": 79,
+    "median_2025": 0.517,
+    "up_2025": 4,
+    "x2_all": 6
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0007,
+    "x4": 0.0477,
+    "to_10pct_or_less": 0.499
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.3529,
+     "lock": 0.6324,
+     "open": 1,
+     "lock_mean_roe_pct": 7.89,
+     "lock_ge_20_share": 0.0698,
+     "hold_median_min": 50
+    },
+    "last19": {
+     "stop": 0.339,
+     "lock": 0.6441,
+     "open": 1,
+     "lock_mean_roe_pct": 7.7,
+     "lock_ge_20_share": 0.0789,
+     "hold_median_min": 61
+    },
+    "select": {
+     "stop": 0.3734,
+     "lock": 0.6266,
+     "open": 0,
+     "lock_mean_roe_pct": 8.9,
+     "lock_ge_20_share": 0.0804,
+     "hold_median_min": 18
+    },
+    "confirm": {
+     "stop": 0.3706,
+     "lock": 0.6294,
+     "open": 0,
+     "lock_mean_roe_pct": 8.42,
+     "lock_ge_20_share": 0.0525,
+     "hold_median_min": 23
+    }
+   }
+  },
+  "A 손거래 방식 · 계단 (순ROE) · 손절 −30": {
+   "oct2026": {
+    "n": 102,
+    "per_weekday": 6.0,
+    "win": 0.6667,
+    "avg_win_pct": 13.8,
+    "avg_loss_pct": -31.0,
+    "breakeven_win": 0.692,
+    "roe_pct": -1.153,
+    "roe_pct_no_payback": -3.799,
+    "mult40": 0.4195,
+    "maxdd40": -0.773
+   },
+   "last19": {
+    "n": 86,
+    "per_weekday": 5.73,
+    "win": 0.6744,
+    "avg_win_pct": 14.1,
+    "avg_loss_pct": -30.9,
+    "breakeven_win": 0.687,
+    "roe_pct": -0.547,
+    "roe_pct_no_payback": -3.193,
+    "mult40": 0.5935,
+    "maxdd40": -0.773
+   },
+   "select": {
+    "n": 13427,
+    "per_weekday": 10.63,
+    "win": 0.6512,
+    "avg_win_pct": 15.6,
+    "avg_loss_pct": -31.3,
+    "breakeven_win": 0.668,
+    "roe_pct": -0.77,
+    "roe_pct_no_payback": -3.416,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 4054,
+    "per_weekday": 8.87,
+    "win": 0.6367,
+    "avg_win_pct": 15.2,
+    "avg_loss_pct": -31.5,
+    "breakeven_win": 0.675,
+    "roe_pct": -1.778,
+    "roe_pct_no_payback": -4.424,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.174,
+    "up_all": 4,
+    "n_all": 79,
+    "median_2025": 0.14,
+    "up_2025": 0,
+    "x2_all": 1
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0039,
+    "x4": 0.0508,
+    "to_10pct_or_less": 0.975
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.3235,
+     "lock": 0.6667,
+     "open": 1,
+     "lock_mean_roe_pct": 11.14,
+     "lock_ge_20_share": 0.0294,
+     "hold_median_min": 92
+    },
+    "last19": {
+     "stop": 0.314,
+     "lock": 0.6744,
+     "open": 1,
+     "lock_mean_roe_pct": 11.45,
+     "lock_ge_20_share": 0.0345,
+     "hold_median_min": 102
+    },
+    "select": {
+     "stop": 0.3429,
+     "lock": 0.6571,
+     "open": 0,
+     "lock_mean_roe_pct": 12.72,
+     "lock_ge_20_share": 0.1395,
+     "hold_median_min": 27
+    },
+    "confirm": {
+     "stop": 0.3606,
+     "lock": 0.6394,
+     "open": 0,
+     "lock_mean_roe_pct": 12.45,
+     "lock_ge_20_share": 0.1038,
+     "hold_median_min": 43
+    }
+   }
+  },
+  "B + 네 조건 · 계단 (순ROE) · 손절 −30": {
+   "oct2026": {
+    "n": 42,
+    "per_weekday": 2.47,
+    "win": 0.619,
+    "avg_win_pct": 13.5,
+    "avg_loss_pct": -31.1,
+    "breakeven_win": 0.698,
+    "roe_pct": -3.53,
+    "roe_pct_no_payback": -6.176,
+    "mult40": 0.4629,
+    "maxdd40": -0.629
+   },
+   "last19": {
+    "n": 34,
+    "per_weekday": 2.27,
+    "win": 0.6176,
+    "avg_win_pct": 14.3,
+    "avg_loss_pct": -31.0,
+    "breakeven_win": 0.684,
+    "roe_pct": -3.025,
+    "roe_pct_no_payback": -5.671,
+    "mult40": 0.5723,
+    "maxdd40": -0.603
+   },
+   "select": {
+    "n": 5643,
+    "per_weekday": 4.47,
+    "win": 0.6521,
+    "avg_win_pct": 15.8,
+    "avg_loss_pct": -31.3,
+    "breakeven_win": 0.665,
+    "roe_pct": -0.611,
+    "roe_pct_no_payback": -3.257,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 1768,
+    "per_weekday": 3.87,
+    "win": 0.6533,
+    "avg_win_pct": 15.4,
+    "avg_loss_pct": -31.6,
+    "breakeven_win": 0.672,
+    "roe_pct": -0.873,
+    "roe_pct_no_payback": -3.519,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.47,
+    "up_all": 18,
+    "n_all": 79,
+    "median_2025": 0.479,
+    "up_2025": 4,
+    "x2_all": 9
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0132,
+    "x4": 0.1122,
+    "to_10pct_or_less": 0.563
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.3571,
+     "lock": 0.619,
+     "open": 1,
+     "lock_mean_roe_pct": 10.81,
+     "lock_ge_20_share": 0.1154,
+     "hold_median_min": 136
+    },
+    "last19": {
+     "stop": 0.3529,
+     "lock": 0.6176,
+     "open": 1,
+     "lock_mean_roe_pct": 11.65,
+     "lock_ge_20_share": 0.1429,
+     "hold_median_min": 150
+    },
+    "select": {
+     "stop": 0.3431,
+     "lock": 0.6569,
+     "open": 0,
+     "lock_mean_roe_pct": 12.98,
+     "lock_ge_20_share": 0.1454,
+     "hold_median_min": 30
+    },
+    "confirm": {
+     "stop": 0.345,
+     "lock": 0.655,
+     "open": 0,
+     "lock_mean_roe_pct": 12.72,
+     "lock_ge_20_share": 0.1183,
+     "hold_median_min": 41
+    }
+   }
+  },
+  "A 손거래 방식 · 계단 (순ROE) · 손절 −50": {
+   "oct2026": {
+    "n": 75,
+    "per_weekday": 4.41,
+    "win": 0.7733,
+    "avg_win_pct": 14.4,
+    "avg_loss_pct": -49.2,
+    "breakeven_win": 0.774,
+    "roe_pct": -0.047,
+    "roe_pct_no_payback": -2.693,
+    "mult40": 0.5951,
+    "maxdd40": -0.624
+   },
+   "last19": {
+    "n": 61,
+    "per_weekday": 4.07,
+    "win": 0.7869,
+    "avg_win_pct": 14.7,
+    "avg_loss_pct": -48.4,
+    "breakeven_win": 0.767,
+    "roe_pct": 1.223,
+    "roe_pct_no_payback": -1.423,
+    "mult40": 0.9122,
+    "maxdd40": -0.624
+   },
+   "select": {
+    "n": 10620,
+    "per_weekday": 8.41,
+    "win": 0.7521,
+    "avg_win_pct": 15.7,
+    "avg_loss_pct": -50.1,
+    "breakeven_win": 0.762,
+    "roe_pct": -0.622,
+    "roe_pct_no_payback": -3.268,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 3029,
+    "per_weekday": 6.63,
+    "win": 0.7412,
+    "avg_win_pct": 15.3,
+    "avg_loss_pct": -50.8,
+    "breakeven_win": 0.769,
+    "roe_pct": -1.848,
+    "roe_pct_no_payback": -4.494,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.127,
+    "up_all": 8,
+    "n_all": 79,
+    "median_2025": 0.113,
+    "up_2025": 1,
+    "x2_all": 0
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0054,
+    "x4": 0.103,
+    "to_10pct_or_less": 0.975
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.2133,
+     "lock": 0.7733,
+     "open": 1,
+     "lock_mean_roe_pct": 11.71,
+     "lock_ge_20_share": 0.069,
+     "hold_median_min": 101
+    },
+    "last19": {
+     "stop": 0.1967,
+     "lock": 0.7869,
+     "open": 1,
+     "lock_mean_roe_pct": 12.02,
+     "lock_ge_20_share": 0.0625,
+     "hold_median_min": 120
+    },
+    "select": {
+     "stop": 0.2395,
+     "lock": 0.7605,
+     "open": 0,
+     "lock_mean_roe_pct": 12.81,
+     "lock_ge_20_share": 0.1466,
+     "hold_median_min": 34
+    },
+    "confirm": {
+     "stop": 0.2542,
+     "lock": 0.7458,
+     "open": 0,
+     "lock_mean_roe_pct": 12.5,
+     "lock_ge_20_share": 0.1076,
+     "hold_median_min": 60
+    }
+   }
+  },
+  "B + 네 조건 · 계단 (순ROE) · 손절 −50": {
+   "oct2026": {
+    "n": 36,
+    "per_weekday": 2.12,
+    "win": 0.75,
+    "avg_win_pct": 13.8,
+    "avg_loss_pct": -48.5,
+    "breakeven_win": 0.778,
+    "roe_pct": -1.731,
+    "roe_pct_no_payback": -4.377,
+    "mult40": 0.6076,
+    "maxdd40": -0.675
+   },
+   "last19": {
+    "n": 29,
+    "per_weekday": 1.93,
+    "win": 0.6897,
+    "avg_win_pct": 14.1,
+    "avg_loss_pct": -48.5,
+    "breakeven_win": 0.775,
+    "roe_pct": -5.324,
+    "roe_pct_no_payback": -7.97,
+    "mult40": 0.4252,
+    "maxdd40": -0.675
+   },
+   "select": {
+    "n": 4847,
+    "per_weekday": 3.84,
+    "win": 0.7543,
+    "avg_win_pct": 15.8,
+    "avg_loss_pct": -50.5,
+    "breakeven_win": 0.762,
+    "roe_pct": -0.494,
+    "roe_pct_no_payback": -3.14,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "confirm": {
+    "n": 1508,
+    "per_weekday": 3.3,
+    "win": 0.746,
+    "avg_win_pct": 15.4,
+    "avg_loss_pct": -51.1,
+    "breakeven_win": 0.769,
+    "roe_pct": -1.495,
+    "roe_pct_no_payback": -4.141,
+    "mult40": 0.0,
+    "maxdd40": -1.0
+   },
+   "months": {
+    "median_all": 0.388,
+    "up_all": 20,
+    "n_all": 79,
+    "median_2025": 0.265,
+    "up_2025": 4,
+    "x2_all": 4
+   },
+   "goal90": {
+    "x51": 0.0,
+    "x10": 0.0192,
+    "x4": 0.0967,
+    "to_10pct_or_less": 0.645
+   },
+   "exits": {
+    "oct2026": {
+     "stop": 0.2222,
+     "lock": 0.75,
+     "open": 1,
+     "lock_mean_roe_pct": 11.2,
+     "lock_ge_20_share": 0.1481,
+     "hold_median_min": 258
+    },
+    "last19": {
+     "stop": 0.2759,
+     "lock": 0.6897,
+     "open": 1,
+     "lock_mean_roe_pct": 11.45,
+     "lock_ge_20_share": 0.15,
+     "hold_median_min": 290
+    },
+    "select": {
+     "stop": 0.2387,
+     "lock": 0.7613,
+     "open": 0,
+     "lock_mean_roe_pct": 12.92,
+     "lock_ge_20_share": 0.1428,
+     "hold_median_min": 39
+    },
+    "confirm": {
+     "stop": 0.2507,
+     "lock": 0.7493,
+     "open": 0,
+     "lock_mean_roe_pct": 12.65,
+     "lock_ge_20_share": 0.1168,
+     "hold_median_min": 54
+    }
+   }
+  }
+ }
+}
