@@ -1,0 +1,139 @@
+{
+ "rulebot_v4": {
+  "record": {
+   "trades": 13039,
+   "accounts": 307,
+   "recorded_total": -485895.0,
+   "recorded_fees": 362310.0,
+   "recorded_slippage": 144421.0,
+   "funding_paid": -367.0,
+   "direction_before_costs": 20470.0,
+   "notional_entry_plus_exit": 728390565.0,
+   "fee_rate_bp_median": {
+    "SL": 5.0,
+    "LOCK": 5.0,
+    "TP": 3.5
+   },
+   "exit_reasons": {
+    "LOCK": 7224,
+    "SL": 5370,
+    "TP": 445
+   }
+  },
+  "scenarios": {
+   "A": {
+    "label": "가정 + 페이백",
+    "total": -155434.0,
+    "cost": 451602.0,
+    "payback": 275332.0,
+    "per_trade": -11.92,
+    "win": 0.5828,
+    "n": 13039
+   },
+   "B": {
+    "label": "가정, 페이백 없음",
+    "total": -430766.0,
+    "cost": 451602.0,
+    "payback": 0.0,
+    "per_trade": -33.04,
+    "win": 0.574,
+    "n": 13039
+   },
+   "C": {
+    "label": "WOO 실측 + 페이백",
+    "total": -328136.0,
+    "cost": 624959.0,
+    "payback": 275987.0,
+    "per_trade": -25.17,
+    "win": 0.5778,
+    "n": 13039
+   },
+   "D": {
+    "label": "WOO 실측",
+    "total": -604123.0,
+    "cost": 624959.0,
+    "payback": 0.0,
+    "per_trade": -46.33,
+    "win": 0.5694,
+    "n": 13039
+   },
+   "E": {
+    "label": "바이비트 실측",
+    "total": -401630.0,
+    "cost": 422467.0,
+    "payback": 0.0,
+    "per_trade": -30.8,
+    "win": 0.575,
+    "n": 13039
+   }
+  }
+ },
+ "league": {
+  "record": {
+   "trades": 4456,
+   "accounts": 742,
+   "recorded_total": -76462.0,
+   "recorded_fees": 36892.0,
+   "recorded_slippage": 14624.0,
+   "funding_paid": -261.0,
+   "gross_column": -25207.0,
+   "direction_before_costs": -25207.0,
+   "notional_entry_plus_exit": 74778478.0,
+   "max_abs_price_pnl_check": 9.202098013361137e-06,
+   "qty_vs_margin_x_lev_median": 1.0,
+   "exit_reasons": {
+    "LOCK": 2183,
+    "SL": 1435,
+    "RULE": 648,
+    "TP": 190
+   }
+  },
+  "scenarios": {
+   "A": {
+    "label": "가정 + 페이백",
+    "total": -43042.0,
+    "cost": 46363.0,
+    "payback": 28266.0,
+    "per_trade": -9.66,
+    "win": 0.548,
+    "n": 4456
+   },
+   "B": {
+    "label": "가정, 페이백 없음",
+    "total": -71308.0,
+    "cost": 46363.0,
+    "payback": 0.0,
+    "per_trade": -16.0,
+    "win": 0.5438,
+    "n": 4456
+   },
+   "C": {
+    "label": "WOO 실측 + 페이백",
+    "total": -60772.0,
+    "cost": 64160.0,
+    "payback": 28334.0,
+    "per_trade": -13.64,
+    "win": 0.5449,
+    "n": 4456
+   },
+   "D": {
+    "label": "WOO 실측",
+    "total": -89106.0,
+    "cost": 64160.0,
+    "payback": 0.0,
+    "per_trade": -20.0,
+    "win": 0.5424,
+    "n": 4456
+   },
+   "E": {
+    "label": "바이비트 실측",
+    "total": -68317.0,
+    "cost": 43372.0,
+    "payback": 0.0,
+    "per_trade": -15.33,
+    "win": 0.5444,
+    "n": 4456
+   }
+  }
+ }
+}
