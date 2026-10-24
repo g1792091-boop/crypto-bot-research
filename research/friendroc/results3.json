@@ -1,0 +1,4127 @@
+{
+ "prereg3_sha256": "ee96ac34b22044bdfac5a614b6a2e949af7f4ebd8e323835f1c3d5d22c8ae04e",
+ "data_end_utc": "2026-10-23 00:00:00",
+ "periods_utc": {
+  "oct2026": [
+   "2026-10-01 00:00:00",
+   "2026-10-23 00:00:00"
+  ],
+  "last19": [
+   "2026-10-04 00:00:00",
+   "2026-10-23 00:00:00"
+  ],
+  "select": [
+   "2020-03-01 00:00:00",
+   "2025-01-01 00:00:00"
+  ],
+  "confirm": [
+   "2025-01-01 00:00:00",
+   "2026-10-01 00:00:00"
+  ]
+ },
+ "P": {
+  "oct2026": {
+   "n": 64,
+   "per_month": 88.6,
+   "wins": 50,
+   "losses": 14,
+   "win": 0.7812,
+   "avg_win_pct": 13.36,
+   "avg_loss_pct": -47.15,
+   "breakeven_win": 0.7793,
+   "roe_pct": 0.121,
+   "gross_roe_pct": 3.841,
+   "month_sum_pct": 10.7,
+   "mult40": 0.7,
+   "maxdd40": -0.763,
+   "stop_share": 0.2031,
+   "liquidated": 0
+  },
+  "last19": {
+   "n": 58,
+   "per_month": 92.9,
+   "wins": 45,
+   "losses": 13,
+   "win": 0.7759,
+   "avg_win_pct": 13.71,
+   "avg_loss_pct": -46.93,
+   "breakeven_win": 0.774,
+   "roe_pct": 0.115,
+   "gross_roe_pct": 3.835,
+   "month_sum_pct": 10.6,
+   "mult40": 0.718,
+   "maxdd40": -0.763,
+   "stop_share": 0.2069,
+   "liquidated": 0
+  },
+  "select": {
+   "n": 9614,
+   "per_month": 165.6,
+   "wins": 7148,
+   "losses": 2466,
+   "win": 0.7435,
+   "avg_win_pct": 12.93,
+   "avg_loss_pct": -48.24,
+   "breakeven_win": 0.7886,
+   "roe_pct": -2.758,
+   "gross_roe_pct": 0.962,
+   "month_sum_pct": -456.7,
+   "mult40": 0.0,
+   "maxdd40": -1.0,
+   "stop_share": 0.2463,
+   "liquidated": 0
+  },
+  "confirm": {
+   "n": 2693,
+   "per_month": 128.5,
+   "wins": 1975,
+   "losses": 718,
+   "win": 0.7334,
+   "avg_win_pct": 12.73,
+   "avg_loss_pct": -48.78,
+   "breakeven_win": 0.793,
+   "roe_pct": -3.668,
+   "gross_roe_pct": 0.052,
+   "month_sum_pct": -471.3,
+   "mult40": 0.0,
+   "maxdd40": -1.0,
+   "stop_share": 0.2596,
+   "liquidated": 0
+  }
+ },
+ "target": {
+  "five_year_trades": 12308,
+  "runs_of_64": 12245,
+  "fewest_losses_in_64": 6,
+  "most_losses_in_64": 27,
+  "median_losses_in_64": 17.0,
+  "share_runs_le4": 0.0,
+  "share_runs_le8": 0.00874,
+  "share_runs_le10": 0.0414,
+  "share_runs_ge14": 0.8063,
+  "oct_win_needed_for_4_of_64": 0.9375
+ },
+ "predict": {
+  "loss_share": {
+   "select": 0.2547,
+   "confirm": 0.2642,
+   "oct_candidates": 0.2682
+  },
+  "n": {
+   "select": 46434,
+   "confirm": 17028,
+   "oct_candidates": 619,
+   "oct_taken": 64
+  },
+  "logistic": {
+   "auc_select_in_sample": 0.5391,
+   "auc_confirm": 0.5029,
+   "auc_oct_candidates": 0.5457,
+   "auc_oct_taken": 0.5786,
+   "filter_top20": {
+    "oct2026": {
+     "n": 59,
+     "per_month": 81.6,
+     "wins": 46,
+     "losses": 13,
+     "win": 0.7797,
+     "avg_win_pct": 13.49,
+     "avg_loss_pct": -46.93,
+     "breakeven_win": 0.7767,
+     "roe_pct": 0.177,
+     "gross_roe_pct": 3.897,
+     "month_sum_pct": 14.4,
+     "mult40": 0.728,
+     "maxdd40": -0.692,
+     "stop_share": 0.2034,
+     "liquidated": 0
+    },
+    "last19": {
+     "n": 53,
+     "per_month": 84.9,
+     "wins": 41,
+     "losses": 12,
+     "win": 0.7736,
+     "avg_win_pct": 13.89,
+     "avg_loss_pct": -46.68,
+     "breakeven_win": 0.7707,
+     "roe_pct": 0.177,
+     "gross_roe_pct": 3.897,
+     "month_sum_pct": 15.0,
+     "mult40": 0.747,
+     "maxdd40": -0.692,
+     "stop_share": 0.2075,
+     "liquidated": 0
+    },
+    "select": {
+     "n": 8132,
+     "per_month": 140.1,
+     "wins": 6102,
+     "losses": 2030,
+     "win": 0.7504,
+     "avg_win_pct": 12.6,
+     "avg_loss_pct": -48.58,
+     "breakeven_win": 0.794,
+     "roe_pct": -2.672,
+     "gross_roe_pct": 1.048,
+     "month_sum_pct": -374.3,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.242,
+     "liquidated": 0
+    },
+    "confirm": {
+     "n": 2468,
+     "per_month": 117.8,
+     "wins": 1825,
+     "losses": 643,
+     "win": 0.7395,
+     "avg_win_pct": 12.64,
+     "avg_loss_pct": -48.56,
+     "breakeven_win": 0.7935,
+     "roe_pct": -3.307,
+     "gross_roe_pct": 0.413,
+     "month_sum_pct": -389.4,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2524,
+     "liquidated": 0
+    },
+    "candidates_removed_share": {
+     "oct2026": 0.184,
+     "last19": 0.196,
+     "select": 0.2,
+     "confirm": 0.18
+    }
+   },
+   "filter_top40": {
+    "oct2026": {
+     "n": 53,
+     "per_month": 73.3,
+     "wins": 41,
+     "losses": 12,
+     "win": 0.7736,
+     "avg_win_pct": 13.7,
+     "avg_loss_pct": -46.68,
+     "breakeven_win": 0.7731,
+     "roe_pct": 0.028,
+     "gross_roe_pct": 3.748,
+     "month_sum_pct": 2.0,
+     "mult40": 0.723,
+     "maxdd40": -0.504,
+     "stop_share": 0.2075,
+     "liquidated": 0
+    },
+    "last19": {
+     "n": 47,
+     "per_month": 75.3,
+     "wins": 36,
+     "losses": 11,
+     "win": 0.766,
+     "avg_win_pct": 14.18,
+     "avg_loss_pct": -46.37,
+     "breakeven_win": 0.7658,
+     "roe_pct": 0.008,
+     "gross_roe_pct": 3.728,
+     "month_sum_pct": 0.6,
+     "mult40": 0.741,
+     "maxdd40": -0.504,
+     "stop_share": 0.2128,
+     "liquidated": 0
+    },
+    "select": {
+     "n": 6808,
+     "per_month": 117.3,
+     "wins": 5134,
+     "losses": 1674,
+     "win": 0.7541,
+     "avg_win_pct": 12.58,
+     "avg_loss_pct": -48.43,
+     "breakeven_win": 0.7938,
+     "roe_pct": -2.423,
+     "gross_roe_pct": 1.297,
+     "month_sum_pct": -284.2,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2377,
+     "liquidated": 0
+    },
+    "confirm": {
+     "n": 2162,
+     "per_month": 103.2,
+     "wins": 1599,
+     "losses": 563,
+     "win": 0.7396,
+     "avg_win_pct": 12.55,
+     "avg_loss_pct": -48.69,
+     "breakeven_win": 0.7951,
+     "roe_pct": -3.396,
+     "gross_roe_pct": 0.324,
+     "month_sum_pct": -350.3,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.253,
+     "liquidated": 0
+    },
+    "candidates_removed_share": {
+     "oct2026": 0.394,
+     "last19": 0.411,
+     "select": 0.4,
+     "confirm": 0.369
+    }
+   }
+  },
+  "tree": {
+   "auc_select_in_sample": 0.5978,
+   "auc_confirm": 0.5053,
+   "auc_oct_candidates": 0.5754,
+   "auc_oct_taken": 0.5186,
+   "filter_top20": {
+    "oct2026": {
+     "n": 57,
+     "per_month": 78.9,
+     "wins": 43,
+     "losses": 14,
+     "win": 0.7544,
+     "avg_win_pct": 13.55,
+     "avg_loss_pct": -47.15,
+     "breakeven_win": 0.7767,
+     "roe_pct": -1.355,
+     "gross_roe_pct": 2.365,
+     "month_sum_pct": -106.9,
+     "mult40": 0.503,
+     "maxdd40": -0.763,
+     "stop_share": 0.2281,
+     "liquidated": 0
+    },
+    "last19": {
+     "n": 51,
+     "per_month": 81.7,
+     "wins": 38,
+     "losses": 13,
+     "win": 0.7451,
+     "avg_win_pct": 13.84,
+     "avg_loss_pct": -46.93,
+     "breakeven_win": 0.7722,
+     "roe_pct": -1.649,
+     "gross_roe_pct": 2.071,
+     "month_sum_pct": -134.7,
+     "mult40": 0.504,
+     "maxdd40": -0.763,
+     "stop_share": 0.2353,
+     "liquidated": 0
+    },
+    "select": {
+     "n": 8242,
+     "per_month": 142.0,
+     "wins": 6307,
+     "losses": 1935,
+     "win": 0.7652,
+     "avg_win_pct": 12.69,
+     "avg_loss_pct": -48.67,
+     "breakeven_win": 0.7931,
+     "roe_pct": -1.713,
+     "gross_roe_pct": 2.007,
+     "month_sum_pct": -243.3,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2281,
+     "liquidated": 0
+    },
+    "confirm": {
+     "n": 2501,
+     "per_month": 119.3,
+     "wins": 1840,
+     "losses": 661,
+     "win": 0.7357,
+     "avg_win_pct": 12.52,
+     "avg_loss_pct": -48.92,
+     "breakeven_win": 0.7963,
+     "roe_pct": -3.722,
+     "gross_roe_pct": -0.002,
+     "month_sum_pct": -444.2,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2583,
+     "liquidated": 0
+    },
+    "candidates_removed_share": {
+     "oct2026": 0.12,
+     "last19": 0.127,
+     "select": 0.2,
+     "confirm": 0.163
+    }
+   },
+   "filter_top40": {
+    "oct2026": {
+     "n": 52,
+     "per_month": 71.9,
+     "wins": 42,
+     "losses": 10,
+     "win": 0.8077,
+     "avg_win_pct": 13.56,
+     "avg_loss_pct": -46.01,
+     "breakeven_win": 0.7724,
+     "roe_pct": 2.105,
+     "gross_roe_pct": 5.825,
+     "month_sum_pct": 151.4,
+     "mult40": 1.166,
+     "maxdd40": -0.532,
+     "stop_share": 0.1731,
+     "liquidated": 0
+    },
+    "last19": {
+     "n": 47,
+     "per_month": 75.3,
+     "wins": 38,
+     "losses": 9,
+     "win": 0.8085,
+     "avg_win_pct": 13.76,
+     "avg_loss_pct": -45.57,
+     "breakeven_win": 0.7681,
+     "roe_pct": 2.396,
+     "gross_roe_pct": 6.116,
+     "month_sum_pct": 180.4,
+     "mult40": 1.215,
+     "maxdd40": -0.532,
+     "stop_share": 0.1702,
+     "liquidated": 0
+    },
+    "select": {
+     "n": 6904,
+     "per_month": 118.9,
+     "wins": 5367,
+     "losses": 1537,
+     "win": 0.7774,
+     "avg_win_pct": 12.65,
+     "avg_loss_pct": -48.84,
+     "breakeven_win": 0.7943,
+     "roe_pct": -1.04,
+     "gross_roe_pct": 2.68,
+     "month_sum_pct": -123.7,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2171,
+     "liquidated": 0
+    },
+    "confirm": {
+     "n": 2191,
+     "per_month": 104.5,
+     "wins": 1604,
+     "losses": 587,
+     "win": 0.7321,
+     "avg_win_pct": 12.4,
+     "avg_loss_pct": -49.28,
+     "breakeven_win": 0.799,
+     "roe_pct": -4.127,
+     "gross_roe_pct": -0.407,
+     "month_sum_pct": -431.4,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2638,
+     "liquidated": 0
+    },
+    "candidates_removed_share": {
+     "oct2026": 0.312,
+     "last19": 0.319,
+     "select": 0.4,
+     "confirm": 0.367
+    }
+   }
+  }
+ },
+ "oct_fit": {
+  "rules_searched": {
+   "single": 483,
+   "pair": 112456
+  },
+  "oct_le4_rules": {
+   "single": 0,
+   "pair": 238
+  },
+  "oct_fewest_losses_any_rule_n30": 2,
+  "le4_rules_five_year": {
+   "better_both_halves_share": 0.437,
+   "positive_both_halves_share": 0.0,
+   "select_roe_pct_median": -2.698,
+   "confirm_roe_pct_median": -3.252,
+   "confirm_roe_pct_best": -1.709,
+   "oct_mult40_median": 1.997
+  },
+  "pick": {
+   "oct2026": {
+    "n": 37,
+    "per_month": 51.2,
+    "wins": 34,
+    "losses": 3,
+    "win": 0.9189,
+    "avg_win_pct": 13.63,
+    "avg_loss_pct": -36.7,
+    "breakeven_win": 0.7292,
+    "roe_pct": 9.547,
+    "gross_roe_pct": 13.267,
+    "month_sum_pct": 488.8,
+    "mult40": 3.692,
+    "maxdd40": -0.2,
+    "stop_share": 0.0541,
+    "liquidated": 0
+   },
+   "last19": {
+    "n": 30,
+    "per_month": 48.1,
+    "wins": 27,
+    "losses": 3,
+    "win": 0.9,
+    "avg_win_pct": 13.9,
+    "avg_loss_pct": -36.7,
+    "breakeven_win": 0.7254,
+    "roe_pct": 8.836,
+    "gross_roe_pct": 12.556,
+    "month_sum_pct": 424.7,
+    "mult40": 2.62,
+    "maxdd40": -0.2,
+    "stop_share": 0.0667,
+    "liquidated": 0
+   },
+   "select": {
+    "n": 5276,
+    "per_month": 90.9,
+    "wins": 3937,
+    "losses": 1339,
+    "win": 0.7462,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -48.37,
+    "breakeven_win": 0.7895,
+    "roe_pct": -2.65,
+    "gross_roe_pct": 1.07,
+    "month_sum_pct": -240.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2443,
+    "liquidated": 0
+   },
+   "confirm": {
+    "n": 1385,
+    "per_month": 66.1,
+    "wins": 988,
+    "losses": 397,
+    "win": 0.7134,
+    "avg_win_pct": 12.35,
+    "avg_loss_pct": -48.87,
+    "breakeven_win": 0.7982,
+    "roe_pct": -5.197,
+    "gross_roe_pct": -1.477,
+    "month_sum_pct": -343.4,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2794,
+    "liquidated": 0
+   },
+   "rule": "7일 위치 > 0.807이면 안 들어감 (고르기 70% 위치) + 15분 ROC9 < 0.399이면 안 들어감 (고르기 70% 위치)",
+   "candidates_removed_share_5y": 0.816,
+   "better_both_halves": false,
+   "positive_both_halves": false
+  }
+ },
+ "select_fit": {
+  "single": {
+   "pick": {
+    "oct2026": {
+     "n": 59,
+     "per_month": 81.6,
+     "wins": 46,
+     "losses": 13,
+     "win": 0.7797,
+     "avg_win_pct": 13.64,
+     "avg_loss_pct": -47.49,
+     "breakeven_win": 0.7768,
+     "roe_pct": 0.173,
+     "gross_roe_pct": 3.893,
+     "month_sum_pct": 14.1,
+     "mult40": 0.726,
+     "maxdd40": -0.704,
+     "stop_share": 0.2034,
+     "liquidated": 0
+    },
+    "last19": {
+     "n": 54,
+     "per_month": 86.5,
+     "wins": 42,
+     "losses": 12,
+     "win": 0.7778,
+     "avg_win_pct": 13.55,
+     "avg_loss_pct": -47.28,
+     "breakeven_win": 0.7773,
+     "roe_pct": 0.03,
+     "gross_roe_pct": 3.75,
+     "month_sum_pct": 2.6,
+     "mult40": 0.723,
+     "maxdd40": -0.704,
+     "stop_share": 0.2037,
+     "liquidated": 0
+    },
+    "select": {
+     "n": 7152,
+     "per_month": 123.2,
+     "wins": 5390,
+     "losses": 1762,
+     "win": 0.7536,
+     "avg_win_pct": 12.83,
+     "avg_loss_pct": -48.67,
+     "breakeven_win": 0.7914,
+     "roe_pct": -2.323,
+     "gross_roe_pct": 1.397,
+     "month_sum_pct": -286.2,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2388,
+     "liquidated": 0
+    },
+    "confirm": {
+     "n": 2197,
+     "per_month": 104.8,
+     "wins": 1611,
+     "losses": 586,
+     "win": 0.7333,
+     "avg_win_pct": 12.76,
+     "avg_loss_pct": -48.96,
+     "breakeven_win": 0.7933,
+     "roe_pct": -3.702,
+     "gross_roe_pct": 0.018,
+     "month_sum_pct": -388.1,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2608,
+     "liquidated": 0
+    },
+    "rule": "4시간 ROC9 > 4.05이면 안 들어감 (고르기 70% 위치)",
+    "candidates_removed_share_5y": 0.282,
+    "better_both_halves": false,
+    "positive_both_halves": false
+   },
+   "top10": [
+    {
+     "rule": "4시간 ROC9 > 4.05이면 안 들어감 (고르기 70% 위치)",
+     "oct2026": {
+      "n": 59,
+      "wins": 46,
+      "losses": 13,
+      "roe_pct": 0.173,
+      "mult40": 0.726
+     },
+     "last19": {
+      "n": 54,
+      "wins": 42,
+      "losses": 12,
+      "roe_pct": 0.03,
+      "mult40": 0.723
+     },
+     "select": {
+      "n": 7152,
+      "wins": 5390,
+      "losses": 1762,
+      "roe_pct": -2.323,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 2197,
+      "wins": 1611,
+      "losses": 586,
+      "roe_pct": -3.702,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "4시간 RSI26 > 49.3이면 안 들어감 (고르기 30% 위치)",
+     "oct2026": {
+      "n": 29,
+      "wins": 21,
+      "losses": 8,
+      "roe_pct": -3.16,
+      "mult40": 0.552
+     },
+     "last19": {
+      "n": 28,
+      "wins": 21,
+      "losses": 7,
+      "roe_pct": -1.487,
+      "mult40": 0.69
+     },
+     "select": {
+      "n": 4807,
+      "wins": 3622,
+      "losses": 1185,
+      "roe_pct": -2.342,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1454,
+      "wins": 1089,
+      "losses": 365,
+      "roe_pct": -2.821,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "15분 ADX < 22.9이면 안 들어감 (고르기 50% 위치)",
+     "oct2026": {
+      "n": 52,
+      "wins": 42,
+      "losses": 10,
+      "roe_pct": 1.736,
+      "mult40": 1.088
+     },
+     "last19": {
+      "n": 43,
+      "wins": 33,
+      "losses": 10,
+      "roe_pct": -0.245,
+      "mult40": 0.735
+     },
+     "select": {
+      "n": 7170,
+      "wins": 5367,
+      "losses": 1803,
+      "roe_pct": -2.381,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 2103,
+      "wins": 1538,
+      "losses": 565,
+      "roe_pct": -3.772,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "EMA 간격(ATR) < 0.596이면 안 들어감 (고르기 40% 위치)",
+     "oct2026": {
+      "n": 56,
+      "wins": 44,
+      "losses": 12,
+      "roe_pct": 0.41,
+      "mult40": 0.788
+     },
+     "last19": {
+      "n": 47,
+      "wins": 35,
+      "losses": 12,
+      "roe_pct": -1.642,
+      "mult40": 0.534
+     },
+     "select": {
+      "n": 7758,
+      "wins": 5800,
+      "losses": 1958,
+      "roe_pct": -2.411,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 2291,
+      "wins": 1689,
+      "losses": 602,
+      "roe_pct": -3.361,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "30분 변동성 위치 > 0.492이면 안 들어감 (고르기 50% 위치)",
+     "oct2026": {
+      "n": 55,
+      "wins": 44,
+      "losses": 11,
+      "roe_pct": 0.433,
+      "mult40": 0.818
+     },
+     "last19": {
+      "n": 50,
+      "wins": 40,
+      "losses": 10,
+      "roe_pct": 0.755,
+      "mult40": 0.889
+     },
+     "select": {
+      "n": 5163,
+      "wins": 3895,
+      "losses": 1268,
+      "roe_pct": -2.424,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1474,
+      "wins": 1099,
+      "losses": 375,
+      "roe_pct": -3.097,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "15분 변동성 위치 > 0.484이면 안 들어감 (고르기 50% 위치)",
+     "oct2026": {
+      "n": 53,
+      "wins": 40,
+      "losses": 13,
+      "roe_pct": -2.041,
+      "mult40": 0.462
+     },
+     "last19": {
+      "n": 48,
+      "wins": 36,
+      "losses": 12,
+      "roe_pct": -2.23,
+      "mult40": 0.477
+     },
+     "select": {
+      "n": 5085,
+      "wins": 3835,
+      "losses": 1250,
+      "roe_pct": -2.427,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1399,
+      "wins": 1028,
+      "losses": 371,
+      "roe_pct": -3.641,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "추세 나이(봉) > 88이면 안 들어감 (고르기 80% 위치)",
+     "oct2026": {
+      "n": 51,
+      "wins": 40,
+      "losses": 11,
+      "roe_pct": 0.548,
+      "mult40": 0.825
+     },
+     "last19": {
+      "n": 45,
+      "wins": 35,
+      "losses": 10,
+      "roe_pct": 0.598,
+      "mult40": 0.846
+     },
+     "select": {
+      "n": 8690,
+      "wins": 6512,
+      "losses": 2178,
+      "roe_pct": -2.43,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 2426,
+      "wins": 1774,
+      "losses": 652,
+      "roe_pct": -3.732,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "추세 나이(봉) > 68이면 안 들어감 (고르기 70% 위치)",
+     "oct2026": {
+      "n": 46,
+      "wins": 36,
+      "losses": 10,
+      "roe_pct": 0.487,
+      "mult40": 0.829
+     },
+     "last19": {
+      "n": 41,
+      "wins": 32,
+      "losses": 9,
+      "roe_pct": 0.886,
+      "mult40": 0.9
+     },
+     "select": {
+      "n": 8096,
+      "wins": 6068,
+      "losses": 2028,
+      "roe_pct": -2.449,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 2272,
+      "wins": 1674,
+      "losses": 598,
+      "roe_pct": -3.309,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "24시간 위치 < 0.757이면 안 들어감 (고르기 50% 위치)",
+     "oct2026": {
+      "n": 56,
+      "wins": 43,
+      "losses": 13,
+      "roe_pct": -0.698,
+      "mult40": 0.601
+     },
+     "last19": {
+      "n": 46,
+      "wins": 35,
+      "losses": 11,
+      "roe_pct": -0.541,
+      "mult40": 0.673
+     },
+     "select": {
+      "n": 7166,
+      "wins": 5348,
+      "losses": 1818,
+      "roe_pct": -2.455,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 2227,
+      "wins": 1630,
+      "losses": 597,
+      "roe_pct": -3.69,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "거래량 배수 > 0.638이면 안 들어감 (고르기 40% 위치)",
+     "oct2026": {
+      "n": 52,
+      "wins": 41,
+      "losses": 11,
+      "roe_pct": 0.068,
+      "mult40": 0.756
+     },
+     "last19": {
+      "n": 45,
+      "wins": 35,
+      "losses": 10,
+      "roe_pct": -0.508,
+      "mult40": 0.703
+     },
+     "select": {
+      "n": 5664,
+      "wins": 4254,
+      "losses": 1410,
+      "roe_pct": -2.467,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1802,
+      "wins": 1361,
+      "losses": 441,
+      "roe_pct": -2.336,
+      "mult40": 0.0
+     }
+    }
+   ]
+  },
+  "pair": {
+   "pick": {
+    "oct2026": {
+     "n": 50,
+     "per_month": 69.2,
+     "wins": 42,
+     "losses": 8,
+     "win": 0.84,
+     "avg_win_pct": 12.39,
+     "avg_loss_pct": -45.01,
+     "breakeven_win": 0.7841,
+     "roe_pct": 3.208,
+     "gross_roe_pct": 6.928,
+     "month_sum_pct": 222.0,
+     "mult40": 1.517,
+     "maxdd40": -0.416,
+     "stop_share": 0.14,
+     "liquidated": 0
+    },
+    "last19": {
+     "n": 44,
+     "per_month": 70.5,
+     "wins": 37,
+     "losses": 7,
+     "win": 0.8409,
+     "avg_win_pct": 12.41,
+     "avg_loss_pct": -44.3,
+     "breakeven_win": 0.7812,
+     "roe_pct": 3.386,
+     "gross_roe_pct": 7.106,
+     "month_sum_pct": 238.7,
+     "mult40": 1.494,
+     "maxdd40": -0.416,
+     "stop_share": 0.1364,
+     "liquidated": 0
+    },
+    "select": {
+     "n": 5008,
+     "per_month": 86.3,
+     "wins": 3807,
+     "losses": 1201,
+     "win": 0.7602,
+     "avg_win_pct": 12.99,
+     "avg_loss_pct": -48.81,
+     "breakeven_win": 0.7898,
+     "roe_pct": -1.832,
+     "gross_roe_pct": 1.888,
+     "month_sum_pct": -158.0,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2332,
+     "liquidated": 0
+    },
+    "confirm": {
+     "n": 1665,
+     "per_month": 79.4,
+     "wins": 1262,
+     "losses": 403,
+     "win": 0.758,
+     "avg_win_pct": 12.52,
+     "avg_loss_pct": -48.74,
+     "breakeven_win": 0.7956,
+     "roe_pct": -2.305,
+     "gross_roe_pct": 1.415,
+     "month_sum_pct": -183.1,
+     "mult40": 0.0,
+     "maxdd40": -1.0,
+     "stop_share": 0.2354,
+     "liquidated": 0
+    },
+    "rule": "EMA52 거리(ATR) < 0.703이면 안 들어감 (고르기 20% 위치) + 거래량 배수 > 0.638이면 안 들어감 (고르기 40% 위치)",
+    "candidates_removed_share_5y": 0.684,
+    "better_both_halves": true,
+    "positive_both_halves": false
+   },
+   "top10": [
+    {
+     "rule": "EMA52 거리(ATR) < 0.703이면 안 들어감 (고르기 20% 위치) + 거래량 배수 > 0.638이면 안 들어감 (고르기 40% 위치)",
+     "oct2026": {
+      "n": 50,
+      "wins": 42,
+      "losses": 8,
+      "roe_pct": 3.208,
+      "mult40": 1.517
+     },
+     "last19": {
+      "n": 44,
+      "wins": 37,
+      "losses": 7,
+      "roe_pct": 3.386,
+      "mult40": 1.494
+     },
+     "select": {
+      "n": 5008,
+      "wins": 3807,
+      "losses": 1201,
+      "roe_pct": -1.832,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1665,
+      "wins": 1262,
+      "losses": 403,
+      "roe_pct": -2.305,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "4시간 ROC9 > 5.7이면 안 들어감 (고르기 80% 위치) + EMA 간격(ATR) < 0.596이면 안 들어감 (고르기 40% 위치)",
+     "oct2026": {
+      "n": 53,
+      "wins": 42,
+      "losses": 11,
+      "roe_pct": 1.087,
+      "mult40": 0.929
+     },
+     "last19": {
+      "n": 45,
+      "wins": 34,
+      "losses": 11,
+      "roe_pct": -1.112,
+      "mult40": 0.611
+     },
+     "select": {
+      "n": 5772,
+      "wins": 4387,
+      "losses": 1385,
+      "roe_pct": -1.845,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1932,
+      "wins": 1442,
+      "losses": 490,
+      "roe_pct": -2.93,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "4시간 ADX < 19.9이면 안 들어감 (고르기 30% 위치) + 거래량 배수 > 0.638이면 안 들어감 (고르기 40% 위치)",
+     "oct2026": {
+      "n": 47,
+      "wins": 37,
+      "losses": 10,
+      "roe_pct": -0.096,
+      "mult40": 0.755
+     },
+     "last19": {
+      "n": 43,
+      "wins": 33,
+      "losses": 10,
+      "roe_pct": -1.194,
+      "mult40": 0.63
+     },
+     "select": {
+      "n": 4908,
+      "wins": 3732,
+      "losses": 1176,
+      "roe_pct": -1.846,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1591,
+      "wins": 1206,
+      "losses": 385,
+      "roe_pct": -2.188,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "EMA52 거리(ATR) < 1.16이면 안 들어감 (고르기 40% 위치) + 30분 변동성 위치 > 0.598이면 안 들어감 (고르기 60% 위치)",
+     "oct2026": {
+      "n": 53,
+      "wins": 45,
+      "losses": 8,
+      "roe_pct": 3.971,
+      "mult40": 1.836
+     },
+     "last19": {
+      "n": 47,
+      "wins": 39,
+      "losses": 8,
+      "roe_pct": 3.072,
+      "mult40": 1.42
+     },
+     "select": {
+      "n": 4869,
+      "wins": 3695,
+      "losses": 1174,
+      "roe_pct": -1.856,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1532,
+      "wins": 1137,
+      "losses": 395,
+      "roe_pct": -3.283,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "24시간 위치 < 0.718이면 안 들어감 (고르기 40% 위치) + 30분 변동성 위치 > 0.598이면 안 들어감 (고르기 60% 위치)",
+     "oct2026": {
+      "n": 56,
+      "wins": 47,
+      "losses": 9,
+      "roe_pct": 3.264,
+      "mult40": 1.603
+     },
+     "last19": {
+      "n": 49,
+      "wins": 41,
+      "losses": 8,
+      "roe_pct": 3.309,
+      "mult40": 1.524
+     },
+     "select": {
+      "n": 4817,
+      "wins": 3648,
+      "losses": 1169,
+      "roe_pct": -1.879,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1535,
+      "wins": 1126,
+      "losses": 409,
+      "roe_pct": -3.871,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "EMA52 거리(ATR) < 1.16이면 안 들어감 (고르기 40% 위치) + 추세 나이(봉) > 41이면 안 들어감 (고르기 50% 위치)",
+     "oct2026": {
+      "n": 38,
+      "wins": 31,
+      "losses": 7,
+      "roe_pct": 2.116,
+      "mult40": 1.109
+     },
+     "last19": {
+      "n": 32,
+      "wins": 26,
+      "losses": 6,
+      "roe_pct": 1.938,
+      "mult40": 1.063
+     },
+     "select": {
+      "n": 5108,
+      "wins": 3854,
+      "losses": 1254,
+      "roe_pct": -1.908,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1619,
+      "wins": 1169,
+      "losses": 450,
+      "roe_pct": -4.369,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "30분 변동성 위치 > 0.598이면 안 들어감 (고르기 60% 위치) + 추세 나이(봉) > 68이면 안 들어감 (고르기 70% 위치)",
+     "oct2026": {
+      "n": 45,
+      "wins": 36,
+      "losses": 9,
+      "roe_pct": 1.044,
+      "mult40": 0.944
+     },
+     "last19": {
+      "n": 40,
+      "wins": 32,
+      "losses": 8,
+      "roe_pct": 1.522,
+      "mult40": 1.025
+     },
+     "select": {
+      "n": 5111,
+      "wins": 3896,
+      "losses": 1215,
+      "roe_pct": -1.91,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1462,
+      "wins": 1063,
+      "losses": 399,
+      "roe_pct": -3.89,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "30분 변동성 위치 > 0.598이면 안 들어감 (고르기 60% 위치) + 신호봉 몸통(ATR) < 0.342이면 안 들어감 (고르기 40% 위치)",
+     "oct2026": {
+      "n": 57,
+      "wins": 46,
+      "losses": 11,
+      "roe_pct": 1.592,
+      "mult40": 1.057
+     },
+     "last19": {
+      "n": 52,
+      "wins": 42,
+      "losses": 10,
+      "roe_pct": 1.785,
+      "mult40": 1.096
+     },
+     "select": {
+      "n": 5080,
+      "wins": 3856,
+      "losses": 1224,
+      "roe_pct": -1.924,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1485,
+      "wins": 1062,
+      "losses": 423,
+      "roe_pct": -4.974,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "거래량 배수 > 0.638이면 안 들어감 (고르기 40% 위치) + 신호봉 몸통(ATR) < 0.0892이면 안 들어감 (고르기 20% 위치)",
+     "oct2026": {
+      "n": 48,
+      "wins": 38,
+      "losses": 10,
+      "roe_pct": -0.129,
+      "mult40": 0.75
+     },
+     "last19": {
+      "n": 41,
+      "wins": 33,
+      "losses": 8,
+      "roe_pct": 0.49,
+      "mult40": 0.881
+     },
+     "select": {
+      "n": 4852,
+      "wins": 3680,
+      "losses": 1172,
+      "roe_pct": -1.93,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1579,
+      "wins": 1192,
+      "losses": 387,
+      "roe_pct": -2.581,
+      "mult40": 0.0
+     }
+    },
+    {
+     "rule": "ROC9 돌파 폭 > 0.614이면 안 들어감 (고르기 60% 위치) + 4시간 ROC9 > 4.05이면 안 들어감 (고르기 70% 위치)",
+     "oct2026": {
+      "n": 54,
+      "wins": 43,
+      "losses": 11,
+      "roe_pct": 0.179,
+      "mult40": 0.776
+     },
+     "last19": {
+      "n": 49,
+      "wins": 39,
+      "losses": 10,
+      "roe_pct": 0.121,
+      "mult40": 0.787
+     },
+     "select": {
+      "n": 4881,
+      "wins": 3726,
+      "losses": 1155,
+      "roe_pct": -1.952,
+      "mult40": 0.0
+     },
+     "confirm": {
+      "n": 1778,
+      "wins": 1313,
+      "losses": 465,
+      "roe_pct": -3.476,
+      "mult40": 0.0
+     }
+    }
+   ]
+  },
+  "min_select_trades": 4807
+ },
+ "exit_fixes": {
+  "X1-30 시간 손절 30분": {
+   "oct2026": {
+    "n": 246,
+    "per_month": 340.4,
+    "wins": 84,
+    "losses": 162,
+    "win": 0.3415,
+    "avg_win_pct": 7.02,
+    "avg_loss_pct": -9.01,
+    "breakeven_win": 0.5621,
+    "roe_pct": -3.538,
+    "gross_roe_pct": 0.182,
+    "month_sum_pct": -1204.2,
+    "mult40": 0.024,
+    "maxdd40": -0.976,
+    "stop_share": 0.0081,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2,
+     "lock": 37,
+     "time": 206,
+     "open": 1
+    }
+   },
+   "last19": {
+    "n": 216,
+    "per_month": 346.1,
+    "wins": 76,
+    "losses": 140,
+    "win": 0.3519,
+    "avg_win_pct": 6.89,
+    "avg_loss_pct": -8.5,
+    "breakeven_win": 0.5522,
+    "roe_pct": -3.083,
+    "gross_roe_pct": 0.637,
+    "month_sum_pct": -1067.0,
+    "mult40": 0.057,
+    "maxdd40": -0.943,
+    "stop_share": 0.0046,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1,
+     "lock": 31,
+     "time": 183,
+     "open": 1
+    }
+   },
+   "select": {
+    "n": 20711,
+    "per_month": 356.8,
+    "wins": 8588,
+    "losses": 12123,
+    "win": 0.4147,
+    "avg_win_pct": 10.1,
+    "avg_loss_pct": -13.25,
+    "breakeven_win": 0.5675,
+    "roe_pct": -3.569,
+    "gross_roe_pct": 0.151,
+    "month_sum_pct": -1273.3,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0343,
+    "liquidated": 0,
+    "exits": {
+     "stop": 711,
+     "lock": 6168,
+     "time": 13832
+    }
+   },
+   "confirm": {
+    "n": 7262,
+    "per_month": 346.5,
+    "wins": 2678,
+    "losses": 4584,
+    "win": 0.3688,
+    "avg_win_pct": 8.67,
+    "avg_loss_pct": -11.02,
+    "breakeven_win": 0.5596,
+    "roe_pct": -3.759,
+    "gross_roe_pct": -0.039,
+    "month_sum_pct": -1302.6,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.015,
+    "liquidated": 0,
+    "exits": {
+     "stop": 109,
+     "lock": 1537,
+     "time": 5616
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X1-60 시간 손절 60분": {
+   "oct2026": {
+    "n": 193,
+    "per_month": 267.0,
+    "wins": 74,
+    "losses": 119,
+    "win": 0.3834,
+    "avg_win_pct": 10.55,
+    "avg_loss_pct": -11.68,
+    "breakeven_win": 0.5255,
+    "roe_pct": -3.159,
+    "gross_roe_pct": 0.561,
+    "month_sum_pct": -843.6,
+    "mult40": 0.062,
+    "maxdd40": -0.951,
+    "stop_share": 0.0155,
+    "liquidated": 0,
+    "exits": {
+     "stop": 3,
+     "lock": 52,
+     "time": 137,
+     "open": 1
+    }
+   },
+   "last19": {
+    "n": 172,
+    "per_month": 275.6,
+    "wins": 65,
+    "losses": 107,
+    "win": 0.3779,
+    "avg_win_pct": 10.54,
+    "avg_loss_pct": -11.09,
+    "breakeven_win": 0.5128,
+    "roe_pct": -2.918,
+    "gross_roe_pct": 0.802,
+    "month_sum_pct": -804.1,
+    "mult40": 0.101,
+    "maxdd40": -0.928,
+    "stop_share": 0.0116,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2,
+     "lock": 45,
+     "time": 124,
+     "open": 1
+    }
+   },
+   "select": {
+    "n": 16999,
+    "per_month": 292.8,
+    "wins": 8570,
+    "losses": 8429,
+    "win": 0.5041,
+    "avg_win_pct": 11.5,
+    "avg_loss_pct": -18.15,
+    "breakeven_win": 0.6121,
+    "roe_pct": -3.201,
+    "gross_roe_pct": 0.519,
+    "month_sum_pct": -937.3,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0685,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1165,
+     "lock": 7371,
+     "time": 8463
+    }
+   },
+   "confirm": {
+    "n": 5820,
+    "per_month": 277.7,
+    "wins": 2682,
+    "losses": 3138,
+    "win": 0.4608,
+    "avg_win_pct": 10.38,
+    "avg_loss_pct": -15.26,
+    "breakeven_win": 0.5953,
+    "roe_pct": -3.448,
+    "gross_roe_pct": 0.272,
+    "month_sum_pct": -957.4,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0411,
+    "liquidated": 0,
+    "exits": {
+     "stop": 239,
+     "lock": 2025,
+     "time": 3556
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X1-120 시간 손절 2시간": {
+   "oct2026": {
+    "n": 148,
+    "per_month": 204.8,
+    "wins": 70,
+    "losses": 78,
+    "win": 0.473,
+    "avg_win_pct": 11.96,
+    "avg_loss_pct": -15.18,
+    "breakeven_win": 0.5593,
+    "roe_pct": -2.344,
+    "gross_roe_pct": 1.376,
+    "month_sum_pct": -480.0,
+    "mult40": 0.173,
+    "maxdd40": -0.893,
+    "stop_share": 0.027,
+    "liquidated": 0,
+    "exits": {
+     "stop": 4,
+     "lock": 59,
+     "time": 84,
+     "open": 1
+    }
+   },
+   "last19": {
+    "n": 130,
+    "per_month": 208.3,
+    "wins": 59,
+    "losses": 71,
+    "win": 0.4538,
+    "avg_win_pct": 12.22,
+    "avg_loss_pct": -13.73,
+    "breakeven_win": 0.5292,
+    "roe_pct": -1.956,
+    "gross_roe_pct": 1.764,
+    "month_sum_pct": -407.3,
+    "mult40": 0.273,
+    "maxdd40": -0.852,
+    "stop_share": 0.0154,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2,
+     "lock": 50,
+     "time": 77,
+     "open": 1
+    }
+   },
+   "select": {
+    "n": 13878,
+    "per_month": 239.1,
+    "wins": 8279,
+    "losses": 5599,
+    "win": 0.5966,
+    "avg_win_pct": 12.29,
+    "avg_loss_pct": -25.82,
+    "breakeven_win": 0.6776,
+    "roe_pct": -3.088,
+    "gross_roe_pct": 0.632,
+    "month_sum_pct": -738.2,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1224,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1698,
+     "lock": 7837,
+     "time": 4343
+    }
+   },
+   "confirm": {
+    "n": 4497,
+    "per_month": 214.6,
+    "wins": 2400,
+    "losses": 2097,
+    "win": 0.5337,
+    "avg_win_pct": 11.72,
+    "avg_loss_pct": -21.55,
+    "breakeven_win": 0.6478,
+    "roe_pct": -3.794,
+    "gross_roe_pct": -0.074,
+    "month_sum_pct": -814.0,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0869,
+    "liquidated": 0,
+    "exits": {
+     "stop": 391,
+     "lock": 2174,
+     "time": 1932
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X1-240 시간 손절 4시간": {
+   "oct2026": {
+    "n": 111,
+    "per_month": 153.6,
+    "wins": 68,
+    "losses": 43,
+    "win": 0.6126,
+    "avg_win_pct": 11.76,
+    "avg_loss_pct": -22.41,
+    "breakeven_win": 0.6558,
+    "roe_pct": -1.477,
+    "gross_roe_pct": 2.243,
+    "month_sum_pct": -226.8,
+    "mult40": 0.354,
+    "maxdd40": -0.811,
+    "stop_share": 0.0721,
+    "liquidated": 0,
+    "exits": {
+     "stop": 8,
+     "lock": 63,
+     "time": 40
+    }
+   },
+   "last19": {
+    "n": 95,
+    "per_month": 152.2,
+    "wins": 55,
+    "losses": 40,
+    "win": 0.5789,
+    "avg_win_pct": 12.14,
+    "avg_loss_pct": -21.58,
+    "breakeven_win": 0.64,
+    "roe_pct": -2.06,
+    "gross_roe_pct": 1.66,
+    "month_sum_pct": -313.5,
+    "mult40": 0.327,
+    "maxdd40": -0.811,
+    "stop_share": 0.0737,
+    "liquidated": 0,
+    "exits": {
+     "stop": 7,
+     "lock": 51,
+     "time": 37
+    }
+   },
+   "select": {
+    "n": 11617,
+    "per_month": 200.1,
+    "wins": 7801,
+    "losses": 3816,
+    "win": 0.6715,
+    "avg_win_pct": 12.72,
+    "avg_loss_pct": -34.71,
+    "breakeven_win": 0.7318,
+    "roe_pct": -2.861,
+    "gross_roe_pct": 0.859,
+    "month_sum_pct": -572.6,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1766,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2051,
+     "lock": 7743,
+     "time": 1823
+    }
+   },
+   "confirm": {
+    "n": 3538,
+    "per_month": 168.8,
+    "wins": 2207,
+    "losses": 1331,
+    "win": 0.6238,
+    "avg_win_pct": 12.31,
+    "avg_loss_pct": -31.16,
+    "breakeven_win": 0.7169,
+    "roe_pct": -4.045,
+    "gross_roe_pct": -0.325,
+    "month_sum_pct": -682.9,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1591,
+    "liquidated": 0,
+    "exits": {
+     "stop": 563,
+     "lock": 2135,
+     "time": 840
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X2-5 본전 이동 +5%": {
+   "oct2026": {
+    "n": 104,
+    "per_month": 143.9,
+    "wins": 91,
+    "losses": 13,
+    "win": 0.875,
+    "avg_win_pct": 5.29,
+    "avg_loss_pct": -46.85,
+    "breakeven_win": 0.8985,
+    "roe_pct": -1.227,
+    "gross_roe_pct": 2.493,
+    "month_sum_pct": -176.5,
+    "mult40": 0.432,
+    "maxdd40": -0.772,
+    "stop_share": 0.1154,
+    "liquidated": 0,
+    "exits": {
+     "stop": 12,
+     "lock": 34,
+     "open": 1,
+     "breakeven": 57
+    }
+   },
+   "last19": {
+    "n": 92,
+    "per_month": 147.4,
+    "wins": 80,
+    "losses": 12,
+    "win": 0.8696,
+    "avg_win_pct": 4.84,
+    "avg_loss_pct": -46.58,
+    "breakeven_win": 0.9059,
+    "roe_pct": -1.871,
+    "gross_roe_pct": 1.849,
+    "month_sum_pct": -275.8,
+    "mult40": 0.374,
+    "maxdd40": -0.772,
+    "stop_share": 0.1196,
+    "liquidated": 0,
+    "exits": {
+     "stop": 11,
+     "lock": 26,
+     "open": 1,
+     "breakeven": 54
+    }
+   },
+   "select": {
+    "n": 12725,
+    "per_month": 219.2,
+    "wins": 10019,
+    "losses": 2706,
+    "win": 0.7873,
+    "avg_win_pct": 6.39,
+    "avg_loss_pct": -38.09,
+    "breakeven_win": 0.8562,
+    "roe_pct": -3.065,
+    "gross_roe_pct": 0.655,
+    "month_sum_pct": -671.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1576,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2006,
+     "lock": 4603,
+     "breakeven": 6116
+    }
+   },
+   "confirm": {
+    "n": 3751,
+    "per_month": 179.0,
+    "wins": 2994,
+    "losses": 757,
+    "win": 0.7982,
+    "avg_win_pct": 5.97,
+    "avg_loss_pct": -41.12,
+    "breakeven_win": 0.8733,
+    "roe_pct": -3.536,
+    "gross_roe_pct": 0.184,
+    "month_sum_pct": -632.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1637,
+    "liquidated": 0,
+    "exits": {
+     "stop": 614,
+     "lock": 1295,
+     "breakeven": 1842
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X2-8 본전 이동 +8%": {
+   "oct2026": {
+    "n": 74,
+    "per_month": 102.4,
+    "wins": 60,
+    "losses": 14,
+    "win": 0.8108,
+    "avg_win_pct": 8.83,
+    "avg_loss_pct": -47.07,
+    "breakeven_win": 0.842,
+    "roe_pct": -1.743,
+    "gross_roe_pct": 1.977,
+    "month_sum_pct": -178.5,
+    "mult40": 0.416,
+    "maxdd40": -0.756,
+    "stop_share": 0.1757,
+    "liquidated": 0,
+    "exits": {
+     "stop": 13,
+     "lock": 39,
+     "open": 1,
+     "breakeven": 21
+    }
+   },
+   "last19": {
+    "n": 68,
+    "per_month": 108.9,
+    "wins": 55,
+    "losses": 13,
+    "win": 0.8088,
+    "avg_win_pct": 8.72,
+    "avg_loss_pct": -46.85,
+    "breakeven_win": 0.843,
+    "roe_pct": -1.9,
+    "gross_roe_pct": 1.82,
+    "month_sum_pct": -207.0,
+    "mult40": 0.427,
+    "maxdd40": -0.756,
+    "stop_share": 0.1765,
+    "liquidated": 0,
+    "exits": {
+     "stop": 12,
+     "lock": 35,
+     "open": 1,
+     "breakeven": 20
+    }
+   },
+   "select": {
+    "n": 11036,
+    "per_month": 190.1,
+    "wins": 8591,
+    "losses": 2445,
+    "win": 0.7785,
+    "avg_win_pct": 9.2,
+    "avg_loss_pct": -45.2,
+    "breakeven_win": 0.8309,
+    "roe_pct": -2.852,
+    "gross_roe_pct": 0.868,
+    "month_sum_pct": -542.3,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1979,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2184,
+     "lock": 6006,
+     "breakeven": 2846
+    }
+   },
+   "confirm": {
+    "n": 3188,
+    "per_month": 152.1,
+    "wins": 2462,
+    "losses": 726,
+    "win": 0.7723,
+    "avg_win_pct": 8.67,
+    "avg_loss_pct": -46.67,
+    "breakeven_win": 0.8434,
+    "roe_pct": -3.936,
+    "gross_roe_pct": -0.216,
+    "month_sum_pct": -598.6,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2114,
+    "liquidated": 0,
+    "exits": {
+     "stop": 674,
+     "lock": 1656,
+     "breakeven": 858
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X3 신호 취소(ROC9 반대)": {
+   "oct2026": {
+    "n": 222,
+    "per_month": 307.2,
+    "wins": 68,
+    "losses": 154,
+    "win": 0.3063,
+    "avg_win_pct": 11.49,
+    "avg_loss_pct": -10.18,
+    "breakeven_win": 0.4696,
+    "roe_pct": -3.539,
+    "gross_roe_pct": 0.181,
+    "month_sum_pct": -1087.0,
+    "mult40": 0.032,
+    "maxdd40": -0.977,
+    "stop_share": 0.0045,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1,
+     "lock": 61,
+     "open": 1,
+     "cancel": 159
+    }
+   },
+   "last19": {
+    "n": 201,
+    "per_month": 322.0,
+    "wins": 60,
+    "losses": 141,
+    "win": 0.2985,
+    "avg_win_pct": 11.58,
+    "avg_loss_pct": -10.0,
+    "breakeven_win": 0.4634,
+    "roe_pct": -3.559,
+    "gross_roe_pct": 0.161,
+    "month_sum_pct": -1146.0,
+    "mult40": 0.044,
+    "maxdd40": -0.971,
+    "stop_share": 0.005,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1,
+     "lock": 53,
+     "open": 1,
+     "cancel": 146
+    }
+   },
+   "select": {
+    "n": 19308,
+    "per_month": 332.6,
+    "wins": 8329,
+    "losses": 10979,
+    "win": 0.4314,
+    "avg_win_pct": 12.13,
+    "avg_loss_pct": -15.08,
+    "breakeven_win": 0.5541,
+    "roe_pct": -3.338,
+    "gross_roe_pct": 0.382,
+    "month_sum_pct": -1110.4,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0348,
+    "liquidated": 0,
+    "exits": {
+     "stop": 671,
+     "lock": 7877,
+     "cancel": 10760
+    }
+   },
+   "confirm": {
+    "n": 6587,
+    "per_month": 314.3,
+    "wins": 2491,
+    "losses": 4096,
+    "win": 0.3782,
+    "avg_win_pct": 11.63,
+    "avg_loss_pct": -12.83,
+    "breakeven_win": 0.5244,
+    "roe_pct": -3.577,
+    "gross_roe_pct": 0.143,
+    "month_sum_pct": -1124.3,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0156,
+    "liquidated": 0,
+    "exits": {
+     "stop": 103,
+     "lock": 2282,
+     "cancel": 4202
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X4 EMA21 이탈": {
+   "oct2026": {
+    "n": 191,
+    "per_month": 264.3,
+    "wins": 64,
+    "losses": 127,
+    "win": 0.3351,
+    "avg_win_pct": 13.3,
+    "avg_loss_pct": -12.93,
+    "breakeven_win": 0.493,
+    "roe_pct": -4.141,
+    "gross_roe_pct": -0.421,
+    "month_sum_pct": -1094.4,
+    "mult40": 0.03,
+    "maxdd40": -0.978,
+    "stop_share": 0.0105,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2,
+     "lock": 65,
+     "open": 1,
+     "cancel": 123
+    }
+   },
+   "last19": {
+    "n": 169,
+    "per_month": 270.8,
+    "wins": 56,
+    "losses": 113,
+    "win": 0.3314,
+    "avg_win_pct": 13.41,
+    "avg_loss_pct": -12.32,
+    "breakeven_win": 0.4787,
+    "roe_pct": -3.791,
+    "gross_roe_pct": -0.071,
+    "month_sum_pct": -1026.3,
+    "mult40": 0.058,
+    "maxdd40": -0.961,
+    "stop_share": 0.0059,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1,
+     "lock": 57,
+     "open": 1,
+     "cancel": 110
+    }
+   },
+   "select": {
+    "n": 17360,
+    "per_month": 299.1,
+    "wins": 8209,
+    "losses": 9151,
+    "win": 0.4729,
+    "avg_win_pct": 12.82,
+    "avg_loss_pct": -17.71,
+    "breakeven_win": 0.5802,
+    "roe_pct": -3.276,
+    "gross_roe_pct": 0.444,
+    "month_sum_pct": -979.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0416,
+    "liquidated": 0,
+    "exits": {
+     "stop": 723,
+     "lock": 8251,
+     "cancel": 8386
+    }
+   },
+   "confirm": {
+    "n": 5732,
+    "per_month": 273.5,
+    "wins": 2416,
+    "losses": 3316,
+    "win": 0.4215,
+    "avg_win_pct": 12.6,
+    "avg_loss_pct": -15.43,
+    "breakeven_win": 0.5505,
+    "roe_pct": -3.616,
+    "gross_roe_pct": 0.104,
+    "month_sum_pct": -988.9,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0204,
+    "liquidated": 0,
+    "exits": {
+     "stop": 117,
+     "lock": 2409,
+     "cancel": 3206
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X5 EMA 뒤집힘": {
+   "oct2026": {
+    "n": 87,
+    "per_month": 120.4,
+    "wins": 59,
+    "losses": 28,
+    "win": 0.6782,
+    "avg_win_pct": 12.86,
+    "avg_loss_pct": -34.03,
+    "breakeven_win": 0.7258,
+    "roe_pct": -2.235,
+    "gross_roe_pct": 1.485,
+    "month_sum_pct": -269.1,
+    "mult40": 0.296,
+    "maxdd40": -0.791,
+    "stop_share": 0.1149,
+    "liquidated": 0,
+    "exits": {
+     "stop": 10,
+     "lock": 59,
+     "open": 1,
+     "cancel": 17
+    }
+   },
+   "last19": {
+    "n": 72,
+    "per_month": 115.4,
+    "wins": 50,
+    "losses": 22,
+    "win": 0.6944,
+    "avg_win_pct": 13.2,
+    "avg_loss_pct": -35.61,
+    "breakeven_win": 0.7295,
+    "roe_pct": -1.713,
+    "gross_roe_pct": 2.007,
+    "month_sum_pct": -197.6,
+    "mult40": 0.42,
+    "maxdd40": -0.775,
+    "stop_share": 0.125,
+    "liquidated": 0,
+    "exits": {
+     "stop": 9,
+     "lock": 50,
+     "open": 1,
+     "cancel": 12
+    }
+   },
+   "select": {
+    "n": 10703,
+    "per_month": 184.4,
+    "wins": 7599,
+    "losses": 3104,
+    "win": 0.71,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -40.94,
+    "breakeven_win": 0.7604,
+    "roe_pct": -2.714,
+    "gross_roe_pct": 1.006,
+    "month_sum_pct": -500.4,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1879,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2011,
+     "lock": 7699,
+     "cancel": 993
+    }
+   },
+   "confirm": {
+    "n": 3115,
+    "per_month": 148.6,
+    "wins": 2116,
+    "losses": 999,
+    "win": 0.6793,
+    "avg_win_pct": 12.73,
+    "avg_loss_pct": -39.23,
+    "breakeven_win": 0.755,
+    "roe_pct": -3.935,
+    "gross_roe_pct": -0.215,
+    "month_sum_pct": -584.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1775,
+    "liquidated": 0,
+    "exits": {
+     "stop": 553,
+     "lock": 2134,
+     "cancel": 428
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X6 첫 잠금 +5%": {
+   "oct2026": {
+    "n": 91,
+    "per_month": 125.9,
+    "wins": 77,
+    "losses": 14,
+    "win": 0.8462,
+    "avg_win_pct": 7.84,
+    "avg_loss_pct": -47.55,
+    "breakeven_win": 0.8584,
+    "roe_pct": -0.677,
+    "gross_roe_pct": 3.043,
+    "month_sum_pct": -85.3,
+    "mult40": 0.546,
+    "maxdd40": -0.687,
+    "stop_share": 0.1429,
+    "liquidated": 0,
+    "exits": {
+     "stop": 13,
+     "lock": 77,
+     "open": 1
+    }
+   },
+   "last19": {
+    "n": 79,
+    "per_month": 126.6,
+    "wins": 66,
+    "losses": 13,
+    "win": 0.8354,
+    "avg_win_pct": 7.72,
+    "avg_loss_pct": -47.36,
+    "breakeven_win": 0.8598,
+    "roe_pct": -1.34,
+    "gross_roe_pct": 2.38,
+    "month_sum_pct": -169.6,
+    "mult40": 0.472,
+    "maxdd40": -0.687,
+    "stop_share": 0.1519,
+    "liquidated": 0,
+    "exits": {
+     "stop": 12,
+     "lock": 66,
+     "open": 1
+    }
+   },
+   "select": {
+    "n": 11664,
+    "per_month": 200.9,
+    "wins": 9167,
+    "losses": 2497,
+    "win": 0.7859,
+    "avg_win_pct": 8.2,
+    "avg_loss_pct": -43.92,
+    "breakeven_win": 0.8427,
+    "roe_pct": -2.959,
+    "gross_roe_pct": 0.761,
+    "month_sum_pct": -594.6,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1854,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2163,
+     "lock": 9501
+    }
+   },
+   "confirm": {
+    "n": 3412,
+    "per_month": 162.8,
+    "wins": 2674,
+    "losses": 738,
+    "win": 0.7837,
+    "avg_win_pct": 7.67,
+    "avg_loss_pct": -45.66,
+    "breakeven_win": 0.8562,
+    "roe_pct": -3.864,
+    "gross_roe_pct": -0.144,
+    "month_sum_pct": -629.1,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1961,
+    "liquidated": 0,
+    "exits": {
+     "stop": 669,
+     "lock": 2743
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X7-0.5 BTC 반대 0.5%": {
+   "oct2026": {
+    "n": 106,
+    "per_month": 146.7,
+    "wins": 61,
+    "losses": 45,
+    "win": 0.5755,
+    "avg_win_pct": 12.62,
+    "avg_loss_pct": -23.66,
+    "breakeven_win": 0.6521,
+    "roe_pct": -2.779,
+    "gross_roe_pct": 0.941,
+    "month_sum_pct": -407.6,
+    "mult40": 0.217,
+    "maxdd40": -0.858,
+    "stop_share": 0.0283,
+    "liquidated": 0,
+    "exits": {
+     "stop": 3,
+     "lock": 61,
+     "open": 1,
+     "btc": 41
+    }
+   },
+   "last19": {
+    "n": 93,
+    "per_month": 149.0,
+    "wins": 56,
+    "losses": 37,
+    "win": 0.6022,
+    "avg_win_pct": 12.73,
+    "avg_loss_pct": -22.59,
+    "breakeven_win": 0.6396,
+    "roe_pct": -1.322,
+    "gross_roe_pct": 2.398,
+    "month_sum_pct": -197.0,
+    "mult40": 0.461,
+    "maxdd40": -0.772,
+    "stop_share": 0.0215,
+    "liquidated": 0,
+    "exits": {
+     "stop": 2,
+     "lock": 56,
+     "open": 1,
+     "btc": 34
+    }
+   },
+   "select": {
+    "n": 13718,
+    "per_month": 236.3,
+    "wins": 8118,
+    "losses": 5600,
+    "win": 0.5918,
+    "avg_win_pct": 12.82,
+    "avg_loss_pct": -26.26,
+    "breakeven_win": 0.6719,
+    "roe_pct": -3.132,
+    "gross_roe_pct": 0.588,
+    "month_sum_pct": -740.2,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.0574,
+    "liquidated": 0,
+    "exits": {
+     "stop": 787,
+     "lock": 8199,
+     "btc": 4732
+    }
+   },
+   "confirm": {
+    "n": 3976,
+    "per_month": 189.7,
+    "wins": 2323,
+    "losses": 1653,
+    "win": 0.5843,
+    "avg_win_pct": 12.53,
+    "avg_loss_pct": -26.45,
+    "breakeven_win": 0.6785,
+    "roe_pct": -3.675,
+    "gross_roe_pct": 0.045,
+    "month_sum_pct": -697.2,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.048,
+    "liquidated": 0,
+    "exits": {
+     "stop": 191,
+     "lock": 2334,
+     "btc": 1451
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "X7-1.0 BTC 반대 1.0%": {
+   "oct2026": {
+    "n": 82,
+    "per_month": 113.5,
+    "wins": 56,
+    "losses": 26,
+    "win": 0.6829,
+    "avg_win_pct": 12.86,
+    "avg_loss_pct": -39.72,
+    "breakeven_win": 0.7555,
+    "roe_pct": -3.815,
+    "gross_roe_pct": -0.095,
+    "month_sum_pct": -432.8,
+    "mult40": 0.177,
+    "maxdd40": -0.886,
+    "stop_share": 0.1098,
+    "liquidated": 0,
+    "exits": {
+     "stop": 9,
+     "lock": 56,
+     "open": 1,
+     "btc": 16
+    }
+   },
+   "last19": {
+    "n": 68,
+    "per_month": 108.9,
+    "wins": 47,
+    "losses": 21,
+    "win": 0.6912,
+    "avg_win_pct": 13.16,
+    "avg_loss_pct": -39.1,
+    "breakeven_win": 0.7483,
+    "roe_pct": -2.983,
+    "gross_roe_pct": 0.737,
+    "month_sum_pct": -325.0,
+    "mult40": 0.301,
+    "maxdd40": -0.852,
+    "stop_share": 0.1029,
+    "liquidated": 0,
+    "exits": {
+     "stop": 7,
+     "lock": 47,
+     "open": 1,
+     "btc": 13
+    }
+   },
+   "select": {
+    "n": 10840,
+    "per_month": 186.7,
+    "wins": 7629,
+    "losses": 3211,
+    "win": 0.7038,
+    "avg_win_pct": 12.92,
+    "avg_loss_pct": -40.33,
+    "breakeven_win": 0.7574,
+    "roe_pct": -2.855,
+    "gross_roe_pct": 0.865,
+    "month_sum_pct": -533.1,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1333,
+    "liquidated": 0,
+    "exits": {
+     "stop": 1445,
+     "lock": 7726,
+     "btc": 1669
+    }
+   },
+   "confirm": {
+    "n": 3025,
+    "per_month": 144.3,
+    "wins": 2095,
+    "losses": 930,
+    "win": 0.6926,
+    "avg_win_pct": 12.62,
+    "avg_loss_pct": -41.13,
+    "breakeven_win": 0.7652,
+    "roe_pct": -3.906,
+    "gross_roe_pct": -0.186,
+    "month_sum_pct": -563.7,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1425,
+    "liquidated": 0,
+    "exits": {
+     "stop": 431,
+     "lock": 2113,
+     "btc": 481
+    }
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  }
+ },
+ "exit_pick": "X5 EMA 뒤집힘",
+ "posthoc_exit_same_entries": {
+  "X1-30 시간 손절 30분": {
+   "oct2026": {
+    "losses_to_wins": 3,
+    "wins_to_losses": 31,
+    "wins_smaller": 8,
+    "losses": 42,
+    "roe_pct": -3.548,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 125,
+    "wins_to_losses": 2738,
+    "wins_smaller": 744,
+    "losses": 5079,
+    "roe_pct": -3.453,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 50,
+    "wins_to_losses": 891,
+    "wins_smaller": 304,
+    "losses": 1559,
+    "roe_pct": -3.841,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X1-60 시간 손절 60분": {
+   "oct2026": {
+    "losses_to_wins": 4,
+    "wins_to_losses": 26,
+    "wins_smaller": 4,
+    "losses": 36,
+    "roe_pct": -3.057,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 72,
+    "wins_to_losses": 1895,
+    "wins_smaller": 462,
+    "losses": 4289,
+    "roe_pct": -3.072,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 34,
+    "wins_to_losses": 705,
+    "wins_smaller": 187,
+    "losses": 1389,
+    "roe_pct": -3.72,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X1-120 시간 손절 2시간": {
+   "oct2026": {
+    "losses_to_wins": 1,
+    "wins_to_losses": 23,
+    "wins_smaller": 0,
+    "losses": 36,
+    "roe_pct": -3.423,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 26,
+    "wins_to_losses": 1192,
+    "wins_smaller": 242,
+    "losses": 3632,
+    "roe_pct": -3.158,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 16,
+    "wins_to_losses": 482,
+    "wins_smaller": 101,
+    "losses": 1184,
+    "roe_pct": -3.822,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X1-240 시간 손절 4시간": {
+   "oct2026": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 12,
+    "wins_smaller": 2,
+    "losses": 26,
+    "roe_pct": -1.901,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 15,
+    "wins_to_losses": 593,
+    "wins_smaller": 93,
+    "losses": 3044,
+    "roe_pct": -2.932,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 8,
+    "wins_to_losses": 264,
+    "wins_smaller": 57,
+    "losses": 974,
+    "roe_pct": -3.871,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X2-5 본전 이동 +5%": {
+   "oct2026": {
+    "losses_to_wins": 7,
+    "wins_to_losses": 0,
+    "wins_smaller": 28,
+    "losses": 7,
+    "roe_pct": -0.731,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 767,
+    "wins_to_losses": 390,
+    "wins_smaller": 3304,
+    "losses": 2089,
+    "roe_pct": -3.066,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 244,
+    "wins_to_losses": 79,
+    "wins_smaller": 992,
+    "losses": 553,
+    "roe_pct": -3.494,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X2-8 본전 이동 +8%": {
+   "oct2026": {
+    "losses_to_wins": 4,
+    "wins_to_losses": 0,
+    "wins_smaller": 16,
+    "losses": 10,
+    "roe_pct": -0.047,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 436,
+    "wins_to_losses": 114,
+    "wins_smaller": 1867,
+    "losses": 2144,
+    "roe_pct": -2.883,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 130,
+    "wins_to_losses": 27,
+    "wins_smaller": 557,
+    "losses": 615,
+    "roe_pct": -3.817,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X3 신호 취소(ROC9 반대)": {
+   "oct2026": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 32,
+    "wins_smaller": 0,
+    "losses": 46,
+    "roe_pct": -4.013,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 38,
+    "wins_to_losses": 2440,
+    "wins_smaller": 200,
+    "losses": 4868,
+    "roe_pct": -3.233,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 14,
+    "wins_to_losses": 838,
+    "wins_smaller": 75,
+    "losses": 1542,
+    "roe_pct": -3.691,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X4 EMA21 이탈": {
+   "oct2026": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 23,
+    "wins_smaller": 0,
+    "losses": 37,
+    "roe_pct": -3.488,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 5,
+    "wins_to_losses": 1941,
+    "wins_smaller": 24,
+    "losses": 4402,
+    "roe_pct": -3.058,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 1,
+    "wins_to_losses": 689,
+    "wins_smaller": 7,
+    "losses": 1406,
+    "roe_pct": -3.717,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X5 EMA 뒤집힘": {
+   "oct2026": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 3,
+    "wins_smaller": 0,
+    "losses": 17,
+    "roe_pct": 0.198,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 252,
+    "wins_smaller": 0,
+    "losses": 2718,
+    "roe_pct": -2.719,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 127,
+    "wins_smaller": 0,
+    "losses": 845,
+    "roe_pct": -3.935,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X6 첫 잠금 +5%": {
+   "oct2026": {
+    "losses_to_wins": 7,
+    "wins_to_losses": 0,
+    "wins_smaller": 27,
+    "losses": 7,
+    "roe_pct": 1.593,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 546,
+    "wins_to_losses": 168,
+    "wins_smaller": 3624,
+    "losses": 2088,
+    "roe_pct": -3.028,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 171,
+    "wins_to_losses": 37,
+    "wins_smaller": 1108,
+    "losses": 584,
+    "roe_pct": -3.796,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X7-0.5 BTC 반대 0.5%": {
+   "oct2026": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 10,
+    "wins_smaller": 0,
+    "losses": 24,
+    "roe_pct": -0.286,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 2,
+    "wins_to_losses": 1490,
+    "wins_smaller": 13,
+    "losses": 3954,
+    "roe_pct": -3.33,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 401,
+    "wins_smaller": 3,
+    "losses": 1119,
+    "roe_pct": -3.648,
+    "roe_pct_P": -3.668
+   }
+  },
+  "X7-1.0 BTC 반대 1.0%": {
+   "oct2026": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 3,
+    "wins_smaller": 0,
+    "losses": 17,
+    "roe_pct": -0.944,
+    "roe_pct_P": 0.121
+   },
+   "select": {
+    "losses_to_wins": 1,
+    "wins_to_losses": 397,
+    "wins_smaller": 2,
+    "losses": 2862,
+    "roe_pct": -2.957,
+    "roe_pct_P": -2.758
+   },
+   "confirm": {
+    "losses_to_wins": 0,
+    "wins_to_losses": 98,
+    "wins_smaller": 0,
+    "losses": 816,
+    "roe_pct": -3.617,
+    "roe_pct_P": -3.668
+   }
+  }
+ },
+ "honest_picks": {
+  "C 규칙 하나 1등": {
+   "oct2026": {
+    "n": 59,
+    "per_month": 81.6,
+    "wins": 46,
+    "losses": 13,
+    "win": 0.7797,
+    "avg_win_pct": 13.64,
+    "avg_loss_pct": -47.49,
+    "breakeven_win": 0.7768,
+    "roe_pct": 0.173,
+    "gross_roe_pct": 3.893,
+    "month_sum_pct": 14.1,
+    "mult40": 0.726,
+    "maxdd40": -0.704,
+    "stop_share": 0.2034,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -5.418,
+     "roe_pct_p975": 0.474,
+     "pct_below": 0.964,
+     "growth40_median": -1.81,
+     "growth40_pct_below": 0.9675
+    }
+   },
+   "last19": {
+    "n": 54,
+    "per_month": 86.5,
+    "wins": 42,
+    "losses": 12,
+    "win": 0.7778,
+    "avg_win_pct": 13.55,
+    "avg_loss_pct": -47.28,
+    "breakeven_win": 0.7773,
+    "roe_pct": 0.03,
+    "gross_roe_pct": 3.75,
+    "month_sum_pct": 2.6,
+    "mult40": 0.723,
+    "maxdd40": -0.704,
+    "stop_share": 0.2037,
+    "liquidated": 0
+   },
+   "select": {
+    "n": 7152,
+    "per_month": 123.2,
+    "wins": 5390,
+    "losses": 1762,
+    "win": 0.7536,
+    "avg_win_pct": 12.83,
+    "avg_loss_pct": -48.67,
+    "breakeven_win": 0.7914,
+    "roe_pct": -2.323,
+    "gross_roe_pct": 1.397,
+    "month_sum_pct": -286.2,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2388,
+    "liquidated": 0
+   },
+   "confirm": {
+    "n": 2197,
+    "per_month": 104.8,
+    "wins": 1611,
+    "losses": 586,
+    "win": 0.7333,
+    "avg_win_pct": 12.76,
+    "avg_loss_pct": -48.96,
+    "breakeven_win": 0.7933,
+    "roe_pct": -3.702,
+    "gross_roe_pct": 0.018,
+    "month_sum_pct": -388.1,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2608,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.283,
+     "roe_pct_p975": -2.312,
+     "pct_below": 0.1915,
+     "growth40_median": -46.16,
+     "growth40_pct_below": 0.327
+    }
+   },
+   "pass_14_to_4": {
+    "oct_le4_n30": false,
+    "confirm_positive": false,
+    "confirm_twin_975": false
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "C 규칙 둘 1등": {
+   "oct2026": {
+    "n": 50,
+    "per_month": 69.2,
+    "wins": 42,
+    "losses": 8,
+    "win": 0.84,
+    "avg_win_pct": 12.39,
+    "avg_loss_pct": -45.01,
+    "breakeven_win": 0.7841,
+    "roe_pct": 3.208,
+    "gross_roe_pct": 6.928,
+    "month_sum_pct": 222.0,
+    "mult40": 1.517,
+    "maxdd40": -0.416,
+    "stop_share": 0.14,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -1.134,
+     "roe_pct_p975": 4.158,
+     "pct_below": 0.949,
+     "growth40_median": -0.5,
+     "growth40_pct_below": 0.9465
+    }
+   },
+   "last19": {
+    "n": 44,
+    "per_month": 70.5,
+    "wins": 37,
+    "losses": 7,
+    "win": 0.8409,
+    "avg_win_pct": 12.41,
+    "avg_loss_pct": -44.3,
+    "breakeven_win": 0.7812,
+    "roe_pct": 3.386,
+    "gross_roe_pct": 7.106,
+    "month_sum_pct": 238.7,
+    "mult40": 1.494,
+    "maxdd40": -0.416,
+    "stop_share": 0.1364,
+    "liquidated": 0
+   },
+   "select": {
+    "n": 5008,
+    "per_month": 86.3,
+    "wins": 3807,
+    "losses": 1201,
+    "win": 0.7602,
+    "avg_win_pct": 12.99,
+    "avg_loss_pct": -48.81,
+    "breakeven_win": 0.7898,
+    "roe_pct": -1.832,
+    "gross_roe_pct": 1.888,
+    "month_sum_pct": -158.0,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2332,
+    "liquidated": 0
+   },
+   "confirm": {
+    "n": 1665,
+    "per_month": 79.4,
+    "wins": 1262,
+    "losses": 403,
+    "win": 0.758,
+    "avg_win_pct": 12.52,
+    "avg_loss_pct": -48.74,
+    "breakeven_win": 0.7956,
+    "roe_pct": -2.305,
+    "gross_roe_pct": 1.415,
+    "month_sum_pct": -183.1,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.2354,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.726,
+     "roe_pct_p975": -2.562,
+     "pct_below": 0.991,
+     "growth40_median": -36.1,
+     "growth40_pct_below": 0.991
+    }
+   },
+   "pass_14_to_4": {
+    "oct_le4_n30": false,
+    "confirm_positive": false,
+    "confirm_twin_975": true
+   },
+   "better_both_halves": true,
+   "positive_both_halves": false
+  },
+  "D 청산 1등": {
+   "oct2026": {
+    "n": 87,
+    "per_month": 120.4,
+    "wins": 59,
+    "losses": 28,
+    "win": 0.6782,
+    "avg_win_pct": 12.86,
+    "avg_loss_pct": -34.03,
+    "breakeven_win": 0.7258,
+    "roe_pct": -2.235,
+    "gross_roe_pct": 1.485,
+    "month_sum_pct": -269.1,
+    "mult40": 0.296,
+    "maxdd40": -0.791,
+    "stop_share": 0.1149,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.34,
+     "roe_pct_p975": -1.22,
+     "pct_below": 0.849,
+     "growth40_median": -2.11,
+     "growth40_pct_below": 0.9395
+    }
+   },
+   "last19": {
+    "n": 72,
+    "per_month": 115.4,
+    "wins": 50,
+    "losses": 22,
+    "win": 0.6944,
+    "avg_win_pct": 13.2,
+    "avg_loss_pct": -35.61,
+    "breakeven_win": 0.7295,
+    "roe_pct": -1.713,
+    "gross_roe_pct": 2.007,
+    "month_sum_pct": -197.6,
+    "mult40": 0.42,
+    "maxdd40": -0.775,
+    "stop_share": 0.125,
+    "liquidated": 0
+   },
+   "select": {
+    "n": 10703,
+    "per_month": 184.4,
+    "wins": 7599,
+    "losses": 3104,
+    "win": 0.71,
+    "avg_win_pct": 12.9,
+    "avg_loss_pct": -40.94,
+    "breakeven_win": 0.7604,
+    "roe_pct": -2.714,
+    "gross_roe_pct": 1.006,
+    "month_sum_pct": -500.4,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1879,
+    "liquidated": 0
+   },
+   "confirm": {
+    "n": 3115,
+    "per_month": 148.6,
+    "wins": 2116,
+    "losses": 999,
+    "win": 0.6793,
+    "avg_win_pct": 12.73,
+    "avg_loss_pct": -39.23,
+    "breakeven_win": 0.755,
+    "roe_pct": -3.935,
+    "gross_roe_pct": -0.215,
+    "month_sum_pct": -584.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1775,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.666,
+     "roe_pct_p975": -3.209,
+     "pct_below": 0.1255,
+     "growth40_median": -80.62,
+     "growth40_pct_below": 0.999
+    }
+   },
+   "pass_14_to_4": {
+    "oct_le4_n30": false,
+    "confirm_positive": false,
+    "confirm_twin_975": false
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "E1 규칙 하나 1등 + 청산 1등": {
+   "oct2026": {
+    "n": 81,
+    "per_month": 112.1,
+    "wins": 54,
+    "losses": 27,
+    "win": 0.6667,
+    "avg_win_pct": 13.05,
+    "avg_loss_pct": -33.71,
+    "breakeven_win": 0.7209,
+    "roe_pct": -2.535,
+    "gross_roe_pct": 1.185,
+    "month_sum_pct": -284.2,
+    "mult40": 0.292,
+    "maxdd40": -0.78,
+    "stop_share": 0.1111,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.537,
+     "roe_pct_p975": -1.365,
+     "pct_below": 0.8235,
+     "growth40_median": -2.05,
+     "growth40_pct_below": 0.934
+    }
+   },
+   "last19": {
+    "n": 67,
+    "per_month": 107.3,
+    "wins": 46,
+    "losses": 21,
+    "win": 0.6866,
+    "avg_win_pct": 13.02,
+    "avg_loss_pct": -35.27,
+    "breakeven_win": 0.7304,
+    "roe_pct": -2.116,
+    "gross_roe_pct": 1.604,
+    "month_sum_pct": -227.1,
+    "mult40": 0.401,
+    "maxdd40": -0.769,
+    "stop_share": 0.1194,
+    "liquidated": 0
+   },
+   "select": {
+    "n": 8111,
+    "per_month": 139.7,
+    "wins": 5727,
+    "losses": 2384,
+    "win": 0.7061,
+    "avg_win_pct": 12.82,
+    "avg_loss_pct": -39.21,
+    "breakeven_win": 0.7536,
+    "roe_pct": -2.471,
+    "gross_roe_pct": 1.249,
+    "month_sum_pct": -345.3,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1673,
+    "liquidated": 0
+   },
+   "confirm": {
+    "n": 2621,
+    "per_month": 125.1,
+    "wins": 1747,
+    "losses": 874,
+    "win": 0.6665,
+    "avg_win_pct": 12.78,
+    "avg_loss_pct": -37.32,
+    "breakeven_win": 0.7449,
+    "roe_pct": -3.925,
+    "gross_roe_pct": -0.205,
+    "month_sum_pct": -490.8,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1572,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.659,
+     "roe_pct_p975": -3.177,
+     "pct_below": 0.123,
+     "growth40_median": -66.94,
+     "growth40_pct_below": 0.9975
+    }
+   },
+   "pass_14_to_4": {
+    "oct_le4_n30": false,
+    "confirm_positive": false,
+    "confirm_twin_975": false
+   },
+   "better_both_halves": false,
+   "positive_both_halves": false
+  },
+  "E2 F4 + 청산 1등": {
+   "oct2026": {
+    "n": 73,
+    "per_month": 101.0,
+    "wins": 53,
+    "losses": 20,
+    "win": 0.726,
+    "avg_win_pct": 12.88,
+    "avg_loss_pct": -33.63,
+    "breakeven_win": 0.7231,
+    "roe_pct": 0.137,
+    "gross_roe_pct": 3.857,
+    "month_sum_pct": 13.8,
+    "mult40": 0.755,
+    "maxdd40": -0.626,
+    "stop_share": 0.0822,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -2.102,
+     "roe_pct_p975": -0.111,
+     "pct_below": 0.984,
+     "growth40_median": -1.2,
+     "growth40_pct_below": 0.9745
+    }
+   },
+   "last19": {
+    "n": 64,
+    "per_month": 102.5,
+    "wins": 47,
+    "losses": 17,
+    "win": 0.7344,
+    "avg_win_pct": 13.01,
+    "avg_loss_pct": -34.88,
+    "breakeven_win": 0.7283,
+    "roe_pct": 0.289,
+    "gross_roe_pct": 4.009,
+    "month_sum_pct": 29.6,
+    "mult40": 0.807,
+    "maxdd40": -0.626,
+    "stop_share": 0.0938,
+    "liquidated": 0
+   },
+   "select": {
+    "n": 9430,
+    "per_month": 162.5,
+    "wins": 6725,
+    "losses": 2705,
+    "win": 0.7131,
+    "avg_win_pct": 13.0,
+    "avg_loss_pct": -41.53,
+    "breakeven_win": 0.7615,
+    "roe_pct": -2.638,
+    "gross_roe_pct": 1.082,
+    "month_sum_pct": -428.5,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1926,
+    "liquidated": 0
+   },
+   "confirm": {
+    "n": 2821,
+    "per_month": 134.6,
+    "wins": 1953,
+    "losses": 868,
+    "win": 0.6923,
+    "avg_win_pct": 12.82,
+    "avg_loss_pct": -39.84,
+    "breakeven_win": 0.7566,
+    "roe_pct": -3.384,
+    "gross_roe_pct": 0.336,
+    "month_sum_pct": -455.4,
+    "mult40": 0.0,
+    "maxdd40": -1.0,
+    "stop_share": 0.1772,
+    "liquidated": 0,
+    "twin": {
+     "roe_pct_median": -3.586,
+     "roe_pct_p975": -3.138,
+     "pct_below": 0.8025,
+     "growth40_median": -68.89,
+     "growth40_pct_below": 0.9995
+    }
+   },
+   "pass_14_to_4": {
+    "oct_le4_n30": false,
+    "confirm_positive": false,
+    "confirm_twin_975": false
+   },
+   "better_both_halves": true,
+   "positive_both_halves": false
+  }
+ },
+ "verdict_14_to_4": false,
+ "oct_losses": [
+  {
+   "entry_kst": "2026-10-01 09:15",
+   "coin": "ETH",
+   "side": "숏",
+   "net_roe_pct": -50.0,
+   "minutes": 1596,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 7.5,
+   "btc_with_pct": -1.94,
+   "adx15": 12.12,
+   "adx1h": 13.491,
+   "adx4h": 13.512,
+   "p24_side": 0.695,
+   "p7_side": 0.552,
+   "d_e21_atr": 0.39,
+   "d_e52_atr": 0.419,
+   "rsi_side": 51.541,
+   "roc_side": 0.067,
+   "roc_jump": 0.161,
+   "atrp15_pct": 0.168,
+   "atrp30_pct": 0.265,
+   "stop50_atr": 6.445,
+   "vote1h": -0.0,
+   "vote4h": -0.0,
+   "roc1h_side": -0.302,
+   "roc4h_side": 1.701,
+   "btc_roc15_side": 0.306,
+   "btc_gap_side": 0.428,
+   "btc_roc1h_side": 0.222,
+   "cross24": 2.0,
+   "trend_age": 23.0,
+   "ema_gap_atr": 0.029,
+   "vol_ratio": 0.774,
+   "body_atr": 0.548,
+   "close_loc": 0.965,
+   "rsi1h_side": 49.965,
+   "rsi4h_side": 48.67,
+   "hour4": "09~15시"
+  },
+  {
+   "entry_kst": "2026-10-05 23:15",
+   "coin": "DOGE",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 19,
+   "type_move": "처음부터 반대",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "1시간 안",
+   "mfe_roe_pct": -0.3,
+   "btc_with_pct": -1.13,
+   "adx15": 12.49,
+   "adx1h": 37.064,
+   "adx4h": 16.903,
+   "p24_side": 0.715,
+   "p7_side": 0.78,
+   "d_e21_atr": 0.774,
+   "d_e52_atr": 1.021,
+   "rsi_side": 54.024,
+   "roc_side": 0.114,
+   "roc_jump": 0.145,
+   "atrp15_pct": 0.279,
+   "atrp30_pct": 0.224,
+   "stop50_atr": 3.692,
+   "vote1h": 1.0,
+   "vote4h": 0.0,
+   "roc1h_side": 0.935,
+   "roc4h_side": 3.784,
+   "btc_roc15_side": 0.506,
+   "btc_gap_side": 0.23,
+   "btc_roc1h_side": 1.034,
+   "cross24": 5.0,
+   "trend_age": 121.0,
+   "ema_gap_atr": 0.246,
+   "vol_ratio": 1.547,
+   "body_atr": 0.745,
+   "close_loc": 0.898,
+   "rsi1h_side": 57.479,
+   "rsi4h_side": 54.837,
+   "hour4": "21~03시"
+  },
+  {
+   "entry_kst": "2026-10-09 03:45",
+   "coin": "DOGE",
+   "side": "숏",
+   "net_roe_pct": -50.0,
+   "minutes": 102,
+   "type_move": "처음부터 반대",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "1~4시간",
+   "mfe_roe_pct": 2.8,
+   "btc_with_pct": -0.35,
+   "adx15": 61.483,
+   "adx1h": 59.851,
+   "adx4h": 33.341,
+   "p24_side": 0.775,
+   "p7_side": 0.885,
+   "d_e21_atr": 0.804,
+   "d_e52_atr": 2.919,
+   "rsi_side": 64.469,
+   "roc_side": 0.132,
+   "roc_jump": 0.193,
+   "atrp15_pct": 0.961,
+   "atrp30_pct": 0.956,
+   "stop50_atr": 1.503,
+   "vote1h": 1.0,
+   "vote4h": 1.0,
+   "roc1h_side": 7.125,
+   "roc4h_side": 8.324,
+   "btc_roc15_side": -0.264,
+   "btc_gap_side": 1.422,
+   "btc_roc1h_side": 2.55,
+   "cross24": 5.0,
+   "trend_age": 195.0,
+   "ema_gap_atr": 2.115,
+   "vol_ratio": 0.319,
+   "body_atr": -0.223,
+   "close_loc": 0.125,
+   "rsi1h_side": 78.236,
+   "rsi4h_side": 70.159,
+   "hour4": "03~09시"
+  },
+  {
+   "entry_kst": "2026-10-09 07:00",
+   "coin": "BTC",
+   "side": "숏",
+   "net_roe_pct": -50.0,
+   "minutes": 818,
+   "type_move": "처음부터 반대",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": -0.1,
+   "btc_with_pct": -1.51,
+   "adx15": 27.797,
+   "adx1h": 48.419,
+   "adx4h": 33.72,
+   "p24_side": 0.578,
+   "p7_side": 0.808,
+   "d_e21_atr": -0.225,
+   "d_e52_atr": 0.866,
+   "rsi_side": 53.351,
+   "roc_side": 0.045,
+   "roc_jump": 0.066,
+   "atrp15_pct": 0.757,
+   "atrp30_pct": 0.845,
+   "stop50_atr": 5.042,
+   "vote1h": 1.0,
+   "vote4h": 1.0,
+   "roc1h_side": 0.735,
+   "roc4h_side": 2.808,
+   "btc_roc15_side": 0.045,
+   "btc_gap_side": 1.091,
+   "btc_roc1h_side": 0.735,
+   "cross24": 1.0,
+   "trend_age": 209.0,
+   "ema_gap_atr": 1.091,
+   "vol_ratio": 0.2,
+   "body_atr": -0.015,
+   "close_loc": 0.28,
+   "rsi1h_side": 61.539,
+   "rsi4h_side": 62.051,
+   "hour4": "03~09시"
+  },
+  {
+   "entry_kst": "2026-10-12 16:45",
+   "coin": "DOGE",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 290,
+   "type_move": "처음부터 반대",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 2.1,
+   "btc_with_pct": -1.14,
+   "adx15": 25.142,
+   "adx1h": 20.333,
+   "adx4h": 34.503,
+   "p24_side": 0.891,
+   "p7_side": 0.416,
+   "d_e21_atr": 1.024,
+   "d_e52_atr": 2.049,
+   "rsi_side": 59.632,
+   "roc_side": 0.057,
+   "roc_jump": 0.159,
+   "atrp15_pct": 0.367,
+   "atrp30_pct": 0.257,
+   "stop50_atr": 3.79,
+   "vote1h": 1.0,
+   "vote4h": -1.0,
+   "roc1h_side": 1.249,
+   "roc4h_side": 0.754,
+   "btc_roc15_side": -0.045,
+   "btc_gap_side": 0.785,
+   "btc_roc1h_side": 0.832,
+   "cross24": 2.0,
+   "trend_age": 65.0,
+   "ema_gap_atr": 1.025,
+   "vol_ratio": 0.841,
+   "body_atr": -0.224,
+   "close_loc": 0.515,
+   "rsi1h_side": 58.225,
+   "rsi4h_side": 44.765,
+   "hour4": "15~21시"
+  },
+  {
+   "entry_kst": "2026-10-13 16:45",
+   "coin": "BTC",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 1769,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 7.9,
+   "btc_with_pct": -1.57,
+   "adx15": 44.058,
+   "adx1h": 22.103,
+   "adx4h": 20.325,
+   "p24_side": 0.849,
+   "p7_side": 0.548,
+   "d_e21_atr": 1.854,
+   "d_e52_atr": 3.373,
+   "rsi_side": 64.928,
+   "roc_side": 0.131,
+   "roc_jump": 0.133,
+   "atrp15_pct": 0.663,
+   "atrp30_pct": 0.708,
+   "stop50_atr": 5.725,
+   "vote1h": 1.0,
+   "vote4h": 0.0,
+   "roc1h_side": 1.44,
+   "roc4h_side": -0.678,
+   "btc_roc15_side": 0.131,
+   "btc_gap_side": 1.52,
+   "btc_roc1h_side": 1.44,
+   "cross24": 1.0,
+   "trend_age": 14.0,
+   "ema_gap_atr": 1.52,
+   "vol_ratio": 2.135,
+   "body_atr": 0.532,
+   "close_loc": 0.337,
+   "rsi1h_side": 55.599,
+   "rsi4h_side": 49.37,
+   "hour4": "15~21시"
+  },
+  {
+   "entry_kst": "2026-10-15 23:00",
+   "coin": "LTC",
+   "side": "숏",
+   "net_roe_pct": -50.0,
+   "minutes": 11,
+   "type_move": "처음부터 반대",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "1시간 안",
+   "mfe_roe_pct": 2.0,
+   "btc_with_pct": -1.34,
+   "adx15": 16.333,
+   "adx1h": 39.589,
+   "adx4h": 45.177,
+   "p24_side": 0.663,
+   "p7_side": 0.89,
+   "d_e21_atr": 0.231,
+   "d_e52_atr": 0.88,
+   "rsi_side": 53.566,
+   "roc_side": 0.137,
+   "roc_jump": 0.809,
+   "atrp15_pct": 0.682,
+   "atrp30_pct": 0.633,
+   "stop50_atr": 2.635,
+   "vote1h": 1.0,
+   "vote4h": 1.0,
+   "roc1h_side": 0.7,
+   "roc4h_side": 4.628,
+   "btc_roc15_side": 1.117,
+   "btc_gap_side": 0.821,
+   "btc_roc1h_side": 1.711,
+   "cross24": 4.0,
+   "trend_age": 111.0,
+   "ema_gap_atr": 0.65,
+   "vol_ratio": 2.649,
+   "body_atr": 0.911,
+   "close_loc": 0.515,
+   "rsi1h_side": 60.598,
+   "rsi4h_side": 63.558,
+   "hour4": "21~03시"
+  },
+  {
+   "entry_kst": "2026-10-16 21:00",
+   "coin": "SOL",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 186,
+   "type_move": "처음부터 반대",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "1~4시간",
+   "mfe_roe_pct": -0.6,
+   "btc_with_pct": -1.23,
+   "adx15": 21.07,
+   "adx1h": 13.082,
+   "adx4h": 38.422,
+   "p24_side": 0.875,
+   "p7_side": 0.469,
+   "d_e21_atr": 0.238,
+   "d_e52_atr": 1.186,
+   "rsi_side": 54.569,
+   "roc_side": 0.113,
+   "roc_jump": 0.15,
+   "atrp15_pct": 0.49,
+   "atrp30_pct": 0.337,
+   "stop50_atr": 3.658,
+   "vote1h": 1.0,
+   "vote4h": 0.0,
+   "roc1h_side": 1.197,
+   "roc4h_side": 2.197,
+   "btc_roc15_side": 0.608,
+   "btc_gap_side": 0.55,
+   "btc_roc1h_side": 0.718,
+   "cross24": 3.0,
+   "trend_age": 82.0,
+   "ema_gap_atr": 0.948,
+   "vol_ratio": 0.57,
+   "body_atr": -0.134,
+   "close_loc": 0.125,
+   "rsi1h_side": 54.544,
+   "rsi4h_side": 45.292,
+   "hour4": "21~03시"
+  },
+  {
+   "entry_kst": "2026-10-19 04:30",
+   "coin": "BTC",
+   "side": "숏",
+   "net_roe_pct": -50.0,
+   "minutes": 313,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 11.4,
+   "btc_with_pct": -1.68,
+   "adx15": 36.818,
+   "adx1h": 17.688,
+   "adx4h": 48.695,
+   "p24_side": 0.816,
+   "p7_side": 0.718,
+   "d_e21_atr": 1.357,
+   "d_e52_atr": 3.0,
+   "rsi_side": 62.507,
+   "roc_side": 0.129,
+   "roc_jump": 0.227,
+   "atrp15_pct": 0.216,
+   "atrp30_pct": 0.202,
+   "stop50_atr": 10.045,
+   "vote1h": 1.0,
+   "vote4h": 1.0,
+   "roc1h_side": 1.188,
+   "roc4h_side": 0.484,
+   "btc_roc15_side": 0.129,
+   "btc_gap_side": 1.643,
+   "btc_roc1h_side": 1.188,
+   "cross24": 5.0,
+   "trend_age": 20.0,
+   "ema_gap_atr": 1.643,
+   "vol_ratio": 0.816,
+   "body_atr": 0.718,
+   "close_loc": 0.74,
+   "rsi1h_side": 56.227,
+   "rsi4h_side": 56.176,
+   "hour4": "03~09시"
+  },
+  {
+   "entry_kst": "2026-10-19 17:30",
+   "coin": "BTC",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 953,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 7.9,
+   "btc_with_pct": -1.59,
+   "adx15": 43.509,
+   "adx1h": 28.182,
+   "adx4h": 40.559,
+   "p24_side": 0.84,
+   "p7_side": 0.686,
+   "d_e21_atr": 0.615,
+   "d_e52_atr": 2.592,
+   "rsi_side": 61.449,
+   "roc_side": 0.019,
+   "roc_jump": 0.106,
+   "atrp15_pct": 0.405,
+   "atrp30_pct": 0.378,
+   "stop50_atr": 7.365,
+   "vote1h": 1.0,
+   "vote4h": 0.0,
+   "roc1h_side": 1.175,
+   "roc4h_side": 1.373,
+   "btc_roc15_side": 0.019,
+   "btc_gap_side": 1.977,
+   "btc_roc1h_side": 1.175,
+   "cross24": 5.0,
+   "trend_age": 36.0,
+   "ema_gap_atr": 1.977,
+   "vol_ratio": 2.127,
+   "body_atr": 0.556,
+   "close_loc": 0.377,
+   "rsi1h_side": 59.973,
+   "rsi4h_side": 51.919,
+   "hour4": "15~21시"
+  },
+  {
+   "entry_kst": "2026-10-20 10:45",
+   "coin": "BCH",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 332,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "코인만 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 8.9,
+   "btc_with_pct": -0.01,
+   "adx15": 17.206,
+   "adx1h": 14.079,
+   "adx4h": 14.19,
+   "p24_side": 0.861,
+   "p7_side": 0.847,
+   "d_e21_atr": 0.948,
+   "d_e52_atr": 1.31,
+   "rsi_side": 54.774,
+   "roc_side": 0.154,
+   "roc_jump": 0.676,
+   "atrp15_pct": 0.51,
+   "atrp30_pct": 0.401,
+   "stop50_atr": 3.097,
+   "vote1h": 1.0,
+   "vote4h": 0.0,
+   "roc1h_side": 0.806,
+   "roc4h_side": 2.297,
+   "btc_roc15_side": -0.41,
+   "btc_gap_side": -0.835,
+   "btc_roc1h_side": -0.264,
+   "cross24": 4.0,
+   "trend_age": 18.0,
+   "ema_gap_atr": 0.362,
+   "vol_ratio": 1.647,
+   "body_atr": 1.556,
+   "close_loc": 0.976,
+   "rsi1h_side": 53.81,
+   "rsi4h_side": 51.719,
+   "hour4": "09~15시"
+  },
+  {
+   "entry_kst": "2026-10-20 17:45",
+   "coin": "SOL",
+   "side": "숏",
+   "net_roe_pct": -50.0,
+   "minutes": 317,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "BTC와 같이 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 11.2,
+   "btc_with_pct": -1.01,
+   "adx15": 16.389,
+   "adx1h": 12.44,
+   "adx4h": 30.044,
+   "p24_side": 0.679,
+   "p7_side": 0.541,
+   "d_e21_atr": 0.88,
+   "d_e52_atr": 1.147,
+   "rsi_side": 54.535,
+   "roc_side": 0.344,
+   "roc_jump": 0.43,
+   "atrp15_pct": 0.257,
+   "atrp30_pct": 0.259,
+   "stop50_atr": 4.656,
+   "vote1h": -1.0,
+   "vote4h": 1.0,
+   "roc1h_side": 0.713,
+   "roc4h_side": -3.562,
+   "btc_roc15_side": 0.278,
+   "btc_gap_side": 0.787,
+   "btc_roc1h_side": 0.607,
+   "cross24": 2.0,
+   "trend_age": 4.0,
+   "ema_gap_atr": 0.267,
+   "vol_ratio": 1.124,
+   "body_atr": 0.145,
+   "close_loc": 0.346,
+   "rsi1h_side": 50.37,
+   "rsi4h_side": 53.517,
+   "hour4": "15~21시"
+  },
+  {
+   "entry_kst": "2026-10-22 03:30",
+   "coin": "DOGE",
+   "side": "롱",
+   "net_roe_pct": -50.0,
+   "minutes": 229,
+   "type_move": "처음부터 반대",
+   "type_btc": "코인만 밀림",
+   "type_time": "1~4시간",
+   "mfe_roe_pct": -1.2,
+   "btc_with_pct": -0.17,
+   "adx15": 27.713,
+   "adx1h": 43.031,
+   "adx4h": 35.492,
+   "p24_side": 0.926,
+   "p7_side": 0.973,
+   "d_e21_atr": 1.55,
+   "d_e52_atr": 3.062,
+   "rsi_side": 65.404,
+   "roc_side": 0.445,
+   "roc_jump": 0.445,
+   "atrp15_pct": 0.412,
+   "atrp30_pct": 0.326,
+   "stop50_atr": 3.711,
+   "vote1h": 1.0,
+   "vote4h": 1.0,
+   "roc1h_side": 1.809,
+   "roc4h_side": 4.574,
+   "btc_roc15_side": 0.174,
+   "btc_gap_side": 2.185,
+   "btc_roc1h_side": 1.707,
+   "cross24": 3.0,
+   "trend_age": 114.0,
+   "ema_gap_atr": 1.512,
+   "vol_ratio": 0.484,
+   "body_atr": 0.374,
+   "close_loc": 0.394,
+   "rsi1h_side": 65.053,
+   "rsi4h_side": 55.291,
+   "hour4": "03~09시"
+  },
+  {
+   "entry_kst": "2026-10-23 04:45",
+   "coin": "SOL",
+   "side": "숏",
+   "net_roe_pct": -10.1,
+   "minutes": 255,
+   "type_move": "조금 가다 밀림",
+   "type_btc": "코인만 밀림",
+   "type_time": "4시간 넘음",
+   "mfe_roe_pct": 8.8,
+   "btc_with_pct": -0.02,
+   "adx15": 34.052,
+   "adx1h": 34.608,
+   "adx4h": 20.009,
+   "p24_side": 0.925,
+   "p7_side": 0.655,
+   "d_e21_atr": 0.878,
+   "d_e52_atr": 1.915,
+   "rsi_side": 58.267,
+   "roc_side": 0.472,
+   "roc_jump": 0.946,
+   "atrp15_pct": 0.727,
+   "atrp30_pct": 0.51,
+   "stop50_atr": 3.263,
+   "vote1h": 1.0,
+   "vote4h": -0.0,
+   "roc1h_side": 0.662,
+   "roc4h_side": 1.134,
+   "btc_roc15_side": -0.014,
+   "btc_gap_side": 1.818,
+   "btc_roc1h_side": 0.697,
+   "cross24": 4.0,
+   "trend_age": 76.0,
+   "ema_gap_atr": 1.037,
+   "vol_ratio": 0.512,
+   "body_atr": 0.757,
+   "close_loc": 0.904,
+   "rsi1h_side": 60.375,
+   "rsi4h_side": 53.339,
+   "hour4": "03~09시"
+  }
+ ],
+ "oct_wins_types": {
+  "mfe_lt3": 0,
+  "btc_against_03": 4,
+  "n": 50
+ },
+ "oct_medians_new": {
+  "adx15": [
+   26.428,
+   28.727
+  ],
+  "adx1h": [
+   25.143,
+   27.917
+  ],
+  "adx4h": [
+   33.531,
+   24.609
+  ],
+  "p24_side": [
+   0.828,
+   0.814
+  ],
+  "p7_side": [
+   0.702,
+   0.702
+  ],
+  "d_e21_atr": [
+   0.841,
+   0.983
+  ],
+  "d_e52_atr": [
+   1.612,
+   1.91
+  ],
+  "rsi_side": [
+   56.52,
+   58.096
+  ],
+  "roc_side": [
+   0.13,
+   0.201
+  ],
+  "roc_jump": [
+   0.177,
+   0.413
+  ],
+  "atrp15_pct": [
+   0.451,
+   0.501
+  ],
+  "atrp30_pct": [
+   0.358,
+   0.437
+  ],
+  "stop50_atr": [
+   3.751,
+   3.966
+  ],
+  "vote1h": [
+   1.0,
+   1.0
+  ],
+  "vote4h": [
+   0.0,
+   0.5
+  ],
+  "roc1h_side": [
+   1.055,
+   1.19
+  ],
+  "roc4h_side": [
+   1.949,
+   2.111
+  ],
+  "btc_roc15_side": [
+   0.13,
+   0.265
+  ],
+  "btc_gap_side": [
+   0.956,
+   1.293
+  ],
+  "btc_roc1h_side": [
+   0.933,
+   0.942
+  ],
+  "cross24": [
+   3.5,
+   4.5
+  ],
+  "trend_age": [
+   70.5,
+   47.0
+  ],
+  "ema_gap_atr": [
+   1.031,
+   1.008
+  ],
+  "vol_ratio": [
+   0.829,
+   0.637
+  ],
+  "body_atr": [
+   0.54,
+   0.511
+  ],
+  "close_loc": [
+   0.455,
+   0.804
+  ],
+  "rsi1h_side": [
+   57.852,
+   57.946
+  ],
+  "rsi4h_side": [
+   53.428,
+   53.965
+  ]
+ },
+ "posthoc_medians_5y": {
+  "select": {
+   "adx15": [
+    24.41,
+    24.954
+   ],
+   "adx1h": [
+    26.961,
+    26.601
+   ],
+   "adx4h": [
+    26.792,
+    26.303
+   ],
+   "p24_side": [
+    0.77,
+    0.776
+   ],
+   "p7_side": [
+    0.685,
+    0.667
+   ],
+   "d_e21_atr": [
+    0.721,
+    0.739
+   ],
+   "d_e52_atr": [
+    1.515,
+    1.546
+   ],
+   "rsi_side": [
+    56.255,
+    56.402
+   ],
+   "roc_side": [
+    0.301,
+    0.281
+   ],
+   "roc_jump": [
+    0.658,
+    0.632
+   ],
+   "atrp15_pct": [
+    0.651,
+    0.638
+   ],
+   "atrp30_pct": [
+    0.641,
+    0.623
+   ],
+   "stop50_atr": [
+    2.161,
+    2.255
+   ],
+   "vote1h": [
+    1.0,
+    1.0
+   ],
+   "vote4h": [
+    1.0,
+    1.0
+   ],
+   "roc1h_side": [
+    1.447,
+    1.52
+   ],
+   "roc4h_side": [
+    2.55,
+    2.333
+   ],
+   "btc_roc15_side": [
+    0.198,
+    0.209
+   ],
+   "btc_gap_side": [
+    0.71,
+    0.72
+   ],
+   "btc_roc1h_side": [
+    0.938,
+    0.978
+   ],
+   "cross24": [
+    3.0,
+    4.0
+   ],
+   "trend_age": [
+    41.0,
+    39.0
+   ],
+   "ema_gap_atr": [
+    0.775,
+    0.773
+   ],
+   "vol_ratio": [
+    0.84,
+    0.811
+   ],
+   "body_atr": [
+    0.503,
+    0.489
+   ],
+   "close_loc": [
+    0.756,
+    0.749
+   ],
+   "rsi1h_side": [
+    55.935,
+    55.931
+   ],
+   "rsi4h_side": [
+    54.23,
+    53.895
+   ]
+  },
+  "confirm": {
+   "adx15": [
+    24.853,
+    24.713
+   ],
+   "adx1h": [
+    25.514,
+    25.938
+   ],
+   "adx4h": [
+    25.005,
+    25.431
+   ],
+   "p24_side": [
+    0.804,
+    0.799
+   ],
+   "p7_side": [
+    0.697,
+    0.703
+   ],
+   "d_e21_atr": [
+    0.853,
+    0.787
+   ],
+   "d_e52_atr": [
+    1.717,
+    1.662
+   ],
+   "rsi_side": [
+    57.15,
+    56.73
+   ],
+   "roc_side": [
+    0.245,
+    0.23
+   ],
+   "roc_jump": [
+    0.517,
+    0.485
+   ],
+   "atrp15_pct": [
+    0.685,
+    0.673
+   ],
+   "atrp30_pct": [
+    0.633,
+    0.644
+   ],
+   "stop50_atr": [
+    2.931,
+    2.901
+   ],
+   "vote1h": [
+    1.0,
+    1.0
+   ],
+   "vote4h": [
+    1.0,
+    1.0
+   ],
+   "roc1h_side": [
+    1.297,
+    1.199
+   ],
+   "roc4h_side": [
+    1.815,
+    1.965
+   ],
+   "btc_roc15_side": [
+    0.196,
+    0.194
+   ],
+   "btc_gap_side": [
+    0.791,
+    0.855
+   ],
+   "btc_roc1h_side": [
+    0.793,
+    0.856
+   ],
+   "cross24": [
+    3.0,
+    3.0
+   ],
+   "trend_age": [
+    39.0,
+    40.0
+   ],
+   "ema_gap_atr": [
+    0.829,
+    0.823
+   ],
+   "vol_ratio": [
+    0.841,
+    0.802
+   ],
+   "body_atr": [
+    0.534,
+    0.504
+   ],
+   "close_loc": [
+    0.749,
+    0.746
+   ],
+   "rsi1h_side": [
+    56.405,
+    56.363
+   ],
+   "rsi4h_side": [
+    54.634,
+    54.018
+   ]
+  }
+ }
+}
