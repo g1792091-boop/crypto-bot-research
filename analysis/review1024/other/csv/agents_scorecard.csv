@@ -1,0 +1,154 @@
+source,id,kind,type,status,correct,metric,value,n,by,text
+agents3,1,newlab,newlab,failed,,,,,,"{""family"": ""donchian_break"", ""params"": {""length"": 55}}"
+agents3,2,newlab,newlab,failed,,,,,,"{""family"": ""squeeze_break"", ""params"": {}}"
+agents3,3,newlab,newlab,failed,,,,,,"{""family"": ""supertrend_flip"", ""params"": {""length"": 10, ""mult"": 3.0}}"
+agents3,4,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.42,50,spec_N24_DMI,"DMI는 ADX 20 미만이나 횡보장에서 신호가 나는 경우가 많아, 5개 봉 합계 승률이 5년 백테스트(5m 약 51%, 1h 약 62%)보다 낮게 나올 수 있다. 지금은 손실 3건, 이익 0건이라 횡보장 진입이 원인인지는 알 수 없는 가설이다."
+agents3,5,hypothesis,hypothesis,open,,,,,,"5분봉 손실이 '횡보장 진입' 태그에 몰려 보이지만, 이 매매법은 원래 그 조건에서 진입하므로 이익 거래에도 같은 태그가 많이 붙을 것이다. 손실만의 특징이 아닐 것이다."
+agents3,6,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.3333333333333333,30,spec_N22_VORTEX_PSAR,"'DI 방향 반대' 특징은 이익 거래보다 손실 거래에 더 자주 붙을 것이다. 지금은 손실 3건에 모두 있고 이익 거래에는 0건이지만, 분석 대상이 7건뿐이라 우연일 수 있다."
+agents3,7,newlab,newlab,failed,,,,,,"{""family"": ""bb_revert"", ""params"": {}}"
+agents3,8,hypothesis,패턴(손실 특징),graded,True,loss_tag_share,0.9545454545454546,30,spec_N18_VWMA_MACD,"'저항 바로 앞 진입' 태그는 지금 손실 3건 모두에 붙었지만 이익 거래에도 2건 붙어 있어, 손실을 가려내는 힘이 있는지 아직 모릅니다(표본 6건, 패턴 아님). 거래가 더 쌓이면 이 태그가 손실의 대부분(85% 이상)에 계속 붙는지 확인합니다. 또 최고 ROE 11~12%였는데 첫 "
+agents3,9,hypothesis,hypothesis,open,,,,,,"새 손실 3건은 모두 손절이고 첫 익절 잠금에는 닿지 않았습니다. 집계 거래가 12건(손실 3건)뿐이라 패턴이 아니고, 이 매매법은 5년 백테스트에서 5m 평균 ROE -6.1%로 원래 잃는 성격이라 정상 비용 수준의 손실일 가능성이 큽니다. 5m 계좌가 실제로도 그 정도로 잃는지 지켜"
+agents3,10,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.5681818181818182,100,spec_DOGE,도지 봇의 '횡보장 진입' 특징은 지금은 손실과 이익 양쪽에 비슷하게 나와 손실 원인이라 보기 어렵습니다. 다만 거래가 더 쌓였을 때 손실 거래의 90% 이상에 붙는다면 약한 손실 신호일 수 있어 지켜봅니다. '지지선 뒤 손절'은 손절로 끝난 거래에 정의상 붙는 꼬리표라 제외합니다.
+agents3,11,newlab,newlab,failed,,,,,,"{""family"": ""macd_hist_zero"", ""params"": {}}"
+agents3,12,newlab,newlab,failed,,,,,,"{""family"": ""volume_spike"", ""params"": {}}"
+agents3,13,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.45454545454545453,50,spec_N17_KC_RSI,"횡보장 진입이 켈트너·RSI 손실에 이익보다 더 자주 붙을 수 있다(현재 손실 4건 중 4건, 이익 12건 중 5건). 16건뿐이라 우연일 가능성이 큽니다. 건너뛰면 이익 거래도 함께 사라질 수 있어 이득인지는 아직 모릅니다."
+agents3,14,newlab,newlab,failed,,,,,,"{""family"": ""rsi_reversal"", ""params"": {""length"": 14, ""low"": 30, ""high"": 70}}"
+agents3,15,newlab,newlab,failed,,,,,,"{""family"": ""roc_zero"", ""params"": {""length"": 21}}"
+agents3,16,hypothesis,패턴(손실 특징),graded,True,loss_tag_share,0.6666666666666666,30,spec_V39_ALL,"V3.9가 횡보장에서 진입했다가 손실로 끝나는 비율이 높을 수 있다. 현재 손실 3건 중 2건(0.667)이 횡보장 진입이고 이익 7건 중에는 3건(0.429)이라 차이는 아직 우연과 구분되지 않는다. 손절 2건은 최고 ROE가 +4.2%, +1.0%였고 첫 잠금에 다가간 적이 없다. "
+agents3,17,newlab,newlab,failed,,,,,,"{""family"": ""ema_cross"", ""params"": {""fast"": 20, ""slow"": 50}}"
+agents3,18,newlab,newlab,failed,,,,,,"{""family"": ""keltner_break"", ""params"": {}}"
+agents3,19,hypothesis,hypothesis,open,,,,,,"5분봉에서 '횡보장 진입' 신호는 손실에 더 자주 붙을 수 있다(현재 손실 3건 전부, 이익 거래는 절반). 다만 집계 거래가 11건뿐이라 가설이고, 세 손실이 모두 같은 횡보 구간이라 이 태그는 횡보장 자체의 성질일 수 있어 구분력이 약할 수 있다."
+agents3,20,hypothesis,hypothesis,open,,,,,,"5m 계좌에서 '추세 약함 (ADX 20 미만)' 신호로 들어간 거래는 평균 ROE가 5년 백테스트 평균(약 -6%)보다 더 나쁠 수 있다. 지금은 손실 3건 중 2건이 이 태그였고 이익 1건에도 붙어 있어, 거래 4건뿐인 가설일 뿐이다."
+agents3,21,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.47368421052631576,60,spec_S3_CMO_SANDWICH,"'DI 방향 반대'(방향 지표가 진입 방향과 어긋난 상태)로 진입한 거래는 그렇지 않은 거래보다 성적이 나쁘다. 지금은 손실 3건 전부에 붙고 이익 쪽은 40%라는, 8건짜리 작은 표본의 관찰일 뿐이다. 이익 거래 2건도 같은 태그라서 건너뛰는 것이 이득인지는 모른다."
+agents3,22,hypothesis,hypothesis,open,,,,,,"5m 슈퍼트렌드·EMA의 손실은 ADX 20 미만(추세 약함) 진입에 더 몰릴 수 있다. 현재 거래 17건 중 손실 쪽 57%(4건), 이익 쪽 40%(4건)이다. 표본이 작아 우연일 수 있고, 5m는 비용 때문에 원래 불리한 성격이라 정상 손실일 가능성도 크다."
+agents3,23,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.10526315789473684,50,spec_N10_HA_PSAR,'많이 오른/내린 뒤 추격' 진입은 이익 거래보다 손실 거래에 더 자주 붙는다(손실 0.429 대 이익 0.105). 손실 3건뿐이라 우연일 수 있다.
+agents3,24,hypothesis,hypothesis,open,,,,,,"일목·AO 5m 계좌는 거래당 평균 ROE가 -5%보다 나쁜 채로 이어진다. 5년 평균 -6.1%와 비슷한 수준이라 운영 초반의 큰 손실은 비용에 약한 봉의 정상 범위일 가능성이 크다. 새 손실 10건은 모두 손절이고, '추격' 4건 대 이익 0건은 21건 표본이라 우연일 수 있다."
+agents3,25,hypothesis,hypothesis,open,,,,,,5m 계좌에서 '추세 약함 (ADX 20 미만)' 태그는 손실 쪽(88.9%)이 이익 쪽(36.4%)보다 높다. 다만 20건 표본이라 우연일 수 있다. 5m이라는 봉 자체의 비용 불리함이 더 단순한 설명일 수도 있다.
+agents3,26,hypothesis,패턴(손실 특징),graded,True,loss_tag_share,0.7777777777777778,30,spec_N19_FIB_CHOP,'횡보장 진입' 태그는 손실 거래의 60% 넘게에 붙을 것이다. 지금은 손실 8건 중 4건(50%)이고 이긴 거래는 1건뿐이라 아직 뜻이 없다. 이 태그가 이긴 거래보다 손실에 뚜렷이 더 많이 붙는지는 거래가 더 쌓여야 안다.
+agents3,27,hypothesis,hypothesis,open,,,,,,"슈퍼트렌드·KST는 5년 백테스트에서 4h만 거래당 평균 ROE가 약한 플러스(+0.64%)였지만, t값 0.38이라 0과 구별되지 않습니다. 실제 4h 계좌에서는 이 플러스가 유지되지 않고 평균 ROE가 0 이하로 나올 것이라고 봅니다. 맞다면 4h도 비용만 내는 매매법이라는 뜻이고,"
+agents3,28,hypothesis,hypothesis,open,,,,,,"일목·CMO 5m 계좌에서 추세가 약할 때(ADX 20 미만) 들어간 거래가 그렇지 않은 거래보다 나쁘다는 것은 우연일 수 있다. 지금은 19건 중 손실 7건, 이익 3건이라 가설일 뿐이다. 5m 손실은 5년 평균(-6.02%)과 같은 봉 자체의 성격일 수도 있다."
+agents3,29,hypothesis,hypothesis,open,,,,,,"5분봉 거래 중 첫 익절 잠금에 닿는 비율(lock_share)은 5년 성격 자료의 52.9%보다 낮게 유지될 것이다. 지금 손실 20건 모두 잠금에 닿지 못했고 진 거래의 최고 ROE 평균이 -0.6%라, 진입 직후부터 불리한 거래가 많아 보이기 때문이다. 운영 1.5일이라 우연일 수"
+agents3,30,hypothesis,hypothesis,open,,,,,,"V4.5에서 'DI 방향 반대'는 지금 손실 100% 대 이익 66.7%로 차이가 나지만 전체 16건뿐이라 우연일 수 있다. 거래가 더 쌓여도 손실 거래 중 이 특징 비중이 계속 90% 이상이면 skip_tag 시험을 검토하고, 낮아지면 우연으로 접는다."
+agents3,31,newlab,newlab,failed,,,,,,"{""family"": ""dmi_cross"", ""params"": {}}"
+agents3,32,newlab,newlab,failed,,,,,,"{""family"": ""obv_cross"", ""params"": {}}"
+agents3,33,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.4166666666666667,100,spec_N23_HA_ST,"ADX 20 미만(추세 약함) 진입은 손실 쪽 41.7%, 이익 쪽 18.2%로 차이가 나지만 해당 거래는 14건(이익 4, 손실 10)뿐이라 패턴이 아닙니다. 추세 따라가기 매매법이 추세가 약할 때 진입하면 더 잃는다는 가설이고, 우연일 수 있습니다. 주말 몰림(32건 중 승률 37."
+agents3,34,test,test,failed,,,,,,"""stop_atr"""
+agents3,35,hypothesis,좋아진다/버틴다,graded,False,mean_roe,-0.059687928675649905,30,team_lead,"N22는 5분봉에서만 손실이 크고(30건 승률 26.7%) 15분봉은 괜찮을 것이다(가설, 15분봉 10건뿐)."
+agents3,36,hypothesis,hypothesis,open,,,,,,N18의 5분봉 승률은 낮은 상태(25%)로 이어질 것이다(가설).
+agents3,37,hypothesis,패턴(손실 특징),graded,True,loss_tag_share,0.7941176470588235,100,spec_N01_ST_EMA,"숏이 롱보다 불리해 보인다(숏 14건 승률 0.286·손익 -2979, 롱 16건 승률 0.688·손익 -15). 주말 26건, 1.8일 표본이라 한 방향 장세의 영향일 가능성이 크다. 손실 쪽에서 '추세 약함(ADX 20 미만)'이 0.8로 가장 높지만 이익 쪽에도 0.533이 붙어 "
+agents3,38,test,test,failed,,,,,,"""stop_atr"""
+agents3,39,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.5,30,spec_N12_ICHI_AO,일목·AO 15m 계좌의 높은 승률(80%)은 롱 8건에 몰린 소표본 운이다. 거래가 30건 쌓이면 15m 승률은 65% 아래로 내려올 것이다. 5m 약세는 5m 전체가 함께 약한 탓이 커서 이 매매법만의 문제로 보지 않는다.
+agents3,40,hypothesis,hypothesis,open,,,,,,"5m 계좌의 거래당 평균 ROE는 비용을 뺀 뒤에도 -3% 아래로 계속 머문다(5년 기록 -6.4%, 현재 10건 -8.53%). 손절 1.5 ATR 가정이 손실 카드 6건 모두 나아졌지만 이익 거래 영향은 모르므로, 5m 30건 이후에 이익 거래까지 포함한 가정 카드가 모이면 stop"
+agents3,41,hypothesis,hypothesis,open,,,,,,"5분봉 손실 카드에서 '추세 약함 (ADX 20 미만)' 태그가 붙는 비율은 이긴 거래(58%)보다 높게(70% 이상) 유지될 것이다. 지금은 22건 기준 손실 80%, 이익 58%인데 표본이 작아 우연일 수 있다."
+agents3,42,hypothesis,좋아진다/버틴다,graded,False,mean_roe,-0.08066977225651249,30,spec_N09_ALLIG_AROON,"15m 계좌는 7건 중 6승이지만 5년 평균 ROE는 -4.7%라 초반 이익은 우연일 가능성이 큽니다. 15m 계좌가 거래 30건에 도달했을 때 평균 ROE가 0 이상이면 5m과 다른 봉 효과가 있다고 보고, 0 미만이면 초반 이익은 우연으로 접습니다. 5m 손실은 5년 백테스트 성격과"
+agents3,43,test,test,failed,,,,,,"""stop_atr"""
+agents3,44,hypothesis,나빠진다(운 되돌림),graded,False,win_rate,0.62,100,spec_N24_DMI,"DMI 손실이 유럽장(16-22시)·새벽에 몰린 것은 시간대 효과일 수 있으나, 숏·횡보장·같은 시기 연속 손절과 겹쳐 있고 칸당 15건 이하라 우연일 수 있는 가설이다. 이 시간대 승률이 미국장(0.636)보다 계속 낮게 남는지 본다."
+agents3,45,test,test,failed,,,,,,"""stop_atr"""
+agents3,46,hypothesis,hypothesis,open,,,,,,"5분봉 계좌의 부진은 이 매매법만의 문제가 아니라 5분봉 전반(비용·잦은 손절)의 성질이다. 5분봉 36개 계좌 중앙값 지갑이 2,986이고 이 매매법 5분봉 지갑은 3,510으로 중앙값 근처다. 5분봉이 30건 이상 쌓여도 평균 ROE는 15분봉보다 낮게 유지될 것이다. 'ADX 20"
+agents3,47,hypothesis,hypothesis,open,,,,,,"5m 계좌 돈치안·MFI 거래의 거래당 평균 ROE는 5년 백테스트 평균(-0.0704)보다 더 나쁜 -0.08 아래일 것이다. 최근 손실이 ADX 20 미만·횡보장에 몰렸고 5m 6건 평균이 -0.0972라는 점이 근거인데, 6건이라 우연일 수 있다."
+agents3,48,hypothesis,좋아진다/버틴다,graded,True,win_rate,0.5333333333333333,30,team_lead,"N25_DST_CCI의 첫날 전패(롱 3건 손절)는 매매법 문제가 아니라 같은 시간대 한 방향 움직임의 영향일 수 있고, 거래가 쌓이면 승률이 올라올 것이다."
+agents3,49,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.10384408992195247,30,team_lead,"N17_KC_RSI의 첫날 4전 전승은 표본이 작아서 생긴 운이고, 거래가 쌓이면 거래당 평균 ROE가 낮아질 것이다."
+agents3,50,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.006313936717862849,30,team_lead,"상위 1위 OBV_S의 전승은 숏이 유리했던 시간대 운일 가능성이 크고, 거래가 쌓이면 거래당 평균 ROE는 낮아질 것"
+agents3,51,hypothesis,나빠진다(운 되돌림),graded,False,win_rate,0.8666666666666667,30,team_lead,"하위 N02_ST_KST의 손실은 롱 손절에 몰린 것이라, 거래가 쌓이면 승률이 본전 승률(약 75%)보다 계속 크게 낮을 것"
+agents3,52,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.08138012432422133,30,team_lead,N24_DMI의 높은 승률(83%)은 숏 중심 장세 덕일 수 있어 거래가 쌓이면 거래당 평균 ROE가 5% 아래로 내려온다
+agents3,53,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.36666666666666664,30,team_lead,N17_KC_RSI는 롱 진입이 약해(롱 7건 1승) 승률이 본전 승률 아래로 계속 머문다
+agents3,54,hypothesis,패턴(손실 특징),graded,False,loss_tag_share,0.48,60,spec_N18_VWMA_MACD,VWMA·MACD 손실은 'ADX 20 미만' 진입에 더 몰린다. 지금은 손실 72.7%(8건) 대 이익 41.2%(7건)지만 이긴 거래에도 흔하고 표본이 작아 패턴이 아니라 가설이다.
+agents3,55,hypothesis,나빠진다(운 되돌림),graded,False,win_rate,0.7,30,team_lead,"N17_KC_RSI의 손실은 롱 쏠림(롱 30건 9승)에서 나오며, 앞으로도 롱 거래의 승률이 50%보다 낮을 것이다."
+agents3,56,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.04658012789015176,30,team_lead,"N23_HA_ST의 상위 성적은 숏·익절 잠금에 유리한 장세 덕이라, 앞으로 거래당 평균 ROE는 5%보다 낮을 것이다."
+agents3,57,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.024013087257622294,60,spec_N13_3OUTSIDE,"롱 3건 전부 손실, 숏 8건 중 7건 이익이라는 갈림은 같은 이틀 장세의 영향일 가능성이 크다. 지금 승률 63.6%는 본전 승률 68.1%에 못 미치고 손익비가 0.47이라, 거래가 쌓이면 4개 봉 합계 평균 ROE는 5년 성격표처럼 음수로 돌아올 것이다."
+agents3,58,hypothesis,나빠진다(운 되돌림),graded,False,win_rate,0.5,30,spec_OBV_B,"OBV 돌파형 15분봉의 손실은 롱에 몰려 있다(롱 7건 승률 28.6%, -1,266$, 숏 9건 -182$). 15분봉 전체의 약세(다른 매매법 30개 중 21개 손실)와 겹친 우연일 수도 있다. 30분과의 차이는 거래 수가 적어 우연일 수 있다."
+agents3,59,hypothesis,좋아진다/버틴다,graded,False,mean_roe,-0.06306926118426358,100,spec_N17_KC_RSI,"N17_KC_RSI의 실전 평균 ROE(-11.6%)가 5년 백테스트(-5.0%)보다 나쁜 것은 2.85일 동안 BTC 롱 거래가 한 시기에 몰린 탓일 수 있습니다(추정, 확인 전). 거래가 더 쌓이면 4개 봉 합계 거래당 평균 ROE는 -5% 근처까지 올라올 것입니다."
+agents3,60,hypothesis,hypothesis,open,,,,,,"일목·AO 롱은 6건 전패(-2,328$)이고 숏은 18건 중 14승(+1,197$)이지만, 롱은 6건이고 숏 이익 대부분이 같은 하락 흐름을 탄 것일 수 있어 롱 약점이라고 부를 수 없다. 이 갈림이 롱 약점이 아니라 우연이면 거래가 쌓일수록 전체 승률은 5년 백테스트 승률(58.6%"
+agents3,61,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.025548859020101337,30,team_lead,N17_KC_RSI는 롱 위주 진입이라 숏 우세 장세가 이어지는 동안 거래당 평균 ROE가 계속 음수일 것이다.
+agents3,62,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.3333333333333333,30,team_lead,S2_ST_ROC의 상위 성과는 30분 한 칸과 숏 쏠림에 기댄 것이라 앞으로 승률이 지금(75%)보다 내려갈 것이다.
+agents3,63,hypothesis,나빠진다(운 되돌림),graded,False,win_rate,0.6,100,spec_S4_BB_BBP,"방향 없는 횡보 장세에서 진입한 거래는 다른 장세보다 승률이 낮다는 가설. 지금 횡보 24건은 12승 12패(승률 50%)이고, 그 밖 장세는 16건 중 13승이다. 롱 10패 쏠림, SOL·DOGE·LTC 쏠림과 겹쳐 있어 장세 효과인지는 아직 모른다."
+agents3,64,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.06937237186291963,30,team_lead,"N17은 롱 위주 진입이라 앞으로도 거래당 평균 ROE가 0보다 낮을 것이다(롱 64건 -7,414.43)."
+agents3,65,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.3333333333333333,30,team_lead,N02의 상위 성적은 숏 쏠림 덕이라 승률이 지금의 77.3%보다 낮아질 것이다(롱은 7건 승률 14.3%).
+agents3,66,hypothesis,나빠진다(운 되돌림),graded,False,win_rate,0.5,60,spec_N16_BBRSI,"진입 순간 EMA20 역방향(추세 역행)으로 들어간 신호는 초입 진입보다 성적이 나쁠 수 있다(역방향 15건 승률 33%, 평균 ROE -16.1%, 초입 9건 승률 78%). 56칸 중 한 칸을 고른 결과라 우연일 수 있어 가설이다."
+agents3,67,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.1265853220184469,30,team_lead,N17은 롱 중심 진입이라 앞으로도 거래당 평균 ROE가 0보다 낮을 것이다(본전 승률보다 승률이 17.4%p 낮음).
+agents3,68,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.09363121383489365,30,team_lead,"N02의 이익은 30분 한 칸에 몰려 있어, 앞으로 15분 거래의 평균 ROE는 0보다 낮을 것이다."
+agents3,69,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.03129903435753244,30,spec_N23_HA_ST,"1시간봉의 높은 성적(16건 중 15승, 평균 ROE +7.6%)은 표본이 작아서 나온 것이고, 거래가 쌓이면 평균 ROE는 5% 아래로 내려올 것이다. 5년 백테스트 1시간 평균은 -3.3%이다."
+agents3,70,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.06844566117639345,30,team_lead,"N17은 손익비 0.451에 승률이 본전 승률보다 낮아, 앞으로 거래당 평균 ROE가 계속 마이너스일 것이다."
+agents3,71,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.6333333333333333,30,team_lead,"N06의 상위 성적은 24건 표본이라 운일 가능성이 커, 앞으로 승률이 지금 70.8%보다 낮아질 것이다."
+agents3,72,hypothesis,좋아진다/버틴다,graded,True,win_rate,0.6666666666666666,30,spec_N06_MACD_ORB,N06의 롱 손실 몰림(롱 17건 승률 47.1% 대 숏 11건 81.8%)은 소표본 우연일 가능성이 크다. 앞으로 롱 거래의 승률이 지금까지의 롱 승률 47.1%보다 올라가 본전 승률 55.95%에 가까워질 것이다.
+agents3,73,hypothesis,hypothesis,open,,,,,,"큰 상관 묶음에 속한 매매법은 같은 날 함께 지는 경향이 있어, 다음 7일에도 묶음 내 매매법의 하루 손실 동반 비율이 높게 나올 것이다."
+agents3,74,hypothesis,나빠진다(운 되돌림),graded,True,mean_roe,-0.037991659245072786,30,team_lead,"N17_KC_RSI의 손실은 롱 쪽에 몰려 있어, 앞으로도 롱 거래의 평균 ROE가 0보다 낮을 것이다(가설)."
+agents3,75,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.5666666666666667,30,team_lead,N18_VWMA_MACD는 승률이 본전 승률(69.3%)에 계속 못 미칠 것이다(가설).
+agents3,76,hypothesis,나빠진다(운 되돌림),graded,False,mean_roe,0.004971447841413932,30,team_lead,N17_KC_RSI는 승률이 본전 승률보다 한참 낮아(-16.8%p) 앞으로 거래도 평균적으로 손실일 것이다.
+agents3,77,hypothesis,hypothesis,open,,,,,,OBV_S의 승률 67.2%는 30분 계좌의 운이 섞여 있어 앞으로는 이보다 낮아질 것이다.
+agents3,78,hypothesis,나빠진다(운 되돌림),graded,True,win_rate,0.46,50,team_lead,N17_KC_RSI는 앞으로도 평균적으로 손실이 이어진다(승률이 본전 승률보다 16.5%p 낮음).
+agents3,79,hypothesis,hypothesis,open,,,,,,OBV_S의 상위 성과는 30분 한 계좌에 몰린 운일 수 있어 앞으로 승률이 본전 승률 수준으로 내려온다.
+committee,10-04 12:01,direction_24h,중립,graded,False,move,0.020382257278661386,1,BTCUSDT,
+committee,10-05 12:01,direction_24h,중립,graded,False,move,-0.010724881872458791,1,ETHUSDT,
+committee,10-06 12:01,direction_24h,하락,graded,True,move,-0.015816199117622554,1,SOLUSDT,
+committee,10-07 12:01,direction_24h,하락,graded,True,move,-0.01066548161315417,1,DOGEUSDT,
+committee,10-08 12:01,direction_24h,하락,graded,True,move,-0.03937007874015763,1,LTCUSDT,
+committee,10-09 12:01,direction_24h,하락,graded,False,move,0.009000542201337502,1,BCHUSDT,
+committee,10-10 12:01,direction_24h,상승,graded,True,move,0.005566028940444445,1,BTCUSDT,
+committee,10-11 12:01,direction_24h,상승,graded,True,move,0.014679864199302006,1,ETHUSDT,
+committee,10-12 12:01,direction_24h,상승,graded,False,move,-0.0476828288240021,1,SOLUSDT,
+committee,10-13 12:01,direction_24h,하락,graded,False,move,0.015189570625523174,1,DOGEUSDT,
+committee,10-17 12:01,direction_24h,하락,graded,False,move,-0.0021189503554301936,1,ETHUSDT,
+committee,10-18 12:01,direction_24h,하락,graded,False,move,0.014527612083894637,1,SOLUSDT,
+committee,10-19 12:01,direction_24h,상승,graded,False,move,-0.006373406648337854,1,DOGEUSDT,
+debate,1,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 88}}"
+debate,2,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,3,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 165}}"
+debate,4,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,5,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 236}}"
+debate,6,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,7,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 250}}"
+debate,9,strategy_roe_sign,strategy_roe_sign,graded,False,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N06_MACD_ORB"", ""tf"": ""15m"", ""op"": ""<"", ""n"": 20, ""account"": ""N06_MACD_ORB@15m"", ""base_id"": 69}}"
+debate,12,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 383}}"
+debate,14,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 403}}"
+debate,15,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,17,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 457}}"
+debate,18,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-05""}}"
+debate,20,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 523}}"
+debate,23,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 566}}"
+debate,24,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N17_KC_RSI"", ""tf"": ""15m"", ""op"": ""<"", ""n"": 20, ""account"": ""N17_KC_RSI@15m"", ""base_id"": 304}}"
+debate,25,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 626}}"
+debate,26,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,28,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,31,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-05""}}"
+debate,36,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 772}}"
+debate,43,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-06""}}"
+debate,44,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 300, ""base_id"": 1038}}"
+debate,45,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N24_DMI"", ""tf"": ""30m"", ""op"": ""<"", ""n"": 20, ""account"": ""N24_DMI@30m"", ""base_id"": 983}}"
+debate,46,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 1062}}"
+debate,49,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 1194}}"
+debate,53,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-06""}}"
+debate,71,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""OBV_B"", ""tf"": ""15m"", ""op"": ""<"", ""n"": 20, ""account"": ""OBV_B@15m"", ""base_id"": 1656}}"
+debate,75,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N17_KC_RSI"", ""tf"": ""1h"", ""op"": ""<"", ""n"": 20, ""account"": ""N17_KC_RSI@1h"", ""base_id"": 1740}}"
+debate,79,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 1885}}"
+debate,89,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 2114}}"
+debate,103,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-08""}}"
+debate,105,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 500, ""base_id"": 2262}}"
+debate,106,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N17_KC_RSI"", ""tf"": ""1h"", ""op"": ""<"", ""n"": 20, ""account"": ""N17_KC_RSI@1h"", ""base_id"": 2266}}"
+debate,107,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 2304}}"
+debate,108,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-08""}}"
+debate,109,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 2328}}"
+debate,118,strategy_roe_sign,strategy_roe_sign,graded,False,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N04_ST_KLINGER"", ""tf"": ""15m"", ""op"": "">"", ""n"": 30, ""account"": ""N04_ST_KLINGER@15m"", ""base_id"": 2393}}"
+debate,125,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 2665}}"
+debate,140,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N06_MACD_ORB"", ""tf"": ""30m"", ""op"": ""<"", ""n"": 20, ""account"": ""N06_MACD_ORB@30m"", ""base_id"": 1834}}"
+debate,142,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-09""}}"
+debate,193,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 3572}}"
+debate,207,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 3976}}"
+debate,208,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 300, ""base_id"": 4016}}"
+debate,209,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N17_KC_RSI"", ""tf"": ""15m"", ""op"": ""<"", ""n"": 20, ""account"": ""N17_KC_RSI@15m"", ""base_id"": 3999}}"
+debate,234,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-11"", ""base_rate"": 1.0}}"
+debate,261,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-12"", ""base_rate"": 1.0}}"
+debate,291,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 5551}}"
+debate,305,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 300, ""base_id"": 6091}}"
+debate,316,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 6221}}"
+debate,334,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 300, ""base_id"": 6722}}"
+debate,337,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-14"", ""base_rate"": 1.0}}"
+debate,339,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 6901}}"
+debate,365,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-15"", ""base_rate"": 1.0}}"
+debate,369,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 300, ""base_id"": 7618}}"
+debate,375,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 7718}}"
+debate,390,best_vs_normal,best_vs_normal,graded,False,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 200, ""base_id"": 8029}}"
+debate,398,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 5, ""base_day"": ""2026-10-16"", ""base_rate"": 1.0}}"
+debate,400,strategy_roe_sign,strategy_roe_sign,graded,True,strategy_roe_sign,,,,"{""kind"": ""strategy_roe_sign"", ""params"": {""strategy"": ""N17_KC_RSI"", ""tf"": ""15m"", ""op"": ""<"", ""n"": 30, ""account"": ""N17_KC_RSI@15m"", ""base_id"": 8241}}"
+debate,418,parity_streak,parity_streak,graded,True,parity_streak,,,,"{""kind"": ""parity_streak"", ""params"": {""days"": 3, ""base_day"": ""2026-10-17"", ""base_rate"": 1.0}}"
+debate,494,best_vs_normal,best_vs_normal,graded,True,best_vs_normal,,,,"{""kind"": ""best_vs_normal"", ""params"": {""n"": 500, ""base_id"": 10703}}"

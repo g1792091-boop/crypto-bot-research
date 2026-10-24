@@ -1,0 +1,7 @@
+group,tier,half,n,mean_pct
+core,base,H1,584,-0.770566
+core,base,H2,724,-0.983428
+core,best,H1,244,-2.006721
+core,best,H2,212,-3.100915
+core,good,H1,1367,-0.898903
+core,good,H2,1432,-1.193892
