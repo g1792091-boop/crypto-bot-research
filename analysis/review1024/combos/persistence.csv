@@ -1,0 +1,13 @@
+level,split,n_units,units_n10,t1.5_pick,t1.5_test,t1.5_both,t1.5_both_expected_if_independent,t2.0_pick,t2.0_test,t2.0_both,t2.0_both_expected_if_independent,rho_raw,rho_market_removed,top10pct_test_excess,all_test_excess,top10pct_test_positive_share
+rule_signals_strategy,half,223,203,30,28,6,4.13793,20,14,2,1.37931,0.19467,0.125308,0.00744078,0.000667944,0.826087
+rule_signals_strategy_side,half,402,345,45,45,7,5.86957,25,26,3,1.88406,0.405517,0.0589161,0.000473372,-0.000464647,0.512195
+rule_signals_strategy,altE,226,209,27,24,3,3.10048,18,18,3,1.55024,0.13499,0.1063,0.00292743,-0.000521726,0.565217
+rule_signals_strategy_side,altE,401,341,50,42,8,6.15836,32,28,4,2.62757,0.239627,0.0443164,-0.00110073,-0.0017337,0.463415
+rule_signals_strategy,altO,226,209,24,27,3,3.10048,18,18,3,1.55024,0.13499,0.1063,0.00504691,1.21223e-05,0.652174
+rule_signals_strategy_side,altO,401,341,42,50,8,6.15836,28,32,4,2.62757,0.239627,0.0443164,0.00258781,-0.000360793,0.487805
+rule_accounts_mean_trade,half,231,,,,,,,,,,0.115832,,-0.00339956,-0.00834477,0.333333
+rule_accounts_mean_trade,altE,236,,,,,,,,,,0.0452086,,-0.00702017,-0.00846668,0.416667
+rule_accounts_mean_trade,altO,236,,,,,,,,,,0.0452086,,-0.0104849,-0.0110854,0.375
+league_accounts_mean_trade,half,157,,,,,,,,,,-0.0744911,,0.00293148,-0.00381588,0.75
+league_accounts_mean_trade,altE,150,,,,,,,,,,0.564687,,0.00630049,-0.0161959,0.8
+league_accounts_mean_trade,altO,150,,,,,,,,,,0.564687,,0.00651708,-0.014771,0.4

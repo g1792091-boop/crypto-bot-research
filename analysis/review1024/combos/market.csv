@@ -1,0 +1,29 @@
+window,split,part,from_kst,to_kst,days,avg6_move,move_BTC,move_ETH,move_SOL,move_DOGE,move_LTC,move_BCH,bot,tf,side,coin_flip_mean_wallet
+rule,half,pick,10/06 03:35,10/15 13:23,9.40867,-0.133192,-0.0512723,-0.123332,-0.138155,-0.152231,-0.172908,-0.161252,,,,
+rule,half,test,10/15 13:23,10/24 23:11,9.40867,-0.0100874,-0.00722818,-0.00388549,-0.0221406,-0.0375809,-0.0384154,0.048726,,,,
+rule,half,test_baseline,,,,,,,,,,,rule,15m,1,-0.018918
+rule,half,test_baseline,,,,,,,,,,,rule,15m,-1,-0.00682084
+rule,half,test_baseline,,,,,,,,,,,rule,1h,1,-0.0219683
+rule,half,test_baseline,,,,,,,,,,,rule,1h,-1,0.00387066
+rule,half,test_baseline,,,,,,,,,,,rule,30m,1,-0.0201845
+rule,half,test_baseline,,,,,,,,,,,rule,30m,-1,-0.00271923
+rule,half,test_baseline,,,,,,,,,,,rule,4h,1,-0.00475239
+rule,half,test_baseline,,,,,,,,,,,rule,4h,-1,-0.000169916
+rule,half,test_baseline,,,,,,,,,,,league,*,1,-0.0219538
+rule,half,test_baseline,,,,,,,,,,,league,*,-1,-0.00120833
+rule,altE,all,10/06 03:35,10/24 23:11,18.8173,-0.141877,-0.0581299,-0.126738,-0.157237,-0.184091,-0.204681,-0.120384,,,,
+rule,altO,all,10/06 03:35,10/24 23:11,18.8173,-0.141877,-0.0581299,-0.126738,-0.157237,-0.184091,-0.204681,-0.120384,,,,
+league,half,pick,10/13 17:10,10/19 08:10,5.625,-0.0439322,-0.0277216,-0.0556091,-0.0448393,-0.0716804,-0.0607223,-0.00302038,,,,
+league,half,test,10/19 08:10,10/24 23:10,5.625,-0.0159007,-0.0127864,-0.0103255,-0.0236167,-0.0191139,-0.0427016,0.0131401,,,,
+league,half,test_baseline,,,,,,,,,,,rule,15m,1,-0.0188899
+league,half,test_baseline,,,,,,,,,,,rule,15m,-1,-0.00686536
+league,half,test_baseline,,,,,,,,,,,rule,1h,1,-0.0204795
+league,half,test_baseline,,,,,,,,,,,rule,1h,-1,0.00246168
+league,half,test_baseline,,,,,,,,,,,rule,30m,1,-0.019022
+league,half,test_baseline,,,,,,,,,,,rule,30m,-1,-0.00209285
+league,half,test_baseline,,,,,,,,,,,rule,4h,1,-0.00882537
+league,half,test_baseline,,,,,,,,,,,rule,4h,-1,-0.00126011
+league,half,test_baseline,,,,,,,,,,,league,*,1,-0.0233345
+league,half,test_baseline,,,,,,,,,,,league,*,-1,0.00113315
+league,altE,all,10/13 17:10,10/24 23:10,11.25,-0.0588477,-0.0401535,-0.0653604,-0.0673971,-0.0894242,-0.100831,0.0100801,,,,
+league,altO,all,10/13 17:10,10/24 23:10,11.25,-0.0588477,-0.0401535,-0.0653604,-0.0673971,-0.0894242,-0.100831,0.0100801,,,,

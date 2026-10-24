@@ -1,0 +1,56 @@
+{
+ "rule_zip": "66fa8934-paperbot_export_20261024_1412.zip",
+ "league_zip": "e93b2d70-league_export_20261024_1416.zip",
+ "rule_zip_sha256": "c6f2c8f2987b5140b53554f64e95c52374caf73cb5c6727ecfb8d441ee4e8382",
+ "league_zip_sha256": "ec14bcb5dcaeffd3e9121336897ec9e0276a25c742b562a8d645951e4e899467",
+ "member_sha256": {
+  "rule": {
+   "current/accounts.csv": "2c1b9ee75a89af1b7950c9111a7c6a840bd29e2e0de86c22f11ece95c7421315",
+   "current/trades.csv": "c2b7be423ea6457c39fdc015ba96cf3fa57e364edd1d8096f34e8c5cd50d00c8",
+   "current/outcomes.csv": "ac6a3cfc28ddea278ac3fe235324ed7e014b97227d33d4926ad6612821cf0c8c",
+   "current/signal_log.csv": "7628b70d8cf486cd0579290ad9a8cb42e53fcfd5927fecb59e4c72d3a1fca339",
+   "current/signal_ctx.jsonl": "9ba6fe8d6aa2d98dd3967ef2a7fd3b7fc6dff5d7cd3f95dd62c975e406122e68",
+   "current/live_bars.csv": "3b439fd197088098aef6bc6a606f3718511c705752d93ce9d4dccff633dd9193",
+   "current/runs.csv": "65987947b30b35ec79da9a9e77e25783deed87e0e9fce3c2dd9ab6a551422e87",
+   "manifest.txt": "cc55e12db616fd929acf558ae46d618b08c7b5dbba4493dc81731118e66e9670"
+  },
+  "league": {
+   "db/league_exits.db": "12cb599e9cb2fc3e854eae71f8add7ca4e11b08b5e96a9e50302e741eeb4bad6",
+   "db/league_exits_start.json": "4afc2fb5bea9f479ddef16c500f91b497a6d33580460dc3f0bb74a73749bab04",
+   "etc/rules.json": "1c790a12510e4cdc9c970539790261f86bae39497b691e7184864fa64409722c",
+   "etc/candidates.json": "7fc01e0307271f566c9cf452a391ef6128850b983d56ba229b1a3cef7b96d2b8",
+   "manifest.txt": "23f048c3b2b77be145c8a82cd839c2f2b42b5f307d2aabcdd84236b6f4107339"
+  }
+ },
+ "rule_first_entry": 1791225600000,
+ "rule_bars_end": 1792851119999,
+ "rule_run_started": 1791225301139,
+ "league_start": 1791879000000,
+ "league_done": 1792851000000,
+ "n_trades": {
+  "rule": 13039,
+  "league": 4456
+ },
+ "n_accounts": {
+  "rule": 331,
+  "league": 1188
+ },
+ "open_positions_excluded": {
+  "rule": 136,
+  "league": 189
+ },
+ "n_signals_replayed": 47984,
+ "replay_check": {
+  "matched_trades": 12082,
+  "real_closed_house_trades": 12082,
+  "same_leverage": 0.9997516967389505,
+  "same_exit_minute": 0.9806307424882046,
+  "roe_diff_median": 3.608224830031759e-16,
+  "roe_diff_mean": 0.00013839857748268081,
+  "roe_abs_diff_p90": 0.0014857660827105879,
+  "share_abs_roe_diff_below_0.5pct": 0.984936268829664,
+  "real_mean_roe": -0.04046650618359789,
+  "replay_mean_roe": -0.040281877011439884,
+  "funding_mean_roe": -3.397882873259499e-05
+ }
+}

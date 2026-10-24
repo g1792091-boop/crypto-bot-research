@@ -1,0 +1,74 @@
+{
+ "rows_total": 762,
+ "wallet_rows": 626,
+ "by_split": {
+  "altE": {
+   "rows": 186,
+   "oos_positive": 36,
+   "with_luck_test": 178,
+   "beat_random_p05": 8,
+   "beat_random_p05_and_positive": 7,
+   "expected_by_chance_p05": 8.9,
+   "excess_positive": 84
+  },
+  "altO": {
+   "rows": 188,
+   "oos_positive": 34,
+   "with_luck_test": 180,
+   "beat_random_p05": 18,
+   "beat_random_p05_and_positive": 11,
+   "expected_by_chance_p05": 9.0,
+   "excess_positive": 94
+  },
+  "half": {
+   "rows": 252,
+   "oos_positive": 77,
+   "with_luck_test": 237,
+   "beat_random_p05": 28,
+   "beat_random_p05_and_positive": 25,
+   "expected_by_chance_p05": 11.9,
+   "excess_positive": 135
+  }
+ },
+ "consistency": {
+  "constructions": 170,
+  "positive_all_three": 11,
+  "beat_random_all_three": 2,
+  "positive_and_beat_all_three": 0,
+  "excess_positive_all_three": 32
+ },
+ "goal_rows": 47,
+ "goal_max_p_touch_x6_now": 0.4532,
+ "goal_max_p_touch_x6_full": 0.9004,
+ "meta": {
+  "rule_run_started": 1791225301139,
+  "rule_bars_end": 1792851119999,
+  "league_start": 1791879000000,
+  "league_done": 1792851000000,
+  "n_trades": {
+   "rule": 13039,
+   "league": 4456
+  },
+  "n_accounts": {
+   "rule": 331,
+   "league": 1188
+  },
+  "open_positions_excluded": {
+   "rule": 136,
+   "league": 189
+  },
+  "replay_check": {
+   "matched_trades": 12082,
+   "real_closed_house_trades": 12082,
+   "same_leverage": 0.9997516967389505,
+   "same_exit_minute": 0.9806307424882046,
+   "roe_diff_median": 3.608224830031759e-16,
+   "roe_diff_mean": 0.00013839857748268081,
+   "roe_abs_diff_p90": 0.0014857660827105879,
+   "share_abs_roe_diff_below_0.5pct": 0.984936268829664,
+   "real_mean_roe": -0.04046650618359789,
+   "replay_mean_roe": -0.040281877011439884,
+   "funding_mean_roe": -3.397882873259499e-05
+  }
+ }
+}
