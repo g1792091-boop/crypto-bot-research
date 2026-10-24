@@ -21,7 +21,6 @@ import json
 import os
 import re
 import socket
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
