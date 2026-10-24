@@ -1,0 +1,57 @@
+{
+ "klinger_tv_vs_loop": {
+  "bars": 59622,
+  "max_abs_diff_over_max_abs": 0.0,
+  "signal_max_abs_diff_over_max_abs": 0.0,
+  "nan_pattern_same": true
+ },
+ "klinger_tv_vs_pine_ema": {
+  "max_abs_diff_over_max_abs": 1.5914427708577036e-17,
+  "signal_max_abs_diff_over_max_abs": 2.3871641562865554e-17
+ },
+ "klinger_other_forms": {
+  "original_source": "research/vwap30/code/vwfriend.klinger",
+  "BTC_15m": {
+   "tv_crosses": 31990,
+   "fg_crosses": 35158,
+   "orig_crosses": 25050,
+   "tv_in_fg_pm1": 0.2706,
+   "tv_in_orig_pm1": 0.6158,
+   "fg_in_orig_pm1": 0.2016
+  },
+  "BTC_1h": {
+   "tv_crosses": 8177,
+   "fg_crosses": 8705,
+   "orig_crosses": 6381,
+   "tv_in_fg_pm1": 0.2764,
+   "tv_in_orig_pm1": 0.6215,
+   "fg_in_orig_pm1": 0.2051
+  },
+  "SOL_30m": {
+   "tv_crosses": 17253,
+   "fg_crosses": 18665,
+   "orig_crosses": 12697,
+   "tv_in_fg_pm1": 0.2861,
+   "tv_in_orig_pm1": 0.6093,
+   "fg_in_orig_pm1": 0.2037
+  }
+ },
+ "judge_BTC_1h": {
+  "bars": 59488,
+  "obv_state_same": 1.0,
+  "v39_state_same": 1.0,
+  "rsi_roc_same_as_frcore": true
+ },
+ "judge_ETH_4h": {
+  "bars": 14722,
+  "obv_state_same": 1.0,
+  "v39_state_same": 1.0,
+  "rsi_roc_same_as_frcore": true
+ },
+ "judge_DOGE_1h": {
+  "bars": 54895,
+  "obv_state_same": 1.0,
+  "v39_state_same": 1.0,
+  "rsi_roc_same_as_frcore": true
+ }
+}
