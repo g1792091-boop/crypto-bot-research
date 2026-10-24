@@ -1,0 +1,338 @@
+{
+ "blocks 40x 6": {
+  "oct2026": {
+   "n": 140,
+   "per_weekday": 8.24,
+   "win": 0.8,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -45.9,
+   "roe_pct": -2.74,
+   "roe_pct_no_payback": -5.76,
+   "mult40": 0.1179
+  },
+  "last19": {
+   "n": 118,
+   "per_weekday": 7.87,
+   "win": 0.8136,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -45.7,
+   "roe_pct": -1.95,
+   "roe_pct_no_payback": -4.97,
+   "mult40": 0.2474
+  },
+  "select": {
+   "n": 15663,
+   "per_weekday": 12.4,
+   "win": 0.8147,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -46.9,
+   "roe_pct": -2.14,
+   "roe_pct_no_payback": -5.16,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 4881,
+   "per_weekday": 10.68,
+   "win": 0.8048,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -47.0,
+   "roe_pct": -2.69,
+   "roe_pct_no_payback": -5.71,
+   "mult40": 0.0
+  }
+ },
+ "blocks 40x DOGE": {
+  "oct2026": {
+   "n": 70,
+   "per_weekday": 4.12,
+   "win": 0.7143,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -45.0,
+   "roe_pct": -7.08,
+   "roe_pct_no_payback": -10.11,
+   "mult40": 0.0913
+  },
+  "last19": {
+   "n": 61,
+   "per_weekday": 4.07,
+   "win": 0.7213,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -44.6,
+   "roe_pct": -6.61,
+   "roe_pct_no_payback": -9.64,
+   "mult40": 0.1409
+  },
+  "select": {
+   "n": 6199,
+   "per_weekday": 4.91,
+   "win": 0.8156,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -47.0,
+   "roe_pct": -2.08,
+   "roe_pct_no_payback": -5.11,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 2342,
+   "per_weekday": 5.12,
+   "win": 0.7985,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -47.0,
+   "roe_pct": -3.04,
+   "roe_pct_no_payback": -6.06,
+   "mult40": 0.0
+  }
+ },
+ "blocks 35x 6": {
+  "oct2026": {
+   "n": 115,
+   "per_weekday": 6.76,
+   "win": 0.8261,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -45.8,
+   "roe_pct": -1.1,
+   "roe_pct_no_payback": -3.74,
+   "mult40": 0.387
+  },
+  "last19": {
+   "n": 99,
+   "per_weekday": 6.6,
+   "win": 0.8384,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -45.4,
+   "roe_pct": -0.37,
+   "roe_pct_no_payback": -3.01,
+   "mult40": 0.6055
+  },
+  "select": {
+   "n": 13996,
+   "per_weekday": 11.08,
+   "win": 0.8206,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.3,
+   "roe_pct": -1.68,
+   "roe_pct_no_payback": -4.33,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 4235,
+   "per_weekday": 9.27,
+   "win": 0.8118,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.4,
+   "roe_pct": -2.18,
+   "roe_pct_no_payback": -4.82,
+   "mult40": 0.0
+  }
+ },
+ "blocks 35x DOGE": {
+  "oct2026": {
+   "n": 65,
+   "per_weekday": 3.82,
+   "win": 0.7385,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -45.9,
+   "roe_pct": -5.87,
+   "roe_pct_no_payback": -8.52,
+   "mult40": 0.1516
+  },
+  "last19": {
+   "n": 56,
+   "per_weekday": 3.73,
+   "win": 0.7321,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -45.7,
+   "roe_pct": -6.16,
+   "roe_pct_no_payback": -8.81,
+   "mult40": 0.1836
+  },
+  "select": {
+   "n": 5914,
+   "per_weekday": 4.68,
+   "win": 0.8186,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.4,
+   "roe_pct": -1.79,
+   "roe_pct_no_payback": -4.43,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 2192,
+   "per_weekday": 4.8,
+   "win": 0.8089,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.4,
+   "roe_pct": -2.34,
+   "roe_pct_no_payback": -4.99,
+   "mult40": 0.0
+  }
+ },
+ "no blocks 40x 6": {
+  "oct2026": {
+   "n": 159,
+   "per_weekday": 9.35,
+   "win": 0.7673,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -46.2,
+   "roe_pct": -4.56,
+   "roe_pct_no_payback": -7.58,
+   "mult40": 0.0249
+  },
+  "last19": {
+   "n": 132,
+   "per_weekday": 8.8,
+   "win": 0.7879,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -45.9,
+   "roe_pct": -3.39,
+   "roe_pct_no_payback": -6.41,
+   "mult40": 0.0915
+  },
+  "select": {
+   "n": 21426,
+   "per_weekday": 16.96,
+   "win": 0.8128,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -46.9,
+   "roe_pct": -2.24,
+   "roe_pct_no_payback": -5.26,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 6417,
+   "per_weekday": 14.04,
+   "win": 0.8102,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -47.0,
+   "roe_pct": -2.39,
+   "roe_pct_no_payback": -5.41,
+   "mult40": 0.0
+  }
+ },
+ "no blocks 40x DOGE": {
+  "oct2026": {
+   "n": 97,
+   "per_weekday": 5.71,
+   "win": 0.7526,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -45.3,
+   "roe_pct": -5.14,
+   "roe_pct_no_payback": -8.16,
+   "mult40": 0.0824
+  },
+  "last19": {
+   "n": 84,
+   "per_weekday": 5.6,
+   "win": 0.75,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -45.0,
+   "roe_pct": -5.21,
+   "roe_pct_no_payback": -8.24,
+   "mult40": 0.112
+  },
+  "select": {
+   "n": 8863,
+   "per_weekday": 7.02,
+   "win": 0.8114,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -46.9,
+   "roe_pct": -2.31,
+   "roe_pct_no_payback": -5.34,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 3303,
+   "per_weekday": 7.23,
+   "win": 0.8093,
+   "avg_win_pct": 8.1,
+   "avg_loss_pct": -47.0,
+   "roe_pct": -2.44,
+   "roe_pct_no_payback": -5.47,
+   "mult40": 0.0
+  }
+ },
+ "no blocks 35x 6": {
+  "oct2026": {
+   "n": 128,
+   "per_weekday": 7.53,
+   "win": 0.8203,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -46.0,
+   "roe_pct": -1.45,
+   "roe_pct_no_payback": -4.09,
+   "mult40": 0.2858
+  },
+  "last19": {
+   "n": 107,
+   "per_weekday": 7.13,
+   "win": 0.8411,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -45.5,
+   "roe_pct": -0.24,
+   "roe_pct_no_payback": -2.89,
+   "mult40": 0.617
+  },
+  "select": {
+   "n": 19023,
+   "per_weekday": 15.06,
+   "win": 0.8186,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.3,
+   "roe_pct": -1.79,
+   "roe_pct_no_payback": -4.44,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 5504,
+   "per_weekday": 12.04,
+   "win": 0.8143,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.4,
+   "roe_pct": -2.03,
+   "roe_pct_no_payback": -4.68,
+   "mult40": 0.0
+  }
+ },
+ "no blocks 35x DOGE": {
+  "oct2026": {
+   "n": 86,
+   "per_weekday": 5.06,
+   "win": 0.7674,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -46.1,
+   "roe_pct": -4.35,
+   "roe_pct_no_payback": -7.0,
+   "mult40": 0.1454
+  },
+  "last19": {
+   "n": 74,
+   "per_weekday": 4.93,
+   "win": 0.7568,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -46.0,
+   "roe_pct": -4.9,
+   "roe_pct_no_payback": -7.55,
+   "mult40": 0.1596
+  },
+  "select": {
+   "n": 8439,
+   "per_weekday": 6.68,
+   "win": 0.8159,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.4,
+   "roe_pct": -1.94,
+   "roe_pct_no_payback": -4.59,
+   "mult40": 0.0
+  },
+  "confirm": {
+   "n": 3080,
+   "per_weekday": 6.74,
+   "win": 0.8156,
+   "avg_win_pct": 8.3,
+   "avg_loss_pct": -47.4,
+   "roe_pct": -1.97,
+   "roe_pct_no_payback": -4.61,
+   "mult40": 0.0
+  }
+ }
+}
