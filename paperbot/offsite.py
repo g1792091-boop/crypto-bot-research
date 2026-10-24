@@ -70,7 +70,9 @@ API = "https://api.telegram.org"
 # compares them); a copy is <basename>.db
 DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/executor-testnet",
             "exec/executor-bybit-live", "exec/executor-mexc-live", "exec/executor-wooxpro-live",
-            "exec/executor-deepcoin-live", "combo/live-ac",
+            "exec/executor-deepcoin-live",
+            "exec/executor-wooxpro2-live",
+            "combo/live-ac",
             "combo/live15-mexc", "combo/vwap", "livecheck", "liveimprove",
             "combo/friend",                  # the '친구 매매법' paper bot (owners 10-24)
             "shadow200/shadow200",
@@ -811,6 +813,9 @@ def _owner(target: str) -> str:
     return "paperbot -g paperbot"
 
 
+WOOXPRO2_DB = "executor-wooxpro2-live.db"     # the WOO X Pro 2 executor's (docs/friend-bot-ko.md)
+
+
 def next_steps(dest: Path, names: Sequence[str]) -> str:
     lines = [
         "",
@@ -822,6 +827,9 @@ def next_steps(dest: Path, names: Sequence[str]) -> str:
         "     paperbot-checkpoint.service paperbot-backup.timer paperbot-offsite.timer",
         "2) 데이터베이스를 제자리에 넣고, 남아 있을 수 있는 -wal/-shm 파일을 지웁니다:",
     ]
+    if WOOXPRO2_DB in names:          # the fourth executor (owners 10-24): its unit only when its database comes back
+        lines.insert(lines.index("     paperbot-executor-deepcoin paperbot-combo paperbot-debate \\") + 1,
+                     "     paperbot-executor-wooxpro2 \\")
     if any(_target(n).startswith(EXEC_DIR + "/") for n in names):
         lines += [
             f"   (주문 실행기 DB는 실행기 전용 사용자 {EXEC_USER}의 것입니다. 'invalid user'가 나오면 먼저 "

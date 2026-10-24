@@ -1299,7 +1299,7 @@ def test_the_paper_bot_leaves_its_raw_trade_lines_out_when_asked(monkeypatch):
                                                  score=3.0))
     eng = SimpleNamespace(trades=[], position=pos)
     me = SimpleNamespace(book=SimpleNamespace(engines={C.ACCOUNT: eng}), cfg=SimpleNamespace(telegram=True, tag="[t]"),
-                         notifier=ListNotifier())
+                         notifier=ListNotifier(), _loss_lines={})      # the runner's loss lines of this minute (friend bot)
     monkeypatch.setenv("PAPERBOT_COMBO_TRADE_MSGS", "0")
     C.ComboRunner._tell(me, {C.ACCOUNT: (None, 0)})
     assert me.notifier.messages == []

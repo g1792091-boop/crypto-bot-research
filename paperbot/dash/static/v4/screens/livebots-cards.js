@@ -6,7 +6,7 @@
 // check four hours after the exit (once known), what each executor did, and the card's own message behind 펼치기.
 // HONESTY: the card's own fields only; what the card does not have is left out; a check not done yet says so.
 import {h, ui, fmt} from "../core/pb.js";
-import {acctTag} from "./livebots-kit.js";
+import {acctTag, countKo} from "./livebots-kit.js";
 
 /** The labels in the watcher's order (the server's `cards.kinds`; this copy only when an answer has none). */
 export const KINDS = [{id: "gap", ko: "실거래-페이퍼 차이", tone: "bad"}, {id: "bigger", ko: "평소보다 큰 손실", tone: "bad"},
@@ -95,7 +95,7 @@ export function cardBlock(c, o = {}) {
     when ? h("p", {class: "lb-cline muted"}, when) : null,
     h("h4", {class: "lb-ch4"}, "백테스트와 비교"), h("ul", {class: "lb-cbt"}, bt),
     h("h4", {class: "lb-ch4"}, "노이즈 손절 (청산 뒤 4시간)"), noiseLine(c.noise),
-    h("h4", {class: "lb-ch4"}, `실행기 ${(c.executors || []).length > 2 ? "세" : "두"} 개`), ex,
+    h("h4", {class: "lb-ch4"}, `실행기 ${countKo((c.executors || []).length)} 개`), ex,
     c.text ? ui.disclosure(c.sent ? "텔레그램으로 간 카드 글 보기" : "카드 글 보기", h("pre", {class: "lb-ctext"}, c.text)) : null);
 }
 

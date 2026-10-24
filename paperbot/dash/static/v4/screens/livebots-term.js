@@ -22,8 +22,8 @@ import {pnlPanel} from "./terminal-pnl.js";
 import {ages, MARKET_LABEL} from "./terminal-kit.js";
 import {tickStream, bigFeed} from "./terminal-live.js";
 import {bandLine, fillsPanel, coinMarks, minePanel, tablePanel} from "./livebots-parts.js";
-import {liveLines, acctCard, lightRow, acctKo, paperSinceNote, ACCT, EXEC_SLOTS, execIds, execsNow, execsKo, acctsKo}
-  from "./livebots-kit.js";
+import {liveLines, acctCard, lightRow, acctKo, paperSinceNote, ACCT, EXEC_SLOTS, execIds, execsNow, execsKo, acctsKo,
+  countKo} from "./livebots-kit.js";
 import {posKeys} from "./livebots-calc.js";
 
 /** The P&L chart's accounts: the executors (execIds: the third while the server has it), then the paper. */
@@ -113,7 +113,7 @@ export function termView(ctx, src) {
   const cards = h("div", {class: "lb-nowgrid"});
   const lights = h("div", {class: "lb-lgrid"});
   // the console's tabs: every executor of the summary (the third, 딥코인, while the server has it: rebuilt when it comes)
-  const conFoot = (ids) => `실행기 ${ids.length > 2 ? "세" : "두"} 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌`;
+  const conFoot = (ids) => `실행기 ${countKo(ids.length)} 개의 주의 · 긴급 기록 (멈춤, 신호등 빨강, 거래소 기록과 다름 …) · 거래소 요청 재시도는 뺌`;
   const conOf = (ids) => consolePanel({title: "실행기 콘솔", tabs: [{id: "all", label: "전체"}, ...ids.map((id) => ({id, label: acctKo(id)}))],
     foot: conFoot(ids), maxHeight: "260px", max: 120});
   let conIds = execsNow(), con = conOf(conIds);

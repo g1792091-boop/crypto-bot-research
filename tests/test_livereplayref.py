@@ -271,7 +271,9 @@ def world(tmp_path_factory):
     pts = _paper_world(paper)
     p = {"paper": paper, "paper2": str(tmp / "none-paper2.db"), "bybit_db": str(tmp / "bybit.db"), "mexc_db": str(tmp / "woo.db"),
          "bybit_config": str(tmp / "executor.json"), "mexc_config": str(tmp / "executor-mexc.json"),
-         "deepcoin_db": str(tmp / "none-deepcoin.db"), "deepcoin_config": str(tmp / "none-deepcoin.json")}
+         "deepcoin_db": str(tmp / "none-deepcoin.db"), "deepcoin_config": str(tmp / "none-deepcoin.json"),
+         "wooxpro2_db": str(tmp / "none-wooxpro2.db"), "wooxpro2_config": str(tmp / "none-wooxpro2.json"),
+         "paper3": str(tmp / "none-paper3.db")}
     # 바이비트 (mainnet): the BTC lock on its own exchange stop, the ETH close after the paper's (시간 정리), the SOL one
     # still a wallet estimate
     _exec_world(p["bybit_db"], p["bybit_config"], paper, "bybit", "mainnet",

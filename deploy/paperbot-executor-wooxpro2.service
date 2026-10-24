@@ -1,0 +1,49 @@
+# The fourth order executor, WOO X Pro 2 (owners 10-24, docs/friend-bot-ko.md: a second WOO X Pro account, a friend's,
+# trades the paper bot '친구 매매법' live): the same program, sandbox and user as paperbot-executor.service, its own config
+# /etc/paperbot/executor-wooxpro2.json ("exchange": "wooxpro", "label": "WOO X Pro 2", made by the owners from
+# deploy/executor.live-wooxpro2.json; install.sh never writes it) and its own database
+# /var/lib/paperbot/exec/executor-wooxpro2-live.db. It follows /var/lib/paperbot/combo/friend.db, account COMBO@mix; the
+# other three executors stay as they are. Mainnet only (WOO X Pro has no testnet).
+#
+# Its keys are in its OWN root-only key file /etc/paperbot/executor-wooxpro2.env (deploy/executor-wooxpro2.env.example),
+# loaded INSTEAD of /etc/paperbot/executor.env: the owners' WOO X Pro executor and this one never see each other's keys.
+# Everything else of the header of paperbot-executor.service applies unchanged: own user paperbot-exec, exit 2 = a gate
+# refused (not restarted; a key that belongs to another executor's account is one), SIGTERM lets the loop in progress
+# finish.
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it, after the key, the drill and the config:
+#   sudo systemctl start paperbot-executor-wooxpro2    (and `enable` only after the first days went as expected)
+[Unit]
+Description=paperbot order executor 4 (WOO X Pro 2; mainnet: every gate must pass)
+After=network-online.target paperbot-live3.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot-exec
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor-wooxpro2.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config /etc/paperbot/executor-wooxpro2.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+# Real money first (owners 2026-10-19: the live bots share the server with the experiments): in a server-wide
+# memory shortage the kernel kills experiments long before the executors (the shadows have +500).
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env
+# no core dump (it would hold the keys)
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

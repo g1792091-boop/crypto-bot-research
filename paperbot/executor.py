@@ -22,6 +22,16 @@ these commands with ``sudo -u paperbot-exec`` (docs/live-safety.md 1-9, 3).
     python -m paperbot.executor clear-halt --config /etc/paperbot/executor.json --by 이름 --note "이유"
     python -m paperbot.executor check-config --config /etc/paperbot/executor.json
     python -m paperbot.executor stage-check --config /etc/paperbot/executor.json
+    python -m paperbot.executor clear-floor --config /etc/paperbot/executor-wooxpro2.json --by 이름 --note "이유"
+    python -m paperbot.executor untie-key --config /etc/paperbot/executor-wooxpro2.json --by 이름 --note "이유"
+
+A second WOO X Pro executor (owners 10-24, docs/friend-bot-ko.md: a friend's account follows the paper bot '친구 매매법')
+uses four optional config fields; without them everything is as before. ``label`` names it in its messages
+("[WOO X Pro 2 실거래 실행기]"); ``own_keys``: its own key file (no other exchange's key in its environment) and its
+database tied to its key, since WOO X Pro's API names no account id (key_guard_problems; every executor refuses a key
+another executor's database is tied to); ``equity_floor_frac`` (잔고 바닥): no new entry once the balance falls to that
+share of the start recorded at its first run, until ``clear-floor``; ``double_notice`` (원금 회수 안내): one message when
+the balance first doubles.
 
 What it does (docs/live-safety.md explains it for the owners):
 - reads the chosen paper account's open position from paper3.db (read-only);
@@ -78,6 +88,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as _dt
+import glob
 import hashlib
 import json
 import os
@@ -99,8 +110,8 @@ from . import wooxpro as WX
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
 from .ladder import net_roe, roe_price
 from .ladder2 import ComboLadder
-from .mainnet import (MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE, KeyCheckClient, MainnetClient,
-                      Refused, check_assets, online_gates, read_env_file, trading_keys)
+from .mainnet import (LIVE_KEY_NAMES, MAINNET_HOSTS, MODE_MAINNET, MODE_TESTNET, PAPER_ENV_FILE, TESTNET_KEY_NAMES,
+                      KeyCheckClient, MainnetClient, Refused, check_assets, online_gates, read_env_file, trading_keys)
 from .margin import Brackets
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, NullNotifier, Notifier
 from .levrule import requested_tier
@@ -113,6 +124,7 @@ SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
+STOP_FROM = ("ratio", "price", "roe")
 EXCHANGES = ("binance", "bybit", "mexc", "wooxpro", "flipster", "deepcoin")
 # owners 10-20 ("거래소 기준으로 익절해야지"): "paper" = the exchange stop follows the paper's lock steps (as before);
 # "own" = the executor runs the take-profit ladder on its OWN position: its fill, its own exchange's prices, its own costs
@@ -199,7 +211,12 @@ class ExecConfig:
     retries: int = 4
     sweep_every: int = 20                # loops between full sweeps of every allowed symbol
     stop_from: str = "ratio"             # "ratio": same stop distance (%) from the actual fill as the paper
-                                         # stop from the paper fill; "price": the paper's stop price itself
+                                         # stop from the paper fill; "price": the paper's stop price itself;
+                                         # "roe" (owners 10-24, WOO X Pro 2): ``stop_roe`` of ROE from its own fill
+                                         # at the leverage it trades, before the liquidation (else no entry)
+    stop_roe: Optional[float] = None     # "roe": the stop's ROE, the screen's before fees (0.20 at 35x: 0.5714 %) ...
+    stop_net: bool = False               # ... or with true the net ROE after its own round trip (``net_costs``, the
+                                         # paper's {"roe": 0.5, "net": true}): 0.5 / 35 - 0.124 % = 1.3046 %
     entry_source: str = "paper"          # "paper": follow the paper position; "signal": enter when submitted
     direct_poll_s: float = 1.5           # signal mode: paper3.db polling between loops
     direct_max_age_s: float = 20.0       # signal mode: a signal seen later than this after it was ready -> paper path
@@ -225,6 +242,14 @@ class ExecConfig:
                                          # next_gap: paperbot/ladder2.py ComboLadder)
     net_costs: Optional[dict] = None     # "own": {exchange: {"taker_fee": per side, "slippage": per side}} (NET_COSTS)
     ladder_basis: str = "net"            # "own": "net" (after the round-trip cost) or "gross" (the exchange screen's ROE)
+    # owners 10-24 (docs/friend-bot-ko.md): a second WOO X Pro executor trades another account; absent = as before
+    label: Optional[str] = None          # its name in messages, checks and pages ("WOO X Pro 2"); None: its exchange's
+    own_keys: bool = False               # its own key file and account (``key_guard_problems``): no other exchange's key
+                                         # in its environment, its database tied to its first key, no key another
+                                         # executor's database recorded
+    equity_floor_frac: Optional[float] = None   # 잔고 바닥: no new entry once the balance falls to this share of the
+                                                # start recorded at its first run (0.7); None = off
+    double_notice: bool = False          # 원금 회수 안내: one Telegram message when the balance first reaches 2x the start
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -249,8 +274,23 @@ class ExecConfig:
             out.append("따라 할 paper 계좌(account, 예: V45_AMB@15m)가 비어 있거나 형식이 다릅니다")
         if not (isinstance(self.qty_scale, (int, float)) and self.qty_scale > 0):
             out.append("qty_scale은 0보다 커야 합니다")
-        if self.stop_from not in ("ratio", "price"):
-            out.append("stop_from은 \"ratio\" 또는 \"price\"입니다")
+        if self.stop_from not in STOP_FROM:
+            out.append("stop_from은 \"ratio\", \"price\" 또는 \"roe\"입니다")
+        elif self.stop_from == "roe" and not (isinstance(self.stop_roe, (int, float)) and not isinstance(self.stop_roe, bool)
+                                              and 0 < self.stop_roe < 1):
+            out.append("stop_from \"roe\"는 stop_roe(화면 ROE 손절, 수수료 전, 0~1 사이 비율, 예: -20% → 0.2)가 있어야 합니다")
+        elif self.stop_from == "roe" and self.ladder_from != "own":
+            out.append("stop_from \"roe\"는 ladder_from \"own\"(거래소 기준 익절)과 함께만 씁니다")
+        if self.stop_roe is not None and self.stop_from != "roe":
+            out.append("stop_roe는 stop_from \"roe\"일 때만 씁니다")
+        if not isinstance(self.stop_net, bool):
+            out.append("stop_net은 true(순ROE, 이 거래소 비용 포함) 또는 false(화면 ROE, 수수료 전)입니다")
+        elif self.stop_net and self.stop_from != "roe":
+            out.append("stop_net은 stop_from \"roe\"일 때만 씁니다")
+        elif self.stop_net and isinstance(self.stop_roe, (int, float)) and 0 < self.stop_roe < 1:
+            rt, top = self.own_round_trip(), self.risk.max_leverage or 125
+            if rt is not None and self.stop_roe / top <= rt:
+                out.append(f"stop_roe {self.stop_roe:g}(순ROE)는 {top}배에서 왕복 비용 {rt:.3%}보다 가까워 손절 자리가 없습니다")
         if self.entry_source not in ENTRY_SOURCES:
             out.append("entry_source는 \"paper\" 또는 \"signal\"입니다")
         if not 0.5 <= float(self.direct_poll_s) <= 5:
@@ -289,8 +329,23 @@ class ExecConfig:
             out.append("ladder_from은 \"paper\"(페이퍼 잠금 따라가기) 또는 \"own\"(거래소 기준 익절)입니다")
         if self.ladder_basis not in LADDER_BASES:
             out.append("ladder_basis는 \"net\"(수수료·슬리피지 뺀 순ROE) 또는 \"gross\"(거래소 화면 ROE, 수수료 전)입니다")
-        out += self._ladder_problems() + self._cost_problems()
+        out += self._ladder_problems() + self._cost_problems() + self._guard_problems()
         return out + self.risk.problems()
+
+    def _guard_problems(self) -> list:
+        """label, own_keys, equity_floor_frac, double_notice (owners 10-24)."""
+        out = []
+        if self.label is not None and not (isinstance(self.label, str) and self.label.strip() == self.label
+                                           and 0 < len(self.label) <= 20 and not set(self.label) & set("[]\n")):
+            out.append("label은 실행기 이름입니다(예: \"WOO X Pro 2\", 20자 이하, 대괄호 없이)")
+        if not isinstance(self.own_keys, bool):
+            out.append("own_keys는 true 또는 false입니다")
+        f = self.equity_floor_frac
+        if f is not None and (isinstance(f, bool) or not isinstance(f, (int, float)) or not 0 < f < 1):
+            out.append("equity_floor_frac은 0~1 사이 비율입니다(예: 70% → 0.7, 끄려면 null)")
+        if not isinstance(self.double_notice, bool):
+            out.append("double_notice는 true 또는 false입니다")
+        return out
 
     def _ladder_problems(self) -> list:
         if self.ladder is None:
@@ -391,6 +446,101 @@ def refuse_unless_allowed(cfg: ExecConfig, client) -> None:
 
 
 refuse_unless_testnet = refuse_unless_allowed      # the name used before mainnet existed
+
+
+# ---------------------------------------------------------------- which key, which account (owners 10-24)
+# Two executors trade WOO X Pro: the owners' account and a friend's (docs/friend-bot-ko.md), each with its own key file.
+# WOO X Pro's futures API names no account id (the only user ids in its docs are the affiliate endpoints' downstream
+# users), so an account is known here by its API key: every executor database records a fingerprint of the key it
+# started with (KEY_SEEN, at every start), and an ``own_keys`` executor ties its database to the key of its first
+# start (KEY_TIE). The database-exchange tie (meta "exchange") cannot tell two accounts of one exchange apart.
+KEY_SEEN, KEY_TIE = "key_seen", "key_tie"
+FLOOR = "floor"              # 잔고 바닥 / 원금 회수 안내: the start balance and what was told (Executor._balance_marks)
+# each exchange's order-key variables: an ``own_keys`` executor's environment holds its own exchange's only
+KEY_NAMES = {"binance": LIVE_KEY_NAMES + TESTNET_KEY_NAMES, "bybit": BY.LIVE_KEY_NAMES + BY.TESTNET_KEY_NAMES,
+             "mexc": MX.LIVE_KEY_NAMES, "wooxpro": WX.LIVE_KEY_NAMES + (WX.MEMO_NAME,), "flipster": FL.LIVE_KEY_NAMES,
+             "deepcoin": DC.LIVE_KEY_NAMES + (DC.PASSPHRASE_NAME,)}
+
+
+class KeyMixup(Refused):
+    """The key does not belong to this executor's database (key_guard_problems): not started (exit 2, not restarted)
+    before any request, and said on Telegram (cmd_run). A position it holds keeps its exchange stop."""
+
+
+def key_fp(exchange: str, key: str) -> str:
+    """A fingerprint of an API access key: the same key always gives the same 16 hex characters, and the key cannot be
+    read back from them. Only compared, never printed."""
+    return hashlib.sha256(f"paperbot-key|{exchange}|{key}".encode()).hexdigest()[:16]
+
+
+def foreign_keys(exchange: str, env: Mapping) -> list:
+    """The names (never the values) of other exchanges' order-key variables set in ``env``."""
+    return sorted(n for ex, names in KEY_NAMES.items() if ex != exchange for n in names if str(env.get(n) or "").strip())
+
+
+def key_holders(db: str, exchange: str, fp: str, ties_only: bool) -> list:
+    """The other executor databases in ``db``'s folder (file names) whose record holds the ``exchange`` key ``fp``: tied
+    to it (KEY_TIE), or with ``ties_only`` False also started with it last (KEY_SEEN). Read-only; a file that cannot be
+    read proves nothing either way and is left out."""
+    me = os.path.abspath(db)
+    out = []
+    for path in sorted(glob.glob(os.path.join(os.path.dirname(me), "*.db"))):
+        if os.path.abspath(path) == me:
+            continue
+        try:
+            conn = _ro(path)
+            try:
+                rows = conn.execute("SELECT k, data FROM state WHERE k IN (?, ?)", (KEY_SEEN, KEY_TIE)).fetchall()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            continue
+        for k, data in rows:
+            try:
+                d = json.loads(data)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(d, dict) and d.get("exchange") == exchange and d.get("fp") == fp \
+                    and (k == KEY_TIE or not ties_only):
+                out.append(os.path.basename(path))
+                break
+    return out
+
+
+def key_guard_problems(cfg: ExecConfig, fp: str, env: Mapping, tie: Optional[dict]) -> list:
+    """Why this key must not trade from this database (Korean; [] when nothing is wrong). Every executor: a key another
+    executor's database is tied to (that executor's account: e.g. the friend's key put in the owners' key file). An
+    ``own_keys`` executor also: another exchange's key in its environment (a copy of /etc/paperbot/executor.env instead of
+    its own file), its database tied (``tie``, its KEY_TIE record) to another key, a key another executor's database
+    started with (the owners' key put in its file)."""
+    out = []
+    ko = EX_KO.get(cfg.exchange, cfg.exchange)
+    tied = key_holders(cfg.db, cfg.exchange, fp, ties_only=True)
+    if tied:
+        out.append(f"이 {ko} 키는 다른 실행기 DB({', '.join(tied)})에 묶인 키입니다(그 실행기의 계정). 두 계정의 키가 섞였으니 "
+                   "이 실행기의 키 파일을 확인하세요")
+    if not cfg.own_keys:
+        return out
+    foreign = foreign_keys(cfg.exchange, env)
+    if foreign:
+        out.append(f"키 파일에 다른 거래소 키({', '.join(foreign)})가 있습니다. 이 실행기는 자기 키 파일만 씁니다"
+                   "(/etc/paperbot/executor.env를 복사했다면 그 파일을 쓰지 말고 템플릿에서 새로 만드세요)")
+    if tie is not None and tie.get("fp") != fp:
+        out.append(f"이 DB({cfg.db})는 처음 켤 때의 다른 {ko} 키에 묶여 있습니다. 같은 계정의 새 키가 맞으면(check의 잔고로 "
+                   "확인) untie-key로 풀고 다시 켜세요")
+    seen = [n for n in key_holders(cfg.db, cfg.exchange, fp, ties_only=False) if n not in tied]
+    if seen:
+        out.append(f"이 {ko} 키는 다른 실행기 DB({', '.join(seen)})가 쓰는 키입니다(그 실행기의 계정). 두 계정의 키가 섞였으니 "
+                   "이 실행기의 키 파일을 확인하세요")
+    return out
+
+
+def exec_prefix(cfg: ExecConfig) -> str:
+    """The executor's message prefix: its config's ``label`` when it has one (owners 10-24: "[WOO X Pro 2 실거래 실행기]"),
+    else its exchange's ("[WOO X Pro 실거래 실행기]", as before)."""
+    if cfg.label:
+        return f"[{cfg.label} {'실거래' if cfg.mode == MODE_MAINNET else '테스트넷'} 실행기]"
+    return _prefixes(cfg.exchange)[cfg.mode]
 
 
 # ---------------------------------------------------------------- paper side
@@ -1009,7 +1159,7 @@ class Executor:
         self.keycheck = keycheck
         self.notifier = notifier or NullNotifier()
         self.now_ms, self.sleep, self.exists = now_ms, sleep, exists
-        self.prefix = _prefixes(cfg.exchange)[cfg.mode]
+        self.prefix = exec_prefix(cfg)
         bot = store.get_state("bot") or {}
         meta = store.get_state("meta")
         recorded = (meta or {}).get("mode") or bot.get("mode")
@@ -1022,12 +1172,21 @@ class Executor:
         venue = (meta or {}).get("exchange") or bot.get("exchange") or ("binance" if (meta or bot) else None)
         if venue and venue != cfg.exchange:
             raise Refused(f"이 DB({cfg.db})는 {venue} 실행기의 기록입니다. {cfg.exchange}는 새 db 파일을 쓰세요")
+        # which key (an exchange account is known by its key here: key_guard_problems), before any request
+        self.key_fp = key_fp(cfg.exchange, str(getattr(client, "key", "") or ""))
+        mixup = key_guard_problems(cfg, self.key_fp, env, store.get_state(KEY_TIE))
+        if mixup:
+            raise KeyMixup("; ".join(mixup))
         if meta is None:
             first = {"mode": cfg.mode, "account": cfg.account, "since": now_ms()}
             if cfg.exchange != "binance":
                 first["exchange"] = cfg.exchange
             store.put_state("meta", now_ms(), first)
             store.commit()
+        store.put_state(KEY_SEEN, now_ms(), {"exchange": cfg.exchange, "fp": self.key_fp})
+        if cfg.own_keys and store.get_state(KEY_TIE) is None:
+            store.put_state(KEY_TIE, now_ms(), {"exchange": cfg.exchange, "fp": self.key_fp, "since": now_ms()})
+        store.commit()
         client.on_request = self._audit
         if keycheck is not None:
             keycheck.on_request = self._audit
@@ -1066,6 +1225,9 @@ class Executor:
         self.own_cost_rt = cfg.own_round_trip() if self.own else None      # the exchange's round trip (the records)
         self.own_rt = cfg.ladder_round_trip() if self.own else None        # the ladder's: 0 on the "gross" basis
         self.own_fails = 0                      # 1m candle reads that failed in a row (the last price stood in)
+        # 잔고 바닥 / 원금 회수 안내 (owners 10-24, docs/friend-bot-ko.md): the start balance and what was told (FLOOR)
+        self.floor_on = cfg.equity_floor_frac is not None or cfg.double_notice
+        self.floor: Optional[dict] = store.get_state(FLOOR) if self.floor_on else None
 
     # ------------------------------------------------------------ records
     def _audit(self, a: dict) -> None:
@@ -1404,6 +1566,8 @@ class Executor:
                 self.last_equity = now
             except sqlite3.Error as e:
                 self._event(CRITICAL, "db_error", f"금액 기록 실패: {e}", notify=False)
+        if self.floor_on:                        # 잔고 바닥 / 원금 회수 안내: words and a block on new entries only
+            self._balance_marks(wallet)
         if not flattened:
             dec, equity = self._limits(equity, kill)
             if dec.action == R.FLATTEN_HALT:
@@ -2177,7 +2341,7 @@ class Executor:
             return
         now = self.now_ms()
         if direct is not None and direct.key not in self.done:
-            if self._light_ok(direct.key, direct.symbol):
+            if self._floor_ok(direct) and self._light_ok(direct.key, direct.symbol):
                 self._enter(direct)
             return
         if intent is None or intent.key in self.done:
@@ -2193,8 +2357,72 @@ class Executor:
             self._event(WARN, "late", f"paper 진입이 {(now - intent.entry_time) / 1000:.0f}초 전이라 따라 하지 않습니다",
                         {"key": intent.key})
             return
-        if self._light_ok(intent.key, intent.symbol):
+        if self._floor_ok(intent) and self._light_ok(intent.key, intent.symbol):
             self._enter(intent)
+
+    # ------------------------------------------------------------ 잔고 바닥 / 원금 회수 안내 (owners 10-24)
+    def _balance_marks(self, wallet: float) -> None:
+        """잔고 바닥 (``equity_floor_frac``) and 원금 회수 안내 (``double_notice``), docs/friend-bot-ko.md. The start is the
+        balance of the first loop of the first run (recorded, said on Telegram so the owners see whose account it is);
+        the floor is reached once the balance is at most ``equity_floor_frac`` of it: said loudly once, then no new
+        entry until a person runs clear-floor (an open position keeps its exchange stop and ladder: nothing is closed
+        here). The balance is the wallet (closed trades; an open position's unrealized P&L is left out, so a dip inside
+        one trade never latches it: new entries are only made while flat anyway). Deposits and withdrawals do not move
+        the start (clear-floor records a new one). Records and words only: never in front of the limits."""
+        now = self.now_ms()
+        f, frac = self.floor, self.cfg.equity_floor_frac
+        if not f or f.get("start") is None:
+            self.floor = {"start": wallet, "since": now, "frac": frac, "hit": False, "double_told": False}
+            self._put_floor()
+            low = f"{frac:.0%}(${frac * wallet:,.2f})에 닿으면 새 진입을" if frac is not None else ""
+            dbl = f"2배(${2 * wallet:,.2f})가 되면 원금 회수를 알려 드립니다"
+            if low and self.cfg.double_notice:
+                rule = f"{low} 멈추고, {dbl}"
+            elif low:
+                rule = f"{low} 멈춥니다"
+            else:
+                rule = dbl
+            text = (f"시작 금액 기록: 이 계정의 잔고 ${wallet:,.2f}. 잔고가 이 금액의 {rule}. 이 잔고가 이 실행기 계정의 "
+                    "잔고가 맞는지 앱에서 확인하세요")
+            self._event(INFO, "floor_start", text, {"start": wallet, "frac": frac}, notify=False)
+            self._notify(INFO, f"{self.prefix} {text}")
+            return
+        start = float(f["start"])
+        if frac is not None and not f.get("hit") and wallet <= frac * start + 1e-9:
+            f.update(hit=True, hit_ts=now, hit_wallet=wallet, frac=frac)
+            self._put_floor()
+            self._event(CRITICAL, "floor_hit", f"잔고 바닥: 잔고 ${wallet:,.2f}가 시작 금액 ${start:,.2f}의 {frac:.0%}"
+                        f"(${frac * start:,.2f})에 닿아 새 진입을 멈춥니다. 열린 포지션은 거래소 손절·계단이 그대로 지킵니다"
+                        "(실행기가 닫지 않음). 지금 할 일: 두 분이 계속할지 정하세요. 다시 거래하려면 실행기를 끄고 clear-floor로 "
+                        "푼 뒤 다시 켭니다(docs/friend-bot-ko.md)", {"start": start, "wallet": wallet, "frac": frac})
+        if self.cfg.double_notice and not f.get("double_told") and wallet >= 2 * start - 1e-9:
+            f.update(double_told=True, double_ts=now, double_wallet=wallet)
+            self._put_floor()
+            text = (f"💰 원금 회수 안내: 잔고 ${wallet:,.2f}가 시작 금액 ${start:,.2f}의 2배가 됐어요. 원금을 빼실지 정하세요"
+                    "(실행기는 그대로 거래합니다. 이 안내는 한 번만 갑니다)")
+            self._event(INFO, "double", text, {"start": start, "wallet": wallet}, notify=False)
+            self._notify(INFO, f"{self.prefix} {text}")
+
+    def _put_floor(self) -> None:
+        try:
+            self.store.put_state(FLOOR, self.now_ms(), self.floor)
+            self.store.commit()
+        except sqlite3.Error as e:              # the block holds in this process; the alert still goes out
+            self._event(CRITICAL, "db_error", f"잔고 바닥 기록 실패: {e}", notify=False)
+
+    def floor_blocked(self) -> bool:
+        """잔고 바닥 reached (and the floor still on in the config): no new entry."""
+        return self.cfg.equity_floor_frac is not None and bool((self.floor or {}).get("hit"))
+
+    def _floor_ok(self, it: Intent) -> bool:
+        """A new entry while 잔고 바닥 holds: not followed, for good (recorded with its key; the site says why)."""
+        if not self.floor_blocked():
+            return True
+        self._mark_done(it.key)
+        self._event(INFO, "floor_skip", f"잔고 바닥 멈춤 중이라 {it.symbol} 진입을 따라가지 않습니다(clear-floor로 풀 때까지)",
+                    {"key": it.key}, notify=False)
+        self._save()
+        return False
 
     def _light_ok(self, key: str, symbol: str) -> bool:
         """신호등 (owners 10-19): follow a new entry only while the paper account's last ``signal_light_n`` closed
@@ -2251,7 +2479,8 @@ class Executor:
             price = self.c.price(it.symbol)
             qty = _round_down(it.qty * self.cfg.qty_scale, spec["qty_step"])
             rules = v3_settings(taker_fee=self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE)
-            stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side)
+            # ("roe": at the paper's leverage, the only one it trades: a lower cap refuses the entry below)
+            stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side, int(it.leverage))
             # the loss at the stop must fit today's remaining loss limit and the paper rules' share of LIVE equity
             # (or the config's own share, risk.max_loss_frac)
             frac = self.cfg.risk.max_loss_frac if self.cfg.risk.max_loss_frac is not None else rules.max_loss_frac
@@ -2263,9 +2492,19 @@ class Executor:
         if not dec.ok:
             self._mark_done(it.key)
             return
+        if self.cfg.stop_from == "roe" and dec.leverage != int(it.leverage):
+            # its stop is a screen ROE at the paper's leverage: another leverage is another trade, never made quietly
+            self._mark_done(it.key)
+            self._event(WARN, "leverage_refused", f"{it.symbol} paper는 {int(it.leverage)}배인데 이 실행기 설정의 상한 "
+                        f"risk.max_leverage가 {self.cfg.risk.max_leverage}배라 진입하지 않습니다(다른 배수로는 거래하지 "
+                        "않습니다). 설정을 고친 뒤 다시 시작하세요", {"key": it.key, "paper": int(it.leverage),
+                                                         "cap": self.cfg.risk.max_leverage})
+            return
         if (price - stop) * it.side <= 0:
             self._mark_done(it.key)
             self._event(WARN, "entry_skip", f"{it.symbol} 가격 {price:g}이 이미 paper 손절선 {stop:g}을 지나 진입하지 않습니다")
+            return
+        if self.cfg.stop_from == "roe" and hasattr(self.raw, "maint_margin_ratio") and not self._liq_ok(it, dec, price, stop):
             return
         open_side = "BUY" if it.side > 0 else "SELL"
         t = {"key": it.key, "base": hashlib.sha1(it.key.encode()).hexdigest()[:12], "symbol": it.symbol,
@@ -2323,7 +2562,7 @@ class Executor:
             t["entry_price"] = float(o.get("avgPrice") or 0) or \
                 float(self.c.position(it.symbol).get("entryPrice") or 0) or price
             t["stop"] = t["stop_initial"] = self._stop_level(it.stop, it.entry_price, t["entry_price"], spec["tick"],
-                                                             it.side)
+                                                             it.side, dec.leverage)
             if self.own:                                    # its own ladder starts at its own fill (exchange clock)
                 self._own_state(t, fill_ms=sent + int(getattr(self.raw, "offset_ms", 0) or 0))
             if it.signal_ready:
@@ -2356,13 +2595,46 @@ class Executor:
             amt = float(self.c.position(symbol)["positionAmt"])
         return amt
 
+    def _liq_ok(self, it: Intent, dec, price: float, stop: float) -> bool:
+        """"roe" (owners 10-24, WOO X Pro 2): the stop must come before the liquidation. The liquidation is estimated
+        from the exchange's leverage risk limit (the maintenance margin ratio of this position's size): 1 / leverage
+        minus that ratio from the price (WX.liq_distance); the stop must sit at least WX.LIQ_ROOM nearer. Otherwise the
+        entry is refused and said; the stop is never moved. A risk limit that cannot be read now (TransientError) is
+        retried on the next loop like any other read."""
+        notional = dec.qty * price
+        stop_d = abs(price - stop) / price
+        try:
+            mmr = self.c._retry("거래소 위험 한도", self.raw.maint_margin_ratio, it.symbol, notional)
+        except (TransientError, RateLimited):
+            raise
+        except TestnetError as e:
+            mmr, why = None, f"거래소 위험 한도(유지증거금률)를 읽지 못했습니다: {e}"
+        else:
+            why = f"포지션 ${notional:,.0f}가 거래소 위험 한도의 마지막 구간을 넘습니다" if mmr is None else ""
+        if mmr is not None:
+            liq_d = WX.liq_distance(dec.leverage, mmr)
+            if liq_d > stop_d + WX.LIQ_ROOM:
+                return True
+            why = (f"{dec.leverage}배 포지션 ${notional:,.0f}의 청산가가 약 {liq_d:.2%} 거리(유지증거금률 {mmr:.2%})라 "
+                   f"손절 {stop_d:.2%}보다 {WX.LIQ_ROOM:.1%} 넘게 멀지 않습니다(청산이 손절보다 먼저 올 수 있음)")
+        self._mark_done(it.key)
+        self._event(WARN, "liq_inside_stop", f"{it.symbol} 진입하지 않습니다: {why}. 손절은 옮기지 않습니다",
+                    {"key": it.key, "mmr": mmr, "notional": round(notional, 2), "stop_frac": round(stop_d, 6)})
+        return False
+
     def _stop_level(self, paper_stop: float, paper_entry: float, live_ref: Optional[float], tick: float,
-                    side: int) -> float:
+                    side: int, lev: Optional[float] = None) -> float:
         """The exchange stop for a paper stop. "ratio" keeps the paper's distance from its fill (the testnet
         price is not the real market price, and a live fill is never exactly the paper fill); "price" copies
-        the paper price. Rounded to the tick, never looser."""
+        the paper price; "roe" (owners 10-24) is ``stop_roe`` of ROE from ``live_ref`` (its own fill) at ``lev``, the
+        leverage it trades, whatever slippage the paper assumed: the screen's before fees (0.20 / 35 = 0.5714 % of the
+        fill) or, ``stop_net``, the net ROE after its own round trip (0.50 / 35 - 0.124 % = 1.3046 %). Rounded to the
+        tick, never looser."""
         level = paper_stop
-        if self.cfg.stop_from == "ratio" and live_ref and paper_entry:
+        if self.cfg.stop_from == "roe" and live_ref and lev:
+            dist = float(self.cfg.stop_roe) / float(lev) - ((self.cfg.own_round_trip() or 0.0) if self.cfg.stop_net else 0.0)
+            level = live_ref * (1 - side * max(dist, 0.0))
+        elif self.cfg.stop_from in ("ratio", "roe") and live_ref and paper_entry:
             level = live_ref * paper_stop / paper_entry
         return round_stop(level, tick, side)
 
@@ -2741,7 +3013,7 @@ def _client() -> TestnetClient:           # kept for scripts written against the
 def cmd_run(args) -> int:
     cfg = ExecConfig.from_file(args.config)
     note = _notifier()                            # first: a database that cannot be opened is alerted too
-    prefix = _prefixes(cfg.exchange).get(cfg.mode, "[실행기]")
+    prefix = exec_prefix(cfg) if cfg.label else _prefixes(cfg.exchange).get(cfg.mode, "[실행기]")
     try:
         store = ExecStore(cfg.db, service=True)
     except Refused as e:                          # another executor holds the database: it stays the only one
@@ -2756,7 +3028,12 @@ def cmd_run(args) -> int:
         raise
     try:
         client, keycheck = _clients(cfg)
-        ex = Executor(cfg, client, Paper3Source(cfg.paper_db, cfg.account), store, note, keycheck=keycheck)
+        try:
+            ex = Executor(cfg, client, Paper3Source(cfg.paper_db, cfg.account), store, note, keycheck=keycheck)
+        except KeyMixup as e:                     # another account's key: not started (exit 2), and said so
+            note.send(CRITICAL, f"{prefix} 실행기를 시작하지 않습니다(키가 섞임, 주문 없음): {e}. 열린 포지션이 있으면 거래소 "
+                                "손절이 지킵니다")
+            raise
 
         def on_term(signum, frame):              # systemctl stop / reboot: finish the loop in progress first
             ex.stopping = True
@@ -2776,8 +3053,44 @@ def cmd_run(args) -> int:
     return 0
 
 
-def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
-    """Every gate, no order: config, host, server time, (mainnet) key permissions and wallet, paper3.db."""
+def db_state(db: str, key: str) -> Optional[dict]:
+    """One state record of an executor database, read-only (None: no such file, record or readable answer)."""
+    if not os.path.exists(db):
+        return None
+    try:
+        conn = _ro(db)
+        try:
+            row = conn.execute("SELECT data FROM state WHERE k = ?", (key,)).fetchone()
+        finally:
+            conn.close()
+        d = json.loads(row[0]) if row else None
+    except (sqlite3.Error, TypeError, ValueError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def floor_text(f: Optional[dict], frac: Optional[float], double: bool) -> list:
+    """잔고 바닥 / 원금 회수 안내 in words, from the database's record ``f`` (status, preflight)."""
+    if not f or f.get("start") is None:
+        return ["잔고 바닥: 시작 금액은 실행기가 처음 돌 때(또는 clear-floor 뒤 다음에 켤 때) 잔고로 기록합니다"]
+    start = float(f["start"])
+    when = _day(int(f.get("since") or 0))
+    out = []
+    if frac is not None:
+        if f.get("hit"):
+            out.append(f"잔고 바닥: 멈춤 중 - 잔고 ${float(f.get('hit_wallet') or 0):,.2f}가 시작 금액 ${start:,.2f}({when} 기록)의 "
+                       f"{frac:.0%}(${frac * start:,.2f})에 닿아 새 진입 없음. 풀기: 실행기를 끄고 clear-floor")
+        else:
+            out.append(f"잔고 바닥: 시작 금액 ${start:,.2f}({when} 기록), {frac:.0%} = ${frac * start:,.2f}에 닿으면 새 진입 멈춤 "
+                       "(아직 아님)")
+    if double:
+        out.append(f"원금 회수 안내: {'보냄' if f.get('double_told') else '아직'} (2배 = ${2 * start:,.2f})")
+    return out
+
+
+def preflight(cfg: ExecConfig, client, keycheck, out=print, env: Optional[Mapping] = None) -> bool:
+    """Every gate, no order: config, host, which key (key_guard_problems), server time, (mainnet) key permissions and
+    wallet, paper3.db."""
     ok = True
 
     def line(good: bool, text: str) -> None:
@@ -2793,6 +3106,21 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print) -> bool:
     except Refused as e:
         line(False, str(e))
         return False
+    tie = db_state(cfg.db, KEY_TIE)
+    mixup = key_guard_problems(cfg, key_fp(cfg.exchange, str(getattr(client, "key", "") or "")),
+                               os.environ if env is None else env, tie)
+    for p in mixup:
+        line(False, f"키: {p}")
+    if cfg.own_keys and not mixup:
+        line(True, "키: 이 실행기 자기 키(다른 거래소 키 없음, 다른 실행기 DB의 키 아님"
+                   + (", 이 DB에 묶인 키와 같음)" if tie else "; 처음 켤 때 이 DB에 묶음)"))
+    if cfg.equity_floor_frac is not None or cfg.double_notice:
+        f = db_state(cfg.db, FLOOR)
+        for text in floor_text(f, cfg.equity_floor_frac, cfg.double_notice):
+            if f and f.get("hit") and text.startswith("잔고 바닥"):
+                out("[주의] " + text)            # it starts, and opens nothing until clear-floor
+            else:
+                line(True, text)
     try:
         off = client.sync_time()
         line(abs(off) < 1000, f"서버 시간 차이 {off} ms (1초 미만이어야 함)")
@@ -2883,6 +3211,11 @@ def cmd_status(args) -> int:
     print(f"계좌 {st.get('account')} ({st.get('mode')}), 반복 {st.get('loops')}, "
           f"멈춤 {'예: ' + rs.get('halt_reason', '') if rs.get('halted') else '아니오'}")
     print(f"포지션: {json.dumps(st.get('trade'), ensure_ascii=False)}")
+    fl = conn.execute("SELECT data FROM state WHERE k = ?", (FLOOR,)).fetchone()
+    if fl:                                        # 잔고 바닥 / 원금 회수 안내 (only an executor that has them)
+        f = json.loads(fl[0]) or {}
+        for line in floor_text(f, f.get("frac"), "double_told" in f):
+            print(line)
     for ts, level, text in conn.execute("SELECT ts, level, text FROM events ORDER BY id DESC LIMIT 15"):
         print(f"  {ts} [{level}] {text}")
     return 0
@@ -2977,6 +3310,80 @@ def ladder_lines(cfg: ExecConfig) -> list:
     return out
 
 
+def guard_lines(cfg: ExecConfig) -> list:
+    """check-config: the name, the key rule, 잔고 바닥 and 원금 회수 안내 in words; only what the config has (an executor
+    without them prints what it always printed)."""
+    out = []
+    if cfg.label:
+        out.append(f"이름: {cfg.label} (알림 머리말 {exec_prefix(cfg)})")
+    if cfg.stop_from == "roe" and isinstance(cfg.stop_roe, (int, float)) and 0 < cfg.stop_roe < 1:
+        lev = cfg.risk.max_leverage or 35
+        if cfg.stop_net is True and cfg.own_round_trip() is not None:
+            rt = cfg.own_round_trip()
+            d = cfg.stop_roe / lev - rt
+            out.append(f"손절: 이 실행기의 체결가에서 순ROE -{cfg.stop_roe:.0%}(이 거래소 비용 왕복 {rt:.3%} 포함, 펀딩 제외) 자리, "
+                       f"거래하는 배수로 계산 ({lev}배면 가격 {d:.4%}, 화면 ROE 약 -{d * lev:.2%}). 페이퍼의 손절 가격은 쓰지 않음")
+        else:
+            out.append(f"손절: 이 실행기의 체결가에서 화면 ROE -{cfg.stop_roe:.0%}(수수료 전) 자리, 거래하는 배수로 계산 ({lev}배면 "
+                       f"가격 {cfg.stop_roe / lev:.4%}). 페이퍼의 손절 가격은 쓰지 않음")
+        if cfg.exchange == "wooxpro":
+            out.append(f"청산가 확인: 진입 전에 거래소 위험 한도(그 크기의 유지증거금률)로 청산가를 어림해, 손절이 청산가보다 "
+                       f"{WX.LIQ_ROOM:.1%} 넘게 가깝지 않으면 진입하지 않고 알림 (손절은 옮기지 않음)")
+    if cfg.own_keys is True:
+        out.append("키: 이 실행기 자기 키 파일만 - 다른 거래소 키가 있거나, 이 DB가 처음 켤 때 묶인 키와 다르거나(새 키는 "
+                   "untie-key), 다른 실행기 DB에 기록된 키면 켜지지 않음")
+    f = cfg.equity_floor_frac
+    if isinstance(f, (int, float)) and not isinstance(f, bool) and 0 < f < 1:
+        out.append(f"잔고 바닥: 켜짐 - 잔고가 시작 금액(처음 돌 때 기록)의 {f:.0%}에 닿으면 새 진입 멈춤, 텔레그램 한 번 "
+                   "(열린 포지션은 거래소 손절·계단이 지킴; 풀기: 실행기를 끄고 clear-floor)")
+    if cfg.double_notice is True:
+        out.append("원금 회수 안내: 켜짐 - 잔고가 시작 금액의 2배가 되면 텔레그램 한 번")
+    return out
+
+
+def cmd_clear_floor(args) -> int:
+    """잔고 바닥 (owners 10-24): the record goes; the next start records its balance then as the new start (after the floor
+    was reached, or to start again from the balance after a deposit or a withdrawal). The executor must be stopped."""
+    cfg = ExecConfig.from_file(args.config)
+    store = ExecStore(cfg.db)          # fails while the executor runs: stop it first
+    try:
+        f = store.get_state(FLOOR)
+        if not f or f.get("start") is None:
+            print("잔고 바닥 기록이 없습니다(시작 금액은 실행기가 처음 돌 때 기록합니다)")
+            return 0
+        now = int(time.time() * 1000)
+        was = "멈춤 중이었음" if f.get("hit") else "멈춤 아니었음"
+        text = (f"{args.by}님이 잔고 바닥 기록을 지웠습니다(시작 금액 ${float(f['start']):,.2f}, {was}; 메모: {args.note}). "
+                "다음에 켤 때의 잔고가 새 시작 금액이 됩니다")
+        store.event(now, WARN, "floor_cleared", text, {"was": f, "by": args.by, "note": args.note})
+        store.put_state(FLOOR, now, {"start": None, "cleared_ts": now, "cleared_by": args.by, "was": f})
+        store.commit()
+        print(text)
+    finally:
+        store.close()
+    return 0
+
+
+def cmd_untie_key(args) -> int:
+    """``own_keys`` (owners 10-24): the database's tie to its first key goes, after the owners checked that a new key is
+    of the same account (its balance in check). The next start ties it to the key it starts with. Stopped executor only."""
+    cfg = ExecConfig.from_file(args.config)
+    store = ExecStore(cfg.db)          # fails while the executor runs: stop it first
+    try:
+        if store.get_state(KEY_TIE) is None:
+            print("이 DB는 아직 키에 묶여 있지 않습니다")
+            return 0
+        now = int(time.time() * 1000)
+        text = f"{args.by}님이 이 DB의 키 묶음을 풀었습니다(메모: {args.note}). 다음에 켤 때의 키에 다시 묶입니다"
+        store.event(now, WARN, "key_untied", text, {"by": args.by, "note": args.note})
+        store.conn.execute("DELETE FROM state WHERE k = ?", (KEY_TIE,))
+        store.commit()
+        print(text)
+    finally:
+        store.close()
+    return 0
+
+
 def cmd_check(args) -> int:
     try:
         cfg = ExecConfig.from_file(args.config)
@@ -2991,6 +3398,8 @@ def cmd_check(args) -> int:
     print(halt_rules_text(cfg.risk))
     print("신호등: 꺼짐 (paper의 모든 진입을 따라감)" if not cfg.signal_light_n else
           f"신호등: 켜짐 - paper 최근 {cfg.signal_light_n}번 중 {cfg.signal_light_min_win:.0%} 이상 이겼을 때만 진입을 따라감")
+    for line in guard_lines(cfg):
+        print(line)
     print("준비됨" if not probs else f"{len(probs)}개를 채워야 합니다")
     return 0 if not probs else 1
 
@@ -3013,10 +3422,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     f.add_argument("--config", required=True)
     g = sub.add_parser("stage-check")
     g.add_argument("--config", required=True)
+    for name in ("clear-floor", "untie-key"):     # owners 10-24 (docs/friend-bot-ko.md)
+        u = sub.add_parser(name)
+        u.add_argument("--config", required=True)
+        u.add_argument("--by", required=True)
+        u.add_argument("--note", default="")
     args = ap.parse_args(argv)
     try:
         return {"run": cmd_run, "clear-halt": cmd_clear, "status": cmd_status, "check-config": cmd_check,
-                "preflight": cmd_preflight, "stage-check": cmd_stage}[args.cmd](args)
+                "preflight": cmd_preflight, "stage-check": cmd_stage, "clear-floor": cmd_clear_floor,
+                "untie-key": cmd_untie_key}[args.cmd](args)
     except Refused as e:
         print(f"시작하지 않습니다: {e}", file=sys.stderr)
         return 2

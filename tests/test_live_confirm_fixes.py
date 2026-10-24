@@ -103,9 +103,25 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                              "/etc/paperbot/executor.json",
                              "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
                              "/etc/paperbot/executor-deepcoin.json"]), differ
+    # the fourth executor (WOO X Pro 2, owners 10-24, docs/friend-bot-ko.md): the same unit, its own config and its OWN
+    # key file instead of executor.env (which it cannot even see)
+    fourth = _unit("deploy/paperbot-executor-wooxpro2.service")
+    differ = sorted(set(unit) ^ set(fourth))
+    assert differ == sorted(["Description=paperbot order executor (testnet unless every mainnet gate passes)",
+                             "Description=paperbot order executor 4 (WOO X Pro 2; mainnet: every gate must pass)",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor.json",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor-wooxpro2.json",
+                             "EnvironmentFile=/etc/paperbot/executor.env",
+                             "EnvironmentFile=/etc/paperbot/executor-wooxpro2.env",
+                             "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env",
+                             "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env "
+                             "-/etc/paperbot/executor.env"]), differ
     for svc in sorted(os.listdir(os.path.join(REPO, "deploy"))):
         if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service",
-                                                   "paperbot-executor-deepcoin.service"):
+                                                   "paperbot-executor-deepcoin.service",
+                                                   "paperbot-executor-wooxpro2.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor
