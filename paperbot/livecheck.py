@@ -111,6 +111,10 @@ A third executor (owners 10-24, docs/deepcoin-ko.md: 딥코인, unit paperbot-ex
 /etc/paperbot/executor-deepcoin.json, database executor-deepcoin-live.db; it follows 'VWAP 개선판') is checked, told and
 scored like the other two once it is installed on this server: its config file or its database is there (the live
 site's rule, paperbot/dash/more/livebots.py ``installed``). Neither there: every check and message is as it was with two.
+A fourth executor (owners 10-24, docs/friend-bot-ko.md: WOO X Pro 2, a second WOO X Pro account, unit
+paperbot-executor-wooxpro2, config /etc/paperbot/executor-wooxpro2.json, database executor-wooxpro2-live.db; it follows
+'친구 매매법', /var/lib/paperbot/combo/friend.db) the same way; its name is its config's ``label`` (two executors trade
+WOO X Pro; the first keeps its words), and its 잔고 바닥 is on its score line and among the morning's 확인할 것.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
 ``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
 getUpdates; the token is never printed; sends nothing).
@@ -171,7 +175,10 @@ EXECUTORS = (("bybit", "/etc/paperbot/executor.json", "paperbot-executor",
 # the executors a server has only once they are installed (``installed_specs``: the config file or the database is there;
 # the live site's rule, livebots.installed); owners 10-24: the third, 딥코인, follows the 'VWAP 개선판' paper bot
 OPTIONAL_EXECUTORS = (("deepcoin", "/etc/paperbot/executor-deepcoin.json", "paperbot-executor-deepcoin",
-                       "/var/lib/paperbot/exec/executor-deepcoin-live.db", 0, 0.85),)
+                       "/var/lib/paperbot/exec/executor-deepcoin-live.db", 0, 0.85),
+                      # owners 10-24: the fourth, WOO X Pro 2 (a second WOO X Pro account), follows '친구 매매법'
+                      ("wooxpro2", "/etc/paperbot/executor-wooxpro2.json", "paperbot-executor-wooxpro2",
+                       "/var/lib/paperbot/exec/executor-wooxpro2-live.db", 0, 0.85),)
 # WOO X Pro: the API's rate (10-20). DeepCoin: an assumption until the drill measures the real fee, then it goes here:
 # 0.05 % a side, the taker rate in the example answer of its fee-rate endpoint (GET /deepcoin/account/trade-fee, tier
 # Lv1), which settles no fee schedule (the owners' payback comes back later, outside the bot)
@@ -353,6 +360,7 @@ class ExecInfo:
     problem: str = ""               # the config could not be read: the fallbacks are used
     paper_db: str = ""              # the paper database its config names ("": the main one; paperbot/livepapers.py)
     ladder_from: str = "paper"      # "own" (owners 10-20): its take-profit ladder on its own fill and exchange prices
+    ko: str = ""                    # its config's "label" (owners 10-24: "WOO X Pro 2"); "": its exchange's name
 
     @property
     def light_on(self) -> bool:
@@ -373,7 +381,7 @@ class ExecInfo:
 
     @property
     def label(self) -> str:
-        return EX_KO.get(self.exchange or self.name, self.name)
+        return self.ko or EX_KO.get(self.exchange or self.name, self.name)
 
     @property
     def fee(self) -> float:
@@ -400,6 +408,7 @@ def load_executors(specs=None) -> list[ExecInfo]:
             e.account = str(d.get("account") or ACCOUNT)
             e.paper_db = str(d.get("paper_db") or "")
             e.ladder_from = str(d.get("ladder_from") or "paper")
+            e.ko = str(d.get("label") or "").strip()
             e.light_n = int(d.get("signal_light_n", 0) or 0)
             e.light_min = float(d.get("signal_light_min_win", 0.85))
             e.budget = float(d["budget_usd"]) if d.get("budget_usd") is not None else None
@@ -1322,6 +1331,9 @@ def exec_report(ex: ExecInfo, paper: list, w0: int, w1: int, now_ms: int, ps: Op
         skips = exec_events(conn, "light_red")
         r["light_skips"] = len({(e["data"] or {}).get("key", e["ts"]) for e in skips})
         r["light_skips_day"] = len({(e["data"] or {}).get("key", e["ts"]) for e in skips if w0 <= e["ts"] < w1})
+        _fts, fl = get_state(conn, "floor")       # 잔고 바닥 (owners 10-24, docs/friend-bot-ko.md): only where there is one
+        if isinstance(fl, dict) and fl.get("start") is not None:
+            r["floor"] = fl
     finally:
         conn.close()
     r["kill_file"] = os.path.exists(ex.kill_file)
@@ -1410,6 +1422,11 @@ def exec_score_lines(r: dict) -> tuple[list, bool]:
         out.append(f"  {light_text(r['light'])}{sk}")
     if r.get("kill_file"):
         out.append("  비상 정지 파일(STOP)이 있음: 새 진입 없음")
+    fl = r.get("floor")
+    if fl and fl.get("hit"):                      # 잔고 바닥 (owners 10-24): no new entry until clear-floor
+        frac = fl.get("frac")
+        out.append(f"  잔고 바닥 멈춤 중: 새 진입 없음(시작 금액 {money(float(fl['start']))}"
+                   + (f"의 {float(frac):.0%}에 닿음" if frac else "") + ", 풀기: clear-floor)")
     return out, n < SMALL
 
 
@@ -1698,8 +1715,11 @@ def bot_section(b: dict, execs: list, w0: int, w1: int, rest: Optional[str] = No
     yesterday's trades (count, wins, net ROE sum, hold-limit exits), since its start (win rate, the break-even win rate
     from its own trades next to the research's 5-year one, its hold-limit exits), the owners' bar for more money with
     the live numbers, its executor(s) counted on this bot only (with the light: its own 20 / 75 %), the signals its
-    checks kept out yesterday by reason, and its 못 탄 신호 line. ``b``: {"path", "name", "trades", "cfg", "gates"}."""
+    checks kept out yesterday by reason, and its 못 탄 신호 line. ``b``: {"path", "name", "trades", "cfg", "gates", "vwap"}.
+    The research's 5-year break-even and the owners' bar for more money are the VWAP bot's own: another bot (owners
+    10-24, '친구 매매법', ``b["vwap"]`` False) gets neither of those lines."""
     tr = b["trades"]
+    vwap = b.get("vwap", True)
     on = [r for r in execs if r.get("section") and LP.same(r["section"], b["path"])]
     out = [LP.label(None, [r["label"] for r in on], b["name"])]
     day = [t for t in tr if w0 <= t["exit_time"] < w1]
@@ -1718,13 +1738,17 @@ def bot_section(b: dict, execs: list, w0: int, w1: int, rest: Optional[str] = No
     be = break_even(tr)
     if be is not None:
         out.append(f"- 본전 승률 {be['rate']:.0%}(이 봇 거래 {be['n']}번: 평균 이익 {fmt_roe(be['avg_win'])} · 평균 손실 "
-                   f"{fmt_roe(be['avg_loss'])})" + (" · 아직 표본 적음" if be["n"] < SMALL else "") + f" · 참고: {BE_5Y_KO}")
+                   f"{fmt_roe(be['avg_loss'])})" + (" · 아직 표본 적음" if be["n"] < SMALL else "")
+                   + (f" · 참고: {BE_5Y_KO}" if vwap else ""))
     else:
-        out.append(f"- 본전 승률: 이긴 거래와 진 거래가 다 있어야 계산해요(아직 없음) · 참고: {BE_5Y_KO}")
+        out.append("- 본전 승률: 이긴 거래와 진 거래가 다 있어야 계산해요(아직 없음)" + (f" · 참고: {BE_5Y_KO}" if vwap else ""))
     live = [f"{r['label']} {r['era']['n']}번 {r['era']['wins']}승" + (f"({r['era']['wins'] / r['era']['n']:.0%})" if r["era"]["n"] else "")
             for r in on if r.get("era")]
-    out.append(f"- 늘리기 기준(두 분): 실거래 {SCALE_N}번 승률 {SCALE_WIN:.0%} 이상이고 페이퍼와 비슷할 때"
-               + (f" · 지금 실거래 {', '.join(live)}" if live else " · 아직 따라가는 실행기 없음" if not on else ""))
+    if vwap:
+        out.append(f"- 늘리기 기준(두 분): 실거래 {SCALE_N}번 승률 {SCALE_WIN:.0%} 이상이고 페이퍼와 비슷할 때"
+                   + (f" · 지금 실거래 {', '.join(live)}" if live else " · 아직 따라가는 실행기 없음" if not on else ""))
+    elif live:
+        out.append(f"- 실거래: {', '.join(live)}")
     for r in on:
         out += exec_score_lines(r)[0]
     g = b.get("gates")
@@ -1759,6 +1783,8 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
     for r in execs:
         if r.get("halted"):
             loud.append(f"{r['label']} 실행기 멈춤")
+        if (r.get("floor") or {}).get("hit"):
+            loud.append(f"{r['label']} 잔고 바닥 멈춤(새 진입 없음)")
         for f in (r.get("cost") or {}).get("flags", []):
             loud.append(f"{r['label']} {f}")
     span = f"{kst_day(w0)} 09:00 ~ {kst_day(w1)} 09:00"
@@ -2311,8 +2337,9 @@ def paper_unit_todo(path: str) -> str:
 
 
 def every_ko(n: int) -> str:
-    """What the STOP file stops: "두 실행기 모두", "세 실행기 모두" once the third (딥코인) is installed."""
-    return f"{'세' if n > 2 else '두'} 실행기 모두"
+    """What the STOP file stops: "두 실행기 모두", "세 실행기 모두" once the third (딥코인) is installed, "네 실행기 모두" with
+    the fourth (WOO X Pro 2)."""
+    return f"{'네' if n > 3 else '세' if n > 2 else '두'} 실행기 모두"
 
 
 def dd_halt_words(ex: ExecInfo, n: int = 2) -> str:
@@ -2495,7 +2522,8 @@ DISK_MIN, DISK_CLEAR = 2 * 1024 ** 3, int(2.5 * 1024 ** 3)
 MEM_MIN, MEM_CLEAR = 500 * 1024 ** 2, 700 * 1024 ** 2
 PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot-executor.service",
                    "paperbot-executor-mexc.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
-                   "paperbot-executor-deepcoin.service")
+                   "paperbot-executor-deepcoin.service",
+                   "paperbot-executor-wooxpro2.service")
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
 UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
 REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
@@ -4847,10 +4875,12 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
         rest = rest_line(w1, ccfg)
         same_rest = all(pause_rules(ps.cfg(p)) == pause_rules(ccfg) for p in diff)
         if diff:                              # the pauses of both bots: the same rules (today) or each its own
-            rest = _rest_named(rest, "두 봇 같음" if same_rest else paper_name(src.paper_db))
+            rest = _rest_named(rest, ("두 봇 같음" if len(diff) == 1 else "모든 봇 같음") if same_rest   # three: 10-24
+                               else paper_name(src.paper_db))
         sections, bots = [], []
         for p in diff:
-            b = {"path": p, "name": paper_name(p), "trades": ps.trades(p), "cfg": ps.cfg(p), "gates": gate_counts(p, w0, w1)}
+            b = {"path": p, "name": paper_name(p), "trades": ps.trades(p), "cfg": ps.cfg(p), "gates": gate_counts(p, w0, w1),
+                 "vwap": LP.same(p, getattr(src, "paper2_db", "") or "")}    # the VWAP bot's own reference lines
             if b["trades"] is None:
                 sections.append([LP.label(None, [r["label"] for r in execs if LP.same(r.get("section") or "", p)], b["name"]),
                                  "- 기록을 못 읽음"])
@@ -5027,6 +5057,7 @@ def cmd_preview(a) -> int:
     from .livepreview import main as preview_main
     return preview_main("ac" if getattr(a, "old", False) else "two" if getattr(a, "two", False)
                         else "vwap" if getattr(a, "vwap", False) else "deepcoin" if getattr(a, "deepcoin", False)
+                        else "wooxpro2" if getattr(a, "wooxpro2", False)
                         else "live15")
 
 
@@ -5097,6 +5128,8 @@ def main(argv: Optional[list] = None) -> int:
                                                           "paper-only, then Bybit follows it, WOO X Pro the trend bot")
     pv.add_argument("--deepcoin", action="store_true", help="three executors (docs/deepcoin-ko.md): Bybit and WOO X Pro "
                                                               "follow the 추세판단 봇, 딥코인 the 'VWAP 개선판'")
+    pv.add_argument("--wooxpro2", action="store_true", help="four executors (docs/friend-bot-ko.md): the three of "
+                                                              "--deepcoin and WOO X Pro 2 following '친구 매매법'")
     c = sub.add_parser("chat-ids", help="the owners' private chat ids the bot in effect has seen (getUpdates; sends "
                                         "nothing, never prints the token)")
     s = sub.add_parser("show", help="print a stored check and where the live messages go")

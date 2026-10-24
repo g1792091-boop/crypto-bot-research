@@ -14,6 +14,10 @@
     python -m paperbot.livecheck preview --deepcoin  three executors (docs/deepcoin-ko.md): Bybit and WOO X Pro follow the
                                                   추세판단 봇, the third, 딥코인, follows 'VWAP 개선판' ITSELF: its
                                                   start, one minute both bots enter, both win, the morning check
+    python -m paperbot.livecheck preview --wooxpro2  four executors (docs/friend-bot-ko.md): the three of --deepcoin
+                                                  and WOO X Pro 2 (a second WOO X Pro account) following '친구 매매법'
+                                                  (a hand-made paper record): its start, its entry and exit, each
+                                                  with its own executor, the morning check with four executors
 
 It writes small databases in the real schemas into a temporary folder (the paper bot's paperbot.store3, the rule
 bot's 1m bars, and the executors' own tables, copied here as ``EXEC_SCHEMA`` so this module never imports the
@@ -118,9 +122,10 @@ class World:
     """One paper bot, the rule bot's bars, two executors (Bybit $100, MEXC $100) as ``prof`` sets them up: 규칙봇 15 (no
     light, no loss-streak or drawdown halt) or the A+C bot (light 20 / 85% and 20 / 90%, 3 losses, 50%). ``three``: the
     third executor too (딥코인 $100, owners 10-24: its own config and database, the VWAP bot's light 20 / 75 %; the
-    scene points it at its paper bot)."""
+    scene points it at its paper bot). ``four``: the fourth too (WOO X Pro 2 $100, owners 10-24: a second WOO X Pro
+    account, its name from its config's label, no light)."""
 
-    def __init__(self, root: str, prof: Profile = None, three: bool = False):
+    def __init__(self, root: str, prof: Profile = None, three: bool = False, four: bool = False):
         self.root = root
         self.prof = prof = prof or LIVE15
         self.paper = os.path.join(root, "live-ac.db")
@@ -128,6 +133,8 @@ class World:
         self.dbs = {"bybit": os.path.join(root, "bybit.db"), "mexc": os.path.join(root, "mexc.db")}
         if three:
             self.dbs["deepcoin"] = os.path.join(root, "deepcoin.db")
+        if four:
+            self.dbs["wooxpro2"] = os.path.join(root, "wooxpro2.db")
         for p in self.dbs.values():
             c = sqlite3.connect(p)
             c.executescript(EXEC_SCHEMA)
@@ -149,6 +156,10 @@ class World:
             self.infos.append(LC.ExecInfo("deepcoin", "/etc/paperbot/executor-deepcoin.json", "paperbot-executor-deepcoin",
                                           self.dbs["deepcoin"], 20, 0.75, exchange="deepcoin", budget=100.0,
                                           kill_file=kill, max_loss=0.2))
+        if four:
+            self.infos.append(LC.ExecInfo("wooxpro2", "/etc/paperbot/executor-wooxpro2.json", "paperbot-executor-wooxpro2",
+                                          self.dbs["wooxpro2"], 0, 0.85, exchange="wooxpro", budget=100.0,
+                                          kill_file=kill, max_loss=0.35, ko="WOO X Pro 2"))
 
     def src(self) -> LC.Sources:
         # the second paper bot's file is this world's own (none unless a scene makes it): never the server's real one
@@ -434,6 +445,8 @@ def scenes(world: str = "live15") -> list:
             out += _vwap_scene(os.path.join(tmp, "v"))
         elif world == "deepcoin":
             out += _deepcoin_scene(os.path.join(tmp, "d"))
+        elif world == "wooxpro2":
+            out += _wooxpro2_scene(os.path.join(tmp, "f"))
         elif world == "ac":
             out += _trade_scene(os.path.join(tmp, "a"))
             out += _pause_scene(os.path.join(tmp, "p"), AC)
@@ -456,9 +469,9 @@ def scenes(world: str = "live15") -> list:
     return out
 
 
-def _mk(path: str, prof: Profile = None, three: bool = False) -> World:
+def _mk(path: str, prof: Profile = None, three: bool = False, four: bool = False) -> World:
     os.makedirs(path, exist_ok=True)
-    return World(path, prof or AC, three)
+    return World(path, prof or AC, three, four)
 
 
 T0 = LC.window_of("2026-10-20")[0] + 8 * H1          # Tuesday 10/20 17:00 KST
@@ -1048,6 +1061,155 @@ def _deepcoin_scene(path: str) -> list:
     got = Collect()
     r = LC.run_check(w.src(), day="2026-10-20", now_ms=w1 + 10 * MIN, no_replay=True, notifier=got)
     out.append(("📋 아침 점검 (실행기 셋)", r["level"], r["text"]))
+    vb.close()
+    return out
+
+
+# '친구 매매법' (owners 10-24, docs/friend-bot-ko.md) as its run record says it: the preview's own hand-made record (the
+# paper bot itself is paperbot/combo.py on deploy/combo.friend.json; only the words the messages read are here)
+FRIEND_CFG = {"name": "친구 매매법", "members": [{"strategy": "FRIEND_ROC", "tf": "15m"}], "leverage": {"default": 30},
+              "margin": 0.4, "stop": {"mode": "roe", "roe": 0.75, "net": True},
+              "ladder": {"first_lock": 0.2, "trigger_gap": 0.02, "step": 0.1}, "no_weekend": True,
+              "macro_blackout_min": 30, "us_open_pause_min": 30, "us_open_pre_min": 30}
+FRIEND = ("FRIEND_ROC", "15m", 0)
+
+
+class FriendPaper:
+    """A paper record of '친구 매매법' in the store3 schema (friend.db): its run record, its account state, its trades."""
+
+    def __init__(self, db: str, start: int):
+        self.db, self.position = db, None
+        s = Store3(db)
+        s.put_state("combo_run", start, {"config": FRIEND_CFG, "taker_fee": 0.0005})
+        s.commit()
+        s.conn.close()
+
+    def open(self, entry: int, symbol: str, side: int, price: float, wallet: float = 1000.0) -> float:
+        """Its position at margin 40 %, 30x, the net ROE -75 % stop; returns the stop."""
+        stop = round(price * (1 - side * (0.75 / 30 - 0.0014)), 2)
+        sig = asdict(Signal(ts=entry - 1, symbol=symbol, timeframe=FRIEND[1], strategy_id=FRIEND[0], side=side,
+                            stop_price=stop, meta={"member_order": FRIEND[2]}))
+        m = 0.4 * wallet
+        self.position = {"signal": sig, "symbol": symbol, "side": side, "qty": m * 30 / price, "entry_price": price,
+                         "entry_time": entry, "leverage": 30, "tier": "best", "margin": m, "margin_initial": m,
+                         "stop_price": stop, "tp_price": None, "liq_price": 0.0, "entry_fee": 0.2, "stop_initial": stop,
+                         "lock_roe": None}
+        return stop
+
+    def close(self, exit_: int, roe: float, reason: str = "LOCK", lock: Optional[float] = 0.2) -> TradeRecord:
+        p, self.position = self.position, None
+        side, price, m = p["side"], p["entry_price"], p["margin"]
+        rec = TradeRecord(strategy_id=FRIEND[0], symbol=p["symbol"], timeframe=FRIEND[1], side=side,
+                          signal_ts=p["entry_time"] - 1, entry_time=p["entry_time"], entry_price=price, exit_time=exit_,
+                          exit_price=price * (1 + side * (roe + 0.042) / 30), exit_reason=reason, qty=p["qty"],
+                          leverage=30, tier="best", margin=m, stop_price=p["stop_price"], tp_price=float("nan"),
+                          liq_price=price * (1 - side / 30), fees=0.4, funding=0.0, pnl=roe * m, roe=roe,
+                          price_move=roe / 30, mae_price=price, mfe_price=price * (1 + side * 0.009),
+                          equity_after=1000 + roe * m, score=3.0, stop_initial=p["stop_initial"], lock_roe=lock)
+        s = Store3(self.db)
+        s.trade(LC.ACCOUNT, rec)
+        s.outcome(LC.ACCOUNT, SignalOutcome(Signal(ts=p["entry_time"] - 1, symbol=p["symbol"], timeframe=FRIEND[1],
+                                                   strategy_id=FRIEND[0], side=side, stop_price=p["stop_price"],
+                                                   meta={"member": "FRIEND_ROC@15m", "member_order": 0,
+                                                         "stop_rule": "ROE -75% net at 30x"}),
+                                            "ENTERED", "", p["entry_time"]))
+        s.commit()
+        s.conn.close()
+        return rec
+
+    def tick(self, now: int) -> None:
+        s = Store3(self.db)
+        s.put_state("accounts", now - MIN, {"last_ts": now - MIN, "engines": {
+            LC.ACCOUNT: {"wallet": 1000.0, "position": self.position}}})
+        s.put_state("heartbeat", now - 2000, {})
+        s.commit()
+        s.conn.close()
+
+
+def _wooxpro2_scene(path: str) -> list:
+    """Four executors (owners 10-24, docs/friend-bot-ko.md): 바이비트 and WOO X Pro follow the 추세판단 봇, 딥코인 'VWAP
+    개선판' (paper-only trades here: --deepcoin shows its own), the fourth, WOO X Pro 2 (a second WOO X Pro account, its
+    name from its config's label), follows '친구 매매법' (FriendPaper). WOO X Pro 2 starts on it (▶️), enters with it
+    alone (🟢), closes with its win (✅), and the morning check has the four executors, each with its own paper bot."""
+    w = _mk(path, TREND, three=True, four=True)
+    out = []
+    w.infos[1].exchange = "wooxpro"                       # the second slot trades WOO X Pro (owners 10-20)
+    with open(os.path.join(LC.ROOT, "deploy", TREND.config), encoding="utf-8") as fh:
+        tcfg = json.load(fh)
+    st = Store3(w.paper)
+    st.put_state("combo_run", T0 - 3 * DAY, {"config": tcfg, "taker_fee": 0.0005})
+    st.commit()
+    st.conn.close()
+    vpath, fpath = os.path.join(path, "vwap.db"), os.path.join(path, "friend.db")
+    day0 = T0 - 41 * H1
+    vb = VwapBot(vpath, w.rule, day0 + 9 * H1)
+    for k, b in enumerate(day0 + h * H1 for h in range(10, 13)):         # the VWAP bot's paper trades (딥코인 waits)
+        sym = (BTC, ETH, SOL)[k]
+        p0 = vb.price(sym, b)
+        vb.run_to(b)
+        vb.signal("F6_VWAP_FAIL", sym, 1, b)
+        vb.run_to(b + MIN)
+        vb.move(sym, b + 20 * MIN, p0 * 1.007)
+        vb.move(sym, b + 40 * MIN, p0 * 1.004)
+        vb.move(sym, b + 55 * MIN, vb.price(sym, b + 55 * MIN))
+        vb.run_to(b + 55 * MIN)
+    fb = FriendPaper(fpath, T0 - 2 * DAY)
+    _history(w, T0, 18, losses_at=(6, 14))
+    for name in ("bybit", "mexc", "deepcoin", "wooxpro2"):
+        w.x_state(name, T0 - 3 * H1)
+    for name in ("bybit", "mexc"):
+        w.x_event(name, T0 - 2 * DAY, "start", "시작", {"paper_db": w.paper})
+    w.infos[2].paper_db = vpath
+    w.x_event("deepcoin", T0 - DAY, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {vpath})", {"paper_db": vpath})
+    # WOO X Pro 2 ran once on the day before (its first start: recorded, never sent) and was stopped
+    w.x_event("wooxpro2", T0 - DAY, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {fpath})", {"paper_db": fpath})
+    w.x_event("wooxpro2", T0 - DAY + H1, "sigterm", "끄라는 신호(SIGTERM)를 받아 하던 반복을 마치고 멈춥니다")
+    vb.run_to(T0 - 2 * H1)
+    fb.tick(T0 - 2 * H1)
+    w.tick(T0 - 2 * H1, bars=False)
+    w.watch(T0 - 2 * H1)                                 # the first look
+    # ▶️ WOO X Pro 2 started on '친구 매매법' (its config: deploy/executor.live-wooxpro2.json, friend.db)
+    w.infos[3].paper_db = fpath
+    w.x_event("wooxpro2", T0 - 30 * MIN, "start", f"시작: paper 계좌 COMBO@mix 따라 하기 (페이퍼 DB {fpath})", {"paper_db": fpath})
+    vb.run_to(T0 - 29 * MIN)
+    fb.tick(T0 - 29 * MIN)
+    w.tick(T0 - 29 * MIN, bars=False)
+    out += [("▶️ 실행기 켜짐 (WOO X Pro 2 · 친구 매매법)", lv, t) for lv, t in w.watch(T0 - 29 * MIN)]
+    # 🟢 '친구 매매법' enters ETH short (a closed 15m bar), WOO X Pro 2 alone with it
+    e = T0 + 15 * MIN
+    price = 2_415.0
+    pstop = fb.open(e, ETH, -1, price)
+    key = f"{LC.ACCOUNT}|{ETH}|{e}"
+    fill = round(price * 0.9998, 2)
+    fqty = round(100.0 * 0.4 * 30 / fill, 2)
+    fstop = round(fill * pstop / price, 2)
+    w.x_open("wooxpro2", key, ETH, -1, e + 3000, fill, fqty, fstop, lev=30)
+    w.x_state("wooxpro2", e + MIN, trade={"key": key, "symbol": ETH, "side": -1, "status": "open", "qty": fqty,
+                                          "entry_ts": e + 3000, "stop_initial": fstop, "stop": fstop, "stop_algo_id": "w1"})
+    vb.run_to(e + MIN)
+    fb.tick(e + MIN)
+    w.tick(e + MIN, bars=False)
+    out += [("🟢 진입 (친구 매매법 · WOO X Pro 2)", lv, t) for lv, t in w.watch(e + MIN)]
+    # ✅ its ladder: a win at +20 % locked; WOO X Pro 2 closes on its own stop (거래소 기준)
+    x = e + 2 * H1
+    t = fb.close(x, 0.21)
+    weq = round(100.0 + live_close(w, "wooxpro2", key, t, fill, fqty, fee=LC.ASSUMED_FEE["wooxpro"]), 2)
+    w.x_state("wooxpro2", x + MIN, trade=None, last_equity=weq, peak_equity=weq)
+    vb.run_to(x + 2 * MIN)
+    fb.tick(x + 2 * MIN)
+    w.tick(x + 2 * MIN, bars=False)
+    out += [("✅ 청산 (친구 매매법 · WOO X Pro 2)", lv, t) for lv, t in w.watch(x + 2 * MIN)]
+    # 📋 the morning check: the four executors, each with its own paper bot
+    w0, w1 = LC.window_of("2026-10-20")
+    for name, eq in (("bybit", 108.9), ("mexc", 108.9), ("deepcoin", 107.87), ("wooxpro2", weq)):
+        w.x_equity(name, w1 - MIN, eq)
+    vb.run_to(w1 + 9 * MIN)
+    fb.tick(w1 + 9 * MIN)
+    w.tick(w1 + 9 * MIN, bars=False)
+    w.watch(w1 + 9 * MIN)
+    got = Collect()
+    r = LC.run_check(w.src(), day="2026-10-20", now_ms=w1 + 10 * MIN, no_replay=True, notifier=got)
+    out.append(("📋 아침 점검 (실행기 넷)", r["level"], r["text"]))
     vb.close()
     return out
 
