@@ -5,8 +5,8 @@
 .brand .bic { color: var(--warn); border-color: var(--warn-line); }
 .brand-t b { color: var(--warn); }
 
-/* the phone's bottom bar: five groups (지금 · 기록 · 성적 · 운영 · VWAP 봇, core/routes.js LIVE_GROUPS) */
-.botbar { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* the phone's bottom bar: six groups (지금 · 기록 · 성적 · 운영 · VWAP 봇 · 믹스 봇, core/routes.js LIVE_GROUPS) */
+.botbar { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 
 /* the link back to the rule bot's dashboard (the strip's end / the top bar): a quiet dashed button like 예전 화면 */
 a.oldui.paperlink { border-style: dashed; }

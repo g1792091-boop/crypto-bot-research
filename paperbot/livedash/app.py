@@ -64,6 +64,9 @@ MODULES = MODULES + ("livejournal",)
 # 실거래 › VWAP 봇 (#/vwap · #/vwperf · #/vwblock: the 'VWAP 개선판' paper bot and the executor that follows it, owners 10-23;
 # dash/more/livevwap.py)
 MODULES = MODULES + ("livevwap",)
+# 실거래 › 믹스 봇 (#/mix · #/mixperf: the '믹스 30분 봇' on the second WOO X Pro account and its paper twin, owners 10-25
+# night; dash/more/livemix.py)
+MODULES = MODULES + ("livemix",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 

@@ -98,7 +98,9 @@ export function tradesView(ctx) {
     if (live) {
       rows.push(kv("짝 페이퍼 거래", r.paper ? `${fmt.kst(r.paper.entry_time)} 진입 · ${fmt.price(r.paper.entry_price)} · 손익 ${fmt.money(r.paper.pnl, true)}` : "없음 (페이퍼에 같은 거래가 없어요)"),
         kv("진입 미끄러짐", r.slip_vs_paper != null ? `${fmt.pct(r.slip_vs_paper, 3)} (${r.slip_vs_paper >= 0 ? "페이퍼보다 유리" : "페이퍼보다 불리"})` : null),
-        kv("페이퍼 × 크기 비율", r.paper_scaled != null ? fmt.money(r.paper_scaled, true) : null), kv("차이 (실거래 − 페이퍼)", r.diff != null ? fmt.money(r.diff, true) : null));
+        // size_from "equity" (the margin from the live balance): the paper's P&L at this trade's own live qty / paper qty
+        r.size_scale != null ? kv("페이퍼 × (실거래 수량 ÷ 페이퍼 수량)", r.paper_scaled != null ? `${fmt.money(r.paper_scaled, true)} (×${fmt.num(r.size_scale, 3)})` : null)
+          : kv("페이퍼 × 크기 비율", r.paper_scaled != null ? fmt.money(r.paper_scaled, true) : null), kv("차이 (실거래 − 페이퍼)", r.diff != null ? fmt.money(r.diff, true) : null));
     }
     const nums = s && s.numbers ? h("div", {class: "lb-nums"}, Object.entries(s.numbers).map(([k, v]) => h("span", {class: "pp thin num"}, `${k} ${Array.isArray(v) ? v.join("/") : v}`))) : null;
     const extra = s ? [s.filter.length ? ui.note(`조건: ${s.filter.map((x) => x.ko).join(" · ")}`) : null, s.disp ? ui.note(`신호봉: ${s.disp}`) : null,

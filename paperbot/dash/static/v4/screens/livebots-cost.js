@@ -328,7 +328,8 @@ export function costView(ctx) {
       h("span", {class: "k"}, "실거래 − 페이퍼(크기 맞춤) · 짝 맞춘 거래 합"),
       h("div", {class: "lbk-big"}, h("b", {class: "num"}, dtTxt), h("span", {class: "u"}, has(dt) ? "USDT" : "짝 맞춘 거래 없음")),
       h("span", {class: "s"}, "거래당 ", h("b", {class: ["num", fmt.tone(a.diff_avg, fmt.money(a.diff_avg))]}, has(a.diff_avg) ? `${fmt.money(a.diff_avg, true)} USDT` : "—"),
-        has(a.qty_scale) ? ` · 페이퍼 크기 × ${fmt.num(a.qty_scale, 2)}` : "",
+        a.size_from === "equity" ? ` · 페이퍼 크기 × 거래마다 실거래 수량 ÷ 페이퍼 수량 (${a.size_ko || "잔고 기준 크기"})`
+          : has(a.qty_scale) ? ` · 페이퍼 크기 × ${fmt.num(a.qty_scale, 2)}` : "",
         has(dt) ? (dt < 0 ? " · 실거래가 덜 벌었어요" : dt > 0 ? " · 실거래가 더 벌었어요" : "") : ""));
     return h("section", {class: ["card", "lbk-card", "lbk-a-" + id], "aria-label": acctKo(id)}, top, hero,
       h("div", {class: "lbk-tiles"}, costTiles(a).map(tile)), gapsEl(a),
@@ -360,7 +361,8 @@ export function costView(ctx) {
     const rows = a.rows || [];
     put(listSum, rows.length ? [h("span", null, `${acctKo(st.acct)} 닫힌 거래 `), h("b", {class: "num"}, `${fmt.int(a.n)}번`),
       a.n > rows.length ? h("span", {class: "muted"}, ` · 새것 ${fmt.int(rows.length)}번만`) : null,
-      h("span", {class: "muted"}, " · 페이퍼 = 짝 페이퍼 손익 × 크기 비율")] : null);
+      h("span", {class: "muted"}, a.size_from === "equity" ? ` · 페이퍼 = 짝 페이퍼 손익 × (실거래 수량 ÷ 페이퍼 수량) · ${a.size_ko || ""}`
+        : " · 페이퍼 = 짝 페이퍼 손익 × 크기 비율")] : null);
     pg.set(rows, !user);
   }
   // ---------------------------------------------------------------- 수수료 줄이기

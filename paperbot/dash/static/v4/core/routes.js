@@ -128,6 +128,9 @@ const ICON = {
     R(12, 12, 2, 2), R(4, 3, 8, 2), R(4, 11, 8, 2), R(3, 4, 2, 8), R(11, 4, 2, 8)],
   // VWAP 봇: a candle crossing its average line (the VWAP)
   vwap: () => [R(1, 11, 3, 1), R(4, 10, 3, 1), R(7, 9, 2, 1), R(9, 8, 3, 1), R(12, 7, 3, 1), R(7, 2, 2, 13), R(6, 4, 4, 7)],
+  // 믹스 봇: the indicator's line turning colour (a falling run, then a rising one) over the 30-minute candles' row
+  mix: () => [R(1, 4, 2, 2), R(3, 6, 2, 2), R(5, 8, 2, 2), R(7, 7, 2, 2), R(9, 5, 2, 2), R(11, 3, 2, 2), R(13, 1, 2, 2),
+    R(2, 12, 2, 3), R(6, 11, 2, 4), R(10, 12, 2, 3), R(13, 10, 2, 5)],
 };
 export const icon =(group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
@@ -206,6 +209,9 @@ const SICON = {
   vwperf: () => SICON.board(),
   vwblock: () => [R(1, 9, 4, 6), R(6, 4, 4, 11), R(11, 11, 4, 4), R(1, 1, 2, 2), R(3, 3, 2, 2), R(5, 5, 2, 2), R(7, 7, 2, 2), R(9, 9, 2, 2),
     R(11, 11, 2, 2), R(13, 13, 2, 2)],
+  // 믹스 봇 (LIVE_GROUPS "mix"): 관제 the group's drawing, 성적 the board's bars
+  mix: ICON.mix,
+  mixperf: () => SICON.board(),
 };
 export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
@@ -268,6 +274,9 @@ const LIVE_GROUPS = [
   // the second paper bot 'VWAP 개선판' and the executor that will follow it (owners 10/23, docs/vwap-bot-ko.md): its own
   // group, last (the number keys of the four groups stay); each tab says 꺼짐 until the bot runs (screens/livebots-vwap.js)
   {id: "vwap", ko: "VWAP 봇", screens: ["vwap", "vwperf", "vwblock"]},
+  // the '믹스 30분 봇' on the second WOO X Pro account (real money) and its paper twin (owners 10/25 night,
+  // docs/mixchop-ko.md): its own group, last; each column says 꺼짐 until its bot runs (screens/livebots-mix.js)
+  {id: "mix", ko: "믹스 봇", screens: ["mix", "mixperf"]},
 ];
 const LIVE_SCREENS = {
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇)"},
@@ -299,6 +308,8 @@ const LIVE_SCREENS = {
   vwap: {ko: "VWAP 관제", group: "vwap", title: "VWAP 관제 (VWAP 개선판)"},
   vwperf: {ko: "VWAP 성적", group: "vwap", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)"},
   vwblock: {ko: "VWAP 막은 신호", group: "vwap", title: "VWAP 막은 신호 (막지 않았다면)"},
+  mix: {ko: "믹스 관제", group: "mix", title: "믹스 관제 (믹스 30분 봇 · 실거래와 모의)"},
+  mixperf: {ko: "믹스 성적", group: "mix", title: "믹스 성적 (실거래 · 모의 · 설계서 5년)"},
 };
 if (LIVE) {
   // put in place (the same objects every module already imported): the menu, the screens, the strip's groups

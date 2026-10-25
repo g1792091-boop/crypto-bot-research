@@ -76,6 +76,9 @@ import {trendView} from "./livebots-trend.js";
 import {tchartView} from "./livebots-tchart.js";
 // VWAP 봇 (owners 10/23: the 'VWAP 개선판' paper bot and its executor; menu group "vwap"): 관제 · 성적 · 막은 신호
 import {vwapView, vwperfView, vwblockView} from "./livebots-vwap.js";
+// 믹스 봇 (owners 10/25 night: the '믹스 30분 봇' on the second WOO X Pro account and its paper twin; menu group "mix"):
+// 관제 · 성적
+import {mixView, mixperfView} from "./livebots-mix.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -110,6 +113,8 @@ export const TABS = [
   {id: "vwap", label: "VWAP 관제", make: (ctx, hub) => vwapView(ctx, hub), own: true},
   {id: "vwperf", label: "VWAP 성적", make: (ctx) => vwperfView(ctx), own: true},
   {id: "vwblock", label: "VWAP 막은 신호", make: (ctx) => vwblockView(ctx), own: true},
+  {id: "mix", label: "믹스 관제", make: (ctx) => mixView(ctx), own: true},
+  {id: "mixperf", label: "믹스 성적", make: (ctx) => mixperfView(ctx), own: true},
 ];
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "trend");
 // what the page already heard (module level: a tab change re-mounts the screen, the same record must not sound again);

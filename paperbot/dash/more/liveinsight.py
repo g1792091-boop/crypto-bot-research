@@ -786,7 +786,11 @@ def chase_part(cx: dict) -> dict:
     tot["verdict"] = None if not dec else "saved" if tot["roe_sum"] < -1e-12 else "cost" if tot["roe_sum"] > 1e-12 else "even"
     return {**base, "state": "ok", "rows": rows, "totals": tot, "small": tot["decided"] < SMALL_N,
             "missed": _src(missed, "state", "reason_ko", "reason", "path"),
-            "scale": {x["id"]: (x["config"] or {}).get("qty_scale") for x in cx["execs"]}}
+            # the live size of each executor: its qty_scale; an executor sized from its balance (size_from "equity") has no
+            # one factor (each trade its own live qty / paper qty): None, with how it sizes in words
+            "scale": {x["id"]: L.size_scale(x["config"]) if (x["config"] or {}).get("size_from") != "equity" else None for x in cx["execs"]},
+            "sizing": {x["id"]: {"size_from": (x["config"] or {}).get("size_from") or "paper", "margin_frac": (x["config"] or {}).get("margin_frac"),
+                                 "size_ko": L.size_ko(x["config"])} for x in cx["execs"]}}
 
 
 def trend_chase_ko(cx: dict) -> str:

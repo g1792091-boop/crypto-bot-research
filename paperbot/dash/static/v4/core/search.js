@@ -21,6 +21,7 @@ export const LIVE_ALIAS = {
   rank: "순위 매매법 진입 가능성 rank", judge: "규칙 점검 빠른 손절 추격 동전 쌍둥이", map: "지도 기대 범위 map", cost: "비용 미끄러짐 수수료 cost",
   cal: "일정 경제 발표 주말 calendar", safety: "안전 멈춤 경고 safety", settings: "설정 규칙 settings", team: "분석팀 AI team",
   shadows: "그림자 봇 shadow",
+  mix: "믹스 30분 봇 관제 WOO X Pro 2 두 번째 계정 모의 신호 계단 mixchop mix", mixperf: "믹스 성적 승률 백테스트 거래 mixchop mix",
 };
 const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 /** The first consonants of the Hangul syllables (other characters kept): "순위표" -> "ㅅㅇㅍ". */

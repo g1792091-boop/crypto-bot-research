@@ -1,0 +1,188 @@
+/* 실거래 › 믹스 봇 (screens/livebots-mix.js: 관제 · 성적 of the '믹스 30분 봇' and its paper twin), @imported by
+   screens/livebots.css with the other tabs. Tokens only (both skins), every font size a --t-* token (the big digits
+   calc(Npx * var(--ts))), every selector under the lmx- prefix; one column at 390 px, no page scroll sideways. The live
+   bot's column is edged in the real-money colour (--warn, as the 실거래 chip), the paper one dashed (never real money).
+   Motion: the orb breathes while a bot runs, bars ease to their value; both off under prefers-reduced-motion. */
+.lmx { gap: 12px; min-width: 0; }
+.lmx-body, .lmx-cards { display: grid; gap: 12px; min-width: 0; }
+.lmx-cards > .card { min-width: 0; }
+.lmx .num { white-space: normal; }
+.lmx-tv, .lmx-t, .lmx-tpnl, .lmx-btr .num { white-space: nowrap; }
+.lmx-sub { color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+small.lmx-sub { font-size: var(--t-2xs); }
+.lmx-h3 { margin: 14px 0 6px; color: var(--muted); font: 700 var(--t-xs)/1.4 var(--f-body); letter-spacing: .04em; }
+.lmx-t { color: var(--muted); font-size: var(--t-xs); }
+.lmx-warn { margin: 6px 0; padding: 7px 10px; border-radius: var(--r-md); border: 1px solid var(--warn-line); background: var(--warn-soft);
+  color: var(--warn); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
+.lmx-hint { margin: 0; color: var(--down); font-size: var(--t-xs); font-family: var(--f-term); overflow-wrap: anywhere; }
+.lmx-honest { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--r-md); border: 1px dashed var(--line-2); color: var(--ink-2);
+  font-size: var(--t-xs); line-height: 1.6; overflow-wrap: anywhere; }
+.lmx-more { justify-self: start; margin-top: 8px; }
+.lmx ul.lmx-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: var(--t-sm); min-width: 0; }
+.lmx-list li { min-width: 0; overflow-wrap: anywhere; }
+.lmx-rlist li { position: relative; padding-left: 12px; line-height: 1.6; }
+.lmx-rlist li::before { content: ""; position: absolute; left: 0; top: .7em; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.lmx-chiprow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 8px 0; min-width: 0; }
+.lmx-chiprow .pp { white-space: normal; }
+.lmx-feedhead { display: grid; gap: 4px; min-width: 0; }
+
+/* ---------------------------------------------------------------- the two bots side by side */
+.lmx-bots { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
+@media (min-width: 1100px) { .lmx-bots { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.lmx-bot {
+  --st: var(--muted); --st-soft: var(--surface-2); --st-line: var(--line-2);
+  position: relative; display: grid; gap: 10px; align-content: start; min-width: 0; padding: 16px 18px; border-radius: var(--r-xl);
+  border: 1px solid var(--line); background: radial-gradient(70% 90% at 0% 0%, var(--st-soft), transparent 70%), var(--surface);
+}
+.lmx-bot.live { border-color: var(--warn-line); }
+.lmx-bot.paper { border-style: dashed; border-color: var(--line-2); }
+.lmx-bot.run { --st: var(--up); --st-soft: var(--up-soft); --st-line: var(--up-line); }
+.lmx-bot.stop, .lmx-bot.err { --st: var(--down); --st-soft: var(--down-soft); --st-line: var(--down-line); }
+.lmx-bhead { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; min-width: 0; }
+.lmx-orb { position: relative; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; margin-top: 2px;
+  border: 2px solid var(--st-line); background: radial-gradient(circle, color-mix(in srgb, var(--st) 14%, transparent), transparent 70%); }
+.lmx-orb > i { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--st); }
+.lmx-bot.run .lmx-orb > i { animation: lmx-breathe 2.4s var(--ease) infinite; }
+.lmx-bot.off .lmx-orb > i { background: var(--line-2); }
+@keyframes lmx-breathe { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(.8); opacity: .7; } }
+.lmx-bmain { display: grid; gap: 4px; min-width: 0; }
+.lmx-kick { margin: 0; color: var(--muted); font-size: var(--t-xs); letter-spacing: .03em; overflow-wrap: anywhere; }
+.lmx-bot.live .lmx-kick { color: var(--warn); }
+.lmx-bname { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--ink); font: 800 var(--t-xl)/1.25 var(--f-body); }
+.lmx-bmain > p.lmx-sub { margin: 0; }
+.lmx-off { display: grid; gap: 8px; padding: 14px 16px; border-radius: var(--r-md); border: 1px dashed var(--line-2); color: var(--ink-2);
+  font-size: var(--t-sm); line-height: 1.6; min-width: 0; }
+.lmx-off p { margin: 0; overflow-wrap: anywhere; }
+.lmx-offhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--ink); }
+
+/* 잔고 · 시작 · 바닥선 */
+.lmx-money { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); min-width: 0; }
+.lmx-tile { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r-md); min-width: 0; border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent); }
+.lmx-tk { color: var(--muted); font-size: var(--t-xs); }
+.lmx-tv { font-size: calc(20px * var(--ts)); line-height: 1.25; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.lmx-ts { color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lmx-tile.real { border-color: var(--warn-line); }
+.lmx-tile.real .lmx-tv { color: var(--warn); }
+.lmx-tile.paper { border-style: dashed; }
+.lmx-tile.paper .lmx-tv { color: var(--ink-2); }
+.lmx-tile.bad { border-color: var(--down-line); background: var(--down-soft); }
+.lmx-tile.na .lmx-tv { color: var(--muted); }
+/* the equity on 0 .. 1.5 x the start: the floor a red tick, the start a grey one */
+.lmx-meter { position: relative; display: block; height: 8px; border-radius: 4px; background: var(--surface-3); overflow: visible; }
+.lmx-meter > i { position: absolute; inset: 0 auto 0 0; width: calc(var(--v, 0) * 100%); border-radius: inherit; background: var(--accent);
+  transition: width .6s var(--ease); }
+.lmx-meter.bad > i { background: var(--down); }
+.lmx-meter > b, .lmx-meter > u { position: absolute; top: -3px; bottom: -3px; left: calc(var(--m, .5) * 100%); width: 2px; border-radius: 1px; }
+.lmx-meter > b { background: var(--down); }
+.lmx-meter > u { background: var(--ink-2); }
+
+/* 새 진입: 멈춤 · 금지 시간 · 보유 중 · 가능 */
+.lmx-gate { display: grid; gap: 8px; min-width: 0; }
+.lmx-verdict { padding: 9px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2); font-size: var(--t-sm);
+  line-height: 1.55; overflow-wrap: anywhere; }
+.lmx-verdict.go { border-color: var(--up-line); background: var(--up-soft); }
+.lmx-verdict.go > b { color: var(--up); }
+.lmx-verdict.hold { border-color: color-mix(in srgb, var(--term-cyan) 45%, transparent); }
+.lmx-verdict.hold > b { color: var(--term-cyan); }
+.lmx-verdict.block { border-color: var(--warn-line); background: var(--warn-soft); }
+.lmx-verdict.block > b { color: var(--warn); }
+.lmx-verdict.halt { border-color: var(--down-line); background: var(--down-soft); }
+.lmx-verdict.halt > b { color: var(--down); }
+.lmx ul.lmx-ilist { gap: 6px; }
+.lmx-ilist li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 2px 10px; line-height: 1.55; }
+.lmx-ilist li.warn { color: var(--warn); }
+.lmx-ilist li.bad { color: var(--down); }
+.lmx-ik { color: var(--muted); font-size: var(--t-xs); padding-top: 1px; }
+.lmx-gate > p.lmx-sub { margin: 0; }
+
+/* 포지션 */
+.lmx-pos { display: grid; gap: 6px; min-width: 0; }
+.lmx-empty { padding: 12px 14px; border-radius: var(--r-md); border: 1px dashed var(--line-2); }
+.lmx-empty b { font-size: var(--t-md); }
+.lmx-empty p { margin: 0; color: var(--ink-2); font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.lmx-phead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.lmx-pcoin { font-size: var(--t-xl); line-height: 1.2; }
+.lmx-kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; margin: 4px 0 0; font-size: var(--t-sm); }
+.lmx-kv dt { color: var(--muted); }
+.lmx-kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.lmx-kv dd.up, .lmx-kv span.up { color: var(--up); }
+.lmx-kv span.down, .lmx-kv dd.down { color: var(--down); }
+.lmx-kv dd.warn { color: var(--warn); }
+.lmx-pos > p.lmx-sub { margin: 4px 0 0; }
+
+/* ---------------------------------------------------------------- 최근 48시간 */
+.lmx ul.lmx-flist { gap: 0; }
+.lmx-frow { display: grid; grid-template-columns: max-content minmax(0, 1fr) auto; gap: 3px 10px; align-items: center; padding: 7px 8px;
+  border-bottom: 1px solid var(--line); border-left: 3px solid transparent; }
+.lmx-frow:last-child { border-bottom: 0; }
+.lmx-frow .pp { justify-self: end; white-space: normal; }
+.lmx-fhead { min-width: 0; overflow-wrap: anywhere; font-size: var(--t-sm); }
+.lmx-why { grid-column: 2 / -1; min-width: 0; }
+.lmx-frow.entry, .lmx-frow.exit { border-left-color: var(--accent); }
+.lmx-frow.ladder { border-left-color: var(--term-cyan); }
+.lmx-frow.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.lmx-frow.warn.crit { border-left-color: var(--down); background: var(--down-soft); }
+.lmx-frow.start { border-left-color: var(--line-2); }
+
+/* ---------------------------------------------------------------- 성적 */
+.lmx-rec { grid-template-columns: max-content minmax(0, 1fr); }
+.lmx-rec dd { text-align: right; }
+.lmx-rec dd.up { color: var(--up); }
+.lmx-rec dd.down { color: var(--down); }
+.lmx ul.lmx-coins { gap: 0; }
+.lmx-crow { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 2px 10px; align-items: baseline; padding: 6px 0;
+  border-bottom: 1px solid var(--line); }
+.lmx-crow:last-child { border-bottom: 0; }
+.lmx-crow > small { grid-column: 2 / -1; }
+.lmx-crow.zero { opacity: .55; }
+.lmx-crow.small { opacity: .8; }
+.lmx-crow b.up { color: var(--up); }
+.lmx-crow b.down { color: var(--down); }
+.lmx-btab { display: grid; min-width: 0; font-size: var(--t-sm); }
+.lmx-btr { display: grid; grid-template-columns: 56px 110px 90px minmax(0, 1fr) minmax(0, 1fr); gap: 4px 10px; align-items: baseline;
+  padding: 7px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.lmx-btr > * { min-width: 0; overflow-wrap: anywhere; }
+.lmx-btr .num { white-space: normal; }
+.lmx-btr .ref { color: var(--ink-2); font-style: italic; }
+.lmx-bth { color: var(--muted); font-size: var(--t-xs); }
+.lmx-btr.small > :nth-child(n+4) { opacity: .8; }
+.lmx ul.lmx-tlist { gap: 0; }
+.lmx-trow { display: grid; gap: 4px; padding: 9px 0 9px 8px; border-bottom: 1px solid var(--line); border-left: 3px solid var(--line-2); min-width: 0; }
+.lmx-trow:last-child { border-bottom: 0; }
+.lmx-trow.win { border-left-color: var(--up); }
+.lmx-trow.loss { border-left-color: var(--down); }
+.lmx-ttop { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.lmx-tpnl { margin-left: auto; }
+.lmx-tpnl.up { color: var(--up); }
+.lmx-tpnl.down { color: var(--down); }
+.lmx-tmeta { color: var(--ink-2); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.lmx-ctab { display: grid; min-width: 0; margin-top: 10px; font-size: var(--t-sm); }
+.lmx-ctr { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, minmax(0, 1fr)); gap: 4px 8px; align-items: baseline; padding: 6px 0;
+  border-bottom: 1px solid var(--line); min-width: 0; }
+.lmx-ctr > * { min-width: 0; overflow-wrap: anywhere; }
+.lmx-ctr > :not(:first-child) { text-align: right; }
+.lmx-cth { color: var(--muted); font-size: var(--t-xs); }
+.lmx-ctr.off { opacity: .55; }
+
+@media (max-width: 760px) {
+  .lmx-btr { grid-template-columns: 48px repeat(2, minmax(0, 1fr)); }
+  .lmx-btr > :nth-child(n+4) { grid-column: 2 / -1; }
+  .lmx-bth { display: none; }
+}
+@media (max-width: 640px) {
+  .lmx-bot { padding: 14px 12px; }
+  .lmx-orb { width: 38px; height: 38px; }
+  .lmx-orb > i { width: 12px; height: 12px; }
+  .lmx-bname { font-size: var(--t-lg); }
+  .lmx-money { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lmx-tv { font-size: var(--t-lg); }
+  .lmx-frow { grid-template-columns: minmax(0, 1fr) auto; }
+  .lmx-frow > .lmx-t { grid-column: 1 / -1; }
+  .lmx-why { grid-column: 1 / -1; }
+  .lmx-ctr { grid-template-columns: 44px repeat(4, minmax(0, 1fr)); font-size: var(--t-xs); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lmx-bot.run .lmx-orb > i { animation: none; }
+  .lmx-meter > i { transition: none; }
+}

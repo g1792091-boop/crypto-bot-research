@@ -982,13 +982,19 @@ def test_the_screens_in_node(w4, answers, tmp_path):
                 s4=a4["build"], t4=a4["trades"], f4=a4["safety"], c4=a4["costs"], p4=a4["perf"], now=a4["now"])
     three, four = out["three"], out["four"]
     for k, t in three.items():                             # not installed: nothing of it anywhere
-        assert "WOO X Pro 2" not in str(t), k
-    assert three["reactors"] == 3 and "four" not in three["deck"].split() and "three" in three["deck"].split()
+        if k != "hq":
+            assert "WOO X Pro 2" not in str(t), k
+    # 한눈에: the four live accounts always (owners 10-25 night): WOO X Pro 2 is the mix bot's card (친구 30분 봇(믹스)), never
+    # the old executor's while the server does not have it
+    assert three["reactors"] == 4 and {"three", "four"} <= set(three["deck"].split()) and "five" not in three["deck"].split()
+    assert "WOO X Pro 2 진짜 돈 봇 친구 30분 봇(믹스) 스스로 매매" in three["hq"] and "친구 매매법" not in three["hq"]
     ids = out["ids4"]
     assert ids[:4] == [["bybit", "mexc", "deepcoin", "wooxpro2"]] * 4
     assert ids[4] == ["paper", "paper2", "bybit", "mexc", "deepcoin", "wooxpro2"] and ids[5][-1] == "wooxpro2"
     assert ids[6] == "바이비트 · WOO X Pro · 딥코인 · WOO X Pro 2" and ids[7] == "여섯 계좌" and ids[8:] == ["네", "세", "두"]
-    assert four["reactors"] == 4 and {"three", "four"} <= set(four["deck"].split())
+    # the old '친구 매매법' executor keeps its reactor while the server has it, next to the mix bot's card
+    assert four["reactors"] == 5 and {"three", "four", "five"} <= set(four["deck"].split())
+    assert four["hq"].count("WOO X Pro 2 진짜 돈 봇") == 2 and "친구 30분 봇(믹스)" in four["hq"]
     assert "WOO X Pro 2 $" in four["real"] and "WOO X Pro 2 $" in four["band"]
     assert "바이비트 · WOO X Pro · 딥코인 · WOO X Pro 2" in four["hq"]
     assert "WOO X Pro 2" in four["trades"]                               # its table is a choice

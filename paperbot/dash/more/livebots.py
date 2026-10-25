@@ -392,9 +392,11 @@ RISK_KEYS = ("max_consecutive_losses", "max_drawdown_pct", "daily_max_loss_usd",
              "max_notional_usd", "allowed_symbols", "kill_file")
 
 
-def risk_limits(risk: dict, budget: Any = None) -> list:
+def risk_limits(risk: dict, budget: Any = None, size_from: Any = "paper") -> list:
     """The limits a config REALLY has, in the owners' words, in a fixed order; a limit the config does not set is left out
-    (owners 10/19: the $40 daily limit and the wallet check were taken out, so they must not show up as if they held)."""
+    (owners 10/19: the $40 daily limit and the wallet check were taken out, so they must not show up as if they held).
+    An executor sized from its balance (``size_from`` "equity", owners 10-25 night) never cuts an entry for its stop, so
+    its risk.max_loss_frac is left out too."""
     out = []
     v = _i(risk.get("max_consecutive_losses"))
     if v:
@@ -406,7 +408,7 @@ def risk_limits(risk: dict, budget: Any = None) -> list:
     if v:
         out.append({"key": "daily_max_loss_usd", "value": v, "ko": f"하루 ${v:,.0f} 잃으면 멈춤", "what_ko": "하루 손실"})
     v = _f(risk.get("max_loss_frac"))
-    if v:
+    if v and size_from != "equity":
         out.append({"key": "max_loss_frac", "value": v, "ko": f"손절 한 번에 잔고의 최대 {round(v * 100)}%", "what_ko": "손절 한 번"})
     v = _i(risk.get("max_leverage"))
     if v:
@@ -424,9 +426,33 @@ def risk_limits(risk: dict, budget: Any = None) -> list:
     return out
 
 
+def size_ko(cfg: Optional[dict]) -> str:
+    """How an executor sizes its entries, in the owners' words (executor.ExecConfig ``size_from``): "equity" (owners 10-25
+    night: each entry's margin = ``margin_frac`` of the live balance; qty_scale stays in the file, unused for size) "진입할
+    때마다 실거래 잔고의 40%를 증거금으로", else "paper" "실거래 크기 = 페이퍼 수량 × 0.1" (its qty_scale)."""
+    c = cfg or {}
+    if c.get("size_from") == "equity":
+        mf = _f(c.get("margin_frac"))
+        return f"진입할 때마다 실거래 잔고의 {mf:.0%}를 증거금으로" if mf else "진입할 때마다 실거래 잔고로 증거금을 정해요 (margin_frac 없음)"
+    qs = _f(c.get("qty_scale"))
+    return f"실거래 크기 = 페이퍼 수량 × {qs:g}" if qs is not None else "실거래 크기 = 페이퍼 수량 × (qty_scale 없음)"
+
+
+def size_scale(cfg: Optional[dict], live_qty: Any = None, paper_qty: Any = None) -> Optional[float]:
+    """The factor a paper trade's P&L is multiplied by to set it next to the live trade that followed it: the config's
+    qty_scale (size_from "paper"); for size_from "equity" (qty_scale unused for size) that trade's own live qty / paper qty
+    (both rows carry ``qty``). None when it cannot be told (never a made-up 1)."""
+    c = cfg or {}
+    if c.get("size_from") == "equity":
+        lq, pq = _f(live_qty), _f(paper_qty)
+        return lq / pq if lq and pq else None
+    return _f(c.get("qty_scale")) or None
+
+
 def read_config(path: str) -> dict:
     """The few settings this page needs from an executor config: account, paper_db, db, exchange, mode, the light, the
-    size ratio, the risk limits it really has, the kill file. Nothing else of the file is passed on."""
+    size ratio (and how it sizes: ``size_from`` / ``margin_frac``, size_ko), the risk limits it really has, the kill file.
+    Nothing else of the file is passed on."""
     try:
         with open(path, encoding="utf-8") as fh:
             raw = json.load(fh)
@@ -453,8 +479,10 @@ def read_config(path: str) -> dict:
            "signal_light_n": LIGHT_N_DEFAULT if n is None else n,
            "signal_light_min_win": LIGHT_MIN_DEFAULT if mw is None else mw,
            "qty_scale": _f(raw.get("qty_scale")), "budget_usd": _f(raw.get("budget_usd")),
+           "size_from": raw.get("size_from") if isinstance(raw.get("size_from"), str) else "paper",
+           "margin_frac": _f(raw.get("margin_frac")),
            "max_consecutive_losses": _i(risk.get("max_consecutive_losses")),
-           "limits": risk_limits(risk, raw.get("budget_usd")), "kill_file": None}
+           "limits": risk_limits(risk, raw.get("budget_usd"), raw.get("size_from")), "kill_file": None}
     if kill:
         try:
             present = os.path.exists(kill)
@@ -463,6 +491,7 @@ def read_config(path: str) -> dict:
         out["kill_file"] = {"path": kill, "present": present}
     if isinstance(raw.get("label"), str) and raw["label"].strip():     # its own name (owners 10-24); else nothing new
         out["label"] = raw["label"].strip()
+    out["size_ko"] = size_ko(out)
     return out
 
 
@@ -2095,9 +2124,10 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                     cells[x["id"]] = {"state": "unknown"}
                 elif lk is not None:
                     lt = live_by[x["id"]][lk]
+                    sc = size_scale(x["config"], lt.get("qty"), t.get("qty"))      # size_from "equity": this trade's own ratio
                     cells[x["id"]] = {"state": "matched", "key": lt["key"], "pnl": lt["pnl"], "est": lt["est"], "entry_price": lt["entry_price"],
                                       "slip": (lt["side"] * (t["entry_price"] - lt["entry_price"]) / t["entry_price"]) if t.get("entry_price") and lt.get("entry_price") else None,
-                                      "diff": (lt["pnl"] - t["pnl"] * (x["config"].get("qty_scale") or 0)) if lt.get("pnl") is not None and x["config"].get("qty_scale") else None}
+                                      "diff": (lt["pnl"] - t["pnl"] * sc) if lt.get("pnl") is not None and t.get("pnl") is not None and sc else None}
                 elif not followed_at(x, path, t.get("entry_time")):
                     other = next((o for o in bots if LP.same(o["path"], LP.paper_at(x["segs"], t.get("entry_time")))), None)
                     cells[x["id"]] = other_cell(x, (other or {}).get("short_ko") or None)
@@ -2132,7 +2162,7 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
             # the paper's reason in its own bot's words (a TIME of the trend bot's supervisor or of a hold limit)
             words = exit_words(reason, cfg_of(_paper_of(x, pt["paper_path"])), pt.get("exit_why")) \
                 if pt and reason == pt["exit_reason"] else EXIT_KO.get(reason, reason)
-            scale = x["config"].get("qty_scale")
+            scale = size_scale(x["config"], t.get("qty"), pt.get("qty") if pt else None)     # size_from "equity": this trade's own
             slip = (t["side"] * (pt["entry_price"] - t["entry_price"]) / pt["entry_price"]) if pt and pt.get("entry_price") and t.get("entry_price") else None
             rows.append({**{k: t.get(k) for k in ("key", "symbol", "side", "qty", "leverage", "entry_price", "pnl", "roe", "margin", "est",
                                                    "commission", "funding", "slippage", "stop_initial", "stop_final", "exit_raw")},
@@ -2142,6 +2172,8 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                                                              "strategy_id", "timeframe", "fees", "funding", "qty")}
                                    | ({"paper_id": bot_id(bots, pt["paper_path"])} if len(bots) > 1 else {}) if pt else None),
                          "paper_scaled": pt["pnl"] * scale if pt and pt.get("pnl") is not None and scale else None,
+                         # a size_from "equity" trade's own factor (live qty / paper qty); "paper": the account's qty_scale
+                         "size_scale": scale if x["config"].get("size_from") == "equity" else None,
                          "diff": (t["pnl"] - pt["pnl"] * scale) if pt and pt.get("pnl") is not None and t.get("pnl") is not None and scale else None,
                          "slip_vs_paper": slip, "gap_ms": abs(pt["entry_time"] - t["paper_time"]) if pt and t.get("paper_time") is not None else None,
                          "strategy_id": pt.get("strategy_id") if pt else None, "timeframe": pt.get("timeframe") if pt else None,
@@ -2151,7 +2183,9 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                          # 진입 근거: the paper entry this trade followed (dash/more/livewhy.py)
                          "why": {"bot": bot_id(bots, pt["paper_path"]), "symbol": pt["symbol"], "entry": pt["entry_time"]}
                          if pt and pt.get("entry_time") is not None and bot_id(bots, pt["paper_path"]) else None})
-        out[x["id"]] = {"state": "ok", "rows": rows, "n": len(r.get("trades") or []), "qty_scale": x["config"].get("qty_scale")}
+        out[x["id"]] = {"state": "ok", "rows": rows, "n": len(r.get("trades") or []), "qty_scale": x["config"].get("qty_scale"),
+                        "size_from": x["config"].get("size_from") or "paper", "margin_frac": x["config"].get("margin_frac"),
+                        "size_ko": size_ko(x["config"])}
     return {"now_ms": now, "accts": out, "match_ms": MATCH_MS, "combo_state": combo.get("state"), "members_n": len(members),
             "cards": {**{k: cards.get(k) for k in ("state", "reason_ko", "reason", "path")}, "n": len(card_by),
                       "kinds": [{"id": k, "ko": ko, "tone": tone} for k, ko, tone in CARD_KINDS]},
@@ -2952,6 +2986,7 @@ def costs(p: dict, now: int) -> dict:
                     m = missed.setdefault(k, {"kind": k, "ko": cell.get("why_ko") or k, "n": 0})
                     m["n"] += 1
         out[ex] = {"state": "ok", "n": len(rows), "matched": len(matched), "qty_scale": a.get("qty_scale"),
+                   "size_from": a.get("size_from") or "paper", "margin_frac": a.get("margin_frac"), "size_ko": a.get("size_ko"),
                    "slip_avg": sum(slips) / len(slips) if slips else None, "slip_worst": min(slips) if slips else None,
                    "fees": sum(fees) if fees else None, "funding": sum(fund) if fund else None,
                    "diff_total": sum(diffs) if diffs else None, "diff_avg": sum(diffs) / len(diffs) if diffs else None,

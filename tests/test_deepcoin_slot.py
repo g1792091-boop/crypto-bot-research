@@ -266,16 +266,20 @@ def test_the_screens_in_node(w3, answers, tmp_path):
                 s3=a3["build"], t3=a3["trades"], f3=a3["safety"], c3=a3["costs"], p3=a3["perf"], now=a3["now"])
     two, three = out["two"], out["three"]
     for k, t in two.items():                              # not installed: nothing of it anywhere, as before
-        assert "딥코인" not in str(t), k
-    assert two["reactors"] == 2 and "three" not in two["deck"].split()
+        if k != "hq":
+            assert "딥코인" not in str(t), k
+    # 한눈에 shows the four live accounts always (owners 10-25 night): 딥코인 as 설치 전 (no number), WOO X Pro 2 the mix bot's
+    assert two["reactors"] == 4 and {"three", "four"} <= set(two["deck"].split()) and "five" not in two["deck"].split()
+    assert "딥코인 진짜 돈 봇 VWAP 개선판 따라갈 실행기 (paperbot-executor-deepcoin) 설치 전" in two["hq"]
+    assert "WOO X Pro 2 진짜 돈 봇 친구 30분 봇(믹스)" in two["hq"] and "딥코인 $" not in two["hq"]
     assert out["ids2"] == [["bybit", "mexc"]] * 3 + [["paper", "bybit", "mexc"]] * 2
     assert out["ids3"][:4] == [["bybit", "mexc", "deepcoin"]] * 4
     assert out["ids3"][4] == ["paper", "paper2", "bybit", "mexc", "deepcoin"] and out["ids3"][5][-1] == "deepcoin"
     assert out["ids3"][6] == "바이비트 · WOO X Pro · 딥코인" and out["ids3"][7] == "다섯 계좌"
     assert re.search(r"딥코인 \$98\.\d\d · 포지션 0/1·0/1·1/1", three["real"]), three["real"]
     assert "딥코인 $98." in three["band"] and "D 근거 쌓는 중 7/20" in three["band"]
-    assert three["reactors"] == 3 and "three" in three["deck"].split()
-    assert "바이비트 · WOO X Pro · 딥코인" in three["hq"]
+    assert three["reactors"] == 4 and "three" in three["deck"].split() and "설치 전" not in three["hq"]   # its own card, the mix bot's
+    assert "바이비트 · WOO X Pro · 딥코인" in three["hq"] and "딥코인 진짜 돈 봇 VWAP 개선판 따라감" in three["hq"]
     assert "WOO X Pro 딥코인" in three["trades"]                        # its table is a choice
     assert "딥코인 deepcoin · mainnet" in three["safety"] and "실행기 세 개" in three["safety"]
     assert three["costCards"] >= 1 and "딥코인 실거래 · 진짜 돈" in three["cost"] and "딥코인 API 문서의 요율 조회 예시(Lv1)" in three["cost"]
@@ -285,7 +289,7 @@ def test_the_screens_in_node(w3, answers, tmp_path):
     assert out["josa"] == ["딥코인이", "바이비트·WOO X Pro가", "딥코인은", "WOO X Pro는"]
     late = out["late"]
     assert "딥코인" not in late["bandBefore"] and "딥코인 $98." in late["band"]
-    assert late["reactors0"] == 2 and late["reactors"] == 3 and "three" in late["deck"].split()
+    assert late["reactors0"] == 4 and late["reactors"] == 4 and "three" in late["deck"].split()       # 설치 전 → its own card
 
 
 def test_the_house_rules_of_the_third_slot():

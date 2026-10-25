@@ -188,7 +188,9 @@ export function settingsView(ctx) {
       return h("div", {class: "lb-light"}, h("b", null, x.name_ko),
         x.follows_ko ? h("p", {class: "note"}, `따라가는 페이퍼 봇: ${x.follows_ko}`) : null,
         h("p", {class: "lb-lline"}, c.signal_light_n ? `신호등: 페이퍼 최근 ${fmt.int(c.signal_light_n)}번 중 ${pctOf(c.signal_light_min_win)} 이상 이겼을 때만 새 진입을 따라감` : "신호등 꺼짐: 모든 진입을 따라감"),
-        h("p", {class: "note"}, `크기 비율 ×${c.qty_scale == null ? "—" : fmt.num(c.qty_scale, 2)} (페이퍼 수량 × 이 비율)`),
+        // size_from "equity" (owners 10/25 night): each entry's margin from the live balance; qty_scale stays in the file, unused
+        h("p", {class: "note"}, c.size_from === "equity" ? `${c.size_ko || "진입할 때마다 실거래 잔고로 증거금을 정해요"} (설정의 크기 비율 qty_scale은 크기에 안 써요)`
+          : `크기 비율 ×${c.qty_scale == null ? "—" : fmt.num(c.qty_scale, 2)} (페이퍼 수량 × 이 비율)`),
         c.limits && c.limits.length ? h("ul", {class: "lb-limits"}, c.limits.map((l) => h("li", {title: l.what_ko}, h("b", null, l.ko)))) : ui.note("적힌 위험 한도 없음"));
     }));
   }

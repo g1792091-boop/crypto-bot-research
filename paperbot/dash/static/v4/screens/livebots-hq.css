@@ -103,6 +103,32 @@
 @media (min-width: 900px) {
   .lbh-deck.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+/* the four live accounts always (owners 10/25 night), in one order whatever came first: 바이비트 · WOO X Pro · 딥코인 (its
+   설치 전 card until the executor comes) · WOO X Pro 2 (친구 30분 봇(믹스)) · the old '친구 매매법' executor of WOO X Pro 2
+   while the server has it (five: the fifth wraps under them; a very wide screen keeps the five in a row) */
+.lbh-deck > .lbh-x-bybit { order: 1; }
+.lbh-deck > .lbh-x-mexc { order: 2; }
+.lbh-deck > .lbh-x-deepcoin { order: 3; }
+.lbh-deck > .lbh-mix { order: 4; }
+.lbh-deck > .lbh-x-wooxpro2:not(.lbh-mix) { order: 5; }
+@media (min-width: 1400px) {
+  .lbh-deck.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+/* the 봇 line under the account's name: which bot the card is or follows (the three ways never mixed up) */
+.lbh-who { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 6px; margin: 0; text-align: center;
+  font-size: var(--t-xs); color: var(--ink-2); }
+.lbh-who:empty { display: none; }
+.lbh-whok { padding: 0 6px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--rc) 55%, var(--line)); color: var(--rc);
+  font: 700 var(--t-2xs)/1.6 var(--f-term); }
+.lbh-who > b { color: var(--ink); font-weight: 800; overflow-wrap: anywhere; }
+.lbh-whos { flex-basis: 100%; color: var(--muted); font-size: var(--t-2xs); }
+/* 딥코인 before its executor is installed: dashed, the ring empty, no number */
+.lbh-soon { border-style: dashed; background: var(--surface); }
+.lbh-soon .lbh-core { opacity: .55; }
+.lbh-soon .lbh-kvs { display: none; }
+.lbh-mlink { margin: 0; text-align: center; font-size: var(--t-xs); }
+.lbh-mlink:empty { display: none; }
+.lbh-mlink a { color: var(--accent); }
 
 /* a reactor (one executor) */
 .lbh-reactor { position: relative; display: grid; gap: 8px; align-content: start; justify-items: center; min-width: 0; padding: 12px 10px;
@@ -155,7 +181,7 @@
 .lbh-mult:empty { display: none; }
 .lbh-mult.up { background: var(--up-soft); color: var(--up); }
 .lbh-mult.down { background: var(--down-soft); color: var(--down); }
-.lbh-delta { text-align: center; font-size: var(--t-2xs); color: var(--muted); overflow-wrap: anywhere; }
+.lbh-delta, .lbh-delta.num { text-align: center; font-size: var(--t-2xs); color: var(--muted); overflow-wrap: anywhere; white-space: normal; }   /* the friend card's line is long: it wraps on a phone (.num keeps one line) */
 .lbh-delta:empty { display: none; }
 @media (min-width: 560px) { .lbh-wal { font-size: var(--t-xl); } }
 @media (min-width: 1200px) { .lbh-wal { font-size: calc(38px * var(--ts)); } .lbh-wal.unk { font-size: var(--t-md); } }
