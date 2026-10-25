@@ -23,8 +23,8 @@ positions are "pieces"). Sides BUY_OPEN / SELL_OPEN / BUY_CLOSE / SELL_CLOSE; a 
 priceType MARKET (matched at the latest price x (1 +- 5 %)); a stop is type STOP with stopPrice; every order carries a
 newClientOrderId ("a unique id among open orders"). Also read, as data and not as authority: ccxt's toobit.js (the
 market-order shape, the signing, the answers' field shapes: the fills' own realizedPnl and commission, the positions,
-a cancel answered with the order's status; ccxt maps a reduce-only buy to SELL_CLOSE, the other way round from the docs'
-words: see "What only a live run can confirm").
+a cancel answered with the order's status; ccxt maps a reduce-only buy to BUY_CLOSE and a reduce-only sell to
+SELL_CLOSE, as the docs and this client do (review 10-25): see "What only a live run can confirm").
 
 The client answers in the SAME shapes the executor reads from the Binance client (paperbot/testnet.py), like
 paperbot/deepcoin.py, so the executor, the stop protocol (place_stop / move_stop / live_stops / covers) and livepnl run
@@ -130,7 +130,7 @@ the raw values and the drill compares the position's own value (positionValue, U
 price. A coin whose cached status is not TRADING is read again in leverage() before an entry.
 
 What only a live run can confirm (docs/toobit-ko.md "drill이 확인할 것"; the drill checks each): the side words (the
-docs: SELL_CLOSE sells to close a long, BUY_CLOSE buys to close a short; ccxt maps them the other way round; a CLOSE
+docs and ccxt: SELL_CLOSE sells to close a long, BUY_CLOSE buys to close a short; a CLOSE
 side can never open, so a wrong reading is refused, never a flip: every run closes half of its position with one, on
 each side); the size units (the position's value against contracts x multiplier x price); a plain market order (LIMIT +
 MARKET) filling fully; two reduce-only STOP orders resting at once (the stop protocol needs it for a moment: new stop ->
@@ -370,6 +370,20 @@ def bn(symbol_id) -> str:
     s = str(symbol_id or "")
     tail = f"{SWAP}{SETTLE}"
     return s[:-len(tail)] + SETTLE if s.endswith(tail) and len(s) > len(tail) else ""
+
+
+def _plain_or_other(row: dict, raw: str) -> Optional[str]:
+    """A position row whose name is not BTC-SWAP-USDT style (review 10-25: other Toobit answers use the plain BTCUSDT,
+    and one of those read as flat would leave a filled entry without its stop): the plain USDT name -> BTCUSDT; a row
+    that is clearly another product (the coin-margined BTC-SWAP, another settle coin) -> None (skipped); anything else
+    -> TransientError, never "no position"."""
+    up = raw.upper()
+    if up.isalnum() and up.endswith(SETTLE) and len(up) > len(SETTLE):
+        return up
+    margin = str(row.get("marginToken") or row.get("settleAsset") or row.get("quoteAsset") or "").upper()
+    if (margin and margin != SETTLE) or (raw and SWAP.rstrip("-") in up and not up.endswith(SETTLE)):
+        return None
+    raise TransientError(200, None, f"포지션 줄의 코인 이름을 읽지 못했습니다(symbol {raw!r}): 포지션 없음으로 읽지 않습니다")
 
 
 def to_ms(v, what: str = "time") -> int:
@@ -1953,8 +1967,11 @@ class ToobitClient:
         out, unread = [], []
         for r in self._open_stops(symbol):
             try:
-                if str(r.get("status") or "").upper() in STOP_ENDED:
+                st = str(r.get("status") or "").upper()
+                if st in STOP_ENDED:
                     continue
+                if st and st not in STOP_RESTING:          # review 10-25: a status we do not know never covers
+                    raise TransientError(200, None, f"손절 목록 줄 {r.get('orderId')}의 상태 {st!r}를 모릅니다")
                 out.append(self._algo_dict(r, symbol))
             except TransientError as e:
                 unread.append((r, e))
@@ -2001,8 +2018,13 @@ class ToobitClient:
         rows = self._rows(self.req("GET", FUT + "/positions", p, limit_key="positions"), "포지션")
         out, per = [], {}
         for r in rows:
-            sym = bn(r.get("symbol"))
-            if not sym or (symbol and sym != symbol):
+            raw = str(r.get("symbol") or "").strip()
+            sym = bn(raw)
+            if not sym:
+                sym = _plain_or_other(r, raw)          # a row never reads as "flat" from a name we do not know
+                if sym is None:
+                    continue
+            if symbol and sym != symbol:
                 continue
             amt = _dec(r.get("position"), "position")
             if amt == 0:
@@ -2012,7 +2034,7 @@ class ToobitClient:
                 raise TransientError(200, None, f"{sym}: 포지션 방향이 이상합니다(side {r.get('side')!r}, 수량 "
                                                 f"{r.get('position')!r})")
             per.setdefault(sym, []).append(side)
-            out.append(r)
+            out.append({**r, "tbSym": sym})                    # the name as read (a plain BTCUSDT row too)
         many = sorted(s for s, sides in per.items() if len(sides) > 1)
         if many:
             err = TransientError(200, None, f"{', '.join(many)}: 한 코인에 포지션이 둘 이상입니다(롱·숏 동시: 단방향이 아님)")
@@ -2042,7 +2064,7 @@ class ToobitClient:
     def positions(self) -> list:
         by: dict = {}
         for r in self._position_rows(None):
-            by.setdefault(bn(r.get("symbol")), []).append(r)
+            by.setdefault(r["tbSym"], []).append(r)
         out = [self._position_dict(s, rs) for s, rs in by.items() if s]
         return [p for p in out if float(p["positionAmt"]) != 0]
 
@@ -2261,6 +2283,8 @@ def reconcile(c: ToobitClient, symbol: str, stop_price: Optional[float] = None) 
     return out
 
 
+WALLET_SWING = 0.02          # the drill's wallet check needs the unrealized P&L to move this much (USDT) ...
+WALLET_STILL = 0.005         # ... while the wallet moves at most this (a funding payment on a tiny size is far below)
 pace = DC.pace                                             # the drill's requests at least DRILL_MIN_GAP_S apart
 trigger_source = DC.trigger_source
 row_text = DC.row_text
@@ -2299,6 +2323,32 @@ class ToobitDrill:
     fee_api: Optional[dict] = None
     entry_sent: bool = False                               # set just before the cycle's entry goes out: from then on a
     entry_qty: float = 0.0                                 # stop part-way cleans up what the drill made (leave_flat)
+    fire_seen: bool = False                                # review 10-25: a STOP seen firing (TRIGGERED, then flat);
+                                                           # without it the drill never ends "모두 [OK]"
+    wallet_seen: list = field(default_factory=list)        # (wallet, unrealized) read while the trigger test waits
+
+    def _sample_wallet(self, s: str) -> None:
+        """Review 10-25: while the trigger test waits with a position, the price moves and the wallet must not move with
+        it (``balance`` never holds the unrealized P&L; the open step alone cannot tell on a tiny size)."""
+        try:
+            a = self.client.account()
+            p = self.client.position(s)
+        except TransientError:
+            return
+        if float(p["positionAmt"]) != 0:
+            self.wallet_seen.append((float(a["totalWalletBalance"]), _f(p.get("unRealizedProfit"))))
+
+    def _wallet_step(self) -> None:
+        xs = self.wallet_seen
+        name = "잔고에 미실현 손익이 섞이지 않음(손절을 기다리는 동안 가격이 움직여도 잔고는 그대로)"
+        swing = max((abs(u - xs[0][1]) for _, u in xs), default=0.0)
+        if len(xs) >= 2 and swing >= WALLET_SWING:
+            moved = max(abs(w - xs[0][0]) for w, _ in xs)
+            self._step(name, moved <= WALLET_STILL, {"reads": len(xs), "unrealized_swing": round(swing, 6),
+                                                     "wallet_moved": round(moved, 6)}, fatal=False)
+        else:
+            self._step(name, True, f"확인 못 함: 기다리는 동안 미실현 손익이 ${WALLET_SWING:g}만큼 움직이지 않았습니다"
+                       f"(읽음 {len(xs)}번). 작은 크기라 흔한 일입니다", fatal=False)
 
     def add(self, name: str, ok: bool, detail) -> None:
         row = {"step": name, "ok": bool(ok), "detail": detail}
@@ -2612,6 +2662,7 @@ class ToobitDrill:
         fired = None
         if self.trigger_test:
             fired = self._trigger_test(s, sell, amt, mv["stop"]["algoId"], spec)
+            self._wallet_step()
             if fired and fired.get("actualOrderId"):
                 mine.add(str(fired["actualOrderId"]))
         if float(c.position(s)["positionAmt"]) != 0:
@@ -2654,7 +2705,7 @@ class ToobitDrill:
             notional = n_in + n_out
             funding = sum(float(r["income"]) for r in c.income(s, "FUNDING_FEE", t0 - 5_000, t1 + 5_000))
             tol = max(0.02, 2e-4 * notional)
-            ok = (abs(realized - by_fills) <= max(1e-6, 1e-7 * notional) and fees > 0
+            ok = (abs(realized - by_fills) <= max(1e-4 * max(1, len(outs)), 1e-7 * notional) and fees > 0   # rounding
                   and all(f.get("realizedSource") == "pnl" and f.get("realizedCheck") == "ok" for f in outs)
                   and abs((w2 - w0) - (realized - fees + funding)) <= tol)
             fee_in = sum(float(f["commission"]) for f in ins)
@@ -2687,8 +2738,9 @@ class ToobitDrill:
         """The stop moved to TRIGGER_GAP from the last price (on the losing side) and left to fire for real: the
         position must close by itself, and the stop must read as fired. The last and the mark price are watched while
         waiting: which one crossed the level says which price fired it. Not reached in time: noted (not a failure), and
-        the cycle closes the position itself."""
+        the cycle closes the position itself (and the drill's last line says the fire is still to be seen)."""
         c = self.client
+        self._sample_wallet(s)                             # the wallet and unrealized P&L before the price moves
         entry = float(c.position(s)["entryPrice"] or 0)
         start = self.elapsed()
         last = c.price(s)
@@ -2700,9 +2752,11 @@ class ToobitDrill:
         while entry and self.side * (last - entry * (1 + self.side * PROFIT_GAP)) < 0 \
                 and self.elapsed() - start < min(PROFIT_WAIT_S, self.trigger_wait_s):
             self.wait(5.0)
+            self._sample_wallet(s)
             self._waiting(start, shown, "이익 쪽 손절 시험")
             if float(c.position(s)["positionAmt"]) == 0:    # the earlier stop fired while waiting: that is the test
                 got = self._fired(stop_id)
+                self.fire_seen = got.get("algoStatus") == "TRIGGERED"
                 self._step("손절 발동 시험: 가격이 닿자 투비트가 포지션을 스스로 닫음", got.get("algoStatus") == "TRIGGERED",
                            {"status": got.get("algoStatus"), "tbStatus": got.get("tbStatus"),
                             "actualOrderId": got.get("actualOrderId")}, fatal=False)
@@ -2740,6 +2794,7 @@ class ToobitDrill:
             if float(c.position(s)["positionAmt"]) == 0:
                 break
             self.wait(5.0)
+            self._sample_wallet(s)
             self._waiting(start, shown, "손절 발동 시험")
         flat = float(c.position(s)["positionAmt"]) == 0
         if not flat:
@@ -2748,6 +2803,7 @@ class ToobitDrill:
                        "이 시험만 다시 하려면 drill을 한 번 더 하세요", fatal=False)
             return None
         got = self._fired(sid)
+        self.fire_seen = got.get("algoStatus") == "TRIGGERED"
         self._step("손절 발동 시험: 가격이 닿자 투비트가 포지션을 스스로 닫음", got.get("algoStatus") == "TRIGGERED",
                    {"stop": level, "status": got.get("algoStatus"), "tbStatus": got.get("tbStatus"),
                     "actualOrderId": got.get("actualOrderId")}, fatal=False)
@@ -2939,6 +2995,11 @@ def run_drill(c: ToobitClient, d: ToobitDrill, cmd: str, confirmed: bool, pause=
     bad = [r["step"] for r in d.log if not r["ok"]]
     if d.say:
         text = "모두 [OK]" if ok else f"[FAIL] {len(bad)}개 — {', '.join(bad)}"
+        if orders and ok and not d.fire_seen:
+            # review 10-25: the only live proof that a resting STOP closes the position; the run's steps passed, the
+            # drill is not done
+            text = ("실행한 단계는 모두 [OK]이지만 손절 발동은 아직 못 봤습니다: 실행기를 켜기 전에 발동이 보일 때까지 "
+                    "drill을 한 번 더 하세요(--no-trigger-test 없이)")
         if orders:
             this, other = ("롱", "숏(--side short)") if d.side > 0 else ("숏", "롱(--side long)")
             text += f" (이번은 {this} 쪽입니다. {other}도 모두 [OK]여야 drill이 끝납니다)"

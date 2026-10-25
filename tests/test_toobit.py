@@ -733,8 +733,8 @@ def test_a_close_is_sent_again_only_once_its_absence_is_settled_and_sized_from_t
 
 
 def test_close_words_read_the_other_way_are_refused_never_a_flip():
-    """ccxt maps a reduce-only buy to SELL_CLOSE, the docs' words the other way: whichever is true, a CLOSE side never
-    opens a position, so a wrong reading is a refusal with the position unchanged (the drill's half close shows it)."""
+    """The docs and ccxt agree (SELL_CLOSE closes a long); were the exchange to read them the other way, a CLOSE side
+    never opens a position, so a wrong reading is a refusal with the position unchanged (the drill's half close shows it)."""
     c, fake, clock = make()
     fake.close_words = "swapped"
     ready(c)
@@ -1543,6 +1543,21 @@ def test_drill_check_and_order_cycle_with_the_trigger_test(own_fills, side, fami
     pnl = next(r for k, r in steps.items() if k.startswith("체결로 계산한 손익"))
     assert pnl["detail"]["fee_rate_pct"] == pytest.approx(0.06, abs=1e-3) and pnl["detail"]["check"] == ["ok"]
     assert steps["실제 수수료율 = 수수료율 API(진입·청산 테이커; 다르면 실제 값을 쓰세요)"]["ok"]
+    still = steps["잔고에 미실현 손익이 섞이지 않음(손절을 기다리는 동안 가격이 움직여도 잔고는 그대로)"]
+    assert still["ok"] and isinstance(still["detail"], dict) and still["detail"]["unrealized_swing"] >= TB.WALLET_SWING
+    assert d.fire_seen and fake.amt(DOGE) == 0 and not fake.stops(DOGE)
+
+
+def test_the_drill_catches_a_balance_that_holds_the_unrealized_pnl():
+    """Review 10-25: a ``balance`` that already holds the unrealized P&L passed the open step (equity = wallet + uPnL
+    by construction); the trigger wait sees the wallet move with the price."""
+    c, fake, clock = drill_world()
+    fake.balance_has_upnl = True
+    d = TB.ToobitDrill(c, symbol=DOGE, wait=trigger_wait(fake, clock, 1), trigger_wait_s=600,
+                       elapsed=lambda: clock.t / 1000)
+    assert not TB.run_drill(c, d, "drill", True, pause=lambda s: None)
+    bad = [r for r in d.log if not r["ok"]]
+    assert any(r["step"].startswith("잔고에 미실현 손익이 섞이지 않음") for r in bad), bad
     assert fake.amt(DOGE) == 0 and not fake.stops(DOGE)
 
 
@@ -1553,8 +1568,11 @@ def test_drill_prints_each_step_and_ends_flat_without_the_trigger_test():
                        say=lines.append)
     assert TB.run_drill(c, d, "drill", True, pause=lambda s: None), [r for r in d.log if not r["ok"]]
     assert len([x for x in lines if x.startswith("[OK]")]) == len(d.log)
-    assert lines[-1] == "끝: drill 모두 [OK] (이번은 롱 쪽입니다. 숏(--side short)도 모두 [OK]여야 drill이 끝납니다)"
-    assert fake.amt(DOGE) == 0 and not fake.stops(DOGE)
+    # no stop seen firing (review 10-25): the steps passed, the drill is not done
+    assert lines[-1] == ("끝: drill 실행한 단계는 모두 [OK]이지만 손절 발동은 아직 못 봤습니다: 실행기를 켜기 전에 발동이 보일 때까지 "
+                         "drill을 한 번 더 하세요(--no-trigger-test 없이) (이번은 롱 쪽입니다. 숏(--side short)도 모두 [OK]여야 "
+                         "drill이 끝납니다)")
+    assert not d.fire_seen and fake.amt(DOGE) == 0 and not fake.stops(DOGE)
 
 
 def test_the_drill_picks_a_coin_whose_contract_tells_the_units_apart():
@@ -2146,3 +2164,79 @@ def test_dataclass_fields_unchanged_for_other_exchanges():
     names = {f.name for f in dataclasses.fields(ExecConfig)}
     raw = json.loads((ROOT / "deploy" / "executor.live-toobit.json").read_text(encoding="utf-8"))
     assert set(raw) <= names
+
+
+# ================================================================ review 10-25: a position row's name never reads as flat
+def _rename_positions(fake, rename):
+    real = fake._route
+
+    def route(m, p, q):
+        st, raw, h = real(m, p, q)
+        if (m, p) == ("GET", "/api/v1/futures/positions") and st == 200:
+            rows = json.loads(raw)
+            for r in rows:
+                r["symbol"] = rename(r["symbol"])
+            raw = json.dumps(rows).encode()
+        return st, raw, h
+    fake._route = route
+
+
+def test_a_position_row_named_plainly_reads_and_an_unknown_name_is_an_error():
+    c, fake, clock = make()
+    ready(c)
+    c.market(BTC, "BUY", 5.0, client_id="pbE")
+    _rename_positions(fake, lambda s: s.replace("-SWAP-USDT", "USDT"))       # "BTCUSDT", as other answers name it
+    assert float(c.position(BTC)["positionAmt"]) == 5 and [p["symbol"] for p in c.positions()] == [BTC]
+    c2, fake2, _ = make()
+    ready(c2)
+    c2.market(BTC, "BUY", 5.0, client_id="pbE")
+    _rename_positions(fake2, lambda s: "BTC/USDT:PERP")                     # a name the client cannot place
+    with pytest.raises(TB.TransientError, match="코인 이름을 읽지 못했습니다"):
+        c2.position(BTC)
+    c3, fake3, _ = make()
+    ready(c3)
+    c3.market(BTC, "BUY", 5.0, client_id="pbE")
+    _rename_positions(fake3, lambda s: "BTC-SWAP")                          # the coin-margined product: not ours
+    assert float(c3.position(BTC)["positionAmt"]) == 0
+
+
+def test_a_filled_entry_without_a_readable_position_is_never_dropped(tmp_path):
+    """The entry's own record says FILLED but the position reads flat (a misread): the trade stays 'entering' (no new
+    entry, never 'not filled'), with a CRITICAL alert, instead of leaving a real position without its stop."""
+    w = World(tmp_path)
+    real = w.fake._route
+
+    def route(m, p, q):
+        st, raw, h = real(m, p, q)
+        if (m, p) == ("GET", "/api/v1/futures/positions") and st == 200:
+            raw = b"[]"
+        return st, raw, h
+    w.fake._route = route
+    w.paper(stop=95.0)
+    for _ in range(40):
+        w.loop()
+    assert w.fake.amt(BTC) == 5 and w.ex.trade is not None and w.ex.trade["status"] == "entering"
+    kinds = w.kinds()
+    assert "entry_filled_flat" in kinds and "recover" not in kinds and "entry_unfilled" not in kinds
+    assert any("포지션이 안 보입니다" in t for _, t in w.note.messages)
+
+
+def test_a_stop_row_with_a_status_we_do_not_know_never_covers_a_position():
+    c, fake, clock = make()
+    ready(c)
+    c.market(BTC, "BUY", 5.0, client_id="pbE")
+    TB.place_stop(c, BTC, "SELL", 95.0, 5.0)
+    assert len(c.open_algo_orders(BTC)) == 1
+    real = fake._route
+
+    def route(m, p, q):
+        st, raw, h = real(m, p, q)
+        if m == "GET" and p == "/api/v1/futures/openOrders" and st == 200:
+            rows = json.loads(raw)
+            for r in rows:
+                r["status"] = "ORDER_SOMETHING_NEW"
+            raw = json.dumps(rows).encode()
+        return st, raw, h
+    fake._route = route
+    with pytest.raises(TB.TransientError, match="상태"):
+        c.open_algo_orders(BTC)

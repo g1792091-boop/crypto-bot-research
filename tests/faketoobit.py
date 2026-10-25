@@ -32,6 +32,7 @@ Unknowns of the real exchange are switches:
 - ``pnl_net_of_fees``: a fill's realizedPnl net of its fee; ``unknown_ids``: "error" (-2013) or "empty" ({});
 - ``ticker_name``: "contract" (s = BTC-SWAP-USDT) or "plain" (BTCUSDT); ``lev_lag_ms``: accountLeverage lags a set;
 - ``oversize``: "refuse" (a close or a firing STOP bigger than the position is refused) or "cap";
+- ``balance_has_upnl``: ``balance`` holds the unrealized P&L too (review 10-25: the trigger wait must catch it);
 - ``balance_is_free``: ``balance`` is the wallet minus the position margin (a reading the drill must catch);
 - ``rate_limit``: (window ms, max requests): beyond it, 429.
 
@@ -143,6 +144,7 @@ class FakeToobit:
         self.lev_lag_ms = 0
         self.oversize = "refuse"
         self.balance_is_free = False
+        self.balance_has_upnl = False
         self.rate_limit = None
         self.states: dict = {}
         self.coverage: list = []                   # (call index, symbol, contracts, covered by a closing STOP)
@@ -457,7 +459,7 @@ class FakeToobit:
         if path == "/api/v1/futures/balance":
             mg = sum(self._margin(s, ps) for (s, ps) in self.pos)
             up = sum(self._upnl(s, ps) for (s, ps) in self.pos)
-            bal = self.wallet - (mg if self.balance_is_free else 0.0)
+            bal = self.wallet - (mg if self.balance_is_free else 0.0) + (up if self.balance_has_upnl else 0.0)
             return self._ok([{"asset": "USDT", "balance": f"{bal:.8f}",
                               "availableBalance": f"{self.wallet - mg + up:.8f}", "positionMargin": f"{mg:.8f}",
                               "orderMargin": "0", "crossUnRealizedPnl": "0"}])

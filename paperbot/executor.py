@@ -1832,6 +1832,16 @@ class Executor:
         young = self.now_ms() - int(t.get("entry_ts") or 0) < self.cfg.entry_unknown_s * 1000
         if o is not None and o.get("status") in FINAL_ORDER and float(o.get("executedQty") or 0) == 0:
             return False                                  # the exchange has it and it did not fill
+        if not young and o is not None and float(o.get("executedQty") or 0) > 0:
+            # its own record says it filled, yet no position reads: never dropped as "not filled" (a misread position
+            # would be left without its stop; review 10-25). Kept 'entering' (no new entry), told loudly now and then.
+            n = t["filled_flat"] = int(t.get("filled_flat") or 0) + 1
+            self._event(CRITICAL, "entry_filled_flat", f"{t['symbol']} 진입 주문은 체결({float(o['executedQty']):g})로 "
+                        "기록됐는데 포지션이 안 보입니다. 새 진입은 하지 않고 계속 확인합니다. 거래소 앱에서 포지션과 손절을 "
+                        "직접 확인하세요", {"key": t["key"], "status": o.get("status"), "n": n},
+                        notify=n in (1, 10, 100) or n % 1000 == 0)
+            self._save()
+            return True
         if young:
             self._event(INFO, "entry_wait", f"{t['symbol']} 진입 주문 결과를 기다립니다"
                         f"({'거래소에 없음' if o is None else o.get('status')}). 다시 보내지 않습니다",
