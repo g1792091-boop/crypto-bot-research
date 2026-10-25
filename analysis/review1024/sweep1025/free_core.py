@@ -178,3 +178,114 @@ def cand(Q, per_coin, coins):
         sd = np.asarray(per_coin(ci)); m = (sd != 0) & Q[ci]["keep"]
         ts.append(Q[ci]["T"][m]); cs.append(np.full(m.sum(), ci)); ss.append(sd[m]); ps.append(np.nan_to_num(np.abs(Q[ci]["r16"][m])))
     return np.concatenate(ts), np.concatenate(cs), np.concatenate(ss), np.concatenate(ps)
+
+
+@njit(cache=True)
+def seq_sim_pull(o, h, l, c, cst, cside, ct, csend, clev, wait, r, sv, tk, tv, lg, ll, ls, cost, margin, conf=False):
+    """as seq_sim, but after a signal wait up to ``wait`` minutes for the price to come back ``r`` against the signal
+    (from the signal minute's open); enter at market when it does (at the trigger, or at the open if it gaps past it),
+    skip the signal if it does not. Conservative: in the touch minute only the adverse side counts. ``conf``: the other
+    way round, enter once the price has gone ``r`` WITH the signal (a confirmation; the fill is the worse price)."""
+    n = len(cst)
+    TI = np.empty(n, np.int64); TW = np.empty(n, np.float64); TT = np.empty(n, np.int64); m = 0
+    free = -1
+    for i in range(n):
+        if ct[i] < free:
+            continue
+        es = cst[i]; e1 = csend[i]; sd = cside[i]
+        if es >= e1 - 2:
+            continue
+        ps = o[es]
+        if not (ps > 0):
+            continue
+        if conf:
+            trig = ps * (1 + r) if sd > 0 else ps * (1 - r)
+        else:
+            trig = ps * (1 - r) if sd > 0 else ps * (1 + r)
+        j0 = -1
+        for j in range(es, min(es + wait, e1 - 1)):
+            if conf:
+                if sd > 0 and h[j] >= trig:
+                    j0 = j; break
+                if sd < 0 and l[j] <= trig:
+                    j0 = j; break
+            else:
+                if sd > 0 and l[j] <= trig:
+                    j0 = j; break
+                if sd < 0 and h[j] >= trig:
+                    j0 = j; break
+        if j0 < 0:
+            continue
+        p0 = trig
+        if conf:
+            if sd > 0 and o[j0] > trig:
+                p0 = o[j0]
+            if sd < 0 and o[j0] < trig:
+                p0 = o[j0]
+        else:
+            if sd > 0 and o[j0] < trig:
+                p0 = o[j0]
+            if sd < 0 and o[j0] > trig:
+                p0 = o[j0]
+        L = clev[i]
+        dliq = 1.0 / L - 0.005
+        d = sv / L - cost
+        if d <= 0.0005:
+            d = 0.0005
+        liq = d >= dliq
+        if liq:
+            d = dliq
+        u = 1e9
+        if tk == 1:
+            u = tv / L + cost
+        g1 = lg / L + cost if lg > 0 else 1e9
+        l1 = ll / L + cost; stp = ls / L
+        lock = -1e9; best = 0.0; mv = 0.0; why = 3; kk = e1 - j0 - 1
+        adv0 = (l[j0] / p0 - 1) if sd > 0 else (1 - h[j0] / p0)
+        if adv0 <= -d:
+            mv = -d; why = 0; kk = 0
+        else:
+            for j in range(j0 + 1, e1):
+                if sd > 0:
+                    oj = o[j] / p0 - 1; lj = l[j] / p0 - 1; hj = h[j] / p0 - 1
+                else:
+                    oj = 1 - o[j] / p0; lj = 1 - h[j] / p0; hj = 1 - l[j] / p0
+                floor = max(-d, lock)
+                if oj <= floor:
+                    mv = oj; why = 0 if lock < -d + 1e-12 else 1; kk = j - j0; break
+                if lj <= floor:
+                    mv = floor; why = 0 if lock == -1e9 else 1; kk = j - j0; break
+                if hj >= u:
+                    mv = max(u, oj); why = 2; kk = j - j0; break
+                if hj > best:
+                    best = hj
+                    if best >= g1:
+                        nl = l1 + np.floor((best - g1) / stp + 1e-9) * stp
+                        if nl > lock:
+                            lock = nl
+                if j == e1 - 1:
+                    mv = c[j] / p0 - 1 if sd > 0 else 1 - c[j] / p0
+                    kk = j - j0
+        if why == 0 and liq and mv <= -d + 1e-12:
+            w = -margin
+        else:
+            w = margin * L * (mv - cost)
+            if w < -margin:
+                w = -margin
+        TI[m] = i; TW[m] = w; TT[m] = ct[i] + (j0 - es) * 60_000; m += 1
+        free = ct[i] + (j0 - es + kk + 1) * 60_000
+    return TI[:m], TW[:m], TT[:m]
+
+
+def run_pull(D, t, coin, side, prio, cost, wait, r, exits=None, conf=False):
+    o_ = np.lexsort((-prio, t)); t, coin, side = t[o_], coin[o_].astype(np.int64), side[o_].astype(np.int64)
+    e = ((t - GT0) // MIN).astype(np.int64); cst = D.off[coin] + e; csend = D.off[coin + 1]
+    lev = HB.LEVC[coin].astype(np.float64)
+    out = {}
+    for s, pn in (exits or EXS):
+        tk, tv, lg, ll, ls = PROF[pn]
+        ti, w, tt = seq_sim_pull(D.o, D.h, D.l, D.c, cst, side, t, csend, lev, wait, r, s, tk, tv, lg, ll, ls, cost, HB.MARGIN, conf)
+        out[f"손절{int(s * 100)} {pn}"] = {"고르기": read(tt, w, P_A, P_B), "확인": read(tt, w, C_A, C_B), "10월": read(tt, w, FWD, FWD),
+                                       "승률": round(float((w > 0).mean()), 3) if len(w) else None,
+                                       "거래당": round(float(w.mean()), 4) if len(w) else None}
+    return out
