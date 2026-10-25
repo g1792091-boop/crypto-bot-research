@@ -47,7 +47,8 @@ unchanged.
                                buy/short with reduceOnly true; read back with GET /deepcoin/trade/order?ordId=
   order(symbol, id / cid)      GET  /deepcoin/trade/order (ordId, or clOrdId: history first, then pending), then
                                /deepcoin/trade/v2/orders-pending and /deepcoin/trade/orders-history (both carry
-                               clOrdId per the docs; the first live drill did not see it there: the drill notes it)
+                               clOrdId per the docs; the first live drill (10-25) read it EMPTY in the order history:
+                               GET order is the look-up that works, the drill notes the lists)
   stop_close(...)              POST /deepcoin/trade/trigger-order productGroup Swap, orderType market, the closing side
                                and posSide (sell/long closes a long, buy/short a short), sz = the position's contracts,
                                triggerPrice, triggerPxType last, mrgPosition merge, tdMode / isCrossMargin of the
@@ -557,6 +558,8 @@ class DeepCoinClient:
         self.rate_answers = 0            # 429 answers seen (the drill reports them)
         self.order_symbol: dict = {}     # ordId (orders and stops) -> symbol
         self.sent: dict = {}             # clOrdId -> {"symbol", "first", "last", "reduce_only"} sent by this process
+        self.own_oids: dict = {}         # ordId -> symbol of each order this process placed (the order history shows
+                                         # clOrdId empty: first live drill 10-25)
         self.stop_intents: dict = {}     # a stop's id key -> what was sent (side, posSide, sz, trigger, times, before)
         self.stop_by_cid: dict = {}      # id key -> stop ordId (answers we got, or found by a look-up)
         self.cid_by_stop: dict = {}
@@ -1155,7 +1158,8 @@ class DeepCoinClient:
 
     def _find_cid(self, symbol: str, ext: str, lists: bool = True) -> Optional[dict]:
         """The order whose clOrdId is ``ext``: GET /deepcoin/trade/order?clOrdId=, then (``lists``) the pending list and
-        the order history of the coin (both carry clOrdId). None: in none of them."""
+        the order history of the coin (the docs say both carry clOrdId; the live order history read it empty, 10-25:
+        GET order is the look-up that finds it). None: in none of them."""
         row = next((r for r in self._order_rows(symbol, clOrdId=ext) if r.get("clOrdId") == ext), None)
         if row is None and lists:
             row = next((r for r in self._pending(symbol) + self._history(symbol) if r.get("clOrdId") == ext), None)
@@ -1271,12 +1275,14 @@ class DeepCoinClient:
             self._unsend(ext, prev)                         # refused (a documented code, its own sCode): nothing ran
             raise
         if found is not None:
+            self.own_oids[str(found["ordId"])] = symbol
             return self._read_back(symbol, str(found["ordId"]), placeholder, found)
         oid = data.get("ordId") if isinstance(data, dict) else None
         if oid in (None, "") or isinstance(oid, (dict, list, bool)):
             raise TransientError(200, None, "주문 번호가 없는 응답(결과 모름)")
         oid = str(oid)
         self.order_symbol[oid] = symbol
+        self.own_oids[oid] = symbol
         return self._read_back(symbol, oid, {**placeholder, "orderId": oid}, None)
 
     def _unsend(self, ext: str, prev: Optional[dict]) -> None:
@@ -1430,7 +1436,7 @@ class DeepCoinClient:
     def _trim(self, keep: int = 2000) -> None:
         """The id maps of a process that runs for weeks stay small (the oldest go first)."""
         for d in (self.sent, self.stop_intents, self.stop_by_cid, self.cid_by_stop, self.order_symbol,
-                  self.list_delay_ms):
+                  self.list_delay_ms, self.own_oids):
             while len(d) > keep:
                 d.pop(next(iter(d)))
 
@@ -1768,7 +1774,8 @@ class DeepCoinClient:
 
     def _child_order(self, symbol: str, sid: str, row: dict, fired_ms: int) -> str:
         """The order a fired stop placed: fills under the stop's own ordId, else the one order of the coin with the
-        stop's side and posSide, created from 2 s before its trigger time to CHILD_AFTER_MS after, no clOrdId of ours.
+        stop's side and posSide, created from 2 s before its trigger time to CHILD_AFTER_MS after, not one of ours (no
+        clOrdId of ours, and not an order this process placed: the history shows clOrdId empty, first live drill 10-25).
         Not found or not one: "" (the executor's P&L then reads every fill of the trade's window). A failed read of the
         fills under the stop's own ordId still leaves the order history to look in."""
         try:
@@ -1782,7 +1789,7 @@ class DeepCoinClient:
             for r in self._history(symbol):
                 if str(r.get("side") or "").lower() != side or str(r.get("posSide") or "").lower() != ps:
                     continue
-                if str(r.get("clOrdId") or "").startswith("pb"):
+                if str(r.get("clOrdId") or "").startswith("pb") or str(r.get("ordId")) in self.own_oids:
                     continue                               # one of ours (every id this executor sends starts "pb")
                 t = to_ms(r["cTime"]) if r.get("cTime") not in (None, "") else None
                 if t is not None and fired_ms - 2_000 <= t <= fired_ms + CHILD_AFTER_MS:

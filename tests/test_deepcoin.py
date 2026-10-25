@@ -768,6 +768,22 @@ def test_a_fired_stops_order_is_found_when_the_fills_under_its_own_id_fail(msg):
     assert (got["algoStatus"], got["actualOrderId"]) == ("TRIGGERED", child)
 
 
+def test_a_fired_stops_order_is_told_from_our_own_close_when_the_history_hides_clordid():
+    """First live drill (10-25): the order history shows clOrdId empty, so our own close made just before the stop
+    fired (same side and posSide) is not "no clOrdId of ours": the orders this process placed are left out by ordId."""
+    c, fake, clock = make()
+    edit_route(fake, "/deepcoin/trade/orders-history", lambda d: [{**r, "clOrdId": ""} for r in d])
+    ready(c, (DOGE,))
+    c.market(DOGE, "BUY", 100.0, client_id="pbE")
+    close = c.market(DOGE, "SELL", 50.0, reduce_only=True, client_id="pbX")         # ours: sell / long, like the stop
+    st = place_stop(c, DOGE, "SELL", 90.0, 50.0, client_id="pbS")
+    fake.set_price(DOGE, 89.0)
+    child = next(o["ordId"] for o in fake.orders.values() if o["source"] == "13")
+    assert close["orderId"] in c.own_oids and child not in c.own_oids
+    got = c.algo_order(algo_id=st["algoId"])
+    assert (got["algoStatus"], got["actualOrderId"]) == ("TRIGGERED", child)
+
+
 def test_a_stop_looked_up_after_a_restart_skips_a_coin_that_cannot_be_read():
     """Review 10-24 (10): a stop id this process has not seen is looked for on every coin; one coin's error does not end
     the scan, and with a coin unread "not found" is never the answer."""
