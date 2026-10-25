@@ -186,7 +186,7 @@ def test_the_template_is_accepted_and_said_in_words(tmp_path, capsys):
     assert main(["check-config", "--config", str(TEMPLATE)]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[-1] == "준비됨"
-    for want in ("계단: 순ROE 15%에서 13% 잠금, 20%에서 17%, 25%에서 22%, 그 뒤 5%마다 (닿은 순ROE - 3%)",
+    for want in ("계단: 순ROE 20%에서 17% 잠금, 25%에서 22%, 30%에서 27%, 그 뒤 5%마다 (닿은 순ROE - 3%)",
                  "배수: BTC 40배, 나머지 30배 (페이퍼 배수 대신) - 진입 전에 거래소 배수를 이 값으로 맞춤",
                  "손절: 페이퍼 손절 거리(2 ATR) × 1.25 = 2.5 ATR, 자기 체결가 기준"):
         assert want in lines, lines
