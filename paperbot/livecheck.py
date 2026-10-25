@@ -142,6 +142,7 @@ from . import livepapers as LP
 from .notify import CRITICAL, INFO, chat_ids
 
 MIN = 60_000
+FIRST_START_MS = 30 * MIN                # a first-seen start younger than this gets its ▶️ (run_watch)
 H1 = 3_600_000
 DAY = 86_400_000
 KST_MS = 9 * H1
@@ -1717,13 +1718,51 @@ def break_even(trades: list) -> Optional[dict]:
     return {"rate": al / (aw + al), "avg_win": aw, "avg_loss": -al, "n": len(trades)}
 
 
+def band_lines(path: str, trades: list, cfg: Optional[dict], execs: list, infos: list, segs: dict) -> list:
+    """운이냐 고장이냐 of the 'VWAP 개선판' (paperbot/vwapband.py, docs/vwap-bot-ko.md 9): its paper since its start and
+    each executor's live trades while it followed it (its own start records), each on its own, against the bot's 5-year
+    paper trades (win rate, losing run, deepest drop, each with 정상 범위 / 드묾 / 아주 드묾), then one reference line (the
+    5 years lost per trade; the 17 days are the picked best period). The research file unread: one line saying so."""
+    from . import vwapband as VB
+    ref = VB.load()
+    if ref.get("state") != "ok":
+        return [f"- 운이냐 고장이냐: {ref.get('reason_ko') or VB.MISSING_KO}"]
+    out = VB.lines(VB.band(trades or [], (cfg or {}).get("initial_equity"), None, ref), "페이퍼")
+    by = {ex.name: ex for ex in infos}
+    for r in execs:
+        ex = by.get(r.get("name"))
+        if ex is None or not (r.get("section") and LP.same(r["section"], path)):
+            continue
+        conn = open_ro(ex.db)
+        if conn is None:
+            out.append(f"- 운이냐 고장이냐 · {r['label']} 실거래: 기록을 못 읽음")
+            continue
+        try:
+            rows = exec_trades(conn)
+        finally:
+            conn.close()
+        sg = segs.get(ex.name) or []
+        live = []
+        for t in sorted((t for t in rows if t.get("exit_ts") is not None and t.get("pnl") is not None
+                         and LP.followed_at(sg, path, t.get("entry_ts"))), key=lambda t: (int(t["exit_ts"]), str(t.get("key")))):
+            try:
+                margin = float(t["entry_price"]) * float(t["qty"]) / float(t["leverage"])
+            except (TypeError, ValueError, ZeroDivisionError, KeyError):
+                margin = None
+            live.append({"pnl": float(t["pnl"]), "roe": float(t["pnl"]) / margin if margin else None})
+        out += VB.lines(VB.band(live, None, ex.margin_frac, ref), f"{r['label']} 실거래")
+    line = VB.ref_line(ref)
+    return out + ([line] if line else [])
+
+
 def bot_section(b: dict, execs: list, w0: int, w1: int, rest: Optional[str] = None,
                 missed: Optional[str] = None) -> list:
     """The morning check's part for a second, different paper bot (owners 10-23, 'VWAP 개선판', docs/vwap-bot-ko.md 6):
     yesterday's trades (count, wins, net ROE sum, hold-limit exits), since its start (win rate, the break-even win rate
     from its own trades next to the research's 5-year one, its hold-limit exits), the owners' bar for more money with
     the live numbers, its executor(s) counted on this bot only (with the light: its own 20 / 75 %), the signals its
-    checks kept out yesterday by reason, and its 못 탄 신호 line. ``b``: {"path", "name", "trades", "cfg", "gates", "vwap"}.
+    checks kept out yesterday by reason, its 못 탄 신호 line, then 운이냐 고장이냐 (``b["band"]``: band_lines, the VWAP
+    bot's own). ``b``: {"path", "name", "trades", "cfg", "gates", "vwap", "band"}.
     The research's 5-year break-even and the owners' bar for more money are the VWAP bot's own: another bot (owners
     10-24, '친구 매매법', ``b["vwap"]`` False) gets neither of those lines."""
     tr = b["trades"]
@@ -1769,6 +1808,7 @@ def bot_section(b: dict, execs: list, w0: int, w1: int, rest: Optional[str] = No
                    + " · ".join(f"{ko} {g[k]}" for k, ko in GATE_GROUPS if g[k] or k != "other"))
     if missed:
         out.append(f"- {missed}")
+    out += b.get("band") or []                    # 운이냐 고장이냐 (the VWAP bot's own: band_lines)
     if rest:
         out.append(rest)
     return out
@@ -4561,7 +4601,9 @@ def changes_pass(src: Sources, conn, now_ms: int, exp: Optional[dict], send: Cal
                 if e is not None:
                     prev = _state_get(conn, k)
                     v = str(e[0])
-                    if prev is None:
+                    # the first event seen is announced only when it is a recent start (an executor switched on for the
+                    # first time, owners 10-25: the DeepCoin one was silent); an older one is only recorded
+                    if prev is None and not (e[2] == "start" and now_ms - int(e[1] or 0) <= FIRST_START_MS):
                         _state_put(conn, k, v, now_ms)
                     elif prev != v:
                         _bts, bot = get_state(c, "bot")
@@ -4898,6 +4940,11 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
                 sections.append([LP.label(None, [r["label"] for r in execs if LP.same(r.get("section") or "", p)], b["name"]),
                                  "- 기록을 못 읽음"])
                 continue
+            if b["vwap"]:                     # 운이냐 고장이냐: never in the way of the check
+                try:
+                    b["band"] = band_lines(p, b["trades"], b["cfg"], execs, infos, segs)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"band lines ({p}): {type(exc).__name__}: {exc}", file=sys.stderr)
             m2 = None
             try:
                 from .livemissed import morning_line, paper_tag

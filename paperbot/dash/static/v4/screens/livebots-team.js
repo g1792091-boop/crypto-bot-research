@@ -136,6 +136,21 @@ const verdictChip = (v, big) => (v ? h("span", {class: ["lbt-verdict", big ? "bi
   h("i", {"aria-hidden": "true"}), v) : null);
 const kindBadge = (m) => h("span", {class: "lbt-kind", dataset: {k: KIND_T[m.kind] || "other"}}, h("i", {"aria-hidden": "true"}), m.kind_ko || m.kind || "회의");
 
+/**
+ * The weekly report's part about the other bot, 'VWAP 개선판' (liveteam.lead_result ``vwap``: owners 10-25, its own section
+ * under its own name, never mixed into the main conclusion), or null when the meeting has none.
+ */
+export function vwapPart(r) {
+  const v = r && r.vwap;
+  if (!v || !(v.headline || (v.summary || []).length)) return null;
+  const col = (title, xs, cls) => (xs && xs.length ? h("div", {class: ["lbt-col", cls]}, h("h4", null, title), h("ul", null, xs.map((t) => h("li", null, t)))) : null);
+  return h("div", {class: "lbt-vwap", dataset: {v: VERDICT_TONE[v.verdict] || "watch"}, role: "group", "aria-label": `${v.label || "VWAP 개선판"}의 결론`},
+    h("div", {class: "lbt-vh"}, h("b", null, v.label || "VWAP 개선판"), verdictChip(v.verdict), h("span", {class: "lbt-ht"}, "같은 회의 · 다른 봇 (숫자를 섞지 않아요)")),
+    v.headline ? h("p", {class: "lbt-vline"}, v.headline) : null,
+    (v.summary || []).length ? h("ul", {class: "lbt-sum"}, v.summary.map((t) => h("li", null, t))) : null,
+    h("div", {class: "lbt-cols"}, col("걱정", v.worries, "worry"), col("다음에 볼 것", v.watch_next, "watch")));
+}
+
 /** One member's words as a bubble body: the headline bold, the points as bullets, 걱정 / 우연일 정도 tinted. */
 export function textBlock(text) {
   const p = parseText(text);
@@ -289,6 +304,7 @@ export function teamView(ctx) {
           h("span", {class: "lbt-hby"}, `${lead.name} · ${lead.title}의 결론`))),
       (r.summary || []).length ? h("ul", {class: "lbt-sum"}, r.summary.map((t) => h("li", null, t))) : null,
       h("div", {class: "lbt-cols"}, col("good", "잘된 점", r.good, "good"), col("worries", "걱정", r.worries, "worry"), col("watch", "다음에 볼 것", r.watch_next, "watch")),
+      vwapPart(r),
       (m.ideas || []).length ? h("div", {class: "lbt-ideas"}, h("h4", null, `시험해 볼 아이디어 ${fmt.int(m.ideas.length)}개`),
         h("div", {class: "lbt-igrid"}, m.ideas.map(ideaCard)),
         ui.note(d.bot && d.bot.idea_how_ko ? `아이디어는 시험해 볼 가설이에요. ${d.bot.idea_how_ko}.`

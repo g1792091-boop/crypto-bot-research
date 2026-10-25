@@ -39,13 +39,33 @@ its parts (judgment, checks, the entry: at once or after a pullback as fixed_rul
 hypothesis to test with a shadow bot (deploy/combo.shadow-trend-*.json) or at the 2-week review. Any other config:
 everything as before.
 
+VWAP 개선판 (owners 10-25: "vwap 개선판봇 … 연구분석이나 손실 분석 … 전부 다 만들어줘"; docs/vwap-bot-ko.md 9): the second
+paper bot and the executor that follows it (딥코인) get their own meetings, never mixed with the main bot's. Its facts
+(``facts_vwap``) come from the live site's VWAP screens (dash/more/livevwap.py: 관제, 성적, 막은 신호; ``vwap_sources``):
+its rules from its running config (the gates, the 2 ATR stop, the ladder, the hold limit, the pauses) and its
+followers' executor rules (the size from the balance, the light), the owners' decisions (VWAP_DECISIONS), its record since
+its own start (the paper, its coin-flip twin and each follower's trades while it followed this bot, apart), 운이냐
+고장이냐 (paperbot/vwapband.py: the win rate, the losing run and the deepest drop against its own 5-year paper trades,
+which lost per trade; the 17 days labelled as the picked best period), the costs (DeepCoin's taker against the research's
+and what the live fills paid), the signals its gates kept out with their what-ifs (가상), the coins now, the splits.
+    loss        an executor's last two closed trades made while it followed the VWAP bot both lost (closed within 3 days):
+                once per pair, key "loss:vwap:…"; those trades never count for the main bot's loss meeting
+    checkpoint  the VWAP paper's 50th, 100th … closed trade since its start (the guide's unit: 실거래 50번 · 80 %), and a
+                follower's own 50th, 100th … live trade on it (the owners' moment to decide about money): once each
+    weekly      the weekly report gets the VWAP bot's part (``vwap_bot``; the members answer it apart: ``vwap_points``, the
+                lead's ``vwap``), the message tells it under its own name
+Its members' instructions (``vwap_prompt``; ``vwap_section_prompt`` added to the weekly report's) name it, keep the trend
+bot's numbers out, say the 5 years lost per trade and that "정상 범위" only means "as in the 5 years", and keep the fixed
+rules and the owners' decisions out of discussion; an idea is a hypothesis to test (2020-24 then 2025-26, or a shadow
+bot). Every message names the bot: "VWAP 개선판 · 딥코인 손실 회의".
+
 Budget (the owners' Claude plan, shared with their chats): LIVETEAM_BUDGET="day=12,week=40,tokens_day=900000"
 (calls per KST day, calls per 7 KST days, tokens per KST day). A meeting starts only when all its calls fit, each call
 is charged at its worst case first (runner.call_charge) and at what it used after.
 
     python -m paperbot.liveteam tick [--dry-run]          the timer (deploy/paperbot-liveteam.timer, installed off)
-    python -m paperbot.liveteam run weekly|loss|checkpoint [--force] [--dry-run]
-    python -m paperbot.liveteam preview weekly|loss|checkpoint     the packet and the prompts, no AI call, nothing written
+    python -m paperbot.liveteam run weekly|loss|checkpoint [--force] [--dry-run] [--vwap]     --vwap: the VWAP bot's own
+    python -m paperbot.liveteam preview weekly|loss|checkpoint [--vwap]   the packet and the prompts, no AI call, nothing written
     python -m paperbot.liveteam status
 """
 from __future__ import annotations
@@ -176,6 +196,47 @@ ROLES_TREND = {
                "focus": "코인별 1시간·4시간·일봉 추세 판단(상승·하락·보류, 힘 약함·끝물), 신호가 어디서 걸렸나(추세 판단·진입 자리 검사·"
                         "추격 막기·쉬는 시간), 코인·시간대·롱/숏, 다가오는 미국 경제 발표와 나스닥 개장. 되돌림 기다림·되돌림 안 옴은 "
                         "되돌림을 기다리는 설정(그림자 trend-wait)의 것"},
+    "lead": dict(ROLES["lead"]),
+}
+# ---- VWAP 개선판 (owners 10-25, docs/vwap-bot-ko.md 9): the second paper bot and the executor that follows it (딥코인)
+VWAP_NAME = "VWAP 개선판"
+VWAP_CHECK_EVERY = 50                  # the guide's unit (6장: 실거래 50번 · 80 %): the paper's 거래 점검 every 50, the follower's too
+VWAP_TRADES_KEEP = 40
+VWAP_CARDS_KEEP = 12
+# the owners' DeepCoin taker rate as passed on 10-25 (one side, market orders); the code's own cost tables still assume
+# 0.05 % until the drill measures the account's own (executor.NET_COSTS, livecheck.ASSUMED_FEE): both are said
+DEEPCOIN_TAKER = 0.0004
+# research/vwap30/code/vwcommon.py COST_RT: the 5-year research's costs, a taker 0.05 % and a slippage 0.02 % each side
+RESEARCH_TAKER, RESEARCH_SLIP = 0.0005, 0.0002
+VWAP_APART_KO = ("추세판단 봇과 다른 봇: 매매법·손절·진입 조건이 다르고 페이퍼 기록(vwap.db)과 실거래 실행기도 따로예요. 두 봇 숫자를 "
+                 "섞지 않아요")
+VWAP_CHECK_RULE = ("docs/vwap-bot-ko.md 6장(두 분): 실거래 50번 동안 승률 80% 이상이고 페이퍼와 결과가 비슷하면 금액 늘리기 검토 · 함께 "
+                   "볼 것: 순ROE 합 플러스, 페이퍼가 동전 쌍둥이보다 나음 · 승률이 본전 승률 아래로 이어지면 멈추고 다시 봄. 5년 기록에서는 "
+                   "50번 80% 이상 뒤에도 다음 50번이 평균 손해였어요. 거래 점검은 페이퍼 50번마다(실거래 50번마다 따로) 숫자를 같이 보는 "
+                   "자리일 뿐, 정하는 것은 두 분")
+VWAP_DECISIONS = ("10/23 두 분: 'A + CMO 1시간 37승 3패가 제일 좋은 거 같네' → 매매법 VWAP 복귀 실패 30분 + CMO·샌드위치 캔들 1시간",
+                  "10/23 두 분: '시드 비중은 40%, 비트도 30배' → 증거금 잔고의 40%, BTC도 30배",
+                  "실거래는 세 번째 실행기(10/24 '그냥 다른거래소 쓸래' → 딥코인). 바이비트·WOO X Pro 실행기는 그대로 추세판단 봇을 따라감",
+                  "실거래 크기(10/25 밤): 실행기는 진입할 때마다 자기 잔고의 증거금 비율만큼(sizing에 지금 숫자)",
+                  "키우기·멈추기: checkpoint_rule 그대로 · 작게 시작해서 맞으면 키우는 순서(docs/vwap-bot-ko.md 3장)")
+VWAP_WORDS = ("band = 운이냐 고장이냐: 지금 기록을 같은 규칙의 5년 페이퍼에 대 본 것. win.p_low = 5년처럼 돈다면 이만큼 이하의 승수가 "
+              "나올 확률, streak.share = 5년 연패 중 이만큼 길었던 비율, dd.share = 5년의 같은 거래 수 구간 중 이만큼 깊게 빠졌던 비율. "
+              "verdict: 정상 범위(5% 이상) · 드묾(1~5%) · 아주 드묾(1% 미만: 설계와 다르게 돌고 있을 수 있음). roe = 그 거래 배율 기준 "
+              "순ROE(수수료 뒤, 0.1 = 10%). flip = 같은 순간 방향만 동전으로 정한 비교용 페이퍼. breakeven = 평균 익절·손절로 본 본전 승률. "
+              "blocked.virtual = 막지 않았다면(가상: 같은 엔진·같은 1분봉으로 다시 계산, 실제 체결 아님)")
+VWAP_IDEA_HOW_KO = "2020-24로 고르고 2025-26에서 한 번 확인하거나(research/vwap30 방식), 그림자 봇으로 나란히 봐요"
+ROLES_VWAP = {
+    "risk": {"name": "방패", "title": "리스크 담당",
+             "focus": "실거래 실행기(딥코인) 잔고와 낙폭, 연패(손절 한 번의 크기), 실행기 멈춤·비상 정지, 신호등이 거른 진입, 실행기가 "
+                      "페이퍼를 제대로 따라갔는지(결과가 같은 거래·순ROE 차이·진입 미끄러짐), 크기(진입마다 잔고의 증거금 비율), "
+                      "수수료(costs)"},
+    "stats": {"name": "저울", "title": "통계 담당",
+              "focus": "운이냐 고장이냐(band: 승률·연패·낙폭이 5년 페이퍼의 어디인지), 본전 승률, 동전 쌍둥이 비교, 키우기·멈추기 점검표"
+                       "(실거래 50번), 거래 수가 충분한지. 5년이 거래당 손해였다는 것과 17일은 고른 기간이라는 것을 숨기지 않음. 다른 "
+                       "사람이 성급하게 결론 내면 반박하는 역할"},
+    "market": {"name": "나침반", "title": "시장 담당",
+               "focus": "코인별 4시간 판단과 변동성 위치(now), 진입 조건이 막은 신호와 그 가상 결과(blocked), 매매법·코인·롱/숏·진입 때 "
+                        "4시간 판단·변동성 위치·시간대·청산 이유·보유 시간 나눠 보기(splits), 쉬는 시간과 다가오는 미국 경제 발표"},
     "lead": dict(ROLES["lead"]),
 }
 SHADOW_TREND_GLOB = "combo.shadow-trend-*.json"   # the trend bot's shadow configs in deploy/ (read only, may not exist yet)
@@ -717,7 +778,80 @@ def sources(now: int, p: Optional[dict] = None) -> dict:
                 out[name] = fn()
             except Exception as exc:  # noqa: BLE001  one unreadable source is said, never fatal
                 out[name] = {"state": "error", "reason": f"{type(exc).__name__}: {exc}"}
+    try:
+        out["vwap"] = vwap_sources(p, now, more)
+    except Exception as exc:  # noqa: BLE001  the VWAP bot's part is said, never fatal (the main bot's meetings as before)
+        out["vwap"] = {"state": "error", "reason_ko": "VWAP 개선판 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"}
     return out
+
+
+def _cost_of(trades: list) -> dict:
+    """What an executor's closed live trades paid (its own records, livebots.read_exec): n, the commission and funding sums,
+    the fee rate measured on both sides of the notional (commission / (2 x entry notional), roughly), the mean commission as
+    a share of the margin (in net ROE), and how many P&Ls are estimates (not from the exchange's fills)."""
+    rows = [t for t in trades if t.get("commission") is not None and t.get("entry_price") and t.get("qty")]
+    notional = sum(float(t["entry_price"]) * float(t["qty"]) for t in rows)
+    comm = sum(float(t["commission"]) for t in rows)
+    on_margin = [float(t["commission"]) / float(t["margin"]) for t in rows if t.get("margin")]
+    return {"n": len(trades), "measured_n": len(rows), "commission": _r(comm), "funding": _r(sum(float(t.get("funding") or 0) for t in trades)),
+            "fee_rate_side": _r(comm / (2 * notional), 6) if notional > 0 else None,
+            "fee_roe_mean": _r(sum(on_margin) / len(on_margin)) if on_margin else None,
+            "estimated": sum(1 for t in trades if t.get("est"))}
+
+
+def vwap_sources(p: dict, now: int, more: Optional[dict] = None) -> dict:
+    """The 'VWAP 개선판' (docs/vwap-bot-ko.md) as the live site's VWAP screens read it (dash/more/livevwap.py: 관제, 성적 with
+    운이냐 고장이냐, 막은 신호), read-only, with the executors that follow or followed it: their segments (a trade entered
+    while one followed this bot is this bot's, never the main bot's) and what their live trades on it paid. {"state":
+    "off"} without the bot (the one-paper world: every meeting as before)."""
+    from . import livepapers as LP
+    from .dash.more import livebots as L
+    from .dash.more import livevwap as VW
+    more = more or L.paths_more()
+    loc = VW.locate(p, now, more)
+    if loc["state"] == "off":
+        return {"state": "off"}
+    bot = loc.get("bot") or {}
+    path = bot.get("path")
+    out = {"state": loc["state"], "reason_ko": loc.get("reason_ko"), "path": path, "bot_id": bot.get("id"), "followers": []}
+    for x in loc["execs"]:
+        stretches = VW.segs_of(x, path) if path else []
+        now_on = bool(path) and LP.same(x["paper_path"], path)
+        if not stretches and not now_on:
+            continue
+        cfg = x["config"] if isinstance(x.get("config"), dict) else {}
+        era = VW.era_trades(x, path) if x["record"].get("state") == "ok" else []
+        out["followers"].append({"id": x["id"], "name_ko": x["name_ko"], "now": now_on, "segs": x["segs"],
+                                 "since_ms": stretches[-1][0] if stretches else None, "exchange": cfg.get("exchange"),
+                                 "size_from": cfg.get("size_from"), "margin_frac": cfg.get("margin_frac"), "budget_usd": cfg.get("budget_usd"),
+                                 "qty_scale": cfg.get("qty_scale"), "light": [cfg.get("signal_light_n"), cfg.get("signal_light_min_win")],
+                                 "record_state": x["record"].get("state"), "costs": _cost_of(era)})
+    if loc["state"] != "ok":
+        return out
+    for name, fn in (("control", VW.control), ("perf", VW.perf), ("blocked", VW.blocked)):
+        try:
+            out[name] = fn(p, now, more)
+        except Exception as exc:  # noqa: BLE001  one unreadable answer is said, never fatal
+            out[name] = {"state": "error", "reason_ko": "읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
+def vwap_apart(src: dict) -> Optional[dict]:
+    """The VWAP bot as another bot than the main one (its own paper database: the second paper bot): its source, else None
+    (no VWAP bot, or it is the main paper bot itself: nothing is set apart)."""
+    vs = src.get("vwap")
+    if not isinstance(vs, dict) or vs.get("state") in (None, "off") or not vs.get("path") or vs.get("bot_id") == "paper":
+        return None
+    return vs
+
+
+def on_vwap(vs: Optional[dict], ex: str, t: Optional[int]) -> bool:
+    """Did executor ``ex`` follow the VWAP bot when it entered at ``t`` (its own start records)?"""
+    if vs is None:
+        return False
+    from . import livepapers as LP
+    f = next((f for f in vs.get("followers") or [] if f.get("id") == ex), None)
+    return f is not None and t is not None and LP.followed_at(f.get("segs") or [], vs["path"], t)
 
 
 def _acct_line(a: dict) -> dict:
@@ -849,9 +983,15 @@ def meeting_label(kind: str, focus: Optional[dict] = None, trend: bool = False) 
 
 
 def kind_ko(kind: str, key: Optional[str] = None) -> str:
-    """A stored meeting's kind in words (the 분석팀 tab): the trend bot's checkpoints (key checkpoint:trend-...) say 거래 점검."""
-    if kind == "checkpoint" and str(key or "").startswith("checkpoint:trend"):
+    """A stored meeting's kind in words (the 분석팀 tab): the trend bot's checkpoints (key checkpoint:trend-...) say 거래 점검;
+    the VWAP bot's meetings name it ("VWAP 손실 회의", "VWAP 거래 점검", "VWAP 실거래 점검", "VWAP 주간 보고")."""
+    k = str(key or "")
+    if kind == "checkpoint" and k.startswith("checkpoint:trend"):
         return TREND_CHECK_KO
+    if k.startswith("checkpoint:vwap-live"):
+        return "VWAP 실거래 점검"
+    if k.startswith(("loss:vwap", "checkpoint:vwap", "weekly:vwap:")) or (kind == "weekly" and k.endswith(":vwap")):
+        return "VWAP " + (TREND_CHECK_KO if kind == "checkpoint" else KIND_KO.get(kind, kind))
     return KIND_KO.get(kind, kind)
 
 
@@ -1165,6 +1305,290 @@ def facts_trend(src: dict, kind: str, window: Optional[tuple] = None, focus: Opt
     return out
 
 
+# ---------------------------------------------------------------- VWAP 개선판: its packet (the live site's VWAP screens)
+def vwap_label(vs: Optional[dict], ex_ko: Optional[str] = None) -> str:
+    """"VWAP 개선판 · 딥코인" (the executor(s) following it now, or ``ex_ko``), "VWAP 개선판 (페이퍼만)" with none."""
+    names = [ex_ko] if ex_ko else [f["name_ko"] for f in (vs or {}).get("followers") or [] if f.get("now")]
+    return f"{VWAP_NAME} · {'·'.join(names)}" if names else f"{VWAP_NAME} (페이퍼만)"
+
+
+def vwap_meeting_label(kind: str, focus: Optional[dict], vs: Optional[dict]) -> str:
+    """The meeting's name, the bot named first: "VWAP 개선판 · 딥코인 손실 회의", "… 50번째 거래 점검(페이퍼)", "VWAP 개선판 ·
+    딥코인 실거래 50번 점검", "… 주간 보고"."""
+    f = focus or {}
+    k = f.get("milestone")
+    k = int(k) if isinstance(k, int) and not isinstance(k, bool) and k > 0 else None
+    if kind == "loss":
+        return f"{vwap_label(vs, f.get('executor_ko'))} 손실 회의"
+    if kind == "checkpoint" and f.get("what") == "live":
+        return f"{vwap_label(vs, f.get('executor_ko'))} 실거래 {k}번 점검" if k else f"{vwap_label(vs, f.get('executor_ko'))} 실거래 점검"
+    if kind == "checkpoint":
+        return f"{vwap_label(vs)} {k}번째 거래 점검(페이퍼)" if k else f"{vwap_label(vs)} 거래 점검"
+    return f"{vwap_label(vs)} {KIND_KO.get(kind, kind)}"
+
+
+def _vw_rec(a: Any) -> Any:
+    if not _ok(a):
+        return _not_ok(a)
+    return {**{k: a.get(k) for k in ("n", "wins", "losses")},
+            **{k: _r(a.get(k)) for k in ("win_rate", "avg_win", "avg_loss", "breakeven", "pf", "roe_sum", "pnl", "max_dd", "wallet",
+                                         "initial", "change")}, "small": a.get("small")}
+
+
+def _vw_record(prf: dict) -> dict:
+    """Since the bot's start: the paper, its coin-flip twin, 실력 vs 운, each follower's live trades on this bot (성적's
+    checklist: n of 50, its record, its break-even win rate, the checks, how close to the paper)."""
+    if not _ok(prf):
+        return _not_ok(prf)
+    live = []
+    for c in prf.get("checklist") or []:
+        be, stp, pv = c.get("breakeven") or {}, c.get("stop") or {}, c.get("pairs") or {}
+        live.append({"name": c.get("name_ko"), "since_kst": kst_text(c.get("since_ms")), "n": c.get("n"), "goal": c.get("goal"),
+                     "record": {**{k: (c.get("record") or {}).get(k) for k in ("n", "wins", "losses")},
+                                **{k: _r((c.get("record") or {}).get(k)) for k in ("win_rate", "avg_win", "avg_loss", "pf", "pnl", "roe_sum")}},
+                     "breakeven": _r(be.get("value")), "breakeven_from": be.get("ko"), "stop_line": {"state": stp.get("state"), "ko": stp.get("value_ko")},
+                     "checks": [{"what": r.get("ko"), "state": r.get("state"), "value": r.get("value_ko")} for r in c.get("rows") or []],
+                     "vs_paper": {"pairs": pv.get("n"), "same_result": pv.get("same"), "roe_diff_mean": _r(pv.get("diff_mean")),
+                                  "entry_slip_mean": _r(pv.get("slip_mean"), 6)},
+                     "record_state": c.get("record_state"), "reason": c.get("reason_ko")})
+    return {"paper": _vw_rec(prf.get("paper")), "flip": _vw_rec(prf.get("flip")), "skill": (prf.get("skill") or {}).get("ko"),
+            "live": live, "small_n": SMALL_N}
+
+
+def _vw_band_one(b: dict) -> dict:
+    if not isinstance(b, dict) or b.get("state") != "ok":
+        return {"state": (b or {}).get("state") or "missing", "words": (b or {}).get("ko") or (b or {}).get("reason_ko")}
+    w, s, d = b.get("win") or {}, b.get("streak") or {}, b.get("dd") or {}
+    return {"verdict": b.get("verdict_ko"), "n": b.get("n"), "small": b.get("small"),
+            "win": {"words": w.get("ko"), "p_low": _r(w.get("p_low")), "verdict": w.get("verdict"), "real_stretches": (w.get("emp") or {}).get("ko")},
+            "streak": {"words": s.get("ko"), "now": s.get("now"), "share": _r(s.get("share")), "verdict": s.get("verdict")},
+            "dd": {"words": d.get("ko"), "deepest": _r(d.get("deepest")), "now": _r(d.get("now")), "share": _r(d.get("share")),
+                   "verdict": d.get("verdict"), "how": d.get("how_ko")}}
+
+
+def _vw_band(prf: dict) -> dict:
+    """운이냐 고장이냐 (성적's band, paperbot/vwapband.py): the paper and each follower apart, the yardstick in words."""
+    bd = (prf.get("band") or {}) if _ok(prf) else {}
+    if bd.get("state") != "ok":
+        return {"state": bd.get("state") or "missing", "reason": bd.get("reason_ko") or "자료 없음"}
+    ref = bd.get("ref") or {}
+    return {"paper": _vw_band_one(bd.get("paper")),
+            "live": [{"name": x.get("name_ko"), **_vw_band_one(x)} for x in bd.get("live") or []],
+            "yardstick": {"five_years": {"trades": ref.get("trades"), "win_rate": ref.get("win_rate"), "breakeven": ref.get("breakeven_win"),
+                                         "roe_per_trade": ref.get("roe_per_trade"), "losing_runs": ref.get("runs"), "longest_run": ref.get("longest")},
+                          "honest": ref.get("honest_ko"), "pick17": (ref.get("pick17") or {}).get("ko"), "rule": ref.get("rule_ko"),
+                          "src": ref.get("src")}}
+
+
+def _vw_costs(vs: dict, cfg: dict) -> dict:
+    """비용: the round trip on the exchange (DeepCoin's taker as the owners passed it on, both sides) against the 5-year
+    research's (taker + slippage both sides), each in net ROE at the bot's leverage; what the code still assumes (until
+    the drill measures it); what each follower's live trades on this bot really paid (its own fills)."""
+    from . import livecheck as LC
+    lev = ((cfg or {}).get("leverage") or {}).get("default") if isinstance((cfg or {}).get("leverage"), dict) else None
+    lev = lev if isinstance(lev, (int, float)) and not isinstance(lev, bool) else None
+    rt_r = 2 * (RESEARCH_TAKER + RESEARCH_SLIP)
+    out = {"words": "왕복 = 진입·청산 두 번의 비율(0.0008 = 0.08%). roe_at_leverage = 왕복 × 배율 = 거래마다 순ROE에서 빠지는 몫",
+           "leverage": lev,
+           "research": {"taker_side": RESEARCH_TAKER, "slippage_side": RESEARCH_SLIP, "round_trip": _r(rt_r, 6),
+                        "roe_at_leverage": _r(rt_r * lev) if lev else None, "src": "research/vwap30/code/vwcommon.py COST_RT"},
+           "execs": []}
+    for f in vs.get("followers") or []:
+        ex = f.get("exchange") or ""
+        x = {"name": f["name_ko"], "exchange": LC.EX_KO.get(ex, ex), "code_assumes_taker": LC.ASSUMED_FEE.get(ex),
+             "live_measured": f.get("costs")}
+        if ex == "deepcoin":
+            x["taker_told"] = {"taker_side": DEEPCOIN_TAKER, "round_trip": 2 * DEEPCOIN_TAKER,
+                               "roe_at_leverage": _r(2 * DEEPCOIN_TAKER * lev) if lev else None,
+                               "words": "딥코인 테이커 수수료 0.04%(한쪽, 시장가) · 코드의 비용 계산은 드릴이 재기 전까지 code_assumes_taker를 씀"}
+        out["execs"].append(x)
+    return out
+
+
+def _vw_blocked(blk: dict) -> dict:
+    """막은 신호 (its own FILTERED signals by reason: today, 7 days, since its start) and 막지 않았다면 per reason (가상)."""
+    if not _ok(blk):
+        return _not_ok(blk)
+    c = blk.get("counts") or {}
+    v = blk.get("virtual") or {}
+    out = {"counts": [{"why": g.get("ko"), "today": g.get("today"), "week": g.get("week"), "since_start": g.get("all")}
+                      for g in c.get("groups") or []], "total": c.get("total"),
+           "label": "가상: 막지 않았다면 (같은 엔진·같은 1분봉으로 다시 계산, 계좌가 비어 있었다고 침, 실제 체결 아님)"}
+    if _ok(v):
+        out["virtual"] = [{"why": k.get("ko"), "group": k.get("grp_ko"), "n": k.get("n"), "closed": k.get("closed"), "wins": k.get("wins"),
+                           "losses": k.get("losses"), "roe_sum": _r(k.get("roe_sum")), "small": k.get("small"), "read": k.get("read_ko"),
+                           "paper_result_not_virtual": bool(k.get("paper_result"))} for k in v.get("kinds") or []]
+        g = v.get("gate") or {}
+        out["gates_virtual"] = {k: (_r(g.get(k)) if k == "roe_sum" else g.get(k)) for k in ("n", "closed", "wins", "losses", "roe_sum", "small")}
+    else:
+        out["virtual"] = _not_ok(v)
+    return out
+
+
+def _vw_now(ctl: dict) -> dict:
+    """관제: running or not, the position (with the gates it passed and the hold limit left), every coin's 4h judgment and
+    which side a signal could take now, the entry pauses, the last 48 h of signals by what became of them."""
+    if not _ok(ctl):
+        return _not_ok(ctl)
+    b = ctl.get("bot") or {}
+    pos = ctl.get("position")
+    p = None
+    if isinstance(pos, dict):
+        p = {"coin": _coin(pos.get("symbol")), "side": _side(pos.get("side")), "strategy": pos.get("strategy_ko"),
+             "entry_kst": kst_text(pos.get("entry_time")), "roe_now": _r(pos.get("roe_now")), "locked": pos.get("locked"),
+             "lock_roe": _r(pos.get("lock_roe")), "hold_left": pos.get("left_ko"), "gates_at_entry": (pos.get("gates") or {}).get("text"),
+             "executors": [{"name": f.get("name_ko"), "same": f.get("pos_state")} for f in ctl.get("followers") or [] if f.get("state") == "following"]}
+    pic = ctl.get("picture") or {}
+    coins = {}
+    for r in pic.get("rows") or [] if pic.get("state") == "ok" else []:
+        v = r.get("vote") or {}
+        coins[_coin(r.get("symbol"))] = {"4h": v.get("text") or (f"못 읽음: {_clip(v.get('error'), 100)}" if v.get("error") else None),
+                                         "sides": {s.get("member_ko"): s.get("ko") for s in r.get("sides") or []}}
+    pz = ctl.get("pause") or {}
+    sg = ctl.get("signals") or {}
+    return {"running": b.get("running"), "position": p, "as_of_kst": kst_text(pic.get("at")) if pic.get("state") == "ok" else None,
+            "coins": coins or {"state": pic.get("state"), "words": pic.get("ko")},
+            "pause_now": (pz.get("now") or {}).get("ko"), "next_pause": ({"what": (pz.get("next") or {}).get("ko"),
+                                                                          "from_kst": kst_text((pz.get("next") or {}).get("from"))}
+                                                                         if pz.get("next") else None),
+            "signals_48h": sg.get("counts")}
+
+
+def _vw_splits(prf: dict) -> dict:
+    """나눠 보기 of the paper (성적): strategy, coin, side, the 4h judgment and the volatility at the entry, KST session,
+    exit, hold; rows with trades only."""
+    if not _ok(prf):
+        return {}
+    out = {}
+    for sp in (prf.get("splits") or {}).get("paper") or []:
+        rows = [{"label": r.get("ko"), "n": r.get("n"), "wins": r.get("wins"), "win_rate": _r(r.get("win_rate")),
+                 "roe_sum": _r(r.get("roe_sum")), "small": r.get("small")} for r in sp.get("rows") or [] if r.get("n")]
+        if rows:
+            out[sp.get("ko") or sp.get("id")] = rows
+    return out
+
+
+def _vw_trades(prf: dict, a: int, b: int) -> list:
+    """The paper's trades closed in [a, b) (성적's rows: the gates read at the entry, how deep each went, each executor's part)."""
+    out = []
+    for t in (prf.get("trades") or []) if _ok(prf) else []:
+        if t.get("exit_time") is None or not a <= t["exit_time"] < b:
+            continue
+        live = {}
+        for ex, c in (t.get("live") or {}).items():
+            if not isinstance(c, dict):
+                continue
+            live[ex] = ({"followed": True, "roe": _r(c.get("roe")), "pnl": _r(c.get("pnl")), "slip": _r(c.get("slip"), 6)}
+                        if c.get("state") == "matched" else {"followed": False, "why": c.get("why_ko") or c.get("state")})
+        out.append({"time_kst": kst_text(t.get("entry_time")), "closed_kst": kst_text(t.get("exit_time")), "coin": _coin(t.get("symbol")),
+                    "side": _side(t.get("side")), "strategy": t.get("member_ko"), "roe": _r(t.get("roe")), "exit": t.get("reason_ko"),
+                    "exit_why": t.get("why"), "minutes": round(t["hold_ms"] / MIN) if t.get("hold_ms") is not None else None,
+                    "gates_at_entry": (t.get("gates") or {}).get("text"), "worst_roe": _r(t.get("mae")), "best_roe": _r(t.get("mfe")),
+                    "live": live})
+        if len(out) >= VWAP_TRADES_KEEP:
+            break
+    return out
+
+
+def _vw_cards(src: dict, vs: dict, a: int, b: int) -> list:
+    """The watcher's loss cards of the VWAP bot's trades closed in [a, b) (keys "COMBO@mix#vwap|…": livecheck.card_key)."""
+    tag = f"#{os.path.splitext(os.path.basename(vs.get('path') or ''))[0]}|"
+    cards = (src.get("cards") or {}).get("cards") or []
+    return [{"label": c.get("label"), "strategy": c.get("strategy"), "tf": c.get("tf"), "coin": c.get("symbol"), "roe": c.get("roe"),
+             "text": _clip(c.get("text") or "", 300)}
+            for c in cards if tag in str(c.get("key") or "") and c.get("exit_time") is not None and a <= int(c["exit_time"]) < b][:VWAP_CARDS_KEEP]
+
+
+def _vw_alarms(src: dict, vs: dict, a: int, b: int) -> list:
+    """The watcher's alarms in [a, b) that name this bot or one of its executors."""
+    names = [VWAP_NAME, "paperbot-combo-vwap"] + [f["name_ko"] for f in vs.get("followers") or []]
+    return [x for x in _alarms_in(src, a, b) if any(n and n in str(x.get("what") or "") for n in names)]
+
+
+def _vw_rules(ctl: dict, infos: list) -> list:
+    """The bot's rules as its running config says them (관제's rules: its combo_run, in the bot's own words), then its
+    followers' executor rules (_exec_rules: the exchange stop, halts, the light, the size from the balance, the money)."""
+    lines = list((ctl.get("rules") or {}).get("lines") or []) if _ok(ctl) else []
+    if not lines:
+        lines = ["규칙을 읽지 못했어요(자료 없음): docs/vwap-bot-ko.md 2장이 두 분이 정한 규칙"]
+    return lines + (_exec_rules(infos) if infos else ["따라가는 실행기 없음(페이퍼만)"])
+
+
+def _vw_sizing(vs: dict) -> dict:
+    """How each follower sizes its entries and its light (its own config)."""
+    rows = []
+    for f in vs.get("followers") or []:
+        rows.append({"executor": f["name_ko"], "following_now": f.get("now"), "size_from": f.get("size_from") or "paper",
+                     "margin_frac": f.get("margin_frac"), "budget_usd": f.get("budget_usd"), "qty_scale": f.get("qty_scale"),
+                     "light": {"n": (f.get("light") or [None, None])[0], "min_win": (f.get("light") or [None, None])[1]}})
+    return {"execs": rows, "words": "size_from \"equity\" = 진입할 때마다 자기 잔고 × margin_frac를 증거금으로 · light = 페이퍼 최근 n번 중 "
+                                    "min_win 이상 이겼을 때만 새 진입을 따라감(그 전 n번 미만은 모두 따라감)"}
+
+
+def _vw_research(prf: dict) -> dict:
+    r = (prf.get("research") or {}) if _ok(prf) else {}
+    y, p = r.get("five_year") or {}, r.get("pick17") or {}
+    return {"five_years": {k: y.get(k) for k in ("trades", "win_rate", "avg_win_roe", "avg_loss_roe", "breakeven_win", "share_80",
+                                                  "next_win_80", "next_roe_80", "next_mult_80")},
+            "per_trade_price": y.get("per_trade"), "months": y.get("months"), "words": y.get("ko"),
+            "pick17": {k: p.get(k) for k in ("n", "wins", "losses", "win_rate", "span_ko", "ko")}, "src": y.get("src")}
+
+
+def vwap_bot_facts(vs: dict, prf: dict, now: int) -> dict:
+    since = prf.get("since_ms") if _ok(prf) else None
+    ref = ((prf.get("band") or {}).get("ref") or {}) if _ok(prf) else {}
+    return {"kind": "vwap", "name": VWAP_NAME, "label": vwap_label(vs), "apart": VWAP_APART_KO, "since_kst": kst_text(since),
+            "running_days": round((int(now) - int(since)) / DAY, 2) if since else None,
+            "followers": [{"name": f["name_ko"], "following_now": f.get("now"), "since_kst": kst_text(f.get("since_ms"))}
+                          for f in vs.get("followers") or []],
+            "break_even_5y": ref.get("breakeven_win"),
+            "reference": ("5년 기준표 있음(band.yardstick: 같은 규칙의 5년 페이퍼) · 5년은 승률이 본전 승률보다 낮아 거래당 손해 · 17일은 "
+                          "고를 때 본 가장 좋은 기간이라 기대치 아님"), "small_n": SMALL_N}
+
+
+def facts_vwap(src: dict, kind: str, window: Optional[tuple] = None, focus: Optional[dict] = None, section: bool = False) -> dict:
+    """The packet of the 'VWAP 개선판' (its own meetings, or ``section``: its part of the weekly report): numbers only,
+    with their meaning in words, from the live site's VWAP screens (vwap_sources); its fixed rules from its running config,
+    its record since its own start (the paper and each follower apart, never the main bot's), the band against its 5
+    years, the costs, the signals its gates kept out with their what-ifs (가상)."""
+    now = src["now"]
+    vs = src.get("vwap") if isinstance(src.get("vwap"), dict) else {"state": "missing"}
+    ctl, prf, blk = (vs.get(k) if isinstance(vs.get(k), dict) else {"state": vs.get("state") or "missing",
+                                                                   "reason_ko": vs.get("reason_ko") or "읽지 않았어요"}
+                     for k in ("control", "perf", "blocked"))
+    world = src.get("bot") or {}
+    ids = {f["id"] for f in vs.get("followers") or [] if f.get("now")}
+    infos = [e for e in world.get("infos") or [] if getattr(e, "name", None) in ids and not getattr(e, "problem", "")]
+    cfg = ((ctl.get("rules") or {}) if _ok(ctl) else {})
+    run_cfg = {"leverage": cfg.get("leverage")} if cfg else {}
+    out = {"meeting": vwap_meeting_label(kind, focus, vs), "now_kst": kst_text(now), "bot": vwap_bot_facts(vs, prf, now),
+           "fixed_rules": _vw_rules(ctl, infos), "owners_decisions": list(VWAP_DECISIONS), "sizing": _vw_sizing(vs),
+           "record": _vw_record(prf), "band": _vw_band(prf), "costs": _vw_costs(vs, run_cfg), "blocked": _vw_blocked(blk),
+           "now": _vw_now(ctl), "splits": _vw_splits(prf), "research": _vw_research(prf), "next_releases": _releases(src),
+           "checkpoint_rule": VWAP_CHECK_RULE, "words": VWAP_WORDS}
+    if section:
+        out["meeting"] = f"{vwap_label(vs)} 주간 보고(같은 회의의 다른 봇 칸)"
+        for k in ("next_releases", "research"):           # the main packet says the releases; the research stays in band
+            out.pop(k, None)
+    if window:
+        a, b = window
+        out["window_kst"] = [kst_text(a), kst_text(b)]
+        out["trades"] = _vw_trades(prf, a, b)
+        out["loss_cards"] = _vw_cards(src, vs, a, b)
+        out["alarms"] = _vw_alarms(src, vs, a, b)
+    if focus:
+        out["focus"] = focus
+    return out
+
+
+def vwap_section(src: dict, window: tuple) -> Optional[dict]:
+    """The VWAP bot's part of the weekly report (owners 10-25: its own section), None without it."""
+    vs = vwap_apart(src)
+    if vs is None or vs.get("state") != "ok":
+        return None
+    return facts_vwap(src, "weekly", window=window, section=True)
+
+
 # ---------------------------------------------------------------- when a meeting is due
 def due_loss(src: dict) -> Optional[tuple]:
     """(key, focus) when a live executor's last two closed trades both lost, closed within LOSS_FRESH_MS; one meeting per
@@ -1173,11 +1597,13 @@ def due_loss(src: dict) -> Optional[tuple]:
     tr = (src.get("trades") or {}).get("accts") or {}
     trend = is_trend(src.get("bot"))
     since = trend_since_of(src) if trend else None
+    vs = vwap_apart(src)                                 # a trade entered while following the VWAP bot is its (due_loss_vwap)
     from .dash.more import livebots as L
     for ex, _ko, _dk, _ck in L.ALL_EXECS:                # the third (딥코인) has rows only once installed
         a = tr.get(ex) or {}
         rows = [r for r in (a.get("rows") or []) if r.get("exit_time") is not None and r.get("pnl") is not None
-                and (since is None or (r.get("entry_time") or 0) >= since)]      # the trend bot: its own trades only
+                and (since is None or (r.get("entry_time") or 0) >= since)      # the trend bot: its own trades only
+                and not on_vwap(vs, ex, r.get("entry_time"))]
         rows.sort(key=lambda r: (r["exit_time"], str(r.get("key"))))
         if len(rows) < 2:
             continue
@@ -1253,6 +1679,98 @@ def due_weekly(src: dict) -> Optional[tuple]:
     return f"weekly:{kst_date(m9)}", {"window": [m9 - 7 * DAY, m9]}
 
 
+# ---------------------------------------------------------------- VWAP 개선판: when its own meetings are due
+def _vwap_paper_trade(vs: dict, pid: Any) -> Optional[dict]:
+    """The VWAP bot's paper trade ``pid`` as 성적 shows it (its gates, how deep it went), None when not among them."""
+    prf = vs.get("perf") if _ok(vs.get("perf")) else {}
+    return next((t for t in prf.get("trades") or [] if pid is not None and str(t.get("id")) == str(pid)), None)
+
+
+def _vwap_band_of(vs: dict, ex: Optional[str] = None) -> dict:
+    """The band of the paper (``ex`` None) or of a follower's live trades on this bot (성적's 운이냐 고장이냐)."""
+    bd = ((vs.get("perf") or {}).get("band") or {}) if _ok(vs.get("perf")) else {}
+    if bd.get("state") != "ok":
+        return {"state": bd.get("state") or "missing", "reason_ko": bd.get("reason_ko") or "5년 비교를 읽지 못했어요"}
+    if ex is None:
+        return bd.get("paper") or {"state": "missing"}
+    return next((b for b in bd.get("live") or [] if b.get("id") == ex), {"state": "missing", "reason_ko": "이 실행기의 비교가 없어요"})
+
+
+def due_loss_vwap(src: dict) -> Optional[tuple]:
+    """(key, focus) when the last two closed trades an executor made while following the VWAP bot both lost, closed within
+    LOSS_FRESH_MS (the same rule as every executor's); one meeting per pair, its key apart from the main bot's
+    ("loss:vwap:<the VWAP paper trades they followed>"). How rare: the losing run against the 5 years (band)."""
+    vs = vwap_apart(src)
+    if vs is None or vs.get("state") != "ok":
+        return None
+    now = src["now"]
+    tr = (src.get("trades") or {}).get("accts") or {}
+    for f in vs.get("followers") or []:
+        rows = [r for r in ((tr.get(f["id"]) or {}).get("rows") or []) if r.get("exit_time") is not None and r.get("pnl") is not None
+                and on_vwap(vs, f["id"], r.get("entry_time"))]
+        rows.sort(key=lambda r: (r["exit_time"], str(r.get("key"))))
+        if len(rows) < 2:
+            continue
+        last2 = rows[-2:]
+        if not (all(r["pnl"] <= 0 for r in last2) and now - last2[-1]["exit_time"] <= LOSS_FRESH_MS):
+            continue
+        ids = [str((r.get("paper") or {}).get("id") or r.get("key")) for r in last2]
+        losses = []
+        for r in last2:
+            pt = _vwap_paper_trade(vs, (r.get("paper") or {}).get("id")) or {}
+            losses.append({"coin": _coin(r.get("symbol")), "side": _side(r.get("side")),
+                           "strategy": pt.get("member_ko") or r.get("strategy_id"), "tf": r.get("timeframe"), "pnl": _r(r.get("pnl")),
+                           "roe": _r(r.get("roe")), "paper_roe": _r((r.get("paper") or {}).get("roe")), "exit": r.get("reason_ko"),
+                           "closed_kst": kst_text(r.get("exit_time")), "gates_at_entry": (pt.get("gates") or {}).get("text"),
+                           "worst_roe": _r(pt.get("mae")), "best_roe": _r(pt.get("mfe")), "exit_why": pt.get("why")})
+        b = _vwap_band_of(vs, f["id"])
+        from . import vwapband as VB
+        return "loss:vwap:" + "+".join(sorted(ids)), {
+            "bot": "vwap", "executor": f["id"], "executor_ko": f["name_ko"], "losses": losses,
+            "how_rare": VB.streak_ko(b) or "5년 비교를 아직 못 했어요(자료 없음)", "band_verdict": b.get("verdict_ko")}
+    return None
+
+
+def due_checkpoint_vwap(src: dict) -> Optional[tuple]:
+    """The VWAP paper's 거래 점검 every VWAP_CHECK_EVERY closed trades since its start (the guide's unit), once each; its
+    followers' checklists ride along (no rule of the meeting's own: the owners decide)."""
+    vs = vwap_apart(src)
+    prf = (vs or {}).get("perf")
+    if vs is None or not _ok(prf) or not _ok(prf.get("paper")):
+        return None
+    n = prf["paper"].get("n") or 0
+    since = prf.get("since_ms")
+    if n < VWAP_CHECK_EVERY or since is None:
+        return None
+    k = (int(n) // VWAP_CHECK_EVERY) * VWAP_CHECK_EVERY
+    ts = prf.get("trades") or []                                      # newest first
+    wins = sum(1 for t in ts[:k] if t.get("win")) if len(ts) >= k else None
+    return f"checkpoint:vwap-{kst_date(since)}:{k}", {
+        "bot": "vwap", "what": "paper", "paper_closed": n, "milestone": k, "since_kst": kst_text(since),
+        "last_k_wins": wins, "last_k_rate": wins / k if wins is not None else None,
+        "live": [{"name": c.get("name_ko"), "n": c.get("n"), "goal": c.get("goal")} for c in prf.get("checklist") or []]}
+
+
+def due_checkpoint_vwap_live(src: dict) -> Optional[tuple]:
+    """A follower's own 50th, 100th … closed live trade on the VWAP bot (the guide's 실거래 50번: the owners' moment to
+    decide about money), once each per follower and start of following."""
+    vs = vwap_apart(src)
+    prf = (vs or {}).get("perf")
+    if vs is None or not _ok(prf):
+        return None
+    for c in prf.get("checklist") or []:
+        n = c.get("n") or 0
+        if n < VWAP_CHECK_EVERY or c.get("since_ms") is None:
+            continue
+        k = (int(n) // VWAP_CHECK_EVERY) * VWAP_CHECK_EVERY
+        rec = c.get("record") or {}
+        return f"checkpoint:vwap-live-{c.get('id')}-{kst_date(c['since_ms'])}:{k}", {
+            "bot": "vwap", "what": "live", "executor": c.get("id"), "executor_ko": c.get("name_ko"), "live_closed": n, "milestone": k,
+            "since_kst": kst_text(c["since_ms"]), "win_rate": _r(rec.get("win_rate")), "roe_sum": _r(rec.get("roe_sum")),
+            "checks": [{"what": r.get("ko"), "state": r.get("state"), "value": r.get("value_ko")} for r in c.get("rows") or []]}
+    return None
+
+
 # ---------------------------------------------------------------- the members
 def system_prompt(role: str, trend: bool = False) -> str:
     if trend:
@@ -1323,6 +1841,78 @@ def trend_prompt(role: str) -> str:
                      "\"worry\": \"가장 걱정되는 한 가지 또는 null\", \"luck\": \"이게 우연일 수 있는 정도를 한 줄로\"}")
 
 
+LEAD_JSON = ("답은 JSON 하나만: {\"headline\": \"한 줄 결론\", \"verdict\": \"정상 범위|지켜보기|주의\", \"summary\": [\"3~5줄\"], "
+             "\"good\": [\"잘된 점\"], \"worries\": [\"걱정되는 점\"], \"watch_next\": [\"다음에 볼 것\"], "
+             "\"ideas\": [{\"idea\": \"가설\", \"why\": \"근거 숫자\", \"test\": \"시험 방법\"}] (최대 3개, 없으면 [])}")
+MEMBER_JSON = ("\n답은 JSON 하나만: {\"headline\": \"한 줄\", \"points\": [\"2~4줄, 숫자와 함께\"], "
+               "\"worry\": \"가장 걱정되는 한 가지 또는 null\", \"luck\": \"이게 우연일 수 있는 정도를 한 줄로\"}")
+
+
+def vwap_prompt(role: str) -> str:
+    """The members' instructions on the 'VWAP 개선판' (its own meetings): its parts (two strategies, two entry gates, the
+    pauses, the 2 ATR stop, the ladder, the hold limit), its yardstick (the band against its own 5 years, which lost per
+    trade; the 17 days the picked best period), never the main bot's numbers, the fixed rules and the owners' decisions
+    never up for discussion, an idea only a hypothesis to test."""
+    r = ROLES_VWAP[role]
+    common = (f"당신은 두 분(코딩과 통계를 모르는 한국인 운영자)의 암호화폐 실거래 봇 '{VWAP_NAME}'을 지켜보는 '실거래 분석 팀'의 "
+              f"{r['title']} '{r['name']}'입니다. 맡은 것: {r['focus']}.\n\n"
+              "이 봇: 규칙봇의 두 매매법 신호(VWAP 복귀 실패 30분, CMO·샌드위치 캔들 1시간)로 들어갑니다. 진입 전 조건 두 개(그 코인 "
+              "4시간 추세 판단이 신호 반대쪽이면 진입 안 함, 신호 봉 변동성이 지난 30일 기준으로 너무 크면 진입 안 함)와 쉬는 시간"
+              "(주말·미국 경제 발표 앞뒤·나스닥 개장 앞뒤)이 신호를 막습니다. 손절은 ATR 기준, 이익은 계단 익절, 자기 봉 수가 보유 "
+              "한도를 넘으면 시장가로 정리, 포지션은 한 번에 하나. 숫자는 fixed_rules 그대로입니다. 실거래는 이 봇을 따라가는 실행기"
+              "(bot.label)가 하고, 신호등이 빨강이면 새 진입을 따라가지 않습니다.\n\n"
+              "지킬 것:\n"
+              "1. 읽기만 합니다. 매매 권한이 없습니다. 진입·청산·건너뛰기·크기·레버리지·코인을 바꾸라는 말은 하지 않습니다.\n"
+              "2. 고정 규칙(fixed_rules)과 두 분의 결정(owners_decisions)은 두 분이 정한 것이라 바꾸자고 하지 않습니다.\n"
+              "3. 패킷(JSON)에 있는 숫자만 씁니다. 없는 숫자는 '자료 없음'이라고 씁니다. 추측한 숫자를 만들지 않습니다.\n"
+              f"4. 거래가 {SMALL_N}번보다 적으면 결론을 내리지 말고 '아직 우연이 큰 단계'라고 분명히 씁니다.\n"
+              f"5. 이 봇은 추세판단 봇과 다른 봇입니다(bot.apart). 추세판단 봇과 그 봇을 따라가는 실행기의 숫자를 쓰거나 섞지 않고, 이 "
+              f"봇을 말할 때는 '{VWAP_NAME}'(실거래는 bot.label에 적힌 실행기 이름)이라고 부릅니다.\n"
+              "6. 이 봇의 잣대는 band(운이냐 고장이냐: 같은 규칙의 5년 페이퍼)입니다. 5년은 승률이 본전 승률보다 낮아 거래당 손해였다는 "
+              "것을 숨기지 않습니다. band의 '정상 범위'는 5년처럼 돈다는 뜻이지 돈을 번다는 뜻이 아닙니다. 17일(pick17)은 고를 때 본 가장 "
+              "좋은 기간이라 기대치로 쓰지 않습니다. '아주 드묾'이면 설계와 다르게 돌고 있을 수 있다고 분명히 씁니다.\n"
+              "7. 페이퍼(연습 돈)와 실거래(진짜 돈)를 섞지 않습니다. blocked의 '막지 않았다면'은 실제 거래가 아니라서 쓸 때마다 '가상'이라고 "
+              "붙입니다.\n"
+              "8. 쉬운 한국어로, 짧게. 전문용어는 풀어서. 매매법은 패킷에 적힌 이름 그대로 부릅니다.\n")
+    if role == "lead":
+        return common + (
+            "9. 팀원들의 말(team)을 읽고, 숫자와 맞지 않는 말은 고칩니다. 아이디어는 '시험해 볼 가설'로만 씁니다: 무엇을 2020-24 자료로 "
+            "고르고 2025-26 자료로 한 번 확인할지(research/vwap30 방식), 또는 그림자 봇(주문 없이 같은 시장에서 나란히 돌리는 비교용 봇)"
+            "으로 볼지. 채택은 두 분이 정합니다.\n\n" + LEAD_JSON)
+    return common + MEMBER_JSON
+
+
+def vwap_section_prompt(role: str) -> str:
+    """Added to a weekly report's instructions when the packet has the VWAP bot's part (``vwap_bot``): another bot, its own
+    yardstick, its own lines in the answer."""
+    out = (f"\n\n[다른 봇: {VWAP_NAME}] 패킷에 vwap_bot이 있습니다. 위 봇과 다른 봇입니다(vwap_bot.bot.apart: 매매법·손절·진입 조건·"
+           "페이퍼 기록·실행기가 모두 따로). 두 봇의 숫자를 섞지 않습니다. vwap_bot의 고정 규칙(vwap_bot.fixed_rules)과 두 분의 결정"
+           "(vwap_bot.owners_decisions)도 바꾸자고 하지 않습니다. 이 봇의 잣대는 vwap_bot.band(같은 규칙의 5년 페이퍼)입니다: 5년은 거래당 "
+           "손해였고, '정상 범위'는 5년처럼 돈다는 뜻일 뿐이며, 17일(pick17)은 고른 가장 좋은 기간이라 기대치가 아닙니다. 막지 않았다면 "
+           "결과(vwap_bot.blocked)는 '가상'입니다.\n")
+    if role == "lead":
+        return out + (f"답 JSON에 \"vwap\": {{\"headline\": \"{VWAP_NAME} 한 줄 결론\", \"verdict\": \"정상 범위|지켜보기|주의\", "
+                      "\"summary\": [\"2~4줄\"], \"worries\": [\"걱정되는 점\"], \"watch_next\": [\"다음에 볼 것\"], \"ideas\": [{\"idea\": \"가설\", "
+                      "\"why\": \"근거 숫자\", \"test\": \"시험 방법\"}] (최대 2개)}를 따로 넣습니다(위 봇의 결론에는 섞지 않음).")
+    return out + f"답 JSON에 \"vwap_points\": [\"{VWAP_NAME}에 대해 1~3줄, 숫자와 함께\"]를 따로 넣습니다(points에는 섞지 않음)."
+
+
+def packet_vwap(packet: Optional[dict]) -> bool:
+    """The packet describes the VWAP bot only (facts_vwap)."""
+    return isinstance(packet, dict) and (packet.get("bot") or {}).get("kind") == "vwap"
+
+
+def prompt_for(role: str, packet: Optional[dict]) -> str:
+    """The instructions of ``role`` for this packet: the VWAP bot's own meeting (vwap_prompt), else the main bot's
+    (system_prompt; the trend bot's when the packet is its) with the VWAP part's addition when the packet has one."""
+    if packet_vwap(packet):
+        return vwap_prompt(role)
+    sp = system_prompt(role, packet_trend(packet))
+    if isinstance(packet, dict) and isinstance(packet.get("vwap_bot"), dict):
+        sp += vwap_section_prompt(role)
+    return sp
+
+
 def instruction(role: str, kind: str, label: Optional[str] = None) -> str:
     return (f"{label or KIND_KO.get(kind, kind)} 회의입니다. 표준입력의 JSON 패킷(facts: 사실, team: 앞 팀원들의 말)을 읽고 "
             f"'{ROLES[role]['name']}'({ROLES[role]['title']})로서 정해진 JSON 하나만 답하세요.")
@@ -1338,8 +1928,12 @@ def member_text(role: str, data: Optional[dict], raw: str) -> str:
         return _clip(raw, 1200)
     if role == "lead":
         lines = [_clip(data.get("headline"))] + [f"· {x}" for x in _list(data.get("summary"))]
+        v = data.get("vwap") if isinstance(data.get("vwap"), dict) else None
+        if v:                                                 # the weekly report's VWAP part, named
+            lines += [f"· [{VWAP_NAME}] {_clip(v.get('headline'))}"] + [f"· [{VWAP_NAME}] {x}" for x in _list(v.get("summary"), 4)]
         return "\n".join(x for x in lines if x)
     lines = [_clip(data.get("headline"))] + [f"· {x}" for x in _list(data.get("points"), 4)]
+    lines += [f"· [{VWAP_NAME}] {x}" for x in _list(data.get("vwap_points"), 3)]     # the weekly report's VWAP part
     if data.get("worry"):
         lines.append(f"걱정: {_clip(data['worry'])}")
     if data.get("luck"):
@@ -1354,8 +1948,17 @@ def lead_result(data: Optional[dict]) -> dict:
         if isinstance(i, dict) and str(i.get("idea") or "").strip():
             ideas.append({"idea": _clip(i.get("idea")), "why": _clip(i.get("why")), "test": _clip(i.get("test"))})
     v = d.get("verdict") if d.get("verdict") in VERDICTS else "지켜보기"
-    return {"headline": _clip(d.get("headline")) or "(팀장 결론 없음)", "verdict": v, "summary": _list(d.get("summary")),
-            "good": _list(d.get("good")), "worries": _list(d.get("worries")), "watch_next": _list(d.get("watch_next")), "ideas": ideas}
+    out = {"headline": _clip(d.get("headline")) or "(팀장 결론 없음)", "verdict": v, "summary": _list(d.get("summary")),
+           "good": _list(d.get("good")), "worries": _list(d.get("worries")), "watch_next": _list(d.get("watch_next")), "ideas": ideas}
+    vw = d.get("vwap")
+    if isinstance(vw, dict):                                  # the weekly report's VWAP part (vwap_section_prompt)
+        vi = [{"idea": _clip(i.get("idea")), "why": _clip(i.get("why")), "test": _clip(i.get("test"))}
+              for i in (vw.get("ideas") if isinstance(vw.get("ideas"), list) else [])[:2]
+              if isinstance(i, dict) and str(i.get("idea") or "").strip()]
+        out["vwap"] = {"headline": _clip(vw.get("headline")) or f"({VWAP_NAME} 결론 없음)",
+                       "verdict": vw.get("verdict") if vw.get("verdict") in VERDICTS else "지켜보기", "summary": _list(vw.get("summary")),
+                       "worries": _list(vw.get("worries")), "watch_next": _list(vw.get("watch_next")), "ideas": vi}
+    return out
 
 
 # ---------------------------------------------------------------- budget
@@ -1385,11 +1988,12 @@ def hold(conn, kind: str, key: str, packet: dict, runner, now: int, budget: dict
     others still speak; a plan limit stops the meeting). Returns the meeting row as a dict."""
     from .agents import runner as R
     roles = KIND_ROLES[kind]
-    trend = packet_trend(packet)                          # the 추세판단 봇: its members' instructions (trend_prompt)
+    # the members' instructions for this packet (prompt_for: the 추세판단 봇's trend_prompt, the VWAP bot's vwap_prompt, the
+    # weekly report's VWAP part added)
     label = packet.get("meeting") if isinstance(packet.get("meeting"), str) and packet.get("meeting") else KIND_KO[kind]
     title = f"{label} · {kst_text(now)}"
     est = R.call_charge(R.input_estimate(R.packet_payload({"role": "lead", "facts": packet, "team": [{"text": "x" * 1200}] * 3}),
-                                         system_prompt("lead", trend), instruction("lead", kind, label)))
+                                         prompt_for("lead", packet), instruction("lead", kind, label)))
     why = None if dry else fits(conn, now, budget, len(roles), est)
     if why:
         return {"state": "deferred", "why": why, "key": key}
@@ -1402,7 +2006,7 @@ def hold(conn, kind: str, key: str, packet: dict, runner, now: int, budget: dict
         pkt = {"role": role, "meeting": kind, "facts": packet, "team": team}
         t0 = clock()
         try:
-            res = runner.call(model, system_prompt(role, trend), instruction(role, kind, label), pkt)
+            res = runner.call(model, prompt_for(role, packet), instruction(role, kind, label), pkt)
             used_t = R._sum((res.meta or {}).get("usage"), R.USAGE_KEYS) if isinstance(res.meta, dict) else 0
             text, data, err = member_text(role, res.data, res.text), res.data, None
         except R.UsageLimitReached as exc:
@@ -1432,7 +2036,13 @@ def hold(conn, kind: str, key: str, packet: dict, runner, now: int, budget: dict
                      (why, clock(), calls, tokens, mid))
         conn.commit()
         return {"id": mid, "state": "failed", "why": why, "key": key}
-    for i in lead["ideas"]:
+    sec = packet.get("vwap_bot") if isinstance(packet.get("vwap_bot"), dict) else None
+    if lead.get("vwap") is not None:
+        if sec is None:
+            lead.pop("vwap")                                  # no VWAP part in this packet: nothing of it is kept
+        else:
+            lead["vwap"]["label"] = (sec.get("bot") or {}).get("label") or VWAP_NAME
+    for i in lead["ideas"] + [{**i, "idea": f"[{VWAP_NAME}] {i['idea']}"} for i in (lead.get("vwap") or {}).get("ideas") or []]:
         conn.execute("INSERT INTO ideas (meeting, ts, idea, why, test) VALUES (?,?,?,?,?)", (mid, now, i["idea"], i["why"], i["test"]))
     sent = None
     if notifier is not None and not dry:
@@ -1452,11 +2062,19 @@ def quiet(conn, kind: str, key: str, now: int, why: str) -> dict:
 
 
 def message(kind: str, lead: dict, label: Optional[str] = None) -> str:
-    icon = {"정상 범위": "🟢", "지켜보기": "🟡", "주의": "🟠"}.get(lead.get("verdict"), "🟡")
+    """The conclusion's quiet message; a weekly report with the VWAP bot's part (``lead["vwap"]``) tells it under its own
+    name ("— VWAP 개선판 · 딥코인 🟡 지켜보기"), never mixed into the main bot's lines."""
+    icons = {"정상 범위": "🟢", "지켜보기": "🟡", "주의": "🟠"}
+    icon = icons.get(lead.get("verdict"), "🟡")
     lines = [f"🧭 [실거래 분석팀] {label or KIND_KO.get(kind, kind)} {icon} {lead.get('verdict')}", lead.get("headline") or ""]
     lines += [f"· {x}" for x in (lead.get("summary") or [])[:4]]
-    if lead.get("ideas"):
-        lines.append(f"시험해 볼 아이디어 {len(lead['ideas'])}개 (결정은 두 분)")
+    v = lead.get("vwap") if isinstance(lead.get("vwap"), dict) else None
+    if v:
+        lines += [f"— {v.get('label') or VWAP_NAME} {icons.get(v.get('verdict'), '🟡')} {v.get('verdict')}", v.get("headline") or ""]
+        lines += [f"· {x}" for x in (v.get("summary") or [])[:3]]
+    n_ideas = len(lead.get("ideas") or []) + len((v or {}).get("ideas") or [])
+    if n_ideas:
+        lines.append(f"시험해 볼 아이디어 {n_ideas}개 (결정은 두 분)")
     lines.append(f"자세히: {DASH_HINT} · AI 의견이라 참고만, 매매는 고정 규칙대로")
     return "\n".join(x for x in lines if x)
 
@@ -1470,10 +2088,19 @@ def _send(notifier, text: str) -> bool:
 
 
 # ---------------------------------------------------------------- tick / run
+DUE = {"loss": due_loss, "checkpoint": due_checkpoint, "weekly": due_weekly}
+# the VWAP bot's own meetings (owners 10-25): its weekly part rides on the weekly report (vwap_section); "weekly" here is
+# only for a meeting opened by hand (run weekly --vwap)
+DUE_VWAP = {"loss": due_loss_vwap, "checkpoint": due_checkpoint_vwap,
+            "weekly": lambda src: (lambda got: (got[0] + ":vwap", {**got[1], "bot": "vwap"}) if got else None)(due_weekly(src))}
+
+
 def due(conn, src: dict) -> list:
-    """[(kind, key, focus)] not held yet, strongest first (loss, checkpoint, weekly)."""
+    """[(kind, key, focus)] not held yet, strongest first (loss, checkpoint, weekly); the VWAP bot's loss after the main
+    bot's, its follower's 실거래 50번 and its paper's 거래 점검 after the main bot's checkpoint."""
     out = []
-    for kind, fn in (("loss", due_loss), ("checkpoint", due_checkpoint), ("weekly", due_weekly)):
+    for kind, fn in (("loss", due_loss), ("loss", due_loss_vwap), ("checkpoint", due_checkpoint),
+                     ("checkpoint", due_checkpoint_vwap_live), ("checkpoint", due_checkpoint_vwap), ("weekly", due_weekly)):
         got = fn(src)
         if got and not conn.execute("SELECT 1 FROM meetings WHERE key = ?", (got[0],)).fetchone():
             out.append((kind, got[0], got[1]))
@@ -1481,29 +2108,45 @@ def due(conn, src: dict) -> list:
 
 
 def packet_for(src: dict, kind: str, focus: dict) -> dict:
+    """The packet of a due meeting: the VWAP bot's own (``focus["bot"] == "vwap"``: facts_vwap), else the main bot's,
+    the weekly report with the VWAP bot's part when it runs (``vwap_bot``: vwap_section)."""
+    if (focus or {}).get("bot") == "vwap":
+        now = src["now"]
+        win = tuple(focus["window"]) if kind == "weekly" and focus.get("window") else \
+            (now - 3 * DAY, now + 1) if kind == "loss" else (now - (7 if kind == "weekly" else 14) * DAY, now + 1)
+        return facts_vwap(src, kind, window=win, focus=focus)
     if kind == "weekly":
         a, b = focus["window"]
-        return facts(src, kind, window=(a, b))
+        pk = facts(src, kind, window=(a, b))
+        sec = vwap_section(src, (a, b))
+        if sec is not None:
+            pk["vwap_bot"] = sec
+        return pk
     if kind == "loss":
         return facts(src, kind, window=(src["now"] - 3 * DAY, src["now"] + 1), focus=focus)
     return facts(src, kind, window=(src["now"] - 14 * DAY, src["now"] + 1), focus=focus)
 
 
 def week_has_trades(packet: dict) -> bool:
-    return bool(packet.get("trades"))
+    return bool(packet.get("trades")) or bool((packet.get("vwap_bot") or {}).get("trades"))
 
 
 def tick(conn, src: dict, runner, budget: dict, notifier=None, dry: bool = False, model: str = MODEL_DEFAULT,
-         only: Optional[str] = None, force: bool = False, clock: Optional[Callable[[], int]] = None) -> Optional[dict]:
-    """Hold the first due meeting (``only``: that kind; ``force``: hold it even if held before, under a new key; ``clock``:
-    the time each call is charged at, the wall clock by default)."""
+         only: Optional[str] = None, force: bool = False, clock: Optional[Callable[[], int]] = None,
+         vwap: bool = False) -> Optional[dict]:
+    """Hold the first due meeting (``only``: that kind; ``force``: hold it even if held before, under a new key; ``vwap``:
+    the VWAP bot's own meeting of that kind; ``clock``: the time each call is charged at, the wall clock by default)."""
     more = {"clock": clock} if clock is not None else {}
     now = src["now"]
     items = due(conn, src) if not force else []
+    if vwap and not force:
+        items = [x for x in items if (x[2] or {}).get("bot") == "vwap"]
     if force and only:
-        got = {"loss": due_loss, "checkpoint": due_checkpoint, "weekly": due_weekly}[only](src)
+        got = (DUE_VWAP if vwap else DUE)[only](src)
         focus = got[1] if got else ({"window": [now - 7 * DAY, now]} if only == "weekly" else {"note": "손으로 연 회의"})
-        items = [(only, f"{only}:manual:{now}", focus)]
+        if vwap:
+            focus = {**focus, "bot": "vwap"}
+        items = [(only, f"{only}:{'vwap:' if vwap else ''}manual:{now}", focus)]
     for kind, key, focus in items:
         if only and kind != only:
             continue
@@ -1550,8 +2193,10 @@ def main(argv: Optional[list] = None) -> int:
     r.add_argument("kind", choices=sorted(KIND_ROLES))
     r.add_argument("--force", action="store_true")
     r.add_argument("--dry-run", action="store_true")
+    r.add_argument("--vwap", action="store_true", help=f"the {VWAP_NAME} bot's own meeting of that kind")
     pv = sub.add_parser("preview")
     pv.add_argument("kind", choices=sorted(KIND_ROLES))
+    pv.add_argument("--vwap", action="store_true", help=f"the {VWAP_NAME} bot's own packet and its members' instructions")
     sub.add_parser("status")
     a = ap.parse_args(argv)
     try:
@@ -1563,13 +2208,14 @@ def main(argv: Optional[list] = None) -> int:
     now = int(time.time() * 1000)
     if a.cmd == "preview":
         src = sources(now)
-        got = {"loss": due_loss, "checkpoint": due_checkpoint, "weekly": due_weekly}[a.kind](src)
+        got = (DUE_VWAP if a.vwap else DUE)[a.kind](src)
         focus = got[1] if got else ({"window": [now - 7 * DAY, now]} if a.kind == "weekly" else {"note": "지금은 열릴 조건이 아님"})
+        if a.vwap:
+            focus = {**focus, "bot": "vwap"}
         pkt = packet_for(src, a.kind, focus)
         print(json.dumps(pkt, ensure_ascii=False, indent=1, default=str))
-        trend = packet_trend(pkt)
         for role in KIND_ROLES[a.kind]:
-            print(f"\n===== {ROLES[role]['name']} ({ROLES[role]['title']})\n{system_prompt(role, trend)}\n"
+            print(f"\n===== {ROLES[role]['name']} ({ROLES[role]['title']})\n{prompt_for(role, pkt)}\n"
                   f"--- {instruction(role, a.kind, pkt.get('meeting'))}")
         return 0
     conn = connect(a.db)
@@ -1587,7 +2233,7 @@ def main(argv: Optional[list] = None) -> int:
                 return 0                    # nothing held; the 분석팀 tab says why
         src = sources(now)
         got = tick(conn, src, _runner(dry), budget, notifier=None if dry else _notifier(), dry=dry, model=model,
-                   only=getattr(a, "kind", None), force=bool(getattr(a, "force", False)))
+                   only=getattr(a, "kind", None), force=bool(getattr(a, "force", False)), vwap=bool(getattr(a, "vwap", False)))
         put_state(conn, "tick", now, {"result": {k: v for k, v in (got or {}).items() if k != "lead"}, "dry": dry})
         print(json.dumps(got or {"state": "nothing due"}, ensure_ascii=False, default=str)[:2000])
         return 0

@@ -335,6 +335,33 @@ def test_the_checklist_counts_the_vwap_era_only(w):
     assert pv["n"] == 3 and pv["same"] == 3 and pv["slip_mean"] == pytest.approx(-0.0003)
 
 
+def test_luck_or_broken_the_paper_and_the_follower_apart(w, tmp_path, monkeypatch):
+    """운이냐 고장이냐 (paperbot/vwapband.py): the paper since its start and WOO X Pro's VWAP-era live trades, each on its own,
+    against the bot's 5-year paper trades; the yardstick honest (the 5 years lost per trade, the 17 days picked); the
+    research file unread: said, never numbers written here."""
+    from paperbot import vwapband as VB
+    d = VW.perf(w["p"], NOW, _more(w))
+    bd = d["band"]
+    assert bd["state"] == "ok" and bd["how_ko"] == VW.BAND_HOW_KO
+    ref = VB.load()
+    paper = [t for t in V.paper_trades(w["p"]["paper2"]) if t["entry_time"] >= V.VS]
+    assert bd["paper"] == VB.band(paper, 1000.0, None, ref)                    # the engine's own trades, its own wallet
+    assert (bd["paper"]["n"], bd["paper"]["wins"]) == (7, 5) and bd["paper"]["dd"]["how"] == "equity"
+    assert bd["paper"]["dd"]["deepest"] == pytest.approx(d["paper"]["max_dd"])  # the same deepest drop as the 성적 card
+    (lv,) = bd["live"]
+    era = sorted((t for t in L.read_exec(w["p"]["mexc_db"], NOW)["trades"] if t["entry_ts"] >= V.SWITCH), key=lambda t: t["exit_ts"])
+    assert (lv["id"], lv["name_ko"], lv["state_ko"]) == ("mexc", "WOO X Pro", "따라가는 중")
+    assert {k: lv[k] for k in ("n", "wins", "verdict")} == {k: VB.band(era, None, None, ref)[k] for k in ("n", "wins", "verdict")}
+    assert lv["n"] == 3 and lv["dd"]["how"] == "margin40"                       # not sized from its balance: the bot's 40 %
+    assert lv["streak"]["now"] == 1 and lv["verdict"] in VB.VERDICTS
+    assert bd["ref"]["trades"] == 5805 and "거래당 손해" in bd["ref"]["honest_ko"] and "고를 때 본 가장 좋은 기간" in bd["ref"]["pick17"]["ko"]
+    # the research file unread: the card says so and nothing else
+    monkeypatch.setattr(VB, "BAND_FILE", str(tmp_path / "gone.json"))
+    VB._cache.clear()
+    gone = VW.perf(w["p"], NOW, _more(w))["band"]
+    assert gone["state"] == "missing" and gone["reason_ko"] == VB.MISSING_KO and "paper" not in gone
+
+
 def test_the_research_numbers_are_read_now_or_said_written(w, tmp_path, monkeypatch):
     r = VW.perf(w["p"], NOW, _more(w))["research"]
     assert r["pick17"]["n"] == 40 and r["pick17"]["wins"] == 37 and r["pick17"]["win_rate"] == pytest.approx(37 / 40)
@@ -582,7 +609,11 @@ def test_the_views_in_node(w, tmp_path):
                  "따라갔을 거래 7번", "걸렀을 거래 없음", "물림 −",
                  "연구 숫자와 나란히", "17일 연구 (고른 기간)", "37승 3패 · 92.5%", "5년 페이퍼 (같은 규칙)", "5,805번", "72.0%", "WOO X Pro 실거래 (VWAP 뒤)",
                  "−0.133%", "79개월 중 플러스 6달", "나눠 보기", "VWAP 복귀 실패 30분", "보유 한도 청산", "96봉(48시간) 지남", "WOO X Pro: 다른 페이퍼",
-                 "안 따라감", "페이퍼 진입을 늦게 봐서 건너뛰었어요"):
+                 "안 따라감", "페이퍼 진입을 늦게 봐서 건너뛰었어요",
+                 "운이냐 고장이냐", "페이퍼 (연습 돈)", "WOO X Pro 실거래 (진짜 돈)", "VWAP 개선판을 따라간 거래만", "승률 5/7승(71%)",
+                 "지금 1연패 · 5년 거래의 28%가 진 거래라 흔한 일이에요", "시작 뒤 가장 깊은 낙폭", "낙폭 계산: 계좌 기록(닫힌 거래의 지갑) 그대로",
+                 "낙폭 계산: 증거금 40% × 순ROE로 계산", "솔직히: 5년 페이퍼 5,805번은 승률 72.0%로 본전 승률 78.6%보다 낮아 거래당 손해였어요",
+                 "참고 17일(10/05~10/23, 이 봇을 고를 때 본 가장 좋은 기간)", "설계와 다르게 돌고 있을 수 있어요"):
         assert word in b, word
     assert not BAD.search(b), BAD.search(b)
     c = out["c"]

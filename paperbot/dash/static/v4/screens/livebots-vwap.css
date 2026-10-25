@@ -211,6 +211,17 @@ small.lvw-sub { font-size: var(--t-2xs); }
 .lvw-crit > small { grid-column: 2 / -1; }
 .lvw-rule { margin: 0; font-size: var(--t-sm); line-height: 1.6; overflow-wrap: anywhere; }
 
+/* ---------------------------------------------------------------- 성적: 운이냐 고장이냐 */
+.lvw-bands { display: grid; gap: 12px; min-width: 0; }
+.lvw-band { display: grid; gap: 6px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface-2);
+  min-width: 0; overflow-wrap: anywhere; }
+.lvw-band.warn { border-color: var(--warn-line); background: color-mix(in srgb, var(--warn-soft) 55%, var(--surface-2)); }
+.lvw-band.bad { border-color: var(--down-line); background: color-mix(in srgb, var(--down-soft) 60%, var(--surface-2)); }
+.lvw ul.lvw-brows { gap: 0; }
+.lvw-brow { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 6px 0;
+  border-bottom: 1px solid var(--line); line-height: 1.55; }
+.lvw-brow:last-child { border-bottom: 0; }
+
 /* ---------------------------------------------------------------- 성적: 연구 숫자와 나란히 */
 .lvw-rtab { display: grid; min-width: 0; font-size: var(--t-sm); }
 .lvw-rtr { display: grid; grid-template-columns: minmax(0, 1.4fr) 70px 150px minmax(0, 1.5fr) minmax(0, 1.6fr); gap: 4px 10px; align-items: baseline;
@@ -312,6 +323,8 @@ small.lvw-sub { font-size: var(--t-2xs); }
   .lvw-srow { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "k roe" "n n" "bar bar" "s s"; }
   .lvw-crit { grid-template-columns: max-content minmax(0, 1fr); }
   .lvw-crit > .num, .lvw-crit > small { grid-column: 2; text-align: left; }
+  .lvw-brow { grid-template-columns: max-content minmax(0, 1fr); }
+  .lvw-brow > span { grid-column: 1 / -1; }
 }
 @media (max-width: 420px) {
   .lvw-cell { padding: 6px 7px; }

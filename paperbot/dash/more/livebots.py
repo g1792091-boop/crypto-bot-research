@@ -3202,9 +3202,11 @@ def team(p: dict, now: int, units=None) -> dict:
                                          "text": text or "", "error": error, "tokens": _i(tok)})
     idea_by: dict = {}
     trend_ms = {m[0] for m in ms if tb and (_i(m[4]) or 0) >= int(tb["since"] or 0)}     # meetings held on the trend bot
+    vwap_ms = {m[0] for m in ms if T.kind_ko(m[1], m[2]).startswith("VWAP")}             # the VWAP bot's own (owners 10-25)
     for iid, mid, ts, idea, why, test, status in ideas:
+        how = T.VWAP_IDEA_HOW_KO if mid in vwap_ms else T.TREND_IDEA_HOW_KO if mid in trend_ms else None
         idea_by.setdefault(mid, []).append({"id": _i(iid), "ts": _i(ts), "idea": idea, "why": why, "test": test, "status": status,
-                                            **({"how_ko": T.TREND_IDEA_HOW_KO} if mid in trend_ms else {})})
+                                            **({"how_ko": how} if how else {})})
     meetings = []
     for mid, kind, key, title, s0, s1, state, why, head, verdict, result, sent, calls, tokens, dry in ms:
         meetings.append({"id": _i(mid), "kind": kind, "kind_ko": T.kind_ko(kind, key), "key": key, "title": title, "started_ts": _i(s0),

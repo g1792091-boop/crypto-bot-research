@@ -14,9 +14,11 @@ the executor that will follow it; "천천히 작업해도 되니까 완벽하게
     GET /api/v4/livebots/vwperf    성적: the paper account and its coin-flip twin side by side (wallet, change, trades, wins,
                                    average win / loss ROE, the break-even win rate of those averages, profit factor, deepest
                                    drop of the closed-trade equity, the curve), "실력 vs 운", the scale-up / stop checklist of
-                                   each follower (its live trades while it followed this bot only), the research's numbers next
-                                   to the live ones, the splits (strategy, coin, side, the 4h vote and the ATR% at the entry,
-                                   KST session, exit, hold), the trades with what the gates read and the follower's part
+                                   each follower (its live trades while it followed this bot only), "운이냐 고장이냐" (the paper
+                                   and each follower apart against the bot's 5-year paper trades: paperbot/vwapband.py), the
+                                   research's numbers next to the live ones, the splits (strategy, coin, side, the 4h vote
+                                   and the ATR% at the entry, KST session, exit, hold), the trades with what the gates read
+                                   and the follower's part
     GET /api/v4/livebots/vwblock   막은 신호: its FILTERED signals by reason (4시간 추세 반대 · 변동성 높음 · 주말·발표·나스닥 ·
                                    못 읽음 · 기타) today, 7 days and since its start (always: its own database), and "막지
                                    않았다면": the 1-minute watcher's virtual results of what it did not take (livecheck.db
@@ -876,6 +878,38 @@ def checklist(x: dict, path: str, paper: dict, flip: dict, ref: dict) -> dict:
             "reason_ko": x["record"].get("reason_ko")}
 
 
+BAND_HOW_KO = ("5년 페이퍼(같은 규칙, research/vwap30/band.json)에 지금 기록을 대 봐요: 승률(이만큼 이하가 나올 확률), 지금 연패(5년 "
+               "연패 중 이만큼 길었던 비율), 시작 뒤 가장 깊은 낙폭(5년의 같은 거래 수 구간 중 이만큼 깊었던 비율). 5% 넘게 있었으면 정상 "
+               "범위, 1~5% 드묾, 1% 미만 아주 드묾")
+
+
+def band_view(mine: list, cfg: dict, loc: dict, fol: list) -> dict:
+    """운이냐 고장이냐 (paperbot/vwapband.py): the paper since its start and each follower's live trades while it followed
+    this bot, each on its own (never added together), against the bot's 5-year paper trades; the yardstick with the 17
+    days labelled as the picked best period and the honest words (the 5 years lost per trade). The research file's state
+    when it cannot be read (said, never replaced by numbers)."""
+    from ... import vwapband as VB
+    ref = VB.load()
+    rv = VB.ref_view(ref)
+    if ref.get("state") != "ok":
+        return rv
+    path = loc["bot"]["path"]
+    paper = VB.band(sorted(mine, key=lambda t: (t.get("exit_time") or 0, t.get("id") or 0)), L._f(cfg.get("initial_equity")), None, ref)
+    ex_by = {x["id"]: x for x in loc["execs"]}
+    live = []
+    for f in fol:
+        x = ex_by.get(f["id"])
+        if x is None:
+            continue
+        c = x["config"] if isinstance(x.get("config"), dict) else {}
+        mf = L._f(c.get("margin_frac")) if c.get("size_from") == "equity" else None
+        era = sorted(era_trades(x, path), key=lambda t: (t.get("exit_ts") or 0, str(t.get("key"))))
+        b = VB.band(era, None, mf, ref) if x["record"].get("state") == "ok" else \
+            {"state": "unknown", "reason_ko": x["record"].get("reason_ko") or "실행기 기록을 못 읽음"}
+        live.append({"id": f["id"], "name_ko": f["name_ko"], "state_ko": f["state_ko"], **b})
+    return {"state": "ok", "ref": rv, "paper": paper, "live": live, "how_ko": BAND_HOW_KO}
+
+
 def research_view(ref: dict, paper: dict, follows: list) -> dict:
     """The research's numbers next to the live ones, honestly (module constants and research/vwap30/scale.json)."""
     return {"pick17": {**PICK17, "win_rate": PICK17["wins"] / PICK17["n"]},
@@ -1105,6 +1139,7 @@ def perf(p: Optional[dict] = None, now_ms: Optional[int] = None, more: Optional[
     return {**head, "bot": {**head["bot"], **bot_status(snap, now)}, "since_ms": since, "paper": paper, "flip": flip,
             "skill": skill_view(paper, flip), "followers": fol, "checklist": checks, "no_follower_ko": NO_FOLLOWER_KO,
             "scale_ko": SCALE_KO, "honest_ko": SCALE_HONEST_KO, "stop_ko": STOP_KO, "research": research_view(ref, paper, checks),
+            "band": band_view(mine, cfg, loc, fol),
             "notes": notes, "splits": {"paper": splits(mine, cfg), "flip": splits(twin, cfg)}, "split_min_n": SPLIT_MIN_N,
             "trades": trades_view(snap, cfg, since, loc, fol)}
 

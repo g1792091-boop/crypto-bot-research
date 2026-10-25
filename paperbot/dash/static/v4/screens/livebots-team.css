@@ -160,6 +160,11 @@
   font: 800 var(--t-2xs)/1 var(--f-term); }
 .lbt-idea p { margin: 0; color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }
 .lbt-hopen { justify-self: start; font-size: var(--t-xs); padding: 4px 0; }
+/* the weekly report's part about the other bot ('VWAP 개선판'): its own box, its own verdict tone */
+.lbt-vwap { display: grid; gap: 8px; min-width: 0; padding: 12px; border-radius: var(--r-md); border: 1px solid color-mix(in srgb, var(--vc) 55%, transparent);
+  background: color-mix(in srgb, var(--vc) 7%, var(--surface)); }
+.lbt-vh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; color: var(--ink); font-size: var(--t-sm); }
+.lbt-vline { margin: 0; color: var(--ink); font: 700 var(--t-md)/1.45 var(--f-body); overflow-wrap: anywhere; }
 .lbt-hero .lb-warn { margin: 0; }
 
 /* the verdict chip: 정상 범위 · 지켜보기 · 주의 */

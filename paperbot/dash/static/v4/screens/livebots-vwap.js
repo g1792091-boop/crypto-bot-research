@@ -8,7 +8,9 @@
 //                       its last 48 hours of signals with the bot's reasons and what the gates read
 //   성적 (#/vwperf)     the paper and its coin-flip twin side by side (break-even win rate from their own averages, profit
 //                       factor, deepest drop, the curves), 실력 vs 운, the scale-up / stop checklist of each follower (its
-//                       live trades while it followed this bot only), the research's numbers next to the live ones,
+//                       live trades while it followed this bot only), 운이냐 고장이냐 (the paper and each follower apart
+//                       against the bot's 5-year paper trades: win rate, losing run, deepest drop, each with its verdict;
+//                       the 17 days labelled as the picked best period), the research's numbers next to the live ones,
 //                       나눠 보기 (strategy, coin, side, the 4h vote and ATR% at the entry, session, exit, hold) and the trades
 //   막은 신호 (#/vwblock) its filtered signals by reason (today · 7 days · since its start) and "막지 않았다면": the 1-minute
 //                       watcher's virtual results per reason, with the gates' numbers
@@ -438,6 +440,17 @@ export function alignCurves(curves) {
   });
   return {t, series};
 }
+/** 운이냐 고장이냐 of one account (dash/more/livevwap.py band_view, paperbot/vwapband.py): [[label, words, verdict]] of
+ *  its three checks, the words without their "→ verdict" tail (the pill says it); [] when there is nothing to compare. */
+export function bandRows(b) {
+  if (!b || b.state !== "ok") return [];
+  const words = (x) => String((x && x.ko) || "").split(" → ")[0];
+  return [["승률", words(b.win), b.win && b.win.verdict], ["연패", words(b.streak), b.streak && b.streak.verdict],
+    ["낙폭", words(b.dd), b.dd && b.dd.verdict]];
+}
+/** The tone of a band verdict: 정상 범위 good · 드묾 warn · 아주 드묾 bad. */
+export const bandTone = (v) => ({"정상 범위": "good", "드묾": "warn", "아주 드묾": "bad"})[v] || "thin";
+
 /** A split's rows for the bars: the largest |ROE sum| sets the scale. */
 export function splitScale(rows) {
   return Math.max(0.0001, ...(rows || []).map((r) => Math.abs(Number(r.roe_sum) || 0)));
@@ -451,6 +464,7 @@ export function vwperfView(ctx) {
   const chartBox = h("div", {class: "lvw-eqbox"});
   const skillBox = h("div", {class: "lvw-skill"});
   const checkBox = h("div", {class: "lvw-checks"});
+  const bandBox = h("div", {class: "lvw-bands"});
   const refBox = h("div", {class: "lvw-ref"});
   const noteBox = h("div", {class: "lvw-notes"});
   const splitHead = h("div", {class: "lvw-splithead"});
@@ -461,6 +475,7 @@ export function vwperfView(ctx) {
     ui.card({title: "페이퍼 vs 동전 쌍둥이", sub: "같은 진입 · 동전 쌍둥이는 방향만 무작위 · 닫힌 거래 기준 · 연습 돈", cls: "lvw-cmpcard", acts: [since]},
       h("div", {class: "lvw-cmpgrid"}, cmpBox, chartBox), skillBox),
     ui.card({title: "키우기 · 멈추기", sub: "실행기가 이 봇을 따라간 뒤의 실거래만 · docs/vwap-bot-ko.md 6장", cls: "lvw-checkcard"}, checkBox),
+    ui.card({title: "운이냐 고장이냐", sub: "지금 기록을 5년 페이퍼(같은 규칙)에 대 봐요 · 페이퍼와 실거래는 따로 · docs/vwap-bot-ko.md 9장", cls: "lvw-bandcard"}, bandBox),
     ui.card({title: "연구 숫자와 나란히", sub: "연구 계산은 참고예요 · 실제가 이 숫자를 따라간다는 약속이 아니에요", cls: "lvw-refcard"}, refBox),
     ui.card({title: "연구 노트", sub: "페이퍼 기록으로 지금 계산 · 물림(이기기 전에 얼마나 밀렸나)과 신호등이 진 거래를 골라내는지", cls: "lvw-notecard"}, noteBox),
     ui.card({title: "나눠 보기", sub: "어디서 이기고 어디서 지나 · 칸마다 10번 미만은 표본 적음", cls: "lvw-splitcard"}, splitHead, splitBox),
@@ -522,6 +537,31 @@ export function vwperfView(ctx) {
     put(checkBox, cs.length ? cs.map(checkCard) : h("div", {class: "lvw-empty"}, h("b", null, d.no_follower_ko || "아직 따라가는 실행기 없음 (페이퍼만)"),
       h("p", null, "실행기 하나를 옮기면 그 실행기의 실거래가 여기서 50번까지 세져요. 키우기는 50번 승률 80% 이상 · 페이퍼와 비슷함, 멈추기는 승률이 본전 승률 아래로 이어질 때예요."),
       h("p", {class: "lvw-honest"}, d.honest_ko || "")));
+  }
+  function bandAcct(title, b, sub) {
+    const head = h("div", {class: "lvw-fhead"}, h("b", null, title), sub ? h("span", {class: "lvw-sub"}, sub) : null,
+      b && b.state === "ok" ? ui.pill(b.verdict_ko, bandTone(b.verdict)) : null, b && b.small ? ui.pill("표본 적음", "thin", "닫힌 거래 20번 미만은 대부분 운") : null);
+    if (!b || b.state !== "ok") {
+      return h("div", {class: "lvw-band"}, head, h("p", {class: "lvw-sub"}, (b && (b.ko || b.reason_ko)) || "아직 비교할 거래가 없어요"));
+    }
+    return h("div", {class: ["lvw-band", bandTone(b.verdict)]}, head,
+      h("ul", {class: "lvw-list lvw-brows"}, bandRows(b).map(([k, words, v]) => h("li", {class: "lvw-brow"},
+        ui.pill(v || "—", bandTone(v)), h("b", null, k), h("span", null, words)))),
+      b.win && b.win.emp && b.win.emp.ko ? h("p", {class: "lvw-sub"}, b.win.emp.ko) : null,
+      b.dd && b.dd.how_ko ? h("p", {class: "lvw-sub"}, `낙폭 계산: ${b.dd.how_ko}`) : null);
+  }
+  function drawBand() {
+    const bd = st.d.band || {};
+    if (bd.state !== "ok") { put(bandBox, h("p", {class: "lvw-sub"}, bd.reason_ko || "5년 비교 파일을 못 읽었어요")); return; }
+    const ref = bd.ref || {}, p17 = ref.pick17;
+    put(bandBox, bandAcct("페이퍼 (연습 돈)", bd.paper, "시작부터"),
+      (bd.live || []).map((x) => bandAcct(`${x.name_ko} 실거래 (진짜 돈)`, x, `VWAP 개선판을 따라간 거래만 · ${x.state_ko || ""}`)),
+      (bd.live || []).length ? null : h("p", {class: "lvw-sub"}, "아직 이 봇을 따라가는 실행기가 없어요 (페이퍼만)"),
+      h("p", {class: "lvw-honest"}, ref.honest_ko || ""),
+      h("ul", {class: "lvw-list lvw-rlist"},
+        p17 ? h("li", null, p17.ko) : null,
+        h("li", null, `판정: ${ref.rule_ko || ""} · 아주 드묾은 "설계와 다르게 돌고 있을 수 있어요" (멈출지는 두 분이 정해요)`),
+        h("li", {class: "lvw-sub"}, `${bd.how_ko || ""} · 출처: ${ref.src || ""}`)));
   }
   function drawRef() {
     const r = st.d.research || {}, p17 = r.pick17 || {}, y5 = r.five_year || {};
@@ -612,7 +652,7 @@ export function vwperfView(ctx) {
     put(slot, stateOf(d));
     if (!d || d.state !== "ok") { cards.hidden = true; return; }
     cards.hidden = false;
-    drawCmp(); drawChecks(); drawRef(); drawNotes(); drawSplit(); drawTrades();
+    drawCmp(); drawChecks(); drawBand(); drawRef(); drawNotes(); drawSplit(); drawTrades();
   }
   poller(ctx, PERF_API, SLOW_MS, st, slot, main, draw);
   return {el, set() {}};

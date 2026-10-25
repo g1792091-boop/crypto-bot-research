@@ -1680,7 +1680,9 @@ def test_light_changes_checkpoint_and_executor_start_stop(tmp_path):
     st.event(T + 2 * MIN, "INFO", "start", "시작")
     st.commit()
     st.close()
-    run(src, T + 3 * MIN, n)                                         # the first start event seen: recorded
+    run(src, T + 3 * MIN, n)                                         # the first start event seen, 1 minute old: told
+    (lv, text), = msgs(n, "▶️")
+    assert lv == INFO and text.startswith("▶️ MEXC 실행기 켜짐")
     st = ExecStore(src.executors[1].db, lock=False)
     st.event(T + 4 * MIN, "INFO", "sigterm", "끄라는 신호(SIGTERM)")
     st.commit()
@@ -1699,8 +1701,22 @@ def test_light_changes_checkpoint_and_executor_start_stop(tmp_path):
     st.commit()
     st.close()
     run(src, T + 22 * MIN, n)
-    (lv, text), = msgs(n, "▶️")
+    first, (lv, text) = msgs(n, "▶️")
     assert text.startswith("▶️ MEXC 실행기 켜짐 · 잔고 $110.00 · 신호등 빨강(최근 20번 16승 80%, 기준 90%)")
+
+
+def test_an_old_first_start_is_only_recorded(tmp_path):
+    """Owners 10-25 (the DeepCoin executor's first start sent no ▶️): a first-seen start is told only while it is
+    recent; one older than FIRST_START_MS (a new watcher state next to an executor that has run for long) is recorded."""
+    from paperbot.executor import ExecStore
+    src = card_setup(tmp_path, _paper_run(35, 4, losses_last=False), [])
+    n = ListNotifier()
+    st = ExecStore(src.executors[1].db, lock=False)
+    st.event(T - LC.FIRST_START_MS - MIN, "INFO", "start", "시작")
+    st.commit()
+    st.close()
+    run(src, T, n)
+    assert msgs(n, "▶️") == []
 
 
 def test_checkpoint_at_the_40th_trade_loud_only_under_82(tmp_path):

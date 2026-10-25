@@ -312,6 +312,30 @@ def test_the_morning_check_has_the_vwap_bots_own_part(morning):
     assert r["report"]["bots"][0]["path"] == w.p["vwap"] and r["report"]["bots"][0]["gates"]["vote"] == 1
 
 
+def test_the_morning_vwap_part_ends_with_luck_or_broken(morning, monkeypatch, tmp_path):
+    """운이냐 고장이냐 (paperbot/vwapband.py, docs/vwap-bot-ko.md 9): the VWAP part's last lines, the paper and its executor
+    apart (the executor's VWAP-era trades only), against the bot's 5-year paper trades; then the reference line."""
+    from paperbot import vwapband as VB
+    w, r = morning
+    text = r["text"]
+    part = text[text.index("\nVWAP 개선판 (바이비트가 따라감)\n"):].split("\n\n")[0].strip().split("\n")
+    i = next(k for k, ln in enumerate(part) if ln.startswith("- 운이냐 고장이냐"))
+    assert all(not ln.startswith("- 운이냐") for ln in part[:i])          # after every line the part had before
+    paper = LC.PaperSet(w.p["paper"]).trades(w.p["vwap"])
+    b = VB.band(paper, 1000.0)
+    assert part[i:i + 2] == VB.lines(b, "페이퍼") and b["n"] == 4
+    assert part[i].startswith("- 운이냐 고장이냐 · 페이퍼(거래 4번): ") and part[i].endswith("· 아직 표본 적음")
+    # 바이비트: its one VWAP-era trade (its two trend-bot trades before the switch never count here)
+    assert part[i + 2].startswith("- 운이냐 고장이냐 · 바이비트 실거래(거래 1번): ") and part[i + 3].startswith("  승률 0/1승")
+    assert part[i + 4] == VB.ref_line() and "거래당 손해" in part[i + 4] and "고른 가장 좋은 기간이라 기대치 아님" in part[i + 4]
+    assert len(part) == i + 5
+    # the research file unread: one line saying so
+    monkeypatch.setattr(VB, "BAND_FILE", str(tmp_path / "gone.json"))
+    VB._cache.clear()
+    assert LC.band_lines(w.p["vwap"], paper, {"initial_equity": 1000}, [], [], {}) == [f"- 운이냐 고장이냐: {VB.MISSING_KO}"]
+    VB._cache.clear()
+
+
 def test_the_morning_score_lines_never_mix_the_two_bots(morning):
     w, r = morning
     score = r["text"][r["text"].index("성적표(시작부터)"):].split("\n\n")[0]
