@@ -432,6 +432,20 @@ for u in paperbot-liveteam.service paperbot-liveteam.timer; do
 done
 systemctl daemon-reload
 echo "paperbot-liveteam.timer (실거래 분석 팀): 자동 시작 $(systemctl is-enabled paperbot-liveteam.timer 2>/dev/null || echo 꺼짐), 지금 $(systemctl is-active paperbot-liveteam.timer 2>/dev/null || echo 꺼짐) · 켜기: sudo systemctl enable --now paperbot-liveteam.timer"
+# 믹스 30분 봇 점검 (paperbot/mixcheck.py; docs/mixchop-ko.md 8장): the '믹스 30분 봇''s morning check (09:05 KST) and its
+# loss cards (every 5 minutes): read-only towards the bot (its config, state file and log read as group paperbot; no
+# exchange account, no key, no order), Telegram to the live bot's own chats, its own folder /var/lib/paperbot/mixcheck.
+# Installed AND switched on here (their timers), like the live checks above. The bot itself (paperbot-mixchop) and its
+# paper twin are never started, stopped or restarted here. Their real state is printed.
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixcheck
+for u in paperbot-mixcheck.service paperbot-mixcheck.timer paperbot-mixcheck-pass.service paperbot-mixcheck-pass.timer; do
+  install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+for t in paperbot-mixcheck.timer paperbot-mixcheck-pass.timer; do
+  systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
+  echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
+done
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"

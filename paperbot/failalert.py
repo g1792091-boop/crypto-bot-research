@@ -71,6 +71,16 @@ JOBS_KO = {
     "paperbot-shadow200.service": ("딥시크 200 그림자 시험(기록만)",
                                    "15분마다 다시 돎 (빠진 부분은 다음 실행이 스스로 메움, 계좌·주문과 무관)\n"
                                    "지금 상태: cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.shadow200 status"),
+    # owners 10-25 night: the '믹스 30분 봇''s own checks (paperbot/mixcheck.py, docs/mixchop-ko.md 8장)
+    "paperbot-mixcheck.service": ("믹스 30분 봇 아침 점검(09:05)",
+                                  "내일 09:05에 다시 돎 (믹스 봇·주문과 무관, 읽기만 함)\n"
+                                  "미리 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
+                                  "/opt/paperbot/venv/bin/python -m paperbot.mixcheck morning --dry-run\n"
+                                  "지금 다시: sudo systemctl start paperbot-mixcheck"),
+    "paperbot-mixcheck-pass.service": ("믹스 30분 봇 손실 카드(5분마다)",
+                                       "5분마다 다시 돎 (믹스 봇·주문과 무관, 읽기만 함)\n"
+                                       "지금 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
+                                       "/opt/paperbot/venv/bin/python -m paperbot.mixcheck pass --dry-run"),
 }
 RESULT_KO = {"exit-code": "오류로 끝남", "timeout": "시간 제한을 넘김", "signal": "강제로 멈춰짐",
              "core-dump": "강제로 멈춰짐", "oom-kill": "메모리 한도를 넘김", "watchdog": "응답 없음"}

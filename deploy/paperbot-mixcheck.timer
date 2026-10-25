@@ -1,0 +1,12 @@
+# 믹스 30분 봇 아침 점검 (deploy/paperbot-mixcheck.service): 00:05 UTC = 09:05 KST, about the KST day that ended at
+# midnight. Installed and switched on by install.sh; by hand: sudo systemctl enable --now paperbot-mixcheck.timer
+[Unit]
+Description=paperbot 믹스 30분 봇 아침 점검 at 00:05 UTC (09:05 KST: the previous KST day)
+
+[Timer]
+OnCalendar=*-*-* 00:05:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -15,7 +15,9 @@ watch the 'VWAP 개선판'). Read-only, two answers:
     GET /api/v4/livebots/mixperf   성적: per bot the closed trades (exit rows joined to their entry rows by coin and
                                    ``opened_ms``): count, wins, win rate, P&L, average win / loss, largest loss, by coin,
                                    the list; the design's 5-year backtest per coin next to them (labelled as such, never
-                                   as live); the rules of each config
+                                   as live); the rules of each config; ``analysis`` (owners 10-25 night, paperbot/mixcheck.py
+                                   site_view): the live trades' loss cards, the luck band against the 5-year replay of the
+                                   bot's own code, that replay next to the design's numbers, the last morning check
     (5 s cache each, as every 실거래 tab)
 
 Sources (the bot's own files, read only; nothing here writes anywhere): per bot its state file (JSON), its log (JSON
@@ -736,12 +738,23 @@ def control(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
             "span_ms": SIG_SPAN_MS, "stale_ms": STALE_MS}
 
 
+def analysis(p: dict, now: int) -> dict:
+    """성적's 손실 분석 part (owners 10-25 night, paperbot/mixcheck.py site_view): the live trades' loss cards, the luck band
+    against the 5-year replay, the replay's numbers next to the design's, the last morning check. Its own failure is said,
+    never the page's."""
+    try:
+        from ... import mixcheck as MC                   # (mixcheck reads the bots through this module: imported here)
+        return {"state": "ok", **MC.site_view(p, now)}
+    except Exception as exc:  # noqa: BLE001
+        return {"state": "error", "ko": "손실 분석을 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}
+
+
 def perf(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     """GET /api/v4/livebots/mixperf (module docstring)."""
     p = p or paths()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     return {"now_ms": now, "name_ko": M.NAME, "bots": [bot_perf(bid, p[bid], now) for bid, *_r in BOTS], "backtest": BACKTEST,
-            "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N}
+            "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N, "analysis": analysis(p, now)}
 
 
 def register(app, ctx) -> dict:

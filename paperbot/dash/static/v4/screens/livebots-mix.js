@@ -8,7 +8,10 @@
 //                     best price and the next ladder trigger; the last 48 hours of signals with what became of each, the
 //                     warnings highlighted
 //   성적 (#/mixperf)  the closed trades of each bot (count, wins, win rate, P&L, average win / loss, largest loss, by coin,
-//                     the list) next to the design's 5-year backtest per coin (labelled: not live), and the rules
+//                     the list) next to the design's 5-year backtest per coin (labelled: not live), and the rules; the
+//                     손실 분석 (owners 10-25 night, paperbot/mixcheck.py): 운이냐 고장이냐 (the live record in the 5-year
+//                     replay of the bot's own code, with the replay next to the design's numbers), the loss cards of the
+//                     live trades, the last morning check (the signal replay, live against paper)
 // Sources: /api/v4/livebots/mix (every 15 s; countdowns tick every second), /mixperf (every 60 s), dash/more/livemix.py.
 // HONESTY: unread = 못 읽음 + why, never a zero; a bot with no files says 꺼짐 and how to start it; the paper bot's money is
 // never shown as real money (모의 · 진짜 돈 아님); small samples say so; the backtest is labelled as the design's, not live.
@@ -343,6 +346,56 @@ export function recordRows(r, real) {
     ["계단까지 간 거래", `${fmt.int(r.ladder_n)}번`],
   ];
 }
+/** A luck-band row (paperbot/mixcheck.py band) in words: {head, pill, tone, text}. */
+export function bandRowKo(x) {
+  const pTxt = ok(x.p) ? `이만큼 나쁘거나 더 나빴던 때 ${rateKo(x.p, 0)}` : "";
+  return {head: `${x.ko} ${x.live}`, pill: x.verdict_ko || "참고", tone: x.tone || "thin",
+    text: [x.range, pTxt, x.why].filter(Boolean).join(" · ")};
+}
+const CARD_PILL = {normal: "설계대로", abnormal: "설계보다 큰 손실", very_abnormal: "설계보다 아주 큰 손실", unknown: "손익 모름", win: "익절"};
+/** A loss card (or a win's line) in words: {head, pill, tone, lines, causes, win}. */
+export function cardKo(c) {
+  const head = `${c.coin || ""} ${c.side_ko || ""}`.trim();
+  if (c.verdict === "win") {
+    const tw = c.twin && c.twin.state === "closed" && ok(c.twin.r) ? ` · 모의 ${fmt.num(c.twin.r, 2, true)}R` : "";
+    return {head, pill: c.ko || "익절", tone: "good", win: true, causes: [],
+      lines: [`${fmt.kst(c.opened_ms)} → ${fmt.kst(c.exit_ms)} (${holdKo(c.hold_ms)}) · ${pnlKo(c.pnl)}${ok(c.r) ? ` (${fmt.num(c.r, 2, true)}R)` : ""}${tw}`]};
+  }
+  const bad = c.verdict === "abnormal" || c.verdict === "very_abnormal";
+  return {head, pill: CARD_PILL[c.verdict] || c.ko || "손실", tone: bad ? "bad" : c.verdict === "unknown" ? "warn" : "thin", win: false,
+    lines: (c.lines || []).filter(Boolean), causes: (c.causes || []).map((x) => x.ko).concat(c.notes || []).filter(Boolean),
+    causesHead: bad ? "이유 후보" : "참고"};
+}
+/** The last morning check in lines (paperbot/mixcheck.py last-morning.json). */
+export function morningKo(m) {
+  if (!m || m.state !== "ok") return {pill: m && m.state === "error" ? "못 읽음" : "아직 없음", tone: m && m.state === "error" ? "bad" : "thin", lines: [(m && m.ko) || "아침 점검 기록이 아직 없어요"]};
+  const d = m.d || {};
+  const rp = d.replay || null;
+  const lines = [];
+  if ((d.warn || []).length) lines.push(...d.warn.map((x) => `확인할 것: ${x}`));
+  const s = d.signals || {};
+  lines.push(`색 변화 ${fmt.int(s.changes || 0)}번 · 조건 맞은 신호 ${fmt.int(s.signals || 0)}번 · 진입 ${fmt.int(s.entries || 0)}번`);
+  if (!rp) lines.push("신호 다시 계산: 건너뜀");
+  else if (rp.state !== "ok") lines.push(`신호 다시 계산: ${rp.ko || "못 함"}`);
+  else {
+    lines.push(`놓친 신호 ${fmt.int((rp.missed || []).length)}개 (바이낸스 봉으로 봇 공식을 다시 계산 · 색 변화 ${fmt.int(rp.changes || 0)}번)`);
+    for (const x of (rp.missed || []).slice(0, 6)) lines.push(`· ${fmt.kst(x.close_ms)} ${x.coin} ${SIDE(x.side)}: ${x.ko}`);
+    if ((rp.different || []).length) lines.push(`판정이 다른 봉 ${fmt.int(rp.different.length)}개`);
+    if ((rp.unexplained || []).length) lines.push(`이유 없이 안 들어간 신호 ${fmt.int(rp.unexplained.length)}개`);
+  }
+  const vs = d.vs_paper || {};
+  if (vs.state === "ok") lines.push(`모의와 같은 진입 ${fmt.int(vs.same || 0)}번${(vs.diffs || []).length ? ` · 다른 것 ${fmt.int(vs.diffs.length)}개` : " · 다른 것 없음"}`);
+  for (const x of (vs.diffs || []).slice(0, 4)) lines.push(`· ${x.ko}`);
+  return {pill: d.level === "WARN" ? `확인할 것 ${fmt.int((d.warn || []).length)}개` : "이상 없음", tone: d.level === "WARN" ? "warn" : "good",
+    day: d.day || "", lines};
+}
+/** The design's numbers next to the replay of the bot's own code, per coin: [coin, design, replay at 0.042 %, at 0.02 %]. */
+export function designRows(ds) {
+  return ((ds && ds.rows) || []).map((r) => ({coin: r.coin, design: `${pctKo(r.design_month, 2)} · 승률 ${rateKo(r.design_win, 0)}`,
+    replay: `${pctKo(r.month, 2)} · 승률 ${rateKo(r.win, 0)}`, replay02: ok(r.month_fee02) ? pctKo(r.month_fee02, 2) : "—",
+    neg: ok(r.neg_months) ? `${fmt.int(r.neg_months)}/60` : "—"}));
+}
+
 /** The backtest table's rows with each bot's own numbers per coin beside them. */
 export function compareCoins(bt, bots) {
   const of = (id, sym) => ((bots.find((b) => b.id === id) || {}).coins || []).find((c) => c.symbol === sym) || null;
@@ -353,14 +406,20 @@ export function compareCoins(bt, bots) {
 
 /** mixperfView(ctx) -> {el, set()}: 성적 (module comment). */
 export function mixperfView(ctx) {
-  const st = {d: null, okAt: 0, busy: false, acct: local.get("lmx-trades", "live"), tn: TRADES_PAGE};
+  const st = {d: null, okAt: 0, busy: false, acct: local.get("lmx-trades", "live"), tn: TRADES_PAGE, cn: TRADES_PAGE};
   const slot = h("div", {class: "lb-slot"});
   const recBox = h("div", {class: "lmx-bots"});
   const btBox = h("div", {class: "lmx-bt"});
   const tradeHead = h("div", {class: "lmx-feedhead"});
   const tradeBox = h("div", {class: "lmx-trades"});
   const rulesBox = h("div", {class: "lmx-bots"});
+  const bandBox = h("div", {class: "lmx-band"});
+  const morningBox = h("div", {class: "lmx-morning"});
+  const lossBox = h("div", {class: "lmx-loss"});
   const cards = h("div", {class: "lmx-cards"}, recBox,
+    ui.card({title: "운이냐 고장이냐", sub: "실거래 기록을 봇 코드 그대로 돌린 5년 재생과 비교 · 이만큼 나쁘거나 더 나빴던 때가 10% 넘으면 정상 범위", cls: "lmx-bandcard"}, bandBox),
+    ui.card({title: "손실 카드", sub: "실거래 거래마다 · 계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교 · 새것부터 · 텔레그램에도 청산 몇 분 뒤 와요", cls: "lmx-losscard"}, lossBox),
+    ui.card({title: "어제 아침 점검", sub: "매일 09:05 · 신호 다시 계산(바이낸스 봉, 봇 공식)과 모의 비교", cls: "lmx-morncard"}, morningBox),
     ui.card({title: "설계서 5년 백테스트와 나란히", sub: "왼쪽 두 칸은 설계서 숫자 (실거래 아님) · 오른쪽은 이 봇들의 실제 기록", cls: "lmx-btcard"}, btBox),
     ui.card({title: "거래", sub: "새것부터 · 청산 기록을 진입 기록과 맞춤 · 한국 시간", cls: "lmx-tradecard"}, tradeHead, tradeBox),
     ui.card({title: "규칙", sub: "봇이 읽는 설정 그대로 (서버 설정 파일)", cls: "lmx-rulecard"}, rulesBox));
@@ -440,11 +499,71 @@ export function mixperfView(ctx) {
           h("span", {class: "num", role: "cell"}, fmt.num(c.h1_buf, 1)), h("span", {class: "num", role: "cell"}, fmt.num(c.sl_atr, 1)),
           h("span", {class: "num", role: "cell"}, `${rateKo(c.roe_act, 0)} → ${rateKo(r.lock_roe, 0)}`), h("span", {class: "num", role: "cell"}, fmt.lev(c.leverage))))));
   }
+  function drawBand(an) {
+    const b = an.band || {};
+    const kids = [];
+    if (b.state === "empty") kids.push(ui.empty(b.ko || "아직 닫힌 실거래가 없어요"));
+    else if (b.state === "ok") {
+      kids.push(h("div", {class: ["lmx-verdict", b.worst === "very_rare" ? "halt" : b.worst === "rare" ? "block" : "go"]},
+        h("b", null, b.ko || ""), h("span", {class: "lmx-sub"}, ` 실거래 ${fmt.int(b.n)}번`)));
+      kids.push(h("ul", {class: "lmx-list lmx-blist"}, (b.rows || []).map((x) => {
+        const k = bandRowKo(x);
+        return h("li", {class: ["lmx-brow", k.tone]}, h("b", {class: "lmx-fhead"}, k.head), ui.pill(k.pill, k.tone), k.text ? h("small", {class: "lmx-sub lmx-why"}, k.text) : null);
+      })));
+      if (b.model_ko) kids.push(h("p", {class: "lmx-honest"}, b.model_ko));
+    } else kids.push(h("p", {class: "lmx-warn"}, "운이냐 고장이냐를 계산하지 못했어요"));
+    const ds = an.design;
+    if (ds) {
+      const lr = ds.live_rules || {}, op = ds.one_position || {};
+      kids.push(h("h3", {class: "lmx-h3"}, "설계서 숫자와 5년 재생 (봇 코드 그대로, 코인마다 따로 · 진입 금지 없음)"),
+        h("div", {class: "lmx-btab lmx-dtab", role: "table", "aria-label": "설계서와 5년 재생"},
+          h("div", {class: "lmx-btr lmx-bth", role: "row"}, ["코인", "설계서 한 달·승률", "재생 (수수료 0.042%)", "재생 (0.02%)", "마이너스 달"].map((x) => h("span", {role: "columnheader"}, x))),
+          designRows(ds).map((r) => h("div", {class: "lmx-btr", role: "row"}, h("b", {role: "rowheader"}, r.coin), h("span", {class: "num ref", role: "cell"}, r.design),
+            h("span", {class: "num", role: "cell"}, r.replay), h("span", {class: "num", role: "cell"}, r.replay02), h("span", {class: "num", role: "cell"}, r.neg)))),
+        h("ul", {class: "lmx-list lmx-rlist"},
+          ok(op.trades) ? h("li", null, `여섯 코인 한 번에 1포지션: 1년 약 ${fmt.int(op.per_year)}번 · 승률 ${rateKo(op.win_rate, 0)} · 한 달 평균 ${pctKo(op.month_mean, 2)} · 마이너스 달 ${fmt.int(op.neg_months)}/60`) : null,
+          ok(lr.trades) ? h("li", null, `실거래 규칙 그대로 (1포지션 · 진입 금지 시간 · 최소 주문 · $50): 1년 약 ${fmt.int(lr.per_year)}번 · 승률 ${rateKo(lr.win_rate, 0)} · ` +
+            `평균 익절 ${fmt.num(lr.avg_win_r, 1, true)}R · 평균 손절 ${fmt.num(lr.avg_loss_r, 1, true)}R · 한 달 평균 ${pctKo(lr.month_mean, 2)} · 가장 긴 연속 손절 ${fmt.int(lr.max_losing_streak)}번 · ` +
+            `가장 깊은 낙폭 ${fmt.num(-Number(lr.max_dd_r), 1, true)}R (잔고 ${pctKo(-Number(lr.max_dd_equity), 1)})`) : null),
+        h("p", {class: "lmx-sub"}, `재생에 없는 것: ${(ds.not_modelled || []).join(" · ")} · 출처 ${ds.src || ""}`));
+    }
+    put(bandBox, kids);
+  }
+  function drawLoss(an) {
+    const cs = an.cards || [];
+    if (!cs.length) { put(lossBox, ui.empty("닫힌 실거래가 아직 없어요 · 청산되면 몇 분 안에 카드가 생겨요")); return; }
+    const n = cs.filter((c) => c.verdict === "abnormal" || c.verdict === "very_abnormal").length;
+    const list = h("ul", {class: "lmx-list lmx-clist"}, cs.slice(0, st.cn).map((c) => {
+      const k = cardKo(c);
+      return h("li", {class: ["lmx-card", k.win ? "win" : k.tone]},
+        h("div", {class: "lmx-ttop"}, h("b", null, k.head), ui.pill(k.pill, k.tone), h("b", {class: ["num", "lmx-tpnl", fmt.tone(c.pnl)]}, pnlKo(c.pnl))),
+        k.lines.map((ln) => h("div", {class: "lmx-tmeta num"}, ln)),
+        k.causes.length ? h("div", {class: "lmx-causes"}, h("span", {class: "lmx-ik"}, k.causesHead), h("ul", {class: "lmx-list"}, k.causes.map((x) => h("li", null, x)))) : null);
+    }));
+    const more = cs.length > st.cn ? h("button", {class: "btn-line lmx-more", type: "button", onclick: () => { st.cn += TRADES_PAGE; drawLoss(an); }},
+      `더 보기 (${fmt.int(cs.length - st.cn)}개 남음)`) : null;
+    put(lossBox, h("p", {class: "lmx-sub"}, `거래 ${fmt.int(cs.length)}번 · 설계보다 큰 손실 ${fmt.int(n)}번 · 청산 가격은 봇 기록에 없어 잔고 변화로 거꾸로 계산해요`), list, more);
+  }
+  function drawMorning(an) {
+    const k = morningKo(an.morning);
+    put(morningBox, h("div", {class: "lmx-ttop"}, h("b", null, k.day ? `${k.day} (한국 시간 하루)` : "아침 점검"), ui.pill(k.pill, k.tone)),
+      h("ul", {class: "lmx-list lmx-rlist"}, k.lines.map((x) => h("li", null, x))),
+      h("p", {class: "lmx-sub"}, "트레이딩뷰는 자동으로 읽을 수 없어요 · 이 점검은 봇 공식을 바이낸스 봉으로 다시 계산한 것이고, 차트와 직접 맞춰 보려면 python -m paperbot.mixchop signals"));
+  }
+  function drawAnalysis() {
+    const an = st.d.analysis;
+    if (!an || an.state !== "ok") {
+      const box = sourceState({state: "error", reason_ko: (an && an.ko) || "손실 분석을 만들지 못했어요", reason: an && an.reason}, "손실 분석");
+      put(bandBox, box); put(lossBox); put(morningBox);
+      return;
+    }
+    drawBand(an); drawLoss(an); drawMorning(an);
+  }
   function draw() {
     const d = st.d;
     if (!d) return;
     put(recBox, (d.bots || []).map(recCard));
-    drawBt(); drawTrades();
+    drawAnalysis(); drawBt(); drawTrades();
     put(rulesBox, (d.bots || []).map(rulesCard));
   }
   poller(ctx, PERF_API, SLOW_MS, st, slot, main, draw);

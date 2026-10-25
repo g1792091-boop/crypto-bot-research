@@ -1,0 +1,11 @@
+# 믹스 30분 봇 손실 카드 (deploy/paperbot-mixcheck-pass.service): every 5 minutes (minute 1, 6, 11, ...). Installed and
+# switched on by install.sh; by hand: sudo systemctl enable --now paperbot-mixcheck-pass.timer
+[Unit]
+Description=paperbot 믹스 30분 봇 손실 카드 every 5 minutes
+
+[Timer]
+OnCalendar=*:1/5
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
