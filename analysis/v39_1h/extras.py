@@ -53,6 +53,10 @@ PLANS = {  # name: (label, variant)
     "m40_40_30": ("증거금 40%, BTC 40배·나머지 30배", V("m40_40_30", lev_btc=40, lev_alt=30, frac=0.40)),
     "m40_30": ("증거금 40%, 모두 30배", V("m40_30", lev_btc=30, lev_alt=30, frac=0.40)),
     "m40_paper": ("증거금 40%, 페이퍼와 같은 배수", V("m40_paper", same_lev=True, frac=0.40)),
+    # owners 10-25 night: the plan with a fixed +15% take-profit, and the same with the stop at 2.5 / 3 ATR
+    "m40_40_30_roe15": ("증거금 40%, BTC 40배·나머지 30배, 고정 익절 +15%", next(v for v in VR.PLAN if v.name == "p_roe15_s2")),
+    "m40_40_30_roe15_s2.5": ("같은 계획, 손절 2.5ATR", next(v for v in VR.PLAN if v.name == "p_roe15_s2.5")),
+    "m40_40_30_roe15_s3": ("같은 계획, 손절 3ATR", next(v for v in VR.PLAN if v.name == "p_roe15_s3")),
 }
 
 
@@ -428,6 +432,10 @@ def outlook(W, X, out: str, sims: int) -> pd.DataFrame:
         "live_rule": ("$50, 지금 규칙 크기 (20/30배·증거금 = 배수 %), Toobit 0.06% + 0.03%", VR.BASE, "toobit_slip3", 50.0),
         "live_rule_roe15": ("$50, 지금 규칙 크기 + 고정 익절 +15%, Toobit 0.06% + 0.03%",
                             V("roe15", ladder=False, tp="ROE", tp_val=0.15), "toobit_slip3", 50.0),
+        "live_m40_40_30_roe15": ("$50, 증거금 40%, BTC 40배·나머지 30배 + 고정 익절 +15%, Toobit 0.06% + 0.03%",
+                                 PLANS["m40_40_30_roe15"][1], "toobit_slip3", 50.0),
+        "live_m40_40_30_roe15_s2.5": ("같은 계획 + 손절 2.5ATR", PLANS["m40_40_30_roe15_s2.5"][1], "toobit_slip3", 50.0),
+        "live_m40_40_30_roe15_s3": ("같은 계획 + 손절 3ATR", PLANS["m40_40_30_roe15_s3"][1], "toobit_slip3", 50.0),
     }
     rows = []
     for name, (label, v, cost, eq0) in plans.items():

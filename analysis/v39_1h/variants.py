@@ -71,6 +71,15 @@ LEV = [
     V("lev50_40_m40", "BTC 50배·나머지 40배, 증거금 40% 고정", lev_btc=50, lev_alt=40, frac=0.40),
 ]
 
+# owners 10-25 night: "증거금 40% BTC 40배 나머지 30배, 고정 익절은 15%" and "손절가 늘렸으면 살았다고?": that plan with
+# the stop at 1.5 / 2 / 2.5 / 3 ATR (forced leverage: a stop beyond liquidation liquidates first), next to the ladder
+_P = dict(lev_btc=40, lev_alt=30, frac=0.40)
+PLAN = [V("p_ladder", "계획 크기(40%·40/30배) + 지금 계단 · 손절 2ATR", **_P)]
+PLAN += [V(f"p_ladder_s{k:g}", f"계획 크기 + 지금 계단 · 손절 {k:g}ATR", stop_atr=k, **_P) for k in (2.5, 3.0)]
+PLAN += [V(f"p_roe15_s{k:g}", f"계획 크기 + 고정 익절 +15% · 손절 {k:g}ATR", ladder=False, tp="ROE", tp_val=0.15,
+           stop_atr=k, **_P) for k in (1.5, 2.0, 2.5, 3.0)]
+PLAN += [V("p_roe10_s2", "계획 크기 + 고정 익절 +10% · 손절 2ATR", ladder=False, tp="ROE", tp_val=0.10, **_P)]
+
 
 # Entry timing (market orders only, the owners' rule): (name, label, kind, params)
 ENTRY = [

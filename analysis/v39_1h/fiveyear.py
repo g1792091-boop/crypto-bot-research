@@ -273,6 +273,8 @@ def main(argv=None) -> int:
         run_variant(v, "sl")
     for v in VR.LEV:
         run_variant(v, "lev")
+    for v in VR.PLAN:
+        run_variant(v, "plan")
     for name, label, kind, p in VR.ENTRY[1:]:
         run_variant(VR.BASE, "entry", (kind, p), (name, label))
     log(f"variants done {time.time() - t0:.0f}s")

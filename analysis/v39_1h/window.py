@@ -439,6 +439,7 @@ def main(argv=None) -> int:
     log(en[["variant", "entered", "skipped", "wins", "losses", "final", "skipped_paper_wins", "acct_final"]]
         .to_string())
     lv = variant_rows(W, VR.LEV, "lev_variants.csv", a.out)
+    variant_rows(W, VR.PLAN, "plan_variants.csv", a.out, "plan_per_trade_roe.csv")   # owners' plan (10-25 night)
     log(lv[["variant", "wins", "losses", "final", "worst_ret_pct", "dd_closed_pct", "deepest_open_pct",
             "acct_final", "acct_dd_closed_pct"]].to_string())
     leverage_per_trade(W, a.out)
