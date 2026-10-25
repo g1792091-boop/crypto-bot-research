@@ -1,0 +1,27 @@
+{
+ "signals": {
+  "pick": 5217,
+  "check": 4516,
+  "recent": 78
+ },
+ "signals_long": 4498,
+ "signals_short": 5313,
+ "best_share": 0.3241259810416879,
+ "data_end_utc": "2026-10-24 23:55:00",
+ "fullgrid_now": {
+  "variant": "ladder|2",
+  "fg_pick_trades": 3410.0,
+  "fg_pick_per_trade_pct": -0.9683592228595812,
+  "fg_pick_win_pct": 69.32551319648094,
+  "fg_check_trades": 3716.0,
+  "fg_check_per_trade_pct": -0.7270985963655109,
+  "fg_check_win_pct": 70.82884822389666
+ },
+ "recent_5m_account": {
+  "trades": 28,
+  "wins": 26,
+  "final_from_5000": 7970.374602504868,
+  "first_kst": "10-06 11:00",
+  "last_kst": "10-24 01:00"
+ }
+}

@@ -1,0 +1,72 @@
+{
+ "shadows": {
+  "rows": 525,
+  "resolved": 475
+ },
+ "skipped": {
+  "in position": {
+   "signals": 23,
+   "wins": 20,
+   "losses": 3,
+   "open": 1,
+   "mean_ret_pct": 2.4605747108588263,
+   "sum_ret_pct": 56.593218349753
+  },
+  "lower score than entered signal": {
+   "signals": 11,
+   "wins": 10,
+   "losses": 1,
+   "open": 0,
+   "mean_ret_pct": 1.7008065860435801,
+   "sum_ret_pct": 18.708872446479383
+  },
+  "bot_shadow_compared": 30,
+  "bot_shadow_equal": 22
+ },
+ "other_timeframes": [
+  {
+   "account": "V39_ALL@15m",
+   "trades": 86,
+   "wins": 46,
+   "losses": 40,
+   "shorts": 51,
+   "pnl": -3865.616526609959,
+   "final": 1134.3834733900444,
+   "max_dd_closed_pct": 81.45361741300714
+  },
+  {
+   "account": "V39_ALL@1h",
+   "trades": 27,
+   "wins": 26,
+   "losses": 1,
+   "shorts": 20,
+   "pnl": 4404.740916428702,
+   "final": 9404.740916428702,
+   "max_dd_closed_pct": 13.890414723394972
+  },
+  {
+   "account": "V39_ALL@30m",
+   "trades": 50,
+   "wins": 37,
+   "losses": 13,
+   "shorts": 28,
+   "pnl": 928.734235674908,
+   "final": 5928.734235674908,
+   "max_dd_closed_pct": 26.37568910731233
+  },
+  {
+   "account": "V39_ALL@4h",
+   "trades": 7,
+   "wins": 4,
+   "losses": 3,
+   "shorts": 6,
+   "pnl": -1012.5808643311685,
+   "final": 3987.419135668831,
+   "max_dd_closed_pct": 21.87190203061622
+  }
+ ],
+ "tie": {
+  "window_bar_closes_with_2plus_signals": 13,
+  "fiveyear_share_of_bar_closes_with_2plus": 0.24548587181254308
+ }
+}

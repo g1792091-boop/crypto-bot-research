@@ -1,0 +1,4 @@
+period,trades,win_pct,longest_win_streak,streaks_ge_10,streaks_ge_20,streaks_ge_26,streaks_ge_50,median_streak,trades_per_day
+pick,1448,69.06077348066299,19,13,0,0,0,2.0,1.3223744292237443
+check,1543,69.41023979261179,16,14,0,0,0,2.0,1.5368525896414342
+all,3028,69.35270805812418,19,28,0,0,0,2.0,1.4271798900235664
