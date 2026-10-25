@@ -8,6 +8,10 @@
  "own_stop_file": "/var/lib/paperbot/mixchop-paper/STOP",
  "max_notional_usd": 500,
  "telegram": false,
+ "no_weekend": true,
+ "us_open_pre_min": 30,
+ "us_open_pause_min": 30,
+ "macro_blackout_min": 30,
  "coins": {
   "SOLUSDT": {
    "h1_buf": 8.0,

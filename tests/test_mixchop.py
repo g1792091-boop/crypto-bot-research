@@ -122,7 +122,7 @@ def test_config_defaults_and_refusals(tmp_path):
 def test_one_position_and_coin_order(tmp_path, monkeypatch):
     cfg = _cfg(tmp_path)
     close = _ms("2026-10-26 01:00")
-    fetch = lambda s, tf, n: _bars_rows(close - 400 * M.MIN30, 400) if tf == "30m" else []   # noqa: E731
+    fetch = lambda s, tf, n: _bars_rows(close - 400 * M.MIN30, 403) if tf == "30m" else []   # noqa: E731
     calls = []
 
     def fake_eval(co, b30, b1h, ce):
@@ -143,9 +143,26 @@ def test_one_position_and_coin_order(tmp_path, monkeypatch):
     bot.on_close(close + M.MIN30)
     rows = [json.loads(x) for x in open(cfg.log)]
     assert any(r["kind"] == "skip" and r.get("why") == "보유 중" for r in rows)
-    # restart: the position comes back from the state file
-    bot2 = M.Bot(cfg, broker, fetch, lambda: close + M.MIN30 + 9000, sleep=lambda s: None)
+    # restart with a new paper broker (as the service does): the position comes back and is NOT closed
+    bot2 = M.Bot(cfg, M.PaperBroker(50.0, 0.0), fetch, lambda: close + M.MIN30 + 9000, sleep=lambda s: None)
+    bot2.start()
     assert bot2.pos is not None and bot2.pos.symbol == "SOLUSDT" and bot2.pos.stop == pytest.approx(99.0)
+    assert not any(json.loads(x)["kind"] == "exit" for x in open(cfg.log))
+
+
+def test_close_must_be_final_at_binance(tmp_path, monkeypatch):
+    """The local clock says the bar closed, but Binance has not opened the next one: the bar is not used."""
+    cfg = _cfg(tmp_path, coins=("SOLUSDT",))
+    close = _ms("2026-10-26 01:00")
+    monkeypatch.setattr(M, "evaluate", lambda co, a, b, ce: {"symbol": co.symbol, "close_ms": ce, "side": 1, "why": "",
+                                                             "to_cyan": True, "close": 100.0, "stop_dist": 1.0,
+                                                             "stop_pct": 1.0, "avg_rsi_30m": 60, "avg_rsi_1h": 55})
+    fetch = lambda s, tf, n: _bars_rows(close - 400 * M.MIN30, 400) if tf == "30m" else []   # noqa: E731
+    bot = M.Bot(cfg, M.PaperBroker(50.0, 0.0), fetch, lambda: close + 5000, sleep=lambda s: None)
+    bot.start()
+    bot.on_close(close)
+    rows = [json.loads(x) for x in open(cfg.log)]
+    assert bot.pos is None and any(r["kind"] == "bars_missing" and "아직 없음" in r["why"] for r in rows)
 
 
 def test_kill_file_and_equity_floor_stop_entries(tmp_path, monkeypatch):
@@ -215,6 +232,8 @@ class FakeWoo:
         self.pos, self.entry, self.algos, self.n = {}, {}, {}, 0
         self.sleep = lambda s: None
         self.orders = []
+        self.hide_reads = 0          # the position reads 0 this many times after an entry (a late fill)
+        self.answer_frac = 1.0       # the order answer shows this part of the fill (a partial read-back)
 
     def account(self):
         return {"totalMarginBalance": str(self.eq)}
@@ -223,6 +242,9 @@ class FakeWoo:
         return [{"symbol": s, "positionAmt": str(a)} for s, a in self.pos.items() if a]
 
     def position(self, s):
+        if self.hide_reads > 0:
+            self.hide_reads -= 1
+            return {"symbol": s, "positionAmt": "0", "entryPrice": "0"}
         return {"symbol": s, "positionAmt": str(self.pos.get(s, 0.0)), "entryPrice": str(self.entry.get(s, 0.0))}
 
     def one_way(self):
@@ -241,7 +263,9 @@ class FakeWoo:
         else:
             self.pos[s] = qty if side == "BUY" else -qty
             self.entry[s] = self.px
-        return {"executedQty": str(qty), "avgPrice": str(self.px), "status": "FILLED"}
+            if self.hide_reads:
+                return {"executedQty": "0", "avgPrice": "0", "status": "NEW"}
+        return {"executedQty": str(qty * self.answer_frac), "avgPrice": str(self.px), "status": "FILLED"}
 
     def stop_close(self, s, side, trigger, qty=None, client_id=None):
         if (side == "SELL" and trigger >= self.px) or (side == "BUY" and trigger <= self.px):
@@ -354,3 +378,159 @@ def test_stop_refused_closes_the_position(tmp_path):
                                     "stop_dist": 1.0, "stop_pct": 1.0, "avg_rsi_30m": 60, "avg_rsi_1h": 55})
     assert fake.pos["SOLUSDT"] == 0.0 and bot.pos is None
     assert any(o[3] for o in fake.orders)                           # a reduce-only close was sent
+
+
+def _enter(bot, sym="SOLUSDT", side=1, close=100.0, dist=1.0):
+    bot.enter(bot.coins[sym], {"symbol": sym, "close_ms": 1, "side": side, "why": "", "close": close, "stop_dist": dist,
+                               "stop_pct": 1.0, "avg_rsi_30m": 60, "avg_rsi_1h": 55})
+
+
+def test_restart_with_the_price_past_the_stop_closes_at_market(tmp_path):
+    """The stop went missing while the bot was down and the price is already past it: WOO X Pro refuses the stop,
+    so the position is closed at market (never left without a stop)."""
+    cfg = _cfg(tmp_path, mode="mainnet", coins=("SOLUSDT",))
+    fake = FakeWoo()
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, sleep=lambda s: None)
+    bot.start()
+    _enter(bot)
+    fake.cancel_all_algo("SOLUSDT")
+    fake.px = 98.5                                                # below the 99 stop
+    bot2 = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 3, sleep=lambda s: None)
+    bot2.start()
+    assert bot2.pos is None and fake.pos["SOLUSDT"] == 0.0
+    assert fake.orders[-1][3] is True                             # the last order was the reduce-only close
+
+
+def test_stop_missing_during_the_run_and_refused_closes(tmp_path):
+    cfg = _cfg(tmp_path, mode="mainnet", coins=("SOLUSDT",))
+    fake = FakeWoo()
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, sleep=lambda s: None)
+    bot.start()
+    _enter(bot)
+    fake.cancel_all_algo("SOLUSDT")
+
+    def refuse(*a, **k):
+        raise TestnetError(400, -1, "refused")
+    fake.stop_close = refuse
+    bot._last_stop_check = -1e9
+    bot.poll()
+    assert bot.pos is None and fake.pos["SOLUSDT"] == 0.0
+
+
+def test_late_fill_is_found_and_protected(tmp_path):
+    cfg = _cfg(tmp_path, mode="mainnet", coins=("SOLUSDT",))
+    fake = FakeWoo()
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, sleep=lambda s: None)
+    bot.start()
+    fake.hide_reads = 2                                           # the answer and the first reads show nothing
+    _enter(bot)
+    assert bot.pos is not None and bot.pos.qty == pytest.approx(0.12)
+    live = fake.open_algo_orders("SOLUSDT")
+    assert len(live) == 1 and live[0]["quantity"] == pytest.approx(0.12) and live[0]["triggerPrice"] == pytest.approx(99.0)
+
+
+def test_partial_answer_uses_the_exchange_size(tmp_path):
+    cfg = _cfg(tmp_path, mode="mainnet", coins=("SOLUSDT",))
+    fake = FakeWoo()
+    fake.answer_frac = 0.5
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, sleep=lambda s: None)
+    bot.start()
+    _enter(bot)
+    assert bot.pos.qty == pytest.approx(0.12)
+    assert fake.open_algo_orders("SOLUSDT")[0]["quantity"] == pytest.approx(0.12)
+
+
+def test_second_instance_is_refused(tmp_path):
+    cfg = _cfg(tmp_path)
+    path = tmp_path / "paper.json"
+    path.write_text(json.dumps({"mode": "paper", "state": cfg.state, "log": cfg.log, "coins": {"SOLUSDT": {}},
+                                "start_equity": 50, "telegram": False}))
+    import fcntl
+    held = open(cfg.state + ".lock", "a")
+    fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert M.main(["run", "--config", str(path)]) == 2
+
+
+def test_mainnet_without_keys_exits_2(tmp_path, monkeypatch):
+    for k in list(os.environ):
+        if k.startswith("WOOXPRO") or k.startswith("PAPERBOT_LIVE"):
+            monkeypatch.delenv(k, raising=False)
+    cfg = _cfg(tmp_path)
+    path = tmp_path / "live.json"
+    path.write_text(json.dumps({"mode": "mainnet", "state": cfg.state, "log": cfg.log, "coins": {"SOLUSDT": {}},
+                                "telegram": False}))
+    assert M.main(["run", "--config", str(path)]) == 2
+
+
+def test_entry_blocks_weekend_nasdaq_open_and_releases(tmp_path):
+    cfg = _cfg(tmp_path)
+    cfg.no_weekend, cfg.us_open_pre_min, cfg.us_open_pause_min, cfg.macro_blackout_min = True, 30, 30, 30
+    assert "주말" in M.entry_block(cfg, _ms("2026-10-24 15:00"))           # Sunday 00:00 KST
+    assert "주말" in M.entry_block(cfg, _ms("2026-10-23 15:00"))           # Saturday 00:00 KST
+    assert M.entry_block(cfg, _ms("2026-10-23 14:59")) == ""                # Friday 23:59 KST
+    assert M.entry_block(cfg, _ms("2026-10-25 15:00")) == ""                # Monday 00:00 KST
+    # Monday 10-26: New York on summer time, 09:30 open = 13:30 UTC; blocked 13:00 .. 13:59
+    assert "나스닥" in M.entry_block(cfg, _ms("2026-10-26 13:00"))
+    assert "나스닥" in M.entry_block(cfg, _ms("2026-10-26 13:59"))
+    assert M.entry_block(cfg, _ms("2026-10-26 14:00")) == ""
+    assert M.entry_block(cfg, _ms("2026-10-26 12:59")) == ""
+    # after the change to winter time (11-02 Monday): the open is 14:30 UTC
+    assert "나스닥" in M.entry_block(cfg, _ms("2026-11-02 14:05"))
+    assert M.entry_block(cfg, _ms("2026-11-02 13:05")) == ""
+    # CPI 2026-10-14 12:30 UTC (data/macro_events.csv): 12:00 .. 13:00 blocked
+    assert "경제 발표" in M.entry_block(cfg, _ms("2026-10-14 12:05"))
+    assert M.entry_block(cfg, _ms("2026-10-14 11:59")) == ""                # (13:00 .. 14:00 is the Nasdaq block)
+    cfg.no_weekend, cfg.us_open_pre_min, cfg.us_open_pause_min, cfg.macro_blackout_min = False, 0, 0, 0
+    assert M.entry_block(cfg, _ms("2026-10-24 15:00")) == ""                # all off: the friend's design
+
+
+def test_entry_block_skips_the_signal(tmp_path, monkeypatch):
+    cfg = _cfg(tmp_path, coins=("SOLUSDT",))
+    cfg.no_weekend = True
+    close = _ms("2026-10-24 15:00")                                         # Sunday KST
+    monkeypatch.setattr(M, "evaluate", lambda co, a, b, ce: {"symbol": co.symbol, "close_ms": ce, "side": 1, "why": "",
+                                                             "to_cyan": True, "close": 100.0, "stop_dist": 1.0,
+                                                             "stop_pct": 1.0, "avg_rsi_30m": 60, "avg_rsi_1h": 55})
+    fetch = lambda s, tf, n: _bars_rows(close - 400 * M.MIN30, 401) if tf == "30m" else []   # noqa: E731
+    bot = M.Bot(cfg, M.PaperBroker(50.0, 0.0), fetch, lambda: close + 5000, sleep=lambda s: None)
+    bot.start()
+    bot.on_close(close)
+    rows = [json.loads(x) for x in open(cfg.log)]
+    assert bot.pos is None and any(r["kind"] == "skip" and "주말" in r["why"] for r in rows)
+
+
+def test_stop_failure_with_a_disagreeing_read_is_not_treated_as_protected(tmp_path):
+    """The stop is refused right after the fill and the position reads 0 once: the bot must not announce a protected
+    entry; poll() keeps working on it (unprotected) until the exchange agrees."""
+    cfg = _cfg(tmp_path, mode="mainnet", coins=("SOLUSDT",))
+    fake = FakeWoo()
+    msgs = []
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, notify=lambda lv, t: msgs.append(t),
+                sleep=lambda s: None)
+    bot.start()
+    orig = fake.stop_close
+
+    def refuse_once(*a, **k):
+        fake.stop_close = orig
+        fake.hide_reads = 1                                       # the next position read shows 0
+        raise TestnetError(400, -1, "refused")
+    fake.stop_close = refuse_once
+    _enter(bot)
+    assert bot.pos is not None and bot._unprotected
+    assert any("손절을 아직 확인하지 못했습니다" in m for m in msgs)            # the entry is told with the warning
+    bot.poll()                                                    # reads agree now: the stop is placed
+    assert not bot._unprotected and len(fake.open_algo_orders("SOLUSDT")) == 1
+
+
+def test_unknown_position_is_told_once(tmp_path):
+    cfg = _cfg(tmp_path, mode="mainnet", coins=("SOLUSDT",))
+    fake = FakeWoo()
+    fake.pos["ETHUSDT"] = 0.5
+    msgs = []
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, notify=lambda lv, t: msgs.append(t),
+                sleep=lambda s: None)
+    bot.start()
+    for _ in range(3):
+        bot.halts()
+        bot.check_unknown()
+    assert sum("모르는 포지션" in m for m in msgs) == 1

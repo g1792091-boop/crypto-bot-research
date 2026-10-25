@@ -30,6 +30,11 @@ Trade:
   stop goes to entry + 10 % ROE, and one more step of (roe_act - 10) % ROE for each further step reached; it only ever
   moves the favourable way, and only at 30m closes. No exit on an opposite signal or on time: stop or ladder only.
 - one position at a time over all coins; signals of one close compete by the coin order of the config.
+- entry blocks (owners 10-25 night, the same as their own bots; not in the friend's design, so off unless the config
+  sets them): ``no_weekend`` (Saturday and Sunday KST), ``us_open_pre_min`` / ``us_open_pause_min`` (minutes before /
+  after the NYSE open 09:30 New York, DST aware, weekdays, not on NYSE holidays), ``macro_blackout_min`` (minutes
+  around the US releases in data/macro_events.csv). Judged on the entry minute; only entries stop (the open position's
+  stop and ladder go on). A blocked signal is skipped, not taken later.
 - halts: the shared kill file or the bot's own stop file (no new entries; the open position keeps its stop and ladder;
   stop the service and close on WOO X Pro by hand to flatten), the equity floor (``equity_floor_frac`` of
   the starting equity: no new entries), any position on the account the bot does not know (no new entries, alert).
@@ -40,6 +45,7 @@ the signal close and exits on the 30m bars as the indicator does (stop at the st
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import math
 import os
@@ -47,7 +53,7 @@ import signal as _signal
 import sys
 import time
 import uuid
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Callable, Optional
 
 import numpy as np
@@ -74,7 +80,10 @@ DEFAULT_COINS = {
 }
 NAME = "믹스 30분 봇"
 EXIT_KO = {"stop": "손절", "ladder": "계단 익절", "closed_while_down": "봇이 꺼진 사이 청산", "manual": "직접 청산",
-           "protect": "손절을 못 걸어 바로 청산"}
+           "protect": "손절을 못 걸어 바로 청산", "wrong_side": "방향이 다른 포지션이라 청산"}
+ALERT_EVERY_S = 600              # a repeated CRITICAL (still no stop / an unknown position) at most this often
+ADOPT_WINDOW_MS = 10 * 60_000    # an entry the bot could not see filled: a position on that coin within this is its own
+LIQ_ROOM = 0.002                 # live: the stop must sit this much (of the price) inside WOO X Pro's own liquidation
 
 
 class MixError(ValueError):
@@ -286,6 +295,10 @@ class Config:
     taker_fee: float = 0.00042                  # paper only (WOO X Pro's taker fee): charged on both sides
     telegram: bool = True
     binance_base: str = "https://fapi.binance.com"
+    no_weekend: bool = False                    # entry blocks (owners' rules; off in the friend's design)
+    us_open_pre_min: int = 0
+    us_open_pause_min: int = 0
+    macro_blackout_min: int = 0
 
     @property
     def symbols(self) -> list:
@@ -320,13 +333,17 @@ def load_config(path: str) -> Config:
                  own_stop_file=raw.get("own_stop_file", "/var/lib/paperbot/exec/mixchop.STOP"),
                  max_notional_usd=float(raw.get("max_notional_usd", 2000.0)),
                  taker_fee=float(raw.get("taker_fee", 0.00042)), telegram=bool(raw.get("telegram", True)),
-                 binance_base=raw.get("binance_base", "https://fapi.binance.com"))
+                 binance_base=raw.get("binance_base", "https://fapi.binance.com"),
+                 no_weekend=bool(raw.get("no_weekend", False)), us_open_pre_min=int(raw.get("us_open_pre_min", 0)),
+                 us_open_pause_min=int(raw.get("us_open_pause_min", 0)), macro_blackout_min=int(raw.get("macro_blackout_min", 0)))
     if not cfg.state or not cfg.log:
         raise MixError("\"state\"와 \"log\" 파일 경로가 필요합니다")
     if not (0 < cfg.risk_pct <= 5):
         raise MixError(f"\"risk_pct\"는 0 ~ 5(%) 사이여야 합니다(지금 {cfg.risk_pct})")
     if not (0 <= cfg.equity_floor_frac < 1):
         raise MixError("\"equity_floor_frac\"는 0 이상 1 미만이어야 합니다")
+    if not all(0 <= m <= 240 for m in (cfg.us_open_pre_min, cfg.us_open_pause_min, cfg.macro_blackout_min)):
+        raise MixError("진입 금지 분(us_open_pre_min, us_open_pause_min, macro_blackout_min)은 0 ~ 240이어야 합니다")
     if cfg.binance_base.rstrip("/") != "https://fapi.binance.com":
         raise MixError("신호 캔들은 바이낸스 USDT 선물(https://fapi.binance.com)에서만 읽습니다")
     return cfg
@@ -376,6 +393,28 @@ def kst(ms: int) -> str:
     return time.strftime("%m/%d %H:%M", time.gmtime((int(ms) + KST_MS) / 1000))
 
 
+def entry_block(cfg: "Config", ts: int) -> str:
+    """"" or why an entry in minute ``ts`` (ms) is not made: weekend (KST), the NYSE open window, a US release."""
+    if cfg.no_weekend and ((int(ts) + 9 * 3_600_000) // 86_400_000 + 3) % 7 >= 5:   # 1970-01-01 was a Thursday
+        return "주말(한국 시간 토·일) 진입 안 함"
+    if cfg.us_open_pre_min or cfg.us_open_pause_min:
+        from datetime import datetime, timezone
+        from .sessions import NY, NYSE_HOLIDAYS
+        local = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).astimezone(NY)
+        if local.weekday() < 5 and local.strftime("%Y-%m-%d") not in NYSE_HOLIDAYS:
+            since = (local - local.replace(hour=9, minute=30, second=0, microsecond=0)).total_seconds()
+            if -cfg.us_open_pre_min * 60 <= since < cfg.us_open_pause_min * 60:
+                return f"나스닥 개장 앞 {cfg.us_open_pre_min}분·뒤 {cfg.us_open_pause_min}분 진입 안 함 (뉴욕 09:30 개장)"
+    if cfg.macro_blackout_min:
+        from . import events as EV
+        w = cfg.macro_blackout_min * 60_000
+        near = EV.near(int(ts), w, w)
+        if near:
+            e = near[0]
+            return f"경제 발표 앞뒤 {cfg.macro_blackout_min}분 진입 안 함: {EV.KIND_KO.get(e.kind, e.kind)} {e.ts_utc}"
+    return ""
+
+
 def coin_ko(symbol: str) -> str:
     return symbol.replace("USDT", "")
 
@@ -386,10 +425,12 @@ class PaperBroker:
     when the bar opens past it), fees ``taker_fee`` on both sides."""
     live = False
 
-    def __init__(self, equity: float, fee: float):
+    def __init__(self, equity: float, fee: float, spec_fn: Optional[Callable[[str], dict]] = None):
         self.eq = float(equity)
         self.fee = float(fee)
         self.pos: dict = {}                     # symbol -> signed qty
+        self.spec_fn = spec_fn                  # WOO X Pro's public contract sizes, so paper skips what live skips
+        self._specs: dict = {}
 
     def equity(self) -> float:
         return self.eq
@@ -401,7 +442,15 @@ class PaperBroker:
         return [(True, "모의: 거래소 설정 없음")]
 
     def spec(self, symbol: str) -> dict:
-        return {"qty_step": 0.0, "min_qty": 0.0, "tick": 0.0, "min_notional": 0.0}
+        if self.spec_fn is not None and symbol not in self._specs:
+            try:
+                self._specs[symbol] = dict(self.spec_fn(symbol))
+            except Exception:
+                pass
+        return self._specs.get(symbol) or {"qty_step": 0.0, "min_qty": 0.0, "tick": 0.0, "min_notional": 0.0}
+
+    def restore(self, p: "Position") -> None:
+        self.pos[p.symbol] = p.side * p.qty
 
     def open(self, symbol: str, side: int, qty: float, ref: float, lev: int) -> tuple[float, float]:
         self.pos[symbol] = side * qty
@@ -477,11 +526,15 @@ class WooBroker:
                           client_id=f"mx{uuid.uuid4().hex[:20]}")
         filled = float(o.get("executedQty") or 0)
         px = float(o.get("avgPrice") or 0)
-        if filled <= 0 or px <= 0:                       # read the position: the order was accepted
+        try:                                             # the position is the truth (the answer may be a partial fill)
             pos = self.c.position(symbol)
-            filled = abs(float(pos.get("positionAmt") or 0))
-            px = float(pos.get("entryPrice") or 0) or ref
-        return px, filled
+            amt = float(pos.get("positionAmt") or 0)
+            if amt * side > 0:
+                filled = max(filled, abs(amt))
+                px = px or float(pos.get("entryPrice") or 0)
+        except Exception:
+            pass
+        return px or ref, filled
 
     def place_stop(self, symbol: str, side: int, price: float, qty: float) -> Optional[str]:
         sp = self.c.spec(symbol)
@@ -504,6 +557,19 @@ class WooBroker:
     def is_open(self, symbol: str) -> Optional[bool]:
         amt = float(self.c.position(symbol)["positionAmt"])
         return amt != 0
+
+    def amount(self, symbol: str) -> float:
+        """The signed position size on the exchange."""
+        return float(self.c.position(symbol)["positionAmt"])
+
+    def liq_room(self, symbol: str, notional: float, lev: int) -> Optional[float]:
+        """How far (a fraction of the price) a ``notional`` position at ``lev`` is from WOO X Pro's liquidation, less
+        LIQ_ROOM; None when the brackets cannot be read."""
+        try:
+            mmr = self.c.maint_margin_ratio(symbol, notional)
+        except Exception:
+            return None
+        return -1.0 if mmr is None else 1.0 / float(lev) - float(mmr) - LIQ_ROOM
 
     def stop_ok(self, symbol: str, qty: float) -> bool:
         amt = float(self.c.position(symbol)["positionAmt"])
@@ -532,6 +598,10 @@ class Bot:
         self.stop = False
         self._last_stop_check = 0.0
         self._flat_reads = 0
+        self._unprotected = False               # live: open without a confirmed stop -> poll() works on it every POLL_S
+        self._said: dict = {}                   # alert key -> monotonic time last sent (repeats at most ALERT_EVERY_S)
+        self._entry_try: Optional[tuple] = None  # (symbol, side, until_ms, ref, dist): an entry whose fill was not seen
+        self._unknown_told = ""                  # the unknown positions last told (coins)
 
     # ---------------------------------------------------------------- persistence and log
     def save(self) -> None:
@@ -550,9 +620,20 @@ class Bot:
         except Exception:
             pass
 
+    def say_once(self, key: str, level: str, text: str) -> None:
+        """An alert that may come every POLL_S (still no stop, an unknown position): at most every ALERT_EVERY_S."""
+        t = time.monotonic()
+        if key in self._said and t - self._said[key] < ALERT_EVERY_S:
+            return
+        self._said[key] = t
+        self.say(level, text)
+
     # ---------------------------------------------------------------- bars
     def bars(self, symbol: str, close_ms: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-        b30 = bars_frame(self.fetch(symbol, "30m", BARS), MIN30, close_ms)
+        r30 = self.fetch(symbol, "30m", BARS)
+        if not any(int(r[0]) >= close_ms for r in r30[-3:]):     # Binance has not opened the next bar: not closed there
+            raise MixError("바이낸스에서 30분봉 마감이 아직 없음")
+        b30 = bars_frame(r30, MIN30, close_ms)
         b1h = bars_frame(self.fetch(symbol, "1h", BARS), H1, close_ms)
         return b30, b1h
 
@@ -566,8 +647,9 @@ class Bot:
         for co in self.cfg.coins:
             if any(co.symbol in t for t in bad):
                 co.enabled = False
+        problem = ""
         if self.pos is not None:
-            self.reconcile_open()
+            problem = self.reconcile_open()
         self.save()
         coins = " · ".join(f"{coin_ko(c.symbol)}{'' if c.enabled else '(꺼짐)'}" for c in self.cfg.coins)
         held = f"\n보유 중: {coin_ko(self.pos.symbol)} {'롱' if self.pos.side > 0 else '숏'} 손절 {self.pos.stop:.6g}" \
@@ -576,18 +658,114 @@ class Bot:
                          f"손절 1번 = 잔고의 {self.cfg.risk_pct}% · 한 번에 1포지션 · 30분봉 마감마다 판단{held}"
                  + ("".join(f"\n⚠ {t}" for t in bad)))
         self.log("start", equity=eq, start_equity=self.start_equity, setup=lines, position=asdict(self.pos) if self.pos else None)
+        if problem:
+            self.say("CRITICAL", problem)
+        if self.b.live:
+            self.check_unknown()
 
-    def reconcile_open(self) -> None:
+    def reconcile_open(self) -> str:
+        """The saved position against the exchange (live) / back into the paper broker. A problem text, or ""."""
         p = self.pos
-        st = self.b.is_open(p.symbol)
-        if st is False and (not self.b.live or self.confirm_flat(p.symbol)):
-            self.finish(p, None, "closed_while_down")
+        if not self.b.live:
+            self.b.restore(p)
+            return ""
+        try:
+            self.protect("closed_while_down", "다시 켜면서")
+        except Exception as e:
+            self.log("reconcile_failed", symbol=p.symbol, error=str(e))
+            self._unprotected = True
+            return f"🚨 다시 켜면서 {coin_ko(p.symbol)} 포지션·손절을 확인하지 못했습니다: {e}\n봇이 15초마다 다시 해 봅니다. 거래소에서 확인하세요"
+        return ""
+
+    # ---------------------------------------------------------------- protection (live)
+    def protect(self, flat_why: str, where: str) -> None:
+        """The open position must rest under a stop for all of it. The exchange's size and side are the truth: a
+        different size is adopted, a wrong side is closed. A missing or short stop is placed again (new one first,
+        then the old ones cancelled); one that cannot be placed closes the position at market (the design: no position
+        without a stop). Actions first, alerts after. Raises when the exchange cannot be read."""
+        p = self.pos
+        amt = self.b.amount(p.symbol)
+        if amt == 0:
+            if self.confirm_flat(p.symbol):
+                self._unprotected = False
+                self.finish(p, None, flat_why)
+            else:                                       # the two reads disagree: not known to be protected
+                self._unprotected = True
             return
-        if self.b.live and not self.b.stop_ok(p.symbol, p.qty):
-            sid = self.b.place_stop(p.symbol, p.side, p.stop, p.qty)
+        s = 1 if amt > 0 else -1
+        if s != p.side:                                 # never protect a side the bot did not open: close it
+            self.b.close_market(p.symbol, s, abs(amt))
+            p.side, p.qty = s, abs(amt)
+            if self.b.is_open(p.symbol) is False and self.confirm_flat(p.symbol):
+                self._unprotected = False
+                self.finish(p, None, "wrong_side")
+            else:
+                self._unprotected = True
+            self.say("CRITICAL", f"🚨 {where} {coin_ko(p.symbol)} 포지션 방향이 봇 기록과 달라 시장가로 닫았습니다 ({amt:g})")
+            return
+        if abs(abs(amt) - p.qty) > 1e-12:
+            self.log("qty_adopted", symbol=p.symbol, old=p.qty, new=abs(amt))
+            p.qty = abs(amt)
+            self.save()
+        if self.b.stop_ok(p.symbol, p.qty):
+            self._unprotected = False
+            return
+        try:
+            res, sid = self.b.move_stop(p.symbol, p.side, p.stop, p.qty, None)
+            err = ""
+        except Exception as e:
+            res, sid, err = "error", None, str(e)
+        if res == "moved":
             p.stop_id = sid
-            self.say("WARN", f"⚠ 다시 켜면서 {coin_ko(p.symbol)} 손절이 없어 다시 걸었습니다 ({p.stop:.6g})")
-            self.log("stop_replaced", symbol=p.symbol, stop=p.stop)
+            self._unprotected = False
+            self.save()
+            self.log("stop_replaced", symbol=p.symbol, stop=p.stop, qty=p.qty, where=where)
+            self.say("WARN", f"⚠ {where} {coin_ko(p.symbol)} 손절이 없거나 모자라 다시 걸었습니다 ({p.stop:.6g}, {p.qty:g}개)")
+            return
+        self.log("stop_failed", symbol=p.symbol, result=res, error=err, where=where)
+        if res not in ("closed", "triggered"):          # could not be placed: close at market
+            try:
+                self.b.close_market(p.symbol, p.side, p.qty)
+            except Exception as e2:
+                self.log("protect_close_failed", symbol=p.symbol, error=str(e2))
+        if self.b.is_open(p.symbol) is False and self.confirm_flat(p.symbol):
+            self._unprotected = False
+            self.finish(p, None, "protect" if res not in ("closed", "triggered") else ("ladder" if p.step > 0 else "stop"))
+            if res not in ("closed", "triggered"):
+                self.say("CRITICAL", f"🚨 {where} {coin_ko(p.symbol)} 손절을 다시 못 걸어 시장가로 닫았습니다: {err}")
+            return
+        self._unprotected = True
+        self.say_once("unprotected", "CRITICAL", f"🚨 {coin_ko(p.symbol)} 포지션이 열려 있고 손절이 없습니다 ({err or res}). "
+                                                 f"봇이 15초마다 손절·청산을 다시 해 봅니다. 거래소에서 바로 확인하세요")
+
+    def check_unknown(self) -> None:
+        """Flat by its own record: a position on one of its coins right after an entry it could not see filled is its
+        own (adopted, stopped); any other position is told once (it blocks entries, halts())."""
+        try:
+            other = self.b.foreign_positions(self.pos.symbol if self.pos else None)
+        except Exception as e:
+            self.log("read_failed", error=str(e))
+            return
+        if not other:
+            self._unknown_told = ""
+            return
+        et = self._entry_try
+        if self.pos is None and et and self.now() <= et[2]:
+            for sym, amt in other:
+                if sym == et[0] and amt * et[1] > 0:
+                    self._entry_try = None
+                    self.adopt(sym, et[3], et[4], self.coins[sym])
+                    return
+        self.tell_unknown(other)
+
+    def tell_unknown(self, other: list) -> None:
+        """Positions the bot does not know (they block entries): told once per set of coins, again when it changes."""
+        key = ",".join(sorted(sym for sym, _ in other))
+        if key == self._unknown_told:
+            return
+        self._unknown_told = key
+        self.say("CRITICAL", "🚨 봇이 모르는 포지션이 있습니다: " + ", ".join(f"{s} {q:g}" for s, q in other)
+                 + "\n새 진입을 멈춥니다. 거래소에서 확인하고 직접 정리하세요")
 
     # ---------------------------------------------------------------- every 30m close
     def on_close(self, close_ms: int) -> None:
@@ -615,9 +793,10 @@ class Bot:
         self.save()
         if not cands:
             return
-        if self.pos is not None or self.halt_reason:
+        block = entry_block(self.cfg, self.now()) if self.pos is None and not self.halt_reason else ""
+        if self.pos is not None or self.halt_reason or block:
             for co, ev in cands:
-                why = "보유 중" if self.pos is not None else self.halt_reason
+                why = "보유 중" if self.pos is not None else (self.halt_reason or block)
                 self.log("skip", symbol=co.symbol, side=ev["side"], why=why)
             return
         co, ev = cands[0]                               # the config's coin order decides between coins
@@ -639,7 +818,11 @@ class Bot:
             other = self.b.foreign_positions(self.pos.symbol if self.pos else None)
         except Exception as e:
             return f"포지션을 못 읽음({e})"
+        et = self._entry_try
+        if other and self.pos is None and et and self.now() <= et[2] and all(sym == et[0] for sym, _ in other):
+            return "진입 체결 확인 중"                    # poll() adopts it (check_unknown)
         if other:
+            self.tell_unknown(other)
             return "봇이 모르는 포지션: " + ", ".join(f"{s} {q:g}" for s, q in other)
         return ""
 
@@ -662,21 +845,28 @@ class Bot:
             self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 크기 {qty:g}가 최소 {need:g}보다 작음 "
                              f"(손절 1번 ${risk:.3f}, 손절 폭 {ev['stop_pct']}%)")
             return
+        if self.b.live:                                 # WOO X Pro's own liquidation, from its brackets
+            room = self.b.liq_room(sym, qty * ref, co.leverage)
+            if room is not None and dist / ref >= room:
+                self.log("skip", symbol=sym, side=side, why="손절이 WOO X Pro 청산가에 너무 가까움", stop_frac=dist / ref, room=room)
+                self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 손절 폭 {dist / ref:.2%}가 "
+                                 f"WOO X Pro 청산까지({max(room, 0):.2%}, 여유 {LIQ_ROOM:.1%} 뺌)보다 멂")
+                return
+        self._entry_try = (sym, side, self.now() + ADOPT_WINDOW_MS, ref, dist)
         try:
             fill, filled = self.b.open(sym, side, qty, ref, co.leverage)
         except Exception as e:
             self.log("entry_failed", symbol=sym, side=side, error=str(e))
-            self.say("CRITICAL", f"🚨 {coin_ko(sym)} 진입 주문 실패: {e}\n포지션이 생겼는지 거래소에서 확인하세요")
-            if self.b.live:
-                try:
-                    if self.b.is_open(sym):
-                        self.protect_unknown(sym, side, ref, dist, co)
-                except Exception:
-                    pass
+            if not self.b.live or not self.look_for_fill(sym, side, ref, dist, co):
+                self.say("CRITICAL", f"🚨 {coin_ko(sym)} 진입 주문 결과를 모릅니다: {e}\n포지션이 생기면 봇이 10분 안에는 "
+                                     f"찾아서 손절을 겁니다. 거래소에서도 확인하세요")
             return
         if filled <= 0:
             self.log("entry_none", symbol=sym, side=side)
+            if not self.b.live or not self.look_for_fill(sym, side, ref, dist, co):
+                self.say("WARN", f"⚠ {coin_ko(sym)} 진입 주문이 체결된 것이 안 보입니다. 10분 동안 계속 살펴봅니다")
             return
+        self._entry_try = None
         stop = fill - side * dist
         p = Position(symbol=sym, side=side, qty=filled, entry=fill, stop_dist=dist, stop=stop, best=fill, step=0,
                      opened_ms=self.now(), signal_close_ms=int(ev["close_ms"]), signal_close=ref,
@@ -686,42 +876,68 @@ class Bot:
         try:
             p.stop_id = self.b.place_stop(sym, side, stop, filled)
         except Exception as e:
-            self.log("stop_failed", symbol=sym, error=str(e))
-            self.say("CRITICAL", f"🚨 {coin_ko(sym)} 손절을 못 걸어 바로 시장가로 닫습니다: {e}")
+            self.log("stop_failed", symbol=sym, error=str(e), where="entry")
             try:
-                self.b.close_market(sym, side, filled)
+                self.protect("protect", "진입 직후")        # one more try (new stop), else closed at market
             except Exception as e2:
-                self.log("protect_close_failed", symbol=sym, error=str(e2))
-            if self.b.is_open(sym) is False and (not self.b.live or self.confirm_flat(sym)):
-                self.finish(p, None, "protect")
-            else:                                       # still open: keep it; poll() places the stop again
-                self._last_stop_check = 0.0
-                self.say("CRITICAL", f"🚨 {coin_ko(sym)} 포지션이 아직 열려 있고 손절이 없습니다. 봇이 계속 손절을 다시 걸어 봅니다. "
-                                     f"거래소에서 바로 확인하세요")
-            return
+                self.log("protect_failed", symbol=sym, error=str(e2))
+                self._unprotected = True
+                self.say_once("unprotected", "CRITICAL", f"🚨 {coin_ko(sym)} 진입 뒤 손절을 못 걸었고 거래소도 못 읽습니다: {e2}\n"
+                                                         f"봇이 15초마다 다시 해 봅니다. 거래소에서 바로 확인하세요")
+            if self.pos is not p:                       # closed at market (finish() told it)
+                return
+            filled, stop = p.qty, p.stop
         self.save()
         self.log("entry", **asdict(p), why=ev)
         lock_px = fill + side * fill * LOCK_ROE / 100 / co.leverage
         act_px = fill + side * fill * co.roe_act / 100 / co.leverage
-        self.say("INFO", f"{'🟢' if side > 0 else '🔴'} {coin_ko(sym)} {'롱' if side > 0 else '숏'} 진입 {fill:.6g} ({co.leverage}배, "
+        self.say("CRITICAL" if self._unprotected else "INFO",
+                 ("🚨 손절을 아직 확인하지 못했습니다. 봇이 15초마다 다시 겁니다. 거래소에서 확인하세요\n" if self._unprotected else "")
+                 + f"{'🟢' if side > 0 else '🔴'} {coin_ko(sym)} {'롱' if side > 0 else '숏'} 진입 {fill:.6g} ({co.leverage}배, "
                          f"{filled:g}개 ≈ ${filled * fill:,.2f})\n손절 {stop:.6g} (ROE −{dist / fill * co.leverage * 100:.1f}%, "
                          f"잔고의 {self.cfg.risk_pct}%)\n계단: {act_px:.6g}(ROE +{co.roe_act:.0f}%) 가면 손절을 {lock_px:.6g}"
                          f"(ROE +{LOCK_ROE:.0f}%)로\n근거: {'하늘색' if side > 0 else '보라색'}으로 바뀜 · 30분 평균 RSI "
                          f"{ev['avg_rsi_30m']} · 1시간 평균 RSI {ev['avg_rsi_1h']} ({kst(ev['close_ms'])} 봉)")
 
-    def protect_unknown(self, sym: str, side: int, ref: float, dist: float, co: Coin) -> None:
-        """An entry whose answer was lost but whose position exists: adopt it with the design's stop."""
-        pos_amt = float(self.b.c.position(sym)["positionAmt"])
-        qty = abs(pos_amt)
-        entry = float(self.b.c.position(sym).get("entryPrice") or ref)
-        s = 1 if pos_amt > 0 else -1
-        p = Position(symbol=sym, side=s, qty=qty, entry=entry, stop_dist=dist, stop=entry - s * dist, best=entry, step=0,
+    def look_for_fill(self, sym: str, side: int, ref: float, dist: float, co: Coin) -> bool:
+        """An entry whose answer was lost or empty: read the position a few times; adopt it if it is there."""
+        for i in range(3):
+            try:
+                amt = self.b.amount(sym)
+            except Exception as e:
+                self.log("read_failed", symbol=sym, error=str(e))
+                amt = 0.0
+            if amt * side > 0:
+                self._entry_try = None
+                self.adopt(sym, ref, dist, co)
+                return True
+            self.sleep(2.0)
+        return False
+
+    def adopt(self, sym: str, ref: float, dist: float, co: Coin) -> None:
+        """A position of the bot's own entry that it did not see filled: the design's stop from its entry price."""
+        pos = self.b.c.position(sym)
+        amt = float(pos.get("positionAmt") or 0)
+        entry = float(pos.get("entryPrice") or 0) or ref
+        s = 1 if amt > 0 else -1
+        p = Position(symbol=sym, side=s, qty=abs(amt), entry=entry, stop_dist=dist, stop=entry - s * dist, best=entry, step=0,
                      opened_ms=self.now(), signal_close_ms=self.last_close_ms, signal_close=ref,
                      last_bar_ms=self.last_close_ms, leverage=co.leverage, roe_act=co.roe_act)
+        try:
+            p.equity_before = self.b.equity()
+        except Exception:
+            pass
         self.pos = p
-        p.stop_id = self.b.place_stop(sym, s, p.stop, qty)
         self.save()
-        self.say("WARN", f"⚠ {coin_ko(sym)} 포지션을 찾아 손절 {p.stop:.6g}을 걸었습니다")
+        self.log("adopted", **asdict(p))
+        try:
+            self.protect("protect", "진입 확인 뒤")
+        except Exception as e:
+            self.log("protect_failed", symbol=sym, error=str(e))
+            self._unprotected = True
+        if self.pos is p and not self._unprotected:
+            self.say("WARN", f"⚠ {coin_ko(sym)} 진입 체결을 늦게 확인했습니다: {'롱' if s > 0 else '숏'} {abs(amt):g}개 {entry:.6g}, "
+                             f"손절 {p.stop:.6g}")
 
     # ---------------------------------------------------------------- the open position
     def manage(self, close_ms: int) -> None:
@@ -733,7 +949,7 @@ class Bot:
         try:
             if self.b.is_open(p.symbol) is False:
                 if self.confirm_flat(p.symbol):
-                    self.finish(p, None, "stop")
+                    self.finish(p, None, "ladder" if p.step > 0 else "stop")
                     return
         except Exception as e:
             self.log("read_failed", symbol=p.symbol, error=str(e))
@@ -798,20 +1014,27 @@ class Bot:
     def poll(self) -> None:
         """Between closes (live): did the stop fire; is the stop still resting."""
         p = self.pos
-        if p is None or not self.b.live:
+        if not self.b.live:
+            return
+        due = time.monotonic() - self._last_stop_check > STOP_CHECK_S
+        if p is None:
+            if due or (self._entry_try and self.now() <= self._entry_try[2]):
+                self._last_stop_check = time.monotonic()
+                self.check_unknown()
             return
         try:
             if self.b.is_open(p.symbol) is False and self.confirm_flat(p.symbol):
+                self._unprotected = False
                 self.finish(p, None, "ladder" if p.step > 0 else "stop")
                 return
-            if time.monotonic() - self._last_stop_check > STOP_CHECK_S:
+            if due or self._unprotected:
                 self._last_stop_check = time.monotonic()
-                if not self.b.stop_ok(p.symbol, p.qty):
-                    p.stop_id = self.b.place_stop(p.symbol, p.side, p.stop, p.qty)
-                    self.save()
-                    self.say("WARN", f"⚠ {coin_ko(p.symbol)} 손절이 보이지 않아 다시 걸었습니다 ({p.stop:.6g})")
+                self.protect("ladder" if p.step > 0 else "stop", "점검 중")
         except Exception as e:
             self.log("poll_failed", error=str(e))
+            if self._unprotected:
+                self.say_once("unprotected", "CRITICAL", f"🚨 {coin_ko(p.symbol)} 손절이 없는데 거래소를 못 읽습니다: {e}\n"
+                                                         f"봇이 15초마다 다시 해 봅니다. 거래소에서 바로 확인하세요")
 
     def finish(self, p: Position, px: Optional[float], why: str) -> None:
         """The position is closed: P&L (paper: the exit price; live: the equity change), log, message, clear."""
@@ -845,9 +1068,10 @@ class Bot:
         while not self.stop:
             now = self.now()
             nxt = (now // MIN30 + 1) * MIN30
-            if self.last_close_ms and nxt - MIN30 > self.last_close_ms and now >= nxt - MIN30 + SETTLE_S * 1000 \
-                    and now < nxt - MIN30 + 120_000:
+            if self.last_close_ms and nxt - MIN30 > self.last_close_ms and now < nxt - MIN30 + 120_000:
                 nxt = nxt - MIN30                       # a close not handled yet (just started): handle it now
+            if nxt <= self.last_close_ms:               # the clock stepped back: never handle a close twice
+                nxt = self.last_close_ms + MIN30
             while not self.stop and self.now() < nxt + SETTLE_S * 1000:
                 self.poll()
                 self.sleep(min(POLL_S, max(0.5, (nxt + SETTLE_S * 1000 - self.now()) / 1000)))
@@ -906,6 +1130,13 @@ def live_broker(cfg: Config):
 
 def cmd_run(args) -> int:
     cfg = load_config(args.config)
+    if cfg.mode == "mainnet" and cfg.telegram and not (os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_CRITICAL")):
+        raise MixError("텔레그램 설정(/etc/paperbot/live-telegram.env)이 없어 실거래를 켜지 않습니다")
+    lock = open(cfg.state + ".lock", "a")              # one bot per state file (a second `run` would trade the same account)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise MixError(f"이미 다른 {NAME}가 {cfg.state}로 돌고 있습니다")
     notify = make_notify(cfg)
     if cfg.mode == "mainnet":
         broker = live_broker(cfg)
@@ -913,7 +1144,12 @@ def cmd_run(args) -> int:
         hide_process_memory()
     else:
         st = read_state(cfg.state)
-        broker = PaperBroker(float(st.get("paper_equity") or cfg.start_equity or 50.0), cfg.taker_fee)
+        try:
+            from . import wooxpro as WX
+            spec_fn = WX.public_client().spec
+        except Exception:
+            spec_fn = None
+        broker = PaperBroker(float(st.get("paper_equity") or cfg.start_equity or 50.0), cfg.taker_fee, spec_fn)
     bot = Bot(cfg, broker, binance_fetch(cfg.binance_base), lambda: int(time.time() * 1000), notify)
 
     def _stop(*_):
@@ -1011,6 +1247,12 @@ def main(argv=None) -> int:
     except MixError as e:
         print(f"멈춤: {e}", file=sys.stderr)
         return 2
+    except Exception as e:
+        from .mainnet import Refused
+        if isinstance(e, Refused):                       # a key / mode / host gate: restarting cannot fix it
+            print(f"멈춤: {e}", file=sys.stderr)
+            return 2
+        raise
 
 
 if __name__ == "__main__":
