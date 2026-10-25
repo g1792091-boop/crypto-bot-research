@@ -1,0 +1,5 @@
+# big outputs of a rerun (s2.py), not committed
+R_real.npy
+R_null1.npy
+R_null2.npy
+top_allrecords.csv
