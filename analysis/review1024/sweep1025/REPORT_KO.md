@@ -780,6 +780,59 @@ A = 오전의 숏 위주 5개 봇(계단). B = 위의 장세별 6개(고정 익�
 - L10으로 바꿔도 가장 좋은 것은 한 달 ×1.16(0.08%면 ×1.26)이었습니다. ×2 이상인 달은 21달 중 1 ~ 3달이었습니다.
 
 
+## 5-33. 지금 장 순위: 10월 20일 · 최근 3달로 줄 세우기 (10/25 밤, 두 분: "가능성이 보이는 조합도 좋아, 현재 장이 중요")
+
+121개 매매법 × 4개 봉(474칸)을 칸마다 1포지션 봇으로 돌렸습니다. 조건은 다음과 같습니다.
+- 방향: 양방향 / 롱만 / 숏만
+- 고정 규칙: BTC 40배 · 알트 30배, 증거금 40%
+- 청산: L10 계단, 손절 −25% / −35%
+- 평일 진입만, 비용 0.14%
+
+**10월 20일 상위 칸은 그 전에 계속 잃던 칸입니다.**
+- 10월 20일 동안 ×2 ~ ×4.2가 된 칸이 있습니다. 대부분 15분 · 30분 숏만입니다(PVT · RSI 다이버전스, HMA55 등).
+- 같은 칸이 7 ~ 9월에는 대부분 한 달 평균 ×0.15 ~ ×0.6이었고, 2025 ~ 26년은 대부분 한 달 ×0.2 ~ ×0.5였습니다.
+- 10월 하락장에서 숏이 맞은 것이고, 매매법의 힘이 아니라 장 방향입니다.
+
+**지금 좋은 것이 다음에도 좋은가 (2022 ~ 2026, 20일 구간 171개)**
+
+| 고른 방법 | 다음 20일 (가운데 값) |
+|---|---|
+| 지난 20일 상위 10칸 | ×0.64 |
+| 지난 20일 ×2 이상 칸 | ×0.46 |
+| 전체 칸 | ×0.38 |
+
+- 상위 10칸이 다음 20일에 본전 이상이었던 구간은 1.8%뿐입니다.
+
+**10월 상위 칸 조합 (2026년 1 ~ 9월에 잃지 않은 칸 중에서, 한 봇):** 10월 20일 ×0.47 ~ ×1.19, 2025 ~ 26년 한 달 ×0.57 ~ ×0.95입니다.
+
+결과 파일은 `s55_now.py`, `out/now55.json`, `out/now55_cells.csv`입니다.
+
+## 5-34. 매매법을 크게 늘려서 (10/25 밤, 두 분: "매매법들은 정해진 거야? 엄청 많잖아")
+
+**늘린 것:** 흔히 쓰는 지표 규칙 77개를 새로 만들었습니다.
+- 규칙 종류: 이동평균 교차 16, 가격 × EMA 4, 돈치안 돌파 5, RSI 되돌림 · 50/60 돌파 10, 볼린저 돌파 · 되돌림 6, MACD 6, 스토캐스틱 4, CCI 4, 슈퍼트렌드 4, 켈트너 2, ROC 3, 캔들 4(장악형 · 3연속 · 인사이드바 · 꼬리), 하이킨아시 1, DMI+ADX 2, 윌리엄스 %R 1, 일목 전환/기준 1, 아룬 1, 파라볼릭 SAR 1, Z-점수 되돌림 2
+- 걸러내기 5가지: 없음, 200 EMA 추세 방향, ADX 20 이상, 조용한 장(ATR%가 200봉 가운데 값 아래), 4시간 EMA50 방향
+- 봉 4개(15분 · 30분 · 1시간 · 4시간)로 곱해 1,540칸을 만들었습니다.
+
+여기에 원래 474칸을 더해 **2,014칸, 방향까지 5,965가지, 손절 둘로 11,930개 봇**입니다. 조건은 5-33과 같습니다.
+
+**결과**
+
+| 확인 | 결과 |
+|---|---|
+| 2025 ~ 26년 한 달 평균이 ×1 이상 | 손절 −25%: 10개, −35%: 28개 (11,930개 중) · 가장 좋은 것 ×1.035 · ×1.2 이상 0개 |
+| 2021 ~ 24년과 2025 ~ 26년 둘 다 ×1 이상 | 1개 (EMA·RSI·초피 1시간, 한 달 ×1.01, 거래 아주 적음) |
+| **P1** 7 ~ 9월(지금 장)로 상위 10 · 20 · 50 고르고 10월 20일(안 본 기간) | 가운데 값 ×0.83 ~ ×0.93, 본전 이상 10 ~ 30%, ×2 이상 0개 (전체 가운데 값 ×0.65 ~ ×0.68) |
+| **P2** 7 ~ 9월 상위 3 · 5 · 8 · 12개를 한 봇으로 | 7 · 8 · 9월 한 달 ×1.1 ~ ×5.6 (고른 기간) → **10월 20일 ×0.23 ~ ×0.69** (모두 손실), 2025 ~ 26년 한 달 ×0.19 ~ ×0.74 |
+| **P3** 10일마다 지난 10 · 20 · 30 · 60일 상위 1 · 3 · 5 · 10개로 바꿔 타기 (2022-01 ~ 2026-09, 57달) | 한 달 평균 ×0.005 ~ ×0.52, ×2 이상 달 0 ~ 1번 · 반 넘게 잃은 달 31 ~ 57번. 가장 나은 것(60일 · 1개) ×0.52 |
+| P3 비교: 무작위로 고른 1 · 3 · 5 · 10개 | 한 달 ×0.28 · ×0.05 · ×0.02 · ×0.004 |
+
+- 매매법을 4배로 늘려도 결론은 같습니다.
+- "지금 좋은 것"을 고르면 무작위보다 조금 낫지만(×0.89 대 ×0.68, P3 ×0.52 대 ×0.28) 여전히 잃습니다.
+- 고정 규칙 크기(지갑의 12 ~ 16배)에서는 거래 한 번 비용이 지갑의 약 1.7 ~ 2.2%입니다. 첫 계단 잠금(+10% ROE)은 지갑의 +4%이고, 손절(−25 ~ −35% ROE)은 지갑의 −10 ~ −14%입니다. 그래서 대부분 칸이 잃습니다.
+
+결과 파일은 `s56_gen.py`, `out/gen56.json`, `out/gen56_cells.csv.gz`입니다.
+
 ## 6. 파일과 다시 돌리기
 
 | 파일 | 내용 |
@@ -788,6 +841,6 @@ A = 오전의 숏 위주 5개 봇(계단). B = 위의 장세별 6개(고정 익�
 | `s2_read.py`, `s2_exit.py` | 실제 대 무작위 개수, 6년 반으로 고른 것의 10월·2026년 (`out/s2_read.txt`, `out/per_exit.csv`) |
 | `s2_members.py`, `s2_cand.py` | 설정 하나의 거래와 30일 확률, 무작위 쌍둥이 (`out/cand.json`) |
 | `s3.py`, `s3b.py`, `s3c.py` | 장세 전환 봇, 더 잘게 나눈 장세 (`out/regime.json`, `out/regime2.json`, `out/regime3.json`, `out/regime_trades_*.csv`) |
-| `s4_combo.py`, `s4b.py`, `s5_cost.py`, `s6_months.py`, `s7_levers.py`, `s8_diag.py`, `s8_consistent.py`, `s9_consensus.py`, `s9b.py`, `s10_gate.py`, `s12_light.py`, `s13_size.py`, `s14_cuts.py`, `s15_lightpick.py`, `s16_rotate.py`, `s17_ml.py`, `s18_ml2.py`, `s20_leak.py`, `s21_mlprice.py`, `s22_deepcoin.py`, `s23_spike.py`, `s24_meta.py`, `s25_freq.py`, `s26_exits.py`, `s29_ladders.py`, `s30_hold.py`, `s31_wide.py`, `s33_need.py`, `s33b_curve.py`, `s33c_months.py`, `free_core.py`, `s35_free.py`, `s35_read.py`, `s36_more.py`, `s37_ens.py`, `s37b_quant.py`, `s38_pull.py`, `s39_breadth.py`, `s40_autopsy.py`, `s41_pm_autopsy.py`, `s41b_fix.py`, `s43_closestop.py`, `s43b_check.py`, `s44_live20.py`, `s45_roles.py`, `s45_page.py`, `roles_page.tpl.html`, `s46_stack.py`, `s47_pairs.py`, `s49_rollpairs.py`, `s48_l5model.py`, `s48b_agree.py`, `s50_need_acc.py`, `s51_cls.py`, `s52_depth.py`, `s53_cadence.py`, `s54_l10.py` | 10월 봇과 장세 봇 합치기, 지금 장세, 비용 민감도, 달별 ×5, 조건 바꾸기, 원인 진단, 해마다 플러스, 신호등·잔고 바닥, 실행기 크기 방식, 구간 자르기, 신호등 켜고 고르기, 매달 다시 고르기, 기계학습 진입과 미래 정보 확인, 딥코인 비용, 급등락 직후, 가격만 쓰는 기계학습, 메타 라벨링, 한 달 95번 기준, 계단 비교, 보유 시간·넓은 계단, 목표에 필요한 것 (`out/combo4.json`, `out/combo4b.json`, `out/cost5.json`, `out/levers7.json`, `out/diag8.json`, `out/consistent8.json`, `out/consensus9*.json`, `out/gate10.json`, `out/light12.json`, `out/size13.json`, `out/cuts14.json`, `out/lightpick15_real.json`, `out/rotate16_real.json`, `out/ml17_*.json`, `out/ml18_*.json`, `out/ml20_*.json`, `out/deepcoin22.json`, `out/spike23.json`, `out/ml21_*.json`, `out/meta24_*.json`, `out/freq25.json`, `out/exits26.json`, `out/ladders29_*.json`, `out/hold30_*.json`, `out/wide31_all.json`, `out/need33.json`, `out/curve33b.json`, `out/months33c.json`, `out/free35_main.json`, `out/more36.json`, `out/read_*.json`, `out/ens37.json`, `out/quant37b.json`, `out/pull38.json`, `out/conf38.json`, `out/breadth39.json`, `out/autopsy40.*`, `out/pmautopsy41.*`, `out/fix41b.json`, `out/closestop43.json`, `out/free35_meta.json`, `out/live20_44.*`, `out/roles45.json`, `out/stack46.json`, `out/pairs47.json`, `out/rollpairs49.json`, `out/l5m48.json`, `out/agree48b.json`, `out/needacc50.json`, `out/cls51.json`, `out/depth52.json`, `out/cadence53.json`, `out/l10_54.json`) |
+| `s4_combo.py`, `s4b.py`, `s5_cost.py`, `s6_months.py`, `s7_levers.py`, `s8_diag.py`, `s8_consistent.py`, `s9_consensus.py`, `s9b.py`, `s10_gate.py`, `s12_light.py`, `s13_size.py`, `s14_cuts.py`, `s15_lightpick.py`, `s16_rotate.py`, `s17_ml.py`, `s18_ml2.py`, `s20_leak.py`, `s21_mlprice.py`, `s22_deepcoin.py`, `s23_spike.py`, `s24_meta.py`, `s25_freq.py`, `s26_exits.py`, `s29_ladders.py`, `s30_hold.py`, `s31_wide.py`, `s33_need.py`, `s33b_curve.py`, `s33c_months.py`, `free_core.py`, `s35_free.py`, `s35_read.py`, `s36_more.py`, `s37_ens.py`, `s37b_quant.py`, `s38_pull.py`, `s39_breadth.py`, `s40_autopsy.py`, `s41_pm_autopsy.py`, `s41b_fix.py`, `s43_closestop.py`, `s43b_check.py`, `s44_live20.py`, `s45_roles.py`, `s45_page.py`, `roles_page.tpl.html`, `s46_stack.py`, `s47_pairs.py`, `s49_rollpairs.py`, `s48_l5model.py`, `s48b_agree.py`, `s50_need_acc.py`, `s51_cls.py`, `s52_depth.py`, `s53_cadence.py`, `s54_l10.py`, `s55_now.py`, `s56_gen.py` | 10월 봇과 장세 봇 합치기, 지금 장세, 비용 민감도, 달별 ×5, 조건 바꾸기, 원인 진단, 해마다 플러스, 신호등·잔고 바닥, 실행기 크기 방식, 구간 자르기, 신호등 켜고 고르기, 매달 다시 고르기, 기계학습 진입과 미래 정보 확인, 딥코인 비용, 급등락 직후, 가격만 쓰는 기계학습, 메타 라벨링, 한 달 95번 기준, 계단 비교, 보유 시간·넓은 계단, 목표에 필요한 것 (`out/combo4.json`, `out/combo4b.json`, `out/cost5.json`, `out/levers7.json`, `out/diag8.json`, `out/consistent8.json`, `out/consensus9*.json`, `out/gate10.json`, `out/light12.json`, `out/size13.json`, `out/cuts14.json`, `out/lightpick15_real.json`, `out/rotate16_real.json`, `out/ml17_*.json`, `out/ml18_*.json`, `out/ml20_*.json`, `out/deepcoin22.json`, `out/spike23.json`, `out/ml21_*.json`, `out/meta24_*.json`, `out/freq25.json`, `out/exits26.json`, `out/ladders29_*.json`, `out/hold30_*.json`, `out/wide31_all.json`, `out/need33.json`, `out/curve33b.json`, `out/months33c.json`, `out/free35_main.json`, `out/more36.json`, `out/read_*.json`, `out/ens37.json`, `out/quant37b.json`, `out/pull38.json`, `out/conf38.json`, `out/breadth39.json`, `out/autopsy40.*`, `out/pmautopsy41.*`, `out/fix41b.json`, `out/closestop43.json`, `out/free35_meta.json`, `out/live20_44.*`, `out/roles45.json`, `out/stack46.json`, `out/pairs47.json`, `out/rollpairs49.json`, `out/l5m48.json`, `out/agree48b.json`, `out/needacc50.json`, `out/cls51.json`, `out/depth52.json`, `out/cadence53.json`, `out/l10_54.json`, `out/now55.json`, `out/gen56.json`) |
 
 1분봉·신호·상위 봉 상태는 `../roles/data`의 캐시를 쓰고, 청산 걷기는 `../hunt1025/hb_build.py`를 씁니다.
