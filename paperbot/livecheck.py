@@ -357,6 +357,7 @@ class ExecInfo:
     max_dd: Optional[float] = None  # its drawdown halt (risk.max_drawdown_pct); None: none (owners 10-19) or not known
     max_streak: Optional[int] = None    # its loss-streak halt (risk.max_consecutive_losses); None: none or not known
     max_loss: Optional[float] = None    # one stop-out's largest share of its equity (risk.max_loss_frac)
+    margin_frac: Optional[float] = None  # size_from "equity" (owners 10-25 night): each entry's margin share of its balance
     problem: str = ""               # the config could not be read: the fallbacks are used
     paper_db: str = ""              # the paper database its config names ("": the main one; paperbot/livepapers.py)
     ladder_from: str = "paper"      # "own" (owners 10-20): its take-profit ladder on its own fill and exchange prices
@@ -420,6 +421,9 @@ def load_executors(specs=None) -> list[ExecInfo]:
                 e.max_streak = int(risk["max_consecutive_losses"])
             if risk.get("max_loss_frac") is not None:
                 e.max_loss = float(risk["max_loss_frac"])
+            if d.get("size_from") == "equity" and d.get("margin_frac") is not None:
+                e.margin_frac = float(d["margin_frac"])  # its size from its balance: the loss share is not applied
+                e.max_loss = None
         except (OSError, ValueError, TypeError) as exc:
             e.problem = f"설정 파일을 못 읽음({type(exc).__name__}); 기본값 사용"
         out.append(e)

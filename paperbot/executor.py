@@ -2946,7 +2946,7 @@ class Executor:
 
 
 # ---------------------------------------------------------------- stage check (leverage stage review)
-def stage_review(exec_db: str, paper_db: str, account: str, now_ms: int, qty_scale: float = 1.0) -> dict:
+def stage_review(exec_db: str, paper_db: str, account: str, now_ms: int, qty_scale: Optional[float] = 1.0) -> dict:
     """risk.leverage_stage_review on the live record (executor db, read-only), the paper account's P&L over
     the same days (paper3.db, read-only) and the cost ratio measured from the fills."""
     conn = _ro(exec_db)
@@ -2982,7 +2982,8 @@ def stage_review(exec_db: str, paper_db: str, account: str, now_ms: int, qty_sca
         rev = {**rev, "ok": False, "next": R.LEVERAGE_STAGES[0],
                "note": "테스트넷 기록입니다. 실거래 단계 판정에는 쓰지 않습니다(참고용). " + rev["note"]}
     return {"mode": mode, "start": start, "now": now_ms, "review": rev, "cost": cost, "paper": paper,
-            "paper_scaled": None if paper is None else paper["pnl"] * qty_scale, "unplanned_halts": int(halts),
+            "paper_scaled": None if paper is None or qty_scale is None else paper["pnl"] * qty_scale,
+            "unplanned_halts": int(halts),
             "emergencies": emerg, "trades": len(closed),
             "fills_measured": sum(1 for t in closed if t["pnl_source"] == "fills")}
 
@@ -3005,7 +3006,8 @@ def stage_text(r: dict, account: str) -> str:
         lines.append(f"paper 계좌 {account}: paper3.db를 읽지 못했습니다")
     else:
         lines.append(f"paper 계좌 {account} 같은 기간: 끝난 거래 {paper['trades']}건, 손익 ${paper['pnl']:+,.2f} "
-                     f"(실행기 크기로 환산 ${r['paper_scaled']:+,.2f})")
+                     + (f"(실행기 크기로 환산 ${r['paper_scaled']:+,.2f})" if r.get("paper_scaled") is not None
+                        else "(실행기 크기는 자기 잔고 기준이라 환산하지 않음)"))
     if r["emergencies"] or r["unplanned_halts"]:
         kinds = ", ".join(f"{k} {v}번" for k, v in sorted(r["emergencies"].items()))
         lines.append(f"계획에 없던 일: 멈춤 {r['unplanned_halts']}번" + (f", 대조 비상 처리 {kinds}" if kinds else ""))
@@ -3209,7 +3211,8 @@ def cmd_preflight(args) -> int:
 
 def cmd_stage(args) -> int:
     cfg = ExecConfig.from_file(args.config)
-    r = stage_review(cfg.db, cfg.paper_db, cfg.account, int(time.time() * 1000), cfg.qty_scale)
+    r = stage_review(cfg.db, cfg.paper_db, cfg.account, int(time.time() * 1000),
+                     None if cfg.size_from == "equity" else cfg.qty_scale)   # equity: no fixed paper-to-live ratio
     print(stage_text(r, cfg.account))
     return 0 if r["review"]["ok"] else 1
 
@@ -3361,6 +3364,10 @@ def guard_lines(cfg: ExecConfig) -> list:
                    f"{f'(상한 {cfg.risk.max_leverage}배)' if cfg.risk.max_leverage else ''} - 수량 = 잔고 × "
                    f"{cfg.margin_frac:g} × 배수 ÷ 가격. 손절이 멀어도 줄이지 않음(손실 비율 상한 안 씀), 거래소 최소 "
                    "주문보다 작으면 건너뜀. qty_scale은 쓰지 않음")
+        cap, lev = cfg.risk.max_notional_usd, cfg.risk.max_leverage
+        if cap and lev:
+            out.append(f"크기 상한: 포지션 ${cap:,.0f} (risk.max_notional_usd) - 잔고가 약 ${cap / (cfg.margin_frac * lev):,.0f}"
+                       f"({lev}배 기준)를 넘으면 상한까지만 들어가 증거금이 {cfg.margin_frac:.0%}보다 작아짐")
     if cfg.stop_from == "roe" and isinstance(cfg.stop_roe, (int, float)) and 0 < cfg.stop_roe < 1:
         lev = cfg.risk.max_leverage or 35
         if cfg.stop_net is True and cfg.own_round_trip() is not None:

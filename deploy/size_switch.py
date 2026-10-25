@@ -14,6 +14,7 @@ What changes in that executor's config (every other value stays; the file keeps 
 - ``size_from`` -> "equity", ``margin_frac`` -> 0.4: each new entry's margin is 40 % of the live balance read at that
   moment, at the paper's leverage (capped by risk.max_leverage); never cut for a far stop. ``qty_scale`` stays in the
   file but is no longer used for the size.
+``--back`` puts the whole file back as it was before the newest switch (a later change by another switch script too).
 Refuses to write while that executor runs (stop it first, only while it holds no position).
 Nothing restarts here: the executor reads its config when it starts (check-config, then ``systemctl start``).
 Standard library only (the server's python3, as root).
@@ -120,7 +121,12 @@ def main(argv=None, active=unit_active) -> int:
     for w in words:
         print(f"  {w}")
     if a.write:
-        print(f"  바꿈 · 예전 파일: {_write(path, new, time.strftime('%Y%m%d-%H%M'))}")
+        try:
+            backup = _write(path, new, time.strftime("%Y%m%d-%H%M%S"))
+        except OSError as exc:
+            print(f"{path} ({ko}): 멈춤 - 쓰지 못함: {exc}")
+            return 1
+        print(f"  바꿈 · 예전 파일: {backup}")
         print("다음: check-config → sudo systemctl start " + unit)
     else:
         print("보여 주기만 했습니다. 바꾸려면 끝에 --write 를 붙여 다시 실행하세요.")

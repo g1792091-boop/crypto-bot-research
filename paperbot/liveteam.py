@@ -467,6 +467,10 @@ def _exec_rules(infos: list) -> list:
     losses = sorted({e.max_loss for e in infos if e.max_loss is not None})
     if losses:
         out.append(f"손절 한 번 최대 잔고의 {'/'.join(f'{x:.0%}' for x in losses)}")
+    for e in infos:
+        if getattr(e, "margin_frac", None):
+            out.append(f"크기: {LP.josa(e.label, '은', '는')} 진입할 때마다 자기 잔고의 {e.margin_frac:.0%}를 증거금으로 "
+                       "(손절이 멀어도 줄이지 않음)")
     lit = [e for e in infos if e.light_on]
     if not lit:
         out.append("신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)")

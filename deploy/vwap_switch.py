@@ -91,7 +91,8 @@ def plan_exec(current: str, exchange: str, balance: float, wallet: float) -> tup
             words.append(f"{k}: {json.dumps(d.get(k), ensure_ascii=False)} → {json.dumps(v, ensure_ascii=False)}")
         d[k] = v
     if risk.get("max_loss_frac") != MAX_LOSS:
-        words.append(f"risk.max_loss_frac: {risk.get('max_loss_frac')} → {MAX_LOSS}")
+        words.append(f"risk.max_loss_frac: {risk.get('max_loss_frac')} → {MAX_LOSS}"
+                     + (" (잔고 기준 크기에서는 쓰지 않음)" if d.get("size_from") == "equity" else ""))
     risk["max_loss_frac"] = MAX_LOSS
     d["risk"] = risk
     if d.get("size_from") == "equity":                  # owners 10-25 night: the size from its own balance
