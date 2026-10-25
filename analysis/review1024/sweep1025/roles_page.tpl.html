@@ -1,0 +1,238 @@
+<title>매매법 역할 카드</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* layout: a search ledger. summary band on top, then one card per strategy; rows inside a card are its timeframes */
+:root {
+  --bg: #f3f4f1; --surface: #ffffff; --ink: #1d2422; --muted: #5d6965; --line: #d8ddd8;
+  --accent: #2c5f8a; --good: #2f7a4d; --goodbg: #e3f1e8; --warn: #9a6a12; --warnbg: #f6ecd8; --bad: #a83b3b; --badbg: #f6e3e1;
+  --display: "IBM Plex Sans KR", "Noto Sans KR", system-ui, sans-serif;
+  --body: "Noto Sans KR", system-ui, -apple-system, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121615; --surface: #1a201e; --ink: #e5ebe8; --muted: #93a19c; --line: #2c3532;
+  --accent: #7fb0d9; --good: #6fcf97; --goodbg: #1c3326; --warn: #e2b357; --warnbg: #3a2f17; --bad: #ef8b84; --badbg: #3d2220; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121615; --surface: #1a201e; --ink: #e5ebe8; --muted: #93a19c; --line: #2c3532;
+  --accent: #7fb0d9; --good: #6fcf97; --goodbg: #1c3326; --warn: #e2b357; --warnbg: #3a2f17; --bad: #ef8b84; --badbg: #3d2220; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px }
+.wrap { max-width: 980px; margin: 0 auto; display: grid; gap: 22px }
+h1 { font-family: var(--display); font-weight: 700; font-size: 1.6rem; margin: 0; text-wrap: balance }
+h2 { font-family: var(--display); font-weight: 600; font-size: 1.15rem; margin: 0 0 8px; text-wrap: balance }
+.lede { color: var(--muted); margin: 6px 0 0; max-width: 68ch }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.band { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; min-width: 0 }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px }
+.fact { border-left: 3px solid var(--line); padding: 2px 0 2px 12px; min-width: 0 }
+.fact b { display: block; font-family: var(--display); font-size: 1.05rem }
+.fact span { color: var(--muted); font-size: .9rem }
+.fact.bad { border-color: var(--bad) } .fact.good { border-color: var(--good) } .fact.warn { border-color: var(--warn) }
+.tablewrap { overflow-x: auto; min-width: 0 }
+table { border-collapse: collapse; width: 100%; font-size: .88rem }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap }
+th { color: var(--muted); font-weight: 500; font-size: .78rem; letter-spacing: .02em }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.controls input[type=search] { flex: 1 1 220px; min-width: 0; font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink) }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface) }
+.seg button { font: inherit; font-size: .85rem; border: 0; background: transparent; color: var(--muted); padding: 7px 10px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface) }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.count { color: var(--muted); font-size: .85rem }
+.cards { display: grid; gap: 10px }
+details.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0 }
+details.card > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline }
+details.card > summary::-webkit-details-marker { display: none }
+.cname { font-family: var(--display); font-weight: 600; font-size: 1.02rem; min-width: 0 }
+.cmeta { color: var(--muted); font-size: .82rem; grid-column: 1 / -1 }
+.verdict { font-size: .8rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap }
+.v-good { background: var(--goodbg); color: var(--good) } .v-warn { background: var(--warnbg); color: var(--warn) } .v-bad { background: var(--badbg); color: var(--bad) }
+.cbody { padding: 0 14px 14px; display: grid; gap: 12px; min-width: 0 }
+.tfrow { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 6px; min-width: 0 }
+.tfhead { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline }
+.tfname { font-family: var(--display); font-weight: 600 }
+.pp { font-size: .85rem }
+.pos { color: var(--good) } .neg { color: var(--bad) } .na { color: var(--muted) }
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { font-size: .8rem; border-radius: 6px; padding: 3px 8px; border: 1px solid var(--line); background: var(--bg) }
+.chip.both { border-color: var(--good); background: var(--goodbg) }
+.chip.pick { border-style: dashed }
+.small { color: var(--muted); font-size: .82rem }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: .82rem; color: var(--muted) }
+.more { font: inherit; font-size: .85rem; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; justify-self: start }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>매매법 역할 카드</h1>
+    <p class="lede">121개 매매법을 봉·방향·장세별로 나눠, 2021-06~2024-12에 돈을 번 조건이 2025-01~2026-09에도 통했는지 표시했습니다. 고정 규칙(BTC 40배·알트 30배, 증거금 40%), 계단 L5(12→10, +5), 손절 ROE −35%, 보유 제한 없음, 딥코인 왕복 0.14%, 평일 진입 기준입니다. 숫자는 신호 하나당 잔고 변화입니다.</p>
+  </header>
+
+  <section class="band" aria-labelledby="sum-h">
+    <h2 id="sum-h">한눈에</h2>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <section class="band" aria-labelledby="bot-h">
+    <h2 id="bot-h">자기 장에서만 쓰는 봇</h2>
+    <p class="small">매매법·봉·방향마다 2021~24년에 가장 잘 맞던 장 조건 하나만 골라 그 조건에서만 진입하게 한 한 포지션 봇입니다. 대조는 같은 방법을 장 정보를 섞어서(무작위) 돌린 것입니다. 배수는 한 달 기하평균입니다.</p>
+    <div class="tablewrap"><table id="bottab"></table></div>
+  </section>
+
+  <section class="band" aria-labelledby="judge-h">
+    <h2 id="judge-h">추세 판단용으로 쓸 만한 지표</h2>
+    <p class="small">121개 매매법의 모든 신호를 그 지표의 1시간·4시간 상태와 같은 방향일 때와 반대 방향일 때로 나눈 신호당 차이입니다. 두 기간 모두 차이가 큰 것이 판단용으로 쓸 만합니다. 위 12개만 보입니다.</p>
+    <div class="tablewrap"><table id="judgetab"></table></div>
+  </section>
+
+  <section aria-labelledby="cards-h" style="display:grid;gap:12px">
+    <h2 id="cards-h">매매법별 카드</h2>
+    <div class="controls">
+      <label for="q" class="small" style="position:absolute;left:-9999px">매매법 찾기</label>
+      <input id="q" type="search" placeholder="매매법 이름 (예: V3.9, 슈퍼트렌드, CMO)" autocomplete="off">
+      <div class="seg" role="group" aria-label="세트">
+        <button type="button" data-set="" aria-pressed="true">전체</button>
+        <button type="button" data-set="규칙봇" aria-pressed="false">규칙봇</button>
+        <button type="button" data-set="딥시크" aria-pressed="false">딥시크</button>
+        <button type="button" data-set="라이브러리" aria-pressed="false">라이브러리</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="chip both">초록</span> 두 기간 모두 플러스</span>
+      <span><span class="chip pick">점선</span> 2021~24년만 플러스 (우연일 가능성 큼)</span>
+      <span>롱/숏 숫자: 2021~24 → 2025~26</span>
+    </div>
+    <div class="count" id="count"></div>
+    <div class="cards" id="cards"></div>
+    <button type="button" class="more" id="more" hidden>더 보기</button>
+  </section>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const TFN = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"};
+const pct = v => v === null || v === undefined ? "—" : (v > 0 ? "+" : "") + (v * 100).toFixed(2) + "%";
+const cls = v => v === null || v === undefined ? "na" : v > 0 ? "pos" : "neg";
+const x = v => "×" + Number(v).toFixed(2);
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) { if (k === "class") e.className = v; else e.setAttribute(k, v); }
+  for (const k of kids) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  return e;
+}
+function num(v, f) { return el("span", {class: "num " + cls(v)}, f(v)); }
+
+// summary facts
+(function () {
+  const s = DATA.strats;
+  const anyAlone = s.filter(t => t.best > 0).length;
+  const withBoth = s.filter(t => t.nboth > 0).length;
+  const real = DATA.bot["자세한 장세 전부 / 실제"], ctl = DATA.bot["자세한 장세 전부 / 대조: 장세 섞음"];
+  const f = [
+    ["bad", anyAlone + " / " + s.length, "단독으로 두 기간 모두 신호당 플러스인 매매법(신호 100개 이상인 봉·방향 기준)"],
+    ["warn", (DATA.fit_rate * 100).toFixed(0) + "%", "2021~24년에 맞던 장 조건 " + DATA.nfits.toLocaleString() + "개 중 2025~26년에도 플러스로 남은 비율"],
+    [withBoth > 0 ? "good" : "bad", withBoth + "개", "두 기간 모두 맞는 장이 하나라도 있는 매매법"],
+    [real["봇 손절 -35%"]["확인 기하평균"] > ctl["봇 손절 -35%"]["확인 기하평균"] ? "warn" : "bad",
+      x(real["봇 손절 -35%"]["확인 기하평균"]) + " 대 " + x(ctl["봇 손절 -35%"]["확인 기하평균"]),
+      "자기 장에서만 쓰는 봇, 2025~26년 한 달 평균 (실제 대 장 섞은 대조)"]
+  ];
+  const box = document.getElementById("facts");
+  for (const [k, b, t] of f) box.append(el("div", {class: "fact " + k}, el("b", {class: "num"}, b), el("span", {}, t)));
+})();
+
+// bot table
+(function () {
+  const t = document.getElementById("bottab");
+  const head = el("tr", {}, el("th", {}, "봇"), el("th", {}, "고른 칸"), el("th", {}, "신호당 21~24"), el("th", {}, "신호당 25~26"));
+  for (const s of ["-25%", "-35%", "-50%"]) head.append(el("th", {}, "손절 " + s + " 21~24 → 25~26"));
+  t.append(el("thead", {}, head));
+  const tb = el("tbody");
+  for (const [k, r] of Object.entries(DATA.bot)) {
+    const tr = el("tr", {}, el("td", {}, k), el("td", {class: "num"}, r["고른 칸"]), el("td", {}, num(r["고르기 신호당"], pct)), el("td", {}, num(r["확인 신호당"], pct)));
+    for (const s of ["-25%", "-35%", "-50%"]) {
+      const b = r["봇 손절 " + s];
+      tr.append(el("td", {class: "num"}, x(b["고르기 기하평균"]) + " → " + x(b["확인 기하평균"]) + "  (−50% 달 " + b["확인 -50% 달"] + ")"));
+    }
+    tb.append(tr);
+  }
+  t.append(tb);
+})();
+
+// judges
+(function () {
+  const t = document.getElementById("judgetab");
+  t.append(el("thead", {}, el("tr", {}, el("th", {}, "지표 @봉"), el("th", {}, "차이 21~24"), el("th", {}, "차이 25~26"),
+    el("th", {}, "같은 방향 21~24 / 25~26"), el("th", {}, "반대 방향 21~24 / 25~26"))));
+  const tb = el("tbody");
+  for (const j of DATA.judges.slice(0, 12)) {
+    const [k, dp, dc, ap, ac, bp, bc] = j;
+    const [src, tf] = k.split(" @");
+    tb.append(el("tr", {}, el("td", {}, (DATA.ko[k] || src) + " @" + (TFN[tf] || tf)), el("td", {}, num(dp, pct)), el("td", {}, num(dc, pct)),
+      el("td", {}, num(ap, pct), " / ", num(ac, pct)), el("td", {}, num(bp, pct), " / ", num(bc, pct))));
+  }
+  t.append(tb);
+})();
+
+// cards
+let setF = "", q = "", shown = 30;
+function verdict(s) {
+  if (s.best > 0) return ["v-good", "단독으로도 두 기간 플러스"];
+  if (s.nboth > 0) return ["v-warn", "특정 장에서만 두 기간 플러스"];
+  return ["v-bad", "두 기간 모두 통한 조건 없음"];
+}
+function fitChip(f, kind) {
+  const [dim, val, side, p, c] = f;
+  return el("span", {class: "chip " + kind}, side + " · " + dim + " " + val + " ", el("span", {class: "num"}, pct(p) + " → " + pct(c)));
+}
+function card(s) {
+  const [vc, vt] = verdict(s);
+  const d = el("details", {class: "card"});
+  d.append(el("summary", {}, el("span", {class: "cname"}, s.ko + " "), el("span", {class: "verdict " + vc}, vt),
+    el("span", {class: "cmeta"}, s.set + " · " + s.role + " · " + s.id)));
+  const body = el("div", {class: "cbody"});
+  for (const tf of ["15m", "30m", "1h", "4h"]) {
+    const t = s.tf[tf]; if (!t) continue;
+    const row = el("div", {class: "tfrow"});
+    row.append(el("div", {class: "tfhead"}, el("span", {class: "tfname"}, TFN[tf]),
+      el("span", {class: "pp"}, "롱 ", num(t.L["고르기 신호당"], pct), " → ", num(t.L["확인 신호당"], pct), el("span", {class: "small"}, " (" + t.L["고르기 신호"] + "·" + t.L["확인 신호"] + "개)")),
+      el("span", {class: "pp"}, "숏 ", num(t.S["고르기 신호당"], pct), " → ", num(t.S["확인 신호당"], pct), el("span", {class: "small"}, " (" + t.S["고르기 신호"] + "·" + t.S["확인 신호"] + "개)"))));
+    if (t.both.length) {
+      const c = el("div", {class: "chips"}); for (const f of t.both) c.append(fitChip(f, "both"));
+      row.append(el("div", {class: "small"}, "두 기간 모두 맞은 장 " + t.nboth + "개"), c);
+    }
+    if (t.pick.length) {
+      const c = el("div", {class: "chips"}); for (const f of t.pick) c.append(fitChip(f, "pick"));
+      row.append(el("div", {class: "small"}, "2021~24년만 맞은 장 " + t.npick + "개 (앞 4개)"), c);
+    }
+    if (!t.both.length && !t.pick.length) row.append(el("div", {class: "small"}, "신호 40개 이상인 장 중 2021~24년에 플러스인 곳 없음"));
+    if (t.judge) {
+      const [jk, jp, jc, base, rnd] = t.judge; const [src, jtf] = jk.split(" @");
+      row.append(el("div", {class: "small"}, "가장 잘 맞는 판단 짝: " + (DATA.ko[jk] || src) + " @" + (TFN[jtf] || jtf) + " 같은 방향일 때만 → ",
+        num(jp, pct), " → ", num(jc, pct), " (그대로 25~26 ", num(base, pct), ", 무작위 판단 ", num(rnd, pct), ")"));
+    }
+    body.append(row);
+  }
+  d.append(body);
+  return d;
+}
+function render() {
+  const box = document.getElementById("cards"); box.textContent = "";
+  const ql = q.trim().toLowerCase();
+  const list = DATA.strats.filter(s => (!setF || s.set === setF) && (!ql || s.ko.toLowerCase().includes(ql) || s.id.toLowerCase().includes(ql)));
+  for (const s of list.slice(0, shown)) box.append(card(s));
+  document.getElementById("count").textContent = list.length + "개 매매법 · 단독 성적 좋은 순";
+  document.getElementById("more").hidden = list.length <= shown;
+}
+document.getElementById("q").addEventListener("input", e => { q = e.target.value; shown = 30; render(); });
+for (const b of document.querySelectorAll(".seg button")) b.addEventListener("click", () => {
+  setF = b.dataset.set; shown = 30;
+  for (const o of document.querySelectorAll(".seg button")) o.setAttribute("aria-pressed", String(o === b));
+  render();
+});
+document.getElementById("more").addEventListener("click", () => { shown += 30; render(); });
+render();
+</script>
