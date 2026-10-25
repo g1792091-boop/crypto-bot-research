@@ -1,0 +1,9 @@
+# big outputs of a rerun (hb_build.py / hb_eval.py), not committed
+fwd.npz
+single_R.npy
+groups_idx.npz
+sig.pkl.gz
+single_top.csv
+group_null.csv
+group_real.csv
+groups.csv
