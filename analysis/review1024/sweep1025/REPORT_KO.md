@@ -291,6 +291,13 @@ A = 오전의 숏 위주 5개 봇(계단). B = 위의 장세별 6개(고정 익�
 - **FOLLOW는 모든 설정에서 해마다 마이너스**(거래당 −1 ~ −4%)였습니다.
 - **FADE는 고르는 기간에 플러스인 설정이 없었습니다**(2020~23 거래당 −1.9 ~ +0.04%). 페이백 비용(0.08%)에 큰 급등락만이면 2024~26에 +0.5 ~ +2.0%였지만 2026년은 마이너스였고, 한 달 8번 남짓, ×5 달 0번이었습니다. 고를 수 있는 근거가 없습니다.
 
+## 5-13. 가격만 쓰는 기계학습 (10/25 밤)
+
+바이낸스 5분 지표를 빼고(미래 정보, 5-10), 1분봉 특징(최근 1·3·5·10분 등락, 15·60분 실현 변동성, 5분 거래량 비율), 다른 코인 평균 등락, 다음 펀딩까지 시간을 더했습니다. 800그루, 표본 절반, 반년씩 앞으로(`s21_mlprice.py`, `out/ml21_price.json`, 비용 왕복 0.12%).
+- **많이 거래하면(낮은 기준) 거의 모두 마이너스**였습니다.
+- **확실한 자리만 고르면 해마다 플러스인 설정이 하나 나왔습니다**: 손절 ROE −35% · 작은 계단 6→4 · 기준 0.03. 235거래(한 달 4번 정도), 거래당 +1.82%, 해별 +1.3 / +4.4 / +4.3 / +1.9 / +1.0%, −50% 달 0번, 한 달 중간값 ×1.09. 장세별로는 상승 +8.3% · 하락 +1.7% · **횡보 −2.2%**.
+- **목표에는 못 미칩니다**: ×5 달 0번. 21가지 설정 중 가장 좋은 것이라 우연일 수 있어, 정답을 섞은 대조(`s21_mlprice.py shuffle`)로 확인합니다. 딥코인 비용(왕복 0.14%)이면 거래당 약 +1.5%입니다.
+
 ## 6. 파일과 다시 돌리기
 
 | 파일 | 내용 |
@@ -299,6 +306,6 @@ A = 오전의 숏 위주 5개 봇(계단). B = 위의 장세별 6개(고정 익�
 | `s2_read.py`, `s2_exit.py` | 실제 대 무작위 개수, 6년 반으로 고른 것의 10월·2026년 (`out/s2_read.txt`, `out/per_exit.csv`) |
 | `s2_members.py`, `s2_cand.py` | 설정 하나의 거래와 30일 확률, 무작위 쌍둥이 (`out/cand.json`) |
 | `s3.py`, `s3b.py`, `s3c.py` | 장세 전환 봇, 더 잘게 나눈 장세 (`out/regime.json`, `out/regime2.json`, `out/regime3.json`, `out/regime_trades_*.csv`) |
-| `s4_combo.py`, `s4b.py`, `s5_cost.py`, `s6_months.py`, `s7_levers.py`, `s8_diag.py`, `s8_consistent.py`, `s9_consensus.py`, `s9b.py`, `s10_gate.py`, `s12_light.py`, `s13_size.py`, `s14_cuts.py`, `s15_lightpick.py`, `s16_rotate.py`, `s17_ml.py`, `s18_ml2.py`, `s20_leak.py`, `s22_deepcoin.py`, `s23_spike.py` | 10월 봇과 장세 봇 합치기, 지금 장세, 비용 민감도, 달별 ×5, 조건 바꾸기, 원인 진단, 해마다 플러스, 신호등·잔고 바닥, 실행기 크기 방식, 구간 자르기, 신호등 켜고 고르기, 매달 다시 고르기, 기계학습 진입과 미래 정보 확인, 딥코인 비용, 급등락 직후 (`out/combo4.json`, `out/combo4b.json`, `out/cost5.json`, `out/levers7.json`, `out/diag8.json`, `out/consistent8.json`, `out/consensus9*.json`, `out/gate10.json`, `out/light12.json`, `out/size13.json`, `out/cuts14.json`, `out/lightpick15_real.json`, `out/rotate16_real.json`, `out/ml17_*.json`, `out/ml18_*.json`, `out/ml20_*.json`, `out/deepcoin22.json`, `out/spike23.json`) |
+| `s4_combo.py`, `s4b.py`, `s5_cost.py`, `s6_months.py`, `s7_levers.py`, `s8_diag.py`, `s8_consistent.py`, `s9_consensus.py`, `s9b.py`, `s10_gate.py`, `s12_light.py`, `s13_size.py`, `s14_cuts.py`, `s15_lightpick.py`, `s16_rotate.py`, `s17_ml.py`, `s18_ml2.py`, `s20_leak.py`, `s21_mlprice.py`, `s22_deepcoin.py`, `s23_spike.py`, `s24_meta.py` | 10월 봇과 장세 봇 합치기, 지금 장세, 비용 민감도, 달별 ×5, 조건 바꾸기, 원인 진단, 해마다 플러스, 신호등·잔고 바닥, 실행기 크기 방식, 구간 자르기, 신호등 켜고 고르기, 매달 다시 고르기, 기계학습 진입과 미래 정보 확인, 딥코인 비용, 급등락 직후, 가격만 쓰는 기계학습, 메타 라벨링 (`out/combo4.json`, `out/combo4b.json`, `out/cost5.json`, `out/levers7.json`, `out/diag8.json`, `out/consistent8.json`, `out/consensus9*.json`, `out/gate10.json`, `out/light12.json`, `out/size13.json`, `out/cuts14.json`, `out/lightpick15_real.json`, `out/rotate16_real.json`, `out/ml17_*.json`, `out/ml18_*.json`, `out/ml20_*.json`, `out/deepcoin22.json`, `out/spike23.json`, `out/ml21_*.json`, `out/meta24_*.json`) |
 
 1분봉·신호·상위 봉 상태는 `../roles/data`의 캐시를 쓰고, 청산 걷기는 `../hunt1025/hb_build.py`를 씁니다.
