@@ -18,9 +18,11 @@
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 wooxpro check
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 wooxpro drill --confirm-order REAL_ORDER
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 executor preflight --config /etc/paperbot/executor-wooxpro2.json
+#   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json
+#   ('믹스 30분 봇', owners 10-25, docs/mixchop-ko.md: reads only)
 #
 # Only the modules paperbot.testnet, paperbot.executor, paperbot.bybit, paperbot.mexc, paperbot.wooxpro,
-# paperbot.flipster and paperbot.deepcoin can be run this way.
+# paperbot.flipster, paperbot.deepcoin and paperbot.mixchop can be run this way.
 set -eu
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo"; exit 1; fi
 if ! id paperbot-exec >/dev/null 2>&1 || [ "$(id -u paperbot-exec)" = "$(id -u paperbot)" ]; then
@@ -31,7 +33,7 @@ hide=""
 if [ "${1:-}" = "--keys" ]; then
   case "${2:-}" in
     wooxpro2) keys=EnvironmentFile=/etc/paperbot/executor-wooxpro2.env; hide=" -/etc/paperbot/executor.env"; shift 2 ;;
-    *) echo "usage: $0 [--keys wooxpro2] testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin <command> [options]"; exit 1 ;;
+    *) echo "usage: $0 [--keys wooxpro2] testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin|mixchop <command> [options]"; exit 1 ;;
   esac
   if [ ! -f "${keys#EnvironmentFile=}" ]; then
     echo "${keys#EnvironmentFile=} is missing: run sudo bash deploy/install.sh first (docs/friend-bot-ko.md)"; exit 1
@@ -42,7 +44,8 @@ case "$mod" in
   testnet|executor) shift ;;
   bybit|mexc|wooxpro|flipster) shift ;;
   deepcoin) shift ;;
-  *) echo "usage: $0 testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin <command> [options]"; exit 1 ;;
+  mixchop) shift ;;
+  *) echo "usage: $0 testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin|mixchop <command> [options]"; exit 1 ;;
 esac
 if [ -t 0 ]; then io=--pty; else io=--pipe; fi
 exec systemd-run --quiet --wait --collect $io --uid=paperbot-exec --gid=paperbot \

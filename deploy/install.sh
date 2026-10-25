@@ -324,6 +324,13 @@ install -m 644 "$APP/deploy/paperbot-executor-deepcoin.service" /etc/systemd/sys
 # '친구 매매법'): installed only, never enabled or started here; /etc/paperbot/executor-wooxpro2.json is never written here
 # (the owners copy deploy/executor.live-wooxpro2.json), so the site, the checks and the messages stay as they are until then.
 install -m 644 "$APP/deploy/paperbot-executor-wooxpro2.service" /etc/systemd/system/paperbot-executor-wooxpro2.service
+# '믹스 30분 봇' (owners 10-25 night, docs/mixchop-ko.md): the second WOO X Pro account trades the 30m signal itself
+# (paperbot/mixchop.py, keys from executor-wooxpro2.env; Conflicts= stops paperbot-executor-wooxpro2 when it starts), and
+# its paper twin (no keys, no orders). Installed only, never enabled or started here; /etc/paperbot/mixchop.json and
+# mixchop-paper.json are never written here (the owners copy deploy/mixchop.live.json / mixchop.paper.json).
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixchop-paper
+install -m 644 "$APP/deploy/paperbot-mixchop.service" /etc/systemd/system/paperbot-mixchop.service
+install -m 644 "$APP/deploy/paperbot-mixchop-paper.service" /etc/systemd/system/paperbot-mixchop-paper.service
 # Until 10-24 this slot was Flipster's (paperbot-executor-flipster, installed by install.sh from 10-23, never started:
 # its API opens only on request, so the owners switched to DeepCoin). Its unit file goes only while that unit is inactive
 # and not enabled; a running or enabled one is left as it is (a person decides).

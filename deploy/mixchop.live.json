@@ -1,0 +1,49 @@
+{
+ "mode": "mainnet",
+ "state": "/var/lib/paperbot/exec/mixchop-state.json",
+ "log": "/var/lib/paperbot/exec/mixchop-log.jsonl",
+ "risk_pct": 0.25,
+ "equity_floor_frac": 0.7,
+ "kill_file": "/var/lib/paperbot/STOP",
+ "own_stop_file": "/var/lib/paperbot/exec/mixchop.STOP",
+ "max_notional_usd": 500,
+ "telegram": true,
+ "coins": {
+  "SOLUSDT": {
+   "h1_buf": 8.0,
+   "sl_atr": 2.0,
+   "roe_act": 150,
+   "leverage": 40
+  },
+  "ETHUSDT": {
+   "h1_buf": 8.5,
+   "sl_atr": 1.5,
+   "roe_act": 200,
+   "leverage": 40
+  },
+  "XRPUSDT": {
+   "h1_buf": 9.5,
+   "sl_atr": 1.5,
+   "roe_act": 200,
+   "leverage": 40
+  },
+  "BCHUSDT": {
+   "h1_buf": 3.0,
+   "sl_atr": 2.0,
+   "roe_act": 150,
+   "leverage": 40
+  },
+  "ZECUSDT": {
+   "h1_buf": 6.5,
+   "sl_atr": 2.5,
+   "roe_act": 100,
+   "leverage": 20
+  },
+  "DOGEUSDT": {
+   "h1_buf": 4.0,
+   "sl_atr": 2.5,
+   "roe_act": 100,
+   "leverage": 40
+  }
+ }
+}

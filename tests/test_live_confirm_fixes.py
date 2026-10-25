@@ -118,10 +118,19 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                              "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env",
                              "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env "
                              "-/etc/paperbot/executor.env"]), differ
+    # '믹스 30분 봇' (owners 10-25, docs/mixchop-ko.md): trades the second WOO X Pro account itself, with that account's
+    # key file and the fourth executor's sandbox; it stops that executor when it starts (never both on one account)
+    mix = _unit("deploy/paperbot-mixchop.service")
+    for line in ("User=paperbot-exec", "EnvironmentFile=/etc/paperbot/executor-wooxpro2.env", "NoNewPrivileges=yes",
+                 "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "LimitCORE=0", "UMask=0027",
+                 "ReadWritePaths=/var/lib/paperbot/exec", "Conflicts=paperbot-executor-wooxpro2.service",
+                 "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env"):
+        assert line in mix, line
+    assert not [x for x in mix if x.startswith("EnvironmentFile=/etc/paperbot/executor.env")]
     for svc in sorted(os.listdir(os.path.join(REPO, "deploy"))):
         if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service",
                                                    "paperbot-executor-deepcoin.service",
-                                                   "paperbot-executor-wooxpro2.service"):
+                                                   "paperbot-executor-wooxpro2.service", "paperbot-mixchop.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor

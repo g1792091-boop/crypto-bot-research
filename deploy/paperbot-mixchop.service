@@ -1,0 +1,45 @@
+# '믹스 30분 봇' (owners 2026-10-25 night, docs/mixchop-ko.md): the SECOND WOO X Pro account trades the 30-minute signal
+# of the indicator "추세 조건 OBV·클링거 + 매매 시그널" by itself (python -m paperbot.mixchop, no paper bot in between):
+# Binance's closed 30m / 1h bars -> the signal at each 30m close -> a market order + a resting stop on WOO X Pro, the
+# ladder moved at 30m closes. One position at a time, SOL · ETH · XRP · BCH · ZEC · DOGE, a stop-out = 0.25 % of the equity.
+#
+# Keys: the second account's root-only key file /etc/paperbot/executor-wooxpro2.env (WOOXPRO_LIVE_KEY / SECRET / MEMO,
+# WOOXPRO_LIVE_KEY_CHECKED, PAPERBOT_LIVE_MAINNET) - the same file the old executor slot used. That executor
+# (paperbot-executor-wooxpro2, following '친구 매매법') must not trade the same account at the same time: Conflicts= below
+# stops it when this one starts. Own user paperbot-exec, the executors' sandbox; exit 2 = a gate refused (not restarted).
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it after the guide's checks:
+#   sudo systemctl start paperbot-mixchop      (enable only after the first days went as expected)
+[Unit]
+Description=paperbot '믹스 30분 봇' (WOO X Pro 2, mainnet: real orders)
+After=network-online.target
+Wants=network-online.target
+Conflicts=paperbot-executor-wooxpro2.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot-exec
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor-wooxpro2.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.mixchop run --config /etc/paperbot/mixchop.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/exec
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

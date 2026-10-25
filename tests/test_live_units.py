@@ -28,7 +28,7 @@ def test_live_chain_is_protected_from_the_oom_killer():
 def test_experiments_are_not_protected():
     for unit in sorted(DEPLOY.glob("paperbot-*.service")):
         if unit.name in {"paperbot-executor.service", "paperbot-executor-mexc.service", "paperbot-executor-deepcoin.service",
-                         "paperbot-executor-wooxpro2.service",
+                         "paperbot-executor-wooxpro2.service", "paperbot-mixchop.service",
                          "paperbot-combo.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
                          "paperbot-combo-friend.service", "paperbot-combo-short5.service",
                          "paperbot-live3.service"}:

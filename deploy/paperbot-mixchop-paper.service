@@ -1,0 +1,32 @@
+# '믹스 30분 봇' in paper mode (docs/mixchop-ko.md): the same program and signal, no keys, no orders. It fills at the
+# signal close and exits on the 30m bars as the TradingView indicator does, from $50, so its log can be put next to the
+# chart (and later next to the live bot). Its own config /etc/paperbot/mixchop-paper.json and files under
+# /var/lib/paperbot/mixchop-paper. installed by install.sh, never enabled or started there:
+#   sudo systemctl start paperbot-mixchop-paper
+[Unit]
+Description=paperbot '믹스 30분 봇' paper (no orders)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.mixchop run --config /etc/paperbot/mixchop-paper.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/mixchop-paper
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/executor-wooxpro2.env
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target
