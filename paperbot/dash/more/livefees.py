@@ -51,6 +51,9 @@ ROWS_KEEP = 12                           # trades listed per span (newest first)
 #            answer (GET /deepcoin/account/trade-fee, tier Lv1) reads taker 0.05 %, maker 0.02 %; no fee schedule is settled
 #            there, so these are the example's numbers until the drill reads the account's own rate and measures the real
 #            fee (the owners' payback app pays part of it back later, outside the bot: the exchange charges its full fee)
+#   toobit   docs/toobit-ko.md "수수료" (owners 10-25, the fifth slot): the base taker fee 0.06 % a side; no maker rate is
+#            written anywhere (its check prints the account's commissionRate, maker too: once the owners read it off, it
+#            goes here); the TetherDrop payback is paid later, outside the bot
 RATES = {
     "bybit": {"taker": 0.00055, "maker": 0.0002, "src": "docs/live1019-start-ko.md",
               "src_ko": "일반 등급(VIP0) 무기한 선물 · 10/19 확인"},
@@ -60,6 +63,8 @@ RATES = {
     "binance": {"taker": 0.0005, "maker": 0.0002, "src": "docs/trade-review-system.md", "src_ko": "USDⓈ-M VIP0"},
     "deepcoin": {"taker": 0.0005, "maker": 0.0002, "src": "docs/deepcoin-ko.md",
                  "src_ko": "딥코인 API 문서의 요율 조회 예시(Lv1) · 두 분 계정 요율은 드릴이 재요 · 페이백은 봇 밖에서 나중에 들어와요"},
+    "toobit": {"taker": 0.0006, "maker": None, "src": "docs/toobit-ko.md",
+               "src_ko": "투비트 기본 테이커 0.06% · 메이커 요율은 문서에 없어요 (check의 수수료율 줄로 확인) · TetherDrop 페이백은 봇 밖에서 나중에 들어와요"},
 }
 RATES_KO = "기본 등급 요율 · 두 분 계정 등급에 따라 다를 수 있어요"
 LIMIT_RISK_KO = ("지정가 주문은 안 채워질 수 있어요: 안 채워졌으면 그 거래는 없었던 거고, 그 위험(놓친 이익·피한 손실)은 이 숫자에 "

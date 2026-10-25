@@ -14,6 +14,7 @@
 .lbh-x-mexc { --rc: var(--series-m5); }
 .lbh-x-deepcoin { --rc: var(--series-dc); }
 .lbh-x-wooxpro2 { --rc: var(--series-w2); }
+.lbh-x-toobit { --rc: var(--series-tb); }
 .lbh-x-paper { --rc: var(--series-coin); }
 .lbh .sw { display: inline-block; flex: none; width: 4px; height: 12px; border-radius: 2px; background: var(--rc); vertical-align: -1px; }
 .lbh-real { display: inline-flex; align-items: center; flex: none; padding: 0 7px; border-radius: 999px; border: 1px solid var(--warn-line); background: var(--warn-soft);
@@ -111,8 +112,14 @@
 .lbh-deck > .lbh-x-deepcoin { order: 3; }
 .lbh-deck > .lbh-mix { order: 4; }
 .lbh-deck > .lbh-x-wooxpro2:not(.lbh-mix) { order: 5; }
+.lbh-deck > .lbh-x-toobit { order: 6; }
 @media (min-width: 1400px) {
   .lbh-deck.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+/* six cards (투비트, owners 10/25, while the server has it, next to the five): two rows of three on a wide screen, a phone
+   two a row (three rows, none across) */
+@media (min-width: 900px) {
+  .lbh-deck.six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 /* the 봇 line under the account's name: which bot the card is or follows (the three ways never mixed up) */
 .lbh-who { display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: 2px 6px; margin: 0; text-align: center;

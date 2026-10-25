@@ -1,0 +1,36 @@
+{
+  "exchange": "toobit",
+  "mode": "mainnet",
+  "account": "TODO-따라갈-V3.9-1시간-페이퍼-계좌",
+  "paper_db": "TODO-그-페이퍼-계좌의-DB-경로",
+  "db": "/var/lib/paperbot/exec/executor-toobit-live.db",
+  "own_keys": true,
+  "budget_usd": 50,
+  "qty_scale": 1.0,
+  "size_from": "equity",
+  "margin_frac": 0.4,
+  "entry_source": "paper",
+  "stop_from": "ratio",
+  "ladder_from": "paper",
+  "signal_light_n": 0,
+  "net_costs": {
+    "toobit": {
+      "taker_fee": 0.0006,
+      "slippage": 0.0002
+    }
+  },
+  "risk": {
+    "max_leverage": 40,
+    "max_notional_usd": 10000,
+    "max_loss_frac": 0.2,
+    "allowed_symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "DOGEUSDT",
+      "LTCUSDT",
+      "BCHUSDT"
+    ],
+    "kill_file": "/var/lib/paperbot/STOP"
+  }
+}

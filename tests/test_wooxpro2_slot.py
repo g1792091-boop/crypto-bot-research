@@ -614,7 +614,7 @@ def test_check_config_and_preflight_say_the_name_the_key_rule_and_the_floor(tmp_
     lines = []
     E.preflight(cfg, w.client, w.keycheck, out=lines.append, env=dict(LIVE_ENV))
     text = "\n".join(lines)
-    assert not [x for x in lines if x.startswith("[FAIL]") and "paper3.db" not in x], lines     # (no paper file here)
+    assert not [x for x in lines if x.startswith("[FAIL]") and "friend.db" not in x], lines      # (no paper file here: its real name, friend.db)
     assert "[OK]   키: 이 실행기 자기 키(다른 거래소 키 없음, 다른 실행기 DB의 키 아님, 이 DB에 묶인 키와 같음)" in text
     assert "[주의] 잔고 바닥: 멈춤 중" in text and "[OK]   원금 회수 안내: 아직" in text
     lines = []
@@ -1005,7 +1005,7 @@ def test_the_screens_in_node(w4, answers, tmp_path):
 
 def test_the_house_rules_of_the_fourth_slot():
     kit = FW._read(SCREENS, "livebots-kit.js")
-    assert 'export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin", "wooxpro2"];' in kit
+    assert 'export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin", "wooxpro2", "toobit"];' in kit      # (the fifth: test_toobit_slot.py)
     assert 'wooxpro2: {ko: "WOO X Pro 2", s: "W2"' in kit
     shorts = re.findall(r'^  \w+: \{ko: "[^"]+", s: "(\w+)"', kit, re.M)
     assert "W2" in shorts and len(shorts) == len(set(shorts)), shorts

@@ -29,7 +29,7 @@ import {whyBox} from "./livebots-why.js";
 export const POS_API = "/api/v4/livebots/positions";
 const REFRESH_MS = 10 * 1000;
 const NAME = {paper: "페이퍼(연습)", bybit: "바이비트", mexc: "WOO X Pro", deepcoin: "딥코인", wooxpro2: "WOO X Pro 2",
-  flip: "동전 쌍둥이"};
+  toobit: "투비트", flip: "동전 쌍둥이"};
 
 /** A card's mark-dependent numbers (pure; node tests): unrealized money, net ROE, distances, the meter's places. */
 export function atMark(p, mark) {

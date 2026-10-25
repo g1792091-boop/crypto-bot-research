@@ -18,6 +18,8 @@
     PAPERBOT_LIVE_WOOXPRO2_DB   /var/lib/paperbot/exec/executor-wooxpro2-live.db WOO X Pro 2 실행기 (네 번째, 설치됐을 때만 보임)
     PAPERBOT_LIVE_WOOXPRO2_CONFIG /etc/paperbot/executor-wooxpro2.json
     PAPERBOT_LIVE_PAPER3_DB     /var/lib/paperbot/combo/friend.db               세 번째 페이퍼 봇 ('친구 매매법': WOO X Pro 2가 따라감)
+    PAPERBOT_LIVE_TOOBIT_DB     /var/lib/paperbot/exec/executor-toobit-live.db  투비트 실행기 (다섯 번째, 설치됐을 때만 보임)
+    PAPERBOT_LIVE_TOOBIT_CONFIG /etc/paperbot/executor-toobit.json
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
@@ -61,6 +63,11 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 그 페이퍼 봇(PAPERBOT_LIVE_PAPER3_DB, friend.db)은 계좌 칸으로 따로 나오지 않아요: 실행기가 따라가는 봇 이름으로만 나오고(``follows_ko``),
 두 번째 페이퍼 봇('VWAP 개선판') 자리를 차지하지 않아요(``paper_bots``). 둘 다 없으면 모든 답이 예전 그대로예요.
 
+다섯 번째 실행기 (owners 10-25, docs/toobit-ko.md: 투비트, $50; 따라갈 페이퍼 계좌는 나중에 정함, 규칙봇의 V3.9 1시간 계좌가 유력): 그
+칸(``toobit``)도 설치됐을 때만(PAPERBOT_LIVE_TOOBIT_CONFIG 또는 PAPERBOT_LIVE_TOOBIT_DB) 나오고, 이름은 그 설정의 거래소(``EX_NAME``:
+투비트)예요. 그 실행기가 따라가는 페이퍼(설정의 paper_db · account)는 계좌 칸으로 따로 나오지 않고 두 번째 페이퍼 봇 자리도 차지하지
+않아요(``paper_bots``: ``SIDE_PAPER_EXECS``). 둘 다 없으면 모든 답이 예전 그대로예요.
+
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
 from __future__ import annotations
@@ -98,6 +105,10 @@ ENV = {
     "wooxpro2_db": ("PAPERBOT_LIVE_WOOXPRO2_DB", "/var/lib/paperbot/exec/executor-wooxpro2-live.db"),
     "wooxpro2_config": ("PAPERBOT_LIVE_WOOXPRO2_CONFIG", "/etc/paperbot/executor-wooxpro2.json"),
     "paper3": ("PAPERBOT_LIVE_PAPER3_DB", "/var/lib/paperbot/combo/friend.db"),
+    # the fifth slot (owners 10-25: 투비트, a $50 executor; the paper account it follows is decided later,
+    # docs/toobit-ko.md): on the page only once it is installed
+    "toobit_db": ("PAPERBOT_LIVE_TOOBIT_DB", "/var/lib/paperbot/exec/executor-toobit-live.db"),
+    "toobit_config": ("PAPERBOT_LIVE_TOOBIT_CONFIG", "/etc/paperbot/executor-toobit.json"),
 }
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
@@ -109,13 +120,18 @@ EXECS = (("bybit", "바이비트", "bybit_db", "bybit_config"), ("mexc", "MEXC",
 # owners 10-24: the third, 딥코인, follows the 'VWAP 개선판' paper bot (docs/deepcoin-ko.md)
 OPTIONAL_EXECS = (("deepcoin", "딥코인", "deepcoin_db", "deepcoin_config"),
                   # owners 10-24: the fourth, WOO X Pro 2 (its config's label), follows '친구 매매법'
-                  ("wooxpro2", "WOO X Pro 2", "wooxpro2_db", "wooxpro2_config"))
+                  ("wooxpro2", "WOO X Pro 2", "wooxpro2_db", "wooxpro2_config"),
+                  # owners 10-25: the fifth, 투비트 (docs/toobit-ko.md)
+                  ("toobit", "투비트", "toobit_db", "toobit_config"))
 ALL_EXECS = EXECS + OPTIONAL_EXECS
+# the slots whose paper bot is never one of the page's paper bots (paper_bots): 투비트 follows a paper account of its own
+# (owners 10-25: most likely the rule bot's V3.9 1-hour account, decided later), never the second paper bot's place
+SIDE_PAPER_EXECS = ("toobit",)
 # the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
 # and config path stay "mexc" so every page and check keeps working). Flipster: the third slot's exchange of 10-23, still
 # an exchange the executor can run (a slot config naming it reads 플립스터)
 EX_NAME = {"bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "binance": "바이낸스", "deepcoin": "딥코인",
-           "flipster": "플립스터"}
+           "flipster": "플립스터", "toobit": "투비트"}
 LIGHT_N_DEFAULT = 0                    # executor.ExecConfig.signal_light_n: 0 = the light is off
 LIGHT_MIN_DEFAULT = 0.85               # executor.ExecConfig.signal_light_min_win
 MATCH_MS = 5 * 60_000                  # a live trade and a paper trade of the same coin and side within 5 minutes
@@ -1275,10 +1291,11 @@ def paper_bots(p: dict, paper: dict, execs: list) -> list:
     "followers", "label_ko"}]. The second only when there is one: another paper database an executor follows now, else the
     -35 % bot's file (PAPERBOT_LIVE_PAPER2_DB) once it is there. One paper bot: one item (the page as before)."""
     main = p["paper"]
-    # the third paper bot's file (owners 10-24, '친구 매매법' that WOO X Pro 2 follows) never takes the second's place
+    # the third paper bot's file (owners 10-24, '친구 매매법' that WOO X Pro 2 follows) never takes the second's place, nor
+    # the paper 투비트 follows (owners 10-25, SIDE_PAPER_EXECS)
     third = p.get("paper3") if p.get("paper3") and not LP.same(p.get("paper3"), p.get("paper2")) else None
     second = next((x["paper_path"] for x in execs if not LP.same(x["paper_path"], main)
-                   and not LP.same(x["paper_path"], third)), None)
+                   and not LP.same(x["paper_path"], third) and x["id"] not in SIDE_PAPER_EXECS), None)
     if second is None and p.get("paper2") and not LP.same(p["paper2"], main) and os.path.exists(p["paper2"]):
         second = p["paper2"]
     papers = execs[0]["_papers"] if execs else {LP.norm(main): paper}
@@ -1487,11 +1504,16 @@ def sources(p: dict, now: int) -> tuple:
 
 def _bot_ko(x: dict) -> str:
     """The short name of the paper bot an executor follows that is not one of the page's paper bots (owners 10-24:
-    '친구 매매법'), from its own record; its path when that cannot be read."""
+    '친구 매매법'), from its own record; its path when that cannot be read. A record without a bot's name or stop whose
+    account is not the combined bots' (owners 10-25: 투비트 may follow a rule-bot account such as V39_ALL@1h): "페이퍼"
+    with that account, never a bare "페이퍼" that reads like the page's own."""
     pr = _paper_of(x)
     if pr.get("state") != "ok":
         return x["paper_path"]
-    return LP.bot_short(pr.get("name_ko"), pr.get("stop"))
+    ko = LP.bot_short(pr.get("name_ko"), pr.get("stop"))
+    if ko == "페이퍼" and x.get("follows") and x["follows"] != ACCOUNT:
+        return f"페이퍼 {x['follows']}"
+    return ko
 
 
 def public(x: dict) -> dict:

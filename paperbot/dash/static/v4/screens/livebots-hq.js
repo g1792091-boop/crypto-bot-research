@@ -1283,6 +1283,7 @@ export function hqView(ctx, hub) {
     deck.classList.toggle("three", n > 2);
     deck.classList.toggle("four", n > 3);
     deck.classList.toggle("five", n > 4);
+    deck.classList.toggle("six", n > 5);                 // 투비트 (owners 10/25) with the five: two rows of three
   }
   deck.append(soon.el, MX.el);
   addReactors(execsNow());

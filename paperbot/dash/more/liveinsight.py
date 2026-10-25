@@ -1628,8 +1628,8 @@ def _live_risk(x: dict) -> dict:
 
 def kill_state(cx: dict) -> dict:
     """The kill file every executor config names (one file stops them all), whether it is there now, the command; "세
-    실행기" once the third (딥코인) is installed (livebots.installed), "네 실행기" with the fourth (WOO X Pro 2), else "두
-    실행기" as before."""
+    실행기" once the third (딥코인) is installed (livebots.installed), "네 실행기" with the fourth (WOO X Pro 2), "다섯 실행기"
+    with the fifth (투비트), else "두 실행기" as before."""
     paths = sorted({(c.get("kill_file") or {}).get("path") for c in cx["configs"].values() if c.get("state") == "ok" and c.get("kill_file")} - {None})
     items = []
     for path in paths or [DEFAULT_KILL]:
@@ -1638,8 +1638,9 @@ def kill_state(cx: dict) -> dict:
         except OSError:
             present = None
         items.append({"path": path, "present": present, "from_config": bool(paths)})
+    n = len(cx["configs"])
     return {"files": items, "any": any(i["present"] for i in items), "cmd": STOP_CMD,
-            "what_ko": f"{'네' if len(cx['configs']) > 3 else '세' if len(cx['configs']) > 2 else '두'} 실행기가 모두 멈춰요: 열린 포지션을 닫고 새 진입을 하지 않아요 (다시 켤지는 두 분이: 파일 지우기 → 실행기 끄기 → clear-halt)"}
+            "what_ko": f"{'다섯' if n > 4 else '네' if n > 3 else '세' if n > 2 else '두'} 실행기가 모두 멈춰요: 열린 포지션을 닫고 새 진입을 하지 않아요 (다시 켤지는 두 분이: 파일 지우기 → 실행기 끄기 → clear-halt)"}
 
 
 def risk(p: dict, now: int, more: Optional[dict] = None) -> dict:

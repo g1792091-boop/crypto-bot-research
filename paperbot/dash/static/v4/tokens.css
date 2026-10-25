@@ -160,6 +160,8 @@
   --series-dc: hsl(20 var(--av-s) var(--av-ring-l));
   /* ... and its fourth (WOO X Pro 2, owners 10/24, a second WOO X Pro account): one more hue */
   --series-w2: hsl(250 var(--av-s) var(--av-ring-l));
+  /* ... and its fifth (투비트, owners 10/25): one more hue (yellow-green: none of the others, nor up / down / accent) */
+  --series-tb: hsl(95 var(--av-s) var(--av-ring-l));
   /* 매매법 비교 (conv-b, screens/compare.js): the 2-4 picks' lines, each also named and drawn in its own dash; they
      follow the skin through the tokens they point at (never up / down) */
   --pick-1: var(--series-core);

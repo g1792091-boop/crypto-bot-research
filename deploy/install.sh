@@ -110,6 +110,7 @@ if ! systemctl is-active --quiet paperbot-executor 2>/dev/null; then
     systemctl is-active --quiet paperbot-executor-mexc 2>/dev/null && continue   # the MEXC executor runs: leave them
     systemctl is-active --quiet paperbot-executor-deepcoin 2>/dev/null && continue   # the DeepCoin executor runs: leave them
     systemctl is-active --quiet paperbot-executor-wooxpro2 2>/dev/null && continue   # the WOO X Pro 2 executor runs: leave them
+    systemctl is-active --quiet paperbot-executor-toobit 2>/dev/null && continue   # the Toobit executor runs: leave them
     runuser -u paperbot-exec -- sqlite3 "$db" 'PRAGMA journal_mode=DELETE;' >/dev/null \
       || echo "could not switch $db to rollback mode: the nightly backup may fail to read it until the executor was started and stopped once"
   done
@@ -269,6 +270,12 @@ if [ ! -f /etc/paperbot/executor-wooxpro2.env ] && [ -f "$APP/deploy/executor-wo
   install -o root -g root -m 600 "$APP/deploy/executor-wooxpro2.env.example" /etc/paperbot/executor-wooxpro2.env
 fi
 [ -f /etc/paperbot/executor-wooxpro2.env ] && chmod 600 /etc/paperbot/executor-wooxpro2.env && chown root:root /etc/paperbot/executor-wooxpro2.env
+# The Toobit executor's own key file (owners 10-25, docs/toobit-ko.md): root only too, its template with every value empty
+# (nothing secret is written here), so the owners' sudoedit fills a root-only file. Its unit loads it INSTEAD of executor.env.
+if [ ! -f /etc/paperbot/executor-toobit.env ] && [ -f "$APP/deploy/executor-toobit.env.example" ]; then
+  install -o root -g root -m 600 "$APP/deploy/executor-toobit.env.example" /etc/paperbot/executor-toobit.env
+fi
+[ -f /etc/paperbot/executor-toobit.env ] && chmod 600 /etc/paperbot/executor-toobit.env && chown root:root /etc/paperbot/executor-toobit.env
 
 echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-livedash.service paperbot-daily3.service paperbot-daily3.timer \
@@ -324,6 +331,10 @@ install -m 644 "$APP/deploy/paperbot-executor-deepcoin.service" /etc/systemd/sys
 # '친구 매매법'): installed only, never enabled or started here; /etc/paperbot/executor-wooxpro2.json is never written here
 # (the owners copy deploy/executor.live-wooxpro2.json), so the site, the checks and the messages stay as they are until then.
 install -m 644 "$APP/deploy/paperbot-executor-wooxpro2.service" /etc/systemd/system/paperbot-executor-wooxpro2.service
+# the Toobit executor (owners 10-25, docs/toobit-ko.md: a $50 executor that will follow the rule bot's V3.9 1-hour paper
+# account): installed only, never enabled or started here; /etc/paperbot/executor-toobit.json is never written here (the
+# owners copy deploy/executor.live-toobit.json once the paper account and its exits are decided).
+install -m 644 "$APP/deploy/paperbot-executor-toobit.service" /etc/systemd/system/paperbot-executor-toobit.service
 # '믹스 30분 봇' (owners 10-25 night, docs/mixchop-ko.md): the second WOO X Pro account trades the 30m signal itself
 # (paperbot/mixchop.py, keys from executor-wooxpro2.env; Conflicts= stops paperbot-executor-wooxpro2 when it starts), and
 # its paper twin (no keys, no orders). Installed only, never enabled or started here; /etc/paperbot/mixchop.json and
@@ -360,6 +371,10 @@ fi
 if systemctl is-active --quiet paperbot-executor-wooxpro2 2>/dev/null; then
   echo "paperbot-executor-wooxpro2 is running the previous code; restart it yourself when ready:"
   echo "  sudo systemctl restart paperbot-executor-wooxpro2"
+fi
+if systemctl is-active --quiet paperbot-executor-toobit 2>/dev/null; then
+  echo "paperbot-executor-toobit is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-executor-toobit"
 fi
 # New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then

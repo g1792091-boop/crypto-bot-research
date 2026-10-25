@@ -21,10 +21,13 @@ export const ACCT = {
   // the fourth executor (owners 10/24, docs/friend-bot-ko.md: a second WOO X Pro account following '친구 매매법'; the server
   // names it by its config's label): only on the page while the server has it installed (execIds)
   wooxpro2: {ko: "WOO X Pro 2", s: "W2", tip: "WOO X Pro 2 실행기 (두 번째 WOO X Pro 계정 · 실거래 · 진짜 돈)"},
+  // the fifth executor (owners 10/25, docs/toobit-ko.md: a $50 executor; the paper account it follows is decided later):
+  // only on the page while the server has it installed (execIds)
+  toobit: {ko: "투비트", s: "T", tip: "투비트 실행기 (실거래 · 진짜 돈)"},
 };
 /** Every executor slot the page knows, in the server's order (dash/more/livebots.py ALL_EXECS). Which of them a server has
  *  (livebots.installed: the third, 딥코인, once its config file or its database is there): execIds / execsNow. */
-export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin", "wooxpro2"];
+export const EXEC_SLOTS = ["bybit", "mexc", "deepcoin", "wooxpro2", "toobit"];
 const EXECS0 = ["bybit", "mexc"];
 let EXECS_NOW = EXECS0, execsKey = EXECS0.join();
 /** The executor ids of the last summary (setExecs); the two before the first one. */
@@ -53,11 +56,11 @@ export function execIds(d) {
 export const execsKo = (ids = EXECS_NOW, sep = " · ") => ids.map((id) => acctKo(id)).join(sep);
 /** "두 실행기가 따라가는" (with the third installed "세 실행기가 따라가는", the fourth "네"): who follows the one paper bot. */
 export const allFollowKo = () => `${countKo(EXECS_NOW.length)} 실행기가 따라가는`;
-/** "두" / "세" / "네": how many executors a sentence counts ("두 실행기", "실행기 세 개"; the fourth, WOO X Pro 2, makes "네";
- *  two or three: the words as before). */
-export const countKo = (n) => ({3: "세", 4: "네"}[n] || "두");
+/** "두" / "세" / "네" / "다섯": how many executors a sentence counts ("두 실행기", "실행기 세 개"; the fourth, WOO X Pro 2,
+ *  makes "네", the fifth, 투비트, "다섯"; two or three: the words as before). */
+export const countKo = (n) => ({3: "세", 4: "네", 5: "다섯"}[n] || (n > 5 ? "다섯" : "두"));
 /** "세 계좌" / "네 계좌" / "다섯 계좌": the accounts a page lists (three: one paper bot and two executors, as before). */
-export const acctsKo = (n) => `${{4: "네", 5: "다섯", 6: "여섯"}[n] || "세"} 계좌`;
+export const acctsKo = (n) => `${{4: "네", 5: "다섯", 6: "여섯", 7: "일곱"}[n] || "세"} 계좌`;
 const ACCT0 = {paper: {...ACCT.paper}, paper2: {...ACCT.paper2}};
 let PAPERS = null, papersKey = "null";
 /** The summary's two paper bots (setPapers), null with one (owners 10/23: the 추세판단 봇 and the 'VWAP 개선판'). */

@@ -118,6 +118,21 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                              "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env",
                              "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env "
                              "-/etc/paperbot/executor.env"]), differ
+    # the Toobit executor (owners 10-25, docs/toobit-ko.md): the same unit, its own config and its OWN key file instead
+    # of executor.env (which it cannot even see)
+    toobit = _unit("deploy/paperbot-executor-toobit.service")
+    differ = sorted(set(unit) ^ set(toobit))
+    assert differ == sorted(["Description=paperbot order executor (testnet unless every mainnet gate passes)",
+                             "Description=paperbot order executor (Toobit; mainnet: every gate must pass)",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor.json",
+                             "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.executor run --config "
+                             "/etc/paperbot/executor-toobit.json",
+                             "EnvironmentFile=/etc/paperbot/executor.env",
+                             "EnvironmentFile=/etc/paperbot/executor-toobit.env",
+                             "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env",
+                             "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env "
+                             "-/etc/paperbot/executor.env"]), differ
     # '믹스 30분 봇' (owners 10-25, docs/mixchop-ko.md): trades the second WOO X Pro account itself, with that account's
     # key file and the fourth executor's sandbox; it stops that executor when it starts (never both on one account)
     mix = _unit("deploy/paperbot-mixchop.service")
@@ -130,7 +145,8 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
     for svc in sorted(os.listdir(os.path.join(REPO, "deploy"))):
         if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service",
                                                    "paperbot-executor-deepcoin.service",
-                                                   "paperbot-executor-wooxpro2.service", "paperbot-mixchop.service"):
+                                                   "paperbot-executor-wooxpro2.service", "paperbot-mixchop.service",
+                                                   "paperbot-executor-toobit.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor

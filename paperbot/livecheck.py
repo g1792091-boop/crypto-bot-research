@@ -115,6 +115,9 @@ A fourth executor (owners 10-24, docs/friend-bot-ko.md: WOO X Pro 2, a second WO
 paperbot-executor-wooxpro2, config /etc/paperbot/executor-wooxpro2.json, database executor-wooxpro2-live.db; it follows
 '친구 매매법', /var/lib/paperbot/combo/friend.db) the same way; its name is its config's ``label`` (two executors trade
 WOO X Pro; the first keeps its words), and its 잔고 바닥 is on its score line and among the morning's 확인할 것.
+A fifth executor (owners 10-25, docs/toobit-ko.md: 투비트, unit paperbot-executor-toobit, config
+/etc/paperbot/executor-toobit.json, database executor-toobit-live.db; a $50 executor that will follow a rule-bot paper
+account, decided later) the same way, named by its exchange (투비트), its assumed fee Toobit's base taker 0.06 % a side.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
 ``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
 getUpdates; the token is never printed; sends nothing).
@@ -179,11 +182,17 @@ OPTIONAL_EXECUTORS = (("deepcoin", "/etc/paperbot/executor-deepcoin.json", "pape
                        "/var/lib/paperbot/exec/executor-deepcoin-live.db", 0, 0.85),
                       # owners 10-24: the fourth, WOO X Pro 2 (a second WOO X Pro account), follows '친구 매매법'
                       ("wooxpro2", "/etc/paperbot/executor-wooxpro2.json", "paperbot-executor-wooxpro2",
-                       "/var/lib/paperbot/exec/executor-wooxpro2-live.db", 0, 0.85),)
+                       "/var/lib/paperbot/exec/executor-wooxpro2-live.db", 0, 0.85),
+                      # owners 10-25: the fifth, 투비트 ($50; its paper account is decided later, docs/toobit-ko.md)
+                      ("toobit", "/etc/paperbot/executor-toobit.json", "paperbot-executor-toobit",
+                       "/var/lib/paperbot/exec/executor-toobit-live.db", 0, 0.85),)
 # WOO X Pro: the API's rate (10-20). DeepCoin: an assumption until the drill measures the real fee, then it goes here:
 # 0.05 % a side, the taker rate in the example answer of its fee-rate endpoint (GET /deepcoin/account/trade-fee, tier
-# Lv1), which settles no fee schedule (the owners' payback comes back later, outside the bot)
-ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.00042, "deepcoin": 0.0005}
+# Lv1), which settles no fee schedule (the owners' payback comes back later, outside the bot). Toobit: the owners' base
+# taker fee, 0.06 % a side (executor.NET_COSTS, deploy/executor.live-toobit.json), until its check's commissionRate and
+# the drill's fee_rate_pct measure the account's own (the TetherDrop payback is paid later, outside the bot)
+ASSUMED_FEE = {"bybit": 0.00055, "mexc": 0.0008, "binance": 0.0005, "wooxpro": 0.00042, "deepcoin": 0.0005,
+               "toobit": 0.0006}
 
 
 def running_combo_config() -> str:
@@ -193,7 +202,7 @@ def running_combo_config() -> str:
 
 # Flipster: the third slot's exchange of 10-23 (owners 10-24: DeepCoin instead), still one the executor can run
 EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro", "deepcoin": "딥코인",
-         "flipster": "플립스터"}
+         "flipster": "플립스터", "toobit": "투비트"}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}      # 1d: the 추세판단 봇's daily judgment (10/22)
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
@@ -345,7 +354,7 @@ def light_text(L: dict) -> str:
 # ---------------------------------------------------------------- executors
 @dataclass
 class ExecInfo:
-    name: str                       # "bybit" | "mexc" | "deepcoin" (the third, once installed)
+    name: str                       # "bybit" | "mexc" | "deepcoin" | "wooxpro2" | "toobit" (the optional ones once installed)
     config: str
     unit: str
     db: str
@@ -2386,8 +2395,8 @@ def paper_unit_todo(path: str) -> str:
 
 def every_ko(n: int) -> str:
     """What the STOP file stops: "두 실행기 모두", "세 실행기 모두" once the third (딥코인) is installed, "네 실행기 모두" with
-    the fourth (WOO X Pro 2)."""
-    return f"{'네' if n > 3 else '세' if n > 2 else '두'} 실행기 모두"
+    the fourth (WOO X Pro 2), "다섯 실행기 모두" with the fifth (투비트)."""
+    return f"{'다섯' if n > 4 else '네' if n > 3 else '세' if n > 2 else '두'} 실행기 모두"
 
 
 def dd_halt_words(ex: ExecInfo, n: int = 2) -> str:
@@ -2571,7 +2580,8 @@ MEM_MIN, MEM_CLEAR = 500 * 1024 ** 2, 700 * 1024 ** 2
 PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot-executor.service",
                    "paperbot-executor-mexc.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
                    "paperbot-executor-deepcoin.service",
-                   "paperbot-executor-wooxpro2.service")
+                   "paperbot-executor-wooxpro2.service",
+                   "paperbot-executor-toobit.service")
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
 UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
 REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
@@ -3412,7 +3422,7 @@ def health_conditions(host: Host, src: Sources) -> tuple[list, set]:
 ENTRY_WAIT_MS = 3 * MIN            # a trade message waits this long at most for the executors to act
 TRADE_SEND_MS = 30 * MIN           # an entry / exit older than this when first seen is recorded, not sent
 PRICE_DP = {"BTCUSDT": 0, "ETHUSDT": 2, "SOLUSDT": 2, "DOGEUSDT": 5, "LTCUSDT": 2, "BCHUSDT": 2}
-PAD = {"paper": "페이퍼   ", "bybit": "바이비트 ", "mexc": "MEXC     ", "deepcoin": "딥코인   "}
+PAD = {"paper": "페이퍼   ", "bybit": "바이비트 ", "mexc": "MEXC     ", "deepcoin": "딥코인   ", "toobit": "투비트   "}
 
 
 def pad_of(name: Optional[str], label: str) -> str:

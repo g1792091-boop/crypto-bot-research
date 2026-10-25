@@ -27,7 +27,7 @@ import {acctKo, acctTag, sourceState, expectLines, expectHead, eraWords, EXEC_SL
 export const MAP_API = "/api/v4/livebots/map";
 const REFRESH_MS = 30 * 1000;
 const IDS = ["paper", "bybit", "mexc"];
-const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro", deepcoin: "딥코인", wooxpro2: "WOO X Pro 2"};
+const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro", deepcoin: "딥코인", wooxpro2: "WOO X Pro 2", toobit: "투비트"};
 /** The accounts of an answer's band: the second paper bot's line too while the server sends it (owners 10/23: the 'VWAP
  *  개선판', its own wins from its own start, named by its bot), the third executor's (딥코인) while the server has it;
  *  one paper bot and two executors: the three as before. */

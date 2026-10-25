@@ -12,7 +12,9 @@ paperbot/flipster.py, mainnet only, keys FLIPSTER_LIVE_KEY / FLIPSTER_LIVE_SECRE
 its client ids live in a ledger table of this executor's own database (owners 10-23, docs/flipster-ko.md).
 ``"exchange": "deepcoin"`` trades DeepCoin USDT perpetuals through paperbot/deepcoin.py, mainnet only, keys
 DEEPCOIN_LIVE_KEY / DEEPCOIN_LIVE_SECRET / DEEPCOIN_LIVE_PASSPHRASE (owners 10-24: the third executor, following the
-VWAP paper bot, moved from Flipster to DeepCoin; docs/deepcoin-ko.md).
+VWAP paper bot, moved from Flipster to DeepCoin; docs/deepcoin-ko.md). ``"exchange": "toobit"`` trades Toobit USDT-M
+perpetuals through paperbot/toobit.py, mainnet only, keys TOOBIT_LIVE_KEY / TOOBIT_LIVE_SECRET from its own key file
+(owners 10-25: a $50 executor following the rule bot's V3.9 1-hour paper account; docs/toobit-ko.md).
 On the server it runs as its own user, paperbot-exec (never paperbot, the agents' and the dashboard's user): run
 these commands with ``sudo -u paperbot-exec`` (docs/live-safety.md 1-9, 3).
 
@@ -106,6 +108,7 @@ from . import flipster as FL
 from . import livepnl as P
 from . import mexc as MX
 from . import risk as R
+from . import toobit as TB
 from . import wooxpro as WX
 from .config import V3_STOP_ATR, V3_SYMBOLS, v3_settings
 from .ladder import net_roe, roe_price
@@ -126,7 +129,7 @@ PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 �
 ENTRY_SOURCES = ("paper", "signal")
 SIZE_FROM = ("paper", "equity")
 STOP_FROM = ("ratio", "price", "roe")
-EXCHANGES = ("binance", "bybit", "mexc", "wooxpro", "flipster", "deepcoin")
+EXCHANGES = ("binance", "bybit", "mexc", "wooxpro", "flipster", "toobit", "deepcoin")
 # owners 10-20 ("거래소 기준으로 익절해야지"): "paper" = the exchange stop follows the paper's lock steps (as before);
 # "own" = the executor runs the take-profit ladder on its OWN position: its fill, its own exchange's prices, its own costs
 LADDER_FROM = ("paper", "own")
@@ -142,13 +145,16 @@ COST_KEYS = ("taker_fee", "slippage")
 # until the drill's fee_rate_pct measures it (docs/flipster-ko.md); DeepCoin's 0.05 % is the taker rate of the example
 # answer on its Get Fee Rates page (Lv1, takerU 0.0005; the docs publish no fee schedule), an assumption until the
 # drill's fee_rate_pct and the fee endpoint measure the account's own (DeepCoin charges its full fee; the owners' payback
-# app pays part back outside the bot, docs/deepcoin-ko.md)
+# app pays part back outside the bot, docs/deepcoin-ko.md); Toobit's 0.06 % is the owners' base taker fee (ccxt's sample
+# fill also charges 0.06 %), an assumption until GET /api/v1/futures/commissionRate and the drill's fee_rate_pct measure
+# the account's own (the TetherDrop payback is paid later, outside the bot: docs/toobit-ko.md)
 NET_COSTS = {"binance": {"taker_fee": 0.0005, "slippage": 0.0002}, "bybit": {"taker_fee": 0.00055, "slippage": 0.0002},
              "mexc": {"taker_fee": 0.0008, "slippage": 0.0002}, "wooxpro": {"taker_fee": 0.0006, "slippage": 0.0002},
              "flipster": {"taker_fee": 0.0006, "slippage": 0.0002},
-             "deepcoin": {"taker_fee": 0.0005, "slippage": 0.0002}}
+             "deepcoin": {"taker_fee": 0.0005, "slippage": 0.0002},
+             "toobit": {"taker_fee": 0.0006, "slippage": 0.0002}}
 EX_KO = {"binance": "바이낸스", "bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "flipster": "플립스터",
-         "deepcoin": "딥코인"}
+         "deepcoin": "딥코인", "toobit": "투비트"}
 # what closed the paper position (paperbot/engine.py, combo.py exit reasons) and what "own" does with it
 PRICE_EXITS = ("SL", "LOCK", "TP", "LIQ")       # a price level on the paper's prices: the live position stays on its own
 # the fast stop (REV) and the trend bot's supervisor (JUDGE: the higher bar's judgment turned, TIME: no first lock in time,
@@ -231,7 +237,7 @@ class ExecConfig:
     transfer_every_s: float = 60.0       # deposits/withdrawals read this often (and before a money halt)
     exchange: str = "binance"            # "binance" | "bybit" (paperbot/bybit.py) | "mexc" (paperbot/mexc.py) |
                                          # "wooxpro" (paperbot/wooxpro.py) | "flipster" (paperbot/flipster.py) |
-                                         # "deepcoin" (paperbot/deepcoin.py)
+                                         # "deepcoin" (paperbot/deepcoin.py) | "toobit" (paperbot/toobit.py)
     bybit_host: Optional[str] = None     # bybit: another allowed host of the mode (mainnet: "api.bytick.com")
     mexc_host: Optional[str] = None      # mexc: "api.mexc.com" (default) or "contract.mexc.com"
     mexc_market_type: int = 5            # mexc: market order type 5 (market) or 6 (market converted to the price)
@@ -319,7 +325,7 @@ class ExecConfig:
             out.append("실거래(mainnet)는 정한 금액 budget_usd(예: 500)가 필요합니다")
         if self.exchange not in EXCHANGES:
             out.append(f"exchange={self.exchange!r}: \"binance\", \"bybit\", \"mexc\", \"wooxpro\", \"flipster\", "
-                       "\"deepcoin\"만 있습니다")
+                       "\"deepcoin\", \"toobit\"만 있습니다")
         elif self.bybit_host is not None and (self.exchange != "bybit" or self.bybit_host not in BY.hosts_for(self.mode)):
             out.append(f"bybit_host={self.bybit_host!r}: exchange가 \"bybit\"일 때 그 모드의 주소"
                        f"({', '.join(BY.hosts_for(self.mode))})만 씁니다")
@@ -339,6 +345,8 @@ class ExecConfig:
             out.append("플립스터에는 테스트넷이 없습니다: \"exchange\": \"flipster\"는 \"mode\": \"mainnet\"만 됩니다")
         if self.exchange == "deepcoin" and self.mode != MODE_MAINNET:
             out.append("딥코인에는 테스트넷이 없습니다: \"exchange\": \"deepcoin\"는 \"mode\": \"mainnet\"만 됩니다")
+        if self.exchange == "toobit" and self.mode != MODE_MAINNET:
+            out.append("투비트에는 테스트넷이 없습니다: \"exchange\": \"toobit\"는 \"mode\": \"mainnet\"만 됩니다")
         if self.risk.kill_file and self.db and not _kill_file_visible(self.risk.kill_file, self.db):
             out.append(f"비상 정지 파일 {self.risk.kill_file}은 실행기 DB가 있는 폴더나 그 위 폴더에 둡니다"
                        "(예: /var/lib/paperbot/STOP). /tmp·/home 같은 곳은 서비스 안에서 보이지 않아 "
@@ -394,7 +402,7 @@ class ExecConfig:
         for ex, c in self.net_costs.items():
             if ex not in EXCHANGES:
                 out.append(f"net_costs의 거래소 {ex!r}: \"binance\", \"bybit\", \"mexc\", \"wooxpro\", \"flipster\", "
-                           "\"deepcoin\"만 있습니다")
+                           "\"deepcoin\", \"toobit\"만 있습니다")
             elif not isinstance(c, dict) or set(c) != set(COST_KEYS) or any(
                     isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v < 0.005 for v in c.values()):
                 out.append(f"net_costs의 {ex}: taker_fee와 slippage(한쪽, 0~0.005 사이 비율, 예: 0.00055)만 적습니다")
@@ -452,6 +460,9 @@ def refuse_unless_allowed(cfg: ExecConfig, client) -> None:
     if cfg.exchange == "deepcoin":
         DC.refuse_unless_allowed(cfg.mode, client)
         return
+    if cfg.exchange == "toobit":
+        TB.refuse_unless_allowed(cfg.mode, client)
+        return
     host = urllib.parse.urlparse(getattr(client, "base", "") or "").hostname or ""
     if cfg.mode == MODE_TESTNET:
         if host not in TESTNET_HOSTS or tuple(ALLOWED_HOSTS) != TESTNET_HOSTS or isinstance(client, MainnetClient) \
@@ -477,7 +488,7 @@ FLOOR = "floor"              # 잔고 바닥 / 원금 회수 안내: the start b
 # each exchange's order-key variables: an ``own_keys`` executor's environment holds its own exchange's only
 KEY_NAMES = {"binance": LIVE_KEY_NAMES + TESTNET_KEY_NAMES, "bybit": BY.LIVE_KEY_NAMES + BY.TESTNET_KEY_NAMES,
              "mexc": MX.LIVE_KEY_NAMES, "wooxpro": WX.LIVE_KEY_NAMES + (WX.MEMO_NAME,), "flipster": FL.LIVE_KEY_NAMES,
-             "deepcoin": DC.LIVE_KEY_NAMES + (DC.PASSPHRASE_NAME,)}
+             "deepcoin": DC.LIVE_KEY_NAMES + (DC.PASSPHRASE_NAME,), "toobit": TB.LIVE_KEY_NAMES}
 
 
 class KeyMixup(Refused):
@@ -601,11 +612,11 @@ class Paper3Source:
             # no account states at all (a new, replaced or restored paper3.db; the paper runner not started yet):
             # unreadable, never "the paper account is flat" (that would close the live position)
             self.engine = None
-            raise Refused("paper3.db에 계좌 상태(accounts)가 없습니다")
+            raise Refused(f"{os.path.basename(self.path)}에 계좌 상태(accounts)가 없습니다")
         ts, data = int(row[0]), json.loads(row[1])
         eng = data.get("engines", {}).get(self.account)
         if eng is None:
-            raise Refused(f"paper 계좌 {self.account}가 paper3.db에 없습니다")
+            raise Refused(f"paper 계좌 {self.account}가 {os.path.basename(self.path)}에 없습니다")
         self.engine = eng
         p = eng.get("position")
         if not p:
@@ -1161,6 +1172,8 @@ class Executor:
             FL.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
         elif cfg.exchange == "deepcoin":
             DC.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
+        elif cfg.exchange == "toobit":
+            TB.check_executor_keys(cfg.mode, client, keycheck, env, paper_env)
         elif cfg.mode == MODE_MAINNET:
             key, secret = trading_keys(MODE_MAINNET, env, paper_env)        # flag, separate names, no reuse
             if (client.key, client.secret) != (key, secret):
@@ -1497,7 +1510,7 @@ class Executor:
         try:
             self.signals.new_rows()                        # start from now: older rows are the paper path's
         except sqlite3.Error as e:
-            self._event(WARN, "signal_read", f"paper3.db 신호 기록을 못 읽었습니다: {e}", notify=False)
+            self._event(WARN, "signal_read", f"{os.path.basename(self.cfg.paper_db)} 신호 기록을 못 읽었습니다: {e}", notify=False)
 
     def run(self, max_loops: Optional[int] = None) -> None:
         """Start (a refused gate raises Refused: exit 2), then loop until ``max_loops`` or SIGTERM. After the
@@ -1547,7 +1560,7 @@ class Executor:
         try:
             rows = self.signals.new_rows()
         except sqlite3.Error as e:
-            self._event(WARN, "signal_read", f"paper3.db 신호 기록을 못 읽었습니다: {e}", notify=False)
+            self._event(WARN, "signal_read", f"{os.path.basename(self.cfg.paper_db)} 신호 기록을 못 읽었습니다: {e}", notify=False)
             return False
         self.new_signals.extend(rows)
         return bool(rows)
@@ -1676,7 +1689,7 @@ class Executor:
         held = f" 열린 포지션 {self.trade['symbol']}은 거래소 손절과 대조로 지킵니다(잠금·청산 따라가기 멈춤)." \
             if self.trade is not None else ""
         self._event(CRITICAL, "paper_unreadable", f"paper 계좌를 읽을 수 없습니다: {e}. 새 진입은 하지 않습니다."
-                    + held + " paper3.db를 확인하세요", notify=self.paper_errors in (1, 10, 100) or
+                    + held + f" {os.path.basename(self.cfg.paper_db)}를 확인하세요", notify=self.paper_errors in (1, 10, 100) or
                     self.paper_errors % 1000 == 0)
 
     def _snapshot(self, rows: list, equity: float, wallet: float) -> Snapshot:
@@ -3025,7 +3038,7 @@ def _notifier() -> Notifier:
 
 def _prefixes(exchange: str) -> dict:
     return {"bybit": BY.PREFIX, "mexc": MX.PREFIX, "wooxpro": WX.PREFIX, "flipster": FL.PREFIX,
-            "deepcoin": DC.PREFIX}.get(exchange, PREFIX)
+            "deepcoin": DC.PREFIX, "toobit": TB.PREFIX}.get(exchange, PREFIX)
 
 
 def _clients(cfg: ExecConfig, env: Optional[Mapping] = None):
@@ -3042,6 +3055,8 @@ def _clients(cfg: ExecConfig, env: Optional[Mapping] = None):
         return FL.clients(cfg.mode, env, read_env_file(cfg.paper_env_file), db=cfg.db)
     if cfg.exchange == "deepcoin":
         return DC.clients(cfg.mode, env, read_env_file(cfg.paper_env_file))
+    if cfg.exchange == "toobit":
+        return TB.clients(cfg.mode, env, read_env_file(cfg.paper_env_file))
     key, secret = trading_keys(cfg.mode, env, read_env_file(cfg.paper_env_file))
     if cfg.mode == MODE_MAINNET:
         return MainnetClient(key, secret), KeyCheckClient(key, secret)
@@ -3190,14 +3205,15 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print, env: Optional[Mappin
                        "지갑은 USDT만")
         for w in warnings:
             out("[주의] " + w)
+    pdb = os.path.basename(cfg.paper_db)                  # the paper bot's own file (paper3.db, vwap.db, live-ac.db, ...)
     try:
         intent, ts = Paper3Source(cfg.paper_db, cfg.account).read()
-        line(ts is not None, f"paper3.db 계좌 {cfg.account} 읽기" + ("" if ts is not None else ": 상태 없음"))
+        line(ts is not None, f"{pdb} 계좌 {cfg.account} 읽기" + ("" if ts is not None else ": 상태 없음"))
         if cfg.entry_source == "signal":
             SignalSource(cfg.paper_db, cfg.account).new_rows()
-            line(True, "paper3.db 신호 기록(signal_log) 읽기")
+            line(True, f"{pdb} 신호 기록(signal_log) 읽기")
     except (Refused, sqlite3.Error) as e:
-        line(False, f"paper3.db: {e}")
+        line(False, f"{pdb}: {e}")
     return ok
 
 

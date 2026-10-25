@@ -16,6 +16,7 @@
 .lbv-a-mexc { --lbv-c: var(--series-m5); }
 .lbv-a-deepcoin { --lbv-c: var(--series-dc); }
 .lbv-a-wooxpro2 { --lbv-c: var(--series-w2); }
+.lbv-a-toobit { --lbv-c: var(--series-tb); }
 .lbv-acct.off { border-style: dashed; }
 .lbv-ah { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
 .lbv-ah .lb-acct { font: 800 var(--t-md)/1.3 var(--f-body); color: var(--ink); }

@@ -77,7 +77,8 @@ def tw(tmp_path, monkeypatch):
     no = str(tmp_path / "none")
     p = {"paper": w.cfg.db, "paper2": no + "-p2.db", "bybit_db": no + "-b.db", "mexc_db": no + "-m.db",
          "bybit_config": no + "-b.json", "mexc_config": no + "-m.json", "deepcoin_db": no + "-d.db", "deepcoin_config": no + "-d.json",
-         "wooxpro2_db": no + "-w2.db", "wooxpro2_config": no + "-w2.json", "paper3": no + "-p3.db"}
+         "wooxpro2_db": no + "-w2.db", "wooxpro2_config": no + "-w2.json", "paper3": no + "-p3.db",
+         "toobit_db": no + "-tb.db", "toobit_config": no + "-tb.json"}
     more = {**L.paths_more(), "combo_config": "/nonexistent/combo.json", "check_db": no + "-check.db", "improve_db": no + "-imp.db",
             "rule_db": w.cfg.paper_db, "shadow_dir": no}
     for k, (var, _d) in L.ENV.items():

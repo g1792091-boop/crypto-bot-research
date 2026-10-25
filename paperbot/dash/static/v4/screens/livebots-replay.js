@@ -422,7 +422,7 @@ export function replayView(ctx) {
     const cs = getComputedStyle(document.documentElement);
     o.col = {up: read("--up"), down: read("--down"), ink: read("--ink"), ink2: read("--ink-2"), muted: read("--muted"), line: read("--line"),
       accent: read("--accent"), warn: read("--warn"), paper: read("--series-coin"), bybit: read("--series-core"), mexc: read("--series-m5"),
-      deepcoin: read("--series-dc"), wooxpro2: read("--series-w2"),
+      deepcoin: read("--series-dc"), wooxpro2: read("--series-w2"), toobit: read("--series-tb"),
       shade: read("--accent-soft"), bg: read("--console")};
     o.fs = parseFloat(String(cs.getPropertyValue("--t-2xs") || "").trim()) || 12;
     o.ff = String(cs.getPropertyValue("--f-term") || "").trim() || "monospace";

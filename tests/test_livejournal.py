@@ -100,7 +100,8 @@ def world(tmp_path_factory):
          "mexc_db": str(folder / "none-mexc.db"), "mexc_config": str(folder / "none-mexc.json"),
          "deepcoin_db": str(folder / "none-deepcoin.db"), "deepcoin_config": str(folder / "none-deepcoin.json"),
          "wooxpro2_db": str(folder / "none-wooxpro2.db"), "wooxpro2_config": str(folder / "none-wooxpro2.json"),
-         "paper3": str(folder / "none-paper3.db")}
+         "paper3": str(folder / "none-paper3.db"),
+         "toobit_db": str(folder / "none-toobit.db"), "toobit_config": str(folder / "none-toobit.json")}
     clock = {"t": now}
     fetch = TCT.Fetch(clock)
     b = TC.Bars(fetch, lambda: clock["t"])

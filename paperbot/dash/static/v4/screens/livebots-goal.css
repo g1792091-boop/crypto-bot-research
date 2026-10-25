@@ -15,6 +15,7 @@
 .lbg-a-mexc { --lbg-c: var(--series-m5); }
 .lbg-a-deepcoin { --lbg-c: var(--series-dc); }
 .lbg-a-wooxpro2 { --lbg-c: var(--series-w2); }
+.lbg-a-toobit { --lbg-c: var(--series-tb); }
 .lbg-acct.off { border-style: dashed; }
 .lbg-ah { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; }
 .lbg-ah .lb-acct { font: 800 var(--t-md)/1.3 var(--f-body); color: var(--ink); }

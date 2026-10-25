@@ -56,13 +56,14 @@ EXEC_LIQ_KO = "실행기 기록에 청산가가 없어요 (거래소 앱에서 �
 FLIP_KO = "동전 쌍둥이 (참고): 같은 순간 같은 신호에 방향만 무작위로 들어가는 비교용 페이퍼"
 EXEC_COST_KO = "순ROE는 페이퍼 비용(수수료·슬리피지 왕복) 가정, 펀딩 뺌"
 EX_KO = {"bybit": "바이비트", "mexc": "MEXC", "binance": "바이낸스", "wooxpro": "WOO X Pro", "deepcoin": "딥코인",
-         "flipster": "플립스터"}                         # Flipster: the third slot's exchange of 10-23, still one the executor runs
+         "flipster": "플립스터",                          # Flipster: the third slot's exchange of 10-23, still one the executor runs
+         "toobit": "투비트"}                              # the fifth slot (owners 10-25, docs/toobit-ko.md)
 OWN_KO = "거래소 기준"
 OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 이 거래소의 1분봉 고가·저가 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)"
 # the third executor (딥코인) has a card only once it is installed (livebots.installed: sources() reads it then)
-# ... and the fourth (WOO X Pro 2, owners 10-24) the same way
+# ... and the fourth (WOO X Pro 2, owners 10-24) and the fifth (투비트, owners 10-25) the same way
 CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("wooxpro2", None),
-         ("flip", L.FLIP_ACCOUNT))
+         ("toobit", None), ("flip", L.FLIP_ACCOUNT))
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()

@@ -11,7 +11,8 @@
 # trades, fills, halts and open-position state; copied as executor.db / executor-testnet.db; the live Bybit and MEXC
 # executors' exec/executor-bybit-live.db, exec/executor-mexc-live.db and exec/executor-wooxpro-live.db (owners 10-20), the
 # DeepCoin executor's exec/executor-deepcoin-live.db (owners 10-24; skipped while it is not there), the WOO X Pro 2
-# executor's exec/executor-wooxpro2-live.db (owners 10-24, the second WOO X Pro account; skipped while it is not there) and the live
+# executor's exec/executor-wooxpro2-live.db (owners 10-24, the second WOO X Pro account; skipped while it is not there), the Toobit
+# executor's exec/executor-toobit-live.db (owners 10-25; skipped while it is not there) and the live
 # paper bots' combo/live-ac.db, combo/live15-mexc.db and combo/vwap.db (10-23), the live checks' livecheck.db and the owners' improvement ledger liveimprove.db
 # (and the '친구 매매법' paper bot's combo/friend.db after them, owners 10-24, and the '숏5 하락장' paper bot's combo/short5.db,
 # owners 10-25; each skipped while it is not there)
@@ -30,7 +31,7 @@ mkdir -p "$d" || exit 1
 find "$out" -name '*.db.part' -type f -delete
 fail=0
 # keep this list the same as DB_NAMES in paperbot/offsite.py (tests/test_offsite.py checks it)
-for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live exec/executor-mexc-live exec/executor-wooxpro-live exec/executor-deepcoin-live exec/executor-wooxpro2-live combo/live-ac combo/live15-mexc combo/vwap livecheck liveimprove combo/friend combo/short5 shadow200/shadow200 debate/debate daily3 paper3; do
+for f in agents3 inbox liq checkpoint exec/executor exec/executor-testnet exec/executor-bybit-live exec/executor-mexc-live exec/executor-wooxpro-live exec/executor-deepcoin-live exec/executor-wooxpro2-live exec/executor-toobit-live combo/live-ac combo/live15-mexc combo/vwap livecheck liveimprove combo/friend combo/short5 shadow200/shadow200 debate/debate daily3 paper3; do
   src="$lib/$f.db"
   [ -f "$src" ] || continue
   n=$(basename "$f")
