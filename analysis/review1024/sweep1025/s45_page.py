@@ -51,11 +51,33 @@ strats = sorted(strat.values(), key=lambda s: -best_alone(s))
 for s in strats:
     s["best"] = round(best_alone(s), 4)
     s["nboth"] = sum(d["nboth"] for d in s["tf"].values())
+ST46 = os.path.join(OUTD, "stack46.json")
+STACK = None
+if os.path.exists(ST46):
+    R46 = json.load(open(ST46))
+    for key, v in R46["카드"].items():
+        nm, tf, sd = key.split(" ")
+        if nm in strat and tf in strat[nm]["tf"]:
+            strat[nm]["tf"][tf].setdefault("stk", {})["L" if sd == "롱" else "S"] = [
+                v["겹친 필터"], v["고르기 신호당"], v["고르기 가장 나쁜 구간"], v["확인 신호당"], v["그대로 확인 신호당"],
+                v["10월 신호당"], v["고르기 신호"], v["확인 신호"], v["10월 신호"]]
+    kc = [v for v in R46["카드"].values() if v["고르기 가장 나쁜 구간"] > 0 and v["겹친 필터"]]
+    rows = []
+    for tag in ("실제", "대조: 판단 300일 전 · 장세 섞음"):
+        for bar in ("0.0", "1.0"):
+            for cost in ("0.14", "0.08"):
+                b = R46["봇"].get(f"{tag} / 가장 나쁜 구간 > {bar}% / 손절 -35% / 비용 {cost}%")
+                if b:
+                    rows.append([tag, bar, cost, b["고르기 한 달 기하평균"], b["고르기 x3+ 달"], b["확인 한 달 기하평균"], b["확인 x3+ 달"],
+                                 b["확인 -50% 달"], b["확인 달 진입"], b["10월 20일 배수"], b["10월 20일 거래"]])
+    STACK = {"rows": rows, "ncells": len(kc), "chk_pos": R46["칸 실제"]["그중 확인 플러스"], "ctl_cells": R46["칸 대조: 판단 300일 전 · 장세 섞음"]["세 구간 모두 플러스인 칸"],
+             "ctl_pos": R46["칸 대조: 판단 300일 전 · 장세 섞음"]["그중 확인 플러스"],
+             "chk_mean": R46["칸 실제"]["고른 신호 확인 신호당"], "ctl_mean": R46["칸 대조: 판단 300일 전 · 장세 섞음"]["고른 신호 확인 신호당"]}
 J = [[k, v["고르기"]["차이"], v["확인"]["차이"], v["고르기"]["같은 방향 신호당"], v["확인"]["같은 방향 신호당"], v["고르기"]["반대 방향 신호당"], v["확인"]["반대 방향 신호당"]]
      for k, v in R["판단용 순위 (고르기 기간 차이 순)"].items()]
 BOT = {k: {kk: vv for kk, vv in v.items() if kk != "고른 칸 목록 (앞 60)"} for k, v in R["봇"].items()}
 DATA = {"strats": strats, "judges": J, "bot": BOT, "fit_rate": R["맞는 장이 확인 기간에도 플러스로 남은 비율"], "nfits": R["맞는 장 수"],
-        "ko": {k: KO.get(k.split(" @")[0], k.split(" @")[0]) for k in R["판단용 순위 (고르기 기간 차이 순)"]}}
+        "ko": {k: KO.get(k.split(" @")[0], k.split(" @")[0]) for k in R["판단용 순위 (고르기 기간 차이 순)"]}, "stack": STACK}
 tpl = open(os.path.join(HERE, "roles_page.tpl.html")).read()
 html = tpl.replace("/*__DATA__*/null", json.dumps(DATA, ensure_ascii=False, separators=(",", ":")))
 open(os.path.join(HERE, "roles_page.html"), "w").write(html)

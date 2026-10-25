@@ -83,6 +83,13 @@ details.card > summary::-webkit-details-marker { display: none }
     <div class="tablewrap"><table id="bottab"></table></div>
   </section>
 
+  <section class="band" aria-labelledby="stack-h" id="stackband" hidden>
+    <h2 id="stack-h">잘 맞는 판단 지표를 겹친 봇 (두 분 제안)</h2>
+    <p class="small">매매법·봉·방향마다 104개 판단 지표(1시간·4시간)와 장 조건(BTC·코인 추세 5단계, 변동성, 시간대, 코인) 가운데 2021~24년에 가장 잘 맞는 것을 최대 4개까지 겹쳤습니다. 2021~24년을 세 구간으로 나눠 세 구간 모두 좋아질 때만 겹쳤습니다. 겹친 결과가 세 구간 모두 플러스인 칸을 한 봇에 넣었습니다(한 포지션, L5, 손절 −35%). 대조는 같은 방법을 300일 전 판단 상태와 섞은 장 정보로 돌린 것입니다(맞을 이유가 없는 판단). 21~24년은 고른 기간이라 좋게 나오는 것이 당연하고, 25~26년과 10월이 처음 보는 기간입니다.</p>
+    <div class="facts" id="stackfacts"></div>
+    <div class="tablewrap"><table id="stacktab"></table></div>
+  </section>
+
   <section class="band" aria-labelledby="judge-h">
     <h2 id="judge-h">추세 판단용으로 쓸 만한 지표</h2>
     <p class="small">121개 매매법의 모든 신호를 그 지표의 1시간·4시간 상태와 같은 방향일 때와 반대 방향일 때로 나눈 신호당 차이입니다. 두 기간 모두 차이가 큰 것이 판단용으로 쓸 만합니다. 위 12개만 보입니다.</p>
@@ -162,6 +169,31 @@ function num(v, f) { return el("span", {class: "num " + cls(v)}, f(v)); }
   t.append(tb);
 })();
 
+// stacked judges
+(function () {
+  const S = DATA.stack; if (!S) return;
+  document.getElementById("stackband").hidden = false;
+  const f = [
+    ["warn", S.ncells + "칸", "2021~24년 세 구간 모두 플러스가 된 칸 (대조 " + S.ctl_cells + "칸)"],
+    ["bad", (S.chk_pos / S.ncells * 100).toFixed(0) + "%", "그중 2025~26년에도 플러스인 칸 (대조 " + (S.ctl_pos / S.ctl_cells * 100).toFixed(0) + "%)"],
+    ["bad", pct(S.chk_mean) + " 대 " + pct(S.ctl_mean), "고른 신호의 2025~26년 신호당 (실제 대 대조)"]];
+  const box = document.getElementById("stackfacts");
+  for (const [k, b, t] of f) box.append(el("div", {class: "fact " + k}, el("b", {class: "num"}, b), el("span", {}, t)));
+  const t = document.getElementById("stacktab");
+  t.append(el("thead", {}, el("tr", {}, el("th", {}, "판단"), el("th", {}, "21~24 한 달"), el("th", {}, "25~26 한 달"), el("th", {}, "10/06~10/24"),
+    el("th", {}, "넣은 칸 기준"), el("th", {}, "비용"), el("th", {}, "21~24 ×3+ 달"), el("th", {}, "25~26 ×3+ 달"),
+    el("th", {}, "25~26 −50% 달"), el("th", {}, "25~26 달 진입"))));
+  const tb = el("tbody");
+  for (const r of S.rows) {
+    const [tag, bar, cost, gp, x3p, gc, x3c, b50, ent, fw, fwn] = r;
+    tb.append(el("tr", {}, el("td", {}, tag === "실제" ? "실제" : "대조"), el("td", {class: "num " + (gp >= 1 ? "pos" : "neg")}, x(gp)),
+      el("td", {class: "num " + (gc >= 1 ? "pos" : "neg")}, x(gc)), el("td", {class: "num " + (fw >= 1 ? "pos" : "neg")}, x(fw) + " (" + fwn + "번)"),
+      el("td", {}, "가장 나쁜 구간 > " + bar + "%"), el("td", {class: "num"}, cost + "%"), el("td", {class: "num"}, x3p + " / 43"),
+      el("td", {class: "num"}, x3c + " / 21"), el("td", {class: "num"}, b50 + " / 21"), el("td", {class: "num"}, ent)));
+  }
+  t.append(tb);
+})();
+
 // judges
 (function () {
   const t = document.getElementById("judgetab");
@@ -213,6 +245,13 @@ function card(s) {
       const [jk, jp, jc, base, rnd] = t.judge; const [src, jtf] = jk.split(" @");
       row.append(el("div", {class: "small"}, "가장 잘 맞는 판단 짝: " + (DATA.ko[jk] || src) + " @" + (TFN[jtf] || jtf) + " 같은 방향일 때만 → ",
         num(jp, pct), " → ", num(jc, pct), " (그대로 25~26 ", num(base, pct), ", 무작위 판단 ", num(rnd, pct), ")"));
+    }
+    if (t.stk) for (const sd of ["L", "S"]) {
+      const k = t.stk[sd]; if (!k || !k[0].length) continue;
+      const [fl, p, wb, c, base, oc, np_, nc, no] = k;
+      const names = fl.map(f => { if (!f.includes(" @")) return f; const [src, jtf] = f.split(" @"); return (DATA.ko[f] || src) + " @" + (TFN[jtf] || jtf); });
+      row.append(el("div", {class: "small"}, (sd === "L" ? "롱" : "숏") + " 겹친 판단: " + names.join(" + ") + " → 21~24 ", num(p, pct),
+        " (가장 나쁜 구간 ", num(wb, pct), ") → 25~26 ", num(c, pct), " (그대로 ", num(base, pct), ")", no ? " · 10월 " : "", no ? num(oc, pct) : "", no ? " (" + no + "번)" : ""));
     }
     body.append(row);
   }
