@@ -289,3 +289,56 @@ def run_pull(D, t, coin, side, prio, cost, wait, r, exits=None, conf=False):
                                        "승률": round(float((w > 0).mean()), 3) if len(w) else None,
                                        "거래당": round(float(w.mean()), 4) if len(w) else None}
     return out
+
+
+@njit(cache=True)
+def seq_sim_close(o, h, l, c, cst, cside, ct, csend, clev, coff, every, sv, lg, ll, ls, cost, margin, hard=0.0):
+    """as seq_sim (one position, no hold limit, ladder lg/ll/ls), but the ROE stop is checked on candle closes only
+    (every = 1 / 5 / 15 minutes on the grid); the liquidation distance stays intrabar (the exchange does that).
+    ``hard`` > 0: an exchange stop on touch at ROE -hard (inside the liquidation distance) as the backstop."""
+    n = len(cst)
+    TI = np.empty(n, np.int64); TW = np.empty(n, np.float64); m = 0
+    free = -1
+    for i in range(n):
+        if ct[i] < free:
+            continue
+        e0 = cst[i]; e1 = csend[i]
+        if e0 >= e1 - 1:
+            continue
+        p0 = o[e0]
+        if not (p0 > 0):
+            continue
+        L = clev[i]; sd = cside[i]
+        dliq = 1.0 / L - 0.005; d = min(sv / L - cost, dliq)
+        dh = min(hard / L - cost, dliq) if hard > 0 else 1e9
+        g1 = lg / L + cost; l1 = ll / L + cost; stp = ls / L
+        lock = -1e9; best = 0.0; mv = 0.0; liqd = False; kk = e1 - e0 - 1
+        for j in range(e0, e1):
+            if sd > 0:
+                oj = o[j] / p0 - 1; lj = l[j] / p0 - 1; hj = h[j] / p0 - 1; cj = c[j] / p0 - 1
+            else:
+                oj = 1 - o[j] / p0; lj = 1 - h[j] / p0; hj = 1 - l[j] / p0; cj = 1 - c[j] / p0
+            if lock > -1e8 and oj <= lock:
+                mv = oj; kk = j - e0; break
+            if hard > 0 and oj <= -dh:
+                mv = oj; kk = j - e0; break
+            if hard > 0 and lj <= -dh:
+                mv = -dh; kk = j - e0; break
+            if lj <= -dliq:
+                liqd = True; kk = j - e0; break
+            if lock > -1e8 and lj <= lock:
+                mv = lock; kk = j - e0; break
+            if (j - coff[i] + 1) % every == 0 and cj <= -d:
+                mv = cj; kk = j - e0; break
+            if hj > best:
+                best = hj
+                if best >= g1:
+                    nl = l1 + np.floor((best - g1) / stp + 1e-9) * stp
+                    if nl > lock:
+                        lock = nl
+            if j == e1 - 1:
+                mv = cj
+        w = -margin if liqd else max(margin * L * (mv - cost), -margin)
+        TI[m] = i; TW[m] = w; m += 1
+        free = ct[i] + (kk + 1) * 60_000
+    return TI[:m], TW[:m]

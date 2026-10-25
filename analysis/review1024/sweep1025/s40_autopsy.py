@@ -62,22 +62,132 @@ for ci, cn in enumerate(COINS):
     vol[m] = np.where(rv[jj] < lo_[jj], 0, np.where(rv[jj] > hi_[jj], 2, 1))
 S["코인장세"] = own; S["변동성"] = vol
 hr = ((t + KST) // 3600_000) % 24
-S["시간대"] = np.where((hr >= 9) & (hr < 16), "아시아 09-16", np.where((hr >= 16) & (hr < 22), "유럽 16-22",
-                      np.where((hr >= 22) | (hr < 2), "미국 22-02", "새벽 02-09")))
+S["시간대"] = pd.Categorical(np.where((hr >= 9) & (hr < 16), "아시아 09-16", np.where((hr >= 16) & (hr < 22), "유럽 16-22",
+                      np.where((hr >= 22) | (hr < 2), "미국 22-02", "새벽 02-09"))))
 ym = FC.ym_of(t); S["ym"] = ym; S["해"] = ym // 100
 S["w25"], S["w35"], S["w50"] = W[:, 0], W[:, 1], W[:, 2]
 S["why35"] = Y[:, 1]; S["k35"] = K[:, 1]
+# ---------------------------------------------------------------- extra dimensions (not asked; needed for the goal)
+from numba import njit                                    # noqa: E402
+from free_core import TF_MIN                              # noqa: E402
+tfs = S.tf.astype(str).to_numpy()
+big = np.full(len(S), np.nan); pos1 = np.full(len(S), np.nan); htf = np.zeros(len(S), np.int8); fund = np.full(len(S), np.nan)
+for ci, cn in enumerate(COINS):
+    mc = coin == ci
+    for tf_ in ("15m", "30m", "1h", "4h"):
+        m = mc & (tfs == tf_)
+        if not m.any():
+            continue
+        b = bars(cn, tf_); h_, l_, c_ = b.high.to_numpy(), b.low.to_numpy(), b.close.to_numpy()
+        pc = np.r_[c_[0], c_[:-1]]; tr = np.maximum(h_ - l_, np.maximum(np.abs(h_ - pc), np.abs(l_ - pc)))
+        atr = pd.Series(tr).ewm(alpha=1 / 14, adjust=False).mean().to_numpy(); atrp = np.r_[np.nan, atr[:-1]]
+        close = b.ts.to_numpy(np.int64) + TF_MIN[tf_] * MIN
+        jj = np.clip(np.searchsorted(close, t[m]), 0, len(close) - 1); ok = close[jj] == t[m]
+        big[m] = np.where(ok, (h_ - l_)[jj] / np.maximum(atrp[jj], 1e-12), np.nan)
+    b15 = bars(cn, "15m"); c15 = b15.close.to_numpy()
+    hi = pd.Series(b15.high.to_numpy()).rolling(96).max().to_numpy(); lo = pd.Series(b15.low.to_numpy()).rolling(96).min().to_numpy()
+    T15 = b15.ts.to_numpy(np.int64) + 15 * MIN; jj = np.clip(np.searchsorted(T15, t[mc], side="right") - 1, 0, None)
+    pos1[mc] = (c15[jj] - lo[jj]) / np.maximum(hi[jj] - lo[jj], 1e-12)
+    Zs = RD._states(cn, "4h"); cz = Zs["ts"] + TF_MIN["4h"] * MIN
+    jz = np.searchsorted(cz, t[mc], side="right") - 1; okz = jz >= 0; jz = np.clip(jz, 0, None)
+    htf[mc] = np.where(okz & (Zs["nb"][jz] >= 300), Zs["j_V39"][jz], 0)
+    g = FC.grid(cn); fr = np.nan_to_num(g["fund"]); fi = np.flatnonzero(fr != 0); ft = GT0 + fi.astype(np.int64) * MIN
+    jf = np.searchsorted(ft, t[mc], side="right") - 1
+    fund[mc] = np.where(jf >= 0, fr[fi][np.clip(jf, 0, None)], np.nan)
+S["신호봉"] = pd.Categorical(np.where(big < 1, "1 ATR 미만", np.where(big < 2, "1~2 ATR", np.where(big < 3, "2~3 ATR", np.where(big >= 3, "3 ATR 이상", "?")))))
+chase = np.where(side > 0, pos1, 1 - pos1)
+S["하루 범위 위치"] = pd.Categorical(np.where(chase > 0.8, "진입 방향 끝 (추격)", np.where(chase < 0.2, "반대 끝 (되돌림)", np.where(np.isfinite(chase), "가운데", "?"))))
+S["4시간 V3.9"] = pd.Categorical(np.where(htf == 0, "없음", np.where(htf == side, "같은 방향", "반대 방향")))
+S["펀딩"] = pd.Categorical(np.where(~np.isfinite(fund) | (fund == 0), "?", np.where(fund * side > 0, "내는 쪽", "받는 쪽")))
+o_c = np.lexsort((t, side, coin)); same = np.zeros(len(S), np.int64)
+key_cs = coin[o_c] * 2 + (side[o_c] > 0)
+for kv in np.unique(key_cs):
+    ix = o_c[key_cs == kv]; tt = t[ix]
+    same[ix] = np.searchsorted(tt, tt, side="right") - np.searchsorted(tt, tt - 60 * MIN, side="right") - 1
+S["1시간 안 같은 방향 신호"] = pd.Categorical(np.where(same == 0, "0개", np.where(same <= 2, "1~2개", np.where(same <= 5, "3~5개", "6개 이상"))))
+S["요일"] = pd.Categorical(np.asarray(["월", "화", "수", "목", "금", "토", "일"])[((((t + KST) // DAY) + 3) % 7)])
+
+
+@njit(cache=True)
+def after_stop(o, h, l, start, k, side, lev, why, cost, lg, look):
+    """for stop-outs: did the price reach the ladder's first step (net ROE +12 %) within ``look`` minutes after the
+    stop, measured from the entry price? (a stop by a wick / noise, the direction was right)"""
+    n = len(start); out = np.zeros(n, np.int8)
+    for i in range(n):
+        if why[i] != 0:
+            continue
+        e0 = start[i]; p0 = o[e0]
+        if not (p0 > 0):
+            continue
+        g1 = lg / lev[i] + cost; es = e0 + k[i]
+        for j in range(es, min(es + look, len(h))):
+            fav = h[j] / p0 - 1 if side[i] > 0 else 1 - l[j] / p0
+            if fav >= g1:
+                out[i] = 1; break
+    return out
+
+
+@njit(cache=True)
+def walk_close_stop(o, h, l, c, start, send, side, lev, offc, sv, lg, ll, ls, cost, margin, every):
+    """L5 ladder, ROE stop checked on candle closes only (every = 1: 1m closes, 15: 15m closes), the liquidation
+    distance still intrabar (the exchange does that), no hold limit."""
+    n = len(start); W = np.zeros(n); WHY = np.zeros(n, np.int8)
+    for i in range(n):
+        e0 = start[i]; e1 = send[i]; L = lev[i]; sd = side[i]; p0 = o[e0]
+        if not (p0 > 0) or e0 >= e1 - 1:
+            W[i] = np.nan; continue
+        dliq = 1.0 / L - 0.005; d = min(sv / L - cost, dliq)
+        g1 = lg / L + cost; l1 = ll / L + cost; stp = ls / L
+        lock = -1e9; best = 0.0; mv = 0.0; why = 3; liqd = False
+        for j in range(e0, e1):
+            if sd > 0:
+                oj = o[j] / p0 - 1; lj = l[j] / p0 - 1; hj = h[j] / p0 - 1; cj = c[j] / p0 - 1
+            else:
+                oj = 1 - o[j] / p0; lj = 1 - h[j] / p0; hj = 1 - l[j] / p0; cj = 1 - c[j] / p0
+            if lock > -1e8 and oj <= lock:
+                mv = oj; why = 1; break
+            if lj <= -dliq:
+                liqd = True; why = 0; break
+            if lock > -1e8 and lj <= lock:
+                mv = lock; why = 1; break
+            if (j - offc[i] + 1) % every == 0 and cj <= -d:
+                mv = cj; why = 0; break
+            if hj > best:
+                best = hj
+                if best >= g1:
+                    nl = l1 + np.floor((best - g1) / stp + 1e-9) * stp
+                    if nl > lock:
+                        lock = nl
+            if j == e1 - 1:
+                mv = cj
+        if liqd:
+            W[i] = -margin
+        else:
+            W[i] = max(margin * L * (mv - cost), -margin)
+        WHY[i] = why
+    return W, WHY
+
+
+st0 = np.where(good, start, 0)
+S["손절 뒤 4시간 안 익절자리 도달"] = after_stop(D.o, D.h, D.l, st0, K[:, 1].astype(np.int64), side, HB.LEVC[coin].astype(float), Y[:, 1],
+                                       0.0014, 0.12, 240)
+offc = D.off[coin].astype(np.int64)
+for every, nm_ in ((1, "1분봉 종가 손절"), (15, "15분봉 종가 손절")):
+    wc, yc = walk_close_stop(D.o, D.h, D.l, D.c, st0, send, side, HB.LEVC[coin].astype(float), offc, 0.35, 0.12, 0.10, 0.05,
+                             0.0014, HB.MARGIN, every)
+    wc[~good] = np.nan; S[f"w35 {nm_}"] = wc
+log("extra dims")
 REGN = {0: "상승", 1: "하락", 2: "횡보"}; SIDEN = {1: "롱", -1: "숏"}; VOLN = {0: "낮음", 1: "중간", 2: "높음"}
 A_ = (ym >= 202201) & (ym <= 202609)
-X = S[A_ & good]
+X = S.loc[A_ & good].copy()
 log("attributes", len(X))
 
 
 def tab(df, by, w="w35"):
-    g = df.groupby(by, observed=True)
-    r = pd.DataFrame({"신호": g[w].size(), "거래당": g[w].mean(), "승률": g[w].apply(lambda v: (v > 0).mean()),
-                      "손절로 끝": g["why35"].apply(lambda v: (v == 0).mean()),
-                      "손절까지 중간(분)": g.apply(lambda d: float(np.median(d.k35[d.why35 == 0])) if (d.why35 == 0).any() else np.nan)})
+    d = df[(by if isinstance(by, list) else [by]) + [w, "why35", "k35"]].assign(_win=(df[w] > 0).astype(float), _stop=(df.why35 == 0).astype(float))
+    g = d.groupby(by, observed=True)
+    r = pd.DataFrame({"신호": g[w].size(), "거래당": g[w].mean(), "승률": g["_win"].mean(), "손절로 끝": g["_stop"].mean(),
+                      "손절까지 중간(분)": d[d.why35 == 0].groupby(by, observed=True).k35.median()})
     return r.round(4)
 
 
@@ -90,8 +200,8 @@ def show(title, r):
     OUT[title] = json.loads(r.reset_index().to_json(orient="records", force_ascii=False))
 
 
-X = X.assign(btc=X["btc장세"].map(REGN), 코인=X["코인장세"].map(REGN), 방향=X.side.map(SIDEN), 변동=X["변동성"].map(VOLN))
-show("전체", tab(X.assign(all="전체"), "all"))
+X = X.assign(btc=pd.Categorical(X["btc장세"].map(REGN)), 코인=pd.Categorical(X["코인장세"].map(REGN)), 방향=pd.Categorical(X.side.map(SIDEN)), 변동=pd.Categorical(X["변동성"].map(VOLN)))
+show("전체", tab(X.assign(all=pd.Categorical(np.full(len(X), "전체"))), "all"))
 show("BTC 4시간 장세 x 방향", tab(X, ["btc", "방향"]))
 show("코인 자기 4시간 장세 x 방향", tab(X, ["코인", "방향"]))
 show("코인", tab(X, "symbol"))
@@ -106,6 +216,17 @@ show("매매법 x 봉 x 방향: 가장 좋은 25", st.sort_values("거래당", a
 show("매매법 x 봉 x 방향: 가장 나쁜 25", st.sort_values("거래당").head(25))
 show("손절 크기별 전체", pd.DataFrame({f"손절 {int(s * 100)}%": [X[f"w{int(s * 100)}"].mean(), (X[f"w{int(s * 100)}"] > 0).mean()]
                                     for s in STOPS}, index=["거래당", "승률"]).round(4))
+for dim in ("신호봉", "하루 범위 위치", "4시간 V3.9", "펀딩", "1시간 안 같은 방향 신호", "요일"):
+    show(f"{dim} x 방향", tab(X, [dim, "방향"]))
+ws = X[X.why35 == 0]
+show("손절된 거래 중 4시간 안에 익절 자리까지 다시 간 비율 (유형별)",
+     ws.groupby("role", observed=True)["손절 뒤 4시간 안 익절자리 도달"].agg(["size", "mean"]).round(4))
+show("손절 방식 비교: 꼬리(지금) / 1분봉 종가 / 15분봉 종가 (손절 ROE -35%, L5)",
+     pd.DataFrame({k: [X[c_].mean(), (X[c_] > 0).mean()] for k, c_ in (("꼬리 닿으면 (지금)", "w35"), ("1분봉 종가", "w35 1분봉 종가 손절"),
+                                                                         ("15분봉 종가", "w35 15분봉 종가 손절"))}, index=["거래당", "승률"]).round(4))
+show("손절 방식 비교 x 유형", X.groupby("role", observed=True)[["w35", "w35 1분봉 종가 손절", "w35 15분봉 종가 손절"]].mean().round(4))
+show("손절 방식 비교 x 봉", X.groupby("tf", observed=True)[["w35", "w35 1분봉 종가 손절", "w35 15분봉 종가 손절"]].mean().round(4))
+show("손절 방식 비교 x 코인", X.groupby("symbol", observed=True)[["w35", "w35 1분봉 종가 손절", "w35 15분봉 종가 손절"]].mean().round(4))
 log("part 1 done")
 # ---------------------------------------------------------------- part 2: keep only the cells that made money (pick 2022-24)
 P_ = (ym >= 202201) & (ym <= 202412); C_ = (ym >= 202501) & (ym <= 202609)
