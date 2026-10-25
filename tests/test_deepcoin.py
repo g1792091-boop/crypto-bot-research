@@ -1427,7 +1427,7 @@ def test_drill_check_and_order_cycle_with_the_trigger_test(own_fills, side, unkn
     assert len(closes) == 1 and (closes[0]["side"], closes[0]["posSide"]) == (("sell", "long") if side > 0 else
                                                                              ("buy", "short"))
     assert [b["sz"] for b in posts(fake, TRIG)][-2:] == ["20", "20"]          # the moved stop and the test stop
-    assert steps["답을 잃은 주문 찾기(대기 목록·주문 기록에도 같은 clOrdId)"]["ok"]
+    assert steps["답을 잃은 주문 찾기(보낸 기록 없이 우리 번호로 다시 조회 - 실행기가 쓰는 길)"]["ok"]
     assert steps["답을 잃은 손절 찾기(보낸 내용: 방향·수량·발동 가격, 보내기 전 목록 제외)"]["ok"]
     assert steps["취소한 손절이 발동 기록에 '발동 안 함'으로 남음(CANCELED)"]["ok"]
     fired = next(r for k, r in steps.items() if k.startswith("손절 발동 시험:"))
@@ -1462,6 +1462,32 @@ def test_the_drill_waits_for_lagging_records_and_ends_flat():
     stop = next(r for k, r in steps.items() if k.startswith("손절이 딥코인에 걸림"))
     assert stop["detail"]["listed_after_ms"] >= 1_000
     assert fake.amt(DOGE) == 0 and not fake.triggers
+
+
+def test_the_drill_notes_lists_without_the_clordid_and_still_passes():
+    """First live drill (10-25): GET order found the entry by its clOrdId, the pending list / order history did not
+    show it. The look-up the executor uses is the step; the lists are a note with what the history shows."""
+    c, fake, clock = drill_world()
+    edit_route(fake, "/deepcoin/trade/orders-history", lambda d: [{**r, "clOrdId": ""} for r in d])
+    lines = []
+    d = DC.DeepCoinDrill(c, symbol=DOGE, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000,
+                         say=lines.append)
+    assert DC.run_drill(c, d, "drill", True, pause=lambda s: None), [r for r in d.log if not r["ok"]]
+    steps = {r["step"]: r for r in d.log}
+    lost = steps["답을 잃은 주문 찾기(보낸 기록 없이 우리 번호로 다시 조회 - 실행기가 쓰는 길)"]
+    assert lost["ok"] and lost["detail"]["lookup"] == lost["detail"]["want"]
+    note = next(x for x in lines if "안 보였습니다" in x)
+    assert "'in_newest': True" in note and "'clOrdId_in_newest': ''" in note and "'by_ordId': {" in note
+    assert fake.amt(DOGE) == 0
+
+
+def test_the_drill_notes_lists_with_the_clordid():
+    c, fake, clock = drill_world()
+    lines = []
+    d = DC.DeepCoinDrill(c, symbol=DOGE, wait=lambda s: None, trigger_test=False, elapsed=lambda: clock.t / 1000,
+                         say=lines.append)
+    assert DC.run_drill(c, d, "drill", True, pause=lambda s: None)
+    assert any("주문 기록에도 같은 clOrdId로 보입니다" in x for x in lines)
 
 
 def test_the_drill_without_the_confirmation_sends_no_order():

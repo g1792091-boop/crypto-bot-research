@@ -46,7 +46,8 @@ unchanged.
                                contracts, clOrdId: open = buy/long or sell/short; close (reduce only) = sell/long or
                                buy/short with reduceOnly true; read back with GET /deepcoin/trade/order?ordId=
   order(symbol, id / cid)      GET  /deepcoin/trade/order (ordId, or clOrdId: history first, then pending), then
-                               /deepcoin/trade/v2/orders-pending and /deepcoin/trade/orders-history (both carry clOrdId)
+                               /deepcoin/trade/v2/orders-pending and /deepcoin/trade/orders-history (both carry
+                               clOrdId per the docs; the first live drill did not see it there: the drill notes it)
   stop_close(...)              POST /deepcoin/trade/trigger-order productGroup Swap, orderType market, the closing side
                                and posSide (sell/long closes a long, buy/short a short), sz = the position's contracts,
                                triggerPrice, triggerPxType last, mrgPosition merge, tdMode / isCrossMargin of the
@@ -1145,11 +1146,12 @@ class DeepCoinClient:
                 break
         return out
 
-    def _history(self, symbol: str) -> list:
-        """GET /deepcoin/trade/orders-history: the newest 100 orders of the coin."""
-        return self._rows(self.req("GET", TRD + "/orders-history", {"instType": "SWAP", "instId": fx(symbol),
-                                                                    "limit": PAGE_ROWS}, limit_key="history"),
-                          "주문 기록")
+    def _history(self, symbol: str, ord_id: Optional[str] = None) -> list:
+        """GET /deepcoin/trade/orders-history: the newest 100 orders of the coin (``ord_id``: that order only)."""
+        p = {"instType": "SWAP", "instId": fx(symbol), "limit": PAGE_ROWS}
+        if ord_id is not None:
+            p["ordId"] = str(ord_id)
+        return self._rows(self.req("GET", TRD + "/orders-history", p, limit_key="history"), "주문 기록")
 
     def _find_cid(self, symbol: str, ext: str, lists: bool = True) -> Optional[dict]:
         """The order whose clOrdId is ``ext``: GET /deepcoin/trade/order?clOrdId=, then (``lists``) the pending list and
@@ -2221,8 +2223,8 @@ class DeepCoinDrill:
     """The DeepCoin micro drill on the REAL account. ``check()`` reads (time, instruments, account, fee rate, open
     orders and stops, funding bills, positions one side per coin) and sets the isolated leverage (BTC 40x, the others
     30x): no order. ``order_cycle()`` (only behind the explicit confirmation) runs one small-size cycle on one coin:
-    a plain market entry, found by its clOrdId (GET order, and again through the lists with its answer treated as
-    lost), the leverage and margin read on the position, a reduce-only trigger stop (how long until it is listed; not
+    a plain market entry, found by its clOrdId (GET order, and again with its answer treated as lost; whether the
+    pending list / order history show it too is a note only), the leverage and margin read on the position, a reduce-only trigger stop (how long until it is listed; not
     in the trigger history while it rests; found again by what was sent), half of the position closed with a
     reduce-only market order (always, whatever the trigger test does), the stop moved to the half left (new first,
     then the old one cancelled: two must rest at once; how the cancelled one reads), then the trigger test (the stop
@@ -2385,17 +2387,48 @@ class DeepCoinDrill:
                    {"clOrdId": ext, "ordId": (got or {}).get("ordId"), "want": oid, "seconds": delay,
                     "error": None if got else str(err)})
         c.forget_order(ext)
-        lists = None
         try:
-            lists = self._until(lambda: next((r for r in c._pending(s) + c._history(s) if r.get("clOrdId") == ext),
-                                             None), tries=10, pause=1.0)
-            via = c.order(s, client_id=ext)
+            via, err = c.order(s, client_id=ext), None
         except TestnetError as e:
             via, err = None, e
-        self._step("답을 잃은 주문 찾기(대기 목록·주문 기록에도 같은 clOrdId)", lists is not None and via is not None
-                   and str(lists.get("ordId")) == oid and via.get("orderId") == oid,
-                   {"lists": (lists or {}).get("ordId"), "lookup": (via or {}).get("orderId"), "want": oid,
-                    "error": None if via else str(err)})
+        self._step("답을 잃은 주문 찾기(보낸 기록 없이 우리 번호로 다시 조회 - 실행기가 쓰는 길)", via is not None
+                   and via.get("orderId") == oid, {"lookup": (via or {}).get("orderId"), "want": oid,
+                                                   "status": (via or {}).get("status"),
+                                                   "error": None if via else str(err)})
+        self._lists_note(s, ext, oid)
+
+    def _lists_note(self, s: str, ext: str, oid: str) -> None:
+        """Only a note: does the pending list / order history show the entry's clOrdId too? The look-up by clOrdId
+        (GET order, the step above) is what the executor relies on; the lists are its second try, and a real position
+        is always read before anything is sent again. Not seen: what the order history shows of it, for the owners
+        to pass on."""
+        c = self.client
+        start = self.elapsed()
+        try:
+            row = self._until(lambda: next((r for r in c._pending(s) + c._history(s) if r.get("clOrdId") == ext),
+                                           None), tries=10, pause=2.0)
+        except TestnetError as e:
+            self._note(f"참고: 대기 목록·주문 기록을 읽지 못했습니다({e}). 위 [OK] 조회로 충분합니다")
+            return
+        waited = round(self.elapsed() - start, 1)
+        if row is not None and str(row.get("ordId")) == oid:
+            self._note(f"참고: 대기 목록·주문 기록에도 같은 clOrdId로 보입니다({waited}초)")
+            return
+        seen = {}
+        try:
+            hist = c._history(s)
+            mine = next((r for r in hist if str(r.get("ordId")) == oid), None)
+            by_id = next(iter(c._history(s, ord_id=oid)), None)
+            seen = {"history_rows": len(hist), "in_newest": mine is not None,
+                    "clOrdId_in_newest": None if mine is None else mine.get("clOrdId"),
+                    "by_ordId": None if by_id is None else {"ordId": by_id.get("ordId"),
+                                                            "clOrdId": by_id.get("clOrdId"),
+                                                            "state": by_id.get("state")},
+                    "first_last": [str(hist[0].get("ordId")), str(hist[-1].get("ordId"))] if hist else []}
+        except TestnetError as e:
+            seen = {"error": str(e)}
+        self._note(f"참고: {waited}초 동안 대기 목록·주문 기록에서 clOrdId {ext}가 안 보였습니다. 위 [OK] 조회(GET order)로 "
+                   f"찾으므로 실거래에는 문제없습니다. 이 줄을 그대로 전달해 주세요: {seen}")
 
     def order_cycle(self) -> list:
         c = self.client

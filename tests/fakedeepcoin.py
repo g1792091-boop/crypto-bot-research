@@ -498,7 +498,8 @@ class FakeDeepCoin:
             return self._ok([self._public(o) for o in rows[(i - 1) * lim:i * lim]])
         if (m, path) == ("GET", "/deepcoin/trade/orders-history"):
             rows = [o for o in self._visible_orders() if o["state"] in ("filled", "canceled")
-                    and (not q.get("instId") or o["instId"] == q["instId"])]
+                    and (not q.get("instId") or o["instId"] == q["instId"])
+                    and (not q.get("ordId") or o["ordId"] == q["ordId"])]
             rows.sort(key=lambda o: int(o["ordId"]), reverse=True)
             return self._ok([self._public(o) for o in rows[:int(q.get("limit", 100))]])
         if (m, path) == ("GET", "/deepcoin/trade/fills"):
