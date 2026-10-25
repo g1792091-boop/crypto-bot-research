@@ -79,6 +79,11 @@ PLAN += [V(f"p_ladder_s{k:g}", f"계획 크기 + 지금 계단 · 손절 {k:g}AT
 PLAN += [V(f"p_roe15_s{k:g}", f"계획 크기 + 고정 익절 +15% · 손절 {k:g}ATR", ladder=False, tp="ROE", tp_val=0.15,
            stop_atr=k, **_P) for k in (1.5, 2.0, 2.5, 3.0)]
 PLAN += [V("p_roe10_s2", "계획 크기 + 고정 익절 +10% · 손절 2ATR", ladder=False, tp="ROE", tp_val=0.10, **_P)]
+# owners 10-25 night, next: "손절 2.5 ATR로 가고 15%되면 13%에 익절 20%되면 17%익절 25%되면 22%" (the bot's two-part ladder:
+# 15 -> 13, then every +5 % the lock 3 % under it: 20 -> 17, 25 -> 22, 30 -> 27, ...)
+_L2 = dict(first_lock=0.13, gap=0.02, step=0.05, next_trigger=0.20, next_gap=0.03)
+PLAN += [V(f"p_lad15_s{k:g}", f"계획 크기 + 계단 15→13·20→17·25→22… · 손절 {k:g}ATR", stop_atr=k, **_L2, **_P)
+         for k in (2.0, 2.5)]
 
 
 # Entry timing (market orders only, the owners' rule): (name, label, kind, params)

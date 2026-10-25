@@ -96,7 +96,8 @@ def size_rule(S, br, equity, side, fill, stop, atr, best, qty_step, min_notional
 
 @njit(cache=False)
 def trade(S, br, o, h, l, mo, mh, ml, fund, e, end, raw, side, stop_dist, atr, best, equity, qty_step, min_notional,
-          force_lev, force_frac, tp_kind, tp_val, ladder, first_lock, step, gap, trail_k, trail_start):
+          force_lev, force_frac, tp_kind, tp_val, ladder, first_lock, step, gap, trail_k, trail_start,
+          next_trigger=0.0, next_gap=0.0):
     """One position filled in bar ``e`` at ``raw`` (+ slippage), until an exit or bar ``end`` (exclusive).
     Sizing: the rule (force_lev <= 0) or a forced leverage and margin share. Returns
     (wallet change, exit bar, reason, leverage, margin, qty, fill, liq, stop_initial, best price, worst price,
@@ -180,8 +181,16 @@ def trade(S, br, o, h, l, mo, mh, ml, fund, e, end, raw, side, stop_dist, atr, b
                 if ladder:
                     ft = first_lock + gap
                     if bst >= ft - 1e-12:
-                        n = math.floor((bst - ft) / step + 1e-9)
-                        lk = first_lock + step * n
+                        if next_trigger > 0.0:
+                            # paperbot/ladder2.py ComboLadder form 2 (the owners' 15/13, 20/17, 25/22, ...)
+                            if bst >= next_trigger - 1e-12:
+                                n = math.floor((bst - next_trigger) / step + 1e-9)
+                                lk = next_trigger - next_gap + step * n
+                            else:
+                                lk = first_lock
+                        else:
+                            n = math.floor((bst - ft) / step + 1e-9)
+                            lk = first_lock + step * n
                         if lock_roe < 0 or lk > lock_roe + 1e-12:
                             cand = fill * (1.0 + side * (lk / lev + rt + fr))
                             if side > 0:
@@ -224,6 +233,8 @@ class Variant:
         self.first_lock = kw.pop("first_lock", 0.10)
         self.step = kw.pop("step", 0.05)
         self.gap = kw.pop("gap", 0.02)
+        self.next_trigger = kw.pop("next_trigger", 0.0)     # ComboLadder form 2: the second trigger (0 = form 1)
+        self.next_gap = kw.pop("next_gap", 0.0)             # ... each later lock this far under its trigger
         self.trail_k = kw.pop("trail_k", 0.0)
         self.trail_start = kw.pop("trail_start", 0.12)
         self.lev_btc = kw.pop("lev_btc", 0)
@@ -246,7 +257,8 @@ class Variant:
 
     def args(self) -> tuple:
         return (self.tp_kind(), float(self.tp_val), bool(self.ladder), float(self.first_lock), float(self.step),
-                float(self.gap), float(self.trail_k), float(self.trail_start))
+                float(self.gap), float(self.trail_k), float(self.trail_start), float(self.next_trigger),
+                float(self.next_gap))
 
 
 def run_one(S, br, A: dict, e: int, raw: float, side: int, atr: float, best: bool, equity: float, spec: dict,
