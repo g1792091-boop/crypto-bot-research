@@ -15,16 +15,16 @@ src = open(os.path.join(HERE, "s21_mlprice.py")).read()
 exec(src.split("# ---------------------------------------------------------------- labels: walk long and short")[0])
 
 EXN = ["L10·손절ROE-35%", "L10·손절ROE-50%"]
-COST = 0.0014
+COST = 0.0014                                       # no hold limit (owners 10/25 night): exits only by stop / ladder
 sk = np.array([1, 1], np.int8); sv = np.array([0.35, 0.50]); tk = np.zeros(2, np.int8); tv = np.zeros(2)
 lg = np.full(2, 0.12); ll = np.full(2, 0.10); ls = np.full(2, 0.10)
 ci_ = MT.coin.to_numpy(); start = off[ci_] + MT.e.to_numpy(); send = off[ci_ + 1]
 good = (start < send - 1) & np.isfinite(o[np.minimum(start, len(o) - 1)])
 lev = HB.LEVC[ci_]; atrf = np.full(len(MT), 0.01); st2 = np.where(good, start, 0)
 WL, KL, _ = HB.walk_all(o, h, l, cl, st2, send, np.ones(len(MT), np.int8), lev, atrf, sk, sv, tk, tv, lg, ll, ls, COST,
-                        HB.MARGIN, HB.MAXK)
+                        HB.MARGIN, 10 ** 12)
 WS, KS, _ = HB.walk_all(o, h, l, cl, st2, send, -np.ones(len(MT), np.int8), lev, atrf, sk, sv, tk, tv, lg, ll, ls, COST,
-                        HB.MARGIN, HB.MAXK)
+                        HB.MARGIN, 10 ** 12)
 WL[~good] = np.nan; WS[~good] = np.nan
 del o, h, l, cl
 log("labels", np.nanmean(WL, 0), np.nanmean(WS, 0))
@@ -44,7 +44,7 @@ while True:
 PRED = np.full((len(MT), 2, 2), np.nan, np.float32)
 rng = np.random.default_rng(32)
 for (a, b) in blocks:
-    tr = np.flatnonzero(Tm < a - 3 * DAY)[::2]
+    tr = np.flatnonzero(Tm < a - 3 * DAY)[::4]
     te = np.flatnonzero((Tm >= a) & (Tm < b))
     for si, W in enumerate((WL, WS)):
         for x in range(2):
@@ -54,7 +54,7 @@ for (a, b) in blocks:
                 um = np.unique(mon); perm = dict(zip(um, rng.permutation(um)))
                 yy = np.concatenate([np.resize(yy[mon == perm[u]], int((mon == u).sum())) for u in um])
                 idx = np.concatenate([idx[mon == u] for u in um])
-            mdl = lgb.LGBMRegressor(n_estimators=800, learning_rate=0.015, num_leaves=63, min_child_samples=300,
+            mdl = lgb.LGBMRegressor(n_estimators=300, learning_rate=0.04, num_leaves=63, min_child_samples=300,
                                     subsample=0.7, subsample_freq=1, colsample_bytree=0.5, reg_lambda=5.0,
                                     n_jobs=4, verbose=-1)
             mdl.fit(X[idx], yy)

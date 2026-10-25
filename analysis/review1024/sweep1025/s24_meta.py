@@ -84,7 +84,7 @@ PRED = np.full((len(S), 2), np.nan, np.float32)
 rng = np.random.default_rng(11)
 for (a, b) in blocks:
     pool = np.flatnonzero(St < a - 3 * DAY)
-    tr = np.sort(rng.choice(pool, size=min(len(pool), 1_200_000), replace=False))
+    tr = np.sort(rng.choice(pool, size=min(len(pool), 600_000), replace=False))
     te = np.flatnonzero((St >= a) & (St < b))
     Xtr = mat(tr)
     for x in range(2):
@@ -95,7 +95,7 @@ for (a, b) in blocks:
             um = np.unique(mon); perm = dict(zip(um, rng.permutation(um)))
             y = np.concatenate([np.resize(y[mon == perm[u]], int((mon == u).sum())) for u in um])
             idx = np.concatenate([idx[mon == u] for u in um])
-        mdl = lgb.LGBMRegressor(n_estimators=400, learning_rate=0.03, num_leaves=63, min_child_samples=500,
+        mdl = lgb.LGBMRegressor(n_estimators=250, learning_rate=0.05, num_leaves=63, min_child_samples=500,
                                 subsample=0.7, subsample_freq=1, colsample_bytree=0.5, reg_lambda=5.0, n_jobs=4,
                                 verbose=-1)
         mdl.fit(Xtr[idx], y, categorical_feature=[len(NAMES) - 3])
@@ -105,6 +105,12 @@ for (a, b) in blocks:
     del Xtr
     log("block", pd.Timestamp(a, unit="ms").strftime("%Y-%m"), "trained", len(tr), "tested", len(te))
 LEV = HB.LEVC[S.coin.to_numpy().astype(int)]
+_keep = np.flatnonzero(np.nanmax(PRED, axis=1) > 0.01)
+np.savez_compressed(os.path.join(OUTD, f"meta24_{MODE24}_cand.npz"), idx=_keep, pred=PRED[_keep], t=St[_keep],
+                    coin=S.coin.to_numpy()[_keep], w0=S.w0.to_numpy()[_keep], k0=S.k0.to_numpy()[_keep],
+                    w1=S.w1.to_numpy()[_keep], k1=S.k1.to_numpy()[_keep], reg=S.reg.to_numpy()[_keep],
+                    cell=S.cell.to_numpy()[_keep], side=S.side.to_numpy()[_keep])
+log("saved candidates", len(_keep))
 
 
 def trade(x, thr, rand=None, cost_adj=0.0):
