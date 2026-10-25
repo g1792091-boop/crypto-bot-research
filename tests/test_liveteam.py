@@ -547,3 +547,15 @@ def test_the_team_is_told_the_vwap_bot_is_another_bot(tmp_path):
         assert not [r for r in T._paper_rules(trend) if "보유 한도" in r or "4시간 추세 판단" in r]
     finally:
         w.close()
+
+
+def test_sizing_of_reads_equity_sizing():
+    """owners 10-25 night: an executor on size_from "equity" puts margin_frac of its own wallet at every entry."""
+    from paperbot.liveteam import sizing_of
+    summary = {"accts": [{"id": "paper", "balance": 600.0}, {"id": "bybit", "balance": 80.0}, {"id": "deepcoin", "balance": 44.0}],
+               "execs": [{"id": "bybit", "name_ko": "바이비트", "config": {"qty_scale": 0.1}},
+                         {"id": "deepcoin", "name_ko": "딥코인", "config": {"qty_scale": 0.044, "size_from": "equity",
+                                                                          "margin_frac": 0.4}}]}
+    rows = {r["executor"]: r for r in sizing_of(summary, {"margin": 0.4})["execs"]}
+    assert rows["바이비트"]["margin_share_now"] == 0.3 and rows["바이비트"]["size_from"] == "paper"   # 0.4 x 600 x 0.1 / 80
+    assert rows["딥코인"]["margin_share_now"] == 0.4 and rows["딥코인"]["size_from"] == "equity"

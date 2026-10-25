@@ -633,7 +633,8 @@ def trend_decisions(cfg: Optional[dict], now: int, since: Optional[int]) -> list
         out.append(f"{C.us_open_ko(us, pre)} 진입 없음" + ("(10/21 밤 '나스닥 개장전 30분도 진입금지로 하자')" if pre else "")
                    + (f": {when}" if when else "") + " · 그 시간에도 추세 판단·" + ("되돌림 확인·" if r.pullback_wait else "")
                    + "감독 청산·손절·익절은 그대로")
-    out.append("실거래 크기: 각 실거래 지갑의 약 40%를 증거금으로(실행기 수량 = 페이퍼 수량 × qty_scale, sizing에 지금 숫자)")
+    out.append("실거래 크기: 각 실거래 지갑의 약 40%를 증거금으로(실행기 수량 = 페이퍼 수량 × qty_scale, 또는 size_from \"equity\"면 "
+               "진입할 때마다 자기 잔고 × margin_frac; sizing에 지금 숫자)")
     return out
 
 
@@ -650,13 +651,17 @@ def sizing_of(summary: Optional[dict], cfg: Optional[dict]) -> dict:
         c = x.get("config") if isinstance(x.get("config"), dict) else {}
         q, real = c.get("qty_scale"), bal.get(x.get("id"))
         share = None
-        if None not in (margin, q, paper, real) and real > 0:
+        mf = c.get("margin_frac")
+        if c.get("size_from") == "equity" and isinstance(mf, (int, float)) and not isinstance(mf, bool):
+            share = round(float(mf), 3)              # owners 10-25 night: each entry's margin is this share of its own wallet
+        elif None not in (margin, q, paper, real) and real > 0:
             share = round(margin * float(paper) * float(q) / float(real), 3)
         rows.append({"executor": x.get("name_ko") or x.get("id"), "qty_scale": q, "real_wallet": real, "paper_wallet": paper,
-                     "margin_share_now": share})
+                     "size_from": c.get("size_from") or "paper", "margin_share_now": share})
     return {"rule": "두 분 결정: 실거래 증거금은 각 실거래 지갑의 약 40% (qty_scale ≈ 실거래 지갑 ÷ 페이퍼 지갑일 때 그렇게 됨)",
             "paper_margin": margin, "execs": rows,
-            "words": "margin_share_now = 페이퍼 증거금 비율 × 페이퍼 지갑 × qty_scale ÷ 실거래 지갑 (지금 지갑으로 계산한 대략값)"}
+            "words": "margin_share_now = 페이퍼 증거금 비율 × 페이퍼 지갑 × qty_scale ÷ 실거래 지갑 (지금 지갑으로 계산한 대략값); "
+                     "size_from \"equity\"인 실행기는 진입할 때마다 자기 잔고 × margin_frac (그 값 그대로)"}
 
 
 def shadow_tests() -> dict:

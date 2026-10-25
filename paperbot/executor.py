@@ -124,6 +124,7 @@ SUPPORTED_MODES = (MODE_TESTNET, MODE_MAINNET)
 TESTNET_HOSTS = ("testnet.binancefuture.com",)
 PREFIX = {MODE_TESTNET: "[테스트넷 실행기]", MODE_MAINNET: "[실거래 실행기]"}
 ENTRY_SOURCES = ("paper", "signal")
+SIZE_FROM = ("paper", "equity")
 STOP_FROM = ("ratio", "price", "roe")
 EXCHANGES = ("binance", "bybit", "mexc", "wooxpro", "flipster", "deepcoin")
 # owners 10-20 ("거래소 기준으로 익절해야지"): "paper" = the exchange stop follows the paper's lock steps (as before);
@@ -250,6 +251,13 @@ class ExecConfig:
     equity_floor_frac: Optional[float] = None   # 잔고 바닥: no new entry once the balance falls to this share of the
                                                 # start recorded at its first run (0.7); None = off
     double_notice: bool = False          # 원금 회수 안내: one Telegram message when the balance first reaches 2x the start
+    # owners 10-25 night ("b로해줘", "파산당하면 파산 당한다는 마인드야 그냥 항상 시드비중 40%로 해줘"): the size of each
+    # new entry from the live account itself; absent = as before
+    size_from: str = "paper"             # "paper": paper quantity x ``qty_scale``; "equity": the live equity (read this
+                                         # loop) x ``margin_frac`` is the margin, at the paper's leverage (capped by
+                                         # risk.max_leverage): qty = equity x margin_frac x leverage / price. No loss-share
+                                         # cut (risk.max_loss_frac is not applied): always that share of the balance
+    margin_frac: Optional[float] = None  # "equity": the margin's share of the live equity (0.4)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -293,6 +301,16 @@ class ExecConfig:
                 out.append(f"stop_roe {self.stop_roe:g}(순ROE)는 {top}배에서 왕복 비용 {rt:.3%}보다 가까워 손절 자리가 없습니다")
         if self.entry_source not in ENTRY_SOURCES:
             out.append("entry_source는 \"paper\" 또는 \"signal\"입니다")
+        if self.size_from not in SIZE_FROM:
+            out.append("size_from은 \"paper\"(페이퍼 수량 × qty_scale) 또는 \"equity\"(실거래 잔고 × margin_frac)입니다")
+        elif self.size_from == "equity":
+            m = self.margin_frac
+            if not (isinstance(m, (int, float)) and not isinstance(m, bool) and 0 < m <= 1):
+                out.append("size_from \"equity\"는 margin_frac(증거금으로 쓸 잔고 비율, 0~1, 예: 40% → 0.4)이 있어야 합니다")
+            if self.entry_source != "paper":
+                out.append("size_from \"equity\"는 entry_source \"paper\"(페이퍼 포지션 따라가기)와 함께만 씁니다")
+        if self.margin_frac is not None and self.size_from != "equity":
+            out.append("margin_frac은 size_from \"equity\"일 때만 씁니다")
         if not 0.5 <= float(self.direct_poll_s) <= 5:
             out.append("direct_poll_s는 0.5~5초입니다")
         if self.budget_usd is not None and not (isinstance(self.budget_usd, (int, float)) and self.budget_usd > 0):
@@ -2471,22 +2489,45 @@ class Executor:
         self.store.trade_open(t)
         self._save()
 
+    def _entry_qty(self, it: Intent, price: float, spec: dict) -> float:
+        """The planned quantity, floored to the contract step: "paper" the paper's quantity x qty_scale; "equity" the live
+        equity of this loop x margin_frac as the margin at the paper's leverage (capped by risk.max_leverage, so the margin
+        stays that share); 0 when the equity is not known."""
+        if self.cfg.size_from != "equity":
+            return _round_down(it.qty * self.cfg.qty_scale, spec["qty_step"])
+        eq = self.risk.last_equity
+        if not (isinstance(eq, (int, float)) and eq > 0 and price > 0):
+            return 0.0
+        lev = int(it.leverage)
+        if self.cfg.risk.max_leverage is not None:
+            lev = min(lev, int(self.cfg.risk.max_leverage))
+        return _round_down(eq * float(self.cfg.margin_frac) * lev / price, spec["qty_step"])
+
     def _enter(self, it: Intent) -> None:
         spec = self._spec(it.symbol) if it.symbol in self.cfg.risk.allowed_symbols else None
         if spec is None:
             dec = R.check_entry(self.cfg.risk, self.risk, it.symbol, 1, 1, 1, 1)
         else:
             price = self.c.price(it.symbol)
-            qty = _round_down(it.qty * self.cfg.qty_scale, spec["qty_step"])
+            qty = self._entry_qty(it, price, spec)
             rules = v3_settings(taker_fee=self.paper_taker if self.paper_taker is not None else P.PAPER_TAKER_FEE)
             # ("roe": at the paper's leverage, the only one it trades: a lower cap refuses the entry below)
             stop = self._stop_level(it.stop, it.entry_price, price, spec["tick"], it.side, int(it.leverage))
             # the loss at the stop must fit today's remaining loss limit and the paper rules' share of LIVE equity
             # (or the config's own share, risk.max_loss_frac)
             frac = self.cfg.risk.max_loss_frac if self.cfg.risk.max_loss_frac is not None else rules.max_loss_frac
-            dec = R.check_entry(self.cfg.risk, self.risk, it.symbol, qty, price, it.leverage, spec["qty_step"],
-                                spec["min_qty"], spec["min_notional"], stop=stop, equity=self.risk.last_equity,
-                                max_loss_frac=frac, cost_frac=rules.taker_fee + rules.slippage_frac)
+            if self.cfg.size_from == "equity":
+                frac = None                     # owners 10-25: always the share of the balance, never cut for the stop
+            eq = self.risk.last_equity
+            if self.cfg.size_from == "equity" and not (isinstance(eq, (int, float)) and eq > 0):
+                dec = R.Decision(R.BLOCK, [f"실거래 잔고({eq})를 읽지 못해 크기를 정할 수 없어 진입하지 않습니다"])
+            elif self.cfg.size_from == "equity" and qty < max(float(spec["min_qty"]), float(spec["qty_step"])) - 1e-12:
+                dec = R.Decision(R.BLOCK, [f"잔고 ${eq:,.2f}의 {self.cfg.margin_frac:.0%}로는 수량 {qty:g}이 거래소 최소 수량 "
+                                           f"{spec['min_qty']:g}보다 작아 진입하지 않습니다"])
+            else:
+                dec = R.check_entry(self.cfg.risk, self.risk, it.symbol, qty, price, it.leverage, spec["qty_step"],
+                                    spec["min_qty"], spec["min_notional"], stop=stop, equity=self.risk.last_equity,
+                                    max_loss_frac=frac, cost_frac=rules.taker_fee + rules.slippage_frac)
         self._event(INFO if dec.ok else WARN, "entry_check", f"진입 검사({it.symbol}): {dec.action} - {dec.text()}",
                     {"key": it.key, "qty": dec.qty, "leverage": dec.leverage, "direct": it.direct})
         if not dec.ok:
@@ -2513,8 +2554,7 @@ class Executor:
              "stop_algo_id": None, "status": "entering", "n": 0, "entry_ts": self.now_ms(),
              "wallet_before": float(self.c.account()["totalWalletBalance"]), "paper_entry": it.entry_price,
              "entry_price": None, "entry_ref": price, "entry_time": it.entry_time, "mode": self.cfg.mode,
-             "direct": it.direct, "confirmed": not it.direct, "planned_qty": _round_down(
-                 it.qty * self.cfg.qty_scale, spec["qty_step"]), "paper_leverage": it.leverage,
+             "direct": it.direct, "confirmed": not it.direct, "planned_qty": qty, "paper_leverage": it.leverage,
              "signal_ref": it.signal_ref, "signal_ready": it.signal_ready}
         self.trade = t
         self._save()                                       # write-ahead: a crash now is recovered by reconcile
@@ -3316,6 +3356,11 @@ def guard_lines(cfg: ExecConfig) -> list:
     out = []
     if cfg.label:
         out.append(f"이름: {cfg.label} (알림 머리말 {exec_prefix(cfg)})")
+    if cfg.size_from == "equity" and isinstance(cfg.margin_frac, (int, float)) and 0 < cfg.margin_frac <= 1:
+        out.append(f"크기: 진입할 때마다 실거래 잔고의 {cfg.margin_frac:.0%}를 증거금으로, paper와 같은 배수"
+                   f"{f'(상한 {cfg.risk.max_leverage}배)' if cfg.risk.max_leverage else ''} - 수량 = 잔고 × "
+                   f"{cfg.margin_frac:g} × 배수 ÷ 가격. 손절이 멀어도 줄이지 않음(손실 비율 상한 안 씀), 거래소 최소 "
+                   "주문보다 작으면 건너뜀. qty_scale은 쓰지 않음")
     if cfg.stop_from == "roe" and isinstance(cfg.stop_roe, (int, float)) and 0 < cfg.stop_roe < 1:
         lev = cfg.risk.max_leverage or 35
         if cfg.stop_net is True and cfg.own_round_trip() is not None:

@@ -94,7 +94,11 @@ def plan_exec(current: str, exchange: str, balance: float, wallet: float) -> tup
         words.append(f"risk.max_loss_frac: {risk.get('max_loss_frac')} → {MAX_LOSS}")
     risk["max_loss_frac"] = MAX_LOSS
     d["risk"] = risk
-    words.append(f"(실거래 크기 = 페이퍼 수량 × {scale}: 페이퍼 지갑 ${wallet:,.2f}, 실거래 잔고 ${balance:,.2f})")
+    if d.get("size_from") == "equity":                  # owners 10-25 night: the size from its own balance
+        words.append(f"(크기는 진입할 때마다 실거래 잔고의 {float(d.get('margin_frac') or 0):.0%}를 증거금으로 - qty_scale {scale}은 "
+                     f"기록용: 페이퍼 지갑 ${wallet:,.2f}, 실거래 잔고 ${balance:,.2f})")
+    else:
+        words.append(f"(실거래 크기 = 페이퍼 수량 × {scale}: 페이퍼 지갑 ${wallet:,.2f}, 실거래 잔고 ${balance:,.2f})")
     return json.dumps(d, indent=2, ensure_ascii=False) + "\n", words
 
 

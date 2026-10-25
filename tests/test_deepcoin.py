@@ -1376,6 +1376,9 @@ def test_the_live_config_the_wrapper_and_the_env_example():
     base = json.loads((ROOT / "deploy" / "executor.live-flipster.json").read_text(encoding="utf-8"))
     mine = json.loads((ROOT / "deploy" / "executor.live-deepcoin.json").read_text(encoding="utf-8"))
     assert mine["net_costs"].pop("deepcoin") == {"taker_fee": 0.0005, "slippage": 0.0002}
+    # owners 10-25 night: its size from its own balance, 40 % margin at every entry (deploy/size_switch.py)
+    assert (mine.pop("size_from"), mine.pop("margin_frac")) == ("equity", 0.4)
+    assert (cfg.size_from, cfg.margin_frac) == ("equity", 0.4)
     assert {k: v for k, v in mine.items() if k not in ("exchange", "db")} == \
         {k: v for k, v in base.items() if k not in ("exchange", "db")}
     sh = (ROOT / "deploy" / "paperbot-exec.sh").read_text(encoding="utf-8")

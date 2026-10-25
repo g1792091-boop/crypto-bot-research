@@ -6,6 +6,8 @@
   "db": "/var/lib/paperbot/exec/executor-deepcoin-live.db",
   "budget_usd": 100,
   "qty_scale": 0.1,
+  "size_from": "equity",
+  "margin_frac": 0.4,
   "entry_source": "paper",
   "stop_from": "ratio",
   "signal_light_n": 20,
