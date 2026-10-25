@@ -123,7 +123,7 @@ CASES = [("1시간만 (지금 계획)", ("1h",), None), ("1시간 + 30분", ("1h
          ("1시간만 + 갈아타기 (잠금 +13% 이상이면)", ("1h",), 0.13), ("1시간만 + 갈아타기 (잠금 +17% 이상이면)", ("1h",), 0.17),
          ("1시간 + 30분 + 갈아타기 (+13%)", ("1h", "30m"), 0.13)]
 res = []
-for label, tfs, rot in CASES:
+for label, tfs, rot in (CASES if __name__ == "__main__" else ()):
     sg = signals(tfs)
     out, ent = account(sg, rot)
     out = {"case": label, "signals": len(sg), **out}
@@ -131,4 +131,5 @@ for label, tfs, rot in CASES:
     ent.drop(columns=[c for c in ent.columns if c in ("status",)]).to_csv(
         os.path.join(OUT, f"more_entries_{len(res)}.csv"), index=False)
     print(json.dumps(out, ensure_ascii=False))
-pd.DataFrame(res).to_csv(os.path.join(OUT, "more_entries.csv"), index=False)
+if __name__ == "__main__":
+    pd.DataFrame(res).to_csv(os.path.join(OUT, "more_entries.csv"), index=False)

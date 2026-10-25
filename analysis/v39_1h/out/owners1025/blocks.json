@@ -1,0 +1,140 @@
+{
+ "signals": 61,
+ "macro_events_in_window": [
+  {
+   "ts_utc": "2026-10-14T12:30:00Z",
+   "kind": "CPI"
+  }
+ ],
+ "nasdaq_signals": [
+  {
+   "kst": "10-06 22:00",
+   "symbol": "ETH",
+   "side": "숏",
+   "nasdaq": true,
+   "macro": false,
+   "beyond_liq": false,
+   "reason": "LOCK",
+   "ret_pct": 5.56,
+   "lock_roe_pct": 13.0
+  },
+  {
+   "kst": "10-15 22:00",
+   "symbol": "DOGE",
+   "side": "숏",
+   "nasdaq": true,
+   "macro": false,
+   "beyond_liq": true,
+   "reason": "LOCK",
+   "ret_pct": 4.33,
+   "lock_roe_pct": 13.0
+  },
+  {
+   "kst": "10-15 22:00",
+   "symbol": "LTC",
+   "side": "숏",
+   "nasdaq": true,
+   "macro": false,
+   "beyond_liq": true,
+   "reason": "SL",
+   "ret_pct": -36.72,
+   "lock_roe_pct": -100.0
+  },
+  {
+   "kst": "10-20 22:00",
+   "symbol": "LTC",
+   "side": "롱",
+   "nasdaq": true,
+   "macro": false,
+   "beyond_liq": false,
+   "reason": "LOCK",
+   "ret_pct": 15.14,
+   "lock_roe_pct": 37.0
+  }
+ ],
+ "macro_signals": [
+  {
+   "kst": "10-14 21:00",
+   "symbol": "BTC",
+   "side": "롱",
+   "nasdaq": false,
+   "macro": true,
+   "beyond_liq": false,
+   "reason": "SL",
+   "ret_pct": -20.53,
+   "lock_roe_pct": -100.0
+  }
+ ],
+ "막기 없음 (지금 계획)": {
+  "trades": 23,
+  "per_day": 1.16,
+  "wins": 22,
+  "losses": 1,
+  "stops": 0,
+  "liq": 0,
+  "rotated": 0,
+  "open": 1,
+  "guard_skips": 3,
+  "by_tf": {
+   "1h": "23번 22승"
+  },
+  "final": 213.77,
+  "ret_pct": 327.5,
+  "dd_pct": 0.9,
+  "worst_pct": -0.9
+ },
+ "나스닥 개장 앞뒤 30분 막기": {
+  "trades": 23,
+  "per_day": 1.16,
+  "wins": 22,
+  "losses": 1,
+  "stops": 0,
+  "liq": 0,
+  "rotated": 0,
+  "open": 1,
+  "guard_skips": 1,
+  "by_tf": {
+   "1h": "23번 22승"
+  },
+  "final": 213.77,
+  "ret_pct": 327.5,
+  "dd_pct": 0.9,
+  "worst_pct": -0.9
+ },
+ "경제 발표 앞뒤 30분 막기": {
+  "trades": 23,
+  "per_day": 1.16,
+  "wins": 22,
+  "losses": 1,
+  "stops": 0,
+  "liq": 0,
+  "rotated": 0,
+  "open": 1,
+  "guard_skips": 3,
+  "by_tf": {
+   "1h": "23번 22승"
+  },
+  "final": 213.77,
+  "ret_pct": 327.5,
+  "dd_pct": 0.9,
+  "worst_pct": -0.9
+ },
+ "둘 다 막기": {
+  "trades": 23,
+  "per_day": 1.16,
+  "wins": 22,
+  "losses": 1,
+  "stops": 0,
+  "liq": 0,
+  "rotated": 0,
+  "open": 1,
+  "guard_skips": 1,
+  "by_tf": {
+   "1h": "23번 22승"
+  },
+  "final": 213.77,
+  "ret_pct": 327.5,
+  "dd_pct": 0.9,
+  "worst_pct": -0.9
+ }
+}
