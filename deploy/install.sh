@@ -170,6 +170,8 @@ echo "== code"
 UNITS="paperbot-live3 paperbot-dash paperbot-livedash paperbot-liq paperbot-ghcoin paperbot-tgtrades paperbot-agents.timer paperbot-combo paperbot-combo2 paperbot-combo-mexc paperbot-combo-vwap"
 # the '친구 매매법' paper bot (owners 10-24): a running one is stopped and started again the same way
 UNITS="$UNITS paperbot-combo-friend"
+# the '숏5 하락장' paper bot (owners 10-25): a running one is stopped and started again the same way
+UNITS="$UNITS paperbot-combo-short5"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -296,6 +298,10 @@ install -m 644 "$APP/deploy/paperbot-combo-vwap.service" /etc/systemd/system/pap
 # WOO X Pro executor follows it, docs/friend-bot-ko.md): installed only, started by a person. A running one is
 # stopped for the code swap and started again like paperbot-combo (UNITS above).
 install -m 644 "$APP/deploy/paperbot-combo-friend.service" /etc/systemd/system/paperbot-combo-friend.service
+# the '숏5 하락장' paper bot (owners 10-25, its own config combo-short5.json and database short5.db; ONE live executor
+# follows it once its config names short5.db, docs/short5-bot-ko.md): installed only, started by a person. A running one
+# is stopped for the code swap and started again like paperbot-combo (UNITS above).
+install -m 644 "$APP/deploy/paperbot-combo-short5.service" /etc/systemd/system/paperbot-combo-short5.service
 # the shadow paper bots (그림자 페이퍼 봇, docs/live1019-start-ko.md): one template, one instance per
 # deploy/combo.shadow-<name>.json; paper only, no Telegram, below the live paper bot. Installed only: never enabled,
 # started or stopped here (not among the units stopped for the code swap). A running shadow keeps the previous code
@@ -437,6 +443,11 @@ fi
 # /etc/paperbot/combo-friend.json.
 if ! systemctl is-enabled --quiet paperbot-combo-friend 2>/dev/null; then
   echo "친구 매매법 페이퍼 봇(paperbot-combo-friend) 설치만 했습니다. 켜는 순서: docs/friend-bot-ko.md"
+fi
+# The '숏5 하락장' paper bot is installed only (docs/short5-bot-ko.md): started by a person after writing
+# /etc/paperbot/combo-short5.json.
+if ! systemctl is-enabled --quiet paperbot-combo-short5 2>/dev/null; then
+  echo "숏5 하락장 페이퍼 봇(paperbot-combo-short5) 설치만 했습니다. 켜는 순서: docs/short5-bot-ko.md"
 fi
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then

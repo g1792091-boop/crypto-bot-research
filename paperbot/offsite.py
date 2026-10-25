@@ -75,6 +75,7 @@ DB_NAMES = ("agents3", "inbox", "liq", "checkpoint", "exec/executor", "exec/exec
             "combo/live-ac",
             "combo/live15-mexc", "combo/vwap", "livecheck", "liveimprove",
             "combo/friend",                  # the '친구 매매법' paper bot (owners 10-24)
+            "combo/short5",                  # the '숏5 하락장' paper bot (owners 10-25)
             "shadow200/shadow200",
             "debate/debate", "daily3", "paper3")
 TELEGRAM_UPLOAD_LIMIT = 50_000_000      # Bot API: documents up to 50 MB (read as decimal MB, the stricter)

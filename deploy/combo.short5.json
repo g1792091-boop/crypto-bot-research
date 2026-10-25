@@ -1,0 +1,36 @@
+{
+  "name": "숏5 하락장",
+  "paper_db": "/var/lib/paperbot/paper3.db",
+  "db": "/var/lib/paperbot/combo/short5.db",
+  "leverage": {
+    "BTCUSDT": 40,
+    "default": 30
+  },
+  "margin": 0.4,
+  "initial_equity": 1000,
+  "max_loss_frac": 0.35,
+  "loss_cap": "shrink",
+  "stop": {
+    "mode": "atr_fit",
+    "atr": 2.0,
+    "min_atr": 1.0
+  },
+  "ladder": {
+    "first_lock": 0.1,
+    "step": 0.05,
+    "trigger_gap": 0.02
+  },
+  "rank": [
+    "timeframe",
+    "order"
+  ],
+  "flip_twin": true,
+  "telegram": true,
+  "members": [
+    {"strategy": "V39_ALL", "tf": "15m", "numbers": {}, "stop": ["pct", 2.38], "entry": "now", "filter": [["side", -1]], "off": [["reg", 0], ["reg", 2]]},
+    {"strategy": "S6_EMA_DMI_ADX", "tf": "15m", "numbers": {}, "stop": ["pct", 1.55], "entry": "now", "filter": [["side", -1]], "off": [["reg", 0], ["reg", 2]]},
+    {"strategy": "F12_MSS", "tf": "1h", "numbers": {}, "stop": ["pct", 2.38], "entry": "now", "filter": [["side", -1]], "off": [["reg", 0], ["reg", 2]]},
+    {"strategy": "N12_ICHI_AO", "tf": "30m", "numbers": {}, "stop": ["pct", 2.38], "entry": "now", "off": [["reg", 0], ["reg", 2]]},
+    {"strategy": "F16_FIB382", "tf": "4h", "numbers": {}, "stop": ["atr", 1.0], "entry": "now", "off": [["reg", 0], ["reg", 2]]}
+  ]
+}
