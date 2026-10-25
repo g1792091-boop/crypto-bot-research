@@ -1225,6 +1225,7 @@ def main(argv: Optional[list] = None) -> int:
         p.add_argument("--paper-db", default=None, help="the paper bot's database (default: combo.json's db)")
         p.add_argument("--rule-db", default=None, help="paper3.db, the rule bot's 1m bars (default: combo.json's paper_db)")
         p.add_argument("--combo-config", default=COMBO_CONFIG)
+        p.add_argument("--now", type=int, default=None, help=argparse.SUPPRESS)   # tests: a fixed clock (ms)
     s = sub.add_parser("show", help="the summary per group (실제로 탄 거래 next to each) and the newest rows")
     common(s)
     s.add_argument("--days", type=int, default=WINDOW_DAYS, help="KST days (0: everything recorded)")
@@ -1234,7 +1235,7 @@ def main(argv: Optional[list] = None) -> int:
     r = sub.add_parser("run", help="one pass now (the 1-minute watcher does it every minute)")
     common(r)
     a = ap.parse_args(argv)
-    now = int(time.time() * 1000)
+    now = int(time.time() * 1000) if a.now is None else int(a.now)
     src = _sources(a)
     if a.cmd == "show":
         if getattr(a, "vwap", False):

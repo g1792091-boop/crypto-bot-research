@@ -396,7 +396,7 @@ def card_lines(c: dict) -> list:
         src = "" if c.get("exit_src") == "log" else " (잔고 변화로 거꾸로 계산: 수수료 추정·펀딩이 섞여 조금 다를 수 있어요)"
         g = c.get("exit_gap")
         ls.append(f"손절 {px(c['stop'])} · 청산 {'추정 ' if c.get('exit_src') != 'log' else ''}{px(c['exit'])}"
-                  + ("" if g is None else f" (손절가와 거의 같음)" if abs(g) < 5e-5 else f" (손절가보다 {pct(abs(g))} {'밀림' if g > 0 else '유리'})") + src)
+                  + ("" if g is None else " (손절가와 거의 같음)" if abs(g) < 5e-5 else f" (손절가보다 {pct(abs(g))} {'밀림' if g > 0 else '유리'})") + src)
     if c.get("twin"):
         ls.append(c["twin"]["ko"])
     if c.get("streak", 0) >= 2:

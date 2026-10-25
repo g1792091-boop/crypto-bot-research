@@ -311,7 +311,7 @@
    cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.mixcheck pass --dry-run
    cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.mixcheck band
    ```
-   - 다른 날: `morning --day 2026-10-26 --dry-run` (한국 날짜)
+   - 다른 날: `morning --day 2026-10-27 --dry-run` (한국 날짜)
    - 지난 아침 점검 전체 글: `python -m paperbot.mixcheck show`
 4. **끄기:** `sudo systemctl disable --now paperbot-mixcheck.timer paperbot-mixcheck-pass.timer`
 5. **실패하면:** 하루 한 번 텔레그램 경고가 옵니다(`paperbot-failed@`). 이유: `sudo journalctl -u paperbot-mixcheck -n 50`

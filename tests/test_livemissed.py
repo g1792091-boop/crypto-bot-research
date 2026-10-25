@@ -287,7 +287,8 @@ def test_cli_run_and_show(world, tmp_path, capsys):
     db = str(tmp_path / "livecheck.db")
     code, text = LM.show_text(db, world.paper_db, NOW)
     assert code == 1 and "1분 감시가 아직 기록 전" in text
-    args = ["--db", db, "--paper-db", world.paper_db, "--rule-db", world.rule_db, "--combo-config", "/nonexistent/combo.json"]
+    args = ["--db", db, "--paper-db", world.paper_db, "--rule-db", world.rule_db, "--combo-config", "/nonexistent/combo.json",
+            "--now", str(NOW)]                       # the world's clock (the real one moves past the world's window)
     assert LM.main(["run"] + args) == 0
     out = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert out["new"] == 3 and out["errors"] == 0
