@@ -726,11 +726,25 @@ def own_exit(ex: "ExecInfo", et: dict) -> bool:
         return False
     r = str(et.get("exit_reason") or "")
     stayed = ((d.get("paper_exit") or {}).get("action") == "stay")
-    return stayed or "발동" in r or "이미 지나" in r
+    # 고정 익절 (owners 10-25 night, take_profit_roe): its own +15 % closed at market, apart from the paper by design
+    tp = d.get("exit_code") == "TP" or r.startswith("고정 익절")
+    return stayed or tp or "발동" in r or "이미 지나" in r
 
 
 OWN_BUSY = "own_busy"    # executor.py _own_skip: a paper entry left out while its own position stayed open (not an alarm)
 OWN_BUSY_KO = "자기 포지션(거래소 기준)을 들고 있어 따라가지 않음"
+
+
+# entries an executor leaves out on purpose by its own config (owners 10-25 night, the Toobit executor): a missed signal,
+# never an alarm. executor.py _liq_guard_ok (liq_guard: its stop would sit beyond the liquidation) and _macro_ok
+# (macro_block_min: a US release within that many minutes)
+PLANNED_SKIPS = {"liq_skip": "손절이 강제청산 가격보다 멀어 진입 안 함", "macro_skip": "미국 경제 발표 앞뒤라 진입 안 함"}
+
+
+def planned_skip(told: list) -> Optional[str]:
+    """The words of a planned skip of this paper entry (PLANNED_SKIPS), None when there was none. ``told``: _key_events
+    rows (ts, kind, text)."""
+    return next((PLANNED_SKIPS[k] for _ts, k, _t in told or [] if k in PLANNED_SKIPS), None)
 
 
 def own_busy(told: list) -> bool:
@@ -2322,6 +2336,8 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                     told = _key_events(c, key)
                     if own_busy(told):
                         continue                   # "own": left out while its own position stayed (a missed signal)
+                    if planned_skip(told):
+                        continue                   # liq_guard / macro_block_min: left out by its config (a missed signal)
                     said = " / ".join(str(x[2])[:90] for x in told) if told else "이 진입에 대한 기록 없음"
                     strat = strategy_ko(e["strategy"]) if gated(ps.cfg(own_path)) else e["strategy"]
                     conds.append(Cond(
@@ -2744,7 +2760,8 @@ def exec_outcome(ex: ExecInfo, conn, key: str, pt: dict) -> dict:
         return {"name": ex.name, "label": ex.label, "status": "blocked"}
     return {"name": ex.name, "label": ex.label, "status": "not_followed",
             "why": " / ".join(str(x[2])[:80] for x in told) if told else "",
-            **({"busy": True} if own_busy(told) else {})}
+            **({"busy": True} if own_busy(told) else {}),
+            **({"skip_ko": planned_skip(told)} if planned_skip(told) else {})}
 
 
 def worse_entry(o: dict) -> bool:
@@ -2907,6 +2924,8 @@ def card_text(c: dict, exp: Optional[dict] = None, infos: Optional[list] = None)
                          + (f" · {own_words(o)}" if o.get("own_exit") else ""))
         elif o["status"] == "not_followed" and o.get("busy"):
             lines.append(f"{pad}{OWN_BUSY_KO}")
+        elif o["status"] == "not_followed" and o.get("skip_ko"):
+            lines.append(f"{pad}⏸ {o['skip_ko']}")
         elif o["status"] == "open" and o.get("staying"):
             lines.append(f"{pad}{OPEN_OWN_KO}" + (f" (자기 잠금 {o['own_lock']:+.0%})" if o.get("own_lock") is not None
                                                   else ""))
@@ -3529,6 +3548,8 @@ def entry_state(ex: ExecInfo, c, key: str, paper: list, entry_time: int, run: bo
         return {"state": "blocked", "light": light_state(paper, ex.light_n, ex.light_min, at=entry_time + MIN)}
     if own_busy(told):
         return {"state": "busy"}
+    if planned_skip(told):
+        return {"state": "skipped", "why_ko": planned_skip(told)}
     if told:
         return {"state": "refused", "why": str(told[0][2])[:70]}
     if ((bot or {}).get("risk") or {}).get("halted"):
@@ -3552,6 +3573,8 @@ def entry_exec_line(ex: ExecInfo, st: dict, symbol: str) -> str:
         return f"{_pad(ex)}⏸ 멈춤 중이라 따라가지 않음"
     if s == "busy":
         return f"{_pad(ex)}⏸ {OWN_BUSY_KO}"
+    if s == "skipped":
+        return f"{_pad(ex)}⏸ {st['why_ko']}"
     if s == "off":
         return f"{_pad(ex)}⏹ 꺼져 있음"
     if s == "none":
@@ -3660,7 +3683,11 @@ def own_exit_text(ex: ExecInfo, et: dict, pt: Optional[dict], paper_ko: Optional
     roe = float(pnl) / margin if (pnl is not None and margin) else None
     lock = own_lock_of(et)
     r = str(et.get("exit_reason") or "")
-    if "이미 지나" in r:
+    if r.startswith("고정 익절"):
+        how = r                                        # "고정 익절 +15% 도달 → 시장가로 닫음" (the executor's own words)
+    elif _data(et).get("exit_code") == "TP":
+        how = "고정 익절 도달 → 시장가로 닫음"
+    elif "이미 지나" in r:
         how = "잠금 자리가 이미 지나 시장가로 닫음"
     elif lock is not None:
         how = f"자기 잠금 {lock:+.0%} 손절 발동"

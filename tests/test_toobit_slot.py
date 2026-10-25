@@ -1,5 +1,5 @@
-"""The fifth live executor, 투비트 (owners 10-25, docs/toobit-ko.md: a $50 executor on Toobit; the paper account it
-follows is decided later, most likely the rule bot's V3.9 1-hour account ``V39_ALL@1h`` in paper3.db) as an optional
+"""The fifth live executor, 투비트 (owners 10-25, docs/toobit-ko.md: a $50 executor on Toobit following the rule bot's
+V3.9 1-hour account ``V39_ALL@1h`` in paper3.db, chosen 10-25 night) as an optional
 slot of the live checks, the Telegram messages and the live site, the way WOO X Pro 2 was added
 (tests/test_wooxpro2_slot.py).
 
@@ -44,7 +44,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "deploy" / "executor.live-toobit.json"
 NOW, MIN, H, DAY = V.NOW, V.MIN, V.H, V.DAY
 SCREENS, BAD = FW.SCREENS, FW.BAD
-TB_ACC = "V39_ALL@1h"                       # the rule bot's V3.9 1-hour paper account (the likely choice, docs/toobit-ko.md)
+TB_ACC = "V39_ALL@1h"                       # the rule bot's V3.9 1-hour paper account (the template's, docs/toobit-ko.md)
 TB_TAKER = 0.0006                           # Toobit's base taker fee a side
 # (coin, side, entry ms, hours held, reason, raw entry, raw exit): R1 a win, R2 a stop, both followed by 투비트
 RULE = (("BTCUSDT", 1, V.K(5, 9), 3, "LOCK", 61000.0, 61500.0),
@@ -231,7 +231,7 @@ def test_its_name_is_its_exchanges():
     assert [ko for _x, ko, _d, _c in got] == ["바이비트", "WOO X Pro", "딥코인", "WOO X Pro 2", "투비트"]
     assert L.slots({"toobit": {"state": "missing"}})[-1][:2] == ("toobit", "투비트")        # unread: the slot's own name
     assert L.EX_NAME["toobit"] == LC.EX_KO["toobit"] == LPOS.EX_KO["toobit"] == "투비트"
-    c = L.read_config(str(TEMPLATE))                                     # the owners' template, its TODO places as they are
+    c = L.read_config(str(TEMPLATE))                                     # the owners' template as it is
     assert c["state"] == "ok" and c["exchange"] == "toobit" and "label" not in c
     assert LT.SHORT["toobit"] == "T" and len(set(LT.SHORT.values())) == len(LT.SHORT)
 
@@ -374,7 +374,7 @@ def test_livecheck_reads_it_only_once_installed(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "OPTIONAL_EXECUTORS", spec)
     assert LC.installed_specs(base, spec) == base                          # neither file: the executors as before
     assert [e.name for e in LC.load_executors(LC.installed_specs(base, spec))] == ["bybit", "mexc"]
-    raw = json.loads(TEMPLATE.read_text(encoding="utf-8"))                 # the owners' template as it is (TODO places)
+    raw = json.loads(TEMPLATE.read_text(encoding="utf-8"))                 # the owners' template as it is
     raw.update(db=str(db))
     cfg.write_text(json.dumps(raw), encoding="utf-8")
     infos = LC.load_executors(LC.installed_specs(base, spec))

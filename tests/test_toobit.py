@@ -1427,21 +1427,28 @@ def test_agents_never_import_the_module():
         assert "toobit" not in p.read_text(encoding="utf-8"), p
 
 
-def test_the_live_config_template_with_its_placeholders():
-    """deploy/executor.live-toobit.json: the exchange, mainnet, $50, its own key file and database, 40 % of the balance
-    as margin, the executor's default exits (following the paper's own stop and lock steps: the strategy's exits are
-    decided elsewhere) and placeholders for the paper account and database that refuse every start until filled in."""
+def test_the_live_config_template_is_the_owners_plan():
+    """deploy/executor.live-toobit.json (owners 10-25 night: "증거금 40% BTC 40배 나머지 30배", then "손절 2.5 ATR로 가고
+    15%되면 13%에 익절 20%되면 17%익절 25%되면 22%"): the exchange, mainnet, $50, its own key file and database, the rule
+    bot's V3.9 1-hour paper account, 40 % of the balance as margin at BTC 40x / the others 30x, the paper's stop distance
+    x 1.25 (2.5 ATR) from its own fill, no entry whose stop sits beyond the liquidation, its own ladder 15 -> 13, 20 -> 17,
+    25 -> 22 ... on net ROE, no fixed take-profit. A valid config as it is."""
     raw = json.loads((ROOT / "deploy" / "executor.live-toobit.json").read_text(encoding="utf-8"))
     cfg = ExecConfig.from_dict(raw)
     assert (cfg.exchange, cfg.mode, cfg.db, cfg.budget_usd, cfg.size_from, cfg.margin_frac, cfg.own_keys) == (
         "toobit", "mainnet", "/var/lib/paperbot/exec/executor-toobit-live.db", 50, "equity", 0.4, True)
-    assert cfg.account.startswith("TODO") and cfg.paper_db.startswith("TODO")
-    probs = cfg.problems()
-    assert len(probs) == 1 and "따라 할 paper 계좌" in probs[0]   # only the placeholder: the rest is a valid config
-    filled = ExecConfig.from_dict({**raw, "account": "V39_ALL@1h", "paper_db": "/var/lib/paperbot/paper3.db"})
-    assert filled.problems() == []
-    assert (cfg.stop_from, cfg.ladder_from, cfg.entry_source, cfg.signal_light_n) == ("ratio", "paper", "paper", 0)
-    assert "ladder" not in raw and "stop_roe" not in raw         # no exits invented here
+    assert (cfg.account, cfg.paper_db) == ("V39_ALL@1h", "/var/lib/paperbot/paper3.db")
+    assert cfg.problems() == []
+    assert (cfg.stop_from, cfg.ladder_from, cfg.entry_source, cfg.signal_light_n) == ("ratio", "own", "paper", 0)
+    assert cfg.leverage_by_symbol == {"BTCUSDT": 40, "*": 30} and cfg.risk.max_leverage == 40
+    assert [cfg.entry_leverage(s, 20) for s in cfg.risk.allowed_symbols] == [40, 30, 30, 30, 30, 30]
+    assert (cfg.stop_scale, cfg.liq_guard, cfg.liq_guard_mmr) == (1.25, True, 0.005)
+    assert cfg.ladder == {"first_lock": 0.13, "trigger_gap": 0.02, "step": 0.05, "next_trigger": 0.20, "next_gap": 0.03}
+    spec = cfg.ladder_spec()
+    locks = [spec.lock_for(r) for r in (0.149, 0.15, 0.20, 0.25, 0.30)]
+    assert locks[0] is None and locks[1:] == pytest.approx([0.13, 0.17, 0.22, 0.27])
+    assert cfg.ladder_basis == "net" and cfg.take_profit_roe is None and "take_profit_roe" not in raw
+    assert "stop_roe" not in raw
     assert cfg.net_cost() == {"taker_fee": 0.0006, "slippage": 0.0002}
     assert tuple(cfg.risk.allowed_symbols) == ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT")
 
@@ -2160,7 +2167,8 @@ def test_executor_preflight_lines(tmp_path):
 
 
 def test_dataclass_fields_unchanged_for_other_exchanges():
-    """The executor's config keeps its fields: Toobit adds none (the template uses existing ones only)."""
+    """The executor's config keeps its fields; the template uses known ones only (its opt-in ones of 10-25 night,
+    leverage_by_symbol, stop_scale, liq_guard, liq_guard_mmr, are ExecConfig fields too)."""
     names = {f.name for f in dataclasses.fields(ExecConfig)}
     raw = json.loads((ROOT / "deploy" / "executor.live-toobit.json").read_text(encoding="utf-8"))
     assert set(raw) <= names

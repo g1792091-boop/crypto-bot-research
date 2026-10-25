@@ -159,6 +159,10 @@ EXEC_TRADE_COLS = ("key", "symbol", "side", "qty", "leverage", "entry_ts", "entr
 WHY = (("light_red", "신호등 빨강이라 따라가지 않았어요"),
        # "own" (owners 10-20): its own position (거래소 기준) was still open; a missed signal, not an alarm
        ("own_busy", "실거래가 아직 자기 포지션(거래소 기준)을 들고 있어 따라가지 않았어요"),
+       # liq_guard (owners 10-25 night): the stop would sit beyond the liquidation at its leverage; a missed signal
+       ("liq_skip", "손절이 강제청산 가격보다 멀어 들어가지 않았어요"),
+       # macro_block_min (owners 10-25 night): a US release (CPI, FOMC, NFP, PCE) within that many minutes
+       ("macro_skip", "미국 경제 발표 앞뒤라 들어가지 않았어요"),
        ("late", "페이퍼 진입을 늦게 봐서 건너뛰었어요"),
        ("entry_check", "진입 검사에서 막혔어요"),
        ("entry_skip", "가격이 이미 손절선을 지나 들어가지 않았어요"),
@@ -187,6 +191,9 @@ KIND_KO = {
     "oversize_retry": "크기 줄이기 다시", "cap_unchecked": "한도 확인 못 함", "recover": "복구", "direct_confirmed": "빠른 진입 확인",
     "own_prices": "거래소 1분봉 못 읽음", "own_lock": "거래소 기준 잠금", "own_stay": "거래소 기준으로 계속",
     "own_busy": "자기 포지션 중이라 안 따라감",
+    # owners 10-25 night (투비트): 고정 익절 and the liquidation guard
+    "own_tp": "고정 익절", "own_tp_price": "고정 익절 가격 못 읽음", "liq_skip": "손절이 청산가보다 멀어 안 들어감",
+    "macro_skip": "경제 발표 앞뒤라 안 들어감",
     "paper_exit_unknown": "페이퍼 청산 이유 모름", "paper_exit_unread": "페이퍼 청산 기록 못 읽음",
     # 잔고 바닥 / 원금 회수 안내 / the key file (owners 10-24, docs/friend-bot-ko.md)
     "floor_hit": "잔고 바닥 멈춤", "floor_skip": "바닥 멈춤이라 안 따라감", "floor_start": "시작 금액 기록",
@@ -508,6 +515,41 @@ def read_config(path: str) -> dict:
     if isinstance(raw.get("label"), str) and raw["label"].strip():     # its own name (owners 10-24); else nothing new
         out["label"] = raw["label"].strip()
     out["size_ko"] = size_ko(out)
+    out["limits"] += fixed_rules(raw)          # owners 10-25 night: only a config that has them; else nothing new
+    return out
+
+
+def fixed_rules(raw: dict) -> list:
+    """An executor config's fixed leverage (``leverage_by_symbol``: {"BTCUSDT": 40, "*": 30}), fixed take-profit
+    (``take_profit_roe``: 0.15, with ``ladder_from`` "own"), stop scale (``stop_scale``: 1.25), liquidation guard
+    (``liq_guard``) and US-release block (``macro_block_min``) (owners 10-25 night, the Toobit executor) as more entries
+    of its limits, in the owners' words; [] for a config without them (every other executor: as before)."""
+    out = []
+    m = raw.get("leverage_by_symbol")
+    if isinstance(m, dict) and m:
+        named = [f"{str(k).upper().replace('USDT', '')} {_i(v)}배" for k, v in m.items() if k != "*" and _i(v)]
+        rest = _i(m.get("*"))
+        words = " · ".join(named + ([f"{'나머지' if named else '모든 코인'} {rest}배"] if rest else []))
+        if words:
+            out.append({"key": "leverage_by_symbol", "value": dict(m), "ko": f"배수 고정: {words} (페이퍼 배수 대신)",
+                        "what_ko": "고정 배수"})
+    tp = _f(raw.get("take_profit_roe"))
+    if tp and raw.get("ladder_from") == "own":
+        roe = "화면 ROE" if raw.get("ladder_basis") == "gross" else "순ROE"
+        tail = "계단 없음" if raw.get("ladder") is None else "계단도 함께"
+        out.append({"key": "take_profit_roe", "value": tp, "ko": f"익절: {roe} +{tp * 100:g}%에서 시장가로 전부 닫음 ({tail})",
+                    "what_ko": "고정 익절"})
+    s = _f(raw.get("stop_scale"))              # owners 10-25 night, later: "손절 2.5 ATR로"
+    if s and raw.get("stop_from", "ratio") == "ratio":
+        out.append({"key": "stop_scale", "value": s, "ko": f"손절: 페이퍼 손절 거리 × {s:g} (2 ATR → {2 * s:g} ATR), 자기 체결가 기준",
+                    "what_ko": "손절 거리"})
+    if raw.get("liq_guard") is True:
+        out.append({"key": "liq_guard", "value": True, "ko": "손절이 강제청산 가격보다 멀면 그 진입은 안 함 (놓친 신호, 알람 아님)",
+                    "what_ko": "청산가 확인"})
+    mb = _i(raw.get("macro_block_min"))
+    if mb:
+        out.append({"key": "macro_block_min", "value": mb, "ko": f"미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 {mb}분 새 진입 안 함",
+                    "what_ko": "경제 발표"})
     return out
 
 
@@ -708,6 +750,8 @@ def live_exit(reason: Any, data: dict, side: int, entry: Optional[float]) -> str
     r = str(reason or "")
     stop = _f(data.get("stop"))
     locked = bool(stop and entry and side and (stop - entry) * side > 0)
+    if data.get("exit_code") == "TP" or r.startswith("고정 익절"):
+        return "TP"                    # 고정 익절 (owners 10-25 night, take_profit_roe): closed at market at its +15 %
     if "발동" in r or "이미 지나" in r:
         return "LOCK" if locked else "SL"
     if "paper 청산" in r:
