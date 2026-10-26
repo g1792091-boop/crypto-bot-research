@@ -410,3 +410,45 @@ def test_deploy_config_and_wrong_ones(tmp_path):
     for name, (over, words) in bad.items():
         probs = rcfg(tmp_path, **over).problems()
         assert any(words in p for p in probs), (name, probs)
+
+
+# ---------------------------------------------------------------- the live watcher's ⏳ (paperbot/livecheck.py)
+def test_the_watcher_reads_the_range_wait_and_its_result(tmp_path):
+    import sqlite3
+    from paperbot import livecheck as LC
+    w = World(tmp_path)
+    _start(w)
+    level = w.px["BTCUSDT"] - 0.2 * ATR
+    w.step(H)
+    w.step(H + MIN)
+    pc, rc = sqlite3.connect(w.cfg.db), sqlite3.connect(str(tmp_path / "paper3.db"))
+    (x,) = LC.pending_entries(pc, rc, H + 2 * MIN)
+    assert x["kind"] == "pullback" and x["level"] == pytest.approx(level) and x["touched"] is False
+    assert x["until"] == H + 59 * MIN and x["to_go"] is not None and x["to_go"] > 0
+    # the signal's own minute counts for the range bot: a dip there is a touch
+    rc.execute("UPDATE live_bars SET low = ? WHERE symbol = 'BTCUSDT' AND ts = ?", (level - 1, H))
+    rc.commit()
+    (x,) = LC.pending_entries(pc, rc, H + 2 * MIN)
+    assert x["touched"] is True
+
+
+def test_the_result_line_of_a_touch_in_the_last_five_minutes(tmp_path):
+    import sqlite3
+    from paperbot import livecheck as LC
+    w = World(tmp_path)
+    _start(w)
+    w.custom.plan[H + HOUR] = [("BTCUSDT", -1, ATR)]          # the same coin's next signal at the entry minute
+    w.to(H, H + 59 * MIN)
+    w.step(H + 59 * MIN, low={"BTCUSDT": w.px["BTCUSDT"] - ATR})
+    w.step(H + HOUR)
+    assert w.engine().position.entry_time == H + HOUR
+    pc = sqlite3.connect(w.cfg.db)
+    assert LC.wait_result(pc, f"{MEMBER}|BTCUSDT|{H}") == f"→ ✅ 되돌림! {LC.kst(H + HOUR)}에 진입했어요 (🟢 진입 알림 참고)"
+    # an earlier touch: the entry minute inside the hour, as before
+    w2 = World(tmp_path / "b")
+    _start(w2)
+    w2.step(H)
+    w2.step(H + MIN, low={"BTCUSDT": w2.px["BTCUSDT"] - ATR})
+    w2.to(H + 2 * MIN, H + 6 * MIN)
+    pc2 = sqlite3.connect(w2.cfg.db)
+    assert LC.wait_result(pc2, f"{MEMBER}|BTCUSDT|{H}") == f"→ ✅ 되돌림! {LC.kst(H + 5 * MIN)}에 진입했어요 (🟢 진입 알림 참고)"

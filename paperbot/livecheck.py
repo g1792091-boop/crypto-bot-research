@@ -3870,7 +3870,9 @@ def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
     break: the deadline is t0 + one bar, the level the signal bar's 1m high (long) / low (short) in the rule bot's bars
     as the paper bot takes it (None before that bar is in the file), reached by trading beyond it.
     pullback (the trend bot): the deadline is the entry bar's last minute it still looks at (t0 + one bar - 1 minute),
-    the level the bot's own (its WAITING row's data), reached by trading back to it (long: down to it)."""
+    the level the bot's own (its WAITING row's data), reached by trading back to it (long: down to it). The 레인지 봇's
+    waits (paperbot/rangebot.py, owners 10-26) are pullbacks too: its level under ``range`` in the row's data, its first
+    looked-at minute the signal's own (the trend bot's: the minute after)."""
     try:
         rows = paper_conn.execute("SELECT bar_close, timeframe, strategy, symbol, side, data FROM signal_log WHERE status = 'WAITING' "
                                   "AND bar_close >= ? ORDER BY bar_close, id", (int(now_ms) - 4 * H1,)).fetchall()
@@ -3895,9 +3897,10 @@ def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
             if until <= now_ms:
                 continue
         level = last = last_ts = moved = None
+        ranged = isinstance(d.get("range"), dict)        # the 레인지 봇's wait (rangebot.py: data "range")
         if pull:
             try:
-                level = float(((d.get("trend") or {}).get("level")))
+                level = float(((d.get("trend") or d.get("range") or {}).get("level")))
             except (TypeError, ValueError):
                 level = None
         if rule_conn is not None:
@@ -3909,9 +3912,10 @@ def pending_entries(paper_conn, rule_conn, now_ms: int) -> list:
                 r = rule_conn.execute("SELECT ts, close FROM live_bars WHERE symbol = ? ORDER BY ts DESC LIMIT 1", (sym,)).fetchone()
                 if r:
                     last_ts, last = int(r[0]), float(r[1])
-                # a pullback is looked for from the minute after the signal's (trendbot.py _pullbacks)
+                # a pullback is looked for from the minute after the signal's (trendbot.py _pullbacks); the 레인지 봇
+                # from the signal's own minute (rangebot.py _watch)
                 hi2, lo2 = rule_conn.execute("SELECT MAX(high), MIN(low) FROM live_bars WHERE symbol = ? AND ts >= ?",
-                                             (sym, t0 + MIN if pull else t0)).fetchone()
+                                             (sym, t0 + MIN if pull and not ranged else t0)).fetchone()
                 moved = (lo2 if side > 0 else hi2) if pull else (hi2 if side > 0 else lo2)
             except sqlite3.Error:
                 pass
@@ -4090,17 +4094,26 @@ def wait_result(pc, key: str) -> Optional[str]:
 
 def _pull_result(pc, t0: int, tf: str, member: str, sym: str) -> Optional[str]:
     """The result of a pullback that was touched: its entry is the one signal_log row of the same setting and coin
-    inside the entry bar (bar_close strictly between t0 and t0 + one bar: the pulled entry's minute, never a bar close),
-    then the engine's outcome of it."""
+    inside the entry bar (bar_close strictly between t0 and t0 + one bar: the pulled entry's minute), or at t0 + one bar
+    when that row is a pulled entry's (data ``pulled``: the 레인지 봇 enters at the next 5-minute open, the hour itself
+    after a touch in the wait's last 5 minutes; at that minute an ordinary row is the next signal's), then the engine's
+    outcome of it."""
     tf_ms = WAIT_TF_MS.get(tf)
     if tf_ms is None:
         return None
     try:
-        sub = pc.execute("SELECT bar_close, status, data FROM signal_log WHERE strategy = ? AND symbol = ? AND timeframe = ? "
-                         "AND bar_close > ? AND bar_close < ? ORDER BY bar_close, id LIMIT 1",
-                         (member, sym, tf, int(t0), int(t0) + tf_ms)).fetchone()
+        rows = pc.execute("SELECT bar_close, status, data FROM signal_log WHERE strategy = ? AND symbol = ? AND timeframe = ? "
+                          "AND bar_close > ? AND bar_close <= ? ORDER BY bar_close, id",
+                          (member, sym, tf, int(t0), int(t0) + tf_ms)).fetchall()
     except sqlite3.Error:
         return None
+
+    def pulled(data) -> bool:
+        try:
+            return bool(json.loads(data or "{}").get("pulled"))
+        except (TypeError, ValueError):
+            return False
+    sub = next((r for r in rows if int(r[0]) < int(t0) + tf_ms or pulled(r[2])), None)
     if sub is None:
         return None
     entry_t, st, data = int(sub[0]), sub[1], sub[2]
