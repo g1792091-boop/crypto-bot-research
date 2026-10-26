@@ -54,7 +54,7 @@ def lad_lock(best: float, lad: tuple) -> float | None:
 
 def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind: str, stop_dist: float = 0.0,
                  sup_at: int | None = None, tp_roe: float = 0.10, lad: tuple | None = None,
-                 stop_roe: float | None = None) -> dict:
+                 stop_roe: float | None = None, time_bars: int | None = None) -> dict:
     """One position. ``m``: the coin's 5m arrays (ts o h l c fund). ``i0``: the 5m bar whose open is the fill.
     ``sup_at``: the first 5m bar index at whose open a JUDGE / REV exit would close (trend exit, before the first lock).
     Returns {exit_i, reason, roe, mfe (best net ROE seen), fill, exit_px}."""
@@ -87,6 +87,9 @@ def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind:
             f_paid += side * fund[i] * o[i] / fill
             if exit_kind == "trend" and lock is None:      # roe_price with the funding paid (the engine's stop moves)
                 stop = fill * (1 + side * (-0.50 / lev + RT + f_paid))
+        if time_bars is not None and i >= i0 + time_bars:      # owners 10/26: a time exit at the 5-minute open, market
+            r, xp = roe_at(o[i], TAKER, True)
+            return {"exit_i": i, "reason": "TIME", "roe": r, "mfe": best, "fill": fill, "exit_px": xp}
         if exit_kind == "trend" and sup_at is not None and i >= sup_at and lock is None and i > i0:
             r, xp = roe_at(o[i], TAKER, True)
             return {"exit_i": i, "reason": "SUP", "roe": r, "mfe": best, "fill": fill, "exit_px": xp}

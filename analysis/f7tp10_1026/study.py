@@ -199,7 +199,8 @@ def run_arm(W: World, cand: pd.DataFrame, arm: dict, a: int, b: int, flip_rng=No
                 if dist + r.atr > (1.0 / lev - 0.005) * fill:
                     continue
             res = S.run_position(W.m5[r.coin], int(r.e5), side, lev, float(r.ref), arm["exit"], stop_dist, sup,
-                                 tp_roe=arm.get("tp_roe", 0.10), lad=arm.get("lad"), stop_roe=arm.get("stop_roe"))
+                                 tp_roe=arm.get("tp_roe", 0.10), lad=arm.get("lad"), stop_roe=arm.get("stop_roe"),
+                                 time_bars=arm.get("time_bars"))
             took = (r, side, lev, res)
             break
         if took is None:
