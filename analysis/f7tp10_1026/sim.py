@@ -44,7 +44,9 @@ def check_ladder() -> None:
 def lad_lock(best: float, lad: tuple) -> float | None:
     """A stepped lock (owners 10/26 "12%도달하면 10% 계단식"): ``lad`` = (first trigger, first lock, step, gap): the first lock
     once the best net ROE reaches the first trigger, then every ``step`` more a lock ``gap`` under the reached trigger
-    ((0.12, 0.10, 0.05, 0.02): 12 -> 10, 17 -> 15, 22 -> 20 ...)."""
+    ((0.12, 0.10, 0.05, 0.02): 12 -> 10, 17 -> 15, 22 -> 20 ...). A function of the best net ROE may stand for the tuple."""
+    if callable(lad):
+        return lad(best)
     ft, fl, step, gap = lad
     if best < ft - 1e-12:
         return None
