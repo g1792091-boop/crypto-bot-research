@@ -62,6 +62,24 @@ class World:
         b = np.load(os.path.join(work, "hunt", "blocks.npz"))
         self.grid = b["grid"]
         self.blk = {k: b[k] for k in ("us_open", "macro", "weekend")}
+        self.cache = {}
+
+    def rsi5(self, coin: str) -> np.ndarray:
+        """Wilder RSI(14) of the 5-minute closes (known at each bar's close)."""
+        key = ("rsi5", coin)
+        if key not in self.cache:
+            c = pd.Series(self.m5[coin]["c"])
+            d = c.diff()
+            up = d.clip(lower=0).ewm(alpha=1 / 14, adjust=False).mean()
+            dn = (-d.clip(upper=0)).ewm(alpha=1 / 14, adjust=False).mean()
+            self.cache[key] = (100 - 100 / (1 + up / dn.replace(0, np.nan))).fillna(50).to_numpy()
+        return self.cache[key]
+
+    def ema5(self, coin: str, n: int) -> np.ndarray:
+        key = ("ema5", coin, n)
+        if key not in self.cache:
+            self.cache[key] = pd.Series(self.m5[coin]["c"]).ewm(span=n, adjust=False).mean().to_numpy()
+        return self.cache[key]
 
     def blocked(self, t: int, weekend_off: bool) -> bool:
         k = int((t - self.grid[0]) // FIVE)
@@ -85,6 +103,52 @@ class World:
         h = self.h[coin]
         i = int(np.searchsorted(h["1h_ts"] + HOUR, t, side="right")) - 1
         return float(h["1h_atr"][i])
+
+
+def touched(W: World, cfg: dict, p: dict, c: str, side: int, i0: int, i1: int) -> np.ndarray:
+    """Which 5-minute bars of [i0, i1) give the entry (at the next open), by the config's entry style:
+      fixed   the low (short: high) reaches the set-up's level: ref - k x ATR (the default)
+      trail   the pullback is measured from the best price since the set-up armed (the higher of ref and every high before
+              the bar; short: the lower of ref and the lows): the low reaches it - k x ATR
+      rsi5    the 5-minute RSI(14) closes at or under x (short: at or over 100 - x)
+      ema5    the low reaches the 5-minute EMA(n) of the bar before (short: the high)
+      fixed+rsi5 / trail+rsi5  both: the level was reached at or before the bar and the RSI condition holds on it"""
+    m = W.m5[c]
+    style = cfg.get("entry", "fixed")
+    if style == "fixed":
+        return (m["l"][i0:i1] <= p["level"]) if side > 0 else (m["h"][i0:i1] >= p["level"])
+    out = None
+    if style.startswith("trail") or style.startswith("fixed"):
+        if style.startswith("trail"):
+            ia = int(np.searchsorted(m["ts"], p["armed"]))
+            ia = min(ia, i0)
+            if side > 0:
+                best = np.maximum.accumulate(np.r_[p["ref"], m["h"][ia:i1 - 1]])
+                hit = m["l"][ia:i1] <= best - cfg["k"] * p["atr"]
+            else:
+                best = np.minimum.accumulate(np.r_[p["ref"], m["l"][ia:i1 - 1]])
+                hit = m["h"][ia:i1] >= best + cfg["k"] * p["atr"]
+            out = hit[i0 - ia:]
+        else:
+            out = (m["l"][i0:i1] <= p["level"]) if side > 0 else (m["h"][i0:i1] >= p["level"])
+        if "+rsi5" in style:                                     # the level reached at or before, the RSI on this bar
+            out = np.maximum.accumulate(out) & rsi_ok(W, cfg, c, side, i0, i1)
+        return out
+    if style == "rsi5":
+        return rsi_ok(W, cfg, c, side, i0, i1)
+    if style == "ema5":
+        e = W.ema5(c, cfg["ema_n"])
+        prev = e[max(i0 - 1, 0):i1 - 1]
+        if i0 == 0:
+            prev = np.r_[e[0], prev]
+        return (m["l"][i0:i1] <= prev) if side > 0 else (m["h"][i0:i1] >= prev)
+    raise ValueError(style)
+
+
+def rsi_ok(W: World, cfg: dict, c: str, side: int, i0: int, i1: int) -> np.ndarray:
+    r = W.rsi5(c)[i0:i1]
+    x = cfg["rsi_x"]
+    return (r <= x) if side > 0 else (r >= 100 - x)
 
 
 def arming_events(W: World, cfg: dict, a: int, b: int) -> list:
@@ -156,7 +220,7 @@ def run(W: World, cfg: dict, a: int, b: int) -> tuple:
             if cfg.get("commit"):                                # timing.run: blocks at the signal, one signal at a time
                 if pending or W.blocked(t, weekend_off) or (t, c, side) in failed:
                     continue
-            pending[(c, side)] = dict(level=ref - side * k * atr, until=t + wait, armed=t, sig_t=sig_t, src=src, kind=kind,
+            pending[(c, side)] = dict(level=ref - side * k * atr, ref=ref, atr=atr, until=t + wait, armed=t, sig_t=sig_t, src=src, kind=kind,
                                       re_n=0, ci=ci)
         pending = {key: p for key, p in pending.items() if p["until"] > now}
         nxt = ev[e][0] if e < len(ev) else None
@@ -176,7 +240,7 @@ def run(W: World, cfg: dict, a: int, b: int) -> tuple:
             i1 = int(np.searchsorted(ts_m[c], min(horizon, p["until"])))
             if i1 <= i0:
                 continue
-            seg = (m["l"][i0:i1] <= p["level"]) if side > 0 else (m["h"][i0:i1] >= p["level"])
+            seg = touched(W, cfg, p, c, side, i0, i1)
             hit = np.flatnonzero(seg)
             for jj in hit:
                 j = i0 + int(jj) + 1
@@ -225,7 +289,7 @@ def run(W: World, cfg: dict, a: int, b: int) -> tuple:
         now = exit_t + FIVE
         if re_max and res["reason"] == "TP" and p["re_n"] < re_max and now < b:
             if W.state_at(c, p["src"], now) == side and checks_ok(W, cfg, c, side, now):
-                pending[key] = dict(level=res["exit_px"] - side * re_k * atr1, until=now + re_wait, armed=now,
+                pending[key] = dict(level=res["exit_px"] - side * re_k * atr1, ref=res["exit_px"], atr=atr1, until=now + re_wait, armed=now,
                                     sig_t=p["sig_t"], src=p["src"], kind="re", re_n=p["re_n"] + 1, ci=p["ci"])
         # set-ups armed while the position was open are not taken (the bot ignores signals while it holds one)
         while e < len(ev) and ev[e][0] < now:
@@ -336,6 +400,19 @@ def stages() -> dict:
                 for wk in (True, False):
                     st["F"].append((f"1시간 · BTC · 익절 {tp:.2f} · 되돌림 {k} · {w}시간 · 주말 {'쉼' if wk else '포함'}",
                                     dict(BASE, commit=True, btc=True, tp=tp, k=k, wait_h=w, weekend_off=wk)))
+    F1 = dict(BASE, commit=True, btc=True, k=0.20, wait_h=1)  # G: entry styles on the 21절 recommendation
+    st["G"] = [("추천(F1): 신호 종가에서 0.2 ATR · 1시간", F1)]
+    for w in (1, 2):
+        for k in (0.15, 0.2, 0.25, 0.3, 0.4, 0.5):
+            st["G"].append((f"신호 뒤 최고가(숏은 최저가)에서 {k} ATR 되돌림 · {w}시간", dict(F1, entry="trail", k=k, wait_h=w)))
+        for x in (20, 25, 30, 35, 40):
+            st["G"].append((f"5분 RSI {x} 이하(숏 {100 - x} 이상) · {w}시간", dict(F1, entry="rsi5", rsi_x=x, wait_h=w)))
+        for n in (9, 20, 50):
+            st["G"].append((f"5분 EMA{n} 닿음 · {w}시간", dict(F1, entry="ema5", ema_n=n, wait_h=w)))
+        for x in (30, 40):
+            st["G"].append((f"0.2 ATR 되돌림 + 5분 RSI {x} 이하 · {w}시간", dict(F1, entry="fixed+rsi5", rsi_x=x, wait_h=w)))
+            st["G"].append((f"최고가에서 0.2 ATR + 5분 RSI {x} 이하 · {w}시간",
+                            dict(F1, entry="trail+rsi5", rsi_x=x, k=0.2, wait_h=w)))
     return st
 
 
