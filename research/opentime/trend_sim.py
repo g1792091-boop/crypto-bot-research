@@ -383,6 +383,8 @@ def arm_hook(ts):
             why = "OPENCUT"
         elif ARM_KIND in ("open_be", "open_mix") and nr > 0:
             be = True
+        elif ARM_KIND == "open_deep" and side * (px - p["entry"]) / abs(p["entry"] - p["stop0"]) <= OT.DEEP_R:   # A7
+            why = "OPENCUT"
     if ARM_KIND == "time" and int(ts) + MIN == five_close_after(p["entry_time"], ARM_HOURS):
         why = "TIME"
     if why is not None:

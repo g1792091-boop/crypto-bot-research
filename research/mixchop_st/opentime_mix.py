@@ -2,7 +2,10 @@
 seven) on the friend bot's chosen live setup (both rules, 3 ATR stop, ladder 12/10/5), through the bot's own code
 (study.run_window, paper mode, 1m bars): ArmBot.paper_bars is mixchop.Bot.paper_bars with the arm checked after each 1m
 bar's own stop / ladder step.
-    python3 -I research/mixchop_st/opentime_mix.py [--jobs 2]  ->  research/mixchop_st/opentime_mix.json
+    python3 -I research/mixchop_st/opentime_mix.py [--jobs 2] [--arms A0,A7]  ->  research/mixchop_st/opentime_mix.json
+A7 (OPENTIME_PREREG.md addendum 3): at M, a position before its first lock with R = side x (close / entry - 1) /
+(initial stop_dist / entry) <= -0.5 is closed at that close. --arms runs only those arms and merges them into the
+existing opentime_mix.json (the other arms' entries are kept as they are).
 """
 from __future__ import annotations
 
@@ -26,7 +29,8 @@ from paperbot.sessions import NYSE_HOLIDAYS  # noqa: E402
 
 OUT = os.path.join(HERE, "opentime_mix.json")
 NY = ZoneInfo("America/New_York")
-ARMS = ("A0", "A1", "A2", "A3", "A4", "A5", "A6")
+ARMS = ("A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7")
+DEEP_R = -0.5                                   # A7: addendum 3
 HOURS = {"A3": 4, "A4": 8, "A5": 12}
 LADDER = (12, 10, 5)
 KST_MS = 9 * 3_600_000
@@ -78,6 +82,12 @@ class ArmBot(R.ReplayBot):
             return False
         if end_ms not in MARKS:
             return False
+        if self.arm == "A7":                    # addendum 3: deep in loss at the open -> close
+            r = p.side * (close / p.entry - 1.0) / (float(p.stop_dist) / p.entry)
+            if r <= DEEP_R:
+                self.finish(p, close, "open_close")
+                return True
+            return False
         fee = self.cfg.taker_fee
         net = p.side * (close / p.entry - 1.0) - 2 * fee
         if self.arm == "A1" or (self.arm == "A6" and net <= 0):
@@ -113,6 +123,7 @@ def stats(res: list) -> dict:
             "win": round(float(np.mean([t["ret"] > 0 for t in ts])), 3) if ts else None,
             "mean_ret_pct": round(float(np.mean([t["ret"] for t in ts]) * 100), 3) if ts else None,
             "closed_by_arm": touched, "be_stop_exits": sum(1 for t in ts if t["why"] == "be_stop"),
+            "worst_trade_pct": round(float(min(t["ret"] for t in ts)) * 100, 3) if ts else None,
             "exits": {k: sum(1 for t in ts if t["why"] == k) for k in sorted({t["why"] for t in ts})}}
 
 
@@ -120,7 +131,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--jobs", type=int, default=2)
     ap.add_argument("--months", type=int, default=0, help="smoke test: the first n months only")
+    ap.add_argument("--arms", default=",".join(ARMS), help="the arms to run (the others are kept from the json)")
     a = ap.parse_args(argv)
+    run_arms = [x for x in a.arms.split(",") if x]
+    assert all(x in ARMS for x in run_arms), run_arms
     t0 = time.time()
     cfg = M.load_config(R.CONFIG)
     coins = list(cfg.coins)
@@ -131,26 +145,31 @@ def main(argv=None) -> int:
     friend, _ = S.friend_decisions(coins, a30, a1h, os.path.join(R.DATA, "npy", "friend_decisions_v2.pkl"))
     lo, hi = R.T0 - 2 * 86_400_000, R.T1 + 30 * 86_400_000
     new = {c.symbol: S.new_signals(c, a30[c.symbol], a1h[c.symbol], S.MAIN, lo, hi) for c in coins}
-    specs = [(arm, "both", 3.0, 3.0, LADDER, None) for arm in ARMS]
+    specs = [(arm, "both", 3.0, 3.0, LADDER, None) for arm in run_arms]
     S.G.update(coins=coins, bars30=a30, m1=m1, bot_cls=ArmBot, arm_of={arm: arm for arm in ARMS})
     Gd.plan(coins, new, friend, specs)
     data_from = int(min(m[0, 0] for m in m1.values()))
     windows = month_bounds_kst(CHOOSE[0], CHECK[1], data_from)
     if a.months:
         windows = windows[:a.months]
-    res = Gd.run_names(list(ARMS), windows, a.jobs)
+    res = Gd.run_names(list(run_arms), windows, a.jobs)
     print(f"runs {time.time() - t0:.0f}s", flush=True)
     kst_month = lambda r: time.strftime("%Y-%m", time.gmtime((r["t0"] + KST_MS) / 1000))  # noqa: E731
     out = {"prereg": "research/mixchop_st/OPENTIME_PREREG.md", "setup": "both rules, stop ATR x3, ladder 12/10/5",
            "arms": {}}
-    for arm in ARMS:
+    if set(run_arms) != set(ARMS) and os.path.exists(OUT):
+        old = json.load(open(OUT, encoding="utf-8"))
+        out["arms"] = {k: v for k, v in old["arms"].items() if k not in run_arms}
+        if "A0" in run_arms and "A0" in old["arms"]:
+            out["A0_before_rerun"] = {p_: old["arms"]["A0"][p_] for p_ in ("choose", "check")}
+    for arm in run_arms:
         rs = sorted(res[arm], key=lambda r: r["t0"])
         ch = [r for r in rs if CHOOSE[0] <= kst_month(r) <= CHOOSE[1]]
         ck = [r for r in rs if CHECK[0] <= kst_month(r) <= CHECK[1]]
         out["arms"][arm] = {"choose": stats(ch) if ch else None, "check": stats(ck) if ck else None,
                             "by_month": [[kst_month(r), round(r["end_eq"] / 50.0, 3), len(r["trades"])] for r in rs]}
     base = out["arms"]["A0"]
-    for arm in ARMS:
+    for arm in run_arms:
         x = out["arms"][arm]
         if arm == "A0" or not (x["choose"] and x["check"]):
             continue
@@ -162,9 +181,10 @@ def main(argv=None) -> int:
             else:
                 beats.append(mine["log_growth"] > ref["log_growth"])
         x["helps"] = all(beats)
+    out["arms"] = {k: out["arms"][k] for k in ARMS if k in out["arms"]}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
-    for arm in ARMS:
+    for arm in run_arms:
         x = out["arms"][arm]
         c, k = x["choose"], x["check"]
         if not (c and k):

@@ -235,6 +235,15 @@ def outcomes_arms(coin: str, R: pd.DataFrame, k: int) -> dict:
                                                                                        > level[rows, np.minimum(th2, Wt - 1)],
                                                                                        "BE", "SL")), "CAP"), why)
                 tch |= hasb
+            if kind == "open_deep":                                              # A7 (addendum 3)
+                cond = ny & ~lockedby & (CL / (2.0 * af) <= CM.DEEP_R) & (col < tn[:, None])
+                cd, hasd = _first(cond)
+                cd = np.minimum(cd, Wt - 1)
+                cl = hasd & (th0 > cd)
+                r = np.where(cl, CL[rows, cd] - V2.COST_RT - FC[rows, cd], r)
+                x = np.where(cl, cd, x)
+                why = np.where(cl, "OPENCUT", why)
+                tch |= cl
             if kind == "time":
                 c_ = 60 * hours - 1
                 cl = (c_ < tn) & (th0 > c_) & ~lockedby[:, min(c_, Wt - 1)]

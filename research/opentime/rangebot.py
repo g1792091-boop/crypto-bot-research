@@ -134,6 +134,8 @@ def run_position_arm(m: dict, i0: int, side: int, lev: float, ref: float, exit_k
                     close_why = "OPENCUT"
                 elif kind in ("open_be", "open_mix") and nr > 0:
                     be = True
+                elif kind == "open_deep" and side * (c[i] - fill) / abs(fill - stop0) <= CM.DEEP_R:   # A7
+                    close_why = "OPENCUT"
             if kind == "time" and i == i0 + tbars - 1:
                 close_why = "TIME"
             if close_why is not None:

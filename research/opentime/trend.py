@@ -29,8 +29,8 @@ MODES = {"now": ["--entry", "now"], "pullback": []}
 MONTHS = {"check_part (2026-07..09)": ["2026-07", "2026-08", "2026-09"], "recent (2026-10, 1-20)": ["2026-10"]}
 
 
-def runs(root: str) -> None:
-    jobs = [(m, a) for m in MODES for a in CM.ARMS]
+def runs(root: str, arms=None) -> None:
+    jobs = [(m, a) for m in MODES for a in (arms or CM.ARMS)]
     procs = []
     for mode, arm in jobs:
         while len([p for p in procs if p.poll() is None]) >= 2:
@@ -64,10 +64,11 @@ def main(argv=None) -> int:
     ap.add_argument("root")
     ap.add_argument("out")
     ap.add_argument("--skip-runs", action="store_true")
+    ap.add_argument("--arms", default=None, help="replay only these arms (comma list); the others are read from ROOT")
     a = ap.parse_args(argv)
     os.makedirs(a.out, exist_ok=True)
     if not a.skip_runs:
-        runs(a.root)
+        runs(a.root, a.arms.split(",") if a.arms else None)
     out = {"bot": "추세판단 봇 -> Bybit (7/1-10/20 replay, 10/21 members, exits as live)", "modes": {}}
     for mode in MODES:
         res = {}

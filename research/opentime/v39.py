@@ -56,7 +56,7 @@ def trade_arm(S, br, o, h, l, c, mo, mh, ml, fund, ny, win, e, end, raw, side, s
               force_lev, force_frac, first_lock, step, gap, next_trigger, next_gap, from_fill, arm, tbars):
     """sim.trade (forced sizing, ladder form 2, no take-profit, no trail) + the arm hooks. arm: 0 none, 1 A1 (close at
     an M if unlocked), 2 A2 (break-even stop at an M if net ROE > 0), 3 time (close at the end of bar e + tbars - 1 if
-    unlocked), 6 A6 (A2 if net ROE > 0 else A1). Returns sim.trade's tuple head (pnl, exit bar, reason, lev, margin, qty,
+    unlocked), 6 A6 (A2 if net ROE > 0 else A1), 7 A7 (close at an M if unlocked and R <= -0.5). Returns sim.trade's tuple head (pnl, exit bar, reason, lev, margin, qty,
     fill, liq, stop0, best, worst, exit price, lock, at_open) + (touched, first M bar unlocked, net ROE there, open &
     unlocked at 4 h / 8 h / 12 h, bars held inside 09:30-11:00 NY, bars held)."""
     taker, slip, rt = S[0], S[1], S[5]
@@ -179,6 +179,8 @@ def trade_arm(S, br, o, h, l, c, mo, mh, ml, fund, ny, win, e, end, raw, side, s
                             act_be = True
                         else:
                             act_close = True
+                    elif arm == 7 and side * (c[j] - fill) / abs(fill - stop0) <= -0.5:   # A7 (addendum 3)
+                        act_close = True
                 if arm == 3 and j == e + tbars - 1:
                     act_close = True
                     reason = R_TIME

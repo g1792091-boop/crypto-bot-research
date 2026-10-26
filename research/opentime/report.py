@@ -16,7 +16,7 @@ sys.path.insert(0, HERE)
 import otcommon as CM  # noqa: E402
 
 ARM_SHORT = {"A0": "A0 지금", "A1": "A1 개장 전 정리", "A2": "A2 개장 전 본전", "A3": "A3 4시간 정리", "A4": "A4 8시간 정리",
-             "A5": "A5 12시간 정리", "A6": "A6 본전+정리"}
+             "A5": "A5 12시간 정리", "A6": "A6 본전+정리", "A7": "A7 깊은 손실 정리"}
 
 
 def load(out: str, name: str):

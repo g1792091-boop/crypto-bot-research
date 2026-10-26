@@ -28,11 +28,13 @@ KST = 9 * HOUR
 
 # arm name -> (kind, hours): kind "none" | "open_close" (A1) | "open_be" (A2) | "time" (A3-5) | "open_mix" (A6)
 ARMS = {"A0": ("none", 0), "A1": ("open_close", 0), "A2": ("open_be", 0), "A3": ("time", 4), "A4": ("time", 8),
-        "A5": ("time", 12), "A6": ("open_mix", 0)}
+        "A5": ("time", 12), "A6": ("open_mix", 0), "A7": ("open_deep", 0)}      # A7: PREREG addendum 3
 ARM_KO = {"A0": "지금 그대로", "A1": "개장 전 정리 (잠금 전이면 09:25봉 종가에 닫기)",
           "A2": "개장 전 본전 (이익이면 손절을 본전으로)", "A3": "시간 정리 4시간", "A4": "시간 정리 8시간",
-          "A5": "시간 정리 12시간", "A6": "개장 전: 이익이면 본전, 손실이면 닫기"}
-ARM_CODE = {"none": 0, "open_close": 1, "open_be": 2, "time": 3, "open_mix": 6}
+          "A5": "시간 정리 12시간", "A6": "개장 전: 이익이면 본전, 손실이면 닫기",
+          "A7": "개장 전 깊은 손실 정리 (잠금 전이고 R <= -0.5면 닫기)"}
+ARM_CODE = {"none": 0, "open_close": 1, "open_be": 2, "time": 3, "open_mix": 6, "open_deep": 7}
+DEEP_R = -0.5                                   # A7: close at M when the progress R <= this (PREREG addendum 3)
 
 
 def kst_ms(s: str) -> int:
@@ -110,6 +112,7 @@ def month_metrics(T: pd.DataFrame, ms_: list) -> dict:
             "mean_ret_pct": 100 * float(r.mean()) if len(r) else float("nan"),
             "median_month": float(np.median(v)), "months_up": int((v > 1.0).sum()), "worst_month": float(v.min()),
             "best_month": float(v.max()), "log_growth": float(np.log1p(np.maximum(r, -1 + 1e-12)).sum()),
+            "worst_trade_pct": 100 * float(r.min()) if len(r) else float("nan"),         # addendum 3 (descriptive)
             "touched": int(P["touched"].sum()) if "touched" in P else 0,
             "by_month": {m: round(mult[m], 5) for m in ms_}}
 
