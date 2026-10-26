@@ -11,7 +11,6 @@
   {"strategy": "F3_BOS", "tf": "1h", "no_chase": true},
   {"strategy": "F15_ORB", "tf": "1h", "no_chase": true},
   {"strategy": "F15_ORB", "tf": "4h", "no_chase": true},
-  {"strategy": "F10_OTE", "tf": "4h", "no_chase": true},
   {"strategy": "F9_IFVG", "tf": "4h", "no_chase": true},
   {"strategy": "F9_OB", "tf": "4h", "no_chase": true},
   {"strategy": "F7_RF_TRIPLE", "tf": "4h", "no_chase": true}

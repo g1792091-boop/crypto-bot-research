@@ -256,7 +256,7 @@ def test_the_packet_describes_the_running_bot_trend(monkeypatch):
     assert T.is_trend(world) and world["ref_ko"] == L.TREND_NO_REF_KO and "trend" not in world
     pk = T.facts({"now": NOW, "bot": world}, "weekly", window=(NOW - 7 * DAY, NOW))
     rules, said = pk["fixed_rules"], TrendRules.from_dict(cfg["trend"]).describe()
-    assert rules[0] == ("진입 매매법 13개(30분 진입 3개는 끝난 1시간봉 추세, 1시간 진입 5개는 끝난 4시간봉 추세, 4시간 진입 5개는 "
+    assert rules[0] == ("진입 매매법 12개(30분 진입 3개는 끝난 1시간봉 추세, 1시간 진입 5개는 끝난 4시간봉 추세, 4시간 진입 4개는 "
                         "끝난 일봉 추세를 따름) · 판단만 하는 매매법 4개(V3.9 · EMA·DMI·ADX · OBV 추세형 · 일목·AO)는 진입 안 함")
     assert rules[1:6] == said and said[3] == "쉬기: 매매법 쉬기 없음 / 코인 쉬기 없음 / 하루 손실 한도 없음"
     assert said[4].endswith("시간 정리 없음") and "되돌림을 기다리지 않고" in said[2] and "보류여도 진입, 반대 방향만 막음" in said[0]
@@ -265,7 +265,7 @@ def test_the_packet_describes_the_running_bot_trend(monkeypatch):
               "진입: 검사를 통과한 신호의 그 분에 시장가(되돌림 안 기다림, 실행기도 그때 시장가로 따라감)",
               "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
               "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
-              "추격 진입 막기 13개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
+              "추격 진입 막기 12개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
               "한국 시간 주말 진입 없음", "미국 경제 발표 앞뒤 30분 진입 없음", "나스닥 개장 앞 30분·뒤 30분 진입 없음",
               "전환 전 포지션 정리: 새 봇 시작 전에 예전 규칙으로 열린 포지션은 첫 잠금 전이면 바로 닫음", "청산 뒤 반대로 갈아타지 않음") + EXEC_RULES:
         assert r in rules, r
@@ -275,10 +275,16 @@ def test_the_packet_describes_the_running_bot_trend(monkeypatch):
     # (summer time ends 11/1)
     d = pk["owners_decisions"]
     assert d[0].startswith("규칙 고정: 새 봇 시작부터 2주는 규칙을 바꾸지 않고")
-    assert d[1] == ("새 설계(2026-10-22): 진입 매매법 13개(30분 3개 · 1시간 5개 · 4시간 5개) · 성적과 2주 검토는 새 설계 시작부터 "
+    assert d[1] == ("새 설계(2026-10-22): 진입 매매법 12개(30분 3개 · 1시간 5개 · 4시간 4개) · 성적과 2주 검토는 새 설계 시작부터 "
                     "새로 셈")
-    # owners 10/26: the Fibonacci members out of the same design (its own line), then the 10/22 ones
-    assert d[2] == T.TREND_FIB_OUT_KO and "피보나치 매매법 5개 뺌" in d[2] and "성적은 이어서 셈" in d[2]
+    # owners 10/26: the Fibonacci members and OTE out of the same design (its own line, naming what is gone), then 10/22's
+    assert d[2] == ("10/26에 뺀 매매법('피보나치 매매법들 다 빼주라', 'OTE도 빼줘'): 피보나치 38.2% 30분 · 피보나치 38.2% 1시간 · "
+                    "피보나치 50% 1시간 · 피보나치 61.8% 4시간 · 피보나치 76.4% 4시간 · OTE 4시간 → 진입 매매법 12개 · 설계 이름 "
+                    "그대로라 성적은 이어서 셈")
+    # a config that still has OTE (the step before): only the Fibonacci ones, the owners' first words; one with them all: none
+    ms = [m for m in cfg["members"]] + [{"strategy": "F10_OTE", "tf": "4h"}]
+    assert T.trend_out_ko(ms).startswith("10/26에 뺀 매매법('피보나치 매매법들 다 빼주라'): 피보나치 38.2% 30분") and "OTE" not in T.trend_out_ko(ms)
+    assert T.trend_out_ko(ms + [{"strategy": s.split("@")[0], "tf": s.split("@")[1]} for s, _k in T.TREND_OUT_1026]) is None
     assert d[3:6] == [T.TREND_DAILY_KO, T.TREND_HOLD_KO, T.TREND_NOW_KO] and "그림자 trend-wait" in T.TREND_NOW_KO
     assert "시간 정리 청산 없음(10/21 밤 '시간청산 빼줘'): 첫 잠금 전에는 손절(순ROE -50%)·추세 뒤집힘 감독 청산·빠른 청산만" in d
     assert "쉬기 없음: 손실 뒤 매매법·코인 쉬기 없음, 하루 손실 한도 없음(10/21 '쉬기는 빼주고', '10번은 없애고')" in d
@@ -289,7 +295,7 @@ def test_the_packet_describes_the_running_bot_trend(monkeypatch):
     bot = pk["bot"]
     assert (bot["kind"], bot["name"], bot["reference"], bot["break_even"]) == ("trend", "추세판단 봇", L.TREND_NO_REF_KO, 0.833)
     assert bot["since_kst"] is None and "trend_since" in bot["since_note"] and "start_basis" not in bot
-    assert len(bot["entry_members"]) == 13 and {"F7_RF_TRIPLE@4h", "V39_ALL@1h", "N06_MACD_ORB@30m"} <= set(bot["entry_members"])
+    assert len(bot["entry_members"]) == 12 and {"F7_RF_TRIPLE@4h", "V39_ALL@1h", "N06_MACD_ORB@30m"} <= set(bot["entry_members"])
     assert not any("숏만" in m for m in bot["entry_members"])
     assert pk["checkpoint_rule"] == T.CHECK_RULE_TREND and pk["meeting"] == "주간 보고"
     assert "expect" not in pk and "strategies" not in pk and pk["tests_available"]["how"].startswith("그림자 봇")
@@ -328,8 +334,8 @@ def test_the_trend_packet_follows_the_entry_style():
     fixed = T.trend_decisions(None, NOW, None)
     assert fixed == list(T.TREND_DECISIONS_FIXED) and fixed[1:6] == [T.TREND_DESIGN_KO, T.TREND_FIB_OUT_KO, T.TREND_DAILY_KO, T.TREND_HOLD_KO, T.TREND_NOW_KO]
     fr = T.fixed_rules(None, None, trend_bot=True)
-    assert fr[:len(T.FIXED_TREND_PAPER)] == list(T.FIXED_TREND_PAPER) and fr[0].startswith("진입 매매법 13개(")
-    assert "4시간 진입 5개는 끝난 일봉 추세" in fr[0] and not any(r.startswith("매매법 15개") for r in fr)
+    assert fr[:len(T.FIXED_TREND_PAPER)] == list(T.FIXED_TREND_PAPER) and fr[0].startswith("진입 매매법 12개(")
+    assert "4시간 진입 4개는 끝난 일봉 추세" in fr[0] and not any(r.startswith("매매법 15개") for r in fr)
     assert T.fixed_rules(None, None) == list(T.FIXED)
     # the rules from each config: the entry line follows pullback_wait; 4h said only when the config has it
     r_new, r_wait = T.fixed_rules(new, None), T.fixed_rules(wait, None)

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Take entry members out of the running 추세판단 봇 (owners 10-26: "추세판단봇 … 피보나치 매매법들 다 빼주라 지금 포지션 진입
-끝나면 다시 수정해서 돌리게").
+끝나면 다시 수정해서 돌리게", then "OTE도 빼줘").
 
     sudo python3 deploy/trend_drop.py            shows what would change (nothing is written)
     sudo python3 deploy/trend_drop.py --write    changes it; the old copy stays as <file>.before-drop-<time>
 
-Only the members whose strategy starts with one of ``--drop`` (default F16_FIB: 피보나치 38.2 % 30분 · 38.2 % 1시간 ·
-50 % 1시간 · 61.8 % 4시간 · 76.4 % 4시간) leave /etc/paperbot/combo.json, the live paper bot's config that both
+Only the members whose strategy starts with one of ``--drop`` (default F16_FIB and F10_OTE: 피보나치 38.2 % 30분 ·
+38.2 % 1시간 · 50 % 1시간 · 61.8 % 4시간 · 76.4 % 4시간, and OTE 4시간, which trades the 62-79 % retracement) leave /etc/paperbot/combo.json, the live paper bot's config that both
 executors follow; every other value stays as the server has it, the design name (``trend.design``) too, so the bot's
 record goes on from its start (paperbot/trendbot.py: only a new design name restarts it). The file is edited line by
 line when each member sits on its own line (the repository's layout), so nothing else of it moves; otherwise it is
@@ -26,10 +26,10 @@ import sys
 import time
 
 COMBO = "/etc/paperbot/combo.json"
-DROP = ("F16_FIB",)
+DROP = ("F16_FIB", "F10_OTE")
 TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 NAME_KO = {"F16_FIB382": "피보나치 38.2%", "F16_FIB500": "피보나치 50%", "F16_FIB618": "피보나치 61.8%",
-           "F16_FIB764": "피보나치 76.4%"}
+           "F16_FIB764": "피보나치 76.4%", "F10_OTE": "OTE"}
 
 
 def member_ko(m: dict) -> str:
@@ -67,7 +67,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="추세판단 봇에서 매매법 빼기 (기본: 피보나치)")
     ap.add_argument("--write", action="store_true", help="실제로 바꾸기 (없으면 보여 주기만)")
     ap.add_argument("--combo", default=COMBO)
-    ap.add_argument("--drop", action="append", help="뺄 매매법 이름의 앞부분 (여러 번 가능; 기본 F16_FIB)")
+    ap.add_argument("--drop", action="append", help="뺄 매매법 이름의 앞부분 (여러 번 가능; 기본 F16_FIB와 F10_OTE)")
     a = ap.parse_args(argv)
     drop = tuple(a.drop) if a.drop else DROP
     try:

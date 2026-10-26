@@ -130,7 +130,7 @@ FIXED_EXEC = ("거래소에 거는 손절", "연패·낙폭으로 저절로 멈�
               "손절 한 번 최대 잔고의 35%", "신호등 없음(실거래는 페이퍼의 모든 진입을 따라감)")
 FIXED = FIXED_PAPER + FIXED_EXEC
 # ... and for the 추세판단 봇 (a trend config that cannot be read): the owners' 10-22 design (deploy/combo.trend.json)
-FIXED_TREND_PAPER = ("진입 매매법 13개(30분 진입 3개는 끝난 1시간봉 추세, 1시간 진입 5개는 끝난 4시간봉 추세, 4시간 진입 5개는 끝난 일봉 "
+FIXED_TREND_PAPER = ("진입 매매법 12개(30분 진입 3개는 끝난 1시간봉 추세, 1시간 진입 5개는 끝난 4시간봉 추세, 4시간 진입 4개는 끝난 일봉 "
                      "추세를 따름) · 판단만 하는 매매법 4개(V3.9 · EMA·DMI·ADX · OBV 추세형 · 일목·AO)는 진입 안 함",
                      "추세 판단: 판단 4개 중 3개 이상 같은 쪽 / ADX 20 이상, 40 넘고 꺾이면 끝물 / 보류여도 진입, 반대 방향만 막음",
                      "진입 전 검사: 상위 봉 EMA20에서 진입 방향 1.5 ATR 넘게 멀면 안 함 / 진입 봉 EMA20에서 1.5 ATR 안 / RSI 롱 70 미만·"
@@ -141,7 +141,7 @@ FIXED_TREND_PAPER = ("진입 매매법 13개(30분 진입 3개는 끝난 1시간
                      "손절 순ROE -50%(수수료·슬리피지 포함: 40배 가격 1.11%, 30배 가격 1.53%)",
                      "계단 익절(순ROE 11%에서 10% 잠금, 15%에서 12%, 20%에서 17%, 그 뒤 5%마다 (닿은 순ROE - 3%))",
                      "빠른 청산: 같은 매매법이 반대 신호를 내면 바로 청산(첫 잠금 전까지만)",
-                     "추격 진입 막기 13개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
+                     "추격 진입 막기 12개 매매법(롱은 7일 범위 위 20%·24시간 고점 쪽 10% 안이면, 숏은 아래쪽이면 진입 안 함)",
                      "코인 6개(BTC ETH SOL DOGE LTC BCH)", "한국 시간 주말 진입 없음", "미국 경제 발표 앞뒤 30분 진입 없음",
                      "나스닥 개장 앞 30분·뒤 30분 진입 없음", "청산 뒤 반대로 갈아타지 않음")
 # what the owners knew when they started a bot without a 5-year reference (keyed by its config name; its guide)
@@ -172,10 +172,25 @@ TREND_ABOUT_KO = "추세판단 봇의 기록(새 봇 시작 뒤 페이퍼·동�
 # what the owners decided for a trend config that cannot be read (docs/trend-bot-ko.md 2-3)
 TREND_DESIGN_KO = ("새 설계(10/22): 진입 매매법 18개(30분 4개 · 1시간 7개 · 4시간 7개, 모두 추격 막기, 규칙봇 기본값 신호) · 성적과 "
                    "2주 검토는 새 설계 시작부터 새로 셈")
-# owners 10/26 ("추세판단봇 … 피보나치 매매법들 다 빼주라"): the five F16_FIB members out of the 10/22 design, its name kept
-# (deploy/trend_drop.py): 13 entry members, the record goes on from the design's start
-TREND_FIB_OUT_KO = ("피보나치 매매법 5개 뺌(10/26 '피보나치 매매법들 다 빼주라'): 38.2% 30분·1시간, 50% 1시간, 61.8%·76.4% 4시간 → "
-                    "진입 매매법 13개(30분 3개 · 1시간 5개 · 4시간 5개) · 설계 이름 그대로라 성적은 이어서 셈")
+# owners 10/26 ("추세판단봇 … 피보나치 매매법들 다 빼주라", then "OTE도 빼줘"): the five F16_FIB members and F10_OTE@4h out
+# of the 10/22 design, its name kept (deploy/trend_drop.py): 12 entry members, the record goes on from the design's start
+TREND_OUT_1026 = (("F16_FIB382@30m", "피보나치 38.2% 30분"), ("F16_FIB382@1h", "피보나치 38.2% 1시간"),
+                  ("F16_FIB500@1h", "피보나치 50% 1시간"), ("F16_FIB618@4h", "피보나치 61.8% 4시간"),
+                  ("F16_FIB764@4h", "피보나치 76.4% 4시간"), ("F10_OTE@4h", "OTE 4시간"))
+TREND_FIB_OUT_KO = ("10/26에 뺀 매매법('피보나치 매매법들 다 빼주라', 'OTE도 빼줘'): 피보나치 38.2% 30분 · 피보나치 38.2% 1시간 · "
+                    "피보나치 50% 1시간 · 피보나치 61.8% 4시간 · 피보나치 76.4% 4시간 · OTE 4시간 → 진입 매매법 12개(30분 3개 · "
+                    "1시간 5개 · 4시간 4개) · 설계 이름 그대로라 성적은 이어서 셈")
+
+
+def trend_out_ko(members: list) -> Optional[str]:
+    """The 10/26 line for a 10/22-design config: the members of TREND_OUT_1026 it no longer has, in the owners' words; None
+    when it still has them all (nothing taken out yet)."""
+    have = {f"{m.get('strategy')}@{m.get('tf')}" for m in members if isinstance(m, dict)}
+    gone = [ko for label, ko in TREND_OUT_1026 if label not in have]
+    if not gone:
+        return None
+    asked = "'피보나치 매매법들 다 빼주라', 'OTE도 빼줘'" if any(ko.startswith("OTE") for ko in gone) else "'피보나치 매매법들 다 빼주라'"
+    return f"10/26에 뺀 매매법({asked}): {' · '.join(gone)} → 진입 매매법 {len(have)}개 · 설계 이름 그대로라 성적은 이어서 셈"
 TREND_DAILY_KO = "4시간 진입은 끝난 일봉 추세로 판단(10/22 '일봉 추세보고 4시간봉 진입'; 30분 진입은 끝난 1시간봉, 1시간 진입은 끝난 4시간봉)"
 TREND_HOLD_KO = "보류 허용(10/22): 상위 봉 판단이 보류여도 진입하고 반대 방향일 때만 막음(힘 약함·끝물·진입 전 검사는 그대로)"
 TREND_NOW_KO = ("바로 진입(10/22 '바로 진입으로 가자'): 검사를 통과한 신호는 그 분에 진입 · 되돌림 기다림은 그림자 trend-wait로 나란히 "
@@ -683,8 +698,9 @@ def trend_decisions(cfg: Optional[dict], now: int, since: Optional[int]) -> list
         n = {tf: sum(1 for m in members if m.get("tf") == tf) for tf in ("30m", "1h", "4h")}
         out.append(f"새 설계({r.design}): 진입 매매법 {len(members)}개(30분 {n['30m']}개 · 1시간 {n['1h']}개 · 4시간 {n['4h']}개) · "
                    "성적과 2주 검토는 새 설계 시작부터 새로 셈")
-        if r.design == "2026-10-22" and members and not any(str(m.get("strategy") or "").startswith("F16_FIB") for m in members):
-            out.append(TREND_FIB_OUT_KO)                 # owners 10/26: the Fibonacci members taken out of this design
+        gone = trend_out_ko(members) if r.design == "2026-10-22" and members else None
+        if gone:
+            out.append(gone)                             # owners 10/26: the Fibonacci members and OTE taken out of this design
     if any(m.get("tf") == "4h" for m in members):
         out.append(TREND_DAILY_KO)
     if r.hold_entry:
