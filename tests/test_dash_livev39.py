@@ -274,7 +274,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     """The strip and the head of a 봇별 screen (screens/livebots.js mount): 추세판단 봇 with 바이비트 · WOO X Pro only, V3.9
     투비트 with 투비트 only (꺼짐 while it is not on the summary), 친구 30분 봇 with none of the executors; the empty 목표 연구
-    foot with its bot, handed to window.LBGoalRes when that is there."""
+    foot with its bot, and in it the 목표 연구 section (screens/livebots-goalres.js) asking for that bot's own answer."""
     summary = {"execs": [{"id": "bybit", "bot": "paper", "name_ko": "바이비트"}, {"id": "mexc", "bot": "paper", "name_ko": "WOO X Pro"},
                          {"id": "deepcoin", "bot": "paper2", "name_ko": "딥코인"}, {"id": "toobit", "bot": None, "name_ko": "투비트"}],
                "accts": [{"id": "paper", "kind": "paper", "state": "ok", "balance": 1000.0},
@@ -291,17 +291,17 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
       const p = this.parentNode; if (!p) return; f(p, p.childNodes.indexOf(this), x); x.parentNode = p; }};
     const K = await import('file://{SCREENS}/livebots-kit.js');
     const LB = await import('file://{SCREENS}/livebots.js');
-    const mounted = [];
-    globalThis.LBGoalRes = {{mount: (el, bot) => mounted.push([el.getAttribute ? el.getAttribute('data-goalres-bot') : null, bot])}};
+    const asked = [];
     const mk = (tab, sum) => ({{params: {{arg: tab, query: {{}}}}, alive: () => true, track() {{}}, listen() {{}}, on() {{}}, watch() {{}}, timeout() {{}},
       href: (n) => '#/' + n, setTitle() {{}}, go() {{}}, every() {{}},
-      api: async (path) => {{ const a = {{'/api/v4/livebots': sum, '/api/v4/livebots/v39': D_v}}[path];
+      api: async (path) => {{ asked.push(path); const a = {{'/api/v4/livebots': sum, '/api/v4/livebots/v39': D_v}}[path];
         if (a === undefined) throw Object.assign(new Error('x'), {{status: 503}}); return JSON.parse(JSON.stringify(a)); }}}});
     const strip = async (tab, sum) => {{ const el = new Node('div'); await LB.mount(el, mk(tab, sum)); await tick(); await tick();
-      const w = D.walk(el); return {{text: w.text.replace(/\\s+/g, ' '), goal: w.classes.filter((c) => c.split(' ').includes('lb-goalres')).length}}; }};
+      const w = D.walk(el); return {{text: w.text.replace(/\\s+/g, ' '), goal: w.classes.filter((c) => c.split(' ').includes('lb-goalres')).length,
+        lgr: w.classes.filter((c) => c.split(' ').includes('lgr')).length}}; }};
     const r = {{trend: await strip('trendbot', D_s), vwap: await strip('vwapbot', D_s), mix: await strip('mixbot', D_s), v39: await strip('v39', D_s),
       v39off: await strip('v39', D_n), old: await strip('hq', D_s)}};
-    console.log(JSON.stringify({{r, mounted, fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'paper2'), K.followersOf(null, 'paper')],
+    console.log(JSON.stringify({{r, asked, fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'paper2'), K.followersOf(null, 'paper')],
       tabs: Object.fromEntries(Object.entries(LB.BOT_TAB).map(([k, v]) => [k, v.bot]))}}));""", s=summary, n=no_tb, v=v39)
     assert out["fol"] == [["bybit", "mexc"], ["deepcoin"], []]
     assert out["tabs"] == {"trendbot": "trend", "vwapbot": "vwap", "mixbot": "mix", "v39": "v39"}
@@ -316,7 +316,9 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     assert "투비트 실행기는 아직 꺼져 있어요" in r["v39off"]["text"]
     assert "바이비트 $101.50" in r["old"]["text"] and "딥코인 $77.70" in r["old"]["text"]          # the old screens as they were
     assert [r[k]["goal"] for k in ("trend", "vwap", "mix", "v39", "old")] == [1, 1, 1, 1, 0]
-    assert ["trend", "trend"] in out["mounted"] and ["v39", "v39"] in out["mounted"] and ["mix", "mix"] in out["mounted"]
+    assert [r[k]["lgr"] for k in ("trend", "vwap", "mix", "v39", "old")] == [1, 1, 1, 1, 0]
+    assert all(f"/api/v4/livebots/goalres?bot={b}" in out["asked"] for b in ("trend", "vwap", "mix", "v39"))
+    assert "목표 연구" in r["trend"]["text"] and "목표 연구" not in r["old"]["text"]
 
 
 def test_the_v39_view_in_node(w, tmp_path):

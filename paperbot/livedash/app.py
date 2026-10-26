@@ -70,6 +70,9 @@ MODULES = MODULES + ("livemix",)
 # 실거래 › 봇별 › V3.9 투비트 (#/v39: the 투비트 executor and the rule bot's V3.9 1-hour paper account it follows, owners
 # 10-26; dash/more/livev39.py)
 MODULES = MODULES + ("livev39",)
+# 실거래 › 봇별 화면마다 목표 연구 (/api/v4/livebots/goalres?bot=: each bot's goal arithmetic and research questions on its own
+# records, owners 10-26; dash/more/livegoalres.py)
+MODULES = MODULES + ("livegoalres",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 

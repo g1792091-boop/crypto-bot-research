@@ -370,3 +370,25 @@ def test_the_section_in_node(world, tmp_path, monkeypatch):
 def test_the_files_keep_the_house_rules():
     from tests.test_dash_livebots_fees import house_rules
     house_rules("livebots-goalres", "lgr")
+
+
+# ================================================================ the route on the live app, and the menu screens use it
+def test_the_route_on_the_live_app(world, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from paperbot.livedash import app as LA
+    for k, v in W.env_of(world["p"]).items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("PAPERBOT_LIVE_RULE_DB", world["more"]["rule_db"])
+    assert "livegoalres" in LA.MODULES
+    app = LA.create_app(None, b"s" * 32, candles=lambda *a, **k: [], ticker=lambda: {}, market=lambda: {}, frames=lambda *a: None,
+                        liq_db=str(tmp_path / "no-liq.db"), inbox_db=str(tmp_path / "no-inbox.db"))
+    assert app.state.more["livegoalres"]["routes"] == ["/api/v4/livebots/goalres"]
+    c = TestClient(app)
+    r = c.get("/api/v4/livebots/goalres?bot=trend")
+    assert r.status_code == 200 and r.json()["bot"] == "trend" and r.json()["state"] == "ok"
+    assert c.get("/api/v4/livebots/goalres?bot=nonsense").json()["bot"] == "trend"
+    for b in ("vwap", "mix", "v39"):
+        assert c.get(f"/api/v4/livebots/goalres?bot={b}").status_code == 200
+    js = open(os.path.join(SCREENS, "livebots.js"), encoding="utf-8").read()
+    assert 'import {goalResSection} from "./livebots-goalres.js";' in js and "goalResMount(goal, bt.bot, ctx)" in js
+    assert '@import url("livebots-goalres.css");' in open(os.path.join(SCREENS, "livebots.css"), encoding="utf-8").read()

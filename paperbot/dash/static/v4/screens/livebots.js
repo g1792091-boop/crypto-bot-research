@@ -11,7 +11,7 @@
 //          bot and 딥코인), 친구 30분 봇 (믹스 관제: the 믹스 30분 봇 on the second WOO X Pro account and its paper twin), V3.9
 //          투비트 (screens/livebots-v39.js, /api/v4/livebots/v39: the rule bot's V3.9 1-hour paper account and the 투비트
 //          executor; 아직 꺼져 있어요 until its database is there). Each leaves an empty <section class="lb-goalres"> at its foot
-//          for the 목표 연구 part (window.LBGoalRes.mount(el, bot) when that module is there)
+//          for the 목표 연구 part (screens/livebots-goalres.js goalResSection: the bot's goal arithmetic and research)
 //   관제   추세판단 봇's control room (screens/livebots-trend.js, /api/v4/livebots/trend; owners 10/21 "대시보드 다시
 //          만들어야겠네 야무지게 필요한부분들 전부다 포함해서"), the site's first screen: what the bot is doing now, the wallets,
 //          the open position and its supervisor, every coin's 1h / 4h judgment, the pullback waits, the pauses, today's signal
@@ -88,6 +88,8 @@ import {vwapView, vwperfView, vwblockView} from "./livebots-vwap.js";
 import {mixView, mixperfView} from "./livebots-mix.js";
 // 봇별 › V3.9 투비트 (owners 10/26: the rule bot's V3.9 1-hour paper account and the 투비트 executor that follows it)
 import {v39View} from "./livebots-v39.js";
+// 봇별 화면마다 맨 아래 목표 연구 (owners 10/26 "필요한 연구 부분들 각 봇마다 … 대시보드 화면에 추가해줘"; dash/more/livegoalres.py)
+import {goalResSection} from "./livebots-goalres.js";
 
 export const API = "/api/v4/livebots";
 const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executors write every loop, the paper every minute
@@ -146,16 +148,13 @@ export const BOT_TAB = {
   v39: {bot: "v39", sub: "규칙봇 V3.9 1시간 페이퍼(연습) V39_ALL@1h와 그 계좌를 따라가는 투비트 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
     head: null, only: (d) => (hasExec(d, "toobit") ? ["toobit"] : []), none: "투비트 실행기는 아직 꺼져 있어요"},
 };
-/** The empty foot of a 봇별 screen for the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한
- *  분석·연구 부분들"; built apart, screens/livebots-goalres.js): mounted by window.LBGoalRes when that module is there. */
+/** The foot of a 봇별 screen: the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한 분석·연구
+ *  부분들"; screens/livebots-goalres.js, its own answer /api/v4/livebots/goalres?bot=). */
 function goalResSlot(bot) {
   return h("section", {class: "lb-goalres", "data-goalres-bot": bot});
 }
-function goalResMount(el, bot) {
-  const g = typeof window !== "undefined" ? window.LBGoalRes : null;
-  if (g && typeof g.mount === "function") {
-    try { g.mount(el, bot); } catch (e) { /* the screen stands without it */ }
-  }
+function goalResMount(el, bot, ctx) {
+  try { put(el, goalResSection(ctx, bot)); } catch (e) { /* the screen stands without it */ }
 }
 // what the page already heard (module level: a tab change re-mounts the screen, the same record must not sound again);
 // seen null = the next answer is the baseline (the first look, and the first look after the page was hidden)
@@ -204,7 +203,7 @@ export async function mount(el, ctx) {
   const view = tab.make(ctx, hub);
   const own = !!tab.own;
   put(body, view.el);
-  if (goal) goalResMount(goal, bt.bot);
+  if (goal) goalResMount(goal, bt.bot, ctx);
 
   async function load() {
     if (st.busy) return;
