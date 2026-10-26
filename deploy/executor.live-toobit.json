@@ -21,6 +21,7 @@
   "macro_block_min": 30,
   "us_open_pre_min": 30,
   "us_open_pause_min": 30,
+  "trade_alerts": true,
   "ladder_from": "own",
   "ladder": {
     "first_lock": 0.17,

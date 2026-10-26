@@ -13,7 +13,7 @@
     DB `/var/lib/paperbot/exec/executor-toobit-live.db`
   - **키는 자기 키 파일** `/etc/paperbot/executor-toobit.env`에 따로 둡니다. 다른 실행기들의 키 파일(`executor.env`)과
     섞이지 않습니다. 이 파일에 다른 거래소 키가 들어 있으면 실행기가 켜지지 않습니다.
-  - 텔레그램 알림 머리말은 `[투비트 실거래 실행기]`입니다.
+  - 텔레그램 알림 머리말은 `[투비트 실거래 실행기]`입니다. 진입·청산 알림은 이 실행기가 직접 보냅니다(`trade_alerts`, 아래 10/26 절).
 - **다른 실행기(바이비트, WOO X Pro, 딥코인, WOO X Pro 2)는 그대로입니다.**
 - 설정 원본에 정해 둔 것(자세히는 아래 "실행기 켜기"):
   - 실거래(mainnet)만, 정한 금액 **$50**
@@ -321,3 +321,52 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
 
 되돌리기: `sudo cp -p /etc/paperbot/executor-toobit.json.before-usopen /etc/paperbot/executor-toobit.json` →
 `sudo systemctl restart paperbot-executor-toobit`.
+
+## 10/26 투비트 진입·청산 텔레그램 알림 넣기 (`trade_alerts`) — 서버 순서
+
+두 분 10/26: "투비트 진입알림 텔레그램 알림 안뜨는거 같은데 해결해주고".
+
+**왜 안 왔나:** 다른 실거래 봇의 진입 알림(🟢)은 실행기가 보내는 게 아닙니다. 실시간 감시(`paperbot-livewatch`, `paperbot/livecheck.py`)가
+페이퍼 봇의 진입을 보고 "각 실행기가 무엇을 했는지"를 붙여 보냅니다. 그런데 감시는 콤보 페이퍼 봇들(추세판단·VWAP·레인지 등, 계좌
+`COMBO@mix`)의 거래만 읽습니다. 투비트는 규칙봇 DB(paper3.db)의 `V39_ALL@1h` 계좌를 따라가서 감시가 읽지 않았습니다. 실행기 자체는
+경고·비상(WARN·CRITICAL)만 텔레그램으로 보내고 진입·청산은 DB에만 적었습니다. 그래서 진입해도 아무 알림이 없었습니다.
+
+**고친 것:** 실행기 설정에 `"trade_alerts": true`를 넣으면 투비트 실행기가 자기 거래를 직접 보냅니다(`deploy/executor.live-toobit.json`에
+넣어 둠, 다른 실행기는 그대로).
+
+| 표시 | 언제 | 예 |
+|---|---|---|
+| 🔔 | 실행기가 켜질 때 한 번 | `[투비트 실거래 실행기] 🔔 거래 알림 켜짐: 진입·첫 잠금·청산·진입 안 한 신호를 여기로 보냅니다(소리 없음)` |
+| 🟢 | 진입 (거래소에 손절이 걸린 뒤에 보냄) | `🟢 진입 BTCUSDT 롱 0.002 @ 65000, 40배(설정의 고정 배수, 페이퍼 20배), 손절 64350` |
+| 🔒 | 계단 첫 잠금 (그 뒤 칸들은 DB에만) | `🔒 BTCUSDT 거래소 기준 잠금 +17% (자기 체결가 기준): …` |
+| ✅ / ❌ | 청산 (손익이 0보다 크면 ✅) | `✅ 청산 BTCUSDT: …, 손익 $+3.10 (…)` |
+| ⏸ | 신호는 왔지만 진입 안 함 (나스닥 개장 앞뒤·경제 발표 앞뒤·손절이 청산가보다 멂) | `⏸ BTCUSDT 이번 진입은 하지 않음: 나스닥 개장 앞 30분·뒤 30분 진입 안 함 (…)` |
+
+- 모두 **소리 없이** 옵니다. 경고·비상은 지금처럼 소리가 납니다(`TELEGRAM_SOUND=critical`). 받는 곳은 다른 실거래 알림과 같은 방입니다
+  (`/etc/paperbot/live-telegram.env`).
+- 진입 알림은 손절이 거래소에 걸린 뒤에 나갑니다. 텔레그램이 느려도 손절이 늦어지지 않습니다.
+- 감시의 아침 점검·문제 알림·실거래 사이트(8093)는 그대로입니다.
+
+포지션이 있어도 할 수 있어요(실행기를 다시 켜면 포지션과 손절·계단을 이어받습니다). 한 줄씩:
+
+1. 코드 받기·설치: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+   (실행기는 다시 켜지 않습니다. "paperbot-executor-toobit is running the previous code"가 나오면 정상)
+2. 서버 설정과 원본이 그 줄만 다른지 보기: `sudo diff /etc/paperbot/executor-toobit.json /opt/crypto-bot-research/deploy/executor.live-toobit.json`
+   → `> "trade_alerts": true,` 한 줄만 나와야 합니다. 위의 나스닥 단계를 아직 안 했다면 `> "us_open_pre_min": 30,`과
+   `> "us_open_pause_min": 30,`도 같이 나옵니다(같이 들어가도 됩니다). 다른 줄이 나오면 여기서 멈추고 알려 주세요.
+3. 예전 설정 남기고 새 원본으로 바꾸기:
+   `sudo cp -p /etc/paperbot/executor-toobit.json /etc/paperbot/executor-toobit.json.before-alerts`
+   `sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/executor.live-toobit.json /etc/paperbot/executor-toobit.json`
+4. 설정 확인: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit executor check-config --config /etc/paperbot/executor-toobit.json`
+   → `거래 알림: 켜짐 - 진입(🟢)·첫 잠금(🔒)·청산(✅/❌)·진입 안 한 신호(⏸)를 …` 줄과 마지막 줄 `준비됨`
+5. 다시 켜기: `sudo systemctl restart paperbot-executor-toobit`, 확인 `systemctl is-active paperbot-executor-toobit`(`active`)
+   → 1분 안에 텔레그램에 `[투비트 실거래 실행기] 🔔 거래 알림 켜짐…`이 와야 합니다.
+6. 🔔가 안 오면: `sudo journalctl -u paperbot-executor-toobit -n 30 --no-pager | grep -c "텔레그램 설정"`
+   → `1` 이상이면 이 서비스에 텔레그램 설정이 없다는 뜻입니다. `sudo test -f /etc/paperbot/live-telegram.env && echo 있음 || echo 없음`
+   결과와 함께 알려 주세요(파일 내용은 보내지 마세요).
+
+되돌리기: `sudo cp -p /etc/paperbot/executor-toobit.json.before-alerts /etc/paperbot/executor-toobit.json` →
+`sudo systemctl restart paperbot-executor-toobit`.
+
+지금까지 투비트가 실제로 진입했는지(읽기만): `cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-toobit-live.db`
+→ `포지션:` 줄과 최근 기록 15줄(`진입 …`, `청산 …`, `이번 진입은 하지 않음 …`).

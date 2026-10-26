@@ -78,6 +78,11 @@ default:
 - ``us_open_pre_min`` / ``us_open_pause_min`` (30 / 30; owners 10-26 "투비트도 나스닥 개장 앞뒤 30분 진입금지"): no new entry
   sent from that many minutes before the NYSE open (09:30 New York, DST aware, weekdays, not on NYSE holidays) to that
   many minutes after it, as the paper bots' block (combo.us_open_pause); recorded as a skipped entry ("us_open_skip", INFO).
+- ``trade_alerts`` (true; owners 10-26 "투비트 진입알림 텔레그램 알림 안뜨는거 같은데"): the executor tells its own trades on
+  Telegram (INFO, silent): each entry (🟢), its first lock (🔒), each exit (✅ / ❌) and each planned skip (⏸ liq_skip,
+  macro_skip, us_open_skip), plus one 🔔 line at start. For an executor whose paper account the live watcher does not tell
+  (paperbot/livecheck.py tells the combo bots' COMBO@mix trades only; the Toobit executor follows the rule bot's
+  V39_ALL@1h in paper3.db). Off: as before (only WARN and CRITICAL go to Telegram).
 
 Every loop, before following the paper account, it reconciles the exchange with its own state:
 an unknown position is closed and alerted; a position without a stop gets one at once (or is
@@ -177,6 +182,9 @@ NET_COSTS = {"binance": {"taker_fee": 0.0005, "slippage": 0.0002}, "bybit": {"ta
              "toobit": {"taker_fee": 0.0006, "slippage": 0.0002}}
 EX_KO = {"binance": "바이낸스", "bybit": "바이비트", "mexc": "MEXC", "wooxpro": "WOO X Pro", "flipster": "플립스터",
          "deepcoin": "딥코인", "toobit": "투비트"}
+# trade_alerts (owners 10-26): the INFO events the executor tells itself, with their mark (exit: ✅ / ❌ by its P&L;
+# own_lock: the first lock only, trade_alert_mark)
+TRADE_ALERT_MARKS = {"entry": "🟢 ", "liq_skip": "⏸ ", "macro_skip": "⏸ ", "us_open_skip": "⏸ "}
 # what closed the paper position (paperbot/engine.py, combo.py exit reasons) and what "own" does with it
 PRICE_EXITS = ("SL", "LOCK", "TP", "LIQ")       # a price level on the paper's prices: the live position stays on its own
 # the fast stop (REV) and the trend bot's supervisor (JUDGE: the higher bar's judgment turned, TIME: no first lock in time,
@@ -305,6 +313,9 @@ class ExecConfig:
     us_open_pre_min: Optional[int] = None   # (owners 10-26 "나스닥 개장 앞뒤 30분 진입금지"): no NEW entry sent from this many
     us_open_pause_min: Optional[int] = None  # minutes before the NYSE open to ``us_open_pause_min`` after it (09:30 New York,
                                             # weekdays, not NYSE holidays: combo.us_open_pause); open positions go on
+    # owners 10-26 ("투비트 진입알림 텔레그램 알림 안뜨는거 같은데"): its own entries, first locks, exits and planned skips
+    # to Telegram (INFO); absent = as before (the live watcher tells the combo bots' trades)
+    trade_alerts: bool = False
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -501,6 +512,8 @@ class ExecConfig:
             out.append("equity_floor_frac은 0~1 사이 비율입니다(예: 70% → 0.7, 끄려면 null)")
         if not isinstance(self.double_notice, bool):
             out.append("double_notice는 true 또는 false입니다")
+        if not isinstance(self.trade_alerts, bool):
+            out.append("trade_alerts는 true 또는 false입니다")
         return out
 
     def _ladder_problems(self) -> list:
@@ -1414,6 +1427,10 @@ class Executor:
                                        "알림은 계속 보냅니다. 디스크를 확인하세요")
         if notify and level in (WARN, CRITICAL):
             self._notify(level, f"{self.prefix} {text}")
+        elif level == INFO and self.cfg.trade_alerts is True:
+            mark = trade_alert_mark(kind, data)
+            if mark is not None:
+                self._notify(INFO, f"{self.prefix} {mark}{text}")
 
     def _notify(self, level: str, text: str) -> None:
         if self.held is not None:
@@ -1561,6 +1578,8 @@ class Executor:
                     + (f", {us_open_short(self.cfg)} 새 진입 안 함" if us_open_window(self.cfg) is not None else ""),
                     {"halted": self.risk.halted, "trade": self.trade, "kill_file": self.cfg.risk.kill_file,
                      "paper_db": self.cfg.paper_db, **own})
+        if self.cfg.trade_alerts is True:
+            self._notify(INFO, f"{self.prefix} {TRADE_ALERTS_ON_KO}")
         if self.risk.halted:
             self._event(WARN, "halted", f"멈춤 상태로 시작합니다(사람이 풀어야 함): {self.risk.halt_reason}")
         self._save()
@@ -2404,7 +2423,7 @@ class Executor:
         roe_word = "화면 ROE" if gross else "순ROE"
         data = {"key": t["key"], "lock": want, "target": target, "entry": entry, "best": o["best"],
                 "best_roe": o["best_roe"], "src": o.get("src"), "round_trip": rt, "leverage": lev, "old": old,
-                "basis": "gross" if gross else "net"}
+                "basis": "gross" if gross else "net", "first": o.get("lock") is None}
         if (target - old) * side > tick / 2:
             self._move(t, target, [s["algoId"] for s in live_stops(self.c, sym)], word, ref=last)
             if self.trade is not t:
@@ -3370,6 +3389,24 @@ def stage_text(r: dict, account: str) -> str:
     return "\n".join(lines)
 
 
+def trade_alert_mark(kind: str, data: Optional[dict]) -> Optional[str]:
+    """trade_alerts (owners 10-26): the mark an INFO event is told with on Telegram, None when it is not told. An exit:
+    ✅ above zero, ❌ otherwise (its P&L as _finish has it); a lock of the own ladder: only the first, never one that
+    found the price past it (its exit is told)."""
+    d = data if isinstance(data, dict) else {}
+    if kind == "exit":
+        pnl = d.get("pnl")
+        return "✅ " if isinstance(pnl, (int, float)) and pnl > 0 else "❌ "
+    if kind == "own_lock":
+        return "🔒 " if d.get("first") is True and not d.get("closed") else None
+    return TRADE_ALERT_MARKS.get(kind)
+
+
+TRADE_ALERTS_ON_KO = "🔔 거래 알림 켜짐: 진입·첫 잠금·청산·진입 안 한 신호를 여기로 보냅니다(소리 없음)"
+TRADE_ALERTS_LINE_KO = ("거래 알림: 켜짐 - 진입(🟢)·첫 잠금(🔒)·청산(✅/❌)·진입 안 한 신호(⏸)를 이 실행기가 직접 텔레그램으로 "
+                        "보냄(소리 없음). 켤 때 '🔔 거래 알림 켜짐'이 오면 연결된 것")
+
+
 # ---------------------------------------------------------------- CLI
 def _notifier() -> Notifier:
     if os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_CRITICAL"):
@@ -3413,6 +3450,9 @@ def cmd_run(args) -> int:
     cfg = ExecConfig.from_file(args.config)
     note = _notifier()                            # first: a database that cannot be opened is alerted too
     prefix = exec_prefix(cfg) if cfg.label else _prefixes(cfg.exchange).get(cfg.mode, "[실행기]")
+    if isinstance(note, ConsoleNotifier):         # said in the journal: its alerts reach no one but this log
+        print(f"{prefix} 텔레그램 설정(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_CRITICAL)이 이 서비스 환경에 없어 알림은 이 기록"
+              "(journal)에만 남습니다", file=sys.stderr)
     try:
         store = ExecStore(cfg.db, service=True)
     except Refused as e:                          # another executor holds the database: it stays the only one
@@ -3904,6 +3944,8 @@ def guard_lines(cfg: ExecConfig) -> list:
                    "(열린 포지션은 거래소 손절·계단이 지킴; 풀기: 실행기를 끄고 clear-floor)")
     if cfg.double_notice is True:
         out.append("원금 회수 안내: 켜짐 - 잔고가 시작 금액의 2배가 되면 텔레그램 한 번")
+    if cfg.trade_alerts is True:
+        out.append(TRADE_ALERTS_LINE_KO)
     return out
 
 
