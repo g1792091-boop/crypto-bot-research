@@ -489,12 +489,17 @@ def fills_from_rows(rows: list, ct_val, symbol: str) -> list:
 
 def lot_unit(step: Decimal, ct: Decimal) -> tuple:
     """How LOT_SIZE reads: ("contracts", step) when stepSize is a whole number, else ("base", stepSize / multiplier)
-    which must be a whole number of contracts (``quantity`` is a LONG). Anything else: BAD_SPEC."""
+    which must be a whole number of contracts (``quantity`` is a LONG). A base step that is an exact fraction of one
+    contract (Toobit's live specs 10-26: BTC stepSize 0.0001 with 0.001 BTC a contract, ETH 0.001 / 0.01, SOL
+    0.01 / 1) is ("base_fine", 1): orders go in whole contracts, each a whole number of steps. Anything else: BAD_SPEC."""
     if step >= 1 and step == step.to_integral_value():
         return "contracts", step
     n = step / ct
     if n >= 1 and n == n.to_integral_value():
         return "base", n
+    k = ct / step
+    if n < 1 and k == k.to_integral_value():
+        return "base_fine", Decimal(1)
     raise TestnetError(400, "BAD_SPEC", f"수량 단위(stepSize {step}, contractMultiplier {ct})가 계약으로도 코인으로도 "
                                         "맞지 않습니다")
 
@@ -2925,7 +2930,8 @@ def specs_text(c: ToobitClient, symbols=COINS) -> str:
                      f"{sp['lot_sz']}계약, 최소 주문 {min_order_text(sp)}(지금 약 ${sp['min_qty'] * px:,.4f}), 한 번 최대 "
                      f"{sp['max_sz']}계약, 최소 금액 ${sp['min_notional']:g}, 가격 단위 {sp['tick_str']}, 최대 {lev} "
                      f"[LOT_SIZE 원래 값 stepSize {lot.get('stepSize')}, minQty {lot.get('minQty')}, maxQty "
-                     f"{lot.get('maxQty')} → {'계약' if sp['lot_unit'] == 'contracts' else '코인'} 단위로 읽음]")
+                     f"{lot.get('maxQty')} → {'계약' if sp['lot_unit'] == 'contracts' else '코인'} 단위로 읽음"
+                     f"{', 1계약보다 잘아서 1계약씩 주문' if sp['lot_unit'] == 'base_fine' else ''}]")
     lines.append(f"요청 한도({c.limits_source}): 가중치 {c.limits['weight']}, 주문 {c.limits['orders']} "
                  "((기간 ms, 한도) - 봇은 80%까지만)")
     return "\n".join(lines)

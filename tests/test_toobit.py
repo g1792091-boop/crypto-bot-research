@@ -395,6 +395,44 @@ def test_contract_units_from_exchange_info():
     assert e.value.code == "BAD_SPEC"
 
 
+def test_live_specs_10_26_step_finer_than_a_contract(monkeypatch):
+    """Toobit's live exchangeInfo (the owners' `check`, 10-26): BTC, ETH and SOL give a LOT_SIZE step in coins that is a
+    fraction of one contract (BTC 0.0001 with 0.001 BTC a contract, ETH 0.001 / 0.01, SOL 0.01 / 1). They were refused
+    as BAD_SPEC; now orders go in whole contracts (each a whole number of steps), the smallest order rounded up to one
+    contract and the largest down. DOGE, LTC and BCH read as they did."""
+    from decimal import Decimal
+    live = {"BTCUSDT": ("0.001", "0.0001", "0.0001", "1000"), "ETHUSDT": ("0.01", "0.001", "0.001", "10000"),
+            "SOLUSDT": ("1", "0.01", "0.01", "100000"), "DOGEUSDT": ("1", "1", "63", "30000000"),
+            "LTCUSDT": ("0.001", "0.001", "0.068", "10207"), "BCHUSDT": ("0.001", "0.001", "0.01", "3400")}
+    for s, (ct, step, mn, mx) in live.items():
+        monkeypatch.setitem(SPECS, s, {**SPECS[s], "ct": ct, "step": step, "min": mn, "max": mx, "notional": "0"})
+    c, fake, clock = make()
+    got = {s: (c.spec(s)["lot_unit"], c.spec(s)["lot_sz"], c.spec(s)["min_sz"], c.spec(s)["max_sz"],
+               c.spec(s)["qty_step"], c.spec(s)["min_qty"]) for s in live}
+    assert got == {"BTCUSDT": ("base_fine", "1", "1", "1000000", 0.001, 0.001),
+                   "ETHUSDT": ("base_fine", "1", "1", "1000000", 0.01, 0.01),
+                   "SOLUSDT": ("base_fine", "1", "1", "100000", 1.0, 1.0),
+                   "DOGEUSDT": ("contracts", "1", "63", "30000000", 1.0, 63.0),
+                   "LTCUSDT": ("base", "1", "68", "10207000", 0.001, 0.068),
+                   "BCHUSDT": ("base", "1", "10", "3400000", 0.001, 0.01)}
+    # a base quantity becomes whole contracts, floored; never a part of a contract
+    assert str(c._contracts("BTCUSDT", 0.0096)) == "9" and str(c._contracts("SOLUSDT", 4.97)) == "4"
+    assert str(c._contracts("ETHUSDT", 0.2299)) == "22"
+    assert TB.lot_unit(Decimal("0.0001"), Decimal("0.001")) == ("base_fine", Decimal(1))
+    with pytest.raises(TestnetError) as e:                     # a step that does not divide a contract stays refused
+        TB.lot_unit(Decimal("0.0003"), Decimal("0.001"))
+    assert e.value.code == "BAD_SPEC"
+    text = TB.specs_text(c)
+    assert "BTCUSDT: 상태 Trading, 1계약 0.001" in text and "코인 단위로 읽음, 1계약보다 잘아서 1계약씩 주문]" in text
+    assert "상품 정보를 쓸 수 없습니다" not in text
+    # the drill still picks a coin whose contract is not 1 coin and costs at most DRILL_UNIT_MAX_USDT
+    for s, px in (("BTCUSDT", 83000.0), ("ETHUSDT", 2700.0), ("SOLUSDT", 190.0), ("DOGEUSDT", 0.077),
+                  ("LTCUSDT", 56.8), ("BCHUSDT", 280.0)):
+        fake.set_price(s, px)
+    d = TB.ToobitDrill(c)
+    assert d.smallest() == "BCHUSDT"
+
+
 def test_prices_klines_and_server_time():
     c, fake, clock = make()
     fake.set_price(BTC, 101.0, mark=100.5)
