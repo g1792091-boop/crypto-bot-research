@@ -159,3 +159,26 @@ committed before any VWAP arm (A0 included) is run; the V3.9 parity check (above
   only before its own first lock (the simulator keeps one account, the paper's); the simulator's ladder is computed at
   30x even when the leverage was shrunk.
 - Diagnostics (a)-(c) as above on its A0 (primary and paper).
+
+## Addendum 2 (2026-10-26): one more descriptive diagnostic — what "횡보" looks like per bot (no choosing)
+
+Added on the owners' question "how to define 횡보 per bot", BEFORE this diagnostic is computed. What was already run or
+seen when this was written: the V3.9 and 레인지 봇 arms (their period numbers, and the A0 diagnostics (a)-(c) written to
+files but not read), and for V3.9 A0 two counts (403 positions open and unlocked at an M, 75 of them in net profit there).
+Nothing of the bins below. The trend bot and VWAP have not been run.
+
+- (d) For every bot (on A0; VWAP on the paper and the copied trades), the positions open and NOT at their first lock /
+  take-profit at their first M (the 09:25 New York bar's close), split three ways, each bin with its count and its later
+  A0 outcome (reached the first lock / take-profit, ended at the stop, other exit; mean net % of equity per trade):
+  1. progress at that moment in R = side x (close - fill) / |fill - initial stop| (price terms; VWAP: return / 2 ATR):
+     <= -0.5, -0.5..0, 0..0.25, 0.25..0.5, > 0.5 (left-open, right-closed); and separately the net-of-costs sign
+     (net ROE at that close > 0 or <= 0);
+  2. hours held at that moment (from the fill to that close): < 2, 2-6, 6-12, >= 12;
+  3. the best price reached so far (fill to that close) as a share of the distance from the fill to the first-lock
+     trigger price (V3.9: net ROE 20 %; 레인지 봇: the +10 % take-profit price; 추세판단 봇: 11 %; VWAP: 12 % at 30x, in
+     the simulator's return terms), price terms: < 25 % (a best never above the fill counts here), 25-50 %, 50-75 %,
+     >= 75 %.
+- Choose and check periods separately (plus recent and all, for reference); a bin under 20 positions is marked
+  "표본 적음". The trend bot has only its 7/1-10/20 window (check months and October).
+- Purpose: show which kind of unresolved position tends to end at the stop (a candidate definition of 횡보 to test
+  later on unseen data). Nothing is chosen from it now.
