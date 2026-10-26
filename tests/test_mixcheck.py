@@ -321,6 +321,8 @@ def doge_day(tmp_path_factory):
     """The bot in paper mode over KST 2026-10-23 on the real DOGE bars (its own config's blocks), its log."""
     folder = tmp_path_factory.mktemp("doge")
     raw = json.load(open(os.path.join(DEPLOY, "mixchop.paper.json"), encoding="utf-8"))
+    for k in ("margin_frac", "ladder", "ladder_every_s"):            # the design's sizing and ladder (see mix_site_world)
+        raw.pop(k, None)
     raw.update(state=str(folder / "state.json"), log=str(folder / "log.jsonl"), kill_file=str(folder / "STOP"),
                own_stop_file=str(folder / "own.STOP"), telegram=False, coins={"DOGEUSDT": raw["coins"]["DOGEUSDT"]})
     (folder / "cfg.json").write_text(json.dumps(raw), encoding="utf-8")

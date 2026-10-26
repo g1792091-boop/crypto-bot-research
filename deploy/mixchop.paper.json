@@ -6,12 +6,19 @@
  "equity_floor_frac": 0.7,
  "kill_file": "/var/lib/paperbot/STOP",
  "own_stop_file": "/var/lib/paperbot/mixchop-paper/STOP",
- "max_notional_usd": 500,
+ "max_notional_usd": 10000,
  "telegram": false,
  "no_weekend": true,
  "us_open_pre_min": 30,
  "us_open_pause_min": 30,
  "macro_blackout_min": 30,
+ "margin_frac": 0.4,
+ "ladder": {
+  "trigger": 12,
+  "lock": 10,
+  "step": 5
+ },
+ "ladder_every_s": 60,
  "coins": {
   "SOLUSDT": {
    "h1_buf": 8.0,

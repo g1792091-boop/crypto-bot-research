@@ -1175,7 +1175,7 @@ export function hqView(ctx, hub) {
       r.streak.className = /멈춤|몰라요/.test(r.streak.textContent) ? "down" : /금지/.test(r.streak.textContent) ? "muted" : "";
     }
     const coins = (b && b.coins) || [];
-    r.foll.textContent = b ? `30분봉 신호 · ${coins.map((c) => `${c.coin}${c.enabled ? "" : "(꺼짐)"}`).join("·") || "코인 모름"}${b.risk_pct != null ? ` · 손절 1번 잔고의 ${fmt.num(b.risk_pct, 2)}%` : ""}` : "";
+    r.foll.textContent = b ? `30분봉 신호 · ${coins.map((c) => `${c.coin}${c.enabled ? "" : "(꺼짐)"}`).join("·") || "코인 모름"}${b.plan_short_ko ? ` · ${b.plan_short_ko}` : b.risk_pct != null ? ` · 손절 1번 잔고의 ${fmt.num(b.risk_pct, 2)}%` : ""}` : "";
     const ns = [];
     if (b && s0.state === "stopped") ns.push(led.why);
     if (b && led.id === "halt") ns.push(`새 진입 멈춤: ${led.why} · 열린 포지션은 손절·계단 그대로`);

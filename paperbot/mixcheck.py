@@ -235,6 +235,15 @@ def risk_of(b: dict) -> float:
     return float(cfg.risk_pct) if cfg is not None else 0.25
 
 
+def plan_changed(cfg: Any) -> bool:
+    """Owners 10-26: sized by margin or a net-ROE ladder: the 5-year replay (risk sizing, the coins' ladder) is not
+    this plan's reference, so the luck band and the losing-run odds are not given."""
+    return cfg is not None and (float(getattr(cfg, "margin_frac", 0) or 0) > 0 or getattr(cfg, "ladder", None) is not None)
+
+
+PLAN_CHANGED_KO = "설정을 바꿔서(증거금 비율·순ROE 계단) 5년 재생과 비교하지 않아요 · 실거래 기록이 쌓이면 그 기록끼리 봐요"
+
+
 def live_rs(trades: list) -> list:
     """The R of the closed trades with a known P&L, oldest first."""
     return [t["r"] for t in sorted(trades, key=lambda t: t.get("exit_ms") or 0) if t.get("r") is not None]
@@ -306,7 +315,12 @@ def card(t: dict, en: Optional[dict], rows: list, cfg: Any, risk_pct: float, twi
     dist = _f((en or {}).get("stop_dist"))
     sig_close = _f((en or {}).get("signal_close"))
     stop_x = t.get("stop")
-    risk_usd = eb * risk_pct / 100.0 if eb else None
+    by_margin = cfg is not None and float(getattr(cfg, "margin_frac", 0) or 0) > 0
+    if by_margin and q and dist:                    # owners 10-26: the stop's loss of this entry is the unit
+        risk_usd = q * dist
+        risk_pct = risk_usd / eb * 100.0 if eb else risk_pct
+    else:
+        risk_usd = eb * risk_pct / 100.0 if eb else None
     exit_px = t.get("exit") if t.get("exit") is not None else (implied_exit(side, e, q, pnl, fee) if e and q and pnl is not None else None)
     exit_src = "log" if t.get("exit") is not None else ("equity" if exit_px is not None else None)
     plan = (side * (stop_x - e) * q - fee * q * (e + stop_x)) if (stop_x and e and q and side) else None
@@ -372,7 +386,8 @@ def card(t: dict, en: Optional[dict], rows: list, cfg: Any, risk_pct: float, twi
            "why_ko": t.get("why_ko"), "step": t.get("step") or 0, "entry": e, "signal_close": sig_close, "entry_slip": slip, "qty": q,
            "notional": e * q if e and q else None, "stop_dist": dist, "first_stop": (e - side * dist) if e and dist else None,
            "stop": stop_x, "exit": exit_px, "exit_src": exit_src, "exit_gap": gap, "pnl": pnl, "r": r, "plan": plan, "plan_r": plan_r,
-           "risk_usd": risk_usd, "risk_pct": risk_pct, "fees_est": fees, "equity_before": eb, "equity": t.get("equity"), "verdict": verdict, "tone": tone,
+           "risk_usd": risk_usd, "risk_pct": risk_pct, "margin_frac": float(getattr(cfg, "margin_frac", 0) or 0) if cfg is not None else 0.0,
+           "fees_est": fees, "equity_before": eb, "equity": t.get("equity"), "verdict": verdict, "tone": tone,
            "ko": ko, "causes": causes, "notes": notes, "twin": twin, "streak": streak if pnl is not None and pnl <= 0 else 0,
            "streak_band": band_streak}
     out["lines"] = card_lines(out)
@@ -384,7 +399,8 @@ def card_lines(c: dict) -> list:
     ls = [f"{kst(c['opened_ms'])} → {kst(c['exit_ms'])} ({hold_ko(c['hold_ms'])}) · 손익 {usd(c['pnl'])} ({r_ko(c['r'], 2)})"]
     if c["verdict"] in ("win", "unknown"):
         return ls
-    plan = f"계획: 손절 1번 = 잔고의 {c['risk_pct']:g}%" + (f" ({usd(c['risk_usd'])[1:]})" if c.get("risk_usd") else "")
+    plan = ((f"계획: 진입마다 증거금 잔고의 {c['margin_frac']:.0%} · 이번 손절 1번 = 잔고의 {c['risk_pct']:.1f}%" if c.get("margin_frac")
+             else f"계획: 손절 1번 = 잔고의 {c['risk_pct']:g}%") + (f" ({usd(c['risk_usd'])[1:]})" if c.get("risk_usd") else ""))
     ls.append(plan + (f" · 이번 손절가에서 계획 손익 {usd(c['plan'])} ({r_ko(c['plan_r'], 2)}, 수수료 포함)" if c.get("plan") is not None else ""))
     if c.get("entry") is not None:
         sl = c.get("entry_slip")
@@ -444,7 +460,7 @@ def cards_of(data: dict, band_ref: Optional[dict] = None) -> list:
         k = streak_at(ts, t)
         twin = paper_twin(en, p_entries, p_trades) if prow else {"state": "off", "ko": "모의 봇 기록이 없어 비교하지 못했어요"}
         out.append(card(t, en, rows, cfg, risk, twin, k,
-                        streak_band(k, band_ref) if k and band_ref is not None else None))
+                        streak_band(k, band_ref) if k and band_ref is not None and not plan_changed(cfg) else None))
     return out
 
 
@@ -648,6 +664,8 @@ def live_band(data: dict, ref: Optional[dict], now: int) -> dict:
     rows = rows_of(lb)
     ts = X.trades_of(rows, lb["conf"].get("cfg")) if rows else []
     rs = live_rs(ts)
+    if plan_changed(lb["conf"].get("cfg")):
+        return {"state": "changed", "n": len(rs), "ko": PLAN_CHANGED_KO, "rows": []}
     t = time.gmtime(now / 1000)
     import calendar
     m0 = calendar.timegm((t.tm_year, t.tm_mon, 1, 0, 0, 0)) * 1000

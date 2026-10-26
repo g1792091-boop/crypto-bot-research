@@ -534,3 +534,101 @@ def test_unknown_position_is_told_once(tmp_path):
         bot.halts()
         bot.check_unknown()
     assert sum("모르는 포지션" in m for m in msgs) == 1
+
+
+# ---------------------------------------------------------------- owners 10-26: margin sizing, net ladder, 1m follow-up
+def _cfg1026(tmp_path, mode="paper", coins=("SOLUSDT",), **extra):
+    raw = {"mode": mode, "state": str(tmp_path / "state.json"), "log": str(tmp_path / "log.jsonl"),
+           "start_equity": 50.0, "kill_file": str(tmp_path / "STOP"), "own_stop_file": str(tmp_path / "MIX.STOP"),
+           "telegram": False, "coins": {c: {} for c in coins}, "max_notional_usd": 10000, "margin_frac": 0.4,
+           "ladder": {"trigger": 12, "lock": 10, "step": 5}, "ladder_every_s": 60, **extra}
+    p = tmp_path / "cfg1026.json"
+    p.write_text(json.dumps(raw))
+    return M.load_config(str(p))
+
+
+def test_1026_config_and_the_net_ladder(tmp_path):
+    cfg = _cfg1026(tmp_path)
+    assert (cfg.margin_frac, cfg.ladder, cfg.ladder_every_s) == (0.4, {"trigger": 12.0, "lock": 10.0, "step": 5.0}, 60.0)
+    for bad in ({"ladder": {"trigger": 10, "lock": 12, "step": 5}}, {"ladder": {"trigger": 12}}, {"margin_frac": 1.5},
+                {"ladder_every_s": 10}):
+        with pytest.raises(M.MixError):
+            _cfg1026(tmp_path, **bad)
+    assert _cfg(tmp_path).ladder is None and _cfg(tmp_path).margin_frac == 0      # absent: as before
+    fee, lev = 0.00042, 40
+
+    def px(roe, side=1):                                          # the price at a net ROE (%)
+        return 100.0 * (1 + side * (roe / 100 / lev + 2 * fee))
+    for roe, lock, step in ((11.9, None, 0), (12.0, 10, 1), (16.9, 10, 1), (17.0, 15, 2), (22.5, 20, 3), (40.0, 35, 6)):
+        for side in (1, -1):
+            new, k = M.net_ladder_stop(side, 100.0, px(roe, side), 100.0 - side * 1.0, lev, 12, 10, 5, fee)
+            assert k == step
+            if lock is not None:
+                assert new == pytest.approx(px(lock, side))
+    new, k = M.net_ladder_stop(1, 100.0, px(13), px(11), lev, 12, 10, 5, fee)   # never moves the wrong way
+    assert (new, k) == (pytest.approx(px(11)), -1)
+
+
+def test_1026_margin_sizing(tmp_path):
+    cfg = _cfg1026(tmp_path)
+    bot = M.Bot(cfg, M.PaperBroker(50.0, 0.0), lambda s, tf, n: [], lambda: _ms("2026-10-26 01:00"), sleep=lambda s: None)
+    bot.start()
+    _enter(bot, close=100.0, dist=1.0)
+    assert bot.pos.qty == pytest.approx(50.0 * 0.4 * 40 / 100.0)                 # 8 SOL = $800 notional, $20 margin
+    capped = _cfg1026(tmp_path / "c", max_notional_usd=500) if (tmp_path / "c").mkdir() is None else None
+    bot2 = M.Bot(capped, M.PaperBroker(50.0, 0.0), lambda s, tf, n: [], lambda: 1, sleep=lambda s: None)
+    bot2.start()
+    _enter(bot2, close=100.0, dist=1.0)
+    assert bot2.pos.qty == pytest.approx(5.0)                                     # the cap still holds
+    assert "진입마다 증거금 = 잔고의 40%" in bot.plan_text() and "+12%→+10%, +17%→+15%" in bot.plan_text()
+
+
+def test_1026_paper_follows_the_position_on_1m_bars(tmp_path):
+    cfg = _cfg1026(tmp_path)
+    t0 = _ms("2026-10-26 01:00")
+    clock = {"t": t0}
+    rows = {"1m": []}
+    bot = M.Bot(cfg, M.PaperBroker(50.0, 0.0), lambda s, tf, n: rows.get(tf, []), lambda: clock["t"], sleep=lambda s: None)
+    bot.start()
+    bot.enter(bot.coins["SOLUSDT"], {"symbol": "SOLUSDT", "close_ms": t0, "side": 1, "why": "", "close": 100.0,
+                                    "stop_dist": 1.0, "stop_pct": 1.0, "avg_rsi_30m": 60, "avg_rsi_1h": 55})
+    lock10 = 100.0 * (1 + 0.10 / 40 + 2 * cfg.taker_fee)
+    # minute 3 reaches net ROE +12 % (100.384): the stop goes to +10 % at once, not at the 30m close
+    rows["1m"] = [[t0, 100.0, 100.1, 99.9, 100.05], [t0 + M.MIN1, 100.05, 100.2, 100.0, 100.15],
+                  [t0 + 2 * M.MIN1, 100.15, 100.40, 100.1, 100.35]]
+    clock["t"] = t0 + 3 * M.MIN1 + 5000
+    bot.minute_update()
+    assert bot.pos.stop == pytest.approx(lock10) and bot.pos.step == 1
+    bot.minute_update()                                          # not again before ladder_every_s
+    # minute 4 falls through the stop: a paper exit at the stop, between the closes
+    rows["1m"].append([t0 + 3 * M.MIN1, 100.35, 100.36, 100.2, 100.25])
+    clock["t"] = t0 + 4 * M.MIN1 + 65000
+    bot.minute_update()
+    assert bot.pos is None
+    ex = [json.loads(x) for x in open(cfg.log) if '"exit"' in x][-1]
+    assert ex["why"] == "ladder" and ex["price"] == pytest.approx(lock10) and ex["pnl"] > 0
+
+
+def test_1026_live_moves_the_resting_stop_between_closes(tmp_path):
+    cfg = _cfg1026(tmp_path, mode="mainnet")
+    fake = FakeWoo()
+    broker = M.WooBroker(fake, cfg.coins)
+    t0 = _ms("2026-10-26 01:00")
+    clock = {"t": t0}
+    rows = {"1m": []}
+    bot = M.Bot(cfg, broker, lambda s, tf, n: rows.get(tf, []), lambda: clock["t"], sleep=lambda s: None)
+    bot.start()
+    bot.enter(bot.coins["SOLUSDT"], {"symbol": "SOLUSDT", "close_ms": t0, "side": 1, "why": "", "close": 100.0,
+                                    "stop_dist": 1.0, "stop_pct": 1.0, "avg_rsi_30m": 60, "avg_rsi_1h": 55})
+    assert bot.pos.qty == pytest.approx(8.0)
+    fake.px = 100.9
+    rows["1m"] = [[t0, 100.0, 100.95, 99.9, 100.9]]               # net ROE about +34.6 %: lock +30 %
+    clock["t"] = t0 + M.MIN1 + 5000
+    bot.minute_update()
+    lock30 = 100.0 * (1 + 0.30 / 40 + 2 * cfg.taker_fee)
+    live = fake.open_algo_orders("SOLUSDT")
+    assert len(live) == 1 and live[0]["triggerPrice"] == pytest.approx(lock30, abs=0.01) and bot.pos.step == 5
+    # the 30m close reads the 1m bars too (nothing new: the stop stays)
+    clock["t"] = t0 + M.MIN30 + 5000
+    bot.manage(t0 + M.MIN30)
+    assert bot.pos.step == 5 and len(fake.open_algo_orders("SOLUSDT")) == 1

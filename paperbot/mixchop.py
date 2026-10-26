@@ -29,6 +29,13 @@ Trade:
   highs / lows); at each 30m close that did not stop the position, when best is ``roe_act`` % ROE past the entry, the
   stop goes to entry + 10 % ROE, and one more step of (roe_act - 10) % ROE for each further step reached; it only ever
   moves the favourable way, and only at 30m closes. No exit on an opposite signal or on time: stop or ladder only.
+- owners 10-26 (config options, off unless set; deploy/mixchop.live.json sets them): ``margin_frac`` sizes each entry
+  by margin instead (equity x margin_frac as margin: qty = equity x margin_frac x leverage / price, capped by
+  ``max_notional_usd``); ``ladder`` {"trigger", "lock", "step"} replaces the coins' roe_act ladder for every coin with
+  one on NET ROE (WOO X Pro's taker fee ``taker_fee`` on both sides, at the coin's leverage): trigger -> lock, then one
+  step more for each further step (12 -> 10, 17 -> 15, 22 -> 20 ...); ``ladder_every_s`` > 0 follows the open position
+  on Binance's closed 1m bars that often between the closes as well (best, the ladder, the resting stop moved; paper:
+  its stop judged on the same 1m bars), and at the 30m close on 1m bars too.
 - one position at a time over all coins; signals of one close compete by the coin order of the config.
 - entry blocks (owners 10-25 night, the same as their own bots; not in the friend's design, so off unless the config
   sets them): ``no_weekend`` (Saturday and Sunday KST), ``us_open_pre_min`` / ``us_open_pause_min`` (minutes before /
@@ -60,6 +67,8 @@ import numpy as np
 import pandas as pd
 
 MIN30 = 30 * 60_000
+MIN1 = 60_000
+MINUTE_MAX = 1400               # 1m bars read at most (one request); a longer gap (the bot was down) is walked on 30m bars
 H1 = 3_600_000
 KST_MS = 9 * H1
 BARS = 1500                     # history per request (Binance's maximum): enough for the EMA / RMA / sum to settle
@@ -279,6 +288,38 @@ def ladder_stop(side: int, entry: float, best: float, stop: float, roe_act: floa
     return stop, -1                                 # reached, but no better than the stop already there
 
 
+def net_ladder_stop(side: int, entry: float, best: float, stop: float, lev: float, trigger: float, lock: float,
+                    step: float, fee: float) -> tuple[float, int]:
+    """Owners 10-26: the ladder on NET ROE (% of the margin, the taker ``fee`` on both sides, at leverage ``lev``):
+    best at ``trigger`` or more -> the stop at ``lock``, one ``step`` more for each further ``step`` reached (12 -> 10,
+    17 -> 15, 22 -> 20 ...). The answers of ladder_stop: (new stop, step); step 0 = not yet, -1 = reached but no better
+    than the stop already there; the stop never moves the unfavourable way."""
+    roe = (side * (best - entry) / entry - 2 * fee) * lev * 100.0
+    if roe < trigger - 1e-9:
+        return stop, 0
+    k = int(math.floor((roe - trigger) / step + 1e-9))
+    new = entry * (1 + side * ((lock + step * k) / 100.0 / lev + 2 * fee))
+    if (side > 0 and new > stop) or (side < 0 and new < stop):
+        return new, k + 1
+    return stop, -1
+
+
+def plan_words(c: "Config", short: bool = False) -> str:
+    """The size and the ladder of a config in words (the start message, the site, the checks); ``short`` for a card."""
+    if c.margin_frac > 0:
+        size = f"증거금 잔고의 {c.margin_frac:.0%}" if short else f"진입마다 증거금 = 잔고의 {c.margin_frac:.0%}"
+    else:
+        size = f"손절 1번 잔고의 {c.risk_pct:g}%" if short else f"손절 1번 = 잔고의 {c.risk_pct:g}%"
+    if c.ladder:
+        t, lk, st = c.ladder["trigger"], c.ladder["lock"], c.ladder["step"]
+        lad = (f"계단 {t:g}→{lk:g}·{t + st:g}→{lk + st:g}…" if short else
+               f"계단 순ROE +{t:g}%→+{lk:g}%, +{t + st:g}%→+{lk + st:g}%, +{t + 2 * st:g}%→+{lk + 2 * st:g}% (그 뒤 {st:g}%마다)")
+    else:
+        lad = "계단 코인별" if short else "계단 코인별 ROE +roe_act%→+10%"
+    every = "" if short or c.ladder_every_s <= 0 else f" · 손절·계단 {c.ladder_every_s:g}초마다(1분봉)"
+    return f"{size} · {lad}{every}"
+
+
 # ====================================================================== config and state
 @dataclass
 class Config:
@@ -292,13 +333,16 @@ class Config:
     kill_file: str = "/var/lib/paperbot/STOP"     # the shared emergency file (the executors close everything on it)
     own_stop_file: str = "/var/lib/paperbot/exec/mixchop.STOP"   # this bot only: no new entries
     max_notional_usd: float = 2000.0
-    taker_fee: float = 0.00042                  # paper only (WOO X Pro's taker fee): charged on both sides
+    taker_fee: float = 0.00042                  # WOO X Pro's taker fee: paper charges it on both sides; ``ladder``'s net ROE
     telegram: bool = True
     binance_base: str = "https://fapi.binance.com"
     no_weekend: bool = False                    # entry blocks (owners' rules; off in the friend's design)
     us_open_pre_min: int = 0
     us_open_pause_min: int = 0
     macro_blackout_min: int = 0
+    margin_frac: float = 0.0                    # > 0: each entry's margin = equity x this (owners 10-26); 0: risk_pct sizing
+    ladder: Optional[dict] = None               # {"trigger", "lock", "step"} net ROE %; None: the coins' roe_act ladder
+    ladder_every_s: float = 0.0                 # > 0: the open position on closed 1m bars this often between the closes
 
     @property
     def symbols(self) -> list:
@@ -335,7 +379,21 @@ def load_config(path: str) -> Config:
                  taker_fee=float(raw.get("taker_fee", 0.00042)), telegram=bool(raw.get("telegram", True)),
                  binance_base=raw.get("binance_base", "https://fapi.binance.com"),
                  no_weekend=bool(raw.get("no_weekend", False)), us_open_pre_min=int(raw.get("us_open_pre_min", 0)),
-                 us_open_pause_min=int(raw.get("us_open_pause_min", 0)), macro_blackout_min=int(raw.get("macro_blackout_min", 0)))
+                 us_open_pause_min=int(raw.get("us_open_pause_min", 0)), macro_blackout_min=int(raw.get("macro_blackout_min", 0)),
+                 margin_frac=float(raw.get("margin_frac", 0) or 0), ladder_every_s=float(raw.get("ladder_every_s", 0) or 0))
+    lad = raw.get("ladder")
+    if lad is not None:
+        try:
+            cfg.ladder = {k: float(lad[k]) for k in ("trigger", "lock", "step")}
+        except (TypeError, KeyError, ValueError):
+            raise MixError("\"ladder\"는 {\"trigger\": 12, \"lock\": 10, \"step\": 5} 꼴이어야 합니다(순ROE %)") from None
+        t, lk, st = cfg.ladder["trigger"], cfg.ladder["lock"], cfg.ladder["step"]
+        if not (0 < lk < t <= 1000 and 0 < st <= 1000):
+            raise MixError(f"\"ladder\" 값이 범위 밖입니다(0 < lock < trigger <= 1000, 0 < step): {cfg.ladder}")
+    if not (0 <= cfg.margin_frac <= 1):
+        raise MixError(f"\"margin_frac\"는 0 ~ 1 사이여야 합니다(지금 {cfg.margin_frac})")
+    if not (cfg.ladder_every_s == 0 or 30 <= cfg.ladder_every_s <= 600):
+        raise MixError(f"\"ladder_every_s\"는 0(끔) 또는 30 ~ 600초여야 합니다(지금 {cfg.ladder_every_s})")
     if not cfg.state or not cfg.log:
         raise MixError("\"state\"와 \"log\" 파일 경로가 필요합니다")
     if not (0 < cfg.risk_pct <= 5):
@@ -362,7 +420,7 @@ class Position:
     opened_ms: int
     signal_close_ms: int
     signal_close: float
-    last_bar_ms: int                            # the last 30m close already used for best / the ladder
+    last_bar_ms: int                            # the end of the last bar (30m, or 1m with ladder_every_s) used for best / the ladder
     stop_id: Optional[str] = None
     equity_before: Optional[float] = None
     leverage: int = 40
@@ -602,6 +660,7 @@ class Bot:
         self._said: dict = {}                   # alert key -> monotonic time last sent (repeats at most ALERT_EVERY_S)
         self._entry_try: Optional[tuple] = None  # (symbol, side, until_ms, ref, dist): an entry whose fill was not seen
         self._unknown_told = ""                  # the unknown positions last told (coins)
+        self._last_minute_ms = 0                 # ladder_every_s: when the open position was last followed on 1m bars
 
     # ---------------------------------------------------------------- persistence and log
     def save(self) -> None:
@@ -655,7 +714,7 @@ class Bot:
         held = f"\n보유 중: {coin_ko(self.pos.symbol)} {'롱' if self.pos.side > 0 else '숏'} 손절 {self.pos.stop:.6g}" \
             if self.pos else ""
         self.say("INFO", f"▶️ 시작 · 잔고 ${eq:,.2f} (시작 잔고 ${self.start_equity:,.2f})\n코인 {coins}\n"
-                         f"손절 1번 = 잔고의 {self.cfg.risk_pct}% · 한 번에 1포지션 · 30분봉 마감마다 판단{held}"
+                         f"{self.plan_text()} · 한 번에 1포지션 · 30분봉 마감마다 판단{held}"
                  + ("".join(f"\n⚠ {t}" for t in bad)))
         self.log("start", equity=eq, start_equity=self.start_equity, setup=lines, position=asdict(self.pos) if self.pos else None)
         if problem:
@@ -676,6 +735,23 @@ class Bot:
             self._unprotected = True
             return f"🚨 다시 켜면서 {coin_ko(p.symbol)} 포지션·손절을 확인하지 못했습니다: {e}\n봇이 15초마다 다시 해 봅니다. 거래소에서 확인하세요"
         return ""
+
+    def plan_text(self) -> str:
+        """The size and the ladder in words (start message)."""
+        return plan_words(self.cfg)
+
+    def ladder_for(self, p: "Position") -> tuple[float, int]:
+        """(new stop, step) for the position's best: the config's net-ROE ladder, else the coin's roe_act ladder."""
+        lad = self.cfg.ladder
+        if lad:
+            return net_ladder_stop(p.side, p.entry, p.best, p.stop, p.leverage, lad["trigger"], lad["lock"], lad["step"],
+                                   self.cfg.taker_fee)
+        return ladder_stop(p.side, p.entry, p.best, p.stop, p.roe_act, p.leverage)
+
+    def roe_text(self, p: "Position", px: float) -> str:
+        if self.cfg.ladder:
+            return f"순ROE {(p.side * (px - p.entry) / p.entry - 2 * self.cfg.taker_fee) * p.leverage * 100:+.1f}%"
+        return f"ROE {p.roe(px):+.1f}%"
 
     # ---------------------------------------------------------------- protection (live)
     def protect(self, flat_why: str, where: str) -> None:
@@ -831,15 +907,18 @@ class Bot:
         sym, side = co.symbol, ev["side"]
         eq = self.b.equity()
         dist = float(ev["stop_dist"])
-        risk = eq * self.cfg.risk_pct / 100.0
-        qty = risk / dist
         ref = float(ev["close"])
+        if self.cfg.margin_frac > 0:                    # owners 10-26: margin = equity x margin_frac
+            qty = eq * self.cfg.margin_frac * co.leverage / ref
+        else:
+            qty = eq * self.cfg.risk_pct / 100.0 / dist
         if qty * ref > self.cfg.max_notional_usd:
             qty = self.cfg.max_notional_usd / ref
         sp = self.b.spec(sym)
         if sp.get("qty_step"):
             qty = math.floor(qty / float(sp["qty_step"]) + 1e-9) * float(sp["qty_step"])
         need = max(float(sp.get("min_qty") or 0), float(sp.get("min_notional") or 0) / ref)
+        risk = qty * dist                               # the loss at the stop (fees aside)
         if qty <= 0 or qty + 1e-12 < need:
             self.log("skip", symbol=sym, side=side, why="최소 주문보다 작음", qty=qty, need=need, equity=eq)
             self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 크기 {qty:g}가 최소 {need:g}보다 작음 "
@@ -889,14 +968,25 @@ class Bot:
             filled, stop = p.qty, p.stop
         self.save()
         self.log("entry", **asdict(p), why=ev)
-        lock_px = fill + side * fill * LOCK_ROE / 100 / co.leverage
-        act_px = fill + side * fill * co.roe_act / 100 / co.leverage
+        lad = self.cfg.ladder
+        if lad:
+            fee2 = 2 * self.cfg.taker_fee
+            act_px = fill * (1 + side * (lad["trigger"] / 100 / co.leverage + fee2))
+            lock_px = fill * (1 + side * (lad["lock"] / 100 / co.leverage + fee2))
+            ladder_line = (f"계단: {act_px:.6g}(순ROE +{lad['trigger']:g}%) 가면 손절을 {lock_px:.6g}(순ROE +{lad['lock']:g}%)로, "
+                           f"그 뒤 {lad['step']:g}%마다 한 칸")
+        else:
+            lock_px = fill + side * fill * LOCK_ROE / 100 / co.leverage
+            act_px = fill + side * fill * co.roe_act / 100 / co.leverage
+            ladder_line = (f"계단: {act_px:.6g}(ROE +{co.roe_act:.0f}%) 가면 손절을 {lock_px:.6g}(ROE +{LOCK_ROE:.0f}%)로")
+        loss_pct = filled * dist / eq * 100 if eq else 0.0
+        size_words = (f"증거금 잔고의 {self.cfg.margin_frac:.0%}, 손절 1번 약 잔고의 {loss_pct:.1f}%" if self.cfg.margin_frac > 0
+                      else f"잔고의 {self.cfg.risk_pct}%")
         self.say("CRITICAL" if self._unprotected else "INFO",
                  ("🚨 손절을 아직 확인하지 못했습니다. 봇이 15초마다 다시 겁니다. 거래소에서 확인하세요\n" if self._unprotected else "")
                  + f"{'🟢' if side > 0 else '🔴'} {coin_ko(sym)} {'롱' if side > 0 else '숏'} 진입 {fill:.6g} ({co.leverage}배, "
                          f"{filled:g}개 ≈ ${filled * fill:,.2f})\n손절 {stop:.6g} (ROE −{dist / fill * co.leverage * 100:.1f}%, "
-                         f"잔고의 {self.cfg.risk_pct}%)\n계단: {act_px:.6g}(ROE +{co.roe_act:.0f}%) 가면 손절을 {lock_px:.6g}"
-                         f"(ROE +{LOCK_ROE:.0f}%)로\n근거: {'하늘색' if side > 0 else '보라색'}으로 바뀜 · 30분 평균 RSI "
+                         f"{size_words})\n{ladder_line}\n근거: {'하늘색' if side > 0 else '보라색'}으로 바뀜 · 30분 평균 RSI "
                          f"{ev['avg_rsi_30m']} · 1시간 평균 RSI {ev['avg_rsi_1h']} ({kst(ev['close_ms'])} 봉)")
 
     def look_for_fill(self, sym: str, side: int, ref: float, dist: float, co: Coin) -> bool:
@@ -954,20 +1044,34 @@ class Bot:
         except Exception as e:
             self.log("read_failed", symbol=p.symbol, error=str(e))
             return
+        self.live_bars(p, close_ms)
+
+    def bars_since(self, p: "Position", upto_ms: int) -> tuple[pd.DataFrame, int]:
+        """The closed bars after the last one used, up to ``upto_ms``: 1m bars with ladder_every_s (30m when more than
+        MINUTE_MAX minutes are missing: the bot was down), else 30m bars as the design. Returns (bars, bar length)."""
+        tf = MIN30
+        if self.cfg.ladder_every_s > 0 and (upto_ms - p.last_bar_ms) // MIN1 <= MINUTE_MAX:
+            tf = MIN1
+        rows = (self.fetch(p.symbol, "1m", int(max(3, (upto_ms - p.last_bar_ms) // MIN1 + 3))) if tf == MIN1
+                else self.fetch(p.symbol, "30m", 50))
+        b = bars_frame(rows, tf, upto_ms)
+        return b[b.open_ms + tf > p.last_bar_ms], tf
+
+    def live_bars(self, p: "Position", upto_ms: int) -> None:
+        """Live: best from the closed bars since the last one used, then the ladder (the resting stop moved)."""
         try:
-            b30 = bars_frame(self.fetch(p.symbol, "30m", 50), MIN30, close_ms)
+            new_bars, tf = self.bars_since(p, upto_ms)
         except Exception as e:
             self.log("bars_failed", symbol=p.symbol, error=str(e))
             return
-        new_bars = b30[b30.open_ms + MIN30 > p.last_bar_ms]
         if new_bars.empty:
             return
         if p.side > 0:
             p.best = max(p.best, float(new_bars.high.max()))
         else:
             p.best = min(p.best, float(new_bars.low.min()))
-        p.last_bar_ms = int(new_bars.open_ms.iloc[-1]) + MIN30
-        new, step = ladder_stop(p.side, p.entry, p.best, p.stop, p.roe_act, p.leverage)
+        p.last_bar_ms = int(new_bars.open_ms.iloc[-1]) + tf
+        new, step = self.ladder_for(p)
         self.save()
         if step > 0 and new != p.stop:
             try:
@@ -981,25 +1085,25 @@ class Bot:
                 p.stop, p.step, p.stop_id = new, step, sid
                 self.save()
                 self.log("ladder", symbol=p.symbol, old=old, new=new, step=step, best=p.best)
-                self.say("INFO", f"🪜 {coin_ko(p.symbol)} 계단 {step}단계: 손절 {old:.6g} → {new:.6g} (ROE {p.roe(new):+.1f}%)")
+                self.say("INFO", f"🪜 {coin_ko(p.symbol)} 계단 {step}단계: 손절 {old:.6g} → {new:.6g} ({self.roe_text(p, new)})")
             else:                                       # "closed" (price already past) / "triggered" (fired at once)
                 self.log("ladder_closed", symbol=p.symbol, result=res, to=new)
                 if self.b.is_open(p.symbol) is False and self.confirm_flat(p.symbol):
                     self.finish(p, None, "ladder")
 
     def paper_bars(self, close_ms: int) -> None:
-        """Paper: the indicator's own exit on each closed 30m bar since the last one used."""
+        """Paper: the indicator's own exit on each closed bar since the last one used (30m; 1m with ladder_every_s)."""
         p = self.pos
-        b30 = bars_frame(self.fetch(p.symbol, "30m", 50), MIN30, close_ms)
-        for _, bar in b30[b30.open_ms + MIN30 > p.last_bar_ms].iterrows():
+        new_bars, tf = self.bars_since(p, close_ms)
+        for _, bar in new_bars.iterrows():
             hit = bar.low <= p.stop if p.side > 0 else bar.high >= p.stop
             if hit:
                 px = min(bar.open, p.stop) if p.side > 0 else max(bar.open, p.stop)
                 self.finish(p, px, "ladder" if p.step > 0 else "stop")
                 return
             p.best = max(p.best, bar.high) if p.side > 0 else min(p.best, bar.low)
-            p.last_bar_ms = int(bar.open_ms) + MIN30
-            new, step = ladder_stop(p.side, p.entry, p.best, p.stop, p.roe_act, p.leverage)
+            p.last_bar_ms = int(bar.open_ms) + tf
+            new, step = self.ladder_for(p)
             if step > 0 and new != p.stop:
                 self.log("ladder", symbol=p.symbol, old=p.stop, new=new, step=step, best=p.best)
                 self.say("INFO", f"🪜 {coin_ko(p.symbol)} 계단 {step}단계: 손절 {p.stop:.6g} → {new:.6g}")
@@ -1035,6 +1139,25 @@ class Bot:
             if self._unprotected:
                 self.say_once("unprotected", "CRITICAL", f"🚨 {coin_ko(p.symbol)} 손절이 없는데 거래소를 못 읽습니다: {e}\n"
                                                          f"봇이 15초마다 다시 해 봅니다. 거래소에서 바로 확인하세요")
+
+    def minute_update(self) -> None:
+        """Between the closes (ladder_every_s > 0): every ladder_every_s the open position on the closed 1m bars since
+        the last one used: best, the ladder and the resting stop (paper: its stop judged on the same bars). Errors are
+        logged; the exchange's stop stays as it is."""
+        p = self.pos
+        if p is None or self.cfg.ladder_every_s <= 0 or self._unprotected:
+            return
+        now = self.now()
+        if now - self._last_minute_ms < self.cfg.ladder_every_s * 1000:
+            return
+        self._last_minute_ms = now
+        try:
+            if self.b.live:
+                self.live_bars(p, now)
+            else:
+                self.paper_bars(now)
+        except Exception as e:
+            self.log("minute_failed", symbol=p.symbol, error=str(e))
 
     def finish(self, p: Position, px: Optional[float], why: str) -> None:
         """The position is closed: P&L (paper: the exit price; live: the equity change), log, message, clear."""
@@ -1074,6 +1197,7 @@ class Bot:
                 nxt = self.last_close_ms + MIN30
             while not self.stop and self.now() < nxt + SETTLE_S * 1000:
                 self.poll()
+                self.minute_update()
                 self.sleep(min(POLL_S, max(0.5, (nxt + SETTLE_S * 1000 - self.now()) / 1000)))
             if self.stop:
                 break
@@ -1187,7 +1311,8 @@ def cmd_signals(args) -> int:
                 rows.append(ev)
                 if len(rows) >= args.n:
                     break
-        print(f"== {co.symbol} (여유 {co.h1_buf} · 손절 ATR × {co.sl_atr} · ROE {co.roe_act:.0f} → 10 · {co.leverage}배"
+        lad = (f"순ROE {cfg.ladder['trigger']:g} → {cfg.ladder['lock']:g}" if cfg.ladder else f"ROE {co.roe_act:.0f} → 10")
+        print(f"== {co.symbol} (여유 {co.h1_buf} · 손절 ATR × {co.sl_atr} · {lad} · {co.leverage}배"
               f"{'' if co.enabled else ' · 꺼짐'})")
         for ev in reversed(rows):
             what = "하늘(롱)" if ev.get("to_cyan") else "보라(숏)"
@@ -1213,6 +1338,11 @@ def cmd_check(args) -> int:
             print(f"  열린 포지션: {s} {q:g}")
     eq = eq or float(cfg.start_equity or 50.0)
     now = int(time.time() * 1000)
+    print("크기·계단: " + (f"진입마다 증거금 = 잔고의 {cfg.margin_frac:.0%} (한 번 최대 ${cfg.max_notional_usd:,.0f})"
+                          if cfg.margin_frac > 0 else f"손절 1번 = 잔고의 {cfg.risk_pct}%")
+          + (f" · 계단 순ROE +{cfg.ladder['trigger']:g}%→+{cfg.ladder['lock']:g}%, 그 뒤 {cfg.ladder['step']:g}%마다"
+             if cfg.ladder else " · 계단 코인별 roe_act")
+          + (f" · 손절·계단 {cfg.ladder_every_s:g}초마다(1분봉)" if cfg.ladder_every_s > 0 else ""))
     for co in cfg.coins:
         try:
             sp = pub.spec(co.symbol)
@@ -1223,7 +1353,8 @@ def cmd_check(args) -> int:
         c = b30.close.to_numpy(float)
         a = float(atr(b30.high.to_numpy(float), b30.low.to_numpy(float), c, 14)[-1])
         dist = a * co.sl_atr
-        qty = eq * cfg.risk_pct / 100 / dist
+        qty = (eq * cfg.margin_frac * co.leverage / c[-1]) if cfg.margin_frac > 0 else eq * cfg.risk_pct / 100 / dist
+        qty = min(qty, cfg.max_notional_usd / c[-1])
         step = float(sp["qty_step"])
         qty_f = math.floor(qty / step + 1e-9) * step
         ok = qty_f >= float(sp["min_qty"]) and qty_f * c[-1] >= float(sp.get("min_notional") or 0)

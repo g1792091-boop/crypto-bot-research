@@ -448,7 +448,7 @@ def test_the_views_in_node(w, tmp_path):
         assert "꺼짐" in t and X.OFF_KO["live"] in t and "sudo systemctl start paperbot-mixchop" in t and "sudo systemctl start paperbot-mixchop-paper" in t
         assert "포지션 없음" not in t and "실거래 잔고" not in t and "모의 잔고" not in t and "닫힌 거래" not in t and not BAD.search(t)
     assert "$" not in out["oa"]                                             # (성적 still shows the repo config's rules: said so)
-    assert "저장소 기본 설정으로 보여 줘요" in out["ob"] and "한 포지션 최대 $500.00" in out["ob"]
+    assert "저장소 기본 설정으로 보여 줘요" in out["ob"] and "한 포지션 최대 $10,000.00" in out["ob"]
     assert "실거래 봇이 아직 꺼져 있어요" in out["oa"] and "실거래 봇이 아직 꺼져 있어요" in out["ob"]
     st = out["st"]
     assert (st[0]["cls"], st[0]["pill"], st[0]["hint"]) == ("run", "돌고 있음", "") and st[1]["hint"] == "서버에서 systemctl status paperbot-mixchop"

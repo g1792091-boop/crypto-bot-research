@@ -45,6 +45,11 @@ def config(folder: str, mode: str) -> str:
     with open(src, encoding="utf-8") as fh:
         raw = json.load(fh)
     tag = "live" if mode == "mainnet" else "paper"
+    # this world plays the friend's design (risk sizing, the coins' ladder at 30m closes): the owners' 10-26 options
+    # (margin_frac, the net-ROE ladder, 1m follow-up) are tested in tests/test_mixchop.py and test_mixchop_1026_site.py
+    for k in ("margin_frac", "ladder", "ladder_every_s"):
+        raw.pop(k, None)
+    raw["max_notional_usd"] = 500
     raw.update(state=os.path.join(folder, f"{tag}-state.json"), log=os.path.join(folder, f"{tag}-log.jsonl"),
                kill_file=os.path.join(folder, "STOP"), own_stop_file=os.path.join(folder, f"{tag}.STOP"), telegram=False)
     path = os.path.join(folder, f"{tag}.json")

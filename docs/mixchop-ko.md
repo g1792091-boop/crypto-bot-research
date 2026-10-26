@@ -13,7 +13,8 @@
 | 진입 봉 / 추세 봉 | 30분봉 / 1시간봉 |
 | 코인 (같은 봉에 신호가 겹치면 이 순서) | SOL · ETH · XRP · BCH · ZEC · DOGE (LTC 꺼짐) |
 | 포지션 | **한 번에 1개** (두 분 결정) |
-| 손절 1번에 잃는 돈 | 잔고의 **0.25%** ($50이면 약 $0.13) |
+| 크기 | **10/26부터: 진입마다 증거금 = 잔고의 40%** (손절 1번에 잔고의 약 15~25%, 9장). 그 전: 손절 1번 = 잔고의 0.25% |
+| 계단 | **10/26부터: 순ROE 12%→10%, 17%→15%, 22%→20% … (모든 코인, 1분마다 옮김, 9장)**. 그 전: 코인별 ROE 100~200%→10% |
 | 주문 | 시장가 (두 분 결정: 지정가 안 씀) |
 | 시작 금액 | $50 |
 
@@ -317,3 +318,35 @@
 5. **실패하면:** 하루 한 번 텔레그램 경고가 옵니다(`paperbot-failed@`). 이유: `sudo journalctl -u paperbot-mixcheck -n 50`
 - 점검이 쓰는 곳은 `/var/lib/paperbot/mixcheck`(보낸 카드 기록, 봇이 처리한 봉 기록, 지난 아침 점검) 하나뿐입니다.
 - 5년 재생을 다시 하려면(개발 쪽): `python3 research/mixchop5y/replay.py all`. WOO X Pro 계약 크기를 알면 `--specs 파일`로 넣습니다(`mixchop check` 결과의 1계약·최소 수량).
+
+## 9. 크기와 계단 바꿈 (두 분 10/26: "시드비중 40%", "12% 도달하면 10%, 17%면 15%, 22%면 20%")
+
+설정 원본(`deploy/mixchop.live.json`, `deploy/mixchop.paper.json`)에 세 줄이 더해졌습니다. 신호·손절 거리·레버리지·코인·진입 금지는
+그대로입니다.
+
+- **크기 `margin_frac: 0.4`**: 진입할 때마다 그때 잔고의 40%를 증거금으로 씁니다(수량 = 잔고 × 0.4 × 배수 ÷ 가격). 전에는 "손절 1번 =
+  잔고의 0.25%"였습니다. 이제 손절 1번에 잔고의 대략 15~25%가 빠집니다(손절 거리에 따라 다름). `max_notional_usd`(한 포지션 최대)는
+  500 → 10,000달러로 올렸습니다(500이면 $50의 40%·40배 = $800을 못 채움).
+- **계단 `ladder: {"trigger": 12, "lock": 10, "step": 5}`**: 모든 코인에 같은 계단입니다. **순ROE**(WOO X Pro 테이커 0.042%를 진입·청산
+  둘 다 뺀 값, 그 코인의 배수로) 12%에 닿으면 손절을 순ROE 10% 자리로, 17%면 15%, 22%면 20%, 그 뒤로도 5%마다 한 칸. 전에는 코인별로
+  ROE 100~200%에 닿아야 10%로 잠갔습니다.
+- **`ladder_every_s: 60`**: 30분봉 마감만 기다리지 않고 **60초마다 바이낸스 1분봉**으로 가장 유리했던 가격을 갱신하고 계단 손절을
+  WOO X Pro에 옮깁니다(모의 쌍둥이는 같은 1분봉으로 손절도 판단). 계단이 촘촘해서 30분마다만 옮기면 늦습니다.
+- 그대로인 것: **`equity_floor_frac: 0.7`**(잔고가 시작의 70% 아래면 새 진입 멈춤). 40%로 들어가면 손절 두 번쯤에 70% 아래로 내려가
+  새 진입이 멈출 수 있습니다. 계속 돌리려면 이 값을 낮추거나(예: 0.3) 0으로 두면 됩니다(두 분이 정할 일).
+- 화면·알림: 실거래 사이트의 믹스 카드와 규칙 표, 텔레그램 시작·진입·계단 문구가 새 크기와 순ROE 계단으로 나옵니다. 아침 점검의
+  "운이냐 고장이냐"(5년 재생 비교)는 옛 크기·계단으로 만든 기준이라, 이 설정에서는 **비교하지 않는다고** 적고 넘어갑니다. 손실 카드의
+  R은 그 거래의 "손절에 맞았을 때 잃는 돈"을 1로 셉니다.
+
+### 9-1. 바꾸는 순서 (서버에서, 포지션이 없을 때)
+
+1. 봇을 끕니다(포지션이 있으면 앱에서 닫고 남은 손절 주문도 취소): `sudo systemctl stop paperbot-mixchop paperbot-mixchop-paper`
+2. 코드를 받습니다: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+3. 설정을 새 원본으로 덮어씁니다(서버 설정을 따로 고친 적이 없을 때):
+   ```bash
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   ```
+4. 확인: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json`
+   — 첫 줄 `크기·계단: 진입마다 증거금 = 잔고의 40% (한 번 최대 $10,000) · 계단 순ROE +12%→+10%, 그 뒤 5%마다 · 손절·계단 60초마다(1분봉)`.
+5. 켭니다: `sudo systemctl start paperbot-mixchop paperbot-mixchop-paper`. 텔레그램 시작 메시지에 같은 계획이 나옵니다.

@@ -467,7 +467,21 @@ def ladder_next(p: M.Position) -> Optional[dict]:
     return {"step": k, "trigger": trig, "trigger_roe": roe / 100.0, "stop_to": new, "stop_to_roe": p.roe(new) / 100.0, "reached": reached}
 
 
-def position_view(bid: str, d: dict, now: int) -> Optional[dict]:
+def ladder_next_net(p: M.Position, lad: dict, fee: float) -> Optional[dict]:
+    """ladder_next for the config's net-ROE ladder (owners 10-26: trigger -> lock, then one ``step`` more each):
+    the step after the position's own, its trigger and its stop in prices and NET ROE."""
+    if not p.entry or not p.leverage:
+        return None
+    lev, side, e = float(p.leverage), int(p.side), float(p.entry)
+    k = max(int(p.step or 0), 0)
+    t_roe, l_roe = lad["trigger"] + lad["step"] * k, lad["lock"] + lad["step"] * k
+    trig = e * (1 + side * (t_roe / 100.0 / lev + 2 * fee))
+    to = e * (1 + side * (l_roe / 100.0 / lev + 2 * fee))
+    return {"step": k + 1, "trigger": trig, "trigger_roe": t_roe / 100.0, "stop_to": to, "stop_to_roe": l_roe / 100.0,
+            "reached": side * (float(p.best) - trig) >= 0, "basis": "net"}
+
+
+def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict]:
     p = position_of(d.get("position"))
     if p is None:
         return None if not d.get("position") else {"state": "error", "ko": "상태 파일의 포지션을 읽지 못했어요"}
@@ -475,8 +489,18 @@ def position_view(bid: str, d: dict, now: int) -> Optional[dict]:
     notional = e * q if e is not None and q is not None else None
     lev = _i(p.leverage) or None
     loss = p.side * (p.stop - p.entry) * p.qty if e is not None and q is not None and _f(p.stop) is not None else None
-    lock_px = e + p.side * e * M.LOCK_ROE / 100.0 / lev if e and lev else None
-    act_px = e + p.side * e * float(p.roe_act) / 100.0 / lev if e and lev else None
+    lad = getattr(cfg, "ladder", None) if cfg is not None else None
+    fee = float(getattr(cfg, "taker_fee", M.Config.taker_fee)) if cfg is not None else M.Config.taker_fee
+    if lad and e and lev:
+        lock_px = e * (1 + p.side * (lad["lock"] / 100.0 / lev + 2 * fee))
+        act_px = e * (1 + p.side * (lad["trigger"] / 100.0 / lev + 2 * fee))
+    else:
+        lock_px = e + p.side * e * M.LOCK_ROE / 100.0 / lev if e and lev else None
+        act_px = e + p.side * e * float(p.roe_act) / 100.0 / lev if e and lev else None
+    net = {} if not lad else {
+        "ladder_basis": "net", "ladder_step": lad["step"] / 100.0, "roe_act": lad["trigger"] / 100.0, "lock_roe": lad["lock"] / 100.0,
+        "next": ladder_next_net(p, lad, fee), "every_s": float(getattr(cfg, "ladder_every_s", 0) or 0),
+        "best_net_roe": (p.side * (p.best - e) / e - 2 * fee) * lev if e and lev else None}
     return {"state": "ok", "symbol": p.symbol, "coin": coin_ko(p.symbol), "side": p.side, "side_ko": SIDE_KO.get(p.side, "?"), "qty": q,
             "entry": e, "notional": notional, "margin": notional / lev if notional is not None and lev else None, "leverage": lev,
             "stop": _f(p.stop), "stop_roe": p.roe(p.stop) / 100.0 if e else None, "stop_dist": _f(p.stop_dist),
@@ -485,7 +509,7 @@ def position_view(bid: str, d: dict, now: int) -> Optional[dict]:
             "first_lock_price": lock_px, "first_act_price": act_px, "next": ladder_next(p), "opened_ms": _i(p.opened_ms),
             "held_ms": now - int(p.opened_ms) if p.opened_ms else None, "signal_close_ms": _i(p.signal_close_ms),
             "signal_close": _f(p.signal_close), "last_bar_ms": _i(p.last_bar_ms), "equity_before": _f(p.equity_before),
-            "stop_id": p.stop_id, "stop_id_missing": bid == "live" and not p.stop_id}
+            "stop_id": p.stop_id, "stop_id_missing": bid == "live" and not p.stop_id, **net}
 
 
 # ---------------------------------------------------------------- 최근 48시간: signals with what became of them, warnings
@@ -601,6 +625,7 @@ def trades_of(rows: list, cfg: Any) -> list:
         if r.get("kind") in ("entry", "adopted"):
             opens[(r.get("symbol"), _i(r.get("opened_ms")))] = r
     risk = float(cfg.risk_pct) if cfg is not None else None
+    by_margin = cfg is not None and float(getattr(cfg, "margin_frac", 0) or 0) > 0
     out = []
     for r in rows:
         if r.get("kind") != "exit":
@@ -622,12 +647,15 @@ def trades_of(rows: list, cfg: Any) -> list:
             roe = None
         why = (en or {}).get("why") if isinstance((en or {}).get("why"), dict) else {}
         t = _i(r.get("ts"))
+        dist = _f((en or {}).get("stop_dist"))
+        # R: the loss at the stop is the unit; sized by margin (owners 10-26) it is the entry's size x stop distance
+        r_unit = (qty * dist) if by_margin and qty and dist else (eq_b * risk / 100.0 if eq_b and risk else None)
         out.append({"symbol": sym, "coin": coin_ko(sym), "side": side, "side_ko": SIDE_KO.get(side, "?"), "opened_ms": om, "exit_ms": t,
                     "hold_ms": (t - om) if t is not None and om is not None else None, "entry": entry, "exit": px, "stop": _f(r.get("stop")),
                     "qty": qty, "leverage": lev, "why": r.get("why"), "why_ko": M.EXIT_KO.get(r.get("why"), str(r.get("why") or "")),
                     "pnl": pnl, "pnl_src": "equity" if eq_a is not None and eq_b is not None else "row" if pnl is not None else None,
                     "win": (pnl > 0) if pnl is not None else None, "roe": roe, "equity": eq_a, "equity_before": eq_b,
-                    "r": (pnl / (eq_b * risk / 100.0)) if pnl is not None and eq_b and risk else None, "step": _i(r.get("step")) or 0,
+                    "r": (pnl / r_unit) if pnl is not None and r_unit else None, "step": _i(r.get("step")) or 0,
                     "no_entry_row": en is None, "adopted": (en or {}).get("kind") == "adopted",
                     "signal": {k: why.get(k) for k in ("avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close", "close_ms") if why.get(k) is not None}})
     out.sort(key=lambda t: t.get("exit_ms") or 0, reverse=True)
@@ -678,7 +706,9 @@ def rules_view(conf: dict, off: Optional[set] = None) -> Optional[dict]:
     return {"source": conf.get("source"), "path": conf.get("path") if conf.get("source") == "server" else conf.get("repo_path"),
             "mode": cfg.mode, "risk_pct": cfg.risk_pct, "equity_floor_frac": cfg.equity_floor_frac, "max_notional_usd": cfg.max_notional_usd,
             "start_equity": _f(cfg.start_equity), "taker_fee": cfg.taker_fee if cfg.mode == "paper" else None, "one_position": True,
-            "lock_roe": M.LOCK_ROE / 100.0,
+            "lock_roe": M.LOCK_ROE / 100.0, "margin_frac": float(getattr(cfg, "margin_frac", 0) or 0),
+            "ladder": ({k: v / 100.0 for k, v in cfg.ladder.items()} if getattr(cfg, "ladder", None) else None),
+            "ladder_every_s": float(getattr(cfg, "ladder_every_s", 0) or 0), "plan_ko": M.plan_words(cfg),
             "coins": [{"symbol": c.symbol, "coin": coin_ko(c.symbol), "h1_buf": c.h1_buf, "sl_atr": c.sl_atr, "roe_act": c.roe_act / 100.0,
                        "leverage": c.leverage, "enabled": c.enabled, "off_at_start": c.symbol in (off or set())} for c in cfg.coins],
             "blocks": block_rules(cfg), "server_state": conf.get("server_state"), "reason_ko": conf.get("reason_ko")}
@@ -700,7 +730,7 @@ def bot_control(bid: str, bp: dict, now: int) -> dict:
     eq = equity_view(bid, b)
     cfg = b["conf"].get("cfg")
     if b["st"].get("state") == "ok":
-        pos = position_view(bid, d, now)
+        pos = position_view(bid, d, now, cfg)
     else:                                            # never "no position" from a state file that was not read
         pos = {"state": b["st"]["state"], "ko": "상태 파일을 읽지 못해 포지션을 몰라요" if b["st"]["state"] == "error" else "상태 파일이 없어 포지션을 몰라요",
                "reason_ko": b["st"].get("reason_ko"), "reason": b["st"].get("reason")}
@@ -716,6 +746,7 @@ def bot_control(bid: str, bp: dict, now: int) -> dict:
     return {**out, "equity": eq, "today": today and {**today, "from_ms": d0}, "recent": recent, "halts": halts_view(b, eq, now), "blocks": blocks_view(cfg, now), "position": pos,
             "feed": feed_view(rows, now) if b["lg"].get("state") == "ok" else None, "setup_bad": setup_bad,
             "risk_pct": cfg.risk_pct if cfg is not None else None,
+            "plan_short_ko": M.plan_words(cfg, short=True) if cfg is not None else None,
             "coins": [{"symbol": c.symbol, "coin": coin_ko(c.symbol), "enabled": c.enabled and c.symbol not in off} for c in cfg.coins] if cfg is not None else []}
 
 
