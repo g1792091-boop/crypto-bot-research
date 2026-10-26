@@ -195,10 +195,11 @@ def run_arm(W: World, cand: pd.DataFrame, arm: dict, a: int, b: int, flip_rng=No
                                rev=arm.get("rev", True))
             if arm.get("liq_check"):                  # the stop at least 1 ATR inside liquidation (first bracket, mmr 0.5 %)
                 fill = W.m5[r.coin]["o"][r.e5] * (1 + side * S.SLIP)
-                if stop_dist + r.atr > (1.0 / lev - 0.005) * fill:
+                dist = (arm["stop_roe"] / lev - S.RT) * fill if arm.get("stop_roe") else stop_dist
+                if dist + r.atr > (1.0 / lev - 0.005) * fill:
                     continue
             res = S.run_position(W.m5[r.coin], int(r.e5), side, lev, float(r.ref), arm["exit"], stop_dist, sup,
-                                 tp_roe=arm.get("tp_roe", 0.10), lad=arm.get("lad"))
+                                 tp_roe=arm.get("tp_roe", 0.10), lad=arm.get("lad"), stop_roe=arm.get("stop_roe"))
             took = (r, side, lev, res)
             break
         if took is None:

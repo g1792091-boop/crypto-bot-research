@@ -53,7 +53,8 @@ def lad_lock(best: float, lad: tuple) -> float | None:
 
 
 def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind: str, stop_dist: float = 0.0,
-                 sup_at: int | None = None, tp_roe: float = 0.10, lad: tuple | None = None) -> dict:
+                 sup_at: int | None = None, tp_roe: float = 0.10, lad: tuple | None = None,
+                 stop_roe: float | None = None) -> dict:
     """One position. ``m``: the coin's 5m arrays (ts o h l c fund). ``i0``: the 5m bar whose open is the fill.
     ``sup_at``: the first 5m bar index at whose open a JUDGE / REV exit would close (trend exit, before the first lock).
     Returns {exit_i, reason, roe, mfe (best net ROE seen), fill, exit_px}."""
@@ -71,6 +72,8 @@ def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind:
     else:
         stop = fill * (1 + side * (-0.50 / lev + RT))
         tp = None
+    if stop_roe is not None and exit_kind in ("tp10", "lad", "trendlad"):   # a net-ROE stop on the fill (roe_price)
+        stop = fill * (1 + side * (-stop_roe / lev + RT))
     lock = None
     best = -9.0
 
