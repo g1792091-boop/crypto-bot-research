@@ -886,6 +886,35 @@ def test_a_fired_stops_order_is_told_from_our_own_close():
     assert (got["algoStatus"], got["actualOrderId"]) == ("TRIGGERED", child)
 
 
+@pytest.mark.parametrize("hidden, takes_cid", [(True, False), (False, True), (True, True)])
+def test_a_fired_stops_order_found_by_its_fills_live_drill_10_26(hidden, takes_cid):
+    """The owners' first live drill (10-26, BCH long and BTC short): the stop fired and closed the position, its fills
+    were in userTrades under a new orderId, but the order-history look-up found no order: the order a fired stop places
+    is now found by its fills (side, time, not one of ours), and also when it carries the stop's own client id."""
+    c, fake, clock = make()
+    fake.child_hidden, fake.child_takes_stop_cid = hidden, takes_cid
+    ready(c)
+    c.market(BTC, "BUY", 10.0, client_id="pbE")
+    close = c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbX")      # ours, the same side, just before
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbS")
+    clock.t += 3_000
+    fake.set_price(BTC, 94.0)
+    assert fake.amt(BTC) == 0
+    child = next(str(f["orderId"]) for f in fake.fills if str(f["orderId"]) not in (str(close["orderId"]),) and
+                 f["side"] == "SELL_CLOSE" and str(f["orderId"]) != str(st["algoId"]) and int(f["time"]) >= clock.t)
+    got = c.algo_order(algo_id=st["algoId"])
+    assert (got["algoStatus"], got["actualOrderId"]) == ("TRIGGERED", child)
+    if takes_cid and not hidden:                       # the history row alone (fills unreadable) still names it
+        real = fake._route
+
+        def broken(m, p, q):
+            if (m, p) == ("GET", "/api/v1/futures/userTrades"):
+                return 503, b"busy", {}
+            return real(m, p, q)
+        fake._route = broken
+        assert c.algo_order(algo_id=st["algoId"])["actualOrderId"] == child
+
+
 def test_a_stop_looked_up_after_a_restart():
     """A stop id this process has not seen: its own record names its coin; without a record every coin's stop list is
     read, and one coin that cannot be read makes the answer unknown, never "not found"."""

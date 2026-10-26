@@ -1848,25 +1848,45 @@ class ToobitClient:
         return out
 
     def _child_order(self, symbol: str, sid: str, row: dict, fired_ms: int) -> str:
-        """The order a fired stop placed: fills under the stop's own orderId, else the one regular order of the coin on
-        the stop's side made from 2 s before it fired to CHILD_AFTER_MS after, not one of ours (no client id of ours,
-        not an order this process placed). Not found or not one: "" (the executor's P&L then reads every fill of the
-        trade's window). A failed read of the fills still leaves the order history to look in."""
+        """The order a fired stop placed: fills under the stop's own orderId; else the one order whose FILLS (the
+        account's own record, read at once) are on the stop's side from 2 s before it fired to CHILD_AFTER_MS after and
+        not under an order this process placed; else the one regular order of the coin in the order history on the
+        stop's side in that window, not one of ours (a client id of ours other than the stop's own: Toobit may give the
+        order a fired stop places the stop's client id). Not found or not one: "" (the executor's P&L then reads its
+        fills again later). The owners' first live drill (10-26, BCH long and BTC short): the stop fired and its fills
+        were in userTrades under a new orderId, which the order-history look-up alone did not find."""
+        side = side_of(row)
+
+        def same_side(v) -> bool:                       # "SELL_CLOSE", or a plain "SELL" on a record that gives one
+            v = str(v or "").upper()
+            return v == side or v == bin_side(side)
         try:
-            if any(str(f.get("orderId")) == sid for f in self._trades(symbol, fired_ms - 60_000,
-                                                                       fired_ms + CHILD_AFTER_MS)):
-                return sid
+            fills = self._trades(symbol, fired_ms - 60_000, fired_ms + CHILD_AFTER_MS)
         except TestnetError:
-            pass
+            fills = None
+        if fills is not None:
+            if any(str(f.get("orderId")) == sid for f in fills):
+                return sid
+            ids = []
+            for f in fills:
+                oid = str(f.get("orderId") or "")
+                t = to_ms(f["time"]) if f.get("time") not in (None, "") else None
+                if (oid and oid not in self.own_oids and same_side(f.get("side")) and t is not None
+                        and fired_ms - 2_000 <= t <= fired_ms + CHILD_AFTER_MS and oid not in ids):
+                    ids.append(oid)
+            if len(ids) == 1:
+                return ids[0]
         try:
-            side = side_of(row)
+            own_cid = str(row.get("clientOrderId") or "")
             cands = []
             for r in self._history_rows(symbol, start_ms=fired_ms - 60_000):
-                if str(r.get("side") or "").upper() != side or str(r.get("type") or "").upper() in STOP_KINDS:
+                if not same_side(r.get("side")) or str(r.get("type") or "").upper() in STOP_KINDS:
                     continue
                 cid = str(r.get("clientOrderId") or "")
-                if cid.startswith("pb") or cid in self.sent or str(r.get("orderId")) in self.own_oids:
+                if (cid != own_cid or not cid) and (cid.startswith("pb") or cid in self.sent):
                     continue                               # one of ours (every id this executor sends starts "pb")
+                if str(r.get("orderId")) in self.own_oids or str(r.get("orderId")) == sid:
+                    continue
                 t = to_ms(r["time"]) if r.get("time") not in (None, "") else None
                 if t is not None and fired_ms - 2_000 <= t <= fired_ms + CHILD_AFTER_MS:
                     cands.append(str(r.get("orderId")))
@@ -2823,20 +2843,39 @@ class ToobitDrill:
             or self._algo_or_empty(sid)
 
     def _fills_of_stop(self, s: str, sid: str, got: dict) -> None:
-        """Whose orderId the fired stop's fills carry: its own, or the order it placed (found by side and time)."""
+        """Whose orderId the fired stop's fills carry: its own, or the order it placed (found by its fills, side and
+        time; asked again for up to about 30 s while the records catch up). Not found: the rows near the moment it
+        fired are shown (order history and fills: id, side, type, client id, time) so the reason can be read."""
         c = self.client
-        now = c.clock_ms() + c.offset_ms
-        try:
-            rows = c._trades(s, now - 3_600_000, now + 5_000)
-        except TestnetError as e:
-            self._step("발동한 손절의 체결 찾기", False, str(e), fatal=False)
-            return
-        child = got.get("actualOrderId") or ""
-        own = [r for r in rows if str(r.get("orderId")) == sid]
-        theirs = [r for r in rows if child and child != sid and str(r.get("orderId")) == child]
-        self._step("발동한 손절의 체결을 찾음(손절 자신의 orderId, 또는 손절이 낸 주문)", bool(own or theirs),
-                   {"own_fills": len(own), "stop": sid, "child_order": child if child != sid else "",
-                    "child_fills": len(theirs)}, fatal=False)
+        own, theirs, child, rows = [], [], "", []
+        for i in range(7):
+            if i:
+                self.wait(5.0)
+                got = self._algo_or_empty(sid) or got
+            now = c.clock_ms() + c.offset_ms
+            try:
+                rows = c._trades(s, now - 3_600_000, now + 5_000)
+            except TestnetError as e:
+                self._step("발동한 손절의 체결 찾기", False, str(e), fatal=False)
+                return
+            child = got.get("actualOrderId") or ""
+            own = [r for r in rows if str(r.get("orderId")) == sid]
+            theirs = [r for r in rows if child and child != sid and str(r.get("orderId")) == child]
+            if own or theirs:
+                break
+        info = {"own_fills": len(own), "stop": sid, "child_order": child if child != sid else "", "child_fills": len(theirs)}
+        if not (own or theirs):
+            fired = to_ms(got.get("updateTime")) if _soft(got.get("updateTime")) > 0 else c.clock_ms() + c.offset_ms
+            near = lambda r: abs((to_ms(r.get("time")) if r.get("time") not in (None, "") else 0) - fired) <= 120_000  # noqa: E731
+            info["fills_near"] = [(str(r.get("orderId")), r.get("side"), r.get("qty"), r.get("time")) for r in rows if near(r)][:6]
+            try:
+                hist = c._history_rows(s, start_ms=fired - 120_000)
+            except TestnetError as e:
+                hist, info["history_error"] = [], str(e)
+            info["history_near"] = [(str(r.get("orderId")), r.get("side"), r.get("type"), r.get("status"),
+                                     str(r.get("clientOrderId") or "")[:6], r.get("time")) for r in hist if near(r)][:6]
+        self._step("발동한 손절의 체결을 찾음(손절 자신의 orderId, 또는 손절이 낸 주문)", bool(own or theirs), info,
+                   fatal=False)
 
     def _algo_or_empty(self, sid: str) -> dict:
         try:

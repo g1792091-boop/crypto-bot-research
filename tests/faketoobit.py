@@ -134,6 +134,8 @@ class FakeToobit:
         self.order_lag_ms = 0
         self.stop_lag_ms = 0
         self.fill_lag_ms = 0
+        self.child_hidden = False           # a fired stop's order: fills only, not in the order history
+        self.child_takes_stop_cid = False   # ... or carrying the stop's own clientOrderId
         self.history_lag_ms = 0
         self.kill_new_stops = False
         self.partial = None
@@ -426,13 +428,15 @@ class FakeToobit:
                 self._end(t, "FAILED")
                 return
         q = {"symbol": t["symbol"], "side": t["side"], "quantity": t["origQty"], "priceType": "MARKET",
-             "newClientOrderId": ""}
+             "newClientOrderId": t.get("clientOrderId", "") if self.child_takes_stop_cid else ""}
         child = self._record(q, "LIMIT")
         if self.own_fills:
             del self.orders[child["orderId"]]
             child = dict(child)
             child["orderId"] = t["orderId"]
         self._execute(child, Decimal(t["origQty"]), self.prices[s])
+        if self.child_hidden and not self.own_fills:    # the live drill (10-26): its fills only, not in the history
+            self.orders.pop(child["orderId"], None)
         self._end(t, "FILLED")
 
     # ------------------------------------------------------------ routes
