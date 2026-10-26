@@ -193,7 +193,8 @@ def run_arm(W: World, cand: pd.DataFrame, arm: dict, a: int, b: int, flip_rng=No
             if arm["exit"] == "trend":
                 sup = W.sup_at(r.coin, int(r.side), int(r.t), int(r.e5), judge=arm.get("judge", True),
                                rev=arm.get("rev", True))
-            res = S.run_position(W.m5[r.coin], int(r.e5), side, lev, float(r.ref), arm["exit"], stop_dist, sup)
+            res = S.run_position(W.m5[r.coin], int(r.e5), side, lev, float(r.ref), arm["exit"], stop_dist, sup,
+                                 tp_roe=arm.get("tp_roe", 0.10))
             took = (r, side, lev, res)
             break
         if took is None:

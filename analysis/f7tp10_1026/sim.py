@@ -42,7 +42,7 @@ def check_ladder() -> None:
 
 
 def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind: str, stop_dist: float = 0.0,
-                 sup_at: int | None = None) -> dict:
+                 sup_at: int | None = None, tp_roe: float = 0.10) -> dict:
     """One position. ``m``: the coin's 5m arrays (ts o h l c fund). ``i0``: the 5m bar whose open is the fill.
     ``sup_at``: the first 5m bar index at whose open a JUDGE / REV exit would close (trend exit, before the first lock).
     Returns {exit_i, reason, roe, mfe (best net ROE seen), fill, exit_px}."""
@@ -53,7 +53,7 @@ def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind:
     f_paid = 0.0                                   # funding paid, fraction of the entry notional
     if exit_kind == "tp10":
         stop = ref - side * stop_dist
-        tp = fill * (1 + side * (0.10 / lev + RT))
+        tp = fill * (1 + side * (tp_roe / lev + RT))
     else:
         stop = fill * (1 + side * (-0.50 / lev + RT))
         tp = None
