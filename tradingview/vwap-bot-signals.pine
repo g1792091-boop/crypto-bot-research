@@ -1,0 +1,443 @@
+// VWAP 개선판 봇 신호 — 트레이딩뷰 지표 (두 분 10/26 "지금 돌아가고 있는 vwap 실거래봇 트뷰 적용되게 시그널 지표 만들어줘")
+//
+// 봇과 같은 규칙 (deploy/combo.vwap.json, paperbot/combo.py · entrygates.py · trendjudge.py · strategy_view_defs):
+//   매매법 1  VWAP 복귀 실패 (30분봉, F6_VWAP_FAIL): 그날(UTC 0시 = 한국 오전 9시 시작) VWAP를 종가로 뚫은 뒤 10봉 안에
+//             VWAP를 다시 건드리고 원래 쪽으로 마감(숏은 음봉, 롱은 양봉)한 첫 봉. 사이에 반대쪽 마감이 있으면 취소.
+//   매매법 2  CMO·샌드위치 캔들 (1시간봉, S3_CMO_SANDWICH): 하락 뒤 음양음(롱) / 상승 뒤 양음양(숏) 샌드위치와
+//             CMO(14) 0선 돌파가 3봉 안에 같이, 그 봉에 둘 중 하나가 새로 생김.
+//   같은 봉이면 VWAP 복귀 실패가 먼저, 포지션은 하나.
+//   진입 문 (하나라도 걸리면 진입 안 함, 봇의 순서):
+//     주말(한국 시간 토·일) → 경제 발표 앞뒤 30분 → 나스닥 개장 앞 30분·뒤 30분(뉴욕 09:30, 평일, 휴장일 빼고)
+//     → 4시간 추세 판단 4개(V3.9 슈퍼트렌드 10/3 · EMA20+DMI · OBV/SMA30 · 일목 구름+AO) 중 3개가 반대
+//     → 변동성: 신호 봉의 ATR(14)% 가 지난 30일 같은 봉들의 80% 위치보다 큼
+//   손절 = 신호 봉 종가 ∓ ATR(14) × 2, 계단 = 순ROE(30배, 수수료·슬리피지 왕복 뺌) 12%에 닿으면 10% 잠금, 그 뒤 5%마다,
+//   보유 한도 = 그 매매법 봉 96개(30분봉 48시간, 1시간봉 96시간).
+//
+// 꼭 알아 둘 것
+//   - 30분봉 차트에서만 씁니다. 바이낸스 선물 차트(예: BINANCE:BTCUSDT.P)에 거세요. 현물 차트는 거래량이 달라 VWAP이 달라집니다.
+//   - 봇은 6코인(BTC·ETH·SOL·DOGE·LTC·BCH)을 한 계좌에서 한 번에 1포지션만 잡습니다. 이 지표는 이 차트 코인만 보므로,
+//     다른 코인을 들고 있을 때 봇이 건너뛴 신호도 여기서는 진입으로 보일 수 있습니다.
+//   - 실거래(딥코인)는 페이퍼 최근 20번 중 75% 넘게 이겼을 때만 따라갑니다(신호등). 신호등 상태는 실거래 사이트에서 보세요.
+//   - 손절·계단 선은 30분봉으로 계산한 추정입니다(봇은 1분봉). 경제 발표 일정은 2026-10~12월치만 들어 있습니다.
+//   - 4시간 추세 판단은 봇이 마지막 300개 4시간봉으로 계산하고 여기서는 전체 기록으로 계산합니다. 대부분 같지만 드물게 다를 수 있습니다.
+//
+// 파이썬으로 같은 계산을 한 검사: tradingview/pine_mirror.py, tests/test_tradingview_vwap.py
+//@version=5
+indicator("VWAP 개선판 봇 신호", shorttitle="VWAP봇", overlay=true, max_labels_count=500, max_lines_count=500, max_bars_back=1500)
+
+// ====================================================================== 입력
+grpG = "진입 문 (봇 설정 그대로)"
+useVote = input.bool(true, "4시간 추세 판단이 반대면 진입 안 함", group=grpG)
+voteMin = input.int(3, "판단 4개 중 몇 개가 반대면 막을지", minval=2, maxval=4, group=grpG)
+useVol = input.bool(true, "변동성이 지난 기간의 기준 위치보다 크면 진입 안 함", group=grpG)
+volDays = input.int(30, "변동성 비교 기간(일)", minval=5, maxval=30, group=grpG)
+volQ = input.float(0.8, "변동성 기준 위치 (0.8 = 상위 20% 금지)", minval=0.5, maxval=0.99, step=0.01, group=grpG)
+grpT = "진입 금지 시간"
+useWeekend = input.bool(true, "주말(한국 시간 토·일) 진입 안 함", group=grpT)
+useMacro = input.bool(true, "경제 발표 앞뒤 30분 진입 안 함 (2026-10~12 일정)", group=grpT)
+useUsOpen = input.bool(true, "나스닥 개장 앞 30분·뒤 30분 진입 안 함", group=grpT)
+grpX = "손절·계단 (봇 설정 그대로)"
+lev = input.int(30, "배수", minval=1, group=grpX)
+stopAtr = input.float(2.0, "손절 = ATR(14) ×", minval=0.1, step=0.1, group=grpX)
+firstLock = input.float(10.0, "첫 잠금 순ROE %", group=grpX)
+trigGap = input.float(2.0, "잠금이 걸리는 여유 %p (12%에 닿으면 10% 잠금)", group=grpX)
+stepPct = input.float(5.0, "계단 간격 %p", group=grpX)
+holdBars = input.int(96, "보유 한도 (그 매매법 봉 수)", minval=1, group=grpX)
+takerPct = input.float(0.05, "테이커 수수료 %", step=0.01, group=grpX)
+slipPct = input.float(0.02, "슬리피지 %", step=0.01, group=grpX)
+grpV = "보기"
+showBlocked = input.bool(true, "막힌 신호도 작게 표시", group=grpV)
+showVwap = input.bool(true, "VWAP 선 (매일 오전 9시 시작)", group=grpV)
+showPos = input.bool(true, "모의 포지션 (진입가 · 손절 · 계단 선)", group=grpV)
+showTable = input.bool(true, "오른쪽 위 상태표", group=grpV)
+
+// ====================================================================== 상수
+MS30 = 1800000
+MS1H = 3600000
+MS4H = 14400000
+MSDAY = 86400000
+MIN_MS = 60000
+is30 = timeframe.period == "30"
+rt = 2.0 * (takerPct + slipPct) / 100.0            // 왕복 비용 (봇: 2 × (테이커 + 슬리피지))
+slipF = slipPct / 100.0
+lockFirst = firstLock / 100.0
+lockTrig = (firstLock + trigGap) / 100.0
+lockStep = stepPct / 100.0
+win30 = volDays * 48                               // 30분봉 30일 = 1440봉 (entrygates.window_bars)
+win1h = volDays * 24                               // 1시간봉 30일 = 720봉
+
+var int[] MACRO = array.from(timestamp("UTC", 2026, 10, 2, 12, 30), timestamp("UTC", 2026, 10, 14, 12, 30),
+     timestamp("UTC", 2026, 10, 28, 18, 0), timestamp("UTC", 2026, 10, 29, 12, 30), timestamp("UTC", 2026, 11, 6, 13, 30),
+     timestamp("UTC", 2026, 11, 10, 13, 30), timestamp("UTC", 2026, 11, 25, 13, 30), timestamp("UTC", 2026, 12, 4, 13, 30),
+     timestamp("UTC", 2026, 12, 9, 19, 0), timestamp("UTC", 2026, 12, 10, 13, 30), timestamp("UTC", 2026, 12, 23, 13, 30))
+var string[] MACRO_KO = array.from("고용(NFP)", "물가(CPI)", "FOMC", "PCE", "고용(NFP)", "물가(CPI)", "PCE", "고용(NFP)", "FOMC",
+     "물가(CPI)", "PCE")
+var string[] NYSE_HOL = array.from("2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19",
+     "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26",
+     "2027-05-31", "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24")
+
+// ====================================================================== 함수
+// 봉마다 값을 넣는 창(가장 오래된 것부터, 최대 win개). 함수 안의 [i]는 그 함수가 불린 봉만 세므로, 지난 30일은 이 창에 둡니다
+f_push(float[] buf, float v, int win) =>
+    array.push(buf, v)
+    if array.size(buf) > win
+        array.shift(buf)
+    array.size(buf)
+
+// 창(이 봉 포함 지난 win 봉) 값의 q 위치, numpy 기본(선형 보간)과 같은 방법; 알려진 값이 절반보다 적으면 na
+f_quantile(float[] buf, int win, float q) =>
+    float res = na
+    float[] arr = array.new_float(0)
+    for v in buf
+        if not na(v)
+            array.push(arr, v)
+    int n = array.size(arr)
+    if n >= math.max(math.floor(win / 2), 1)
+        array.sort(arr, order.ascending)
+        float pos = (n - 1) * q
+        int lo = math.floor(pos)
+        int hi = math.min(lo + 1, n - 1)
+        float a = array.get(arr, lo)
+        float b = array.get(arr, hi)
+        res := a + (b - a) * (pos - lo)
+    res
+
+// CMO(14): 오른 폭 합과 내린 폭 합 (fg_indicators.cmo)
+f_cmo(float src, int len) =>
+    float d = src - src[1]
+    float up = math.sum(d > 0 ? d : 0.0, len)
+    float dn = math.sum(d < 0 ? -d : 0.0, len)
+    float den = up + dn
+    den == 0 ? na : 100.0 * (up - dn) / den
+
+// 1시간봉에서: CMO·샌드위치 신호(+1 / -1 / 0), ATR(14), ATR%, 그 신호 봉의 변동성 기준 위치
+f_s3(int win, float q) =>
+    float a = ta.atr(14)
+    float b = close - open
+    float b1 = b[2]
+    float b2 = b[1]
+    float b3 = b
+    bool upPrior = close[3] > close[7]
+    bool dnPrior = close[3] < close[7]
+    bool bodies = math.abs(b1) >= 0.08 * a and math.abs(b2) >= 0.08 * a and math.abs(b3) >= 0.08 * a
+    bool bear = upPrior and bodies and b1 > 0 and b2 < 0 and b3 > 0 and math.abs(high[2] - high) <= 0.3 * a and close <= math.max(high[2], high) + 0.075 * a
+    bool bull = dnPrior and bodies and b1 < 0 and b2 > 0 and b3 < 0 and math.abs(low[2] - low) <= 0.3 * a and close >= math.min(low[2], low) - 0.075 * a
+    float cm = f_cmo(close, 14)
+    bool cmu = cm > 0 and cm[1] <= 0
+    bool cmd = cm < 0 and cm[1] >= 0
+    bool rBull = bull or bull[1] or bull[2]
+    bool rBear = bear or bear[1] or bear[2]
+    bool rCmu = cmu or cmu[1] or cmu[2]
+    bool rCmd = cmd or cmd[1] or cmd[2]
+    int sig = rBull and rCmu and cm > 0 and (bull or cmu) ? 1 : rBear and rCmd and cm < 0 and (bear or cmd) ? -1 : 0
+    float atrp = a / close
+    var float[] buf = array.new_float(0)
+    f_push(buf, atrp, win)
+    float qv = sig != 0 or barstate.islast ? f_quantile(buf, win, q) : na
+    [sig, a, atrp, qv]
+
+// 4시간봉에서: 추세 판단 4개 중 상승 수, 하락 수 (off = 0 이 봉, 1 한 봉 전)
+f_judges(int off) =>
+    // V3.9: 거래소식 슈퍼트렌드 10 / 3 (RMA ATR, 첫 봉 TR은 고가-저가)
+    float tr = math.max(high - low, math.max(math.abs(high - nz(close[1], close)), math.abs(low - nz(close[1], close))))
+    float at10 = ta.rma(tr, 10)
+    float hl = (high + low) / 2
+    float bl = hl - 3.0 * at10
+    float bu = hl + 3.0 * at10
+    var float lower = na
+    var float upper = na
+    var int dir = 1
+    float pL = na(lower) ? bl : lower
+    float pU = na(upper) ? bu : upper
+    float pc = close[1]
+    float nL = na(bl) ? na : (not na(pc) and not na(pL) and pc > pL ? math.max(bl, pL) : bl)
+    float nU = na(bu) ? na : (not na(pc) and not na(pU) and pc < pU ? math.min(bu, pU) : bu)
+    int d = dir
+    if d == -1 and not na(pU) and close > pU
+        d := 1
+    else if d == 1 and not na(pL) and close < pL
+        d := -1
+    lower := nL
+    upper := nU
+    dir := d
+    // EMA20 + DMI(14, 14)
+    float e20 = ta.ema(close, 20)
+    [dip, dim, adxv] = ta.dmi(14, 14)
+    int s6 = close > e20 and dip > dim ? 1 : close < e20 and dim > dip ? -1 : 0
+    // OBV 와 그 30봉 평균
+    var float obvv = 0.0
+    float ch = close - close[1]
+    obvv += na(ch) ? 0.0 : math.sign(ch) * nz(volume)
+    float obvMa = ta.sma(obvv, 30)
+    int jo = obvv > obvMa ? 1 : obvv < obvMa ? -1 : 0
+    // 일목 구름(9, 26, 52, 26칸 앞) + AO(5, 34)
+    float tenkan = (ta.highest(high, 9) + ta.lowest(low, 9)) / 2
+    float kijun = (ta.highest(high, 26) + ta.lowest(low, 26)) / 2
+    float saRaw = (tenkan + kijun) / 2
+    float sbRaw = (ta.highest(high, 52) + ta.lowest(low, 52)) / 2
+    float sa = saRaw[26]
+    float sb = sbRaw[26]
+    float top = na(sa) ? sb : na(sb) ? sa : math.max(sa, sb)
+    float bot = na(sa) ? sb : na(sb) ? sa : math.min(sa, sb)
+    float ao = ta.sma(hl, 5) - ta.sma(hl, 34)
+    int n12 = not na(top) and close > top and ao > 0 ? 1 : not na(bot) and close < bot and ao < 0 ? -1 : 0
+    int up = (d > 0 ? 1 : 0) + (s6 > 0 ? 1 : 0) + (jo > 0 ? 1 : 0) + (n12 > 0 ? 1 : 0)
+    int dn = (d < 0 ? 1 : 0) + (s6 < 0 ? 1 : 0) + (jo < 0 ? 1 : 0) + (n12 < 0 ? 1 : 0)
+    [up[off], dn[off]]
+
+f_macro(int ts) =>
+    string hit = ""
+    for i = 0 to array.size(MACRO) - 1
+        if math.abs(array.get(MACRO, i) - ts) <= 30 * MIN_MS and hit == ""
+            hit := array.get(MACRO_KO, i)
+    hit
+
+f_usopen(int ts) =>
+    int wd = dayofweek(ts, "America/New_York")
+    bool weekday = wd != dayofweek.saturday and wd != dayofweek.sunday
+    bool holiday = array.includes(NYSE_HOL, str.format_time(ts, "yyyy-MM-dd", "America/New_York"))
+    int since = hour(ts, "America/New_York") * 60 + minute(ts, "America/New_York") - 570
+    weekday and not holiday and since >= -30 and since < 30
+
+f_weekend(int ts) =>
+    int wd = dayofweek(ts, "Asia/Seoul")
+    wd == dayofweek.saturday or wd == dayofweek.sunday
+
+// ====================================================================== VWAP (UTC 하루, 이 차트의 30분봉)
+int dayUtc = int(math.floor(time / MSDAY))
+bool newDay = bar_index == 0 or dayUtc != dayUtc[1]
+var float cpv = 0.0
+var float cv = 0.0
+if newDay
+    cpv := 0.0
+    cv := 0.0
+float tp = (high + low + close) / 3
+cpv += tp * nz(volume)
+cv += nz(volume)
+float vw = cv > 0 ? cpv / cv : na
+
+// ====================================================================== 매매법 1: VWAP 복귀 실패 (30분봉)
+bool okPrev = not newDay and not na(vw[1]) and not na(vw)
+bool brkDn = okPrev and close[1] >= vw[1] and close < vw
+bool brkUp = okPrev and close[1] <= vw[1] and close > vw
+bool rtS = not na(vw) and high >= vw
+bool backS = not na(vw) and close < vw and close < open
+bool rtL = not na(vw) and low <= vw
+bool backL = not na(vw) and close > vw and close > open
+bool killS = not na(vw) and close > vw
+bool killL = not na(vw) and close < vw
+
+var int lastS = -1
+var int lastSDay = -1
+var bool killedS = false
+var bool usedS = false
+var int lastL = -1
+var int lastLDay = -1
+var bool killedL = false
+var bool usedL = false
+bool hasS = lastS >= 0 and bar_index - lastS <= 10 and lastSDay == dayUtc
+bool hasL = lastL >= 0 and bar_index - lastL <= 10 and lastLDay == dayUtc
+bool f6Short = hasS and not killedS and not usedS and rtS and backS
+bool f6Long = hasL and not killedL and not usedL and rtL and backL
+if brkDn
+    lastS := bar_index
+    lastSDay := dayUtc
+    killedS := false
+    usedS := false
+else
+    killedS := killedS or killS
+    usedS := usedS or (rtS and backS)
+if brkUp
+    lastL := bar_index
+    lastLDay := dayUtc
+    killedL := false
+    usedL := false
+else
+    killedL := killedL or killL
+    usedL := usedL or (rtL and backL)
+int f6Sig = f6Long ? 1 : f6Short ? -1 : 0
+
+float atr30 = ta.atr(14)
+float atrp30 = atr30 / close
+var float[] buf30 = array.new_float(0)
+f_push(buf30, atrp30, win30)
+float q30 = f6Sig != 0 or barstate.islast ? f_quantile(buf30, win30, volQ) : na
+
+// ====================================================================== 매매법 2: CMO·샌드위치 (1시간봉), 4시간 판단
+// 1시간봉이 이 30분봉과 같이 끝날 때만 그 1시간봉 값을 씀 (미리 보기 없음); 4시간도 같은 방식: 끝나는 봉이면 방금 끝난
+// 4시간봉, 아니면 그 전에 끝난 4시간봉 (봇: 신호 봉 마감 시각 이전에 끝난 마지막 4시간봉)
+bool end1h = time_close % MS1H == 0
+bool end4h = time_close % MS4H == 0
+[s3Cur, s3Atr, s3Atrp, s3Q] = request.security(syminfo.tickerid, "60", f_s3(win1h, volQ), lookahead=barmerge.lookahead_on)
+[upCur, dnCur] = request.security(syminfo.tickerid, "240", f_judges(0), lookahead=barmerge.lookahead_on)
+[upPrev, dnPrev] = request.security(syminfo.tickerid, "240", f_judges(1), lookahead=barmerge.lookahead_on)
+int s3Sig = end1h ? s3Cur : 0
+int vUp = end4h ? upCur : upPrev
+int vDn = end4h ? dnCur : dnPrev
+int vRaw = vUp >= voteMin ? 1 : vDn >= voteMin ? -1 : 0
+
+// ====================================================================== 진입 문 (봇의 순서)
+f_block(int side, float atrp, float qv, int ts) =>
+    string why = ""
+    if useWeekend and f_weekend(ts)
+        why := "주말(한국 시간 토·일)"
+    if why == "" and useMacro
+        string ev = f_macro(ts)
+        if ev != ""
+            why := "경제 발표 앞뒤 30분: " + ev
+    if why == "" and useUsOpen and f_usopen(ts)
+        why := "나스닥 개장 앞뒤 30분"
+    if why == "" and useVote and vRaw == -side
+        why := "4시간 추세 반대 (상승 " + str.tostring(vUp) + "·하락 " + str.tostring(vDn) + "·중립 " + str.tostring(4 - vUp - vDn) + ")"
+    if why == "" and useVol and not na(qv) and atrp > qv
+        why := "변동성 높음: ATR " + str.tostring(atrp * 100, "#.###") + "% > 30일 기준 " + str.tostring(qv * 100, "#.###") + "%"
+    why
+
+// ====================================================================== 모의 포지션 (이 코인만, 30분봉 추정)
+var int posSide = 0
+var float posRef = na
+var float posEntry = na
+var float posStop = na
+var float posBest = na
+var float posLock = na
+var int posEntryTime = 0
+var int posHoldMs = 0
+var string posName = ""
+
+f_lockFor(float best) =>
+    best >= lockTrig - 1e-12 ? lockFirst + lockStep * math.floor((best - lockTrig) / lockStep + 1e-9) : na
+
+f_netRoe(int side, float entry, float px) =>
+    lev * (side * (px / entry - 1.0) - rt)
+
+bool exitNow = false
+string exitWhy = ""
+float exitPx = na
+float exitRoe = na
+int exitSide = 0
+if is30 and barstate.isconfirmed and posSide != 0 and time >= posEntryTime
+    // 보유 한도: 이 봉 시가에 시장가
+    if time - posEntryTime >= posHoldMs
+        exitNow := true
+        exitWhy := "보유 한도 청산"
+        exitPx := open
+    else
+        bool hit = posSide > 0 ? low <= posStop : high >= posStop
+        if hit
+            exitNow := true
+            exitWhy := na(posLock) ? "손절" : "계단 익절 (순ROE +" + str.tostring(posLock * 100, "#") + "% 잠금)"
+            exitPx := posSide > 0 ? math.min(open, posStop) : math.max(open, posStop)
+    if exitNow
+        exitSide := posSide
+        exitRoe := f_netRoe(posSide, posEntry, exitPx)
+        posSide := 0
+    else
+        // 이번 봉까지 가장 유리했던 가격으로 계단 (다음 봉부터 적용)
+        posBest := posSide > 0 ? math.max(posBest, high) : math.min(posBest, low)
+        float lk = f_lockFor(f_netRoe(posSide, posEntry, posBest))
+        if not na(lk) and (na(posLock) or lk > posLock + 1e-12)
+            float lp = posEntry * (1.0 + posSide * (lk / lev + rt))
+            posStop := posSide > 0 ? math.max(posStop, lp) : math.min(posStop, lp)
+            posLock := lk
+
+// ====================================================================== 이 봉의 신호
+int tsIn = time_close                              // 봇이 진입하는 분 = 신호 봉 마감 시각
+string whyF6 = f6Sig != 0 ? f_block(f6Sig, atrp30, q30, tsIn) : ""
+string whyS3 = s3Sig != 0 ? f_block(s3Sig, s3Atrp, s3Q, tsIn) : ""
+bool passF6 = is30 and barstate.isconfirmed and f6Sig != 0 and whyF6 == ""
+bool passS3 = is30 and barstate.isconfirmed and s3Sig != 0 and whyS3 == ""
+
+// 같은 봉이면 VWAP 복귀 실패가 먼저 (members 순서), 한 번에 하나
+int enterSide = 0
+string enterName = ""
+float enterAtr = na
+int enterHold = 0
+string skipWhyF6 = whyF6
+string skipWhyS3 = whyS3
+if passF6
+    if posSide != 0
+        skipWhyF6 := "이 코인 보유 중"
+    else
+        enterSide := f6Sig
+        enterName := "VWAP 복귀 실패 (30분)"
+        enterAtr := atr30
+        enterHold := holdBars * MS30
+if passS3
+    if posSide != 0 or enterSide != 0
+        skipWhyS3 := posSide != 0 ? "이 코인 보유 중" : "같은 봉에 VWAP 복귀 실패 먼저"
+    else
+        enterSide := s3Sig
+        enterName := "CMO·샌드위치 (1시간)"
+        enterAtr := s3Atr
+        enterHold := holdBars * MS1H
+if enterSide != 0
+    posSide := enterSide
+    posRef := close
+    posEntry := close * (1.0 + enterSide * slipF)
+    posStop := close - enterSide * stopAtr * enterAtr
+    posBest := posEntry
+    posLock := na
+    posEntryTime := time_close
+    posHoldMs := enterHold
+    posName := enterName
+
+// ====================================================================== 그리기
+plot(showVwap and is30 ? vw : na, "VWAP (매일 오전 9시 시작)", color=color.new(color.orange, 0), linewidth=1, style=plot.style_linebr)
+plot(showPos and posSide != 0 ? posEntry : na, "모의 진입가", color=color.new(color.gray, 30), style=plot.style_linebr)
+plot(showPos and posSide != 0 ? posStop : na, "모의 손절·계단", color=posSide > 0 ? color.new(color.red, 0) : color.new(color.fuchsia, 0), linewidth=2, style=plot.style_linebr)
+
+if enterSide != 0
+    string txt = (enterSide > 0 ? "롱 " : "숏 ") + enterName
+    string tip = txt + "\n손절 " + str.tostring(posStop, format.mintick) + " (ATR×" + str.tostring(stopAtr) + ")\n순ROE " + str.tostring(lockTrig * 100, "#") + "%에 닿으면 " + str.tostring(lockFirst * 100, "#") + "% 잠금\n4시간 판단: 상승 " + str.tostring(vUp) + "·하락 " + str.tostring(vDn)
+    label.new(bar_index, enterSide > 0 ? low : high, (enterSide > 0 ? "▲ 롱\n" : "▼ 숏\n") + (enterName == "VWAP 복귀 실패 (30분)" ? "VWAP" : "CMO"),
+         style=enterSide > 0 ? label.style_label_up : label.style_label_down, color=enterSide > 0 ? color.new(color.teal, 0) : color.new(color.red, 0),
+         textcolor=color.white, size=size.small, tooltip=tip)
+if exitNow
+    label.new(bar_index, exitSide > 0 ? high : low, exitWhy + "\n" + (exitRoe >= 0 ? "+" : "") + str.tostring(exitRoe * 100, "#.#") + "%",
+         style=exitSide > 0 ? label.style_label_down : label.style_label_up, color=color.new(exitRoe >= 0 ? color.green : color.gray, 20),
+         textcolor=color.white, size=size.tiny, tooltip="모의 청산 (30분봉 추정) · 순ROE " + str.tostring(exitRoe * 100, "#.#") + "%")
+if showBlocked and is30 and barstate.isconfirmed
+    if f6Sig != 0 and skipWhyF6 != ""
+        label.new(bar_index, f6Sig > 0 ? low : high, "×", style=f6Sig > 0 ? label.style_label_up : label.style_label_down,
+             color=color.new(color.gray, 60), textcolor=color.white, size=size.tiny,
+             tooltip=(f6Sig > 0 ? "롱" : "숏") + " VWAP 복귀 실패 — 진입 안 함: " + skipWhyF6)
+    if s3Sig != 0 and skipWhyS3 != ""
+        label.new(bar_index, s3Sig > 0 ? low : high, "×", style=s3Sig > 0 ? label.style_label_up : label.style_label_down,
+             color=color.new(color.gray, 60), textcolor=color.white, size=size.tiny,
+             tooltip=(s3Sig > 0 ? "롱" : "숏") + " CMO·샌드위치 — 진입 안 함: " + skipWhyS3)
+
+// ====================================================================== 알림
+// "봇이 들어갈 신호": 진입 문을 모두 통과한 신호 (이 코인 보유 여부와 무관; 봇은 6코인 중 1포지션)
+bool alertLong = (passF6 and f6Sig > 0) or (passS3 and s3Sig > 0)
+bool alertShort = (passF6 and f6Sig < 0) or (passS3 and s3Sig < 0)
+alertcondition(alertLong, "VWAP봇 롱 신호", "VWAP 개선판 롱 신호: {{ticker}} 30분봉 종가 {{close}}")
+alertcondition(alertShort, "VWAP봇 숏 신호", "VWAP 개선판 숏 신호: {{ticker}} 30분봉 종가 {{close}}")
+alertcondition(alertLong or alertShort, "VWAP봇 신호 (롱·숏)", "VWAP 개선판 신호: {{ticker}} 30분봉 종가 {{close}}")
+if alertLong or alertShort
+    int s = alertLong ? 1 : -1
+    float a = passF6 and f6Sig == s ? atr30 : s3Atr
+    string msg = (s > 0 ? "VWAP 개선판 롱 " : "VWAP 개선판 숏 ") + syminfo.ticker + " · " + (passF6 and f6Sig == s ? "VWAP 복귀 실패 30분" : "CMO·샌드위치 1시간") + " · 종가 " + str.tostring(close, format.mintick) + " · 손절 " + str.tostring(close - s * stopAtr * a, format.mintick)
+    alert(msg, alert.freq_once_per_bar_close)
+
+// ====================================================================== 상태표
+var table tb = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 20), border_width=1)
+if showTable and barstate.islast
+    if not is30
+        table.cell(tb, 0, 0, "VWAP봇", text_color=color.white)
+        table.cell(tb, 1, 0, "30분봉 차트에서만 맞게 계산돼요", text_color=color.yellow)
+    else
+        int nowTs = time_close
+        string wword = vRaw > 0 ? "상승" : vRaw < 0 ? "하락" : "보류"
+        table.cell(tb, 0, 0, "4시간 판단", text_color=color.white)
+        table.cell(tb, 1, 0, wword + " (상승 " + str.tostring(vUp) + "·하락 " + str.tostring(vDn) + "·중립 " + str.tostring(4 - vUp - vDn) + ")", text_color=color.white)
+        table.cell(tb, 0, 1, "변동성 30분", text_color=color.white)
+        table.cell(tb, 1, 1, na(q30) ? "기준 계산 중" : str.tostring(atrp30 * 100, "#.###") + "% / 기준 " + str.tostring(q30 * 100, "#.###") + "%" + (atrp30 > q30 ? " · 높음(막힘)" : " · 보통"), text_color=atrp30 > q30 ? color.orange : color.white)
+        table.cell(tb, 0, 2, "변동성 1시간", text_color=color.white)
+        table.cell(tb, 1, 2, na(s3Q) ? "기준 계산 중" : str.tostring(s3Atrp * 100, "#.###") + "% / 기준 " + str.tostring(s3Q * 100, "#.###") + "%" + (s3Atrp > s3Q ? " · 높음(막힘)" : " · 보통"), text_color=s3Atrp > s3Q ? color.orange : color.white)
+        string tWhy = useWeekend and f_weekend(nowTs) ? "주말 (진입 안 함)" : useMacro and f_macro(nowTs) != "" ? "경제 발표 앞뒤 (진입 안 함)" : useUsOpen and f_usopen(nowTs) ? "나스닥 개장 앞뒤 (진입 안 함)" : "진입 가능 시간"
+        table.cell(tb, 0, 3, "시간", text_color=color.white)
+        table.cell(tb, 1, 3, tWhy, text_color=tWhy == "진입 가능 시간" ? color.white : color.orange)
+        table.cell(tb, 0, 4, "모의 포지션", text_color=color.white)
+        table.cell(tb, 1, 4, posSide == 0 ? "없음" : (posSide > 0 ? "롱 " : "숏 ") + posName + " · 손절 " + str.tostring(posStop, format.mintick) + (na(posLock) ? "" : " (+" + str.tostring(posLock * 100, "#") + "% 잠금)"), text_color=color.white)
+        table.cell(tb, 0, 5, "참고", text_color=color.gray)
+        table.cell(tb, 1, 5, "봇은 6코인 중 1포지션 · 실거래는 신호등 초록일 때만", text_color=color.gray)
