@@ -54,7 +54,10 @@ def main(argv=None) -> int:
     D = pd.DataFrame(rows)
     D["oct"] = D.t >= ST.ms("2026-10-01")
     out = {}
-    for name, g in (("2021-2026.09", D[~D.oct]), ("2026-10", D[D.oct])):
+    groups = [("2021-2026.09", D[~D.oct]), ("2026-10", D[D.oct])]
+    for wn, (wa, wb) in PK.LIVE.items():          # owners 10/26: the rule bot's and the league's periods
+        groups.append((wn, D[(D.t >= wa) & (D.t < wb)]))
+    for name, g in groups:
         o = {"signals": int(len(g)), "stopped_48h": float(g.stopped.mean())}
         for lv in LEVELS:
             col = f"h{int(lv * 100)}"

@@ -72,10 +72,25 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bars", required=True)
     ap.add_argument("--work", required=True)
+    ap.add_argument("--live-only", action="store_true",
+                    help="owners 10/26 '5년치 말고 이번 규칙봇 돌린기간이랑 커스텀값 봇 돌린기간만': the two live windows only")
     a = ap.parse_args(argv)
     W = ST.World(a.bars, a.work)
     cand = add_trend(W, pd.read_pickle(os.path.join(a.work, "cand.pkl")), a.work)
     out = {"mfe": {}, "rows": []}
+    if a.live_only:
+        for en, ex in EXITS.items():
+            for wk in ("주말 포함", "주말 쉼"):
+                for tn, tc in TRENDS.items():
+                    arm = arm_of(ex, wk, tc)
+                    r = {"exit": en, "weekend": wk, "trend": tn}
+                    for wn, (wa, wb) in PK.LIVE.items():
+                        r[wn] = PK.read(ST.run_arm(W, cand, arm, wa, wb))
+                    r["score"] = min(r["rulebot"]["x"], r["league"]["x"])
+                    out["rows"].append(r)
+                    print(json.dumps(r, ensure_ascii=False), flush=True)
+        json.dump(out, open(os.path.join(a.work, "structure_live.json"), "w"), indent=1, ensure_ascii=False)
+        return 0
     # (1) best net ROE before a -50 % stop, no take-profit (every signal the rules allow, one position)
     probe = {**PK.SIZE, "exit": "tp10", "tp_roe": 50.0, "stop_roe": 0.50, "filters": (PK.FIXED,)}
     for wn, (wa, wb) in (("2021-2026.09", (ST.ms("2021-01-01"), ST.ms("2026-10-01"))), ("2026-10", (ST.ms("2026-10-01"), PK.END))):
