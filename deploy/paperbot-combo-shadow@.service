@@ -7,6 +7,8 @@
 # and the 추세판단 봇's own (docs/trend-bot-ko.md: deploy/combo.trend.json with ONE change, for the 2-week review):
 # @trend-wait (trend.pullback_wait true, owners 10/22: the live bot enters at once). The 10/21 design's @trend-time,
 # @trend-now and @trend-vote4 left with the 10/22 design (their configs are gone: stop them; their databases stay).
+# and the VWAP 개선판's own (docs/vwap-bot-ko.md 10장: deploy/combo.vwap.json with ONE change, owners 10/26):
+# @vwap-4h (unlocked_close_min 240: closed when not at its first lock 4 hours after entry).
 # Paper only: no orders, and no executor follows a shadow. Instance <name> writes only
 # /var/lib/paperbot/combo/shadow-<name>.db (never live-ac.db, the executors' paper_db, and never another shadow's).
 # No Telegram: "telegram": false in each config, and the Telegram lines of live.env are removed below. The first

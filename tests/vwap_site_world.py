@@ -37,6 +37,8 @@ VWAP paper (COMBO@mix, $1,000):
 """
 from __future__ import annotations
 
+from typing import Optional
+
 import dataclasses
 import json
 import os
@@ -212,11 +214,13 @@ def picture_gates(at: int) -> G.EntryGates:
                         bars=G.BarCache(bars, clock))
 
 
-def vwap_db(folder: str, plan=PLAN, until: int = NOW, picture: bool = True) -> dict:
-    """vwap.db by the real runner (module docstring); {"path", "rule", "cfg", "runner"}."""
+def vwap_db(folder: str, plan=PLAN, until: int = NOW, picture: bool = True, name: str = "vwap.db",
+            extra: Optional[dict] = None) -> dict:
+    """vwap.db by the real runner (module docstring); {"path", "rule", "cfg", "runner"}. ``name`` / ``extra``: another
+    database of the same bot with config keys changed (a shadow, tests/test_vwap_shadow.py)."""
     rule = Rule(os.path.join(folder, "rule-paper3.db"))
-    path = os.path.join(folder, "vwap.db")
-    raw = vwap_config(rule.path, path)
+    path = os.path.join(folder, name)
+    raw = {**vwap_config(rule.path, path), **(extra or {})}
     cfg = C.ComboConfig.from_dict(raw)
     assert cfg.problems() == [], cfg.problems()
     clock = [VS - 10 * MIN]

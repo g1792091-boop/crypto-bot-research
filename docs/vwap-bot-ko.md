@@ -334,3 +334,30 @@ VWAP 페이퍼 봇을 켜면(5-B) 실행기가 아직 따라가지 않아도 사
   `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.liveteam preview loss --vwap`
   (`checkpoint --vwap`, `weekly --vwap`도 됨). 손으로 열기: `… run loss --vwap --force`.
 - 분석팀 타이머는 그대로입니다(설치만, 두 분이 켬: `sudo systemctl enable --now paperbot-liveteam.timer`).
+
+## 10. 그림자 "4시간 정리" (두 분 10/26: "둘 다 해줘")
+
+나스닥 개장·횡보 대책 시험(research/opentime/REPORT_KO.md)에서 VWAP만 "진입 4시간 안에 첫 잠금(순ROE +10%)에 못 닿으면 닫기"가
+기준을 통과했습니다. 그런데 신호등(최근 20번 중 75%)을 거친 실거래 쪽에서만 좋아졌고, 모의 거래 전체로는 차이가 없었고, 10월에는
+오히려 나빴습니다. 그래서 **실거래 규칙은 그대로** 두고, 같은 시장에서 그 규칙 하나만 바꾼 모의 봇(그림자)을 같이 돌려 몇 주 봅니다.
+
+- 설정: `deploy/combo.shadow-vwap-4h.json` = `deploy/combo.vwap.json`에 `"unlocked_close_min": 240` 하나만 더한 것(이름, 기록 파일
+  `/var/lib/paperbot/combo/shadow-vwap-4h.db`, 텔레그램 끔은 그림자마다 다름). 돈·주문·텔레그램 없음, 실행기는 그림자를 따라가지 않습니다.
+- 청산 이유 "잠금 전 시간 정리": 진입 4시간이 지난 첫 분에 아직 첫 잠금 전이면 그 분 시가에 시장가로 닫습니다(수수료 포함).
+- 보는 곳: 실거래 사이트(8093) → 그림자 화면 맨 위 "VWAP 개선판 그림자 비교". 그림자를 켠 때부터, VWAP 페이퍼도 같은 기간만:
+  - "모든 페이퍼 거래": 거래 수, 이긴 비율, 거래당 평균 순ROE, 순ROE 합, 최대 낙폭, 청산 이유.
+  - "실행기가 따라갔을 거래": 딥코인 실행기 신호등(20번 · 75%)을 각자의 거래 순서로 다시 계산해 따라갔을 거래만. 5년 시험에서 차이가
+    난 쪽이 여기입니다.
+  - 양쪽 다 닫힌 거래가 20번이 넘기 전에는 "표본 적음 · 아직 판단 못 함".
+- 정하는 법(제안): 2~3주 뒤 "실행기가 따라갔을 거래"의 순ROE 합이 그림자 쪽이 분명히 높고 모든 거래 쪽도 나쁘지 않으면, 그때 실거래에
+  넣을지 두 분이 정합니다. 그 전에는 실거래 규칙을 바꾸지 않습니다.
+
+### 10-1. 켜는 순서 (서버에서, 언제든 · 실거래에 영향 없음)
+
+1. 코드 받기: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+   - 설치는 그림자를 켜거나 끄지 않습니다. 돌고 있는 VWAP 봇·실행기도 그대로입니다(새 설정 항목은 기본값이 꺼짐).
+2. 설정 확인(읽기만): `cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config deploy/combo.shadow-vwap-4h.json`
+   - 마지막 줄 `준비됨`, 규칙 줄에 `진입 4시간 안에 첫 잠금에 못 닿으면 시장가 청산`.
+3. 켜기: `sudo systemctl start paperbot-combo-shadow@vwap-4h`
+   - 약 2분 기다렸다가 돌기 시작합니다(바이낸스 요청 순서). 확인: `systemctl is-active paperbot-combo-shadow@vwap-4h`, 몇 분 뒤 사이트의 그림자 화면.
+4. 끄기: `sudo systemctl stop paperbot-combo-shadow@vwap-4h` (기록은 남습니다).

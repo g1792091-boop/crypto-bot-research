@@ -118,7 +118,7 @@ KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
 KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
            "REV": "빠른 청산(반대 신호)", "JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)",
-           "SWITCH": "전환 전 포지션 정리"}
+           "SWITCH": "전환 전 포지션 정리", "STALE": "잠금 전 시간 정리"}
 TIME_HOLD_KO = "보유 한도 청산"      # TIME in a bot with max_hold_bars and no trend supervisor ('VWAP 개선판')
 GATES_NOW_KEY = "gates_now"         # state: what the entry gates read for every coin (the live site's VWAP screen)
 EARLY_EXITS = (None, "own", "any")
@@ -570,6 +570,9 @@ class ComboConfig:
                                         # above its 30-day 80 % point; None = off (both)
     max_hold_bars: Optional[int] = None  # ... a position open this many bars of its own timeframe (30m: 96 = 48 h, 1h: 96
                                          # = 96 h) is closed at the next minute's open (exit "TIME"); None = no limit
+    unlocked_close_min: Optional[int] = None  # owners 10-26 (VWAP shadow, research/opentime A3): a position not at its
+                                              # first lock this many minutes after its entry is closed at that minute's
+                                              # open (exit "STALE"); None = off (every live bot)
     adx_gate: Optional[dict] = None     # '친구 매매법' (owners 10-24, paperbot/friendsig.py): {"tf": "4h", "min": 20} no entry
                                         # when ADX(14) of the last closed tf bar is below min (research F4)
     quiet_gate: Optional[dict] = None   # ... {"bars": 20, "max_ratio": 0.64}: no entry when the signal bar's volume is above
@@ -727,6 +730,10 @@ class ComboConfig:
                                                    and not isinstance(self.max_hold_bars, bool)
                                                    and 1 <= self.max_hold_bars <= 1000):
             out.append("max_hold_bars는 1~1000봉(정수) 또는 null입니다(그 매매법 봉 기준, 예: 96)")
+        if self.unlocked_close_min is not None and not (isinstance(self.unlocked_close_min, int)
+                                                        and not isinstance(self.unlocked_close_min, bool)
+                                                        and 1 <= self.unlocked_close_min <= 10080):
+            out.append("unlocked_close_min은 1~10080분(정수) 또는 null입니다(예: 4시간 → 240)")
         return out
 
 
@@ -865,6 +872,14 @@ class ComboEngine(PaperEngine):
             ctx["exit_why"] = f"{self.combo.max_hold_bars}봉({hold_ko(hold)}) 지남"
             p.signal = replace(p.signal, meta={**p.signal.meta, "ctx": ctx})
             self._close_market(bar.open, bar.open_time, "TIME")
+        lim = self.combo.unlocked_close_min
+        p = self.position
+        if lim and p is not None and p.lock_roe is None and p.symbol in bars and bars[p.symbol].open_time - p.entry_time >= lim * MIN:
+            bar = bars[p.symbol]
+            ctx = dict(p.signal.meta.get("ctx") or {})
+            ctx["exit_why"] = f"{hold_ko(lim)} 안에 첫 잠금에 못 닿음"
+            p.signal = replace(p.signal, meta={**p.signal.meta, "ctx": ctx})
+            self._close_market(bar.open, bar.open_time, "STALE")
         trig, self._exit_on = self._exit_on, []
         p = self.position
         if trig and p is not None and self.combo.early_exit_until_lock and p.lock_roe is not None:
@@ -2117,6 +2132,8 @@ def gate_lines(cfg: "ComboConfig") -> list[str]:
                      key=lambda tf: TF_MIN[tf])
         each = " · ".join(f"{KO_TF.get(tf, tf)} {hold_ko(cfg.max_hold_bars * TF_MIN[tf])}" for tf in tfs)
         out.append(f"보유 한도 {cfg.max_hold_bars}봉" + (f"({each})" if each else "") + ", 넘으면 시장가 청산")
+    if isinstance(cfg.unlocked_close_min, int) and not isinstance(cfg.unlocked_close_min, bool):
+        out.append(f"진입 {hold_ko(cfg.unlocked_close_min)} 안에 첫 잠금에 못 닿으면 시장가 청산")
     return out
 
 

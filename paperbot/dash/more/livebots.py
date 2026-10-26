@@ -217,7 +217,7 @@ KIND_KO = {
 LEVEL_KO = {"WARN": "주의", "CRITICAL": "긴급"}
 # exit reasons: the paper engine's codes (paperbot/combo.py KO_EXIT) and what an executor's close was
 EXIT_KO = {"SL": "손절", "LOCK": "잠금 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산", "REV": "빠른 청산",
-           "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)", "SWITCH": "전환 전 포지션 정리",
+           "JUDGE": "감독 청산(추세 뒤집힘)", "TIME": "감독 청산(시간 정리)", "SWITCH": "전환 전 포지션 정리", "STALE": "잠금 전 시간 정리",
            "END": "끝냄", "TP": "익절", "PAPER": "페이퍼 따라 청산", "OTHER": "기타 청산"}
 MISSING_KO = "아직 파일이 없어요 (봇을 아직 켜지 않았거나, 설정의 경로가 달라요)"
 NO_TABLE_KO = "파일은 있지만 아직 기록 표가 없어요 (봇이 첫 기록을 쓰기 전)"
@@ -2569,7 +2569,8 @@ def shadows(p: dict, now: int, units=None) -> dict:
                        position=sa.get("position"), until_ms=None if apart else end, no_overlap=apart,
                        later=(sum(1 for t in sa.get("trades") or [] if (t.get("entry_time") or 0) >= end) if end is not None and not apart else None))
         out.append(row)
-    return {"now_ms": now, "trend": LS.trend_shadows(p, now, more["shadow_dir"], units), "shadows": out,
+    return {"now_ms": now, "trend": LS.trend_shadows(p, now, more["shadow_dir"], units),
+            "vwap": LS.vwap_shadows(p, now, more["shadow_dir"], units), "shadows": out,
             "old_until_ms": end, "old_ko": OLD_ERA_KO,
             "main": {"state": main.get("state"), "reason_ko": main.get("reason_ko"),
             "since_ms": (ma or {}).get("since_ms"), "stats": (ma or {}).get("stats")},

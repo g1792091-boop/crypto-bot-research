@@ -167,6 +167,8 @@ SHADOW_GLOB = "/var/lib/paperbot/combo/shadow-*.db"
 SHADOW_NAMES = {"shadow-b": "그림자 B 안정형", "shadow-nocut": "그림자 끄는 구간 없음", "shadow-ac32": "그림자 32개",
                 # the 추세판단 봇's own (deploy/combo.shadow-trend-*.json; the live site's 그림자 tab compares them by ROE)
                 "shadow-trend-wait": "그림자 되돌림 기다림",
+                # the VWAP 개선판's own (owners 10-26, deploy/combo.shadow-vwap-4h.json)
+                "shadow-vwap-4h": "그림자 VWAP 4시간 정리",
                 # the 10/21 design's (stopped with the 10/22 design; their databases stay)
                 "shadow-trend-time": "그림자 시간 정리 있음", "shadow-trend-now": "그림자 되돌림 없이 바로 진입",
                 "shadow-trend-vote4": "그림자 판단 4개 모두 같은 쪽"}

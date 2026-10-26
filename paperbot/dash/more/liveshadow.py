@@ -47,6 +47,15 @@ TREND_SHADOWS = (
      "live_ko": "실거래 봇은 검사를 통과한 신호에 그 분에 바로 진입 (10/22 새 설계)"},
 )
 SKIP_KEYS = ("db", "name", "telegram", "paper_db")       # what every shadow sets itself (deploy/paperbot-combo-shadow@.service)
+# the VWAP 개선판's own (owners 10-26 "둘 다 해줘": research/opentime REPORT_KO.md, its A3 passed only through the light)
+VWAP_SHADOWS = (
+    {"id": "vwap-4h", "file": "shadow-vwap-4h.db", "name_ko": "4시간 정리", "key": "unlocked_close_min", "value": 240,
+     "diff_ko": "진입 4시간 안에 첫 잠금(순ROE +10%)에 못 닿으면 그 분 시가에 시장가로 닫음",
+     "live_ko": "실거래 VWAP 봇은 손절 · 계단 익절 · 보유 한도(30분봉 48시간 · 1시간봉 96시간)로만 닫음"},
+)
+HOLD_KO = "보유 한도 청산"                 # paperbot/combo.TIME_HOLD_KO, the VWAP bot's word for TIME
+NOT_VWAP_KO = "VWAP 개선판 페이퍼 기록이 아직 없어 견줄 수 없어요"
+NO_LIGHT_KO = "VWAP 봇을 따라가는 실행기에 신호등이 없어 모든 거래를 따라간다고 셌어요"
 
 
 def weekday_days(a: int, b: int) -> float:
@@ -64,9 +73,10 @@ def weekday_days(a: int, b: int) -> float:
     return n / L.DAY
 
 
-def record(trades: list, start: int, now: int, position: Optional[dict] = None) -> dict:
+def record(trades: list, start: int, now: int, position: Optional[dict] = None, words: Optional[dict] = None) -> dict:
     """One side of the comparison over [start, now]: the closed trades entered at or after ``start`` (oldest first),
-    by trade and net ROE (each wallet is its own), the entries per KST weekday (the open position counts as an entry)."""
+    by trade and net ROE (each wallet is its own), the entries per KST weekday (the open position counts as an entry);
+    ``words``: exit reasons said otherwise for this bot (the VWAP 개선판's TIME is its hold limit)."""
     ts = [t for t in trades if (L._i(t.get("entry_time")) or 0) >= int(start)]
     n = len(ts)
     wins = sum(1 for t in ts if (L._f(t.get("pnl")) or 0) > 0)
@@ -92,7 +102,7 @@ def record(trades: list, start: int, now: int, position: Optional[dict] = None) 
             "roe_n": len(known), "roe_mean": sum(known) / len(known) if known else None, "roe_sum": sum(known) if known else None,
             "max_dd_roe": dd if known else None, "entries": entries, "open": opened, "weekday_days": wd,
             "per_weekday": entries / wd if wd >= MIN_WEEKDAY_DAYS else None,
-            "exits": [{"reason": k, "reason_ko": L.EXIT_KO.get(k, k), "n": v}
+            "exits": [{"reason": k, "reason_ko": (words or {}).get(k) or L.EXIT_KO.get(k, k), "n": v}
                       for k, v in sorted(exits.items(), key=lambda kv: (-kv[1], kv[0]))],
             "curve": L.thin(curve)}
 
@@ -107,10 +117,10 @@ def _flat(cfg: dict) -> dict:
     return out
 
 
-def cfg_diff(main_cfg: Optional[dict], shadow_cfg: Optional[dict]) -> Optional[list]:
+def cfg_diff(main_cfg: Optional[dict], shadow_cfg: Optional[dict], trend: bool = True) -> Optional[list]:
     """The keys where the shadow's start record differs from the live bot's ([{key, main, shadow}]), None when either
-    is unreadable."""
-    if not isinstance(main_cfg, dict) or not isinstance(shadow_cfg, dict) or not isinstance(shadow_cfg.get("trend"), dict):
+    is unreadable (``trend``: a trend bot's shadow, which must carry its trend rules)."""
+    if not isinstance(main_cfg, dict) or not isinstance(shadow_cfg, dict) or (trend and not isinstance(shadow_cfg.get("trend"), dict)):
         return None
     a, b = _flat(main_cfg), _flat(shadow_cfg)
     return [{"key": k, "main": json.loads(a[k]) if k in a else None, "shadow": json.loads(b[k]) if k in b else None}
@@ -198,4 +208,94 @@ def trend_shadows(p: dict, now: int, shadow_dir: str, units: Optional[Callable] 
             "review_ms": tb["freeze_until"] if tb else None, "main": {k: main.get(k) for k in ("state", "reason_ko", "as_of_ms", "stale")},
             "main_ko": None if tb else NOT_TREND_KO, "small_n": SMALL_N, "small_ko": SMALL_KO, "wait_ko": WAIT_KO,
             "shadows": rows,
+            "start_all_ko": ("sudo systemctl start " + " ".join(UNIT.format(id=i) for i in off)) if off else None}
+
+
+# ---------------------------------------------------------------- VWAP 개선판's shadows
+def lit(trades: list, n: int, min_win: Optional[float]) -> list:
+    """The paper trades an executor with the signal light (``n`` trades, ``min_win``) follows on this paper's own
+    sequence: the light green or still building when each was entered (livegoalres.light_item's rule; n <= 0: all)."""
+    closed = sorted([t for t in trades if t.get("exit_time") is not None and t.get("pnl") is not None],
+                    key=lambda t: (t["exit_time"], t.get("id") or 0))
+    out = []
+    for t in trades:
+        if t.get("entry_time") is None:
+            continue
+        prior = [c["pnl"] for c in closed if c["exit_time"] < t["entry_time"]][::-1]
+        if L.light(n, min_win, prior)["state"] in ("green", "building", "off"):
+            out.append(t)
+    return out
+
+
+def vwap_shadows(p: dict, now: int, shadow_dir: str, units: Optional[Callable] = None) -> dict:
+    """The ``vwap`` part of /api/v4/livebots/shadows: the VWAP 개선판 paper and its shadows from each shadow's own start,
+    every paper trade (``shadow`` / ``main``) and the trades its executor's signal light would have followed on each
+    side's own sequence (``shadow_lit`` / ``main_lit``: the research's A3 helped only there, REPORT_KO.md)."""
+    from ... import livepapers as LP
+    from .livevwap import is_vwap
+    if units is None:
+        from ... import livecheck as LC
+        units = LC.unit_state
+    path0 = p.get("paper2")                                  # the second paper bot's file (livebots.paths), when it is VWAP
+    read = L.read_paper(path0, [L.ACCOUNT], now) if path0 and os.path.exists(path0) else None
+    on = bool(read) and read.get("state") == "ok" and is_vwap(read.get("_cfg"))
+    ma = (read.get("accounts") or {}).get(L.ACCOUNT) if on else None
+    lx = None                                                # the first executor that follows it with a signal light
+    for _ex, ko, _dk, ck in (L.installed(p) if on else ()):
+        c = L.read_config(p[ck]) if p.get(ck) else {}
+        if c.get("state") == "ok" and LP.same(c.get("paper_db"), path0) and (L._i(c.get("signal_light_n")) or 0) > 0:
+            lx = {"name_ko": ko, "config": c}
+            break
+    n = L._i((lx or {}).get("config", {}).get("signal_light_n")) or 0
+    mw = L._f((lx or {}).get("config", {}).get("signal_light_min_win"))
+    share = L.light(n, mw, [])["min_win"] if n else None
+    light = {"n": n, "min_win": share, "exec_ko": lx["name_ko"] if lx else None,
+             "ko": f"{lx['name_ko']} 신호등: 최근 {n}번 중 {round(share * 100)}% 넘게 이겼을 때만 따라감" if lx else NO_LIGHT_KO}
+    main_cfg = _cfg_of(path0) if on else None
+    rows = []
+    for spec in VWAP_SHADOWS:
+        sid = spec["id"]
+        path = os.path.join(shadow_dir, spec["file"])
+        try:
+            active = (units(UNIT.format(id=sid) + ".service") or ("", ""))[0] or ""
+        except Exception:  # noqa: BLE001  systemd not reachable: unknown, never "off"
+            active = ""
+        run = _unit_word(active)
+        row = {k: spec[k] for k in ("id", "name_ko", "key", "value", "diff_ko", "live_ko")}
+        row.update(unit=UNIT.format(id=sid), start_ko=START_KO.format(id=sid), stop_ko=STOP_KO.format(id=sid), path=path,
+                   running=run, unit_state=active or None)
+        sh = L.read_paper(path, [L.ACCOUNT], now)
+        sa = (sh.get("accounts") or {}).get(L.ACCOUNT) if sh.get("state") == "ok" else None
+        if sh.get("state") == "error":
+            row.update(state="error", state_ko="그림자 기록을 못 읽음", reason_ko=sh.get("reason_ko"), reason=sh.get("reason"))
+        elif not (sa and sa.get("known")):
+            if run:
+                row.update(state="starting", state_ko="켜는 중 · 첫 기록 전 (켠 뒤 약 2분이면 돌기 시작해요)")
+            elif not os.path.exists(path):
+                row.update(state="off", state_ko="아직 안 켬")
+            else:
+                row.update(state="empty", state_ko="기록 파일은 있지만 아직 첫 기록 전 (켰다면 약 2분 뒤 생겨요)")
+        else:
+            start = sa.get("since_ms") or sh.get("started_ms") or 0
+            frm = max(int(start), int((ma or {}).get("since_ms") or 0))
+            st_all, mt_all = sa.get("trades") or [], (ma or {}).get("trades") or []
+            hold = {"TIME": HOLD_KO}                    # no trend supervisor: TIME is the hold limit (combo.exit_ko)
+            mine = record(st_all, frm, now, sa.get("position"), hold)
+            other = record(mt_all, frm, now, (ma or {}).get("position"), hold) if ma else None
+            mine_lit = record(lit(st_all, n, mw), frm, now, words=hold)
+            other_lit = record(lit(mt_all, n, mw), frm, now, words=hold) if ma else None
+            diff = cfg_diff(main_cfg, _cfg_of(path), trend=False)
+            small = mine["trades"] < SMALL_N or other is None or other["trades"] < SMALL_N
+            row.update(state="ok", state_ko="꺼져 있음 (기록은 꺼지기 전까지)" if run is False else "도는 중" if run else None,
+                       since_ms=int(start), from_ms=frm, as_of_ms=sh.get("as_of_ms"), stale=sh.get("stale"),
+                       name_cfg=sh.get("name_ko"), wallet=sa.get("wallet"), shadow=mine, main=other,
+                       shadow_lit=mine_lit, main_lit=other_lit,
+                       main_ko=None if other is not None else (NOT_VWAP_KO if not on else (read.get("reason_ko") or "VWAP 페이퍼 기록을 못 읽음")),
+                       small=small, small_ko=SMALL_KO if small else None, cfg_diff=diff,
+                       cfg_ok=None if diff is None else [d["key"] for d in diff] == [spec["key"]],
+                       position=bool(sa.get("position")))
+        rows.append(row)
+    off = [r["id"] for r in rows if r["state"] in ("off", "empty") or (r["state"] == "ok" and r["running"] is False)]
+    return {"on": on, "name": read.get("name_ko") if on else None, "main_ko": None if on else NOT_VWAP_KO, "light": light,
+            "small_n": SMALL_N, "small_ko": SMALL_KO, "wait_ko": WAIT_KO, "shadows": rows,
             "start_all_ko": ("sudo systemctl start " + " ".join(UNIT.format(id=i) for i in off)) if off else None}

@@ -10,6 +10,9 @@
 //   예전 봇 비교용 (folded): the old bots' shadows (A+C 합본 · 규칙봇 15 · the 10/21 trend design's three) as before
 //   (trades, win rate, money, both lines),
 //   next to the live paper only over the old bot's days (they compare with the old bot, not this one).
+//   VWAP 개선판 그림자 (owners 10/26 "둘 다 해줘", research/opentime REPORT_KO.md): the VWAP paper with ONE change
+//   (4시간 정리: closed when not at its first lock 4 hours after entry), every paper trade and, apart, the trades the
+//   executor's signal light would have followed on each side's own sequence (the research's A3 helped only there).
 // The page starts and stops nothing: it shows the commands to paste on the server.
 import {h, s, put, ui, fmt, motion} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
@@ -132,6 +135,50 @@ function trendHead(t) {
     t.start_all_ko ? ui.note(t.wait_ko || "") : null);
 }
 
+// ---------------------------------------------------------------- VWAP 개선판 그림자
+function cmpGrid(title, sh, mn, label) {
+  const rows = cmpRows(sh, mn);
+  return h("div", {class: "lb-tsh-grid", role: "table", "aria-label": label},
+    h("div", {class: "lb-tsh-row lb-tsh-hd", role: "row"}, h("span", {role: "columnheader"}, title),
+      h("span", {role: "columnheader", class: "lb-shk"}, "그림자"), h("span", {role: "columnheader", class: "lb-mk"}, "VWAP 페이퍼")),
+    rows.map((r) => h("div", {class: "lb-tsh-row", role: "row"}, h("span", {class: "lb-tsh-k", role: "rowheader"}, r.k),
+      h("span", {class: "lb-tsh-sh", role: "cell"}, r.sh), h("span", {class: "lb-tsh-mn", role: "cell"}, r.mn))));
+}
+
+/** One VWAP shadow: every paper trade, then the trades the executor's light would have followed (the money side). */
+export function vwapCard(x, W, v) {
+  if (x.state !== "ok") return trendCard(x, W, v);
+  const title = `VWAP 그림자 · ${x.name_ko}`, cw = cfgWords(x);
+  const n = x.shadow ? x.shadow.trades : null, m = x.main ? x.main.trades : null;
+  return ui.card({title, sub: `${fmt.kst(x.from_ms)}부터 · VWAP 페이퍼도 같은 기간 · 모의`, cls: "lb-tsh",
+    acts: [x.small ? ui.pill(x.small_ko, "thin", `닫힌 거래가 양쪽 다 ${v.small_n}번이 넘어야 견줘 볼 만해요`) : null,
+      x.running === false ? ui.pill("꺼져 있음", "warn") : null,
+      x.stale && x.running !== false ? ui.pill(`기록 멈춤 · ${fmt.ago(x.as_of_ms)}`, "warn") : null]},
+    h("div", {class: "lb-tsh-diff"}, h("p", null, h("b", null, "다른 점 하나 · "), x.diff_ko),
+      h("p", {class: "lb-tsh-live"}, x.live_ko.replace("실거래 VWAP 봇은", "VWAP 페이퍼(실거래가 따라가는 봇)는"))),
+    cmpGrid("모든 페이퍼 거래", x.shadow, x.main, `${title}와 VWAP 페이퍼, 모든 거래`),
+    cmpGrid("실행기가 따라갔을 거래", x.shadow_lit, x.main_lit, `${title}와 VWAP 페이퍼, 신호등을 거친 거래`),
+    ui.note(`아래 표는 ${(v.light && v.light.ko) || "신호등"} · 각자 자기 거래 순서로 다시 계산 (실제 주문 아님)`),
+    x.main ? null : ui.note(x.main_ko || "VWAP 페이퍼 기록을 못 읽었어요"),
+    twoLines(x.shadow && x.shadow.curve, x.main && x.main.curve, W, `${title}와 VWAP 페이퍼의 순ROE 합`)
+      || h("p", {class: "lb-flat"}, "닫힌 거래가 생기면 순ROE 합 선이 그려져요"),
+    h("p", {class: "lb-tsh-key"}, h("b", {class: "lb-shk"}, "━ 그림자"), " ", h("b", {class: "lb-mk"}, "━ VWAP 페이퍼"),
+      " · 모든 페이퍼 거래의 순ROE를 더한 선 (지갑 크기와 무관)"),
+    x.small ? ui.note(`${x.small_ko}: 양쪽 다 닫힌 거래가 ${v.small_n}번은 넘어야 견줘 볼 만해요 · 지금 그림자 ${n == null ? "—" : fmt.int(n)}번 · VWAP 페이퍼 ${m == null ? "—" : fmt.int(m)}번`)
+      : ui.note(`양쪽 다 ${v.small_n}번 넘음 · 그래도 우연일 수 있어요`),
+    h("p", {class: ["lb-tsh-cfg", cw.ok === false ? "warn" : ""]}, cw.ko.replace(/실거래 봇/g, "VWAP 봇")),
+    x.running === false ? howTo("다시 켜는 법 (서버에서):", x.start_ko) : null);
+}
+
+function vwapHead(v) {
+  return ui.card({title: "VWAP 개선판 그림자 비교", sub: "모의 · 몇 주 지켜본 뒤 정하기", cls: "lb-tsh-top"},
+    h("p", {class: "lb-flat"}, "5년 시험에서 '4시간 안에 첫 잠금 못 하면 닫기'는 신호등을 거친 실거래 쪽에서만 좋아졌고, 페이퍼 전체로는 차이가 없었어요. ",
+      "그래서 실거래 규칙은 그대로 두고, 같은 시장에서 그 규칙 하나만 바꾼 페이퍼 봇을 같이 돌려 실제로도 그런지 봐요 (돈 · 주문 · 텔레그램 없음)."),
+    v.on ? null : ui.note(v.main_ko || ""),
+    v.start_all_ko ? howTo("안 켠 것 켜기 (서버에서, 한 줄):", v.start_all_ko) : null,
+    v.start_all_ko ? ui.note(v.wait_ko || "") : null);
+}
+
 // ---------------------------------------------------------------- 예전 봇 비교용
 const statLine = (x) => (x ? `${fmt.int(x.trades)}번 · 승률 ${x.win_rate == null ? "—" : fmt.pct(x.win_rate, 1, false)} · ${fmt.money(x.pnl, true)} USDT` : "—");
 
@@ -174,7 +221,9 @@ export function shadowsView(ctx) {
     if (!d) { put(body, motion.shimmer(3)); return; }
     const W = Math.max(260, Math.round((body.clientWidth || 600) - 40));
     const t = d.trend || {shadows: [], on: false, small_n: 20};
-    put(body, trendHead(t), (t.shadows || []).map((x) => trendCard(x, W, t)), oldPart(d, W));
+    const v = d.vwap || null;
+    put(body, v ? [vwapHead(v), (v.shadows || []).map((x) => vwapCard(x, W, v))] : null,
+      trendHead(t), (t.shadows || []).map((x) => trendCard(x, W, t)), oldPart(d, W));
   }
   loader(ctx, "/api/v4/livebots/shadows", st, stateSlot, draw);
   return {el, set() {}};
