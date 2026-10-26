@@ -47,6 +47,7 @@ HOLD = {"V39": 0, "S6": 0, "OBV": 0, "N12": 0}
 ROLES_1022 = {"N06_MACD_ORB": "돌파", "S3_CMO_SANDWICH": "횡보", "N05_PSAR_POC": "자리", "F16_FIB382": "자리", "F16_FIB500": "자리",
               "F16_FIB618": "자리", "F16_FIB764": "자리", "V39_ALL": "눌림", "F9_IFVG": "자리", "F6_VWAP_FAIL": "자리", "F3_BOS": "돌파",
               "F15_ORB": "돌파", "F10_OTE": "자리", "F9_OB": "자리", "F7_RF_TRIPLE": "추세"}
+ROLES_1026 = {k: v for k, v in ROLES_1022.items() if not k.startswith("F16_FIB")}
 ROLES_1021 = {"N08_ICHI_WR": "눌림", "F9_FVG": "눌림", "N20_EMA9_CHOP": "횡보"}
 
 
@@ -89,8 +90,11 @@ def test_the_design_constants():
     # every member of the live config and of the shadow has its role, in the owners' words; the 10/21 ones keep theirs
     for name in ("combo.trend.json", "combo.shadow-trend-wait.json"):
         ms = _cfg(name)["members"]
-        assert len(ms) == 18 and {m["strategy"]: L.TREND_ROLE[m["strategy"]] for m in ms} == ROLES_1022
+        # owners 10/26: the five F16_FIB members out (13 left); their roles stay known for the record before
+        assert len(ms) == 13 and {m["strategy"]: L.TREND_ROLE[m["strategy"]] for m in ms} == ROLES_1026
+        assert not any(m["strategy"].startswith("F16_FIB") for m in ms)
     assert {k: L.TREND_ROLE[k] for k in ROLES_1021} == ROLES_1021
+    assert {k: L.TREND_ROLE[k] for k in ROLES_1022} == ROLES_1022
     assert L.TREND_ROLES == ("눌림", "자리", "돌파", "횡보", "추세") and set(L.TREND_ROLE.values()) <= set(L.TREND_ROLES)
     assert "하이킨아시" in L.TREND_ROLE_SUB_KO["추세"] and set(L.TREND_ROLE_SUB_KO) == set(L.TREND_ROLES)
     # the breakout members (early trend only) are the 돌파 role
@@ -257,7 +261,7 @@ def test_the_replay_says_its_design_differs():
     d = ref["d"]
     note = X.design_note_ko(d, _cfg("combo.trend.json"))
     assert note.startswith("재현은 10/21 설계(진입 매매법 10개 · 30분·1시간 진입 · 보류면 진입 안 함 · 되돌림 기다림)로 돌린 숫자예요")
-    for w in ("진입 매매법 18개", "4시간 진입(끝난 일봉 판단)", "보류 허용", "바로 진입(되돌림 안 기다림)", "참고로만"):
+    for w in ("진입 매매법 13개", "4시간 진입(끝난 일봉 판단)", "보류 허용", "바로 진입(되돌림 안 기다림)", "참고로만"):
         assert w in note, w
     assert X.design_note_ko(d, {"trend": {"time_bars": None}, "members": [{"strategy": "X", "tf": "30m"}]}) is None
     assert "보류 허용" in LT.expect_of(_cfg("combo.trend.json"))["note_ko"]

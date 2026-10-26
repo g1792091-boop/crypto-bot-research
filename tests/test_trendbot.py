@@ -537,12 +537,11 @@ def test_the_deploy_config_and_refusals(tmp_path):
     assert TJ.TrendRules.from_dict(cfg.trend) == dataclasses.replace(
         TJ.TrendRules(), time_bars=None, hold_entry=True, pullback_wait=False, design="2026-10-22")
     ms = C.resolve_members(cfg.members, cfg.picks_file)
-    # owners 10/22: 18 entry members, 30m on the closed 1h, 1h on the closed 4h, 4h on the closed daily bar
-    assert [m.label for m in ms] == ["N06_MACD_ORB@30m", "S3_CMO_SANDWICH@30m", "N05_PSAR_POC@30m", "F16_FIB382@30m",
-                                     "V39_ALL@1h", "F9_IFVG@1h", "F16_FIB382@1h", "F16_FIB500@1h", "F6_VWAP_FAIL@1h",
-                                     "F3_BOS@1h", "F15_ORB@1h",
-                                     "F15_ORB@4h", "F10_OTE@4h", "F16_FIB618@4h", "F16_FIB764@4h", "F9_IFVG@4h",
-                                     "F9_OB@4h", "F7_RF_TRIPLE@4h"]
+    # owners 10/22: 18 entry members, 30m on the closed 1h, 1h on the closed 4h, 4h on the closed daily bar; owners 10/26
+    # ("피보나치 매매법들 다 빼주라"): the five F16_FIB members out, 13 left (deploy/trend_drop.py on the server)
+    assert [m.label for m in ms] == ["N06_MACD_ORB@30m", "S3_CMO_SANDWICH@30m", "N05_PSAR_POC@30m",
+                                     "V39_ALL@1h", "F9_IFVG@1h", "F6_VWAP_FAIL@1h", "F3_BOS@1h", "F15_ORB@1h",
+                                     "F15_ORB@4h", "F10_OTE@4h", "F9_IFVG@4h", "F9_OB@4h", "F7_RF_TRIPLE@4h"]
     assert all(m.no_chase and not m.when for m in ms)
     assert TB.config_problems(cfg) == []
     assert C.make_cls(cfg).func is TB.TrendEngine and C.make_cls(dataclasses.replace(cfg, trend=None)).func is C.ComboEngine
@@ -580,7 +579,7 @@ def test_the_switch_shows_then_writes_and_keeps_the_old_files(tmp_path, capsys):
     args = ["--combo", str(combo), "--exec", str(woo), "--exec", str(bybit)]
     assert S.main(args) == 0
     out = capsys.readouterr().out
-    assert "규칙봇 15 → 추세판단 봇 · 매매법 14개 → 진입 18개" in out and "보여 주기만" in out
+    assert "규칙봇 15 → 추세판단 봇 · 매매법 14개 → 진입 13개" in out and "보여 주기만" in out
     assert "paper_db /var/lib/paperbot/combo/live15-mexc.db → /var/lib/paperbot/combo/live-ac.db" in out
     assert "paper_db 그대로 /var/lib/paperbot/combo/live-ac.db" in out
     assert {p: p.read_text(encoding="utf-8") for p in before} == before            # nothing written
@@ -606,7 +605,7 @@ def test_the_switch_shows_then_writes_and_keeps_the_old_files(tmp_path, capsys):
     combo.write_text(json.dumps(old), encoding="utf-8")
     assert S.main(args + ["--write"]) == 0
     out = capsys.readouterr().out
-    assert ("추세판단 봇 10/21 설계 → 추세판단 봇 새 설계 2026-10-22 · 진입 10개 → 진입 18개 · 성적은 새 설계 시작부터 새로 셈"
+    assert ("추세판단 봇 10/21 설계 → 추세판단 봇 새 설계 2026-10-22 · 진입 10개 → 진입 13개 · 성적은 새 설계 시작부터 새로 셈"
             in out) and "실행기는 두 분이 정할 때만 켬" in out
     assert json.loads(combo.read_text(encoding="utf-8")) == json.loads(open(os.path.join(deploy, "combo.trend.json"),
                                                                            encoding="utf-8").read())
