@@ -122,3 +122,40 @@ that is 0 (the engine's lock price at a 0 % lock).
 5m bars instead of 1m for V3.9 and the 레인지 봇 (stop first inside a bar; the M decision at the 5m close); the trend
 bot only 3.5 months of one market with another member set; NYSE holidays only 2026-2027; CPI / PCE missing from the
 macro block before 2026-10; V3.9's paper-following and fast exit not modelled; wallet multiples only (no dollars).
+
+## Addendum 1 (2026-10-26, before any arm of the 4th bot is run): VWAP 개선판 -> 딥코인 (DeepCoin)
+
+The owners asked for every live bot ("총 돌아가는 실거래 매매봇들 각각"), so a fourth section is added with the same arms,
+the same periods, the same decision metric and the same "helps" rule as above. Nothing above changes. This addendum is
+committed before any VWAP arm (A0 included) is run; the V3.9 parity check (above, check 1) was the only thing run so far
+(9,813 signals, 0 differences).
+
+### 4. VWAP 개선판 (paper `deploy/combo.vwap.json`) -> 딥코인 executor (`deploy/executor.live-deepcoin.json`)
+- Simulator: research/vwap30/code, the chain of vwmonth2.paper_trades (the live bot's own 5-year paper trades, the band
+  of docs/vwap-bot-ko.md 9장): vwfix2.rows_tf (VWAP 복귀 실패 30m, prio 0) and vwadd.sig_job / rows_of (S3_CMO_SANDWICH 1h,
+  prio 1), vwadd.time_ok + gates, vwacct._take (one position), leverage min(30, 0.5 / (2 ATR % + 0.14 %)) (the loss cap
+  "shrink": a stop costs at most 20 % of the wallet at margin 40 %), margin 40 %. Its exit (vwfix2.outcomes_tf "base":
+  stop 2 ATR of the signal bar, the rule bot's ladder 12 -> 10 then every +5 on net ROE at 30x, 96-bar cap closed at
+  market, taker 0.05 % + slippage 0.02 % per side = DeepCoin's net_costs, funding) is copied with the arm hooks;
+  parity: with no arm it must equal outcomes_tf "base" on every signal.
+- Data: the simulator reads a 1m grid (fg1m) that is not on this machine. It is fed the same 5m files expanded to
+  minutes (each 5m bar = one minute with its open / high / low / close / volume, then four flat minutes at its close;
+  funding on the first minute; mark = last price; gaps filled flat as nlcommon.load_grid does) — 5m resolution, as for
+  V3.9 and the 레인지 봇 (the method of analysis/f7tp10_1026/livepar.py). The trend-judge arrays (research/newlive
+  judge_all.py -> trendbot/fiveyear judge5y.job) are rebuilt from that grid. Bars of 30m / 1h / 4h made from it equal the
+  5m-built bars exactly. Its macro block is its own (data/macro_events.csv only, i.e. 2026-10 on); weekend and Nasdaq-open
+  blocks as the bot.
+- Arms at this resolution: M = the minute 09:29 New York (the last minute of the 09:25 5m bar), decided at its close.
+  "First lock reached" = the ladder's first lock armed by then (best net ROE >= 12 %). Net ROE and break-even in the
+  simulator's terms (return - round-trip cost - funding paid; break-even = the return where that is 0). Time arms: the
+  close of minute 60 x N - 1 after the entry minute (entries sit on 30m / 1h closes, so this is the 5m close at entry +
+  N h). The 96-bar cap stays (30m: 48 h, 1h: 96 h). All seven arms are possible.
+- One-position chain from 2020-03-01 (the simulator's start); trades counted from 2021-01 KST like the other bots.
+- Primary (as live): the executor copies a paper entry only while the paper's last 20 closed trades won >= 75 %
+  (signal_light_n 20, min_win 0.75; fewer than 20: copied), on that arm's own paper sequence (the rule would be in the
+  bot). Wallet return of a copied trade = 0.4 x leverage x net return; a trade not copied is 0. The decision uses this.
+  Secondary (reported): the paper bot itself (every trade, no light).
+- Not modelled (limits): the executor's own ladder on its own fill and its following of the paper's hold-limit exit
+  only before its own first lock (the simulator keeps one account, the paper's); the simulator's ladder is computed at
+  30x even when the leverage was shrunk.
+- Diagnostics (a)-(c) as above on its A0 (primary and paper).
