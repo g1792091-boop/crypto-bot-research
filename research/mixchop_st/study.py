@@ -217,9 +217,10 @@ def run_window(variant: str, t0: int, t1: int, start_eq: float = 50.0) -> dict:
                    kill_file="", own_stop_file="", max_notional_usd=float(raw["max_notional_usd"]), taker_fee=R.TAKER,
                    telegram=False, no_weekend=bool(raw["no_weekend"]), us_open_pre_min=int(raw["us_open_pre_min"]),
                    us_open_pause_min=int(raw["us_open_pause_min"]), macro_blackout_min=int(raw["macro_blackout_min"]),
-                   margin_frac=float(raw["margin_frac"]), ladder={k: float(v) for k, v in raw["ladder"].items()},
+                   margin_frac=float(raw["margin_frac"]),
+                   ladder=G.get("ladder_of", {}).get(variant) or {k: float(v) for k, v in raw["ladder"].items()},
                    ladder_every_s=float(raw["ladder_every_s"]))
-    dec = G["decided"][variant]
+    dec = G["decided"][G.get("dec_of", {}).get(variant, variant)]     # grid.py: many ladders on one set of answers
     bars30, m1 = G["bars30"], G["m1"]
     clock = R.Clock()
     o30 = {s: a[:, 0].astype(np.int64) for s, a in bars30.items()}
