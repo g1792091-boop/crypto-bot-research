@@ -75,6 +75,9 @@ default:
   client gives one, else ``liq_guard_mmr``, 0.5 %): recorded as a skipped entry ("liq_skip", INFO), never an alarm.
 - ``macro_block_min`` (30; "경제발표 30분전이랑 30분후는 ... 진입금지"): no new entry sent within ± that many minutes of a
   US release of data/macro_events.csv (paperbot/events.py); recorded as a skipped entry ("macro_skip", INFO).
+- ``us_open_pre_min`` / ``us_open_pause_min`` (30 / 30; owners 10-26 "투비트도 나스닥 개장 앞뒤 30분 진입금지"): no new entry
+  sent from that many minutes before the NYSE open (09:30 New York, DST aware, weekdays, not on NYSE holidays) to that
+  many minutes after it, as the paper bots' block (combo.us_open_pause); recorded as a skipped entry ("us_open_skip", INFO).
 
 Every loop, before following the paper account, it reconciles the exchange with its own state:
 an unknown position is closed and alerted; a position without a stop gets one at once (or is
@@ -299,6 +302,9 @@ class ExecConfig:
     macro_block_min: Optional[int] = None   # ("경제발표 30분전이랑 30분후는 ... 진입금지"): no NEW entry sent within ± this
                                             # many minutes of a US release (CPI, FOMC, NFP, PCE: data/macro_events.csv
                                             # through paperbot/events.py); an open position keeps its stop and ladder
+    us_open_pre_min: Optional[int] = None   # (owners 10-26 "나스닥 개장 앞뒤 30분 진입금지"): no NEW entry sent from this many
+    us_open_pause_min: Optional[int] = None  # minutes before the NYSE open to ``us_open_pause_min`` after it (09:30 New York,
+                                            # weekdays, not NYSE holidays: combo.us_open_pause); open positions go on
 
     @classmethod
     def from_dict(cls, d: dict) -> "ExecConfig":
@@ -395,6 +401,10 @@ class ExecConfig:
         m = self.macro_block_min
         if m is not None and (isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 240):
             out.append("macro_block_min은 1~240분(정수) 또는 null입니다(예: 경제 발표 앞뒤 30분 → 30)")
+        for name in ("us_open_pre_min", "us_open_pause_min"):
+            m = getattr(self, name)
+            if m is not None and (isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 240):
+                out.append(f"{name}은 1~240분(정수) 또는 null입니다(예: 나스닥 개장 앞뒤 30분 → 둘 다 30)")
         return out + self.risk.problems()
 
     def _stop_guard_problems(self) -> list:
@@ -1535,6 +1545,8 @@ class Executor:
             own.update(liq_guard=True, liq_guard_mmr=self.cfg.guard_mmr())
         if self.cfg.macro_block_min:
             own["macro_block_min"] = self.cfg.macro_block_min
+        if us_open_window(self.cfg) is not None:
+            own.update(us_open_pre_min=self.cfg.us_open_pre_min, us_open_pause_min=self.cfg.us_open_pause_min)
         self._event(INFO, "start", f"시작: paper 계좌 {self.cfg.account} 따라 하기 (페이퍼 DB {self.cfg.paper_db}), "
                     f"{self.cfg.mode}, 진입 {'신호 즉시' if self.signals is not None else 'paper 포지션'}, "
                     f"비상 정지 파일 {os.path.abspath(self.cfg.risk.kill_file)}"
@@ -1545,7 +1557,8 @@ class Executor:
                     + (f", {stop_scale_text(self.cfg)}" if self.cfg.stop_scale is not None else "")
                     + (", 청산가 확인 켜짐(손절이 강제청산 가격보다 멀면 진입 안 함, 유지증거금률 거래소 값 또는 "
                        f"{_pct(self.cfg.guard_mmr())})" if self.cfg.liq_guard is True else "")
-                    + (f", 미국 경제 발표 앞뒤 {self.cfg.macro_block_min}분 새 진입 안 함" if self.cfg.macro_block_min else ""),
+                    + (f", 미국 경제 발표 앞뒤 {self.cfg.macro_block_min}분 새 진입 안 함" if self.cfg.macro_block_min else "")
+                    + (f", {us_open_short(self.cfg)} 새 진입 안 함" if us_open_window(self.cfg) is not None else ""),
                     {"halted": self.risk.halted, "trade": self.trade, "kill_file": self.cfg.risk.kill_file,
                      "paper_db": self.cfg.paper_db, **own})
         if self.risk.halted:
@@ -2597,7 +2610,8 @@ class Executor:
             return
         now = self.now_ms()
         if direct is not None and direct.key not in self.done:
-            if self._floor_ok(direct) and self._macro_ok(direct) and self._light_ok(direct.key, direct.symbol):
+            if (self._floor_ok(direct) and self._macro_ok(direct) and self._us_open_ok(direct)
+                    and self._light_ok(direct.key, direct.symbol)):
                 self._enter(direct)
             return
         if intent is None or intent.key in self.done:
@@ -2613,7 +2627,8 @@ class Executor:
             self._event(WARN, "late", f"paper 진입이 {(now - intent.entry_time) / 1000:.0f}초 전이라 따라 하지 않습니다",
                         {"key": intent.key})
             return
-        if self._floor_ok(intent) and self._macro_ok(intent) and self._light_ok(intent.key, intent.symbol):
+        if (self._floor_ok(intent) and self._macro_ok(intent) and self._us_open_ok(intent)
+                and self._light_ok(intent.key, intent.symbol)):
             self._enter(intent)
 
     # ------------------------------------------------------------ 잔고 바닥 / 원금 회수 안내 (owners 10-24)
@@ -2705,6 +2720,27 @@ class Executor:
         self._event(INFO, "macro_skip", f"{it.symbol} 미국 경제 발표({e.kind} {_kst_short(e.ts_ms)}) 앞뒤 {int(n)}분이라 이번 "
                     "진입은 하지 않음", {"key": it.key, "symbol": it.symbol, "side": it.side, "minutes": int(n),
                                        "event": e.as_dict()}, notify=False)
+        self._save()
+        return False
+
+    def _us_open_ok(self, it: Intent) -> bool:
+        """us_open_pre_min / us_open_pause_min (owners 10-26, "투비트도 나스닥 개장 앞뒤 30분 진입금지"): no new entry sent from
+        ``us_open_pre_min`` minutes before the NYSE open (09:30 New York, DST aware, weekdays, not on NYSE holidays) to
+        ``us_open_pause_min`` after it, the paper bots' rule (combo.us_open_pause). Such a paper entry is skipped for good,
+        as _macro_ok: recorded once (INFO "us_open_skip": a missed signal, never an alarm), marked done, never joined
+        later. Only entries: an open position keeps its stop and ladder."""
+        win = us_open_window(self.cfg)
+        if win is None:
+            return True
+        from .combo import us_open_pause
+        pre, mins = win
+        why = us_open_pause(self.now_ms(), mins, pre)
+        if not why:
+            return True
+        self._mark_done(it.key)
+        self._event(INFO, "us_open_skip", f"{it.symbol} 이번 진입은 하지 않음: {why}",
+                    {"key": it.key, "symbol": it.symbol, "side": it.side, "pre_min": pre, "pause_min": mins},
+                    notify=False)
         self._save()
         return False
 
@@ -3498,6 +3534,8 @@ def preflight(cfg: ExecConfig, client, keycheck, out=print, env: Optional[Mappin
                 line(True, text)
             else:
                 out("[주의] " + text)            # a warning, never a failed gate (combo.py's check says the same)
+    if us_open_window(cfg) is not None:
+        line(True, us_open_text(cfg))
     if cfg.liq_guard is True and not cfg._stop_guard_problems():
         line(True, liq_guard_text(cfg)
              + ("" if callable(getattr(client, "maint_margin_ratio", None)) else
@@ -3678,7 +3716,36 @@ def liq_guard_text(cfg: ExecConfig) -> str:
 def macro_text(cfg: ExecConfig) -> str:
     """macro_block_min in words (check-config, preflight)."""
     return (f"경제 발표: 미국 CPI·FOMC·고용(NFP)·PCE 발표 앞뒤 {int(cfg.macro_block_min or 0)}분에는 새 진입 안 함(놓친 신호로 "
-            "기록, 알람 아님; 열린 포지션은 손절·계단 그대로), 나스닥 개장 시간은 막지 않음. 일정: data/macro_events.csv")
+            "기록, 알람 아님; 열린 포지션은 손절·계단 그대로), "
+            + ("나스닥 개장은 아래 줄" if us_open_window(cfg) is not None else "나스닥 개장 시간은 막지 않음")
+            + ". 일정: data/macro_events.csv")
+
+
+def us_open_window(cfg: ExecConfig) -> Optional[tuple]:
+    """(minutes before, minutes after) the NYSE open with no new entry, or None (off, or a value check-config refuses)."""
+    vals = []
+    for m in (cfg.us_open_pre_min, cfg.us_open_pause_min):
+        if m is not None and (isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 240):
+            return None
+        vals.append(int(m or 0))
+    return tuple(vals) if any(vals) else None
+
+
+def us_open_short(cfg: ExecConfig) -> str:
+    """"나스닥 개장 앞 30분·뒤 30분" (combo.us_open_ko's words)."""
+    from .combo import us_open_ko
+    pre, mins = us_open_window(cfg) or (0, 0)
+    return us_open_ko(mins, pre)
+
+
+def us_open_text(cfg: ExecConfig) -> str:
+    """us_open_pre_min / us_open_pause_min in words (check-config, preflight), with the KST hours (summer / winter)."""
+    pre, mins = us_open_window(cfg) or (0, 0)
+    kst = lambda m: f"{m // 60 % 24:02d}:{m % 60:02d}"                     # noqa: E731  minutes of the KST day
+    summer, winter = (22 * 60 + 30 - pre, 22 * 60 + 30 + mins), (23 * 60 + 30 - pre, 23 * 60 + 30 + mins)
+    return (f"나스닥 개장: {us_open_short(cfg)} 새 진입 안 함(뉴욕 09:30 개장, 평일, 미국 휴장일 제외; 한국 시간 서머타임 "
+            f"{kst(summer[0])}~{kst(summer[1])} / 겨울 {kst(winter[0])}~{kst(winter[1])}; 놓친 신호로 기록, 알람 아님; 열린 "
+            "포지션은 손절·계단 그대로)")
 
 
 def macro_calendar(now_ms: int, days: int = 30) -> list:
@@ -3813,6 +3880,8 @@ def guard_lines(cfg: ExecConfig) -> list:
         out.append(liq_guard_text(cfg))
     if isinstance(cfg.macro_block_min, int) and not isinstance(cfg.macro_block_min, bool) and 1 <= cfg.macro_block_min <= 240:
         out.append(macro_text(cfg))
+    if us_open_window(cfg) is not None:
+        out.append(us_open_text(cfg))
     if cfg.stop_from == "roe" and isinstance(cfg.stop_roe, (int, float)) and 0 < cfg.stop_roe < 1:
         lev = cfg.risk.max_leverage or 35
         if cfg.stop_net is True and cfg.own_round_trip() is not None:

@@ -250,8 +250,16 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
     0.5%로 어림한 값으로 합니다(실제 청산가는 수수료와 투비트의 구간에 따라 조금 다를 수 있습니다). 진입한 뒤에는 손절 자리를
     옮기지 않습니다.
 - **미국 경제 발표 앞뒤 30분 진입 금지**(`macro_block_min: 30`). CPI(소비자물가), FOMC(금리 결정), NFP(고용보고서), PCE 발표
-  30분 전부터 30분 뒤까지는 **새 진입을 하지 않습니다.** 열린 포지션은 그대로 둡니다(손절·계단 그대로). 나스닥 개장 시간은 막지
-  않습니다. 막힌 진입은 "놓친 신호"로 한 번 기록되고(알람 아님), 나중에 따라 들어가지도 않습니다.
+  30분 전부터 30분 뒤까지는 **새 진입을 하지 않습니다.** 열린 포지션은 그대로 둡니다(손절·계단 그대로). 막힌 진입은 "놓친
+  신호"로 한 번 기록되고(알람 아님), 나중에 따라 들어가지도 않습니다.
+- **나스닥 개장 앞뒤 30분 진입 금지**(`us_open_pre_min: 30`, `us_open_pause_min: 30`; 두 분 10/26 "투비트도 나스닥 개장 앞뒤
+  30분 진입금지 넣어주고"). 뉴욕 09:30 개장 30분 전부터 30분 뒤까지(평일, 미국 휴장일 제외) **새 진입을 하지 않습니다.** 한국
+  시간으로 서머타임 22:00~23:00, 겨울(11/2부터) 23:00~00:00입니다. 추세판단 봇·레인지 봇과 같은 규칙(같은 코드)입니다.
+  V3.9은 1시간봉이라 평일 하루 한 번(22:00, 겨울 23:00 봉)의 진입만 막힙니다. 열린 포지션은 그대로(손절·계단 그대로), 막힌 진입은
+  "놓친 신호"로 한 번 기록됩니다(알람 아님).
+  - 5년 기록으로 본 값(10/26): 이 시간의 진입은 5년에 113번(한 달 약 2번), 승률 65.5% · 거래당 −0.97%로 그 밖(69.5% · −0.89%)과
+    거의 같았습니다(2021~23은 더 나빴고 2024~26은 오히려 나았음). 데이터로는 막아도 안 막아도 비슷하고, 두 분이 다른 봇과 같게
+    맞추기로 정했습니다.
   - 발표 일정은 `data/macro_events.csv`(다른 봇들의 경제 발표 진입 금지와 같은 파일)에 있습니다. 지금은 2026년 12월까지 들어
     있습니다. **앞으로 30일 안에 일정이 없으면 check-config와 preflight가 `[주의] 일정 없음: … data/macro_events.csv를 채우세요`로
     알려 줍니다**(실패는 아님). 그때 다음 일정을 채워 주세요: `python -m paperbot.events line CPI 2027-01-13 (공식 일정 페이지 주소)`가
@@ -294,3 +302,22 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
   `tests/test_toobit_plan_options.py`(고정 배수, 2.5 ATR 손절, 청산가 확인, 경제 발표 진입 금지, 고정 익절),
   설정 원본 `deploy/executor.live-toobit.json`, 서비스 `deploy/paperbot-executor-toobit.service`,
   키 파일 원본 `deploy/executor-toobit.env.example`.
+
+## 10/26 나스닥 개장 앞뒤 30분 진입 금지 넣기 — 서버 순서
+
+포지션이 있어도 할 수 있어요(실행기를 다시 켜면 포지션과 손절·계단을 이어받습니다). 한 줄씩:
+
+1. 코드 받기·설치: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+   (실행기는 다시 켜지 않습니다. "paperbot-executor-toobit is running the previous code"가 나오면 정상)
+2. 서버 설정과 원본이 그 두 줄만 다른지 보기: `sudo diff /etc/paperbot/executor-toobit.json /opt/crypto-bot-research/deploy/executor.live-toobit.json`
+   → `> "us_open_pre_min": 30,`과 `> "us_open_pause_min": 30,` 두 줄만 나와야 합니다. 다른 줄이 나오면 여기서 멈추고 알려 주세요.
+3. 예전 설정 남기고 새 원본으로 바꾸기:
+   `sudo cp -p /etc/paperbot/executor-toobit.json /etc/paperbot/executor-toobit.json.before-usopen`
+   `sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/executor.live-toobit.json /etc/paperbot/executor-toobit.json`
+4. 설정 확인: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit executor check-config --config /etc/paperbot/executor-toobit.json`
+   → `나스닥 개장: 나스닥 개장 앞 30분·뒤 30분 새 진입 안 함(…서머타임 22:00~23:00 / 겨울 23:00~00:00…)` 줄과 마지막 줄 `준비됨`
+5. 다시 켜기: `sudo systemctl restart paperbot-executor-toobit`, 확인 `systemctl is-active paperbot-executor-toobit`(`active`)
+6. 시작 기록: `sudo journalctl -u paperbot-executor-toobit -n 5 --no-pager`
+
+되돌리기: `sudo cp -p /etc/paperbot/executor-toobit.json.before-usopen /etc/paperbot/executor-toobit.json` →
+`sudo systemctl restart paperbot-executor-toobit`.

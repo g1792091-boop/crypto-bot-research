@@ -19,6 +19,8 @@
   "liq_guard": true,
   "liq_guard_mmr": 0.005,
   "macro_block_min": 30,
+  "us_open_pre_min": 30,
+  "us_open_pause_min": 30,
   "ladder_from": "own",
   "ladder": {
     "first_lock": 0.17,

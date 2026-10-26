@@ -514,3 +514,94 @@ def test_without_the_release_block_an_entry_at_the_release_is_made(tmp_path, cal
     calendar((w.clock.t + 3_000, "NFP"))
     w.loop()
     assert w.ex.trade is not None and w.fake.amt(BTC) == 5 and not events(w, "macro_skip")
+
+
+# ====================================================================== the Nasdaq-open block (owners 10-26)
+OPEN_JAN15 = int(datetime(2027, 1, 15, 14, 30, tzinfo=timezone.utc).timestamp() * 1000)   # 09:30 New York (EST), a Friday
+
+
+@pytest.mark.parametrize("minutes,enters", [(-31, True), (-30, False), (0, False), (29, False), (30, True)])
+def test_no_new_entry_from_30_minutes_before_to_30_after_the_nyse_open(tmp_path, minutes, enters):
+    """``minutes``: when the entry is sent, from the open (09:30 New York); the window is [-30, +30)."""
+    w = World(tmp_path, us_open_pre_min=30, us_open_pause_min=30)
+    w.clock.t = OPEN_JAN15 + minutes * MIN - 3_000                     # World.loop moves the clock 3 s first
+    w.paper(stop=99.0)
+    w.loop()
+    if enters:
+        assert w.ex.trade is not None and w.fake.amt(BTC) == 5 and not events(w, "us_open_skip")
+        return
+    assert w.ex.trade is None and w.fake.amt(BTC) == 0 and not w.fake.order_bodies
+    w.loop(2)
+    (lv, text, d), = events(w, "us_open_skip")                        # once: marked done, never joined later
+    assert lv == "INFO" and text == ("BTCUSDT 이번 진입은 하지 않음: 나스닥 개장 앞 30분·뒤 30분 진입 안 함 "
+                                     "(뉴욕 09:00~10:00, 09:30 개장)")
+    assert (d["pre_min"], d["pause_min"], d["symbol"]) == (30, 30, BTC)
+    assert not [m for _lv, m in w.note.messages if "나스닥" in m]     # a missed signal, never an alarm
+    assert w.src.intent.key in w.ex.done and w.fake.amt(BTC) == 0
+    ex = LC.ExecInfo(name="toobit", config="", unit="", db=w.cfg.db, light_n=0, light_min=0.85, exchange="toobit")
+    st = LC.entry_state(ex, LC.open_ro(w.cfg.db), w.src.intent.key, [], w.src.intent.entry_time, True)
+    assert st == {"state": "skipped", "why_ko": "나스닥 개장 앞뒤라 진입 안 함"}
+
+
+def test_the_nasdaq_block_follows_new_york_summer_time_and_skips_weekends(tmp_path):
+    summer = int(datetime(2026, 10, 26, 13, 15, tzinfo=timezone.utc).timestamp() * 1000)   # 09:15 New York (EDT), Monday
+    saturday = int(datetime(2027, 1, 16, 14, 30, tzinfo=timezone.utc).timestamp() * 1000)
+    (tmp_path / "s").mkdir()
+    (tmp_path / "w").mkdir()
+    w = World(tmp_path / "s", us_open_pre_min=30, us_open_pause_min=30)
+    w.clock.t = summer - 3_000
+    w.paper(stop=99.0)
+    w.loop()
+    assert w.ex.trade is None and len(events(w, "us_open_skip")) == 1
+    w = World(tmp_path / "w", us_open_pre_min=30, us_open_pause_min=30)
+    w.clock.t = saturday - 3_000
+    w.paper(stop=99.0)
+    w.loop()
+    assert w.ex.trade is not None and not events(w, "us_open_skip")
+
+
+def test_the_nasdaq_block_never_touches_an_open_position(tmp_path):
+    w = World(tmp_path, us_open_pre_min=30, us_open_pause_min=30)
+    w.clock.t = OPEN_JAN15 - 40 * MIN
+    w.paper(stop=99.0)
+    w.loop()
+    assert w.fake.amt(BTC) == 5
+    w.clock.t = OPEN_JAN15 - 5 * MIN                                   # inside the window now
+    w.loop(3)
+    assert w.ex.trade is not None and w.fake.amt(BTC) == 5 and w.stops() == [(99.0, 5.0)]
+    assert not events(w, "us_open_skip")
+
+
+def test_without_the_nasdaq_block_an_entry_at_the_open_is_made(tmp_path):
+    w = World(tmp_path)
+    w.clock.t = OPEN_JAN15 - 3_000
+    w.paper(stop=99.0)
+    w.loop()
+    assert w.ex.trade is not None and w.fake.amt(BTC) == 5 and not events(w, "us_open_skip")
+    (_lv, text, d), = events(w, "start")
+    assert "us_open_pre_min" not in d and "나스닥" not in text
+
+
+@pytest.mark.parametrize("extra", [{"us_open_pre_min": 0}, {"us_open_pause_min": 241}, {"us_open_pre_min": 30.0},
+                                   {"us_open_pause_min": True}])
+def test_the_nasdaq_block_values_are_checked(tmp_path, extra):
+    raw = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    raw.update(extra)
+    probs = ExecConfig.from_dict(raw).problems()
+    assert any("은 1~240분(정수) 또는 null입니다(예: 나스닥 개장 앞뒤 30분 → 둘 다 30)" in p for p in probs), probs
+
+
+def test_the_template_check_config_and_start_say_the_nasdaq_block(tmp_path, capsys):
+    raw = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+    assert (raw["us_open_pre_min"], raw["us_open_pause_min"]) == (30, 30)
+    assert main(["check-config", "--config", str(TEMPLATE)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[-1] == "준비됨"
+    assert ("나스닥 개장: 나스닥 개장 앞 30분·뒤 30분 새 진입 안 함(뉴욕 09:30 개장, 평일, 미국 휴장일 제외; 한국 시간 서머타임 "
+            "22:00~23:00 / 겨울 23:00~00:00; 놓친 신호로 기록, 알람 아님; 열린 포지션은 손절·계단 그대로)") in lines
+    macro = next(ln for ln in lines if ln.startswith("경제 발표:"))
+    assert "나스닥 개장은 아래 줄" in macro and "막지 않음" not in macro
+    w = World(tmp_path, us_open_pre_min=30, us_open_pause_min=30)
+    (_lv, text, d), = events(w, "start")
+    assert "나스닥 개장 앞 30분·뒤 30분 새 진입 안 함" in text
+    assert (d["us_open_pre_min"], d["us_open_pause_min"]) == (30, 30)

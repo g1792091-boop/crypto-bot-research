@@ -738,9 +738,11 @@ OWN_BUSY_KO = "자기 포지션(거래소 기준)을 들고 있어 따라가지 
 
 
 # entries an executor leaves out on purpose by its own config (owners 10-25 night, the Toobit executor): a missed signal,
-# never an alarm. executor.py _liq_guard_ok (liq_guard: its stop would sit beyond the liquidation) and _macro_ok
-# (macro_block_min: a US release within that many minutes)
-PLANNED_SKIPS = {"liq_skip": "손절이 강제청산 가격보다 멀어 진입 안 함", "macro_skip": "미국 경제 발표 앞뒤라 진입 안 함"}
+# never an alarm. executor.py _liq_guard_ok (liq_guard: its stop would sit beyond the liquidation), _macro_ok
+# (macro_block_min: a US release within that many minutes) and _us_open_ok (us_open_pre_min / us_open_pause_min, owners
+# 10-26: the NYSE open window)
+PLANNED_SKIPS = {"liq_skip": "손절이 강제청산 가격보다 멀어 진입 안 함", "macro_skip": "미국 경제 발표 앞뒤라 진입 안 함",
+                 "us_open_skip": "나스닥 개장 앞뒤라 진입 안 함"}
 
 
 def planned_skip(told: list) -> Optional[str]:
