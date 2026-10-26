@@ -65,6 +65,7 @@ DAY, HOUR, MIN = L.DAY, L.HOUR, 60_000
 BOTS = ("trend", "vwap", "mix", "v39")
 NAME_KO = {"trend": "추세판단 봇", "vwap": "VWAP 개선판", "mix": "믹스 30분 봇", "v39": "V3.9 투비트"}
 MONTH_D = 30                            # the goal's month (×6 in 30 days)
+TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 MIN_DAYS = 1.0                          # entries a day only from one whole day of record
 FEW = 20                                # a record under this many closed trades: 표본 적음
 READ_N = 10                             # under this many closed trades no verdict at all
@@ -357,7 +358,7 @@ def gap_item(x: dict, path: str, since: Optional[int], now: int) -> dict:
         if worst is not None and worst[0] < 0:
             lead += f" · 가장 큰 몫: {worst[1]} {_pct(worst[0])}p"
         tone = "bad" if gap is not None and gap < -0.02 else "warn" if gap is not None and gap < 0 else "good"
-    kp = [kpi("같은 거래", len(matched), "n"), kpi("거래당 순ROE 차이", gap, "pct", "bad" if gap is not None and gap < 0 else None)]
+    kp = [kpi("같은 거래", len(matched), "n"), kpi("거래당 순ROE 차이", gap, "pctp", "bad" if gap is not None and gap < 0 else None)]
     if fg.get("state") == "ok":
         kp += [kpi("진입 가격 차이", fg.get("entry_roe"), "pctp", sub=f"{fg.get('entry_n', 0)}번 잼"),
                kpi("청산 가격 차이", fg.get("exit_roe"), "pctp", sub=f"{fg.get('exit_n', 0)}번 잼"),
@@ -405,7 +406,7 @@ def light_item(x: dict, trades: list) -> Optional[dict]:
     for k in ("green", "red", "building"):
         b = by[k]
         rows.append({**b, "state_ko": ko[k], "win_rate": b["wins"] / b["n"] if b["n"] else None,
-                     "roe_mean": b["roe_sum"] / b["n"] if b["n"] else None})
+                     "roe_mean": b["roe_sum"] / b["n"] if b["n"] else None, "roe_sum": b["roe_sum"] if b["n"] else None})
     g, rd = by["green"], by["red"]
     title = f"{x['name_ko']}: 신호등 {n}번 · {_pct(mw, 0, False)} 검증"
     q = f"최근 {n}번 중 {_pct(mw, 0, False)} 넘게 이겼을 때만 따라가는 규칙이 실제로 나쁜 거래를 거르나?"
@@ -582,7 +583,7 @@ def site_bot(which: str, p: dict, now: int, more: dict) -> dict:
                                               use_ko="잃는 역할이 표본이 쌓여도 계속 잃으면 그 역할을 빼거나 진입 조건을 바꾸는 것이 2주 검토의 안건이에요"),
                            "roles", "어느 역할이 버나"))
         items.append(_safe(lambda: split_item("tf", "어느 진입봉이 버나", "30분 · 1시간 · 4시간 진입 중 어디가 버나?", trades,
-                                              lambda t: t.get("timeframe"), "진입봉", ["30m", "1h", "4h"],
+                                              lambda t: TF_KO.get(t.get("timeframe"), t.get("timeframe")), "진입봉", ["30분", "1시간", "4시간"],
                                               use_ko="한 진입봉이 계속 잃으면 그 봉을 끄는 것이 다음 검토 안건이에요"), "tf", "어느 진입봉이 버나"))
     else:
         items.append(_safe(lambda: split_item("strategies", "어느 매매법이 버나", "VWAP 개선판 안의 매매법 중 어느 것이 목표에 보태나?", trades,
