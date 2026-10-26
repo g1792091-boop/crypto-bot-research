@@ -47,7 +47,15 @@ def main(argv=None) -> int:
         sig = np.asarray(lo, bool).astype(np.int8) - np.asarray(sh, bool).astype(np.int8)
         latch = pd.Series(np.where(sig != 0, sig, np.nan)).ffill().fillna(0).to_numpy(np.int8)
         st = np.where(np.asarray(d) == 1, 1, np.where(np.asarray(d) == -1, -1, 0)).astype(np.int8)
-        np.savez(os.path.join(a.work, "prep", f"{c}_trend.npz"), v39_sig=sig, v39_latch=latch, st1h=st)
+        with warnings.catch_warnings():               # the trend bot's four judges on the 1h bar itself, and EMA200
+            warnings.simplefilter("ignore")
+            arr = TJ.vote_arrays(df, fg, pi)
+            e200 = TJ._f(fg.ema(df["close"], 200))
+        close = df["close"].to_numpy(float)
+        extra = {f"j1_{k}": arr[k].astype(np.int8) for k in TJ.JUDGES}
+        extra["j1_raw3"] = TJ.raw_votes(arr, 3)
+        extra["ema200"] = np.where(close > e200, 1, np.where(close < e200, -1, 0)).astype(np.int8)
+        np.savez(os.path.join(a.work, "prep", f"{c}_trend.npz"), v39_sig=sig, v39_latch=latch, st1h=st, **extra)
         print(c, "V3.9 signals", int((sig != 0).sum()), "latch long share %.2f" % float((latch > 0).mean()), flush=True)
     return 0
 

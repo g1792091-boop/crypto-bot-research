@@ -33,14 +33,22 @@ STARTS = [f"2026-10-{d:02d} 09:00" for d in range(1, 19)]
 
 
 def add_trend(W, cand: pd.DataFrame, work: str) -> pd.DataFrame:
-    cols = {k: np.zeros(len(cand), np.int8) for k in ("v39_latch", "st1h", "st4h")}
+    names = ("v39_latch", "st1h", "st4h", "j1_V39", "j1_S6", "j1_OBV", "j1_N12", "j1_raw3", "ema200",
+             "j4_S6", "j4_OBV", "j4_N12", "j4_raw3")
+    cols = {k: np.zeros(len(cand), np.int8) for k in names}
     for c in ST.COINS:
         m = (cand.coin == c).to_numpy()
         y = np.load(os.path.join(work, "prep", f"{c}_trend.npz"))
         i1 = cand.loc[m, "i1"].to_numpy()
+        k4 = cand.loc[m, "j4k"].to_numpy()
         cols["v39_latch"][m] = y["v39_latch"][i1]
         cols["st1h"][m] = y["st1h"][i1]
-        cols["st4h"][m] = W.p[c]["j4_V39"][cand.loc[m, "j4k"].to_numpy()]
+        cols["st4h"][m] = W.p[c]["j4_V39"][k4]
+        for k in ("j1_V39", "j1_S6", "j1_OBV", "j1_N12", "j1_raw3", "ema200"):
+            if k in y.files:
+                cols[k][m] = y[k][i1]
+        for k in ("j4_S6", "j4_OBV", "j4_N12", "j4_raw3"):
+            cols[k][m] = W.p[c][k][k4]
     return cand.assign(**cols)
 
 

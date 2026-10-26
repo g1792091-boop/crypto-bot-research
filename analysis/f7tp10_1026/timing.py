@@ -60,11 +60,16 @@ def entry_index(W, r, mode) -> int | None:
     raise ValueError(mode)
 
 
-def run(W, cand, trend, mode, a, b, keep_paths=False, exit_kind="tp10", tp_roe=0.10, lad=None, weekend_off=True):
+def run(W, cand, trend, mode, a, b, keep_paths=False, exit_kind="tp10", tp_roe=0.10, lad=None, weekend_off=True,
+        stop=("roe", 0.50)):
+    """``trend``: None, a column name (its value must equal the side) or a function of the frame (a mask).
+    ``stop``: ("roe", x) net ROE on the fill, or ("atr", k) k x ATR(1h) from the fill."""
     c = cand[(cand.t >= a) & (cand.t < b) & ~cand.us_open & ~cand.macro]
     if weekend_off:
         c = c[~c.weekend]
-    if trend:
+    if callable(trend):
+        c = c[trend(c)]
+    elif trend:
         c = c[c[trend] == c.side]
     eq, busy = 1.0, -1
     out = []
@@ -81,10 +86,15 @@ def run(W, cand, trend, mode, a, b, keep_paths=False, exit_kind="tp10", tp_roe=0
                 busy = max(busy, wait_end)                 # the account waited for this signal
                 break
             fill = m["o"][j] * (1 + r.side * S.SLIP)
-            if (0.50 / lev - S.RT) * fill + r.atr > (1.0 / lev - 0.005) * fill:
+            dist = (stop[1] / lev - S.RT) * fill if stop[0] == "roe" else stop[1] * r.atr
+            if dist + r.atr > (1.0 / lev - 0.005) * fill:
                 continue                                   # the liquidation check (as pick.py)
-            res = S.run_position(m, j, int(r.side), lev, float(r.ref), exit_kind, 0.0, None, tp_roe=tp_roe, lad=lad,
-                                 stop_roe=0.50)
+            if stop[0] == "roe":
+                res = S.run_position(m, j, int(r.side), lev, float(r.ref), exit_kind, 0.0, None, tp_roe=tp_roe, lad=lad,
+                                     stop_roe=stop[1])
+            else:                                          # an ATR stop measured from the entry price
+                res = S.run_position(m, j, int(r.side), lev, float(m["o"][j]), exit_kind, stop[1] * float(r.atr), None,
+                                     tp_roe=tp_roe, lad=lad)
             busy = int(m["ts"][res["exit_i"]]) + FIVE
             if res["reason"] == "END":
                 break
