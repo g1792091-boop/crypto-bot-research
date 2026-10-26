@@ -238,7 +238,8 @@ def run_window(variant: str, t0: int, t1: int, start_eq: float = 50.0) -> dict:
     keep = M.evaluate
     M.evaluate = evaluate
     try:
-        bot = R.ReplayBot(cfg, broker, fetch, clock, sleep=lambda s: None)
+        bot = (G.get("bot_cls") or R.ReplayBot)(cfg, broker, fetch, clock, sleep=lambda s: None)
+        bot.arm = G.get("arm_of", {}).get(variant, "A0")         # opentime_mix.py: the exit arm
         clock.t = t0
         bot.start()
         ce = t0 + M.MIN30
