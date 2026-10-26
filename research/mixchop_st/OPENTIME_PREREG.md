@@ -20,3 +20,24 @@ deploy/mixchop.live.json 그대로(6코인, 1포지션, 증거금 40%, 진입 �
   2026-09. 달마다 $50에서 새로 시작, 잔고 바닥 끔, 그 달 마지막 포지션은 나갈 때까지 따라감.
 - 판정: 기간의 한 달 중앙값, 같으면 로그 성장 합. 규칙은 두 기간 모두 A0보다 나을 때만 "도움 됨". 결과를 본 뒤 규칙을 바꾸거나
   더하거나 빼지 않습니다. 거래, 승률, 거래당 평균, 오른 달, 가장 나쁜 달, 규칙이 건드린 포지션 수도 적습니다.
+
+## Addendum 3 (2026-10-26, before A7 is run): A7 "close at the open if deep in loss"
+
+The owners (10-26, "둘 다 해줘") asked to test the rule that diagnostic (d) pointed to. This addendum is written and
+committed before any A7 number exists. Nothing above changes: arms A0-A6, their results, the periods, the metric and the
+"helps" rule stay as they are.
+
+- **A7**: at M (the same M as A1 / A2 / A6), a position not yet at its first lock (레인지 봇: its take-profit) whose
+  progress R <= -0.5 is closed at that close (market: that bot's taker fee + slippage, as A1). Otherwise nothing
+  changes. The rule is re-checked at every M while the position is open.
+- R as defined in Addendum 2 (d): price terms, side x (close - fill) / |fill - initial stop| (V3.9, 레인지 봇,
+  추세판단 봇); VWAP: return / 2 ATR (the simulator's return terms); friend bot: side x (close / entry - 1) /
+  (initial stop_dist / entry).
+- Same periods and the same "helps" rule: A7 helps only if it beats A0 (median month multiple, tie -> log growth) in
+  BOTH choose and check. VWAP: verdict on the live account with the signal light (primary), the paper reported too;
+  추세판단 봇: descriptive only, no verdict, as before. No other new arm.
+- Two descriptive reads for A0 vs A7, not used for the verdict: the worst month multiple and the largest single-trade
+  loss (% of the wallet) per period. The number of positions A7 closed is reported too.
+- Said plainly: A7's threshold (R <= -0.5) came from looking at the (d) bins of A0 on these same periods (choose and
+  check), so a pass is weaker evidence than a rule chosen before any data; it would need confirming on new data.
+- This file's own periods stay as above (choose 2021-10 .. 2023-12, check 2024-01 .. 2026-09, 1m bars, M = the 09:29 bar's close).

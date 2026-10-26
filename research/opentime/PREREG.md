@@ -182,3 +182,23 @@ Nothing of the bins below. The trend bot and VWAP have not been run.
   "표본 적음". The trend bot has only its 7/1-10/20 window (check months and October).
 - Purpose: show which kind of unresolved position tends to end at the stop (a candidate definition of 횡보 to test
   later on unseen data). Nothing is chosen from it now.
+
+## Addendum 3 (2026-10-26, before A7 is run): A7 "close at the open if deep in loss"
+
+The owners (10-26, "둘 다 해줘") asked to test the rule that diagnostic (d) pointed to. This addendum is written and
+committed before any A7 number exists. Nothing above changes: arms A0-A6, their results, the periods, the metric and the
+"helps" rule stay as they are.
+
+- **A7**: at M (the same M as A1 / A2 / A6), a position not yet at its first lock (레인지 봇: its take-profit) whose
+  progress R <= -0.5 is closed at that close (market: that bot's taker fee + slippage, as A1). Otherwise nothing
+  changes. The rule is re-checked at every M while the position is open.
+- R as defined in Addendum 2 (d): price terms, side x (close - fill) / |fill - initial stop| (V3.9, 레인지 봇,
+  추세판단 봇); VWAP: return / 2 ATR (the simulator's return terms); friend bot: side x (close / entry - 1) /
+  (initial stop_dist / entry).
+- Same periods and the same "helps" rule: A7 helps only if it beats A0 (median month multiple, tie -> log growth) in
+  BOTH choose and check. VWAP: verdict on the live account with the signal light (primary), the paper reported too;
+  추세판단 봇: descriptive only, no verdict, as before. No other new arm.
+- Two descriptive reads for A0 vs A7, not used for the verdict: the worst month multiple and the largest single-trade
+  loss (% of the wallet) per period. The number of positions A7 closed is reported too.
+- Said plainly: A7's threshold (R <= -0.5) came from looking at the (d) bins of A0 on these same periods (choose and
+  check), so a pass is weaker evidence than a rule chosen before any data; it would need confirming on new data.
