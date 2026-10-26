@@ -41,8 +41,19 @@ def check_ladder() -> None:
         assert (a is None and w is None) or (a is not None and w is not None and abs(a - w) < 1e-9), (b, a, w)
 
 
+def lad_lock(best: float, lad: tuple) -> float | None:
+    """A stepped lock (owners 10/26 "12%도달하면 10% 계단식"): ``lad`` = (first trigger, first lock, step, gap): the first lock
+    once the best net ROE reaches the first trigger, then every ``step`` more a lock ``gap`` under the reached trigger
+    ((0.12, 0.10, 0.05, 0.02): 12 -> 10, 17 -> 15, 22 -> 20 ...)."""
+    ft, fl, step, gap = lad
+    if best < ft - 1e-12:
+        return None
+    n = math.floor((best - ft) / step + 1e-9)
+    return fl if n == 0 else ft + step * n - gap
+
+
 def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind: str, stop_dist: float = 0.0,
-                 sup_at: int | None = None, tp_roe: float = 0.10) -> dict:
+                 sup_at: int | None = None, tp_roe: float = 0.10, lad: tuple | None = None) -> dict:
     """One position. ``m``: the coin's 5m arrays (ts o h l c fund). ``i0``: the 5m bar whose open is the fill.
     ``sup_at``: the first 5m bar index at whose open a JUDGE / REV exit would close (trend exit, before the first lock).
     Returns {exit_i, reason, roe, mfe (best net ROE seen), fill, exit_px}."""
@@ -54,6 +65,9 @@ def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind:
     if exit_kind == "tp10":
         stop = ref - side * stop_dist
         tp = fill * (1 + side * (tp_roe / lev + RT))
+    elif exit_kind in ("lad", "trendlad"):              # the league's ATR stop, no take-profit, a stepped lock
+        stop = ref - side * stop_dist
+        tp = None
     else:
         stop = fill * (1 + side * (-0.50 / lev + RT))
         tp = None
@@ -89,8 +103,8 @@ def run_position(m: dict, i0: int, side: int, lev: float, ref: float, exit_kind:
             px = max(tp, o[i]) if side > 0 else min(tp, o[i])
             r, xp = roe_at(px, MAKER, False)
             return {"exit_i": i, "reason": "TP", "roe": r, "mfe": best, "fill": fill, "exit_px": xp}
-        if exit_kind == "trend" and i > i0:
-            k = ladder_lock(best)
+        if exit_kind in ("trend", "trendlad", "lad") and i > i0:
+            k = lad_lock(best, lad) if exit_kind == "lad" else ladder_lock(best)
             if k is not None and (lock is None or k > lock + 1e-12):
                 cand = fill * (1 + side * (k / lev + RT + f_paid))
                 stop = max(stop, cand) if side > 0 else min(stop, cand)

@@ -185,7 +185,7 @@ def run_arm(W: World, cand: pd.DataFrame, arm: dict, a: int, b: int, flip_rng=No
             if flip_rng is not None:
                 side = int(flip_rng.choice((-1, 1)))
             stop_dist = arm.get("stop_atr", 2.0) * r.atr
-            if arm["exit"] == "tp10" and arm.get("league_check", False):
+            if arm["exit"] in ("tp10", "lad", "trendlad") and arm.get("league_check", False):
                 fill = W.m5[r.coin]["o"][r.e5] * (1 + side * S.SLIP)
                 if not league_size_ok(fill, side, r.ref - side * stop_dist, r.atr, eq):
                     continue
@@ -193,8 +193,12 @@ def run_arm(W: World, cand: pd.DataFrame, arm: dict, a: int, b: int, flip_rng=No
             if arm["exit"] == "trend":
                 sup = W.sup_at(r.coin, int(r.side), int(r.t), int(r.e5), judge=arm.get("judge", True),
                                rev=arm.get("rev", True))
+            if arm.get("liq_check"):                  # the stop at least 1 ATR inside liquidation (first bracket, mmr 0.5 %)
+                fill = W.m5[r.coin]["o"][r.e5] * (1 + side * S.SLIP)
+                if stop_dist + r.atr > (1.0 / lev - 0.005) * fill:
+                    continue
             res = S.run_position(W.m5[r.coin], int(r.e5), side, lev, float(r.ref), arm["exit"], stop_dist, sup,
-                                 tp_roe=arm.get("tp_roe", 0.10))
+                                 tp_roe=arm.get("tp_roe", 0.10), lad=arm.get("lad"))
             took = (r, side, lev, res)
             break
         if took is None:
