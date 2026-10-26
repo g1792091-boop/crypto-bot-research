@@ -915,6 +915,28 @@ def test_a_fired_stops_order_found_by_its_fills_live_drill_10_26(hidden, takes_c
         assert c.algo_order(algo_id=st["algoId"])["actualOrderId"] == child
 
 
+@pytest.mark.parametrize("lag_ms", [5_000, 90_000])
+def test_a_fired_stops_order_found_when_its_record_is_updated_later_live_drill_2(lag_ms):
+    """The owners' second live drill (10-26, BCH long): the stop fired and its order's fill was in userTrades next to the
+    firing, but the stop record's updateTime came later than 2 s after it, so the window that began 2 s before the
+    update missed it. The window now begins at the stop's own placing (at most 2 min before the update)."""
+    c, fake, clock = make()
+    fake.child_hidden, fake.stop_update_lag_ms = True, lag_ms
+    ready(c)
+    c.market(BTC, "BUY", 10.0, client_id="pbE")
+    close = c.market(BTC, "SELL", 5.0, reduce_only=True, client_id="pbX")      # ours, the same side, before the stop
+    clock.t += 1_000
+    st = place_stop(c, BTC, "SELL", 95.0, 5.0, client_id="pbS")
+    clock.t += 3_000
+    fake.set_price(BTC, 94.0)
+    assert fake.amt(BTC) == 0
+    child = next(str(f["orderId"]) for f in fake.fills if str(f["orderId"]) != str(close["orderId"])
+                 and f["side"] == "SELL_CLOSE" and int(f["time"]) >= clock.t)
+    clock.t += lag_ms + 1_000                          # the record says it was updated after the fill
+    got = c.algo_order(algo_id=st["algoId"])
+    assert (got["algoStatus"], got["actualOrderId"]) == ("TRIGGERED", child)
+
+
 def test_a_stop_looked_up_after_a_restart():
     """A stop id this process has not seen: its own record names its coin; without a record every coin's stop list is
     read, and one coin that cannot be read makes the answer unknown, never "not found"."""

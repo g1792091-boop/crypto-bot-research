@@ -136,6 +136,7 @@ class FakeToobit:
         self.fill_lag_ms = 0
         self.child_hidden = False           # a fired stop's order: fills only, not in the order history
         self.child_takes_stop_cid = False   # ... or carrying the stop's own clientOrderId
+        self.stop_update_lag_ms = 0         # a fired stop's record: updateTime this much after its order's fills
         self.history_lag_ms = 0
         self.kill_new_stops = False
         self.partial = None
@@ -407,7 +408,7 @@ class FakeToobit:
     def _end(self, t, status):
         plan = {"FILLED": "ORDER_FILLED", "CANCELED": "ORDER_CANCELED", "FAILED": "ORDER_FAILED"}
         t["status"] = plan[status] if self.stop_family == "plan" else {"FAILED": "REJECTED"}.get(status, status)
-        t["updateTime"] = str(self.now())
+        t["updateTime"] = str(self.now() + (self.stop_update_lag_ms if status == "FILLED" else 0))
         t["_ended"] = self.now()
 
     def _fire_due(self, s):

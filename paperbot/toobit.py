@@ -250,7 +250,10 @@ PAGE_ROWS = 1000                                      # openOrders, historyOrder
 HISTORY_DEPTH = 24                                    # a full page is read again in halves, at most this deep
 HISTORY_REQUESTS = 64                                 # ... and with at most this many requests
 SETTLE_MS = 25_000                                    # an order sent this long ago is surely in the records
-CHILD_AFTER_MS = 60_000                               # a fired stop's order: from 2 s before it fired to 60 s after
+CHILD_AFTER_MS = 60_000                               # a fired stop's order: up to 60 s after it fired
+CHILD_BEFORE_MS = 120_000                             # ... and from 2 min before its record's update time (or from the
+                                                      # stop's own placing, when later): the record's updateTime may come
+                                                      # after the fill (the second live drill, 10-26)
 SPEC_CACHE_MS = 5_000
 # the docs' Error Codes page. Each refuses the request (nothing ran) except the ones named below it
 DOCUMENTED_CODES = frozenset((
@@ -1854,14 +1857,18 @@ class ToobitClient:
         stop's side in that window, not one of ours (a client id of ours other than the stop's own: Toobit may give the
         order a fired stop places the stop's client id). Not found or not one: "" (the executor's P&L then reads its
         fills again later). The owners' first live drill (10-26, BCH long and BTC short): the stop fired and its fills
-        were in userTrades under a new orderId, which the order-history look-up alone did not find."""
+        were in userTrades under a new orderId, which the order-history look-up alone did not find. The second (10-26,
+        BCH long) found the fill next to the firing but not in the window that began 2 s before the stop record's
+        ``updateTime``: the window now begins at the stop's own placing (its ``time``), at most CHILD_BEFORE_MS before."""
         side = side_of(row)
+        placed = to_ms(row["time"]) if _soft(row.get("time")) > 0 else 0
+        lo = max(fired_ms - CHILD_BEFORE_MS, placed)
 
         def same_side(v) -> bool:                       # "SELL_CLOSE", or a plain "SELL" on a record that gives one
             v = str(v or "").upper()
             return v == side or v == bin_side(side)
         try:
-            fills = self._trades(symbol, fired_ms - 60_000, fired_ms + CHILD_AFTER_MS)
+            fills = self._trades(symbol, lo - 1_000, fired_ms + CHILD_AFTER_MS)
         except TestnetError:
             fills = None
         if fills is not None:
@@ -1872,14 +1879,14 @@ class ToobitClient:
                 oid = str(f.get("orderId") or "")
                 t = to_ms(f["time"]) if f.get("time") not in (None, "") else None
                 if (oid and oid not in self.own_oids and same_side(f.get("side")) and t is not None
-                        and fired_ms - 2_000 <= t <= fired_ms + CHILD_AFTER_MS and oid not in ids):
+                        and lo <= t <= fired_ms + CHILD_AFTER_MS and oid not in ids):
                     ids.append(oid)
             if len(ids) == 1:
                 return ids[0]
         try:
             own_cid = str(row.get("clientOrderId") or "")
             cands = []
-            for r in self._history_rows(symbol, start_ms=fired_ms - 60_000):
+            for r in self._history_rows(symbol, start_ms=lo - 1_000):
                 if not same_side(r.get("side")) or str(r.get("type") or "").upper() in STOP_KINDS:
                     continue
                 cid = str(r.get("clientOrderId") or "")
@@ -1888,7 +1895,7 @@ class ToobitClient:
                 if str(r.get("orderId")) in self.own_oids or str(r.get("orderId")) == sid:
                     continue
                 t = to_ms(r["time"]) if r.get("time") not in (None, "") else None
-                if t is not None and fired_ms - 2_000 <= t <= fired_ms + CHILD_AFTER_MS:
+                if t is not None and lo <= t <= fired_ms + CHILD_AFTER_MS:
                     cands.append(str(r.get("orderId")))
             return cands[0] if len(cands) == 1 else ""
         except TestnetError:
@@ -2865,6 +2872,8 @@ class ToobitDrill:
                 break
         info = {"own_fills": len(own), "stop": sid, "child_order": child if child != sid else "", "child_fills": len(theirs)}
         if not (own or theirs):
+            # the stop record's own times (placed, updated) next to the rows below: which window the look-up missed
+            info["stop_times"] = (got.get("createTime"), got.get("updateTime"), str(got.get("clientAlgoId") or "")[:8])
             fired = to_ms(got.get("updateTime")) if _soft(got.get("updateTime")) > 0 else c.clock_ms() + c.offset_ms
             near = lambda r: abs((to_ms(r.get("time")) if r.get("time") not in (None, "") else 0) - fired) <= 120_000  # noqa: E731
             info["fills_near"] = [(str(r.get("orderId")), r.get("side"), r.get("qty"), r.get("time")) for r in rows if near(r)][:6]
