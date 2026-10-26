@@ -513,8 +513,19 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
 
 
 # ---------------------------------------------------------------- 최근 48시간: signals with what became of them, warnings
+VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok", "rule", "k", "d", "rsi26_30m", "rsi26_1h")
+CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
+
+
 def _vals(r: dict) -> dict:
-    return {k: r.get(k) for k in ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok") if r.get(k) is not None}
+    return {k: r.get(k) for k in VAL_KEYS if r.get(k) is not None}
+
+
+def _rule_of(r: dict) -> Optional[str]:
+    """The entry rule a row belongs to (paperbot/mixchop.py RULES; the signal / skip row's own, the entry row's ``why``);
+    None for rows from before the second rule (10-26), which match either."""
+    why = r.get("why")
+    return r.get("rule") or (why.get("rule") if isinstance(why, dict) else None)
 
 
 def feed_view(rows: list, now: int) -> dict:
@@ -527,10 +538,11 @@ def feed_view(rows: list, now: int) -> dict:
     used: set = set()
 
     def signal_of(r: dict) -> Optional[dict]:
-        t, sym, side = _i(r.get("ts")) or 0, r.get("symbol"), _i(r.get("side"))
+        t, sym, side, rule = _i(r.get("ts")) or 0, r.get("symbol"), _i(r.get("side")), _rule_of(r)
         for s in reversed(sigs):
             st = _i(s.get("ts")) or 0
-            if s.get("symbol") == sym and _i(s.get("side")) == side and st <= t < st + 30 * MIN and id(s) not in used:
+            if s.get("symbol") == sym and _i(s.get("side")) == side and st <= t < st + 30 * MIN and id(s) not in used \
+                    and (rule is None or (s.get("rule") or "mix") == rule):
                 return s
         return None
 
@@ -560,6 +572,8 @@ def feed_view(rows: list, now: int) -> dict:
         if k == "signal":
             counts["signal"] += 1
             colour = "cyan" if r.get("to_cyan") else "purple" if r.get("to_purple") else None
+            cross = r.get("cross") or None
+            rule = r.get("rule") or "mix"
             side = _i(r.get("side")) or 0
             out = outcome.get(id(r))
             if side == 0:
@@ -571,8 +585,10 @@ def feed_view(rows: list, now: int) -> dict:
             else:
                 stage, tone = "skipped", out["tone"]
             counts[stage] += 1
-            items.append({**base, "cat": "signal", "colour": colour, "colour_ko": {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour, "신호"),
-                          "want": 1 if colour == "cyan" else -1 if colour == "purple" else side, "stage": stage, "tone": tone,
+            items.append({**base, "cat": "signal", "colour": colour, "cross": cross, "rule": rule, "rule_ko": M.RULE_KO.get(rule, rule),
+                          "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour, "신호"),
+                          "want": 1 if colour == "cyan" or cross == "gold" else -1 if colour == "purple" or cross == "dead" else side,
+                          "stage": stage, "tone": tone,
                           "why": r.get("why") or None, "outcome": out, "vals": _vals(r)})
         elif k == "skip" and id(r) not in folded:
             g = skip_group(r.get("why"))
@@ -657,7 +673,7 @@ def trades_of(rows: list, cfg: Any) -> list:
                     "win": (pnl > 0) if pnl is not None else None, "roe": roe, "equity": eq_a, "equity_before": eq_b,
                     "r": (pnl / r_unit) if pnl is not None and r_unit else None, "step": _i(r.get("step")) or 0,
                     "no_entry_row": en is None, "adopted": (en or {}).get("kind") == "adopted",
-                    "signal": {k: why.get(k) for k in ("avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close", "close_ms") if why.get(k) is not None}})
+                    "signal": {k: why.get(k) for k in VAL_KEYS if k != "liq_ok" and why.get(k) is not None}})
     out.sort(key=lambda t: t.get("exit_ms") or 0, reverse=True)
     return out
 

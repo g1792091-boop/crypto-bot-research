@@ -585,3 +585,15 @@ def test_the_files_keep_the_house_rules():
     # read-only: the module never opens a file to write, never runs a command
     src = FW._read(ROOT, "paperbot", "dash", "more", "livemix.py")
     assert not re.search(r"open\([^)]*['\"][wa]b?['\"]", src) and "subprocess" not in src and "write_state" not in src and ".unlink(" not in src
+
+
+def test_the_second_rules_rows_in_words(tmp_path):
+    """Owners 10-26: a Stoch RSI cross row says whose it is and its own numbers; the friend's rows read as before."""
+    st = {"cat": "signal", "coin": "SOL", "rule": "st", "rule_ko": "슈퍼트렌드·스톡RSI", "colour_ko": "골든크로스", "want": 1,
+          "stage": "refused", "why": "30분 RSI26 조건 안 맞음", "vals": {"k": 30.1, "d": 25.2, "rsi26_30m": 48.0, "rsi26_1h": 54.0, "close": 100.0, "stop_pct": 1.5}}
+    mix = {"cat": "signal", "coin": "SOL", "rule": "mix", "rule_ko": "친구 매매법", "colour_ko": "하늘색으로 바뀜", "want": 1, "stage": "waiting",
+           "vals": {"avg_rsi_30m": 60.0, "avg_rsi_1h": 55.0}}
+    out = _node(tmp_path, "console.log(JSON.stringify([X.feedKo(D_s), X.feedKo(D_m)]));", s=st, m=mix)
+    assert out[0]["head"] == "SOL 슈퍼트렌드·스톡RSI 골든크로스" and out[0]["pill"] == "진입 안 함"
+    assert out[0]["text"] == "30분 RSI26 조건 안 맞음 · 스톡RSI K 30.1 / D 25.2 · 30분 RSI26 48.0 · 1시간 RSI26 54.0 · 종가 100.00 · 손절 폭 1.50%"
+    assert out[1]["head"] == "SOL 하늘색으로 바뀜 (롱 쪽)" and out[1]["text"] == "30분 평균 RSI 60.0 · 1시간 평균 RSI 55.0"

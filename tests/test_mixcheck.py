@@ -316,13 +316,12 @@ class Doge:
         return self.rows[tf][i:i + limit]
 
 
-@pytest.fixture(scope="module")
-def doge_day(tmp_path_factory):
-    """The bot in paper mode over KST 2026-10-23 on the real DOGE bars (its own config's blocks), its log."""
-    folder = tmp_path_factory.mktemp("doge")
+def _doge_bot_day(folder, both: bool) -> dict:
+    """The bot in paper mode over KST 2026-10-23 on the real DOGE bars (its own config's blocks), its log; ``both``: the
+    deploy config's two rules and its one stop multiple (owners 10-26), else the friend's rule and stops alone."""
     raw = json.load(open(os.path.join(DEPLOY, "mixchop.paper.json"), encoding="utf-8"))
-    for k in ("margin_frac", "ladder", "ladder_every_s"):            # the design's sizing and ladder (see mix_site_world)
-        raw.pop(k, None)
+    for k in ("margin_frac", "ladder", "ladder_every_s") + (() if both else ("rules", "stop_atr")):
+        raw.pop(k, None)                                              # the design's sizing and ladder (see mix_site_world)
     raw.update(state=str(folder / "state.json"), log=str(folder / "log.jsonl"), kill_file=str(folder / "STOP"),
                own_stop_file=str(folder / "own.STOP"), telegram=False, coins={"DOGEUSDT": raw["coins"]["DOGEUSDT"]})
     (folder / "cfg.json").write_text(json.dumps(raw), encoding="utf-8")
@@ -336,6 +335,16 @@ def doge_day(tmp_path_factory):
         d.t = ce + 5000
         bot.on_close(ce)
     return {"cfg": cfg, "doge": d, "w0": w0, "rows": W.rows(str(folder / "log.jsonl"))}
+
+
+@pytest.fixture(scope="module")
+def doge_day(tmp_path_factory):
+    return _doge_bot_day(tmp_path_factory.mktemp("doge"), both=False)
+
+
+@pytest.fixture(scope="module")
+def doge_day_both(tmp_path_factory):
+    return _doge_bot_day(tmp_path_factory.mktemp("doge2"), both=True)
 
 
 def test_the_replay_finds_what_the_bot_logged(doge_day):
@@ -377,6 +386,46 @@ def test_the_replay_names_each_kind_of_miss(doge_day):
         raise OSError("no route")
     bad = MC.signal_replay(cfg, w0, w0 + DAY, rows, down)
     assert bad["state"] == "error" and MC.replay_lines(bad) == ["- 바이낸스 봉을 못 읽어 신호를 다시 계산하지 못했어요"]
+
+
+def test_the_replay_follows_both_rules(doge_day_both):
+    """Owners 10-26: the second rule's crosses are logged and replayed apart from the friend's colour changes; one entry
+    or skip per coin and close covers both rules."""
+    cfg, d, w0, rows = doge_day_both["cfg"], doge_day_both["doge"], doge_day_both["w0"], doge_day_both["rows"]
+    assert cfg.rules == ("mix", "st")
+    sigs = [r for r in rows if r["kind"] == "signal"]
+    mix = [r for r in sigs if r.get("rule") == "mix"]
+    st = [r for r in sigs if r.get("rule") == "st"]
+    assert mix and st and all(r["cross"] in ("gold", "dead") or r["side"] for r in st)
+    assert not [r for r in rows if r["kind"] == "bars_missing"]
+    rp = MC.signal_replay(cfg, w0, w0 + DAY, rows, d.klines)
+    assert rp["state"] == "ok" and rp["changes"] == len(mix) and rp["crosses"] == len({r["close_ms"] for r in st if r["cross"]})
+    assert rp["signals"] == len({(r["symbol"], r["close_ms"]) for r in sigs if r["side"]})
+    assert rp["missed"] == [] and rp["different"] == [] and rp["unexplained"] == [] and rp["unsure"] == []
+    assert "· 스톡RSI 크로스 " in MC.replay_lines(rp)[0]
+    sc = MC.signal_counts(rows)
+    assert sc["changes"] == len(mix) and sc["crosses"] == len(st)
+    # the second rule's rows gone: each cross is missed (a side) or unsure (no side), and says whose it is
+    no_st = [r for r in rows if not (r["kind"] == "signal" and r.get("rule") == "st")]
+    r2 = MC.signal_replay(cfg, w0, w0 + DAY, no_st, d.klines)
+    assert len(r2["missed"]) + len(r2["unsure"]) == len(st) and {x["rule"] for x in r2["missed"] + r2["unsure"]} == {"st"}
+    gone = r2["missed"] + r2["unsure"]
+    assert {x["kind"] for x in gone} <= {"unseen", "unknown"}                  # unseen: the bot left another row at that close
+    assert all("스톡RSI 크로스를" in x["ko"] for x in gone if x["kind"] == "unseen")
+    one = dict(r2, missed=[{"close_ms": K(23, 10), "coin": "DOGE", "side": 1, "rule": "st", "ko": "봇 기록에 없어요"}])
+    assert MC.replay_lines(one)[1] == "  · 10/23 10:00 DOGE 롱(슈퍼트렌드·스톡RSI): 봇 기록에 없어요"
+    # a cross the bot logged that the replay does not see
+    ghost = rows + [{"ts": w0 + 3 * M.MIN30 + 5000, "kind": "signal", "symbol": "DOGEUSDT", "close_ms": w0 + 3 * M.MIN30,
+                     "side": 0, "rule": "st", "cross": "gold", "why": "30분 RSI26 조건 안 맞음"}]
+    if not any(r["close_ms"] == w0 + 3 * M.MIN30 for r in st):
+        (x,) = MC.signal_replay(cfg, w0, w0 + DAY, ghost, d.klines)["different"]
+        assert x["rule"] == "st" and x["ko"] == "봇은 스톡RSI 크로스로 기록했는데 다시 계산하면 스톡RSI 크로스 없음"
+    # the site's feed names the rule and the cross
+    feed = X.feed_view(rows, w0 + DAY + 60_000)
+    items = [x for x in feed["rows"] if x.get("cat") == "signal" and x["rule"] == "st"]
+    assert len(items) == len(st) and {x["colour_ko"] for x in items} <= {"골든크로스", "데드크로스"}
+    assert all(x["rule_ko"] == "슈퍼트렌드·스톡RSI" and x["want"] == (1 if x["cross"] == "gold" else -1) for x in items)
+    assert all("k" in x["vals"] and "rsi26_30m" in x["vals"] for x in items)
 
 
 # ================================================================ A. the morning check

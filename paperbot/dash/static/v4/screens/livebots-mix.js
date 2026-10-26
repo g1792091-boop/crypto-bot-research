@@ -99,13 +99,15 @@ export function feedKo(x) {
     const want = x.want ? ` (${SIDE(x.want)} 쪽)` : "";
     const o = x.outcome || {};
     const vals = valsKo(x.vals);
+    // owners 10-26: the second rule's rows say whose they are (the friend's rows read as before)
+    const what = `${x.coin} ${x.rule === "st" ? `${x.rule_ko} ` : ""}${x.colour_ko}`;
     if (x.stage === "entered") {
-      return {head: `${x.coin} ${x.colour_ko}${want}`, pill: o.adopted ? "진입 (늦게 확인)" : "진입", tone: "good",
+      return {head: `${what}${want}`, pill: o.adopted ? "진입 (늦게 확인)" : "진입", tone: "good",
         text: [`체결 ${fmt.price(o.entry)} · ${fmt.num(o.qty, 4)}개 · 손절 ${fmt.price(o.stop)}`, vals].filter(Boolean).join(" · ")};
     }
-    if (x.stage === "skipped") return {head: `${x.coin} ${x.colour_ko}${want}`, pill: `건너뜀 · ${o.group_ko}`, tone: o.tone || "thin", text: [o.why, vals].filter(Boolean).join(" · ")};
-    if (x.stage === "refused") return {head: `${x.coin} ${x.colour_ko}`, pill: "진입 안 함", tone: "thin", text: [x.why, vals].filter(Boolean).join(" · ")};
-    return {head: `${x.coin} ${x.colour_ko}${want}`, pill: "결과 기록 없음", tone: "thin", text: vals};
+    if (x.stage === "skipped") return {head: `${what}${want}`, pill: `건너뜀 · ${o.group_ko}`, tone: o.tone || "thin", text: [o.why, vals].filter(Boolean).join(" · ")};
+    if (x.stage === "refused") return {head: what, pill: "진입 안 함", tone: "thin", text: [x.why, vals].filter(Boolean).join(" · ")};
+    return {head: `${what}${want}`, pill: "결과 기록 없음", tone: "thin", text: vals};
   }
   if (x.cat === "skip") return {head: who, pill: `건너뜀 · ${x.group_ko}`, tone: x.tone, text: x.why || ""};
   if (x.cat === "entry") return {head: `${who} 진입${x.adopted ? " (늦게 확인)" : ""}`, pill: "진입", tone: "good",
@@ -128,12 +130,16 @@ export function feedKo(x) {
   }
   return {head: who || String(x.kind || ""), pill: String(x.kind || ""), tone: "thin", text: ""};
 }
-/** The signal's numbers: "30분 평균 RSI 61.2 · 1시간 평균 RSI 55.0 · 종가 0.0812 · 손절 폭 1.23%". */
+/** The signal's numbers: "30분 평균 RSI 61.2 · 1시간 평균 RSI 55.0 · 종가 0.0812 · 손절 폭 1.23%" (the second rule:
+ *  "스톡RSI K 30.1 / D 25.2 · 30분 RSI26 56.0 · 1시간 RSI26 54.0 · 종가 … · 손절 폭 …"). */
 export function valsKo(v) {
   if (!v) return "";
   return [ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
+    ok(v.k) && ok(v.d) ? `스톡RSI K ${fmt.num(v.k, 1)} / D ${fmt.num(v.d, 1)}` : null,
+    ok(v.rsi26_30m) ? `30분 RSI26 ${fmt.num(v.rsi26_30m, 1)}` : null, ok(v.rsi26_1h) ? `1시간 RSI26 ${fmt.num(v.rsi26_1h, 1)}` : null,
     ok(v.close) ? `종가 ${fmt.price(v.close)}` : null, ok(v.stop_pct) ? `손절 폭 ${fmt.num(v.stop_pct, 2)}%` : null].filter(Boolean).join(" · ");
 }
+const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI"};
 
 // ---------------------------------------------------------------- shared parts
 /** A tab's own poll: its endpoint every ``every`` ms, the failures said (stale: dimmed with its age). */
@@ -377,12 +383,13 @@ export function morningKo(m) {
   const lines = [];
   if ((d.warn || []).length) lines.push(...d.warn.map((x) => `확인할 것: ${x}`));
   const s = d.signals || {};
-  lines.push(`색 변화 ${fmt.int(s.changes || 0)}번 · 조건 맞은 신호 ${fmt.int(s.signals || 0)}번 · 진입 ${fmt.int(s.entries || 0)}번`);
+  lines.push(`색 변화 ${fmt.int(s.changes || 0)}번${s.crosses != null ? ` · 스톡RSI 크로스 ${fmt.int(s.crosses)}번` : ""} · 조건 맞은 신호 ${fmt.int(s.signals || 0)}번 · 진입 ${fmt.int(s.entries || 0)}번`);
   if (!rp) lines.push("신호 다시 계산: 건너뜀");
   else if (rp.state !== "ok") lines.push(`신호 다시 계산: ${rp.ko || "못 함"}`);
   else {
-    lines.push(`놓친 신호 ${fmt.int((rp.missed || []).length)}개 (바이낸스 봉으로 봇 공식을 다시 계산 · 색 변화 ${fmt.int(rp.changes || 0)}번)`);
-    for (const x of (rp.missed || []).slice(0, 6)) lines.push(`· ${fmt.kst(x.close_ms)} ${x.coin} ${SIDE(x.side)}: ${x.ko}`);
+    lines.push(`놓친 신호 ${fmt.int((rp.missed || []).length)}개 (바이낸스 봉으로 봇 공식을 다시 계산 · 색 변화 ${fmt.int(rp.changes || 0)}번`
+      + `${rp.crosses != null ? ` · 스톡RSI 크로스 ${fmt.int(rp.crosses)}번` : ""})`);
+    for (const x of (rp.missed || []).slice(0, 6)) lines.push(`· ${fmt.kst(x.close_ms)} ${x.coin} ${SIDE(x.side)}${x.rule === "st" ? `(${RULE_KO.st})` : ""}: ${x.ko}`);
     if ((rp.different || []).length) lines.push(`판정이 다른 봉 ${fmt.int(rp.different.length)}개`);
     if ((rp.unexplained || []).length) lines.push(`이유 없이 안 들어간 신호 ${fmt.int(rp.unexplained.length)}개`);
   }
@@ -465,7 +472,8 @@ export function mixperfView(ctx) {
         h("b", {class: ["num", "lmx-tpnl", fmt.tone(t.pnl)]}, pnlKo(t.pnl), real ? "" : h("small", {class: "lmx-sub"}, " 모의"))),
       h("div", {class: "lmx-tmeta num"}, `${fmt.kst(t.opened_ms)} → ${fmt.kst(t.exit_ms)} (${holdKo(t.hold_ms)}) · ${fmt.price(t.entry)} → ${ok(t.exit) ? fmt.price(t.exit) : "체결가 기록 없음"}`,
         ok(t.roe) ? ` · ROE ${pctKo(t.roe, 0)}` : "", ok(t.r) ? ` · 손절 1번의 ${fmt.num(t.r, 1, true)}배` : "", ok(t.qty) ? ` · ${fmt.num(t.qty, 4)}개 ${fmt.lev(t.leverage)}` : ""),
-      t.signal && ok(t.signal.avg_rsi_30m) ? h("div", {class: "lmx-sub"}, `진입 근거: ${valsKo(t.signal)}`) : null,
+      t.signal && (ok(t.signal.avg_rsi_30m) || ok(t.signal.k)) ? h("div", {class: "lmx-sub"},
+        `진입 근거${t.signal.rule && RULE_KO[t.signal.rule] ? `(${RULE_KO[t.signal.rule]})` : ""}: ${valsKo(t.signal)}`) : null,
       t.pnl == null ? h("small", {class: "lmx-sub"}, "손익 모름: 청산 뒤 잔고를 읽지 못했어요") : null,
       t.no_entry_row ? h("small", {class: "lmx-sub"}, "진입 기록이 읽은 범위 밖이라 진입 때 값 일부가 비어요") : null);
   }

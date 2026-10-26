@@ -350,3 +350,55 @@
 4. 확인: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json`
    — 첫 줄 `크기·계단: 진입마다 증거금 = 잔고의 40% (한 번 최대 $10,000) · 계단 순ROE +12%→+10%, 그 뒤 5%마다 · 손절·계단 60초마다(1분봉)`.
 5. 켭니다: `sudo systemctl start paperbot-mixchop paperbot-mixchop-paper`. 텔레그램 시작 메시지에 같은 계획이 나옵니다.
+
+## 10. 두 번째 매매법 + 손절 ATR 3배 (두 분 10/26: "친구 봇 ATR 3배 계단 고정으로 넣어서 실거래 돌리자", "둘 다")
+
+설정 원본(`deploy/mixchop.live.json`, `deploy/mixchop.paper.json`)에 두 줄이 더해졌습니다. 코인·배수·증거금 40%·계단(9장)·진입 금지
+시간(주말, 나스닥 개장 앞뒤 30분, 경제 지표 앞뒤 30분)·바닥선 70%는 그대로입니다.
+
+- **`rules: ["mix", "st"]`**: 친구 매매법(지금 그대로) + 새 매매법 "슈퍼트렌드·스톡RSI"를 같이 봅니다. 한 번에 1포지션 그대로입니다.
+  - 새 매매법 롱: 슈퍼트렌드(ATR 14, 3배)와 (ATR 14, 6배)가 둘 다 상승 · 스톡RSI(RSI 14, 스토캐스틱 11, K 4, D 5)의 K가 D를 위로
+    뚫음(골든크로스) · 30분 RSI(26) 50 위 · 마지막으로 닫힌 1시간봉 RSI(26) 50 위. 숏은 반대(하락 · 데드크로스 · 둘 다 50 아래).
+  - 같은 코인 같은 봉에서 두 매매법이 다 신호면 **친구 매매법이 먼저**입니다. 코인끼리는 전처럼 설정의 코인 순서입니다.
+- **`stop_atr: 3`**: 두 매매법 모두 손절 = 30분봉 ATR(14) × 3, 모든 코인 같음(전에는 코인별 1.5~2.5배). 청산가 검사도 이 거리로 합니다.
+- **5년 시험에서 기대할 것** (research/mixchop_st/REPORT_KO.md, 계단 12→10 고정, 달마다 $50 새로 시작): 한 달 중앙값 고른 기간 ×0.25,
+  확인 기간 ×0.25. 지금 친구 봇(×0.24 / ×0.14)보다 조금 낫지만, 대부분의 달에 잔고가 줄어드는 쪽입니다. 작은 돈으로 보는 시험입니다.
+- **바닥선 70%:** 증거금 40%면 손절 두 번쯤에 시작의 70% 아래로 내려가 새 진입이 멈출 수 있습니다(5년 시험은 바닥선을 끄고 셈).
+  바꾸려면 서버 설정의 `equity_floor_frac`를 고칩니다(두 분이 정할 일).
+- **화면·알림:** 텔레그램 시작 메시지에 `매매법 친구 매매법 + 슈퍼트렌드·스톡RSI(같은 봉이면 친구 매매법 먼저) · 손절 ATR 3배(모든 코인)`,
+  진입 메시지에 `근거(슈퍼트렌드·스톡RSI): …` 또는 `근거(친구 매매법): …`. 실거래 사이트 "최근 48시간"에 `SOL 슈퍼트렌드·스톡RSI 골든크로스`
+  같은 줄(K·D, RSI26 값과 함께). 아침 점검에 `스톡RSI 크로스 N번`, 놓친 신호 다시 계산도 두 매매법을 각각 계산합니다.
+- **나스닥 개장·횡보 대책 시험** (research/mixchop_st/OPENTIME_REPORT_KO.md): 이 설정에는 넣지 않는 것을 권합니다. A6(이익이면 본전, 손해면
+  닫기)는 두 기간 모두 나빴고, A2(이익이면 본전)는 기준은 넘었지만 5년 4,849번 중 20번만 바뀌어 차이가 거의 없습니다.
+
+### 10-1. 바꾸는 순서 (서버에서, 포지션이 없을 때)
+
+한 단계씩 하고 결과를 확인한 뒤 다음으로 갑니다.
+
+1. **지금 상태:** `systemctl is-active paperbot-mixchop paperbot-mixchop-paper`
+   - `active`이면 열린 포지션이 없는지 앱에서 보고 `sudo systemctl stop paperbot-mixchop paperbot-mixchop-paper`. 포지션이 있으면 닫힐 때까지 기다립니다.
+2. **코드 받기:** `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+3. **서버 설정과 새 원본 비교 (읽기만):**
+   ```bash
+   sudo diff /etc/paperbot/mixchop.json /opt/crypto-bot-research/deploy/mixchop.live.json
+   sudo diff /etc/paperbot/mixchop-paper.json /opt/crypto-bot-research/deploy/mixchop.paper.json
+   ```
+   - `>`로 나오는 줄이 `"rules": [`, `"mix",`, `"st"`, `],`, `"stop_atr": 3` 뿐이어야 합니다. 다른 줄(서버에서 따로 고친 값)이 나오면
+     덮어쓰지 말고 그 결과를 보내 주세요.
+4. **백업하고 덮어쓰기:**
+   ```bash
+   sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-st
+   sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-st
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   ```
+5. **확인 (읽기만, 주문 없음):**
+   ```bash
+   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json
+   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.mixchop signals --config /etc/paperbot/mixchop-paper.json -n 4
+   ```
+   - check 둘째 줄: `매매법·손절: 친구 매매법 + 슈퍼트렌드·스톡RSI(같은 봉이면 친구 매매법 먼저) · 손절 ATR 3배(모든 코인)`. 코인마다 손절 폭이 전보다 넓게 나옵니다.
+   - signals: 코인마다 친구 매매법 색 변화 다음에 `-- 슈퍼트렌드·스톡RSI: 스톡RSI 크로스` 아래 최근 크로스 4개. 트레이딩뷰 30분 차트와 맞춰 볼 수 있습니다.
+6. **켜기:** `sudo systemctl start paperbot-mixchop paperbot-mixchop-paper` 그리고 `journalctl -u paperbot-mixchop -n 30`. 텔레그램 시작 메시지에 위 계획이 나옵니다.
+
+**되돌리기:** 봇을 끄고 `sudo cp -p /etc/paperbot/mixchop.json.before-st /etc/paperbot/mixchop.json`(모의도 같은 식) 뒤 다시 켭니다.

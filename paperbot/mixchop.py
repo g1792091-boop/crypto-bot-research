@@ -36,6 +36,14 @@ Trade:
   step more for each further step (12 -> 10, 17 -> 15, 22 -> 20 ...); ``ladder_every_s`` > 0 follows the open position
   on Binance's closed 1m bars that often between the closes as well (best, the ladder, the resting stop moved; paper:
   its stop judged on the same 1m bars), and at the 30m close on 1m bars too.
+- owners 10-26 ("둘 다"): ``rules`` ["mix", "st"] adds a second entry rule, the owners' own (research/mixchop_st:
+  "30분봉 진입 슈퍼트렌드 14/3, 14/6 같은 상승 추세이고 스톡RSI 14/11/4/5를 사용하고 골든 크로스를 하는데 RSI26이 50 위에 있고
+  그리고 1시간봉 RSI26도 50 위에 있으면 롱 진입, 1시간봉은 슈퍼트렌드 사용 안 함, 숏은 반대"): on the closed 30m bar, long =
+  TradingView's Supertrend(ATR 14, factor 3) and (ATR 14, factor 6) both up, Stoch RSI (RSI 14, stochastic 11, K SMA 4,
+  D SMA 5) %K crossing above %D on this bar, RSI(26) of the 30m closes > 50 and of the last CLOSED 1h bar > 50 (the same
+  1h bar as the friend's rule); short = the mirror. Its stop and the liquidation guard as the friend's (ATR14 x the
+  multiple). On one coin and close the friend's rule ("mix") answers first. ``stop_atr`` (owners 10-26: 3) replaces every
+  coin's ``sl_atr`` for both rules. Exits as before (stop or ladder). Default: ["mix"] and the coins' own multiples.
 - one position at a time over all coins; signals of one close compete by the coin order of the config.
 - entry blocks (owners 10-25 night, the same as their own bots; not in the friend's design, so off unless the config
   sets them): ``no_weekend`` (Saturday and Sunday KST), ``us_open_pre_min`` / ``us_open_pause_min`` (minutes before /
@@ -203,6 +211,52 @@ def line_gold(close) -> np.ndarray:
     return np.where(np.isfinite(sig), line > sig, False)
 
 
+def sma(x, n: int) -> np.ndarray:
+    """Pine ta.sma: NaN while the window holds a NaN."""
+    return pd.Series(np.asarray(x, float)).rolling(n, min_periods=n).mean().to_numpy()
+
+
+def stoch_rsi(close, rsi_len: int = 14, stoch_len: int = 11, k_len: int = 4, d_len: int = 5) -> tuple[np.ndarray, np.ndarray]:
+    """TradingView 'Stoch RSI': k = sma(stoch(rsi, rsi, rsi, stoch_len), k_len), d = sma(k, d_len); NaN where the
+    stochastic's range is 0 (Pine: x / 0 is na)."""
+    r = rsi(close, rsi_len)
+    s = pd.Series(r)
+    lo = s.rolling(stoch_len, min_periods=stoch_len).min().to_numpy()
+    hi = s.rolling(stoch_len, min_periods=stoch_len).max().to_numpy()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        st = np.where(hi > lo, 100.0 * (r - lo) / (hi - lo), np.nan)
+    k = sma(st, k_len)
+    return k, sma(k, d_len)
+
+
+def supertrend(high, low, close, atr_len: int, factor: float) -> tuple[np.ndarray, np.ndarray]:
+    """Pine v5 ta.supertrend(factor, atr_len), TradingView's built-in 'Supertrend': (line, up), up = True where
+    TradingView's direction is -1 (the line under the price). The bands start from nz(...) = 0 as Pine's do."""
+    h, l, c = (np.asarray(a, float) for a in (high, low, close))
+    a = atr(h, l, c, atr_len)
+    hl2 = (h + l) / 2.0
+    n = len(c)
+    line, up = np.full(n, np.nan), np.zeros(n, dtype=bool)
+    lb_prev = ub_prev = st_prev = math.nan
+    for i in range(n):
+        lb, ub = hl2[i] - factor * a[i], hl2[i] + factor * a[i]
+        pl = 0.0 if math.isnan(lb_prev) else lb_prev
+        pu = 0.0 if math.isnan(ub_prev) else ub_prev
+        c1 = c[i - 1] if i > 0 else math.nan
+        lb = lb if (lb > pl or c1 < pl) else pl                      # comparisons with na are false
+        ub = ub if (ub < pu or c1 > pu) else pu
+        if i == 0 or math.isnan(a[i - 1]):
+            d = 1
+        elif st_prev == pu:
+            d = -1 if c[i] > ub else 1
+        else:
+            d = 1 if c[i] < lb else -1
+        st = lb if d == -1 else ub
+        line[i], up[i] = st, d == -1
+        lb_prev, ub_prev, st_prev = lb, ub, st
+    return line, up
+
+
 # ====================================================================== the decision at one 30m close
 @dataclass
 class Coin:
@@ -227,7 +281,7 @@ def bars_frame(rows: list, tf_ms: int, upto_ms: int) -> pd.DataFrame:
 def evaluate(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
     """The design's decision on the 30m bar closing at ``close_ms`` (b30 / b1h: closed bars only). Returns the values
     (for the log and the comparison with TradingView) and ``side`` = 1 / -1 / 0 with ``why`` when 0."""
-    out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": ""}
+    out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": "", "rule": "mix"}
     if b30.empty or int(b30.open_ms.iloc[-1]) + MIN30 != close_ms:
         out["why"] = "30분봉이 아직 없음"
         return out
@@ -271,6 +325,66 @@ def evaluate(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) ->
     return out
 
 
+RULE_KO = {"mix": "친구 매매법", "st": "슈퍼트렌드·스톡RSI"}
+RULES = tuple(RULE_KO)
+
+
+def evaluate_st(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
+    """The owners' second rule (10-26) on the 30m bar closing at ``close_ms`` (b30 / b1h: closed bars only): side = 1 /
+    -1 / 0 with ``why`` when 0, and its values (the log, the message). Stop and liquidation guard as evaluate()."""
+    out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": "", "rule": "st"}
+    if b30.empty or int(b30.open_ms.iloc[-1]) + MIN30 != close_ms:
+        out["why"] = "30분봉이 아직 없음"
+        return out
+    if len(b30) < 300 or len(b1h) < 300:
+        out["why"] = "지난 봉이 모자람"
+        return out
+    h, l, c = (b30[k].to_numpy(float) for k in ("high", "low", "close"))
+    h_close = b1h.open_ms.to_numpy(np.int64) + H1
+    j = int(np.searchsorted(h_close, close_ms, side="right")) - 1     # the last 1h bar closed by this 30m close
+    if j < 0 or int(h_close[j]) != close_ms // H1 * H1:
+        out["why"] = "1시간봉이 아직 없음"
+        return out
+    _l3, up3 = supertrend(h, l, c, 14, 3.0)
+    _l6, up6 = supertrend(h, l, c, 14, 6.0)
+    k, d = stoch_rsi(c)
+    r30 = float(rsi(c, 26)[-1])
+    r1h = float(rsi(b1h.close.to_numpy(float), 26)[j])
+    at = float(atr(h, l, c, 14)[-1])
+    px = float(c[-1])
+    gold = bool(k[-1] > d[-1] and k[-2] <= d[-2])                     # NaN compares false: no cross
+    dead = bool(k[-1] < d[-1] and k[-2] >= d[-2])
+    dist = at * coin.sl_atr
+    liq_ok = dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0)
+    rnd = lambda x: round(float(x), 2) if np.isfinite(x) else None   # noqa: E731
+    out.update({"close": px, "st3_up": bool(up3[-1]), "st6_up": bool(up6[-1]), "k": rnd(k[-1]), "d": rnd(d[-1]),
+                "cross": "gold" if gold else ("dead" if dead else ""), "rsi26_30m": rnd(r30), "rsi26_1h": rnd(r1h),
+                "trend_close_ms": int(h_close[j]), "atr": at, "stop_dist": dist, "stop_pct": round(dist / px * 100, 3),
+                "liq_ok": bool(liq_ok)})
+    if not (gold or dead):
+        out["why"] = "스톡RSI 크로스 없음"
+        return out
+    if not coin.enabled:
+        out["why"] = "이 코인 꺼짐"
+        return out
+    want = 1 if gold else -1
+    miss = []
+    if not (bool(up3[-1]) == (want > 0) and bool(up6[-1]) == (want > 0)):
+        miss.append("슈퍼트렌드 14/3·14/6 " + ("상승" if want > 0 else "하락") + " 아님")
+    if not (r30 > 50 if want > 0 else r30 < 50):
+        miss.append("30분 RSI26")
+    if not (r1h > 50 if want > 0 else r1h < 50):
+        miss.append("1시간 RSI26")
+    if miss:
+        out["why"] = " · ".join(miss) + " 조건 안 맞음"
+        return out
+    if not liq_ok:
+        out["why"] = f"손절 폭 {dist / px * 100:.2f}%가 {coin.leverage}배 청산가보다 멂"
+        return out
+    out["side"] = want
+    return out
+
+
 def ladder_stop(side: int, entry: float, best: float, stop: float, roe_act: float, lev: float,
                 lock_roe: float = LOCK_ROE) -> tuple[float, int]:
     """BOT_FORMULAS 3: (new stop, step) after a 30m close; the stop never moves the unfavourable way. step 0 = not yet
@@ -304,6 +418,18 @@ def net_ladder_stop(side: int, entry: float, best: float, stop: float, lev: floa
     return stop, -1
 
 
+def reason_words(ev: dict, side: int, name: bool = False) -> str:
+    """The entry's 근거 line: the friend's colour change and averaged RSIs, or the second rule's supertrends, Stoch RSI
+    cross and RSI26s; ``name``: the rule's name first (two rules)."""
+    head = f"근거({RULE_KO.get(ev.get('rule', 'mix'), '')}): " if name else "근거: "
+    if ev.get("rule") == "st":
+        return (head + f"슈퍼트렌드 14/3·14/6 {'상승' if side > 0 else '하락'} · 스톡RSI {'골든' if side > 0 else '데드'}크로스"
+                f"(K {ev.get('k')} / D {ev.get('d')}) · RSI26 30분 {ev.get('rsi26_30m')} · 1시간 {ev.get('rsi26_1h')} "
+                f"({kst(ev['close_ms'])} 봉)")
+    return (head + f"{'하늘색' if side > 0 else '보라색'}으로 바뀜 · 30분 평균 RSI {ev.get('avg_rsi_30m')} · 1시간 평균 RSI "
+            f"{ev.get('avg_rsi_1h')} ({kst(ev['close_ms'])} 봉)")
+
+
 def plan_words(c: "Config", short: bool = False) -> str:
     """The size and the ladder of a config in words (the start message, the site, the checks); ``short`` for a card."""
     if c.margin_frac > 0:
@@ -317,7 +443,13 @@ def plan_words(c: "Config", short: bool = False) -> str:
     else:
         lad = "계단 코인별" if short else "계단 코인별 ROE +roe_act%→+10%"
     every = "" if short or c.ladder_every_s <= 0 else f" · 손절·계단 {c.ladder_every_s:g}초마다(1분봉)"
-    return f"{size} · {lad}{every}"
+    extra = ""
+    if tuple(c.rules) != ("mix",):
+        extra += " · 매매법 " + " + ".join(RULE_KO[r] for r in c.rules) + ("" if short or len(c.rules) < 2 else
+                                                                           f"(같은 봉이면 {RULE_KO[c.rules[0]]} 먼저)")
+    if c.stop_atr:
+        extra += f" · 손절 ATR {c.stop_atr:g}배" + ("" if short else "(모든 코인)")
+    return f"{size} · {lad}{every}{extra}"
 
 
 # ====================================================================== config and state
@@ -343,6 +475,8 @@ class Config:
     margin_frac: float = 0.0                    # > 0: each entry's margin = equity x this (owners 10-26); 0: risk_pct sizing
     ladder: Optional[dict] = None               # {"trigger", "lock", "step"} net ROE %; None: the coins' roe_act ladder
     ladder_every_s: float = 0.0                 # > 0: the open position on closed 1m bars this often between the closes
+    rules: tuple = ("mix",)                     # the entry rules in their order (owners 10-26: ("mix", "st"))
+    stop_atr: Optional[float] = None            # > 0: every coin's stop = ATR14 x this, both rules (owners 10-26: 3)
 
     @property
     def symbols(self) -> list:
@@ -394,6 +528,18 @@ def load_config(path: str) -> Config:
         raise MixError(f"\"margin_frac\"는 0 ~ 1 사이여야 합니다(지금 {cfg.margin_frac})")
     if not (cfg.ladder_every_s == 0 or 30 <= cfg.ladder_every_s <= 600):
         raise MixError(f"\"ladder_every_s\"는 0(끔) 또는 30 ~ 600초여야 합니다(지금 {cfg.ladder_every_s})")
+    rules = raw.get("rules", ["mix"])
+    if (not isinstance(rules, list) or not rules or len(set(rules)) != len(rules)
+            or any(r not in RULES for r in rules)):
+        raise MixError(f"\"rules\"는 {list(RULES)} 중에서 고른 목록이어야 합니다(앞의 것이 먼저, 지금 {rules!r})")
+    cfg.rules = tuple(rules)
+    sa = raw.get("stop_atr")
+    if sa is not None:
+        if isinstance(sa, bool) or not isinstance(sa, (int, float)) or not 0.3 <= sa <= 10:
+            raise MixError(f"\"stop_atr\"는 0.3 ~ 10(ATR 배수) 또는 null이어야 합니다(지금 {sa!r})")
+        cfg.stop_atr = float(sa)
+        for co in cfg.coins:                     # both rules read the coin's multiple
+            co.sl_atr = float(sa)
     if not cfg.state or not cfg.log:
         raise MixError("\"state\"와 \"log\" 파일 경로가 필요합니다")
     if not (0 < cfg.risk_pct <= 5):
@@ -642,6 +788,11 @@ class WooBroker:
 
 
 # ====================================================================== the bot
+def _not_read(ev: dict) -> bool:
+    """An answer that could not be made from the bars (not there yet, or not read): tried again, then logged."""
+    return ev["why"].endswith("아직 없음") or ev["why"].startswith("캔들 읽기 실패")
+
+
 class Bot:
     def __init__(self, cfg: Config, broker, fetch: Callable[[str, str, int], list], clock_ms: Callable[[], int],
                  notify: Optional[Callable[[str, str], None]] = None, sleep: Callable[[float], None] = time.sleep):
@@ -853,17 +1004,19 @@ class Bot:
             for attempt in range(3):
                 try:
                     b30, b1h = self.bars(co.symbol, close_ms)
-                    ev = evaluate(co, b30, b1h, close_ms)
+                    evs = [self.judge(rule, co, b30, b1h, close_ms) for rule in self.cfg.rules]
                 except Exception as e:
-                    ev = {"symbol": co.symbol, "close_ms": close_ms, "side": 0, "why": f"캔들 읽기 실패: {e}"}
-                if not (ev["why"].endswith("아직 없음") or ev["why"].startswith("캔들 읽기 실패")):
+                    evs = [{"symbol": co.symbol, "close_ms": close_ms, "side": 0, "why": f"캔들 읽기 실패: {e}"}]
+                if not any(_not_read(ev) for ev in evs):
                     break
                 self.sleep(3.0)
-            if ev["why"].endswith("아직 없음") or ev["why"].startswith("캔들 읽기 실패"):
-                self.log("bars_missing", **ev)
-            if ev.get("to_cyan") or ev.get("to_purple") or ev["side"]:
-                self.log("signal", **ev)
-            if ev["side"]:
+            for ev in evs:
+                if _not_read(ev):
+                    self.log("bars_missing", **ev)
+                if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev["side"]:
+                    self.log("signal", **ev)
+            ev = next((e for e in evs if e["side"]), None)          # the config's rule order decides on one coin
+            if ev is not None:
                 cands.append((co, ev))
         self.last_close_ms = close_ms
         self.save()
@@ -873,12 +1026,18 @@ class Bot:
         if self.pos is not None or self.halt_reason or block:
             for co, ev in cands:
                 why = "보유 중" if self.pos is not None else (self.halt_reason or block)
-                self.log("skip", symbol=co.symbol, side=ev["side"], why=why)
+                self.log("skip", symbol=co.symbol, side=ev["side"], why=why, rule=ev.get("rule", "mix"))
             return
         co, ev = cands[0]                               # the config's coin order decides between coins
         for other, oev in cands[1:]:
-            self.log("skip", symbol=other.symbol, side=oev["side"], why=f"같은 봉에 {coin_ko(co.symbol)} 먼저")
+            self.log("skip", symbol=other.symbol, side=oev["side"], why=f"같은 봉에 {coin_ko(co.symbol)} 먼저",
+                     rule=oev.get("rule", "mix"))
         self.enter(co, ev)
+
+    @staticmethod
+    def judge(rule: str, co: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
+        """One entry rule's answer at this close (``rule``: "mix" the friend's, "st" the owners' second)."""
+        return evaluate(co, b30, b1h, close_ms) if rule == "mix" else evaluate_st(co, b30, b1h, close_ms)
 
     def halts(self) -> str:
         for f in (self.cfg.kill_file, self.cfg.own_stop_file):
@@ -920,14 +1079,16 @@ class Bot:
         need = max(float(sp.get("min_qty") or 0), float(sp.get("min_notional") or 0) / ref)
         risk = qty * dist                               # the loss at the stop (fees aside)
         if qty <= 0 or qty + 1e-12 < need:
-            self.log("skip", symbol=sym, side=side, why="최소 주문보다 작음", qty=qty, need=need, equity=eq)
+            self.log("skip", symbol=sym, side=side, why="최소 주문보다 작음", qty=qty, need=need, equity=eq,
+                     rule=ev.get("rule", "mix"))
             self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 크기 {qty:g}가 최소 {need:g}보다 작음 "
                              f"(손절 1번 ${risk:.3f}, 손절 폭 {ev['stop_pct']}%)")
             return
         if self.b.live:                                 # WOO X Pro's own liquidation, from its brackets
             room = self.b.liq_room(sym, qty * ref, co.leverage)
             if room is not None and dist / ref >= room:
-                self.log("skip", symbol=sym, side=side, why="손절이 WOO X Pro 청산가에 너무 가까움", stop_frac=dist / ref, room=room)
+                self.log("skip", symbol=sym, side=side, why="손절이 WOO X Pro 청산가에 너무 가까움", stop_frac=dist / ref, room=room,
+                         rule=ev.get("rule", "mix"))
                 self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 손절 폭 {dist / ref:.2%}가 "
                                  f"WOO X Pro 청산까지({max(room, 0):.2%}, 여유 {LIQ_ROOM:.1%} 뺌)보다 멂")
                 return
@@ -986,8 +1147,7 @@ class Bot:
                  ("🚨 손절을 아직 확인하지 못했습니다. 봇이 15초마다 다시 겁니다. 거래소에서 확인하세요\n" if self._unprotected else "")
                  + f"{'🟢' if side > 0 else '🔴'} {coin_ko(sym)} {'롱' if side > 0 else '숏'} 진입 {fill:.6g} ({co.leverage}배, "
                          f"{filled:g}개 ≈ ${filled * fill:,.2f})\n손절 {stop:.6g} (ROE −{dist / fill * co.leverage * 100:.1f}%, "
-                         f"{size_words})\n{ladder_line}\n근거: {'하늘색' if side > 0 else '보라색'}으로 바뀜 · 30분 평균 RSI "
-                         f"{ev['avg_rsi_30m']} · 1시간 평균 RSI {ev['avg_rsi_1h']} ({kst(ev['close_ms'])} 봉)")
+                         f"{size_words})\n{ladder_line}\n{reason_words(ev, side, len(self.cfg.rules) > 1)}")
 
     def look_for_fill(self, sym: str, side: int, ref: float, dist: float, co: Coin) -> bool:
         """An entry whose answer was lost or empty: read the position a few times; adopt it if it is there."""
@@ -1319,6 +1479,26 @@ def cmd_signals(args) -> int:
             res = ("롱 진입" if ev["side"] > 0 else "숏 진입") if ev["side"] else f"X ({ev['why']})"
             print(f"  {kst(ev['close_ms'])} KST 마감  {what}  종가 {ev.get('close', 0):.6g}  30분 평균RSI {ev.get('avg_rsi_30m')}"
                   f"  1시간 평균RSI {ev.get('avg_rsi_1h')}  손절폭 {ev.get('stop_pct')}%  → {res}")
+        if "st" in cfg.rules:                    # the second rule: its last Stoch RSI crosses (owners 10-26)
+            k, d = stoch_rsi(b30.close.to_numpy(float))
+            lines = []
+            print(f"  -- {RULE_KO['st']}: 스톡RSI 크로스 (슈퍼트렌드 14/3·14/6, RSI26 30분·1시간)")
+            for i in range(len(b30) - 1, max(len(b30) - 400, 300), -1):
+                if (k[i] > d[i]) != (k[i - 1] > d[i - 1]) and np.isfinite(k[i]) and np.isfinite(d[i - 1]):
+                    ce = int(b30.open_ms.iloc[i]) + MIN30
+                    ev = evaluate_st(co, b30.iloc[:i + 1].reset_index(drop=True),
+                                     b1h[b1h.open_ms + H1 <= ce].reset_index(drop=True), ce)
+                    if not ev.get("cross"):
+                        continue
+                    res = ("롱 진입" if ev["side"] > 0 else "숏 진입") if ev["side"] else f"X ({ev['why']})"
+                    lines.append(f"  {kst(ev['close_ms'])} KST 마감  {'골든' if ev['cross'] == 'gold' else '데드'}  종가 "
+                          f"{ev.get('close', 0):.6g}  ST14/3 {'상승' if ev['st3_up'] else '하락'} · 14/6 "
+                          f"{'상승' if ev['st6_up'] else '하락'}  K {ev['k']} D {ev['d']}  RSI26 30분 {ev['rsi26_30m']} "
+                          f"1시간 {ev['rsi26_1h']}  손절폭 {ev.get('stop_pct')}%  → {res}")
+                    if len(lines) >= args.n:
+                        break
+            for ln in reversed(lines):                   # oldest first, as the colour changes above
+                print(ln)
     return 0
 
 
@@ -1343,6 +1523,10 @@ def cmd_check(args) -> int:
           + (f" · 계단 순ROE +{cfg.ladder['trigger']:g}%→+{cfg.ladder['lock']:g}%, 그 뒤 {cfg.ladder['step']:g}%마다"
              if cfg.ladder else " · 계단 코인별 roe_act")
           + (f" · 손절·계단 {cfg.ladder_every_s:g}초마다(1분봉)" if cfg.ladder_every_s > 0 else ""))
+    if tuple(cfg.rules) != ("mix",) or cfg.stop_atr:          # owners 10-26: the second rule, one stop multiple
+        print("매매법·손절: " + " + ".join(RULE_KO[r] for r in cfg.rules)
+              + (f"(같은 봉이면 {RULE_KO[cfg.rules[0]]} 먼저)" if len(cfg.rules) > 1 else "")
+              + (f" · 손절 ATR {cfg.stop_atr:g}배(모든 코인)" if cfg.stop_atr else " · 손절 코인별 ATR 배수"))
     for co in cfg.coins:
         try:
             sp = pub.spec(co.symbol)

@@ -79,6 +79,7 @@ BIG_R = 1.0
 GAP_FRAC = 0.001                    # the worked-back exit past the stop by more than 0.1 % of the price
 FAR_GAP_FRAC = 0.005                # ... by more than 0.5 %: the stop fired far past its price
 SLIP_FRAC = 0.0015                  # the entry fill worse than the signal close by more than 0.15 %
+RULE_TAG = {"st": "(슈퍼트렌드·스톡RSI)"}  # the second rule's lines say whose they are (owners 10-26)
 BLOCK_NEAR_MS = 60 * MIN            # an entry block that started within an hour after the entry
 # luck band: the share of the replay's runs that are this bad or worse
 RARE, VERY_RARE = 0.10, 0.02
@@ -713,11 +714,23 @@ def covered(obs: list, ce: int) -> bool:
     return any(ce + 2 * MIN <= int(o[0]) < ce + M.MIN30 for o in obs if o)
 
 
+def _rule(r: dict) -> str:
+    """The entry rule of a signal row (rows from before the second rule, 10-26, are the friend's)."""
+    return r.get("rule") or "mix"
+
+
+def _moved(ev: dict) -> bool:
+    """A row the bot logs: a colour change (the friend's rule), a Stoch RSI cross (the second) or a side."""
+    return bool(ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("side"))
+
+
 def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs: Optional[list] = None,
                   st_last: Optional[int] = None) -> dict:
-    """D (module docstring): every 30-minute close in (w0, w1] of the config's coins recomputed with mixchop.evaluate on
-    Binance's closed bars (the 1,499 closed bars the bot holds), against the live log."""
+    """D (module docstring): every 30-minute close in (w0, w1] of the config's coins recomputed with the bot's rules
+    (mixchop.evaluate, and evaluate_st when the config runs the second rule) on Binance's closed bars (the 1,499 closed
+    bars the bot holds), against the live log; one answer per (coin, close, rule)."""
     obs = obs or []
+    rules = tuple(getattr(cfg, "rules", None) or ("mix",))
     closes = list(range(w0 + M.MIN30, w1 + 1, M.MIN30))
     rep: dict = {}
     fails, failed_syms = [], set()
@@ -732,25 +745,28 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         for ce in closes:
             b30 = M.bars_frame(r30, M.MIN30, ce).tail(M.BARS - 1).reset_index(drop=True)
             b1h = M.bars_frame(r1h, M.H1, ce).tail(M.BARS - 1).reset_index(drop=True)
-            ev = M.evaluate(co, b30, b1h, ce)
-            if ev.get("to_cyan") or ev.get("to_purple") or ev.get("side") or ev["why"].endswith("아직 없음"):
-                rep[(co.symbol, ce)] = ev
+            for rule in rules:
+                ev = M.Bot.judge(rule, co, b30, b1h, ce)
+                if _moved(ev) or ev["why"].endswith("아직 없음"):
+                    rep[(co.symbol, ce, rule)] = ev
     if fails and len(fails) == len(cfg.coins):
         return {"state": "error", "ko": "바이낸스 봉을 못 읽어 신호를 다시 계산하지 못했어요", "reason": "; ".join(fails)[:400]}
     day = [r for r in rows if w0 <= (_i(r.get("ts")) or 0) <= w1 + M.MIN30]
-    sig = {(r.get("symbol"), _i(r.get("close_ms"))): r for r in day if r.get("kind") == "signal"}
+    sig = {(r.get("symbol"), _i(r.get("close_ms")), _rule(r)): r for r in day if r.get("kind") == "signal"}
     late = {(r.get("symbol"), _i(r.get("close_ms"))) for r in day if r.get("kind") == "bars_missing"}
     failed = {_i(r.get("close_ms")) for r in day if r.get("kind") == "close_failed"}
     handled = handled_closes(day, obs, st_last)
     missed, different, unexplained, unsure = [], [], [], []
-    for (sym, ce), ev in sorted(rep.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+    for (sym, ce, rule), ev in sorted(rep.items(), key=lambda kv: (kv[0][1], kv[0][0], rules.index(kv[0][2]))):
         if ev["why"].endswith("아직 없음"):
             continue                                            # Binance's own bar missing now: nothing to compare
-        lv = sig.get((sym, ce))
-        item = {"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": ev.get("side") or 0,
-                "colour": "cyan" if ev.get("to_cyan") else "purple", "why": ev.get("why") or ""}
+        lv = sig.get((sym, ce, rule))
+        st = rule == "st"
+        item = {"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": ev.get("side") or 0, "rule": rule,
+                "colour": (ev.get("cross") or "") if st else "cyan" if ev.get("to_cyan") else "purple", "why": ev.get("why") or ""}
         if lv is not None:
-            if (_i(lv.get("side")) or 0) != item["side"] or bool(lv.get("to_cyan")) != bool(ev.get("to_cyan")):
+            if (_i(lv.get("side")) or 0) != item["side"] or (
+                    (lv.get("cross") or "") != (ev.get("cross") or "") if st else bool(lv.get("to_cyan")) != bool(ev.get("to_cyan"))):
                 different.append({**item, "live_side": _i(lv.get("side")) or 0, "live_why": lv.get("why") or "",
                                   "ko": f"봇은 {_side_word(_i(lv.get('side')) or 0, lv.get('why'))}, 다시 계산하면 {_side_word(item['side'], item['why'])}"})
             continue
@@ -759,28 +775,37 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         elif ce in failed:
             why, kind = "봇이 이 봉 처리에 실패했어요", "failed"
         elif ce in handled:
-            why, kind = "봇은 이 봉에서 색 변화를 보지 못했어요 (봉 값이 마감 직후와 달랐을 수 있어요)", "unseen"
+            why, kind = (f"봇은 이 봉에서 {'스톡RSI 크로스를' if st else '색 변화를'} 보지 못했어요 "
+                         "(봉 값이 마감 직후와 달랐을 수 있어요)", "unseen")
         elif covered(obs, ce):
             why, kind = "봇이 이 봉을 처리하지 않았어요 (꺼져 있었거나 늦었어요)", "down"
         else:
             why, kind = "봇 기록에 없어요 (그때 봇이 돌았는지는 확인 못 함)", "unknown"
         entry = {**item, "kind": kind, "ko": why}
         (missed if item["side"] else unsure).append(entry)
-    for (sym, ce), lv in sig.items():
-        if (sym, ce) not in rep and ce is not None and w0 < ce <= w1 and sym not in failed_syms:
-            different.append({"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": 0, "live_side": _i(lv.get("side")) or 0,
-                              "live_why": lv.get("why") or "", "ko": "봇은 색 변화로 기록했는데 다시 계산하면 색 변화 없음"})
+    for (sym, ce, rule), lv in sig.items():
+        if (sym, ce, rule) not in rep and rule in rules and ce is not None and w0 < ce <= w1 and sym not in failed_syms:
+            what = "스톡RSI 크로스" if rule == "st" else "색 변화"
+            different.append({"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": 0, "rule": rule,
+                              "live_side": _i(lv.get("side")) or 0, "live_why": lv.get("why") or "",
+                              "ko": f"봇은 {what}로 기록했는데 다시 계산하면 {what} 없음"})
+    # one entry or skip per coin and close: the first rule with a side was taken, the other rule's side goes with it
     acted = {(r.get("symbol"), (_i(r.get("ts")) or 0) // M.MIN30 * M.MIN30) for r in day
              if r.get("kind") in ("skip", "entry", "adopted", "entry_failed", "entry_none")}
-    for (sym, ce), lv in sig.items():
-        if (_i(lv.get("side")) or 0) and (sym, ce) not in acted and ce is not None and w0 < ce <= w1:
-            unexplained.append({"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": _i(lv.get("side")),
+    told = set()
+    for (sym, ce, rule), lv in sig.items():
+        if (_i(lv.get("side")) or 0) and (sym, ce) not in acted and (sym, ce) not in told and ce is not None and w0 < ce <= w1:
+            told.add((sym, ce))
+            unexplained.append({"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": _i(lv.get("side")), "rule": rule,
                                 "ko": "신호가 나왔는데 진입도, 건너뛴 이유도 기록에 없어요"})
-    n_sig = sum(1 for (s, ce), ev in rep.items() if ev.get("side"))
-    n_chg = sum(1 for (s, ce), ev in rep.items() if ev.get("to_cyan") or ev.get("to_purple"))
-    return {"state": "ok", "closes": len(closes), "coins": len(cfg.coins) - len(fails), "changes": n_chg, "signals": n_sig,
-            "missed": missed, "different": different, "unexplained": unexplained, "unsure": unsure,
-            "fails": fails, "observed": sum(1 for ce in closes if covered(obs, ce))}
+    n_sig = len({(s, ce) for (s, ce, rule), ev in rep.items() if ev.get("side")})
+    n_chg = sum(1 for (s, ce, rule), ev in rep.items() if ev.get("to_cyan") or ev.get("to_purple"))
+    out = {"state": "ok", "closes": len(closes), "coins": len(cfg.coins) - len(fails), "changes": n_chg, "signals": n_sig,
+           "missed": missed, "different": different, "unexplained": unexplained, "unsure": unsure,
+           "fails": fails, "observed": sum(1 for ce in closes if covered(obs, ce))}
+    if "st" in rules:
+        out["crosses"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "st" and ev.get("cross"))
+    return out
 
 
 def _side_word(side: int, why: Any = "") -> str:
@@ -792,13 +817,14 @@ def replay_lines(d: Optional[dict]) -> list:
         return ["- 다시 계산은 건너뛰었어요"]
     if d.get("state") != "ok":
         return [f"- {d.get('ko')}"]
+    cross = f" · 스톡RSI 크로스 {d['crosses']}번" if d.get("crosses") is not None else ""
     out = [f"- 놓친 신호 {len(d['missed'])}개 (봇 공식으로 바이낸스 봉을 다시 계산: 30분봉 {d['closes']}개 × 코인 {d['coins']}개, "
-           f"색 변화 {d['changes']}번 · 신호 {d['signals']}번)"]
+           f"색 변화 {d['changes']}번{cross} · 신호 {d['signals']}번)"]
     for x in d["missed"][:8]:
-        out.append(f"  · {kst(x['close_ms'])} {x['coin']} {'롱' if x['side'] > 0 else '숏'}: {x['ko']}")
+        out.append(f"  · {kst(x['close_ms'])} {x['coin']} {'롱' if x['side'] > 0 else '숏'}{RULE_TAG.get(x.get('rule'), '')}: {x['ko']}")
     if d["different"]:
         out.append(f"- 판정이 다른 봉 {len(d['different'])}개")
-        out += [f"  · {kst(x['close_ms'])} {x['coin']}: {x['ko']}" for x in d["different"][:6]]
+        out += [f"  · {kst(x['close_ms'])} {x['coin']}{RULE_TAG.get(x.get('rule'), '')}: {x['ko']}" for x in d["different"][:6]]
     if d["unexplained"]:
         out.append(f"- 이유 없이 안 들어간 신호 {len(d['unexplained'])}개")
         out += [f"  · {kst(x['close_ms'])} {x['coin']}: {x['ko']}" for x in d["unexplained"][:6]]
@@ -815,8 +841,11 @@ def day_rows(rows: list, w0: int, w1: int) -> list:
 
 
 def signal_counts(rows: list) -> dict:
-    """The day's colour changes, signals, entries and skips by reason (livemix.skip_group; blocks by kind)."""
+    """The day's colour changes (the friend's rule), Stoch RSI crosses (the second rule, when it logged any), signals
+    (one per coin and close), entries and skips by reason (livemix.skip_group; blocks by kind)."""
     sig = [r for r in rows if r.get("kind") == "signal"]
+    mix = [r for r in sig if _rule(r) == "mix"]
+    st = [r for r in sig if _rule(r) == "st"]
     skips: dict = {}
     blocks: dict = {}
     for r in rows:
@@ -831,10 +860,13 @@ def signal_counts(rows: list) -> dict:
         if g == "block":
             k = X.block_kind(r.get("why")) or "other"
             blocks[k] = blocks.get(k, 0) + 1
-    return {"changes": len({(r.get("symbol"), _i(r.get("close_ms"))) for r in sig}),
-            "signals": len({(r.get("symbol"), _i(r.get("close_ms"))) for r in sig if r.get("side")}),
-            "refused": len({(r.get("symbol"), _i(r.get("close_ms"))) for r in sig if not r.get("side")}),
-            "entries": sum(1 for r in rows if r.get("kind") in ("entry", "adopted")), "skips": skips, "blocks": blocks}
+    out = {"changes": len({(r.get("symbol"), _i(r.get("close_ms"))) for r in mix}),
+           "signals": len({(r.get("symbol"), _i(r.get("close_ms"))) for r in sig if r.get("side")}),
+           "refused": len({(r.get("symbol"), _i(r.get("close_ms")), _rule(r)) for r in sig if not r.get("side")}),
+           "entries": sum(1 for r in rows if r.get("kind") in ("entry", "adopted")), "skips": skips, "blocks": blocks}
+    if st:
+        out["crosses"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in st})
+    return out
 
 
 SKIP_KO = {"block": "진입 금지 시간", "small": "최소 주문보다 작음", "held": "보유 중", "same_bar": "같은 봉 다른 코인 먼저",
@@ -988,7 +1020,8 @@ def morning(data: dict, w0: int, *, klines: Optional[Callable] = None, obs: Opti
     if warn:
         lines += [""] + [f"- {x}" for x in warn]
     lines += ["", "신호 (30분봉)",
-              f"- 색 변화 {sc['changes']}번 · 조건 맞은 신호 {sc['signals']}번 · 진입 {sc['entries']}번",
+              f"- 색 변화 {sc['changes']}번" + (f" · 스톡RSI 크로스 {sc['crosses']}번" if "crosses" in sc else "")
+              + f" · 조건 맞은 신호 {sc['signals']}번 · 진입 {sc['entries']}번",
               f"- {skip_text(sc)}"]
     if vs["state"] == "ok":
         lines.append(f"- 모의와 같은 진입 {vs['same']}번" + (f" · 다른 것 {len(vs['diffs'])}개" if vs["diffs"] else " · 다른 것 없음"))
