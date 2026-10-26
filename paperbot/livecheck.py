@@ -530,7 +530,9 @@ PAPER_UNITS = {"vwap": "paperbot-combo-vwap", "live15-mexc": "paperbot-combo-mex
                # '친구 매매법' (owners 10-24, docs/friend-bot-ko.md): its alarms once WOO X Pro 2 follows it
                "friend": "paperbot-combo-friend",
                # '숏5 하락장' (owners 10-25, docs/short5-bot-ko.md): its alarms once an executor follows it
-               "short5": "paperbot-combo-short5"}
+               "short5": "paperbot-combo-short5",
+               # '레인지 봇' (owners 10-26, docs/range-bot-ko.md): its alarms once WOO X Pro follows it
+               "range": "paperbot-combo-range"}
 # the 'VWAP 개선판' guide (docs/vwap-bot-ko.md 6): more money after 50 live trades at 80 % or more; the research's 5-year
 # break-even win rate (research/vwap30/scale.json: 5,805 paper trades, average win +10.76 % ROE, average loss -39.43 %)
 SCALE_N, SCALE_WIN = 50, 0.80

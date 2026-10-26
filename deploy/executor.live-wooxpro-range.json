@@ -1,0 +1,56 @@
+{
+  "exchange": "wooxpro",
+  "mode": "mainnet",
+  "account": "COMBO@mix",
+  "paper_db": "/var/lib/paperbot/combo/range.db",
+  "db": "/var/lib/paperbot/exec/executor-wooxpro-live.db",
+  "budget_usd": 100,
+  "qty_scale": 0.1,
+  "entry_source": "paper",
+  "stop_from": "roe",
+  "signal_light_n": 0,
+  "ladder_from": "own",
+  "ladder": null,
+  "ladder_basis": "net",
+  "net_costs": {
+    "bybit": {
+      "taker_fee": 0.00044,
+      "slippage": 0.0002
+    },
+    "mexc": {
+      "taker_fee": 0.0008,
+      "slippage": 0.0002
+    },
+    "wooxpro": {
+      "taker_fee": 0.00042,
+      "slippage": 0.0002
+    }
+  },
+  "risk": {
+    "max_leverage": 40,
+    "max_notional_usd": 10000,
+    "max_loss_frac": 0.35,
+    "allowed_symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "SOLUSDT",
+      "DOGEUSDT",
+      "LTCUSDT",
+      "BCHUSDT"
+    ],
+    "kill_file": "/var/lib/paperbot/STOP"
+  },
+  "size_from": "equity",
+  "margin_frac": 0.4,
+  "leverage_by_symbol": {
+    "BTCUSDT": 40,
+    "*": 30
+  },
+  "stop_roe": 0.5,
+  "stop_net": true,
+  "take_profit_roe": 0.1,
+  "equity_floor_frac": null,
+  "liq_guard": true,
+  "liq_guard_mmr": 0.005,
+  "macro_block_min": 30
+}

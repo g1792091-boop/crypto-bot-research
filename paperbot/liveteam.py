@@ -476,7 +476,7 @@ def _combo(cfg: Optional[dict]):
 
 def _paper_rules(cfg: Optional[dict]) -> Optional[list]:
     c = _combo(cfg)
-    if c is None or c.ladder_spec is None:
+    if c is None or (c.ladder_spec is None and c.take_profit_roe is None):
         return None
     from . import combo as C
     try:
@@ -487,8 +487,9 @@ def _paper_rules(cfg: Optional[dict]) -> Optional[list]:
     nc = sum(1 for m in members if isinstance(m, dict) and m.get("no_chase"))
     out = [f"매매법 {len(members)}개", f"BTC {c.lev_of('BTCUSDT')}배 · 나머지 {c.lev_of('ETHUSDT')}배",
            "증거금 " + ("배수%" if c.margin == "leverage" else f"잔고의 {float(c.margin):.0%}"), "한 번에 포지션 하나",
-           "시장가 진입", f"손절 {stop}", f"계단 익절({c.ladder_spec.describe()})",
-           f"빠른 청산: {C.KO_EARLY.get(c.early_exit, c.early_exit)}"
+           "시장가 진입", f"손절 {stop}",
+           C.take_profit_text(c) if c.take_profit_roe is not None else f"계단 익절({c.ladder_spec.describe()})",
+           f"빠른 청산: {C.early_ko(c)}"
            + ("(첫 잠금 전까지만)" if c.early_exit and c.early_exit_until_lock else "")]
     if nc:
         out.append(f"추격 진입 막기 {nc}개 매매법(" + C.CHASE_KO.split("(", 1)[1])
@@ -500,6 +501,7 @@ def _paper_rules(cfg: Optional[dict]) -> Optional[list]:
     if c.us_open_pause_min or c.us_open_pre_min:
         out.append(f"{C.us_open_ko(c.us_open_pause_min or 0, c.us_open_pre_min or 0)} 진입 없음")
     out += C.gate_lines(c)                  # 'VWAP 개선판' (owners 10-23): its entry gates and hold limit; others: none
+    out += C.range_lines(c)                 # '레인지 봇' (owners 10-26): its supertrend checks and pullback; others: none
     return out
 
 

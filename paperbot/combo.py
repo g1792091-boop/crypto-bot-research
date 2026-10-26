@@ -34,7 +34,8 @@ The account (``ComboEngine``: paperbot.engine.PaperEngine with three changes)
   does not fit (refused below ``min_atr`` x ATR); ``{"mode": "roe", "roe": 0.5}`` a fixed ROE (-50% at the coin's
   leverage, before costs: BTC 1.25%, others 1.67% of price);
 - the take-profit is the house ladder (``ladder``: lock ``first_lock`` net ROE when the best net ROE reaches
-  ``first_lock + trigger_gap``, then ``step`` steps; owners: 10% at 11%);
+  ``first_lock + trigger_gap``, then ``step`` steps; owners: 10% at 11%); or, with ``take_profit_roe`` (the 레인지
+  봇, owners 10-26, ``ladder`` null), one fixed take-profit at that net ROE on the fill (exit "TP");
 - one position; the signals of one step compete by ``rank`` (default: entry strength score, then the longer
   timeframe, then the member order of the config). The score is the 5-year entry study's quality score of the
   signal's strength features (paperbot/levrule.py: mean quintile 1-5); a signal without one (DeepSeek, a strategy
@@ -93,7 +94,7 @@ from .margin import Brackets, liquidation_price
 from .models import Bar, Signal
 from .notify import CRITICAL, INFO, WARN, ConsoleNotifier, Notifier
 from . import rmember as RM
-from .sizing import SizeDecision
+from .sizing import SizeDecision, tp_from_roe
 from .store3 import Store3
 
 VERSION = "combo-v2"
@@ -115,7 +116,7 @@ DS_DEFS_FILE = os.path.join(ROOT, "research", "fullgrid", "ds_defs.py")
 DS_TFS_OF = {d[0]: d[2] for d in DS200_DEFS}
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_TF = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간"}
-KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
+KO_EXIT = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ": "강제청산", "HALT": "멈춤 청산", "MANUAL": "수동 청산",
            "REV": "빠른 청산(반대 신호)", "JUDGE": "감독 청산(추세 판단 뒤집힘)", "TIME": "감독 청산(시간 정리)",
            "SWITCH": "전환 전 포지션 정리"}
 TIME_HOLD_KO = "보유 한도 청산"      # TIME in a bot with max_hold_bars and no trend supervisor ('VWAP 개선판')
@@ -537,7 +538,10 @@ class ComboConfig:
     stop: dict = field(default_factory=lambda: {"mode": "atr", "atr": V3_STOP_ATR})
     liq_buffer_atr: float = 1.0
     liq_buffer_min_frac: float = 0.002
-    ladder: dict = field(default_factory=lambda: {"first_lock": 0.10, "step": 0.05, "trigger_gap": 0.01})
+    ladder: Optional[dict] = field(default_factory=lambda: {"first_lock": 0.10, "step": 0.05, "trigger_gap": 0.01})
+    take_profit_roe: Optional[float] = None  # '레인지 봇' (owners 10-26, paperbot/rangebot.py): one fixed take-profit at
+                                             # this net ROE (0.10 = +10 % after both sides' fees and slippage, the
+                                             # ladder's definition), resting at its price; no ladder (``ladder`` null)
     rank: tuple = RANK_KEYS
     no_score: float = 3.0
     flip_twin: bool = True
@@ -570,6 +574,8 @@ class ComboConfig:
                                         # when ADX(14) of the last closed tf bar is below min (research F4)
     quiet_gate: Optional[dict] = None   # ... {"bars": 20, "max_ratio": 0.64}: no entry when the signal bar's volume is above
                                         # 0.64 x the mean of the 20 bars before it (research V); None = off (both)
+    range: Optional[dict] = None        # '레인지 봇' (owners 10-26, paperbot/rangebot.py): one signal at a time, the coin's and
+                                        # BTC's 1h supertrend on the side, a 0.2 ATR pullback within 1 h at the next 5m open
 
     @classmethod
     def from_dict(cls, d: dict) -> "ComboConfig":
@@ -666,9 +672,15 @@ class ComboConfig:
         if unknown:
             out.append(f"stop에 알 수 없는 이름: {', '.join(unknown)}")
         lad = self.ladder_spec
-        if lad is None:
+        if self.take_profit_roe is not None:
+            tp = self.take_profit_roe
+            if isinstance(tp, bool) or not (isinstance(tp, (int, float)) and 0 < tp < 1):
+                out.append("take_profit_roe(고정 익절)는 0~1 사이 비율입니다(+10% = 0.1)")
+            if self.ladder is not None:
+                out.append("take_profit_roe(고정 익절)를 쓰면 ladder는 null입니다(계단 익절과 같이 쓰지 않음)")
+        elif lad is None:
             out.append("ladder에 first_lock, step, trigger_gap이 필요합니다")
-        else:
+        if lad is not None:
             out += lad.problems()
             unknown = sorted(set(self.ladder) - {"first_lock", "step", "trigger_gap", "next_trigger", "next_gap"})
             if unknown:
@@ -708,6 +720,9 @@ class ComboConfig:
         if self.adx_gate is not None or self.quiet_gate is not None:
             from .friendsig import gate_problems as friend_gate_problems
             out += friend_gate_problems(self.adx_gate, self.quiet_gate)
+        if self.range is not None:
+            from .rangebot import config_problems as range_problems
+            out += range_problems(self)
         if self.max_hold_bars is not None and not (isinstance(self.max_hold_bars, int)
                                                    and not isinstance(self.max_hold_bars, bool)
                                                    and 1 <= self.max_hold_bars <= 1000):
@@ -718,12 +733,17 @@ class ComboConfig:
 def settings_of(cfg: ComboConfig, **over):
     """The engine rules: paper v4's (fees, slippage, bust, no drawdown halt) with the combined bot's ladder, loss cap
     and liquidation buffer. Its own version string, so its ledger never mixes with the rule bot's."""
-    lad = cfg.ladder
     kw = dict(version=VERSION, initial_equity=float(cfg.initial_equity), symbols=tuple(cfg.symbols),
-              symbol_priority=tuple(cfg.symbols), ladder_first_lock=float(lad["first_lock"]),
-              ladder_step=float(lad["step"]), ladder_trigger_gap=float(lad["trigger_gap"]),
-              liq_buffer_atr_mult=float(cfg.liq_buffer_atr), liq_buffer_min_frac=float(cfg.liq_buffer_min_frac),
-              max_loss_frac=float(cfg.max_loss_frac), bust_below=0.01 * float(cfg.initial_equity))
+              symbol_priority=tuple(cfg.symbols), liq_buffer_atr_mult=float(cfg.liq_buffer_atr),
+              liq_buffer_min_frac=float(cfg.liq_buffer_min_frac), max_loss_frac=float(cfg.max_loss_frac),
+              bust_below=0.01 * float(cfg.initial_equity))
+    if cfg.take_profit_roe is not None:
+        # one take-profit at the net ROE (paperbot/sizing.tp_from_roe on the fill), filled at its price as a maker
+        kw.update(tp_mode="fixed", default_tp_roe=float(cfg.take_profit_roe))
+    else:
+        lad = cfg.ladder
+        kw.update(ladder_first_lock=float(lad["first_lock"]), ladder_step=float(lad["step"]),
+                  ladder_trigger_gap=float(lad["trigger_gap"]))
     kw.update(over)
     return v3_settings(**kw)
 
@@ -794,7 +814,10 @@ class FixedLevPolicy:
         return SizeDecision(True, "combo", lev, margin, qty, liq, qty * per, reasons)
 
     def take_profit(self, sig, entry, dec):
-        return math.nan                   # ladder: no take-profit order
+        if self.c.take_profit_roe is None:
+            return math.nan               # ladder: no take-profit order
+        # the fixed take-profit (레인지 봇): net ROE on the fill at the entry's leverage, both sides' costs counted
+        return tp_from_roe(sig.side, entry, dec.leverage, float(self.c.take_profit_roe), round_trip=self.s.round_trip_cost)
 
 
 def rank_key(cfg: ComboConfig, settings, sig: Signal) -> tuple:
@@ -956,7 +979,8 @@ class ComboEngine(PaperEngine):
 
 def make_cls(cfg: ComboConfig):
     """The engine class AccountBook builds (accounts.AccountBook._make calls it like PaperEngine); the trend bot's
-    engine (paperbot/trendbot.py TrendEngine: the supervisor's exits) when the config has ``trend``."""
+    engine (paperbot/trendbot.py TrendEngine: the supervisor's exits) when the config has ``trend``. The 레인지 봇
+    (``range``) uses ComboEngine itself: its fixed take-profit is the settings' (``take_profit_roe``)."""
     if cfg.trend is not None:
         from .trendbot import TrendEngine
         return functools.partial(TrendEngine, combo=cfg)
@@ -1982,7 +2006,7 @@ def exit_text(cfg: "ComboConfig", t, loss: str = "") -> str:
     """The paper bot's own exit line (a TradeRecord); ``loss``: the friend bot's loss review line of a losing trade,
     on a line of its own."""
     why = (t.context or {}).get("exit_why") if isinstance(t.context, dict) else None
-    if cfg.vote_gate or cfg.vol_gate or friend_bot(cfg):     # the VWAP / friend bot: the owners' words, as its entry
+    if cfg.vote_gate or cfg.vol_gate or friend_bot(cfg) or cfg.range is not None:  # VWAP / friend / 레인지: owners' words
         return (f"{cfg.tag} 청산 {t.symbol.replace('USDT', '')} {KO_SIDE.get(t.side, t.side)} · {member_ko(t.strategy_id)} "
                 f"{KO_TF.get(t.timeframe, t.timeframe)} · {exit_ko(cfg, t.exit_reason)}" + (f"({why})" if why else "")
                 + f" · 순ROE {t.roe:+.1%}, {'+' if t.pnl >= 0 else '-'}${abs(t.pnl):,.2f}, 지갑 ${t.equity_after:,.2f}"
@@ -1994,7 +2018,8 @@ def exit_text(cfg: "ComboConfig", t, loss: str = "") -> str:
 
 
 MEMBER_KO = {"F6_VWAP_FAIL": "VWAP 복귀 실패", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들",   # the VWAP bot's two (10-23)
-             FRIEND: "친구 매매법(EMA·RSI·ROC)"}                                       # the friend bot's (10-24)
+             FRIEND: "친구 매매법(EMA·RSI·ROC)",                                       # the friend bot's (10-24)
+             "F7_RF_TRIPLE": "레인지 필터 3중 일치"}                                    # the 레인지 봇's (10-26)
 
 
 def member_ko(strategy: str) -> str:
@@ -2028,6 +2053,12 @@ def entry_text(cfg: "ComboConfig", p) -> str:
                 f"{member_ko(p.signal.strategy_id)} {KO_TF.get(p.signal.timeframe, p.signal.timeframe)} · {p.leverage}배, "
                 f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g}" + (f" ({rule})" if rule else "")
                 + f"\n신호 봉: {signal_words(m['friend'])}")
+    if isinstance(m.get("range"), dict):           # the 레인지 봇: the pullback it entered on and the two supertrends
+        from .rangebot import entry_words
+        return (f"{cfg.tag} 진입 {p.symbol.replace('USDT', '')} {KO_SIDE.get(p.side, p.side)} · "
+                f"{member_ko(p.signal.strategy_id)} {KO_TF.get(p.signal.timeframe, p.signal.timeframe)} · {p.leverage}배, "
+                f"증거금 ${p.margin:,.2f}, 손절 {p.stop_price:.6g}" + (f" ({rule})" if rule else "")
+                + (f", 익절 {p.tp_price:.6g}" if p.tp_price == p.tp_price else "") + f"\n{entry_words(m['range'])}")
     if isinstance(m.get("gates"), dict):
         g = gates_text(m.get("gates"))
         return (f"{cfg.tag} 진입 {p.symbol.replace('USDT', '')} {KO_SIDE.get(p.side, p.side)} · "
@@ -2057,12 +2088,12 @@ def start_text(cfg: "ComboConfig", members: list, wallet: float) -> str:
     return (f"{cfg.tag} 시작: 매매법 {len(members)}개" + (f"({', '.join(kinds)})" if kinds else "") + ", "
             f"BTC {cfg.lev_of('BTCUSDT')}배·나머지 {cfg.lev_of('ETHUSDT')}배, 증거금 "
             f"{'배수%' if cfg.margin == 'leverage' else f'잔고의 {float(cfg.margin):.0%}'}, 손절 {stop_text(cfg)}, "
-            f"계단 익절 {cfg.ladder_spec.describe()}, "
-            f"빠른 청산 {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
+            f"{take_profit_text(cfg)}, "
+            f"빠른 청산 {early_ko(cfg)}"
             f"{'(첫 잠금 전까지만)' if cfg.early_exit and cfg.early_exit_until_lock else ''}, "
             f"{f'추격 진입 막기 {nc}개, ' if nc else ''}"
             f"{trend_start_text(cfg.trend) if cfg.trend is not None else ''}"
-            + "".join(f"{line}, " for line in gate_lines(cfg)) +
+            + "".join(f"{line}, " for line in gate_lines(cfg) + range_lines(cfg)) +
             f"포지션 1개, {pause}지갑 ${wallet:,.2f}")
 
 
@@ -2087,6 +2118,17 @@ def gate_lines(cfg: "ComboConfig") -> list[str]:
         each = " · ".join(f"{KO_TF.get(tf, tf)} {hold_ko(cfg.max_hold_bars * TF_MIN[tf])}" for tf in tfs)
         out.append(f"보유 한도 {cfg.max_hold_bars}봉" + (f"({each})" if each else "") + ", 넘으면 시장가 청산")
     return out
+
+
+def range_lines(cfg: "ComboConfig") -> list[str]:
+    """The 레인지 봇's own rules in the owners' words (empty for every other bot)."""
+    if cfg.range is None:
+        return []
+    from .rangebot import RangeError, RangeRules
+    try:
+        return RangeRules.from_dict(cfg.range).describe()
+    except (RangeError, TypeError):
+        return []                                  # the problem is in check-config's list
 
 
 def hold_minutes(cfg: "ComboConfig", tf: str) -> Optional[int]:
@@ -2221,6 +2263,9 @@ def cmd_run(args) -> int:
     if cfg.trend is not None:                    # 추세판단 봇 (paperbot/trendbot.py)
         from .trendbot import TrendRunner, make_judge
         runner_cls, extra = TrendRunner, {"judge": make_judge(cfg, rest)}
+    if cfg.range is not None:                    # 레인지 봇 (paperbot/rangebot.py)
+        from .rangebot import RangeRunner
+        runner_cls = RangeRunner
     if cfg.vote_gate is not None or cfg.vol_gate is not None:      # 'VWAP 개선판' (paperbot/entrygates.py)
         from .entrygates import make_gates
         extra["gates"] = make_gates(cfg.vote_gate, cfg.vol_gate, rest)
@@ -2273,7 +2318,8 @@ def cmd_run(args) -> int:
     return 0
 
 
-LATER_KEYS = ("adx_gate", "quiet_gate")     # config keys of 10-24: in a run record only when set
+LATER_KEYS = ("adx_gate", "quiet_gate", "take_profit_roe", "range")   # config keys of 10-24 / 10-26: in a run record
+                                                                        # only when set
 
 
 def run_config(cfg: ComboConfig) -> dict:
@@ -2284,6 +2330,24 @@ def run_config(cfg: ComboConfig) -> dict:
         if d.get(k) is None:
             d.pop(k, None)
     return d
+
+
+def early_ko(cfg: ComboConfig) -> str:
+    """The early exit in words; with the fixed take-profit (레인지 봇) "없음" says so instead of the ladder."""
+    if cfg.early_exit is None and cfg.take_profit_roe is not None:
+        return "없음(고정 손절과 고정 익절만)"
+    return KO_EARLY.get(cfg.early_exit, cfg.early_exit)
+
+
+def take_profit_text(cfg: ComboConfig) -> str:
+    """The take-profit in words: "고정 익절 순ROE +10%(…)" or "계단 익절 …" (the config's ladder)."""
+    if cfg.take_profit_roe is not None:
+        rt = v3_settings().round_trip_cost
+        lv = sorted({cfg.lev_of(s) for s in cfg.symbols}, reverse=True)
+        moves = ", ".join(f"{v}배 가격 {float(cfg.take_profit_roe) / v + rt:.2%}" for v in lv)
+        return f"고정 익절 순ROE +{float(cfg.take_profit_roe):.0%}(수수료·슬리피지 포함: {moves}, 계단 없음)"
+    lad = cfg.ladder_spec
+    return f"계단 익절 {lad.describe() if lad is not None else '설정 오류'}"
 
 
 def stop_text(cfg: ComboConfig) -> str:
@@ -2314,19 +2378,18 @@ def cmd_check(args) -> int:
     print(f"- 따라 읽는 규칙봇 DB: {cfg.paper_db} / 자기 DB: {cfg.db}")
     print(f"- 배수: " + ", ".join(f"{s} {cfg.lev_of(s)}배" for s in cfg.symbols) +
           f" / 증거금: {'배수%' if cfg.margin == 'leverage' else f'{float(cfg.margin):.0%}'}")
-    lad = cfg.ladder_spec
-    print(f"- 손절: {stop_text(cfg)} / 계단 익절: {lad.describe() if lad is not None else '설정 오류'}")
+    print(f"- 손절: {stop_text(cfg)} / {take_profit_text(cfg)}")
     score_ko = "추세 점수(판단 강도+자리+최근 성적)" if cfg.trend is not None else "진입 점수"
     print(f"- 동시에 나온 신호: {' > '.join({'score': score_ko, 'timeframe': '긴 봉', 'order': '목록 순서'}[r] for r in cfg.rank)}")
     print(f"- 동전 쌍둥이 계좌: {'있음' if cfg.flip_twin else '없음'}")
-    print(f"- 빠른 청산: {KO_EARLY.get(cfg.early_exit, cfg.early_exit)}"
+    print(f"- 빠른 청산: {early_ko(cfg)}"
           + (" (첫 잠금 +10% 전까지만, 잠긴 뒤에는 계단 익절만)" if cfg.early_exit and cfg.early_exit_until_lock else ""))
     nc = [m for m in members if m.no_chase]
     if nc:
         print(f"- 추격 진입 막기: {len(nc)}개 매매법 ({', '.join(m.label for m in nc)}) — {CHASE_KO}")
     if cfg.no_weekend:
         print("- 주말(한국 시간 토·일)에는 새로 진입하지 않음(열린 포지션은 손절·익절까지 그대로)")
-    for line in gate_lines(cfg):
+    for line in gate_lines(cfg) + range_lines(cfg):
         print(f"- {line}")
     if friend_bot(cfg):
         print("- 손실 리뷰: 진 거래마다 청산 메시지에 '손실 이유 후보' 한 줄(BTC 움직임·손절 전 최고·보유 시간·4시간 ADX·"

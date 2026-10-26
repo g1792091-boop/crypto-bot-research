@@ -1,0 +1,45 @@
+{
+  "name": "레인지 봇",
+  "paper_db": "/var/lib/paperbot/paper3.db",
+  "db": "/var/lib/paperbot/combo/range.db",
+  "members": [
+    {"pick": "ds-F7_RF_TRIPLE-1h-1"}
+  ],
+  "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"],
+  "leverage": {
+    "BTCUSDT": 40,
+    "default": 30
+  },
+  "margin": 0.4,
+  "initial_equity": 1000,
+  "max_loss_frac": 0.35,
+  "loss_cap": "shrink",
+  "stop": {
+    "mode": "roe",
+    "roe": 0.5,
+    "net": true
+  },
+  "liq_buffer_atr": 0.0,
+  "ladder": null,
+  "take_profit_roe": 0.1,
+  "rank": [
+    "order"
+  ],
+  "flip_twin": true,
+  "early_exit": null,
+  "no_weekend": true,
+  "macro_blackout_min": 30,
+  "us_open_pause_min": 30,
+  "us_open_pre_min": 30,
+  "range": {
+    "pullback_atr": 0.2,
+    "wait_min": 60,
+    "coin_st": true,
+    "btc_st": true,
+    "st_period": 10,
+    "st_mult": 3.0,
+    "liq_check": true,
+    "liq_mmr": 0.005
+  },
+  "telegram": true
+}

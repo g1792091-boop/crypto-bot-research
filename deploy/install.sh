@@ -173,6 +173,8 @@ UNITS="paperbot-live3 paperbot-dash paperbot-livedash paperbot-liq paperbot-ghco
 UNITS="$UNITS paperbot-combo-friend"
 # the '숏5 하락장' paper bot (owners 10-25): a running one is stopped and started again the same way
 UNITS="$UNITS paperbot-combo-short5"
+# the '레인지 봇' paper bot (owners 10-26): a running one is stopped and started again the same way
+UNITS="$UNITS paperbot-combo-range"
 RUNNING=""
 if [ "$REPO_DIR" != "$APP" ]; then
   # Scheduled jobs (nightly check, backups, checkpoint, monthly re-check) are not stopped for the swap:
@@ -309,6 +311,10 @@ install -m 644 "$APP/deploy/paperbot-combo-friend.service" /etc/systemd/system/p
 # follows it once its config names short5.db, docs/short5-bot-ko.md): installed only, started by a person. A running one
 # is stopped for the code swap and started again like paperbot-combo (UNITS above).
 install -m 644 "$APP/deploy/paperbot-combo-short5.service" /etc/systemd/system/paperbot-combo-short5.service
+# the '레인지 봇' paper bot (owners 10-26, its own config combo-range.json and database range.db; the WOO X Pro executor
+# follows it once its config names range.db, docs/range-bot-ko.md): installed only, started by a person. A running one
+# is stopped for the code swap and started again like paperbot-combo (UNITS above).
+install -m 644 "$APP/deploy/paperbot-combo-range.service" /etc/systemd/system/paperbot-combo-range.service
 # the shadow paper bots (그림자 페이퍼 봇, docs/live1019-start-ko.md): one template, one instance per
 # deploy/combo.shadow-<name>.json; paper only, no Telegram, below the live paper bot. Installed only: never enabled,
 # started or stopped here (not among the units stopped for the code swap). A running shadow keeps the previous code
@@ -484,6 +490,11 @@ fi
 # /etc/paperbot/combo-short5.json.
 if ! systemctl is-enabled --quiet paperbot-combo-short5 2>/dev/null; then
   echo "숏5 하락장 페이퍼 봇(paperbot-combo-short5) 설치만 했습니다. 켜는 순서: docs/short5-bot-ko.md"
+fi
+# The '레인지 봇' paper bot is installed only (docs/range-bot-ko.md): started by a person after writing
+# /etc/paperbot/combo-range.json.
+if ! systemctl is-enabled --quiet paperbot-combo-range 2>/dev/null; then
+  echo "레인지 봇 페이퍼 봇(paperbot-combo-range) 설치만 했습니다. 켜는 순서: docs/range-bot-ko.md"
 fi
 # The debate room is installed only: never enabled, started or restarted here (it spends the owners' own API money).
 if systemctl is-active --quiet paperbot-debate 2>/dev/null; then
