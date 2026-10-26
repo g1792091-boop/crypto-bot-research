@@ -444,7 +444,10 @@ def _exec_cell(x: dict, pairs: dict, live_by: dict, pt: dict, path: Optional[str
     lk = pairs.get(pt["id"])
     if lk is None:
         if path and not L.followed_at(x, path, pt.get("entry_time")):
-            return {**base, **L.other_cell(x, other_ko)}
+            # the bot it followed then, by its own record's name (three paper bots, owners 10-26: never just "the other")
+            then = L._paper_of(x, L.LP.paper_at(x["segs"], pt.get("entry_time"))) if x.get("segs") else {}
+            name = L.LP.bot_short(then.get("name_ko"), then.get("stop")) if then.get("state") == "ok" else None
+            return {**base, **L.other_cell(x, name if name and name != "페이퍼" else other_ko)}
         return {**base, **L.why_missed(r, pt, ACCOUNT)}
     lt = live_by[lk]
     reason = lt["exit_reason"]
@@ -698,14 +701,14 @@ def register(app, ctx) -> dict:
         ``bot=paper2``: the second paper bot's (owners 10-19)."""
         p = L.paths()
         o, n = max(0, int(offset)), max(1, min(LIST_MAX, int(limit)))
-        b = "paper2" if bot == "paper2" else "paper"
+        b = bot if bot in L.BOT_IDS else "paper"
         key = "replay:" + json.dumps([p, L.paths_more(), o, n] + ([b] if b != "paper" else []), sort_keys=True)
         return L._cached(key, lambda: json_finite(build_list(p, offset=o, limit=n, bot=b)))
 
     @app.get("/api/v4/livebots/replay/{trade_id}")
     def get_livebots_replay_one(trade_id: int, bot: str = "paper"):
         """실거래 › 다시보기: one closed trade on its 1-minute bars, the stop path and the locks rebuilt, the executors' part."""
-        v = one_cached(L.paths(), L.paths_more(), trade_id, "paper2" if bot == "paper2" else "paper")
+        v = one_cached(L.paths(), L.paths_more(), trade_id, bot if bot in L.BOT_IDS else "paper")
         if v is None:
             raise HTTPException(404, "그런 거래가 없어요")
         return v

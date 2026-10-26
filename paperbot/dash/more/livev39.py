@@ -166,6 +166,9 @@ def plan_of(raw: dict) -> dict:
     mb = _i(raw.get("macro_block_min"))
     add("macro", "경제 발표", f"미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 {mb}분은 새 진입 안 함 · 열린 포지션은 그대로" if mb
         else "경제 발표 진입 금지 없음")
+    uo = L.us_open_window(raw)                  # owners 10-26: "투비트도 나스닥 개장 앞뒤 30분 진입금지"
+    if uo:
+        add("us_open", "나스닥 개장", f"{L.us_open_words(*uo)}은 새 진입 안 함 · 열린 포지션은 그대로")
     risk = raw.get("risk") if isinstance(raw.get("risk"), dict) else {}
     syms = risk.get("allowed_symbols") if isinstance(risk.get("allowed_symbols"), list) else []
     budget = _f(raw.get("budget_usd"))

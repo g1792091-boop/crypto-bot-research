@@ -15,6 +15,8 @@ export const ACCT = {
   mexc: {ko: "WOO X Pro", s: "W", tip: "WOO X Pro 실행기 (실거래 · 진짜 돈)"},
   // the second paper bot (owners 10/19, docs/live15-mexc-ko.md): only on the page while there is one (the summary's papers)
   paper2: {ko: "페이퍼 2(연습)", s: "P2", tip: "두 번째 페이퍼(연습) 봇 (모의 돈)"},
+  // the 레인지 봇 (owners 10/26, docs/range-bot-ko.md: WOO X Pro follows it): only on the page while there is one (papers)
+  range: {ko: "레인지 봇", s: "R", tip: "레인지 봇 페이퍼(연습) (모의 돈)"},
   // the third executor (owners 10/24, docs/deepcoin-ko.md: it follows the VWAP 개선판): only on the page while the server has
   // it installed (execIds)
   deepcoin: {ko: "딥코인", s: "D", tip: "딥코인 실행기 (실거래 · 진짜 돈)"},
@@ -52,8 +54,13 @@ export function execIds(d) {
   const ids = have ? EXEC_SLOTS.filter((id) => have.includes(id)) : [];
   return ids.length ? ids : EXECS_NOW;
 }
+/** The paper accounts a page may list, in the server's order (dash/more/livebots.py BOT_IDS): the main one, the second
+ *  (VWAP 개선판), the 레인지 봇 (owners 10/26). */
+export const PAPER_IDS = ["paper", "paper2", "range"];
+/** Is ``id`` one of the page's paper accounts (never real money)? */
+export const isPaperId = (id) => PAPER_IDS.includes(id);
 /** The executor ids of a summary that follow one of its paper bots now (its ``execs[].bot``: "paper" the main one, the
- *  추세판단 봇; "paper2" the second, the VWAP 개선판), in the server's order: the 봇별 screens (owners 10/26) show each bot
+ *  추세판단 봇; "paper2" the second, the VWAP 개선판; "range" the 레인지 봇), in the server's order: the 봇별 screens (owners 10/26) show each bot
  *  with its own executors only. [] when none does (or the answer is not there yet). */
 export function followersOf(d, bot) {
   const xs = d && Array.isArray(d.execs) ? d.execs : [];
@@ -68,7 +75,7 @@ export const allFollowKo = () => `${countKo(EXECS_NOW.length)} 실행기가 따�
 export const countKo = (n) => ({3: "세", 4: "네", 5: "다섯"}[n] || (n > 5 ? "다섯" : "두"));
 /** "세 계좌" / "네 계좌" / "다섯 계좌": the accounts a page lists (three: one paper bot and two executors, as before). */
 export const acctsKo = (n) => `${{4: "네", 5: "다섯", 6: "여섯", 7: "일곱"}[n] || "세"} 계좌`;
-const ACCT0 = {paper: {...ACCT.paper}, paper2: {...ACCT.paper2}};
+const ACCT0 = {paper: {...ACCT.paper}, paper2: {...ACCT.paper2}, range: {...ACCT.range}};
 let PAPERS = null, papersKey = "null";
 /** The summary's two paper bots (setPapers), null with one (owners 10/23: the 추세판단 봇 and the 'VWAP 개선판'). */
 export const papersNow = () => PAPERS;
@@ -92,7 +99,7 @@ export function setPapers(papers) {
     PAPERS = Array.isArray(papers) && papers.length > 1 ? papers : null;
     bus.emit("lb:papers", PAPERS);
   }
-  for (const id of ["paper", "paper2"]) Object.assign(ACCT[id], ACCT0[id]);
+  for (const id of PAPER_IDS) Object.assign(ACCT[id], ACCT0[id]);
   for (const b of papers || []) {
     if (!ACCT[b.id]) continue;
     const short = b.short_ko || (b.label_ko || "").split(" (")[0] || ACCT0[b.id].ko;

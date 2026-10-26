@@ -182,6 +182,9 @@ const SICON = {
   // the 실거래 site's tabs (LIVE_SCREENS, 찾기): the nearest drawing of a rule-bot screen
   // 봇별 (owners 10/26): each bot's own drawing (추세판단 봇 the coin of 관제, VWAP and 믹스 their groups', V3.9 candles)
   trendbot: () => SICON.livebots(),
+  // 레인지 봇: a price line held inside its band (the range filter) and the pullback dot under it
+  rangebot: () => [R(1, 3, 14, 1), R(1, 12, 14, 1), R(2, 9, 2, 2), R(4, 7, 2, 2), R(6, 8, 2, 2), R(8, 6, 2, 2), R(10, 5, 2, 2), R(12, 4, 2, 2),
+    R(9, 9, 2, 2)],
   vwapbot: ICON.vwap,
   mixbot: ICON.mix,
   v39: ICON.trade,
@@ -278,7 +281,7 @@ const LIVE_GROUPS = [
   // 봇별 (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면
   // 따로, v3.9 화면 따로"): one screen per bot, first in the menu, each with only the executors that follow it
   // (screens/livebots.js BOT_TABS); the screens of the groups below stay as they were
-  {id: "bots", ko: "봇별", screens: ["trendbot", "vwapbot", "mixbot", "v39"]},
+  {id: "bots", ko: "봇별", screens: ["trendbot", "rangebot", "vwapbot", "mixbot", "v39"]},
   {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
@@ -291,7 +294,8 @@ const LIVE_GROUPS = [
   {id: "mix", ko: "믹스 봇", screens: ["mix", "mixperf"]},
 ];
 const LIVE_SCREENS = {
-  trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (페이퍼와 그 봇을 따라가는 바이비트 · WOO X Pro)"},
+  trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (페이퍼와 그 봇을 따라가는 바이비트)"},
+  rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (페이퍼와 그 봇을 따라가는 WOO X Pro)"},
   vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼와 그 봇을 따라가는 딥코인)"},
   mixbot: {ko: "친구 30분 봇", group: "bots", title: "친구 30분 봇 (믹스 30분 봇 · WOO X Pro 2 실거래와 모의)"},
   v39: {ko: "V3.9 투비트", group: "bots", title: "V3.9 투비트 (규칙봇 V3.9 1시간 페이퍼와 투비트 실행기)"},

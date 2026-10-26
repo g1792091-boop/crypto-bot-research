@@ -22,7 +22,7 @@
 // Data: GET /api/v4/livebots/positions (dash/more/livepos.py; asked every 10 s, the server caches 5 s). HONESTY: no file =
 // 수집 전, unreadable = 못 읽음 + why, a value the records do not have is '—' with the reason; no order buttons.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
-import {acctTag, sourceState, execsKo} from "./livebots-kit.js";
+import {acctTag, sourceState, execsKo, isPaperId} from "./livebots-kit.js";
 import {netRoe, unrealized, distTo} from "./livebots-calc.js";
 import {whyBox} from "./livebots-why.js";
 
@@ -136,14 +136,16 @@ export function posCard(c, o = {}) {
     p.locked && p.stop_initial ? h("small", {class: "muted"}, ` · 처음 손절 ${fmt.price(p.stop_initial)}`) : null,
     !p.locked && p.stop50 && p.stop_rule_cfg ? h("small", {class: "muted", title: "설정의 손절: 수수료·슬리피지 포함 순ROE"},
       ` · 설정 −${fmt.pct(p.stop_rule_cfg.roe, 0, false)}${p.stop_rule_cfg.net ? " 순ROE" : ""} 자리 ${fmt.price(p.stop50)}`) : null);
-  const tpV = nx && nx.price ? h("span", null, h("b", {class: "num up"}, fmt.price(nx.price)), " ", dTpEl,
+  const tpV = nx && nx.fixed && nx.price ? h("span", null, h("b", {class: "num up"}, fmt.price(nx.price)), " ", dTpEl,
+    h("small", {class: "muted"}, ` · 순ROE +${fmt.pct(nx.at, 0, false)} 고정 익절 (닿으면 전부 닫음 · 계단 없음)`))
+    : nx && nx.price ? h("span", null, h("b", {class: "num up"}, fmt.price(nx.price)), " ", dTpEl,
     h("small", {class: "muted"}, ` · 순ROE ${fmt.pct(nx.at, 0, false)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금 (손절 → ${fmt.price(nx.lock_price)})${nx.from === "paper" && live ? " · 페이퍼 기준" : nx.from === "exchange" ? " · 거래소 기준 (자기 체결가)" : ""}`))
     : ui.notYet("—", "다음 잠금 자리를 계산하지 못했어요 (설정에 계단이 없거나 포지션 기록이 모자라요)");
   const liqV = p.liq ? h("span", null, h("b", {class: "num down"}, fmt.price(p.liq)), " ", dLiqEl) : h("span", {class: "muted"}, p.liq_ko || "—");
   const held = p.entry_time ? fmt.dur((serverNow() - p.entry_time) / 1000) : null;
   const pairs = [
     ["진입가", h("b", {class: "num"}, fmt.price(p.entry))], ["지금 가격 (마크)", markEl],
-    [stopK, stopV], ["익절가 (다음 잠금 자리)", tpV], ["청산가", liqV],
+    [stopK, stopV], [nx && nx.fixed ? "익절가 (고정 익절)" : "익절가 (다음 잠금 자리)", tpV], ["청산가", liqV],
     ["증거금", p.margin == null ? null : live ? fmt.usd(p.margin) : `${fmt.money(p.margin)} USDT`],
     [`크기 (${fmt.coin(p.symbol)})`, p.qty == null ? null : String(Number(p.qty))],
     ["진입", p.entry_time ? `${fmt.kst(p.entry_time)}${held ? ` · ${held} 보유` : ""}` : null],
@@ -169,7 +171,7 @@ export function posCard(c, o = {}) {
     ? h("p", {class: "note lbp-gap"}, p.gap ? ["페이퍼 진입 ", h("b", {class: "num"}, fmt.price(p.gap.paper_entry)), " → 이 실행기 ", h("b", {class: "num"}, fmt.price(p.gap.live_entry)),
       " · ", h("b", {class: ["num", fmt.tone(p.gap.slip)]}, fmt.pct(p.gap.slip, 3)), p.gap.slip >= 0 ? " (페이퍼보다 유리)" : " (페이퍼보다 불리)",
       p.gap.delay_ms != null ? ` · ${fmt.dur(p.gap.delay_ms / 1000)} 뒤 체결` : ""] : "페이퍼와 진입 차이: 따라가는 페이퍼 포지션이 없어요")
-    : c.id === "paper" || c.id === "paper2" ? h("p", {class: "note lbp-gap"}, gaps.length ? gaps.map((g, i) => [i ? " · " : "", `${g.name_ko} `, h("b", {class: "num"}, fmt.price(g.live_entry)),
+    : isPaperId(c.id) ? h("p", {class: "note lbp-gap"}, gaps.length ? gaps.map((g, i) => [i ? " · " : "", `${g.name_ko} `, h("b", {class: "num"}, fmt.price(g.live_entry)),
       " (", h("span", {class: ["num", fmt.tone(g.slip)]}, fmt.pct(g.slip, 3)), g.delay_ms != null ? `, ${fmt.dur(g.delay_ms / 1000)} 뒤` : "", ")"])
       : (p.execs || []).length && (p.execs || []).every((x) => x.why_ko) ? "실거래 실행기는 이 포지션을 따라가지 않았어요 (이 손익은 페이퍼에만 남아요)"
         : "실행기가 따라 들어간 기록이 아직 없어요 (따라가는 중이 아니거나 아직 진입 확인 중)",

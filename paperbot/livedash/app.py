@@ -70,6 +70,9 @@ MODULES = MODULES + ("livemix",)
 # 실거래 › 봇별 › V3.9 투비트 (#/v39: the 투비트 executor and the rule bot's V3.9 1-hour paper account it follows, owners
 # 10-26; dash/more/livev39.py)
 MODULES = MODULES + ("livev39",)
+# 실거래 › 봇별 › 레인지 봇 (#/rangebot: the 레인지 봇 paper bot and the executors that follow it, owners 10-26;
+# dash/more/liverange.py)
+MODULES = MODULES + ("liverange",)
 # 실거래 › 봇별 화면마다 목표 연구 (/api/v4/livebots/goalres?bot=: each bot's goal arithmetic and research questions on its own
 # records, owners 10-26; dash/more/livegoalres.py)
 MODULES = MODULES + ("livegoalres",)

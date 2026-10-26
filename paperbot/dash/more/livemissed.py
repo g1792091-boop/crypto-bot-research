@@ -117,6 +117,9 @@ PLAIN_KO = ("이 봇의 못 탄 신호는 1분 감시가 아직 가상으로 따
 # its gates are the owners' 10/23 rules (docs/vwap-bot-ko.md 2장), not the 5-year filters of FILTER_NOTE_KO: said as such
 PLAIN_FILTER_KO = ("조건(4시간 추세 반대 · 변동성 높음 · 쉬는 시간 · 한 번에 하나)은 설정 그대로예요 (docs/vwap-bot-ko.md 2장). 여기는 "
                    "보기만 해요: 규칙을 바꿀지는 두 분이 정하고, 바꾸려면 13장 순서(백테스트 → 그림자 → 채택)를 따라요.")
+# the 레인지 봇's own rules (owners 10-26, docs/range-bot-ko.md 1장): said as such, never the VWAP bot's words
+RANGE_FILTER_KO = ("조건(추세 확인 · 되돌림 · 한 신호씩 · 강제청산 여유 · 쉬는 시간)은 설정 그대로예요 (docs/range-bot-ko.md 1장). "
+                   "여기는 보기만 해요: 규칙을 바꿀지는 두 분이 정해요.")
 PLAIN_ONE = {"in position": ("one", "한 번에 하나 (포지션 있음)"), "lower score than entered signal": ("one", "같은 때 다른 신호에 밀림"),
              "late": ("late", "늦음")}
 
@@ -178,7 +181,8 @@ def plain(p: dict, now: int, span: str, group: str, bots: list, b: dict, execs: 
     since = LM.window_start(now) if span == "7d" else 0
     rows, st = plain_rows(b["path"], since)
     base = {"now_ms": now, "span": span, "spans": [{"id": k, "ko": ko} for k, ko in SPANS], "kind": "plain", "bot": b["id"],
-            "bot_ko": b["short_ko"], "bots": L.bots_out(bots), "note_ko": PLAIN_KO, "filter_note_ko": PLAIN_FILTER_KO,
+            "bot_ko": b["short_ko"], "bots": L.bots_out(bots), "note_ko": PLAIN_KO,
+            "filter_note_ko": RANGE_FILTER_KO if L.range_bot(L.cfg_of(b["read"])) else PLAIN_FILTER_KO,
             "small_ko": SMALL_KO, "since_ms": since}
     if st is not None:
         return {**base, **{k: st.get(k) for k in ("state", "reason_ko", "reason", "path")}, "rows": [], "n_rows": 0, "groups": [],
@@ -280,7 +284,7 @@ def register(app, ctx) -> dict:
         paper2: the second paper bot's not-taken signals and why (read-only, 5 s cache)."""
         p, more = L.paths(), L.paths_more()
         LM = _LM()
-        bt = bot if bot in ("paper", "paper2") else "paper"
+        bt = bot if bot in L.BOT_IDS else "paper"
         sp = span if span in dict(SPANS) else "7d"
         gr = (group if group in LM.GROUPS else "all") if bt == "paper" else (group if isinstance(group, str) and len(group) <= 40 else "all")
         rs = result if result in dict(RESULTS) else "all"

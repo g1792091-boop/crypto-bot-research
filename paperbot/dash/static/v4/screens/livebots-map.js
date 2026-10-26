@@ -22,7 +22,7 @@
 // ``empty``, owners 10/21 night: zeros everywhere on the first day) one card says so in their place, with what the 7/1~10/20
 // replay says to expect (가상).
 import {h, s, put, ui, fmt, motion, serverNow, href} from "../core/pb.js";
-import {acctKo, acctTag, sourceState, expectLines, expectHead, eraWords, EXEC_SLOTS, execsNow} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, expectLines, expectHead, eraWords, EXEC_SLOTS, execsNow, isPaperId} from "./livebots-kit.js";
 
 export const MAP_API = "/api/v4/livebots/map";
 const REFRESH_MS = 30 * 1000;
@@ -31,12 +31,12 @@ const SHORT = {paper: "페이퍼", bybit: "바이비트", mexc: "WOO X Pro", dee
 /** The accounts of an answer's band: the second paper bot's line too while the server sends it (owners 10/23: the 'VWAP
  *  개선판', its own wins from its own start, named by its bot), the third executor's (딥코인) while the server has it;
  *  one paper bot and two executors: the three as before. */
-export const idsOf = (b) => ["paper", ...(b && b.accounts && b.accounts.paper2 ? ["paper2"] : []),
+export const idsOf = (b) => ["paper", ...["paper2", "range"].filter((id) => b && b.accounts && b.accounts[id]),
   ...EXEC_SLOTS.filter((id) => execsNow().includes(id) || (b && b.accounts && b.accounts[id]))];
 /** A line's short label: the account's (페이퍼 · 바이비트 · WOO X Pro); with a second paper bot both paper lines by their
  *  bots' names (acctKo: the summary's names). */
-const shortOf = (id, b) => (id === "paper2" ? ((b && b.accounts && b.accounts.paper2 && b.accounts.paper2.label_ko) || acctKo(id))
-  : id === "paper" && b && b.accounts && b.accounts.paper2 ? acctKo(id) : SHORT[id] || id);
+const shortOf = (id, b) => (id === "paper2" || id === "range" ? ((b && b.accounts && b.accounts[id] && b.accounts[id].label_ko) || acctKo(id))
+  : id === "paper" && b && b.accounts && (b.accounts.paper2 || b.accounts.range) ? acctKo(id) : SHORT[id] || id);
 /** liveimprove SMALL_N: a cut is judged (and coloured here) from this many live trades. */
 export const MIN_N = 10;
 const SMALL_ACCT = 20;                   // an account's line: fewer closed trades than this is mostly luck (표본 적음)
@@ -314,7 +314,7 @@ export function mapView(ctx) {
   function drawTiles(d) {
     const b = d.band;
     const ex = Object.fromEntries((d.execs || []).map((x) => [x.id, x]));
-    const srcOf = (id) => (id === "paper" ? d.paper : id === "paper2" ? {state: "ok"} : ex[id] || {state: "missing"});
+    const srcOf = (id) => (id === "paper" ? d.paper : isPaperId(id) ? {state: "ok"} : ex[id] || {state: "missing"});
     put(tiles, idsOf(b).map((id) => {
       const src = srcOf(id);
       const tag = acctTag(id);
@@ -331,11 +331,12 @@ export function mapView(ctx) {
       const g = w.where !== "none" ? gaugeGeom(w.q, w.n, w.wins) : null;
       const lim = w.q && w.q.honest ? `현실 범위 ${fmt.int(w.q.honest[0])}~${fmt.int(w.q.honest[2])}승` : null;
       return h("div", {class: ["lbm-tile", "lbm-a-" + id, "w-" + w.where]},
-        h("div", {class: "lbm-th"}, tag, id === "paper" || id === "paper2" ? null : h("span", {class: "lbm-kind real"}, "진짜 돈"),
+        h("div", {class: "lbm-th"}, tag, isPaperId(id) ? null : h("span", {class: "lbm-kind real"}, "진짜 돈"),
           h("span", {class: "lbm-chips"}, w.n ? ui.smallSample(w.n, SMALL_ACCT) : null,
             chip ? ui.pill(chip[0], chip[1], w.where === "below" ? "현실 기대 범위의 아래쪽 끝(하위 5%)보다 적게 이겼어요: 감시 경보가 보는 선" : null) : null)),
         h("p", {class: ["lbm-ts", sen.tone]}, sen.text),
-        id === "paper2" ? h("p", {class: "lbm-tl"}, "두 번째 페이퍼 봇 · 이 봇 시작부터 (아래 나눠 보기는 추세판단 봇만)") : null,
+        id === "paper2" ? h("p", {class: "lbm-tl"}, "두 번째 페이퍼 봇 · 이 봇 시작부터 (아래 나눠 보기는 추세판단 봇만)")
+          : id === "range" ? h("p", {class: "lbm-tl"}, "레인지 봇 · 이 봇 시작부터 (아래 나눠 보기는 추세판단 봇만)") : null,
         era ? h("p", {class: "lbm-tl"}, era) : null,
         g ? gaugeEl(g, w) : null,
         w.n && lim ? h("p", {class: "lbm-tl"}, lim,

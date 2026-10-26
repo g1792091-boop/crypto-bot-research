@@ -4,11 +4,13 @@ liveinsight.MONTHLY_TARGET) and the open research questions that decide whether 
 records as they come in. Read-only, like every 실거래 tab: nothing here changes a bot, a rule or an order (that is the
 owners' decision), and nothing here is a forecast.
 
-    GET /api/v4/livebots/goalres?bot=trend|vwap|mix|v39   (5 s cache, as every 실거래 tab)
+    GET /api/v4/livebots/goalres?bot=trend|range|vwap|mix|v39   (5 s cache, as every 실거래 tab)
 
 Bots (each answer shows one bot and the executors that follow it, nothing of the others):
     trend   추세판단 봇: the main paper bot (PAPERBOT_LIVE_PAPER_DB, account COMBO@mix) from its own start
             (livebots.trend_bot), and the executors that follow its database (바이비트, WOO X Pro)
+    range   레인지 봇 (owners 10-26, docs/range-bot-ko.md): the paper bot "range" of paper_bots (its config's ``range``
+            section), and its followers (WOO X Pro)
     vwap    VWAP 개선판: the paper bot whose config has an entry gate (livevwap.is_vwap; paper_bots), and its followers
             (딥코인)
     mix     믹스 30분 봇 (WOO X Pro 2): the live bot and its paper twin (livemix: their logs), the owners' new settings of
@@ -45,6 +47,11 @@ Items by bot (every follower's items only while it follows this bot: livepapers 
     v39                        장세 (V3.9에 맞는 장인가: the last 10 closed paper trades, the weeks, BTC's 24-hour move at
                                each entry from the rule bot's 1-minute bars) and the 30-day study's numbers (research,
                                labelled as such)
+    range                      진짜 vs 동전 (the paper account against its coin-flip twin), 장세 (10월 같은 장인가: the same
+                               cuts as V3.9's, against the research's October and 2025-01 ~ 2026-09 numbers, labelled as
+                               research), 손절 해부 (each stop-out: did the price reach the take-profit level within 24 hours
+                               after it (the stop was close) or keep going (the direction was wrong), from the rule bot's
+                               1-minute bars) and the research's numbers (analysis/f7tp10_1026/FINAL_KO.md)
 
 Honest states as every live page (CONTRACT §1.6): a source not there = ``missing`` (수집 전), unreadable = ``error``
 (못 읽음 + why), never a zero; a small sample says so (``few``). Ratios are ratios (0.1 = 10 %), times UTC ms.
@@ -62,8 +69,8 @@ from ... import livepapers as LP
 from . import livebots as L
 
 DAY, HOUR, MIN = L.DAY, L.HOUR, 60_000
-BOTS = ("trend", "vwap", "mix", "v39")
-NAME_KO = {"trend": "추세판단 봇", "vwap": "VWAP 개선판", "mix": "믹스 30분 봇", "v39": "V3.9 투비트"}
+BOTS = ("trend", "range", "vwap", "mix", "v39")
+NAME_KO = {"trend": "추세판단 봇", "range": "레인지 봇", "vwap": "VWAP 개선판", "mix": "믹스 30분 봇", "v39": "V3.9 투비트"}
 MONTH_D = 30                            # the goal's month (×6 in 30 days)
 TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 MIN_DAYS = 1.0                          # entries a day only from one whole day of record
@@ -78,6 +85,7 @@ LINKS = {
     "vwap": [("#/vwperf", "VWAP 성적"), ("#/vwblock", "막은 신호")],
     "mix": [("#/mixperf", "믹스 성적")],
     "v39": [],
+    "range": [("#/trades", "거래"), ("#/signals", "신호"), ("#/missed", "못 탄 신호"), ("#/cost", "비용")],
 }
 GOAL_KO = "두 분 목표: 한 달(30일) ×6 (+500%)"
 NOTE_KO = ("계산일 뿐 예측이 아니에요: 지금까지의 기록(승률 · 평균 이익 · 평균 손실 · 하루 진입 수)이 그대로 간다고 칠 때의 숫자예요. "
@@ -90,6 +98,20 @@ V39_STUDY = {
              {"span_ko": "30일 한 계좌", "trades": None, "wins": None, "stops": None, "start": 50.0, "end": 58.0}],
     "ko": "결과를 가른 것은 계단도 진입도 아니고, V3.9에 맞는 장(20일)이었는지 아닌 장(앞 10일)이었는지였어요",
 }
+
+
+# the 레인지 봇's research (analysis/f7tp10_1026/FINAL_KO.md 8 · 9장, docs/range-bot-ko.md 0장): research numbers, never live
+RANGE_STUDY = {
+    "src": "analysis/f7tp10_1026/FINAL_KO.md 8 · 9장",
+    "rows": [{"span_ko": "10월 1 ~ 25일", "kind_ko": "10월 같은 장", "trades": 41, "wins": 40, "losses": 1, "win_rate": 40 / 41, "mult": 5.53},
+             {"span_ko": "규칙봇 기간 10/06 ~ 10/25", "kind_ko": "10월 같은 장", "trades": 38, "wins": 38, "losses": 0, "win_rate": 1.0, "mult": 6.24},
+             {"span_ko": "2025-01 ~ 2026-09 (21달, 달마다 새 지갑)", "kind_ko": "평소 · 약한 장", "trades": None, "wins": None, "losses": None,
+              "win_rate": 0.77, "mult": 0.66, "note_ko": "플러스 달 4 / 21 · 가운데 달 약 ×0.66"}],
+    "breakeven": 0.82, "usual": 0.77, "october": 40 / 41, "plus_months": 4, "months": 21, "median_month": 0.66,
+    "ko": "10월처럼 추세가 강한 장에서는 40승 1패 ×5.53이었고, 2025-01 ~ 2026-09에는 승률 77%로 본전(약 82%)보다 낮아 21달 중 4달만 "
+          "플러스였어요 (가운데 달 ×0.66) · 연구 숫자예요, 실거래 아님",
+}
+STOP_AFTER_MS = 24 * 3_600_000          # 손절 해부: the 24 hours after a stop-out
 
 
 # ---------------------------------------------------------------- small helpers
@@ -843,6 +865,197 @@ def v39_bot(p: dict, now: int, more: dict) -> dict:
     return {"state": "ok", "since_ms": since, "accounts": accounts, "items": [i for i in items if i]}
 
 
+# ---------------------------------------------------------------- 레인지 봇 (owners 10-26)
+def range_bot(p: dict, now: int, more: dict) -> dict:
+    """The 레인지 봇 (livebots.paper_bots "range": its config's ``range`` section) and its followers: the goal cards and the
+    items (실거래가 덜 버는 이유 per follower, 진짜 vs 동전, 장세, 손절 해부, the research's numbers)."""
+    from . import liverange as RG
+    target = 1 + _target()
+    _cfgs, _fol, paper, execs = L.sources(p, now)
+    bots = L.paper_bots(p, paper, execs)
+    b = next((x for x in bots if x["id"] == "range"), None)
+    if b is None:
+        return {"state": "off", "ko": f"레인지 봇 페이퍼 봇이 아직 꺼져 있어요 ({RG.GUIDE_STEP_KO}로 켜요)"}
+    pr = b["read"]
+    if pr.get("state") != "ok":
+        return {"state": pr.get("state"), "ko": pr.get("reason_ko") or "레인지 봇 기록을 읽지 못했어요", **_src(pr)}
+    acc = (pr.get("accounts") or {}).get(L.ACCOUNT) or {}
+    since = acc.get("since_ms")
+    trades = [t for t in acc.get("trades") or [] if since is None or (t.get("entry_time") or 0) >= since]
+    fol = _followers(execs, b["path"])
+    accounts = [paper_goal("paper", "레인지 봇 페이퍼(연습)", acc, since, now, target)] + [live_goal(x, b["path"], since, now, target) for x in fol]
+    items = []
+    for x in fol:
+        items.append(_safe(lambda x=x: gap_item(x, b["path"], since, now), f"gap_{x['id']}", f"{x['name_ko']}: 실거래가 덜 버는 이유"))
+        li = _safe(lambda x=x: light_item(x, trades), f"light_{x['id']}", f"{x['name_ko']}: 신호등 검증")
+        if li:
+            items.append(li)
+    flip = (pr.get("accounts") or {}).get(L.FLIP_ACCOUNT) or {}
+    items.append(_safe(lambda: range_flip(trades, flip, since), "flip", "진짜 vs 동전"))
+    items.append(_safe(lambda: range_regime(trades, more.get("rule_db"), accounts[0]), "regime", "장세: 10월 같은 장인가"))
+    cfg = L.cfg_of(pr)
+    items.append(_safe(lambda: range_stops(trades, cfg, float(pr.get("round_trip") or 0.0), more.get("rule_db"), now), "stops", "손절 해부"))
+    items.append(range_study())
+    return {"state": "ok", "since_ms": since, "accounts": accounts, "items": [i for i in items if i]}
+
+
+def range_flip(trades: list, flip: dict, since: Optional[int]) -> dict:
+    """진짜 vs 동전: the paper account against its coin-flip twin (the same moments, a random side), from the bot's start."""
+    rows = []
+    for ko, ts in (("진짜 방향", trades), ("동전 방향 (쌍둥이)",
+                                         [t for t in (flip or {}).get("trades") or [] if since is None or (t.get("entry_time") or 0) >= since])):
+        known = [t for t in ts if t.get("pnl") is not None]
+        w = sum(1 for t in known if t["pnl"] > 0)
+        rows.append({"side_ko": ko, "n": len(known), "wins": w, "win_rate": w / len(known) if known else None,
+                     "roe_sum": sum(t.get("roe") or 0.0 for t in known), "pnl": sum(t["pnl"] for t in known) if known else None})
+    real, coin = rows
+    title, q = "진짜 vs 동전: 신호의 방향이 동전보다 나은가", "같은 때 들어가고 방향만 동전으로 정한 쌍둥이보다 레인지 봇의 방향이 더 이기나?"
+    if not (flip or {}).get("known"):
+        return item("flip", title, q, state="missing", lead_ko="동전 쌍둥이 계좌 기록이 아직 없어요", tone="thin")
+    if not real["n"] or not coin["n"]:
+        lead, tone = "둘 다 닫힌 거래가 있어야 견줘요", "thin"
+    else:
+        gap = real["win_rate"] - coin["win_rate"]
+        lead = (f"진짜 {real['wins']}승 {real['n'] - real['wins']}패 · 동전 {coin['wins']}승 {coin['n'] - coin['wins']}패 → 승률 "
+                f"{_pct(abs(gap), 0, False)}p {'높아요' if gap > 0 else '낮아요' if gap < 0 else '같아요'}" + (" · 아직 우연이 커요" if real["n"] < 40 else ""))
+        tone = "good" if gap > 0 and real["n"] >= 40 else "warn" if gap <= 0 else "thin"
+    return item("flip", title, q, lead_ko=lead, tone=tone, n=real["n"],
+                kpis=[kpi("진짜 승률", real["win_rate"], "pct0"), kpi("동전 승률", coin["win_rate"], "pct0"),
+                      kpi("진짜 순ROE 합", real["roe_sum"], "pct", "good" if real["roe_sum"] > 0 else "bad"),
+                      kpi("동전 순ROE 합", coin["roe_sum"], "pct")],
+                table={"cols": [{"key": "side_ko", "label_ko": "방향", "fmt": "text"}, {"key": "n", "label_ko": "번", "fmt": "n"},
+                                {"key": "win_rate", "label_ko": "승률", "fmt": "pct0"}, {"key": "roe_sum", "label_ko": "순ROE 합", "fmt": "pct"},
+                                {"key": "pnl", "label_ko": "손익 (모의)", "fmt": "usd"}], "rows": rows},
+                need_ko="둘 다 40번이 넘어야 우연과 실력을 가를 수 있어요",
+                use_ko="진짜 방향이 동전보다 계속 낫지 않으면 신호(레인지 필터 3중 일치)가 아니라 익절·손절 모양이 결과를 만드는 거예요",
+                how_ko="같은 페이퍼 기록의 COMBO@mix(진짜)와 COMBOFLIP@mix(동전) 닫힌 거래, 봇 시작부터")
+
+
+def breakeven_of(avg_win: Optional[float], avg_loss: Optional[float]) -> Optional[float]:
+    """The win rate at which the wallet stays where it is (compounding): p ln(1 + w) + (1 - p) ln(1 - l) = 0."""
+    if not avg_win or avg_loss is None or not 0 < avg_loss < 1:
+        return None
+    a, b = math.log1p(avg_win), -math.log1p(-avg_loss)
+    return b / (a + b)
+
+
+def range_regime(trades: list, rule_db: Optional[str], goal: dict) -> dict:
+    """장세: 10월 같은 장인가 — the last ROLL_N closed paper trades against the break-even win rate (this record's own wallet
+    shares when it has wins and losses, else the research's ~82 %), the KST weeks, BTC's 24-hour move at each entry, next to
+    the research's October and 2025-01 ~ 2026-09 numbers (research, never live)."""
+    c = regime_cuts(trades, rule_db)
+    closed, last, wins, roe = c["closed"], c["last"], c["wins"], c["roe"]
+    be = breakeven_of((goal or {}).get("avg_win"), (goal or {}).get("avg_loss"))
+    be_src = "이 기록의 이길 때·질 때 잔고로 잰 본전" if be is not None else "연구의 본전 (약 82%)"
+    be = be if be is not None else RANGE_STUDY["breakeven"]
+    title, q = "장세: 지금 10월 같은 장인가", "레인지 봇이 잘 된 10월 같은 강한 추세 장인가, 2025-01 ~ 2026-09 같은 약한 장인가?"
+    if len(last) < ROLL_N:
+        lead, tone = f"닫힌 거래가 {len(last)}번뿐이라 최근 {ROLL_N}번 장세 표시는 아직이에요 (본전 승률 약 {_pct(be, 0, False)})", "thin"
+    else:
+        rate = wins / ROLL_N
+        good = rate >= be
+        lead = (f"최근 {ROLL_N}번: {wins}승 {ROLL_N - wins}패 · 승률 {_pct(rate, 0, False)} (본전 약 {_pct(be, 0, False)}) → "
+                + ("10월 같은 장 쪽이에요 (연구 10월 40승 1패)" if good else "약한 장 쪽이에요 (연구 2025-01 ~ 2026-09 평소 승률 77%)"))
+        tone = "good" if good else "bad"
+    return item("regime", title, q, lead_ko=lead, tone=tone, n=len(closed),
+                kpis=[kpi(f"최근 {ROLL_N}번 승률", wins / ROLL_N if len(last) >= ROLL_N else None, "pct0"),
+                      kpi("본전 승률", be, "pct0", sub=be_src),
+                      kpi(f"최근 {ROLL_N}번 순ROE 합", roe if len(last) >= ROLL_N else None, "pct", "good" if roe > 0 else "bad"),
+                      kpi("연구 10월 승률", RANGE_STUDY["october"], "pct0", sub="40승 1패 ×5.53 · 연구"),
+                      kpi("연구 평소 승률", RANGE_STUDY["usual"], "pct0", sub="2025-01 ~ 2026-09 · 연구")],
+                table={"cols": REGIME_COLS, "rows": c["rows"]},
+                table2={"title_ko": "주마다 (청산 기준, 한국 시간 월요일부터)", "cols": WEEK_COLS, "rows": c["wrows"]},
+                need_ko=f"최근 {ROLL_N}번이 쌓여야 장세를 말하고, 약한 장이 한 번은 지나가야 쉬는 규칙을 시험해 볼 수 있어요 (지금 {len(closed)}번)",
+                use_ko="약한 장 쪽이 이어지면 쉬는 규칙(연구 19 · 21절: 신호등, 1패 뒤 24시간 쉼)을 다시 볼 때예요 · 바꿀지는 두 분이 정해요",
+                how_ko="레인지 봇 페이퍼 닫힌 거래 · 본전 = 이길 때 잔고 w, 질 때 잔고 l에서 p·ln(1+w) + (1−p)·ln(1−l) = 0 · "
+                       f"BTC 하루 움직임은 규칙봇 1분봉 · 연구 숫자: {RANGE_STUDY['src']}")
+
+
+def stop_after(conn, sym: str, side: int, after: int, until: int, tp_px: float) -> Optional[int]:
+    """The first 1m bar (its open ms) in [after, until] whose high (a long) / low (a short) reached ``tp_px``; None when none."""
+    col, op = ("high", ">=") if side > 0 else ("low", "<=")
+    r = conn.execute(f"SELECT MIN(ts) FROM live_bars WHERE symbol = ? AND ts >= ? AND ts <= ? AND {col} {op} ?",
+                     (sym, int(after), int(until), float(tp_px))).fetchone()
+    return L._i(r[0]) if r and r[0] is not None else None
+
+
+def range_stops(trades: list, cfg: dict, rt: float, rule_db: Optional[str], now: int) -> dict:
+    """손절 해부: each stop-out of the paper account — did the price reach the take-profit level (entry x (1 + side x (tp /
+    leverage + round trip))) within 24 hours after the stop (the direction was right, the stop was close: 손절이 가까웠음),
+    or not (the price kept going: 방향이 틀림)? The rule bot's 1-minute bars; a stop younger than 24 hours that has not
+    reached it yet is 아직 모름, a stop without bars says so (never a guess)."""
+    from . import livepos as P
+    tp = L._f((cfg or {}).get("take_profit_roe"))
+    stops = [t for t in trades if t.get("exit_reason") == "SL" and t.get("exit_time") is not None]
+    title, q = "손절 해부: 손절이 가까웠나, 방향이 틀렸나", "손절로 끝난 거래가 그 뒤 24시간 안에 익절 자리까지 갔나 (손절이 가까웠음), 그대로 갔나 (방향이 틀림)?"
+    if tp is None:
+        return item("stops", title, q, state="missing", lead_ko="설정에 고정 익절이 없어 익절 자리를 몰라요", tone="thin")
+    conn, bst = P.open_bars(rule_db) if rule_db else (None, {"state": "missing", "reason_ko": "규칙봇 1분봉 파일 경로가 없어요"})
+    rows = []
+    try:
+        for t in sorted(stops, key=lambda t: -(t["exit_time"] or 0)):
+            side, entry, lev = int(t.get("side") or 0), t.get("entry_price"), t.get("leverage")
+            px = entry * (1 + side * (tp / lev + rt)) if entry and lev and side else None
+            row = {"t": t["exit_time"], "when_ko": _kst(t["exit_time"]), "coin": str(t.get("symbol") or "").replace("USDT", ""),
+                   "side_ko": "롱" if side > 0 else "숏", "roe": t.get("roe"), "tp_px": px}
+            end = int(t["exit_time"]) + STOP_AFTER_MS
+            if conn is None or px is None:
+                row.update(kind="none", kind_ko="1분봉 없음" if conn is None else "진입가 기록 없음")
+            else:
+                n = conn.execute("SELECT COUNT(*) FROM live_bars WHERE symbol = ? AND ts >= ? AND ts <= ?",
+                                 (t.get("symbol"), int(t["exit_time"]), min(end, now))).fetchone()[0]
+                hit = stop_after(conn, t.get("symbol"), side, int(t["exit_time"]), min(end, now), px) if n else None
+                if hit is not None:
+                    row.update(kind="close", kind_ko="손절이 가까웠음", after_ko=f"{(hit - int(t['exit_time'])) // MIN}분 뒤 익절 자리 닿음")
+                elif not n:
+                    row.update(kind="none", kind_ko="1분봉 없음")
+                elif end > now:
+                    row.update(kind="pending", kind_ko="아직 모름 (24시간 안 지남)")
+                else:
+                    row.update(kind="wrong", kind_ko="방향이 틀림", after_ko="24시간 안에 익절 자리에 안 닿음")
+            rows.append(row)
+    except sqlite3.Error as exc:
+        return item("stops", title, q, state="error", lead_ko="규칙봇 1분봉을 읽지 못했어요", reason=f"{type(exc).__name__}: {exc}"[:200])
+    finally:
+        if conn is not None:
+            conn.close()
+    close = sum(1 for r in rows if r["kind"] == "close")
+    wrong = sum(1 for r in rows if r["kind"] == "wrong")
+    if not stops:
+        lead, tone = "손절로 끝난 거래가 아직 없어요", "good" if trades else "thin"
+    elif conn is None and bst.get("state") != "ok":
+        lead, tone = f"손절 {len(stops)}번 · {bst.get('reason_ko') or '규칙봇 1분봉을 못 읽어요'}", "thin"
+    else:
+        lead = f"손절 {len(stops)}번 중 {close}번은 24시간 안에 익절 자리까지 갔어요 (손절이 가까웠음) · {wrong}번은 그대로 갔어요 (방향이 틀림)"
+        tone = "warn" if close > wrong else "bad" if wrong else "thin"
+    out = item("stops", title, q, lead_ko=lead, tone=tone, n=len(stops),
+               kpis=[kpi("손절", len(stops), "n"), kpi("손절이 가까웠음", close, "n"), kpi("방향이 틀림", wrong, "n"),
+                     kpi("아직 모름 · 1분봉 없음", len(rows) - close - wrong, "n")],
+               table={"cols": [{"key": "when_ko", "label_ko": "손절 시각", "fmt": "text"}, {"key": "coin", "label_ko": "코인", "fmt": "text"},
+                               {"key": "side_ko", "label_ko": "방향", "fmt": "text"}, {"key": "kind_ko", "label_ko": "그 뒤 24시간", "fmt": "text"},
+                               {"key": "after_ko", "label_ko": "언제", "fmt": "text"}], "rows": rows},
+               need_ko=f"손절이 {READ_N}번은 쌓여야 어느 쪽이 많은지 말할 수 있어요 (지금 {len(stops)}번)",
+               use_ko="손절이 가까웠던 게 많으면 손절 거리(순ROE −50%)가, 방향이 틀린 게 많으면 진입 조건(추세 확인 · 되돌림)이 다음 연구예요",
+               how_ko=f"손절 뒤 24시간의 규칙봇 1분봉 고가(롱) · 저가(숏)가 익절 가격(진입가 × (1 ± (익절 순ROE {_pct(tp, 0, False)} ÷ 배수 + 왕복 비용)))에 "
+                      "닿았는지")
+    if bst.get("state") != "ok":
+        out["sub_state"] = _src(bst)
+    return out
+
+
+def range_study() -> dict:
+    """연구 기록: the research's numbers of this structure (analysis/f7tp10_1026/FINAL_KO.md), labelled as research."""
+    return item("study", "연구 기록: 이 구조를 지난 기간에 돌려 본 것", "레인지 봇 구조를 지난 기간에 그대로 돌리면 어땠나? (실거래 아님)",
+                lead_ko=RANGE_STUDY["ko"], tone="warn",
+                table={"cols": [{"key": "span_ko", "label_ko": "기간", "fmt": "text"}, {"key": "kind_ko", "label_ko": "장", "fmt": "text"},
+                                {"key": "wins", "label_ko": "승", "fmt": "n"}, {"key": "losses", "label_ko": "패", "fmt": "n"},
+                                {"key": "win_rate", "label_ko": "승률", "fmt": "pct0"}, {"key": "mult", "label_ko": "지갑", "fmt": "mult"},
+                                {"key": "note_ko", "label_ko": "", "fmt": "text"}], "rows": RANGE_STUDY["rows"]},
+                need_ko="연구 숫자라 바뀌지 않아요 (실거래가 쌓이면 위 '목표까지'와 '장세'가 이걸 대신해요)",
+                use_ko="약한 장에서는 한 달 −30 ~ −60%가 날 수 있어요: 위 '장세' 칸이 지금이 어느 쪽인지의 근거를 쌓아요",
+                how_ko=RANGE_STUDY["src"] + " (수수료 · 미끄러짐 포함, 지갑 배수)")
+
+
 def btc_moves(rule_db: Optional[str], times: list) -> dict:
     """{entry ms: BTC's 24-hour move (close at the entry minute over the close 24 h before)} from the rule bot's 1m bars."""
     from . import livepos as P
@@ -866,9 +1079,9 @@ def btc_moves(rule_db: Optional[str], times: list) -> dict:
     return out
 
 
-def v39_regime(trades: list, rule_db: Optional[str], now: int) -> dict:
-    """장세: the last ROLL_N closed paper trades (wins, net ROE sum) as the one live sign of a V3.9 market, the KST weeks,
-    and BTC's 24-hour move at each entry (up / down / sideways, and with or against the trade's side)."""
+def regime_cuts(trades: list, rule_db: Optional[str]) -> dict:
+    """장세's cuts of a paper account (V3.9 and the 레인지 봇): its closed trades oldest first, the last ROLL_N (wins, net ROE
+    sum), BTC's 24-hour move at each entry (up / down / sideways, with or against the trade's side) and the KST weeks."""
     closed = sorted([t for t in trades if t.get("exit_time") is not None and t.get("pnl") is not None], key=lambda t: t["exit_time"])
     last = closed[-ROLL_N:]
     wins = sum(1 for t in last if t["pnl"] > 0)
@@ -898,6 +1111,20 @@ def v39_regime(trades: list, rule_db: Optional[str], now: int) -> dict:
         w["wins"] += 1 if t["pnl"] > 0 else 0
         w["roe_sum"] += t.get("roe") or 0.0
     wrows = [{**w, "week_ko": _kst(w["week_ms"]).split(" ")[0] + " 주", "win_rate": w["wins"] / w["n"]} for _k, w in sorted(weeks.items())][-8:]
+    return {"closed": closed, "last": last, "wins": wins, "roe": roe, "moves": moves, "rows": rows, "wrows": wrows}
+
+
+REGIME_COLS = [{"key": "key", "label_ko": "진입 때 BTC 하루 움직임", "fmt": "text"}, {"key": "n", "label_ko": "번", "fmt": "n"},
+               {"key": "win_rate", "label_ko": "승률", "fmt": "pct0"}, {"key": "roe_sum", "label_ko": "순ROE 합", "fmt": "pct"}]
+WEEK_COLS = [{"key": "week_ko", "label_ko": "주", "fmt": "text"}, {"key": "n", "label_ko": "번", "fmt": "n"},
+             {"key": "win_rate", "label_ko": "승률", "fmt": "pct0"}, {"key": "roe_sum", "label_ko": "순ROE 합", "fmt": "pct"}]
+
+
+def v39_regime(trades: list, rule_db: Optional[str], now: int) -> dict:
+    """장세: the last ROLL_N closed paper trades (wins, net ROE sum) as the one live sign of a V3.9 market, the KST weeks,
+    and BTC's 24-hour move at each entry (up / down / sideways, and with or against the trade's side)."""
+    c = regime_cuts(trades, rule_db)
+    closed, last, wins, roe, moves, rows, wrows = c["closed"], c["last"], c["wins"], c["roe"], c["moves"], c["rows"], c["wrows"]
     if len(last) < ROLL_N:
         lead, tone = f"닫힌 거래가 {len(last)}번뿐이라 최근 {ROLL_N}번 장세 표시는 아직이에요", "thin"
     else:
@@ -946,7 +1173,8 @@ def build(bot: str, p: Optional[dict] = None, now_ms: Optional[int] = None, more
             "note_ko": NOTE_KO, "few_n": FEW, "read_n": READ_N,
             "links": [{"href": h, "ko": k} for h, k in LINKS[bot]]}
     try:
-        body = (site_bot(bot, p, now, more) if bot in ("trend", "vwap") else mix_bot(p, now) if bot == "mix" else v39_bot(p, now, more))
+        body = (site_bot(bot, p, now, more) if bot in ("trend", "vwap") else mix_bot(p, now) if bot == "mix"
+                else range_bot(p, now, more) if bot == "range" else v39_bot(p, now, more))
     except Exception as exc:  # noqa: BLE001
         body = {"state": "error", "ko": "목표 연구를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}
     return {**head, **body}

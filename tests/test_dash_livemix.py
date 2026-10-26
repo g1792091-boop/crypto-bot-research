@@ -561,8 +561,8 @@ def test_the_menu_group_and_the_tabs():
     d = json.loads(r.stdout.strip().splitlines()[-1])
     assert d["groups"][-1] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-1] == "믹스 봇" and len(d["groups"]) == 7
     assert d["groups"][-2][0] == "vwap"                                               # VWAP 봇 stays where it was
-    # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its four screens take the first number keys
-    assert d["keys"] == ["trendbot", "vwapbot", "mixbot", "v39", "trend", "tchart", "hq", "pos", "summary"]
+    # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its five screens take the first number keys (레인지 봇 second)
+    assert d["keys"] == ["trendbot", "rangebot", "vwapbot", "mixbot", "v39", "trend", "tchart", "hq", "pos"]
     assert d["screens"] == [["믹스 관제", "mix", "livebots"], ["믹스 성적", "mix", "livebots"]]
     assert d["parse"]["name"] == "mixperf" and d["href"] == "#/mix" and d["icons"][0] > 5
     lb = FW._read(SCREENS, "livebots.js")

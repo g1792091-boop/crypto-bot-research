@@ -236,7 +236,8 @@ def test_the_menus_of_both_sites_in_node():
     # and its paper twin, tests/test_dash_livemix.py)
     assert live["groups"] == ["봇별", "지금", "기록", "성적", "운영", "VWAP 봇", "믹스 봇"] and live["land"] == "trend" and live["tag"]["text"] == "실거래"
     assert live["items"][-5:] == ["vwap", "vwperf", "vwblock", "mix", "mixperf"]
-    assert live["items"][:4] == ["trendbot", "vwapbot", "mixbot", "v39"] and live["items"][4:8] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
+    # (레인지 봇 after 추세판단 봇 since 10/26 evening, tests/test_dash_live_range.py)
+    assert live["items"][:5] == ["trendbot", "rangebot", "vwapbot", "mixbot", "v39"] and live["items"][5:9] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
                                                      "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"

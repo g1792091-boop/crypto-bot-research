@@ -708,8 +708,9 @@ def test_wiring_route_menu_find_inventory_and_module():
     # in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 봇별 · 지금 · 기록 · 성적 · 운영); part B's 위험 · 봇 상태 · 목표 ·
     # 규칙 점검 join once their files are there
     own = [t for t in tabs if t[0] not in ("risk", "health", "goal", "judge")]
-    # 봇별 first (owners 10/26: one screen per bot, tests/test_dash_livev39.py), then every tab as it was
-    assert own == [("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트"),
+    # 봇별 first (owners 10/26: one screen per bot, tests/test_dash_livev39.py; 레인지 봇 after 추세판단 봇,
+    # tests/test_dash_live_range.py), then every tab as it was
+    assert own == [("trendbot", "추세판단 봇"), ("rangebot", "레인지 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트"),
                    ("trend", "관제"), ("tchart", "추세 차트"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("journal", "일지"), ("trades", "거래"), ("replay", "다시보기"),
                    ("signals", "신호"), ("missed", "못 탄 신호"), ("review", "검토"), ("expect", "재현 비교"), ("perf", "성적"), ("rank", "순위"), ("map", "지도"), ("cost", "비용"),
                    ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자"),

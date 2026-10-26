@@ -210,11 +210,10 @@ def locate(p: dict, now: int, more: Optional[dict] = None) -> dict:
     base = {"execs": execs, "configs": configs, "bots": bots}
     other = None
     for b in bots:
-        fallback = more.get("combo_config") if b["id"] == "paper" else more.get("combo2_config")
-        combo = L.read_combo(b["path"], fallback or "-")
+        combo = L.read_combo(b["path"], L.combo_fallback(more, b["id"]))
         cfg = combo.get("config") if combo.get("state") == "ok" else None
         if not is_vwap(cfg):
-            if b["id"] != "paper":
+            if b["id"] != "paper" and other is None:
                 other = b
             continue
         out = {**base, "bot": b, "cfg": cfg, "cfg_source": combo.get("source"), "combo_since": combo.get("since_ms")}

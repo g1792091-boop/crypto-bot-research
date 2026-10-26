@@ -62,7 +62,7 @@ OWN_KO = "거래소 기준"
 OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 이 거래소의 1분봉 고가·저가 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)"
 # the third executor (딥코인) has a card only once it is installed (livebots.installed: sources() reads it then)
 # ... and the fourth (WOO X Pro 2, owners 10-24) and the fifth (투비트, owners 10-25) the same way
-CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("wooxpro2", None),
+CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("range", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("wooxpro2", None),
          ("toobit", None), ("flip", L.FLIP_ACCOUNT))
 
 _lock = threading.Lock()
@@ -291,7 +291,7 @@ def setting_of(facts: dict, order: Optional[int], strategy: Optional[str] = None
 def why_ref(bot: Optional[str], symbol: Optional[str], entry: Optional[int]) -> Optional[dict]:
     """The 진입 근거 reference of a paper entry (GET /api/v4/livebots/why?bot=&symbol=&entry=): an executor's position and
     trade carry the one of the paper entry they followed."""
-    if bot not in ("paper", "paper2") or not symbol or entry is None:
+    if bot not in L.BOT_IDS or not symbol or entry is None:
         return None
     return {"bot": bot, "symbol": symbol, "entry": int(entry)}
 
@@ -304,6 +304,15 @@ def _gap(pp: Optional[dict], xp: dict) -> Optional[dict]:
     side = int(xp.get("side") or 0)
     return {"paper_entry": pp["entry"], "live_entry": xp["entry"], "slip": side * (pp["entry"] - xp["entry"]) / pp["entry"],
             "delay_ms": (xp["entry_time"] - pp["entry_time"]) if xp.get("entry_time") is not None and pp.get("entry_time") is not None else None}
+
+
+def fixed_tp(cfg: dict, side: int, entry: Optional[float], lev: Optional[int], rt: float, ff: float) -> Optional[dict]:
+    """A bot without a ladder and with one fixed take-profit (owners 10-26, the 레인지 봇's ``take_profit_roe``): where it
+    closes, as the card's 익절가 (``fixed``); None for any other config (the next ladder step stays the card's)."""
+    tp = L._f((cfg or {}).get("take_profit_roe"))
+    if tp is None or ladder_of(cfg) is not None:
+        return None
+    return {"at": tp, "lock": None, "price": roe_price(side, entry, lev, tp, rt, ff), "lock_price": None, "fixed": True}
 
 
 def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, bars_state: dict, now: int, execs: list,
@@ -345,7 +354,7 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
     cells = []
     for x in execs:
         xp = (x["record"].get("position") if x["record"].get("state") == "ok" else None) or None
-        if cid not in ("paper", "paper2"):
+        if cid not in L.BOT_IDS:
             continue
         if bot and not L.LP.same(x.get("paper_path"), bot["path"]):
             cells.append({"id": x["id"], "name_ko": x["name_ko"], "state": "other",
@@ -366,14 +375,14 @@ def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, b
         "stop": pos.get("stop"), "stop_initial": pos.get("stop_initial"), "stop50": stop50, "stop_rule_cfg": sr,
         "locked": lock is not None, "lock_roe": lock, "lock_price": pos.get("stop") if lock is not None else None,
         "secured": {"roe": lock, "usd": lock * margin if margin else None} if lock is not None else None,
-        "next": pos.get("next_lock"), "ladder": ladder_steps(spec, lock, best, lambda r: roe_price(side, entry, lev, r, rt, ff),
+        "next": pos.get("next_lock") or fixed_tp(cfg, side, entry, lev, rt, ff), "ladder": ladder_steps(spec, lock, best, lambda r: roe_price(side, entry, lev, r, rt, ff),
                                                              lambda r: roe_price(side, entry, lev, r, rt, ff)),
         "liq": pos.get("liq"), "liq_ko": None if pos.get("liq") else "청산가 기록이 없어요",
         "round_trip": rt, "funding_frac": ff, "funding_paid": pos.get("funding_paid"),
         "last_mark": pos.get("last_mark"), "last_mark_roe_net": pos.get("last_mark_roe_net"), "best_roe": best,
         "excursion": ex, "fast": fast_state(cfg, lock), "execs": cells, "status": "open",
         # 진입 근거 (dash/more/livewhy.py): this paper entry's reference (the coin-flip twin's side is a coin flip: none)
-        "why": why_ref(cid, pos.get("symbol"), pos.get("entry_time")) if cid in ("paper", "paper2") else None,
+        "why": why_ref(cid, pos.get("symbol"), pos.get("entry_time")) if cid in L.BOT_IDS else None,
     }
     inh = bool(since) and pos.get("entry_time") is not None and int(pos["entry_time"]) < int(since)
     out["position"].update(inherited=inh, inherited_ko=INHERITED_KO if inh else None)

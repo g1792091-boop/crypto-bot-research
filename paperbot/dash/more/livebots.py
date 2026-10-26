@@ -20,6 +20,7 @@
     PAPERBOT_LIVE_PAPER3_DB     /var/lib/paperbot/combo/friend.db               세 번째 페이퍼 봇 ('친구 매매법': WOO X Pro 2가 따라감)
     PAPERBOT_LIVE_TOOBIT_DB     /var/lib/paperbot/exec/executor-toobit-live.db  투비트 실행기 (다섯 번째, 설치됐을 때만 보임)
     PAPERBOT_LIVE_TOOBIT_CONFIG /etc/paperbot/executor-toobit.json
+    PAPERBOT_LIVE_RANGE_DB      /var/lib/paperbot/combo/range.db                레인지 봇 페이퍼 ('range': 그 설정에 range가 있을 때만)
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
@@ -68,6 +69,10 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 투비트)예요. 그 실행기가 따라가는 페이퍼(설정의 paper_db · account)는 계좌 칸으로 따로 나오지 않고 두 번째 페이퍼 봇 자리도 차지하지
 않아요(``paper_bots``: ``SIDE_PAPER_EXECS``). 둘 다 없으면 모든 답이 예전 그대로예요.
 
+레인지 봇 (owners 10-26, docs/range-bot-ko.md: WOO X Pro가 추세판단 봇에서 레인지 봇으로 옮김, 딥코인은 그대로 'VWAP 개선판'):
+페이퍼 봇이 셋이 될 수 있어요(``paper_bots``: "paper" · "paper2" · "range", BOT_IDS). 레인지 봇은 이름이나 파일 이름이 아니라 그 봇의
+시작 기록 설정에 ``range``가 있는지로만 알아요(``range_bot``). 그 봇이 없으면 페이퍼 하나 · 둘인 화면과 답은 예전 그대로예요.
+
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
 from __future__ import annotations
@@ -110,6 +115,10 @@ ENV = {
     "toobit_db": ("PAPERBOT_LIVE_TOOBIT_DB", "/var/lib/paperbot/exec/executor-toobit-live.db"),
     "toobit_config": ("PAPERBOT_LIVE_TOOBIT_CONFIG", "/etc/paperbot/executor-toobit.json"),
 }
+# the 레인지 봇 (owners 10-26, docs/range-bot-ko.md: WOO X Pro follows it): a page account of its own ("range") next to the
+# two paper bots of ENV once an executor follows it or its file is there, always told by its config (``range_bot``). Kept
+# apart from ENV (callers that list ENV's files in full stay as they were); paths() reads both.
+ENV_RANGE = {"range": ("PAPERBOT_LIVE_RANGE_DB", "/var/lib/paperbot/combo/range.db")}
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
 # the live watcher reports a second bot only from the VWAP default (livecheck.paper2_default), never this old one.
@@ -127,6 +136,10 @@ ALL_EXECS = EXECS + OPTIONAL_EXECS
 # the slots whose paper bot is never one of the page's paper bots (paper_bots): 투비트 follows a paper account of its own
 # (owners 10-25: most likely the rule bot's V3.9 1-hour account, decided later), never the second paper bot's place
 SIDE_PAPER_EXECS = ("toobit",)
+# the page's paper bots (paper_bots), in this order: the main one (PAPERBOT_LIVE_PAPER_DB, the 추세판단 봇), the second
+# (owners 10-23: the 'VWAP 개선판'), the 레인지 봇 (owners 10-26). A page that lists paper accounts takes them all.
+BOT_IDS = ("paper", "paper2", "range")
+RANGE_NAME_KO = "레인지 봇"
 # the exchange a slot's config names, in the owners' words (owners 10-20: the second slot runs WOO X Pro; its id, unit
 # and config path stay "mexc" so every page and check keeps working). Flipster: the third slot's exchange of 10-23, still
 # an exchange the executor can run (a slot config naming it reads 플립스터)
@@ -163,6 +176,8 @@ WHY = (("light_red", "신호등 빨강이라 따라가지 않았어요"),
        ("liq_skip", "손절이 강제청산 가격보다 멀어 들어가지 않았어요"),
        # macro_block_min (owners 10-25 night): a US release (CPI, FOMC, NFP, PCE) within that many minutes
        ("macro_skip", "미국 경제 발표 앞뒤라 들어가지 않았어요"),
+       # us_open_pre_min / us_open_pause_min (owners 10-26, "투비트도 나스닥 개장 앞뒤 30분 진입금지"): a missed signal
+       ("us_open_skip", "나스닥 개장 앞뒤라 들어가지 않았어요"),
        ("late", "페이퍼 진입을 늦게 봐서 건너뛰었어요"),
        ("entry_check", "진입 검사에서 막혔어요"),
        ("entry_skip", "가격이 이미 손절선을 지나 들어가지 않았어요"),
@@ -193,7 +208,7 @@ KIND_KO = {
     "own_busy": "자기 포지션 중이라 안 따라감",
     # owners 10-25 night (투비트): 고정 익절 and the liquidation guard
     "own_tp": "고정 익절", "own_tp_price": "고정 익절 가격 못 읽음", "liq_skip": "손절이 청산가보다 멀어 안 들어감",
-    "macro_skip": "경제 발표 앞뒤라 안 들어감",
+    "macro_skip": "경제 발표 앞뒤라 안 들어감", "us_open_skip": "나스닥 개장 앞뒤라 안 들어감",
     "paper_exit_unknown": "페이퍼 청산 이유 모름", "paper_exit_unread": "페이퍼 청산 기록 못 읽음",
     # 잔고 바닥 / 원금 회수 안내 / the key file (owners 10-24, docs/friend-bot-ko.md)
     "floor_hit": "잔고 바닥 멈춤", "floor_skip": "바닥 멈춤이라 안 따라감", "floor_start": "시작 금액 기록",
@@ -245,7 +260,7 @@ def paths(env: Optional[dict] = None) -> dict:
     its variable when set, else the ``db`` its own config names (owners 10-20: the second slot's WOO X Pro executor has
     its own database), else the start guide's path."""
     env = os.environ if env is None else env
-    out = {k: (env.get(var) or default) for k, (var, default) in ENV.items()}
+    out = {k: (env.get(var) or default) for k, (var, default) in {**ENV, **ENV_RANGE}.items()}
     if not env.get(ENV["paper2"][0]) and not os.path.exists(out["paper2"]) and os.path.exists(LEGACY_PAPER2):
         out["paper2"] = LEGACY_PAPER2          # before the VWAP bot's file is there: the page as it was (the -35 % bot)
     for _ex, _ko, dk, ck in ALL_EXECS:
@@ -268,8 +283,9 @@ def shown_paths(p: dict) -> dict:
     only once it is there (else as it was)."""
     have = {s[0] for s in installed(p)}
     drop = {k for s in OPTIONAL_EXECS if s[0] not in have for k in (s[2], s[3])}
-    if not (p.get("paper3") and os.path.exists(p["paper3"])):
-        drop.add("paper3")
+    for k in ("paper3", "range"):                       # the friend's and the 레인지 봇's files only once they are there
+        if not (p.get(k) and os.path.exists(p[k])):
+            drop.add(k)
     return {k: v for k, v in p.items() if k not in drop}
 
 
@@ -550,7 +566,29 @@ def fixed_rules(raw: dict) -> list:
     if mb:
         out.append({"key": "macro_block_min", "value": mb, "ko": f"미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 {mb}분 새 진입 안 함",
                     "what_ko": "경제 발표"})
+    uo = us_open_window(raw)                    # owners 10-26: the NYSE open too (us_open_pre_min / us_open_pause_min)
+    if uo:
+        out.append({"key": "us_open", "value": list(uo), "ko": f"{us_open_words(*uo)} 새 진입 안 함", "what_ko": "나스닥 개장"})
     return out
+
+
+def us_open_window(raw: Any) -> Optional[tuple]:
+    """An executor config's (minutes before, minutes after) the NYSE open with no new entry (``us_open_pre_min``,
+    ``us_open_pause_min``: ints 1..240 or null; owners 10-26), or None (off, or a value its check-config refuses: the
+    executor's own us_open_window rule, read here from the config dict)."""
+    vals = []
+    for k in ("us_open_pre_min", "us_open_pause_min"):
+        m = raw.get(k) if isinstance(raw, dict) else None
+        if m is not None and (isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 240):
+            return None
+        vals.append(int(m or 0))
+    return tuple(vals) if any(vals) else None
+
+
+def us_open_words(pre: int, post: int) -> str:
+    """"나스닥 개장 앞 30분·뒤 30분" (combo.us_open_ko's words)."""
+    parts = ([f"앞 {pre}분"] if pre else []) + ([f"뒤 {post}분"] if post else [])
+    return "나스닥 개장 " + "·".join(parts)
 
 
 # ---------------------------------------------------------------- the paper bot (paperbot.store3 tables)
@@ -1330,21 +1368,41 @@ def other_cell(x: dict, label_ko: Optional[str]) -> dict:
     return {"state": "other", "why_ko": f"이때 {josa(x['name_ko'], '은', '는')} {josa(label_ko or '다른 페이퍼', '을', '를')} 따라갔어요"}
 
 
+def range_bot(cfg: Any) -> bool:
+    """A config of the 레인지 봇 (owners 10-26, paperbot/rangebot.py): its ``range`` section (never the file name alone)."""
+    return isinstance(cfg, dict) and isinstance(cfg.get("range"), dict)
+
+
 def paper_bots(p: dict, paper: dict, execs: list) -> list:
-    """The paper bots on the page: [{"id": "paper" | "paper2", "path", "read", "name", "stop", "stop_short", "stop_ko",
-    "followers", "label_ko"}]. The second only when there is one: another paper database an executor follows now, else the
-    -35 % bot's file (PAPERBOT_LIVE_PAPER2_DB) once it is there. One paper bot: one item (the page as before)."""
+    """The paper bots on the page: [{"id": "paper" | "paper2" | "range", "path", "read", "name", "stop", "stop_short",
+    "stop_ko", "followers", "label_ko"}] in BOT_IDS order. "range": the 레인지 봇 (owners 10-26), told by its own config
+    (``range_bot``: its start record's ``range`` section), the database an executor follows that is one, else its file
+    (PAPERBOT_LIVE_RANGE_DB) once it is there and is one. "paper2": another paper database an executor follows now (not the
+    레인지 봇's), else the second bot's file (PAPERBOT_LIVE_PAPER2_DB) once it is there. One paper bot: one item (the page as
+    before); without a 레인지 봇 the one- and two-bot pages are as they were."""
     main = p["paper"]
     # the third paper bot's file (owners 10-24, '친구 매매법' that WOO X Pro 2 follows) never takes the second's place, nor
     # the paper 투비트 follows (owners 10-25, SIDE_PAPER_EXECS)
     third = p.get("paper3") if p.get("paper3") and not LP.same(p.get("paper3"), p.get("paper2")) else None
-    second = next((x["paper_path"] for x in execs if not LP.same(x["paper_path"], main)
-                   and not LP.same(x["paper_path"], third) and x["id"] not in SIDE_PAPER_EXECS), None)
-    if second is None and p.get("paper2") and not LP.same(p["paper2"], main) and os.path.exists(p["paper2"]):
-        second = p["paper2"]
     papers = execs[0]["_papers"] if execs else {LP.norm(main): paper}
+    cands: list = []
+    for x in execs:
+        path = x["paper_path"]
+        if LP.same(path, main) or LP.same(path, third) or x["id"] in SIDE_PAPER_EXECS or any(LP.same(path, c) for c in cands):
+            continue
+        cands.append(path)
+
+    def is_range(path: Optional[str]) -> bool:
+        return bool(path) and range_bot(cfg_of(papers.get(LP.norm(path))))
+    rng = next((c for c in cands if is_range(c)), None)
+    if rng is None and p.get("range") and not LP.same(p["range"], main) and is_range(p["range"]):
+        rng = p["range"]                                 # its file, read by sources() once it is there
+    second = next((c for c in cands if not LP.same(c, rng)), None)
+    if second is None and p.get("paper2") and not LP.same(p["paper2"], main) and not LP.same(p["paper2"], rng) \
+            and os.path.exists(p["paper2"]):
+        second = p["paper2"]
     out = []
-    for pid, path in (("paper", main), ("paper2", second)):
+    for pid, path in (("paper", main), ("paper2", second), ("range", rng)):
         if path is None:
             continue
         pr = papers.get(LP.norm(path)) or paper
@@ -1357,7 +1415,7 @@ def paper_bots(p: dict, paper: dict, execs: list) -> list:
 
 
 def bot_id(bots: list, path: Optional[str]) -> Optional[str]:
-    """"paper" / "paper2": which paper bot on the page ``path`` is (None: neither)."""
+    """"paper" / "paper2" / "range": which paper bot on the page ``path`` is (None: none of them)."""
     return next((b["id"] for b in bots if LP.same(b["path"], path)), None)
 
 
@@ -1491,8 +1549,9 @@ def sources(p: dict, now: int) -> tuple:
         if k not in papers:
             papers[k] = read_paper(path, want, now)
         return papers[k]
-    if p.get("paper2") and os.path.exists(p["paper2"]):
-        get(p["paper2"])
+    for k in ("paper2", "range"):                       # the second bot's and the 레인지 봇's files once they are there
+        if p.get(k) and os.path.exists(p[k]):
+            get(p[k])
     execs = []
     for ex, ko, dk, _ck in slots(configs):
         cfg = configs[ex]
@@ -1642,6 +1701,8 @@ ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"
             "combo_config": ("PAPERBOT_LIVE_COMBO_CONFIG", "/etc/paperbot/combo.json"),
             # the second paper bot's config file (its database's combo_run is read first; docs/live15-mexc-ko.md)
             "combo2_config": ("PAPERBOT_LIVE_COMBO2_CONFIG", "/etc/paperbot/combo-vwap.json"),
+            # the 레인지 봇's config file (owners 10-26, docs/range-bot-ko.md 3장 B; its database's combo_run is read first)
+            "range_config": ("PAPERBOT_LIVE_RANGE_CONFIG", "/etc/paperbot/combo-range.json"),
             "check_db": ("PAPERBOT_LIVE_CHECK_DB", "/var/lib/paperbot/livecheck.db"),
             "improve_db": ("PAPERBOT_LIVE_IMPROVE_DB", "/var/lib/paperbot/liveimprove.db"),
             "rule_db": ("PAPERBOT_LIVE_RULE_DB", "/var/lib/paperbot/paper3.db")}
@@ -1650,6 +1711,14 @@ ENV_MORE = {"shadow_dir": ("PAPERBOT_LIVE_SHADOW_DIR", "/var/lib/paperbot/combo"
 def paths_more(env: Optional[dict] = None) -> dict:
     env = os.environ if env is None else env
     return {k: (env.get(var) or default) for k, (var, default) in ENV_MORE.items()}
+
+
+def combo_fallback(more: dict, bot: Optional[str]) -> str:
+    """The config file a paper bot's settings are read from before its first start record (read_combo's fallback): the
+    main bot's (PAPERBOT_LIVE_COMBO_CONFIG), the 레인지 봇's (PAPERBOT_LIVE_RANGE_CONFIG), else the second bot's
+    (PAPERBOT_LIVE_COMBO2_CONFIG); "-" (nothing) when ``more`` names none."""
+    key = "combo_config" if bot == "paper" else "range_config" if bot == "range" else "combo2_config"
+    return (more or {}).get(key) or "-"
 
 
 def dim_value_ko(dim: str, v: Any) -> str:
@@ -1863,6 +1932,36 @@ def rules_of(combo: dict) -> dict:
         out.update(vote_gate=c.get("vote_gate") if isinstance(c.get("vote_gate"), dict) else None,
                    vol_gate=c.get("vol_gate") if isinstance(c.get("vol_gate"), dict) else None,
                    max_hold_bars=_i(c.get("max_hold_bars")), gates=gates, time_ko=LP.time_exit_ko(c))
+    rw = range_words(c)
+    if rw:                                               # the 레인지 봇 (owners 10-26): its own rules and its fixed take-profit
+        out.update(range=c.get("range"), range_rules=rw, take_profit_roe=_f(c.get("take_profit_roe")))
+    return out
+
+
+# the 레인지 봇's rule numbers when its config leaves one out (paperbot/rangebot.py RangeRules)
+RANGE_DEFAULTS = {"pullback_atr": 0.2, "wait_min": 60, "coin_st": True, "btc_st": True, "st_period": 10, "st_mult": 3.0,
+                  "liq_check": True, "liq_mmr": 0.005}
+
+
+def range_words(c: Any) -> list:
+    """[{id, ko}] of a 레인지 봇 config's own rules in the owners' words (paperbot/rangebot.py RangeRules.describe, worked out
+    here from the config dict: this module reads the bots' records, never their code; tests hold them to describe());
+    [] for any other config."""
+    r = c.get("range") if isinstance(c, dict) else None
+    if not isinstance(r, dict):
+        return []
+    r = {**RANGE_DEFAULTS, **r}
+    who = [w for w, on in (("코인", r["coin_st"]), ("BTC", r["btc_st"])) if on]
+    st = (f"{'·'.join(who)} 1시간 슈퍼트렌드({r['st_period']}, {float(r['st_mult']):g})가 신호와 같은 방향일 때만" if who
+          else "슈퍼트렌드 확인 없음")
+    syms = [str(s).replace("USDT", "") for s in c.get("symbols") or [] if isinstance(s, str)] or ["BTC", "ETH", "SOL", "DOGE", "LTC", "BCH"]
+    out = [{"id": "range_st", "ko": f"추세 확인: {st}"},
+           {"id": "range_pull", "ko": f"되돌림 진입: 신호 1시간봉 종가에서 {float(r['pullback_atr']):g} ATR(14, 1시간) 되돌림을 최대 "
+                                      f"{int(r['wait_min'])}분 기다림, 닿은 5분봉 다음 5분봉 시가에 시장가(안 오면 버림)"},
+           {"id": "range_one", "ko": f"한 신호씩: 기다리는 동안·포지션 있는 동안 다른 신호 안 받음(같은 시각이면 {'→'.join(syms)} 순서)"}]
+    if r["liq_check"]:
+        out.append({"id": "range_liq", "ko": f"강제청산 여유: 손절 거리 + 1시간 ATR이 (1/배수 - {float(r['liq_mmr']):.1%}) 안쪽일 때만"})
+    out.append({"id": "range_none", "ko": "진 뒤 쉬기·시간 청산·반대 신호 청산·신호등 없음"})
     return out
 
 
@@ -1893,6 +1992,15 @@ def why_cat(status: str, why: str) -> tuple:
         return "trend_unread", "추세 판단 못 읽음"
     if w.startswith("변동성 높음"):
         return "vol_high", VOL_GATE_KO
+    # the 레인지 봇 (owners 10-26, paperbot/rangebot.py _divert): one signal at a time, the supertrends, the liquidation room
+    if w.startswith("한 신호씩"):
+        return "range_one", "한 신호씩 (기다림·포지션 중)"
+    if w.startswith("추세 확인:"):
+        return "range_st", "추세 확인 (슈퍼트렌드 반대)"
+    if w.startswith("강제청산 여유 부족"):
+        return "range_liq", "강제청산 여유 부족"
+    if w.startswith("슈퍼트렌드를 못 읽어"):
+        return "range_unread", "슈퍼트렌드 못 읽음"
     # the trend bot (paperbot/trendbot.py, trendjudge.check): its waits, its judge, its entry checks, its pauses
     if w.startswith("되돌림 안 옴"):
         return "nopull", "되돌림 안 옴"
@@ -2498,7 +2606,7 @@ def settings(p: dict, now: int) -> dict:
             if x.get("follows_ko"):
                 e["follows_ko"] = x["follows_ko"]
         for b in bots[1:]:
-            c2 = read_combo(b["path"], more.get("combo2_config") or "-")
+            c2 = read_combo(b["path"], combo_fallback(more, b["id"]))
             item = {"id": b["id"], "short_ko": b["short_ko"], "label_ko": b["label_ko"], "followers": b["followers"],
                     "combo": {k: c2.get(k) for k in ("state", "reason_ko", "reason", "path", "source", "since_ms")}}
             if c2.get("state") == "ok":
@@ -3047,7 +3155,7 @@ def costs(p: dict, now: int) -> dict:
         coins = [{"symbol": c["symbol"], "n": c["n"], "slip_avg": sum(c["slip"]) / len(c["slip"]) if c["slip"] else None, "diff": c["diff"]}
                  for c in sorted(by_coin.values(), key=lambda c: -c["n"])]
         missed: dict = {}
-        for pid in ("paper", "paper2"):                  # each paper bot's trades it was following then (others say "other")
+        for pid in BOT_IDS:                              # each paper bot's trades it was following then (others say "other")
             for r in ((accts.get(pid) or {}).get("rows") or []):
                 cell = (r.get("live") or {}).get(ex) or {}
                 if cell.get("state") == "missed":        # before the executor's start, or still closing: not a miss
@@ -3372,17 +3480,19 @@ def whynow(p: dict, now: int) -> dict:
             {k: pos.get(k) for k in ("symbol", "side", "strategy_id", "timeframe", "entry_time", "last_mark_roe_net")} if pos else None)
         if acc.get("halted"):
             add("paper_halt", False, "페이퍼 계좌가 멈춤", {"reason": acc.get("halt_reason")})
-    for b in paper_bots(p, paper, execs)[1:]:            # the second paper bot, while an executor follows it
+    for b in paper_bots(p, paper, execs)[1:]:            # the other paper bots (the second, the 레인지 봇), while an executor follows
         if not b["follower_ids"]:
             continue
         pr, who, nm = b["read"], ",".join(b["follower_ids"]), b["short_ko"]
+        bw = nm if str(nm).endswith("봇") else f"{nm} 봇"     # "VWAP 개선판 봇", "레인지 봇" (one 봇)
+        pid, posid = b["id"], "position2" if b["id"] == "paper2" else f"position_{b['id']}"
         if pr.get("state") != "ok":
-            add("paper2", False, f"{nm} 봇 기록을 못 읽음", {"reason_ko": pr.get("reason_ko")}, who=who)
+            add(pid, False, f"{bw} 기록을 못 읽음", {"reason_ko": pr.get("reason_ko")}, who=who)
             continue
-        add("paper2", not pr.get("stale"), f"{nm} 봇이 돌고 있음" if not pr.get("stale") else f"{nm} 봇 기록이 멈춤(5분 넘게 새 기록 없음)",
+        add(pid, not pr.get("stale"), f"{bw}이 돌고 있음" if not pr.get("stale") else f"{bw} 기록이 멈춤(5분 넘게 새 기록 없음)",
             {"as_of": pr.get("as_of_ms")}, who=who)
         pos2 = ((pr.get("accounts") or {}).get(ACCOUNT) or {}).get("position")
-        add("position2", pos2 is None, f"{nm} 포지션이 비어 있음" if pos2 is None else f"{nm}에 이미 포지션이 있어 새 진입 안 함(한 번에 하나)",
+        add(posid, pos2 is None, f"{nm} 포지션이 비어 있음" if pos2 is None else f"{nm}에 이미 포지션이 있어 새 진입 안 함(한 번에 하나)",
             {k: pos2.get(k) for k in ("symbol", "side", "strategy_id", "timeframe", "entry_time", "last_mark_roe_net")} if pos2 else None, who=who)
     for x in execs:
         r, ko = x["record"], x["name_ko"]
@@ -4004,7 +4114,7 @@ def register(app, ctx) -> dict:
         """실거래 › 신호: the combined bot's signals of the last 7 KST days and what became of each; ``bot`` paper2: the second
         paper bot's (5 s cache)."""
         p = paths()
-        b = bot if bot in ("paper", "paper2") else "paper"
+        b = bot if bot in BOT_IDS else "paper"
         return _cached(key("signals:" + b, p), lambda: json_finite(signals(p, int(time.time() * 1000), b)))
 
     @app.get("/api/v4/livebots/perf")

@@ -43,7 +43,7 @@
 // under the account's name; the old '친구 매매법' executor of WOO X Pro 2 keeps its own reactor while the server has it.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
-import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo} from "./livebots-kit.js";
+import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo, takingNoneKo} from "./livebots-likely.js";
 
@@ -459,7 +459,7 @@ export function freshMilestones(before, reached, seen, firstWinAt = null, now = 
  *  entry (the same trade's entry fill): {exit, entry, paper} or null. */
 export function lastClosed(fills) {
   const xs = (fills || []).filter((f) => f && f.kind === "exit" && f.t != null).sort((a, b) => b.t - a.t);
-  const paperish = (f) => f.acct === "paper" || f.acct === "paper2";               // the second paper bot's fills are paper too
+  const paperish = (f) => isPaperId(f.acct);                                        // the other paper bots' fills are paper too
   const pick = xs.find((f) => !paperish(f)) || xs.find((f) => f.acct === "paper") || xs.find(paperish) || null;
   if (!pick) return null;
   const ek = String(pick.key || "").replace(/:x:/, ":e:");

@@ -20,7 +20,7 @@
 // says to expect (가상), in place of 승률 흐름 · 그룹별 성적 · 나눠 보기 · 동전 쌍둥이, the no-scorecard card (it points at
 // 나눠 보기) and the account switch; 2주 검토까지 stays.
 import {h, s, put, ui, fmt, local, motion, href} from "../core/pb.js";
-import {acctKo, sourceState, expectLines, expectHead, eraWords, EXEC_SLOTS, execIds, execsNow, execsKo} from "./livebots-kit.js";
+import {acctKo, sourceState, expectLines, expectHead, eraWords, EXEC_SLOTS, execIds, execsNow, execsKo, PAPER_IDS} from "./livebots-kit.js";
 import {smallFloor} from "./livebots-calc.js";
 import {scoreView, ledgerView} from "./livebots-score.js";
 import {groupBlock, cardSub} from "./livebots-rank.js";
@@ -28,7 +28,7 @@ import {groupBlock, cardSub} from "./livebots-rank.js";
 /** The accounts of an answer: the second paper bot too while the server sends it (owners 10/23: the 'VWAP 개선판', its own
  *  record from its own start), named by its bot (acctKo), and the third executor (딥코인) while the server has it
  *  (execIds); one paper bot and two executors: the three as before. */
-export const idsOf = (d) => ["paper", ...(d && d.accts && d.accts.paper2 ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
+export const idsOf = (d) => ["paper", ...["paper2", "range"].filter((id) => d && d.accts && d.accts[id]), ...(d ? execIds(d) : execsNow())];
 const REFRESH_MS = 60 * 1000;
 const BREAK = [{id: "by_strategy", label: "매매법"}, {id: "by_coin", label: "코인"}, {id: "by_tf", label: "봉"}, {id: "by_side", label: "롱·숏"}, {id: "by_hour", label: "시간(한국)"}];
 /** The trend bot's splits: its roles first, the entry bar as such. */
@@ -41,7 +41,7 @@ const keyKo = (b, k) => (b === "by_strategy" ? fmt.stratKo(k) : b === "by_coin" 
   : b === "by_side" ? fmt.sideKo(k) : b === "by_hour" ? `${String(k).padStart(2, "0")}시` : String(k));
 
 /** The splits a page offers: the trend bot's (with 역할) or the old ones (and the second paper bot's: never the trend roles). */
-export const breaksOf = (d, acct) => (d && d.trend_bot && acct !== "paper2" ? BREAK_TREND : BREAK);
+export const breaksOf = (d, acct) => (d && d.trend_bot && acct !== "paper2" && acct !== "range" ? BREAK_TREND : BREAK);
 
 /** 2주 검토까지 in numbers (the server's review): {pct (0..1 of the freeze gone), daysLeft, head, sub, done}; null without
  *  one. A count of days and trades, never a verdict. */
@@ -94,7 +94,7 @@ export function rollChart(acc, refs, W = 640) {
 export function perfView(ctx) {
   // the split remembered on this device; none yet: the first of the bot's own list (역할 for the trend bot)
   const st = {acct: local.get("lb-pacct", "paper"), brk: local.get("lb-pbrk", null), d: null, okAt: 0};
-  if (!["paper", "paper2", ...EXEC_SLOTS].includes(st.acct)) st.acct = "paper";
+  if (![...PAPER_IDS, ...EXEC_SLOTS].includes(st.acct)) st.acct = "paper";
   if (![...BREAK, ...BREAK_TREND].some((b) => b.id === st.brk)) st.brk = null;
   let chosen = st.brk != null;
   const pickAcct = (id) => { st.acct = id; local.set("lb-pacct", id); draw(); };
@@ -140,7 +140,7 @@ export function perfView(ctx) {
   /** The splits' switch for this answer (rebuilt in its place only when the bot kind changes; the choice is kept when the
    *  list has it). */
   function breaks(d) {
-    const list = breaksOf(d, st.acct), kind = d && d.trend_bot && st.acct !== "paper2" ? "trend" : "old";
+    const list = breaksOf(d, st.acct), kind = d && d.trend_bot && st.acct !== "paper2" && st.acct !== "range" ? "trend" : "old";
     if (kind === bkind) return;
     bkind = kind;
     if (!chosen || !list.some((b) => b.id === st.brk)) st.brk = list[0].id;
@@ -209,6 +209,8 @@ export function perfView(ctx) {
     eraNote.hidden = !ew;
     if (st.acct === "paper2") {                          // the second paper bot: its own record from its own start
       put(botTag, ui.pill(`${a0.label_ko || acctKo("paper2")} · 이 봇 시작부터`, "thin", "두 번째 페이퍼 봇의 기록이에요 (추세판단 봇과 다른 봇)"));
+    } else if (st.acct === "range") {                    // the 레인지 봇 (owners 10/26): its own record from its own start
+      put(botTag, ui.pill(`${a0.label_ko || acctKo("range")} · 이 봇 시작부터`, "thin", "레인지 봇의 기록이에요 (추세판단 봇과 다른 봇)"));
     }
     // the trend bot with no closed trade of its own yet: one empty state, never tables of zeros (the rest as before)
     const fresh = d.trend_bot && d.empty ? d.empty : null;

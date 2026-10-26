@@ -121,6 +121,12 @@ def test_off_before_the_executor_runs(tmp_path):
     assert "순ROE 20%→17% · 25%→22% · 30%→27% …" in words["ladder"] and "그 뒤 5%마다 (닿은 순ROE - 3%)" in words["ladder"]
     assert words["tp"] == "없음" and "강제청산 가격보다 멀면 그 진입은 안 함" in words["liq"] and "40배 약 2%" in words["liq"]
     assert "30배 약 2.83%" in words["liq"] and words["macro"].startswith("미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 30분은 새 진입 안 함")
+    # owners 10-26 "투비트도 나스닥 개장 앞뒤 30분 진입금지" (the template's us_open_pre_min / us_open_pause_min)
+    assert words["us_open"] == "나스닥 개장 앞 30분·뒤 30분은 새 진입 안 함 · 열린 포지션은 그대로"
+    lim = {x["key"]: x for x in L.fixed_rules(json.load(open(TEMPLATE, encoding="utf-8")))}
+    assert lim["us_open"]["value"] == [30, 30] and lim["us_open"]["ko"] == "나스닥 개장 앞 30분·뒤 30분 새 진입 안 함"
+    assert L.WHY_KO["us_open_skip"] == "나스닥 개장 앞뒤라 들어가지 않았어요" and L.KIND_KO["us_open_skip"] == "나스닥 개장 앞뒤라 안 들어감"
+    assert L.fixed_rules({"us_open_pre_min": 0}) == [] and L.us_open_window({"us_open_pause_min": 15}) == (0, 15)
     assert "BTC · ETH · SOL · DOGE · LTC · BCH" in words["coins"] and "정한 금액 $50" in words["coins"] and "V39_ALL@1h" in words["follow"]
     assert pl["ladder"] == [{"at": 0.2, "lock": 0.17}, {"at": 0.25, "lock": 0.22}, {"at": 0.3, "lock": 0.27}, {"at": 0.35, "lock": 0.32}]
     # a config on the server but no database yet: still off, said why
@@ -253,14 +259,15 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     const R = await import('file://{V4}/core/routes.js');
     console.log(JSON.stringify({{groups: R.GROUPS.map((g) => [g.id, g.ko, g.screens]), keys: R.KEYS, land: R.landing(),
       nav: R.navGroups(true).map((g) => [g.ko, g.items.map((it) => it.ko)]),
-      screens: ['trendbot', 'vwapbot', 'mixbot', 'v39'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].group, R.SCREENS[k].mod]),
+      screens: ['trendbot', 'rangebot', 'vwapbot', 'mixbot', 'v39'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].group, R.SCREENS[k].mod]),
       parse: R.parseHash('#/v39'), href: R.href('livebots', 'mixbot'), icon: R.icon('bots').childNodes.length}}));""")
-    assert out["groups"][0] == ["bots", "봇별", ["trendbot", "vwapbot", "mixbot", "v39"]]
+    # 레인지 봇 (owners 10/26 evening, tests/test_dash_live_range.py) right after 추세판단 봇
+    assert out["groups"][0] == ["bots", "봇별", ["trendbot", "rangebot", "vwapbot", "mixbot", "v39"]]
     assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix"]      # the rest as it was
-    assert out["nav"][0] == ["봇별", ["추세판단 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트"]]
-    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"],
+    assert out["nav"][0] == ["봇별", ["추세판단 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트"]]
+    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"],
                               ["V3.9 투비트", "bots", "livebots"]]
-    assert out["keys"][:5] == ["trendbot", "vwapbot", "mixbot", "v39", "trend"] and out["land"] == "trend"
+    assert out["keys"][:6] == ["trendbot", "rangebot", "vwapbot", "mixbot", "v39", "trend"] and out["land"] == "trend"
     assert out["parse"]["name"] == "v39" and out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트")):
@@ -304,7 +311,7 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     console.log(JSON.stringify({{r, asked, fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'paper2'), K.followersOf(null, 'paper')],
       tabs: Object.fromEntries(Object.entries(LB.BOT_TAB).map(([k, v]) => [k, v.bot]))}}));""", s=summary, n=no_tb, v=v39)
     assert out["fol"] == [["bybit", "mexc"], ["deepcoin"], []]
-    assert out["tabs"] == {"trendbot": "trend", "vwapbot": "vwap", "mixbot": "mix", "v39": "v39"}
+    assert out["tabs"] == {"trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix", "v39": "v39"}
     r = out["r"]
     head = lambda t: t.split("보기만 하는 화면(주문 버튼 없음)")[0]       # the strip, before its last words
     assert "바이비트 $101.50" in head(r["trend"]["text"]) and "WOO X Pro $102.80" in head(r["trend"]["text"])
@@ -341,6 +348,7 @@ def test_the_v39_view_in_node(w, tmp_path):
                  "표본 적음", "페이퍼 V39 지갑", "모의 · 진짜 돈 아님",
                  "계획", "1단계", "20% → 17%", "25% → 22%", "30% → 27%", "BTC 40배 · 나머지 30배", "2.5 ATR", "증거금 = 그때 투비트 잔고의 40%",
                  "미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 30분은 새 진입 안 함", "강제청산 가격보다 멀면 그 진입은 안 함",
+                 "나스닥 개장 앞 30분·뒤 30분은 새 진입 안 함",
                  "지금 포지션", "DOGE", "30배 격리", "계단 1단계 · 순ROE 17% 잠금", "가장 좋았던 순ROE +21%",
                  "순ROE 25% (0.21195)에 닿으면 손절을 순ROE 22% (0.21160)로", "잠금선", "강제청산 (어림)", "페이퍼 V39:",
                  "페이퍼 V39 진입 vs 실거래", "따라 들어감 2", "같이 들고 있음 1", "안 들어감 2", "실행기 시작 전 1",

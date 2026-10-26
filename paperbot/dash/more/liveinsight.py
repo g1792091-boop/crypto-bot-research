@@ -409,7 +409,7 @@ def bot_side(cx: dict, path: Optional[str]) -> dict:
                "combo": cx["combo"], "paper": cx["paper"]}
     else:
         pr = (bot or {}).get("read") or (cx["execs"][0]["_papers"].get(k) if cx["execs"] else None) or L._missing(path)
-        combo = L.read_combo(path, cx["more"].get("combo2_config") or "-")
+        combo = L.read_combo(path, L.combo_fallback(cx["more"], (bot or {}).get("id") or "paper2"))
         members = run_members(path, combo)
         ok = pr.get("state") == "ok"
         acc = (pr.get("accounts") or {}).get(ACCOUNT) if ok else None
@@ -1470,7 +1470,8 @@ def head_to_head(cx: dict) -> Optional[dict]:
     if not twin:
         return _plain_h2h(cx, c)
     rows = {r["id"]: r for r in c["rows"]}
-    switch = max((x["switched_ms"] for x in cx["execs"] if x.get("paper_id") == "paper2" and x.get("switched_ms")), default=None)
+    second = cx["bots"][1]["id"]                         # the second bot on the page (paper2, or the 레인지 봇 alone)
+    switch = max((x["switched_ms"] for x in cx["execs"] if x.get("paper_id") == second and x.get("switched_ms")), default=None)
     sides = []
     for b in cx["bots"][:2]:
         r = rows.get(b["id"]) or {}
@@ -1490,7 +1491,8 @@ def _plain_h2h(cx: dict, c: dict) -> dict:
     second one started (compare_papers) and the live accounts following each, all counted from the switch (the last move
     of an executor to the second bot) and only their trades on that bot; no stop words, no review date, no verdict."""
     rows = {r["id"]: r for r in c["rows"]}
-    switch = max((x["switched_ms"] for x in cx["execs"] if x.get("paper_id") == "paper2" and x.get("switched_ms")), default=None)
+    second = cx["bots"][1]["id"]                         # the second bot on the page (paper2, or the 레인지 봇 alone)
+    switch = max((x["switched_ms"] for x in cx["execs"] if x.get("paper_id") == second and x.get("switched_ms")), default=None)
     sides = []
     for b in cx["bots"][:2]:
         r = rows.get(b["id"]) or {}
@@ -1829,19 +1831,20 @@ def health(p: dict, now: int, more: Optional[dict] = None) -> dict:
         add("paper_step", f"{main_ko} 마지막 1분", _late(pb["step"], now, PAPER_STEP_LATE_MS, MIN))
     # the second paper bot (owners 10-19, docs/live15-mexc-ko.md): its own heartbeat and last minute; it holds an executor
     # back only while one follows it, else it is a comparison (a warning, not a fault)
-    for b in bots[1:]:
+    for b in bots[1:]:                                   # (the 레인지 봇 too, owners 10-26: its own items, "range_hb")
         nm = _bot_word(b["short_ko"])                    # "VWAP 개선판 봇" (a name ending in 봇 keeps one)
         sev = "bad" if b["follower_ids"] else "warn"
+        bid = b["id"]
         pb2 = paper_beat(b["path"])
         if pb2.get("state") != "ok":
-            add("paper2_hb", f"{nm} 심장 박동", {**_src(pb2), "at": None, "late_ms": None, "limit_ms": PAPER_HB_LATE_MS},
-                who="paper2", severity=sev, detail={"label_ko": b["label_ko"]})
+            add(f"{bid}_hb", f"{nm} 심장 박동", {**_src(pb2), "at": None, "late_ms": None, "limit_ms": PAPER_HB_LATE_MS},
+                who=bid, severity=sev, detail={"label_ko": b["label_ko"]})
             continue
         hb2 = pb2["heartbeat"]
-        add("paper2_hb", f"{nm} 심장 박동", _late(hb2, now, PAPER_HB_LATE_MS) if hb2 is not None else
+        add(f"{bid}_hb", f"{nm} 심장 박동", _late(hb2, now, PAPER_HB_LATE_MS) if hb2 is not None else
             {"state": "missing", "reason_ko": "심장 박동 기록이 아직 없어요 (아직 켜지기 전)", "at": None, "late_ms": None,
-             "limit_ms": PAPER_HB_LATE_MS}, who="paper2", severity=sev, detail={"queue": pb2.get("queue"), "label_ko": b["label_ko"]})
-        add("paper2_step", f"{nm} 마지막 1분", _late(pb2["step"], now, PAPER_STEP_LATE_MS, MIN), who="paper2", severity=sev)
+             "limit_ms": PAPER_HB_LATE_MS}, who=bid, severity=sev, detail={"queue": pb2.get("queue"), "label_ko": b["label_ko"]})
+        add(f"{bid}_step", f"{nm} 마지막 1분", _late(pb2["step"], now, PAPER_STEP_LATE_MS, MIN), who=bid, severity=sev)
     configs = {ex: L.read_config(p[ck]) for ex, _ko, _dk, ck in L.installed(p)}
     for ex, ko, dk, _ck in L.slots(configs):             # each slot by the exchange its config names (WOO X Pro)
         eb = exec_beat(p[dk])

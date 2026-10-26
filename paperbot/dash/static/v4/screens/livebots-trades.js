@@ -16,7 +16,7 @@
 // HONESTY: every number is a record's; a field the record does not have is '—' or left out; real money and paper money each
 // carry their own caption; no buttons that change anything; cards not collected yet say 수집 전, never '없음'.
 import {h, put, ui, fmt, local, motion} from "../core/pb.js";
-import {acctKo, acctTag, sourceState, EXEC_SLOTS, execIds, execsNow} from "./livebots-kit.js";
+import {acctKo, acctTag, sourceState, EXEC_SLOTS, execIds, execsNow, isPaperId} from "./livebots-kit.js";
 import {cardBlock, cardSummary} from "./livebots-cards.js";
 import {replayHref} from "./livebots-replay.js";
 import {whyBox} from "./livebots-why.js";
@@ -24,7 +24,7 @@ import {whyBox} from "./livebots-why.js";
 export const EXC_API = "/api/v4/livebots/positions/excursions";
 /** The tables of the answer: the paper bots (the second while there is one), then the executors (execIds: the third,
  *  딥코인, while the server has it). */
-const idsOf = (d) => ["paper", ...(d && d.accts && d.accts.paper2 ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
+const idsOf = (d) => ["paper", ...["paper2", "range"].filter((id) => d && d.accts && d.accts[id]), ...(d ? execIds(d) : execsNow())];
 const EX_NONE = {missing: "수집 전", error: "못 읽음", none: "1분봉 없음"};
 
 /** A row's 최대 +% / 최대 −% (pure; node tests): {state, mfe, mae, src, why} from the excursions answer x, its account and
@@ -40,7 +40,7 @@ export function excOf(x, acct, key, failed) {
 }
 const REFRESH_MS = 30 * 1000;
 const STATE_KO = {matched: "따라감", missed: "안 따라감", before: "시작 전", open: "닫는 중", unknown: "모름", other: "다른 페이퍼"};
-const isPaper = (id) => id === "paper" || id === "paper2";
+const isPaper = (id) => isPaperId(id);
 const F0 = () => ({coin: "", strat: "", res: "all", card: false});
 
 /** The trades in a filter: {coin, strat, res: "all" | "win" | "loss", card: only the ones with a loss card}. */
@@ -144,7 +144,7 @@ export function tradesView(ctx) {
    *  has its own account and start), nor a live trade that followed it. */
   function prevTrade(r) {
     const since = st.d && st.d.trend_bot ? Number(st.d.trend_bot.since) : null;
-    if (!since || st.acct === "paper2" || (r.paper && r.paper.paper_id === "paper2")) return false;
+    if (!since || (isPaper(st.acct) && st.acct !== "paper") || (r.paper && r.paper.paper_id && r.paper.paper_id !== "paper")) return false;
     const t = r.entry_time != null ? r.entry_time : r.paper && r.paper.entry_time != null ? r.paper.entry_time : r.entry_ts;
     return t != null && Number(t) < since;
   }
@@ -193,7 +193,7 @@ export function tradesView(ctx) {
     const cs = st.d.cards || {};
     put(csum, cs.state && cs.state !== "ok" ? sourceState(cs, "손실 카드") : cardSummary(xs, cs.kinds, cs));
     pg.set(xs, !user);
-    put(cap, isPaper(st.acct) ? ui.assumeLine(["closed"], st.acct === "paper2" ? acctKo("paper2") : "페이퍼(연습)") : ui.assumeLive(`${acctKo(st.acct)} · ≈ = 체결 기록 전 지갑 변화로 어림`));
+    put(cap, isPaper(st.acct) ? ui.assumeLine(["closed"], st.acct !== "paper" ? acctKo(st.acct) : "페이퍼(연습)") : ui.assumeLive(`${acctKo(st.acct)} · ≈ = 체결 기록 전 지갑 변화로 어림`));
   }
   async function load() {
     let d;
@@ -215,7 +215,8 @@ export function tradesView(ctx) {
       st.ids = ids;
       if (!ids.includes(st.acct)) st.acct = "bybit";
       const want2 = local.get("lb-tacct2", "");
-      if (q.acct === "paper2" || (!q.acct && want2 === "paper2" && ids.includes("paper2"))) st.acct = "paper2";
+      const pq = ["paper2", "range"].find((id) => q.acct === id || (!q.acct && want2 === id && ids.includes(id)));
+      if (pq) st.acct = pq;
       else if (EXEC_SLOTS.includes(q.acct || want2) && ids.includes(q.acct || want2)) st.acct = q.acct || want2;
       const next = segOf(ids);
       seg.replaceWith(next);

@@ -188,8 +188,11 @@ export function v39View(ctx) {
     if (s.state === "off") { put(posBox, h("div", {class: "l39-empty"}, h("b", null, "실행기 꺼짐"), h("p", null, "켜지면 투비트 포지션과 계단이 여기 보여요.")), paperLine); return; }
     if (s.state === "error") { put(posBox, sourceState({state: "error", reason_ko: s.reason_ko, reason: s.reason}, "실행기 기록"), paperLine); return; }
     if (!p) {
+      // the NYSE open too when the config blocks it (owners 10/26, the plan's own line: us_open_pre_min / us_open_pause_min)
+      const uo = ((d.plan || {}).lines || []).find((x) => x.key === "us_open");
       put(posBox, h("div", {class: "l39-empty"}, h("b", null, "포지션 없음"),
-        h("p", null, "페이퍼 V39가 진입하면 따라 들어가요 (한 번에 1포지션 · 시장가 · 격리). 손절이 강제청산보다 멀거나 미국 경제 발표 앞뒤 30분이면 들어가지 않아요.")), paperLine);
+        h("p", null, "페이퍼 V39가 진입하면 따라 들어가요 (한 번에 1포지션 · 시장가 · 격리). 손절이 강제청산보다 멀거나 미국 경제 발표 앞뒤 30분이면 들어가지 않아요."
+          + (uo ? ` ${String(uo.ko).split("은 새 진입")[0]}에도 들어가지 않아요.` : ""))), paperLine);
       return;
     }
     put(posBox,

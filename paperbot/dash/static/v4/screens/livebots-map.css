@@ -16,6 +16,8 @@
 .lbm-l-toobit { color: var(--series-tb); }
 .lbm-a-paper2 { --lbm-c: var(--series-ds); }        /* the second paper bot (only while the server sends it) */
 .lbm-l-paper2 { color: var(--series-ds); }
+.lbm-a-range { --lbm-c: var(--series-rg); }         /* the 레인지 봇 (only while the server sends it) */
+.lbm-l-range { color: var(--series-rg); }
 
 /* ---------------------------------------------------------------- 기대 범위 띠 */
 .lbm-hero { position: relative; overflow: hidden; }

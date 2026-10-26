@@ -13,11 +13,11 @@ import {panel, ratioBar, ping, ageCell} from "./terminal-kit.js";
 import {hit} from "./terminal-live.js";
 import {failNote} from "./terminal-state.js";
 import {unrealized, roeAt, lightWords, coinCounts, liveToday, distTo} from "./livebots-calc.js";
-import {ACCT, acctKo, acctTag, posTip, EXIT_SHORT, EXEC_SLOTS, execIds, execsNow, execsKo} from "./livebots-kit.js";
+import {ACCT, acctKo, acctTag, posTip, EXIT_SHORT, EXEC_SLOTS, execIds, execsNow, execsKo, PAPER_IDS, isPaperId} from "./livebots-kit.js";
 
 const live = () => motion.visible() && !motion.reduced();
 /** The accounts of the table's choice: the paper bots (the second while there is one), then the executors (execIds). */
-const idsOf = (d) => ["paper", ...(d && (d.accts || []).some((a) => a.id === "paper2") ? ["paper2"] : []), ...(d ? execIds(d) : execsNow())];
+const idsOf = (d) => ["paper", ...["paper2", "range"].filter((id) => d && (d.accts || []).some((a) => a.id === id)), ...(d ? execIds(d) : execsNow())];
 
 // ---------------------------------------------------------------- the status strip
 /** bandLine(ctx) -> {el, set(d, state)}: one slim line of chips, each a link to the tab that explains it. */
@@ -134,7 +134,7 @@ export function fillsPanel(ctx) {
       }
     }
     let W = 0, L = 0, n = 0;
-    for (const f of fills) { if (f.kind !== "exit" || f.acct === "paper" || f.acct === "paper2" || f.pnl == null) continue; if (f.pnl > 0) W++; else L++; if (++n >= 20) break; }
+    for (const f of fills) { if (f.kind !== "exit" || isPaperId(f.acct) || f.pnl == null) continue; if (f.pnl > 0) W++; else L++; if (++n >= 20) break; }
     ratioK.textContent = `실거래 최근 ${fmt.int(n)}번`;
     ratio.set({W, L});
   }
@@ -234,7 +234,7 @@ const TAB_NOTE = {
 export function tablePanel(ctx, st, onPick) {
   const t = {tab: local.get("lb-tab", "pos"), acct: local.get("lb-tacct", ""), d: null, state: "loading"};
   if (!["pos", "fills", "stops"].includes(t.tab)) t.tab = "pos";
-  if (t.acct && !["paper", "paper2", ...EXEC_SLOTS].includes(t.acct)) t.acct = "";
+  if (t.acct && ![...PAPER_IDS, ...EXEC_SLOTS].includes(t.acct)) t.acct = "";
   const tabs = ui.seg([{id: "pos", label: "포지션"}, {id: "fills", label: "체결"}, {id: "stops", label: "손절 주문"}], t.tab,
     (id) => { t.tab = id; local.set("lb-tab", id); render(true); }, {label: "아래 표"});
   const posBtn = tabs.querySelector('[data-id="pos"]');

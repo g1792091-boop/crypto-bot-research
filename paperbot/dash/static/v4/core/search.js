@@ -13,7 +13,7 @@ export const ALIAS = {
 /** The 실거래 site's tabs (core/routes.js LIVE_SCREENS; the rule bot's page no longer lists 실거래: it moved to its own site). */
 export const LIVE_ALIAS = {
   // 봇별 (owners 10/26): one screen per bot
-  trendbot: "추세판단 봇 봇별 바이비트 WOO X Pro 페이퍼 trend bot", vwapbot: "VWAP 개선판 봇별 딥코인 페이퍼 vwap bot",
+  trendbot: "추세판단 봇 봇별 바이비트 WOO X Pro 페이퍼 trend bot", rangebot: "레인지 봇 봇별 WOO X Pro 레인지 필터 되돌림 슈퍼트렌드 range bot", vwapbot: "VWAP 개선판 봇별 딥코인 페이퍼 vwap bot",
   mixbot: "친구 30분 봇 믹스 봇별 WOO X Pro 2 두 번째 계정 mixchop mix bot", v39: "V3.9 투비트 봇별 V39 규칙봇 1시간 toobit",
   trend: "관제 추세 판단 되돌림 감독 지금 control trend", tchart: "추세 차트 흐름 판단 기록 히트맵 신호 띠 heatmap trend chart", hq: "한눈에 지갑 빛 실행기 계좌", pos: "포지션 진입가 익절가 손절가 최대 position", summary: "요약 터미널 terminal", chart: "차트 선 chart",
   risk: "위험 청산 손절 risk", health: "봇 상태 살아 있나 실행기 health", trades: "거래 체결 기록 trades", replay: "다시보기 재생 replay",

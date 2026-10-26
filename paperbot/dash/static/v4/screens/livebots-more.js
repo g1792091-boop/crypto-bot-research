@@ -54,13 +54,15 @@ export function ladderKo(lad) {
  *  gates and hold limit too, the server's rules.gates words; it has no trend judgment that keeps going in a pause). */
 export function rulesList(r) {
   const gates = Array.isArray(r.gates) && r.gates.length ? r.gates : null;
+  // the 레인지 봇 (owners 10/26): one fixed take-profit instead of a ladder, its own entry rules (the server's range_rules)
+  const rng = Array.isArray(r.range_rules) && r.range_rules.length ? r.range_rules : null;
   const entryGates = gates ? gates.filter((g) => g.id !== "max_hold") : [];
   const hold = gates ? gates.find((g) => g.id === "max_hold") : null;
   const out = [
     ["배수", `BTC ${r.leverage_btc ?? "—"}배 · 나머지 ${r.leverage_alt ?? "—"}배 (고정)`],
     ["증거금", typeof r.margin === "number" ? `잔고의 ${pctOf(r.margin)}` : r.margin === "leverage" ? "배수와 같은 %" : "—"],
     ["포지션", "한 번에 하나"],
-    ["계단 잠금", ladderKo(r.ladder)],
+    r.take_profit_roe != null ? ["고정 익절", `순ROE +${pctOf(r.take_profit_roe)}에서 전부 닫음 (계단 없음)`] : ["계단 잠금", ladderKo(r.ladder)],
     ["손절 한 번", r.max_loss_frac != null ? `잔고의 최대 ${pctOf(r.max_loss_frac)} (넘으면 크기를 줄임)` : "—"],
     ["주말", r.no_weekend ? "한국 시간 토·일에는 새로 진입하지 않음 (열린 포지션은 그대로)" : "주말에도 진입"],
     ["경제 발표", r.macro_blackout_min ? `미국 경제 발표 앞뒤 ${r.macro_blackout_min}분은 진입하지 않음` : "제한 없음"],
@@ -68,8 +70,9 @@ export function rulesList(r) {
       r.us_open_pause_min ? `뒤 ${r.us_open_pause_min}분` : ""].filter(Boolean).join("·")}은 진입하지 않음 (${gates ? "열린 포지션 청산은 계속" : "추세 판단·청산은 계속"})`] : null,
     ["기본 손절", r.stop ? r.stop.ko : "—"],
     ["빠른 청산", r.early_exit ? (r.early_exit === "own" ? "같은 매매법의 반대 신호에 바로 청산" : "아무 매매법의 반대 신호에 바로 청산")
-      : hold ? "없음 (손절 · 계단 잠금 · 보유 한도만)" : "없음 (손절과 계단 잠금만)"],
+      : hold ? "없음 (손절 · 계단 잠금 · 보유 한도만)" : r.take_profit_roe != null ? "없음 (손절과 고정 익절만)" : "없음 (손절과 계단 잠금만)"],
   ];
+  if (rng) return [...out, ["진입 규칙", h("ul", {class: "lb-limits"}, rng.map((g) => h("li", null, g.ko)))]];
   if (!gates) return out;
   return [...out,
     entryGates.length ? ["진입 조건", h("ul", {class: "lb-limits"}, entryGates.map((g) => h("li", null, g.ko)))] : null,
@@ -141,13 +144,15 @@ export function settingsView(ctx) {
   function botCard(b) {
     const who = (b.followers || []).length ? `${josa(b.followers.join(" · "), "이", "가")} 따라가요` : "따라가는 실행기 없음";
     const c = b.combo || {};
-    return ui.card({title: `${b.short_ko || "두 번째 페이퍼 봇"} 규칙`, sub: `두 번째 페이퍼(연습) 봇 · ${who}`, cls: "lb-rulecard lb-botcard"},
+    const rng = b.id === "range";                     // the 레인지 봇 (owners 10/26): its own card words and guide
+    return ui.card({title: `${b.short_ko || "두 번째 페이퍼 봇"} 규칙`, sub: `${rng ? "레인지 봇 페이퍼(연습)" : "두 번째 페이퍼(연습) 봇"} · ${who}`, cls: "lb-rulecard lb-botcard"},
       c.state !== "ok" ? sourceState(c, `${b.short_ko || "두 번째"} 봇 설정`) : [
         h("div", {class: "lb-rules"}, ui.kv(rulesList(b.rules || {}))),
         ui.note(c.source === "db" ? `봇이 지금 쓰는 설정 (봇 DB의 시작 기록, ${fmt.kst(c.since_ms)})` : `설정 파일 ${c.path || "—"} (봇이 아직 시작 기록을 남기기 전)`),
         h("p", {class: "lb-ghead"}, `매매법 ${fmt.int(b.n_strategies || 0)}개 · 설정 ${fmt.int(b.n_settings || 0)}개`),
         h("div", {class: "lb-mems", role: "list"}, (b.groups || []).map((g) => groupRow(g, null))),
-        ui.note("자세한 것은 docs/vwap-bot-ko.md 2장 (설정 파일 deploy/combo.vwap.json 그대로)")]);
+        ui.note(rng ? "자세한 것은 docs/range-bot-ko.md 1장 (설정 파일 deploy/combo.range.json 그대로)"
+          : "자세한 것은 docs/vwap-bot-ko.md 2장 (설정 파일 deploy/combo.vwap.json 그대로)")]);
   }
   function drawTrend(tr) {
     if (!tr) { put(trendSlot); return; }

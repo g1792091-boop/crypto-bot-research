@@ -61,6 +61,9 @@ REF_PAPER2_KO = "5년 기준표는 −50% 봇(규칙봇 15) 것이라 이 봇(�
 # a second paper bot that is another bot (owners 10-23: the 'VWAP 개선판'), not the twin the line above is about
 REF_OTHER_KO = ("5년 기준표(deploy/combo.live-ac.expected.json)는 예전 봇 것이라 {name}에는 보여 드리지 않아요 · 이 봇의 연구 숫자는 "
                 "research/vwap30/QA_KO.md")
+# the 레인지 봇 (owners 10-26): its own research, never the old bots' table
+REF_RANGE_KO = ("5년 기준표(deploy/combo.live-ac.expected.json)는 예전 봇 것이라 {name}에는 보여 드리지 않아요 · 이 봇의 연구 숫자는 "
+                "analysis/f7tp10_1026/FINAL_KO.md")
 # the 'VWAP 개선판' (paperbot/entrygates.py, combo.py): what its gates read at the entry rides with the entry (since 10-23,
 # commit 7ac1d51); an entry recorded before that has no numbers, said so (never made up)
 GATES_NONE_KO = "이 진입은 조건 기록 전이라 숫자가 없어요"
@@ -476,6 +479,65 @@ def gate_checks(cfg: dict, entry: int, side: int, tf: Optional[str], gates: Any)
     return out
 
 
+def _hm(ms: int) -> str:
+    """"10/27 13:05" (KST)."""
+    t = time.gmtime((int(ms) + L.KST_MS) / 1000)
+    return f"{t.tm_mon}/{t.tm_mday} {t.tm_hour:02d}:{t.tm_min:02d}"
+
+
+def _lev(cfg: dict, symbol: str) -> Optional[int]:
+    """The config's leverage of a coin (its own, else ``default``)."""
+    lev = cfg.get("leverage") if isinstance(cfg.get("leverage"), dict) else {}
+    return L._i(lev.get(symbol)) or L._i(lev.get("default"))
+
+
+def range_checks(cfg: dict, entry: int, side: int, symbol: str, lev: Optional[int], info: Any, rt: float) -> list:
+    """What the 레인지 봇 checked before this entry (paperbot/rangebot.py: the weekend / macro / NYSE-open pauses at the
+    entry minute, one signal at a time, the coin's and BTC's 1h supertrend on the signal's side, the liquidation room,
+    then the pullback it waited for), with the numbers the bot kept in the signal (``range``: close, ATR, level, touch,
+    the two supertrend sides). An entry without them says so, never a made-up number."""
+    out = []
+
+    def add(id_, ok, ko, detail=None, **kw):
+        out.append({"id": id_, "ok": ok, "ko": ko, "detail": detail, **kw})
+    _pauses(cfg, entry, add)
+    add("one", True, "기다리는 신호도 포지션도 없었어요 (한 신호씩)")
+    r = cfg.get("range") if isinstance(cfg.get("range"), dict) else {}
+    i = info if isinstance(info, dict) else None
+    if i is None:
+        add("range", None, "이 진입은 레인지 봇의 되돌림 기록이 없어요")
+        return out
+    words = {1: "상승", -1: "하락", 0: "없음"}
+    sts = [(w, L._i(i.get(k))) for w, k, on in (("코인", "coin_st", r.get("coin_st", True)), ("BTC", "btc_st", r.get("btc_st", True))) if on]
+    if sts:
+        known = [v for _w, v in sts if v is not None]
+        ok = None if len(known) < len(sts) else all(v == side for _w, v in sts)
+        said = " · ".join(f"{w} 1시간 슈퍼트렌드 {words.get(v, '모름')}" for w, v in sts)
+        add("st", ok, f"추세 확인: {said} → "
+            + ({True: f"{SIDE_WORD.get(side, '')} 통과", False: "반대인데 진입 기록이 있어요", None: "기록 없음"}[ok]), dict(sts))
+    close, atr = L._f(i.get("close")), L._f(i.get("atr"))
+    if r.get("liq_check", True) and close and atr and lev:
+        mmr = L._f(r.get("liq_mmr")) or 0.005
+        stop = L._f(((cfg.get("stop") or {}) if isinstance(cfg.get("stop"), dict) else {}).get("roe")) or 0.5
+        dist, room = stop / lev - rt, 1 / lev - mmr
+        add("liq", dist + atr / close <= room + 1e-9, f"강제청산 여유: 손절 거리 {dist:.2%} + 1시간 ATR {atr / close:.2%} → {room:.2%} 안쪽 ({lev}배)",
+            {"dist": dist, "atr_frac": atr / close, "room": room})
+    lvl, touch, et = L._f(i.get("level")), L._i(i.get("touch")), L._i(i.get("entry_t"))
+    k = L._f(i.get("k")) or L._f(r.get("pullback_atr"))
+    if lvl is not None and touch is not None:
+        waited = max(0, int(touch) - int(i.get("t0") or touch)) // MIN
+        add("pull", True, f"되돌림: 종가 {close:.6g}에서 {k:g} ATR {'아래' if side > 0 else '위'} {lvl:.6g}에 {waited}분 만에 닿음 → "
+            + (f"{_hm(et)} 5분봉 시가에 진입" if et is not None else "다음 5분봉 시가에 진입"), {"level": lvl, "touch": touch, "entry_t": et})
+    else:
+        add("pull", None, "되돌림 숫자가 기록에 없어요")
+    tp = L._f(cfg.get("take_profit_roe"))
+    if tp is not None:
+        sl = L._f(((cfg.get("stop") or {}) if isinstance(cfg.get("stop"), dict) else {}).get("roe")) or 0.5
+        add("tp", None, f"익절은 순ROE +{tp:.0%} 고정 · 손절은 순ROE −{sl:.0%} (계단 없음)",
+            {"tp": tp}, info=True)
+    return out
+
+
 # ---------------------------------------------------------------- the record before this entry
 def record_of(trades: list, meta: dict, member: Optional[str], strategy: str, tf: str, entry: int) -> dict:
     """This setting's (its member label: the label stays when the list is renumbered; else the strategy x timeframe) and
@@ -523,7 +585,7 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
     meta = sig.get("meta") if isinstance(sig.get("meta"), dict) else {}
     bar_close = int(sig["ts"]) + 1
     side, tf, strategy = int(sig.get("side") or 0), sig.get("timeframe"), sig.get("strategy_id")
-    combo = L.read_combo(b["path"], more["combo_config"] if bot == "paper" else (more.get("combo2_config") or "-"))
+    combo = L.read_combo(b["path"], L.combo_fallback(more, bot))
     cfg = (combo.get("config") or {}) if combo.get("state") == "ok" else {}
     members = L.members_of(combo) if combo.get("state") == "ok" else []
     order = L._i(meta.get("member_order"))
@@ -537,13 +599,14 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
               "score": score, "score_used": "score" in rank, "order": order, "member": meta.get("member"),
               "break_level": L._f(meta.get("break_level"))}
     gate = isinstance(cfg.get("vote_gate"), dict) or isinstance(cfg.get("vol_gate"), dict)
-    if gate:                                             # the 'VWAP 개선판': the strategy in the owners' words (combo.member_ko)
+    rng = L.range_bot(cfg)                               # the 레인지 봇 (owners 10-26): its own checks and words
+    if gate or rng:                                      # the 'VWAP 개선판' / 레인지 봇: the strategy in the owners' words (combo.member_ko)
         from ... import combo as C
         signal["strategy_ko"] = C.member_ko(strategy)
     setting = None
     if member:
         # the A / B groups were 규칙봇 15's (B = the chase-blocked four): never on a gate bot's entry (owners 10-23)
-        setting = {**member, "group": None if gate else "B" if member.get("no_chase") else "A"}
+        setting = {**member, "group": None if gate or rng else "B" if member.get("no_chase") else "A"}
     rule = rule_row(more["rule_db"], bar_close, tf, strategy, symbol) if (meta.get("source") or "rule") == "rule" else \
         {"state": "none", "reason_ko": "커스텀값 신호라 규칙봇 신호 기록이 없어요"}
     chart = chart_of(rule.get("ctx") or {}, side, tf) if rule.get("state") == "ok" else {k: rule.get(k) for k in ("state", "reason_ko", "reason", "path")}
@@ -556,15 +619,18 @@ def build(p: dict, more: dict, bot: str, symbol: str, entry: int, frames, now_ms
     if bot == "paper":
         five = five_year(order, strategy, p["paper"])
     else:                                                # the twin of 10-19 (its stop differs) or another bot (10-23)
-        five = {"state": "missing", "reason_ko": REF_PAPER2_KO if L.twins(bots) else REF_OTHER_KO.format(name=base["bot_ko"])}
+        five = {"state": "missing", "reason_ko": REF_RANGE_KO.format(name=base["bot_ko"]) if rng else
+                REF_PAPER2_KO if L.twins(bots) else REF_OTHER_KO.format(name=base["bot_ko"])}
     return {**base, "state": "ok", "signal": signal, "setting": setting,
             "combo": {k: combo.get(k) for k in ("state", "reason_ko", "reason", "path", "source")},
             "rule": {k: rule.get(k) for k in ("state", "reason_ko", "reason", "path", "status", "close", "bid", "ask", "delay_ms")},
             "chart": chart, "conditions": cond,
             "checks": gate_checks(cfg, int(entry), side, tf, meta.get("gates")) if gate else
+            range_checks(cfg, int(entry), side, symbol, L._i(det.get("leverage")) or _lev(cfg, symbol), meta.get("range"),
+                         float(b["read"].get("round_trip") or 0.0) if b["read"].get("state") == "ok" else 0.0) if rng else
             checks(cfg, member, int(entry), bar_close, side, symbol, signal["ref_price"], more["rule_db"]),
             "rivals": rivals(b["path"], L.ACCOUNT, bar_close, (tf, meta.get("member") or strategy, symbol)),
-            "record": rec, "five_year": five, **({"gate": True} if gate else {})}
+            "record": rec, "five_year": five, **({"gate": True} if gate else {}), **({"range": True} if rng else {})}
 
 
 # ---------------------------------------------------------------- routes
@@ -580,7 +646,7 @@ def register(app, ctx) -> dict:
     def get_livebots_why(bot: str, symbol: str, entry: int):
         """실거래 › 진입 근거: one paper entry's signal, the strategy's conditions on the signal bar, the chart, the checks it
         passed, the other signals of that bar and the record before it (5 s cache; the recheck is kept per signal bar)."""
-        if bot not in ("paper", "paper2"):
+        if bot not in L.BOT_IDS:
             raise HTTPException(400, "unknown bot")
         if symbol not in L.COINS:
             raise HTTPException(400, "unknown symbol")
