@@ -1589,6 +1589,9 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     flip = (paper.get("accounts") or {}).get(FLIP_ACCOUNT) if paper.get("state") == "ok" else None
     execs = [public(x) for x in execs]
     for x in execs:                                      # the page needs neither the raw reasons nor the full trade list here
+        # which of the page's paper bots it follows now ("paper" / "paper2", None: one of its own such as 투비트's): the
+        # 봇별 screens (owners 10-26) show each bot with its own executors only
+        x["bot"] = bot_id(bots, x.get("paper_path"))
         rec = x["record"] = dict(x["record"])
         rec.pop("why", None)
         rec.pop("events", None)

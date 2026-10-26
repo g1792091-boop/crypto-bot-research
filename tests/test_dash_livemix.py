@@ -559,9 +559,10 @@ def test_the_menu_group_and_the_tabs():
     r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     d = json.loads(r.stdout.strip().splitlines()[-1])
-    assert d["groups"][-1] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-1] == "믹스 봇" and len(d["groups"]) == 6
+    assert d["groups"][-1] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-1] == "믹스 봇" and len(d["groups"]) == 7
     assert d["groups"][-2][0] == "vwap"                                               # VWAP 봇 stays where it was
-    assert d["keys"] == ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health", "journal"]       # the number keys stay
+    # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its four screens take the first number keys
+    assert d["keys"] == ["trendbot", "vwapbot", "mixbot", "v39", "trend", "tchart", "hq", "pos", "summary"]
     assert d["screens"] == [["믹스 관제", "mix", "livebots"], ["믹스 성적", "mix", "livebots"]]
     assert d["parse"]["name"] == "mixperf" and d["href"] == "#/mix" and d["icons"][0] > 5
     lb = FW._read(SCREENS, "livebots.js")
@@ -571,7 +572,7 @@ def test_the_menu_group_and_the_tabs():
     routes = FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js")
     assert "mix: ICON.mix," in routes and "mixperf: () => SICON.board()," in routes
     assert "mix:" in FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "search.js").split("export const LIVE_ALIAS")[1]
-    assert ".botbar { grid-template-columns: repeat(6, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(7, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_the_files_keep_the_house_rules():

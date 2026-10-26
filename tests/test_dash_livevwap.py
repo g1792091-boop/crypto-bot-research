@@ -655,9 +655,10 @@ def test_the_menu_group_and_the_tabs():
     r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     d = json.loads(r.stdout.strip().splitlines()[-1])
-    # its own group after the four (믹스 봇 came after it on 10/25: tests/test_dash_livemix.py)
-    assert d["groups"][-2] == ["vwap", "VWAP 봇", ["vwap", "vwperf", "vwblock"]] and d["nav"][-2] == "VWAP 봇" and len(d["groups"]) == 6
-    assert d["keys"] == ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health", "journal"]       # the four groups' keys stay
+    # its own group after the four (믹스 봇 came after it on 10/25: tests/test_dash_livemix.py; 봇별 before them all on 10/26:
+    # tests/test_dash_livev39.py)
+    assert d["groups"][-2] == ["vwap", "VWAP 봇", ["vwap", "vwperf", "vwblock"]] and d["nav"][-2] == "VWAP 봇" and len(d["groups"]) == 7
+    assert d["keys"] == ["trendbot", "vwapbot", "mixbot", "v39", "trend", "tchart", "hq", "pos", "summary"]     # 봇별's four, then 지금
     assert d["screens"] == [["VWAP 관제", "vwap", "livebots"], ["VWAP 성적", "vwap", "livebots"], ["VWAP 막은 신호", "vwap", "livebots"]]
     assert d["parse"]["name"] == "vwperf" and d["href"] == "#/vwblock"
     lb = FW._read(SCREENS, "livebots.js")

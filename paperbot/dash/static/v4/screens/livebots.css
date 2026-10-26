@@ -26,6 +26,7 @@
 @import url("livebots-judge.css");
 @import url("livebots-vwap.css");
 @import url("livebots-mix.css");
+@import url("livebots-v39.css");
 
 /* the page column: the terminal takes the window from 760 px (a phone keeps the shell's 16 px gutter) */
 @media (min-width: 760px) {

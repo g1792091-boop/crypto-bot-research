@@ -231,11 +231,12 @@ def test_the_menus_of_both_sites_in_node():
     paper, live = _node(body, False), _node(body, True)
     assert "livebots" not in paper["items"] and paper["groups"] == ["거래", "성적", "매매법", "AI 직원", "서버"]
     assert paper["tag"]["text"] == "모의" and paper["href"] == "#/livebots/replay?id=7" and paper["mod"] is None
-    # 지금 · 기록 · 성적 · 운영, then VWAP 봇 (owners 10/23: the 'VWAP 개선판' paper bot's tabs, tests/test_dash_livevwap.py) and
-    # 믹스 봇 (owners 10/25 night: the '믹스 30분 봇' and its paper twin, tests/test_dash_livemix.py)
-    assert live["groups"] == ["지금", "기록", "성적", "운영", "VWAP 봇", "믹스 봇"] and live["land"] == "trend" and live["tag"]["text"] == "실거래"
+    # 봇별 first (owners 10/26: one screen per bot, tests/test_dash_livev39.py), then 지금 · 기록 · 성적 · 운영, VWAP 봇 (owners
+    # 10/23: the 'VWAP 개선판' paper bot's tabs, tests/test_dash_livevwap.py) and 믹스 봇 (owners 10/25 night: the '믹스 30분 봇'
+    # and its paper twin, tests/test_dash_livemix.py)
+    assert live["groups"] == ["봇별", "지금", "기록", "성적", "운영", "VWAP 봇", "믹스 봇"] and live["land"] == "trend" and live["tag"]["text"] == "실거래"
     assert live["items"][-5:] == ["vwap", "vwperf", "vwblock", "mix", "mixperf"]
-    assert live["items"][:4] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
+    assert live["items"][:4] == ["trendbot", "vwapbot", "mixbot", "v39"] and live["items"][4:8] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
                                                      "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"

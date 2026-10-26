@@ -119,6 +119,9 @@ const ICON = {
   strat: () => [R(2, 1, 10, 1), R(2, 1, 1, 14), R(2, 14, 11, 1), R(12, 1, 1, 14), R(5, 4, 5, 1), R(5, 7, 5, 1), R(5, 10, 3, 1), R(13, 3, 1, 12)],
   agents: () => [R(5, 1, 6, 2), R(5, 3, 6, 4), R(3, 8, 10, 5), R(1, 9, 2, 3), R(13, 9, 2, 3), R(5, 13, 2, 2), R(9, 13, 2, 2)],
   server: () => [1, 6, 11].flatMap((y) => [R(2, y, 12, 1), R(2, y + 3, 12, 1), R(2, y, 1, 4), R(13, y, 1, 4), R(10, y + 1, 2, 2), R(4, y + 1, 4, 1)]),
+  // 봇별 (LIVE_GROUPS "bots", owners 10/26): four small robot heads, one per bot
+  bots: () => [[0, 0], [9, 0], [0, 9], [9, 9]].flatMap(([x, y]) => [R(x + 3, y, 1, 1), R(x, y + 1, 7, 1), R(x, y + 6, 7, 1), R(x, y + 1, 1, 6),
+    R(x + 6, y + 1, 1, 6), R(x + 2, y + 3, 1, 2), R(x + 4, y + 3, 1, 2)]),
   // the 실거래 site's four groups (LIVE_GROUPS): 지금 a radar dot in a ring, 기록 a ruled page, 성적 three bars, 운영 a gear
   now: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6), R(2, 11, 1, 2),
     R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(7, 4, 2, 5), R(9, 7, 3, 2)],
@@ -177,6 +180,11 @@ const SICON = {
     R(3, 3, 2, 2), R(11, 3, 2, 2), R(3, 11, 2, 2), R(11, 11, 2, 2)],
   faq: () => [R(5, 1, 6, 2), R(3, 3, 3, 3), R(10, 3, 3, 4), R(8, 7, 3, 2), R(7, 9, 2, 2), R(7, 12, 2, 2)],
   // the 실거래 site's tabs (LIVE_SCREENS, 찾기): the nearest drawing of a rule-bot screen
+  // 봇별 (owners 10/26): each bot's own drawing (추세판단 봇 the coin of 관제, VWAP and 믹스 their groups', V3.9 candles)
+  trendbot: () => SICON.livebots(),
+  vwapbot: ICON.vwap,
+  mixbot: ICON.mix,
+  v39: ICON.trade,
   trend: () => SICON.livebots(),
   // 추세 차트: two rows of judgment cells (the heatmap) over three candles
   tchart: () => [R(1, 1, 4, 3), R(6, 1, 3, 3), R(10, 1, 5, 3), R(1, 5, 6, 3), R(8, 5, 7, 3), R(3, 9, 1, 6), R(2, 10, 3, 3),
@@ -267,6 +275,10 @@ export function navGroups(feats) {
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
 export const LIVE_START = "trend";
 const LIVE_GROUPS = [
+  // 봇별 (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면
+  // 따로, v3.9 화면 따로"): one screen per bot, first in the menu, each with only the executors that follow it
+  // (screens/livebots.js BOT_TABS); the screens of the groups below stay as they were
+  {id: "bots", ko: "봇별", screens: ["trendbot", "vwapbot", "mixbot", "v39"]},
   {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
@@ -279,6 +291,10 @@ const LIVE_GROUPS = [
   {id: "mix", ko: "믹스 봇", screens: ["mix", "mixperf"]},
 ];
 const LIVE_SCREENS = {
+  trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (페이퍼와 그 봇을 따라가는 바이비트 · WOO X Pro)"},
+  vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼와 그 봇을 따라가는 딥코인)"},
+  mixbot: {ko: "친구 30분 봇", group: "bots", title: "친구 30분 봇 (믹스 30분 봇 · WOO X Pro 2 실거래와 모의)"},
+  v39: {ko: "V3.9 투비트", group: "bots", title: "V3.9 투비트 (규칙봇 V3.9 1시간 페이퍼와 투비트 실행기)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇)"},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실행기 두 계좌)"},

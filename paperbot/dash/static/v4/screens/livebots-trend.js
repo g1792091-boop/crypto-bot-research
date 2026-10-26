@@ -216,10 +216,13 @@ export function heroOf(t, now) {
 }
 
 // ---------------------------------------------------------------- the view
-/** trendView(ctx, hub) -> {el, set(summary)}: its own endpoint every 15 s, the countdowns every second (ctx.every: the
- *  router stops them); ``set`` gets the site's summary (money, the executors' positions) from screens/livebots.js. */
-export function trendView(ctx, hub) {
+/** trendView(ctx, hub, o) -> {el, set(summary)}: its own endpoint every 15 s, the countdowns every second (ctx.every: the
+ *  router stops them); ``set`` gets the site's summary (money, the executors' positions) from screens/livebots.js.
+ *  o.only(account, summary): the executors it lists (봇별 › 추세판단 봇, owners 10/26: only the ones that follow this bot);
+ *  without it every executor, as 관제 always did. */
+export function trendView(ctx, hub, o = {}) {
   const st = {t: null, s: null, okAt: 0, busy: false, ticks: [], j: null, jAt: 0};
+  const liveOf = (accts) => accts.filter((x) => x.kind === "live" && (!o.only || o.only(x, st.s)));
   const stateSlot = h("div", {class: "lb-slot"});
   // the hero
   const head = h("h2", {class: "ltr-head"}, "불러오는 중");
@@ -303,7 +306,7 @@ export function trendView(ctx, hub) {
     const tile = (k, v, sub2, cls, title) => h("div", {class: ["ltr-tile", cls || ""], role: "listitem", title},
       h("span", {class: "ltr-tk"}, k), h("b", {class: "ltr-tv num"}, v), sub2 ? h("span", {class: "ltr-ts num"}, sub2) : null);
     const items = [];
-    for (const a of accts.filter((x) => x.kind === "live")) {
+    for (const a of liveOf(accts)) {
       if (a.state !== "ok") { items.push(tile(a.name_ko, "못 읽음", a.reason_ko || "", "na")); continue; }
       const td = a.today || {};
       const tone = ok(td.pnl) && td.pnl < 0 ? "down" : ok(td.pnl) && td.pnl > 0 ? "up" : "";
@@ -325,8 +328,8 @@ export function trendView(ctx, hub) {
     put(money, items.length ? items : h("p", {class: "ltr-sub"}, "지갑 기록을 불러오는 중"));
   }
   function liveRows(p) {
-    const accts = ((st.s && st.s.accts) || []).filter((a) => a.kind === "live");
-    if (!accts.length) return h("p", {class: "ltr-sub"}, "실행기 기록을 불러오는 중");
+    const accts = liveOf((st.s && st.s.accts) || []);
+    if (!accts.length) return h("p", {class: "ltr-sub"}, st.s && o.only ? "이 봇을 따라가는 실행기가 지금 없어요" : "실행기 기록을 불러오는 중");
     const fol = p && Array.isArray(p.follow) ? p.follow : null;
     const none = fol && fol.length && fol.every((f) => f.state === "skip" || f.state === "none");
     return h("div", null, h("ul", {class: "ltr-list ltr-follow"}, accts.map((a) => {

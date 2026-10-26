@@ -52,6 +52,13 @@ export function execIds(d) {
   const ids = have ? EXEC_SLOTS.filter((id) => have.includes(id)) : [];
   return ids.length ? ids : EXECS_NOW;
 }
+/** The executor ids of a summary that follow one of its paper bots now (its ``execs[].bot``: "paper" the main one, the
+ *  추세판단 봇; "paper2" the second, the VWAP 개선판), in the server's order: the 봇별 screens (owners 10/26) show each bot
+ *  with its own executors only. [] when none does (or the answer is not there yet). */
+export function followersOf(d, bot) {
+  const xs = d && Array.isArray(d.execs) ? d.execs : [];
+  return EXEC_SLOTS.filter((id) => xs.some((x) => x && x.id === id && x.bot === bot));
+}
 /** The executors' names in one line ("바이비트 · WOO X Pro", "… · 딥코인"). */
 export const execsKo = (ids = EXECS_NOW, sep = " · ") => ids.map((id) => acctKo(id)).join(sep);
 /** "두 실행기가 따라가는" (with the third installed "세 실행기가 따라가는", the fourth "네"): who follows the one paper bot. */
@@ -151,12 +158,17 @@ function realOf(a) {
 /**
  * The thin real-money strip over every 실거래 tab (owners 10/19): '진짜 돈 · 바이비트 $X · MEXC $Y · 포지션 n/1·n/1 · 보기만
  * 하는 화면(주문 버튼 없음)' (딥코인 $Z too while the server has it). d: the summary answer (/api/v4/livebots), null before
- * the first one (dashes, never a zero).
+ * the first one (dashes, never a zero). o.only: a 봇별 screen's executors (owners 10/26: that bot's only, never the others');
+ * none of them: o.none in their place (what that bot's real money is, or that its executor is off).
  */
-export function realLine(d) {
+export function realLine(d, o = {}) {
   const by = Object.fromEntries(((d && d.accts) || []).map((a) => [a.id, a]));
-  const ids = execIds(d).map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
+  const ids = (o.only || execIds(d)).map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
   const sep = () => h("span", {class: "lb-real-s", "aria-hidden": "true"}, "·");
+  if (o.only && !ids.length) {
+    return [h("b", {class: "lb-real-k"}, "진짜 돈"), sep(), h("span", {class: "lb-real-a unk"}, o.none || "따라가는 실행기 없음"),
+      sep(), h("span", {class: "lb-real-v"}, "보기만 하는 화면(주문 버튼 없음)")];
+  }
   return [h("b", {class: "lb-real-k"}, "진짜 돈"),
     ...ids.flatMap((x) => [sep(), h("span", {class: ["lb-real-a", x.unk ? "unk" : ""]}, `${ACCT[x.id].ko} `, h("b", {class: "num"}, x.bal))]),
     sep(), h("span", {class: "lb-real-a", title: `한 번에 포지션 하나 · ${ids.map((x) => `${ACCT[x.id].ko} ${x.pos}`).join(" · ")}`},
