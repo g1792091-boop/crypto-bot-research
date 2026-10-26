@@ -61,7 +61,7 @@ def entry_index(W, r, mode) -> int | None:
 
 
 def run(W, cand, trend, mode, a, b, keep_paths=False, exit_kind="tp10", tp_roe=0.10, lad=None, weekend_off=True,
-        stop=("roe", 0.50)):
+        stop=("roe", 0.50), flip_rng=None):
     """``trend``: None, a column name (its value must equal the side) or a function of the frame (a mask).
     ``stop``: ("roe", x) net ROE on the fill, or ("atr", k) k x ATR(1h) from the fill."""
     c = cand[(cand.t >= a) & (cand.t < b) & ~cand.us_open & ~cand.macro]
@@ -77,6 +77,8 @@ def run(W, cand, trend, mode, a, b, keep_paths=False, exit_kind="tp10", tp_roe=0
         if t < busy:
             continue
         for r in g.itertuples():
+            if flip_rng is not None:                       # the coin-flip twin: the same signal, a random side
+                r = r._replace(side=int(flip_rng.choice((-1, 1))))
             lev = 40.0 if r.coin == "BTCUSDT" else 30.0
             m = W.m5[r.coin]
             j = entry_index(W, r, mode)
