@@ -10,7 +10,7 @@
 //     주말(한국 시간 토·일) → 경제 발표 앞뒤 30분 → 나스닥 개장 앞 30분·뒤 30분(뉴욕 09:30, 평일, 휴장일 빼고)
 //     → 4시간 추세 판단 4개(V3.9 슈퍼트렌드 10/3 · EMA20+DMI · OBV/SMA30 · 일목 구름+AO) 중 3개가 반대
 //     → 변동성: 신호 봉의 ATR(14)% 가 지난 30일 같은 봉들의 80% 위치보다 큼
-//   손절 = 신호 봉 종가 ∓ ATR(14) × 2, 계단 = 순ROE(30배, 수수료·슬리피지 왕복 뺌) 12%에 닿으면 10% 잠금, 그 뒤 5%마다,
+//   손절 = 신호 봉 종가 ∓ ATR(14) × 2, 계단 = 순ROE(30배, 수수료·슬리피지 왕복 뺌) 10%에 닿으면 8% 잠금, 그 뒤 4%마다(두 분 10/27),
 //   보유 한도 = 그 매매법 봉 96개(30분봉 48시간, 1시간봉 96시간).
 //
 // 꼭 알아 둘 것
@@ -39,9 +39,9 @@ useUsOpen = input.bool(true, "나스닥 개장 앞 30분·뒤 30분 진입 안 �
 grpX = "손절·계단 (봇 설정 그대로)"
 lev = input.int(30, "배수", minval=1, group=grpX)
 stopAtr = input.float(2.0, "손절 = ATR(14) ×", minval=0.1, step=0.1, group=grpX)
-firstLock = input.float(10.0, "첫 잠금 순ROE %", group=grpX)
-trigGap = input.float(2.0, "잠금이 걸리는 여유 %p (12%에 닿으면 10% 잠금)", group=grpX)
-stepPct = input.float(5.0, "계단 간격 %p", group=grpX)
+firstLock = input.float(8.0, "첫 잠금 순ROE %", group=grpX)
+trigGap = input.float(2.0, "잠금이 걸리는 여유 %p (10%에 닿으면 8% 잠금)", group=grpX)
+stepPct = input.float(4.0, "계단 간격 %p", group=grpX)
 holdBars = input.int(96, "보유 한도 (그 매매법 봉 수)", minval=1, group=grpX)
 takerPct = input.float(0.05, "테이커 수수료 %", step=0.01, group=grpX)
 slipPct = input.float(0.02, "슬리피지 %", step=0.01, group=grpX)

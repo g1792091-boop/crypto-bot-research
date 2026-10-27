@@ -174,7 +174,7 @@ def test_the_bot_its_follower_and_its_rules(w):
     assert woo["position"]["key"] == d["position"]["key"] and woo["pos_state"] == "same"
     lines = d["rules"]["lines"]
     for want in ("매매법 VWAP 복귀 실패 30분 · CMO·샌드위치 캔들 1시간", "BTC 30배 · 나머지 30배 · 증거금 잔고의 40%", "손절 2 ATR",
-                 "순ROE 12%에서 10% 잠금, 이후 5%씩", "손절 한 번에 계좌 최대 −20%", "4시간 추세 판단이 반대면 진입 안 함(4개 중 3개 반대; 보류는 진입)",
+                 "순ROE 10%에서 8% 잠금, 이후 4%씩", "손절 한 번에 계좌 최대 −20%", "4시간 추세 판단이 반대면 진입 안 함(4개 중 3개 반대; 보류는 진입)",
                  "변동성(ATR14%)이 지난 30일의 80% 위치보다 크면 진입 안 함(상위 20% 금지)", "보유 한도 96봉(30분 48시간 · 1시간 96시간)",
                  "진입 쉼: 주말(한국 시간 토·일) · 미국 경제 발표 앞뒤 30분 · 나스닥 개장 앞 30분·뒤 30분", "동전 쌍둥이"):
         assert any(want in x for x in lines), want
@@ -205,7 +205,7 @@ def test_the_position_with_its_hold_limit_and_the_gates_it_passed(w):
         mark = json.loads(c.execute("SELECT data FROM state WHERE k = 'accounts'").fetchone()[0])["engines"][V.ACC]["last_mark"]["BTCUSDT"]
     rt = L.round_trip(0.0005)
     assert p["mark"] == pytest.approx(mark) and p["roe_now"] == pytest.approx(30 * ((mark / raw["entry_price"] - 1) - rt))
-    assert p["locked"] is False and p["next_lock"]["lock"] == pytest.approx(0.10) and p["next_lock"]["at"] == pytest.approx(0.12)
+    assert p["locked"] is False and p["next_lock"]["lock"] == pytest.approx(0.08) and p["next_lock"]["at"] == pytest.approx(0.10)
     g = p["gates"]
     assert g["vote"]["word"] == "보류" and g["vote"]["with_side"] == 0 and (g["vote"]["up"], g["vote"]["down"], g["vote"]["neutral"]) == (2, 0, 2)
     assert g["vol"]["tf"] == "1h" and g["vol"]["atr_pct"] == 0.33 and g["vol"]["ratio"] == pytest.approx(0.33 / 0.58)
@@ -602,7 +602,8 @@ def test_the_views_in_node(w, tmp_path):
         assert word in a, word
     assert not BAD.search(a), BAD.search(a)
     b = out["b"]
-    for word in ("페이퍼 vs 동전 쌍둥이", "본전 승률 (이 평균으로)", "77.7%", "손익비 (PF)", "가장 깊은 낙폭", "실력 vs 운", "키우기 · 멈추기",
+    # (the VWAP bot's ladder since owners 10-27: 10 -> 8, every 4 %: its paper trades here win less, break-even 76.3 %)
+    for word in ("페이퍼 vs 동전 쌍둥이", "본전 승률 (이 평균으로)", "76.3%", "손익비 (PF)", "가장 깊은 낙폭", "실력 vs 운", "키우기 · 멈추기",
                  "3 / 50번", "본전 승률 (멈추기 선)", "실거래 평균 익절·손절로 계산", "5년 기록 78.6% (참고)", "본전 아래", "순ROE 합 플러스",
                  "페이퍼가 동전 쌍둥이보다 나음", "페이퍼와 비슷한가", "결과가 같은 거래 3/3", "5년 기록에서 50번 80% 이상 뒤 다음 50번도 평균 손해였어요",
                  "연구 노트", "물림 (진입 뒤 가장 깊이 밀린 순ROE)", "먼저 −20% 넘게 물린 거래 1번 (20%)", "신호등 시험 (최근 20번 중 75% 이상일 때만 따라감)",

@@ -272,7 +272,7 @@ def macro(ts: int, events: list) -> bool:
     return any(abs(e - ts) <= 30 * MIN for e in events)
 
 
-def lock_for(best: float, first=0.10, gap=0.02, step=0.05):
+def lock_for(best: float, first=0.08, gap=0.02, step=0.04):
     trig = first + gap
     return first + step * math.floor((best - trig) / step + 1e-9) if best >= trig - 1e-12 else None
 

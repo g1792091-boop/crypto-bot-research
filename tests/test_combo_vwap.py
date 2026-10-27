@@ -39,7 +39,8 @@ def test_deploy_config_is_candidate_a_and_valid():
     assert cfg.vote_gate == {"tf": "4h", "vote_min": 3}
     assert cfg.vol_gate == {"atr": 14, "days": 30, "q": 0.8}
     assert cfg.max_hold_bars == 96 and cfg.margin == 0.4
-    assert cfg.stop == {"mode": "atr", "atr": 2} and cfg.ladder == {"first_lock": 0.10, "trigger_gap": 0.02, "step": 0.05}
+    # the ladder: 10 % -> 8 % locked, then every 4 % (owners 10-27 "vwap 매매법도 순수익+8%로 해줘"; until then 12 -> 10, every 5 %)
+    assert cfg.stop == {"mode": "atr", "atr": 2} and cfg.ladder == {"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.04}
     assert cfg.lev_of("BTCUSDT") == cfg.lev_of("DOGEUSDT") == 30 and cfg.loss_cap == "shrink"
     assert cfg.max_loss_frac == pytest.approx(0.5 * cfg.margin)          # the stop loses at most 50 % of the margin
     assert cfg.no_weekend and cfg.macro_blackout_min == 30 and cfg.us_open_pause_min == cfg.us_open_pre_min == 30

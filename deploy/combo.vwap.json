@@ -25,9 +25,9 @@
  },
  "liq_buffer_atr": 0.0,
  "ladder": {
-  "first_lock": 0.1,
+  "first_lock": 0.08,
   "trigger_gap": 0.02,
-  "step": 0.05
+  "step": 0.04
  },
  "rank": [
   "order"

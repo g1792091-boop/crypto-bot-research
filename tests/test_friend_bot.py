@@ -511,14 +511,15 @@ def test_a_winning_exit_has_no_loss_line(tmp_path):
 
 
 # ---------------------------------------------------------------- the other bots: as before
-OLD = {   # the texts of commit eebb24a (before the friend bot), for the same trade and position
+OLD = {   # the texts of commit eebb24a (before the friend bot), for the same trade and position (the VWAP bot's start: its
+    #         ladder since owners 10-27, 10 -> 8 then every 4 %)
     "combo.vwap.json": {
         "exit_win": "[합친 봇 페이퍼 VWAP 개선판] 청산 ETH 롱 · VWAP 복귀 실패 30분 · 계단 익절 · 순ROE +20.6%, +$82.30, 지갑 $1,082.33",
         "exit_loss": "[합친 봇 페이퍼 VWAP 개선판] 청산 ETH 롱 · VWAP 복귀 실패 30분 · 손절 · 순ROE -74.9%, -$324.40, 지갑 $1,082.33",
         "entry_gates": "[합친 봇 페이퍼 VWAP 개선판] 진입 ETH 숏 · VWAP 복귀 실패 30분 · 30배, 증거금 $399.95, 손절 2600 (2 ATR) · "
                        "4시간 상승(상승 3·하락 0·중립 1) · 변동성 30분 ATR 0.45% (30일 80% 위치 0.62%)",
         "start": "[합친 봇 페이퍼 VWAP 개선판] 시작: 매매법 2개(VWAP 복귀 실패 30분 · CMO·샌드위치 캔들 1시간), BTC 30배·나머지 30배, "
-                 "증거금 잔고의 40%, 손절 2 ATR, 계단 익절 순ROE 12%에서 10% 잠금, 이후 5%씩, 빠른 청산 없음(고정 손절과 계단 익절만), "
+                 "증거금 잔고의 40%, 손절 2 ATR, 계단 익절 순ROE 10%에서 8% 잠금, 이후 4%씩, 빠른 청산 없음(고정 손절과 계단 익절만), "
                  "4시간 추세 판단이 반대면 진입 안 함(4개 중 3개 반대; 보류는 진입), 변동성(ATR14%)이 지난 30일의 80% 위치보다 크면 "
                  "진입 안 함(상위 20% 금지), 보유 한도 96봉(30분 48시간 · 1시간 96시간), 넘으면 시장가 청산, 포지션 1개, 진입 쉼 "
                  "주말·경제 발표 앞뒤 30분·나스닥 개장 앞 30분·뒤 30분, 지갑 $1,234.50"},

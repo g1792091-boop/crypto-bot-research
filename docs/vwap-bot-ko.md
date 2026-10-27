@@ -45,7 +45,7 @@
 | 항목 | 내용 | 설정 이름 |
 |---|---|---|
 | 손절 | 진입가에서 2 ATR (신호 봉 ATR14). 실행기가 거래소에 손절 주문을 바로 걸어 둠 | `stop` |
-| 계단 익절 | 순ROE 12% → 10% 잠금, 17% → 15%, 22% → 20%, 이후 5%씩 (페이퍼). **실거래(딥코인)는 10/27부터 10% → 8%, 14% → 12%, 18% → 16%, 이후 4%씩 (11장)** | `ladder` |
+| 계단 익절 | 순ROE 10% → 8% 잠금, 14% → 12%, 18% → 16%, 이후 4%씩 (10/27부터 페이퍼·실거래 둘 다, 11장; 그 전에는 12% → 10%, 이후 5%씩) | `ladder` |
 | 보유 한도 | 자기 봉 96개: VWAP 48시간, CMO 96시간 (넘으면 시장가 정리, 기록·메시지에는 "보유 한도 청산") | `max_hold_bars` |
 | 반대 신호 청산 · 추세 뒤집힘 청산 | 없음 | `early_exit` null |
 
@@ -80,7 +80,7 @@
 - 봇 코드(`paperbot/combo.py`, `paperbot/entrygates.py`): 새 기능 3개(4시간 추세 금지, 변동성 금지, 보유 한도)는 설정에 있을 때만
   동작합니다. 추세판단 봇 설정에는 없어서 그 봇의 동작은 바뀌지 않습니다(시험으로 확인).
 - 새로 생김(설치만, 두 분이 켬): 딥코인 실행기 서비스 `paperbot-executor-deepcoin`, 연결 코드 `paperbot/deepcoin.py`, 설정 원본
-  `deploy/executor.live-deepcoin.json`(VWAP 페이퍼를 따라가게 이미 맞춰 둠: 계단 12%→10% 잠금 이후 5%씩, 신호등 20번 75%, 손절 한 번
+  `deploy/executor.live-deepcoin.json`(VWAP 페이퍼를 따라가게 이미 맞춰 둠: 계단 10%→8% 잠금 이후 4%씩(10/27부터), 신호등 20번 75%, 손절 한 번
   최대 손실 20%), 기록 `/var/lib/paperbot/exec/executor-deepcoin-live.db`(매일 밤 백업에 포함).
 - **바이비트·WOO X Pro 실행기는 아무것도 안 바뀝니다.** 설정·키·기록 그대로 추세판단 봇을 따라갑니다. 실행기 코드는 딥코인 연결이
   더해지고 말(따라가는 페이퍼의 보유 한도 청산 이름)만 바뀌었습니다. 다음에 그 실행기들을 다시 켤 때 적용되고, 지금 켜진 것을 다시 켤
@@ -176,7 +176,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh executor preflight --confi
 ```
 
 - 예전 설정은 `/etc/paperbot/executor-deepcoin.json.before-vwap-<시각>`으로 남습니다.
-- check-config에서 볼 줄: 계단 `순ROE 12%에서 10% 잠금, 이후 5%씩`, `순ROE 비용: 딥코인 테이커 0.05% + 슬리피지 0.02% …`,
+- check-config에서 볼 줄: 계단 `순ROE 10%에서 8% 잠금, 이후 4%씩`(10/27부터), `순ROE 비용: 딥코인 테이커 0.05% + 슬리피지 0.02% …`,
   `신호등: 켜짐 - paper 최근 20번 중 75% 이상 이겼을 때만 진입을 따라감`, 마지막 줄 **`준비됨`**. preflight도 통과해야 합니다.
 
 4) 켜기 → 확인:
@@ -368,8 +368,11 @@ VWAP 페이퍼 봇을 켜면(5-B) 실행기가 아직 따라가지 않아도 사
 두 분: "그래도 10→8로 간다면 친구봇 간격 5 / VWAP 간격 4 … 이렇게 가자 그 대신에 vwap 봇도 비트는 40배로 나머지 종목들은 30배로 가자",
 "5년기록 하지말고 그냥 바꿔".
 
-딥코인 실행기(실거래)만 바뀝니다. VWAP 페이퍼(모의, `deploy/combo.vwap.json`)는 5년 연구·"운이냐 고장이냐"와 비교하려고 그대로입니다
-(12→10, 모두 30배). 실행기는 원래 페이퍼의 계단을 따르지 않고 자기 체결가로 자기 계단을 돕니다.
+처음에는 딥코인 실행기(실거래)만 바꿨습니다. 같은 날 두 분이 "vwap 매매법도 순수익+8%로 해줘", "순수익 8% 계단식익절 알지?"라고 해서
+**VWAP 페이퍼(모의, `deploy/combo.vwap.json`)의 계단도 같은 10→8, 4%마다로 바꿨습니다**(11-2; 배수는 페이퍼 그대로 모두 30배).
+실행기는 페이퍼의 계단을 따르지 않고 자기 체결가로 자기 계단을 돕니다. 페이퍼를 맞추면 페이퍼가 실거래와 같은 자리에서 닫혀서,
+다음 신호를 받을 때(포지션 하나)와 신호등(최근 20번 승률)이 실거래 규칙과 같은 거래로 계산됩니다. 그림자 "4시간 정리"
+(`deploy/combo.shadow-vwap-4h.json`)도 페이퍼와 같은 계단으로 맞췄습니다(그 하나만 다른 쌍둥이).
 
 - **계단** (`ladder`: `first_lock 0.08, trigger_gap 0.02, step 0.04`): 순ROE 10%에 닿으면 손절을 순 8% 자리로, 14%면 12%, 18%면 16%,
   그 뒤 4%마다 한 칸.
@@ -406,3 +409,23 @@ VWAP 페이퍼 봇을 켜면(5-B) 실행기가 아직 따라가지 않아도 사
 5. **켜기:** `sudo systemctl start paperbot-executor-deepcoin` 그리고 `journalctl -u paperbot-executor-deepcoin -n 20`.
 
 **되돌리기:** 끈 뒤 `sudo python3 deploy/vwap_switch.py --exec deepcoin --back --write`(바로 전 사본으로) 그리고 다시 켭니다.
+
+### 11-2. VWAP 페이퍼도 계단 10%→8% (두 분 10/27 "vwap 매매법도 순수익+8%로 해줘")
+
+`deploy/combo.vwap.json`의 `ladder`만 바뀝니다: `{"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.04}`. 모의라 돈·주문은 없습니다.
+11-1과 같이(딥코인 포지션이 없을 때) 하면 깔끔합니다. 한 줄씩:
+
+1. 코드 받기(11-1의 1과 같음, 이미 했으면 건너뜀): `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+2. 서버 설정과 새 원본 비교(읽기만): `sudo diff /etc/paperbot/combo-vwap.json /opt/crypto-bot-research/deploy/combo.vwap.json`
+   → `first_lock` 0.1 → 0.08, `step` 0.05 → 0.04 두 줄만 나와야 합니다. 다른 줄이 나오면 멈추고 알려 주세요.
+3. 백업하고 바꾸기:
+   ```bash
+   sudo cp -p /etc/paperbot/combo-vwap.json /etc/paperbot/combo-vwap.json.before-8
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.vwap.json /etc/paperbot/combo-vwap.json
+   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo-vwap.json
+   ```
+   → 계단 줄 `순ROE 10%에서 8% 잠금, 이후 4%씩`, 마지막 줄 `준비됨`.
+4. 다시 켜기: `sudo systemctl restart paperbot-combo-vwap` (기록에서 이어서 돕니다). 그림자를 켜 두셨다면
+   `sudo systemctl restart paperbot-combo-shadow@vwap-4h`도(그림자는 설치된 원본을 바로 읽습니다).
+
+되돌리기: `sudo cp -p /etc/paperbot/combo-vwap.json.before-8 /etc/paperbot/combo-vwap.json` → `sudo systemctl restart paperbot-combo-vwap`.

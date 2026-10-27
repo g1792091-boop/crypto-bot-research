@@ -93,14 +93,15 @@ def test_a_bots_name_on_its_lock_and_win_and_its_executors_light_from_its_own_tr
     held["stop"] = round(held["entry_price"] * pos.stop_price / pos.entry_price, 6)      # Bybit's stop follows the lock
     w.advance(vb.t)
     lock = [t for kind, key, _lv, t in _pass(w, vb.t) if kind == "lock" and key == VWAP_KEY]
-    assert len(lock) == 1 and lock[0].startswith("🔒 잠금 시작 · BTC 롱 · +10% 확보\nVWAP 개선판 · 바이비트 손절 ")
+    # +0.7 % at 30x = net ROE about 16.8 %: the VWAP ladder (owners 10-27: 10 -> 8, then every 4 %) locks 12 % at once
+    assert len(lock) == 1 and lock[0].startswith("🔒 잠금 시작 · BTC 롱 · +12% 확보\nVWAP 개선판 · 바이비트 손절 ")
     w.hold_v5("win")
     w.advance(vb.t + 3 * MIN)
     got = _pass(w, vb.t)
     (win,) = [t for kind, key, _lv, t in got if kind == "exit"]
     lines = win.split("\n")
-    assert lines[0].startswith("✅ 청산 · BTC 롱 · 순ROE +10.")
-    assert lines[1].startswith("VWAP 개선판 · VWAP 복귀 실패 30분 · ") and "잠금 +10% 청산" in lines[1]
+    assert lines[0].startswith("✅ 청산 · BTC 롱 · 순ROE +12.")
+    assert lines[1].startswith("VWAP 개선판 · VWAP 복귀 실패 30분 · ") and "잠금 +12% 청산" in lines[1]
     assert lines[2].startswith("바이비트 +$") and "MEXC" not in win
     # Bybit's own light (N 4, 75 %) on the VWAP bot's last 4 trades: v2 lost, v3 won, v4 lost, v5 won = 50 %: red
     assert lines[3].endswith("· 신호등 바이비트 🔴")
