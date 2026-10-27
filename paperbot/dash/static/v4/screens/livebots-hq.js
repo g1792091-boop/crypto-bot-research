@@ -42,7 +42,7 @@
 // trades as the ring, today, the position, whether it may enter now). Every card says which bot it is or follows (봇 …)
 // under the account's name; the old '친구 매매법' executor of WOO X Pro 2 keeps its own reactor while the server has it.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
-import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday} from "./livebots-calc.js";
+import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday, unrealized} from "./livebots-calc.js";
 import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo, takingNoneKo} from "./livebots-likely.js";
@@ -1127,18 +1127,27 @@ export function hqView(ctx, hub) {
     r.day.title = dn ? `처음 켬 ${fmt.kst(s0.first_start_ms)} (한국 시간 기준 ${dn}일째)` : "";
     const on = !!b && s0.state !== "off" && s0.state !== "error";
     const e = (b && b.equity) || {}, n = e.now;
+    // owners 10-27 ("친구봇 돈 움직이는것도 안뜨고"): with a position open, the balance read at its entry plus the position at the
+    // page's mark (before the exit fee), so the card moves like the executors' (their balance is the exchange's, position in)
+    const pq = on && b.position && b.position.state === "ok" ? b.position : null;
+    const mk = pq ? store.mark(pq.symbol) : null;
+    const uPnl = pq && mk ? unrealized(pq, mk) : null;
+    const live = uPnl != null && !!n && (n.from === "entry" || n.from === "adopted");
     if (on && n && n.value != null) {
+      const val = Number(n.value) + (live ? uPnl : 0);
       r.cur.hidden = false;
       r.wal.classList.remove("unk");
-      motion.countTo(r.wal, Number(n.value), {format: (v) => fmt.money(v), glow: true});
-      const m = e.start > 0 ? Number(n.value) / Number(e.start) : null;
+      motion.countTo(r.wal, val, {format: (v) => fmt.money(v), glow: !live});
+      const m = e.start > 0 ? val / Number(e.start) : null;
       r.mult.textContent = m == null ? "" : `×${fmt.num(m, 2)}`;
       r.mult.className = ["lbh-mult", "num", m == null ? "" : m > 1.00499 ? "up" : m < 0.99501 ? "down" : ""].join(" ");
       r.mult.title = m == null ? "" : `시작 잔고 ${usd0(e.start)}의 몇 배인지`;
-      const dv = e.start != null ? Number(n.value) - Number(e.start) : null;
-      r.delta.textContent = dv == null ? "" : `시작 대비 ${usdS(dv)} · ${n.from_ko || "기록된 잔고"} ${fmt.kst(n.ms)}`;
+      const dv = e.start != null ? val - Number(e.start) : null;
+      r.delta.textContent = dv == null ? "" : live ? `시작 대비 ${usdS(dv)} · 진입 때 잔고 ${usd0(n.value)} + 평가 ${usdS(uPnl)}`
+        : `시작 대비 ${usdS(dv)} · ${n.from_ko || "기록된 잔고"} ${fmt.kst(n.ms)}`;
       r.delta.className = ["lbh-delta", "num", fmt.tone(dv, fmt.money(dv))].join(" ");
-      r.delta.title = "봇이 WOO X Pro 2에서 읽어 기록한 마지막 잔고 (켤 때 · 진입 때 · 청산 뒤) · 지금 거래소 값은 앱에서";
+      r.delta.title = live ? `진입 때 읽은 잔고(${fmt.kst(n.ms)})에 지금 열린 포지션의 평가 손익(마크 ${fmt.price(mk)}, 나갈 때 수수료 전)을 더한 어림값 · 정확한 값은 앱에서`
+        : "봇이 WOO X Pro 2에서 읽어 기록한 마지막 잔고 (켤 때 · 진입 때 · 청산 뒤) · 지금 거래소 값은 앱에서";
     } else {
       motion.countTo(r.wal, null);
       r.cur.hidden = true;
@@ -1169,7 +1178,8 @@ export function hqView(ctx, hub) {
       r.today.title = "오늘(한국 시간 0시부터) 닫힌 거래 · 손익은 진입 때부터 청산 뒤까지 잔고 변화";
       const p = b.position;
       r.pos.className = p && p.state === "ok" ? (Number(p.side) > 0 ? "up" : "down") : "muted";
-      r.pos.textContent = !p ? "없음" : p.state !== "ok" ? "몰라요" : `${p.coin} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)} · ${p.step > 0 ? `계단 ${p.step}단계` : "손절 걸림"}`;
+      const pr = p && p.state === "ok" ? roeAt(p, store.mark(p.symbol)) : null;
+      r.pos.textContent = !p ? "없음" : p.state !== "ok" ? "몰라요" : `${p.coin} ${fmt.sideKo(p.side)} ${fmt.lev(p.leverage)} · ${p.step > 0 ? `계단 ${p.step}단계` : "손절 걸림"}${pr != null ? ` · ROE ${fmt.pct(pr, 1)}` : ""}`;
       r.pos.title = p && p.state === "ok" ? `진입 ${fmt.price(p.entry)} · 손절 ${fmt.price(p.stop)}` : "한 번에 포지션 하나";
       r.streak.textContent = mixGate(b);
       r.streak.className = /멈춤|몰라요/.test(r.streak.textContent) ? "down" : /금지/.test(r.streak.textContent) ? "muted" : "";
@@ -1515,7 +1525,7 @@ export function hqView(ctx, hub) {
     const nx = p.next_lock;
     gNext.textContent = nx && nx.at != null ? `다음 잠금: 순ROE ${fmt.pct(nx.at, 0, false)}${nx.price ? ` (${fmt.price(nx.price)})` : ""}에 닿으면 ${fmt.pct(nx.lock, 0, false)}로 잠가요${nx.from === "paper" ? " · 페이퍼 기준" : ""}` : "";
     // the real money: each executor's own position and its stop order on the exchange
-    gEx.replaceChildren(...execIds(st.d).map((id) => {
+    gEx.replaceChildren(...[...execIds(st.d).map((id) => {
       const a = by((st.d && st.d.accts) || [], id);
       const head = h("span", {class: ["lbh-gexn", "lbh-x-" + id]}, h("i", {class: "sw", "aria-hidden": "true"}), ACCT[id].ko);
       if (!a || a.state !== "ok") return h("div", {class: "lbh-gexr unk"}, head, h("span", null, a && a.state === "error" ? "못 읽음" : "수집 전"));
@@ -1526,7 +1536,24 @@ export function hqView(ctx, hub) {
         h("span", null, `${fmt.coin(q.symbol)} ${fmt.sideKo(q.side)} · 진입 `, h("b", {class: "num"}, fmt.price(q.entry))),
         h("span", null, "거래소 손절 ", h("b", {class: ["num", q.locked ? "up" : ""]}, fmt.price(q.stop)), q.locked ? " 잠금" : ""),
         r != null ? h("b", {class: ["num", "lbh-gexroe", fmt.tone(r, fmt.pct(r, 1))]}, fmt.pct(r, 1)) : null);
-    }));
+    }), mixExRow()].filter(Boolean));
+  }
+  /** The friend bot's row in the strip (WOO X Pro 2, owners 10-27): it trades by itself, so it is not one of the executors. */
+  function mixExRow() {
+    const b = mixBot();
+    if (!b) return null;
+    const s0 = b.status || {};
+    const head = h("span", {class: ["lbh-gexn", "lbh-x-wooxpro2"], title: `WOO X Pro 2 · ${MIX_BOT_KO}`}, h("i", {class: "sw", "aria-hidden": "true"}), "WOO X Pro 2");
+    if (s0.state === "off" || s0.state === "error") return h("div", {class: "lbh-gexr unk"}, head, h("span", null, s0.state === "off" ? "꺼짐" : "못 읽음"));
+    const q = b.position;
+    if (!q) return h("div", {class: "lbh-gexr none"}, head, h("span", null, "포지션 없음"));
+    if (q.state !== "ok") return h("div", {class: "lbh-gexr unk"}, head, h("span", null, "포지션 몰라요"));
+    const r = roeAt(q, store.mark(q.symbol));
+    return h("div", {class: "lbh-gexr"}, head,
+      h("span", null, `${fmt.coin(q.symbol)} ${fmt.sideKo(q.side)} · 진입 `, h("b", {class: "num"}, fmt.price(q.entry))),
+      h("span", null, "거래소 손절 ", h("b", {class: ["num", q.locked ? "up" : ""]}, fmt.price(q.stop)), q.locked ? ` 계단 ${q.step}단계` : ""),
+      r != null ? h("b", {class: ["num", "lbh-gexroe", fmt.tone(r, fmt.pct(r, 1))]}, fmt.pct(r, 1))
+        : h("b", {class: "num lbh-gexroe muted", title: "이 코인의 시세가 사이트에 없어요"}, "—"));
   }
 
   function drawIdle() {
@@ -1880,7 +1907,11 @@ export function hqView(ctx, hub) {
   ctx.every(RANK_MS, () => fRank.load().catch(() => {}));
   ctx.every(MIX_MS, () => loadMix().catch(() => {}));
   ctx.every(1000, tick, {now: true});
-  ctx.watch("ticker", () => { if (center.dataset.mode === "pos") { drawCenter(); drawEntry(); } });
+  ctx.watch("ticker", () => {
+    if (center.dataset.mode === "pos") { drawCenter(); drawEntry(); }
+    const mb = mixBot();
+    if (mb && mb.position) setMix();
+  });
   ctx.watch("board", () => { if (fRank.d) drawTiles(); });
   drawAll();
 

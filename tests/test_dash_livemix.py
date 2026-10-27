@@ -597,3 +597,45 @@ def test_the_second_rules_rows_in_words(tmp_path):
     assert out[0]["head"] == "SOL 슈퍼트렌드·스톡RSI 골든크로스" and out[0]["pill"] == "진입 안 함"
     assert out[0]["text"] == "30분 RSI26 조건 안 맞음 · 스톡RSI K 30.1 / D 25.2 · 30분 RSI26 48.0 · 1시간 RSI26 54.0 · 종가 100.00 · 손절 폭 1.50%"
     assert out[1]["head"] == "SOL 하늘색으로 바뀜 (롱 쪽)" and out[1]["text"] == "30분 평균 RSI 60.0 · 1시간 평균 RSI 55.0"
+
+
+
+MARK_JS = """
+const PB = await import('file://SCREENS/../core/pb.js');
+globalThis.fetch = async (path) => {                          // the page's ticker: BCH at 101 (nothing else answers)
+  if (path !== '/api/ticker') throw new Error('offline');
+  return {status: 200, ok: true, json: async () => ({BCHUSDT: {mark: 101}})};
+};
+await PB.store.need('ticker', 0);
+const v = await view(D_m);
+console.log(JSON.stringify({text: v.text}));
+"""
+
+
+def test_the_friend_bot_card_and_strip_move_with_the_mark(w, tmp_path, monkeypatch):
+    """한눈에, owners 10-27 ("친구봇 돈 움직이는것도 안뜨고 저기 위에 문구도 없어"): with BCH long 0.12 @ 100 open (margin $0.30) and the
+    page's mark at 101, the 친구봇 card shows the balance read at the entry + the position's P&L ($49.95 + $0.12) and ROE +40 %;
+    with a paper or executor position open (the gauge shows), its strip of real-money positions has a WOO X Pro 2 row too."""
+    from tests import livebots_world as LW
+    mix = json_finite(X.control(_p(w), NOW))
+    js = (HQ_JS.split("const on = await view")[0] + MARK_JS).replace("SCREENS", SCREENS)
+    # no paper / executor position: the card moves, the gauge (and its strip) stays hidden
+    f = tmp_path / "fees"
+    f.mkdir()
+    p = FW.build_world(f)["p"]
+    t = _node(tmp_path, js, s=json_finite(L.build(p, FW.NOW)), m=mix, n=json_finite(L.whynow(p, FW.NOW)),
+              cal=json_finite(L.calendar(p, FW.NOW)), r=json_finite(L.rank(p, FW.NOW)))["text"]
+    for word in ("WOO X Pro 2 진짜 돈 봇 친구 30분 봇(믹스) 스스로 매매", "$ 50.07 ×1.00", "시작 대비 +$0.07 · 진입 때 잔고 $49.95 + 평가 +$0.12",
+                 "포지션 BCH 롱 40배 · 계단 1단계 · ROE +40.0%"):
+        assert word in t, word
+    assert "진입 때 읽은 잔고 10/27 09:00" not in t and not BAD.search(t)
+    # the paper and both executors hold BTC (tests/livebots_world.py): the strip lists them, then WOO X Pro 2
+    L._cache.clear()
+    monkeypatch.setenv("PAPERBOT_LIVE_COMBO_CONFIG", "/nonexistent")
+    q = LW.build_world(str(tmp_path / "lw"))
+    t = _node(tmp_path, js, s=json_finite(L.build(q, LW.NOW)), m=mix, n=json_finite(L.whynow(q, LW.NOW)),
+              cal=json_finite(L.calendar(q, LW.NOW)), r=json_finite(L.rank(q, LW.NOW)))["text"]
+    L._cache.clear()
+    row = re.search(r"WOO X Pro 2 BCH 롱 · 진입 (\S+) 거래소 손절 (\S+) 계단 1단계 (\S+)", t)
+    assert row and row.groups() == ("100.00", "100.25", "+40.0%"), t[t.find("거래소 손절") - 200:]
+    assert t.index("바이비트 BTC") < t.index("WOO X Pro 2 BCH") and not BAD.search(t)
