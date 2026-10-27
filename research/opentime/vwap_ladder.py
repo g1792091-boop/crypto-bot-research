@@ -11,7 +11,8 @@ The paper and the executor take the same ladder here (in the live bot the execut
 
 Selection (fixed before the results, as research/opentime and research/mixchop_st/ladder9.py): among the 10 -> 8 arms, the
 highest median month (KST months, a fresh wallet each, the executor's copied trades) of 2021-01 .. 2023-12, log growth on a
-tie; 2024-01 .. 2026-09 and October 2026 only check it (reported, not used to choose).
+tie; 2024-01 .. 2026-09, October 2026 and the 20 days 2026-10-05 .. 10-25 (KST, one wallet; added 10-27 at the owners'
+"20일 기준도", after the first run) only check it (reported, not used to choose).
     python3 -I vwap_ladder.py FIVE5M_DIR WORK OUT_DIR       (the same folders as vwap.py)  ->  OUT_DIR/vwap_ladder.json"""
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ import vwap as VB  # noqa: E402
 
 import numpy as np  # noqa: E402
 
+D20 = (CM.kst_ms("2026-10-05 00:00"), CM.kst_ms("2026-10-25 09:00"))
 LADDERS = [(12, 10, 5)] + [(10, 8, step) for step in (2, 3, 4, 5, 7, 10)]
 
 
@@ -61,6 +63,10 @@ def main(argv=None) -> int:
             L = D[D.copied].reset_index(drop=True)
             res[name(lad)] = {"ladder": list(lad), "live": {p: CM.period_metrics(L, p) for p in CM.PERIODS},
                               "paper": {p: CM.period_metrics(D, p) for p in CM.PERIODS}}
+            # the 20 days of the friend bot's check (owners 10-27 "20일 기준도"): 2026-10-05 .. 10-25 KST, one wallet
+            W = L[(L.t >= D20[0]) & (L.t < D20[1])]
+            rr = W.ret.to_numpy(float)
+            res[name(lad)]["d20"] = {"trades": int(len(rr)), "wins": int((rr > 0).sum()), "x": float(np.prod(1 + rr))}
             lv = res[name(lad)]["live"]
             print(name(lad), {p: (d["trades"], round(d["median_month"], 4), d["months_up"], round(d["win_pct"], 1))
                               for p, d in lv.items()}, f"{time.time() - t0:.0f}s", flush=True)
