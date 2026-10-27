@@ -4,6 +4,8 @@ when the ladder was chosen) with the Toobit plan (40 % margin, BTC 40x / others 
 costs, $50, one position), the exit only changed: the ladder as it runs (20 -> 17, 25 -> 22, ...), the rule bot's ladder
 (12 -> 10, then 5 % steps) and a fixed take-profit at net +10 / +15 / +20 % (closed at market: sim's maker fee = taker +
 slippage, as owners1025c sets it). Only the account table of owners1025h (its later reads are not repeated).
+Later the same day, "V 3.9 지금 확보선 순 17%로 바꾸면 어떻게 돼?": a fixed take-profit at net +17 % (the ladder's first lock) and the
+ladder moved down to start there (17 -> 14, 22 -> 19, then 5 % steps) were added; the other rows are unchanged.
 
     python3 owners1027.py <export_dir> <out_dir> <bars_dir>     -> tp_thirty.csv, tp_thirty_trades.csv
 """
@@ -27,7 +29,9 @@ LADDERS = {"B 20→17 (지금)": V("B", first_lock=0.17, gap=0.03, next_trigger=
            "L 12→10 (규칙봇 계단)": V("L", first_lock=0.10, gap=0.02, **_P),
            "F10 고정 +10%": V("F10", tp="ROE", tp_val=0.10, ladder=False, **_P),
            "F15 고정 +15%": V("F15", tp="ROE", tp_val=0.15, ladder=False, **_P),
-           "F20 고정 +20%": V("F20", tp="ROE", tp_val=0.20, ladder=False, **_P)}
+           "F20 고정 +20%": V("F20", tp="ROE", tp_val=0.20, ladder=False, **_P),
+           "F17 고정 +17%": V("F17", tp="ROE", tp_val=0.17, ladder=False, **_P),
+           "B17 계단 17→14": V("B17", first_lock=0.14, gap=0.03, next_trigger=0.22, **_P)}
 
 live = C.signals(("1h",))
 t20 = min(d["bar_close"] for d in live) - 1                     # the paper record's first 1h signal close
