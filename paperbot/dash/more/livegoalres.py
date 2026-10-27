@@ -92,11 +92,12 @@ NOTE_KO = ("계산일 뿐 예측이 아니에요: 지금까지의 기록(승률 
            "거래가 적으면 숫자가 크게 흔들려요")
 # the 30-day study of the owners' Toobit plan (analysis/v39_1h/REPORT_KO.md 14장, owners1025h.py): research numbers, never live
 V39_STUDY = {
-    "src": "analysis/v39_1h/REPORT_KO.md 14장 (owners1025h.py)",
-    "rows": [{"span_ko": "페이퍼 앞 10일 (09-26 ~ 10-06, 계단 고를 때 안 본 기간)", "trades": 13, "wins": 5, "stops": 8, "start": 50.0, "end": 11.0},
-             {"span_ko": "페이퍼 20일 (10-06 ~ 10-26)", "trades": None, "wins": None, "stops": None, "start": 50.0, "end": 268.0},
-             {"span_ko": "30일 한 계좌", "trades": None, "wins": None, "stops": None, "start": 50.0, "end": 58.0}],
-    "ko": "결과를 가른 것은 계단도 진입도 아니고, V3.9에 맞는 장(20일)이었는지 아닌 장(앞 10일)이었는지였어요",
+    "src": "analysis/v39_1h/REPORT_KO.md 15장 (owners1027.py, 계단 12→10 줄)",
+    "rows": [{"span_ko": "페이퍼 앞 10일 (09-26 ~ 10-06)", "trades": 13, "wins": 6, "stops": 7, "start": 50.0, "end": 14.1},
+             {"span_ko": "페이퍼 20일 (10-06 ~ 10-26)", "trades": 26, "wins": 26, "stops": 0, "start": 50.0, "end": 177.9},
+             {"span_ko": "30일 한 계좌", "trades": 39, "wins": 32, "stops": 7, "start": 50.0, "end": 48.9}],
+    "ko": ("지금 계획(계단 12→10, 10/27부터)으로 다시 돌린 숫자예요. 예전 계단 20→17은 $11.0 · $268 · $57.6이었어요. "
+           "결과를 가른 것은 계단보다 V3.9에 맞는 장(20일)이었는지 아닌 장(앞 10일)이었는지였어요"),
 }
 
 
@@ -847,13 +848,22 @@ def v39_bot(p: dict, now: int, more: dict) -> dict:
 
     def lev_of(sym: Any) -> int:
         return _i(lev.get(sym)) or (lev_btc if sym == "BTCUSDT" else lev_alt)
+    # the plan's first rung (form 1: first_lock + trigger_gap; 12 -> 10 since owners 10-27 "투비트봇 12→10 계단으로 바꿔줘")
+    lad = plan_raw.get("ladder") if isinstance(plan_raw.get("ladder"), dict) else {}
+    lock1 = _f(lad.get("first_lock")) or 0.10
+    trig1 = lock1 + (_f(lad.get("trigger_gap")) or 0.0)
+    rung = f"{100 * trig1:.0f}→{100 * lock1:.0f}"
+    edges = (trig1 / 2, trig1, trig1 + 0.08)
+    edge_ko = tuple(f"{100 * e:.0f}%" for e in edges)
     items.append(_safe(lambda: mfe_item(
-        "ladder", "계단 20→17 확인: 진 거래는 한때 얼마나 갔나",
+        "ladder", f"계단 {rung} 확인: 진 거래는 한때 얼마나 갔나",
         "투비트 계획(BTC 40배 · 나머지 30배 · 투비트 비용)으로 보면 손절로 끝난 V3.9 거래가 그 전에 순ROE 몇 %까지 갔나?",
-        ppath, acct, trades, rt or TOOBIT_RT, (0.15, 0.20, 0.28), ("15% 안", "15% ~ 20%", "20% ~ 28%", "28% 넘게"), more.get("rule_db"), lev_of,
-        use_ko=("20일 연구에서는 진 거래가 15% 안쪽이거나 28% 넘게 갔다 돌아온 것뿐이라 20%에 첫 계단을 뒀어요. "
-                "15~28% 칸에 진 거래가 쌓이면 첫 계단(20→17)을 다시 볼 때예요"),
-        how_extra=f" · 배수는 투비트 계획(BTC {lev_btc}배 · 나머지 {lev_alt}배), 비용 왕복 {100 * (rt or TOOBIT_RT):.2f}%"), "ladder", "계단 20→17 확인"))
+        ppath, acct, trades, rt or TOOBIT_RT, edges,
+        (f"{edge_ko[0]} 안", f"{edge_ko[0]} ~ {edge_ko[1]}", f"{edge_ko[1]} ~ {edge_ko[2]}", f"{edge_ko[2]} 넘게"), more.get("rule_db"), lev_of,
+        use_ko=(f"첫 계단은 순ROE {edge_ko[1]}에 닿으면 손절을 {100 * lock1:.0f}% 자리로 올려요. {edge_ko[1]} 넘게 갔다 진 페이퍼 거래는 "
+                f"실거래 계단이었다면 잠금으로 끝났을 거래예요(배수·체결가가 달라 어림). "
+                f"{edge_ko[0]} ~ {edge_ko[1]} 칸에 진 거래가 쌓이면 첫 계단을 더 내릴지 다시 볼 때예요"),
+        how_extra=f" · 배수는 투비트 계획(BTC {lev_btc}배 · 나머지 {lev_alt}배), 비용 왕복 {100 * (rt or TOOBIT_RT):.2f}%"), "ladder", f"계단 {rung} 확인"))
     items.append(item("study", "30일 다시 돌려 본 것 (연구 기록)", "투비트 계획을 지난 30일에 그대로 돌리면 어땠나? (실거래 아님)",
                       lead_ko=V39_STUDY["ko"], tone="warn",
                       table={"cols": [{"key": "span_ko", "label_ko": "기간", "fmt": "text"}, {"key": "trades", "label_ko": "번", "fmt": "n"},

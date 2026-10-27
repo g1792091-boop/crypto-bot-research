@@ -1518,10 +1518,11 @@ def test_agents_never_import_the_module():
 
 def test_the_live_config_template_is_the_owners_plan():
     """deploy/executor.live-toobit.json (owners 10-25 night: "증거금 40% BTC 40배 나머지 30배", then "손절 2.5 ATR로 가고
-    15%되면 13%에 익절 20%되면 17%익절 25%되면 22%", and later "너가 정한 기준으로 갈게": the ladder from 20 -> 17): the
+    15%되면 13%에 익절 20%되면 17%익절 25%되면 22%", "너가 정한 기준으로 갈게": the ladder from 20 -> 17, and 10-27 "그럼 투비트봇
+    12→10 계단으로 바꿔줘": the rule bot's ladder 12 -> 10, then every 5 %): the
     exchange, mainnet, $50, its own key file and database, the rule bot's V3.9 1-hour paper account, 40 % of the balance as
     margin at BTC 40x / the others 30x, the paper's stop distance x 1.25 (2.5 ATR) from its own fill, no entry whose stop
-    sits beyond the liquidation, its own ladder 20 -> 17, 25 -> 22, 30 -> 27 ... on net ROE, no fixed take-profit. A
+    sits beyond the liquidation, its own ladder 12 -> 10, 17 -> 15, 22 -> 20 ... on net ROE, no fixed take-profit. A
     valid config as it is."""
     raw = json.loads((ROOT / "deploy" / "executor.live-toobit.json").read_text(encoding="utf-8"))
     cfg = ExecConfig.from_dict(raw)
@@ -1533,10 +1534,10 @@ def test_the_live_config_template_is_the_owners_plan():
     assert cfg.leverage_by_symbol == {"BTCUSDT": 40, "*": 30} and cfg.risk.max_leverage == 40
     assert [cfg.entry_leverage(s, 20) for s in cfg.risk.allowed_symbols] == [40, 30, 30, 30, 30, 30]
     assert (cfg.stop_scale, cfg.liq_guard, cfg.liq_guard_mmr) == (1.25, True, 0.005)
-    assert cfg.ladder == {"first_lock": 0.17, "trigger_gap": 0.03, "step": 0.05, "next_trigger": 0.25, "next_gap": 0.03}
+    assert cfg.ladder == {"first_lock": 0.10, "trigger_gap": 0.02, "step": 0.05}
     spec = cfg.ladder_spec()
-    locks = [spec.lock_for(r) for r in (0.15, 0.199, 0.20, 0.249, 0.25, 0.30, 0.35)]
-    assert locks[:2] == [None, None] and locks[2:] == pytest.approx([0.17, 0.17, 0.22, 0.27, 0.32])
+    locks = [spec.lock_for(r) for r in (0.10, 0.119, 0.12, 0.169, 0.17, 0.22, 0.27)]
+    assert locks[:2] == [None, None] and locks[2:] == pytest.approx([0.10, 0.10, 0.15, 0.20, 0.25])
     assert cfg.ladder_basis == "net" and cfg.take_profit_roe is None and "take_profit_roe" not in raw
     assert "stop_roe" not in raw
     assert cfg.net_cost() == {"taker_fee": 0.0006, "slippage": 0.0002}

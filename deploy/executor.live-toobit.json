@@ -24,11 +24,9 @@
   "trade_alerts": true,
   "ladder_from": "own",
   "ladder": {
-    "first_lock": 0.17,
-    "trigger_gap": 0.03,
-    "step": 0.05,
-    "next_trigger": 0.25,
-    "next_gap": 0.03
+    "first_lock": 0.10,
+    "trigger_gap": 0.02,
+    "step": 0.05
   },
   "ladder_basis": "net",
   "signal_light_n": 0,

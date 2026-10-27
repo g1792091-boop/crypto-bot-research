@@ -276,8 +276,10 @@ def test_v39_paper_alone_until_toobit_is_installed(tmp_path, monkeypatch):
     items = {i["id"]: i for i in d["items"]}
     assert list(items) == ["regime", "ladder", "study"] and all(i["state"] == "ok" for i in items.values())
     lad = {r["range_ko"]: r for r in items["ladder"]["table"]["rows"]}
-    # losers' best move 0.3 %, 0.2 %, 0.1 % -> under 15 %; 0.8 % -> 15~20; 1.0 % -> 20~28; 1.2 % -> 28 %+ (30x, cost 0.16 %)
-    assert [lad[k]["losers"] for k in ("15% 안", "15% ~ 20%", "20% ~ 28%", "28% 넘게")] == [3, 1, 1, 1]
+    # the template's first rung 12 -> 10 (owners 10-27): losers' best move 0.3 %, 0.2 %, 0.1 % -> net ROE 4.2 / 1.2 / -1.8 %, under 6 %;
+    # 0.8 % -> 19.2 % (12~20); 1.0 %, 1.2 % -> 25.2 / 31.2 % (20 %+) (30x, cost 0.16 %)
+    assert items["ladder"]["title_ko"].startswith("계단 12→10 확인")
+    assert [lad[k]["losers"] for k in ("6% 안", "6% ~ 12%", "12% ~ 20%", "20% 넘게")] == [3, 0, 1, 2]
     assert sum(r["winners"] for r in lad.values()) == 6 and "6번 중 3번" in items["ladder"]["lead_ko"]
     assert "BTC 40배 · 나머지 30배" in items["ladder"]["how_ko"] and "0.16%" in items["ladder"]["how_ko"]
     rg = items["regime"]
@@ -289,7 +291,7 @@ def test_v39_paper_alone_until_toobit_is_installed(tmp_path, monkeypatch):
     last10 = V39_TRADES[-10:]
     assert f"최근 10번: {sum(1 for x in last10 if x[3])}승" in rg["lead_ko"] and rg["kpis"][2]["value"] == 12
     assert rg["table2"]["rows"] and all(r["week_ko"].endswith(" 주") for r in rg["table2"]["rows"])
-    assert items["study"]["table"]["rows"][0]["end"] == 11.0 and "맞는 장" in items["study"]["lead_ko"]
+    assert items["study"]["table"]["rows"][0]["end"] == 14.1 and "맞는 장" in items["study"]["lead_ko"]
 
 
 def test_v39_without_its_account(tmp_path, monkeypatch):
@@ -354,7 +356,8 @@ def test_the_section_in_node(world, tmp_path, monkeypatch):
                  "언제 판단:", "어디에 쓰나:", "진 거래는 한때 얼마나 갔나", "어느 역할이 버나", "더 깊게 보기:", "2주 검토"):
         assert word in a, word
     for word in ("V3.9 투비트" if False else "투비트", "투비트 실행기가 아직 꺼져 있어요", "장세: 지금 V3.9에 맞는 장인가", "진입 때 BTC 하루 움직임",
-                 "BTC 옆걸음 (하루 ±2% 안)", "주마다", "계단 20→17 확인", "15% ~ 20%", "28% 넘게", "30일 다시 돌려 본 것 (연구 기록)", "$11.00", "$268.00"):
+                 "BTC 옆걸음 (하루 ±2% 안)", "주마다", "계단 12→10 확인", "6% ~ 12%", "20% 넘게", "30일 다시 돌려 본 것 (연구 기록)", "$14.10", "$177.90",
+                 "$48.90", "예전 계단 20→17은 $11.0 · $268 · $57.6"):
         assert word in b, word
     for t in (a, b):
         assert not BAD.search(t), BAD.search(t)

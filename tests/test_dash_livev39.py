@@ -52,7 +52,8 @@ def _key(sym: str, t: int) -> str:
 def world(folder: str) -> dict:
     """paper3.db (V39_ALL@1h: tests/test_toobit_slot.py's two followed trades and the open DOGE, plus EXTRA) and 투비트's
     database and config (the owners' template with the account and the paper file filled in); the open DOGE position at
-    its first ladder step (거래소 기준: lock 17 %, next 25 % -> 22 %)."""
+    its first ladder step (거래소 기준: lock 17 %, next 25 % -> 22 %: the ladder it was opened with, 20 -> 17, kept in the trade;
+    the plan reads the template's ladder, 12 -> 10 since 10-27)."""
     os.makedirs(folder, exist_ok=True)
     rp = TS.rule_paper_db(os.path.join(folder, "paper3.db"))
     s = Store3(rp["path"])
@@ -118,7 +119,7 @@ def test_off_before_the_executor_runs(tmp_path):
     # the owners' plan (docs/toobit-ko.md "두 분이 정한 계획"), from the template's own numbers
     assert "투비트 잔고의 40%" in words["size"] and words["leverage"].startswith("BTC 40배 · 나머지 30배")
     assert words["stop"].startswith("2.5 ATR (페이퍼 손절 거리 2 ATR × 1.25)")
-    assert "순ROE 20%→17% · 25%→22% · 30%→27% …" in words["ladder"] and "그 뒤 5%마다 (닿은 순ROE - 3%)" in words["ladder"]
+    assert "순ROE 12%→10% · 17%→15% · 22%→20% …" in words["ladder"] and "순ROE 12%에서 10% 잠금, 이후 5%씩" in words["ladder"]
     assert words["tp"] == "없음" and "강제청산 가격보다 멀면 그 진입은 안 함" in words["liq"] and "40배 약 2%" in words["liq"]
     assert "30배 약 2.83%" in words["liq"] and words["macro"].startswith("미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 30분은 새 진입 안 함")
     # owners 10-26 "투비트도 나스닥 개장 앞뒤 30분 진입금지" (the template's us_open_pre_min / us_open_pause_min)
@@ -128,7 +129,7 @@ def test_off_before_the_executor_runs(tmp_path):
     assert L.WHY_KO["us_open_skip"] == "나스닥 개장 앞뒤라 들어가지 않았어요" and L.KIND_KO["us_open_skip"] == "나스닥 개장 앞뒤라 안 들어감"
     assert L.fixed_rules({"us_open_pre_min": 0}) == [] and L.us_open_window({"us_open_pause_min": 15}) == (0, 15)
     assert "BTC · ETH · SOL · DOGE · LTC · BCH" in words["coins"] and "정한 금액 $50" in words["coins"] and "V39_ALL@1h" in words["follow"]
-    assert pl["ladder"] == [{"at": 0.2, "lock": 0.17}, {"at": 0.25, "lock": 0.22}, {"at": 0.3, "lock": 0.27}, {"at": 0.35, "lock": 0.32}]
+    assert pl["ladder"] == [{"at": 0.12, "lock": 0.1}, {"at": 0.17, "lock": 0.15}, {"at": 0.22, "lock": 0.2}, {"at": 0.27, "lock": 0.25}]
     # a config on the server but no database yet: still off, said why
     with open(TEMPLATE, encoding="utf-8") as fh:
         (tmp_path / "cfg.json").write_text(fh.read(), encoding="utf-8")
@@ -346,7 +347,7 @@ def test_the_v39_view_in_node(w, tmp_path):
     for word in ("진짜 돈 · 투비트 실행기 · 규칙봇 V3.9 1시간 페이퍼(V39_ALL@1h)를 따라가요", "V3.9 투비트", "켜짐", "페이퍼 V39_ALL@1h가 진입하면 따라 들어가요",
                  "처음 켬 10/25 09:00", "투비트 잔고 (실거래)", "처음 잔고 대비", "오늘 (한국 시간)", "오늘 닫힌 거래 없음", "실거래 성적", "1승 1패",
                  "표본 적음", "페이퍼 V39 지갑", "모의 · 진짜 돈 아님",
-                 "계획", "1단계", "20% → 17%", "25% → 22%", "30% → 27%", "BTC 40배 · 나머지 30배", "2.5 ATR", "증거금 = 그때 투비트 잔고의 40%",
+                 "계획", "1단계", "12% → 10%", "17% → 15%", "22% → 20%", "BTC 40배 · 나머지 30배", "2.5 ATR", "증거금 = 그때 투비트 잔고의 40%",
                  "미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 30분은 새 진입 안 함", "강제청산 가격보다 멀면 그 진입은 안 함",
                  "나스닥 개장 앞 30분·뒤 30분은 새 진입 안 함",
                  "지금 포지션", "DOGE", "30배 격리", "계단 1단계 · 순ROE 17% 잠금", "가장 좋았던 순ROE +21%",
@@ -359,7 +360,7 @@ def test_the_v39_view_in_node(w, tmp_path):
     assert not BAD.search(a), BAD.search(a)
     b = out["off"]
     for word in ("꺼짐", "아직 꺼져 있어요", "서버에 설정 파일도 기록 파일도 아직 없어요", "docs/toobit-ko.md의 '실행기 켜기' → '켜는 순서'",
-                 "그 전에는 숫자를 만들지 않아요", "저장소의 설정 원본", "20% → 17%", "실행기 꺼짐", "실행기가 아직 꺼져 있어요"):
+                 "그 전에는 숫자를 만들지 않아요", "저장소의 설정 원본", "12% → 10%", "17% → 15%", "실행기 꺼짐", "실행기가 아직 꺼져 있어요"):
         assert word in b, word
     assert "투비트 잔고 (실거래)" not in b and "실거래 성적" not in b and "처음 잔고 대비" not in b and not BAD.search(b)
     assert not re.search(r"\$\d", b.split("계획")[0].replace("$50", ""))                     # no money before the plan's own $50

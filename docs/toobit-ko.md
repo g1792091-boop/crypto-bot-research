@@ -19,7 +19,8 @@
   - 실거래(mainnet)만, 정한 금액 **$50**
   - 따라갈 페이퍼: 규칙봇의 V3.9 1시간 계좌 **`V39_ALL@1h`**(`/var/lib/paperbot/paper3.db`)
   - 진입 크기: **잔고의 40%를 증거금으로**(`size_from: "equity"`, `margin_frac: 0.4`), 배수는 **BTC 40배, 나머지 30배**
-  - 손절 **2.5 ATR**, 계단 익절 **20%→17%, 25%→22%, 30%→27%, 그 뒤 5%마다(닿은 순ROE - 3%)**, 고정 익절 없음
+  - 손절 **2.5 ATR**, 계단 익절 **12%→10%, 17%→15%, 22%→20%, 그 뒤 5%마다**(10/27부터, 규칙봇 V3.9와 같은 계단; 그 전에는
+    20%→17%), 고정 익절 없음
   - 손절이 강제청산 가격보다 멀면 그 진입은 하지 않음, 미국 경제 발표 앞뒤 30분 새 진입 안 함
   - 6개 코인(BTC, ETH, SOL, DOGE, LTC, BCH), 1포지션, 시장가만, 격리 마진
 
@@ -230,14 +231,17 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
   손절을 겁니다. 예: 페이퍼 손절이 진입가에서 1.6%면 실거래 손절은 자기 체결가에서 2.0%.
 - **익절: 계단(거래소 기준).** 실행기가 **자기 체결가, 투비트 1분봉, 투비트 비용(왕복 0.16%)** 으로 순ROE를 재서 손절을 올립니다.
   페이퍼의 잠금은 따르지 않습니다.
-  - 순ROE 20% 닿으면 손절을 순ROE 17% 자리로 (처음 정한 15%→13%에서 두 분이 맡긴 대로 바꿈, 10-25 밤)
-  - 25% 닿으면 22%, 30% 닿으면 27%
-  - 그 뒤로도 5%마다 한 칸씩(닿은 순ROE - 3%): 35%면 32% …
-  - 왜 20%부터인가: 지난 20일 V3.9 1시간 신호 61개를 하나씩 따로 보면, 손절로 끝난 신호는 손절 전에 순ROE **15% 안쪽**까지만
-    갔거나 **28% 이상** 갔다가 돌아왔습니다. 그 사이(15~28%)에서 돌아선 신호는 없었습니다. 20%는 그 빈 구간의 가운데라
-    양쪽 끝에서 멀고, 25%는 28%에 3%밖에 안 떨어져 있습니다(`analysis/v39_1h/owners1025f.py`).
-    다만 페이퍼 시작 전 10일(계단을 고를 때 안 본 기간)에서는 이 빈 구간이 없었고, 세 계단 모두 크게 잃었습니다(20→17이 가장 덜
-    잃음). 계단은 결과를 크게 바꾸지 못합니다(`owners1025h.py`, `analysis/v39_1h/REPORT_KO.md` 14장).
+  - 순ROE 12% 닿으면 손절을 순ROE 10% 자리로, 17% 닿으면 15%, 22% 닿으면 20%, 그 뒤로도 5%마다 한 칸씩
+    (두 분 10/27: "그럼 투비트봇 12→10 계단으로 바꿔줘". 규칙봇 V3.9 계좌와 같은 계단 숫자입니다)
+  - 그 전에는 20%→17%, 25%→22%, … 였습니다(10/25 밤). 같은 30일(페이퍼 20일 + 그 앞 10일)로 다시 돌려 보면
+    (`analysis/v39_1h/owners1027.py`, `REPORT_KO.md` 15장):
+    | | 20→17 (예전) | 12→10 (지금) |
+    |---|---|---|
+    | 앞 10일 | 5승 8손절, $50 → $11.0 | 6승 7손절, $50 → $14.1 |
+    | 페이퍼 20일 | 21승 0손절, $50 → $268 | 26승 0손절, $50 → $178 |
+    | 30일 한 계좌 | 26승 8손절, $50 → $57.6 (최대 낙폭 78%) | 32승 7손절, $50 → $48.9 (최대 낙폭 72%) |
+  - 12→10은 손절이 하나 적고(순 12~20%까지 갔다 돌아선 거래를 10%에 잠금) 안 좋은 장에서 덜 잃습니다. 대신 이긴 거래가
+    작아서(이길 때 잔고 가운데 +4.4%, 예전 +8.8%) 좋은 장에서는 덜 법니다.
   - 손절은 올리기만 하고 내리지 않습니다. 잠긴 자리에서 닫히면 그만큼 이익입니다.
 - **고정 익절은 없습니다.** (실행기에 "순ROE +X%에서 시장가로 전부 닫기"(`take_profit_roe`)가 들어 있지만 이번 계획에서는 쓰지
   않습니다.)
@@ -285,7 +289,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
    ```
 3. 설정 확인: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit executor check-config --config /etc/paperbot/executor-toobit.json`
    - 마지막 줄 `준비됨`. 위 계획이 한국어로 나옵니다: `배수: BTC 40배, 나머지 30배 (페이퍼 배수 대신)`,
-     `손절: 페이퍼 손절 거리(2 ATR) × 1.25 = 2.5 ATR, 자기 체결가 기준`, `계단: 순ROE 20%에서 17% 잠금, 25%에서 22%, 30%에서 27%, …`,
+     `손절: 페이퍼 손절 거리(2 ATR) × 1.25 = 2.5 ATR, 자기 체결가 기준`, `계단: 순ROE 12%에서 10% 잠금, 이후 5%씩`,
      `청산가 확인: 켜짐 …`, `경제 발표: … 앞뒤 30분에는 새 진입 안 함 …`.
 4. 점검: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit executor preflight --config /etc/paperbot/executor-toobit.json`
    (모든 줄 `[OK]`. `[주의] 일정 없음`이 나오면 `data/macro_events.csv`를 채운 뒤 다시 봅니다)
@@ -338,7 +342,7 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
 |---|---|---|
 | 🔔 | 실행기가 켜질 때 한 번 | `[투비트 실거래 실행기] 🔔 거래 알림 켜짐: 진입·첫 잠금·청산·진입 안 한 신호를 여기로 보냅니다(소리 없음)` |
 | 🟢 | 진입 (거래소에 손절이 걸린 뒤에 보냄) | `🟢 진입 BTCUSDT 롱 0.002 @ 65000, 40배(설정의 고정 배수, 페이퍼 20배), 손절 64350` |
-| 🔒 | 계단 첫 잠금 (그 뒤 칸들은 DB에만) | `🔒 BTCUSDT 거래소 기준 잠금 +17% (자기 체결가 기준): …` |
+| 🔒 | 계단 첫 잠금 (그 뒤 칸들은 DB에만) | `🔒 BTCUSDT 거래소 기준 잠금 +10% (자기 체결가 기준): …` |
 | ✅ / ❌ | 청산 (손익이 0보다 크면 ✅) | `✅ 청산 BTCUSDT: …, 손익 $+3.10 (…)` |
 | ⏸ | 신호는 왔지만 진입 안 함 (나스닥 개장 앞뒤·경제 발표 앞뒤·손절이 청산가보다 멂) | `⏸ BTCUSDT 이번 진입은 하지 않음: 나스닥 개장 앞 30분·뒤 30분 진입 안 함 (…)` |
 
@@ -370,3 +374,33 @@ sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill
 
 지금까지 투비트가 실제로 진입했는지(읽기만): `cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-toobit-live.db`
 → `포지션:` 줄과 최근 기록 15줄(`진입 …`, `청산 …`, `이번 진입은 하지 않음 …`).
+
+## 10/27 계단 12%→10%로 바꾸기 — 서버 순서
+
+두 분 10/27: "그럼 투비트봇 12→10 계단으로 바꿔줘". 설정 원본(`deploy/executor.live-toobit.json`)의 `ladder`만 바뀝니다:
+`{"first_lock": 0.10, "trigger_gap": 0.02, "step": 0.05}` (순ROE 12%에서 10%, 17%에서 15%, 22%에서 20%, 그 뒤 5%마다).
+진입·손절(2.5 ATR)·배수(BTC 40배·나머지 30배)·증거금 40%·진입 금지 시간은 그대로입니다.
+
+거래소 화면(투비트 비용 왕복 0.16% 포함)으로는: BTC 40배 화면 18.4%에 닿으면 16.4% 자리로, 나머지 30배 화면 16.8%에 닿으면 14.8%
+자리로 손절이 올라갑니다(그다음 칸은 BTC 23.4%→21.4%, 나머지 21.8%→19.8%).
+
+**투비트 앱에서 열린 포지션이 없을 때** 합니다. (실행기는 다시 켜면 열린 포지션에도 새 계단을 씁니다. 손절은 올라가기만 해서
+위험하지는 않지만, 들고 있던 거래가 갑자기 다른 기준으로 잠기지 않게 포지션이 없을 때 바꿉니다.) 한 줄씩:
+
+1. 코드 받기·설치: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+   (실행기는 다시 켜지 않습니다. "paperbot-executor-toobit is running the previous code"가 나오면 정상)
+2. 서버 설정과 원본이 계단만 다른지 보기: `sudo diff /etc/paperbot/executor-toobit.json /opt/crypto-bot-research/deploy/executor.live-toobit.json`
+   → 계단 줄만 나와야 합니다: `< "first_lock": 0.17,` `< "trigger_gap": 0.03,` `< "next_trigger": 0.25,` `< "next_gap": 0.03`과
+   `> "first_lock": 0.10,` `> "trigger_gap": 0.02,` `> "step": 0.05` 같은 줄들. 위의 10/26 단계(나스닥 · 거래 알림)를 아직 안
+   했다면 `> "us_open_pre_min": 30,` `> "us_open_pause_min": 30,` `> "trade_alerts": true,`도 같이 나옵니다(같이 들어가도 됩니다).
+   그 밖의 줄이 나오면 여기서 멈추고 알려 주세요.
+3. 투비트 앱에서 열린 포지션이 없는지 확인한 뒤, 예전 설정 남기고 새 원본으로 바꾸기:
+   `sudo cp -p /etc/paperbot/executor-toobit.json /etc/paperbot/executor-toobit.json.before-12`
+   `sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/executor.live-toobit.json /etc/paperbot/executor-toobit.json`
+4. 설정 확인: `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit executor check-config --config /etc/paperbot/executor-toobit.json`
+   → `계단: 순ROE 12%에서 10% 잠금, 이후 5%씩` 줄과 마지막 줄 `준비됨`
+5. 다시 켜기: `sudo systemctl restart paperbot-executor-toobit`, 확인 `systemctl is-active paperbot-executor-toobit`(`active`)
+6. 시작 기록: `sudo journalctl -u paperbot-executor-toobit -n 5 --no-pager`
+
+되돌리기: `sudo cp -p /etc/paperbot/executor-toobit.json.before-12 /etc/paperbot/executor-toobit.json` →
+`sudo systemctl restart paperbot-executor-toobit`.
