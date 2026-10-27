@@ -14,7 +14,7 @@
 | 코인 (같은 봉에 신호가 겹치면 이 순서) | SOL · ETH · XRP · BCH · ZEC · DOGE (LTC 꺼짐) |
 | 포지션 | **한 번에 1개** (두 분 결정) |
 | 크기 | **10/26부터: 진입마다 증거금 = 잔고의 40%** (손절 1번에 잔고의 약 15~25%, 9장). 그 전: 손절 1번 = 잔고의 0.25% |
-| 계단 | **10/26부터: 순ROE 12%→10%, 17%→15%, 22%→20% … (모든 코인, 1분마다 옮김, 9장)**. 그 전: 코인별 ROE 100~200%→10% |
+| 계단 | **10/27부터: 순ROE 10%→8%, 15%→13%, 20%→18% … (모든 코인, 1분마다 옮김, 11장)**. 10/26: 12%→10%, 17%→15% …. 그 전: 코인별 ROE 100~200%→10% |
 | 주문 | 시장가 (두 분 결정: 지정가 안 씀) |
 | 시작 금액 | $50 |
 
@@ -402,3 +402,47 @@
 6. **켜기:** `sudo systemctl start paperbot-mixchop paperbot-mixchop-paper` 그리고 `journalctl -u paperbot-mixchop -n 30`. 텔레그램 시작 메시지에 위 계획이 나옵니다.
 
 **되돌리기:** 봇을 끄고 `sudo cp -p /etc/paperbot/mixchop.json.before-st /etc/paperbot/mixchop.json`(모의도 같은 식) 뒤 다시 켭니다.
+
+## 11. 계단 10%→8%로 낮춤 (두 분 10/27: "친구봇 익절기준은 1 계단 10->8로 바꿔주고")
+
+설정 원본(`deploy/mixchop.live.json`, `deploy/mixchop.paper.json`)의 `ladder`만 바뀌었습니다: `{"trigger": 10, "lock": 8, "step": 5}`.
+매매법 두 개·손절 ATR 3배·코인·배수·증거금 40%·진입 금지 시간·바닥선 70%는 그대로입니다.
+
+- **어떻게 움직이나:** 순ROE(WOO X Pro 테이커 0.042%를 진입·청산 둘 다 뺀 값) 10%에 닿으면 손절을 순ROE 8% 자리로 올립니다.
+  15%면 13%, 20%면 18%, 그 뒤로도 5%마다 한 칸. 닿아도 바로 닫지 않고 손절만 올리며, 되돌아와 그 자리에 닿으면 닫힙니다.
+- **거래소 화면 기준 (40배 코인):** 화면 ROE ≈ 순ROE + 약 3.4%p. 첫 잠금은 화면 약 +13.4%에 닿으면 손절이 약 +11.4% 자리로.
+  ZEC(20배)는 약 +1.7%p: 화면 약 +11.7% → +9.7%.
+- **전(12→10)과 다른 점:** 첫 잠금이 더 일찍 걸리고(12% → 10%), 잠기는 몫은 작아집니다(10% → 8%, 잔고로는 이긴 한 번에 약 +4.0% → +3.2%).
+- **시험:** 8%로 좁힌 계단은 5년·20일 시험을 하지 않았습니다(research/mixchop_st의 계단 시험은 12→10부터 넓은 쪽만). 그 시험에서는
+  넓은 계단이 같거나 나았습니다. 두 분이 시험 없이 바꾸기로 정했습니다.
+- **화면·알림:** 실거래 사이트 믹스 카드와 텔레그램 시작 메시지가 `계단 순ROE +10%→+8%, +15%→+13%, +20%→+18% (그 뒤 5%마다)`로 나옵니다.
+
+### 11-1. 바꾸는 순서 (서버에서, 포지션이 없을 때)
+
+한 단계씩 하고 결과를 확인한 뒤 다음으로 갑니다.
+
+1. **지금 상태:** `systemctl is-active paperbot-mixchop paperbot-mixchop-paper`
+   - `active`이면 WOO X Pro 두 번째 계정 앱에서 열린 포지션이 없는지 보고 `sudo systemctl stop paperbot-mixchop paperbot-mixchop-paper`.
+     포지션이 있으면 닫힐 때까지 기다립니다.
+2. **코드 받기:** `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+3. **서버 설정과 새 원본 비교 (읽기만):**
+   ```bash
+   sudo diff /etc/paperbot/mixchop.json /opt/crypto-bot-research/deploy/mixchop.live.json
+   sudo diff /etc/paperbot/mixchop-paper.json /opt/crypto-bot-research/deploy/mixchop.paper.json
+   ```
+   - 다른 줄이 `"trigger": 12` → `"trigger": 10`, `"lock": 10` → `"lock": 8` 두 쌍뿐이어야 합니다. 다른 줄(서버에서 따로 고친 값)이
+     나오면 덮어쓰지 말고 그 결과를 보내 주세요.
+4. **백업하고 덮어쓰기:**
+   ```bash
+   sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-8
+   sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-8
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   ```
+5. **확인 (읽기만, 주문 없음):**
+   `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json`
+   - 첫 줄: `크기·계단: 진입마다 증거금 = 잔고의 40% (한 번 최대 $10,000) · 계단 순ROE +10%→+8%, 그 뒤 5%마다 · 손절·계단 60초마다(1분봉)`.
+6. **켜기:** `sudo systemctl start paperbot-mixchop paperbot-mixchop-paper` 그리고 `journalctl -u paperbot-mixchop -n 30`. 텔레그램 시작
+   메시지에 같은 계단이 나옵니다.
+
+**되돌리기:** 봇을 끄고 `sudo cp -p /etc/paperbot/mixchop.json.before-8 /etc/paperbot/mixchop.json`(모의도 같은 식) 뒤 다시 켭니다.

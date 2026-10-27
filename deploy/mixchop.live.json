@@ -14,8 +14,8 @@
  "macro_blackout_min": 30,
  "margin_frac": 0.4,
  "ladder": {
-  "trigger": 12,
-  "lock": 10,
+  "trigger": 10,
+  "lock": 8,
   "step": 5
  },
  "ladder_every_s": 60,

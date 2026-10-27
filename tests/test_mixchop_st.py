@@ -191,7 +191,9 @@ def test_the_live_config_runs_both_rules_with_a_3_atr_stop():
     cfg = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
     assert cfg.rules == ("mix", "st") and cfg.stop_atr == 3.0
     assert {c.sl_atr for c in cfg.coins} == {3.0}
-    assert cfg.ladder == {"trigger": 12.0, "lock": 10.0, "step": 5.0} and cfg.margin_frac == 0.4
+    # owners 10-27 "친구봇 익절기준은 1 계단 10->8로 바꿔주고": 10 -> 8, 15 -> 13, 20 -> 18 ...
+    assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
+    assert "계단 순ROE +10%→+8%, +15%→+13%, +20%→+18%" in M.plan_words(cfg)
 
 
 def test_the_signals_command_lists_the_crosses(tmp_path, monkeypatch, capsys):
