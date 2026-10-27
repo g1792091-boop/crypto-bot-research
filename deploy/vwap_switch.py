@@ -18,7 +18,9 @@ paper has no such position closes it) and while the VWAP paper bot has no record
 
 What changes in that executor's config (every other value stays; the file keeps its owner and mode):
 - ``paper_db`` -> /var/lib/paperbot/combo/vwap.db (account COMBO@mix there too)
-- ``ladder`` -> the VWAP bot's: 12 % -> 10 % locked, then every 5 % (first_lock 0.10, trigger_gap 0.02, step 0.05)
+- ``ladder`` -> the VWAP bot's: 10 % -> 8 % locked, then every 4 % (first_lock 0.08, trigger_gap 0.02, step 0.04; owners
+  10-27; until then 12 % -> 10 %, every 5 %)
+- ``leverage_by_symbol`` BTC 40x / the other coins 30x, ``liq_guard`` (0.5 %): owners 10-27 (the paper stays 30x)
 - ``signal_light_n`` 20, ``signal_light_min_win`` 0.75: a new entry is followed only while the paper's last 20 closed
   trades won 75 % or more (fewer than 20: followed)
 - ``risk.max_loss_frac`` 0.20: one stop loses at most 20 % of the live balance (margin 40 % x ROE -50 %)
@@ -44,8 +46,10 @@ EXECS = {"bybit": ("바이비트", "/etc/paperbot/executor.json", "paperbot-exec
          "deepcoin": ("딥코인", "/etc/paperbot/executor-deepcoin.json", "paperbot-executor-deepcoin")}
 VWAP_DB = "/var/lib/paperbot/combo/vwap.db"
 ACCOUNT = "COMBO@mix"
-LADDER = {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}
+LADDER = {"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.04}
 LIGHT_N, LIGHT_WIN = 20, 0.75
+LEVERAGE = {"BTCUSDT": 40, "*": 30}        # owners 10-27: BTC 40x, the other coins 30x (not the paper's 30x)
+LIQ_GUARD, LIQ_MMR = True, 0.005            # no entry whose stop sits beyond the liquidation at that leverage
 MAX_LOSS = 0.2
 SUFFIX = ".before-vwap-"
 
@@ -84,6 +88,7 @@ def plan_exec(current: str, exchange: str, balance: float, wallet: float) -> tup
     scale = round(balance / wallet, 6)
     risk = dict(d.get("risk") or {})
     want = {"paper_db": VWAP_DB, "ladder": LADDER, "signal_light_n": LIGHT_N, "signal_light_min_win": LIGHT_WIN,
+            "leverage_by_symbol": LEVERAGE, "liq_guard": LIQ_GUARD, "liq_guard_mmr": LIQ_MMR,
             "budget_usd": round(float(balance), 2), "qty_scale": scale}
     words = []
     for k, v in want.items():

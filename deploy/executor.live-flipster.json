@@ -12,11 +12,17 @@
   "signal_light_min_win": 0.75,
   "ladder_from": "own",
   "ladder": {
-    "first_lock": 0.1,
+    "first_lock": 0.08,
     "trigger_gap": 0.02,
-    "step": 0.05
+    "step": 0.04
   },
   "ladder_basis": "net",
+  "leverage_by_symbol": {
+    "BTCUSDT": 40,
+    "*": 30
+  },
+  "liq_guard": true,
+  "liq_guard_mmr": 0.005,
   "net_costs": {
     "bybit": {
       "taker_fee": 0.00044,

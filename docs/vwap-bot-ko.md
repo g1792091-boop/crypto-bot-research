@@ -45,7 +45,7 @@
 | 항목 | 내용 | 설정 이름 |
 |---|---|---|
 | 손절 | 진입가에서 2 ATR (신호 봉 ATR14). 실행기가 거래소에 손절 주문을 바로 걸어 둠 | `stop` |
-| 계단 익절 | 순ROE 12% → 10% 잠금, 17% → 15%, 22% → 20%, 이후 5%씩 | `ladder` |
+| 계단 익절 | 순ROE 12% → 10% 잠금, 17% → 15%, 22% → 20%, 이후 5%씩 (페이퍼). **실거래(딥코인)는 10/27부터 10% → 8%, 14% → 12%, 18% → 16%, 이후 4%씩 (11장)** | `ladder` |
 | 보유 한도 | 자기 봉 96개: VWAP 48시간, CMO 96시간 (넘으면 시장가 정리, 기록·메시지에는 "보유 한도 청산") | `max_hold_bars` |
 | 반대 신호 청산 · 추세 뒤집힘 청산 | 없음 | `early_exit` null |
 
@@ -55,7 +55,8 @@
 - 2 ATR 손절이 ROE −50%보다 크면 수량을 줄입니다(`max_loss_frac` 0.2, `loss_cap` shrink). 그래서 손절 한 번에 계좌는 최대 약 −20%.
 - 페이퍼는 1,000달러로 시작합니다. 실거래 수량은 "페이퍼 수량 × qty_scale"이고, 딥코인 실행기를 켜기 전에 도구가 qty_scale을
   "딥코인 잔고 ÷ 그때 페이퍼 지갑"으로 맞춥니다(5-C).
-- 배수는 실행기도 페이퍼를 따릅니다(BTC도 30배).
+- 배수: 페이퍼는 모든 코인 30배. **실거래(딥코인)는 10/27부터 BTC 40배 · 나머지 30배**(실행기 `leverage_by_symbol`), 강제청산 가격보다
+  먼 손절이면 진입 안 함(`liq_guard`). 페이퍼는 5년 연구와 비교하려고 그대로 둡니다(11장).
 
 ## 3. 숫자 (솔직하게)
 
@@ -361,3 +362,47 @@ VWAP 페이퍼 봇을 켜면(5-B) 실행기가 아직 따라가지 않아도 사
 3. 켜기: `sudo systemctl start paperbot-combo-shadow@vwap-4h`
    - 약 2분 기다렸다가 돌기 시작합니다(바이낸스 요청 순서). 확인: `systemctl is-active paperbot-combo-shadow@vwap-4h`, 몇 분 뒤 사이트의 그림자 화면.
 4. 끄기: `sudo systemctl stop paperbot-combo-shadow@vwap-4h` (기록은 남습니다).
+
+## 11. 실거래 계단 10%→8% · BTC 40배 (두 분 10/27)
+
+두 분: "그래도 10→8로 간다면 친구봇 간격 5 / VWAP 간격 4 … 이렇게 가자 그 대신에 vwap 봇도 비트는 40배로 나머지 종목들은 30배로 가자",
+"5년기록 하지말고 그냥 바꿔".
+
+딥코인 실행기(실거래)만 바뀝니다. VWAP 페이퍼(모의, `deploy/combo.vwap.json`)는 5년 연구·"운이냐 고장이냐"와 비교하려고 그대로입니다
+(12→10, 모두 30배). 실행기는 원래 페이퍼의 계단을 따르지 않고 자기 체결가로 자기 계단을 돕니다.
+
+- **계단** (`ladder`: `first_lock 0.08, trigger_gap 0.02, step 0.04`): 순ROE 10%에 닿으면 손절을 순 8% 자리로, 14%면 12%, 18%면 16%,
+  그 뒤 4%마다 한 칸.
+  - 거래소 화면 기준(딥코인 비용 왕복 0.14%): 30배 코인은 화면 +14.2% → +12.2%, +18.2% → +16.2%, +22.2% → +20.2%.
+    BTC 40배는 화면 +15.6% → +13.6%, +19.6% → +17.6%, +23.6% → +21.6%.
+- **배수** (`leverage_by_symbol`: BTC 40, 나머지 30): 진입 전에 딥코인 배수를 이 값으로 맞춥니다. 크기는 그대로 잔고의 40% × 배수.
+  BTC는 손절 한 번이 전보다 약 1.3배 큽니다(같은 손절 거리에서 30배 → 40배).
+- **청산가 확인** (`liq_guard`, 유지증거금률 0.5%): 손절이 강제청산 거리(40배 약 2.0%, 30배 약 2.83%)와 같거나 더 멀면 그 진입은 하지
+  않습니다(놓친 신호로 기록). 레인지 봇·투비트 실행기와 같은 장치입니다.
+- 참고(바꾸기 전 한 번 돌려 본 5년 기록, `research/opentime/vwap_ladder.py`, `vwap_btc40.py`): 계단 10→8은 12→10보다 같거나 조금 나빴고,
+  BTC 40배는 2021~23에는 나빴고 2024~26에는 나았습니다. 두 분이 정한 대로 바꿉니다.
+- 바꾼 설정 원본: `deploy/executor.live-deepcoin.json`(다른 거래소로 옮길 때 쓰는 `executor.live-wooxpro-vwap.json`,
+  `executor.live-bybit-vwap.json`, `executor.live-flipster.json`도 같게), `deploy/vwap_switch.py`(같은 값을 씀).
+
+### 11-1. 바꾸는 순서 (서버에서, 딥코인 포지션이 없을 때)
+
+한 단계씩 하고 결과를 확인한 뒤 다음으로 갑니다.
+
+1. **코드 받기:** `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+2. **미리 보기 (아무것도 안 바꿈):** 딥코인 앱에서 선물 잔고(달러)를 보고 그 숫자를 넣습니다.
+   ```bash
+   cd /opt/crypto-bot-research && sudo python3 deploy/vwap_switch.py --exec deepcoin --balance (딥코인 선물 잔고)
+   ```
+   - 바뀌는 줄: `ladder` → `{"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.04}`, `leverage_by_symbol` → `{"BTCUSDT": 40, "*": 30}`,
+     `liq_guard` → `true`, `liq_guard_mmr` → `0.005`, 그리고 `budget_usd`·`qty_scale`(잔고 기준 크기에서는 쓰지 않음). 다른 줄이 나오면 쓰지 말고
+     결과를 보내 주세요.
+3. **딥코인 포지션이 없을 때 끄고 쓰기:**
+   ```bash
+   sudo systemctl stop paperbot-executor-deepcoin
+   cd /opt/crypto-bot-research && sudo python3 deploy/vwap_switch.py --exec deepcoin --balance (딥코인 선물 잔고) --write
+   ```
+4. **확인 (주문 없음):** `cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor check-config --config /etc/paperbot/executor-deepcoin.json`
+   - `계단: 순ROE 10%에서 8% 잠금, 이후 4%씩`, `배수: BTC 40배, 나머지 30배 (페이퍼 배수 대신)`, `청산가 확인: 켜짐 …`, 마지막 줄 `준비됨`.
+5. **켜기:** `sudo systemctl start paperbot-executor-deepcoin` 그리고 `journalctl -u paperbot-executor-deepcoin -n 20`.
+
+**되돌리기:** 끈 뒤 `sudo python3 deploy/vwap_switch.py --exec deepcoin --back --write`(바로 전 사본으로) 그리고 다시 켭니다.

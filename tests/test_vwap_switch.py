@@ -58,11 +58,12 @@ def test_write_moves_the_executor_and_keeps_everything_else(tmp_path, ex, name):
     assert rc == 0
     new = json.loads(Path(cfg).read_text())
     assert new["paper_db"] == "/var/lib/paperbot/combo/vwap.db"
-    assert new["ladder"] == {"first_lock": 0.1, "trigger_gap": 0.02, "step": 0.05}
+    assert new["ladder"] == {"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.04}     # owners 10-27: 10 -> 8, every 4
     assert new["signal_light_n"] == 20 and new["signal_light_min_win"] == 0.75
     assert new["risk"]["max_loss_frac"] == 0.2 and new["budget_usd"] == 125 and new["qty_scale"] == 0.1
+    assert (new["leverage_by_symbol"], new["liq_guard"], new["liq_guard_mmr"]) == ({"BTCUSDT": 40, "*": 30}, True, 0.005)
     for k in set(old) - {"paper_db", "ladder", "signal_light_n", "signal_light_min_win", "budget_usd", "qty_scale",
-                         "risk"}:
+                         "risk", "leverage_by_symbol", "liq_guard", "liq_guard_mmr"}:
         assert new[k] == old[k], k
     assert {k: v for k, v in new["risk"].items() if k != "max_loss_frac"} == \
         {k: v for k, v in old["risk"].items() if k != "max_loss_frac"}
