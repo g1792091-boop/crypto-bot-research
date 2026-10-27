@@ -1,0 +1,1762 @@
+{
+ "arms": {
+  "C0": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1078,
+     "win_pct": 75.510204,
+     "mean_ret_pct": -1.131261,
+     "median_month": 0.704899,
+     "months_up": 5,
+     "worst_month": 0.149305,
+     "best_month": 1.628043,
+     "log_growth": -19.104272,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1316,
+     "win_pct": 76.519757,
+     "mean_ret_pct": -0.860668,
+     "median_month": 0.571445,
+     "months_up": 5,
+     "worst_month": 0.182234,
+     "best_month": 1.397102,
+     "log_growth": -19.465121,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 41,
+     "win_pct": 97.560976,
+     "mean_ret_pct": 4.34304,
+     "median_month": 5.533055,
+     "months_up": 1,
+     "worst_month": 5.533055,
+     "best_month": 5.533055,
+     "log_growth": 1.71074,
+     "worst_trade_pct": -19.747058,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 38,
+     "w": 38,
+     "l": 0,
+     "x": 6.239411
+    },
+    "league": {
+     "n": 23,
+     "w": 23,
+     "l": 0,
+     "x": 3.045862
+    },
+    "oct": {
+     "n": 41,
+     "w": 40,
+     "l": 1,
+     "x": 5.533055
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.380282,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 172,
+       "win_pct": 73.837209,
+       "mean_ret_pct": -1.614551
+      },
+      "BTCUSDT": {
+       "n": 316,
+       "win_pct": 75.632911,
+       "mean_ret_pct": -0.942273
+      },
+      "DOGEUSDT": {
+       "n": 128,
+       "win_pct": 78.90625,
+       "mean_ret_pct": -0.352106
+      },
+      "ETHUSDT": {
+       "n": 259,
+       "win_pct": 73.745174,
+       "mean_ret_pct": -1.638266
+      },
+      "LTCUSDT": {
+       "n": 137,
+       "win_pct": 75.182482,
+       "mean_ret_pct": -1.272402
+      },
+      "SOLUSDT": {
+       "n": 66,
+       "win_pct": 80.30303,
+       "mean_ret_pct": -0.005126
+      }
+     }
+    },
+    "check": {
+     "per_weekday": 1.832869,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 142,
+       "win_pct": 76.760563,
+       "mean_ret_pct": -0.880276
+      },
+      "BTCUSDT": {
+       "n": 482,
+       "win_pct": 75.726141,
+       "mean_ret_pct": -0.912502
+      },
+      "DOGEUSDT": {
+       "n": 126,
+       "win_pct": 74.603175,
+       "mean_ret_pct": -1.412074
+      },
+      "ETHUSDT": {
+       "n": 256,
+       "win_pct": 78.515625,
+       "mean_ret_pct": -0.452577
+      },
+      "LTCUSDT": {
+       "n": 151,
+       "win_pct": 71.523179,
+       "mean_ret_pct": -2.181273
+      },
+      "SOLUSDT": {
+       "n": 159,
+       "win_pct": 81.761006,
+       "mean_ret_pct": 0.348045
+      }
+     }
+    },
+    "recent": {
+     "per_weekday": 2.411765,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 3,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BTCUSDT": {
+       "n": 15,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.12025
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 7,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.840811
+      },
+      "LTCUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839621
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      }
+     }
+    }
+   }
+  },
+  "C5": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "XRPUSDT",
+    "BNBUSDT",
+    "ADAUSDT",
+    "AVAXUSDT",
+    "LINKUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1405,
+     "win_pct": 74.875445,
+     "mean_ret_pct": -1.3003,
+     "median_month": 0.449672,
+     "months_up": 5,
+     "worst_month": 0.110327,
+     "best_month": 1.508781,
+     "log_growth": -27.452431,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1664,
+     "win_pct": 75.420673,
+     "mean_ret_pct": -1.153966,
+     "median_month": 0.476342,
+     "months_up": 3,
+     "worst_month": 0.055978,
+     "best_month": 1.530945,
+     "log_growth": -29.874586,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 44,
+     "win_pct": 88.636364,
+     "mean_ret_pct": 2.121921,
+     "median_month": 2.17091,
+     "months_up": 1,
+     "worst_month": 2.17091,
+     "best_month": 2.17091,
+     "log_growth": 0.775146,
+     "worst_trade_pct": -19.772946,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 39,
+     "w": 36,
+     "l": 3,
+     "x": 2.909626
+    },
+    "league": {
+     "n": 24,
+     "w": 24,
+     "l": 0,
+     "x": 3.184808
+    },
+    "oct": {
+     "n": 44,
+     "w": 39,
+     "l": 5,
+     "x": 2.17091
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.798976,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 71,
+       "win_pct": 81.690141,
+       "mean_ret_pct": 0.353778
+      },
+      "AVAXUSDT": {
+       "n": 42,
+       "win_pct": 66.666667,
+       "mean_ret_pct": -3.35612
+      },
+      "BCHUSDT": {
+       "n": 162,
+       "win_pct": 72.839506,
+       "mean_ret_pct": -1.855165
+      },
+      "BNBUSDT": {
+       "n": 152,
+       "win_pct": 75.657895,
+       "mean_ret_pct": -1.146459
+      },
+      "BTCUSDT": {
+       "n": 298,
+       "win_pct": 75.167785,
+       "mean_ret_pct": -1.060563
+      },
+      "DOGEUSDT": {
+       "n": 114,
+       "win_pct": 78.947368,
+       "mean_ret_pct": -0.343083
+      },
+      "ETHUSDT": {
+       "n": 247,
+       "win_pct": 74.089069,
+       "mean_ret_pct": -1.552638
+      },
+      "LINKUSDT": {
+       "n": 26,
+       "win_pct": 76.923077,
+       "mean_ret_pct": -0.838353
+      },
+      "LTCUSDT": {
+       "n": 129,
+       "win_pct": 74.418605,
+       "mean_ret_pct": -1.461345
+      },
+      "SOLUSDT": {
+       "n": 61,
+       "win_pct": 78.688525,
+       "mean_ret_pct": -0.402361
+      },
+      "XRPUSDT": {
+       "n": 103,
+       "win_pct": 69.902913,
+       "mean_ret_pct": -2.551156
+      }
+     },
+     "six_lost": {
+      "n": 74,
+      "wins": 55,
+      "sum_ret_pct": -105.433569
+     },
+     "six_gained": 7
+    },
+    "check": {
+     "per_weekday": 2.317549,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 86,
+       "win_pct": 79.069767,
+       "mean_ret_pct": -0.317671
+      },
+      "AVAXUSDT": {
+       "n": 55,
+       "win_pct": 78.181818,
+       "mean_ret_pct": -0.54531
+      },
+      "BCHUSDT": {
+       "n": 119,
+       "win_pct": 76.470588,
+       "mean_ret_pct": -0.94536
+      },
+      "BNBUSDT": {
+       "n": 174,
+       "win_pct": 73.563218,
+       "mean_ret_pct": -1.676469
+      },
+      "BTCUSDT": {
+       "n": 441,
+       "win_pct": 75.510204,
+       "mean_ret_pct": -0.963657
+      },
+      "DOGEUSDT": {
+       "n": 112,
+       "win_pct": 76.785714,
+       "mean_ret_pct": -0.875719
+      },
+      "ETHUSDT": {
+       "n": 242,
+       "win_pct": 78.099174,
+       "mean_ret_pct": -0.554346
+      },
+      "LINKUSDT": {
+       "n": 45,
+       "win_pct": 73.333333,
+       "mean_ret_pct": -1.731777
+      },
+      "LTCUSDT": {
+       "n": 133,
+       "win_pct": 71.428571,
+       "mean_ret_pct": -2.206918
+      },
+      "SOLUSDT": {
+       "n": 146,
+       "win_pct": 80.821918,
+       "mean_ret_pct": 0.115516
+      },
+      "XRPUSDT": {
+       "n": 111,
+       "win_pct": 63.963964,
+       "mean_ret_pct": -4.026075
+      }
+     },
+     "six_lost": {
+      "n": 132,
+      "wins": 100,
+      "sum_ret_pct": -140.551491
+     },
+     "six_gained": 9
+    },
+    "recent": {
+     "per_weekday": 2.588235,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 2,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.84
+      },
+      "AVAXUSDT": {
+       "n": 3,
+       "win_pct": 66.666667,
+       "mean_ret_pct": -3.356443
+      },
+      "BCHUSDT": {
+       "n": 2,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BNBUSDT": {
+       "n": 1,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "BTCUSDT": {
+       "n": 12,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.12
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "LINKUSDT": {
+       "n": 2,
+       "win_pct": 50.0,
+       "mean_ret_pct": -7.452961
+      },
+      "LTCUSDT": {
+       "n": 5,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839318
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      },
+      "XRPUSDT": {
+       "n": 3,
+       "win_pct": 33.333333,
+       "mean_ret_pct": -11.56038
+      }
+     },
+     "six_lost": {
+      "n": 9,
+      "wins": 9,
+      "sum_ret_pct": 44.683632
+     },
+     "six_gained": 1
+    }
+   }
+  },
+  "C1_XRPUSDT": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "XRPUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1179,
+     "win_pct": 74.893978,
+     "mean_ret_pct": -1.287137,
+     "median_month": 0.594367,
+     "months_up": 4,
+     "worst_month": 0.195408,
+     "best_month": 1.28862,
+     "log_growth": -22.882509,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1407,
+     "win_pct": 75.408671,
+     "mean_ret_pct": -1.140245,
+     "median_month": 0.564757,
+     "months_up": 2,
+     "worst_month": 0.086208,
+     "best_month": 1.511359,
+     "log_growth": -25.07712,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 43,
+     "win_pct": 90.697674,
+     "mean_ret_pct": 2.650203,
+     "median_month": 2.727002,
+     "months_up": 1,
+     "worst_month": 2.727002,
+     "best_month": 2.727002,
+     "log_growth": 1.003203,
+     "worst_trade_pct": -19.772946,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 40,
+     "w": 37,
+     "l": 3,
+     "x": 3.075134
+    },
+    "league": {
+     "n": 23,
+     "w": 23,
+     "l": 0,
+     "x": 3.045862
+    },
+    "oct": {
+     "n": 43,
+     "w": 39,
+     "l": 4,
+     "x": 2.727002
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.509603,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 170,
+       "win_pct": 74.117647,
+       "mean_ret_pct": -1.544542
+      },
+      "BTCUSDT": {
+       "n": 311,
+       "win_pct": 75.884244,
+       "mean_ret_pct": -0.880329
+      },
+      "DOGEUSDT": {
+       "n": 127,
+       "win_pct": 77.952756,
+       "mean_ret_pct": -0.58657
+      },
+      "ETHUSDT": {
+       "n": 258,
+       "win_pct": 73.643411,
+       "mean_ret_pct": -1.663924
+      },
+      "LTCUSDT": {
+       "n": 135,
+       "win_pct": 74.814815,
+       "mean_ret_pct": -1.362757
+      },
+      "SOLUSDT": {
+       "n": 65,
+       "win_pct": 80.0,
+       "mean_ret_pct": -0.079684
+      },
+      "XRPUSDT": {
+       "n": 113,
+       "win_pct": 69.911504,
+       "mean_ret_pct": -2.55081
+      }
+     },
+     "six_lost": {
+      "n": 13,
+      "wins": 10,
+      "sum_ret_pct": -9.953148
+     },
+     "six_gained": 1
+    },
+    "check": {
+     "per_weekday": 1.95961,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 137,
+       "win_pct": 77.372263,
+       "mean_ret_pct": -0.727015
+      },
+      "BTCUSDT": {
+       "n": 473,
+       "win_pct": 75.264271,
+       "mean_ret_pct": -1.026836
+      },
+      "DOGEUSDT": {
+       "n": 121,
+       "win_pct": 75.206612,
+       "mean_ret_pct": -1.263521
+      },
+      "ETHUSDT": {
+       "n": 251,
+       "win_pct": 78.087649,
+       "mean_ret_pct": -0.556961
+      },
+      "LTCUSDT": {
+       "n": 149,
+       "win_pct": 71.14094,
+       "mean_ret_pct": -2.275518
+      },
+      "SOLUSDT": {
+       "n": 154,
+       "win_pct": 81.818182,
+       "mean_ret_pct": 0.361559
+      },
+      "XRPUSDT": {
+       "n": 122,
+       "win_pct": 65.57377,
+       "mean_ret_pct": -3.630941
+      }
+     },
+     "six_lost": {
+      "n": 36,
+      "wins": 29,
+      "sum_ret_pct": 3.925116
+     },
+     "six_gained": 5
+    },
+    "recent": {
+     "per_weekday": 2.529412,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 2,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BTCUSDT": {
+       "n": 15,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.12025
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "LTCUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839621
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      },
+      "XRPUSDT": {
+       "n": 4,
+       "win_pct": 25.0,
+       "mean_ret_pct": -13.607049
+      }
+     },
+     "six_lost": {
+      "n": 3,
+      "wins": 3,
+      "sum_ret_pct": 14.79648
+     },
+     "six_gained": 1
+    }
+   }
+  },
+  "C1_BNBUSDT": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "BNBUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1212,
+     "win_pct": 75.247525,
+     "mean_ret_pct": -1.20353,
+     "median_month": 0.553178,
+     "months_up": 6,
+     "worst_month": 0.132364,
+     "best_month": 1.669531,
+     "log_growth": -22.415037,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1436,
+     "win_pct": 76.044568,
+     "mean_ret_pct": -0.990297,
+     "median_month": 0.506147,
+     "months_up": 4,
+     "worst_month": 0.133742,
+     "best_month": 1.354178,
+     "log_growth": -23.24006,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 37,
+     "win_pct": 97.297297,
+     "mean_ret_pct": 4.266486,
+     "median_month": 4.543208,
+     "months_up": 1,
+     "worst_month": 4.543208,
+     "best_month": 4.543208,
+     "log_growth": 1.513633,
+     "worst_trade_pct": -19.747058,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 34,
+     "w": 34,
+     "l": 0,
+     "x": 5.123199
+    },
+    "league": {
+     "n": 23,
+     "w": 23,
+     "l": 0,
+     "x": 3.045862
+    },
+    "oct": {
+     "n": 37,
+     "w": 36,
+     "l": 1,
+     "x": 4.543208
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.551857,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 166,
+       "win_pct": 73.493976,
+       "mean_ret_pct": -1.698176
+      },
+      "BNBUSDT": {
+       "n": 169,
+       "win_pct": 73.372781,
+       "mean_ret_pct": -1.711647
+      },
+      "BTCUSDT": {
+       "n": 309,
+       "win_pct": 75.404531,
+       "mean_ret_pct": -1.001218
+      },
+      "DOGEUSDT": {
+       "n": 120,
+       "win_pct": 79.166667,
+       "mean_ret_pct": -0.289038
+      },
+      "ETHUSDT": {
+       "n": 249,
+       "win_pct": 74.297189,
+       "mean_ret_pct": -1.501282
+      },
+      "LTCUSDT": {
+       "n": 134,
+       "win_pct": 75.373134,
+       "mean_ret_pct": -1.227262
+      },
+      "SOLUSDT": {
+       "n": 65,
+       "win_pct": 80.0,
+       "mean_ret_pct": -0.079684
+      }
+     },
+     "six_lost": {
+      "n": 40,
+      "wins": 27,
+      "sum_ret_pct": -124.331336
+     },
+     "six_gained": 5
+    },
+    "check": {
+     "per_weekday": 2.0,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 131,
+       "win_pct": 77.099237,
+       "mean_ret_pct": -0.796567
+      },
+      "BNBUSDT": {
+       "n": 187,
+       "win_pct": 73.262032,
+       "mean_ret_pct": -1.750836
+      },
+      "BTCUSDT": {
+       "n": 450,
+       "win_pct": 75.555556,
+       "mean_ret_pct": -0.953544
+      },
+      "DOGEUSDT": {
+       "n": 122,
+       "win_pct": 74.590164,
+       "mean_ret_pct": -1.416002
+      },
+      "ETHUSDT": {
+       "n": 249,
+       "win_pct": 78.714859,
+       "mean_ret_pct": -0.403391
+      },
+      "LTCUSDT": {
+       "n": 144,
+       "win_pct": 72.222222,
+       "mean_ret_pct": -2.011187
+      },
+      "SOLUSDT": {
+       "n": 153,
+       "win_pct": 80.392157,
+       "mean_ret_pct": 0.01041
+      }
+     },
+     "six_lost": {
+      "n": 70,
+      "wins": 53,
+      "sum_ret_pct": -72.659895
+     },
+     "six_gained": 3
+    },
+    "recent": {
+     "per_weekday": 2.176471,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 3,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BNBUSDT": {
+       "n": 2,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.84
+      },
+      "BTCUSDT": {
+       "n": 12,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.120208
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 5,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.840682
+      },
+      "LTCUSDT": {
+       "n": 5,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839318
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      }
+     },
+     "six_lost": {
+      "n": 6,
+      "wins": 6,
+      "sum_ret_pct": 29.884656
+     },
+     "six_gained": 0
+    }
+   }
+  },
+  "C1_ADAUSDT": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "ADAUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1154,
+     "win_pct": 75.823224,
+     "mean_ret_pct": -1.057852,
+     "median_month": 0.715236,
+     "months_up": 6,
+     "worst_month": 0.093311,
+     "best_month": 1.935225,
+     "log_growth": -19.527139,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1402,
+     "win_pct": 76.533524,
+     "mean_ret_pct": -0.86307,
+     "median_month": 0.500401,
+     "months_up": 4,
+     "worst_month": 0.166796,
+     "best_month": 1.535647,
+     "log_growth": -20.766116,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 45,
+     "win_pct": 95.555556,
+     "mean_ret_pct": 3.84081,
+     "median_month": 5.116845,
+     "months_up": 1,
+     "worst_month": 5.116845,
+     "best_month": 5.116845,
+     "log_growth": 1.632538,
+     "worst_trade_pct": -19.747058,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 41,
+     "w": 40,
+     "l": 1,
+     "x": 5.503749
+    },
+    "league": {
+     "n": 24,
+     "w": 24,
+     "l": 0,
+     "x": 3.193317
+    },
+    "oct": {
+     "n": 45,
+     "w": 43,
+     "l": 2,
+     "x": 5.116845
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.477593,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 90,
+       "win_pct": 80.0,
+       "mean_ret_pct": -0.072383
+      },
+      "BCHUSDT": {
+       "n": 169,
+       "win_pct": 73.372781,
+       "mean_ret_pct": -1.728649
+      },
+      "BTCUSDT": {
+       "n": 312,
+       "win_pct": 75.641026,
+       "mean_ret_pct": -0.940471
+      },
+      "DOGEUSDT": {
+       "n": 125,
+       "win_pct": 79.2,
+       "mean_ret_pct": -0.281271
+      },
+      "ETHUSDT": {
+       "n": 257,
+       "win_pct": 73.929961,
+       "mean_ret_pct": -1.592582
+      },
+      "LTCUSDT": {
+       "n": 135,
+       "win_pct": 74.814815,
+       "mean_ret_pct": -1.36213
+      },
+      "SOLUSDT": {
+       "n": 66,
+       "win_pct": 80.30303,
+       "mean_ret_pct": -0.005126
+      }
+     },
+     "six_lost": {
+      "n": 14,
+      "wins": 11,
+      "sum_ret_pct": -5.251909
+     },
+     "six_gained": 0
+    },
+    "check": {
+     "per_weekday": 1.952646,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 107,
+       "win_pct": 78.504673,
+       "mean_ret_pct": -0.454628
+      },
+      "BCHUSDT": {
+       "n": 137,
+       "win_pct": 76.642336,
+       "mean_ret_pct": -0.907882
+      },
+      "BTCUSDT": {
+       "n": 477,
+       "win_pct": 75.471698,
+       "mean_ret_pct": -0.975058
+      },
+      "DOGEUSDT": {
+       "n": 123,
+       "win_pct": 76.422764,
+       "mean_ret_pct": -0.964248
+      },
+      "ETHUSDT": {
+       "n": 256,
+       "win_pct": 78.125,
+       "mean_ret_pct": -0.548976
+      },
+      "LTCUSDT": {
+       "n": 146,
+       "win_pct": 70.547945,
+       "mean_ret_pct": -2.420895
+      },
+      "SOLUSDT": {
+       "n": 156,
+       "win_pct": 81.410256,
+       "mean_ret_pct": 0.260867
+      }
+     },
+     "six_lost": {
+      "n": 26,
+      "wins": 22,
+      "sum_ret_pct": 28.858033
+     },
+     "six_gained": 5
+    },
+    "recent": {
+     "per_weekday": 2.647059,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 4,
+       "win_pct": 75.0,
+       "mean_ret_pct": -1.307048
+      },
+      "BCHUSDT": {
+       "n": 3,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BTCUSDT": {
+       "n": 15,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.12025
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 7,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.840811
+      },
+      "LTCUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839621
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      }
+     },
+     "six_lost": {
+      "n": 0,
+      "wins": 0,
+      "sum_ret_pct": 0.0
+     },
+     "six_gained": 0
+    }
+   }
+  },
+  "C1_AVAXUSDT": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "AVAXUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1121,
+     "win_pct": 74.933095,
+     "mean_ret_pct": -1.275793,
+     "median_month": 0.580799,
+     "months_up": 4,
+     "worst_month": 0.161988,
+     "best_month": 1.592439,
+     "log_growth": -21.62314,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1391,
+     "win_pct": 76.563623,
+     "mean_ret_pct": -0.855228,
+     "median_month": 0.55184,
+     "months_up": 5,
+     "worst_month": 0.121736,
+     "best_month": 1.464738,
+     "log_growth": -20.484491,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 43,
+     "win_pct": 95.348837,
+     "mean_ret_pct": 3.794336,
+     "median_month": 4.655306,
+     "months_up": 1,
+     "worst_month": 4.655306,
+     "best_month": 4.655306,
+     "log_growth": 1.538008,
+     "worst_trade_pct": -19.747058,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 39,
+     "w": 39,
+     "l": 0,
+     "x": 6.541328
+    },
+    "league": {
+     "n": 23,
+     "w": 23,
+     "l": 0,
+     "x": 3.045862
+    },
+    "oct": {
+     "n": 43,
+     "w": 41,
+     "l": 2,
+     "x": 4.655306
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.435339,
+     "by_coin": {
+      "AVAXUSDT": {
+       "n": 54,
+       "win_pct": 68.518519,
+       "mean_ret_pct": -2.906427
+      },
+      "BCHUSDT": {
+       "n": 172,
+       "win_pct": 73.255814,
+       "mean_ret_pct": -1.755075
+      },
+      "BTCUSDT": {
+       "n": 313,
+       "win_pct": 75.079872,
+       "mean_ret_pct": -1.079172
+      },
+      "DOGEUSDT": {
+       "n": 124,
+       "win_pct": 79.83871,
+       "mean_ret_pct": -0.122845
+      },
+      "ETHUSDT": {
+       "n": 258,
+       "win_pct": 73.643411,
+       "mean_ret_pct": -1.66338
+      },
+      "LTCUSDT": {
+       "n": 136,
+       "win_pct": 75.0,
+       "mean_ret_pct": -1.317338
+      },
+      "SOLUSDT": {
+       "n": 64,
+       "win_pct": 79.6875,
+       "mean_ret_pct": -0.156572
+      }
+     },
+     "six_lost": {
+      "n": 13,
+      "wins": 11,
+      "sum_ret_pct": 14.359078
+     },
+     "six_gained": 2
+    },
+    "check": {
+     "per_weekday": 1.937326,
+     "by_coin": {
+      "AVAXUSDT": {
+       "n": 89,
+       "win_pct": 77.52809,
+       "mean_ret_pct": -0.706051
+      },
+      "BCHUSDT": {
+       "n": 139,
+       "win_pct": 76.978417,
+       "mean_ret_pct": -0.825241
+      },
+      "BTCUSDT": {
+       "n": 479,
+       "win_pct": 75.574113,
+       "mean_ret_pct": -0.949675
+      },
+      "DOGEUSDT": {
+       "n": 126,
+       "win_pct": 74.603175,
+       "mean_ret_pct": -1.412074
+      },
+      "ETHUSDT": {
+       "n": 254,
+       "win_pct": 78.346457,
+       "mean_ret_pct": -0.494242
+      },
+      "LTCUSDT": {
+       "n": 147,
+       "win_pct": 71.428571,
+       "mean_ret_pct": -2.204051
+      },
+      "SOLUSDT": {
+       "n": 157,
+       "win_pct": 82.165605,
+       "mean_ret_pct": 0.447601
+      }
+     },
+     "six_lost": {
+      "n": 15,
+      "wins": 12,
+      "sum_ret_pct": -0.736576
+     },
+     "six_gained": 1
+    },
+    "recent": {
+     "per_weekday": 2.529412,
+     "by_coin": {
+      "AVAXUSDT": {
+       "n": 2,
+       "win_pct": 50.0,
+       "mean_ret_pct": -7.454097
+      },
+      "BCHUSDT": {
+       "n": 3,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BTCUSDT": {
+       "n": 15,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.12025
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 7,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.840811
+      },
+      "LTCUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839621
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      }
+     },
+     "six_lost": {
+      "n": 0,
+      "wins": 0,
+      "sum_ret_pct": 0.0
+     },
+     "six_gained": 0
+    }
+   }
+  },
+  "C1_LINKUSDT": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "LINKUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1119,
+     "win_pct": 75.513852,
+     "mean_ret_pct": -1.133595,
+     "median_month": 0.648188,
+     "months_up": 5,
+     "worst_month": 0.155615,
+     "best_month": 1.880397,
+     "log_growth": -19.856172,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1376,
+     "win_pct": 76.162791,
+     "mean_ret_pct": -0.952961,
+     "median_month": 0.571445,
+     "months_up": 4,
+     "worst_month": 0.147781,
+     "best_month": 1.535647,
+     "log_growth": -21.727979,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 44,
+     "win_pct": 93.181818,
+     "mean_ret_pct": 3.25235,
+     "median_month": 3.724863,
+     "months_up": 1,
+     "worst_month": 3.724863,
+     "best_month": 3.724863,
+     "log_growth": 1.31503,
+     "worst_trade_pct": -19.772946,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 41,
+     "w": 39,
+     "l": 2,
+     "x": 4.200383
+    },
+    "league": {
+     "n": 23,
+     "w": 23,
+     "l": 0,
+     "x": 3.037746
+    },
+    "oct": {
+     "n": 44,
+     "w": 41,
+     "l": 3,
+     "x": 3.724863
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.432778,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 172,
+       "win_pct": 73.837209,
+       "mean_ret_pct": -1.614551
+      },
+      "BTCUSDT": {
+       "n": 313,
+       "win_pct": 75.71885,
+       "mean_ret_pct": -0.921214
+      },
+      "DOGEUSDT": {
+       "n": 126,
+       "win_pct": 77.777778,
+       "mean_ret_pct": -0.629871
+      },
+      "ETHUSDT": {
+       "n": 255,
+       "win_pct": 73.72549,
+       "mean_ret_pct": -1.643703
+      },
+      "LINKUSDT": {
+       "n": 53,
+       "win_pct": 79.245283,
+       "mean_ret_pct": -0.278502
+      },
+      "LTCUSDT": {
+       "n": 137,
+       "win_pct": 75.182482,
+       "mean_ret_pct": -1.272402
+      },
+      "SOLUSDT": {
+       "n": 63,
+       "win_pct": 79.365079,
+       "mean_ret_pct": -0.235901
+      }
+     },
+     "six_lost": {
+      "n": 14,
+      "wins": 12,
+      "sum_ret_pct": 19.47155
+     },
+     "six_gained": 2
+    },
+    "check": {
+     "per_weekday": 1.916435,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 140,
+       "win_pct": 76.428571,
+       "mean_ret_pct": -0.961978
+      },
+      "BTCUSDT": {
+       "n": 478,
+       "win_pct": 75.732218,
+       "mean_ret_pct": -0.910606
+      },
+      "DOGEUSDT": {
+       "n": 120,
+       "win_pct": 74.166667,
+       "mean_ret_pct": -1.519598
+      },
+      "ETHUSDT": {
+       "n": 250,
+       "win_pct": 78.4,
+       "mean_ret_pct": -0.48116
+      },
+      "LINKUSDT": {
+       "n": 82,
+       "win_pct": 73.170732,
+       "mean_ret_pct": -1.771891
+      },
+      "LTCUSDT": {
+       "n": 150,
+       "win_pct": 71.333333,
+       "mean_ret_pct": -2.228089
+      },
+      "SOLUSDT": {
+       "n": 156,
+       "win_pct": 81.410256,
+       "mean_ret_pct": 0.261683
+      }
+     },
+     "six_lost": {
+      "n": 23,
+      "wins": 20,
+      "sum_ret_pct": 38.459093
+     },
+     "six_gained": 1
+    },
+    "recent": {
+     "per_weekday": 2.588235,
+     "by_coin": {
+      "BCHUSDT": {
+       "n": 3,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BTCUSDT": {
+       "n": 14,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.120178
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 7,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.840811
+      },
+      "LINKUSDT": {
+       "n": 4,
+       "win_pct": 50.0,
+       "mean_ret_pct": -7.460001
+      },
+      "LTCUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839621
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      }
+     },
+     "six_lost": {
+      "n": 1,
+      "wins": 1,
+      "sum_ret_pct": 5.121248
+     },
+     "six_gained": 0
+    }
+   }
+  },
+  "CS": {
+   "coins": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "LTCUSDT",
+    "BCHUSDT",
+    "ADAUSDT"
+   ],
+   "periods": {
+    "choose": {
+     "months": 36,
+     "trades": 1154,
+     "win_pct": 75.823224,
+     "mean_ret_pct": -1.057852,
+     "median_month": 0.715236,
+     "months_up": 6,
+     "worst_month": 0.093311,
+     "best_month": 1.935225,
+     "log_growth": -19.527139,
+     "worst_trade_pct": -21.506371,
+     "touched": 0
+    },
+    "check": {
+     "months": 33,
+     "trades": 1402,
+     "win_pct": 76.533524,
+     "mean_ret_pct": -0.86307,
+     "median_month": 0.500401,
+     "months_up": 4,
+     "worst_month": 0.166796,
+     "best_month": 1.535647,
+     "log_growth": -20.766116,
+     "worst_trade_pct": -20.283857,
+     "touched": 0
+    },
+    "recent": {
+     "months": 1,
+     "trades": 45,
+     "win_pct": 95.555556,
+     "mean_ret_pct": 3.84081,
+     "median_month": 5.116845,
+     "months_up": 1,
+     "worst_month": 5.116845,
+     "best_month": 5.116845,
+     "log_growth": 1.632538,
+     "worst_trade_pct": -19.747058,
+     "touched": 0
+    }
+   },
+   "live": {
+    "rulebot": {
+     "n": 41,
+     "w": 40,
+     "l": 1,
+     "x": 5.503749
+    },
+    "league": {
+     "n": 24,
+     "w": 24,
+     "l": 0,
+     "x": 3.193317
+    },
+    "oct": {
+     "n": 45,
+     "w": 43,
+     "l": 2,
+     "x": 5.116845
+    }
+   },
+   "describe": {
+    "choose": {
+     "per_weekday": 1.477593,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 90,
+       "win_pct": 80.0,
+       "mean_ret_pct": -0.072383
+      },
+      "BCHUSDT": {
+       "n": 169,
+       "win_pct": 73.372781,
+       "mean_ret_pct": -1.728649
+      },
+      "BTCUSDT": {
+       "n": 312,
+       "win_pct": 75.641026,
+       "mean_ret_pct": -0.940471
+      },
+      "DOGEUSDT": {
+       "n": 125,
+       "win_pct": 79.2,
+       "mean_ret_pct": -0.281271
+      },
+      "ETHUSDT": {
+       "n": 257,
+       "win_pct": 73.929961,
+       "mean_ret_pct": -1.592582
+      },
+      "LTCUSDT": {
+       "n": 135,
+       "win_pct": 74.814815,
+       "mean_ret_pct": -1.36213
+      },
+      "SOLUSDT": {
+       "n": 66,
+       "win_pct": 80.30303,
+       "mean_ret_pct": -0.005126
+      }
+     },
+     "six_lost": {
+      "n": 14,
+      "wins": 11,
+      "sum_ret_pct": -5.251909
+     },
+     "six_gained": 0
+    },
+    "check": {
+     "per_weekday": 1.952646,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 107,
+       "win_pct": 78.504673,
+       "mean_ret_pct": -0.454628
+      },
+      "BCHUSDT": {
+       "n": 137,
+       "win_pct": 76.642336,
+       "mean_ret_pct": -0.907882
+      },
+      "BTCUSDT": {
+       "n": 477,
+       "win_pct": 75.471698,
+       "mean_ret_pct": -0.975058
+      },
+      "DOGEUSDT": {
+       "n": 123,
+       "win_pct": 76.422764,
+       "mean_ret_pct": -0.964248
+      },
+      "ETHUSDT": {
+       "n": 256,
+       "win_pct": 78.125,
+       "mean_ret_pct": -0.548976
+      },
+      "LTCUSDT": {
+       "n": 146,
+       "win_pct": 70.547945,
+       "mean_ret_pct": -2.420895
+      },
+      "SOLUSDT": {
+       "n": 156,
+       "win_pct": 81.410256,
+       "mean_ret_pct": 0.260867
+      }
+     },
+     "six_lost": {
+      "n": 26,
+      "wins": 22,
+      "sum_ret_pct": 28.858033
+     },
+     "six_gained": 5
+    },
+    "recent": {
+     "per_weekday": 2.647059,
+     "by_coin": {
+      "ADAUSDT": {
+       "n": 4,
+       "win_pct": 75.0,
+       "mean_ret_pct": -1.307048
+      },
+      "BCHUSDT": {
+       "n": 3,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.838864
+      },
+      "BTCUSDT": {
+       "n": 15,
+       "win_pct": 100.0,
+       "mean_ret_pct": 5.12025
+      },
+      "DOGEUSDT": {
+       "n": 4,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.841136
+      },
+      "ETHUSDT": {
+       "n": 7,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.840811
+      },
+      "LTCUSDT": {
+       "n": 6,
+       "win_pct": 100.0,
+       "mean_ret_pct": 4.839621
+      },
+      "SOLUSDT": {
+       "n": 6,
+       "win_pct": 83.333333,
+       "mean_ret_pct": 0.742725
+      }
+     },
+     "six_lost": {
+      "n": 0,
+      "wins": 0,
+      "sum_ret_pct": 0.0
+     },
+     "six_gained": 0
+    }
+   }
+  }
+ },
+ "verdicts": {
+  "C5": {
+   "beats_C0_choose": false,
+   "beats_C0_check": false,
+   "helps": false
+  },
+  "CS": {
+   "chosen": [
+    "ADAUSDT"
+   ],
+   "helps": false
+  },
+  "recommend": []
+ },
+ "liq_fail_share": {
+  "BTCUSDT": 0.337032,
+  "ETHUSDT": 0.260824,
+  "SOLUSDT": 0.548503,
+  "DOGEUSDT": 0.470849,
+  "LTCUSDT": 0.359487,
+  "BCHUSDT": 0.358849,
+  "XRPUSDT": 0.348542,
+  "BNBUSDT": 0.196804,
+  "ADAUSDT": 0.441806,
+  "AVAXUSDT": 0.551325,
+  "LINKUSDT": 0.511722
+ },
+ "weekdays": {
+  "choose": 781,
+  "check": 718,
+  "recent": 17
+ }
+}
