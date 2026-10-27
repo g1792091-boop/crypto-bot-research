@@ -56,6 +56,7 @@ from paperbot import mixchop as M  # noqa: E402
 
 OUT = os.path.join(HERE, "summary.json")
 MAIN = dict(rsi=14, stoch=11, k=4, d=5)
+NEW = dict(rsi=14, stoch=11, k=4, d=6, mom=10)       # owners 10-27: %D 5 -> 6 and MOM(10) of the 30m above / below 0
 ALT = dict(rsi=4, stoch=5, k=14, d=11)
 
 
@@ -114,7 +115,8 @@ def supertrend(high, low, close, atr_len: int, factor: float) -> tuple[np.ndarra
 
 def new_signals(co: "M.Coin", a30: np.ndarray, a1h: np.ndarray, p: dict, lo_ms: int, hi_ms: int) -> dict:
     """{close_ms: decision} for every 30m close in (lo_ms, hi_ms] where the new rule fires (the dicts mixchop.Bot.enter
-    reads: side, close, close_ms, stop_dist (ATR x sl_atr), stop_st (to the supertrend 14/3 line), stop_pct, the RSIs)."""
+    reads: side, close, close_ms, stop_dist (ATR x sl_atr), stop_st (to the supertrend 14/3 line), stop_pct, the RSIs).
+    ``p["mom"]`` (owners 10-27, optional): MOM of that length of the 30m closes above 0 for a long, below 0 for a short."""
     o = a30[:, 0].astype(np.int64)                                   # rows: open_ms, open, high, low, close
     h, l, c = a30[:, 2], a30[:, 3], a30[:, 4]
     ce = o + M.MIN30
@@ -134,6 +136,10 @@ def new_signals(co: "M.Coin", a30: np.ndarray, a1h: np.ndarray, p: dict, lo_ms: 
     with np.errstate(invalid="ignore"):
         lng = up3 & up6 & gold & (r30 > 50) & (rh > 50)
         sht = (~up3) & (~up6) & dead & (r30 < 50) & (rh < 50)
+        if p.get("mom"):
+            mm = M.mom(c, p["mom"])
+            lng &= mm > 0
+            sht &= mm < 0
     out = {}
     for i in np.flatnonzero((lng | sht) & (ce > lo_ms) & (ce <= hi_ms)):
         side = 1 if lng[i] else -1

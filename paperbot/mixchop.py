@@ -44,6 +44,10 @@ Trade:
   1h bar as the friend's rule); short = the mirror. Its stop and the liquidation guard as the friend's (ATR14 x the
   multiple). On one coin and close the friend's rule ("mix") answers first. ``stop_atr`` (owners 10-26: 3) replaces every
   coin's ``sl_atr`` for both rules. Exits as before (stop or ladder). Default: ["mix"] and the coins' own multiples.
+- owners 10-27, the second rule changed ("스톡RSI 14/11/4/6 ... 골든 크로스를 하는데 RSI26이 50 위에 있고 MOM도 0선 위에
+  있고 그리고 1시간봉 RSI26도 50 위에 있으면 롱 진입"): the Stoch RSI's %D SMA 5 -> 6 (``ST_STOCH``, read in the same order
+  as on 10-26: RSI 14, stochastic 11, %K 4, %D 6) and one more condition, MOM(10) of the 30m closes (TradingView's
+  Momentum, close - close 10 bars before, ``ST_MOM``) above 0 for a long, below 0 for a short.
 - one position at a time over all coins; signals of one close compete by the coin order of the config.
 - entry blocks (owners 10-25 night, the same as their own bots; not in the friend's design, so off unless the config
   sets them): ``no_weekend`` (Saturday and Sunday KST), ``us_open_pre_min`` / ``us_open_pause_min`` (minutes before /
@@ -86,6 +90,8 @@ POLL_S = 15.0                   # open position: how often WOO X Pro is asked wh
 STOP_CHECK_S = 300.0            # ... and whether its stop is still resting
 LOCK_ROE = 10.0                 # the first lock (the indicator's minimum take-profit, %)
 MMR_PCT = 0.5                   # maintenance margin used by the liquidation guard (%)
+ST_STOCH = (14, 11, 4, 6)       # the second rule's Stoch RSI: RSI, stochastic, %K SMA, %D SMA (owners 10-27: %D 5 -> 6)
+ST_MOM = 10                     # ... and its MOM length (owners 10-27: MOM above / below 0)
 # 30m settings of the design notes (BOT_FORMULAS.md 5): trend-bar buffer, stop ATR multiple, ladder start ROE, leverage
 DEFAULT_COINS = {
     "SOLUSDT": {"h1_buf": 8.0, "sl_atr": 2.0, "roe_act": 150.0, "leverage": 40},
@@ -330,8 +336,10 @@ RULES = tuple(RULE_KO)
 
 
 def evaluate_st(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
-    """The owners' second rule (10-26) on the 30m bar closing at ``close_ms`` (b30 / b1h: closed bars only): side = 1 /
-    -1 / 0 with ``why`` when 0, and its values (the log, the message). Stop and liquidation guard as evaluate()."""
+    """The owners' second rule (10-26, changed 10-27) on the 30m bar closing at ``close_ms`` (b30 / b1h: closed bars
+    only): side = 1 / -1 / 0 with ``why`` when 0, and its values (the log, the message). Long = supertrend 14/3 and 14/6
+    up, Stoch RSI ``ST_STOCH`` %K crossing above %D, RSI26 of the 30m and of the last closed 1h above 50, MOM(``ST_MOM``)
+    of the 30m above 0; short = the mirror. Stop and liquidation guard as evaluate()."""
     out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": "", "rule": "st"}
     if b30.empty or int(b30.open_ms.iloc[-1]) + MIN30 != close_ms:
         out["why"] = "30분봉이 아직 없음"
@@ -347,7 +355,8 @@ def evaluate_st(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int)
         return out
     _l3, up3 = supertrend(h, l, c, 14, 3.0)
     _l6, up6 = supertrend(h, l, c, 14, 6.0)
-    k, d = stoch_rsi(c)
+    k, d = stoch_rsi(c, *ST_STOCH)
+    m30 = float(mom(c, ST_MOM)[-1])
     r30 = float(rsi(c, 26)[-1])
     r1h = float(rsi(b1h.close.to_numpy(float), 26)[j])
     at = float(atr(h, l, c, 14)[-1])
@@ -359,6 +368,7 @@ def evaluate_st(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int)
     rnd = lambda x: round(float(x), 2) if np.isfinite(x) else None   # noqa: E731
     out.update({"close": px, "st3_up": bool(up3[-1]), "st6_up": bool(up6[-1]), "k": rnd(k[-1]), "d": rnd(d[-1]),
                 "cross": "gold" if gold else ("dead" if dead else ""), "rsi26_30m": rnd(r30), "rsi26_1h": rnd(r1h),
+                "mom": float(f"{m30:.6g}") if np.isfinite(m30) else None,
                 "trend_close_ms": int(h_close[j]), "atr": at, "stop_dist": dist, "stop_pct": round(dist / px * 100, 3),
                 "liq_ok": bool(liq_ok)})
     if not (gold or dead):
@@ -375,6 +385,8 @@ def evaluate_st(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int)
         miss.append("30분 RSI26")
     if not (r1h > 50 if want > 0 else r1h < 50):
         miss.append("1시간 RSI26")
+    if not (m30 > 0 if want > 0 else m30 < 0):                      # NaN compares false: not met
+        miss.append("30분 MOM")
     if miss:
         out["why"] = " · ".join(miss) + " 조건 안 맞음"
         return out
@@ -425,7 +437,7 @@ def reason_words(ev: dict, side: int, name: bool = False) -> str:
     if ev.get("rule") == "st":
         return (head + f"슈퍼트렌드 14/3·14/6 {'상승' if side > 0 else '하락'} · 스톡RSI {'골든' if side > 0 else '데드'}크로스"
                 f"(K {ev.get('k')} / D {ev.get('d')}) · RSI26 30분 {ev.get('rsi26_30m')} · 1시간 {ev.get('rsi26_1h')} "
-                f"({kst(ev['close_ms'])} 봉)")
+                f"· MOM {ev.get('mom')} ({kst(ev['close_ms'])} 봉)")
     return (head + f"{'하늘색' if side > 0 else '보라색'}으로 바뀜 · 30분 평균 RSI {ev.get('avg_rsi_30m')} · 1시간 평균 RSI "
             f"{ev.get('avg_rsi_1h')} ({kst(ev['close_ms'])} 봉)")
 
@@ -1480,9 +1492,10 @@ def cmd_signals(args) -> int:
             print(f"  {kst(ev['close_ms'])} KST 마감  {what}  종가 {ev.get('close', 0):.6g}  30분 평균RSI {ev.get('avg_rsi_30m')}"
                   f"  1시간 평균RSI {ev.get('avg_rsi_1h')}  손절폭 {ev.get('stop_pct')}%  → {res}")
         if "st" in cfg.rules:                    # the second rule: its last Stoch RSI crosses (owners 10-26)
-            k, d = stoch_rsi(b30.close.to_numpy(float))
+            k, d = stoch_rsi(b30.close.to_numpy(float), *ST_STOCH)
             lines = []
-            print(f"  -- {RULE_KO['st']}: 스톡RSI 크로스 (슈퍼트렌드 14/3·14/6, RSI26 30분·1시간)")
+            print(f"  -- {RULE_KO['st']}: 스톡RSI {'/'.join(map(str, ST_STOCH))} 크로스 (슈퍼트렌드 14/3·14/6, RSI26 30분·1시간, "
+                  f"MOM {ST_MOM})")
             for i in range(len(b30) - 1, max(len(b30) - 400, 300), -1):
                 if (k[i] > d[i]) != (k[i - 1] > d[i - 1]) and np.isfinite(k[i]) and np.isfinite(d[i - 1]):
                     ce = int(b30.open_ms.iloc[i]) + MIN30
@@ -1494,7 +1507,7 @@ def cmd_signals(args) -> int:
                     lines.append(f"  {kst(ev['close_ms'])} KST 마감  {'골든' if ev['cross'] == 'gold' else '데드'}  종가 "
                           f"{ev.get('close', 0):.6g}  ST14/3 {'상승' if ev['st3_up'] else '하락'} · 14/6 "
                           f"{'상승' if ev['st6_up'] else '하락'}  K {ev['k']} D {ev['d']}  RSI26 30분 {ev['rsi26_30m']} "
-                          f"1시간 {ev['rsi26_1h']}  손절폭 {ev.get('stop_pct')}%  → {res}")
+                          f"1시간 {ev['rsi26_1h']}  MOM {ev.get('mom')}  손절폭 {ev.get('stop_pct')}%  → {res}")
                     if len(lines) >= args.n:
                         break
             for ln in reversed(lines):                   # oldest first, as the colour changes above

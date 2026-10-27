@@ -513,7 +513,7 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
 
 
 # ---------------------------------------------------------------- 최근 48시간: signals with what became of them, warnings
-VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok", "rule", "k", "d", "rsi26_30m", "rsi26_1h")
+VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok", "rule", "k", "d", "rsi26_30m", "rsi26_1h", "mom")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 

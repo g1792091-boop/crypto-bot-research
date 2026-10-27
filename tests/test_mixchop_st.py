@@ -1,6 +1,7 @@
 """The friend bot's second rule (owners 10-26, paperbot/mixchop.py evaluate_st, ``rules`` / ``stop_atr``): TradingView's
 Supertrend and Stoch RSI, the same answers as the research that chose it (research/mixchop_st/study.py new_signals) on
-every close of the bot's 1,500-bar window, the rule order on one coin, the stop multiple of both rules, the words."""
+every close of the bot's 1,500-bar window, the rule order on one coin, the stop multiple of both rules, the words.
+Owners 10-27: Stoch RSI 14/11/4/6 (was %D 5) and MOM(10) of the 30m above / below 0 (study.NEW)."""
 from __future__ import annotations
 
 import importlib.util
@@ -68,7 +69,7 @@ def test_every_close_answers_as_the_research(seed):
     a1h = _hours(a30)
     co = M.Coin("SOLUSDT", 8.0, 3.0, 150.0, 40)
     ce_all = a30[:, 0].astype(np.int64) + M.MIN30
-    want = S.new_signals(co, a30, a1h, S.MAIN, int(ce_all[1700]), int(ce_all[-1]))
+    want = S.new_signals(co, a30, a1h, S.NEW, int(ce_all[1700]), int(ce_all[-1]))
     df30, df1h = _frame(a30), _frame(a1h)
     seen = 0
     for i in range(1700, len(a30)):
@@ -209,9 +210,10 @@ def test_the_signals_command_lists_the_crosses(tmp_path, monkeypatch, capsys):
     import argparse
     assert M.cmd_signals(argparse.Namespace(config=str(tmp_path / "cfg.json"), n=4)) == 0
     out = capsys.readouterr().out
-    assert out.count("-- 슈퍼트렌드·스톡RSI: 스톡RSI 크로스") == len(cfg.coins)
+    assert out.count("-- 슈퍼트렌드·스톡RSI: 스톡RSI 14/11/4/6 크로스 (슈퍼트렌드 14/3·14/6, RSI26 30분·1시간, MOM 10)") == len(cfg.coins)
     cross = [ln for ln in out.splitlines() if " KST 마감  골든" in ln or " KST 마감  데드" in ln]
-    assert len(cross) == 4 * len(cfg.coins) and all("K " in ln and "RSI26 30분" in ln and "→ " in ln for ln in cross)
+    assert len(cross) == 4 * len(cfg.coins) and all("K " in ln and "RSI26 30분" in ln and "  MOM " in ln and "→ " in ln
+                                                    for ln in cross)
     first = cross[:4]
     assert first == sorted(first)                                     # oldest first
 
@@ -235,3 +237,41 @@ def test_the_check_command_names_the_rules_and_the_stop(tmp_path, monkeypatch, c
     _cfg(tmp_path)
     assert M.cmd_check(argparse.Namespace(config=str(tmp_path / "cfg.json"))) == 0
     assert not any(ln.startswith("매매법·손절") for ln in capsys.readouterr().out.splitlines())     # the friend's alone: as before
+
+
+def test_the_10_27_rule_is_the_10_26_rule_with_d6_and_mom():
+    """Owners 10-27: "스톡RSI 14/11/4/6 ... RSI26이 50 위에 있고 MOM도 0선 위에 있고": the bot's numbers, and on a long walk
+    every new signal is a %D-6 signal whose MOM agrees, and some %D-6 signals are dropped by MOM."""
+    assert M.ST_STOCH == (14, 11, 4, 6) and M.ST_MOM == 10
+    a30 = _walk(6000, 7)
+    a1h = _hours(a30)
+    co = M.Coin("SOLUSDT", 8.0, 3.0, 150.0, 40)
+    lo, hi = int(a30[400, 0]), int(a30[-1, 0]) + M.MIN30
+    new = S.new_signals(co, a30, a1h, S.NEW, lo, hi)
+    d6 = S.new_signals(co, a30, a1h, {**S.NEW, "mom": 0}, lo, hi)
+    mm = M.mom(a30[:, 4], 10)
+    ce = a30[:, 0].astype(np.int64) + M.MIN30
+    assert new and set(new) < set(d6)
+    for t, e in d6.items():
+        i = int(np.searchsorted(ce, t))
+        assert (t in new) == (mm[i] * e["side"] > 0)
+
+
+def test_the_entry_words_and_the_mom_condition(tmp_path):
+    ev = {"rule": "st", "close_ms": _ms("2026-10-27 01:00"), "k": 30.1, "d": 25.2, "rsi26_30m": 56.0, "rsi26_1h": 54.0,
+          "mom": 0.0042}
+    assert M.reason_words(ev, 1, True) == ("근거(슈퍼트렌드·스톡RSI): 슈퍼트렌드 14/3·14/6 상승 · 스톡RSI 골든크로스(K 30.1 / D 25.2)"
+                                           " · RSI26 30분 56.0 · 1시간 54.0 · MOM 0.0042 (10/27 10:00 봉)")
+    a30 = _walk(3000, 8)
+    a1h = _hours(a30)
+    co = M.Coin("SOLUSDT", 8.0, 3.0, 150.0, 40)
+    df30, df1h = _frame(a30), _frame(a1h)
+    moms = []
+    for i in range(1700, 3000):
+        ce = int(a30[i, 0]) + M.MIN30
+        ev = M.evaluate_st(co, df30.iloc[i - 1498:i + 1].reset_index(drop=True),
+                           df1h[df1h.open_ms + M.H1 <= ce].tail(1499).reset_index(drop=True), ce)
+        if ev.get("cross"):
+            assert ev["mom"] == pytest.approx(float(M.mom(a30[:i + 1, 4], 10)[-1]), rel=1e-5)
+            moms.append(ev["why"])
+    assert any("30분 MOM" in w for w in moms)                          # the new condition really says no sometimes

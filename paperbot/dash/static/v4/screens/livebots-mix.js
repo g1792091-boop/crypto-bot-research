@@ -131,12 +131,13 @@ export function feedKo(x) {
   return {head: who || String(x.kind || ""), pill: String(x.kind || ""), tone: "thin", text: ""};
 }
 /** The signal's numbers: "30분 평균 RSI 61.2 · 1시간 평균 RSI 55.0 · 종가 0.0812 · 손절 폭 1.23%" (the second rule:
- *  "스톡RSI K 30.1 / D 25.2 · 30분 RSI26 56.0 · 1시간 RSI26 54.0 · 종가 … · 손절 폭 …"). */
+ *  "스톡RSI K 30.1 / D 25.2 · 30분 RSI26 56.0 · 1시간 RSI26 54.0 · MOM 0.0042 · 종가 … · 손절 폭 …"; MOM since 10-27). */
 export function valsKo(v) {
   if (!v) return "";
   return [ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
     ok(v.k) && ok(v.d) ? `스톡RSI K ${fmt.num(v.k, 1)} / D ${fmt.num(v.d, 1)}` : null,
     ok(v.rsi26_30m) ? `30분 RSI26 ${fmt.num(v.rsi26_30m, 1)}` : null, ok(v.rsi26_1h) ? `1시간 RSI26 ${fmt.num(v.rsi26_1h, 1)}` : null,
+    ok(v.mom) ? `MOM ${fmt.price(v.mom)}` : null,
     ok(v.close) ? `종가 ${fmt.price(v.close)}` : null, ok(v.stop_pct) ? `손절 폭 ${fmt.num(v.stop_pct, 2)}%` : null].filter(Boolean).join(" · ");
 }
 const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI"};
