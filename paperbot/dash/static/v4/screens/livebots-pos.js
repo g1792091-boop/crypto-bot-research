@@ -19,6 +19,8 @@
 //             costs), its own best price, and that it stays open after the paper's price exit
 //   진입 근거 (owners 10/20 "왜 진입했는지 어떤 근거로 진입했는지"): the button under the strategy line opens the entry's
 //             reasons (livebots-why.js; an executor's: the paper entry it followed)
+//   친구봇    (owners 10-27 "친구봇 대시보드 화면에 실시간 포지션도 안뜨고"): WOO X Pro 2's own 30-minute bot (``self``: it trades
+//             by itself, no paper behind it): its own position, stop, ladder and net ROE at its own fee round trip
 // Data: GET /api/v4/livebots/positions (dash/more/livepos.py; asked every 10 s, the server caches 5 s). HONESTY: no file =
 // 수집 전, unreadable = 못 읽음 + why, a value the records do not have is '—' with the reason; no order buttons.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
@@ -81,7 +83,8 @@ function ladderBox(p) {
   if (!steps.length) return h("p", {class: "note"}, "계단 잠금: 설정에 계단이 없어요");
   const from = p.ladder_from === "paper" ? " · 가격은 페이퍼 기준 (이 실행기 손절은 페이퍼 잠금을 따라 진입가 비율로 옮겨요)"
     : p.ladder_from === "own" ? " · 따라가는 페이퍼 포지션이 없어 이 실행기 진입가로 그린 계단"
-    : p.ladder_from === "exchange" ? ` · 거래소 기준: 이 실행기 체결가 · 이 거래소 가격 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)${p.basis === "gross" ? " · 계단 숫자는 화면 ROE (수수료 전)" : ""}` : "";
+    : p.ladder_from === "exchange" ? ` · 거래소 기준: 이 실행기 체결가 · 이 거래소 가격 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)${p.basis === "gross" ? " · 계단 숫자는 화면 ROE (수수료 전)" : ""}`
+    : p.ladder_from === "bot" ? ` · 친구봇 기준: 자기 체결가 · 바이낸스 1분봉 · 친구봇 수수료로 잠가요${p.every_s ? ` (${fmt.int(p.every_s)}초마다)` : ""}` : "";
   return h("div", {class: "lbp-lad"},
     h("div", {class: "lbp-ladk"}, h("b", null, "계단 익절"), h("small", {class: "muted"}, `순ROE가 닿으면 → 그 잠금으로 손절을 올려요${from}`)),
     h("ol", {class: "lbp-steps"}, steps.map((s) => h("li", {class: ["lbp-step", s.state], title: `${s.n}단: 최고 순ROE ${fmt.pct(s.at, 0, false)} (${fmt.price(s.price)})에 닿으면 순ROE ${fmt.pct(s.lock, 0, false)} 잠금 (${fmt.price(s.lock_price)})`},
@@ -93,7 +96,9 @@ function ladderBox(p) {
  *  button asks its answer with it (without one the card has no button). */
 export function posCard(c, o = {}) {
   const name = (c.label_ko || "").split(" (")[0] || NAME[c.id] || c.name_ko || c.id;     // two paper bots: "페이퍼 −35%"
-  const tag = c.id === "flip" ? h("span", {class: "lb-acct lb-a-flip", title: c.note_ko || ""}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name) : acctTag(c.id);
+  const tag = c.id === "flip" ? h("span", {class: "lb-acct lb-a-flip", title: c.note_ko || ""}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name)
+    : c.self ? h("span", {class: "lb-acct lb-a-wooxpro2", title: "WOO X Pro 두 번째 계정의 친구봇 (실거래 · 진짜 돈 · 스스로 매매)"}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name)
+    : acctTag(c.id);
   const kindPill = c.kind === "live" ? ui.pill("진짜 돈", "warn") : c.id === "flip" ? ui.pill("", "ref") : ui.pill("모의", "thin");     // ("ref" prints 참고 itself)
   // owners 10/20 "거래소 기준으로 익절해야지": an executor that locks on its own position says so on its card
   const basisPill = c.position && c.position.ladder_from === "exchange" ? ui.pill(c.position.basis_ko || "거래소 기준", "accent", c.position.ladder_ko || "") : null;
@@ -109,7 +114,8 @@ export function posCard(c, o = {}) {
     const el = ui.card({cls: "lbp-card none"}, h("div", {class: "lbp-top"}, tag, kindPill, follows, h("span", {class: "grow"}),
       c.halted ? ui.pill(`멈춤${c.halt_reason ? `: ${c.halt_reason}` : ""}`, "bad") : null),
     h("p", {class: "lbp-flat"}, "포지션 없음"),
-    c.kind === "live" && !c.halted ? h("p", {class: "note"}, `따라가는 중 · 다음 페이퍼 진입을 기다려요${c.stale ? " (기록 오래됨)" : ""}`) : null,
+    c.kind === "live" && !c.halted ? h("p", {class: "note"}, c.self ? `30분봉 신호를 기다려요 · 스스로 매매 (한 번에 포지션 하나)${c.stale ? " (기록 오래됨)" : ""}`
+      : `따라가는 중 · 다음 페이퍼 진입을 기다려요${c.stale ? " (기록 오래됨)" : ""}`) : null,
     h("p", {class: "note"}, c.wallet != null ? `잔고 ${c.kind === "live" ? fmt.usd(c.wallet) : `${fmt.money(c.wallet)} USDT`} · ` : "",
       c.as_of_ms ? `마지막 기록 ${ago(c.as_of_ms)}` : "", c.stale ? " · 기록 멈춤" : ""),
     c.note_ko ? h("p", {class: "note"}, c.note_ko) : null);
@@ -124,7 +130,7 @@ export function posCard(c, o = {}) {
       : st.group === "A" ? ui.pill("A그룹", "thin", "추격 진입 막기 없는 매매법") : null) : null;     // (no group: the VWAP bot)
   const stratLine = p.strategy_id
     ? `${fmt.stratKo(p.strategy_id)} · ${fmt.tfKo(p.timeframe)}봉${st ? ` · ${st.order}번 설정` : p.member_order ? ` · ${p.member_order}번 설정` : ""}`
-    : live ? "매매법 모름 (따라가는 페이퍼 포지션을 못 찾았어요)" : "매매법 기록 없음";
+    : p.rule_ko ? p.rule_ko : live ? "매매법 모름 (따라가는 페이퍼 포지션을 못 찾았어요)" : "매매법 기록 없음";
   // money: unrealized (before the exit fee) and net ROE, rolling with the mark
   const uEl = h("b", {class: "led-num num"}, "—"), rEl = h("b", {class: "led-sm num"}, "—");
   const markEl = h("span", {class: "num"}, "—");
@@ -160,7 +166,8 @@ export function posCard(c, o = {}) {
     h("div", {class: "lbp-mtrack"}, mEntry, mNow), meterNote);
   const secured = p.secured ? h("p", {class: "lbp-sec"}, h("b", {class: "up"}, "확보한 수익 "),
     h("b", {class: "num up"}, `순ROE ${pctOr(p.secured.roe)}`), p.secured.usd != null ? h("span", {class: "num"}, ` · ${live ? fmt.usd(p.secured.usd) : `${fmt.money(p.secured.usd, true)} USDT`}`) : null,
-    h("small", {class: "muted"}, own ? " (지금 손절선에서 닫히면 · 거래소 비용 기준)" : live ? " (지금 손절선에서 닫히면 · 페이퍼 비용 가정)" : " (잠금선에서 닫혀도 남는 순이익)"))
+    h("small", {class: "muted"}, own ? " (지금 손절선에서 닫히면 · 거래소 비용 기준)" : c.self ? " (지금 손절선에서 닫히면 · 친구봇 비용 기준)"
+      : live ? " (지금 손절선에서 닫히면 · 페이퍼 비용 가정)" : " (잠금선에서 닫혀도 남는 순이익)"))
     : h("p", {class: "lbp-sec"}, h("b", null, "확보한 수익 "), h("span", {class: "muted"}, "아직 없음 · 첫 잠금 전"),
       nx && nx.fixed && nx.price ? h("small", {class: "muted"}, ` (계단 없음 · 순ROE +${fmt.pct(nx.at, 0, false)} · ${fmt.price(nx.price)}에 닿으면 전부 익절)`)
         : nx && nx.price ? h("small", {class: "muted"}, ` (순ROE ${fmt.pct(nx.at, 0, false)} · ${fmt.price(nx.price)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금)`) : null);
@@ -170,7 +177,8 @@ export function posCard(c, o = {}) {
     p.own_best.src === "last" ? "1분봉을 못 읽어 지금 가격" : "이 거래소 1분봉", ")") : null;
   const staying = own && p.staying ? h("p", {class: "note"}, p.staying.ko) : null;
   const gaps = live ? [] : (p.execs || []).filter((x) => x.state === "following");
-  const gapEl = live
+  const gapEl = c.self ? (p.stop_id_missing ? h("p", {class: "note"}, "상태 파일에 손절 주문 번호가 없어요 · WOO X Pro 앱에서 손절을 확인하세요") : null)
+    : live
     ? h("p", {class: "note lbp-gap"}, p.gap ? ["페이퍼 진입 ", h("b", {class: "num"}, fmt.price(p.gap.paper_entry)), " → 이 실행기 ", h("b", {class: "num"}, fmt.price(p.gap.live_entry)),
       " · ", h("b", {class: ["num", fmt.tone(p.gap.slip)]}, fmt.pct(p.gap.slip, 3)), p.gap.slip >= 0 ? " (페이퍼보다 유리)" : " (페이퍼보다 불리)",
       p.gap.delay_ms != null ? ` · ${fmt.dur(p.gap.delay_ms / 1000)} 뒤 체결` : ""] : "페이퍼와 진입 차이: 따라가는 페이퍼 포지션이 없어요")
@@ -181,7 +189,7 @@ export function posCard(c, o = {}) {
     (p.execs || []).filter((x) => x.state !== "following").map((x) => ` · ${x.name_ko}: ${x.state === "unknown" ? `기록 못 읽음${x.reason_ko ? ` (${x.reason_ko})` : ""}`
       : x.state === "other" ? "다른 페이퍼를 따라가요" : x.why_ko ? `안 따라감 · ${x.why_ko}${x.why_text ? ` (실행기 기록: ${x.why_text})` : ""}` : "이 포지션 없음"}`))
       : null;
-  const capText = live ? ui.ASSUME_LIVE_KO : ui.ASSUME_OPEN_KO;
+  const capText = c.self ? "친구봇 기록 · 손익은 마크 가격으로 어림 (나갈 때 수수료 전)" : live ? ui.ASSUME_LIVE_KO : ui.ASSUME_OPEN_KO;
   const el = ui.card({cls: `lbp-card ${live ? "live" : c.id}`},
     h("div", {class: "lbp-top"}, tag, kindPill, basisPill, follows, h("span", {class: "lbp-sym"}, `${fmt.coin(p.symbol)}USDT`), h("span", {class: "muted lbp-perp"}, "무기한"),
       ui.sideTag(p.side), h("span", {class: "muted"}, `격리 ${fmt.lev(p.leverage)}`), grp, p.status === "entering" ? ui.pill("진입 확인 중", "warn") : null),

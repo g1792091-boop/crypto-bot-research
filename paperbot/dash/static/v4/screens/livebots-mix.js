@@ -223,6 +223,15 @@ export function mixView(ctx) {
         `${n.from_ko}${ok(n.ms) ? ` · ${fmt.kst(n.ms)}` : ""}${b.real ? "" : " · 진짜 돈 아님"}`, b.real ? "real" : "paper",
         b.real ? "봇이 WOO X Pro에서 읽어 기록한 마지막 잔고 (지금 거래소 값은 앱에서)" : "모의 잔고 (주문 없음)"));
     } else items.push(tile(b.real ? "실거래 잔고" : "모의 잔고", "수집 전", e.none_ko || "", "na"));
+    // owners 10-27 ("친구봇 돈 움직이는것도 안뜨고"): with a position open, the balance read at its entry plus the position at the
+    // page's mark (before the exit fee), redrawn with the ticker
+    const p = b.position && b.position.state === "ok" ? b.position : null;
+    const mk = p ? store.mark(p.symbol) : null;
+    const u = p && ok(mk) && ok(p.entry) && ok(p.qty) ? Number(p.side) * Number(p.qty) * (Number(mk) - Number(p.entry)) : null;
+    if (u != null && n && ok(n.value) && (n.from === "entry" || n.from === "adopted")) {
+      items.push(tile("지금 어림 잔고", usdKo(Number(n.value) + u), `진입 때 잔고 + 평가 ${pnlKo(u)} · 마크 ${fmt.price(mk)}`, b.real ? "real" : "paper",
+        "진입 때 읽은 잔고에 열린 포지션의 평가 손익(바이낸스 마크 가격, 나갈 때 수수료 전)을 더한 어림값 · 정확한 값은 앱에서"));
+    }
     items.push(tile("시작 잔고", usdKo(e.start), ok(e.change) ? `지금까지 ${pctKo(e.change)}${b.real ? "" : " (모의)"}` : "", b.real ? "" : "paper"));
     items.push(tile(`바닥선 (시작의 ${rateKo(e.floor_frac, 0)})`, usdKo(e.floor),
       e.below ? "아래로 내려감 → 새 진입 멈춤" : ok(e.room) ? `남은 여유 ${usdKo(e.room)}` : "아래로 가면 새 진입을 멈춰요", e.below ? "bad" : ""));
@@ -276,7 +285,7 @@ export function mixView(ctx) {
         h("dt", null, "손절"), h("dd", {class: ["num", p.locked ? "up" : ""]}, stopKo(p),
           ok(p.stop_pnl) ? h("small", {class: "lmx-sub"}, ` · 맞으면 약 ${pnlKo(p.stop_pnl)} (수수료 전)`) : null),
         h("dt", null, "가장 유리했던 가격"), h("dd", {class: "num"}, `${fmt.price(p.best)} · ROE ${pctKo(p.best_roe, 0)}`,
-          h("small", {class: "lmx-sub"}, " (30분봉 고가·저가, 마감 때 반영)")),
+          h("small", {class: "lmx-sub"}, p.every_s ? ` (바이낸스 1분봉 고가·저가, ${fmt.int(p.every_s)}초마다 반영)` : " (30분봉 고가·저가, 마감 때 반영)")),
         h("dt", null, "다음 계단"), h("dd", {class: ["num", p.next && p.next.reached ? "warn" : ""]}, ladderKo(p)),
         roe != null ? h("dt", null, "지금 가격") : null,
         roe != null ? h("dd", {class: "num"}, `${fmt.price(mark)} · ROE `, h("span", {class: fmt.tone(roe)}, pctKo(roe, 0)),

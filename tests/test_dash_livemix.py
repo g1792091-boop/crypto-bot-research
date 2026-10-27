@@ -639,3 +639,48 @@ def test_the_friend_bot_card_and_strip_move_with_the_mark(w, tmp_path, monkeypat
     row = re.search(r"WOO X Pro 2 BCH 롱 · 진입 (\S+) 거래소 손절 (\S+) 계단 1단계 (\S+)", t)
     assert row and row.groups() == ("100.00", "100.25", "+40.0%"), t[t.find("거래소 손절") - 200:]
     assert t.index("바이비트 BTC") < t.index("WOO X Pro 2 BCH") and not BAD.search(t)
+
+
+def test_the_positions_tab_has_the_friend_bot(w, tmp_path):
+    """실거래 › 포지션 (dash/more/livepos.py mix_card; owners 10-27 "친구봇 대시보드 화면에 실시간 포지션도 안뜨고"): the 친구봇
+    trades by itself (no executor, no paper), so its card comes from its own state file: BCH long 0.12 @ 100, 40x, margin $0.30,
+    its stop, its net-ROE ladder (the live config's 10 -> 8, then every 5 %) at its own fee round trip; no paper gap line."""
+    from paperbot.dash.more import livepos as LP
+    mp = _p(w)
+    with open(mp["live"]["config"], encoding="utf-8") as fh:
+        raw = json.load(fh)
+    raw.update(ladder={"trigger": 10, "lock": 8, "step": 5}, ladder_every_s=60)
+    cfgp = tmp_path / "live-net.json"
+    cfgp.write_text(json.dumps(raw), encoding="utf-8")
+    mp = {**mp, "live": {**mp["live"], "config": str(cfgp)}}
+    f = tmp_path / "fees"
+    f.mkdir()
+    p = FW.build_world(f)["p"]
+    d = json_finite(LP.build(p, {**L.paths_more({}), "mix_paths": mp}, NOW))
+    ids = [c["id"] for c in d["cards"]]
+    assert "mix" in ids and ids.index("mix") > ids.index("paper")
+    c = next(c for c in d["cards"] if c["id"] == "mix")
+    assert (c["state"], c["kind"], c["self"], c["name_ko"]) == ("ok", "live", True, "WOO X Pro 2 · 친구봇")
+    q = c["position"]
+    fee = M.load_config(str(cfgp)).taker_fee
+    assert (q["symbol"], q["side"], q["leverage"], q["entry"], q["qty"]) == ("BCHUSDT", 1, 40, 100.0, 0.12)
+    assert q["margin"] == pytest.approx(0.3) and q["round_trip"] == pytest.approx(2 * fee) and q["locked"] is True
+    assert q["stop"] == pytest.approx(100.25) and q["lock_roe"] == pytest.approx(0.08) and q["ladder_from"] == "bot"
+    nx = q["next"]                                       # step 2: net 15 % -> 13 %
+    assert (nx["at"], nx["lock"]) == (pytest.approx(0.15), pytest.approx(0.13))
+    assert nx["price"] == pytest.approx(100 * (1 + 0.15 / 40 + 2 * fee)) and nx["screen_at"] == pytest.approx(0.15 + 40 * 2 * fee)
+    assert [(round(s["at"], 4), round(s["lock"], 4), s["state"]) for s in q["ladder"][:3]] == [(0.1, 0.08, "done"), (0.15, 0.13, "next"), (0.2, 0.18, "later")]
+    assert q["secured"]["roe"] == pytest.approx(40 * (0.0025 - 2 * fee)) and q["gap"] is None and q["fast"]["state"] == "none"
+    # the card in node: the bot's rule line, no "follow the paper" words, the ladder said as the bot's own
+    out = _node(tmp_path, f"""
+    const P = await import('file://{SCREENS}/livebots-pos.js');
+    const el = P.posCard(D_c, {{}}); el.update(101);
+    const flat = P.posCard({{...D_c, position: null}}, {{}});
+    console.log(JSON.stringify({{t: texts(el), flat: texts(flat)}}));""", c=c)
+    t = out["t"]
+    for word in ("WOO X Pro 2 · 친구봇", "진짜 돈", "BCHUSDT", "격리 40배", "믹스 30분 봇 · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
+                 "친구봇 기준: 자기 체결가 · 바이낸스 1분봉 · 친구봇 수수료로 잠가요 (60초마다)", "10%→8%", "15%→13%",
+                 "확보한 수익", "빠른 손절 없음 · 친구봇은 손절선과 계단 익절로만 닫아요"):
+        assert word in t, word
+    assert "페이퍼와 진입 차이" not in t and "매매법 모름" not in t and not BAD.search(t)
+    assert "30분봉 신호를 기다려요 · 스스로 매매 (한 번에 포지션 하나)" in out["flat"] and "다음 페이퍼 진입" not in out["flat"]

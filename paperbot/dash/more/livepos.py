@@ -62,8 +62,12 @@ OWN_KO = "거래소 기준"
 OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 이 거래소의 1분봉 고가·저가 · 이 거래소 수수료로 잠가요 (페이퍼 잠금은 안 따라요)"
 # the third executor (딥코인) has a card only once it is installed (livebots.installed: sources() reads it then)
 # ... and the fourth (WOO X Pro 2, owners 10-24) and the fifth (투비트, owners 10-25) the same way
+# ... and the 친구봇 (owners 10-27 "친구봇 대시보드 화면에 실시간 포지션도 안뜨고"): WOO X Pro 2's own 30-minute bot, not an
+# executor (it trades by itself), its card from its own state file once it has one (mix_card)
 CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("range", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("wooxpro2", None),
-         ("toobit", None), ("flip", L.FLIP_ACCOUNT))
+         ("mix", None), ("toobit", None), ("flip", L.FLIP_ACCOUNT))
+MIX_NAME_KO = "WOO X Pro 2 · 친구봇"
+MIX_LIQ_KO = "친구봇 상태 파일에 청산가가 없어요 (WOO X Pro 앱에서 확인)"
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()
@@ -537,6 +541,66 @@ EXIT_REASON_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ"
                   "SWITCH": "전환 전 포지션 정리"}
 
 
+def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None) -> Optional[dict]:
+    """The 친구봇's card (paperbot/mixchop.py, WOO X Pro 2): its state file's position in this page's shape, its own rules
+    (the config's net-ROE ladder, its own fill, its fee round trip); no paper behind it. None while the bot has no state
+    file on this server (never started)."""
+    from . import livemix as X
+    bp = (mp or X.paths())["live"]
+    conf = X.read_config(bp["config"], bp["repo_config"])
+    sp, _lp = X.files_of("live", bp, conf)
+    st = X.read_state(sp)
+    base = {"id": "mix", "kind": "live", "self": True, "account": None, "name_ko": MIX_NAME_KO, "label_ko": MIX_NAME_KO}
+    if st.get("state") == "missing":
+        return None
+    if st.get("state") != "ok":
+        return {**base, **{k: st.get(k) for k in ("state", "reason_ko", "reason", "path")}}
+    d = st.get("d") or {}
+    cfg = conf.get("cfg")
+    seen = X._i(d.get("saved_ms")) or st.get("mtime_ms")
+    out = {**base, "state": "ok", "as_of_ms": seen, "stale": seen is None or now - int(seen) > X.STALE_MS, "wallet": None,
+           "halted": False, "halt_reason": "", "position": None, "rule_ko": X.M.NAME}
+    pv = X.position_view("live", d, now, cfg)
+    if not pv:
+        return out
+    if pv.get("state") != "ok":
+        return {**base, "state": "error", "reason_ko": pv.get("ko") or "상태 파일의 포지션을 읽지 못했어요"}
+    side, entry, lev = int(pv["side"]), pv.get("entry"), pv.get("leverage")
+    fee = float(getattr(cfg, "taker_fee", X.M.Config.taker_fee)) if cfg is not None else X.M.Config.taker_fee
+    rt = 2.0 * fee                                    # the bot's own net ROE: lev x (move - 2 x fee), mixchop's ladder
+    lad = getattr(cfg, "ladder", None) if cfg is not None else None
+    spec, lock = None, None
+    if lad:
+        from ...ladder2 import ComboLadder
+        spec = ComboLadder.of({"first_lock": lad["lock"] / 100.0, "trigger_gap": (lad["trigger"] - lad["lock"]) / 100.0,
+                               "step": lad["step"] / 100.0})
+        k = int(pv.get("step") or 0)
+        lock = (lad["lock"] + lad["step"] * (k - 1)) / 100.0 if k > 0 else None
+    price_of = lambda r_: roe_price(side, entry, lev, r_, rt)                       # noqa: E731
+    best = pv.get("best_net_roe")
+    nx = pv.get("next")
+    nxt = {"lock": nx["stop_to_roe"], "at": nx["trigger_roe"], "price": nx["trigger"], "lock_price": nx["stop_to"], "from": "bot",
+           "screen_at": nx["trigger_roe"] + (lev or 0) * rt} if nx and nx.get("basis") == "net" else None
+    stop, locked = pv.get("stop"), bool(pv.get("locked"))
+    secured = None
+    if locked and stop and entry:
+        sroe = net_roe(side, entry, stop, lev, rt)
+        secured = {"roe": sroe, "usd": sroe * pv["margin"] if sroe is not None and pv.get("margin") else None, "basis": "stop"}
+    out["position"] = {
+        "key": None, "symbol": pv["symbol"], "side": side, "leverage": lev, "qty": pv.get("qty"), "margin": pv.get("margin"),
+        "entry": entry, "entry_time": pv.get("opened_ms"), "status": "open", "stop_order": pv.get("stop_id"),
+        "strategy_id": None, "timeframe": "30m", "rule_ko": f"{X.M.NAME} · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
+        "paired": False, "stop": stop, "stop_initial": None, "stop50": None, "stop_rule_cfg": None,
+        "locked": locked, "lock_roe": lock, "lock_price": stop if locked else None, "secured": secured,
+        "next": nxt, "ladder": ladder_steps(spec, lock, best, price_of, price_of), "ladder_from": "bot",
+        "liq": None, "liq_ko": MIX_LIQ_KO, "round_trip": rt, "funding_frac": 0.0,
+        "cost_ko": f"순ROE는 친구봇 비용(수수료 왕복 {100 * rt:.3f}%) 기준, 펀딩 뺌", "best_roe": best,
+        "excursion": from_bars(conn, bars_state, pv["symbol"], side, entry, lev, rt, 0.0, pv.get("opened_ms"), now),
+        "fast": {"state": "none", "ko": "빠른 손절 없음 · 친구봇은 손절선과 계단 익절로만 닫아요"},
+        "gap": None, "every_s": pv.get("every_s"), "stop_id_missing": pv.get("stop_id_missing")}
+    return out
+
+
 def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     """GET /api/v4/livebots/positions."""
     p = p or L.paths()
@@ -579,6 +643,13 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two or b["id"] is None:
                 cards[x["id"]]["follows_ko"] = b["short_ko"]
+        try:
+            mc = mix_card(now, conn, bars_state, more.get("mix_paths"))
+        except Exception as exc:  # noqa: BLE001  (its own failure is said on its card, never the page's)
+            mc = {"id": "mix", "kind": "live", "self": True, "name_ko": MIX_NAME_KO, "label_ko": MIX_NAME_KO, "state": "error",
+                  "reason_ko": "친구봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}
+        if mc is not None:
+            cards["mix"] = mc
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [], since=since)
     finally:
         if conn is not None:
