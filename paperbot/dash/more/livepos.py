@@ -306,13 +306,25 @@ def _gap(pp: Optional[dict], xp: dict) -> Optional[dict]:
             "delay_ms": (xp["entry_time"] - pp["entry_time"]) if xp.get("entry_time") is not None and pp.get("entry_time") is not None else None}
 
 
+def screen_roe(side: int, entry: Optional[float], lev: Optional[float], price: Optional[float]) -> Optional[float]:
+    """The ROE an exchange screen shows at ``price`` (leverage x the move from the entry, before any fee; owners 10-27
+    "거래소에서 실시간 포지션 봤을때 기준으로 몇%가 찍혀야 익절"), None without the numbers."""
+    try:
+        if not (entry and lev and price and side):
+            return None
+        return float(lev) * int(side) * (float(price) / float(entry) - 1.0)
+    except (TypeError, ValueError):
+        return None
+
+
 def fixed_tp(cfg: dict, side: int, entry: Optional[float], lev: Optional[int], rt: float, ff: float) -> Optional[dict]:
     """A bot without a ladder and with one fixed take-profit (owners 10-26, the 레인지 봇's ``take_profit_roe``): where it
     closes, as the card's 익절가 (``fixed``); None for any other config (the next ladder step stays the card's)."""
     tp = L._f((cfg or {}).get("take_profit_roe"))
     if tp is None or ladder_of(cfg) is not None:
         return None
-    return {"at": tp, "lock": None, "price": roe_price(side, entry, lev, tp, rt, ff), "lock_price": None, "fixed": True}
+    px = roe_price(side, entry, lev, tp, rt, ff)
+    return {"at": tp, "lock": None, "price": px, "lock_price": None, "fixed": True, "screen_at": screen_roe(side, entry, lev, px)}
 
 
 def paper_card(cid: str, acct: str, paper: dict, raw: dict, facts: dict, conn, bars_state: dict, now: int, execs: list,
@@ -472,6 +484,13 @@ def own_exec_card(out: dict, x: dict, xp: dict, pp: Optional[dict], paired: bool
     if nxt is None and ospec is not None:
         nl = ospec.next_after(lock)
         nxt = {"lock": nl[0], "at": nl[1], "price": price_of(nl[1]), "lock_price": price_of(nl[0]), "from": "exchange"}
+    if nxt is None and own.get("tp") is not None:
+        # 고정 익절 without a ladder (owners 10-26, the 레인지 봇's executor ``take_profit_roe``): the last price at which it
+        # closes it all at market, on its own fill, leverage and round trip (executor._own_tp)
+        nxt = {"at": float(own["tp"]), "lock": None, "price": price_of(float(own["tp"])), "lock_price": None, "fixed": True,
+               "from": "exchange"}
+    if nxt is not None and nxt.get("price"):
+        nxt["screen_at"] = screen_roe(side, entry, lev, nxt["price"])
     secured = None
     if lock is not None and stop and entry:
         sroe = net_roe(side, entry, stop, lev, crt)

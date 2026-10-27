@@ -835,6 +835,7 @@ def _own_view(t: dict) -> Optional[dict]:
             "taker_fee": _f(cost.get("taker_fee")), "slippage": _f(cost.get("slippage")),
             "exchange": o.get("exchange") if isinstance(o.get("exchange"), str) else None,
             "ladder": o.get("ladder") if isinstance(o.get("ladder"), dict) else None,
+            "tp": _f(o.get("tp")),          # 고정 익절 (take_profit_roe, the 레인지 봇's executor): its own net ROE
             "next": {k: _f(nx.get(k)) for k in ("lock", "at", "price", "lock_price")} if nx else None,
             "staying": px.get("action") == "stay", "paper_reason": px.get("reason") if px.get("action") == "stay" else None,
             "paper_exit_time": _i(px.get("exit_time")) if px.get("action") == "stay" else None}

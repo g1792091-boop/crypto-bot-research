@@ -548,5 +548,43 @@ def test_the_existing_views_draw_three_bots(rw, tmp_path):
     assert out["ids"][0][:3] == ["paper", "paper2", "range"] and out["ids"][1][:3] == ["paper", "paper2", "range"] and out["sw"] >= 1
     assert "레인지 봇" in out["trades"] and "VWAP 개선판" in out["trades"] and "추세판단 봇" in out["trades"]
     assert "레인지 봇" in out["perf"] and "레인지 봇 · 이 봇 시작부터 (아래 나눠 보기는 추세판단 봇만)" in out["map"]
-    assert "익절가 (고정 익절)" in out["pos"] and "순ROE +10% 고정 익절 (닿으면 전부 닫음 · 계단 없음)" in out["pos"]
+    (rnx,) = [c["position"]["next"] for c in pos["cards"] if c["id"] == "range"]
+    assert "익절가 (고정 익절)" in out["pos"] and f"순ROE +10% 고정 익절 · 거래소 화면 ROE 약 +{rnx['screen_at'] * 100:.1f}%" in out["pos"]
+    assert "(닿으면 시장가로 전부 닫음 · 계단 없음)" in out["pos"]
     assert "따라감 · 레인지 봇" in out["pos"] and "따라감 · VWAP 개선판" in out["pos"]
+
+
+# ---------------------------------------------------------------- the executor's own fixed take-profit (owners 10-27)
+def test_the_executor_card_shows_its_fixed_take_profit_and_the_screen_roe(tmp_path, monkeypatch):
+    """Owners 10-27 ("사진에서 익절가가 안나와서 그런데 익절가가 얼마야", "거래소에서 실시간 포지션 봤을때 기준으로 몇%"): the
+    WOO X Pro executor follows the 레인지 봇 with its own +10 % net take-profit and no ladder (its trade's ``own`` record:
+    ``tp`` 0.1, ``ladder`` {}). Its card's 익절가 is the last price where it closes it all (its own fill, leverage and round
+    trip, as executor._own_tp), with the exchange screen's ROE there (leverage x the move, before fees)."""
+    d = str(tmp_path / "w")
+    p, more = RW.build(d), RW.more(d)
+    from paperbot.executor import ExecStore
+    st = ExecStore(p["mexc_db"], lock=False)
+    bot = st.get_state("bot")
+    rt = 2 * (0.00042 + 0.0002)
+    bot["trade"]["own"] = {"fill_ms": bot["trade"]["entry_ts"], "best": bot["trade"]["entry_price"], "best_roe": None, "lock": None,
+                           "rt": rt, "cost": {"taker_fee": 0.00042, "slippage": 0.0002}, "cost_rt": rt, "basis": "net",
+                           "exchange": "wooxpro", "ladder": {}, "tp": 0.1}
+    st.put_state("bot", NOW - 4_000, bot)
+    st.commit()
+    st.close()
+    monkeypatch.setattr(L, "paths_more", lambda env=None: more)
+    L._cache.clear()
+    try:
+        pos = _by(P.build(p, more, NOW)["cards"])["mexc"]["position"]
+    finally:
+        L._cache.clear()
+    t = bot["trade"]
+    side, entry, lev = t["side"], t["entry_price"], t["leverage"]
+    nx = pos["next"]
+    assert nx["fixed"] is True and nx["at"] == 0.1 and nx["lock"] is None and nx["from"] == "exchange"
+    assert nx["price"] == pytest.approx(entry * (1 + side * (0.1 / lev + rt)))
+    assert nx["screen_at"] == pytest.approx(0.1 + lev * rt)                  # 30x: +13.72 % on the screen
+    assert pos["ladder_from"] == "exchange" and pos["ladder"] == []
+    # the paper card's fixed take-profit carries the screen ROE too
+    rc = _by(P.build(p, more, NOW)["cards"])["range"]["position"]["next"]
+    assert rc["fixed"] is True and rc["screen_at"] == pytest.approx(30 * (rc["price"] / 100.0 - 1.0))

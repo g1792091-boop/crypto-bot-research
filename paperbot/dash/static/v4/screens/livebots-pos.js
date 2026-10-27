@@ -136,10 +136,12 @@ export function posCard(c, o = {}) {
     p.locked && p.stop_initial ? h("small", {class: "muted"}, ` · 처음 손절 ${fmt.price(p.stop_initial)}`) : null,
     !p.locked && p.stop50 && p.stop_rule_cfg ? h("small", {class: "muted", title: "설정의 손절: 수수료·슬리피지 포함 순ROE"},
       ` · 설정 −${fmt.pct(p.stop_rule_cfg.roe, 0, false)}${p.stop_rule_cfg.net ? " 순ROE" : ""} 자리 ${fmt.price(p.stop50)}`) : null);
+  // the exchange screen's ROE at that price (leverage x the move, before fees: what the app shows; owners 10-27)
+  const screenAt = nx && nx.screen_at != null ? ` · 거래소 화면 ROE 약 +${fmt.pct(nx.screen_at, 1, false)}` : "";
   const tpV = nx && nx.fixed && nx.price ? h("span", null, h("b", {class: "num up"}, fmt.price(nx.price)), " ", dTpEl,
-    h("small", {class: "muted"}, ` · 순ROE +${fmt.pct(nx.at, 0, false)} 고정 익절 (닿으면 전부 닫음 · 계단 없음)`))
+    h("small", {class: "muted"}, ` · 순ROE +${fmt.pct(nx.at, 0, false)} 고정 익절${screenAt} (닿으면 시장가로 전부 닫음 · 계단 없음${nx.from === "exchange" ? " · 거래소 마지막 체결가 기준" : ""})`))
     : nx && nx.price ? h("span", null, h("b", {class: "num up"}, fmt.price(nx.price)), " ", dTpEl,
-    h("small", {class: "muted"}, ` · 순ROE ${fmt.pct(nx.at, 0, false)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금 (손절 → ${fmt.price(nx.lock_price)})${nx.from === "paper" && live ? " · 페이퍼 기준" : nx.from === "exchange" ? " · 거래소 기준 (자기 체결가)" : ""}`))
+    h("small", {class: "muted"}, ` · 순ROE ${fmt.pct(nx.at, 0, false)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금 (손절 → ${fmt.price(nx.lock_price)})${nx.from === "paper" && live ? " · 페이퍼 기준" : nx.from === "exchange" ? " · 거래소 기준 (자기 체결가)" : ""}${screenAt}`))
     : ui.notYet("—", "다음 잠금 자리를 계산하지 못했어요 (설정에 계단이 없거나 포지션 기록이 모자라요)");
   const liqV = p.liq ? h("span", null, h("b", {class: "num down"}, fmt.price(p.liq)), " ", dLiqEl) : h("span", {class: "muted"}, p.liq_ko || "—");
   const held = p.entry_time ? fmt.dur((serverNow() - p.entry_time) / 1000) : null;
@@ -154,13 +156,14 @@ export function posCard(c, o = {}) {
   const mEntry = h("i", {class: "lbp-mt entry", "aria-hidden": "true"}), mNow = h("i", {class: "lbp-mt now", "aria-hidden": "true"});
   const meterNote = h("small", {class: "muted lbp-mnote"});
   const meter = h("div", {class: "lbp-meter"},
-    h("div", {class: "lbp-mk"}, h("span", {class: "down"}, p.locked ? "잠금선" : "손절"), h("span", null, "진입 ▸ 지금"), h("span", {class: "up"}, "익절(다음 잠금)")),
+    h("div", {class: "lbp-mk"}, h("span", {class: "down"}, p.locked ? "잠금선" : "손절"), h("span", null, "진입 ▸ 지금"), h("span", {class: "up"}, nx && nx.fixed ? "익절(고정)" : "익절(다음 잠금)")),
     h("div", {class: "lbp-mtrack"}, mEntry, mNow), meterNote);
   const secured = p.secured ? h("p", {class: "lbp-sec"}, h("b", {class: "up"}, "확보한 수익 "),
     h("b", {class: "num up"}, `순ROE ${pctOr(p.secured.roe)}`), p.secured.usd != null ? h("span", {class: "num"}, ` · ${live ? fmt.usd(p.secured.usd) : `${fmt.money(p.secured.usd, true)} USDT`}`) : null,
     h("small", {class: "muted"}, own ? " (지금 손절선에서 닫히면 · 거래소 비용 기준)" : live ? " (지금 손절선에서 닫히면 · 페이퍼 비용 가정)" : " (잠금선에서 닫혀도 남는 순이익)"))
     : h("p", {class: "lbp-sec"}, h("b", null, "확보한 수익 "), h("span", {class: "muted"}, "아직 없음 · 첫 잠금 전"),
-      nx && nx.price ? h("small", {class: "muted"}, ` (순ROE ${fmt.pct(nx.at, 0, false)} · ${fmt.price(nx.price)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금)`) : null);
+      nx && nx.fixed && nx.price ? h("small", {class: "muted"}, ` (계단 없음 · 순ROE +${fmt.pct(nx.at, 0, false)} · ${fmt.price(nx.price)}에 닿으면 전부 익절)`)
+        : nx && nx.price ? h("small", {class: "muted"}, ` (순ROE ${fmt.pct(nx.at, 0, false)} · ${fmt.price(nx.price)}에 닿으면 ${fmt.pct(nx.lock, 0, false)} 잠금)`) : null);
   const fast = p.fast ? h("p", {class: ["lbp-fast", p.fast.state]}, h("b", null, "빠른 손절 "), p.fast.ko) : null;
   // 거래소 기준: its own best price so far (its own exchange's 1m candles) and, after the paper's price exit, that it stays
   const ownBest = own && p.own_best && p.own_best.price ? h("p", {class: "note"}, `거래소 기준 최고 ${p.basis === "gross" ? "화면 ROE" : "순ROE"} ${pctOr(p.own_best.roe)} (${fmt.price(p.own_best.price)}, `,
