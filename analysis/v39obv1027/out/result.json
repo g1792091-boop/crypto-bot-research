@@ -1,0 +1,49 @@
+{
+ "signal_check": {
+  "bot": 61,
+  "study": 64,
+  "same": 61,
+  "bot_only": [],
+  "study_only": [
+   "('BCHUSDT', 1792494000000, 1)",
+   "('DOGEUSDT', 1792494000000, 1)",
+   "('SOLUSDT', 1792494000000, 1)"
+  ]
+ },
+ "verdict": {
+  "pick": {
+   "keep_share": 0.7625071880391029,
+   "A0_x": 0.015773949452153702,
+   "A1_x": 0.014601168773493428,
+   "twin_x_p50": 0.017690565306617556,
+   "twin_x_p95": 0.019828866539378247,
+   "twin_share_beaten": 0.01,
+   "A0_alone_roe": -0.08325730323577157,
+   "A1_alone_roe": -0.08476094885975917,
+   "tests": {
+    "x_above_A0": false,
+    "x_above_twin95": false,
+    "alone_roe_above_A0": false,
+    "grew_no_bust": false
+   }
+  },
+  "check": {
+   "keep_share": 0.7836581045172719,
+   "A0_x": 0.018079395748619463,
+   "A1_x": 0.017959149141056726,
+   "twin_x_p50": 0.018013370170096882,
+   "twin_x_p95": 0.01963506502793521,
+   "twin_share_beaten": 0.475,
+   "A0_alone_roe": -0.049021610898826215,
+   "A1_alone_roe": -0.0423917859620973,
+   "tests": {
+    "x_above_A0": false,
+    "x_above_twin95": false,
+    "alone_roe_above_A0": true,
+    "grew_no_bust": false
+   }
+  }
+ },
+ "helps": false,
+ "usable_live": false
+}
