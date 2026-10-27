@@ -1,0 +1,68 @@
+{
+ "rulebot": {
+  "RB30|bot_signals": {
+   "real_trades": 33,
+   "replay_trades": 33,
+   "same_entry": 33,
+   "same_reason": 33,
+   "same_lev": 32,
+   "pnl_real": 1958.1642218814668,
+   "pnl_replay_same": 2459.590501370315,
+   "pnl_real_same": 1958.1642218814668,
+   "max_abs_pnl_diff": 466.9531491496191
+  },
+  "RB30|study_signals": {
+   "real_trades": 33,
+   "replay_trades": 33,
+   "same_entry": 33,
+   "same_reason": 33,
+   "same_lev": 33,
+   "pnl_real": 1958.1642218814668,
+   "pnl_replay_same": 2130.502769461844,
+   "pnl_real_same": 1958.1642218814668,
+   "max_abs_pnl_diff": 191.71388085630073
+  },
+  "RB1h|bot_signals": {
+   "real_trades": 11,
+   "replay_trades": 11,
+   "same_entry": 11,
+   "same_reason": 11,
+   "same_lev": 11,
+   "pnl_real": -1023.833726006812,
+   "pnl_replay_same": -1022.4179662505544,
+   "pnl_real_same": -1023.8337260068116,
+   "max_abs_pnl_diff": 2.028017290343996
+  },
+  "RB1h|study_signals": {
+   "real_trades": 11,
+   "replay_trades": 13,
+   "same_entry": 11,
+   "same_reason": 10,
+   "same_lev": 11,
+   "pnl_real": -1023.833726006812,
+   "pnl_replay_same": -296.41054559857093,
+   "pnl_real_same": -1023.8337260068116,
+   "max_abs_pnl_diff": 699.170422127511
+  }
+ },
+ "league": {
+  "CV30": {
+   "league_entries": 62,
+   "found": 44,
+   "found_as_coin_flip_twin": 18,
+   "missing": []
+  },
+  "CV1h": {
+   "league_entries": 22,
+   "found": 17,
+   "found_as_coin_flip_twin": 5,
+   "missing": []
+  },
+  "CV4h": {
+   "league_entries": 3,
+   "found": 2,
+   "found_as_coin_flip_twin": 1,
+   "missing": []
+  }
+ }
+}
