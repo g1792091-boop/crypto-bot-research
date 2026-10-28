@@ -1,0 +1,199 @@
+{
+ "paper_trades": 4645,
+ "choose": {
+  "G0": {
+   "months": 36,
+   "half": 21,
+   "x2": 2,
+   "x6": 0,
+   "up": 8,
+   "median": 0.377,
+   "geo": 0.357,
+   "paper_entries": 2778,
+   "followed": 2778,
+   "share": 1.0,
+   "trades": 2778,
+   "mean_roe": -0.0129,
+   "win": 0.805,
+   "whole_x": 0.017334,
+   "whole_bust": true
+  },
+  "G1": {
+   "months": 36,
+   "half": 18,
+   "x2": 2,
+   "x6": 0,
+   "up": 5,
+   "median": 0.494,
+   "geo": 0.533,
+   "paper_entries": 2778,
+   "followed": 1249,
+   "share": 0.45,
+   "trades": 1249,
+   "mean_roe": -0.0232,
+   "win": 0.798,
+   "whole_x": 0.016412,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 9.0,
+    "p50": 13.0,
+    "p95": 17.0
+   },
+   "twins_more_share": 0.015
+  },
+  "G2": {
+   "months": 36,
+   "half": 21,
+   "x2": 2,
+   "x6": 0,
+   "up": 8,
+   "median": 0.39,
+   "geo": 0.464,
+   "paper_entries": 2778,
+   "followed": 2256,
+   "share": 0.812,
+   "trades": 2256,
+   "mean_roe": -0.0103,
+   "win": 0.813,
+   "whole_x": 0.015298,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 16.0,
+    "p50": 19.0,
+    "p95": 22.0
+   },
+   "twins_more_share": 0.125
+  },
+  "G3": {
+   "months": 36,
+   "half": 15,
+   "x2": 1,
+   "x6": 0,
+   "up": 8,
+   "median": 0.59,
+   "geo": 0.604,
+   "paper_entries": 2778,
+   "followed": 1321,
+   "share": 0.476,
+   "trades": 1321,
+   "mean_roe": -0.0135,
+   "win": 0.806,
+   "whole_x": 0.017832,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 9.950000000000001,
+    "p50": 13.5,
+    "p95": 17.0
+   },
+   "twins_more_share": 0.17
+  },
+  "twins_more_share": 0.015
+ },
+ "check": {
+  "G0": {
+   "months": 24,
+   "half": 16,
+   "x2": 0,
+   "x6": 0,
+   "up": 0,
+   "median": 0.376,
+   "geo": 0.295,
+   "paper_entries": 1867,
+   "followed": 1867,
+   "share": 1.0,
+   "trades": 1867,
+   "mean_roe": -0.0173,
+   "win": 0.818,
+   "whole_x": 0.01968,
+   "whole_bust": true
+  },
+  "G1": {
+   "months": 24,
+   "half": 13,
+   "x2": 0,
+   "x6": 0,
+   "up": 3,
+   "median": 0.47,
+   "geo": 0.516,
+   "paper_entries": 1867,
+   "followed": 810,
+   "share": 0.434,
+   "trades": 810,
+   "mean_roe": -0.0257,
+   "win": 0.81,
+   "whole_x": 0.017063,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 6.0,
+    "p50": 9.0,
+    "p95": 13.0
+   },
+   "twins_more_share": 0.03
+  },
+  "G2": {
+   "months": 24,
+   "half": 18,
+   "x2": 0,
+   "x6": 0,
+   "up": 2,
+   "median": 0.416,
+   "geo": 0.336,
+   "paper_entries": 1867,
+   "followed": 1590,
+   "share": 0.852,
+   "trades": 1590,
+   "mean_roe": -0.0185,
+   "win": 0.819,
+   "whole_x": 0.016762,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 12.0,
+    "p50": 15.0,
+    "p95": 18.0
+   },
+   "twins_more_share": 0.015
+  },
+  "G3": {
+   "months": 24,
+   "half": 8,
+   "x2": 1,
+   "x6": 0,
+   "up": 5,
+   "median": 0.686,
+   "geo": 0.625,
+   "paper_entries": 1867,
+   "followed": 924,
+   "share": 0.495,
+   "trades": 924,
+   "mean_roe": -0.0094,
+   "win": 0.83,
+   "whole_x": 0.015311,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 7.0,
+    "p50": 10.0,
+    "p95": 13.0
+   },
+   "twins_more_share": 0.74
+  },
+  "twins_more_share": 0.03
+ },
+ "verdict": {
+  "tests": {
+   "choose": {
+    "fewer_half_months": true,
+    "better_mean_roe": false,
+    "beats_95pct_twins": false,
+    "higher_median_month": true
+   },
+   "check": {
+    "fewer_half_months": true,
+    "better_mean_roe": false,
+    "beats_95pct_twins": false,
+    "higher_median_month": true
+   }
+  },
+  "helps": false,
+  "recommend": false
+ }
+}

@@ -1,0 +1,483 @@
+{
+ "paper_trades": 3499,
+ "y2020": {
+  "G0": {
+   "months": 12,
+   "half": 2,
+   "x2": 1,
+   "x6": 0,
+   "up": 3,
+   "median": 0.75,
+   "geo": 0.706,
+   "fast": {
+    "months": 12,
+    "half": 2,
+    "x2": 1,
+    "x6": 0,
+    "up": 3,
+    "median": 0.748,
+    "geo": 0.705
+   },
+   "paper_entries": 427,
+   "followed": 427,
+   "share": 1.0,
+   "trades": 217,
+   "mean_roe": -0.023,
+   "win": 0.76,
+   "whole_x": 0.0164,
+   "whole_bust": true
+  },
+  "G1": {
+   "months": 12,
+   "half": 1,
+   "x2": 0,
+   "x6": 0,
+   "up": 4,
+   "median": 1.0,
+   "geo": 0.914,
+   "fast": {
+    "months": 12,
+    "half": 1,
+    "x2": 0,
+    "x6": 0,
+    "up": 4,
+    "median": 1.0,
+    "geo": 0.914
+   },
+   "paper_entries": 427,
+   "followed": 136,
+   "share": 0.319,
+   "trades": 69,
+   "mean_roe": -0.0135,
+   "win": 0.739,
+   "whole_x": 0.3427,
+   "whole_bust": false
+  },
+  "G2": {
+   "months": 12,
+   "half": 2,
+   "x2": 1,
+   "x6": 0,
+   "up": 6,
+   "median": 1.012,
+   "geo": 0.935,
+   "fast": {
+    "months": 12,
+    "half": 2,
+    "x2": 1,
+    "x6": 0,
+    "up": 6,
+    "median": 1.012,
+    "geo": 0.935
+   },
+   "paper_entries": 427,
+   "followed": 212,
+   "share": 0.496,
+   "trades": 105,
+   "mean_roe": 0.0044,
+   "win": 0.781,
+   "whole_x": 0.4424,
+   "whole_bust": false
+  },
+  "G3": {
+   "months": 12,
+   "half": 1,
+   "x2": 0,
+   "x6": 0,
+   "up": 6,
+   "median": 0.953,
+   "geo": 0.957,
+   "fast": {
+    "months": 12,
+    "half": 1,
+    "x2": 0,
+    "x6": 0,
+    "up": 6,
+    "median": 0.954,
+    "geo": 0.957
+   },
+   "paper_entries": 427,
+   "followed": 191,
+   "share": 0.447,
+   "trades": 97,
+   "mean_roe": 0.0108,
+   "win": 0.784,
+   "whole_x": 0.5945,
+   "whole_bust": false
+  }
+ },
+ "pick": {
+  "G0": {
+   "months": 36,
+   "half": 20,
+   "x2": 0,
+   "x6": 0,
+   "up": 4,
+   "median": 0.451,
+   "geo": 0.408,
+   "fast": {
+    "months": 36,
+    "half": 20,
+    "x2": 0,
+    "x6": 0,
+    "up": 4,
+    "median": 0.438,
+    "geo": 0.405
+   },
+   "paper_entries": 1475,
+   "followed": 1475,
+   "share": 1.0,
+   "trades": 725,
+   "mean_roe": -0.0794,
+   "win": 0.695,
+   "whole_x": 0.0189,
+   "whole_bust": true
+  },
+  "G1": {
+   "months": 36,
+   "half": 5,
+   "x2": 0,
+   "x6": 0,
+   "up": 7,
+   "median": 1.0,
+   "geo": 0.771,
+   "fast": {
+    "months": 36,
+    "half": 5,
+    "x2": 0,
+    "x6": 0,
+    "up": 7,
+    "median": 1.0,
+    "geo": 0.772
+   },
+   "paper_entries": 1475,
+   "followed": 393,
+   "share": 0.266,
+   "trades": 159,
+   "mean_roe": -0.1103,
+   "win": 0.654,
+   "whole_x": 0.0154,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 3.0,
+    "p50": 6.0,
+    "p95": 9.0
+   },
+   "twins_more_share": 0.545
+  },
+  "G2": {
+   "months": 36,
+   "half": 10,
+   "x2": 0,
+   "x6": 0,
+   "up": 6,
+   "median": 0.85,
+   "geo": 0.679,
+   "fast": {
+    "months": 36,
+    "half": 11,
+    "x2": 0,
+    "x6": 0,
+    "up": 6,
+    "median": 0.849,
+    "geo": 0.676
+   },
+   "paper_entries": 1475,
+   "followed": 600,
+   "share": 0.407,
+   "trades": 241,
+   "mean_roe": -0.1097,
+   "win": 0.664,
+   "whole_x": 0.0198,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 6.0,
+    "p50": 9.0,
+    "p95": 13.0
+   },
+   "twins_more_share": 0.17
+  },
+  "G3": {
+   "months": 36,
+   "half": 8,
+   "x2": 0,
+   "x6": 0,
+   "up": 4,
+   "median": 0.799,
+   "geo": 0.709,
+   "fast": {
+    "months": 36,
+    "half": 8,
+    "x2": 0,
+    "x6": 0,
+    "up": 4,
+    "median": 0.799,
+    "geo": 0.708
+   },
+   "paper_entries": 1475,
+   "followed": 493,
+   "share": 0.334,
+   "trades": 236,
+   "mean_roe": -0.0961,
+   "win": 0.678,
+   "whole_x": 0.0197,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 4.0,
+    "p50": 7.0,
+    "p95": 11.0
+   },
+   "twins_more_share": 0.32
+  },
+  "twins_more_share": 0.545
+ },
+ "check": {
+  "G0": {
+   "months": 33,
+   "half": 22,
+   "x2": 0,
+   "x6": 0,
+   "up": 5,
+   "median": 0.408,
+   "geo": 0.418,
+   "fast": {
+    "months": 33,
+    "half": 21,
+    "x2": 0,
+    "x6": 0,
+    "up": 5,
+    "median": 0.388,
+    "geo": 0.409
+   },
+   "paper_entries": 1553,
+   "followed": 1553,
+   "share": 1.0,
+   "trades": 995,
+   "mean_roe": -0.0458,
+   "win": 0.745,
+   "whole_x": 0.0153,
+   "whole_bust": true
+  },
+  "G1": {
+   "months": 33,
+   "half": 3,
+   "x2": 0,
+   "x6": 0,
+   "up": 9,
+   "median": 1.0,
+   "geo": 0.855,
+   "fast": {
+    "months": 33,
+    "half": 3,
+    "x2": 0,
+    "x6": 0,
+    "up": 9,
+    "median": 1.0,
+    "geo": 0.853
+   },
+   "paper_entries": 1553,
+   "followed": 389,
+   "share": 0.25,
+   "trades": 241,
+   "mean_roe": -0.0277,
+   "win": 0.776,
+   "whole_x": 0.0222,
+   "whole_bust": false,
+   "twins_half": {
+    "p5": 2.0,
+    "p50": 5.0,
+    "p95": 8.0
+   },
+   "twins_more_share": 0.8
+  },
+  "G2": {
+   "months": 33,
+   "half": 8,
+   "x2": 0,
+   "x6": 0,
+   "up": 10,
+   "median": 0.879,
+   "geo": 0.774,
+   "fast": {
+    "months": 33,
+    "half": 8,
+    "x2": 0,
+    "x6": 0,
+    "up": 10,
+    "median": 0.87,
+    "geo": 0.77
+   },
+   "paper_entries": 1553,
+   "followed": 562,
+   "share": 0.362,
+   "trades": 349,
+   "mean_roe": -0.0335,
+   "win": 0.771,
+   "whole_x": 0.0149,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 4.0,
+    "p50": 7.0,
+    "p95": 11.0
+   },
+   "twins_more_share": 0.31
+  },
+  "G3": {
+   "months": 33,
+   "half": 8,
+   "x2": 0,
+   "x6": 0,
+   "up": 6,
+   "median": 0.688,
+   "geo": 0.693,
+   "fast": {
+    "months": 33,
+    "half": 8,
+    "x2": 0,
+    "x6": 0,
+    "up": 6,
+    "median": 0.699,
+    "geo": 0.693
+   },
+   "paper_entries": 1553,
+   "followed": 500,
+   "share": 0.322,
+   "trades": 325,
+   "mean_roe": -0.0633,
+   "win": 0.726,
+   "whole_x": 0.0198,
+   "whole_bust": true,
+   "twins_half": {
+    "p5": 4.0,
+    "p50": 7.0,
+    "p95": 10.0
+   },
+   "twins_more_share": 0.21
+  },
+  "twins_more_share": 0.8
+ },
+ "oct": {
+  "G0": {
+   "months": 1,
+   "half": 0,
+   "x2": 0,
+   "x6": 0,
+   "up": 1,
+   "median": 1.461,
+   "geo": 1.461,
+   "fast": {
+    "months": 1,
+    "half": 0,
+    "x2": 0,
+    "x6": 0,
+    "up": 1,
+    "median": 1.453,
+    "geo": 1.453
+   },
+   "paper_entries": 44,
+   "followed": 44,
+   "share": 1.0,
+   "trades": 37,
+   "mean_roe": 0.0395,
+   "win": 0.811,
+   "whole_x": 1.4609,
+   "whole_bust": false
+  },
+  "G1": {
+   "months": 1,
+   "half": 0,
+   "x2": 1,
+   "x6": 0,
+   "up": 1,
+   "median": 2.214,
+   "geo": 2.214,
+   "fast": {
+    "months": 1,
+    "half": 0,
+    "x2": 1,
+    "x6": 0,
+    "up": 1,
+    "median": 2.182,
+    "geo": 2.182
+   },
+   "paper_entries": 44,
+   "followed": 20,
+   "share": 0.455,
+   "trades": 15,
+   "mean_roe": 0.1407,
+   "win": 0.933,
+   "whole_x": 2.2135,
+   "whole_bust": false
+  },
+  "G2": {
+   "months": 1,
+   "half": 0,
+   "x2": 1,
+   "x6": 0,
+   "up": 1,
+   "median": 2.045,
+   "geo": 2.045,
+   "fast": {
+    "months": 1,
+    "half": 0,
+    "x2": 1,
+    "x6": 0,
+    "up": 1,
+    "median": 2.01,
+    "geo": 2.01
+   },
+   "paper_entries": 44,
+   "followed": 22,
+   "share": 0.5,
+   "trades": 17,
+   "mean_roe": 0.1152,
+   "win": 0.882,
+   "whole_x": 2.0448,
+   "whole_bust": false
+  },
+  "G3": {
+   "months": 1,
+   "half": 0,
+   "x2": 1,
+   "x6": 0,
+   "up": 1,
+   "median": 2.369,
+   "geo": 2.369,
+   "fast": {
+    "months": 1,
+    "half": 0,
+    "x2": 1,
+    "x6": 0,
+    "up": 1,
+    "median": 2.338,
+    "geo": 2.338
+   },
+   "paper_entries": 44,
+   "followed": 29,
+   "share": 0.659,
+   "trades": 24,
+   "mean_roe": 0.1024,
+   "win": 0.917,
+   "whole_x": 2.3686,
+   "whole_bust": false
+  }
+ },
+ "verdict": {
+  "tests": {
+   "pick": {
+    "fewer_half_months": true,
+    "better_mean_roe": false,
+    "beats_95pct_twins": false,
+    "higher_median_month": true
+   },
+   "check": {
+    "fewer_half_months": true,
+    "better_mean_roe": true,
+    "beats_95pct_twins": false,
+    "higher_median_month": true
+   }
+  },
+  "helps": false,
+  "recommend": false
+ }
+}
