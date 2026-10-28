@@ -168,6 +168,9 @@ TIME_CODES = (30007, 30008, 40013)                   # the request time is off: 
 RATE_CODES = (30013,)
 BAN_CODES = (30017,)
 TRANSIENT_CODES = (30014, 30016, 40012)              # unavailable / maintenance / system error
+# 40012 is also the answer to a stop on the wrong side of the price (live 10-21 BCH, 10-28 XRP: "The stop loss price is
+# invalid, needs to be lesser than the order price"): that one is the -2021 refusal, never retried as a system error
+STOP_PAST_CODE, STOP_PAST_TEXT = 40012, ("price is invalid", "than the order price")
 NOT_FOUND_CODES = (40035, 40037, 40002)              # order not exist / order id not exist / out_trade_no not found
 GONE_CODES = (40036,)                                # the order status is invalid (already finished)
 DUPLICATE_CID = 40050                                # client_order_id used before: the order exists
@@ -290,6 +293,14 @@ def permission_record(attested: bool, position_mode) -> dict:
 
 
 # ---------------------------------------------------------------- client
+
+
+def _stop_past(code, msg) -> bool:
+    """WOO X Pro's refusal of a TP/SL price on the wrong side of its price (code 40012 with that text)."""
+    text = str(msg or "").lower()
+    return code == STOP_PAST_CODE and all(t in text for t in STOP_PAST_TEXT)
+
+
 class WooXProClient:
     """Signed REST client for WOO X Pro USDT perpetuals, real money only. Answers are translated into the Binance
     client's shapes (see the module docstring)."""
@@ -450,7 +461,7 @@ class WooXProClient:
             err = RateLimited(429, code, text, 2.0)
         elif code in BAN_CODES:
             err = RateLimited(418, code, text, 300.0)
-        elif code in TRANSIENT_CODES:
+        elif code in TRANSIENT_CODES and not _stop_past(code, msg):
             err = TransientError(status or 400, code, text)
         elif code in NOT_FOUND_CODES:
             err = TestnetError(400, NOT_FOUND[0], text)
@@ -1052,6 +1063,9 @@ class WooXProClient:
         close at market). Anything else stays as it was."""
         if e.code == WOULD_TRIGGER:
             return e
+        if _stop_past(getattr(e, "ret_code", None), e.msg):
+            # WOO X Pro itself says the stop is past its price (it may compare a price other than the last trade)
+            return TestnetError(e.status, WOULD_TRIGGER, f"Order would immediately trigger (WOO X Pro: {e.msg})")
         try:
             last = self.price(symbol)
         except TestnetError:

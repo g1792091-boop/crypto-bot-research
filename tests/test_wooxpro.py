@@ -236,20 +236,47 @@ def test_stop_found_after_a_lost_answer():
     assert got["algoStatus"] == "NEW" and got["triggerPrice"] == "95"
 
 
-@pytest.mark.parametrize("past", ["refuse", "trigger"])
+@pytest.mark.parametrize("past", ["refuse", "invalid", "trigger"])
 def test_a_stop_past_the_price(past):
     c, fake, _ = make()
     fake.plan_past = past
     ready(c, fake)
     c.market(BTC, "BUY", 5.0, client_id="pbAe")
     fake.set_price(BTC, 100.5)
-    if past == "refuse":
+    if past in ("refuse", "invalid"):
         with pytest.raises(TestnetError) as e:
             c.stop_close(BTC, "SELL", 101.1, 5.0, client_id="pbAs3r3")
         assert e.value.code == WOULD_TRIGGER                 # the executor then closes at market
+        assert sum(1 for x in fake.calls if x[2].endswith("submit-tp-sl-order")) == 1   # refused once, not retried
     else:
         got = place_stop(c, BTC, "SELL", 101.1, 5.0, client_id="pbAs3r3")
         assert got.get("fired") and fake.pos[BTC] == 0
+
+
+@pytest.mark.parametrize("side,close,move", [(1, "SELL", -0.4), (-1, "BUY", 0.4)])
+def test_a_lock_past_the_price_answered_with_40012_closes_at_market(side, close, move):
+    """Live 10-21 01:00 (BCH long) and 10-28 21:35 (XRP short): WOO X Pro answered the lock move with 40012 "The stop
+    loss price is invalid, needs to be lesser / greater than the order price"; read as a system error, the same price
+    was sent again for four minutes while the old stop stayed. Now it is the -2021 path: closed at market at once."""
+    c, fake, _ = make()
+    fake.plan_past = "invalid"
+    ready(c, fake)
+    c.market(BTC, "BUY" if side > 0 else "SELL", 5.0, client_id="pbAe")
+    old = place_stop(c, BTC, close, 95.0 if side > 0 else 105.0, 5.0, client_id="pbAs7r1")
+    lock = 100.2 if side > 0 else 99.8
+    fake.set_price(BTC, 100.0 + move)                       # the price went back through the lock
+    r = move_stop(c, BTC, close, lock, 5.0, [old["algoId"]], client_id="pbAs7r2", close_id="pbAc7r2")
+    assert r["result"] == "closed" and r["flat"] and fake.pos[BTC] == 0
+    assert sum(1 for x in fake.calls if x[2].endswith("submit-tp-sl-order")) == 2   # the first stop + one refusal
+
+
+def test_40012_without_the_stop_text_stays_a_system_error():
+    c, fake, _ = make()
+    ready(c, fake)
+    c.market(BTC, "BUY", 5.0, client_id="pbAe")
+    fake.fail("POST", "/contract/private/submit-tp-sl-order", ("ret", 40012, "System error"), times=9)
+    with pytest.raises(TransientError):
+        c.stop_close(BTC, "SELL", 95.0, 5.0, client_id="pbAs8r1")
 
 
 @pytest.mark.parametrize("history_plans,placed_cid", [(True, True), (True, False), (False, True)])

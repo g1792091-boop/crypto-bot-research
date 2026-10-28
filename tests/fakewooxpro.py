@@ -17,7 +17,9 @@ orders, plan cancels, trades with ``realised_profit`` and ``paid_fees``, funding
 Unknowns of the real exchange are switches:
 - ``time_source``: "system" (/system/time answers), "funding" (only the funding rate's timestamp), "none";
 - ``two_stops``: whether a second stop_loss order can rest next to the first (else refused, code 40028);
-- ``plan_past``: "refuse" (a stop already past the price is refused, code 40031) or "trigger" (it executes at once);
+- ``plan_past``: "refuse" (a stop already past the price is refused, code 40031), "invalid" (refused with 40012 "The stop
+  loss price is invalid, needs to be lesser / greater than the order price", what the live exchange answered on 10-21
+  and 10-28) or "trigger" (it executes at once);
 - ``history_plans``: whether order-history shows the stop's own row with its executive_order_id;
 - ``placed_cid``: whether the market order a stop placed carries client_order_id "PLAN_<stop id>";
 - ``flat_cancels``: whether resting stops are cancelled when their position closes.
@@ -439,6 +441,9 @@ class FakeWooX:
         past = (side == 3 and px <= trig) or (side == 2 and px >= trig)
         if past and self.plan_past == "refuse":
             return self._error(40031, "The deviation between current price and trigger price is too large.")
+        if past and self.plan_past == "invalid":
+            return self._error(40012, "The stop loss price is invalid, needs to be "
+                                      f"{'lesser' if side == 3 else 'greater'} than the order price")
         self.cids.add(q.get("client_order_id"))
         pid = str(self._id())
         self.plans[pid] = {"order_id": pid, "client_order_id": q.get("client_order_id") or "", "symbol": s,
