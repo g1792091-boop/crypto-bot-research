@@ -1760,6 +1760,24 @@ def test_executor_books_a_stop_that_fired_on_the_exchange(tmp_path, own_fills):
     assert "손절" in reason and source == "fills" and pnl == pytest.approx(w.fake.wallet - 10_000.0, abs=1e-6)
 
 
+@pytest.mark.parametrize("lag_ms", [4_000, 30_000])
+def test_executor_books_a_stop_the_history_shows_seconds_late_as_a_stop(tmp_path, lag_ms):
+    """Live 10-27 09:00: a BCH lock fired, the position read flat 6 s later, and the trigger history did not show the
+    order yet (UNCONFIRMED): booked as 이유 미확인. Now read again a few seconds later; still unknown after 10 s, the
+    exit is booked as unknown as before."""
+    w = World(tmp_path, advance=True)
+    w.ex.sleep = ticking(w.clock)
+    w.fake.trigger_history_lag_ms = lag_ms
+    w.paper(stop=95.0)
+    w.loop()
+    w.clock.t += 10_000
+    w.fake.set_price(BTC, 94.0)                                       # the exchange stop fires
+    w.loop(3)
+    assert w.fake.amt(BTC) == 0 and w.ex.trade is None
+    (reason,) = w.store.conn.execute("SELECT exit_reason FROM trades").fetchone()
+    assert ("손절" in reason) == (lag_ms < 10_000), reason
+
+
 def test_executor_finds_an_entry_whose_answer_was_lost_by_its_clordid(tmp_path):
     w = World(tmp_path)
     w.fake.fail("POST", "/deepcoin/trade/order", "drop_after")

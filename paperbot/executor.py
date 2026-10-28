@@ -231,6 +231,7 @@ EXEC_USER = "paperbot-exec"
 ENTRY_REREAD_S = (0.2, 0.2)               # positionRisk read again after an entry fill it does not show yet
 FLAT_REREAD_S = (0.2, 0.5, 1.0)           # ... after a close while it still shows a position (it can lag a fill)
 FLAT_CONFIRM_S = 0.5                      # flat without an order answer that agrees: positionRisk once more, later
+UNSETTLED_WAITS = (2.0, 3.0, 5.0)         # a fired stop the exchange lists only seconds later (UNCONFIRMED) is read again
 
 
 # ---------------------------------------------------------------- config
@@ -2207,20 +2208,32 @@ class Executor:
         if aid is not None and str(aid) not in [str(x) for x in t.setdefault("algos", [])]:
             t["algos"].append(aid)
 
+    def _stop_fired(self, t: dict) -> bool:
+        """The recorded stop's own status says it fired. A stop of ours the exchange shows neither resting nor ended yet
+        (UNCONFIRMED) is read again after UNSETTLED_WAITS: DeepCoin lists a fired trigger order only seconds later
+        (live 10-27 09:00, a BCH lock that had fired 6 seconds before was booked as 이유 미확인)."""
+        for wait in (0.0,) + UNSETTLED_WAITS:
+            if wait:
+                self.sleep(wait)
+            try:
+                o = self.c.algo_order(algo_id=t["stop_algo_id"])
+            except TestnetError:
+                return False
+            if o.get("algoStatus") in FIRED_ALGO:
+                if o.get("actualOrderId") not in (None, "", "0", 0):
+                    self._note_order(t, {"orderId": o["actualOrderId"]})
+                return True
+            if o.get("algoStatus") != "UNCONFIRMED":
+                return False
+        return False
+
     def _closed_on_exchange(self, t: dict, snap: Snapshot) -> None:
         """The loop's positionRisk shows no position for the open trade. Its stop fired (the stop's own status):
         book it. Otherwise one read is not enough to cancel its stops and forget it: positionRisk is read again
         FLAT_CONFIRM_S later (as in _settle_flat), and a position that shows up again stays protected."""
         reason, level, fired = "거래소에서 포지션이 닫혔습니다(이유 미확인)", WARN, False
-        if t.get("stop_algo_id") is not None:
-            try:
-                o = self.c.algo_order(algo_id=t["stop_algo_id"])
-                if o.get("algoStatus") in FIRED_ALGO:
-                    reason, level, fired = "거래소 손절(또는 잠금) 발동", INFO, True
-                    if o.get("actualOrderId") not in (None, "", "0", 0):
-                        self._note_order(t, {"orderId": o["actualOrderId"]})
-            except TestnetError:
-                pass
+        if t.get("stop_algo_id") is not None and self._stop_fired(t):
+            reason, level, fired = "거래소 손절(또는 잠금) 발동", INFO, True
         if not fired:
             self.sleep(FLAT_CONFIRM_S)
             amt = float(self.c.position(t["symbol"])["positionAmt"])
