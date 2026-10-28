@@ -1,0 +1,225 @@
+{
+ "payoff": {
+  "bybit": {
+   "n": 17,
+   "wins": 10,
+   "losses": 7,
+   "win_rate": 0.588,
+   "avg_win_pct": 4.61,
+   "avg_loss_pct": -16.04,
+   "breakeven_win_rate": 0.777,
+   "pnl": -58.99
+  },
+  "deepcoin": {
+   "n": 12,
+   "wins": 9,
+   "losses": 3,
+   "win_rate": 0.75,
+   "avg_win_pct": 5.37,
+   "avg_loss_pct": -10.22,
+   "breakeven_win_rate": 0.655,
+   "pnl": 6.91
+  },
+  "mexc": {
+   "n": 2,
+   "wins": 2,
+   "losses": 0,
+   "win_rate": 1.0,
+   "avg_win_pct": 3.38,
+   "avg_loss_pct": NaN,
+   "breakeven_win_rate": null,
+   "pnl": 7.33
+  },
+  "toobit": {
+   "n": 3,
+   "wins": 1,
+   "losses": 2,
+   "win_rate": 0.333,
+   "avg_win_pct": 6.19,
+   "avg_loss_pct": -12.57,
+   "breakeven_win_rate": 0.67,
+   "pnl": -9.85
+  },
+  "wooxpro": {
+   "n": 16,
+   "wins": 11,
+   "losses": 5,
+   "win_rate": 0.688,
+   "avg_win_pct": 4.2,
+   "avg_loss_pct": -16.59,
+   "breakeven_win_rate": 0.798,
+   "pnl": -41.8
+  },
+  "wooxpro2": {
+   "n": 6,
+   "wins": 5,
+   "losses": 1,
+   "win_rate": 0.833,
+   "avg_win_pct": 3.2,
+   "avg_loss_pct": -27.73,
+   "breakeven_win_rate": 0.896,
+   "pnl": -7.75
+  }
+ },
+ "payoff_all": {
+  "n": 56,
+  "wins": 38,
+  "losses": 18,
+  "win_rate": 0.679,
+  "avg_win_pct": 4.46,
+  "avg_loss_pct": -15.49,
+  "breakeven_win_rate": 0.776,
+  "pnl": -104.15
+ },
+ "overlaps": [
+  {
+   "side": -1,
+   "t0": 1792944075260,
+   "t1": 1792975247428,
+   "trades": [
+    [
+     "wooxpro",
+     "ETH",
+     3.67
+    ],
+    [
+     "deepcoin",
+     "BTC",
+     2.68
+    ],
+    [
+     "wooxpro2",
+     "XRP",
+     -0.16
+    ],
+    [
+     "wooxpro2",
+     "ETH",
+     0.13
+    ]
+   ],
+   "sum": 6.33
+  },
+  {
+   "side": -1,
+   "t0": 1793044877983,
+   "t1": 1793103956242,
+   "trades": [
+    [
+     "toobit",
+     "BTC",
+     -1.87
+    ],
+    [
+     "deepcoin",
+     "LTC",
+     1.72
+    ],
+    [
+     "wooxpro",
+     "BTC",
+     2.99
+    ],
+    [
+     "deepcoin",
+     "BTC",
+     2.69
+    ],
+    [
+     "wooxpro",
+     "BTC",
+     3.75
+    ],
+    [
+     "deepcoin",
+     "LTC",
+     2.21
+    ],
+    [
+     "deepcoin",
+     "BCH",
+     -3.62
+    ]
+   ],
+   "sum": 7.86
+  },
+  {
+   "side": -1,
+   "t0": 1793109610285,
+   "t1": 1793189744927,
+   "trades": [
+    [
+     "wooxpro2",
+     "SOL",
+     -14.05
+    ],
+    [
+     "wooxpro",
+     "SOL",
+     -16.85
+    ],
+    [
+     "toobit",
+     "BTC",
+     -11.07
+    ],
+    [
+     "wooxpro2",
+     "XRP",
+     0.94
+    ],
+    [
+     "deepcoin",
+     "ETH",
+     2.59
+    ]
+   ],
+   "sum": -38.45
+  },
+  {
+   "side": 1,
+   "t0": 1793152874756,
+   "t1": 1793176084741,
+   "trades": [
+    [
+     "deepcoin",
+     "BTC",
+     3.52
+    ],
+    [
+     "wooxpro2",
+     "XRP",
+     0.75
+    ]
+   ],
+   "sum": 4.27
+  }
+ ],
+ "pairs": {
+  "bybit": {
+   "n": 17,
+   "live_sum_pct": -66.1,
+   "paper_sum_pct": -70.9
+  },
+  "deepcoin": {
+   "n": 12,
+   "live_sum_pct": 17.7,
+   "paper_sum_pct": -1.6
+  },
+  "mexc": {
+   "n": 2,
+   "live_sum_pct": 6.8,
+   "paper_sum_pct": 7.2
+  },
+  "toobit": {
+   "n": 3,
+   "live_sum_pct": -18.9,
+   "paper_sum_pct": -4.0
+  },
+  "wooxpro": {
+   "n": 16,
+   "live_sum_pct": -36.8,
+   "paper_sum_pct": -27.7
+  }
+ }
+}
