@@ -84,6 +84,12 @@ def test_error_codes_map_to_the_executor_classes():
     fake.fail("GET", "/contract/private/get-position-mode", "503_before")
     with pytest.raises(TransientError):
         c.position_mode()
+    fake.fail("GET", "/contract/private/get-position-mode", "503_html", times=9)
+    with pytest.raises(TransientError) as e:
+        c.position_mode()
+    assert e.value.status == 503 and "<html" not in str(e.value)       # the alert says what it is, not the page
+    assert "503 Service Temporarily Unavailable (WOO X Pro 서버의 오류 페이지" in str(e.value)
+    fake.fails.clear()
     c.offset_ms = 120_000                                  # a clock two minutes off: the clock refusal (-1021)
     with pytest.raises(TestnetError) as e:
         c.position_mode()

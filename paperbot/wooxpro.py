@@ -90,6 +90,7 @@ import http.client
 import json
 import math
 import os
+import re
 import signal
 import sys
 import time
@@ -295,6 +296,17 @@ def permission_record(attested: bool, position_mode) -> dict:
 # ---------------------------------------------------------------- client
 
 
+def _plain(raw) -> str:
+    """A non-JSON answer in a few words: an HTML error page by its <title> (live 10-29 12:07: WOO X Pro's gateway
+    answered 503 "Service Temporarily Unavailable" for minutes, and the alerts carried the whole page), else its
+    first 200 bytes."""
+    head = bytes(raw or b"")[:2000].decode("utf-8", "replace")
+    m = re.search(r"<title>(.*?)</title>", head, re.I | re.S)
+    if m:
+        return f"{' '.join(m.group(1).split())} (WOO X Pro 서버의 오류 페이지: 거래소 쪽 일시 장애)"
+    return str(bytes(raw or b"")[:200])
+
+
 def _stop_past(code, msg) -> bool:
     """WOO X Pro's refusal of a TP/SL price on the wrong side of its price (code 40012 with that text)."""
     text = str(msg or "").lower()
@@ -428,7 +440,7 @@ class WooXProClient:
         code = data.get("code") if isinstance(data, dict) else None
         if isinstance(code, str) and code.lstrip("-").isdigit():
             code = int(code)
-        msg = (data.get("message") if isinstance(data, dict) else None) or str((raw or b"")[:200])
+        msg = (data.get("message") if isinstance(data, dict) else None) or _plain(raw)
         err: Optional[TestnetError] = None
         if status >= 500 or status in (0, 408):
             # a server error first, whatever code it carries: the request may have run (looked up, never resent)

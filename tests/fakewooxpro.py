@@ -30,7 +30,8 @@ Unknowns of the real exchange are switches:
   "The order's leverage is too large."; what the real exchange answers there only a live order shows).
 
 Failures are injected per request with ``fail(method, path, kind, times)``: "drop_before" / "drop_after" (TimeoutError
-before / after executing), "503_before", "429", "403", ("ret", code, msg) (refused, not executed).
+before / after executing), "503_before", "503_html" (the gateway's HTML page), "429", "403", ("ret", code, msg)
+(refused, not executed).
 """
 
 from __future__ import annotations
@@ -138,6 +139,10 @@ class FakeWooX:
                     raise TimeoutError("dropped")
                 if kind == "503_before":
                     return 503, b"Service Unavailable", {}
+                if kind == "503_html":                     # the gateway's page (live 10-29 12:07)
+                    return 503, (b"<html>\r\n<head><title>503 Service Temporarily Unavailable</title></head>\r\n<body>"
+                                 b"<center><h1>503 Service Temporarily Unavailable</h1></center><hr><center>openresty"
+                                 b"</center></body></html>"), {}
                 if kind == "429":
                     return 429, json.dumps({"code": 30013, "message": "Request too many requests"}).encode(), {}
                 if kind == "403":
