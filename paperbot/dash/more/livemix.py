@@ -29,6 +29,16 @@ why, never a zero; the paper bot's money is never shown as real money.
 
 The numbers: ratios (0.12 = 12 %), money in USDT, times UTC ms. A trade's P&L is the equity change from its entry to its
 exit (live: what the bot logged, ``None`` when it could not read the equity; paper: both fees included), win = P&L > 0.
+
+Two mix bots (owners 10-29, docs/mixbybit-ko.md): the same program trades the Bybit account as the '바이비트 봇' (the
+friend's OBV / Stoch RSI rules). Each bot is a ``Profile`` (PROFILES: its name, exchange, units, guide, files and their
+environment variables, its 5-year reference if any, its morning check's folder); ``paths(bot=...)`` names it in every
+path dict (``"bot"``), so every reader here and in paperbot/mixcheck.py answers for that bot. Its own two answers:
+
+    GET /api/v4/livebots/mixbybit      관제 of the 바이비트 봇 and its paper twin (as /mix)
+    GET /api/v4/livebots/mixbybitperf  성적 (as /mixperf; no 5-year reference: the owners' own rules)
+
+The friend bot's answers, paths and words are as they were (``PAPERBOT_MIX_BOT`` unset: the friend bot).
 """
 from __future__ import annotations
 
@@ -57,6 +67,7 @@ ENV = {
 }
 DEFAULT_FILES = {"live": ("/var/lib/paperbot/exec/mixchop-state.json", "/var/lib/paperbot/exec/mixchop-log.jsonl"),
                  "paper": ("/var/lib/paperbot/mixchop-paper/state.json", "/var/lib/paperbot/mixchop-paper/log.jsonl")}
+BOT_ENV = "PAPERBOT_MIX_BOT"           # which mix bot a job reads when it names none: "mix" (default) or "bybit"
 STALE_MS = 35 * MIN                     # the bot saves at every 30-minute close: older than this = 멈춤
 TAIL_BYTES = 8 * 1024 * 1024            # the log's last 8 MB (about a year of this bot's rows)
 SIG_SPAN_MS = 48 * HOUR                 # 최근 48시간
@@ -83,6 +94,58 @@ BACKTEST = {
                  "주말·나스닥 개장·경제 발표 진입 금지는 백테스트에 없던 규칙이라 실제 진입 수는 줄어요",
                  "실거래는 한 번에 1포지션이라 코인별 값을 더한 만큼 나오지 않아요"],
     "src": "docs/mixchop-ko.md 7장 (친구 설계서의 5년 백테스트)"}
+
+
+@dataclasses.dataclass(frozen=True)
+class Profile:
+    """One mix bot (paperbot/mixchop.py) and its paper twin on this site and in its checks (owners 10-29: two)."""
+    id: str
+    name: str                   # its config's ``name`` (the messages' and the pages' name)
+    exchange_ko: str
+    account_ko: str             # the account it trades, as the owners say it
+    guide: str
+    bots: tuple                 # BOTS rows: (id, words, unit, mode, the guide's step)
+    env: dict                   # ENV: every path's (environment variable, default)
+    files: dict                 # DEFAULT_FILES
+    backtest: Optional[dict]    # the 5-year reference shown next to the record (None: there is none)
+    check_dir: str              # paperbot/mixcheck.py's folder (its state, the last morning check)
+    check_env: str
+    routes: tuple               # (관제, 성적)
+
+
+MIX = Profile("mix", M.NAME, "WOO X Pro", "WOO X Pro 2", "docs/mixchop-ko.md", BOTS, ENV, DEFAULT_FILES, BACKTEST,
+              "/var/lib/paperbot/mixcheck", "PAPERBOT_MIXCHECK_DIR", ("/api/v4/livebots/mix", "/api/v4/livebots/mixperf"))
+BYBIT = Profile(
+    "bybit", "바이비트 봇", "바이비트", "바이비트", "docs/mixbybit-ko.md",
+    (("live", "실거래", "paperbot-mixbybit", "mainnet", "docs/mixbybit-ko.md 3장 B"),
+     ("paper", "모의", "paperbot-mixbybit-paper", "paper", "docs/mixbybit-ko.md 3장 A 5")),
+    {"live": {"state": ("PAPERBOT_MIXBYBIT_STATE", None), "log": ("PAPERBOT_MIXBYBIT_LOG", None),
+              "config": ("PAPERBOT_MIXBYBIT_CONFIG", "/etc/paperbot/mixbybit.json"),
+              "repo_config": ("PAPERBOT_MIXBYBIT_REPO_CONFIG", os.path.join(REPO, "deploy", "mixbybit.live.json"))},
+     "paper": {"state": ("PAPERBOT_MIXBYBIT_PAPER_STATE", None), "log": ("PAPERBOT_MIXBYBIT_PAPER_LOG", None),
+               "config": ("PAPERBOT_MIXBYBIT_PAPER_CONFIG", "/etc/paperbot/mixbybit-paper.json"),
+               "repo_config": ("PAPERBOT_MIXBYBIT_PAPER_REPO_CONFIG", os.path.join(REPO, "deploy", "mixbybit.paper.json"))}},
+    {"live": ("/var/lib/paperbot/exec/mixbybit-state.json", "/var/lib/paperbot/exec/mixbybit-log.jsonl"),
+     "paper": ("/var/lib/paperbot/mixbybit-paper/state.json", "/var/lib/paperbot/mixbybit-paper/log.jsonl")},
+    None, "/var/lib/paperbot/mixbybitcheck", "PAPERBOT_MIXBYBITCHECK_DIR",
+    ("/api/v4/livebots/mixbybit", "/api/v4/livebots/mixbybitperf"))
+PROFILES = {"mix": MIX, "bybit": BYBIT}
+
+
+def prof_of(x: Any) -> Profile:
+    """The mix bot a path dict (paths) or one bot's paths names; the friend bot when none."""
+    if not isinstance(x, dict):
+        return MIX
+    bid = x.get("bot")
+    if bid is None and isinstance(x.get("live"), dict):
+        bid = x["live"].get("bot")
+    return PROFILES.get(str(bid or "mix"), MIX)
+
+
+def off_ko(prof: Profile, bid: str) -> str:
+    return f"{prof.name}({'실거래' if bid == 'live' else '모의'})이 아직 꺼져 있어요 · 기록 파일이 없어요"
+
+
 # the log's kinds the 관제 lists as warnings: (words, tone)
 WARN_KO = {
     "stop_failed": ("손절 주문을 걸지 못했어요", "bad"), "protect_close_failed": ("손절을 못 걸어 시장가로 닫으려 했지만 실패했어요", "bad"),
@@ -144,24 +207,28 @@ def block_kind(why: Any) -> Optional[str]:
 
 
 # ---------------------------------------------------------------- where the files are
-def paths(env: Optional[dict] = None) -> dict:
-    """{"live": {"state", "log", "config", "repo_config"}, "paper": {...}}: the environment variable when set; ``state`` /
-    ``log`` None otherwise (resolved from the config, files_of)."""
+def paths(env: Optional[dict] = None, bot: Optional[str] = None) -> dict:
+    """{"live": {"state", "log", "config", "repo_config", "bot"}, "paper": {...}}: the environment variable when set;
+    ``state`` / ``log`` None otherwise (resolved from the config, files_of). ``bot``: which mix bot (PROFILES), else
+    the environment's PAPERBOT_MIX_BOT, else the friend bot."""
     env = os.environ if env is None else env
-    return {bid: {k: (env.get(var) or default) for k, (var, default) in d.items()} for bid, d in ENV.items()}
+    prof = PROFILES.get(str(bot or env.get(BOT_ENV) or "mix"), MIX)
+    return {bid: {**{k: (env.get(var) or default) for k, (var, default) in d.items()}, "bot": prof.id}
+            for bid, d in prof.env.items()}
 
 
 def files_of(bid: str, bp: dict, conf: dict) -> tuple:
     """(state path, log path) of a bot: its environment variable, else the server config's own ``state`` / ``log`` (the
     bot writes there), else the guide's paths."""
     raw = conf.get("raw") if conf.get("source") == "server" else None
-    st = bp.get("state") or ((raw or {}).get("state") if isinstance((raw or {}).get("state"), str) else None) or DEFAULT_FILES[bid][0]
-    lg = bp.get("log") or ((raw or {}).get("log") if isinstance((raw or {}).get("log"), str) else None) or DEFAULT_FILES[bid][1]
+    files = prof_of(bp).files
+    st = bp.get("state") or ((raw or {}).get("state") if isinstance((raw or {}).get("state"), str) else None) or files[bid][0]
+    lg = bp.get("log") or ((raw or {}).get("log") if isinstance((raw or {}).get("log"), str) else None) or files[bid][1]
     return st, lg
 
 
 # ---------------------------------------------------------------- reads (one each, never a write)
-def read_config(path: str, repo_path: str) -> dict:
+def read_config(path: str, repo_path: str, prof: Optional[Profile] = None) -> dict:
     """The bot's config (mixchop.load_config: the bot's own checks): {"state": "ok", "source": "server" | "repo", "cfg":
     Config, "raw", "path"} — the repo's deploy file when the server's is missing or unreadable (``server_state`` /
     ``reason_ko`` say why); ``state`` "error" when neither can be read."""
@@ -172,7 +239,8 @@ def read_config(path: str, repo_path: str) -> dict:
             raw = json.load(fh)
         return {**out, "state": "ok", "source": "server", "cfg": cfg, "raw": raw, "server_state": "ok"}
     except FileNotFoundError:
-        out.update(server_state="missing", reason_ko="서버 설정 파일이 아직 없어요 (docs/mixchop-ko.md 5장 3) · 저장소 기본 설정으로 보여 줘요")
+        out.update(server_state="missing", reason_ko=f"서버 설정 파일이 아직 없어요 ({(prof or MIX).guide}"
+                   + (" 5장 3" if (prof or MIX) is MIX else " 3장 A 2") + ") · 저장소 기본 설정으로 보여 줘요")
     except Exception as exc:  # noqa: BLE001  unreadable, not JSON, or refused by the bot's own checks (MixError): said so
         out.update(server_state="error", reason=f"{type(exc).__name__}: {exc}"[:300],
                    reason_ko=("서버 설정 파일을 읽지 못했어요" + (f" ({L.reason_ko(exc, path)})" if isinstance(exc, OSError) else f": {exc}"))[:300]
@@ -274,16 +342,18 @@ def stop_file(path: Any) -> Optional[bool]:
 # ---------------------------------------------------------------- one bot's files in one read
 def load_bot(bid: str, bp: dict, now: int, tail: Optional[int] = None) -> dict:
     """The config, the state and the log of one bot, and whether it runs: {"id", "conf", "st", "lg", "status"}."""
-    conf = read_config(bp["config"], bp["repo_config"])
+    prof = prof_of(bp)
+    conf = read_config(bp["config"], bp["repo_config"], prof)
     sp, lp = files_of(bid, bp, conf)
     st, lg = read_state(sp), read_log(lp, tail)
-    return {"id": bid, "conf": conf, "st": st, "lg": lg, "status": status_of(bid, st, lg, now)}
+    return {"id": bid, "conf": conf, "st": st, "lg": lg, "status": status_of(bid, st, lg, now, prof), "bot": prof.id}
 
 
-def status_of(bid: str, st: dict, lg: dict, now: int) -> dict:
+def status_of(bid: str, st: dict, lg: dict, now: int, prof: Optional[Profile] = None) -> dict:
     """running / stopped / off / error, from the state file's ``saved_ms`` (written at every 30-minute close; its mtime
     when the field is not there), else the log's last row."""
-    unit, mode = next((u, m) for b, _k, u, m, _g in BOTS if b == bid)
+    prof = prof or MIX
+    unit, mode = next((u, m) for b, _k, u, m, _g in prof.bots if b == bid)
     rows = lg.get("rows") or []
     starts = [r for r in rows if r.get("kind") == "start"]
     base = {"unit": unit, "stale_ms": STALE_MS, "last_log_ms": _i(rows[-1]["ts"]) if rows else None,
@@ -291,7 +361,7 @@ def status_of(bid: str, st: dict, lg: dict, now: int) -> dict:
             # its first start (한눈에's DAY n): the log's first start row, unknown when the log's start was not read
             "first_start_ms": _i(starts[0]["ts"]) if starts and not lg.get("cut") else None}
     if st["state"] == "missing" and lg["state"] == "missing":
-        return {**base, "state": "off", "ko": OFF_KO[bid]}
+        return {**base, "state": "off", "ko": OFF_KO[bid] if prof is MIX else off_ko(prof, bid)}
     if st["state"] == "error":
         return {**base, "state": "error", "ko": "상태 파일을 읽지 못해 돌고 있는지 몰라요", "reason_ko": st.get("reason_ko"), "reason": st.get("reason")}
     d = st.get("d") or {}
@@ -513,7 +583,9 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
 
 
 # ---------------------------------------------------------------- 최근 48시간: signals with what became of them, warnings
-VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok", "rule", "k", "d", "rsi26_30m", "rsi26_1h", "mom")
+VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok", "rule", "k", "d", "rsi26_30m", "rsi26_1h", "mom",
+            # the 바이비트 봇's rules (owners 10-29): the OBV turn, the friend's trend of the bar and its four votes
+            "turn", "trend", "votes")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 
@@ -585,9 +657,12 @@ def feed_view(rows: list, now: int) -> dict:
             else:
                 stage, tone = "skipped", out["tone"]
             counts[stage] += 1
+            turn = _i(r.get("turn")) or 0                     # the OBV rule's light -> dark turn (owners 10-29)
             items.append({**base, "cat": "signal", "colour": colour, "cross": cross, "rule": rule, "rule_ko": M.RULE_KO.get(rule, rule),
-                          "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour, "신호"),
-                          "want": 1 if colour == "cyan" or cross == "gold" else -1 if colour == "purple" or cross == "dead" else side,
+                          "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour)
+                          or {1: "OBV 연한 초록→진한 초록", -1: "OBV 연한 빨강→진한 빨강"}.get(turn, "신호"),
+                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 else
+                          -1 if colour == "purple" or cross == "dead" or turn < 0 else side,
                           "stage": stage, "tone": tone,
                           "why": r.get("why") or None, "outcome": out, "vals": _vals(r)})
         elif k == "skip" and id(r) not in folded:
@@ -692,9 +767,9 @@ def record(trades: list) -> dict:
             "ladder_n": sum(1 for t in trades if (t.get("step") or 0) > 0), "small": n < SMALL_N, "small_n": SMALL_N}
 
 
-def by_coin(trades: list, cfg: Any) -> list:
+def by_coin(trades: list, cfg: Any, backtest: Optional[dict] = BACKTEST) -> list:
     """The record per coin, in the config's coin order (then any other coin traded)."""
-    order = [c.symbol for c in cfg.coins] if cfg is not None else [r["symbol"] for r in BACKTEST["rows"]]
+    order = [c.symbol for c in cfg.coins] if cfg is not None else [r["symbol"] for r in (backtest or {}).get("rows") or []]
     syms = order + sorted({t["symbol"] for t in trades if t.get("symbol") and t["symbol"] not in order})
     out = []
     for s in syms:
@@ -731,15 +806,16 @@ def rules_view(conf: dict, off: Optional[set] = None) -> Optional[dict]:
 
 
 # ---------------------------------------------------------------- the two answers
-def _head(bid: str, b: dict) -> dict:
-    ko, unit, _m, guide = next((k, u, m, g) for x, k, u, m, g in BOTS if x == bid)
-    return {"id": bid, "ko": ko, "name_ko": f"{M.NAME} {ko}", "real": bid == "live", "unit": unit, "guide": guide,
+def _head(bid: str, b: dict, prof: Optional[Profile] = None) -> dict:
+    prof = prof or MIX
+    ko, unit, _m, guide = next((k, u, m, g) for x, k, u, m, g in prof.bots if x == bid)
+    return {"id": bid, "ko": ko, "name_ko": f"{prof.name} {ko}", "real": bid == "live", "unit": unit, "guide": guide,
             "status": b["status"], "files": file_states(b), "start_ko": f"켜는 순서: {guide} · sudo systemctl start {unit}"}
 
 
 def bot_control(bid: str, bp: dict, now: int) -> dict:
     b = load_bot(bid, bp, now)
-    out = _head(bid, b)
+    out = _head(bid, b, prof_of(bp))
     if b["status"]["state"] == "off":
         return out
     d = (b["st"].get("d") or {}) if b["st"].get("state") == "ok" else {}
@@ -767,21 +843,29 @@ def bot_control(bid: str, bp: dict, now: int) -> dict:
 
 
 def bot_perf(bid: str, bp: dict, now: int) -> dict:
+    prof = prof_of(bp)
     b = load_bot(bid, bp, now)
     setup_bad, off = last_setup(b["lg"].get("rows") or [])
-    out = {**_head(bid, b), "rules": rules_view(b["conf"], off), "setup_bad": setup_bad}
+    out = {**_head(bid, b, prof), "rules": rules_view(b["conf"], off), "setup_bad": setup_bad}
     if b["status"]["state"] == "off" or b["lg"].get("state") != "ok":
         return out
     cfg = b["conf"].get("cfg")
     ts = trades_of(b["lg"]["rows"], cfg)
-    return {**out, "record": record(ts), "coins": by_coin(ts, cfg), "trades": ts[:TRADES_KEEP], "equity": equity_view(bid, b)}
+    return {**out, "record": record(ts), "coins": by_coin(ts, cfg, prof.backtest), "trades": ts[:TRADES_KEEP],
+            "equity": equity_view(bid, b)}
+
+
+def _who(prof: Profile) -> dict:
+    """The bot's own words for its pages (owners 10-29: two mix bots)."""
+    return {"bot": prof.id, "exchange_ko": prof.exchange_ko, "account_ko": prof.account_ko, "guide": prof.guide}
 
 
 def control(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
-    """GET /api/v4/livebots/mix (module docstring)."""
+    """GET /api/v4/livebots/mix (module docstring); the 바이비트 봇's: /mixbybit."""
     p = p or paths()
+    prof = prof_of(p)
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    return {"now_ms": now, "name_ko": M.NAME, "bots": [bot_control(bid, p[bid], now) for bid, *_r in BOTS],
+    return {"now_ms": now, "name_ko": prof.name, **_who(prof), "bots": [bot_control(bid, p[bid], now) for bid, *_r in prof.bots],
             "span_ms": SIG_SPAN_MS, "stale_ms": STALE_MS}
 
 
@@ -797,11 +881,12 @@ def analysis(p: dict, now: int) -> dict:
 
 
 def perf(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
-    """GET /api/v4/livebots/mixperf (module docstring)."""
+    """GET /api/v4/livebots/mixperf (module docstring); the 바이비트 봇's: /mixbybitperf."""
     p = p or paths()
+    prof = prof_of(p)
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    return {"now_ms": now, "name_ko": M.NAME, "bots": [bot_perf(bid, p[bid], now) for bid, *_r in BOTS], "backtest": BACKTEST,
-            "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N, "analysis": analysis(p, now)}
+    return {"now_ms": now, "name_ko": prof.name, **_who(prof), "bots": [bot_perf(bid, p[bid], now) for bid, *_r in prof.bots],
+            "backtest": prof.backtest, "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N, "analysis": analysis(p, now)}
 
 
 def register(app, ctx) -> dict:
@@ -824,4 +909,17 @@ def register(app, ctx) -> dict:
         p = paths()
         return L._cached(key("mixperf", p), lambda: json_finite(perf(p)))
 
-    return {"routes": ["/api/v4/livebots/mix", "/api/v4/livebots/mixperf"], "paths": paths}
+    @app.get("/api/v4/livebots/mixbybit")
+    def get_livebots_mixbybit():
+        """실거래 › 바이비트 봇 관제 (owners 10-29): as /mix, for the 바이비트 봇 and its paper twin (read-only, 5 s cache)."""
+        p = paths(bot="bybit")
+        return L._cached(key("mixbybit", p), lambda: json_finite(control(p)))
+
+    @app.get("/api/v4/livebots/mixbybitperf")
+    def get_livebots_mixbybitperf():
+        """실거래 › 바이비트 봇 성적 (owners 10-29): as /mixperf, without a 5-year reference (read-only, 5 s cache)."""
+        p = paths(bot="bybit")
+        return L._cached(key("mixbybitperf", p), lambda: json_finite(perf(p)))
+
+    return {"routes": ["/api/v4/livebots/mix", "/api/v4/livebots/mixperf", "/api/v4/livebots/mixbybit",
+                       "/api/v4/livebots/mixbybitperf"], "paths": paths}

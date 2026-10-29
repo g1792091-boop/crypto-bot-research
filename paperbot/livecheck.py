@@ -118,6 +118,13 @@ WOO X Pro; the first keeps its words), and its 잔고 바닥 is on its score lin
 A fifth executor (owners 10-25, docs/toobit-ko.md: 투비트, unit paperbot-executor-toobit, config
 /etc/paperbot/executor-toobit.json, database executor-toobit-live.db; a $50 executor that will follow a rule-bot paper
 account, decided later) the same way, named by its exchange (투비트), its assumed fee Toobit's base taker 0.06 % a side.
+Owners 10-29 (docs/mixbybit-ko.md, docs/range-bot-ko.md): the Bybit account is traded by the 바이비트 봇 itself
+(paperbot/mixchop.py, unit paperbot-mixbybit; its own messages and its own morning check, paperbot/mixcheck.py), as WOO X
+Pro 2's by the 믹스 30분 봇 since 10-25. An executor slot whose account such a bot trades (``REPLACED_BY``: that bot's
+config is on this server) is neither checked nor told any more: no "실행기 꺼짐 · 다시 켜기" for the old unit (starting it
+would stop the new bot, its Conflicts=), no stale alarm, no score line. The 추세판단 봇 (the main paper, live-ac.db) is
+then followed by nothing; once its own unit is also neither running nor enabled it is retired (``main_retired``): no
+"페이퍼 봇 멈춤" alarm, no replay, no checkpoint or drift, its score line marked 꺼짐; its record stays.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
 ``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
 getUpdates; the token is never printed; sends nothing).
@@ -401,10 +408,26 @@ class ExecInfo:
         return ASSUMED_FEE.get(self.exchange or self.name, ASSUMED_FEE["binance"])
 
 
-def installed_specs(specs=EXECUTORS, optional=OPTIONAL_EXECUTORS) -> tuple:
+# Owners 10-29: an executor slot whose exchange account a self-trading bot (paperbot/mixchop.py) now trades: once that
+# bot's config is on this server the executor is left out of every check and message (its unit is stopped by the new
+# bot's Conflicts=; "다시 켜기: systemctl start" would stop the new bot). name -> (the bot's config, its unit, its name)
+REPLACED_BY = {"bybit": ("/etc/paperbot/mixbybit.json", "paperbot-mixbybit", "바이비트 봇"),
+               "wooxpro2": ("/etc/paperbot/mixchop.json", "paperbot-mixchop", "믹스 30분 봇")}
+
+
+def installed_specs(specs=EXECUTORS, optional=OPTIONAL_EXECUTORS, replaced=None) -> tuple:
     """The executors of this server: ``specs`` always, an optional one (the third, 딥코인) once its config file or its
-    database is there; neither there: the two as before."""
-    return tuple(specs) + tuple(x for x in optional if os.path.exists(x[1]) or os.path.exists(x[3]))
+    database is there; neither there: the two as before. One whose account a mix bot now trades (``replaced``, default
+    REPLACED_BY: that bot's config is there) is left out."""
+    rp = REPLACED_BY if replaced is None else replaced
+    out = tuple(specs) + tuple(x for x in optional if os.path.exists(x[1]) or os.path.exists(x[3]))
+    return tuple(x for x in out if not (x[0] in rp and os.path.exists(rp[x[0]][0])))
+
+
+def replaced_now(replaced=None) -> list:
+    """[(executor name, the bot's unit, the bot's name)] of the slots a mix bot trades on this server (REPLACED_BY)."""
+    rp = REPLACED_BY if replaced is None else replaced
+    return [(name, unit, ko) for name, (cfg, unit, ko) in rp.items() if os.path.exists(cfg)]
 
 
 def load_executors(specs=None) -> list[ExecInfo]:
@@ -541,7 +564,12 @@ SCALE_N, SCALE_WIN = 50, 0.80
 BE_5Y_KO = "5년 기준 본전 승률 79%"
 # the reasons the VWAP bot's FILTERED signals carry (paperbot/combo.py _entry_block, paperbot/entrygates.py), in groups
 GATE_GROUPS = (("vote", "4시간 추세 반대"), ("vol", "변동성 높음"), ("pause", "주말·발표·나스닥"), ("unread", "못 읽음"),
+               # the 레인지 봇's own (paperbot/rangebot.py _divert / _watch; owners 10-29: its trend check is the
+               # friend's indicator): listed only when it has some (RANGE_GATES), so the VWAP bot's line stays as it was
+               ("trend", "추세 확인(친구 추세 반대·진입 금지)"), ("one", "한 신호씩"), ("liq", "강제청산 여유 부족"),
+               ("nopull", "되돌림 안 옴"),
                ("other", "기타"))
+RANGE_GATES = ("trend", "one", "liq", "nopull")
 
 
 def paper2_default() -> str:
@@ -1054,6 +1082,8 @@ def _trade_line(kind: str, x: dict) -> str:
 
 def parity_lines(p: dict) -> list:
     """The 대조 part of the message."""
+    if p.get("retired"):                             # owners 10-29: nothing to replay
+        return [f"대조: 안 함 — {p['retired']}"]
     if p.get("error"):
         return [f"대조: 못 함 — {p['error']}"]
     sig, tr = p["signals"], p["trades"]
@@ -1115,6 +1145,24 @@ def bot_paths(src: Sources, segs: Optional[dict] = None) -> list:
     if p2 and os.path.exists(p2) and not any(LP.same(p2, q) for q in out):
         out.append(p2)
     return out
+
+
+def main_retired(src: Sources, segs: dict, units: Callable = None) -> bool:
+    """Owners 10-29: the main paper bot (the 추세판단 봇) is retired when no executor of this server follows it now
+    (``segs``, exec_segs) and its own unit (PAPER_UNITS by its file's name) is neither running nor enabled. Unknown (no
+    systemctl, another file name): not retired, every check as before."""
+    if any(LP.same(LP.current(sg), src.paper_db) for sg in (segs or {}).values()):
+        return False
+    unit = PAPER_UNITS.get(os.path.splitext(os.path.basename(src.paper_db or ""))[0])
+    if not unit:
+        return False
+    active, enabled = (units or unit_state)(unit)
+    if not active and not enabled:
+        return False
+    return active not in RUNNING and enabled not in ("enabled", "enabled-runtime")
+
+
+RETIRED_KO = "꺼짐 · 따라가는 실거래 없음"
 
 
 def exec_segs(src: Sources, infos: list) -> dict:
@@ -1469,7 +1517,7 @@ def exec_score_lines(r: dict) -> tuple[list, bool]:
 
 
 def score_lines(paper: Optional[dict], execs: list, shadows: list, ref_ko: str = "", others: Optional[list] = None,
-                main_name: Optional[str] = None) -> list:
+                main_name: Optional[str] = None, retired: bool = False) -> list:
     """``others`` (second_reports): a line for each other paper bot an executor follows, right under the first's.
     ``main_name``: the main bot's name when another, different paper bot runs (owners 10-23; that bot and its
     executors have their own part, bot_section: an executor marked ``section`` is not listed here)."""
@@ -1482,6 +1530,8 @@ def score_lines(paper: Optional[dict], execs: list, shadows: list, ref_ko: str =
     elif main_name:
         lead = [r["label"] for r in execs if not r.get("paper_db")]
         head = f"- {main_name}" + (f"({LP.josa('·'.join(lead), '이', '가')} 따라감)" if lead else "")
+    if retired:                                      # owners 10-29: stopped and unfollowed, its record only
+        head = f"- {main_name or '페이퍼'}({RETIRED_KO})"
     if paper is None:
         out.append(f"{head}: DB를 못 읽음")
     else:
@@ -1514,7 +1564,7 @@ def score_lines(paper: Optional[dict], execs: list, shadows: list, ref_ko: str =
         lines, sm = exec_score_lines(r)
         out += lines
         small = small or sm
-    if paper is not None:
+    if paper is not None and not retired:
         f = paper.get("flip")
         if f is not None:
             out.append(f"- 동전 쌍둥이(참고): 거래 {f['n']}번 · {f['wins']}승"
@@ -1701,11 +1751,19 @@ def gate_kind(why: str) -> str:
     w = str(why or "")
     if re.match(r"^\S+ 추세 반대", w):
         return "vote"
+    if w.startswith("추세 확인"):                     # the 레인지 봇: the friend's trend (or the supertrends) against
+        return "trend"
+    if w.startswith("한 신호씩"):
+        return "one"
+    if w.startswith("강제청산 여유 부족"):
+        return "liq"
+    if w.startswith("되돌림 안 옴"):
+        return "nopull"
     if w.startswith("변동성 높음"):
         return "vol"
     if w.startswith(("주말", "경제 발표", "나스닥 개장")):
         return "pause"
-    if "못 읽음" in w:
+    if "못 읽음" in w or "못 읽어" in w:
         return "unread"
     return "other"
 
@@ -1834,7 +1892,7 @@ def bot_section(b: dict, execs: list, w0: int, w1: int, rest: Optional[str] = No
         out.append("- 조건이 막은 신호(어제): 없음")
     else:
         out.append(f"- 조건이 막은 신호(어제) {g['n']}개: "
-                   + " · ".join(f"{ko} {g[k]}" for k, ko in GATE_GROUPS if g[k] or k != "other"))
+                   + " · ".join(f"{ko} {g[k]}" for k, ko in GATE_GROUPS if g.get(k) or k not in RANGE_GATES + ("other",)))
     if missed:
         out.append(f"- {missed}")
     out += b.get("band") or []                    # 운이냐 고장이냐 (the VWAP bot's own: band_lines)
@@ -1847,7 +1905,8 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
             week: Optional[list], cards: Optional[list] = None, drift: Optional[str] = None,
             notes: Optional[list] = None, now_ms: Optional[int] = None, rest: Optional[str] = None,
             missed: Optional[str] = None, ref_ko: str = "", others: Optional[list] = None,
-            sections: Optional[list] = None, main_name: Optional[str] = None) -> tuple[str, str, list]:
+            sections: Optional[list] = None, main_name: Optional[str] = None,
+            retired: bool = False) -> tuple[str, str, list]:
     """(level, text, loud reasons). ``cards``: the loss cards of the day (3부 ①, already sent by the watcher; here one
     line each with the noise-stop result), ``drift``: the paper against the backtest's ranges (3부 ②), ``missed``: the
     day's not-entered signals in one quiet line (paperbot/livemissed.py morning_line; never loud), ``ref_ko``: the
@@ -1881,7 +1940,7 @@ def compose(day: str, w0: int, w1: int, parity: dict, paper: Optional[dict], exe
             lines.append(f"- 외 {len(cards) - MAX_LINES}장")
     if missed:
         lines += ["", missed]
-    sl = score_lines(paper, execs, shadows, ref_ko, others=others, main_name=main_name)
+    sl = score_lines(paper, execs, shadows, ref_ko, others=others, main_name=main_name, retired=retired)
     if drift:
         at = next((i for i, ln in enumerate(sl) if ln.startswith("- 페이퍼")), None)
         if at is None:                                # the main bot's line under its name (two paper bots)
@@ -2171,11 +2230,15 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
     else:
         hb = step = None
     hb = hb if hb is not None else step               # a database written before the heartbeat existed
-    all_paths = bot_paths(src, exec_segs(src, infos))
+    segs0 = exec_segs(src, infos)
+    all_paths = bot_paths(src, segs0)
     two = len(all_paths) > 1                         # two paper bots (owners 10-23): the alarms name the bot
     main_ko = f"{paper_name(src.paper_db)} " if two else ""
-    judged.add("paper_stale")
-    if hb is None or now_ms - hb > STALE_PAPER_MS:
+    retired = main_retired(src, segs0, units)        # owners 10-29: the 추세판단 봇 off, nothing follows it
+    seen["main_retired"] = retired
+    if not retired:
+        judged.add("paper_stale")
+    if not retired and (hb is None or now_ms - hb > STALE_PAPER_MS):
         conds.append(Cond("paper_stale", CRITICAL,
                           f"{main_ko}페이퍼 봇이 10분 넘게 아무것도 쓰지 않습니다\n"
                           f"마지막 기록: {_ago(now_ms, hb)}\n"
@@ -2393,7 +2456,7 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
                               + paper_unit_todo(p2),
                               recover=f"✅ {paper_name(p2)} 페이퍼 봇 기록이 다시 들어옵니다"))
     # 3부 ②: the paper against the backtest's ranges
-    if paper is not None and exp is not None:
+    if paper is not None and exp is not None and not retired:
         dc, dj = drift_conditions(paper, exp, lights=any(ex.light_on for ex in infos))
         conds += dc
         judged |= dj
@@ -2603,7 +2666,9 @@ PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot
                    "paperbot-executor-mexc.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
                    "paperbot-executor-deepcoin.service",
                    "paperbot-executor-wooxpro2.service",
-                   "paperbot-executor-toobit.service")
+                   "paperbot-executor-toobit.service",
+                   # owners 10-29: the mix bots trade by themselves; the 레인지 봇 paper bot is what WOO X Pro follows
+                   "paperbot-mixchop.service", "paperbot-mixbybit.service", "paperbot-combo-range.service")
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
 UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
 REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
@@ -4920,15 +4985,20 @@ live_notifier = _notifier
 
 def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = None, dry_run: bool = False,
               replay: Optional[Callable] = None, no_replay: bool = False, notifier=None,
-              budget_min: float = REPLAY_BUDGET_MIN, log=None, extra_ctx: Optional[Callable] = None) -> dict:
-    """The whole morning check. Returns {"level", "text", "loud", "report", "sent"}."""
+              budget_min: float = REPLAY_BUDGET_MIN, log=None, extra_ctx: Optional[Callable] = None,
+              units: Optional[Callable] = None) -> dict:
+    """The whole morning check. Returns {"level", "text", "loud", "report", "sent"}. ``units``: systemd's answer for a
+    unit (unit_state), read for main_retired."""
     now_ms = int(time.time() * 1000) if now_ms is None else int(now_ms)
     day = day or default_day(now_ms)
     w0, w1 = window_of(day)
     infos = src.executors or load_executors()
+    retired = main_retired(src, exec_segs(src, infos), units)     # owners 10-29: the 추세판단 봇 off and unfollowed
     live_conn = open_ro(src.paper_db)
     try:
-        if no_replay:
+        if retired:
+            parity = {"retired": f"{LP.josa(paper_name(src.paper_db), '이', '가')} 꺼져 있고 따라가는 실거래가 없어요"}
+        elif no_replay:
             parity = {"error": "이번에는 다시 계산을 건너뜀(--no-replay)"}
         else:
             parity = parity_check(src, live_conn, w0, w1, now_ms, replay=replay, budget_min=budget_min, log=log,
@@ -4976,18 +5046,19 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
         if not dry_run:                       # cards the watcher has not made yet (stored, not sent) and noise checks
             cards_pass(src, out_conn, now_ms, exp, send=None, infos=infos, older_only=True, ref_ko=ref_ko)
         cards = stored_cards(out_conn, w0, w1)
-        drift = drift_line(drift_state(trades, exp)) if (paper is not None and exp is not None) else None
+        drift = drift_line(drift_state(trades, exp)) if (paper is not None and exp is not None and not retired) else None
         missed = None
         try:                                  # 못 탄 신호 (the watcher's table): one quiet line, never in the way of the check
             from .livemissed import morning_line
             missed = morning_line(out_conn, trades, (paper or {}).get("pos_entry"), w0, w1)
         except Exception as exc:  # noqa: BLE001
             print(f"missed line: {type(exc).__name__}: {exc}", file=sys.stderr)
-        rest = rest_line(w1, ccfg)
-        same_rest = all(pause_rules(ps.cfg(p)) == pause_rules(ccfg) for p in diff)
+        base = ps.cfg(diff[0]) if (retired and diff) else ccfg      # a retired main bot's pauses are no one's
+        rest = rest_line(w1, base)
+        same_rest = all(pause_rules(ps.cfg(p)) == pause_rules(base) for p in diff)
         if diff:                              # the pauses of both bots: the same rules (today) or each its own
             rest = _rest_named(rest, ("두 봇 같음" if len(diff) == 1 else "모든 봇 같음") if same_rest   # three: 10-24
-                               else paper_name(src.paper_db))
+                               else paper_name(diff[0] if retired else src.paper_db))
         sections, bots = [], []
         for p in diff:
             b = {"path": p, "name": paper_name(p), "trades": ps.trades(p), "cfg": ps.cfg(p), "gates": gate_counts(p, w0, w1),
@@ -5011,9 +5082,12 @@ def run_check(src: Sources, day: Optional[str] = None, now_ms: Optional[int] = N
                                         rest=None if same_rest else _rest_named(rest_line(w1, b["cfg"]), b["name"])))
             bots.append({"path": p, "name": b["name"], **win_stats(b["trades"]), "gates": b["gates"],
                          "break_even": break_even(b["trades"])})
+        if retired:                           # its name on its (history) line, never a checkpoint of a stopped bot
+            main_name = paper_name(src.paper_db)
+            notes = []
         level, text, loud = compose(day, w0, w1, parity, paper, execs, shadows, week, cards=cards, drift=drift,
                                     notes=notes, now_ms=now_ms, rest=rest, missed=missed, ref_ko=ref_ko,
-                                    others=others, sections=sections, main_name=main_name)
+                                    others=others, sections=sections, main_name=main_name, retired=retired)
         report = {"day": day, "w0": w0, "w1": w1, "parity": parity, "executors": execs, "shadows": shadows,
                   **({"other_papers": others} if others else {}), **({"bots": bots} if bots else {}),
                   "paper": {k: v for k, v in (paper or {}).items() if k != "trades"} if paper else None,

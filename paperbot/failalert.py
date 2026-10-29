@@ -81,6 +81,14 @@ JOBS_KO = {
                                        "5분마다 다시 돎 (믹스 봇·주문과 무관, 읽기만 함)\n"
                                        "지금 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
                                        "/opt/paperbot/venv/bin/python -m paperbot.mixcheck pass --dry-run"),
+    # owners 10-29: the same checks for the '바이비트 봇' (docs/mixbybit-ko.md)
+    "paperbot-mixbybitcheck.service": ("바이비트 봇 아침 점검(09:07)",
+                                       "내일 09:07에 다시 돎 (바이비트 봇·주문과 무관, 읽기만 함)\n미리 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
+                                       "env PAPERBOT_MIX_BOT=bybit /opt/paperbot/venv/bin/python -m paperbot.mixcheck morning --dry-run\n"
+                                       "지금 다시: sudo systemctl start paperbot-mixbybitcheck"),
+    "paperbot-mixbybitcheck-pass.service": ("바이비트 봇 손실 카드(5분마다)",
+                                            "5분마다 다시 돎 (바이비트 봇·주문과 무관, 읽기만 함)\n지금 보기: cd /opt/crypto-bot-research && sudo -u paperbot "
+                                            "env PAPERBOT_MIX_BOT=bybit /opt/paperbot/venv/bin/python -m paperbot.mixcheck pass --dry-run"),
 }
 RESULT_KO = {"exit-code": "오류로 끝남", "timeout": "시간 제한을 넘김", "signal": "강제로 멈춰짐",
              "core-dump": "강제로 멈춰짐", "oom-kill": "메모리 한도를 넘김", "watchdog": "응답 없음"}

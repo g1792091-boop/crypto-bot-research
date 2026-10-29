@@ -61,5 +61,26 @@ if [ -f "$g/calls.jsonl" ] || [ -f "$g/patterns.jsonl" ] || [ -f "$g/state.json"
     fail=1
   fi
 fi
+# the mix bots (owners 10-25 / 10-29: the 믹스 30분 봇 and the 바이비트 봇 trade by themselves, paperbot/mixchop.py) keep
+# their state and log as plain files, with their paper twins' and their checks' state: one file of them a night, as
+# ghcoin's (a file that is not there is left out)
+m="$d/mixbots.db"
+rm -f "$m.part"
+ok=1
+sqlite3 -bail "$m.part" "CREATE TABLE files (name TEXT PRIMARY KEY, data BLOB);" || ok=0
+for f in exec/mixchop-state.json exec/mixchop-log.jsonl exec/mixbybit-state.json exec/mixbybit-log.jsonl \
+         mixchop-paper/state.json mixchop-paper/log.jsonl mixbybit-paper/state.json mixbybit-paper/log.jsonl \
+         mixcheck/state.json mixbybitcheck/state.json; do
+  [ "$ok" = 1 ] || break
+  [ -f "$lib/$f" ] || continue
+  sqlite3 -bail "$m.part" "INSERT INTO files VALUES ('$f', readfile('$lib/$f'));" || ok=0
+done
+if [ "$ok" = 1 ] && mv "$m.part" "$m"; then
+  :
+else
+  rm -f "$m.part"
+  echo "backup of mixbots.db failed" >&2
+  fail=1
+fi
 find "$out" -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +
 exit $fail

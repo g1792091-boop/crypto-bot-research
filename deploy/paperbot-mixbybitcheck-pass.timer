@@ -1,0 +1,10 @@
+# 바이비트 봇 손실 카드 (deploy/paperbot-mixbybitcheck-pass.service): every 5 minutes (a minute after the friend bot's).
+[Unit]
+Description=paperbot 바이비트 봇 손실 카드 every 5 minutes
+
+[Timer]
+OnCalendar=*:2/5
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

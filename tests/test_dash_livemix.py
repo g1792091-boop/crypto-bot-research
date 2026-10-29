@@ -368,7 +368,8 @@ def test_the_routes_on_the_live_app(w, tmp_path, monkeypatch):
     before = {n: (open(os.path.join(w["folder"], n), "rb").read(), os.stat(os.path.join(w["folder"], n)).st_mtime_ns) for n in sorted(os.listdir(w["folder"]))}
     app = LA.create_app(None, b"s" * 32, candles=lambda *a, **k: [], ticker=lambda: {}, market=lambda: {}, frames=lambda *a: None,
                         liq_db=str(tmp_path / "no-liq.db"), inbox_db=str(tmp_path / "no-inbox.db"))
-    assert app.state.more["livemix"]["routes"] == ["/api/v4/livebots/mix", "/api/v4/livebots/mixperf"]
+    assert app.state.more["livemix"]["routes"] == ["/api/v4/livebots/mix", "/api/v4/livebots/mixperf", "/api/v4/livebots/mixbybit",
+                                                   "/api/v4/livebots/mixbybitperf"]
     c = TestClient(app)
     for path, key in (("/api/v4/livebots/mix", "position"), ("/api/v4/livebots/mixperf", "record")):
         r = c.get(path)

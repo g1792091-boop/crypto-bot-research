@@ -1,0 +1,13 @@
+# 바이비트 봇 아침 점검 (deploy/paperbot-mixbybitcheck.service): 00:07 UTC = 09:07 KST, about the KST day that ended at
+# midnight (two minutes after the friend bot's). Installed and switched on by install.sh; by hand:
+#   sudo systemctl enable --now paperbot-mixbybitcheck.timer
+[Unit]
+Description=paperbot 바이비트 봇 아침 점검 at 00:07 UTC (09:07 KST: the previous KST day)
+
+[Timer]
+OnCalendar=*-*-* 00:07:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

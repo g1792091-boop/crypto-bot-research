@@ -474,6 +474,18 @@ for t in paperbot-mixcheck.timer paperbot-mixcheck-pass.timer; do
   systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
   echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
 done
+# 바이비트 봇 점검 (owners 10-29, docs/mixbybit-ko.md): the same checks for the '바이비트 봇' (PAPERBOT_MIX_BOT=bybit in its
+# units), its own folder /var/lib/paperbot/mixbybitcheck. Installed AND switched on here; before the bot runs they say
+# so once in the morning (no record yet) and the pass sends nothing. The bot itself is never touched here.
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixbybitcheck
+for u in paperbot-mixbybitcheck.service paperbot-mixbybitcheck.timer paperbot-mixbybitcheck-pass.service paperbot-mixbybitcheck-pass.timer; do
+  install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+for t in paperbot-mixbybitcheck.timer paperbot-mixbybitcheck-pass.timer; do
+  systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
+  echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
+done
 # The combined bot is installed only: started by a person after writing /etc/paperbot/combo.json (docs/combo-bot-ko.md).
 if ! systemctl is-enabled --quiet paperbot-combo 2>/dev/null; then
   echo "합친 봇(paperbot-combo) 설치만 했습니다. 켜는 법: docs/combo-bot-ko.md"
