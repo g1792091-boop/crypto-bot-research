@@ -69,7 +69,10 @@ def lev_of(sym: str) -> int:
 
 def run_config(paper_db: str, db: str, **over) -> dict:
     """The 레인지 봇's combo_run config as the bot writes it (combo.run_config of its ComboConfig)."""
-    d = {**TW.deploy("combo.range.json"), "paper_db": paper_db, "db": db, **over}
+    dep = TW.deploy("combo.range.json")
+    # the bot of 10/26 ~ 10/27 checked the coin's and BTC's 1h supertrend (the friend's trend came on 10/29)
+    dep = {**dep, "range": {**dep["range"], "coin_st": True, "btc_st": True, "friend_tf": None}}
+    d = {**dep, "paper_db": paper_db, "db": db, **over}
     return json.loads(json.dumps(C.run_config(C.ComboConfig(**d)), default=str))
 
 

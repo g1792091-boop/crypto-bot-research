@@ -8,6 +8,9 @@
   and BTC's supertrend, the liquidation room, the weekend / NYSE-open pause at the signal and again at the entry;
 - restart keeps the wait; the state for the live site; the Telegram words; the executor's reader sees the entry;
 - the supertrend read equals pine_indicators.exchange_supertrend on the 1h bars of the same 5m history;
+- owners 10-29: the deploy config checks the friend's trend indicator on the signal's 1h bar instead of the two
+  supertrends (paperbot/friendtrend.py): with the signal -> waits; against or no entry (2 sideways, 2-2) -> FILTERED
+  with the votes; unreadable -> no entry and an alert; its read equals friendtrend.last_trend on the same 1h frame;
 - the deploy config passes check-config; wrong ones are refused."""
 
 import json
@@ -35,6 +38,9 @@ BRK = Brackets([BracketTier(300_000, 125, 0.004, 0.0), BracketTier(800_000, 50, 
 BRACKETS = {s: BRK for s in SYMS}
 DEPLOY = Path(__file__).resolve().parents[1] / "deploy" / "combo.range.json"
 MEMBER = "ds-F7_RF_TRIPLE-1h-1"
+# the range section before owners 10-29: the coin's and BTC's 1h supertrend (the supertrend tests use it)
+ST_RANGE = {"pullback_atr": 0.2, "wait_min": 60, "coin_st": True, "btc_st": True, "st_period": 10, "st_mult": 3.0,
+            "liq_check": True, "liq_mmr": 0.005}
 
 
 def rcfg(tmp_path, **kw):
@@ -76,6 +82,7 @@ class World:
         assert self.cfg.problems() == []
         self.note = ListNotifier()
         self.st: dict = {}                         # symbol -> supertrend side (default: with the signal)
+        self.ft: dict = {}                         # symbol -> the friend's trend (default: with the signal)
         self.add_minutes(T0 - 10 * MIN, 10)
         self.open()
 
@@ -87,6 +94,7 @@ class World:
         self.run = RB.RangeRunner(self.cfg, self.members, self.book, self.store, self.note, self.custom,
                                   now_ms=lambda: self.now, prices=lambda: {})
         self.run.supertrend = lambda sym, bc: self.st.get(sym, self.default_st)
+        self.run.friend_trend = lambda sym, bc: self.ft.get(sym, friend_votes(self.default_st))
         self.default_st = 1
 
     def restart(self):
@@ -131,6 +139,13 @@ class World:
     def trades(self):
         return [json.loads(d) for (d,) in self.store.conn.execute(
             "SELECT data FROM trades WHERE account_id = ? ORDER BY id", (C.ACCOUNT,))]
+
+
+def friend_votes(trend, line=None, ema=None, chop=None, st=None):
+    """A friend's trend read: the trend and its four votes (each vote the trend's side unless given)."""
+    d = {"line": trend or 1, "ema": trend or 1, "chop": trend, "st": trend}
+    d.update({k: v for k, v in (("line", line), ("ema", ema), ("chop", chop), ("st", st)) if v is not None})
+    return {"trend": trend, **d, "ema_rsi": 55.0 if trend >= 0 else 45.0, "chop_zone": 2 * (d["chop"] or 0)}
 
 
 H = T0 + HOUR                                 # the 1h close of the tests' signals (10:00 KST Monday)
@@ -260,7 +275,7 @@ def test_one_signal_at_a_time_in_coin_order_and_while_holding(tmp_path):
 
 
 def test_supertrend_against_skips_and_the_next_coin_of_the_same_close_waits(tmp_path):
-    w = World(tmp_path)
+    w = World(tmp_path, range=ST_RANGE)
     w.st = {"BTCUSDT": 1, "ETHUSDT": -1, "SOLUSDT": 1}
     _start(w, [("ETHUSDT", 1, 10.0), ("SOLUSDT", 1, 1.0)])
     w.step(H)
@@ -268,7 +283,7 @@ def test_supertrend_against_skips_and_the_next_coin_of_the_same_close_waits(tmp_
     assert st["ETHUSDT"] == ("FILTERED", "추세 확인: ETH 1시간 슈퍼트렌드 하락(신호 롱와 반대)")
     assert st["SOLUSDT"][0] == "WAITING" and w.run.wait["signal"]["symbol"] == "SOLUSDT"
     # BTC's supertrend against: no entry either
-    w2 = World(tmp_path / "b")
+    w2 = World(tmp_path / "b", range=ST_RANGE)
     w2.st = {"BTCUSDT": -1}
     _start(w2, [("SOLUSDT", 1, 1.0)])
     w2.step(H)
@@ -277,7 +292,7 @@ def test_supertrend_against_skips_and_the_next_coin_of_the_same_close_waits(tmp_
 
 
 def test_unreadable_supertrend_means_no_entry_and_an_alert(tmp_path):
-    w = World(tmp_path)
+    w = World(tmp_path, range=ST_RANGE)
 
     def boom(sym, bc):
         raise C.ComboError("BTC 5분봉 10개뿐")
@@ -348,7 +363,7 @@ def test_restart_keeps_the_wait(tmp_path):
 
 
 def test_state_for_the_live_site(tmp_path):
-    w = World(tmp_path)
+    w = World(tmp_path, range=ST_RANGE)
     w.st = {"ETHUSDT": -1}
     _start(w)
     w.step(H)
@@ -356,6 +371,16 @@ def test_state_for_the_live_site(tmp_path):
     assert st["wait"]["symbol"] == "BTCUSDT" and st["wait"]["level"] == pytest.approx(w.run.wait["level"])
     assert st["supertrend"]["ETHUSDT"] == -1 and st["supertrend"]["BTCUSDT"] == 1 and st["st_at"] == H
     assert st["busy"].startswith("한 신호씩") and any("되돌림 진입" in x for x in st["rules"])
+    assert "friend" not in st
+    # the deploy config (owners 10-29): the friend's trend per coin, no supertrend read
+    w2 = World(tmp_path / "b")
+    w2.ft = {"ETHUSDT": friend_votes(0, chop=0, st=0)}
+    w2.run.supertrend = lambda sym, bc: pytest.fail("the supertrend is not read")
+    _start(w2)
+    w2.step(H)
+    _ts, st = w2.store.get_state(RB.STATE_RANGE)
+    assert st["friend"]["ETHUSDT"]["trend"] == 0 and st["friend"]["BTCUSDT"]["trend"] == 1 and st["supertrend"] == {}
+    assert any(x.startswith("추세 확인: 친구 추세지표 1시간봉") for x in st["rules"])
 
 
 def test_the_supertrend_read_equals_the_indicator_on_the_same_history(tmp_path):
@@ -389,6 +414,81 @@ def test_the_supertrend_read_equals_the_indicator_on_the_same_history(tmp_path):
         run.supertrend("ETHUSDT", T0)
 
 
+def test_the_friends_trend_decides_the_signal(tmp_path):
+    """Owners 10-29: the friend's trend on the signal's 1h bar must be the signal's side; 2 sideways or 2-2 is no entry."""
+    w = World(tmp_path)
+    assert w.cfg.range["friend_tf"] == "1h" and not w.cfg.range["coin_st"] and not w.cfg.range["btc_st"]
+    w.ft = {"ETHUSDT": friend_votes(-1, line=1, chop=-1, st=-1, ema=-1),
+            "SOLUSDT": friend_votes(0, line=1, ema=1, chop=0, st=0),
+            "DOGEUSDT": friend_votes(0, line=1, ema=-1, chop=1, st=-1)}
+    w.run.supertrend = lambda sym, bc: pytest.fail("the supertrend is not read")
+    _start(w, [("ETHUSDT", 1, 10.0), ("SOLUSDT", 1, 1.0), ("DOGEUSDT", 1, 0.001), ("LTCUSDT", 1, 0.5)])
+    w.step(H)
+    st = {r[1]: (r[2], r[3]["why"]) for r in w.rows()}
+    assert st["ETHUSDT"] == ("FILTERED", "추세 확인: 친구 추세지표 1시간 하락 (하늘·보라 선 상승 · EMA RSI 하락 · 찹존 하락 · "
+                                         "슈퍼트렌드 하락)(신호 롱와 반대)")
+    assert st["SOLUSDT"] == ("FILTERED", "추세 확인: 친구 추세지표 1시간 진입 금지 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 횡보 · "
+                                         "슈퍼트렌드 횡보)")
+    assert st["DOGEUSDT"] == ("FILTERED", "추세 확인: 친구 추세지표 1시간 진입 금지 (하늘·보라 선 상승 · EMA RSI 하락 · 찹존 상승 · "
+                                          "슈퍼트렌드 하락)")
+    assert st["LTCUSDT"][0] == "WAITING" and "친구 추세 상승" in st["LTCUSDT"][1]
+    assert w.run.wait["info"]["friend"]["trend"] == 1
+    # the entry keeps the votes; the Telegram entry line says them
+    w.step(H + MIN, low={"LTCUSDT": w.px["LTCUSDT"] - 1.0})
+    w.to(H + 2 * MIN, H + 6 * MIN)
+    p = w.engine().position
+    assert p is not None and p.symbol == "LTCUSDT" and p.signal.meta["range"]["friend"]["trend"] == 1
+    ent = [m for _l, m in w.note.messages if "진입" in m and "레인지 필터 3중 일치" in m]
+    assert ent and "친구 추세 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 상승 · 슈퍼트렌드 상승)" in ent[-1]
+    # a short signal needs a falling trend
+    w2 = World(tmp_path / "b")
+    w2.ft = {"BTCUSDT": friend_votes(-1)}
+    _start(w2, [("BTCUSDT", -1, ATR)])
+    w2.step(H)
+    assert w2.rows()[0][2] == "WAITING"
+
+
+def test_unreadable_friends_trend_means_no_entry_and_an_alert(tmp_path):
+    w = World(tmp_path)
+
+    def boom(sym, bc):
+        raise C.ComboError("BTC 5분봉 10개뿐(친구 추세지표에 3600개 필요)")
+    w.run.friend_trend = boom
+    _start(w)
+    w.step(H)
+    (_bc, _s, st, d), = w.rows()
+    assert st == "FILTERED" and d["why"].startswith("친구 추세지표를 못 읽어 진입 안 함: BTC 5분봉")
+    assert any("친구 추세지표" in m and "못 읽어" in m for _l, m in w.note.messages)
+
+
+def test_the_friends_trend_read_equals_the_indicator_on_the_same_history(tmp_path):
+    from paperbot import friendtrend as FT
+    from paperbot import sweepsig
+    from paperbot.dssig import frame
+    lib = sweepsig.lib()
+    members = C.resolve_members([{"pick": MEMBER}])
+    custom = C.CustomSignals(members, ["BTCUSDT"], lib=lib)
+    rng = np.random.default_rng(5)
+    n = 400 * 12
+    ts0 = T0 - n * FIVE
+    c = 60000 * np.exp(np.cumsum(rng.normal(0, 0.002, n)))
+    o = np.r_[c[0], c[:-1]]
+    hi, lo = np.maximum(o, c) * 1.001, np.minimum(o, c) * 0.999
+    vol = rng.uniform(1.0, 9.0, n)
+    custom.bootstrap("BTCUSDT", [(ts0 + k * FIVE, o[k], hi[k], lo[k], c[k], vol[k]) for k in range(n)])
+    w = World(tmp_path)
+    run = RB.RangeRunner(w.cfg, w.members, w.book, w.store, w.note, custom, now_ms=lambda: T0, prices=lambda: {})
+    df = frame(np.array([ts0 + k * FIVE for k in range(n)]), o, hi, lo, c, vol, tf="1h", lib=lib)
+    want = FT.last_trend(*(df[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume")))
+    got = run.friend_trend("BTCUSDT", T0)
+    assert got == want and got["trend"] in (-1, 0, 1) and set(FT.VOTES) <= set(got)
+    df2 = df.iloc[:-7]
+    assert run.friend_trend("BTCUSDT", T0 - 7 * HOUR) == FT.last_trend(*(df2[k].to_numpy(float) for k in
+                                                                   ("open", "high", "low", "close", "volume")))
+    with pytest.raises(C.ComboError, match="친구 추세지표"):
+        run.friend_trend("BTCUSDT", T0 - 200 * HOUR)                  # too little history before it
+
+
 def test_deploy_config_and_wrong_ones(tmp_path):
     from argparse import Namespace
     assert C.cmd_check(Namespace(config=str(DEPLOY))) == 0
@@ -406,6 +506,7 @@ def test_deploy_config_and_wrong_ones(tmp_path):
         "key": ({"range": {"pull": 0.2}}, "알 수 없는 이름"),
         "tp": ({"take_profit_roe": 1.5}, "take_profit_roe"),
         "atr room twice": ({"liq_buffer_atr": 1.0}, "liq_buffer_atr는 0"),
+        "friend tf": ({"range": {"friend_tf": "4h"}}, "friend_tf"),
     }
     for name, (over, words) in bad.items():
         probs = rcfg(tmp_path, **over).problems()

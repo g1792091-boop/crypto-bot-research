@@ -1,4 +1,7 @@
-# 레인지 봇 (10/26)
+# 레인지 봇 (10/26, 10/29 추세 확인을 친구 추세지표로)
+
+> **10/29 바뀐 것:** 추세 확인이 "코인·BTC 1시간 슈퍼트렌드"에서 **친구 추세지표 1시간봉**으로 바뀌었습니다(1-1절, 서버 순서는 3장 E).
+> 나머지 규칙은 모두 그대로입니다.
 
 두 분이 10/26에 "그 구조로 가자", "레인지봇을 추세 봇 woo x pro 거래소로 … 원래 있던 추세봇 woo x pro 는 없애고", "진행해줘",
 "1패후 24시간 휴식을 왜해 빼"라고 하셔서 만든 봇입니다. 구조의 근거는 `analysis/f7tp10_1026/FINAL_KO.md`(최종 구조)와
@@ -28,7 +31,7 @@
 | 단계 | 규칙 |
 |---|---|
 | 신호 | 1시간봉 마감 때 레인지 필터 방향 · 그 봉 하이킨아시 · 마지막 4시간봉 하이킨아시가 처음 모두 같은 쪽 |
-| 추세 확인 | 그 코인의 1시간 V3.9 슈퍼트렌드(10, 3)와 BTC의 1시간 슈퍼트렌드가 둘 다 신호 쪽 |
+| 추세 확인 | (10/29부터) 그 코인의 친구 추세지표 1시간봉이 신호 쪽 (1-1절). 10/28까지는 그 코인·BTC의 1시간 V3.9 슈퍼트렌드(10, 3) |
 | 강제청산 여유 | 손절 거리 + 1시간 ATR이 (1/배수 − 0.5%) 안쪽 (아주 거친 장이면 건너뜀) |
 | 진입 | 신호 봉 종가에서 0.2 × ATR(14, 1시간) 되돌림을 최대 60분 기다림 → 닿은 5분봉이 끝나면 다음 5분봉 시가에 시장가. 안 오면 버림 |
 | 한 신호씩 | 기다리는 동안·포지션 있는 동안 다른 신호는 안 받음. 같은 시각이면 BTC → ETH → SOL → DOGE → LTC → BCH 순서 |
@@ -40,6 +43,27 @@
 
 - 페이퍼는 익절을 그 가격에 지정가처럼 체결해 수수료가 덜 나가므로, 페이퍼의 이긴 거래는 순ROE가 +12% 안팎으로 보입니다.
   실거래 실행기는 자기 체결가 기준 순ROE +10%에서 시장가로 닫습니다(지정가 안 씀). 그래서 실거래 이긴 거래는 +10% 안팎입니다.
+
+## 1-1. 10/29: 추세 확인을 친구 추세지표로
+
+두 분(10/29): "백테스트는 신경쓰지마 친구 지표 1시간봉 + 레인지 필터 3중 일치 1시간봉으로 가자", "만들어주고 … 포지션 종료되면 바로
+돌리려고 미리 만들어줘".
+
+- **추세 확인:** 신호가 나온 1시간봉에서 그 코인의 친구 추세지표(`paperbot/friendtrend.py`) 신호 4개를 봅니다.
+  - 4개: 하늘·보라 선, EMA RSI(밴드 가운데 선 색), 찹존, 슈퍼트렌드 평균(14·6 / 14·3)
+  - 같은 추세가 2개 이상이면 그 추세입니다. 상승이면 롱 신호만, 하락이면 숏 신호만 받습니다.
+  - 횡보(찹존 노랑, 슈퍼트렌드 노랑)가 2개 이상이거나 상승 2·하락 2면 진입하지 않습니다.
+  - BTC 방향은 더 이상 보지 않습니다.
+- 설정: `range`에 `"friend_tf": "1h"`, `"coin_st": false`, `"btc_st": false` (`deploy/combo.range.json`).
+- 진입·청산·크기·진입 금지·한 신호씩·강제청산 확인은 모두 그대로입니다. 실행기(`paperbot-executor-mexc`)도 그대로 페이퍼를 따라갑니다.
+- 계산은 시험(`analysis/rangefriend1029/`)에 쓴 것과 같습니다. 6년 치 봉으로 봉마다 같은지 확인했습니다.
+- **알아 둘 숫자:**
+  - 시험에서 이 설정(칸 A)은 지금 설정보다 나빴습니다. 2021~23, 2024~26 두 기간 모두 거래당 순ROE와 가운데 달이 낮았습니다(`analysis/rangefriend1029/REPORT_KO.md`).
+  - 두 분이 그래도 이 설정으로 가기로 정하셨습니다.
+  - 진입은 요즘 장 기준 평일 하루 약 2.4 ~ 2.9번으로, 지금보다 20 ~ 30% 많습니다.
+- 텔레그램 진입 줄에는 `친구 추세 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 상승 · 슈퍼트렌드 상승)`이 붙습니다.
+- 들어가지 않은 신호 이유: `추세 확인: 친구 추세지표 1시간 하락 (…)(신호 롱와 반대)` 또는 `… 진입 금지 (…)`.
+- 사이트 레인지 봇 화면에 코인마다 "친구 추세지표 1시간"(상승·하락·진입 금지)이 나옵니다.
 
 ## 2. 준비물
 
@@ -144,6 +168,44 @@ sudo systemctl start paperbot-executor-mexc
 
 - 가장 최근 `.before-range-<시각>` 사본(옮기기 전 설정)으로 돌아갑니다.
 - `sudo touch /var/lib/paperbot/STOP`(비상 정지)은 **모든 실행기를** 닫고 멈춥니다. WOO X Pro만 멈출 때는 쓰지 않습니다.
+
+### E. 추세 확인을 친구 추세지표로 바꾸기 (10/29) — WOO X Pro 실행기에 포지션이 없을 때
+
+1) 코드 받기 (A와 같음, 이미 했으면 건너뜀). 페이퍼 봇이 새 코드로 다시 켜지지만, 설정을 바꾸기 전까지는 예전 규칙 그대로입니다.
+
+```bash
+cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+```
+
+2) 실행기 포지션 확인 (`포지션: null`일 때만 다음으로):
+
+```bash
+sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-wooxpro-live.db
+```
+
+3) 설정 바꾸기 → 확인 (예전 설정은 `.before-friend`로 남김):
+
+```bash
+sudo cp -p /etc/paperbot/combo-range.json /etc/paperbot/combo-range.json.before-friend
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.range.json /etc/paperbot/combo-range.json
+sudo diff /etc/paperbot/combo-range.json.before-friend /etc/paperbot/combo-range.json
+cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo-range.json
+```
+
+- diff에는 `"coin_st"`(true → false), `"btc_st"`(true → false), 새 줄 `"friend_tf": "1h"` 세 곳만 나와야 합니다.
+- check-config에서 볼 줄: `추세 확인: 친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·찹존·슈퍼트렌드)이 …`, 마지막 줄 **`준비됨`**.
+
+4) 페이퍼 봇 다시 켜기 → 실행기 켜기:
+
+```bash
+sudo systemctl enable paperbot-combo-range && sudo systemctl restart paperbot-combo-range
+journalctl -u paperbot-combo-range -n 20 --no-pager
+sudo systemctl enable --now paperbot-executor-mexc
+```
+
+- 텔레그램 `[합친 봇 페이퍼 레인지 봇] 시작: …`에 `추세 확인: 친구 추세지표 1시간봉 …`이 보이면 바뀐 것입니다.
+- 되돌리기: 2)처럼 포지션이 없을 때 `sudo install -o root -g paperbot -m 640 /etc/paperbot/combo-range.json.before-friend /etc/paperbot/combo-range.json`
+  하고 페이퍼 봇을 다시 켭니다.
 
 ## 4. 처음 며칠 지켜볼 것
 

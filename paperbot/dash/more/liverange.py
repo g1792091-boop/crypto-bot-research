@@ -325,6 +325,11 @@ def wait_of(snap: dict, now: int) -> Optional[dict]:
             "coin_st": L._i(info.get("coin_st")), "btc_st": L._i(info.get("btc_st"))}
 
 
+FRIEND_KO = {1: "상승", -1: "하락", 0: "진입 금지"}
+VOTE_SIDE_KO = {1: "상승", -1: "하락", 0: "횡보"}
+FRIEND_VOTES = (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드"))
+
+
 def supertrend_of(snap: dict, now: int) -> Optional[dict]:
     """Each coin's 1h supertrend side on the last closed hour (the ``range`` snapshot; an unreadable one with its why), the
     bot's own 'busy' words and its rules (its own words), and how old the snapshot is."""
@@ -338,8 +343,18 @@ def supertrend_of(snap: dict, now: int) -> Optional[dict]:
         else:
             sd = L._i(v)
             coins.append({"symbol": sym, "coin": coin_ko(sym), "side": sd, "ko": ST_KO.get(sd, "모름")})
+    friend = []                                    # owners 10-29: the friend's trend indicator per coin (``friend``)
+    for sym, v in (rs.get("friend") or {}).items():
+        if not isinstance(v, dict) or "error" in v or L._i(v.get("trend")) is None:
+            friend.append({"symbol": sym, "coin": coin_ko(sym), "side": None,
+                           "error_ko": str((v or {}).get("error") or "못 읽음") if isinstance(v, dict) else "못 읽음"})
+        else:
+            sd = L._i(v.get("trend"))
+            friend.append({"symbol": sym, "coin": coin_ko(sym), "side": sd, "ko": FRIEND_KO.get(sd, "모름"),
+                           "votes_ko": " · ".join(f"{ko} {VOTE_SIDE_KO.get(L._i(v.get(k)), '모름')}" for k, ko in FRIEND_VOTES)})
     return {"at": ts, "st_at": L._i(rs.get("st_at")), "age_ms": now - ts if ts is not None else None, "coins": coins,
-            "busy_ko": rs.get("busy") or None, "rules": [str(x) for x in rs.get("rules") or [] if isinstance(x, str)]}
+            "friend": friend, "busy_ko": rs.get("busy") or None,
+            "rules": [str(x) for x in rs.get("rules") or [] if isinstance(x, str)]}
 
 
 # ---------------------------------------------------------------- the followers

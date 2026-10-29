@@ -34,8 +34,9 @@
   "range": {
     "pullback_atr": 0.2,
     "wait_min": 60,
-    "coin_st": true,
-    "btc_st": true,
+    "coin_st": false,
+    "btc_st": false,
+    "friend_tf": "1h",
     "st_period": 10,
     "st_mult": 3.0,
     "liq_check": true,

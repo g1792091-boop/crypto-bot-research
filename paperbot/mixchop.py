@@ -48,6 +48,15 @@ Trade:
   있고 그리고 1시간봉 RSI26도 50 위에 있으면 롱 진입"): the Stoch RSI's %D SMA 5 -> 6 (``ST_STOCH``, read in the same order
   as on 10-26: RSI 14, stochastic 11, %K 4, %D 6) and one more condition, MOM(10) of the 30m closes (TradingView's
   Momentum, close - close 10 bars before, ``ST_MOM``) above 0 for a long, below 0 for a short.
+- owners 10-29 (the 바이비트 봇: "원래 바이비트 봇에 돌아가고 있던 추세판단 매매법 다 빼고 친구가 만든 매매법 2개로"): two more
+  rules on the friend's chart-mix indicators (paperbot/friendtrend.py), both on the closed 30m bar, both needing the
+  friend's trend of that 30m bar on their side (four votes: sky / purple line, EMA RSI, chop zone, supertrend average;
+  two or more alike = the trend, two or more sideways or two up and two down = no entry): ``"obv"`` the OBV pane's
+  histogram turning from light to dark (green: long, red: short; "연한색에서 진한색으로 변할때 진입"), ``"srsi"`` the Stoch
+  RSI pane's golden ● under 50 (long) / dead ● over 50 (short). Their stop and liquidation guard as the friend's rule
+  (ATR14 x the coin's multiple; ``stop_atr`` 3 for all). They need the bars' volume (Binance's klines carry it).
+  ``exchange`` "bybit" trades them on Bybit (paperbot/bybit.py: the same order / stop protocol, its own key gates,
+  isolated margin, one-way mode); ``name`` is the bot's name in its messages (deploy/mixbybit.live.json: "바이비트 봇").
 - one position at a time over all coins; signals of one close compete by the coin order of the config.
 - entry blocks (owners 10-25 night, the same as their own bots; not in the friend's design, so off unless the config
   sets them): ``no_weekend`` (Saturday and Sunday KST), ``us_open_pre_min`` / ``us_open_pause_min`` (minutes before /
@@ -58,7 +67,7 @@ Trade:
   stop the service and close on WOO X Pro by hand to flatten), the equity floor (``equity_floor_frac`` of
   the starting equity: no new entries), any position on the account the bot does not know (no new entries, alert).
 Restart: the state file holds the open position (coin, side, size, entry, stop, best, ladder step); at start it is
-checked against WOO X Pro and the resting stop is placed again when missing. "paper" mode trades nothing: it fills at
+checked against the exchange (WOO X Pro, or Bybit) and the resting stop is placed again when missing. "paper" mode trades nothing: it fills at
 the signal close and exits on the 30m bars as the indicator does (stop at the stop price, or the open when it gaps).
 """
 from __future__ import annotations
@@ -102,6 +111,7 @@ DEFAULT_COINS = {
     "DOGEUSDT": {"h1_buf": 4.0, "sl_atr": 2.5, "roe_act": 100.0, "leverage": 40},
 }
 NAME = "믹스 30분 봇"
+EXCHANGES = {"wooxpro": "WOO X Pro", "bybit": "바이비트"}     # ``exchange`` -> its name in the messages
 EXIT_KO = {"stop": "손절", "ladder": "계단 익절", "closed_while_down": "봇이 꺼진 사이 청산", "manual": "직접 청산",
            "protect": "손절을 못 걸어 바로 청산", "wrong_side": "방향이 다른 포지션이라 청산"}
 ALERT_EVERY_S = 600              # a repeated CRITICAL (still no stop / an unknown position) at most this often
@@ -275,11 +285,13 @@ class Coin:
 
 
 def bars_frame(rows: list, tf_ms: int, upto_ms: int) -> pd.DataFrame:
-    """Binance kline rows -> bars CLOSED by ``upto_ms`` (open + tf <= upto), oldest first, one row per open time."""
+    """Binance kline rows -> bars CLOSED by ``upto_ms`` (open + tf <= upto), oldest first, one row per open time. The
+    volume is the row's sixth field (NaN when a row has none)."""
     if not rows:
-        return pd.DataFrame(columns=["open_ms", "open", "high", "low", "close"])
-    df = pd.DataFrame([[int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])] for r in rows],
-                      columns=["open_ms", "open", "high", "low", "close"])
+        return pd.DataFrame(columns=["open_ms", "open", "high", "low", "close", "volume"])
+    df = pd.DataFrame([[int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]),
+                        float(r[5]) if len(r) > 5 else math.nan] for r in rows],
+                      columns=["open_ms", "open", "high", "low", "close", "volume"])
     df = df[df.open_ms + tf_ms <= upto_ms].drop_duplicates("open_ms", keep="last").sort_values("open_ms")
     return df.reset_index(drop=True)
 
@@ -331,8 +343,58 @@ def evaluate(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) ->
     return out
 
 
-RULE_KO = {"mix": "친구 매매법", "st": "슈퍼트렌드·스톡RSI"}
+RULE_KO = {"mix": "친구 매매법", "st": "슈퍼트렌드·스톡RSI", "obv": "OBV 진한색", "srsi": "스톡RSI 50선"}
 RULES = tuple(RULE_KO)
+FRIEND_RULES = ("obv", "srsi")          # owners 10-29: the friend's trend of the 30m bar first, then the entry signal
+
+
+def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> dict:
+    """Owners 10-29, on the 30m bar closing at ``close_ms`` (b30: closed bars with volume): the friend's trend of that bar
+    (paperbot/friendtrend.py: four votes) and the rule's entry signal on its side. ``rule`` "obv": the OBV pane's
+    histogram light -> dark (green long, red short); "srsi": the Stoch RSI pane's golden ● under 50 (long) / dead ● over
+    50 (short). side = 1 / -1 / 0 with ``why`` when 0; stop and liquidation guard as evaluate()."""
+    from . import friendtrend as FT
+    out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": "", "rule": rule}
+    if b30.empty or int(b30.open_ms.iloc[-1]) + MIN30 != close_ms:
+        out["why"] = "30분봉이 아직 없음"
+        return out
+    if len(b30) < 300:
+        out["why"] = "지난 봉이 모자람"
+        return out
+    o, h, l, c, v = (b30[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
+    if rule == "obv":
+        want = FT.obv_turn(h, l, c, v)
+        out["turn"] = want
+        no = "OBV 연한색→진한색 없음"
+    else:
+        sg = FT.stoch_signal(c)
+        out.update({"cross": sg["cross"], "k": sg["k"], "d": sg["d"]})
+        want = sg["side"]
+        no = ("스톡RSI 크로스 없음" if not sg["cross"] else
+              f"스톡RSI {'골든' if sg['cross'] == 'gold' else '데드'}이 50선 {'위' if sg['cross'] == 'gold' else '아래'}(K {sg['k']})")
+    t = FT.last_trend(o, h, l, c, v)
+    at = float(atr(h, l, c, 14)[-1])
+    px = float(c[-1])
+    dist = at * coin.sl_atr
+    liq_ok = dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0)
+    out.update({"close": px, "trend": t["trend"], "votes": {k: t[k] for k in FT.VOTES}, "ema_rsi": t["ema_rsi"],
+                "chop_zone": t["chop_zone"], "atr": at, "stop_dist": dist, "stop_pct": round(dist / px * 100, 3),
+                "liq_ok": bool(liq_ok)})
+    if not want:
+        out["why"] = no
+        return out
+    if not coin.enabled:
+        out["why"] = "이 코인 꺼짐"
+        return out
+    if t["trend"] != want:
+        out["why"] = (f"친구 추세 {FT.trend_words(t)}"
+                      + ("" if t["trend"] == 0 else f": 신호 {'롱' if want > 0 else '숏'}와 반대"))
+        return out
+    if not liq_ok:
+        out["why"] = f"손절 폭 {dist / px * 100:.2f}%가 {coin.leverage}배 청산가보다 멂"
+        return out
+    out["side"] = want
+    return out
 
 
 def evaluate_st(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
@@ -434,6 +496,12 @@ def reason_words(ev: dict, side: int, name: bool = False) -> str:
     """The entry's 근거 line: the friend's colour change and averaged RSIs, or the second rule's supertrends, Stoch RSI
     cross and RSI26s; ``name``: the rule's name first (two rules)."""
     head = f"근거({RULE_KO.get(ev.get('rule', 'mix'), '')}): " if name else "근거: "
+    if ev.get("rule") in FRIEND_RULES:
+        from . import friendtrend as FT
+        what = (f"OBV {'연한 초록→진한 초록' if side > 0 else '연한 빨강→진한 빨강'}" if ev["rule"] == "obv" else
+                f"스톡RSI {'골든' if side > 0 else '데드'}(K {ev.get('k')} / D {ev.get('d')}, 50선 {'아래' if side > 0 else '위'})")
+        return (head + f"{what} · 친구 추세 30분 {FT.trend_words({'trend': ev.get('trend', 0), **(ev.get('votes') or {})})} "
+                f"({kst(ev['close_ms'])} 봉)")
     if ev.get("rule") == "st":
         return (head + f"슈퍼트렌드 14/3·14/6 {'상승' if side > 0 else '하락'} · 스톡RSI {'골든' if side > 0 else '데드'}크로스"
                 f"(K {ev.get('k')} / D {ev.get('d')}) · RSI26 30분 {ev.get('rsi26_30m')} · 1시간 {ev.get('rsi26_1h')} "
@@ -489,6 +557,8 @@ class Config:
     ladder_every_s: float = 0.0                 # > 0: the open position on closed 1m bars this often between the closes
     rules: tuple = ("mix",)                     # the entry rules in their order (owners 10-26: ("mix", "st"))
     stop_atr: Optional[float] = None            # > 0: every coin's stop = ATR14 x this, both rules (owners 10-26: 3)
+    exchange: str = "wooxpro"                   # "wooxpro" | "bybit" (owners 10-29: the 바이비트 봇)
+    name: str = NAME                            # the bot's name in its messages
 
     @property
     def symbols(self) -> list:
@@ -502,10 +572,19 @@ def load_config(path: str) -> Config:
     if mode not in ("paper", "mainnet"):
         raise MixError(f"\"mode\"는 \"paper\" 또는 \"mainnet\"이어야 합니다(지금 {mode!r})")
     coins = []
+    rules_raw = raw.get("rules", ["mix"])
+    sa_raw = raw.get("stop_atr")
+    if isinstance(rules_raw, list) and any(r in FRIEND_RULES for r in rules_raw) and sa_raw is None:
+        raise MixError("\"obv\"·\"srsi\" 매매법은 \"stop_atr\"(손절 ATR 배수, 예: 3)가 필요합니다")
     for sym, v in (raw.get("coins") or {}).items():
         if not sym.endswith("USDT"):
             raise MixError(f"코인 이름은 BTCUSDT 꼴이어야 합니다: {sym!r}")
         base = dict(DEFAULT_COINS.get(sym, {}))
+        if isinstance(rules_raw, list) and "mix" not in rules_raw:      # only the friend's rule reads these two
+            base.setdefault("h1_buf", 0.0)
+            base.setdefault("roe_act", 100.0)
+        if isinstance(sa_raw, (int, float)) and not isinstance(sa_raw, bool):
+            base.setdefault("sl_atr", float(sa_raw))                     # replaced by stop_atr below anyway
         base.update({k: v[k] for k in ("h1_buf", "sl_atr", "roe_act", "leverage") if k in v})
         missing = [k for k in ("h1_buf", "sl_atr", "roe_act", "leverage") if k not in base]
         if missing:
@@ -552,6 +631,16 @@ def load_config(path: str) -> Config:
         cfg.stop_atr = float(sa)
         for co in cfg.coins:                     # both rules read the coin's multiple
             co.sl_atr = float(sa)
+    ex = raw.get("exchange", "wooxpro")
+    if ex not in EXCHANGES:
+        raise MixError(f"\"exchange\"는 {list(EXCHANGES)} 중 하나입니다(지금 {ex!r})")
+    cfg.exchange = ex
+    name = raw.get("name", NAME)
+    if not isinstance(name, str) or not name.strip() or len(name) > 40:
+        raise MixError(f"\"name\"은 40자 안의 이름입니다(지금 {name!r})")
+    cfg.name = name.strip()
+    if any(r in FRIEND_RULES for r in cfg.rules) and not cfg.stop_atr:
+        raise MixError("\"obv\"·\"srsi\" 매매법은 \"stop_atr\"(손절 ATR 배수, 예: 3)가 필요합니다")
     if not cfg.state or not cfg.log:
         raise MixError("\"state\"와 \"log\" 파일 경로가 필요합니다")
     if not (0 < cfg.risk_pct <= 5):
@@ -799,6 +888,43 @@ class WooBroker:
         self.c.cancel_all_algo(symbol)
 
 
+class BybitBroker(WooBroker):
+    """Bybit (API v5 USDT perpetuals, paperbot/bybit.py, whose client answers in the same shapes as WOO X Pro's): the
+    same orders and stop protocol. At the start the account goes to one-way mode and isolated margin (a unified account:
+    account-wide; one that cannot be switched at all refuses the start); the liquidation room comes from its risk-limit
+    tiers."""
+
+    def setup(self, coins) -> list:
+        from .testnet import TestnetError
+        out = []
+        self.c.one_way()
+        out.append((True, "포지션 모드: 단방향"))
+        for co in coins:
+            try:
+                self.c.isolated(co.symbol)               # Refused (never possible): raised, the bot does not start
+            except TestnetError as e:
+                if getattr(e, "code", None) not in (-4047, -4048):
+                    out.append((False, f"{co.symbol}: 격리 마진으로 못 바꿈 ({e})"))
+                    continue
+                out.append((True, f"{co.symbol}: 포지션·주문이 있어 격리 마진은 다음 진입 때 다시 ({e})"))
+            try:
+                self.c.leverage(co.symbol, co.leverage)
+                out.append((True, f"{co.symbol}: 격리 {co.leverage}배"))
+            except Exception as e:                       # a coin that cannot be set is not traded
+                out.append((False, f"{co.symbol}: 레버리지를 못 맞춤 ({e})"))
+        return out
+
+    def liq_room(self, symbol: str, notional: float, lev: int) -> Optional[float]:
+        """Bybit's maintenance rate of the tier holding ``notional`` (its risk limits): 1 / lev - that - LIQ_ROOM; -1 when
+        no tier holds it; None when the tiers cannot be read."""
+        try:
+            tiers = self.c.risk_limits(symbol)
+        except Exception:
+            return None
+        mmr = next((float(t["mmr"]) for t in tiers if notional <= float(t["cap"])), None)
+        return -1.0 if mmr is None else 1.0 / float(lev) - mmr - LIQ_ROOM
+
+
 # ====================================================================== the bot
 def _not_read(ev: dict) -> bool:
     """An answer that could not be made from the bars (not there yet, or not read): tried again, then logged."""
@@ -836,7 +962,7 @@ class Bot:
             f.write(json.dumps(row, ensure_ascii=False, default=float) + "\n")
 
     def say(self, level: str, text: str) -> None:
-        prefix = f"[{NAME}{' 모의' if not self.b.live else ''}] "
+        prefix = f"[{self.cfg.name}{' 모의' if not self.b.live else ''}] "
         try:
             self.notify(level, prefix + text)
         except Exception:
@@ -1025,7 +1151,7 @@ class Bot:
             for ev in evs:
                 if _not_read(ev):
                     self.log("bars_missing", **ev)
-                if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev["side"]:
+                if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev["side"]:
                     self.log("signal", **ev)
             ev = next((e for e in evs if e["side"]), None)          # the config's rule order decides on one coin
             if ev is not None:
@@ -1048,7 +1174,10 @@ class Bot:
 
     @staticmethod
     def judge(rule: str, co: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
-        """One entry rule's answer at this close (``rule``: "mix" the friend's, "st" the owners' second)."""
+        """One entry rule's answer at this close (``rule``: "mix" the friend's, "st" the owners' second, "obv" / "srsi"
+        the friend's trend with the OBV pane / the Stoch RSI pane, owners 10-29)."""
+        if rule in FRIEND_RULES:
+            return evaluate_friend(rule, co, b30, close_ms)
         return evaluate(co, b30, b1h, close_ms) if rule == "mix" else evaluate_st(co, b30, b1h, close_ms)
 
     def halts(self) -> str:
@@ -1096,13 +1225,14 @@ class Bot:
             self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 크기 {qty:g}가 최소 {need:g}보다 작음 "
                              f"(손절 1번 ${risk:.3f}, 손절 폭 {ev['stop_pct']}%)")
             return
-        if self.b.live:                                 # WOO X Pro's own liquidation, from its brackets
+        if self.b.live:                                 # the exchange's own liquidation, from its brackets / tiers
             room = self.b.liq_room(sym, qty * ref, co.leverage)
+            ex = EXCHANGES.get(self.cfg.exchange, self.cfg.exchange)
             if room is not None and dist / ref >= room:
-                self.log("skip", symbol=sym, side=side, why="손절이 WOO X Pro 청산가에 너무 가까움", stop_frac=dist / ref, room=room,
+                self.log("skip", symbol=sym, side=side, why=f"손절이 {ex} 청산가에 너무 가까움", stop_frac=dist / ref, room=room,
                          rule=ev.get("rule", "mix"))
                 self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 손절 폭 {dist / ref:.2%}가 "
-                                 f"WOO X Pro 청산까지({max(room, 0):.2%}, 여유 {LIQ_ROOM:.1%} 뺌)보다 멂")
+                                 f"{ex} 청산까지({max(room, 0):.2%}, 여유 {LIQ_ROOM:.1%} 뺌)보다 멂")
                 return
         self._entry_try = (sym, side, self.now() + ADOPT_WINDOW_MS, ref, dist)
         try:
@@ -1407,10 +1537,25 @@ def make_notify(cfg: Config):
 
 def live_broker(cfg: Config):
     """The WOO X Pro client of the second account, through the same key gates as the executor (keys from the
-    environment: /etc/paperbot/executor-wooxpro2.env)."""
-    from . import wooxpro as WX
+    environment: /etc/paperbot/executor-wooxpro2.env); ``exchange`` "bybit": the Bybit client of the 바이비트 봇's
+    sub-account (BYBIT_LIVE_* in /etc/paperbot/executor.env, the old Bybit executor's file), its gates as the executor's."""
     from .mainnet import MODE_MAINNET, check_permissions
     env = dict(os.environ)
+    if cfg.exchange == "bybit":
+        from . import bybit as BY
+        client, keycheck = BY.clients(MODE_MAINNET, env)
+        BY.refuse_unless_allowed(MODE_MAINNET, client)
+        BY.check_executor_keys(MODE_MAINNET, client, keycheck, env, None)
+        client.sync_time()
+        keycheck.offset_ms = client.offset_ms
+        perm = keycheck.api_restrictions()
+        if perm is None:
+            raise MixError("바이비트 키 권한을 읽지 못했습니다(/v5/user/query-api)")
+        problems = check_permissions(perm)
+        if problems:
+            raise MixError("키 확인 실패: " + " / ".join(problems))
+        return BybitBroker(client, cfg.coins)
+    from . import wooxpro as WX
     client, keycheck = WX.clients(MODE_MAINNET, env)
     WX.refuse_unless_allowed(MODE_MAINNET, client)
     WX.check_executor_keys(MODE_MAINNET, client, keycheck, env, None)
@@ -1424,6 +1569,16 @@ def live_broker(cfg: Config):
     return WooBroker(client, cfg.coins)
 
 
+def public_spec(cfg: Config):
+    """The exchange's public contract reader (symbol -> qty_step, min_qty, tick, min_notional, max_leverage ...): paper
+    sizes as live would. Bybit's instruments are public; its client wants a key pair it never signs with here."""
+    if cfg.exchange == "bybit":
+        from . import bybit as BY
+        return BY.BybitMainnetClient("public-read", "public-read-only").spec
+    from . import wooxpro as WX
+    return WX.public_client().spec
+
+
 def cmd_run(args) -> int:
     cfg = load_config(args.config)
     if cfg.mode == "mainnet" and cfg.telegram and not (os.environ.get("TELEGRAM_BOT_TOKEN") and os.environ.get("TELEGRAM_CHAT_CRITICAL")):
@@ -1432,7 +1587,7 @@ def cmd_run(args) -> int:
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        raise MixError(f"이미 다른 {NAME}가 {cfg.state}로 돌고 있습니다")
+        raise MixError(f"이미 다른 {cfg.name}가 {cfg.state}로 돌고 있습니다")
     notify = make_notify(cfg)
     if cfg.mode == "mainnet":
         broker = live_broker(cfg)
@@ -1441,8 +1596,7 @@ def cmd_run(args) -> int:
     else:
         st = read_state(cfg.state)
         try:
-            from . import wooxpro as WX
-            spec_fn = WX.public_client().spec
+            spec_fn = public_spec(cfg)
         except Exception:
             spec_fn = None
         broker = PaperBroker(float(st.get("paper_equity") or cfg.start_equity or 50.0), cfg.taker_fee, spec_fn)
@@ -1474,6 +1628,13 @@ def cmd_signals(args) -> int:
     for co in cfg.coins:
         b30 = bars_frame(fetch(co.symbol, "30m", BARS), MIN30, last_close)
         b1h = bars_frame(fetch(co.symbol, "1h", BARS), H1, last_close)
+        if "mix" not in cfg.rules:                       # the 바이비트 봇: the friend's trend rules only
+            print(f"== {co.symbol} (손절 ATR × {co.sl_atr} · {co.leverage}배{'' if co.enabled else ' · 꺼짐'})")
+            for rule in [r for r in cfg.rules if r in FRIEND_RULES]:
+                print(f"  -- {RULE_KO[rule]} (친구 추세 30분: 하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드)")
+                for ln in friend_history(co, b30, rule, args.n):
+                    print("  " + ln)
+            continue
         rows = []
         g = line_gold(b30.close.to_numpy(float))
         for i in range(len(b30) - 1, max(len(b30) - 400, 300), -1):
@@ -1515,18 +1676,66 @@ def cmd_signals(args) -> int:
     return 0
 
 
+def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int) -> list:
+    """The last ``n`` signals of a friend rule ("obv": light -> dark turns, "srsi": golden / dead ●) on the closed 30m
+    bars, each with the friend's trend and what the bot did, oldest first (lines to put next to TradingView). The
+    indicators look back only, so the whole history's values at a bar are the values the bot read at that close."""
+    from . import friendtrend as FT
+    o, h, l, c, v = (b30[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
+    if len(c) < 302:
+        return ["지난 봉이 모자람"]
+    V = FT.votes(o, h, l, c, v)
+    if rule == "obv":
+        P = FT.obv_pane(h, l, c, v)
+        cs, dk = P["cs"], P["dark"]
+        want = np.zeros(len(c), int)
+        want[1:] = np.where((cs[1:] == cs[:-1]) & (cs[1:] != 0) & dk[1:] & ~dk[:-1], cs[1:], 0)
+        mark = want != 0
+    else:
+        P = FT.stoch_pane(c)
+        k = P["k"]
+        want = np.where(P["gold"] & (k < 50), 1, np.where(P["dead"] & (k > 50), -1, 0))
+        mark = P["gold"] | P["dead"]
+    at = atr(h, l, c, 14)
+    out = []
+    for i in range(len(c) - 1, 300, -1):
+        if not mark[i]:
+            continue
+        ce = int(b30.open_ms.iloc[i]) + MIN30
+        t = {"trend": int(V["trend"][i]), **{x: int(V[x][i]) for x in FT.VOTES}}
+        dist = float(at[i]) * coin.sl_atr
+        px = float(c[i])
+        if rule == "obv":
+            what = "연한 초록→진한 초록" if want[i] > 0 else "연한 빨강→진한 빨강"
+        else:
+            what = f"{'골든' if P['gold'][i] else '데드'} K {P['k'][i]:.1f} D {P['d'][i]:.1f}"
+        if not want[i]:
+            res = "X (50선 조건 안 맞음)"
+        elif t["trend"] != want[i]:
+            res = "X (추세 다름)"
+        elif not dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0):
+            res = f"X (손절 폭 {dist / px * 100:.2f}%가 청산가보다 멂)"
+        else:
+            res = "롱 진입" if want[i] > 0 else "숏 진입"
+        out.append(f"{kst(ce)} KST 마감  {what}  종가 {px:.6g}  친구 추세 {FT.trend_words(t)}  손절폭 {dist / px * 100:.2f}%  → {res}")
+        if len(out) >= n:
+            break
+    return list(reversed(out))
+
+
 def cmd_check(args) -> int:
     """Reads only: WOO X Pro contract specs of the coins (public), and with keys the account, the position mode, the
     positions, and what a stop-out would size to now."""
     cfg = load_config(args.config)
-    from . import wooxpro as WX
-    pub = WX.public_client()
+    spec_of = public_spec(cfg)
+    ex = EXCHANGES[cfg.exchange]
     fetch = binance_fetch(cfg.binance_base)
     eq = None
     if cfg.mode == "mainnet":
         b = live_broker(cfg)
         eq = b.equity()
-        print(f"잔고(WOO X Pro 2): ${eq:,.2f} · 포지션 모드 {b.c.position_mode()}")
+        mode = (f"포지션 모드 {b.c.position_mode()}" if hasattr(b.c, "position_mode") else f"마진 모드 {b.c.margin_mode()}")
+        print(f"잔고({cfg.name}, {ex}): ${eq:,.2f} · {mode}")
         for s, q in b.foreign_positions(None):
             print(f"  열린 포지션: {s} {q:g}")
     eq = eq or float(cfg.start_equity or 50.0)
@@ -1542,9 +1751,9 @@ def cmd_check(args) -> int:
               + (f" · 손절 ATR {cfg.stop_atr:g}배(모든 코인)" if cfg.stop_atr else " · 손절 코인별 ATR 배수"))
     for co in cfg.coins:
         try:
-            sp = pub.spec(co.symbol)
+            sp = spec_of(co.symbol)
         except Exception as e:
-            print(f"✘ {co.symbol}: WOO X Pro 계약을 못 읽음 ({e})")
+            print(f"✘ {co.symbol}: {ex} 계약을 못 읽음 ({e})")
             continue
         b30 = bars_frame(fetch(co.symbol, "30m", 100), MIN30, now // MIN30 * MIN30)
         c = b30.close.to_numpy(float)
@@ -1555,14 +1764,22 @@ def cmd_check(args) -> int:
         step = float(sp["qty_step"])
         qty_f = math.floor(qty / step + 1e-9) * step
         ok = qty_f >= float(sp["min_qty"]) and qty_f * c[-1] >= float(sp.get("min_notional") or 0)
-        print(f"{'✔' if ok else '✘'} {co.symbol}: 상태 {sp.get('status')}, 최대 {sp.get('max_leverage')}배, 1계약 {sp['contract_size']}, "
+        lev_ok = not sp.get("max_leverage") or co.leverage <= float(sp["max_leverage"])
+        liq_ok = dist < c[-1] * (1.0 / co.leverage - MMR_PCT / 100.0)
+        why = ("" if lev_ok and ok else f" → 설정 {co.leverage}배가 {ex} 최대보다 커서 이 코인은 꺼짐" if not lev_ok
+               else " → 최소 주문보다 작아 건너뜀")
+        ml = sp.get("max_leverage")
+        print(f"{'✔' if ok and lev_ok else '✘'} {co.symbol}: 상태 {sp.get('status')}, "
+              f"최대 {f'{ml:g}' if isinstance(ml, (int, float)) else ml}배, "
+              f"1계약 {sp.get('contract_size', 1)}, "
               f"최소 {sp['min_qty']:g}개 · 지금 손절 폭 {dist / c[-1] * 100:.2f}% → 크기 {qty_f:g}개 ≈ ${qty_f * c[-1]:,.2f} "
-              f"(증거금 ${qty_f * c[-1] / co.leverage:,.2f}){'' if ok else ' → 최소 주문보다 작아 건너뜀'}")
+              f"(증거금 ${qty_f * c[-1] / co.leverage:,.2f}){why}"
+              + ("" if liq_ok else f" · 지금 손절 폭이면 {co.leverage}배 강제청산 확인에 걸려 신호를 건너뜀"))
     return 0
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m paperbot.mixchop", description=NAME)
+    ap = argparse.ArgumentParser(prog="python -m paperbot.mixchop", description=f"{NAME} · 바이비트 봇")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("run", "check", "signals"):
         p = sub.add_parser(name)

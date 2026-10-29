@@ -173,6 +173,31 @@ def test_a_range_entry_shows_its_own_checks(rw):
     assert "A그룹" not in json.dumps(d, ensure_ascii=False) and (d["setting"] is None or d["setting"]["group"] is None)
 
 
+def test_the_friends_trend_check_of_an_entry():
+    """Owners 10-29: with ``friend_tf`` the entry's check reads the friend's trend and its votes the bot kept."""
+    cfg = {"range": {"friend_tf": "1h", "coin_st": False, "btc_st": False}, "stop": {"mode": "roe", "roe": 0.5}}
+    t0 = RW.KST0 + 3 * H
+    info = {**RW.info_of("ETHUSDT", 1, t0, t0 + 15 * MIN), "friend": {"trend": 1, "line": 1, "ema": 1, "chop": 1, "st": 0}}
+    info.pop("coin_st")
+    info.pop("btc_st")
+    ck = _by(Y.range_checks(cfg, t0 + 15 * MIN, 1, "ETHUSDT", 30, info, 0.0014))
+    assert ck["friend"]["ok"] is True and "st" not in ck
+    assert ck["friend"]["ko"] == ("추세 확인: 친구 추세지표 1시간 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 상승 · 슈퍼트렌드 횡보)"
+                                  " → 롱 통과")
+    ck = _by(Y.range_checks(cfg, t0 + 15 * MIN, 1, "ETHUSDT", 30, {**info, "friend": None}, 0.0014))
+    assert ck["friend"]["ok"] is None and ck["friend"]["ko"].endswith("기록 없음")
+    # the plan's words on the site: the bot's own describe()
+    from paperbot.rangebot import RangeRules
+    rules = RangeRules.from_dict({"friend_tf": "1h", "coin_st": False, "btc_st": False})
+    words = [x["ko"] for x in L.range_words({"range": {"friend_tf": "1h", "coin_st": False, "btc_st": False}})]
+    assert words == rules.describe() and words[0].startswith("추세 확인: 친구 추세지표 1시간봉")
+    # the filtered signals' reasons have their own groups
+    assert L.why_cat("FILTERED", "추세 확인: 친구 추세지표 1시간 진입 금지 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 횡보 · "
+                                 "슈퍼트렌드 횡보)")[0] == "range_friend"
+    assert L.why_cat("FILTERED", "추세 확인: ETH 1시간 슈퍼트렌드 하락(신호 롱와 반대)")[0] == "range_st"
+    assert L.why_cat("FILTERED", "친구 추세지표를 못 읽어 진입 안 함: BTC 5분봉 10개뿐") == ("range_unread", "친구 추세지표 못 읽음")
+
+
 def test_only_the_range_bot_without_a_vwap_bot(tmp_path, monkeypatch):
     """딥코인 not installed and no vwap.db: the 레인지 봇 is the page's second paper bot under its own id."""
     p = RW.build(str(tmp_path / "w"), deepcoin=False)
@@ -244,7 +269,8 @@ def test_the_plan_follows_the_config_numbers(tmp_path, monkeypatch):
     from paperbot.dash.more import liverange as R
     path = str(tmp_path / "range.db")
     RW.range_db(path, over={"take_profit_roe": 0.12, "margin": 0.3, "leverage": {"BTCUSDT": 50, "default": 20},
-                            "range": {**RW.TW.deploy("combo.range.json")["range"], "pullback_atr": 0.3, "wait_min": 45, "st_period": 12}})
+                            "range": {**RW.TW.deploy("combo.range.json")["range"], "pullback_atr": 0.3, "wait_min": 45, "st_period": 12,
+                                      "coin_st": True}})
     p = {**L.paths({}), "range": path, "paper": str(tmp_path / "none.db")}
     for k in ("bybit_db", "mexc_db", "bybit_config", "mexc_config"):
         p[k] = str(tmp_path / f"no-{k}")
@@ -253,6 +279,7 @@ def test_the_plan_follows_the_config_numbers(tmp_path, monkeypatch):
     assert words["tp"].startswith("순ROE +12% 고정") and "50배" in words["tp"] and "20배" in words["tp"]
     assert words["size"].startswith("증거금 = 그때 잔고의 30%") and words["leverage"] == "BTC 50배 · 나머지 20배"
     assert "0.3 × ATR" in words["pull"] and "최대 45분" in words["pull"] and "(12, 3)" in words["trend"]
+    assert words["trend"].startswith("친구 추세지표 1시간봉") and "코인 1시간 슈퍼트렌드(12, 3)" in words["trend"]
     assert d["status"]["state"] == "running" and d["followers"] == []
 
 

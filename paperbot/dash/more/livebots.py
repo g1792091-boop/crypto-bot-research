@@ -1941,7 +1941,10 @@ def rules_of(combo: dict) -> dict:
 
 # the 레인지 봇's rule numbers when its config leaves one out (paperbot/rangebot.py RangeRules)
 RANGE_DEFAULTS = {"pullback_atr": 0.2, "wait_min": 60, "coin_st": True, "btc_st": True, "st_period": 10, "st_mult": 3.0,
-                  "liq_check": True, "liq_mmr": 0.005}
+                  "liq_check": True, "liq_mmr": 0.005, "friend_tf": None}
+# the friend's trend indicator check (owners 10-29, paperbot/rangebot.py FRIEND_WORDS)
+RANGE_FRIEND_KO = ("친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·찹존·슈퍼트렌드)이 신호와 같은 방향일 때만: 같은 추세 2개 이상이면 "
+                   "그 추세, 횡보(찹존·슈퍼트렌드 노랑) 2개 이상이나 상승 2·하락 2면 진입 안 함")
 
 
 def range_words(c: Any) -> list:
@@ -1953,8 +1956,9 @@ def range_words(c: Any) -> list:
         return []
     r = {**RANGE_DEFAULTS, **r}
     who = [w for w, on in (("코인", r["coin_st"]), ("BTC", r["btc_st"])) if on]
-    st = (f"{'·'.join(who)} 1시간 슈퍼트렌드({r['st_period']}, {float(r['st_mult']):g})가 신호와 같은 방향일 때만" if who
-          else "슈퍼트렌드 확인 없음")
+    st = " · ".join(([RANGE_FRIEND_KO] if r.get("friend_tf") else [])
+                    + ([f"{'·'.join(who)} 1시간 슈퍼트렌드({r['st_period']}, {float(r['st_mult']):g})가 신호와 같은 방향일 때만"]
+                       if who else [])) or "슈퍼트렌드 확인 없음"
     syms = [str(s).replace("USDT", "") for s in c.get("symbols") or [] if isinstance(s, str)] or ["BTC", "ETH", "SOL", "DOGE", "LTC", "BCH"]
     out = [{"id": "range_st", "ko": f"추세 확인: {st}"},
            {"id": "range_pull", "ko": f"되돌림 진입: 신호 1시간봉 종가에서 {float(r['pullback_atr']):g} ATR(14, 1시간) 되돌림을 최대 "
@@ -1996,12 +2000,16 @@ def why_cat(status: str, why: str) -> tuple:
     # the 레인지 봇 (owners 10-26, paperbot/rangebot.py _divert): one signal at a time, the supertrends, the liquidation room
     if w.startswith("한 신호씩"):
         return "range_one", "한 신호씩 (기다림·포지션 중)"
+    if w.startswith("추세 확인: 친구 추세지표"):            # owners 10-29: the friend's trend indicator (1h)
+        return "range_friend", "추세 확인 (친구 추세지표 반대·진입 금지)"
     if w.startswith("추세 확인:"):
         return "range_st", "추세 확인 (슈퍼트렌드 반대)"
     if w.startswith("강제청산 여유 부족"):
         return "range_liq", "강제청산 여유 부족"
     if w.startswith("슈퍼트렌드를 못 읽어"):
         return "range_unread", "슈퍼트렌드 못 읽음"
+    if w.startswith("친구 추세지표를 못 읽어"):
+        return "range_unread", "친구 추세지표 못 읽음"
     # the trend bot (paperbot/trendbot.py, trendjudge.check): its waits, its judge, its entry checks, its pauses
     if w.startswith("되돌림 안 옴"):
         return "nopull", "되돌림 안 옴"

@@ -142,11 +142,20 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                  "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env"):
         assert line in mix, line
     assert not [x for x in mix if x.startswith("EnvironmentFile=/etc/paperbot/executor.env")]
+    # '바이비트 봇' (owners 10-29, docs/mixbybit-ko.md): the same program on the Bybit sub-account, with the old Bybit
+    # executor's key file and sandbox; it stops that executor when it starts (never both on one account)
+    byb = _unit("deploy/paperbot-mixbybit.service")
+    for line in ("User=paperbot-exec", "EnvironmentFile=/etc/paperbot/executor.env", "NoNewPrivileges=yes",
+                 "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "LimitCORE=0", "UMask=0027",
+                 "ReadWritePaths=/var/lib/paperbot/exec", "Conflicts=paperbot-executor.service"):
+        assert line in byb, line
+    hidden = next(x for x in byb if x.startswith("InaccessiblePaths=")).split("=", 1)[1].split()
+    assert {"-/etc/paperbot/agents.env", "-/etc/paperbot/dash.env", "-/etc/paperbot/executor-wooxpro2.env"} <= set(hidden)
     for svc in sorted(os.listdir(os.path.join(REPO, "deploy"))):
         if not svc.endswith(".service") or svc in ("paperbot-executor.service", "paperbot-executor-mexc.service",
                                                    "paperbot-executor-deepcoin.service",
                                                    "paperbot-executor-wooxpro2.service", "paperbot-mixchop.service",
-                                                   "paperbot-executor-toobit.service"):
+                                                   "paperbot-executor-toobit.service", "paperbot-mixbybit.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor

@@ -348,6 +348,13 @@ install -m 644 "$APP/deploy/paperbot-executor-toobit.service" /etc/systemd/syste
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixchop-paper
 install -m 644 "$APP/deploy/paperbot-mixchop.service" /etc/systemd/system/paperbot-mixchop.service
 install -m 644 "$APP/deploy/paperbot-mixchop-paper.service" /etc/systemd/system/paperbot-mixchop-paper.service
+# '바이비트 봇' (owners 10-29, docs/mixbybit-ko.md): the same program on the Bybit sub-account with the friend's two rules
+# (keys from executor.env, the old Bybit executor's file; Conflicts= stops paperbot-executor when it starts), and its
+# paper twin. Installed only, never enabled or started here; /etc/paperbot/mixbybit.json and mixbybit-paper.json are
+# never written here (the owners copy deploy/mixbybit.live.json / mixbybit.paper.json).
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixbybit-paper
+install -m 644 "$APP/deploy/paperbot-mixbybit.service" /etc/systemd/system/paperbot-mixbybit.service
+install -m 644 "$APP/deploy/paperbot-mixbybit-paper.service" /etc/systemd/system/paperbot-mixbybit-paper.service
 # Until 10-24 this slot was Flipster's (paperbot-executor-flipster, installed by install.sh from 10-23, never started:
 # its API opens only on request, so the owners switched to DeepCoin). Its unit file goes only while that unit is inactive
 # and not enabled; a running or enabled one is left as it is (a person decides).

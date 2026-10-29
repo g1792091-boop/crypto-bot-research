@@ -76,7 +76,7 @@ export function waitKo(w, now) {
   const how = w.hit ? `${fmt.kst(w.hit)}에 닿음 · 그 5분봉이 끝나면 다음 5분봉 시가에 진입` : `${ok(w.level) ? fmt.price(w.level) : "—"}에 닿으면 다음 5분봉 시가에 진입`;
   return `${w.coin || ""} ${SIDE(w.side)} · ${how}${ok(w.until) ? ` · ${fmt.kst(w.until)}까지${left != null && !w.hit ? ` (${fmt.dur(left / 1000)} 남음)` : ""}` : ""}`;
 }
-/** A coin's 1h supertrend side: {text, tone}. */
+/** A coin's 1h trend side (supertrend, or the friend's trend: 0 = 진입 금지): {text, tone}. */
 export function stKo(c) {
   if (!c || c.side == null) return {text: `${(c && c.coin) || ""} 못 읽음`, tone: "bad"};
   return {text: `${c.coin} ${c.ko || (Number(c.side) > 0 ? "상승" : "하락")}`, tone: Number(c.side) > 0 ? "good" : Number(c.side) < 0 ? "bad" : "thin"};
@@ -220,9 +220,11 @@ export function rangeView(ctx) {
       w ? h("div", {class: "lrb-wline", role: "status"}, ui.pill("되돌림 기다림", "accent"), h("b", null, waitKo(w, now)),
         h("small", {class: "lrb-sub"}, `신호 ${fmt.kst(w.t0)} 종가 ${fmt.price(w.close)} · ATR ${ok(w.atr) ? fmt.price(w.atr) : "—"} · 안 오면 그 신호는 버려요`))
         : h("p", {class: "lrb-sub"}, d.position ? "포지션을 들고 있어 새 신호를 받지 않아요 (한 신호씩)" : "지금 기다리는 되돌림이 없어요"),
-      t ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "1시간 슈퍼트렌드"}, h("span", {class: "lrb-sub"}, "1시간 슈퍼트렌드"),
+      t && (t.friend || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "친구 추세지표 1시간"}, h("span", {class: "lrb-sub"}, "친구 추세지표 1시간"),
+        ...t.friend.map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || c.votes_ko || ""); })) : null,
+      t && (t.coins || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "1시간 슈퍼트렌드"}, h("span", {class: "lrb-sub"}, "1시간 슈퍼트렌드"),
         ...(t.coins || []).map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || ""); }))
-        : h("p", {class: "lrb-sub"}, "슈퍼트렌드 기록이 아직 없어요 (봇이 1분마다 남겨요)"),
+        : t && (t.friend || []).length ? null : h("p", {class: "lrb-sub"}, "추세 기록이 아직 없어요 (봇이 1분마다 남겨요)"),
       t && t.busy_ko ? h("p", {class: "lrb-sub"}, `봇: ${t.busy_ko}`) : null,
       t && ok(t.at) ? h("p", {class: "lrb-sub"}, `${fmt.kst(t.at)} 기록${ok(t.st_at) ? ` · ${fmt.kst(t.st_at)}에 닫힌 1시간봉` : ""}`) : null);
   }

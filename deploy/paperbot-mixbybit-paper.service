@@ -1,0 +1,32 @@
+# '바이비트 봇' in paper mode (docs/mixbybit-ko.md): the same program, config and signal, no keys, no orders. It fills at
+# the signal close and exits on the closed 1m bars as the live bot follows them, from $100, so its log can be put next
+# to the chart (and next to the live bot). Its own config /etc/paperbot/mixbybit-paper.json and files under
+# /var/lib/paperbot/mixbybit-paper. installed by install.sh, never enabled or started there:
+#   sudo systemctl start paperbot-mixbybit-paper
+[Unit]
+Description=paperbot '바이비트 봇' paper (no orders)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.mixchop run --config /etc/paperbot/mixbybit-paper.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/mixbybit-paper
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/executor-toobit.env
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

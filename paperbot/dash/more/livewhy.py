@@ -508,6 +508,16 @@ def range_checks(cfg: dict, entry: int, side: int, symbol: str, lev: Optional[in
         add("range", None, "이 진입은 레인지 봇의 되돌림 기록이 없어요")
         return out
     words = {1: "상승", -1: "하락", 0: "없음"}
+    if r.get("friend_tf"):                               # owners 10-29: the friend's trend indicator on the 1h bar
+        ft = i.get("friend") if isinstance(i.get("friend"), dict) else None
+        tr = L._i(ft.get("trend")) if ft else None
+        ok = None if tr is None else tr == side
+        votes = (" · ".join(f"{ko} {({1: '상승', -1: '하락', 0: '횡보'}).get(L._i(ft.get(k)), '모름')}"
+                            for k, ko in (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드")))
+                 if ft else "")
+        add("friend", ok, f"추세 확인: 친구 추세지표 1시간 {({1: '상승', -1: '하락', 0: '진입 금지'}).get(tr, '기록 없음')}"
+            + (f" ({votes})" if votes else "") + " → "
+            + ({True: f"{SIDE_WORD.get(side, '')} 통과", False: "반대인데 진입 기록이 있어요", None: "기록 없음"}[ok]), ft)
     sts = [(w, L._i(i.get(k))) for w, k, on in (("코인", "coin_st", r.get("coin_st", True)), ("BTC", "btc_st", r.get("btc_st", True))) if on]
     if sts:
         known = [v for _w, v in sts if v is not None]

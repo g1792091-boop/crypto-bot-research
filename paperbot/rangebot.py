@@ -12,6 +12,10 @@ the weekend / macro / NYSE-open pauses at the minute of the entry, the coin-flip
    config's coin order (BTC, ETH, SOL, DOGE, LTC, BCH); the first that passes everything below is the one.
 2. 추세 확인: the coin's 1h V3.9 supertrend (10, 3) and BTC's on the signal's side, both read on the 1h bar the signal
    closed (pine_indicators.exchange_supertrend on the same 1h chart frame as the signal, dssig.frame of the 5m history).
+   Owners 10-29 ("친구 지표 1시간봉 + 레인지 필터 3중 일치 1시간봉으로 가자"): ``friend_tf`` "1h" reads the friend's trend
+   indicator instead (paperbot/friendtrend.py: four votes, sky / purple line · EMA RSI · chop zone · supertrend average, on
+   the same closed 1h bar of the signal's coin; two or more sideways, or two up and two down, is no entry), with
+   ``coin_st`` and ``btc_st`` off (deploy/combo.range.json). Each check that is on must agree with the signal.
 3. 강제청산 여유: the stop distance (net ROE -50 % at the coin's leverage) plus the signal bar's ATR(14) must fit inside
    (1 / leverage - 0.5 %) of the price (the research's check), else FILTERED (a very wild hour). This is the only ATR room:
    the config's ``liq_buffer_atr`` is 0, so the account's sizing keeps only its 0.2 % room between the stop and the
@@ -24,7 +28,8 @@ the weekend / macro / NYSE-open pauses at the minute of the entry, the coin-flip
    ends -> the entry is the next 5-minute open, at market (the reference price = the book then; the executor follows with
    a market order as always): BROKE "되돌림 확인" and a new SUBMITTED row. No touch in the hour: FILTERED "되돌림 안 옴".
    The entry minute is checked again for the weekend / macro / NYSE-open pauses (combo._entry_block).
-5. State ``range`` each live minute (the live site): the wait, each coin's last 1h supertrend side, the rules.
+5. State ``range`` each live minute (the live site): the wait, each coin's last 1h supertrend side (``friend``: the
+   friend's trend and votes instead), the rules.
 No pause after a loss, no time exit, no reverse exit, no signal light (the owners' decisions of 10-26).
 """
 
@@ -40,6 +45,7 @@ from typing import Optional
 import numpy as np
 
 from . import combo as C
+from . import friendtrend as FT
 from .config import DS_WINDOW_5M
 from .models import Signal
 from .notify import WARN
@@ -53,7 +59,12 @@ SNAP_EVERY_MS = 5 * MIN
 ST_MIN_BARS = 300                     # 1h bars the supertrend needs before it is read (its ATR settles long before)
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_ST = {1: "상승", -1: "하락", 0: "없음"}
-RULE_KEYS = ("pullback_atr", "wait_min", "coin_st", "btc_st", "st_period", "st_mult", "liq_check", "liq_mmr")
+RULE_KEYS = ("pullback_atr", "wait_min", "coin_st", "btc_st", "st_period", "st_mult", "liq_check", "liq_mmr", "friend_tf")
+FRIEND_TFS = ("1h",)
+
+
+FRIEND_WORDS = ("친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·찹존·슈퍼트렌드)이 신호와 같은 방향일 때만: 같은 추세 2개 이상이면 "
+                "그 추세, 횡보(찹존·슈퍼트렌드 노랑) 2개 이상이나 상승 2·하락 2면 진입 안 함")
 
 
 class RangeError(ValueError):
@@ -78,6 +89,7 @@ class RangeRules:
     st_mult: float = 3.0
     liq_check: bool = True            # stop distance + ATR inside (1 / leverage - liq_mmr) of the price
     liq_mmr: float = 0.005
+    friend_tf: Optional[str] = None   # "1h": the friend's trend indicator on the signal's 1h bar (owners 10-29)
 
     @classmethod
     def from_dict(cls, d) -> "RangeRules":
@@ -105,13 +117,18 @@ class RangeRules:
             out.append("range.st_mult는 0.5~10입니다(예: 3)")
         if not (num(self.liq_mmr) and 0 <= self.liq_mmr < 0.05):
             out.append("range.liq_mmr는 0~0.05입니다(예: 0.005)")
+        if self.friend_tf is not None and self.friend_tf not in FRIEND_TFS:
+            out.append("range.friend_tf는 \"1h\"(친구 추세지표 1시간봉) 또는 null입니다")
         return out
 
     def st_words(self) -> str:
         who = [w for w, on in (("코인", self.coin_st), ("BTC", self.btc_st)) if on]
-        if not who:
-            return "슈퍼트렌드 확인 없음"
-        return f"{'·'.join(who)} 1시간 슈퍼트렌드({self.st_period}, {self.st_mult:g})가 신호와 같은 방향일 때만"
+        out = []
+        if self.friend_tf:
+            out.append(FRIEND_WORDS)
+        if who:
+            out.append(f"{'·'.join(who)} 1시간 슈퍼트렌드({self.st_period}, {self.st_mult:g})가 신호와 같은 방향일 때만")
+        return " · ".join(out) or "슈퍼트렌드 확인 없음"
 
     def describe(self) -> list[str]:
         """The rules in the owners' words (check-config, the start message, the live site)."""
@@ -166,6 +183,8 @@ def entry_words(r: dict) -> str:
         waited = max(0, int(r["entry_t"]) - int(r["t0"])) // MIN
         sts = " · ".join(f"{w} 슈퍼트렌드 {KO_ST.get(int(v), v)}" for w, v in (("코인", r.get("coin_st")),
                                                                                ("BTC", r.get("btc_st"))) if v is not None)
+        if isinstance(r.get("friend"), dict):
+            sts = " · ".join(x for x in (f"친구 추세 {FT.trend_words(r['friend'])}", sts) if x)
         return (f"신호 {kst(r['t0'])} 종가 {float(r['close']):.6g} → {float(r['k']):g} ATR({float(r['atr']):.6g}) "
                 f"{'아래' if side > 0 else '위'} {float(r['level']):.6g}에 닿음, {waited}분 뒤 진입"
                 + (f" · {sts}" if sts else ""))
@@ -184,6 +203,7 @@ class RangeRunner(C.ComboRunner):
         st = st[1] if st else {}
         self.wait: Optional[dict] = st.get("range_wait")
         self._st: dict = {}                       # (symbol, bar close) -> supertrend side
+        self._ft: dict = {}                       # (symbol, bar close) -> the friend's trend and its votes
         self._snap: Optional[tuple] = None
         self.st_fails = 0
         if self.wait is not None and self.wait.get("member") not in self.by_label:
@@ -202,16 +222,7 @@ class RangeRunner(C.ComboRunner):
         key = (symbol, int(bar_close))
         if key in self._st:
             return self._st[key]
-        if self.custom is None or symbol not in self.custom.hist:
-            raise C.ComboError(f"{coin(symbol)} 5분봉 기록 없음")
-        rows = [r for r in self.custom.hist[symbol] if r[0] < int(bar_close)][-DS_WINDOW_5M["1h"]:]
-        if len(rows) < ST_MIN_BARS * 12:
-            raise C.ComboError(f"{coin(symbol)} 5분봉 {len(rows)}개뿐(슈퍼트렌드에 {ST_MIN_BARS * 12}개 필요)")
-        a = np.array(rows, dtype=float)
-        from .dssig import frame
-        df = frame(a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4], a[:, 5], tf="1h", lib=self.custom.lib)
-        if not len(df) or int(df["ts"].iloc[-1].value // 1_000_000) + HOUR != int(bar_close):
-            raise C.ComboError(f"{coin(symbol)} {kst(bar_close)}에 닫힌 1시간봉이 없음")
+        df = self._frame_1h(symbol, bar_close, "슈퍼트렌드")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             _line, d = self.custom.lib.pi.exchange_supertrend(df["high"].to_numpy(float), df["low"].to_numpy(float),
@@ -224,9 +235,38 @@ class RangeRunner(C.ComboRunner):
         self._st[key] = side
         return side
 
-    def _st_failed(self, text: str) -> None:
+    def _frame_1h(self, symbol: str, bar_close: int, what: str):
+        """The 1h chart frame (dssig.frame) of the 5m history the custom signals use, its last bar closed at
+        ``bar_close``. Raises C.ComboError when it cannot be made."""
+        if self.custom is None or symbol not in self.custom.hist:
+            raise C.ComboError(f"{coin(symbol)} 5분봉 기록 없음")
+        rows = [r for r in self.custom.hist[symbol] if r[0] < int(bar_close)][-DS_WINDOW_5M["1h"]:]
+        if len(rows) < ST_MIN_BARS * 12:
+            raise C.ComboError(f"{coin(symbol)} 5분봉 {len(rows)}개뿐({what}에 {ST_MIN_BARS * 12}개 필요)")
+        a = np.array(rows, dtype=float)
+        from .dssig import frame
+        df = frame(a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4], a[:, 5], tf="1h", lib=self.custom.lib)
+        if not len(df) or int(df["ts"].iloc[-1].value // 1_000_000) + HOUR != int(bar_close):
+            raise C.ComboError(f"{coin(symbol)} {kst(bar_close)}에 닫힌 1시간봉이 없음")
+        return df
+
+    # ---- the friend's trend indicator (owners 10-29)
+    def friend_trend(self, symbol: str, bar_close: int) -> dict:
+        """The friend's trend on the 1h bar that closed at ``bar_close`` (paperbot/friendtrend.py last_trend: trend +1 /
+        -1 / 0 and the four votes), from the same 1h frame as the supertrend. Raises C.ComboError when unreadable."""
+        key = (symbol, int(bar_close))
+        if key in self._ft:
+            return self._ft[key]
+        df = self._frame_1h(symbol, bar_close, "친구 추세지표")
+        t = FT.last_trend(*(df[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume")))
+        if len(self._ft) > 50:
+            self._ft = {k: v for k, v in self._ft.items() if k[1] >= int(bar_close)}
+        self._ft[key] = t
+        return t
+
+    def _st_failed(self, text: str, what: str = "슈퍼트렌드") -> None:
         self.st_fails += 1
-        msg = f"{self.cfg.tag} 슈퍼트렌드를 못 읽어 진입 안 함({self.st_fails}번째): {text}"[:300]
+        msg = f"{self.cfg.tag} {what}를 못 읽어 진입 안 함({self.st_fails}번째): {text}"[:300]
         self.store.alert(self.now_ms(), WARN, msg)
         if self.cfg.telegram and (self.st_fails in (1, 10, 100) or self.st_fails % 1000 == 0):
             self.notifier.send(WARN, msg)
@@ -268,6 +308,19 @@ class RangeRunner(C.ComboRunner):
             return True
         r, side = self.rules, int(sig.side)
         sts: dict = {}
+        if r.friend_tf:
+            try:
+                ft = self.friend_trend(sig.symbol, bar_close)
+            except Exception as exc:  # noqa: BLE001  unreadable: no entry, said so
+                why = f"{type(exc).__name__}: {exc}" if not isinstance(exc, C.ComboError) else str(exc)
+                self._filtered(sig, f"친구 추세지표를 못 읽어 진입 안 함: {why}"[:200])
+                self._st_failed(f"{coin(sig.symbol)} {kst(bar_close)}: {why}", "친구 추세지표")
+                return True
+            sts["friend"] = dict(ft)
+            if int(ft["trend"]) != side:
+                tail = "" if int(ft["trend"]) == 0 else f"(신호 {KO_SIDE.get(side, side)}와 반대)"
+                self._filtered(sig, f"추세 확인: 친구 추세지표 1시간 {FT.trend_words(ft)}{tail}", {"range": sts})
+                return True
         try:
             if r.coin_st:
                 sts["coin_st"] = self.supertrend(sig.symbol, bar_close)
@@ -302,8 +355,9 @@ class RangeRunner(C.ComboRunner):
                 "until": until, **sts}
         self.wait = {"member": sig.meta.get("member", sig.strategy_id), "t0": int(bar_close), "until": until,
                      "level": level, "hit": None, "info": info, "signal": dataclasses.asdict(sig)}
+        said = (f"친구 추세 {FT.trend_words(sts['friend'])}" if "friend" in sts else "") or (r.st_words() if sts else "")
         self._restate(sig, "WAITING", f"되돌림 기다림: {level:.6g}까지(종가 {close:.6g} {'-' if side > 0 else '+'} "
-                                      f"{r.pullback_atr:g} ATR, {kst(until)}까지) · {r.st_words() if sts else ''}".rstrip(" ·"),
+                                      f"{r.pullback_atr:g} ATR, {kst(until)}까지) · {said}".rstrip(" ·"),
                       extra={"range": info})
         self._count(self.wait["member"], "waiting")
         return True
@@ -367,30 +421,40 @@ class RangeRunner(C.ComboRunner):
 
     # ---- what the live site shows
     def _snapshot(self, ts: int) -> None:
-        """State ``range``: the wait, each coin's supertrend on the last closed 1h bar, the rules (live minutes only)."""
+        """State ``range``: the wait, each coin's supertrend (and/or the friend's trend, ``friend``) on the last closed 1h
+        bar, the rules (live minutes only)."""
         now = self.now_ms()
         if now - int(ts) > 10 * MIN:
             return                                # a catch-up: only the live minute is shown
         h = int(ts) - int(ts) % HOUR
         sts: dict = {}
+        fts: dict = {}
         if int(ts) % HOUR == 0 or self._snap is None:
             for sym in self.cfg.symbols:
-                try:
-                    sts[sym] = self.supertrend(sym, h)
-                except Exception as exc:  # noqa: BLE001  shown as unreadable
-                    sts[sym] = {"error": str(exc)[:200]}
+                if self.rules.coin_st or self.rules.btc_st or not self.rules.friend_tf:
+                    try:
+                        sts[sym] = self.supertrend(sym, h)
+                    except Exception as exc:  # noqa: BLE001  shown as unreadable
+                        sts[sym] = {"error": str(exc)[:200]}
+                if self.rules.friend_tf:
+                    try:
+                        fts[sym] = dict(self.friend_trend(sym, h))
+                    except Exception as exc:  # noqa: BLE001  shown as unreadable
+                        fts[sym] = {"error": str(exc)[:200]}
         else:
-            sts = dict(self._snap[2])
+            sts, fts = dict(self._snap[2]), dict(self._snap[3])
         w = self.wait
         wait = None
         if w is not None:
             s = w["signal"]
             wait = {"member": w["member"], "symbol": s["symbol"], "side": s["side"], "t0": w["t0"], "until": w["until"],
                     "level": w["level"], "hit": w.get("hit"), "info": w.get("info")}
-        key = json.dumps([sts, wait], sort_keys=True, default=str)
+        key = json.dumps([sts, fts, wait], sort_keys=True, default=str)
         if self._snap is not None and self._snap[0] == key and int(ts) - self._snap[1] < SNAP_EVERY_MS:
             return
-        self._snap = (key, int(ts), sts)
-        self.store.put_state(STATE_RANGE, int(ts), {"ts": int(ts), "st_at": h, "supertrend": sts, "wait": wait,
-                                                     "busy": self._busy(), "rules": self.rules.describe(),
-                                                     "numbers": dataclasses.asdict(self.rules)})
+        self._snap = (key, int(ts), sts, fts)
+        snap = {"ts": int(ts), "st_at": h, "supertrend": sts, "wait": wait, "busy": self._busy(),
+                "rules": self.rules.describe(), "numbers": dataclasses.asdict(self.rules)}
+        if self.rules.friend_tf:
+            snap["friend"] = fts
+        self.store.put_state(STATE_RANGE, int(ts), snap)
