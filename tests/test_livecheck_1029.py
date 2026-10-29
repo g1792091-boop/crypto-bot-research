@@ -118,3 +118,23 @@ def test_the_range_bots_reasons_have_their_groups():
     line = next(x for x in LC.bot_section({"path": "r.db", "name": "레인지 봇", "trades": [], "cfg": None, "gates": g},
                                           [], 0, 1) if x.startswith("- 조건이 막은 신호"))
     assert "추세 확인(친구 추세 반대·진입 금지) 2 · 한 신호씩 1" in line and "강제청산" not in line
+
+
+# ---------------------------------------------------------------- the VWAP bot switched off (owners 10-29 "VWAP 봇 끄자")
+def test_a_bot_switched_off_for_good_raises_no_alarm(world):
+    """Its executor and its paper bot stopped and disabled: no stale alarm for either, no quiet note for the paper; the
+    same files with the units meant to run: the alarms as before."""
+    w = world
+    t = NOW + 15 * MIN                                          # neither paper bot wrote since NOW
+    ex_unit = next(x.unit for x in w.infos() if x.name == "bybit")         # the executor that follows the VWAP bot
+    conds, _judged, _seen = LC.watch_conditions(w.src(executors=_only(w, "bybit")), t, units(off=()), exists=lambda p: False)
+    keys = {x.key for x in conds}
+    assert any(k.startswith("paper2_stale:") for k in keys) or any(k.startswith("stale:bybit") for k in keys)
+    off = units(off=("paperbot-combo", ex_unit, "paperbot-combo-vwap"))
+    conds, _judged, _seen = LC.watch_conditions(w.src(executors=_only(w, "bybit")), t, off, exists=lambda p: False)
+    keys = {x.key for x in conds}
+    assert not any(k.startswith(("paper2_stale:", "paper2_quiet:", "stale:bybit", "paper_stale")) for k in keys), keys
+    # what counts as switched off: known, not running (a failed unit still is), not enabled
+    assert LC.switched_off("u", lambda u: ("inactive", "disabled")) and LC.switched_off("u", lambda u: ("inactive", "masked"))
+    assert not LC.switched_off("u", lambda u: ("failed", "disabled")) and not LC.switched_off("u", lambda u: ("inactive", "enabled"))
+    assert not LC.switched_off("u", lambda u: ("", "")) and not LC.switched_off(None, lambda u: ("inactive", "disabled"))

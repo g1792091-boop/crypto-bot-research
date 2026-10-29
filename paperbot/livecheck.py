@@ -1165,6 +1165,17 @@ def main_retired(src: Sources, segs: dict, units: Callable = None) -> bool:
 RETIRED_KO = "꺼짐 · 따라가는 실거래 없음"
 
 
+def switched_off(unit: Optional[str], units: Callable = None) -> bool:
+    """Owners 10-29 ("VWAP 봇 끄자"): a unit a person switched off for good (``systemctl disable --now``): known to systemd,
+    neither running (a failed one still counts as running) nor enabled. Unknown (no unit, no systemctl): False."""
+    if not unit:
+        return False
+    active, enabled = (units or unit_state)(unit)
+    if not active and not enabled:
+        return False
+    return active not in RUNNING and enabled not in ("enabled", "enabled-runtime")
+
+
 def exec_segs(src: Sources, infos: list) -> dict:
     """{executor name: its segments} from its own start records (read-only; an unreadable database: the main paper)."""
     ps = PaperSet(src.paper_db)
@@ -2292,6 +2303,9 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
     # ---- per executor
     for ex in infos:
         run, why = should_run(ex, units)
+        if switched_off(ex.unit, units):
+            judged.add(f"stale:{ex.name}")          # (a stale alarm of it clears, as for any executor stopped on purpose)
+            continue                    # switched off for good (owners 10-29: 딥코인 with the VWAP bot): no checks, its paper not followed
         c = open_ro(ex.db)
         if c is None:
             judged.add(f"stale:{ex.name}")
@@ -2436,7 +2450,7 @@ def watch_conditions(src: Sources, now_ms: int, units: Callable = unit_state,
     # the second paper bot's file while no executor follows it (owners 10-23: 'VWAP 개선판' runs paper-only first): a
     # quiet note when it stops writing (no money depends on it yet; its record is what the owners will judge it by)
     p2 = getattr(src, "paper2_db", "") or ""
-    if p2 and os.path.exists(p2) and not ps.is_main(p2) and LP.norm(p2) not in second:
+    if p2 and os.path.exists(p2) and not ps.is_main(p2) and LP.norm(p2) not in second and not switched_off(unit_of(p2), units):
         nm = os.path.splitext(os.path.basename(p2))[0]
         pc2 = open_ro(p2)
         hb2 = None
