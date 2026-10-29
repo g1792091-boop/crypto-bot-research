@@ -134,6 +134,9 @@ const ICON = {
   // 믹스 봇: the indicator's line turning colour (a falling run, then a rising one) over the 30-minute candles' row
   mix: () => [R(1, 4, 2, 2), R(3, 6, 2, 2), R(5, 8, 2, 2), R(7, 7, 2, 2), R(9, 5, 2, 2), R(11, 3, 2, 2), R(13, 1, 2, 2),
     R(2, 12, 2, 3), R(6, 11, 2, 4), R(10, 12, 2, 3), R(13, 10, 2, 5)],
+  // 바이비트 봇 (owners 10-29): the OBV histogram turning dark (three light bars, then a full one) under the trend's arrow
+  bybit: () => [R(1, 11, 2, 4), R(4, 10, 2, 5), R(7, 9, 2, 6), R(10, 5, 3, 10), R(2, 3, 9, 1), R(10, 1, 1, 5), R(11, 2, 1, 3),
+    R(12, 3, 1, 1)],
 };
 export const icon =(group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
@@ -223,6 +226,12 @@ const SICON = {
   // 믹스 봇 (LIVE_GROUPS "mix"): 관제 the group's drawing, 성적 the board's bars
   mix: ICON.mix,
   mixperf: () => SICON.board(),
+  // 바이비트 봇 (LIVE_GROUPS "bybit", 봇별 › 바이비트 봇): the group's drawing, 성적 the board's bars, 친구 추세판 four votes
+  bybitbot: ICON.bybit,
+  bybit: ICON.bybit,
+  bybitperf: () => SICON.board(),
+  ftrend: () => [R(1, 3, 3, 3), R(5, 3, 3, 3), R(9, 3, 3, 3), R(13, 4, 2, 1), R(1, 9, 3, 3), R(5, 9, 3, 3), R(9, 10, 3, 1),
+    R(13, 9, 2, 3)],
 };
 export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
@@ -276,12 +285,15 @@ export function navGroups(feats) {
 // menu, in four groups (the strip's thin lines, the phone's bottom bar). Every item opens screens/livebots.js on its tab
 // (`mod`; the router hands it {name: "livebots", arg: <tab>}), so the screens, their css scope ([data-screen="livebots"])
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
-export const LIVE_START = "trend";
+// owners 10-29 (the 추세판단 봇 switched off, the 바이비트 봇 on the Bybit account): the site opens on 한눈에 (every real-money
+// account), never on a bot that no longer trades
+export const LIVE_START = "hq";
 const LIVE_GROUPS = [
   // 봇별 (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면
   // 따로, v3.9 화면 따로"): one screen per bot, first in the menu, each with only the executors that follow it
   // (screens/livebots.js BOT_TABS); the screens of the groups below stay as they were
-  {id: "bots", ko: "봇별", screens: ["trendbot", "rangebot", "vwapbot", "mixbot", "v39"]},
+  // owners 10-29: the 바이비트 봇 first, the 추세판단 봇 (switched off, its record kept) last
+  {id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]},
   {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
@@ -292,16 +304,20 @@ const LIVE_GROUPS = [
   // the '믹스 30분 봇' on the second WOO X Pro account (real money) and its paper twin (owners 10/25 night,
   // docs/mixchop-ko.md): its own group, last; each column says 꺼짐 until its bot runs (screens/livebots-mix.js)
   {id: "mix", ko: "믹스 봇", screens: ["mix", "mixperf"]},
+  // the 바이비트 봇 (owners 10-29, docs/mixbybit-ko.md: the friend's trend + OBV / Stoch RSI entries on the Bybit account,
+  // real money, and its paper twin) and the friend's trend per coin (dash/more/liveftrend.py): its own group, last
+  {id: "bybit", ko: "바이비트 봇", screens: ["bybit", "bybitperf", "ftrend"]},
 ];
 const LIVE_SCREENS = {
-  trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (페이퍼와 그 봇을 따라가는 바이비트)"},
+  bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (친구 추세 + OBV · 스톡RSI · 바이비트 실거래와 모의)"},
+  trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)"},
   rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (페이퍼와 그 봇을 따라가는 WOO X Pro)"},
   vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼와 그 봇을 따라가는 딥코인)"},
   mixbot: {ko: "친구 30분 봇", group: "bots", title: "친구 30분 봇 (믹스 30분 봇 · WOO X Pro 2 실거래와 모의)"},
   v39: {ko: "V3.9 투비트", group: "bots", title: "V3.9 투비트 (규칙봇 V3.9 1시간 페이퍼와 투비트 실행기)"},
-  trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇)"},
+  trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)"},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
-  hq: {ko: "한눈에", group: "now", title: "한눈에 (실행기 두 계좌)"},
+  hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)"},
   pos: {ko: "포지션", group: "now", title: "포지션"},
   summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},
   chart: {ko: "차트", group: "now", title: "차트"},
@@ -330,6 +346,9 @@ const LIVE_SCREENS = {
   vwblock: {ko: "VWAP 막은 신호", group: "vwap", title: "VWAP 막은 신호 (막지 않았다면)"},
   mix: {ko: "믹스 관제", group: "mix", title: "믹스 관제 (믹스 30분 봇 · 실거래와 모의)"},
   mixperf: {ko: "믹스 성적", group: "mix", title: "믹스 성적 (실거래 · 모의 · 설계서 5년)"},
+  bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)"},
+  bybitperf: {ko: "바이비트 성적", group: "bybit", title: "바이비트 성적 (실거래 vs 모의)"},
+  ftrend: {ko: "친구 추세판", group: "bybit", title: "친구 추세판 (코인별 30분 · 1시간 추세 투표와 OBV · 스톡RSI)"},
 };
 if (LIVE) {
   // put in place (the same objects every module already imported): the menu, the screens, the strip's groups

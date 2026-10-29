@@ -363,12 +363,13 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> 
         return out
     o, h, l, c, v = (b30[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
     if rule == "obv":
-        want = FT.obv_turn(h, l, c, v)
-        out["turn"] = want
+        ob = FT.obv_state(h, l, c, v)
+        want = ob["turn"]
+        out.update({"turn": want, "obv_cs": ob["cs"], "obv_dark": ob["dark"]})
         no = "OBV 연한색→진한색 없음"
     else:
         sg = FT.stoch_signal(c)
-        out.update({"cross": sg["cross"], "k": sg["k"], "d": sg["d"]})
+        out.update({"cross": sg["cross"], "k": sg["k"], "d": sg["d"], "xs": sg.get("xs")})
         want = sg["side"]
         no = ("스톡RSI 크로스 없음" if not sg["cross"] else
               f"스톡RSI {'골든' if sg['cross'] == 'gold' else '데드'}이 50선 {'위' if sg['cross'] == 'gold' else '아래'}(K {sg['k']})")
@@ -394,6 +395,23 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> 
         out["why"] = f"손절 폭 {dist / px * 100:.2f}%가 {coin.leverage}배 청산가보다 멂"
         return out
     out["side"] = want
+    return out
+
+
+# a coin's row of the 친구 추세판 (owners 10-29, dash/more/liveftrend.py): the friend rules' values at the last close
+BOARD_KEYS = ("close", "trend", "votes", "ema_rsi", "chop_zone", "turn", "obv_cs", "obv_dark", "cross", "k", "d", "xs",
+              "stop_pct", "liq_ok")
+
+
+def board_row(evs: list, close_ms: int) -> dict:
+    """The 바이비트 봇's state ``board`` row of one coin at this close: the trend of the bar and its votes, the OBV pane's
+    colour, the Stoch RSI pane's state, and each rule's answer ({rule: {side, why}})."""
+    out: dict = {"close_ms": int(close_ms), "rules": {}}
+    for ev in evs:
+        for k in BOARD_KEYS:
+            if ev.get(k) is not None and k not in out:
+                out[k] = ev[k]
+        out["rules"][str(ev.get("rule") or "?")] = {"side": int(ev.get("side") or 0), "why": str(ev.get("why") or "")}
     return out
 
 
@@ -950,11 +968,15 @@ class Bot:
         self._entry_try: Optional[tuple] = None  # (symbol, side, until_ms, ref, dist): an entry whose fill was not seen
         self._unknown_told = ""                  # the unknown positions last told (coins)
         self._last_minute_ms = 0                 # ladder_every_s: when the open position was last followed on 1m bars
+        self.board: dict = {}                    # the friend rules: each coin's values at the last close (board_row)
 
     # ---------------------------------------------------------------- persistence and log
     def save(self) -> None:
-        write_state(self.cfg.state, {"position": asdict(self.pos) if self.pos else None, "start_equity": self.start_equity,
-                                     "last_close_ms": self.last_close_ms, "saved_ms": self.now(), "mode": self.cfg.mode})
+        st = {"position": asdict(self.pos) if self.pos else None, "start_equity": self.start_equity,
+              "last_close_ms": self.last_close_ms, "saved_ms": self.now(), "mode": self.cfg.mode}
+        if self.board:                          # the 바이비트 봇's 친구 추세판 (owners 10-29)
+            st["board"] = self.board
+        write_state(self.cfg.state, st)
 
     def log(self, kind: str, **kv) -> None:
         row = {"ts": self.now(), "kind": kind, **kv}
@@ -1153,6 +1175,8 @@ class Bot:
                     self.log("bars_missing", **ev)
                 if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev["side"]:
                     self.log("signal", **ev)
+            if any(r in FRIEND_RULES for r in self.cfg.rules):
+                self.board[co.symbol] = board_row(evs, close_ms)
             ev = next((e for e in evs if e["side"]), None)          # the config's rule order decides on one coin
             if ev is not None:
                 cands.append((co, ev))

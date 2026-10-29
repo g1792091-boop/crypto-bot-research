@@ -170,7 +170,7 @@ def test_a_signal_enters_only_with_the_friends_trend(monkeypatch, rule):
     sig = {"side": 1, "cross": "gold", "k": 31.2, "d": 27.0}
 
     def run(turn, trend):
-        monkeypatch.setattr(FT, "obv_turn", lambda *a: turn)
+        monkeypatch.setattr(FT, "obv_state", lambda *a: {"turn": turn, "cs": turn or 1, "dark": bool(turn)})
         monkeypatch.setattr(FT, "stoch_signal", lambda c: {**sig, "side": turn,
                                                             "cross": "gold" if turn >= 0 else "dead"})
         monkeypatch.setattr(FT, "last_trend", lambda *a: trend)

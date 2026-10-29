@@ -710,16 +710,20 @@ def test_wiring_route_menu_find_inventory_and_module():
     own = [t for t in tabs if t[0] not in ("risk", "health", "goal", "judge")]
     # 봇별 first (owners 10/26: one screen per bot, tests/test_dash_livev39.py; 레인지 봇 after 추세판단 봇,
     # tests/test_dash_live_range.py), then every tab as it was
-    assert own == [("trendbot", "추세판단 봇"), ("rangebot", "레인지 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트"),
-                   ("trend", "관제"), ("tchart", "추세 차트"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("journal", "일지"), ("trades", "거래"), ("replay", "다시보기"),
+    # (owners 10-29: the 바이비트 봇 first, the 추세판단 봇 switched off last; tests/test_dash_mixbybit_site.py)
+    assert own == [("bybitbot", "바이비트 봇"), ("rangebot", "레인지 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트"),
+                   ("trendbot", "추세판단 봇"), ("trend", "관제"), ("tchart", "추세 차트"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("journal", "일지"), ("trades", "거래"), ("replay", "다시보기"),
                    ("signals", "신호"), ("missed", "못 탄 신호"), ("review", "검토"), ("expect", "재현 비교"), ("perf", "성적"), ("rank", "순위"), ("map", "지도"), ("cost", "비용"),
                    ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자"),
                    # VWAP 봇 (owners 10/23, screens/livebots-vwap.js; tests/test_dash_livevwap.py)
                    ("vwap", "VWAP 관제"), ("vwperf", "VWAP 성적"), ("vwblock", "VWAP 막은 신호"),
                    # 믹스 봇 (owners 10/25 night, screens/livebots-mix.js; tests/test_dash_livemix.py)
-                   ("mix", "믹스 관제"), ("mixperf", "믹스 성적")]
-    # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에
-    assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "trend")' in _read(SCREENS, "livebots.js")
+                   ("mix", "믹스 관제"), ("mixperf", "믹스 성적"),
+                   # 바이비트 봇 (owners 10-29, screens/livebots-mix.js on its own answers, livebots-ftrend.js)
+                   ("bybit", "바이비트 관제"), ("bybitperf", "바이비트 성적"), ("ftrend", "친구 추세판")]
+    # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에;
+    # 10-29 (the 추세판단 봇 switched off): 한눈에 first
+    assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq")' in _read(SCREENS, "livebots.js")
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):

@@ -351,7 +351,9 @@ def supertrend_of(snap: dict, now: int) -> Optional[dict]:
         else:
             sd = L._i(v.get("trend"))
             friend.append({"symbol": sym, "coin": coin_ko(sym), "side": sd, "ko": FRIEND_KO.get(sd, "모름"),
-                           "votes_ko": " · ".join(f"{ko} {VOTE_SIDE_KO.get(L._i(v.get(k)), '모름')}" for k, ko in FRIEND_VOTES)})
+                           "votes_ko": " · ".join(f"{ko} {VOTE_SIDE_KO.get(L._i(v.get(k)), '모름')}" for k, ko in FRIEND_VOTES),
+                           "votes": {k: L._i(v.get(k)) for k, _ko in FRIEND_VOTES}, "ema_rsi": L._f(v.get("ema_rsi")),
+                           "chop_zone": L._i(v.get("chop_zone"))})
     return {"at": ts, "st_at": L._i(rs.get("st_at")), "age_ms": now - ts if ts is not None else None, "coins": coins,
             "friend": friend, "busy_ko": rs.get("busy") or None,
             "rules": [str(x) for x in rs.get("rules") or [] if isinstance(x, str)]}

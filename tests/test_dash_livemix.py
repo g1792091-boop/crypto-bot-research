@@ -560,20 +560,21 @@ def test_the_menu_group_and_the_tabs():
     r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     d = json.loads(r.stdout.strip().splitlines()[-1])
-    assert d["groups"][-1] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-1] == "믹스 봇" and len(d["groups"]) == 7
-    assert d["groups"][-2][0] == "vwap"                                               # VWAP 봇 stays where it was
+    # (the 바이비트 봇's group after it since 10-29, tests/test_dash_mixbybit_site.py)
+    assert d["groups"][-2] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-2] == "믹스 봇" and len(d["groups"]) == 8
+    assert d["groups"][-3][0] == "vwap" and d["groups"][-1][0] == "bybit"            # VWAP 봇 stays where it was
     # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its five screens take the first number keys (레인지 봇 second)
-    assert d["keys"] == ["trendbot", "rangebot", "vwapbot", "mixbot", "v39", "trend", "tchart", "hq", "pos"]
+    assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend", "tchart", "hq"]
     assert d["screens"] == [["믹스 관제", "mix", "livebots"], ["믹스 성적", "mix", "livebots"]]
     assert d["parse"]["name"] == "mixperf" and d["href"] == "#/mix" and d["icons"][0] > 5
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("mix", "믹스 관제"), ("mixperf", "믹스 성적")):
         assert f'{{id: "{t}", label: "{label}"' in lb
-    assert 'import {mixView, mixperfView} from "./livebots-mix.js";' in lb
+    assert 'import {mixView, mixperfView, BYBIT_UI} from "./livebots-mix.js";' in lb       # (the 바이비트 봇's too, 10-29)
     routes = FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js")
     assert "mix: ICON.mix," in routes and "mixperf: () => SICON.board()," in routes
     assert "mix:" in FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "search.js").split("export const LIVE_ALIAS")[1]
-    assert ".botbar { grid-template-columns: repeat(7, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(8, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_the_files_keep_the_house_rules():

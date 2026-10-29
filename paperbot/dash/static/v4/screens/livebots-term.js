@@ -69,10 +69,10 @@ export function termView(ctx, src) {
   const mine = minePanel(ctx, st);
   const table = tablePanel(ctx, st, pick);
   let pnlId = local.get("lb-pnl-acct", "bybit");
-  if (![...EXEC_SLOTS, "paper", "paper2", "range"].includes(pnlId)) pnlId = "bybit";
+  if (![...EXEC_SLOTS, "paper", "paper2", "range"].includes(pnlId)) pnlId = pnlBase(null)[0];
   const pickPnl = (id) => { pnlId = id; local.set("lb-pnl-acct", id); pnl.refresh(true); };
   const psegOf = (ids) => {
-    const x = ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(pnlId) ? pnlId : "bybit", pickPnl, {label: "수익 차트 계좌"});
+    const x = ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(pnlId) ? pnlId : ids[0], pickPnl, {label: "수익 차트 계좌"});
     x.classList.add("lb-pseg");
     return x;
   };
@@ -81,7 +81,7 @@ export function termView(ctx, src) {
   /** The P&L chart's accounts: the second paper bot too while the summary has it (owners 10/23), named by its bot. */
   function pnlIds(d) {
     const ids = [...pnlBase(d), ...["paper2", "range"].filter((id) => d && (d.accts || []).some((a) => a.id === id))];
-    if (d && !ids.includes(pnlId)) pnlId = "bybit";
+    if (d && !ids.includes(pnlId)) pnlId = ids[0];       // the first executor (owners 10-29: 바이비트 may not be one)
     const key = ids.map((id) => `${id}:${acctKo(id)}`).join();
     if (key === psegKey) return;
     psegKey = key;

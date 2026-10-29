@@ -205,12 +205,12 @@ export function replayFeeKo(rp) {
 /** costView(ctx) -> {el, set()}: its own endpoint, read now and every 30 s. */
 export function costView(ctx) {
   const st = {d: null, okAt: 0, sig: "", acct: local.get("lbk-acct", "bybit"), ex: execsNow()};
-  if (!EXEC_SLOTS.includes(st.acct)) st.acct = "bybit";
+  if (!EXEC_SLOTS.includes(st.acct) || !st.ex.includes(st.acct)) st.acct = st.ex[0];
   const stateSlot = h("div", {class: "lb-slot"});
   const paperSlot = h("div", {class: "lb-slot"});
   const cards = h("div", {class: "lbk-cards"});
   // the executors of the answer (the third, 딥코인, while the server has it: the switch is rebuilt in place, draw)
-  const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(st.acct) ? st.acct : "bybit",
+  const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), ids.includes(st.acct) ? st.acct : ids[0],
     (id) => { st.acct = id; local.set("lbk-acct", id); drawList(true); }, {label: "실행기 고르기"});
   let seg = segOf(st.ex);
   const judge = h("div", {class: "lbk-judge"});
@@ -448,7 +448,7 @@ export function costView(ctx) {
     const ids = execIds(d);
     if (ids.join() !== st.ex.join()) {
       st.ex = ids;
-      if (!ids.includes(st.acct)) st.acct = "bybit";
+      if (!ids.includes(st.acct)) st.acct = ids[0];
       const nx = segOf(ids);
       seg.replaceWith(nx);
       seg = nx;

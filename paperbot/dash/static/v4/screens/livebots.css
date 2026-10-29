@@ -29,6 +29,7 @@
 @import url("livebots-v39.css");
 @import url("livebots-range.css");
 @import url("livebots-goalres.css");
+@import url("livebots-ftrend.css");
 
 /* the page column: the terminal takes the window from 760 px (a phone keeps the shell's 16 px gutter) */
 @media (min-width: 760px) {

@@ -86,7 +86,10 @@ import {tchartView} from "./livebots-tchart.js";
 import {vwapView, vwperfView, vwblockView} from "./livebots-vwap.js";
 // 믹스 봇 (owners 10/25 night: the '믹스 30분 봇' on the second WOO X Pro account and its paper twin; menu group "mix"):
 // 관제 · 성적
-import {mixView, mixperfView} from "./livebots-mix.js";
+import {mixView, mixperfView, BYBIT_UI} from "./livebots-mix.js";
+// 바이비트 봇 (owners 10-29: the friend's trend + OBV / Stoch RSI entries on the Bybit account; menu group "bybit"): 관제 ·
+// 성적 (the mix screens on its own answers) · 친구 추세판
+import {ftrendView} from "./livebots-ftrend.js";
 // 봇별 › V3.9 투비트 (owners 10/26: the rule bot's V3.9 1-hour paper account and the 투비트 executor that follows it)
 import {v39View} from "./livebots-v39.js";
 // 봇별 › 레인지 봇 (owners 10/26: the 레인지 봇 paper bot and the executors that follow it; docs/range-bot-ko.md)
@@ -99,11 +102,13 @@ const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executo
 // in the 실거래 site's menu order (core/routes.js LIVE_GROUPS: 봇별 · 지금 · 기록 · 성적 · 운영)
 export const TABS = [
   // 봇별 (owners 10/26): one bot each, its own executors only (BOT_TAB)
-  {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
+  {id: "bybitbot", label: "바이비트 봇", make: (ctx) => mixView(ctx, BYBIT_UI), own: true},
   {id: "rangebot", label: "레인지 봇", make: (ctx) => rangeView(ctx), own: true},
   {id: "vwapbot", label: "VWAP 개선판", make: (ctx, hub) => vwapView(ctx, hub), own: true},
   {id: "mixbot", label: "친구 30분 봇", make: (ctx) => mixView(ctx), own: true},
   {id: "v39", label: "V3.9 투비트", make: (ctx) => v39View(ctx), own: true},
+  // owners 10-29: the 추세판단 봇 switched off, its record kept (last of 봇별)
+  {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
   {id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true},
   {id: "tchart", label: "추세 차트", make: (ctx, hub) => tchartView(ctx, hub), own: true},
   {id: "hq", label: "한눈에", make: (ctx, hub) => hqView(ctx, hub)},
@@ -135,14 +140,21 @@ export const TABS = [
   {id: "vwblock", label: "VWAP 막은 신호", make: (ctx) => vwblockView(ctx), own: true},
   {id: "mix", label: "믹스 관제", make: (ctx) => mixView(ctx), own: true},
   {id: "mixperf", label: "믹스 성적", make: (ctx) => mixperfView(ctx), own: true},
+  {id: "bybit", label: "바이비트 관제", make: (ctx) => mixView(ctx, BYBIT_UI), own: true},
+  {id: "bybitperf", label: "바이비트 성적", make: (ctx) => mixperfView(ctx, BYBIT_UI), own: true},
+  {id: "ftrend", label: "친구 추세판", make: (ctx) => ftrendView(ctx), own: true},
 ];
-const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "trend");
+/** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
+const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 · 스톡RSI 50선) · 다른 봇은 이 화면에 없어요"};
+const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
 const hasExec = (d, id) => !!(d && Array.isArray(d.execs) && d.execs.some((x) => x && x.id === id));
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 봇별 screens (owners 10/26): bot (the 목표 연구 part's id), the head's line, the strip's executors (that bot's only;
  *  none: what its real money is instead). */
 export const BOT_TAB = {
-  trendbot: {bot: "trend", sub: "추세판단 봇 페이퍼(연습)와 그 봇을 따라가는 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
+  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 · 스톡RSI 50선) · 다른 봇은 이 화면에 없어요",
+    head: null, only: () => [], none: "바이비트 봇은 바이비트 계정에서 스스로 거래해요 · 잔고는 아래 실거래 칸"},
+  trendbot: {bot: "trend", sub: "추세판단 봇 페이퍼(연습)와 그 봇을 따라가던 실행기 · 두 분 결정(10/29)으로 꺼 두는 봇 · 지난 기록 보관용이에요",
     head: (d) => botHead("추세판단 봇", followersOf(d, "paper")), only: (d) => followersOf(d, "paper"), none: "추세판단 봇을 따라가는 실행기가 지금 없어요"},
   rangebot: {bot: "range", sub: "레인지 봇 페이퍼(연습)와 그 봇을 따라가는 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
     head: (d) => botHead("레인지 봇", followersOf(d, "range")), only: (d) => followersOf(d, "range"),
@@ -197,7 +209,8 @@ export async function mount(el, ctx) {
   const real = h("div", {class: "lb-real", role: "note", "aria-label": "진짜 돈 화면"}, bt ? realLine(null, {only: [], none: "불러오는 중"}) : realLine(null));
   // two paper bots (owners 10/23): who follows which, from the summary (followLine); one: the usual line
   const HEAD_SUB = "바이비트 · WOO X Pro 실행기와 그 둘이 따라가는 페이퍼(연습)";
-  const sub = h("span", {class: "sub"}, bt ? bt.sub : HEAD_SUB);
+  const gsub = group ? GROUP_SUB[group.id] || null : null;      // a group of one bot's own screens: that bot's words
+  const sub = h("span", {class: "sub"}, bt ? bt.sub : gsub || HEAD_SUB);
   const head = h("div", {class: "lb-head"}, h("h1", null, tab.label), sub, mine.length > 1 ? seg : null);
   const staleSlot = h("div", {class: "lb-slot"});
   const body = h("div", {class: "lb-body"});
@@ -234,8 +247,10 @@ export async function mount(el, ctx) {
     setPapers(d.papers);                 // two paper bots: their labels everywhere (null with one: the usual names)
     setExecs(d.execs);                   // the third executor (딥코인) everywhere while the server has it (else the two)
     const two = followLine(d.papers), n = execIds(d).length, three = n > 2;
-    const head = bt ? (bt.head ? bt.head(d) : bt.sub) : two ? `실행기 ${countKo(n)} 개 · ${two}`
-      : three ? `${execsKo(execIds(d))} 실행기와 그 ${n > 3 ? "넷" : "셋"}이 따라가는 페이퍼(연습)` : HEAD_SUB;
+    // owners 10-29: an account a mix bot took (the summary's ``replaced``) is said after who follows which
+    const took = (d.replaced || []).map((r) => `${r.account_ko} → ${r.name_ko}(스스로 매매)`).join(" · ");
+    const head = bt ? (bt.head ? bt.head(d) : bt.sub) : gsub ? gsub : `${two ? `실행기 ${countKo(n)} 개 · ${two}`
+      : three ? `${execsKo(execIds(d))} 실행기와 그 ${n > 3 ? "넷" : "셋"}이 따라가는 페이퍼(연습)` : HEAD_SUB}${took ? ` · ${took}` : ""}`;
     if (sub.textContent !== head) sub.textContent = head;
     if (bt) put(real, realLine(d, {only: bt.only(d), none: bt.none}));   // a 봇별 screen: that bot's executors only
     else put(real, realLine(d));

@@ -113,6 +113,8 @@
 .lbh-deck > .lbh-mix { order: 4; }
 .lbh-deck > .lbh-x-wooxpro2:not(.lbh-mix) { order: 5; }
 .lbh-deck > .lbh-x-toobit { order: 6; }
+/* the 바이비트 봇 (owners 10-29: it took the Bybit slot, trading that account by itself) in the Bybit place */
+.lbh-deck > .lbh-mix.lbh-x-bybit { order: 1; }
 @media (min-width: 1400px) {
   .lbh-deck.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
@@ -342,6 +344,9 @@
   background: linear-gradient(90deg, var(--accent), var(--accent-hi)); box-shadow: 0 0 10px var(--accent-glow); transition: transform .9s var(--ease); }
 .lbh-pbar.done .lbh-pbf { background: linear-gradient(90deg, var(--up), var(--accent-hi)); }
 .lbh-pbrule { margin: 0; color: var(--muted); font-size: var(--t-2xs); line-height: 1.5; }
+/* the 추세판단 봇 switched off (owners 10-29): one quiet line in place of its 40-trade bar */
+.lbh-retired { margin: 0; padding: 6px 10px; border-radius: var(--r-md); border: 1px dashed var(--line-2); color: var(--ink-2);
+  font-size: var(--t-xs); line-height: 1.5; overflow-wrap: anywhere; }
 
 /* the ticker: the real numbers, scrolling slowly; it wraps instead under reduced motion */
 .lbh-ticker { overflow: hidden; min-width: 0; padding: 7px 0 2px; border-top: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);

@@ -13,6 +13,9 @@
 //                     replay of the bot's own code, with the replay next to the design's numbers), the loss cards of the
 //                     live trades, the last morning check (the signal replay, live against paper)
 // Sources: /api/v4/livebots/mix (every 15 s; countdowns tick every second), /mixperf (every 60 s), dash/more/livemix.py.
+// The 바이비트 봇 (owners 10-29, docs/mixbybit-ko.md: the friend's trend with the OBV / Stoch RSI entries on the Bybit
+// account, the same code) has the same two tabs from its own answers (/mixbybit, /mixbybitperf): mixView(ctx, BYBIT_UI);
+// its 성적 has no 5-year reference (said so), and 실거래 vs 모의 side by side.
 // HONESTY: unread = 못 읽음 + why, never a zero; a bot with no files says 꺼짐 and how to start it; the paper bot's money is
 // never shown as real money (모의 · 진짜 돈 아님); small samples say so; the backtest is labelled as the design's, not live.
 import {h, put, ui, fmt, store, serverNow, local} from "../core/pb.js";
@@ -28,7 +31,17 @@ const FEED_PAGE = 25;
 const TRADES_PAGE = 15;
 const SIDE = (x) => (Number(x) > 0 ? "롱" : "숏");
 const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
-const BOT_KO = {live: "실거래 · WOO X Pro 2", paper: "모의 · 주문 없음"};
+/** Each mix bot's screens: its answers, its account and the words that differ (the friend bot's: the tabs as they were). */
+export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "WOO X Pro 2", exchange: "WOO X Pro", key: "",
+  kick: "진짜 돈 · WOO X Pro 두 번째 계정",
+  wait: "30분봉이 끝날 때 하늘색(롱)·보라색(숏)으로 바뀌고 30분·1시간 평균 RSI 조건이 맞으면 시장가로 들어가요 (한 번에 1포지션).",
+  plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
+export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
+  exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정",
+  wait: "30분봉이 끝날 때 친구 추세(하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드 4표 중 같은 쪽 2표 이상, 횡보 2표 이상이면 금지) 쪽으로 " +
+    "OBV 히스토그램이 연한색→진한색이 되거나 스톡RSI가 50선 아래 골든(롱)·50선 위 데드(숏)가 뜨면 시장가로 들어가요 (한 번에 1포지션).",
+  plan: "손절 = 진입 때 30분봉 ATR × 3 · 증거금 = 잔고의 40%", morning: "09:07", h1: false};
+const botKo = (id, o = MIX_UI) => (id === "live" ? `실거래 · ${o.account}` : "모의 · 주문 없음");
 const STATUS = {running: ["돌고 있음", "good", "run"], stopped: ["멈춤", "bad", "stop"], off: ["꺼짐", "thin", "off"], error: ["못 읽음", "bad", "err"]};
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_dash_livemix.py)
@@ -100,7 +113,7 @@ export function feedKo(x) {
     const o = x.outcome || {};
     const vals = valsKo(x.vals);
     // owners 10-26: the second rule's rows say whose they are (the friend's rows read as before)
-    const what = `${x.coin} ${x.rule === "st" ? `${x.rule_ko} ` : ""}${x.colour_ko}`;
+    const what = `${x.coin} ${x.rule === "st" || x.rule === "srsi" ? `${x.rule_ko} ` : ""}${x.colour_ko}`;
     if (x.stage === "entered") {
       return {head: `${what}${want}`, pill: o.adopted ? "진입 (늦게 확인)" : "진입", tone: "good",
         text: [`체결 ${fmt.price(o.entry)} · ${fmt.num(o.qty, 4)}개 · 손절 ${fmt.price(o.stop)}`, vals].filter(Boolean).join(" · ")};
@@ -134,13 +147,22 @@ export function feedKo(x) {
  *  "스톡RSI K 30.1 / D 25.2 · 30분 RSI26 56.0 · 1시간 RSI26 54.0 · MOM 0.0042 · 종가 … · 손절 폭 …"; MOM since 10-27). */
 export function valsKo(v) {
   if (!v) return "";
-  return [ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
+  return [trendKo(v), ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
     ok(v.k) && ok(v.d) ? `스톡RSI K ${fmt.num(v.k, 1)} / D ${fmt.num(v.d, 1)}` : null,
     ok(v.rsi26_30m) ? `30분 RSI26 ${fmt.num(v.rsi26_30m, 1)}` : null, ok(v.rsi26_1h) ? `1시간 RSI26 ${fmt.num(v.rsi26_1h, 1)}` : null,
     ok(v.mom) ? `MOM ${fmt.price(v.mom)}` : null,
     ok(v.close) ? `종가 ${fmt.price(v.close)}` : null, ok(v.stop_pct) ? `손절 폭 ${fmt.num(v.stop_pct, 2)}%` : null].filter(Boolean).join(" · ");
 }
-const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI"};
+const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI", obv: "OBV 진한색", srsi: "스톡RSI 50선"};
+const TREND_KO = {1: "상승", "-1": "하락", 0: "진입 금지"}, VOTE_KO = {1: "상승", "-1": "하락", 0: "횡보"};
+const VOTES = [["line", "하늘·보라 선"], ["ema", "EMA RSI"], ["chop", "찹존"], ["st", "슈퍼트렌드"]];
+/** The 바이비트 봇's trend of the bar in words (owners 10-29): "친구 추세 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 횡보 ·
+ *  슈퍼트렌드 상승)"; null without one (the friend bot's rows). */
+export function trendKo(v) {
+  if (!v || v.trend == null || !Number.isFinite(Number(v.trend))) return null;
+  const vs = v.votes && typeof v.votes === "object" ? VOTES.filter(([k]) => v.votes[k] != null).map(([k, ko]) => `${ko} ${VOTE_KO[Number(v.votes[k])] || "?"}`) : [];
+  return `친구 추세 ${TREND_KO[Number(v.trend)] || "?"}${vs.length ? ` (${vs.join(" · ")})` : ""}`;
+}
 
 // ---------------------------------------------------------------- shared parts
 /** A tab's own poll: its endpoint every ``every`` ms, the failures said (stale: dimmed with its age). */
@@ -171,13 +193,13 @@ function tile(k, v, sub, cls, title) {
     sub ? h("span", {class: "lmx-ts"}, sub) : null);
 }
 /** The head of a bot's column: the orb, its name, the status pill and line (both tabs). */
-function botHead(b, now) {
+function botHead(b, now, o = MIX_UI) {
   const s = statusOf(b, now);
   return h("div", {class: ["lmx-bhead", s.cls]},
     h("div", {class: "lmx-orb", "aria-hidden": "true"}, h("i")),
     h("div", {class: "lmx-bmain"},
-      h("p", {class: "lmx-kick"}, b.real ? "진짜 돈 · WOO X Pro 두 번째 계정" : "연습 · 같은 신호, 주문 없음 · 진짜 돈 아님"),
-      h("h2", {class: "lmx-bname"}, BOT_KO[b.id] || b.ko, " ", ui.pill(s.pill, s.tone, `서버 서비스 ${b.unit}`)),
+      h("p", {class: "lmx-kick"}, b.real ? o.kick : "연습 · 같은 신호, 주문 없음 · 진짜 돈 아님"),
+      h("h2", {class: "lmx-bname"}, botKo(b.id, o) || b.ko, " ", ui.pill(s.pill, s.tone, `서버 서비스 ${b.unit}`)),
       s.line ? h("p", {class: "lmx-sub"}, s.line) : null,
       s.hint ? h("p", {class: "lmx-hint"}, s.hint) : null,
       (b.status || {}).mode_ko ? h("p", {class: "lmx-warn"}, b.status.mode_ko) : null));
@@ -200,9 +222,9 @@ function fileNotes(b) {
 }
 
 // ================================================================ 관제 (#/mix)
-/** mixView(ctx) -> {el, set()}: the two bots now (module comment). */
-export function mixView(ctx) {
-  const st = {d: null, okAt: 0, busy: false, ticks: [], feed: local.get("lmx-feed", "live"), feedN: FEED_PAGE};
+/** mixView(ctx, o) -> {el, set()}: the two bots now (module comment); ``o``: which mix bot (MIX_UI, BYBIT_UI). */
+export function mixView(ctx, o = MIX_UI) {
+  const st = {d: null, okAt: 0, busy: false, ticks: [], feed: local.get("lmx-feed" + o.key, "live"), feedN: FEED_PAGE};
   const slot = h("div", {class: "lb-slot"});
   const botsBox = h("div", {class: "lmx-bots"});
   const feedHead = h("div", {class: "lmx-feedhead"});
@@ -222,7 +244,7 @@ export function mixView(ctx) {
     if (n && ok(n.value)) {
       items.push(tile(b.real ? "실거래 잔고" : "모의 잔고", usdKo(n.value),
         `${n.from_ko}${ok(n.ms) ? ` · ${fmt.kst(n.ms)}` : ""}${b.real ? "" : " · 진짜 돈 아님"}`, b.real ? "real" : "paper",
-        b.real ? "봇이 WOO X Pro에서 읽어 기록한 마지막 잔고 (지금 거래소 값은 앱에서)" : "모의 잔고 (주문 없음)"));
+        b.real ? `봇이 ${o.exchange}에서 읽어 기록한 마지막 잔고 (지금 거래소 값은 앱에서)` : "모의 잔고 (주문 없음)"));
     } else items.push(tile(b.real ? "실거래 잔고" : "모의 잔고", "수집 전", e.none_ko || "", "na"));
     // owners 10-27 ("친구봇 돈 움직이는것도 안뜨고"): with a position open, the balance read at its entry plus the position at the
     // page's mark (before the exit fee), redrawn with the ticker
@@ -234,12 +256,14 @@ export function mixView(ctx) {
         "진입 때 읽은 잔고에 열린 포지션의 평가 손익(바이낸스 마크 가격, 나갈 때 수수료 전)을 더한 어림값 · 정확한 값은 앱에서"));
     }
     items.push(tile("시작 잔고", usdKo(e.start), ok(e.change) ? `지금까지 ${pctKo(e.change)}${b.real ? "" : " (모의)"}` : "", b.real ? "" : "paper"));
-    items.push(tile(`바닥선 (시작의 ${rateKo(e.floor_frac, 0)})`, usdKo(e.floor),
-      e.below ? "아래로 내려감 → 새 진입 멈춤" : ok(e.room) ? `남은 여유 ${usdKo(e.room)}` : "아래로 가면 새 진입을 멈춰요", e.below ? "bad" : ""));
+    const floorOn = Number(e.floor_frac) > 0;            // the 바이비트 봇 (owners 10-29): no floor
+    items.push(floorOn ? tile(`바닥선 (시작의 ${rateKo(e.floor_frac, 0)})`, usdKo(e.floor),
+      e.below ? "아래로 내려감 → 새 진입 멈춤" : ok(e.room) ? `남은 여유 ${usdKo(e.room)}` : "아래로 가면 새 진입을 멈춰요", e.below ? "bad" : "")
+      : tile("바닥선", "없음", "잔고가 줄어도 새 진입을 멈추지 않아요 (두 분 결정)"));
     const frac = ok(n && n.value) && ok(e.start) && Number(e.start) > 0 ? Math.max(0, Math.min(1, Number(n.value) / Number(e.start) / 1.5)) : null;
     return [h("div", {class: "lmx-money", role: "list", "aria-label": b.real ? "실거래 잔고" : "모의 잔고"}, items),
       frac == null ? null : h("div", {class: ["lmx-meter", e.below ? "bad" : ""], role: "img", "aria-label": "잔고와 바닥선"},
-        h("i", {style: {"--v": frac.toFixed(4)}}), h("b", {style: {"--m": (Number(e.floor_frac || 0.7) / 1.5).toFixed(4)}}),
+        h("i", {style: {"--v": frac.toFixed(4)}}), floorOn ? h("b", {style: {"--m": (Number(e.floor_frac) / 1.5).toFixed(4)}}) : null,
         h("u", {style: {"--m": (1 / 1.5).toFixed(4)}}))];
   }
   function haltBox(b) {
@@ -271,7 +295,7 @@ export function mixView(ctx) {
     }
     if (!p) {
       return h("div", {class: "lmx-pos lmx-empty"}, h("b", null, "포지션 없음"),
-        h("p", null, "30분봉이 끝날 때 하늘색(롱)·보라색(숏)으로 바뀌고 30분·1시간 평균 RSI 조건이 맞으면 시장가로 들어가요 (한 번에 1포지션)."));
+        h("p", null, o.wait));
     }
     const heldNode = h("b", {class: "num"});
     const mark = store.mark(p.symbol);
@@ -292,7 +316,7 @@ export function mixView(ctx) {
         roe != null ? h("dd", {class: "num"}, `${fmt.price(mark)} · ROE `, h("span", {class: fmt.tone(roe)}, pctKo(roe, 0)),
           h("small", {class: "lmx-sub"}, " (바이낸스 가격, 수수료 전 · 참고)")) : null,
         h("dt", null, "신호 봉"), h("dd", {class: "num"}, `${fmt.kst(p.signal_close_ms)} 마감 · 종가 ${fmt.price(p.signal_close)}`)),
-      p.stop_id_missing ? h("p", {class: "lmx-warn"}, "상태 파일에 손절 주문 번호가 없어요 · 봇이 5분마다 손절을 확인해요 · WOO X Pro 앱에서도 확인하세요") : null,
+      p.stop_id_missing ? h("p", {class: "lmx-warn"}, `상태 파일에 손절 주문 번호가 없어요 · 봇이 5분마다 손절을 확인해요 · ${o.exchange} 앱에서도 확인하세요`) : null,
       h("p", {class: "lmx-sub"}, p.ladder_basis === "net"
         ? `계단(순ROE, 수수료 뺀 값): 가장 유리했던 가격이 순ROE ${pctKo(p.roe_act, 0)} (${fmt.price(p.first_act_price)})에 닿으면 손절을 순ROE ${pctKo(p.lock_roe, 0)} (${fmt.price(p.first_lock_price)})로, 그 뒤 ${pctKo(p.ladder_step, 0)}마다 한 칸 · ${p.every_s ? `${fmt.int(p.every_s)}초마다 1분봉으로` : "30분봉 마감 때"} 옮겨요`
         : `계단: 가장 유리했던 가격이 ROE ${pctKo(p.roe_act, 0)} (${fmt.price(p.first_act_price)})에 닿으면 손절을 ROE ${pctKo(p.lock_roe, 0)} (${fmt.price(p.first_lock_price)})로, 그 뒤 같은 폭씩 · 30분봉 마감 때만 옮겨요`));
@@ -300,7 +324,7 @@ export function mixView(ctx) {
   function botCol(b) {
     const now = serverNow();
     const s = (b.status || {}).state;
-    const kids = [botHead(b, now)];
+    const kids = [botHead(b, now, o)];
     if (s === "off") kids.push(offBox(b));
     else {
       if (s === "error") kids.push(sourceState({state: "error", reason_ko: b.status.reason_ko, reason: b.status.reason}, "상태 파일"));
@@ -308,7 +332,7 @@ export function mixView(ctx) {
       if ((b.setup_bad || []).length) kids.push(h("p", {class: "lmx-warn"}, `마지막 시작 때 설정 실패: ${b.setup_bad.join(" · ")} (그 코인은 거래 안 함)`));
       kids.push(...fileNotes(b));
     }
-    return h("section", {class: ["lmx-bot", b.id, (STATUS[s] || [])[2] || "err"], "aria-label": BOT_KO[b.id] || b.ko}, kids);
+    return h("section", {class: ["lmx-bot", b.id, (STATUS[s] || [])[2] || "err"], "aria-label": botKo(b.id, o) || b.ko}, kids);
   }
   function drawBots() {
     st.ticks = [];
@@ -318,7 +342,7 @@ export function mixView(ctx) {
     const bots = st.d.bots || [];
     const b = bots.find((x) => x.id === st.feed) || bots[0];
     put(feedHead, ui.seg(bots.map((x) => ({id: x.id, label: x.id === "live" ? "실거래" : "모의"})), b ? b.id : "",
-      (id) => { st.feed = id; st.feedN = FEED_PAGE; local.set("lmx-feed", id); drawFeed(); }, {label: "어느 봇"}),
+      (id) => { st.feed = id; st.feedN = FEED_PAGE; local.set("lmx-feed" + o.key, id); drawFeed(); }, {label: "어느 봇"}),
     b && b.feed ? h("div", {class: "lmx-chiprow"}, ...[["signal", "색 변화"], ["entered", "진입"], ["skipped", "건너뜀"], ["refused", "조건 안 맞음"], ["exit", "청산"], ["ladder", "계단"]]
       .filter(([k]) => b.feed.counts[k]).map(([k, ko]) => ui.pill(`${ko} ${fmt.int(b.feed.counts[k])}`, k === "entered" ? "good" : "thin")),
     b.feed.counts.warn ? ui.pill(`경고 ${fmt.int(b.feed.counts.warn)}`, b.feed.bad ? "bad" : "warn") : null) : null);
@@ -343,7 +367,7 @@ export function mixView(ctx) {
   function onTick() {
     for (const k of st.ticks) k.node.textContent = k.f(serverNow());
   }
-  poller(ctx, API, REFRESH_MS, st, slot, main, draw);
+  poller(ctx, o.api, REFRESH_MS, st, slot, main, draw);
   ctx.every(TICK_MS, onTick, {now: false});
   if (ctx.watch) ctx.watch("ticker", () => { if (st.d) drawBots(); });
   return {el, set() {}};
@@ -424,9 +448,9 @@ export function compareCoins(bt, bots) {
     live: cell(of("live", r.symbol)), paper: cell(of("paper", r.symbol)), small: [of("live", r.symbol), of("paper", r.symbol)].some((c) => c && c.n && c.small)}));
 }
 
-/** mixperfView(ctx) -> {el, set()}: 성적 (module comment). */
-export function mixperfView(ctx) {
-  const st = {d: null, okAt: 0, busy: false, acct: local.get("lmx-trades", "live"), tn: TRADES_PAGE, cn: TRADES_PAGE};
+/** mixperfView(ctx, o) -> {el, set()}: 성적 (module comment); ``o``: which mix bot (MIX_UI, BYBIT_UI). */
+export function mixperfView(ctx, o = MIX_UI) {
+  const st = {d: null, okAt: 0, busy: false, acct: local.get("lmx-trades" + o.key, "live"), tn: TRADES_PAGE, cn: TRADES_PAGE};
   const slot = h("div", {class: "lb-slot"});
   const recBox = h("div", {class: "lmx-bots"});
   const btBox = h("div", {class: "lmx-bt"});
@@ -436,11 +460,14 @@ export function mixperfView(ctx) {
   const bandBox = h("div", {class: "lmx-band"});
   const morningBox = h("div", {class: "lmx-morning"});
   const lossBox = h("div", {class: "lmx-loss"});
+  const twinBox = h("div", {class: "lmx-twin"});
+  const btCard = ui.card({title: "설계서 5년 백테스트와 나란히", sub: "왼쪽 두 칸은 설계서 숫자 (실거래 아님) · 오른쪽은 이 봇들의 실제 기록", cls: "lmx-btcard"}, btBox);
   const cards = h("div", {class: "lmx-cards"}, recBox,
+    ui.card({title: "실거래 vs 모의", sub: "같은 신호를 받는 두 봇 · 차이는 체결 · 수수료 · 놓친 진입 · 모의 칸의 돈은 진짜 돈 아님", cls: "lmx-twincard"}, twinBox),
     ui.card({title: "운이냐 고장이냐", sub: "실거래 기록을 봇 코드 그대로 돌린 5년 재생과 비교 · 이만큼 나쁘거나 더 나빴던 때가 10% 넘으면 정상 범위", cls: "lmx-bandcard"}, bandBox),
-    ui.card({title: "손실 카드", sub: "실거래 거래마다 · 계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교 · 새것부터 · 텔레그램에도 청산 몇 분 뒤 와요", cls: "lmx-losscard"}, lossBox),
-    ui.card({title: "어제 아침 점검", sub: "매일 09:05 · 신호 다시 계산(바이낸스 봉, 봇 공식)과 모의 비교", cls: "lmx-morncard"}, morningBox),
-    ui.card({title: "설계서 5년 백테스트와 나란히", sub: "왼쪽 두 칸은 설계서 숫자 (실거래 아님) · 오른쪽은 이 봇들의 실제 기록", cls: "lmx-btcard"}, btBox),
+    ui.card({title: "손실 카드", sub: `실거래 거래마다 · ${o.plan} · 새것부터 · 텔레그램에도 청산 몇 분 뒤 와요`, cls: "lmx-losscard"}, lossBox),
+    ui.card({title: "어제 아침 점검", sub: `매일 ${o.morning} · 신호 다시 계산(바이낸스 봉, 봇 공식)과 모의 비교`, cls: "lmx-morncard"}, morningBox),
+    btCard,
     ui.card({title: "거래", sub: "새것부터 · 청산 기록을 진입 기록과 맞춤 · 한국 시간", cls: "lmx-tradecard"}, tradeHead, tradeBox),
     ui.card({title: "규칙", sub: "봇이 읽는 설정 그대로 (서버 설정 파일)", cls: "lmx-rulecard"}, rulesBox));
   const main = h("div", {class: "lmx-body"}, cards);
@@ -450,7 +477,7 @@ export function mixperfView(ctx) {
   function recCard(b) {
     const now = serverNow();
     const s = (b.status || {}).state;
-    const kids = [botHead(b, now)];
+    const kids = [botHead(b, now, o)];
     if (s === "off") { kids.push(offBox(b)); return h("section", {class: ["lmx-bot", b.id, "off"]}, kids); }
     const r = b.record;
     if (!r) kids.push(sourceState((b.files || {}).log || {}, "기록(log) 파일"));
@@ -491,7 +518,7 @@ export function mixperfView(ctx) {
     const bots = st.d.bots || [];
     const b = bots.find((x) => x.id === st.acct) || bots[0];
     put(tradeHead, ui.seg(bots.map((x) => ({id: x.id, label: x.id === "live" ? "실거래" : "모의"})), b ? b.id : "",
-      (id) => { st.acct = id; st.tn = TRADES_PAGE; local.set("lmx-trades", id); drawTrades(); }, {label: "어느 봇"}));
+      (id) => { st.acct = id; st.tn = TRADES_PAGE; local.set("lmx-trades" + o.key, id); drawTrades(); }, {label: "어느 봇"}));
     if (!b) { put(tradeBox, ui.empty("봇이 없어요")); return; }
     if ((b.status || {}).state === "off") { put(tradeBox, ui.empty(`${b.ko} 봇이 아직 꺼져 있어요`)); return; }
     const ts = b.trades;
@@ -503,29 +530,30 @@ export function mixperfView(ctx) {
   }
   function rulesCard(b) {
     const r = b.rules;
-    if (!r) return h("section", {class: ["lmx-bot", b.id]}, h("h3", {class: "lmx-h3"}, BOT_KO[b.id]), sourceState((b.files || {}).config || {}, "설정 파일"));
+    if (!r) return h("section", {class: ["lmx-bot", b.id]}, h("h3", {class: "lmx-h3"}, botKo(b.id, o)), sourceState((b.files || {}).config || {}, "설정 파일"));
     return h("section", {class: ["lmx-bot", b.id]},
-      h("h3", {class: "lmx-h3"}, `${BOT_KO[b.id]} · ${r.mode === "mainnet" ? "실거래 (mainnet)" : "모의 (paper)"}`),
+      h("h3", {class: "lmx-h3"}, `${botKo(b.id, o)} · ${r.mode === "mainnet" ? "실거래 (mainnet)" : "모의 (paper)"}`),
       r.source === "repo" ? h("p", {class: "lmx-warn"}, r.reason_ko || "서버 설정 파일 대신 저장소 기본 설정이에요") : null,
       h("ul", {class: "lmx-list lmx-rlist"},
         h("li", null, `${r.margin_frac > 0 ? `진입마다 증거금 = 잔고의 ${rateKo(r.margin_frac, 0)}` : `손절 1번 = 잔고의 ${fmt.num(r.risk_pct, 2)}%`} · 한 번에 1포지션 (같은 봉에 겹치면 아래 코인 순서)`),
-        h("li", null, `잔고가 시작의 ${rateKo(r.equity_floor_frac, 0)} 아래면 새 진입 멈춤 · 한 포지션 최대 ${usdKo(r.max_notional_usd)}`),
+        h("li", null, `${Number(r.equity_floor_frac) > 0 ? `잔고가 시작의 ${rateKo(r.equity_floor_frac, 0)} 아래면 새 진입 멈춤` : "바닥선 없음 (잔고가 줄어도 새 진입)"} · 한 포지션 최대 ${usdKo(r.max_notional_usd)}`),
         h("li", null, r.ladder
           ? `계단(순ROE, 모든 코인): ${rateKo(r.ladder.trigger, 0)}에 닿으면 손절을 ${rateKo(r.ladder.lock, 0)}로, 그 뒤 ${rateKo(r.ladder.step, 0)}마다 한 칸${r.ladder_every_s ? ` · ${fmt.int(r.ladder_every_s)}초마다 1분봉으로 옮김` : ""} · 반대 신호나 시간으로는 청산 안 함`
           : `계단: 시작 ROE에 닿으면 손절을 ROE ${pctKo(r.lock_roe, 0)}로, 그 뒤 같은 폭씩 · 반대 신호나 시간으로는 청산 안 함`),
         h("li", null, `진입 금지: ${(r.blocks || []).map((x) => `${x.ko} ${x.on ? "켬" : "끔"}`).join(" · ")}`),
         ok(r.start_equity) ? h("li", null, `시작 금액 ${usdKo(r.start_equity)}${r.mode === "paper" ? " (모의)" : ""}`) : null),
-      h("div", {class: "lmx-ctab", role: "table", "aria-label": "코인별 설정"},
-        h("div", {class: "lmx-ctr lmx-cth", role: "row"}, ["코인", "1시간 여유", "손절 ATR ×", "계단 시작 ROE", "레버리지"].map((x) => h("span", {role: "columnheader"}, x))),
+      h("div", {class: ["lmx-ctab", o.h1 ? "" : "no-h1"], role: "table", "aria-label": "코인별 설정"},
+        h("div", {class: "lmx-ctr lmx-cth", role: "row"}, ["코인", ...(o.h1 ? ["1시간 여유"] : []), "손절 ATR ×", "계단 시작 ROE", "레버리지"].map((x) => h("span", {role: "columnheader"}, x))),
         (r.coins || []).map((c) => h("div", {class: ["lmx-ctr", c.enabled && !c.off_at_start ? "" : "off"], role: "row"},
           h("b", {role: "rowheader"}, c.coin, !c.enabled ? " (꺼짐)" : c.off_at_start ? " (시작 때 꺼짐)" : ""),
-          h("span", {class: "num", role: "cell"}, fmt.num(c.h1_buf, 1)), h("span", {class: "num", role: "cell"}, fmt.num(c.sl_atr, 1)),
+          o.h1 ? h("span", {class: "num", role: "cell"}, fmt.num(c.h1_buf, 1)) : null, h("span", {class: "num", role: "cell"}, fmt.num(c.sl_atr, 1)),
           h("span", {class: "num", role: "cell"}, r.ladder ? `${rateKo(r.ladder.trigger, 0)} → ${rateKo(r.ladder.lock, 0)} (순ROE)` : `${rateKo(c.roe_act, 0)} → ${rateKo(r.lock_roe, 0)}`), h("span", {class: "num", role: "cell"}, fmt.lev(c.leverage))))));
   }
   function drawBand(an) {
     const b = an.band || {};
     const kids = [];
     if (b.state === "empty" || b.state === "changed") kids.push(ui.empty(b.ko || "아직 닫힌 실거래가 없어요"));
+    else if (b.state === "none") kids.push(ui.empty(b.ko || "이 봇은 5년 재생이 없어 운이냐 고장이냐를 재지 않아요 · 손실 카드와 아침 점검은 그대로예요"));
     else if (b.state === "ok") {
       kids.push(h("div", {class: ["lmx-verdict", b.worst === "very_rare" ? "halt" : b.worst === "rare" ? "block" : "go"]},
         h("b", null, b.ko || ""), h("span", {class: "lmx-sub"}, ` 실거래 ${fmt.int(b.n)}번`)));
@@ -582,13 +610,26 @@ export function mixperfView(ctx) {
     }
     drawBand(an); drawLoss(an); drawMorning(an);
   }
+  /** 실거래 vs 모의: the two records side by side, row by row (recordRows). */
+  function drawTwin() {
+    const bots = st.d.bots || [];
+    const lv = bots.find((b) => b.id === "live"), pp = bots.find((b) => b.id === "paper");
+    if (!lv || !pp || !lv.record || !pp.record) { put(twinBox, ui.empty("두 봇 모두 기록이 있어야 나란히 봐요 · 꺼져 있거나 기록을 못 읽은 봇이 있어요")); return; }
+    const a = recordRows(lv.record, true), b = recordRows(pp.record, false);
+    put(twinBox, h("div", {class: "lmx-btab", role: "table", "aria-label": "실거래와 모의 기록"},
+      h("div", {class: "lmx-btr lmx-bth", role: "row"}, ["", "실거래", "모의"].map((x) => h("span", {role: "columnheader"}, x))),
+      a.map(([k, v, tone], i) => h("div", {class: "lmx-btr", role: "row"}, h("b", {role: "rowheader"}, k.replace(" (모의)", "")),
+        h("span", {class: ["num", tone || ""], role: "cell"}, v), h("span", {class: ["num", (b[i] || [])[2] || ""], role: "cell"}, (b[i] || [])[1] || "—")))),
+    h("p", {class: "lmx-sub"}, "모의는 주문을 내지 않고 같은 신호에 같은 규칙으로 들어간 것으로 쳐요 · 승률 차이가 크면 체결 · 놓친 진입을 아침 점검에서 봐요"));
+  }
   function draw() {
     const d = st.d;
     if (!d) return;
     put(recBox, (d.bots || []).map(recCard));
-    drawAnalysis(); drawBt(); drawTrades();
+    btCard.hidden = !d.backtest;                         // the 바이비트 봇 has no 5-year reference
+    drawAnalysis(); drawTwin(); if (d.backtest) drawBt(); drawTrades();
     put(rulesBox, (d.bots || []).map(rulesCard));
   }
-  poller(ctx, PERF_API, SLOW_MS, st, slot, main, draw);
+  poller(ctx, o.perf, SLOW_MS, st, slot, main, draw);
   return {el, set() {}};
 }

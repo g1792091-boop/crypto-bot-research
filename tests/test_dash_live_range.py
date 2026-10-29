@@ -515,8 +515,8 @@ def test_the_menu_button_strip_and_names(rw, tmp_path):
       fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'range'), K.followersOf(D_s, 'paper2')],
       names: ['paper', 'paper2', 'range'].map((id) => K.acctKo(id)), line: K.followLine(D_s.papers), isp: ['range', 'mexc'].map(K.isPaperId),
       tab: LB.BOT_TAB.rangebot.bot}}));""", s=summary)
-    assert out["group"] == ["trendbot", "rangebot", "vwapbot", "mixbot", "v39"]
-    assert out["nav"] == ["추세판단 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트"]
+    assert out["group"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]          # (owners 10-29: 바이비트 봇 first, 추세판단 봇 last)
+    assert out["nav"] == ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트", "추세판단 봇"]
     assert out["screen"] == ["레인지 봇", "bots", "livebots"] and out["icon"] > 5 and out["tab"] == "range"
     assert out["fol"] == [["bybit"], ["mexc"], ["deepcoin"]]
     assert out["names"] == ["추세판단 봇", "VWAP 개선판", "레인지 봇"] and out["isp"] == [True, False]

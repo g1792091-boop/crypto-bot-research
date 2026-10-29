@@ -76,6 +76,9 @@ MODULES = MODULES + ("liverange",)
 # 실거래 › 봇별 화면마다 목표 연구 (/api/v4/livebots/goalres?bot=: each bot's goal arithmetic and research questions on its own
 # records, owners 10-26; dash/more/livegoalres.py)
 MODULES = MODULES + ("livegoalres",)
+# 실거래 › 바이비트 봇 › 친구 추세판 (#/ftrend: each coin's friend trend as the 바이비트 봇 and the 레인지 봇 saw it, owners
+# 10-29; dash/more/liveftrend.py)
+MODULES = MODULES + ("liveftrend",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 

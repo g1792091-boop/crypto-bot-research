@@ -15,6 +15,8 @@ Bots (each answer shows one bot and the executors that follow it, nothing of the
             (딥코인)
     mix     믹스 30분 봇 (WOO X Pro 2): the live bot and its paper twin (livemix: their logs), the owners' new settings of
             10-26 (margin_frac 40 %, net ladder) told apart by each entry's own margin share
+    bybit   바이비트 봇 (owners 10-29, docs/mixbybit-ko.md): the same parts as the mix bot from its own logs (livemix
+            PROFILES "bybit"), but no 전후 (margin 40 % from its first trade) and no 하한 (it has no balance floor)
     v39     V3.9 투비트: the rule bot's paper account V39_ALL@1h (paper3.db) and the Toobit executor (while it is not
             installed, the paper account alone, said so)
 
@@ -69,8 +71,9 @@ from ... import livepapers as LP
 from . import livebots as L
 
 DAY, HOUR, MIN = L.DAY, L.HOUR, 60_000
-BOTS = ("trend", "range", "vwap", "mix", "v39")
-NAME_KO = {"trend": "추세판단 봇", "range": "레인지 봇", "vwap": "VWAP 개선판", "mix": "믹스 30분 봇", "v39": "V3.9 투비트"}
+BOTS = ("trend", "range", "vwap", "mix", "v39", "bybit")
+NAME_KO = {"trend": "추세판단 봇", "range": "레인지 봇", "vwap": "VWAP 개선판", "mix": "믹스 30분 봇", "v39": "V3.9 투비트",
+           "bybit": "바이비트 봇"}
 MONTH_D = 30                            # the goal's month (×6 in 30 days)
 TF_KO = {"15m": "15분", "30m": "30분", "1h": "1시간", "4h": "4시간", "1d": "일봉"}
 MIN_DAYS = 1.0                          # entries a day only from one whole day of record
@@ -84,6 +87,7 @@ LINKS = {
               ("#/map", "지도")],
     "vwap": [("#/vwperf", "VWAP 성적"), ("#/vwblock", "막은 신호")],
     "mix": [("#/mixperf", "믹스 성적")],
+    "bybit": [("#/bybitperf", "바이비트 성적"), ("#/ftrend", "친구 추세판")],
     "v39": [],
     "range": [("#/trades", "거래"), ("#/signals", "신호"), ("#/missed", "못 탄 신호"), ("#/cost", "비용")],
 }
@@ -647,15 +651,17 @@ def mix_margin_share(t: dict) -> Optional[float]:
     return q * e / lev / eq if q and e and lev and eq else None
 
 
-def mix_bot(p: dict, now: int) -> dict:
+def mix_bot(p: dict, now: int, bot: str = "mix") -> dict:
+    """A mix bot's goal part (``bot``: livemix.PROFILES, the 믹스 30분 봇 or the 바이비트 봇)."""
     from . import livemix as MX
+    prof = MX.PROFILES[bot]
     target = 1 + _target()
-    mp = MX.paths()
-    loaded = {bid: MX.load_bot(bid, mp[bid], now) for bid, *_r in MX.BOTS}
+    mp = MX.paths(bot=bot)
+    loaded = {bid: MX.load_bot(bid, mp[bid], now) for bid, *_r in prof.bots}
     if all(b["status"]["state"] == "off" for b in loaded.values()):
-        return {"state": "off", "ko": MX.OFF_KO["live"]}
+        return {"state": "off", "ko": MX.OFF_KO["live"] if bot == "mix" else MX.off_ko(prof, "live")}
     accounts, per = [], {}
-    for bid, ko in (("live", "WOO X Pro 2 (실거래)"), ("paper", "모의")):
+    for bid, ko in (("live", f"{prof.account_ko} (실거래)"), ("paper", "모의")):
         b = loaded[bid]
         if b["status"]["state"] == "off" or b["lg"].get("state") != "ok":
             accounts.append({"id": bid, "name_ko": ko, "kind": "live" if bid == "live" else "paper",
@@ -684,9 +690,11 @@ def mix_bot(p: dict, now: int) -> dict:
                          "real": bid == "live", **goal_numbers(rows, entries, since, now, target, eq_from, eq_now, f_ms)})
     items = []
     if per:
-        items.append(_safe(lambda: mix_before_after(per), "before_after", "새 설정 전후"))
+        if bot == "mix":                                # the 바이비트 봇: margin 40 % from its first trade, no floor
+            items.append(_safe(lambda: mix_before_after(per), "before_after", "새 설정 전후"))
         items.append(_safe(lambda: mix_steps(per), "steps", "계단 몇 칸까지 갔나"))
-        items.append(_safe(lambda: mix_floor(per), "floor", "잔고 하한까지 손절 몇 번"))
+        if bot == "mix":
+            items.append(_safe(lambda: mix_floor(per), "floor", "잔고 하한까지 손절 몇 번"))
     if "live" in per and "paper" in per:
         items.append(_safe(lambda: mix_twin(per), "twin", "실거래 vs 모의"))
     return {"state": "ok", "accounts": accounts, "items": [i for i in items if i]}
@@ -739,7 +747,10 @@ def mix_steps(per: dict) -> dict:
         b["wins"] += 1 if (t.get("pnl") or 0) > 0 else 0
         b["pnl"] += t.get("pnl") or 0.0
         b["roe_sum"] += t.get("roe") or 0.0
-    ko = {0: "계단 전 (손절·수동)", 1: "1칸 (12% 닿고 10% 잠금)", 2: "2칸 (17→15)", 3: "3칸 (22→20)", 4: "4칸 넘게"}
+    lad = getattr(src.get("cfg"), "ladder", None) or {"trigger": 12, "lock": 10, "step": 5}     # its config's net-ROE ladder
+    tg, lk, sp = (lad[k] for k in ("trigger", "lock", "step"))
+    ko = {0: "계단 전 (손절·수동)", 1: f"1칸 ({tg:g}% 닿고 {lk:g}% 잠금)", 2: f"2칸 ({tg + sp:g}→{lk + sp:g})",
+          3: f"3칸 ({tg + 2 * sp:g}→{lk + 2 * sp:g})", 4: "4칸 넘게"}
     rows = [{**by[k], "step_ko": ko[k], "roe_mean": by[k]["roe_sum"] / by[k]["n"]} for k in sorted(by)]
     up = sum(r["n"] for r in rows if r["step"] > 0)
     n = sum(r["n"] for r in rows)
@@ -750,7 +761,7 @@ def mix_steps(per: dict) -> dict:
                                 {"key": "roe_mean", "label_ko": "평균 순ROE", "fmt": "pct"}, {"key": "pnl", "label_ko": "손익", "fmt": "usd"}],
                        "rows": rows},
                 need_ko=f"계단에 닿은 거래 {FEW}번부터 칸 간격을 말할 수 있어요 (지금 {up}번)",
-                use_ko="1칸에서 끝나는 게 대부분이면 첫 칸(12→10)이, 3칸 넘게 가는 게 많으면 칸 간격(5%)이 다음 연구예요",
+                use_ko=f"1칸에서 끝나는 게 대부분이면 첫 칸({tg:g}→{lk:g})이, 3칸 넘게 가는 게 많으면 칸 간격({sp:g}%)이 다음 연구예요",
                 how_ko=f"{'실거래' if bid == 'live' else '모의'} 봇 기록의 청산 때 칸 수 (새 설정 거래, 없으면 모든 거래)")
 
 
@@ -1183,7 +1194,7 @@ def build(bot: str, p: Optional[dict] = None, now_ms: Optional[int] = None, more
             "note_ko": NOTE_KO, "few_n": FEW, "read_n": READ_N,
             "links": [{"href": h, "ko": k} for h, k in LINKS[bot]]}
     try:
-        body = (site_bot(bot, p, now, more) if bot in ("trend", "vwap") else mix_bot(p, now) if bot == "mix"
+        body = (site_bot(bot, p, now, more) if bot in ("trend", "vwap") else mix_bot(p, now, bot) if bot in ("mix", "bybit")
                 else range_bot(p, now, more) if bot == "range" else v39_bot(p, now, more))
     except Exception as exc:  # noqa: BLE001
         body = {"state": "error", "ko": "목표 연구를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}

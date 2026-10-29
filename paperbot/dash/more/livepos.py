@@ -64,10 +64,16 @@ OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 
 # ... and the fourth (WOO X Pro 2, owners 10-24) and the fifth (투비트, owners 10-25) the same way
 # ... and the 친구봇 (owners 10-27 "친구봇 대시보드 화면에 실시간 포지션도 안뜨고"): WOO X Pro 2's own 30-minute bot, not an
 # executor (it trades by itself), its card from its own state file once it has one (mix_card)
-CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("range", L.ACCOUNT), ("bybit", None), ("mexc", None), ("deepcoin", None), ("wooxpro2", None),
-         ("mix", None), ("toobit", None), ("flip", L.FLIP_ACCOUNT))
+# ... and the 바이비트 봇 (owners 10-29, docs/mixbybit-ko.md): the Bybit account's own 30-minute bot (mixbybit_card), in the
+# Bybit slot's place once the old executor's slot left the page (livebots.replaced)
+CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("range", L.ACCOUNT), ("bybit", None), ("mixbybit", None), ("mexc", None),
+         ("deepcoin", None), ("wooxpro2", None), ("mix", None), ("toobit", None), ("flip", L.FLIP_ACCOUNT))
 MIX_NAME_KO = "WOO X Pro 2 · 친구봇"
 MIX_LIQ_KO = "친구봇 상태 파일에 청산가가 없어요 (WOO X Pro 앱에서 확인)"
+# each mix bot's card words (livemix.PROFILES): card id, name, its short name, the app to check in, the account's colour
+MIX_CARD = {"mix": {"id": "mix", "name_ko": MIX_NAME_KO, "short_ko": "친구봇", "app_ko": "WOO X Pro", "tag": "wooxpro2"},
+            "bybit": {"id": "mixbybit", "name_ko": "바이비트 · 바이비트 봇", "short_ko": "바이비트 봇", "app_ko": "바이비트",
+                      "tag": "bybit"}}
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()
@@ -541,16 +547,19 @@ EXIT_REASON_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ"
                   "SWITCH": "전환 전 포지션 정리"}
 
 
-def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None) -> Optional[dict]:
-    """The 친구봇's card (paperbot/mixchop.py, WOO X Pro 2): its state file's position in this page's shape, its own rules
-    (the config's net-ROE ladder, its own fill, its fee round trip); no paper behind it. None while the bot has no state
-    file on this server (never started)."""
+def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None, bot: str = "mix") -> Optional[dict]:
+    """A mix bot's card (paperbot/mixchop.py; ``bot``: livemix.PROFILES, the 친구봇 on WOO X Pro 2 or the 바이비트 봇):
+    its state file's position in this page's shape, its own rules (the config's net-ROE ladder, its own fill, its fee
+    round trip); no paper behind it. None while the bot has no state file on this server (never started)."""
     from . import livemix as X
-    bp = (mp or X.paths())["live"]
-    conf = X.read_config(bp["config"], bp["repo_config"])
+    prof = X.PROFILES[bot]
+    w = MIX_CARD[bot]
+    bp = (mp or X.paths(bot=bot))["live"]
+    conf = X.read_config(bp["config"], bp["repo_config"], prof)
     sp, _lp = X.files_of("live", bp, conf)
     st = X.read_state(sp)
-    base = {"id": "mix", "kind": "live", "self": True, "account": None, "name_ko": MIX_NAME_KO, "label_ko": MIX_NAME_KO}
+    base = {"id": w["id"], "kind": "live", "self": True, "account": None, "name_ko": w["name_ko"], "label_ko": w["name_ko"],
+            "short_ko": w["short_ko"], "app_ko": w["app_ko"], "tag": w["tag"]}
     if st.get("state") == "missing":
         return None
     if st.get("state") != "ok":
@@ -559,7 +568,7 @@ def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None) -> Opt
     cfg = conf.get("cfg")
     seen = X._i(d.get("saved_ms")) or st.get("mtime_ms")
     out = {**base, "state": "ok", "as_of_ms": seen, "stale": seen is None or now - int(seen) > X.STALE_MS, "wallet": None,
-           "halted": False, "halt_reason": "", "position": None, "rule_ko": X.M.NAME}
+           "halted": False, "halt_reason": "", "position": None, "rule_ko": prof.name}
     pv = X.position_view("live", d, now, cfg)
     if not pv:
         return out
@@ -589,14 +598,15 @@ def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None) -> Opt
     out["position"] = {
         "key": None, "symbol": pv["symbol"], "side": side, "leverage": lev, "qty": pv.get("qty"), "margin": pv.get("margin"),
         "entry": entry, "entry_time": pv.get("opened_ms"), "status": "open", "stop_order": pv.get("stop_id"),
-        "strategy_id": None, "timeframe": "30m", "rule_ko": f"{X.M.NAME} · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
+        "strategy_id": None, "timeframe": "30m", "rule_ko": f"{prof.name} · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
         "paired": False, "stop": stop, "stop_initial": None, "stop50": None, "stop_rule_cfg": None,
         "locked": locked, "lock_roe": lock, "lock_price": stop if locked else None, "secured": secured,
-        "next": nxt, "ladder": ladder_steps(spec, lock, best, price_of, price_of), "ladder_from": "bot",
-        "liq": None, "liq_ko": MIX_LIQ_KO, "round_trip": rt, "funding_frac": 0.0,
-        "cost_ko": f"순ROE는 친구봇 비용(수수료 왕복 {100 * rt:.3f}%) 기준, 펀딩 뺌", "best_roe": best,
+        "next": nxt, "ladder": ladder_steps(spec, lock, best, price_of, price_of), "ladder_from": "bot", "bot_ko": w["short_ko"],
+        "liq": None, "liq_ko": MIX_LIQ_KO if bot == "mix" else f"{w['short_ko']} 상태 파일에 청산가가 없어요 ({w['app_ko']} 앱에서 확인)",
+        "round_trip": rt, "funding_frac": 0.0,
+        "cost_ko": f"순ROE는 {w['short_ko']} 비용(수수료 왕복 {100 * rt:.3f}%) 기준, 펀딩 뺌", "best_roe": best,
         "excursion": from_bars(conn, bars_state, pv["symbol"], side, entry, lev, rt, 0.0, pv.get("opened_ms"), now),
-        "fast": {"state": "none", "ko": "빠른 손절 없음 · 친구봇은 손절선과 계단 익절로만 닫아요"},
+        "fast": {"state": "none", "ko": f"빠른 손절 없음 · {L.josa(w['short_ko'], '은', '는')} 손절선과 계단 익절로만 닫아요"},
         "gap": None, "every_s": pv.get("every_s"), "stop_id_missing": pv.get("stop_id_missing")}
     return out
 
@@ -643,13 +653,17 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two or b["id"] is None:
                 cards[x["id"]]["follows_ko"] = b["short_ko"]
-        try:
-            mc = mix_card(now, conn, bars_state, more.get("mix_paths"))
-        except Exception as exc:  # noqa: BLE001  (its own failure is said on its card, never the page's)
-            mc = {"id": "mix", "kind": "live", "self": True, "name_ko": MIX_NAME_KO, "label_ko": MIX_NAME_KO, "state": "error",
-                  "reason_ko": "친구봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}
-        if mc is not None:
-            cards["mix"] = mc
+        # the mix bots: the 친구봇 always (its card once it has a state file), the 바이비트 봇 once it took the Bybit slot
+        for bot, key in (("mix", "mix_paths"), *((("bybit", "mixbybit_paths"),) if "bybit" in L.replaced(p) else ())):
+            w = MIX_CARD[bot]
+            try:
+                mc = mix_card(now, conn, bars_state, more.get(key), bot)
+            except Exception as exc:  # noqa: BLE001  (its own failure is said on its card, never the page's)
+                mc = {"id": w["id"], "kind": "live", "self": True, "name_ko": w["name_ko"], "label_ko": w["name_ko"],
+                      "short_ko": w["short_ko"], "app_ko": w["app_ko"], "tag": w["tag"], "state": "error",
+                      "reason_ko": f"{w['short_ko']} 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}
+            if mc is not None:
+                cards[w["id"]] = mc
         cards["flip"] = paper_card("flip", L.FLIP_ACCOUNT, paper, raw, facts, conn, bars_state, now, [], since=since)
     finally:
         if conn is not None:

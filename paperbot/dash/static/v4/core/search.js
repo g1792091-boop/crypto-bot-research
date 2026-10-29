@@ -25,6 +25,9 @@ export const LIVE_ALIAS = {
   cal: "일정 경제 발표 주말 calendar", safety: "안전 멈춤 경고 safety", settings: "설정 규칙 settings", team: "분석팀 AI team",
   shadows: "그림자 봇 shadow",
   mix: "믹스 30분 봇 관제 WOO X Pro 2 두 번째 계정 모의 신호 계단 mixchop mix", mixperf: "믹스 성적 승률 백테스트 거래 mixchop mix",
+  // the 바이비트 봇 (owners 10-29) and the friend's trend per coin
+  bybitbot: "바이비트 봇 봇별 친구 추세 OBV 스톡RSI 실거래 모의 bybit bot", bybit: "바이비트 관제 바이비트 봇 OBV 스톡RSI 신호 계단 bybit",
+  bybitperf: "바이비트 성적 실거래 모의 비교 승률 거래 bybit", ftrend: "친구 추세판 추세 지표 투표 찹존 슈퍼트렌드 EMA RSI OBV 스톡RSI friend trend",
 };
 const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 /** The first consonants of the Hangul syllables (other characters kept): "순위표" -> "ㅅㅇㅍ". */

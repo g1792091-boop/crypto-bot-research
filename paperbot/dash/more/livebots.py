@@ -119,6 +119,13 @@ ENV = {
 # two paper bots of ENV once an executor follows it or its file is there, always told by its config (``range_bot``). Kept
 # apart from ENV (callers that list ENV's files in full stay as they were); paths() reads both.
 ENV_RANGE = {"range": ("PAPERBOT_LIVE_RANGE_DB", "/var/lib/paperbot/combo/range.db")}
+# the executor slots a mix bot (paperbot/mixchop.py) trades by itself now (owners 10-29, docs/mixbybit-ko.md: the Bybit
+# account is the 바이비트 봇's): once that bot's server config is there the old executor's slot leaves every page and
+# every answer (installed), as it leaves the live checks (livecheck.REPLACED_BY); the summary names the bot that took it
+# (``replaced``: 한눈에 shows that bot's own card). Its config path the same variable as dash/more/livemix.py's.
+ENV_MIX = {"mixbybit_config": ("PAPERBOT_MIXBYBIT_CONFIG", "/etc/paperbot/mixbybit.json")}
+REPLACED = {"bybit": {"key": "mixbybit_config", "bot": "bybit", "name_ko": "바이비트 봇", "account_ko": "바이비트",
+                      "unit": "paperbot-mixbybit", "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot"}}
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
 # the live watcher reports a second bot only from the VWAP default (livecheck.paper2_default), never this old one.
@@ -260,7 +267,7 @@ def paths(env: Optional[dict] = None) -> dict:
     its variable when set, else the ``db`` its own config names (owners 10-20: the second slot's WOO X Pro executor has
     its own database), else the start guide's path."""
     env = os.environ if env is None else env
-    out = {k: (env.get(var) or default) for k, (var, default) in {**ENV, **ENV_RANGE}.items()}
+    out = {k: (env.get(var) or default) for k, (var, default) in {**ENV, **ENV_RANGE, **ENV_MIX}.items()}
     if not env.get(ENV["paper2"][0]) and not os.path.exists(out["paper2"]) and os.path.exists(LEGACY_PAPER2):
         out["paper2"] = LEGACY_PAPER2          # before the VWAP bot's file is there: the page as it was (the -35 % bot)
     for _ex, _ko, dk, ck in ALL_EXECS:
@@ -271,11 +278,24 @@ def paths(env: Optional[dict] = None) -> dict:
     return out
 
 
+def replaced(p: dict) -> list:
+    """The slots a mix bot trades now (REPLACED: its server config is there), in EXECS order."""
+    return [ex for ex, _ko, _dk, _ck in ALL_EXECS
+            if ex in REPLACED and p.get(REPLACED[ex]["key"]) and os.path.exists(p[REPLACED[ex]["key"]])]
+
+
+def replaced_out(p: dict) -> list:
+    """The summary's ``replaced``: [{id, bot, name_ko, account_ko, unit, api, tab}] (none: [])."""
+    return [{"id": ex, **{k: v for k, v in REPLACED[ex].items() if k != "key"}} for ex in replaced(p)]
+
+
 def installed(p: dict) -> tuple:
-    """The executor slots of this server, in EXECS order: the two first always; an optional slot (the third, 딥코인)
-    once its config file or its database is there (``p``: paths()). Neither there: the pages, the answers, the checks and
-    the messages are as they were with two executors."""
-    return EXECS + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2])))
+    """The executor slots of this server, in EXECS order: the two first always (but a slot a mix bot trades now,
+    ``replaced``); an optional slot (the third, 딥코인) once its config file or its database is there (``p``: paths()).
+    Neither there: the pages, the answers, the checks and the messages are as they were with two executors."""
+    gone = set(replaced(p))
+    return tuple(s for s in EXECS if s[0] not in gone) \
+        + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2])))
 
 
 def shown_paths(p: dict) -> dict:
@@ -283,7 +303,7 @@ def shown_paths(p: dict) -> dict:
     only once it is there (else as it was)."""
     have = {s[0] for s in installed(p)}
     drop = {k for s in OPTIONAL_EXECS if s[0] not in have for k in (s[2], s[3])}
-    for k in ("paper3", "range"):                       # the friend's and the 레인지 봇's files only once they are there
+    for k in ("paper3", "range", *ENV_MIX):             # the friend's, the 레인지 봇's and the mix configs once there
         if not (p.get(k) and os.path.exists(p[k])):
             drop.add(k)
     return {k: v for k, v in p.items() if k not in drop}
@@ -302,10 +322,11 @@ def _config_db(path: str) -> Optional[str]:
 def slots(configs: Optional[dict] = None) -> list:
     """EXECS with each slot's name taken from its config: its ``label`` when it has one (owners 10-24: "WOO X Pro 2"),
     else the exchange it names (the slot's own name when unread); an optional slot only when ``configs`` has it (the
-    callers read the configs of ``installed`` slots)."""
+    callers read the configs of ``installed`` slots; a slot a mix bot trades now is not there either). No configs: the
+    two first slots."""
     out = []
     for ex, ko, dk, ck in ALL_EXECS:
-        if ex not in (configs or {}) and (ex, ko, dk, ck) in OPTIONAL_EXECS:
+        if ex not in (configs or {}) and ((ex, ko, dk, ck) in OPTIONAL_EXECS or configs):
             continue
         c = (configs or {}).get(ex) or {}
         name = (c.get("label") or EX_NAME.get(c.get("exchange"))) if c.get("state") == "ok" else None
@@ -1667,7 +1688,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
             "accts": accts, "fills": fills, "marks": marks, "events": events, "checkpoint": cp,
             "flip": {"stats": flip.get("stats")} if flip and flip.get("known") else None,
             "refs": None if ref_ko else REFS, "refs_ko": ref_ko or None, "match_ms": MATCH_MS, "small": list(SMALL),
-            "papers": papers_out(bots), "trend_bot": trend_out(tb)}
+            "papers": papers_out(bots), "trend_bot": trend_out(tb), "replaced": replaced_out(p)}
 
 
 # ================================================================ the other tabs (거래 · 신호 · 성적 · 안전 · 그림자 · 설정)
@@ -2329,7 +2350,8 @@ def trade_rows(p: dict, now: int, more: Optional[dict] = None) -> dict:
                          "card": card_of(t, path)})
         return {"state": "ok", "rows": rows, "n": len(ptrades)}
 
-    out = {"paper": None, "bybit": None, "mexc": None}
+    have = {s[0] for s in installed(p)}                 # (the Bybit slot only while no mix bot took it, owners 10-29)
+    out = {"paper": None, **{ex: None for ex, _ko, _dk, _ck in EXECS if ex in have}}
     out["paper"] = paper_rows(bots[0])
     for b in bots[1:]:
         out[b["id"]] = {**paper_rows(b), "label_ko": b["label_ko"], "path": b["path"]}

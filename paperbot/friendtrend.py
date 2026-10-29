@@ -292,15 +292,20 @@ def obv_pane(h, l, c, v) -> dict:
     return {"line": line, "sig": sig, "cs": cs, "dark": (grew & real).astype(bool), "real": real, "hist": line - cond}
 
 
-def obv_turn(h, l, c, v) -> int:
-    """On the last bar: +1 light green -> dark green, -1 light red -> dark red, else 0 (a hairline bar is light)."""
+def obv_state(h, l, c, v) -> dict:
+    """On the last bar: {"turn": +1 light green -> dark green / -1 light red -> dark red / 0 (a hairline bar is light),
+    "cs": the histogram's colour (+1 green, -1 red, 0 grey), "dark": is it dark}."""
     P = obv_pane(h, l, c, v)
     cs, dark = P["cs"], P["dark"]
-    if len(cs) < 2:
-        return 0
-    if cs[-1] == cs[-2] and cs[-1] != 0 and dark[-1] and not dark[-2]:
-        return int(cs[-1])
-    return 0
+    if len(cs) < 1:
+        return {"turn": 0, "cs": 0, "dark": False}
+    turn = int(cs[-1]) if len(cs) >= 2 and cs[-1] == cs[-2] and cs[-1] != 0 and dark[-1] and not dark[-2] else 0
+    return {"turn": turn, "cs": int(cs[-1]), "dark": bool(dark[-1])}
+
+
+def obv_turn(h, l, c, v) -> int:
+    """On the last bar: +1 light green -> dark green, -1 light red -> dark red, else 0 (a hairline bar is light)."""
+    return obv_state(h, l, c, v)["turn"]
 
 
 # ====================================================================== 3. the Stoch RSI pane
@@ -330,10 +335,11 @@ def stoch_pane(c) -> dict:
 
 
 def stoch_signal(c) -> dict:
-    """On the last bar: {"side": +1 golden ● with K < 50 / -1 dead ● with K > 50 / 0, "cross": "gold"/"dead"/"", "k", "d"}."""
+    """On the last bar: {"side": +1 golden ● with K < 50 / -1 dead ● with K > 50 / 0, "cross": "gold"/"dead"/"", "k", "d",
+    "xs": the pane's state (+1 K over D by the gap, -1 under, 0 before the first)}."""
     P = stoch_pane(c)
     k, d = float(P["k"][-1]), float(P["d"][-1])
     cross = "gold" if P["gold"][-1] else ("dead" if P["dead"][-1] else "")
     side = 1 if cross == "gold" and k < 50 else (-1 if cross == "dead" and k > 50 else 0)
     rnd = (lambda x: round(x, 2) if math.isfinite(x) else None)
-    return {"side": side, "cross": cross, "k": rnd(k), "d": rnd(d)}
+    return {"side": side, "cross": cross, "k": rnd(k), "d": rnd(d), "xs": int(P["xs"][-1])}

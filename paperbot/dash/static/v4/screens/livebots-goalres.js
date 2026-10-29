@@ -1,5 +1,5 @@
 // 실거래 › 봇별 화면의 '목표 연구' (owners 10/26: "필요한 연구 부분들 각 봇마다 내 목표 수익률을 위해 필요한 분석부분들이나 연구
-// 부분들 다 대시보드 화면에 추가해줘"), from /api/v4/livebots/goalres?bot=trend|range|vwap|mix|v39 (dash/more/livegoalres.py).
+// 부분들 다 대시보드 화면에 추가해줘"), from /api/v4/livebots/goalres?bot=trend|range|vwap|mix|v39|bybit (dash/more/livegoalres.py).
 // One section at the bottom of each bot's own screen (추세판단 봇 · 레인지 봇 · VWAP 개선판 · 친구 30분 봇 · V3.9 투비트):
 //   목표까지     per account of that bot (its paper bot, each executor that follows it): the record, the wallet a win and a
 //               loss move, entries a day, and the goal arithmetic (한 달 ×6): the 30-day multiple at this pace, the win rate,
@@ -195,6 +195,6 @@ export function goalResSection(ctx, bot) {
 /** goalresView(ctx): the section alone as a screen (its bot from the query: ?bot=trend|range|vwap|mix|v39). */
 export function goalresView(ctx) {
   const q = (ctx.params && ctx.params.query) || {};
-  const bot = ["trend", "range", "vwap", "mix", "v39"].includes(q.bot) ? q.bot : "trend";
+  const bot = ["trend", "range", "vwap", "mix", "v39", "bybit"].includes(q.bot) ? q.bot : "trend";
   return {el: h("div", {class: "lgr-page"}, goalResSection(ctx, bot)), set() {}};
 }

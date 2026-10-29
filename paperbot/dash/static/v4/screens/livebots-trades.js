@@ -25,6 +25,8 @@ export const EXC_API = "/api/v4/livebots/positions/excursions";
 /** The tables of the answer: the paper bots (the second while there is one), then the executors (execIds: the third,
  *  딥코인, while the server has it). */
 const idsOf = (d) => ["paper", ...["paper2", "range"].filter((id) => d && d.accts && d.accts[id]), ...(d ? execIds(d) : execsNow())];
+/** The table a first look opens: the first executor of the list (owners 10-29: 바이비트 is not one once its own bot took it). */
+const firstExec = (ids) => ids.find((id) => EXEC_SLOTS.includes(id)) || ids[0];
 const EX_NONE = {missing: "수집 전", error: "못 읽음", none: "1분봉 없음"};
 
 /** A row's 최대 +% / 최대 −% (pure; node tests): {state, mfe, mae, src, why} from the excursions answer x, its account and
@@ -54,7 +56,7 @@ export function tradesView(ctx) {
   const q = ctx.params.query || {};
   const want = q.acct || local.get("lb-tacct2", "bybit");
   const ids0 = idsOf(null);
-  const st = {acct: ids0.includes(want) ? want : "bybit", f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false, ids: ids0};
+  const st = {acct: ids0.includes(want) ? want : firstExec(ids0), f: F0(), d: null, open: null, okAt: 0, x: null, xFailed: false, ids: ids0};
   const segOf = (ids) => ui.seg(ids.map((id) => ({id, label: acctKo(id)})), st.acct, (id) => { st.acct = id; local.set("lb-tacct2", id); st.f = F0(); st.open = null; resSeg.set("all"); draw(true); },
     {label: "계좌 고르기"});
   let seg = segOf(ids0);
@@ -213,7 +215,7 @@ export function tradesView(ctx) {
     const ids = idsOf(d);
     if (ids.join() !== st.ids.join()) {
       st.ids = ids;
-      if (!ids.includes(st.acct)) st.acct = "bybit";
+      if (!ids.includes(st.acct)) st.acct = firstExec(ids);
       const want2 = local.get("lb-tacct2", "");
       const pq = ["paper2", "range"].find((id) => q.acct === id || (!q.acct && want2 === id && ids.includes(id)));
       if (pq) st.acct = pq;

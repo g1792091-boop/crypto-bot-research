@@ -263,12 +263,14 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
       screens: ['trendbot', 'rangebot', 'vwapbot', 'mixbot', 'v39'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].group, R.SCREENS[k].mod]),
       parse: R.parseHash('#/v39'), href: R.href('livebots', 'mixbot'), icon: R.icon('bots').childNodes.length}}));""")
     # 레인지 봇 (owners 10/26 evening, tests/test_dash_live_range.py) right after 추세판단 봇
-    assert out["groups"][0] == ["bots", "봇별", ["trendbot", "rangebot", "vwapbot", "mixbot", "v39"]]
-    assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix"]      # the rest as it was
-    assert out["nav"][0] == ["봇별", ["추세판단 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트"]]
+    # (owners 10-29: the 바이비트 봇 first, the 추세판단 봇 switched off last, the 바이비트 봇's group last;
+    # tests/test_dash_mixbybit_site.py)
+    assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]]
+    assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit"]      # the rest as it was
+    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트", "추세판단 봇"]]
     assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"],
                               ["V3.9 투비트", "bots", "livebots"]]
-    assert out["keys"][:6] == ["trendbot", "rangebot", "vwapbot", "mixbot", "v39", "trend"] and out["land"] == "trend"
+    assert out["keys"][:7] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend"] and out["land"] == "hq"
     assert out["parse"]["name"] == "v39" and out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트")):
@@ -276,7 +278,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     assert 'import {v39View} from "./livebots-v39.js";' in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert all(f"{k}:" in search for k in ("trendbot", "vwapbot", "mixbot", "v39"))
-    assert ".botbar { grid-template-columns: repeat(7, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(8, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
@@ -312,7 +314,7 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     console.log(JSON.stringify({{r, asked, fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'paper2'), K.followersOf(null, 'paper')],
       tabs: Object.fromEntries(Object.entries(LB.BOT_TAB).map(([k, v]) => [k, v.bot]))}}));""", s=summary, n=no_tb, v=v39)
     assert out["fol"] == [["bybit", "mexc"], ["deepcoin"], []]
-    assert out["tabs"] == {"trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix", "v39": "v39"}
+    assert out["tabs"] == {"bybitbot": "bybit", "trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix", "v39": "v39"}
     r = out["r"]
     head = lambda t: t.split("보기만 하는 화면(주문 버튼 없음)")[0]       # the strip, before its last words
     assert "바이비트 $101.50" in head(r["trend"]["text"]) and "WOO X Pro $102.80" in head(r["trend"]["text"])

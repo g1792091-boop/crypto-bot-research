@@ -169,7 +169,7 @@ def test_the_route_is_in_the_live_site():
     assert '{id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true}' in js
     assert js.index('{id: "trend", label: "관제"') < js.index('{id: "hq", label: "한눈에"') < js.index('{id: "pos"')
     routes = _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js"))
-    assert 'export const LIVE_START = "trend";' in routes and '"now", ko: "지금", screens: ["trend", "tchart", "hq", "pos"' in routes
+    assert 'export const LIVE_START = "hq";' in routes            # (owners 10-29: the 추세판단 봇 switched off) and '"now", ko: "지금", screens: ["trend", "tchart", "hq", "pos"' in routes
     assert 'trend: {ko: "관제", group: "now"' in routes and 'hq: {ko: "한눈에", group: "now"' in routes
     assert '@import url("livebots-trend.css");' in _read(os.path.join(SCREENS, "livebots.css"))
 

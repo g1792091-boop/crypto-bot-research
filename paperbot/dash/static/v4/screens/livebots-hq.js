@@ -43,7 +43,7 @@
 // under the account's name; the old '친구 매매법' executor of WOO X Pro 2 keeps its own reactor while the server has it.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday, unrealized} from "./livebots-calc.js";
-import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId} from "./livebots-kit.js";
+import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId, followersOf} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo, takingNoneKo} from "./livebots-likely.js";
 
@@ -53,6 +53,16 @@ export const RANK_API = "/api/v4/livebots/rank";
 export const MIX_API = "/api/v4/livebots/mix";
 const NOW_MS = 15 * 1000, CAL_MS = 30 * 1000, RANK_MS = 30 * 1000, MIX_MS = 15 * 1000;
 const MIX_BOT_KO = "친구 30분 봇(믹스)";                // the mix bot's name on 한눈에 (owners' words; '믹스 30분 봇' in its own tabs)
+export const MIXBYBIT_API = "/api/v4/livebots/mixbybit";
+/** The mix bots' cards (paperbot/mixchop.py, each trading an account by itself): the account's slot (its colour and its
+ *  place in the deck), its words, its answer, its screen; ``replaces``: shown only once the summary says it took that
+ *  executor slot (owners 10-29: the 바이비트 봇 in the Bybit slot); ``oldExec``: the old executor of the same account. */
+export const MIX_BOTS = [
+  {slot: "wooxpro2", account: "WOO X Pro 2", exchange: "WOO X Pro 2", bot: MIX_BOT_KO, api: MIX_API, unit: "paperbot-mixchop",
+    tab: "mix", linkKo: "믹스 관제 · 성적 →", oldExec: "wooxpro2", oldKo: "'친구 매매법'", replaces: null, cls: ""},
+  {slot: "bybit", account: "바이비트", exchange: "바이비트", bot: "바이비트 봇", api: MIXBYBIT_API, unit: "paperbot-mixbybit",
+    tab: "bybit", linkKo: "바이비트 봇 관제 · 성적 →", oldExec: "bybit", oldKo: "추세판단 봇을 따라가던", replaces: "bybit", cls: "lbh-mixb"},
+];
 export const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const DAY = 86400000, KST = 9 * 3600000;
 const SPIN = 0.00011;                                // the ring's turn (rad / ms): about one turn in a minute
@@ -119,9 +129,9 @@ export function botOfExec(d, x) {
   return x.follows_ko || paperBotKo(d.trend_bot || null, d.paper ? d.paper.name_ko : null);
 }
 /** The mix bot's LED from its /api/v4/livebots/mix entry: {id: run | stale | halt | bad | none | wait, ko, why}. */
-export function mixLed(b, failed = false) {
-  if (!b || !b.status) return failed ? {id: "bad", ko: "불러오지 못함", why: "믹스 봇 기록을 불러오지 못했어요"} : {id: "wait", ko: "불러오는 중", why: null};
-  const s = b.status, unit = s.unit || b.unit || "paperbot-mixchop";
+export function mixLed(b, failed = false, o = {}) {
+  if (!b || !b.status) return failed ? {id: "bad", ko: "불러오지 못함", why: `${o.ko || "믹스 봇"} 기록을 불러오지 못했어요`} : {id: "wait", ko: "불러오는 중", why: null};
+  const s = b.status, unit = s.unit || b.unit || o.unit || "paperbot-mixchop";
   if (s.state === "off") return {id: "none", ko: "꺼짐", why: `아직 켠 적 없어요 (기록 파일 없음) · 켜기: sudo systemctl start ${unit}`};
   if (s.state === "error") return {id: "bad", ko: "못 읽음", why: s.reason_ko || s.ko || "상태 파일을 읽지 못했어요"};
   if (s.state === "stopped") return {id: "stale", ko: "기록 멈춤", why: `35분 넘게 새 기록이 없어요 · 서버에서 systemctl status ${unit}`};
@@ -1090,38 +1100,51 @@ export function hqView(ctx, hub) {
     if (!soon.notes.firstChild) soon.notes.replaceChildren(h("p", null, "설치하고 켜면 잔고 · 신호등 · 포지션이 여기 보여요 (그 전에는 숫자를 만들지 않아요)"));
   }
 
-  // ---- WOO X Pro 2: 친구 30분 봇(믹스) (its own state and log, /api/v4/livebots/mix)
-  const MX = reactor("wooxpro2", {cls: "lbh-mix", name: "WOO X Pro 2", aria: `WOO X Pro 2 · ${MIX_BOT_KO} (진짜 돈)`, third: "새 진입"});
-  const mixSt = {d: null, at: 0, err: null, busy: false};
-  /** The live mix bot of the last /mix answer (null before it, or an answer without it). */
-  function mixBot() {
-    const bots = mixSt.d && Array.isArray(mixSt.d.bots) ? mixSt.d.bots : null;
+  // ---- the mix bots, each trading an account by itself (their own state and log, dash/more/livemix.py): WOO X Pro 2's
+  // 친구 30분 봇(믹스) (/api/v4/livebots/mix) and, once it took the Bybit slot (owners 10-29: the summary's ``replaced``),
+  // the 바이비트 봇 (/api/v4/livebots/mixbybit)
+  const MIXES = MIX_BOTS.map((m) => ({...m, r: reactor(m.slot, {cls: ["lbh-mix", m.cls].filter(Boolean).join(" "), name: m.account,
+    aria: `${m.account} · ${m.bot} (진짜 돈)`, third: "새 진입"}), d: null, at: 0, err: null, busy: false}));
+  const MX = MIXES[0];
+  /** The live bot of a mix bot's last answer (null before it, or an answer without it). */
+  const liveOf = (m) => {
+    const bots = m.d && Array.isArray(m.d.bots) ? m.d.bots : null;
     return bots ? bots.find((b) => b && b.id === "live") || null : null;
-  }
-  async function loadMix() {
-    if (mixSt.busy) return;
-    mixSt.busy = true;
+  };
+  /** The 친구 30분 봇's live bot (the old WOO X Pro 2 executor's card says it took that account). */
+  const mixBot = () => liveOf(MX);
+  /** Is a mix bot's card on this server's 한눈에 (the friend bot's always, the 바이비트 봇's once it took the slot)? */
+  const shownMix = (m) => !m.replaces || !!(st.d && (st.d.replaced || []).some((x) => x && x.id === m.replaces));
+  async function loadMix(m) {
+    if (m.busy || !shownMix(m)) return;
+    m.busy = true;
     try {
-      const d = await ctx.api(MIX_API);
+      const d = await ctx.api(m.api);
       if (!ctx.alive()) return;
-      mixSt.d = d; mixSt.at = serverNow(); mixSt.err = null;
+      m.d = d; m.at = serverNow(); m.err = null;
     } catch (e) {
       if (!ctx.alive() || (e && e.name === "AbortError")) return;
-      mixSt.err = e;
-    } finally { mixSt.busy = false; }
-    setMix();
+      m.err = e;
+    } finally { m.busy = false; }
+    setMix(m);
+    if (st.d && m.replaces) drawCenter();               // its row in the centre's real-money strip
   }
-  function setMix() {
-    const b = mixBot();
-    const led = mixLed(b, !!mixSt.err && !b);
-    const r = MX;
+  const setMixes = () => { for (const m of MIXES) setMix(m); };
+  function setMix(m) {
+    const show = shownMix(m);
+    m.r.el.hidden = !show;
+    if (!show) return;
+    if (!m.r.el.parentNode) deck.append(m.r.el);
+    const b = liveOf(m);
+    const led = mixLed(b, !!m.err && !b, {ko: m.bot, unit: m.unit});
+    const r = m.r;
     r.el.dataset.led = led.id;
     r.ledKo.textContent = led.ko;
     const s0 = (b && b.status) || {};
     r.asOf = (led.id === "run" || led.id === "stale") && s0.seen_ms ? s0.seen_ms : null;
     r.ledSub.textContent = led.why && led.id !== "stale" ? led.why : r.asOf ? `${ageKo(r.asOf)} 기록` : "";
-    r.el.title = led.why ? `WOO X Pro 2 · ${MIX_BOT_KO}: ${led.ko} · ${led.why}` : "";
-    whoLine(r, MIX_BOT_KO, "스스로 매매 · 페이퍼를 따라가지 않음");
+    r.el.title = led.why ? `${m.account} · ${m.bot}: ${led.ko} · ${led.why}` : "";
+    whoLine(r, m.bot, "스스로 매매 · 페이퍼를 따라가지 않음");
     const dn = s0.first_start_ms ? dayN(s0.first_start_ms, serverNow()) : null;
     r.day.textContent = dn ? `DAY ${String(dn).padStart(2, "0")}` : "";
     r.day.title = dn ? `처음 켬 ${fmt.kst(s0.first_start_ms)} (한국 시간 기준 ${dn}일째)` : "";
@@ -1147,11 +1170,11 @@ export function hqView(ctx, hub) {
         : `시작 대비 ${usdS(dv)} · ${n.from_ko || "기록된 잔고"} ${fmt.kst(n.ms)}`;
       r.delta.className = ["lbh-delta", "num", fmt.tone(dv, fmt.money(dv))].join(" ");
       r.delta.title = live ? `진입 때 읽은 잔고(${fmt.kst(n.ms)})에 지금 열린 포지션의 평가 손익(마크 ${fmt.price(mk)}, 나갈 때 수수료 전)을 더한 어림값 · 정확한 값은 앱에서`
-        : "봇이 WOO X Pro 2에서 읽어 기록한 마지막 잔고 (켤 때 · 진입 때 · 청산 뒤) · 지금 거래소 값은 앱에서";
+        : `봇이 ${m.exchange}에서 읽어 기록한 마지막 잔고 (켤 때 · 진입 때 · 청산 뒤) · 지금 거래소 값은 앱에서`;
     } else {
       motion.countTo(r.wal, null);
       r.cur.hidden = true;
-      r.wal.textContent = !b ? (mixSt.err ? "—" : "…") : s0.state === "off" ? "꺼짐" : s0.state === "error" ? "못 읽음" : "기록 전";
+      r.wal.textContent = !b ? (m.err ? "—" : "…") : s0.state === "off" ? "꺼짐" : s0.state === "error" ? "못 읽음" : "기록 전";
       r.wal.classList.add("unk");
       r.mult.textContent = "";
       r.delta.textContent = on ? (e.none_ko || "잔고 기록이 아직 없어요") : "";
@@ -1191,10 +1214,10 @@ export function hqView(ctx, hub) {
     if (b && led.id === "halt") ns.push(`새 진입 멈춤: ${led.why} · 열린 포지션은 손절·계단 그대로`);
     if (b && s0.mode_ko) ns.push(s0.mode_ko);
     for (const t of (b && b.setup_bad) || []) ns.push(`마지막 시작 때 설정 실패: ${t}`);
-    const old = st.d ? by(st.d.accts, "wooxpro2") : null;
-    if (old && old.state === "ok" && !old.stale) ns.push("같은 계정의 예전 '친구 매매법' 실행기도 기록 중이에요 · 한 계정에는 봇 하나만 켜 두세요");
+    const old = st.d ? by(st.d.accts, m.oldExec) : null;
+    if (old && old.state === "ok" && !old.stale) ns.push(`같은 계정의 예전 ${m.oldKo} 실행기도 기록 중이에요 · 한 계정에는 봇 하나만 켜 두세요`);
     if (r.notes.dataset.k !== JSON.stringify(ns)) { r.notes.dataset.k = JSON.stringify(ns); r.notes.replaceChildren(...ns.map((t) => h("p", null, t))); }
-    if (!r.link.firstChild) r.link.replaceChildren(h("a", {href: ctx.href ? ctx.href("mix") : "#/mix"}, "믹스 관제 · 성적 →"));
+    if (!r.link.firstChild) r.link.replaceChildren(h("a", {href: ctx.href ? ctx.href(m.tab) : `#/${m.tab}`}, m.linkKo));
   }
 
   // ---- milestones: a one-time burst for a real milestone first seen in this browser
@@ -1289,19 +1312,23 @@ export function hqView(ctx, hub) {
     // the order is the css's (.lbh-deck > .lbh-x-*), whatever came first
     if (ids.includes("deepcoin")) { if (soon.el.parentNode) soon.el.remove(); }
     else if (!soon.el.parentNode) deck.append(soon.el);
-    const n = ids.length + (ids.includes("deepcoin") ? 0 : 1) + 1;
+    const n = ids.length + (ids.includes("deepcoin") ? 0 : 1) + MIXES.filter(shownMix).length;
     deck.classList.toggle("three", n > 2);
     deck.classList.toggle("four", n > 3);
     deck.classList.toggle("five", n > 4);
     deck.classList.toggle("six", n > 5);                 // 투비트 (owners 10/25) with the five: two rows of three
   }
-  deck.append(soon.el, MX.el);
+  deck.append(soon.el, MX.r.el);                      // a mix bot that took a slot: its card once the summary says so (setMix)
   addReactors(execsNow());
+  // owners 10-29 (the 추세판단 봇 switched off): no executor follows the main paper bot any more -> its 40-trade count leaves the
+  // page and one line says what the centre still shows (that bot's last record)
+  const retired = h("p", {class: "lbh-retired", role: "note", hidden: true},
+    "추세판단 봇(페이퍼)은 따라가는 실거래가 없어요 (10/29부터 꺼 둠) · 가운데 칸은 그 봇의 지난 기록이에요");
   const frame = h("div", {class: "lbh-frame"},
     side("실거래 · LIVE · 진짜 돈 · 실거래 · LIVE"), sideBot,
     banner,
     deck,
-    pbar, ticker);
+    retired, pbar, ticker);
 
   // ---- the cards: ⏳ 진입 대기 · 진입 카드 · 결과 카드 · 실시간
   const wBody = h("div", {class: "lbh-wbody"});
@@ -1536,14 +1563,15 @@ export function hqView(ctx, hub) {
         h("span", null, `${fmt.coin(q.symbol)} ${fmt.sideKo(q.side)} · 진입 `, h("b", {class: "num"}, fmt.price(q.entry))),
         h("span", null, "거래소 손절 ", h("b", {class: ["num", q.locked ? "up" : ""]}, fmt.price(q.stop)), q.locked ? " 잠금" : ""),
         r != null ? h("b", {class: ["num", "lbh-gexroe", fmt.tone(r, fmt.pct(r, 1))]}, fmt.pct(r, 1)) : null);
-    }), mixExRow()].filter(Boolean));
+    }), ...MIXES.map(mixExRow)].filter(Boolean));
   }
-  /** The friend bot's row in the strip (WOO X Pro 2, owners 10-27): it trades by itself, so it is not one of the executors. */
-  function mixExRow() {
-    const b = mixBot();
+  /** A mix bot's row in the strip (WOO X Pro 2's friend bot, owners 10-27; the 바이비트 봇, 10-29): it trades by itself, so
+   *  it is not one of the executors. */
+  function mixExRow(m) {
+    const b = shownMix(m) ? liveOf(m) : null;
     if (!b) return null;
     const s0 = b.status || {};
-    const head = h("span", {class: ["lbh-gexn", "lbh-x-wooxpro2"], title: `WOO X Pro 2 · ${MIX_BOT_KO}`}, h("i", {class: "sw", "aria-hidden": "true"}), "WOO X Pro 2");
+    const head = h("span", {class: ["lbh-gexn", "lbh-x-" + m.slot], title: `${m.account} · ${m.bot}`}, h("i", {class: "sw", "aria-hidden": "true"}), m.account);
     if (s0.state === "off" || s0.state === "error") return h("div", {class: "lbh-gexr unk"}, head, h("span", null, s0.state === "off" ? "꺼짐" : "못 읽음"));
     const q = b.position;
     if (!q) return h("div", {class: "lbh-gexr none"}, head, h("span", null, "포지션 없음"));
@@ -1808,6 +1836,8 @@ export function hqView(ctx, hub) {
     pbNum.textContent = unk ? unk : `${fmt.int(n)}/${fmt.int(goal)} · ${fmt.pct(pct, 0, false)}`;
     pbar.classList.toggle("unk", !!unk);
     pbar.classList.toggle("done", !!(cp && cp.ready));
+    const off = !!st.d && !followersOf(st.d, "paper").length;      // the 추세판단 봇 followed by no executor (owners 10-29)
+    pbar.hidden = off; ckpt.el.hidden = off; retired.hidden = !off;
   }
 
   let tSig = "";
@@ -1862,7 +1892,7 @@ export function hqView(ctx, hub) {
       el.textContent = left > 0 ? clockOf(left) : "시간 지남 · 진입 없음";
       if (row) row.classList.toggle("gone", left <= 0);
     }
-    for (const r of [...Object.values(R), MX]) if (r.asOf && (r.el.dataset.led === "run" || r.el.dataset.led === "stale")) r.ledSub.textContent = `${ageKo(r.asOf)} 기록`;
+    for (const r of [...Object.values(R), ...MIXES.map((m) => m.r)]) if (r.asOf && (r.el.dataset.led === "run" || r.el.dataset.led === "stale")) r.ledSub.textContent = `${ageKo(r.asOf)} 기록`;
     if (now % 10000 < 1000) for (const el of fList.querySelectorAll("[data-t]")) el.textContent = ageKo(Number(el.dataset.t));
     tickDial();
   }
@@ -1885,7 +1915,8 @@ export function hqView(ctx, hub) {
     addReactors(ids);
     for (const id of ids) setReactor(R[id], d ? by(d.accts, id) : null, d ? by(d.execs, id) : null);
     setSoon();
-    setMix();
+    setMixes();
+    for (const m of MIXES) if (shownMix(m) && !m.d && !m.busy && !m.err) loadMix(m).catch(() => {});
     drawBot();
     drawStatus();
     drawCenter();
@@ -1905,12 +1936,11 @@ export function hqView(ctx, hub) {
   ctx.every(NOW_MS, () => fNow.load().catch(() => {}));
   ctx.every(CAL_MS, () => fCal.load().catch(() => {}));
   ctx.every(RANK_MS, () => fRank.load().catch(() => {}));
-  ctx.every(MIX_MS, () => loadMix().catch(() => {}));
+  ctx.every(MIX_MS, () => { for (const m of MIXES) loadMix(m).catch(() => {}); });
   ctx.every(1000, tick, {now: true});
   ctx.watch("ticker", () => {
     if (center.dataset.mode === "pos") { drawCenter(); drawEntry(); }
-    const mb = mixBot();
-    if (mb && mb.position) setMix();
+    for (const m of MIXES) { const mb = liveOf(m); if (mb && mb.position) setMix(m); }
   });
   ctx.watch("board", () => { if (fRank.d) drawTiles(); });
   drawAll();

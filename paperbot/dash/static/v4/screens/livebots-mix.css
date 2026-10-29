@@ -161,6 +161,8 @@ small.lmx-sub { font-size: var(--t-2xs); }
 .lmx-ctr { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, minmax(0, 1fr)); gap: 4px 8px; align-items: baseline; padding: 6px 0;
   border-bottom: 1px solid var(--line); min-width: 0; }
 .lmx-ctr > * { min-width: 0; overflow-wrap: anywhere; }
+/* the 바이비트 봇 (owners 10-29): no 1-hour column */
+.lmx-ctab.no-h1 .lmx-ctr { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(0, 1fr)); }
 .lmx-ctr > :not(:first-child) { text-align: right; }
 .lmx-cth { color: var(--muted); font-size: var(--t-xs); }
 .lmx-ctr.off { opacity: .55; }
@@ -205,6 +207,7 @@ small.lmx-sub { font-size: var(--t-2xs); }
   .lmx-frow > .lmx-t { grid-column: 1 / -1; }
   .lmx-why { grid-column: 1 / -1; }
   .lmx-ctr { grid-template-columns: 44px repeat(4, minmax(0, 1fr)); font-size: var(--t-xs); }
+  .lmx-ctab.no-h1 .lmx-ctr { grid-template-columns: 44px repeat(3, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .lmx-bot.run .lmx-orb > i { animation: none; }
