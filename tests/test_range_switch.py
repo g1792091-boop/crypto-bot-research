@@ -59,7 +59,7 @@ def test_dry_run_writes_nothing_and_lists_the_changes(tmp_path, capsys):
     rc = RS.main(["--config", cfg], active=lambda u: False, ready=lambda: 1000.0)
     out = capsys.readouterr().out
     assert rc == 0 and Path(cfg).read_text() == before and not list(tmp_path.glob("*.before-range-*"))
-    for k in ("paper_db", "size_from", "margin_frac", "stop_from", "take_profit_roe", "ladder"):
+    for k in ("paper_db", "size_from", "margin_frac", "ladder"):
         assert k in out
     assert "보여 주기만" in out and "레인지 봇 페이퍼(지갑 $1,000.00)" in out
 
@@ -76,8 +76,9 @@ def test_write_moves_the_executor_and_keeps_everything_else(tmp_path):
     assert new["paper_db"] == "/var/lib/paperbot/combo/range.db" and new["account"] == "COMBO@mix"
     assert new["size_from"] == "equity" and new["margin_frac"] == 0.4
     assert new["leverage_by_symbol"] == {"BTCUSDT": 40, "*": 30} and new["risk"]["max_leverage"] == 40
-    assert (new["stop_from"], new["stop_roe"], new["stop_net"]) == ("roe", 0.5, True) and "stop_scale" not in new
-    assert (new["ladder_from"], new["ladder"], new["take_profit_roe"], new["ladder_basis"]) == ("own", None, 0.1, "net")
+    assert new["stop_from"] == "ratio" and not {"stop_roe", "stop_net", "stop_scale"} & set(new)
+    assert (new["ladder_from"], new["ladder"], new["take_profit_roe"], new["ladder_basis"]) == \
+        ("own", {"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.05}, None, "net")
     assert new["signal_light_n"] == 0 and new["equity_floor_frac"] is None
     assert new["liq_guard"] is True and new["liq_guard_mmr"] == 0.005 and new["macro_block_min"] == 30
     for k in set(old) - CHANGED:
@@ -123,8 +124,28 @@ def test_the_repository_template_is_what_the_switch_writes(capsys):
     E.main(["check-config", "--config", str(DEPLOY / "executor.live-wooxpro-range.json")])
     lines = capsys.readouterr().out.strip().splitlines()
     assert lines[-1] == "준비됨"
-    assert "익절: 순ROE +10%에서 시장가로 전부 닫음 (계단 없음)" in lines
+    assert "계단: 순ROE 10%에서 8% 잠금, 이후 5%씩" in lines
+    assert any(x.startswith("손절 자리: stop_from \"ratio\" - 페이퍼 손절 거리(%)를 이 실행기의 체결가에서") for x in lines)
     assert "신호등: 꺼짐 (paper의 모든 진입을 따라감)" in lines
+
+
+def test_the_switch_again_takes_the_10_26_file_to_the_10_30_rules(tmp_path, capsys):
+    # the server's file as the switch wrote it on 10-26 (net ROE -50 % stop, +10 % fixed take-profit) -> owners 10-30:
+    # the paper's stop distance (the range entry's -50 %, the ROC entry's 30m ATR x 3) and the ladder 10 -> 8, then 5
+    old26 = dict(stop_from="roe", stop_roe=0.5, stop_net=True, ladder=None, take_profit_roe=0.1, ladder_from="own",
+                 ladder_basis="net", paper_db="/var/lib/paperbot/combo/range.db")
+    cfg = _exec(tmp_path, **old26)
+    db = _paper(tmp_path)
+    assert RS.main(["--config", cfg], active=lambda u: False, ready=lambda: RS.paper_ready(db)) == 0
+    out = capsys.readouterr().out
+    assert "stop_from: \"roe\" → \"ratio\"" in out and "stop_roe: 0.5 → 없앰" in out and "stop_net: true → 없앰" in out
+    assert "take_profit_roe: 0.1 → null" in out and "계단 익절 순ROE 10%에서 8% 잠금 뒤 5%씩" in out
+    assert RS.main(["--config", cfg, "--write"], active=lambda u: False, ready=lambda: RS.paper_ready(db)) == 0
+    new = json.loads(Path(cfg).read_text())
+    tmpl = json.loads((DEPLOY / "executor.live-wooxpro-range.json").read_text())
+    assert {k: new[k] for k in ("stop_from", "ladder", "take_profit_roe", "ladder_basis")} == \
+        {k: tmpl[k] for k in ("stop_from", "ladder", "take_profit_roe", "ladder_basis")}
+    assert not {"stop_roe", "stop_net"} & set(new) and ExecConfig.from_dict(new).problems() == []
 
 
 def test_the_morning_check_names_its_unit():

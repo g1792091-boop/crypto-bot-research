@@ -217,7 +217,7 @@ def test_the_deploy_configs():
     for path, mode in ((LIVE, "mainnet"), (PAPER, "paper")):
         cfg = M.load_config(str(path))
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
-        assert cfg.rules == ("obv", "srsi") and cfg.stop_atr == 3.0
+        assert cfg.rules == ("obv50",) and cfg.stop_atr == 3.0 and cfg.tf == "30m" and cfg.trend == "four"   # (owners 10-30)
         assert cfg.symbols == ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "ZECUSDT"]
         assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in cfg.symbols}, "ZECUSDT": 20}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
@@ -228,10 +228,10 @@ def test_the_deploy_configs():
     assert live.state != paper.state and live.own_stop_file != paper.own_stop_file and paper.start_equity == 100
     assert "/exec/" in live.state and not paper.telegram
     words = M.plan_words(live)
-    assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "OBV 진한색 + 스톡RSI 50선" in words and "손절 ATR 3배" in words
-    # the friend bot's own config is unchanged: WOO X Pro, its name
+    assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 50선" in words and "손절 ATR 3배" in words
+    # the friend bot's own config: WOO X Pro, its 10-30 rules on 15m bars (tests/test_rules1030.py)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "wooxpro" and old.name == M.NAME and old.rules == ("mix", "st")
+    assert old.exchange == "wooxpro" and old.name == "친구 15분 봇" and old.rules == ("roc50", "obv50") and old.tf == "15m"
 
 
 def test_wrong_configs_are_refused(tmp_path):
@@ -291,8 +291,8 @@ def test_a_live_cycle_on_bybit(tmp_path):
     assert fake.info["marginMode"] == "ISOLATED_MARGIN" and fake.lev["BTCUSDT"] == "40"
     assert all(co.enabled for co in cfg.coins) and msgs[0].startswith("[바이비트 봇] ▶️ 시작")
     px = 150.0
-    ev = {"symbol": "SOLUSDT", "close_ms": T0, "side": 1, "why": "", "rule": "obv", "close": px, "turn": 1, "trend": 1,
-          "votes": {"line": 1, "ema": 1, "chop": 1, "st": 0}, "stop_dist": 1.5, "stop_pct": 1.0}
+    ev = {"symbol": "SOLUSDT", "close_ms": T0, "side": 1, "why": "", "rule": "obv50", "close": px, "turn": 1, "trend": 1,
+          "obv50": 41.0, "votes": {"line": 1, "ema": 1, "chop": 1, "st": 0}, "stop_dist": 1.5, "stop_pct": 1.0}
     bot.enter(bot.coins["SOLUSDT"], ev)
     p = bot.pos
     assert p is not None and p.leverage == 40 and p.side == 1
@@ -301,7 +301,7 @@ def test_a_live_cycle_on_bybit(tmp_path):
     assert float(stop["triggerPrice"]) == pytest.approx(p.entry - 1.5, abs=0.001)
     assert fake.covered("SOLUSDT")
     entry_msg = msgs[-1]
-    assert "[바이비트 봇] 🟢 SOL 롱 진입" in entry_msg and "근거(OBV 진한색): OBV 연한 초록→진한 초록" in entry_msg
+    assert "[바이비트 봇] 🟢 SOL 롱 진입" in entry_msg and "근거: OBV 연한 초록→진한 초록 · OBV 50선 아래(41.0)" in entry_msg
     assert "친구 추세 30분 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 상승 · 슈퍼트렌드 횡보)" in entry_msg
     # the price runs past net ROE +10 % on the 1m bars: the stop goes to net ROE +8 % (new first, old cancelled)
     hi = p.entry * (1 + 0.10 / 40 + 2 * 0.00044) * 1.0005
@@ -347,12 +347,12 @@ def test_a_coin_bybit_cannot_set_is_not_traded(tmp_path):
 
 # ---------------------------------------------------------------- one close (paper)
 def test_one_close_rule_order_and_coin_order(tmp_path, monkeypatch):
-    cfg = _cfg(tmp_path, mode="paper", start_equity=100)
+    cfg = _cfg(tmp_path, mode="paper", start_equity=100, rules=["obv", "srsi"])        # (the 10-29 rules: two of them)
     rows30 = [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in T0 - M.MIN30 * np.arange(400, -1, -1)]
     rows1h = [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in T0 - M.H1 * np.arange(400, -1, -1)]
     calls = []
 
-    def fake_eval(rule, co, b30, close_ms):
+    def fake_eval(rule, co, b30, close_ms, *more):
         calls.append((rule, co.symbol))
         side = {("srsi", "ETHUSDT"): -1, ("obv", "SOLUSDT"): 1, ("srsi", "SOLUSDT"): 1}.get((rule, co.symbol), 0)
         return {"symbol": co.symbol, "close_ms": close_ms, "side": side, "why": "" if side else "없음", "rule": rule,
@@ -394,7 +394,7 @@ def test_the_check_command_on_bybit(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M.time, "time", lambda: (T0 + 60_000) / 1000)
     assert M.cmd_check(argparse.Namespace(config=str(PAPER))) == 0
     out = capsys.readouterr().out.splitlines()
-    assert "매매법·손절: OBV 진한색 + 스톡RSI 50선(같은 봉이면 OBV 진한색 먼저) · 손절 ATR 3배(모든 코인)" in out
+    assert "매매법·손절: OBV 50선 · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상" in out
     btc = next(x for x in out if x.startswith("✔ BTCUSDT"))
     assert "최대 75배" in btc and "(증거금 $40.00)" in btc               # 40 % of the paper's $100
     zec = next(x for x in out if "ZECUSDT" in x)

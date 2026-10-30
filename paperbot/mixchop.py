@@ -88,7 +88,12 @@ import numpy as np
 import pandas as pd
 
 MIN30 = 30 * 60_000
+MIN15 = 15 * 60_000
 MIN1 = 60_000
+TF_MS = {"30m": MIN30, "15m": MIN15}         # the signal bar (owners 10-30: WOO X Pro 2 on 15m bars)
+TF_KO = {"30m": "30분", "15m": "15분"}
+TFKO_MS = {MIN30: "30분", MIN15: "15분"}
+TRENDS = ("four", "swing")      # the friend's trend: four votes, 2+ the same (10-29) | WOO X Pro 2's (10-30, friendtrend 6)
 MINUTE_MAX = 1400               # 1m bars read at most (one request); a longer gap (the bot was down) is walked on 30m bars
 H1 = 3_600_000
 KST_MS = 9 * H1
@@ -343,20 +348,29 @@ def evaluate(coin: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) ->
     return out
 
 
-RULE_KO = {"mix": "친구 매매법", "st": "슈퍼트렌드·스톡RSI", "obv": "OBV 진한색", "srsi": "스톡RSI 50선"}
+RULE_KO = {"mix": "친구 매매법", "st": "슈퍼트렌드·스톡RSI", "obv": "OBV 진한색", "srsi": "스톡RSI 50선",
+           # owners 10-30: the OBV turn under / over its 50 line, the OBV ROC bar's turn under / over 50
+           "obv50": "OBV 50선", "roc50": "ROC 50선"}
 RULES = tuple(RULE_KO)
-FRIEND_RULES = ("obv", "srsi")          # owners 10-29: the friend's trend of the 30m bar first, then the entry signal
+FRIEND_RULES = ("obv", "srsi", "obv50", "roc50")   # the friend's trend of the signal bar first, then the entry signal
 
 
-def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> dict:
-    """Owners 10-29, on the 30m bar closing at ``close_ms`` (b30: closed bars with volume): the friend's trend of that bar
-    (paperbot/friendtrend.py: four votes) and the rule's entry signal on its side. ``rule`` "obv": the OBV pane's
+def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_ms: int = MIN30,
+                    trend: str = "four") -> dict:
+    """Owners 10-29, on the signal bar (30m; ``tf_ms`` 15m: WOO X Pro 2, owners 10-30) closing at ``close_ms`` (b30:
+    closed bars with volume): the friend's trend of that bar (paperbot/friendtrend.py: four votes; ``trend`` "swing":
+    WOO X Pro 2's rule, friendtrend part 6) and the rule's entry signal on its side. ``rule`` "obv": the OBV pane's
     histogram light -> dark (green long, red short); "srsi": the Stoch RSI pane's golden ● under 50 (long) / dead ● over
-    50 (short). side = 1 / -1 / 0 with ``why`` when 0; stop and liquidation guard as evaluate()."""
+    50 (short); "obv50": the obv turn under its 50 line (long) / over it (short); "roc50": the OBV ROC pane's bar light ->
+    dark with its purple line under 50 (long) / over 50 (short). side = 1 / -1 / 0 with ``why`` when 0; stop and
+    liquidation guard as evaluate()."""
     from . import friendtrend as FT
+    tf_ko = TFKO_MS.get(tf_ms, "30분")
     out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": "", "rule": rule}
-    if b30.empty or int(b30.open_ms.iloc[-1]) + MIN30 != close_ms:
-        out["why"] = "30분봉이 아직 없음"
+    if tf_ms != MIN30:
+        out["tf"] = tf_ko
+    if b30.empty or int(b30.open_ms.iloc[-1]) + tf_ms != close_ms:
+        out["why"] = f"{tf_ko}봉이 아직 없음"
         return out
     if len(b30) < 300:
         out["why"] = "지난 봉이 모자람"
@@ -367,6 +381,19 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> 
         want = ob["turn"]
         out.update({"turn": want, "obv_cs": ob["cs"], "obv_dark": ob["dark"]})
         no = "OBV 연한색→진한색 없음"
+    elif rule == "obv50":
+        ob = FT.obv50_state(h, l, c, v)
+        want = ob["side"]
+        out.update({"turn": ob["turn"], "obv_cs": ob["cs"], "obv_dark": ob["dark"], "obv50": ob["d50"]})
+        no = ("OBV 연한색→진한색 없음" if not ob["turn"] else
+              f"OBV {'진한 초록' if ob['turn'] > 0 else '진한 빨강'}인데 50선 {'위' if ob['turn'] > 0 else '아래'}(OBV {ob['d50']})")
+    elif rule == "roc50":
+        rs = FT.roc_state(h, l, c, v)
+        want = rs["side"]
+        out.update({"roc_turn": rs["turn"], "roc_cs": rs["cs"], "roc_dark": rs["dark"], "roc": rs["osc"]})
+        no = ("ROC 막대 연한색→진한색 없음" if not rs["turn"] else
+              f"ROC 막대 {'진한 초록' if rs['turn'] > 0 else '진한 빨강'}인데 보라 선이 50선 {'위' if rs['turn'] > 0 else '아래'}"
+              f"(ROC {rs['osc']})")
     else:
         sg = FT.stoch_signal(c)
         out.update({"cross": sg["cross"], "k": sg["k"], "d": sg["d"], "xs": sg.get("xs")})
@@ -374,22 +401,25 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> 
         no = ("스톡RSI 크로스 없음" if not sg["cross"] else
               f"스톡RSI {'골든' if sg['cross'] == 'gold' else '데드'}이 50선 {'위' if sg['cross'] == 'gold' else '아래'}(K {sg['k']})")
     t = FT.last_trend(o, h, l, c, v)
+    tside = FT.swing_side(t) if trend == "swing" else t["trend"]
     at = float(atr(h, l, c, 14)[-1])
     px = float(c[-1])
     dist = at * coin.sl_atr
     liq_ok = dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0)
-    out.update({"close": px, "trend": t["trend"], "votes": {k: t[k] for k in FT.VOTES}, "ema_rsi": t["ema_rsi"],
+    out.update({"close": px, "trend": tside, "votes": {k: t[k] for k in FT.VOTES}, "ema_rsi": t["ema_rsi"],
                 "chop_zone": t["chop_zone"], "atr": at, "stop_dist": dist, "stop_pct": round(dist / px * 100, 3),
                 "liq_ok": bool(liq_ok)})
+    if trend == "swing":
+        out["trend_mode"] = "swing"
     if not want:
         out["why"] = no
         return out
     if not coin.enabled:
         out["why"] = "이 코인 꺼짐"
         return out
-    if t["trend"] != want:
-        out["why"] = (f"친구 추세 {FT.trend_words(t)}"
-                      + ("" if t["trend"] == 0 else f": 신호 {'롱' if want > 0 else '숏'}와 반대"))
+    if tside != want:
+        out["why"] = (f"추세 {FT.swing_words(t)}" if trend == "swing" else f"친구 추세 {FT.trend_words(t)}") \
+            + ("" if tside == 0 else f": 신호 {'롱' if want > 0 else '숏'}와 반대")
         return out
     if not liq_ok:
         out["why"] = f"손절 폭 {dist / px * 100:.2f}%가 {coin.leverage}배 청산가보다 멂"
@@ -400,7 +430,7 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int) -> 
 
 # a coin's row of the 친구 추세판 (owners 10-29, dash/more/liveftrend.py): the friend rules' values at the last close
 BOARD_KEYS = ("close", "trend", "votes", "ema_rsi", "chop_zone", "turn", "obv_cs", "obv_dark", "cross", "k", "d", "xs",
-              "stop_pct", "liq_ok")
+              "stop_pct", "liq_ok", "obv50", "roc_turn", "roc_cs", "roc_dark", "roc", "trend_mode", "tf")
 
 
 def board_row(evs: list, close_ms: int) -> dict:
@@ -510,16 +540,32 @@ def net_ladder_stop(side: int, entry: float, best: float, stop: float, lev: floa
     return stop, -1
 
 
+def friend_words(ev: dict, side: int) -> str:
+    """A friend rule's signal and the trend it passed: 'OBV 연한 초록→진한 초록 · OBV 50선 아래(41.2) · 친구 추세 30분 상승
+    (…)' (the 근거 line, the signal lists)."""
+    from . import friendtrend as FT
+    r = ev.get("rule")
+    up = side > 0
+    if r in ("obv", "obv50"):
+        what = f"OBV {'연한 초록→진한 초록' if up else '연한 빨강→진한 빨강'}"
+        if r == "obv50":
+            what += f" · OBV 50선 {'아래' if up else '위'}({ev.get('obv50')})"
+    elif r == "roc50":
+        what = f"ROC 막대 {'연한 초록→진한 초록' if up else '연한 빨강→진한 빨강'} · 보라 선 50선 {'아래' if up else '위'}({ev.get('roc')})"
+    else:
+        what = f"스톡RSI {'골든' if up else '데드'}(K {ev.get('k')} / D {ev.get('d')}, 50선 {'아래' if up else '위'})"
+    t = {"trend": ev.get("trend", 0), **(ev.get("votes") or {})}
+    tf = ev.get("tf") or "30분"
+    trend = f"추세 {tf} {FT.swing_words(t)}" if ev.get("trend_mode") == "swing" else f"친구 추세 {tf} {FT.trend_words(t)}"
+    return f"{what} · {trend}"
+
+
 def reason_words(ev: dict, side: int, name: bool = False) -> str:
     """The entry's 근거 line: the friend's colour change and averaged RSIs, or the second rule's supertrends, Stoch RSI
     cross and RSI26s; ``name``: the rule's name first (two rules)."""
     head = f"근거({RULE_KO.get(ev.get('rule', 'mix'), '')}): " if name else "근거: "
     if ev.get("rule") in FRIEND_RULES:
-        from . import friendtrend as FT
-        what = (f"OBV {'연한 초록→진한 초록' if side > 0 else '연한 빨강→진한 빨강'}" if ev["rule"] == "obv" else
-                f"스톡RSI {'골든' if side > 0 else '데드'}(K {ev.get('k')} / D {ev.get('d')}, 50선 {'아래' if side > 0 else '위'})")
-        return (head + f"{what} · 친구 추세 30분 {FT.trend_words({'trend': ev.get('trend', 0), **(ev.get('votes') or {})})} "
-                f"({kst(ev['close_ms'])} 봉)")
+        return head + f"{friend_words(ev, side)} ({kst(ev['close_ms'])} 봉)"
     if ev.get("rule") == "st":
         return (head + f"슈퍼트렌드 14/3·14/6 {'상승' if side > 0 else '하락'} · 스톡RSI {'골든' if side > 0 else '데드'}크로스"
                 f"(K {ev.get('k')} / D {ev.get('d')}) · RSI26 30분 {ev.get('rsi26_30m')} · 1시간 {ev.get('rsi26_1h')} "
@@ -577,10 +623,20 @@ class Config:
     stop_atr: Optional[float] = None            # > 0: every coin's stop = ATR14 x this, both rules (owners 10-26: 3)
     exchange: str = "wooxpro"                   # "wooxpro" | "bybit" (owners 10-29: the 바이비트 봇)
     name: str = NAME                            # the bot's name in its messages
+    tf: str = "30m"                             # the signal bar (TF_MS; owners 10-30: WOO X Pro 2 on "15m")
+    trend: str = "four"                         # the friend rules' trend (TRENDS; owners 10-30: WOO X Pro 2 "swing")
 
     @property
     def symbols(self) -> list:
         return [c.symbol for c in self.coins]
+
+    @property
+    def tf_ms(self) -> int:
+        return TF_MS[self.tf]
+
+    @property
+    def tf_ko(self) -> str:
+        return TF_KO[self.tf]
 
 
 def load_config(path: str) -> Config:
@@ -593,7 +649,7 @@ def load_config(path: str) -> Config:
     rules_raw = raw.get("rules", ["mix"])
     sa_raw = raw.get("stop_atr")
     if isinstance(rules_raw, list) and any(r in FRIEND_RULES for r in rules_raw) and sa_raw is None:
-        raise MixError("\"obv\"·\"srsi\" 매매법은 \"stop_atr\"(손절 ATR 배수, 예: 3)가 필요합니다")
+        raise MixError("\"obv\"·\"srsi\"·\"obv50\"·\"roc50\" 매매법은 \"stop_atr\"(손절 ATR 배수, 예: 3)가 필요합니다")
     for sym, v in (raw.get("coins") or {}).items():
         if not sym.endswith("USDT"):
             raise MixError(f"코인 이름은 BTCUSDT 꼴이어야 합니다: {sym!r}")
@@ -658,7 +714,15 @@ def load_config(path: str) -> Config:
         raise MixError(f"\"name\"은 40자 안의 이름입니다(지금 {name!r})")
     cfg.name = name.strip()
     if any(r in FRIEND_RULES for r in cfg.rules) and not cfg.stop_atr:
-        raise MixError("\"obv\"·\"srsi\" 매매법은 \"stop_atr\"(손절 ATR 배수, 예: 3)가 필요합니다")
+        raise MixError("\"obv\"·\"srsi\"·\"obv50\"·\"roc50\" 매매법은 \"stop_atr\"(손절 ATR 배수, 예: 3)가 필요합니다")
+    tf, tr = raw.get("tf", "30m"), raw.get("trend", "four")
+    if tf not in TF_MS:
+        raise MixError(f"\"tf\"는 {list(TF_MS)} 중 하나입니다(신호 봉, 지금 {tf!r})")
+    if tr not in TRENDS:
+        raise MixError(f"\"trend\"는 {list(TRENDS)} 중 하나입니다(four: 네 표 중 2개 이상, swing: WOO X Pro 2 규칙; 지금 {tr!r})")
+    if (tf != "30m" or tr != "four") and any(r not in FRIEND_RULES for r in cfg.rules):
+        raise MixError("\"mix\"·\"st\" 매매법은 30분봉(tf \"30m\")과 네 표 추세(trend \"four\")에서만 씁니다")
+    cfg.tf, cfg.trend = tf, tr
     if not cfg.state or not cfg.log:
         raise MixError("\"state\"와 \"log\" 파일 경로가 필요합니다")
     if not (0 < cfg.risk_pct <= 5):
@@ -1000,12 +1064,14 @@ class Bot:
 
     # ---------------------------------------------------------------- bars
     def bars(self, symbol: str, close_ms: int) -> tuple[pd.DataFrame, pd.DataFrame]:
-        r30 = self.fetch(symbol, "30m", BARS)
-        if not any(int(r[0]) >= close_ms for r in r30[-3:]):     # Binance has not opened the next bar: not closed there
-            raise MixError("바이낸스에서 30분봉 마감이 아직 없음")
-        b30 = bars_frame(r30, MIN30, close_ms)
-        b1h = bars_frame(self.fetch(symbol, "1h", BARS), H1, close_ms)
-        return b30, b1h
+        """The closed signal bars (the config's ``tf``) and, for the friend's own two rules only, the closed 1h bars."""
+        rb = self.fetch(symbol, self.cfg.tf, BARS)
+        if not any(int(r[0]) >= close_ms for r in rb[-3:]):     # Binance has not opened the next bar: not closed there
+            raise MixError(f"바이낸스에서 {self.cfg.tf_ko}봉 마감이 아직 없음")
+        b = bars_frame(rb, self.cfg.tf_ms, close_ms)
+        if all(r in FRIEND_RULES for r in self.cfg.rules):
+            return b, b.iloc[0:0]                                # (no 1h bars read: the friend rules use the one frame)
+        return b, bars_frame(self.fetch(symbol, "1h", BARS), H1, close_ms)
 
     # ---------------------------------------------------------------- start
     def start(self) -> None:
@@ -1025,7 +1091,7 @@ class Bot:
         held = f"\n보유 중: {coin_ko(self.pos.symbol)} {'롱' if self.pos.side > 0 else '숏'} 손절 {self.pos.stop:.6g}" \
             if self.pos else ""
         self.say("INFO", f"▶️ 시작 · 잔고 ${eq:,.2f} (시작 잔고 ${self.start_equity:,.2f})\n코인 {coins}\n"
-                         f"{self.plan_text()} · 한 번에 1포지션 · 30분봉 마감마다 판단{held}"
+                         f"{self.plan_text()} · 한 번에 1포지션 · {self.cfg.tf_ko}봉 마감마다 판단{held}"
                  + ("".join(f"\n⚠ {t}" for t in bad)))
         self.log("start", equity=eq, start_equity=self.start_equity, setup=lines, position=asdict(self.pos) if self.pos else None)
         if problem:
@@ -1164,7 +1230,8 @@ class Bot:
             for attempt in range(3):
                 try:
                     b30, b1h = self.bars(co.symbol, close_ms)
-                    evs = [self.judge(rule, co, b30, b1h, close_ms) for rule in self.cfg.rules]
+                    evs = [self.judge(rule, co, b30, b1h, close_ms, self.cfg.tf_ms, self.cfg.trend)
+                           for rule in self.cfg.rules]
                 except Exception as e:
                     evs = [{"symbol": co.symbol, "close_ms": close_ms, "side": 0, "why": f"캔들 읽기 실패: {e}"}]
                 if not any(_not_read(ev) for ev in evs):
@@ -1173,7 +1240,8 @@ class Bot:
             for ev in evs:
                 if _not_read(ev):
                     self.log("bars_missing", **ev)
-                if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev["side"]:
+                if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev.get("roc_turn") \
+                        or ev["side"]:
                     self.log("signal", **ev)
             if any(r in FRIEND_RULES for r in self.cfg.rules):
                 self.board[co.symbol] = board_row(evs, close_ms)
@@ -1197,11 +1265,15 @@ class Bot:
         self.enter(co, ev)
 
     @staticmethod
-    def judge(rule: str, co: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int) -> dict:
+    def judge(rule: str, co: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int, tf_ms: int = MIN30,
+              trend: str = "four") -> dict:
         """One entry rule's answer at this close (``rule``: "mix" the friend's, "st" the owners' second, "obv" / "srsi"
-        the friend's trend with the OBV pane / the Stoch RSI pane, owners 10-29)."""
+        the friend's trend with the OBV pane / the Stoch RSI pane, owners 10-29; "obv50" / "roc50" with the 50 lines,
+        owners 10-30, on the config's bar ``tf_ms`` and trend rule)."""
         if rule in FRIEND_RULES:
-            return evaluate_friend(rule, co, b30, close_ms)
+            if tf_ms == MIN30 and trend == "four":
+                return evaluate_friend(rule, co, b30, close_ms)
+            return evaluate_friend(rule, co, b30, close_ms, tf_ms, trend)
         return evaluate(co, b30, b1h, close_ms) if rule == "mix" else evaluate_st(co, b30, b1h, close_ms)
 
     def halts(self) -> str:
@@ -1375,11 +1447,11 @@ class Bot:
     def bars_since(self, p: "Position", upto_ms: int) -> tuple[pd.DataFrame, int]:
         """The closed bars after the last one used, up to ``upto_ms``: 1m bars with ladder_every_s (30m when more than
         MINUTE_MAX minutes are missing: the bot was down), else 30m bars as the design. Returns (bars, bar length)."""
-        tf = MIN30
+        tf = self.cfg.tf_ms
         if self.cfg.ladder_every_s > 0 and (upto_ms - p.last_bar_ms) // MIN1 <= MINUTE_MAX:
             tf = MIN1
         rows = (self.fetch(p.symbol, "1m", int(max(3, (upto_ms - p.last_bar_ms) // MIN1 + 3))) if tf == MIN1
-                else self.fetch(p.symbol, "30m", 50))
+                else self.fetch(p.symbol, self.cfg.tf, 50))
         b = bars_frame(rows, tf, upto_ms)
         return b[b.open_ms + tf > p.last_bar_ms], tf
 
@@ -1516,11 +1588,12 @@ class Bot:
         self.start()
         while not self.stop:
             now = self.now()
-            nxt = (now // MIN30 + 1) * MIN30
-            if self.last_close_ms and nxt - MIN30 > self.last_close_ms and now < nxt - MIN30 + 120_000:
-                nxt = nxt - MIN30                       # a close not handled yet (just started): handle it now
+            tf = self.cfg.tf_ms
+            nxt = (now // tf + 1) * tf
+            if self.last_close_ms and nxt - tf > self.last_close_ms and now < nxt - tf + 120_000:
+                nxt = nxt - tf                          # a close not handled yet (just started): handle it now
             if nxt <= self.last_close_ms:               # the clock stepped back: never handle a close twice
-                nxt = self.last_close_ms + MIN30
+                nxt = self.last_close_ms + tf
             while not self.stop and self.now() < nxt + SETTLE_S * 1000:
                 self.poll()
                 self.minute_update()
@@ -1648,17 +1721,19 @@ def cmd_signals(args) -> int:
     cfg = load_config(args.config)
     fetch = binance_fetch(cfg.binance_base)
     now = int(time.time() * 1000)
-    last_close = now // MIN30 * MIN30
+    last_close = now // cfg.tf_ms * cfg.tf_ms
+    trend_ko = ("하늘·보라 선 · 찹존 · 슈퍼트렌드, 선 쪽이고 찹존·슈퍼트렌드 중 하나 이상 횡보" if cfg.trend == "swing"
+                else "하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드")
     for co in cfg.coins:
-        b30 = bars_frame(fetch(co.symbol, "30m", BARS), MIN30, last_close)
-        b1h = bars_frame(fetch(co.symbol, "1h", BARS), H1, last_close)
-        if "mix" not in cfg.rules:                       # the 바이비트 봇: the friend's trend rules only
+        b30 = bars_frame(fetch(co.symbol, cfg.tf, BARS), cfg.tf_ms, last_close)
+        if all(r in FRIEND_RULES for r in cfg.rules):     # the 바이비트 봇 / WOO X Pro 2: the friend's trend rules only
             print(f"== {co.symbol} (손절 ATR × {co.sl_atr} · {co.leverage}배{'' if co.enabled else ' · 꺼짐'})")
-            for rule in [r for r in cfg.rules if r in FRIEND_RULES]:
-                print(f"  -- {RULE_KO[rule]} (친구 추세 30분: 하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드)")
-                for ln in friend_history(co, b30, rule, args.n):
+            for rule in cfg.rules:
+                print(f"  -- {RULE_KO[rule]} (추세 {cfg.tf_ko}: {trend_ko})")
+                for ln in friend_history(co, b30, rule, args.n, cfg.tf_ms, cfg.trend):
                     print("  " + ln)
             continue
+        b1h = bars_frame(fetch(co.symbol, "1h", BARS), H1, last_close)
         rows = []
         g = line_gold(b30.close.to_numpy(float))
         for i in range(len(b30) - 1, max(len(b30) - 400, 300), -1):
@@ -1700,21 +1775,28 @@ def cmd_signals(args) -> int:
     return 0
 
 
-def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int) -> list:
-    """The last ``n`` signals of a friend rule ("obv": light -> dark turns, "srsi": golden / dead ●) on the closed 30m
-    bars, each with the friend's trend and what the bot did, oldest first (lines to put next to TradingView). The
-    indicators look back only, so the whole history's values at a bar are the values the bot read at that close."""
+def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int = MIN30, trend: str = "four") -> list:
+    """The last ``n`` signals of a friend rule ("obv" / "obv50": light -> dark turns, "roc50": the ROC bar's light -> dark
+    turns, "srsi": golden / dead ●) on the closed signal bars, each with the trend and what the bot did, oldest first
+    (lines to put next to TradingView). The indicators look back only, so the whole history's values at a bar are the
+    values the bot read at that close."""
     from . import friendtrend as FT
     o, h, l, c, v = (b30[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
     if len(c) < 302:
         return ["지난 봉이 모자람"]
     V = FT.votes(o, h, l, c, v)
-    if rule == "obv":
-        P = FT.obv_pane(h, l, c, v)
+    lvl = None                                           # the 50 line's value (obv50 / roc50)
+    if rule in ("obv", "obv50", "roc50"):
+        P = FT.roc_pane(h, l, c, v) if rule == "roc50" else FT.obv_pane(h, l, c, v)
         cs, dk = P["cs"], P["dark"]
-        want = np.zeros(len(c), int)
-        want[1:] = np.where((cs[1:] == cs[:-1]) & (cs[1:] != 0) & dk[1:] & ~dk[:-1], cs[1:], 0)
-        mark = want != 0
+        turn = np.zeros(len(c), int)
+        turn[1:] = np.where((cs[1:] == cs[:-1]) & (cs[1:] != 0) & dk[1:] & ~dk[:-1], cs[1:], 0)
+        mark = turn != 0
+        want = turn
+        if rule != "obv":
+            lvl = P["osc"] if rule == "roc50" else FT.to50(P["line"], M.ema(P["line"], FT.OBV50_BASE), FT.OBV50_NORM,
+                                                           FT.OBV50_SENS)
+            want = np.where((turn > 0) & (lvl < 50), 1, np.where((turn < 0) & (lvl > 50), -1, 0))
     else:
         P = FT.stoch_pane(c)
         k = P["k"]
@@ -1725,23 +1807,26 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int) -> list:
     for i in range(len(c) - 1, 300, -1):
         if not mark[i]:
             continue
-        ce = int(b30.open_ms.iloc[i]) + MIN30
+        ce = int(b30.open_ms.iloc[i]) + tf_ms
         t = {"trend": int(V["trend"][i]), **{x: int(V[x][i]) for x in FT.VOTES}}
+        tside = FT.swing_side(t) if trend == "swing" else t["trend"]
         dist = float(at[i]) * coin.sl_atr
         px = float(c[i])
-        if rule == "obv":
-            what = "연한 초록→진한 초록" if want[i] > 0 else "연한 빨강→진한 빨강"
+        if rule in ("obv", "obv50", "roc50"):
+            what = (("ROC 막대 " if rule == "roc50" else "") + ("연한 초록→진한 초록" if turn[i] > 0 else "연한 빨강→진한 빨강")
+                    + (f" {'ROC' if rule == 'roc50' else 'OBV'} {float(lvl[i]):.1f}" if lvl is not None else ""))
         else:
             what = f"{'골든' if P['gold'][i] else '데드'} K {P['k'][i]:.1f} D {P['d'][i]:.1f}"
         if not want[i]:
             res = "X (50선 조건 안 맞음)"
-        elif t["trend"] != want[i]:
+        elif tside != want[i]:
             res = "X (추세 다름)"
         elif not dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0):
             res = f"X (손절 폭 {dist / px * 100:.2f}%가 청산가보다 멂)"
         else:
             res = "롱 진입" if want[i] > 0 else "숏 진입"
-        out.append(f"{kst(ce)} KST 마감  {what}  종가 {px:.6g}  친구 추세 {FT.trend_words(t)}  손절폭 {dist / px * 100:.2f}%  → {res}")
+        tw = f"추세 {FT.swing_words(t)}" if trend == "swing" else f"친구 추세 {FT.trend_words(t)}"
+        out.append(f"{kst(ce)} KST 마감  {what}  종가 {px:.6g}  {tw}  손절폭 {dist / px * 100:.2f}%  → {res}")
         if len(out) >= n:
             break
     return list(reversed(out))
@@ -1772,14 +1857,17 @@ def cmd_check(args) -> int:
     if tuple(cfg.rules) != ("mix",) or cfg.stop_atr:          # owners 10-26: the second rule, one stop multiple
         print("매매법·손절: " + " + ".join(RULE_KO[r] for r in cfg.rules)
               + (f"(같은 봉이면 {RULE_KO[cfg.rules[0]]} 먼저)" if len(cfg.rules) > 1 else "")
-              + (f" · 손절 ATR {cfg.stop_atr:g}배(모든 코인)" if cfg.stop_atr else " · 손절 코인별 ATR 배수"))
+              + (f" · 손절 ATR {cfg.stop_atr:g}배(모든 코인)" if cfg.stop_atr else " · 손절 코인별 ATR 배수")
+              + (f" · 신호 {cfg.tf_ko}봉" + (" · 추세: 하늘·보라 선 쪽 + 찹존·슈퍼트렌드 중 하나 이상 횡보(같은 추세 2개 이상 금지)"
+                                          if cfg.trend == "swing" else " · 추세: 네 표 중 같은 쪽 2개 이상")
+                 if any(r in FRIEND_RULES for r in cfg.rules) else ""))
     for co in cfg.coins:
         try:
             sp = spec_of(co.symbol)
         except Exception as e:
             print(f"✘ {co.symbol}: {ex} 계약을 못 읽음 ({e})")
             continue
-        b30 = bars_frame(fetch(co.symbol, "30m", 100), MIN30, now // MIN30 * MIN30)
+        b30 = bars_frame(fetch(co.symbol, cfg.tf, 100), cfg.tf_ms, now // cfg.tf_ms * cfg.tf_ms)
         c = b30.close.to_numpy(float)
         a = float(atr(b30.high.to_numpy(float), b30.low.to_numpy(float), c, 14)[-1])
         dist = a * co.sl_atr

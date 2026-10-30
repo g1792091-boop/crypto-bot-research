@@ -294,7 +294,11 @@ def test_the_range_answer_off_missing_stopped_and_unreadable(tmp_path):
     assert (s["state"], s["ko"]) == ("off", "아직 꺼져 있어요") and s["why_ko"] == "서버에 레인지 봇 기록 파일이 아직 없어요"
     assert s["guide"] == "docs/range-bot-ko.md" and os.path.exists(os.path.join(RW.TW.ROOT, s["guide"]))
     assert "sudo systemctl enable --now paperbot-combo-range" in s["steps"]
-    assert d["plan"]["source"] == "repo" and "저장소의 설정 원본" in d["plan"]["reason_ko"] and d["plan"]["tp"] == 0.1
+    assert d["plan"]["source"] == "repo" and "저장소의 설정 원본" in d["plan"]["reason_ko"] and d["plan"]["tp"] is None
+    # owners 10-30: the repository's config has the ladder (net ROE 10 % -> lock 8 %, then 5 %) and the ROC entry
+    pl = {x["key"]: x["ko"] for x in d["plan"]["lines"]}
+    assert pl["tp"].startswith("계단 익절 순ROE 10%에서 8% 잠금, 그 뒤 5%씩 (고정 익절 없음)")
+    assert pl["stop"].endswith("· ROC 진입은 30분 ATR(14) × 3") and pl["roc"].startswith("친구 추세지표 30분봉(네 표)")
     assert d["wallet"] is None and d["position"] is None and d["trades"] == [] and d["flip"] is None
     # a config on the server: the plan from it, said so
     (tmp_path / "cfg.json").write_text(json.dumps(RW.TW.deploy("combo.range.json")), encoding="utf-8")
@@ -469,7 +473,7 @@ def test_the_range_view_in_node(rw, tmp_path):
         assert bad not in a, bad
     b = out["off"]
     for word in ("꺼짐", "아직 꺼져 있어요", "서버에 레인지 봇 기록 파일이 아직 없어요", "docs/range-bot-ko.md 3장 'B. 레인지 페이퍼 봇 켜기'",
-                 "sudo systemctl enable --now paperbot-combo-range", "그 전에는 숫자를 만들지 않아요", "저장소의 설정 원본", "순ROE +10% 고정"):
+                 "sudo systemctl enable --now paperbot-combo-range", "그 전에는 숫자를 만들지 않아요", "저장소의 설정 원본", "계단 익절 순ROE 10%에서 8% 잠금"):
         assert word in b, word
     assert "페이퍼 지갑 (모의)" not in b and "$" not in b.split("계획")[0] and not BAD.search(b)
     c = out["wait"]
@@ -516,7 +520,7 @@ def test_the_menu_button_strip_and_names(rw, tmp_path):
       names: ['paper', 'paper2', 'range'].map((id) => K.acctKo(id)), line: K.followLine(D_s.papers), isp: ['range', 'mexc'].map(K.isPaperId),
       tab: LB.BOT_TAB.rangebot.bot}}));""", s=summary)
     assert out["group"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]          # (owners 10-29: 바이비트 봇 first, 추세판단 봇 last)
-    assert out["nav"] == ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트", "추세판단 봇"]
+    assert out["nav"] == ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "V3.9 투비트", "추세판단 봇"]
     assert out["screen"] == ["레인지 봇", "bots", "livebots"] and out["icon"] > 5 and out["tab"] == "range"
     assert out["fol"] == [["bybit"], ["mexc"], ["deepcoin"]]
     assert out["names"] == ["추세판단 봇", "VWAP 개선판", "레인지 봇"] and out["isp"] == [True, False]

@@ -20,10 +20,12 @@ file keeps its owner and mode):
 - size: ``size_from`` "equity", ``margin_frac`` 0.4 (each entry's margin = 40 % of the live balance read then: money taken
   out or put in counts at the next entry, nothing to type), ``leverage_by_symbol`` BTC 40 / the rest 30,
   ``risk.max_leverage`` at least 40
-- stop: ``stop_from`` "roe", ``stop_roe`` 0.5, ``stop_net`` true (net ROE -50 % from its own fill, its own costs);
-  ``stop_scale`` removed
-- take-profit: ``ladder_from`` "own", ``ladder`` null, ``take_profit_roe`` 0.1, ``ladder_basis`` "net" (net ROE +10 % on
-  its own fill and WOO X Pro's last price -> closed at market; no ladder)
+- stop (owners 10-30, the ROC entry with its own stop): ``stop_from`` "ratio" (the paper's stop distance in % from its own
+  fill: the range entry's net ROE -50 %, the ROC entry's 30m ATR x 3); ``stop_roe``, ``stop_net``, ``stop_scale`` removed
+  (10-26 to 10-29: "roe" 0.5 net)
+- take-profit (owners 10-30 "레인지도 woox pro1 순수익8% 방식으로"): ``ladder_from`` "own", ``ladder`` net ROE 10 % -> lock 8 %,
+  then every 5 %, ``take_profit_roe`` null, ``ladder_basis`` "net" (its own fill, WOO X Pro's own 1m bars and costs)
+  (10-26 to 10-29: one fixed take-profit at net ROE +10 %)
 - ``signal_light_n`` 0 (no signal light), ``equity_floor_frac`` null (no balance floor: "파산당하면 파산 당한다는 마인드"),
   ``liq_guard`` true with ``liq_guard_mmr`` 0.005, ``macro_block_min`` 30
 Nothing restarts here: the executor reads its config when it starts (check-config, preflight, then ``systemctl start``).
@@ -48,8 +50,9 @@ RANGE_DB = "/var/lib/paperbot/combo/range.db"
 ACCOUNT = "COMBO@mix"
 MARGIN = 0.4
 LEV = {"BTCUSDT": 40, "*": 30}
-STOP_ROE = 0.5
-TP_ROE = 0.1
+LADDER = {"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.05}     # net ROE 10 % -> lock 8 %, then every 5 %
+GONE = {"stop_roe": "stop_from \"ratio\"라 안 씀", "stop_net": "stop_from \"ratio\"라 안 씀",
+        "stop_scale": "손절은 페이퍼 손절 거리 그대로"}
 MMR = 0.005
 MACRO_MIN = 30
 SUFFIX = ".before-range-"
@@ -91,8 +94,8 @@ def plan_exec(current: str, exchange: str) -> tuple:
     if (d.get("account") or ACCOUNT) != ACCOUNT:
         raise Stop(f"account가 {d.get('account')!r}입니다(레인지 봇 계좌는 {ACCOUNT})")
     want = {"paper_db": RANGE_DB, "size_from": "equity", "margin_frac": MARGIN, "leverage_by_symbol": LEV,
-            "stop_from": "roe", "stop_roe": STOP_ROE, "stop_net": True, "ladder_from": "own", "ladder": None,
-            "take_profit_roe": TP_ROE, "ladder_basis": "net", "signal_light_n": 0, "equity_floor_frac": None,
+            "stop_from": "ratio", "ladder_from": "own", "ladder": LADDER,
+            "take_profit_roe": None, "ladder_basis": "net", "signal_light_n": 0, "equity_floor_frac": None,
             "liq_guard": True, "liq_guard_mmr": MMR, "macro_block_min": MACRO_MIN}
     words = []
     for k, v in want.items():
@@ -100,15 +103,17 @@ def plan_exec(current: str, exchange: str) -> tuple:
             if k in d or v is not None:
                 words.append(f"{k}: {json.dumps(d.get(k), ensure_ascii=False)} → {json.dumps(v, ensure_ascii=False)}")
         d[k] = v
-    if "stop_scale" in d:
-        words.append(f"stop_scale: {json.dumps(d.pop('stop_scale'))} → 없앰(손절은 순ROE -50%)")
+    for k, why in GONE.items():
+        if k in d:
+            words.append(f"{k}: {json.dumps(d.pop(k))} → 없앰({why})")
     risk = dict(d.get("risk") or {})
     if not (isinstance(risk.get("max_leverage"), (int, float)) and risk["max_leverage"] >= 40):
         words.append(f"risk.max_leverage: {risk.get('max_leverage')} → 40")
         risk["max_leverage"] = 40
     d["risk"] = risk
-    words.append(f"(진입할 때마다 실거래 잔고의 {MARGIN:.0%}를 증거금으로, BTC 40배·나머지 30배. 손절 순ROE -{STOP_ROE:.0%}, "
-                 f"익절 순ROE +{TP_ROE:.0%}에서 시장가로 전부, 둘 다 실거래 자기 체결가 기준)")
+    words.append(f"(진입할 때마다 실거래 잔고의 {MARGIN:.0%}를 증거금으로, BTC 40배·나머지 30배. 손절은 페이퍼와 같은 거리"
+                 "(레인지 신호 순ROE -50%, ROC 신호 30분 ATR × 3), 계단 익절 순ROE 10%에서 8% 잠금 뒤 5%씩, "
+                 "모두 실거래 자기 체결가 기준)")
     cap = risk.get("max_notional_usd")
     if cap:
         words.append(f"(참고) 한 포지션 최대 ${float(cap):,.0f}(risk.max_notional_usd): 잔고가 ${float(cap) / (MARGIN * 40):,.0f}를 "

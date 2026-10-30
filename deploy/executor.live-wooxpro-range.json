@@ -7,10 +7,14 @@
   "budget_usd": 100,
   "qty_scale": 0.1,
   "entry_source": "paper",
-  "stop_from": "roe",
+  "stop_from": "ratio",
   "signal_light_n": 0,
   "ladder_from": "own",
-  "ladder": null,
+  "ladder": {
+    "first_lock": 0.08,
+    "trigger_gap": 0.02,
+    "step": 0.05
+  },
   "ladder_basis": "net",
   "net_costs": {
     "bybit": {
@@ -46,9 +50,7 @@
     "BTCUSDT": 40,
     "*": 30
   },
-  "stop_roe": 0.5,
-  "stop_net": true,
-  "take_profit_roe": 0.1,
+  "take_profit_roe": null,
   "equity_floor_frac": null,
   "liq_guard": true,
   "liq_guard_mmr": 0.005,

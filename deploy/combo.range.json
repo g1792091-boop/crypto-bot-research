@@ -20,8 +20,12 @@
     "net": true
   },
   "liq_buffer_atr": 0.0,
-  "ladder": null,
-  "take_profit_roe": 0.1,
+  "ladder": {
+    "first_lock": 0.08,
+    "trigger_gap": 0.02,
+    "step": 0.05
+  },
+  "take_profit_roe": null,
   "rank": [
     "order"
   ],
@@ -40,7 +44,9 @@
     "st_period": 10,
     "st_mult": 3.0,
     "liq_check": true,
-    "liq_mmr": 0.005
+    "liq_mmr": 0.005,
+    "roc_tf": "30m",
+    "roc_stop_atr": 3
   },
   "telegram": true
 }

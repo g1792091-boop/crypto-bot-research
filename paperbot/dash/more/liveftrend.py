@@ -5,8 +5,9 @@
     30분  the 바이비트 봇 (paperbot/mixchop.py, docs/mixbybit-ko.md) at its last 30-minute close: its state file's ``board``
           (mixchop.board_row): the trend of the bar and its four votes (하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드; two
           or more the same way = that trend, two or more sideways or two against two = 진입 금지), the OBV pane's colour
-          (green / red, light / dark, the light -> dark turn the OBV rule enters on), the Stoch RSI pane (K, D, its state,
-          a golden / dead ● on the bar) and each rule's answer with the bot's reason. The live bot's file, else its paper
+          (green / red, light / dark, the light -> dark turn the OBV rule enters on), its 50 line's value (``obv50``, the
+          rule of 10-30), the Stoch RSI pane (K, D, its state, a golden / dead ● on the bar; the rules of 10-29 only) and
+          each rule's answer with the bot's reason. The live bot's file, else its paper
           twin's (said so).
     1시간 the 레인지 봇 (paperbot/rangebot.py, docs/range-bot-ko.md) on its last closed hour: its ``range`` snapshot's
           ``friend`` (dash/more/liverange.supertrend_of), once its config has ``friend_tf``.
@@ -26,14 +27,15 @@ MIN = 60_000
 TREND_KO = {1: "상승", -1: "하락", 0: "진입 금지"}
 VOTE_KO = {1: "상승", -1: "하락", 0: "횡보"}
 VOTES = (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드"))
-RULE_KO = {"obv": "OBV 진한색", "srsi": "스톡RSI 50선"}
+RULE_KO = {"obv": "OBV 진한색", "srsi": "스톡RSI 50선", "obv50": "OBV 50선", "roc50": "ROC 50선"}
 STALE_30M_MS = 35 * MIN                 # the bot writes at every 30-minute close
 STALE_1H_MS = 70 * MIN                  # the 레인지 봇 reads its hour once it closed
 RULES_KO = [
     "추세: 네 표(하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드) 중 같은 쪽이 2표 이상이고 반대쪽보다 많으면 그 추세 · "
     "횡보가 2표 이상이거나 2 대 2면 진입 금지",
-    "OBV 진한색(바이비트 봇): 추세 쪽 색(상승 초록 · 하락 빨강)의 히스토그램이 연한색에서 진한색으로 바뀌는 봉에 들어가요",
-    "스톡RSI 50선(바이비트 봇): 50선 아래 골든 ●이면 롱, 50선 위 데드 ●이면 숏 · 추세와 같은 쪽일 때만",
+    "OBV 50선(바이비트 봇, 10-30부터): 히스토그램이 연한 초록→진한 초록인 봉에서 OBV 50선 값이 50 아래면 롱, "
+    "연한 빨강→진한 빨강이고 50 위면 숏 · 추세와 같은 쪽일 때만",
+    "OBV 진한색 · 스톡RSI 50선: 10-29의 두 규칙 (10-30부터 바이비트 봇은 OBV 50선 하나)",
     "1시간 추세(레인지 봇): 신호와 반대이거나 진입 금지면 그 신호를 막아요",
 ]
 
@@ -88,6 +90,7 @@ def m30_row(r: Any, now: int) -> dict:
             "trend": t, "trend_ko": TREND_KO.get(t, "모름") if t is not None else None, "votes": votes_out(r.get("votes")),
             "ema_rsi": _f(r.get("ema_rsi")), "chop_zone": _i(r.get("chop_zone")), "close": _f(r.get("close")),
             "stop_pct": _f(r.get("stop_pct")), "liq_ok": r.get("liq_ok"), "obv": obv_out(r), "stoch": stoch_out(r),
+            "obv50": _f(r.get("obv50")),
             "rules": rules, "ko": next((x["why"] for x in rules.values() if x["why"]), "") if unread else ""}
 
 

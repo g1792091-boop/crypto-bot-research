@@ -19,46 +19,31 @@
   "step": 5
  },
  "ladder_every_s": 60,
+ "name": "친구 15분 봇",
+ "tf": "15m",
+ "trend": "swing",
  "rules": [
-  "mix",
-  "st"
+  "roc50",
+  "obv50"
  ],
  "stop_atr": 3,
  "coins": {
   "SOLUSDT": {
-   "h1_buf": 8.0,
-   "sl_atr": 2.0,
-   "roe_act": 150,
    "leverage": 40
   },
   "ETHUSDT": {
-   "h1_buf": 8.5,
-   "sl_atr": 1.5,
-   "roe_act": 200,
    "leverage": 40
   },
   "XRPUSDT": {
-   "h1_buf": 9.5,
-   "sl_atr": 1.5,
-   "roe_act": 200,
    "leverage": 40
   },
   "BCHUSDT": {
-   "h1_buf": 3.0,
-   "sl_atr": 2.0,
-   "roe_act": 150,
    "leverage": 40
   },
   "ZECUSDT": {
-   "h1_buf": 6.5,
-   "sl_atr": 2.5,
-   "roe_act": 100,
    "leverage": 20
   },
   "DOGEUSDT": {
-   "h1_buf": 4.0,
-   "sl_atr": 2.5,
-   "roe_act": 100,
    "leverage": 40
   }
  },

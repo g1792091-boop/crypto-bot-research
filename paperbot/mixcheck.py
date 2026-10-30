@@ -87,10 +87,12 @@ GAP_FRAC = 0.001                    # the worked-back exit past the stop by more
 FAR_GAP_FRAC = 0.005                # ... by more than 0.5 %: the stop fired far past its price
 SLIP_FRAC = 0.0015                  # the entry fill worse than the signal close by more than 0.15 %
 RULE_TAG = {"st": "(슈퍼트렌드·스톡RSI)",  # the second rule's lines say whose they are (owners 10-26)
-            "obv": "(OBV 진한색)", "srsi": "(스톡RSI 50선)"}            # the 바이비트 봇's (owners 10-29)
+            "obv": "(OBV 진한색)", "srsi": "(스톡RSI 50선)",            # the 바이비트 봇's (owners 10-29)
+            "obv50": "(OBV 50선)", "roc50": "(ROC 50선)"}               # owners 10-30
 # what a signal row of each rule is, for the replay's lines (the friend's colour change, the Stoch RSI cross / ●, the OBV
 # light -> dark turn)
-RULE_WHAT = {"mix": "색 변화", "st": "스톡RSI 크로스", "srsi": "스톡RSI ●", "obv": "OBV 연한→진한"}
+RULE_WHAT = {"mix": "색 변화", "st": "스톡RSI 크로스", "srsi": "스톡RSI ●", "obv": "OBV 연한→진한", "obv50": "OBV 연한→진한",
+             "roc50": "ROC 막대 연한→진한"}
 BLOCK_NEAR_MS = 60 * MIN            # an entry block that started within an hour after the entry
 # luck band: the share of the replay's runs that are this bad or worse
 RARE, VERY_RARE = 0.10, 0.02
@@ -247,8 +249,12 @@ def words_of(data: dict) -> dict:
     prof = X.PROFILES.get(data.get("bot") or "mix", X.MIX)
     cfg = ((data.get("live") or {}).get("conf") or {}).get("cfg") or ((data.get("paper") or {}).get("conf") or {}).get("cfg")
     fee = float(getattr(cfg, "taker_fee", TAKER)) if cfg is not None else TAKER
-    return {"name": prof.name, "short": "믹스" if prof is X.MIX else prof.name, "ex": prof.exchange_ko, "fee": fee,
-            "unit": prof.bots[0][2], "mix": prof is X.MIX, "guide": prof.guide}
+    # the friend's own rule ("mix") is what the 5-year replay and the luck band are of (owners 10-30: the friend bot runs
+    # ROC / OBV 50 on 15m bars since, its config's name)
+    mix = prof is X.MIX and (cfg is None or "mix" in tuple(getattr(cfg, "rules", ("mix",))))
+    name = (getattr(cfg, "name", None) or prof.name) if prof is X.MIX else prof.name
+    return {"name": name, "short": "믹스" if mix else name, "ex": prof.exchange_ko, "fee": fee,
+            "unit": prof.bots[0][2], "mix": mix, "guide": prof.guide}
 
 
 def rows_of(b: dict) -> list:
@@ -759,15 +765,18 @@ def _rule(r: dict) -> str:
 def _moved(ev: dict) -> bool:
     """A row the bot logs: a colour change (the friend's rule), a Stoch RSI cross (the second; the 바이비트 봇's ●), an
     OBV light -> dark turn (the 바이비트 봇's, owners 10-29) or a side."""
-    return bool(ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev.get("side"))
+    return bool(ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev.get("roc_turn")
+                or ev.get("side"))
 
 
 def _mark(ev: dict, rule: str) -> Any:
     """What the rule saw on the bar, to compare the log with the replay: the colour, the cross / ●, the OBV turn."""
     if rule == "mix":
         return bool(ev.get("to_cyan"))
-    if rule == "obv":
+    if rule in ("obv", "obv50"):
         return _i(ev.get("turn")) or 0
+    if rule == "roc50":
+        return _i(ev.get("roc_turn")) or 0
     return ev.get("cross") or ""
 
 
@@ -778,22 +787,25 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
     bars the bot holds), against the live log; one answer per (coin, close, rule)."""
     obs = obs or []
     rules = tuple(getattr(cfg, "rules", None) or ("mix",))
-    closes = list(range(w0 + M.MIN30, w1 + 1, M.MIN30))
+    tf = getattr(cfg, "tf", "30m")                      # the signal bar (owners 10-30: the friend bot's 15m)
+    tf_ms, trend = M.TF_MS[tf], getattr(cfg, "trend", "four")
+    need_1h = any(r not in M.FRIEND_RULES for r in rules)
+    closes = list(range(w0 + tf_ms, w1 + 1, tf_ms))
     rep: dict = {}
     fails, failed_syms = [], set()
     for co in cfg.coins:
         try:
-            r30 = bars_range(klines, co.symbol, "30m", w0 - (M.BARS + 10) * M.MIN30, w1 + M.MIN30)
-            r1h = bars_range(klines, co.symbol, "1h", w0 - (M.BARS + 10) * M.H1, w1 + M.H1)
+            r30 = bars_range(klines, co.symbol, tf, w0 - (M.BARS + 10) * tf_ms, w1 + tf_ms)
+            r1h = bars_range(klines, co.symbol, "1h", w0 - (M.BARS + 10) * M.H1, w1 + M.H1) if need_1h else []
         except Exception as exc:  # noqa: BLE001  Binance unreachable: said, never guessed
             fails.append(f"{co.symbol}: {type(exc).__name__}: {exc}"[:160])
             failed_syms.add(co.symbol)
             continue
         for ce in closes:
-            b30 = M.bars_frame(r30, M.MIN30, ce).tail(M.BARS - 1).reset_index(drop=True)
-            b1h = M.bars_frame(r1h, M.H1, ce).tail(M.BARS - 1).reset_index(drop=True)
+            b30 = M.bars_frame(r30, tf_ms, ce).tail(M.BARS - 1).reset_index(drop=True)
+            b1h = M.bars_frame(r1h, M.H1, ce).tail(M.BARS - 1).reset_index(drop=True) if need_1h else b30.iloc[0:0]
             for rule in rules:
-                ev = M.Bot.judge(rule, co, b30, b1h, ce)
+                ev = M.Bot.judge(rule, co, b30, b1h, ce, tf_ms, trend)
                 if _moved(ev) or ev["why"].endswith("아직 없음"):
                     rep[(co.symbol, ce, rule)] = ev
     if fails and len(fails) == len(cfg.coins):
@@ -840,7 +852,7 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
                               "ko": (f"봇은 {what}로 기록했는데 다시 계산하면 {what} 없음" if rule in ("mix", "st")
                                      else f"봇은 {what} 신호로 기록했는데 다시 계산하면 없음")})
     # one entry or skip per coin and close: the first rule with a side was taken, the other rule's side goes with it
-    acted = {(r.get("symbol"), (_i(r.get("ts")) or 0) // M.MIN30 * M.MIN30) for r in day
+    acted = {(r.get("symbol"), (_i(r.get("ts")) or 0) // tf_ms * tf_ms) for r in day
              if r.get("kind") in ("skip", "entry", "adopted", "entry_failed", "entry_none")}
     told = set()
     for (sym, ce, rule), lv in sig.items():
@@ -855,8 +867,11 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
            "fails": fails, "observed": sum(1 for ce in closes if covered(obs, ce))}
     if "st" in rules:
         out["crosses"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "st" and ev.get("cross"))
-    if "obv" in rules:                                   # the 바이비트 봇's (owners 10-29)
-        out["turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "obv" and ev.get("turn"))
+    if "obv" in rules or "obv50" in rules:               # the 바이비트 봇's (owners 10-29; with its 50 line 10-30)
+        out["turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule in ("obv", "obv50") and ev.get("turn"))
+    if "roc50" in rules:                                 # owners 10-30
+        out["roc_turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "roc50" and ev.get("roc_turn"))
+    out["tf_ko"] = M.TF_KO[tf]
     if "srsi" in rules:
         out["dots"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "srsi" and ev.get("cross"))
     out["rules"] = list(rules)
@@ -874,9 +889,11 @@ def replay_lines(d: Optional[dict]) -> list:
         return [f"- {d.get('ko')}"]
     cross = f" · 스톡RSI 크로스 {d['crosses']}번" if d.get("crosses") is not None else ""
     seen = f"색 변화 {d['changes']}번{cross}" if "mix" in (d.get("rules") or ["mix"]) else " · ".join(
-        x for x in ((f"OBV 연한→진한 {d['turns']}번" if d.get("turns") is not None else ""),
+        x for x in ((f"ROC 막대 연한→진한 {d['roc_turns']}번" if d.get("roc_turns") is not None else ""),
+                    (f"OBV 연한→진한 {d['turns']}번" if d.get("turns") is not None else ""),
                     (f"스톡RSI ● {d['dots']}번" if d.get("dots") is not None else ""), cross.lstrip(" ·")) if x)
-    out = [f"- 놓친 신호 {len(d['missed'])}개 (봇 공식으로 바이낸스 봉을 다시 계산: 30분봉 {d['closes']}개 × 코인 {d['coins']}개, "
+    out = [f"- 놓친 신호 {len(d['missed'])}개 (봇 공식으로 바이낸스 봉을 다시 계산: {d.get('tf_ko', '30분')}봉 {d['closes']}개 × "
+           f"코인 {d['coins']}개, "
            f"{seen} · 신호 {d['signals']}번)"]
     for x in d["missed"][:8]:
         out.append(f"  · {kst(x['close_ms'])} {x['coin']} {'롱' if x['side'] > 0 else '숏'}{RULE_TAG.get(x.get('rule'), '')}: {x['ko']}")
@@ -925,10 +942,13 @@ def signal_counts(rows: list) -> dict:
            "entries": sum(1 for r in rows if r.get("kind") in ("entry", "adopted")), "skips": skips, "blocks": blocks}
     if st:
         out["crosses"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in st})
-    obv = [r for r in sig if _rule(r) == "obv"]          # the 바이비트 봇's rules (owners 10-29)
+    obv = [r for r in sig if _rule(r) in ("obv", "obv50")]   # the 바이비트 봇's rules (owners 10-29; 50 lines 10-30)
     srsi = [r for r in sig if _rule(r) == "srsi"]
+    roc = [r for r in sig if _rule(r) == "roc50"]
     if obv:
         out["turns"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in obv})
+    if roc:
+        out["roc_turns"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in roc})
     if srsi:
         out["dots"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in srsi})
     return out
@@ -1088,10 +1108,11 @@ def morning(data: dict, w0: int, *, klines: Optional[Callable] = None, obs: Opti
         lines += [""] + [f"- {x}" for x in warn]
     rules = tuple(getattr(cfg, "rules", None) or ("mix",))
     seen = (f"- 색 변화 {sc['changes']}번" + (f" · 스톡RSI 크로스 {sc['crosses']}번" if "crosses" in sc else "")) if "mix" in rules else \
-        "- " + " · ".join(x for x in ((f"OBV 연한→진한 {sc.get('turns', 0)}번" if "obv" in rules else ""),
+        "- " + " · ".join(x for x in ((f"ROC 막대 연한→진한 {sc.get('roc_turns', 0)}번" if "roc50" in rules else ""),
+                                      (f"OBV 연한→진한 {sc.get('turns', 0)}번" if "obv" in rules or "obv50" in rules else ""),
                                       (f"스톡RSI ● {sc.get('dots', 0)}번" if "srsi" in rules else ""),
                                       (f"스톡RSI 크로스 {sc.get('crosses', 0)}번" if "st" in rules else "")) if x)
-    lines += ["", "신호 (30분봉)",
+    lines += ["", f"신호 ({M.TF_KO.get(getattr(cfg, 'tf', '30m'), '30분')}봉)",
               seen + f" · 조건 맞은 신호 {sc['signals']}번 · 진입 {sc['entries']}번",
               f"- {skip_text(sc)}"]
     if vs["state"] == "ok":
@@ -1306,8 +1327,9 @@ def site_view(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     the luck band now, the replay's reference numbers next to the design's, the last morning check."""
     data = load(p, now_ms)
     prof = X.PROFILES.get(data.get("bot") or "mix", X.MIX)
-    s = load_summary() if prof is X.MIX else {"state": "none", "path": None, "reason": "이 봇은 5년 재생이 없어요(두 분의 새 규칙)"}
-    ref = band_ref(s) if prof is X.MIX else None
+    own = words_of(data)["mix"]                         # the friend's own rule: its 5-year replay (not the 10-30 rules)
+    s = load_summary() if own else {"state": "none", "path": None, "reason": "이 봇은 5년 재생이 없어요(두 분의 새 규칙)"}
+    ref = band_ref(s) if own else None
     cards = cards_of(data, ref)
     bd = live_band(data, ref, data["now"])
     design = None

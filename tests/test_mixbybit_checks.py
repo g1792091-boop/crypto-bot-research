@@ -26,13 +26,15 @@ DAY0 = 1_793_232_000_000 - 9 * 3_600_000          # a KST midnight
 H, MIN = 3_600_000, 60_000
 
 
-def _write(folder, live_rows, paper_rows, live_state=None, paper_state=None):
+def _write(folder, live_rows, paper_rows, live_state=None, paper_state=None, rules=("obv", "srsi")):
+    """The 바이비트 봇's two deploy configs with this world's files; ``rules``: the 10-29 two by default (this world's log
+    is theirs; the 10-30 rules: tests/test_rules1030.py)."""
     os.makedirs(folder, exist_ok=True)
     j = lambda n: os.path.join(folder, n)      # noqa: E731
     for mode, src in (("live", "mixbybit.live.json"), ("paper", "mixbybit.paper.json")):
         d = json.load(open(os.path.join(ROOT, "deploy", src), encoding="utf-8"))
         d.update(state=j(f"{mode}-state.json"), log=j(f"{mode}-log.jsonl"), own_stop_file=j(f"{mode}.STOP"),
-                 kill_file=j("STOP"))
+                 kill_file=j("STOP"), rules=list(rules))
         json.dump(d, open(j(f"{mode}.json"), "w", encoding="utf-8"))
     for mode, rows, st in (("live", live_rows, live_state), ("paper", paper_rows, paper_state)):
         with open(j(f"{mode}-log.jsonl"), "w", encoding="utf-8") as fh:
@@ -145,6 +147,7 @@ def test_the_units_name_their_bot():
 def test_the_replay_finds_what_its_log_has(tmp_path):
     cfg = M.load_config(os.path.join(ROOT, "deploy", "mixbybit.paper.json"))
     cfg.coins = cfg.coins[:1]                                      # BTC
+    cfg.rules = ("obv", "srsi")                                    # the 10-29 rules (the 10-30 ones: tests/test_rules1030.py)
     rng = np.random.default_rng(12)
     n = 2000
     t30 = DAY0 + DAY_MS() - M.MIN30 * np.arange(n, 0, -1)

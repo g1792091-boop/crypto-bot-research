@@ -1962,7 +1962,11 @@ def rules_of(combo: dict) -> dict:
 
 # the 레인지 봇's rule numbers when its config leaves one out (paperbot/rangebot.py RangeRules)
 RANGE_DEFAULTS = {"pullback_atr": 0.2, "wait_min": 60, "coin_st": True, "btc_st": True, "st_period": 10, "st_mult": 3.0,
-                  "liq_check": True, "liq_mmr": 0.005, "friend_tf": None}
+                  "liq_check": True, "liq_mmr": 0.005, "friend_tf": None, "roc_tf": None, "roc_stop_atr": 3.0}
+# its ROC entry (owners 10-30, paperbot/rangebot.py ROC_WORDS)
+RANGE_ROC_KO = ("ROC 진입(30분봉): 친구 추세지표 30분봉(네 표)이 상승일 때 ROC 막대가 연한 초록→진한 초록이고 보라선이 50 아래면 롱, "
+                "하락일 때 연한 빨강→진한 빨강이고 50 위면 숏 · 30분봉 마감 다음 분 시가에 시장가(되돌림 안 기다림) · "
+                "손절 30분 ATR(14) × {k:g}, 그 거리가 (1/배수 - {mmr:.1%}) 안쪽일 때만 · 한 신호씩(레인지 신호와 합쳐 포지션 1개)")
 # the friend's trend indicator check (owners 10-29, paperbot/rangebot.py FRIEND_WORDS)
 RANGE_FRIEND_KO = ("친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·찹존·슈퍼트렌드)이 신호와 같은 방향일 때만: 같은 추세 2개 이상이면 "
                    "그 추세, 횡보(찹존·슈퍼트렌드 노랑) 2개 이상이나 상승 2·하락 2면 진입 안 함")
@@ -1987,6 +1991,8 @@ def range_words(c: Any) -> list:
            {"id": "range_one", "ko": f"한 신호씩: 기다리는 동안·포지션 있는 동안 다른 신호 안 받음(같은 시각이면 {'→'.join(syms)} 순서)"}]
     if r["liq_check"]:
         out.append({"id": "range_liq", "ko": f"강제청산 여유: 손절 거리 + 1시간 ATR이 (1/배수 - {float(r['liq_mmr']):.1%}) 안쪽일 때만"})
+    if r.get("roc_tf"):
+        out.append({"id": "range_roc", "ko": RANGE_ROC_KO.format(k=float(r["roc_stop_atr"]), mmr=float(r["liq_mmr"]))})
     out.append({"id": "range_none", "ko": "진 뒤 쉬기·시간 청산·반대 신호 청산·신호등 없음"})
     return out
 

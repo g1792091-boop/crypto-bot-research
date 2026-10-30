@@ -4,6 +4,9 @@
 트레이딩뷰 지표 "추세 조건 OBV·클링거 + 매매 시그널"의 30분봉 신호로 WOO X Pro **두 번째 계정**에서 직접 주문합니다.
 코드: `paperbot/mixchop.py`, 테스트: `tests/test_mixchop.py`.
 
+> **10/30부터 이 봇은 '친구 15분 봇'입니다:** 15분봉, 매매법 ROC 50선 + OBV 50선, 스윙 추세. 아래 1~12장은 그 전의 규칙이고,
+> 바뀐 내용과 켜는 순서는 13장에 있습니다. 크기(40%)·계단(10%→8%)·손절(ATR × 3)·코인·배수는 그대로입니다.
+
 ## 1. 한눈에
 
 | 항목 | 값 |
@@ -495,3 +498,45 @@
 4. **켜기:** `sudo systemctl start paperbot-mixchop paperbot-mixchop-paper` 그리고 `journalctl -u paperbot-mixchop -n 30`.
    - 바꾼 다음 날 아침 점검(신호 다시 계산)은 바꾸기 전 시각의 두 번째 매매법 신호를 새 규칙으로 다시 계산하므로, 그 시각들에서
      '다르게 나옴'이 몇 줄 나올 수 있습니다. 그 다음 날부터는 같은 규칙끼리 비교합니다.
+
+## 13. 10/30: 친구 15분 봇 (15분봉 · ROC 50선 + OBV 50선 · 스윙 추세)
+
+두 분(10/30, 친구가 보낸 파일 4개와 대화): 예전 규칙을 모두 빼고 두 매매법으로 갑니다. "나머지는 다 맞다", "2번은 가능".
+
+| 항목 | 내용 |
+|---|---|
+| 신호 봉 | 바이낸스 **15분봉**, 끝난 봉만 (1시간봉은 더 안 읽음) |
+| 추세 (스윙) | 하늘·보라 선이 방향을 정합니다. 찹존과 슈퍼트렌드는 각각 횡보이거나 그 반대여야 하고, 둘 중 하나는 꼭 횡보여야 합니다 |
+| 추세 예 | 하늘 선 + 찹존 횡보 + 슈퍼트렌드 하락 → 롱 가능 · 둘 다 횡보 → 가능 · 찹존이나 슈퍼트렌드가 선과 같은 쪽(같은 추세 2개) → 진입 안 함 · 둘 다 반대 → 진입 안 함 |
+| ① ROC 50선 | ROC 막대(EMA 21·52 간격)가 연한 초록 → 진한 초록이고 보라선이 50 아래 → 롱. 연한 빨강 → 진한 빨강이고 50 위 → 숏 |
+| ② OBV 50선 | OBV 막대가 연한 초록 → 진한 초록이고 OBV 50선 값이 50 아래 → 롱. 빨강·50 위 → 숏 (바이비트 봇과 같은 규칙) |
+| 같은 봉에 둘 다 | ROC 먼저. 코인끼리는 SOL → ETH → XRP → BCH → ZEC → DOGE |
+| 그대로 | 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간 |
+
+- ROC 막대: 친구 파일 "OBV ROC" 기본값 그대로입니다(ROC 12, EMA 21·52, 크기 맞춤 100, 민감도 2, `paperbot/friendtrend.py` 5장).
+- 이름은 텔레그램·사이트에서 **친구 15분 봇**입니다. 설정: `deploy/mixchop.live.json`, `deploy/mixchop.paper.json`
+  (`"tf": "15m"`, `"trend": "swing"`, `"rules": ["roc50", "obv50"]`, `"name": "친구 15분 봇"`).
+- 아침 점검의 '놓친 신호'도 15분봉으로 다시 계산합니다(`ROC 막대 연한→진한 n번 · OBV 연한→진한 n번`).
+- 시험: `tests/test_rules1030.py`.
+
+### 13-1. 바꾸는 순서 (서버에서, 봇이 꺼져 있을 때)
+
+1. 코드 받기: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+2. 설정 바꾸기 (예전 것은 `.before-1030`):
+   ```
+   sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-1030
+   sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-1030
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   sudo diff /etc/paperbot/mixchop.json.before-1030 /etc/paperbot/mixchop.json
+   ```
+   - diff에는 `"name"`, `"tf"`, `"trend"`, `"rules"` 줄과 코인 줄 모양만 나와야 합니다.
+3. 확인 (읽기만):
+   ```
+   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json
+   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.mixchop signals --config /etc/paperbot/mixchop-paper.json -n 3
+   ```
+   - check 끝부분: `· 신호 15분봉 · 추세: …` 줄. signals: 코인마다 ROC·OBV 50선 신호 최근 3개(15분봉).
+4. 켜기: `sudo systemctl enable --now paperbot-mixchop paperbot-mixchop-paper` 그리고 `journalctl -u paperbot-mixchop -n 30`.
+   - 텔레그램 `[친구 15분 봇] ▶️ 시작`에 `15분봉 마감마다 판단`이 보이면 바뀐 것입니다.
+- 되돌리기: 끄고 `sudo cp -p /etc/paperbot/mixchop.json.before-1030 /etc/paperbot/mixchop.json`(모의도 같은 식) 뒤 다시 켭니다.

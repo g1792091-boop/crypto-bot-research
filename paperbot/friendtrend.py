@@ -21,6 +21,21 @@ Three parts of the friend's TradingView scripts (차트 믹스 · 차트 믹스 
    50선 밑에서 롱신호가 나오면 진입 50선 위에서 숏 신호뜨면 진입" -> long on a golden ● with K under 50, short on a dead ●
    with K over 50 (the ● is drawn at K).
 
+4. the OBV pane's 50 line ('OBV 50' script, owners 10-30): the same line drawn RSI-style, 50 + 50 tanh((line - EMA 52 of
+   the line) / (stdev 100 of that gap x 2)); under 50 = the line under its EMA 52. Owners 10-30: "obv가 50선 밑에서 진한색으로
+   변하면 롱진입 … obv 50선 위에서 롱진입 금지 50선 밑에서 숏 진입금지" -> the light -> dark turn of part 2, long only
+   under 50, short only over 50.
+5. the OBV ROC pane ('OBV ROC + EMA 21 · 52 (RSI 형식)', owners 10-30): ROC 12 of the close weighted by the volume
+   direction (the same OBV · Klinger line's 12-bar move, tanh over its 100-bar stdev): roc x (1 + sign(roc) x vdir) / 2,
+   drawn 0 ~ 100 (tanh over its 100-bar stdev x 2: the purple line), its EMA 21 and EMA 52, and the bar between them:
+   green while EMA 21 >= EMA 52, red under; dark while their gap (its EMA 2) widens, light while it narrows. Owners 10-30
+   ("봉이 진한거"): long on the bar where a light green bar turns dark green with the purple line under 50, short on light
+   red turning dark red over 50.
+6. WOO X Pro 2's trend (owners 10-30, 15m): the sky / purple line, the chop zone and the supertrend average (no EMA RSI):
+   long needs the sky line with the chop zone and the supertrend each sideways or down and at least one sideways
+   ("파란선 이여야 하고 찹존이나 슈퍼트랜드 두개중 하나가 횡보 … 같은 추세가 2개 이상이면 진입 금지 … 찹존이랑 슈퍼트랜드가
+   같이 횡보면 진입 가능"; owners 10-30: chop sideways with the supertrend down is a long too); short the mirror.
+
 Every series is computed over the whole bar history given (oldest first) and read on its last value: the recursive parts
 (EMA, RMA, SAR, supertrend, the running sums, the kept states) settle long before the last of 1,000+ bars. The Pine
 helpers come from paperbot/mixchop.py (EMA, RSI, population stdev, zsq, ROC, MOM, ATR, supertrend: the friend bot's,
@@ -252,18 +267,25 @@ def _nrm(x, n: int) -> np.ndarray:
         return np.where(np.isfinite(a) & (a > 0), x / np.where(a > 0, a, 1.0), 0.0)
 
 
-def obv_pane(h, l, c, v) -> dict:
-    """The OBV pane of '차트 믹스 + OBV' (its defaults): {"line", "sig", "cs", "dark"} per bar. cs: +1 green, -1 red, 0 grey
-    (before the first state); dark: the histogram (line - the conditional signal) grew in size on this bar."""
+def mix_line(h, l, c, v) -> np.ndarray:
+    """The OBV · Klinger line both panes share (트렌드 믹스 통합 라인, '누적 (OBV 형식)'): the running sum of the averaged
+    OBV flow and Klinger (21 / 34) volume force, each normalised over 50 bars."""
     h, l, c = (np.asarray(a, float) for a in (h, l, c))
     vol = _nz(v)
-    n = len(c)
-    ar = M.avg_rsi(c)                                   # RSI 26 · ROC 7 · MOM 7, normalised over 100, EMA 3
     chg = change(c)
     flow = np.where(chg > 0, vol, np.where(chg < 0, -vol, 0.0))
     sv = np.where(change((h + l + c) / 3.0) >= 0, vol, -vol)   # na >= 0 is false: the first bar counts -volume
     kvo = M.ema(sv, 21) - M.ema(sv, 34)
-    line = np.cumsum(_nz((_nrm(flow, 50) + _nrm(kvo, 50)) / 2.0))
+    return np.cumsum(_nz((_nrm(flow, 50) + _nrm(kvo, 50)) / 2.0))
+
+
+def obv_pane(h, l, c, v) -> dict:
+    """The OBV pane of '차트 믹스 + OBV' (its defaults): {"line", "sig", "cs", "dark"} per bar. cs: +1 green, -1 red, 0 grey
+    (before the first state); dark: the histogram (line - the conditional signal) grew in size on this bar."""
+    c = np.asarray(c, float)
+    n = len(c)
+    ar = M.avg_rsi(c)                                   # RSI 26 · ROC 7 · MOM 7, normalised over 100, EMA 3
+    line = mix_line(h, l, c, v)
     sig = M.ema(line, 9)
     gold = np.where(np.isfinite(sig), line > sig, False)
     cs = np.zeros(n, np.int8)
@@ -306,6 +328,105 @@ def obv_state(h, l, c, v) -> dict:
 def obv_turn(h, l, c, v) -> int:
     """On the last bar: +1 light green -> dark green, -1 light red -> dark red, else 0 (a hairline bar is light)."""
     return obv_state(h, l, c, v)["turn"]
+
+
+# ====================================================================== 4. the OBV pane's 50 line (owners 10-30)
+OBV50_BASE = 52                 # '50 기준선 = 통합 라인의 EMA'
+OBV50_NORM = 100                # '크기 맞춤 기간'
+OBV50_SENS = 2.0                # '민감도'
+
+
+def to50(x, base, norm: int, sens: float) -> np.ndarray:
+    """The scripts' RSI-style drawing: 50 + 50 tanh((x - base) / (stdev_norm(x - base) x sens)); 50 where that stdev is
+    0 or na (Pine: oSd > 0 is false)."""
+    d = np.asarray(x, float) - np.asarray(base, float)
+    sd = M.stdev(d, norm)
+    pos = np.isfinite(sd) & (sd > 0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(pos, 50.0 + 50.0 * _tanh(d / (np.where(pos, sd, 1.0) * sens)), 50.0)
+
+
+def obv50_state(h, l, c, v) -> dict:
+    """On the last bar: the OBV turn of part 2 with the 50 line: {"turn", "cs", "dark", "d50": the line drawn 0 ~ 100,
+    "side": +1 a light -> dark green turn under 50 / -1 light -> dark red over 50 / 0}."""
+    P = obv_pane(h, l, c, v)
+    cs, dark = P["cs"], P["dark"]
+    d50 = to50(P["line"], M.ema(P["line"], OBV50_BASE), OBV50_NORM, OBV50_SENS)
+    if len(cs) < 1:
+        return {"turn": 0, "cs": 0, "dark": False, "d50": None, "side": 0}
+    turn = int(cs[-1]) if len(cs) >= 2 and cs[-1] == cs[-2] and cs[-1] != 0 and dark[-1] and not dark[-2] else 0
+    x = float(d50[-1])
+    side = 1 if turn > 0 and x < 50 else (-1 if turn < 0 and x > 50 else 0)
+    return {"turn": turn, "cs": int(cs[-1]), "dark": bool(dark[-1]), "d50": round(x, 2) if math.isfinite(x) else None,
+            "side": side}
+
+
+# ====================================================================== 5. the OBV ROC pane (owners 10-30)
+ROC_LEN = 12                    # 'ROC 기간'
+ROC_FAST, ROC_SLOW = 21, 52     # its EMAs
+ROC_NORM = 100                  # '크기 맞춤 기간' (0 ~ 100)
+ROC_SENS = 2.0                  # '민감도'
+ROC_NORM_V = 100                # '거래량 방향 크기 맞춤 기간'
+ROC_WEAK = 2                    # '힘 판단 평활 기간'
+
+
+def roc_pane(h, l, c, v) -> dict:
+    """The OBV ROC pane (its defaults) per bar: {"osc": the purple line 0 ~ 100, "ef", "es": its EMA 21 / 52, "cs": the
+    bar's colour (+1 green: EMA 21 >= EMA 52, -1 red), "dark": the gap widening (its EMA 2 grew in size)}."""
+    c = np.asarray(c, float)
+    vol = _nz(v)
+    line = mix_line(h, l, c, v)
+    dmix = line - lag(line, ROC_LEN)
+    dsd = M.stdev(dmix, ROC_NORM_V)
+    pos = np.isfinite(dsd) & (dsd > 0)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        vdir = np.where(pos, _tanh(dmix / np.where(pos, dsd, 1.0)), 0.0)
+        prev = lag(c, ROC_LEN)
+        raw = 100.0 * (c - prev) / prev
+    has_vol = np.cumsum(vol) > 0
+    obv_roc = np.where(has_vol, raw * (1.0 + np.sign(raw) * vdir) / 2.0, raw)
+    osc = to50(obv_roc, np.zeros(len(c)), ROC_NORM, ROC_SENS)
+    ef, es = M.ema(osc, ROC_FAST), M.ema(osc, ROC_SLOW)
+    with np.errstate(invalid="ignore"):
+        gap = M.ema(ef - es, ROC_WEAK)
+        weak = np.where(np.isfinite(gap) & np.isfinite(lag(gap, 1)), np.abs(gap) < np.abs(lag(gap, 1)), False)
+        cs = np.where(ef >= es, 1, -1).astype(np.int8)          # na >= na is false: red
+    return {"osc": osc, "ef": ef, "es": es, "cs": cs, "dark": ~weak}
+
+
+def roc_state(h, l, c, v) -> dict:
+    """On the last bar: {"turn": +1 light -> dark green bar / -1 light -> dark red / 0, "cs", "dark", "osc", "side": +1 a
+    green turn with the purple line under 50 / -1 a red turn over 50 / 0}."""
+    P = roc_pane(h, l, c, v)
+    cs, dark, osc = P["cs"], P["dark"], P["osc"]
+    if len(cs) < 2:
+        return {"turn": 0, "cs": int(cs[-1]) if len(cs) else 0, "dark": bool(dark[-1]) if len(cs) else False,
+                "osc": None, "side": 0}
+    turn = int(cs[-1]) if cs[-1] == cs[-2] and dark[-1] and not dark[-2] else 0
+    x = float(osc[-1])
+    side = 1 if turn > 0 and x < 50 else (-1 if turn < 0 and x > 50 else 0)
+    return {"turn": turn, "cs": int(cs[-1]), "dark": bool(dark[-1]), "osc": round(x, 2) if math.isfinite(x) else None,
+            "side": side}
+
+
+# ====================================================================== 6. WOO X Pro 2's trend (owners 10-30)
+SWING_KO = {1: "롱 가능", -1: "숏 가능", 0: "진입 금지"}
+
+
+def swing_side(t: dict) -> int:
+    """+1 / -1 / 0 from the votes ``line``, ``chop``, ``st`` (part 6): the line's side, with the chop zone and the
+    supertrend each sideways or against it, at least one sideways."""
+    side, chop, st = int(t.get("line", 0)), int(t.get("chop", 0)), int(t.get("st", 0))
+    if side == 0 or chop == side or st == side or (chop != 0 and st != 0):
+        return 0
+    return side
+
+
+def swing_words(t: dict) -> str:
+    """'롱 가능 (하늘·보라 선 상승 · 찹존 횡보 · 슈퍼트렌드 하락)'."""
+    ko = {1: "상승", -1: "하락", 0: "횡보"}
+    vs = " · ".join(f"{VOTE_KO[k]} {ko.get(int(t.get(k, 0)), '?')}" for k in ("line", "chop", "st") if k in t)
+    return f"{SWING_KO.get(swing_side(t), '?')} ({vs})"
 
 
 # ====================================================================== 3. the Stoch RSI pane

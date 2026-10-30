@@ -5,7 +5,8 @@ then "1패후 24시간 휴식을 왜해 빼" (no pause after a loss). The member
 F7_RF_TRIPLE 1h (레인지 필터 3중 일치, range filter 80 / 9.0, computed here at each 1h close as combo.CustomSignals does);
 everything of the combined bot stays (one position, BTC 40x / others 30x, margin 40 % of the wallet, the -50 % net stop,
 the weekend / macro / NYSE-open pauses at the minute of the entry, the coin-flip twin); the config's ``take_profit_roe``
-(0.10) is the only take-profit (combo.FixedLevPolicy.take_profit: net ROE on the fill, no ladder). This adds:
+(0.10) was the only take-profit until 10-29 (combo.FixedLevPolicy.take_profit: net ROE on the fill, no ladder); since
+10-30 the config's ``ladder`` (net ROE 10 % -> lock 8 %, then every 5 %) and no ``take_profit_roe`` (item 6). This adds:
 
 1. 한 신호씩: a signal is taken only while nothing else is going on: no pullback wait, no open position and no entry
    about to be filled in the bot's account. Else FILTERED "한 신호씩: …". Signals of one 1h close are looked at in the
@@ -30,6 +31,14 @@ the weekend / macro / NYSE-open pauses at the minute of the entry, the coin-flip
    The entry minute is checked again for the weekend / macro / NYSE-open pauses (combo._entry_block).
 5. State ``range`` each live minute (the live site): the wait, each coin's last 1h supertrend side (``friend``: the
    friend's trend and votes instead), the rules.
+6. Owners 10-30 ("b로 가자 레인지도 woox pro1 순수익8% 방식으로 가고 3번은 atr x3으로 가자"): ``roc_tf`` "30m" adds a second
+   entry, the friend's OBV ROC pane on 30m bars (paperbot/friendtrend.py part 5, the same 5m history made into 30m bars,
+   ROC_BARS of them): at each 30m close (live minutes only), a light -> dark green bar with the purple line under 50 is a
+   long, a light -> dark red one over 50 a short, taken when the 30m four-vote trend is on its side (else FILTERED
+   "추세 확인: 친구 추세지표 30분 …"); queued for the next minute's open, no pullback; its stop ATR(14, RMA) of that bar x
+   ``roc_stop_atr`` (3; combo's research stop ["atr", k]) when that distance fits inside (1 / leverage - liq_mmr) of the
+   price, else FILTERED "강제청산 여유 부족"; item 1 holds for both entries (one position). Its member ``ROC50-30m`` is the
+   runner's own (roc_member), not in the config's ``members``. Both entries take the ladder.
 No pause after a loss, no time exit, no reverse exit, no signal light (the owners' decisions of 10-26).
 """
 
@@ -59,12 +68,21 @@ SNAP_EVERY_MS = 5 * MIN
 ST_MIN_BARS = 300                     # 1h bars the supertrend needs before it is read (its ATR settles long before)
 KO_SIDE = {1: "롱", -1: "숏"}
 KO_ST = {1: "상승", -1: "하락", 0: "없음"}
-RULE_KEYS = ("pullback_atr", "wait_min", "coin_st", "btc_st", "st_period", "st_mult", "liq_check", "liq_mmr", "friend_tf")
+RULE_KEYS = ("pullback_atr", "wait_min", "coin_st", "btc_st", "st_period", "st_mult", "liq_check", "liq_mmr", "friend_tf",
+             "roc_tf", "roc_stop_atr")
 FRIEND_TFS = ("1h",)
+ROC_TFS = {"30m": 30 * MIN}            # the ROC entry's bar (owners 10-30)
+ROC_NAME = "ROC50"                      # its strategy name in the records (signal_log, trades); combo.MEMBER_KO says it
+ROC_BARS = 1500                         # 30m bars it reads (the 바이비트 봇's history per request, paperbot/mixchop.BARS)
 
 
 FRIEND_WORDS = ("친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·찹존·슈퍼트렌드)이 신호와 같은 방향일 때만: 같은 추세 2개 이상이면 "
                 "그 추세, 횡보(찹존·슈퍼트렌드 노랑) 2개 이상이나 상승 2·하락 2면 진입 안 함")
+
+
+ROC_WORDS = ("ROC 진입(30분봉): 친구 추세지표 30분봉(네 표)이 상승일 때 ROC 막대가 연한 초록→진한 초록이고 보라선이 50 아래면 롱, "
+             "하락일 때 연한 빨강→진한 빨강이고 50 위면 숏 · 30분봉 마감 다음 분 시가에 시장가(되돌림 안 기다림) · "
+             "손절 30분 ATR(14) × {k:g}, 그 거리가 (1/배수 - {mmr:.1%}) 안쪽일 때만 · 한 신호씩(레인지 신호와 합쳐 포지션 1개)")
 
 
 class RangeError(ValueError):
@@ -90,6 +108,8 @@ class RangeRules:
     liq_check: bool = True            # stop distance + ATR inside (1 / leverage - liq_mmr) of the price
     liq_mmr: float = 0.005
     friend_tf: Optional[str] = None   # "1h": the friend's trend indicator on the signal's 1h bar (owners 10-29)
+    roc_tf: Optional[str] = None      # "30m": the second entry, the OBV ROC turn on the 30m bar (owners 10-30)
+    roc_stop_atr: float = 3.0         # its stop: ATR(14) of that 30m bar x this
 
     @classmethod
     def from_dict(cls, d) -> "RangeRules":
@@ -119,6 +139,10 @@ class RangeRules:
             out.append("range.liq_mmr는 0~0.05입니다(예: 0.005)")
         if self.friend_tf is not None and self.friend_tf not in FRIEND_TFS:
             out.append("range.friend_tf는 \"1h\"(친구 추세지표 1시간봉) 또는 null입니다")
+        if self.roc_tf is not None and self.roc_tf not in ROC_TFS:
+            out.append("range.roc_tf는 \"30m\"(ROC 30분봉 진입) 또는 null입니다")
+        if not (num(self.roc_stop_atr) and 0.5 <= self.roc_stop_atr <= 10):
+            out.append("range.roc_stop_atr는 0.5~10(ATR 배수)입니다(예: 3)")
         return out
 
     def st_words(self) -> str:
@@ -138,6 +162,8 @@ class RangeRules:
                "한 신호씩: 기다리는 동안·포지션 있는 동안 다른 신호 안 받음(같은 시각이면 BTC→ETH→SOL→DOGE→LTC→BCH 순서)"]
         if self.liq_check:
             out.append(f"강제청산 여유: 손절 거리 + 1시간 ATR이 (1/배수 - {self.liq_mmr:.1%}) 안쪽일 때만")
+        if self.roc_tf:
+            out.append(ROC_WORDS.format(k=self.roc_stop_atr, mmr=self.liq_mmr))
         out.append("진 뒤 쉬기·시간 청산·반대 신호 청산·신호등 없음")
         return out
 
@@ -159,8 +185,6 @@ def config_problems(cfg) -> list[str]:
             out.append(f"레인지 봇 members {i}번째({m['pick']}): 1시간봉 매매법만 됩니다")
         elif set(m) - {"pick"}:
             out.append(f"레인지 봇 members {i}번째({m['pick']}): pick 말고 다른 설정은 쓰지 않습니다")
-    if cfg.take_profit_roe is None:
-        out.append("레인지 봇은 take_profit_roe(고정 익절, 예: 0.1)가 필요합니다")
     if not cfg.stop_net:
         out.append('레인지 봇의 손절은 {"mode": "roe", "roe": 0.5, "net": true}(순ROE)입니다')
     if cfg.trend is not None:
@@ -177,9 +201,17 @@ def config_problems(cfg) -> list[str]:
 
 
 def entry_words(r: dict) -> str:
-    """The entry's range facts in words (the Telegram entry line): the pullback and the two supertrends."""
+    """The entry's range facts in words (the Telegram entry line): the pullback and the two supertrends; for the ROC
+    entry its 30m bar, the purple line and the 30m trend."""
     try:
         side = int(r["side"])
+        if r.get("roc"):
+            colour = "초록" if side > 0 else "빨강"
+            osc = r.get("osc")
+            return (f"ROC 30분봉 {kst(r['t0'])} 마감: 연한 {colour}→진한 {colour}, 보라선 "
+                    + (f"{float(osc):.1f}({'50 아래' if side > 0 else '50 위'})" if osc is not None else "모름")
+                    + f" · 손절 30분 ATR({float(r['atr']):.6g}) × {float(r['k']):g}"
+                    + (f" · 친구 추세 30분 {FT.trend_words(r['friend'])}" if isinstance(r.get("friend"), dict) else ""))
         waited = max(0, int(r["entry_t"]) - int(r["t0"])) // MIN
         sts = " · ".join(f"{w} 슈퍼트렌드 {KO_ST.get(int(v), v)}" for w, v in (("코인", r.get("coin_st")),
                                                                                ("BTC", r.get("btc_st"))) if v is not None)
@@ -190,6 +222,14 @@ def entry_words(r: dict) -> str:
                 + (f" · {sts}" if sts else ""))
     except (KeyError, TypeError, ValueError):
         return ""
+
+
+def roc_member(rules: RangeRules, order: int) -> Optional[C.Member]:
+    """The ROC entry as a member of the account (its signals, counts and records), None when ``roc_tf`` is off."""
+    if not rules.roc_tf:
+        return None
+    return C.Member(label=f"{ROC_NAME}-{rules.roc_tf}", kind="roc", name=ROC_NAME, tf=rules.roc_tf, numbers=None,
+                    order=order)
 
 
 # ====================================================================== the runner
@@ -212,6 +252,15 @@ class RangeRunner(C.ComboRunner):
             self.wait = None
             self.store.commit()
 
+    def _drop_old_members(self, st: dict) -> None:
+        """ComboRunner's check of the saved queue against the config's members, with the ROC entry's member known
+        first (it is not in the config's ``members``: ``range.roc_tf`` makes it)."""
+        self.roc = roc_member(RangeRules.from_dict(self.cfg.range), len(self.members) + 1)
+        self._roc_last: dict = {}                 # symbol -> its last ROC read (the live site)
+        if self.roc is not None:
+            self.by_label[self.roc.label] = self.roc
+        super()._drop_old_members(st)
+
     def _state_extra(self) -> dict:
         return {"range_wait": getattr(self, "wait", None)}
 
@@ -222,7 +271,7 @@ class RangeRunner(C.ComboRunner):
         key = (symbol, int(bar_close))
         if key in self._st:
             return self._st[key]
-        df = self._frame_1h(symbol, bar_close, "슈퍼트렌드")
+        df = self._frame(symbol, bar_close, "슈퍼트렌드")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             _line, d = self.custom.lib.pi.exchange_supertrend(df["high"].to_numpy(float), df["low"].to_numpy(float),
@@ -235,19 +284,21 @@ class RangeRunner(C.ComboRunner):
         self._st[key] = side
         return side
 
-    def _frame_1h(self, symbol: str, bar_close: int, what: str):
-        """The 1h chart frame (dssig.frame) of the 5m history the custom signals use, its last bar closed at
-        ``bar_close``. Raises C.ComboError when it cannot be made."""
+    def _frame(self, symbol: str, bar_close: int, what: str, tf: str = "1h"):
+        """The ``tf`` chart frame (dssig.frame) of the 5m history the custom signals use, its last bar closed at
+        ``bar_close`` (1h: DS_WINDOW_5M of 5m bars; 30m: ROC_BARS bars). Raises C.ComboError when it cannot be made."""
         if self.custom is None or symbol not in self.custom.hist:
             raise C.ComboError(f"{coin(symbol)} 5분봉 기록 없음")
-        rows = [r for r in self.custom.hist[symbol] if r[0] < int(bar_close)][-DS_WINDOW_5M["1h"]:]
-        if len(rows) < ST_MIN_BARS * 12:
-            raise C.ComboError(f"{coin(symbol)} 5분봉 {len(rows)}개뿐({what}에 {ST_MIN_BARS * 12}개 필요)")
+        per = (HOUR if tf == "1h" else ROC_TFS[tf]) // FIVE
+        keep = DS_WINDOW_5M["1h"] if tf == "1h" else ROC_BARS * per
+        rows = [r for r in self.custom.hist[symbol] if r[0] < int(bar_close)][-keep:]
+        if len(rows) < ST_MIN_BARS * per:
+            raise C.ComboError(f"{coin(symbol)} 5분봉 {len(rows)}개뿐({what}에 {ST_MIN_BARS * per}개 필요)")
         a = np.array(rows, dtype=float)
         from .dssig import frame
-        df = frame(a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4], a[:, 5], tf="1h", lib=self.custom.lib)
-        if not len(df) or int(df["ts"].iloc[-1].value // 1_000_000) + HOUR != int(bar_close):
-            raise C.ComboError(f"{coin(symbol)} {kst(bar_close)}에 닫힌 1시간봉이 없음")
+        df = frame(a[:, 0].astype(np.int64), a[:, 1], a[:, 2], a[:, 3], a[:, 4], a[:, 5], tf=tf, lib=self.custom.lib)
+        if not len(df) or int(df["ts"].iloc[-1].value // 1_000_000) + per * FIVE != int(bar_close):
+            raise C.ComboError(f"{coin(symbol)} {kst(bar_close)}에 닫힌 {'1시간' if tf == '1h' else '30분'}봉이 없음")
         return df
 
     # ---- the friend's trend indicator (owners 10-29)
@@ -257,12 +308,72 @@ class RangeRunner(C.ComboRunner):
         key = (symbol, int(bar_close))
         if key in self._ft:
             return self._ft[key]
-        df = self._frame_1h(symbol, bar_close, "친구 추세지표")
+        df = self._frame(symbol, bar_close, "친구 추세지표")
         t = FT.last_trend(*(df[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume")))
         if len(self._ft) > 50:
             self._ft = {k: v for k, v in self._ft.items() if k[1] >= int(bar_close)}
         self._ft[key] = t
         return t
+
+    # ---- the ROC entry (owners 10-30)
+    def roc_read(self, symbol: str, bar_close: int) -> dict:
+        """The ROC entry's read on the 30m bar that closed at ``bar_close`` (the 바이비트 봇's indicator parts, on the
+        same 5m history): {"roc": friendtrend.roc_state, "trend": friendtrend.last_trend, "atr": ATR(14) RMA, "close"}.
+        Raises C.ComboError when it cannot be read."""
+        from .mixchop import atr as atr_of
+        df = self._frame(symbol, bar_close, "ROC", self.rules.roc_tf)
+        o, h, l, c, v = (df[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
+        a = float(atr_of(h, l, c, 14)[-1])
+        if not (np.isfinite(a) and a > 0 and np.isfinite(c[-1]) and c[-1] > 0):
+            raise C.ComboError(f"{coin(symbol)} {kst(bar_close)} 30분 ATR·종가를 못 읽음")
+        return {"roc": FT.roc_state(h, l, c, v), "trend": FT.last_trend(o, h, l, c, v), "atr": a, "close": float(c[-1])}
+
+    def _custom(self, boundary: int) -> None:
+        super()._custom(boundary)
+        if self.roc is not None and boundary % ROC_TFS[self.rules.roc_tf] == 0:
+            self._roc_signals(boundary)
+
+    def _roc_signals(self, boundary: int) -> None:
+        """At a 30m close (live only, as the custom signals): each coin's ROC read; a turn on its side of 50 with the
+        30m trend the same way is queued (SUBMITTED, entered at the next minute's open, its stop ATR x roc_stop_atr);
+        against the trend or 진입 금지: FILTERED. One signal at a time and the liquidation room: _divert."""
+        now = self.now_ms()
+        if now - boundary > self.cfg.max_signal_age_s * 1000:
+            return                                    # a catch-up: late anyway
+        try:
+            px = self.prices()
+        except Exception:  # noqa: BLE001  without a price the fill is the next minute's open
+            px = {}
+        for sym in self.cfg.symbols:
+            try:
+                r = self.roc_read(sym, boundary)
+            except Exception as exc:  # noqa: BLE001  unreadable: no entry, said so
+                why = f"{type(exc).__name__}: {exc}" if not isinstance(exc, C.ComboError) else str(exc)
+                self._roc_last[sym] = {"at": boundary, "error": why[:200]}
+                self._st_failed(f"{coin(sym)} {kst(boundary)}: {why}", "ROC 30분 지표")
+                continue
+            roc, t = r["roc"], r["trend"]
+            self._roc_last[sym] = {"at": boundary, "turn": roc["turn"], "cs": roc["cs"], "dark": roc["dark"],
+                                   "osc": roc["osc"], "side": roc["side"], "trend": t["trend"]}
+            side = int(roc["side"])
+            if not side:
+                continue
+            bid, ask = px.get(sym, (None, None))
+            ref = ask if side > 0 else bid
+            ready = self.now_ms()
+            sig = C.make_signal(self.cfg, self.roc, boundary, sym, side, r["atr"], ref, ready, ready - boundary,
+                                {"close": r["close"]}, "custom")
+            info = {"roc": True, "side": side, "close": r["close"], "atr": r["atr"], "k": float(self.rules.roc_stop_atr),
+                    "t0": int(boundary), "osc": roc["osc"], "turn": roc["turn"], "friend": dict(t)}
+            sig = replace(sig, meta={**sig.meta, "rstop": ["atr", float(self.rules.roc_stop_atr)], "range": info,
+                                     "ctx": {**(sig.meta.get("ctx") or {}), "range": info}})
+            if int(t["trend"]) != side:
+                tail = "" if int(t["trend"]) == 0 else f"(신호 {KO_SIDE.get(side, side)}와 반대)"
+                self._log(sig, "FILTERED", "custom", f"추세 확인: 친구 추세지표 30분 {FT.trend_words(t)}{tail}",
+                          {"range": info})
+                self._count(self.roc.label, "filtered")
+                continue
+            self._queue(self.roc, sig, boundary, "custom")
 
     def _st_failed(self, text: str, what: str = "슈퍼트렌드") -> None:
         self.st_fails += 1
@@ -307,6 +418,17 @@ class RangeRunner(C.ComboRunner):
             self._filtered(sig, busy)
             return True
         r, side = self.rules, int(sig.side)
+        if (sig.meta.get("range") or {}).get("roc"):
+            # the ROC entry: its trend was read at its close; its stop (ATR x k) must fit inside the liquidation room
+            info = sig.meta["range"]
+            close, atr = float(info["close"]), float(sig.atr or 0.0)
+            lev = self.cfg.lev_of(sig.symbol)
+            dist, room = float(info["k"]) * atr, (1.0 / lev - float(r.liq_mmr)) * close
+            if dist > room:
+                self._filtered(sig, f"강제청산 여유 부족: 손절 30분 ATR × {float(info['k']):g} = {dist / close:.2%} > "
+                                    f"{room / close:.2%}({lev}배)", {"range": info})
+                return True
+            return False
         sts: dict = {}
         if r.friend_tf:
             try:
@@ -449,7 +571,7 @@ class RangeRunner(C.ComboRunner):
             s = w["signal"]
             wait = {"member": w["member"], "symbol": s["symbol"], "side": s["side"], "t0": w["t0"], "until": w["until"],
                     "level": w["level"], "hit": w.get("hit"), "info": w.get("info")}
-        key = json.dumps([sts, fts, wait], sort_keys=True, default=str)
+        key = json.dumps([sts, fts, wait, getattr(self, "_roc_last", None)], sort_keys=True, default=str)
         if self._snap is not None and self._snap[0] == key and int(ts) - self._snap[1] < SNAP_EVERY_MS:
             return
         self._snap = (key, int(ts), sts, fts)
@@ -457,4 +579,6 @@ class RangeRunner(C.ComboRunner):
                 "rules": self.rules.describe(), "numbers": dataclasses.asdict(self.rules)}
         if self.rules.friend_tf:
             snap["friend"] = fts
+        if self.roc is not None:
+            snap["roc"] = dict(self._roc_last)
         self.store.put_state(STATE_RANGE, int(ts), snap)

@@ -320,8 +320,10 @@ def _doge_bot_day(folder, both: bool) -> dict:
     """The bot in paper mode over KST 2026-10-23 on the real DOGE bars (its own config's blocks), its log; ``both``: the
     deploy config's two rules and its one stop multiple (owners 10-26), else the friend's rule and stops alone."""
     raw = json.load(open(os.path.join(DEPLOY, "mixchop.paper.json"), encoding="utf-8"))
-    for k in ("margin_frac", "ladder", "ladder_every_s") + (() if both else ("rules", "stop_atr")):
+    for k in ("margin_frac", "ladder", "ladder_every_s", "tf", "trend", "name") + (() if both else ("rules", "stop_atr")):
         raw.pop(k, None)                                              # the design's sizing and ladder (see mix_site_world)
+    if both:
+        raw["rules"] = ["mix", "st"]                                  # the 10-26 rules (the deploy config's since 10-30: ROC / OBV 50)
     raw.update(state=str(folder / "state.json"), log=str(folder / "log.jsonl"), kill_file=str(folder / "STOP"),
                own_stop_file=str(folder / "own.STOP"), telegram=False, coins={"DOGEUSDT": raw["coins"]["DOGEUSDT"]})
     (folder / "cfg.json").write_text(json.dumps(raw), encoding="utf-8")

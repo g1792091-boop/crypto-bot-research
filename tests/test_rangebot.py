@@ -43,9 +43,14 @@ ST_RANGE = {"pullback_atr": 0.2, "wait_min": 60, "coin_st": True, "btc_st": True
             "liq_check": True, "liq_mmr": 0.005}
 
 
-def rcfg(tmp_path, **kw):
+def rcfg(tmp_path, deploy=False, **kw):
+    """The deploy config on the test's files. The tests here pin the rules of 10-26 / 10-29 (one fixed take-profit, no ROC
+    entry); ``deploy``: as deployed (owners 10-30: the ladder and the ROC entry, tests/test_rules1030.py)."""
     d = json.loads(DEPLOY.read_text(encoding="utf-8"))
     d.update(paper_db=str(tmp_path / "paper3.db"), db=str(tmp_path / "range.db"), macro_blackout_min=None)
+    if not deploy:
+        d.update(ladder=None, take_profit_roe=0.1,
+                 range={k: v for k, v in d["range"].items() if k not in ("roc_tf", "roc_stop_atr")})
     d.update(kw)
     return C.ComboConfig.from_dict(d)
 

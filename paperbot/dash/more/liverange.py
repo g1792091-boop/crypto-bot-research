@@ -169,6 +169,18 @@ def member_line(cfg: dict, describe: list) -> str:
     return (" / ".join(picks) or "매매법 설정 없음") + " (커스텀값 숫자는 봇이 켜질 때 시작 기록에 남아요)"
 
 
+def ladder_of(lad) -> Optional[dict]:
+    """A config's ladder (owners 10-30: the 레인지 봇 and its WOO X Pro executor) as numbers with its words (``ko``:
+    '순ROE 10%에서 8% 잠금, 그 뒤 5%씩'); None without a whole one."""
+    if not isinstance(lad, dict):
+        return None
+    n = L.ladder_numbers(lad)
+    if any(n.get(k) is None for k in ("first_lock", "trigger_gap", "step")):
+        return None
+    from .livetape import ladder_ko
+    return {**n, "ko": ladder_ko(n)}
+
+
 def plan_of(cfg: dict, describe: list, rt: float) -> dict:
     """The plan of a 레인지 봇 config in the owners' words (docs/range-bot-ko.md 1장), each line from the config's own
     numbers: [{"key", "k", "ko"}]; a number the config lacks says so (never the guide's number in its place)."""
@@ -194,16 +206,20 @@ def plan_of(cfg: dict, describe: list, rt: float) -> dict:
     levs = sorted({L._i(lev.get(s)) or L._i(lev.get("default")) for s in syms} - {None}, reverse=True) or \
         sorted({L._i(v) for v in lev.values()} - {None}, reverse=True)
     tp = L._f(cfg.get("take_profit_roe"))
+    lad = ladder_of(cfg.get("ladder"))
     if tp is not None:
         add("tp", "익절", f"순ROE +{_pct(tp)} 고정 (계단 없음) · 가격으로 " + ", ".join(f"{v}배 {tp / v + rt:.2%}" for v in levs))
+    elif lad and lad.get("ko"):                          # owners 10-30: the ladder (net ROE 10 % -> lock 8 %, then 5 %)
+        add("tp", "익절", f"계단 익절 {lad['ko']} (고정 익절 없음) · 잠금은 손절선을 올리는 것 · 레인지·ROC 진입 모두")
     else:
-        add("tp", "익절", "고정 익절이 설정에 없어요")
+        add("tp", "익절", "익절(고정 익절·계단)이 설정에 없어요")
     stop = cfg.get("stop") if isinstance(cfg.get("stop"), dict) else {}
     sr = L._f(stop.get("roe"))
     if stop.get("mode") == "roe" and sr is not None:
         net = stop.get("net") is True
         add("stop", "손절", f"{'순ROE' if net else 'ROE'} −{_pct(sr)} · 가격으로 "
-            + ", ".join(f"{v}배 {sr / v - (rt if net else 0.0):.2%}" for v in levs))
+            + ", ".join(f"{v}배 {sr / v - (rt if net else 0.0):.2%}" for v in levs)
+            + (f" · ROC 진입은 30분 ATR(14) × {float(r['roc_stop_atr']):g}" if r.get("roc_tf") else ""))
     else:
         add("stop", "손절", L.stop_ko(None, stop or None).get("ko") or "손절 설정을 읽지 못했어요")
     named = [f"{coin_ko(k)} {L._i(v)}배" for k, v in lev.items() if k != "default" and L._i(v)]
@@ -222,12 +238,14 @@ def plan_of(cfg: dict, describe: list, rt: float) -> dict:
     if mb:
         pauses.append(f"경제 발표 앞뒤 {mb}분")
     add("pause", "진입 금지", (" · ".join(pauses) + " (신호 때와 진입 때 둘 다 봄)") if pauses else "없음")
+    if rw.get("range_roc"):
+        add("roc", "ROC 진입", rw["range_roc"].split(": ", 1)[-1])
     if rw.get("range_none"):
         add("none", "없는 것", rw["range_none"])
     add("coins", "코인", " · ".join(coin_ko(s) for s in syms) or "코인 설정 없음")
     add("flip", "동전 쌍둥이", "있음 (COMBOFLIP@mix: 같은 때 들어가고 방향만 동전으로)" if cfg.get("flip_twin", True) else "없음")
-    return {"lines": lines, "tp": tp, "stop": sr, "margin": m, "leverage": lev, "initial_equity": L._f(cfg.get("initial_equity")),
-            "range": r}
+    return {"lines": lines, "tp": tp, "ladder": lad, "stop": sr, "margin": m, "leverage": lev,
+            "initial_equity": L._f(cfg.get("initial_equity")), "range": r}
 
 
 # ---------------------------------------------------------------- status, wallet, position, wait
@@ -297,7 +315,8 @@ def position_of(snap: dict, rt: float) -> Optional[dict]:
     return {"key": f"{ACCOUNT}|{sym}|{L._i(p.get('entry_time'))}", "symbol": sym, "coin": coin_ko(sym), "side": side, "leverage": lev,
             "qty": qty, "entry": entry, "entry_time": L._i(p.get("entry_time")), "stop": stop, "stop_move": move(stop),
             "tp": tp, "tp_move": move(tp), "liq": L._f(p.get("liq_price")), "margin": L._f(p.get("margin_initial")) or L._f(p.get("margin")),
-            "mark": mark, "roe": roe, "range": meta.get("range") if isinstance(meta.get("range"), dict) else None,
+            "mark": mark, "roe": roe, "lock_roe": L._f(p.get("lock_roe")),
+            "range": meta.get("range") if isinstance(meta.get("range"), dict) else None,
             "strategy_id": sig.get("strategy_id"), "timeframe": sig.get("timeframe")}
 
 
@@ -403,6 +422,7 @@ def follower_view(x: dict, path: str, snap: dict, plan: Optional[dict], now: int
     raw = (read_json(cfg["path"]).get("raw") or {}) if cfg.get("state") == "ok" and cfg.get("path") else {}
     tp = L._f(raw.get("take_profit_roe"))               # its own fixed take-profit and stop (deploy/range_switch.py writes them)
     sr = L._f(raw.get("stop_roe")) if raw.get("stop_from") == "roe" else None
+    lad = ladder_of(raw.get("ladder")) if raw.get("ladder_from") == "own" else None
     state = "stopped" if r.get("stale") else "halted" if r.get("halted") else "running"
     return {**base, "state": "ok", "run": state, "run_ko": {"running": "켜짐", "stopped": "기록 멈춤", "halted": "멈춤"}[state],
             "halt_reason": r.get("halt_reason") or "", "seen_ms": r.get("as_of_ms"), "mode": r.get("mode"),
@@ -411,7 +431,11 @@ def follower_view(x: dict, path: str, snap: dict, plan: Optional[dict], now: int
             "record": L.stats(t["pnl"] for t in mine), "today": L.today_of(mine, now, "exit_ts"), "n_other": len(r.get("trades") or []) - len(mine),
             "position": ({**pos, "coin": coin_ko(pos.get("symbol")), "tp_roe": tp, "stop_roe": sr} if pos else None),
             "plan_ko": [w for w in (f"익절 순ROE +{_pct(tp)} (자기 체결가 기준 · 시장가로 닫음)" if tp else None,
+                                    f"계단 익절 {lad['ko']} (자기 체결가·이 거래소 1분봉 기준 · 손절선을 올림)"
+                                    if lad and lad.get("ko") else None,
                                     f"손절 순ROE −{_pct(sr)} (자기 체결가 기준 · 거래소에 걸어 둠)" if sr else None,
+                                    "손절 = 페이퍼 손절 거리(%)를 자기 체결가에서 (레인지 순ROE −50% · ROC 30분 ATR × 3) · 거래소에 걸어 둠"
+                                    if raw.get("stop_from") == "ratio" and lad else None,
                                     f"크기 = 진입 때 잔고의 {_pct(L._f(cfg.get('margin_frac')))}" if cfg.get("size_from") == "equity" and L._f(cfg.get("margin_frac")) else None)
                         if w],
             "events": (r.get("events") or [])[:WARN_KEEP]}

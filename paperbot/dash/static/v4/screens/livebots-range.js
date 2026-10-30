@@ -205,11 +205,14 @@ export function rangeView(ctx) {
         ok(p.roe) ? ui.pill(`순ROE ${pctKo(p.roe)}`, Number(p.roe) >= 0 ? "good" : "bad", "마지막 마크 가격으로 계산 (수수료 포함)") : null),
       h("dl", {class: "lrb-kv"},
         h("dt", null, "진입"), h("dd", {class: "num"}, `${fmt.price(p.entry)} · ${fmt.kst(p.entry_time)}`),
-        h("dt", null, "익절"), h("dd", {class: "num up"}, ok(p.tp) ? `${fmt.price(p.tp)} (진입가에서 ${pctKo(p.tp_move, 2)})` : "—"),
+        h("dt", null, "익절"), h("dd", {class: "num up"}, ok(p.tp) ? `${fmt.price(p.tp)} (진입가에서 ${pctKo(p.tp_move, 2)})`
+          : (st.d.plan || {}).ladder && st.d.plan.ladder.ko ? `계단 ${st.d.plan.ladder.ko} · ${ok(p.lock_roe) ? `지금 순ROE +${rateKo(p.lock_roe)} 잠금` : "아직 잠금 없음"}` : "—"),
         h("dt", null, "손절"), h("dd", {class: "num down"}, ok(p.stop) ? `${fmt.price(p.stop)} (진입가에서 ${pctKo(p.stop_move, 2)})` : "—"),
         h("dt", null, "강제청산"), h("dd", {class: "num"}, ok(p.liq) ? fmt.price(p.liq) : "기록 없음"),
         h("dt", null, "지금 가격"), h("dd", {class: "num"}, ok(p.mark) ? `${fmt.price(p.mark)} (마지막 마크)` : "—"),
-        h("dt", null, "되돌림"), h("dd", null, ok(rg.level) ? `종가 ${fmt.price(rg.close)} → ${fmt.num(rg.k, 1)} ATR ${Number(p.side) > 0 ? "아래" : "위"} ${fmt.price(rg.level)}${ok(rg.touch) ? ` · ${fmt.kst(rg.touch)} 닿음` : ""}` : "기록 없음")),
+        rg.roc ? h("dt", null, "진입 신호") : h("dt", null, "되돌림"),
+        rg.roc ? h("dd", null, `ROC 30분봉 ${fmt.kst(rg.t0)} 마감 · 보라선 ${ok(rg.osc) ? fmt.num(rg.osc, 1) : "—"} · 손절 30분 ATR × ${fmt.num(rg.k, 0)} (되돌림 안 기다림)`)
+          : h("dd", null, ok(rg.level) ? `종가 ${fmt.price(rg.close)} → ${fmt.num(rg.k, 1)} ATR ${Number(p.side) > 0 ? "아래" : "위"} ${fmt.price(rg.level)}${ok(rg.touch) ? ` · ${fmt.kst(rg.touch)} 닿음` : ""}` : "기록 없음")),
       ...lives);
   }
   function drawWait() {

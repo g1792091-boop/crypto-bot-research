@@ -585,7 +585,9 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
 # ---------------------------------------------------------------- 최근 48시간: signals with what became of them, warnings
 VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_ok", "rule", "k", "d", "rsi26_30m", "rsi26_1h", "mom",
             # the 바이비트 봇's rules (owners 10-29): the OBV turn, the friend's trend of the bar and its four votes
-            "turn", "trend", "votes")
+            "turn", "trend", "votes",
+            # owners 10-30: the 50 lines (OBV, ROC), the ROC bar's turn, the swing trend, the bar
+            "obv50", "roc", "roc_turn", "trend_mode", "tf")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 
@@ -658,11 +660,13 @@ def feed_view(rows: list, now: int) -> dict:
                 stage, tone = "skipped", out["tone"]
             counts[stage] += 1
             turn = _i(r.get("turn")) or 0                     # the OBV rule's light -> dark turn (owners 10-29)
+            rturn = _i(r.get("roc_turn")) or 0                # the ROC bar's (owners 10-30)
             items.append({**base, "cat": "signal", "colour": colour, "cross": cross, "rule": rule, "rule_ko": M.RULE_KO.get(rule, rule),
                           "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour)
-                          or {1: "OBV 연한 초록→진한 초록", -1: "OBV 연한 빨강→진한 빨강"}.get(turn, "신호"),
-                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 else
-                          -1 if colour == "purple" or cross == "dead" or turn < 0 else side,
+                          or {1: "OBV 연한 초록→진한 초록", -1: "OBV 연한 빨강→진한 빨강"}.get(turn)
+                          or {1: "ROC 막대 연한 초록→진한 초록", -1: "ROC 막대 연한 빨강→진한 빨강"}.get(rturn, "신호"),
+                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 else
+                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 else side,
                           "stage": stage, "tone": tone,
                           "why": r.get("why") or None, "outcome": out, "vals": _vals(r)})
         elif k == "skip" and id(r) not in folded:
@@ -855,6 +859,13 @@ def bot_perf(bid: str, bp: dict, now: int) -> dict:
             "equity": equity_view(bid, b)}
 
 
+def live_name(p: dict, prof: Profile) -> str:
+    """The bot's name: its live config's ``name`` (owners 10-30: the friend bot is '친구 15분 봇'), else the profile's."""
+    conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
+    cfg = conf.get("cfg")
+    return getattr(cfg, "name", None) or prof.name
+
+
 def _who(prof: Profile) -> dict:
     """The bot's own words for its pages (owners 10-29: two mix bots)."""
     return {"bot": prof.id, "exchange_ko": prof.exchange_ko, "account_ko": prof.account_ko, "guide": prof.guide}
@@ -865,7 +876,8 @@ def control(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     p = p or paths()
     prof = prof_of(p)
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    return {"now_ms": now, "name_ko": prof.name, **_who(prof), "bots": [bot_control(bid, p[bid], now) for bid, *_r in prof.bots],
+    return {"now_ms": now, "name_ko": live_name(p, prof), **_who(prof),
+            "bots": [bot_control(bid, p[bid], now) for bid, *_r in prof.bots],
             "span_ms": SIG_SPAN_MS, "stale_ms": STALE_MS}
 
 
@@ -885,8 +897,13 @@ def perf(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     p = p or paths()
     prof = prof_of(p)
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    return {"now_ms": now, "name_ko": prof.name, **_who(prof), "bots": [bot_perf(bid, p[bid], now) for bid, *_r in prof.bots],
-            "backtest": prof.backtest, "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N, "analysis": analysis(p, now)}
+    conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
+    cfg = conf.get("cfg")
+    own = cfg is None or "mix" in tuple(cfg.rules)       # the design's 5-year backtest is of the friend's own rule
+    return {"now_ms": now, "name_ko": live_name(p, prof), **_who(prof),
+            "bots": [bot_perf(bid, p[bid], now) for bid, *_r in prof.bots],
+            "backtest": prof.backtest if own else None, "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N,
+            "analysis": analysis(p, now)}
 
 
 def register(app, ctx) -> dict:

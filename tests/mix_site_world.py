@@ -47,8 +47,9 @@ def config(folder: str, mode: str) -> str:
     tag = "live" if mode == "mainnet" else "paper"
     # this world plays the friend's design (risk sizing, the coins' ladder at 30m closes, the friend's rule and stops):
     # the owners' 10-26 options (margin_frac, the net-ROE ladder, 1m follow-up, the second rule, one ATR multiple) are
-    # tested in tests/test_mixchop.py, test_mixchop_1026_site.py and test_mixchop_st.py
-    for k in ("margin_frac", "ladder", "ladder_every_s", "rules", "stop_atr"):
+    # tested in tests/test_mixchop.py, test_mixchop_1026_site.py and test_mixchop_st.py; the 10-30 switch (15m bars, the
+    # swing trend, the ROC / OBV 50 rules, its name) in tests/test_rules1030.py
+    for k in ("margin_frac", "ladder", "ladder_every_s", "rules", "stop_atr", "tf", "trend", "name"):
         raw.pop(k, None)
     raw["max_notional_usd"] = 500
     raw.update(state=os.path.join(folder, f"{tag}-state.json"), log=os.path.join(folder, f"{tag}-log.jsonl"),

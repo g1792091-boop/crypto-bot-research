@@ -2034,7 +2034,8 @@ def exit_text(cfg: "ComboConfig", t, loss: str = "") -> str:
 
 MEMBER_KO = {"F6_VWAP_FAIL": "VWAP 복귀 실패", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들",   # the VWAP bot's two (10-23)
              FRIEND: "친구 매매법(EMA·RSI·ROC)",                                       # the friend bot's (10-24)
-             "F7_RF_TRIPLE": "레인지 필터 3중 일치"}                                    # the 레인지 봇's (10-26)
+             "F7_RF_TRIPLE": "레인지 필터 3중 일치",                                    # the 레인지 봇's (10-26)
+             "ROC50": "ROC 50선"}                                                      # and its ROC entry (10-30)
 
 
 def member_ko(strategy: str) -> str:

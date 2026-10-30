@@ -1,8 +1,9 @@
 // 실거래 › 바이비트 봇 › 친구 추세판 (#/ftrend, owners 10-29): the friend's trend indicator per coin, as the two bots that use
 // it saw it (dash/more/liveftrend.py, /api/v4/livebots/ftrend every 30 s), read-only:
 //   30분   the 바이비트 봇's last close: the trend and its four votes (하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드), the OBV
-//          pane's colour (연한 / 진한 초록 · 빨강, the light -> dark turn the OBV rule enters on), the Stoch RSI pane (K, D,
-//          50선 아래 / 위, a golden / dead ●) and each rule's answer in the bot's words
+//          pane's colour (연한 / 진한 초록 · 빨강, the light -> dark turn the OBV rule enters on), its 50 line's value (the
+//          rule of 10-30), the Stoch RSI pane when the bot reads it (K, D, 50선 아래 / 위, a golden / dead ●) and each
+//          rule's answer in the bot's words
 //   1시간  the 레인지 봇's last closed hour (its trend check), once its config uses the indicator
 // HONESTY: a bot that is off or has not written its row yet says so; an old row says how old; never a vote of our own.
 import {h, put, ui, fmt, serverNow} from "../core/pb.js";
@@ -83,7 +84,10 @@ export function ftrendView(ctx) {
       m.state === "ok" ? h("dl", {class: "lft-kv"},
         h("dt", null, "OBV"), h("dd", null, h("span", {class: ["lft-obv", ob.tone, ob.dark ? "dark" : "light"]}, h("i", {"aria-hidden": "true"}), ob.text),
           ob.turn ? h("b", {class: ["lft-turn", ob.tone]}, ` 바뀜: ${ob.turn}`) : null),
-        h("dt", null, "스톡RSI"), h("dd", null, h("span", {class: ["lft-stoch", sk.tone]}, sk.text), sk.cross ? h("b", {class: "lft-turn"}, ` ${sk.cross}`) : null),
+        ok(m.obv50) ? h("dt", null, "OBV 50선") : null,
+        ok(m.obv50) ? h("dd", {class: "num"}, `${fmt.num(m.obv50, 1)} (${Number(m.obv50) < 50 ? "50 아래: 롱 쪽" : "50 위: 숏 쪽"})`) : null,
+        m.stoch ? h("dt", null, "스톡RSI") : null,
+        m.stoch ? h("dd", null, h("span", {class: ["lft-stoch", sk.tone]}, sk.text), sk.cross ? h("b", {class: "lft-turn"}, ` ${sk.cross}`) : null) : null,
         ok(m.ema_rsi) ? h("dt", null, "EMA RSI") : null, ok(m.ema_rsi) ? h("dd", {class: "num"}, fmt.num(m.ema_rsi, 1)) : null,
         ok(m.stop_pct) ? h("dt", null, "손절 폭") : null,
         ok(m.stop_pct) ? h("dd", {class: "num"}, `${fmt.num(m.stop_pct, 2)}% (ATR × 3)`, m.liq_ok === false ? h("small", {class: "lft-bad"}, " · 청산가보다 멀어 진입 안 함") : null) : null) : null,

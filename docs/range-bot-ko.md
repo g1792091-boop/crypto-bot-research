@@ -37,8 +37,8 @@
 | 한 신호씩 | 기다리는 동안·포지션 있는 동안 다른 신호는 안 받음. 같은 시각이면 BTC → ETH → SOL → DOGE → LTC → BCH 순서 |
 | 진입 금지 | 한국 시간 토·일, 나스닥 개장 앞뒤 30분, 경제 발표 앞뒤 30분 (신호 때와 진입 때 둘 다 봄) |
 | 크기 | BTC 40배, 알트 30배, 증거금 = 그때 잔고의 40%, 포지션 1개 |
-| 익절 | 순ROE +10% 고정 (계단 없음) |
-| 손절 | 순ROE −50% |
+| 익절 | (10/30부터) 계단: 순ROE 10%에서 8% 잠금, 그 뒤 5%씩 (1-2절). 10/29까지는 순ROE +10% 고정 |
+| 손절 | 순ROE −50% (ROC 진입은 30분 ATR × 3, 1-2절) |
 | 없는 것 | 진 뒤 쉬기, 시간 청산, 반대 신호 청산, 신호등, 잔고 바닥 |
 
 - 페이퍼는 익절을 그 가격에 지정가처럼 체결해 수수료가 덜 나가므로, 페이퍼의 이긴 거래는 순ROE가 +12% 안팎으로 보입니다.
@@ -64,6 +64,30 @@
 - 텔레그램 진입 줄에는 `친구 추세 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 상승 · 슈퍼트렌드 상승)`이 붙습니다.
 - 들어가지 않은 신호 이유: `추세 확인: 친구 추세지표 1시간 하락 (…)(신호 롱와 반대)` 또는 `… 진입 금지 (…)`.
 - 사이트 레인지 봇 화면에 코인마다 "친구 추세지표 1시간"(상승·하락·진입 금지)이 나옵니다.
+
+## 1-2. 10/30: ROC 30분 진입 + 계단 익절
+
+두 분(10/30): "b로 가자 레인지도 woox pro1 순수익8% 방식으로 가고 3번은 atr x3으로 가자", "3번 1포지션이고 순수익8프로".
+
+- **원래 레인지 진입은 그대로입니다:** 레인지 필터 3중 일치 1시간봉 → 친구 추세지표 1시간 → 0.2 ATR 되돌림 → 손절 순ROE −50%.
+- **ROC 진입을 하나 더 받습니다 (30분봉):**
+  - 30분봉이 마감될 때마다 6개 코인의 친구 추세지표 30분봉(네 표)과 OBV ROC 막대를 봅니다.
+  - 롱: 추세가 상승이고, ROC 막대가 연한 초록 → 진한 초록으로 바뀐 봉이고, 보라선이 50 아래.
+  - 숏: 추세가 하락이고, 연한 빨강 → 진한 빨강이고, 보라선이 50 위.
+  - 마감 다음 분 시가에 시장가로 들어갑니다. 되돌림은 기다리지 않습니다.
+  - 손절: 그 30분봉의 ATR(14) × 3. 그 거리가 (1/배수 − 0.5%)보다 멀면 들어가지 않습니다(`강제청산 여유 부족`).
+- **포지션은 언제나 1개:** 레인지 신호가 되돌림을 기다리거나 포지션이 있으면 ROC 신호는 `한 신호씩: …`으로 건너뜁니다. 반대도 같습니다.
+  같은 시각(정각)에 둘 다 나오면 레인지 신호를 먼저 봅니다.
+- **익절은 두 진입 모두 계단:** 순ROE 10%에 닿으면 손절선을 순ROE 8%로 올리고, 그 뒤 5%마다 한 칸씩 올립니다(15%→13%, 20%→18%…).
+  고정 익절(+10%)은 없앴습니다.
+- **WOO X Pro 실행기:** 손절은 페이퍼의 손절 거리(%)를 자기 체결가에서 씁니다(`stop_from: "ratio"`). 계단은 자기 체결가·WOO X Pro 1분봉·
+  WOO X Pro 비용으로 직접 올립니다(`ladder_from: "own"`). 레인지 진입의 손절은 페이퍼 비용 기준 순ROE −50% 거리라서, 10/29까지의
+  실행기 비용 기준보다 아주 조금(가격 0.02% 안팎) 가깝습니다.
+- 기록 이름: 신호 `ROC50-30m`(전략 `ROC50`, 30분). 텔레그램 진입 줄: `ROC 30분봉 10-30 21:30 마감: 연한 초록→진한 초록, 보라선 38.2(50 아래) ·
+  손절 30분 ATR(…) × 3 · 친구 추세 30분 상승 (…)`.
+- 백테스트는 하지 않았습니다(두 분: "백테스트는 신경쓰지마"). 숫자는 실거래가 쌓이면 봅니다.
+- 계산은 바이비트 봇과 같은 식(`paperbot/friendtrend.py`의 ROC 막대·추세)을 레인지 봇이 받는 5분봉으로 만든 30분봉 1,500개에 씁니다
+  (`tests/test_rules1030.py`).
 
 ## 2. 준비물
 
@@ -206,6 +230,55 @@ sudo systemctl enable --now paperbot-executor-mexc
 - 텔레그램 `[합친 봇 페이퍼 레인지 봇] 시작: …`에 `추세 확인: 친구 추세지표 1시간봉 …`이 보이면 바뀐 것입니다.
 - 되돌리기: 2)처럼 포지션이 없을 때 `sudo install -o root -g paperbot -m 640 /etc/paperbot/combo-range.json.before-friend /etc/paperbot/combo-range.json`
   하고 페이퍼 봇을 다시 켭니다.
+
+### F. 10/30 규칙으로 바꾸기 (ROC 진입 · 계단 익절) — 레인지 페이퍼 봇과 WOO X Pro 실행기가 꺼져 있을 때
+
+1) 코드 받기, 지금 상태:
+
+```bash
+cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+systemctl is-active paperbot-combo-range paperbot-executor-mexc
+sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor status --db /var/lib/paperbot/exec/executor-wooxpro-live.db
+```
+
+- 둘 다 `inactive`, 실행기 `포지션: null`일 때만 다음으로.
+
+2) 페이퍼 봇 설정 바꾸기 → 확인 (예전 것은 `.before-1030`):
+
+```bash
+sudo cp -p /etc/paperbot/combo-range.json /etc/paperbot/combo-range.json.before-1030
+sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.range.json /etc/paperbot/combo-range.json
+sudo diff /etc/paperbot/combo-range.json.before-1030 /etc/paperbot/combo-range.json
+cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo-range.json
+```
+
+- diff: `"ladder": null` → `{"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.05}`, `"take_profit_roe": 0.1` → `null`,
+  새 줄 `"roc_tf": "30m"`, `"roc_stop_atr": 3`.
+- check-config: `손절: 순ROE -50%(…) / 계단 익절 순ROE 10%에서 8% 잠금, 이후 5%씩`, `ROC 진입(30분봉): …`, 마지막 줄 **`준비됨`**.
+
+3) 실행기 설정 바꾸기 → 확인 (스크립트가 예전 것을 `.before-range-<시각>`으로 남김):
+
+```bash
+cd /opt/crypto-bot-research && sudo python3 deploy/range_switch.py
+cd /opt/crypto-bot-research && sudo python3 deploy/range_switch.py --write
+cd /opt/crypto-bot-research && sudo -u paperbot-exec /opt/paperbot/venv/bin/python -m paperbot.executor check-config --config /etc/paperbot/executor-mexc.json
+```
+
+- 첫 줄(보기만)에서 볼 것: `stop_from: "roe" → "ratio"`, `ladder: null → {…0.08…}`, `take_profit_roe: 0.1 → null`,
+  `stop_roe: 0.5 → 없앰`, `stop_net: true → 없앰`.
+- check-config: `계단: 순ROE 10%에서 8% 잠금, 이후 5%씩`, `손절 자리: stop_from "ratio" - 페이퍼 손절 거리(%)를 …`, 마지막 줄 **`준비됨`**.
+
+4) 켜기:
+
+```bash
+sudo systemctl enable --now paperbot-combo-range
+journalctl -u paperbot-combo-range -n 20 --no-pager
+sudo systemctl enable --now paperbot-executor-mexc
+```
+
+- 텔레그램 `[합친 봇 페이퍼 레인지 봇] 시작: …`에 `계단 익절 …`과 `ROC 진입(30분봉): …`이 보이면 바뀐 것입니다.
+- 되돌리기(포지션 없을 때): 둘 다 끄고 `sudo install -o root -g paperbot -m 640 /etc/paperbot/combo-range.json.before-1030 /etc/paperbot/combo-range.json`,
+  `cd /opt/crypto-bot-research && sudo python3 deploy/range_switch.py --back --write`.
 
 ## 4. 처음 며칠 지켜볼 것
 

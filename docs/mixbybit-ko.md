@@ -16,6 +16,8 @@
 
 ## 1. 규칙
 
+**10/30부터 진입 규칙은 8장의 OBV 50선 하나입니다.** 아래 표의 ①·②는 10/29~30의 규칙입니다(추세·코인·손절·계단·크기는 그대로).
+
 모든 판단은 바이낸스의 **마감된 30분봉**으로, 30분봉이 끝날 때마다 합니다(친구봇과 같음).
 
 | 항목 | 내용 |
@@ -160,9 +162,47 @@
 - **바이비트 봇 › 친구 추세판**: 코인마다 이 봇이 마지막 30분봉에 본 값입니다.
   - 추세와 네 표(하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드)
   - OBV 색(연한색 / 진한색, 연한색→진한색으로 바뀐 봉)
-  - 스톡RSI K·D와 50선 위/아래, 골든·데드 ●
+  - OBV 50선 값(10/30부터의 규칙), 스톡RSI K·D와 골든·데드 ●(10/29 규칙의 기록이 있을 때만)
   - 두 매매법이 그 봉에 낸 답
   - 레인지 봇이 본 1시간 추세(레인지 봇 설정을 바꾼 뒤부터)
   - 이 표는 새 코드로 봇을 켠 뒤 첫 30분봉이 끝나야 채워집니다.
 - **포지션**: 이 봇의 포지션 카드가 바이비트 자리에 나옵니다.
 - 추세판단 봇 화면은 봇별 맨 끝으로 옮겼고, 지난 기록 보관용으로 남겨 둡니다.
+
+## 8. 10/30: OBV 50선 하나로
+
+두 분(10/30, 친구가 보낸 파일 4개와 대화): 예전 두 규칙(OBV 진한색, 스톡RSI)을 빼고 **OBV 50선** 하나로 갑니다.
+
+| 항목 | 내용 |
+|---|---|
+| 추세 | 그대로: 친구 추세지표 30분봉 네 표. 같은 쪽 2개 이상이면 그 추세, 2:2나 횡보 2개면 진입 안 함 |
+| 롱 | 추세 상승 + OBV 막대가 연한 초록 → 진한 초록으로 바뀐 봉 + 그 봉의 OBV 50선 값이 50 아래 |
+| 숏 | 추세 하락 + 연한 빨강 → 진한 빨강 + OBV 50선 값이 50 위 |
+| 그대로 | 코인 7개, 40배(ZEC 20배), 증거금 40%, 손절 30분 ATR × 3, 계단 순ROE 10%→8% 뒤 5%씩, 진입 금지 시간 |
+
+- OBV 50선 값: OBV 창의 선(자금 흐름과 클링거를 반씩 섞어 쌓은 선)이 그 선의 EMA 52보다 얼마나 위·아래인지를 0~100으로 그린 값입니다.
+  50 + 50 × tanh(차이 ÷ (차이의 100봉 표준편차 × 2)). 친구 파일의 기본값 그대로입니다(`paperbot/friendtrend.py` 4장).
+- 텔레그램 근거 줄 예: `근거(OBV 50선): OBV 연한 초록→진한 초록 · OBV 50선 아래(41.0) · 친구 추세 30분 상승 (…)`.
+- 설정은 `"rules": ["obv50"]` 한 줄만 바뀝니다(`deploy/mixbybit.live.json`, `deploy/mixbybit.paper.json`).
+
+### 8-1. 바꾸는 순서 (서버에서, 봇이 꺼져 있을 때)
+
+1. 코드 받기: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+2. 설정 바꾸기 (예전 것은 `.before-1030`):
+   ```
+   sudo cp -p /etc/paperbot/mixbybit.json /etc/paperbot/mixbybit.json.before-1030
+   sudo cp -p /etc/paperbot/mixbybit-paper.json /etc/paperbot/mixbybit-paper.json.before-1030
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixbybit.live.json /etc/paperbot/mixbybit.json
+   sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixbybit.paper.json /etc/paperbot/mixbybit-paper.json
+   sudo diff /etc/paperbot/mixbybit.json.before-1030 /etc/paperbot/mixbybit.json
+   ```
+   - diff에는 `"rules"` 줄 하나(`["obv", "srsi"]` → `["obv50"]`)만 나와야 합니다.
+3. 확인 (읽기만):
+   ```
+   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixbybit.json
+   cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.mixchop signals --config /etc/paperbot/mixbybit-paper.json -n 3
+   ```
+   - check에서 볼 줄: `매매법·손절: OBV 50선 · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상`.
+4. 켜기: `sudo systemctl enable --now paperbot-mixbybit paperbot-mixbybit-paper` 그리고 `journalctl -u paperbot-mixbybit -n 30`.
+   - 바이비트에 포지션이 남아 있으면 켤 때 그 포지션을 이어받아 손절·계단을 계속 봅니다.
+- 되돌리기: 끄고 `sudo cp -p /etc/paperbot/mixbybit.json.before-1030 /etc/paperbot/mixbybit.json`(모의도 같은 식) 뒤 다시 켭니다.
