@@ -43,7 +43,7 @@
 // under the account's name; the old '친구 매매법' executor of WOO X Pro 2 keeps its own reactor while the server has it.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday, unrealized} from "./livebots-calc.js";
-import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId, followersOf} from "./livebots-kit.js";
+import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo, takingNoneKo} from "./livebots-likely.js";
 
@@ -334,6 +334,10 @@ export function tilesOf(rank) {
   });
 }
 
+/** No executor of the summary follows the main paper bot (the 추세판단 봇) any more (owners 10-29: switched off). */
+export const mainOff = (d) => !!d && Array.isArray(d.execs) && d.execs.length > 0 && d.execs.every((x) => x && "bot" in x)
+  && !d.execs.some((x) => x.bot === "paper");
+const MAIN_OFF_KO = "10/29부터 따라가는 실거래가 없어요 · 가운데 그림은 그 봇의 매매법이에요 · 지금 거래는 아래 계좌 카드의 봇들이 해요";
 /**
  * What the centre says while no position is open: {tone: ok | warn | bad | wait, head, sub, until, on (the ring turns)}. The
  * ring turns only while the paper bot's record is fresh (it is really looking at every bar); a pause (weekend, a US
@@ -342,6 +346,8 @@ export function tilesOf(rank) {
 export function idleWords(d, cal) {
   if (!d) return {tone: "wait", head: "불러오는 중", sub: null, until: null, on: false};
   const p = d.paper || {};
+  // owners 10-29: the 추세판단 봇 switched off (no executor follows it): its stopped record is no alarm
+  if (mainOff(d) && (p.state !== "ok" || p.stale)) return {tone: "wait", head: "추세판단 봇 꺼 둠", sub: MAIN_OFF_KO, until: null, on: false};
   if (p.state !== "ok") {
     return {tone: "bad", head: p.state === "error" ? "페이퍼 봇 기록을 못 읽음" : "페이퍼 봇 기록 수집 전", sub: p.reason_ko || null, until: null, on: false};
   }
@@ -1436,6 +1442,7 @@ export function hqView(ctx, hub) {
       if (n.pause_until) { until = n.pause_until; untilKo = "다시 진입 가능까지"; }
       else if (n.next_pause && n.next_pause.from) { until = n.next_pause.from; untilKo = `다음 쉬는 시간(${n.next_pause.ko || "쉼"})까지`; }
     } else if (fCal.d && fCal.d.now && fCal.d.now.next) { until = fCal.d.now.next.from; untilKo = `다음 쉬는 시간(${fCal.d.now.next.ko || "쉼"})까지`; }
+    if (mainOff(d)) { tone = "wait"; head = "추세판단 봇 꺼 둠 · 지금 실거래는 아래 계좌 카드의 봇들이 해요"; }
     verdict.dataset.tone = tone;
     vHead.textContent = head;
     vSub.replaceChildren(...(until ? [`${untilKo} `, cd(until)] : []));
@@ -1592,9 +1599,10 @@ export function hqView(ctx, hub) {
     put(iUntil, w.until ? [cd(w.until), " 남음"] : null);
     const n = fNow.d;
     iSub.textContent = w.sub || (n && !n.ready && n.head_ko ? n.head_ko : "");
-    const ws = (n && n.pending && n.pending.state === "ok" && n.pending.waits) || [];
+    const off = mainOff(st.d);
+    const ws = (!off && n && n.pending && n.pending.state === "ok" && n.pending.waits) || [];
     put(iWait, ws.length ? [h("span", {class: "k"}, `⏳ 진입 대기 ${fmt.int(ws.length)}개`), ws.slice(0, 2).map((w) => `${fmt.coin(w.symbol)} ${fmt.sideKo(w.side)} · ${waitWords(w).move || "기준가 못 읽음"}`).join(" / ")] : null);
-    const ls = n && n.last_signal;
+    const ls = !off && n && n.last_signal;
     put(iSig, ls ? [h("span", {class: "k"}, "마지막 신호"), `${fmt.coin(ls.symbol)} ${fmt.sideKo(ls.side)} · ${stratName(ls.strategy)} ${fmt.tfKo(ls.tf)} · ${ls.ko || ""} · ${ageKo(ls.t)}`] : null);
     const rk = fRank.d;
     iScope.textContent = rk && rk.n_strategies ? `매매법 ${fmt.int(rk.n_strategies)}개 · 설정 ${fmt.int(rk.n_settings)}개가 코인 6개를 봉마다 살펴요` : "코인 6개를 봉마다 살펴요";
@@ -1836,7 +1844,7 @@ export function hqView(ctx, hub) {
     pbNum.textContent = unk ? unk : `${fmt.int(n)}/${fmt.int(goal)} · ${fmt.pct(pct, 0, false)}`;
     pbar.classList.toggle("unk", !!unk);
     pbar.classList.toggle("done", !!(cp && cp.ready));
-    const off = !!st.d && !followersOf(st.d, "paper").length;      // the 추세판단 봇 followed by no executor (owners 10-29)
+    const off = mainOff(st.d);                          // the 추세판단 봇 followed by no executor (owners 10-29)
     pbar.hidden = off; ckpt.el.hidden = off; retired.hidden = !off;
   }
 

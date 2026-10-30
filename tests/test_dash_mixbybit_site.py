@@ -306,3 +306,18 @@ def test_hq_shows_the_bybit_bot_once_it_took_the_slot(site, tmp_path):
     for word in ("바이비트 진짜 돈 봇 바이비트 봇 스스로 매매 · 페이퍼를 따라가지 않음", "최근 거래 · 0승 1패", "바이비트 봇 관제 · 성적 →",
                  "30분봉 신호 · BTC·ETH·SOL·DOGE·LTC·BCH·ZEC"):
         assert word in t, word
+
+
+def test_hq_is_calm_about_the_switched_off_trend_bot(tmp_path):
+    """한눈에 (owners 10-30 photo: '페이퍼 봇 기록 멈춤' in red on the first screen): once no executor follows the 추세판단 봇,
+    its stopped record is said in plain words, not as an alarm; followed: the alarm as before."""
+    from tests import test_dash_livev39 as TV
+    out = TV._node(tmp_path, f"""
+    const HQ = await import('file://{SCREENS}/livebots-hq.js');
+    const d = (bots) => ({{paper: {{state: 'ok', stale: true}}, execs: bots.map((b, i) => ({{id: 'x' + i, bot: b, record: {{state: 'ok'}}}}))}});
+    console.log(JSON.stringify({{off: HQ.idleWords(d(['range', 'paper2'])), on: HQ.idleWords(d(['paper', 'range'])),
+      old: HQ.idleWords({{paper: {{state: 'ok', stale: true}}, execs: [{{id: 'bybit'}}]}}), m: [HQ.mainOff(d(['range'])), HQ.mainOff(d([])), HQ.mainOff(null)]}}));""")
+    assert out["off"]["head"] == "추세판단 봇 꺼 둠" and out["off"]["tone"] == "wait" and "아래 계좌 카드" in out["off"]["sub"]
+    assert out["on"]["head"] == "페이퍼 봇 기록 멈춤" and out["on"]["tone"] == "bad"
+    assert out["old"]["head"] == "페이퍼 봇 기록 멈춤"                  # an answer without ``bot``: as before
+    assert out["m"] == [True, False, False]
