@@ -611,3 +611,32 @@ def test_the_start_screen_centre_is_the_bots_trading_now(tmp_path):
     assert out["idle"]["head"] == "실거래 봇 3/3개 돌아가는 중" and out["idle"]["on"] is True
     assert out["none"]["head"] == "실거래 봇 불러오는 중"
     assert out["old"]["head"] == "추세판단 봇 꺼 둠"                   # without the bots (an old caller): as before
+
+
+def test_a_switched_off_optional_executor_leaves_the_site(tmp_path, monkeypatch):
+    """Owners 10-30 ("딥코인 봇이랑 투비트 봇은 안돌릴예정"): once their units are disabled and stopped, the 딥코인 and 투비트
+    slots leave the site's answers as if they were not installed (livebots.installed); a running or unknown one stays."""
+    from paperbot import livecheck as LC
+    from paperbot.dash.more import livebots as L
+    p = {k: str(tmp_path / f"{k}.json") for k in ("deepcoin_config", "toobit_config", "wooxpro2_config")}
+    for v in p.values():
+        Path(v).write_text("{}", encoding="utf-8")
+    base = {"bybit_config": str(tmp_path / "no-b.json"), "mexc_config": str(tmp_path / "no-m.json"), **p}
+    states = {"paperbot-executor-deepcoin": ("inactive", "disabled"), "paperbot-executor-toobit": ("active", "enabled"),
+              "paperbot-executor-wooxpro2": ("", "")}
+    monkeypatch.setattr(LC, "unit_state", lambda u: states.get(u, ("", "")))
+    L._off_cache.clear()
+    ids = [s[0] for s in L.installed(base)]
+    assert "deepcoin" not in ids and "toobit" in ids and "wooxpro2" in ids
+    states["paperbot-executor-toobit"] = ("inactive", "disabled")
+    L._off_cache.clear()
+    assert [s[0] for s in L.installed(base)] == [x for x in ids if x not in ("deepcoin", "toobit")]
+    # a unit systemd does not know (a machine without it): unknown, it stays
+    states["paperbot-executor-deepcoin"] = ("", "not-found")
+    L._off_cache.clear()
+    assert "deepcoin" in [s[0] for s in L.installed(base)] and LC.switched_off("paperbot-executor-deepcoin") is False
+    # a failed one still counts as running (its alarms stay): it stays on the site
+    states["paperbot-executor-toobit"] = ("failed", "disabled")
+    L._off_cache.clear()
+    assert "toobit" in [s[0] for s in L.installed(base)]
+    L._off_cache.clear()

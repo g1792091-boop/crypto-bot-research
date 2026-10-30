@@ -289,13 +289,42 @@ def replaced_out(p: dict) -> list:
     return [{"id": ex, **{k: v for k, v in REPLACED[ex].items() if k != "key"}} for ex in replaced(p)]
 
 
+# owners 10-30 ("딥코인 봇이랑 투비트 봇은 안돌릴예정이야"): an optional executor whose unit a person switched off for good
+# (``systemctl disable --now``: livecheck.switched_off, as the live checks) leaves the site as if it were not installed
+OPTIONAL_UNITS = {"deepcoin": "paperbot-executor-deepcoin", "wooxpro2": "paperbot-executor-wooxpro2",
+                  "toobit": "paperbot-executor-toobit"}
+OFF_TTL_S = 30.0
+_off_cache: dict = {}
+
+
+def switched_off_slot(slot: str) -> bool:
+    """Is an optional executor's unit switched off for good (disabled and not running)? Read at most every OFF_TTL_S;
+    False when systemctl cannot say (a test machine) or on any error (the slot stays as before)."""
+    unit = OPTIONAL_UNITS.get(slot)
+    if not unit:
+        return False
+    now = time.monotonic()
+    hit = _off_cache.get(unit)
+    if hit is not None and now - hit[0] < OFF_TTL_S:
+        return hit[1]
+    try:
+        from ... import livecheck as LC
+        off = bool(LC.switched_off(unit))
+    except Exception:  # noqa: BLE001  never a page's failure
+        off = False
+    _off_cache[unit] = (now, off)
+    return off
+
+
 def installed(p: dict) -> tuple:
     """The executor slots of this server, in EXECS order: the two first always (but a slot a mix bot trades now,
-    ``replaced``); an optional slot (the third, 딥코인) once its config file or its database is there (``p``: paths()).
+    ``replaced``); an optional slot (the third, 딥코인) once its config file or its database is there (``p``: paths()),
+    unless its unit is switched off for good (switched_off_slot, owners 10-30).
     Neither there: the pages, the answers, the checks and the messages are as they were with two executors."""
     gone = set(replaced(p))
     return tuple(s for s in EXECS if s[0] not in gone) \
-        + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2])))
+        + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2]))
+                and not switched_off_slot(s[0]))
 
 
 def shown_paths(p: dict) -> dict:

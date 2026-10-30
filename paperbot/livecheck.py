@@ -1167,11 +1167,12 @@ RETIRED_KO = "꺼짐 · 따라가는 실거래 없음"
 
 def switched_off(unit: Optional[str], units: Callable = None) -> bool:
     """Owners 10-29 ("VWAP 봇 끄자"): a unit a person switched off for good (``systemctl disable --now``): known to systemd,
-    neither running (a failed one still counts as running) nor enabled. Unknown (no unit, no systemctl): False."""
+    neither running (a failed one still counts as running) nor enabled. Unknown (no unit, no systemctl, a unit systemd
+    does not know: "not-found"): False."""
     if not unit:
         return False
     active, enabled = (units or unit_state)(unit)
-    if not active and not enabled:
+    if (not active and not enabled) or enabled == "not-found":
         return False
     return active not in RUNNING and enabled not in ("enabled", "enabled-runtime")
 
