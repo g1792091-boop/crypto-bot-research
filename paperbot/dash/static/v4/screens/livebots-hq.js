@@ -339,13 +339,50 @@ export const mainOff = (d) => !!d && Array.isArray(d.execs) && d.execs.length > 
   && !d.execs.some((x) => x.bot === "paper");
 const MAIN_OFF_KO = "10/29부터 따라가는 실거래가 없어요 · 가운데 그림은 그 봇의 매매법이에요 · 지금 거래는 아래 계좌 카드의 봇들이 해요";
 /**
+ * Owners 10-30 ("왜이래 이거"): while no executor follows the 추세판단 봇 the centre is the bots that trade now: each
+ * executor's account with the bot it follows (the summary's accounts) and each mix bot on 한눈에 ({bot, account, live:
+ * its /mix answer's live bot, failed}): [{bot, account, ko, tone: ok | warn | wait, symbol, side, pos}].
+ */
+export function liveBots(d, mixes) {
+  const out = [];
+  const accts = (d && d.accts) || [];
+  for (const id of execIds(d)) {
+    const a = by(accts, id);
+    if (!a) continue;
+    const ko = a.state !== "ok" ? (a.state === "error" ? "못 읽음" : "기록 전") : a.halted ? "멈춤" : a.stale ? "기록 멈춤" : "돌아가는 중";
+    const ps = a.state === "ok" && a.position ? a.position : null;
+    out.push({bot: a.follows_ko || botOfExec(d, ((d && d.execs) || []).find((x) => x && x.id === id)) || "실행기", account: a.name_ko || id, ko,
+      tone: ko === "돌아가는 중" ? "ok" : "warn", symbol: ps ? ps.symbol : null, side: ps ? ps.side : null,
+      pos: ps ? `${fmt.coin(ps.symbol)} ${fmt.sideKo(ps.side)}` : null});
+  }
+  for (const m of mixes || []) {
+    const led = mixLed(m.live, !!m.failed, {ko: m.bot, unit: m.unit});
+    const ps = m.live && m.live.position && m.live.position.state === "ok" ? m.live.position : null;
+    out.push({bot: m.bot, account: m.account, ko: led.ko, tone: led.id === "run" ? "ok" : led.id === "wait" ? "wait" : "warn",
+      symbol: ps ? ps.symbol : null, side: ps ? ps.side : null, pos: ps ? `${fmt.coin(ps.symbol)} ${fmt.sideKo(ps.side)}` : null});
+  }
+  return out;
+}
+/** The centre's words for the bots of liveBots(): {tone, head, sub}. */
+export function liveBotsWords(bots) {
+  const xs = bots || [];
+  if (!xs.length) return {tone: "wait", head: "실거래 봇 불러오는 중", sub: null};
+  const run = xs.filter((b) => b.tone === "ok").length, held = xs.filter((b) => b.pos);
+  const wait = xs.some((b) => b.tone === "wait");
+  return {tone: run === xs.length ? "ok" : wait && !xs.some((b) => b.tone === "warn") ? "wait" : "warn",
+    head: `실거래 봇 ${fmt.int(run)}/${fmt.int(xs.length)}개 돌아가는 중`,
+    sub: held.length ? `포지션: ${held.map((b) => `${b.pos} (${b.bot})`).join(" · ")}` : "지금 열린 포지션 없음 · 봇마다 자기 코인을 봉 마감마다 살펴요"};
+}
+/**
  * What the centre says while no position is open: {tone: ok | warn | bad | wait, head, sub, until, on (the ring turns)}. The
  * ring turns only while the paper bot's record is fresh (it is really looking at every bar); a pause (weekend, a US
  * release) says why and until when; both executors halted says that no real money follows.
  */
-export function idleWords(d, cal) {
+export function idleWords(d, cal, bots = null) {
   if (!d) return {tone: "wait", head: "불러오는 중", sub: null, until: null, on: false};
   const p = d.paper || {};
+  // owners 10-30: no executor follows the 추세판단 봇: the centre speaks of the bots that trade now (liveBots)
+  if (mainOff(d) && bots) { const w = liveBotsWords(bots); return {...w, until: null, on: w.tone === "ok"}; }
   // owners 10-29: the 추세판단 봇 switched off (no executor follows it): its stopped record is no alarm
   if (mainOff(d) && (p.state !== "ok" || p.stale)) return {tone: "wait", head: "추세판단 봇 꺼 둠", sub: MAIN_OFF_KO, until: null, on: false};
   if (p.state !== "ok") {
@@ -873,7 +910,8 @@ function orbView(ctx) {
       el.dataset.spin = o.spin ? "1" : "";
       for (const [sym, lb] of Object.entries(labels)) lb.classList.toggle("hot", sym === o.hot);
       const nS = groups.length, nSet = groups.reduce((a, g) => a + (Number(g.settings) || 0), 0);
-      legend.textContent = real ? `고리 = 매매법 ${fmt.int(nS)}개${nSet ? ` · 설정 ${fmt.int(nSet)}개` : ""} (점 묶음 하나가 매매법 하나) · 금색일수록 이번 주 신호 많음${o.holdG >= 0 ? " · 주황 = 지금 포지션" : ""}${o.spin ? "" : " · 페이퍼 기록이 새로 오지 않아 멈춰 있어요"}`
+      legend.textContent = x.bots ? (real ? `고리 = 지금 실거래 봇 ${fmt.int(nS)}개 (점 묶음 하나가 봇 하나)${o.holdG >= 0 ? " · 주황 = 포지션 든 봇" : ""} · 꺼 둔 추세판단 봇은 봇별 맨 끝에 기록만 남아 있어요` : "실거래 봇을 불러오는 중")
+        : real ? `고리 = 매매법 ${fmt.int(nS)}개${nSet ? ` · 설정 ${fmt.int(nSet)}개` : ""} (점 묶음 하나가 매매법 하나) · 금색일수록 이번 주 신호 많음${o.holdG >= 0 ? " · 주황 = 지금 포지션" : ""}${o.spin ? "" : " · 페이퍼 기록이 새로 오지 않아 멈춰 있어요"}`
         : "매매법 정보를 불러오는 중";
       const resized = layout();
       const bsig = `${o.hot}|${o.spin}`;
@@ -1119,6 +1157,9 @@ export function hqView(ctx, hub) {
   };
   /** The 친구 30분 봇's live bot (the old WOO X Pro 2 executor's card says it took that account). */
   const mixBot = () => liveOf(MX);
+  /** The bots trading now (liveBots), for the centre while the 추세판단 봇 is off. */
+  const botsNow = () => liveBots(st.d, MIXES.filter((m) => shownMix(m)).map((m) => ({bot: m.bot, account: m.account, unit: m.unit,
+    live: liveOf(m), failed: !!m.err && !liveOf(m)})));
   /** Is a mix bot's card on this server's 한눈에 (the friend bot's always, the 바이비트 봇's once it took the slot)? */
   const shownMix = (m) => !m.replaces || !!(st.d && (st.d.replaced || []).some((x) => x && x.id === m.replaces));
   async function loadMix(m) {
@@ -1133,7 +1174,7 @@ export function hqView(ctx, hub) {
       m.err = e;
     } finally { m.busy = false; }
     setMix(m);
-    if (st.d && m.replaces) drawCenter();               // its row in the centre's real-money strip
+    if (st.d && (m.replaces || mainOff(st.d))) drawCenter();   // its row in the centre's real-money strip / the bots' ring
   }
   const setMixes = () => { for (const m of MIXES) setMix(m); };
   function setMix(m) {
@@ -1442,7 +1483,7 @@ export function hqView(ctx, hub) {
       if (n.pause_until) { until = n.pause_until; untilKo = "다시 진입 가능까지"; }
       else if (n.next_pause && n.next_pause.from) { until = n.next_pause.from; untilKo = `다음 쉬는 시간(${n.next_pause.ko || "쉼"})까지`; }
     } else if (fCal.d && fCal.d.now && fCal.d.now.next) { until = fCal.d.now.next.from; untilKo = `다음 쉬는 시간(${fCal.d.now.next.ko || "쉼"})까지`; }
-    if (mainOff(d)) { tone = "wait"; head = "추세판단 봇 꺼 둠 · 지금 실거래는 아래 계좌 카드의 봇들이 해요"; }
+    if (mainOff(d)) { const w = liveBotsWords(botsNow()); tone = w.tone === "ok" ? "ok" : "wait"; head = `${w.head} · ${w.sub || ""}`.replace(/ · $/, ""); }
     verdict.dataset.tone = tone;
     vHead.textContent = head;
     vSub.replaceChildren(...(until ? [`${untilKo} `, cd(until)] : []));
@@ -1496,7 +1537,11 @@ export function hqView(ctx, hub) {
     const rk = fRank.d, d = st.d;
     const ls = fNow.d && fNow.d.last_signal;
     const w0 = fNow.d && fNow.d.pending && fNow.d.pending.state === "ok" && (fNow.d.pending.waits || [])[0];
-    orb.set({groups: rk && rk.combo && rk.combo.state === "ok" ? tilesOf(rk).map((t) => ({code: t.code, settings: t.settings, lvl: t.lvl})) : [],
+    if (mainOff(d)) {                                   // owners 10-30: one arc per bot trading now, orange = holding
+      const bots = botsNow(), held = bots.find((b) => b.symbol);
+      orb.set({groups: bots.map((b) => ({code: b.bot, settings: 1, lvl: null})), hold: held ? held.bot : null,
+        hot: lead ? lead.p.symbol : held ? held.symbol : null, spin: bots.some((b) => b.tone === "ok"), compact: !!lead, bots: true});
+    } else orb.set({groups: rk && rk.combo && rk.combo.state === "ok" ? tilesOf(rk).map((t) => ({code: t.code, settings: t.settings, lvl: t.lvl})) : [],
       hold: lead && lead.kind === "paper" ? lead.p.strategy_id : null, hot: lead ? lead.p.symbol : w0 ? w0.symbol : ls ? ls.symbol : null,
       spin: !!(d && d.paper && d.paper.state === "ok" && !d.paper.stale), compact: !!lead});
     if (lead) drawGauge(lead, lives);
@@ -1592,7 +1637,8 @@ export function hqView(ctx, hub) {
   }
 
   function drawIdle() {
-    const w = idleWords(st.d, fCal.d);
+    const off0 = mainOff(st.d), bots = off0 ? botsNow() : null;
+    const w = idleWords(st.d, fCal.d, bots);
     center.dataset.tone = w.tone;
     iHead.textContent = w.head;
     iHead.dataset.tone = w.tone;
@@ -1601,11 +1647,14 @@ export function hqView(ctx, hub) {
     iSub.textContent = w.sub || (n && !n.ready && n.head_ko ? n.head_ko : "");
     const off = mainOff(st.d);
     const ws = (!off && n && n.pending && n.pending.state === "ok" && n.pending.waits) || [];
-    put(iWait, ws.length ? [h("span", {class: "k"}, `⏳ 진입 대기 ${fmt.int(ws.length)}개`), ws.slice(0, 2).map((w) => `${fmt.coin(w.symbol)} ${fmt.sideKo(w.side)} · ${waitWords(w).move || "기준가 못 읽음"}`).join(" / ")] : null);
+    iWait.classList.toggle("bots", !!(off && bots && bots.length));
+    put(iWait, off && bots && bots.length ? bots.map((b) => h("span", {class: ["lbh-ibot", b.tone]}, h("b", null, b.bot), ` ${b.account} · ${b.ko}${b.pos ? ` · ${b.pos}` : ""}`))
+      : ws.length ? [h("span", {class: "k"}, `⏳ 진입 대기 ${fmt.int(ws.length)}개`), ws.slice(0, 2).map((w) => `${fmt.coin(w.symbol)} ${fmt.sideKo(w.side)} · ${waitWords(w).move || "기준가 못 읽음"}`).join(" / ")] : null);
     const ls = !off && n && n.last_signal;
     put(iSig, ls ? [h("span", {class: "k"}, "마지막 신호"), `${fmt.coin(ls.symbol)} ${fmt.sideKo(ls.side)} · ${stratName(ls.strategy)} ${fmt.tfKo(ls.tf)} · ${ls.ko || ""} · ${ageKo(ls.t)}`] : null);
     const rk = fRank.d;
-    iScope.textContent = rk && rk.n_strategies ? `매매법 ${fmt.int(rk.n_strategies)}개 · 설정 ${fmt.int(rk.n_settings)}개가 코인 6개를 봉마다 살펴요` : "코인 6개를 봉마다 살펴요";
+    iScope.textContent = off ? "가운데 고리는 지금 실거래 봇들이에요 · 봇마다 잔고·최근 거래는 아래 계좌 카드에서"
+      : rk && rk.n_strategies ? `매매법 ${fmt.int(rk.n_strategies)}개 · 설정 ${fmt.int(rk.n_settings)}개가 코인 6개를 봉마다 살펴요` : "코인 6개를 봉마다 살펴요";
   }
 
   // ⏳ 진입 대기: a new wait (after the first look) lights its row once

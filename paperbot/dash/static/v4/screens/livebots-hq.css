@@ -276,6 +276,10 @@
 .lbh-isig { color: var(--ink); font-size: var(--t-xs); }
 .lbh-iwait { margin: 0; color: var(--warn); font-size: var(--t-sm); font-weight: 700; overflow-wrap: anywhere; }
 .lbh-iwait:empty { display: none; }
+/* owners 10-30: the bots trading now, one line each, while the 추세판단 봇 is off (liveBots) */
+.lbh-iwait.bots { display: grid; gap: 2px; color: var(--ink-2); font-weight: 500; }
+.lbh-ibot > b { color: var(--ink); font-weight: 700; }
+.lbh-ibot.warn { color: var(--warn); }
 .lbh-iscope { color: var(--muted); font: 600 var(--t-2xs)/1.5 var(--f-term); }
 .lbh .k { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; background: var(--surface-3); color: var(--ink-2); font: 700 var(--t-2xs)/1.6 var(--f-body); }
 

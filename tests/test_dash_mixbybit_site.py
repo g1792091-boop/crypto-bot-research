@@ -301,6 +301,9 @@ def test_hq_shows_the_bybit_bot_once_it_took_the_slot(site, tmp_path):
     # the 추세판단 봇's 40-trade bar while an executor follows it (here WOO X Pro still does); no one: one line instead
     assert (out["before"]["bar"], out["before"]["retired"]) == (True, False) and (out["after"]["bar"], out["after"]["retired"]) == (True, False)
     assert (out["moved"]["bar"], out["moved"]["retired"]) == (False, True)
+    # owners 10-30: no executor follows the 추세판단 봇 -> the centre is the bots trading now (tests/test_rules1030.py)
+    mv = out["moved"]["text"]
+    assert "실거래 봇 " in mv and "개 돌아가는 중" in mv and "고리 = 지금 실거래 봇" in mv and "추세판단 봇 꺼 둠" not in mv
     t = out["after"]["text"]
     assert out["after"]["mixb"] == 1 and out["n1"] >= 1
     for word in ("바이비트 진짜 돈 봇 바이비트 봇 스스로 매매 · 페이퍼를 따라가지 않음", "최근 거래 · 0승 1패", "바이비트 봇 관제 · 성적 →",

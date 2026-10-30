@@ -584,3 +584,30 @@ def test_the_friend_trend_board_shows_the_friend_bot_and_the_roc_reads(tmp_path)
     for w in ("ROC 30분 (레인지 봇) 롱 신호 보라선 38.2", "30분 (친구 30분 봇) 상승", "OBV 진한 초록", "롱 신호",
               "친구 30분 봇 (실거래 봇)", "ROC 30분(레인지 봇, 10-30부터)"):
         assert w in a, (w, a)
+
+
+def test_the_start_screen_centre_is_the_bots_trading_now(tmp_path):
+    """한눈에 (owners 10-30 photo: the centre still the switched-off 추세판단 봇): once no executor follows it, the centre's
+    ring and words are the bots trading now (livebots-hq.js liveBots / liveBotsWords / idleWords with the bots)."""
+    from tests import test_dash_livev39 as TV
+    from tests.test_dash_live_range import SCREENS
+    out = TV._node(tmp_path, f"""
+    const HQ = await import('file://{SCREENS}/livebots-hq.js');
+    const d = {{paper: {{state: 'ok', stale: true}}, execs: [{{id: 'mexc', bot: 'range', follows_ko: '레인지 봇'}}, {{id: 'deepcoin', bot: 'paper2'}}],
+      accts: [{{id: 'mexc', name_ko: 'WOO X Pro', follows_ko: '레인지 봇', state: 'ok', stale: false, halted: false, position: null}},
+              {{id: 'deepcoin', name_ko: '딥코인', follows_ko: 'VWAP 개선판', state: 'ok', stale: false, position: {{symbol: 'ETHUSDT', side: -1}}}}]}};
+    const mixes = [{{bot: '친구 30분 봇', account: 'WOO X Pro 2', unit: 'paperbot-mixchop', live: {{status: {{state: 'running'}}, position: null}}}},
+                   {{bot: '바이비트 봇', account: '바이비트', unit: 'paperbot-mixbybit', live: {{status: {{state: 'off'}}}}}}];
+    const bots = HQ.liveBots(d, mixes);
+    const allOn = HQ.liveBots(d, [mixes[0]]);
+    console.log(JSON.stringify({{bots, w: HQ.liveBotsWords(bots), on: HQ.liveBotsWords(allOn), idle: HQ.idleWords(d, null, allOn),
+      none: HQ.liveBotsWords([]), old: HQ.idleWords(d, null)}}));""")
+    bots = out["bots"]
+    assert [(b["bot"], b["account"], b["ko"]) for b in bots] == [("레인지 봇", "WOO X Pro", "돌아가는 중"), ("VWAP 개선판", "딥코인", "돌아가는 중"),
+                                                               ("친구 30분 봇", "WOO X Pro 2", "돌아가는 중"), ("바이비트 봇", "바이비트", "꺼짐")]
+    assert bots[1]["pos"] == "ETH 숏" and bots[1]["symbol"] == "ETHUSDT" and bots[0]["pos"] is None
+    assert out["w"] == {"tone": "warn", "head": "실거래 봇 3/4개 돌아가는 중", "sub": "포지션: ETH 숏 (VWAP 개선판)"}
+    assert out["on"]["tone"] == "ok" and out["on"]["head"] == "실거래 봇 3/3개 돌아가는 중"
+    assert out["idle"]["head"] == "실거래 봇 3/3개 돌아가는 중" and out["idle"]["on"] is True
+    assert out["none"]["head"] == "실거래 봇 불러오는 중"
+    assert out["old"]["head"] == "추세판단 봇 꺼 둠"                   # without the bots (an old caller): as before
