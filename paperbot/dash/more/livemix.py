@@ -860,7 +860,7 @@ def bot_perf(bid: str, bp: dict, now: int) -> dict:
 
 
 def live_name(p: dict, prof: Profile) -> str:
-    """The bot's name: its live config's ``name`` (owners 10-30: the friend bot is '친구 15분 봇'), else the profile's."""
+    """The bot's name: its live config's ``name`` (owners 10-30: the friend bot is '친구 30분 봇'), else the profile's."""
     conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
     cfg = conf.get("cfg")
     return getattr(cfg, "name", None) or prof.name

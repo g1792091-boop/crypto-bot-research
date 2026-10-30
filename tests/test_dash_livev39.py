@@ -267,13 +267,13 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     # tests/test_dash_mixbybit_site.py)
     assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]]
     assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit"]      # the rest as it was
-    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "V3.9 투비트", "추세판단 봇"]]
-    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 15분 봇", "bots", "livebots"],
+    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트", "추세판단 봇"]]
+    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"],
                               ["V3.9 투비트", "bots", "livebots"]]
     assert out["keys"][:7] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend"] and out["land"] == "hq"
     assert out["parse"]["name"] == "v39" and out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
-    for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 15분 봇"), ("v39", "V3.9 투비트")):
+    for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트")):
         assert f'{{id: "{t}", label: "{label}"' in lb
     assert 'import {v39View} from "./livebots-v39.js";' in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
@@ -321,7 +321,7 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     assert "딥코인" not in head(r["trend"]["text"]) and "투비트" not in head(r["trend"]["text"])
     assert "추세판단 봇 페이퍼(연습)와 그 봇을 따라가는 바이비트 · WOO X Pro 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요" in r["trend"]["text"]
     assert "딥코인 $77.70" in head(r["vwap"]["text"]) and "바이비트" not in head(r["vwap"]["text"])
-    assert "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요" in r["mix"]["text"] and "바이비트" not in head(r["mix"]["text"])
+    assert "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요" in r["mix"]["text"] and "바이비트" not in head(r["mix"]["text"])
     assert "투비트 $47.60" in head(r["v39"]["text"]) and "바이비트" not in head(r["v39"]["text"])
     assert "투비트 실행기는 아직 꺼져 있어요" in r["v39off"]["text"]
     assert "바이비트 $101.50" in r["old"]["text"] and "딥코인 $77.70" in r["old"]["text"]          # the old screens as they were

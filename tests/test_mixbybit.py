@@ -229,9 +229,9 @@ def test_the_deploy_configs():
     assert "/exec/" in live.state and not paper.telegram
     words = M.plan_words(live)
     assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 50선" in words and "손절 ATR 3배" in words
-    # the friend bot's own config: WOO X Pro, its 10-30 rules on 15m bars (tests/test_rules1030.py)
+    # the friend bot's own config: WOO X Pro, this bot's first rule on 30m bars (owners 10-30, tests/test_rules1030.py)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "wooxpro" and old.name == "친구 15분 봇" and old.rules == ("roc50", "obv50") and old.tf == "15m"
+    assert old.exchange == "wooxpro" and old.name == "친구 30분 봇" and old.rules == ("obv",) and old.tf == "30m"
 
 
 def test_wrong_configs_are_refused(tmp_path):

@@ -34,8 +34,8 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 /** Each mix bot's screens: its answers, its account and the words that differ (the friend bot's: the tabs as they were). */
 export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "WOO X Pro 2", exchange: "WOO X Pro", key: "",
   kick: "진짜 돈 · WOO X Pro 두 번째 계정",
-  wait: "15분봉이 끝날 때 하늘 선(롱)·보라 선(숏)이고 찹존·슈퍼트렌드 중 하나 이상이 횡보일 때(같은 추세 2개 이상이면 금지), " +
-    "ROC 막대나 OBV 히스토그램이 연한색→진한색이 되면(롱은 50선 아래, 숏은 50선 위) 시장가로 들어가요 (한 번에 1포지션).",
+  wait: "30분봉이 끝날 때 친구 추세(하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드 4표 중 같은 쪽 2표 이상, 횡보 2표 이상이면 금지) 쪽으로 " +
+    "OBV 히스토그램이 연한색→진한색이 되면 시장가로 들어가요 (한 번에 1포지션).",
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
   exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정",

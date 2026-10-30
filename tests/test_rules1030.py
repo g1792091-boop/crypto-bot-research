@@ -4,9 +4,11 @@
   history up to a bar equals the pane on the whole history at that bar; 1,500 bars read the same last values as a longer
   history; the swing rule on every combination of its three votes (the owners' cases: chop sideways + supertrend down +
   the sky line = long);
-- 바이비트 봇 (paperbot/mixchop.py, rule "obv50") and 친구 15분 봇 (rules "roc50", "obv50" on 15m bars, the swing trend):
-  the rules enter only on their side of 50 with their trend, the stop is ATR14 of the signal bar x 3; the deploy configs;
-  a 15m close in the bot's loop; the morning replay (paperbot/mixcheck.py) recomputes 15m closes;
+- 바이비트 봇 (paperbot/mixchop.py, rule "obv50") and the friend bot's 15m form (rules "roc50", "obv50" on 15m bars, the
+  swing trend): the rules enter only on their side of 50 with their trend, the stop is ATR14 of the signal bar x 3; a 15m
+  close in the bot's loop; the morning replay (paperbot/mixcheck.py) recomputes 15m closes. Later on 10-30 the owners
+  put the friend bot (WOO X Pro 2) on the 바이비트 봇's first rule instead ("역추세 안되겠다 … 바이비트 원래 obv 매매법만
+  적용", 30m bars): 친구 30분 봇, rule "obv" with the four votes; the 15m form stays a config away;
 - 레인지 봇 (paperbot/rangebot.py): the ROC entry on 30m closes (the 30m four-vote trend, the purple line's side of 50,
   ATR x 3, the liquidation room, one position with the range entries), the ladder net ROE 10 -> 8 then 5 instead of the
   fixed +10 %; the read equals friendtrend's on the same 5m history; a restart keeps a queued ROC entry; the deploy
@@ -166,19 +168,20 @@ def test_obv50_with_the_four_votes_on_30m(monkeypatch):
     assert ev["side"] == 0 and ev["why"] == "OBV 진한 빨강인데 50선 아래(OBV 40.0)"
 
 
-def test_the_friend_15m_deploy_configs_and_wrong_ones(tmp_path):
+def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
-        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 15분 봇"
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("15m", "swing", ("roc50", "obv50"), 3.0)
-        assert cfg.tf_ms == M.MIN15 and cfg.tf_ko == "15분"
+        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
+        # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes) on 30m bars, nothing else
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obv",), 3.0)
+        assert cfg.tf_ms == M.MIN30 and cfg.tf_ko == "30분"
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
     base = json.loads((DEPLOY / "mixchop.live.json").read_text(encoding="utf-8"))
     bad = {"tf": ({"tf": "5m"}, "tf"), "trend": ({"trend": "two"}, "trend"),
-           "mix on 15m": ({"rules": ["mix"]}, "30m")}
+           "mix on 15m": ({"rules": ["mix"], "tf": "15m"}, "30m")}
     for what, (over, words) in bad.items():
         p = tmp_path / f"{what}.json"
         p.write_text(json.dumps({**base, **over}), encoding="utf-8")
@@ -189,7 +192,8 @@ def test_the_friend_15m_deploy_configs_and_wrong_ones(tmp_path):
 def test_a_15m_close_in_the_bots_loop(tmp_path, monkeypatch):
     d = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
     d.update(state=str(tmp_path / "state.json"), log=str(tmp_path / "log.jsonl"), kill_file=str(tmp_path / "STOP"),
-             own_stop_file=str(tmp_path / "OWN.STOP"), telegram=False, start_equity=100)
+             own_stop_file=str(tmp_path / "OWN.STOP"), telegram=False, start_equity=100,
+             tf="15m", trend="swing", rules=["roc50", "obv50"], name="친구 15분 봇")        # the 15m form
     p = tmp_path / "cfg.json"
     p.write_text(json.dumps(d), encoding="utf-8")
     cfg = M.load_config(str(p))
@@ -221,6 +225,7 @@ def test_a_15m_close_in_the_bots_loop(tmp_path, monkeypatch):
 def test_the_morning_replay_recomputes_15m_closes():
     cfg = M.load_config(str(DEPLOY / "mixchop.paper.json"))
     cfg.coins = cfg.coins[:1]                              # SOL
+    cfg.tf, cfg.trend, cfg.rules = "15m", "swing", ("roc50", "obv50")      # the 15m form
     rng = np.random.default_rng(31)
     n = 2000
     day0 = T0 - 24 * HOUR
@@ -493,3 +498,21 @@ def test_the_range_screen_shows_a_roc_position_and_its_ladder(tmp_path, monkeypa
     assert "계단 순ROE 10%에서 8% 잠금, 그 뒤 5%씩 · 지금 순ROE +8% 잠금" in a
     assert "진입 신호" in a and "ROC 30분봉" in a and "보라선 38.2 · 손절 30분 ATR × 3 (되돌림 안 기다림)" in a
     assert not BAD.search(a), BAD.search(a)
+
+
+
+def test_the_friend_bot_on_the_bybit_bots_first_rule(tmp_path, monkeypatch):
+    """Owners 10-30, later: WOO X Pro 2 trades the 바이비트 봇's first rule (OBV light -> dark with the four-vote trend,
+    30m bars), its coins, leverage, stop, ladder and margin kept; the check and the start words say so."""
+    cfg = M.load_config(str(DEPLOY / "mixchop.live.json"))
+    b30 = frame(400, vol=0.002)
+    co = cfg.coins[0]
+    monkeypatch.setattr(FT, "obv_state", lambda *a: {"turn": 1, "cs": 1, "dark": True})
+    monkeypatch.setattr(FT, "last_trend", lambda *a: _votes(t=1, line=1, ema=1, chop=0, st=1))
+    ev = M.Bot.judge("obv", co, b30, b30.iloc[0:0], T0, cfg.tf_ms, cfg.trend)
+    assert ev["side"] == 1 and ev["rule"] == "obv" and "tf" not in ev and "trend_mode" not in ev
+    # the swing reading would have refused it (two of the same trend): the four votes take it
+    assert FT.swing_side(_votes(t=1, line=1, ema=1, chop=0, st=1)) == 0
+    monkeypatch.setattr(FT, "last_trend", lambda *a: _votes(t=0, line=1, ema=1, chop=0, st=0))
+    assert M.Bot.judge("obv", co, b30, b30.iloc[0:0], T0, cfg.tf_ms, cfg.trend)["side"] == 0
+    assert "OBV 진한색" in M.plan_words(cfg) and "ROC" not in M.plan_words(cfg)

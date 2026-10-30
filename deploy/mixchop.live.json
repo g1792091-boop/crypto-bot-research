@@ -19,12 +19,11 @@
   "step": 5
  },
  "ladder_every_s": 60,
- "name": "친구 15분 봇",
- "tf": "15m",
- "trend": "swing",
+ "name": "친구 30분 봇",
+ "tf": "30m",
+ "trend": "four",
  "rules": [
-  "roc50",
-  "obv50"
+  "obv"
  ],
  "stop_atr": 3,
  "coins": {
