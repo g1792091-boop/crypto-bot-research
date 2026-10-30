@@ -1007,10 +1007,13 @@ def range_stops(trades: list, cfg: dict, rt: float, rule_db: Optional[str], now:
     reached it yet is 아직 모름, a stop without bars says so (never a guess)."""
     from . import livepos as P
     tp = L._f((cfg or {}).get("take_profit_roe"))
+    lad = (cfg or {}).get("ladder") if isinstance((cfg or {}).get("ladder"), dict) else {}
+    if tp is None and L._f(lad.get("first_lock")) is not None and L._f(lad.get("trigger_gap")) is not None:
+        tp = L._f(lad["first_lock"]) + L._f(lad["trigger_gap"])    # owners 10-30: the ladder's first lock arms there
     stops = [t for t in trades if t.get("exit_reason") == "SL" and t.get("exit_time") is not None]
     title, q = "손절 해부: 손절이 가까웠나, 방향이 틀렸나", "손절로 끝난 거래가 그 뒤 24시간 안에 익절 자리까지 갔나 (손절이 가까웠음), 그대로 갔나 (방향이 틀림)?"
     if tp is None:
-        return item("stops", title, q, state="missing", lead_ko="설정에 고정 익절이 없어 익절 자리를 몰라요", tone="thin")
+        return item("stops", title, q, state="missing", lead_ko="설정에 고정 익절도 계단도 없어 익절 자리를 몰라요", tone="thin")
     conn, bst = P.open_bars(rule_db) if rule_db else (None, {"state": "missing", "reason_ko": "규칙봇 1분봉 파일 경로가 없어요"})
     rows = []
     try:

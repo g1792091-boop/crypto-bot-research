@@ -516,3 +516,71 @@ def test_the_friend_bot_on_the_bybit_bots_first_rule(tmp_path, monkeypatch):
     monkeypatch.setattr(FT, "last_trend", lambda *a: _votes(t=0, line=1, ema=1, chop=0, st=0))
     assert M.Bot.judge("obv", co, b30, b30.iloc[0:0], T0, cfg.tf_ms, cfg.trend)["side"] == 0
     assert "OBV 진한색" in M.plan_words(cfg) and "ROC" not in M.plan_words(cfg)
+
+
+def test_the_site_explains_a_roc_entry_and_reads_the_ladder():
+    """왜 들어갔나 (livewhy.range_checks) for a ROC entry; 목표 연구's 손절 해부 (livegoalres.range_stops) with the ladder;
+    the 레인지 봇 screen's ROC chips and each signal's entry kind (liverange)."""
+    from paperbot.dash.more import livegoalres as G
+    from paperbot.dash.more import liverange as R
+    from paperbot.dash.more import livewhy as W
+    cfg = json.loads((DEPLOY / "combo.range.json").read_text(encoding="utf-8"))
+    info = {"roc": True, "side": 1, "close": 60000.0, "atr": 100.0, "k": 3.0, "t0": TR.T0 + 30 * MIN, "osc": 38.2, "turn": 1,
+            "friend": TR.friend_votes(1)}
+    out = {x["id"]: x for x in W.range_checks(cfg, TR.T0 + 31 * MIN, 1, "BTCUSDT", 40, info, 0.0014)}
+    assert out["friend"]["ok"] is True and out["friend"]["ko"].startswith("추세 확인: 친구 추세지표 30분 상승 (")
+    assert out["roc"]["ok"] is True and "보라선 38.2 (50 아래이어야 함)" in out["roc"]["ko"]
+    assert out["liq"]["ok"] is True and out["liq"]["ko"] == "강제청산 여유: 손절 30분 ATR × 3 = 0.50% → 2.00% 안쪽 (40배)"
+    assert out["entry"]["ko"].startswith("되돌림 안 기다림") and "pull" not in out
+    assert out["tp"]["ko"] == "익절은 계단 순ROE 10%에서 8% 잠금, 그 뒤 5%씩 (고정 익절 없음)"
+    # the 10-26 config still says its fixed take-profit; a range entry still shows its pullback
+    old = {**cfg, "ladder": None, "take_profit_roe": 0.1}
+    pull = {"side": 1, "close": 100.0, "atr": 1.0, "k": 0.2, "level": 99.8, "t0": TR.T0, "until": TR.T0 + HOUR,
+            "touch": TR.T0 + 10 * MIN, "entry_t": TR.T0 + 15 * MIN, "friend": TR.friend_votes(1)}
+    o2 = {x["id"]: x for x in W.range_checks(old, TR.T0 + 15 * MIN, 1, "SOLUSDT", 30, pull, 0.0014)}
+    assert o2["tp"]["ko"].startswith("익절은 순ROE +10% 고정") and o2["pull"]["ok"] is True
+    assert o2["friend"]["ko"].startswith("추세 확인: 친구 추세지표 1시간 상승")
+    # 손절 해부 reads the ladder's first lock (net ROE 10 %) as the take-profit side
+    it = G.range_stops([], cfg, 0.0014, None, TR.T0)
+    assert it["state"] == "ok" and it["lead_ko"] == "손절로 끝난 거래가 아직 없어요"     # (not 'no take-profit level')
+    it2 = G.range_stops([], {**cfg, "ladder": None, "take_profit_roe": None}, 0.0014, None, TR.T0)
+    assert it2["state"] == "missing" and it2["lead_ko"] == "설정에 고정 익절도 계단도 없어 익절 자리를 몰라요"
+    # the screen: each coin's ROC read, and which entry a signal row is
+    snap = {"range": (TR.T0, {"supertrend": {}, "friend": {}, "busy": "", "rules": [],
+                              "roc": {"BTCUSDT": {"at": B, "turn": 1, "cs": 1, "dark": True, "osc": 38.2, "side": 1, "trend": 1},
+                                      "ETHUSDT": {"at": B, "turn": 0, "cs": -1, "dark": False, "osc": 55.0, "side": 0, "trend": 0},
+                                      "SOLUSDT": {"at": B, "error": "SOL 5분봉 기록 없음"}}})}
+    sv = R.supertrend_of(snap, TR.T0)
+    assert [(x["coin"], x["side"], x.get("ko")) for x in sv["roc"]] == [("BTC", 1, "롱 신호"), ("ETH", 0, "빨강 연함"),
+                                                                      ("SOL", None, None)]
+    assert sv["roc"][0]["osc_ko"] == "보라선 38.2" and sv["roc"][2]["error_ko"] == "SOL 5분봉 기록 없음"
+    rows = R.signals_view({"signals": [(1, B, "30m", "ROC50-30m", "BTCUSDT", 1, "FILTERED", json.dumps({"why": "한 신호씩: …"})),
+                                       (2, H, "1h", "ds-F7_RF_TRIPLE-1h-1", "ETHUSDT", -1, "WAITING", json.dumps({"why": "되돌림 기다림: …"}))],
+                           "outcomes": []}, TR.T0 + 2 * HOUR)["rows"]
+    assert [r["entry_ko"] for r in rows] == ["ROC 30분", "레인지 1시간"]
+
+
+def test_the_friend_trend_board_shows_the_friend_bot_and_the_roc_reads(tmp_path):
+    """친구 추세판 (screens/livebots-ftrend.js): per coin the 레인지 봇's ROC 30분 read and the 친구 30분 봇's own 30m read."""
+    from paperbot.dash.more import liveftrend as FTR
+    from tests.test_dash_live_range import SCREENS, _node
+    ev = {"symbol": "SOLUSDT", "close_ms": T0, "side": 1, "why": "", "rule": "obv", "close": 150.0, "turn": 1, "obv_cs": 1,
+          "obv_dark": True, "trend": 1, "votes": {"line": 1, "ema": 1, "chop": 1, "st": 0}}
+    f30 = FTR.m30_row(M.board_row([ev], T0), T0 + MIN)
+    roc = FTR.roc_row({"symbol": "SOLUSDT", "coin": "SOL", "side": 1, "ko": "롱 신호", "osc": 38.2, "osc_ko": "보라선 38.2", "at": T0})
+    assert FTR.roc_row(None) is None and FTR.roc_row({"side": None, "error_ko": "못 읽음"})["state"] == "error"
+    d = {"now_ms": T0 + MIN, "m30": {"state": "off", "ko": "바이비트 봇이 아직 꺼져 있어요"}, "h1": {"state": "none", "ko": "-"},
+         "f30": {"state": "ok", "bot_ko": "실거래 봇", "last_close_ms": T0, "stale": False},
+         "roc": {"state": "ok", "at": T0, "stale": False}, "agree": [], "rules_ko": FTR.RULES_KO,
+         "coins": [{"symbol": "SOLUSDT", "coin": "SOL", "in30": True, "m30": FTR.m30_row(None, T0), "inf": True, "f30": f30,
+                    "h1": {"state": "none"}, "roc": roc}]}
+    out = _node(tmp_path, f"""
+    const F = await import('file://{SCREENS}/livebots-ftrend.js');
+    const ctx = {{params: {{query: {{}}}}, alive: () => true, track() {{}}, listen() {{}}, on() {{}}, watch() {{}}, href: (n) => '#/' + n,
+      every() {{}}, api: async () => JSON.parse(JSON.stringify(D_d))}};
+    const v = F.ftrendView(ctx); await tick(); await tick();
+    console.log(JSON.stringify({{a: texts(v.el)}}));""", d=d)
+    a = out["a"]
+    for w in ("ROC 30분 (레인지 봇) 롱 신호 보라선 38.2", "30분 (친구 30분 봇) 상승", "OBV 진한 초록", "롱 신호",
+              "친구 30분 봇 (실거래 봇)", "ROC 30분(레인지 봇, 10-30부터)"):
+        assert w in a, (w, a)

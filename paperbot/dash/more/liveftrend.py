@@ -11,6 +11,9 @@
           twin's (said so).
     1시간 the 레인지 봇 (paperbot/rangebot.py, docs/range-bot-ko.md) on its last closed hour: its ``range`` snapshot's
           ``friend`` (dash/more/liverange.supertrend_of), once its config has ``friend_tf``.
+    owners 10-30: 친구 30분 봇 (WOO X Pro 2, the same program, rule "obv"): its own board row of the last 30-minute close
+          (``f30``, its coins); the 레인지 봇's ROC entry (``roc``): each coin's ROC read at its last 30-minute close
+          (liverange.supertrend_of ``roc``).
 
 Read-only: the bots' own files, never a computation of our own (what is shown is what the bots decided on). HONESTY: a bot
 that is off, stopped or has not written its row yet says so; an old row says how old; never a guessed vote.
@@ -37,6 +40,8 @@ RULES_KO = [
     "연한 빨강→진한 빨강이고 50 위면 숏 · 추세와 같은 쪽일 때만",
     "OBV 진한색 · 스톡RSI 50선: 10-29의 두 규칙 (10-30부터 바이비트 봇은 OBV 50선 하나)",
     "1시간 추세(레인지 봇): 신호와 반대이거나 진입 금지면 그 신호를 막아요",
+    "친구 30분 봇(WOO X Pro 2, 10-30부터): 바이비트 봇의 원래 OBV 매매법 하나 · 추세 쪽 색이 연한색→진한색인 봉에 들어가요 (50선 조건 없음)",
+    "ROC 30분(레인지 봇, 10-30부터): ROC 막대가 연한색→진한색이고 보라선이 롱은 50 아래·숏은 50 위이면 신호, 30분 추세가 같은 쪽일 때만 들어가요",
 ]
 
 
@@ -94,11 +99,13 @@ def m30_row(r: Any, now: int) -> dict:
             "rules": rules, "ko": next((x["why"] for x in rules.values() if x["why"]), "") if unread else ""}
 
 
-def board_of(now: int, mp: Optional[dict] = None) -> tuple:
-    """(source, {symbol: row}, coins in the config's order): the 바이비트 봇's live state, else its paper twin's."""
+def board_of(now: int, mp: Optional[dict] = None, bot: str = "bybit") -> tuple:
+    """(source, {symbol: row}, coins in the config's order): the mix bot's (``bot``: "bybit" the 바이비트 봇, "mix" the
+    친구 30분 봇) live state, else its paper twin's."""
     from . import livemix as X
-    prof = X.PROFILES["bybit"]
-    mp = mp or X.paths(bot="bybit")
+    prof = X.PROFILES[bot]
+    mp = mp or X.paths(bot=bot)
+    name = "바이비트 봇" if bot == "bybit" else "친구 30분 봇"
     coins: list = []
     tried = []
     for bid in ("live", "paper"):
@@ -124,34 +131,36 @@ def board_of(now: int, mp: Optional[dict] = None) -> tuple:
         return src, b, coins
     states = {bid: st.get("state") for bid, st in tried}
     if all(s == "missing" for s in states.values()):
-        ko = "바이비트 봇이 아직 꺼져 있어요 (상태 파일 없음) · 켜고 30분봉이 한 번 끝나면 여기 보여요"
+        ko = f"{name}이 아직 꺼져 있어요 (상태 파일 없음) · 켜고 30분봉이 한 번 끝나면 여기 보여요"
         state = "off"
     elif any(s == "error" for s in states.values()):
-        ko = "바이비트 봇 상태 파일을 읽지 못했어요"
+        ko = f"{name} 상태 파일을 읽지 못했어요"
         state = "error"
     else:
-        ko = "바이비트 봇이 아직 이 표를 쓰지 않았어요 · 다음 30분봉 마감 뒤에 보여요 (새 코드로 다시 켠 뒤부터)"
+        ko = f"{name}이 아직 이 표를 쓰지 않았어요 · 다음 30분봉 마감 뒤에 보여요 (새 코드로 다시 켠 뒤부터)"
         state = "none"
     return {"state": state, "ko": ko}, {}, coins
 
 
 def h1_of(p: dict, now: int) -> tuple:
-    """(source, {symbol: item}, symbols): the 레인지 봇's last hour (liverange.supertrend_of's ``friend``)."""
+    """(source, {symbol: item}, symbols, {symbol: ROC read}): the 레인지 봇's last hour (liverange.supertrend_of's
+    ``friend``) and its ROC entry's reads (``roc``, owners 10-30)."""
     from . import liverange as RG
     _b, path, _execs, _bots = RG.locate(p, now)
     snap = RG.snapshot(path, now) if path else L._missing("-", L.MISSING_KO)
     if snap.get("state") != "ok":
         return {"state": "off" if snap.get("state") == "missing" else "error",
                 "ko": "레인지 봇 기록이 없어요" if snap.get("state") == "missing" else "레인지 봇 기록을 읽지 못했어요",
-                "path": path}, {}, []
+                "path": path}, {}, [], {}
     sv = RG.supertrend_of(snap, now)
+    roc = {x["symbol"]: x for x in (sv or {}).get("roc") or []}
     if not sv or not sv.get("friend"):
         return {"state": "none", "path": path,
-                "ko": "레인지 봇이 아직 친구 추세지표를 쓰지 않아요 (설정에 friend_tf 1h를 넣고 다시 켠 뒤부터 · docs/range-bot-ko.md 3장 E)"}, {}, []
+                "ko": "레인지 봇이 아직 친구 추세지표를 쓰지 않아요 (설정에 friend_tf 1h를 넣고 다시 켠 뒤부터 · docs/range-bot-ko.md 3장 E)"}, {}, [], roc
     at = _i(sv.get("at"))
     src = {"state": "ok", "path": path, "at": at, "age_ms": sv.get("age_ms"),
            "stale": at is None or now - at > STALE_1H_MS}
-    return src, {x["symbol"]: x for x in sv["friend"]}, [x["symbol"] for x in sv["friend"]]
+    return src, {x["symbol"]: x for x in sv["friend"]}, [x["symbol"] for x in sv["friend"]], roc
 
 
 def h1_row(x: Any) -> dict:
@@ -163,8 +172,18 @@ def h1_row(x: Any) -> dict:
             "ema_rsi": x.get("ema_rsi"), "chop_zone": x.get("chop_zone")}
 
 
-def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[dict] = None) -> dict:
-    """GET /api/v4/livebots/ftrend (module docstring)."""
+def roc_row(x: Any) -> Optional[dict]:
+    """The 레인지 봇's ROC read of a coin (liverange.supertrend_of ``roc``), None when it has none."""
+    if not isinstance(x, dict):
+        return None
+    if x.get("side") is None:
+        return {"state": "error", "ko": x.get("error_ko") or "못 읽음"}
+    return {"state": "ok", "side": x["side"], "ko": x.get("ko"), "osc": x.get("osc"), "osc_ko": x.get("osc_ko"), "at": x.get("at")}
+
+
+def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[dict] = None,
+          mpf: Optional[dict] = None) -> dict:
+    """GET /api/v4/livebots/ftrend (module docstring); ``mp`` / ``mpf``: the 바이비트 봇's / 친구 30분 봇's paths."""
     p = p or L.paths()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     try:
@@ -172,15 +191,24 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[d
     except Exception as exc:  # noqa: BLE001  (its own failure is said, never the page's)
         s30, b30, coins30 = {"state": "error", "ko": "바이비트 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, []
     try:
-        s1h, b1h, coins1h = h1_of(p, now)
+        sf, bf, coinsf = board_of(now, mpf, bot="mix")
     except Exception as exc:  # noqa: BLE001
-        s1h, b1h, coins1h = {"state": "error", "ko": "레인지 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, []
-    order = list(dict.fromkeys([*coins30, *b30, *coins1h]))
+        sf, bf, coinsf = {"state": "error", "ko": "친구 30분 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, []
+    try:
+        s1h, b1h, coins1h, roc = h1_of(p, now)
+    except Exception as exc:  # noqa: BLE001
+        s1h, b1h, coins1h, roc = {"state": "error", "ko": "레인지 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, [], {}
+    order = list(dict.fromkeys([*coins30, *b30, *coinsf, *bf, *coins1h, *roc]))
     from .liverange import coin_ko
     rows = [{"symbol": sym, "coin": coin_ko(sym), "in30": not coins30 or sym in coins30, "m30": m30_row(b30.get(sym), now),
-             "h1": h1_row(b1h.get(sym)) if s1h.get("state") == "ok" else {"state": "none"}} for sym in order]
+             "inf": sym in coinsf or sym in bf, "f30": m30_row(bf.get(sym), now) if sym in coinsf or sym in bf else None,
+             "h1": h1_row(b1h.get(sym)) if s1h.get("state") == "ok" else {"state": "none"},
+             "roc": roc_row(roc.get(sym))} for sym in order]
     agree = [r["symbol"] for r in rows if r["m30"].get("trend") and r["h1"].get("trend") and r["m30"]["trend"] == r["h1"]["trend"]]
-    return {"now_ms": now, "m30": s30, "h1": s1h, "coins": rows, "agree": agree, "rules_ko": RULES_KO}
+    ats = [x.get("at") for x in roc.values() if isinstance(x, dict) and x.get("at") is not None]
+    sroc = {"state": "ok", "at": max(ats), "stale": now - max(ats) > STALE_30M_MS} if ats else \
+        {"state": "none", "ko": "레인지 봇이 아직 ROC 30분 값을 쓰지 않았어요 (10/30 설정으로 켜고 30분봉이 끝난 뒤부터)"}
+    return {"now_ms": now, "m30": s30, "f30": sf, "h1": s1h, "roc": sroc, "coins": rows, "agree": agree, "rules_ko": RULES_KO}
 
 
 def register(app, ctx) -> dict:

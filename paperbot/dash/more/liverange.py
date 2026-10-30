@@ -272,7 +272,9 @@ def status_of(snap: dict, now: int) -> dict:
                 "why_ko": f"{HB_STALE_MS // MIN}분 넘게 새 기록이 없어요 (봇은 1분마다 기록해요) · 서버에서 systemctl status {UNIT}"}
     if e.get("halted"):
         return {**out, "state": "halted", "ko": "멈춤", "why_ko": f"페이퍼 계좌 멈춤: {e.get('halt_reason') or '이유 기록 없음'}"}
-    return {**out, "state": "running", "ko": "켜져 있어요", "why_ko": "1시간봉 마감마다 신호를 보고, 되돌림이 오면 들어가요"}
+    roc = isinstance(snap["cfg"].get("range"), dict) and bool(snap["cfg"]["range"].get("roc_tf"))
+    return {**out, "state": "running", "ko": "켜져 있어요", "why_ko": "1시간봉 마감마다 신호를 보고, 되돌림이 오면 들어가요"
+            + (" · 30분봉 마감마다 ROC 진입도 봐요 (되돌림 없이 바로)" if roc else "")}
 
 
 def wallet_of(snap: dict, acct: str, plan: Optional[dict]) -> dict:
@@ -373,8 +375,20 @@ def supertrend_of(snap: dict, now: int) -> Optional[dict]:
                            "votes_ko": " · ".join(f"{ko} {VOTE_SIDE_KO.get(L._i(v.get(k)), '모름')}" for k, ko in FRIEND_VOTES),
                            "votes": {k: L._i(v.get(k)) for k, _ko in FRIEND_VOTES}, "ema_rsi": L._f(v.get("ema_rsi")),
                            "chop_zone": L._i(v.get("chop_zone"))})
+    roc = []                                       # owners 10-30: the ROC entry's read per coin at the last 30m close
+    for sym, v in (rs.get("roc") or {}).items():
+        if not isinstance(v, dict) or "error" in v:
+            roc.append({"symbol": sym, "coin": coin_ko(sym), "side": None,
+                        "error_ko": str((v or {}).get("error") or "못 읽음") if isinstance(v, dict) else "못 읽음"})
+            continue
+        sd, turn, cs, osc = L._i(v.get("side")) or 0, L._i(v.get("turn")) or 0, L._i(v.get("cs")) or 0, L._f(v.get("osc"))
+        colour = "초록" if cs > 0 else "빨강"
+        ko = ("롱 신호" if sd > 0 else "숏 신호") if sd else (f"진한 {colour} 바뀜(50선 반대쪽)" if turn else
+                                                          f"{colour} {'진함' if v.get('dark') else '연함'}")
+        roc.append({"symbol": sym, "coin": coin_ko(sym), "side": sd, "ko": ko, "osc": osc, "at": L._i(v.get("at")),
+                    "osc_ko": f"보라선 {osc:.1f}" if osc is not None else "보라선 모름"})
     return {"at": ts, "st_at": L._i(rs.get("st_at")), "age_ms": now - ts if ts is not None else None, "coins": coins,
-            "friend": friend, "busy_ko": rs.get("busy") or None,
+            "friend": friend, "roc": roc, "busy_ko": rs.get("busy") or None,
             "rules": [str(x) for x in rs.get("rules") or [] if isinstance(x, str)]}
 
 
@@ -555,7 +569,8 @@ def signals_view(snap: dict, now: int) -> dict:
         else:
             cat, ko, stage = "other", str(status), "other"
         rows.append({"t": L._i(bc), "tf": tf, "symbol": sym, "coin": coin_ko(sym), "side": L._i(side), "status": status, "stage": stage,
-                     "cat": cat, "ko": ko, "why": d.get("why"), "pulled": bool(d.get("pulled"))})
+                     "cat": cat, "ko": ko, "why": d.get("why"), "pulled": bool(d.get("pulled")),
+                     "entry_ko": "ROC 30분" if str(strat or "").startswith("ROC50") else "레인지 1시간"})
         c = counts.setdefault(cat, {"cat": cat, "ko": ko, "stage": stage, "n": 0})
         c["n"] += 1
     return {"rows": rows, "counts": sorted(counts.values(), key=lambda c: -c["n"]), "since_ms": now - SIG_SPAN_MS}

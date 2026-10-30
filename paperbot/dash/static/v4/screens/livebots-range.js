@@ -5,7 +5,7 @@
 //               there); the paper wallet against its start (모의 · 진짜 돈 아님), today's trades, each follower's real balance
 //               and its change since it moved to this bot
 //   계획        the plan in words from the config's own numbers (F7_RF_TRIPLE 1시간 커스텀값, 0.2 ATR 되돌림 최대 60분, 코인 ·
-//               BTC 1시간 슈퍼트렌드(10, 3), 강제청산 여유, 고정 익절 순ROE +10%, 손절 순ROE −50%, 증거금 40%, 코인별 배수)
+//               BTC 1시간 슈퍼트렌드(10, 3), 강제청산 여유, 고정 익절 순ROE +10% (10/30부터 계단 · ROC 30분 진입), 손절 순ROE −50%, 증거금 40%, 코인별 배수)
 //   포지션      the paper's open position with its stop and take-profit prices, the pullback it entered on; each follower's
 //               own position (its exchange stop, its own take-profit net ROE)
 //   되돌림 · 추세 the pullback the bot waits for now (level, until when) and every coin's 1h supertrend side
@@ -195,7 +195,7 @@ export function rangeView(ctx) {
     });
     if (!p) {
       put(posBox, h("div", {class: "lrb-empty"}, h("b", null, "페이퍼 포지션 없음"),
-        h("p", null, d.wait ? "되돌림을 기다리는 중이에요 (아래 칸)." : "다음 1시간봉 신호와 되돌림을 기다려요. 한 번에 한 신호 · 포지션 하나예요.")), ...lives);
+        h("p", null, d.wait ? "되돌림을 기다리는 중이에요 (아래 칸)." : `다음 1시간봉 신호와 되돌림을 기다려요${((d.plan || {}).range || {}).roc_tf ? " · 30분봉마다 ROC 신호도 봐요" : ""}. 한 번에 한 신호 · 포지션 하나예요.`)), ...lives);
       return;
     }
     const rg = p.range || {};
@@ -225,6 +225,8 @@ export function rangeView(ctx) {
         : h("p", {class: "lrb-sub"}, d.position ? "포지션을 들고 있어 새 신호를 받지 않아요 (한 신호씩)" : "지금 기다리는 되돌림이 없어요"),
       t && (t.friend || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "친구 추세지표 1시간"}, h("span", {class: "lrb-sub"}, "친구 추세지표 1시간"),
         ...t.friend.map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || c.votes_ko || ""); })) : null,
+      t && (t.roc || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "ROC 30분"}, h("span", {class: "lrb-sub"}, "ROC 30분"),
+        ...t.roc.map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || c.osc_ko || ""); })) : null,
       t && (t.coins || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "1시간 슈퍼트렌드"}, h("span", {class: "lrb-sub"}, "1시간 슈퍼트렌드"),
         ...(t.coins || []).map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || ""); }))
         : t && (t.friend || []).length ? null : h("p", {class: "lrb-sub"}, "추세 기록이 아직 없어요 (봇이 1분마다 남겨요)"),
@@ -295,7 +297,8 @@ export function rangeView(ctx) {
     put(sigBox,
       h("div", {class: "lrb-chiprow"}, (sg.counts || []).map((c) => ui.pill(`${c.ko} ${fmt.int(c.n)}`, c.stage === "entered" ? "good" : c.stage === "filtered" ? "warn" : "thin"))),
       h("ul", {class: "lrb-list"}, rows.slice(0, st.sigN).map((r) => h("li", {class: ["lrb-srow", r.stage]}, h("span", {class: "num lrb-t"}, fmt.kst(r.t)),
-        h("b", null, `${r.coin} ${SIDE(r.side)}`), ui.pill(r.ko, r.stage === "entered" ? "good" : r.stage === "filtered" ? "warn" : "thin"),
+        h("b", null, `${r.coin} ${SIDE(r.side)}`), r.entry_ko ? h("small", {class: "lrb-sub"}, r.entry_ko) : null,
+        ui.pill(r.ko, r.stage === "entered" ? "good" : r.stage === "filtered" ? "warn" : "thin"),
         r.why ? h("small", {class: "lrb-sub"}, r.why) : null))),
       rows.length > st.sigN ? h("button", {class: "btn-line lrb-more", type: "button", onclick: () => { st.sigN += PAGE * 2; drawSignals(); }},
         `더 보기 (${fmt.int(rows.length - st.sigN)}개 남음)`) : null);

@@ -508,16 +508,12 @@ def range_checks(cfg: dict, entry: int, side: int, symbol: str, lev: Optional[in
         add("range", None, "이 진입은 레인지 봇의 되돌림 기록이 없어요")
         return out
     words = {1: "상승", -1: "하락", 0: "없음"}
+    if i.get("roc"):                                     # owners 10-30: the ROC entry on a 30m close (no pullback)
+        _roc_checks(cfg, side, lev, i, add)
+        _tp_line(cfg, add)
+        return out
     if r.get("friend_tf"):                               # owners 10-29: the friend's trend indicator on the 1h bar
-        ft = i.get("friend") if isinstance(i.get("friend"), dict) else None
-        tr = L._i(ft.get("trend")) if ft else None
-        ok = None if tr is None else tr == side
-        votes = (" · ".join(f"{ko} {({1: '상승', -1: '하락', 0: '횡보'}).get(L._i(ft.get(k)), '모름')}"
-                            for k, ko in (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드")))
-                 if ft else "")
-        add("friend", ok, f"추세 확인: 친구 추세지표 1시간 {({1: '상승', -1: '하락', 0: '진입 금지'}).get(tr, '기록 없음')}"
-            + (f" ({votes})" if votes else "") + " → "
-            + ({True: f"{SIDE_WORD.get(side, '')} 통과", False: "반대인데 진입 기록이 있어요", None: "기록 없음"}[ok]), ft)
+        _friend_line(i.get("friend") if isinstance(i.get("friend"), dict) else None, side, "1시간", add)
     sts = [(w, L._i(i.get(k))) for w, k, on in (("코인", "coin_st", r.get("coin_st", True)), ("BTC", "btc_st", r.get("btc_st", True))) if on]
     if sts:
         known = [v for _w, v in sts if v is not None]
@@ -540,12 +536,54 @@ def range_checks(cfg: dict, entry: int, side: int, symbol: str, lev: Optional[in
             + (f"{_hm(et)} 5분봉 시가에 진입" if et is not None else "다음 5분봉 시가에 진입"), {"level": lvl, "touch": touch, "entry_t": et})
     else:
         add("pull", None, "되돌림 숫자가 기록에 없어요")
-    tp = L._f(cfg.get("take_profit_roe"))
-    if tp is not None:
-        sl = L._f(((cfg.get("stop") or {}) if isinstance(cfg.get("stop"), dict) else {}).get("roe")) or 0.5
-        add("tp", None, f"익절은 순ROE +{tp:.0%} 고정 · 손절은 순ROE −{sl:.0%} (계단 없음)",
-            {"tp": tp}, info=True)
+    _tp_line(cfg, add)
     return out
+
+
+def _friend_line(ft: Optional[dict], side: int, tf_ko: str, add) -> None:
+    """The friend's trend check of a 레인지 봇 entry (its four votes) in words."""
+    tr = L._i(ft.get("trend")) if ft else None
+    ok = None if tr is None else tr == side
+    votes = (" · ".join(f"{ko} {({1: '상승', -1: '하락', 0: '횡보'}).get(L._i(ft.get(k)), '모름')}"
+                        for k, ko in (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드")))
+             if ft else "")
+    add("friend", ok, f"추세 확인: 친구 추세지표 {tf_ko} {({1: '상승', -1: '하락', 0: '진입 금지'}).get(tr, '기록 없음')}"
+        + (f" ({votes})" if votes else "") + " → "
+        + ({True: f"{SIDE_WORD.get(side, '')} 통과", False: "반대인데 진입 기록이 있어요", None: "기록 없음"}[ok]), ft)
+
+
+def _roc_checks(cfg: dict, side: int, lev: Optional[int], i: dict, add) -> None:
+    """A ROC entry's checks (owners 10-30, paperbot/rangebot.py item 6): the 30m trend, the ROC bar's turn and its side
+    of 50, the liquidation room of its ATR x k stop, the entry at the next minute's open."""
+    r = cfg.get("range") if isinstance(cfg.get("range"), dict) else {}
+    _friend_line(i.get("friend") if isinstance(i.get("friend"), dict) else None, side, "30분", add)
+    osc, t0 = L._f(i.get("osc")), L._i(i.get("t0"))
+    colour = "초록" if side > 0 else "빨강"
+    ok = None if osc is None else (osc < 50 if side > 0 else osc > 50)
+    add("roc", ok, f"ROC 30분봉{f' {_hm(t0)}' if t0 is not None else ''} 마감: 연한 {colour}→진한 {colour}, 보라선 "
+        + (f"{osc:.1f} ({'50 아래' if side > 0 else '50 위'}이어야 함)" if osc is not None else "기록 없음"), {"osc": osc, "t0": t0})
+    close, atr, k = L._f(i.get("close")), L._f(i.get("atr")), L._f(i.get("k")) or 3.0
+    if close and atr and lev:
+        mmr = L._f(r.get("liq_mmr")) or 0.005
+        dist, room = k * atr / close, 1 / lev - mmr
+        add("liq", dist <= room + 1e-9, f"강제청산 여유: 손절 30분 ATR × {k:g} = {dist:.2%} → {room:.2%} 안쪽 ({lev}배)",
+            {"dist": dist, "room": room})
+    else:
+        add("liq", None, "손절 거리 숫자가 기록에 없어요")
+    add("entry", True, "되돌림 안 기다림: 30분봉 마감 다음 분 시가에 시장가로 진입", {"t0": t0})
+
+
+def _tp_line(cfg: dict, add) -> None:
+    """The take-profit of the 레인지 봇 in words: one fixed take-profit (10-26 ~ 10-29) or the ladder (owners 10-30)."""
+    tp = L._f(cfg.get("take_profit_roe"))
+    sl = L._f(((cfg.get("stop") or {}) if isinstance(cfg.get("stop"), dict) else {}).get("roe")) or 0.5
+    if tp is not None:
+        add("tp", None, f"익절은 순ROE +{tp:.0%} 고정 · 손절은 순ROE −{sl:.0%} (계단 없음)", {"tp": tp}, info=True)
+        return
+    from .liverange import ladder_of
+    lad = ladder_of(cfg.get("ladder"))
+    if lad:
+        add("tp", None, f"익절은 계단 {lad['ko']} (고정 익절 없음)", {"ladder": lad}, info=True)
 
 
 # ---------------------------------------------------------------- the record before this entry

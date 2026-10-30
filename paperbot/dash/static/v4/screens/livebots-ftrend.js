@@ -5,6 +5,8 @@
 //          rule of 10-30), the Stoch RSI pane when the bot reads it (K, D, 50선 아래 / 위, a golden / dead ●) and each
 //          rule's answer in the bot's words
 //   1시간  the 레인지 봇's last closed hour (its trend check), once its config uses the indicator
+//   owners 10-30: the 친구 30분 봇's own 30m read (WOO X Pro 2: its trend, OBV colour and answer) and the 레인지 봇's
+//          ROC 30분 read per coin (the ROC entry: 롱 신호 / 숏 신호 / the bar's colour, the purple line)
 // HONESTY: a bot that is off or has not written its row yet says so; an old row says how old; never a vote of our own.
 import {h, put, ui, fmt, serverNow} from "../core/pb.js";
 
@@ -60,7 +62,7 @@ export function ftrendView(ctx) {
   const grid = h("div", {class: "lft-grid"});
   const rules = h("ul", {class: "lft-rules"});
   const main = h("div", {class: "lft-body"},
-    ui.card({title: "코인별 친구 추세", sub: "30분: 바이비트 봇이 마지막 30분봉 마감에 본 값 · 1시간: 레인지 봇이 마지막 1시간봉에 본 값 · 봇 기록 그대로", cls: "lft-card"}, head, grid),
+    ui.card({title: "코인별 친구 추세", sub: "30분: 바이비트 봇이 마지막 30분봉 마감에 본 값 · 1시간: 레인지 봇이 마지막 1시간봉에 본 값 · ROC 30분: 레인지 봇의 ROC 진입 값 · 친구 30분 봇: WOO X Pro 2가 본 값 · 봇 기록 그대로", cls: "lft-card"}, head, grid),
     ui.card({title: "읽는 법", cls: "lft-rcard"}, rules));
   const el = h("div", {class: "lft stack"}, slot, main,
     ui.note("보기만 하는 화면 · 30초마다 새로 읽어요 · 트레이딩뷰 차트와 같은 식(친구 지표 그대로)으로 봇이 계산한 값이에요 · 거래소 봉 기준이라 차트와 한 봉 차이가 날 수 있어요"));
@@ -93,12 +95,27 @@ export function ftrendView(ctx) {
         ok(m.stop_pct) ? h("dd", {class: "num"}, `${fmt.num(m.stop_pct, 2)}% (ATR × 3)`, m.liq_ok === false ? h("small", {class: "lft-bad"}, " · 청산가보다 멀어 진입 안 함") : null) : null) : null,
       m.state === "ok" ? h("ul", {class: "lft-rl"}, ruleLines(m).map((x) => h("li", null, ui.pill(x.ko, "thin"), h("span", {class: x.tone === "good" ? "lft-go" : "lft-sub"}, ` ${x.text}`)))) : null,
       h("div", {class: "lft-h1"}, h("span", {class: "lft-sub"}, "1시간 (레인지 봇)"),
-        t1.state === "ok" ? [h("b", {class: ["lft-mid", c1.tone]}, c1.text), votesRow(t1.votes)] : h("span", {class: "lft-sub"}, ` ${t1.ko || "—"}`)));
+        t1.state === "ok" ? [h("b", {class: ["lft-mid", c1.tone]}, c1.text), votesRow(t1.votes)] : h("span", {class: "lft-sub"}, ` ${t1.ko || "—"}`)),
+      r.roc ? h("div", {class: "lft-h1"}, h("span", {class: "lft-sub"}, "ROC 30분 (레인지 봇)"), rocCell(r.roc)) : null,
+      r.inf && r.f30 ? h("div", {class: "lft-h1"}, h("span", {class: "lft-sub"}, "30분 (친구 30분 봇)"), ...friendCell(r.f30)) : null);
+  }
+  function rocCell(x) {
+    if (x.state !== "ok") return h("span", {class: "lft-sub"}, ` ${x.ko || "못 읽음"}`);
+    const tone = TONE[x.side] || "side";
+    return [h("b", {class: ["lft-mid", tone]}, x.ko || "—"), h("small", {class: "lft-sub"}, ` ${x.osc_ko || ""}`)];
+  }
+  function friendCell(f) {
+    if (f.state !== "ok") return [h("span", {class: "lft-sub"}, ` ${f.ko || "아직 없음"}`)];
+    const c = trendCell(f), ob = obvCell(f.obv), rl = ruleLines(f);
+    return [h("b", {class: ["lft-mid", c.tone]}, c.text),
+      ob.tone !== "na" ? h("span", {class: ["lft-obv", ob.tone, ob.dark ? "dark" : "light"]}, h("i", {"aria-hidden": "true"}), `OBV ${ob.text}`) : null,
+      ...rl.map((x) => h("small", {class: x.tone === "good" ? "lft-go" : "lft-sub"}, ` ${x.text}`))];
   }
   function draw() {
     const d = st.d;
     if (!d) return;
-    put(head, srcLine(d.m30, "30분"), srcLine(d.h1, "1시간"),
+    put(head, srcLine(d.m30, "30분"), srcLine(d.h1, "1시간"), d.f30 && d.f30.state !== "off" ? srcLine(d.f30, "친구 30분 봇") : null,
+      d.roc && d.roc.state === "ok" ? srcLine(d.roc, "ROC 30분 (레인지 봇)") : null,
       (d.agree || []).length ? h("p", {class: "lft-src"}, ui.pill("30분 = 1시간", "accent"), ` 두 추세가 같은 코인: ${(d.coins || []).filter((c) => d.agree.includes(c.symbol)).map((c) => c.coin).join(" · ")}`) : null);
     const cs = d.coins || [];
     put(grid, cs.length ? cs.map(coinCard) : ui.empty("보여 줄 코인이 없어요 · 바이비트 봇 설정을 읽지 못했어요"));
