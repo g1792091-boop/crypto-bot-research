@@ -10,11 +10,14 @@ Bots (each answer shows one bot and the executors that follow it, nothing of the
     trend   추세판단 봇: the main paper bot (PAPERBOT_LIVE_PAPER_DB, account COMBO@mix) from its own start
             (livebots.trend_bot), and the executors that follow its database (바이비트, WOO X Pro)
     range   레인지 봇 (owners 10-26, docs/range-bot-ko.md): the paper bot "range" of paper_bots (its config's ``range``
-            section), and its followers (WOO X Pro)
+            section), and its followers (WOO X Pro); owners 10-31 night: once the 레인지 봇 trades the first WOO X Pro
+            account by itself (livebots.range_moved: its mix bot's server config is there), the same parts as the
+            바이비트 봇 from its own logs (livemix PROFILES "range": no 전후, no 하한)
     vwap    VWAP 개선판: the paper bot whose config has an entry gate (livevwap.is_vwap; paper_bots), and its followers
             (딥코인)
-    mix     믹스 30분 봇 (WOO X Pro 2): the live bot and its paper twin (livemix: their logs), the owners' new settings of
-            10-26 (margin_frac 40 %, net ladder) told apart by each entry's own margin share
+    mix     믹스 30분 봇 (WOO X Pro 2; its config's name, owners 10-31 night: 친구 15분 봇): the live bot and its paper
+            twin (livemix: their logs), the owners' new settings of 10-26 (margin_frac 40 %, net ladder) told apart by each
+            entry's own margin share
     bybit   바이비트 봇 (owners 10-29, docs/mixbybit-ko.md): the same parts as the mix bot from its own logs (livemix
             PROFILES "bybit"), but no 전후 (margin 40 % from its first trade) and no 하한 (it has no balance floor)
     v39     V3.9 투비트: the rule bot's paper account V39_ALL@1h (paper3.db) and the Toobit executor (while it is not
@@ -91,6 +94,8 @@ LINKS = {
     "v39": [],
     "range": [("#/trades", "거래"), ("#/signals", "신호"), ("#/missed", "못 탄 신호"), ("#/cost", "비용")],
 }
+# the 레인지 봇 once it trades WOO X Pro by itself (owners 10-31 night, livebots.range_moved): its own screen's 성적 and the board
+RANGE_MIX_LINKS = [("#/rangebot", "레인지 봇 관제 · 성적"), ("#/ftrend", "추세판")]
 GOAL_KO = "두 분 목표: 한 달(30일) ×6 (+500%)"
 NOTE_KO = ("계산일 뿐 예측이 아니에요: 지금까지의 기록(승률 · 평균 이익 · 평균 손실 · 하루 진입 수)이 그대로 간다고 칠 때의 숫자예요. "
            "거래가 적으면 숫자가 크게 흔들려요")
@@ -652,7 +657,7 @@ def mix_margin_share(t: dict) -> Optional[float]:
 
 
 def mix_bot(p: dict, now: int, bot: str = "mix") -> dict:
-    """A mix bot's goal part (``bot``: livemix.PROFILES, the 믹스 30분 봇 or the 바이비트 봇)."""
+    """A mix bot's goal part (``bot``: livemix.PROFILES, the 믹스 30분 봇, the 바이비트 봇 or the 레인지 봇)."""
     from . import livemix as MX
     prof = MX.PROFILES[bot]
     target = 1 + _target()
@@ -1193,11 +1198,19 @@ def build(bot: str, p: Optional[dict] = None, now_ms: Optional[int] = None, more
     more = more or L.paths_more()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     bot = bot if bot in BOTS else "trend"
+    moved = bot == "range" and L.range_moved(p)        # owners 10-31 night: the 레인지 봇 is a mix bot of its own
     head = {"now_ms": now, "bot": bot, "name_ko": NAME_KO[bot], "goal": {"mult": 1 + _target(), "days": MONTH_D, "ko": GOAL_KO},
             "note_ko": NOTE_KO, "few_n": FEW, "read_n": READ_N,
-            "links": [{"href": h, "ko": k} for h, k in LINKS[bot]]}
+            "links": [{"href": h, "ko": k} for h, k in (RANGE_MIX_LINKS if moved else LINKS[bot])]}
+    if bot == "mix":                                    # its config's name (owners 10-31 night: 친구 15분 봇)
+        try:
+            from . import livemix as MX
+            head["name_ko"] = MX.live_name(MX.paths(bot="mix"), MX.MIX)
+        except Exception:  # noqa: BLE001  (the profile's name then)
+            pass
     try:
-        body = (site_bot(bot, p, now, more) if bot in ("trend", "vwap") else mix_bot(p, now, bot) if bot in ("mix", "bybit")
+        body = (site_bot(bot, p, now, more) if bot in ("trend", "vwap")
+                else mix_bot(p, now, bot) if bot in ("mix", "bybit") or moved
                 else range_bot(p, now, more) if bot == "range" else v39_bot(p, now, more))
     except Exception as exc:  # noqa: BLE001
         body = {"state": "error", "ko": "목표 연구를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}

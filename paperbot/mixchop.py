@@ -501,7 +501,7 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
 BOARD_KEYS = ("close", "trend", "votes", "ema_rsi", "chop_zone", "turn", "obv_cs", "obv_dark", "cross", "k", "d", "xs",
               "stop_pct", "liq_ok", "obv50", "roc_turn", "roc_cs", "roc_dark", "roc", "trend_mode", "tf",
               "e3_turn", "e3_cs", "e3_dark", "ersi", "e3_trend", "e3_votes", "ac", "ac_col", "bar", "bar_n", "bar_score",
-              "x0", "h6")
+              "x0", "h6", "trend_tf")
 
 
 def board_row(evs: list, close_ms: int) -> dict:

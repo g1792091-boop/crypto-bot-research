@@ -125,3 +125,11 @@ small.lrb-sub { font-size: var(--t-2xs); }
 @media (prefers-reduced-motion: reduce) {
   .lrb-hero.run .lrb-orb > i { animation: none; }
 }
+
+/* ---------------------------------------------------------------- owners 10-31 night: the 레인지 봇 trades WOO X Pro by itself
+   (screens/livebots-range.js rangeBotView): its mix screens under one switch, the old paper screen as its past record */
+.lrb-tab, .lrb-parts { display: grid; gap: 12px; min-width: 0; }
+.lrb-mixhead { margin: 0; }
+.lrb-part[hidden] { display: none; }
+.lrb-moved { margin: 0; padding: 7px 10px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--surface-2);
+  color: var(--ink-2); font-size: var(--t-xs); line-height: 1.55; overflow-wrap: anywhere; }

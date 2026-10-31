@@ -355,6 +355,8 @@ export function costView(ctx) {
     const a0 = d && (d.accts || {})[st.acct];
     listHead.hidden = !(a0 && a0.state === "ok" && (a0.rows || []).length);
     if (!d) { put(listSlot); put(listSum); pg.set(undefined); return; }
+    // owners 10-31 night: no executor at all once mix bots took every slot (they trade by themselves: no paper to follow)
+    if (!st.acct) { put(listSlot, ui.empty("페이퍼를 따라가는 실행기가 없어요 · 실거래 봇은 계정마다 스스로 매매해요 (각 봇 화면)")); put(listSum); pg.set([]); return; }
     const a = (d.accts || {})[st.acct];
     if (!a || a.state !== "ok") { put(listSlot, sourceState(a, `${acctKo(st.acct)} 실행기 DB`)); put(listSum); pg.set([]); return; }
     put(listSlot);

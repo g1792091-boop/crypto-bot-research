@@ -52,3 +52,6 @@
 .lft-rl li, .lft-rules li { font-size: var(--t-xs); color: var(--ink-2); white-space: normal; overflow-wrap: anywhere; }
 .lft-rules li { padding-left: 10px; border-left: 2px solid var(--line-2); line-height: 1.55; }
 .lft-h1 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding-top: 8px; border-top: 1px dashed var(--line-2); min-width: 0; }
+/* owners 10-31 night: the trend bar's 종합 sideways is 노랑 (진입 금지): --warn, as the owners' chart */
+.lft-coin.flat { --tc: var(--warn); }
+.lft-big.flat, .lft-mid.flat { color: var(--warn); }

@@ -38,7 +38,17 @@ path dict (``"bot"``), so every reader here and in paperbot/mixcheck.py answers 
     GET /api/v4/livebots/mixbybit      관제 of the 바이비트 봇 and its paper twin (as /mix)
     GET /api/v4/livebots/mixbybitperf  성적 (as /mixperf; no 5-year reference: the owners' own rules)
 
-The friend bot's answers, paths and words are as they were (``PAPERBOT_MIX_BOT`` unset: the friend bot).
+A third (owners 10-31 night, docs/range-bot-ko.md 0장): the 레인지 봇 trades the first WOO X Pro account itself (the old
+range executor's slot "mexc"; profile "range"), 15m bars, the trend bar's 종합 and the histogram's 0 cross ("h0x"):
+
+    GET /api/v4/livebots/mixrange      관제 of the 레인지 봇 and its paper twin (as /mix)
+    GET /api/v4/livebots/mixrangeperf  성적 (as /mixperf; no 5-year reference)
+
+The friend bot's answers, paths and words are as they were (``PAPERBOT_MIX_BOT`` unset: the friend bot). Each bot's bar
+(its config's ``tf``: 30m or 15m) sets how old its last record may be before it reads 멈춤 (``stale_of``) and the words
+(``tf_ko`` in each answer); owners 10-31, last: all three enter on 15m bars and read the trend bar on the 30m bar
+(the config's ``trend_tf``: ``trend_tf_ko`` in each answer, the rows' ``trend_tf``). The signal rows of the trend bar ("bar": 종합 and its six rows) and of rule "h0x" (``x0``: the
+histogram crossed 0 up / down on that bar, ``h6``: its value) carry their values (VAL_KEYS).
 """
 from __future__ import annotations
 
@@ -68,7 +78,8 @@ ENV = {
 DEFAULT_FILES = {"live": ("/var/lib/paperbot/exec/mixchop-state.json", "/var/lib/paperbot/exec/mixchop-log.jsonl"),
                  "paper": ("/var/lib/paperbot/mixchop-paper/state.json", "/var/lib/paperbot/mixchop-paper/log.jsonl")}
 BOT_ENV = "PAPERBOT_MIX_BOT"           # which mix bot a job reads when it names none: "mix" (default) or "bybit"
-STALE_MS = 35 * MIN                     # the bot saves at every 30-minute close: older than this = 멈춤
+STALE_MS = 35 * MIN                     # the bot saves at every 30-minute close: older than this = 멈춤 (stale_of: its bar + 5 min)
+STALE_PAD_MS = 5 * MIN
 TAIL_BYTES = 8 * 1024 * 1024            # the log's last 8 MB (about a year of this bot's rows)
 SIG_SPAN_MS = 48 * HOUR                 # 최근 48시간
 FEED_KEEP = 400
@@ -174,7 +185,7 @@ WARN_KO = {
     "ladder_closed": ("계단 손절을 옮기려는데 가격이 이미 지나 있었어요", "warn"),
     "cancel_failed": ("청산 뒤 남은 손절 주문을 취소하지 못했어요", "warn"),
     "bars_missing": ("바이낸스 봉을 못 읽어 그 코인의 이번 봉을 건너뛰었어요", "warn"),
-    "bars_failed": ("바이낸스 봉을 못 읽어 이번 계단 계산을 건너뛰었어요", "warn"), "close_failed": ("30분봉 마감 처리에 실패했어요", "warn"),
+    "bars_failed": ("바이낸스 봉을 못 읽어 이번 계단 계산을 건너뛰었어요", "warn"), "close_failed": ("봉 마감 처리에 실패했어요", "warn"),
 }
 # a skip row's reason, grouped: (words, tone); the bot's own words stay in ``why``
 SKIP_GROUPS = {"held": ("보유 중", "thin"), "same_bar": ("같은 봉 다른 코인 먼저", "thin"), "block": ("진입 금지 시간", "warn"),
@@ -256,7 +267,7 @@ def read_config(path: str, repo_path: str, prof: Optional[Profile] = None) -> di
         return {**out, "state": "ok", "source": "server", "cfg": cfg, "raw": raw, "server_state": "ok"}
     except FileNotFoundError:
         out.update(server_state="missing", reason_ko=f"서버 설정 파일이 아직 없어요 ({(prof or MIX).guide}"
-                   + (" 5장 3" if (prof or MIX) is MIX else " 3장 A 2") + ") · 저장소 기본 설정으로 보여 줘요")
+                   + {"mix": " 5장 3", "bybit": " 3장 A 2"}.get((prof or MIX).id, " 0장") + ") · 저장소 기본 설정으로 보여 줘요")
     except Exception as exc:  # noqa: BLE001  unreadable, not JSON, or refused by the bot's own checks (MixError): said so
         out.update(server_state="error", reason=f"{type(exc).__name__}: {exc}"[:300],
                    reason_ko=("서버 설정 파일을 읽지 못했어요" + (f" ({L.reason_ko(exc, path)})" if isinstance(exc, OSError) else f": {exc}"))[:300]
@@ -362,17 +373,44 @@ def load_bot(bid: str, bp: dict, now: int, tail: Optional[int] = None) -> dict:
     conf = read_config(bp["config"], bp["repo_config"], prof)
     sp, lp = files_of(bid, bp, conf)
     st, lg = read_state(sp), read_log(lp, tail)
-    return {"id": bid, "conf": conf, "st": st, "lg": lg, "status": status_of(bid, st, lg, now, prof), "bot": prof.id}
+    return {"id": bid, "conf": conf, "st": st, "lg": lg, "status": status_of(bid, st, lg, now, prof, conf.get("cfg")),
+            "bot": prof.id}
 
 
-def status_of(bid: str, st: dict, lg: dict, now: int, prof: Optional[Profile] = None) -> dict:
-    """running / stopped / off / error, from the state file's ``saved_ms`` (written at every 30-minute close; its mtime
-    when the field is not there), else the log's last row."""
+def tf_of(cfg: Any) -> tuple:
+    """(the bar in ms, its words "30분" / "15분") of a bot's config (mixchop Config ``tf``); 30 minutes when unread."""
+    try:
+        return int(cfg.tf_ms), str(cfg.tf_ko)
+    except Exception:  # noqa: BLE001  (no config, or one from before ``tf``)
+        return M.MIN30, "30분"
+
+
+def trend_tf_ko(cfg: Any) -> Optional[str]:
+    """The bar the trend is read on (owners 10-31, last: "30분" while the bot enters on 15-minute bars: mixchop Config
+    ``trend_tf``), else the signal's own bar; None when unread."""
+    try:
+        return str(cfg.trend_tf_ko)
+    except Exception:  # noqa: BLE001  (no config, or one from before ``trend_tf``)
+        return tf_of(cfg)[1] if cfg is not None else None
+
+
+def stale_of(cfg: Any) -> tuple:
+    """(ms, the 멈춤 words): the bot saves at every close of its bar, so older than its bar + 5 minutes = 멈춤."""
+    tf_ms, tf_ko = tf_of(cfg)
+    ms = tf_ms + STALE_PAD_MS
+    return ms, f"{ms // MIN}분 넘게 새 기록이 없어요 (봇은 {tf_ko}봉이 끝날 때마다 기록해요)"
+
+
+def status_of(bid: str, st: dict, lg: dict, now: int, prof: Optional[Profile] = None, cfg: Any = None) -> dict:
+    """running / stopped / off / error, from the state file's ``saved_ms`` (written at every close of its bar: ``cfg``'s
+    tf, 30 minutes when unread; its mtime when the field is not there), else the log's last row."""
     prof = prof or MIX
     unit, mode = next((u, m) for b, _k, u, m, _g in prof.bots if b == bid)
+    stale_ms, stopped_ko = stale_of(cfg)
     rows = lg.get("rows") or []
     starts = [r for r in rows if r.get("kind") == "start"]
-    base = {"unit": unit, "stale_ms": STALE_MS, "last_log_ms": _i(rows[-1]["ts"]) if rows else None,
+    base = {"unit": unit, "stale_ms": stale_ms, "tf_ko": tf_of(cfg)[1], "trend_tf_ko": trend_tf_ko(cfg),
+            "last_log_ms": _i(rows[-1]["ts"]) if rows else None,
             "started_ms": _i(starts[-1]["ts"]) if starts else None,
             # its first start (한눈에's DAY n): the log's first start row, unknown when the log's start was not read
             "first_start_ms": _i(starts[0]["ts"]) if starts and not lg.get("cut") else None}
@@ -383,11 +421,11 @@ def status_of(bid: str, st: dict, lg: dict, now: int, prof: Optional[Profile] = 
     d = st.get("d") or {}
     seen = _i(d.get("saved_ms")) or st.get("mtime_ms") or base["last_log_ms"]
     age = now - seen if seen is not None else None
-    running = age is not None and age <= STALE_MS
+    running = age is not None and age <= stale_ms
     out = {**base, "state": "running" if running else "stopped", "saved_ms": _i(d.get("saved_ms")), "seen_ms": seen, "age_ms": age,
            "seen_from": "saved_ms" if d.get("saved_ms") is not None else "mtime" if st.get("mtime_ms") else "log",
            "last_close_ms": _i(d.get("last_close_ms")), "mode": d.get("mode"),
-           "ko": "돌고 있음" if running else STOPPED_KO}
+           "ko": "돌고 있음" if running else stopped_ko}
     if d.get("mode") and d.get("mode") != mode:
         out["mode_ko"] = f"상태 파일의 mode가 {d.get('mode')!r}예요 (이 칸은 {mode!r} 봇)"
     return out
@@ -595,7 +633,7 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
             "first_lock_price": lock_px, "first_act_price": act_px, "next": ladder_next(p), "opened_ms": _i(p.opened_ms),
             "held_ms": now - int(p.opened_ms) if p.opened_ms else None, "signal_close_ms": _i(p.signal_close_ms),
             "signal_close": _f(p.signal_close), "last_bar_ms": _i(p.last_bar_ms), "equity_before": _f(p.equity_before),
-            "stop_id": p.stop_id, "stop_id_missing": bid == "live" and not p.stop_id, **net}
+            "stop_id": p.stop_id, "stop_id_missing": bid == "live" and not p.stop_id, "tf_ko": tf_of(cfg)[1], **net}
 
 
 # ---------------------------------------------------------------- 최근 48시간: signals with what became of them, warnings
@@ -607,7 +645,11 @@ VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_o
             # owners 10-31: 추세 3개 일치 (its histogram's turn, the EMA RSI, its own three trends)
             "e3_turn", "ersi", "e3_trend", "e3_votes",
             # owners 10-31 evening: OBV 진한색 + AC (OBV MACD's AC bar: its value and colour)
-            "ac", "ac_col")
+            "ac", "ac_col",
+            # owners 10-31 night: the trend bar (its six rows, the counts [상승, 하락, 횡보], the 3개 점수) and rule "h0x"
+            # (the histogram's 0 cross on the bar: +1 up / -1 down, and its value); owners 10-31, last: the trend read on its
+            # own bar ("trend_tf": "30분") while the signal is the 15-minute bar ("tf")
+            "bar", "bar_n", "bar_score", "x0", "h6", "trend_tf")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 
@@ -682,13 +724,15 @@ def feed_view(rows: list, now: int) -> dict:
             turn = _i(r.get("turn")) or 0                     # the OBV rule's light -> dark turn (owners 10-29)
             rturn = _i(r.get("roc_turn")) or 0                # the ROC bar's (owners 10-30)
             eturn = _i(r.get("e3_turn")) or 0                 # the EMA RSI histogram's (owners 10-31)
+            x0 = _i(r.get("x0")) or 0                         # the histogram's 0 cross (owners 10-31 night, rule h0x)
             items.append({**base, "cat": "signal", "colour": colour, "cross": cross, "rule": rule, "rule_ko": M.RULE_KO.get(rule, rule),
                           "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour)
                           or {1: "OBV 연한 초록→진한 초록", -1: "OBV 연한 빨강→진한 빨강"}.get(turn)
                           or {1: "ROC 막대 연한 초록→진한 초록", -1: "ROC 막대 연한 빨강→진한 빨강"}.get(rturn)
-                          or {1: "EMA RSI 막대 연한 초록→진한 초록", -1: "EMA RSI 막대 연한 빨강→진한 빨강"}.get(eturn, "신호"),
-                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 or eturn > 0 else
-                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 or eturn < 0 else side,
+                          or {1: "EMA RSI 막대 연한 초록→진한 초록", -1: "EMA RSI 막대 연한 빨강→진한 빨강"}.get(eturn)
+                          or {1: "히스토그램 0선 위로 돌파", -1: "히스토그램 0선 아래로 돌파"}.get(x0, "신호"),
+                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 or eturn > 0 or x0 > 0 else
+                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 or eturn < 0 or x0 < 0 else side,
                           "stage": stage, "tone": tone,
                           "why": r.get("why") or None, "outcome": out, "vals": _vals(r)})
         elif k == "skip" and id(r) not in folded:
@@ -882,10 +926,22 @@ def bot_perf(bid: str, bp: dict, now: int) -> dict:
 
 
 def live_name(p: dict, prof: Profile) -> str:
-    """The bot's name: its live config's ``name`` (owners 10-31 evening: the friend bot is '친구 30분 봇'), else the profile's."""
+    """The bot's name: its live config's ``name`` (owners 10-31 night: the friend bot is '친구 15분 봇'), else the profile's."""
     conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
     cfg = conf.get("cfg")
     return getattr(cfg, "name", None) or prof.name
+
+
+def live_words(p: dict, prof: Profile) -> dict:
+    """The answers' head words from the live config: the bot's ``name_ko``, its signal bar (``tf_ko`` "30분" / "15분"),
+    the bar its trend is read on (``trend_tf_ko``, owners 10-31, last: "30분" on 15-minute signals), its rules (``rules``,
+    ``rules_ko``) and trend (``trend_mode``)."""
+    conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
+    cfg = conf.get("cfg")
+    rules = [str(r) for r in getattr(cfg, "rules", None) or ()]
+    return {"name_ko": getattr(cfg, "name", None) or prof.name, "tf_ko": tf_of(cfg)[1], "trend_tf_ko": trend_tf_ko(cfg), "rules": rules,
+            "rules_ko": [M.RULE_KO.get(r, r) for r in rules], "trend_mode": getattr(cfg, "trend", None),
+            "stale_ms": stale_of(cfg)[0]}
 
 
 def _who(prof: Profile) -> dict:
@@ -898,9 +954,9 @@ def control(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     p = p or paths()
     prof = prof_of(p)
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
-    return {"now_ms": now, "name_ko": live_name(p, prof), **_who(prof),
+    return {"now_ms": now, **live_words(p, prof), **_who(prof),
             "bots": [bot_control(bid, p[bid], now) for bid, *_r in prof.bots],
-            "span_ms": SIG_SPAN_MS, "stale_ms": STALE_MS}
+            "span_ms": SIG_SPAN_MS}
 
 
 def analysis(p: dict, now: int) -> dict:
@@ -922,7 +978,7 @@ def perf(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
     cfg = conf.get("cfg")
     own = cfg is None or "mix" in tuple(cfg.rules)       # the design's 5-year backtest is of the friend's own rule
-    return {"now_ms": now, "name_ko": live_name(p, prof), **_who(prof),
+    return {"now_ms": now, **live_words(p, prof), **_who(prof),
             "bots": [bot_perf(bid, p[bid], now) for bid, *_r in prof.bots],
             "backtest": prof.backtest if own else None, "small_n": SMALL_N, "split_min_n": SPLIT_MIN_N,
             "analysis": analysis(p, now)}
@@ -960,5 +1016,18 @@ def register(app, ctx) -> dict:
         p = paths(bot="bybit")
         return L._cached(key("mixbybitperf", p), lambda: json_finite(perf(p)))
 
+    @app.get("/api/v4/livebots/mixrange")
+    def get_livebots_mixrange():
+        """실거래 › 레인지 봇 관제 (owners 10-31 night): as /mix, for the 레인지 봇 on the first WOO X Pro account and its
+        paper twin (read-only, 5 s cache)."""
+        p = paths(bot="range")
+        return L._cached(key("mixrange", p), lambda: json_finite(control(p)))
+
+    @app.get("/api/v4/livebots/mixrangeperf")
+    def get_livebots_mixrangeperf():
+        """실거래 › 레인지 봇 성적 (owners 10-31 night): as /mixperf, without a 5-year reference (read-only, 5 s cache)."""
+        p = paths(bot="range")
+        return L._cached(key("mixrangeperf", p), lambda: json_finite(perf(p)))
+
     return {"routes": ["/api/v4/livebots/mix", "/api/v4/livebots/mixperf", "/api/v4/livebots/mixbybit",
-                       "/api/v4/livebots/mixbybitperf"], "paths": paths}
+                       "/api/v4/livebots/mixbybitperf", *RANGE.routes], "paths": paths}

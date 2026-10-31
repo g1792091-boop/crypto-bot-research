@@ -98,7 +98,8 @@ export function posCard(c, o = {}) {
   const name = (c.label_ko || "").split(" (")[0] || NAME[c.id] || c.name_ko || c.id;     // two paper bots: "페이퍼 −35%"
   const tag = c.id === "flip" ? h("span", {class: "lb-acct lb-a-flip", title: c.note_ko || ""}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name)
     : c.self ? h("span", {class: `lb-acct lb-a-${c.tag || "wooxpro2"}`, title: c.tag === "bybit" ? "바이비트 계정의 바이비트 봇 (실거래 · 진짜 돈 · 스스로 매매)"
-      : "WOO X Pro 두 번째 계정의 친구봇 (실거래 · 진짜 돈 · 스스로 매매)"}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name)
+      : c.tag === "mexc" ? "WOO X Pro 계정의 레인지 봇 (실거래 · 진짜 돈 · 스스로 매매)"         // owners 10-31 night
+        : "WOO X Pro 두 번째 계정의 친구봇 (실거래 · 진짜 돈 · 스스로 매매)"}, h("i", {class: "lb-sw", "aria-hidden": "true"}), name)
     : acctTag(c.id);
   const kindPill = c.kind === "live" ? ui.pill("진짜 돈", "warn") : c.id === "flip" ? ui.pill("", "ref") : ui.pill("모의", "thin");     // ("ref" prints 참고 itself)
   // owners 10/20 "거래소 기준으로 익절해야지": an executor that locks on its own position says so on its card
@@ -115,7 +116,7 @@ export function posCard(c, o = {}) {
     const el = ui.card({cls: "lbp-card none"}, h("div", {class: "lbp-top"}, tag, kindPill, follows, h("span", {class: "grow"}),
       c.halted ? ui.pill(`멈춤${c.halt_reason ? `: ${c.halt_reason}` : ""}`, "bad") : null),
     h("p", {class: "lbp-flat"}, "포지션 없음"),
-    c.kind === "live" && !c.halted ? h("p", {class: "note"}, c.self ? `30분봉 신호를 기다려요 · 스스로 매매 (한 번에 포지션 하나)${c.stale ? " (기록 오래됨)" : ""}`
+    c.kind === "live" && !c.halted ? h("p", {class: "note"}, c.self ? `${c.tf_ko || "30분"}봉 신호를 기다려요 · 스스로 매매 (한 번에 포지션 하나)${c.stale ? " (기록 오래됨)" : ""}`
       : `따라가는 중 · 다음 페이퍼 진입을 기다려요${c.stale ? " (기록 오래됨)" : ""}`) : null,
     h("p", {class: "note"}, c.wallet != null ? `잔고 ${c.kind === "live" ? fmt.usd(c.wallet) : `${fmt.money(c.wallet)} USDT`} · ` : "",
       c.as_of_ms ? `마지막 기록 ${ago(c.as_of_ms)}` : "", c.stale ? " · 기록 멈춤" : ""),

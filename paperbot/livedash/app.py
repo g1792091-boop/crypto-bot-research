@@ -65,18 +65,19 @@ MODULES = MODULES + ("livejournal",)
 # dash/more/livevwap.py)
 MODULES = MODULES + ("livevwap",)
 # 실거래 › 믹스 봇 (#/mix · #/mixperf: the '믹스 30분 봇' on the second WOO X Pro account and its paper twin, owners 10-25
-# night; dash/more/livemix.py)
+# night; dash/more/livemix.py; the 바이비트 봇's /mixbybit · /mixbybitperf, owners 10-29; the 레인지 봇's /mixrange ·
+# /mixrangeperf on the first WOO X Pro account, owners 10-31 night: the same module, one profile each)
 MODULES = MODULES + ("livemix",)
 # (실거래 › 봇별 › V3.9 투비트, #/v39 and its answer /api/v4/livebots/v39, owners 10-26: removed on 10-31, "투비트봇이랑
 # 딥코인봇은 이제 안돌릴꺼니까 대시보드화면에서 지우자"; dash/more/livev39.py stays for the goal research's own reads)
 # 실거래 › 봇별 › 레인지 봇 (#/rangebot: the 레인지 봇 paper bot and the executors that follow it, owners 10-26;
-# dash/more/liverange.py)
+# dash/more/liverange.py; owners 10-31 night: once the 레인지 봇 trades WOO X Pro by itself, the tab's 지난 기록)
 MODULES = MODULES + ("liverange",)
 # 실거래 › 봇별 화면마다 목표 연구 (/api/v4/livebots/goalres?bot=: each bot's goal arithmetic and research questions on its own
 # records, owners 10-26; dash/more/livegoalres.py)
 MODULES = MODULES + ("livegoalres",)
 # 실거래 › 바이비트 봇 › 친구 추세판 (#/ftrend: each coin's friend trend as the 바이비트 봇 and the 레인지 봇 saw it, owners
-# 10-29; dash/more/liveftrend.py)
+# 10-29; owners 10-31 night: the trend bar of the three mix bots; dash/more/liveftrend.py)
 MODULES = MODULES + ("liveftrend",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 

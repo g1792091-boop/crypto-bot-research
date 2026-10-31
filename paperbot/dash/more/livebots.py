@@ -21,6 +21,8 @@
     PAPERBOT_LIVE_TOOBIT_DB     /var/lib/paperbot/exec/executor-toobit-live.db  투비트 실행기 (다섯 번째, 설치됐을 때만 보임)
     PAPERBOT_LIVE_TOOBIT_CONFIG /etc/paperbot/executor-toobit.json
     PAPERBOT_LIVE_RANGE_DB      /var/lib/paperbot/combo/range.db                레인지 봇 페이퍼 ('range': 그 설정에 range가 있을 때만)
+    PAPERBOT_MIXBYBIT_CONFIG    /etc/paperbot/mixbybit.json                     바이비트 봇 (있으면 바이비트 실행기 칸이 빠짐)
+    PAPERBOT_MIXRANGE_CONFIG    /etc/paperbot/mixrange.json                     레인지 봇 믹스 (있으면 "mexc" 칸과 옛 레인지 페이퍼가 빠짐)
     PAPERBOT_LIVE_CHECK_DB      /var/lib/paperbot/livecheck.db                  아침 점검 · 실시간 감시 · 손실 카드 (paperbot/livecheck.py)
     PAPERBOT_LIVE_IMPROVE_DB    /var/lib/paperbot/liveimprove.db                주간 성적표 · 개선 후보 장부 (paperbot/liveimprove.py)
 
@@ -73,6 +75,11 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 페이퍼 봇이 셋이 될 수 있어요(``paper_bots``: "paper" · "paper2" · "range", BOT_IDS). 레인지 봇은 이름이나 파일 이름이 아니라 그 봇의
 시작 기록 설정에 ``range``가 있는지로만 알아요(``range_bot``). 그 봇이 없으면 페이퍼 하나 · 둘인 화면과 답은 예전 그대로예요.
 
+레인지 봇이 스스로 매매 (owners 10-31 밤, docs/range-bot-ko.md 0장): 레인지 봇이 첫 번째 WOO X Pro 계정을 믹스 봇
+(paperbot/mixchop.py, 추세 바 종합 + 히스토그램 0선 돌파, 15분봉)으로 직접 거래해요. 그 서버 설정(PAPERBOT_MIXRANGE_CONFIG,
+/etc/paperbot/mixrange.json)이 있으면 "mexc" 실행기 칸은 바이비트 칸처럼 모든 화면과 답에서 빠지고(``replaced``), 옛 레인지 봇
+페이퍼(range.db)는 페이지의 페이퍼 봇이 아니에요(``range_moved``). 그 파일이 없으면 모든 답이 예전 그대로예요.
+
 시간은 UTC 밀리초, 비율은 비율(0.85 = 85%), 돈은 각 계좌의 단위(페이퍼 USDT, 실거래 거래소 USDT).
 """
 from __future__ import annotations
@@ -123,9 +130,16 @@ ENV_RANGE = {"range": ("PAPERBOT_LIVE_RANGE_DB", "/var/lib/paperbot/combo/range.
 # account is the 바이비트 봇's): once that bot's server config is there the old executor's slot leaves every page and
 # every answer (installed), as it leaves the live checks (livecheck.REPLACED_BY); the summary names the bot that took it
 # (``replaced``: 한눈에 shows that bot's own card). Its config path the same variable as dash/more/livemix.py's.
-ENV_MIX = {"mixbybit_config": ("PAPERBOT_MIXBYBIT_CONFIG", "/etc/paperbot/mixbybit.json")}
+# Owners 10-31 night (docs/range-bot-ko.md 0장): the 레인지 봇 is a mix bot of its own on the first WOO X Pro account (the
+# slot "mexc", whose executor followed the old 레인지 봇 paper bot): once its server config is there (PAPERBOT_MIXRANGE_CONFIG,
+# /etc/paperbot/mixrange.json, livecheck.REPLACED_BY["mexc"]) that slot leaves every page the same way, and the old range
+# paper bot (range.db) is no longer one of the page's paper bots (range_moved).
+ENV_MIX = {"mixbybit_config": ("PAPERBOT_MIXBYBIT_CONFIG", "/etc/paperbot/mixbybit.json"),
+           "mixrange_config": ("PAPERBOT_MIXRANGE_CONFIG", "/etc/paperbot/mixrange.json")}
 REPLACED = {"bybit": {"key": "mixbybit_config", "bot": "bybit", "name_ko": "바이비트 봇", "account_ko": "바이비트",
-                      "unit": "paperbot-mixbybit", "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot"}}
+                      "unit": "paperbot-mixbybit", "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot"},
+            "mexc": {"key": "mixrange_config", "bot": "range", "name_ko": "레인지 봇", "account_ko": "WOO X Pro",
+                     "unit": "paperbot-mixrange", "api": "/api/v4/livebots/mixrange", "tab": "rangebot"}}
 # the second paper bot's file before 10-23 (규칙봇 15 at -35 %): the site's second bot while the VWAP bot's file is not there
 # yet and no variable names one, so the page stays as it was until the owners start the VWAP bot (paths). Only the site:
 # the live watcher reports a second bot only from the VWAP default (livecheck.paper2_default), never this old one.
@@ -289,6 +303,13 @@ def replaced_out(p: dict) -> list:
     return [{"id": ex, **{k: v for k, v in REPLACED[ex].items() if k != "key"}} for ex in replaced(p)]
 
 
+def range_moved(p: dict) -> bool:
+    """Does the 레인지 봇 trade its WOO X Pro account by itself now (owners 10-31 night: REPLACED "mexc", its mix bot's
+    server config is there)? Then the old 레인지 봇 paper bot (range.db, no executor follows it any more) is not one of the
+    page's paper bots (paper_bots); its own screen (dash/more/liverange.py) stays readable as its past record."""
+    return any(REPLACED[ex]["bot"] == "range" for ex in replaced(p))
+
+
 # owners 10-30 ("딥코인 봇이랑 투비트 봇은 안돌릴예정이야"): an optional executor whose unit a person switched off for good
 # (``systemctl disable --now``: livecheck.switched_off, as the live checks) leaves the site as if it were not installed
 OPTIONAL_UNITS = {"deepcoin": "paperbot-executor-deepcoin", "wooxpro2": "paperbot-executor-wooxpro2",
@@ -357,11 +378,11 @@ def _config_db(path: str) -> Optional[str]:
 def slots(configs: Optional[dict] = None) -> list:
     """EXECS with each slot's name taken from its config: its ``label`` when it has one (owners 10-24: "WOO X Pro 2"),
     else the exchange it names (the slot's own name when unread); an optional slot only when ``configs`` has it (the
-    callers read the configs of ``installed`` slots; a slot a mix bot trades now is not there either). No configs: the
-    two first slots."""
+    callers read the configs of ``installed`` slots; a slot a mix bot trades now is not there either). No configs (None):
+    the two first slots; an empty dict (owners 10-31 night: mix bots took every slot) none."""
     out = []
     for ex, ko, dk, ck in ALL_EXECS:
-        if ex not in (configs or {}) and ((ex, ko, dk, ck) in OPTIONAL_EXECS or configs):
+        if ex not in (configs or {}) and ((ex, ko, dk, ck) in OPTIONAL_EXECS or configs is not None):
             continue
         c = (configs or {}).get(ex) or {}
         name = (c.get("label") or EX_NAME.get(c.get("exchange"))) if c.get("state") == "ok" else None
@@ -1452,8 +1473,9 @@ def paper_bots(p: dict, paper: dict, execs: list) -> list:
     def is_range(path: Optional[str]) -> bool:
         return bool(path) and range_bot(cfg_of(papers.get(LP.norm(path))))
     rng = next((c for c in cands if is_range(c)), None)
-    if rng is None and p.get("range") and not LP.same(p["range"], main) and is_range(p["range"]):
-        rng = p["range"]                                 # its file, read by sources() once it is there
+    if rng is None and p.get("range") and not LP.same(p["range"], main) and is_range(p["range"]) and not range_moved(p):
+        rng = p["range"]                                 # its file, read by sources() once it is there (owners 10-31 night:
+        #                                                  not once the 레인지 봇 trades WOO X Pro by itself, range_moved)
     second = next((c for c in cands if not LP.same(c, rng)), None)
     if second is None and p.get("paper2") and not LP.same(p["paper2"], main) and not LP.same(p["paper2"], rng) \
             and os.path.exists(p["paper2"]):

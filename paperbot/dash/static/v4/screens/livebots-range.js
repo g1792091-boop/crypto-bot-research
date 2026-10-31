@@ -13,10 +13,16 @@
 //               follower (followed, or the executor's own reason); real vs the coin-flip twin; the balance lines; the
 //               signals of the last 24 hours by what became of each; the warnings
 // Source: /api/v4/livebots/range (every 15 s), dash/more/liverange.py.
+// Owners 10-31 night (docs/range-bot-ko.md 0장): the 레인지 봇 trades the first WOO X Pro account by itself (a mix bot,
+// paperbot/mixchop.py: 15m bars, the trend bar's 종합 + the histogram's 0 cross). The 레인지 봇 tab (rangeBotView) waits for
+// the summary: while its ``replaced`` does not name the tab, this screen as it was; once it does, the bot's own screens
+// (livebots-mix.js on RANGE_UI: 관제 · 성적 · 모의 비교, no floor line, no 5-year reference) and this screen as the old paper
+// bot's past record (지난 페이퍼 기록; the answer's ``moved`` says so at its top).
 // HONESTY: a file that is not there = 꺼짐 / 수집 전, an unreadable one = 못 읽음 + why, never a zero; the paper money is never
 // shown as real money; small samples say so.
-import {h, put, ui, fmt, serverNow} from "../core/pb.js";
+import {h, put, ui, fmt, serverNow, local} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
+import {mixView, mixperfView, RANGE_UI} from "./livebots-mix.js";
 
 export const API = "/api/v4/livebots/range";
 const REFRESH_MS = 15 * 1000;
@@ -122,7 +128,8 @@ export function rangeView(ctx) {
       ui.card({title: "잔고", sub: "페이퍼 지갑(모의)과 실행기 잔고(진짜 돈) · 입출금은 빼고 셈", cls: "lrb-eqcard"}, eqBox)),
     ui.card({title: "최근 24시간 신호", sub: "신호마다 어떻게 됐는지 · 봇이 남긴 이유 그대로", cls: "lrb-sigcard"}, sigBox),
     ui.card({title: "주의 · 긴급 기록", sub: "페이퍼 봇과 따라가는 실행기의 기록 그대로", cls: "lrb-warncard"}, warnBox));
-  const main = h("div", {class: "lrb-body"}, hero, cards);
+  const movedBox = h("div", {class: "lrb-movedbox"});
+  const main = h("div", {class: "lrb-body"}, movedBox, hero, cards);
   const el = h("div", {class: "lrb stack"}, slot, main,
     ui.note("보기만 하는 화면 · 15초마다 새로 읽어요 · 페이퍼(COMBO@mix · COMBOFLIP@mix)의 돈은 진짜 돈이 아니에요 · 실거래 손익은 거래소 체결 기록 (못 읽은 거래는 지갑 변화로 어림)"));
 
@@ -317,6 +324,8 @@ export function rangeView(ctx) {
   }
   function draw() {
     if (!st.d) return;
+    // owners 10-31 night: once the 레인지 봇 trades WOO X Pro by itself, this screen is the old paper bot's past record
+    put(movedBox, st.d.moved ? h("p", {class: "lrb-moved", role: "note"}, ui.pill("지난 기록", "thin"), ` ${st.d.moved.ko || ""}`) : null);
     drawHero(); drawPlan(); drawPos(); drawWait(); drawTrades(); drawFollow(); drawFlip(); drawEquity(); drawSignals(); drawWarns();
   }
 
@@ -340,4 +349,53 @@ export function rangeView(ctx) {
   load().catch(() => {});
   ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
   return {el, set() {}};
+}
+
+// ================================================================ the 레인지 봇 tab (owners 10-31 night)
+/** Does the summary (/api/v4/livebots) say the 레인지 봇 trades WOO X Pro by itself (its ``replaced`` names the tab)? */
+export function rangeMoved(d) {
+  return !!(d && Array.isArray(d.replaced) && d.replaced.some((r) => r && (r.tab === "rangebot" || r.bot === "range")));
+}
+/** The parts of the 레인지 봇 tab once it trades by itself: its 관제 and 성적 (실거래 vs 모의 side by side) on /mixrange, and
+ *  the old paper bot's screen as its past record. */
+export const RANGE_PARTS = [{id: "ctl", label: "관제"}, {id: "perf", label: "성적 · 모의 비교"}, {id: "old", label: "지난 페이퍼 기록"}];
+/** rangeBotView(ctx, hub) -> {el, set(d, state)}: the 레인지 봇 tab (screens/livebots.js TABS "rangebot"). Decided once, at
+ *  the first summary: rangeMoved -> the mix screens (each part made the first time it is opened, then kept and shown or
+ *  hidden), else this file's rangeView as it was. */
+export function rangeBotView(ctx, hub) {
+  const el = h("div", {class: "lrb-tab"});
+  const st = {mode: null, part: local.get("lrb-part", "ctl"), views: {}, boxes: {}, body: null};
+  put(el, ui.empty("불러오는 중"));
+  const make = (id) => (id === "perf" ? mixperfView(ctx, RANGE_UI) : id === "old" ? rangeView(ctx) : mixView(ctx, RANGE_UI));
+  function show(id) {
+    const part = RANGE_PARTS.some((x) => x.id === id) ? id : "ctl";
+    st.part = part;
+    local.set("lrb-part", part);
+    if (!st.views[part]) {
+      st.views[part] = make(part);
+      st.boxes[part] = h("div", {class: "lrb-part", "data-part": part}, st.views[part].el);
+      st.body.append(st.boxes[part]);
+    }
+    for (const [k, b] of Object.entries(st.boxes)) b.hidden = k !== part;
+  }
+  function decide(d) {
+    if (st.mode) return;
+    st.mode = rangeMoved(d) ? "mix" : "old";
+    if (st.mode === "old") {                       // before the 레인지 봇's move: the screen as it was
+      st.views.old = rangeView(ctx);
+      put(el, st.views.old.el);
+      return;
+    }
+    st.body = h("div", {class: "lrb-parts"});
+    const seg = ui.seg(RANGE_PARTS, RANGE_PARTS.some((x) => x.id === st.part) ? st.part : "ctl", (id) => show(id), {label: "레인지 봇 보기"});
+    put(el, h("p", {class: "lrb-sub lrb-mixhead"}, `레인지 봇 · ${RANGE_UI.account} 계정에서 스스로 거래 (페이퍼를 따라가지 않음) · 실거래와 모의 쌍둥이`),
+      seg, st.body);
+    show(st.part);
+  }
+  const d0 = hub && hub.get ? hub.get() : null;
+  if (d0) decide(d0);
+  return {el, set(d, state) {
+    if (d) decide(d);
+    else if (!st.mode && state === "failed") put(el, ui.empty("요약 답을 아직 못 받아 어느 레인지 봇 화면인지 몰라요 · 다시 읽는 중"));
+  }};
 }

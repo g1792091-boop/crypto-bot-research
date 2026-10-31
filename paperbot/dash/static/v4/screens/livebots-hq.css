@@ -105,7 +105,7 @@
   .lbh-deck.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 /* the four live accounts always (owners 10/25 night), in one order whatever came first: 바이비트 · WOO X Pro · 딥코인 (its
-   설치 전 card until the executor comes) · WOO X Pro 2 (친구 30분 봇(믹스)) · the old '친구 매매법' executor of WOO X Pro 2
+   설치 전 card until the executor comes) · WOO X Pro 2 (친구 15분 봇(믹스)) · the old '친구 매매법' executor of WOO X Pro 2
    while the server has it (five: the fifth wraps under them; a very wide screen keeps the five in a row) */
 .lbh-deck > .lbh-x-bybit { order: 1; }
 .lbh-deck > .lbh-x-mexc { order: 2; }
@@ -115,6 +115,8 @@
 .lbh-deck > .lbh-x-toobit { order: 6; }
 /* the 바이비트 봇 (owners 10-29: it took the Bybit slot, trading that account by itself) in the Bybit place */
 .lbh-deck > .lbh-mix.lbh-x-bybit { order: 1; }
+/* the 레인지 봇 (owners 10-31 night: it took the first WOO X Pro slot, trading that account by itself) in that place */
+.lbh-deck > .lbh-mix.lbh-x-mexc { order: 2; }
 @media (min-width: 1400px) {
   .lbh-deck.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }

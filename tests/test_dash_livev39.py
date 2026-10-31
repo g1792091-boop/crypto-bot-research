@@ -274,13 +274,14 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     # tests/test_dash_mixbybit_site.py); owners 10-31: V3.9 투비트 gone
     assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]]
     assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit"]      # the rest as it was
-    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "추세판단 봇"]]
-    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"]]
+    # (owners 10-31 night: the friend bot is 친구 15분 봇, its config's name)
+    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "추세판단 봇"]]
+    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 15분 봇", "bots", "livebots"]]
     assert out["v39"] is None and "v39" not in out["keys"]
     assert out["keys"][:6] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend"] and out["land"] == "hq"
     assert out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
-    for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇")):
+    for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 15분 봇")):
         assert f'{{id: "{t}", label: "{label}"' in lb
     assert "livebots-v39" not in lb and 'id: "v39"' not in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
@@ -290,7 +291,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
 
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     """The strip and the head of a 봇별 screen (screens/livebots.js mount): 추세판단 봇 with 바이비트 · WOO X Pro only (V3.9
-    투비트 gone on 10-31), 친구 30분 봇 with none of the executors; the empty 목표 연구
+    투비트 gone on 10-31), 친구 15분 봇 with none of the executors; the empty 목표 연구
     foot with its bot, and in it the 목표 연구 section (screens/livebots-goalres.js) asking for that bot's own answer."""
     summary = {"execs": [{"id": "bybit", "bot": "paper", "name_ko": "바이비트"}, {"id": "mexc", "bot": "paper", "name_ko": "WOO X Pro"},
                          {"id": "deepcoin", "bot": "paper2", "name_ko": "딥코인"}, {"id": "toobit", "bot": None, "name_ko": "투비트"}],
@@ -325,7 +326,7 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     assert "딥코인" not in head(r["trend"]["text"]) and "투비트" not in head(r["trend"]["text"])
     assert "추세판단 봇 페이퍼(연습)와 그 봇을 따라가는 바이비트 · WOO X Pro 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요" in r["trend"]["text"]
     assert "딥코인 $77.70" in head(r["vwap"]["text"]) and "바이비트" not in head(r["vwap"]["text"])
-    assert "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요" in r["mix"]["text"] and "바이비트" not in head(r["mix"]["text"])
+    assert "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요" in r["mix"]["text"] and "바이비트" not in head(r["mix"]["text"])
     assert "바이비트 $101.50" in r["old"]["text"] and "딥코인 $77.70" in r["old"]["text"]          # the old screens as they were
     assert [r[k]["goal"] for k in ("trend", "vwap", "mix", "old")] == [1, 1, 1, 0]
     assert [r[k]["lgr"] for k in ("trend", "vwap", "mix", "old")] == [1, 1, 1, 0]

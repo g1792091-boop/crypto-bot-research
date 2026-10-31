@@ -309,11 +309,12 @@ const LIVE_GROUPS = [
   {id: "bybit", ko: "바이비트 봇", screens: ["bybit", "bybitperf", "ftrend"]},
 ];
 const LIVE_SCREENS = {
-  bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (친구 추세 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
+  bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (15분봉 · 추세 바 30분 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
   trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)"},
-  rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (페이퍼와 그 봇을 따라가는 WOO X Pro)"},
+  // owners 10-31 night: the 레인지 봇 trades WOO X Pro by itself once its config is there (screens/livebots-range.js rangeBotView)
+  rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (WOO X Pro · 15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · 지난 페이퍼 기록)"},
   vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)"},
-  mixbot: {ko: "친구 30분 봇", group: "bots", title: "친구 30분 봇 (OBV 진한색 + AC · WOO X Pro 2 실거래와 모의)"},
+  mixbot: {ko: "친구 15분 봇", group: "bots", title: "친구 15분 봇 (15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)"},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)"},
@@ -343,11 +344,11 @@ const LIVE_SCREENS = {
   vwap: {ko: "VWAP 관제", group: "vwap", title: "VWAP 관제 (VWAP 개선판)"},
   vwperf: {ko: "VWAP 성적", group: "vwap", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)"},
   vwblock: {ko: "VWAP 막은 신호", group: "vwap", title: "VWAP 막은 신호 (막지 않았다면)"},
-  mix: {ko: "믹스 관제", group: "mix", title: "믹스 관제 (믹스 30분 봇 · 실거래와 모의)"},
+  mix: {ko: "믹스 관제", group: "mix", title: "믹스 관제 (친구 15분 봇 · 실거래와 모의)"},
   mixperf: {ko: "믹스 성적", group: "mix", title: "믹스 성적 (실거래 · 모의 · 설계서 5년)"},
   bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)"},
   bybitperf: {ko: "바이비트 성적", group: "bybit", title: "바이비트 성적 (실거래 vs 모의)"},
-  ftrend: {ko: "친구 추세판", group: "bybit", title: "친구 추세판 (코인별 30분 · 1시간 추세 투표와 OBV · 스톡RSI)"},
+  ftrend: {ko: "친구 추세판", group: "bybit", title: "친구 추세판 (코인별 추세 바 30분 종합 · 바이비트 봇 · 친구 15분 봇 · 레인지 봇 15분봉 신호)"},
 };
 if (LIVE) {
   // put in place (the same objects every module already imported): the menu, the screens, the strip's groups

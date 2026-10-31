@@ -13,6 +13,9 @@ and only the executors that follow it (now WOO X Pro), on one screen and nothing
                                  against the coin-flip twin, the balance lines, the signals of the last 24 hours by what became
                                  of them, the warnings (5 s cache, as every 실거래 tab)
 
+Owners 10-31 night: once the 레인지 봇 trades the first WOO X Pro account by itself (a mix bot, livebots.range_moved) this
+answer is the old paper bot's past record (``moved`` says so; the 레인지 봇 tab shows the new bot's screens first).
+
 Which database is the 레인지 봇 (the site and this screen must agree): livebots.paper_bots' "range" (a paper database an
 executor follows, or PAPERBOT_LIVE_RANGE_DB once it is there, whose start record's config has a ``range`` section; never the
 file name alone). Its file opened ``mode=ro`` + ``query_only`` (livebots.open_ro), one snapshot; the executors through
@@ -42,6 +45,11 @@ REPO_CONFIG = os.path.join(REPO, "deploy", "combo.range.json")
 OFF_KO = "아직 꺼져 있어요"
 FIRST_KO = "레인지 봇이 아직 첫 기록 전이에요 (켜고 1~2분 뒤 생겨요)"
 NOT_RANGE_KO = "이 기록 파일의 봇은 레인지 봇이 아니에요 (시작 기록의 설정에 range가 없어요)"
+# owners 10-31 night (docs/range-bot-ko.md 0장): the 레인지 봇 trades the first WOO X Pro account by itself (livebots.range_moved);
+# this screen is then the old paper bot's past record (the 레인지 봇 tab shows the new bot first)
+MOVED = {"ko": "10/31 밤부터 레인지 봇은 WOO X Pro 계정에서 스스로 거래해요 (추세 바 종합 + 히스토그램 0선 돌파, 15분봉) · "
+               "이 화면은 그 전 레인지 페이퍼 봇과 그 봇을 따라가던 실행기의 지난 기록이에요",
+         "tab": "rangebot", "api": "/api/v4/livebots/mixrange"}
 # the guide's start steps (docs/range-bot-ko.md 3장 B), shown while the bot is off
 START_STEPS = (
     "sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/combo.range.json /etc/paperbot/combo-range.json",
@@ -643,7 +651,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
             "bot": {"id": "range", "path": path, "short_ko": b["short_ko"], "label_ko": b["label_ko"], "followers": b["followers"]} if b else None,
             "files": {"db": {"state": snap.get("state"), "path": path, "reason_ko": snap.get("reason_ko"), "reason": snap.get("reason")},
                       "config": {"path": L.combo_fallback(more, "range")}},
-            "round_trip": rt}
+            "round_trip": rt, "moved": MOVED if L.range_moved(p) else None}
     if not ok:
         return {**head, "wallet": None, "flip_wallet": None, "today": None, "position": None, "wait": None, "supertrend": None,
                 "followers": [follower_view(x, path, snap, plan, now) for x in fol], "trades": [], "follow": [], "flip": None,

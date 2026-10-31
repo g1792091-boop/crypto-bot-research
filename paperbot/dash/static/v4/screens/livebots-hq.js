@@ -37,13 +37,13 @@
 // (livebots-kit.js execIds): the deck then puts the centre on top and the three reactors in a row; else as before.
 // The live accounts side by side (owners 10/25 night: the ways of trading must never be mixed up): 바이비트 ·
 // WOO X Pro (they follow 추세판단 봇) · WOO X Pro 2 (owners 10-31: 딥코인 and 투비트 retired, no card for them any more)
-// (친구 30분 봇(믹스), paperbot/mixchop.py: no paper bot, it trades by itself; its card from
+// (the friend bot, 친구 15분 봇 since 10-31 night (its config's name), paperbot/mixchop.py: no paper bot, it trades by itself; its card from
 // /api/v4/livebots/mix, dash/more/livemix.py: running or 꺼짐 / 기록 멈춤, the last equity it logged, its last 20 closed
 // trades as the ring, today, the position, whether it may enter now). Every card says which bot it is or follows (봇 …)
 // under the account's name; the old '친구 매매법' executor of WOO X Pro 2 keeps its own reactor while the server has it.
 import {h, s, put, ui, fmt, motion, store, serverNow, local} from "../core/pb.js";
 import {lightWords, lightCells, netRoe, roeAt, roePrice, liveToday, unrealized} from "./livebots-calc.js";
-import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId} from "./livebots-kit.js";
+import {ACCT, paperBotKo, EXEC_SLOTS, execIds, execsNow, execsKo, isPaperId, josa} from "./livebots-kit.js";
 import {expectLines} from "./livebots-trend.js";
 import {takingKo, takingNoneKo} from "./livebots-likely.js";
 
@@ -52,17 +52,27 @@ export const CAL_API = "/api/v4/livebots/calendar";
 export const RANK_API = "/api/v4/livebots/rank";
 export const MIX_API = "/api/v4/livebots/mix";
 const NOW_MS = 15 * 1000, CAL_MS = 30 * 1000, RANK_MS = 30 * 1000, MIX_MS = 15 * 1000;
-const MIX_BOT_KO = "친구 30분 봇";                    // the friend bot's name on 한눈에 (owners 10-31 evening: OBV + AC on 30m, as the 바이비트 봇)
+// the friend bot's name on 한눈에 before its answer says it (owners 10-31 night: 15m, the trend bar + the histogram's 0 cross;
+// each card then takes its answer's ``name_ko``, its config's name: mixName)
+const MIX_BOT_KO = "친구 15분 봇";
 export const MIXBYBIT_API = "/api/v4/livebots/mixbybit";
+export const MIXRANGE_API = "/api/v4/livebots/mixrange";
 /** The mix bots' cards (paperbot/mixchop.py, each trading an account by itself): the account's slot (its colour and its
  *  place in the deck), its words, its answer, its screen; ``replaces``: shown only once the summary says it took that
- *  executor slot (owners 10-29: the 바이비트 봇 in the Bybit slot); ``oldExec``: the old executor of the same account. */
+ *  executor slot (owners 10-29: the 바이비트 봇 in the Bybit slot; 10-31 night: the 레인지 봇 in the first WOO X Pro slot);
+ *  ``oldExec``: the old executor of the same account. */
 export const MIX_BOTS = [
   {slot: "wooxpro2", account: "WOO X Pro 2", exchange: "WOO X Pro 2", bot: MIX_BOT_KO, api: MIX_API, unit: "paperbot-mixchop",
     tab: "mix", linkKo: "믹스 관제 · 성적 →", oldExec: "wooxpro2", oldKo: "'친구 매매법'", replaces: null, cls: ""},
   {slot: "bybit", account: "바이비트", exchange: "바이비트", bot: "바이비트 봇", api: MIXBYBIT_API, unit: "paperbot-mixbybit",
     tab: "bybit", linkKo: "바이비트 봇 관제 · 성적 →", oldExec: "bybit", oldKo: "추세판단 봇을 따라가던", replaces: "bybit", cls: "lbh-mixb"},
+  {slot: "mexc", account: "WOO X Pro", exchange: "WOO X Pro", bot: "레인지 봇", api: MIXRANGE_API, unit: "paperbot-mixrange",
+    tab: "rangebot", linkKo: "레인지 봇 관제 · 성적 →", oldExec: "mexc", oldKo: "레인지 봇 페이퍼를 따라가던", replaces: "mexc", cls: "lbh-mixr"},
 ];
+/** A mix bot's name: its answer's (its live config's ``name``, owners 10-31 night: 친구 15분 봇), else the card's. */
+export const mixName = (m) => (m && m.d && m.d.name_ko) || (m && m.bot) || "";
+/** A mix bot's bar in words from its live bot ("30분" / "15분": the answer's ``tf_ko``), else 30분. */
+const tfKo = (b) => (b && ((b.status && b.status.tf_ko) || b.tf_ko)) || "30분";
 export const COINS = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"];
 const DAY = 86400000, KST = 9 * 3600000;
 const SPIN = 0.00011;                                // the ring's turn (rad / ms): about one turn in a minute
@@ -134,7 +144,7 @@ export function mixLed(b, failed = false, o = {}) {
   const s = b.status, unit = s.unit || b.unit || o.unit || "paperbot-mixchop";
   if (s.state === "off") return {id: "none", ko: "꺼짐", why: `아직 켠 적 없어요 (기록 파일 없음) · 켜기: sudo systemctl start ${unit}`};
   if (s.state === "error") return {id: "bad", ko: "못 읽음", why: s.reason_ko || s.ko || "상태 파일을 읽지 못했어요"};
-  if (s.state === "stopped") return {id: "stale", ko: "기록 멈춤", why: `35분 넘게 새 기록이 없어요 · 서버에서 systemctl status ${unit}`};
+  if (s.state === "stopped") return {id: "stale", ko: "기록 멈춤", why: `${Number(s.stale_ms) > 0 ? Math.round(Number(s.stale_ms) / 60000) : 35}분 넘게 새 기록이 없어요 · 서버에서 systemctl status ${unit}`};
   const hs = ((b.halts || {}).items || []).filter((x) => x.sure);
   if (hs.length) return {id: "halt", ko: "새 진입 멈춤", why: hs.map((x) => x.ko).join(" · ")};
   return {id: "run", ko: "돌아가는 중", why: null};
@@ -157,7 +167,7 @@ export function mixGate(b) {
   if (bl.now && bl.now.blocked) return `진입 금지 시간${bl.now.kind ? ` · ${{weekend: "주말", usopen: "나스닥 개장", macro: "경제 발표"}[bl.now.kind] || ""}` : ""}`;
   if (b.position && b.position.state === "ok") return "보유 중 (한 번에 1개)";
   if (b.position && b.position.state !== "ok") return "몰라요";
-  return b.status.state === "running" ? "가능 · 30분봉 신호를 기다려요" : "—";
+  return b.status.state === "running" ? `가능 · ${tfKo(b)}봉 신호를 기다려요` : "—";
 }
 
 /**
@@ -334,9 +344,11 @@ export function tilesOf(rank) {
   });
 }
 
-/** No executor of the summary follows the main paper bot (the 추세판단 봇) any more (owners 10-29: switched off). */
-export const mainOff = (d) => !!d && Array.isArray(d.execs) && d.execs.length > 0 && d.execs.every((x) => x && "bot" in x)
-  && !d.execs.some((x) => x.bot === "paper");
+/** No executor of the summary follows the main paper bot (the 추세판단 봇) any more (owners 10-29: switched off); owners
+ *  10-31 night: no executor at all once mix bots took every slot (the summary's ``replaced``). */
+export const mainOff = (d) => !!d && Array.isArray(d.execs) && (d.execs.length > 0
+  ? d.execs.every((x) => x && "bot" in x) && !d.execs.some((x) => x.bot === "paper")
+  : Array.isArray(d.replaced) && d.replaced.length > 0);
 const MAIN_OFF_KO = "10/29부터 따라가는 실거래가 없어요 · 가운데 그림은 그 봇의 매매법이에요 · 지금 거래는 아래 계좌 카드의 봇들이 해요";
 /**
  * Owners 10-30 ("왜이래 이거"): while no executor follows the 추세판단 봇 the centre is the bots that trade now: each
@@ -1115,7 +1127,7 @@ export function hqView(ctx, hub) {
     // the old '친구 매매법' executor of WOO X Pro 2: the mix bot trades that account now (its unit stops this one)
     const mb = mixBot();
     if (r.id === "wooxpro2" && mb && mb.status && mb.status.state !== "off") {
-      ns.push(`같은 WOO X Pro 2 계정을 지금은 ${MIX_BOT_KO}이 써요 · 이 칸은 예전 '친구 매매법' 실행기 기록이에요`);
+      ns.push(`같은 WOO X Pro 2 계정을 지금은 ${josa(mixName(MX), "이", "가")} 써요 · 이 칸은 예전 '친구 매매법' 실행기 기록이에요`);
     }
     r.notes.replaceChildren(...ns.map((t) => h("p", null, t)));
   }
@@ -1130,8 +1142,9 @@ export function hqView(ctx, hub) {
   // retired: livebots.RETIRED_SLOTS)
 
   // ---- the mix bots, each trading an account by itself (their own state and log, dash/more/livemix.py): WOO X Pro 2's
-  // 친구 30분 봇(믹스) (/api/v4/livebots/mix) and, once it took the Bybit slot (owners 10-29: the summary's ``replaced``),
-  // the 바이비트 봇 (/api/v4/livebots/mixbybit)
+  // friend bot (/api/v4/livebots/mix) and, once it took the Bybit slot (owners 10-29: the summary's ``replaced``), the
+  // 바이비트 봇 (/api/v4/livebots/mixbybit); once it took the first WOO X Pro slot (owners 10-31 night), the 레인지 봇
+  // (/api/v4/livebots/mixrange)
   const MIXES = MIX_BOTS.map((m) => ({...m, r: reactor(m.slot, {cls: ["lbh-mix", m.cls].filter(Boolean).join(" "), name: m.account,
     aria: `${m.account} · ${m.bot} (진짜 돈)`, third: "새 진입"}), d: null, at: 0, err: null, busy: false}));
   const MX = MIXES[0];
@@ -1140,10 +1153,10 @@ export function hqView(ctx, hub) {
     const bots = m.d && Array.isArray(m.d.bots) ? m.d.bots : null;
     return bots ? bots.find((b) => b && b.id === "live") || null : null;
   };
-  /** The 친구 30분 봇's live bot (the old WOO X Pro 2 executor's card says it took that account). */
+  /** The friend bot's live bot (the old WOO X Pro 2 executor's card says it took that account). */
   const mixBot = () => liveOf(MX);
   /** The bots trading now (liveBots), for the centre while the 추세판단 봇 is off. */
-  const botsNow = () => liveBots(st.d, MIXES.filter((m) => shownMix(m)).map((m) => ({bot: m.bot, account: m.account, unit: m.unit,
+  const botsNow = () => liveBots(st.d, MIXES.filter((m) => shownMix(m)).map((m) => ({bot: mixName(m), account: m.account, unit: m.unit,
     live: liveOf(m), failed: !!m.err && !liveOf(m)})));
   /** Is a mix bot's card on this server's 한눈에 (the friend bot's always, the 바이비트 봇's once it took the slot)? */
   const shownMix = (m) => !m.replaces || !!(st.d && (st.d.replaced || []).some((x) => x && x.id === m.replaces));
@@ -1168,15 +1181,16 @@ export function hqView(ctx, hub) {
     if (!show) return;
     if (!m.r.el.parentNode) deck.append(m.r.el);
     const b = liveOf(m);
-    const led = mixLed(b, !!m.err && !b, {ko: m.bot, unit: m.unit});
+    const name = mixName(m);
+    const led = mixLed(b, !!m.err && !b, {ko: name, unit: m.unit});
     const r = m.r;
     r.el.dataset.led = led.id;
     r.ledKo.textContent = led.ko;
     const s0 = (b && b.status) || {};
     r.asOf = (led.id === "run" || led.id === "stale") && s0.seen_ms ? s0.seen_ms : null;
     r.ledSub.textContent = led.why && led.id !== "stale" ? led.why : r.asOf ? `${ageKo(r.asOf)} 기록` : "";
-    r.el.title = led.why ? `${m.account} · ${m.bot}: ${led.ko} · ${led.why}` : "";
-    whoLine(r, m.bot, "스스로 매매 · 페이퍼를 따라가지 않음");
+    r.el.title = led.why ? `${m.account} · ${name}: ${led.ko} · ${led.why}` : "";
+    whoLine(r, name, "스스로 매매 · 페이퍼를 따라가지 않음");
     const dn = s0.first_start_ms ? dayN(s0.first_start_ms, serverNow()) : null;
     r.day.textContent = dn ? `DAY ${String(dn).padStart(2, "0")}` : "";
     r.day.title = dn ? `처음 켬 ${fmt.kst(s0.first_start_ms)} (한국 시간 기준 ${dn}일째)` : "";
@@ -1223,7 +1237,7 @@ export function hqView(ctx, hub) {
     r.el.dataset.light = "";
     r.lHead.textContent = !on ? "최근 거래 —" : tr.have ? `최근 거래 · ${fmt.int(tr.wins)}승 ${fmt.int(tr.losses)}패` : "아직 닫힌 거래 없음";
     r.lHead.className = "lbh-lh";
-    r.lRule.textContent = on ? `신호등 없음 · 30분봉 신호마다 바로 들어가요 · 칸 하나가 거래 하나 (최근 ${tr.n}번)` : "";
+    r.lRule.textContent = on ? `신호등 없음 · ${tfKo(b)}봉 신호마다 바로 들어가요 · 칸 하나가 거래 하나 (최근 ${tr.n}번)` : "";
     if (!on) {
       for (const k of [r.today, r.pos, r.streak]) { k.textContent = !b ? "—" : s0.state === "error" ? "못 읽음" : "—"; k.className = "muted"; }
     } else {
@@ -1240,7 +1254,8 @@ export function hqView(ctx, hub) {
       r.streak.className = /멈춤|몰라요/.test(r.streak.textContent) ? "down" : /금지/.test(r.streak.textContent) ? "muted" : "";
     }
     const coins = (b && b.coins) || [];
-    r.foll.textContent = b ? `30분봉 신호 · ${coins.map((c) => `${c.coin}${c.enabled ? "" : "(꺼짐)"}`).join("·") || "코인 모름"}${b.plan_short_ko ? ` · ${b.plan_short_ko}` : b.risk_pct != null ? ` · 손절 1번 잔고의 ${fmt.num(b.risk_pct, 2)}%` : ""}` : "";
+    const ttf = b && b.status && b.status.trend_tf_ko && b.status.trend_tf_ko !== tfKo(b) ? ` · 추세 ${b.status.trend_tf_ko}봉` : "";   // owners 10-31, last
+    r.foll.textContent = b ? `${tfKo(b)}봉 신호 · ${coins.map((c) => `${c.coin}${c.enabled ? "" : "(꺼짐)"}`).join("·") || "코인 모름"}${ttf}${b.plan_short_ko ? ` · ${b.plan_short_ko}` : b.risk_pct != null ? ` · 손절 1번 잔고의 ${fmt.num(b.risk_pct, 2)}%` : ""}` : "";
     const ns = [];
     if (b && s0.state === "stopped") ns.push(led.why);
     if (b && led.id === "halt") ns.push(`새 진입 멈춤: ${led.why} · 열린 포지션은 손절·계단 그대로`);
@@ -1329,7 +1344,8 @@ export function hqView(ctx, hub) {
   const side = (t) => h("span", {class: "lbh-side", "aria-hidden": "true"}, t);
   const sideBot = side(sideBotKo(undefined));             // the paper bot's name from the first summary on (drawBot)
   const [first, ...rest] = execsNow();                // the first reactor · the centre · the others (as before: 바이비트 · WOO X Pro)
-  const deck = h("div", {class: "lbh-deck"}, R[first].el, center, ...rest.map((id) => R[id].el));
+  // (owners 10-31 night: no executor at all once mix bots took every slot: the centre first, then the mix bots' cards)
+  const deck = h("div", {class: "lbh-deck"}, first ? R[first].el : null, center, ...rest.map((id) => R[id].el));
   /** The reactors of the summary's executors: the third (딥코인) is added after the others when it comes; with three the
    *  deck puts the centre on top and the reactors in a row (livebots-hq.css .lbh-deck.three), with four (WOO X Pro 2) the
    *  four in a row (.four; a phone two a row). */

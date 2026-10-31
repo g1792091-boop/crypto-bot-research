@@ -711,7 +711,7 @@ def test_wiring_route_menu_find_inventory_and_module():
     # 봇별 first (owners 10/26: one screen per bot, tests/test_dash_livev39.py; 레인지 봇 after 추세판단 봇,
     # tests/test_dash_live_range.py), then every tab as it was
     # (owners 10-29: the 바이비트 봇 first, the 추세판단 봇 switched off last; tests/test_dash_mixbybit_site.py)
-    assert own == [("bybitbot", "바이비트 봇"), ("rangebot", "레인지 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"),
+    assert own == [("bybitbot", "바이비트 봇"), ("rangebot", "레인지 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 15분 봇"),
                    ("trendbot", "추세판단 봇"), ("trend", "관제"), ("tchart", "추세 차트"), ("hq", "한눈에"), ("pos", "포지션"), ("summary", "요약"), ("chart", "차트"), ("journal", "일지"), ("trades", "거래"), ("replay", "다시보기"),
                    ("signals", "신호"), ("missed", "못 탄 신호"), ("review", "검토"), ("expect", "재현 비교"), ("perf", "성적"), ("rank", "순위"), ("map", "지도"), ("cost", "비용"),
                    ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자"),

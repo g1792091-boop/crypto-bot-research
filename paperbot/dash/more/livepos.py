@@ -66,14 +66,20 @@ OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 
 # executor (it trades by itself), its card from its own state file once it has one (mix_card)
 # ... and the 바이비트 봇 (owners 10-29, docs/mixbybit-ko.md): the Bybit account's own 30-minute bot (mixbybit_card), in the
 # Bybit slot's place once the old executor's slot left the page (livebots.replaced)
+# ... and the 레인지 봇 (owners 10-31 night, docs/range-bot-ko.md 0장): the first WOO X Pro account's own 15-minute bot
+# ("mixrange"), in the "mexc" slot's place once that slot left the page (livebots.replaced)
 CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("range", L.ACCOUNT), ("bybit", None), ("mixbybit", None), ("mexc", None),
-         ("deepcoin", None), ("wooxpro2", None), ("mix", None), ("toobit", None), ("flip", L.FLIP_ACCOUNT))
+         ("mixrange", None), ("deepcoin", None), ("wooxpro2", None), ("mix", None), ("toobit", None), ("flip", L.FLIP_ACCOUNT))
 MIX_NAME_KO = "WOO X Pro 2 · 친구봇"
 MIX_LIQ_KO = "친구봇 상태 파일에 청산가가 없어요 (WOO X Pro 앱에서 확인)"
 # each mix bot's card words (livemix.PROFILES): card id, name, its short name, the app to check in, the account's colour
 MIX_CARD = {"mix": {"id": "mix", "name_ko": MIX_NAME_KO, "short_ko": "친구봇", "app_ko": "WOO X Pro", "tag": "wooxpro2"},
             "bybit": {"id": "mixbybit", "name_ko": "바이비트 · 바이비트 봇", "short_ko": "바이비트 봇", "app_ko": "바이비트",
-                      "tag": "bybit"}}
+                      "tag": "bybit"},
+            "range": {"id": "mixrange", "name_ko": "WOO X Pro · 레인지 봇", "short_ko": "레인지 봇", "app_ko": "WOO X Pro",
+                      "tag": "mexc"}}
+# which mix bot takes which executor slot's place on this page (livebots.REPLACED: its ``bot``), and its paths in ``more``
+MIX_SLOTS = (("bybit", "mixbybit_paths"), ("range", "mixrange_paths"))
 
 _lock = threading.Lock()
 _final: "OrderedDict[str, dict]" = OrderedDict()
@@ -548,7 +554,8 @@ EXIT_REASON_KO = {"SL": "손절", "LOCK": "계단 익절", "TP": "익절", "LIQ"
 
 
 def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None, bot: str = "mix") -> Optional[dict]:
-    """A mix bot's card (paperbot/mixchop.py; ``bot``: livemix.PROFILES, the 친구봇 on WOO X Pro 2 or the 바이비트 봇):
+    """A mix bot's card (paperbot/mixchop.py; ``bot``: livemix.PROFILES, the 친구봇 on WOO X Pro 2, the 바이비트 봇 or the
+    레인지 봇):
     its state file's position in this page's shape, its own rules (the config's net-ROE ladder, its own fill, its fee
     round trip); no paper behind it. None while the bot has no state file on this server (never started)."""
     from . import livemix as X
@@ -567,8 +574,10 @@ def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None, bot: s
     d = st.get("d") or {}
     cfg = conf.get("cfg")
     seen = X._i(d.get("saved_ms")) or st.get("mtime_ms")
-    out = {**base, "state": "ok", "as_of_ms": seen, "stale": seen is None or now - int(seen) > X.STALE_MS, "wallet": None,
-           "halted": False, "halt_reason": "", "position": None, "rule_ko": prof.name}
+    tf_ms, tf_ko = X.tf_of(cfg)
+    name = getattr(cfg, "name", None) or prof.name               # its config's name (owners 10-31 night: 친구 15분 봇)
+    out = {**base, "state": "ok", "as_of_ms": seen, "stale": seen is None or now - int(seen) > X.stale_of(cfg)[0], "wallet": None,
+           "halted": False, "halt_reason": "", "position": None, "rule_ko": name, "tf_ko": tf_ko}
     pv = X.position_view("live", d, now, cfg)
     if not pv:
         return out
@@ -598,7 +607,8 @@ def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None, bot: s
     out["position"] = {
         "key": None, "symbol": pv["symbol"], "side": side, "leverage": lev, "qty": pv.get("qty"), "margin": pv.get("margin"),
         "entry": entry, "entry_time": pv.get("opened_ms"), "status": "open", "stop_order": pv.get("stop_id"),
-        "strategy_id": None, "timeframe": "30m", "rule_ko": f"{prof.name} · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
+        "strategy_id": None, "timeframe": "15m" if tf_ms == X.M.MIN15 else "30m",
+        "rule_ko": f"{name} · {tf_ko}봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
         "paired": False, "stop": stop, "stop_initial": None, "stop50": None, "stop_rule_cfg": None,
         "locked": locked, "lock_roe": lock, "lock_price": stop if locked else None, "secured": secured,
         "next": nxt, "ladder": ladder_steps(spec, lock, best, price_of, price_of), "ladder_from": "bot", "bot_ko": w["short_ko"],
@@ -653,8 +663,10 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
                 xpos["why"] = why_ref(b["id"], follow.get("symbol"), follow.get("entry_time"))
             if two or b["id"] is None:
                 cards[x["id"]]["follows_ko"] = b["short_ko"]
-        # the mix bots: the 친구봇 always (its card once it has a state file), the 바이비트 봇 once it took the Bybit slot
-        for bot, key in (("mix", "mix_paths"), *((("bybit", "mixbybit_paths"),) if "bybit" in L.replaced(p) else ())):
+        # the mix bots: the 친구봇 always (its card once it has a state file), the 바이비트 봇 once it took the Bybit slot,
+        # the 레인지 봇 once it took the "mexc" slot (owners 10-31 night)
+        took = {L.REPLACED[ex]["bot"] for ex in L.replaced(p)}
+        for bot, key in (("mix", "mix_paths"), *((b, k) for b, k in MIX_SLOTS if b in took)):
             w = MIX_CARD[bot]
             try:
                 mc = mix_card(now, conn, bars_state, more.get(key), bot)

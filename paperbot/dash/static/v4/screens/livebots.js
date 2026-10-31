@@ -8,9 +8,11 @@
 //   봇별   one screen per bot (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로,
 //          친구 30분 봇 화면 따로, v3.9 화면 따로"; BOT_TAB), each with only the executors that follow it, in its head and in
 //          the real-money strip: 추세판단 봇 (the 관제 screen with 바이비트 · WOO X Pro only), VWAP 개선판 (VWAP 관제: its paper
-//          bot; owners 10-31: no 딥코인 any more), 친구 30분 봇 (믹스 관제: the 믹스 30분 봇 on the second WOO X Pro account and
-//          its paper twin; V3.9 투비트 left the menu on 10-31: the 투비트 bot does not run), and since 10/26 레인지 봇 (screens/livebots-range.js,
-//          /api/v4/livebots/range: the 레인지 봇 paper bot and the executors that follow it, now WOO X Pro). Each leaves an empty <section class="lb-goalres"> at its foot
+//          bot; owners 10-31: no 딥코인 any more), 친구 15분 봇 (믹스 관제: the friend bot on the second WOO X Pro account and
+//          its paper twin, its config's name; V3.9 투비트 left the menu on 10-31: the 투비트 bot does not run), and since 10/26 레인지 봇 (screens/livebots-range.js,
+//          /api/v4/livebots/range: the 레인지 봇 paper bot and the executors that follow it, now WOO X Pro; owners 10-31 night:
+//          once the summary's ``replaced`` says the 레인지 봇 trades WOO X Pro by itself, its mix screens 관제 · 성적 · 모의 비교
+//          on /mixrange and the old paper's screen as 지난 페이퍼 기록: livebots-range.js rangeBotView). Each leaves an empty <section class="lb-goalres"> at its foot
 //          for the 목표 연구 part (screens/livebots-goalres.js goalResSection: the bot's goal arithmetic and research)
 //   관제   추세판단 봇's control room (screens/livebots-trend.js, /api/v4/livebots/trend; owners 10/21 "대시보드 다시
 //          만들어야겠네 야무지게 필요한부분들 전부다 포함해서"), the site's first screen: what the bot is doing now, the wallets,
@@ -89,8 +91,9 @@ import {mixView, mixperfView, BYBIT_UI} from "./livebots-mix.js";
 // 바이비트 봇 (owners 10-29: the friend's trend + OBV / Stoch RSI entries on the Bybit account; menu group "bybit"): 관제 ·
 // 성적 (the mix screens on its own answers) · 친구 추세판
 import {ftrendView} from "./livebots-ftrend.js";
-// 봇별 › 레인지 봇 (owners 10/26: the 레인지 봇 paper bot and the executors that follow it; docs/range-bot-ko.md)
-import {rangeView} from "./livebots-range.js";
+// 봇별 › 레인지 봇 (owners 10/26: the 레인지 봇 paper bot and the executors that follow it; docs/range-bot-ko.md; owners 10-31
+// night: the 레인지 봇's own mix screens once it trades WOO X Pro by itself, rangeBotView / rangeMoved)
+import {rangeBotView, rangeMoved} from "./livebots-range.js";
 // 봇별 화면마다 맨 아래 목표 연구 (owners 10/26 "필요한 연구 부분들 각 봇마다 … 대시보드 화면에 추가해줘"; dash/more/livegoalres.py)
 import {goalResSection} from "./livebots-goalres.js";
 
@@ -100,9 +103,9 @@ const REFRESH_MS = 5 * 1000;               // the server caches 5 s; the executo
 export const TABS = [
   // 봇별 (owners 10/26): one bot each, its own executors only (BOT_TAB)
   {id: "bybitbot", label: "바이비트 봇", make: (ctx) => mixView(ctx, BYBIT_UI), own: true},
-  {id: "rangebot", label: "레인지 봇", make: (ctx) => rangeView(ctx), own: true},
+  {id: "rangebot", label: "레인지 봇", make: (ctx, hub) => rangeBotView(ctx, hub), own: true},
   {id: "vwapbot", label: "VWAP 개선판", make: (ctx, hub) => vwapView(ctx, hub), own: true},
-  {id: "mixbot", label: "친구 30분 봇", make: (ctx) => mixView(ctx), own: true},
+  {id: "mixbot", label: "친구 15분 봇", make: (ctx) => mixView(ctx), own: true},
   // owners 10-29: the 추세판단 봇 switched off, its record kept (last of 봇별)
   {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
   {id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true},
@@ -141,25 +144,31 @@ export const TABS = [
   {id: "ftrend", label: "친구 추세판", make: (ctx) => ftrendView(ctx), own: true},
 ];
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
-const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요"};
+const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요"};
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
+/** The 레인지 봇's head once it trades WOO X Pro by itself (owners 10-31 night, the summary's ``replaced``). */
+const RANGE_MIX_SUB = "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요";
 /** The 봇별 screens (owners 10/26): bot (the 목표 연구 part's id), the head's line, the strip's executors (that bot's only;
  *  none: what its real money is instead). */
 export const BOT_TAB = {
-  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
+  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "바이비트 봇은 바이비트 계정에서 스스로 거래해요 · 잔고는 아래 실거래 칸"},
   trendbot: {bot: "trend", sub: "추세판단 봇 페이퍼(연습)와 그 봇을 따라가던 실행기 · 두 분 결정(10/29)으로 꺼 두는 봇 · 지난 기록 보관용이에요",
     head: (d) => botHead("추세판단 봇", followersOf(d, "paper")), only: (d) => followersOf(d, "paper"), none: "추세판단 봇을 따라가는 실행기가 지금 없어요"},
+  // owners 10-31 night: once the 레인지 봇 trades WOO X Pro by itself (rangeMoved), its own words (no executor follows a paper)
   rangebot: {bot: "range", sub: "레인지 봇 페이퍼(연습)와 그 봇을 따라가는 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
-    head: (d) => botHead("레인지 봇", followersOf(d, "range")), only: (d) => followersOf(d, "range"),
-    none: "레인지 봇을 따라가는 실행기가 아직 없어요 (페이퍼만)"},
+    head: (d) => (rangeMoved(d) ? RANGE_MIX_SUB : botHead("레인지 봇", followersOf(d, "range"))),
+    only: (d) => (rangeMoved(d) ? [] : followersOf(d, "range")),
+    none: (d) => (rangeMoved(d) ? "레인지 봇은 WOO X Pro 계정에서 스스로 거래해요 · 잔고는 아래 실거래 칸"
+      : "레인지 봇을 따라가는 실행기가 아직 없어요 (페이퍼만)")},
   vwapbot: {bot: "vwap", sub: "VWAP 개선판 페이퍼(연습) · 따라가는 실거래 없음 (딥코인은 10/31부터 안 돌림) · 다른 봇은 이 화면에 없어요",
     head: (d) => botHead("VWAP 개선판", followersOf(d, "paper2")), only: (d) => followersOf(d, "paper2"),
     none: "VWAP 개선판을 따라가는 실거래가 없어요 (페이퍼만)"},
-  // owners 10-30: the friend bot runs ROC / OBV 50 on 15m bars (paperbot/mixchop.py, deploy/mixchop.live.json)
-  mixbot: {bot: "mix", sub: "친구 30분 봇(OBV 진한색 + AC) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
-    head: null, only: () => [], none: "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
+  // owners 10-31 night: the friend bot (its config's name 친구 15분 봇) on 15m bars, the trend bar + the histogram's 0 cross;
+  // owners 10-31, last: all three mix bots enter on 15m bars and read the trend bar on the 30m bar
+  mixbot: {bot: "mix", sub: "친구 15분 봇(15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
+    head: null, only: () => [], none: "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
 };
 /** The foot of a 봇별 screen: the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한 분석·연구
  *  부분들"; screens/livebots-goalres.js, its own answer /api/v4/livebots/goalres?bot=). */
@@ -243,10 +252,12 @@ export async function mount(el, ctx) {
     const two = followLine(d.papers), n = execIds(d).length, three = n > 2;
     // owners 10-29: an account a mix bot took (the summary's ``replaced``) is said after who follows which
     const took = (d.replaced || []).map((r) => `${r.account_ko} → ${r.name_ko}(스스로 매매)`).join(" · ");
-    const head = bt ? (bt.head ? bt.head(d) : bt.sub) : gsub ? gsub : `${two ? `실행기 ${countKo(n)} 개 · ${two}`
+    // (owners 10-31 night: no executor left once mix bots took every slot: the accounts and their bots only)
+    const head = bt ? (bt.head ? bt.head(d) : bt.sub) : gsub ? gsub : `${!n && took ? "실행기 없음 · 실거래 봇이 계정마다 스스로 매매해요"
+      : two ? `실행기 ${countKo(n)} 개 · ${two}`
       : three ? `${execsKo(execIds(d))} 실행기와 그 ${n > 3 ? "넷" : "셋"}이 따라가는 페이퍼(연습)` : HEAD_SUB}${took ? ` · ${took}` : ""}`;
     if (sub.textContent !== head) sub.textContent = head;
-    if (bt) put(real, realLine(d, {only: bt.only(d), none: bt.none}));   // a 봇별 screen: that bot's executors only
+    if (bt) put(real, realLine(d, {only: bt.only(d), none: typeof bt.none === "function" ? bt.none(d) : bt.none}));   // a 봇별 screen: that bot's executors only
     else put(real, realLine(d));
     view.set(d, "ok");
     // 소리 · 빛: only what really arrived since the last answer (core/sound.js playLive; its gate, cooldown and switches)

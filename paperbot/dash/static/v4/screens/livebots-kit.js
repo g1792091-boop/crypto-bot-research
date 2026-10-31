@@ -35,17 +35,18 @@ let EXECS_NOW = EXECS0, execsKey = EXECS0.join();
 /** The executor ids of the last summary (setExecs); the two before the first one. */
 export const execsNow = () => EXECS_NOW;
 /** The summary's executors (its ``execs``), called with every summary: a tab that built its parts for two adds the third
- *  when it comes (bus "lb:execs"); without it every list stays the two as before. */
+ *  when it comes (bus "lb:execs"); without it every list stays the two as before. Owners 10-31 night: a summary whose
+ *  executor slots mix bots all took (its ``replaced``: the 바이비트 봇, the 레인지 봇) sends an empty list: none then. */
 export function setExecs(execs) {
   const ids = Array.isArray(execs) ? EXEC_SLOTS.filter((id) => execs.some((x) => x && x.id === id)) : [];
-  const now = ids.length ? ids : EXECS0;
+  const now = ids.length || (Array.isArray(execs) && !execs.length) ? ids : EXECS0;
   if (now.join() === execsKey) return;
   execsKey = now.join();
   EXECS_NOW = now;
   bus.emit("lb:execs", EXECS_NOW);
 }
 /** The executor ids of an answer, in the server's order: its own ``execs`` ([{id}] or ids), else its accounts (``accts``:
- *  a list or a map by id); an answer that names none: execsNow(). */
+ *  a list or a map by id); an answer that names none: execsNow() (none at all once the summary said so, setExecs). */
 export function execIds(d) {
   let have = null;
   if (d && Array.isArray(d.execs)) have = d.execs.map((x) => (x && typeof x === "object" ? x.id : x));
@@ -172,8 +173,10 @@ export function realLine(d, o = {}) {
   const by = Object.fromEntries(((d && d.accts) || []).map((a) => [a.id, a]));
   const ids = (o.only || execIds(d)).map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
   const sep = () => h("span", {class: "lb-real-s", "aria-hidden": "true"}, "·");
-  if (o.only && !ids.length) {
-    return [h("b", {class: "lb-real-k"}, "진짜 돈"), sep(), h("span", {class: "lb-real-a unk"}, o.none || "따라가는 실행기 없음"),
+  // owners 10-31 night: no executor at all once mix bots took every slot: the accounts and the bots that trade them
+  const took = !o.only && d && !ids.length ? (d.replaced || []).map((r) => `${r.account_ko} · ${r.name_ko}`).join(" · ") : "";
+  if ((o.only && !ids.length) || took) {
+    return [h("b", {class: "lb-real-k"}, "진짜 돈"), sep(), h("span", {class: "lb-real-a unk"}, took ? `${took} (스스로 매매 · 잔고는 각 봇 화면)` : o.none || "따라가는 실행기 없음"),
       sep(), h("span", {class: "lb-real-v"}, "보기만 하는 화면(주문 버튼 없음)")];
   }
   return [h("b", {class: "lb-real-k"}, "진짜 돈"),

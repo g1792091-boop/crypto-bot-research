@@ -13,8 +13,8 @@ export const ALIAS = {
 /** The 실거래 site's tabs (core/routes.js LIVE_SCREENS; the rule bot's page no longer lists 실거래: it moved to its own site). */
 export const LIVE_ALIAS = {
   // 봇별 (owners 10/26): one screen per bot
-  trendbot: "추세판단 봇 봇별 바이비트 WOO X Pro 페이퍼 trend bot", rangebot: "레인지 봇 봇별 WOO X Pro 레인지 필터 되돌림 슈퍼트렌드 range bot", vwapbot: "VWAP 개선판 봇별 페이퍼 vwap bot",
-  mixbot: "친구 30분 봇 친구 15분 봇 믹스 봇별 WOO X Pro 2 두 번째 계정 OBV AC MACD mixchop mix bot",
+  trendbot: "추세판단 봇 봇별 바이비트 WOO X Pro 페이퍼 trend bot", rangebot: "레인지 봇 봇별 WOO X Pro 레인지 필터 되돌림 슈퍼트렌드 추세 바 종합 히스토그램 0선 돌파 15분 mixrange range bot", vwapbot: "VWAP 개선판 봇별 페이퍼 vwap bot",
+  mixbot: "친구 15분 봇 친구 30분 봇 믹스 봇별 WOO X Pro 2 두 번째 계정 추세 바 종합 히스토그램 0선 돌파 mixchop mix bot",
   trend: "관제 추세 판단 되돌림 감독 지금 control trend", tchart: "추세 차트 흐름 판단 기록 히트맵 신호 띠 heatmap trend chart", hq: "한눈에 지갑 빛 실행기 계좌", pos: "포지션 진입가 익절가 손절가 최대 position", summary: "요약 터미널 terminal", chart: "차트 선 chart",
   risk: "위험 청산 손절 risk", health: "봇 상태 살아 있나 실행기 health", trades: "거래 체결 기록 trades", replay: "다시보기 재생 replay",
   journal: "일지 그동안 있었던 일 자리 비운 동안 기록 피드 타임라인 journal feed timeline",
@@ -24,10 +24,10 @@ export const LIVE_ALIAS = {
   rank: "순위 매매법 진입 가능성 rank", judge: "규칙 점검 빠른 손절 추격 동전 쌍둥이", map: "지도 기대 범위 map", cost: "비용 미끄러짐 수수료 cost",
   cal: "일정 경제 발표 주말 calendar", safety: "안전 멈춤 경고 safety", settings: "설정 규칙 settings", team: "분석팀 AI team",
   shadows: "그림자 봇 shadow",
-  mix: "믹스 30분 봇 관제 WOO X Pro 2 두 번째 계정 모의 신호 계단 mixchop mix", mixperf: "믹스 성적 승률 백테스트 거래 mixchop mix",
+  mix: "믹스 30분 봇 친구 15분 봇 관제 WOO X Pro 2 두 번째 계정 모의 신호 계단 mixchop mix", mixperf: "믹스 성적 승률 백테스트 거래 mixchop mix",
   // the 바이비트 봇 (owners 10-29) and the friend's trend per coin
-  bybitbot: "바이비트 봇 봇별 친구 추세 OBV 스톡RSI 실거래 모의 bybit bot", bybit: "바이비트 관제 바이비트 봇 OBV 스톡RSI 신호 계단 bybit",
-  bybitperf: "바이비트 성적 실거래 모의 비교 승률 거래 bybit", ftrend: "친구 추세판 추세 지표 투표 찹존 슈퍼트렌드 EMA RSI OBV 스톡RSI friend trend",
+  bybitbot: "바이비트 봇 봇별 친구 추세 추세 바 OBV AC 스톡RSI 실거래 모의 bybit bot", bybit: "바이비트 관제 바이비트 봇 OBV 스톡RSI 신호 계단 bybit",
+  bybitperf: "바이비트 성적 실거래 모의 비교 승률 거래 bybit", ftrend: "친구 추세판 추세 지표 투표 찹존 슈퍼트렌드 EMA RSI OBV 스톡RSI 추세 바 종합 6종 4종 히스토그램 friend trend",
 };
 const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 /** The first consonants of the Hangul syllables (other characters kept): "순위표" -> "ㅅㅇㅍ". */

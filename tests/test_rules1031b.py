@@ -212,8 +212,9 @@ def test_the_screens_say_the_ac_bar():
       w: X.MIX_UI.wait, y: X.BYBIT_UI.wait}}));"""))
     assert "AC 플러스 양봉 0.42" in out["v"] and "OBV 50선" not in out["v"]
     assert (out["a"], out["b"], out["n"]) == ("마이너스 음봉 (\u22120.31)", "플러스 음봉 (0.12)", "못 읽음")   # fmt.num: U+2212
-    for w in (out["w"], out["y"]):
-        assert "AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)" in w
-    assert out["w"].startswith("30분봉이 끝날 때") and "50선 조건 없음" in out["y"]
+    # the 바이비트 봇 keeps this rule (10-31 night: on 15m bars with the 30m trend bar); the friend bot moved to the
+    # histogram's 0 cross (tests/test_rules1031c.py, tests/test_dash_mixrange_site.py)
+    assert "AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)" in out["y"] and "50선 조건 없음" in out["y"]
+    assert out["y"].startswith("15분봉이 끝날 때 30분봉의 추세 바 종합(") and "AC 막대" not in out["w"]
     routes = (ROOT / "paperbot" / "dash" / "static" / "v4" / "core" / "routes.js").read_text(encoding="utf-8")
-    assert 'mixbot: {ko: "친구 30분 봇"' in routes and "OBV 진한색 + AC" in routes
+    assert 'mixbot: {ko: "친구 15분 봇"' in routes and "OBV 진한색 + AC" in routes

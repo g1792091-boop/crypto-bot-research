@@ -211,8 +211,11 @@ def test_the_pages(tmp_path):
     assert out["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend", "tchart", "hq", "pos"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]
-    assert out["mixes"] == [["wooxpro2", "친구 30분 봇", "/api/v4/livebots/mix", None],
-                            ["bybit", "바이비트 봇", "/api/v4/livebots/mixbybit", "bybit"]]
+    # (owners 10-31 night: the friend bot is 친구 15분 봇; the 레인지 봇's card once it took the first WOO X Pro slot,
+    # tests/test_dash_mixrange_site.py)
+    assert out["mixes"] == [["wooxpro2", "친구 15분 봇", "/api/v4/livebots/mix", None],
+                            ["bybit", "바이비트 봇", "/api/v4/livebots/mixbybit", "bybit"],
+                            ["mexc", "레인지 봇", "/api/v4/livebots/mixrange", "mexc"]]
     assert out["led"] == "바이비트 봇 기록을 불러오지 못했어요" and all(out["tabs"]) and out["tab"] == "bybit"
     assert out["ui"] == ["/api/v4/livebots/mixbybit", "/api/v4/livebots/mixbybitperf", "/api/v4/livebots/mix"]
     assert out["trend"] == "친구 추세 진입 금지 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 횡보 · 슈퍼트렌드 횡보)"
