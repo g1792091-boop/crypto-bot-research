@@ -28,8 +28,12 @@
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit toobit drill --confirm-order REAL_ORDER [--side short]
 #   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys toobit executor preflight --config /etc/paperbot/executor-toobit.json
 #
+# --keys gate first: the keys of /etc/paperbot/executor-gate.env INSTEAD (the 게이트 봇, owners 10-31,
+# docs/gate-bot-ko.md; its unit paperbot-gateguard loads that file instead of executor.env). Reads only:
+#   sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh --keys gate gateguard check --config /etc/paperbot/gateguard.json
+#
 # Only the modules paperbot.testnet, paperbot.executor, paperbot.bybit, paperbot.mexc, paperbot.wooxpro,
-# paperbot.flipster, paperbot.deepcoin, paperbot.mixchop and paperbot.toobit can be run this way.
+# paperbot.flipster, paperbot.deepcoin, paperbot.mixchop, paperbot.toobit and paperbot.gateguard can be run this way.
 set -eu
 if [ "$(id -u)" -ne 0 ]; then echo "run with sudo"; exit 1; fi
 if ! id paperbot-exec >/dev/null 2>&1 || [ "$(id -u paperbot-exec)" = "$(id -u paperbot)" ]; then
@@ -41,7 +45,8 @@ if [ "${1:-}" = "--keys" ]; then
   case "${2:-}" in
     wooxpro2) keys=EnvironmentFile=/etc/paperbot/executor-wooxpro2.env; hide=" -/etc/paperbot/executor.env"; guide=docs/friend-bot-ko.md; shift 2 ;;
     toobit) keys=EnvironmentFile=/etc/paperbot/executor-toobit.env; hide=" -/etc/paperbot/executor.env"; guide=docs/toobit-ko.md; shift 2 ;;
-    *) echo "usage: $0 [--keys wooxpro2|toobit] testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin|mixchop|toobit <command> [options]"; exit 1 ;;
+    gate) keys=EnvironmentFile=/etc/paperbot/executor-gate.env; hide=" -/etc/paperbot/executor.env"; guide=docs/gate-bot-ko.md; shift 2 ;;
+    *) echo "usage: $0 [--keys wooxpro2|toobit|gate] testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin|mixchop|toobit|gateguard <command> [options]"; exit 1 ;;
   esac
   if [ ! -f "${keys#EnvironmentFile=}" ]; then
     echo "${keys#EnvironmentFile=} is missing: run sudo bash deploy/install.sh first ($guide)"; exit 1
@@ -54,7 +59,11 @@ case "$mod" in
   deepcoin) shift ;;
   mixchop) shift ;;
   toobit) shift ;;
-  *) echo "usage: $0 testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin|mixchop|toobit <command> [options]"; exit 1 ;;
+  gateguard)
+    # the 게이트 봇 runs only with its own key file (never executor.env's keys)
+    [ "$keys" = EnvironmentFile=/etc/paperbot/executor-gate.env ] || { echo "gateguard: use --keys gate"; exit 1; }
+    shift ;;
+  *) echo "usage: $0 testnet|executor|bybit|mexc|wooxpro|flipster|deepcoin|mixchop|toobit|gateguard <command> [options]"; exit 1 ;;
 esac
 if [ -t 0 ]; then io=--pty; else io=--pipe; fi
 exec systemd-run --quiet --wait --collect $io --uid=paperbot-exec --gid=paperbot \

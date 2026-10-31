@@ -26,13 +26,14 @@ def test_live_chain_is_protected_from_the_oom_killer():
     assert _oom("paperbot-combo-range.service") == -500      # the '레인지 봇' paper bot WOO X Pro follows (10-26)
     assert _oom("paperbot-live3.service") == -500
     assert _oom("paperbot-mixbybit.service") == -900          # the 바이비트 봇 (owners 10-29: real orders itself)
+    assert _oom("paperbot-gateguard.service") == -900         # the 게이트 봇 (owners 10-31: stops on real positions)
 
 
 def test_experiments_are_not_protected():
     for unit in sorted(DEPLOY.glob("paperbot-*.service")):
         if unit.name in {"paperbot-executor.service", "paperbot-executor-mexc.service", "paperbot-executor-deepcoin.service",
                          "paperbot-executor-wooxpro2.service", "paperbot-executor-toobit.service",
-                         "paperbot-mixchop.service", "paperbot-mixbybit.service",
+                         "paperbot-mixchop.service", "paperbot-mixbybit.service", "paperbot-gateguard.service",
                          "paperbot-combo.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
                          "paperbot-combo-friend.service", "paperbot-combo-short5.service", "paperbot-combo-range.service",
                          "paperbot-live3.service"}:

@@ -278,6 +278,12 @@ if [ ! -f /etc/paperbot/executor-toobit.env ] && [ -f "$APP/deploy/executor-toob
   install -o root -g root -m 600 "$APP/deploy/executor-toobit.env.example" /etc/paperbot/executor-toobit.env
 fi
 [ -f /etc/paperbot/executor-toobit.env ] && chmod 600 /etc/paperbot/executor-toobit.env && chown root:root /etc/paperbot/executor-toobit.env
+# The 게이트 봇's own key file (owners 10-31, docs/gate-bot-ko.md): root only too, its template with every value empty
+# (nothing secret is written here), so the owners' sudoedit fills a root-only file. Only paperbot-gateguard loads it.
+if [ ! -f /etc/paperbot/executor-gate.env ] && [ -f "$APP/deploy/executor-gate.env.example" ]; then
+  install -o root -g root -m 600 "$APP/deploy/executor-gate.env.example" /etc/paperbot/executor-gate.env
+fi
+[ -f /etc/paperbot/executor-gate.env ] && chmod 600 /etc/paperbot/executor-gate.env && chown root:root /etc/paperbot/executor-gate.env
 
 echo "== systemd units (installed, not started)"
 for u in paperbot-live3.service paperbot-dash.service paperbot-livedash.service paperbot-daily3.service paperbot-daily3.timer \
@@ -355,6 +361,10 @@ install -m 644 "$APP/deploy/paperbot-mixchop-paper.service" /etc/systemd/system/
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixbybit-paper
 install -m 644 "$APP/deploy/paperbot-mixbybit.service" /etc/systemd/system/paperbot-mixbybit.service
 install -m 644 "$APP/deploy/paperbot-mixbybit-paper.service" /etc/systemd/system/paperbot-mixbybit-paper.service
+# '게이트 봇' (owners 10-31, docs/gate-bot-ko.md): the stops and the ladder on the friend's own Gate positions (keys from
+# executor-gate.env). Installed only, never enabled or started here; /etc/paperbot/gateguard.json is never written here
+# (the owners copy deploy/gateguard.json).
+install -m 644 "$APP/deploy/paperbot-gateguard.service" /etc/systemd/system/paperbot-gateguard.service
 # Until 10-24 this slot was Flipster's (paperbot-executor-flipster, installed by install.sh from 10-23, never started:
 # its API opens only on request, so the owners switched to DeepCoin). Its unit file goes only while that unit is inactive
 # and not enabled; a running or enabled one is left as it is (a person decides).
@@ -388,6 +398,10 @@ fi
 if systemctl is-active --quiet paperbot-executor-toobit 2>/dev/null; then
   echo "paperbot-executor-toobit is running the previous code; restart it yourself when ready:"
   echo "  sudo systemctl restart paperbot-executor-toobit"
+fi
+if systemctl is-active --quiet paperbot-gateguard 2>/dev/null; then
+  echo "paperbot-gateguard (게이트 봇) is running the previous code; restart it yourself when ready:"
+  echo "  sudo systemctl restart paperbot-gateguard"
 fi
 # New timers are installed, never enabled here (docs/server-setup-v3.md 11 and 13-5 name the one-time command).
 if ! systemctl is-enabled --quiet paperbot-rehearsal.timer 2>/dev/null; then

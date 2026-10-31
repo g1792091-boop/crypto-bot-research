@@ -40,7 +40,7 @@ ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/paperbot/exec
 # systemd reads executor.env before the sandbox: the process itself never needs the file (the keys come in its environment)
-InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/executor-toobit.env
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/executor-toobit.env -/etc/paperbot/executor-gate.env
 LimitCORE=0
 
 [Install]

@@ -2683,7 +2683,9 @@ PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot
                    "paperbot-executor-wooxpro2.service",
                    "paperbot-executor-toobit.service",
                    # owners 10-29: the mix bots trade by themselves; the 레인지 봇 paper bot is what WOO X Pro follows
-                   "paperbot-mixchop.service", "paperbot-mixbybit.service", "paperbot-combo-range.service")
+                   "paperbot-mixchop.service", "paperbot-mixbybit.service", "paperbot-combo-range.service",
+                   # owners 10-31: the 게이트 봇 moves the stops of the friend's real Gate positions
+                   "paperbot-gateguard.service")
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")
 UNIT_FAMILIES = ("paperbot-*", "candleague-*", "demobot-*", "huntbot-*")
 REG5_KO = ("강상승", "약상승", "강하락", "약하락", "횡보")
