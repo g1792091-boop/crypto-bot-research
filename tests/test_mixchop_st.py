@@ -190,9 +190,10 @@ def test_a_real_answer_without_a_cross_or_with_failing_conditions():
 
 def test_the_live_config_runs_both_rules_with_a_3_atr_stop():
     cfg = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    # owners 10-31: the friend bot trades OBV light -> dark and 추세 3개 일치 on 15m bars (tests/test_rules1031.py); the
-    # stop multiple, the ladder and the margin stay
-    assert cfg.rules == ("obv", "ema3") and cfg.stop_atr == 3.0
+    # owners 10-31: the friend bot trades OBV light -> dark and 추세 3개 일치 on 15m bars (tests/test_rules1031.py); 10-31
+    # evening: on 30m bars, the OBV turn with the AC bar (tests/test_rules1031b.py); the stop multiple, the ladder and the
+    # margin stay
+    assert cfg.rules == ("obvac", "ema3") and cfg.stop_atr == 3.0
     assert {c.sl_atr for c in cfg.coins} == {3.0}
     # owners 10-27 "친구봇 익절기준은 1 계단 10->8로 바꿔주고": 10 -> 8, 15 -> 13, 20 -> 18 ...
     assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4

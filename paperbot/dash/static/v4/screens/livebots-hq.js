@@ -52,7 +52,7 @@ export const CAL_API = "/api/v4/livebots/calendar";
 export const RANK_API = "/api/v4/livebots/rank";
 export const MIX_API = "/api/v4/livebots/mix";
 const NOW_MS = 15 * 1000, CAL_MS = 30 * 1000, RANK_MS = 30 * 1000, MIX_MS = 15 * 1000;
-const MIX_BOT_KO = "친구 15분 봇";                    // the friend bot's name on 한눈에 (owners 10-31: OBV + 추세 3개 일치 on 15m bars)
+const MIX_BOT_KO = "친구 30분 봇";                    // the friend bot's name on 한눈에 (owners 10-31 evening: OBV + AC · 추세 3개 일치 on 30m)
 export const MIXBYBIT_API = "/api/v4/livebots/mixbybit";
 /** The mix bots' cards (paperbot/mixchop.py, each trading an account by itself): the account's slot (its colour and its
  *  place in the deck), its words, its answer, its screen; ``replaces``: shown only once the summary says it took that

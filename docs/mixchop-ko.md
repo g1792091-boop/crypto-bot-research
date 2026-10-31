@@ -606,3 +606,37 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 - diff: `"name"`(→ `"친구 15분 봇"`), `"tf": "15m"`, `"rules"`에 `"ema3"` 추가.
 - check: `매매법·손절: OBV 진한색 + 추세 3개 일치 · … · 신호 15분봉 · …`.
 - 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
+
+## 16. 10/31 저녁: 친구 30분 봇 — OBV 진한색 + AC · 추세 3개 일치 (30분봉)
+
+두 분(10/31 저녁, 친구 지표 'OBV MACD'): 바이비트 봇과 같은 진입 방식으로 바꿈. 두 분 답: WOO X Pro 봇 = 이 봇(WOO X Pro 2),
+봉은 **30분봉**(바이비트 봇과 같은 네 표 추세), '초록 진한선' = OBV 막대의 연한 초록 → 진한 초록.
+
+| 항목 | 내용 |
+|---|---|
+| 신호 봉 | 바이낸스 **30분봉**, 끝난 봉만 (15장의 15분봉에서 바뀜) |
+| ① OBV 진한색 + AC | 네 표 추세 쪽으로 OBV 막대가 연한색 → 진한색이고, 'OBV MACD'의 AC 막대가 롱은 플러스 양봉, 숏은 마이너스 음봉. 플러스 음봉 · 마이너스 양봉이면 진입 안 함. 50선 조건 없음 (바이비트 봇 문서 9장과 같음) |
+| ② 추세 3개 일치 | 15장과 같은 규칙. 이제 30분봉으로 봅니다 |
+| 같은 봉에 둘 다 | ①먼저. 코인끼리는 SOL → ETH → XRP → BCH → ZEC → DOGE |
+| 그대로 | 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 ATR(14) × 3 (이제 30분봉 ATR), 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간 |
+
+- 설정: `"name": "친구 30분 봇"`, `"tf": "30m"`, `"trend": "four"`, `"rules": ["obvac", "ema3"]`.
+- 아침 점검의 '놓친 신호'도 30분봉으로 두 매매법을 다시 계산합니다.
+- 시험: `tests/test_rules1031b.py`.
+
+### 16-1. 바꾸는 순서 (서버에서)
+
+```bash
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-1031b
+sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-1031b
+sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+sudo diff /etc/paperbot/mixchop.json.before-1031b /etc/paperbot/mixchop.json
+sudo deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json | tail -8
+sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
+```
+
+- diff: `"name"`(→ `"친구 30분 봇"`), `"tf": "30m"`, `"rules"`의 `"obv"` → `"obvac"` (15장을 서버에 아직 안 올렸다면 `"ema3"` 추가도 보입니다).
+- check: `매매법·손절: OBV 진한색 + AC + 추세 3개 일치(같은 봉이면 OBV 진한색 + AC 먼저) · … · 신호 30분봉 · …`.
+

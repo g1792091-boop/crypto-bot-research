@@ -11,7 +11,8 @@
           twin's (said so).
     1시간 the 레인지 봇 (paperbot/rangebot.py, docs/range-bot-ko.md) on its last closed hour: its ``range`` snapshot's
           ``friend`` (dash/more/liverange.supertrend_of), once its config has ``friend_tf``.
-    owners 10-30: the friend bot (WOO X Pro 2, the same program; 10-31: 친구 15분 봇, rules "obv" and "ema3" on 15m bars):
+    owners 10-30: the friend bot (WOO X Pro 2, the same program; 10-31 evening: 친구 30분 봇, rules "obvac" and "ema3" on 30m
+          bars, the four votes again):
           its own board row of its last close
           (``f30``, its coins); the 레인지 봇's ROC entry (``roc``): each coin's ROC read at its last 30-minute close
           (liverange.supertrend_of ``roc``).
@@ -31,18 +32,21 @@ MIN = 60_000
 TREND_KO = {1: "상승", -1: "하락", 0: "진입 금지"}
 VOTE_KO = {1: "상승", -1: "하락", 0: "횡보"}
 VOTES = (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드"))
-RULE_KO = {"obv": "OBV 진한색", "srsi": "스톡RSI 50선", "obv50": "OBV 50선", "roc50": "ROC 50선", "ema3": "추세 3개 일치"}
+RULE_KO = {"obv": "OBV 진한색", "srsi": "스톡RSI 50선", "obv50": "OBV 50선", "roc50": "ROC 50선", "ema3": "추세 3개 일치",
+           "obvac": "OBV 진한색 + AC"}
 STALE_30M_MS = 35 * MIN                 # the bot writes at every 30-minute close
 STALE_1H_MS = 70 * MIN                  # the 레인지 봇 reads its hour once it closed
 RULES_KO = [
     "추세: 네 표(하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드) 중 같은 쪽이 2표 이상이고 반대쪽보다 많으면 그 추세 · "
     "횡보가 2표 이상이거나 2 대 2면 진입 금지",
-    "OBV 50선(바이비트 봇, 10-30부터): 히스토그램이 연한 초록→진한 초록인 봉에서 OBV 50선 값이 50 아래면 롱, "
-    "연한 빨강→진한 빨강이고 50 위면 숏 · 추세와 같은 쪽일 때만",
+    "OBV 진한색 + AC(바이비트 봇 · 친구 30분 봇, 10-31 저녁부터): OBV 히스토그램이 연한 초록→진한 초록인 봉에서 OBV MACD의 "
+    "AC 막대가 플러스 양봉(0 위 · 앞 막대보다 커짐)이면 롱, 연한 빨강→진한 빨강이고 마이너스 음봉(0 아래 · 앞 막대보다 작아짐)이면 숏 · "
+    "추세와 같은 쪽일 때만 · 플러스 음봉 · 마이너스 양봉과 그 밖의 막대는 진입 안 함 · 50선 조건 없음",
+    "OBV 50선(바이비트 봇, 10-30 ~ 10-31): 진한 초록이 50 아래면 롱, 진한 빨강이 50 위면 숏 (10-31 저녁부터 안 씀)",
     "OBV 진한색 · 스톡RSI 50선: 10-29의 두 규칙 (10-30부터 바이비트 봇은 OBV 50선 하나)",
     "1시간 추세(레인지 봇): 신호와 반대이거나 진입 금지면 그 신호를 막아요",
-    "친구 15분 봇(WOO X Pro 2, 10-31부터 15분봉): ① OBV 진한색 (친구 추세 쪽 색이 연한색→진한색) ② 추세 3개 일치 (EMA RSI · 하늘·보라 선 · "
-    "슈퍼트렌드가 모두 같은 쪽일 때 EMA RSI 막대가 연한색→진한색)",
+    "친구 30분 봇(WOO X Pro 2, 10-31 저녁부터 30분봉 · 네 표 추세): ① OBV 진한색 + AC (위와 같음) ② 추세 3개 일치 (EMA RSI · "
+    "하늘·보라 선 · 슈퍼트렌드가 모두 같은 쪽일 때 EMA RSI 막대가 연한색→진한색)",
     "ROC 30분(레인지 봇, 10-30): ROC 막대가 연한색→진한색이고 보라선이 롱은 50 아래·숏은 50 위이면 신호, 30분 추세가 같은 쪽일 때만 들어가요",
     "추세 3개 15분(레인지 봇, 10-31부터): EMA RSI · 하늘·보라 선 · 슈퍼트렌드가 모두 같은 쪽일 때 EMA RSI 막대가 연한색→진한색이면 신호",
 ]
@@ -98,17 +102,17 @@ def m30_row(r: Any, now: int) -> dict:
             "trend": t, "trend_ko": TREND_KO.get(t, "모름") if t is not None else None, "votes": votes_out(r.get("votes")),
             "ema_rsi": _f(r.get("ema_rsi")), "chop_zone": _i(r.get("chop_zone")), "close": _f(r.get("close")),
             "stop_pct": _f(r.get("stop_pct")), "liq_ok": r.get("liq_ok"), "obv": obv_out(r), "stoch": stoch_out(r),
-            "obv50": _f(r.get("obv50")),
+            "obv50": _f(r.get("obv50")), "ac": _f(r.get("ac")), "ac_col": _i(r.get("ac_col")),
             "rules": rules, "ko": next((x["why"] for x in rules.values() if x["why"]), "") if unread else ""}
 
 
 def board_of(now: int, mp: Optional[dict] = None, bot: str = "bybit") -> tuple:
     """(source, {symbol: row}, coins in the config's order): the mix bot's (``bot``: "bybit" the 바이비트 봇, "mix" the
-    친구 15분 봇) live state, else its paper twin's."""
+    친구 30분 봇) live state, else its paper twin's."""
     from . import livemix as X
     prof = X.PROFILES[bot]
     mp = mp or X.paths(bot=bot)
-    name = "바이비트 봇" if bot == "bybit" else "친구 15분 봇"
+    name = "바이비트 봇" if bot == "bybit" else "친구 30분 봇"
     coins: list = []
     tried = []
     for bid in ("live", "paper"):
@@ -188,7 +192,7 @@ def roc_row(x: Any) -> Optional[dict]:
 
 def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[dict] = None,
           mpf: Optional[dict] = None) -> dict:
-    """GET /api/v4/livebots/ftrend (module docstring); ``mp`` / ``mpf``: the 바이비트 봇's / 친구 15분 봇's paths."""
+    """GET /api/v4/livebots/ftrend (module docstring); ``mp`` / ``mpf``: the 바이비트 봇's / 친구 30분 봇's paths."""
     p = p or L.paths()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     try:
@@ -198,7 +202,7 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[d
     try:
         sf, bf, coinsf = board_of(now, mpf, bot="mix")
     except Exception as exc:  # noqa: BLE001
-        sf, bf, coinsf = {"state": "error", "ko": "친구 15분 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, []
+        sf, bf, coinsf = {"state": "error", "ko": "친구 30분 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, []
     try:
         s1h, b1h, coins1h, roc = h1_of(p, now)
     except Exception as exc:  # noqa: BLE001

@@ -89,11 +89,12 @@ SLIP_FRAC = 0.0015                  # the entry fill worse than the signal close
 RULE_TAG = {"st": "(슈퍼트렌드·스톡RSI)",  # the second rule's lines say whose they are (owners 10-26)
             "obv": "(OBV 진한색)", "srsi": "(스톡RSI 50선)",            # the 바이비트 봇's (owners 10-29)
             "obv50": "(OBV 50선)", "roc50": "(ROC 50선)",               # owners 10-30
-            "ema3": "(추세 3개 일치)"}                                     # owners 10-31
+            "ema3": "(추세 3개 일치)",                                     # owners 10-31
+            "obvac": "(OBV 진한색 + AC)"}                                 # owners 10-31: no 50 line, the AC bar
 # what a signal row of each rule is, for the replay's lines (the friend's colour change, the Stoch RSI cross / ●, the OBV
 # light -> dark turn)
 RULE_WHAT = {"mix": "색 변화", "st": "스톡RSI 크로스", "srsi": "스톡RSI ●", "obv": "OBV 연한→진한", "obv50": "OBV 연한→진한",
-             "roc50": "ROC 막대 연한→진한", "ema3": "EMA RSI 막대 연한→진한"}
+             "roc50": "ROC 막대 연한→진한", "ema3": "EMA RSI 막대 연한→진한", "obvac": "OBV 연한→진한"}
 BLOCK_NEAR_MS = 60 * MIN            # an entry block that started within an hour after the entry
 # luck band: the share of the replay's runs that are this bad or worse
 RARE, VERY_RARE = 0.10, 0.02
@@ -774,7 +775,7 @@ def _mark(ev: dict, rule: str) -> Any:
     """What the rule saw on the bar, to compare the log with the replay: the colour, the cross / ●, the OBV turn."""
     if rule == "mix":
         return bool(ev.get("to_cyan"))
-    if rule in ("obv", "obv50"):
+    if rule in M.OBV_RULES:
         return _i(ev.get("turn")) or 0
     if rule == "roc50":
         return _i(ev.get("roc_turn")) or 0
@@ -825,7 +826,7 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         lv = sig.get((sym, ce, rule))
         st = rule == "st"
         colour = ("cyan" if ev.get("to_cyan") else "purple") if rule == "mix" else \
-            ({1: "up", -1: "down"}.get(_i(ev.get("turn")) or 0, "") if rule == "obv" else (ev.get("cross") or ""))
+            ({1: "up", -1: "down"}.get(_i(ev.get("turn")) or 0, "") if rule in M.OBV_RULES else (ev.get("cross") or ""))
         item = {"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": ev.get("side") or 0, "rule": rule,
                 "colour": colour, "why": ev.get("why") or ""}
         if lv is not None:
@@ -870,8 +871,8 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
            "fails": fails, "observed": sum(1 for ce in closes if covered(obs, ce))}
     if "st" in rules:
         out["crosses"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "st" and ev.get("cross"))
-    if "obv" in rules or "obv50" in rules:               # the 바이비트 봇's (owners 10-29; with its 50 line 10-30)
-        out["turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule in ("obv", "obv50") and ev.get("turn"))
+    if any(r in M.OBV_RULES for r in rules):             # the 바이비트 봇's (owners 10-29; 50 line 10-30; AC 10-31)
+        out["turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule in M.OBV_RULES and ev.get("turn"))
     if "roc50" in rules:                                 # owners 10-30
         out["roc_turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "roc50" and ev.get("roc_turn"))
     if "ema3" in rules:                                  # owners 10-31
@@ -948,7 +949,7 @@ def signal_counts(rows: list) -> dict:
            "entries": sum(1 for r in rows if r.get("kind") in ("entry", "adopted")), "skips": skips, "blocks": blocks}
     if st:
         out["crosses"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in st})
-    obv = [r for r in sig if _rule(r) in ("obv", "obv50")]   # the 바이비트 봇's rules (owners 10-29; 50 lines 10-30)
+    obv = [r for r in sig if _rule(r) in M.OBV_RULES]   # the 바이비트 봇's rules (owners 10-29; 50 line 10-30; AC 10-31)
     srsi = [r for r in sig if _rule(r) == "srsi"]
     roc = [r for r in sig if _rule(r) == "roc50"]
     e3 = [r for r in sig if _rule(r) == "ema3"]
@@ -1119,7 +1120,7 @@ def morning(data: dict, w0: int, *, klines: Optional[Callable] = None, obs: Opti
     seen = (f"- 색 변화 {sc['changes']}번" + (f" · 스톡RSI 크로스 {sc['crosses']}번" if "crosses" in sc else "")) if "mix" in rules else \
         "- " + " · ".join(x for x in ((f"ROC 막대 연한→진한 {sc.get('roc_turns', 0)}번" if "roc50" in rules else ""),
                                       (f"EMA RSI 막대 연한→진한 {sc.get('e3_turns', 0)}번" if "ema3" in rules else ""),
-                                      (f"OBV 연한→진한 {sc.get('turns', 0)}번" if "obv" in rules or "obv50" in rules else ""),
+                                      (f"OBV 연한→진한 {sc.get('turns', 0)}번" if any(r in M.OBV_RULES for r in rules) else ""),
                                       (f"스톡RSI ● {sc.get('dots', 0)}번" if "srsi" in rules else ""),
                                       (f"스톡RSI 크로스 {sc.get('crosses', 0)}번" if "st" in rules else "")) if x)
     lines += ["", f"신호 ({M.TF_KO.get(getattr(cfg, 'tf', '30m'), '30분')}봉)",

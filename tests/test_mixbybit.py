@@ -217,7 +217,8 @@ def test_the_deploy_configs():
     for path, mode in ((LIVE, "mainnet"), (PAPER, "paper")):
         cfg = M.load_config(str(path))
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
-        assert cfg.rules == ("obv50",) and cfg.stop_atr == 3.0 and cfg.tf == "30m" and cfg.trend == "four"   # (owners 10-30)
+        # owners 10-30: the OBV 50 line; 10-31 evening: the AC bar instead, no 50 line (tests/test_rules1031b.py)
+        assert cfg.rules == ("obvac",) and cfg.stop_atr == 3.0 and cfg.tf == "30m" and cfg.trend == "four"
         assert cfg.symbols == ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "ZECUSDT"]
         assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in cfg.symbols}, "ZECUSDT": 20}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
@@ -228,11 +229,11 @@ def test_the_deploy_configs():
     assert live.state != paper.state and live.own_stop_file != paper.own_stop_file and paper.start_equity == 100
     assert "/exec/" in live.state and not paper.telegram
     words = M.plan_words(live)
-    assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 50선" in words and "손절 ATR 3배" in words
-    # the friend bot's own config: WOO X Pro, this bot's first rule and 추세 3개 일치 on 15m bars (owners 10-31,
-    # tests/test_rules1031.py)
+    assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 진한색 + AC" in words and "손절 ATR 3배" in words
+    # the friend bot's own config: WOO X Pro, this bot's rule and 추세 3개 일치 on 30m bars (owners 10-31 evening,
+    # tests/test_rules1031b.py)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "wooxpro" and old.name == "친구 15분 봇" and old.rules == ("obv", "ema3") and old.tf == "15m"
+    assert old.exchange == "wooxpro" and old.name == "친구 30분 봇" and old.rules == ("obvac", "ema3") and old.tf == "30m"
 
 
 def test_wrong_configs_are_refused(tmp_path):
@@ -395,7 +396,7 @@ def test_the_check_command_on_bybit(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M.time, "time", lambda: (T0 + 60_000) / 1000)
     assert M.cmd_check(argparse.Namespace(config=str(PAPER))) == 0
     out = capsys.readouterr().out.splitlines()
-    assert "매매법·손절: OBV 50선 · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상" in out
+    assert "매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상" in out
     btc = next(x for x in out if x.startswith("✔ BTCUSDT"))
     assert "최대 75배" in btc and "(증거금 $40.00)" in btc               # 40 % of the paper's $100
     zec = next(x for x in out if "ZECUSDT" in x)

@@ -74,9 +74,14 @@ def test_fifteen_hundred_bars_read_the_same_three_trends():
 
 
 # ====================================================================== 친구 15분 봇
-def test_the_friend_bot_runs_obv_and_ema3_on_15m():
+def test_the_friend_bot_runs_obv_and_ema3_on_15m(tmp_path):
+    # the 10-31 day's form (10-31 evening: 30m bars, the OBV turn with the AC bar, tests/test_rules1031b.py)
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
-        cfg = M.load_config(str(DEPLOY / name))
+        d = json.loads((DEPLOY / name).read_text(encoding="utf-8"))
+        d.update(name="친구 15분 봇", tf="15m", rules=["obv", "ema3"])
+        p = tmp_path / name
+        p.write_text(json.dumps(d), encoding="utf-8")
+        cfg = M.load_config(str(p))
         assert cfg.mode == mode and cfg.name == "친구 15분 봇" and cfg.exchange == "wooxpro"
         assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("15m", "four", ("obv", "ema3"), 3.0)
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
@@ -113,6 +118,7 @@ def test_the_ema3_signals_listing_and_the_morning_replay():
     cfg = M.load_config(str(DEPLOY / "mixchop.paper.json"))
     cfg.coins = cfg.coins[:1]
     cfg.rules = ("ema3",)
+    cfg.tf = "15m"                                       # the 10-31 day's bars (10-31 evening: 30m)
     rng = np.random.default_rng(41)
     n = 2000
     day0 = T0 - 24 * HOUR

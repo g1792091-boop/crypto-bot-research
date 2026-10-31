@@ -22,7 +22,7 @@
  },
  "ladder_every_s": 60,
  "rules": [
-  "obv50"
+  "obvac"
  ],
  "stop_atr": 3,
  "coins": {

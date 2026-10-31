@@ -42,6 +42,12 @@ Three parts of the friend's TradingView scripts (차트 믹스 · 차트 믹스 
    2개 이상 나오면 진입 금지 상승 2개 하락1개 나와도 진입 금지 … 그 포지션에 맞는 진한 히스토그램이 나오면 진입", and their
    answer: the light -> dark bar): long on the bar where the three are up and a light green bar turns dark green; short
    the mirror. The script's other filters (overheat, overbought / oversold, its own exits) are not used (owners 10-31).
+8. OBV MACD's AC histogram (OBV_MACD.pine, owners 10-31): part 2's OBV pane drawn MACD-style (the same line, the same
+   conditional signal); its default histogram 'AC 오실레이터 (가속)' = (line - the conditional signal) - its SMA 5, green
+   while it rose on this bar, red while it fell (grey: equal or not yet defined). Owners 10-31 (the 바이비트 봇 and the
+   friend bot: "상승 추세에서 초록진한선이 뜨는데 히스토그램이 플러스 양봉이면 진입 … 플러스 음봉이면 진입 금지", the dark line =
+   their answer: part 2's light -> dark turn, "50일선위 숏 아래 롱은 삭제"): long on a light -> dark green turn with the AC
+   bar over 0 and green; short on a light -> dark red turn with the AC bar under 0 and red; no 50 line.
 
 Every series is computed over the whole bar history given (oldest first) and read on its last value: the recursive parts
 (EMA, RMA, SAR, supertrend, the running sums, the kept states) settle long before the last of 1,000+ bars. The Pine
@@ -366,6 +372,59 @@ def obv50_state(h, l, c, v) -> dict:
     side = 1 if turn > 0 and x < 50 else (-1 if turn < 0 and x > 50 else 0)
     return {"turn": turn, "cs": int(cs[-1]), "dark": bool(dark[-1]), "d50": round(x, 2) if math.isfinite(x) else None,
             "side": side}
+
+
+# ====================================================================== 8. OBV MACD's AC histogram (owners 10-31)
+AC_LEN = 5                      # 'AC: SMA 기간'
+
+
+def ac_pane(h, l, c, v) -> dict:
+    """Part 2's OBV pane with OBV MACD's AC histogram per bar: "ac" = (line - the conditional signal) - its SMA 5,
+    "ac_col" +1 green (rose on this bar) / -1 red (fell) / 0 grey (equal, or not defined yet)."""
+    P = obv_pane(h, l, c, v)
+    hraw = np.asarray(P["hist"], float)
+    ac = hraw - M.sma(hraw, AC_LEN)
+    prev = lag(ac, 1)
+    with np.errstate(invalid="ignore"):
+        ok = np.isfinite(ac) & np.isfinite(prev)
+        col = np.where(ok, np.where(ac > prev, 1, np.where(ac < prev, -1, 0)), 0).astype(np.int8)
+    return {**P, "ac": ac, "ac_col": col}
+
+
+def ac_side(turn: int, ac: float, col: int) -> int:
+    """The owners' 10-31 entry: a green turn with the AC bar plus and green (+1), a red turn with it minus and red (-1)."""
+    if not math.isfinite(ac):
+        return 0
+    if turn > 0 and ac > 0 and col > 0:
+        return 1
+    if turn < 0 and ac < 0 and col < 0:
+        return -1
+    return 0
+
+
+def ac_words(ac, col) -> str:
+    """'플러스 양봉(0.42)' / '마이너스 음봉(-0.31)' / '플러스 음봉(0.12)' …"""
+    try:
+        a = float(ac)
+    except (TypeError, ValueError):
+        return "못 읽음"
+    if not math.isfinite(a):
+        return "못 읽음"
+    sign = "플러스" if a > 0 else "마이너스" if a < 0 else "0"
+    bar = "양봉" if col and int(col) > 0 else "음봉" if col and int(col) < 0 else "보합"
+    return f"{sign} {bar}({a:.2f})"
+
+
+def obvac_state(h, l, c, v) -> dict:
+    """On the last bar: {"turn", "cs", "dark" (part 2), "ac", "ac_col", "side": ac_side}."""
+    P = ac_pane(h, l, c, v)
+    cs, dark = P["cs"], P["dark"]
+    if len(cs) < 2:
+        return {"turn": 0, "cs": 0, "dark": False, "ac": None, "ac_col": 0, "side": 0}
+    turn = int(cs[-1]) if cs[-1] == cs[-2] and cs[-1] != 0 and dark[-1] and not dark[-2] else 0
+    ac, col = float(P["ac"][-1]), int(P["ac_col"][-1])
+    return {"turn": turn, "cs": int(cs[-1]), "dark": bool(dark[-1]),
+            "ac": round(ac, 4) if math.isfinite(ac) else None, "ac_col": col, "side": ac_side(turn, ac, col)}
 
 
 # ====================================================================== 5. the OBV ROC pane (owners 10-30)

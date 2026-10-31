@@ -498,7 +498,7 @@ console.log(JSON.stringify({on, off, late, failed,
 
 def test_the_four_live_accounts_on_hq(w, tmp_path):
     """한눈에 (screens/livebots-hq.js; owners 10-25 night): 바이비트 · WOO X Pro (추세판단 봇) · 딥코인 (설치 전 until its executor
-    comes) · WOO X Pro 2 (친구 15분 봇(믹스), its own state and log): every card says its bot; 꺼짐 / 기록 멈춤 / 불러오지 못함,
+    comes) · WOO X Pro 2 (친구 30분 봇(믹스), its own state and log): every card says its bot; 꺼짐 / 기록 멈춤 / 불러오지 못함,
     never a zero; nothing there says 주문 (view only)."""
     f = tmp_path / "fees"
     f.mkdir()
@@ -516,21 +516,21 @@ def test_the_four_live_accounts_on_hq(w, tmp_path):
     for word in ("바이비트 진짜 돈 봇", "WOO X Pro 진짜 돈 봇", "따라감 · 그 봇의 페이퍼 진입을 실거래로 따라 들어가요",
                  "딥코인 진짜 돈 봇 VWAP 개선판 따라갈 실행기 (paperbot-executor-deepcoin) 설치 전 이 서버에 딥코인 실행기가 아직 없어요",
                  "설치하고 켜면 잔고 · 신호등 · 포지션이 여기 보여요",
-                 "WOO X Pro 2 진짜 돈 봇 친구 15분 봇 스스로 매매 · 페이퍼를 따라가지 않음 돌아가는 중", "DAY 04", "49.95", "×1.00",
+                 "WOO X Pro 2 진짜 돈 봇 친구 30분 봇 스스로 매매 · 페이퍼를 따라가지 않음 돌아가는 중", "DAY 04", "49.95", "×1.00",
                  "시작 대비 −$0.05 · 진입 때 읽은 잔고 10/27 09:00", "최근 거래 · 1승 1패", "신호등 없음 · 30분봉 신호마다 바로 들어가요",
                  "오늘 실현 닫힌 거래 없음", "포지션 BCH 롱 40배 · 계단 1단계", "새 진입 보유 중 (한 번에 1개)",
                  "30분봉 신호 · SOL·ETH·XRP·BCH·ZEC(꺼짐)·DOGE · 손절 1번 잔고의 0.25%",
                  "마지막 시작 때 설정 실패: ZECUSDT: 레버리지를 못 맞춤 (leverage 20 not allowed)", "믹스 관제 · 성적 →"):
         assert word in t, word
     bots = re.findall(r"진짜 돈 봇 (.+?) (따라감|따라갈|스스로) ", t)
-    assert ("친구 15분 봇", "스스로") in bots and ("VWAP 개선판", "따라갈") in bots and len(bots) == 4      # every card says its bot
+    assert ("친구 30분 봇", "스스로") in bots and ("VWAP 개선판", "따라갈") in bots and len(bots) == 4      # every card says its bot
     assert "딥코인 $" not in t and not BAD.search(t)
     assert "주문" not in t.replace("주문 버튼 없음", "").replace("주문 없음", "")                    # view only
     o = out["off"]["text"]
-    assert "WOO X Pro 2 진짜 돈 봇 친구 15분 봇 스스로 매매 · 페이퍼를 따라가지 않음 꺼짐 아직 켠 적 없어요 (기록 파일 없음) · 켜기: sudo systemctl start paperbot-mixchop" in o
+    assert "WOO X Pro 2 진짜 돈 봇 친구 30분 봇 스스로 매매 · 페이퍼를 따라가지 않음 꺼짐 아직 켠 적 없어요 (기록 파일 없음) · 켜기: sudo systemctl start paperbot-mixchop" in o
     assert "최근 거래 —" in o and "49.95" not in o and not BAD.search(o)
     assert "기록 멈춤" in out["late"]["text"] and "서버에서 systemctl status paperbot-mixchop" in out["late"]["text"]
-    assert "WOO X Pro 2 진짜 돈 봇 친구 15분 봇 스스로 매매 · 페이퍼를 따라가지 않음 불러오지 못함" in out["failed"]["text"]
+    assert "WOO X Pro 2 진짜 돈 봇 친구 30분 봇 스스로 매매 · 페이퍼를 따라가지 않음 불러오지 못함" in out["failed"]["text"]
     led = out["led"]
     assert [x["id"] for x in led] == ["run", "none", "stale", "wait", "bad", "halt", "bad"] and led[0]["why"] is None
     assert led[5]["ko"] == "새 진입 멈춤" and led[6]["why"] == "권한 없음"
@@ -627,7 +627,7 @@ def test_the_friend_bot_card_and_strip_move_with_the_mark(w, tmp_path, monkeypat
     p = FW.build_world(f)["p"]
     t = _node(tmp_path, js, s=json_finite(L.build(p, FW.NOW)), m=mix, n=json_finite(L.whynow(p, FW.NOW)),
               cal=json_finite(L.calendar(p, FW.NOW)), r=json_finite(L.rank(p, FW.NOW)))["text"]
-    for word in ("WOO X Pro 2 진짜 돈 봇 친구 15분 봇 스스로 매매", "$ 50.07 ×1.00", "시작 대비 +$0.07 · 진입 때 잔고 $49.95 + 평가 +$0.12",
+    for word in ("WOO X Pro 2 진짜 돈 봇 친구 30분 봇 스스로 매매", "$ 50.07 ×1.00", "시작 대비 +$0.07 · 진입 때 잔고 $49.95 + 평가 +$0.12",
                  "포지션 BCH 롱 40배 · 계단 1단계 · ROE +40.0%"):
         assert word in t, word
     assert "진입 때 읽은 잔고 10/27 09:00" not in t and not BAD.search(t)

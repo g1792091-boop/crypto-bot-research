@@ -171,11 +171,12 @@ def test_obv50_with_the_four_votes_on_30m(monkeypatch):
 def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
-        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 15분 봇"
+        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
         # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes); 10-31: on 15m bars with
-        # 추세 3개 일치 added (tests/test_rules1031.py)
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("15m", "four", ("obv", "ema3"), 3.0)
-        assert cfg.tf_ms == M.MIN15 and cfg.tf_ko == "15분"
+        # 추세 3개 일치 added (tests/test_rules1031.py); 10-31 evening: back on 30m bars, the OBV turn with the AC bar
+        # (tests/test_rules1031b.py)
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac", "ema3"), 3.0)
+        assert cfg.tf_ms == M.MIN30 and cfg.tf_ko == "30분"
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
@@ -481,7 +482,7 @@ def test_the_friend_trend_board_shows_the_obv50_rule():
     row = FTR.m30_row(M.board_row([ev], T0), T0 + MIN)
     assert row["state"] == "ok" and row["obv50"] == 41.3 and row["stoch"] is None
     assert row["rules"]["obv50"] == {"side": 1, "why": "", "ko": "OBV 50선"} and row["obv"]["ko"] == "진한 초록"
-    assert any(x.startswith("OBV 50선(바이비트 봇, 10-30부터)") for x in FTR.RULES_KO)
+    assert any(x.startswith("OBV 50선(바이비트 봇, 10-30 ~ 10-31)") for x in FTR.RULES_KO)    # 10-31 evening: AC instead
 
 
 def test_the_range_screen_shows_a_roc_position_and_its_ladder(tmp_path, monkeypatch):
@@ -595,8 +596,8 @@ def test_the_friend_trend_board_shows_the_friend_bot_and_the_roc_reads(tmp_path)
     const v = F.ftrendView(ctx); await tick(); await tick();
     console.log(JSON.stringify({{a: texts(v.el)}}));""", d=d)
     a = out["a"]
-    for w in ("ROC 30분 (레인지 봇) 롱 신호 보라선 38.2", "15분 (친구 15분 봇) 상승", "OBV 진한 초록", "롱 신호",
-              "친구 15분 봇 (실거래 봇)", "ROC 30분(레인지 봇, 10-30)"):
+    for w in ("ROC 30분 (레인지 봇) 롱 신호 보라선 38.2", "30분 (친구 30분 봇) 상승", "OBV 진한 초록", "롱 신호",
+              "친구 30분 봇 (실거래 봇)", "ROC 30분(레인지 봇, 10-30)"):
         assert w in a, (w, a)
 
 

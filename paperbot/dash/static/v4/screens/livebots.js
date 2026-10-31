@@ -105,7 +105,7 @@ export const TABS = [
   {id: "bybitbot", label: "바이비트 봇", make: (ctx) => mixView(ctx, BYBIT_UI), own: true},
   {id: "rangebot", label: "레인지 봇", make: (ctx) => rangeView(ctx), own: true},
   {id: "vwapbot", label: "VWAP 개선판", make: (ctx, hub) => vwapView(ctx, hub), own: true},
-  {id: "mixbot", label: "친구 15분 봇", make: (ctx) => mixView(ctx), own: true},
+  {id: "mixbot", label: "친구 30분 봇", make: (ctx) => mixView(ctx), own: true},
   {id: "v39", label: "V3.9 투비트", make: (ctx) => v39View(ctx), own: true},
   // owners 10-29: the 추세판단 봇 switched off, its record kept (last of 봇별)
   {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
@@ -145,14 +145,14 @@ export const TABS = [
   {id: "ftrend", label: "친구 추세판", make: (ctx) => ftrendView(ctx), own: true},
 ];
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
-const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 · 스톡RSI 50선) · 다른 봇은 이 화면에 없어요"};
+const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요"};
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
 const hasExec = (d, id) => !!(d && Array.isArray(d.execs) && d.execs.some((x) => x && x.id === id));
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 봇별 screens (owners 10/26): bot (the 목표 연구 part's id), the head's line, the strip's executors (that bot's only;
  *  none: what its real money is instead). */
 export const BOT_TAB = {
-  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 · 스톡RSI 50선) · 다른 봇은 이 화면에 없어요",
+  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "바이비트 봇은 바이비트 계정에서 스스로 거래해요 · 잔고는 아래 실거래 칸"},
   trendbot: {bot: "trend", sub: "추세판단 봇 페이퍼(연습)와 그 봇을 따라가던 실행기 · 두 분 결정(10/29)으로 꺼 두는 봇 · 지난 기록 보관용이에요",
     head: (d) => botHead("추세판단 봇", followersOf(d, "paper")), only: (d) => followersOf(d, "paper"), none: "추세판단 봇을 따라가는 실행기가 지금 없어요"},
@@ -163,8 +163,8 @@ export const BOT_TAB = {
     head: (d) => botHead("VWAP 개선판", followersOf(d, "paper2")), only: (d) => followersOf(d, "paper2"),
     none: "VWAP 개선판을 따라가는 실행기가 아직 없어요 (페이퍼만)"},
   // owners 10-30: the friend bot runs ROC / OBV 50 on 15m bars (paperbot/mixchop.py, deploy/mixchop.live.json)
-  mixbot: {bot: "mix", sub: "친구 15분 봇(OBV 진한색 · 추세 3개 일치) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
-    head: null, only: () => [], none: "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
+  mixbot: {bot: "mix", sub: "친구 30분 봇(OBV 진한색 + AC · 추세 3개 일치) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
+    head: null, only: () => [], none: "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
   v39: {bot: "v39", sub: "규칙봇 V3.9 1시간 페이퍼(연습) V39_ALL@1h와 그 계좌를 따라가는 투비트 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
     head: null, only: (d) => (hasExec(d, "toobit") ? ["toobit"] : []), none: "투비트 실행기는 아직 꺼져 있어요"},
 };
