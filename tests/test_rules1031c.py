@@ -417,11 +417,12 @@ def test_three_bots_one_trend_six_coins():
     assert (rg.name, rg.exchange, rg.tf, rg.rules) == ("레인지 봇", "wooxpro", "15m", ("h0x",))
     assert {c.symbol: c.leverage for c in by.coins} == {c.symbol: c.leverage for c in fr.coins} == \
         {**{s: 40 for s in SIX}, "ZECUSDT": 20}
-    # the 레인지 봇 keeps its leverage (the old range executor's 30x; ZEC 20x as the other two)
-    assert {c.symbol: c.leverage for c in rg.coins} == {**{s: 30 for s in SIX}, "ZECUSDT": 20}
-    # the friend bot and the 레인지 봇: one rule, one trend, one bar; their own files
+    # the 레인지 봇 as the other two (owners 10-31 night: "레인지봇 zec 20배 나머지 40배로해")
+    assert {c.symbol: c.leverage for c in rg.coins} == {**{s: 40 for s in SIX}, "ZECUSDT": 20}
+    # the friend bot and the 레인지 봇: one rule, one trend, one bar, the same coins and leverage; their own files
     same = ("tf", "trend", "rules", "stop_atr", "ladder", "margin_frac", "equity_floor_frac", "ladder_every_s")
     assert {k: getattr(fr, k) for k in same} == {k: getattr(rg, k) for k in same}
+    assert [(c.symbol, c.leverage) for c in fr.coins] == [(c.symbol, c.leverage) for c in rg.coins]
     files = [(c.state, c.log, c.own_stop_file) for c in (by, fr, rg, _cfg("mixbybit.paper.json"),
                                                           _cfg("mixchop.paper.json"), _cfg("mixrange.paper.json"))]
     assert len({x for f in files for x in f}) == 18

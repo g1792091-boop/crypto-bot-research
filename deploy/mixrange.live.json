@@ -28,22 +28,22 @@
  "stop_atr": 3,
  "coins": {
   "SOLUSDT": {
-   "leverage": 30
+   "leverage": 40
   },
   "ETHUSDT": {
-   "leverage": 30
+   "leverage": 40
   },
   "XRPUSDT": {
-   "leverage": 30
+   "leverage": 40
   },
   "BCHUSDT": {
-   "leverage": 30
+   "leverage": 40
   },
   "ZECUSDT": {
    "leverage": 20
   },
   "DOGEUSDT": {
-   "leverage": 30
+   "leverage": 40
   }
  }
 }
