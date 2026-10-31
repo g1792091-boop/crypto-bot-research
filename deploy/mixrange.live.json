@@ -1,0 +1,49 @@
+{
+ "name": "레인지 봇",
+ "exchange": "wooxpro",
+ "mode": "mainnet",
+ "state": "/var/lib/paperbot/exec/mixrange-state.json",
+ "log": "/var/lib/paperbot/exec/mixrange-log.jsonl",
+ "equity_floor_frac": 0,
+ "kill_file": "/var/lib/paperbot/STOP",
+ "own_stop_file": "/var/lib/paperbot/exec/mixrange.STOP",
+ "max_notional_usd": 10000,
+ "telegram": true,
+ "no_weekend": true,
+ "us_open_pre_min": 30,
+ "us_open_pause_min": 30,
+ "macro_blackout_min": 30,
+ "margin_frac": 0.4,
+ "ladder": {
+  "trigger": 10,
+  "lock": 8,
+  "step": 5
+ },
+ "ladder_every_s": 60,
+ "tf": "15m",
+ "trend": "bar",
+ "rules": [
+  "h0x"
+ ],
+ "stop_atr": 3,
+ "coins": {
+  "SOLUSDT": {
+   "leverage": 30
+  },
+  "ETHUSDT": {
+   "leverage": 30
+  },
+  "XRPUSDT": {
+   "leverage": 30
+  },
+  "BCHUSDT": {
+   "leverage": 30
+  },
+  "ZECUSDT": {
+   "leverage": 20
+  },
+  "DOGEUSDT": {
+   "leverage": 30
+  }
+ }
+}

@@ -69,8 +69,10 @@ rm -f "$m.part"
 ok=1
 sqlite3 -bail "$m.part" "CREATE TABLE files (name TEXT PRIMARY KEY, data BLOB);" || ok=0
 for f in exec/mixchop-state.json exec/mixchop-log.jsonl exec/mixbybit-state.json exec/mixbybit-log.jsonl \
+         exec/mixrange-state.json exec/mixrange-log.jsonl \
          mixchop-paper/state.json mixchop-paper/log.jsonl mixbybit-paper/state.json mixbybit-paper/log.jsonl \
-         mixcheck/state.json mixbybitcheck/state.json; do
+         mixrange-paper/state.json mixrange-paper/log.jsonl \
+         mixcheck/state.json mixbybitcheck/state.json mixrangecheck/state.json; do
   [ "$ok" = 1 ] || break
   [ -f "$lib/$f" ] || continue
   sqlite3 -bail "$m.part" "INSERT INTO files VALUES ('$f', readfile('$lib/$f'));" || ok=0

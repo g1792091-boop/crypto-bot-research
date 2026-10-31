@@ -48,6 +48,18 @@ Three parts of the friend's TradingView scripts (차트 믹스 · 차트 믹스 
    friend bot: "상승 추세에서 초록진한선이 뜨는데 히스토그램이 플러스 양봉이면 진입 … 플러스 음봉이면 진입 금지", the dark line =
    their answer: part 2's light -> dark turn, "50일선위 숏 아래 롱은 삭제"): long on a light -> dark green turn with the AC
    bar over 0 and green; short on a light -> dark red turn with the AC bar under 0 and red; no 50 line.
+9. '추세 바' and 'ALL + OBV6 MACD' (추세 바만.pine, WOOX_pro2.pine, owners 10-31 night: "이 추세지표는 레인지봇,
+   바이비트봇, woo x pro 2친구봇에 공통으로 쓰이는 추세지표"): the trend of all three bots is the trend bar's 종합 over six
+   rows: ① 3개 점수 (sky / purple +-1, EMA RSI +-1, the supertrend average 14 · 3 / 14 · 5 +-1 or 0; +2 or more up, -2 or
+   less down, else sideways), ② 6종 평균 (OBV - EMA 20, ROC 9, Klinger 34 / 55, MACD 12 / 26, AO 5 / 34, AC 5, each
+   zsq over 100, x 100, EMA 3: >= 0 up, else down), ③ the sky / purple line (up / down, equal: sideways), ④ EMA RSI (> 50 up,
+   < 50 down), ⑤ the supertrend average (both up / both down / mixed: sideways), ⑥ 4종 평균 (AO, AC, OBV, Klinger the same
+   way). 종합: two or more sideways, or two or more up with two or more down -> 0 (노랑, no entry); else two or more up -> +1,
+   two or more down -> -1. 'ALL + OBV6 MACD' (its defaults): A = 2 x (EMA RSI - 50), B = the mean of the OBV line's
+   distance from its EMA 52 (zsq over 100, x 100) and ② 6종 평균; their mean through EMA 3 is the MACD line, its EMA 9 the
+   signal, the histogram = line - signal. Owners 10-31 night (WOO X Pro 2 and the 레인지 봇: "15분봉 진입 추세 바를 통해서
+   추세를 정하고 그리고 추세에 맞게 히스토 그램이 0선 돌파 할때 진입"): long on the bar where the histogram crosses above 0
+   with 종합 up, short where it crosses below 0 with 종합 down (Pine's crossover / crossunder of 0).
 
 Every series is computed over the whole bar history given (oldest first) and read on its last value: the recursive parts
 (EMA, RMA, SAR, supertrend, the running sums, the kept states) settle long before the last of 1,000+ bars. The Pine
@@ -541,6 +553,133 @@ def ema3_words(t: dict) -> str:
     head = {1: "3개 상승", -1: "3개 하락"}.get(tr, "진입 금지")
     ko = {"ema": {1: "초록", -1: "빨강", 0: "50"}, "line": {1: "하늘", -1: "보라"}, "st": {1: "상승", -1: "하락", 0: "횡보"}}
     return f"{head} ({' · '.join(f'{name} {ko[k].get(int(v.get(k, 0)), chr(63))}' for k, name in EMA3_VOTES)})"
+
+
+# ====================================================================== 9. 추세 바 · ALL + OBV6 MACD (owners 10-31 night)
+BAR_ROWS = (("score", "3개 점수"), ("six", "6종 평균"), ("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("st", "슈퍼트렌드"),
+            ("four", "4종 평균"))
+BAR_ST = (5.0, 3.0)                     # the supertrend average's two factors (ATR 14), as part 7's
+H6_SMOOTH, H6_SIG = 3, 9                # 'ALL + OBV6 MACD': its MACD line's EMA, its signal's EMA
+
+
+def _z100(x) -> np.ndarray:
+    """nz(zsq(x, 100)): 0 where undefined (the scripts' nz around every zsq)."""
+    return _nz(M.zsq(x, 100))
+
+
+def six_four(h, l, c, v) -> tuple[np.ndarray, np.ndarray]:
+    """(② 6종 평균, ⑥ 4종 평균) per bar, the trend bar's (and 'ALL + OBV6 MACD''s v6 / v4): OBV - EMA 20, ROC 9, Klinger
+    EMA 34 - EMA 55 of the volume force, MACD EMA 12 - EMA 26, AO SMA 5 - SMA 34 of hl2, AC AO - SMA 5; each zsq over 100,
+    their mean x 100 through EMA 3."""
+    h, l, c = (np.asarray(a, float) for a in (h, l, c))
+    vol = _nz(v)
+    ob = obv(c, vol)
+    sv = np.where(change((h + l + c) / 3.0) >= 0, vol, -vol)   # na >= 0 is false: the first bar counts -volume
+    hl2 = (h + l) / 2.0
+    ao = M.sma(hl2, 5) - M.sma(hl2, 34)
+    zO, zR, zK = _z100(ob - M.ema(ob, 20)), _z100(M.roc(c, 9)), _z100(M.ema(sv, 34) - M.ema(sv, 55))
+    zM, zAo, zAc = _z100(M.ema(c, 12) - M.ema(c, 26)), _z100(ao), _z100(ao - M.sma(ao, 5))
+    six = M.ema(100.0 * (zO + zR + zK + zM + zAo + zAc) / 6.0, 3)
+    four = M.ema(100.0 * (zAo + zAc + zO + zK) / 4.0, 3)
+    return six, four
+
+
+def bar_pane(h, l, c, v) -> dict:
+    """The trend bar per bar: each row (+1 / -1 / 0), the 3-score, the counts and 종합 ("trend")."""
+    h, l, c = (np.asarray(a, float) for a in (h, l, c))
+    er = ema_rsi(c)
+    with np.errstate(invalid="ignore"):
+        ema = np.where(er > 50, 1, np.where(er < 50, -1, 0))
+    score_l = ((M._nz(M.rsi(c, 26), 50.0) - 50.0) / 50.0 + _z100(M.roc(c, 9)) + _z100(M.mom(c, 10))) / 3.0
+    nline = np.cumsum(score_l)
+    nsig = M.ema(nline, 9)
+    with np.errstate(invalid="ignore"):
+        line = np.where(nline > nsig, 1, np.where(nline < nsig, -1, 0))
+    _, up_a = M.supertrend(h, l, c, 14, BAR_ST[0])
+    _, up_b = M.supertrend(h, l, c, 14, BAR_ST[1])
+    st = np.where(up_a & up_b, 1, np.where(~up_a & ~up_b, -1, 0))
+    score = line + ema + st
+    six, four = six_four(h, l, c, v)
+    with np.errstate(invalid="ignore"):
+        rows = {"score": np.where(score >= 2, 1, np.where(score <= -2, -1, 0)), "six": np.where(six >= 0, 1, -1),
+                "line": line, "ema": ema, "st": st, "four": np.where(four >= 0, 1, -1)}
+    up = sum((r == 1).astype(int) for r in rows.values())
+    dn = sum((r == -1).astype(int) for r in rows.values())
+    sd = len(rows) - up - dn
+    trend = np.where((sd >= 2) | ((up >= 2) & (dn >= 2)), 0, np.where(up >= 2, 1, np.where(dn >= 2, -1, 0)))
+    return {"rows": {k: r.astype(np.int8) for k, r in rows.items()}, "score": score.astype(np.int8), "up": up, "down": dn,
+            "side": sd, "trend": trend.astype(np.int8), "ersi": er, "six": six, "four": four}
+
+
+def bar_state(h, l, c, v) -> dict:
+    """On the last bar: {"trend": 종합, "rows": {row: +1 / -1 / 0}, "n": [up, down, sideways], "score", "ersi"}."""
+    P = bar_pane(h, l, c, v)
+    if not len(P["trend"]):
+        return {"trend": 0, "rows": {}, "n": [0, 0, 0], "score": 0, "ersi": None}
+    er = float(P["ersi"][-1])
+    return {"trend": int(P["trend"][-1]), "rows": {k: int(r[-1]) for k, r in P["rows"].items()},
+            "n": [int(P["up"][-1]), int(P["down"][-1]), int(P["side"][-1])], "score": int(P["score"][-1]),
+            "ersi": round(er, 2) if math.isfinite(er) else None}
+
+
+ROW_KO = {"score": {1: "상승", -1: "하락", 0: "횡보"}, "six": {1: "상승", -1: "하락"}, "line": {1: "하늘", -1: "보라", 0: "같음"},
+          "ema": {1: "초록", -1: "빨강", 0: "50"}, "st": {1: "상승", -1: "하락", 0: "횡보"}, "four": {1: "상승", -1: "하락"}}
+
+
+def bar_words(t: dict) -> str:
+    """'종합 상승 (상승 5 · 하락 1 · 횡보 0: 3개 점수 +3 · 6종 상승 · 하늘·보라 선 하늘 · EMA RSI 초록 · 슈퍼트렌드 상승 ·
+    4종 하락)'; 종합 노랑: '종합 횡보(진입 금지) (…)'."""
+    rows = t.get("rows") or {}
+    n = t.get("n") or [None, None, None]
+    head = {1: "종합 상승", -1: "종합 하락"}.get(int(t.get("trend") or 0), "종합 횡보(진입 금지)")
+    parts = []
+    for k, ko in BAR_ROWS:
+        if k not in rows or rows[k] is None:
+            continue
+        if k == "score":
+            sc = t.get("score")
+            parts.append(f"{ko} {'+' if sc is not None and sc > 0 else ''}{sc}" if sc is not None else
+                         f"{ko} {ROW_KO[k].get(int(rows[k]), '?')}")
+        else:
+            parts.append(f"{ko} {ROW_KO[k].get(int(rows[k]), '?')}")
+    count = f"상승 {n[0]} · 하락 {n[1]} · 횡보 {n[2]}" if None not in n else ""
+    inner = ": ".join(x for x in (count, " · ".join(parts)) if x)
+    return f"{head} ({inner})" if inner else head
+
+
+def h6_pane(h, l, c, v) -> dict:
+    """'ALL + OBV6 MACD' per bar (its defaults): {"macd", "sig", "hist", "cross": +1 the histogram crossed above 0 on this
+    bar / -1 below / 0}."""
+    h, l, c = (np.asarray(a, float) for a in (h, l, c))
+    a = 2.0 * (ema_rsi(c) - 50.0)
+    ml = mix_line(h, l, c, v)
+    vobv = 100.0 * _z100(ml - M.ema(ml, 52))
+    six, _four = six_four(h, l, c, v)
+    avg = (a + (vobv + six) / 2.0) / 2.0
+    macd = M.ema(avg, H6_SMOOTH)
+    sig = M.ema(macd, H6_SIG)
+    hist = macd - sig
+    prev = lag(hist, 1)
+    with np.errstate(invalid="ignore"):
+        ok = np.isfinite(hist) & np.isfinite(prev)
+        cross = np.where(ok & (hist > 0) & (prev <= 0), 1, np.where(ok & (hist < 0) & (prev >= 0), -1, 0))
+    return {"macd": macd, "sig": sig, "hist": hist, "cross": cross.astype(np.int8)}
+
+
+def h0x_side(cross: int, trend: int) -> int:
+    """The owners' entry: a cross of 0 on 종합's side (+1 / -1), else 0."""
+    return int(cross) if cross and int(cross) == int(trend) else 0
+
+
+def h0x_state(h, l, c, v) -> dict:
+    """On the last bar: {"cross", "hist", "macd", "bar": bar_state, "side": h0x_side}."""
+    H = h6_pane(h, l, c, v)
+    B = bar_state(h, l, c, v)
+    if not len(H["hist"]):
+        return {"cross": 0, "hist": None, "macd": None, "bar": B, "side": 0}
+    x, hv, mv = int(H["cross"][-1]), float(H["hist"][-1]), float(H["macd"][-1])
+    return {"cross": x, "hist": round(hv, 4) if math.isfinite(hv) else None,
+            "macd": round(mv, 3) if math.isfinite(mv) else None, "bar": B, "side": h0x_side(x, B["trend"])}
 
 
 # ====================================================================== 3. the Stoch RSI pane

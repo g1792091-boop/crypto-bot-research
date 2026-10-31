@@ -151,6 +151,17 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
         assert line in byb, line
     hidden = next(x for x in byb if x.startswith("InaccessiblePaths=")).split("=", 1)[1].split()
     assert {"-/etc/paperbot/agents.env", "-/etc/paperbot/dash.env", "-/etc/paperbot/executor-wooxpro2.env"} <= set(hidden)
+    # '레인지 봇' (owners 10-31 night, docs/range-bot-ko.md 0장): the same program on the first WOO X Pro account, with
+    # the old range executor's key file and sandbox; it stops that executor when it starts (never both on one account)
+    rng = _unit("deploy/paperbot-mixrange.service")
+    for line in ("User=paperbot-exec", "EnvironmentFile=/etc/paperbot/executor.env", "NoNewPrivileges=yes",
+                 "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "LimitCORE=0", "UMask=0027",
+                 "ReadWritePaths=/var/lib/paperbot/exec", "Conflicts=paperbot-executor-mexc.service",
+                 "ExecStart=/opt/paperbot/venv/bin/python -m paperbot.mixchop run --config /etc/paperbot/mixrange.json"):
+        assert line in rng, line
+    hidden = next(x for x in rng if x.startswith("InaccessiblePaths=")).split("=", 1)[1].split()
+    assert {"-/etc/paperbot/agents.env", "-/etc/paperbot/dash.env", "-/etc/paperbot/executor-wooxpro2.env",
+            "-/etc/paperbot/executor-gate.env"} <= set(hidden)
     # '게이트 봇' (owners 10-31, docs/gate-bot-ko.md): its OWN key file only, the executors' sandbox, every other key
     # file hidden; no Conflicts= (an account no other bot trades)
     gate = _unit("deploy/paperbot-gateguard.service")
@@ -170,7 +181,7 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
                                                    "paperbot-executor-deepcoin.service",
                                                    "paperbot-executor-wooxpro2.service", "paperbot-mixchop.service",
                                                    "paperbot-executor-toobit.service", "paperbot-mixbybit.service",
-                                                   "paperbot-gateguard.service"):
+                                                   "paperbot-gateguard.service", "paperbot-mixrange.service"):
             continue
         lines = _unit(f"deploy/{svc}")
         assert "User=paperbot-exec" not in lines, svc                         # nothing else runs as the executor

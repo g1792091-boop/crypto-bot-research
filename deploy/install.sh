@@ -361,6 +361,14 @@ install -m 644 "$APP/deploy/paperbot-mixchop-paper.service" /etc/systemd/system/
 install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixbybit-paper
 install -m 644 "$APP/deploy/paperbot-mixbybit.service" /etc/systemd/system/paperbot-mixbybit.service
 install -m 644 "$APP/deploy/paperbot-mixbybit-paper.service" /etc/systemd/system/paperbot-mixbybit-paper.service
+# '레인지 봇' (owners 10-31 night, docs/range-bot-ko.md 0장): the same program on the first WOO X Pro account with the
+# trend bar's 종합 and the histogram's 0 cross on 15m bars (keys from executor.env, the old range executor's file;
+# Conflicts= stops paperbot-executor-mexc when it starts), and its paper twin. Installed only, never enabled or started
+# here; /etc/paperbot/mixrange.json and mixrange-paper.json are never written here (the owners copy
+# deploy/mixrange.live.json / mixrange.paper.json).
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixrange-paper
+install -m 644 "$APP/deploy/paperbot-mixrange.service" /etc/systemd/system/paperbot-mixrange.service
+install -m 644 "$APP/deploy/paperbot-mixrange-paper.service" /etc/systemd/system/paperbot-mixrange-paper.service
 # '게이트 봇' (owners 10-31, docs/gate-bot-ko.md): the stops and the ladder on the friend's own Gate positions (keys from
 # executor-gate.env). Installed only, never enabled or started here; /etc/paperbot/gateguard.json is never written here
 # (the owners copy deploy/gateguard.json).
@@ -497,6 +505,18 @@ for u in paperbot-mixbybitcheck.service paperbot-mixbybitcheck.timer paperbot-mi
 done
 systemctl daemon-reload
 for t in paperbot-mixbybitcheck.timer paperbot-mixbybitcheck-pass.timer; do
+  systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
+  echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
+done
+# 레인지 봇 점검 (owners 10-31 night, docs/range-bot-ko.md 0장): the same checks for the '레인지 봇' (PAPERBOT_MIX_BOT=range
+# in its units), its own folder /var/lib/paperbot/mixrangecheck. Installed AND switched on here; before the bot runs they
+# say so once in the morning (no record yet) and the pass sends nothing. The bot itself is never touched here.
+install -d -o paperbot -g paperbot -m 750 /var/lib/paperbot/mixrangecheck
+for u in paperbot-mixrangecheck.service paperbot-mixrangecheck.timer paperbot-mixrangecheck-pass.service paperbot-mixrangecheck-pass.timer; do
+  install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
+done
+systemctl daemon-reload
+for t in paperbot-mixrangecheck.timer paperbot-mixrangecheck-pass.timer; do
   systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
   echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
 done

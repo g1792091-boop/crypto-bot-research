@@ -1,0 +1,13 @@
+# 레인지 봇 아침 점검 (deploy/paperbot-mixrangecheck.service): 00:09 UTC = 09:09 KST, about the KST day that ended at
+# midnight (two minutes after the 바이비트 봇's). Installed and switched on by install.sh; by hand:
+#   sudo systemctl enable --now paperbot-mixrangecheck.timer
+[Unit]
+Description=paperbot 레인지 봇 아침 점검 at 00:09 UTC (09:09 KST: the previous KST day)
+
+[Timer]
+OnCalendar=*-*-* 00:09:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

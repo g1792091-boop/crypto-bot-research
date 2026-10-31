@@ -1,0 +1,49 @@
+# '레인지 봇' (owners 2026-10-31 night, docs/range-bot-ko.md 0장): the FIRST WOO X Pro account trades by itself with the
+# mix bots' program (python -m paperbot.mixchop with deploy/mixrange.live.json, no paper bot in between): Binance's
+# closed 15m bars -> the trend bar's 종합 (노랑 = no entry) and 'ALL + OBV6 MACD''s histogram crossing 0 on its side at
+# each 15m close -> a market order + a resting stop (ATR14 of the 15m bar x 3) on WOO X Pro, the net-ROE ladder
+# (10 -> 8, then every 5 %) followed on 1m bars. One position at a time, SOL · ETH · XRP · BCH · DOGE (30x) · ZEC (20x),
+# margin 40 % of the balance - the same coins as the 바이비트 봇 and the 친구 15분 봇.
+#
+# Keys: WOOXPRO_LIVE_KEY / SECRET / MEMO, WOOXPRO_LIVE_KEY_CHECKED and PAPERBOT_LIVE_MAINNET in the root-only
+# /etc/paperbot/executor.env (the file the old range executor read; nothing new to type). That executor
+# (paperbot-executor-mexc, following the old combo range paper bot) must not trade the same account at the same time:
+# Conflicts= below stops it when this one starts. Own user paperbot-exec, the executors' sandbox; exit 2 = a gate
+# refused (not restarted).
+#
+# install.sh installs this unit but NEVER enables or starts it. A person starts it after the guide's checks:
+#   sudo systemctl start paperbot-mixrange      (enable only after the first days went as expected)
+[Unit]
+Description=paperbot '레인지 봇' (WOO X Pro, mainnet: real orders)
+After=network-online.target
+Wants=network-online.target
+Conflicts=paperbot-executor-mexc.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=paperbot-exec
+Group=paperbot
+UMask=0027
+WorkingDirectory=/opt/crypto-bot-research
+EnvironmentFile=/etc/paperbot/executor.env
+# the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.mixchop run --config /etc/paperbot/mixrange.json
+Restart=on-failure
+RestartSec=30
+RestartPreventExitStatus=2
+TimeoutStopSec=60
+OOMScoreAdjust=-900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/paperbot/exec
+# systemd reads executor.env before the sandbox: the process itself never needs the file (the keys come in its environment)
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env -/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/executor-toobit.env -/etc/paperbot/executor-gate.env
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

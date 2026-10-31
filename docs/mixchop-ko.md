@@ -4,8 +4,8 @@
 트레이딩뷰 지표 "추세 조건 OBV·클링거 + 매매 시그널"의 30분봉 신호로 WOO X Pro **두 번째 계정**에서 직접 주문합니다.
 코드: `paperbot/mixchop.py`, 테스트: `tests/test_mixchop.py`.
 
-> **10/31부터 이 봇은 '친구 15분 봇'입니다(15장):** 15분봉, ① OBV 진한색(바이비트 봇의 원래 매매법) ② 추세 3개 일치.
-> 아래 1~12장은 그 전의 규칙이고, 13장(15분봉·ROC·스윙 추세)은 취소, 14장(30분봉 OBV 하나)은 10/30~31의 규칙입니다.
+> **10/31 밤부터 이 봇은 '친구 15분 봇'입니다(17장):** 15분봉, 추세 바 종합(세 봇 공통) + 'ALL + OBV6 MACD' 히스토그램 0선 돌파.
+> 레인지 봇도 같은 매매법입니다. 아래 1~16장은 그 전의 규칙입니다(13장은 취소, 14 · 15 · 16장은 10/30 ~ 10/31 저녁의 규칙).
 > 크기(40%)·계단(10%→8%)·손절(ATR × 3)·코인·배수는 그대로입니다.
 
 ## 1. 한눈에
@@ -642,3 +642,42 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 - diff: `"name"`(→ `"친구 30분 봇"`), `"tf": "30m"`, `"rules"` → `["obvac"]`, `"equity_floor_frac": 0`.
 - check: `매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 30분봉 · …`.
 
+
+## 17. 10/31 밤: 친구 15분 봇 — 추세 바 종합 + 히스토그램 0선 돌파 (15분봉)
+
+친구가 따로 보낸 말(WOO X Pro 2): "15분봉 진입 추세 바를 통해서 추세를 정하고 그리고 추세에 맞게 히스토 그램이 0선 돌파 할때 진입"
+('ALL + OBV6 MACD' 지표). 두 분 답: "15분봉 0선 돌파만". 레인지 봇도 같은 매매법입니다(`docs/range-bot-ko.md` 0장).
+
+| 항목 | 내용 |
+|---|---|
+| 이름 | **친구 15분 봇** (16장의 친구 30분 봇에서 바뀜) |
+| 신호 봉 | 바이낸스 **15분봉**, 끝난 봉만 |
+| 추세 | **추세 바 종합** 15분봉 (세 봇 공통). 노랑이면 진입 안 함. 6줄의 기준은 `docs/range-bot-ko.md` 0장 표 |
+| 롱 | 종합 초록 + 그 봉에서 히스토그램이 **0선 위로 돌파** |
+| 숏 | 종합 빨강 + 히스토그램이 **0선 아래로 돌파** |
+| 뺀 것 | OBV 진한색 + AC (16장). 이제 바이비트 봇만 씀 |
+| 그대로 | 코인 6개(SOL → ETH → XRP → BCH → ZEC → DOGE), 40배(ZEC 20배), 증거금 40%, 손절 ATR(14) × 3 (15분봉 ATR), 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간, 잔고 하한 없음 |
+
+- 히스토그램: 'ALL + OBV6 MACD' 기본값(MACD 모양). A = 2 × (EMA RSI − 50), B = (OBV 통합 라인과 그 EMA 52의 거리 · 6종 평균)의 평균,
+  (A + B) / 2의 EMA 3이 MACD 선, 그 EMA 9가 시그널선, 히스토그램 = MACD 선 − 시그널선 (`paperbot/friendtrend.py` 9장).
+- 텔레그램 근거 줄 예: `근거: 히스토그램 0선 위로 돌파(히스토그램 4.2) · 추세 바 15분 종합 상승 (…)`.
+- 아침 점검의 '놓친 신호'는 15분봉으로 0선 돌파를 다시 계산하고, `히스토그램 0선 돌파 N번`을 셉니다.
+- 설정: `"name": "친구 15분 봇"`, `"tf": "15m"`, `"trend": "bar"`, `"rules": ["h0x"]`. 시험: `tests/test_rules1031c.py`.
+
+### 17-1. 바꾸는 순서 (서버에서, 포지션이 없을 때 권장)
+
+```bash
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-1031c
+sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-1031c
+sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+sudo diff /etc/paperbot/mixchop.json.before-1031c /etc/paperbot/mixchop.json
+sudo deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json | tail -8
+sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
+```
+
+- diff: `"name"`(→ `"친구 15분 봇"`), `"tf": "15m"`, `"trend": "bar"`, `"rules"` → `["h0x"]`.
+- check: `매매법·손절: 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 추세 바 종합(6줄, 노랑이면 진입 안 함)`.
+- 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
+- 되돌리기: `.before-1031c` 파일을 다시 복사하고 다시 켭니다.

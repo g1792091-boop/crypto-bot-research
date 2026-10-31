@@ -1,0 +1,10 @@
+# 레인지 봇 손실 카드 (deploy/paperbot-mixrangecheck-pass.service): every 5 minutes (a minute after the 바이비트 봇's).
+[Unit]
+Description=paperbot 레인지 봇 손실 카드 every 5 minutes
+
+[Timer]
+OnCalendar=*:3/5
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

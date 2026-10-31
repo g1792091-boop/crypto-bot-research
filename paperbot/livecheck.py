@@ -125,6 +125,9 @@ config is on this server) is neither checked nor told any more: no "실행기 �
 would stop the new bot, its Conflicts=), no stale alarm, no score line. The 추세판단 봇 (the main paper, live-ac.db) is
 then followed by nothing; once its own unit is also neither running nor enabled it is retired (``main_retired``): no
 "페이퍼 봇 멈춤" alarm, no replay, no checkpoint or drift, its score line marked 꺼짐; its record stays.
+Owners 10-31 night (docs/range-bot-ko.md 0장): the first WOO X Pro account (the slot "mexc") is the 레인지 봇's itself
+(paperbot/mixchop.py, unit paperbot-mixrange): the old range executor leaves the checks the same way once
+/etc/paperbot/mixrange.json is there, and the old range paper bot (combo range.db) is then followed by nothing.
 ``preview`` prints one sample of every message from a hand-made world (paperbot/livepreview.py; sends nothing);
 ``chat-ids`` lists the private chats the bot in effect has seen (live.env's token, then live-telegram.env's; getMe and
 getUpdates; the token is never printed; sends nothing).
@@ -412,7 +415,9 @@ class ExecInfo:
 # bot's config is on this server the executor is left out of every check and message (its unit is stopped by the new
 # bot's Conflicts=; "다시 켜기: systemctl start" would stop the new bot). name -> (the bot's config, its unit, its name)
 REPLACED_BY = {"bybit": ("/etc/paperbot/mixbybit.json", "paperbot-mixbybit", "바이비트 봇"),
-               "wooxpro2": ("/etc/paperbot/mixchop.json", "paperbot-mixchop", "믹스 30분 봇")}
+               "wooxpro2": ("/etc/paperbot/mixchop.json", "paperbot-mixchop", "친구 15분 봇"),
+               # owners 10-31 night (docs/range-bot-ko.md 0장): the first WOO X Pro account is the 레인지 봇's itself
+               "mexc": ("/etc/paperbot/mixrange.json", "paperbot-mixrange", "레인지 봇")}
 
 
 def installed_specs(specs=EXECUTORS, optional=OPTIONAL_EXECUTORS, replaced=None) -> tuple:
@@ -2684,6 +2689,8 @@ PROTECTED_UNITS = ("paperbot-live3.service", "paperbot-combo.service", "paperbot
                    "paperbot-executor-toobit.service",
                    # owners 10-29: the mix bots trade by themselves; the 레인지 봇 paper bot is what WOO X Pro follows
                    "paperbot-mixchop.service", "paperbot-mixbybit.service", "paperbot-combo-range.service",
+                   # owners 10-31 night: the 레인지 봇 trades the first WOO X Pro account by itself
+                   "paperbot-mixrange.service",
                    # owners 10-31: the 게이트 봇 moves the stops of the friend's real Gate positions
                    "paperbot-gateguard.service")
 EXPERIMENT_HINTS = ("agents", "debate", "demobot", "demo", "candleague", "league", "shadow", "huntbot", "combo2")

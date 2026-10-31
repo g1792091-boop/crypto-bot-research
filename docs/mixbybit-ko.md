@@ -1,5 +1,7 @@
 # 바이비트 봇 (10/29, 친구 매매법 2개)
 
+> **10/31 밤부터(11장):** 추세는 '추세 바' 종합 30분봉(세 봇 공통), 진입은 OBV 진한색 + AC(9장), 코인 SOL · ETH · XRP · BCH · ZEC · DOGE.
+
 두 분 결정(10/29):
 - "바이비트 봇에 돌아가고 있던 추세판단 매매법 다 빼고 친구가 만든 매매법 2개로 돌릴꺼야"
 - "아까 내가 친구가 만든 추세지표 보냈잖아 일단 추세는 그걸로 볼꺼고 … 진입타점 매매법 2개야"
@@ -261,3 +263,39 @@
   또는 실거래 사이트 › 바이비트 봇).
 - 바꾸는 순서는 9-1과 같습니다(같은 설정 파일 하나에 9장과 10장이 같이 들어 있음). check에서 XRP 줄이 `✔ XRPUSDT`인지 봅니다.
 
+
+## 11. 10/31 밤: 추세를 '추세 바' 종합으로 (세 봇 공통)
+
+두 분(10/31 밤): "이 추세지표는 레인지봇, 바이비트봇, woo x pro 2친구봇에 공통으로 쓰이는 추세지표야"('추세 바만' 지표),
+"이거는 바이비트, woox pro2 친구봇 진입방식 파일이야"(OBV MACD).
+
+| 항목 | 내용 |
+|---|---|
+| 추세 | **추세 바 종합** 30분봉 (네 표에서 바뀜). 6줄(3개 점수 · 6종 평균 · 하늘·보라 선 · EMA RSI · 슈퍼트렌드 평균 · 4종 평균)을 셈: 횡보 2개 이상이거나 상승 2개 이상 + 하락 2개 이상이면 노랑(진입 금지), 그 밖에 상승 2개 이상 초록, 하락 2개 이상 빨강. 줄마다의 기준은 `docs/range-bot-ko.md` 0장 표 |
+| 롱 | 종합 초록 + OBV 막대 연한 초록 → 진한 초록 + AC 막대 플러스 양봉 (9장 그대로) |
+| 숏 | 종합 빨강 + 연한 빨강 → 진한 빨강 + AC 막대 마이너스 음봉 |
+| 진입 안 함 | 종합 노랑, 플러스 음봉 · 마이너스 양봉, 50선 조건 없음 (9장 그대로) |
+| 그대로 | 30분봉, 코인 6개(SOL · ETH · XRP · BCH · ZEC · DOGE), 40배(ZEC 20배), 증거금 40%, 손절 30분 ATR × 3, 계단 순ROE 10%→8% 뒤 5%씩, 진입 금지 시간, 잔고 하한 없음 |
+
+- 텔레그램 근거 줄 예: `근거: OBV 연한 초록→진한 초록 · AC 플러스 양봉(0.42) · 추세 바 30분 종합 상승 (상승 6 · 하락 0 · 횡보 0: 3개 점수 +3 · …)`.
+- 설정은 `"trend": "bar"` 한 줄(과 `"tf": "30m"`을 적어 둔 줄)만 바뀝니다. 시험: `tests/test_rules1031c.py`.
+- 세 봇: 바이비트 봇 30분봉 OBV MACD, 친구 15분 봇과 레인지 봇은 15분봉 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 17장, `docs/range-bot-ko.md` 0장).
+
+### 11-1. 바꾸는 순서 (서버에서, 포지션이 없을 때 권장)
+
+```bash
+cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixbybit.json /etc/paperbot/mixbybit.json.before-1031c
+sudo cp -p /etc/paperbot/mixbybit-paper.json /etc/paperbot/mixbybit-paper.json.before-1031c
+sudo install -o root -g paperbot -m 640 deploy/mixbybit.live.json /etc/paperbot/mixbybit.json
+sudo install -o root -g paperbot -m 640 deploy/mixbybit.paper.json /etc/paperbot/mixbybit-paper.json
+sudo diff /etc/paperbot/mixbybit.json.before-1031c /etc/paperbot/mixbybit.json
+sudo deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixbybit.json | tail -8
+sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
+```
+
+- diff: 새 줄 `"tf": "30m"`, `"trend": "bar"`만 나옵니다.
+- check: `매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 추세 바 종합(6줄, 노랑이면 진입 안 함)`.
+- 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
+- 되돌리기: `.before-1031c` 파일을 다시 복사하고 다시 켭니다.

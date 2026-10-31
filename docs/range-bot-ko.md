@@ -1,13 +1,101 @@
-# 레인지 봇 (10/26, 10/29 추세 확인을 친구 추세지표로)
+# 레인지 봇 (10/31 밤부터: WOO X Pro를 스스로 매매 · 추세 바 종합 + 히스토그램 0선 돌파 15분봉)
 
-> **10/29 바뀐 것:** 추세 확인이 "코인·BTC 1시간 슈퍼트렌드"에서 **친구 추세지표 1시간봉**으로 바뀌었습니다(1-1절, 서버 순서는 3장 E).
-> 나머지 규칙은 모두 그대로입니다.
+> **10/31 밤 바뀐 것:** 레인지 봇이 페이퍼 봇 + 실행기 구조에서 **바이비트 봇·친구 봇과 같은 프로그램**(`paperbot/mixchop.py`)으로
+> 옮겨 갑니다. WOO X Pro 첫 번째 계정을 직접 거래하고, 코인은 세 봇이 모두 SOL · ETH · XRP · BCH · ZEC · DOGE입니다(0장).
+> 1장부터는 예전(10/26 ~ 10/31 낮) 레인지 봇의 기록입니다.
+
+## 0장. 10/31 밤부터: 새 레인지 봇
+
+두 분(10/31 밤): "이 추세지표는 레인지봇, 바이비트봇, woo x pro 2친구봇에 공통으로 쓰이는 추세지표야"(추세 바만), 레인지 봇은
+친구 봇과 같게("15분봉 0선 돌파만", 추세 3개 일치 진입은 빼고), "모든 코인 종목들은 SOL · ETH · XRP · BCH · ZEC · DOGE 이걸로 해줘",
+"레인지봇도 다른봇들이랑 같은 종목으로 만들꺼야" → "무슨 방법이 제일 괜찮은데? 그 방법으로 해줘".
+
+**왜 구조를 바꾸나:** 예전 레인지 봇(페이퍼 봇 `paperbot-combo-range`)은 규칙봇의 코인 목록(BTC ETH SOL DOGE LTC BCH)만 거래할 수
+있습니다. 그 목록은 고정 파일이라 XRP · ZEC를 넣을 수 없습니다. 그래서 바이비트 봇과 친구 봇이 쓰는 프로그램으로 옮겨, 같은 코인을
+WOO X Pro 첫 번째 계정에서 직접 거래합니다(페이퍼를 따라가지 않음).
+
+| 항목 | 내용 |
+|---|---|
+| 계정 | WOO X Pro **첫 번째** 계정 (예전 WOO X Pro 실행기 `paperbot-executor-mexc`가 거래하던 계정). 키는 예전과 같은 `/etc/paperbot/executor.env` — 새로 넣을 것 없음 |
+| 신호 봉 | 바이낸스 **15분봉**, 끝난 봉만 |
+| 추세 | **추세 바 종합** (세 봇 공통, 아래 표). 노랑(횡보)이면 진입하지 않음 |
+| 롱 | 종합 **초록(상승)** + 그 봉에서 'ALL + OBV6 MACD' 히스토그램이 **0선 위로 돌파** |
+| 숏 | 종합 **빨강(하락)** + 히스토그램이 **0선 아래로 돌파** |
+| 진입 안 함 | 종합 노랑, 돌파 방향이 종합과 반대, 돌파 없음 |
+| 코인 | SOL → ETH → XRP → BCH → ZEC → DOGE (같은 봉에 여러 개면 이 순서). 30배, ZEC만 20배 (예전 레인지 봇의 30배 그대로) |
+| 그대로 | 증거금 잔고의 40%, 포지션 1개, 손절 그 15분봉 ATR(14) × 3, 계단 익절 순ROE 10%→8% 뒤 5%씩(1분봉으로 봄), 진입 금지 시간(주말 · 나스닥 개장 앞뒤 30분 · 미국 경제 발표 앞뒤 30분), 잔고 하한 없음 |
+| 뺀 것 | 추세 3개 일치 진입(10/31 낮), 레인지 필터 · ROC · 되돌림 대기 |
+
+**추세 바 종합** ('추세 바만' 지표, `paperbot/friendtrend.py` 9장): 아래 6줄을 상승 / 하락 / 횡보로 셉니다.
+
+| 줄 | 상승 | 하락 | 횡보 |
+|---|---|---|---|
+| ① 3개 점수 (하늘·보라 ±1 · EMA RSI ±1 · 슈퍼트렌드 ±1/0) | +2 이상 | −2 이하 | −1 ~ +1 |
+| ② 6종 평균 (OBV · ROC · 클링거 · MACD · AO · AC) | 0 이상 | 0 아래 | — |
+| ③ 하늘색 / 보라색 선 | 하늘 | 보라 | 같음 |
+| ④ EMA RSI | 50 위 | 50 아래 | 50 |
+| ⑤ 슈퍼트렌드 평균 (14·3 / 14·5) | 둘 다 상승 | 둘 다 하락 | 서로 다름 |
+| ⑥ 4종 평균 (AO · AC · OBV · 클링거) | 0 이상 | 0 아래 | — |
+
+- 횡보 2개 이상, 또는 상승 2개 이상과 하락 2개 이상이 같이 있으면 **노랑(진입 금지)**. 그 밖에 상승 2개 이상이면 초록, 하락 2개 이상이면 빨강.
+- 히스토그램: 'ALL + OBV6 MACD' 기본값('MACD' 모양). A = 2 × (EMA RSI − 50), B = (OBV 통합 라인과 그 EMA 52의 거리 · 6종 평균)의 평균,
+  (A + B) / 2의 EMA 3이 MACD 선, 그 EMA 9가 시그널선, 히스토그램 = MACD 선 − 시그널선. 0선 돌파는 MACD 선이 시그널선을 넘는 봉과 같습니다.
+- 텔레그램 근거 줄 예: `근거: 히스토그램 0선 위로 돌파(히스토그램 4.2) · 추세 바 15분 종합 상승 (상승 5 · 하락 0 · 횡보 1: 3개 점수 +2 · …)`.
+- 막힌 신호 예: `추세 바 종합 횡보(진입 금지) (상승 2 · 하락 2 · 횡보 2: …)`, `… : 신호 롱와 반대`, `히스토그램 0선 돌파 없음`.
+- 친구 15분 봇(WOO X Pro 2)과 매매법이 완전히 같습니다. 다른 것은 계정과 레버리지(친구 봇 40배)뿐입니다.
+- 설정: `deploy/mixrange.live.json` / `deploy/mixrange.paper.json`. 서비스: `paperbot-mixrange`(실거래), `paperbot-mixrange-paper`(모의, $100),
+  아침 점검 09:09 · 손실 카드 5분마다(`paperbot-mixrangecheck*`). 시험: `tests/test_rules1031c.py`. 백테스트는 하지 않았습니다.
+
+### A. 코드 받기 · 읽기만 하는 점검 · 모의 켜기 — 언제든 (주문 없음)
+
+```bash
+cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+sudo test -e /etc/paperbot/mixrange.json || sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixrange.live.json /etc/paperbot/mixrange.json
+sudo test -e /etc/paperbot/mixrange-paper.json || sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixrange.paper.json /etc/paperbot/mixrange-paper.json
+sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixrange.json
+cd /opt/crypto-bot-research && sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.mixchop signals --config /etc/paperbot/mixrange-paper.json -n 3
+sudo systemctl start paperbot-mixrange-paper
+```
+
+- `/etc/paperbot/mixrange.json`이 생기는 순간부터 텔레그램 점검과 사이트는 WOO X Pro 칸을 새 레인지 봇으로 봅니다(예전 실행기 알림 없음).
+- check: 잔고, 열린 포지션, 코인 6개의 WOO X Pro 계약(✔/✘), `매매법·손절: 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 ·
+  추세: 추세 바 종합(6줄, 노랑이면 진입 안 함)`. **✘ 코인**은 거래하지 않습니다.
+- signals: 코인마다 최근 0선 돌파 3개와 그때의 종합, 진입 또는 X. 트레이딩뷰 15분 차트(바이낸스 무기한)와 같은지 봅니다.
+
+### B. 실거래로 옮기기 — WOO X Pro 첫 계정에 포지션이 없을 때만
+
+1. A의 check에서 **열린 포지션이 없는지** 봅니다. 예전 실행기가 포지션을 들고 있으면 그게 끝난 뒤에 합니다
+   (새 봇은 자기가 열지 않은 포지션을 '모르는 포지션'으로 보고 새 진입을 멈춥니다).
+2. 예전 레인지 봇 끄기 (예전 실행기와 예전 페이퍼 봇, 재부팅해도 안 켜지게):
+   ```bash
+   sudo systemctl disable --now paperbot-executor-mexc paperbot-combo-range
+   ```
+3. 새 봇 켜기:
+   ```bash
+   sudo systemctl start paperbot-mixrange
+   journalctl -u paperbot-mixrange -n 30
+   ```
+   - 텔레그램에 `[레인지 봇] ▶️ 시작`이 옵니다. 시작할 때 코인마다 레버리지를 맞추고, 못 맞춘 코인은 `(꺼짐)`으로 나옵니다.
+   - 서비스에 `Conflicts=paperbot-executor-mexc.service`가 있어서, 예전 실행기가 켜져 있어도 같이 돌지 않습니다.
+4. 며칠 문제없으면: `sudo systemctl enable paperbot-mixrange paperbot-mixrange-paper`
+
+### C. 되돌리기 (포지션이 없을 때만)
+
+```bash
+sudo systemctl disable --now paperbot-mixrange paperbot-mixrange-paper
+sudo mv /etc/paperbot/mixrange.json /etc/paperbot/mixrange.json.off
+sudo systemctl start paperbot-combo-range paperbot-executor-mexc
+```
+
+- 예전 레인지 봇(10/31 낮의 추세 3개 일치, 코인 BTC ETH SOL DOGE LTC BCH)으로 돌아갑니다. 설정 파일 이름을 바꿔야 점검과 사이트도 예전 칸으로 돌아옵니다.
+
+## 예전 레인지 봇 (10/26 ~ 10/31 낮)
 
 두 분이 10/26에 "그 구조로 가자", "레인지봇을 추세 봇 woo x pro 거래소로 … 원래 있던 추세봇 woo x pro 는 없애고", "진행해줘",
 "1패후 24시간 휴식을 왜해 빼"라고 하셔서 만든 봇입니다. 구조의 근거는 `analysis/f7tp10_1026/FINAL_KO.md`(최종 구조)와
 `REPORT_KO.md` 17 ~ 23절입니다.
 
-## 0. 먼저 숫자 (솔직하게)
+## 0-1. 먼저 숫자 (솔직하게, 예전 레인지 매매법)
 
 | 기간 | 결과 (지갑 배수, 수수료·미끄러짐 포함) |
 |---|---|

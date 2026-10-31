@@ -129,7 +129,23 @@ BYBIT = Profile(
      "paper": ("/var/lib/paperbot/mixbybit-paper/state.json", "/var/lib/paperbot/mixbybit-paper/log.jsonl")},
     None, "/var/lib/paperbot/mixbybitcheck", "PAPERBOT_MIXBYBITCHECK_DIR",
     ("/api/v4/livebots/mixbybit", "/api/v4/livebots/mixbybitperf"))
-PROFILES = {"mix": MIX, "bybit": BYBIT}
+# owners 10-31 night (docs/range-bot-ko.md 0장): the 레인지 봇 is the third mix bot, on the first WOO X Pro account (the
+# old range executor's slot "mexc"), the trend bar's 종합 and the histogram's 0 cross on 15m bars, the same six coins
+RANGE = Profile(
+    "range", "레인지 봇", "WOO X Pro", "WOO X Pro", "docs/range-bot-ko.md",
+    (("live", "실거래", "paperbot-mixrange", "mainnet", "docs/range-bot-ko.md 0장 B"),
+     ("paper", "모의", "paperbot-mixrange-paper", "paper", "docs/range-bot-ko.md 0장 A")),
+    {"live": {"state": ("PAPERBOT_MIXRANGE_STATE", None), "log": ("PAPERBOT_MIXRANGE_LOG", None),
+              "config": ("PAPERBOT_MIXRANGE_CONFIG", "/etc/paperbot/mixrange.json"),
+              "repo_config": ("PAPERBOT_MIXRANGE_REPO_CONFIG", os.path.join(REPO, "deploy", "mixrange.live.json"))},
+     "paper": {"state": ("PAPERBOT_MIXRANGE_PAPER_STATE", None), "log": ("PAPERBOT_MIXRANGE_PAPER_LOG", None),
+               "config": ("PAPERBOT_MIXRANGE_PAPER_CONFIG", "/etc/paperbot/mixrange-paper.json"),
+               "repo_config": ("PAPERBOT_MIXRANGE_PAPER_REPO_CONFIG", os.path.join(REPO, "deploy", "mixrange.paper.json"))}},
+    {"live": ("/var/lib/paperbot/exec/mixrange-state.json", "/var/lib/paperbot/exec/mixrange-log.jsonl"),
+     "paper": ("/var/lib/paperbot/mixrange-paper/state.json", "/var/lib/paperbot/mixrange-paper/log.jsonl")},
+    None, "/var/lib/paperbot/mixrangecheck", "PAPERBOT_MIXRANGECHECK_DIR",
+    ("/api/v4/livebots/mixrange", "/api/v4/livebots/mixrangeperf"))
+PROFILES = {"mix": MIX, "bybit": BYBIT, "range": RANGE}
 
 
 def prof_of(x: Any) -> Profile:

@@ -34,6 +34,7 @@ def test_experiments_are_not_protected():
         if unit.name in {"paperbot-executor.service", "paperbot-executor-mexc.service", "paperbot-executor-deepcoin.service",
                          "paperbot-executor-wooxpro2.service", "paperbot-executor-toobit.service",
                          "paperbot-mixchop.service", "paperbot-mixbybit.service", "paperbot-gateguard.service",
+                         "paperbot-mixrange.service",
                          "paperbot-combo.service", "paperbot-combo-mexc.service", "paperbot-combo-vwap.service",
                          "paperbot-combo-friend.service", "paperbot-combo-short5.service", "paperbot-combo-range.service",
                          "paperbot-live3.service"}:

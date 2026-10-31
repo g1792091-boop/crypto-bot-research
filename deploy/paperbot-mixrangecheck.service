@@ -1,0 +1,42 @@
+# 레인지 봇 아침 점검 (paperbot/mixcheck.py morning with PAPERBOT_MIX_BOT=range, docs/range-bot-ko.md 0장; owners 10-31
+# night): the 바이비트 봇's morning check (deploy/paperbot-mixbybitcheck.service) for the '레인지 봇' (paperbot-mixrange, the
+# first WOO X Pro account, real money) with its paper twin next to it: its 15m signals (the histogram crossing 0 with
+# the trend bar's 종합), entries and skipped signals by reason, live against paper, the entry fills and WOO X Pro's taker
+# fee, whether a stop rested the whole time, the exchange read failures, the equity, the day's loss cards and the signal
+# replay (its rule on Binance's closed bars against its log). No 5-year replay: no luck band. ONE Telegram message to
+# the live bot's own chats at 09:09 KST, quiet (INFO), WARN when something is wrong. Read-only towards the bot; writes
+# only /var/lib/paperbot/mixrangecheck. Started by paperbot-mixrangecheck.timer; installed and switched on by
+# install.sh, which never touches paperbot-mixrange. By hand (prints, sends nothing, writes nothing):
+#   cd /opt/crypto-bot-research && sudo -u paperbot env PAPERBOT_MIX_BOT=range /opt/paperbot/venv/bin/python -m paperbot.mixcheck morning --dry-run
+[Unit]
+Description=paperbot 레인지 봇 아침 점검 (read-only, no orders)
+After=network-online.target
+Wants=network-online.target
+# a failed run sends one Korean Telegram warning a day (deploy/paperbot-failed@.service)
+OnFailure=paperbot-failed@%n.service
+
+[Service]
+Type=oneshot
+User=paperbot
+Group=paperbot
+WorkingDirectory=/opt/crypto-bot-research
+# the live bot's token and the owners' private chats (as paperbot-mixrange.service); systemd reads the file before the
+# sandbox below applies, the code never opens it
+EnvironmentFile=-/etc/paperbot/live-telegram.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+# which mix bot (paperbot/dash/more/livemix.py PROFILES): its config, files, words and this folder
+Environment=PAPERBOT_MIX_BOT=range
+ExecStart=/opt/paperbot/venv/bin/python -m paperbot.mixcheck morning
+Nice=10
+CPUWeight=20
+IOSchedulingClass=idle
+MemoryMax=800M
+TimeoutStartSec=15min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/paperbot/mixrangecheck
+ReadOnlyPaths=-/var/lib/paperbot/exec -/var/lib/paperbot/mixrange-paper /opt/crypto-bot-research
+InaccessiblePaths=-/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/executor-toobit.env -/etc/paperbot/executor-gate.env -/etc/paperbot/executor.env -/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/debate.env -/etc/paperbot/live.env -/etc/paperbot/live-telegram.env -/var/lib/paperbot/debate -/var/lib/paperbot/.claude -/var/lib/paperbot/.claude.json -/var/lib/paperbot/.local -/var/backups/paperbot

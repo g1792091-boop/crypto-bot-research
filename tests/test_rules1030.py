@@ -171,12 +171,13 @@ def test_obv50_with_the_four_votes_on_30m(monkeypatch):
 def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
-        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
+        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 15분 봇"
         # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes); 10-31: on 15m bars with
         # 추세 3개 일치 added (tests/test_rules1031.py); 10-31 evening: back on 30m bars, the OBV turn with the AC bar
-        # (tests/test_rules1031b.py)
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac",), 3.0)
-        assert cfg.tf_ms == M.MIN30 and cfg.tf_ko == "30분"
+        # (tests/test_rules1031b.py); 10-31 night: 15m bars, the trend bar's 종합 and the histogram's 0 cross
+        # (tests/test_rules1031c.py)
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("15m", "bar", ("h0x",), 3.0)
+        assert cfg.tf_ms == M.MIN15 and cfg.tf_ko == "15분"
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
@@ -519,7 +520,7 @@ def test_the_friend_bot_on_the_bybit_bots_first_rule(tmp_path, monkeypatch):
     """Owners 10-30, later: WOO X Pro 2 trades the 바이비트 봇's first rule (OBV light -> dark with the four-vote trend,
     30m bars), its coins, leverage, stop, ladder and margin kept; the check and the start words say so."""
     cfg = M.load_config(str(DEPLOY / "mixchop.live.json"))
-    cfg.tf, cfg.rules = "30m", ("obv",)                  # (10-30's form; 10-31 put it on 15m with 추세 3개 일치)
+    cfg.tf, cfg.rules, cfg.trend = "30m", ("obv",), "four"   # (10-30's form; 10-31 night: 15m, trend bar, h0x)
     b30 = frame(400, vol=0.002)
     co = cfg.coins[0]
     monkeypatch.setattr(FT, "obv_state", lambda *a: {"turn": 1, "cs": 1, "dark": True})

@@ -126,27 +126,18 @@ def test_the_deploy_configs():
     for name, mode in (("mixbybit.live.json", "mainnet"), ("mixbybit.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac",), 3.0)
+        # (10-31 night: the trend bar's 종합 instead of the four votes, tests/test_rules1031c.py)
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "bar", ("obvac",), 3.0)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
         # owners 10-31 evening ("바이비트 봇 코인 목록을 친구 30분 봇 코인 목록이랑 같게"): the friend bot's six
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert cfg.symbols == ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"] and cfg.equity_floor_frac == 0
-    for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
-        cfg = M.load_config(str(DEPLOY / name))
-        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac",), 3.0)
-        assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
-                                                            "ZECUSDT": 20, "DOGEUSDT": 40}
-        assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
-        assert cfg.equity_floor_frac == 0                  # owners 10-31 evening: "친구 30분봉 잔고 하한 없애주고"
         assert "매매법 OBV 진한색 + AC · 손절 ATR 3배" in M.plan_words(cfg) and "추세 3개 일치" not in M.plan_words(cfg)
-    # the two bots: the same rule, trend, bars, coins, stop, ladder, margin and floor (only the exchange differs)
-    b, f = (M.load_config(str(DEPLOY / n)) for n in ("mixbybit.live.json", "mixchop.live.json"))
-    same = ("tf", "trend", "rules", "stop_atr", "ladder", "margin_frac", "equity_floor_frac", "ladder_every_s", "no_weekend",
-            "us_open_pre_min", "us_open_pause_min", "macro_blackout_min")
-    assert {k: getattr(b, k) for k in same} == {k: getattr(f, k) for k in same}
-    assert [(c.symbol, c.leverage) for c in b.coins] == [(c.symbol, c.leverage) for c in f.coins]
+    # the friend bot traded this rule on 30m bars the same evening; 10-31 night it moved to 15m bars and the histogram's
+    # 0 cross (its config: tests/test_rules1031c.py), its floor still off ("친구 30분봉 잔고 하한 없애주고")
+    for name in ("mixchop.live.json", "mixchop.paper.json"):
+        assert M.load_config(str(DEPLOY / name)).equity_floor_frac == 0
 
 
 def _walk_rows(n, seed, tf):

@@ -63,13 +63,15 @@ def test_the_owners_check_of_the_units_shows_only_the_settings():
     # 13 jobs (paper v4): the 7 before, the DeepSeek nightly check and the nightly backup (owners' G29, G31), the
     # custom-value shadow (owners' "2번", 2026-10-10), the live daily check, the live watcher and the weekly live
     # scorecard (2026-10-19), and the 실거래 분석 팀 (owners 10/19; its pinned Claude Code too); the 믹스 30분 봇's
-    # morning check and loss cards (owners 10-25 night), the 바이비트 봇's (owners 10-29): 21 lines
-    assert len(FA.JOBS_KO) == 18 and {"paperbot-dscheck.service", "paperbot-backup.service",
+    # morning check and loss cards (owners 10-25 night), the 바이비트 봇's (owners 10-29), the 레인지 봇's (owners 10-31
+    # night): 23 lines
+    assert len(FA.JOBS_KO) == 20 and {"paperbot-dscheck.service", "paperbot-backup.service",
                                       "paperbot-paramshadow.service", "paperbot-livecheck.service",
                                       "paperbot-livewatch.service", "paperbot-liveimprove.service",
                                       "paperbot-liveteam.service", "paperbot-mixcheck.service",
                                       "paperbot-mixcheck-pass.service", "paperbot-mixbybitcheck.service",
-                                      "paperbot-mixbybitcheck-pass.service"} <= set(FA.JOBS_KO)
+                                      "paperbot-mixbybitcheck-pass.service", "paperbot-mixrangecheck.service",
+                                      "paperbot-mixrangecheck-pass.service"} <= set(FA.JOBS_KO)
 
 
 def test_a_failed_backup_warns_and_the_dscheck_bar_cache_is_never_copied():
