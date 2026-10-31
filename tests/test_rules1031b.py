@@ -126,6 +126,10 @@ def test_the_deploy_configs():
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
         assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac",), 3.0)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
+        # owners 10-31 evening ("바이비트 봇 코인 목록을 친구 30분 봇 코인 목록이랑 같게"): the friend bot's six
+        assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
+                                                            "ZECUSDT": 20, "DOGEUSDT": 40}
+        assert cfg.symbols == ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"] and cfg.equity_floor_frac == 0
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
         assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
@@ -133,6 +137,7 @@ def test_the_deploy_configs():
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
+        assert cfg.equity_floor_frac == 0                  # owners 10-31 evening: "친구 30분봉 잔고 하한 없애주고"
         assert "매매법 OBV 진한색 + AC + 추세 3개 일치(같은 봉이면 OBV 진한색 + AC 먼저)" in M.plan_words(cfg)
 
 

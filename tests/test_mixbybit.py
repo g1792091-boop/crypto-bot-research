@@ -219,7 +219,8 @@ def test_the_deploy_configs():
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
         # owners 10-30: the OBV 50 line; 10-31 evening: the AC bar instead, no 50 line (tests/test_rules1031b.py)
         assert cfg.rules == ("obvac",) and cfg.stop_atr == 3.0 and cfg.tf == "30m" and cfg.trend == "four"
-        assert cfg.symbols == ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "ZECUSDT"]
+        # owners 10-31 evening: the friend bot's six coins (BTC, LTC out, XRP in; tests/test_rules1031b.py)
+        assert cfg.symbols == ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
         assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in cfg.symbols}, "ZECUSDT": 20}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.ladder_every_s == 60
@@ -397,7 +398,7 @@ def test_the_check_command_on_bybit(tmp_path, monkeypatch, capsys):
     assert M.cmd_check(argparse.Namespace(config=str(PAPER))) == 0
     out = capsys.readouterr().out.splitlines()
     assert "매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상" in out
-    btc = next(x for x in out if x.startswith("✔ BTCUSDT"))
-    assert "최대 75배" in btc and "(증거금 $40.00)" in btc               # 40 % of the paper's $100
+    sol = next(x for x in out if x.startswith("✔ SOLUSDT"))
+    assert "최대 75배" in sol and "(증거금 $40.00)" in sol               # 40 % of the paper's $100
     zec = next(x for x in out if "ZECUSDT" in x)
     assert zec.startswith("✘") and "설정 20배가 바이비트 최대보다 커서 이 코인은 꺼짐" in zec

@@ -619,8 +619,10 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 | ② 추세 3개 일치 | 15장과 같은 규칙. 이제 30분봉으로 봅니다 |
 | 같은 봉에 둘 다 | ①먼저. 코인끼리는 SOL → ETH → XRP → BCH → ZEC → DOGE |
 | 그대로 | 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 ATR(14) × 3 (이제 30분봉 ATR), 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간 |
+| 잔고 하한 | **없앰** (두 분 10/31 저녁 "친구 30분봉 잔고 하한 없애주고"): 예전에는 잔고가 시작의 70% 아래면 새 진입을 멈췄습니다. 바이비트 봇처럼 하한 없음 |
 
-- 설정: `"name": "친구 30분 봇"`, `"tf": "30m"`, `"trend": "four"`, `"rules": ["obvac", "ema3"]`.
+- 설정: `"name": "친구 30분 봇"`, `"tf": "30m"`, `"trend": "four"`, `"rules": ["obvac", "ema3"]`, `"equity_floor_frac": 0`.
+- 바이비트 봇과 같은 것: 30분봉 추세(신호 4개), 진입 방식(OBV 진한색 + AC), 코인 6개, 손절·계단·증거금, 잔고 하한 없음. 다른 것: 이 봇에만 ② 추세 3개 일치.
 - 아침 점검의 '놓친 신호'도 30분봉으로 두 매매법을 다시 계산합니다.
 - 시험: `tests/test_rules1031b.py`.
 
@@ -637,6 +639,6 @@ sudo deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbo
 sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 ```
 
-- diff: `"name"`(→ `"친구 30분 봇"`), `"tf": "30m"`, `"rules"`의 `"obv"` → `"obvac"` (15장을 서버에 아직 안 올렸다면 `"ema3"` 추가도 보입니다).
+- diff: `"name"`(→ `"친구 30분 봇"`), `"tf": "30m"`, `"rules"`의 `"obv"` → `"obvac"`, `"equity_floor_frac": 0` (15장을 서버에 아직 안 올렸다면 `"ema3"` 추가도 보입니다).
 - check: `매매법·손절: OBV 진한색 + AC + 추세 3개 일치(같은 봉이면 OBV 진한색 + AC 먼저) · … · 신호 30분봉 · …`.
 

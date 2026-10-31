@@ -26,15 +26,20 @@ DAY0 = 1_793_232_000_000 - 9 * 3_600_000          # a KST midnight
 H, MIN = 3_600_000, 60_000
 
 
-def _write(folder, live_rows, paper_rows, live_state=None, paper_state=None, rules=("obv", "srsi")):
+OLD_COINS = {s: {"leverage": 20 if s == "ZECUSDT" else 40}
+             for s in ("BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT", "ZECUSDT")}
+
+
+def _write(folder, live_rows, paper_rows, live_state=None, paper_state=None, rules=("obv", "srsi"), coins=OLD_COINS):
     """The 바이비트 봇's two deploy configs with this world's files; ``rules``: the 10-29 two by default (this world's log
-    is theirs; the 10-30 rules: tests/test_rules1030.py)."""
+    is theirs; the 10-30 rules: tests/test_rules1030.py); ``coins``: its seven of 10-29 (owners 10-31 evening: the friend
+    bot's six, tests/test_rules1031b.py)."""
     os.makedirs(folder, exist_ok=True)
     j = lambda n: os.path.join(folder, n)      # noqa: E731
     for mode, src in (("live", "mixbybit.live.json"), ("paper", "mixbybit.paper.json")):
         d = json.load(open(os.path.join(ROOT, "deploy", src), encoding="utf-8"))
         d.update(state=j(f"{mode}-state.json"), log=j(f"{mode}-log.jsonl"), own_stop_file=j(f"{mode}.STOP"),
-                 kill_file=j("STOP"), rules=list(rules))
+                 kill_file=j("STOP"), rules=list(rules), coins=coins)
         json.dump(d, open(j(f"{mode}.json"), "w", encoding="utf-8"))
     for mode, rows, st in (("live", live_rows, live_state), ("paper", paper_rows, paper_state)):
         with open(j(f"{mode}-log.jsonl"), "w", encoding="utf-8") as fh:

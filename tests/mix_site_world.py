@@ -52,6 +52,7 @@ def config(folder: str, mode: str) -> str:
     for k in ("margin_frac", "ladder", "ladder_every_s", "rules", "stop_atr", "tf", "trend", "name"):
         raw.pop(k, None)
     raw["max_notional_usd"] = 500
+    raw["equity_floor_frac"] = 0.7          # the friend's design's floor (owners 10-31: the deploy config has none, test_rules1031b)
     raw.update(state=os.path.join(folder, f"{tag}-state.json"), log=os.path.join(folder, f"{tag}-log.jsonl"),
                kill_file=os.path.join(folder, "STOP"), own_stop_file=os.path.join(folder, f"{tag}.STOP"), telegram=False)
     path = os.path.join(folder, f"{tag}.json")

@@ -3,7 +3,7 @@
  "state": "/var/lib/paperbot/mixchop-paper/state.json",
  "log": "/var/lib/paperbot/mixchop-paper/log.jsonl",
  "risk_pct": 0.25,
- "equity_floor_frac": 0.7,
+ "equity_floor_frac": 0,
  "kill_file": "/var/lib/paperbot/STOP",
  "own_stop_file": "/var/lib/paperbot/mixchop-paper/STOP",
  "max_notional_usd": 10000,

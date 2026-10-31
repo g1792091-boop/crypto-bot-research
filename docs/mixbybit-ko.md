@@ -239,10 +239,25 @@
    sudo install -o root -g paperbot -m 640 /opt/crypto-bot-research/deploy/mixbybit.paper.json /etc/paperbot/mixbybit-paper.json
    sudo diff /etc/paperbot/mixbybit.json.before-1031b /etc/paperbot/mixbybit.json
    ```
-   - diff에는 `"rules"` 줄 하나(`["obv50"]` → `["obvac"]`)만 나와야 합니다.
+   - diff에는 `"rules"` 줄(`["obv50"]` → `["obvac"]`)과 10장의 코인 목록이 나옵니다.
 3. 확인 (읽기만): `sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixbybit.json | tail -8`
    - 볼 줄: `매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상`.
 4. 다시 켜기: `sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper`
    - 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
 - 되돌리기: `.before-1031b` 파일을 다시 복사하고 다시 켭니다.
+
+## 10. 10/31 저녁: 코인을 친구 30분 봇과 같게
+
+두 분(10/31 저녁): "바이비트 봇 코인 목록을 친구 30분 봇 코인 목록이랑 같게".
+
+| 전 | 후 |
+|---|---|
+| BTC · ETH · SOL · DOGE · LTC · BCH · ZEC (7개) | **SOL · ETH · XRP · BCH · ZEC · DOGE** (6개, 친구 30분 봇과 같은 순서) |
+
+- 레버리지: 40배, ZEC만 20배 (그대로). XRP는 새로 들어가 40배입니다.
+- 같은 봉에 여러 코인이 신호를 내면 이 순서대로 봅니다(포지션 1개).
+- **바꾸기 전에 확인**: 바이비트 봇이 BTC나 LTC 포지션을 들고 있으면, 그 포지션이 끝난 뒤에 설정을 바꿉니다
+  (`sudo /opt/crypto-bot-research/deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixbybit.json`의 열린 포지션 줄,
+  또는 실거래 사이트 › 바이비트 봇).
+- 바꾸는 순서는 9-1과 같습니다(같은 설정 파일 하나에 9장과 10장이 같이 들어 있음). check에서 XRP 줄이 `✔ XRPUSDT`인지 봅니다.
 
