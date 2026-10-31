@@ -211,7 +211,7 @@ def test_the_pages(tmp_path):
     assert out["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend", "tchart", "hq"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]
-    assert out["mixes"] == [["wooxpro2", "친구 30분 봇", "/api/v4/livebots/mix", None],
+    assert out["mixes"] == [["wooxpro2", "친구 15분 봇", "/api/v4/livebots/mix", None],
                             ["bybit", "바이비트 봇", "/api/v4/livebots/mixbybit", "bybit"]]
     assert out["led"] == "바이비트 봇 기록을 불러오지 못했어요" and all(out["tabs"]) and out["tab"] == "bybit"
     assert out["ui"] == ["/api/v4/livebots/mixbybit", "/api/v4/livebots/mixbybitperf", "/api/v4/livebots/mix"]

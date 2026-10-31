@@ -587,7 +587,9 @@ VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_o
             # the 바이비트 봇's rules (owners 10-29): the OBV turn, the friend's trend of the bar and its four votes
             "turn", "trend", "votes",
             # owners 10-30: the 50 lines (OBV, ROC), the ROC bar's turn, the swing trend, the bar
-            "obv50", "roc", "roc_turn", "trend_mode", "tf")
+            "obv50", "roc", "roc_turn", "trend_mode", "tf",
+            # owners 10-31: 추세 3개 일치 (its histogram's turn, the EMA RSI, its own three trends)
+            "e3_turn", "ersi", "e3_trend", "e3_votes")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 
@@ -661,12 +663,14 @@ def feed_view(rows: list, now: int) -> dict:
             counts[stage] += 1
             turn = _i(r.get("turn")) or 0                     # the OBV rule's light -> dark turn (owners 10-29)
             rturn = _i(r.get("roc_turn")) or 0                # the ROC bar's (owners 10-30)
+            eturn = _i(r.get("e3_turn")) or 0                 # the EMA RSI histogram's (owners 10-31)
             items.append({**base, "cat": "signal", "colour": colour, "cross": cross, "rule": rule, "rule_ko": M.RULE_KO.get(rule, rule),
                           "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour)
                           or {1: "OBV 연한 초록→진한 초록", -1: "OBV 연한 빨강→진한 빨강"}.get(turn)
-                          or {1: "ROC 막대 연한 초록→진한 초록", -1: "ROC 막대 연한 빨강→진한 빨강"}.get(rturn, "신호"),
-                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 else
-                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 else side,
+                          or {1: "ROC 막대 연한 초록→진한 초록", -1: "ROC 막대 연한 빨강→진한 빨강"}.get(rturn)
+                          or {1: "EMA RSI 막대 연한 초록→진한 초록", -1: "EMA RSI 막대 연한 빨강→진한 빨강"}.get(eturn, "신호"),
+                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 or eturn > 0 else
+                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 or eturn < 0 else side,
                           "stage": stage, "tone": tone,
                           "why": r.get("why") or None, "outcome": out, "vals": _vals(r)})
         elif k == "skip" and id(r) not in folded:
@@ -860,7 +864,7 @@ def bot_perf(bid: str, bp: dict, now: int) -> dict:
 
 
 def live_name(p: dict, prof: Profile) -> str:
-    """The bot's name: its live config's ``name`` (owners 10-30: the friend bot is '친구 30분 봇'), else the profile's."""
+    """The bot's name: its live config's ``name`` (owners 10-31: the friend bot is '친구 15분 봇'), else the profile's."""
     conf = read_config(p["live"]["config"], p["live"]["repo_config"], prof)
     cfg = conf.get("cfg")
     return getattr(cfg, "name", None) or prof.name

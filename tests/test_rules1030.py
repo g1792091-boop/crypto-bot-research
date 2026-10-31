@@ -171,10 +171,11 @@ def test_obv50_with_the_four_votes_on_30m(monkeypatch):
 def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
-        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
-        # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes) on 30m bars, nothing else
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obv",), 3.0)
-        assert cfg.tf_ms == M.MIN30 and cfg.tf_ko == "30분"
+        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 15분 봇"
+        # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes); 10-31: on 15m bars with
+        # 추세 3개 일치 added (tests/test_rules1031.py)
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("15m", "four", ("obv", "ema3"), 3.0)
+        assert cfg.tf_ms == M.MIN15 and cfg.tf_ko == "15분"
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
@@ -273,6 +274,16 @@ def _roc(side=1, osc=None, trend=None, atr=100.0, close=60000.0, **votes):
             "trend": TR.friend_votes(t, **votes), "atr": atr, "close": close}
 
 
+def _r1030():
+    """The 레인지 봇 config of 10-30 (the range filter member and the ROC entry; 10-31 replaced both: test_rules1031.py)."""
+    d = json.loads((DEPLOY / "combo.range.json").read_text(encoding="utf-8"))
+    rng = {k: v for k, v in d["range"].items() if k not in ("ema3_tf", "ema3_stop_atr")}
+    return {"members": [{"pick": TR.MEMBER}], "range": {**rng, "roc_tf": "30m", "roc_stop_atr": 3}}
+
+
+R1030 = _r1030()
+
+
 class RocWorld(TR.World):
     """The range test world on the deploy config (owners 10-30: the ladder, the ROC entry); ``roc``: {(symbol, 30m
     close): read}, every other coin and close a read without a turn."""
@@ -280,7 +291,7 @@ class RocWorld(TR.World):
     def __init__(self, tmp_path, **kw):
         self.roc: dict = {}
         self.reads: list = []
-        super().__init__(tmp_path, deploy=True, **kw)
+        super().__init__(tmp_path, deploy=True, **{**R1030, **kw})
 
     def open(self):
         super().open()
@@ -298,7 +309,7 @@ def _go(w, upto):
 
 
 def test_the_deploy_config_takes_the_ladder_and_the_roc_entry(tmp_path, capsys):
-    cfg = TR.rcfg(tmp_path, deploy=True)
+    cfg = TR.rcfg(tmp_path, deploy=True, **R1030)       # the deploy config as of 10-30 (10-31: test_rules1031.py)
     assert cfg.problems() == [] and cfg.take_profit_roe is None
     s = C.settings_of(cfg)
     assert s.tp_mode == "ladder" and (s.ladder_first_lock, s.ladder_trigger_gap, s.ladder_step) == (0.08, 0.02, 0.05)
@@ -308,17 +319,19 @@ def test_the_deploy_config_takes_the_ladder_and_the_roc_entry(tmp_path, capsys):
     words = rules.describe()
     assert words[-2].startswith("ROC 진입(30분봉): 친구 추세지표 30분봉(네 표)이 상승일 때 ROC 막대가 연한 초록→진한 초록이고 "
                                 "보라선이 50 아래면 롱") and "손절 30분 ATR(14) × 3, 그 거리가 (1/배수 - 0.5%) 안쪽일 때만" in words[-2]
-    assert C.cmd_check(Namespace(config=str(DEPLOY / "combo.range.json"))) == 0
+    f30 = tmp_path / "range1030.json"
+    f30.write_text(json.dumps({**json.loads((DEPLOY / "combo.range.json").read_text(encoding="utf-8")), **R1030}), encoding="utf-8")
+    assert C.cmd_check(Namespace(config=str(f30))) == 0
     out = capsys.readouterr().out
     assert "계단 익절 순ROE 10%에서 8% 잠금, 이후 5%씩" in out and "- ROC 진입(30분봉):" in out and out.strip().endswith("준비됨")
     text = C.start_text(cfg, C.resolve_members(cfg.members, cfg.picks_file), 1000.0)
     assert "ROC 진입(30분봉)" in text and "계단 익절" in text
     # the site says the same words (dash/more/livebots.range_words, held to describe())
     from paperbot.dash.more import livebots as L
-    assert [x["ko"] for x in L.range_words(json.loads((DEPLOY / "combo.range.json").read_text()))] == words
+    assert [x["ko"] for x in L.range_words(json.loads(f30.read_text()))] == words
     # wrong ROC numbers
     for over, want in (({"roc_tf": "15m"}, "range.roc_tf"), ({"roc_stop_atr": 0.2}, "range.roc_stop_atr")):
-        bad = TR.rcfg(tmp_path, deploy=True, range={**cfg.range, **over})
+        bad = TR.rcfg(tmp_path, deploy=True, members=R1030["members"], range={**cfg.range, **over})
         assert any(want in p for p in bad.problems()), over
     # the 10-26 form still loads: the fixed take-profit, no ladder
     assert TR.rcfg(tmp_path).problems() == [] and C.settings_of(TR.rcfg(tmp_path)).tp_mode == "fixed"
@@ -424,7 +437,7 @@ def test_the_roc_read_equals_friendtrend_on_the_same_history(tmp_path):
     hi, lo = np.maximum(o, c) * 1.0008, np.minimum(o, c) * 0.9992
     vol = rng.uniform(1.0, 9.0, n)
     custom.bootstrap("BTCUSDT", [(ts0 + k * FIVE, o[k], hi[k], lo[k], c[k], vol[k]) for k in range(n)])
-    w = TR.World(tmp_path, deploy=True)
+    w = TR.World(tmp_path, deploy=True, **R1030)
     run = RB.RangeRunner(w.cfg, w.members, w.book, w.store, w.note, custom, now_ms=lambda: TR.T0, prices=lambda: {})
     df = dsframe(np.array([ts0 + k * FIVE for k in range(n)]), o, hi, lo, c, vol, tf="30m", lib=lib).tail(RB.ROC_BARS)
     a = {k: df[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume")}
@@ -505,6 +518,7 @@ def test_the_friend_bot_on_the_bybit_bots_first_rule(tmp_path, monkeypatch):
     """Owners 10-30, later: WOO X Pro 2 trades the 바이비트 봇's first rule (OBV light -> dark with the four-vote trend,
     30m bars), its coins, leverage, stop, ladder and margin kept; the check and the start words say so."""
     cfg = M.load_config(str(DEPLOY / "mixchop.live.json"))
+    cfg.tf, cfg.rules = "30m", ("obv",)                  # (10-30's form; 10-31 put it on 15m with 추세 3개 일치)
     b30 = frame(400, vol=0.002)
     co = cfg.coins[0]
     monkeypatch.setattr(FT, "obv_state", lambda *a: {"turn": 1, "cs": 1, "dark": True})
@@ -581,8 +595,8 @@ def test_the_friend_trend_board_shows_the_friend_bot_and_the_roc_reads(tmp_path)
     const v = F.ftrendView(ctx); await tick(); await tick();
     console.log(JSON.stringify({{a: texts(v.el)}}));""", d=d)
     a = out["a"]
-    for w in ("ROC 30분 (레인지 봇) 롱 신호 보라선 38.2", "30분 (친구 30분 봇) 상승", "OBV 진한 초록", "롱 신호",
-              "친구 30분 봇 (실거래 봇)", "ROC 30분(레인지 봇, 10-30부터)"):
+    for w in ("ROC 30분 (레인지 봇) 롱 신호 보라선 38.2", "15분 (친구 15분 봇) 상승", "OBV 진한 초록", "롱 신호",
+              "친구 15분 봇 (실거래 봇)", "ROC 30분(레인지 봇, 10-30)"):
         assert w in a, (w, a)
 
 

@@ -512,6 +512,10 @@ def range_checks(cfg: dict, entry: int, side: int, symbol: str, lev: Optional[in
         _roc_checks(cfg, side, lev, i, add)
         _tp_line(cfg, add)
         return out
+    if i.get("ema3"):                                    # owners 10-31: 추세 3개 일치 on a 15m close (no pullback)
+        _ema3_checks(cfg, side, lev, i, add)
+        _tp_line(cfg, add)
+        return out
     if r.get("friend_tf"):                               # owners 10-29: the friend's trend indicator on the 1h bar
         _friend_line(i.get("friend") if isinstance(i.get("friend"), dict) else None, side, "1시간", add)
     sts = [(w, L._i(i.get(k))) for w, k, on in (("코인", "coin_st", r.get("coin_st", True)), ("BTC", "btc_st", r.get("btc_st", True))) if on]
@@ -571,6 +575,35 @@ def _roc_checks(cfg: dict, side: int, lev: Optional[int], i: dict, add) -> None:
     else:
         add("liq", None, "손절 거리 숫자가 기록에 없어요")
     add("entry", True, "되돌림 안 기다림: 30분봉 마감 다음 분 시가에 시장가로 진입", {"t0": t0})
+
+
+def _ema3_checks(cfg: dict, side: int, lev: Optional[int], i: dict, add) -> None:
+    """A 추세 3개 일치 entry's checks (owners 10-31, paperbot/rangebot.py item 6): its three trends, the EMA RSI histogram's
+    light -> dark bar, the liquidation room of its ATR x k stop, the entry at the next minute's open."""
+    r = cfg.get("range") if isinstance(cfg.get("range"), dict) else {}
+    v = i.get("e3_votes") if isinstance(i.get("e3_votes"), dict) else {}
+    tr = L._i(i.get("e3_trend"))
+    ko = {"ema": ("EMA RSI", {1: "초록", -1: "빨강", 0: "50"}), "line": ("하늘·보라 선", {1: "하늘", -1: "보라"}),
+          "st": ("슈퍼트렌드", {1: "상승", -1: "하락", 0: "횡보"})}
+    votes = " · ".join(f"{name} {m.get(L._i(v.get(k)), '모름')}" for k, (name, m) in ko.items()) if v else ""
+    ok = None if tr is None else tr == side
+    add("ema3_trend", ok, f"추세 3개: {({1: '3개 상승', -1: '3개 하락'}).get(tr, '진입 금지' if tr is not None else '기록 없음')}"
+        + (f" ({votes})" if votes else "") + " → "
+        + ({True: f"{SIDE_WORD.get(side, '')} 통과", False: "맞지 않는데 진입 기록이 있어요", None: "기록 없음"}[ok]), v or None)
+    ersi, t0 = L._f(i.get("ersi")), L._i(i.get("t0"))
+    colour = "초록" if side > 0 else "빨강"
+    add("ema3", True if L._i(i.get("turn")) == side else None,
+        f"추세 3개 일치 15분봉{f' {_hm(t0)}' if t0 is not None else ''} 마감: EMA RSI 막대 연한 {colour}→진한 {colour}"
+        + (f" (EMA RSI {ersi:.1f})" if ersi is not None else ""), {"ersi": ersi, "t0": t0})
+    close, atr, k = L._f(i.get("close")), L._f(i.get("atr")), L._f(i.get("k")) or 3.0
+    if close and atr and lev:
+        mmr = L._f(r.get("liq_mmr")) or 0.005
+        dist, room = k * atr / close, 1 / lev - mmr
+        add("liq", dist <= room + 1e-9, f"강제청산 여유: 손절 15분 ATR × {k:g} = {dist:.2%} → {room:.2%} 안쪽 ({lev}배)",
+            {"dist": dist, "room": room})
+    else:
+        add("liq", None, "손절 거리 숫자가 기록에 없어요")
+    add("entry", True, "되돌림 안 기다림: 15분봉 마감 다음 분 시가에 시장가로 진입", {"t0": t0})
 
 
 def _tp_line(cfg: dict, add) -> None:

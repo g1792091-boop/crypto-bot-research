@@ -34,8 +34,8 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 /** Each mix bot's screens: its answers, its account and the words that differ (the friend bot's: the tabs as they were). */
 export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "WOO X Pro 2", exchange: "WOO X Pro", key: "",
   kick: "진짜 돈 · WOO X Pro 두 번째 계정",
-  wait: "30분봉이 끝날 때 친구 추세(하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드 4표 중 같은 쪽 2표 이상, 횡보 2표 이상이면 금지) 쪽으로 " +
-    "OBV 히스토그램이 연한색→진한색이 되면 시장가로 들어가요 (한 번에 1포지션).",
+  wait: "15분봉이 끝날 때 ① 친구 추세(4표 중 같은 쪽 2표 이상) 쪽으로 OBV 히스토그램이 연한색→진한색이 되거나, " +
+    "② 추세 3개(EMA RSI · 하늘·보라 선 · 슈퍼트렌드)가 모두 같은 쪽일 때 EMA RSI 막대가 연한색→진한색이 되면 시장가로 들어가요 (한 번에 1포지션).",
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
   exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정",
@@ -148,18 +148,25 @@ export function feedKo(x) {
  *  "스톡RSI K 30.1 / D 25.2 · 30분 RSI26 56.0 · 1시간 RSI26 54.0 · MOM 0.0042 · 종가 … · 손절 폭 …"; MOM since 10-27). */
 export function valsKo(v) {
   if (!v) return "";
-  return [trendKo(v), ok(v.roc) ? `ROC ${fmt.num(v.roc, 1)}` : null, ok(v.obv50) ? `OBV 50선 ${fmt.num(v.obv50, 1)}` : null, ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
+  return [trendKo(v), ok(v.ersi) ? `EMA RSI ${fmt.num(v.ersi, 1)}` : null, ok(v.roc) ? `ROC ${fmt.num(v.roc, 1)}` : null, ok(v.obv50) ? `OBV 50선 ${fmt.num(v.obv50, 1)}` : null, ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
     ok(v.k) && ok(v.d) ? `스톡RSI K ${fmt.num(v.k, 1)} / D ${fmt.num(v.d, 1)}` : null,
     ok(v.rsi26_30m) ? `30분 RSI26 ${fmt.num(v.rsi26_30m, 1)}` : null, ok(v.rsi26_1h) ? `1시간 RSI26 ${fmt.num(v.rsi26_1h, 1)}` : null,
     ok(v.mom) ? `MOM ${fmt.price(v.mom)}` : null,
     ok(v.close) ? `종가 ${fmt.price(v.close)}` : null, ok(v.stop_pct) ? `손절 폭 ${fmt.num(v.stop_pct, 2)}%` : null].filter(Boolean).join(" · ");
 }
-const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI", obv: "OBV 진한색", srsi: "스톡RSI 50선", obv50: "OBV 50선", roc50: "ROC 50선"};
+const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI", obv: "OBV 진한색", srsi: "스톡RSI 50선", obv50: "OBV 50선", roc50: "ROC 50선",
+  ema3: "추세 3개 일치"};
+const E3_KO = {ema: ["EMA RSI", {1: "초록", "-1": "빨강", 0: "50"}], line: ["하늘·보라 선", {1: "하늘", "-1": "보라"}],
+  st: ["슈퍼트렌드", {1: "상승", "-1": "하락", 0: "횡보"}]};
 const TREND_KO = {1: "상승", "-1": "하락", 0: "진입 금지"}, VOTE_KO = {1: "상승", "-1": "하락", 0: "횡보"};
 const VOTES = [["line", "하늘·보라 선"], ["ema", "EMA RSI"], ["chop", "찹존"], ["st", "슈퍼트렌드"]];
 /** The 바이비트 봇's trend of the bar in words (owners 10-29): "친구 추세 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 횡보 ·
  *  슈퍼트렌드 상승)"; null without one (the friend bot's rows). */
 export function trendKo(v) {
+  if (v && v.e3_votes && typeof v.e3_votes === "object") {   // owners 10-31: 추세 3개 일치's own three trends
+    const vs = Object.entries(E3_KO).filter(([k]) => v.e3_votes[k] != null).map(([k, [ko, m]]) => `${ko} ${m[Number(v.e3_votes[k])] || "?"}`);
+    return `추세 ${{1: "3개 상승", "-1": "3개 하락"}[Number(v.e3_trend)] || "진입 금지"}${vs.length ? ` (${vs.join(" · ")})` : ""}`;
+  }
   if (!v || v.trend == null || !Number.isFinite(Number(v.trend))) return null;
   const swing = v.trend_mode === "swing";             // owners 10-30: the friend bot's (line + chop / supertrend sideways)
   const vs = v.votes && typeof v.votes === "object" ? VOTES.filter(([k]) => v.votes[k] != null && !(swing && k === "ema"))

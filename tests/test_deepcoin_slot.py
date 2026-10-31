@@ -271,7 +271,7 @@ def test_the_screens_in_node(w3, answers, tmp_path):
     # 한눈에 shows the four live accounts always (owners 10-25 night): 딥코인 as 설치 전 (no number), WOO X Pro 2 the mix bot's
     assert two["reactors"] == 4 and {"three", "four"} <= set(two["deck"].split()) and "five" not in two["deck"].split()
     assert "딥코인 진짜 돈 봇 VWAP 개선판 따라갈 실행기 (paperbot-executor-deepcoin) 설치 전" in two["hq"]
-    assert "WOO X Pro 2 진짜 돈 봇 친구 30분 봇" in two["hq"] and "딥코인 $" not in two["hq"]
+    assert "WOO X Pro 2 진짜 돈 봇 친구 15분 봇" in two["hq"] and "딥코인 $" not in two["hq"]
     assert out["ids2"] == [["bybit", "mexc"]] * 3 + [["paper", "bybit", "mexc"]] * 2
     assert out["ids3"][:4] == [["bybit", "mexc", "deepcoin"]] * 4
     assert out["ids3"][4] == ["paper", "paper2", "bybit", "mexc", "deepcoin"] and out["ids3"][5][-1] == "deepcoin"

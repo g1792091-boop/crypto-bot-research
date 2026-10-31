@@ -1991,11 +1991,17 @@ def rules_of(combo: dict) -> dict:
 
 # the 레인지 봇's rule numbers when its config leaves one out (paperbot/rangebot.py RangeRules)
 RANGE_DEFAULTS = {"pullback_atr": 0.2, "wait_min": 60, "coin_st": True, "btc_st": True, "st_period": 10, "st_mult": 3.0,
-                  "liq_check": True, "liq_mmr": 0.005, "friend_tf": None, "roc_tf": None, "roc_stop_atr": 3.0}
+                  "liq_check": True, "liq_mmr": 0.005, "friend_tf": None, "roc_tf": None, "roc_stop_atr": 3.0,
+                  "ema3_tf": None, "ema3_stop_atr": 3.0}
 # its ROC entry (owners 10-30, paperbot/rangebot.py ROC_WORDS)
 RANGE_ROC_KO = ("ROC 진입(30분봉): 친구 추세지표 30분봉(네 표)이 상승일 때 ROC 막대가 연한 초록→진한 초록이고 보라선이 50 아래면 롱, "
                 "하락일 때 연한 빨강→진한 빨강이고 50 위면 숏 · 30분봉 마감 다음 분 시가에 시장가(되돌림 안 기다림) · "
                 "손절 30분 ATR(14) × {k:g}, 그 거리가 (1/배수 - {mmr:.1%}) 안쪽일 때만 · 한 신호씩(레인지 신호와 합쳐 포지션 1개)")
+# its 추세 3개 일치 entry (owners 10-31, paperbot/rangebot.py EMA3_WORDS) and the one-signal line without the range member
+RANGE_EMA3_KO = ("추세 3개 일치(15분봉): EMA RSI · 하늘·보라 선 · 슈퍼트렌드(14·3 / 14·5) 셋이 모두 상승일 때 EMA RSI 막대가 "
+                 "연한 초록→진한 초록이면 롱, 셋이 모두 하락일 때 연한 빨강→진한 빨강이면 숏(하나라도 다르거나 횡보면 진입 안 함) · "
+                 "15분봉 마감 다음 분 시가에 시장가 · 손절 15분 ATR(14) × {k:g}, 그 거리가 (1/배수 - {mmr:.1%}) 안쪽일 때만 · 포지션 1개")
+RANGE_ONE_KO = "한 신호씩: 포지션 있는 동안 다른 신호 안 받음(같은 시각이면 BTC→ETH→SOL→DOGE→LTC→BCH 순서)"
 # the friend's trend indicator check (owners 10-29, paperbot/rangebot.py FRIEND_WORDS)
 RANGE_FRIEND_KO = ("친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·찹존·슈퍼트렌드)이 신호와 같은 방향일 때만: 같은 추세 2개 이상이면 "
                    "그 추세, 횡보(찹존·슈퍼트렌드 노랑) 2개 이상이나 상승 2·하락 2면 진입 안 함")
@@ -2004,24 +2010,30 @@ RANGE_FRIEND_KO = ("친구 추세지표 1시간봉(하늘·보라 선·EMA RSI·
 def range_words(c: Any) -> list:
     """[{id, ko}] of a 레인지 봇 config's own rules in the owners' words (paperbot/rangebot.py RangeRules.describe, worked out
     here from the config dict: this module reads the bots' records, never their code; tests hold them to describe());
-    [] for any other config."""
+    [] for any other config. Owners 10-31: a config without members has no range entry (its own entries only)."""
     r = c.get("range") if isinstance(c, dict) else None
     if not isinstance(r, dict):
         return []
     r = {**RANGE_DEFAULTS, **r}
-    who = [w for w, on in (("코인", r["coin_st"]), ("BTC", r["btc_st"])) if on]
-    st = " · ".join(([RANGE_FRIEND_KO] if r.get("friend_tf") else [])
-                    + ([f"{'·'.join(who)} 1시간 슈퍼트렌드({r['st_period']}, {float(r['st_mult']):g})가 신호와 같은 방향일 때만"]
-                       if who else [])) or "슈퍼트렌드 확인 없음"
-    syms = [str(s).replace("USDT", "") for s in c.get("symbols") or [] if isinstance(s, str)] or ["BTC", "ETH", "SOL", "DOGE", "LTC", "BCH"]
-    out = [{"id": "range_st", "ko": f"추세 확인: {st}"},
-           {"id": "range_pull", "ko": f"되돌림 진입: 신호 1시간봉 종가에서 {float(r['pullback_atr']):g} ATR(14, 1시간) 되돌림을 최대 "
-                                      f"{int(r['wait_min'])}분 기다림, 닿은 5분봉 다음 5분봉 시가에 시장가(안 오면 버림)"},
-           {"id": "range_one", "ko": f"한 신호씩: 기다리는 동안·포지션 있는 동안 다른 신호 안 받음(같은 시각이면 {'→'.join(syms)} 순서)"}]
-    if r["liq_check"]:
-        out.append({"id": "range_liq", "ko": f"강제청산 여유: 손절 거리 + 1시간 ATR이 (1/배수 - {float(r['liq_mmr']):.1%}) 안쪽일 때만"})
+    out = []
+    if c.get("members"):
+        who = [w for w, on in (("코인", r["coin_st"]), ("BTC", r["btc_st"])) if on]
+        st = " · ".join(([RANGE_FRIEND_KO] if r.get("friend_tf") else [])
+                        + ([f"{'·'.join(who)} 1시간 슈퍼트렌드({r['st_period']}, {float(r['st_mult']):g})가 신호와 같은 방향일 때만"]
+                           if who else [])) or "슈퍼트렌드 확인 없음"
+        syms = [str(s).replace("USDT", "") for s in c.get("symbols") or [] if isinstance(s, str)] or ["BTC", "ETH", "SOL", "DOGE", "LTC", "BCH"]
+        out = [{"id": "range_st", "ko": f"추세 확인: {st}"},
+               {"id": "range_pull", "ko": f"되돌림 진입: 신호 1시간봉 종가에서 {float(r['pullback_atr']):g} ATR(14, 1시간) 되돌림을 최대 "
+                                          f"{int(r['wait_min'])}분 기다림, 닿은 5분봉 다음 5분봉 시가에 시장가(안 오면 버림)"},
+               {"id": "range_one", "ko": f"한 신호씩: 기다리는 동안·포지션 있는 동안 다른 신호 안 받음(같은 시각이면 {'→'.join(syms)} 순서)"}]
+        if r["liq_check"]:
+            out.append({"id": "range_liq", "ko": f"강제청산 여유: 손절 거리 + 1시간 ATR이 (1/배수 - {float(r['liq_mmr']):.1%}) 안쪽일 때만"})
+    else:
+        out.append({"id": "range_one", "ko": RANGE_ONE_KO})
     if r.get("roc_tf"):
         out.append({"id": "range_roc", "ko": RANGE_ROC_KO.format(k=float(r["roc_stop_atr"]), mmr=float(r["liq_mmr"]))})
+    if r.get("ema3_tf"):
+        out.append({"id": "range_ema3", "ko": RANGE_EMA3_KO.format(k=float(r["ema3_stop_atr"]), mmr=float(r["liq_mmr"]))})
     out.append({"id": "range_none", "ko": "진 뒤 쉬기·시간 청산·반대 신호 청산·신호등 없음"})
     return out
 

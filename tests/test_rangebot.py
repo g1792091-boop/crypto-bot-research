@@ -49,8 +49,8 @@ def rcfg(tmp_path, deploy=False, **kw):
     d = json.loads(DEPLOY.read_text(encoding="utf-8"))
     d.update(paper_db=str(tmp_path / "paper3.db"), db=str(tmp_path / "range.db"), macro_blackout_min=None)
     if not deploy:
-        d.update(ladder=None, take_profit_roe=0.1,
-                 range={k: v for k, v in d["range"].items() if k not in ("roc_tf", "roc_stop_atr")})
+        d.update(ladder=None, take_profit_roe=0.1, members=[{"pick": MEMBER}],
+                 range={k: v for k, v in d["range"].items() if k not in ("roc_tf", "roc_stop_atr", "ema3_tf", "ema3_stop_atr")})
     d.update(kw)
     return C.ComboConfig.from_dict(d)
 
@@ -92,7 +92,7 @@ class World:
         self.open()
 
     def open(self):
-        self.members = C.resolve_members(self.cfg.members, self.cfg.picks_file)
+        self.members = C.resolve_members(self.cfg.members, self.cfg.picks_file, allow_empty=True)
         self.store = Store3(self.cfg.db)
         self.book = C.build_book(self.cfg, C.settings_of(self.cfg), BRACKETS, self.store, self.note, SPECS)
         self.custom = FakeCustom(self.members, self.px)

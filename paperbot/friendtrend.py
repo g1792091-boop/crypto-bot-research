@@ -35,6 +35,13 @@ Three parts of the friend's TradingView scripts (차트 믹스 · 차트 믹스 
    long needs the sky line with the chop zone and the supertrend each sideways or down and at least one sideways
    ("파란선 이여야 하고 찹존이나 슈퍼트랜드 두개중 하나가 횡보 … 같은 추세가 2개 이상이면 진입 금지 … 찹존이랑 슈퍼트랜드가
    같이 횡보면 진입 가능"; owners 10-30: chop sideways with the supertrend down is a long too); short the mirror.
+7. '추세 3개 일치' (EMARSI_ALL.pine, owners 10-31, 15m): three trends, the EMA RSI line (green over 50 / red under, part 1's
+   ema), the sky / purple line (part 1's line) and the supertrend average of ATR 14 with factors 3 and 5 (both up / both
+   down / mixed = sideways); the histogram under it is the EMA RSI's distance from 50, green over / red under, dark while
+   that distance (its EMA 2) grows, light while it shrinks. Owners 10-31 ("추세 지표중에 3개 이상 같은 추세 … 횡보 추세가
+   2개 이상 나오면 진입 금지 상승 2개 하락1개 나와도 진입 금지 … 그 포지션에 맞는 진한 히스토그램이 나오면 진입", and their
+   answer: the light -> dark bar): long on the bar where the three are up and a light green bar turns dark green; short
+   the mirror. The script's other filters (overheat, overbought / oversold, its own exits) are not used (owners 10-31).
 
 Every series is computed over the whole bar history given (oldest first) and read on its last value: the recursive parts
 (EMA, RMA, SAR, supertrend, the running sums, the kept states) settle long before the last of 1,000+ bars. The Pine
@@ -427,6 +434,54 @@ def swing_words(t: dict) -> str:
     ko = {1: "상승", -1: "하락", 0: "횡보"}
     vs = " · ".join(f"{VOTE_KO[k]} {ko.get(int(t.get(k, 0)), '?')}" for k in ("line", "chop", "st") if k in t)
     return f"{SWING_KO.get(swing_side(t), '?')} ({vs})"
+
+
+# ====================================================================== 7. 추세 3개 일치 (owners 10-31)
+EMA3_ST = (3.0, 5.0)            # the supertrend average's two factors (ATR 14)
+EMA3_WEAK = 2                   # '막대 진한색 / 연한색 판단 평활'
+EMA3_VOTES = (("ema", "EMA RSI"), ("line", "하늘·보라 선"), ("st", "슈퍼트렌드"))
+
+
+def ema3_pane(h, l, c) -> dict:
+    """Per bar: {"ersi": the EMA RSI, "ema" +1 green / -1 red / 0, "line" +1 sky / -1 purple, "st" +1 both up / -1 both
+    down / 0 mixed, "trend" +1 all three up / -1 all three down / 0, "cs" the histogram's colour (= ema), "dark"}."""
+    c = np.asarray(c, float)
+    er = ema_rsi(c)
+    ema = np.where(er > 50, 1, np.where(er < 50, -1, 0)).astype(np.int8)
+    line = np.where(M.line_gold(c), 1, -1).astype(np.int8)
+    _, up_a = M.supertrend(h, l, c, 14, EMA3_ST[0])
+    _, up_b = M.supertrend(h, l, c, 14, EMA3_ST[1])
+    st = np.where(up_a & up_b, 1, np.where(~up_a & ~up_b, -1, 0)).astype(np.int8)
+    trend = np.where((ema == 1) & (line == 1) & (st == 1), 1, np.where((ema == -1) & (line == -1) & (st == -1), -1, 0))
+    dev = M.ema(np.abs(er - 50.0), EMA3_WEAK)
+    with np.errstate(invalid="ignore"):
+        dark = np.where(np.isfinite(dev) & np.isfinite(lag(dev, 1)), dev > lag(dev, 1), False)
+    return {"ersi": er, "ema": ema, "line": line, "st": st, "trend": trend.astype(np.int8), "cs": ema, "dark": dark}
+
+
+def ema3_state(h, l, c) -> dict:
+    """On the last bar: {"trend", "votes", "ersi", "cs", "dark", "turn": +1 light -> dark green / -1 light -> dark red / 0,
+    "side": the turn when the three trends are on its side, else 0}."""
+    P = ema3_pane(h, l, c)
+    cs, dark = P["cs"], P["dark"]
+    n = len(cs)
+    votes = {k: int(P[k][-1]) for k, _ko in EMA3_VOTES} if n else {k: 0 for k, _ko in EMA3_VOTES}
+    if n < 2:
+        return {"trend": 0, "votes": votes, "ersi": None, "cs": 0, "dark": False, "turn": 0, "side": 0}
+    turn = int(cs[-1]) if cs[-1] == cs[-2] and cs[-1] != 0 and dark[-1] and not dark[-2] else 0
+    tr = int(P["trend"][-1])
+    x = float(P["ersi"][-1])
+    return {"trend": tr, "votes": votes, "ersi": round(x, 2) if math.isfinite(x) else None, "cs": int(cs[-1]),
+            "dark": bool(dark[-1]), "turn": turn, "side": turn if turn and tr == turn else 0}
+
+
+def ema3_words(t: dict) -> str:
+    """'3개 상승 (EMA RSI 초록 · 하늘·보라 선 하늘 · 슈퍼트렌드 상승)' / '진입 금지 (…)'."""
+    v = t.get("votes") or {}
+    tr = int(t.get("trend") or 0)
+    head = {1: "3개 상승", -1: "3개 하락"}.get(tr, "진입 금지")
+    ko = {"ema": {1: "초록", -1: "빨강", 0: "50"}, "line": {1: "하늘", -1: "보라"}, "st": {1: "상승", -1: "하락", 0: "횡보"}}
+    return f"{head} ({' · '.join(f'{name} {ko[k].get(int(v.get(k, 0)), chr(63))}' for k, name in EMA3_VOTES)})"
 
 
 # ====================================================================== 3. the Stoch RSI pane

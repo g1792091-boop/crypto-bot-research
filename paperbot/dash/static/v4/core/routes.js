@@ -313,7 +313,7 @@ const LIVE_SCREENS = {
   trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)"},
   rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (페이퍼와 그 봇을 따라가는 WOO X Pro)"},
   vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼와 그 봇을 따라가는 딥코인)"},
-  mixbot: {ko: "친구 30분 봇", group: "bots", title: "친구 30분 봇 (OBV 진한색 · WOO X Pro 2 실거래와 모의)"},
+  mixbot: {ko: "친구 15분 봇", group: "bots", title: "친구 15분 봇 (OBV 진한색 · 추세 3개 일치 · WOO X Pro 2 실거래와 모의)"},
   v39: {ko: "V3.9 투비트", group: "bots", title: "V3.9 투비트 (규칙봇 V3.9 1시간 페이퍼와 투비트 실행기)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)"},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},

@@ -190,16 +190,21 @@ def plan_of(cfg: dict, describe: list, rt: float) -> dict:
         lines.append({"key": key, "k": k, "ko": ko})
     rw = {x["id"]: x["ko"] for x in L.range_words(cfg)}
     r = {**L.RANGE_DEFAULTS, **(cfg.get("range") if isinstance(cfg.get("range"), dict) else {})}
-    add("signal", "신호", f"{member_line(cfg, describe)} · 1시간봉이 마감될 때마다")
+    range_on = bool(cfg.get("members"))                  # owners 10-31: no range member, its own entries only
+    if range_on:
+        add("signal", "신호", f"{member_line(cfg, describe)} · 1시간봉이 마감될 때마다")
+    elif r.get("ema3_tf"):
+        add("signal", "신호", "추세 3개 일치 (EMA RSI · 하늘·보라 선 · 슈퍼트렌드) · 15분봉이 마감될 때마다")
     if rw.get("range_st"):
         add("trend", "추세 확인", rw["range_st"].split(": ", 1)[-1])
-    add("pull", "되돌림 진입", f"신호 1시간봉 종가에서 {float(r['pullback_atr']):g} × ATR(14, 1시간) 되돌림을 최대 {int(r['wait_min'])}분 기다려요 → "
-                             "닿은 5분봉이 끝나면 다음 5분봉 시가에 시장가 · 안 오면 그 신호는 버려요")
+    if range_on:
+        add("pull", "되돌림 진입", f"신호 1시간봉 종가에서 {float(r['pullback_atr']):g} × ATR(14, 1시간) 되돌림을 최대 {int(r['wait_min'])}분 기다려요 → "
+                                 "닿은 5분봉이 끝나면 다음 5분봉 시가에 시장가 · 안 오면 그 신호는 버려요")
     if rw.get("range_one"):
         add("one", "한 신호씩", rw["range_one"].split(": ", 1)[-1])
-    if r.get("liq_check"):
+    if range_on and r.get("liq_check"):
         add("liq", "강제청산 여유", f"손절 거리 + 1시간 ATR이 (1/배수 − {float(r['liq_mmr']):.1%}) 안쪽일 때만 · 아주 거친 장이면 건너뜀")
-    else:
+    elif range_on:
         add("liq", "강제청산 여유", "확인 안 함 (설정에서 꺼짐)")
     lev = cfg.get("leverage") if isinstance(cfg.get("leverage"), dict) else {}
     syms = [s for s in cfg.get("symbols") or [] if isinstance(s, str)]
@@ -210,16 +215,20 @@ def plan_of(cfg: dict, describe: list, rt: float) -> dict:
     if tp is not None:
         add("tp", "익절", f"순ROE +{_pct(tp)} 고정 (계단 없음) · 가격으로 " + ", ".join(f"{v}배 {tp / v + rt:.2%}" for v in levs))
     elif lad and lad.get("ko"):                          # owners 10-30: the ladder (net ROE 10 % -> lock 8 %, then 5 %)
-        add("tp", "익절", f"계단 익절 {lad['ko']} (고정 익절 없음) · 잠금은 손절선을 올리는 것 · 레인지·ROC 진입 모두")
+        add("tp", "익절", f"계단 익절 {lad['ko']} (고정 익절 없음) · 잠금은 손절선을 올리는 것 · 모든 진입에")
     else:
         add("tp", "익절", "익절(고정 익절·계단)이 설정에 없어요")
     stop = cfg.get("stop") if isinstance(cfg.get("stop"), dict) else {}
     sr = L._f(stop.get("roe"))
-    if stop.get("mode") == "roe" and sr is not None:
+    own_stop = " · ".join(x for x in ((f"ROC 진입은 30분 ATR(14) × {float(r['roc_stop_atr']):g}" if r.get("roc_tf") else ""),
+                                      (f"추세 3개 일치는 15분 ATR(14) × {float(r['ema3_stop_atr']):g}" if r.get("ema3_tf") else "")) if x)
+    if not range_on and own_stop:
+        add("stop", "손절", own_stop + f" · 그 거리가 (1/배수 − {float(r['liq_mmr']):.1%}) 안쪽일 때만 진입")
+    elif stop.get("mode") == "roe" and sr is not None:
         net = stop.get("net") is True
         add("stop", "손절", f"{'순ROE' if net else 'ROE'} −{_pct(sr)} · 가격으로 "
             + ", ".join(f"{v}배 {sr / v - (rt if net else 0.0):.2%}" for v in levs)
-            + (f" · ROC 진입은 30분 ATR(14) × {float(r['roc_stop_atr']):g}" if r.get("roc_tf") else ""))
+            + (f" · {own_stop}" if own_stop else ""))
     else:
         add("stop", "손절", L.stop_ko(None, stop or None).get("ko") or "손절 설정을 읽지 못했어요")
     named = [f"{coin_ko(k)} {L._i(v)}배" for k, v in lev.items() if k != "default" and L._i(v)]
@@ -240,6 +249,8 @@ def plan_of(cfg: dict, describe: list, rt: float) -> dict:
     add("pause", "진입 금지", (" · ".join(pauses) + " (신호 때와 진입 때 둘 다 봄)") if pauses else "없음")
     if rw.get("range_roc"):
         add("roc", "ROC 진입", rw["range_roc"].split(": ", 1)[-1])
+    if rw.get("range_ema3"):
+        add("ema3", "추세 3개 일치", rw["range_ema3"].split(": ", 1)[-1])
     if rw.get("range_none"):
         add("none", "없는 것", rw["range_none"])
     add("coins", "코인", " · ".join(coin_ko(s) for s in syms) or "코인 설정 없음")
@@ -272,9 +283,11 @@ def status_of(snap: dict, now: int) -> dict:
                 "why_ko": f"{HB_STALE_MS // MIN}분 넘게 새 기록이 없어요 (봇은 1분마다 기록해요) · 서버에서 systemctl status {UNIT}"}
     if e.get("halted"):
         return {**out, "state": "halted", "ko": "멈춤", "why_ko": f"페이퍼 계좌 멈춤: {e.get('halt_reason') or '이유 기록 없음'}"}
-    roc = isinstance(snap["cfg"].get("range"), dict) and bool(snap["cfg"]["range"].get("roc_tf"))
+    rc = snap["cfg"].get("range") if isinstance(snap["cfg"].get("range"), dict) else {}
+    if not snap["cfg"].get("members") and rc.get("ema3_tf"):          # owners 10-31: its own entry only
+        return {**out, "state": "running", "ko": "켜져 있어요", "why_ko": "15분봉 마감마다 추세 3개 일치를 보고, 맞으면 바로 들어가요"}
     return {**out, "state": "running", "ko": "켜져 있어요", "why_ko": "1시간봉 마감마다 신호를 보고, 되돌림이 오면 들어가요"
-            + (" · 30분봉 마감마다 ROC 진입도 봐요 (되돌림 없이 바로)" if roc else "")}
+            + (" · 30분봉 마감마다 ROC 진입도 봐요 (되돌림 없이 바로)" if rc.get("roc_tf") else "")}
 
 
 def wallet_of(snap: dict, acct: str, plan: Optional[dict]) -> dict:
@@ -387,8 +400,21 @@ def supertrend_of(snap: dict, now: int) -> Optional[dict]:
                                                           f"{colour} {'진함' if v.get('dark') else '연함'}")
         roc.append({"symbol": sym, "coin": coin_ko(sym), "side": sd, "ko": ko, "osc": osc, "at": L._i(v.get("at")),
                     "osc_ko": f"보라선 {osc:.1f}" if osc is not None else "보라선 모름"})
+    e3 = []                                        # owners 10-31: 추세 3개 일치's read per coin at the last 15m close
+    for sym, v in (rs.get("ema3") or {}).items():
+        if not isinstance(v, dict) or "error" in v:
+            e3.append({"symbol": sym, "coin": coin_ko(sym), "side": None,
+                       "error_ko": str((v or {}).get("error") or "못 읽음") if isinstance(v, dict) else "못 읽음"})
+            continue
+        sd, tr, cs = L._i(v.get("side")) or 0, L._i(v.get("trend")) or 0, L._i(v.get("cs")) or 0
+        colour = "초록" if cs > 0 else "빨강"
+        ko = ("롱 신호" if sd > 0 else "숏 신호") if sd else (f"3개 {'상승' if tr > 0 else '하락'} · 막대 {colour} {'진함' if v.get('dark') else '연함'}"
+                                                          if tr else "추세 안 맞음")
+        ersi = L._f(v.get("ersi"))
+        e3.append({"symbol": sym, "coin": coin_ko(sym), "side": sd, "ko": ko, "at": L._i(v.get("at")),
+                   "osc_ko": f"EMA RSI {ersi:.1f}" if ersi is not None else "EMA RSI 모름", "trend": tr})
     return {"at": ts, "st_at": L._i(rs.get("st_at")), "age_ms": now - ts if ts is not None else None, "coins": coins,
-            "friend": friend, "roc": roc, "busy_ko": rs.get("busy") or None,
+            "friend": friend, "roc": roc, "ema3": e3, "busy_ko": rs.get("busy") or None,
             "rules": [str(x) for x in rs.get("rules") or [] if isinstance(x, str)]}
 
 
@@ -570,7 +596,8 @@ def signals_view(snap: dict, now: int) -> dict:
             cat, ko, stage = "other", str(status), "other"
         rows.append({"t": L._i(bc), "tf": tf, "symbol": sym, "coin": coin_ko(sym), "side": L._i(side), "status": status, "stage": stage,
                      "cat": cat, "ko": ko, "why": d.get("why"), "pulled": bool(d.get("pulled")),
-                     "entry_ko": "ROC 30분" if str(strat or "").startswith("ROC50") else "레인지 1시간"})
+                     "entry_ko": "ROC 30분" if str(strat or "").startswith("ROC50") else
+                     "추세 3개 15분" if str(strat or "").startswith("EMA3") else "레인지 1시간"})
         c = counts.setdefault(cat, {"cat": cat, "ko": ko, "stage": stage, "n": 0})
         c["n"] += 1
     return {"rows": rows, "counts": sorted(counts.values(), key=lambda c: -c["n"]), "since_ms": now - SIG_SPAN_MS}

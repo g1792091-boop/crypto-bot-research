@@ -195,7 +195,7 @@ export function rangeView(ctx) {
     });
     if (!p) {
       put(posBox, h("div", {class: "lrb-empty"}, h("b", null, "페이퍼 포지션 없음"),
-        h("p", null, d.wait ? "되돌림을 기다리는 중이에요 (아래 칸)." : `다음 1시간봉 신호와 되돌림을 기다려요${((d.plan || {}).range || {}).roc_tf ? " · 30분봉마다 ROC 신호도 봐요" : ""}. 한 번에 한 신호 · 포지션 하나예요.`)), ...lives);
+        h("p", null, d.wait ? "되돌림을 기다리는 중이에요 (아래 칸)." : (((d.plan || {}).lines || []).some((x) => x.key === "pull") ? `다음 1시간봉 신호와 되돌림을 기다려요${((d.plan || {}).range || {}).roc_tf ? " · 30분봉마다 ROC 신호도 봐요" : ""}` : "15분봉마다 추세 3개 일치 신호를 기다려요") + ". 한 번에 한 신호 · 포지션 하나예요.")), ...lives);
       return;
     }
     const rg = p.range || {};
@@ -210,8 +210,9 @@ export function rangeView(ctx) {
         h("dt", null, "손절"), h("dd", {class: "num down"}, ok(p.stop) ? `${fmt.price(p.stop)} (진입가에서 ${pctKo(p.stop_move, 2)})` : "—"),
         h("dt", null, "강제청산"), h("dd", {class: "num"}, ok(p.liq) ? fmt.price(p.liq) : "기록 없음"),
         h("dt", null, "지금 가격"), h("dd", {class: "num"}, ok(p.mark) ? `${fmt.price(p.mark)} (마지막 마크)` : "—"),
-        rg.roc ? h("dt", null, "진입 신호") : h("dt", null, "되돌림"),
-        rg.roc ? h("dd", null, `ROC 30분봉 ${fmt.kst(rg.t0)} 마감 · 보라선 ${ok(rg.osc) ? fmt.num(rg.osc, 1) : "—"} · 손절 30분 ATR × ${fmt.num(rg.k, 0)} (되돌림 안 기다림)`)
+        rg.roc || rg.ema3 ? h("dt", null, "진입 신호") : h("dt", null, "되돌림"),
+        rg.ema3 ? h("dd", null, `추세 3개 일치 15분봉 ${fmt.kst(rg.t0)} 마감 · EMA RSI ${ok(rg.ersi) ? fmt.num(rg.ersi, 1) : "—"} · 손절 15분 ATR × ${fmt.num(rg.k, 0)} (되돌림 안 기다림)`)
+        : rg.roc ? h("dd", null, `ROC 30분봉 ${fmt.kst(rg.t0)} 마감 · 보라선 ${ok(rg.osc) ? fmt.num(rg.osc, 1) : "—"} · 손절 30분 ATR × ${fmt.num(rg.k, 0)} (되돌림 안 기다림)`)
           : h("dd", null, ok(rg.level) ? `종가 ${fmt.price(rg.close)} → ${fmt.num(rg.k, 1)} ATR ${Number(p.side) > 0 ? "아래" : "위"} ${fmt.price(rg.level)}${ok(rg.touch) ? ` · ${fmt.kst(rg.touch)} 닿음` : ""}` : "기록 없음")),
       ...lives);
   }
@@ -225,6 +226,8 @@ export function rangeView(ctx) {
         : h("p", {class: "lrb-sub"}, d.position ? "포지션을 들고 있어 새 신호를 받지 않아요 (한 신호씩)" : "지금 기다리는 되돌림이 없어요"),
       t && (t.friend || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "친구 추세지표 1시간"}, h("span", {class: "lrb-sub"}, "친구 추세지표 1시간"),
         ...t.friend.map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || c.votes_ko || ""); })) : null,
+      t && (t.ema3 || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "추세 3개 15분"}, h("span", {class: "lrb-sub"}, "추세 3개 15분"),
+        ...t.ema3.map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || c.osc_ko || ""); })) : null,
       t && (t.roc || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "ROC 30분"}, h("span", {class: "lrb-sub"}, "ROC 30분"),
         ...t.roc.map((c) => { const k = stKo(c); return ui.pill(k.text, k.tone, c.error_ko || c.osc_ko || ""); })) : null,
       t && (t.coins || []).length ? h("div", {class: "lrb-chiprow", role: "list", "aria-label": "1시간 슈퍼트렌드"}, h("span", {class: "lrb-sub"}, "1시간 슈퍼트렌드"),

@@ -4,8 +4,8 @@
 트레이딩뷰 지표 "추세 조건 OBV·클링거 + 매매 시그널"의 30분봉 신호로 WOO X Pro **두 번째 계정**에서 직접 주문합니다.
 코드: `paperbot/mixchop.py`, 테스트: `tests/test_mixchop.py`.
 
-> **10/30부터 이 봇은 '친구 30분 봇'이고, 바이비트 봇의 원래 OBV 매매법 하나로 거래합니다(14장).** 30분봉, 친구 추세지표 네 표,
-> OBV 연한색→진한색. 아래 1~12장은 그 전의 규칙이고, 13장(15분봉·ROC·스윙 추세)은 같은 날 취소되었습니다.
+> **10/31부터 이 봇은 '친구 15분 봇'입니다(15장):** 15분봉, ① OBV 진한색(바이비트 봇의 원래 매매법) ② 추세 3개 일치.
+> 아래 1~12장은 그 전의 규칙이고, 13장(15분봉·ROC·스윙 추세)은 취소, 14장(30분봉 OBV 하나)은 10/30~31의 규칙입니다.
 > 크기(40%)·계단(10%→8%)·손절(ATR × 3)·코인·배수는 그대로입니다.
 
 ## 1. 한눈에
@@ -572,3 +572,37 @@
 - diff에서 볼 것: `"name"`(→ `"친구 30분 봇"`), `"tf": "30m"`, `"trend": "four"`, `"rules": ["obv"]`, 코인 줄 모양.
 - check 끝부분: `매매법·손절: OBV 진한색 · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 네 표 중 같은 쪽 2개 이상`.
 - 텔레그램 `[친구 30분 봇] ▶️ 시작`에 `30분봉 마감마다 판단`이 보이면 바뀐 것입니다.
+
+## 15. 10/31: 친구 15분 봇 — OBV 진한색 + 추세 3개 일치 (15분봉)
+
+두 분(10/31, 친구 대화): "내 WOOX는 이걸 추가로 해줘"(지표 'EMARSI_ALL' 추세 3개 일치). 두 분 답: 친구 봇에도 추가, 15분봉.
+
+| 항목 | 내용 |
+|---|---|
+| 신호 봉 | 바이낸스 **15분봉**, 끝난 봉만 |
+| ① OBV 진한색 | 친구 추세지표 네 표(같은 쪽 2개 이상) 쪽으로 OBV 막대가 연한색 → 진한색 (14장과 같음, 15분봉으로) |
+| ② 추세 3개 일치 | EMA RSI 선 · 하늘·보라 선 · 슈퍼트렌드(14·3 / 14·5)가 모두 상승이고 EMA RSI 막대가 연한 초록 → 진한 초록이면 롱, 모두 하락이고 연한 빨강 → 진한 빨강이면 숏. 이 매매법은 네 표가 아니라 자기 추세 3개로만 봅니다 |
+| 같은 봉에 둘 다 | OBV 먼저. 코인끼리는 SOL → ETH → XRP → BCH → ZEC → DOGE |
+| 그대로 | 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간 |
+
+- 설정: `"name": "친구 15분 봇"`, `"tf": "15m"`, `"trend": "four"`, `"rules": ["obv", "ema3"]`.
+- 텔레그램 근거 줄 예: `근거(추세 3개 일치): EMA RSI 막대 연한 초록→진한 초록(EMA RSI 63.4) · 추세 15분 3개 상승 (EMA RSI 초록 · 하늘·보라 선 하늘 · 슈퍼트렌드 상승)`.
+- 아침 점검의 '놓친 신호'도 15분봉으로 두 매매법을 다시 계산합니다(`OBV 연한→진한 n번 · EMA RSI 막대 연한→진한 n번`).
+- 시험: `tests/test_rules1031.py`.
+
+### 15-1. 바꾸는 순서 (서버에서)
+
+```bash
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-1031
+sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-1031
+sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+sudo diff /etc/paperbot/mixchop.json.before-1031 /etc/paperbot/mixchop.json
+sudo deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json | tail -8
+sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
+```
+
+- diff: `"name"`(→ `"친구 15분 봇"`), `"tf": "15m"`, `"rules"`에 `"ema3"` 추가.
+- check: `매매법·손절: OBV 진한색 + 추세 3개 일치 · … · 신호 15분봉 · …`.
+- 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.

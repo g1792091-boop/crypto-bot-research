@@ -89,6 +89,23 @@
 - 계산은 바이비트 봇과 같은 식(`paperbot/friendtrend.py`의 ROC 막대·추세)을 레인지 봇이 받는 5분봉으로 만든 30분봉 1,500개에 씁니다
   (`tests/test_rules1030.py`).
 
+## 1-3. 10/31: 레인지 매매법을 모두 빼고 '추세 3개 일치' 15분봉 하나로
+
+두 분(10/31, 친구 대화): "너꺼 WOOX봇 바꾸자 그거 봐보니까 하루에 진입 한번 할까 말까더라", "레인지봇 매매법 싹 없애고 사진속 친구가
+말하는 매매법으로 바꾸자". 두 분 답: 진입은 연한색→진한색 바뀌는 봉, 손절 ATR × 3 + 계단 10→8, 지표 파일의 필터는 빼기.
+
+- **뺀 것:** 레인지 필터 3중 일치(1시간봉 신호·되돌림·1시간 추세 확인)와 ROC 30분 진입. 설정 `members`가 비어 있습니다(`[]`).
+- **새 진입 (15분봉, 지표 'EMARSI_ALL' 추세 3개 일치):**
+  - 추세 3개: EMA RSI 선(초록/빨강), 하늘·보라 선, 슈퍼트렌드 평균(ATR 14, 배수 3과 5: 둘 다 상승 / 둘 다 하락 / 다르면 횡보).
+  - 셋이 모두 상승이고, 아래 EMA RSI 막대가 연한 초록 → 진한 초록으로 바뀐 봉이면 롱. 셋이 모두 하락이고 연한 빨강 → 진한 빨강이면 숏.
+  - 하나라도 다르거나(상승 2·하락 1) 횡보가 섞이면 진입하지 않습니다.
+  - 15분봉 마감 다음 분 시가에 시장가. 손절은 그 15분봉 ATR(14) × 3이고, 그 거리가 (1/배수 − 0.5%) 안쪽일 때만 들어갑니다.
+  - 지표 파일 안의 과열·과매수/과매도 필터와 자체 청산(슈퍼트렌드 반대)은 쓰지 않습니다.
+- **그대로:** 코인 6개(BTC ETH SOL DOGE LTC BCH), BTC 40배·나머지 30배, 증거금 40%, 포지션 1개, 계단 익절 순ROE 10%→8% 뒤 5%씩,
+  진입 금지 시간. WOO X Pro 실행기 설정은 바꿀 것이 없습니다(페이퍼 손절 거리 그대로, 자기 계단).
+- 이름은 그대로 '레인지 봇'(페이퍼 봇 `paperbot-combo-range`)입니다. 기록 이름: 신호 `EMA3-15m`(전략 `EMA3`, 15분).
+- 시험: `tests/test_rules1031.py`. 백테스트는 하지 않았습니다.
+
 ## 2. 준비물
 
 - WOO X Pro 선물 계좌의 지금 잔고 그대로. 키도 지금 WOO X Pro 실행기의 키 그대로(새 키·새 계정 필요 없음).
@@ -279,6 +296,27 @@ sudo systemctl enable --now paperbot-executor-mexc
 - 텔레그램 `[합친 봇 페이퍼 레인지 봇] 시작: …`에 `계단 익절 …`과 `ROC 진입(30분봉): …`이 보이면 바뀐 것입니다.
 - 되돌리기(포지션 없을 때): 둘 다 끄고 `sudo install -o root -g paperbot -m 640 /etc/paperbot/combo-range.json.before-1030 /etc/paperbot/combo-range.json`,
   `cd /opt/crypto-bot-research && sudo python3 deploy/range_switch.py --back --write`.
+
+### G. 10/31: 추세 3개 일치 15분봉으로 바꾸기
+
+1) 코드 받기: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+2) 설정 바꾸기 → 확인 (예전 것은 `.before-1031`):
+
+```bash
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/combo-range.json /etc/paperbot/combo-range.json.before-1031
+sudo install -o root -g paperbot -m 640 deploy/combo.range.json /etc/paperbot/combo-range.json
+sudo diff /etc/paperbot/combo-range.json.before-1031 /etc/paperbot/combo-range.json
+sudo -u paperbot /opt/paperbot/venv/bin/python -m paperbot.combo check-config --config /etc/paperbot/combo-range.json | tail -6
+```
+
+- diff: `members`가 `[]`, `"roc_tf": null`, 새 줄 `"ema3_tf": "15m"`, `"ema3_stop_atr": 3`.
+- check-config: `손절: 추세 3개 일치 15분 ATR(14) × 3 / 계단 익절 …`, `- 추세 3개 일치(15분봉): …`, 마지막 줄 **`준비됨`**.
+
+3) 페이퍼 봇 다시 켜기: `sudo systemctl restart paperbot-combo-range` (실행기는 그대로 둠). 기다리던 되돌림·ROC 신호가 있으면
+   "설정이 바뀌어 … 버림"으로 정리되고, 들고 있던 포지션은 손절·계단 그대로 이어 갑니다.
+- 되돌리기: `sudo install -o root -g paperbot -m 640 /etc/paperbot/combo-range.json.before-1031 /etc/paperbot/combo-range.json`
+  하고 페이퍼 봇을 다시 켭니다.
 
 ## 4. 처음 며칠 지켜볼 것
 

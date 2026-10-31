@@ -2,9 +2,7 @@
   "name": "레인지 봇",
   "paper_db": "/var/lib/paperbot/paper3.db",
   "db": "/var/lib/paperbot/combo/range.db",
-  "members": [
-    {"pick": "ds-F7_RF_TRIPLE-1h-1"}
-  ],
+  "members": [],
   "symbols": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "DOGEUSDT", "LTCUSDT", "BCHUSDT"],
   "leverage": {
     "BTCUSDT": 40,
@@ -45,8 +43,10 @@
     "st_mult": 3.0,
     "liq_check": true,
     "liq_mmr": 0.005,
-    "roc_tf": "30m",
-    "roc_stop_atr": 3
+    "roc_tf": null,
+    "roc_stop_atr": 3,
+    "ema3_tf": "15m",
+    "ema3_stop_atr": 3
   },
   "telegram": true
 }

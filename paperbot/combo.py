@@ -437,11 +437,14 @@ def load_picks(path: str) -> dict:
     return {c["id"]: c for c in data.get("candidates", [])}
 
 
-def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Optional[list] = None) -> list[Member]:
+def resolve_members(specs: list, picks_file: str = CANDIDATES_FILE, core: Optional[list] = None,
+                    allow_empty: bool = False) -> list[Member]:
     """Config ``members`` -> Members. A spec is {"strategy", "tf"} (default numbers), {"strategy", "tf", "numbers"}
     (custom numbers) or {"pick": "<candidate league id>"} (that pick's custom numbers), each with an optional ``when``
     (parse_when). Custom numbers equal to the defaults become a default member (the rule bot's own signals). Raises
-    ComboError (Korean) on anything wrong."""
+    ComboError (Korean) on anything wrong. ``allow_empty`` (the 레인지 봇, owners 10-31: its own entries only): [] is []."""
+    if allow_empty and specs == []:
+        return []
     if not isinstance(specs, list) or not specs:
         raise ComboError("members(매매법 목록)가 비어 있습니다")
     core = core_names() if core is None else core
@@ -1071,12 +1074,13 @@ class CustomSignals:
     ``sigservice.window_5m`` bars; DeepSeek: ``dssig.frame`` on ``config.DS_WINDOW_5M`` bars, BTC's frame for F14_SMT)
     and the candidate league's custom-number signal functions."""
 
-    def __init__(self, members: list[Member], symbols, lib=None):
+    def __init__(self, members: list[Member], symbols, lib=None, keep_min: int = 0):
         self.members = [m for m in members if m.custom]
         self.symbols = list(symbols)
         self._lib = lib
         self.agg = Aggregator(["5m"])
-        self.keep = self.window_need() + 12 if self.members else 0
+        # ``keep_min``: 5m bars kept even without a custom member (the 레인지 봇's own entries, paperbot/rangebot.py)
+        self.keep = max(self.window_need() + 12 if self.members else 0, int(keep_min))
         self.hist = {s: deque(maxlen=max(self.keep, 1)) for s in self.symbols}
         self._mods: dict = {}
         self.errors: list[str] = []
@@ -1105,7 +1109,7 @@ class CustomSignals:
                 h.append((int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5])))
 
     def add_1m(self, bar: Bar) -> None:
-        if not self.members or bar.symbol not in self.hist:
+        if not self.keep or bar.symbol not in self.hist:
             return
         for _tf, b5 in self.agg.add(bar):
             h = self.hist[b5.symbol]
@@ -1411,6 +1415,10 @@ class ComboRunner:
         pullback). It still counts for the early exit."""
         return False
 
+    def _own_signals(self) -> bool:
+        """The runner computes signals of its own at the 5m boundaries without a custom member (the 레인지 봇's)."""
+        return False
+
     def _count(self, label: str, what: str) -> None:
         c = self.counts.setdefault(label, {})
         c[what] = c.get(what, 0) + 1
@@ -1469,7 +1477,7 @@ class ComboRunner:
                 if ts % (60 * MIN) == 0:
                     self.rdata.trim(ts)
             boundary = ts + MIN
-            if boundary % FIVE == 0 and self.custom is not None and self.custom.members:
+            if boundary % FIVE == 0 and self.custom is not None and (self.custom.members or self._own_signals()):
                 self._custom(boundary)
             if self.friend is not None:
                 self._friend_due(boundary)
@@ -2035,7 +2043,8 @@ def exit_text(cfg: "ComboConfig", t, loss: str = "") -> str:
 MEMBER_KO = {"F6_VWAP_FAIL": "VWAP 복귀 실패", "S3_CMO_SANDWICH": "CMO·샌드위치 캔들",   # the VWAP bot's two (10-23)
              FRIEND: "친구 매매법(EMA·RSI·ROC)",                                       # the friend bot's (10-24)
              "F7_RF_TRIPLE": "레인지 필터 3중 일치",                                    # the 레인지 봇's (10-26)
-             "ROC50": "ROC 50선"}                                                      # and its ROC entry (10-30)
+             "ROC50": "ROC 50선",                                                      # and its ROC entry (10-30)
+             "EMA3": "추세 3개 일치"}                                                  # and 추세 3개 일치 (10-31)
 
 
 def member_ko(strategy: str) -> str:
@@ -2144,7 +2153,7 @@ def range_lines(cfg: "ComboConfig") -> list[str]:
         return []
     from .rangebot import RangeError, RangeRules
     try:
-        return RangeRules.from_dict(cfg.range).describe()
+        return RangeRules.from_dict(cfg.range).describe(range_on=bool(cfg.members))
     except (RangeError, TypeError):
         return []                                  # the problem is in check-config's list
 
@@ -2249,7 +2258,7 @@ def cmd_run(args) -> int:
     probs = cfg.problems()
     if probs:
         raise SystemExit("설정 문제: " + "; ".join(probs))
-    members = resolve_members(cfg.members, cfg.picks_file)
+    members = resolve_members(cfg.members, cfg.picks_file, allow_empty=cfg.range is not None)
     notifier = _notifier() if cfg.telegram else ConsoleNotifier()
     rest = BinanceREST(api_key=os.environ.get("BINANCE_API_KEY"), api_secret=os.environ.get("BINANCE_API_SECRET"))
     syms = list(cfg.symbols)
@@ -2262,7 +2271,11 @@ def cmd_run(args) -> int:
     os.makedirs(os.path.dirname(os.path.abspath(cfg.db)) or ".", exist_ok=True)
     store = Store3(cfg.db)
     book = build_book(cfg, settings, brackets, store, notifier, specs)
-    custom = CustomSignals(members, syms) if any(m.custom for m in members) else None
+    keep_min = 0
+    if cfg.range is not None:                    # the 레인지 봇's own entries read the same 5m history (rangebot.hist_need)
+        from .rangebot import hist_need
+        keep_min = hist_need(cfg.range)
+    custom = CustomSignals(members, syms, keep_min=keep_min) if any(m.custom for m in members) or keep_min else None
     now = rest.server_time()
     btc = BtcTrend(lambda: rest.klines("BTCUSDT", "4h", limit=500), lambda: int(time.time() * 1000)) \
         if any(m.needs_btc for m in members) else None
@@ -2369,6 +2382,11 @@ def take_profit_text(cfg: ComboConfig) -> str:
 
 
 def stop_text(cfg: ComboConfig) -> str:
+    if cfg.range is not None and not cfg.members:      # the 레인지 봇 on its own entries only (owners 10-31)
+        from .rangebot import own_stop_words
+        words = own_stop_words(cfg.range)
+        if words:
+            return words
     if cfg.stop_net:
         rt = v3_settings().round_trip_cost
         lv = sorted({cfg.lev_of(s) for s in cfg.symbols}, reverse=True)
@@ -2387,7 +2405,7 @@ def cmd_check(args) -> int:
     cfg = ComboConfig.from_file(args.config)
     probs = cfg.problems()
     try:
-        members = resolve_members(cfg.members, cfg.picks_file)
+        members = resolve_members(cfg.members, cfg.picks_file, allow_empty=cfg.range is not None)
     except ComboError as exc:
         probs.append(str(exc))
         members = []

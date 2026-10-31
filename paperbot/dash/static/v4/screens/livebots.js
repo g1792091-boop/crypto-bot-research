@@ -105,7 +105,7 @@ export const TABS = [
   {id: "bybitbot", label: "바이비트 봇", make: (ctx) => mixView(ctx, BYBIT_UI), own: true},
   {id: "rangebot", label: "레인지 봇", make: (ctx) => rangeView(ctx), own: true},
   {id: "vwapbot", label: "VWAP 개선판", make: (ctx, hub) => vwapView(ctx, hub), own: true},
-  {id: "mixbot", label: "친구 30분 봇", make: (ctx) => mixView(ctx), own: true},
+  {id: "mixbot", label: "친구 15분 봇", make: (ctx) => mixView(ctx), own: true},
   {id: "v39", label: "V3.9 투비트", make: (ctx) => v39View(ctx), own: true},
   // owners 10-29: the 추세판단 봇 switched off, its record kept (last of 봇별)
   {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
@@ -163,8 +163,8 @@ export const BOT_TAB = {
     head: (d) => botHead("VWAP 개선판", followersOf(d, "paper2")), only: (d) => followersOf(d, "paper2"),
     none: "VWAP 개선판을 따라가는 실행기가 아직 없어요 (페이퍼만)"},
   // owners 10-30: the friend bot runs ROC / OBV 50 on 15m bars (paperbot/mixchop.py, deploy/mixchop.live.json)
-  mixbot: {bot: "mix", sub: "친구 30분 봇(OBV 진한색) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
-    head: null, only: () => [], none: "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
+  mixbot: {bot: "mix", sub: "친구 15분 봇(OBV 진한색 · 추세 3개 일치) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
+    head: null, only: () => [], none: "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
   v39: {bot: "v39", sub: "규칙봇 V3.9 1시간 페이퍼(연습) V39_ALL@1h와 그 계좌를 따라가는 투비트 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
     head: null, only: (d) => (hasExec(d, "toobit") ? ["toobit"] : []), none: "투비트 실행기는 아직 꺼져 있어요"},
 };
