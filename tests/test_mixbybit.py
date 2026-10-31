@@ -234,7 +234,7 @@ def test_the_deploy_configs():
     # the friend bot's own config: WOO X Pro, this bot's rule and 추세 3개 일치 on 30m bars (owners 10-31 evening,
     # tests/test_rules1031b.py)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "wooxpro" and old.name == "친구 30분 봇" and old.rules == ("obvac", "ema3") and old.tf == "30m"
+    assert old.exchange == "wooxpro" and old.name == "친구 30분 봇" and old.rules == ("obvac",) and old.tf == "30m"
 
 
 def test_wrong_configs_are_refused(tmp_path):

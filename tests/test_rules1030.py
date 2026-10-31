@@ -175,7 +175,7 @@ def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
         # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes); 10-31: on 15m bars with
         # 추세 3개 일치 added (tests/test_rules1031.py); 10-31 evening: back on 30m bars, the OBV turn with the AC bar
         # (tests/test_rules1031b.py)
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac", "ema3"), 3.0)
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac",), 3.0)
         assert cfg.tf_ms == M.MIN30 and cfg.tf_ko == "30분"
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}

@@ -9,7 +9,9 @@ answers: the dark line = the OBV pane's light -> dark turn the bots already read
 - friendtrend part 8: OBV MACD's AC histogram = (line - the conditional signal) - its SMA 5, green when it rose, red when
   it fell; a side = a green turn with the AC bar plus and green, a red turn with it minus and red; no 50 line;
 - mixchop rule "obvac": its words, the trend still checked, the friend's own other rules unchanged; the deploy configs
-  (바이비트 봇: ["obvac"]; 친구 30분 봇: 30m, four votes, ["obvac", "ema3"]); its signals listing and the morning replay;
+  (바이비트 봇: ["obvac"]; 친구 30분 봇: 30m, four votes, ["obvac"] alone, the same six coins, no equity floor: the two
+  bots trade the same rule; owners: "파일이랑 이 말에 emarsi_all이 있는거야?", 추세 3개 일치 out of the friend bot, the
+  레인지 봇 keeps it); its signals listing and the morning replay;
 - the site: the rule's name, the AC words on the signal rows and on the friend trend board."""
 import json
 import math
@@ -133,12 +135,18 @@ def test_the_deploy_configs():
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
         assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 30분 봇"
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac", "ema3"), 3.0)
+        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "four", ("obvac",), 3.0)
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
         assert cfg.equity_floor_frac == 0                  # owners 10-31 evening: "친구 30분봉 잔고 하한 없애주고"
-        assert "매매법 OBV 진한색 + AC + 추세 3개 일치(같은 봉이면 OBV 진한색 + AC 먼저)" in M.plan_words(cfg)
+        assert "매매법 OBV 진한색 + AC · 손절 ATR 3배" in M.plan_words(cfg) and "추세 3개 일치" not in M.plan_words(cfg)
+    # the two bots: the same rule, trend, bars, coins, stop, ladder, margin and floor (only the exchange differs)
+    b, f = (M.load_config(str(DEPLOY / n)) for n in ("mixbybit.live.json", "mixchop.live.json"))
+    same = ("tf", "trend", "rules", "stop_atr", "ladder", "margin_frac", "equity_floor_frac", "ladder_every_s", "no_weekend",
+            "us_open_pre_min", "us_open_pause_min", "macro_blackout_min")
+    assert {k: getattr(b, k) for k in same} == {k: getattr(f, k) for k in same}
+    assert [(c.symbol, c.leverage) for c in b.coins] == [(c.symbol, c.leverage) for c in f.coins]
 
 
 def _walk_rows(n, seed, tf):

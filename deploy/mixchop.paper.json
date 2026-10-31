@@ -23,8 +23,7 @@
  "tf": "30m",
  "trend": "four",
  "rules": [
-  "obvac",
-  "ema3"
+  "obvac"
  ],
  "stop_atr": 3,
  "coins": {

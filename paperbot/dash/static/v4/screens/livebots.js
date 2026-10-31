@@ -158,7 +158,7 @@ export const BOT_TAB = {
     head: (d) => botHead("VWAP 개선판", followersOf(d, "paper2")), only: (d) => followersOf(d, "paper2"),
     none: "VWAP 개선판을 따라가는 실거래가 없어요 (페이퍼만)"},
   // owners 10-30: the friend bot runs ROC / OBV 50 on 15m bars (paperbot/mixchop.py, deploy/mixchop.live.json)
-  mixbot: {bot: "mix", sub: "친구 30분 봇(OBV 진한색 + AC · 추세 3개 일치) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
+  mixbot: {bot: "mix", sub: "친구 30분 봇(OBV 진한색 + AC) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
 };
 /** The foot of a 봇별 screen: the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한 분석·연구

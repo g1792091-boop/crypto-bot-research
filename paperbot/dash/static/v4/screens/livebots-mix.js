@@ -34,9 +34,8 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 /** Each mix bot's screens: its answers, its account and the words that differ (the friend bot's: the tabs as they were). */
 export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "WOO X Pro 2", exchange: "WOO X Pro", key: "",
   kick: "진짜 돈 · WOO X Pro 두 번째 계정",
-  wait: "30분봉이 끝날 때 ① 친구 추세(4표 중 같은 쪽 2표 이상) 쪽으로 " +
-    "OBV 히스토그램이 연한색→진한색이 되고 OBV MACD의 AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)이면, " +
-    "② 추세 3개(EMA RSI · 하늘·보라 선 · 슈퍼트렌드)가 모두 같은 쪽일 때 EMA RSI 막대가 연한색→진한색이 되면 시장가로 들어가요 (한 번에 1포지션).",
+  wait: "30분봉이 끝날 때 친구 추세(4표 중 같은 쪽 2표 이상) 쪽으로 " +
+    "OBV 히스토그램이 연한색→진한색이 되고 OBV MACD의 AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)이면 시장가로 들어가요 (한 번에 1포지션, 50선 조건 없음 · 바이비트 봇과 같은 매매법).",
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
   exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정",
