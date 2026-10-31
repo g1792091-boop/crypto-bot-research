@@ -218,8 +218,10 @@ def test_the_deploy_configs():
         cfg = M.load_config(str(path))
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
         # owners 10-30: the OBV 50 line; 10-31 evening: the AC bar instead, no 50 line (tests/test_rules1031b.py);
-        # 10-31 night: the trend bar's 종합 instead of the four votes (tests/test_rules1031c.py)
-        assert cfg.rules == ("obvac",) and cfg.stop_atr == 3.0 and cfg.tf == "30m" and cfg.trend == "bar"
+        # 10-31 night: the trend bar's 종합 instead of the four votes, read on the 30m bar, the signal on 15m bars
+        # (tests/test_rules1031c.py)
+        assert cfg.rules == ("obvac",) and cfg.stop_atr == 3.0 and cfg.tf == "15m" and cfg.trend == "bar"
+        assert cfg.trend_tf == "30m"
         # owners 10-31 evening: the friend bot's six coins (BTC, LTC out, XRP in; tests/test_rules1031b.py)
         assert cfg.symbols == ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
         assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in cfg.symbols}, "ZECUSDT": 20}
@@ -267,7 +269,9 @@ def _cfg(tmp_path, **over):
     d = json.loads(LIVE.read_text(encoding="utf-8"))
     d.update(state=str(tmp_path / "state.json"), log=str(tmp_path / "log.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"), coins={"BTCUSDT": {"leverage": 40}, "ETHUSDT": {"leverage": 40},
-                                                             "SOLUSDT": {"leverage": 40}}, telegram=False)
+                                                             "SOLUSDT": {"leverage": 40}}, telegram=False,
+             tf="30m", trend="four")              # (the 10-29 era of these tests; 10-31 night: tests/test_rules1031c.py)
+    d.pop("trend_tf", None)
     d.update(over)
     p = tmp_path / "cfg.json"
     p.write_text(json.dumps(d), encoding="utf-8")
@@ -398,7 +402,7 @@ def test_the_check_command_on_bybit(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M.time, "time", lambda: (T0 + 60_000) / 1000)
     assert M.cmd_check(argparse.Namespace(config=str(PAPER))) == 0
     out = capsys.readouterr().out.splitlines()
-    assert "매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 30분봉 · 추세: 추세 바 종합(6줄, 노랑이면 진입 안 함)" in out
+    assert "매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 바 종합(6줄, 노랑이면 진입 안 함)" in out
     sol = next(x for x in out if x.startswith("✔ SOLUSDT"))
     assert "최대 75배" in sol and "(증거금 $40.00)" in sol               # 40 % of the paper's $100
     zec = next(x for x in out if "ZECUSDT" in x)

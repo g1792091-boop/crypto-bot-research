@@ -22,6 +22,7 @@
  "ladder_every_s": 60,
  "tf": "15m",
  "trend": "bar",
+ "trend_tf": "30m",
  "rules": [
   "h0x"
  ],

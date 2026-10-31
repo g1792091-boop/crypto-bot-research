@@ -22,6 +22,7 @@
  "name": "친구 15분 봇",
  "tf": "15m",
  "trend": "bar",
+ "trend_tf": "30m",
  "rules": [
   "h0x"
  ],

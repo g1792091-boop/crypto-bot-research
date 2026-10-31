@@ -22,8 +22,9 @@
   "step": 5
  },
  "ladder_every_s": 60,
- "tf": "30m",
+ "tf": "15m",
  "trend": "bar",
+ "trend_tf": "30m",
  "rules": [
   "obvac"
  ],

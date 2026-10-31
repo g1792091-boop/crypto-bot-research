@@ -119,6 +119,7 @@ def test_the_ema3_signals_listing_and_the_morning_replay():
     cfg.coins = cfg.coins[:1]
     cfg.rules = ("ema3",)
     cfg.tf = "15m"                                       # the 10-31 day's bars (10-31 evening: 30m)
+    cfg.trend, cfg.trend_tf = "four", None               # (its trend: its own three; no 30m bars read)
     rng = np.random.default_rng(41)
     n = 2000
     day0 = T0 - 24 * HOUR

@@ -1,7 +1,7 @@
 # '레인지 봇' (owners 2026-10-31 night, docs/range-bot-ko.md 0장): the FIRST WOO X Pro account trades by itself with the
 # mix bots' program (python -m paperbot.mixchop with deploy/mixrange.live.json, no paper bot in between): Binance's
-# closed 15m bars -> the trend bar's 종합 (노랑 = no entry) and 'ALL + OBV6 MACD''s histogram crossing 0 on its side at
-# each 15m close -> a market order + a resting stop (ATR14 of the 15m bar x 3) on WOO X Pro, the net-ROE ladder
+# closed bars -> the 30m trend bar's 종합 (노랑 = no entry) and 'ALL + OBV6 MACD''s 15m histogram crossing 0 on its side
+# at each 15m close -> a market order + a resting stop (ATR14 of the 15m bar x 3) on WOO X Pro, the net-ROE ladder
 # (10 -> 8, then every 5 %) followed on 1m bars. One position at a time, SOL · ETH · XRP · BCH · DOGE (40x) · ZEC (20x),
 # margin 40 % of the balance - the same coins as the 바이비트 봇 and the 친구 15분 봇.
 #

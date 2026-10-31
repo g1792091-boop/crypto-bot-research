@@ -1,8 +1,9 @@
-# '바이비트 봇' (owners 2026-10-29, docs/mixbybit-ko.md): the Bybit sub-account trades the friend's two rules by itself
-# (python -m paperbot.mixchop with deploy/mixbybit.live.json, no paper bot in between): Binance's closed 30m bars -> the
-# friend's trend (four votes) and its OBV light -> dark turn / Stoch RSI ● at each 30m close -> a market order + a
-# resting stop (ATR14 x 3) on Bybit, the net-ROE ladder (10 -> 8, then every 5 %) followed on 1m bars. One position at a
-# time, BTC · ETH · SOL · DOGE · LTC · BCH (40x) · ZEC (20x), margin 40 % of the balance.
+# '바이비트 봇' (owners 2026-10-29, docs/mixbybit-ko.md): the Bybit sub-account trades by itself (python -m
+# paperbot.mixchop with deploy/mixbybit.live.json, no paper bot in between). Since 10-31 night (docs/mixbybit-ko.md 11장):
+# Binance's closed bars -> the 30m trend bar's 종합 and the 15m OBV light -> dark turn with OBV MACD's AC bar at each 15m
+# close -> a market order + a resting stop (ATR14 of the 15m bar x 3) on Bybit, the net-ROE ladder (10 -> 8, then every
+# 5 %) followed on 1m bars. One position at a time, SOL · ETH · XRP · BCH · DOGE (40x) · ZEC (20x), margin 40 % of the
+# balance.
 #
 # Keys: BYBIT_LIVE_API_KEY / BYBIT_LIVE_API_SECRET and PAPERBOT_LIVE_MAINNET in the root-only /etc/paperbot/executor.env
 # (the file the old Bybit executor read; nothing new to type). That executor (paperbot-executor, following the 추세판단

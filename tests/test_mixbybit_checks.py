@@ -39,7 +39,8 @@ def _write(folder, live_rows, paper_rows, live_state=None, paper_state=None, rul
     for mode, src in (("live", "mixbybit.live.json"), ("paper", "mixbybit.paper.json")):
         d = json.load(open(os.path.join(ROOT, "deploy", src), encoding="utf-8"))
         d.update(state=j(f"{mode}-state.json"), log=j(f"{mode}-log.jsonl"), own_stop_file=j(f"{mode}.STOP"),
-                 kill_file=j("STOP"), rules=list(rules), coins=coins)
+                 kill_file=j("STOP"), rules=list(rules), coins=coins, tf="30m", trend="four")   # (this world's era)
+        d.pop("trend_tf", None)                    # (owners 10-31, last: the 30m trend on 15m signals)
         json.dump(d, open(j(f"{mode}.json"), "w", encoding="utf-8"))
     for mode, rows, st in (("live", live_rows, live_state), ("paper", paper_rows, paper_state)):
         with open(j(f"{mode}-log.jsonl"), "w", encoding="utf-8") as fh:
@@ -153,6 +154,7 @@ def test_the_replay_finds_what_its_log_has(tmp_path):
     cfg = M.load_config(os.path.join(ROOT, "deploy", "mixbybit.paper.json"))
     cfg.coins = cfg.coins[:1]                                      # BTC
     cfg.rules = ("obv", "srsi")                                    # the 10-29 rules (the 10-30 ones: tests/test_rules1030.py)
+    cfg.tf, cfg.trend, cfg.trend_tf = "30m", "four", None          # (their bars and trend)
     rng = np.random.default_rng(12)
     n = 2000
     t30 = DAY0 + DAY_MS() - M.MIN30 * np.arange(n, 0, -1)

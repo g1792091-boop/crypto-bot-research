@@ -797,6 +797,8 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
     rules = tuple(getattr(cfg, "rules", None) or ("mix",))
     tf = getattr(cfg, "tf", "30m")                      # the signal bar (owners 10-30: the friend bot's 15m)
     tf_ms, trend = M.TF_MS[tf], getattr(cfg, "trend", "four")
+    ttf = getattr(cfg, "trend_tf", None)                # owners 10-31, last: the trend on its own 30m bars
+    ttf_ms = M.TF_MS[ttf] if ttf else tf_ms
     need_1h = any(r not in M.FRIEND_RULES for r in rules)
     closes = list(range(w0 + tf_ms, w1 + 1, tf_ms))
     rep: dict = {}
@@ -805,6 +807,7 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         try:
             r30 = bars_range(klines, co.symbol, tf, w0 - (M.BARS + 10) * tf_ms, w1 + tf_ms)
             r1h = bars_range(klines, co.symbol, "1h", w0 - (M.BARS + 10) * M.H1, w1 + M.H1) if need_1h else []
+            rtr = bars_range(klines, co.symbol, ttf, w0 - (M.BARS + 10) * ttf_ms, w1 + ttf_ms) if ttf else []
         except Exception as exc:  # noqa: BLE001  Binance unreachable: said, never guessed
             fails.append(f"{co.symbol}: {type(exc).__name__}: {exc}"[:160])
             failed_syms.add(co.symbol)
@@ -812,8 +815,10 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         for ce in closes:
             b30 = M.bars_frame(r30, tf_ms, ce).tail(M.BARS - 1).reset_index(drop=True)
             b1h = M.bars_frame(r1h, M.H1, ce).tail(M.BARS - 1).reset_index(drop=True) if need_1h else b30.iloc[0:0]
+            if ttf:                                       # the second frame holds the trend's bars (Bot.bars)
+                b1h = M.bars_frame(rtr, ttf_ms, ce).tail(M.BARS - 1).reset_index(drop=True)
             for rule in rules:
-                ev = M.Bot.judge(rule, co, b30, b1h, ce, tf_ms, trend)
+                ev = M.Bot.judge(rule, co, b30, b1h, ce, tf_ms, trend, ttf_ms)
                 if _moved(ev) or ev["why"].endswith("아직 없음"):
                     rep[(co.symbol, ce, rule)] = ev
     if fails and len(fails) == len(cfg.coins):

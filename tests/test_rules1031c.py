@@ -41,6 +41,20 @@ MIN, HOUR = 60_000, 3_600_000
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
 
 
+def _pair(n15, seed, end_ms=T0, vol=0.002):
+    """15m kline rows ending at ``end_ms`` and the 30m rows made of them (Binance's 30m bar = two 15m bars)."""
+    rng = np.random.default_rng(seed)
+    t = end_ms - M.MIN15 * np.arange(n15, 0, -1)
+    c = 100 * np.exp(np.cumsum(rng.normal(0, vol, n15)))
+    o = np.r_[c[0], c[:-1]]
+    h, lo = np.maximum(o, c) * 1.001, np.minimum(o, c) * 0.999
+    v = rng.uniform(100, 1000, n15)
+    r15 = [[int(t[i]), o[i], h[i], lo[i], c[i], v[i]] for i in range(n15)]
+    r30 = [[int(t[i]), o[i], max(h[i], h[i + 1]), min(lo[i], lo[i + 1]), c[i + 1], v[i] + v[i + 1]]
+           for i in range(n15 - 1) if t[i] % M.MIN30 == 0]
+    return r15, r30
+
+
 # ====================================================================== the script's formulas, written out again
 def _ema(x, n):
     """Pine ta.ema: the first n values' mean, then alpha = 2 / (n + 1); leading na skipped."""
@@ -305,81 +319,110 @@ def test_a_15m_close_in_the_loop_logs_the_cross_and_enters(tmp_path, monkeypatch
     p = tmp_path / "cfg.json"
     p.write_text(json.dumps(d), encoding="utf-8")
     cfg = M.load_config(str(p))
-    ce = T0 + M.MIN15
-    rows = [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in ce - M.MIN15 * np.arange(400, -1, -1)]   # with the bar opening now
+    ce = T0 + M.MIN15                                   # a quarter that is not a 30m close
+    rows = {"15m": [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in ce - M.MIN15 * np.arange(400, -1, -1)],   # with the bar
+            "30m": [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in T0 - M.MIN30 * np.arange(400, -1, -1)]}   # opening now
     asked = []
 
     def fetch(sym, tf, n):
         asked.append(tf)
-        return rows
+        return rows[tf]
 
-    def fake_eval(rule, co, b, close_ms, tf_ms=M.MIN30, trend="four"):
-        assert (rule, tf_ms, trend) == ("h0x", M.MIN15, "bar")
+    def fake_eval(rule, co, b, close_ms, tf_ms=M.MIN30, trend="four", tb=None, trend_tf_ms=None):
+        assert (rule, tf_ms, trend, trend_tf_ms) == ("h0x", M.MIN15, "bar", M.MIN30)
+        assert int(b.open_ms.iloc[-1]) + M.MIN15 == close_ms and int(tb.open_ms.iloc[-1]) + M.MIN30 == T0   # closed ones
         x0 = {"ETHUSDT": 1, "SOLUSDT": -1}.get(co.symbol, 0)
         side = 1 if co.symbol == "ETHUSDT" else 0
         return {"symbol": co.symbol, "close_ms": close_ms, "side": side, "rule": rule, "x0": x0, "h6": 3.1 * x0,
                 "why": "" if side else ("추세 바 종합 횡보(진입 금지)" if x0 else "히스토그램 0선 돌파 없음"),
                 "close": 10.0, "stop_dist": 0.1, "stop_pct": 1.0, "trend": side, "trend_mode": "bar", "tf": "15분",
-                "bar": {"score": side, "six": 1, "line": side, "ema": side, "st": side, "four": 1},
+                "trend_tf": "30분", "bar": {"score": side, "six": 1, "line": side, "ema": side, "st": side, "four": 1},
                 "bar_n": [6, 0, 0] if side else [2, 0, 4], "bar_score": 3 * side}
     monkeypatch.setattr(M, "evaluate_friend", fake_eval)
     msgs = []
     bot = M.Bot(cfg, M.PaperBroker(100.0, cfg.taker_fee), fetch, lambda: ce + 5_000, notify=lambda lv, t: msgs.append(t),
                 sleep=lambda s: None)
     bot.on_close(ce)
-    assert set(asked) == {"15m"}
+    assert set(asked) == {"15m", "30m"}                  # the signal's bars and the trend's
     assert bot.pos is not None and bot.pos.symbol == "ETHUSDT" and bot.pos.side == 1
     logged = [json.loads(x) for x in Path(cfg.log).read_text(encoding="utf-8").splitlines()]
     sig = {r["symbol"]: r for r in logged if r.get("kind") == "signal"}
     assert set(sig) == {"ETHUSDT", "SOLUSDT"}                     # a cross is logged even when the trend refused it
     assert sig["SOLUSDT"]["x0"] == -1 and sig["SOLUSDT"]["side"] == 0
     assert bot.board["ETHUSDT"]["rules"]["h0x"]["side"] == 1 and bot.board["XRPUSDT"]["trend_mode"] == "bar"
-    assert any("히스토그램 0선 위로 돌파" in m and "추세 바 15분 종합 상승" in m for m in msgs)
+    assert any("히스토그램 0선 위로 돌파" in m and "추세 바 30분 종합 상승" in m for m in msgs)
+    # Binance has not opened the 30m bar of this quarter yet: the close is read again, then logged
+    rows["30m"] = rows["30m"][:-1]
+    with pytest.raises(M.MixError, match="추세 30분봉 마감이 아직 없음"):
+        bot.bars("ETHUSDT", ce)
 
 
 def test_the_signals_listing_and_the_check(tmp_path, monkeypatch, capsys):
     cfg = M.load_config(str(DEPLOY / "mixrange.paper.json"))
-    b = frame(1500, tf_ms=M.MIN15, vol=0.002, seed=9)
-    lines = M.friend_history(cfg.coins[0], b, "h0x", 30, M.MIN15, "bar")
-    assert 1 <= len(lines) <= 30 and all("히스토그램 0선 " in x and " 추세 바 종합 " in x and "→" in x for x in lines)
-    assert any(x.endswith("→ X (종합 노랑, 진입 금지)") for x in lines) or any(x.endswith("→ X (추세 다름)") for x in lines)
+    r15, r30 = _pair(3000, 9)
+    b = M.bars_frame(r15, M.MIN15, T0).tail(1499).reset_index(drop=True)
+    tb = M.bars_frame(r30, M.MIN30, T0).tail(1499).reset_index(drop=True)
+    lines = M.friend_history(cfg.coins[0], b, "h0x", 10_000, M.MIN15, "bar", tb, M.MIN30)
+    assert lines and all("히스토그램 0선 " in x and " 추세 바 30분 종합 " in x and "→" in x for x in lines)
+    assert any(x.endswith("→ X (종합 노랑, 진입 금지)") for x in lines) and any(x.endswith("→ X (추세 다름)") for x in lines)
+    # each line's trend is the last 30m bar closed by its 15m close (no look ahead), as the bot read it then
+    P = FT.bar_pane(*(tb[k].to_numpy(float) for k in ("high", "low", "close", "volume")))
     o, h, lo, c, v = (b[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
-    n_cross = int((FT.h6_pane(h, lo, c, v)["cross"][301:] != 0).sum())
-    assert len(M.friend_history(cfg.coins[0], b, "h0x", 10_000, M.MIN15, "bar")) == n_cross
-    # the bybit bot's rule listed under the trend bar
-    ob = M.friend_history(cfg.coins[0], frame(1500, tf_ms=M.MIN30, vol=0.002, seed=9), "obvac", 5, M.MIN30, "bar")
-    assert ob and all(" 추세 바 종합 " in x for x in ob)
-    # ``signals``: the trend bar named once per rule
-    rows = b[["open_ms", "open", "high", "low", "close", "volume"]].to_numpy().tolist()
-    end = int(rows[-1][0]) + M.MIN15
-    monkeypatch.setattr(M, "binance_fetch", lambda base: lambda s, tf, n: [r for r in rows if r[0] < end][-n:])
+    H = FT.h6_pane(h, lo, c, v)
+    t_close = tb.open_ms.to_numpy() + M.MIN30
+    want = []
+    for i in range(301, len(c)):
+        if not H["cross"][i]:
+            continue
+        ce = int(b.open_ms.iloc[i]) + M.MIN15
+        j = int(np.searchsorted(t_close, ce, side="right") - 1)
+        assert t_close[j] <= ce < t_close[j] + M.MIN30
+        tr = int(P["trend"][j])
+        want.append("롱 진입" if H["cross"][i] == tr == 1 else "숏 진입" if H["cross"][i] == tr == -1 else
+                    "X (종합 노랑, 진입 금지)" if tr == 0 else "X (추세 다름)")
+    assert len(lines) == len(want)
+    for ln, w in zip(lines, want):
+        assert ln.endswith(w) or ("X (손절 폭" in ln and "진입" in w)
+    # the 바이비트 봇's rule listed under the 30m trend bar
+    ob = M.friend_history(cfg.coins[0], b, "obvac", 5, M.MIN15, "bar", tb, M.MIN30)
+    assert ob and all(" 추세 바 30분 종합 " in x for x in ob)
+    # without the 30m bars: the 15m bar's own trend (the 10-31 night form)
+    assert all(" 추세 바 종합 " in x for x in M.friend_history(cfg.coins[0], b, "h0x", 5, M.MIN15, "bar"))
+    # ``signals``: the 30m trend named once per rule and coin
+    src = {"15m": r15, "30m": r30}
+    end = T0
+    monkeypatch.setattr(M, "binance_fetch", lambda base: lambda s, tf, n: [r for r in src[tf] if r[0] < end][-n:])
     monkeypatch.setattr(M.time, "time", lambda: end / 1000 + 60)
     assert M.cmd_signals(argparse.Namespace(config=str(DEPLOY / "mixrange.paper.json"), n=3)) == 0
     out = capsys.readouterr().out
-    assert out.count("  -- 히스토그램 0선 돌파 (추세 15분: 추세 바 종합(3개 점수 · 6종 · 하늘·보라 · EMA RSI · 슈퍼트렌드 · 4종, "
+    assert out.count("  -- 히스토그램 0선 돌파 (추세 30분: 추세 바 종합(3개 점수 · 6종 · 하늘·보라 · EMA RSI · 슈퍼트렌드 · 4종, "
                      "노랑이면 진입 안 함))") == 6
+    assert " 추세 바 30분 종합 " in out
 
 
 def test_the_morning_replay_counts_the_crosses():
     cfg = M.load_config(str(DEPLOY / "mixrange.paper.json"))
     cfg.coins = cfg.coins[:1]
-    b = frame(2000, tf_ms=M.MIN15, vol=0.002, seed=11, end_ms=T0)
-    rows = b[["open_ms", "open", "high", "low", "close", "volume"]].to_numpy().tolist()
-    rows = [[int(r[0]), *r[1:]] for r in rows]
+    r15, r30 = _pair(4000, 11)
+    src = {"15m": r15, "30m": r30}
+    asked = set()
 
     def klines(symbol, tf, start, limit):
-        assert tf == "15m"
-        return [r for r in rows if r[0] >= start][:limit]
+        asked.add(tf)
+        return [r for r in src[tf] if r[0] >= start][:limit]
     day0 = T0 - 24 * HOUR
     log = []
     co = cfg.coins[0]
     for ce in range(day0 + M.MIN15, T0 + 1, M.MIN15):
-        bb = M.bars_frame(rows, M.MIN15, ce).tail(M.BARS - 1).reset_index(drop=True)
-        ev = M.Bot.judge("h0x", co, bb, bb, ce, M.MIN15, "bar")
+        bb = M.bars_frame(r15, M.MIN15, ce).tail(M.BARS - 1).reset_index(drop=True)
+        tb = M.bars_frame(r30, M.MIN30, ce).tail(M.BARS - 1).reset_index(drop=True)
+        ev = M.Bot.judge("h0x", co, bb, tb, ce, M.MIN15, "bar", M.MIN30)
+        assert ev["trend_tf"] == "30분" and ev["tf"] == "15분"
         if ev.get("x0") or ev["side"]:
             log.append({"ts": ce + 5_000, "kind": "signal", **ev})
     assert log
     rp = MC.signal_replay(cfg, day0, T0, log, klines, obs=[[T0 + 3 * MIN, T0, None]], st_last=T0)
+    assert asked == {"15m", "30m"}
     assert rp["state"] == "ok" and rp["different"] == [] and rp["rules"] == ["h0x"] and rp["tf_ko"] == "15분"
     assert rp["x0s"] == len(log) and "turns" not in rp
     assert f"히스토그램 0선 돌파 {rp['x0s']}번" in MC.replay_lines(rp)[0]
@@ -394,7 +437,65 @@ def test_the_morning_replay_counts_the_crosses():
     assert MC.RULE_TAG["h0x"] == "(히스토그램 0선 돌파)" and MC.RULE_WHAT["h0x"] == "히스토그램 0선 돌파"
 
 
-# ====================================================================== the configs
+# ====================================================================== the 30m trend on 15m signals (owners 10-31, last)
+def test_the_trend_is_the_last_closed_30m_bars_and_the_15m_trend_is_ignored():
+    """"30분봉은 추세만 보고 15분봉으로 진입을 하는데 15분봉 추세는 무시 진입 방식은 지금이랑 동일": the trend bar's 종합 of
+    the last 30m bar closed by the 15m close; the signal, the ATR stop and the guard on the 15m bars."""
+    r15, r30 = _pair(4000, 21)
+    co = M.Coin("SOLUSDT", 0.0, 3.0, 100.0, 40)
+    seen = set()
+    for ce in range(T0 - 40 * M.MIN15, T0 + 1, M.MIN15):          # :00 / :30 closes and the quarters between them
+        b = M.bars_frame(r15, M.MIN15, ce).tail(1499).reset_index(drop=True)
+        tb = M.bars_frame(r30, M.MIN30, ce).tail(1499).reset_index(drop=True)
+        assert int(tb.open_ms.iloc[-1]) + M.MIN30 == ce // M.MIN30 * M.MIN30      # the 30m bar closed by now
+        for rule in ("h0x", "obvac"):
+            ev = M.Bot.judge(rule, co, b, tb, ce, M.MIN15, "bar", M.MIN30)
+            t30 = FT.bar_state(*(tb[k].to_numpy(float) for k in ("high", "low", "close", "volume")))
+            t15 = FT.bar_state(*(b[k].to_numpy(float) for k in ("high", "low", "close", "volume")))
+            assert ev["trend"] == t30["trend"] and ev["bar"] == t30["rows"] and ev["bar_n"] == t30["n"]
+            assert (ev["tf"], ev["trend_tf"]) == ("15분", "30분")
+            a = float(M.atr(b.high.to_numpy(float), b.low.to_numpy(float), b.close.to_numpy(float), 14)[-1])
+            assert ev["atr"] == pytest.approx(a)                       # the stop: the 15m bar's ATR
+            if rule == "h0x":
+                x = int(FT.h6_pane(*(b[k].to_numpy(float) for k in ("high", "low", "close", "volume")))["cross"][-1])
+                assert ev["x0"] == x and ev["side"] in ((x if x == t30["trend"] else 0), 0)
+            seen.add((t30["trend"] != t15["trend"]))
+    assert True in seen                                             # the 15m trend differed at some closes: not read
+    # a trend bar missing (Binance late): read again, then logged (never the 15m trend instead)
+    b = M.bars_frame(r15, M.MIN15, T0).tail(1499).reset_index(drop=True)
+    tb = M.bars_frame(r30, M.MIN30, T0).tail(1499).reset_index(drop=True)
+    ev = M.Bot.judge("h0x", co, b, tb.iloc[:-1].reset_index(drop=True), T0, M.MIN15, "bar", M.MIN30)
+    assert ev["side"] == 0 and ev["why"] == "추세 30분봉이 아직 없음" and M._not_read(ev)
+    ev = M.Bot.judge("h0x", co, b, tb.tail(200).reset_index(drop=True), T0, M.MIN15, "bar", M.MIN30)
+    assert ev["why"] == "추세 30분봉의 지난 봉이 모자람"
+    # the words say the trend's bar
+    ev = M.Bot.judge("h0x", co, b, tb, T0, M.MIN15, "bar", M.MIN30)
+    assert M.friend_words({**ev, "x0": 1, "h6": 2.0, "rule": "h0x"}, 1).startswith("히스토그램 0선 위로 돌파(히스토그램 2.0) · 추세 바 30분 종합 ")
+
+
+def test_the_trend_tf_in_the_config(tmp_path):
+    base = json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8"))
+
+    def load(**over):
+        p = tmp_path / "c.json"
+        p.write_text(json.dumps({**base, **over}), encoding="utf-8")
+        return M.load_config(str(p))
+    assert load().trend_tf == "30m"
+    assert load(trend_tf="15m").trend_tf is None and load(trend_tf="15m").trend_tf_ms == M.MIN15   # the same bar: none
+    c = load(trend_tf=None)
+    assert c.trend_tf is None and c.trend_tf_ms == M.MIN15 and c.trend_tf_ko == "15분"
+    for bad in ("1h", "5m"):
+        with pytest.raises(M.MixError, match="trend_tf"):
+            load(trend_tf=bad)
+    with pytest.raises(M.MixError, match="trend_tf"):
+        load(tf="30m", trend_tf="15m")                          # shorter than the signal's bar
+    # the friend's own "mix" rule reads its own 1h bars: a trend_tf is not used there
+    assert load(rules=["mix"], tf="30m", trend="four", stop_atr=None, coins={"SOLUSDT": {}}).trend_tf is None
+    words = M.plan_words(load())
+    assert "매매법 히스토그램 0선 돌파" in words
+
+
+
 def _cfg(name):
     return M.load_config(str(DEPLOY / name))
 
@@ -406,13 +507,15 @@ def test_three_bots_one_trend_six_coins():
         for name, mode in ((live, "mainnet"), (paper, "paper")):
             cfg = _cfg(name)
             assert cfg.mode == mode and cfg.trend == "bar" and cfg.symbols == SIX, name
+            # owners 10-31, last: "30분봉은 추세만 보고 15분봉으로 진입을 하는데 15분봉 추세는 무시"
+            assert (cfg.tf, cfg.trend_tf, cfg.trend_tf_ms, cfg.trend_tf_ko) == ("15m", "30m", M.MIN30, "30분"), name
             assert cfg.stop_atr == 3.0 and {c.sl_atr for c in cfg.coins} == {3.0}
             assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.ladder_every_s == 60
             assert cfg.margin_frac == 0.4 and cfg.equity_floor_frac == 0 and cfg.max_notional_usd == 10000
             assert cfg.no_weekend and cfg.us_open_pre_min == cfg.us_open_pause_min == cfg.macro_blackout_min == 30
             assert cfg.telegram == (mode == "mainnet")
     by, fr, rg = _cfg("mixbybit.live.json"), _cfg("mixchop.live.json"), _cfg("mixrange.live.json")
-    assert (by.name, by.exchange, by.tf, by.rules) == ("바이비트 봇", "bybit", "30m", ("obvac",))
+    assert (by.name, by.exchange, by.tf, by.rules) == ("바이비트 봇", "bybit", "15m", ("obvac",))
     assert (fr.name, fr.exchange, fr.tf, fr.rules) == ("친구 15분 봇", "wooxpro", "15m", ("h0x",))
     assert (rg.name, rg.exchange, rg.tf, rg.rules) == ("레인지 봇", "wooxpro", "15m", ("h0x",))
     assert {c.symbol: c.leverage for c in by.coins} == {c.symbol: c.leverage for c in fr.coins} == \
@@ -420,7 +523,7 @@ def test_three_bots_one_trend_six_coins():
     # the 레인지 봇 as the other two (owners 10-31 night: "레인지봇 zec 20배 나머지 40배로해")
     assert {c.symbol: c.leverage for c in rg.coins} == {**{s: 40 for s in SIX}, "ZECUSDT": 20}
     # the friend bot and the 레인지 봇: one rule, one trend, one bar, the same coins and leverage; their own files
-    same = ("tf", "trend", "rules", "stop_atr", "ladder", "margin_frac", "equity_floor_frac", "ladder_every_s")
+    same = ("tf", "trend", "trend_tf", "rules", "stop_atr", "ladder", "margin_frac", "equity_floor_frac", "ladder_every_s")
     assert {k: getattr(fr, k) for k in same} == {k: getattr(rg, k) for k in same}
     assert [(c.symbol, c.leverage) for c in fr.coins] == [(c.symbol, c.leverage) for c in rg.coins]
     files = [(c.state, c.log, c.own_stop_file) for c in (by, fr, rg, _cfg("mixbybit.paper.json"),

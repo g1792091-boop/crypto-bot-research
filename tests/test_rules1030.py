@@ -197,6 +197,7 @@ def test_a_15m_close_in_the_bots_loop(tmp_path, monkeypatch):
     d.update(state=str(tmp_path / "state.json"), log=str(tmp_path / "log.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"), telegram=False, start_equity=100,
              tf="15m", trend="swing", rules=["roc50", "obv50"], name="친구 15분 봇")        # the 15m form
+    d.pop("trend_tf", None)                               # (10-31, last: the 30m trend; tests/test_rules1031c.py)
     p = tmp_path / "cfg.json"
     p.write_text(json.dumps(d), encoding="utf-8")
     cfg = M.load_config(str(p))
@@ -229,6 +230,7 @@ def test_the_morning_replay_recomputes_15m_closes():
     cfg = M.load_config(str(DEPLOY / "mixchop.paper.json"))
     cfg.coins = cfg.coins[:1]                              # SOL
     cfg.tf, cfg.trend, cfg.rules = "15m", "swing", ("roc50", "obv50")      # the 15m form
+    cfg.trend_tf = None
     rng = np.random.default_rng(31)
     n = 2000
     day0 = T0 - 24 * HOUR

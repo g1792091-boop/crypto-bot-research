@@ -126,8 +126,9 @@ def test_the_deploy_configs():
     for name, mode in (("mixbybit.live.json", "mainnet"), ("mixbybit.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
-        # (10-31 night: the trend bar's 종합 instead of the four votes, tests/test_rules1031c.py)
-        assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("30m", "bar", ("obvac",), 3.0)
+        # (10-31 night: the trend bar's 종합 instead of the four votes, read on the 30m bar with the signal on 15m bars,
+        # tests/test_rules1031c.py)
+        assert (cfg.tf, cfg.trend, cfg.trend_tf, cfg.rules, cfg.stop_atr) == ("15m", "bar", "30m", ("obvac",), 3.0)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
         # owners 10-31 evening ("바이비트 봇 코인 목록을 친구 30분 봇 코인 목록이랑 같게"): the friend bot's six
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
@@ -152,6 +153,7 @@ def _walk_rows(n, seed, tf):
 def test_the_signals_listing_and_the_morning_replay():
     cfg = M.load_config(str(DEPLOY / "mixbybit.paper.json"))
     cfg.coins = cfg.coins[:1]
+    cfg.tf, cfg.trend, cfg.trend_tf = "30m", "four", None         # (the 10-31 evening form)
     rows = _walk_rows(2000, 43, M.MIN30)
     b = M.bars_frame(rows, M.MIN30, T0)
     lines = M.friend_history(cfg.coins[0], b, "obvac", 8, M.MIN30)
