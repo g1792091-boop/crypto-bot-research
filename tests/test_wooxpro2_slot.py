@@ -37,6 +37,16 @@ from paperbot.executor import ExecConfig, ExecStore, Executor, Intent, KeyMixup 
 from paperbot.mainnet import FLAG, FLAG_VALUE  # noqa: E402
 from paperbot.notify import CRITICAL, INFO, ListNotifier  # noqa: E402
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _retired_slots_kept_for_these_tests():
+    """Owners 10-31: 딥코인 and 투비트 are retired from the site (livebots.RETIRED_SLOTS); these worlds keep them as the
+    slots before and after WOO X Pro 2, to check the machinery they share (tests/test_retired_slots.py: the site without
+    them)."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "RETIRED_SLOTS", ())
+        yield
+
 ROOT = Path(__file__).resolve().parents[1]
 T0 = 1_800_000_000_000
 BTC, ETH = "BTCUSDT", "ETHUSDT"

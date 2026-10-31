@@ -1,4 +1,4 @@
-"""실거래 › V3.9 투비트 (#/v39; owners 10-26: "추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면 따로, v3.9
+"""(owners 10-31: the screen and its route are gone; the goal research still reads this module) 실거래 › V3.9 투비트 (#/v39; owners 10-26: "추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면 따로, v3.9
 화면 따로"): the fifth executor, 투비트 (docs/toobit-ko.md, $50 of real money), and the paper account it follows, the rule
 bot's V3.9 1-hour account ``V39_ALL@1h`` in paper3.db, on one screen and nothing of the other bots. Read-only, one answer:
 
@@ -395,15 +395,5 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None) -> dict:
     }
 
 
-def register(app, ctx) -> dict:
-    from ..app import json_finite
-
-    @app.get("/api/v4/livebots/v39")
-    def get_livebots_v39():
-        """실거래 › V3.9 투비트: the Toobit executor and the rule bot's V3.9 1-hour paper account it follows: status, the
-        plan in words, the open position with its ladder step, today's and recent live trades, paper entries followed or
-        missed and why, the equity (read-only, 5 s cache)."""
-        p = paths()
-        return L._cached("v39:" + json.dumps(p, sort_keys=True), lambda: json_finite(build(p)))
-
-    return {"routes": ["/api/v4/livebots/v39"], "paths": paths}
+# owners 10-31 ("투비트봇이랑 딥코인봇은 이제 안돌릴꺼니까 대시보드화면에서 지우자"): no route any more (the V3.9 투비트 screen and
+# GET /api/v4/livebots/v39 are gone); the goal research (dash/more/livegoalres.py) still reads paths() / read_raw.
