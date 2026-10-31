@@ -660,7 +660,7 @@ def test_the_menu_group_and_the_tabs():
     # tests/test_dash_livev39.py)
     # (the 바이비트 봇's group last since 10-29)
     assert d["groups"][-3] == ["vwap", "VWAP 봇", ["vwap", "vwperf", "vwblock"]] and d["nav"][-3] == "VWAP 봇" and len(d["groups"]) == 8
-    assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend", "tchart", "hq"]     # 봇별's six, then 지금
+    assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend", "tchart", "hq", "pos"]     # 봇별's six, then 지금
     assert d["screens"] == [["VWAP 관제", "vwap", "livebots"], ["VWAP 성적", "vwap", "livebots"], ["VWAP 막은 신호", "vwap", "livebots"]]
     assert d["parse"]["name"] == "vwperf" and d["href"] == "#/vwblock"
     lb = FW._read(SCREENS, "livebots.js")

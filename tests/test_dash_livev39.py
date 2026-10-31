@@ -10,7 +10,11 @@ screens/livebots.js BOT_TAB), and the new one, V3.9 투비트 (dash/more/livev39
   V39_ALL@1h as tests/test_toobit_slot.py makes it): the plan from the server's config, the open position with its ladder
   step, the trades with the paper trade each followed, the paper entries followed / missed with the executor's own reason
   (liq_skip, macro_skip) or before its start, the equity; 기록 멈춤, 멈춤 and 못 읽음 when so;
-- the route on the live app (read-only: nothing written), the views in node, the house rules of the css."""
+- the route on the live app (read-only: nothing written), the views in node, the house rules of the css.
+
+Owners 10-31 ("투비트봇이랑 딥코인봇은 이제 안돌릴꺼니까 대시보드화면에서 지우자"): the screen, its files and its route are gone,
+the 투비트 slot is retired from the summary (livebots.RETIRED_SLOTS). The answer's own module (dash/more/livev39.py, still
+read by the goal research) keeps its tests here, with the slot kept for them."""
 from __future__ import annotations
 
 import json
@@ -88,6 +92,13 @@ def world(folder: str) -> dict:
 @pytest.fixture(scope="module")
 def w(tmp_path_factory):
     return world(str(tmp_path_factory.mktemp("v39") / "w"))
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _slot_kept_for_these_tests():
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "RETIRED_SLOTS", ())
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -219,20 +230,16 @@ def test_the_summary_says_which_bot_each_executor_follows(w, tmp_path):
     assert (p["config"], p["db"]) == (w["p"]["config"], w["p"]["db"]) and p["paper"] == "/var/lib/paperbot/paper3.db"
 
 
-def test_the_route_on_the_live_app(w, tmp_path, monkeypatch):
+def test_the_route_is_gone_from_the_live_app(w, tmp_path, monkeypatch):
+    """Owners 10-31: no V3.9 투비트 on the site, its answer not served either."""
     from fastapi.testclient import TestClient
     from paperbot.livedash import app as LA
     monkeypatch.setenv("PAPERBOT_LIVE_TOOBIT_DB", w["p"]["db"])
     monkeypatch.setenv("PAPERBOT_LIVE_TOOBIT_CONFIG", w["p"]["config"])
-    monkeypatch.setenv("PAPERBOT_LIVE_V39_PAPER_DB", w["p"]["paper"])
-    before = {n: (open(os.path.join(w["folder"], n), "rb").read(), os.stat(os.path.join(w["folder"], n)).st_mtime_ns) for n in sorted(os.listdir(w["folder"]))}
     app = LA.create_app(None, b"s" * 32, candles=lambda *a, **k: [], ticker=lambda: {}, market=lambda: {}, frames=lambda *a: None,
                         liq_db=str(tmp_path / "no-liq.db"), inbox_db=str(tmp_path / "no-inbox.db"))
-    assert "livev39" in LA.MODULES and app.state.more["livev39"]["routes"] == ["/api/v4/livebots/v39"]
-    r = TestClient(app).get("/api/v4/livebots/v39")
-    assert r.status_code == 200 and r.json()["status"]["state"] in ("running", "stopped") and r.json()["account"] == ACC
-    after = {n: (open(os.path.join(w["folder"], n), "rb").read(), os.stat(os.path.join(w["folder"], n)).st_mtime_ns) for n in sorted(os.listdir(w["folder"]))}
-    assert after == before                                                    # nothing written, nothing new
+    assert "livev39" not in LA.MODULES and "livev39" not in app.state.more
+    assert TestClient(app).get("/api/v4/livebots/v39").status_code in (401, 404)
 
 
 # ================================================================ the menu and the views in node
@@ -260,30 +267,30 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     const R = await import('file://{V4}/core/routes.js');
     console.log(JSON.stringify({{groups: R.GROUPS.map((g) => [g.id, g.ko, g.screens]), keys: R.KEYS, land: R.landing(),
       nav: R.navGroups(true).map((g) => [g.ko, g.items.map((it) => it.ko)]),
-      screens: ['trendbot', 'rangebot', 'vwapbot', 'mixbot', 'v39'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].group, R.SCREENS[k].mod]),
-      parse: R.parseHash('#/v39'), href: R.href('livebots', 'mixbot'), icon: R.icon('bots').childNodes.length}}));""")
+      screens: ['trendbot', 'rangebot', 'vwapbot', 'mixbot'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].group, R.SCREENS[k].mod]),
+      v39: R.SCREENS.v39 || null, href: R.href('livebots', 'mixbot'), icon: R.icon('bots').childNodes.length}}));""")
     # 레인지 봇 (owners 10/26 evening, tests/test_dash_live_range.py) right after 추세판단 봇
     # (owners 10-29: the 바이비트 봇 first, the 추세판단 봇 switched off last, the 바이비트 봇's group last;
-    # tests/test_dash_mixbybit_site.py)
-    assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]]
+    # tests/test_dash_mixbybit_site.py); owners 10-31: V3.9 투비트 gone
+    assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]]
     assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit"]      # the rest as it was
-    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "V3.9 투비트", "추세판단 봇"]]
-    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"],
-                              ["V3.9 투비트", "bots", "livebots"]]
-    assert out["keys"][:7] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend"] and out["land"] == "hq"
-    assert out["parse"]["name"] == "v39" and out["href"] == "#/mixbot" and out["icon"] > 20
+    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 30분 봇", "추세판단 봇"]]
+    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 30분 봇", "bots", "livebots"]]
+    assert out["v39"] is None and "v39" not in out["keys"]
+    assert out["keys"][:6] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend"] and out["land"] == "hq"
+    assert out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
-    for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇"), ("v39", "V3.9 투비트")):
+    for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 30분 봇")):
         assert f'{{id: "{t}", label: "{label}"' in lb
-    assert 'import {v39View} from "./livebots-v39.js";' in lb
+    assert "livebots-v39" not in lb and 'id: "v39"' not in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
-    assert all(f"{k}:" in search for k in ("trendbot", "vwapbot", "mixbot", "v39"))
+    assert all(f"{k}:" in search for k in ("trendbot", "vwapbot", "mixbot")) and "v39:" not in search
     assert ".botbar { grid-template-columns: repeat(8, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
-    """The strip and the head of a 봇별 screen (screens/livebots.js mount): 추세판단 봇 with 바이비트 · WOO X Pro only, V3.9
-    투비트 with 투비트 only (꺼짐 while it is not on the summary), 친구 30분 봇 with none of the executors; the empty 목표 연구
+    """The strip and the head of a 봇별 screen (screens/livebots.js mount): 추세판단 봇 with 바이비트 · WOO X Pro only (V3.9
+    투비트 gone on 10-31), 친구 30분 봇 with none of the executors; the empty 목표 연구
     foot with its bot, and in it the 목표 연구 section (screens/livebots-goalres.js) asking for that bot's own answer."""
     summary = {"execs": [{"id": "bybit", "bot": "paper", "name_ko": "바이비트"}, {"id": "mexc", "bot": "paper", "name_ko": "WOO X Pro"},
                          {"id": "deepcoin", "bot": "paper2", "name_ko": "딥코인"}, {"id": "toobit", "bot": None, "name_ko": "투비트"}],
@@ -293,8 +300,6 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
                          {"id": "deepcoin", "kind": "live", "state": "ok", "balance": 77.7, "position": None},
                          {"id": "toobit", "kind": "live", "state": "ok", "balance": 47.6, "position": None}],
                "papers": None, "now_ms": NOW}
-    no_tb = {**summary, "execs": summary["execs"][:3], "accts": summary["accts"][:4]}
-    v39 = json_finite(X.build(w["p"], NOW))
     out = _node(tmp_path, f"""
     for (const [k, f] of Object.entries({{after: (p, i, x) => p.childNodes.splice(i + 1, 0, x), before: (p, i, x) => p.childNodes.splice(i, 0, x),
       replaceWith: (p, i, x) => p.childNodes.splice(i, 1, x)}})) if (!Node.prototype[k]) Node.prototype[k] = function (x) {{
@@ -304,17 +309,16 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     const asked = [];
     const mk = (tab, sum) => ({{params: {{arg: tab, query: {{}}}}, alive: () => true, track() {{}}, listen() {{}}, on() {{}}, watch() {{}}, timeout() {{}},
       href: (n) => '#/' + n, setTitle() {{}}, go() {{}}, every() {{}},
-      api: async (path) => {{ asked.push(path); const a = {{'/api/v4/livebots': sum, '/api/v4/livebots/v39': D_v}}[path];
+      api: async (path) => {{ asked.push(path); const a = {{'/api/v4/livebots': sum}}[path];
         if (a === undefined) throw Object.assign(new Error('x'), {{status: 503}}); return JSON.parse(JSON.stringify(a)); }}}});
     const strip = async (tab, sum) => {{ const el = new Node('div'); await LB.mount(el, mk(tab, sum)); await tick(); await tick();
       const w = D.walk(el); return {{text: w.text.replace(/\\s+/g, ' '), goal: w.classes.filter((c) => c.split(' ').includes('lb-goalres')).length,
         lgr: w.classes.filter((c) => c.split(' ').includes('lgr')).length}}; }};
-    const r = {{trend: await strip('trendbot', D_s), vwap: await strip('vwapbot', D_s), mix: await strip('mixbot', D_s), v39: await strip('v39', D_s),
-      v39off: await strip('v39', D_n), old: await strip('hq', D_s)}};
+    const r = {{trend: await strip('trendbot', D_s), vwap: await strip('vwapbot', D_s), mix: await strip('mixbot', D_s), old: await strip('hq', D_s)}};
     console.log(JSON.stringify({{r, asked, fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'paper2'), K.followersOf(null, 'paper')],
-      tabs: Object.fromEntries(Object.entries(LB.BOT_TAB).map(([k, v]) => [k, v.bot]))}}));""", s=summary, n=no_tb, v=v39)
+      tabs: Object.fromEntries(Object.entries(LB.BOT_TAB).map(([k, v]) => [k, v.bot]))}}));""", s=summary)
     assert out["fol"] == [["bybit", "mexc"], ["deepcoin"], []]
-    assert out["tabs"] == {"bybitbot": "bybit", "trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix", "v39": "v39"}
+    assert out["tabs"] == {"bybitbot": "bybit", "trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix"}
     r = out["r"]
     head = lambda t: t.split("보기만 하는 화면(주문 버튼 없음)")[0]       # the strip, before its last words
     assert "바이비트 $101.50" in head(r["trend"]["text"]) and "WOO X Pro $102.80" in head(r["trend"]["text"])
@@ -322,69 +326,23 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     assert "추세판단 봇 페이퍼(연습)와 그 봇을 따라가는 바이비트 · WOO X Pro 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요" in r["trend"]["text"]
     assert "딥코인 $77.70" in head(r["vwap"]["text"]) and "바이비트" not in head(r["vwap"]["text"])
     assert "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요" in r["mix"]["text"] and "바이비트" not in head(r["mix"]["text"])
-    assert "투비트 $47.60" in head(r["v39"]["text"]) and "바이비트" not in head(r["v39"]["text"])
-    assert "투비트 실행기는 아직 꺼져 있어요" in r["v39off"]["text"]
     assert "바이비트 $101.50" in r["old"]["text"] and "딥코인 $77.70" in r["old"]["text"]          # the old screens as they were
-    assert [r[k]["goal"] for k in ("trend", "vwap", "mix", "v39", "old")] == [1, 1, 1, 1, 0]
-    assert [r[k]["lgr"] for k in ("trend", "vwap", "mix", "v39", "old")] == [1, 1, 1, 1, 0]
-    assert all(f"/api/v4/livebots/goalres?bot={b}" in out["asked"] for b in ("trend", "vwap", "mix", "v39"))
+    assert [r[k]["goal"] for k in ("trend", "vwap", "mix", "old")] == [1, 1, 1, 0]
+    assert [r[k]["lgr"] for k in ("trend", "vwap", "mix", "old")] == [1, 1, 1, 0]
+    assert all(f"/api/v4/livebots/goalres?bot={b}" in out["asked"] for b in ("trend", "vwap", "mix"))
+    assert not any("v39" in a for a in out["asked"])
     assert "목표 연구" in r["trend"]["text"] and "목표 연구" not in r["old"]["text"]
 
 
-def test_the_v39_view_in_node(w, tmp_path):
-    on = json_finite(X.build(w["p"], NOW))
-    off = json_finite(X.build(_off(tmp_path), NOW))
-    out = _node(tmp_path, f"""
-    const X = await import('file://{SCREENS}/livebots-v39.js');
-    const mkCtx = (a) => ({{params: {{query: {{}}}}, alive: () => true, track() {{}}, listen() {{}}, on() {{}}, watch() {{}}, href: (n) => '#/' + n,
-      every() {{}}, api: async () => JSON.parse(JSON.stringify(a))}});
-    const run = async (a) => {{ const v = X.v39View(mkCtx(a)); await tick(); await tick(); return texts(v.el); }};
-    const p = D_on.position;
-    console.log(JSON.stringify({{on: await run(D_on), off: await run(D_off),
-      st: [X.statusOf(D_on.status, D_on.now_ms), X.statusOf(D_off.status, D_on.now_ms), X.statusOf({{...D_on.status, state: 'stopped'}}, D_on.now_ms)],
-      step: [X.stepKo(p), X.stepKo({{step: 0}}), X.nextKo(p), X.nextKo({{next: null}})],
-      fol: D_on.follow.rows.map((r) => X.followKo(r)), paper: D_on.follow.rows.map((r) => X.paperKo(r)),
-      pnl: [X.pnlKo(0.026), X.pnlKo(-0.13), X.pnlKo(null)]}}));""", on=on, off=off)
-    a = out["on"]
-    for word in ("진짜 돈 · 투비트 실행기 · 규칙봇 V3.9 1시간 페이퍼(V39_ALL@1h)를 따라가요", "V3.9 투비트", "켜짐", "페이퍼 V39_ALL@1h가 진입하면 따라 들어가요",
-                 "처음 켬 10/25 09:00", "투비트 잔고 (실거래)", "처음 잔고 대비", "오늘 (한국 시간)", "오늘 닫힌 거래 없음", "실거래 성적", "1승 1패",
-                 "표본 적음", "페이퍼 V39 지갑", "모의 · 진짜 돈 아님",
-                 "계획", "1단계", "12% → 10%", "17% → 15%", "22% → 20%", "BTC 40배 · 나머지 30배", "2.5 ATR", "증거금 = 그때 투비트 잔고의 40%",
-                 "미국 경제 발표(CPI·FOMC·NFP·PCE) 앞뒤 30분은 새 진입 안 함", "강제청산 가격보다 멀면 그 진입은 안 함",
-                 "나스닥 개장 앞 30분·뒤 30분은 새 진입 안 함",
-                 "지금 포지션", "DOGE", "30배 격리", "계단 1단계 · 순ROE 17% 잠금", "가장 좋았던 순ROE +21%",
-                 "순ROE 25% (0.21195)에 닿으면 손절을 순ROE 22% (0.21160)로", "잠금선", "강제청산 (어림)", "페이퍼 V39:",
-                 "페이퍼 V39 진입 vs 실거래", "따라 들어감 2", "같이 들고 있음 1", "안 들어감 2", "실행기 시작 전 1",
-                 L.WHY_KO["liq_skip"], L.WHY_KO["macro_skip"], "실거래 페이퍼 따라 청산", "페이퍼 손절", "페이퍼 잠금 익절",
-                 "오늘 · 최근 실거래", "ETH 숏 30배", "BTC 롱 30배", "잔고", "처음", "$50.00", "정한 금액",
-                 "주의 · 긴급 기록", "손절 옮기기 실패", "DOGEUSDT 손절 옮기기 실패: timeout"):
-        assert word in a, (word, a)
-    assert not BAD.search(a), BAD.search(a)
-    b = out["off"]
-    for word in ("꺼짐", "아직 꺼져 있어요", "서버에 설정 파일도 기록 파일도 아직 없어요", "docs/toobit-ko.md의 '실행기 켜기' → '켜는 순서'",
-                 "그 전에는 숫자를 만들지 않아요", "저장소의 설정 원본", "12% → 10%", "17% → 15%", "실행기 꺼짐", "실행기가 아직 꺼져 있어요"):
-        assert word in b, word
-    assert "투비트 잔고 (실거래)" not in b and "실거래 성적" not in b and "처음 잔고 대비" not in b and not BAD.search(b)
-    assert not re.search(r"\$\d", b.split("계획")[0].replace("$50", ""))                     # no money before the plan's own $50
-    st = out["st"]
-    assert (st[0]["cls"], st[0]["pill"], st[0]["hint"]) == ("run", "켜짐", "")
-    assert st[1]["cls"] == "off" and st[1]["line"].startswith("아직 꺼져 있어요") and "실행기 켜기" in st[1]["hint"]
-    assert st[2]["hint"] == "서버에서 systemctl status paperbot-executor-toobit"
-    assert out["step"][:2] == ["계단 1단계 · 순ROE 17% 잠금", "처음 손절 (계단 전)"] and "다음 계단은" in out["step"][3]
-    pills = {f["pill"] for f in out["fol"]}
-    assert {"따라 들어감", "같이 들고 있음", "안 들어감", "실행기 시작 전"} <= pills
-    assert "페이퍼 아직 열림" in out["paper"] and out["pnl"] == ["+$0.026", "−$0.130", "모름"]
-
-
-def test_the_files_keep_the_house_rules():
-    FW.house_rules("livebots-v39", "l39")
-    js = FW._read(SCREENS, "livebots-v39.js")
-    assert '"/api/v4/livebots/v39"' in js
-    assert '@import url("livebots-v39.css");' in FW._read(SCREENS, "livebots.css")
-    assert re.search(r'^MODULES = MODULES \+ \("livev39",\)$', FW._read(ROOT, "paperbot", "livedash", "app.py"), re.M)
+def test_the_v39_screen_is_gone():
+    """Owners 10-31: the screen's files, its css import, its route on the live app and its goal-research choice are gone;
+    the inventory says so."""
+    assert not os.path.exists(os.path.join(SCREENS, "livebots-v39.js")) and not os.path.exists(os.path.join(SCREENS, "livebots-v39.css"))
+    assert "livebots-v39" not in FW._read(SCREENS, "livebots.css")
+    assert not re.search(r'^MODULES = MODULES \+ \("livev39",\)$', FW._read(ROOT, "paperbot", "livedash", "app.py"), re.M)
+    assert '["trend", "range", "vwap", "mix", "bybit"].includes(q.bot)' in FW._read(SCREENS, "livebots-goalres.js")
     inv = FW._read(V4, "INVENTORY.md")
-    assert "실거래 › 봇별" in inv and "/api/v4/livebots/v39" in inv and "livebots-v39.js" in inv
-    # read-only: the module never opens a file to write, never runs a command, never reads a key file
+    assert "`#/v39` **V3.9 투비트** removed with its files" in inv
+    # the answer's module stays read-only (the goal research still reads it)
     src = FW._read(ROOT, "paperbot", "dash", "more", "livev39.py")
     assert not re.search(r"open\([^)]*['\"][wa]b?['\"]", src) and "subprocess" not in src and ".unlink(" not in src
-    assert ".env" not in src.replace("os.environ", "")

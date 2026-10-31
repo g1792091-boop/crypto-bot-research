@@ -316,15 +316,21 @@ def switched_off_slot(slot: str) -> bool:
     return off
 
 
+# owners 10-31 ("투비트봇이랑 딥코인봇은 이제 안돌릴꺼니까 대시보드화면에서 지우자"): these slots never show on the site
+# again, whatever their files and units (the executors themselves and their guides stay in the repository)
+RETIRED_SLOTS = ("deepcoin", "toobit")
+
+
 def installed(p: dict) -> tuple:
     """The executor slots of this server, in EXECS order: the two first always (but a slot a mix bot trades now,
-    ``replaced``); an optional slot (the third, 딥코인) once its config file or its database is there (``p``: paths()),
-    unless its unit is switched off for good (switched_off_slot, owners 10-30).
+    ``replaced``); an optional slot (WOO X Pro 2) once its config file or its database is there (``p``: paths()),
+    unless its unit is switched off for good (switched_off_slot, owners 10-30); never a retired one (RETIRED_SLOTS,
+    owners 10-31: 딥코인, 투비트).
     Neither there: the pages, the answers, the checks and the messages are as they were with two executors."""
     gone = set(replaced(p))
     return tuple(s for s in EXECS if s[0] not in gone) \
-        + tuple(s for s in OPTIONAL_EXECS if any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2]))
-                and not switched_off_slot(s[0]))
+        + tuple(s for s in OPTIONAL_EXECS if s[0] not in RETIRED_SLOTS
+                and any(p.get(k) and os.path.exists(p[k]) for k in (s[3], s[2])) and not switched_off_slot(s[0]))
 
 
 def shown_paths(p: dict) -> dict:

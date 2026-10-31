@@ -35,9 +35,9 @@
 // numbers, the countdown) are exported pure functions (tests/test_dash_livebots_hq.py runs them in node).
 // The third executor (딥코인, owners 10/24) gets its own reactor, ticker item and gauge row while the server has it
 // (livebots-kit.js execIds): the deck then puts the centre on top and the three reactors in a row; else as before.
-// The four live accounts side by side (owners 10/25 night: the three ways of trading must never be mixed up): 바이비트 ·
-// WOO X Pro (they follow 추세판단 봇) · 딥코인 (it follows VWAP 개선판; before its executor is installed a card that says
-// 설치 전) · WOO X Pro 2 (친구 30분 봇(믹스), paperbot/mixchop.py: no paper bot, it trades by itself; its card from
+// The live accounts side by side (owners 10/25 night: the ways of trading must never be mixed up): 바이비트 ·
+// WOO X Pro (they follow 추세판단 봇) · WOO X Pro 2 (owners 10-31: 딥코인 and 투비트 retired, no card for them any more)
+// (친구 30분 봇(믹스), paperbot/mixchop.py: no paper bot, it trades by itself; its card from
 // /api/v4/livebots/mix, dash/more/livemix.py: running or 꺼짐 / 기록 멈춤, the last equity it logged, its last 20 closed
 // trades as the ring, today, the position, whether it may enter now). Every card says which bot it is or follows (봇 …)
 // under the account's name; the old '친구 매매법' executor of WOO X Pro 2 keeps its own reactor while the server has it.
@@ -989,7 +989,7 @@ export function hqView(ctx, hub) {
 
   // ---- reactors (the third executor's when it comes: addReactors)
   const R = Object.fromEntries(execsNow().map((id) => [id, reactor(id)]));
-  /** One account's card; o: {name, aria, cls, third} for the cards that are not an executor's (딥코인 설치 전, 믹스 봇). */
+  /** One account's card; o: {name, aria, cls, third} for the cards that are not an executor's (the mix bots). */
   function reactor(id, o = {}) {
     const led = h("i", {class: "lbh-led", "aria-hidden": "true"});
     const ledKo = h("b", {class: "lbh-ledko"}, "불러오는 중");
@@ -1126,23 +1126,8 @@ export function hqView(ctx, hub) {
     r.who.replaceChildren(...(bot ? [h("span", {class: "lbh-whok"}, "봇"), h("b", null, bot), h("span", {class: "lbh-whos"}, how)] : []));
   }
 
-  // ---- 딥코인 before its executor is installed: a card that says so (no number, no ring)
-  const soon = reactor("deepcoin", {cls: "lbh-soon", aria: "딥코인 실행기 (진짜 돈) · 설치 전"});
-  function setSoon() {
-    soon.el.dataset.led = "none";
-    soon.ledKo.textContent = "설치 전";
-    soon.ledSub.textContent = "이 서버에 딥코인 실행기가 아직 없어요";
-    whoLine(soon, "VWAP 개선판", "따라갈 실행기 (paperbot-executor-deepcoin)");
-    soon.cur.hidden = true;
-    soon.wal.textContent = "설치 전";
-    soon.wal.classList.add("unk");
-    soon.lHead.textContent = "신호등 —";
-    soon.lRule.textContent = "";
-    for (const k of [soon.today, soon.pos, soon.streak]) { k.textContent = "—"; k.className = "muted"; }
-    if (!soon.segs.firstChild) soon.segs.replaceChildren(s("circle", {class: "lbh-seg off", cx: 100, cy: 100, r: 86}));
-    soon.foll.textContent = "실거래 · VWAP 개선판 페이퍼를 따라가요 (docs/deepcoin-ko.md)";
-    if (!soon.notes.firstChild) soon.notes.replaceChildren(h("p", null, "설치하고 켜면 잔고 · 신호등 · 포지션이 여기 보여요 (그 전에는 숫자를 만들지 않아요)"));
-  }
+  // owners 10-31 ("투비트봇이랑 딥코인봇은 이제 안돌릴꺼니까 대시보드화면에서 지우자"): no card for 딥코인 before it is installed any more (the slot is
+  // retired: livebots.RETIRED_SLOTS)
 
   // ---- the mix bots, each trading an account by itself (their own state and log, dash/more/livemix.py): WOO X Pro 2's
   // 친구 30분 봇(믹스) (/api/v4/livebots/mix) and, once it took the Bybit slot (owners 10-29: the summary's ``replaced``),
@@ -1355,17 +1340,15 @@ export function hqView(ctx, hub) {
       deck.append(R[id].el);
     }
     for (const id of EXEC_SLOTS) if (R[id]) R[id].el.hidden = !ids.includes(id);
-    // the four accounts always (owners 10/25 night): 딥코인's 설치 전 card until its executor comes, the mix bot's card;
+    // the accounts that trade (owners 10/25 night, 10-31: 딥코인 and 투비트 retired): the executors and the mix bots' cards;
     // the order is the css's (.lbh-deck > .lbh-x-*), whatever came first
-    if (ids.includes("deepcoin")) { if (soon.el.parentNode) soon.el.remove(); }
-    else if (!soon.el.parentNode) deck.append(soon.el);
-    const n = ids.length + (ids.includes("deepcoin") ? 0 : 1) + MIXES.filter(shownMix).length;
+    const n = ids.length + MIXES.filter(shownMix).length;
     deck.classList.toggle("three", n > 2);
     deck.classList.toggle("four", n > 3);
     deck.classList.toggle("five", n > 4);
     deck.classList.toggle("six", n > 5);                 // 투비트 (owners 10/25) with the five: two rows of three
   }
-  deck.append(soon.el, MX.r.el);                      // a mix bot that took a slot: its card once the summary says so (setMix)
+  deck.append(MX.r.el);                               // a mix bot that took a slot: its card once the summary says so (setMix)
   addReactors(execsNow());
   // owners 10-29 (the 추세판단 봇 switched off): no executor follows the main paper bot any more -> its 40-trade count leaves the
   // page and one line says what the centre still shows (that bot's last record)
@@ -1971,7 +1954,6 @@ export function hqView(ctx, hub) {
     const d = st.d, ids = execIds(d);
     addReactors(ids);
     for (const id of ids) setReactor(R[id], d ? by(d.accts, id) : null, d ? by(d.execs, id) : null);
-    setSoon();
     setMixes();
     for (const m of MIXES) if (shownMix(m) && !m.d && !m.busy && !m.err) loadMix(m).catch(() => {});
     drawBot();

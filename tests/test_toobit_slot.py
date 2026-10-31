@@ -40,6 +40,16 @@ from tests import test_livecheck as TL  # noqa: E402
 from tests import test_wooxpro2_slot as W2  # noqa: E402
 from tests import vwap_site_world as V  # noqa: E402
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _slot_kept_for_these_tests():
+    """Owners 10-31: the 투비트 slot is retired from the site (livebots.RETIRED_SLOTS: "투비트봇이랑 딥코인봇은 이제
+    안돌릴꺼니까 대시보드화면에서 지우자"); these tests keep the slot machinery it shares with WOO X Pro 2 checked
+    (tests/test_retired_slots.py: the site without it)."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "RETIRED_SLOTS", ())
+        yield
+
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "deploy" / "executor.live-toobit.json"
 NOW, MIN, H, DAY = V.NOW, V.MIN, V.H, V.DAY

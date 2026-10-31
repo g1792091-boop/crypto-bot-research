@@ -195,6 +195,7 @@ export function goalResSection(ctx, bot) {
 /** goalresView(ctx): the section alone as a screen (its bot from the query: ?bot=trend|range|vwap|mix|v39). */
 export function goalresView(ctx) {
   const q = (ctx.params && ctx.params.query) || {};
-  const bot = ["trend", "range", "vwap", "mix", "v39", "bybit"].includes(q.bot) ? q.bot : "trend";
+  // owners 10-31: no V3.9 투비트 any more (the 투비트 bot does not run)
+  const bot = ["trend", "range", "vwap", "mix", "bybit"].includes(q.bot) ? q.bot : "trend";
   return {el: h("div", {class: "lgr-page"}, goalResSection(ctx, bot)), set() {}};
 }

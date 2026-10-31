@@ -67,9 +67,8 @@ MODULES = MODULES + ("livevwap",)
 # 실거래 › 믹스 봇 (#/mix · #/mixperf: the '믹스 30분 봇' on the second WOO X Pro account and its paper twin, owners 10-25
 # night; dash/more/livemix.py)
 MODULES = MODULES + ("livemix",)
-# 실거래 › 봇별 › V3.9 투비트 (#/v39: the 투비트 executor and the rule bot's V3.9 1-hour paper account it follows, owners
-# 10-26; dash/more/livev39.py)
-MODULES = MODULES + ("livev39",)
+# (실거래 › 봇별 › V3.9 투비트, #/v39 and its answer /api/v4/livebots/v39, owners 10-26: removed on 10-31, "투비트봇이랑
+# 딥코인봇은 이제 안돌릴꺼니까 대시보드화면에서 지우자"; dash/more/livev39.py stays for the goal research's own reads)
 # 실거래 › 봇별 › 레인지 봇 (#/rangebot: the 레인지 봇 paper bot and the executors that follow it, owners 10-26;
 # dash/more/liverange.py)
 MODULES = MODULES + ("liverange",)

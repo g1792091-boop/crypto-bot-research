@@ -40,6 +40,16 @@ from paperbot.dash.more import livevwap as VW  # noqa: E402
 from tests import test_dash_livebots_fees as FW  # noqa: E402
 from tests import vwap_site_world as V  # noqa: E402
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _slot_kept_for_these_tests():
+    """Owners 10-31: the 딥코인 slot is retired from the site (livebots.RETIRED_SLOTS: "투비트봇이랑 딥코인봇은 이제
+    안돌릴꺼니까 대시보드화면에서 지우자"); these tests keep the slot machinery it shares with WOO X Pro 2 checked
+    (tests/test_retired_slots.py: the site without it)."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(L, "RETIRED_SLOTS", ())
+        yield
+
 NOW, MIN, H, DAY = V.NOW, V.MIN, V.H, V.DAY
 ROOT = Path(FW.ROOT)
 SCREENS, DOM, BAD = FW.SCREENS, FW.DOM, FW.BAD
@@ -268,9 +278,9 @@ def test_the_screens_in_node(w3, answers, tmp_path):
     for k, t in two.items():                              # not installed: nothing of it anywhere, as before
         if k != "hq":
             assert "딥코인" not in str(t), k
-    # 한눈에 shows the four live accounts always (owners 10-25 night): 딥코인 as 설치 전 (no number), WOO X Pro 2 the mix bot's
-    assert two["reactors"] == 4 and {"three", "four"} <= set(two["deck"].split()) and "five" not in two["deck"].split()
-    assert "딥코인 진짜 돈 봇 VWAP 개선판 따라갈 실행기 (paperbot-executor-deepcoin) 설치 전" in two["hq"]
+    # 한눈에: the live accounts that trade (owners 10-31: no 딥코인 설치 전 card any more), WOO X Pro 2 the mix bot's
+    assert two["reactors"] == 3 and "three" in two["deck"].split() and "four" not in two["deck"].split()
+    assert "설치 전" not in two["hq"] and "paperbot-executor-deepcoin" not in two["hq"]
     assert "WOO X Pro 2 진짜 돈 봇 친구 30분 봇" in two["hq"] and "딥코인 $" not in two["hq"]
     assert out["ids2"] == [["bybit", "mexc"]] * 3 + [["paper", "bybit", "mexc"]] * 2
     assert out["ids3"][:4] == [["bybit", "mexc", "deepcoin"]] * 4
@@ -289,7 +299,7 @@ def test_the_screens_in_node(w3, answers, tmp_path):
     assert out["josa"] == ["딥코인이", "바이비트·WOO X Pro가", "딥코인은", "WOO X Pro는"]
     late = out["late"]
     assert "딥코인" not in late["bandBefore"] and "딥코인 $98." in late["band"]
-    assert late["reactors0"] == 4 and late["reactors"] == 4 and "three" in late["deck"].split()       # 설치 전 → its own card
+    assert late["reactors0"] == 3 and late["reactors"] == 4 and "three" in late["deck"].split()       # its own card comes
 
 
 def test_the_house_rules_of_the_third_slot():

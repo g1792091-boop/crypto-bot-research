@@ -640,6 +640,9 @@ def test_a_switched_off_optional_executor_leaves_the_site(tmp_path, monkeypatch)
     states = {"paperbot-executor-deepcoin": ("inactive", "disabled"), "paperbot-executor-toobit": ("active", "enabled"),
               "paperbot-executor-wooxpro2": ("", "")}
     monkeypatch.setattr(LC, "unit_state", lambda u: states.get(u, ("", "")))
+    # owners 10-31: both slots are retired from the site for good (tests/test_retired_slots.py); the switch-off rule they
+    # came with still holds for an optional slot (WOO X Pro 2), checked here with them kept
+    monkeypatch.setattr(L, "RETIRED_SLOTS", ())
     L._off_cache.clear()
     ids = [s[0] for s in L.installed(base)]
     assert "deepcoin" not in ids and "toobit" in ids and "wooxpro2" in ids

@@ -497,9 +497,9 @@ console.log(JSON.stringify({on, off, late, failed,
 
 
 def test_the_four_live_accounts_on_hq(w, tmp_path):
-    """한눈에 (screens/livebots-hq.js; owners 10-25 night): 바이비트 · WOO X Pro (추세판단 봇) · 딥코인 (설치 전 until its executor
-    comes) · WOO X Pro 2 (친구 30분 봇(믹스), its own state and log): every card says its bot; 꺼짐 / 기록 멈춤 / 불러오지 못함,
-    never a zero; nothing there says 주문 (view only)."""
+    """한눈에 (screens/livebots-hq.js; owners 10-25 night): 바이비트 · WOO X Pro (추세판단 봇) · WOO X Pro 2 (친구 30분 봇(믹스),
+    its own state and log; owners 10-31: no 딥코인 설치 전 card any more): every card says its bot; 꺼짐 / 기록 멈춤 /
+    불러오지 못함, never a zero; nothing there says 주문 (view only)."""
     f = tmp_path / "fees"
     f.mkdir()
     world = FW.build_world(f)
@@ -512,10 +512,9 @@ def test_the_four_live_accounts_on_hq(w, tmp_path):
     out = _node(tmp_path, HQ_JS.replace("SCREENS", SCREENS), s=summ, m=mix, o=off, l=late, **extra)
     on = out["on"]
     t = on["text"]
-    assert on["reactors"] == 4 and {"three", "four"} <= set(on["deck"].split()) and "five" not in on["deck"].split() and len(on["mix"]) == 1
+    assert on["reactors"] == 3 and "three" in on["deck"].split() and "four" not in on["deck"].split() and len(on["mix"]) == 1
+    assert "설치 전" not in on["text"] and "paperbot-executor-deepcoin" not in on["text"]
     for word in ("바이비트 진짜 돈 봇", "WOO X Pro 진짜 돈 봇", "따라감 · 그 봇의 페이퍼 진입을 실거래로 따라 들어가요",
-                 "딥코인 진짜 돈 봇 VWAP 개선판 따라갈 실행기 (paperbot-executor-deepcoin) 설치 전 이 서버에 딥코인 실행기가 아직 없어요",
-                 "설치하고 켜면 잔고 · 신호등 · 포지션이 여기 보여요",
                  "WOO X Pro 2 진짜 돈 봇 친구 30분 봇 스스로 매매 · 페이퍼를 따라가지 않음 돌아가는 중", "DAY 04", "49.95", "×1.00",
                  "시작 대비 −$0.05 · 진입 때 읽은 잔고 10/27 09:00", "최근 거래 · 1승 1패", "신호등 없음 · 30분봉 신호마다 바로 들어가요",
                  "오늘 실현 닫힌 거래 없음", "포지션 BCH 롱 40배 · 계단 1단계", "새 진입 보유 중 (한 번에 1개)",
@@ -523,7 +522,7 @@ def test_the_four_live_accounts_on_hq(w, tmp_path):
                  "마지막 시작 때 설정 실패: ZECUSDT: 레버리지를 못 맞춤 (leverage 20 not allowed)", "믹스 관제 · 성적 →"):
         assert word in t, word
     bots = re.findall(r"진짜 돈 봇 (.+?) (따라감|따라갈|스스로) ", t)
-    assert ("친구 30분 봇", "스스로") in bots and ("VWAP 개선판", "따라갈") in bots and len(bots) == 4      # every card says its bot
+    assert ("친구 30분 봇", "스스로") in bots and ("VWAP 개선판", "따라갈") not in bots and len(bots) == 3   # every card says its bot
     assert "딥코인 $" not in t and not BAD.search(t)
     assert "주문" not in t.replace("주문 버튼 없음", "").replace("주문 없음", "")                    # view only
     o = out["off"]["text"]
@@ -564,7 +563,7 @@ def test_the_menu_group_and_the_tabs():
     assert d["groups"][-2] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-2] == "믹스 봇" and len(d["groups"]) == 8
     assert d["groups"][-3][0] == "vwap" and d["groups"][-1][0] == "bybit"            # VWAP 봇 stays where it was
     # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its five screens take the first number keys (레인지 봇 second)
-    assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend", "tchart", "hq"]
+    assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend", "tchart", "hq", "pos"]
     assert d["screens"] == [["믹스 관제", "mix", "livebots"], ["믹스 성적", "mix", "livebots"]]
     assert d["parse"]["name"] == "mixperf" and d["href"] == "#/mix" and d["icons"][0] > 5
     lb = FW._read(SCREENS, "livebots.js")

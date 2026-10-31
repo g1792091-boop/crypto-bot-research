@@ -190,7 +190,6 @@ const SICON = {
     R(9, 9, 2, 2)],
   vwapbot: ICON.vwap,
   mixbot: ICON.mix,
-  v39: ICON.trade,
   trend: () => SICON.livebots(),
   // 추세 차트: two rows of judgment cells (the heatmap) over three candles
   tchart: () => [R(1, 1, 4, 3), R(6, 1, 3, 3), R(10, 1, 5, 3), R(1, 5, 6, 3), R(8, 5, 7, 3), R(3, 9, 1, 6), R(2, 10, 3, 3),
@@ -293,7 +292,8 @@ const LIVE_GROUPS = [
   // 따로, v3.9 화면 따로"): one screen per bot, first in the menu, each with only the executors that follow it
   // (screens/livebots.js BOT_TABS); the screens of the groups below stay as they were
   // owners 10-29: the 바이비트 봇 first, the 추세판단 봇 (switched off, its record kept) last
-  {id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]},
+  // owners 10-31: V3.9 투비트 left the menu (the 투비트 and 딥코인 bots do not run any more)
+  {id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]},
   {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
@@ -309,12 +309,11 @@ const LIVE_GROUPS = [
   {id: "bybit", ko: "바이비트 봇", screens: ["bybit", "bybitperf", "ftrend"]},
 ];
 const LIVE_SCREENS = {
-  bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (친구 추세 + OBV · 스톡RSI · 바이비트 실거래와 모의)"},
+  bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (친구 추세 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
   trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)"},
   rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (페이퍼와 그 봇을 따라가는 WOO X Pro)"},
-  vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼와 그 봇을 따라가는 딥코인)"},
+  vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)"},
   mixbot: {ko: "친구 30분 봇", group: "bots", title: "친구 30분 봇 (OBV 진한색 + AC · 추세 3개 일치 · WOO X Pro 2 실거래와 모의)"},
-  v39: {ko: "V3.9 투비트", group: "bots", title: "V3.9 투비트 (규칙봇 V3.9 1시간 페이퍼와 투비트 실행기)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)"},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)"},

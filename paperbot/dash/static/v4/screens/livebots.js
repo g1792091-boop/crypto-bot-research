@@ -8,9 +8,8 @@
 //   봇별   one screen per bot (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로,
 //          친구 30분 봇 화면 따로, v3.9 화면 따로"; BOT_TAB), each with only the executors that follow it, in its head and in
 //          the real-money strip: 추세판단 봇 (the 관제 screen with 바이비트 · WOO X Pro only), VWAP 개선판 (VWAP 관제: its paper
-//          bot and 딥코인), 친구 30분 봇 (믹스 관제: the 믹스 30분 봇 on the second WOO X Pro account and its paper twin), V3.9
-//          투비트 (screens/livebots-v39.js, /api/v4/livebots/v39: the rule bot's V3.9 1-hour paper account and the 투비트
-//          executor; 아직 꺼져 있어요 until its database is there), and since 10/26 레인지 봇 (screens/livebots-range.js,
+//          bot; owners 10-31: no 딥코인 any more), 친구 30분 봇 (믹스 관제: the 믹스 30분 봇 on the second WOO X Pro account and
+//          its paper twin; V3.9 투비트 left the menu on 10-31: the 투비트 bot does not run), and since 10/26 레인지 봇 (screens/livebots-range.js,
 //          /api/v4/livebots/range: the 레인지 봇 paper bot and the executors that follow it, now WOO X Pro). Each leaves an empty <section class="lb-goalres"> at its foot
 //          for the 목표 연구 part (screens/livebots-goalres.js goalResSection: the bot's goal arithmetic and research)
 //   관제   추세판단 봇's control room (screens/livebots-trend.js, /api/v4/livebots/trend; owners 10/21 "대시보드 다시
@@ -90,8 +89,6 @@ import {mixView, mixperfView, BYBIT_UI} from "./livebots-mix.js";
 // 바이비트 봇 (owners 10-29: the friend's trend + OBV / Stoch RSI entries on the Bybit account; menu group "bybit"): 관제 ·
 // 성적 (the mix screens on its own answers) · 친구 추세판
 import {ftrendView} from "./livebots-ftrend.js";
-// 봇별 › V3.9 투비트 (owners 10/26: the rule bot's V3.9 1-hour paper account and the 투비트 executor that follows it)
-import {v39View} from "./livebots-v39.js";
 // 봇별 › 레인지 봇 (owners 10/26: the 레인지 봇 paper bot and the executors that follow it; docs/range-bot-ko.md)
 import {rangeView} from "./livebots-range.js";
 // 봇별 화면마다 맨 아래 목표 연구 (owners 10/26 "필요한 연구 부분들 각 봇마다 … 대시보드 화면에 추가해줘"; dash/more/livegoalres.py)
@@ -106,7 +103,6 @@ export const TABS = [
   {id: "rangebot", label: "레인지 봇", make: (ctx) => rangeView(ctx), own: true},
   {id: "vwapbot", label: "VWAP 개선판", make: (ctx, hub) => vwapView(ctx, hub), own: true},
   {id: "mixbot", label: "친구 30분 봇", make: (ctx) => mixView(ctx), own: true},
-  {id: "v39", label: "V3.9 투비트", make: (ctx) => v39View(ctx), own: true},
   // owners 10-29: the 추세판단 봇 switched off, its record kept (last of 봇별)
   {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
   {id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true},
@@ -147,7 +143,6 @@ export const TABS = [
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
 const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (친구 추세 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요"};
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
-const hasExec = (d, id) => !!(d && Array.isArray(d.execs) && d.execs.some((x) => x && x.id === id));
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 봇별 screens (owners 10/26): bot (the 목표 연구 part's id), the head's line, the strip's executors (that bot's only;
  *  none: what its real money is instead). */
@@ -159,14 +154,12 @@ export const BOT_TAB = {
   rangebot: {bot: "range", sub: "레인지 봇 페이퍼(연습)와 그 봇을 따라가는 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
     head: (d) => botHead("레인지 봇", followersOf(d, "range")), only: (d) => followersOf(d, "range"),
     none: "레인지 봇을 따라가는 실행기가 아직 없어요 (페이퍼만)"},
-  vwapbot: {bot: "vwap", sub: "VWAP 개선판 페이퍼(연습)와 그 봇을 따라가는 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
+  vwapbot: {bot: "vwap", sub: "VWAP 개선판 페이퍼(연습) · 따라가는 실거래 없음 (딥코인은 10/31부터 안 돌림) · 다른 봇은 이 화면에 없어요",
     head: (d) => botHead("VWAP 개선판", followersOf(d, "paper2")), only: (d) => followersOf(d, "paper2"),
-    none: "VWAP 개선판을 따라가는 실행기가 아직 없어요 (페이퍼만)"},
+    none: "VWAP 개선판을 따라가는 실거래가 없어요 (페이퍼만)"},
   // owners 10-30: the friend bot runs ROC / OBV 50 on 15m bars (paperbot/mixchop.py, deploy/mixchop.live.json)
   mixbot: {bot: "mix", sub: "친구 30분 봇(OBV 진한색 + AC · 추세 3개 일치) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "친구 30분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
-  v39: {bot: "v39", sub: "규칙봇 V3.9 1시간 페이퍼(연습) V39_ALL@1h와 그 계좌를 따라가는 투비트 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요",
-    head: null, only: (d) => (hasExec(d, "toobit") ? ["toobit"] : []), none: "투비트 실행기는 아직 꺼져 있어요"},
 };
 /** The foot of a 봇별 screen: the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한 분석·연구
  *  부분들"; screens/livebots-goalres.js, its own answer /api/v4/livebots/goalres?bot=). */

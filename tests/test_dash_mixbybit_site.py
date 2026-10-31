@@ -206,9 +206,9 @@ def test_the_pages(tmp_path):
         F.stochCell({{k: 62.0, d: 58.0, xs: -1, cross: 'dead', cross_ko: '데드 ●', side50_ko: '50선 위'}}),
         F.ruleLines({{rules: {{obv: {{ko: 'OBV 진한색', side: 0, why: '친구 추세 진입 금지'}}, srsi: {{ko: '스톡RSI 50선', side: -1, why: ''}}}}}}),
         F.agoKo(65 * 60000)]}}));""")
-    assert out["start"] == "hq" and out["bots"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot"]
+    assert out["start"] == "hq" and out["bots"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]
     assert out["groups"][-1] == "bybit" and out["by"] == ["bybit", "bybitperf", "ftrend"]
-    assert out["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "v39", "trendbot", "trend", "tchart", "hq"]
+    assert out["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend", "tchart", "hq", "pos"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]
     assert out["mixes"] == [["wooxpro2", "친구 30분 봇", "/api/v4/livebots/mix", None],
