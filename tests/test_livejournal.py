@@ -518,8 +518,9 @@ def test_the_wiring():
     assert js.index('{id: "missed"') > js.index('{id: "journal", label: "일지"') > js.index('{id: "chart"')
     assert js.index('{id: "journal"') < js.index('{id: "trades", label: "거래"')
     routes = _read(V4, "core", "routes.js")
-    assert '{id: "rec", ko: "기록", screens: ["journal", "trades", ' in routes
-    assert 'journal: {ko: "일지", group: "rec", title: "일지 (자리 비운 동안 있었던 일)"},' in routes and "journal: () => [" in routes
+    # (owners 11-01: off the menu, hidden: it reads the retired paper-bot / executor records; an old link still opens it)
+    assert '"journal"' not in routes.split("const LIVE_GROUPS = [")[1].split("];")[0]
+    assert 'journal: {ko: "일지", group: "now", title: "일지 (자리 비운 동안 있었던 일)", hidden: true},' in routes and "journal: () => [" in routes
     assert "journal:" in _read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert '@import url("livebots-journal.css");' in _read(SCREENS, "livebots.css")
     inv = _read(V4, "INVENTORY.md")

@@ -724,8 +724,8 @@ def test_wiring_route_menu_find_inventory_and_module():
                    # 레인지 봇 (owners 10-31 night, the same screens on its own answers; tests/test_dash_mixrange_site.py)
                    ("mixrange", "레인지 관제"), ("mixrangeperf", "레인지 성적")]
     # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에;
-    # 10-29 (the 추세판단 봇 switched off): 한눈에 first
-    assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq")' in _read(SCREENS, "livebots.js")
+    # 10-29 (the 추세판단 봇 switched off): 한눈에 first; 11-01: 관제실 (한눈에 is off the menu)
+    assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "deck")' in _read(SCREENS, "livebots.js")
     inv = _read(V4, "INVENTORY.md")
     for word in ("#/livebots", "/api/v4/livebots", "PAPERBOT_LIVE_PAPER_DB", "PAPERBOT_LIVE_BYBIT_DB", "PAPERBOT_LIVE_MEXC_DB",
                  "PAPERBOT_LIVE_BYBIT_CONFIG", "PAPERBOT_LIVE_MEXC_CONFIG", "실거래 터미널"):

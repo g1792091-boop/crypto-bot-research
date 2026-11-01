@@ -411,7 +411,7 @@ def test_the_live_site_takes_the_palette_of_the_owners_pictures():
 
 def test_the_tab_and_the_menu():
     routes, lb = _read(os.path.join(V4, "core", "routes.js")), _read(os.path.join(SCREENS, "livebots.js"))
-    assert '"now", ko: "지금", screens: ["deck", "trend", "tchart", "hq", "pos", "room",' in routes
+    assert '{id: "now", ko: "지금", screens: ["deck", "room"]}' in routes                  # (owners 11-01: 지금 is 관제실 and 회의실)
     assert re.search(r'room: \{ko: "회의실", group: "now"', routes) and "  room: () => [" in routes
     assert 'import {roomView} from "./livebots-room.js";' in lb
     assert '{id: "room", label: "회의실", make: (ctx) => roomView(ctx), own: true, bare: true}' in lb

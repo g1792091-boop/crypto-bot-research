@@ -56,13 +56,16 @@
 .dk-pt::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--dk-cyan);
   box-shadow: 0 0 6px var(--dk-cyan-glow); vertical-align: middle; }
 .dk-ph .dk-ps { color: var(--dk-muted); letter-spacing: .04em; }
+/* the picture's order (owners 11-01 "사진같이 더 유사하게"): wallet · spot · feed / the grid · lifecycle / status · card · goal /
+   the core / the tape · forward test / the histogram · the cascade */
 .dk-a-wal { grid-column: span 3; }
-.dk-a-cht { grid-column: span 5; }
-.dk-a-bot { grid-column: span 4; }
+.dk-a-cht { grid-column: span 4; }
+.dk-a-fee { grid-column: span 5; }
 .dk-a-grd { grid-column: span 7; }
-.dk-a-crd { grid-column: span 5; }
-.dk-a-gol { grid-column: span 6; }
-.dk-a-lif { grid-column: span 6; }
+.dk-a-lif { grid-column: span 5; }
+.dk-a-bot { grid-column: span 3; }
+.dk-a-crd { grid-column: span 4; }
+.dk-a-gol { grid-column: span 5; }
 .dk-a-cor { grid-column: span 12; }
 .dk-a-tap { grid-column: span 7; }
 .dk-a-fwd { grid-column: span 5; border-color: var(--dk-red-tile); box-shadow: inset 0 0 40px var(--dk-red-soft); }
@@ -199,12 +202,12 @@
 
 /* 추세 그리드: filled tiles (the pictures' resolution grid) */
 .dk-grid { display: grid; gap: 4px; min-width: 0; }
-.dk-gh, .dk-gr { display: grid; grid-template-columns: 52px repeat(3, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.dk-gh, .dk-gr { display: grid; grid-template-columns: 112px repeat(6, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
 .dk-gh small { text-align: center; }
-.dk-gcoin { align-self: center; font-size: var(--t-sm); color: var(--dk-ink); letter-spacing: .06em; }
-.dk-cell { display: grid; gap: 0; align-content: center; justify-items: start; min-height: 58px; padding: 4px 8px; min-width: 0;
+.dk-gbot { display: flex; align-items: center; gap: 6px; align-self: center; font-size: var(--t-2xs); color: var(--dk-ink); letter-spacing: .04em; }
+.dk-cell { display: grid; gap: 0; align-content: center; justify-items: start; min-height: 64px; padding: 4px 6px; min-width: 0;
   border: 1px solid var(--dk-line-2); border-radius: 2px; background: var(--dk-panel-2); color: var(--dk-ink-2); }
-.dk-cell b { font-size: var(--t-lg); color: var(--dk-ink); }
+.dk-cell b { font-size: var(--t-md); color: var(--dk-ink); }
 .dk-cell small { font-size: var(--t-2xs); overflow-wrap: anywhere; }
 .dk-cell.up { border-color: var(--dk-green); background: var(--dk-green-tile); color: var(--dk-ink); }
 .dk-cell.down { border-color: var(--dk-red); background: var(--dk-red-tile); color: var(--dk-ink); }
@@ -314,7 +317,7 @@
 /* a tablet: six columns; a phone: one (the core's sides above and under it) */
 @media (max-width: 1100px) {
   .dk-a-wal, .dk-a-cht { grid-column: span 6; }
-  .dk-a-bot, .dk-a-grd, .dk-a-crd, .dk-a-gol, .dk-a-lif, .dk-a-tap, .dk-a-fwd, .dk-a-his, .dk-a-flo { grid-column: span 12; }
+  .dk-a-fee, .dk-a-bot, .dk-a-grd, .dk-a-crd, .dk-a-gol, .dk-a-lif, .dk-a-tap, .dk-a-fwd, .dk-a-his, .dk-a-flo { grid-column: span 12; }
 }
 @media (max-width: 760px) {
   .dk { padding: 4px; }
@@ -323,6 +326,8 @@
   .dk-pr { min-width: 0; flex: 1 1 30%; }
   .dk-clock { justify-items: start; }
   .dk-a-wal, .dk-a-cht { grid-column: span 12; }
+  .dk-grid { overflow-x: auto; }                      /* six coins across: the grid scrolls inside its panel on a phone */
+  .dk-gh, .dk-gr { min-width: 560px; grid-template-columns: 96px repeat(6, minmax(0, 1fr)); }
   .dk-corewrap { grid-template-columns: minmax(0, 1fr); }
   .dk-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dk-corebox { min-height: 420px; order: -1; }
@@ -336,3 +341,104 @@
 @media (prefers-reduced-motion: reduce) {
   .dk-tickin { animation: none; }
 }
+
+/* 지갑's stats as tiles, as in the picture */
+.dk-wst { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+.dk-wt { display: grid; gap: 1px; padding: 4px 6px; border: 1px solid var(--dk-line); border-radius: 2px; background: var(--dk-panel-2); min-width: 0; }
+.dk-wt b { font-size: var(--t-sm); color: var(--dk-ink); overflow-wrap: anywhere; }
+.dk-wt b.up { color: var(--dk-green); }
+.dk-wt b.down { color: var(--dk-red); }
+.dk-wt b.warn { color: var(--dk-amber); }
+
+/* each coin's own colour (dk-k0 … dk-k5: the feed's lines and tags, the core's inputs; never up / down's green and red) */
+.dk .dk-k0 { --cid: var(--dk-core-cyan); }
+.dk .dk-k1 { --cid: var(--dk-amber); }
+.dk .dk-k2 { --cid: var(--dk-spark); }
+.dk .dk-k3 { --cid: var(--dk-core-violet); }
+.dk .dk-k4 { --cid: var(--dk-core-pink); }
+.dk .dk-k5 { --cid: var(--dk-core-blue); }
+.dk-spark.dk-cid .dk-spark-l { stroke: var(--cid); }
+.dk-spark.dk-cid .dk-spark-a { fill: var(--cid); fill-opacity: .16; }
+.dk-in .dk-mono.dk-cid { color: var(--cid); }
+
+/* 코인 흐름 · FEED: the lines, the wire (the bots' records as they are written), the stats column */
+.dk-feedwrap { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 8px; min-width: 0; }
+.dk-feedmain { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.dk-feedbox { min-width: 0; overflow-x: auto; }
+.dk-feed { display: block; max-width: none; }
+.dk-feedl { fill: none; stroke: var(--cid); stroke-width: 1.4; }
+.dk-feedt { fill: var(--cid); font-family: var(--f-term); font-size: var(--t-2xs); }
+.dk-wire { display: grid; gap: 1px; min-width: 0; max-height: 132px; overflow: hidden; padding: 4px 6px; border: 1px solid var(--dk-line);
+  border-radius: 2px; background: var(--dk-bg); font-family: var(--f-term); font-size: var(--t-2xs); }
+.dk-wl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--dk-ink-2); }
+.dk-wl .dk-wtm { color: var(--dk-muted); }
+.dk-wl.entry .dk-wj, .dk-wl.adopted .dk-wj { color: var(--dk-cyan); }
+.dk-wl.exit .dk-wj { color: var(--dk-amber); }
+.dk-wl.signal .dk-wj { color: var(--dk-gold); }
+.dk-fstats { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.dk-fs { display: grid; gap: 1px; padding: 4px 6px; border-left: 2px solid var(--dk-cyan); background: var(--dk-panel-2); min-width: 0; }
+.dk-fs b { font-size: var(--t-sm); color: var(--dk-ink); }
+.dk-fs b.up { color: var(--dk-green); }
+.dk-fs b.warn { color: var(--dk-amber); }
+
+/* 신호 흐름 as the picture's cascade: the 2-hour sum a gold area, the 15m impulses under it, the entries on the line */
+.dk-farea { fill: var(--dk-amber); fill-opacity: .16; stroke: none; }
+.dk-fline { fill: none; stroke: var(--dk-amber); stroke-width: 1.5; }
+.dk-fbar { fill: var(--dk-steel); opacity: .9; }
+
+/* 목표별 하루 필요 (owners 11-01: the goals they named, what each needs a day; arithmetic, never a forecast) */
+.dk-gladder { display: grid; gap: 4px; min-width: 0; }
+.dk-glrow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.dk-gl { display: grid; gap: 0; padding: 4px 6px; border: 1px solid var(--dk-line); border-radius: 2px; background: var(--dk-panel-2); min-width: 0; }
+.dk-gl b { font-size: var(--t-sm); color: var(--dk-ink); }
+.dk-gl small { font-size: var(--t-2xs); color: var(--dk-ink-2); }
+.dk-gl.on { border-color: var(--dk-amber); box-shadow: inset 0 2px 0 var(--dk-amber); }
+.dk-gl.on b { color: var(--dk-amber); }
+
+/* the chart's last close: a dot and its ring */
+.dk-nowd { fill: var(--dk-amber); }
+.dk-nowr { fill: none; stroke: var(--dk-amber); stroke-width: 1.5; opacity: 0; }
+
+/* a phone: the feed's stats under its lines, two a row (after the rules above, so it wins) */
+@media (max-width: 760px) {
+  .dk-feedwrap { grid-template-columns: minmax(0, 1fr); }
+  .dk-fstats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dk-glrow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* motion (owners 11-01: "이 화면도 동영상처럼 움직이는 기능 있지? 멋있게"). On opening: the head, the running line and the
+   panels come up one after another, a light line runs down each panel once and the charts draw in from the left (a coin
+   picked draws its charts in again). After that only what is true moves: a price that changed since the last read flashes
+   its way, a record not seen before slides into the tape, the wallet and the goal numbers count to a new value; the LIVE
+   tag, a running bot's light, a cell whose last close gave a signal, an open position's card and the last price's dot
+   breathe. Nothing invents activity, and all of it stops under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .dk.boot > .dk-top, .dk.boot > .dk-tick, .dk.boot .dk-g > .dk-p { animation: dk-in .6s cubic-bezier(.2, .7, .2, 1) both;
+    animation-delay: calc(var(--i, 0) * 70ms); }
+  .dk.boot .dk-g > .dk-p::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--dk-cyan);
+    box-shadow: 0 0 14px var(--dk-cyan-glow); pointer-events: none; opacity: 0; animation: dk-scan 1.1s ease-out both;
+    animation-delay: calc(var(--i, 0) * 70ms + 220ms); }
+  .dk.boot .dk-chart, .dk.boot .dk-hist, .dk.boot .dk-flow, .dk.boot .dk-fwd, .dk.boot .dk-feed, .dk.boot .dk-gsvg, .dk-chart.dk-wipe1,
+  .dk-hist.dk-wipe1 { animation: dk-wipe 1.2s cubic-bezier(.3, .6, .2, 1) both; animation-delay: .35s; }
+  .dk-chart.dk-wipe1, .dk-hist.dk-wipe1 { animation-delay: 0s; }
+  .dk-live { animation: dk-blink 2s ease-in-out infinite; }
+  .dk-ledd.running { animation: dk-pulse 2.4s ease-in-out infinite; }
+  .dk-cell.sig { animation: dk-sig 2.4s ease-in-out infinite; }
+  .dk-card.live .dk-side.up { --side-gl: var(--dk-green-glow); animation: dk-breathe 3s ease-in-out infinite; }
+  .dk-card.live .dk-side.down { --side-gl: var(--dk-red-glow); animation: dk-breathe 3s ease-in-out infinite; }
+  .dk-nowr { transform-box: fill-box; transform-origin: center; animation: dk-ring 1.8s ease-out infinite; }
+  .dk-pr.fl-up { animation: dk-flu 1.6s ease-out; }
+  .dk-pr.fl-down { animation: dk-fld 1.6s ease-out; }
+  .dk-ttab tr.new td { animation: dk-new 1.8s ease-out; }
+}
+@keyframes dk-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes dk-scan { 0% { opacity: 0; top: 0; } 12% { opacity: 1; } 100% { opacity: 0; top: 100%; } }
+@keyframes dk-wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes dk-blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes dk-pulse { 0%, 100% { box-shadow: 0 0 3px var(--dk-green-glow); } 50% { box-shadow: 0 0 14px var(--dk-green-glow), 0 0 0 2px var(--dk-green-soft); } }
+@keyframes dk-sig { 0%, 100% { box-shadow: 0 0 0 2px var(--dk-cyan), 0 0 8px var(--dk-cyan-glow); } 50% { box-shadow: 0 0 0 2px var(--dk-cyan), 0 0 26px var(--dk-cyan-glow); } }
+@keyframes dk-breathe { 0%, 100% { box-shadow: 0 0 14px var(--side-gl), inset 0 0 14px var(--side-gl); } 50% { box-shadow: 0 0 34px var(--side-gl), inset 0 0 26px var(--side-gl); } }
+@keyframes dk-ring { from { transform: scale(1); opacity: .9; } to { transform: scale(3.4); opacity: 0; } }
+@keyframes dk-flu { from { background: var(--dk-green-tile); box-shadow: inset 0 -2px 0 var(--dk-green); } }
+@keyframes dk-fld { from { background: var(--dk-red-tile); box-shadow: inset 0 -2px 0 var(--dk-red); } }
+@keyframes dk-new { from { background: var(--dk-cyan-soft); color: var(--dk-ink); } }

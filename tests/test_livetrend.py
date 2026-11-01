@@ -170,8 +170,10 @@ def test_the_route_is_in_the_live_site():
     assert js.index('{id: "trend", label: "관제"') < js.index('{id: "hq", label: "한눈에"') < js.index('{id: "pos"')
     routes = _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js"))
     # (owners 10-29: the 추세판단 봇 switched off, the site opened on 한눈에; 11-01: on 관제실, tests/test_dash_livedeck.py)
-    assert 'export const LIVE_START = "deck";' in routes and '"now", ko: "지금", screens: ["deck", "trend", "tchart", "hq", "pos"' in routes
-    assert 'trend: {ko: "관제", group: "now"' in routes and 'hq: {ko: "한눈에", group: "now"' in routes
+    # (11-01: the menu is 지금 · one group per live bot; the 추세판단 봇's 관제 and 한눈에 hidden, an old link still opens them)
+    assert 'export const LIVE_START = "deck";' in routes and '{id: "now", ko: "지금", screens: ["deck", "room"]}' in routes
+    assert 'trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)", hidden: true}' in routes
+    assert 'hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)", hidden: true}' in routes
     assert '@import url("livebots-trend.css");' in _read(os.path.join(SCREENS, "livebots.css"))
 
 

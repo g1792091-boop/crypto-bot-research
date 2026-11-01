@@ -33,8 +33,31 @@ const TONE = {1: "up", "-1": "down", 0: "flat"};
 export const toneOf = (t) => (ok(t) ? TONE[Number(t)] || "flat" : "na");
 const TREND_KO = {up: "상승", down: "하락", flat: "진입 금지", na: "—"};
 const BOT_TAB = {bybit: "bybitbot", mix: "mixbot", range: "rangebot"};   // each bot's 봇별 screen (its 목표 연구 at the foot)
+/** Each coin's own colour (dk-k0 … dk-k5, in the server's fixed coin order; never a colour that means up or down). */
+const CID = (k) => `dk-k${k % 6}`;
+/** The goals the owners named (11-01: "100달러로 한달만에 700달러, 800달러 … 5000달러 그이상"), ×6 the one they keep. */
+export const GOAL_LADDER = [6, 7, 10, 20, 50];
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_dash_livedeck.py)
+/** 목표별 하루 필요: for each multiple over n days from `start` dollars, the end in dollars and the daily rate compounding
+ *  needs (x^(1/n) − 1). Arithmetic only, never a forecast. */
+export function ladderOf(xs = GOAL_LADDER, n = 30, start = 100) {
+  return (xs || []).filter((x) => ok(x) && Number(x) > 0)
+    .map((x) => ({x: Number(x), usd: start * Number(x), daily: Math.pow(Number(x), 1 / Math.max(1, Number(n) || 30)) - 1}));
+}
+/** 코인 흐름: each coin's last 96 15m closes as a ratio to the first one, in the coins' order (k = its colour). */
+export function feedLines(coins) {
+  return (coins || []).map((c, k) => {
+    const v = (c && c.state === "ok" ? c.spark || [] : []).filter(ok).map(Number);
+    if (v.length < 2 || !(v[0] > 0)) return null;
+    return {k, coin: c.coin, pts: v.map((x, i) => [i, x / v[0] - 1]), last: v[v.length - 1] / v[0] - 1};
+  }).filter(Boolean);
+}
+/** The wire (the pictures' raw message log): the newest bot records, each one line as the record has it. */
+export function wireOf(tape, n = 7) {
+  return (tape || []).slice(0, n).map((r) => ({t: ok(r.ts) ? fmt.hm(r.ts) : "--:--", kind: r.kind || "",
+    txt: JSON.stringify({bot: r.bot_ko, coin: r.coin || "—", kind: r.kind, side: r.side || 0, ...(ok(r.pnl) ? {pnl: Math.round(Number(r.pnl) * 100) / 100} : {}), text: r.text})}));
+}
 /** "+1.23%" / "−0.40%" of a ratio; "—" when unknown. */
 export const pctKo = (r, dec = 2) => (ok(r) ? `${Number(r) > 0 ? "+" : ""}${fmt.num(Number(r) * 100, dec)}%` : "—");
 /** A price with its own digits (6 significant, no trailing zeros). */
@@ -195,7 +218,8 @@ function chartSvg(c, holds, W = 600) {
   const lastC = bars[n - 1][4];                       // the last close: a dashed line and its tag (the pictures' price tag)
   kids.push(s("line", {class: "dk-last", x1: 0, x2: W, y1: y(lastC), y2: y(lastC)}),
     s("rect", {class: "dk-lastbox", x: W - 64, y: y(lastC) - 8, width: 64, height: 16, rx: 1}),
-    s("text", {class: "dk-lastt", x: W - 4, y: y(lastC) + 4, "text-anchor": "end"}, pxKo(lastC)));
+    s("text", {class: "dk-lastt", x: W - 4, y: y(lastC) + 4, "text-anchor": "end"}, pxKo(lastC)),
+    s("circle", {class: "dk-nowr", cx: (n - 1) * bw + bw / 2, cy: y(lastC), r: 4}), s("circle", {class: "dk-nowd", cx: (n - 1) * bw + bw / 2, cy: y(lastC), r: 2.6}));
   for (const p of holds) {
     for (const [v, cls, ko] of [[p.entry, "entry", `${p.bot} 진입`], [p.stop, "stop", "손절"]]) {
       if (!ok(v)) continue;
@@ -234,18 +258,48 @@ function histSvg(c, W = 600) {
 
 /** 신호 흐름: the last 48 hours by 15m: 0 crosses (bars) and entries (dots). */
 function flowSvg(flow, W = 600) {
-  const H = 120, base = 100;
+  const H = 140, base = 116, imp = 22;
   const f = flow || [];
   if (!f.length) return ui.empty("기록이 없어요");
   const m = Math.max(1, ...f.map((x) => x[1])), bw = W / f.length;
-  const kids = [s("line", {class: "dk-zero", x1: 0, x2: W, y1: base, y2: base})];
+  const sum = f.map((_x, i) => f.slice(Math.max(0, i - 7), i + 1).reduce((a, x) => a + (Number(x[1]) || 0), 0));   // 8 × 15m
+  const ms = Math.max(1, ...sum), ya = (v) => base - imp - 4 - (v / ms) * (base - imp - 14);
+  const line = sum.map((v, i) => `${i ? "L" : "M"}${(i * bw + bw / 2).toFixed(1)},${ya(v).toFixed(1)}`).join("");
+  const kids = [s("line", {class: "dk-zero", x1: 0, x2: W, y1: base, y2: base}),
+    s("path", {class: "dk-farea", d: `${line}L${(W - bw / 2).toFixed(1)},${base - imp - 4}L${(bw / 2).toFixed(1)},${base - imp - 4}Z`}),
+    s("path", {class: "dk-fline", d: line})];
   f.forEach((x, i) => {
-    const hh = (x[1] / m) * (base - 10);
-    if (x[1]) kids.push(s("rect", {class: "dk-fbar", x: i * bw, width: Math.max(1, bw * 0.8), y: base - hh, height: hh}));
-    if (x[2]) kids.push(s("circle", {class: "dk-fent", cx: i * bw + bw / 2, cy: base - hh - 6, r: 3}));
+    const hh = (x[1] / m) * imp;
+    if (x[1]) kids.push(s("rect", {class: "dk-fbar", x: i * bw, width: Math.max(1, bw * 0.7), y: base - hh, height: hh}));
+    if (x[2]) kids.push(s("circle", {class: "dk-fent", cx: i * bw + bw / 2, cy: ya(sum[i]), r: 3}));
   });
   kids.push(s("text", {class: "dk-axis", x: 2, y: H - 4}, `${fmt.kst(f[0][0])}`), s("text", {class: "dk-axis", x: W - 2, y: H - 4, "text-anchor": "end"}, "지금"));
   return s("svg", {class: "dk-flow", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "48시간 0선 돌파와 진입"}, kids);
+}
+
+/** 코인 흐름 · FEED (the pictures' feed chart): the six coins' last 24 hours as % from where each began, a colour a coin,
+ *  each line's last value tagged at its end (the tags nudged apart). */
+function feedSvg(coins, W = 600) {
+  const H = 176, top = 10, bot = 154, L = 44, Rm = 92;
+  const ls = feedLines(coins);
+  if (!ls.length) return ui.empty("봉이 없어요");
+  const vs = ls.flatMap((o) => o.pts.map((p) => p[1])), lo = Math.min(0, ...vs), hi = Math.max(0, ...vs), sp = hi - lo || 0.01;
+  const n = Math.max(1, ...ls.map((o) => o.pts.length - 1));
+  const x = (i) => L + (i / n) * (W - L - Rm), y = (v) => top + (1 - (v - lo) / sp) * (bot - top);
+  const kids = [];
+  for (let g = 0; g <= 3; g++) {
+    const v = lo + (sp * g) / 3;
+    kids.push(s("line", {class: "dk-gridl", x1: L, x2: W - Rm, y1: y(v), y2: y(v)}), s("text", {class: "dk-axis", x: 2, y: y(v) + 3}, pctKo(v, 1)));
+  }
+  kids.push(s("line", {class: "dk-zero", x1: L, x2: W - Rm, y1: y(0), y2: y(0)}));
+  for (const o of ls) kids.push(s("path", {class: ["dk-feedl", CID(o.k)], d: o.pts.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join("")}));
+  const tags = ls.map((o) => ({o, ty: y(o.last)})).sort((a, b) => a.ty - b.ty);
+  for (let i = 1; i < tags.length; i++) tags[i].ty = Math.max(tags[i].ty, tags[i - 1].ty + 12);
+  const over = tags.length ? tags[tags.length - 1].ty - (H - 14) : 0;
+  if (over > 0) for (const t of tags) t.ty = Math.max(8, t.ty - over);
+  for (const {o, ty} of tags) kids.push(s("text", {class: ["dk-feedt", CID(o.k)], x: W - Rm + 6, y: ty + 3}, `${o.coin} ${pctKo(o.last, 1)}`));
+  kids.push(s("text", {class: "dk-axis", x: L, y: H - 4}, "24시간 전"), s("text", {class: "dk-axis", x: W - Rm, y: H - 4, "text-anchor": "end"}, "지금"));
+  return s("svg", {class: "dk-feed", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "여섯 코인 24시간 흐름 (처음 대비 %)"}, kids);
 }
 
 /** 포워드 테스트: each bot's balance in % from its start, the line where the new rules began. */
@@ -524,8 +578,8 @@ function coreView(ctx) {
     if (t - o.last >= FRAME_MS) {
       const dt = o.last ? Math.min(120, t - o.last) : 0;
       o.last = t;
-      o.ang += dt * 0.00012;
-      step(2);
+      o.ang += dt * 0.00034;                           // (owners 11-01, their video: the core turns visibly)
+      step(3);
       drawShell(t);
       drawFlow(t, true);
     }
@@ -586,30 +640,39 @@ export function deckView(ctx) {
   const hist = h("div", {class: "dk-histbox"});
   const histSub = h("span");
   const flow = h("div", {class: "dk-flowbox"});
-  const el = h("div", {class: "dk"},
+  const feedBox = h("div", {class: "dk-feedbox"}), wire = h("div", {class: "dk-wire"}), feedStats = h("div", {class: "dk-fstats"});
+  // the numbers that count to a new value (core/motion.js countTo: only on a real change, the first paint at once)
+  const eqLed = h("div", {class: "dk-led num"}, "—"), gMult = h("b", {class: "num"}, "—"), gNeed = h("b", {class: "num"}, "—");
+  const grid = h("div", {class: "dk-g"},
+    panel("dk-a-wal", "지갑 · WALLET", "세 봇 합계 · 봇 기록 그대로", wallet),
+    panel("dk-a-cht", "코인 차트 · SPOT", chartSub, coinTabs, chart),
+    panel("dk-a-fee", "코인 흐름 · FEED", "여섯 코인 24시간 · 처음 대비 % · 아래는 봇 기록 원문",
+      h("div", {class: "dk-feedwrap"}, h("div", {class: "dk-feedmain"}, feedBox, h("small", {class: "dk-mono"}, "WIRE · 봇 기록 원문 (최근 7)"), wire), feedStats)),
+    panel("dk-a-grd", "추세 그리드 · TREND GRID", "봇 × 코인 · 마지막 마감에 본 추세 바 30분 종합과 신호", gridBox),
+    panel("dk-a-lif", "포지션 진행 · LIFECYCLE", "손절 → 진입 → 다음 계단 · 지금 가격", lifeBox),
+    panel("dk-a-bot", "봇 상태 · BOT STATUS", "실거래 · 모의 쌍둥이", botsBox),
+    panel("dk-a-crd", "진입 카드 · ENTRY CARD", cardSub, cardBox),
+    panel("dk-a-gol", "목표 ×6 · GOAL PACE", goalSub, goalBox),
+    panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 바 종합) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
+      h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
+    panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "세 봇의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
+    panel("dk-a-fwd", "포워드 테스트 · FORWARD TEST", "새 규칙 전과 후 · 시작 대비 잔고", fwd),
+    panel("dk-a-his", "히스토그램 · ALL + OBV6 MACD", histSub, hist),
+    panel("dk-a-flo", "신호 흐름 · SIGNAL CASCADE", "48시간 · 15분마다 0선 돌파(아래 막대) · 2시간 합(금색) · 진입(점)", flow));
+  // the opening (owners 11-01 "동영상처럼"): the head, the running line and the panels come up one after another (--i);
+  // the class goes once they are up, so the 15 s redraws never replay it
+  grid.childNodes.forEach((p, i) => { if (p.style && p.style.setProperty) p.style.setProperty("--i", String(i + 2)); });
+  const el = h("div", {class: ["dk", "boot"]},
     slot,
-    h("header", {class: "dk-top"},
+    h("header", {class: "dk-top", style: {"--i": 0}},
       h("div", {class: "dk-brand"}, h("span", {class: "dk-logo", "aria-hidden": "true"}, "PB"),
         h("div", null, h("small", {class: "dk-mono"}, "3 BOTS · 15M ENTRY · 30M TREND BAR · ONE POSITION EACH"),
           h("b", {class: "dk-name"}, "PAPERBOT ", h("em", null, "//"), " 관제실"),
           h("small", {class: "dk-mono"}, "바이비트 봇 · 친구 15분 봇 · 레인지 봇 — 보기만 하는 화면"))),
       prices,
       h("div", {class: "dk-clock"}, h("div", null, clockK, h("span", {class: "dk-live"}, "LIVE")), h("small", {class: "dk-mono"}, "KST · 한국 시간"), clockU)),
-    h("div", {class: "dk-tick", "aria-label": "봇 기록 흐름"}, tickIn),
-    h("div", {class: "dk-g"},
-      panel("dk-a-wal", "지갑 · WALLET", "세 봇 합계 · 봇 기록 그대로", wallet),
-      panel("dk-a-cht", "코인 차트 · SPOT", chartSub, coinTabs, chart),
-      panel("dk-a-bot", "봇 상태 · BOT STATUS", "실거래 · 모의 쌍둥이", botsBox),
-      panel("dk-a-grd", "추세 그리드 · TREND GRID", "코인 × 봇 · 마지막 마감에 본 추세 바 30분 종합과 신호", gridBox),
-      panel("dk-a-crd", "진입 카드 · ENTRY CARD", cardSub, cardBox),
-      panel("dk-a-gol", "목표 ×6 · GOAL PACE", goalSub, goalBox),
-      panel("dk-a-lif", "포지션 진행 · LIFECYCLE", "손절 → 진입 → 다음 계단 · 지금 가격", lifeBox),
-      panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 바 종합) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
-        h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
-      panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "세 봇의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
-      panel("dk-a-fwd", "포워드 테스트 · FORWARD TEST", "새 규칙 전과 후 · 시작 대비 잔고", fwd),
-      panel("dk-a-his", "히스토그램 · ALL + OBV6 MACD", histSub, hist),
-      panel("dk-a-flo", "신호 흐름 · SIGNAL FLOW", "48시간 · 15분마다 0선 돌파(막대)와 진입(점)", flow)),
+    h("div", {class: "dk-tick", "aria-label": "봇 기록 흐름", style: {"--i": 1}}, tickIn),
+    grid,
     h("div", {class: "dk-tick dk-foot", "aria-label": "요약 흐름"}, footIn),
     ui.note("보기만 하는 화면 · 15초마다 새로 읽어요 · 숫자는 모두 봇 기록과 바이낸스 봉이에요 (꾸민 숫자 없음)"));
 
@@ -619,7 +682,7 @@ export function deckView(ctx) {
     const two = (x) => String(x).padStart(2, "0");
     clockK.textContent = `${two(k.getUTCHours())}:${two(k.getUTCMinutes())}:${two(k.getUTCSeconds())}`;
     clockU.textContent = `${two(u.getUTCHours())}:${two(u.getUTCMinutes())} UTC · 다음 15분 마감 ${mmss(nextClose(now).left_ms)}`;
-    for (const x of lifeBox.querySelectorAll("[data-wait]")) x.textContent = mmss(nextClose(now).left_ms);
+    for (const box of [lifeBox, feedStats]) for (const x of box.querySelectorAll("[data-wait]")) x.textContent = mmss(nextClose(now).left_ms);
   }
   /** A panel's width in px (the charts are drawn 1:1 so their words keep their size on a phone). */
   const wOf = (box) => Math.max(260, Math.round((box.getBoundingClientRect ? box.getBoundingClientRect().width : 0) || 600));
@@ -628,8 +691,12 @@ export function deckView(ctx) {
     .map((b) => ({bot: b.name_ko, entry: b.position.entry, stop: b.position.stop}));
 
   function drawTop(d) {
-    put(prices, (d.coins || []).map((c) => h("button", {type: "button", class: ["dk-pr", st.sel === c.symbol ? "on" : ""], title: c.ko || "",
-      onclick: () => { st.sel = c.symbol; draw(); }},
+    const was = st.px || {};
+    st.px = {};
+    for (const c of d.coins || []) if (c.state === "ok" && ok(c.last)) st.px[c.symbol] = Number(c.last);
+    const fl = (c) => (ok(was[c.symbol]) && ok(st.px[c.symbol]) && was[c.symbol] !== st.px[c.symbol] ? (st.px[c.symbol] > was[c.symbol] ? "fl-up" : "fl-down") : "");
+    put(prices, (d.coins || []).map((c) => h("button", {type: "button", class: ["dk-pr", st.sel === c.symbol ? "on" : "", fl(c)], title: c.ko || "",
+      onclick: () => { st.sel = c.symbol; st.wipe = true; draw(); }},
       h("small", {class: "dk-mono"}, c.coin), h("b", {class: "num"}, c.state === "ok" ? pxKo(c.last) : "—"),
       h("small", {class: ["num", ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : ""]}, c.state === "ok" ? pctKo(c.chg24) : c.ko || "못 읽음"))));
     const tp = (d.tape || []).slice(0, 14);
@@ -644,21 +711,25 @@ export function deckView(ctx) {
     put(footIn, h("span", null, ftx), h("span", {"aria-hidden": "true"}, `   ·   ${ftx}`));
   }
 
+  const tile = (k, v, cls) => h("div", {class: "dk-wt"}, h("small", {class: "dk-mono"}, k), h("b", {class: ["num", cls || ""]}, v));
   function drawWallet(d) {
     const T = d.totals || {};
+    eqLed.className = ["dk-led", "num", ok(T.pnl) ? (T.pnl >= 0 ? "up" : "down") : ""].filter(Boolean).join(" ");
+    motion.countTo(eqLed, ok(T.equity) ? Number(T.equity) : null, {format: (v) => fmt.usd(v), flash: true});
     const bots = d.bots || [];
     const curve = bots.map((b) => pctCurve(b.curve)).filter((c) => c.length > 1).sort((a, b) => b.length - a.length)[0] || [];
     const run = bots.filter((b) => (b.status || {}).state === "running").length;
     put(wallet,
       h("small", {class: "dk-mono"}, "ALL BOTS · EQUITY"),
-      h("div", {class: ["dk-led", "num", ok(T.pnl) ? (T.pnl >= 0 ? "up" : "down") : ""]}, ok(T.equity) ? fmt.usd(T.equity) : "—"),
+      eqLed,
       h("p", {class: "dk-wsub"}, ok(T.equity) ? `실거래 봇 ${fmt.int(T.bots)}개 잔고 합 (마지막으로 읽은 값)` : "아직 실거래 잔고 기록이 없어요 · 봇이 켜질 때 처음 읽어요"),
-      h("dl", {class: "dk-kv"},
-        h("dt", null, "시작 대비"), h("dd", {class: ["num", ok(T.pnl) ? (T.pnl >= 0 ? "up" : "down") : ""]}, ok(T.pnl) ? `${T.pnl >= 0 ? "+" : ""}${fmt.usd(T.pnl)}` : "—"),
-        h("dt", null, "오늘 손익"), h("dd", {class: ["num", ok(T.today_pnl) ? (T.today_pnl >= 0 ? "up" : "down") : ""]}, ok(T.today_pnl) ? `${T.today_pnl >= 0 ? "+" : ""}${fmt.usd(T.today_pnl)}` : "—"),
-        h("dt", null, "닫힌 거래"), h("dd", {class: "num"}, `${fmt.int(T.n || 0)}번`),
-        h("dt", null, "승률"), h("dd", {class: "num"}, ok(T.win_rate) ? pctKo(T.win_rate, 1).replace("+", "") : "—"),
-        h("dt", null, "열린 포지션"), h("dd", {class: ["num", T.open ? "warn" : ""]}, `${fmt.int(T.open || 0)} / 3`)),
+      h("div", {class: "dk-wst"},
+        tile("시작 대비", ok(T.pnl) ? `${T.pnl >= 0 ? "+" : ""}${fmt.usd(T.pnl)}` : "—", ok(T.pnl) ? (T.pnl >= 0 ? "up" : "down") : ""),
+        tile("오늘 손익", ok(T.today_pnl) ? `${T.today_pnl >= 0 ? "+" : ""}${fmt.usd(T.today_pnl)}` : "—", ok(T.today_pnl) ? (T.today_pnl >= 0 ? "up" : "down") : ""),
+        tile("닫힌 거래", `${fmt.int(T.n || 0)}번`),
+        tile("승률", ok(T.win_rate) ? pctKo(T.win_rate, 1).replace("+", "") : "—"),
+        tile("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
+        tile("돌고 있음", `${run} / 3`, run ? "up" : "")),
       h("span", {class: "dk-chip"}, `실거래 봇 ${run}/3 돌고 있음`),
       h("div", {class: "dk-wcurve"}, h("small", {class: "dk-mono"}, "EQUITY · 시작 대비 %"),
         curve.length > 1 ? spark(curve.map((p) => p[1]), curve[curve.length - 1][1] >= 0 ? "up" : "down", 240, 48) : h("small", {class: "dk-ps"}, "거래가 쌓이면 선이 그려져요")));
@@ -668,7 +739,7 @@ export function deckView(ctx) {
     const sel = st.sel;
     put(coinTabs, (d.coins || []).map((c) => h("button", {type: "button", role: "tab", "aria-selected": c.symbol === sel ? "true" : "false",
       class: ["dk-ctab", c.symbol === sel ? "on" : "", toneOf(c.trend30 && c.trend30.length ? c.trend30[c.trend30.length - 1][1] : null)],
-      onclick: () => { st.sel = c.symbol; draw(); }}, c.coin)));
+      onclick: () => { st.sel = c.symbol; st.wipe = true; draw(); }}, c.coin)));
     const c = coinOf(sel);
     if (!c || c.state !== "ok") { put(chart, ui.empty(c ? `${c.coin}: ${c.ko || "못 읽음"}` : "코인 값을 읽는 중")); chartSub.textContent = ""; return; }
     const n = c.n30 || [];
@@ -694,10 +765,11 @@ export function deckView(ctx) {
   }
 
   function drawGrid(d) {
-    const bots = d.bots || [];
-    put(gridBox, h("div", {class: "dk-gh"}, h("span"), ...bots.map((b) => h("small", {class: "dk-mono"}, b.name_ko))),
-      ...(d.grid || []).map((row) => h("div", {class: "dk-gr"}, h("b", {class: "dk-gcoin"}, row.coin),
-        ...bots.map((b) => {
+    const bots = d.bots || [], rows = d.grid || [];
+    put(gridBox, h("div", {class: "dk-gh"}, h("span"), ...rows.map((row) => h("small", {class: "dk-mono"}, row.coin))),
+      ...bots.map((b) => h("div", {class: "dk-gr"},
+        h("b", {class: "dk-gbot"}, h("i", {class: ["dk-ledd", (b.status || {}).state || "off"], "aria-hidden": "true"}), b.name_ko),
+        ...rows.map((row) => {
           const c = (row.bots || {})[b.id], x = cellOf(c);
           return h("div", {class: ["dk-cell", x.tone, x.sig ? "sig" : ""], title: c ? `${b.name_ko} ${row.coin}: ${c.why || x.sub}` : `${b.name_ko}: 기록 없음`},
             h("b", {class: "num"}, x.big), h("small", null, x.sub),
@@ -765,11 +837,11 @@ export function deckView(ctx) {
         {k: "REGIME · 30M 추세 바", v: TREND_KO[rg], tone: rg, s: n30 ? `상승 ${n30[0]} · 하락 ${n30[1]} · 횡보 ${n30[2]}` : ""},
         {k: "NEXT CLOSE · 15M", v: mmss(nc.left_ms), s: `${fmt.hm(nc.at)} 마감 · 세 봇이 판단해요`}],
       late.map((t) => (t.win ? "up" : t.win === false ? "down" : "na")));
-    put(inputs, coins.map((c) => {
+    put(inputs, coins.map((c, k) => {
       const tone = c.state === "ok" && c.trend30 && c.trend30.length ? toneOf(c.trend30[c.trend30.length - 1][1]) : "na";
-      return h("div", {class: ["dk-in", tone]}, h("div", {class: "dk-inh"}, h("b", {class: "dk-mono"}, `${c.coin} · 15M`),
+      return h("div", {class: ["dk-in", tone]}, h("div", {class: "dk-inh"}, h("b", {class: ["dk-mono", "dk-cid", CID(k)]}, `${c.coin} · 15M`),
         h("small", {class: ["num", ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : ""]}, c.state === "ok" ? pctKo(c.chg24) : "—")),
-      c.state === "ok" ? spark(c.spark, tone, 160, 30) : h("small", {class: "dk-ps"}, c.ko || "못 읽음"));
+      c.state === "ok" ? spark(c.spark, `dk-cid ${CID(k)}`, 160, 30) : h("small", {class: "dk-ps"}, c.ko || "못 읽음"));
     }));
     put(fills, h("small", {class: "dk-mono"}, "LATE FILLS · 최근 청산"),
       late.length ? late.map((t) => h("div", {class: ["dk-fill", t.win ? "up" : t.win === false ? "down" : ""]},
@@ -778,11 +850,14 @@ export function deckView(ctx) {
         : h("small", {class: "dk-ps"}, "아직 청산한 거래가 없어요"));
   }
 
+  const keyOf = (r) => `${r.ts}|${r.bot_ko}|${r.kind}|${r.text}`;
   function drawTape(d) {
     const rows = (d.tape || []).slice(0, 18);
+    const seen = st.seen || null;                      // (the first read marks nothing new)
+    st.seen = new Set(rows.map(keyOf));
     put(tape, rows.length ? h("div", {class: "dk-tscroll"}, h("table", {class: "dk-ttab"},
       h("thead", null, h("tr", null, ...["시각", "봇", "코인", "종류", "내용", "손익"].map((x) => h("th", null, x)))),
-      h("tbody", null, rows.map((r) => h("tr", {class: [r.kind, r.side > 0 ? "long" : r.side < 0 ? "short" : ""]},
+      h("tbody", null, rows.map((r) => h("tr", {class: [r.kind, r.side > 0 ? "long" : r.side < 0 ? "short" : "", seen && !seen.has(keyOf(r)) ? "new" : ""]},
         h("td", {class: "num"}, fmt.kst(r.ts)), h("td", null, r.bot_ko), h("td", null, r.coin || "—"),
         h("td", null, h("span", {class: ["dk-kind", r.kind]}, r.kind_ko)), h("td", {class: "dk-ttext"}, r.text),
         h("td", {class: ["num", ok(r.pnl) ? (r.pnl >= 0 ? "up" : "down") : ""]}, ok(r.pnl) ? `${r.pnl >= 0 ? "+" : ""}${fmt.usd(r.pnl)}` : ""))))))
@@ -796,10 +871,10 @@ export function deckView(ctx) {
     goalSub.textContent = `${g.goal_ko} · ${fmt.kst(g.from_ms)}부터 · 기록으로 한 계산이지 예측이 아니에요`;
     const head = a ? h("div", {class: "dk-ghead"},
       h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "세 봇 합 · 이번 달"),
-        h("b", {class: ["num", a.vs_path >= 0 ? "up" : "down"]}, multKo(a.mult)),
+        gMult,
         h("small", null, `오늘 목표 경로 ${multKo(a.path_now)} · 경로보다 ${pctKo(a.vs_path, 1)}`)),
       h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "남은 날 하루에 필요"),
-        h("b", {class: "num"}, ok(a.need_daily) ? pctKo(a.need_daily, 1) : "—"),
+        gNeed,
         h("small", null, `${fmt.num(Math.max(0, n - a.days), 1)}일 남음 · ×${fmt.num(T, 0)}까지 매일`)))
       : h("p", {class: "dk-ps"}, "이번 달 닫힌 거래가 아직 없어 목표 경로와 견줄 숫자가 없어요 (첫 거래부터 계산해요)");
     const rows = (g.bots || []).map((x) => {
@@ -818,7 +893,16 @@ export function deckView(ctx) {
         h("small", {class: "dk-mono"}, facts.length ? facts.join(" · ") : "—"),
         x.verdict_ko ? h("small", {class: ["dk-gv", x.tone || ""]}, x.verdict_ko) : null, link);
     });
-    put(goalBox, head, goalSvg(g, d.bots, wOf(goalBox)), h("div", {class: "dk-grows"}, rows));
+    if (a) {
+      gMult.className = ["num", a.vs_path >= 0 ? "up" : "down"].join(" ");
+      motion.countTo(gMult, ok(a.mult) ? Number(a.mult) : null, {format: (v) => multKo(v)});
+      motion.countTo(gNeed, ok(a.need_daily) ? Number(a.need_daily) : null, {format: (v) => pctKo(v, 1)});
+    }
+    // the owners' goals side by side (11-01: "700달러, 800달러 … 5000달러 그이상"): what each needs a day, arithmetic only
+    const lad = h("div", {class: "dk-gladder"}, h("small", {class: "dk-mono"}, `목표별 하루 필요 · ${fmt.num(n, 0)}일 복리 · $100 시작 · 계산일 뿐 (예측 아님)`),
+      h("div", {class: "dk-glrow"}, ladderOf(GOAL_LADDER, n).map((r) => h("div", {class: ["dk-gl", r.x === T ? "on" : ""]},
+        h("b", {class: "num"}, `×${fmt.num(r.x, 0)}`), h("small", {class: "num"}, `$${fmt.int(r.usd)}`), h("small", {class: "num"}, `하루 ${pctKo(r.daily, 1)}`)))));
+    put(goalBox, head, lad, goalSvg(g, d.bots, wOf(goalBox)), h("div", {class: "dk-grows"}, rows));
   }
 
   function drawFwd(d) {
@@ -840,6 +924,20 @@ export function deckView(ctx) {
         h("div", {class: "dk-stat"}, h("b", {class: "num"}, pn ? `${fmt.int(ps)}/${fmt.int(pn)}` : "—"), h("small", {class: "dk-mono"}, "실거래 = 모의 진입"))));
   }
 
+  function drawFeed(d) {
+    put(feedBox, feedSvg(d.coins, wOf(feedBox)));
+    const w = wireOf(d.tape);
+    put(wire, w.length ? w.map((r) => h("div", {class: ["dk-wl", r.kind]}, h("span", {class: "dk-wtm num"}, r.t), " ", h("span", {class: "dk-wj"}, r.txt)))
+      : h("small", {class: "dk-ps"}, "아직 봇 기록이 없어요"));
+    const f = d.flow || [], sig = f.reduce((a, x) => a + (Number(x[1]) || 0), 0), ent = f.reduce((a, x) => a + (Number(x[2]) || 0), 0);
+    const tr = (d.coins || []).filter((c) => c.state === "ok" && c.trend30 && c.trend30.length).map((c) => toneOf(c.trend30[c.trend30.length - 1][1]));
+    const T = d.totals || {}, cnt = (t) => tr.filter((x) => x === t).length;
+    const stat = (k, v, cls) => h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, k), h("b", {class: ["num", cls || ""]}, v));
+    put(feedStats, stat("0선 돌파 · 48H", `${fmt.int(sig)}번`), stat("진입 · 48H", `${fmt.int(ent)}번`, ent ? "up" : ""),
+      stat("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
+      stat("30분 추세 바", `▲${cnt("up")} ▼${cnt("down")} ■${cnt("flat")}`),
+      h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, "다음 15분 마감"), h("b", {class: "num", "data-wait": "1"}, mmss(nextClose(serverNow()).left_ms))));
+  }
   function drawHist(d) {
     const c = coinOf(st.sel);
     if (!c || c.state !== "ok") { put(hist, ui.empty("코인 값을 읽는 중")); histSub.textContent = ""; return; }
@@ -856,8 +954,12 @@ export function deckView(ctx) {
       const held = (d.bots || []).find((b) => b.position && b.position.state === "ok");
       st.sel = held ? held.position.symbol : ((d.coins || [])[0] || {}).symbol || null;
     }
-    drawTop(d); drawWallet(d); drawChart(d); drawBots(d); drawGrid(d); drawCard(d); drawGoal(d); drawLife(d); drawCore(d); drawTape(d); drawFwd(d); drawHist(d);
+    drawTop(d); drawWallet(d); drawChart(d); drawFeed(d); drawBots(d); drawGrid(d); drawCard(d); drawGoal(d); drawLife(d); drawCore(d); drawTape(d); drawFwd(d); drawHist(d);
     tickClock();
+    if (st.wipe) {                                     // another coin picked: its charts draw in from the left
+      st.wipe = false;
+      for (const b of [chart, hist]) if (b.firstChild) motion.play(b.firstChild, "dk-wipe1");
+    }
   }
   async function load() {
     if (st.busy) return;
@@ -888,6 +990,7 @@ export function deckView(ctx) {
     ro.observe(chart);
     ctx.track(() => { ro.disconnect(); clearTimeout(tmr); });
   }
+  if (typeof ctx.timeout === "function") ctx.timeout(() => el.classList.remove("boot"), 3200);   // (the opening is over)
   load().catch(() => {});
   ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
   ctx.every(1000, tickClock);

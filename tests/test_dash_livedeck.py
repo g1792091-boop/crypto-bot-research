@@ -374,6 +374,34 @@ def test_the_pure_functions():
     assert out["line0"] == [[], []]
 
 
+def test_the_goal_ladder_the_feed_and_the_wire():
+    """Owners 11-01: "100달러로 한달만에 700달러, 800달러 … 5000달러 그이상" (what each goal needs a day, arithmetic only) and
+    their picture again (the coins' feed lines, the raw record log)."""
+    out = _node("""console.log(JSON.stringify({
+      lad: M.ladderOf(), lad7: M.ladderOf([7, 0, -1, null, "x"], 30, 100), goals: M.GOAL_LADDER,
+      feed: M.feedLines([{state: "ok", coin: "SOL", spark: [100, 101, 99.5]}, {state: "error", coin: "ETH"},
+        {state: "ok", coin: "XRP", spark: [2]}, {state: "ok", coin: "BCH", spark: [0, 5]}, {state: "ok", coin: "ZEC", spark: [50, null, 55]}]),
+      wire: M.wireOf([{ts: Date.UTC(2026, 10, 1, 2, 50), bot_ko: "레인지 봇", coin: "SOL", kind: "exit", side: -1, pnl: 7.700000000000003,
+        text: "손절"}, {ts: null, bot_ko: "바이비트 봇", kind: "signal", text: "롱 신호"}], 7),
+      wire0: M.wireOf(null)}));""")
+    assert out["goals"] == [6, 7, 10, 20, 50]
+    assert [r["x"] for r in out["lad"]] == [6, 7, 10, 20, 50] and [r["usd"] for r in out["lad"]] == [600, 700, 1000, 2000, 5000]
+    for r in out["lad"]:
+        assert (1 + r["daily"]) ** 30 == pytest.approx(r["x"])
+    assert [round(r["daily"] * 100, 1) for r in out["lad"]] == [6.2, 6.7, 8.0, 10.5, 13.9]
+    assert out["lad7"] == [{"x": 7, "usd": 700, "daily": pytest.approx(7 ** (1 / 30) - 1)}]   # (a bad goal is left out)
+    # each coin keeps its place (its colour) in the order; one that is not read, too short or starts at 0 drops out
+    f = out["feed"]
+    assert [(x["k"], x["coin"]) for x in f] == [(0, "SOL"), (4, "ZEC")]
+    assert f[0]["pts"] == [[0, 0], [1, pytest.approx(0.01)], [2, pytest.approx(-0.005)]] and f[0]["last"] == pytest.approx(-0.005)
+    assert f[1]["pts"] == [[0, 0], [1, pytest.approx(0.1)]]                                   # (a missing close skipped)
+    w = out["wire"]
+    assert w[0]["t"] == "11:50" and w[0]["kind"] == "exit"                                    # (KST)
+    assert json.loads(w[0]["txt"]) == {"bot": "레인지 봇", "coin": "SOL", "kind": "exit", "side": -1, "pnl": 7.7, "text": "손절"}
+    assert w[1]["t"] == "--:--" and json.loads(w[1]["txt"]) == {"bot": "바이비트 봇", "coin": "—", "kind": "signal", "side": 0, "text": "롱 신호"}
+    assert out["wire0"] == []
+
+
 def test_the_whole_screen_renders_on_the_real_answer(world):
     d = json_finite(D.build(candles_of(), NOW))
     out = _node("""
@@ -391,9 +419,13 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: bad.tex
     assert not BAD.search(t), BAD.search(t)
     for w in ("관제실", "바이비트 봇", "친구 15분 봇", "레인지 봇", "지갑", "추세 그리드", "진입 카드", "포지션 진행", "실행 기록",
               "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식", "목표 ×6", "경로보다", "남은 날 하루에 필요",
-              "목표 연구 →"):
+              "목표 연구 →", "코인 흐름", "FEED", "WIRE", "목표별 하루 필요", "×50", "$5,000", "하루 +13.9%", "SIGNAL CASCADE",
+              "0선 돌파 · 48H", "다음 15분 마감", "돌고 있음"):
         assert w in t, w
     assert "dk-cell down" in out["cls"] and "dk-side down" in out["cls"] and "dk-grow g-thin" in out["cls"]
+    # owners 11-01 (the picture again, their video): the feed's lines in the coins' colours, the opening's class, the ladder
+    # (the walk sees the html's classes: the svg lines' own are drawn by s())
+    assert "dk boot" in out["cls"] and "dk-gl on" in out["cls"] and "dk-mono dk-cid dk-k5" in out["cls"] and "dk-wl exit" in out["cls"]
     assert "×1 ×2 ×3 ×6 0일 10일 20일 30일 목표 ×6" in re.sub(r"\s+", " ", t)      # the goal chart: its axes and the path's tag
     assert not BAD.search(out["bad"])
 

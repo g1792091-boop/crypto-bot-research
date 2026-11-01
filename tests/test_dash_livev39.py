@@ -268,17 +268,21 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     console.log(JSON.stringify({{groups: R.GROUPS.map((g) => [g.id, g.ko, g.screens]), keys: R.KEYS, land: R.landing(),
       nav: R.navGroups(true).map((g) => [g.ko, g.items.map((it) => it.ko)]),
       screens: ['trendbot', 'rangebot', 'vwapbot', 'mixbot'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].group, R.SCREENS[k].mod]),
+      hidden: ['trendbot', 'rangebot', 'vwapbot', 'mixbot'].map((k) => !!R.SCREENS[k].hidden),
       v39: R.SCREENS.v39 || null, href: R.href('livebots', 'mixbot'), icon: R.icon('bots').childNodes.length}}));""")
     # 레인지 봇 (owners 10/26 evening, tests/test_dash_live_range.py) right after 추세판단 봇
     # (owners 10-29: the 바이비트 봇 first, the 추세판단 봇 switched off last, the 바이비트 봇's group last;
     # tests/test_dash_mixbybit_site.py); owners 10-31: V3.9 투비트 gone
-    assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]]
-    assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit", "range"]   # (+ 10-31 night)
+    # owners 11-01 ("필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, each live bot's 봇별
+    # screen leading its own group; the 추세판단 봇's and the VWAP 개선판's screens hidden (an old link still opens them)
+    assert out["groups"] == [["now", "지금", ["deck", "room"]], ["bybit", "바이비트 봇", ["bybitbot", "bybitperf", "ftrend"]],
+                             ["mix", "친구 15분 봇", ["mixbot", "mixperf"]], ["range", "레인지 봇", ["rangebot", "mixrangeperf"]]]
     # (owners 10-31 night: the friend bot is 친구 15분 봇, its config's name)
-    assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "추세판단 봇"]]
-    assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 15분 봇", "bots", "livebots"]]
+    assert out["nav"][1] == ["바이비트 봇", ["바이비트 봇", "바이비트 성적", "친구 추세판"]] and out["nav"][2] == ["친구 15분 봇", ["친구 15분 봇", "친구 성적"]]
+    assert out["screens"] == [["추세판단 봇", "now", "livebots"], ["레인지 봇", "range", "livebots"], ["VWAP 개선판", "now", "livebots"], ["친구 15분 봇", "mix", "livebots"]]
+    assert out["hidden"] == [True, False, True, False]
     assert out["v39"] is None and "v39" not in out["keys"]
-    assert out["keys"][:6] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "deck"] and out["land"] == "deck"   # (11-01)
+    assert out["keys"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"] and out["land"] == "deck"   # (11-01)
     assert out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 15분 봇")):
@@ -286,7 +290,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     assert "livebots-v39" not in lb and 'id: "v39"' not in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert all(f"{k}:" in search for k in ("trendbot", "vwapbot", "mixbot")) and "v39:" not in search
-    assert ".botbar { grid-template-columns: repeat(9, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):

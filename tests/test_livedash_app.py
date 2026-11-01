@@ -227,7 +227,8 @@ def _node(body: str, live: bool) -> dict:
 def test_the_menus_of_both_sites_in_node():
     body = ("console.log(JSON.stringify({items: R.navGroups(true).flatMap((g) => g.items.map((it) => it.id)), groups: R.navGroups(true).map((g) => g.ko),"
             " keys: R.KEYS, land: R.landing(), tag: R.modeTag(R.landing()), parse: R.parseHash('#/livebots/trades?acct=mexc'),"
-            " href: R.href('livebots', 'replay', {id: 7}), mod: (R.SCREENS.pos || {}).mod || null}));")
+            " href: R.href('livebots', 'replay', {id: 7}), mod: (R.SCREENS.pos || {}).mod || null,"
+            " hidden: Object.keys(R.SCREENS).filter((k) => R.SCREENS[k].hidden && R.SCREENS[k].mod === 'livebots')}));")
     paper, live = _node(body, False), _node(body, True)
     assert "livebots" not in paper["items"] and paper["groups"] == ["거래", "성적", "매매법", "AI 직원", "서버"]
     assert paper["tag"]["text"] == "모의" and paper["href"] == "#/livebots/replay?id=7" and paper["mod"] is None
@@ -235,23 +236,17 @@ def test_the_menus_of_both_sites_in_node():
     # 10/23: the 'VWAP 개선판' paper bot's tabs, tests/test_dash_livevwap.py) and 믹스 봇 (owners 10/25 night: the '믹스 30분 봇'
     # and its paper twin, tests/test_dash_livemix.py)
     # (owners 10-29: 바이비트 봇's group last; 11-01: the site opens on 관제실, tests/test_dash_livedeck.py)
-    assert live["groups"] == ["봇별", "지금", "기록", "성적", "운영", "VWAP 봇", "친구 15분 봇", "바이비트 봇", "레인지 봇"] \
-        and live["land"] == "deck" and live["tag"]["text"] == "실거래"
-    assert live["items"][-10:] == ["vwap", "vwperf", "vwblock", "mix", "mixperf", "bybit", "bybitperf", "ftrend", "mixrange", "mixrangeperf"]
-    # (레인지 봇 after 추세판단 봇 since 10/26 evening, tests/test_dash_live_range.py)
-    assert live["items"][:5] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"] and live["items"][5:10] == ["deck", "trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
-                                                     "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
+    # owners 11-01 ("필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, nine screens; the
+    # other tabs read the retired paper-bot / executor records and are hidden (an old link still opens them)
+    assert live["groups"] == ["지금", "바이비트 봇", "친구 15분 봇", "레인지 봇"] and live["land"] == "deck" and live["tag"]["text"] == "실거래"
+    assert live["items"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"
-    # 성적 starts with 검토 (the 추세판단 봇's 2-week review), then 재현 비교 (its 7/1~10/20 replay against the live record)
-    assert live["items"].index("review") + 1 == live["items"].index("expect") == live["items"].index("perf") - 1
-    # 기록 starts with 일지 (what the trend bot and the executors did, one feed)
-    assert live["items"].index("journal") + 1 == live["items"].index("trades")
     # every menu item of the live site is a tab of screens/livebots.js (part B's tabs once their files are there)
     tabs = re.findall(r'\{id: "(\w+)", label: "([^"]+)"', _read(V4, "screens", "livebots.js"))
     have = {t for t, _ in tabs}
-    pending = {"risk", "health", "goal", "judge"} - have                    # part B's four, until they land
-    assert set(live["items"]) - pending == have
+    # every tab is a menu item or a hidden screen (owners 11-01: off the menu, an old link still opens it)
+    assert set(live["items"]) <= have and live["hidden"] and set(live["hidden"]) == have - set(live["items"])
 
 
 # ================================================================ every /api path the live JS can call is served

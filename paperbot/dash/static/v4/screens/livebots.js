@@ -1,10 +1,14 @@
-// 실거래 (owners 10/19, the live start day: 바이비트 $100 + MEXC $100). The two live order executors (real money) and the
-// paper account both follow (COMBO@mix), read-only: dash/more/livebots.py reads the paper bot's database, both executors'
-// databases and their configs (never the key file).
+// 실거래 (owners 10/19, the live start day). Since 10-31 three live bots trade, each on its own account by itself (the mix
+// program, dash/more/livemix.py): 바이비트 봇 (Bybit), 친구 15분 봇 (WOO X Pro 2), 레인지 봇 (WOO X Pro), each beside its paper
+// twin; read-only: the server reads their logs and configs (never a key file).
 // Where it lives (owners 10/19 "대시보드가 지금 규칙봇 안에 있잖아 제거하고 따로 실거래용 봇 대시보드 사이트를 따로"): the
-// separate 실거래 site (paperbot/livedash, port 8093, core/site.js LIVE), where every tab below is a menu item (#/<tab>,
-// core/routes.js LIVE_SCREENS: 봇별 · 지금 · 기록 · 성적 · 운영) and the head shows the tabs of the item's group. On the rule
-// bot's dashboard (port 8080) #/livebots only says where it moved, with the link built from this very host.
+// separate 실거래 site (paperbot/livedash, port 8093, core/site.js LIVE), where every tab below is a screen (#/<tab>,
+// core/routes.js LIVE_SCREENS) and the head shows the tabs of the item's group. On the rule bot's dashboard (port 8080)
+// #/livebots only says where it moved, with the link built from this very host.
+// The menu (owners 11-01: "필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): nine of the tabs
+// below in four groups (core/routes.js LIVE_GROUPS: 지금 관제실 · 회의실; per live bot its 봇별 screen and 성적; the
+// 바이비트 봇's 친구 추세판). Every other tab reads the retired paper-bot / executor records and is hidden (off the menu and
+// 찾기; an old link still opens it). The tabs as they were built:
 //   봇별   one screen per bot (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로,
 //          친구 30분 봇 화면 따로, v3.9 화면 따로"; BOT_TAB), each with only the executors that follow it, in its head and in
 //          the real-money strip: 추세판단 봇 (the 관제 screen with 바이비트 · WOO X Pro only), VWAP 개선판 (VWAP 관제: its paper
@@ -158,7 +162,7 @@ export const TABS = [
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
 const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
   range: "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요"};
-const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
+const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "deck");   // (owners 11-01: 관제실, the main screen)
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 레인지 봇's head once it trades WOO X Pro by itself (owners 10-31 night, the summary's ``replaced``). */
 const RANGE_MIX_SUB = "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요";

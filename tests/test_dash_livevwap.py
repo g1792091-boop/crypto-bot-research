@@ -660,9 +660,10 @@ def test_the_menu_group_and_the_tabs():
     # tests/test_dash_livev39.py)
     # (the 바이비트 봇's group last since 10-29)
     # (+ 레인지 봇's group last since 10-31 night: tests/test_dash_mixrange_site.py; 관제실 first of 지금 since 11-01)
-    assert d["groups"][-4] == ["vwap", "VWAP 봇", ["vwap", "vwperf", "vwblock"]] and d["nav"][-4] == "VWAP 봇" and len(d["groups"]) == 9
-    assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "deck", "trend", "tchart", "hq"]     # 봇별's five, then 지금
-    assert d["screens"] == [["VWAP 관제", "vwap", "livebots"], ["VWAP 성적", "vwap", "livebots"], ["VWAP 막은 신호", "vwap", "livebots"]]
+    # owners 11-01 ("vwap봇 안쓰는데 화면 필요없을꺼 같고"): the group left the menu; its tabs stay hidden (an old link opens them)
+    assert "vwap" not in [g[0] for g in d["groups"]] and "VWAP 봇" not in d["nav"] and len(d["groups"]) == 4
+    assert d["keys"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]
+    assert d["screens"] == [["VWAP 관제", "now", "livebots"], ["VWAP 성적", "now", "livebots"], ["VWAP 막은 신호", "now", "livebots"]]
     assert d["parse"]["name"] == "vwperf" and d["href"] == "#/vwblock"
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("vwap", "VWAP 관제"), ("vwperf", "VWAP 성적"), ("vwblock", "VWAP 막은 신호")):

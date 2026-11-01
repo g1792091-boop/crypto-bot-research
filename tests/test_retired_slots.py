@@ -69,9 +69,10 @@ def test_a_world_where_deepcoin_follows_the_vwap_bot_shows_none_of_it(tmp_path):
 
 def test_the_screens_say_so():
     routes = (V4 / "core" / "routes.js").read_text(encoding="utf-8")
-    assert '{id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]}' in routes
+    # (owners 11-01: one group per live bot; the VWAP 개선판's screen hidden)
+    assert '{id: "bybit", ko: "바이비트 봇", screens: ["bybitbot", "bybitperf", "ftrend"]}' in routes
     assert "V3.9 투비트" not in routes.split("const LIVE_SCREENS")[1].split("};")[0]
-    assert 'vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)"}' in routes
+    assert 'vwapbot: {ko: "VWAP 개선판", group: "now", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)", hidden: true}' in routes
     hq = (V4 / "screens" / "livebots-hq.js").read_text(encoding="utf-8")
     assert "설치 전" not in hq and "setSoon" not in hq and "paperbot-executor-deepcoin" not in hq
     lb = (V4 / "screens" / "livebots.js").read_text(encoding="utf-8")

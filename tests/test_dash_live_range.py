@@ -530,9 +530,10 @@ def test_the_menu_button_strip_and_names(rw, tmp_path):
       fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'range'), K.followersOf(D_s, 'paper2')],
       names: ['paper', 'paper2', 'range'].map((id) => K.acctKo(id)), line: K.followLine(D_s.papers), isp: ['range', 'mexc'].map(K.isPaperId),
       tab: LB.BOT_TAB.rangebot.bot}}));""", s=summary)
-    assert out["group"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]          # (owners 10-29: 바이비트 봇 first, 추세판단 봇 last)
-    assert out["nav"] == ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "추세판단 봇"]      # (10-31 night: 15분)
-    assert out["screen"] == ["레인지 봇", "bots", "livebots"] and out["icon"] > 5 and out["tab"] == "range"
+    # (owners 11-01: the menu's first group is 지금, 관제실 · 회의실; the 레인지 봇's screen leads its own group)
+    assert out["group"] == ["deck", "room"]
+    assert out["nav"] == ["관제실", "회의실"]
+    assert out["screen"] == ["레인지 봇", "range", "livebots"] and out["icon"] > 5 and out["tab"] == "range"
     assert out["fol"] == [["bybit"], ["mexc"], ["deepcoin"]]
     assert out["names"] == ["추세판단 봇", "VWAP 개선판", "레인지 봇"] and out["isp"] == [True, False]
     assert out["line"] == "바이비트 → 추세판단 봇 · 딥코인 → VWAP 개선판 · WOO X Pro → 레인지 봇"

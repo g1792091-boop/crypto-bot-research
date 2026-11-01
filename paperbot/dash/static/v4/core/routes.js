@@ -79,7 +79,7 @@ export const LANDING_MIN_PX = 900;
  *  switched-off screen (900 > 760), so the router may also send a PC-only screen opened on a phone here (no loop).
  *  The 설정 panel's automatic 첫 화면 shows this same screen (core/settings.js autoStart). */
 export function mainLanding() {
-  if (LIVE) return LIVE_START;          // the 실거래 site opens on 관제 (owners 10/19; 추세판단 봇's since 10/21)
+  if (LIVE) return LIVE_START;          // the 실거래 site opens on 관제실 (owners 11-01)
   const wide = typeof matchMedia !== "function" || matchMedia(`(min-width: ${LANDING_MIN_PX}px)`).matches;
   return wide ? "terminal" : "chart";
 }
@@ -292,83 +292,74 @@ export function navGroups(feats) {
 
 // ---------------------------------------------------------------- the 실거래 site (paperbot/livedash, core/site.js LIVE)
 // Owners 10/19: "실거래용 봇 대시보드 사이트를 따로 … 지금 실거래봇 대시보드 형식으로 똑같이": the 실거래 tabs are this site's
-// menu, in four groups (the strip's thin lines, the phone's bottom bar). Every item opens screens/livebots.js on its tab
+// menu, in groups (the strip's thin lines, the phone's bottom bar). Every item opens screens/livebots.js on its tab
 // (`mod`; the router hands it {name: "livebots", arg: <tab>}), so the screens, their css scope ([data-screen="livebots"])
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
 // owners 10-29 (the 추세판단 봇 switched off, the 바이비트 봇 on the Bybit account): the site opens on 한눈에 (every real-money
 // account), never on a bot that no longer trades
 // owners 11-01 ("이런 화면느낌으로 메인화면으로"): the site opens on 관제실 (the three mix bots and the six coins in the style
-// of their pictures); 한눈에 stays one tab away
+// of their pictures)
 export const LIVE_START = "deck";
 const LIVE_GROUPS = [
-  // 봇별 (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면
-  // 따로, v3.9 화면 따로"): one screen per bot, first in the menu, each with only the executors that follow it
-  // (screens/livebots.js BOT_TABS); the screens of the groups below stay as they were
-  // owners 10-29: the 바이비트 봇 first, the 추세판단 봇 (switched off, its record kept) last
-  // owners 10-31: V3.9 투비트 left the menu (the 투비트 and 딥코인 bots do not run any more)
-  {id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]},
-  {id: "now", ko: "지금", screens: ["deck", "trend", "tchart", "hq", "pos", "room", "summary", "chart", "risk", "health"]},
-  {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
-  {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
-  {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
-  // the second paper bot 'VWAP 개선판' and the executor that will follow it (owners 10/23, docs/vwap-bot-ko.md): its own
-  // group, last (the number keys of the four groups stay); each tab says 꺼짐 until the bot runs (screens/livebots-vwap.js)
-  {id: "vwap", ko: "VWAP 봇", screens: ["vwap", "vwperf", "vwblock"]},
-  // the '믹스 30분 봇' on the second WOO X Pro account (real money) and its paper twin (owners 10/25 night,
-  // docs/mixchop-ko.md): its own group, last; each column says 꺼짐 until its bot runs (screens/livebots-mix.js)
+  // owners 11-01 ("그럼 한눈에 대시보드 화면 필요없지 않나? 그 외 그닥 불필요한 대시보드 화면들 있으면 없애도 돼!", then
+  // "vwap봇 안쓰는데 화면 필요없을꺼 같고 … 포지션 대시보드 화면도 필요없을꺼같고 … 필요없는 대시보드 화면들 있으면 싹 다
+  // 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, nine screens. 지금: 관제실 (the main screen) and 회의실; then one group
+  // per live bot (the three trade by themselves since 10-31: the mix program, dash/more/livemix.py), each its own screen
+  // first (봇별: the live bot and its paper twin, the real-money strip, 목표 연구 at the foot) and its 성적 (live vs paper);
+  // the 바이비트 봇's group also has 친구 추세판. Every other tab (한눈에, 포지션, 요약 … 그림자, the 추세판단 봇's and the
+  // VWAP 봇's screens, the bot groups' 관제 copies of the 봇별 screens) read the retired paper-bot / executor records and is
+  // `hidden` below: off the menu and 찾기, an old link or bookmark still opens it
+  {id: "now", ko: "지금", screens: ["deck", "room"]},
+  {id: "bybit", ko: "바이비트 봇", screens: ["bybitbot", "bybitperf", "ftrend"]},
   // (owners 10-31 night: the friend bot is the 친구 15분 봇; the group keeps its id and links)
-  {id: "mix", ko: "친구 15분 봇", screens: ["mix", "mixperf"]},
-  // the 바이비트 봇 (owners 10-29, docs/mixbybit-ko.md: the friend's trend + OBV / Stoch RSI entries on the Bybit account,
-  // real money, and its paper twin) and the friend's trend per coin (dash/more/liveftrend.py): its own group, last
-  {id: "bybit", ko: "바이비트 봇", screens: ["bybit", "bybitperf", "ftrend"]},
-  // the 레인지 봇 (owners 10-31 night, docs/range-bot-ko.md 0장: the first WOO X Pro account, real money, and its paper
-  // twin, the mix program): its own group, last, as the 바이비트 봇's; each column says 꺼짐 until its bot runs
-  {id: "range", ko: "레인지 봇", screens: ["mixrange", "mixrangeperf"]},
+  {id: "mix", ko: "친구 15분 봇", screens: ["mixbot", "mixperf"]},
+  // the 레인지 봇 (owners 10-31 night, docs/range-bot-ko.md 0장: the first WOO X Pro account, real money, and its paper twin)
+  {id: "range", ko: "레인지 봇", screens: ["rangebot", "mixrangeperf"]},
 ];
 const LIVE_SCREENS = {
-  bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (15분봉 · 추세 바 30분 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
-  trendbot: {ko: "추세판단 봇", group: "bots", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)"},
+  bybitbot: {ko: "바이비트 봇", group: "bybit", title: "바이비트 봇 (15분봉 · 추세 바 30분 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
+  trendbot: {ko: "추세판단 봇", group: "now", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)", hidden: true},
   // owners 10-31 night: the 레인지 봇 trades WOO X Pro by itself once its config is there (screens/livebots-range.js rangeBotView)
-  rangebot: {ko: "레인지 봇", group: "bots", title: "레인지 봇 (WOO X Pro · 15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · 지난 페이퍼 기록)"},
-  vwapbot: {ko: "VWAP 개선판", group: "bots", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)"},
-  mixbot: {ko: "친구 15분 봇", group: "bots", title: "친구 15분 봇 (15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"},
-  trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)"},
-  tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
+  rangebot: {ko: "레인지 봇", group: "range", title: "레인지 봇 (WOO X Pro · 15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · 지난 페이퍼 기록)"},
+  vwapbot: {ko: "VWAP 개선판", group: "now", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)", hidden: true},
+  mixbot: {ko: "친구 15분 봇", group: "mix", title: "친구 15분 봇 (15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"},
+  trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)", hidden: true},
+  tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)", hidden: true},
   deck: {ko: "관제실", group: "now", title: "관제실 (세 봇 · 여섯 코인 · 봇 기록과 바이낸스 봉)"},
-  hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)"},
-  pos: {ko: "포지션", group: "now", title: "포지션"},
+  hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)", hidden: true},
+  pos: {ko: "포지션", group: "now", title: "포지션", hidden: true},
   room: {ko: "회의실", group: "now", title: "회의실 (서버의 실제 프로그램들 · 그 기록과 systemd)"},
-  summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},
-  chart: {ko: "차트", group: "now", title: "차트"},
-  risk: {ko: "위험", group: "now", title: "위험"},
-  health: {ko: "봇 상태", group: "now", title: "봇 상태"},
-  journal: {ko: "일지", group: "rec", title: "일지 (자리 비운 동안 있었던 일)"},
-  trades: {ko: "거래", group: "rec", title: "거래"},
-  replay: {ko: "다시보기", group: "rec", title: "거래 다시보기"},
-  signals: {ko: "신호", group: "rec", title: "신호"},
-  missed: {ko: "못 탄 신호", group: "rec", title: "못 탄 신호"},
-  review: {ko: "검토", group: "perf", title: "2주 검토 (추세판단 봇)"},
-  expect: {ko: "재현 비교", group: "perf", title: "재현 비교 (7/1~10/20 가상 vs 실제)"},
-  perf: {ko: "성적", group: "perf", title: "성적"},
-  goal: {ko: "목표", group: "perf", title: "목표"},
-  rank: {ko: "순위", group: "perf", title: "매매법 순위"},
-  judge: {ko: "규칙 점검", group: "perf", title: "규칙 점검"},
-  map: {ko: "지도", group: "perf", title: "지도"},
-  cost: {ko: "비용", group: "perf", title: "비용"},
-  cal: {ko: "일정", group: "ops", title: "일정"},
-  safety: {ko: "안전", group: "ops", title: "안전"},
-  settings: {ko: "설정", group: "ops", title: "봇 설정"},
-  team: {ko: "분석팀", group: "ops", title: "분석팀"},
-  shadows: {ko: "그림자", group: "ops", title: "그림자 봇"},
-  vwap: {ko: "VWAP 관제", group: "vwap", title: "VWAP 관제 (VWAP 개선판)"},
-  vwperf: {ko: "VWAP 성적", group: "vwap", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)"},
-  vwblock: {ko: "VWAP 막은 신호", group: "vwap", title: "VWAP 막은 신호 (막지 않았다면)"},
-  mix: {ko: "친구 관제", group: "mix", title: "친구 관제 (친구 15분 봇 · WOO X Pro 2 실거래와 모의)"},
+  summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)", hidden: true},
+  chart: {ko: "차트", group: "now", title: "차트", hidden: true},
+  risk: {ko: "위험", group: "now", title: "위험", hidden: true},
+  health: {ko: "봇 상태", group: "now", title: "봇 상태", hidden: true},
+  journal: {ko: "일지", group: "now", title: "일지 (자리 비운 동안 있었던 일)", hidden: true},
+  trades: {ko: "거래", group: "now", title: "거래", hidden: true},
+  replay: {ko: "다시보기", group: "now", title: "거래 다시보기", hidden: true},
+  signals: {ko: "신호", group: "now", title: "신호", hidden: true},
+  missed: {ko: "못 탄 신호", group: "now", title: "못 탄 신호", hidden: true},
+  review: {ko: "검토", group: "now", title: "2주 검토 (추세판단 봇)", hidden: true},
+  expect: {ko: "재현 비교", group: "now", title: "재현 비교 (7/1~10/20 가상 vs 실제)", hidden: true},
+  perf: {ko: "성적", group: "now", title: "성적", hidden: true},
+  goal: {ko: "목표", group: "now", title: "목표", hidden: true},
+  rank: {ko: "순위", group: "now", title: "매매법 순위", hidden: true},
+  judge: {ko: "규칙 점검", group: "now", title: "규칙 점검", hidden: true},
+  map: {ko: "지도", group: "now", title: "지도", hidden: true},
+  cost: {ko: "비용", group: "now", title: "비용", hidden: true},
+  cal: {ko: "일정", group: "now", title: "일정", hidden: true},
+  safety: {ko: "안전", group: "now", title: "안전", hidden: true},
+  settings: {ko: "설정", group: "now", title: "봇 설정", hidden: true},
+  team: {ko: "분석팀", group: "now", title: "분석팀", hidden: true},
+  shadows: {ko: "그림자", group: "now", title: "그림자 봇", hidden: true},
+  vwap: {ko: "VWAP 관제", group: "now", title: "VWAP 관제 (VWAP 개선판)", hidden: true},
+  vwperf: {ko: "VWAP 성적", group: "now", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)", hidden: true},
+  vwblock: {ko: "VWAP 막은 신호", group: "now", title: "VWAP 막은 신호 (막지 않았다면)", hidden: true},
+  mix: {ko: "친구 관제", group: "mix", title: "친구 관제 (친구 15분 봇 · WOO X Pro 2 실거래와 모의)", hidden: true},
   mixperf: {ko: "친구 성적", group: "mix", title: "친구 성적 (친구 15분 봇 · 실거래 vs 모의)"},
-  bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)"},
+  bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)", hidden: true},
   bybitperf: {ko: "바이비트 성적", group: "bybit", title: "바이비트 성적 (실거래 vs 모의)"},
   ftrend: {ko: "친구 추세판", group: "bybit", title: "친구 추세판 (코인별 추세 바 30분 종합 · 바이비트 봇 · 친구 15분 봇 · 레인지 봇 15분봉 신호)"},
-  mixrange: {ko: "레인지 관제", group: "range", title: "레인지 관제 (레인지 봇 · WOO X Pro 실거래와 모의)"},
+  mixrange: {ko: "레인지 관제", group: "range", title: "레인지 관제 (레인지 봇 · WOO X Pro 실거래와 모의)", hidden: true},
   mixrangeperf: {ko: "레인지 성적", group: "range", title: "레인지 성적 (레인지 봇 · 실거래 vs 모의)"},
 };
 if (LIVE) {

@@ -206,9 +206,10 @@ def test_the_pages(tmp_path):
         F.stochCell({{k: 62.0, d: 58.0, xs: -1, cross: 'dead', cross_ko: '데드 ●', side50_ko: '50선 위'}}),
         F.ruleLines({{rules: {{obv: {{ko: 'OBV 진한색', side: 0, why: '친구 추세 진입 금지'}}, srsi: {{ko: '스톡RSI 50선', side: -1, why: ''}}}}}}),
         F.agoKo(65 * 60000)]}}));""")
-    assert out["start"] == "deck" and out["bots"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]   # (11-01: 관제실)
-    assert out["groups"][-2:] == ["bybit", "range"] and out["by"] == ["bybit", "bybitperf", "ftrend"]   # (the 레인지 봇's last)
-    assert out["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "deck", "trend", "tchart", "hq"]
+    # (owners 11-01: the first group is 지금, 관제실 · 회의실; the 바이비트 봇's 봇별 screen leads its own group, its 관제 copy hidden)
+    assert out["start"] == "deck" and out["bots"] == ["deck", "room"]
+    assert out["groups"] == ["now", "bybit", "mix", "range"] and out["by"] == ["bybitbot", "bybitperf", "ftrend"]
+    assert out["keys"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]
     # (owners 10-31 night: the friend bot is 친구 15분 봇; the 레인지 봇's card once it took the first WOO X Pro slot,

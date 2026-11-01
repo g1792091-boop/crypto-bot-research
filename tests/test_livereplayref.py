@@ -634,8 +634,9 @@ def test_the_wiring():
     assert '{id: "expect", label: "재현 비교", make: (ctx, hub) => expectView(ctx, hub), own: true}' in js
     assert js.index('{id: "review", label: "검토"') < js.index('{id: "expect"') < js.index('{id: "perf", label: "성적"')
     routes = _read(V4, "core", "routes.js")
-    assert '"review", "expect", "perf"' in routes
-    assert 'expect: {ko: "재현 비교", group: "perf", title: "재현 비교 (7/1~10/20 가상 vs 실제)"},' in routes and "expect: () => SICON." in routes
+    # (owners 11-01: off the menu with the switched-off 추세판단 봇, hidden; an old link still opens it)
+    assert '"expect"' not in routes.split("const LIVE_GROUPS = [")[1].split("];")[0]
+    assert 'expect: {ko: "재현 비교", group: "now", title: "재현 비교 (7/1~10/20 가상 vs 실제)", hidden: true},' in routes and "expect: () => SICON." in routes
     assert "expect:" in _read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert '@import url("livebots-expect.css");' in _read(SCREENS, "livebots.css")
     inv = _read(V4, "INVENTORY.md")

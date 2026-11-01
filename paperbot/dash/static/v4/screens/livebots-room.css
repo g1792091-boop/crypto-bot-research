@@ -124,6 +124,7 @@
   .rm-g .rm-feed { max-height: 300px; }
   .rm-a-room > .dk-ph, .rm-a-room > .rm-detail { margin: 0 352px 0 312px; }
   .rm-scene { height: 900px; min-height: 900px; }
+  .rm-note { left: 316px; }                         /* (clear of the left column lying over the room) */
 }
 @media (max-width: 1100px) {
   .rm-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

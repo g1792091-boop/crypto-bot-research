@@ -421,8 +421,9 @@ def test_the_wiring():
     assert '{id: "review", label: "검토", make: (ctx, hub) => reviewView(ctx, hub), own: true}' in js
     assert js.index('{id: "missed"') < js.index('{id: "review", label: "검토"') < js.index('{id: "perf", label: "성적"')
     routes = _read(V4, "core", "routes.js")
-    assert '{id: "perf", ko: "성적", screens: ["review", ' in routes
-    assert 'review: {ko: "검토", group: "perf", title: "2주 검토 (추세판단 봇)"},' in routes and "review: () => SICON." in routes
+    # (owners 11-01: off the menu with the switched-off 추세판단 봇, hidden; an old link still opens it)
+    assert '"review"' not in routes.split("const LIVE_GROUPS = [")[1].split("];")[0]
+    assert 'review: {ko: "검토", group: "now", title: "2주 검토 (추세판단 봇)", hidden: true},' in routes and "review: () => SICON." in routes
     assert "review:" in _read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert '@import url("livebots-review.css");' in _read(SCREENS, "livebots.css")
     assert "livebots-review.js" in _read(V4, "INVENTORY.md") and "/api/v4/livebots/trendreview" in _read(V4, "INVENTORY.md")
