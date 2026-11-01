@@ -17,11 +17,13 @@
 .rm-a-room { align-content: start; }
 .rm-scene { min-height: 520px; height: min(62vw, 640px); min-width: 0; border-radius: 2px;
   background: radial-gradient(ellipse 60% 55% at 50% 58%, var(--dk-core-haze), var(--dk-bg) 100%); }
-.rm-note { position: absolute; left: 8px; bottom: 6px; }
+.rm-note { position: absolute; left: 8px; bottom: 6px; pointer-events: none; }
+.rm-scene.is-3d .rm-cv { cursor: grab; touch-action: pan-y; }        /* the 3D room: drag sideways to turn it, the page still scrolls */
+.rm-scene.is-3d .rm-cv:active { cursor: grabbing; }
 
 /* the name tags over the table (placed by the script) */
 .rm-tags { position: absolute; inset: 0; pointer-events: none; }
-.rm-tag { position: absolute; display: grid; gap: 0; justify-items: start; max-width: 180px; padding: 3px 8px; pointer-events: auto; cursor: pointer;
+.rm-tag { position: absolute; display: grid; gap: 0; justify-items: start; max-width: 160px; padding: 2px 7px; pointer-events: auto; cursor: pointer;
   text-align: left; font: inherit; color: var(--dk-ink); background: var(--dk-panel); border: 1px solid var(--dk-line-2); border-left-width: 3px;
   border-radius: 2px; transform-origin: 50% 100%; }
 .rm-tag b { font-size: var(--t-2xs); letter-spacing: .04em; white-space: nowrap; }

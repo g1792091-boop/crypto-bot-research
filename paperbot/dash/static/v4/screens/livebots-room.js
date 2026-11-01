@@ -13,6 +13,8 @@
 // read and explain, they never trade; the figures and the room are a picture (said on the screen), never a number.
 // Under reduced motion the camera stands still.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
+// the table in real 3D (owners 11-01 "3d로"): the browser's WebGL; where it cannot start, the 2D picture below
+import {create3d, hexRgb, seatPose, screenOf} from "./livebots-room3d.js";
 
 export const ROOM_API = "/api/v4/livebots/room";
 const REFRESH_MS = 15 * 1000;
@@ -56,10 +58,13 @@ export function project(c, x, y, z) {
   const k = c.D / (c.D + d);
   return [c.cx + x1 * k * c.S, c.cy - up * k * c.S, d, k];
 }
-/** A seat's tag: {cls, name, role, line} (its state and when it last did something). */
+/** A seat's tag: {cls, name, role, line} (its state in a word or two and when it last did something, as the video's tags;
+ * a live bot's holding in full: "보유 중 · SOL 숏"). */
+export const STATE_WORD = {live: "일하는 중", wait: "기다리는 중", idle: "쉬는 중", off: "꺼짐", error: "확인 필요"};
 export function tagOf(s, now) {
+  const word = s.state === "live" && s.group === "bot" ? s.state_ko : STATE_WORD[s.state] || s.state_ko;
   return {cls: ["rm-tag", s.state || "off", `g-${s.group || "ops"}`], name: s.name_ko || "?", role: s.role_ko || "",
-    line: `${s.state_ko || "—"} · ${agoKo(now, s.last_ms)}`};
+    line: `${word || "—"} · ${agoKo(now, s.last_ms)}`};
 }
 /** 팀 맥박: [[words, count, share of the largest], …]. */
 export function pulseRows(p) {
@@ -67,6 +72,29 @@ export function pulseRows(p) {
     .map(([ko, k]) => [ko, ok((p || {})[k]) ? Number(p[k]) : 0]);
   const m = Math.max(1, ...rows.map((r) => r[1]));
   return rows.map(([ko, n]) => [ko, n, n / m]);
+}
+/** The floating screens of the 3D room: [{title, sub, rows [{k, t, tone, big}], bars [[words, share, text]]}], all from
+ * the answer (the programs' own records) and the clock. */
+export function panelSpecs(d, now) {
+  const t = (d && d.team) || {}, money = (x) => (ok(x) ? `${x >= 0 ? "" : "−"}$${fmt.num(Math.abs(x), 2)}` : "—");
+  const sign = (x) => (ok(x) ? `${x >= 0 ? "+" : "−"}$${fmt.num(Math.abs(x), 2)}` : "—");
+  const c = stateCounts(d && d.seats), sk = (d && d.states_ko) || {};
+  const ps = (d && d.positions) || [];
+  return [
+    {title: "TEAM STATUS · 팀 상태", sub: "세 실거래 봇", rows: [
+      {k: "잔고", t: money(t.equity), big: true},
+      {k: "오늘 손익", t: sign(t.today_pnl), tone: ok(t.today_pnl) ? (t.today_pnl >= 0 ? "up" : "down") : ""},
+      {k: "닫힌 거래", t: ok(t.n) ? `${fmt.int(t.n)}번 · 승 ${fmt.int(t.wins || 0)} / 패 ${fmt.int(Math.max(0, t.n - (t.wins || 0)))}` : "—"},
+      {k: "열린 포지션", t: ok(t.open) ? `${fmt.int(t.open)}개` : "—"}]},
+    {title: "POSITIONS · 포지션", sub: "실거래 봇의 열린 포지션", rows: ps.length ? ps.flatMap((p) => [
+      {t: `${p.coin || p.symbol} ${Number(p.side) > 0 ? "롱" : "숏"} · ${p.bot_ko || ""}`, tone: Number(p.side) > 0 ? "up" : "down"},
+      {t: `진입 ${px(p.entry)} · 손절 ${px(p.stop)}${p.leverage ? ` · ${p.leverage}배` : ""}`, tone: "muted"}]) : [{t: "열린 포지션 없음", tone: "muted"}]},
+    {title: "ACTIVITY · 활동", sub: "모든 자리의 최근 기록", rows: ((d && d.feed) || []).slice(0, 7).map((r) => ({t: `${fmt.hm(r.ts)} ${r.who_ko} ${r.kind_ko} · ${r.text}`}))},
+    {title: "NEXT CANDLE CLOSES · 다음 봉 마감", sub: "바이낸스 봉", rows: nextCloses(now).map((x) => ({k: `${x.ko} 마감`, t: clockKo(x.left), tone: "flat"}))},
+    {title: "TEAM PULSE · 팀 맥박", sub: "지난 24시간", bars: pulseRows(d && d.pulse).map(([ko, n, f]) => [ko, f, String(n)])},
+    {title: "ROSTER · 자리", sub: "자리마다 실제 프로그램", rows: STATE_ORDER.map((k) => ({k: sk[k] || k, t: `${c[k]}`,
+      tone: k === "live" ? "up" : k === "error" ? "down" : k === "wait" ? "cyan" : "muted"}))},
+  ];
 }
 /** How many seats in each state: {live, wait, idle, error, off}. */
 export function stateCounts(seats) {
@@ -80,10 +108,13 @@ function tableView(ctx, onPick) {
   const pin = {position: "absolute", left: "0", top: "0", width: "100%", height: "100%", display: "block"};
   const cv = h("canvas", {class: "rm-cv", "aria-hidden": "true", style: pin});
   const tags = h("div", {class: "rm-tags"});
-  const note = h("small", {class: "rm-note dk-mono"}, "그림은 장식 · 자리마다 실제 프로그램 · 글자는 그 기록");
+  const note = h("small", {class: "rm-note dk-mono"}, "그림은 장식 · 자리마다 실제 프로그램 · 글자는 그 기록 · 3D는 끌어서 돌려요");
   const box = h("div", {class: "rm-scene", style: {position: "relative", overflow: "hidden"}}, cv, tags, note);
-  const g = cv.getContext ? cv.getContext("2d") : null;
-  const o = {W: 0, H: 0, dpr: 1, th: 0.35, seats: [], tagEls: [], tw: [], col: null, raf: 0, last: 0, alive: true, sel: null, motes: [], small: false};
+  const r3 = create3d(cv);                             // WebGL: the real 3D room; else the 2D picture
+  const g = r3 ? null : cv.getContext ? cv.getContext("2d") : null;
+  if (r3) box.classList.add("is-3d");
+  const o = {W: 0, H: 0, dpr: 1, th: 0.35, seats: [], tagEls: [], tw: [], col: null, raf: 0, last: 0, alive: true, sel: null, motes: [], small: false,
+    yaw: 0.35, pitch: 0.42, drag: null, idleUntil: 0, c3: null};
   for (let i = 0; i < 160; i++) o.motes.push({a: (i * 2.39996) % (Math.PI * 2), r: 0.04 + ((i * 37) % 100) / 100 * 0.2, y: ((i * 53) % 100) / 100, v: 0.15 + ((i * 17) % 10) / 40});
   const tok = () => {
     const cs = getComputedStyle(document.documentElement), v = (k) => String(cs.getPropertyValue(k) || "").trim();
@@ -91,6 +122,17 @@ function tableView(ctx, onPick) {
       line: v("--dk-line-2"), bg: v("--dk-bg"), haze: v("--dk-core-haze")};
     for (const [k, t] of Object.entries(TINT)) o.col["g-" + k] = v(t);
     for (const [k, t] of Object.entries(STATE_TINT)) o.col["s-" + k] = v(t);
+    const num3 = (k, d) => hexRgb(v(k)) || d;           // the 3D room's colours: the same tokens, as numbers
+    const c3 = {bg: num3("--dk-bg", [0.01, 0.03, 0.04]), floor: num3("--dk-panel", [0.02, 0.07, 0.1]), table: num3("--dk-core-haze", [0.04, 0.13, 0.2]),
+      desk: num3("--dk-panel-2", [0.03, 0.1, 0.15]), chair: num3("--dk-line-2", [0.13, 0.25, 0.31]), cyan: num3("--dk-core-cyan", [0.25, 0.81, 0.88]),
+      blue: num3("--dk-core-blue", [0.48, 0.71, 0.94]), sand: num3("--dk-core-sand", [0.88, 0.8, 0.57]), ink: num3("--dk-ink", [0.87, 0.9, 0.93]),
+      muted: num3("--dk-muted", [0.45, 0.54, 0.59]), green: num3("--dk-green", [0.32, 0.78, 0.6])};
+    for (const [k, t] of Object.entries(TINT)) c3["g-" + k] = num3(t, c3.ink);
+    for (const [k, t] of Object.entries(STATE_TINT)) c3["s-" + k] = num3(t, c3.muted);
+    o.c3 = c3;
+    o.css = {panel: v("--dk-panel"), cyan: v("--dk-core-cyan"), ink: v("--dk-ink"), muted: v("--dk-muted"), line: v("--dk-line-2"),
+      up: v("--dk-green"), down: v("--dk-red"), flat: v("--dk-amber")};
+    o.font = v("--f-term") || "monospace";
   };
   function layout() {
     const r = box.getBoundingClientRect ? box.getBoundingClientRect() : {width: 0, height: 0};
@@ -138,7 +180,30 @@ function tableView(ctx, onPick) {
     g.beginPath(); g.arc(fx, by - 0.075 * u, 0.06 * u, 0, Math.PI * 2); g.fill();
     if (o.sel === s.id) { g.globalAlpha = 1; g.strokeStyle = C.ink; g.lineWidth = 1.5 * o.dpr; g.beginPath(); g.arc(fx, by - 0.075 * u, 0.09 * u, 0, Math.PI * 2); g.stroke(); }
   }
+  function draw3d(t) {
+    if (!o.c3 || !o.W) return;
+    const vp = r3.draw({W: o.W, H: o.H, dpr: o.dpr, t, yaw: o.yaw, pitch: o.pitch, col: o.c3, drift: !o.drag && !motion.reduced(),
+      seats: o.seats.map((s) => ({group: s.group, state: s.state, sel: s.id === o.sel}))});
+    if (!vp) return;
+    const css = o.dpr || 1, wCss = o.W / css, n = o.seats.length;
+    o.seats.forEach((s, i) => {                        // each name tag over its figure's head
+      const el = o.tagEls[i];
+      if (!el) return;
+      const p = seatPose(i, n), at = screenOf(vp, p.x + Math.cos(p.a) * 0.12, 1.02, p.z + Math.sin(p.a) * 0.12, o.W, o.H);
+      if (!at) { el.style.visibility = "hidden"; return; }
+      const sc = Math.max(0.7, Math.min(1.08, 6.8 / at[2] * (o.small ? 0.85 : 1)));
+      const half = ((o.tw[i] || 150) / 2) * sc + 4;
+      el.style.visibility = "visible";
+      el.style.left = `${Math.max(half, Math.min(wCss - half, at[0] / css)).toFixed(1)}px`;
+      el.style.top = `${Math.max(4, at[1] / css).toFixed(1)}px`;
+      el.style.zIndex = String(Math.round(200 - at[2] * 20));
+      el.style.opacity = String(Math.max(0.6, Math.min(1, 1.6 - at[2] * 0.12)));
+      el.style.transform = `translate(-50%, -100%) scale(${sc.toFixed(3)})`;
+      el.style.transformOrigin = "50% 100%";
+    });
+  }
   function draw(t) {
+    if (r3) { draw3d(t); return; }
     if (!g || !o.col || !o.W) return;
     const c = cam(), C = o.col, tt = (t || 0) / 1000;
     g.setTransform(1, 0, 0, 1, 0, 0);
@@ -205,7 +270,7 @@ function tableView(ctx, onPick) {
     }
   }
   const measure = () => { o.tw = o.tagEls.map((e) => (e.offsetWidth || 0)); };
-  const running = () => o.alive && cv.isConnected && !document.hidden && !motion.reduced() && !!g;
+  const running = () => o.alive && cv.isConnected && !document.hidden && !motion.reduced() && (!!g || !!r3);
   function frame(t) {
     o.raf = 0;
     if (!running()) return;
@@ -213,12 +278,25 @@ function tableView(ctx, onPick) {
       const dt = o.last ? Math.min(120, t - o.last) : 0;
       o.last = t;
       o.th += dt * 0.00006;
+      if (!o.drag && Date.now() >= o.idleUntil) o.yaw += dt * 0.00006;      // the camera circles (a drag turns it by hand)
       draw(t);
     }
     o.raf = requestAnimationFrame(frame);
   }
   const kick = () => { if (!o.raf && running()) { o.last = 0; o.raf = requestAnimationFrame(frame); } };
   const still = () => { layout(); draw(0); };
+  if (r3) {                                            // drag to turn the camera (a finger or the mouse); it circles again 4 s after
+    ctx.listen(cv, "pointerdown", (e) => { o.drag = {x: e.clientX, y: e.clientY, yaw: o.yaw, pitch: o.pitch}; if (cv.setPointerCapture) cv.setPointerCapture(e.pointerId); });
+    ctx.listen(cv, "pointermove", (e) => {
+      if (!o.drag) return;
+      o.yaw = o.drag.yaw - (e.clientX - o.drag.x) * 0.006;
+      o.pitch = Math.max(0.22, Math.min(1.0, o.drag.pitch + (e.clientY - o.drag.y) * 0.004));
+      if (!o.raf) draw(0);
+    });
+    const up = () => { o.drag = null; o.idleUntil = Date.now() + 4000; };
+    ctx.listen(cv, "pointerup", up);
+    ctx.listen(cv, "pointercancel", up);
+  }
   if (typeof ResizeObserver === "function") {
     const ro = new ResizeObserver(() => { if (layout()) { measure(); if (running()) kick(); else still(); } });
     ro.observe(box);
@@ -242,6 +320,7 @@ function tableView(ctx, onPick) {
       if (!o.raf) { if (running()) kick(); else still(); }
     },
     pick(id) { o.sel = id; },
+    panels(specs) { if (r3 && o.css) { r3.panels(specs, o.css, o.font); if (!o.raf) still(); } },
   };
 }
 
@@ -294,6 +373,7 @@ export function roomView(ctx) {
     clockU.textContent = `${two(u.getUTCHours())}:${two(u.getUTCMinutes())} UTC`;
     put(closes, nextCloses(now).map((c) => h("div", {class: "rm-cl"}, h("small", {class: "dk-mono"}, `${c.ko} 마감`),
       h("b", {class: "num"}, clockKo(c.left)), h("small", {class: "dk-ps"}, fmt.hm(c.at)))));
+    if (st.d) table.panels(panelSpecs(st.d, now));     // the 3D room's floating screens (their clock counts down too)
   }
   function drawTop(d) {
     const c = stateCounts(d.seats);

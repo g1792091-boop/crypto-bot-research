@@ -9,6 +9,8 @@ picture and a video of someone's 'AI office' trading dashboard: "이렇게 가�
 - the route in the live app, behind its login
 - the pure functions in node (ago, the bar closes and their clock, the seats round the table, the projection, a tag, the
   pulse, the counts) and the whole screen rendered in node on the real answer: no null / undefined / NaN
+- the 3D room (owners 11-01 "3d로": screens/livebots-room3d.js, the browser's WebGL, no library): its matrices, meshes, the
+  seats' poses and a point on the screen in node; where WebGL cannot start the 2D picture stays (node has none)
 - static: tokens only, imports through pb.js, read-only, the decoration said on the screen, the tab and the menu
 """
 from __future__ import annotations
@@ -35,6 +37,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 V4 = os.path.join(ROOT, "paperbot", "dash", "static", "v4")
 SCREENS = os.path.join(V4, "screens")
 JS = os.path.join(SCREENS, "livebots-room.js")
+JS3 = os.path.join(SCREENS, "livebots-room3d.js")
 CSS = os.path.join(SCREENS, "livebots-room.css")
 DOM = os.path.join(ROOT, "tests", "anasyn_dom.mjs")
 IDS = ["bybit-live", "bybit-paper", "bybit-check", "mix-live", "mix-paper", "mix-check", "range-live", "range-paper", "range-check",
@@ -200,6 +203,12 @@ console.log(JSON.stringify({
   tag0: M.tagOf({}, now),
   pulse: M.pulseRows({signals: 4, entries: 2, exits: 1, checks: 0, meetings: null}), pulse0: M.pulseRows(null),
   counts: M.stateCounts([{state: "live"}, {state: "wait"}, {state: "wait"}, {state: "x"}, null]),
+  live: M.tagOf({group: "bot", state: "live", state_ko: "보유 중 · SOL 숏", last_ms: now}, now),
+  waitTag: M.tagOf({group: "check", state: "wait", state_ko: "다음 5분 확인 기다리는 중", last_ms: now - 61000}, now),
+  specs: M.panelSpecs({team: {equity: 104.2, today_pnl: -3.5, n: 2, wins: 1, open: 1}, positions: [{coin: "SOL", side: -1, bot_ko: "레인지 봇", entry: 104.6, stop: 106, leverage: 40}],
+    feed: [{ts: now - 60000, who_ko: "레인지 봇", kind_ko: "진입", text: "SOL · 숏 진입 104.6"}], pulse: {signals: 2, entries: 1},
+    seats: [{state: "live"}, {state: "error"}], states_ko: {live: "일하는 중", error: "확인 필요"}}, now),
+  specs0: M.panelSpecs(null, now),
   api: M.ROOM_API,
 }));""")
     assert out["ago"] == ["방금", "12분 전", "3시간 전", "2일 전", "기록 없음"]
@@ -220,6 +229,19 @@ console.log(JSON.stringify({
     assert [r[1] for r in out["pulse0"]] == [0, 0, 0, 0, 0]
     assert out["counts"] == {"live": 1, "wait": 2, "idle": 0, "error": 0, "off": 0}
     assert out["api"] == R.ROUTE
+    assert out["live"]["line"] == "보유 중 · SOL 숏 · 방금" and out["waitTag"]["line"] == "기다리는 중 · 1분 전"
+    # the 3D room's floating screens: the answer's numbers and the clock, in words
+    sp = out["specs"]
+    assert [x["title"] for x in sp] == ["TEAM STATUS · 팀 상태", "POSITIONS · 포지션", "ACTIVITY · 활동", "NEXT CANDLE CLOSES · 다음 봉 마감",
+                                        "TEAM PULSE · 팀 맥박", "ROSTER · 자리"]
+    assert [r["t"] for r in sp[0]["rows"]] == ["$104.20", "−$3.50", "2번 · 승 1 / 패 1", "1개"] and sp[0]["rows"][1]["tone"] == "down"
+    assert [r["t"] for r in sp[1]["rows"]] == ["SOL 숏 · 레인지 봇", "진입 104.6 · 손절 106 · 40배"]
+    assert sp[2]["rows"][0]["t"].endswith("레인지 봇 진입 · SOL · 숏 진입 104.6")
+    assert [r["t"] for r in sp[3]["rows"]] == ["8:13", "23:13", "53:13", "3:53:13", "19:53:13"]
+    assert sp[4]["bars"][:2] == [["신호", 1, "2"], ["진입", 0.5, "1"]]
+    assert [(r["k"], r["t"]) for r in sp[5]["rows"]][:2] == [("일하는 중", "1"), ("wait", "0")]
+    s0 = out["specs0"]
+    assert s0[0]["rows"][0]["t"] == "—" and s0[1]["rows"] == [{"t": "열린 포지션 없음", "tone": "muted"}] and s0[2]["rows"] == []
 
 
 def test_the_whole_screen_renders_on_the_real_answer(room):
@@ -243,6 +265,55 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: T.walk(
     assert not BAD.search(out["bad"])
 
 
+def test_the_3d_rooms_pure_parts():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("needs node")
+    script = f"""const R = await import('file://{JS3}');
+const I = R.m4ident(), P = R.m4persp(0.62, 1.5, 0.1, 60), V = R.m4look([0, 3, 5], [0, 0.25, 0]), VP = R.m4mul(P, V);
+const box = R.meshBox(), cyl = R.meshCyl(28), sph = R.meshSphere(10, 16), tor = R.meshTorus(0.02, 72, 6);
+const unit = (m) => {{ let worst = 0; for (let i = 0; i < m.nrm.length; i += 3) worst = Math.max(worst, Math.abs(Math.hypot(m.nrm[i], m.nrm[i + 1], m.nrm[i + 2]) - 1)); return worst; }};
+const inRange = (m) => m.idx.every((k) => k >= 0 && k < m.pos.length / 3);
+const mid = R.screenOf(VP, 0, 0.25, 0, 800, 600), behind = R.screenOf(VP, 0, 3, 9, 800, 600);
+const p0 = R.seatPose(0, 4), p1 = R.seatPose(1, 4);
+const T = R.m4trs([1, 2, 3], Math.PI / 2, [2, 1, 1]);
+console.log(JSON.stringify({{
+  ii: R.m4mul(I, VP).map((x, i) => Math.abs(x - VP[i])).reduce((a, b) => Math.max(a, b), 0),
+  mid, behind, near: R.screenOf(VP, 0, 0.25, 2, 800, 600), far: R.screenOf(VP, 0, 0.25, -2, 800, 600),
+  boxN: [box.pos.length / 3, box.idx.length], cylN: [cyl.pos.length / 3, cyl.idx.length], sphN: [sph.pos.length / 3, sph.idx.length],
+  torN: [tor.pos.length / 3, tor.idx.length], units: [unit(box), unit(cyl), unit(sph), unit(tor)], ok: [box, cyl, sph, tor].every(inRange),
+  box: [Math.min(...box.pos), Math.max(...box.pos)], p0, p1, tx: R.m4apply(T, [1, 0, 0]), tz: R.m4apply(T, [0, 0, 1]),
+  pp: [R.panelPose(0, 6), R.panelPose(3, 6)], hx: R.helix(2.5, 6, 48),
+  hex: [R.hexRgb("#ff0080"), R.hexRgb("#0f8"), R.hexRgb("rgb(255, 0, 51)"), R.hexRgb("x"), R.hexRgb(null)],
+  none: R.create3d({{}}), none2: R.create3d({{getContext: () => null}}),
+}}));"""
+    r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    o = json.loads(r.stdout.strip().splitlines()[-1])
+    assert o["ii"] < 1e-12
+    assert o["mid"][0] == pytest.approx(400) and o["mid"][1] == pytest.approx(300)       # what the camera looks at: the middle
+    assert o["behind"] is None
+    assert o["near"][2] < o["mid"][2] < o["far"][2] and o["near"][1] > 300 > o["far"][1]   # nearer: lower on the screen, smaller depth
+    assert o["boxN"] == [24, 36] and o["cylN"] == [29 * 2 + 2 * 30, 28 * 6 + 2 * 28 * 3] and o["sphN"] == [11 * 17, 10 * 16 * 6]
+    assert o["torN"] == [73 * 7, 72 * 6 * 6] and max(o["units"]) < 1e-9 and o["ok"] is True and o["box"] == [-0.5, 0.5]
+    p0, p1 = o["p0"], o["p1"]
+    assert p0["x"] == pytest.approx(0, abs=1e-9) and p0["z"] == pytest.approx(1.85) and p1["x"] == pytest.approx(-1.85)
+    # a seat's yaw turns a box's depth (its local z) towards the middle: radial
+    import math
+    for p in (p0, p1):
+        assert abs(math.sin(p["yaw"]) * math.cos(p["a"]) + math.cos(p["yaw"]) * math.sin(p["a"])) == pytest.approx(1)
+    assert o["tx"] == [pytest.approx(1), 2, pytest.approx(1), 1] and o["tz"] == [pytest.approx(2), 2, pytest.approx(3), 1]
+    assert o["hex"][0] == [1, 0, pytest.approx(128 / 255)] and o["hex"][1] == [0, 1, pytest.approx(136 / 255)]
+    assert o["hex"][2] == [1, 0, pytest.approx(0.2)] and o["hex"][3] is None and o["hex"][4] is None
+    assert o["none"] is None and o["none2"] is None
+    # the floating screens hang round the room facing the middle; the vortex stays inside the column of light
+    for pp in o["pp"]:
+        assert math.hypot(pp["x"], pp["z"]) == pytest.approx(3.3)
+        assert math.sin(pp["yaw"]) * pp["x"] + math.cos(pp["yaw"]) * pp["z"] == pytest.approx(-3.3)     # its face (local z) to the middle
+    assert len(o["hx"]) == 6 and all(len(s) == 48 for s in o["hx"])
+    assert all(math.hypot(p[0], p[2]) <= 0.33 and 0.17 <= p[1] <= 1.64 for s in o["hx"] for p in s)
+
+
 # ---------------------------------------------------------------- static
 def test_tokens_only_imports_through_pb_and_read_only():
     css, js, tok = _read(CSS), _read(JS), _read(os.path.join(V4, "tokens.css"))
@@ -254,9 +325,13 @@ def test_tokens_only_imports_through_pb_and_read_only():
     defined = set(re.findall(r"^\s*(--dk-[\w-]+)\s*:", tok, flags=re.M))
     assert used and used <= defined, used - defined
     assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(", re.sub(r"//[^\n]*", "", js))
-    assert re.findall(r'from\s+"([^"]+)"', js) == ["../core/pb.js"]
+    assert re.findall(r'from\s+"([^"]+)"', js) == ["../core/pb.js", "./livebots-room3d.js"]
     assert "innerHTML" not in js and "fetch(" not in js and "POST" not in js and "DOMParser" not in js
     assert "그림은 장식" in js and "사람 모양 그림은 장식이에요" in js
+    js3 = _read(JS3)                                   # the 3D room: no library, no colour of its own (the tokens, as numbers)
+    assert "import " not in re.sub(r"//[^\n]*", "", js3) and not re.search(r"#[0-9a-fA-F]{3,8}\b", js3)
+    assert "fetch(" not in js3 and "innerHTML" not in js3
+    assert 'import {create3d, hexRgb, seatPose, screenOf} from "./livebots-room3d.js";' in js
 
 
 def test_the_tab_and_the_menu():
