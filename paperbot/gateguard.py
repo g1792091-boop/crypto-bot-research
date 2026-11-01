@@ -73,6 +73,12 @@ CLOSED_KEEP = 40                       # the ended positions with their P&L (sta
 FOREIGN_PREFIXES = ("BYBIT_", "MEXC_", "WOOXPRO_", "FLIPSTER_", "DEEPCOIN_", "TOOBIT_", "LIVE_API_", "TESTNET_API_",
                     "BINANCE_API_")
 INFO, WARN, CRITICAL = "INFO", "WARN", "CRITICAL"
+# Gate's answer when the key's account has no USDT perpetual futures account yet (owners 11-01, the first check)
+NO_FUTURES_KO = ("이 키의 게이트 계정에 USDT 무기한 선물 계정이 아직 없습니다(게이트 답: USER_NOT_FOUND). 게이트 앱의 자산 → 이체에서 "
+                 "현물 → 선물(USDT 무기한)로 USDT를 옮기면 생깁니다. 친구가 평소 거래하는 계정(UID)에서 만든 키인지도 확인해 주세요")
+UNIFIED_KO = {"classic": "클래식 계정", "multi_currency": "통합 계정(다중 통화 증거금)", "portfolio": "통합 계정(포트폴리오 증거금)",
+              "single_currency": "통합 계정(단일 통화 증거금)"}
+COPY_ROLE_KO = {1: "카피 트레이딩 리더", 2: "카피 트레이딩 팔로워", 3: "카피 트레이딩 리더이자 팔로워"}
 
 
 class Refused(Exception):
@@ -279,8 +285,14 @@ class Guard:
 
     # ------------------------------------------------------------------ start
     def start_checks(self) -> dict:
-        """Hedge mode or split positions refuse the start; an unbound key too (when Gate shows the binding)."""
-        acct = self.c.account()
+        """Hedge mode or split positions refuse the start; an unbound key too (when Gate shows the binding); an account
+        without a USDT futures account (Gate's USER_NOT_FOUND) too, in words (exit 2: systemd does not restart it)."""
+        try:
+            acct = self.c.account()
+        except G.GateRefused as e:
+            if e.label == "USER_NOT_FOUND":
+                raise Refused(NO_FUTURES_KO) from e
+            raise
         self._mode_ok(acct, start=True)
         try:
             det = self.c.detail()
@@ -291,6 +303,37 @@ class Guard:
             raise Refused("이 키는 IP가 묶여 있지 않습니다(게이트 키 화면에서 서버 IP 158.247.200.152 를 묶어 주세요)")
         self.last_account = self.c.now()
         return {"account": acct, "ips": ips}
+
+    def whoami_lines(self) -> list[str]:
+        """Reads only (the check, when the key's account has no USDT futures account): whose account the key is, so the
+        owners can compare its UID with the one in the friend's app; its IP binding, its account mode, copy trading, a
+        BTC-settled futures account. Never a key, a secret or a balance of another wallet."""
+        out = ["게이트가 이 키를 받아들였습니다(키 · 시크릿 · 서명 정상). 다만 이 키의 계정에 USDT 무기한 선물 계정이 없습니다."]
+        try:
+            det = self.c.detail()
+        except G.GateError as e:
+            det = None
+            out.append(f"계정 정보를 못 읽음: {e}")
+        if isinstance(det, dict):
+            ips = det.get("ip_whitelist")
+            key_mode = (det.get("key") or {}).get("mode") if isinstance(det.get("key"), dict) else None
+            out.append(f"이 키의 계정 UID: {det.get('user_id') or '못 읽음'} (친구 앱 프로필의 UID와 같아야 합니다)")
+            out.append(f"IP 묶음: {', '.join(map(str, ips)) if isinstance(ips, list) and ips else '없음'}"
+                       + (f" · 키 모드 {'클래식' if key_mode == 1 else '예전 통합 계정' if key_mode == 2 else key_mode}" if key_mode else ""))
+            role = det.get("copy_trading_role")
+            if role in COPY_ROLE_KO:
+                out.append(f"이 계정은 {COPY_ROLE_KO[role]}입니다(카피 트레이딩 자금은 따로 된 계정이라 봇이 못 봅니다)")
+        try:
+            um = str(self.c.unified_mode().get("mode") or "")
+            out.append(f"계정 모드: {UNIFIED_KO.get(um, um or '못 읽음')}")
+        except G.GateError:
+            out.append("계정 모드: 이 키로는 못 읽음(선물 전용 키라 정상)")
+        try:
+            self.c.account("btc")
+            out.append("BTC 마진(코인 마진) 선물 계정은 있습니다. 봇은 USDT 무기한만 지킵니다")
+        except G.GateError:
+            pass
+        return out
 
     def _mode_ok(self, acct: dict, start: bool = False) -> bool:
         mode = str(acct.get("position_mode") or "")
@@ -786,7 +829,14 @@ def cmd_check(args) -> int:
     cfg = load_config(args.config)
     client = build(cfg, dict(os.environ))
     g = Guard(cfg, client, lambda level, text: None, save=False)
-    info = g.start_checks()
+    try:
+        info = g.start_checks()
+    except Refused as e:
+        if isinstance(e.__cause__, G.GateRefused) and e.__cause__.label == "USER_NOT_FOUND":
+            for line in g.whoami_lines():
+                print(line)
+            print("주문은 하나도 내지 않았습니다(읽기만).")
+        raise
     acct = info["account"]
     print(f"{cfg.name}: 키 확인됨 · 서버 시각 차 {client.offset_s:+.1f}초 · 한 방향 모드 · "
           f"IP 묶음 {', '.join(info['ips']) if isinstance(info['ips'], list) else '(이 키로는 못 읽음: 키 화면에서 확인)'}")

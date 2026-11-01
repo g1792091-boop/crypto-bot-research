@@ -240,11 +240,19 @@ class GateClient:
         return px
 
     # ------------------------------------------------------------------ private reads
-    def account(self) -> dict:
-        js = self.req("GET", f"/futures/{SETTLE}/accounts")
+    def account(self, settle: str = SETTLE) -> dict:
+        """The futures account of ``settle`` (usdt: the one the bot guards; btc only for the check's words). Gate answers
+        USER_NOT_FOUND ("please transfer funds first to create futures account") when the key's account has none."""
+        js = self.req("GET", f"/futures/{settle}/accounts")
         if not isinstance(js, dict):
             raise GateUnknown(f"선물 계정을 못 읽음 ({str(js)[:120]})")
         return js
+
+    def unified_mode(self) -> dict:
+        """GET /unified/unified_mode: {mode: classic | multi_currency | portfolio | single_currency} (the check's words
+        only; a futures-only key may be refused)."""
+        js = self.req("GET", "/unified/unified_mode")
+        return js if isinstance(js, dict) else {}
 
     def detail(self) -> dict:
         js = self.req("GET", "/account/detail")

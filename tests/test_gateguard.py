@@ -34,6 +34,7 @@ class FakeGate:
         self.closes = []
         self.m1 = {"BTC_USDT": {}}     # minute (s) -> (o, h, l, c)
         self.dual = False
+        self.no_futures = False        # Gate's USER_NOT_FOUND: the key's account has no USDT futures account
         self.ips = ["158.247.200.152"]
         self.calls = []
         self.fail_next_post = None     # an HTTP status for the next price-order POST (the order is still made)
@@ -103,11 +104,15 @@ class FakeGate:
                     "taker_fee_rate": "0.00075", "status": "trading"}
         if p == "/futures/usdt/tickers":
             return [{"contract": q["contract"], "last": str(self.last[q["contract"]])}]
+        if p in ("/futures/usdt/accounts", "/futures/btc/accounts") and (self.no_futures or p.endswith("/btc/accounts")):
+            return 400, json.dumps({"label": "USER_NOT_FOUND", "message": "please transfer funds first to create futures account"})
+        if p == "/unified/unified_mode":
+            return 403, json.dumps({"label": "FORBIDDEN", "message": "no permission"})
         if p == "/futures/usdt/accounts":
             return {"total": "100", "available": "60", "in_dual_mode": self.dual,
                     "position_mode": "dual" if self.dual else "single"}
         if p == "/account/detail":
-            return {"ip_whitelist": self.ips}
+            return {"ip_whitelist": self.ips, "user_id": 12345678, "key": {"mode": 1}, "copy_trading_role": 0}
         if p == "/futures/usdt/fee":
             return {q["contract"]: {"taker_fee": "0.0005", "maker_fee": "0.0002"}}
         if p == "/futures/usdt/positions":
@@ -644,6 +649,30 @@ class Guarding(unittest.TestCase):
         for name in ("GATE_LIVE_KEY", "GATE_LIVE_SECRET", "GATE_LIVE_KEY_CHECKED", "PAPERBOT_LIVE_MAINNET"):
             self.assertIn(f"\n{name}=\n", env)
         self.assertEqual(subprocess.run(["sh", "-n", os.path.join(root, "deploy", "paperbot-exec.sh")]).returncode, 0)
+
+    def test_no_futures_account_is_said_with_the_keys_uid(self):
+        """Owners 11-01, the first check on the friend's key: Gate's USER_NOT_FOUND ("please transfer funds first to
+        create futures account") refuses the start in words; the check says whose account the key is (its UID, to compare
+        with the friend's app) and places nothing."""
+        fake, g, msgs = make()
+        fake.no_futures = True
+        with self.assertRaises(GG.Refused) as e:
+            g.start_checks()
+        self.assertIn("USDT 무기한 선물 계정이 아직 없습니다", str(e.exception))
+        self.assertIn("현물 → 선물(USDT 무기한)", str(e.exception))
+        lines = g.whoami_lines()
+        self.assertIn("키 · 시크릿 · 서명 정상", lines[0])
+        self.assertIn("이 키의 계정 UID: 12345678 (친구 앱 프로필의 UID와 같아야 합니다)", lines)
+        self.assertIn("IP 묶음: 158.247.200.152 · 키 모드 클래식", lines)
+        self.assertIn("계정 모드: 이 키로는 못 읽음(선물 전용 키라 정상)", lines)
+        self.assertFalse([x for x in lines if "BTC 마진" in x])
+        self.assertFalse([c for c in fake.calls if c[0] in ("POST", "DELETE")])
+        joined = "\n".join(lines)
+        self.assertNotIn(KEY, joined)
+        self.assertNotIn(SECRET, joined)
+        # the friend moved USDT to futures: the start goes on as before
+        fake.no_futures = False
+        self.assertEqual(g.start_checks()["ips"], ["158.247.200.152"])
 
     def test_check_reads_only(self):
         fake, g, msgs = make()
