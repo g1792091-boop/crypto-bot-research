@@ -722,7 +722,9 @@ def test_wiring_route_menu_find_inventory_and_module():
                    # 바이비트 봇 (owners 10-29, screens/livebots-mix.js on its own answers, livebots-ftrend.js)
                    ("bybit", "바이비트 관제"), ("bybitperf", "바이비트 성적"), ("ftrend", "친구 추세판"),
                    # 레인지 봇 (owners 10-31 night, the same screens on its own answers; tests/test_dash_mixrange_site.py)
-                   ("mixrange", "레인지 관제"), ("mixrangeperf", "레인지 성적")]
+                   ("mixrange", "레인지 관제"), ("mixrangeperf", "레인지 성적"),
+                   # 게이트 봇 (owners 11-01, screens/livebots-gate.js; tests/test_dash_livegate.py)
+                   ("gatebot", "게이트 봇")]
     # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에;
     # 10-29 (the 추세판단 봇 switched off): 한눈에 first; 11-01: 관제실 (한눈에 is off the menu)
     assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "deck")' in _read(SCREENS, "livebots.js")

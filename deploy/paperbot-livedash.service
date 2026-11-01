@@ -31,7 +31,7 @@ PrivateTmp=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/paperbot
 ReadOnlyPaths=-/var/lib/paperbot/.local -/var/lib/paperbot/lab -/var/lib/paperbot/exec
-InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/etc/paperbot/debate.env -/etc/paperbot/live-telegram.env -/var/backups/paperbot
+InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/live.env -/etc/paperbot/executor.env -/etc/paperbot/executor-gate.env -/etc/paperbot/executor-wooxpro2.env -/etc/paperbot/executor-toobit.env -/etc/paperbot/debate.env -/etc/paperbot/live-telegram.env -/var/backups/paperbot
 
 [Install]
 WantedBy=multi-user.target

@@ -26,7 +26,11 @@ the account's positions and, for each one, puts a stop on Gate and moves it up t
 The stop is a Gate price order (paperbot/gate.py ``place_stop``): it rests on the exchange and closes the whole position
 at market, so it keeps protecting while this program is off; only the ladder waits. A stop is moved new-first: the new
 one is placed, then the old one cancelled (never a moment without one). Its state (the stop ids, the lock reached, the
-best price) is saved in ``state`` (/var/lib/paperbot/exec/gateguard.json).
+best price) is saved in ``state`` (/var/lib/paperbot/exec/gateguard.json). For the live site's 게이트 봇 screen (owners
+11-01, dash/more/livegate.py, which reads this file and nothing else) the state also keeps the bot's own messages
+(``log``, the last LOG_KEEP), the ended positions with Gate's P&L (``closed``, the last CLOSED_KEEP), the positions as last
+read (``live``: size, average entry, leverage, liquidation, margin, unrealised P&L), the account (``account``, every
+ACCOUNT_EVERY_S) and the last loop's time (``loop_s``).
 
     python -m paperbot.gateguard check --config /etc/paperbot/gateguard.json   # reads only: what it would do now
     python -m paperbot.gateguard run --config /etc/paperbot/gateguard.json     # the unit paperbot-gateguard
@@ -64,6 +68,8 @@ CLOSE_WAIT_S = 120                     # how long a closed position's P&L is loo
 CLOSING_WAIT_S = 60                    # a market close sent: not sent again for this long while the position shows
 LATE_S = 300                           # a position first seen this long after it opened: "seen late"
 ACCOUNT_EVERY_S = 600
+LOG_KEEP = 80                          # the site's history of the bot's own messages (state "log")
+CLOSED_KEEP = 40                       # the ended positions with their P&L (state "closed")
 FOREIGN_PREFIXES = ("BYBIT_", "MEXC_", "WOOXPRO_", "FLIPSTER_", "DEEPCOIN_", "TOOBIT_", "LIVE_API_", "TESTNET_API_",
                     "BINANCE_API_")
 INFO, WARN, CRITICAL = "INFO", "WARN", "CRITICAL"
@@ -230,6 +236,8 @@ class Guard:
         self.coins: dict = self.st.setdefault("coins", {})
         self.pending: list = self.st.setdefault("pending", [])
         self.orphans: list = self.st.setdefault("orphans", [])     # [contract, id] of our stops still to cancel
+        self.log: list = self.st.setdefault("log", [])             # (the site's history: say)
+        self.closed: list = self.st.setdefault("closed", [])       # (the site's ended positions: _report_pending)
         self.fails = 0
         self.last_account = 0.0
         self.warned: dict = {}
@@ -256,6 +264,12 @@ class Guard:
 
     def say(self, level: str, text: str) -> None:
         self.notify(level, f"[{self.cfg.name}] {text}")
+        try:
+            at = self.c.now()
+        except Exception:  # noqa: BLE001  (the clock of a client that could not start)
+            at = time.time()
+        self.log.append({"s": int(at), "level": level, "text": text})
+        del self.log[:-LOG_KEEP]
 
     def say_once(self, key: str, level: str, text: str, every_s: float = 3600.0) -> None:
         now = self.c.now()
@@ -293,7 +307,10 @@ class Guard:
     def loop_once(self) -> None:
         now = self.c.now()
         if now - self.last_account >= ACCOUNT_EVERY_S:
-            self._mode_ok(self.c.account())
+            acct = self.c.account()
+            self._mode_ok(acct)
+            self.st["account"] = {"total": G.fnum(acct.get("total")), "available": G.fnum(acct.get("available")),
+                                  "upnl": G.fnum(acct.get("unrealised_pnl")), "s": int(now)}
             self.last_account = now
         positions, held = {}, set()
         for p in self.c.positions():
@@ -306,6 +323,9 @@ class Guard:
                 continue
             positions[p["contract"]] = p
         open_orders = {o["id"]: o for o in self.c.price_orders()}
+        self.st["loop_s"] = int(now)
+        self.st["live"] = {c: {k: p.get(k) for k in ("side", "size", "entry", "lev", "liq", "margin", "upnl", "mark", "cross", "open_s")}
+                           for c, p in positions.items()}
         for c in list(self.coins):
             p = positions.get(c)
             if p is None or p["side"] != self.coins[c]["side"]:
@@ -694,6 +714,11 @@ class Guard:
                 head += (f" (수수료 {fee:+.2f} 포함)" if fee is not None and pnl is not None else "")
             else:
                 head += "\n손익은 게이트 기록에서 아직 못 찾았습니다(앱의 포지션 기록을 봐 주세요)"
+            self.closed.append({"contract": d["contract"], "side": d["side"], "entry": d["entry"], "open_s": d["open_s"],
+                                "end_s": int(self.c.now()), "cause": d["cause"], "best_roe": d.get("best_roe"), "lock": d.get("lock"),
+                                "exit": out if row is not None else None, "pnl": pnl if row is not None else None,
+                                "fee": fee if row is not None else None})
+            del self.closed[:-CLOSED_KEEP]
             self.say(INFO, head)
         self.pending[:] = left
 

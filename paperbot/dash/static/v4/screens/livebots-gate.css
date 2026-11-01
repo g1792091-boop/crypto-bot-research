@@ -1,0 +1,106 @@
+/* 실거래 › 게이트 봇 (#/gatebot; screens/livebots-gate.js), @imported by screens/livebots.css with the other tabs. Tokens
+   only (both skins), every font size a --t-* token, every selector under the lgt- prefix. The status card, then one card
+   per position (two side by side on a desk, one column on a phone), then the ended positions and the bot's messages.
+   Long = --up, short = --down; the bot's stop in --warn, a lock in --up; the ladder's locked rungs lit, the next one ringed.
+   The 관제실's finish (screens/livebots-hud.css on .lb-hud) dresses the cards and the head. */
+.lgt { gap: 12px; min-width: 0; }
+.lgt-body { display: grid; gap: 12px; min-width: 0; }
+.lgt-body .card { min-width: 0; }
+.lgt-line { margin: 0; font-size: var(--t-sm); color: var(--ink-2); overflow-wrap: anywhere; }
+.lgt-bad { margin: 0; font-size: var(--t-xs); color: var(--down); overflow-wrap: anywhere; }
+.lgt-k { font-size: var(--t-2xs); color: var(--muted); letter-spacing: .06em; }
+.lgt-sub { font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+
+/* 상태 */
+.lgt-st { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 10px; min-width: 0; }
+.lgt-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.lgt-dot.good { background: var(--up); box-shadow: 0 0 10px var(--up-glow); }
+.lgt-dot.warn { background: var(--warn); }
+.lgt-dot.bad { background: var(--down); box-shadow: 0 0 10px var(--down-glow); }
+.lgt-tiles { margin: 0 0 10px; }
+.lgt-rules { margin: 0; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.6; }
+
+/* 아직 시작 전 */
+.lgt-steps { margin: 10px 0; padding-left: 22px; display: grid; gap: 8px; min-width: 0; }
+.lgt-steps li { display: grid; gap: 3px; font-size: var(--t-sm); color: var(--ink); min-width: 0; }
+.lgt-steps li.done { color: var(--muted); }
+.lgt-steps code { font-family: var(--f-term); font-size: var(--t-xs); color: var(--ink-2); padding: 3px 8px; border-radius: 4px;
+  background: var(--surface-2); border: 1px solid var(--line); overflow-wrap: anywhere; white-space: normal; }
+
+/* 포지션 */
+.lgt-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); min-width: 0; }
+.lgt-pos { --sc: var(--muted); display: grid; gap: 10px; align-content: start; border-left: 3px solid var(--sc); min-width: 0; }
+.lgt-pos.long { --sc: var(--up); }
+.lgt-pos.short { --sc: var(--down); }
+.lgt-pos.off { opacity: .8; border-style: dashed; }
+.lgt-ph { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.lgt-coin { font-size: var(--t-lg); color: var(--ink); letter-spacing: .04em; }
+.lgt-lev { font-size: var(--t-sm); color: var(--ink-2); }
+.lgt-upnl { display: grid; justify-items: end; margin-left: auto; }
+.lgt-upnl small { font-size: var(--t-2xs); color: var(--muted); }
+.lgt-upnl b { font-size: var(--t-md); }
+.lgt-kv { display: grid; grid-template-columns: repeat(3, minmax(0, auto) minmax(0, 1fr)); gap: 4px 10px; margin: 0; font-size: var(--t-xs); min-width: 0; }
+.lgt-kv dt { color: var(--muted); }
+.lgt-kv dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; white-space: normal; }
+.lgt-stop { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: baseline; gap: 2px 10px; padding: 8px 10px;
+  border-radius: var(--r-md); border: 1px solid var(--warn-line); background: var(--warn-soft); min-width: 0; }
+.lgt-stop.lock { border-color: var(--up-line); background: var(--up-soft); }
+.lgt-sp { font-size: var(--t-lg); color: var(--warn); }
+.lgt-stop.lock .lgt-sp { color: var(--up); }
+.lgt-why { font-size: var(--t-xs); color: var(--ink); overflow-wrap: anywhere; }
+.lgt-stop .lgt-sub { grid-column: 1 / -1; }
+.lgt .num.up { color: var(--up); }
+.lgt .num.down { color: var(--down); }
+
+/* 계단 익절 */
+.lgt-lad { display: grid; gap: 6px; min-width: 0; }
+.lgt-lh { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
+.lgt-roe { font-size: var(--t-xs); color: var(--ink-2); }
+.lgt-roe b { font-size: var(--t-sm); }
+.lgt-rungs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 4px; min-width: 0; }
+.lgt-rung { display: grid; justify-items: center; gap: 0; padding: 4px 2px; border-radius: 4px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--muted); min-width: 0; }
+.lgt-rung small { font-size: var(--t-2xs); }
+.lgt-rung b { font-size: var(--t-xs); color: var(--ink-2); }
+.lgt-rung.on { border-color: var(--up-line); background: var(--up-soft); color: var(--up); }
+.lgt-rung.on b { color: var(--up); }
+.lgt-rung.next { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-line); color: var(--accent); }
+.lgt-rung.next b { color: var(--ink); }
+.lgt-meter { position: relative; display: block; height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.lgt-meter > i { position: absolute; inset: 0 auto 0 0; width: calc(var(--v, 0) * 100%); border-radius: inherit; background: var(--accent);
+  transition: width .6s var(--ease); }
+.lgt-next { margin: 0; font-size: var(--t-xs); color: var(--ink-2); overflow-wrap: anywhere; }
+.lgt-warns { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; min-width: 0; }
+.lgt-warns li { padding: 5px 8px; border-left: 3px solid var(--line-2); border-radius: 2px; font-size: var(--t-xs); color: var(--ink-2);
+  background: var(--surface-2); overflow-wrap: anywhere; }
+.lgt-warns li.warn { border-left-color: var(--warn); color: var(--warn); }
+.lgt-warns li.bad { border-left-color: var(--down); color: var(--down); background: var(--down-soft); }
+
+/* 끝난 포지션 · 봇 메시지 */
+.lgt-two { display: grid; gap: 12px; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; min-width: 0; }
+.lgt-feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 420px; overflow-y: auto; min-width: 0; }
+.lgt-msg { display: grid; grid-template-columns: auto auto minmax(0, 1fr); align-items: baseline; gap: 2px 8px; padding: 5px 0;
+  border-bottom: 1px solid var(--line); min-width: 0; }
+.lgt-msg time { font-size: var(--t-2xs); color: var(--muted); white-space: nowrap; }
+.lgt-msg > .pp { justify-self: start; }
+.lgt-mt { font-size: var(--t-xs); color: var(--ink); white-space: pre-line; overflow-wrap: anywhere; min-width: 0; }
+.lgt-msg.bad .lgt-mt { color: var(--down); }
+.lgt-msg.warn .lgt-mt { color: var(--warn); }
+
+/* the 관제실's finish (on .lb-hud): the status card's dot pulses while the bot keeps watch */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-skin="classic"]) .lb-hud .lgt-dot.good { animation: lgt-pulse 2.4s ease-in-out infinite; }
+  :root:not([data-skin="classic"]) .lb-hud .lgt-rung.next { animation: lgt-pulse 2.4s ease-in-out infinite; }
+}
+@keyframes lgt-pulse { 50% { opacity: .45; } }
+:root:not([data-skin="classic"]) .lb-hud .lgt-rung { border-radius: 2px; font-family: var(--f-term); }
+:root:not([data-skin="classic"]) .lb-hud .lgt-coin,
+:root:not([data-skin="classic"]) .lb-hud .lgt-sp { font-family: var(--f-term); text-shadow: 0 0 12px currentColor; }
+
+@media (max-width: 760px) {
+  .lgt-two { grid-template-columns: minmax(0, 1fr); }
+  .lgt-kv { grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr); }
+  .lgt-upnl { justify-items: start; margin-left: 0; width: 100%; }
+  .lgt-msg { grid-template-columns: auto minmax(0, 1fr); }            /* a phone: the time and the level, the words under them */
+  .lgt-mt { grid-column: 1 / -1; }
+}

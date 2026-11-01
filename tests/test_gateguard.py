@@ -44,7 +44,7 @@ class FakeGate:
         self.positions[c] = {"contract": c, "size": str(size), "entry_price": str(entry), "leverage": str(lev),
                              "cross_leverage_limit": "0", "liq_price": str(liq), "mode": mode,
                              "pos_margin_mode": "isolated", "open_time": int(self.now if open_s is None else open_s),
-                             "margin": "5", "unrealised_pnl": "0"}
+                             "margin": "5", "unrealised_pnl": "0", "mark_price": str(entry)}
 
     def minute(self, c, hi, lo, close, at=None):
         t = int((self.now if at is None else at) // 60 * 60)
@@ -381,6 +381,36 @@ class Guarding(unittest.TestCase):
         self.assertEqual(fake.orders[sid]["finish_as"], "cancelled")       # our stop does not stay behind
         self.assertIn("BTC 롱 종료: 직접 종료", msgs[-1][1])
         self.assertIn("평단 100 → 종료 101, 손익 +0.09 USDT", msgs[-1][1])
+
+    def test_the_state_keeps_what_the_site_shows(self):
+        """Owners 11-01 (the live site's 게이트 봇 screen reads the state file only): the positions as last read, the loop's
+        time, the account, the bot's own messages and the ended positions with Gate's P&L."""
+        fake, g, msgs = make()
+        fake.open(size=10, entry=100.0, lev=20)
+        g.loop_once()
+        with open(g.cfg.state, encoding="utf-8") as fh:
+            st = json.load(fh)
+        live = st["live"]["BTC_USDT"]
+        self.assertEqual((live["side"], live["size"], live["entry"], live["lev"], live["mark"]), (1, 10, 100.0, 20, 100.0))
+        self.assertEqual(st["loop_s"], int(fake.now))
+        self.assertEqual((st["account"]["total"], st["account"]["available"]), (100.0, 60.0))
+        self.assertTrue(any("진입 확인" in x["text"] for x in st["log"]))
+        self.assertEqual(st["log"][-1]["s"], int(fake.now))
+        fake.now += 30
+        fake.flat("BTC_USDT", 101.0)
+        g.loop_once()
+        with open(g.cfg.state, encoding="utf-8") as fh:
+            st = json.load(fh)
+        self.assertEqual(st["live"], {})
+        (c,) = st["closed"]
+        self.assertEqual((c["contract"], c["side"], c["entry"], c["exit"]), ("BTC_USDT", 1, 100.0, 101.0))
+        self.assertAlmostEqual(c["pnl"], 0.09)
+        self.assertTrue(c["cause"].startswith("직접 종료"))
+        # only the last LOG_KEEP messages are kept
+        for i in range(GG.LOG_KEEP + 5):
+            g.say(GG.INFO, f"x{i}")
+        self.assertEqual(len(g.log), GG.LOG_KEEP)
+        self.assertEqual(g.log[-1]["text"], f"x{GG.LOG_KEEP + 4}")
 
     def test_friends_own_orders_are_never_touched(self):
         fake, g, msgs = make()

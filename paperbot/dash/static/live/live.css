@@ -5,9 +5,9 @@
 .brand .bic { color: var(--warn); border-color: var(--warn-line); }
 .brand-t b { color: var(--warn); }
 
-/* the phone's bottom bar: four groups (지금 · 바이비트 봇 · 친구 15분 봇 · 레인지 봇, core/routes.js LIVE_GROUPS; owners 11-01:
-   "너무 많으면 또 복잡하잖아"), the words one size smaller to fit a phone */
-.botbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* the phone's bottom bar: five groups (지금 · 바이비트 봇 · 친구 15분 봇 · 레인지 봇 · 게이트 봇, core/routes.js LIVE_GROUPS;
+   owners 11-01: "너무 많으면 또 복잡하잖아", then the 게이트 봇's screen), the words one size smaller to fit a phone */
+.botbar { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .botbar a { font-size: var(--t-2xs); text-align: center; }
 
 /* the link back to the rule bot's dashboard (the strip's end / the top bar): a quiet dashed button like 예전 화면 */

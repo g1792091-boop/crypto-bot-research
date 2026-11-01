@@ -251,7 +251,8 @@ class GateClient:
         return js if isinstance(js, dict) else {}
 
     def positions(self) -> list[dict]:
-        """The open positions: {contract, side (+1 / -1), size (abs), entry, lev, liq, mode, margin_mode, open_s}."""
+        """The open positions: {contract, side (+1 / -1), size (abs), entry, lev, cross, liq, mode, open_s, margin, upnl,
+        mark (Gate's mark price: the live site's 게이트 봇 screen)}."""
         js = self.req("GET", f"/futures/{SETTLE}/positions", {"holding": "true"})
         if not isinstance(js, list):
             raise GateUnknown(f"포지션 목록을 못 읽음 ({str(js)[:120]})")
@@ -272,7 +273,7 @@ class GateClient:
                         "entry": fnum(p.get("entry_price")) or 0.0, "lev": lev, "cross": cross,
                         "liq": fnum(p.get("liq_price")) or 0.0, "mode": str(p.get("mode") or "single"),
                         "open_s": int(fnum(p.get("open_time")) or 0), "margin": fnum(p.get("margin")),
-                        "upnl": fnum(p.get("unrealised_pnl"))})
+                        "upnl": fnum(p.get("unrealised_pnl")), "mark": fnum(p.get("mark_price"))})
         return out
 
     def taker_fee(self, c: str) -> Optional[float]:

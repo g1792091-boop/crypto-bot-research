@@ -140,4 +140,6 @@ sudo systemctl stop paperbot-gateguard
 
 ## 7. 지금 없는 것
 
-- 사이트(대시보드) 화면은 아직 없습니다. 알림은 텔레그램으로 옵니다. 상태는 `/var/lib/paperbot/exec/gateguard.json`에 남습니다.
+- (11-01부터 있음) 실거래 사이트 메뉴 맨 끝 **게이트 봇** 화면: 봇 상태, 포지션마다 봇 손절 · 계단, 끝난 포지션, 봇 메시지
+  (`docs/livedash-ko.md` 메뉴 장). 화면은 `/var/lib/paperbot/exec/gateguard.json`과 설정만 읽고, 게이트 키는 없습니다.
+  잔고 · 포지션 · 메시지 · 끝난 포지션을 상태 파일에 남기는 것은 11-01 코드부터라, `install.sh`로 올린 뒤 봇이 돌면 채워집니다.

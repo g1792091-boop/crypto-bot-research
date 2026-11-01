@@ -102,6 +102,9 @@ import {ftrendView} from "./livebots-ftrend.js";
 // 봇별 › 레인지 봇 (owners 10/26: the 레인지 봇 paper bot and the executors that follow it; docs/range-bot-ko.md; owners 10-31
 // night: the 레인지 봇's own mix screens once it trades WOO X Pro by itself, rangeBotView / rangeMoved)
 import {rangeBotView, rangeMoved} from "./livebots-range.js";
+// 게이트 봇 (owners 11-01 "게이트 대시보드 화면 만드는거 진행해줘야지": the friend's own Gate positions and the stops and
+// ladder the 게이트 봇 put on them; menu group "gate"; dash/more/livegate.py)
+import {gateView} from "./livebots-gate.js";
 // 봇별 화면마다 맨 아래 목표 연구 (owners 10/26 "필요한 연구 부분들 각 봇마다 … 대시보드 화면에 추가해줘"; dash/more/livegoalres.py)
 import {goalResSection} from "./livebots-goalres.js";
 
@@ -158,13 +161,15 @@ export const TABS = [
   // 레인지 봇 (owners 10-31 night: menu group "range", as the 바이비트 봇's): 관제 · 성적 of the mix bot on WOO X Pro
   {id: "mixrange", label: "레인지 관제", make: (ctx) => mixView(ctx, RANGE_UI), own: true},
   {id: "mixrangeperf", label: "레인지 성적", make: (ctx) => mixperfView(ctx, RANGE_UI), own: true},
+  // 게이트 봇 (owners 11-01: menu group "gate"): its positions, stops and ladder from its own state file
+  {id: "gatebot", label: "게이트 봇", make: (ctx) => gateView(ctx), own: true},
 ];
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
 const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
   range: "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요"};
 /** The menu's tabs of each live bot (owners 11-01 "봇별 화면이랑 회의실도 이렇게 멋있게 만들어야지"): they wear the 관제실's HUD
  *  finish (.lb-hud, screens/livebots-hud.css); 관제실 and 회의실 have their own. */
-export const HUD = new Set(["bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]);
+export const HUD = new Set(["bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]);
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "deck");   // (owners 11-01: 관제실, the main screen)
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 레인지 봇's head once it trades WOO X Pro by itself (owners 10-31 night, the summary's ``replaced``). */
@@ -189,6 +194,10 @@ export const BOT_TAB = {
   // owners 10-31, last: all three mix bots enter on 15m bars and read the trend bar on the 30m bar
   mixbot: {bot: "mix", sub: "친구 15분 봇(15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · WOO X Pro 두 번째 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요 · 잔고는 아래 실거래 칸"},
+  // owners 11-01: the 게이트 봇 has no trading rule and no 목표 연구 of its own (bot null: no foot); the friend's Gate
+  // account is on the screen's status card
+  gatebot: {bot: null, sub: "게이트 봇 · 친구가 게이트에서 직접 진입하면 봇이 손절(15분봉 ATR × 3)과 계단 익절(순ROE 10%→8%, 이후 2%씩)만 걸어요 · 다른 봇은 이 화면에 없어요",
+    head: null, only: () => [], none: "게이트 봇은 진입하지 않아요 · 친구의 게이트 계정 잔고는 아래 상태 칸"},
 };
 /** The foot of a 봇별 screen: the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한 분석·연구
  *  부분들"; screens/livebots-goalres.js, its own answer /api/v4/livebots/goalres?bot=). */
@@ -237,7 +246,7 @@ export async function mount(el, ctx) {
   const head = h("div", {class: "lb-head"}, h("h1", null, tab.label), sub, mine.length > 1 ? seg : null);
   const staleSlot = h("div", {class: "lb-slot"});
   const body = h("div", {class: "lb-body"});
-  const goal = bt ? goalResSlot(bt.bot) : null;
+  const goal = bt && bt.bot ? goalResSlot(bt.bot) : null;
   el.classList.add("lb-scr", "lb-tab-" + st.tab);
   if (HUD.has(st.tab)) {                 // each live bot's own screens in the 관제실's finish (screens/livebots-hud.css)
     el.classList.add("lb-hud", "lb-boot");

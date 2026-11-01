@@ -276,7 +276,8 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     # owners 11-01 ("필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, each live bot's 봇별
     # screen leading its own group; the 추세판단 봇's and the VWAP 개선판's screens hidden (an old link still opens them)
     assert out["groups"] == [["now", "지금", ["deck", "room"]], ["bybit", "바이비트 봇", ["bybitbot", "bybitperf", "ftrend"]],
-                             ["mix", "친구 15분 봇", ["mixbot", "mixperf"]], ["range", "레인지 봇", ["rangebot", "mixrangeperf"]]]
+                             ["mix", "친구 15분 봇", ["mixbot", "mixperf"]], ["range", "레인지 봇", ["rangebot", "mixrangeperf"]],
+                             ["gate", "게이트 봇", ["gatebot"]]]                  # (later on 11-01: the 게이트 봇's screen)
     # (owners 10-31 night: the friend bot is 친구 15분 봇, its config's name)
     assert out["nav"][1] == ["바이비트 봇", ["바이비트 봇", "바이비트 성적", "친구 추세판"]] and out["nav"][2] == ["친구 15분 봇", ["친구 15분 봇", "친구 성적"]]
     assert out["screens"] == [["추세판단 봇", "now", "livebots"], ["레인지 봇", "range", "livebots"], ["VWAP 개선판", "now", "livebots"], ["친구 15분 봇", "mix", "livebots"]]
@@ -290,7 +291,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     assert "livebots-v39" not in lb and 'id: "v39"' not in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert all(f"{k}:" in search for k in ("trendbot", "vwapbot", "mixbot")) and "v39:" not in search
-    assert ".botbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(5, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
@@ -323,7 +324,8 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     console.log(JSON.stringify({{r, asked, fol: [K.followersOf(D_s, 'paper'), K.followersOf(D_s, 'paper2'), K.followersOf(null, 'paper')],
       tabs: Object.fromEntries(Object.entries(LB.BOT_TAB).map(([k, v]) => [k, v.bot]))}}));""", s=summary)
     assert out["fol"] == [["bybit", "mexc"], ["deepcoin"], []]
-    assert out["tabs"] == {"bybitbot": "bybit", "trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix"}
+    assert out["tabs"] == {"bybitbot": "bybit", "trendbot": "trend", "rangebot": "range", "vwapbot": "vwap", "mixbot": "mix",
+                           "gatebot": None}                                  # (11-01: no 목표 연구 for the 게이트 봇)
     r = out["r"]
     head = lambda t: t.split("보기만 하는 화면(주문 버튼 없음)")[0]       # the strip, before its last words
     assert "바이비트 $101.50" in head(r["trend"]["text"]) and "WOO X Pro $102.80" in head(r["trend"]["text"])

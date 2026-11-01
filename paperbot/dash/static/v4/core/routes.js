@@ -139,6 +139,9 @@ const ICON = {
     R(12, 3, 1, 1)],
   // 레인지 봇 (owners 10-31 night: its own group once it trades WOO X Pro by itself): the histogram's bars crossing the 0 line
   range: () => [R(1, 8, 14, 1), R(2, 9, 2, 3), R(5, 9, 2, 2), R(8, 6, 2, 2), R(11, 3, 2, 5), R(13, 1, 2, 7)],
+  // 게이트 봇 (owners 11-01): a shield (the bot only guards: the stop and the ladder) with its steps inside
+  gate: () => [R(2, 1, 12, 1), R(2, 1, 1, 8), R(13, 1, 1, 8), R(3, 9, 1, 2), R(12, 9, 1, 2), R(4, 11, 2, 1), R(10, 11, 2, 1), R(6, 12, 4, 1),
+    R(7, 13, 2, 1), R(5, 8, 2, 1), R(7, 6, 2, 1), R(9, 4, 2, 1)],
 };
 export const icon =(group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
@@ -242,6 +245,8 @@ const SICON = {
   mixrangeperf: () => SICON.board(),
   ftrend: () => [R(1, 3, 3, 3), R(5, 3, 3, 3), R(9, 3, 3, 3), R(13, 4, 2, 1), R(1, 9, 3, 3), R(5, 9, 3, 3), R(9, 10, 3, 1),
     R(13, 9, 2, 3)],
+  // 게이트 봇 (LIVE_GROUPS "gate"): the group's shield
+  gatebot: ICON.gate,
 };
 export const screenIcon = (name) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (SICON[name] || ICON[(SCREENS[name] || {}).group] || ICON.home)());
@@ -303,7 +308,7 @@ export const LIVE_START = "deck";
 const LIVE_GROUPS = [
   // owners 11-01 ("그럼 한눈에 대시보드 화면 필요없지 않나? 그 외 그닥 불필요한 대시보드 화면들 있으면 없애도 돼!", then
   // "vwap봇 안쓰는데 화면 필요없을꺼 같고 … 포지션 대시보드 화면도 필요없을꺼같고 … 필요없는 대시보드 화면들 있으면 싹 다
-  // 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, nine screens. 지금: 관제실 (the main screen) and 회의실; then one group
+  // 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, nine screens (owners 11-01, later: a fifth, the 게이트 봇's one screen). 지금: 관제실 (the main screen) and 회의실; then one group
   // per live bot (the three trade by themselves since 10-31: the mix program, dash/more/livemix.py), each its own screen
   // first (봇별: the live bot and its paper twin, the real-money strip, 목표 연구 at the foot) and its 성적 (live vs paper);
   // the 바이비트 봇's group also has 친구 추세판. Every other tab (한눈에, 포지션, 요약 … 그림자, the 추세판단 봇's and the
@@ -315,9 +320,13 @@ const LIVE_GROUPS = [
   {id: "mix", ko: "친구 15분 봇", screens: ["mixbot", "mixperf"]},
   // the 레인지 봇 (owners 10-31 night, docs/range-bot-ko.md 0장: the first WOO X Pro account, real money, and its paper twin)
   {id: "range", ko: "레인지 봇", screens: ["rangebot", "mixrangeperf"]},
+  // the 게이트 봇 (owners 10-31 / 11-01, docs/gate-bot-ko.md: the friend enters by hand on Gate, the bot only puts the stop
+  // and the ladder; dash/more/livegate.py)
+  {id: "gate", ko: "게이트 봇", screens: ["gatebot"]},
 ];
 const LIVE_SCREENS = {
   bybitbot: {ko: "바이비트 봇", group: "bybit", title: "바이비트 봇 (15분봉 · 추세 바 30분 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
+  gatebot: {ko: "게이트 봇", group: "gate", title: "게이트 봇 (친구가 직접 진입 · 봇은 손절 15분봉 ATR × 3과 계단 익절만)"},
   trendbot: {ko: "추세판단 봇", group: "now", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)", hidden: true},
   // owners 10-31 night: the 레인지 봇 trades WOO X Pro by itself once its config is there (screens/livebots-range.js rangeBotView)
   rangebot: {ko: "레인지 봇", group: "range", title: "레인지 봇 (WOO X Pro · 15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · 지난 페이퍼 기록)"},

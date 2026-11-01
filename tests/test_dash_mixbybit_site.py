@@ -208,7 +208,7 @@ def test_the_pages(tmp_path):
         F.agoKo(65 * 60000)]}}));""")
     # (owners 11-01: the first group is 지금, 관제실 · 회의실; the 바이비트 봇's 봇별 screen leads its own group, its 관제 copy hidden)
     assert out["start"] == "deck" and out["bots"] == ["deck", "room"]
-    assert out["groups"] == ["now", "bybit", "mix", "range"] and out["by"] == ["bybitbot", "bybitperf", "ftrend"]
+    assert out["groups"] == ["now", "bybit", "mix", "range", "gate"] and out["by"] == ["bybitbot", "bybitperf", "ftrend"]   # (+ 게이트 봇, 11-01)
     assert out["keys"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]

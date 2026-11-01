@@ -568,9 +568,10 @@ def test_the_menu_group_and_the_tabs():
     d = json.loads(r.stdout.strip().splitlines()[-1])
     # (the 바이비트 봇's group after it since 10-29, tests/test_dash_mixbybit_site.py; the 레인지 봇's last, 10-31 night;
     # the group's name the bot's: 친구 15분 봇)
-    # (owners 11-01: four groups; the friend bot's 봇별 screen leads its group, its 관제 copy is hidden)
-    assert d["groups"][-2] == ["mix", "친구 15분 봇", ["mixbot", "mixperf"]] and d["nav"][-2] == "친구 15분 봇" and len(d["groups"]) == 4
-    assert d["groups"][0][0] == "now" and d["groups"][1][0] == "bybit" and d["groups"][-1][0] == "range"
+    # (owners 11-01: four groups; the friend bot's 봇별 screen leads its group, its 관제 copy is hidden; later on 11-01 a
+    # fifth, the 게이트 봇's, tests/test_dash_livegate.py)
+    assert d["groups"][2] == ["mix", "친구 15분 봇", ["mixbot", "mixperf"]] and d["nav"][2] == "친구 15분 봇" and len(d["groups"]) == 5
+    assert d["groups"][0][0] == "now" and d["groups"][1][0] == "bybit" and d["groups"][3][0] == "range" and d["groups"][-1][0] == "gate"
     # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its five screens take the first number keys (레인지 봇 second)
     assert d["keys"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]   # (11-01: the nine screens of the menu)
     assert d["screens"] == [["친구 관제", "mix", "livebots"], ["친구 성적", "mix", "livebots"]]
@@ -583,7 +584,7 @@ def test_the_menu_group_and_the_tabs():
     routes = FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js")
     assert "mix: ICON.mix," in routes and "mixperf: () => SICON.board()," in routes
     assert "mix:" in FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "search.js").split("export const LIVE_ALIAS")[1]
-    assert ".botbar { grid-template-columns: repeat(4, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(5, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_the_files_keep_the_house_rules():

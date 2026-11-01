@@ -85,6 +85,9 @@ MODULES = MODULES + ("livedeck",)
 # 실거래 › 회의실 (#/room, owners 11-01: "이렇게 가능할까?" with a picture of someone's AI office; dash/more/liveroom.py: the
 # real programs round one table, /api/v4/livebots/room)
 MODULES = MODULES + ("liveroom",)
+# 실거래 › 게이트 봇 (#/gatebot, owners 11-01 "게이트 대시보드 화면 만드는거 진행해줘야지": the friend's own Gate positions and the
+# stops and ladder the 게이트 봇 put on them; dash/more/livegate.py, /api/v4/livebots/gate; read-only from its state file)
+MODULES = MODULES + ("livegate",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 

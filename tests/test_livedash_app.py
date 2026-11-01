@@ -238,8 +238,8 @@ def test_the_menus_of_both_sites_in_node():
     # (owners 10-29: 바이비트 봇's group last; 11-01: the site opens on 관제실, tests/test_dash_livedeck.py)
     # owners 11-01 ("필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, nine screens; the
     # other tabs read the retired paper-bot / executor records and are hidden (an old link still opens them)
-    assert live["groups"] == ["지금", "바이비트 봇", "친구 15분 봇", "레인지 봇"] and live["land"] == "deck" and live["tag"]["text"] == "실거래"
-    assert live["items"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]
+    assert live["groups"] == ["지금", "바이비트 봇", "친구 15분 봇", "레인지 봇", "게이트 봇"] and live["land"] == "deck" and live["tag"]["text"] == "실거래"
+    assert live["items"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"
     # every menu item of the live site is a tab of screens/livebots.js (part B's tabs once their files are there)
