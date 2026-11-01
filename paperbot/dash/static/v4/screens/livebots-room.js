@@ -95,8 +95,8 @@ export function panelSpecs(d, now) {
     {title: "TOP 6 · 코인 카드", sub: "24시간 줄", px: [720, 460], pose: {off: -0.98, y: 1.42, w: 1.85, h: 1.18, r: 3.35},
       cards: coins.filter((c) => c.state === "ok").map((c) => ({coin: c.coin, price: px(c.last), chg: pct(c.chg24),
         tone: ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : "muted", spark: c.spark || []}))},
-    {title: "TEAM PULSE · 팀 맥박", sub: "지난 24시간", pose: {off: 0.98, y: 1.42, w: 1.7, h: 1.06, r: 3.35},
-      bars: pulseRows(d && d.pulse).map(([ko, n, f]) => [ko, f, String(n)])},
+    {title: "GOAL MEETING · 목표 회의", sub: "한 달 ×6을 지키려면 · 기록으로 한 계산", px: [720, 460], pose: {off: 0.98, y: 1.42, w: 1.85, h: 1.18, r: 3.35},
+      rows: goalAgenda(d && d.goal).map((x) => ({k: x.n === "③" ? x.q : `${x.n} ${x.q}`.slice(0, 14), t: x.a, tone: x.tone}))},
     {title: "TEAM STATUS · 팀 상태", sub: "세 실거래 봇", pose: {off: -1.75, y: 1.25, w: 1.6, h: 1.0, r: 3.2}, rows: [
       {k: "잔고", t: money(t.equity), big: true},
       {k: "오늘 손익", t: sign(t.today_pnl), tone: ok(t.today_pnl) ? (t.today_pnl >= 0 ? "up" : "down") : ""},
@@ -105,6 +105,32 @@ export function panelSpecs(d, now) {
     {title: "ACTIVITY · 활동", sub: "모든 자리의 최근 기록", pose: {off: 1.75, y: 1.25, w: 1.6, h: 1.0, r: 3.2},
       rows: ((d && d.feed) || []).slice(0, 7).map((r) => ({t: `${fmt.hm(r.ts)} ${r.who_ko} ${r.kind_ko} · ${r.text}`}))},
   ];
+}
+/** 목표 회의 (owners 11-01: "내 1달 목표 수익률 유지목표를 위해 추가로 필요한 회의부분들"): the agenda of keeping ×6 a month,
+ * each item a question and the records' answer (livedeck.goal_view: the 목표 연구 arithmetic, never a forecast, never a
+ * rule change: the rules stay fixed, the owners decide). [{n, q, a, tone}] */
+export function goalAgenda(g) {
+  if (!g || g.state === "error" || !Array.isArray(g.bots)) return [{n: "!", q: "목표 숫자", a: (g && g.ko) || "목표 숫자를 못 읽었어요", tone: "muted"}];
+  const T = Number(g.target) || 6, mult = (m) => (ok(m) ? `×${fmt.num(m, 2)}` : "—");
+  const pct = (r) => (ok(r) ? `${r >= 0 ? "+" : "−"}${fmt.num(Math.abs(r) * 100, 1)}%` : "—");
+  const a = g.all, nDays = Number(g.month_days) || 30;
+  const out = [{n: "목표", q: g.goal_ko || `한 달 ×${fmt.num(T, 0)}`, a: `예: $100로 시작하면 ${nDays}일 뒤 $${fmt.int(100 * T)} (×${fmt.num(T, 0)}, 이익 +${fmt.int((T - 1) * 100)}%)`, tone: "flat"},
+    {n: "①", q: "이번 달 어디쯤?", a: a ? `세 봇 합 ${mult(a.mult)} · 오늘 목표 경로 ${mult(a.path_now)} · 경로보다 ${pct(a.vs_path)}` : "이번 달 닫힌 거래가 아직 없어요 (첫 거래부터 계산해요)",
+      tone: a ? (a.vs_path >= 0 ? "up" : "down") : "muted"},
+    {n: "②", q: "남은 날 하루에 얼마나?", a: a && ok(a.need_daily) ? `남은 ${fmt.num(Math.max(0, nDays - a.days), 1)}일 동안 매일 ${pct(a.need_daily)}씩 늘어야 ×${fmt.num(T, 0)}` : "—",
+      tone: a && ok(a.need_daily) ? "flat" : "muted"}];
+  for (const b of g.bots) {
+    if (b.state !== "ok") { out.push({n: "③", q: b.name_ko, a: b.reason_ko || "기록이 없어요", tone: "muted"}); continue; }
+    const m = b.month, parts = [m ? `${mult(m.mult)} (경로보다 ${pct(m.vs_path)})` : "이번 달 거래 없음",
+      ok(b.pace_mult) ? `지금 속도면 30일 ${mult(b.pace_mult)} (가상)` : null, ok(b.per_day) ? `하루 진입 ${fmt.num(b.per_day, 1)}번` : null,
+      ok(b.win_rate) ? `승률 ${fmt.num(b.win_rate * 100, 0)}%` : null, ok(b.n) ? `닫힌 거래 ${fmt.int(b.n)}번` : null].filter(Boolean);
+    out.push({n: "③", q: b.name_ko, a: parts.join(" · "), tone: m ? (m.vs_path >= 0 ? "up" : "down") : "muted"});
+  }
+  const v = g.bots.filter((b) => b.state === "ok" && b.verdict_ko);
+  out.push({n: "④", q: "판단할 수 있나?", a: v.length ? v.map((b) => `${b.name_ko}: ${b.verdict_ko}`).join(" / ") : "아직 판단할 기록이 없어요",
+    tone: v.some((b) => b.tone === "bad") ? "down" : v.some((b) => b.tone === "good") ? "up" : "muted"});
+  out.push({n: "⑤", q: "정할 것", a: "규칙은 고정이에요. 숫자를 보고 바꿀지는 두 분이 정해요 (봇별 화면 맨 아래 목표 연구에 자세히)", tone: "muted"});
+  return out;
 }
 /** How many seats in each state: {live, wait, idle, error, off}. */
 export function stateCounts(seats) {
@@ -143,7 +169,9 @@ function tableView(ctx, onPick) {
     o.css = {panel: v("--dk-panel"), cyan: v("--dk-core-cyan"), ink: v("--dk-ink"), muted: v("--dk-muted"), line: v("--dk-line-2"),
       up: v("--dk-green"), down: v("--dk-red"), flat: v("--dk-amber"), upTile: v("--dk-green-tile"), downTile: v("--dk-red-tile"),
       mutedTile: v("--dk-line")};
-    o.font = v("--f-term") || "monospace";
+    const px = (k, d) => parseFloat(v(k)) || d;         // the text sizes (--t-*: 글자 크기 enlarges them)
+    o.fonts = {fam: v("--f-term") || "monospace", s2: px("--t-2xs", 15), xs: px("--t-xs", 16), sm: px("--t-sm", 17.5), md: px("--t-md", 19.5),
+      lg: px("--t-lg", 24), xl: px("--t-xl", 32.5)};
   };
   function layout() {
     const r = box.getBoundingClientRect ? box.getBoundingClientRect() : {width: 0, height: 0};
@@ -333,7 +361,7 @@ function tableView(ctx, onPick) {
       if (!o.raf) { if (running()) kick(); else still(); }
     },
     pick(id) { o.sel = id; },
-    panels(specs) { if (r3 && o.css) { r3.panels(specs, o.css, o.font, "PAPERBOT · LIVE 3D · 회의실"); if (!o.raf) still(); } },
+    panels(specs) { if (r3 && o.css) { r3.panels(specs, o.css, o.fonts, "PAPERBOT · LIVE 3D · 회의실"); if (!o.raf) still(); } },
   };
 }
 
@@ -350,6 +378,7 @@ export function roomView(ctx) {
   const closes = h("div", {class: "rm-closes"});
   const pos = h("div", {class: "rm-pos"});
   const pulse = h("div", {class: "rm-pulse"});
+  const goalBox = h("div", {class: "rm-goal"});
   const feed = h("div", {class: "rm-feed"});
   const roster = h("div", {class: "rm-roster"});
   const detail = h("div", {class: "rm-detail", "aria-live": "polite"});
@@ -368,14 +397,15 @@ export function roomView(ctx) {
       h("div", {class: ["rm-col", "rm-left"]},
         panel("rm-a-team", "팀 상태 · TEAM STATUS", "세 실거래 봇", team),
         panel("rm-a-close", "다음 봉 마감 · NEXT CANDLE CLOSES", "바이낸스 봉 (UTC 기준)", closes),
-        panel("rm-a-pos", "포지션 · POSITIONS", "실거래 봇의 열린 포지션", pos)),
+        panel("rm-a-pos", "포지션 · POSITIONS", "실거래 봇의 열린 포지션", pos),
+        panel("rm-a-feed", "활동 · ACTIVITY", "모든 자리의 최근 기록", feed)),
       h("section", {class: ["dk-p", "rm-a-room"]},
         h("header", {class: "dk-ph"}, h("b", {class: "dk-pt"}, "◆ 회의실 · THE TABLE"),
           h("span", {class: "dk-ps"}, "이름표를 누르면 그 프로그램이 마지막에 한 일 · 빛 = 초록 일하는 중 · 하늘 기다리는 중 · 회색 쉬는 중 · 빨강 확인 필요")),
         table.el, detail),
       h("div", {class: ["rm-col", "rm-right"]},
-        panel("rm-a-pulse", "팀 맥박 · TEAM PULSE", "지난 24시간", pulse),
-        panel("rm-a-feed", "활동 · ACTIVITY", "모든 자리의 최근 기록", feed))),
+        panel("rm-a-goal", "목표 회의 · GOAL MEETING", "한 달 ×6을 지키려면 · 기록으로 한 계산 (AI 아님)", goalBox),
+        panel("rm-a-pulse", "팀 맥박 · TEAM PULSE", "지난 24시간", pulse))),
     panel("rm-a-roster", "자리 · ROSTER", "그림 없이 같은 내용 · 묶음마다", roster),
     h("p", {class: "dk-ps rm-foot"}, "보기만 하는 화면 · 15초마다 새로 읽어요 · AI 분석팀은 기록을 읽고 설명만 해요 (거래하지 않아요) · 사람 모양 그림은 장식이에요"));
 
@@ -410,6 +440,10 @@ export function roomView(ctx) {
       h("small", {class: "dk-mono"}, `진입 ${px(p.entry)} · 손절 ${px(p.stop)}${p.step ? ` · ${p.step}단계` : ""}${p.leverage ? ` · ${p.leverage}배` : ""}`)))
       : ui.empty("열린 포지션이 없어요"));
   }
+  function drawGoal(d) {
+    put(goalBox, goalAgenda(d.goal).map((x) => h("div", {class: ["rm-gi", `t-${x.tone || "muted"}`]},
+      h("b", {class: "rm-gn"}, x.n), h("div", null, h("small", {class: "dk-mono"}, x.q), h("span", null, x.a)))));
+  }
   function drawPulse(d) {
     put(pulse, pulseRows(d.pulse).map(([ko, n, f]) => h("div", {class: "rm-pr"}, h("small", {class: "dk-mono"}, ko),
       h("span", {class: "rm-bar"}, h("i", {style: {width: `${Math.round(f * 100)}%`}})), h("b", {class: "num"}, fmt.int(n)))));
@@ -441,7 +475,7 @@ export function roomView(ctx) {
   function draw() {
     const d = st.d;
     if (!d) return;
-    drawTop(d); drawTeam(d); drawPos(d); drawPulse(d); drawFeed(d); drawRoster(d); drawDetail();
+    drawTop(d); drawTeam(d); drawPos(d); drawGoal(d); drawPulse(d); drawFeed(d); drawRoster(d); drawDetail();
     table.set(d.seats, serverNow());
     tickClock();
   }

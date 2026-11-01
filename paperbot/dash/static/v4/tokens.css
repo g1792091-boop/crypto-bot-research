@@ -347,6 +347,65 @@
   --smc-ote: #f5a524;
 }
 
+/* ---------------------------------------------------------------- the 실거래 site in the 관제실's colours
+   (owners 11-01: "다른화면 색깔들도 다 이색깔 이느낌으로"): on the live site (<html data-site="live">, paperbot/livedash) the
+   AI skin takes the palette measured off the owners' pictures (the --dk-* tokens above): a dark navy-teal ground, faint
+   teal rules, muted teal accent, mint up, brick-red down, sand-gold warnings. 클래식 and the rule bot's page stay as they
+   are (the glows and the panels' edge light keep the AI skin's teal: tests/test_dash_gaps_b.py, test_dash_w2_sound.py
+   count both skins' definitions). Text on --surface / --surface-2 / --surface-3: ink 15.2 / 14.1 / 13.8, ink-2 8.6 / 8.0 / 7.8, muted 5.3 / 4.9 / 4.8,
+   accent 9.7 / 9.0, up 9.1 / 8.4, down 6.2 / 5.8 (WCAG AA for small text: 4.5). */
+:root[data-site="live"]:not([data-skin="classic"]) {
+  --bg: var(--dk-bg);
+  --dot: rgba(134, 195, 204, .035);
+  --frame: #03090e;
+  --surface: var(--dk-panel);
+  --surface-2: var(--dk-panel-2);
+  --surface-3: #091c28;
+  --line: var(--dk-line);
+  --line-2: var(--dk-line-2);
+  --ink: var(--dk-ink);
+  --ink-2: var(--dk-ink-2);
+  --muted: var(--dk-muted);
+  --accent: var(--dk-cyan);
+  --accent-hi: #b5e3ea;
+  --accent-ink: #02080b;
+  --accent-soft: rgba(134, 195, 204, .12);
+  --accent-line: rgba(134, 195, 204, .45);
+  --up: var(--dk-green);
+  --up-soft: rgba(82, 199, 154, .12);
+  --up-line: rgba(82, 199, 154, .45);
+  --down: var(--dk-red);
+  --down-soft: rgba(236, 106, 112, .12);
+  --down-line: rgba(236, 106, 112, .45);
+  --warn: var(--dk-amber);
+  --flash: rgba(134, 195, 204, .2);
+  --shim-a: #071a26;
+  --shim-b: #0d2433;
+  --glass: rgba(2, 8, 11, .93);
+  --botbar: rgba(2, 8, 11, .97);
+  --scrim: rgba(1, 4, 6, .74);
+  --console: #030c12;
+  --console-line: #122633;
+  --console-tab: #0b2232;
+  --term-cyan: #86c3cc;
+  --led-bg: #04111b;
+  --led-line: #11352e;
+  --led-green: #52c79a;
+  --led-digit: #86c3cc;
+  --plate: #05131d;
+  --plate-line: #21404f;
+  --skin-grid: rgba(134, 195, 204, .03);
+  --skin-glow-a: rgba(63, 207, 224, .07);
+  --skin-glow-b: rgba(224, 205, 146, .04);
+  --card-ring: rgba(134, 195, 204, .06);
+  --head-glow: rgba(134, 195, 204, .18);
+  --pill-bg: rgba(2, 8, 11, .86);
+  --vol-up: rgba(82, 199, 154, .26);
+  --vol-down: rgba(236, 106, 112, .26);
+  --smc-prem: #ec6a70;
+  --smc-disc: #52c79a;
+}
+
 /* ---------------------------------------------------------------- 글자 크기 (core/textsize.js, per device)
    보통 = the scale above; 크게 about 112 %; 아주 크게 about 125 %. Every v4 font size reads these tokens. */
 html[data-text="md"] { --ts: 1; }

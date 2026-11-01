@@ -66,6 +66,19 @@
 .rm-p b { font-size: var(--t-sm); }
 .rm-p small { font-size: var(--t-2xs); color: var(--dk-ink-2); overflow-wrap: anywhere; }
 
+/* 목표 회의: the agenda, a question and the records' answer each */
+.rm-goal { display: grid; gap: 5px; }
+.rm-gi { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; align-items: start; padding: 5px 6px; border-left: 2px solid var(--dk-line-2);
+  border-radius: 2px; background: var(--dk-panel-2); min-width: 0; }
+.rm-gi .rm-gn { font-size: var(--t-xs); color: var(--dk-cyan); }
+.rm-gi > div { display: grid; gap: 1px; min-width: 0; }
+.rm-gi span { font-size: var(--t-2xs); color: var(--dk-ink); overflow-wrap: anywhere; }
+.rm-gi.t-up { border-left-color: var(--dk-green); }
+.rm-gi.t-up span { color: var(--dk-green); }
+.rm-gi.t-down { border-left-color: var(--dk-red); }
+.rm-gi.t-down span { color: var(--dk-red); }
+.rm-gi.t-flat { border-left-color: var(--dk-amber); }
+
 /* 팀 맥박, 활동 */
 .rm-pulse { display: grid; gap: 5px; }
 .rm-pr { display: grid; grid-template-columns: 40px minmax(0, 1fr) 36px; align-items: center; gap: 8px; }
@@ -108,6 +121,7 @@
   .rm-g > .rm-left { grid-column: 1; }
   .rm-g > .rm-right { grid-column: 3; }
   .rm-g > .rm-col > .dk-p { background: var(--dk-glass); }
+  .rm-g .rm-feed { max-height: 300px; }
   .rm-a-room > .dk-ph, .rm-a-room > .rm-detail { margin: 0 352px 0 312px; }
   .rm-scene { height: 900px; min-height: 900px; }
 }

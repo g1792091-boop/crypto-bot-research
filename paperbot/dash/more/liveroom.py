@@ -16,6 +16,8 @@ not have is said to be off, a file that cannot be read is said so.
              the morning checks, the team's meetings),
      pulse: {signals, entries, exits, checks, meetings} (the last 24 hours, from the same rows),
      team:  livedeck.totals_view (the three live bots), positions: [{bot, bot_ko, coin, side, entry, stop, step, opened_ms}],
+     goal:  livedeck.goal_view (the owners' monthly ×6 against each bot's record this month: the 회의실's 목표 회의, the same
+            arithmetic as each bot's 목표 연구),
      coins: [{symbol, coin, state, last, chg24, spark, trend (the last closed 30m bar's 추세 바 종합), n30, hist, cross}] (the six
             coins from livedeck.coins_view: Binance's closed bars and the bots' own formulas, read once a minute; the 3D
             room's floating screens)}
@@ -278,12 +280,16 @@ def build(now: int, units: Callable, started: Callable, candles: Optional[Callab
                                                                  ("coin", "symbol", "side", "entry", "stop", "step", "opened_ms", "leverage")}}
                  for b in bots if isinstance(b.get("position"), dict) and b["position"].get("state") == "ok"]
     try:
+        goal = D.goal_view(now, {b["id"]: b.get("name_ko") for b in bots})
+    except Exception as exc:  # noqa: BLE001  the goal's arithmetic never hides the room
+        goal = {"state": "error", "ko": "목표 숫자를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
+    try:
         coins = coins_of(candles, now)
     except Exception as exc:  # noqa: BLE001  the coins never hide the room
         coins = [{"symbol": s, "coin": MX.coin_ko(s), "state": "error", "ko": "코인 값을 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
                  for s in D.COINS]
     return {"now_ms": now, "seats": seats, "feed": feed_of(bots, checks, meetings), "pulse": pulse_of(bots, checks, meetings, now),
-            "team": D.totals_view(bots), "positions": positions, "coins": coins, "states_ko": STATE_KO, "groups_ko": GROUP_KO}
+            "team": D.totals_view(bots), "positions": positions, "coins": coins, "goal": goal, "states_ko": STATE_KO, "groups_ko": GROUP_KO}
 
 
 def register(app, ctx) -> dict:

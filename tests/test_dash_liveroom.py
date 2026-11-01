@@ -151,6 +151,14 @@ def test_states_said_as_they_are(room):
     assert {s["state_ko"] for s in off2["seats"] if s["group"] == "ai"} == {"분석팀 타이머가 꺼져 있어요"}
 
 
+def test_the_goal_meeting_reads_the_goal_arithmetic(room):
+    d = json_finite(R.build(NOW, ON, RAN))
+    g = d["goal"]
+    assert g["target"] == 6.0 and [b["id"] for b in g["bots"]] == ["bybit", "mix", "range"]
+    want = json_finite(D.goal_view(NOW, {"bybit": "바이비트 봇", "mix": "친구 15분 봇", "range": "레인지 봇"}))
+    assert g == want
+
+
 def test_the_coins_for_the_floating_screens(room):
     from tests.test_dash_livedeck import candles_of
     d = json_finite(R.build(NOW, ON, RAN, candles_of()))
@@ -224,6 +232,12 @@ console.log(JSON.stringify({
     feed: [{ts: now - 60000, who_ko: "레인지 봇", kind_ko: "진입", text: "SOL · 숏 진입 104.6"}], pulse: {signals: 2, entries: 1},
     seats: [{state: "live"}, {state: "error"}], states_ko: {live: "일하는 중", error: "확인 필요"}}, now),
   specs0: M.panelSpecs(null, now),
+  agenda: M.goalAgenda({goal_ko: "두 분 목표: 한 달(30일) ×6 (+500%)", target: 6, month_days: 30,
+    all: {mult: 1.08, path_now: 1.04, vs_path: 0.043, need_daily: 0.06, days: 0.6},
+    bots: [{id: "bybit", name_ko: "바이비트 봇", state: "missing", reason_ko: "이번 달 거래가 없어요"},
+      {id: "range", name_ko: "레인지 봇", state: "ok", n: 2, win_rate: 0.5, per_day: 0.58, pace_mult: 1.42, verdict_ko: "닫힌 거래가 2번뿐이라 아직 판단하지 않아요", tone: "thin",
+       month: {mult: 1.08, vs_path: 0.043}}]}),
+  agenda0: M.goalAgenda(null), agenda1: M.goalAgenda({target: 6, bots: []}),
   api: M.ROOM_API,
 }));""")
     assert out["ago"] == ["방금", "12분 전", "3시간 전", "2일 전", "기록 없음"]
@@ -247,15 +261,24 @@ console.log(JSON.stringify({
     assert out["live"]["line"] == "보유 중 · SOL 숏 · 방금" and out["waitTag"]["line"] == "기다리는 중 · 1분 전"
     # the 3D room's floating screens: the answer's numbers and the clock, in words
     sp = out["specs"]
-    assert [x["title"] for x in sp] == ["COINS · 코인", "TOP 6 · 코인 카드", "TEAM PULSE · 팀 맥박", "TEAM STATUS · 팀 상태", "ACTIVITY · 활동"]
+    assert [x["title"] for x in sp] == ["COINS · 코인", "TOP 6 · 코인 카드", "GOAL MEETING · 목표 회의", "TEAM STATUS · 팀 상태", "ACTIVITY · 활동"]
     assert all("pose" in x for x in sp) and sp[0]["pose"]["off"] == 0 and sp[0]["px"] == [1024, 420]
     rows = sp[0]["table"]["rows"]
     assert [c["t"] for c in rows[0]] == ["SOL", "104.25", "+1.23%", "하락", "−4.21 ▼0선"] and [c.get("tone") for c in rows[0]][2:] == ["up", "down", "down"]
     assert rows[1] == [{"t": "ETH"}, {"t": "바이낸스 봉을 못 읽었어요", "tone": "muted"}]
     assert sp[1]["cards"] == [{"coin": "SOL", "price": "104.25", "chg": "+1.23%", "tone": "up", "spark": [1, 2, 3]}]
-    assert sp[2]["bars"][:2] == [["신호", 1, "2"], ["진입", 0.5, "1"]]
     assert [r["t"] for r in sp[3]["rows"]] == ["$104.20", "−$3.50", "2번 · 승 1 / 패 1", "1개"] and sp[3]["rows"][1]["tone"] == "down"
     assert sp[4]["rows"][0]["t"].endswith("레인지 봇 진입 · SOL · 숏 진입 104.6")
+    ag = out["agenda"]
+    assert [x["n"] for x in ag] == ["목표", "①", "②", "③", "③", "④", "⑤"]
+    assert ag[0]["a"] == "예: $100로 시작하면 30일 뒤 $600 (×6, 이익 +500%)"
+    assert ag[1]["a"] == "세 봇 합 ×1.08 · 오늘 목표 경로 ×1.04 · 경로보다 +4.3%" and ag[1]["tone"] == "up"
+    assert ag[2]["a"] == "남은 29.4일 동안 매일 +6.0%씩 늘어야 ×6"
+    assert ag[3] == {"n": "③", "q": "바이비트 봇", "a": "이번 달 거래가 없어요", "tone": "muted"}
+    assert ag[4]["a"] == "×1.08 (경로보다 +4.3%) · 지금 속도면 30일 ×1.42 (가상) · 하루 진입 0.6번 · 승률 50% · 닫힌 거래 2번"
+    assert ag[5]["a"] == "레인지 봇: 닫힌 거래가 2번뿐이라 아직 판단하지 않아요" and "두 분이 정해요" in ag[6]["a"]
+    assert out["agenda0"][0]["tone"] == "muted" and out["agenda1"][1]["a"].startswith("이번 달 닫힌 거래가 아직 없어요")
+    assert sp[2]["title"] == "GOAL MEETING · 목표 회의" and sp[2]["rows"] == [{"k": "! 목표 숫자", "t": "목표 숫자를 못 읽었어요", "tone": "muted"}]
     s0 = out["specs0"]
     assert s0[0]["table"]["rows"] == [[{"t": "코인 값을 기다리는 중", "tone": "muted"}]] and s0[1]["cards"] == [] and s0[3]["rows"][0]["t"] == "—"
 
@@ -275,7 +298,8 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: T.walk(
     t = out["ok"]
     assert not BAD.search(t), BAD.search(t)
     for w in ("회의실", "팀 상태", "다음 봉 마감", "포지션", "팀 맥박", "활동", "자리", "레인지 봇", "모의 레인지 봇", "레인지 봇 점검", "방패", "저울",
-              "나침반", "등대", "백업", "사이트", "보유 중 · SOL 숏", "SOL 숏", "15분 마감", "1일 마감", "장식", "거래하지 않아요"):
+              "나침반", "등대", "백업", "사이트", "보유 중 · SOL 숏", "SOL 숏", "15분 마감", "1일 마감", "장식", "거래하지 않아요",
+              "목표 회의", "예: $100로 시작하면 30일 뒤 $600", "두 분이 정해요"):
         assert w in t, w
     assert "rm-tag live g-bot" in out["cls"] and "rm-rs live" in out["cls"] and "rm-cnt live" in out["cls"]
     assert not BAD.search(out["bad"])
@@ -367,6 +391,22 @@ def test_tokens_only_imports_through_pb_and_read_only():
     assert "import " not in re.sub(r"//[^\n]*", "", js3) and not re.search(r"#[0-9a-fA-F]{3,8}\b", js3)
     assert "fetch(" not in js3 and "innerHTML" not in js3
     assert 'import {create3d, hexRgb, seatPose, screenOf, YAW0, SEAT_RING, SEAT_K} from "./livebots-room3d.js";' in js
+
+
+def test_the_live_site_takes_the_palette_of_the_owners_pictures():
+    tok = _read(os.path.join(V4, "tokens.css"))
+    m = re.search(r':root\[data-site="live"\]:not\(\[data-skin="classic"\]\) \{(.*?)\}', tok, re.S)
+    assert m, "the live site's block"
+    body = m.group(1)
+    for k, v in (("--bg", "var(--dk-bg)"), ("--surface", "var(--dk-panel)"), ("--surface-2", "var(--dk-panel-2)"), ("--line", "var(--dk-line)"),
+                 ("--ink", "var(--dk-ink)"), ("--muted", "var(--dk-muted)"), ("--accent", "var(--dk-cyan)"), ("--up", "var(--dk-green)"),
+                 ("--down", "var(--dk-red)"), ("--warn", "var(--dk-amber)")):
+        assert re.search(rf"^\s*{re.escape(k)}: {re.escape(v)};", body, re.M), k
+    assert tok.index(':root:not([data-skin="classic"]) {') < tok.index(m.group(0))      # after the AI skin: it wins on the live site
+    from paperbot.livedash import app as LA                                   # the live site marks its page; the rule bot's does not
+    from paperbot.dash.assets import Assets
+    assert re.search(r'<html[^>]*data-site="live"', LA.live_assets(LA.STATIC).index_html())
+    assert "data-site" not in Assets(LA.STATIC).index_html()
 
 
 def test_the_tab_and_the_menu():

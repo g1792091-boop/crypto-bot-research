@@ -247,38 +247,42 @@ const PW = 512, PH = 320;                              // a floating screen's pi
 
 /** One floating screen's picture: its title, then rows of words, bars, a table (cols, rows of cells) or coin cards (each
  * coin's price, change and 24-hour line); the screen module gives the words and numbers: the programs' records and
- * Binance's closed bars. css: the token colours as CSS strings; font: the page's terminal font. */
-function paintPanel(g, spec, css, font) {
-  const W = g.canvas.width, H = g.canvas.height, tone = (t) => css[t] || css.ink;
+ * Binance's closed bars. css: the token colours as CSS strings; F: the page's terminal font (fam) and its text sizes in
+ * px from the --t-* tokens (s2 · xs · sm · md · lg · xl), so 크게 / 아주 크게 enlarge these words too. */
+function paintPanel(g, spec, css, F) {
+  const W = g.canvas.width, H = g.canvas.height, tone = (t) => css[t] || css.ink, fam = F.fam;
+  const fnt = (px, bold) => `${bold ? "700 " : ""}${px}px ${fam}`;
   const fit = (text, w) => { let s = String(text == null ? "" : text); if (g.measureText(s).width <= w) return s; while (s.length > 1 && g.measureText(s + "…").width > w) s = s.slice(0, -1); return s + "…"; };
   g.clearRect(0, 0, W, H);
   g.globalAlpha = 0.84; g.fillStyle = css.panel; g.fillRect(4, 4, W - 8, H - 8);
   g.globalAlpha = 1; g.strokeStyle = css.cyan; g.lineWidth = 3; g.strokeRect(4, 4, W - 8, H - 8);
   g.fillStyle = css.cyan; g.fillRect(4, 4, W - 8, 4);
   g.textBaseline = "top"; g.textAlign = "left";
-  g.font = `700 22px ${font}`; g.fillStyle = css.ink; g.fillText(fit(spec.title, W - 40), 18, 20);
-  if (spec.sub) { g.font = `16px ${font}`; g.fillStyle = css.muted; g.fillText(fit(spec.sub, W - 40), 18, 48); }
-  let y = 78;
+  let y = 18;
+  g.font = fnt(F.md * 1.13, true); g.fillStyle = css.ink; g.fillText(fit(spec.title, W - 40), 18, y);
+  y += F.md * 1.13 * 1.35;
+  if (spec.sub) { g.font = fnt(F.xs); g.fillStyle = css.muted; g.fillText(fit(spec.sub, W - 40), 18, y); y += F.xs * 1.4; }
+  y += F.xs * 0.6;
   for (const b of spec.bars || []) {
-    g.font = `17px ${font}`; g.fillStyle = css.muted; g.fillText(String(b[0]), 18, y + 2);
-    g.fillStyle = css.line; g.fillRect(110, y + 4, W - 210, 14);
-    g.fillStyle = css.cyan; g.fillRect(110, y + 4, Math.max(2, (W - 210) * Math.max(0, Math.min(1, b[1]))), 14);
+    g.font = fnt(F.sm); g.fillStyle = css.muted; g.fillText(String(b[0]), 18, y + 2);
+    g.fillStyle = css.line; g.fillRect(110, y + 4, W - 210, F.sm * 0.8);
+    g.fillStyle = css.cyan; g.fillRect(110, y + 4, Math.max(2, (W - 210) * Math.max(0, Math.min(1, b[1]))), F.sm * 0.8);
     g.fillStyle = css.ink; g.textAlign = "right"; g.fillText(String(b[2]), W - 20, y + 2); g.textAlign = "left";
-    y += 34;
+    y += F.sm * 1.95;
   }
   if (spec.table) {                                    // a table: the header, then one line a row
     const cols = spec.table.cols || [], xs = spec.table.x || cols.map((_c, k) => 18 + k * ((W - 36) / Math.max(1, cols.length)));
-    g.font = `15px ${font}`; g.fillStyle = css.muted;
+    g.font = fnt(F.s2); g.fillStyle = css.muted;
     cols.forEach((c, k) => g.fillText(String(c), xs[k], y));
-    y += 26;
+    y += F.s2 * 1.75;
     for (const row of spec.table.rows || []) {
-      if (y > H - 30) break;
+      if (y > H - F.md * 1.5) break;
       g.fillStyle = css.line; g.fillRect(14, y - 4, W - 28, 1);
       row.forEach((cell, k) => {
-        g.font = `${k === 0 ? "700 " : ""}20px ${font}`; g.fillStyle = tone(cell.tone);
+        g.font = fnt(F.md, k === 0); g.fillStyle = tone(cell.tone);
         g.fillText(fit(cell.t, (xs[k + 1] || W - 18) - xs[k] - 10), xs[k], y + 2);
       });
-      y += 34;
+      y += F.md * 1.75;
     }
   }
   if (spec.cards) {                                    // coin cards: 3 x 2 tiles
@@ -287,12 +291,13 @@ function paintPanel(g, spec, css, font) {
       const x0 = 18 + (k % 3) * (cw + 8), y0 = y + Math.floor(k / 3) * (ch + 8);
       g.fillStyle = css[c.tone + "Tile"] || css.line; g.fillRect(x0, y0, cw, ch);
       g.strokeStyle = tone(c.tone); g.lineWidth = 1.5; g.strokeRect(x0, y0, cw, ch);
-      g.font = `700 16px ${font}`; g.fillStyle = css.ink; g.fillText(fit(c.coin, cw - 16), x0 + 8, y0 + 6);
-      g.font = `700 24px ${font}`; g.fillText(fit(c.price, cw - 16), x0 + 8, y0 + 26);
-      g.font = `15px ${font}`; g.fillStyle = tone(c.tone); g.fillText(fit(c.chg, cw - 16), x0 + 8, y0 + 54);
+      let yy = y0 + 6;
+      g.font = fnt(F.xs, true); g.fillStyle = css.ink; g.fillText(fit(c.coin, cw - 16), x0 + 8, yy); yy += F.xs * 1.25;
+      g.font = fnt(F.lg, true); g.fillText(fit(c.price, cw - 16), x0 + 8, yy); yy += F.lg * 1.15;
+      g.font = fnt(F.s2); g.fillStyle = tone(c.tone); g.fillText(fit(c.chg, cw - 16), x0 + 8, yy); yy += F.s2 * 1.4;
       const v = (c.spark || []).filter((q) => Number.isFinite(q));
-      if (v.length > 1) {
-        const lo = Math.min(...v), hi = Math.max(...v), sp = hi - lo || 1, top = y0 + 74, bot = y0 + ch - 8;
+      if (v.length > 1 && y0 + ch - 8 > yy + 8) {
+        const lo = Math.min(...v), hi = Math.max(...v), sp = hi - lo || 1, top = yy, bot = y0 + ch - 8;
         g.beginPath();
         v.forEach((q, i2) => { const px = x0 + 8 + (i2 / (v.length - 1)) * (cw - 16), py = bot - ((q - lo) / sp) * (bot - top); if (i2) g.lineTo(px, py); else g.moveTo(px, py); });
         g.strokeStyle = tone(c.tone); g.lineWidth = 2; g.stroke();
@@ -300,17 +305,17 @@ function paintPanel(g, spec, css, font) {
     });
   }
   for (const r of spec.rows || []) {
-    if (y > H - 30) break;
-    const big = r.big, x = r.k != null ? 170 : 18;
-    if (r.k != null) { g.fillStyle = css.muted; g.font = `16px ${font}`; g.fillText(String(r.k), 18, y + (big ? 8 : 2)); }
-    g.font = `${big ? "700 30px" : "18px"} ${font}`; g.fillStyle = tone(r.tone);
+    const big = r.big, x = r.k != null ? 170 : 18, sz = big ? F.xl * 0.92 : F.sm;
+    if (y > H - sz * 1.3) break;
+    if (r.k != null) { g.fillStyle = css.muted; g.font = fnt(F.xs); g.fillText(fit(r.k, 146), 18, y + (big ? sz * 0.25 : 2)); }
+    g.font = fnt(sz, big); g.fillStyle = tone(r.tone);
     g.fillText(fit(r.t, W - x - 18), x, y);
-    y += big ? 42 : 30;
+    y += sz * (big ? 1.3 : 1.7);
   }
 }
 
 /** The floor's words and rings (painted once): the name round the stage, ticks, rings, facing the camera's start. */
-function paintFloor(g, css, font, words) {
+function paintFloor(g, css, fam, words) {
   const S = g.canvas.width, c = S / 2, unit = S / 7.2;           // the picture covers 7.2 x 7.2 of the room
   g.clearRect(0, 0, S, S);
   g.strokeStyle = css.cyan; g.fillStyle = css.cyan;
@@ -322,7 +327,8 @@ function paintFloor(g, css, font, words) {
   }
   // the words: on the arc nearest the camera at its start, each letter's top towards the middle (read from the camera)
   const th = Math.atan2(Math.cos(YAW0), Math.sin(YAW0)), R = 3.08 * unit, text = String(words || "");
-  g.globalAlpha = 0.9; g.font = `700 ${Math.round(unit * 0.24)}px ${font}`; g.textAlign = "center"; g.textBaseline = "middle";
+  const size = Math.round(unit * 0.24);                         // (the floor's own scale: its words are part of the stage)
+  g.globalAlpha = 0.9; g.font = `700 ${size}px ${fam}`; g.textAlign = "center"; g.textBaseline = "middle";
   const widths = [...text].map((ch) => g.measureText(ch).width + unit * 0.035), total = widths.reduce((a, b) => a + b, 0);
   let acc = -total / 2;
   [...text].forEach((ch, k) => {
@@ -333,7 +339,7 @@ function paintFloor(g, css, font, words) {
   g.globalAlpha = 1;
 }
 
-/** The room on ``canvas``: {draw(scene), panels(specs, css, font), vp, lost()}; null where WebGL cannot start.
+/** The room on ``canvas``: {draw(scene), panels(specs, css, F, words), vp, lost()}; null where WebGL cannot start.
  * scene: {W, H, dpr, t (ms), yaw, pitch, drift (the camera's own slow sway), col {name: [r, g, b]}, seats [{group, state, sel}]} */
 export function create3d(canvas) {
   let gl = null;
@@ -395,12 +401,12 @@ export function create3d(canvas) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   };
   let floor = null;
-  function panels(specs, css, font, words) {
+  function panels(specs, css, F, words) {
     if (!floor && typeof document !== "undefined") {    // the floor's words and rings, once
       const cv = document.createElement("canvas");
       cv.width = cv.height = 1024;
       const g = cv.getContext("2d");
-      if (g) { paintFloor(g, css, font, words || "PAPERBOT"); floor = {tex: gl.createTexture()}; texOf(floor.tex, cv); }
+      if (g) { paintFloor(g, css, F.fam, words || "PAPERBOT"); floor = {tex: gl.createTexture()}; texOf(floor.tex, cv); }
     }
     (specs || []).forEach((spec, i) => {
       const [w, hh] = spec.px || [PW, PH];
@@ -412,7 +418,7 @@ export function create3d(canvas) {
       }
       if (!s.g) return;
       s.pose = spec.pose || null;
-      paintPanel(s.g, spec, css, font);
+      paintPanel(s.g, spec, css, F);
       texOf(s.tex, s.cv);
     });
     screens.length = Math.min(screens.length, (specs || []).length);
@@ -621,31 +627,51 @@ void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float
     strokes(gl.POINTS, ms, mc, [0.02], 0);
     glows.push([0, 0.46, 0], [0, 0.9, 0]); glowC.push(rgba(green, 0.7), rgba(green, 0.25)); glowS.push(1.6, 4.0);
     strokes(gl.POINTS, glows, glowC, glowS, 1);
-    // the energy dome (the owners' video): thick ribbons of mint-green light with white-hot middles, a twisted cage from the
-    // top of the middle down to the open floor's edge, turning and flickering; three bright bundles to every running program
+    // the energy (the owners' video: "컴퓨터랑 선이 연결되어 있는 느낌"): from the core, ribbons of mint-green light arch up and
+    // land on every seat's computer (more strands the busier it is: 4 working, 3 waiting, 2 resting or to be checked, 1 dim
+    // when off), packets of light run along them to the running ones, the computers are linked to their neighbours, cables
+    // of light run on the floor from each pod to the middle, and a small twisted swirl turns above the core
     const neon = C.neon || green, hot = [Math.min(1, neon[0] * 0.5 + 0.55), Math.min(1, neon[1] * 0.4 + 0.62), Math.min(1, neon[2] * 0.45 + 0.55)];
+    const red = C["s-error"] || neon;
     const tri = [], triC = [];
     const add = (pts, w, c, a, core) => { for (const v of ribbon(pts, eye, w)) { tri.push([v[0], v[1], v[2]]); triC.push(rgba(core && v[3] > 0.5 ? hot : c, a * v[3])); } };
-    for (const arc of domeArcs(t, 30, 26)) {
-      add(arc.pts, 0.04, neon, 0.16 * arc.glow, false);
-      add(arc.pts, 0.01, neon, 0.55 * arc.glow, arc.glow > 0.85);
+    for (const arc of domeArcs(t, 18, 22, 1.5, 0.62)) {
+      add(arc.pts, 0.035, neon, 0.18 * arc.glow, false);
+      add(arc.pts, 0.009, neon, 0.6 * arc.glow, arc.glow > 0.85);
     }
-    const core = [0, 1.55, 0], dots = [];
+    const core = [0, 1.25, 0], dots = [], mons = [], cables = [], cableC = [];
+    const STRANDS = {live: 4, wait: 3, idle: 2, error: 2, off: 1};
     sc.seats.forEach((s, i) => {
-      if (s.state !== "live" && s.state !== "wait") return;
-      const p = seatPose(i, n, RING), to = [p.x * 0.86, 0.5 * K, p.z * 0.86];
-      for (let m = 0; m < 3; m++) {
-        const lift = 0.35 + 0.15 * m + 0.08 * Math.sin(t * 2.3 + i + m), wob = 0.05 * Math.sin(t * 9 + i * 1.7 + m * 2.1);
-        const pts = arcPts(core, [to[0] + wob, to[1], to[2] - wob], lift, 26), flick = 0.6 + 0.4 * Math.abs(Math.sin(t * (2.2 + m) + i * 0.9));
-        add(pts, 0.045, neon, 0.25 * flick, false);
-        add(pts, 0.012, neon, 0.8 * flick, true);
+      const p = seatPose(i, n, RING), out = [Math.cos(p.a), Math.sin(p.a)];
+      const mon = [p.x - out[0] * 0.27 * K, 0.71 * K, p.z - out[1] * 0.27 * K];
+      mons.push(mon);
+      const k = STRANDS[s.state] || 1, off = s.state === "off", run = s.state === "live" || s.state === "wait";
+      for (let m = 0; m < k; m++) {
+        const lift = 0.3 + 0.16 * m + 0.07 * Math.sin(t * 2.1 + i + m), wob = 0.04 * Math.sin(t * 8 + i * 1.7 + m * 2.1);
+        const pts = arcPts(core, [mon[0] + wob, mon[1], mon[2] - wob], lift, 28);
+        const flick = off ? 0.35 : 0.6 + 0.4 * Math.abs(Math.sin(t * (2.0 + m * 0.6) + i * 0.9));
+        const c = s.state === "error" && m === 0 ? red : neon;
+        add(pts, 0.042, c, (run ? 0.26 : off ? 0.06 : 0.14) * flick, false);
+        add(pts, 0.011, c, (run ? 0.9 : off ? 0.18 : 0.5) * flick, run);
+        if (run || s.state === "idle") {                        // packets of light, down to the computer
+          for (const ph of run ? [0, 0.5] : [0.3]) {
+            const f = (t * (s.state === "live" ? 0.55 : 0.32) + i * 0.37 + m * 0.21 + ph) % 1;
+            dots.push(pts[Math.min(27, Math.floor(f * 27))]);
+          }
+        }
       }
-      const f = (t * 0.45 + i * 0.37) % 1;
-      dots.push(arcPts(core, to, 0.35, 26)[Math.floor(f * 25)]);
+      const pod = [p.x - out[0] * 0.05, 0.008, p.z - out[1] * 0.05], inner = [out[0] * 1.58, 0.008, out[1] * 1.58];  // a cable on the floor
+      cables.push(pod, inner); const cc = rgba(off ? C.muted : neon, off ? 0.12 : 0.45); cableC.push(cc, cc);
+    });
+    mons.forEach((m0, i) => {                                   // each computer linked to the next
+      const m1 = mons[(i + 1) % mons.length];
+      if (m1 !== m0) add(arcPts(m0, m1, 0.18, 12), 0.008, neon, 0.32, false);
     });
     strokes(gl.TRIANGLES, tri, triC, [1], 2);
-    strokes(gl.POINTS, dots, [rgba(hot, 0.95)], [0.07], 1);
-    strokes(gl.POINTS, [core, [0, 0.46, 0]], [rgba(neon, 0.45), rgba(neon, 0.5)], [0.7, 1.4], 1);
+    strokes(gl.LINES, cables, cableC, [1], 2);
+    strokes(gl.POINTS, dots, [rgba(hot, 0.95)], [0.06], 1);
+    strokes(gl.POINTS, mons.map((m) => [m[0], m[1] + 0.01, m[2]]), [rgba(neon, 0.55)], [0.22], 1);   // where the light lands
+    strokes(gl.POINTS, [core, [0, 0.46, 0]], [rgba(hot, 0.6), rgba(neon, 0.5)], [0.9, 1.4], 1);
     gl.disableVertexAttribArray(qP); gl.disableVertexAttribArray(qC); gl.disableVertexAttribArray(qS);
     gl.depthMask(true);
     if (pic) {                                         // the glow: bright parts, blurred twice each way, added back
