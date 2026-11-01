@@ -442,3 +442,73 @@
 @keyframes dk-flu { from { background: var(--dk-green-tile); box-shadow: inset 0 -2px 0 var(--dk-green); } }
 @keyframes dk-fld { from { background: var(--dk-red-tile); box-shadow: inset 0 -2px 0 var(--dk-red); } }
 @keyframes dk-new { from { background: var(--dk-cyan-soft); color: var(--dk-ink); } }
+
+/* 멋있게 (owners 11-01 "멋있게 좀 만들어봐봐"): the HUD's finish. A cyan haze over the head and a faint grid behind glass
+   panels; every panel with lit corner brackets, a header strip that fades out and a glow under the pointer; the lines lit
+   like neon (each in its own colour); the tiles with a lit top edge; the head's name in a light gradient, the logo's ring
+   turning; the running lines labelled as in the picture. Decoration only: no number is changed by it. */
+.dk { position: relative; isolation: isolate;
+  background: radial-gradient(ellipse 70% 340px at 50% 0, var(--dk-cyan-soft), transparent 72%),
+    radial-gradient(ellipse 55% 30% at 50% 58%, var(--dk-core-haze), transparent 78%), var(--dk-bg); }
+.dk::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+  background-image: linear-gradient(var(--dk-line) 1px, transparent 1px), linear-gradient(90deg, var(--dk-line) 1px, transparent 1px);
+  background-size: 44px 44px; }
+.dk-g > .dk-p { background: var(--dk-glass); transition: border-color .2s, box-shadow .2s; }
+.dk-g > .dk-p::before { content: ""; position: absolute; inset: -1px; z-index: 1; pointer-events: none; opacity: .75; transition: opacity .2s;
+  --bk: var(--dk-cyan);
+  background: linear-gradient(var(--bk), var(--bk)) left top / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) left top / 2px 14px no-repeat,
+    linear-gradient(var(--bk), var(--bk)) right top / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) right top / 2px 14px no-repeat,
+    linear-gradient(var(--bk), var(--bk)) left bottom / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) left bottom / 2px 14px no-repeat,
+    linear-gradient(var(--bk), var(--bk)) right bottom / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) right bottom / 2px 14px no-repeat; }
+.dk-g > .dk-a-fwd::before { --bk: var(--dk-red); }
+.dk-g > .dk-p:hover { border-color: var(--dk-line-2); box-shadow: 0 0 0 1px var(--dk-cyan-soft), 0 10px 34px var(--dk-cyan-soft); }
+.dk-g > .dk-p:hover::before { opacity: 1; }
+.dk-g > .dk-p > .dk-ph { margin: -8px -10px 0; padding: 6px 10px 5px; background: linear-gradient(90deg, var(--dk-cyan-soft), transparent 70%); }
+.dk-g > .dk-a-fwd > .dk-ph { background: linear-gradient(90deg, var(--dk-red-soft), transparent 70%); }
+
+/* the head: a lit edge, the name in a light gradient, the logo's ring */
+.dk-top { position: relative; background: linear-gradient(90deg, var(--dk-panel-2), var(--dk-panel) 60%);
+  box-shadow: inset 0 -1px 0 var(--dk-cyan-glow), 0 0 34px var(--dk-cyan-soft); }
+.dk-name { background: linear-gradient(90deg, var(--dk-spark), var(--dk-cyan) 70%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: none; }
+.dk-name em { color: var(--dk-cyan); }
+.dk-logo { position: relative; }
+.dk-logo::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px dashed var(--dk-cyan-glow); pointer-events: none; }
+.dk-clk { text-shadow: 0 0 14px var(--dk-cyan-glow); }
+
+/* the running lines labelled as in the picture */
+.dk-tick { position: relative; padding-left: 104px; }
+.dk-tick::before { content: "● LIVE TAPE"; position: absolute; left: 0; top: 0; bottom: 0; z-index: 1; display: flex; align-items: center;
+  padding: 0 10px; background: var(--dk-red-tile); color: var(--dk-ink); font-size: var(--t-2xs); letter-spacing: .12em; }
+.dk-foot::before { content: "◆ SUMMARY"; background: var(--dk-panel-2); color: var(--dk-cyan); box-shadow: inset -1px 0 0 var(--dk-line-2); }
+
+/* neon: each line glows in its own colour */
+.dk-feedl { filter: drop-shadow(0 0 3px var(--cid)); }
+.dk-spark.dk-cid .dk-spark-l { filter: drop-shadow(0 0 3px var(--cid)); }
+.dk-spark.up .dk-spark-l { filter: drop-shadow(0 0 3px var(--dk-green-glow)); }
+.dk-spark.down .dk-spark-l { filter: drop-shadow(0 0 3px var(--dk-red-glow)); }
+.dk-fwdl.b0 { filter: drop-shadow(0 0 4px var(--dk-green-glow)); }
+.dk-fwdl.b1 { filter: drop-shadow(0 0 4px var(--dk-cyan-glow)); }
+.dk-fwdl.b2 { filter: drop-shadow(0 0 3px var(--dk-amber-soft)); }
+.dk-gpath, .dk-fline { filter: drop-shadow(0 0 3px var(--dk-amber)); }
+.dk-lastbox { filter: drop-shadow(0 0 6px var(--dk-amber)); }
+.dk-led { text-shadow: 0 0 20px var(--dk-green-glow), 0 0 2px var(--dk-green); }
+.dk-led.down { text-shadow: 0 0 20px var(--dk-red-glow), 0 0 2px var(--dk-red); }
+
+/* the tiles: a light from the top edge down */
+.dk-cell.up { background: linear-gradient(180deg, var(--dk-green-tile), var(--dk-panel-2) 160%); box-shadow: inset 0 2px 0 var(--dk-green); }
+.dk-cell.down { background: linear-gradient(180deg, var(--dk-red-tile), var(--dk-panel-2) 160%); box-shadow: inset 0 2px 0 var(--dk-red); }
+.dk-cell.flat { background: linear-gradient(180deg, var(--dk-amber-tile), var(--dk-panel-2) 160%); box-shadow: inset 0 2px 0 var(--dk-amber); }
+.dk-cell.sig { box-shadow: 0 0 0 2px var(--dk-cyan), 0 0 16px var(--dk-cyan-glow); }
+.dk-wt, .dk-fs, .dk-gl, .dk-gbig { background: linear-gradient(180deg, var(--dk-panel-2), var(--dk-panel)); }
+
+/* the core, the picture's centrepiece: taller on a big screen */
+@media (min-width: 1101px) { .dk-corebox { min-height: 540px; } }
+@media (prefers-reduced-motion: no-preference) {
+  .dk-logo::after { animation: dk-spin 14s linear infinite; }
+}
+@keyframes dk-spin { to { transform: rotate(1turn); } }
+@media (max-width: 760px) {
+  .dk-tick { padding-left: 0; }
+  .dk-tick::before { display: none; }                 /* (a phone: the line's words need the width) */
+}
