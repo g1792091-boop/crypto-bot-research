@@ -136,7 +136,7 @@ function tableView(ctx, onPick) {
     const c3 = {bg: num3("--dk-bg", [0.01, 0.03, 0.04]), floor: num3("--dk-panel", [0.02, 0.07, 0.1]), table: num3("--dk-core-haze", [0.04, 0.13, 0.2]),
       desk: num3("--dk-panel-2", [0.03, 0.1, 0.15]), chair: num3("--dk-line-2", [0.13, 0.25, 0.31]), cyan: num3("--dk-core-cyan", [0.25, 0.81, 0.88]),
       blue: num3("--dk-core-blue", [0.48, 0.71, 0.94]), sand: num3("--dk-core-sand", [0.88, 0.8, 0.57]), ink: num3("--dk-ink", [0.87, 0.9, 0.93]),
-      muted: num3("--dk-muted", [0.45, 0.54, 0.59]), green: num3("--dk-green", [0.32, 0.78, 0.6])};
+      muted: num3("--dk-muted", [0.45, 0.54, 0.59]), green: num3("--dk-green", [0.32, 0.78, 0.6]), neon: num3("--dk-core-green", [0.44, 0.86, 0.7])};
     for (const [k, t] of Object.entries(TINT)) c3["g-" + k] = num3(t, c3.ink);
     for (const [k, t] of Object.entries(STATE_TINT)) c3["s-" + k] = num3(t, c3.muted);
     o.c3 = c3;

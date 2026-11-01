@@ -302,6 +302,7 @@ console.log(JSON.stringify({{
   pp: [R.panelPose(0, 6), R.panelPose(3, 6)], hx: R.helix(2.5, 6, 48),
   yaw0: R.YAW0, lp: R.layoutPose({{off: 0, y: 1.6, w: 3, h: 1.2, r: 3.45}}), lpd: R.layoutPose({{}}),
   arc: R.arcPts([0, 1.3, 0], [1, 0.6, 0], 0.5, 5), rx: R.m4apply(R.m4rotx(-Math.PI / 2), [0, 1, 0]),
+  dome: R.domeArcs(3.0, 30, 26), rib: R.ribbon([[0, 0, 0], [1, 0, 0], [2, 0, 0]], [1, 5, 0], 0.1),
   hex: [R.hexRgb("#ff0080"), R.hexRgb("#0f8"), R.hexRgb("rgb(255, 0, 51)"), R.hexRgb("x"), R.hexRgb(null)],
   none: R.create3d({{}}), none2: R.create3d({{getContext: () => null}}),
 }}));"""
@@ -337,6 +338,14 @@ console.log(JSON.stringify({{
     a = o["arc"]
     assert a[0] == [0, 1.3, 0] and a[-1] == [1, pytest.approx(0.6), 0] and a[2][1] > 1.3                 # lifted in its middle
     assert o["rx"] == [0, pytest.approx(0, abs=1e-12), pytest.approx(-1), 1]
+    # the energy dome: 30 twisted arcs from the top of the middle to the open floor's edge; a ribbon is 4 triangles a step
+    dome = o["dome"]
+    assert len(dome) == 30 and all(len(a["pts"]) == 26 and 0.45 <= a["glow"] <= 1.0 for a in dome)
+    assert all(a["pts"][0][1] == pytest.approx(1.55) and a["pts"][-1][1] == pytest.approx(0.06) for a in dome)
+    assert all(math.hypot(a["pts"][-1][0], a["pts"][-1][2]) <= 1.45 + 1e-9 for a in dome)
+    rib = o["rib"]
+    assert len(rib) == 2 * 12 and {v[3] for v in rib} == {0, 1}
+    assert all(abs(v[2]) == pytest.approx(0.1) for v in rib if v[3] == 0)      # its sides: across the line, as the eye sees it
     assert all(math.hypot(p[0], p[2]) <= 0.33 and 0.17 <= p[1] <= 1.64 for s in o["hx"] for p in s)
 
 

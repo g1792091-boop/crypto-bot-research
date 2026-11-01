@@ -156,6 +156,36 @@ export function arcPts(a, b, lift, n = 16) {
   }
   return out;
 }
+/** The energy dome (the owners' video): n twisted arcs from the top of the middle down to the open floor's edge, turning
+ * with t (s); each [[x, y, z] × m] with its brightness. */
+export function domeArcs(t, n = 40, m = 28, top = 1.55, rim = 1.45) {
+  const out = [];
+  for (let j = 0; j < n; j++) {
+    const th0 = (j / n) * Math.PI * 2 + t * 0.12, twist = (j % 2 ? 1 : -1) * (0.9 + 0.5 * ((j * 7) % 5) / 5), pts = [];
+    for (let i = 0; i < m; i++) {
+      const f = i / (m - 1), th = th0 + twist * f, r = rim * Math.pow(Math.sin(f * Math.PI / 2), 0.75) * (0.92 + 0.08 * Math.sin(t * 1.7 + j));
+      pts.push([Math.cos(th) * r, top - (top - 0.06) * Math.pow(f, 1.7), Math.sin(th) * r]);
+    }
+    out.push({pts, glow: 0.45 + 0.55 * Math.abs(Math.sin(t * (0.9 + (j % 4) * 0.35) + j * 1.3))});
+  }
+  return out;
+}
+/** A ribbon of light along pts, turned to the eye: [[x, y, z, edge (0 at its sides, 1 at its middle)], …] as triangles. */
+export function ribbon(pts, eye, w) {
+  const out = [], sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const side = pts.map((p, i) => {
+    const tg = sub(pts[Math.min(pts.length - 1, i + 1)], pts[Math.max(0, i - 1)]), c = cross(tg, sub(eye, p)), l = Math.hypot(c[0], c[1], c[2]) || 1;
+    return [c[0] / l * w, c[1] / l * w, c[2] / l * w];
+  });
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], b = pts[i + 1], sa = side[i], sb = side[i + 1];
+    const L = (p, s, k) => [p[0] + s[0] * k, p[1] + s[1] * k, p[2] + s[2] * k];
+    const aL = [...L(a, sa, 1), 0], aC = [...a, 1], aR = [...L(a, sa, -1), 0], bL = [...L(b, sb, 1), 0], bC = [...b, 1], bR = [...L(b, sb, -1), 0];
+    out.push(aL, aC, bL, aC, bC, bL, aC, aR, bC, aR, bR, bC);
+  }
+  return out;
+}
 /** Panel i of n hanging round the room (the floating screens): where it hangs and its turn to face the middle. */
 export function panelPose(i, n, r = 3.3) {
   const b = -Math.PI / 2 + ((i + 0.5) / Math.max(1, n)) * Math.PI * 2;
@@ -392,7 +422,7 @@ export function create3d(canvas) {
   // where the browser cannot make the pictures, the room is drawn straight onto the canvas
   const QV = `attribute vec2 aQ; varying vec2 vU; void main() { vU = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0.0, 1.0); }`;
   const BF = `precision mediump float; uniform sampler2D uT; varying vec2 vU;
-void main() { vec3 c = texture2D(uT, vU).rgb; float l = max(max(c.r, c.g), c.b); gl_FragColor = vec4(c * smoothstep(0.42, 0.95, l), 1.0); }`;
+void main() { vec3 c = texture2D(uT, vU).rgb; float l = max(max(c.r, c.g), c.b); gl_FragColor = vec4(c * smoothstep(0.5, 1.0, l), 1.0); }`;
   const GF = `precision mediump float; uniform sampler2D uT; uniform vec2 uD; varying vec2 vU;
 void main() { vec3 s = texture2D(uT, vU).rgb * 0.227; s += (texture2D(uT, vU + uD * 1.384).rgb + texture2D(uT, vU - uD * 1.384).rgb) * 0.316;
   s += (texture2D(uT, vU + uD * 3.23).rgb + texture2D(uT, vU - uD * 3.23).rgb) * 0.07; gl_FragColor = vec4(s, 1.0); }`;
@@ -461,11 +491,11 @@ void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float
     gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aN);
     gl.uniformMatrix4fv(u.VP, false, new Float32Array(vp));
     gl.uniform3fv(u.Eye, eye); gl.uniform3fv(u.Fog, C.bg); gl.uniform2fv(u.FogR, [dist * 0.8, dist * 2.4]);
-    const cyan = C.cyan, blue = C.blue, green = C.green;
+    const cyan = C.cyan, blue = C.blue, green = C.green, neon0 = () => C.neon || green;
     // the floor and the big stage, its glowing edge, dashes turning round it
     solid(mesh.cyl, m4trs([0, -0.06, 0], 0, [9, 0.04, 9]), C.floor, scale(C.floor, 0.15), 1);
     solid(mesh.cyl, m4trs([0, -0.04, 0], 0, [ST, 0.04, ST]), C.desk, scale(blue, 0.05), 1);
-    solid(mesh.fat, m4trs([0, 0.0, 0], 0, [ST, 0.5, ST]), cyan, scale(cyan, 0.9), 0.85, true);
+    solid(mesh.fat, m4trs([0, 0.0, 0], 0, [ST, 0.5, ST]), cyan, scale(cyan, 0.55), 0.55, true);
     for (const [r, a] of [[ST + 0.45, 0.4], [ST + 0.85, 0.22], [ST + 1.9, 0.14], [ST + 3.0, 0.08]]) solid(mesh.ring, m4trs([0, -0.018, 0], 0, [r, 1, r]), cyan, scale(cyan, 0.9), a, true);
     for (let i = 0; i < 64; i++) {
       const a = (i / 64) * Math.PI * 2 - t * 0.04;
@@ -489,15 +519,15 @@ void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float
     }
     // the open middle: a low round floor of light with rings and turning spokes, a small pedestal with its core
     solid(mesh.cyl, m4trs([0, 0, 0], 0, [1.55, 0.05, 1.55]), C.table, scale(blue, 0.06), 1);
-    solid(mesh.fat, m4trs([0, 0.05, 0], 0, [1.55, 0.7, 1.55]), cyan, scale(cyan, 1.0), 0.9, true);
+    solid(mesh.fat, m4trs([0, 0.05, 0], 0, [1.55, 0.7, 1.55]), neon0(), scale(neon0(), 0.7), 0.6, true);
     for (const [r, a] of [[0.55, 0.5], [0.9, 0.35], [1.25, 0.28]]) solid(mesh.ring, m4trs([0, 0.055, 0], t * 0.05, [r, 1, r]), cyan, scale(cyan, 0.7), a, true);
     for (let i = 0; i < 32; i++) {
       const a = (i / 32) * Math.PI * 2 + t * 0.08, r0 = i % 2 ? 0.55 : 0.9, rm = (r0 + 1.5) / 2;
       solid(mesh.box, m4trs([Math.cos(a) * rm, 0.054, Math.sin(a) * rm], -a, [1.5 - r0, 0.004, 0.012]), blue, scale(blue, 0.5), 0.25, true);
     }
     solid(mesh.cyl, m4trs([0, 0.05, 0], 0, [0.32, 0.22, 0.32]), C.desk, scale(blue, 0.08), 1);
-    solid(mesh.fat, m4trs([0, 0.27, 0], 0, [0.32, 0.8, 0.32]), green, scale(green, 1.2), 0.95, true);
-    solid(mesh.sph, m4trs([0, 0.46, 0], 0, [0.13, 0.13, 0.13]), green, scale(green, 1.4), 1);
+    solid(mesh.fat, m4trs([0, 0.27, 0], 0, [0.32, 0.8, 0.32]), neon0(), scale(neon0(), 0.8), 0.8, true);
+    solid(mesh.sph, m4trs([0, 0.46, 0], 0, [0.13, 0.13, 0.13]), neon0(), scale(neon0(), 0.9), 1);
     // the seats round the ring: a pod of light, a desk with its lit monitor, a chair, a figure at work
     const n = sc.seats.length, glows = [], glowC = [], glowS = [];
     sc.seats.forEach((s, i) => {
@@ -507,8 +537,8 @@ void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float
       const at = (d, y, w = 0) => [p.x + (out[0] * d + side[0] * w) * K, y * K, p.z + (out[1] * d + side[1] * w) * K];
       const part = (m, pos, yw, sz, c, e, a, glow) => solid(m, m4trs(pos, yw, [sz[0] * K, sz[1] * K, sz[2] * K]), c, e, a, glow);
       part(mesh.cyl, at(0.06, 0.0), 0, [0.5, 0.06, 0.5], C.desk, scale(blue, 0.05), 1);                                // the pod
-      part(mesh.fat, at(0.06, 0.06), 0, [0.5, 0.8, 0.5], st, scale(st, 0.85 * pulse), 0.85, true);
-      part(mesh.fat, at(0.06, 0.06), 0, [0.54, 2.6, 0.54], st, scale(st, 0.4 * pulse), 0.22, true);
+      part(mesh.fat, at(0.06, 0.06), 0, [0.5, 0.6, 0.5], st, scale(st, 0.45 * pulse), 0.55, true);
+      part(mesh.fat, at(0.06, 0.06), 0, [0.54, 2.0, 0.54], st, scale(st, 0.2 * pulse), 0.12, true);
       part(mesh.box, at(-0.22, 0.22), p.yaw, [0.62, 0.34, 0.26], C.desk, scale(blue, 0.03), 1);                          // the desk
       part(mesh.box, at(-0.09, 0.395), p.yaw, [0.64, 0.01, 0.014], cyan, scale(cyan, 0.8), 0.8, true);
       part(mesh.box, at(-0.27, 0.56), p.yaw, [0.46, 0.29, 0.02], C.desk, [0, 0, 0], 1);                                  // the monitor
@@ -591,30 +621,31 @@ void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float
     strokes(gl.POINTS, ms, mc, [0.02], 0);
     glows.push([0, 0.46, 0], [0, 0.9, 0]); glowC.push(rgba(green, 0.7), rgba(green, 0.25)); glowS.push(1.6, 4.0);
     strokes(gl.POINTS, glows, glowC, glowS, 1);
-    // the energy dome: thick arcs of light (a tube of soft glows round a bright line) from the core over the open middle
-    // to its edge, and to every running program (brighter, three strands), flickering
-    const core = [0, 0.46, 0], ends = [];
-    sc.seats.forEach((s, i) => {
-      const p = seatPose(i, n, RING), run = s.state === "live" || s.state === "wait";
-      if (run) ends.push({to: [p.x * 0.86, 0.5 * K, p.z * 0.86], run, k: i, c: C["s-" + s.state] || green});
-    });
-    for (let j = 0; j < 14; j++) { const a = (j / 14) * Math.PI * 2 + 0.2; ends.push({to: [Math.cos(a) * 1.5, 0.06, Math.sin(a) * 1.5], run: false, k: 40 + j, c: green}); }
-    const tube = [], tubeC = [], dots = [];
-    for (const e of ends) {
-      const strands = e.run ? 3 : 1;
-      for (let m = 0; m < strands; m++) {
-        const lift = (e.run ? 0.75 : 1.0) + 0.2 * m + 0.08 * Math.sin(t * 2.3 + e.k + m);
-        const wob = 0.05 * Math.sin(t * 9 + e.k * 1.7 + m * 2.1);
-        const pts = arcPts(core, [e.to[0] + wob, e.to[1], e.to[2] - wob], lift, 26);
-        const flick = 0.6 + 0.4 * Math.abs(Math.sin(t * (2.2 + m) + e.k * 0.9));
-        const c = e.run ? e.c : green;
-        strokes(gl.LINE_STRIP, pts, [rgba(c, 0.95 * flick)], [1], 2);
-        for (const q2 of pts) { tube.push(q2); tubeC.push(rgba(c, (e.run ? 0.36 : 0.24) * flick)); }
-      }
-      if (e.run) { const f = (t * 0.45 + e.k * 0.37) % 1; dots.push(arcPts(core, e.to, 0.75, 26)[Math.floor(f * 25)]); }
+    // the energy dome (the owners' video): thick ribbons of mint-green light with white-hot middles, a twisted cage from the
+    // top of the middle down to the open floor's edge, turning and flickering; three bright bundles to every running program
+    const neon = C.neon || green, hot = [Math.min(1, neon[0] * 0.5 + 0.55), Math.min(1, neon[1] * 0.4 + 0.62), Math.min(1, neon[2] * 0.45 + 0.55)];
+    const tri = [], triC = [];
+    const add = (pts, w, c, a, core) => { for (const v of ribbon(pts, eye, w)) { tri.push([v[0], v[1], v[2]]); triC.push(rgba(core && v[3] > 0.5 ? hot : c, a * v[3])); } };
+    for (const arc of domeArcs(t, 30, 26)) {
+      add(arc.pts, 0.04, neon, 0.16 * arc.glow, false);
+      add(arc.pts, 0.01, neon, 0.55 * arc.glow, arc.glow > 0.85);
     }
-    strokes(gl.POINTS, tube, tubeC, [0.15], 1);
-    strokes(gl.POINTS, dots, [rgba(green, 0.95)], [0.06], 1);
+    const core = [0, 1.55, 0], dots = [];
+    sc.seats.forEach((s, i) => {
+      if (s.state !== "live" && s.state !== "wait") return;
+      const p = seatPose(i, n, RING), to = [p.x * 0.86, 0.5 * K, p.z * 0.86];
+      for (let m = 0; m < 3; m++) {
+        const lift = 0.35 + 0.15 * m + 0.08 * Math.sin(t * 2.3 + i + m), wob = 0.05 * Math.sin(t * 9 + i * 1.7 + m * 2.1);
+        const pts = arcPts(core, [to[0] + wob, to[1], to[2] - wob], lift, 26), flick = 0.6 + 0.4 * Math.abs(Math.sin(t * (2.2 + m) + i * 0.9));
+        add(pts, 0.045, neon, 0.25 * flick, false);
+        add(pts, 0.012, neon, 0.8 * flick, true);
+      }
+      const f = (t * 0.45 + i * 0.37) % 1;
+      dots.push(arcPts(core, to, 0.35, 26)[Math.floor(f * 25)]);
+    });
+    strokes(gl.TRIANGLES, tri, triC, [1], 2);
+    strokes(gl.POINTS, dots, [rgba(hot, 0.95)], [0.07], 1);
+    strokes(gl.POINTS, [core, [0, 0.46, 0]], [rgba(neon, 0.45), rgba(neon, 0.5)], [0.7, 1.4], 1);
     gl.disableVertexAttribArray(qP); gl.disableVertexAttribArray(qC); gl.disableVertexAttribArray(qS);
     gl.depthMask(true);
     if (pic) {                                         // the glow: bright parts, blurred twice each way, added back
@@ -626,7 +657,7 @@ void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float
       }
       pass(CP, pic.scene, null, () => {
         gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pic.a.tex); gl.uniform1i(gl.getUniformLocation(CP, "uB"), 1);
-        gl.uniform1f(gl.getUniformLocation(CP, "uK"), 1.35);
+        gl.uniform1f(gl.getUniformLocation(CP, "uK"), 1.05);
         gl.activeTexture(gl.TEXTURE0);
       });
       gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND);

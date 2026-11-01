@@ -240,6 +240,7 @@
   --dk-core-sand: #e0cd92;
   --dk-core-pink: #e39ac4;
   --dk-core-violet: #a59bf0;
+  --dk-core-green: #6fdcb2;  /* the 회의실's energy dome: the mint-green measured off the owners' video (canvas only) */
   --dk-core-haze: #0b2232;   /* the navy glow behind the core, as in the picture */
   --dk-glass: rgba(4, 17, 27, .76);   /* a panel lying over the 회의실's 3D room (the room shows through) */
   --sub-h: 44px;
