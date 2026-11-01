@@ -357,7 +357,7 @@ def test_tokens_only_imports_through_pb_and_read_only():
     js3 = _read(JS3)                                   # the 3D room: no library, no colour of its own (the tokens, as numbers)
     assert "import " not in re.sub(r"//[^\n]*", "", js3) and not re.search(r"#[0-9a-fA-F]{3,8}\b", js3)
     assert "fetch(" not in js3 and "innerHTML" not in js3
-    assert 'import {create3d, hexRgb, seatPose, screenOf, YAW0} from "./livebots-room3d.js";' in js
+    assert 'import {create3d, hexRgb, seatPose, screenOf, YAW0, SEAT_RING, SEAT_K} from "./livebots-room3d.js";' in js
 
 
 def test_the_tab_and_the_menu():

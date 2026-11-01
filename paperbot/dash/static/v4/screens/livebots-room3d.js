@@ -132,6 +132,10 @@ export function meshTorus(tube = 0.02, seg = 72, sides = 6) {
 /** The camera's own turn at the start (radians): the floating screens and the floor's words stand behind the table as
  * seen from it, as in the owners' video. */
 export const YAW0 = 0.35;
+/** The stage's radius, the seats' ring and the seats' size (as in the video: a big stage, small figures far apart). */
+export const STAGE = 3.25;
+export const SEAT_RING = 2.5;
+export const SEAT_K = 0.8;
 /** A turn about x (the floor's words lie flat). */
 export function m4rotx(a) {
   const c = Math.cos(a), s = Math.sin(a);
@@ -384,33 +388,88 @@ export function create3d(canvas) {
     screens.length = Math.min(screens.length, (specs || []).length);
   }
 
+  // ---- the glow (bloom, as in the owners' video): the room drawn into a picture, its bright parts blurred and added back;
+  // where the browser cannot make the pictures, the room is drawn straight onto the canvas
+  const QV = `attribute vec2 aQ; varying vec2 vU; void main() { vU = aQ * 0.5 + 0.5; gl_Position = vec4(aQ, 0.0, 1.0); }`;
+  const BF = `precision mediump float; uniform sampler2D uT; varying vec2 vU;
+void main() { vec3 c = texture2D(uT, vU).rgb; float l = max(max(c.r, c.g), c.b); gl_FragColor = vec4(c * smoothstep(0.42, 0.95, l), 1.0); }`;
+  const GF = `precision mediump float; uniform sampler2D uT; uniform vec2 uD; varying vec2 vU;
+void main() { vec3 s = texture2D(uT, vU).rgb * 0.227; s += (texture2D(uT, vU + uD * 1.384).rgb + texture2D(uT, vU - uD * 1.384).rgb) * 0.316;
+  s += (texture2D(uT, vU + uD * 3.23).rgb + texture2D(uT, vU - uD * 3.23).rgb) * 0.07; gl_FragColor = vec4(s, 1.0); }`;
+  const CF = `precision mediump float; uniform sampler2D uS; uniform sampler2D uB; uniform float uK; varying vec2 vU;
+void main() { vec3 c = texture2D(uS, vU).rgb + texture2D(uB, vU).rgb * uK; float v = smoothstep(0.45, 1.0, length((vU - 0.5) * vec2(1.25, 1.0)) * 1.35);
+  gl_FragColor = vec4(c * (1.0 - 0.45 * v), 1.0); }`;
+  const BP = program(gl, QV, BF), GP = program(gl, QV, GF), CP = program(gl, QV, CF);
+  const quad2 = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quad2); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]), gl.STATIC_DRAW);
+  let fx = null;                                       // {w, h, scene, a, b}: the pictures (made at the canvas's size)
+  function target(w, h, depth) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    if (depth) {
+      const rb = gl.createRenderbuffer();
+      gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+    }
+    const okFb = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return okFb ? {tex, fb, w, h} : null;
+  }
+  function pictures(W, H) {
+    if (!BP || !GP || !CP) return null;
+    if (fx && fx.w === W && fx.h === H) return fx.ok ? fx : null;
+    const q4 = [Math.max(1, Math.round(W / 4)), Math.max(1, Math.round(H / 4))];
+    const sceneT = target(W, H, true), a = target(q4[0], q4[1], false), b = target(q4[0], q4[1], false);
+    fx = {w: W, h: H, ok: !!(sceneT && a && b), scene: sceneT, a, b};
+    return fx.ok ? fx : null;
+  }
+  function pass(prog, src, dst, setup) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null);
+    gl.viewport(0, 0, dst ? dst.w : fx.w, dst ? dst.h : fx.h);
+    gl.useProgram(prog);
+    const aQ = gl.getAttribLocation(prog, "aQ");
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad2); gl.enableVertexAttribArray(aQ); gl.vertexAttribPointer(aQ, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); gl.uniform1i(gl.getUniformLocation(prog, prog === CP ? "uS" : "uT"), 0);
+    if (setup) setup();
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    gl.disableVertexAttribArray(aQ);
+  }
+
+  const ST = STAGE, RING = SEAT_RING, K = SEAT_K;
   function draw(sc) {
     if (lost || (gl.isContextLost && gl.isContextLost())) return null;
     const {W, H, col: C} = sc, t = (sc.t || 0) / 1000;
+    const pic = pictures(W, H);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pic ? pic.scene.fb : null);
     gl.viewport(0, 0, W, H);
-    gl.clearColor(0, 0, 0, 0);
+    if (pic) gl.clearColor(C.bg[0], C.bg[1], C.bg[2], 1); else gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND);
-    // the camera: circling, and (drift) swaying slowly up and down and in and out, as in the owners' video
+    // the camera: swaying slowly round its start (drift), up and down, in and out, as in the owners' video
     const aspect = W / Math.max(1, H), sway = sc.drift ? 1 : 0, fitA = aspect * (sc.fit || 1);
-    const dist = Math.max(5.6, (fitA < 1 ? 2.4 : 2.75) / (Math.tan(0.31) * fitA)) * (1 + 0.05 * sway * Math.sin(t * 0.13));
+    const dist = Math.max(6.4, (fitA < 1 ? 3.0 : 3.45) / (Math.tan(0.31) * fitA)) * (1 + 0.05 * sway * Math.sin(t * 0.13));
     const pitch = sc.pitch + 0.05 * sway * Math.sin(t * 0.21);
-    const yaw = sc.yaw + 0.3 * sway * Math.sin(t * 0.075);          // the drift: swaying round its start, as in the video
+    const yaw = sc.yaw + 0.3 * sway * Math.sin(t * 0.075);
     const eye = [Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist];
-    vp = m4mul(m4persp(0.62, aspect, 0.1, 60), m4look(eye, [0, aspect < 1 ? -0.35 : 0.42, 0]));
+    vp = m4mul(m4persp(0.62, aspect, 0.1, 80), m4look(eye, [0, aspect < 1 ? -0.5 : 0.35, 0]));
     gl.useProgram(P);
     gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aN);
     gl.uniformMatrix4fv(u.VP, false, new Float32Array(vp));
-    gl.uniform3fv(u.Eye, eye); gl.uniform3fv(u.Fog, C.bg); gl.uniform2fv(u.FogR, [dist * 0.75, dist * 2.4]);
+    gl.uniform3fv(u.Eye, eye); gl.uniform3fv(u.Fog, C.bg); gl.uniform2fv(u.FogR, [dist * 0.8, dist * 2.4]);
     const cyan = C.cyan, blue = C.blue, green = C.green;
-    // the floor, the stage the desks stand on, their glowing edges
-    solid(mesh.cyl, m4trs([0, -0.06, 0], 0, [6, 0.04, 6]), C.floor, scale(C.floor, 0.15), 1);
-    solid(mesh.cyl, m4trs([0, -0.03, 0], 0, [2.55, 0.03, 2.55]), C.desk, scale(blue, 0.04), 1);
-    solid(mesh.fat, m4trs([0, 0.002, 0], 0, [2.55, 0.5, 2.55]), cyan, scale(cyan, 0.9), 0.8, true);
-    for (const [r, a] of [[3.0, 0.4], [3.35, 0.22], [4.4, 0.16], [5.2, 0.1]]) solid(mesh.ring, m4trs([0, -0.018, 0], 0, [r, 1, r]), cyan, scale(cyan, 0.9), a, true);
-    for (let i = 0; i < 48; i++) {                    // dashes round the stage's edge, turning slowly
-      const a = (i / 48) * Math.PI * 2 - t * 0.04;
-      solid(mesh.box, m4trs([Math.cos(a) * 2.75, -0.015, Math.sin(a) * 2.75], Math.PI / 2 - a, [0.12, 0.004, 0.02]), blue, scale(blue, 0.8), 0.5, true);
+    // the floor and the big stage, its glowing edge, dashes turning round it
+    solid(mesh.cyl, m4trs([0, -0.06, 0], 0, [9, 0.04, 9]), C.floor, scale(C.floor, 0.15), 1);
+    solid(mesh.cyl, m4trs([0, -0.04, 0], 0, [ST, 0.04, ST]), C.desk, scale(blue, 0.05), 1);
+    solid(mesh.fat, m4trs([0, 0.0, 0], 0, [ST, 0.5, ST]), cyan, scale(cyan, 0.9), 0.85, true);
+    for (const [r, a] of [[ST + 0.45, 0.4], [ST + 0.85, 0.22], [ST + 1.9, 0.14], [ST + 3.0, 0.08]]) solid(mesh.ring, m4trs([0, -0.018, 0], 0, [r, 1, r]), cyan, scale(cyan, 0.9), a, true);
+    for (let i = 0; i < 64; i++) {
+      const a = (i / 64) * Math.PI * 2 - t * 0.04;
+      solid(mesh.box, m4trs([Math.cos(a) * (ST + 0.22), -0.015, Math.sin(a) * (ST + 0.22)], Math.PI / 2 - a, [0.14, 0.004, 0.022]), blue, scale(blue, 0.8), 0.5, true);
     }
     if (floor) {                                       // the floor's words and rings (a picture lying flat)
       gl.useProgram(X);
@@ -421,79 +480,74 @@ export function create3d(canvas) {
       gl.bindBuffer(gl.ARRAY_BUFFER, quadP); gl.vertexAttribPointer(xP, 3, gl.FLOAT, false, 0, 0);
       gl.bindBuffer(gl.ARRAY_BUFFER, quadT); gl.vertexAttribPointer(xT, 2, gl.FLOAT, false, 0, 0);
       gl.activeTexture(gl.TEXTURE0); gl.uniform1i(x.Tex, 0); gl.bindTexture(gl.TEXTURE_2D, floor.tex);
-      gl.uniformMatrix4fv(x.M, false, new Float32Array(m4mul(m4trs([0, 0.004, 0], 0, [7.2, 1, 7.2]), m4rotx(-Math.PI / 2))));
+      gl.uniformMatrix4fv(x.M, false, new Float32Array(m4mul(m4trs([0, 0.004, 0], 0, [9.2, 1, 9.2]), m4rotx(-Math.PI / 2))));
       gl.uniform1f(x.A, 0.9);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.disableVertexAttribArray(xP); gl.disableVertexAttribArray(xT);
       gl.useProgram(P);
       gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aN);
     }
-    // the table: a dark round top, a glowing rim, rings and turning spokes on it
-    solid(mesh.cyl, m4trs([0, 0, 0], 0, [1.25, 0.16, 1.25]), C.table, scale(blue, 0.05), 1);
-    solid(mesh.fat, m4trs([0, 0.16, 0], 0, [1.25, 1, 1.25]), cyan, scale(cyan, 1.1), 0.95, true);
-    solid(mesh.fat, m4trs([0, 0.16, 0], 0, [1.29, 3, 1.29]), cyan, scale(cyan, 0.5), 0.25, true);
-    for (const [r, a] of [[0.38, 0.55], [0.66, 0.38], [0.95, 0.3]]) solid(mesh.ring, m4trs([0, 0.165, 0], t * 0.05, [r, 1, r]), cyan, scale(cyan, 0.7), a, true);
-    for (let i = 0; i < 24; i++) {
-      const a = (i / 24) * Math.PI * 2 + t * 0.08, r0 = i % 2 ? 0.4 : 0.68, rm = (r0 + 1.2) / 2;
-      solid(mesh.box, m4trs([Math.cos(a) * rm, 0.163, Math.sin(a) * rm], -a, [1.2 - r0, 0.004, 0.01]), blue, scale(blue, 0.5), 0.22, true);
+    // the open middle: a low round floor of light with rings and turning spokes, a small pedestal with its core
+    solid(mesh.cyl, m4trs([0, 0, 0], 0, [1.55, 0.05, 1.55]), C.table, scale(blue, 0.06), 1);
+    solid(mesh.fat, m4trs([0, 0.05, 0], 0, [1.55, 0.7, 1.55]), cyan, scale(cyan, 1.0), 0.9, true);
+    for (const [r, a] of [[0.55, 0.5], [0.9, 0.35], [1.25, 0.28]]) solid(mesh.ring, m4trs([0, 0.055, 0], t * 0.05, [r, 1, r]), cyan, scale(cyan, 0.7), a, true);
+    for (let i = 0; i < 32; i++) {
+      const a = (i / 32) * Math.PI * 2 + t * 0.08, r0 = i % 2 ? 0.55 : 0.9, rm = (r0 + 1.5) / 2;
+      solid(mesh.box, m4trs([Math.cos(a) * rm, 0.054, Math.sin(a) * rm], -a, [1.5 - r0, 0.004, 0.012]), blue, scale(blue, 0.5), 0.25, true);
     }
-    // the seats: a pod of light, a desk with its lit monitor, a chair, a figure at work
+    solid(mesh.cyl, m4trs([0, 0.05, 0], 0, [0.32, 0.22, 0.32]), C.desk, scale(blue, 0.08), 1);
+    solid(mesh.fat, m4trs([0, 0.27, 0], 0, [0.32, 0.8, 0.32]), green, scale(green, 1.2), 0.95, true);
+    solid(mesh.sph, m4trs([0, 0.46, 0], 0, [0.13, 0.13, 0.13]), green, scale(green, 1.4), 1);
+    // the seats round the ring: a pod of light, a desk with its lit monitor, a chair, a figure at work
     const n = sc.seats.length, glows = [], glowC = [], glowS = [];
     sc.seats.forEach((s, i) => {
-      const p = seatPose(i, n), st = C["s-" + s.state] || C.muted, tint = C["g-" + s.group] || C.ink;
+      const p = seatPose(i, n, RING), st = C["s-" + s.state] || C.muted, tint = C["g-" + s.group] || C.ink;
       const off = s.state === "off", busy = s.state === "live" || s.state === "wait", pulse = s.state === "live" ? 0.65 + 0.35 * Math.sin(t * 3 + i) : 1;
       const out = [Math.cos(p.a), Math.sin(p.a)], side = [-Math.sin(p.a), Math.cos(p.a)];
-      const at = (d, y, w = 0) => [p.x + out[0] * d + side[0] * w, y, p.z + out[1] * d + side[1] * w];
-      solid(mesh.cyl, m4trs(at(0.12, 0.0), 0, [0.4, 0.05, 0.4]), C.desk, scale(blue, 0.05), 1);                     // the pod
-      solid(mesh.fat, m4trs(at(0.12, 0.05), 0, [0.4, 0.8, 0.4]), st, scale(st, 0.75 * pulse), 0.75, true);
-      solid(mesh.fat, m4trs(at(0.12, 0.05), 0, [0.43, 2.4, 0.43]), st, scale(st, 0.35 * pulse), 0.2, true);
-      // the desk (towards the table) and its monitor, facing the figure
-      solid(mesh.box, m4trs(at(-0.22, 0.22), p.yaw, [0.62, 0.34, 0.26]), C.desk, scale(blue, 0.03), 1);
-      solid(mesh.box, m4trs(at(-0.09, 0.395), p.yaw, [0.64, 0.01, 0.014]), cyan, scale(cyan, 0.8), 0.8, true);
-      solid(mesh.box, m4trs(at(-0.27, 0.56), p.yaw, [0.46, 0.29, 0.02]), C.desk, [0, 0, 0], 1);
-      const flick = off ? 0.1 : 0.5 * pulse * (0.92 + 0.08 * Math.sin(t * 9 + i * 3));
-      solid(mesh.box, m4trs(at(-0.255, 0.56), p.yaw, [0.43, 0.26, 0.006]), scale(off ? C.muted : st, 0.6), scale(off ? C.muted : st, flick), 1);
-      for (let k = 0; k < 5; k++) {                                   // bars moving on the screen (decoration)
+      const at = (d, y, w = 0) => [p.x + (out[0] * d + side[0] * w) * K, y * K, p.z + (out[1] * d + side[1] * w) * K];
+      const part = (m, pos, yw, sz, c, e, a, glow) => solid(m, m4trs(pos, yw, [sz[0] * K, sz[1] * K, sz[2] * K]), c, e, a, glow);
+      part(mesh.cyl, at(0.06, 0.0), 0, [0.5, 0.06, 0.5], C.desk, scale(blue, 0.05), 1);                                // the pod
+      part(mesh.fat, at(0.06, 0.06), 0, [0.5, 0.8, 0.5], st, scale(st, 0.85 * pulse), 0.85, true);
+      part(mesh.fat, at(0.06, 0.06), 0, [0.54, 2.6, 0.54], st, scale(st, 0.4 * pulse), 0.22, true);
+      part(mesh.box, at(-0.22, 0.22), p.yaw, [0.62, 0.34, 0.26], C.desk, scale(blue, 0.03), 1);                          // the desk
+      part(mesh.box, at(-0.09, 0.395), p.yaw, [0.64, 0.01, 0.014], cyan, scale(cyan, 0.8), 0.8, true);
+      part(mesh.box, at(-0.27, 0.56), p.yaw, [0.46, 0.29, 0.02], C.desk, [0, 0, 0], 1);                                  // the monitor
+      const flick = off ? 0.1 : 0.55 * pulse * (0.92 + 0.08 * Math.sin(t * 9 + i * 3));
+      part(mesh.box, at(-0.255, 0.56), p.yaw, [0.43, 0.26, 0.006], scale(off ? C.muted : st, 0.6), scale(off ? C.muted : st, flick), 1);
+      for (let k = 0; k < 5; k++) {
         const hgt = 0.03 + 0.05 * ((Math.sin(t * (0.8 + k * 0.35) + i * 1.7 + k) + 1) / 2) * (off ? 0 : 1);
-        solid(mesh.box, m4trs(at(-0.25, 0.45 + hgt / 2, -0.14 + k * 0.07), p.yaw, [0.035, hgt, 0.004]), C.ink, scale(C.ink, off ? 0.1 : 0.6), 0.9, true);
+        part(mesh.box, at(-0.25, 0.45 + hgt / 2, -0.14 + k * 0.07), p.yaw, [0.035, hgt, 0.004], C.ink, scale(C.ink, off ? 0.1 : 0.6), 0.9, true);
       }
-      if (!off) { glows.push(at(-0.2, 0.56)); glowC.push(rgba(st, 0.5 * pulse)); glowS.push(0.9); }
-      // the chair
-      solid(mesh.box, m4trs(at(0.14, 0.24), p.yaw, [0.26, 0.05, 0.24]), C.chair, [0, 0, 0], 1);
-      solid(mesh.box, m4trs(at(0.27, 0.45), p.yaw, [0.26, 0.38, 0.04]), C.chair, [0, 0, 0], 1);
-      solid(mesh.cyl, m4trs(at(0.14, 0.05), 0, [0.025, 0.19, 0.025]), C.chair, [0, 0, 0], 1);
+      if (!off) { glows.push(at(-0.2, 0.56)); glowC.push(rgba(st, 0.5 * pulse)); glowS.push(0.75); }
+      part(mesh.box, at(0.14, 0.24), p.yaw, [0.26, 0.05, 0.24], C.chair, [0, 0, 0], 1);                                  // the chair
+      part(mesh.box, at(0.27, 0.45), p.yaw, [0.26, 0.38, 0.04], C.chair, [0, 0, 0], 1);
+      part(mesh.cyl, at(0.14, 0.05), 0, [0.025, 0.19, 0.025], C.chair, [0, 0, 0], 1);
       // the figure: a body, a big head with a cap in its group's colour and two eyes, arms typing while it works
       const fig = off ? scale(tint, 0.45) : tint, face = off ? scale(C.sand, 0.45) : C.sand;
-      const bob = busy ? 0.008 * Math.sin(t * 2.2 + i) : off ? -0.02 : 0;
-      solid(mesh.cyl, m4trs(at(0.13, 0.27), 0, [0.095, 0.25, 0.095]), fig, scale(fig, 0.12), 1);
-      solid(mesh.sph, m4trs(at(0.13, 0.52), 0, [0.105, 0.075, 0.105]), fig, scale(fig, 0.12), 1);
+      const bob = busy ? 0.01 * Math.sin(t * 2.2 + i) : off ? -0.02 : 0;
+      part(mesh.cyl, at(0.13, 0.27), 0, [0.095, 0.25, 0.095], fig, scale(fig, 0.12), 1);
+      part(mesh.sph, at(0.13, 0.52), 0, [0.105, 0.075, 0.105], fig, scale(fig, 0.12), 1);
       const hc = at(0.11, 0.68 + bob);
-      solid(mesh.sph, m4trs(hc, 0, [0.12, 0.115, 0.12]), face, scale(face, 0.15), 1);
-      solid(mesh.sph, m4trs([hc[0], hc[1] + 0.05, hc[2]], 0, [0.125, 0.075, 0.125]), fig, scale(fig, 0.2), 1);
+      part(mesh.sph, hc, 0, [0.125, 0.12, 0.125], face, scale(face, 0.15), 1);
+      part(mesh.sph, at(0.11, 0.73 + bob), 0, [0.13, 0.078, 0.13], fig, scale(fig, 0.2), 1);
       for (const k of [-1, 1]) {
-        const e = at(0.0, 0.69 + bob, 0.045 * k);
-        solid(mesh.sph, m4trs(e, 0, [0.017, 0.022, 0.017]), C.bg, [0, 0, 0], 1);
+        part(mesh.sph, at(-0.005, 0.69 + bob, 0.047 * k), 0, [0.018, 0.024, 0.018], C.bg, [0, 0, 0], 1);
         const tap = busy ? 0.012 * Math.sin(t * (s.state === "live" ? 16 : 9) + k * Math.PI + i) : 0;
-        solid(mesh.box, m4trs(at(-0.01, 0.47 + tap, 0.11 * k), p.yaw, [0.05, 0.05, 0.26]), fig, scale(fig, 0.12), 1);
-        solid(mesh.sph, m4trs(at(-0.14, 0.47 + tap, 0.11 * k), 0, [0.035, 0.035, 0.035]), face, scale(face, 0.15), 1);
+        part(mesh.box, at(-0.01, 0.47 + tap, 0.11 * k), p.yaw, [0.05, 0.05, 0.26], fig, scale(fig, 0.12), 1);
+        part(mesh.sph, at(-0.14, 0.47 + tap, 0.11 * k), 0, [0.035, 0.035, 0.035], face, scale(face, 0.15), 1);
       }
-      const top = [hc[0], hc[1] + 0.1, hc[2]];                      // a touch of its own (decoration): ears, a headset, an antenna, a bun, a brim
-      const kind = i % 5;
-      if (kind === 0) for (const k of [-1, 1]) solid(mesh.sph, m4trs(at(0.11, hc[1] + 0.1, 0.075 * k), 0, [0.04, 0.04, 0.04]), fig, scale(fig, 0.2), 1);
+      const kind = i % 5;                                           // a touch of its own (decoration)
+      if (kind === 0) for (const k of [-1, 1]) part(mesh.sph, at(0.11, 0.79 + bob, 0.078 * k), 0, [0.042, 0.042, 0.042], fig, scale(fig, 0.2), 1);
       if (kind === 1) {
-        for (const k of [-1, 1]) solid(mesh.sph, m4trs(at(0.11, hc[1], 0.115 * k), 0, [0.035, 0.045, 0.035]), C.chair, scale(st, 0.4), 1);
-        solid(mesh.sph, m4trs(at(0.02, hc[1] - 0.06, 0.08), 0, [0.015, 0.015, 0.015]), st, scale(st, 1), 1);
+        for (const k of [-1, 1]) part(mesh.sph, at(0.11, 0.68 + bob, 0.12 * k), 0, [0.036, 0.048, 0.036], C.chair, scale(st, 0.4), 1);
+        part(mesh.sph, at(0.02, 0.62 + bob, 0.085), 0, [0.016, 0.016, 0.016], st, scale(st, 1), 1);
       }
-      if (kind === 2) { solid(mesh.cyl, m4trs(top, 0, [0.008, 0.09, 0.008]), C.ink, [0, 0, 0], 1); solid(mesh.sph, m4trs([top[0], top[1] + 0.1, top[2]], 0, [0.025, 0.025, 0.025]), st, scale(st, 1.2), 1); }
-      if (kind === 3) solid(mesh.sph, m4trs(at(0.2, hc[1] + 0.05), 0, [0.055, 0.055, 0.055]), fig, scale(fig, 0.2), 1);
-      if (kind === 4) solid(mesh.cyl, m4trs(at(0.04, hc[1] + 0.035), p.yaw, [0.13, 0.012, 0.13]), fig, scale(fig, 0.2), 1);
-      if (s.sel) solid(mesh.ring, m4trs(at(0.12, 0.92), t, [0.15, 1, 0.15]), C.ink, scale(C.ink, 1), 1, true);
+      if (kind === 2) { part(mesh.cyl, at(0.11, 0.78 + bob), 0, [0.008, 0.09, 0.008], C.ink, [0, 0, 0], 1); part(mesh.sph, at(0.11, 0.89 + bob), 0, [0.026, 0.026, 0.026], st, scale(st, 1.2), 1); }
+      if (kind === 3) part(mesh.sph, at(0.21, 0.73 + bob), 0, [0.056, 0.056, 0.056], fig, scale(fig, 0.2), 1);
+      if (kind === 4) part(mesh.cyl, at(0.04, 0.715 + bob), p.yaw, [0.14, 0.012, 0.14], fig, scale(fig, 0.2), 1);
+      if (s.sel) part(mesh.ring, at(0.06, 1.0), t, [0.18, 1, 0.18], C.ink, scale(C.ink, 1), 1, true);
     });
-    // the middle: a column of light and floating rings
-    solid(mesh.cyl, m4trs([0, 0.16, 0], 0, [0.34, 1.25, 0.34]), green, scale(green, 0.3), 0.1, true);
-    solid(mesh.cyl, m4trs([0, 0.16, 0], 0, [0.12, 1.5, 0.12]), cyan, scale(cyan, 0.7), 0.16, true);
-    for (const [y, r, k] of [[0.55, 0.42, 1], [0.9, 0.32, -1.4], [1.25, 0.24, 1.9], [1.55, 0.16, -2.4]]) solid(mesh.fat, m4trs([0, y, 0], t * k, [r, 0.6, r]), cyan, scale(cyan, 1), 0.7, true);
-    solid(mesh.sph, m4trs([0, 0.16, 0], 0, [1.15, 1.25, 1.15]), green, scale(green, 0.5), 0.05, true);     // the dome's haze
+    solid(mesh.sph, m4trs([0, 0.05, 0], 0, [1.5, 1.35, 1.5]), green, scale(green, 0.45), 0.045, true);    // the dome's haze
     // the floating screens round the room: the programs' own numbers (paintPanel), facing the middle; the ones turned
     // away from the camera are not drawn
     if (screens.length) {
@@ -506,58 +560,77 @@ export function create3d(canvas) {
       gl.bindBuffer(gl.ARRAY_BUFFER, quadT); gl.vertexAttribPointer(xT, 2, gl.FLOAT, false, 0, 0);
       gl.activeTexture(gl.TEXTURE0); gl.uniform1i(x.Tex, 0);
       screens.forEach((s, i) => {
-        const pp = s.pose ? layoutPose(s.pose) : {...panelPose(i, screens.length), y: 1.22, w: 1.7, h: 1.06};
+        const pp0 = s.pose ? layoutPose({...s.pose, r: (s.pose.r || 3.3) + 1.05, y: (s.pose.y == null ? 1.25 : s.pose.y) + 0.35}) : {...panelPose(i, screens.length, 4.3), y: 1.6, w: 1.7, h: 1.06};
+        const pp = {...pp0, w: pp0.w * 1.12, h: pp0.h * 1.12};
         const y = pp.y + 0.04 * Math.sin(t * 0.7 + i);
-        const nx = -Math.cos(pp.b), nz = -Math.sin(pp.b), face = nx * (eye[0] - pp.x) + nz * (eye[2] - pp.z);
-        if (face <= 0) return;
+        const nx = -Math.cos(pp.b), nz = -Math.sin(pp.b), facing = nx * (eye[0] - pp.x) + nz * (eye[2] - pp.z);
+        if (facing <= 0) return;
         gl.bindTexture(gl.TEXTURE_2D, s.tex);
         gl.uniformMatrix4fv(x.M, false, new Float32Array(m4trs([pp.x, y, pp.z], pp.yaw, [pp.w, pp.h, 1])));
-        gl.uniform1f(x.A, Math.min(0.95, 0.35 + face / dist));
+        gl.uniform1f(x.A, Math.min(0.95, 0.35 + facing / dist));
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       });
       gl.disableVertexAttribArray(xP); gl.disableVertexAttribArray(xT);
     }
-    // glows, the energy in the middle, the motes, a beam to each running program
+    // glows, the energy in the middle, the motes, the energy dome
     gl.useProgram(Q);
     gl.disableVertexAttribArray(aN); gl.disableVertexAttribArray(aP);
     gl.enableVertexAttribArray(qP); gl.enableVertexAttribArray(qC); gl.enableVertexAttribArray(qS);
     gl.uniformMatrix4fv(q.VP, false, new Float32Array(vp));
     gl.uniform1f(q.Scale, H * 0.9);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
-    for (const [k, strand] of helix(t).entries()) {                  // the vortex: helices of green and cyan
-      const c = k % 2 ? rgba(cyan, 0.55) : rgba(green, 0.7);
-      strokes(gl.LINE_STRIP, strand, [c], [1], 2);
+    for (const [k, strand] of helix(t, 6, 40).entries()) {
+      const c = k % 2 ? rgba(cyan, 0.5) : rgba(green, 0.65);
+      strokes(gl.LINE_STRIP, strand.map((q2) => [q2[0] * 0.8, 0.3 + (q2[1] - 0.18) * 0.7, q2[2] * 0.8]), [c], [1], 2);
     }
     const ms = [], mc = [];
     for (const [a0, r, y0, v] of motes) {
       const yy = (y0 + t * v * 0.12) % 1, a = a0 + t * 0.35;
-      ms.push([Math.cos(a) * r, 0.18 + yy * 1.6, Math.sin(a) * r]); mc.push(yy > 0.6 ? rgba(C.sand, 0.8) : rgba(green, 0.75));
+      ms.push([Math.cos(a) * r * 1.3, 0.3 + yy * 1.4, Math.sin(a) * r * 1.3]); mc.push(yy > 0.6 ? rgba(C.sand, 0.8) : rgba(green, 0.75));
     }
     strokes(gl.POINTS, ms, mc, [0.02], 0);
-    glows.push([0, 0.9, 0], [0, 0.2, 0]); glowC.push(rgba(green, 0.35), rgba(cyan, 0.4)); glowS.push(3.2, 2.4);
+    glows.push([0, 0.46, 0], [0, 0.9, 0]); glowC.push(rgba(green, 0.7), rgba(green, 0.25)); glowS.push(1.6, 4.0);
     strokes(gl.POINTS, glows, glowC, glowS, 1);
-    // the energy dome: arcs of light from the middle to every seat (brighter and busier to the running programs) and to
-    // the stage's edge, flickering
-    const ends = [], dots = [];
+    // the energy dome: thick arcs of light (a tube of soft glows round a bright line) from the core over the open middle
+    // to its edge, and to every running program (brighter, three strands), flickering
+    const core = [0, 0.46, 0], ends = [];
     sc.seats.forEach((s, i) => {
-      const p = seatPose(i, n), run = s.state === "live" || s.state === "wait";
-      ends.push({to: [p.x * 0.82, 0.62, p.z * 0.82], run, k: i, c: C["s-" + s.state] || green});
+      const p = seatPose(i, n, RING), run = s.state === "live" || s.state === "wait";
+      if (run) ends.push({to: [p.x * 0.86, 0.5 * K, p.z * 0.86], run, k: i, c: C["s-" + s.state] || green});
     });
-    for (let j = 0; j < 18; j++) { const a = (j / 18) * Math.PI * 2 + 0.17; ends.push({to: [Math.cos(a) * 1.2, 0.17, Math.sin(a) * 1.2], run: false, k: 40 + j, c: green}); }
+    for (let j = 0; j < 14; j++) { const a = (j / 14) * Math.PI * 2 + 0.2; ends.push({to: [Math.cos(a) * 1.5, 0.06, Math.sin(a) * 1.5], run: false, k: 40 + j, c: green}); }
+    const tube = [], tubeC = [], dots = [];
     for (const e of ends) {
       const strands = e.run ? 3 : 1;
       for (let m = 0; m < strands; m++) {
-        const lift = 0.35 + 0.18 * m + 0.06 * Math.sin(t * 2.3 + e.k + m);
-        const wob = 0.04 * Math.sin(t * 9 + e.k * 1.7 + m * 2.1);
-        const pts = arcPts([0, 1.3, 0], [e.to[0] + wob, e.to[1], e.to[2] - wob], lift, 18);
-        const flick = 0.55 + 0.45 * Math.abs(Math.sin(t * (3 + m) + e.k * 0.9));
-        strokes(gl.LINE_STRIP, pts, [rgba(e.run ? e.c : green, (e.run ? 0.9 : 0.42) * flick)], [1], 2);
+        const lift = (e.run ? 0.75 : 1.0) + 0.2 * m + 0.08 * Math.sin(t * 2.3 + e.k + m);
+        const wob = 0.05 * Math.sin(t * 9 + e.k * 1.7 + m * 2.1);
+        const pts = arcPts(core, [e.to[0] + wob, e.to[1], e.to[2] - wob], lift, 26);
+        const flick = 0.6 + 0.4 * Math.abs(Math.sin(t * (2.2 + m) + e.k * 0.9));
+        const c = e.run ? e.c : green;
+        strokes(gl.LINE_STRIP, pts, [rgba(c, 0.95 * flick)], [1], 2);
+        for (const q2 of pts) { tube.push(q2); tubeC.push(rgba(c, (e.run ? 0.36 : 0.24) * flick)); }
       }
-      if (e.run) { const f = (t * 0.45 + e.k * 0.37) % 1; dots.push(arcPts([0, 1.3, 0], e.to, 0.35, 18)[Math.floor(f * 17)]); }
+      if (e.run) { const f = (t * 0.45 + e.k * 0.37) % 1; dots.push(arcPts(core, e.to, 0.75, 26)[Math.floor(f * 25)]); }
     }
-    strokes(gl.POINTS, dots, [rgba(green, 0.95)], [0.05], 1);
+    strokes(gl.POINTS, tube, tubeC, [0.15], 1);
+    strokes(gl.POINTS, dots, [rgba(green, 0.95)], [0.06], 1);
     gl.disableVertexAttribArray(qP); gl.disableVertexAttribArray(qC); gl.disableVertexAttribArray(qS);
     gl.depthMask(true);
+    if (pic) {                                         // the glow: bright parts, blurred twice each way, added back
+      gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
+      pass(BP, pic.scene, pic.a);
+      for (let r = 0; r < 2; r++) {
+        pass(GP, pic.a, pic.b, () => gl.uniform2fv(gl.getUniformLocation(GP, "uD"), [1 / pic.a.w, 0]));
+        pass(GP, pic.b, pic.a, () => gl.uniform2fv(gl.getUniformLocation(GP, "uD"), [0, 1 / pic.a.h]));
+      }
+      pass(CP, pic.scene, null, () => {
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, pic.a.tex); gl.uniform1i(gl.getUniformLocation(CP, "uB"), 1);
+        gl.uniform1f(gl.getUniformLocation(CP, "uK"), 1.35);
+        gl.activeTexture(gl.TEXTURE0);
+      });
+      gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND);
+    }
     return vp;
   }
   return {draw, panels, get vp() { return vp; }, lost: () => lost};

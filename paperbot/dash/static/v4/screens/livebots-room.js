@@ -14,7 +14,7 @@
 // Under reduced motion the camera stands still.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 // the table in real 3D (owners 11-01 "3d로"): the browser's WebGL; where it cannot start, the 2D picture below
-import {create3d, hexRgb, seatPose, screenOf, YAW0} from "./livebots-room3d.js";
+import {create3d, hexRgb, seatPose, screenOf, YAW0, SEAT_RING, SEAT_K} from "./livebots-room3d.js";
 
 export const ROOM_API = "/api/v4/livebots/room";
 const REFRESH_MS = 15 * 1000;
@@ -124,7 +124,7 @@ function tableView(ctx, onPick) {
   const g = r3 ? null : cv.getContext ? cv.getContext("2d") : null;
   if (r3) box.classList.add("is-3d");
   const o = {W: 0, H: 0, dpr: 1, th: 0.35, seats: [], tagEls: [], tw: [], col: null, raf: 0, last: 0, alive: true, sel: null, motes: [], small: false,
-    yaw: YAW0, pitch: 0.36, drag: null, idleUntil: 0, c3: null, fit: 1};
+    yaw: YAW0, pitch: 0.5, drag: null, idleUntil: 0, c3: null, fit: 1};
   for (let i = 0; i < 160; i++) o.motes.push({a: (i * 2.39996) % (Math.PI * 2), r: 0.04 + ((i * 37) % 100) / 100 * 0.2, y: ((i * 53) % 100) / 100, v: 0.15 + ((i * 17) % 10) / 40});
   const tok = () => {
     const cs = getComputedStyle(document.documentElement), v = (k) => String(cs.getPropertyValue(k) || "").trim();
@@ -202,15 +202,15 @@ function tableView(ctx, onPick) {
     o.seats.forEach((s, i) => {                        // each name tag over its figure's head
       const el = o.tagEls[i];
       if (!el) return;
-      const p = seatPose(i, n), at = screenOf(vp, p.x + Math.cos(p.a) * 0.12, 1.02, p.z + Math.sin(p.a) * 0.12, o.W, o.H);
+      const p = seatPose(i, n, SEAT_RING), at = screenOf(vp, p.x + Math.cos(p.a) * 0.1 * SEAT_K, 1.02 * SEAT_K, p.z + Math.sin(p.a) * 0.1 * SEAT_K, o.W, o.H);
       if (!at) { el.style.visibility = "hidden"; return; }
-      const sc = Math.max(0.7, Math.min(1.08, 6.8 / at[2] * (o.small ? 0.85 : 1)));
+      const sc = Math.max(0.66, Math.min(1.0, 7.4 / at[2] * (o.small ? 0.85 : 1)));
       const half = ((o.tw[i] || 150) / 2) * sc + 4;
       el.style.visibility = "visible";
       el.style.left = `${Math.max(half, Math.min(wCss - half, at[0] / css)).toFixed(1)}px`;
       el.style.top = `${Math.max(4, at[1] / css).toFixed(1)}px`;
-      el.style.zIndex = String(Math.round(200 - at[2] * 20));
-      el.style.opacity = String(Math.max(0.6, Math.min(1, 1.6 - at[2] * 0.12)));
+      el.style.zIndex = String(Math.max(1, Math.round(1000 - at[2] * 20)));   // (nearer above; never behind the canvas)
+      el.style.opacity = String(Math.max(0.72, Math.min(1, 2.0 - at[2] * 0.12)));
       el.style.transform = `translate(-50%, -100%) scale(${sc.toFixed(3)})`;
       el.style.transformOrigin = "50% 100%";
     });
