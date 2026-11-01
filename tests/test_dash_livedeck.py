@@ -458,3 +458,27 @@ def test_the_start_screen_and_the_tab():
     assert '@import url("livebots-deck.css");' in _read(os.path.join(SCREENS, "livebots.css"))
     assert "관제실" in _read(os.path.join(V4, "INVENTORY.md"))
     assert '.screen:has(.lb-tab-deck)' in _read(CSS)
+
+
+def test_the_bot_screens_and_the_room_wear_the_hud():
+    """Owners 11-01 ("봇별 화면이랑 회의실도 이렇게 멋있게 만들어야지"): each live bot's menu screens wear the 관제실's finish
+    (screens/livebots-hud.css on .lb-hud), the room's panels take the 관제실's (its root is .dk). Tokens only, the 클래식 skin
+    left as it was, the opening one-shot and still under reduced motion."""
+    scr = os.path.join(ROOT, "paperbot", "dash", "static", "v4", "screens")
+    lb, hud = _read(os.path.join(scr, "livebots.js")), _read(os.path.join(scr, "livebots-hud.css"))
+    routes = _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js"))
+    menu = re.findall(r'"(\w+)"', "".join(re.findall(r'screens: \[([^\]]*)\]', routes.split("const LIVE_GROUPS = [")[1].split("];")[0])))
+    hud_set = set(re.findall(r'"(\w+)"', re.search(r"export const HUD = new Set\(\[([^\]]*)\]\)", lb).group(1)))
+    assert hud_set == set(menu) - {"deck", "room"}                     # every menu tab but the two with their own look
+    assert 'el.classList.add("lb-hud", "lb-boot");' in lb and 'el.classList.remove("lb-boot"), 2600)' in lb
+    assert '@import url("livebots-hud.css");' in _read(os.path.join(scr, "livebots.css"))
+    body = re.sub(r"/\*.*?\*/", "", hud, flags=re.S)
+    assert not re.search(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(\s*\d", body) and not re.search(r"font-size:\s*\d", body)
+    tok = _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "tokens.css"))
+    assert {v for v in re.findall(r"var\((--dk-[\w-]+)", body)} <= set(re.findall(r"(--dk-[\w-]+):", tok))
+    rules = [r for r in re.findall(r"([^{}]+)\{", body) if r.strip() and not r.strip().startswith(("@", "from", "to"))]
+    assert all(':root:not([data-skin="classic"]) .lb-hud' in r for r in rules if "%" not in r), rules
+    anim = body.split("@media (prefers-reduced-motion: no-preference)")
+    assert len(anim) == 2 and "animation" not in anim[0]               # (the opening only where motion is welcome)
+    deck = re.sub(r"/\*.*?\*/", "", _read(os.path.join(scr, "livebots-deck.css")), flags=re.S)
+    assert ".dk .dk-p::before" in deck and ".dk .dk-p:not(.rm-a-room) > .dk-ph" in deck   # (the room's panels too)

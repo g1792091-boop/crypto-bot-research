@@ -446,24 +446,25 @@
 /* 멋있게 (owners 11-01 "멋있게 좀 만들어봐봐"): the HUD's finish. A cyan haze over the head and a faint grid behind glass
    panels; every panel with lit corner brackets, a header strip that fades out and a glow under the pointer; the lines lit
    like neon (each in its own colour); the tiles with a lit top edge; the head's name in a light gradient, the logo's ring
-   turning; the running lines labelled as in the picture. Decoration only: no number is changed by it. */
+   turning; the running lines labelled as in the picture. 회의실 (its root is .dk too) gets the same panels. Decoration only:
+   no number is changed by it. */
 .dk { position: relative; isolation: isolate;
   background: radial-gradient(ellipse 70% 340px at 50% 0, var(--dk-cyan-soft), transparent 72%),
     radial-gradient(ellipse 55% 30% at 50% 58%, var(--dk-core-haze), transparent 78%), var(--dk-bg); }
 .dk::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
   background-image: linear-gradient(var(--dk-line) 1px, transparent 1px), linear-gradient(90deg, var(--dk-line) 1px, transparent 1px);
   background-size: 44px 44px; }
-.dk-g > .dk-p { background: var(--dk-glass); transition: border-color .2s, box-shadow .2s; }
-.dk-g > .dk-p::before { content: ""; position: absolute; inset: -1px; z-index: 1; pointer-events: none; opacity: .75; transition: opacity .2s;
+.dk .dk-p { background: var(--dk-glass); transition: border-color .2s, box-shadow .2s; }
+.dk .dk-p::before { content: ""; position: absolute; inset: -1px; z-index: 1; pointer-events: none; opacity: .75; transition: opacity .2s;
   --bk: var(--dk-cyan);
   background: linear-gradient(var(--bk), var(--bk)) left top / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) left top / 2px 14px no-repeat,
     linear-gradient(var(--bk), var(--bk)) right top / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) right top / 2px 14px no-repeat,
     linear-gradient(var(--bk), var(--bk)) left bottom / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) left bottom / 2px 14px no-repeat,
     linear-gradient(var(--bk), var(--bk)) right bottom / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) right bottom / 2px 14px no-repeat; }
 .dk-g > .dk-a-fwd::before { --bk: var(--dk-red); }
-.dk-g > .dk-p:hover { border-color: var(--dk-line-2); box-shadow: 0 0 0 1px var(--dk-cyan-soft), 0 10px 34px var(--dk-cyan-soft); }
-.dk-g > .dk-p:hover::before { opacity: 1; }
-.dk-g > .dk-p > .dk-ph { margin: -8px -10px 0; padding: 6px 10px 5px; background: linear-gradient(90deg, var(--dk-cyan-soft), transparent 70%); }
+.dk .dk-p:hover { border-color: var(--dk-line-2); box-shadow: 0 0 0 1px var(--dk-cyan-soft), 0 10px 34px var(--dk-cyan-soft); }
+.dk .dk-p:hover::before { opacity: 1; }
+.dk .dk-p:not(.rm-a-room) > .dk-ph { margin: -8px -10px 0; padding: 6px 10px 5px; background: linear-gradient(90deg, var(--dk-cyan-soft), transparent 70%); }
 .dk-g > .dk-a-fwd > .dk-ph { background: linear-gradient(90deg, var(--dk-red-soft), transparent 70%); }
 
 /* the head: a lit edge, the name in a light gradient, the logo's ring */

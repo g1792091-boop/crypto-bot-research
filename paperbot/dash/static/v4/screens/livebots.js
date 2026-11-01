@@ -162,6 +162,9 @@ export const TABS = [
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
 const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
   range: "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요"};
+/** The menu's tabs of each live bot (owners 11-01 "봇별 화면이랑 회의실도 이렇게 멋있게 만들어야지"): they wear the 관제실's HUD
+ *  finish (.lb-hud, screens/livebots-hud.css); 관제실 and 회의실 have their own. */
+export const HUD = new Set(["bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]);
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "deck");   // (owners 11-01: 관제실, the main screen)
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 레인지 봇's head once it trades WOO X Pro by itself (owners 10-31 night, the summary's ``replaced``). */
@@ -236,6 +239,10 @@ export async function mount(el, ctx) {
   const body = h("div", {class: "lb-body"});
   const goal = bt ? goalResSlot(bt.bot) : null;
   el.classList.add("lb-scr", "lb-tab-" + st.tab);
+  if (HUD.has(st.tab)) {                 // each live bot's own screens in the 관제실's finish (screens/livebots-hud.css)
+    el.classList.add("lb-hud", "lb-boot");
+    if (typeof ctx.timeout === "function") ctx.timeout(() => el.classList.remove("lb-boot"), 2600);   // (the opening is over)
+  }
   if (tab.bare) el.append(staleSlot, body);              // 관제실: the screen is the whole page under the menus
   else el.append(real, head, staleSlot, body);
   if (goal) el.append(goal);              // a 봇별 screen's foot: the 목표 연구 part's place

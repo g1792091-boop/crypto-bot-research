@@ -1,0 +1,76 @@
+/* 실거래 › each live bot's screens in the 관제실's HUD finish (owners 11-01 "봇별 화면이랑 회의실도 이렇게 멋있게 만들어야지").
+   screens/livebots.js puts .lb-hud on the menu's tabs that are not bare (each bot's screen, its 성적, 친구 추세판) and
+   .lb-boot for the first seconds. A cyan haze and a faint grid behind glass cards with lit corner brackets and a lit top
+   strip, square corners, the head as a HUD bar with the name in a light gradient, the real-money strip labelled LIVE,
+   captions and numbers in the terminal face; on opening the cards come up one after another (one-shot: the class goes
+   before the first poll, so a redraw never replays it). Decoration only, tokens only (the 관제실's --dk-*), not on the
+   클래식 skin, still under reduced motion. */
+:root:not([data-skin="classic"]) .lb-hud { position: relative; isolation: isolate; }
+:root:not([data-skin="classic"]) .lb-hud::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55;
+  background: radial-gradient(ellipse 70% 360px at 50% 0, var(--dk-cyan-soft), transparent 72%),
+    linear-gradient(var(--dk-line) 1px, transparent 1px) 0 0 / 44px 44px, linear-gradient(90deg, var(--dk-line) 1px, transparent 1px) 0 0 / 44px 44px; }
+
+/* the head: a HUD bar */
+:root:not([data-skin="classic"]) .lb-hud > .lb-head { position: relative; padding: 10px 14px; border: 1px solid var(--dk-line); border-radius: 2px;
+  background: linear-gradient(90deg, var(--dk-panel-2), var(--dk-panel) 60%); box-shadow: inset 0 -1px 0 var(--dk-cyan-glow), 0 0 34px var(--dk-cyan-soft); }
+:root:not([data-skin="classic"]) .lb-hud > .lb-head h1 { font-family: var(--f-term); letter-spacing: .1em;
+  background: linear-gradient(90deg, var(--dk-spark), var(--dk-cyan) 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:root:not([data-skin="classic"]) .lb-hud > .lb-head h1::before { content: "◆ "; color: var(--dk-cyan); }
+:root:not([data-skin="classic"]) .lb-hud > .lb-head .sub { font-family: var(--f-term); font-size: var(--t-2xs); letter-spacing: .04em; color: var(--dk-ink-2); }
+:root:not([data-skin="classic"]) .lb-hud .seg button { border-radius: 2px; font-family: var(--f-term); letter-spacing: .06em; }
+:root:not([data-skin="classic"]) .lb-hud .seg button[aria-selected="true"],
+:root:not([data-skin="classic"]) .lb-hud .seg button[aria-pressed="true"] { box-shadow: 0 0 14px var(--dk-cyan-glow); }
+
+/* the real-money strip, labelled as the 관제실's running line */
+:root:not([data-skin="classic"]) .lb-hud > .lb-real { position: relative; overflow: hidden; padding-left: 86px; border-radius: 2px; font-family: var(--f-term);
+  font-size: var(--t-2xs); letter-spacing: .03em; }
+:root:not([data-skin="classic"]) .lb-hud > .lb-real::before { content: "● LIVE"; position: absolute; left: 0; top: 0; bottom: 0; display: flex;
+  align-items: center; padding: 0 12px; background: var(--dk-red-tile); color: var(--dk-ink); letter-spacing: .12em; }
+
+/* the cards: glass, square, a lit top strip, corner brackets, a glow under the pointer */
+:root:not([data-skin="classic"]) .lb-hud .card,
+:root:not([data-skin="classic"]) .lb-hud .lmx-bot { position: relative; border-radius: 2px; transition: border-color .2s, box-shadow .2s; }
+:root:not([data-skin="classic"]) .lb-hud .card { border-color: var(--dk-line); background: linear-gradient(180deg, var(--dk-cyan-soft), transparent 46px), var(--dk-glass); }
+:root:not([data-skin="classic"]) .lb-hud .lmx-bot { background: radial-gradient(70% 90% at 0% 0%, var(--st-soft), transparent 70%), var(--dk-glass); }
+:root:not([data-skin="classic"]) .lb-hud .card::before,
+:root:not([data-skin="classic"]) .lb-hud .lmx-bot::before { content: ""; position: absolute; inset: -1px; z-index: 1; pointer-events: none; opacity: .75;
+  transition: opacity .2s; --bk: var(--dk-cyan);
+  background: linear-gradient(var(--bk), var(--bk)) left top / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) left top / 2px 14px no-repeat,
+    linear-gradient(var(--bk), var(--bk)) right top / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) right top / 2px 14px no-repeat,
+    linear-gradient(var(--bk), var(--bk)) left bottom / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) left bottom / 2px 14px no-repeat,
+    linear-gradient(var(--bk), var(--bk)) right bottom / 14px 2px no-repeat, linear-gradient(var(--bk), var(--bk)) right bottom / 2px 14px no-repeat; }
+:root:not([data-skin="classic"]) .lb-hud .lmx-bot::before { --bk: var(--st); }          /* (the bot's state colour: running green, stopped red) */
+:root:not([data-skin="classic"]) .lb-hud .card:hover,
+:root:not([data-skin="classic"]) .lb-hud .lmx-bot:hover { box-shadow: 0 0 0 1px var(--dk-cyan-soft), 0 10px 34px var(--dk-cyan-soft); }
+:root:not([data-skin="classic"]) .lb-hud .card:hover::before,
+:root:not([data-skin="classic"]) .lb-hud .lmx-bot:hover::before { opacity: 1; }
+:root:not([data-skin="classic"]) .lb-hud .card-h h2,
+:root:not([data-skin="classic"]) .lb-hud .card-h h3 { font-family: var(--f-term); letter-spacing: .06em; }
+:root:not([data-skin="classic"]) .lb-hud .card-h h2::before,
+:root:not([data-skin="classic"]) .lb-hud .card-h h3::before { content: "◆ "; color: var(--dk-cyan); }
+
+/* 목표 연구 at a bot screen's foot: its title as a HUD bar too */
+:root:not([data-skin="classic"]) .lb-hud .lgr-title { padding: 8px 14px; border: 1px solid var(--dk-line); border-radius: 2px; font-family: var(--f-term);
+  letter-spacing: .08em; color: var(--dk-ink); background: linear-gradient(90deg, var(--dk-amber-soft), transparent 70%);
+  box-shadow: inset 2px 0 0 var(--dk-amber); }
+:root:not([data-skin="classic"]) .lb-hud .lgr-title::before { content: "◆ "; color: var(--dk-amber); }
+:root:not([data-skin="classic"]) .lb-hud .lgr-title small { font-family: var(--f-body); letter-spacing: 0; }
+
+/* the tiles and their numbers: the terminal face, a soft glow in their own colour */
+:root:not([data-skin="classic"]) .lb-hud .lmx-tile { border-radius: 2px; border-color: var(--dk-line); background: linear-gradient(180deg, var(--dk-panel-2), var(--dk-panel)); }
+:root:not([data-skin="classic"]) .lb-hud .lmx-tv { font-family: var(--f-term); letter-spacing: .02em; text-shadow: 0 0 12px currentColor; }
+:root:not([data-skin="classic"]) .lb-hud .lmx-tk { font-family: var(--f-term); font-size: var(--t-2xs); letter-spacing: .06em; }
+:root:not([data-skin="classic"]) .lb-hud .num { font-family: var(--f-term); }
+
+/* opening: the head, then the cards come up one after another (one-shot) */
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot > .lb-real,
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot > .lb-head { animation: hud-in .5s cubic-bezier(.2, .7, .2, 1) both; }
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot .card,
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot .lmx-bot { animation: hud-in .6s cubic-bezier(.2, .7, .2, 1) both; animation-delay: .12s; }
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot :is(.card, .lmx-bot):nth-child(2) { animation-delay: .22s; }
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot :is(.card, .lmx-bot):nth-child(3) { animation-delay: .32s; }
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot :is(.card, .lmx-bot):nth-child(4) { animation-delay: .42s; }
+  :root:not([data-skin="classic"]) .lb-hud.lb-boot :is(.card, .lmx-bot):nth-child(n+5) { animation-delay: .52s; }
+}
+@keyframes hud-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
