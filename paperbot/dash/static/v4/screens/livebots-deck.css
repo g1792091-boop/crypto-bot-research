@@ -85,9 +85,9 @@
 .dk-gnow { stroke: var(--dk-cyan); stroke-width: 1; stroke-dasharray: 2 3; }
 .dk-grows { display: grid; gap: 6px; min-width: 0; }
 .dk-grow { display: grid; gap: 3px; min-width: 0; padding: 6px 8px; border-left: 3px solid var(--dk-line-2); border-radius: 2px; background: var(--dk-panel-2); }
-.dk-grow.good { border-left-color: var(--dk-green); }
-.dk-grow.warn { border-left-color: var(--dk-amber); }
-.dk-grow.bad { border-left-color: var(--dk-red); }
+.dk-grow.g-good { border-left-color: var(--dk-green); }
+.dk-grow.g-warn { border-left-color: var(--dk-amber); }
+.dk-grow.g-bad { border-left-color: var(--dk-red); }
 .dk-grow > small { overflow-wrap: anywhere; }
 .dk-gr1 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
 .dk-gr1 b { font-size: var(--t-sm); color: var(--dk-ink); }

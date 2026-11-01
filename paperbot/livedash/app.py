@@ -82,6 +82,9 @@ MODULES = MODULES + ("liveftrend",)
 # 실거래 › 관제실 (#/deck, owners 11-01: the main screen in the style of their pictures; dash/more/livedeck.py: the three mix
 # bots and the six coins in one answer, /api/v4/livebots/deck)
 MODULES = MODULES + ("livedeck",)
+# 실거래 › 회의실 (#/room, owners 11-01: "이렇게 가능할까?" with a picture of someone's AI office; dash/more/liveroom.py: the
+# real programs round one table, /api/v4/livebots/room)
+MODULES = MODULES + ("liveroom",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 

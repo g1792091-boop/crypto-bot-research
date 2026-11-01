@@ -234,6 +234,9 @@ const SICON = {
   // 관제실 (owners 11-01): a sphere of points inside its orbit
   deck: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6),
     R(2, 11, 1, 2), R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(6, 6, 4, 4), R(7, 4, 2, 1), R(7, 11, 2, 1)],
+  // 회의실 (owners 11-01): a round table and its seats
+  room: () => [R(4, 6, 8, 1), R(3, 7, 1, 2), R(12, 7, 1, 2), R(4, 9, 8, 1), R(7, 3, 2, 2), R(2, 4, 2, 2), R(12, 4, 2, 2), R(1, 11, 2, 2),
+    R(13, 11, 2, 2), R(7, 12, 2, 2)],
   // 레인지 봇 (LIVE_GROUPS "range"): 관제 the group's drawing, 성적 the board's bars
   mixrange: ICON.range,
   mixrangeperf: () => SICON.board(),
@@ -304,7 +307,7 @@ const LIVE_GROUPS = [
   // owners 10-29: the 바이비트 봇 first, the 추세판단 봇 (switched off, its record kept) last
   // owners 10-31: V3.9 투비트 left the menu (the 투비트 and 딥코인 bots do not run any more)
   {id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]},
-  {id: "now", ko: "지금", screens: ["deck", "trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
+  {id: "now", ko: "지금", screens: ["deck", "trend", "tchart", "hq", "pos", "room", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
@@ -334,6 +337,7 @@ const LIVE_SCREENS = {
   deck: {ko: "관제실", group: "now", title: "관제실 (세 봇 · 여섯 코인 · 봇 기록과 바이낸스 봉)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)"},
   pos: {ko: "포지션", group: "now", title: "포지션"},
+  room: {ko: "회의실", group: "now", title: "회의실 (서버의 실제 프로그램들 · 그 기록과 systemd)"},
   summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},
   chart: {ko: "차트", group: "now", title: "차트"},
   risk: {ko: "위험", group: "now", title: "위험"},

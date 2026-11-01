@@ -1,0 +1,113 @@
+/* 실거래 › 회의실 (#/room; screens/livebots-room.js): the real programs round one table, in the 관제실's look (its --dk-*
+   tokens and its panel classes: livebots-deck.css). Colours only through tokens, font sizes through --t-*. */
+.screen:has(.lb-tab-room) { max-width: 1760px; padding-top: 8px; }
+
+/* the head: how many seats in each state */
+.rm-counts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; min-width: 0; }
+.rm-cnt { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-2xs); color: var(--dk-ink-2); letter-spacing: .04em; }
+.rm-cnt i { width: 8px; height: 8px; border-radius: 50%; background: var(--dk-muted); }
+.rm-cnt.live i { background: var(--dk-green); box-shadow: 0 0 8px var(--dk-green-glow); }
+.rm-cnt.wait i { background: var(--dk-cyan); box-shadow: 0 0 8px var(--dk-cyan-glow); }
+.rm-cnt.idle i { background: var(--dk-steel); }
+.rm-cnt.error i { background: var(--dk-red); box-shadow: 0 0 8px var(--dk-red-glow); }
+
+/* the layout: left · the table · right */
+.rm-g { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr) minmax(0, 340px); gap: 6px; min-width: 0; }
+.rm-col { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.rm-a-room { align-content: start; }
+.rm-scene { min-height: 520px; height: min(62vw, 640px); min-width: 0; border-radius: 2px;
+  background: radial-gradient(ellipse 60% 55% at 50% 58%, var(--dk-core-haze), var(--dk-bg) 100%); }
+.rm-note { position: absolute; left: 8px; bottom: 6px; }
+
+/* the name tags over the table (placed by the script) */
+.rm-tags { position: absolute; inset: 0; pointer-events: none; }
+.rm-tag { position: absolute; display: grid; gap: 0; justify-items: start; max-width: 180px; padding: 3px 8px; pointer-events: auto; cursor: pointer;
+  text-align: left; font: inherit; color: var(--dk-ink); background: var(--dk-panel); border: 1px solid var(--dk-line-2); border-left-width: 3px;
+  border-radius: 2px; transform-origin: 50% 100%; }
+.rm-tag b { font-size: var(--t-2xs); letter-spacing: .04em; white-space: nowrap; }
+.rm-tag small { font-size: var(--t-2xs); color: var(--dk-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 164px; }
+.rm-tag .rm-role { display: none; color: var(--dk-muted); }       /* on the table: the name and the state (the role when picked) */
+.rm-tag.on .rm-role { display: block; }
+.rm-tag.live { border-color: var(--dk-green); box-shadow: 0 0 12px var(--dk-green-glow); }
+.rm-tag.live .rm-line { color: var(--dk-green); }
+.rm-tag.wait { border-color: var(--dk-cyan); }
+.rm-tag.wait .rm-line { color: var(--dk-cyan); }
+.rm-tag.idle { border-color: var(--dk-steel); }
+.rm-tag.error { border-color: var(--dk-red); box-shadow: 0 0 12px var(--dk-red-glow); }
+.rm-tag.error .rm-line { color: var(--dk-red); }
+.rm-tag.off { border-color: var(--dk-line-2); }
+.rm-tag.on { outline: 2px solid var(--dk-ink); outline-offset: 1px; }
+.rm-tag:focus-visible { outline: 2px solid var(--dk-amber); outline-offset: 2px; }
+
+/* the picked seat */
+.rm-detail { min-height: 44px; }
+.rm-dc { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--dk-line-2); border-left: 3px solid var(--dk-muted); border-radius: 2px;
+  background: var(--dk-panel-2); min-width: 0; }
+.rm-dc b { font-size: var(--t-sm); color: var(--dk-ink); }
+.rm-dc small, .rm-dc span { font-size: var(--t-2xs); color: var(--dk-ink-2); overflow-wrap: anywhere; }
+.rm-dc.live { border-left-color: var(--dk-green); }
+.rm-dc.wait { border-left-color: var(--dk-cyan); }
+.rm-dc.idle { border-left-color: var(--dk-steel); }
+.rm-dc.error { border-left-color: var(--dk-red); }
+
+/* 팀 상태, 다음 봉 마감, 포지션 */
+.rm-kvs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.rm-kv { display: grid; gap: 2px; padding: 6px 8px; border: 1px solid var(--dk-line); border-radius: 2px; background: var(--dk-panel-2); min-width: 0; }
+.rm-kv b { font-size: var(--t-md); color: var(--dk-ink); overflow-wrap: anywhere; }
+.rm-closes { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.rm-cl { display: grid; gap: 1px; padding: 6px 8px; border: 1px solid var(--dk-line); border-radius: 2px; background: var(--dk-panel-2); min-width: 0; }
+.rm-cl b { font-size: var(--t-lg); color: var(--dk-amber); letter-spacing: .04em; }
+.rm-pos { display: grid; gap: 6px; }
+.rm-p { display: grid; gap: 2px; padding: 6px 8px; border-left: 3px solid var(--dk-muted); border-radius: 2px; background: var(--dk-panel-2); min-width: 0; }
+.rm-p.up { border-left-color: var(--dk-green); }
+.rm-p.down { border-left-color: var(--dk-red); }
+.rm-p b { font-size: var(--t-sm); }
+.rm-p small { font-size: var(--t-2xs); color: var(--dk-ink-2); overflow-wrap: anywhere; }
+
+/* 팀 맥박, 활동 */
+.rm-pulse { display: grid; gap: 5px; }
+.rm-pr { display: grid; grid-template-columns: 40px minmax(0, 1fr) 36px; align-items: center; gap: 8px; }
+.rm-pr b { text-align: right; font-size: var(--t-sm); color: var(--dk-ink); }
+.rm-bar { display: block; height: 8px; border-radius: 2px; background: var(--dk-panel-2); overflow: hidden; }
+.rm-bar i { display: block; height: 100%; background: var(--dk-cyan); box-shadow: 0 0 8px var(--dk-cyan-glow); }
+.rm-feed { display: grid; gap: 4px; max-height: 560px; overflow-y: auto; min-width: 0; }
+.rm-f { display: grid; grid-template-columns: 40px auto minmax(0, 1fr); align-items: baseline; gap: 2px 6px; padding: 3px 0;
+  border-bottom: 1px solid var(--dk-line); min-width: 0; }
+.rm-f > .dk-ps { grid-column: 3; }
+.rm-ft { font-size: var(--t-2xs); color: var(--dk-ink); overflow-wrap: anywhere; min-width: 0; }
+.rm-chip { padding: 0 5px; border: 1px solid var(--dk-green); border-radius: 2px; font-size: var(--t-2xs); color: var(--dk-green); white-space: nowrap; }
+.rm-chip.paper { border-color: var(--dk-cyan); color: var(--dk-cyan); }
+.rm-chip.check { border-color: var(--dk-amber); color: var(--dk-amber); }
+.rm-chip.ai { border-color: var(--dk-mauve); color: var(--dk-mauve); }
+
+/* 자리 */
+.rm-roster { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; min-width: 0; }
+.rm-rg { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.rm-rs { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 0 8px; align-items: center; padding: 5px 8px; min-width: 0; cursor: pointer;
+  text-align: left; font: inherit; color: var(--dk-ink); background: var(--dk-panel-2); border: 1px solid var(--dk-line); border-radius: 2px; }
+.rm-rs i { grid-row: span 3; width: 8px; height: 8px; border-radius: 50%; background: var(--dk-muted); align-self: center; }
+.rm-rs b { font-size: var(--t-xs); }
+.rm-rs small { font-size: var(--t-2xs); color: var(--dk-ink-2); overflow-wrap: anywhere; }
+.rm-rs.live i { background: var(--dk-green); box-shadow: 0 0 8px var(--dk-green-glow); }
+.rm-rs.live .rm-line { color: var(--dk-green); }
+.rm-rs.wait i { background: var(--dk-cyan); }
+.rm-rs.wait .rm-line { color: var(--dk-cyan); }
+.rm-rs.idle i { background: var(--dk-steel); }
+.rm-rs.error i { background: var(--dk-red); box-shadow: 0 0 8px var(--dk-red-glow); }
+.rm-rs.error .rm-line { color: var(--dk-red); }
+.rm-rs.on { border-color: var(--dk-ink); }
+.rm-rs:focus-visible { outline: 2px solid var(--dk-amber); outline-offset: 1px; }
+.rm-foot { margin: 0; padding: 2px 4px; }
+
+@media (max-width: 1100px) {
+  .rm-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .rm-a-room { grid-column: 1 / -1; order: -1; }
+}
+@media (max-width: 760px) {
+  .rm-g { grid-template-columns: minmax(0, 1fr); }
+  .rm-scene { min-height: 420px; height: 420px; }
+  .rm-tag { max-width: 112px; padding: 1px 5px; }
+  .rm-tag small { display: none; max-width: 100px; }                /* a phone: the names on the table, the rest in 자리 below */
+  .rm-tag.on small.rm-line { display: block; }
+  .rm-counts { justify-content: start; }
+}

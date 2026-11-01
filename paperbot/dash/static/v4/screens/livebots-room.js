@@ -1,0 +1,376 @@
+// 실거래 › 회의실 (#/room; owners 2026-11-01, with a picture and a video of someone's 'AI office' trading dashboard: "이렇게
+// 가능할까?"): one round table, each seat one real program on the server, from one read-only answer (dash/more/liveroom.py,
+// /api/v4/livebots/room, every 15 s):
+//   the table   a glowing round table drawn on a canvas, the camera slowly circling it; each seat a program (the three
+//               live bots, their paper twins, their checks, the AI 분석팀's four members, the backup, this site) with its
+//               name tag: its role, its state (일하는 중 · 기다리는 중 · 쉬는 중 · 꺼짐 · 확인 필요) and when it last did
+//               something; a beam from the centre to each program that is running; a tag picked shows what it did last
+//   left        팀 상태 (the three live bots' balance, today, closed trades, open positions), 다음 봉 마감 (15m · 30m · 1h · 4h ·
+//               1d, counting down), 포지션 (the live bots' open positions)
+//   right       팀 맥박 (the last 24 h: signals, entries, exits, checks, meetings), 활동 (the newest rows of every program)
+//   below       자리 (every seat as a list: the same words without the picture, and the phone's main view)
+// HONESTY: a seat is a program the repo installs and what it says is read from its own files or systemd; the AI members
+// read and explain, they never trade; the figures and the room are a picture (said on the screen), never a number.
+// Under reduced motion the camera stands still.
+import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
+
+export const ROOM_API = "/api/v4/livebots/room";
+const REFRESH_MS = 15 * 1000;
+const MIN = 60 * 1000;
+const FRAME_MS = 33;
+const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
+const TINT = {bot: "--dk-green", paper: "--dk-cyan", check: "--dk-amber", ai: "--dk-core-violet", ops: "--dk-steel"};
+const STATE_TINT = {live: "--dk-green", wait: "--dk-cyan", idle: "--dk-steel", off: "--dk-muted", error: "--dk-red"};
+const STATE_ORDER = ["live", "wait", "idle", "error", "off"];
+const px = (x) => (ok(x) ? String(Number(Number(x).toPrecision(6))) : "—");
+
+// ---------------------------------------------------------------- pure (node tests: tests/test_dash_liveroom.py)
+/** "방금" / "12분 전" / "3시간 전" / "2일 전" / "기록 없음". */
+export function agoKo(now, ts) {
+  if (!ok(ts)) return "기록 없음";
+  const m = Math.max(0, Math.floor((Number(now) - Number(ts)) / MIN));
+  return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
+}
+/** Binance's bar closes after ``now`` (UTC-aligned: the 4h and the day close at 09:00 KST and every 4 h from it). */
+export const CLOSES = [["15분", 15 * MIN], ["30분", 30 * MIN], ["1시간", 60 * MIN], ["4시간", 240 * MIN], ["1일", 1440 * MIN]];
+export function nextCloses(now) {
+  return CLOSES.map(([ko, ms]) => { const at = Math.floor(now / ms) * ms + ms; return {ko, at, left: at - now}; });
+}
+/** "6:13" / "36:13" / "2:36:13" (h:mm:ss past an hour). */
+export function clockKo(ms) {
+  const t = Math.max(0, Math.floor(Number(ms) / 1000)), hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = t % 60;
+  const two = (x) => String(x).padStart(2, "0");
+  return hh ? `${hh}:${two(mm)}:${two(ss)}` : `${mm}:${two(ss)}`;
+}
+/** A seat's place round the table: its angle (the first seat nearest the camera at the start) and its point. */
+export function seatAt(i, n, r = 1.38) {
+  const a = Math.PI / 2 + (i / Math.max(1, n)) * Math.PI * 2;
+  return {a, x: Math.cos(a) * r, z: Math.sin(a) * r};
+}
+/** A point of the room (x, z on the floor, y up) on the screen: [X, Y, depth, scale] for a camera {cx, cy, S, th
+ * (its turn), el (its height angle), D (its distance)}; a larger depth is further away. */
+export function project(c, x, y, z) {
+  const ct = Math.cos(c.th), st = Math.sin(c.th), ce = Math.cos(c.el), se = Math.sin(c.el);
+  const x1 = x * ct - z * st, z1 = x * st + z * ct;
+  const up = y * ce + z1 * se, d = z1 * ce - y * se;
+  const k = c.D / (c.D + d);
+  return [c.cx + x1 * k * c.S, c.cy - up * k * c.S, d, k];
+}
+/** A seat's tag: {cls, name, role, line} (its state and when it last did something). */
+export function tagOf(s, now) {
+  return {cls: ["rm-tag", s.state || "off", `g-${s.group || "ops"}`], name: s.name_ko || "?", role: s.role_ko || "",
+    line: `${s.state_ko || "—"} · ${agoKo(now, s.last_ms)}`};
+}
+/** 팀 맥박: [[words, count, share of the largest], …]. */
+export function pulseRows(p) {
+  const rows = [["신호", "signals"], ["진입", "entries"], ["청산", "exits"], ["점검", "checks"], ["회의", "meetings"]]
+    .map(([ko, k]) => [ko, ok((p || {})[k]) ? Number(p[k]) : 0]);
+  const m = Math.max(1, ...rows.map((r) => r[1]));
+  return rows.map(([ko, n]) => [ko, n, n / m]);
+}
+/** How many seats in each state: {live, wait, idle, error, off}. */
+export function stateCounts(seats) {
+  const out = {live: 0, wait: 0, idle: 0, error: 0, off: 0};
+  for (const s of seats || []) if (s && s.state in out) out[s.state] += 1;
+  return out;
+}
+
+// ---------------------------------------------------------------- the table (canvas) and its name tags (HTML)
+function tableView(ctx, onPick) {
+  const pin = {position: "absolute", left: "0", top: "0", width: "100%", height: "100%", display: "block"};
+  const cv = h("canvas", {class: "rm-cv", "aria-hidden": "true", style: pin});
+  const tags = h("div", {class: "rm-tags"});
+  const note = h("small", {class: "rm-note dk-mono"}, "그림은 장식 · 자리마다 실제 프로그램 · 글자는 그 기록");
+  const box = h("div", {class: "rm-scene", style: {position: "relative", overflow: "hidden"}}, cv, tags, note);
+  const g = cv.getContext ? cv.getContext("2d") : null;
+  const o = {W: 0, H: 0, dpr: 1, th: 0.35, seats: [], tagEls: [], tw: [], col: null, raf: 0, last: 0, alive: true, sel: null, motes: [], small: false};
+  for (let i = 0; i < 160; i++) o.motes.push({a: (i * 2.39996) % (Math.PI * 2), r: 0.04 + ((i * 37) % 100) / 100 * 0.2, y: ((i * 53) % 100) / 100, v: 0.15 + ((i * 17) % 10) / 40});
+  const tok = () => {
+    const cs = getComputedStyle(document.documentElement), v = (k) => String(cs.getPropertyValue(k) || "").trim();
+    o.col = {cyan: v("--dk-core-cyan"), blue: v("--dk-core-blue"), sand: v("--dk-core-sand"), ink: v("--dk-ink"), panel: v("--dk-panel-2"),
+      line: v("--dk-line-2"), bg: v("--dk-bg"), haze: v("--dk-core-haze")};
+    for (const [k, t] of Object.entries(TINT)) o.col["g-" + k] = v(t);
+    for (const [k, t] of Object.entries(STATE_TINT)) o.col["s-" + k] = v(t);
+  };
+  function layout() {
+    const r = box.getBoundingClientRect ? box.getBoundingClientRect() : {width: 0, height: 0};
+    const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio) || 1);
+    const W = Math.round(Math.min(r.width, 2000) * dpr), H = Math.round(Math.min(r.height, 1200) * dpr);
+    o.small = r.width < 560;
+    if (W === o.W && H === o.H) return false;
+    o.W = W; o.H = H; o.dpr = dpr;
+    cv.width = Math.max(1, W); cv.height = Math.max(1, H);
+    return true;
+  }
+  const cam = () => ({cx: o.W / 2, cy: o.H * 0.6, S: Math.min(o.W * (o.small ? 0.33 : 0.27), o.H * 0.48), th: o.th, el: 0.6, D: 4.2});
+  const P = (c, x, y, z) => project(c, x, y, z);
+  function ring(c, r, y, stroke, alpha, width) {
+    g.beginPath();
+    for (let i = 0; i <= 96; i++) {
+      const a = (i / 96) * Math.PI * 2, [X, Y] = P(c, Math.cos(a) * r, y, Math.sin(a) * r);
+      if (i) g.lineTo(X, Y); else g.moveTo(X, Y);
+    }
+    g.globalAlpha = alpha; g.strokeStyle = stroke; g.lineWidth = width * o.dpr; g.stroke();
+  }
+  function disc(c, r, y, fill, alpha) {
+    g.beginPath();
+    for (let i = 0; i <= 96; i++) {
+      const a = (i / 96) * Math.PI * 2, [X, Y] = P(c, Math.cos(a) * r, y, Math.sin(a) * r);
+      if (i) g.lineTo(X, Y); else g.moveTo(X, Y);
+    }
+    g.globalAlpha = alpha; g.fillStyle = fill; g.fill();
+  }
+  function figure(c, s, at, t) {                       // a seat: its chair, its figure, its light on the floor
+    const C = o.col, tint = C["g-" + s.group] || C.ink, st = C["s-" + s.state] || C.line, dim = s.state === "off" ? 0.35 : 1;
+    const [fx, fy, , k] = P(c, at.x, 0, at.z);
+    const u = k * c.S;                                 // one room unit on the screen here
+    const pulse = s.state === "live" ? 0.6 + 0.4 * Math.sin(t / 300 + at.a * 3) : 1;
+    g.globalAlpha = 0.85 * pulse; g.strokeStyle = st; g.lineWidth = 2 * o.dpr;           // the light on the floor
+    g.beginPath(); g.ellipse(fx, fy, 0.17 * u, 0.07 * u, 0, 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = 0.18 * pulse; g.fillStyle = st; g.fill();
+    g.globalAlpha = 0.9 * dim; g.fillStyle = C.panel;                                      // the chair
+    g.fillRect(fx - 0.09 * u, fy - 0.34 * u, 0.18 * u, 0.26 * u);
+    g.fillStyle = tint; g.globalAlpha = 0.85 * dim;                                        // the figure: a body, a head
+    const bw = 0.13 * u, bh = 0.2 * u, by = fy - 0.3 * u;
+    g.beginPath();
+    if (g.roundRect) g.roundRect(fx - bw / 2, by, bw, bh, bw / 2.4); else g.rect(fx - bw / 2, by, bw, bh);
+    g.fill();
+    g.beginPath(); g.arc(fx, by - 0.075 * u, 0.06 * u, 0, Math.PI * 2); g.fill();
+    if (o.sel === s.id) { g.globalAlpha = 1; g.strokeStyle = C.ink; g.lineWidth = 1.5 * o.dpr; g.beginPath(); g.arc(fx, by - 0.075 * u, 0.09 * u, 0, Math.PI * 2); g.stroke(); }
+  }
+  function draw(t) {
+    if (!g || !o.col || !o.W) return;
+    const c = cam(), C = o.col, tt = (t || 0) / 1000;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = "source-over";
+    g.clearRect(0, 0, o.W, o.H);
+    for (const [r, a] of [[2.1, 0.1], [2.5, 0.07], [2.95, 0.05]]) ring(c, r, 0, C.cyan, a, 1);          // the floor's rings
+    disc(c, 1.0, 0, C.haze, 0.95);                                                                   // the table
+    ring(c, 1.0, 0, C.cyan, 0.9, 2.2);
+    ring(c, 1.04, 0, C.cyan, 0.25, 5);
+    for (const [r, a] of [[0.32, 0.5], [0.55, 0.35], [0.78, 0.28]]) ring(c, r, 0.001, C.cyan, a, 1);
+    g.globalAlpha = 0.22; g.strokeStyle = C.blue; g.lineWidth = o.dpr;                              // the circuits, turning
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2 + tt * 0.08, r0 = i % 2 ? 0.32 : 0.55;
+      const [x0, y0] = P(c, Math.cos(a) * r0, 0, Math.sin(a) * r0), [x1, y1] = P(c, Math.cos(a) * 0.97, 0, Math.sin(a) * 0.97);
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    }
+    const n = o.seats.length;
+    const seats = o.seats.map((s, i) => ({s, at: seatAt(i, n)})).map((x) => ({...x, d: P(c, x.at.x, 0, x.at.z)[2]}));
+    seats.sort((a, b) => b.d - a.d);                                                                  // far first
+    const core = () => {                                                                             // the centre: a column of light
+      const [bx, byy, , k] = P(c, 0, 0, 0), u = k * c.S;
+      g.globalCompositeOperation = "lighter";
+      for (const m of o.motes) {
+        const yy = (m.y + tt * m.v * 0.1) % 1, a = m.a + tt * 0.4;
+        const [X, Y] = P(c, Math.cos(a) * m.r, yy * 0.9, Math.sin(a) * m.r);
+        g.globalAlpha = 0.5 * (1 - yy); g.fillStyle = yy > 0.6 ? C.sand : C.cyan;
+        g.fillRect(X - o.dpr, Y - o.dpr, 2 * o.dpr, 2 * o.dpr);
+      }
+      for (const [yy, r] of [[0.45, 0.2], [0.62, 0.15], [0.76, 0.1]]) ring(c, r, yy, C.cyan, 0.5, 1.2);
+      g.globalAlpha = 0.25; g.fillStyle = C.cyan; g.beginPath(); g.ellipse(bx, byy, 0.26 * u, 0.1 * u, 0, 0, Math.PI * 2); g.fill();
+      g.globalCompositeOperation = "source-over";
+    };
+    let drewCore = false;
+    for (const x of seats) {
+      if (!drewCore && x.d < 0) { core(); drewCore = true; }
+      if (x.s.state === "live" || x.s.state === "wait") {                                            // a beam to each running program
+        const [x0, y0] = P(c, 0, 0.32, 0), [x1, y1] = P(c, x.at.x * 0.86, 0.12, x.at.z * 0.86);
+        g.globalAlpha = x.s.state === "live" ? 0.55 : 0.25; g.strokeStyle = C["s-" + x.s.state]; g.lineWidth = o.dpr;
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+        const f = (tt * 0.5 + x.at.a) % 1;
+        g.globalAlpha = 0.9; g.fillStyle = C["s-" + x.s.state];
+        g.beginPath(); g.arc(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, 1.8 * o.dpr, 0, Math.PI * 2); g.fill();
+      }
+      figure(c, x.s, x.at, t || 0);
+    }
+    if (!drewCore) core();
+    g.globalAlpha = 1;
+    placeTags(c, seats);
+  }
+  function placeTags(c, seats) {
+    const css = o.dpr || 1, wCss = o.W / css;
+    for (const x of seats) {
+      const i = o.seats.indexOf(x.s), el = o.tagEls[i];
+      if (!el) continue;
+      const [X, Y, d, k] = P(c, x.at.x, 0.62, x.at.z);
+      const sc = Math.max(0.72, Math.min(1.05, k * (o.small ? 0.85 : 1)));
+      const half = ((o.tw[i] || 150) / 2) * sc + 4;                  // a tag stays inside the frame
+      el.style.left = `${Math.max(half, Math.min(wCss - half, X / css)).toFixed(1)}px`;
+      el.style.top = `${Math.max(4, Y / css).toFixed(1)}px`;
+      el.style.zIndex = String(100 - Math.round(d * 20));
+      el.style.opacity = String(Math.max(0.55, Math.min(1, 0.75 + (1 - d) * 0.2)));
+      el.style.transform = `translate(-50%, -100%) scale(${sc.toFixed(3)})`;
+      el.style.transformOrigin = "50% 100%";
+    }
+  }
+  const measure = () => { o.tw = o.tagEls.map((e) => (e.offsetWidth || 0)); };
+  const running = () => o.alive && cv.isConnected && !document.hidden && !motion.reduced() && !!g;
+  function frame(t) {
+    o.raf = 0;
+    if (!running()) return;
+    if (t - o.last >= FRAME_MS) {
+      const dt = o.last ? Math.min(120, t - o.last) : 0;
+      o.last = t;
+      o.th += dt * 0.00006;
+      draw(t);
+    }
+    o.raf = requestAnimationFrame(frame);
+  }
+  const kick = () => { if (!o.raf && running()) { o.last = 0; o.raf = requestAnimationFrame(frame); } };
+  const still = () => { layout(); draw(0); };
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => { if (layout()) { measure(); if (running()) kick(); else still(); } });
+    ro.observe(box);
+    ctx.track(() => ro.disconnect());
+  }
+  ctx.listen(document, "visibilitychange", () => { if (!document.hidden) { tok(); if (running()) kick(); else still(); } });
+  ctx.track(() => { o.alive = false; if (o.raf) cancelAnimationFrame(o.raf); o.raf = 0; });
+  requestAnimationFrame(() => { tok(); layout(); if (running()) kick(); else still(); });
+  return {
+    el: box,
+    set(seats, now) {
+      o.seats = seats || [];
+      o.tagEls = o.seats.map((s) => {
+        const tg = tagOf(s, now);
+        return h("button", {type: "button", class: [...tg.cls, o.sel === s.id ? "on" : ""], title: `${tg.name} · ${tg.role}`,
+          onclick: () => { o.sel = s.id; onPick(s); for (const e of o.tagEls) e.classList.toggle("on", e === o.tagEls[o.seats.indexOf(s)]); if (!o.raf) still(); }},
+        h("b", null, tg.name), h("small", {class: "rm-role"}, tg.role), h("small", {class: "rm-line"}, tg.line));
+      });
+      put(tags, o.tagEls);
+      requestAnimationFrame(() => { measure(); if (!o.raf) still(); });
+      if (!o.raf) { if (running()) kick(); else still(); }
+    },
+    pick(id) { o.sel = id; },
+  };
+}
+
+// ---------------------------------------------------------------- the screen
+const panel = (cls, title, sub, ...body) => h("section", {class: ["dk-p", cls]},
+  h("header", {class: "dk-ph"}, h("b", {class: "dk-pt"}, "◆ ", title), sub ? h("span", {class: "dk-ps"}, sub) : null), ...body);
+
+export function roomView(ctx) {
+  const st = {d: null, okAt: 0, busy: false, sel: null};
+  const slot = h("div", {class: "lb-slot"});
+  const clockK = h("b", {class: "dk-clk num"}, "--:--:--"), clockU = h("small", {class: "dk-clku num"}, "");
+  const counts = h("div", {class: "rm-counts"});
+  const team = h("div", {class: "rm-team"});
+  const closes = h("div", {class: "rm-closes"});
+  const pos = h("div", {class: "rm-pos"});
+  const pulse = h("div", {class: "rm-pulse"});
+  const feed = h("div", {class: "rm-feed"});
+  const roster = h("div", {class: "rm-roster"});
+  const detail = h("div", {class: "rm-detail", "aria-live": "polite"});
+  const pick = (s) => { st.sel = s.id; drawDetail(); };
+  const table = tableView(ctx, pick);
+  const el = h("div", {class: ["dk", "rm"]},
+    slot,
+    h("header", {class: "dk-top"},
+      h("div", {class: "dk-brand"}, h("span", {class: "dk-logo", "aria-hidden": "true"}, "PB"),
+        h("div", null, h("small", {class: "dk-mono"}, "THE TEAM · REAL PROGRAMS · READ ONLY"),
+          h("b", {class: "dk-name"}, "PAPERBOT ", h("em", null, "//"), " 회의실"),
+          h("small", {class: "dk-mono"}, "자리마다 서버의 실제 프로그램 · 상태는 그 기록과 systemd"))),
+      counts,
+      h("div", {class: "dk-clock"}, h("div", null, clockK, h("span", {class: "dk-live"}, "LIVE")), h("small", {class: "dk-mono"}, "KST · 한국 시간"), clockU)),
+    h("div", {class: "rm-g"},
+      h("div", {class: "rm-col"},
+        panel("rm-a-team", "팀 상태 · TEAM STATUS", "세 실거래 봇", team),
+        panel("rm-a-close", "다음 봉 마감 · NEXT CANDLE CLOSES", "바이낸스 봉 (UTC 기준)", closes),
+        panel("rm-a-pos", "포지션 · POSITIONS", "실거래 봇의 열린 포지션", pos)),
+      h("section", {class: ["dk-p", "rm-a-room"]},
+        h("header", {class: "dk-ph"}, h("b", {class: "dk-pt"}, "◆ 회의실 · THE TABLE"),
+          h("span", {class: "dk-ps"}, "이름표를 누르면 그 프로그램이 마지막에 한 일 · 빛 = 초록 일하는 중 · 하늘 기다리는 중 · 회색 쉬는 중 · 빨강 확인 필요")),
+        table.el, detail),
+      h("div", {class: "rm-col"},
+        panel("rm-a-pulse", "팀 맥박 · TEAM PULSE", "지난 24시간", pulse),
+        panel("rm-a-feed", "활동 · ACTIVITY", "모든 자리의 최근 기록", feed))),
+    panel("rm-a-roster", "자리 · ROSTER", "그림 없이 같은 내용 · 묶음마다", roster),
+    h("p", {class: "dk-ps rm-foot"}, "보기만 하는 화면 · 15초마다 새로 읽어요 · AI 분석팀은 기록을 읽고 설명만 해요 (거래하지 않아요) · 사람 모양 그림은 장식이에요"));
+
+  function tickClock() {
+    const now = serverNow(), two = (x) => String(x).padStart(2, "0");
+    const k = new Date(now + 9 * 3600 * 1000), u = new Date(now);
+    clockK.textContent = `${two(k.getUTCHours())}:${two(k.getUTCMinutes())}:${two(k.getUTCSeconds())}`;
+    clockU.textContent = `${two(u.getUTCHours())}:${two(u.getUTCMinutes())} UTC`;
+    put(closes, nextCloses(now).map((c) => h("div", {class: "rm-cl"}, h("small", {class: "dk-mono"}, `${c.ko} 마감`),
+      h("b", {class: "num"}, clockKo(c.left)), h("small", {class: "dk-ps"}, fmt.hm(c.at)))));
+  }
+  function drawTop(d) {
+    const c = stateCounts(d.seats);
+    put(counts, STATE_ORDER.map((k) => h("span", {class: ["rm-cnt", k]}, h("i"), `${(d.states_ko || {})[k] || k} ${c[k]}`)));
+  }
+  function drawTeam(d) {
+    const t = d.team || {};
+    const row = (k, v, cls) => h("div", {class: "rm-kv"}, h("small", {class: "dk-mono"}, k), h("b", {class: ["num", cls || ""]}, v));
+    put(team, h("div", {class: "rm-kvs"},
+      row("잔고", ok(t.equity) ? fmt.usd(t.equity) : "—"),
+      row("시작 대비", ok(t.pnl) ? `${t.pnl >= 0 ? "+" : ""}${fmt.usd(t.pnl)}` : "—", ok(t.pnl) ? (t.pnl >= 0 ? "up" : "down") : ""),
+      row("오늘 손익", ok(t.today_pnl) ? `${t.today_pnl >= 0 ? "+" : ""}${fmt.usd(t.today_pnl)}` : "—", ok(t.today_pnl) ? (t.today_pnl >= 0 ? "up" : "down") : ""),
+      row("닫힌 거래", ok(t.n) ? `${fmt.int(t.n)}번` : "—"),
+      row("승 / 패", ok(t.n) ? `${fmt.int(t.wins || 0)} / ${fmt.int(Math.max(0, (t.n || 0) - (t.wins || 0)))}` : "—"),
+      row("열린 포지션", ok(t.open) ? `${fmt.int(t.open)}개` : "—")));
+  }
+  function drawPos(d) {
+    const ps = d.positions || [];
+    put(pos, ps.length ? ps.map((p) => h("div", {class: ["rm-p", Number(p.side) > 0 ? "up" : "down"]},
+      h("b", null, `${p.coin || p.symbol} ${Number(p.side) > 0 ? "롱" : "숏"}`), h("small", null, p.bot_ko || ""),
+      h("small", {class: "dk-mono"}, `진입 ${px(p.entry)} · 손절 ${px(p.stop)}${p.step ? ` · ${p.step}단계` : ""}${p.leverage ? ` · ${p.leverage}배` : ""}`)))
+      : ui.empty("열린 포지션이 없어요"));
+  }
+  function drawPulse(d) {
+    put(pulse, pulseRows(d.pulse).map(([ko, n, f]) => h("div", {class: "rm-pr"}, h("small", {class: "dk-mono"}, ko),
+      h("span", {class: "rm-bar"}, h("i", {style: {width: `${Math.round(f * 100)}%`}})), h("b", {class: "num"}, fmt.int(n)))));
+  }
+  function drawFeed(d) {
+    const now = serverNow(), rows = (d.feed || []).slice(0, 30);
+    put(feed, rows.length ? rows.map((r) => h("div", {class: "rm-f"}, h("small", {class: "dk-mono num"}, fmt.hm(r.ts)),
+      h("span", {class: ["rm-chip", (r.seat || "").split("-")[1] === "paper" ? "paper" : (r.seat || "").startsWith("team") ? "ai" : (r.seat || "").endsWith("check") ? "check" : "bot"]}, r.who_ko),
+      h("span", {class: "rm-ft"}, `${r.kind_ko} · ${r.text}`), h("small", {class: "dk-ps"}, agoKo(now, r.ts))))
+      : ui.empty("아직 기록이 없어요"));
+  }
+  function drawRoster(d) {
+    const now = serverNow(), groups = d.groups_ko || {};
+    put(roster, Object.keys(groups).map((gk) => {
+      const ss = (d.seats || []).filter((s) => s.group === gk);
+      if (!ss.length) return null;
+      return h("div", {class: "rm-rg"}, h("small", {class: "dk-mono"}, groups[gk]),
+        ss.map((s) => h("button", {type: "button", class: ["rm-rs", s.state, st.sel === s.id ? "on" : ""], onclick: () => { table.pick(s.id); pick(s); drawRoster(d); }},
+          h("i"), h("b", null, s.name_ko), h("small", null, s.role_ko), h("small", {class: "rm-line"}, `${s.state_ko} · ${agoKo(now, s.last_ms)}`))));
+    }));
+  }
+  function drawDetail() {
+    const s = st.d && (st.d.seats || []).find((x) => x.id === st.sel);
+    if (!s) { put(detail, h("small", {class: "dk-ps"}, "이름표나 아래 자리를 누르면 그 프로그램이 마지막에 한 일이 나와요")); return; }
+    put(detail, h("div", {class: ["rm-dc", s.state]}, h("b", null, `${s.name_ko} · ${(st.d.groups_ko || {})[s.group] || ""}`),
+      h("small", null, s.role_ko), h("small", {class: "rm-line"}, `${s.state_ko} · ${agoKo(serverNow(), s.last_ms)}`),
+      h("span", null, `마지막 기록: ${s.last_ko || "—"}`), s.unit ? h("small", {class: "dk-mono"}, `systemd · ${s.unit}`) : null));
+  }
+  function draw() {
+    const d = st.d;
+    if (!d) return;
+    drawTop(d); drawTeam(d); drawPos(d); drawPulse(d); drawFeed(d); drawRoster(d); drawDetail();
+    table.set(d.seats, serverNow());
+    tickClock();
+  }
+  async function load() {
+    if (st.busy) return;
+    st.busy = true;
+    let d;
+    try { d = await ctx.api(ROOM_API); }
+    catch (e) {
+      if (!ctx.alive() || (e && e.name === "AbortError")) return;
+      if (st.d) put(slot, ui.staleNote(e, st.okAt, () => load().catch(() => {})));
+      else put(slot, ui.errorBox(e, () => load()));
+      throw e;
+    } finally { st.busy = false; }
+    if (!ctx.alive()) return;
+    put(slot);
+    st.d = d; st.okAt = Date.now();
+    draw();
+  }
+  put(roster, ui.empty("불러오는 중"));
+  load().catch(() => {});
+  ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
+  ctx.every(1000, tickClock);
+  return {el, set() {}};
+}

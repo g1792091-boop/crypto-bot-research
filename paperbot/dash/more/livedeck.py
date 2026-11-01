@@ -247,6 +247,7 @@ def bot_view(prof: Any, now: int) -> dict:
     if rows and prow:
         out["parity"] = _parity(rows, prow)
     out["_rows"] = rows                                   # (for the tape and the flow; dropped before the answer)
+    out["_prows"] = prow                                  # (the paper twin's rows: liveroom.py's seats and feed)
     out["_board"] = ((live["st"].get("d") or {}).get("board") or {}) if live["st"].get("state") == "ok" else {}
     return out
 

@@ -68,6 +68,8 @@ import {shadowsView, settingsView} from "./livebots-more.js";
 import {hqView} from "./livebots-hq.js";
 // 관제실 (owners 11-01: the main screen in the style of their pictures; screens/livebots-deck.js, /api/v4/livebots/deck)
 import {deckView} from "./livebots-deck.js";
+// 실거래 › 회의실 (owners 11-01 "이렇게 가능할까?": the real programs round one table; dash/more/liveroom.py)
+import {roomView} from "./livebots-room.js";
 import {rankView} from "./livebots-rank.js";
 import {mapView} from "./livebots-map.js";
 import {costView} from "./livebots-cost.js";
@@ -117,6 +119,8 @@ export const TABS = [
   {id: "tchart", label: "추세 차트", make: (ctx, hub) => tchartView(ctx, hub), own: true},
   {id: "hq", label: "한눈에", make: (ctx, hub) => hqView(ctx, hub)},
   {id: "pos", label: "포지션", make: (ctx, hub) => posView(ctx, hub), own: true},
+  // owners 11-01: 회의실, the real programs round one table (bare: its own head, as the 관제실)
+  {id: "room", label: "회의실", make: (ctx) => roomView(ctx), own: true, bare: true},
   {id: "summary", label: "요약", make: (ctx, hub) => termView(ctx, hub)},
   {id: "chart", label: "차트", make: (ctx, hub) => chartView(ctx, hub)},
   {id: "risk", label: "위험", make: (ctx) => riskView(ctx), own: true},

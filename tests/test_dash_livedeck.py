@@ -393,7 +393,7 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: bad.tex
               "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식", "목표 ×6", "경로보다", "남은 날 하루에 필요",
               "목표 연구 →"):
         assert w in t, w
-    assert "dk-cell down" in out["cls"] and "dk-side down" in out["cls"] and "dk-grow thin" in out["cls"]
+    assert "dk-cell down" in out["cls"] and "dk-side down" in out["cls"] and "dk-grow g-thin" in out["cls"]
     assert "×1 ×2 ×3 ×6 0일 10일 20일 30일 목표 ×6" in re.sub(r"\s+", " ", t)      # the goal chart: its axes and the path's tag
     assert not BAD.search(out["bad"])
 

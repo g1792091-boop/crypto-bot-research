@@ -812,7 +812,7 @@ export function deckView(ctx) {
         ok(x.need_win) ? (Number(x.need_win) > 1 ? "지금 평균 이익·손실로는 승률 100%여도 모자라요" : `필요 승률 ${rateKo(x.need_win)}`) : null,
         ok(x.win_rate) ? `지금 승률 ${rateKo(x.win_rate)}` : null,
         ok(x.n) ? `닫힌 거래 ${fmt.int(x.n)}번` : null].filter(Boolean);
-      return h("div", {class: ["dk-grow", x.tone || ""]},
+      return h("div", {class: ["dk-grow", x.tone ? `g-${x.tone}` : ""]},      // (g-: ".dk .warn" would paint the whole row)
         h("div", {class: "dk-gr1"}, h("span", {class: ["dk-legi", `b${k}`]}, h("i"), h("b", null, x.name_ko)),
           h("b", {class: ["num", m ? (m.vs_path >= 0 ? "up" : "down") : ""]}, m ? `${multKo(m.mult)} · 경로보다 ${pctKo(m.vs_path, 1)}` : "이번 달 거래 없음")),
         h("small", {class: "dk-mono"}, facts.length ? facts.join(" · ") : "—"),
