@@ -25,6 +25,7 @@ export const LIVE_ALIAS = {
   cal: "일정 경제 발표 주말 calendar", safety: "안전 멈춤 경고 safety", settings: "설정 규칙 settings", team: "분석팀 AI team",
   shadows: "그림자 봇 shadow",
   mix: "친구 관제 친구 15분 봇 믹스 30분 봇 관제 WOO X Pro 2 두 번째 계정 모의 신호 계단 mixchop mix", mixperf: "친구 성적 믹스 성적 승률 거래 실거래 모의 비교 mixchop mix",
+  deck: "관제실 메인 첫 화면 대시보드 지갑 차트 추세 그리드 포지션 코어 실행 기록 포워드 테스트 히스토그램 신호 흐름 deck main",
   mixrange: "레인지 관제 레인지 봇 WOO X Pro 첫 계정 추세 바 히스토그램 0선 돌파 모의 신호 계단 mixrange range",
   mixrangeperf: "레인지 성적 레인지 봇 실거래 모의 비교 승률 거래 mixrange range",
   // the 바이비트 봇 (owners 10-29) and the friend's trend per coin

@@ -5,9 +5,10 @@
 .brand .bic { color: var(--warn); border-color: var(--warn-line); }
 .brand-t b { color: var(--warn); }
 
-/* the phone's bottom bar: eight groups (봇별 · 지금 · 기록 · 성적 · 운영 · VWAP 봇 · 믹스 봇 · 바이비트 봇, core/routes.js
-   LIVE_GROUPS) */
-.botbar { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+/* the phone's bottom bar: nine groups (봇별 · 지금 · 기록 · 성적 · 운영 · VWAP 봇 · 친구 15분 봇 · 바이비트 봇 · 레인지 봇,
+   core/routes.js LIVE_GROUPS; owners 11-01: the 레인지 봇's group too), the words one size smaller to fit 9 on a phone */
+.botbar { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.botbar a { font-size: var(--t-2xs); text-align: center; }
 
 /* the link back to the rule bot's dashboard (the strip's end / the top bar): a quiet dashed button like 예전 화면 */
 a.oldui.paperlink { border-style: dashed; }

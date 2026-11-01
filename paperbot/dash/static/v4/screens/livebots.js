@@ -66,6 +66,8 @@ import {perfView} from "./livebots-perf.js";
 import {safetyView} from "./livebots-safety.js";
 import {shadowsView, settingsView} from "./livebots-more.js";
 import {hqView} from "./livebots-hq.js";
+// 관제실 (owners 11-01: the main screen in the style of their pictures; screens/livebots-deck.js, /api/v4/livebots/deck)
+import {deckView} from "./livebots-deck.js";
 import {rankView} from "./livebots-rank.js";
 import {mapView} from "./livebots-map.js";
 import {costView} from "./livebots-cost.js";
@@ -108,6 +110,9 @@ export const TABS = [
   {id: "mixbot", label: "친구 15분 봇", make: (ctx) => mixView(ctx), own: true},
   // owners 10-29: the 추세판단 봇 switched off, its record kept (last of 봇별)
   {id: "trendbot", label: "추세판단 봇", make: (ctx, hub) => trendView(ctx, hub, {only: (a, s) => followersOf(s, "paper").includes(a.id)}), own: true},
+  // owners 11-01: 관제실, the site's main screen, first of 지금 (bare: its own head and clock, no strip or title row above
+  // it: the owners' "딱 대시보드 들어갔을때 메인화면이 이렇게")
+  {id: "deck", label: "관제실", make: (ctx) => deckView(ctx), own: true, bare: true},
   {id: "trend", label: "관제", make: (ctx, hub) => trendView(ctx, hub), own: true},
   {id: "tchart", label: "추세 차트", make: (ctx, hub) => tchartView(ctx, hub), own: true},
   {id: "hq", label: "한눈에", make: (ctx, hub) => hqView(ctx, hub)},
@@ -223,7 +228,8 @@ export async function mount(el, ctx) {
   const body = h("div", {class: "lb-body"});
   const goal = bt ? goalResSlot(bt.bot) : null;
   el.classList.add("lb-scr", "lb-tab-" + st.tab);
-  el.append(real, head, staleSlot, body);
+  if (tab.bare) el.append(staleSlot, body);              // 관제실: the screen is the whole page under the menus
+  else el.append(real, head, staleSlot, body);
   if (goal) el.append(goal);              // a 봇별 screen's foot: the 목표 연구 part's place
 
   const hub = {state: () => st.state, at: () => st.okAt, retry: () => load().catch(() => {}), get: () => st.d};

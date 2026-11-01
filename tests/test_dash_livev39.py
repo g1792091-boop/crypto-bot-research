@@ -278,7 +278,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "추세판단 봇"]]
     assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 15분 봇", "bots", "livebots"]]
     assert out["v39"] is None and "v39" not in out["keys"]
-    assert out["keys"][:6] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend"] and out["land"] == "hq"
+    assert out["keys"][:6] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "deck"] and out["land"] == "deck"   # (11-01)
     assert out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 15분 봇")):
@@ -286,7 +286,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     assert "livebots-v39" not in lb and 'id: "v39"' not in lb
     search = FW._read(V4, "core", "search.js").split("export const LIVE_ALIAS")[1]
     assert all(f"{k}:" in search for k in ("trendbot", "vwapbot", "mixbot")) and "v39:" not in search
-    assert ".botbar { grid-template-columns: repeat(8, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
+    assert ".botbar { grid-template-columns: repeat(9, minmax(0, 1fr)); }" in FW._read(ROOT, "paperbot", "dash", "static", "live", "live.css")
 
 
 def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):

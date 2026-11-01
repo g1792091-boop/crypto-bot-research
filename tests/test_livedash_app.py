@@ -234,12 +234,12 @@ def test_the_menus_of_both_sites_in_node():
     # 봇별 first (owners 10/26: one screen per bot, tests/test_dash_livev39.py), then 지금 · 기록 · 성적 · 운영, VWAP 봇 (owners
     # 10/23: the 'VWAP 개선판' paper bot's tabs, tests/test_dash_livevwap.py) and 믹스 봇 (owners 10/25 night: the '믹스 30분 봇'
     # and its paper twin, tests/test_dash_livemix.py)
-    # (owners 10-29: 바이비트 봇's group last, the site opens on 한눈에, tests/test_dash_mixbybit_site.py)
+    # (owners 10-29: 바이비트 봇's group last; 11-01: the site opens on 관제실, tests/test_dash_livedeck.py)
     assert live["groups"] == ["봇별", "지금", "기록", "성적", "운영", "VWAP 봇", "친구 15분 봇", "바이비트 봇", "레인지 봇"] \
-        and live["land"] == "hq" and live["tag"]["text"] == "실거래"
+        and live["land"] == "deck" and live["tag"]["text"] == "실거래"
     assert live["items"][-10:] == ["vwap", "vwperf", "vwblock", "mix", "mixperf", "bybit", "bybitperf", "ftrend", "mixrange", "mixrangeperf"]
     # (레인지 봇 after 추세판단 봇 since 10/26 evening, tests/test_dash_live_range.py)
-    assert live["items"][:5] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"] and live["items"][5:9] == ["trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
+    assert live["items"][:5] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"] and live["items"][5:10] == ["deck", "trend", "tchart", "hq", "pos"] and {"trades", "replay", "signals", "missed", "perf", "rank", "map", "cost", "cal", "safety",
                                                      "settings", "team", "shadows", "summary", "chart"} <= set(live["items"])
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"

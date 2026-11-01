@@ -202,6 +202,45 @@
   --t-count: 600ms;    /* number count-to (core/motion.js reads its own constant) */
   /* shell */
   --top-h: 56px;
+  /* 관제실 (screens/livebots-deck.css, owners 11-01: "사진속 배경 색깔 느낌으로", "동그라미 이색깔로 전체적으로 이 색깔 느낌으로"):
+     the palette measured off their picture of a trading terminal, one look in both skins (a terminal is dark): a dark
+     navy-teal ground, faint teal rules, muted teal, mint green, brick red, sand gold, cream; the core's shell adds steel
+     blue and a rare mauve speck. Text on --dk-panel: ink 15.2, ink-2 8.6, muted 5.3, green 9.1, red 6.2, cyan 9.7,
+     amber 11.5; on --dk-panel-2 muted 4.9; ink on the green / red / amber tile 8.3 / 9.8 / 8.6, ink-2 4.7 / 5.6 / 4.9
+     (WCAG AA for small text: 4.5). */
+  --dk-bg: #02080b;
+  --dk-panel: #04111b;
+  --dk-panel-2: #071a26;
+  --dk-line: #122633;
+  --dk-line-2: #21404f;
+  --dk-ink: #dde7ec;
+  --dk-ink-2: #9fb1bb;
+  --dk-muted: #728a97;
+  --dk-cyan: #86c3cc;
+  --dk-cyan-soft: rgba(134, 195, 204, .12);
+  --dk-cyan-glow: rgba(134, 195, 204, .34);
+  --dk-green: #52c79a;
+  --dk-green-soft: rgba(82, 199, 154, .12);
+  --dk-green-glow: rgba(82, 199, 154, .38);
+  --dk-green-tile: #114835;
+  --dk-red: #ec6a70;
+  --dk-red-soft: rgba(236, 106, 112, .12);
+  --dk-red-glow: rgba(236, 106, 112, .38);
+  --dk-red-tile: #5e2021;
+  --dk-amber: #e8c48c;
+  --dk-amber-soft: rgba(232, 196, 140, .12);
+  --dk-amber-tile: #4b3b1c;
+  --dk-gold: #d6c8a4;
+  --dk-spark: #f7f3ea;
+  --dk-steel: #6c8696;
+  --dk-mauve: #b391a6;
+  /* the core's canvas only (never text): the picture's glowing cyan and blue shell, sand tube, pink and violet stars */
+  --dk-core-cyan: #3fcfe0;
+  --dk-core-blue: #7ab6f0;
+  --dk-core-sand: #e0cd92;
+  --dk-core-pink: #e39ac4;
+  --dk-core-violet: #a59bf0;
+  --dk-core-haze: #0b2232;   /* the navy glow behind the core, as in the picture */
   --sub-h: 44px;
   --bot-h: 62px;       /* phone bottom tab bar (plus the safe area) */
   --page-max: 1320px;

@@ -231,6 +231,9 @@ const SICON = {
   bybitbot: ICON.bybit,
   bybit: ICON.bybit,
   bybitperf: () => SICON.board(),
+  // 관제실 (owners 11-01): a sphere of points inside its orbit
+  deck: () => [R(5, 1, 6, 1), R(3, 2, 2, 1), R(11, 2, 2, 1), R(2, 3, 1, 2), R(13, 3, 1, 2), R(1, 5, 1, 6), R(14, 5, 1, 6),
+    R(2, 11, 1, 2), R(13, 11, 1, 2), R(3, 13, 2, 1), R(11, 13, 2, 1), R(5, 14, 6, 1), R(6, 6, 4, 4), R(7, 4, 2, 1), R(7, 11, 2, 1)],
   // 레인지 봇 (LIVE_GROUPS "range"): 관제 the group's drawing, 성적 the board's bars
   mixrange: ICON.range,
   mixrangeperf: () => SICON.board(),
@@ -291,7 +294,9 @@ export function navGroups(feats) {
 // and their own links (#/livebots/<tab>, parseHash / href above) are the very ones of the rule bot's page before the move.
 // owners 10-29 (the 추세판단 봇 switched off, the 바이비트 봇 on the Bybit account): the site opens on 한눈에 (every real-money
 // account), never on a bot that no longer trades
-export const LIVE_START = "hq";
+// owners 11-01 ("이런 화면느낌으로 메인화면으로"): the site opens on 관제실 (the three mix bots and the six coins in the style
+// of their pictures); 한눈에 stays one tab away
+export const LIVE_START = "deck";
 const LIVE_GROUPS = [
   // 봇별 (owners 10/26 "대시보드에 추가화면으로 안헷갈리게 추세판단봇 화면 따로, vwap 개선판 봇 화면 따로, 친구 30분 봇 화면
   // 따로, v3.9 화면 따로"): one screen per bot, first in the menu, each with only the executors that follow it
@@ -299,7 +304,7 @@ const LIVE_GROUPS = [
   // owners 10-29: the 바이비트 봇 first, the 추세판단 봇 (switched off, its record kept) last
   // owners 10-31: V3.9 투비트 left the menu (the 투비트 and 딥코인 bots do not run any more)
   {id: "bots", ko: "봇별", screens: ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]},
-  {id: "now", ko: "지금", screens: ["trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
+  {id: "now", ko: "지금", screens: ["deck", "trend", "tchart", "hq", "pos", "summary", "chart", "risk", "health"]},
   {id: "rec", ko: "기록", screens: ["journal", "trades", "replay", "signals", "missed"]},
   {id: "perf", ko: "성적", screens: ["review", "expect", "perf", "goal", "rank", "judge", "map", "cost"]},
   {id: "ops", ko: "운영", screens: ["cal", "safety", "settings", "team", "shadows"]},
@@ -326,6 +331,7 @@ const LIVE_SCREENS = {
   mixbot: {ko: "친구 15분 봇", group: "bots", title: "친구 15분 봇 (15분봉 · 추세 바 30분 + 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)"},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)"},
+  deck: {ko: "관제실", group: "now", title: "관제실 (세 봇 · 여섯 코인 · 봇 기록과 바이낸스 봉)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)"},
   pos: {ko: "포지션", group: "now", title: "포지션"},
   summary: {ko: "요약", group: "now", title: "요약 (실거래 터미널)"},

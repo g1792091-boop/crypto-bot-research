@@ -79,6 +79,9 @@ MODULES = MODULES + ("livegoalres",)
 # 실거래 › 바이비트 봇 › 친구 추세판 (#/ftrend: each coin's friend trend as the 바이비트 봇 and the 레인지 봇 saw it, owners
 # 10-29; owners 10-31 night: the trend bar of the three mix bots; dash/more/liveftrend.py)
 MODULES = MODULES + ("liveftrend",)
+# 실거래 › 관제실 (#/deck, owners 11-01: the main screen in the style of their pictures; dash/more/livedeck.py: the three mix
+# bots and the six coins in one answer, /api/v4/livebots/deck)
+MODULES = MODULES + ("livedeck",)
 PRICE_ALERTS_KO = "가격 알림은 규칙봇 대시보드(8080)에서 걸어 주세요 · 실거래 사이트는 보기만 해요"
 
 
