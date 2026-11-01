@@ -273,7 +273,7 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     # (owners 10-29: the 바이비트 봇 first, the 추세판단 봇 switched off last, the 바이비트 봇's group last;
     # tests/test_dash_mixbybit_site.py); owners 10-31: V3.9 투비트 gone
     assert out["groups"][0] == ["bots", "봇별", ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]]
-    assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit"]      # the rest as it was
+    assert [g[0] for g in out["groups"]] == ["bots", "now", "rec", "perf", "ops", "vwap", "mix", "bybit", "range"]   # (+ 10-31 night)
     # (owners 10-31 night: the friend bot is 친구 15분 봇, its config's name)
     assert out["nav"][0] == ["봇별", ["바이비트 봇", "레인지 봇", "VWAP 개선판", "친구 15분 봇", "추세판단 봇"]]
     assert out["screens"] == [["추세판단 봇", "bots", "livebots"], ["레인지 봇", "bots", "livebots"], ["VWAP 개선판", "bots", "livebots"], ["친구 15분 봇", "bots", "livebots"]]

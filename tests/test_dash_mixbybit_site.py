@@ -207,7 +207,7 @@ def test_the_pages(tmp_path):
         F.ruleLines({{rules: {{obv: {{ko: 'OBV 진한색', side: 0, why: '친구 추세 진입 금지'}}, srsi: {{ko: '스톡RSI 50선', side: -1, why: ''}}}}}}),
         F.agoKo(65 * 60000)]}}));""")
     assert out["start"] == "hq" and out["bots"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot"]
-    assert out["groups"][-1] == "bybit" and out["by"] == ["bybit", "bybitperf", "ftrend"]
+    assert out["groups"][-2:] == ["bybit", "range"] and out["by"] == ["bybit", "bybitperf", "ftrend"]   # (the 레인지 봇's last)
     assert out["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend", "tchart", "hq", "pos"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]

@@ -717,10 +717,12 @@ def test_wiring_route_menu_find_inventory_and_module():
                    ("cal", "일정"), ("safety", "안전"), ("settings", "설정"), ("team", "분석팀"), ("shadows", "그림자"),
                    # VWAP 봇 (owners 10/23, screens/livebots-vwap.js; tests/test_dash_livevwap.py)
                    ("vwap", "VWAP 관제"), ("vwperf", "VWAP 성적"), ("vwblock", "VWAP 막은 신호"),
-                   # 믹스 봇 (owners 10/25 night, screens/livebots-mix.js; tests/test_dash_livemix.py)
-                   ("mix", "믹스 관제"), ("mixperf", "믹스 성적"),
+                   # 믹스 봇 (owners 10/25 night, screens/livebots-mix.js; tests/test_dash_livemix.py; 10-31 night: 친구 15분 봇)
+                   ("mix", "친구 관제"), ("mixperf", "친구 성적"),
                    # 바이비트 봇 (owners 10-29, screens/livebots-mix.js on its own answers, livebots-ftrend.js)
-                   ("bybit", "바이비트 관제"), ("bybitperf", "바이비트 성적"), ("ftrend", "친구 추세판")]
+                   ("bybit", "바이비트 관제"), ("bybitperf", "바이비트 성적"), ("ftrend", "친구 추세판"),
+                   # 레인지 봇 (owners 10-31 night, the same screens on its own answers; tests/test_dash_mixrange_site.py)
+                   ("mixrange", "레인지 관제"), ("mixrangeperf", "레인지 성적")]
     # owners 10/19: 관제 first; 10/21 "대시보드 다시 만들어야겠네": 관제 is 추세판단 봇's (livebots-trend.js), the old one 한눈에;
     # 10-29 (the 추세판단 봇 switched off): 한눈에 first
     assert 'tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq")' in _read(SCREENS, "livebots.js")

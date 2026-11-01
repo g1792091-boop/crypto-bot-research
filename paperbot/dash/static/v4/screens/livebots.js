@@ -87,7 +87,7 @@ import {tchartView} from "./livebots-tchart.js";
 import {vwapView, vwperfView, vwblockView} from "./livebots-vwap.js";
 // 믹스 봇 (owners 10/25 night: the '믹스 30분 봇' on the second WOO X Pro account and its paper twin; menu group "mix"):
 // 관제 · 성적
-import {mixView, mixperfView, BYBIT_UI} from "./livebots-mix.js";
+import {mixView, mixperfView, BYBIT_UI, RANGE_UI} from "./livebots-mix.js";
 // 바이비트 봇 (owners 10-29: the friend's trend + OBV / Stoch RSI entries on the Bybit account; menu group "bybit"): 관제 ·
 // 성적 (the mix screens on its own answers) · 친구 추세판
 import {ftrendView} from "./livebots-ftrend.js";
@@ -137,14 +137,18 @@ export const TABS = [
   {id: "vwap", label: "VWAP 관제", make: (ctx, hub) => vwapView(ctx, hub), own: true},
   {id: "vwperf", label: "VWAP 성적", make: (ctx) => vwperfView(ctx), own: true},
   {id: "vwblock", label: "VWAP 막은 신호", make: (ctx) => vwblockView(ctx), own: true},
-  {id: "mix", label: "믹스 관제", make: (ctx) => mixView(ctx), own: true},
-  {id: "mixperf", label: "믹스 성적", make: (ctx) => mixperfView(ctx), own: true},
+  {id: "mix", label: "친구 관제", make: (ctx) => mixView(ctx), own: true},
+  {id: "mixperf", label: "친구 성적", make: (ctx) => mixperfView(ctx), own: true},
   {id: "bybit", label: "바이비트 관제", make: (ctx) => mixView(ctx, BYBIT_UI), own: true},
   {id: "bybitperf", label: "바이비트 성적", make: (ctx) => mixperfView(ctx, BYBIT_UI), own: true},
   {id: "ftrend", label: "친구 추세판", make: (ctx) => ftrendView(ctx), own: true},
+  // 레인지 봇 (owners 10-31 night: menu group "range", as the 바이비트 봇's): 관제 · 성적 of the mix bot on WOO X Pro
+  {id: "mixrange", label: "레인지 관제", make: (ctx) => mixView(ctx, RANGE_UI), own: true},
+  {id: "mixrangeperf", label: "레인지 성적", make: (ctx) => mixperfView(ctx, RANGE_UI), own: true},
 ];
 /** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
-const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요"};
+const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 + OBV 진한색 + AC) · 다른 봇은 이 화면에 없어요",
+  range: "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 바 30분 종합 + 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요"};
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "hq");
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 레인지 봇's head once it trades WOO X Pro by itself (owners 10-31 night, the summary's ``replaced``). */

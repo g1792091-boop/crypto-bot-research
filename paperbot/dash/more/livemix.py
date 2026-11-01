@@ -169,8 +169,12 @@ def prof_of(x: Any) -> Profile:
     return PROFILES.get(str(bid or "mix"), MIX)
 
 
-def off_ko(prof: Profile, bid: str) -> str:
-    return f"{prof.name}({'실거래' if bid == 'live' else '모의'})이 아직 꺼져 있어요 · 기록 파일이 없어요"
+def off_ko(prof: Profile, bid: str, name: Optional[str] = None) -> str:
+    """The 꺼짐 line of a bot with no files yet, by its config's ``name`` (owners 10-31 night: 친구 15분 봇), else the
+    profile's (the friend bot without a config: OFF_KO)."""
+    if name is None and prof is MIX:
+        return OFF_KO[bid]
+    return f"{name or prof.name}({'실거래' if bid == 'live' else '모의'})이 아직 꺼져 있어요 · 기록 파일이 없어요"
 
 
 # the log's kinds the 관제 lists as warnings: (words, tone)
@@ -415,7 +419,7 @@ def status_of(bid: str, st: dict, lg: dict, now: int, prof: Optional[Profile] = 
             # its first start (한눈에's DAY n): the log's first start row, unknown when the log's start was not read
             "first_start_ms": _i(starts[0]["ts"]) if starts and not lg.get("cut") else None}
     if st["state"] == "missing" and lg["state"] == "missing":
-        return {**base, "state": "off", "ko": OFF_KO[bid] if prof is MIX else off_ko(prof, bid)}
+        return {**base, "state": "off", "ko": off_ko(prof, bid, getattr(cfg, "name", None))}
     if st["state"] == "error":
         return {**base, "state": "error", "ko": "상태 파일을 읽지 못해 돌고 있는지 몰라요", "reason_ko": st.get("reason_ko"), "reason": st.get("reason")}
     d = st.get("d") or {}

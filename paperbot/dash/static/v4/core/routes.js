@@ -137,6 +137,8 @@ const ICON = {
   // 바이비트 봇 (owners 10-29): the OBV histogram turning dark (three light bars, then a full one) under the trend's arrow
   bybit: () => [R(1, 11, 2, 4), R(4, 10, 2, 5), R(7, 9, 2, 6), R(10, 5, 3, 10), R(2, 3, 9, 1), R(10, 1, 1, 5), R(11, 2, 1, 3),
     R(12, 3, 1, 1)],
+  // 레인지 봇 (owners 10-31 night: its own group once it trades WOO X Pro by itself): the histogram's bars crossing the 0 line
+  range: () => [R(1, 8, 14, 1), R(2, 9, 2, 3), R(5, 9, 2, 2), R(8, 6, 2, 2), R(11, 3, 2, 5), R(13, 1, 2, 7)],
 };
 export const icon =(group) => s("svg", {viewBox: "0 0 16 16", fill: "currentColor", "shape-rendering": "crispEdges", "aria-hidden": "true"},
   (ICON[group] || ICON.home)());
@@ -229,6 +231,9 @@ const SICON = {
   bybitbot: ICON.bybit,
   bybit: ICON.bybit,
   bybitperf: () => SICON.board(),
+  // 레인지 봇 (LIVE_GROUPS "range"): 관제 the group's drawing, 성적 the board's bars
+  mixrange: ICON.range,
+  mixrangeperf: () => SICON.board(),
   ftrend: () => [R(1, 3, 3, 3), R(5, 3, 3, 3), R(9, 3, 3, 3), R(13, 4, 2, 1), R(1, 9, 3, 3), R(5, 9, 3, 3), R(9, 10, 3, 1),
     R(13, 9, 2, 3)],
 };
@@ -303,10 +308,14 @@ const LIVE_GROUPS = [
   {id: "vwap", ko: "VWAP 봇", screens: ["vwap", "vwperf", "vwblock"]},
   // the '믹스 30분 봇' on the second WOO X Pro account (real money) and its paper twin (owners 10/25 night,
   // docs/mixchop-ko.md): its own group, last; each column says 꺼짐 until its bot runs (screens/livebots-mix.js)
-  {id: "mix", ko: "믹스 봇", screens: ["mix", "mixperf"]},
+  // (owners 10-31 night: the friend bot is the 친구 15분 봇; the group keeps its id and links)
+  {id: "mix", ko: "친구 15분 봇", screens: ["mix", "mixperf"]},
   // the 바이비트 봇 (owners 10-29, docs/mixbybit-ko.md: the friend's trend + OBV / Stoch RSI entries on the Bybit account,
   // real money, and its paper twin) and the friend's trend per coin (dash/more/liveftrend.py): its own group, last
   {id: "bybit", ko: "바이비트 봇", screens: ["bybit", "bybitperf", "ftrend"]},
+  // the 레인지 봇 (owners 10-31 night, docs/range-bot-ko.md 0장: the first WOO X Pro account, real money, and its paper
+  // twin, the mix program): its own group, last, as the 바이비트 봇's; each column says 꺼짐 until its bot runs
+  {id: "range", ko: "레인지 봇", screens: ["mixrange", "mixrangeperf"]},
 ];
 const LIVE_SCREENS = {
   bybitbot: {ko: "바이비트 봇", group: "bots", title: "바이비트 봇 (15분봉 · 추세 바 30분 + OBV 진한색 + AC · 바이비트 실거래와 모의)"},
@@ -344,11 +353,13 @@ const LIVE_SCREENS = {
   vwap: {ko: "VWAP 관제", group: "vwap", title: "VWAP 관제 (VWAP 개선판)"},
   vwperf: {ko: "VWAP 성적", group: "vwap", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)"},
   vwblock: {ko: "VWAP 막은 신호", group: "vwap", title: "VWAP 막은 신호 (막지 않았다면)"},
-  mix: {ko: "믹스 관제", group: "mix", title: "믹스 관제 (친구 15분 봇 · 실거래와 모의)"},
-  mixperf: {ko: "믹스 성적", group: "mix", title: "믹스 성적 (실거래 · 모의 · 설계서 5년)"},
+  mix: {ko: "친구 관제", group: "mix", title: "친구 관제 (친구 15분 봇 · WOO X Pro 2 실거래와 모의)"},
+  mixperf: {ko: "친구 성적", group: "mix", title: "친구 성적 (친구 15분 봇 · 실거래 vs 모의)"},
   bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)"},
   bybitperf: {ko: "바이비트 성적", group: "bybit", title: "바이비트 성적 (실거래 vs 모의)"},
   ftrend: {ko: "친구 추세판", group: "bybit", title: "친구 추세판 (코인별 추세 바 30분 종합 · 바이비트 봇 · 친구 15분 봇 · 레인지 봇 15분봉 신호)"},
+  mixrange: {ko: "레인지 관제", group: "range", title: "레인지 관제 (레인지 봇 · WOO X Pro 실거래와 모의)"},
+  mixrangeperf: {ko: "레인지 성적", group: "range", title: "레인지 성적 (레인지 봇 · 실거래 vs 모의)"},
 };
 if (LIVE) {
   // put in place (the same objects every module already imported): the menu, the screens, the strip's groups

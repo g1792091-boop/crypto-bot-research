@@ -93,7 +93,9 @@ def test_off_before_either_bot_ran(tmp_path):
     c, f = X.control(p, NOW), X.perf(p, NOW)
     for d in (c, f):
         for bid, b in _bots(d).items():
-            assert b["status"]["state"] == "off" and b["status"]["ko"] == X.OFF_KO[bid]
+            # the bot's name from its (repo) config (owners 10-31 night: 친구 15분 봇)
+            assert b["status"]["state"] == "off" and b["status"]["ko"] == X.off_ko(X.MIX, bid, "친구 15분 봇")
+            assert b["status"]["ko"].startswith("친구 15분 봇(")
             assert "equity" not in b and "position" not in b and "record" not in b and "trades" not in b    # nothing made up
             assert b["start_ko"].endswith(f"sudo systemctl start {b['unit']}") and "docs/mixchop-ko.md 5장" in b["start_ko"]
             assert b["files"]["config"]["source"] == "repo" and "서버 설정 파일이 아직 없어요" in b["files"]["config"]["reason_ko"]
@@ -448,14 +450,15 @@ def test_the_views_in_node(w, tmp_path):
         assert word in b, word
     assert not BAD.search(b), BAD.search(b)
     for t in (out["oa"], out["ob"]):                                        # before the bots run: 꺼짐 and how, nothing made up
-        assert "꺼짐" in t and X.OFF_KO["live"] in t and "sudo systemctl start paperbot-mixchop" in t and "sudo systemctl start paperbot-mixchop-paper" in t
+        assert "꺼짐" in t and X.off_ko(X.MIX, "live", "친구 15분 봇") in t and "sudo systemctl start paperbot-mixchop" in t \
+            and "sudo systemctl start paperbot-mixchop-paper" in t
         assert "포지션 없음" not in t and "실거래 잔고" not in t and "모의 잔고" not in t and "닫힌 거래" not in t and not BAD.search(t)
     assert "$" not in out["oa"]                                             # (성적 still shows the repo config's rules: said so)
     assert "저장소 기본 설정으로 보여 줘요" in out["ob"] and "한 포지션 최대 $10,000.00" in out["ob"]
     assert "실거래 봇이 아직 꺼져 있어요" in out["oa"] and "실거래 봇이 아직 꺼져 있어요" in out["ob"]
     st = out["st"]
     assert (st[0]["cls"], st[0]["pill"], st[0]["hint"]) == ("run", "돌고 있음", "") and st[1]["hint"] == "서버에서 systemctl status paperbot-mixchop"
-    assert st[2]["cls"] == "off" and st[2]["line"] == X.OFF_KO["live"]
+    assert st[2]["cls"] == "off" and st[2]["line"] == X.off_ko(X.MIX, "live", "친구 15분 봇")
     vd = out["vd"]
     assert [v["cls"] for v in vd] == ["hold", "go", "halt", "block", "na"] and vd[3]["sub"] == "주말(한국 시간 토·일) 진입 안 함"
     assert out["lad"][1].endswith("이미 닿음: 다음 30분봉 마감 때 옮겨요") and out["lad"][2] == "100.25 · ROE +10% · 계단 1단계"
@@ -522,7 +525,7 @@ def test_the_four_live_accounts_on_hq(w, tmp_path):
                  "시작 대비 −$0.05 · 진입 때 읽은 잔고 10/27 09:00", "최근 거래 · 1승 1패", "신호등 없음 · 30분봉 신호마다 바로 들어가요",
                  "오늘 실현 닫힌 거래 없음", "포지션 BCH 롱 40배 · 계단 1단계", "새 진입 보유 중 (한 번에 1개)",
                  "30분봉 신호 · SOL·ETH·XRP·BCH·ZEC(꺼짐)·DOGE · 손절 1번 잔고의 0.25%",
-                 "마지막 시작 때 설정 실패: ZECUSDT: 레버리지를 못 맞춤 (leverage 20 not allowed)", "믹스 관제 · 성적 →"):
+                 "마지막 시작 때 설정 실패: ZECUSDT: 레버리지를 못 맞춤 (leverage 20 not allowed)", "친구 관제 · 성적 →"):
         assert word in t, word
     bots = re.findall(r"진짜 돈 봇 (.+?) (따라감|따라갈|스스로) ", t)
     assert (nm, "스스로") in bots and ("VWAP 개선판", "따라갈") not in bots and len(bots) == 3   # every card says its bot
@@ -563,17 +566,19 @@ def test_the_menu_group_and_the_tabs():
     r = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
     d = json.loads(r.stdout.strip().splitlines()[-1])
-    # (the 바이비트 봇's group after it since 10-29, tests/test_dash_mixbybit_site.py)
-    assert d["groups"][-2] == ["mix", "믹스 봇", ["mix", "mixperf"]] and d["nav"][-2] == "믹스 봇" and len(d["groups"]) == 8
-    assert d["groups"][-3][0] == "vwap" and d["groups"][-1][0] == "bybit"            # VWAP 봇 stays where it was
+    # (the 바이비트 봇's group after it since 10-29, tests/test_dash_mixbybit_site.py; the 레인지 봇's last, 10-31 night;
+    # the group's name the bot's: 친구 15분 봇)
+    assert d["groups"][-3] == ["mix", "친구 15분 봇", ["mix", "mixperf"]] and d["nav"][-3] == "친구 15분 봇" and len(d["groups"]) == 9
+    assert d["groups"][-4][0] == "vwap" and d["groups"][-2][0] == "bybit" and d["groups"][-1][0] == "range"
     # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its five screens take the first number keys (레인지 봇 second)
     assert d["keys"] == ["bybitbot", "rangebot", "vwapbot", "mixbot", "trendbot", "trend", "tchart", "hq", "pos"]
-    assert d["screens"] == [["믹스 관제", "mix", "livebots"], ["믹스 성적", "mix", "livebots"]]
+    assert d["screens"] == [["친구 관제", "mix", "livebots"], ["친구 성적", "mix", "livebots"]]
     assert d["parse"]["name"] == "mixperf" and d["href"] == "#/mix" and d["icons"][0] > 5
     lb = FW._read(SCREENS, "livebots.js")
-    for t, label in (("mix", "믹스 관제"), ("mixperf", "믹스 성적")):
+    for t, label in (("mix", "친구 관제"), ("mixperf", "친구 성적")):
         assert f'{{id: "{t}", label: "{label}"' in lb
-    assert 'import {mixView, mixperfView, BYBIT_UI} from "./livebots-mix.js";' in lb       # (the 바이비트 봇's too, 10-29)
+    # (the 바이비트 봇's too, 10-29; the 레인지 봇's, 10-31 night)
+    assert 'import {mixView, mixperfView, BYBIT_UI, RANGE_UI} from "./livebots-mix.js";' in lb
     routes = FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js")
     assert "mix: ICON.mix," in routes and "mixperf: () => SICON.board()," in routes
     assert "mix:" in FW._read(ROOT, "paperbot", "dash", "static", "v4", "core", "search.js").split("export const LIVE_ALIAS")[1]

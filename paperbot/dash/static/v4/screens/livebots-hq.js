@@ -63,7 +63,7 @@ export const MIXRANGE_API = "/api/v4/livebots/mixrange";
  *  ``oldExec``: the old executor of the same account. */
 export const MIX_BOTS = [
   {slot: "wooxpro2", account: "WOO X Pro 2", exchange: "WOO X Pro 2", bot: MIX_BOT_KO, api: MIX_API, unit: "paperbot-mixchop",
-    tab: "mix", linkKo: "믹스 관제 · 성적 →", oldExec: "wooxpro2", oldKo: "'친구 매매법'", replaces: null, cls: ""},
+    tab: "mix", linkKo: "친구 관제 · 성적 →", oldExec: "wooxpro2", oldKo: "'친구 매매법'", replaces: null, cls: ""},
   {slot: "bybit", account: "바이비트", exchange: "바이비트", bot: "바이비트 봇", api: MIXBYBIT_API, unit: "paperbot-mixbybit",
     tab: "bybit", linkKo: "바이비트 봇 관제 · 성적 →", oldExec: "bybit", oldKo: "추세판단 봇을 따라가던", replaces: "bybit", cls: "lbh-mixb"},
   {slot: "mexc", account: "WOO X Pro", exchange: "WOO X Pro", bot: "레인지 봇", api: MIXRANGE_API, unit: "paperbot-mixrange",

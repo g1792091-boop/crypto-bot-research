@@ -664,7 +664,7 @@ def mix_bot(p: dict, now: int, bot: str = "mix") -> dict:
     mp = MX.paths(bot=bot)
     loaded = {bid: MX.load_bot(bid, mp[bid], now) for bid, *_r in prof.bots}
     if all(b["status"]["state"] == "off" for b in loaded.values()):
-        return {"state": "off", "ko": MX.OFF_KO["live"] if bot == "mix" else MX.off_ko(prof, "live")}
+        return {"state": "off", "ko": MX.off_ko(prof, "live", MX.live_name(mp, prof))}
     accounts, per = [], {}
     for bid, ko in (("live", f"{prof.account_ko} (실거래)"), ("paper", "모의")):
         b = loaded[bid]

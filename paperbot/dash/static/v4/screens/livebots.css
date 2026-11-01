@@ -49,6 +49,9 @@
 .lb-real-k { color: var(--warn); font-weight: 800; }
 .lb-real-s { color: var(--muted); }
 .lb-real-a { white-space: nowrap; }
+/* the strip's long line once the mix bots trade every account (owners 10-31 night): it wraps on a phone, never pushes the
+   page wider */
+.lb-real-a.unk { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
 .lb-real-a.unk b { color: var(--muted); font-weight: 700; }
 .lb-real-v { color: var(--ink-2); }
 
