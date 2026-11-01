@@ -241,6 +241,7 @@
   --dk-core-pink: #e39ac4;
   --dk-core-violet: #a59bf0;
   --dk-core-haze: #0b2232;   /* the navy glow behind the core, as in the picture */
+  --dk-glass: rgba(4, 17, 27, .76);   /* a panel lying over the 회의실's 3D room (the room shows through) */
   --sub-h: 44px;
   --bot-h: 62px;       /* phone bottom tab bar (plus the safe area) */
   --page-max: 1320px;

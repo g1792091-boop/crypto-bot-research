@@ -15,7 +15,10 @@ not have is said to be off, a file that cannot be read is said so.
      feed:  [{ts, seat, who_ko, kind, kind_ko, text}] (newest first: the bots' logs, the paper twins' entries and exits,
              the morning checks, the team's meetings),
      pulse: {signals, entries, exits, checks, meetings} (the last 24 hours, from the same rows),
-     team:  livedeck.totals_view (the three live bots), positions: [{bot, bot_ko, coin, side, entry, stop, step, opened_ms}]}
+     team:  livedeck.totals_view (the three live bots), positions: [{bot, bot_ko, coin, side, entry, stop, step, opened_ms}],
+     coins: [{symbol, coin, state, last, chg24, spark, trend (the last closed 30m bar's 추세 바 종합), n30, hist, cross}] (the six
+            coins from livedeck.coins_view: Binance's closed bars and the bots' own formulas, read once a minute; the 3D
+            room's floating screens)}
 
 The states: live = doing something now (a bot holding a position, a meeting under way, this site), wait = running and
 waiting for its next bar, idle = a scheduled program between its runs, off = not installed or turned off, error = it
@@ -238,7 +241,22 @@ def pulse_of(bots: list, checks: list, meetings: list, now: int) -> dict:
     return out
 
 
-def build(now: int, units: Callable, started: Callable) -> dict:
+def coins_of(candles: Optional[Callable], now: int) -> list:
+    """The six coins, small: their price, 24-hour change, 24-hour line, the 30m trend bar's 종합 and the last 15m bar's
+    histogram and 0 cross (livedeck.coins_view: the same numbers as the 관제실)."""
+    out = []
+    for c in D.coins_view(candles, now):
+        x = {k: c.get(k) for k in ("symbol", "coin", "state", "ko", "last", "chg24")}
+        if c.get("state") == "ok":
+            tr = c.get("trend30") or []
+            hist = [h for h in (c.get("hist") or []) if h is not None]
+            x.update(spark=(c.get("spark") or [])[-48:], trend=tr[-1][1] if tr else None, n30=c.get("n30"),
+                     hist=hist[-1] if hist else None, cross=(c.get("cross") or [0])[-1])
+        out.append(x)
+    return out
+
+
+def build(now: int, units: Callable, started: Callable, candles: Optional[Callable] = None) -> dict:
     bots, seats, checks = [], [], []
     for bid in D.BOT_ORDER:
         prof = MX.PROFILES[bid]
@@ -259,8 +277,13 @@ def build(now: int, units: Callable, started: Callable) -> dict:
     positions = [{"bot": b["id"], "bot_ko": b.get("name_ko"), **{k: b["position"].get(k) for k in
                                                                  ("coin", "symbol", "side", "entry", "stop", "step", "opened_ms", "leverage")}}
                  for b in bots if isinstance(b.get("position"), dict) and b["position"].get("state") == "ok"]
+    try:
+        coins = coins_of(candles, now)
+    except Exception as exc:  # noqa: BLE001  the coins never hide the room
+        coins = [{"symbol": s, "coin": MX.coin_ko(s), "state": "error", "ko": "코인 값을 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
+                 for s in D.COINS]
     return {"now_ms": now, "seats": seats, "feed": feed_of(bots, checks, meetings), "pulse": pulse_of(bots, checks, meetings, now),
-            "team": D.totals_view(bots), "positions": positions, "states_ko": STATE_KO, "groups_ko": GROUP_KO}
+            "team": D.totals_view(bots), "positions": positions, "coins": coins, "states_ko": STATE_KO, "groups_ko": GROUP_KO}
 
 
 def register(app, ctx) -> dict:
@@ -268,11 +291,12 @@ def register(app, ctx) -> dict:
 
     from ... import livecheck as LC
     from ..app import json_finite
+    candles = getattr(ctx, "candles", None)
 
     @app.get("/api/v4/livebots/room")                   # (= ROUTE: written out for tests/test_dash_v4.py's route list)
     def get_livebots_room():
         """실거래 › 회의실: the real programs round one table (read-only, 5 s cache)."""
         key = "room:" + json.dumps([MX.paths(bot=b) for b in D.BOT_ORDER], sort_keys=True)
-        return L._cached(key, lambda: json_finite(build(int(time.time() * 1000), LC.unit_state, LC.unit_started)))
+        return L._cached(key, lambda: json_finite(build(int(time.time() * 1000), LC.unit_state, LC.unit_started, candles)))
 
     return {"routes": [ROUTE]}

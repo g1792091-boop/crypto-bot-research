@@ -101,6 +101,16 @@
 .rm-rs:focus-visible { outline: 2px solid var(--dk-amber); outline-offset: 1px; }
 .rm-foot { margin: 0; padding: 2px 4px; }
 
+.rm-scene { isolation: isolate; }                  /* the name tags stay under the panels lying over the room */
+@media (min-width: 1101px) {                         /* wide: the 3D room fills the width, the side panels lie over it (the video) */
+  .rm-g > .rm-a-room { grid-column: 1 / -1; grid-row: 1; }
+  .rm-g > .rm-left, .rm-g > .rm-right { grid-row: 1; position: relative; z-index: 3; padding: 6px; }
+  .rm-g > .rm-left { grid-column: 1; }
+  .rm-g > .rm-right { grid-column: 3; }
+  .rm-g > .rm-col > .dk-p { background: var(--dk-glass); }
+  .rm-a-room > .dk-ph, .rm-a-room > .rm-detail { margin: 0 352px 0 312px; }
+  .rm-scene { height: 900px; min-height: 900px; }
+}
 @media (max-width: 1100px) {
   .rm-g { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .rm-a-room { grid-column: 1 / -1; order: -1; }

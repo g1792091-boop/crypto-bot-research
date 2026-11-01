@@ -151,6 +151,20 @@ def test_states_said_as_they_are(room):
     assert {s["state_ko"] for s in off2["seats"] if s["group"] == "ai"} == {"분석팀 타이머가 꺼져 있어요"}
 
 
+def test_the_coins_for_the_floating_screens(room):
+    from tests.test_dash_livedeck import candles_of
+    d = json_finite(R.build(NOW, ON, RAN, candles_of()))
+    full = D.coins_view(candles_of(), NOW)
+    assert [c["symbol"] for c in d["coins"]] == list(D.COINS) and all(c["state"] == "ok" for c in d["coins"])
+    for c, f in zip(d["coins"], full):
+        assert c["last"] == f["last"] and c["chg24"] == f["chg24"] and c["spark"] == f["spark"][-48:]
+        assert c["trend"] == f["trend30"][-1][1] and c["n30"] == f["n30"] and c["cross"] == f["cross"][-1]
+        assert c["hist"] == [x for x in f["hist"] if x is not None][-1]
+    D._coin_cache.clear()
+    none = R.build(NOW, ON, RAN, None)["coins"]
+    assert all(c["state"] == "error" and c["ko"] == "가격 읽기가 없는 서버예요" for c in none)
+
+
 def test_one_bots_broken_files_never_hide_the_others(room, monkeypatch):
     real = D.bot_view
 
@@ -206,6 +220,7 @@ console.log(JSON.stringify({
   live: M.tagOf({group: "bot", state: "live", state_ko: "보유 중 · SOL 숏", last_ms: now}, now),
   waitTag: M.tagOf({group: "check", state: "wait", state_ko: "다음 5분 확인 기다리는 중", last_ms: now - 61000}, now),
   specs: M.panelSpecs({team: {equity: 104.2, today_pnl: -3.5, n: 2, wins: 1, open: 1}, positions: [{coin: "SOL", side: -1, bot_ko: "레인지 봇", entry: 104.6, stop: 106, leverage: 40}],
+    coins: [{coin: "SOL", state: "ok", last: 104.25, chg24: 0.0123, trend: -1, hist: -4.21, cross: -1, spark: [1, 2, 3]}, {coin: "ETH", state: "error", ko: "바이낸스 봉을 못 읽었어요"}],
     feed: [{ts: now - 60000, who_ko: "레인지 봇", kind_ko: "진입", text: "SOL · 숏 진입 104.6"}], pulse: {signals: 2, entries: 1},
     seats: [{state: "live"}, {state: "error"}], states_ko: {live: "일하는 중", error: "확인 필요"}}, now),
   specs0: M.panelSpecs(null, now),
@@ -232,16 +247,17 @@ console.log(JSON.stringify({
     assert out["live"]["line"] == "보유 중 · SOL 숏 · 방금" and out["waitTag"]["line"] == "기다리는 중 · 1분 전"
     # the 3D room's floating screens: the answer's numbers and the clock, in words
     sp = out["specs"]
-    assert [x["title"] for x in sp] == ["TEAM STATUS · 팀 상태", "POSITIONS · 포지션", "ACTIVITY · 활동", "NEXT CANDLE CLOSES · 다음 봉 마감",
-                                        "TEAM PULSE · 팀 맥박", "ROSTER · 자리"]
-    assert [r["t"] for r in sp[0]["rows"]] == ["$104.20", "−$3.50", "2번 · 승 1 / 패 1", "1개"] and sp[0]["rows"][1]["tone"] == "down"
-    assert [r["t"] for r in sp[1]["rows"]] == ["SOL 숏 · 레인지 봇", "진입 104.6 · 손절 106 · 40배"]
-    assert sp[2]["rows"][0]["t"].endswith("레인지 봇 진입 · SOL · 숏 진입 104.6")
-    assert [r["t"] for r in sp[3]["rows"]] == ["8:13", "23:13", "53:13", "3:53:13", "19:53:13"]
-    assert sp[4]["bars"][:2] == [["신호", 1, "2"], ["진입", 0.5, "1"]]
-    assert [(r["k"], r["t"]) for r in sp[5]["rows"]][:2] == [("일하는 중", "1"), ("wait", "0")]
+    assert [x["title"] for x in sp] == ["COINS · 코인", "TOP 6 · 코인 카드", "TEAM PULSE · 팀 맥박", "TEAM STATUS · 팀 상태", "ACTIVITY · 활동"]
+    assert all("pose" in x for x in sp) and sp[0]["pose"]["off"] == 0 and sp[0]["px"] == [1024, 420]
+    rows = sp[0]["table"]["rows"]
+    assert [c["t"] for c in rows[0]] == ["SOL", "104.25", "+1.23%", "하락", "−4.21 ▼0선"] and [c.get("tone") for c in rows[0]][2:] == ["up", "down", "down"]
+    assert rows[1] == [{"t": "ETH"}, {"t": "바이낸스 봉을 못 읽었어요", "tone": "muted"}]
+    assert sp[1]["cards"] == [{"coin": "SOL", "price": "104.25", "chg": "+1.23%", "tone": "up", "spark": [1, 2, 3]}]
+    assert sp[2]["bars"][:2] == [["신호", 1, "2"], ["진입", 0.5, "1"]]
+    assert [r["t"] for r in sp[3]["rows"]] == ["$104.20", "−$3.50", "2번 · 승 1 / 패 1", "1개"] and sp[3]["rows"][1]["tone"] == "down"
+    assert sp[4]["rows"][0]["t"].endswith("레인지 봇 진입 · SOL · 숏 진입 104.6")
     s0 = out["specs0"]
-    assert s0[0]["rows"][0]["t"] == "—" and s0[1]["rows"] == [{"t": "열린 포지션 없음", "tone": "muted"}] and s0[2]["rows"] == []
+    assert s0[0]["table"]["rows"] == [[{"t": "코인 값을 기다리는 중", "tone": "muted"}]] and s0[1]["cards"] == [] and s0[3]["rows"][0]["t"] == "—"
 
 
 def test_the_whole_screen_renders_on_the_real_answer(room):
@@ -284,6 +300,8 @@ console.log(JSON.stringify({{
   torN: [tor.pos.length / 3, tor.idx.length], units: [unit(box), unit(cyl), unit(sph), unit(tor)], ok: [box, cyl, sph, tor].every(inRange),
   box: [Math.min(...box.pos), Math.max(...box.pos)], p0, p1, tx: R.m4apply(T, [1, 0, 0]), tz: R.m4apply(T, [0, 0, 1]),
   pp: [R.panelPose(0, 6), R.panelPose(3, 6)], hx: R.helix(2.5, 6, 48),
+  yaw0: R.YAW0, lp: R.layoutPose({{off: 0, y: 1.6, w: 3, h: 1.2, r: 3.45}}), lpd: R.layoutPose({{}}),
+  arc: R.arcPts([0, 1.3, 0], [1, 0.6, 0], 0.5, 5), rx: R.m4apply(R.m4rotx(-Math.PI / 2), [0, 1, 0]),
   hex: [R.hexRgb("#ff0080"), R.hexRgb("#0f8"), R.hexRgb("rgb(255, 0, 51)"), R.hexRgb("x"), R.hexRgb(null)],
   none: R.create3d({{}}), none2: R.create3d({{getContext: () => null}}),
 }}));"""
@@ -311,6 +329,14 @@ console.log(JSON.stringify({{
         assert math.hypot(pp["x"], pp["z"]) == pytest.approx(3.3)
         assert math.sin(pp["yaw"]) * pp["x"] + math.cos(pp["yaw"]) * pp["z"] == pytest.approx(-3.3)     # its face (local z) to the middle
     assert len(o["hx"]) == 6 and all(len(s) == 48 for s in o["hx"])
+    # the screens' places: straight behind the table as seen from the camera's start; the floor's picture lies flat
+    lp, y0 = o["lp"], o["yaw0"]
+    cam = [math.sin(y0), math.cos(y0)]
+    assert math.hypot(lp["x"], lp["z"]) == pytest.approx(3.45) and (lp["x"] * cam[0] + lp["z"] * cam[1]) == pytest.approx(-3.45)
+    assert (lp["y"], lp["w"], lp["h"]) == (1.6, 3, 1.2) and (o["lpd"]["y"], o["lpd"]["w"], o["lpd"]["h"]) == (1.25, 1.7, 1.06)
+    a = o["arc"]
+    assert a[0] == [0, 1.3, 0] and a[-1] == [1, pytest.approx(0.6), 0] and a[2][1] > 1.3                 # lifted in its middle
+    assert o["rx"] == [0, pytest.approx(0, abs=1e-12), pytest.approx(-1), 1]
     assert all(math.hypot(p[0], p[2]) <= 0.33 and 0.17 <= p[1] <= 1.64 for s in o["hx"] for p in s)
 
 
@@ -331,7 +357,7 @@ def test_tokens_only_imports_through_pb_and_read_only():
     js3 = _read(JS3)                                   # the 3D room: no library, no colour of its own (the tokens, as numbers)
     assert "import " not in re.sub(r"//[^\n]*", "", js3) and not re.search(r"#[0-9a-fA-F]{3,8}\b", js3)
     assert "fetch(" not in js3 and "innerHTML" not in js3
-    assert 'import {create3d, hexRgb, seatPose, screenOf} from "./livebots-room3d.js";' in js
+    assert 'import {create3d, hexRgb, seatPose, screenOf, YAW0} from "./livebots-room3d.js";' in js
 
 
 def test_the_tab_and_the_menu():

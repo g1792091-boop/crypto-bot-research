@@ -14,7 +14,7 @@
 // Under reduced motion the camera stands still.
 import {h, put, ui, fmt, motion, serverNow} from "../core/pb.js";
 // the table in real 3D (owners 11-01 "3d로"): the browser's WebGL; where it cannot start, the 2D picture below
-import {create3d, hexRgb, seatPose, screenOf} from "./livebots-room3d.js";
+import {create3d, hexRgb, seatPose, screenOf, YAW0} from "./livebots-room3d.js";
 
 export const ROOM_API = "/api/v4/livebots/room";
 const REFRESH_MS = 15 * 1000;
@@ -73,27 +73,37 @@ export function pulseRows(p) {
   const m = Math.max(1, ...rows.map((r) => r[1]));
   return rows.map(([ko, n]) => [ko, n, n / m]);
 }
-/** The floating screens of the 3D room: [{title, sub, rows [{k, t, tone, big}], bars [[words, share, text]]}], all from
- * the answer (the programs' own records) and the clock. */
+/** The floating screens of the 3D room, each with its place behind the table (pose: livebots-room3d.js layoutPose): the
+ * coins (Binance's closed bars and the bots' formulas, as the 관제실: price, 24 hours, the 30m 추세 바 종합, the last 15m
+ * histogram and its 0 cross), the coin cards, the team's pulse, its status and its newest rows; all from the answer. */
+const TREND_WORD = {1: ["상승", "up"], "-1": ["하락", "down"], 0: ["진입 금지", "flat"]};
 export function panelSpecs(d, now) {
   const t = (d && d.team) || {}, money = (x) => (ok(x) ? `${x >= 0 ? "" : "−"}$${fmt.num(Math.abs(x), 2)}` : "—");
   const sign = (x) => (ok(x) ? `${x >= 0 ? "+" : "−"}$${fmt.num(Math.abs(x), 2)}` : "—");
-  const c = stateCounts(d && d.seats), sk = (d && d.states_ko) || {};
-  const ps = (d && d.positions) || [];
+  const pct = (r) => (ok(r) ? `${r >= 0 ? "+" : "−"}${fmt.num(Math.abs(r) * 100, 2)}%` : "—");
+  const coins = (d && d.coins) || [];
+  const cRows = coins.map((c) => {
+    if (c.state !== "ok") return [{t: c.coin || c.symbol}, {t: c.ko || "못 읽음", tone: "muted"}];
+    const tw = TREND_WORD[String(c.trend)] || ["—", "muted"], x = Number(c.cross) || 0;
+    return [{t: c.coin}, {t: px(c.last)}, {t: pct(c.chg24), tone: ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : "muted"}, {t: tw[0], tone: tw[1]},
+      {t: ok(c.hist) ? `${fmt.num(c.hist, 2)}${x ? (x > 0 ? " ▲0선" : " ▼0선") : ""}` : "—", tone: ok(c.hist) ? (c.hist >= 0 ? "up" : "down") : "muted"}];
+  });
   return [
-    {title: "TEAM STATUS · 팀 상태", sub: "세 실거래 봇", rows: [
+    {title: "COINS · 코인", sub: "바이낸스 봉 · 30분 추세 바 종합 · 15분 히스토그램 (봇의 계산 그대로)", px: [1024, 420],
+      pose: {off: 0, y: 1.62, w: 3.1, h: 1.27, r: 3.45},
+      table: {cols: ["코인", "가격", "24시간", "30분 추세", "히스토그램"], x: [22, 150, 390, 590, 790], rows: cRows.length ? cRows : [[{t: "코인 값을 기다리는 중", tone: "muted"}]]}},
+    {title: "TOP 6 · 코인 카드", sub: "24시간 줄", px: [720, 460], pose: {off: -0.98, y: 1.42, w: 1.85, h: 1.18, r: 3.35},
+      cards: coins.filter((c) => c.state === "ok").map((c) => ({coin: c.coin, price: px(c.last), chg: pct(c.chg24),
+        tone: ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : "muted", spark: c.spark || []}))},
+    {title: "TEAM PULSE · 팀 맥박", sub: "지난 24시간", pose: {off: 0.98, y: 1.42, w: 1.7, h: 1.06, r: 3.35},
+      bars: pulseRows(d && d.pulse).map(([ko, n, f]) => [ko, f, String(n)])},
+    {title: "TEAM STATUS · 팀 상태", sub: "세 실거래 봇", pose: {off: -1.75, y: 1.25, w: 1.6, h: 1.0, r: 3.2}, rows: [
       {k: "잔고", t: money(t.equity), big: true},
       {k: "오늘 손익", t: sign(t.today_pnl), tone: ok(t.today_pnl) ? (t.today_pnl >= 0 ? "up" : "down") : ""},
       {k: "닫힌 거래", t: ok(t.n) ? `${fmt.int(t.n)}번 · 승 ${fmt.int(t.wins || 0)} / 패 ${fmt.int(Math.max(0, t.n - (t.wins || 0)))}` : "—"},
       {k: "열린 포지션", t: ok(t.open) ? `${fmt.int(t.open)}개` : "—"}]},
-    {title: "POSITIONS · 포지션", sub: "실거래 봇의 열린 포지션", rows: ps.length ? ps.flatMap((p) => [
-      {t: `${p.coin || p.symbol} ${Number(p.side) > 0 ? "롱" : "숏"} · ${p.bot_ko || ""}`, tone: Number(p.side) > 0 ? "up" : "down"},
-      {t: `진입 ${px(p.entry)} · 손절 ${px(p.stop)}${p.leverage ? ` · ${p.leverage}배` : ""}`, tone: "muted"}]) : [{t: "열린 포지션 없음", tone: "muted"}]},
-    {title: "ACTIVITY · 활동", sub: "모든 자리의 최근 기록", rows: ((d && d.feed) || []).slice(0, 7).map((r) => ({t: `${fmt.hm(r.ts)} ${r.who_ko} ${r.kind_ko} · ${r.text}`}))},
-    {title: "NEXT CANDLE CLOSES · 다음 봉 마감", sub: "바이낸스 봉", rows: nextCloses(now).map((x) => ({k: `${x.ko} 마감`, t: clockKo(x.left), tone: "flat"}))},
-    {title: "TEAM PULSE · 팀 맥박", sub: "지난 24시간", bars: pulseRows(d && d.pulse).map(([ko, n, f]) => [ko, f, String(n)])},
-    {title: "ROSTER · 자리", sub: "자리마다 실제 프로그램", rows: STATE_ORDER.map((k) => ({k: sk[k] || k, t: `${c[k]}`,
-      tone: k === "live" ? "up" : k === "error" ? "down" : k === "wait" ? "cyan" : "muted"}))},
+    {title: "ACTIVITY · 활동", sub: "모든 자리의 최근 기록", pose: {off: 1.75, y: 1.25, w: 1.6, h: 1.0, r: 3.2},
+      rows: ((d && d.feed) || []).slice(0, 7).map((r) => ({t: `${fmt.hm(r.ts)} ${r.who_ko} ${r.kind_ko} · ${r.text}`}))},
   ];
 }
 /** How many seats in each state: {live, wait, idle, error, off}. */
@@ -114,7 +124,7 @@ function tableView(ctx, onPick) {
   const g = r3 ? null : cv.getContext ? cv.getContext("2d") : null;
   if (r3) box.classList.add("is-3d");
   const o = {W: 0, H: 0, dpr: 1, th: 0.35, seats: [], tagEls: [], tw: [], col: null, raf: 0, last: 0, alive: true, sel: null, motes: [], small: false,
-    yaw: 0.35, pitch: 0.42, drag: null, idleUntil: 0, c3: null};
+    yaw: YAW0, pitch: 0.36, drag: null, idleUntil: 0, c3: null, fit: 1};
   for (let i = 0; i < 160; i++) o.motes.push({a: (i * 2.39996) % (Math.PI * 2), r: 0.04 + ((i * 37) % 100) / 100 * 0.2, y: ((i * 53) % 100) / 100, v: 0.15 + ((i * 17) % 10) / 40});
   const tok = () => {
     const cs = getComputedStyle(document.documentElement), v = (k) => String(cs.getPropertyValue(k) || "").trim();
@@ -131,7 +141,8 @@ function tableView(ctx, onPick) {
     for (const [k, t] of Object.entries(STATE_TINT)) c3["s-" + k] = num3(t, c3.muted);
     o.c3 = c3;
     o.css = {panel: v("--dk-panel"), cyan: v("--dk-core-cyan"), ink: v("--dk-ink"), muted: v("--dk-muted"), line: v("--dk-line-2"),
-      up: v("--dk-green"), down: v("--dk-red"), flat: v("--dk-amber")};
+      up: v("--dk-green"), down: v("--dk-red"), flat: v("--dk-amber"), upTile: v("--dk-green-tile"), downTile: v("--dk-red-tile"),
+      mutedTile: v("--dk-line")};
     o.font = v("--f-term") || "monospace";
   };
   function layout() {
@@ -139,6 +150,7 @@ function tableView(ctx, onPick) {
     const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio) || 1);
     const W = Math.round(Math.min(r.width, 2000) * dpr), H = Math.round(Math.min(r.height, 1200) * dpr);
     o.small = r.width < 560;
+    o.fit = r.width >= 1100 ? 0.6 : 1;                 // (wide: the side panels lie over the room, the table in the free middle)
     if (W === o.W && H === o.H) return false;
     o.W = W; o.H = H; o.dpr = dpr;
     cv.width = Math.max(1, W); cv.height = Math.max(1, H);
@@ -182,7 +194,8 @@ function tableView(ctx, onPick) {
   }
   function draw3d(t) {
     if (!o.c3 || !o.W) return;
-    const vp = r3.draw({W: o.W, H: o.H, dpr: o.dpr, t, yaw: o.yaw, pitch: o.pitch, col: o.c3, drift: !o.drag && !motion.reduced(),
+    const vp = r3.draw({W: o.W, H: o.H, dpr: o.dpr, t, yaw: o.yaw, pitch: o.pitch, col: o.c3, drift: !o.drag && !motion.reduced() && Date.now() >= o.idleUntil,
+      fit: o.fit,
       seats: o.seats.map((s) => ({group: s.group, state: s.state, sel: s.id === o.sel}))});
     if (!vp) return;
     const css = o.dpr || 1, wCss = o.W / css, n = o.seats.length;
@@ -278,7 +291,7 @@ function tableView(ctx, onPick) {
       const dt = o.last ? Math.min(120, t - o.last) : 0;
       o.last = t;
       o.th += dt * 0.00006;
-      if (!o.drag && Date.now() >= o.idleUntil) o.yaw += dt * 0.00006;      // the camera circles (a drag turns it by hand)
+      // (the camera sways round its start by itself, livebots-room3d.js; a drag turns it by hand)
       draw(t);
     }
     o.raf = requestAnimationFrame(frame);
@@ -320,7 +333,7 @@ function tableView(ctx, onPick) {
       if (!o.raf) { if (running()) kick(); else still(); }
     },
     pick(id) { o.sel = id; },
-    panels(specs) { if (r3 && o.css) { r3.panels(specs, o.css, o.font); if (!o.raf) still(); } },
+    panels(specs) { if (r3 && o.css) { r3.panels(specs, o.css, o.font, "PAPERBOT · LIVE 3D · 회의실"); if (!o.raf) still(); } },
   };
 }
 
@@ -352,7 +365,7 @@ export function roomView(ctx) {
       counts,
       h("div", {class: "dk-clock"}, h("div", null, clockK, h("span", {class: "dk-live"}, "LIVE")), h("small", {class: "dk-mono"}, "KST · 한국 시간"), clockU)),
     h("div", {class: "rm-g"},
-      h("div", {class: "rm-col"},
+      h("div", {class: ["rm-col", "rm-left"]},
         panel("rm-a-team", "팀 상태 · TEAM STATUS", "세 실거래 봇", team),
         panel("rm-a-close", "다음 봉 마감 · NEXT CANDLE CLOSES", "바이낸스 봉 (UTC 기준)", closes),
         panel("rm-a-pos", "포지션 · POSITIONS", "실거래 봇의 열린 포지션", pos)),
@@ -360,7 +373,7 @@ export function roomView(ctx) {
         h("header", {class: "dk-ph"}, h("b", {class: "dk-pt"}, "◆ 회의실 · THE TABLE"),
           h("span", {class: "dk-ps"}, "이름표를 누르면 그 프로그램이 마지막에 한 일 · 빛 = 초록 일하는 중 · 하늘 기다리는 중 · 회색 쉬는 중 · 빨강 확인 필요")),
         table.el, detail),
-      h("div", {class: "rm-col"},
+      h("div", {class: ["rm-col", "rm-right"]},
         panel("rm-a-pulse", "팀 맥박 · TEAM PULSE", "지난 24시간", pulse),
         panel("rm-a-feed", "활동 · ACTIVITY", "모든 자리의 최근 기록", feed))),
     panel("rm-a-roster", "자리 · ROSTER", "그림 없이 같은 내용 · 묶음마다", roster),

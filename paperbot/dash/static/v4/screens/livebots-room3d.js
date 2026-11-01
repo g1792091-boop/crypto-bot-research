@@ -129,6 +129,29 @@ export function meshTorus(tube = 0.02, seg = 72, sides = 6) {
 }
 
 
+/** The camera's own turn at the start (radians): the floating screens and the floor's words stand behind the table as
+ * seen from it, as in the owners' video. */
+export const YAW0 = 0.35;
+/** A turn about x (the floor's words lie flat). */
+export function m4rotx(a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  return [1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1];
+}
+/** A floating screen's place from its pose {off (radians from straight behind the table), y, w, h, r}: {b, x, z, yaw, y, w, h}. */
+export function layoutPose(p) {
+  const b = 1.5 * Math.PI - YAW0 + (p.off || 0), r = p.r || 3.3;
+  return {b, x: Math.cos(b) * r, z: Math.sin(b) * r, yaw: Math.atan2(-Math.cos(b), -Math.sin(b)), y: p.y == null ? 1.25 : p.y,
+    w: p.w || 1.7, h: p.h || 1.06};
+}
+/** An arc of light from a to b, lifted at its middle: n points on the curve (the energy dome's strands). */
+export function arcPts(a, b, lift, n = 16) {
+  const m = [(a[0] + b[0]) / 2, Math.max(a[1], b[1]) + lift, (a[2] + b[2]) / 2], out = [];
+  for (let i = 0; i < n; i++) {
+    const f = i / (n - 1), g = 1 - f;
+    out.push([0, 1, 2].map((k) => g * g * a[k] + 2 * g * f * m[k] + f * f * b[k]));
+  }
+  return out;
+}
 /** Panel i of n hanging round the room (the floating screens): where it hangs and its turn to face the middle. */
 export function panelPose(i, n, r = 3.3) {
   const b = -Math.PI / 2 + ((i + 0.5) / Math.max(1, n)) * Math.PI * 2;
@@ -188,37 +211,92 @@ function program(gl, vs, fs) {
 
 const PW = 512, PH = 320;                              // a floating screen's picture, in pixels
 
-/** One floating screen's picture: its title, its rows of words, its bars (the screen module gives the words: the
- * programs' records). css: the token colours as CSS strings; font: the page's terminal font. */
+/** One floating screen's picture: its title, then rows of words, bars, a table (cols, rows of cells) or coin cards (each
+ * coin's price, change and 24-hour line); the screen module gives the words and numbers: the programs' records and
+ * Binance's closed bars. css: the token colours as CSS strings; font: the page's terminal font. */
 function paintPanel(g, spec, css, font) {
-  g.clearRect(0, 0, PW, PH);
-  g.globalAlpha = 0.82; g.fillStyle = css.panel; g.fillRect(4, 4, PW - 8, PH - 8);
-  g.globalAlpha = 1; g.strokeStyle = css.cyan; g.lineWidth = 3; g.strokeRect(4, 4, PW - 8, PH - 8);
-  g.fillStyle = css.cyan; g.fillRect(4, 4, PW - 8, 4);
-  g.font = `700 22px ${font}`; g.fillStyle = css.ink; g.textBaseline = "top";
-  g.fillText(String(spec.title || ""), 18, 20);
-  if (spec.sub) { g.font = `16px ${font}`; g.fillStyle = css.muted; g.fillText(String(spec.sub), 18, 48); }
+  const W = g.canvas.width, H = g.canvas.height, tone = (t) => css[t] || css.ink;
+  const fit = (text, w) => { let s = String(text == null ? "" : text); if (g.measureText(s).width <= w) return s; while (s.length > 1 && g.measureText(s + "…").width > w) s = s.slice(0, -1); return s + "…"; };
+  g.clearRect(0, 0, W, H);
+  g.globalAlpha = 0.84; g.fillStyle = css.panel; g.fillRect(4, 4, W - 8, H - 8);
+  g.globalAlpha = 1; g.strokeStyle = css.cyan; g.lineWidth = 3; g.strokeRect(4, 4, W - 8, H - 8);
+  g.fillStyle = css.cyan; g.fillRect(4, 4, W - 8, 4);
+  g.textBaseline = "top"; g.textAlign = "left";
+  g.font = `700 22px ${font}`; g.fillStyle = css.ink; g.fillText(fit(spec.title, W - 40), 18, 20);
+  if (spec.sub) { g.font = `16px ${font}`; g.fillStyle = css.muted; g.fillText(fit(spec.sub, W - 40), 18, 48); }
   let y = 78;
-  const tone = (t) => css[t] || css.ink;
   for (const b of spec.bars || []) {
     g.font = `17px ${font}`; g.fillStyle = css.muted; g.fillText(String(b[0]), 18, y + 2);
-    g.fillStyle = css.line; g.fillRect(110, y + 4, PW - 210, 14);
-    g.fillStyle = css.cyan; g.fillRect(110, y + 4, Math.max(2, (PW - 210) * Math.max(0, Math.min(1, b[1]))), 14);
-    g.fillStyle = css.ink; g.textAlign = "right"; g.fillText(String(b[2]), PW - 20, y + 2); g.textAlign = "left";
+    g.fillStyle = css.line; g.fillRect(110, y + 4, W - 210, 14);
+    g.fillStyle = css.cyan; g.fillRect(110, y + 4, Math.max(2, (W - 210) * Math.max(0, Math.min(1, b[1]))), 14);
+    g.fillStyle = css.ink; g.textAlign = "right"; g.fillText(String(b[2]), W - 20, y + 2); g.textAlign = "left";
     y += 34;
   }
+  if (spec.table) {                                    // a table: the header, then one line a row
+    const cols = spec.table.cols || [], xs = spec.table.x || cols.map((_c, k) => 18 + k * ((W - 36) / Math.max(1, cols.length)));
+    g.font = `15px ${font}`; g.fillStyle = css.muted;
+    cols.forEach((c, k) => g.fillText(String(c), xs[k], y));
+    y += 26;
+    for (const row of spec.table.rows || []) {
+      if (y > H - 30) break;
+      g.fillStyle = css.line; g.fillRect(14, y - 4, W - 28, 1);
+      row.forEach((cell, k) => {
+        g.font = `${k === 0 ? "700 " : ""}20px ${font}`; g.fillStyle = tone(cell.tone);
+        g.fillText(fit(cell.t, (xs[k + 1] || W - 18) - xs[k] - 10), xs[k], y + 2);
+      });
+      y += 34;
+    }
+  }
+  if (spec.cards) {                                    // coin cards: 3 x 2 tiles
+    const cw = (W - 36 - 16) / 3, ch = (H - y - 18 - 8) / 2;
+    spec.cards.slice(0, 6).forEach((c, k) => {
+      const x0 = 18 + (k % 3) * (cw + 8), y0 = y + Math.floor(k / 3) * (ch + 8);
+      g.fillStyle = css[c.tone + "Tile"] || css.line; g.fillRect(x0, y0, cw, ch);
+      g.strokeStyle = tone(c.tone); g.lineWidth = 1.5; g.strokeRect(x0, y0, cw, ch);
+      g.font = `700 16px ${font}`; g.fillStyle = css.ink; g.fillText(fit(c.coin, cw - 16), x0 + 8, y0 + 6);
+      g.font = `700 24px ${font}`; g.fillText(fit(c.price, cw - 16), x0 + 8, y0 + 26);
+      g.font = `15px ${font}`; g.fillStyle = tone(c.tone); g.fillText(fit(c.chg, cw - 16), x0 + 8, y0 + 54);
+      const v = (c.spark || []).filter((q) => Number.isFinite(q));
+      if (v.length > 1) {
+        const lo = Math.min(...v), hi = Math.max(...v), sp = hi - lo || 1, top = y0 + 74, bot = y0 + ch - 8;
+        g.beginPath();
+        v.forEach((q, i2) => { const px = x0 + 8 + (i2 / (v.length - 1)) * (cw - 16), py = bot - ((q - lo) / sp) * (bot - top); if (i2) g.lineTo(px, py); else g.moveTo(px, py); });
+        g.strokeStyle = tone(c.tone); g.lineWidth = 2; g.stroke();
+      }
+    });
+  }
   for (const r of spec.rows || []) {
-    if (y > PH - 30) break;
-    const big = r.big;
-    g.font = `${big ? "700 30px" : "18px"} ${font}`;
-    if (r.k != null) { g.fillStyle = css.muted; g.font = `16px ${font}`; g.fillText(String(r.k), 18, y + (big ? 8 : 2)); g.font = `${big ? "700 30px" : "18px"} ${font}`; }
-    g.fillStyle = tone(r.tone);
-    const x = r.k != null ? 170 : 18, text = String(r.t == null ? "" : r.t);
-    let s = text;
-    while (s.length > 1 && g.measureText(s).width > PW - x - 18) s = s.slice(0, -1);
-    g.fillText(s === text ? s : s.slice(0, -1) + "…", x, y);
+    if (y > H - 30) break;
+    const big = r.big, x = r.k != null ? 170 : 18;
+    if (r.k != null) { g.fillStyle = css.muted; g.font = `16px ${font}`; g.fillText(String(r.k), 18, y + (big ? 8 : 2)); }
+    g.font = `${big ? "700 30px" : "18px"} ${font}`; g.fillStyle = tone(r.tone);
+    g.fillText(fit(r.t, W - x - 18), x, y);
     y += big ? 42 : 30;
   }
+}
+
+/** The floor's words and rings (painted once): the name round the stage, ticks, rings, facing the camera's start. */
+function paintFloor(g, css, font, words) {
+  const S = g.canvas.width, c = S / 2, unit = S / 7.2;           // the picture covers 7.2 x 7.2 of the room
+  g.clearRect(0, 0, S, S);
+  g.strokeStyle = css.cyan; g.fillStyle = css.cyan;
+  for (const [r, w, a] of [[2.62, 3, 0.55], [2.9, 1.5, 0.35], [3.3, 1, 0.25]]) { g.globalAlpha = a; g.lineWidth = w; g.beginPath(); g.arc(c, c, r * unit, 0, Math.PI * 2); g.stroke(); }
+  g.globalAlpha = 0.45;
+  for (let i = 0; i < 120; i++) {                                // ticks round the outer ring
+    const a = (i / 120) * Math.PI * 2, r0 = 3.3 * unit, r1 = (i % 5 ? 3.36 : 3.45) * unit;
+    g.lineWidth = i % 5 ? 1 : 2; g.beginPath(); g.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0); g.lineTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1); g.stroke();
+  }
+  // the words: on the arc nearest the camera at its start, each letter's top towards the middle (read from the camera)
+  const th = Math.atan2(Math.cos(YAW0), Math.sin(YAW0)), R = 3.08 * unit, text = String(words || "");
+  g.globalAlpha = 0.9; g.font = `700 ${Math.round(unit * 0.24)}px ${font}`; g.textAlign = "center"; g.textBaseline = "middle";
+  const widths = [...text].map((ch) => g.measureText(ch).width + unit * 0.035), total = widths.reduce((a, b) => a + b, 0);
+  let acc = -total / 2;
+  [...text].forEach((ch, k) => {
+    const mid = acc + widths[k] / 2, a = th - mid / R;             // left to right as the camera reads it
+    g.save(); g.translate(c + Math.cos(a) * R, c + Math.sin(a) * R); g.rotate(a - Math.PI / 2); g.fillText(ch, 0, 0); g.restore();
+    acc += widths[k];
+  });
+  g.globalAlpha = 1;
 }
 
 /** The room on ``canvas``: {draw(scene), panels(specs, css, font), vp, lost()}; null where WebGL cannot start.
@@ -274,22 +352,34 @@ export function create3d(canvas) {
   const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
   const rgba = (c, a) => [c[0], c[1], c[2], a];
 
-  function panels(specs, css, font) {
+  const texOf = (tex, cv) => {
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  };
+  let floor = null;
+  function panels(specs, css, font, words) {
+    if (!floor && typeof document !== "undefined") {    // the floor's words and rings, once
+      const cv = document.createElement("canvas");
+      cv.width = cv.height = 1024;
+      const g = cv.getContext("2d");
+      if (g) { paintFloor(g, css, font, words || "PAPERBOT"); floor = {tex: gl.createTexture()}; texOf(floor.tex, cv); }
+    }
     (specs || []).forEach((spec, i) => {
+      const [w, hh] = spec.px || [PW, PH];
       let s = screens[i];
-      if (!s) {
+      if (!s || s.cv.width !== w || s.cv.height !== hh) {
         const cv = document.createElement("canvas");
-        cv.width = PW; cv.height = PH;
-        s = screens[i] = {cv, g: cv.getContext("2d"), tex: gl.createTexture()};
+        cv.width = w; cv.height = hh;
+        s = screens[i] = {cv, g: cv.getContext("2d"), tex: (s && s.tex) || gl.createTexture()};
       }
       if (!s.g) return;
+      s.pose = spec.pose || null;
       paintPanel(s.g, spec, css, font);
-      gl.bindTexture(gl.TEXTURE_2D, s.tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, s.cv);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      texOf(s.tex, s.cv);
     });
     screens.length = Math.min(screens.length, (specs || []).length);
   }
@@ -302,10 +392,11 @@ export function create3d(canvas) {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND);
     // the camera: circling, and (drift) swaying slowly up and down and in and out, as in the owners' video
-    const aspect = W / Math.max(1, H), sway = sc.drift ? 1 : 0;
-    const dist = Math.max(6.2, (aspect < 1 ? 2.4 : 2.75) / (Math.tan(0.31) * aspect)) * (1 + 0.05 * sway * Math.sin(t * 0.13));
+    const aspect = W / Math.max(1, H), sway = sc.drift ? 1 : 0, fitA = aspect * (sc.fit || 1);
+    const dist = Math.max(5.6, (fitA < 1 ? 2.4 : 2.75) / (Math.tan(0.31) * fitA)) * (1 + 0.05 * sway * Math.sin(t * 0.13));
     const pitch = sc.pitch + 0.05 * sway * Math.sin(t * 0.21);
-    const eye = [Math.sin(sc.yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(sc.yaw) * Math.cos(pitch) * dist];
+    const yaw = sc.yaw + 0.3 * sway * Math.sin(t * 0.075);          // the drift: swaying round its start, as in the video
+    const eye = [Math.sin(yaw) * Math.cos(pitch) * dist, Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist];
     vp = m4mul(m4persp(0.62, aspect, 0.1, 60), m4look(eye, [0, aspect < 1 ? -0.35 : 0.42, 0]));
     gl.useProgram(P);
     gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aN);
@@ -320,6 +411,22 @@ export function create3d(canvas) {
     for (let i = 0; i < 48; i++) {                    // dashes round the stage's edge, turning slowly
       const a = (i / 48) * Math.PI * 2 - t * 0.04;
       solid(mesh.box, m4trs([Math.cos(a) * 2.75, -0.015, Math.sin(a) * 2.75], Math.PI / 2 - a, [0.12, 0.004, 0.02]), blue, scale(blue, 0.8), 0.5, true);
+    }
+    if (floor) {                                       // the floor's words and rings (a picture lying flat)
+      gl.useProgram(X);
+      gl.disableVertexAttribArray(aN); gl.disableVertexAttribArray(aP);
+      gl.enableVertexAttribArray(xP); gl.enableVertexAttribArray(xT);
+      gl.uniformMatrix4fv(x.VP, false, new Float32Array(vp));
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadP); gl.vertexAttribPointer(xP, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadT); gl.vertexAttribPointer(xT, 2, gl.FLOAT, false, 0, 0);
+      gl.activeTexture(gl.TEXTURE0); gl.uniform1i(x.Tex, 0); gl.bindTexture(gl.TEXTURE_2D, floor.tex);
+      gl.uniformMatrix4fv(x.M, false, new Float32Array(m4mul(m4trs([0, 0.004, 0], 0, [7.2, 1, 7.2]), m4rotx(-Math.PI / 2))));
+      gl.uniform1f(x.A, 0.9);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(xP); gl.disableVertexAttribArray(xT);
+      gl.useProgram(P);
+      gl.enableVertexAttribArray(aP); gl.enableVertexAttribArray(aN);
     }
     // the table: a dark round top, a glowing rim, rings and turning spokes on it
     solid(mesh.cyl, m4trs([0, 0, 0], 0, [1.25, 0.16, 1.25]), C.table, scale(blue, 0.05), 1);
@@ -370,12 +477,23 @@ export function create3d(canvas) {
         solid(mesh.box, m4trs(at(-0.01, 0.47 + tap, 0.11 * k), p.yaw, [0.05, 0.05, 0.26]), fig, scale(fig, 0.12), 1);
         solid(mesh.sph, m4trs(at(-0.14, 0.47 + tap, 0.11 * k), 0, [0.035, 0.035, 0.035]), face, scale(face, 0.15), 1);
       }
+      const top = [hc[0], hc[1] + 0.1, hc[2]];                      // a touch of its own (decoration): ears, a headset, an antenna, a bun, a brim
+      const kind = i % 5;
+      if (kind === 0) for (const k of [-1, 1]) solid(mesh.sph, m4trs(at(0.11, hc[1] + 0.1, 0.075 * k), 0, [0.04, 0.04, 0.04]), fig, scale(fig, 0.2), 1);
+      if (kind === 1) {
+        for (const k of [-1, 1]) solid(mesh.sph, m4trs(at(0.11, hc[1], 0.115 * k), 0, [0.035, 0.045, 0.035]), C.chair, scale(st, 0.4), 1);
+        solid(mesh.sph, m4trs(at(0.02, hc[1] - 0.06, 0.08), 0, [0.015, 0.015, 0.015]), st, scale(st, 1), 1);
+      }
+      if (kind === 2) { solid(mesh.cyl, m4trs(top, 0, [0.008, 0.09, 0.008]), C.ink, [0, 0, 0], 1); solid(mesh.sph, m4trs([top[0], top[1] + 0.1, top[2]], 0, [0.025, 0.025, 0.025]), st, scale(st, 1.2), 1); }
+      if (kind === 3) solid(mesh.sph, m4trs(at(0.2, hc[1] + 0.05), 0, [0.055, 0.055, 0.055]), fig, scale(fig, 0.2), 1);
+      if (kind === 4) solid(mesh.cyl, m4trs(at(0.04, hc[1] + 0.035), p.yaw, [0.13, 0.012, 0.13]), fig, scale(fig, 0.2), 1);
       if (s.sel) solid(mesh.ring, m4trs(at(0.12, 0.92), t, [0.15, 1, 0.15]), C.ink, scale(C.ink, 1), 1, true);
     });
     // the middle: a column of light and floating rings
     solid(mesh.cyl, m4trs([0, 0.16, 0], 0, [0.34, 1.25, 0.34]), green, scale(green, 0.3), 0.1, true);
     solid(mesh.cyl, m4trs([0, 0.16, 0], 0, [0.12, 1.5, 0.12]), cyan, scale(cyan, 0.7), 0.16, true);
     for (const [y, r, k] of [[0.55, 0.42, 1], [0.9, 0.32, -1.4], [1.25, 0.24, 1.9], [1.55, 0.16, -2.4]]) solid(mesh.fat, m4trs([0, y, 0], t * k, [r, 0.6, r]), cyan, scale(cyan, 1), 0.7, true);
+    solid(mesh.sph, m4trs([0, 0.16, 0], 0, [1.15, 1.25, 1.15]), green, scale(green, 0.5), 0.05, true);     // the dome's haze
     // the floating screens round the room: the programs' own numbers (paintPanel), facing the middle; the ones turned
     // away from the camera are not drawn
     if (screens.length) {
@@ -388,11 +506,12 @@ export function create3d(canvas) {
       gl.bindBuffer(gl.ARRAY_BUFFER, quadT); gl.vertexAttribPointer(xT, 2, gl.FLOAT, false, 0, 0);
       gl.activeTexture(gl.TEXTURE0); gl.uniform1i(x.Tex, 0);
       screens.forEach((s, i) => {
-        const pp = panelPose(i, screens.length), y = 1.22 + 0.05 * Math.sin(t * 0.7 + i);
+        const pp = s.pose ? layoutPose(s.pose) : {...panelPose(i, screens.length), y: 1.22, w: 1.7, h: 1.06};
+        const y = pp.y + 0.04 * Math.sin(t * 0.7 + i);
         const nx = -Math.cos(pp.b), nz = -Math.sin(pp.b), face = nx * (eye[0] - pp.x) + nz * (eye[2] - pp.z);
         if (face <= 0) return;
         gl.bindTexture(gl.TEXTURE_2D, s.tex);
-        gl.uniformMatrix4fv(x.M, false, new Float32Array(m4trs([pp.x, y, pp.z], pp.yaw, [1.7, 1.06, 1])));
+        gl.uniformMatrix4fv(x.M, false, new Float32Array(m4trs([pp.x, y, pp.z], pp.yaw, [pp.w, pp.h, 1])));
         gl.uniform1f(x.A, Math.min(0.95, 0.35 + face / dist));
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       });
@@ -417,16 +536,26 @@ export function create3d(canvas) {
     strokes(gl.POINTS, ms, mc, [0.02], 0);
     glows.push([0, 0.9, 0], [0, 0.2, 0]); glowC.push(rgba(green, 0.35), rgba(cyan, 0.4)); glowS.push(3.2, 2.4);
     strokes(gl.POINTS, glows, glowC, glowS, 1);
-    const beams = [], beamC = [], dots = [];
+    // the energy dome: arcs of light from the middle to every seat (brighter and busier to the running programs) and to
+    // the stage's edge, flickering
+    const ends = [], dots = [];
     sc.seats.forEach((s, i) => {
-      if (s.state !== "live" && s.state !== "wait") return;
-      const p = seatPose(i, n), e = [p.x * 0.8, 0.7, p.z * 0.8], c = rgba(C["s-" + s.state] || green, 0.6);
-      beams.push([0, 1.15, 0], e); beamC.push(c, c);
-      const f = (t * 0.45 + i * 0.37) % 1;
-      dots.push([e[0] * f, 1.15 + (0.7 - 1.15) * f, e[2] * f]);
+      const p = seatPose(i, n), run = s.state === "live" || s.state === "wait";
+      ends.push({to: [p.x * 0.82, 0.62, p.z * 0.82], run, k: i, c: C["s-" + s.state] || green});
     });
-    strokes(gl.LINES, beams, beamC, [1], 2);
-    strokes(gl.POINTS, dots, [rgba(green, 0.95)], [0.045], 1);
+    for (let j = 0; j < 18; j++) { const a = (j / 18) * Math.PI * 2 + 0.17; ends.push({to: [Math.cos(a) * 1.2, 0.17, Math.sin(a) * 1.2], run: false, k: 40 + j, c: green}); }
+    for (const e of ends) {
+      const strands = e.run ? 3 : 1;
+      for (let m = 0; m < strands; m++) {
+        const lift = 0.35 + 0.18 * m + 0.06 * Math.sin(t * 2.3 + e.k + m);
+        const wob = 0.04 * Math.sin(t * 9 + e.k * 1.7 + m * 2.1);
+        const pts = arcPts([0, 1.3, 0], [e.to[0] + wob, e.to[1], e.to[2] - wob], lift, 18);
+        const flick = 0.55 + 0.45 * Math.abs(Math.sin(t * (3 + m) + e.k * 0.9));
+        strokes(gl.LINE_STRIP, pts, [rgba(e.run ? e.c : green, (e.run ? 0.9 : 0.42) * flick)], [1], 2);
+      }
+      if (e.run) { const f = (t * 0.45 + e.k * 0.37) % 1; dots.push(arcPts([0, 1.3, 0], e.to, 0.35, 18)[Math.floor(f * 17)]); }
+    }
+    strokes(gl.POINTS, dots, [rgba(green, 0.95)], [0.05], 1);
     gl.disableVertexAttribArray(qP); gl.disableVertexAttribArray(qC); gl.disableVertexAttribArray(qS);
     gl.depthMask(true);
     return vp;
