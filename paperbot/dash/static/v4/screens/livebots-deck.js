@@ -21,7 +21,7 @@
 // HONESTY: every number is a bot's record or a price; a panel with nothing yet says so; nothing drawn is made up (the core's
 // flow shape, its stars and its particle colours are decoration and say so on the screen, never a model). Under reduced
 // motion the core and the running lines stand still.
-import {h, s, put, ui, fmt, motion, serverNow} from "../core/pb.js";
+import {h, s, put, ui, fmt, motion, serverNow, sound} from "../core/pb.js";
 
 export const DECK_API = "/api/v4/livebots/deck";
 const REFRESH_MS = 15 * 1000;
@@ -37,8 +37,61 @@ const BOT_TAB = {bybit: "bybitbot", mix: "mixbot", range: "rangebot"};   // each
 const CID = (k) => `dk-k${k % 6}`;
 /** The goals the owners named (11-01: "100달러로 한달만에 700달러, 800달러 … 5000달러 그이상"), ×6 the one they keep. */
 export const GOAL_LADDER = [6, 7, 10, 20, 50];
+/** The price now (owners 11-01 "다 해줘"): dash/more/livedeck.py px_view, Binance futures' mark price, last trade and
+ *  funding, one fetch per 5 s shared by every viewer; read every PX_MS, older than PX_FRESH_MS is not "now" any more. */
+export const PX_API = "/api/v4/livebots/deck/px";
+const PX_MS = 5 * 1000;
+const PX_FRESH_MS = 30 * 1000;
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_dash_livedeck.py)
+/** A coin's price now: the live mark (else the last trade) while fresh, src "live"; else its last closed 15m bar, src
+ *  "15m"; null when neither is known. Also the coin's funding rate and next funding time when live. */
+export function priceNow(live, liveAt, coin, nowMs) {
+  const r = live && live.coins && coin && !Array.isArray(live.coins) ? live.coins[coin.symbol] : null;
+  if (r && ok(liveAt) && nowMs - liveAt <= PX_FRESH_MS && (ok(r.mark) || ok(r.last))) {
+    return {px: Number(ok(r.mark) ? r.mark : r.last), src: "live", funding: ok(r.funding) ? Number(r.funding) : null,
+      next_ms: ok(r.next_ms) ? Number(r.next_ms) : null};
+  }
+  return coin && coin.state === "ok" && ok(coin.last) ? {px: Number(coin.last), src: "15m", funding: null, next_ms: null} : null;
+}
+/** 위험 한눈에 for one open position at price `px` (owners 11-01): pnl ($) and roe (of the margin) now, before fees; the
+ *  liquidation price (isolated: entry × (1 − side × (1/lev − mmr)), the card's rough figure) and how far the price is from
+ *  it and from the stop (fractions of the price, > 0 = room left); the P&L if the stop is hit (the bot's own stop_pnl,
+ *  before fees) and that as a share of the bot's balance; the funding (rate; pays: this side pays it; usd: one funding on
+ *  the notional now, < 0 = paid). Null without a position or a price. */
+export function riskOf(pos, px, equity, mmr = 0.005, funding = null) {
+  if (!pos || pos.state !== "ok" || !ok(pos.entry) || !ok(px)) return null;
+  const side = Number(pos.side), e = Number(pos.entry), p = Number(px), lev = Number(pos.leverage) || null;
+  const q = ok(pos.qty) ? Number(pos.qty) : null;
+  const liq = lev ? e * (1 - side * (1 / lev - Number(mmr))) : null;
+  const stopPnl = ok(pos.stop_pnl) ? Number(pos.stop_pnl) : ok(pos.stop) && q ? side * (Number(pos.stop) - e) * q : null;
+  const eq = ok(equity) ? Number(equity) : ok(pos.equity_before) ? Number(pos.equity_before) : null;
+  const notional = q ? q * p : null;
+  return {px: p, pnl: q ? side * (p - e) * q : null, roe: lev ? side * (p / e - 1) * lev : null, liq,
+    toLiq: ok(liq) ? side * (p - liq) / p : null, toStop: ok(pos.stop) ? side * (p - Number(pos.stop)) / p : null,
+    stopPnl, stopPct: ok(stopPnl) && eq ? stopPnl / eq : null,
+    funding: ok(funding) ? {rate: Number(funding), pays: side * Number(funding) > 0, usd: notional ? -side * Number(funding) * notional : null} : null};
+}
+/** The risk bar of one position: where the liquidation, the stop, the entry and the price now sit on a line from the
+ *  liquidation (0) to as far past the entry on the other side (1), each 0…1 (clamped), null when unknown. */
+export function riskBar(pos, r) {
+  if (!r || !ok(r.liq) || !ok(pos.entry)) return null;
+  const side = Number(pos.side), e = Number(pos.entry), w = 2 * Math.abs(e - r.liq) || 1;
+  const at = (x) => (ok(x) ? Math.max(0, Math.min(1, side * (Number(x) - r.liq) / w)) : null);
+  return {liq: 0, stop: at(pos.stop), entry: at(e), now: at(r.px)};
+}
+/** "+$1.23" / "−$4.50" (fmt.usd with the sign); "—" when unknown. */
+export const usdKo = (x) => (ok(x) ? `${Number(x) >= 0 ? "+" : "−"}${fmt.usd(Math.abs(Number(x)))}` : "—");
+/** The sounds of the bots' new records (core/sound.js playLive: the site's sound switch, its events and quiet hours):
+ *  an entry, an exit with a gain, an exit with a loss (or a P&L not read). */
+export function liveSoundsOf(rows) {
+  const out = [];
+  for (const r of rows || []) {
+    const k = r.kind === "entry" || r.kind === "adopted" ? "lv_entry" : r.kind === "exit" ? (ok(r.pnl) && Number(r.pnl) > 0 ? "lv_tp" : "lv_sl") : null;
+    if (k && !out.includes(k)) out.push(k);
+  }
+  return out;
+}
 /** 목표별 하루 필요: for each multiple over n days from `start` dollars, the end in dollars and the daily rate compounding
  *  needs (x^(1/n) − 1). Arithmetic only, never a forecast. */
 export function ladderOf(xs = GOAL_LADDER, n = 30, start = 100) {
@@ -643,6 +696,11 @@ export function deckView(ctx) {
   const feedBox = h("div", {class: "dk-feedbox"}), wire = h("div", {class: "dk-wire"}), feedStats = h("div", {class: "dk-fstats"});
   // the numbers that count to a new value (core/motion.js countTo: only on a real change, the first paint at once)
   const eqLed = h("div", {class: "dk-led num"}, "—"), gMult = h("b", {class: "num"}, "—"), gNeed = h("b", {class: "num"}, "—");
+  // owners 11-01 "다 해줘": the price now (the card's 지금 row, the source line under the clock), 위험, 이번 달, the alerts
+  const cardNow = h("div", {class: "dk-crow now"});
+  const pxSrc = h("small", {class: "dk-clku dk-pxsrc"}, "가격 · 끝난 15분봉");
+  const riskBox = h("div", {class: "dk-riskbox"}), calBox = h("div", {class: "dk-calbox"}), calSub = h("span");
+  const toast = h("div", {class: "dk-toast", role: "status", "aria-live": "polite", hidden: true});
   const grid = h("div", {class: "dk-g"},
     panel("dk-a-wal", "지갑 · WALLET", "세 봇 합계 · 봇 기록 그대로", wallet),
     panel("dk-a-cht", "코인 차트 · SPOT", chartSub, coinTabs, chart),
@@ -652,7 +710,9 @@ export function deckView(ctx) {
     panel("dk-a-lif", "포지션 진행 · LIFECYCLE", "손절 → 진입 → 다음 계단 · 지금 가격", lifeBox),
     panel("dk-a-bot", "봇 상태 · BOT STATUS", "실거래 · 모의 쌍둥이", botsBox),
     panel("dk-a-crd", "진입 카드 · ENTRY CARD", cardSub, cardBox),
+    panel("dk-a-rsk", "위험 · RISK", "열린 포지션 · 지금 가격 기준 · 이번 달", riskBox),
     panel("dk-a-gol", "목표 ×6 · GOAL PACE", goalSub, goalBox),
+    panel("dk-a-cal", "이번 달 · CALENDAR", calSub, calBox),
     panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 바 종합) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
       h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
     panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "세 봇의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
@@ -670,12 +730,13 @@ export function deckView(ctx) {
           h("b", {class: "dk-name"}, "PAPERBOT ", h("em", null, "//"), " 관제실"),
           h("small", {class: "dk-mono"}, "바이비트 봇 · 친구 15분 봇 · 레인지 봇 — 보기만 하는 화면"))),
       prices,
-      h("div", {class: "dk-clock"}, h("div", null, clockK, h("span", {class: "dk-live"}, "LIVE")), h("small", {class: "dk-mono"}, "KST · 한국 시간"), clockU)),
+      h("div", {class: "dk-clock"}, h("div", null, clockK, h("span", {class: "dk-live"}, "LIVE")), h("small", {class: "dk-mono"}, "KST · 한국 시간"), clockU, pxSrc)),
     h("div", {class: "dk-tick", "aria-label": "봇 기록 흐름", style: {"--i": 1}}, tickIn),
     grid,
     h("div", {class: "dk-tick dk-foot", "aria-label": "요약 흐름"}, footIn),
     ui.note("보기만 하는 화면 · 15초마다 새로 읽어요 · 숫자는 모두 봇 기록과 바이낸스 봉이에요 (꾸민 숫자 없음)"));
 
+  el.append(toast);
   function tickClock() {
     const now = serverNow();
     const k = new Date(now + 9 * 3600 * 1000), u = new Date(now);
@@ -691,14 +752,19 @@ export function deckView(ctx) {
     .map((b) => ({bot: b.name_ko, entry: b.position.entry, stop: b.position.stop}));
 
   function drawTop(d) {
-    const was = st.px || {};
-    st.px = {};
-    for (const c of d.coins || []) if (c.state === "ok" && ok(c.last)) st.px[c.symbol] = Number(c.last);
-    const fl = (c) => (ok(was[c.symbol]) && ok(st.px[c.symbol]) && was[c.symbol] !== st.px[c.symbol] ? (st.px[c.symbol] > was[c.symbol] ? "fl-up" : "fl-down") : "");
-    put(prices, (d.coins || []).map((c) => h("button", {type: "button", class: ["dk-pr", st.sel === c.symbol ? "on" : "", fl(c)], title: c.ko || "",
+    const was = st.pxWas || {}, now = {};
+    for (const c of d.coins || []) { const q = pn(c); if (q) now[c.symbol] = q; }
+    st.pxWas = Object.fromEntries(Object.entries(now).map(([k, q]) => [k, q.px]));
+    const fl = (c) => (ok(was[c.symbol]) && now[c.symbol] && was[c.symbol] !== now[c.symbol].px ? (now[c.symbol].px > was[c.symbol] ? "fl-up" : "fl-down") : "");
+    // the 24-hour change against the close 96 bars ago (the server's chg24 is of the last close)
+    const chg = (c) => (now[c.symbol] && ok(c.chg24) && ok(c.last) ? now[c.symbol].px / (Number(c.last) / (1 + Number(c.chg24))) - 1 : c.chg24);
+    const live = Object.values(now).some((q) => q.src === "live");
+    pxSrc.textContent = live ? "가격 · 바이낸스 마크 · 5초마다" : "가격 · 끝난 15분봉 (지금 가격 못 받음)";
+    put(prices, (d.coins || []).map((c) => h("button", {type: "button", class: ["dk-pr", st.sel === c.symbol ? "on" : "", fl(c)],
+      title: now[c.symbol] && now[c.symbol].src === "live" ? "지금 가격 (바이낸스 마크)" : c.ko || "끝난 15분봉 종가",
       onclick: () => { st.sel = c.symbol; st.wipe = true; draw(); }},
-      h("small", {class: "dk-mono"}, c.coin), h("b", {class: "num"}, c.state === "ok" ? pxKo(c.last) : "—"),
-      h("small", {class: ["num", ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : ""]}, c.state === "ok" ? pctKo(c.chg24) : c.ko || "못 읽음"))));
+      h("small", {class: "dk-mono"}, c.coin), h("b", {class: "num"}, now[c.symbol] ? pxKo(now[c.symbol].px) : "—"),
+      h("small", {class: ["num", ok(chg(c)) ? (chg(c) >= 0 ? "up" : "down") : ""]}, c.state === "ok" ? pctKo(chg(c)) : c.ko || "못 읽음"))));
     const tp = (d.tape || []).slice(0, 14);
     const txt = tp.length ? tp.map((r) => `${fmt.hm(r.ts)} ${r.bot_ko} ${r.coin || ""} ${r.kind_ko}: ${r.text}`).join("   ◆   ") : "아직 봇 기록이 없어요 · 봇이 켜지면 신호와 거래가 여기 흘러요";
     put(tickIn, h("span", null, txt), h("span", {"aria-hidden": "true"}, `   ◆   ${txt}`));
@@ -729,7 +795,9 @@ export function deckView(ctx) {
         tile("닫힌 거래", `${fmt.int(T.n || 0)}번`),
         tile("승률", ok(T.win_rate) ? pctKo(T.win_rate, 1).replace("+", "") : "—"),
         tile("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
-        tile("돌고 있음", `${run} / 3`, run ? "up" : "")),
+        (() => { const u = risksOf(d).map((x) => x.r && x.r.pnl).filter(ok);
+          const sum = u.length ? u.reduce((a, v) => a + v, 0) : null;
+          return tile("미실현 · 수수료 전", sum == null ? (T.open ? "—" : "$0.00") : usdKo(sum), ok(sum) && sum !== 0 ? (sum > 0 ? "up" : "down") : ""); })()),
       h("span", {class: "dk-chip"}, `실거래 봇 ${run}/3 돌고 있음`),
       h("div", {class: "dk-wcurve"}, h("small", {class: "dk-mono"}, "EQUITY · 시작 대비 %"),
         curve.length > 1 ? spark(curve.map((p) => p[1]), curve[curve.length - 1][1] >= 0 ? "up" : "down", 240, 48) : h("small", {class: "dk-ps"}, "거래가 쌓이면 선이 그려져요")));
@@ -787,6 +855,7 @@ export function deckView(ctx) {
       h("div", {class: ["dk-side", tone]}, h("b", null, c.sideKo), h("span", null, c.sideEn),
         h("div", {class: "dk-agree"}, h("span", null, "추세 바 30분 같은 쪽"), h("b", {class: "num"}, ok(c.agree) ? `${c.agree} / 6` : "—"),
           h("i", {class: "dk-agbar"}, h("i", {style: {width: `${ok(c.agree) ? (c.agree / 6) * 100 : 0}%`}})))),
+      c.live ? cardNow : null,
       h("div", {class: "dk-crow entry"}, h("b", null, "진입"), h("p", null, `${pxKo(c.entry)} · ${c.why || "신호 기록 없음"}`)),
       h("div", {class: "dk-crow stop"}, h("b", null, "손절"),
         h("p", null, `${pxKo(c.stop)}${ok(c.dist) ? ` (진입에서 ${fmt.num(c.dist * 100, 2)}%)` : ""} · 진입 봉 ATR(14) × ${c.stopAtr ? fmt.num(c.stopAtr, 0) : "?"} · 거래소에 걸어 둔 손절`)),
@@ -796,13 +865,15 @@ export function deckView(ctx) {
         h("div", null, h("small", null, "손익비 (첫 계단 : 손절)"), h("b", {class: "num"}, ok(c.rr) ? `1 : ${fmt.num(c.rr, 2)}` : "—")),
         h("div", null, h("small", null, "레버리지"), h("b", {class: "num"}, c.lev ? `${c.lev}x` : "—")),
         h("div", null, h("small", null, "예상 청산가 (대략)"), h("b", {class: "num down"}, ok(c.liq) ? pxKo(c.liq) : "—")))));
+    drawCardNow(d);
   }
 
   function drawLife(d) {
     put(lifeBox, (d.bots || []).map((b) => {
       const p = b.position;
       const c = p && p.state === "ok" ? coinOf(p.symbol) : null;
-      const ln = laneOf(p, c && c.state === "ok" ? c.last : null);
+      const q = c ? pn(c) : null;
+      const ln = laneOf(p, q ? q.px : null);
       if (!ln) {
         return h("div", {class: "dk-lane idle"}, h("b", null, b.name_ko),
           h("div", {class: "dk-track"}, h("span", {class: "dk-trackline"})),
@@ -855,6 +926,16 @@ export function deckView(ctx) {
     const rows = (d.tape || []).slice(0, 18);
     const seen = st.seen || null;                      // (the first read marks nothing new)
     st.seen = new Set(rows.map(keyOf));
+    const fresh = seen ? rows.filter((r) => !seen.has(keyOf(r)) && ["entry", "adopted", "exit"].includes(r.kind)) : [];
+    if (fresh.length) {                                // owners 11-01: an entry or an exit of the three bots sounds and shows
+      try { sound.playLive(liveSoundsOf(fresh)); } catch (e) { /* no sound here: the toast still shows */ }
+      const r = fresh[0];
+      toast.className = ["dk-toast", r.kind === "exit" ? (ok(r.pnl) && r.pnl > 0 ? "up" : "down") : "entry"].join(" ");
+      put(toast, h("b", null, `● ${r.bot_ko} · ${r.coin || ""} ${r.kind_ko}`), h("span", null, r.text || ""),
+        ok(r.pnl) ? h("b", {class: "num"}, usdKo(r.pnl)) : null);
+      toast.hidden = false;
+      if (typeof ctx.timeout === "function") ctx.timeout(() => { toast.hidden = true; }, 9000);
+    }
     put(tape, rows.length ? h("div", {class: "dk-tscroll"}, h("table", {class: "dk-ttab"},
       h("thead", null, h("tr", null, ...["시각", "봇", "코인", "종류", "내용", "손익"].map((x) => h("th", null, x)))),
       h("tbody", null, rows.map((r) => h("tr", {class: [r.kind, r.side > 0 ? "long" : r.side < 0 ? "short" : "", seen && !seen.has(keyOf(r)) ? "new" : ""]},
@@ -924,6 +1005,80 @@ export function deckView(ctx) {
         h("div", {class: "dk-stat"}, h("b", {class: "num"}, pn ? `${fmt.int(ps)}/${fmt.int(pn)}` : "—"), h("small", {class: "dk-mono"}, "실거래 = 모의 진입"))));
   }
 
+  const pn = (c) => priceNow(st.live, st.liveAt, c, Date.now());
+  /** Each bot with an open position: {b, q (its price now), r (riskOf)}. */
+  const risksOf = (d) => (d.bots || []).filter((b) => b.position && b.position.state === "ok").map((b) => {
+    const c = coinOf(b.position.symbol), q = c ? pn(c) : null;
+    return {b, q, r: q ? riskOf(b.position, q.px, (b.equity || {}).value, d.mmr, q.funding) : null};
+  });
+  function drawCardNow(d) {
+    const x = risksOf(d)[0];
+    if (!x || !x.r) { cardNow.className = "dk-crow now"; put(cardNow, h("b", null, "지금"), h("p", null, "지금 가격을 아직 못 받았어요")); return; }
+    cardNow.className = ["dk-crow", "now", ok(x.r.pnl) ? (x.r.pnl >= 0 ? "up" : "down") : ""].filter(Boolean).join(" ");
+    put(cardNow, h("b", null, "지금"), h("p", {class: "num"}, `${pxKo(x.r.px)} · ROE ${pctKo(x.r.roe, 1)} · ${usdKo(x.r.pnl)} (수수료 전)`,
+      x.q.src === "live" ? "" : " · 끝난 15분봉 값"));
+  }
+  function drawRisk(d) {
+    const pos = risksOf(d).filter((x) => x.r).map(({b, q, r}) => {
+      const p = b.position, bar = riskBar(p, r);
+      const mk = (v, cls, ko) => (v == null ? null : h("i", {class: ["dk-rmk", cls], style: {left: `${(v * 100).toFixed(1)}%`}, title: ko}));
+      return h("article", {class: ["dk-rk", Number(p.side) > 0 ? "long" : "short", ok(r.toLiq) && r.toLiq < 0.03 ? "hot" : ""]},
+        h("div", {class: "dk-rk1"}, h("b", null, `${b.name_ko} · ${p.coin} ${p.side_ko}`),
+          h("small", {class: "dk-mono"}, `${p.leverage ? `${p.leverage}배 · ` : ""}지금 ${pxKo(r.px)}${q.src === "live" ? "" : " (15분봉)"}`)),
+        bar ? h("div", {class: "dk-rbar", role: "img", "aria-label": "청산가 · 손절 · 진입 · 지금 가격"}, h("span", {class: "dk-rfill", style: {width: `${((bar.now || 0) * 100).toFixed(1)}%`}}),
+          mk(bar.liq, "liq", `청산가 ${pxKo(r.liq)}`), mk(bar.stop, "stop", `손절 ${pxKo(p.stop)}`), mk(bar.entry, "entry", `진입 ${pxKo(p.entry)}`), mk(bar.now, "now", `지금 ${pxKo(r.px)}`)) : null,
+        h("dl", {class: "dk-kv dk-kv3"},
+          h("dt", null, "청산가까지"), h("dd", {class: ["num", ok(r.toLiq) && r.toLiq < 0.03 ? "down" : ""]}, ok(r.toLiq) ? `${fmt.num(r.toLiq * 100, 2)}% · ${pxKo(r.liq)} (대략)` : "—"),
+          h("dt", null, "손절가까지"), h("dd", {class: "num"}, ok(r.toStop) ? `${fmt.num(r.toStop * 100, 2)}% · ${pxKo(p.stop)}` : "—"),
+          h("dt", null, "손절가에 닿으면"), h("dd", {class: ["num", ok(r.stopPnl) ? (r.stopPnl >= 0 ? "up" : "down") : ""]},
+            ok(r.stopPnl) ? `${usdKo(r.stopPnl)}${ok(r.stopPct) ? ` · 잔고의 ${pctKo(r.stopPct, 1)}` : ""} (수수료 전)` : "—"),
+          h("dt", null, "펀딩 (바이낸스)"), h("dd", {class: ["num", r.funding ? (r.funding.pays ? "down" : "up") : ""]},
+            r.funding ? `${pctKo(r.funding.rate, 4)} · ${r.funding.pays ? "이 포지션이 내요" : "이 포지션이 받아요"}${ok(r.funding.usd) ? ` · 한 번 ${usdKo(r.funding.usd)}` : ""}${ok(q.next_ms) ? ` · 다음 ${fmt.hm(q.next_ms)}` : ""}` : "지금 값 없음")));
+    });
+    const m = d.month && d.month.state !== "error" && d.month.days ? d.month : null;
+    const month = m ? h("div", {class: "dk-rkm"},
+      tile("이번 달 가장 깊은 낙폭", m.dd ? `${pctKo(m.dd.pct, 1)} · ${m.dd.bot_ko}` : "—", m.dd && m.dd.pct < 0 ? "down" : ""),
+      tile("연속 손실 (지금 · 이번 달 최대)", `${fmt.int(m.loss_run || 0)}번 · ${fmt.int(m.max_loss_run || 0)}번`, m.loss_run >= 3 ? "warn" : ""),
+      tile("이번 달 가장 큰 손실", m.worst_trade && m.worst_trade.pnl < 0 ? `${usdKo(m.worst_trade.pnl)} · ${m.worst_trade.coin || ""} ${m.worst_trade.bot_ko || ""}`
+        : m.trades_n ? "손실 거래 없음" : "—", m.worst_trade && m.worst_trade.pnl < 0 ? "down" : ""),
+      tile("이번 달 닫힌 거래", `${fmt.int(m.trades_n || 0)}번`)) : null;
+    put(riskBox, pos.length ? pos : h("p", {class: "dk-rnone"}, "열린 포지션 없음 · 지금 걸려 있는 돈 없음"), month,
+      h("small", {class: "dk-ps"}, "청산가는 격리 증거금 기준 대략값 · 펀딩은 바이낸스 값(거래소마다 조금 달라요) · 수수료 전"));
+  }
+  function drawCal(d) {
+    const m = d.month;
+    if (!m || m.state === "error" || !m.days) { calSub.textContent = ""; put(calBox, ui.empty((m && m.ko) || "이번 달 기록을 읽는 중")); return; }
+    calSub.textContent = `세 봇 하루 손익 ÷ 그날 시작 잔고 · ×${fmt.num(m.target, 0)} 하려면 매일 ${pctKo(m.need, 1)} · 한국 시간`;
+    const dow0 = (new Date(Number(m.from_ms) + 9 * 3600000).getUTCDay() + 6) % 7;          // Monday first
+    const cells = [];
+    for (let i = 0; i < dow0; i++) cells.push(h("i", {class: "dk-cd blank", "aria-hidden": "true"}));
+    for (const x of m.days) {
+      const has = x.state !== "future" && x.n;
+      const tone = x.state === "future" ? "future" : !has ? "flat" : ok(x.pct) && x.pct >= m.need ? "over" : x.pnl > 0 ? "up" : x.pnl < 0 ? "down" : "flat";
+      cells.push(h("div", {class: ["dk-cd", tone, x.state === "today" ? "today" : ""],
+        title: has ? `${x.d}일 · 거래 ${x.n}번 · ${usdKo(x.pnl)}${ok(x.pct) ? ` · ${pctKo(x.pct, 2)}` : ""}` : `${x.d}일`},
+        h("small", {class: "num"}, String(x.d)),
+        x.state === "future" ? null : h("b", {class: "num"}, has ? (ok(x.pct) ? pctKo(x.pct, 1) : usdKo(x.pnl)) : "—"),
+        has ? h("small", {class: "dk-mono"}, `${x.n}번${ok(x.pct) && x.pct >= m.need ? " ✓" : ""}`) : null));
+    }
+    put(calBox, h("div", {class: "dk-calh"}, ...["월", "화", "수", "목", "금", "토", "일"].map((w) => h("small", {class: "dk-mono"}, w))),
+      h("div", {class: "dk-cal"}, cells),
+      h("div", {class: "dk-calsum"}, tile("목표 넘은 날", `${fmt.int(m.over || 0)}일`, m.over ? "up" : ""),
+        tile("번 날 · 잃은 날", `${fmt.int(m.green || 0)} · ${fmt.int(m.red || 0)}`),
+        tile("가장 좋은 날", m.best ? `${m.best.d}일 ${pctKo(m.best.pct, 1)}` : "—", m.best && m.best.pct > 0 ? "up" : ""),
+        tile("가장 나쁜 날", m.worst ? `${m.worst.d}일 ${pctKo(m.worst.pct, 1)}` : "—", m.worst && m.worst.pct < 0 ? "down" : "")),
+      h("small", {class: "dk-ps"}, "✓ = 그날 목표 경로(매일 같은 %)를 넘은 날 · 거래 없는 날은 — · 계산일 뿐 예측이 아니에요"));
+  }
+  /** Every PX_MS: the price now, and what moves with it (the prices, the wallet's P&L now, the card's 지금, the lanes, 위험). */
+  async function loadPx() {
+    let r;
+    try { r = await ctx.api(PX_API); } catch (e) { return; }
+    if (!ctx.alive() || !r || r.state !== "ok") return;
+    st.live = r; st.liveAt = Date.now();
+    const d = st.d;
+    if (!d) return;
+    drawTop(d); drawWallet(d); drawCardNow(d); drawLife(d); drawRisk(d);
+  }
   function drawFeed(d) {
     put(feedBox, feedSvg(d.coins, wOf(feedBox)));
     const w = wireOf(d.tape);
@@ -954,7 +1109,8 @@ export function deckView(ctx) {
       const held = (d.bots || []).find((b) => b.position && b.position.state === "ok");
       st.sel = held ? held.position.symbol : ((d.coins || [])[0] || {}).symbol || null;
     }
-    drawTop(d); drawWallet(d); drawChart(d); drawFeed(d); drawBots(d); drawGrid(d); drawCard(d); drawGoal(d); drawLife(d); drawCore(d); drawTape(d); drawFwd(d); drawHist(d);
+    drawTop(d); drawWallet(d); drawChart(d); drawFeed(d); drawBots(d); drawGrid(d); drawCard(d); drawRisk(d); drawGoal(d); drawCal(d); drawLife(d);
+    drawCore(d); drawTape(d); drawFwd(d); drawHist(d);
     tickClock();
     if (st.wipe) {                                     // another coin picked: its charts draw in from the left
       st.wipe = false;
@@ -994,5 +1150,6 @@ export function deckView(ctx) {
   load().catch(() => {});
   ctx.every(REFRESH_MS, () => load().catch(() => {}), {now: false});
   ctx.every(1000, tickClock);
+  ctx.every(PX_MS, () => loadPx().catch(() => {}));       // the price now (owners 11-01)
   return {el, set() {}};
 }

@@ -25,7 +25,14 @@ made up to fill the look (the pictures' decorative panels are drawn from these v
               their entries),
      totals {equity, start, pnl, today_pnl, open, n, wins, win_rate},
      goal   {goal_ko, target, month_days, from_ms, bots [...], all {...}} (goal_view: the owners' monthly ×6 against each
-              bot's record this month, the 목표 연구 arithmetic)}
+              bot's record this month, the 목표 연구 arithmetic),
+     month  {from_ms, days_n, need, days [...], over, green, red, best, worst, loss_run, max_loss_run, worst_trade, dd}
+              (month_view: this month's calendar of the three bots' closed trades and the month's risk numbers)}
+
+    GET /api/v4/livebots/deck/px     (owners 11-01: the price now, every 5 s; px_view)
+
+    {now_ms, state, coins {symbol: {last, mark, funding, next_ms}}, missing [symbols]} (Binance futures: the last trade, the
+     mark price the exchanges liquidate on, the funding rate and the next funding time; nothing of the bots')
 
 Each bot also carries ``last_entry`` (its newest entry row: coin, side, price, stop, leverage and the signal it entered on,
 for the 진입 카드), its ``ladder`` and ``stop_atr`` (the config's) and the liquidation room the bots use (M.MMR_PCT).
@@ -48,6 +55,10 @@ from . import livebots as L
 from . import livemix as MX
 
 ROUTE = "/api/v4/livebots/deck"
+PX_ROUTE = "/api/v4/livebots/deck/px"
+PX_TTL_S = 5.0                                    # the price now: one fetch every 5 s, shared by every viewer
+_PX_CACHE: dict = {}
+_PX_LOCK = threading.Lock()
 BOT_ORDER = ("bybit", "mix", "range")          # the three mix bots (livemix.PROFILES), the screen's order
 COINS = ("SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT")   # the owners' six (10-31 night)
 MIN = 60_000
@@ -247,6 +258,7 @@ def bot_view(prof: Any, now: int) -> dict:
     if rows and prow:
         out["parity"] = _parity(rows, prow)
     out["_rows"] = rows                                   # (for the tape and the flow; dropped before the answer)
+    out["_trades"] = ts if live["status"]["state"] != "off" and rows else []   # (every closed trade: the month view)
     out["_prows"] = prow                                  # (the paper twin's rows: liveroom.py's seats and feed)
     out["_board"] = ((live["st"].get("d") or {}).get("board") or {}) if live["st"].get("state") == "ok" else {}
     return out
@@ -373,6 +385,146 @@ def goal_view(now: int, names: Optional[dict] = None) -> dict:
     return out
 
 
+def _eq_at(curve: list, t: int) -> Optional[float]:
+    """A bot's equity at ``t`` from its curve (the start, then after each exit): the last point at or before ``t``; the
+    start when the bot began after ``t`` (its money that day); None without a curve."""
+    if not curve:
+        return None
+    last = None
+    for ms, eq in curve:
+        if ms <= t:
+            last = eq
+    return last if last is not None else curve[0][1]
+
+
+def month_view(bots: list, now: int, target: Optional[float] = None) -> dict:
+    """이번 달 (owners 11-01 "다 해줘": a month calendar beside the goal, and the month's risk): each KST day of this month
+    with the three live bots' closed trades that day, from their own records.
+
+    {from_ms, days_n, need (the daily growth ×target in 30 days needs, compounding: target^(1/30) − 1), days: [{d, ms, state
+    past | today | future, n, wins, pnl, base (the bots' equity at the day's start), pct (pnl / base)}], over (days with pct
+    at or over need), green / red (days that made / lost money), best / worst {d, pct}, loss_run (losing trades in a row
+    up to the newest), max_loss_run (this month), worst_trade {pnl, coin, bot_ko, exit_ms}, dd {bot_ko, pct} (the deepest
+    fall from a high of one bot's balance this month)}. A day without trades: n 0, pnl 0, pct 0; a future day: no numbers.
+    A trade whose P&L the bot could not read (모름) counts in n, never in pnl."""
+    from . import livegoalres as G
+    t = float(target) if target else 1 + G._target()
+    m0, days_n = G.month_from(now)
+    today = L.kst_day(now)
+    need = t ** (1 / G.MONTH_D) - 1
+    live = [b for b in bots if b.get("curve") or b.get("_trades")]
+    days = []
+    for i in range(days_n):
+        ms = m0 + i * L.DAY
+        kd = L.kst_day(ms)
+        if kd > today:
+            days.append({"d": i + 1, "ms": ms, "state": "future"})
+            continue
+        n = wins = 0
+        pnl = 0.0
+        for b in live:
+            for tr in b.get("_trades") or []:
+                ex = tr.get("exit_ms")
+                if ex is not None and ms <= ex < ms + L.DAY:
+                    n += 1
+                    if tr.get("pnl") is not None:
+                        pnl += float(tr["pnl"])
+                        wins += 1 if tr["pnl"] > 0 else 0
+        base = sum(e for e in (_eq_at(b.get("curve") or [], ms) for b in live if (b.get("curve") or [[now + 1]])[0][0] < ms + L.DAY) if e)
+        days.append({"d": i + 1, "ms": ms, "state": "today" if kd == today else "past", "n": n, "wins": wins,
+                     "pnl": pnl, "base": base or None, "pct": pnl / base if base else None})
+    seen = [x for x in days if x["state"] != "future" and x.get("n")]
+    out = {"from_ms": m0, "days_n": days_n, "need": need, "target": t, "days": days,
+           "over": sum(1 for x in seen if x["pct"] is not None and x["pct"] >= need),
+           "green": sum(1 for x in seen if x["pnl"] > 0), "red": sum(1 for x in seen if x["pnl"] < 0)}
+    ranked = [x for x in seen if x["pct"] is not None]
+    if ranked:
+        b_, w_ = max(ranked, key=lambda x: x["pct"]), min(ranked, key=lambda x: x["pct"])
+        out["best"] = {"d": b_["d"], "pct": b_["pct"], "pnl": b_["pnl"]}
+        out["worst"] = {"d": w_["d"], "pct": w_["pct"], "pnl": w_["pnl"]}
+    # the month's risk: losing trades in a row (all three bots, by exit time), the worst trade, the deepest fall of a balance
+    trs = sorted(((tr, b.get("name_ko")) for b in live for tr in b.get("_trades") or []
+                  if tr.get("exit_ms") is not None and tr["exit_ms"] >= m0 and tr.get("pnl") is not None), key=lambda x: x[0]["exit_ms"])
+    run = best_run = 0
+    for tr, _n in trs:
+        run = run + 1 if tr["pnl"] < 0 else 0
+        best_run = max(best_run, run)
+    out["loss_run"], out["max_loss_run"], out["trades_n"] = run, best_run, len(trs)
+    if trs:
+        w, wn = min(trs, key=lambda x: x[0]["pnl"])
+        out["worst_trade"] = {"pnl": w["pnl"], "coin": w.get("coin"), "side": w.get("side"), "bot_ko": wn, "exit_ms": w["exit_ms"]}
+    dd = None
+    for b in live:
+        cv = b.get("curve") or []
+        pts = [eq for ms, eq in cv if ms >= m0]
+        if not pts:
+            continue
+        peak = _eq_at(cv, m0) if cv[0][0] < m0 else pts[0]
+        low = 0.0
+        for eq in pts:
+            peak = max(peak, eq)
+            low = min(low, eq / peak - 1 if peak else 0.0)
+        if dd is None or low < dd["pct"]:
+            dd = {"bot_ko": b.get("name_ko"), "pct": low}
+    out["dd"] = dd
+    return out
+
+
+def fetch_px(symbols=COINS) -> dict:
+    """Binance futures now, per coin: {symbol: {last, mark, funding, next_ms}} (ticker/price and premiumIndex, weight 1
+    each, the coins in parallel; a coin that did not answer is left out, never a zero)."""
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(sym):
+        row: dict = {}
+        try:
+            with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={sym}", timeout=4) as r:
+                m = json.loads(r.read())
+            row.update(mark=float(m["markPrice"]), funding=float(m["lastFundingRate"]), next_ms=int(m["nextFundingTime"]))
+        except Exception:  # noqa: BLE001  (a coin missing is shown as the 15m close)
+            pass
+        try:
+            with urllib.request.urlopen(f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={sym}", timeout=4) as r:
+                row["last"] = float(json.loads(r.read())["price"])
+        except Exception:  # noqa: BLE001
+            pass
+        return sym, row
+
+    with ThreadPoolExecutor(max_workers=max(1, len(symbols))) as ex:
+        return {sym: row for sym, row in ex.map(one, symbols) if row}
+
+
+def px_view(fetch: Optional[Callable] = None, now_ms: Optional[int] = None) -> dict:
+    """The six coins' price now (owners 11-01: the 관제실's prices, the open position's P&L and its risk move with it), one
+    fetch every PX_TTL_S shared by every viewer: {now_ms, state ok | error, coins {symbol: {last, mark, funding, next_ms}},
+    missing [symbols], ko (when nothing came)}."""
+    with _PX_LOCK:
+        hit = _PX_CACHE.get("px")
+        if hit and time.time() - hit[0] < PX_TTL_S:
+            return hit[1]
+        now = int(time.time() * 1000) if now_ms is None else int(now_ms)
+        try:
+            got = (fetch or fetch_px)(COINS) or {}
+            err = None
+        except Exception as exc:  # noqa: BLE001
+            got, err = {}, f"{type(exc).__name__}: {exc}"[:200]
+        coins = {}
+        for sym in COINS:
+            row = got.get(sym) or {}
+            keep = {k: (int(v) if k == "next_ms" else float(v)) for k, v in row.items()
+                    if k in ("last", "mark", "funding", "next_ms") and v is not None and np.isfinite(float(v))}
+            if keep.get("last") or keep.get("mark"):
+                coins[sym] = keep
+        out = {"now_ms": now, "state": "ok" if coins else "error", "coins": coins, "missing": [x for x in COINS if x not in coins]}
+        if not coins:
+            out["ko"] = "바이낸스 지금 가격을 못 받았어요 (끝난 15분봉 값으로 보여요)"
+            if err:
+                out["reason"] = err
+        _PX_CACHE["px"] = (time.time(), out)
+        return out
+
+
 def build(candles: Optional[Callable], now_ms: Optional[int] = None) -> dict:
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     bots = []
@@ -389,6 +541,10 @@ def build(candles: Optional[Callable], now_ms: Optional[int] = None) -> dict:
         out["goal"] = goal_view(now, {b["id"]: b.get("name_ko") for b in bots})
     except Exception as exc:  # noqa: BLE001  the goal's arithmetic never hides the rest
         out["goal"] = {"state": "error", "ko": "목표 숫자를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
+    try:
+        out["month"] = month_view(bots, now, (out.get("goal") or {}).get("target"))
+    except Exception as exc:  # noqa: BLE001  the calendar never hides the rest
+        out["month"] = {"state": "error", "ko": "이번 달 달력을 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
     try:
         out["coins"] = coins_view(candles, now)
     except Exception as exc:  # noqa: BLE001
@@ -407,4 +563,11 @@ def register(app, ctx) -> dict:
         key = "deck:" + json.dumps([MX.paths(bot=b) for b in BOT_ORDER], sort_keys=True)
         return L._cached(key, lambda: json_finite(build(candles)))
 
-    return {"routes": [ROUTE]}
+    px = getattr(ctx, "px", None)
+
+    @app.get("/api/v4/livebots/deck/px")                # (= PX_ROUTE)
+    def get_livebots_deck_px():
+        """실거래 › 관제실: the six coins' price now (Binance futures: last, mark, funding; 5 s, shared; prices only)."""
+        return json_finite(px_view(px))
+
+    return {"routes": [ROUTE, PX_ROUTE]}

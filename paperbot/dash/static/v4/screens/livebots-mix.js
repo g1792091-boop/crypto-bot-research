@@ -27,6 +27,10 @@
 // never shown as real money (모의 · 진짜 돈 아님); small samples say so; the backtest is labelled as the design's, not live.
 import {h, put, ui, fmt, store, serverNow, local} from "../core/pb.js";
 import {sourceState} from "./livebots-kit.js";
+// owners 11-01 "다 해줘": the price now of the six coins (관제실's feed, 5 s, shared) and one position's risk at it
+import {PX_API, riskOf} from "./livebots-deck.js";
+const MMR = 0.005;                                  // the liquidation room the bots use (paperbot/mixchop.py MMR_PCT 0.5 %)
+const PX_MS = 5 * 1000;
 
 export const API = "/api/v4/livebots/mix";
 export const PERF_API = "/api/v4/livebots/mixperf";
@@ -376,7 +380,9 @@ export function mixView(ctx, o = MIX_UI) {
         h("p", null, waitOf(o, b)));
     }
     const heldNode = h("b", {class: "num"});
-    const mark = store.mark(p.symbol);
+    const live = st.px && st.px.coins && !Array.isArray(st.px.coins) ? st.px.coins[p.symbol] : null;   // (관제실's feed: all six coins)
+    const mark = live && ok(live.mark) ? Number(live.mark) : store.mark(p.symbol);
+    const rk = ok(mark) ? riskOf(p, mark, ((b.equity || {}).now || {}).value, MMR, live && ok(live.funding) ? live.funding : null) : null;
     const roe = ok(mark) && ok(p.entry) && ok(p.leverage) ? Number(p.side) * (Number(mark) / Number(p.entry) - 1) * Number(p.leverage) : null;
     return h("div", {class: "lmx-pos"},
       h("div", {class: "lmx-phead"}, h("span", {class: ["side", Number(p.side) > 0 ? "long" : "short"]}, SIDE(p.side)),
@@ -393,6 +399,15 @@ export function mixView(ctx, o = MIX_UI) {
         roe != null ? h("dt", null, "지금 가격") : null,
         roe != null ? h("dd", {class: "num"}, `${fmt.price(mark)} · ROE `, h("span", {class: fmt.tone(roe)}, pctKo(roe, 0)),
           h("small", {class: "lmx-sub"}, " (바이낸스 가격, 수수료 전 · 참고)")) : null,
+        // owners 11-01 "다 해줘" (위험 한눈에): how far the liquidation is, what the stop costs of the balance, the funding
+        rk && ok(rk.toLiq) ? h("dt", null, "청산가까지") : null,
+        rk && ok(rk.toLiq) ? h("dd", {class: ["num", rk.toLiq < 0.03 ? "down" : ""]}, `${fmt.num(rk.toLiq * 100, 2)}% · ${fmt.price(rk.liq)}`,
+          h("small", {class: "lmx-sub"}, " (격리 증거금 기준 대략값)")) : null,
+        rk && ok(rk.stopPct) ? h("dt", null, "손절되면 잔고") : null,
+        rk && ok(rk.stopPct) ? h("dd", {class: ["num", rk.stopPct < 0 ? "down" : "up"]}, `${pctKo(rk.stopPct, 1)}`, h("small", {class: "lmx-sub"}, " (수수료 전)")) : null,
+        rk && rk.funding ? h("dt", null, "펀딩 (바이낸스)") : null,
+        rk && rk.funding ? h("dd", {class: ["num", rk.funding.pays ? "down" : "up"]},
+          `${fmt.num(rk.funding.rate * 100, 4)}% · ${rk.funding.pays ? "이 포지션이 내요" : "이 포지션이 받아요"}${ok(rk.funding.usd) ? ` · 한 번 ${pnlKo(rk.funding.usd)}` : ""}${live && ok(live.next_ms) ? ` · 다음 ${fmt.hm(live.next_ms)}` : ""}`) : null,
         h("dt", null, "신호 봉"), h("dd", {class: "num"}, `${fmt.kst(p.signal_close_ms)} 마감 · 종가 ${fmt.price(p.signal_close)}`)),
       p.stop_id_missing ? h("p", {class: "lmx-warn"}, `상태 파일에 손절 주문 번호가 없어요 · 봇이 5분마다 손절을 확인해요 · ${o.exchange} 앱에서도 확인하세요`) : null,
       h("p", {class: "lmx-sub"}, p.ladder_basis === "net"
@@ -448,6 +463,11 @@ export function mixView(ctx, o = MIX_UI) {
   poller(ctx, o.api, REFRESH_MS, st, slot, main, draw);
   ctx.every(TICK_MS, onTick, {now: false});
   if (ctx.watch) ctx.watch("ticker", () => { if (st.d) drawBots(); });
+  ctx.every(PX_MS, async () => {                    // the price now (관제실's feed): the open position's 지금 · 위험 rows
+    let r;
+    try { r = await ctx.api(PX_API); } catch (e) { return; }
+    if (!ctx.alive || ctx.alive()) { if (r && r.state === "ok") { st.px = r; if (st.d && (st.d.bots || []).some((b) => b.position)) drawBots(); } }
+  });
   return {el, set() {}};
 }
 

@@ -280,6 +280,65 @@ def test_the_route_in_the_live_app_behind_its_login(world, tmp_path):
     assert [b["id"] for b in d["bots"]] == ["bybit", "mix", "range"]
 
 
+def test_the_month_view_calendar_and_its_risk():
+    """Owners 11-01 "다 해줘": this month's days (KST) with the three bots' closed trades (P&L over the day's starting
+    balance), the days over the daily rate ×6 needs, the losing run, the worst trade, the deepest fall of a balance."""
+    from paperbot.dash.more import livegoalres as G
+    from paperbot.dash.more import livebots as LB
+    now = 1793458800000 + 3 * LB.DAY + 5 * 3600 * 1000            # (the 4th of a KST month, 05:00)
+    m0, n = G.month_from(now)
+    H = 3600 * 1000
+    b1 = {"name_ko": "레인지 봇", "curve": [[m0 - LB.DAY, 100.0], [m0 + H, 108.0], [m0 + LB.DAY + H, 103.0], [m0 + LB.DAY + 2 * H, 99.0],
+                                            [m0 + 2 * LB.DAY + 2 * H, 103.0]],
+          "_trades": [{"exit_ms": m0 + 2 * LB.DAY + 2 * H, "pnl": 4.0, "coin": "SOL", "side": -1},
+                      {"exit_ms": m0 + LB.DAY + 2 * H, "pnl": -4.0, "coin": "SOL", "side": -1},
+                      {"exit_ms": m0 + LB.DAY + H, "pnl": -5.0, "coin": "ETH", "side": 1},
+                      {"exit_ms": m0 + H, "pnl": 8.0, "coin": "ETH", "side": 1},
+                      {"exit_ms": m0 - H, "pnl": -50.0, "coin": "XRP", "side": 1},          # (last month: not counted)
+                      {"exit_ms": m0 + 3 * LB.DAY + H, "pnl": None, "coin": "BCH", "side": 1}]}  # (모름: counts in n only)
+    b2 = {"name_ko": "꺼진 봇"}
+    v = D.month_view([b1, b2], now, 6.0)
+    assert (v["from_ms"], v["days_n"], v["target"]) == (m0, n, 6.0) and v["need"] == pytest.approx(6 ** (1 / 30) - 1)
+    d = {x["d"]: x for x in v["days"]}
+    assert d[1]["state"] == "past" and (d[1]["n"], d[1]["pnl"], d[1]["base"]) == (1, 8.0, 100.0) and d[1]["pct"] == pytest.approx(0.08)
+    assert (d[2]["n"], d[2]["wins"], d[2]["pnl"], d[2]["base"]) == (2, 0, -9.0, 108.0)
+    assert (d[3]["pnl"], d[3]["base"]) == (4.0, 99.0)
+    assert d[4]["state"] == "today" and (d[4]["n"], d[4]["pnl"]) == (1, 0.0)
+    assert d[5] == {"d": 5, "ms": m0 + 4 * LB.DAY, "state": "future"} and len(v["days"]) == n
+    assert (v["over"], v["green"], v["red"]) == (1, 2, 1)                            # (8% is over the 6.2% a day)
+    assert v["best"]["d"] == 1 and v["worst"] == {"d": 2, "pct": pytest.approx(-9 / 108), "pnl": -9.0}
+    assert (v["loss_run"], v["max_loss_run"], v["trades_n"]) == (0, 2, 4)            # (−5, −4 in a row, then +4)
+    assert v["worst_trade"]["pnl"] == -5.0 and v["worst_trade"]["bot_ko"] == "레인지 봇"
+    assert v["dd"]["bot_ko"] == "레인지 봇" and v["dd"]["pct"] == pytest.approx(99 / 108 - 1)
+    # nothing yet: every past day flat, no best / worst, no fall
+    e = D.month_view([{"name_ko": "x"}], now, 6.0)
+    assert e["over"] == e["green"] == e["red"] == 0 and "best" not in e and e["dd"] is None and e["trades_n"] == 0
+
+
+def test_the_price_now_shared_every_5_seconds(monkeypatch):
+    """GET /api/v4/livebots/deck/px: Binance's mark, last and funding for the six coins, one fetch per PX_TTL_S shared by
+    every viewer; a coin that did not answer is left out (never a zero); nothing came = state error with the words."""
+    calls = []
+
+    def fake(symbols):
+        calls.append(tuple(symbols))
+        return {"SOLUSDT": {"last": 150.5, "mark": 150.6, "funding": 0.0001, "next_ms": 1}, "ETHUSDT": {"last": float("nan")},
+                "XRPUSDT": {"mark": 0.61}, "BTCUSDT": {"last": 1.0}}
+    D._PX_CACHE.clear()
+    v = D.px_view(fake, now_ms=7)
+    assert calls == [D.COINS] and v["state"] == "ok" and v["now_ms"] == 7
+    assert v["coins"] == {"SOLUSDT": {"last": 150.5, "mark": 150.6, "funding": 0.0001, "next_ms": 1}, "XRPUSDT": {"mark": 0.61}}
+    assert v["missing"] == ["ETHUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
+    assert D.px_view(fake) is v and len(calls) == 1                                  # (cached for every viewer)
+    D._PX_CACHE.clear()
+
+    def down(_s):
+        raise OSError("no network")
+    w = D.px_view(down, now_ms=8)
+    assert w["state"] == "error" and w["coins"] == {} and "15분봉" in w["ko"] and "OSError" in w["reason"]
+    D._PX_CACHE.clear()
+
+
 # ---------------------------------------------------------------- the screen in node
 def _node(body: str, data=None):
     node = shutil.which("node")
@@ -374,6 +433,39 @@ def test_the_pure_functions():
     assert out["line0"] == [[], []]
 
 
+def test_the_price_now_the_risk_and_the_alerts():
+    """The price now (live while fresh, else the 15m close), one position's risk at it, the risk bar, the sounds of new
+    records (core/sound.js playLive's names)."""
+    out = _node("""
+    const coin = {symbol: "SOLUSDT", state: "ok", last: 100};
+    const live = {state: "ok", coins: {SOLUSDT: {last: 101, mark: 101.2, funding: 0.0001, next_ms: 9}}};
+    const pos = {state: "ok", side: -1, entry: 104.6, stop: 106, leverage: 40, qty: 10, stop_pnl: -14, equity_before: 100};
+    console.log(JSON.stringify({
+      p1: M.priceNow(live, 1000, coin, 5000), p2: M.priceNow(live, 1000, coin, 1000 + 31000), p3: M.priceNow(null, null, coin, 0),
+      p4: M.priceNow({coins: {SOLUSDT: {last: 99}}}, 1, coin, 2), p5: M.priceNow(null, null, {state: "error"}, 0), arr: M.priceNow({coins: []}, 1, coin, 2),
+      r: M.riskOf(pos, 103.6, 98, 0.005, 0.0001), rl: M.riskOf({...pos, side: 1, entry: 100, stop: 98, stop_pnl: null}, 101, null, 0.005, -0.0002),
+      r0: M.riskOf(null, 100), r1: M.riskOf(pos, null), bar: M.riskBar(pos, M.riskOf(pos, 103.6, 98)),
+      usd: [M.usdKo(1.5), M.usdKo(-2), M.usdKo(0), M.usdKo(null)],
+      snd: M.liveSoundsOf([{kind: "entry"}, {kind: "exit", pnl: 2}, {kind: "exit", pnl: -1}, {kind: "exit", pnl: null}, {kind: "signal"}, {kind: "adopted"}]),
+      snd0: M.liveSoundsOf(null), api: M.PX_API}));""")
+    assert out["p1"] == {"px": 101.2, "src": "live", "funding": 0.0001, "next_ms": 9}       # (the mark first)
+    assert out["p2"] == {"px": 100, "src": "15m", "funding": None, "next_ms": None}        # (30 s old: not now any more)
+    assert out["p3"] == out["p2"] and out["p4"]["px"] == 99 and out["p5"] is None and out["arr"]["src"] == "15m"
+    r = out["r"]                                           # a short from 104.6, 10 coins, 40x, price now 103.6
+    assert r["pnl"] == pytest.approx(10.0) and r["roe"] == pytest.approx((1 - 103.6 / 104.6) * 40)
+    assert r["liq"] == pytest.approx(104.6 * (1 + (1 / 40 - 0.005))) and r["toLiq"] == pytest.approx(-(103.6 - r["liq"]) / 103.6)
+    assert r["toStop"] == pytest.approx((106 - 103.6) / 103.6) and r["stopPnl"] == -14 and r["stopPct"] == pytest.approx(-14 / 98)
+    assert r["funding"] == {"rate": 0.0001, "pays": False, "usd": pytest.approx(0.0001 * 10 * 103.6)}   # (a short is paid)
+    rl = out["rl"]       # a long without stop_pnl: the stop's P&L from its qty and prices; funding < 0 = the long is paid
+    assert rl["stopPnl"] == pytest.approx(-20) and rl["stopPct"] == pytest.approx(-0.2)     # (of equity_before: no balance given)
+    assert rl["funding"]["pays"] is False and rl["liq"] < 100 and rl["toStop"] == pytest.approx((101 - 98) / 101)
+    assert out["r0"] is None and out["r1"] is None
+    b = out["bar"]
+    assert b["liq"] == 0 and b["entry"] == pytest.approx(0.5) and 0 < b["stop"] < b["entry"] < b["now"] <= 1
+    assert out["usd"] == ["+$1.50", "−$2.00", "+$0.00", "—"]
+    assert out["snd"] == ["lv_entry", "lv_tp", "lv_sl"] and out["snd0"] == [] and out["api"] == D.PX_ROUTE
+
+
 def test_the_goal_ladder_the_feed_and_the_wire():
     """Owners 11-01: "100달러로 한달만에 700달러, 800달러 … 5000달러 그이상" (what each goal needs a day, arithmetic only) and
     their picture again (the coins' feed lines, the raw record log)."""
@@ -420,7 +512,9 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: bad.tex
     for w in ("관제실", "바이비트 봇", "친구 15분 봇", "레인지 봇", "지갑", "추세 그리드", "진입 카드", "포지션 진행", "실행 기록",
               "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식", "목표 ×6", "경로보다", "남은 날 하루에 필요",
               "목표 연구 →", "코인 흐름", "FEED", "WIRE", "목표별 하루 필요", "×50", "$5,000", "하루 +13.9%", "SIGNAL CASCADE",
-              "0선 돌파 · 48H", "다음 15분 마감", "돌고 있음"):
+              "0선 돌파 · 48H", "다음 15분 마감", "돌고 있음", "위험", "RISK", "청산가까지", "손절가에 닿으면",
+              "펀딩 (바이낸스)", "이번 달 가장 깊은 낙폭", "연속 손실", "CALENDAR", "목표 넘은 날", "가장 좋은 날", "미실현 · 수수료 전",
+              "지금", "ROE", "(수수료 전)"):
         assert w in t, w
     assert "dk-cell down" in out["cls"] and "dk-side down" in out["cls"] and "dk-grow g-thin" in out["cls"]
     # owners 11-01 (the picture again, their video): the feed's lines in the coins' colours, the opening's class, the ladder
