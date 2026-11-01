@@ -8,6 +8,9 @@ livebots-deck.css; owners: "이런 화면느낌으로 메인화면으로 똑같�
   48-hour flow, the totals; each coin's closed 15m bars, the histogram and its 0 crosses (the bots' own formulas, part 9 of
   paperbot/friendtrend.py), the trend bar on the closed 30m bars; Binance down, a short history, a server without prices:
   each said, never guessed; one bot's broken files never hide the others; the coins read once a minute
+- 목표 ×6 (owners 11-01: "내 1달 목표 수익률 달성을 위해 필요한 대시보드 화면 내용들"): each bot's month against the path to ×6
+  with the 목표 연구 arithmetic (dash/more/livegoalres.py), the three together, the daily growth the rest needs; a bot without
+  this month's trades or not installed said so; the arithmetic never breaks the answer
 - the route in the live app, behind its login
 - the pure functions in node (the grid cell, the lane, the % curve and the forward test's split, the entry card, the
   words of an entry's signal, the clock, the attractor's step) and the whole screen rendered in node on the real answer:
@@ -225,6 +228,43 @@ def test_one_bots_broken_files_never_hide_the_others(world, monkeypatch):
     assert d["bots"][2]["record"]["n"] == 1 and d["totals"]["open"] == 1
 
 
+def test_the_goal_against_the_path_to_x6(world, monkeypatch):
+    from paperbot.dash.more import livegoalres as G
+    g = D.build(None, NOW)["goal"]
+    assert g["target"] == 6.0 and g["month_days"] == 30 and g["goal_ko"] == G.GOAL_KO and g["from_ms"] == G.month_from(NOW)[0]
+    by, mix, rg = g["bots"]
+    assert (by["id"], mix["id"], rg["id"]) == ("bybit", "mix", "range")
+    assert (by["name_ko"], mix["name_ko"], rg["name_ko"]) == ("바이비트 봇", "친구 15분 봇", "레인지 봇")    # the configs' names
+    assert by["state"] == "missing" and by["reason_ko"] and mix["state"] == "off" and mix["reason_ko"]
+    # the 레인지 봇: from its first trade this month (the wallet before it: 100) to its balance now (96.5)
+    m = rg["month"]
+    assert rg["state"] == "ok" and m["from_ms"] == DAY0 + 2 * H and m["start_equity"] == 100.0 and m["now_equity"] == pytest.approx(96.5)
+    days = (NOW - (DAY0 + 2 * H)) / (24 * H)
+    assert m["days"] == pytest.approx(days) and m["mult"] == pytest.approx(0.965)
+    assert m["path_now"] == pytest.approx(6 ** (days / 30)) and m["vs_path"] == pytest.approx(0.965 / 6 ** (days / 30) - 1)
+    assert rg["need_daily"] == pytest.approx((6 / 0.965) ** (1 / (30 - days)) - 1)
+    assert rg["n"] == 1 and rg["tone"] == "thin" and "아직 판단하지 않아요" in rg["verdict_ko"]
+    # the same numbers as the bot's own 목표 연구
+    acc = next(a for a in G.mix_bot(None, NOW, "range")["accounts"] if a["id"] == "live")
+    assert acc["month"] == m and acc["verdict_ko"] == rg["verdict_ko"]
+    # the three together: only the bots with this month's numbers
+    a = g["all"]
+    assert a["start_equity"] == 100.0 and a["now_equity"] == pytest.approx(96.5) and a["need_daily"] == pytest.approx(rg["need_daily"])
+    # the arithmetic of one bot breaking never hides the others, nor the answer
+    real = G.mix_bot
+
+    def broken(p, now, bot="mix"):
+        if bot == "bybit":
+            raise ValueError("bad")
+        return real(p, now, bot)
+    monkeypatch.setattr(G, "mix_bot", broken)
+    g2 = D.build(None, NOW)["goal"]
+    assert g2["bots"][0]["state"] == "error" and "bad" in g2["bots"][0]["reason"] and g2["bots"][2]["state"] == "ok"
+    monkeypatch.setattr(D, "goal_view", lambda *a, **k: 1 / 0)
+    d = D.build(None, NOW)
+    assert d["goal"]["state"] == "error" and d["goal"]["ko"] == "목표 숫자를 만들지 못했어요" and len(d["bots"]) == 3
+
+
 def test_the_route_in_the_live_app_behind_its_login(world, tmp_path):
     from fastapi.testclient import TestClient
     from paperbot.livedash import app as LA
@@ -282,6 +322,11 @@ def test_the_pure_functions():
         for (let i = 0; i < 20000; i++) { p = M.aizawa(p); for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p[k]); hi[k] = Math.max(hi[k], p[k]); } }
         return {lo, hi}; })(),
       api: M.DECK_API,
+      path: [M.pathAt(6, 0), M.pathAt(6, 15), M.pathAt(6, 30), M.pathAt(6, -3), M.pathAt(null, 3), M.pathAt(6, null)],
+      mult: [M.multKo(1.0798), M.multKo(6), M.multKo(5000), M.multKo(0.001), M.multKo(null)],
+      rate: [M.rateKo(0.554), M.rateKo(1), M.rateKo(null)],
+      line: M.monthLine([[1000, 100], [86400000 * 2, 104.2], [86400000 * 3, "x"]], {from_ms: 86400000, start_equity: 96.5, now_equity: 110}, 86400000 * 4),
+      line0: [M.monthLine([[1, 2]], null, 5), M.monthLine([], {from_ms: 1, start_equity: 0}, 5)],
     }));""")
     assert out["tone"] == ["up", "down", "flat", "na", "na"]
     assert out["pct"] == ["+1.23%", "−0.40%", "—", "−3.5%"]
@@ -321,6 +366,12 @@ def test_the_pure_functions():
     assert out["az"] == [pytest.approx(x + dx * 0.011), pytest.approx(y + dy * 0.011), pytest.approx(z + dz * 0.011)]
     assert all(-2 < v < 2.5 for v in out["far"]["lo"] + out["far"]["hi"])
     assert out["api"] == D.ROUTE
+    # 목표 ×6: the path to ×6 over 30 days, the multiples in words, a bot's month in multiples of its month-start balance
+    assert out["path"][0] == 1 and out["path"][1] == pytest.approx(6 ** 0.5) and out["path"][2] == pytest.approx(6)
+    assert out["path"][3] == 1 and out["path"][4] is None and out["path"][5] is None
+    assert out["mult"] == ["×1.08", "×6.00", "×1000 넘게", "×0.01 아래", "—"] and out["rate"] == ["55%", "100%", "—"]
+    assert out["line"] == [[0, 1], [1, pytest.approx(104.2 / 96.5)], [3, pytest.approx(110 / 96.5)]]
+    assert out["line0"] == [[], []]
 
 
 def test_the_whole_screen_renders_on_the_real_answer(world):
@@ -339,9 +390,11 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: bad.tex
     t = out["ok"]
     assert not BAD.search(t), BAD.search(t)
     for w in ("관제실", "바이비트 봇", "친구 15분 봇", "레인지 봇", "지갑", "추세 그리드", "진입 카드", "포지션 진행", "실행 기록",
-              "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식"):
+              "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식", "목표 ×6", "경로보다", "남은 날 하루에 필요",
+              "목표 연구 →"):
         assert w in t, w
-    assert "dk-cell down" in out["cls"] and "dk-side down" in out["cls"]
+    assert "dk-cell down" in out["cls"] and "dk-side down" in out["cls"] and "dk-grow thin" in out["cls"]
+    assert "×1 ×2 ×3 ×6 0일 10일 20일 30일 목표 ×6" in re.sub(r"\s+", " ", t)      # the goal chart: its axes and the path's tag
     assert not BAD.search(out["bad"])
 
 

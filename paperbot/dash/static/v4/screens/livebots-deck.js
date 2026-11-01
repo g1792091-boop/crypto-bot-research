@@ -8,6 +8,8 @@
 //            종합 as a strip under them, a bot's entry and stop on that coin
 //   봇        each bot: running or not, its rules, balance, record, position, live vs paper
 //   추세 그리드 coin x bot: the trend each bot read at its last close (초록 상승 · 빨강 하락 · 노랑 진입 금지) and its signal
+//   목표 ×6   this month against the path to the owners' ×6 (the three bots together and each), the daily growth the rest
+//            needs, each bot's own pace (가상) and the 목표 연구's verdict, a link to it
 //   포지션 진행 each bot's lane from its stop through the entry to the ladder's next lock, the price now
 //   코어      the six coins' 24-hour lines beside an attractor drawn in the owners' picture's colours: a fan of lines per coin
 //            in its 30m 종합 colour, the coin whose histogram crossed 0 at the last 15m close white, the held coin amber
@@ -30,6 +32,7 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 const TONE = {1: "up", "-1": "down", 0: "flat"};
 export const toneOf = (t) => (ok(t) ? TONE[Number(t)] || "flat" : "na");
 const TREND_KO = {up: "상승", down: "하락", flat: "진입 금지", na: "—"};
+const BOT_TAB = {bybit: "bybitbot", mix: "mixbot", range: "rangebot"};   // each bot's 봇별 screen (its 목표 연구 at the foot)
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_dash_livedeck.py)
 /** "+1.23%" / "−0.40%" of a ratio; "—" when unknown. */
@@ -85,6 +88,25 @@ export function since(curve, t0) {
   let hi = pts[0], dd = 0;
   for (const v of pts) { hi = Math.max(hi, v); dd = Math.min(dd, v / hi - 1); }
   return {ret: pts[pts.length - 1] / pts[0] - 1, dd};
+}
+
+// ---------------------------------------------------------------- 목표 ×6 (owners 11-01: "내 1달 목표 수익률 달성을 위해 필요한
+// 대시보드 화면 내용들 있으면 추가해도 돼"): the bots' month against the path to ×6, the 목표 연구 arithmetic (livegoalres)
+/** The ×target path's multiple on day ``d`` of an ``n``-day month (the 목표 연구's path: target^(d / n)). */
+export const pathAt = (target, d, n = 30) => (ok(target) && Number(target) > 0 && ok(d) ? Math.pow(Number(target), Math.max(0, Number(d)) / n) : null);
+/** "×1.23" of a multiple ("×1000 넘게" / "×0.01 아래" past those); "—" when unknown. */
+export const multKo = (m, dec = 2) => (!ok(m) ? "—" : Number(m) > 1000 ? "×1000 넘게" : Number(m) < 0.01 ? "×0.01 아래" : `×${fmt.num(Number(m), dec)}`);
+/** "55%" of a rate; "—" when unknown. */
+export const rateKo = (r) => (ok(r) ? `${fmt.num(Number(r) * 100, 0)}%` : "—");
+/** A bot's line this month in multiples of its month-start balance: [[day, multiple], …] from its balance curve (the
+ * equity after each exit) and its balance now; [] without this month's numbers. */
+export function monthLine(curve, month, nowMs) {
+  if (!month || !ok(month.start_equity) || !Number(month.start_equity) || !ok(month.from_ms)) return [];
+  const f = Number(month.from_ms), e0 = Number(month.start_equity), day = (t) => (t - f) / 86400000;
+  const pts = [[0, 1]];
+  for (const p of curve || []) if (ok(p[0]) && ok(p[1]) && Number(p[0]) > f) pts.push([day(Number(p[0])), Number(p[1]) / e0]);
+  if (ok(month.now_equity) && ok(nowMs) && Number(nowMs) > f) pts.push([day(Number(nowMs)), Number(month.now_equity) / e0]);
+  return pts.sort((a, b) => a[0] - b[0]);
 }
 
 /** The signal an entry was made on, in the owners' words (the entry row's ``why``). */
@@ -253,6 +275,40 @@ function fwdSvg(bots, split, W = 600) {
     kids.push(s("circle", {class: ["dk-fwdp", `b${k}`], cx: x(last[0]), cy: y(last[1]), r: 3.5}));
   });
   return s("svg", {class: "dk-fwd", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "봇별 잔고 변화 (시작 대비 %)"}, kids);
+}
+
+/** 목표 ×6: the path to ×target over the month (dashed), each bot's month in multiples of its month-start balance, today. */
+function goalSvg(g, bots, W = 600) {
+  const H = 190, top = 12, bot = 166, L = 40;
+  const n = Number(g.month_days) || 30, T = Number(g.target) || 6;
+  const lines = (g.bots || []).filter((x) => x.state === "ok" && x.month).map((x) => {
+    const k = (bots || []).findIndex((b) => b.id === x.id);
+    return {k, pts: monthLine(((bots || [])[k] || {}).curve, x.month, serverNow())};
+  }).filter((o) => o.pts.length > 1);
+  const ms = lines.flatMap((o) => o.pts.map((p) => p[1]));
+  const hiM = Math.max(T, ...ms), loM = Math.min(1, ...ms) * 0.95;
+  const ly = (m) => Math.log(Math.max(Number(m), 1e-3)), sp = ly(hiM) - ly(loM) || 1;
+  const y = (m) => top + (1 - (ly(m) - ly(loM)) / sp) * (bot - top);
+  const x = (d) => L + (Math.min(n, Math.max(0, d)) / n) * (W - L - 8);
+  const kids = [];
+  for (const m of [1, 2, 3, T].filter((v, i, a) => v <= hiM && a.indexOf(v) === i)) {      // (a log scale: ×4, ×5 would crowd ×6)
+    kids.push(s("line", {class: "dk-gridl", x1: L, x2: W, y1: y(m), y2: y(m)}), s("text", {class: "dk-axis", x: 2, y: y(m) + 3}, `×${m}`));
+  }
+  for (const d of [0, 10, 20, n]) kids.push(s("text", {class: "dk-axis", x: x(d), y: H - 4, "text-anchor": d === 0 ? "start" : d === n ? "end" : "middle"}, `${d}일`));
+  const path = [];
+  for (let d = 0; d <= n; d += 0.5) path.push(`${d ? "L" : "M"}${x(d).toFixed(1)},${y(pathAt(T, d, n)).toFixed(1)}`);
+  kids.push(s("path", {class: "dk-gpath", d: path.join("")}), s("text", {class: "dk-gtag", x: x(n) - 2, y: y(T) - 5, "text-anchor": "end"}, `목표 ×${fmt.num(T, 0)}`));
+  const today = ok(g.from_ms) ? (serverNow() - Number(g.from_ms)) / 86400000 : null;
+  if (ok(today) && today >= 0 && today <= n) {
+    kids.push(s("line", {class: "dk-gnow", x1: x(today), x2: x(today), y1: top, y2: bot}),
+      s("text", {class: "dk-axis", x: x(today) + 4, y: top + 9}, `오늘 · 경로 ${multKo(pathAt(T, today, n))}`));
+  }
+  for (const o of lines) {
+    kids.push(s("path", {class: ["dk-fwdl", `b${o.k}`], d: o.pts.map((p, i) => `${i ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join("")}));
+    const last = o.pts[o.pts.length - 1];
+    kids.push(s("circle", {class: ["dk-fwdp", `b${o.k}`], cx: x(last[0]), cy: y(last[1]), r: 3.5}));
+  }
+  return s("svg", {class: "dk-gsvg", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": `이번 달 잔고 배수와 ×${fmt.num(T, 0)} 경로`}, kids);
 }
 
 // ---------------------------------------------------------------- the core: an attractor's flow inside a shell of points
@@ -518,6 +574,8 @@ export function deckView(ctx) {
   const botsBox = h("div", {class: "dk-bots"});
   const gridBox = h("div", {class: "dk-grid"});
   const lifeBox = h("div", {class: "dk-life"});
+  const goalBox = h("div", {class: "dk-goal"});
+  const goalSub = h("span");
   const cardBox = h("div", {class: "dk-cardbox"});
   const cardSub = h("span");
   const inputs = h("div", {class: "dk-inputs"});
@@ -544,6 +602,7 @@ export function deckView(ctx) {
       panel("dk-a-bot", "봇 상태 · BOT STATUS", "실거래 · 모의 쌍둥이", botsBox),
       panel("dk-a-grd", "추세 그리드 · TREND GRID", "코인 × 봇 · 마지막 마감에 본 추세 바 30분 종합과 신호", gridBox),
       panel("dk-a-crd", "진입 카드 · ENTRY CARD", cardSub, cardBox),
+      panel("dk-a-gol", "목표 ×6 · GOAL PACE", goalSub, goalBox),
       panel("dk-a-lif", "포지션 진행 · LIFECYCLE", "손절 → 진입 → 다음 계단 · 지금 가격", lifeBox),
       panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 바 종합) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
         h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
@@ -730,6 +789,38 @@ export function deckView(ctx) {
       : ui.empty("아직 기록이 없어요 · 봇이 켜지면 신호와 거래가 여기 쌓여요"));
   }
 
+  function drawGoal(d) {
+    const g = d.goal;
+    if (!g || g.state === "error") { goalSub.textContent = ""; put(goalBox, ui.empty((g && g.ko) || "목표 숫자를 못 읽었어요")); return; }
+    const T = Number(g.target) || 6, n = Number(g.month_days) || 30, a = g.all;
+    goalSub.textContent = `${g.goal_ko} · ${fmt.kst(g.from_ms)}부터 · 기록으로 한 계산이지 예측이 아니에요`;
+    const head = a ? h("div", {class: "dk-ghead"},
+      h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "세 봇 합 · 이번 달"),
+        h("b", {class: ["num", a.vs_path >= 0 ? "up" : "down"]}, multKo(a.mult)),
+        h("small", null, `오늘 목표 경로 ${multKo(a.path_now)} · 경로보다 ${pctKo(a.vs_path, 1)}`)),
+      h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "남은 날 하루에 필요"),
+        h("b", {class: "num"}, ok(a.need_daily) ? pctKo(a.need_daily, 1) : "—"),
+        h("small", null, `${fmt.num(Math.max(0, n - a.days), 1)}일 남음 · ×${fmt.num(T, 0)}까지 매일`)))
+      : h("p", {class: "dk-ps"}, "이번 달 닫힌 거래가 아직 없어 목표 경로와 견줄 숫자가 없어요 (첫 거래부터 계산해요)");
+    const rows = (g.bots || []).map((x) => {
+      const k = (d.bots || []).findIndex((b) => b.id === x.id);
+      const link = h("a", {class: "dk-glink", href: `#/${BOT_TAB[x.id] || "deck"}`}, "목표 연구 →");
+      if (x.state !== "ok") return h("div", {class: ["dk-grow", "off"]}, h("b", null, x.name_ko), h("small", {class: "dk-ps"}, x.reason_ko || "기록이 없어요"), link);
+      const m = x.month;
+      const facts = [m && ok(x.need_daily) ? `남은 날 하루 ${pctKo(x.need_daily, 1)} 필요` : null,
+        ok(x.pace_mult) ? `지금 속도면 30일 ${multKo(x.pace_mult)} (가상)` : null,
+        ok(x.need_win) ? (Number(x.need_win) > 1 ? "지금 평균 이익·손실로는 승률 100%여도 모자라요" : `필요 승률 ${rateKo(x.need_win)}`) : null,
+        ok(x.win_rate) ? `지금 승률 ${rateKo(x.win_rate)}` : null,
+        ok(x.n) ? `닫힌 거래 ${fmt.int(x.n)}번` : null].filter(Boolean);
+      return h("div", {class: ["dk-grow", x.tone || ""]},
+        h("div", {class: "dk-gr1"}, h("span", {class: ["dk-legi", `b${k}`]}, h("i"), h("b", null, x.name_ko)),
+          h("b", {class: ["num", m ? (m.vs_path >= 0 ? "up" : "down") : ""]}, m ? `${multKo(m.mult)} · 경로보다 ${pctKo(m.vs_path, 1)}` : "이번 달 거래 없음")),
+        h("small", {class: "dk-mono"}, facts.length ? facts.join(" · ") : "—"),
+        x.verdict_ko ? h("small", {class: ["dk-gv", x.tone || ""]}, x.verdict_ko) : null, link);
+    });
+    put(goalBox, head, goalSvg(g, d.bots, wOf(goalBox)), h("div", {class: "dk-grows"}, rows));
+  }
+
   function drawFwd(d) {
     const bots = d.bots || [];
     const splits = bots.map((b) => b.rules_since_ms).filter(ok).map(Number);
@@ -765,7 +856,7 @@ export function deckView(ctx) {
       const held = (d.bots || []).find((b) => b.position && b.position.state === "ok");
       st.sel = held ? held.position.symbol : ((d.coins || [])[0] || {}).symbol || null;
     }
-    drawTop(d); drawWallet(d); drawChart(d); drawBots(d); drawGrid(d); drawCard(d); drawLife(d); drawCore(d); drawTape(d); drawFwd(d); drawHist(d);
+    drawTop(d); drawWallet(d); drawChart(d); drawBots(d); drawGrid(d); drawCard(d); drawGoal(d); drawLife(d); drawCore(d); drawTape(d); drawFwd(d); drawHist(d);
     tickClock();
   }
   async function load() {

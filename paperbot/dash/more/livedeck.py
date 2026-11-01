@@ -23,7 +23,9 @@ made up to fill the look (the pictures' decorative panels are drawn from these v
      tape:  [{ts, bot, bot_ko, kind, kind_ko, symbol, coin, side, text, pnl}] (the three live logs' newest rows),
      flow:  [[slot_ms, crosses, entries], …] (the last 48 h by 15m slot: the histogram's 0 crosses the three bots logged,
               their entries),
-     totals {equity, start, pnl, today_pnl, open, n, wins, win_rate}}
+     totals {equity, start, pnl, today_pnl, open, n, wins, win_rate},
+     goal   {goal_ko, target, month_days, from_ms, bots [...], all {...}} (goal_view: the owners' monthly ×6 against each
+              bot's record this month, the 목표 연구 arithmetic)}
 
 Each bot also carries ``last_entry`` (its newest entry row: coin, side, price, stop, leverage and the signal it entered on,
 for the 진입 카드), its ``ladder`` and ``stop_atr`` (the config's) and the liquidation room the bots use (M.MMR_PCT).
@@ -316,6 +318,60 @@ def totals_view(bots: list) -> dict:
             "n": n, "wins": wins, "win_rate": wins / known if known else None, "bots": len(eqs)}
 
 
+# ---------------------------------------------------------------- 목표 페이스 (owners 11-01: "내 1달 목표 수익률 달성을 위해 필요한
+# 대시보드 화면 내용들 있으면 추가해도 돼"): the three live bots against the owners' goal (한 달 ×6), with the 목표 연구 arithmetic
+# (dash/more/livegoalres.py goal_numbers: the same numbers as each bot's screen), never a forecast.
+def goal_view(now: int, names: Optional[dict] = None) -> dict:
+    """{goal_ko, target, month_days, from_ms (this KST month's start), bots: [{id, name_ko, state, reason_ko | month
+    {from_ms, start_equity, now_equity, mult, path_now, vs_path, days}, need_daily (the daily growth the rest of the 30
+    days would need from here), n, win_rate, per_day, pace_mult, need_win, verdict_ko, tone}], all {start_equity,
+    now_equity, mult, path_now, vs_path, need_daily} (the bots with this month's numbers, together)}. ``names``: each bot's
+    name as its config says it (bot_view's), else the profile's."""
+    from . import livegoalres as G
+    target = 1 + G._target()
+    m0, _md = G.month_from(now)
+    out: dict = {"goal_ko": G.GOAL_KO, "target": target, "month_days": G.MONTH_D, "from_ms": m0, "bots": []}
+
+    def need_daily(mult: float, days: float):
+        left = G.MONTH_D - days
+        return (target / mult) ** (1 / left) - 1 if mult and mult > 0 and left >= 0.5 else None
+
+    s0 = s1 = 0.0
+    el = []
+    for bid in BOT_ORDER:
+        prof = MX.PROFILES[bid]
+        row = {"id": bid, "name_ko": (names or {}).get(bid) or prof.name}
+        try:
+            r = G.mix_bot(None, now, bid)
+        except Exception as exc:  # noqa: BLE001  one bot's broken file never hides the others
+            out["bots"].append({**row, "state": "error", "reason_ko": "목표 숫자를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]})
+            continue
+        if r.get("state") != "ok":
+            out["bots"].append({**row, "state": r.get("state") or "error", "reason_ko": r.get("ko")})
+            continue
+        acc = next((a for a in r.get("accounts") or [] if a.get("id") == "live"), None)
+        if not acc or acc.get("state") != "ok":
+            out["bots"].append({**row, "state": "missing", "reason_ko": (acc or {}).get("reason_ko") or "실거래 기록이 아직 없어요"})
+            continue
+        mo = acc.get("month")
+        x = {**row, "state": "ok", "n": acc.get("n"), "win_rate": acc.get("win_rate"), "per_day": acc.get("per_day"),
+             "pace_mult": acc.get("pace_mult"), "need_win": acc.get("need_win"), "verdict_ko": acc.get("verdict_ko"),
+             "tone": acc.get("tone"), "month": mo}
+        if mo:
+            x["need_daily"] = need_daily(mo["mult"], mo["days"])
+            s0 += mo["start_equity"]
+            s1 += mo["now_equity"]
+            el.append(mo["days"])
+        out["bots"].append(x)
+    if s0 > 0 and el:
+        days = max(el)
+        mult = s1 / s0
+        path = target ** (days / G.MONTH_D)
+        out["all"] = {"start_equity": s0, "now_equity": s1, "mult": mult, "path_now": path, "vs_path": mult / path - 1,
+                      "days": days, "need_daily": need_daily(mult, days)}
+    return out
+
+
 def build(candles: Optional[Callable], now_ms: Optional[int] = None) -> dict:
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     bots = []
@@ -328,6 +384,10 @@ def build(candles: Optional[Callable], now_ms: Optional[int] = None) -> dict:
                          "status": {"state": "error", "ko": "기록을 읽지 못했어요"}, "reason": f"{type(exc).__name__}: {exc}"[:200]})
     out = {"now_ms": now, "mmr": M.MMR_PCT / 100.0, "grid": grid_view(bots), "tape": tape_view(bots), "flow": flow_view(bots, now), "totals": totals_view(bots)}
     out["bots"] = [{k: v for k, v in b.items() if not k.startswith("_")} for b in bots]
+    try:
+        out["goal"] = goal_view(now, {b["id"]: b.get("name_ko") for b in bots})
+    except Exception as exc:  # noqa: BLE001  the goal's arithmetic never hides the rest
+        out["goal"] = {"state": "error", "ko": "목표 숫자를 만들지 못했어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
     try:
         out["coins"] = coins_view(candles, now)
     except Exception as exc:  # noqa: BLE001

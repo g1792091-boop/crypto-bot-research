@@ -61,7 +61,8 @@
 .dk-a-bot { grid-column: span 4; }
 .dk-a-grd { grid-column: span 7; }
 .dk-a-crd { grid-column: span 5; }
-.dk-a-lif { grid-column: span 12; }
+.dk-a-gol { grid-column: span 6; }
+.dk-a-lif { grid-column: span 6; }
 .dk-a-cor { grid-column: span 12; }
 .dk-a-tap { grid-column: span 7; }
 .dk-a-fwd { grid-column: span 5; border-color: var(--dk-red-tile); box-shadow: inset 0 0 40px var(--dk-red-soft); }
@@ -69,6 +70,35 @@
 .dk-a-fwd .dk-pt::before { background: var(--dk-red); box-shadow: 0 0 6px var(--dk-red-glow); }
 .dk-a-his { grid-column: span 7; }
 .dk-a-flo { grid-column: span 5; }
+
+/* 목표 ×6 (owners 11-01: their monthly goal against the bots' month) */
+.dk-goal { display: grid; gap: 8px; min-width: 0; }
+.dk-ghead { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dk-gbig { display: grid; gap: 3px; min-width: 0; padding: 8px 10px; border: 1px solid var(--dk-line-2); border-radius: 2px; background: var(--dk-panel-2); }
+.dk-gbig b { font-family: var(--f-term); font-size: var(--t-2xl); line-height: 1; color: var(--dk-ink); }
+.dk-gbig b.up { color: var(--dk-green); text-shadow: 0 0 12px var(--dk-green-glow); }
+.dk-gbig b.down { color: var(--dk-red); text-shadow: 0 0 12px var(--dk-red-glow); }
+.dk-gbig small { font-size: var(--t-2xs); color: var(--dk-ink-2); overflow-wrap: anywhere; }
+.dk-gsvg { display: block; max-width: 100%; height: auto; }
+.dk-gpath { fill: none; stroke: var(--dk-amber); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.dk-gtag { fill: var(--dk-amber); font-family: var(--f-term); font-size: var(--t-2xs); }
+.dk-gnow { stroke: var(--dk-cyan); stroke-width: 1; stroke-dasharray: 2 3; }
+.dk-grows { display: grid; gap: 6px; min-width: 0; }
+.dk-grow { display: grid; gap: 3px; min-width: 0; padding: 6px 8px; border-left: 3px solid var(--dk-line-2); border-radius: 2px; background: var(--dk-panel-2); }
+.dk-grow.good { border-left-color: var(--dk-green); }
+.dk-grow.warn { border-left-color: var(--dk-amber); }
+.dk-grow.bad { border-left-color: var(--dk-red); }
+.dk-grow > small { overflow-wrap: anywhere; }
+.dk-gr1 { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
+.dk-gr1 b { font-size: var(--t-sm); color: var(--dk-ink); }
+.dk-gr1 b.num.up { color: var(--dk-green); }
+.dk-gr1 b.num.down { color: var(--dk-red); }
+.dk-gv { font-size: var(--t-2xs); color: var(--dk-ink-2); }
+.dk-gv.good { color: var(--dk-green); }
+.dk-gv.warn { color: var(--dk-amber); }
+.dk-gv.bad { color: var(--dk-red); }
+.dk-glink { justify-self: start; font-size: var(--t-2xs); letter-spacing: .06em; color: var(--dk-cyan); text-decoration: none; }
+.dk-glink:hover, .dk-glink:focus-visible { text-decoration: underline; }
 
 /* 지갑 */
 .dk-wallet { display: grid; gap: 6px; min-width: 0; }
@@ -284,7 +314,7 @@
 /* a tablet: six columns; a phone: one (the core's sides above and under it) */
 @media (max-width: 1100px) {
   .dk-a-wal, .dk-a-cht { grid-column: span 6; }
-  .dk-a-bot, .dk-a-grd, .dk-a-crd, .dk-a-lif, .dk-a-tap, .dk-a-fwd, .dk-a-his, .dk-a-flo { grid-column: span 12; }
+  .dk-a-bot, .dk-a-grd, .dk-a-crd, .dk-a-gol, .dk-a-lif, .dk-a-tap, .dk-a-fwd, .dk-a-his, .dk-a-flo { grid-column: span 12; }
 }
 @media (max-width: 760px) {
   .dk { padding: 4px; }
