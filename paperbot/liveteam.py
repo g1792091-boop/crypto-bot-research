@@ -39,6 +39,17 @@ its parts (judgment, checks, the entry: at once or after a pullback as fixed_rul
 hypothesis to test with a shadow bot (deploy/combo.shadow-trend-*.json) or at the 2-week review. Any other config:
 everything as before.
 
+세 실거래 봇 (owners 11-01 "다 해줘": the AI team meets on the three live bots: the mix program trading the Bybit and both
+WOO X Pro accounts by itself since 10-31, 바이비트 봇 · 친구 15분 봇 · 레인지 봇, each beside its paper twin): their own
+meetings (``mix_sources``: the live site's 관제실 readers, dash/more/livedeck.py: each bot's record, every closed trade, the
+open position, the month's goal and calendar; ``facts_mix``; ``mix_prompt``), never mixed with the retired bots':
+    daily       every day from 09:00 KST about the day before (the three bots' closed trades that day): risk · stats · lead;
+                a day without a closed trade is a quiet line without AI
+    loss        a bot's last two closed trades both lost (closed within 3 days): once per pair, key "loss:mix:<bot>:…"
+    weekly      Monday from 10:00 KST: the week before, all four members
+The members keep the owners' decisions (MIX_DECISIONS: the rules fixed, one position, no limit orders, no adding to a
+position, margin and leverage as set) out of discussion, never promise the ×6 goal, and judge no bot before 20 trades.
+
 VWAP 개선판 (owners 10-25: "vwap 개선판봇 … 연구분석이나 손실 분석 … 전부 다 만들어줘"; docs/vwap-bot-ko.md 9): the second
 paper bot and the executor that follows it (딥코인) get their own meetings, never mixed with the main bot's. Its facts
 (``facts_vwap``) come from the live site's VWAP screens (dash/more/livevwap.py: 관제, 성적, 막은 신호; ``vwap_sources``):
@@ -114,8 +125,22 @@ ROLES = {
              "focus": "팀원 셋의 말을 모아 두 분이 1분 안에 읽을 결론을 쓰는 역할. 팀원끼리 다르면 어느 쪽이 숫자에 맞는지 밝힘"},
 }
 KIND_ROLES = {"weekly": ("risk", "stats", "market", "lead"), "loss": ("risk", "stats", "lead"),
-              "checkpoint": ("risk", "stats", "market", "lead")}
-KIND_KO = {"weekly": "주간 보고", "loss": "손실 회의", "checkpoint": "판단 회의"}
+              "checkpoint": ("risk", "stats", "market", "lead"), "daily": ("risk", "stats", "lead")}
+KIND_KO = {"weekly": "주간 보고", "loss": "손실 회의", "checkpoint": "판단 회의", "daily": "하루 회의"}
+# 세 실거래 봇 (owners 11-01 "다 해줘"): their meetings (module comment)
+MIX_NAME = "세 실거래 봇"
+MIX_DAILY_HOUR = 9                     # every day from 09:00 KST: the day before
+MIX_TRADES_KEEP = 40
+MIX_DECISIONS = ("규칙은 고정: 숫자를 보고 바꿀지는 두 분이 정해요(봇별 화면 맨 아래 목표 연구)",
+                 "한 봇에 포지션은 하나(2포지션 안 함)", "지정가 주문 안 씀", "불타기·물타기 안 함",
+                 "증거금 비율과 레버리지는 두 분이 정한 대로(바꾸자고 하지 않음)",
+                 "목표: 한 달(30일) ×6, 계산일 뿐 예측이 아님", "거래소에 거는 손절과 계단 익절(봇 설정 그대로)")
+MIX_WORDS = ("pnl = 그 거래로 잔고가 바뀐 돈(봇 기록, 실거래는 거래소 잔고), None = 봇이 못 읽음(모름). roe = 증거금 대비. "
+             "month.mult = 이번 달 시작 잔고 대비 지금 배수, vs_path = 목표 경로(매일 같은 %로 30일에 ×6)보다 앞(+)·뒤(−), "
+             "need_daily = 남은 날 매일 필요한 %, pace_mult = 지금 속도면 30일 배수(가상), need_win = 지금 평균 이익·손실로 필요한 승률. "
+             "calendar = 이번 달 날마다 세 봇 손익 ÷ 그날 시작 잔고, over = 하루 필요 %를 넘은 날 수, dd = 한 봇 잔고가 이번 달 고점에서 "
+             "가장 깊게 떨어진 비율, loss_run = 지금 이어지는 손실 거래 수. parity = 실거래 진입 중 모의 쌍둥이도 5분 안에 같은 코인·"
+             "방향으로 들어간 비율.")
 VERDICTS = ("정상 범위", "지켜보기", "주의")
 # The owners' fixed rules as the running configs say them (fixed_rules: the paper bot's config, both executors' configs).
 # What a config that cannot be read would have said comes from the owners' 10-19 decisions for 규칙봇 15 (from 10-20):
@@ -811,6 +836,34 @@ def sources(now: int, p: Optional[dict] = None) -> dict:
         out["vwap"] = vwap_sources(p, now, more)
     except Exception as exc:  # noqa: BLE001  the VWAP bot's part is said, never fatal (the main bot's meetings as before)
         out["vwap"] = {"state": "error", "reason_ko": "VWAP 개선판 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"}
+    try:
+        out["mix"] = mix_sources(now)
+    except Exception as exc:  # noqa: BLE001  the three bots' part is said, never fatal
+        out["mix"] = {"state": "error", "reason_ko": "세 실거래 봇 기록을 읽지 못했어요", "reason": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
+def mix_sources(now: int) -> dict:
+    """The three live bots, read once from the 관제실's readers (dash/more/livedeck.py bot_view: each bot's record, every
+    closed trade, the open position; goal_view; month_view), read-only. A bot that cannot be read says so."""
+    from .dash.more import livedeck as D
+    from .dash.more import livemix as MX
+    bots = []
+    for bid in D.BOT_ORDER:
+        try:
+            bots.append(D.bot_view(MX.PROFILES[bid], now))
+        except Exception as exc:  # noqa: BLE001  one bot's broken file never hides the others
+            bots.append({"id": bid, "name_ko": MX.PROFILES[bid].name, "status": {"state": "error", "ko": "기록을 읽지 못했어요"},
+                         "reason": f"{type(exc).__name__}: {exc}"[:200]})
+    out: dict = {"state": "ok", "bots": bots}
+    try:
+        out["goal"] = D.goal_view(now, {b["id"]: b.get("name_ko") for b in bots})
+    except Exception as exc:  # noqa: BLE001
+        out["goal"] = {"state": "error", "reason": f"{type(exc).__name__}: {exc}"[:200]}
+    try:
+        out["month"] = D.month_view(bots, now, (out.get("goal") or {}).get("target"))
+    except Exception as exc:  # noqa: BLE001
+        out["month"] = {"state": "error", "reason": f"{type(exc).__name__}: {exc}"[:200]}
     return out
 
 
@@ -1017,6 +1070,8 @@ def kind_ko(kind: str, key: Optional[str] = None) -> str:
     k = str(key or "")
     if kind == "checkpoint" and k.startswith("checkpoint:trend"):
         return TREND_CHECK_KO
+    if k.startswith(("loss:mix", "daily:mix", "weekly:mix")):
+        return "세 봇 " + KIND_KO.get(kind, kind)
     if k.startswith("checkpoint:vwap-live"):
         return "VWAP 실거래 점검"
     if k.startswith(("loss:vwap", "checkpoint:vwap", "weekly:vwap:")) or (kind == "weekly" and k.endswith(":vwap")):
@@ -1575,6 +1630,64 @@ def vwap_bot_facts(vs: dict, prf: dict, now: int) -> dict:
                           "고를 때 본 가장 좋은 기간이라 기대치 아님"), "small_n": SMALL_N}
 
 
+def facts_mix(src: dict, kind: str, focus: Optional[dict] = None) -> dict:
+    """The three live bots' packet for a meeting (``kind`` daily / loss / weekly): each bot's rules, balance, record since
+    its start and in the window, open position, this month against the ×6 goal, the paper twin; the window's closed
+    trades (oldest first); the month's calendar numbers; the owners' decisions; the loss pair (``focus``)."""
+    now = src["now"]
+    focus = focus or {}
+    mx = src.get("mix") or {}
+    a, b = tuple(focus["window"]) if focus.get("window") else (now - 3 * DAY, now + 1)
+    gb = {x.get("id"): x for x in ((mx.get("goal") or {}).get("bots") or [])}
+    bots, trades = [], []
+    for bt in mx.get("bots") or []:
+        allt = [t for t in (bt.get("_trades") or []) if t.get("exit_ms") is not None]
+        mine = sorted((t for t in allt if a <= t["exit_ms"] < b), key=lambda t: t["exit_ms"])
+        known = [t for t in mine if t.get("pnl") is not None]
+        trades += [{"bot": bt.get("name_ko"), "coin": t.get("coin"), "side": _side(t.get("side")), "pnl": _r(t.get("pnl"), 2),
+                    "roe": _r(t.get("roe")), "exit": t.get("why_ko"), "closed_kst": kst_text(t["exit_ms"])} for t in mine]
+        p = bt.get("position") if isinstance(bt.get("position"), dict) and bt["position"].get("state") == "ok" else None
+        g = gb.get(bt.get("id")) or {}
+        rec = bt.get("record") or {}
+        bots.append({
+            "name": bt.get("name_ko"), "account": bt.get("account_ko"), "status": (bt.get("status") or {}).get("ko") or (bt.get("status") or {}).get("state"),
+            "rules": {"entry_bar": bt.get("tf_ko"), "trend_bar": bt.get("trend_tf_ko"), "rules": bt.get("rules_ko"),
+                      "ladder": bt.get("ladder"), "stop_atr": bt.get("stop_atr")},
+            "equity": {"now": _r((bt.get("equity") or {}).get("value"), 2), "start": _r((bt.get("equity") or {}).get("start"), 2)},
+            "record_since_start": {k: (_r(rec.get(k), 4) if k in ("win_rate", "pnl", "worst", "best") else rec.get(k))
+                                   for k in ("n", "wins", "losses", "win_rate", "pnl", "worst", "best")},
+            "window": {"n": len(mine), "wins": sum(1 for t in known if t["pnl"] > 0), "losses": sum(1 for t in known if t["pnl"] <= 0),
+                       "unknown": len(mine) - len(known), "pnl": _r(sum(t["pnl"] for t in known), 2) if known else 0.0},
+            "position": {"coin": p.get("coin"), "side": _side(p.get("side")), "entry": p.get("entry"), "stop": p.get("stop"),
+                         "leverage": p.get("leverage"), "stop_pnl": _r(p.get("stop_pnl"), 2), "step": p.get("step"),
+                         "held_h": _r((p.get("held_ms") or 0) / HOUR, 1)} if p else None,
+            "month": {k: (_r(v, 4) if isinstance(v, float) else v) for k, v in g.items()
+                      if k in ("state", "reason_ko", "n", "win_rate", "per_day", "pace_mult", "need_win", "verdict_ko", "need_daily")}
+                     | ({"mult": _r((g.get("month") or {}).get("mult"), 4), "vs_path": _r((g.get("month") or {}).get("vs_path"), 4)} if g.get("month") else {}),
+            "paper": {"equity": _r((bt.get("paper") or {}).get("equity"), 2), "record": (bt.get("paper") or {}).get("record")} if bt.get("paper") else None,
+            "parity": bt.get("parity")})
+    m = mx.get("month") if isinstance(mx.get("month"), dict) and mx["month"].get("days") else None
+    cal = {k: m.get(k) for k in ("need", "over", "green", "red", "best", "worst", "loss_run", "max_loss_run", "trades_n", "dd", "worst_trade")} if m else None
+    if m:
+        cal["days"] = [{"d": x["d"], "n": x.get("n"), "pnl": _r(x.get("pnl"), 2), "pct": _r(x.get("pct"), 4)}
+                       for x in m["days"] if x.get("state") != "future" and x.get("n")]
+    goal = mx.get("goal") or {}
+    label = {"loss": f"{focus.get('name_ko') or MIX_NAME} 손실 회의", "daily": f"{MIX_NAME} 하루 회의 ({kst_md(a)})",
+             "weekly": f"{MIX_NAME} 주간 보고"}.get(kind, f"{MIX_NAME} {KIND_KO.get(kind, kind)}")
+    out = {"bot": {"kind": "mix", "label": MIX_NAME, "names": [x["name"] for x in bots]}, "kind": kind, "meeting": label,
+           "window": {"from_kst": kst_text(a), "to_kst": kst_text(min(b, now))},
+           "goal": {"ko": goal.get("goal_ko"), "target": goal.get("target"), "all": goal.get("all")},
+           "calendar": cal, "bots": bots, "trades": trades[-MIX_TRADES_KEEP:], "decisions": list(MIX_DECISIONS), "words": MIX_WORDS}
+    if kind == "loss":
+        out["focus"] = {k: v for k, v in focus.items() if k in ("name_ko", "losses")}
+    return out
+
+
+def packet_mix(packet: Optional[dict]) -> bool:
+    """The packet describes the three live bots (facts_mix)."""
+    return isinstance(packet, dict) and (packet.get("bot") or {}).get("kind") == "mix"
+
+
 def facts_vwap(src: dict, kind: str, window: Optional[tuple] = None, focus: Optional[dict] = None, section: bool = False) -> dict:
     """The packet of the 'VWAP 개선판' (its own meetings, or ``section``: its part of the weekly report): numbers only,
     with their meaning in words, from the live site's VWAP screens (vwap_sources); its fixed rules from its running config,
@@ -1664,6 +1777,43 @@ def how_rare_trend(src: dict) -> str:
     both = (1 - float(wr)) ** 2
     return (f"{HOW_RARE_TREND}. 참고(가상): 7/1~10/20 재현의 이긴 비율 {wr:.0%}로 치면 거래 두 번이 둘 다 질 확률은 약 "
             f"{both:.0%}입니다" + ("(드문 일이 아님)" if both >= 0.1 else ""))
+
+
+def due_loss_mix(src: dict) -> Optional[tuple]:
+    """(key, focus) when one of the three live bots' last two closed trades both lost (a P&L it read), the newer closed
+    within LOSS_FRESH_MS: once per pair."""
+    now = src["now"]
+    for bt in (src.get("mix") or {}).get("bots") or []:
+        ts = sorted((t for t in (bt.get("_trades") or []) if t.get("exit_ms") is not None and t.get("pnl") is not None),
+                    key=lambda t: t["exit_ms"])
+        if len(ts) < 2:
+            continue
+        last2 = ts[-2:]
+        if all(t["pnl"] <= 0 for t in last2) and now - last2[-1]["exit_ms"] <= LOSS_FRESH_MS:
+            return (f"loss:mix:{bt.get('id')}:" + "+".join(str(int(t["exit_ms"])) for t in last2),
+                    {"bot": "mix", "mix_bot": bt.get("id"), "name_ko": bt.get("name_ko"), "window": [now - 3 * DAY, now + 1],
+                     "losses": [{"coin": t.get("coin"), "side": _side(t.get("side")), "pnl": _r(t.get("pnl"), 2), "roe": _r(t.get("roe")),
+                                 "exit": t.get("why_ko"), "closed_kst": kst_text(t["exit_ms"])} for t in last2]})
+    return None
+
+
+def due_daily_mix(src: dict) -> Optional[tuple]:
+    """Every day from MIX_DAILY_HOUR KST, about the day before (once a day), while one of the three bots has a record."""
+    now = src["now"]
+    d0 = ((now + KST_MS) // DAY) * DAY - KST_MS            # today 00:00 KST
+    if now < d0 + MIX_DAILY_HOUR * HOUR:
+        return None
+    if not any(bt.get("_trades") or bt.get("curve") or bt.get("position") for bt in (src.get("mix") or {}).get("bots") or []):
+        return None
+    return f"daily:mix:{kst_date(d0 - DAY)}", {"bot": "mix", "window": [d0 - DAY, d0]}
+
+
+def due_weekly_mix(src: dict) -> Optional[tuple]:
+    """The three bots' weekly report, on the weekly report's moment (Monday from 10:00 KST: the week before)."""
+    got = due_weekly(src)
+    if not got or not any(bt.get("_trades") or bt.get("curve") for bt in (src.get("mix") or {}).get("bots") or []):
+        return None
+    return got[0].replace("weekly:", "weekly:mix:", 1), {**got[1], "bot": "mix"}
 
 
 def due_checkpoint(src: dict) -> Optional[tuple]:
@@ -1931,9 +2081,38 @@ def packet_vwap(packet: Optional[dict]) -> bool:
     return isinstance(packet, dict) and (packet.get("bot") or {}).get("kind") == "vwap"
 
 
+def mix_prompt(role: str) -> str:
+    """The members' instructions in a meeting on the three live bots (owners 11-01)."""
+    r = ROLES[role]
+    focus = {"risk": "세 봇의 잔고와 낙폭, 연속 손실, 열린 포지션의 손절까지 거리와 손절되면 줄어드는 돈, 실거래와 모의 쌍둥이가 같이 "
+                     "들어갔는지(parity)",
+             "stats": f"이게 우연인지 아닌지: 거래 수({SMALL_N}번 전에는 판단하지 않음), 승률과 평균 이익·손실, 목표 ×6 경로와 비교, 모의 "
+                      "쌍둥이와 비교. 다른 사람이 성급하게 결론 내면 반박하는 역할",
+             "market": "어느 코인 · 롱/숏 · 한국 시간대에서 벌고 잃었는지, 봇이 적어 둔 청산 이유(exit)",
+             "lead": r["focus"]}[role]
+    common = (f"당신은 두 분(코딩과 통계를 모르는 한국인 운영자)의 암호화폐 실거래 봇 셋(바이비트 봇 · 친구 15분 봇 · 레인지 봇, 계정마다 "
+              f"스스로 매매하고 옆에 모의 쌍둥이가 있음)을 지켜보는 '실거래 분석 팀'의 {r['title']} '{r['name']}'입니다. 맡은 것: {focus}.\n\n"
+              "지킬 것:\n"
+              "1. 읽기만 합니다. 매매 권한이 없습니다. 진입·청산·크기·레버리지·코인을 바꾸라는 말은 하지 않습니다.\n"
+              "2. 두 분의 결정(decisions)과 봇 규칙(rules)은 고정이라 바꾸자고 하지 않습니다. 증거금·레버리지·포지션 수를 늘리자는 말도 하지 "
+              "않습니다.\n"
+              "3. 패킷(JSON)에 있는 숫자만 씁니다. 없는 숫자는 '자료 없음'이라고 씁니다. 추측한 숫자를 만들지 않습니다(words가 뜻을 풀어 줌).\n"
+              f"4. 한 봇의 거래가 {SMALL_N}번보다 적으면 그 봇에 결론을 내리지 말고 '아직 우연이 큰 단계'라고 분명히 씁니다.\n"
+              "5. 목표(한 달 ×6)는 계산일 뿐 예측이 아닙니다. 이룰 수 있다고 약속하지 않습니다.\n"
+              "6. 모의(연습 돈)와 실거래(진짜 돈)를 섞지 않습니다. 세 봇은 계정이 달라 봇마다 따로 말합니다.\n"
+              "7. 쉬운 한국어로, 짧게. 전문용어는 풀어서.\n")
+    if role == "lead":
+        return common + ("8. 팀원들의 말(team)을 읽고, 숫자와 맞지 않는 말은 고칩니다. 아이디어는 '시험해 볼 가설'로만 씁니다: 모의 쌍둥이나 "
+                         "지난 기록으로 무엇을 볼지. 채택은 두 분이 정합니다.\n\n" + LEAD_JSON)
+    return common + MEMBER_JSON
+
+
 def prompt_for(role: str, packet: Optional[dict]) -> str:
-    """The instructions of ``role`` for this packet: the VWAP bot's own meeting (vwap_prompt), else the main bot's
-    (system_prompt; the trend bot's when the packet is its) with the VWAP part's addition when the packet has one."""
+    """The instructions of ``role`` for this packet: the three live bots' meeting (mix_prompt), the VWAP bot's own meeting
+    (vwap_prompt), else the main bot's (system_prompt; the trend bot's when the packet is its) with the VWAP part's
+    addition when the packet has one."""
+    if packet_mix(packet):
+        return mix_prompt(role)
     if packet_vwap(packet):
         return vwap_prompt(role)
     sp = system_prompt(role, packet_trend(packet))
@@ -2117,7 +2296,10 @@ def _send(notifier, text: str) -> bool:
 
 
 # ---------------------------------------------------------------- tick / run
-DUE = {"loss": due_loss, "checkpoint": due_checkpoint, "weekly": due_weekly}
+DUE = {"loss": due_loss, "checkpoint": due_checkpoint, "weekly": due_weekly, "daily": due_daily_mix}
+# the three live bots' own meetings (owners 11-01): run by hand with --mix
+DUE_MIX = {"loss": due_loss_mix, "daily": due_daily_mix, "weekly": due_weekly_mix,
+           "checkpoint": lambda src: None}
 # the VWAP bot's own meetings (owners 10-25): its weekly part rides on the weekly report (vwap_section); "weekly" here is
 # only for a meeting opened by hand (run weekly --vwap)
 DUE_VWAP = {"loss": due_loss_vwap, "checkpoint": due_checkpoint_vwap,
@@ -2128,8 +2310,9 @@ def due(conn, src: dict) -> list:
     """[(kind, key, focus)] not held yet, strongest first (loss, checkpoint, weekly); the VWAP bot's loss after the main
     bot's, its follower's 실거래 50번 and its paper's 거래 점검 after the main bot's checkpoint."""
     out = []
-    for kind, fn in (("loss", due_loss), ("loss", due_loss_vwap), ("checkpoint", due_checkpoint),
-                     ("checkpoint", due_checkpoint_vwap_live), ("checkpoint", due_checkpoint_vwap), ("weekly", due_weekly)):
+    for kind, fn in (("loss", due_loss), ("loss", due_loss_vwap), ("loss", due_loss_mix), ("checkpoint", due_checkpoint),
+                     ("checkpoint", due_checkpoint_vwap_live), ("checkpoint", due_checkpoint_vwap), ("weekly", due_weekly),
+                     ("weekly", due_weekly_mix), ("daily", due_daily_mix)):
         got = fn(src)
         if got and not conn.execute("SELECT 1 FROM meetings WHERE key = ?", (got[0],)).fetchone():
             out.append((kind, got[0], got[1]))
@@ -2138,7 +2321,10 @@ def due(conn, src: dict) -> list:
 
 def packet_for(src: dict, kind: str, focus: dict) -> dict:
     """The packet of a due meeting: the VWAP bot's own (``focus["bot"] == "vwap"``: facts_vwap), else the main bot's,
-    the weekly report with the VWAP bot's part when it runs (``vwap_bot``: vwap_section)."""
+    the weekly report with the VWAP bot's part when it runs (``vwap_bot``: vwap_section); the three live bots' own
+    (``focus["bot"] == "mix"``: facts_mix)."""
+    if (focus or {}).get("bot") == "mix" or kind == "daily":
+        return facts_mix(src, kind, {**(focus or {}), "bot": "mix"})
     if (focus or {}).get("bot") == "vwap":
         now = src["now"]
         win = tuple(focus["window"]) if kind == "weekly" and focus.get("window") else \
@@ -2162,26 +2348,35 @@ def week_has_trades(packet: dict) -> bool:
 
 def tick(conn, src: dict, runner, budget: dict, notifier=None, dry: bool = False, model: str = MODEL_DEFAULT,
          only: Optional[str] = None, force: bool = False, clock: Optional[Callable[[], int]] = None,
-         vwap: bool = False) -> Optional[dict]:
+         vwap: bool = False, mix: bool = False) -> Optional[dict]:
     """Hold the first due meeting (``only``: that kind; ``force``: hold it even if held before, under a new key; ``vwap``:
-    the VWAP bot's own meeting of that kind; ``clock``: the time each call is charged at, the wall clock by default)."""
+    the VWAP bot's own meeting of that kind; ``mix``: the three live bots'; ``clock``: the time each call is charged at,
+    the wall clock by default)."""
     more = {"clock": clock} if clock is not None else {}
     now = src["now"]
     items = due(conn, src) if not force else []
     if vwap and not force:
         items = [x for x in items if (x[2] or {}).get("bot") == "vwap"]
+    if mix and not force:
+        items = [x for x in items if (x[2] or {}).get("bot") == "mix"]
     if force and only:
-        got = (DUE_VWAP if vwap else DUE)[only](src)
-        focus = got[1] if got else ({"window": [now - 7 * DAY, now]} if only == "weekly" else {"note": "손으로 연 회의"})
+        got = (DUE_MIX if mix or only == "daily" else DUE_VWAP if vwap else DUE)[only](src)
+        focus = got[1] if got else ({"window": [now - (1 if only == "daily" else 7) * DAY, now]} if only in ("weekly", "daily")
+                                    else {"note": "손으로 연 회의", "window": [now - 3 * DAY, now + 1]})
         if vwap:
             focus = {**focus, "bot": "vwap"}
-        items = [(only, f"{only}:{'vwap:' if vwap else ''}manual:{now}", focus)]
+        if mix or only == "daily":
+            focus = {**focus, "bot": "mix"}
+        tag = "mix:" if mix or only == "daily" else "vwap:" if vwap else ""
+        items = [(only, f"{only}:{tag}manual:{now}", focus)]
     for kind, key, focus in items:
         if only and kind != only:
             continue
         packet = packet_for(src, kind, focus)
         if kind == "weekly" and not week_has_trades(packet):
             return quiet(conn, kind, key, now, "지난주 닫힌 거래가 없어 AI 회의 없이 넘어갑니다")
+        if kind == "daily" and not packet.get("trades"):
+            return quiet(conn, kind, key, now, "어제 세 봇이 닫은 거래가 없어 AI 회의 없이 넘어가요")
         return hold(conn, kind, key, packet, runner, now, budget, notifier=notifier, dry=dry, model=model, **more)
     return None
 
@@ -2223,9 +2418,11 @@ def main(argv: Optional[list] = None) -> int:
     r.add_argument("--force", action="store_true")
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--vwap", action="store_true", help=f"the {VWAP_NAME} bot's own meeting of that kind")
+    r.add_argument("--mix", action="store_true", help=f"the {MIX_NAME}' own meeting of that kind (daily is always theirs)")
     pv = sub.add_parser("preview")
     pv.add_argument("kind", choices=sorted(KIND_ROLES))
     pv.add_argument("--vwap", action="store_true", help=f"the {VWAP_NAME} bot's own packet and its members' instructions")
+    pv.add_argument("--mix", action="store_true", help=f"the {MIX_NAME}' own packet and its members' instructions")
     sub.add_parser("status")
     a = ap.parse_args(argv)
     try:
@@ -2237,10 +2434,14 @@ def main(argv: Optional[list] = None) -> int:
     now = int(time.time() * 1000)
     if a.cmd == "preview":
         src = sources(now)
-        got = (DUE_VWAP if a.vwap else DUE)[a.kind](src)
-        focus = got[1] if got else ({"window": [now - 7 * DAY, now]} if a.kind == "weekly" else {"note": "지금은 열릴 조건이 아님"})
+        mixed = a.mix or a.kind == "daily"
+        got = (DUE_MIX if mixed else DUE_VWAP if a.vwap else DUE)[a.kind](src)
+        focus = got[1] if got else ({"window": [now - (1 if a.kind == "daily" else 7) * DAY, now]} if a.kind in ("weekly", "daily")
+                                    else {"note": "지금은 열릴 조건이 아님"})
         if a.vwap:
             focus = {**focus, "bot": "vwap"}
+        if mixed:
+            focus = {**focus, "bot": "mix"}
         pkt = packet_for(src, a.kind, focus)
         print(json.dumps(pkt, ensure_ascii=False, indent=1, default=str))
         for role in KIND_ROLES[a.kind]:
@@ -2262,7 +2463,8 @@ def main(argv: Optional[list] = None) -> int:
                 return 0                    # nothing held; the 분석팀 tab says why
         src = sources(now)
         got = tick(conn, src, _runner(dry), budget, notifier=None if dry else _notifier(), dry=dry, model=model,
-                   only=getattr(a, "kind", None), force=bool(getattr(a, "force", False)), vwap=bool(getattr(a, "vwap", False)))
+                   only=getattr(a, "kind", None), force=bool(getattr(a, "force", False)), vwap=bool(getattr(a, "vwap", False)),
+                   mix=bool(getattr(a, "mix", False)))
         put_state(conn, "tick", now, {"result": {k: v for k, v in (got or {}).items() if k != "lead"}, "dry": dry})
         print(json.dumps(got or {"state": "nothing due"}, ensure_ascii=False, default=str)[:2000])
         return 0

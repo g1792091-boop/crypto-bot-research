@@ -173,7 +173,8 @@ def team_seats(now: int, units: Callable) -> tuple:
         elif running:
             seat.update(state="live", state_ko="회의 중")
         elif active in ("active", "activating"):
-            seat.update(state="idle", state_ko="다음 회의 기다리는 중 (주간 · 손실 · 점검)")
+            # (owners 11-01: the team meets on the three live bots: 하루 회의 every morning, 손실 회의, 주간 보고)
+            seat.update(state="idle", state_ko="다음 회의 기다리는 중 (하루 · 손실 · 주간)")
         elif active:
             seat.update(state="off", state_ko="분석팀 타이머가 꺼져 있어요")
         else:
