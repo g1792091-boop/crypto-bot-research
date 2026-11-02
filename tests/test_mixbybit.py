@@ -219,8 +219,8 @@ def test_the_deploy_configs():
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
         # owners 10-30: the OBV 50 line; 10-31 evening: the AC bar instead, no 50 line (tests/test_rules1031b.py);
         # 10-31 night: the trend bar's 종합 instead of the four votes, read on the 30m bar, the signal on 15m bars
-        # (tests/test_rules1031c.py)
-        assert cfg.rules == ("obvac",) and cfg.stop_atr == 3.0 and cfg.tf == "15m" and cfg.trend == "bar"
+        # (tests/test_rules1031c.py); 11-02: the 추세 MACD and the OBV4 MACD histogram (tests/test_rules1102.py)
+        assert cfg.rules == ("o4h",) and cfg.stop_atr == 3.0 and cfg.tf == "15m" and cfg.trend == "macd"
         assert cfg.trend_tf == "30m"
         # owners 10-31 evening: the friend bot's six coins (BTC, LTC out, XRP in; tests/test_rules1031b.py)
         assert cfg.symbols == ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
@@ -233,11 +233,11 @@ def test_the_deploy_configs():
     assert live.state != paper.state and live.own_stop_file != paper.own_stop_file and paper.start_equity == 100
     assert "/exec/" in live.state and not paper.telegram
     words = M.plan_words(live)
-    assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 진한색 + AC" in words and "손절 ATR 3배" in words
+    assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 히스토그램 전환" in words and "손절 ATR 3배" in words
     # the friend bot's own config: WOO X Pro, the histogram's 0 cross on 15m bars (owners 10-31 night,
-    # tests/test_rules1031c.py)
+    # tests/test_rules1031c.py; 11-02: the 3합 histogram's, tests/test_rules1102.py)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "wooxpro" and old.name == "친구 15분 봇" and old.rules == ("h0x",) and old.tf == "15m"
+    assert old.exchange == "wooxpro" and old.name == "친구 15분 봇" and old.rules == ("h3x",) and old.tf == "15m"
 
 
 def test_wrong_configs_are_refused(tmp_path):
@@ -402,7 +402,8 @@ def test_the_check_command_on_bybit(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M.time, "time", lambda: (T0 + 60_000) / 1000)
     assert M.cmd_check(argparse.Namespace(config=str(PAPER))) == 0
     out = capsys.readouterr().out.splitlines()
-    assert "매매법·손절: OBV 진한색 + AC · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 바 종합(6줄, 노랑이면 진입 안 함)" in out
+    assert ("매매법·손절: OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏) · 손절 ATR 3배(모든 코인) · 신호 15분봉 · "
+            "추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)") in out             # (11-02)
     sol = next(x for x in out if x.startswith("✔ SOLUSDT"))
     assert "최대 75배" in sol and "(증거금 $40.00)" in sol               # 40 % of the paper's $100
     zec = next(x for x in out if "ZECUSDT" in x)

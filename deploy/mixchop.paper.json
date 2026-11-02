@@ -21,10 +21,10 @@
  "ladder_every_s": 60,
  "name": "친구 15분 봇",
  "tf": "15m",
- "trend": "bar",
+ "trend": "macd",
  "trend_tf": "30m",
  "rules": [
-  "h0x"
+  "h3x"
  ],
  "stop_atr": 3,
  "coins": {

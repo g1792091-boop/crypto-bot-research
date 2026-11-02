@@ -306,3 +306,56 @@ sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
   코인 줄의 `지금 손절 폭`은 15분봉 ATR × 3입니다.
 - 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
 - 되돌리기: `.before-1031c` 파일을 다시 복사하고 다시 켭니다.
+
+## 12. 11/02: 30분봉 '추세 MACD' 히스토그램 + 15분봉 OBV 히스토그램 전환
+
+두 분(11/02): "30분봉 추세 15분봉은 진입 바꾸지말고 30분봉 추세인데 추세를 macd 히스토그램으로 사용 0선 위에 있으면 상승 0선 아래에
+있으면 하락으로", 바이비트 봇: "obv 선은 사용 안함 히스토그램으로 진입 할꺼임 30분봉 추세macd가 봉 상관 없이 0선위에 있으면 상승추세로
+보고 15분봉 obv 히스토그램이 0선 아래에서 양봉으로 바뀌면 롱진입 숏 진입은 반대 조건으로 하고 그리고 추세 macd에서 노란 히스토 그램이
+나와도 0선아래에 있으면 하락추세로 보고 0선 위에 있으면 상승추세로 보고 진입가능" (보내 주신 `추세 MACD`, `OBV4 MACD` 파인 스크립트).
+
+| 항목 | 내용 |
+|---|---|
+| 추세 | **30분봉 '추세 MACD'의 히스토그램** (11장의 추세 바 종합에서 바뀜). 15분봉 마감 때 그때까지 끝난 마지막 30분봉의 히스토그램이 **0선 위면 상승, 0선 아래면 하락**. 막대 색은 보지 않음: **노란 막대(추세 바 종합 횡보)도 0선 위면 상승, 아래면 하락**. 정확히 0이면 진입 안 함 |
+| 신호 봉 | **15분봉** 그대로, 끝난 봉만 |
+| 롱 | 30분봉 추세 MACD 히스토그램 0선 위 + 15분봉 **OBV 히스토그램이 0선 아래에서 양봉으로 바뀜** (전 봉은 음봉 · 이번 봉은 양봉, 이번 봉 값이 0 아래) |
+| 숏 | 30분봉 히스토그램 0선 아래 + 15분봉 OBV 히스토그램이 **0선 위에서 음봉으로 바뀜** |
+| 진입 안 함 | 0선 위에서 양봉 전환 · 0선 아래에서 음봉 전환, 전환 없음, 전환 방향이 30분봉 추세와 반대 |
+| 뺀 것 | OBV 선(연한색 → 진한색), AC 막대 플러스 양봉 · 마이너스 음봉 조건(9장 · 11장의 방식), 추세 바 종합 |
+| 그대로 | 코인 6개(SOL · ETH · XRP · BCH · ZEC · DOGE), 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간, 잔고 하한 없음 |
+
+- **추세 MACD** (`paperbot/friendtrend.py` 10장 `tmacd_pane`, 스크립트 기본값): 추세 바의 6줄을 −100 ~ +100 값으로 바꿔
+  (③ 하늘·보라 선과 그 EMA 9의 거리, ④ 2 × (EMA RSI − 50), ⑤ 종가와 슈퍼트렌드 14·5 · 14·3 평균선의 거리, ① ③④⑤의 평균,
+  ② 6종 평균, ⑥ 4종 평균) 6개 평균의 EMA 3이 MACD 선, 그 EMA 9가 시그널선, **히스토그램 = MACD 선 − 시그널선**.
+  추세는 **히스토그램**의 0선 위 · 아래입니다(MACD 선의 0선이 아님). MACD 선으로 바꾸길 원하시면 말씀해 주세요.
+- **OBV 히스토그램** (`o4_pane`, OBV4 MACD 기본값): ① OBV · 클링거 통합선 − 그 EMA 52, ② AO, ③ AC, ④ MACD 12/26을 각각 정규화해
+  평균 × 100의 EMA 3이 MACD 선, 그 EMA 9가 시그널선, 히스토그램(기본 'AC 오실레이터') = (MACD 선 − 시그널선) − 그 SMA 5.
+  전 봉보다 오르면 양봉(초록), 내리면 음봉(빨강). 차트에서 초록/빨강이 바뀐 봉이 진입 봉입니다.
+- 텔레그램 근거 줄 예: `근거: OBV 히스토그램 0선 아래 양봉 전환(-2.00) · 추세 MACD 30분 히스토그램 0선 위 상승(+1.00)`.
+  노란 막대면 `(…, 노란 막대)`가 붙습니다.
+- 막힌 신호 예: `OBV 히스토그램 0선 위 양봉 전환(2.10): 롱은 0선 아래 양봉 전환만`, `추세 MACD 30분 히스토그램 0선 아래 하락(-1.40): 신호 롱와 반대`.
+- 아침 점검의 '놓친 신호'는 15분봉으로 다시 계산해 `OBV 히스토그램 양봉·음봉 전환 N번`을 셉니다.
+- 설정: `"trend": "macd"`, `"rules": ["o4h"]` (`"tf": "15m"`, `"trend_tf": "30m"` 그대로). 시험: `tests/test_rules1102.py`,
+  `tests/test_dash_rules1102.py`. **백테스트는 하지 않았습니다.**
+- 친구 15분 봇과 레인지 봇은 같은 추세(30분봉 추세 MACD) + 15분봉 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장).
+
+### 12-1. 바꾸는 순서 (서버에서, 포지션이 없을 때 권장)
+
+```bash
+cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixbybit.json /etc/paperbot/mixbybit.json.before-1102
+sudo cp -p /etc/paperbot/mixbybit-paper.json /etc/paperbot/mixbybit-paper.json.before-1102
+sudo install -o root -g paperbot -m 640 deploy/mixbybit.live.json /etc/paperbot/mixbybit.json
+sudo install -o root -g paperbot -m 640 deploy/mixbybit.paper.json /etc/paperbot/mixbybit-paper.json
+sudo diff /etc/paperbot/mixbybit.json.before-1102 /etc/paperbot/mixbybit.json
+sudo deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixbybit.json | tail -8
+sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
+```
+
+- diff: `"trend": "bar"` → `"macd"`, `"obvac"` → `"o4h"` 두 줄만 나옵니다.
+- check: `매매법·손절: OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏) · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉
+  추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
+- 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.
+- 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
+- 되돌리기: `.before-1102` 파일을 다시 복사하고 다시 켭니다.

@@ -23,6 +23,9 @@
 // six rows), the friend bot and the 레인지 봇 enter on rule "h0x" (히스토그램 0선 돌파: valsKo h0xVal); each bot's bar
 // (30분 / 15분) from its answer (``tf_ko``), else its UI's ``tf``. Owners 10-31, last: all three enter on 15m bars and read the
 // trend bar on the 30m bar only ("추세 바 30분 종합 …": the rows' ``trend_tf``; the wait line from the answer's ``trend_tf_ko``).
+// Owners 11-02: the trend is the 30m 추세 MACD histogram's side of 0 (trendKo of trend_mode "macd": tmKo, the yellow bars too);
+// the 친구 15분 봇 and the 레인지 봇 enter on rule "h3x" (3합 히스토그램 0선 돌파: h3Val), the 바이비트 봇 on rule "o4h" (OBV
+// 히스토그램 0선 아래 양봉 / 0선 위 음봉 전환: o4Val); each UI's wait line says so (TM_WAIT, H3X_WAIT, O4H_WAIT).
 // HONESTY: unread = 못 읽음 + why, never a zero; a bot with no files says 꺼짐 and how to start it; the paper bot's money is
 // never shown as real money (모의 · 진짜 돈 아님); small samples say so; the backtest is labelled as the design's, not live.
 import {h, put, ui, fmt, store, serverNow, local} from "../core/pb.js";
@@ -46,12 +49,18 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 const BAR_WAIT = "추세 바 종합(3개 점수 · 6종 평균 · 하늘·보라 선 · EMA RSI · 슈퍼트렌드 · 4종 평균 여섯 줄: 상승 2줄 이상이면 초록, " +
   "하락 2줄 이상이면 빨강, 횡보 2줄 이상이거나 둘 다 2줄 이상이면 노랑 = 진입 금지)";
 const H0X_WAIT = "'ALL + OBV6 MACD' 히스토그램이 0선을 그 쪽으로 돌파하면(롱: 0선 위로, 숏: 0선 아래로) 시장가로 들어가요 (한 번에 1포지션).";
+/** Owners 11-02: the trend is the 30m 추세 MACD histogram's side of 0 (its yellow bars too); the 친구 15분 봇 and the 레인지 봇
+ *  enter on the 3합 histogram's 0 cross, the 바이비트 봇 on the OBV4 MACD histogram's turn. */
+export const TM_WAIT = "추세 MACD 히스토그램(0선 위 = 상승, 0선 아래 = 하락, 노란 막대도 같음)";
+export const H3X_WAIT = "15분봉 3합 히스토그램이 0선을 그 쪽으로 돌파하면(롱: 0선 위로, 숏: 0선 아래로) 시장가로 들어가요 (한 번에 1포지션).";
+export const O4H_WAIT = "15분봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로 " +
+  "바뀌면 숏으로 시장가로 들어가요 (한 번에 1포지션, OBV 선은 안 봐요).";
 const OBVAC_WAIT = "OBV 히스토그램이 연한색→진한색이 되고 OBV MACD의 AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)이면 시장가로 들어가요 " +
   "(한 번에 1포지션, 50선 조건 없음).";
 /** The wait line of a bot on its signal bar ``tf`` with the trend read on ``ttf`` (owners 10-31, last: "15분봉이 끝날 때
  *  30분봉의 추세 바 종합(…) 쪽으로 …"; the trend's bar left out when it is the signal's own). */
-export function waitWords(tf, ttf, rule) {
-  return `${tf}봉이 끝날 때 ${ttf && ttf !== tf ? `${ttf}봉의 ` : ""}${BAR_WAIT} 쪽으로 ${rule}`;
+export function waitWords(tf, ttf, rule, trend = "bar") {
+  return `${tf}봉이 끝날 때 ${ttf && ttf !== tf ? `${ttf}봉의 ` : ""}${trend === "macd" ? TM_WAIT : BAR_WAIT} 쪽으로 ${rule}`;
 }
 /** The 손실 카드's plan words of a bot sized by margin with an ATR stop on its signal bar ``tf`` (the answer's ``tf_ko``). */
 export const planWords = (tf) => `손절 = 진입 때 ${tf}봉 ATR × 3 · 증거금 = 잔고의 40%`;
@@ -59,22 +68,22 @@ export const planWords = (tf) => `손절 = 진입 때 ${tf}봉 ATR × 3 · 증�
  *  ``tf`` / ``ttf``: its signal bar and its trend's bar before the answer says (the answer's ``tf_ko`` / ``trend_tf_ko``
  *  after: waitOf). Owners 10-31, last: all three enter on 15m bars, the trend bar on the 30m bar. */
 export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "WOO X Pro 2", exchange: "WOO X Pro", key: "",
-  kick: "진짜 돈 · WOO X Pro 두 번째 계정", tf: "15분", ttf: "30분", rule: H0X_WAIT,
-  wait: waitWords("15분", "30분", H0X_WAIT),
+  kick: "진짜 돈 · WOO X Pro 두 번째 계정", tf: "15분", ttf: "30분", rule: H3X_WAIT, trend: "macd",
+  wait: waitWords("15분", "30분", H3X_WAIT, "macd"),
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
-  exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정", tf: "15분", ttf: "30분", rule: OBVAC_WAIT,
-  wait: waitWords("15분", "30분", OBVAC_WAIT),
+  exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
+  wait: waitWords("15분", "30분", O4H_WAIT, "macd"),
   plan: planWords("15분"), planOf: planWords, morning: "09:07", h1: false};
 /** The 레인지 봇 (owners 10-31 night): the first WOO X Pro account, 15m bars, the friend bot's rule (screens/livebots.js). */
 export const RANGE_UI = {id: "range", api: "/api/v4/livebots/mixrange", perf: "/api/v4/livebots/mixrangeperf", account: "WOO X Pro",
-  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 계정", tf: "15분", ttf: "30분", rule: H0X_WAIT,
-  wait: waitWords("15분", "30분", H0X_WAIT),
+  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 계정", tf: "15분", ttf: "30분", rule: H3X_WAIT, trend: "macd",
+  wait: waitWords("15분", "30분", H3X_WAIT, "macd"),
   plan: planWords("15분"), planOf: planWords, morning: "09:09", h1: false};
 /** A bot's wait line from its answer's bars (its config's ``tf`` and ``trend_tf``), else its UI's. */
 export function waitOf(o, b) {
   const s = (b && b.status) || {};
-  return o.rule ? waitWords(s.tf_ko || o.tf || "30분", s.trend_tf_ko || o.ttf || null, o.rule) : o.wait;
+  return o.rule ? waitWords(s.tf_ko || o.tf || "30분", s.trend_tf_ko || o.ttf || null, o.rule, o.trend) : o.wait;
 }
 const botKo = (id, o = MIX_UI) => (id === "live" ? `실거래 · ${o.account}` : "모의 · 주문 없음");
 const STATUS = {running: ["돌고 있음", "good", "run"], stopped: ["멈춤", "bad", "stop"], off: ["꺼짐", "thin", "off"], error: ["못 읽음", "bad", "err"]};
@@ -187,18 +196,38 @@ export function feedKo(x) {
  *  "스톡RSI K 30.1 / D 25.2 · 30분 RSI26 56.0 · 1시간 RSI26 54.0 · MOM 0.0042 · 종가 … · 손절 폭 …"; MOM since 10-27). */
 export function valsKo(v) {
   if (!v) return "";
-  return [trendKo(v), h0xVal(v), ok(v.ersi) ? `EMA RSI ${fmt.num(v.ersi, 1)}` : null, ok(v.roc) ? `ROC ${fmt.num(v.roc, 1)}` : null, ok(v.obv50) ? `OBV 50선 ${fmt.num(v.obv50, 1)}` : null, acVal(v), ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
+  return [trendKo(v), h3Val(v), o4Val(v), h0xVal(v), ok(v.ersi) ? `EMA RSI ${fmt.num(v.ersi, 1)}` : null, ok(v.roc) ? `ROC ${fmt.num(v.roc, 1)}` : null, ok(v.obv50) ? `OBV 50선 ${fmt.num(v.obv50, 1)}` : null, acVal(v), ok(v.avg_rsi_30m) ? `30분 평균 RSI ${fmt.num(v.avg_rsi_30m, 1)}` : null, ok(v.avg_rsi_1h) ? `1시간 평균 RSI ${fmt.num(v.avg_rsi_1h, 1)}` : null,
     ok(v.k) && ok(v.d) ? `스톡RSI K ${fmt.num(v.k, 1)} / D ${fmt.num(v.d, 1)}` : null,
     ok(v.rsi26_30m) ? `30분 RSI26 ${fmt.num(v.rsi26_30m, 1)}` : null, ok(v.rsi26_1h) ? `1시간 RSI26 ${fmt.num(v.rsi26_1h, 1)}` : null,
     ok(v.mom) ? `MOM ${fmt.price(v.mom)}` : null,
     ok(v.close) ? `종가 ${fmt.price(v.close)}` : null, ok(v.stop_pct) ? `손절 폭 ${fmt.num(v.stop_pct, 2)}%` : null].filter(Boolean).join(" · ");
 }
 export const RULE_KO = {mix: "친구 매매법", st: "슈퍼트렌드·스톡RSI", obv: "OBV 진한색", srsi: "스톡RSI 50선", obv50: "OBV 50선", roc50: "ROC 50선",
-  ema3: "추세 3개 일치", obvac: "OBV 진한색 + AC", h0x: "히스토그램 0선 돌파"};
+  ema3: "추세 3개 일치", obvac: "OBV 진한색 + AC", h0x: "히스토그램 0선 돌파",
+  o4h: "OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)", h3x: "3합 히스토그램 0선 돌파"};
+/** Rule "h3x" (owners 11-02): the 3합 histogram on the bar: "3합 히스토그램 0선 위로 돌파 2.50"; null without it. */
+export function h3Val(v) {
+  if (!v || v.rule !== "h3x" || (!ok(v.h3) && !ok(v.x0))) return null;
+  const x = Number(v.x0) || 0;
+  return `3합 히스토그램 ${x > 0 ? "0선 위로 돌파" : x < 0 ? "0선 아래로 돌파" : "0선 돌파 없음"}${ok(v.h3) ? ` ${fmt.num(v.h3, 2)}` : ""}`;
+}
+/** Rule "o4h" (owners 11-02): the OBV4 MACD histogram on the bar: "OBV 히스토그램 0선 아래 양봉 전환 −3.00"; null without it. */
+export function o4Val(v) {
+  if (!v || !ok(v.o4)) return null;
+  const a = Number(v.o4), t = Number(v.o4_turn) || 0;
+  const where = a < 0 ? "0선 아래 " : a > 0 ? "0선 위 " : "";
+  return `OBV 히스토그램 ${t ? `${where}${t > 0 ? "양봉" : "음봉"} 전환` : `${where}전환 없음`} ${fmt.num(a, 2)}`;
+}
+/** The 추세 MACD of a row (owners 11-02): "추세 MACD 30분 히스토그램 0선 위 상승 +3.21" (· 노란 막대). */
+export function tmKo(v) {
+  const tt = v.trend_tf || v.tf, tr = Number(v.trend);
+  const head = tr > 0 ? "0선 위 상승" : tr < 0 ? "0선 아래 하락" : "0선(진입 안 함)";
+  return `추세 MACD ${tt ? `${tt} ` : ""}히스토그램 ${head}${ok(v.tmacd) ? ` ${fmt.num(v.tmacd, 2, true)}` : ""}${v.tyellow ? " · 노란 막대" : ""}`;
+}
 /** Rule "h0x" (owners 10-31 night): 'ALL + OBV6 MACD''s histogram on the bar: "히스토그램 0선 아래로 돌파 −4.08"; null
  *  without its value. */
 export function h0xVal(v) {
-  if (!v || (!ok(v.h6) && !ok(v.x0))) return null;
+  if (!v || v.rule === "h3x" || (!ok(v.h6) && !ok(v.x0))) return null;
   const x = Number(v.x0) || 0;
   return `히스토그램 ${x > 0 ? "0선 위로 돌파" : x < 0 ? "0선 아래로 돌파" : "0선 돌파 없음"}${ok(v.h6) ? ` ${fmt.num(v.h6, 2)}` : ""}`;
 }
@@ -230,6 +259,7 @@ export function barKo(v) {
 /** The 바이비트 봇's trend of the bar in words (owners 10-29): "친구 추세 상승 (하늘·보라 선 상승 · EMA RSI 상승 · 찹존 횡보 ·
  *  슈퍼트렌드 상승)"; null without one (the friend bot's rows). */
 export function trendKo(v) {
+  if (v && v.trend_mode === "macd" && v.trend != null && Number.isFinite(Number(v.trend))) return tmKo(v);   // owners 11-02
   if (v && (v.trend_mode === "bar" || (v.bar && typeof v.bar === "object")) && v.trend != null && Number.isFinite(Number(v.trend))) {
     return barKo(v);                                  // owners 10-31 night: the trend bar's 종합 (all three mix bots)
   }

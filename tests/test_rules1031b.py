@@ -128,13 +128,14 @@ def test_the_deploy_configs():
         assert cfg.mode == mode and cfg.exchange == "bybit" and cfg.name == "바이비트 봇"
         # (10-31 night: the trend bar's 종합 instead of the four votes, read on the 30m bar with the signal on 15m bars,
         # tests/test_rules1031c.py)
-        assert (cfg.tf, cfg.trend, cfg.trend_tf, cfg.rules, cfg.stop_atr) == ("15m", "bar", "30m", ("obvac",), 3.0)
+        # (11-02: the 추세 MACD's histogram and the OBV4 MACD histogram's turn, tests/test_rules1102.py)
+        assert (cfg.tf, cfg.trend, cfg.trend_tf, cfg.rules, cfg.stop_atr) == ("15m", "macd", "30m", ("o4h",), 3.0)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
         # owners 10-31 evening ("바이비트 봇 코인 목록을 친구 30분 봇 코인 목록이랑 같게"): the friend bot's six
         assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
                                                             "ZECUSDT": 20, "DOGEUSDT": 40}
         assert cfg.symbols == ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"] and cfg.equity_floor_frac == 0
-        assert "매매법 OBV 진한색 + AC · 손절 ATR 3배" in M.plan_words(cfg) and "추세 3개 일치" not in M.plan_words(cfg)
+        assert "매매법 OBV 히스토그램 전환" in M.plan_words(cfg) and "추세 3개 일치" not in M.plan_words(cfg)
     # the friend bot traded this rule on 30m bars the same evening; 10-31 night it moved to 15m bars and the histogram's
     # 0 cross (its config: tests/test_rules1031c.py), its floor still off ("친구 30분봉 잔고 하한 없애주고")
     for name in ("mixchop.live.json", "mixchop.paper.json"):
@@ -154,6 +155,7 @@ def test_the_signals_listing_and_the_morning_replay():
     cfg = M.load_config(str(DEPLOY / "mixbybit.paper.json"))
     cfg.coins = cfg.coins[:1]
     cfg.tf, cfg.trend, cfg.trend_tf = "30m", "four", None         # (the 10-31 evening form)
+    cfg.rules = ("obvac",)                                       # (11-02: "o4h", tests/test_rules1102.py)
     rows = _walk_rows(2000, 43, M.MIN30)
     b = M.bars_frame(rows, M.MIN30, T0)
     lines = M.friend_history(cfg.coins[0], b, "obvac", 8, M.MIN30)
@@ -212,9 +214,9 @@ def test_the_screens_say_the_ac_bar():
       w: X.MIX_UI.wait, y: X.BYBIT_UI.wait}}));"""))
     assert "AC 플러스 양봉 0.42" in out["v"] and "OBV 50선" not in out["v"]
     assert (out["a"], out["b"], out["n"]) == ("마이너스 음봉 (\u22120.31)", "플러스 음봉 (0.12)", "못 읽음")   # fmt.num: U+2212
-    # the 바이비트 봇 keeps this rule (10-31 night: on 15m bars with the 30m trend bar); the friend bot moved to the
-    # histogram's 0 cross (tests/test_rules1031c.py, tests/test_dash_mixrange_site.py)
-    assert "AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)" in out["y"] and "50선 조건 없음" in out["y"]
-    assert out["y"].startswith("15분봉이 끝날 때 30분봉의 추세 바 종합(") and "AC 막대" not in out["w"]
+    # owners 11-02: the 바이비트 봇 left this rule for the OBV histogram's turn ("o4h") on the 30m 추세 MACD, the friend bot
+    # the histogram's 0 cross for the 3합's (tests/test_dash_rules1102.py); the rows of before keep their words above
+    assert "AC 막대가 그 쪽" not in out["y"] and "0선 아래에서 양봉으로 바뀌면 롱" in out["y"] and "AC 막대" not in out["w"]
+    assert out["y"].startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램(")
     routes = (ROOT / "paperbot" / "dash" / "static" / "v4" / "core" / "routes.js").read_text(encoding="utf-8")
-    assert 'mixbot: {ko: "친구 15분 봇"' in routes and "OBV 진한색 + AC" in routes
+    assert 'mixbot: {ko: "친구 15분 봇"' in routes and "OBV 진한색 + AC" not in routes

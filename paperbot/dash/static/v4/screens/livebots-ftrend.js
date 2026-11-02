@@ -11,6 +11,9 @@
 //          ``tf_ko`` / ``trend_tf_ko`` from its config; owners 10-31, last: all on 15분 signals, the trend on 30분: whoLabel) on the '추세 바' 종합 (trendCell / barRows: 종합 상승 초록 · 하락 빨강 ·
 //          횡보 노랑 = 진입 금지, and its six rows) and rule "h0x" (h0xKo: the histogram's 0 cross and its value); once the
 //          레인지 봇 trades WOO X Pro by itself (the answer's ``moved``) its old paper's 1시간 / ROC rows leave the cards
+// Owners 11-02: the three bots' trend is the 30m 추세 MACD histogram's side of 0 (trendCell of a row's ``tm``: 추세 MACD 상승 /
+//          하락, its value, the yellow bar said), the 친구 15분 봇 and the 레인지 봇 enter on the 3합 histogram's 0 cross
+//          (h3Ko), the 바이비트 봇 on the OBV4 MACD histogram's turn (o4Ko)
 // HONESTY: a bot that is off or has not written its row yet says so; an old row says how old; never a vote of our own.
 import {h, put, ui, fmt, serverNow} from "../core/pb.js";
 
@@ -57,6 +60,12 @@ export function agoKo(ms) {
 /** A coin's trend cell in words and tone: {text, tone ("up" / "down" / "side" / "na"; the trend bar's 횡보: "flat"), sub}. */
 export function trendCell(x) {
   if (!x || x.state !== "ok") return {text: x && x.state === "error" ? "못 읽음" : "—", tone: "na", sub: (x && x.ko) || ""};
+  if (x.tm) {                                        // owners 11-02: the 30m 추세 MACD histogram's side of 0 (yellow too)
+    const t = x.tm;
+    return {text: `추세 MACD ${t.ko || "모름"}`, tone: TONE[x.trend] || "na",
+      sub: [ok(t.hist) ? `히스토그램 ${fmt.num(t.hist, 2, true)}` : "", t.yellow ? "노란 막대(0선 기준으로 봄)" : "",
+        x.trend === 0 ? "0선 · 진입 안 함" : ""].filter(Boolean).join(" · ")};
+  }
   if (x.bar) {                                       // owners 10-31 night: the trend bar's 종합
     const b = x.bar, n = Array.isArray(b.n) && b.n.every(ok) ? `상승 ${b.n[0]} · 하락 ${b.n[1]} · 횡보 ${b.n[2]}` : "";
     return {text: `종합 ${b.ko || "모름"}${b.colour_ko ? ` ${b.colour_ko}` : ""}`, tone: BAR_TONE[x.trend] || "na",
@@ -65,6 +74,13 @@ export function trendCell(x) {
   const n = (x.votes || []).filter((v) => v.side === x.trend).length;
   return {text: x.trend_ko || "모름", tone: TONE[x.trend] || "na",
     sub: x.trend === 0 ? "추세 없음 · 진입 안 함" : `${n}표가 ${x.trend > 0 ? "상승" : "하락"}`};
+}
+/** The owners' 11-02 entries in words: "3합 히스토그램 0선 위로 돌파 (2.50)" / "OBV 히스토그램 0선 아래 양봉 전환(-3.00)"; null without. */
+export function h3Ko(x) {
+  return x ? `${x.ko || "3합 히스토그램"}${ok(x.h3) ? ` (${fmt.num(x.h3, 2)})` : ""}` : null;
+}
+export function o4Ko(x) {
+  return x ? x.ko || "OBV 히스토그램" : null;
 }
 /** The OBV pane in words: {text, tone, turn} (turn: the light -> dark bar the OBV rule enters on). */
 export function obvCell(o) {
@@ -135,6 +151,10 @@ export function ftrendView(ctx) {
         ok(m.ac) ? h("dd", {class: "num"}, acKo(m.ac, m.ac_col)) : null,
         m.h0x ? h("dt", null, "히스토그램") : null,
         m.h0x ? h("dd", {class: "num"}, h0xKo(m.h0x)) : null,
+        m.o4h ? h("dt", null, "OBV 히스토그램") : null,
+        m.o4h ? h("dd", {class: "num"}, o4Ko(m.o4h)) : null,
+        m.h3x ? h("dt", null, "3합 히스토그램") : null,
+        m.h3x ? h("dd", {class: "num"}, h3Ko(m.h3x)) : null,
         m.stoch ? h("dt", null, "스톡RSI") : null,
         m.stoch ? h("dd", null, h("span", {class: ["lft-stoch", sk.tone]}, sk.text), sk.cross ? h("b", {class: "lft-turn"}, ` ${sk.cross}`) : null) : null,
         ok(m.ema_rsi) ? h("dt", null, "EMA RSI") : null, ok(m.ema_rsi) ? h("dd", {class: "num"}, fmt.num(m.ema_rsi, 1)) : null,
@@ -155,11 +175,13 @@ export function ftrendView(ctx) {
   function friendCell(f) {
     if (f.state !== "ok") return [h("span", {class: "lft-sub"}, ` ${f.ko || "아직 없음"}`)];
     const c = trendCell(f), ob = obvCell(f.obv), rl = ruleLines(f);
-    return [h("b", {class: ["lft-mid", c.tone]}, c.text), c.sub && f.bar ? h("small", {class: "lft-sub"}, ` ${c.sub}`) : null,
+    return [h("b", {class: ["lft-mid", c.tone]}, c.text), c.sub && (f.bar || f.tm) ? h("small", {class: "lft-sub"}, ` ${c.sub}`) : null,
       f.bar ? barRows(f.bar) : null,
       ob.tone !== "na" ? h("span", {class: ["lft-obv", ob.tone, ob.dark ? "dark" : "light"]}, h("i", {"aria-hidden": "true"}), `OBV ${ob.text}`) : null,
       ok(f.ac) ? h("small", {class: "lft-sub"}, ` AC ${acKo(f.ac, f.ac_col)}`) : null,
       f.h0x ? h("small", {class: "lft-sub"}, ` ${h0xKo(f.h0x)}`) : null,
+      f.h3x ? h("small", {class: "lft-sub"}, ` ${h3Ko(f.h3x)}`) : null,
+      f.o4h ? h("small", {class: "lft-sub"}, ` ${o4Ko(f.o4h)}`) : null,
       ...rl.map((x) => h("small", {class: x.tone === "good" ? "lft-go" : "lft-sub"}, ` ${x.text}`))];
   }
   /** The bots of this answer, each {name, tf} (its board's source; the words of before 10-31 night for an older answer). */

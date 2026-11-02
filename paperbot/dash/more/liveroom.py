@@ -18,7 +18,7 @@ not have is said to be off, a file that cannot be read is said so.
      team:  livedeck.totals_view (the three live bots), positions: [{bot, bot_ko, coin, side, entry, stop, step, opened_ms}],
      goal:  livedeck.goal_view (the owners' monthly ×6 against each bot's record this month: the 회의실's 목표 회의, the same
             arithmetic as each bot's 목표 연구),
-     coins: [{symbol, coin, state, last, chg24, spark, trend (the last closed 30m bar's 추세 바 종합), n30, hist, cross}] (the six
+     coins: [{symbol, coin, state, last, chg24, spark, trend (the last closed 30m bar's 추세 MACD side of 0, owners 11-02), tm30, hist (the 3합 histogram), cross}] (the six
             coins from livedeck.coins_view: Binance's closed bars and the bots' own formulas, read once a minute; the 3D
             room's floating screens)}
 
@@ -253,7 +253,7 @@ def coins_of(candles: Optional[Callable], now: int) -> list:
         if c.get("state") == "ok":
             tr = c.get("trend30") or []
             hist = [h for h in (c.get("hist") or []) if h is not None]
-            x.update(spark=(c.get("spark") or [])[-48:], trend=tr[-1][1] if tr else None, n30=c.get("n30"),
+            x.update(spark=(c.get("spark") or [])[-48:], trend=tr[-1][1] if tr else None, tm30=c.get("tm30"),
                      hist=hist[-1] if hist else None, cross=(c.get("cross") or [0])[-1])
         out.append(x)
     return out

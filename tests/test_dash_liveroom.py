@@ -166,7 +166,7 @@ def test_the_coins_for_the_floating_screens(room):
     assert [c["symbol"] for c in d["coins"]] == list(D.COINS) and all(c["state"] == "ok" for c in d["coins"])
     for c, f in zip(d["coins"], full):
         assert c["last"] == f["last"] and c["chg24"] == f["chg24"] and c["spark"] == f["spark"][-48:]
-        assert c["trend"] == f["trend30"][-1][1] and c["n30"] == f["n30"] and c["cross"] == f["cross"][-1]
+        assert c["trend"] == f["trend30"][-1][1] and c["tm30"] == f["tm30"] and c["cross"] == f["cross"][-1]
         assert c["hist"] == [x for x in f["hist"] if x is not None][-1]
     D._coin_cache.clear()
     none = R.build(NOW, ON, RAN, None)["coins"]

@@ -91,12 +91,13 @@ RULE_TAG = {"st": "(슈퍼트렌드·스톡RSI)",  # the second rule's lines say
             "obv50": "(OBV 50선)", "roc50": "(ROC 50선)",               # owners 10-30
             "ema3": "(추세 3개 일치)",                                     # owners 10-31
             "obvac": "(OBV 진한색 + AC)",                                 # owners 10-31: no 50 line, the AC bar
-            "h0x": "(히스토그램 0선 돌파)"}                                # owners 10-31 night: ALL + OBV6 MACD
+            "h0x": "(히스토그램 0선 돌파)",                                # owners 10-31 night: ALL + OBV6 MACD
+            "o4h": "(OBV 히스토그램 전환)", "h3x": "(3합 히스토그램 0선 돌파)"}   # owners 11-02
 # what a signal row of each rule is, for the replay's lines (the friend's colour change, the Stoch RSI cross / ●, the OBV
 # light -> dark turn)
 RULE_WHAT = {"mix": "색 변화", "st": "스톡RSI 크로스", "srsi": "스톡RSI ●", "obv": "OBV 연한→진한", "obv50": "OBV 연한→진한",
              "roc50": "ROC 막대 연한→진한", "ema3": "EMA RSI 막대 연한→진한", "obvac": "OBV 연한→진한",
-             "h0x": "히스토그램 0선 돌파"}
+             "h0x": "히스토그램 0선 돌파", "o4h": "OBV 히스토그램 양봉·음봉 전환", "h3x": "3합 히스토그램 0선 돌파"}
 BLOCK_NEAR_MS = 60 * MIN            # an entry block that started within an hour after the entry
 # luck band: the share of the replay's runs that are this bad or worse
 RARE, VERY_RARE = 0.10, 0.02
@@ -768,9 +769,10 @@ def _rule(r: dict) -> str:
 
 def _moved(ev: dict) -> bool:
     """A row the bot logs: a colour change (the friend's rule), a Stoch RSI cross (the second; the 바이비트 봇's ●), an
-    OBV light -> dark turn (the 바이비트 봇's, owners 10-29), the histogram crossing 0 (owners 10-31 night) or a side."""
+    OBV light -> dark turn (the 바이비트 봇's, owners 10-29), the histogram crossing 0 (owners 10-31 night; the 3합's,
+    owners 11-02), the OBV histogram turning colour (owners 11-02) or a side."""
     return bool(ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev.get("roc_turn")
-                or ev.get("e3_turn") or ev.get("x0") or ev.get("side"))
+                or ev.get("e3_turn") or ev.get("x0") or ev.get("o4_turn") or ev.get("side"))
 
 
 def _mark(ev: dict, rule: str) -> Any:
@@ -783,8 +785,10 @@ def _mark(ev: dict, rule: str) -> Any:
         return _i(ev.get("roc_turn")) or 0
     if rule == "ema3":
         return _i(ev.get("e3_turn")) or 0
-    if rule == "h0x":
+    if rule in ("h0x", "h3x"):
         return _i(ev.get("x0")) or 0
+    if rule == "o4h":
+        return _i(ev.get("o4_turn")) or 0
     return ev.get("cross") or ""
 
 
@@ -836,7 +840,8 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         st = rule == "st"
         colour = ("cyan" if ev.get("to_cyan") else "purple") if rule == "mix" else \
             ({1: "up", -1: "down"}.get(_i(ev.get("turn")) or 0, "") if rule in M.OBV_RULES else
-             {1: "up", -1: "down"}.get(_i(ev.get("x0")) or 0, "") if rule == "h0x" else (ev.get("cross") or ""))
+             {1: "up", -1: "down"}.get(_i(ev.get("x0")) or 0, "") if rule in ("h0x", "h3x") else
+             {1: "up", -1: "down"}.get(_i(ev.get("o4_turn")) or 0, "") if rule == "o4h" else (ev.get("cross") or ""))
         item = {"symbol": sym, "coin": X.coin_ko(sym), "close_ms": ce, "side": ev.get("side") or 0, "rule": rule,
                 "colour": colour, "why": ev.get("why") or ""}
         if lv is not None:
@@ -889,6 +894,10 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
         out["e3_turns"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "ema3" and ev.get("e3_turn"))
     if "h0x" in rules:                                   # owners 10-31 night
         out["x0s"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "h0x" and ev.get("x0"))
+    if "h3x" in rules:                                   # owners 11-02
+        out["h3s"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "h3x" and ev.get("x0"))
+    if "o4h" in rules:                                   # owners 11-02
+        out["o4s"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "o4h" and ev.get("o4_turn"))
     out["tf_ko"] = M.TF_KO[tf]
     if "srsi" in rules:
         out["dots"] = sum(1 for (s, ce, rule), ev in rep.items() if rule == "srsi" and ev.get("cross"))
@@ -910,6 +919,8 @@ def replay_lines(d: Optional[dict]) -> list:
         x for x in ((f"ROC 막대 연한→진한 {d['roc_turns']}번" if d.get("roc_turns") is not None else ""),
                     (f"EMA RSI 막대 연한→진한 {d['e3_turns']}번" if d.get("e3_turns") is not None else ""),
                     (f"히스토그램 0선 돌파 {d['x0s']}번" if d.get("x0s") is not None else ""),
+                    (f"3합 히스토그램 0선 돌파 {d['h3s']}번" if d.get("h3s") is not None else ""),          # owners 11-02
+                    (f"OBV 히스토그램 양봉·음봉 전환 {d['o4s']}번" if d.get("o4s") is not None else ""),
                     (f"OBV 연한→진한 {d['turns']}번" if d.get("turns") is not None else ""),
                     (f"스톡RSI ● {d['dots']}번" if d.get("dots") is not None else ""), cross.lstrip(" ·")) if x)
     out = [f"- 놓친 신호 {len(d['missed'])}개 (봇 공식으로 바이낸스 봉을 다시 계산: {d.get('tf_ko', '30분')}봉 {d['closes']}개 × "
@@ -969,6 +980,12 @@ def signal_counts(rows: list) -> dict:
     x0 = [r for r in sig if _rule(r) == "h0x"]
     if x0:
         out["x0s"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in x0})
+    h3 = [r for r in sig if _rule(r) == "h3x"]           # owners 11-02
+    if h3:
+        out["h3s"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in h3})
+    o4 = [r for r in sig if _rule(r) == "o4h"]
+    if o4:
+        out["o4s"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in o4})
     if obv:
         out["turns"] = len({(r.get("symbol"), _i(r.get("close_ms"))) for r in obv})
     if roc:
@@ -1137,6 +1154,8 @@ def morning(data: dict, w0: int, *, klines: Optional[Callable] = None, obs: Opti
         "- " + " · ".join(x for x in ((f"ROC 막대 연한→진한 {sc.get('roc_turns', 0)}번" if "roc50" in rules else ""),
                                       (f"EMA RSI 막대 연한→진한 {sc.get('e3_turns', 0)}번" if "ema3" in rules else ""),
                                       (f"히스토그램 0선 돌파 {sc.get('x0s', 0)}번" if "h0x" in rules else ""),
+                                      (f"3합 히스토그램 0선 돌파 {sc.get('h3s', 0)}번" if "h3x" in rules else ""),
+                                      (f"OBV 히스토그램 양봉·음봉 전환 {sc.get('o4s', 0)}번" if "o4h" in rules else ""),
                                       (f"OBV 연한→진한 {sc.get('turns', 0)}번" if any(r in M.OBV_RULES for r in rules) else ""),
                                       (f"스톡RSI ● {sc.get('dots', 0)}번" if "srsi" in rules else ""),
                                       (f"스톡RSI 크로스 {sc.get('crosses', 0)}번" if "st" in rules else "")) if x)

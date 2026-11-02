@@ -76,7 +76,7 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 시작 기록 설정에 ``range``가 있는지로만 알아요(``range_bot``). 그 봇이 없으면 페이퍼 하나 · 둘인 화면과 답은 예전 그대로예요.
 
 레인지 봇이 스스로 매매 (owners 10-31 밤, docs/range-bot-ko.md 0장): 레인지 봇이 첫 번째 WOO X Pro 계정을 믹스 봇
-(paperbot/mixchop.py, 추세 바 종합 + 히스토그램 0선 돌파, 15분봉)으로 직접 거래해요. 그 서버 설정(PAPERBOT_MIXRANGE_CONFIG,
+(paperbot/mixchop.py, 11/02부터 추세 MACD 30분 + 3합 히스토그램 0선 돌파, 15분봉)으로 직접 거래해요. 그 서버 설정(PAPERBOT_MIXRANGE_CONFIG,
 /etc/paperbot/mixrange.json)이 있으면 "mexc" 실행기 칸은 바이비트 칸처럼 모든 화면과 답에서 빠지고(``replaced``), 옛 레인지 봇
 페이퍼(range.db)는 페이지의 페이퍼 봇이 아니에요(``range_moved``). 그 파일이 없으면 모든 답이 예전 그대로예요.
 

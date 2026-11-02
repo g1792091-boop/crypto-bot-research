@@ -4,20 +4,22 @@
 //   top      the name, each coin's last 15m close and its 24-hour change, the clock (KST · UTC); a running line of the
 //            bots' newest log rows
 //   지갑      the three bots' balance together, against their start, today's and all closed trades
-//   차트      the chosen coin's last 120 15m bars, the 'ALL + OBV6 MACD' histogram's 0 crosses on them, the 30m trend bar's
-//            종합 as a strip under them, a bot's entry and stop on that coin
+//   차트      the chosen coin's last 120 15m bars, the 3합 histogram's 0 crosses on them (▲▼: the 친구 15분 봇's and the
+//            레인지 봇's entry, owners 11-02), the OBV4 MACD histogram's turns that are the 바이비트 봇's entry (○), the 30m
+//            추세 MACD's side of 0 as a strip under them (the three bots' trend), a bot's entry and stop on that coin
 //   봇        each bot: running or not, its rules, balance, record, position, live vs paper
-//   추세 그리드 coin x bot: the trend each bot read at its last close (초록 상승 · 빨강 하락 · 노랑 진입 금지) and its signal
+//   추세 그리드 coin x bot: the trend each bot read at its last close (초록 상승 · 빨강 하락) and its signal
 //   목표 ×6   this month against the path to the owners' ×6 (the three bots together and each), the daily growth the rest
 //            needs, each bot's own pace (가상) and the 목표 연구's verdict, a link to it
 //   포지션 진행 each bot's lane from its stop through the entry to the ladder's next lock, the price now
 //   코어      the six coins' 24-hour lines beside an attractor drawn in the owners' picture's colours: a fan of lines per coin
-//            in its 30m 종합 colour, the coin whose histogram crossed 0 at the last 15m close white, the held coin amber
+//            in its 30m 추세 MACD colour, the coin whose histogram crossed 0 at the last 15m close white, the held coin amber
 //            and pulsing, a fan per recent close to the late fills; three probes with real values
 //   실행 기록  the three logs' newest rows (signals, entries, ladder steps, exits, skips)
 //   포워드 테스트 each bot's balance line from its start, split where it began the 10-31 night rules (이전 규칙 · 새 규칙),
 //            the return and the deepest drop since, live vs paper entries
-//   히스토그램 the chosen coin's histogram on its 15m bars; 신호 흐름: the last 48 hours' 0 crosses and entries by 15m
+//   히스토그램 the chosen coin's 3합 histogram on its 15m bars; 신호 흐름: the last 48 hours' signals (0 crosses, OBV
+//            histogram turns) and entries by 15m
 // HONESTY: every number is a bot's record or a price; a panel with nothing yet says so; nothing drawn is made up (the core's
 // flow shape, its stars and its particle colours are decoration and say so on the screen, never a model). Under reduced
 // motion the core and the running lines stand still.
@@ -32,6 +34,9 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 const TONE = {1: "up", "-1": "down", 0: "flat"};
 export const toneOf = (t) => (ok(t) ? TONE[Number(t)] || "flat" : "na");
 const TREND_KO = {up: "상승", down: "하락", flat: "진입 금지", na: "—"};
+// owners 11-02: the three bots' trend is the 30m 추세 MACD histogram's side of 0 (its yellow bars too); the 친구 15분 봇
+// and the 레인지 봇 enter on the 15m 3합 histogram's 0 cross, the 바이비트 봇 on the OBV4 MACD histogram's turn
+const TM_KO = "추세 MACD";
 const BOT_TAB = {bybit: "bybitbot", mix: "mixbot", range: "rangebot"};   // each bot's 봇별 screen (its 목표 연구 at the foot)
 /** Each coin's own colour (dk-k0 … dk-k5, in the server's fixed coin order; never a colour that means up or down). */
 const CID = (k) => `dk-k${k % 6}`;
@@ -125,13 +130,20 @@ export const mmss = (ms) => {
   const t = Math.max(0, Math.round(ms / 1000));
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 };
+/** A coin's 30m 추세 MACD now in words (owners 11-02): "상승 +3.21" / "하락 −1.40" / "0선". */
+export function tmKo(c) {
+  const tr = c && c.trend30 && c.trend30.length ? toneOf(c.trend30[c.trend30.length - 1][1]) : "na", t = (c && c.tm30) || {};
+  return `${tr === "flat" ? "0선" : TREND_KO[tr]}${ok(t.hist) ? ` ${fmt.num(t.hist, 2, true)}` : ""}`;
+}
 /** A grid cell of one coin and one bot: {tone, big, sub, sig} from the bot's board row (livedeck.grid_view). */
 export function cellOf(c) {
   if (!c) return {tone: "na", big: "—", sub: "기록 없음", sig: 0};
   const tone = toneOf(c.trend);
-  const big = c.rule === "obvac" ? (ok(c.ac) ? `AC ${fmt.num(c.ac, 2)}` : "AC —") : ok(c.h6) ? fmt.num(c.h6, 1) : "—";
+  const big = c.rule === "o4h" ? (ok(c.o4) ? `OBV ${fmt.num(c.o4, 1)}` : "OBV —") : c.rule === "h3x" ? (ok(c.h3) ? fmt.num(c.h3, 1) : "—")
+    : c.rule === "obvac" ? (ok(c.ac) ? `AC ${fmt.num(c.ac, 2)}` : "AC —") : ok(c.h6) ? fmt.num(c.h6, 1) : "—";
   const sig = Number(c.side) || 0;
-  const what = c.rule === "obvac" ? (c.turn ? (c.turn > 0 ? "OBV 진한 초록" : "OBV 진한 빨강") : "") : c.x0 ? (c.x0 > 0 ? "0선 ↑" : "0선 ↓") : "";
+  const what = c.rule === "o4h" ? (c.o4_turn ? (c.o4_turn > 0 ? "양봉 전환" : "음봉 전환") : "")
+    : c.rule === "obvac" ? (c.turn ? (c.turn > 0 ? "OBV 진한 초록" : "OBV 진한 빨강") : "") : c.x0 ? (c.x0 > 0 ? "0선 ↑" : "0선 ↓") : "";
   const sub = sig ? `${sig > 0 ? "롱" : "숏"} 신호` : what ? `${what} · ${TREND_KO[tone]}` : TREND_KO[tone];
   return {tone, big, sub, sig};
 }
@@ -188,7 +200,11 @@ export function monthLine(curve, month, nowMs) {
 /** The signal an entry was made on, in the owners' words (the entry row's ``why``). */
 export function whyKo(w) {
   if (!w) return "";
-  const tr = toneOf(w.trend), bar = `추세 바 ${w.trend_tf || w.tf || ""} 종합 ${TREND_KO[tr]}`.replace(/\s+/g, " ");
+  const tr = toneOf(w.trend);
+  const bar = (w.trend_mode === "macd" ? `${TM_KO} ${w.trend_tf || w.tf || ""} ${tr === "flat" ? "0선" : TREND_KO[tr]}${ok(w.tmacd) ? ` (${fmt.num(w.tmacd, 2)})` : ""}`
+    : `추세 바 ${w.trend_tf || w.tf || ""} 종합 ${TREND_KO[tr]}`).replace(/\s+/g, " ");
+  if (w.rule === "h3x") return `${w.tf || ""}봉 3합 히스토그램 0선 ${Number(w.x0) > 0 ? "위로" : "아래로"} 돌파${ok(w.h3) ? ` (${fmt.num(w.h3, 2)})` : ""} · ${bar}`;
+  if (w.rule === "o4h") return `${w.tf || ""}봉 OBV 히스토그램 ${Number(w.o4_turn) > 0 ? "0선 아래 양봉 전환" : "0선 위 음봉 전환"}${ok(w.o4) ? ` (${fmt.num(w.o4, 2)})` : ""} · ${bar}`;
   if (w.rule === "h0x") return `${w.tf || ""}봉 히스토그램 0선 ${Number(w.x0) > 0 ? "위로" : "아래로"} 돌파${ok(w.h6) ? ` (${fmt.num(w.h6, 2)})` : ""} · ${bar}`;
   if (w.rule === "obvac") {
     const ac = ok(w.ac) ? `${Number(w.ac) > 0 ? "플러스" : "마이너스"} ${Number(w.ac_col) > 0 ? "양봉" : "음봉"} (${fmt.num(w.ac, 2)})` : "—";
@@ -221,13 +237,14 @@ export function cardOf(bots, mmr = 0.005) {
   const lev = Number(e.leverage) || null, side = e.side;
   const n = (e.why && e.why.bar_n) || null;
   const agree = n ? (side > 0 ? Number(n[0]) : Number(n[1])) : null;
+  const tm = e.why && e.why.trend_mode === "macd" ? (ok(e.why.tmacd) ? Number(e.why.tmacd) : null) : undefined;   // (11-02)
   const dist = ok(e.entry) && ok(e.stop) ? Math.abs(Number(e.entry) - Number(e.stop)) / Number(e.entry) : null;
   const reward = ok(e.act) && ok(e.entry) ? Math.abs(Number(e.act) - Number(e.entry)) : null;
   const risk = ok(e.entry) && ok(e.stop) ? Math.abs(Number(e.entry) - Number(e.stop)) : null;
   const liq = ok(e.entry) && lev ? Number(e.entry) * (1 - side * (1 / lev - Number(mmr))) : null;
   const lad = b.ladder;
   return {live: !!live, bot: b.name_ko, coin: e.coin, symbol: e.symbol, side, sideKo: side > 0 ? "롱" : "숏", sideEn: side > 0 ? "LONG" : "SHORT",
-    lev, ts: e.ts, agree, entry: e.entry, stop: e.stop, act: e.act, step: e.step, why: whyKo(e.why), dist, stopAtr: b.stop_atr,
+    lev, ts: e.ts, agree, tm, entry: e.entry, stop: e.stop, act: e.act, step: e.step, why: whyKo(e.why), dist, stopAtr: b.stop_atr,
     rr: reward && risk ? reward / risk : null, liq,
     target: lad ? `순ROE +${fmt.num(lad.trigger, 0)}%에 닿으면 손절을 +${fmt.num(lad.lock, 0)}%로 옮기고, 그 뒤 ${fmt.num(lad.step, 0)}%마다 한 계단씩 올려요` : "계단 설정을 못 읽었어요"};
 }
@@ -246,7 +263,7 @@ function spark(vals, cls, w = 120, hh = 32) {
     d ? [s("path", {class: "dk-spark-a", d: `${d}L${w - 2},${hh}L2,${hh}Z`}), s("path", {class: "dk-spark-l", d})] : null);
 }
 
-/** The chosen coin's 15m candles, its 0 crosses, the 30m trend strip, a bot's entry / stop. */
+/** The chosen coin's 15m candles, its 3합 0 crosses and OBV histogram turns, the 30m 추세 MACD strip, a bot's entry / stop. */
 function chartSvg(c, holds, W = 600) {
   const H = 250, top = 8, bot = 196, strip = 214;
   const bars = c.bars || [];
@@ -267,6 +284,8 @@ function chartSvg(c, holds, W = 600) {
         height: Math.max(1, Math.abs(y(b[1]) - y(b[4])))}));
     const x0 = (c.cross || [])[i];
     if (x0) kids.push(s("path", {class: ["dk-x0", x0 > 0 ? "up" : "down"], d: x0 > 0 ? `M${x},${y(b[3]) + 10}l-4,6h8z` : `M${x},${y(b[2]) - 10}l-4,-6h8z`}));
+    const o4 = (c.o4side || [])[i];                   // the 바이비트 봇's entry mark (owners 11-02): a ring under / over the bar
+    if (o4) kids.push(s("circle", {class: ["dk-o4", o4 > 0 ? "up" : "down"], cx: x, cy: o4 > 0 ? y(b[3]) + 22 : y(b[2]) - 22, r: 3.2}));
   });
   const lastC = bars[n - 1][4];                       // the last close: a dashed line and its tag (the pictures' price tag)
   kids.push(s("line", {class: "dk-last", x1: 0, x2: W, y1: y(lastC), y2: y(lastC)}),
@@ -287,10 +306,10 @@ function chartSvg(c, holds, W = 600) {
     const xa = Math.max(0, ((t - t0) / (t1 - t0)) * W), xb = Math.min(W, ((t + 30 * MIN - t0) / (t1 - t0)) * W);
     kids.push(s("rect", {class: ["dk-strip", toneOf(tr)], x: xa, width: Math.max(0.5, xb - xa - 0.6), y: strip, height: 10}));
   }
-  kids.push(s("text", {class: "dk-axis", x: 2, y: strip - 4}, "추세 바 30분 종합"),
+  kids.push(s("text", {class: "dk-axis", x: 2, y: strip - 4}, `${TM_KO} 30분 (0선 위 초록 · 아래 빨강)`),
     s("text", {class: "dk-axis", x: 2, y: H - 4}, fmt.kst(t0)), s("text", {class: "dk-axis", x: W - 2, y: H - 4, "text-anchor": "end"}, fmt.kst(t1)));
   return s("svg", {class: "dk-chart", viewBox: VB(W, H), width: W, height: H, role: "img",
-    "aria-label": `${c.coin} 15분봉 ${n}개와 30분 추세 바`}, kids);
+    "aria-label": `${c.coin} 15분봉 ${n}개와 30분 ${TM_KO}`}, kids);
 }
 
 /** The chosen coin's histogram on its 15m bars (green above 0, red below, the crosses marked). */
@@ -309,7 +328,7 @@ function histSvg(c, W = 600) {
   return s("svg", {class: "dk-hist", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": `${c.coin} 히스토그램`}, kids);
 }
 
-/** 신호 흐름: the last 48 hours by 15m: 0 crosses (bars) and entries (dots). */
+/** 신호 흐름: the last 48 hours by 15m: the bots' signals (bars) and entries (dots). */
 function flowSvg(flow, W = 600) {
   const H = 140, base = 116, imp = 22;
   const f = flow || [];
@@ -327,7 +346,7 @@ function flowSvg(flow, W = 600) {
     if (x[2]) kids.push(s("circle", {class: "dk-fent", cx: i * bw + bw / 2, cy: ya(sum[i]), r: 3}));
   });
   kids.push(s("text", {class: "dk-axis", x: 2, y: H - 4}, `${fmt.kst(f[0][0])}`), s("text", {class: "dk-axis", x: W - 2, y: H - 4, "text-anchor": "end"}, "지금"));
-  return s("svg", {class: "dk-flow", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "48시간 0선 돌파와 진입"}, kids);
+  return s("svg", {class: "dk-flow", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "48시간 신호와 진입"}, kids);
 }
 
 /** 코인 흐름 · FEED (the pictures' feed chart): the six coins' last 24 hours as % from where each began, a colour a coin,
@@ -423,7 +442,7 @@ function goalSvg(g, bots, W = 600) {
 // rings, glowing stars joined by thin lines, and a swirling flow inside, in the picture's colours (a sand tube up the axis,
 // cyan and blue swirls round it). The flow is the Aizawa system (a well-known chaotic attractor): its shape, the stars and
 // the particle colours are decoration, never a model of the market. What carries data: the fans from the left, one per
-// coin in the colour of its 30m 추세 바 종합; the coin whose histogram crossed 0 at the last 15m close drawn white; the held
+// coin in the colour of its 30m 추세 MACD (owners 11-02; the 추세 바 종합 before); the coin whose histogram crossed 0 at the last 15m close drawn white; the held
 // coin's particles amber, pulsing; the fans to the right, one per recent close (won green, lost red); the probes' values.
 const AZ = {a: 0.95, b: 0.7, c: 0.6, d: 3.5, e: 0.25, f: 0.1};
 const AZ_DT = 0.011;
@@ -706,19 +725,19 @@ export function deckView(ctx) {
     panel("dk-a-cht", "코인 차트 · SPOT", chartSub, coinTabs, chart),
     panel("dk-a-fee", "코인 흐름 · FEED", "여섯 코인 24시간 · 처음 대비 % · 아래는 봇 기록 원문",
       h("div", {class: "dk-feedwrap"}, h("div", {class: "dk-feedmain"}, feedBox, h("small", {class: "dk-mono"}, "WIRE · 봇 기록 원문 (최근 7)"), wire), feedStats)),
-    panel("dk-a-grd", "추세 그리드 · TREND GRID", "봇 × 코인 · 마지막 마감에 본 추세 바 30분 종합과 신호", gridBox),
+    panel("dk-a-grd", "추세 그리드 · TREND GRID", "봇 × 코인 · 마지막 마감에 본 30분 추세 MACD와 신호", gridBox),
     panel("dk-a-lif", "포지션 진행 · LIFECYCLE", "손절 → 진입 → 다음 계단 · 지금 가격", lifeBox),
     panel("dk-a-bot", "봇 상태 · BOT STATUS", "실거래 · 모의 쌍둥이", botsBox),
     panel("dk-a-crd", "진입 카드 · ENTRY CARD", cardSub, cardBox),
     panel("dk-a-rsk", "위험 · RISK", "열린 포지션 · 지금 가격 기준 · 이번 달", riskBox),
     panel("dk-a-gol", "목표 ×6 · GOAL PACE", goalSub, goalBox),
     panel("dk-a-cal", "이번 달 · CALENDAR", calSub, calBox),
-    panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 바 종합) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
+    panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 MACD) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
       h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
     panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "세 봇의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
     panel("dk-a-fwd", "포워드 테스트 · FORWARD TEST", "새 규칙 전과 후 · 시작 대비 잔고", fwd),
-    panel("dk-a-his", "히스토그램 · ALL + OBV6 MACD", histSub, hist),
-    panel("dk-a-flo", "신호 흐름 · SIGNAL CASCADE", "48시간 · 15분마다 0선 돌파(아래 막대) · 2시간 합(금색) · 진입(점)", flow));
+    panel("dk-a-his", "히스토그램 · 3합", histSub, hist),
+    panel("dk-a-flo", "신호 흐름 · SIGNAL CASCADE", "48시간 · 15분마다 신호(0선 돌파 · OBV 히스토그램 전환, 아래 막대) · 2시간 합(금색) · 진입(점)", flow));
   // the opening (owners 11-01 "동영상처럼"): the head, the running line and the panels come up one after another (--i);
   // the class goes once they are up, so the 15 s redraws never replay it
   grid.childNodes.forEach((p, i) => { if (p.style && p.style.setProperty) p.style.setProperty("--i", String(i + 2)); });
@@ -726,7 +745,7 @@ export function deckView(ctx) {
     slot,
     h("header", {class: "dk-top", style: {"--i": 0}},
       h("div", {class: "dk-brand"}, h("span", {class: "dk-logo", "aria-hidden": "true"}, "PB"),
-        h("div", null, h("small", {class: "dk-mono"}, "3 BOTS · 15M ENTRY · 30M TREND BAR · ONE POSITION EACH"),
+        h("div", null, h("small", {class: "dk-mono"}, "3 BOTS · 15M ENTRY · 30M TREND MACD · ONE POSITION EACH"),
           h("b", {class: "dk-name"}, "PAPERBOT ", h("em", null, "//"), " 관제실"),
           h("small", {class: "dk-mono"}, "바이비트 봇 · 친구 15분 봇 · 레인지 봇 — 보기만 하는 화면"))),
       prices,
@@ -772,7 +791,7 @@ export function deckView(ctx) {
     const ft = [`총 잔고 ${ok(T.equity) ? fmt.usd(T.equity) : "—"}`, `시작 대비 ${ok(T.pnl) ? `${T.pnl >= 0 ? "+" : ""}${fmt.usd(T.pnl)}` : "—"}`,
       `오늘 손익 ${ok(T.today_pnl) ? `${T.today_pnl >= 0 ? "+" : ""}${fmt.usd(T.today_pnl)}` : "—"}`, `열린 포지션 ${fmt.int(T.open || 0)}개`,
       `닫힌 거래 ${fmt.int(T.n || 0)}번`, `승률 ${ok(T.win_rate) ? pctKo(T.win_rate, 1).replace("+", "") : "—"}`,
-      `48시간 0선 돌파 ${fmt.int((d.flow || []).reduce((a, x) => a + x[1], 0))}번`, `진입 ${fmt.int((d.flow || []).reduce((a, x) => a + x[2], 0))}번`];
+      `48시간 신호 ${fmt.int((d.flow || []).reduce((a, x) => a + x[1], 0))}번`, `진입 ${fmt.int((d.flow || []).reduce((a, x) => a + x[2], 0))}번`];
     const ftx = ft.join("   ·   ");
     put(footIn, h("span", null, ftx), h("span", {"aria-hidden": "true"}, `   ·   ${ftx}`));
   }
@@ -810,8 +829,8 @@ export function deckView(ctx) {
       onclick: () => { st.sel = c.symbol; st.wipe = true; draw(); }}, c.coin)));
     const c = coinOf(sel);
     if (!c || c.state !== "ok") { put(chart, ui.empty(c ? `${c.coin}: ${c.ko || "못 읽음"}` : "코인 값을 읽는 중")); chartSub.textContent = ""; return; }
-    const n = c.n30 || [];
-    chartSub.textContent = `${c.coin} 15분봉 · ▲▼ 히스토그램 0선 돌파 · 아래 띠 = 30분 추세 바 종합 (지금 ${TREND_KO[toneOf(c.trend30[c.trend30.length - 1][1])]}${n.length ? ` · 상승 ${n[0]} · 하락 ${n[1]} · 횡보 ${n[2]}` : ""})`;
+    const t = c.tm30 || {};
+    chartSub.textContent = `${c.coin} 15분봉 · ▲▼ 3합 히스토그램 0선 돌파 · ○ OBV 히스토그램 전환(바이비트 봇) · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
     put(chart, chartSvg(c, holdsOf(sel), wOf(chart)));
   }
 
@@ -822,7 +841,7 @@ export function deckView(ctx) {
       return h("article", {class: ["dk-bot", sta]},
         h("div", {class: "dk-brow"}, h("i", {class: ["dk-ledd", sta], "aria-hidden": "true"}),
           h("b", null, b.name_ko), h("small", {class: "dk-mono"}, `${b.account_ko} · ${sta === "running" ? "돌고 있음" : sta === "off" ? "꺼짐" : sta === "stopped" ? "멈춤" : "확인 필요"}`)),
-        h("small", {class: "dk-ps"}, `${b.tf_ko || "—"}봉 진입 · 추세 바 ${b.trend_tf_ko || b.tf_ko || "—"} · ${(b.rules_ko || []).join(" + ") || "—"}`),
+        h("small", {class: "dk-ps"}, `${b.tf_ko || "—"}봉 진입 · ${TM_KO} ${b.trend_tf_ko || b.tf_ko || "—"} · ${(b.rules_ko || []).join(" + ") || "—"}`),
         h("dl", {class: "dk-kv dk-kv3"},
           h("dt", null, "잔고"), h("dd", {class: "num"}, ok((b.equity || {}).value) ? fmt.usd(b.equity.value) : "—"),
           h("dt", null, "거래"), h("dd", {class: "num"}, `${fmt.int(r.n || 0)}번${ok(r.win_rate) ? ` · ${pctKo(r.win_rate, 0).replace("+", "")}` : ""}`),
@@ -853,8 +872,11 @@ export function deckView(ctx) {
     put(cardBox, h("article", {class: ["dk-card", tone, c.live ? "live" : "past"]},
       h("header", {class: "dk-cdh"}, h("b", null, `${c.coin} · ${c.bot}`), h("small", {class: "dk-mono"}, `${c.lev ? `${c.lev}배` : ""} · ${fmt.kst(c.ts)}${c.live ? "" : " · 지난 진입"}`)),
       h("div", {class: ["dk-side", tone]}, h("b", null, c.sideKo), h("span", null, c.sideEn),
-        h("div", {class: "dk-agree"}, h("span", null, "추세 바 30분 같은 쪽"), h("b", {class: "num"}, ok(c.agree) ? `${c.agree} / 6` : "—"),
-          h("i", {class: "dk-agbar"}, h("i", {style: {width: `${ok(c.agree) ? (c.agree / 6) * 100 : 0}%`}})))),
+        c.tm !== undefined ? h("div", {class: "dk-agree"}, h("span", null, `${TM_KO} 30분 히스토그램`),
+          h("b", {class: "num"}, c.tm !== null ? fmt.num(c.tm, 2, true) : "—"),
+          h("i", {class: "dk-agbar"}, h("i", {style: {width: c.tm !== null && Math.sign(c.tm) === c.side ? "100%" : "0%"}})))
+          : h("div", {class: "dk-agree"}, h("span", null, "추세 바 30분 같은 쪽"), h("b", {class: "num"}, ok(c.agree) ? `${c.agree} / 6` : "—"),
+            h("i", {class: "dk-agbar"}, h("i", {style: {width: `${ok(c.agree) ? (c.agree / 6) * 100 : 0}%`}})))),
       c.live ? cardNow : null,
       h("div", {class: "dk-crow entry"}, h("b", null, "진입"), h("p", null, `${pxKo(c.entry)} · ${c.why || "신호 기록 없음"}`)),
       h("div", {class: "dk-crow stop"}, h("b", null, "손절"),
@@ -895,7 +917,7 @@ export function deckView(ctx) {
     const hot = (coins.find((c) => (c.cross || []).length && c.cross[c.cross.length - 1]) || {}).symbol || null;
     const sc = coinOf(st.sel);
     const lastH = sc ? (sc.hist || []).filter(ok).slice(-1)[0] : null, lastX = sc ? (sc.cross || []).slice(-1)[0] : 0;
-    const n30 = (sc && sc.n30) || null, rg = sc && sc.trend30 && sc.trend30.length ? toneOf(sc.trend30[sc.trend30.length - 1][1]) : "na";
+    const tm30 = (sc && sc.tm30) || null, rg = sc && sc.trend30 && sc.trend30.length ? toneOf(sc.trend30[sc.trend30.length - 1][1]) : "na";
     const nc = nextClose(serverNow());
     const tr = [];
     for (const b of d.bots || []) for (const t of b.trades || []) tr.push({...t, bot: b.name_ko});
@@ -903,9 +925,10 @@ export function deckView(ctx) {
     const late = tr.slice(0, 7);
     core.set(coins.map((c) => ({sym: c.symbol, tone: c.state === "ok" && c.trend30 && c.trend30.length ? toneOf(c.trend30[c.trend30.length - 1][1]) : "na"})),
       hot, hold ? hold.symbol : null, [
-        {k: `PROBE · ${sc ? sc.coin : "—"} 15M HIST`, v: ok(lastH) ? fmt.num(lastH, 2) : "—", tone: ok(lastH) ? (lastH >= 0 ? "up" : "down") : "",
+        {k: `PROBE · ${sc ? sc.coin : "—"} 15M 3합`, v: ok(lastH) ? fmt.num(lastH, 2) : "—", tone: ok(lastH) ? (lastH >= 0 ? "up" : "down") : "",
           s: lastX ? `방금 0선 ${lastX > 0 ? "위로" : "아래로"} 돌파` : "이번 봉 0선 돌파 없음"},
-        {k: "REGIME · 30M 추세 바", v: TREND_KO[rg], tone: rg, s: n30 ? `상승 ${n30[0]} · 하락 ${n30[1]} · 횡보 ${n30[2]}` : ""},
+        {k: "REGIME · 30M 추세 MACD", v: rg === "flat" ? "0선" : TREND_KO[rg], tone: rg,
+          s: tm30 && ok(tm30.hist) ? `히스토그램 ${fmt.num(tm30.hist, 2, true)}${tm30.yellow ? " · 노란 막대" : ""}` : ""},
         {k: "NEXT CLOSE · 15M", v: mmss(nc.left_ms), s: `${fmt.hm(nc.at)} 마감 · 세 봇이 판단해요`}],
       late.map((t) => (t.win ? "up" : t.win === false ? "down" : "na")));
     put(inputs, coins.map((c, k) => {
@@ -1088,16 +1111,16 @@ export function deckView(ctx) {
     const tr = (d.coins || []).filter((c) => c.state === "ok" && c.trend30 && c.trend30.length).map((c) => toneOf(c.trend30[c.trend30.length - 1][1]));
     const T = d.totals || {}, cnt = (t) => tr.filter((x) => x === t).length;
     const stat = (k, v, cls) => h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, k), h("b", {class: ["num", cls || ""]}, v));
-    put(feedStats, stat("0선 돌파 · 48H", `${fmt.int(sig)}번`), stat("진입 · 48H", `${fmt.int(ent)}번`, ent ? "up" : ""),
+    put(feedStats, stat("신호 · 48H", `${fmt.int(sig)}번`), stat("진입 · 48H", `${fmt.int(ent)}번`, ent ? "up" : ""),
       stat("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
-      stat("30분 추세 바", `▲${cnt("up")} ▼${cnt("down")} ■${cnt("flat")}`),
+      stat(`30분 ${TM_KO}`, `▲${cnt("up")} ▼${cnt("down")}${cnt("flat") ? ` ■${cnt("flat")}` : ""}`),
       h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, "다음 15분 마감"), h("b", {class: "num", "data-wait": "1"}, mmss(nextClose(serverNow()).left_ms))));
   }
   function drawHist(d) {
     const c = coinOf(st.sel);
     if (!c || c.state !== "ok") { put(hist, ui.empty("코인 값을 읽는 중")); histSub.textContent = ""; return; }
     const last = (c.hist || []).filter(ok).slice(-1)[0];
-    histSub.textContent = `${c.coin} 15분봉 · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
+    histSub.textContent = `${c.coin} 15분봉 3합 히스토그램 (친구 15분 봇 · 레인지 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
     put(hist, histSvg(c, wOf(hist)));
     put(flow, flowSvg(d.flow, wOf(flow)));
   }

@@ -8,7 +8,10 @@ enter on 15-minute bars and read the trend bar on the 30-minute bar only (their 
 "30분" next to ``tf`` "15분", each source's ``trend_tf_ko``; the board keys ``m30`` / ``f30`` / ``r15`` are only names).
 Each board row carries it
 (``bar``: the six rows with their words, ``bar_n`` [상승, 하락, 횡보], ``bar_score`` the 3개 점수) and rule "h0x"'s
-histogram (``x0`` its 0 cross on the bar, ``h6`` its value). Each bot's board says its name (its config's ``name``) and
+histogram (``x0`` its 0 cross on the bar, ``h6`` its value). Owners 11-02: the three bots' trend is the 30m 추세 MACD histogram's side of 0
+(friendtrend part 10; ``tm``: its side, value, line and yellow bar; the yellow bars count by their side of 0), the 친구
+15분 봇 and the 레인지 봇 enter on the 3합 histogram's 0 cross (``h3x``: ``x0``, ``h3``), the 바이비트 봇 on the OBV4 MACD
+histogram's turn (``o4h``: ``o4``, ``o4_turn``, ``o4_col``). Each bot's board says its name (its config's ``name``) and
 bar (``tf_ko``); the 레인지 봇's own board (``r15``, the coin's ``rg``) once its state file has one. Once the 레인지 봇 trades
 WOO X Pro by itself (livebots.range_moved) the old 레인지 봇 paper's 1-hour and ROC / 추세 3개 reads (``h1``, ``roc``) leave
 the board (None).
@@ -48,13 +51,21 @@ X0_KO = {1: "0선 위로 돌파", -1: "0선 아래로 돌파", 0: "0선 돌파 �
 VOTE_KO = {1: "상승", -1: "하락", 0: "횡보"}
 VOTES = (("line", "하늘·보라 선"), ("ema", "EMA RSI"), ("chop", "찹존"), ("st", "슈퍼트렌드"))
 RULE_KO = {"obv": "OBV 진한색", "srsi": "스톡RSI 50선", "obv50": "OBV 50선", "roc50": "ROC 50선", "ema3": "추세 3개 일치",
-           "obvac": "OBV 진한색 + AC", "h0x": "히스토그램 0선 돌파"}
+           "obvac": "OBV 진한색 + AC", "h0x": "히스토그램 0선 돌파",
+           "o4h": "OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)", "h3x": "3합 히스토그램 0선 돌파"}   # (owners 11-02)
+TM_KO = {1: "상승", -1: "하락", 0: "0선"}                # the 추세 MACD histogram's side of 0 (owners 11-02)
 # the boards of the mix bots: (the answer's key, the coin row's key, livemix profile)
 BOARDS = (("m30", "m30", "bybit"), ("f30", "f30", "mix"), ("r15", "rg", "range"))
 STALE_30M_MS = 35 * MIN                 # the bot writes at every 30-minute close
 STALE_1H_MS = 70 * MIN                  # the 레인지 봇 reads its hour once it closed
 RULES_KO = [
-    "추세 바 종합(10-31 밤부터 세 봇 모두: 바이비트 봇 · 친구 15분 봇 · 레인지 봇): 여섯 줄(3개 점수 · 6종 평균 · "
+    "추세 MACD(11-02부터 세 봇 모두): 30분봉 '추세 MACD' 히스토그램이 0선 위면 상승, 0선 아래면 하락 · 노란 막대(추세 바 종합 횡보)가 "
+    "나와도 0선 위 / 아래로만 봐요 · 15분봉 추세는 안 봐요",
+    "3합 히스토그램 0선 돌파(친구 15분 봇 · 레인지 봇, 11-02부터): 15분봉 3합 히스토그램(WOOX pro2 · 레인지봇 EMA RSI · 15종 MACD "
+    "평균의 MACD 히스토그램)이 0선을 위로 돌파하면 롱, 아래로 돌파하면 숏 · 추세 MACD가 같은 쪽일 때만",
+    "OBV 히스토그램 전환(바이비트 봇, 11-02부터): 15분봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 "
+    "바뀌면 롱, 0선 위에서 음봉으로 바뀌면 숏 · 추세 MACD가 같은 쪽일 때만 · OBV 선은 안 봐요",
+    "추세 바 종합(10-31 밤 ~ 11-02, 지난 규칙: 바이비트 봇 · 친구 15분 봇 · 레인지 봇 모두): 여섯 줄(3개 점수 · 6종 평균 · "
     "하늘·보라 선 · EMA RSI · 슈퍼트렌드 · 4종 평균) 중 상승이 2줄 이상이면 상승(초록), 하락이 2줄 이상이면 하락(빨강) · "
     "횡보가 2줄 이상이거나 상승·하락이 둘 다 2줄 이상이면 횡보(노랑) = 진입 금지",
     "봉(10-31 마지막 결정부터 세 봇 모두): 진입 신호는 15분봉 · 추세 바 종합은 30분봉에서만 봐요 (15분봉 추세는 안 봐요)",
@@ -141,6 +152,36 @@ def bar_out(r: dict) -> Optional[dict]:
             "rows": out_rows, "n": [_i(x) for x in n], "score": score, "words": words}
 
 
+def tm_out(r: dict) -> Optional[dict]:
+    """The 추세 MACD of a board row (owners 11-02, trend "macd"): {"trend", "ko" (상승 / 하락 / 0선), "hist", "macd",
+    "yellow", "words" (friendtrend.tmacd_words)}; None for a row of another trend."""
+    if r.get("trend_mode") != "macd":
+        return None
+    from ... import friendtrend as FT
+    from ... import mixchop as MC
+    t = _i(r.get("trend"))
+    try:
+        words = FT.tmacd_words(MC.tmacd_of(r))
+    except Exception:  # noqa: BLE001  (an odd row: the values alone)
+        words = None
+    return {"trend": t, "ko": TM_KO.get(t, "모름") if t is not None else "모름", "hist": _f(r.get("tmacd")),
+            "macd": _f(r.get("tmacd_line")), "yellow": bool(r.get("tyellow")), "words": words}
+
+
+def entry_out(r: dict) -> dict:
+    """The owners' 11-02 entries of a board row: {"h3x": {x0, h3, ko} | None, "o4h": {o4, turn, col, ko} | None}."""
+    from ... import friendtrend as FT
+    out: dict = {"h3x": None, "o4h": None}
+    if "h3x" in (r.get("rules") or {}) or r.get("h3") is not None:
+        x0 = _i(r.get("x0")) or 0
+        out["h3x"] = {"x0": x0, "h3": _f(r.get("h3")), "ko": f"3합 히스토그램 {X0_KO.get(x0)}"}
+    if r.get("o4") is not None or r.get("o4_turn") is not None:
+        t = _i(r.get("o4_turn")) or 0
+        out["o4h"] = {"o4": _f(r.get("o4")), "turn": t, "col": _i(r.get("o4_col")),
+                      "ko": f"OBV 히스토그램 {FT.o4_words(r.get('o4'), t)}"}
+    return out
+
+
 def m30_row(r: Any, now: int, tf_ko: str = "30분") -> dict:
     """One coin's part of a mix bot's board row (``tf_ko``: its signal bar from its config, 15분 for all three since 10-31,
     last; the row's ``trend_tf`` the bar its trend was read on)."""
@@ -154,14 +195,17 @@ def m30_row(r: Any, now: int, tf_ko: str = "30분") -> dict:
             rules[k] = {"side": _i(x.get("side")) or 0, "why": str(x.get("why") or ""), "ko": RULE_KO.get(k, k)}
     unread = t is None and any(x["why"] for x in rules.values())
     bar = bar_out(r)
+    tm = tm_out(r)
+    ent = entry_out(r)
     x0 = _i(r.get("x0"))
     return {"state": "error" if unread else "ok" if t is not None else "none", "close_ms": close_ms,
             "age_ms": now - close_ms if close_ms is not None else None, "tf": r.get("tf") or None,
             "trend_tf": r.get("trend_tf") or None,
-            "trend": t, "trend_ko": (bar["ko"] if bar else TREND_KO.get(t, "모름")) if t is not None else None,
-            "trend_mode": r.get("trend_mode") or None, "bar": bar,
-            "h0x": {"x0": x0 or 0, "h6": _f(r.get("h6")), "ko": X0_KO.get(x0 or 0)} if x0 is not None or r.get("h6") is not None else None,
-            "votes": [] if bar else votes_out(r.get("votes")),
+            "trend": t, "trend_ko": (tm["ko"] if tm else bar["ko"] if bar else TREND_KO.get(t, "모름")) if t is not None else None,
+            "trend_mode": r.get("trend_mode") or None, "bar": bar, "tm": tm, "h3x": ent["h3x"], "o4h": ent["o4h"],
+            "h0x": {"x0": x0 or 0, "h6": _f(r.get("h6")), "ko": X0_KO.get(x0 or 0)}
+            if not ent["h3x"] and (x0 is not None or r.get("h6") is not None) else None,
+            "votes": [] if bar or tm else votes_out(r.get("votes")),
             "ema_rsi": _f(r.get("ema_rsi")), "chop_zone": _i(r.get("chop_zone")), "close": _f(r.get("close")),
             "stop_pct": _f(r.get("stop_pct")), "liq_ok": r.get("liq_ok"), "obv": obv_out(r), "stoch": stoch_out(r),
             "obv50": _f(r.get("obv50")), "ac": _f(r.get("ac")), "ac_col": _i(r.get("ac_col")),

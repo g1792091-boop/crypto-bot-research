@@ -15,11 +15,13 @@ made up to fill the look (the pictures' decorative panels are drawn from these v
               rules), parity {n, same, share} (live entries with a paper entry on the same coin and side within 5 min),
               last_close_ms}],
      coins: [{symbol, coin, state, last, chg24 (vs 96 15m bars ago), spark [closes of the last 96 15m bars],
-              bars [[t, o, h, l, c], … the last 120 15m bars], hist [the 'ALL + OBV6 MACD' histogram per 15m bar],
-              cross [the bar's 0 cross: 1 / -1 / 0], trend30 [the trend bar's 종합 per 30m bar: [t, 1 / -1 / 0], …],
-              rows30 {score, six, line, ema, st, four} (the last closed 30m bar's six rows)}],
-     grid:  [{symbol, coin, bots: {bot id: {trend, x0, h6, turn, ac, ac_col, side, why, close_ms}}}] (each bot's own
-              board row at its last close),
+              bars [[t, o, h, l, c], … the last 120 15m bars], hist [the 3합 histogram per 15m bar (owners 11-02: the
+              친구 15분 봇's and the 레인지 봇's entry)], cross [its 0 cross on the bar: 1 / -1 / 0], o4side [the 바이비트 봇's
+              entry mark per bar: the OBV4 MACD histogram turning green under 0: 1 / red over 0: -1 / 0], o4 (its last
+              value), trend30 [the 추세 MACD histogram's side of 0 per 30m bar: [t, 1 / -1 / 0], …], tm30 {hist, macd,
+              yellow} (the last closed 30m bar's)}],
+     grid:  [{symbol, coin, bots: {bot id: {trend, x0, h3, o4, o4_turn, o4_col, tmacd, tyellow, side, why, close_ms,
+              rule, trend_mode}}}] (each bot's own board row at its last close),
      tape:  [{ts, bot, bot_ko, kind, kind_ko, symbol, coin, side, text, pnl}] (the three live logs' newest rows),
      flow:  [[slot_ms, crosses, entries], …] (the last 48 h by 15m slot: the histogram's 0 crosses the three bots logged,
               their entries),
@@ -38,7 +40,8 @@ Each bot also carries ``last_entry`` (its newest entry row: coin, side, price, s
 for the 진입 카드), its ``ladder`` and ``stop_atr`` (the config's) and the liquidation room the bots use (M.MMR_PCT).
 
 The coins' series come from ``candles`` (dash/app.py fetch_candles on the server: 15m and 30m klines, cached there) and
-paperbot/friendtrend.py part 9 (the bots' own formulas), cached COIN_TTL_S; a coin Binance did not answer says so.
+paperbot/friendtrend.py part 10 (the bots' own formulas since 11-02), cached COIN_TTL_S; a coin Binance did not answer says
+so.
 """
 from __future__ import annotations
 
@@ -103,8 +106,9 @@ def _frame(rows: list) -> tuple:
 
 
 def coin_view(symbol: str, candles: Callable, now: int) -> dict:
-    """One coin's panels: its 15m bars (the last one still open is left out), the histogram and its 0 crosses on them,
-    and the trend bar's 종합 on the closed 30m bars."""
+    """One coin's panels: its 15m bars (the last one still open is left out), the 3합 histogram and its 0 crosses and the
+    OBV4 MACD histogram's entry marks on them, and the 추세 MACD histogram's side of 0 on the closed 30m bars (owners
+    11-02: the three bots' trend)."""
     out: dict = {"symbol": symbol, "coin": MX.coin_ko(symbol), "state": "ok"}
     try:
         r15 = candles(symbol, "15m", HIST_BARS)
@@ -115,8 +119,9 @@ def coin_view(symbol: str, candles: Callable, now: int) -> dict:
     t30, _o30, h30, l30, c30, v30 = _frame([r for r in r30 if int(r["time"]) * 1000 + MIN30 <= now])
     if len(c15) < 300 or len(c30) < 300:
         return {**out, "state": "short", "ko": "지난 봉이 모자라요"}
-    H = FT.h6_pane(h15, l15, c15, v15)
-    B = FT.bar_pane(h30, l30, c30, v30)
+    H = FT.h3_pane(o15, h15, l15, c15, v15)
+    O = FT.o4_pane(h15, l15, c15, v15)
+    T = FT.tmacd_pane(h30, l30, c30, v30)
     k = slice(len(c15) - CHART_N, len(c15))
     last = float(c15[-1])
     base = float(c15[-SPARK_N - 1]) if len(c15) > SPARK_N else None
@@ -124,10 +129,16 @@ def coin_view(symbol: str, candles: Callable, now: int) -> dict:
     out.update({"last": last, "last_ms": int(t15[-1]) + MIN15, "chg24": (last / base - 1) if base else None,
                 "spark": [round(float(x), 8) for x in c15[-SPARK_N:]],
                 "bars": [[int(t15[i]), float(o15[i]), float(h15[i]), float(l15[i]), float(c15[i])] for i in range(k.start, k.stop)],
-                "hist": hist, "cross": [int(x) for x in H["cross"][k]],
-                "trend30": [[int(t30[i]), int(B["trend"][i])] for i in range(len(t30) - TREND_N, len(t30))],
-                "rows30": {kk: int(r[-1]) for kk, r in B["rows"].items()}, "n30": [int(B["up"][-1]), int(B["down"][-1]), int(B["side"][-1])]})
+                "hist": hist, "cross": [int(x) for x in H["cross"][k]], "o4side": [int(x) for x in O["side"][k]],
+                "o4": _r(O["ac"][-1], 3),
+                "trend30": [[int(t30[i]), int(T["trend"][i])] for i in range(len(t30) - TREND_N, len(t30))],
+                "tm30": {"hist": _r(T["hist"][-1], 3), "macd": _r(T["macd"][-1], 3), "yellow": bool(T["yellow"][-1])}})
     return out
+
+
+def _r(x: Any, n: int) -> Optional[float]:
+    x = float(x)
+    return round(x, n) if np.isfinite(x) else None
 
 
 def coins_view(candles: Optional[Callable], now: int) -> list:
@@ -189,7 +200,11 @@ def _tape_text(r: dict) -> str:
             return f"{'롱' if r['side'] > 0 else '숏'} 신호 · {r.get('why') or ''}".rstrip(" ·")
         x0 = _i(r.get("x0"))
         if x0:
-            return f"히스토그램 0선 {'위로' if x0 > 0 else '아래로'} 돌파 · {r.get('why') or '진입 안 함'}"
+            return (f"{'3합 ' if r.get('rule') == 'h3x' else ''}히스토그램 0선 {'위로' if x0 > 0 else '아래로'} 돌파 · "
+                    f"{r.get('why') or '진입 안 함'}")
+        o4 = _i(r.get("o4_turn"))
+        if o4:                                          # owners 11-02: the 바이비트 봇's OBV histogram
+            return f"OBV 히스토그램 {FT.o4_words(r.get('o4'), o4)} · {r.get('why') or '진입 안 함'}"
         t = _i(r.get("turn"))
         if t:
             return f"OBV {'연한→진한 초록' if t > 0 else '연한→진한 빨강'} · {r.get('why') or '진입 안 함'}"
@@ -206,7 +221,7 @@ def _tape_text(r: dict) -> str:
 
 
 ENTRY_WHY = ("rule", "trend", "trend_mode", "tf", "trend_tf", "bar", "bar_n", "bar_score", "x0", "h6", "turn", "ac", "ac_col", "stop_pct",
-             "ema_rsi", "close", "close_ms")
+             "ema_rsi", "close", "close_ms", "tmacd", "tmacd_line", "tyellow", "h3", "o4", "o4_col", "o4_turn")
 
 
 def last_entry(rows: list) -> Optional[dict]:
@@ -277,7 +292,9 @@ def grid_view(bots: list) -> list:
             cell[b["id"]] = {"trend": _i(r.get("trend")), "x0": _i(r.get("x0")), "h6": _f(r.get("h6")), "turn": _i(r.get("turn")),
                              "ac": _f(r.get("ac")), "ac_col": _i(r.get("ac_col")), "close_ms": _i(r.get("close_ms")),
                              "bar_n": r.get("bar_n"), "side": _i((rule[1] or {}).get("side")) or 0, "why": (rule[1] or {}).get("why") or "",
-                             "rule": rule[0]}
+                             "rule": rule[0], "trend_mode": r.get("trend_mode"), "tmacd": _f(r.get("tmacd")),
+                             "tyellow": bool(r.get("tyellow")), "h3": _f(r.get("h3")), "o4": _f(r.get("o4")),
+                             "o4_turn": _i(r.get("o4_turn")), "o4_col": _i(r.get("o4_col"))}
         out.append({"symbol": s, "coin": MX.coin_ko(s), "bots": cell})
     return out
 
@@ -287,7 +304,7 @@ def tape_view(bots: list) -> list:
     for b in bots:
         for r in b.get("_rows") or []:
             k = r.get("kind")
-            if k not in TAPE_KINDS or (k == "signal" and not (r.get("side") or r.get("x0") or r.get("turn"))):
+            if k not in TAPE_KINDS or (k == "signal" and not (r.get("side") or r.get("x0") or r.get("turn") or r.get("o4_turn"))):
                 continue
             rows.append({"ts": _i(r.get("ts")), "bot": b["id"], "bot_ko": b["name_ko"], "kind": k, "kind_ko": TAPE_KINDS[k],
                          "symbol": r.get("symbol"), "coin": MX.coin_ko(r["symbol"]) if r.get("symbol") else None,
@@ -298,7 +315,8 @@ def tape_view(bots: list) -> list:
 
 
 def flow_view(bots: list, now: int) -> list:
-    """The last FLOW_H hours by 15m slot: the 0 crosses / OBV turns the three bots logged, and their entries."""
+    """The last FLOW_H hours by 15m slot: the 0 crosses / OBV turns / OBV histogram turns (owners 11-02) the three bots
+    logged, and their entries."""
     n = FLOW_H * 4
     end = now // MIN15 * MIN15
     slots = {end - (n - 1 - i) * MIN15: [0, 0] for i in range(n)}
@@ -310,7 +328,7 @@ def flow_view(bots: list, now: int) -> list:
             s = (_i(r.get("close_ms")) or t) // MIN15 * MIN15 if k == "signal" else t // MIN15 * MIN15
             if s not in slots:
                 continue
-            if k == "signal" and (r.get("x0") or r.get("turn")):
+            if k == "signal" and (r.get("x0") or r.get("turn") or r.get("o4_turn")):
                 slots[s][0] += 1
             elif k in ("entry", "adopted"):
                 slots[s][1] += 1

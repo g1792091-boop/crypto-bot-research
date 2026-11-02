@@ -47,7 +47,7 @@ FIRST_KO = "레인지 봇이 아직 첫 기록 전이에요 (켜고 1~2분 뒤 �
 NOT_RANGE_KO = "이 기록 파일의 봇은 레인지 봇이 아니에요 (시작 기록의 설정에 range가 없어요)"
 # owners 10-31 night (docs/range-bot-ko.md 0장): the 레인지 봇 trades the first WOO X Pro account by itself (livebots.range_moved);
 # this screen is then the old paper bot's past record (the 레인지 봇 tab shows the new bot first)
-MOVED = {"ko": "10/31 밤부터 레인지 봇은 WOO X Pro 계정에서 스스로 거래해요 (추세 바 종합 + 히스토그램 0선 돌파, 15분봉) · "
+MOVED = {"ko": "10/31 밤부터 레인지 봇은 WOO X Pro 계정에서 스스로 거래해요 (11/02부터 추세 MACD 30분 + 3합 히스토그램 0선 돌파, 15분봉) · "
                "이 화면은 그 전 레인지 페이퍼 봇과 그 봇을 따라가던 실행기의 지난 기록이에요",
          "tab": "rangebot", "api": "/api/v4/livebots/mixrange"}
 # the guide's start steps (docs/range-bot-ko.md 3장 B), shown while the bot is off

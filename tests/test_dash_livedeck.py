@@ -185,11 +185,17 @@ def test_each_coin_from_closed_binance_bars_and_the_bots_formulas(world):
         assert all(t + MIN30 <= NOW for t, _v in c["trend30"]) and c["trend30"][-1][0] + 2 * MIN30 > NOW
         assert all(b[0] - a[0] == MIN30 for a, b in zip(c["trend30"], c["trend30"][1:]))
         assert set(c["cross"]) <= {-1, 0, 1} and {v for _t, v in c["trend30"]} <= {-1, 0, 1}
-        assert sum(c["n30"]) == 6 and set(c["rows30"]) >= {"six"}
-        # the same numbers as the bots' own formulas on the same closed bars
+        assert len(c["o4side"]) == D.CHART_N and set(c["o4side"]) <= {-1, 0, 1} and set(c["tm30"]) == {"hist", "macd", "yellow"}
+        # the same numbers as the bots' own formulas on the same closed bars (owners 11-02: the 3합 histogram, the
+        # OBV4 MACD histogram's entries, the 30m 추세 MACD)
         r15 = [r for r in f(c["symbol"], "15m", D.HIST_BARS) if r["time"] * 1000 + MIN15 <= NOW]
-        h = FT.h6_pane(*(np.array([r[k] for r in r15]) for k in ("high", "low", "close", "volume")))
+        r30 = [r for r in f(c["symbol"], "30m", D.HIST_BARS) if r["time"] * 1000 + MIN30 <= NOW]
+        a15 = [np.array([r[k] for r in r15]) for k in ("open", "high", "low", "close", "volume")]
+        h = FT.h3_pane(*a15)
         assert c["hist"][-1] == pytest.approx(round(float(h["hist"][-1]), 3)) and c["cross"][-1] == int(h["cross"][-1])
+        assert c["o4side"] == [int(x) for x in FT.o4_pane(*a15[1:])["side"][-D.CHART_N:]]
+        tm = FT.tmacd_pane(*(np.array([r[k] for r in r30]) for k in ("high", "low", "close", "volume")))
+        assert c["trend30"][-1][1] == int(tm["trend"][-1]) and c["tm30"]["hist"] == pytest.approx(round(float(tm["hist"][-1]), 3))
         assert c["last"] == pytest.approx(r15[-1]["close"]) and c["chg24"] == pytest.approx(r15[-1]["close"] / r15[-97]["close"] - 1)
     # read once a minute for every viewer
     n = len(calls)
@@ -512,7 +518,7 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: bad.tex
     for w in ("관제실", "바이비트 봇", "친구 15분 봇", "레인지 봇", "지갑", "추세 그리드", "진입 카드", "포지션 진행", "실행 기록",
               "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식", "목표 ×6", "경로보다", "남은 날 하루에 필요",
               "목표 연구 →", "코인 흐름", "FEED", "WIRE", "목표별 하루 필요", "×50", "$5,000", "하루 +13.9%", "SIGNAL CASCADE",
-              "0선 돌파 · 48H", "다음 15분 마감", "돌고 있음", "위험", "RISK", "청산가까지", "손절가에 닿으면",
+              "신호 · 48H", "다음 15분 마감", "30M TREND MACD", "3합 히스토그램", "추세 MACD 30분", "돌고 있음", "위험", "RISK", "청산가까지", "손절가에 닿으면",
               "펀딩 (바이낸스)", "이번 달 가장 깊은 낙폭", "연속 손실", "CALENDAR", "목표 넘은 날", "가장 좋은 날", "미실현 · 수수료 전",
               "지금", "ROE", "(수수료 전)"):
         assert w in t, w

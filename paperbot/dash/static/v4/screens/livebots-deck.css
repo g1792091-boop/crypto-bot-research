@@ -147,6 +147,10 @@
 .dk-body.down { fill: var(--dk-red); }
 .dk-x0.up { fill: var(--dk-green); }
 .dk-x0.down { fill: var(--dk-red); }
+/* the 바이비트 봇's entry mark (owners 11-02: the OBV4 MACD histogram turning green under 0 / red over 0): a ring */
+.dk-o4 { fill: none; stroke-width: 1.6; }
+.dk-o4.up { stroke: var(--dk-green); }
+.dk-o4.down { stroke: var(--dk-red); }
 .dk-last { stroke: var(--dk-amber); stroke-width: 1; stroke-dasharray: 4 3; }
 .dk-lastbox { fill: var(--dk-amber); }
 .dk-lastt { fill: var(--dk-bg); font-family: var(--f-term); font-size: var(--t-2xs); font-weight: 700; }

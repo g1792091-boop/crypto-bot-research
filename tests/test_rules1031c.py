@@ -21,6 +21,7 @@ import math
 import os
 import re
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,15 @@ from test_rules1030 import frame, walk  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
+# this era's configs (10-31 night): the deploy files with the trend bar and the rules of then (owners 11-02 moved all three
+# bots to the 추세 MACD trend and new entries: tests/test_rules1102.py)
+ERA_RULES = {"mixbybit": ["obvac"], "mixchop": ["h0x"], "mixrange": ["h0x"]}
+ERA = Path(tempfile.mkdtemp(prefix="era1031c-"))
+for _f in DEPLOY.glob("mix*.json"):
+    _d = json.loads(_f.read_text(encoding="utf-8"))
+    if _f.name.split(".")[0] in ERA_RULES:
+        _d.update(trend="bar", rules=ERA_RULES[_f.name.split(".")[0]])
+    (ERA / _f.name).write_text(json.dumps(_d, ensure_ascii=False), encoding="utf-8")
 T0 = 1_800_000_000_000 - 1_800_000_000_000 % M.MIN30
 MIN, HOUR = 60_000, 3_600_000
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
@@ -312,7 +322,7 @@ def test_the_real_indicators_through_the_bot(monkeypatch):
 
 
 def test_a_15m_close_in_the_loop_logs_the_cross_and_enters(tmp_path, monkeypatch):
-    d = json.loads((DEPLOY / "mixrange.paper.json").read_text(encoding="utf-8"))
+    d = json.loads((ERA / "mixrange.paper.json").read_text(encoding="utf-8"))
     d.update(state=str(tmp_path / "state.json"), log=str(tmp_path / "log.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"), no_weekend=False, us_open_pre_min=0, us_open_pause_min=0,
              macro_blackout_min=0)
@@ -358,7 +368,7 @@ def test_a_15m_close_in_the_loop_logs_the_cross_and_enters(tmp_path, monkeypatch
 
 
 def test_the_signals_listing_and_the_check(tmp_path, monkeypatch, capsys):
-    cfg = M.load_config(str(DEPLOY / "mixrange.paper.json"))
+    cfg = M.load_config(str(ERA / "mixrange.paper.json"))
     r15, r30 = _pair(3000, 9)
     b = M.bars_frame(r15, M.MIN15, T0).tail(1499).reset_index(drop=True)
     tb = M.bars_frame(r30, M.MIN30, T0).tail(1499).reset_index(drop=True)
@@ -393,7 +403,7 @@ def test_the_signals_listing_and_the_check(tmp_path, monkeypatch, capsys):
     end = T0
     monkeypatch.setattr(M, "binance_fetch", lambda base: lambda s, tf, n: [r for r in src[tf] if r[0] < end][-n:])
     monkeypatch.setattr(M.time, "time", lambda: end / 1000 + 60)
-    assert M.cmd_signals(argparse.Namespace(config=str(DEPLOY / "mixrange.paper.json"), n=3)) == 0
+    assert M.cmd_signals(argparse.Namespace(config=str(ERA / "mixrange.paper.json"), n=3)) == 0
     out = capsys.readouterr().out
     assert out.count("  -- 히스토그램 0선 돌파 (추세 30분: 추세 바 종합(3개 점수 · 6종 · 하늘·보라 · EMA RSI · 슈퍼트렌드 · 4종, "
                      "노랑이면 진입 안 함))") == 6
@@ -401,7 +411,7 @@ def test_the_signals_listing_and_the_check(tmp_path, monkeypatch, capsys):
 
 
 def test_the_morning_replay_counts_the_crosses():
-    cfg = M.load_config(str(DEPLOY / "mixrange.paper.json"))
+    cfg = M.load_config(str(ERA / "mixrange.paper.json"))
     cfg.coins = cfg.coins[:1]
     r15, r30 = _pair(4000, 11)
     src = {"15m": r15, "30m": r30}
@@ -474,7 +484,7 @@ def test_the_trend_is_the_last_closed_30m_bars_and_the_15m_trend_is_ignored():
 
 
 def test_the_trend_tf_in_the_config(tmp_path):
-    base = json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8"))
+    base = json.loads((ERA / "mixrange.live.json").read_text(encoding="utf-8"))
 
     def load(**over):
         p = tmp_path / "c.json"
@@ -497,7 +507,7 @@ def test_the_trend_tf_in_the_config(tmp_path):
 
 
 def _cfg(name):
-    return M.load_config(str(DEPLOY / name))
+    return M.load_config(str(ERA / name))
 
 
 def test_three_bots_one_trend_six_coins():
@@ -537,7 +547,7 @@ def test_three_bots_one_trend_six_coins():
     # a trend that is not one of the three is refused, with the new one named
     with pytest.raises(M.MixError, match="bar: 추세 바 종합"):
         p = Path(os.environ.get("TMPDIR", "/tmp")) / "bad-trend-1031c.json"
-        d = json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8"))
+        d = json.loads((ERA / "mixrange.live.json").read_text(encoding="utf-8"))
         p.write_text(json.dumps({**d, "trend": "votes"}), encoding="utf-8")
         try:
             M.load_config(str(p))

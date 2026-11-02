@@ -682,3 +682,51 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 - check: `매매법·손절: 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 바 종합(6줄, 노랑이면 진입 안 함)`.
 - 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
 - 되돌리기: `.before-1031c` 파일을 다시 복사하고 다시 켭니다.
+
+
+## 18. 11/02: 친구 15분 봇 — 30분봉 '추세 MACD' 히스토그램 + 15분봉 3합 히스토그램 0선 돌파
+
+두 분(11/02): "30분봉 추세 15분봉은 진입 바꾸지말고 30분봉 추세인데 추세를 macd 히스토그램으로 사용 0선 위에 있으면 상승 0선 아래에
+있으면 하락으로", "WOOX PRO 1,2 3합 히스토그램도 비슷한 방식이지만 이거는 30분봉 추세 macd가 0선 위에 있으면 상승 추세로 보고 15분봉
+3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로" (보내 주신 `추세 MACD`, `3합 히스토그램` 파인 스크립트).
+레인지 봇(WOO X Pro 첫 계정)도 같은 매매법입니다(`docs/range-bot-ko.md` 맨 앞).
+
+| 항목 | 내용 |
+|---|---|
+| 추세 | **30분봉 '추세 MACD'의 히스토그램** (17장의 추세 바 종합에서 바뀜, 세 봇 공통). 15분봉 마감 때 그때까지 끝난 마지막 30분봉의 히스토그램이 **0선 위면 상승, 0선 아래면 하락**. 노란 막대도 0선 기준. 정확히 0이면 진입 안 함 |
+| 신호 봉 | **15분봉** 그대로, 끝난 봉만 |
+| 롱 | 30분봉 추세 MACD 히스토그램 0선 위 + 15분봉 **3합 히스토그램이 0선 위로 돌파** (전 봉 0 이하 → 이번 봉 0 위) |
+| 숏 | 30분봉 히스토그램 0선 아래 + 15분봉 3합 히스토그램이 **0선 아래로 돌파** |
+| 뺀 것 | 'ALL + OBV6 MACD' 히스토그램 0선 돌파 (17장), 추세 바 종합 |
+| 그대로 | 코인 6개(SOL → ETH → XRP → BCH → ZEC → DOGE), 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단 순ROE 10%→8% 뒤 5%씩, 포지션 1개, 진입 금지 시간, 잔고 하한 없음 |
+
+- **추세 MACD**: 추세 바의 6줄을 값으로 바꾼 평균의 EMA 3(MACD 선), 그 EMA 9(시그널선), 히스토그램 = 선 − 시그널
+  (`paperbot/friendtrend.py` 10장, `docs/mixbybit-ko.md` 12장). 추세는 **히스토그램**의 0선 위 · 아래입니다(MACD 선이 아님).
+- **3합 히스토그램** (`h3_pane`, 스크립트 기본값): ① WOOX pro2 = 'ALL + OBV6 MACD'의 MACD 선(17장), ② 레인지봇 = 2 × (EMA RSI − 50),
+  ③ 15종 MACD 선(BB %B · RSI · MFI · %R · MOM · 거래량 오실레이터 · 얼티밋 · AO · AC · SMIO · 매물대 POC 거리 · 거래량 · SMMA 21 ·
+  SMA 52 · MACD 12/26, 각각 정규화 후 EMA 3, 평균 × 100의 EMA 3)의 평균, 그 EMA 9가 시그널선, 히스토그램 = 평균 − 시그널.
+- 텔레그램 근거 줄 예: `근거: 3합 히스토그램 0선 위로 돌파(히스토그램 2.5) · 추세 MACD 30분 히스토그램 0선 위 상승(+3.21)`.
+- 막힌 신호 예: `3합 히스토그램 0선 돌파 없음`, `추세 MACD 30분 히스토그램 0선 아래 하락(-1.40): 신호 롱와 반대`.
+- 아침 점검의 '놓친 신호'는 15분봉으로 다시 계산해 `3합 히스토그램 0선 돌파 N번`을 셉니다.
+- 설정: `"trend": "macd"`, `"rules": ["h3x"]` (`"tf": "15m"`, `"trend_tf": "30m"` 그대로). 시험: `tests/test_rules1102.py`,
+  `tests/test_dash_rules1102.py`. **백테스트는 하지 않았습니다.**
+
+### 18-1. 바꾸는 순서 (서버에서, 포지션이 없을 때 권장)
+
+```bash
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-1102
+sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-1102
+sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+sudo diff /etc/paperbot/mixchop.json.before-1102 /etc/paperbot/mixchop.json
+sudo deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbot/mixchop.json | tail -8
+sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
+```
+
+- (코드 받기 `git pull && sudo bash deploy/install.sh`는 `docs/mixbybit-ko.md` 12-1에서 한 번만 하면 됩니다.)
+- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"h3x"` 두 줄만 나옵니다.
+- check: `매매법·손절: 3합 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
+- 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.
+- 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
+- 되돌리기: `.before-1102` 파일을 다시 복사하고 다시 켭니다.

@@ -1,8 +1,42 @@
-# 레인지 봇 (10/31 밤부터: WOO X Pro를 스스로 매매 · 30분봉 추세 바 종합 + 15분봉 히스토그램 0선 돌파)
+# 레인지 봇 (WOO X Pro를 스스로 매매 · 11/02부터 30분봉 추세 MACD 히스토그램 + 15분봉 3합 히스토그램 0선 돌파)
 
 > **10/31 밤 바뀐 것:** 레인지 봇이 페이퍼 봇 + 실행기 구조에서 **바이비트 봇·친구 봇과 같은 프로그램**(`paperbot/mixchop.py`)으로
 > 옮겨 갑니다. WOO X Pro 첫 번째 계정을 직접 거래하고, 코인은 세 봇이 모두 SOL · ETH · XRP · BCH · ZEC · DOGE입니다(0장).
 > 1장부터는 예전(10/26 ~ 10/31 낮) 레인지 봇의 기록입니다.
+
+## 11/02부터: 30분봉 '추세 MACD' 히스토그램 + 15분봉 3합 히스토그램 0선 돌파 (지금 매매법)
+
+두 분(11/02): "30분봉 추세 15분봉은 진입 바꾸지말고 30분봉 추세인데 추세를 macd 히스토그램으로 사용 0선 위에 있으면 상승 0선 아래에
+있으면 하락으로", "WOOX PRO 1,2 3합 히스토그램도 비슷한 방식이지만 이거는 30분봉 추세 macd가 0선 위에 있으면 상승 추세로 보고 15분봉
+3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로". 친구 15분 봇(WOO X Pro 2)과 완전히 같은 매매법이고
+자세한 내용은 `docs/mixchop-ko.md` 18장입니다. 아래 0장에서 바뀐 것만:
+
+| 항목 | 0장(10/31 밤) | 11/02부터 |
+|---|---|---|
+| 추세 (30분봉) | 추세 바 종합 (6줄 셈, 노랑 = 진입 금지) | **추세 MACD 히스토그램**: 0선 위 = 상승, 0선 아래 = 하락. 노란 막대도 0선 기준 |
+| 진입 (15분봉) | 'ALL + OBV6 MACD' 히스토그램 0선 돌파 | **3합 히스토그램** 0선 돌파 (롱: 0선 위로, 숏: 0선 아래로) |
+| 설정 | `"trend": "bar"`, `"rules": ["h0x"]` | `"trend": "macd"`, `"rules": ["h3x"]` |
+
+- 그대로: 계정(WOO X Pro 첫 계정), 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단, 포지션 1개, 진입 금지 시간.
+- **백테스트는 하지 않았습니다.** 시험: `tests/test_rules1102.py`.
+
+### 바꾸는 순서 (서버에서, WOO X Pro 첫 계정에 포지션이 없을 때 권장)
+
+```bash
+cd /opt/crypto-bot-research
+sudo cp -p /etc/paperbot/mixrange.json /etc/paperbot/mixrange.json.before-1102
+sudo cp -p /etc/paperbot/mixrange-paper.json /etc/paperbot/mixrange-paper.json.before-1102
+sudo install -o root -g paperbot -m 640 deploy/mixrange.live.json /etc/paperbot/mixrange.json
+sudo install -o root -g paperbot -m 640 deploy/mixrange.paper.json /etc/paperbot/mixrange-paper.json
+sudo diff /etc/paperbot/mixrange.json.before-1102 /etc/paperbot/mixrange.json
+sudo deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixrange.json | tail -8
+sudo systemctl restart paperbot-mixrange paperbot-mixrange-paper
+```
+
+- (코드 받기 `git pull && sudo bash deploy/install.sh`는 한 번만: `docs/mixbybit-ko.md` 12-1.)
+- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"h3x"` 두 줄만 나옵니다.
+- check: `매매법·손절: 3합 히스토그램 0선 돌파 · … · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
+- 되돌리기: `.before-1102` 파일을 다시 복사하고 다시 켭니다.
 
 ## 0장. 10/31 밤부터: 새 레인지 봇
 

@@ -74,9 +74,9 @@ export function pulseRows(p) {
   return rows.map(([ko, n]) => [ko, n, n / m]);
 }
 /** The floating screens of the 3D room, each with its place behind the table (pose: livebots-room3d.js layoutPose): the
- * coins (Binance's closed bars and the bots' formulas, as the 관제실: price, 24 hours, the 30m 추세 바 종합, the last 15m
- * histogram and its 0 cross), the coin cards, the team's pulse, its status and its newest rows; all from the answer. */
-const TREND_WORD = {1: ["상승", "up"], "-1": ["하락", "down"], 0: ["진입 금지", "flat"]};
+ * coins (Binance's closed bars and the bots' formulas, as the 관제실: price, 24 hours, the 30m 추세 MACD (owners 11-02),
+ * the last 15m 3합 histogram and its 0 cross), the coin cards, the team's pulse, its status and its newest rows; all from the answer. */
+const TREND_WORD = {1: ["상승", "up"], "-1": ["하락", "down"], 0: ["0선", "flat"]};
 export function panelSpecs(d, now) {
   const t = (d && d.team) || {}, money = (x) => (ok(x) ? `${x >= 0 ? "" : "−"}$${fmt.num(Math.abs(x), 2)}` : "—");
   const sign = (x) => (ok(x) ? `${x >= 0 ? "+" : "−"}$${fmt.num(Math.abs(x), 2)}` : "—");
@@ -89,9 +89,9 @@ export function panelSpecs(d, now) {
       {t: ok(c.hist) ? `${fmt.num(c.hist, 2)}${x ? (x > 0 ? " ▲0선" : " ▼0선") : ""}` : "—", tone: ok(c.hist) ? (c.hist >= 0 ? "up" : "down") : "muted"}];
   });
   return [
-    {title: "COINS · 코인", sub: "바이낸스 봉 · 30분 추세 바 종합 · 15분 히스토그램 (봇의 계산 그대로)", px: [1024, 420],
+    {title: "COINS · 코인", sub: "바이낸스 봉 · 30분 추세 MACD · 15분 3합 히스토그램 (봇의 계산 그대로)", px: [1024, 420],
       pose: {off: 0, y: 1.62, w: 3.1, h: 1.27, r: 3.45},
-      table: {cols: ["코인", "가격", "24시간", "30분 추세", "히스토그램"], x: [22, 150, 390, 590, 790], rows: cRows.length ? cRows : [[{t: "코인 값을 기다리는 중", tone: "muted"}]]}},
+      table: {cols: ["코인", "가격", "24시간", "30분 추세", "3합 히스토그램"], x: [22, 150, 390, 590, 790], rows: cRows.length ? cRows : [[{t: "코인 값을 기다리는 중", tone: "muted"}]]}},
     {title: "TOP 6 · 코인 카드", sub: "24시간 줄", px: [720, 460], pose: {off: -0.98, y: 1.42, w: 1.85, h: 1.18, r: 3.35},
       cards: coins.filter((c) => c.state === "ok").map((c) => ({coin: c.coin, price: px(c.last), chg: pct(c.chg24),
         tone: ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : "muted", spark: c.spark || []}))},

@@ -69,6 +69,13 @@ Trade:
   FIRST WOO X Pro account, keys from executor.env, owners "그 방법으로 해줘"): 15m, "bar", ["h0x"]; all on SOL · ETH · XRP ·
   BCH · ZEC · DOGE. Last (owners: "30분봉은 추세만 보고 15분봉으로 진입을 하는데 15분봉 추세는 무시 진입 방식은 지금이랑
   동일"): ``"trend_tf": "30m"`` - every bot on 15m signal bars with the trend bar read on the last closed 30m bar.
+- owners 11-02 ("30분봉 추세 15분봉은 진입 바꾸지말고 30분봉 추세인데 추세를 macd 히스토그램으로 사용 0선 위에 있으면 상승 0선
+  아래에 있으면 하락으로"): ``"trend": "macd"``, the '추세 MACD' histogram of the last closed 30m bar (friendtrend part 10:
+  over 0 up, under 0 down, its yellow bars counted the same way) for all three bots; the 바이비트 봇 enters on rule
+  ``"o4h"`` ("obv 선은 사용 안함 히스토그램으로 진입 … 15분봉 obv 히스토그램이 0선 아래에서 양봉으로 바뀌면 롱진입 숏 진입은
+  반대"): the OBV4 MACD's AC histogram turning green under 0 (long) / red over 0 (short); the 친구 15분 봇 and the 레인지 봇
+  (WOO X Pro 2 / 1) on rule ``"h3x"`` ("15분봉 3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대"): the 3합
+  histogram crossing above 0 (long) / below 0 (short). Each on the trend's side.
 - one position at a time over all coins; signals of one close compete by the coin order of the config.
 - entry blocks (owners 10-25 night, the same as their own bots; not in the friend's design, so off unless the config
   sets them): ``no_weekend`` (Saturday and Sunday KST), ``us_open_pre_min`` / ``us_open_pause_min`` (minutes before /
@@ -105,8 +112,10 @@ MIN1 = 60_000
 TF_MS = {"30m": MIN30, "15m": MIN15}         # the signal bar (owners 10-30: WOO X Pro 2 on 15m bars)
 TF_KO = {"30m": "30분", "15m": "15분"}
 TFKO_MS = {MIN30: "30분", MIN15: "15분"}
-TRENDS = ("four", "swing", "bar")  # the friend's trend: four votes, 2+ the same (10-29) | WOO X Pro 2's (10-30,
+TRENDS = ("four", "swing", "bar", "macd")  # the friend's trend: four votes, 2+ the same (10-29) | WOO X Pro 2's (10-30,
                                    # friendtrend 6) | the trend bar's 종합 of all three bots (10-31 night, friendtrend 9)
+                                   # | the 추세 MACD histogram's side of 0 (owners 11-02, friendtrend 10)
+TREND_START_KO = {"macd": " 추세 MACD 히스토그램"}   # the start message's trend (owners 11-02; the older modes say only the bar)
 MINUTE_MAX = 1400               # 1m bars read at most (one request); a longer gap (the bot was down) is walked on 30m bars
 H1 = 3_600_000
 KST_MS = 9 * H1
@@ -367,9 +376,12 @@ RULE_KO = {"mix": "친구 매매법", "st": "슈퍼트렌드·스톡RSI", "obv":
            # owners 10-31: the OBV turn with OBV MACD's AC bar on its side (plus 양봉 long, minus 음봉 short), no 50 line
            "obvac": "OBV 진한색 + AC",
            # owners 10-31 night: 'ALL + OBV6 MACD''s histogram crossing 0 on 종합's side (WOO X Pro 2, the 레인지 봇)
-           "h0x": "히스토그램 0선 돌파"}
+           "h0x": "히스토그램 0선 돌파",
+           # owners 11-02: the 바이비트 봇's OBV4 MACD histogram turning green under 0 / red over 0; WOO X Pro 1 · 2's 3합
+           # histogram crossing 0
+           "o4h": "OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)", "h3x": "3합 히스토그램 0선 돌파"}
 RULES = tuple(RULE_KO)
-FRIEND_RULES = ("obv", "srsi", "obv50", "roc50", "ema3", "obvac", "h0x")   # the trend of the bar first, then the signal
+FRIEND_RULES = ("obv", "srsi", "obv50", "roc50", "ema3", "obvac", "h0x", "o4h", "h3x")   # the trend of the bar first, then the signal
 OBV_RULES = ("obv", "obv50", "obvac")                     # the rules entering on the OBV pane's light -> dark turn
 
 
@@ -384,7 +396,10 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
     "obv50": the obv turn under its 50 line (long) / over it (short); "roc50": the OBV ROC pane's bar light ->
     dark with its purple line under 50 (long) / over 50 (short); "obvac" (owners 10-31): the obv turn with OBV MACD's AC
     bar plus and green (long) / minus and red (short), no 50 line (friendtrend part 8); "h0x" (owners 10-31 night): 'ALL
-    + OBV6 MACD''s histogram crossing above 0 (long) / below 0 (short) on that bar (friendtrend part 9). ``trend`` "bar"
+    + OBV6 MACD''s histogram crossing above 0 (long) / below 0 (short) on that bar (friendtrend part 9); "o4h" (owners
+    11-02, the 바이비트 봇): the OBV4 MACD's AC histogram turning green under 0 (long) / red over 0 (short); "h3x" (owners
+    11-02, WOO X Pro 1 · 2): the 3합 histogram crossing above 0 (long) / below 0 (short) (friendtrend part 10). ``trend``
+    "macd" (owners 11-02, all three bots): the 추세 MACD histogram over 0 (up) / under 0 (down), its yellow bars too. ``trend`` "bar"
     (owners 10-31 night, all three bots): the trend bar's 종합 (friendtrend part 9; 노랑 = no entry). ``tb`` with
     ``trend_tf_ms`` (owners 10-31, last: "30분봉은 추세만 보고 15분봉으로 진입을 하는데 15분봉 추세는 무시"): the trend is read
     on these bars instead (closed bars of that timeframe; the last one closed at or before this close), the signal, the
@@ -444,6 +459,17 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
         hv = float(H["hist"][-1])
         out.update({"x0": want, "h6": round(hv, 4) if math.isfinite(hv) else None})
         no = "히스토그램 0선 돌파 없음"
+    elif rule == "o4h":                                 # owners 11-02: the OBV4 MACD's AC histogram turning colour
+        o4 = FT.o4_state(h, l, c, v)
+        want = o4["side"]
+        out.update({"o4": o4["ac"], "o4_col": o4["col"], "o4_turn": o4["turn"]})
+        no = ("OBV 히스토그램 양봉·음봉 전환 없음" if not o4["turn"] else
+              f"OBV 히스토그램 {FT.o4_words(o4['ac'], o4['turn'])}: {'롱은 0선 아래 양봉 전환만' if o4['turn'] > 0 else '숏은 0선 위 음봉 전환만'}")
+    elif rule == "h3x":                                 # owners 11-02: the 3합 histogram crossing 0
+        h3 = FT.h3_state(o, h, l, c, v)
+        want = h3["cross"]
+        out.update({"x0": want, "h3": h3["hist"]})
+        no = "3합 히스토그램 0선 돌파 없음"
     elif rule == "roc50":
         rs = FT.roc_state(h, l, c, v)
         want = rs["side"]
@@ -457,7 +483,11 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
         want = sg["side"]
         no = ("스톡RSI 크로스 없음" if not sg["cross"] else
               f"스톡RSI {'골든' if sg['cross'] == 'gold' else '데드'}이 50선 {'위' if sg['cross'] == 'gold' else '아래'}(K {sg['k']})")
-    if trend == "bar":                                  # owners 10-31 night: the trend bar's 종합, no four votes
+    if trend == "macd":                                 # owners 11-02: the 추세 MACD histogram's side of 0
+        t = FT.tmacd_state(th, tl, tc, tv)
+        tside = t["trend"]
+        out.update({"tmacd": t["hist"], "tmacd_line": t["macd"], "tyellow": t["yellow"]})
+    elif trend == "bar":                                # owners 10-31 night: the trend bar's 종합, no four votes
         t = FT.bar_state(th, tl, tc, tv)
         tside = t["trend"]
         out.update({"bar": t["rows"], "bar_n": t["n"], "bar_score": t["score"], "ema_rsi": t["ersi"]})
@@ -473,7 +503,7 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
     liq_ok = dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0)
     out.update({"close": px, "trend": tside, "atr": at, "stop_dist": dist, "stop_pct": round(dist / px * 100, 3),
                 "liq_ok": bool(liq_ok)})
-    if trend in ("swing", "bar"):
+    if trend in ("swing", "bar", "macd"):
         out["trend_mode"] = trend
     if not want:
         out["why"] = no
@@ -486,7 +516,8 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
         return out
     if tside != want:
         tt = f"{out['trend_tf']} " if out.get("trend_tf") else ""
-        out["why"] = (f"추세 바 {tt}{FT.bar_words(t)}" if trend == "bar" else f"추세 {tt}{FT.swing_words(t)}"
+        out["why"] = (f"추세 MACD {tt}{FT.tmacd_words(t)}" if trend == "macd" else f"추세 바 {tt}{FT.bar_words(t)}"
+                      if trend == "bar" else f"추세 {tt}{FT.swing_words(t)}"
                       if trend == "swing" else f"친구 추세 {tt}{FT.trend_words(t)}") \
             + ("" if tside == 0 else f": 신호 {'롱' if want > 0 else '숏'}와 반대")
         return out
@@ -501,7 +532,7 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
 BOARD_KEYS = ("close", "trend", "votes", "ema_rsi", "chop_zone", "turn", "obv_cs", "obv_dark", "cross", "k", "d", "xs",
               "stop_pct", "liq_ok", "obv50", "roc_turn", "roc_cs", "roc_dark", "roc", "trend_mode", "tf",
               "e3_turn", "e3_cs", "e3_dark", "ersi", "e3_trend", "e3_votes", "ac", "ac_col", "bar", "bar_n", "bar_score",
-              "x0", "h6", "trend_tf")
+              "x0", "h6", "trend_tf", "tmacd", "tmacd_line", "tyellow", "o4", "o4_col", "o4_turn", "h3")
 
 
 def board_row(evs: list, close_ms: int) -> dict:
@@ -627,6 +658,10 @@ def friend_words(ev: dict, side: int) -> str:
         what = f"ROC 막대 {'연한 초록→진한 초록' if up else '연한 빨강→진한 빨강'} · 보라 선 50선 {'아래' if up else '위'}({ev.get('roc')})"
     elif r == "h0x":
         what = f"히스토그램 0선 {'위로' if up else '아래로'} 돌파(히스토그램 {ev.get('h6')})"
+    elif r == "o4h":                                    # owners 11-02
+        what = f"OBV 히스토그램 {FT.o4_words(ev.get('o4'), 1 if up else -1)}"
+    elif r == "h3x":                                    # owners 11-02
+        what = f"3합 히스토그램 0선 {'위로' if up else '아래로'} 돌파(히스토그램 {ev.get('h3')})"
     elif r == "ema3":                                   # owners 10-31: its own three trends are its trend
         tf = ev.get("tf") or "30분"
         return (f"EMA RSI 막대 {'연한 초록→진한 초록' if up else '연한 빨강→진한 빨강'}(EMA RSI {ev.get('ersi')}) · 추세 {tf} "
@@ -634,11 +669,18 @@ def friend_words(ev: dict, side: int) -> str:
     else:
         what = f"스톡RSI {'골든' if up else '데드'}(K {ev.get('k')} / D {ev.get('d')}, 50선 {'아래' if up else '위'})"
     tf = ev.get("trend_tf") or ev.get("tf") or "30분"          # the trend's bar (owners 10-31, last: 30m on 15m)
+    if ev.get("trend_mode") == "macd":                          # owners 11-02
+        return f"{what} · 추세 MACD {tf} {FT.tmacd_words(tmacd_of(ev))}"
     if ev.get("trend_mode") == "bar":
         return f"{what} · 추세 바 {tf} {FT.bar_words(bar_of(ev))}"
     t = {"trend": ev.get("trend", 0), **(ev.get("votes") or {})}
     trend = f"추세 {tf} {FT.swing_words(t)}" if ev.get("trend_mode") == "swing" else f"친구 추세 {tf} {FT.trend_words(t)}"
     return f"{what} · {trend}"
+
+
+def tmacd_of(ev: dict) -> dict:
+    """The 추세 MACD of a signal / board row as friendtrend.tmacd_words reads it (owners 11-02)."""
+    return {"trend": ev.get("trend", 0), "hist": ev.get("tmacd"), "yellow": bool(ev.get("tyellow"))}
 
 
 def bar_of(ev: dict) -> dict:
@@ -746,7 +788,7 @@ def load_config(path: str) -> Config:
     rules_raw = raw.get("rules", ["mix"])
     sa_raw = raw.get("stop_atr")
     if isinstance(rules_raw, list) and any(r in FRIEND_RULES for r in rules_raw) and sa_raw is None:
-        raise MixError("친구 추세 매매법(\"obv\"·\"srsi\"·\"obv50\"·\"roc50\"·\"ema3\"·\"obvac\"·\"h0x\")은 \"stop_atr\"(손절 ATR 배수, "
+        raise MixError("친구 추세 매매법(\"obv\"·\"srsi\"·\"obv50\"·\"roc50\"·\"ema3\"·\"obvac\"·\"h0x\"·\"o4h\"·\"h3x\")은 \"stop_atr\"(손절 ATR 배수, "
                        "예: 3)가 필요합니다")
     for sym, v in (raw.get("coins") or {}).items():
         if not sym.endswith("USDT"):
@@ -812,14 +854,14 @@ def load_config(path: str) -> Config:
         raise MixError(f"\"name\"은 40자 안의 이름입니다(지금 {name!r})")
     cfg.name = name.strip()
     if any(r in FRIEND_RULES for r in cfg.rules) and not cfg.stop_atr:
-        raise MixError("친구 추세 매매법(\"obv\"·\"srsi\"·\"obv50\"·\"roc50\"·\"ema3\"·\"obvac\"·\"h0x\")은 \"stop_atr\"(손절 ATR 배수, "
+        raise MixError("친구 추세 매매법(\"obv\"·\"srsi\"·\"obv50\"·\"roc50\"·\"ema3\"·\"obvac\"·\"h0x\"·\"o4h\"·\"h3x\")은 \"stop_atr\"(손절 ATR 배수, "
                        "예: 3)가 필요합니다")
     tf, tr = raw.get("tf", "30m"), raw.get("trend", "four")
     if tf not in TF_MS:
         raise MixError(f"\"tf\"는 {list(TF_MS)} 중 하나입니다(신호 봉, 지금 {tf!r})")
     if tr not in TRENDS:
         raise MixError(f"\"trend\"는 {list(TRENDS)} 중 하나입니다(four: 네 표 중 2개 이상, swing: WOO X Pro 2 규칙, bar: 추세 바 "
-                       f"종합; 지금 {tr!r})")
+                       f"종합, macd: 추세 MACD 히스토그램 0선 위 / 아래; 지금 {tr!r})")
     if (tf != "30m" or tr != "four") and any(r not in FRIEND_RULES for r in cfg.rules):
         raise MixError("\"mix\"·\"st\" 매매법은 30분봉(tf \"30m\")과 네 표 추세(trend \"four\")에서만 씁니다")
     cfg.tf, cfg.trend = tf, tr
@@ -1203,9 +1245,9 @@ class Bot:
         coins = " · ".join(f"{coin_ko(c.symbol)}{'' if c.enabled else '(꺼짐)'}" for c in self.cfg.coins)
         held = f"\n보유 중: {coin_ko(self.pos.symbol)} {'롱' if self.pos.side > 0 else '숏'} 손절 {self.pos.stop:.6g}" \
             if self.pos else ""
+        tw = f" (추세는 {self.cfg.trend_tf_ko}봉{TREND_START_KO.get(self.cfg.trend, '')})" if self.cfg.trend_tf else ""
         self.say("INFO", f"▶️ 시작 · 잔고 ${eq:,.2f} (시작 잔고 ${self.start_equity:,.2f})\n코인 {coins}\n"
-                         f"{self.plan_text()} · 한 번에 1포지션 · {self.cfg.tf_ko}봉 마감마다 판단"
-                         f"{f' (추세는 {self.cfg.trend_tf_ko}봉)' if self.cfg.trend_tf else ''}{held}"
+                         f"{self.plan_text()} · 한 번에 1포지션 · {self.cfg.tf_ko}봉 마감마다 판단{tw}{held}"
                  + ("".join(f"\n⚠ {t}" for t in bad)))
         self.log("start", equity=eq, start_equity=self.start_equity, setup=lines, position=asdict(self.pos) if self.pos else None)
         if problem:
@@ -1355,7 +1397,7 @@ class Bot:
                 if _not_read(ev):
                     self.log("bars_missing", **ev)
                 if ev.get("to_cyan") or ev.get("to_purple") or ev.get("cross") or ev.get("turn") or ev.get("roc_turn") \
-                        or ev.get("e3_turn") or ev.get("x0") \
+                        or ev.get("e3_turn") or ev.get("x0") or ev.get("o4_turn") \
                         or ev["side"]:
                     self.log("signal", **ev)
             if any(r in FRIEND_RULES for r in self.cfg.rules):
@@ -1842,7 +1884,8 @@ def cmd_signals(args) -> int:
     last_close = now // cfg.tf_ms * cfg.tf_ms
     trend_ko = ("하늘·보라 선 · 찹존 · 슈퍼트렌드, 선 쪽이고 찹존·슈퍼트렌드 중 하나 이상 횡보" if cfg.trend == "swing"
                 else "추세 바 종합(3개 점수 · 6종 · 하늘·보라 · EMA RSI · 슈퍼트렌드 · 4종, 노랑이면 진입 안 함)"
-                if cfg.trend == "bar" else "하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드")
+                if cfg.trend == "bar" else "추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 같음)"
+                if cfg.trend == "macd" else "하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드")
     for co in cfg.coins:
         b30 = bars_frame(fetch(co.symbol, cfg.tf, BARS), cfg.tf_ms, last_close)
         if all(r in FRIEND_RULES for r in cfg.rules):     # the 바이비트 봇 / WOO X Pro 2: the friend's trend rules only
@@ -1910,8 +1953,9 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
     own = tb is not None and bool(trend_tf_ms) and trend_tf_ms != tf_ms and len(tb) >= 300
     to, th, tl, tc, tv = ((tb[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume")) if own
                           else (o, h, l, c, v))
-    V = None if trend == "bar" else FT.votes(to, th, tl, tc, tv)
+    V = None if trend in ("bar", "macd") else FT.votes(to, th, tl, tc, tv)
     B = FT.bar_pane(th, tl, tc, tv) if trend == "bar" else None   # owners 10-31 night: the trend bar's 종합
+    TM = FT.tmacd_pane(th, tl, tc, tv) if trend == "macd" else None   # owners 11-02: the 추세 MACD histogram's side
     # the trend's bar of each signal bar: itself, or the last trend bar closed by the signal's close (-1: none yet)
     if own:
         t_close = tb.open_ms.to_numpy(np.int64) + trend_tf_ms
@@ -1922,11 +1966,17 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
     lvl = None                                           # the 50 line's value (obv50 / roc50)
     e3 = None
     hx = None
-    if rule == "h0x":                                    # owners 10-31 night: the histogram crossing 0
-        hx = FT.h6_pane(h, l, c, v)
+    o4 = None
+    if rule in ("h0x", "h3x"):                           # owners 10-31 night / 11-02: a histogram crossing 0
+        hx = FT.h6_pane(h, l, c, v) if rule == "h0x" else FT.h3_pane(o, h, l, c, v)
         turn = hx["cross"].astype(int)
         mark = turn != 0
         want = turn
+    elif rule == "o4h":                                  # owners 11-02: the OBV4 MACD's AC histogram turning colour
+        o4 = FT.o4_pane(h, l, c, v)
+        turn = o4["turn"].astype(int)
+        mark = turn != 0
+        want = o4["side"].astype(int)
     elif rule == "ema3":                                   # owners 10-31: its own three trends and the EMA RSI histogram
         e3 = FT.ema3_pane(h, l, c)
         cs, dk = e3["cs"], e3["dark"]
@@ -1962,7 +2012,11 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
         j = int(tix[i])
         if j < 300:                                      # the trend's bars do not reach back this far
             continue
-        if B is not None:
+        if TM is not None:
+            hv = float(TM["hist"][j])
+            t = {"trend": int(TM["trend"][j]), "hist": hv if math.isfinite(hv) else None, "yellow": bool(TM["yellow"][j])}
+            tside = t["trend"]
+        elif B is not None:
             t = {"trend": int(B["trend"][j]), "rows": {k: int(r[j]) for k, r in B["rows"].items()},
                  "n": [int(B["up"][j]), int(B["down"][j]), int(B["side"][j])], "score": int(B["score"][j])}
             tside = t["trend"]
@@ -1975,7 +2029,10 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
         dist = float(at[i]) * coin.sl_atr
         px = float(c[i])
         if hx is not None:
-            what = f"히스토그램 0선 {'위로' if turn[i] > 0 else '아래로'} 돌파(히스토그램 {float(hx['hist'][i]):.3f})"
+            what = (f"{'3합 ' if rule == 'h3x' else ''}히스토그램 0선 {'위로' if turn[i] > 0 else '아래로'} 돌파"
+                    f"(히스토그램 {float(hx['hist'][i]):.3f})")
+        elif o4 is not None:
+            what = f"OBV 히스토그램 {FT.o4_words(float(o4['ac'][i]), int(turn[i]))}"
         elif e3 is not None:
             what = f"EMA RSI 막대 {'연한 초록→진한 초록' if turn[i] > 0 else '연한 빨강→진한 빨강'} EMA RSI {float(e3['ersi'][i]):.1f}"
         elif rule in ("obv", "obv50", "roc50", "obvac"):
@@ -1986,7 +2043,7 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
             what = f"{'골든' if P['gold'][i] else '데드'} K {P['k'][i]:.1f} D {P['d'][i]:.1f}"
         if not want[i]:
             res = "X (추세 3개가 같은 쪽 아님)" if e3 is not None else "X (AC 조건 안 맞음)" if rule == "obvac" \
-                else "X (50선 조건 안 맞음)"
+                else "X (롱은 0선 아래 양봉 전환, 숏은 0선 위 음봉 전환만)" if rule == "o4h" else "X (50선 조건 안 맞음)"
         elif tside != want[i]:
             res = "X (종합 노랑, 진입 금지)" if B is not None and tside == 0 else "X (추세 다름)"
         elif not dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0):
@@ -1994,7 +2051,8 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
         else:
             res = "롱 진입" if want[i] > 0 else "숏 진입"
         tt = f"{TFKO_MS.get(trend_tf_ms, '')} " if own else ""
-        tw = f"추세 {FT.ema3_words(t)}" if e3 is not None else f"추세 바 {tt}{FT.bar_words(t)}" if B is not None \
+        tw = f"추세 {FT.ema3_words(t)}" if e3 is not None else f"추세 MACD {tt}{FT.tmacd_words(t)}" if TM is not None \
+            else f"추세 바 {tt}{FT.bar_words(t)}" if B is not None \
             else f"추세 {tt}{FT.swing_words(t)}" if trend == "swing" else f"친구 추세 {tt}{FT.trend_words(t)}"
         out.append(f"{kst(ce)} KST 마감  {what}  종가 {px:.6g}  {tw}  손절폭 {dist / px * 100:.2f}%  → {res}")
         if len(out) >= n:
@@ -2032,6 +2090,8 @@ def cmd_check(args) -> int:
                                           if cfg.trend == "swing" else
                                           f" · 추세: {cfg.trend_tf_ko + '봉 ' if cfg.trend_tf else ''}추세 바 종합(6줄, 노랑이면 "
                                           "진입 안 함)" if cfg.trend == "bar"
+                                          else f" · 추세: {cfg.trend_tf_ko + '봉 ' if cfg.trend_tf else ''}추세 MACD 히스토그램"
+                                          "(0선 위 상승 · 0선 아래 하락)" if cfg.trend == "macd"
                                           else " · 추세: 네 표 중 같은 쪽 2개 이상")
                  + (" (추세 3개 일치는 자기 추세 3개가 모두 같은 쪽)" if "ema3" in cfg.rules else "")
                  if any(r in FRIEND_RULES for r in cfg.rules) else ""))

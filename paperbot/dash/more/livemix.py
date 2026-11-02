@@ -39,7 +39,8 @@ path dict (``"bot"``), so every reader here and in paperbot/mixcheck.py answers 
     GET /api/v4/livebots/mixbybitperf  성적 (as /mixperf; no 5-year reference: the owners' own rules)
 
 A third (owners 10-31 night, docs/range-bot-ko.md 0장): the 레인지 봇 trades the first WOO X Pro account itself (the old
-range executor's slot "mexc"; profile "range"), 15m bars, the trend bar's 종합 and the histogram's 0 cross ("h0x"):
+range executor's slot "mexc"; profile "range"), 15m bars, the trend bar's 종합 and the histogram's 0 cross ("h0x"; owners
+11-02: the 30m 추세 MACD and the 3합 histogram's 0 cross, "h3x"; the 바이비트 봇 the OBV4 MACD histogram's turn, "o4h"):
 
     GET /api/v4/livebots/mixrange      관제 of the 레인지 봇 and its paper twin (as /mix)
     GET /api/v4/livebots/mixrangeperf  성적 (as /mixperf; no 5-year reference)
@@ -653,7 +654,10 @@ VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_o
             # owners 10-31 night: the trend bar (its six rows, the counts [상승, 하락, 횡보], the 3개 점수) and rule "h0x"
             # (the histogram's 0 cross on the bar: +1 up / -1 down, and its value); owners 10-31, last: the trend read on its
             # own bar ("trend_tf": "30분") while the signal is the 15-minute bar ("tf")
-            "bar", "bar_n", "bar_score", "x0", "h6", "trend_tf")
+            "bar", "bar_n", "bar_score", "x0", "h6", "trend_tf",
+            # owners 11-02: the 추세 MACD (its histogram, its line, its yellow bar), the 3합 histogram's value (rule "h3x",
+            # its 0 cross in "x0"), the OBV4 MACD histogram (rule "o4h": its value, colour and turn)
+            "tmacd", "tmacd_line", "tyellow", "h3", "o4", "o4_col", "o4_turn")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 
@@ -728,15 +732,20 @@ def feed_view(rows: list, now: int) -> dict:
             turn = _i(r.get("turn")) or 0                     # the OBV rule's light -> dark turn (owners 10-29)
             rturn = _i(r.get("roc_turn")) or 0                # the ROC bar's (owners 10-30)
             eturn = _i(r.get("e3_turn")) or 0                 # the EMA RSI histogram's (owners 10-31)
-            x0 = _i(r.get("x0")) or 0                         # the histogram's 0 cross (owners 10-31 night, rule h0x)
+            x0 = _i(r.get("x0")) or 0                         # the histogram's 0 cross (owners 10-31 night, rule h0x; 11-02 h3x)
+            o4t = _i(r.get("o4_turn")) or 0                   # the OBV4 MACD histogram's turn (owners 11-02, rule o4h)
+            o4v = _f(r.get("o4"))
+            where = "0선 아래 " if o4v is not None and o4v < 0 else "0선 위 " if o4v is not None and o4v > 0 else ""
             items.append({**base, "cat": "signal", "colour": colour, "cross": cross, "rule": rule, "rule_ko": M.RULE_KO.get(rule, rule),
                           "colour_ko": CROSS_KO.get(cross) or {"cyan": "하늘색으로 바뀜", "purple": "보라색으로 바뀜"}.get(colour)
                           or {1: "OBV 연한 초록→진한 초록", -1: "OBV 연한 빨강→진한 빨강"}.get(turn)
                           or {1: "ROC 막대 연한 초록→진한 초록", -1: "ROC 막대 연한 빨강→진한 빨강"}.get(rturn)
                           or {1: "EMA RSI 막대 연한 초록→진한 초록", -1: "EMA RSI 막대 연한 빨강→진한 빨강"}.get(eturn)
-                          or {1: "히스토그램 0선 위로 돌파", -1: "히스토그램 0선 아래로 돌파"}.get(x0, "신호"),
-                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 or eturn > 0 or x0 > 0 else
-                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 or eturn < 0 or x0 < 0 else side,
+                          or {1: f"OBV 히스토그램 {where}양봉 전환", -1: f"OBV 히스토그램 {where}음봉 전환"}.get(o4t)
+                          or {1: f"{'3합 ' if rule == 'h3x' else ''}히스토그램 0선 위로 돌파",
+                              -1: f"{'3합 ' if rule == 'h3x' else ''}히스토그램 0선 아래로 돌파"}.get(x0, "신호"),
+                          "want": 1 if colour == "cyan" or cross == "gold" or turn > 0 or rturn > 0 or eturn > 0 or x0 > 0 or o4t > 0 else
+                          -1 if colour == "purple" or cross == "dead" or turn < 0 or rturn < 0 or eturn < 0 or x0 < 0 or o4t < 0 else side,
                           "stage": stage, "tone": tone,
                           "why": r.get("why") or None, "outcome": out, "vals": _vals(r)})
         elif k == "skip" and id(r) not in folded:

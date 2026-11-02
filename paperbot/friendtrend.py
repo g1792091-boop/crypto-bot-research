@@ -682,6 +682,260 @@ def h0x_state(h, l, c, v) -> dict:
             "macd": round(mv, 3) if math.isfinite(mv) else None, "bar": B, "side": h0x_side(x, B["trend"])}
 
 
+# ====================================================================== 10. 추세 MACD · OBV4 MACD · 3합 히스토그램 (owners 11-02)
+TM_SMOOTH, TM_SIG = 3, 9                # 추세 MACD: its MACD line's EMA, its signal's EMA
+O4_SMOOTH, O4_SIG, O4_AC = 3, 9, 5      # OBV4 MACD: the MACD line's EMA, the signal's EMA, the AC histogram's SMA
+H3_SIG = 9                              # 3합 히스토그램: the signal's EMA (EMA, cSm 1 = the average itself)
+TM_KO = {1: "상승", -1: "하락", 0: "0선"}
+
+
+def _cross0(hist) -> np.ndarray:
+    """Pine ta.crossover(hist, 0) / ta.crossunder(hist, 0) per bar: +1 / -1 / 0 (the bar before at or past 0)."""
+    prev = lag(hist, 1)
+    with np.errstate(invalid="ignore"):
+        ok = np.isfinite(hist) & np.isfinite(prev)
+        return np.where(ok & (hist > 0) & (prev <= 0), 1, np.where(ok & (hist < 0) & (prev >= 0), -1, 0)).astype(np.int8)
+
+
+def tmacd_pane(h, l, c, v) -> dict:
+    """'추세 지표 MACD' (추세 MACD.pine, its defaults) per bar: the trend bar's six rows as values -100 ~ +100 (③ sky /
+    purple: 100 zsq(line - its EMA 9), ④ EMA RSI: 2 (EMA RSI - 50), ⑤ supertrend: 100 zsq(close - the average of the
+    supertrend lines 14 · 5 and 14 · 3), ① 3개 점수: the mean of ③ ④ ⑤, ② 6종 and ⑥ 4종 as they are), their mean through
+    EMA 3 = the MACD line, its EMA 9 the signal, the histogram = line - signal. Owners 11-02 ("30분봉 추세 … macd
+    히스토그램으로 사용 0선 위에 있으면 상승 0선 아래에 있으면 하락", "노란 히스토그램이 나와도 0선 아래에 있으면 하락추세 … 0선
+    위에 있으면 상승추세"): "trend" = the histogram's sign (+1 over 0, -1 under, 0 on it or undefined), whatever its colour;
+    "yellow" = the trend bar's 종합 is 횡보 there (the script draws that bar yellow: said, not used)."""
+    h, l, c = (np.asarray(a, float) for a in (h, l, c))
+    er = ema_rsi(c)
+    score_l = ((M._nz(M.rsi(c, 26), 50.0) - 50.0) / 50.0 + _z100(M.roc(c, 9)) + _z100(M.mom(c, 10))) / 3.0
+    nline = np.cumsum(score_l)
+    nsig = M.ema(nline, 9)
+    st_a, _ = M.supertrend(h, l, c, 14, BAR_ST[0])
+    st_b, _ = M.supertrend(h, l, c, 14, BAR_ST[1])
+    su = (st_a + st_b) / 2.0
+    v_n = 100.0 * _z100(nline - nsig)
+    v_e = 2.0 * (er - 50.0)
+    v_s = 100.0 * _z100(c - np.where(np.isfinite(su), su, c))
+    v_1 = (v_n + v_e + v_s) / 3.0
+    six, four = six_four(h, l, c, v)
+    macd = M.ema((v_1 + six + v_n + v_e + v_s + four) / 6.0, TM_SMOOTH)
+    sig = M.ema(macd, TM_SIG)
+    hist = macd - sig
+    with np.errstate(invalid="ignore"):
+        trend = np.where(hist > 0, 1, np.where(hist < 0, -1, 0)).astype(np.int8)
+    B = bar_pane(h, l, c, v)
+    return {"macd": macd, "sig": sig, "hist": hist, "trend": trend, "yellow": B["trend"] == 0}
+
+
+def tmacd_state(h, l, c, v) -> dict:
+    """On the last bar: {"trend" +1 / -1 / 0, "hist", "macd", "yellow"}."""
+    P = tmacd_pane(h, l, c, v)
+    if not len(P["hist"]):
+        return {"trend": 0, "hist": None, "macd": None, "yellow": False}
+    hv, mv = float(P["hist"][-1]), float(P["macd"][-1])
+    return {"trend": int(P["trend"][-1]), "hist": round(hv, 3) if math.isfinite(hv) else None,
+            "macd": round(mv, 3) if math.isfinite(mv) else None, "yellow": bool(P["yellow"][-1])}
+
+
+def tmacd_words(t: dict) -> str:
+    """'히스토그램 0선 위 상승(+3.21)' / '히스토그램 0선 아래 하락(−1.40, 노란 막대)' / '히스토그램 0선(진입 안 함)'."""
+    tr = int(t.get("trend") or 0)
+    hv = t.get("hist")
+    val = f"{hv:+.2f}" if isinstance(hv, (int, float)) and math.isfinite(hv) else "못 읽음"
+    yl = ", 노란 막대" if t.get("yellow") else ""
+    if tr > 0:
+        return f"히스토그램 0선 위 상승({val}{yl})"
+    if tr < 0:
+        return f"히스토그램 0선 아래 하락({val}{yl})"
+    return f"히스토그램 0선(진입 안 함, {val})"
+
+
+def o4_pane(h, l, c, v) -> dict:
+    """'OBV · AO · AC · MACD 합친 평균 MACD' (OBV4 MACD, its defaults: all four on, weight 1, the OBV line '누적') per bar:
+    ① the OBV · Klinger line (21 / 34) - its EMA 52, ② AO SMA 5 - SMA 34 of hl2, ③ AC = AO - its SMA 5, ④ MACD EMA 12 -
+    EMA 26; each zsq over 100, their mean x 100 through EMA 3 = the MACD line, its EMA 9 the signal; the histogram (the
+    default 'AC 오실레이터 (가속)') = (line - signal) - its SMA 5, green while it rose on this bar, red while it fell.
+    "col" +1 / -1 / 0 (equal or undefined); "turn" +1 = green now and not green on the bar before (the script's 'AC 초록
+    전환'), -1 = red now and not red before. Owners 11-02 (the 바이비트 봇: "obv 선은 사용 안함 히스토그램으로 진입 … 15분봉
+    obv 히스토그램이 0선 아래에서 양봉으로 바뀌면 롱진입 숏 진입은 반대 조건"): "side" +1 = a green turn under 0, -1 = a red
+    turn over 0."""
+    h, l, c = (np.asarray(a, float) for a in (h, l, c))
+    ml = mix_line(h, l, c, v)
+    hl2 = (h + l) / 2.0
+    ao = M.sma(hl2, 5) - M.sma(hl2, 34)
+    zs = (_z100(ml - M.ema(ml, 52)), _z100(ao), _z100(ao - M.sma(ao, 5)), _z100(M.ema(c, 12) - M.ema(c, 26)))
+    macd = M.ema(100.0 * sum(zs) / 4.0, O4_SMOOTH)
+    sig = M.ema(macd, O4_SIG)
+    hraw = macd - sig
+    ac = hraw - M.sma(hraw, O4_AC)
+    prev = lag(ac, 1)
+    with np.errstate(invalid="ignore"):
+        ok = np.isfinite(ac) & np.isfinite(prev)
+        col = np.where(ok, np.where(ac > prev, 1, np.where(ac < prev, -1, 0)), 0).astype(np.int8)
+    pcol = np.r_[0, col[:-1]].astype(np.int8)
+    turn = np.where((col == 1) & (pcol != 1), 1, np.where((col == -1) & (pcol != -1), -1, 0)).astype(np.int8)
+    with np.errstate(invalid="ignore"):
+        side = np.where((turn > 0) & (ac < 0), 1, np.where((turn < 0) & (ac > 0), -1, 0)).astype(np.int8)
+    return {"macd": macd, "sig": sig, "ac": ac, "col": col, "turn": turn, "side": side}
+
+
+def o4_state(h, l, c, v) -> dict:
+    """On the last bar: {"ac", "col", "turn", "side", "macd"}."""
+    P = o4_pane(h, l, c, v)
+    if not len(P["ac"]):
+        return {"ac": None, "col": 0, "turn": 0, "side": 0, "macd": None}
+    a, mv = float(P["ac"][-1]), float(P["macd"][-1])
+    return {"ac": round(a, 4) if math.isfinite(a) else None, "col": int(P["col"][-1]), "turn": int(P["turn"][-1]),
+            "side": int(P["side"][-1]), "macd": round(mv, 3) if math.isfinite(mv) else None}
+
+
+def o4_words(ac, turn) -> str:
+    """'0선 아래 양봉 전환(−3.20)' / '0선 위 음봉 전환(2.10)' / '0선 위 양봉 전환(1.10)' / '전환 없음(0.40)'."""
+    try:
+        a = float(ac)
+    except (TypeError, ValueError):
+        a = math.nan
+    val = f"{a:.2f}" if math.isfinite(a) else "못 읽음"
+    t = int(turn or 0)
+    if not t:
+        return f"전환 없음({val})"
+    where = "0선 아래" if math.isfinite(a) and a < 0 else "0선 위" if math.isfinite(a) and a > 0 else "0선"
+    return f"{where} {'양봉' if t > 0 else '음봉'} 전환({val})"
+
+
+def _qz(x) -> np.ndarray:
+    """The 15종 MACD's qz(x): EMA 3 of nz(tanh(x / stdev_100(x))) (0 where that stdev is 0 or na)."""
+    return M.ema(_nz(M.zsq(x, 100)), 3)
+
+
+def _tsi(c, short: int, long: int) -> np.ndarray:
+    """Pine ta.tsi(close, short, long): EMA short of EMA long of the change over the same of its size."""
+    pc = change(c)
+    num = M.ema(M.ema(pc, long), short)
+    den = M.ema(M.ema(np.abs(pc), long), short)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(np.isfinite(den) & (den != 0), num / np.where(den != 0, den, 1.0), np.nan)
+
+
+def _mfi(src, vol, n: int) -> np.ndarray:
+    """Pine ta.mfi(src, n): 100 - 100 / (1 + upper / lower), the n-bar sums of the volume x src of the bars where src
+    rose / fell (the first bar's na change counts on both sides, as Pine's na comparisons do); na where lower is 0."""
+    src = np.asarray(src, float)
+    ch = change(src)
+    with np.errstate(invalid="ignore"):
+        up = vol * np.where(ch <= 0.0, 0.0, src)
+        dn = vol * np.where(ch >= 0.0, 0.0, src)
+    upper = pd.Series(up).rolling(n, min_periods=n).sum().to_numpy()
+    lower = pd.Series(dn).rolling(n, min_periods=n).sum().to_numpy()
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return np.where(np.isfinite(lower) & (lower != 0), 100.0 - 100.0 / (1.0 + upper / np.where(lower != 0, lower, 1.0)),
+                        np.nan)
+
+
+def _poc(h, l, c, vol, n: int = 100, bins: int = 24) -> np.ndarray:
+    """The 15종 MACD's VPVR point of control per bar (from bar n on): the last n bars' hlc3 binned in 24 rows between
+    their lowest low and highest high, weighted by volume; the middle of the first fullest row; na before / when flat."""
+    hlc3 = (h + l + c) / 3.0
+    hi, lo = highest(h, n), lowest(l, n)
+    out = np.full(len(c), np.nan)
+    for t in range(n, len(c)):
+        rg = hi[t] - lo[t]
+        if not (math.isfinite(rg) and rg > 0):
+            continue
+        x = hlc3[t - n + 1:t + 1]
+        k = np.clip(np.floor((x - lo[t]) / rg * bins), 0, bins - 1)
+        k = np.where(np.isfinite(k), k, 0).astype(int)        # (an na hlc3: Pine's int(na) is na -> its clamp gives 0)
+        w = np.bincount(k, weights=vol[t - n + 1:t + 1], minlength=bins)
+        if w.max() > 0:
+            out[t] = lo[t] + (int(np.argmax(w)) + 0.5) * rg / bins
+    return out
+
+
+Q15_KEYS = ("bb", "rsi", "mfi", "wpr", "mom", "vo", "uo", "ao", "ac", "smio", "poc", "vsma", "smma", "ma52", "macd")
+
+
+def q15_parts(o, h, l, c, v) -> dict:
+    """The 15종 MACD's fifteen inputs per bar (Q15_KEYS, its defaults), before their qz: ① BB %B (20, 2) - 0.5, ② RSI 14
+    - 50, ③ MFI 14 of hlc3 - 50, ④ %R 14 + 50, ⑤ MOM 10, ⑥ the volume oscillator (EMA 5 / EMA 10) only on its plus side,
+    signed by the 5-bar move (already its own EMA 3: no qz), ⑦ the ultimate oscillator (7 / 14 / 28) - 50, ⑧ AO, ⑨ AC,
+    ⑩ SMIO (TSI 5 / 20 - its EMA 5), ⑪ the VPVR point of control's distance in ATR 14, ⑫ the signed volume over its SMA 20
+    (EMA 3), ⑬ close - SMMA 21, ⑭ close - SMA 52, ⑮ MACD 12 / 26."""
+    o, h, l, c = (np.asarray(a, float) for a in (o, h, l, c))
+    vol = _nz(v)
+    at = M.atr(h, l, c, 14)
+    bm = M.sma(c, 20)
+    dev = 2.0 * M.stdev(c, 20)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        bw = 2.0 * dev                                          # upper - lower
+        pb = np.where(bw > 0, (c - (bm - dev)) / np.where(bw > 0, bw, 1.0) - 0.5, 0.0)
+        hh, ll = highest(h, 14), lowest(l, 14)
+        wpr = np.where(hh - ll != 0, 100.0 * (c - hh) / np.where(hh - ll != 0, hh - ll, 1.0), np.nan)
+    hl2 = (h + l) / 2.0
+    ao = M.sma(hl2, 5) - M.sma(hl2, 34)
+    vs = M.ema(vol, 10)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        vo = np.where(vs > 0, 100.0 * (M.ema(vol, 5) - vs) / np.where(vs > 0, vs, 1.0), 0.0)
+    vd = M.stdev(vo, 100)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        vt = np.where(np.isfinite(vd) & (vd > 0), _tanh(vo / np.where(vd > 0, vd, 1.0)), 0.0)
+    pc = np.where(np.isfinite(lag(c, 1)), lag(c, 1), c)
+    bp = c - np.minimum(l, pc)
+    tr = np.maximum(h, pc) - np.minimum(l, pc)
+
+    def ssum(x, n):
+        return pd.Series(x).rolling(n, min_periods=n).sum().to_numpy()
+
+    def part(n):
+        s = ssum(tr, n)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return np.where(s > 0, ssum(bp, n) / np.where(s > 0, s, 1.0), 0.5)
+    er = _tsi(c, 5, 20)
+    poc = _poc(h, l, c, vol)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        dpoc = np.where(np.isfinite(poc) & (at > 0), (c - poc) / np.where(at > 0, at, 1.0), 0.0)
+        vm = M.sma(vol, 20)
+        sv = np.where(c >= o, 1.0, -1.0) * np.where(vm > 0, vol / np.where(vm > 0, vm, 1.0), 0.0)
+    return {"bb": pb, "rsi": _nz(M.rsi(c, 14), 50.0) - 50.0, "mfi": _nz(_mfi((h + l + c) / 3.0, vol, 14), 50.0) - 50.0,
+            "wpr": _nz(wpr, -50.0) + 50.0, "mom": _nz(M.mom(c, 10)),
+            "vo": M.ema(_nz(np.maximum(vt, 0.0) * np.sign(_nz(c - lag(c, 5)))), 3),
+            "uo": 100.0 * (4.0 * part(7) + 2.0 * part(14) + part(28)) / 7.0 - 50.0, "ao": _nz(ao),
+            "ac": _nz(ao - M.sma(ao, 5)), "smio": _nz(er - M.ema(er, 5)), "poc": dpoc, "vsma": M.ema(sv, 3),
+            "smma": c - M.rma(c, 21), "ma52": c - M.sma(c, 52), "macd": _nz(M.ema(c, 12) - M.ema(c, 26))}
+
+
+def q15_line(o, h, l, c, v) -> np.ndarray:
+    """'15종 MACD''s line (its defaults, all fifteen on) per bar: the mean of the fifteen qz(input) (⑥ as it is) x 100
+    through EMA 3."""
+    P = q15_parts(o, h, l, c, v)
+    qs = [P[k] if k == "vo" else _qz(P[k]) for k in Q15_KEYS]
+    return M.ema(100.0 * sum(qs) / 15.0, 3)
+
+
+def h3_pane(o, h, l, c, v) -> dict:
+    """'3개 합친 평균 히스토그램' (3합 히스토그램, its defaults) per bar: ① WOOX pro2 = 'ALL + OBV6 MACD''s line (part 9),
+    ② 레인지봇 = 2 (EMA RSI - 50), ③ 15종 MACD's line; their mean, its EMA 9 the signal, the histogram = mean - signal;
+    "cross" +1 / -1 where it crossed above / below 0 on that bar. Owners 11-02 (WOO X Pro 1 · 2: "30분봉 추세 macd가 0선 위에
+    있으면 상승 추세로 보고 15분봉 3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건")."""
+    h, l, c = (np.asarray(a, float) for a in (h, l, c))
+    w = h6_pane(h, l, c, v)["macd"]
+    r = 2.0 * (ema_rsi(c) - 50.0)
+    q = q15_line(o, h, l, c, v)
+    avg = (w + r + q) / 3.0
+    sig = M.ema(avg, H3_SIG)
+    hist = avg - sig
+    return {"avg": avg, "sig": sig, "hist": hist, "cross": _cross0(hist), "w": w, "r": r, "q": q}
+
+
+def h3_state(o, h, l, c, v) -> dict:
+    """On the last bar: {"cross", "hist", "avg"}."""
+    P = h3_pane(o, h, l, c, v)
+    if not len(P["hist"]):
+        return {"cross": 0, "hist": None, "avg": None}
+    hv, av = float(P["hist"][-1]), float(P["avg"][-1])
+    return {"cross": int(P["cross"][-1]), "hist": round(hv, 4) if math.isfinite(hv) else None,
+            "avg": round(av, 3) if math.isfinite(av) else None}
+
+
 # ====================================================================== 3. the Stoch RSI pane
 def stoch_pane(c) -> dict:
     """The Stoch RSI pane of '차트 믹스 + 스톡 RSI' (14 · 11 · 4 · 6, noise 보통, gap 2): {"k", "d", "xs", "gold", "dead"}."""
