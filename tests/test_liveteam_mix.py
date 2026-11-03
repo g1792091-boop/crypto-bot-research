@@ -66,7 +66,7 @@ def test_the_daily_meeting_its_packet_and_the_members_words(world):
     for role in T.KIND_ROLES["daily"]:
         sp = T.prompt_for(role, pk)
         # (owners 11-03: the two WOO X Pro bots, the 바이비트 봇 off)
-        assert sp == T.mix_prompt(role) and "레인지 봇 = WOO X Pro 1 · 친구 15분 봇 = WOO X Pro 2, 바이비트 봇은 꺼 둠" in sp
+        assert sp == T.mix_prompt(role) and "레인지 봇 = WOO X Pro 1 · 친구 15분 봇 = 투비트(11/03 WOO X Pro 2 계정이 없어져 옮김), 바이비트 봇은 꺼 둠" in sp
         assert "매매 권한이 없습니다" in sp and "약속하지 않습니다" in sp and f"{T.SMALL_N}번보다 적으면" in sp
     assert '"verdict"' in T.mix_prompt("lead") and '"luck"' in T.mix_prompt("risk")
     assert T.kind_ko("daily", "daily:mix:2026-11-01") == "실거래 봇 하루 회의" and T.KIND_ROLES["daily"] == ("risk", "stats", "lead")

@@ -125,7 +125,8 @@ class Profile:
     routes: tuple               # (관제, 성적)
 
 
-MIX = Profile("mix", M.NAME, "WOO X Pro", "WOO X Pro 2", "docs/mixchop-ko.md", BOTS, ENV, DEFAULT_FILES, BACKTEST,
+# (owners 11-03: the friend bot trades Toobit, its WOO X Pro 2 account gone: docs/mixchop-ko.md 19장)
+MIX = Profile("mix", M.NAME, "투비트", "투비트", "docs/mixchop-ko.md", BOTS, ENV, DEFAULT_FILES, BACKTEST,
               "/var/lib/paperbot/mixcheck", "PAPERBOT_MIXCHECK_DIR", ("/api/v4/livebots/mix", "/api/v4/livebots/mixperf"))
 BYBIT = Profile(
     "bybit", "바이비트 봇", "바이비트", "바이비트", "docs/mixbybit-ko.md",

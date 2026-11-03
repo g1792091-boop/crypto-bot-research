@@ -8,13 +8,18 @@
 # (paperbot-executor-wooxpro2, following '친구 매매법') must not trade the same account at the same time: Conflicts= below
 # stops it when this one starts. Own user paperbot-exec, the executors' sandbox; exit 2 = a gate refused (not restarted).
 #
+# Owners 11-03 ("Woo x pro2 거래소 아이디를 실수로 탈퇴해서 woo x pro2 친구봇 거래소를 투빗으로 해줘"): the bot (now the
+# '친구 15분 봇', deploy/mixchop.live.json "exchange": "toobit") trades Toobit with the keys of the old Toobit executor's
+# root-only file /etc/paperbot/executor-toobit.env (TOOBIT_LIVE_KEY / SECRET, TOOBIT_LIVE_KEY_CHECKED,
+# PAPERBOT_LIVE_MAINNET); that executor (paperbot-executor-toobit) must not trade the account at the same time: Conflicts=.
+#
 # install.sh installs this unit but NEVER enables or starts it. A person starts it after the guide's checks:
 #   sudo systemctl start paperbot-mixchop      (enable only after the first days went as expected)
 [Unit]
-Description=paperbot '믹스 30분 봇' (WOO X Pro 2, mainnet: real orders)
+Description=paperbot '친구 15분 봇' (투비트, mainnet: real orders)
 After=network-online.target
 Wants=network-online.target
-Conflicts=paperbot-executor-wooxpro2.service
+Conflicts=paperbot-executor-wooxpro2.service paperbot-executor-toobit.service
 StartLimitIntervalSec=0
 
 [Service]
@@ -23,7 +28,7 @@ User=paperbot-exec
 Group=paperbot
 UMask=0027
 WorkingDirectory=/opt/crypto-bot-research
-EnvironmentFile=/etc/paperbot/executor-wooxpro2.env
+EnvironmentFile=/etc/paperbot/executor-toobit.env
 # the live bot's token and the owners' private chats (optional, deploy/live-telegram.env.example)
 EnvironmentFile=-/etc/paperbot/live-telegram.env
 Environment=PYTHONDONTWRITEBYTECODE=1

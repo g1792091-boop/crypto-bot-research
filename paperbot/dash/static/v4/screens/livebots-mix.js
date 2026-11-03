@@ -67,8 +67,9 @@ export const planWords = (tf) => `손절 = 진입 때 ${tf}봉 ATR × 3 · 증�
 /** Each mix bot's screens: its answers, its account and the words that differ (the friend bot's: the tabs as they were);
  *  ``tf`` / ``ttf``: its signal bar and its trend's bar before the answer says (the answer's ``tf_ko`` / ``trend_tf_ko``
  *  after: waitOf). Owners 10-31, last: all three enter on 15m bars, the trend bar on the 30m bar. */
-export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "WOO X Pro 2", exchange: "WOO X Pro", key: "",
-  kick: "진짜 돈 · WOO X Pro 두 번째 계정", tf: "15분", ttf: "30분", rule: H3X_WAIT, trend: "macd",
+// (owners 11-03: the friend bot trades Toobit, its WOO X Pro 2 account gone)
+export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "투비트", exchange: "투비트", key: "",
+  kick: "진짜 돈 · 투비트 계정", tf: "15분", ttf: "30분", rule: H3X_WAIT, trend: "macd",
   wait: waitWords("15분", "30분", H3X_WAIT, "macd"),
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",

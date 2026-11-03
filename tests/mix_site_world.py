@@ -55,6 +55,8 @@ def config(folder: str, mode: str) -> str:
     # numbers for BTC): this world stays the one it was built as
     from paperbot import mixchop as M
     raw["coins"] = {s: {"leverage": v["leverage"]} for s, v in M.DEFAULT_COINS.items()}
+    # and on WOO X Pro, its fee (owners 11-03 moved the friend bot to Toobit: tests/test_mixchop_toobit.py)
+    raw["exchange"], raw["taker_fee"] = "wooxpro", 0.00042
     raw["max_notional_usd"] = 500
     raw["equity_floor_frac"] = 0.7          # the friend's design's floor (owners 10-31: the deploy config has none, test_rules1031b)
     raw.update(state=os.path.join(folder, f"{tag}-state.json"), log=os.path.join(folder, f"{tag}-log.jsonl"),

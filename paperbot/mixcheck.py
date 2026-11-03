@@ -258,7 +258,9 @@ def words_of(data: dict) -> dict:
     # ROC / OBV 50 on 15m bars since, its config's name)
     mix = prof is X.MIX and (cfg is None or "mix" in tuple(getattr(cfg, "rules", ("mix",))))
     name = (getattr(cfg, "name", None) or prof.name) if prof is X.MIX else prof.name
-    return {"name": name, "short": "믹스" if mix else name, "ex": prof.exchange_ko, "fee": fee,
+    # the exchange its config names (owners 11-03: the friend bot moved to Toobit), else the profile's
+    ex = M.EXCHANGES.get(getattr(cfg, "exchange", None) or "", prof.exchange_ko) if cfg is not None else prof.exchange_ko
+    return {"name": name, "short": "믹스" if mix else name, "ex": ex, "fee": fee,
             "unit": prof.bots[0][2], "mix": mix, "guide": prof.guide}
 
 

@@ -423,7 +423,7 @@ def test_the_views_in_node(w, tmp_path):
       feed: L.feed.rows.map((x) => X.feedKo(x)), rec: X.recordRows(D_p.bots[0].record, true).map((r) => [r[0], r[1]]),
       cmp: X.compareCoins(D_p.backtest, D_p.bots)}));""", c=ctl, p=prf, oc=oc, op=op)
     a = out["a"]
-    for word in ("실거래 · WOO X Pro 2", "진짜 돈 · WOO X Pro 두 번째 계정", "돌고 있음", "마지막 기록 10/27 12:00 (9분 전)", "마지막으로 본 30분봉 12:00 마감",
+    for word in ("실거래 · 투비트", "진짜 돈 · 투비트 계정",                      # (owners 11-03: WOO X Pro 2 until then) "돌고 있음", "마지막 기록 10/27 12:00 (9분 전)", "마지막으로 본 30분봉 12:00 마감",
                  "마지막 시작 10/26 12:00", "실거래 잔고", "$49.95", "진입 때 읽은 잔고 · 10/27 09:00", "시작 잔고", "$50.00", "바닥선 (시작의 70%)",
                  "$35.00", "남은 여유 $14.95", "BCH 롱 보유 중", "새 신호는 건너뛰어요 (한 번에 1포지션)", "지금 진입 가능 (진입 금지 시간 아님)",
                  "나스닥 개장 앞뒤 · 10/27 22:00 ~ 10/27 23:00 · 9시간 50분 뒤", "마지막 멈춤 기록 10/26 10:30: 정지 파일(", "그 뒤 진입이 있었어요",
@@ -673,7 +673,7 @@ def test_the_positions_tab_has_the_friend_bot(w, tmp_path):
     ids = [c["id"] for c in d["cards"]]
     assert "mix" in ids and ids.index("mix") > ids.index("paper")
     c = next(c for c in d["cards"] if c["id"] == "mix")
-    assert (c["state"], c["kind"], c["self"], c["name_ko"]) == ("ok", "live", True, "WOO X Pro 2 · 친구봇")
+    assert (c["state"], c["kind"], c["self"], c["name_ko"]) == ("ok", "live", True, "투비트 · 친구봇")
     q = c["position"]
     fee = M.load_config(str(cfgp)).taker_fee
     assert (q["symbol"], q["side"], q["leverage"], q["entry"], q["qty"]) == ("BCHUSDT", 1, 40, 100.0, 0.12)
@@ -691,7 +691,7 @@ def test_the_positions_tab_has_the_friend_bot(w, tmp_path):
     const flat = P.posCard({{...D_c, position: null}}, {{}});
     console.log(JSON.stringify({{t: texts(el), flat: texts(flat)}}));""", c=c)
     t = out["t"]
-    for word in ("WOO X Pro 2 · 친구봇", "진짜 돈", "BCHUSDT", "격리 40배", "믹스 30분 봇 · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
+    for word in ("투비트 · 친구봇", "진짜 돈", "BCHUSDT", "격리 40배", "믹스 30분 봇 · 30분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)",
                  "친구봇 기준: 자기 체결가 · 바이낸스 1분봉 · 친구봇 수수료로 잠가요 (60초마다)", "10%→8%", "15%→13%",
                  "확보한 수익", "빠른 손절 없음 · 친구봇은 손절선과 계단 익절로만 닫아요"):
         assert word in t, word

@@ -735,3 +735,48 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 - 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.
 - 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
 - 되돌리기: `.before-1102` 파일을 다시 복사하고 다시 켭니다.
+
+
+## 19. 11/03: 친구 15분 봇을 투비트로 (WOO X Pro 2 계정이 없어짐)
+
+두 분(11/03): "Woo x pro2 거래소 아이디를 실수로 탈퇴해서 woo x pro2 친구봇 거래소를 투빗으로 해줘".
+
+| 항목 | 내용 |
+|---|---|
+| 거래소 | **투비트** USDT 무기한 (`"exchange": "toobit"`). 프로그램은 그대로 `paperbot/mixchop.py`, 투비트 연결은 예전 투비트 실행기가 쓰던 `paperbot/toobit.py` |
+| 키 | `/etc/paperbot/executor-toobit.env` (예전 투비트 실행기의 파일): `TOOBIT_LIVE_KEY`, `TOOBIT_LIVE_SECRET`, `TOOBIT_LIVE_KEY_CHECKED=FUTURES_ONLY_NO_WITHDRAW_IP_BOUND`(키를 '선물 거래만 · 출금 없음 · 서버 IP만'으로 만들었다는 두 분 확인), `PAPERBOT_LIVE_MAINNET=I_UNDERSTAND`. 키는 채팅에 쓰지 않고 서버에서 `sudoedit`로만 넣습니다 |
+| 서비스 | `paperbot-mixchop`이 이 키 파일을 읽습니다. 예전 투비트 실행기(`paperbot-executor-toobit`)와는 같이 돌지 않습니다(`Conflicts=`) |
+| 수수료 | 투비트 시장가 0.06% (`"taker_fee": 0.0006`, 모의 쌍둥이 계산용). 계단은 거래소 ROE(수수료 전)라 수수료와 상관없이 +10%→+8%, 그 뒤 2%마다 |
+| 시작할 때 | 코인마다 한쪽만 있는지 확인하고(롱·숏 동시면 시작 안 함), 코인마다 격리 마진 + 레버리지(40배, ZEC 20배)를 맞춰 다시 읽어 봅니다. 못 맞춘 코인은 `(꺼짐)` |
+| 그대로 | 매매법(3합 히스토그램 0선 돌파 · 30분봉 추세 MACD), 코인(BTC → XRP → BCH → ZEC → DOGE), 증거금 40%, 손절 15분봉 ATR × 3, 계단, 1포지션, 진입 금지 시간 |
+| 청산가 확인 | 투비트는 유지 증거금 구간을 주지 않아서, 봇 자체 확인(손절 거리가 40배는 2.0%, 20배는 4.5% 안쪽)만 합니다 |
+
+- 사이트와 텔레그램의 이 봇 이름 옆 거래소는 "투비트"입니다(봇별 화면, 관제실, 아침 점검 · 손실 카드의 "투비트 앱에서 확인").
+- 시험: `tests/test_mixchop_toobit.py`(가짜 투비트 서버에서 진입 → 거래소 손절 → 계단으로 손절 옮기기 → 손절 체결 → 청산 알림).
+  **실제 투비트에서는 아직 이 봇으로 주문해 본 적이 없습니다.** 예전 투비트 실행기는 같은 연결 코드로 10/25 ~ 10/31에 거래했습니다.
+
+### 19-1. 바꾸는 순서 (서버에서)
+
+1. 투비트 앱: 선물 계정에 USDT를 옮기고, API 키가 없으면 '선물 거래만 · 출금 없음 · 서버 IP만'으로 만듭니다.
+2. 코드 받기(한 번만, `docs/mixbybit-ko.md` 13-1): `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+3. 키 확인(읽기만, 주문 없음):
+   ```bash
+   cd /opt/crypto-bot-research
+   sudo deploy/paperbot-exec.sh --keys toobit toobit check
+   ```
+   키가 비어 있거나 틀리면 `sudoedit /etc/paperbot/executor-toobit.env`로 네 줄을 넣고 다시 확인합니다.
+4. 예전 투비트 실행기가 켜져 있지 않게: `sudo systemctl disable --now paperbot-executor-toobit`
+5. 친구 15분 봇 설정 바꾸기와 점검:
+   ```bash
+   sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-toobit
+   sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-toobit
+   sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   sudo diff /etc/paperbot/mixchop.json.before-toobit /etc/paperbot/mixchop.json
+   sudo deploy/paperbot-exec.sh --keys toobit mixchop check --config /etc/paperbot/mixchop.json | tail -10
+   ```
+   - diff: 새 줄 `"exchange": "toobit"`, `"taker_fee": 0.0006`(그리고 11/02 · 11/03 바꾼 것: `"trend": "macd"`, `"h3x"`, 코인, 계단).
+   - check: `잔고(친구 15분 봇, 투비트)`, 코인 다섯 개가 ✔인지(✘ 코인은 거래하지 않음, 최대 레버리지가 40배보다 낮으면 그 코인은 꺼짐).
+6. 켜기: `sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper` → 텔레그램 `[친구 15분 봇] ▶️ 시작`에 코인과 매매법,
+   `journalctl -u paperbot-mixchop -n 30`에 코인마다 `격리 40배`.
+7. WOO X Pro 2 계정의 예전 키 파일(`/etc/paperbot/executor-wooxpro2.env`)은 이제 아무 봇도 읽지 않습니다.

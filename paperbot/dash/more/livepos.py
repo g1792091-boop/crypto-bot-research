@@ -70,10 +70,10 @@ OWN_LADDER_KO = "거래소 기준 (owners 10/20): 이 실행기의 체결가 · 
 # ("mixrange"), in the "mexc" slot's place once that slot left the page (livebots.replaced)
 CARDS = (("paper", L.ACCOUNT), ("paper2", L.ACCOUNT), ("range", L.ACCOUNT), ("bybit", None), ("mixbybit", None), ("mexc", None),
          ("mixrange", None), ("deepcoin", None), ("wooxpro2", None), ("mix", None), ("toobit", None), ("flip", L.FLIP_ACCOUNT))
-MIX_NAME_KO = "WOO X Pro 2 · 친구봇"
+MIX_NAME_KO = "투비트 · 친구봇"                     # (owners 11-03: WOO X Pro 2 until then)
 MIX_LIQ_KO = "친구봇 상태 파일에 청산가가 없어요 (WOO X Pro 앱에서 확인)"
 # each mix bot's card words (livemix.PROFILES): card id, name, its short name, the app to check in, the account's colour
-MIX_CARD = {"mix": {"id": "mix", "name_ko": MIX_NAME_KO, "short_ko": "친구봇", "app_ko": "WOO X Pro", "tag": "wooxpro2"},
+MIX_CARD = {"mix": {"id": "mix", "name_ko": MIX_NAME_KO, "short_ko": "친구봇", "app_ko": "투비트", "tag": "wooxpro2"},
             "bybit": {"id": "mixbybit", "name_ko": "바이비트 · 바이비트 봇", "short_ko": "바이비트 봇", "app_ko": "바이비트",
                       "tag": "bybit"},
             "range": {"id": "mixrange", "name_ko": "WOO X Pro · 레인지 봇", "short_ko": "레인지 봇", "app_ko": "WOO X Pro",

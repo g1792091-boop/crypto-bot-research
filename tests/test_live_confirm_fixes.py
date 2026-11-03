@@ -136,9 +136,11 @@ def test_the_executor_runs_as_its_own_user_never_the_agents_and_dashboard_user()
     # '믹스 30분 봇' (owners 10-25, docs/mixchop-ko.md): trades the second WOO X Pro account itself, with that account's
     # key file and the fourth executor's sandbox; it stops that executor when it starts (never both on one account)
     mix = _unit("deploy/paperbot-mixchop.service")
-    for line in ("User=paperbot-exec", "EnvironmentFile=/etc/paperbot/executor-wooxpro2.env", "NoNewPrivileges=yes",
+    # (owners 11-03: the 친구 15분 봇 trades Toobit with the old Toobit executor's key file, and never beside that executor)
+    for line in ("User=paperbot-exec", "EnvironmentFile=/etc/paperbot/executor-toobit.env", "NoNewPrivileges=yes",
                  "ProtectSystem=strict", "ProtectHome=yes", "PrivateTmp=yes", "LimitCORE=0", "UMask=0027",
-                 "ReadWritePaths=/var/lib/paperbot/exec", "Conflicts=paperbot-executor-wooxpro2.service",
+                 "ReadWritePaths=/var/lib/paperbot/exec",
+                 "Conflicts=paperbot-executor-wooxpro2.service paperbot-executor-toobit.service",
                  "InaccessiblePaths=-/etc/paperbot/agents.env -/etc/paperbot/dash.env -/etc/paperbot/executor.env"):
         assert line in mix, line
     assert not [x for x in mix if x.startswith("EnvironmentFile=/etc/paperbot/executor.env")]

@@ -1,5 +1,7 @@
 {
  "mode": "paper",
+ "exchange": "toobit",
+ "taker_fee": 0.0006,
  "state": "/var/lib/paperbot/mixchop-paper/state.json",
  "log": "/var/lib/paperbot/mixchop-paper/log.jsonl",
  "risk_pct": 0.25,

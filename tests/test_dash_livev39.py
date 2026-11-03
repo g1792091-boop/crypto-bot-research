@@ -333,7 +333,7 @@ def test_each_bot_screen_names_its_own_executors_only(w, tmp_path):
     assert "딥코인" not in head(r["trend"]["text"]) and "투비트" not in head(r["trend"]["text"])
     assert "추세판단 봇 페이퍼(연습)와 그 봇을 따라가는 바이비트 · WOO X Pro 실행기(진짜 돈) · 다른 봇은 이 화면에 없어요" in r["trend"]["text"]
     assert "딥코인 $77.70" in head(r["vwap"]["text"]) and "바이비트" not in head(r["vwap"]["text"])
-    assert "친구 15분 봇은 WOO X Pro 두 번째 계정에서 거래해요" in r["mix"]["text"] and "바이비트" not in head(r["mix"]["text"])
+    assert "친구 15분 봇은 투비트 계정에서 거래해요" in r["mix"]["text"]                  # (owners 11-03) and "바이비트" not in head(r["mix"]["text"])
     assert "바이비트 $101.50" in r["old"]["text"] and "딥코인 $77.70" in r["old"]["text"]          # the old screens as they were
     assert [r[k]["goal"] for k in ("trend", "vwap", "mix", "old")] == [1, 1, 1, 0]
     assert [r[k]["lgr"] for k in ("trend", "vwap", "mix", "old")] == [1, 1, 1, 0]

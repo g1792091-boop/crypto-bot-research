@@ -432,7 +432,7 @@ def test_the_words(tmp_path):
     assert out["ids"] == [[], []] and out["ids0"] == ["bybit", "mexc"]
     assert out["gate"] == "가능 · 15분봉 신호를 기다려요" and out["led"].startswith("20분 넘게 새 기록이 없어요")
     assert out["screens"][0][0] == "레인지 봇" and "OBV 히스토그램 전환" in out["screens"][0][1]     # (owners 11-03)
-    assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (15분봉 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"]
+    assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (15분봉 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파 · 투비트 실거래와 모의)"]
 
 
 TAB_JS = """

@@ -1,5 +1,9 @@
 # 투비트 실행기 (10/25)
 
+> **11/03:** 투비트 계정은 이제 **친구 15분 봇**(`paperbot/mixchop.py`, `deploy/mixchop.live.json` `"exchange": "toobit"`)이
+> 거래합니다. 같은 연결 코드와 같은 키 파일(`/etc/paperbot/executor-toobit.env`)을 쓰고, 이 문서의 실행기는 켜지 않습니다
+> (`docs/mixchop-ko.md` 19장).
+
 두 분이 10/25에 정했습니다: **투비트(toobit.com)에 $50짜리 새 실거래 봇을 만들고, 규칙봇의 V3.9 1시간 페이퍼 계좌를 따라가게
 한다.**
 

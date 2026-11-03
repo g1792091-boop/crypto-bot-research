@@ -237,7 +237,7 @@ def test_the_deploy_configs():
     # the friend bot's own config: WOO X Pro, the histogram's 0 cross on 15m bars (owners 10-31 night,
     # tests/test_rules1031c.py; 11-02: the 3합 histogram's, tests/test_rules1102.py)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "wooxpro" and old.name == "친구 15분 봇" and old.rules == ("h3x",) and old.tf == "15m"
+    assert old.exchange == "toobit" and old.name == "친구 15분 봇" and old.rules == ("h3x",) and old.tf == "15m"   # (owners 11-03: Toobit, the WOO X Pro 2 account gone: tests/test_mixchop_toobit.py)
 
 
 def test_wrong_configs_are_refused(tmp_path):

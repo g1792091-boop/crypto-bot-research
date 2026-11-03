@@ -1,5 +1,7 @@
 {
  "mode": "mainnet",
+ "exchange": "toobit",
+ "taker_fee": 0.0006,
  "state": "/var/lib/paperbot/exec/mixchop-state.json",
  "log": "/var/lib/paperbot/exec/mixchop-log.jsonl",
  "risk_pct": 0.25,

@@ -333,7 +333,7 @@ const LIVE_SCREENS = {
   // owners 10-31 night: the 레인지 봇 trades WOO X Pro by itself once its config is there (screens/livebots-range.js rangeBotView)
   rangebot: {ko: "레인지 봇", group: "range", title: "레인지 봇 (WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환 · 지난 페이퍼 기록)"},
   vwapbot: {ko: "VWAP 개선판", group: "now", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)", hidden: true},
-  mixbot: {ko: "친구 15분 봇", group: "mix", title: "친구 15분 봇 (15분봉 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"},
+  mixbot: {ko: "친구 15분 봇", group: "mix", title: "친구 15분 봇 (15분봉 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파 · 투비트 실거래와 모의)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)", hidden: true},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)", hidden: true},
   deck: {ko: "관제실", group: "now", title: "관제실 (실거래 봇 · 여섯 코인 · 봇 기록과 바이낸스 봉)"},
@@ -365,7 +365,7 @@ const LIVE_SCREENS = {
   vwap: {ko: "VWAP 관제", group: "now", title: "VWAP 관제 (VWAP 개선판)", hidden: true},
   vwperf: {ko: "VWAP 성적", group: "now", title: "VWAP 성적 (페이퍼 · 동전 쌍둥이 · 실거래)", hidden: true},
   vwblock: {ko: "VWAP 막은 신호", group: "now", title: "VWAP 막은 신호 (막지 않았다면)", hidden: true},
-  mix: {ko: "친구 관제", group: "mix", title: "친구 관제 (친구 15분 봇 · WOO X Pro 2 실거래와 모의)", hidden: true},
+  mix: {ko: "친구 관제", group: "mix", title: "친구 관제 (친구 15분 봇 · 투비트 실거래와 모의)", hidden: true},
   mixperf: {ko: "친구 성적", group: "mix", title: "친구 성적 (친구 15분 봇 · 실거래 vs 모의)"},
   bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)", hidden: true},
   bybitperf: {ko: "바이비트 성적", group: "now", title: "바이비트 성적 (11/03부터 꺼 둠 · 실거래 vs 모의 지난 기록)", hidden: true},

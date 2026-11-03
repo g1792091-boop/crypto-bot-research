@@ -117,7 +117,7 @@ def test_the_menu_words():
         assert "추세 MACD 30분" in line and "추세 바" not in line, line
     rb = next(l for l in routes.splitlines() if l.lstrip().startswith("rangebot: {"))
     mb = next(l for l in routes.splitlines() if l.lstrip().startswith("mixbot: {"))
-    assert "WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환" in rb and "추세 MACD 30분 + 3합 히스토그램 0선 돌파 · WOO X Pro 2" in mb
+    assert "WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환" in rb and "추세 MACD 30분 + 3합 히스토그램 0선 돌파 · 투비트" in mb
     assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes and '{id: "bybit"' not in routes
     assert 'bybitbot: {ko: "바이비트 봇", group: "now", title: "바이비트 봇 (11/03부터 꺼 둠 · 지난 기록)", hidden: true}' in routes
     assert 'bybitperf: {ko: "바이비트 성적", group: "now"' in routes and routes.count("11/03부터 꺼 둠") == 2

@@ -416,6 +416,8 @@ class ExecInfo:
 # bot's Conflicts=; "다시 켜기: systemctl start" would stop the new bot). name -> (the bot's config, its unit, its name)
 REPLACED_BY = {"bybit": ("/etc/paperbot/mixbybit.json", "paperbot-mixbybit", "바이비트 봇"),
                "wooxpro2": ("/etc/paperbot/mixchop.json", "paperbot-mixchop", "친구 15분 봇"),
+               # owners 11-03: the 친구 15분 봇 trades Toobit (its WOO X Pro 2 account gone): the old Toobit executor too
+               "toobit": ("/etc/paperbot/mixchop.json", "paperbot-mixchop", "친구 15분 봇"),
                # owners 10-31 night (docs/range-bot-ko.md 0장): the first WOO X Pro account is the 레인지 봇's itself
                "mexc": ("/etc/paperbot/mixrange.json", "paperbot-mixrange", "레인지 봇")}
 

@@ -79,4 +79,6 @@ def test_the_screens_say_so():
     lb = (V4 / "screens" / "livebots.js").read_text(encoding="utf-8")
     assert "livebots-v39" not in lb and "VWAP 개선판을 따라가는 실거래가 없어요 (페이퍼만)" in lb
     search = (V4 / "core" / "search.js").read_text(encoding="utf-8")
-    assert "v39:" not in search and "딥코인" not in search and "투비트" not in search
+    # (owners 11-03: 투비트 is the 친구 15분 봇's exchange now: only its alias names it, never a slot of its own)
+    assert "v39:" not in search and "딥코인" not in search
+    assert [ln.split(":")[0].strip() for ln in search.splitlines() if "투비트" in ln] == ["mixbot"]

@@ -140,7 +140,8 @@ DEFAULT_COINS = {
     "DOGEUSDT": {"h1_buf": 4.0, "sl_atr": 2.5, "roe_act": 100.0, "leverage": 40},
 }
 NAME = "믹스 30분 봇"
-EXCHANGES = {"wooxpro": "WOO X Pro", "bybit": "바이비트"}     # ``exchange`` -> its name in the messages
+# ``exchange`` -> its name in the messages (owners 11-03: the 친구 15분 봇 moves to Toobit, its WOO X Pro 2 account gone)
+EXCHANGES = {"wooxpro": "WOO X Pro", "bybit": "바이비트", "toobit": "투비트"}
 EXIT_KO = {"stop": "손절", "ladder": "계단 익절", "closed_while_down": "봇이 꺼진 사이 청산", "manual": "직접 청산",
            "protect": "손절을 못 걸어 바로 청산", "wrong_side": "방향이 다른 포지션이라 청산"}
 ALERT_EVERY_S = 600              # a repeated CRITICAL (still no stop / an unknown position) at most this often
@@ -768,7 +769,7 @@ class Config:
     ladder_every_s: float = 0.0                 # > 0: the open position on closed 1m bars this often between the closes
     rules: tuple = ("mix",)                     # the entry rules in their order (owners 10-26: ("mix", "st"))
     stop_atr: Optional[float] = None            # > 0: every coin's stop = ATR14 x this, both rules (owners 10-26: 3)
-    exchange: str = "wooxpro"                   # "wooxpro" | "bybit" (owners 10-29: the 바이비트 봇)
+    exchange: str = "wooxpro"                   # "wooxpro" | "bybit" (owners 10-29: the 바이비트 봇) | "toobit" (11-03)
     name: str = NAME                            # the bot's name in its messages
     tf: str = "30m"                             # the signal bar (TF_MS; owners 10-30: WOO X Pro 2 on "15m")
     trend: str = "four"                         # the friend rules' trend (TRENDS; owners 10-30: WOO X Pro 2 "swing")
@@ -1175,6 +1176,30 @@ class BybitBroker(WooBroker):
             return None
         mmr = next((float(t["mmr"]) for t in tiers if notional <= float(t["cap"])), None)
         return -1.0 if mmr is None else 1.0 / float(lev) - mmr - LIQ_ROOM
+
+
+class ToobitBroker(WooBroker):
+    """Toobit USDT-M perpetuals (paperbot/toobit.py, whose client answers in the same shapes as WOO X Pro's and was built
+    for the executor: the same orders and the shared stop protocol). Owners 11-03 ("Woo x pro2 거래소 아이디를 실수로
+    탈퇴해서 woo x pro2 친구봇 거래소를 투빗으로 해줘"): the 친구 15분 봇's account. At the start the positions are checked
+    (one side per coin: every order names its side, BUY_OPEN / SELL_CLOSE ...) and each coin goes to isolated margin at
+    its leverage (read back); Toobit gives no maintenance tiers, so the liquidation room is the bot's own check
+    (``liq_ok``, MMR_PCT) only."""
+
+    def setup(self, coins) -> list:
+        out = []
+        self.c.one_way()                                 # Refused (a coin holds both sides): the bot does not start
+        out.append((True, "포지션: 한 코인 한쪽만 (주문마다 롱·숏 쪽을 붙여 보냄)"))
+        for co in coins:
+            try:
+                self.c.leverage(co.symbol, co.leverage)  # isolated, then the leverage, each read back
+                out.append((True, f"{co.symbol}: 격리 {co.leverage}배"))
+            except Exception as e:                       # a coin that cannot be set is not traded
+                out.append((False, f"{co.symbol}: 레버리지를 못 맞춤 ({e})"))
+        return out
+
+    def liq_room(self, symbol: str, notional: float, lev: int) -> Optional[float]:
+        return None
 
 
 # ====================================================================== the bot
@@ -1817,10 +1842,25 @@ def make_notify(cfg: Config):
 
 def live_broker(cfg: Config):
     """The WOO X Pro client of the second account, through the same key gates as the executor (keys from the
-    environment: /etc/paperbot/executor-wooxpro2.env); ``exchange`` "bybit": the Bybit client of the 바이비트 봇's
+    environment: /etc/paperbot/executor-wooxpro2.env); ``exchange`` "toobit" (owners 11-03, the 친구 15분 봇): the Toobit
+    client, keys and gates of the old Toobit executor (/etc/paperbot/executor-toobit.env); ``exchange`` "bybit": the Bybit client of the 바이비트 봇's
     sub-account (BYBIT_LIVE_* in /etc/paperbot/executor.env, the old Bybit executor's file), its gates as the executor's."""
     from .mainnet import MODE_MAINNET, check_permissions
     env = dict(os.environ)
+    if cfg.exchange == "toobit":                        # owners 11-03: keys from /etc/paperbot/executor-toobit.env
+        from . import toobit as TB
+        client, keycheck = TB.clients(MODE_MAINNET, env)
+        TB.refuse_unless_allowed(MODE_MAINNET, client)
+        TB.check_executor_keys(MODE_MAINNET, client, keycheck, env, None)
+        client.sync_time()
+        keycheck.offset_ms = client.offset_ms
+        perm = keycheck.api_restrictions()
+        if perm is None:
+            raise MixError("투비트 키로 선물 계정을 읽지 못했습니다")
+        problems = check_permissions(perm)
+        if problems:
+            raise MixError("키 확인 실패: " + " / ".join(problems))
+        return ToobitBroker(client, cfg.coins)
     if cfg.exchange == "bybit":
         from . import bybit as BY
         client, keycheck = BY.clients(MODE_MAINNET, env)
@@ -1852,6 +1892,9 @@ def live_broker(cfg: Config):
 def public_spec(cfg: Config):
     """The exchange's public contract reader (symbol -> qty_step, min_qty, tick, min_notional, max_leverage ...): paper
     sizes as live would. Bybit's instruments are public; its client wants a key pair it never signs with here."""
+    if cfg.exchange == "toobit":
+        from . import toobit as TB
+        return TB.public_client().spec
     if cfg.exchange == "bybit":
         from . import bybit as BY
         return BY.BybitMainnetClient("public-read", "public-read-only").spec
@@ -2094,7 +2137,8 @@ def cmd_check(args) -> int:
     if cfg.mode == "mainnet":
         b = live_broker(cfg)
         eq = b.equity()
-        mode = (f"포지션 모드 {b.c.position_mode()}" if hasattr(b.c, "position_mode") else f"마진 모드 {b.c.margin_mode()}")
+        mode = (f"포지션 모드 {b.c.position_mode()}" if hasattr(b.c, "position_mode") else f"마진 모드 {b.c.margin_mode()}"
+                if hasattr(b.c, "margin_mode") else "포지션: 한 코인 한쪽만(주문마다 롱·숏 쪽을 붙여 보냄) · 격리 마진")
         print(f"잔고({cfg.name}, {ex}): ${eq:,.2f} · {mode}")
         for s, q in b.foreign_positions(None):
             print(f"  열린 포지션: {s} {q:g}")
@@ -2137,10 +2181,14 @@ def cmd_check(args) -> int:
         liq_ok = dist < c[-1] * (1.0 / co.leverage - MMR_PCT / 100.0)
         why = ("" if lev_ok and ok else f" → 설정 {co.leverage}배가 {ex} 최대보다 커서 이 코인은 꺼짐" if not lev_ok
                else " → 최소 주문보다 작아 건너뜀")
+        if sp.get("problem"):                            # (Toobit: a contract row without what a new entry needs)
+            ok, why = False, f" → {ex} 상품 정보에 새 진입에 필요한 값이 없어 진입 안 함 ({sp['problem']})"
+        if sp.get("tradable") is False and sp.get("status") not in (None, "Trading"):
+            ok, why = False, f" → 거래 중인 상품이 아님 ({sp.get('status')})"
         ml = sp.get("max_leverage")
         print(f"{'✔' if ok and lev_ok else '✘'} {co.symbol}: 상태 {sp.get('status')}, "
               f"최대 {f'{ml:g}' if isinstance(ml, (int, float)) else ml}배, "
-              f"1계약 {sp.get('contract_size', 1)}, "
+              f"1계약 {sp.get('contract_size', sp.get('ct_val', 1))}, "
               f"최소 {sp['min_qty']:g}개 · 지금 손절 폭 {dist / c[-1] * 100:.2f}% → 크기 {qty_f:g}개 ≈ ${qty_f * c[-1]:,.2f} "
               f"(증거금 ${qty_f * c[-1] / co.leverage:,.2f}){why}"
               + ("" if liq_ok else f" · 지금 손절 폭이면 {co.leverage}배 강제청산 확인에 걸려 신호를 건너뜀"))

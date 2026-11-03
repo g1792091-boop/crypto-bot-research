@@ -171,7 +171,7 @@ def test_obv50_with_the_four_votes_on_30m(monkeypatch):
 def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
-        assert cfg.mode == mode and cfg.exchange == "wooxpro" and cfg.name == "친구 15분 봇"
+        assert cfg.mode == mode and cfg.exchange == "toobit" and cfg.name == "친구 15분 봇"    # (owners 11-03: Toobit, the WOO X Pro 2 account gone: tests/test_mixchop_toobit.py)
         # owners 10-30, later: the 바이비트 봇's first rule (OBV light -> dark, the four votes); 10-31: on 15m bars with
         # 추세 3개 일치 added (tests/test_rules1031.py); 10-31 evening: back on 30m bars, the OBV turn with the AC bar
         # (tests/test_rules1031b.py); 10-31 night: 15m bars, the trend bar's 종합 and the histogram's 0 cross
