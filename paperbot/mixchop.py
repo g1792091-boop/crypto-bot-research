@@ -147,6 +147,11 @@ EXIT_KO = {"stop": "손절", "ladder": "계단 익절", "closed_while_down": "�
 ALERT_EVERY_S = 600              # a repeated CRITICAL (still no stop / an unknown position) at most this often
 ADOPT_WINDOW_MS = 10 * 60_000    # an entry the bot could not see filled: a position on that coin within this is its own
 LIQ_ROOM = 0.002                 # live: the stop must sit this much (of the price) inside WOO X Pro's own liquidation
+# owners 11-03 (the 레인지 봇's log: WOO X Pro answered an equity of $0.0014 and $0.0055 at two 15m closes between good
+# readings of about $52, so both signals were skipped as "smaller than the minimum"): an entry's equity reading under
+# EQ_ODD_FRAC of the last good one is read again EQ_RETRIES times, EQ_RETRY_S apart (a real loss cannot take 90 % of
+# the account between two entries: one position, 40 % margin)
+EQ_ODD_FRAC, EQ_RETRIES, EQ_RETRY_S = 0.1, 2, 2.0
 
 
 class MixError(ValueError):
@@ -1053,6 +1058,14 @@ class WooBroker:
         a = self.c.account()
         return float(a["totalMarginBalance"])
 
+    def balance_rows(self) -> Optional[list]:
+        """WOO X Pro's own balance rows as it answered them (assets-detail: currency, equity, available, position margin,
+        frozen, unrealized; no key, no secret), logged when an equity reading looks wrong (owners 11-03)."""
+        from . import wooxpro as WX
+        data = self.c.req("GET", WX.PRIVATE + "/assets-detail", limit_key="assets")
+        keys = ("currency", "equity", "available_balance", "position_deposit", "frozen_balance", "unrealized")
+        return [{k: r.get(k) for k in keys} for r in data if isinstance(r, dict)] if isinstance(data, list) else [repr(data)[:200]]
+
     def foreign_positions(self, mine: Optional[str]) -> list:
         """Every open position on the account except the bot's own (symbol, signed qty)."""
         out = []
@@ -1167,6 +1180,9 @@ class BybitBroker(WooBroker):
                 out.append((False, f"{co.symbol}: 레버리지를 못 맞춤 ({e})"))
         return out
 
+    def balance_rows(self) -> Optional[list]:
+        return None
+
     def liq_room(self, symbol: str, notional: float, lev: int) -> Optional[float]:
         """Bybit's maintenance rate of the tier holding ``notional`` (its risk limits): 1 / lev - that - LIQ_ROOM; -1 when
         no tier holds it; None when the tiers cannot be read."""
@@ -1201,6 +1217,9 @@ class ToobitBroker(WooBroker):
     def liq_room(self, symbol: str, notional: float, lev: int) -> Optional[float]:
         return None
 
+    def balance_rows(self) -> Optional[list]:
+        return None
+
 
 # ====================================================================== the bot
 def _not_read(ev: dict) -> bool:
@@ -1228,6 +1247,9 @@ class Bot:
         self._unknown_told = ""                  # the unknown positions last told (coins)
         self._last_minute_ms = 0                 # ladder_every_s: when the open position was last followed on 1m bars
         self.board: dict = {}                    # the friend rules: each coin's values at the last close (board_row)
+        se = float(self.start_equity or 0)
+        self._eq_good: Optional[float] = se if se >= 1.0 else None   # the last equity reading that looked right
+        self._eq_odd: Optional[tuple] = None     # (reading, the good one) when an entry's reading stayed wrong
 
     # ---------------------------------------------------------------- persistence and log
     def save(self) -> None:
@@ -1280,6 +1302,8 @@ class Bot:
         eq = self.b.equity()
         if not self.start_equity:
             self.start_equity = eq
+        if eq >= 1.0:
+            self._eq_good = eq
         lines = self.b.setup(self.cfg.coins)
         bad = [t for ok, t in lines if not ok]
         for co in self.cfg.coins:
@@ -1506,9 +1530,46 @@ class Bot:
         return ""
 
     # ---------------------------------------------------------------- entry
+    def checked_equity(self, what: str) -> tuple[float, bool]:
+        """A live equity reading checked against the last good one (owners 11-03: see EQ_ODD_FRAC): one under
+        EQ_ODD_FRAC of it is read again (EQ_RETRIES, EQ_RETRY_S apart). (the reading used, it looked right); a reading
+        that was wrong at first is logged with the exchange's own rows (equity_odd, ``what``: "entry" / "exit")."""
+        eq = float(self.b.equity())
+        good = self._eq_good
+        if not self.b.live or good is None or eq >= good * EQ_ODD_FRAC:
+            if eq >= 1.0:
+                self._eq_good = eq
+            return eq, True
+        reads = [eq]
+        for _ in range(EQ_RETRIES):
+            self.sleep(EQ_RETRY_S)
+            eq = float(self.b.equity())
+            reads.append(eq)
+            if eq >= good * EQ_ODD_FRAC:
+                break
+        try:
+            rows = self.b.balance_rows()
+        except Exception as e:  # noqa: BLE001  (a diagnosis only)
+            rows = [f"{type(e).__name__}: {e}"[:200]]
+        ok = eq >= good * EQ_ODD_FRAC
+        self.log("equity_odd", what=what, reads=reads, good=good, used=eq, recovered=ok, rows=rows)
+        if ok:
+            self._eq_good = eq
+        return eq, ok
+
+    def entry_equity(self) -> float:
+        """The equity an entry is sized from (checked_equity); still wrong after the reads: that reading (the entry is
+        skipped as too small and the message says why: ``_eq_odd``)."""
+        self._eq_odd = None
+        good = self._eq_good
+        eq, ok = self.checked_equity("entry")
+        if not ok:
+            self._eq_odd = (eq, good)
+        return eq
+
     def enter(self, co: Coin, ev: dict) -> None:
         sym, side = co.symbol, ev["side"]
-        eq = self.b.equity()
+        eq = self.entry_equity()
         dist = float(ev["stop_dist"])
         ref = float(ev["close"])
         if self.cfg.margin_frac > 0:                    # owners 10-26: margin = equity x margin_frac
@@ -1525,8 +1586,11 @@ class Bot:
         if qty <= 0 or qty + 1e-12 < need:
             self.log("skip", symbol=sym, side=side, why="최소 주문보다 작음", qty=qty, need=need, equity=eq,
                      rule=ev.get("rule", "mix"))
+            odd = (f"\n거래소가 잔고를 ${self._eq_odd[0]:,.4f}로 알려 줬어요(바로 전 ${self._eq_odd[1]:,.2f}). "
+                   f"{EQ_RETRIES}번 다시 읽어도 같아서 이번 신호는 건너뛰어요 · "
+                   f"{EXCHANGES.get(self.cfg.exchange, self.cfg.exchange)} 앱에서 선물 잔고를 확인해 주세요") if self._eq_odd else ""
             self.say("WARN", f"⚠ {coin_ko(sym)} {'롱' if side > 0 else '숏'} 신호를 건너뜀: 크기 {qty:g}가 최소 {need:g}보다 작음 "
-                             f"(손절 1번 ${risk:.3f}, 손절 폭 {ev['stop_pct']}%)")
+                             f"(손절 1번 ${risk:.3f}, 손절 폭 {ev['stop_pct']}%){odd}")
             return
         if self.b.live:                                 # the exchange's own liquidation, from its brackets / tiers
             room = self.b.liq_room(sym, qty * ref, co.leverage)
@@ -1773,7 +1837,8 @@ class Bot:
             except Exception as e:
                 self.log("cancel_failed", symbol=p.symbol, error=str(e))
             try:
-                eq = self.b.equity()
+                eq, ok = self.checked_equity("exit")     # (owners 11-03: a wrong reading never makes a P&L)
+                eq = eq if ok else None
             except Exception:
                 eq = None
             pnl = (eq - p.equity_before) if (eq is not None and p.equity_before is not None) else None
