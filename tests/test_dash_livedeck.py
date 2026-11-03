@@ -72,6 +72,16 @@ def _range_rows():
     return live, paper
 
 
+# this world's coins: the owners' six of 10-31 night (owners 11-03 moved the 관제실 to the two WOO X Pro bots' coins,
+# BTC · SOL · XRP · BCH · ZEC · DOGE: tests/test_dash_rules1102.py)
+WORLD_COINS = ("SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT")
+
+
+@pytest.fixture(autouse=True)
+def _world_coins(monkeypatch):
+    monkeypatch.setattr(D, "COINS", WORLD_COINS)
+
+
 @pytest.fixture
 def world(tmp_path, monkeypatch):
     live, paper = _range_rows()

@@ -51,6 +51,10 @@ def config(folder: str, mode: str) -> str:
     # swing trend, the ROC / OBV 50 rules, its name) in tests/test_rules1030.py
     for k in ("margin_frac", "ladder", "ladder_every_s", "rules", "stop_atr", "tf", "trend", "name"):
         raw.pop(k, None)
+    # the design's own six coins (owners 11-03 moved the deploy config to BTC · XRP · BCH · ZEC · DOGE; the design has no
+    # numbers for BTC): this world stays the one it was built as
+    from paperbot import mixchop as M
+    raw["coins"] = {s: {"leverage": v["leverage"]} for s, v in M.DEFAULT_COINS.items()}
     raw["max_notional_usd"] = 500
     raw["equity_floor_frac"] = 0.7          # the friend's design's floor (owners 10-31: the deploy config has none, test_rules1031b)
     raw.update(state=os.path.join(folder, f"{tag}-state.json"), log=os.path.join(folder, f"{tag}-log.jsonl"),

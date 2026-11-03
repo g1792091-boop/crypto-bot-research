@@ -41,14 +41,15 @@ DEPLOY = ROOT / "deploy"
 # bots to the 추세 MACD trend and new entries: tests/test_rules1102.py)
 ERA_RULES = {"mixbybit": ["obvac"], "mixchop": ["h0x"], "mixrange": ["h0x"]}
 ERA = Path(tempfile.mkdtemp(prefix="era1031c-"))
+SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
 for _f in DEPLOY.glob("mix*.json"):
     _d = json.loads(_f.read_text(encoding="utf-8"))
-    if _f.name.split(".")[0] in ERA_RULES:
-        _d.update(trend="bar", rules=ERA_RULES[_f.name.split(".")[0]])
+    if _f.name.split(".")[0] in ERA_RULES:       # (and the six coins of then: owners 11-03 changed the two WOO X Pro bots')
+        _d.update(trend="bar", rules=ERA_RULES[_f.name.split(".")[0]],
+                  coins={s: {"leverage": 20 if s == "ZECUSDT" else 40} for s in SIX})
     (ERA / _f.name).write_text(json.dumps(_d, ensure_ascii=False), encoding="utf-8")
 T0 = 1_800_000_000_000 - 1_800_000_000_000 % M.MIN30
 MIN, HOUR = 60_000, 3_600_000
-SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
 
 
 def _pair(n15, seed, end_ms=T0, vol=0.002):

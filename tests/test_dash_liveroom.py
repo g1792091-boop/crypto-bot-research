@@ -58,6 +58,12 @@ def _touch(path, ms):
     os.utime(path, (ms / 1000, ms / 1000))
 
 
+@pytest.fixture(autouse=True)
+def _world_coins(monkeypatch):
+    from tests.test_dash_livedeck import WORLD_COINS
+    monkeypatch.setattr(D, "COINS", WORLD_COINS)
+
+
 @pytest.fixture
 def room(world, monkeypatch):
     tmp = world["tmp"]

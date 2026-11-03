@@ -367,11 +367,11 @@ sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
 두 분(11/03): "자동매매봇 거래소는 총 2개 거래소를 쓸꺼야", "바이비트말고 woox pro1 거래소랑 친구봇 woox pro2 이렇게 쓸꺼야",
 "PRO1 OBV · PRO2 3합".
 
-| 봇 | 계정 | 추세 (30분봉) | 진입 (15분봉) |
-|---|---|---|---|
-| 레인지 봇 | WOO X Pro 1 | 추세 MACD 히스토그램 0선 위 상승 · 아래 하락 | OBV 히스토그램 0선 아래 양봉 전환 롱 · 0선 위 음봉 전환 숏 (12장의 방식, `docs/range-bot-ko.md` 맨 앞) |
-| 친구 15분 봇 | WOO X Pro 2 | 같음 | 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장) |
-| 바이비트 봇 | 바이비트 | — | **꺼 둠** |
+| 봇 | 계정 | 추세 (30분봉) | 진입 (15분봉) | 코인 |
+|---|---|---|---|---|
+| 레인지 봇 | WOO X Pro 1 | 추세 MACD 히스토그램 0선 위 상승 · 아래 하락 | OBV 히스토그램 0선 아래 양봉 전환 롱 · 0선 위 음봉 전환 숏 (12장의 방식, `docs/range-bot-ko.md` 맨 앞) | BTC · SOL · ZEC · DOGE |
+| 친구 15분 봇 | WOO X Pro 2 | 같음 | 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장) | BTC · XRP · BCH · ZEC · DOGE |
+| 바이비트 봇 | 바이비트 | — | **꺼 둠** | — |
 
 - 바이비트 봇의 두 서비스(실거래 `paperbot-mixbybit`, 모의 `paperbot-mixbybit-paper`)를 `disable --now`로 끄면:
   - 사이트: 관제실 · 회의실 · 분석팀 · 친구 추세판 · 진짜 돈 줄에서 빠집니다(`livebots.mix_off`). 메뉴에서도 빠지고, 지난 기록은

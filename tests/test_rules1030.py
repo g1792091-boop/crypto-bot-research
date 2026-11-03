@@ -178,13 +178,13 @@ def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
         # (tests/test_rules1031c.py); 11-02: the 추세 MACD and the 3합 histogram's 0 cross (tests/test_rules1102.py)
         assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr) == ("15m", "macd", ("h3x",), 3.0)
         assert cfg.tf_ms == M.MIN15 and cfg.tf_ko == "15분"
-        assert {c.symbol: c.leverage for c in cfg.coins} == {"SOLUSDT": 40, "ETHUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40,
-                                                            "ZECUSDT": 20, "DOGEUSDT": 40}
+        # owners 11-03 ("woox2에 솔라나 이더만 삭제하고 비트 추가해줘"): BTC · XRP · BCH · ZEC · DOGE
+        assert {c.symbol: c.leverage for c in cfg.coins} == {"BTCUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40, "ZECUSDT": 20, "DOGEUSDT": 40}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
     base = json.loads((DEPLOY / "mixchop.live.json").read_text(encoding="utf-8"))
     bad = {"tf": ({"tf": "5m"}, "tf"), "trend": ({"trend": "two"}, "trend"),
-           "mix on 15m": ({"rules": ["mix"], "tf": "15m"}, "30m")}
+           "mix on 15m": ({"rules": ["mix"], "tf": "15m", "coins": {s: {"leverage": 40} for s in ("SOLUSDT", "XRPUSDT")}}, "30m")}
     for what, (over, words) in bad.items():
         p = tmp_path / f"{what}.json"
         p.write_text(json.dumps({**base, **over}), encoding="utf-8")
@@ -196,7 +196,8 @@ def test_a_15m_close_in_the_bots_loop(tmp_path, monkeypatch):
     d = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
     d.update(state=str(tmp_path / "state.json"), log=str(tmp_path / "log.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"), telegram=False, start_equity=100,
-             tf="15m", trend="swing", rules=["roc50", "obv50"], name="친구 15분 봇")        # the 15m form
+             tf="15m", trend="swing", rules=["roc50", "obv50"], name="친구 15분 봇",        # the 15m form
+             coins={"SOLUSDT": {"leverage": 40}, "ETHUSDT": {"leverage": 40}, "XRPUSDT": {"leverage": 40}, "BCHUSDT": {"leverage": 40}, "ZECUSDT": {"leverage": 20}, "DOGEUSDT": {"leverage": 40}})                          # (its six coins of then)
     d.pop("trend_tf", None)                               # (10-31, last: the 30m trend; tests/test_rules1031c.py)
     p = tmp_path / "cfg.json"
     p.write_text(json.dumps(d), encoding="utf-8")

@@ -176,3 +176,15 @@ def test_a_switched_off_bot_leaves_the_bot_screens(tmp_path, monkeypatch):
     assert L.replaced_out({"mixbybit_config": str(cfg)}) == [{"id": "bybit", "bot": "bybit", "name_ko": "바이비트 봇",
         "account_ko": "바이비트", "unit": "paperbot-mixbybit", "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot", "off": True}]
     L._off_cache.clear()
+
+
+def test_the_deck_reads_the_two_bots_coins():
+    """Owners 11-03 ("woo x pro 1 거래소는 이더 리플 bch 삭제하고 비트 추가해주고", "woox2에 솔라나 이더만 삭제하고 비트
+    추가해줘"): 관제실's coins are the two WOO X Pro bots' together, BTC first; ETH left both."""
+    import json as _json
+    from paperbot.dash.more import livedeck as D
+    deploy = os.path.join(ROOT, "deploy")
+    coins = {n: list(_json.load(open(os.path.join(deploy, f"{n}.live.json"), encoding="utf-8"))["coins"]) for n in ("mixrange", "mixchop")}
+    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT", "DOGEUSDT"],
+                     "mixchop": ["BTCUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]}
+    assert set(D.COINS) == set(coins["mixrange"]) | set(coins["mixchop"]) and D.COINS[0] == "BTCUSDT" and "ETHUSDT" not in D.COINS

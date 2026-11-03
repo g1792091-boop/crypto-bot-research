@@ -17,10 +17,12 @@
 |---|---|---|
 | 추세 (30분봉) | 추세 바 종합 (6줄 셈, 노랑 = 진입 금지) | **추세 MACD 히스토그램**: 0선 위 = 상승, 0선 아래 = 하락. 노란 막대도 0선 기준. 정확히 0이면 진입 안 함 |
 | 진입 (15분봉) | 'ALL + OBV6 MACD' 히스토그램 0선 돌파 | **OBV 히스토그램이 0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로 바뀌면 숏** (OBV 선은 안 봄) |
+| 코인 | SOL → ETH → XRP → BCH → ZEC → DOGE | **BTC → SOL → ZEC → DOGE** (11/03 "이더 리플 bch 삭제하고 비트 추가") · BTC 40배, ZEC 20배, 나머지 40배 |
 | 설정 | `"trend": "bar"`, `"rules": ["h0x"]` | `"trend": "macd"`, `"rules": ["o4h"]` |
 
 - OBV 히스토그램(OBV4 MACD 기본값)과 추세 MACD의 계산은 `docs/mixbybit-ko.md` 12장과 같습니다.
-- 그대로: 계정(WOO X Pro 첫 계정), 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단, 포지션 1개, 진입 금지 시간.
+- 그대로: 계정(WOO X Pro 첫 계정), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단, 포지션 1개, 진입 금지 시간.
+- 같은 15분봉에 신호가 여러 개면 코인 순서(BTC → SOL → ZEC → DOGE)대로 첫 번째만 들어갑니다(포지션 1개).
 - 텔레그램 근거 줄 예: `근거: OBV 히스토그램 0선 아래 양봉 전환(-2.00) · 추세 MACD 30분 히스토그램 0선 위 상승(+1.00)`.
 - 아침 점검의 '놓친 신호'는 `OBV 히스토그램 양봉·음봉 전환 N번`을 셉니다.
 - **백테스트는 하지 않았습니다.** 시험: `tests/test_rules1102.py`, `tests/test_dash_rules1102.py`.
@@ -39,7 +41,8 @@ sudo systemctl restart paperbot-mixrange paperbot-mixrange-paper
 ```
 
 - (코드 받기 `git pull && sudo bash deploy/install.sh`는 한 번만: `docs/mixbybit-ko.md` 13장.)
-- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"o4h"` 두 줄만 나옵니다.
+- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"o4h"`, 코인 `ETHUSDT` · `XRPUSDT` · `BCHUSDT`가 빠지고 `BTCUSDT`가 들어갑니다.
+- check의 코인 줄에 BTC가 ✔(WOO X Pro에 계약 있음)인지 봅니다. ✘ 코인은 거래하지 않습니다.
 - check: `매매법·손절: OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏) · … · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
 - 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.
 - 되돌리기: `.before-1103` 파일을 다시 복사하고 다시 켭니다.

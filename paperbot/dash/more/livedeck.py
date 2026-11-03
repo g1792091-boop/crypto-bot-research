@@ -69,7 +69,9 @@ def bot_order() -> tuple:
     """BOT_ORDER without a bot switched off for good (livebots.mix_off; owners 11-03: the 바이비트 봇 off, the two WOO X
     Pro accounts trade): the bots 관제실, 회의실 and the 분석팀 read."""
     return tuple(b for b in BOT_ORDER if not L.mix_off(b))
-COINS = ("SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT")   # the owners' six (10-31 night)
+# the coins the two bots trade together (owners 11-03: WOO X Pro 1 BTC · SOL · ZEC · DOGE, WOO X Pro 2 BTC · XRP · BCH · ZEC · DOGE;
+# ETH left both); before: the owners' six of 10-31 night (SOL · ETH · XRP · BCH · ZEC · DOGE)
+COINS = ("BTCUSDT", "SOLUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT")
 MIN = 60_000
 MIN15, MIN30 = M.MIN15, M.MIN30
 DAY = 86_400_000

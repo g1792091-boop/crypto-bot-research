@@ -40,6 +40,8 @@ DEPLOY = ROOT / "deploy"
 T0 = 1_800_000_000_000 - 1_800_000_000_000 % M.MIN30
 MIN, HOUR = 60_000, 3_600_000
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
+PRO1 = ["BTCUSDT", "SOLUSDT", "ZECUSDT", "DOGEUSDT"]                     # owners 11-03: the 레인지 봇 (WOO X Pro 1)
+PRO2 = ["BTCUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]          # owners 11-03: the 친구 15분 봇 (WOO X Pro 2)
 
 
 def _roc(c, n):
@@ -335,7 +337,7 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M.time, "time", lambda: T0 / 1000 + 60)
     assert M.cmd_signals(argparse.Namespace(config=str(DEPLOY / "mixchop.paper.json"), n=3)) == 0
     out = capsys.readouterr().out
-    assert out.count("  -- 3합 히스토그램 0선 돌파 (추세 30분: 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 같음))") == 6
+    assert out.count("  -- 3합 히스토그램 0선 돌파 (추세 30분: 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 같음))") == len(PRO2)
     # the check's rules line
     monkeypatch.setattr(M, "public_spec", lambda cfg: lambda sym: {"status": "Trading", "max_leverage": 50.0, "min_qty": 0.001,
                                                                   "qty_step": 0.001, "min_notional": 5.0, "tick": 0.01})
@@ -426,19 +428,20 @@ def test_the_morning_replay_counts_the_new_signals():
 
 # ====================================================================== the configs
 def test_three_bots_on_the_trend_macd():
-    bots = {"bybit": ("mixbybit.live.json", "mixbybit.paper.json", ("o4h",)),
-            "friend": ("mixchop.live.json", "mixchop.paper.json", ("h3x",)),
-            # owners 11-03 ("PRO1 OBV · PRO2 3합"): the 레인지 봇 (WOO X Pro 1) on the OBV histogram's turn
-            "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",))}
-    for key, (live, paper, rules) in bots.items():
+    # owners 11-03 ("PRO1 OBV · PRO2 3합"): the 레인지 봇 (WOO X Pro 1) on the OBV histogram's turn; its coins "이더 리플 bch
+    # 삭제하고 비트 추가", the friend bot's (WOO X Pro 2) "솔라나 이더만 삭제하고 비트 추가" (the 바이비트 봇, off, as it was)
+    bots = {"bybit": ("mixbybit.live.json", "mixbybit.paper.json", ("o4h",), SIX),
+            "friend": ("mixchop.live.json", "mixchop.paper.json", ("h3x",), PRO2),
+            "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",), PRO1)}
+    for key, (live, paper, rules, coins) in bots.items():
         for name, mode in ((live, "mainnet"), (paper, "paper")):
             cfg = M.load_config(str(DEPLOY / name))
-            assert (cfg.mode, cfg.trend, cfg.rules, cfg.symbols) == (mode, "macd", rules, SIX), name
+            assert (cfg.mode, cfg.trend, cfg.rules, cfg.symbols) == (mode, "macd", rules, coins), name
             # "30분봉 추세 15분봉은 진입 바꾸지말고"
             assert (cfg.tf, cfg.trend_tf, cfg.trend_tf_ms) == ("15m", "30m", M.MIN30), name
             assert cfg.stop_atr == 3.0 and cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0}
             assert cfg.margin_frac == 0.4 and cfg.equity_floor_frac == 0
-            assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in SIX}, "ZECUSDT": 20}
+            assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in coins}, "ZECUSDT": 20}
     by = M.load_config(str(DEPLOY / "mixbybit.live.json"))
     assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in M.plan_words(by)
     assert "매매법 3합 히스토그램 0선 돌파" in M.plan_words(M.load_config(str(DEPLOY / "mixchop.live.json")))
