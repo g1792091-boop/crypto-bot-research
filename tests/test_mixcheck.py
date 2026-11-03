@@ -325,7 +325,7 @@ def _doge_bot_day(folder, both: bool) -> dict:
     if both:
         raw["rules"] = ["mix", "st"]                                  # the 10-26 rules (the deploy config's since 10-30: ROC / OBV 50)
     raw.update(state=str(folder / "state.json"), log=str(folder / "log.jsonl"), kill_file=str(folder / "STOP"),
-               own_stop_file=str(folder / "own.STOP"), telegram=False, coins={"DOGEUSDT": raw["coins"]["DOGEUSDT"]})
+               own_stop_file=str(folder / "own.STOP"), telegram=False, coins={"DOGEUSDT": {"leverage": 40}})   # (DOGE at its 40x of then: the deploy config has no DOGE since 11-03)
     (folder / "cfg.json").write_text(json.dumps(raw), encoding="utf-8")
     cfg = M.load_config(str(folder / "cfg.json"))
     d = Doge()

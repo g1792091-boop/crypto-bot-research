@@ -406,10 +406,10 @@ def test_the_words(tmp_path):
     assert out["h0x"] == ["히스토그램 0선 위로 돌파 0.50", "히스토그램 0선 돌파 없음 −0.20", None] and out["rule"] == "히스토그램 0선 돌파"
     assert out["ui"] == ["/api/v4/livebots/mixrange", "/api/v4/livebots/mixrangeperf", "WOO X Pro", "15분", "15분", "15분"]
     w_mix, w_range, w_bybit = out["waits"]
-    # owners 11-02: the 30m 추세 MACD; the 3합 histogram's 0 cross (WOO X Pro 2), the OBV histogram's turn (owners 11-03:
-    # the 레인지 봇 on WOO X Pro 1, the 바이비트 봇's rule of 11-02)
-    assert w_mix.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "3합 히스토그램이 0선을 그 쪽으로 돌파" in w_mix
-    assert w_range == w_bybit and "노란 막대도 같음" in w_mix
+    # owners 11-02: the 30m 추세 MACD; the OBV histogram's turn (owners 11-03: the 레인지 봇 on WOO X Pro 1, the 바이비트
+    # 봇's rule of 11-02; 11-03 evening "친구봇도 obv로": the 친구 15분 봇 too, its 3합 0 cross of before gone)
+    assert w_mix.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱" in w_mix
+    assert w_mix == w_range == w_bybit and "노란 막대도 같음" in w_mix and "3합" not in w_mix
     assert w_bybit.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로" in w_bybit
     assert "찹존" not in w_mix + w_bybit and "AC 막대가 그 쪽" not in w_bybit
     assert out["tf"] == ["15분", "30분", "15분"]
@@ -432,7 +432,8 @@ def test_the_words(tmp_path):
     assert out["ids"] == [[], []] and out["ids0"] == ["bybit", "mexc"]
     assert out["gate"] == "가능 · 15분봉 신호를 기다려요" and out["led"].startswith("20분 넘게 새 기록이 없어요")
     assert out["screens"][0][0] == "레인지 봇" and "OBV 히스토그램 전환" in out["screens"][0][1]     # (owners 11-03)
-    assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (15분봉 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파 · 투비트 실거래와 모의)"]
+    # (owners 11-03 evening "친구봇도 obv로": the friend bot on the OBV histogram's turn too)
+    assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환 · 투비트 실거래와 모의)"]
 
 
 TAB_JS = """

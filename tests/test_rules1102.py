@@ -42,7 +42,8 @@ MIN, HOUR = 60_000, 3_600_000
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
 # owners 11-03, last ("레인지봇 도지 bch 이더 리플 삭제해주고 친구봇 bch 삭제해줘"); before: PRO1 + DOGE, PRO2 + BCH
 PRO1 = ["BTCUSDT", "SOLUSDT", "ZECUSDT"]                                 # the 레인지 봇 (WOO X Pro 1)
-PRO2 = ["BTCUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT"]                     # the 친구 15분 봇 (투비트 since 11-03)
+# owners 11-03 evening ("친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만"): the 친구 15분 봇 as the 레인지 봇
+PRO2 = ["BTCUSDT", "SOLUSDT", "ZECUSDT"]                                 # the 친구 15분 봇 (투비트 since 11-03)
 
 
 def _roc(c, n):
@@ -336,13 +337,18 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     src = {"15m": r15, "30m": r30}
     monkeypatch.setattr(M, "binance_fetch", lambda base: lambda s, tf, n: [r for r in src[tf] if r[0] < T0][-n:])
     monkeypatch.setattr(M.time, "time", lambda: T0 / 1000 + 60)
-    assert M.cmd_signals(argparse.Namespace(config=str(DEPLOY / "mixchop.paper.json"), n=3)) == 0
+    # (the 3합's words on the friend bot's config of 11-02 ~ 11-03; since 11-03 evening it enters on the OBV turn)
+    h3 = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
+    h3["rules"] = ["h3x"]
+    h3cfg = tmp_path / "h3x.json"
+    h3cfg.write_text(json.dumps(h3), encoding="utf-8")
+    assert M.cmd_signals(argparse.Namespace(config=str(h3cfg), n=3)) == 0
     out = capsys.readouterr().out
     assert out.count("  -- 3합 히스토그램 0선 돌파 (추세 30분: 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 같음))") == len(PRO2)
     # the check's rules line
     monkeypatch.setattr(M, "public_spec", lambda cfg: lambda sym: {"status": "Trading", "max_leverage": 50.0, "min_qty": 0.001,
                                                                   "qty_step": 0.001, "min_notional": 5.0, "tick": 0.01})
-    assert M.cmd_check(argparse.Namespace(config=str(DEPLOY / "mixchop.paper.json"))) == 0
+    assert M.cmd_check(argparse.Namespace(config=str(h3cfg))) == 0
     assert ("매매법·손절: 3합 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 MACD 히스토그램"
             "(0선 위 상승 · 0선 아래 하락)") in capsys.readouterr().out.splitlines()
     # the start message says the trend
@@ -356,7 +362,8 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     bot = M.Bot(c2, M.PaperBroker(100.0, c2.taker_fee), lambda s, tf, n: [], lambda: T0 + 5_000,
                 notify=lambda lv, t: msgs.append(t), sleep=lambda s: None)
     bot.start()
-    assert "매매법 3합 히스토그램 0선 돌파" in msgs[0] and "15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)" in msgs[0]
+    assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in msgs[0] and "코인 BTC · SOL · ZEC\n" in msgs[0]
+    assert "15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)" in msgs[0] and "3합" not in msgs[0]
 
 
 def test_a_15m_close_in_the_loop_logs_the_turn_and_enters(tmp_path, monkeypatch):
@@ -401,6 +408,7 @@ def test_the_morning_replay_counts_the_new_signals():
                                    ("mixrange.paper.json", "o4h", "o4s", "OBV 히스토그램 양봉·음봉 전환")):
         cfg = M.load_config(str(DEPLOY / name))
         cfg.coins = cfg.coins[:1]
+        cfg.rules = (rule,)                  # (the friend bot's 3합 of 11-02 ~ 11-03; both bots on the OBV turn since 11-03 evening)
         r15, r30 = _pair(4000, 83)
         src = {"15m": r15, "30m": r30}
 
@@ -434,7 +442,7 @@ def test_three_bots_on_the_trend_macd():
     # owners 11-03 ("손절은 냅두고 익절을 거래소에 찍히는 10프로 부터 계단식 익절 2프로 뛰기로"): the two WOO X Pro bots' ladder
     # on the exchange screen's ROE (before fees), +10 % -> +8 %, then every 2 %; the 바이비트 봇 (off) as it was
     bots = {"bybit": ("mixbybit.live.json", "mixbybit.paper.json", ("o4h",), SIX, (5.0, "net")),
-            "friend": ("mixchop.live.json", "mixchop.paper.json", ("h3x",), PRO2, (2.0, "gross")),
+            "friend": ("mixchop.live.json", "mixchop.paper.json", ("o4h",), PRO2, (2.0, "gross")),   # (11-03 evening)
             "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",), PRO1, (2.0, "gross"))}
     for key, (live, paper, rules, coins, (step, basis)) in bots.items():
         for name, mode in ((live, "mainnet"), (paper, "paper")):
@@ -447,7 +455,7 @@ def test_three_bots_on_the_trend_macd():
             assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in coins}, "ZECUSDT": 20}
     by = M.load_config(str(DEPLOY / "mixbybit.live.json"))
     assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in M.plan_words(by)
-    assert "매매법 3합 히스토그램 0선 돌파" in M.plan_words(M.load_config(str(DEPLOY / "mixchop.live.json")))
+    assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(DEPLOY / "mixchop.live.json")))
     assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(DEPLOY / "mixrange.live.json")))
     # a trend that is not one of the four is refused, the new one named
     p = Path(os.environ.get("TMPDIR", "/tmp")) / "bad-trend-1102.json"

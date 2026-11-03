@@ -117,11 +117,13 @@ def test_the_menu_words():
         assert "추세 MACD 30분" in line and "추세 바" not in line, line
     rb = next(l for l in routes.splitlines() if l.lstrip().startswith("rangebot: {"))
     mb = next(l for l in routes.splitlines() if l.lstrip().startswith("mixbot: {"))
-    assert "WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환" in rb and "추세 MACD 30분 + 3합 히스토그램 0선 돌파 · 투비트" in mb
+    # (owners 11-03 evening "친구봇도 obv로": the friend bot on the OBV histogram's turn too)
+    assert "WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환" in rb and "추세 MACD 30분 + OBV 히스토그램 전환 · 투비트" in mb
+    assert "3합" not in mb
     assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes and '{id: "bybit"' not in routes
     assert 'bybitbot: {ko: "바이비트 봇", group: "now", title: "바이비트 봇 (11/03부터 꺼 둠 · 지난 기록)", hidden: true}' in routes
     assert 'bybitperf: {ko: "바이비트 성적", group: "now"' in routes and routes.count("11/03부터 꺼 둠") == 2
-    assert tabs.count("추세 MACD 30분 + OBV 히스토그램 전환") == 2 and tabs.count("추세 MACD 30분 + 3합 히스토그램 0선 돌파") == 1
+    assert tabs.count("추세 MACD 30분 + OBV 히스토그램 전환") == 3 and "3합" not in tabs     # (11-03 evening: the friend bot too)
     assert "레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이" in tabs and "두 분 결정(11/03)으로 꺼 두는 봇" in tabs
     assert "OBV 진한색 + AC" not in tabs and "추세 바 30분" not in tabs
     assert ".filter((r) => r && !r.off)" in tabs                         # the real-money line leaves a bot switched off
@@ -186,9 +188,9 @@ def test_the_deck_reads_the_two_bots_coins():
     from paperbot.dash.more import livedeck as D
     deploy = os.path.join(ROOT, "deploy")
     coins = {n: list(_json.load(open(os.path.join(deploy, f"{n}.live.json"), encoding="utf-8"))["coins"]) for n in ("mixrange", "mixchop")}
-    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT"], "mixchop": ["BTCUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT"]}
-    assert set(D.COINS) == set(coins["mixrange"]) | set(coins["mixchop"]) and D.COINS[0] == "BTCUSDT"
-    assert "ETHUSDT" not in D.COINS and "BCHUSDT" not in D.COINS and D.COINS == ("BTCUSDT", "SOLUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT")
+    # (owners 11-03 evening "친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만": both bots BTC · SOL · ZEC)
+    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT"], "mixchop": ["BTCUSDT", "SOLUSDT", "ZECUSDT"]}
+    assert set(D.COINS) == set(coins["mixrange"]) | set(coins["mixchop"]) and D.COINS == ("BTCUSDT", "SOLUSDT", "ZECUSDT")
     for n in ("mixrange", "mixchop"):                       # the paper twins trade the same coins
         paper = list(_json.load(open(os.path.join(deploy, f"{n}.paper.json"), encoding="utf-8"))["coins"])
         assert paper == coins[n], n
@@ -222,3 +224,36 @@ def test_a_position_held_in_a_coin_taken_out_is_still_guarded(tmp_path):
     (start,) = [t for t in msgs if "▶️ 시작" in t]
     assert "보유 중: DOGE 롱" in start and "코인 BTC · SOL · ZEC\n" in start and not any("모르는 포지션" in t for t in msgs)
     assert any("DOGE 손절이 없거나 모자라 다시 걸었습니다" in t for t in msgs)
+
+
+def test_the_histogram_follows_the_bots_entry_rule(monkeypatch):
+    """Owners 11-03 evening ("친구봇도 obv로"): no live bot enters on the 3합 any more, so 관제실 · 회의실 show the OBV
+    histogram (the OBV4 MACD's AC histogram, the bots' own formula) and its turns (0선 아래 양봉 / 0선 위 음봉) as the
+    marks; a bot back on the 3합 brings it back. The words follow."""
+    import numpy as np
+    from paperbot import friendtrend as FTP
+    from paperbot.dash.more import livedeck as D
+    from tests.test_dash_livedeck import NOW, candles_of
+    from types import SimpleNamespace as NS
+    assert D.hist_rule() == "o4h"                                   # the repo's two configs (no server config here)
+    monkeypatch.setattr(D.MX, "read_config", lambda *a, **k: {"cfg": NS(rules=("h3x",))})
+    assert D.hist_rule() == "h3x"
+    monkeypatch.undo()
+    f = candles_of()
+    c = D.coin_view("SOLUSDT", f, NOW, "o4h")
+    r15 = [r for r in f("SOLUSDT", "15m", D.HIST_BARS) if r["time"] * 1000 + D.MIN15 <= NOW]
+    a = [np.array([r[k] for r in r15]) for k in ("high", "low", "close", "volume")]
+    o4 = FTP.o4_pane(*a)
+    assert c["hist_rule"] == "o4h" and c["hist"][-1] == pytest.approx(round(float(o4["ac"][-1]), 3))
+    assert c["cross"] == c["o4side"] == [int(x) for x in o4["side"][-D.CHART_N:]] and c["o4"] == c["hist"][-1]
+    assert D.coin_view("SOLUSDT", f, NOW)["hist_rule"] == "h3x"
+    out = _node("""console.log(JSON.stringify({
+  k: [DK.histKo({hist_rule: "o4h"}), DK.histKo({hist_rule: "h3x"}), DK.histKo(null)],
+  m: [DK.markKo({hist_rule: "o4h"}, 1), DK.markKo({hist_rule: "o4h"}, -1), DK.markKo({hist_rule: "h3x"}, 1), DK.markKo({hist_rule: "o4h"}, 0)],
+}));""")
+    assert out["k"] == ["OBV 히스토그램", "3합 히스토그램", "3합 히스토그램"]
+    assert out["m"] == ["0선 아래 양봉 전환", "0선 위 음봉 전환", "0선 위로 돌파", ""]
+    js = open(os.path.join(SCREENS, "livebots-deck.js"), encoding="utf-8").read()
+    assert "OBV 히스토그램 (레인지 봇 · 친구 15분 봇 진입)" in js and '"히스토그램 · HISTOGRAM"' in js
+    room = open(os.path.join(SCREENS, "livebots-room.js"), encoding="utf-8").read()
+    assert 'cols: ["코인", "가격", "24시간", "30분 추세", hk]' in room and '"OBV 히스토그램" : "3합 히스토그램"' in room

@@ -18,7 +18,8 @@
 //   실행 기록  the three logs' newest rows (signals, entries, ladder steps, exits, skips)
 //   포워드 테스트 each bot's balance line from its start, split where it began the 10-31 night rules (이전 규칙 · 새 규칙),
 //            the return and the deepest drop since, live vs paper entries
-//   히스토그램 the chosen coin's 3합 histogram on its 15m bars; 신호 흐름: the last 48 hours' signals (0 crosses, OBV
+//   히스토그램 the chosen coin's entry histogram on its 15m bars (the answer's hist_rule: the 3합, or the OBV histogram
+//            once both bots enter on its turn, owners 11-03 last "친구봇도 obv로"); 신호 흐름: the last 48 hours' signals (0 crosses, OBV
 //            histogram turns) and entries by 15m
 // HONESTY: every number is a bot's record or a price; a panel with nothing yet says so; nothing drawn is made up (the core's
 // flow shape, its stars and its particle colours are decoration and say so on the screen, never a model). Under reduced
@@ -38,6 +39,11 @@ const TREND_KO = {up: "상승", down: "하락", flat: "진입 금지", na: "—"
 // the 15m 3합 histogram's 0 cross, the 레인지 봇 on the OBV4 MACD histogram's turn (owners 11-03; the 바이비트 봇, which
 // had that rule on 11-02, is off: the screen shows the bots livedeck.bot_order() reads)
 const TM_KO = "추세 MACD";
+/** The coin's entry histogram in words (livedeck hist_rule): the OBV histogram once every live bot enters on its turn. */
+export const histKo = (c) => ((c || {}).hist_rule === "o4h" ? "OBV 히스토그램" : "3합 히스토그램");
+/** The entry mark on a bar in words: the OBV turn (0선 아래 양봉 / 0선 위 음봉) or the 3합's 0 cross; "" without one. */
+export const markKo = (c, x) => (!Number(x) ? "" : (c || {}).hist_rule === "o4h" ? (x > 0 ? "0선 아래 양봉 전환" : "0선 위 음봉 전환")
+  : (x > 0 ? "0선 위로 돌파" : "0선 아래로 돌파"));
 const BOT_TAB = {bybit: "bybitbot", mix: "mixbot", range: "rangebot"};   // each bot's 봇별 screen (its 목표 연구 at the foot)
 /** Each coin's own colour (dk-k0 … dk-k5, in the server's fixed coin order; never a colour that means up or down). */
 const CID = (k) => `dk-k${k % 6}`;
@@ -285,7 +291,7 @@ function chartSvg(c, holds, W = 600) {
         height: Math.max(1, Math.abs(y(b[1]) - y(b[4])))}));
     const x0 = (c.cross || [])[i];
     if (x0) kids.push(s("path", {class: ["dk-x0", x0 > 0 ? "up" : "down"], d: x0 > 0 ? `M${x},${y(b[3]) + 10}l-4,6h8z` : `M${x},${y(b[2]) - 10}l-4,-6h8z`}));
-    const o4 = (c.o4side || [])[i];                   // the 바이비트 봇's entry mark (owners 11-02): a ring under / over the bar
+    const o4 = c.hist_rule === "o4h" ? 0 : (c.o4side || [])[i];   // the OBV turn as a ring (no ring when ▲▼ are the OBV turns)
     if (o4) kids.push(s("circle", {class: ["dk-o4", o4 > 0 ? "up" : "down"], cx: x, cy: o4 > 0 ? y(b[3]) + 22 : y(b[2]) - 22, r: 3.2}));
   });
   const lastC = bars[n - 1][4];                       // the last close: a dashed line and its tag (the pictures' price tag)
@@ -733,11 +739,11 @@ export function deckView(ctx) {
     panel("dk-a-rsk", "위험 · RISK", "열린 포지션 · 지금 가격 기준 · 이번 달", riskBox),
     panel("dk-a-gol", "목표 ×6 · GOAL PACE", goalSub, goalBox),
     panel("dk-a-cal", "이번 달 · CALENDAR", calSub, calBox),
-    panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 MACD) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
+    panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 코인 (색 = 30분 추세 MACD) · 흰 입자 = 방금 진입 신호 자리 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
       h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
     panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "봇들의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
     panel("dk-a-fwd", "포워드 테스트 · FORWARD TEST", "새 규칙 전과 후 · 시작 대비 잔고", fwd),
-    panel("dk-a-his", "히스토그램 · 3합", histSub, hist),
+    panel("dk-a-his", "히스토그램 · HISTOGRAM", histSub, hist),
     panel("dk-a-flo", "신호 흐름 · SIGNAL CASCADE", "48시간 · 15분마다 신호(0선 돌파 · OBV 히스토그램 전환, 아래 막대) · 2시간 합(금색) · 진입(점)", flow));
   // the opening (owners 11-01 "동영상처럼"): the head, the running line and the panels come up one after another (--i);
   // the class goes once they are up, so the 15 s redraws never replay it
@@ -831,7 +837,9 @@ export function deckView(ctx) {
     const c = coinOf(sel);
     if (!c || c.state !== "ok") { put(chart, ui.empty(c ? `${c.coin}: ${c.ko || "못 읽음"}` : "코인 값을 읽는 중")); chartSub.textContent = ""; return; }
     const t = c.tm30 || {};
-    chartSub.textContent = `${c.coin} 15분봉 · ▲▼ 3합 히스토그램 0선 돌파 · ○ OBV 히스토그램 전환(레인지 봇) · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
+    const marks = c.hist_rule === "o4h" ? "▲▼ OBV 히스토그램 전환(▲ 0선 아래 양봉 · ▼ 0선 위 음봉, 두 봇 진입)"
+      : "▲▼ 3합 히스토그램 0선 돌파 · ○ OBV 히스토그램 전환";
+    chartSub.textContent = `${c.coin} 15분봉 · ${marks} · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
     put(chart, chartSvg(c, holdsOf(sel), wOf(chart)));
   }
 
@@ -926,8 +934,8 @@ export function deckView(ctx) {
     const late = tr.slice(0, 7);
     core.set(coins.map((c) => ({sym: c.symbol, tone: c.state === "ok" && c.trend30 && c.trend30.length ? toneOf(c.trend30[c.trend30.length - 1][1]) : "na"})),
       hot, hold ? hold.symbol : null, [
-        {k: `PROBE · ${sc ? sc.coin : "—"} 15M 3합`, v: ok(lastH) ? fmt.num(lastH, 2) : "—", tone: ok(lastH) ? (lastH >= 0 ? "up" : "down") : "",
-          s: lastX ? `방금 0선 ${lastX > 0 ? "위로" : "아래로"} 돌파` : "이번 봉 0선 돌파 없음"},
+        {k: `PROBE · ${sc ? sc.coin : "—"} 15M ${sc && sc.hist_rule === "o4h" ? "OBV" : "3합"}`, v: ok(lastH) ? fmt.num(lastH, 2) : "—", tone: ok(lastH) ? (lastH >= 0 ? "up" : "down") : "",
+          s: lastX ? `방금 ${markKo(sc, lastX)}` : (sc && sc.hist_rule === "o4h" ? "이번 봉 전환 없음" : "이번 봉 0선 돌파 없음")},
         {k: "REGIME · 30M 추세 MACD", v: rg === "flat" ? "0선" : TREND_KO[rg], tone: rg,
           s: tm30 && ok(tm30.hist) ? `히스토그램 ${fmt.num(tm30.hist, 2, true)}${tm30.yellow ? " · 노란 막대" : ""}` : ""},
         {k: "NEXT CLOSE · 15M", v: mmss(nc.left_ms), s: `${fmt.hm(nc.at)} 마감 · 봇들이 판단해요`}],
@@ -1121,7 +1129,9 @@ export function deckView(ctx) {
     const c = coinOf(st.sel);
     if (!c || c.state !== "ok") { put(hist, ui.empty("코인 값을 읽는 중")); histSub.textContent = ""; return; }
     const last = (c.hist || []).filter(ok).slice(-1)[0];
-    histSub.textContent = `${c.coin} 15분봉 3합 히스토그램 (친구 15분 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
+    histSub.textContent = c.hist_rule === "o4h"
+      ? `${c.coin} 15분봉 OBV 히스토그램 (레인지 봇 · 친구 15분 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 전환(0선 아래 양봉 · 0선 위 음봉) · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`
+      : `${c.coin} 15분봉 3합 히스토그램 (친구 15분 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
     put(hist, histSvg(c, wOf(hist)));
     put(flow, flowSvg(d.flow, wOf(flow)));
   }

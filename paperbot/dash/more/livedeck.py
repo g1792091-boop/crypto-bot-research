@@ -15,10 +15,11 @@ made up to fill the look (the pictures' decorative panels are drawn from these v
               rules), parity {n, same, share} (live entries with a paper entry on the same coin and side within 5 min),
               last_close_ms}],
      coins: [{symbol, coin, state, last, chg24 (vs 96 15m bars ago), spark [closes of the last 96 15m bars],
-              bars [[t, o, h, l, c], … the last 120 15m bars], hist [the 3합 histogram per 15m bar (owners 11-02: the
-              친구 15분 봇's and the 레인지 봇's entry)], cross [its 0 cross on the bar: 1 / -1 / 0], o4side [the 바이비트 봇's
-              entry mark per bar: the OBV4 MACD histogram turning green under 0: 1 / red over 0: -1 / 0], o4 (its last
-              value), trend30 [the 추세 MACD histogram's side of 0 per 30m bar: [t, 1 / -1 / 0], …], tm30 {hist, macd,
+              bars [[t, o, h, l, c], … the last 120 15m bars], hist_rule (the entry rule the histogram is: "h3x" the 3합
+              histogram while a live bot enters on it, "o4h" the OBV4 MACD histogram once every live bot enters on its
+              turn, owners 11-03 last), hist [that histogram per 15m bar], cross [its entry mark on the bar: h3x the 0 cross
+              1 / -1 / 0, o4h the turn green under 0: 1 / red over 0: -1 / 0], o4side [the OBV4 MACD histogram's turn per
+              bar, whatever hist_rule is], o4 (its last value), trend30 [the 추세 MACD histogram's side of 0 per 30m bar: [t, 1 / -1 / 0], …], tm30 {hist, macd,
               yellow} (the last closed 30m bar's)}],
      grid:  [{symbol, coin, bots: {bot id: {trend, x0, h3, o4, o4_turn, o4_col, tmacd, tyellow, side, why, close_ms,
               rule, trend_mode}}}] (each bot's own board row at its last close),
@@ -69,10 +70,10 @@ def bot_order() -> tuple:
     """BOT_ORDER without a bot switched off for good (livebots.mix_off; owners 11-03: the 바이비트 봇 off, the two WOO X
     Pro accounts trade): the bots 관제실, 회의실 and the 분석팀 read."""
     return tuple(b for b in BOT_ORDER if not L.mix_off(b))
-# the coins the two bots trade together (owners 11-03, last: "레인지봇 도지 bch 이더 리플 삭제해주고 친구봇 bch 삭제해줘":
-# 레인지 봇 BTC · SOL · ZEC, 친구 15분 봇 BTC · XRP · ZEC · DOGE; BCH and ETH left both); before: 11-03 BTC · SOL · XRP · BCH ·
-# ZEC · DOGE, the owners' six of 10-31 night (SOL · ETH · XRP · BCH · ZEC · DOGE)
-COINS = ("BTCUSDT", "SOLUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT")
+# the coins the two bots trade together (owners 11-03, last: "친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만": both bots
+# BTC · SOL · ZEC); before: 11-03 evening BTC · SOL · XRP · ZEC · DOGE, 11-03 BTC · SOL · XRP · BCH · ZEC · DOGE, the owners'
+# six of 10-31 night (SOL · ETH · XRP · BCH · ZEC · DOGE)
+COINS = ("BTCUSDT", "SOLUSDT", "ZECUSDT")
 MIN = 60_000
 MIN15, MIN30 = M.MIN15, M.MIN30
 DAY = 86_400_000
@@ -114,10 +115,25 @@ def _frame(rows: list) -> tuple:
     return (t, *cols, v)
 
 
-def coin_view(symbol: str, candles: Callable, now: int) -> dict:
-    """One coin's panels: its 15m bars (the last one still open is left out), the 3합 histogram and its 0 crosses and the
-    OBV4 MACD histogram's entry marks on them, and the 추세 MACD histogram's side of 0 on the closed 30m bars (owners
-    11-02: the three bots' trend)."""
+def hist_rule() -> str:
+    """The entry rule the coins' histogram shows: "h3x" (the 3합 histogram's 0 cross) while a live bot enters on it, "o4h"
+    (the OBV4 MACD histogram's turn) once the live bots enter on that and none on the 3합 (owners 11-03, last: "친구봇도
+    obv로": both bots on the OBV histogram). Read from the bots' own configs (the server's, else the repo's)."""
+    rules: set = set()
+    for bid in bot_order():
+        try:
+            bp = MX.paths(bot=bid)["live"]
+            cfg = MX.read_config(bp["config"], bp["repo_config"], MX.PROFILES[bid]).get("cfg")
+        except Exception:  # noqa: BLE001  a config that cannot be read: the 3합 as before
+            cfg = None
+        rules.update(getattr(cfg, "rules", None) or ())
+    return "o4h" if "o4h" in rules and "h3x" not in rules else "h3x"
+
+
+def coin_view(symbol: str, candles: Callable, now: int, rule: str = "h3x") -> dict:
+    """One coin's panels: its 15m bars (the last one still open is left out), the entry histogram (``rule``: the 3합 and
+    its 0 crosses, or the OBV4 MACD histogram and its turns) and the OBV histogram's turns on them, and the 추세 MACD
+    histogram's side of 0 on the closed 30m bars (owners 11-02: the bots' trend)."""
     out: dict = {"symbol": symbol, "coin": MX.coin_ko(symbol), "state": "ok"}
     try:
         r15 = candles(symbol, "15m", HIST_BARS)
@@ -134,11 +150,12 @@ def coin_view(symbol: str, candles: Callable, now: int) -> dict:
     k = slice(len(c15) - CHART_N, len(c15))
     last = float(c15[-1])
     base = float(c15[-SPARK_N - 1]) if len(c15) > SPARK_N else None
-    hist = [None if not np.isfinite(x) else round(float(x), 3) for x in H["hist"][k]]
-    out.update({"last": last, "last_ms": int(t15[-1]) + MIN15, "chg24": (last / base - 1) if base else None,
+    hv, xv = (O["ac"], O["side"]) if rule == "o4h" else (H["hist"], H["cross"])
+    hist = [None if not np.isfinite(x) else round(float(x), 3) for x in hv[k]]
+    out.update({"hist_rule": "o4h" if rule == "o4h" else "h3x","last": last, "last_ms": int(t15[-1]) + MIN15, "chg24": (last / base - 1) if base else None,
                 "spark": [round(float(x), 8) for x in c15[-SPARK_N:]],
                 "bars": [[int(t15[i]), float(o15[i]), float(h15[i]), float(l15[i]), float(c15[i])] for i in range(k.start, k.stop)],
-                "hist": hist, "cross": [int(x) for x in H["cross"][k]], "o4side": [int(x) for x in O["side"][k]],
+                "hist": hist, "cross": [int(x) for x in xv[k]], "o4side": [int(x) for x in O["side"][k]],
                 "o4": _r(O["ac"][-1], 3),
                 "trend30": [[int(t30[i]), int(T["trend"][i])] for i in range(len(t30) - TREND_N, len(t30))],
                 "tm30": {"hist": _r(T["hist"][-1], 3), "macd": _r(T["macd"][-1], 3), "yellow": bool(T["yellow"][-1])}})
@@ -159,7 +176,8 @@ def coins_view(candles: Optional[Callable], now: int) -> list:
         hit = _coin_cache.get("coins")
         if hit is not None and hit[0] == key:
             return hit[1]
-    out = [coin_view(s, candles, now) for s in COINS]
+    rule = hist_rule()
+    out = [coin_view(s, candles, now, rule) for s in COINS]
     with _coin_lock:
         _coin_cache["coins"] = (key, out)
     return out

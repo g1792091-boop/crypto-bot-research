@@ -18,7 +18,7 @@ not have is said to be off, a file that cannot be read is said so.
      team:  livedeck.totals_view (the three live bots), positions: [{bot, bot_ko, coin, side, entry, stop, step, opened_ms}],
      goal:  livedeck.goal_view (the owners' monthly ×6 against each bot's record this month: the 회의실's 목표 회의, the same
             arithmetic as each bot's 목표 연구),
-     coins: [{symbol, coin, state, last, chg24, spark, trend (the last closed 30m bar's 추세 MACD side of 0, owners 11-02), tm30, hist (the 3합 histogram), cross}] (the six
+     coins: [{symbol, coin, state, last, chg24, spark, trend (the last closed 30m bar's 추세 MACD side of 0, owners 11-02), tm30, hist_rule, hist (the entry histogram: the 3합, or the OBV histogram once both bots enter on it), cross}] (the six
             coins from livedeck.coins_view: Binance's closed bars and the bots' own formulas, read once a minute; the 3D
             room's floating screens)}
 
@@ -249,7 +249,7 @@ def coins_of(candles: Optional[Callable], now: int) -> list:
     histogram and 0 cross (livedeck.coins_view: the same numbers as the 관제실)."""
     out = []
     for c in D.coins_view(candles, now):
-        x = {k: c.get(k) for k in ("symbol", "coin", "state", "ko", "last", "chg24")}
+        x = {k: c.get(k) for k in ("symbol", "coin", "state", "ko", "last", "chg24", "hist_rule")}
         if c.get("state") == "ok":
             tr = c.get("trend30") or []
             hist = [h for h in (c.get("hist") or []) if h is not None]

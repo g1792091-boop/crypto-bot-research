@@ -86,12 +86,14 @@ export function panelSpecs(d, now) {
     if (c.state !== "ok") return [{t: c.coin || c.symbol}, {t: c.ko || "못 읽음", tone: "muted"}];
     const tw = TREND_WORD[String(c.trend)] || ["—", "muted"], x = Number(c.cross) || 0;
     return [{t: c.coin}, {t: px(c.last)}, {t: pct(c.chg24), tone: ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : "muted"}, {t: tw[0], tone: tw[1]},
-      {t: ok(c.hist) ? `${fmt.num(c.hist, 2)}${x ? (x > 0 ? " ▲0선" : " ▼0선") : ""}` : "—", tone: ok(c.hist) ? (c.hist >= 0 ? "up" : "down") : "muted"}];
+      {t: ok(c.hist) ? `${fmt.num(c.hist, 2)}${x ? (c.hist_rule === "o4h" ? (x > 0 ? " ▲양봉 전환" : " ▼음봉 전환") : (x > 0 ? " ▲0선" : " ▼0선")) : ""}` : "—",
+        tone: ok(c.hist) ? (c.hist >= 0 ? "up" : "down") : "muted"}];
   });
+  const hk = coins.some((c) => c.hist_rule === "o4h") ? "OBV 히스토그램" : "3합 히스토그램";   // (owners 11-03 last: both bots on OBV)
   return [
-    {title: "COINS · 코인", sub: "바이낸스 봉 · 30분 추세 MACD · 15분 3합 히스토그램 (봇의 계산 그대로)", px: [1024, 420],
+    {title: "COINS · 코인", sub: `바이낸스 봉 · 30분 추세 MACD · 15분 ${hk} (봇의 계산 그대로)`, px: [1024, 420],
       pose: {off: 0, y: 1.62, w: 3.1, h: 1.27, r: 3.45},
-      table: {cols: ["코인", "가격", "24시간", "30분 추세", "3합 히스토그램"], x: [22, 150, 390, 590, 790], rows: cRows.length ? cRows : [[{t: "코인 값을 기다리는 중", tone: "muted"}]]}},
+      table: {cols: ["코인", "가격", "24시간", "30분 추세", hk], x: [22, 150, 390, 590, 790], rows: cRows.length ? cRows : [[{t: "코인 값을 기다리는 중", tone: "muted"}]]}},
     {title: "TOP 6 · 코인 카드", sub: "24시간 줄", px: [720, 460], pose: {off: -0.98, y: 1.42, w: 1.85, h: 1.18, r: 3.35},
       cards: coins.filter((c) => c.state === "ok").map((c) => ({coin: c.coin, price: px(c.last), chg: pct(c.chg24),
         tone: ok(c.chg24) ? (c.chg24 >= 0 ? "up" : "down") : "muted", spark: c.spark || []}))},

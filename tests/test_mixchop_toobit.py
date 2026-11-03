@@ -63,8 +63,9 @@ def test_the_deploy_configs_trade_toobit():
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         cfg = M.load_config(str(DEPLOY / name))
         assert (cfg.exchange, cfg.mode, cfg.name, M.EXCHANGES[cfg.exchange]) == ("toobit", mode, "친구 15분 봇", "투비트"), name
-        assert cfg.taker_fee == 0.0006 and cfg.rules == ("h3x",) and cfg.trend == "macd" and cfg.tf == "15m", name
-        assert cfg.symbols == ["BTCUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT"], name           # (11-03, last: BCH out)
+        # (owners 11-03 evening "친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만": the 레인지 봇's rule and coins)
+        assert cfg.taker_fee == 0.0006 and cfg.rules == ("o4h",) and cfg.trend == "macd" and cfg.tf == "15m", name
+        assert cfg.symbols == ["BTCUSDT", "SOLUSDT", "ZECUSDT"], name
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross", name
     unit = (DEPLOY / "paperbot-mixchop.service").read_text(encoding="utf-8")
     assert "EnvironmentFile=/etc/paperbot/executor-toobit.env\n" in unit and "executor-wooxpro2.env\n" not in unit
@@ -141,8 +142,8 @@ def test_the_bot_enters_moves_and_exits_on_toobit(tmp_path, monkeypatch):
         side = 1 if co.symbol == BTC else 0
         return {"symbol": co.symbol, "close_ms": close_ms, "side": side, "rule": r, "close": 100.0, "stop_dist": 1.0,
                 "stop_pct": 1.0, "trend": 1, "trend_mode": "macd", "tf": "15분", "trend_tf": "30분", "tmacd": 3.21,
-                "tmacd_line": 5.0, "tyellow": False, "x0": side, "h3": 2.5, "why": "" if side else "3합 히스토그램 0선 돌파 없음",
-                "liq_ok": True}
+                "tmacd_line": 5.0, "tyellow": False, "o4": -2.0, "o4_turn": side, "o4_col": 1 if side else 0,
+                "why": "" if side else "OBV 히스토그램 전환 없음", "liq_ok": True}
     monkeypatch.setattr(M, "evaluate_friend", fake_eval)
     msgs = []
     bot = M.Bot(cfg, b, fetch, lambda: clock.t, notify=lambda lv, t: msgs.append(t), sleep=ticking(clock))
@@ -153,7 +154,7 @@ def test_the_bot_enters_moves_and_exits_on_toobit(tmp_path, monkeypatch):
     assert p is not None and (p.symbol, p.side, p.leverage) == (BTC, 1, 40) and float(fake.amt(BTC)) == pytest.approx(p.qty)
     assert [float(o["stopPrice"]) for o in fake.live_stops(BTC)] == [pytest.approx(p.stop)]
     entry = next(m for m in msgs if "롱 진입" in m)
-    assert "근거: 3합 히스토그램 0선 위로 돌파(히스토그램 2.5)" in entry and "거래소 ROE +10%" in entry
+    assert "근거: OBV 히스토그램 0선 아래 양봉 전환(-2.00)" in entry and "거래소 ROE +10%" in entry      # (rule o4h since 11-03 evening)
     # the price climbs on 1m bars to exchange ROE +10.4 % (40x): the stop goes to +8 % on the exchange
     e = p.entry
     t = ce + M.MIN1
@@ -214,4 +215,4 @@ def test_the_words_say_toobit():
     js = (ROOT / "paperbot" / "dash" / "static" / "v4" / "screens" / "livebots-mix.js").read_text(encoding="utf-8")
     assert 'account: "투비트", exchange: "투비트", key: "",\n  kick: "진짜 돈 · 투비트 계정"' in js
     routes = (ROOT / "paperbot" / "dash" / "static" / "v4" / "core" / "routes.js").read_text(encoding="utf-8")
-    assert "3합 히스토그램 0선 돌파 · 투비트 실거래와 모의" in routes and "WOO X Pro 2 실거래" not in routes
+    assert "OBV 히스토그램 전환 · 투비트 실거래와 모의" in routes and "WOO X Pro 2 실거래" not in routes

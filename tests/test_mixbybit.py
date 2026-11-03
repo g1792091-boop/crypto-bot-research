@@ -235,9 +235,9 @@ def test_the_deploy_configs():
     words = M.plan_words(live)
     assert "계단 순ROE +10%→+8%, +15%→+13%" in words and "매매법 OBV 히스토그램 전환" in words and "손절 ATR 3배" in words
     # the friend bot's own config: WOO X Pro, the histogram's 0 cross on 15m bars (owners 10-31 night,
-    # tests/test_rules1031c.py; 11-02: the 3합 histogram's, tests/test_rules1102.py)
+    # tests/test_rules1031c.py; 11-02: the 3합 histogram's, tests/test_rules1102.py; 11-03 evening: the OBV histogram's turn)
     old = M.load_config(str(ROOT / "deploy" / "mixchop.live.json"))
-    assert old.exchange == "toobit" and old.name == "친구 15분 봇" and old.rules == ("h3x",) and old.tf == "15m"   # (owners 11-03: Toobit, the WOO X Pro 2 account gone: tests/test_mixchop_toobit.py)
+    assert old.exchange == "toobit" and old.name == "친구 15분 봇" and old.rules == ("o4h",) and old.tf == "15m"   # (owners 11-03: Toobit, the WOO X Pro 2 account gone: tests/test_mixchop_toobit.py)
 
 
 def test_wrong_configs_are_refused(tmp_path):

@@ -193,8 +193,8 @@ def test_the_live_config_runs_both_rules_with_a_3_atr_stop():
     # owners 10-31: the friend bot trades OBV light -> dark and 추세 3개 일치 on 15m bars (tests/test_rules1031.py); 10-31
     # evening: on 30m bars, the OBV turn with the AC bar (tests/test_rules1031b.py); the stop multiple, the ladder and the
     # margin stay; 10-31 night: the histogram's 0 cross on 15m bars (tests/test_rules1031c.py); 11-02: the 3합
-    # histogram's (tests/test_rules1102.py)
-    assert cfg.rules == ("h3x",) and cfg.stop_atr == 3.0
+    # histogram's (tests/test_rules1102.py); 11-03 evening: the OBV histogram's turn, as the 레인지 봇
+    assert cfg.rules == ("o4h",) and cfg.stop_atr == 3.0
     assert {c.sl_atr for c in cfg.coins} == {3.0}
     # owners 10-27 "친구봇 익절기준은 1 계단 10->8로 바꿔주고": 10 -> 8, 15 -> 13, 20 -> 18 ...
     # (owners 11-03: the exchange screen's ROE, every 2 %: tests/test_rules1102.py)

@@ -193,7 +193,7 @@ export const BOT_TAB = {
     none: "VWAP 개선판을 따라가는 실거래가 없어요 (페이퍼만)"},
   // owners 10-31 night: the friend bot (its config's name 친구 15분 봇) on 15m bars, the trend bar + the histogram's 0 cross;
   // owners 10-31, last: all three mix bots enter on 15m bars and read the trend bar on the 30m bar
-  mixbot: {bot: "mix", sub: "친구 15분 봇(15분봉 진입 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파) · 투비트 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
+  mixbot: {bot: "mix", sub: "친구 15분 봇(15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환) · 투비트 계정 실거래와 모의 쌍둥이 · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "친구 15분 봇은 투비트 계정에서 거래해요 (11/03부터, WOO X Pro 2 계정은 없어짐) · 잔고는 아래 실거래 칸"},
   // owners 11-01: the 게이트 봇 has no trading rule and no 목표 연구 of its own (bot null: no foot); the friend's Gate
   // account is on the screen's status card

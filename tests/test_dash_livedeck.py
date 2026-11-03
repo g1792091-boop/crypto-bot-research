@@ -80,6 +80,9 @@ WORLD_COINS = ("SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"
 @pytest.fixture(autouse=True)
 def _world_coins(monkeypatch):
     monkeypatch.setattr(D, "COINS", WORLD_COINS)
+    # (and its histogram: the 3합 of the friend bot of then; owners 11-03 evening moved both bots to the OBV histogram's
+    # turn, livedeck.hist_rule "o4h": test_the_histogram_follows_the_bots_entry_rule)
+    monkeypatch.setattr(D, "hist_rule", lambda: "h3x")
 
 
 @pytest.fixture
@@ -207,6 +210,7 @@ def test_each_coin_from_closed_binance_bars_and_the_bots_formulas(world):
         tm = FT.tmacd_pane(*(np.array([r[k] for r in r30]) for k in ("high", "low", "close", "volume")))
         assert c["trend30"][-1][1] == int(tm["trend"][-1]) and c["tm30"]["hist"] == pytest.approx(round(float(tm["hist"][-1]), 3))
         assert c["last"] == pytest.approx(r15[-1]["close"]) and c["chg24"] == pytest.approx(r15[-1]["close"] / r15[-97]["close"] - 1)
+    assert all(c["hist_rule"] == "h3x" for c in d["coins"])
     # read once a minute for every viewer
     n = len(calls)
     D.build(candles_of(calls), NOW)

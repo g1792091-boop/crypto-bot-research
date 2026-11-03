@@ -691,7 +691,9 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로" (보내 주신 `추세 MACD`, `3합 히스토그램` 파인 스크립트).
 11/03: 자동매매는 WOO X Pro 두 계정만이고(바이비트 봇은 끔), 3합 히스토그램은 **이 봇(WOO X Pro 2)만** 씁니다. 레인지 봇(WOO X Pro 1)은
 OBV 히스토그램 전환입니다(`docs/range-bot-ko.md` 맨 앞). 코인은 11/03부터 **BTC → XRP → BCH → ZEC → DOGE** ("woox2에 솔라나 이더만
-삭제하고 비트 추가해줘", BTC 40배, ZEC 20배), 11/03 저녁부터 **BTC → XRP → ZEC → DOGE** ("친구봇 bch 삭제해줘": `docs/live-bots-ko.md` 7장). 계단 익절은 11/03부터 **거래소 ROE(수수료 전) +10%→+8%, 그 뒤 2%마다**
+삭제하고 비트 추가해줘", BTC 40배, ZEC 20배), 11/03 저녁부터 **BTC → XRP → ZEC → DOGE** ("친구봇 bch 삭제해줘": `docs/live-bots-ko.md` 7장). **11/03 저녁 그 뒤부터는
+진입이 OBV 히스토그램 전환(`o4h`, 레인지 봇과 같음)이고 코인은 BTC → SOL → ZEC** ("친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만
+넣어서 해줘": `docs/live-bots-ko.md` 8장). 이 장의 3합 규칙은 그 전까지의 기록입니다. 계단 익절은 11/03부터 **거래소 ROE(수수료 전) +10%→+8%, 그 뒤 2%마다**
 (`"ladder": {"trigger": 10, "lock": 8, "step": 2}`, `"ladder_basis": "gross"`; 손절은 그대로).
 
 | 항목 | 내용 |
