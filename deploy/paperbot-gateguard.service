@@ -1,7 +1,7 @@
 # '게이트 봇' (owners 2026-10-31, docs/gate-bot-ko.md): no trading rule. A friend enters by hand on their own Gate
 # account (USDT perpetuals, one-way mode); this program (python -m paperbot.gateguard) puts the stop on each position
-# (entry -/+ Gate's 15m ATR(14) x 3, pulled inside the liquidation price when beyond it) and moves it up the net-ROE
-# ladder (10 -> 8, then every 2 %). It places only its own stops (and a market close when a lock was already passed);
+# (entry -/+ Gate's 15m ATR(14) x 3, pulled inside the liquidation price when beyond it) and moves it up the
+# ladder (10 -> 8, then every 2 %; in Gate's own ROE, before fees, since 11-03: ladder_basis gross). It places only its own stops (and a market close when a lock was already passed);
 # the friend's own orders are never touched. Its stops rest on Gate and keep protecting while this unit is off.
 #
 # Keys: GATE_LIVE_KEY / GATE_LIVE_SECRET, GATE_LIVE_KEY_CHECKED and PAPERBOT_LIVE_MAINNET in the root-only

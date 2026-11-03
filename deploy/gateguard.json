@@ -1,11 +1,12 @@
 {
   "name": "게이트 봇",
-  "note": "owners 10-31 (docs/gate-bot-ko.md): no trading rule; the friend enters by hand on Gate, the bot puts the stop (15m ATR(14) x 3, pulled inside the liquidation price) and the net-ROE ladder (10 -> 8, then 2 % steps) on each position. Copy to /etc/paperbot/gateguard.json.",
+  "note": "owners 10-31 (docs/gate-bot-ko.md): no trading rule; the friend enters by hand on Gate, the bot puts the stop (15m ATR(14) x 3, pulled inside the liquidation price) and the ladder (10 -> 8, then 2 % steps) on each position; since 11-03 the ladder counts Gate's own ROE (the app's, before fees: ladder_basis gross). Copy to /etc/paperbot/gateguard.json.",
   "mode": "mainnet",
   "stop_atr": 3,
   "atr_tf": "15m",
   "atr_n": 14,
   "ladder": {"first_lock": 0.08, "trigger_gap": 0.02, "step": 0.02},
+  "ladder_basis": "gross",
   "fee": null,
   "liq_keep": 0.15,
   "poll_s": 10,

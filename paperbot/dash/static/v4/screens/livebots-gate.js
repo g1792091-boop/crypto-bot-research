@@ -1,13 +1,15 @@
 // 실거래 › 게이트 봇 (#/gatebot; owners 11-01 "일단 게이트 대시보드 화면 만드는거 진행해줘야지"): the friend's own Gate
 // positions and what the 게이트 봇 (paperbot/gateguard.py, docs/gate-bot-ko.md) put on them, from its state file and config
 // (dash/more/livegate.py, /api/v4/livebots/gate every 5 s), read-only. There is no trading rule: the friend enters by
-// hand on Gate; the bot puts the stop (15분봉 ATR(14) × 3, pulled inside the liquidation price) and the net-ROE ladder
-// (순ROE +10 % -> the stop at +8 %, then 2 % steps) on each position.
+// hand on Gate; the bot puts the stop (15분봉 ATR(14) × 3, pulled inside the liquidation price) and the ladder (+10 % ->
+// the stop at +8 %, then 2 % steps) on each position, counted in the ROE ``rules.basis`` names: "gross" = 거래소 ROE
+// (Gate's own, before fees; owners 11-03 "게이트 아이오봇 거래소 수익률 기준 10%로 2%로 마다 계단식 익절로 바꿔줘"),
+// "net" = 순ROE (both fees paid).
 //   상태         the bot's unit, its last loop, the Gate account, the rules in one line
 //   포지션       one card each: Gate's own numbers (평단 · 수량 · 증거금 · 마크가 · 청산가 · 미실현), the bot's stop and its
-//                basis, how far it is, the net ROE if it fires; the ladder's rungs (locked · next), the best net ROE so
+//                basis, how far it is, the ROE if it fires; the ladder's rungs (locked · next), the best ROE so
 //                far and the price of the next rung; what the bot is not doing (손 뗌 · 아직 안 봄 · 손절 없음 · 닫는 중)
-//   끝난 포지션   Gate's record of each ended position (손익 수수료 포함), the bot's best net ROE and lock on it
+//   끝난 포지션   Gate's record of each ended position (손익 수수료 포함), the bot's best ROE and lock on it
 //   봇 메시지    the bot's own messages (the ones sent to Telegram), newest first
 // HONESTY: a bot not installed, not switched on or not run yet says so and how to start it (docs/gate-bot-ko.md 4장);
 // an old loop says how old; the screen never trades and the site has no Gate key.
@@ -22,10 +24,14 @@ const LEVEL_KO = {INFO: "알림", WARN: "주의", CRITICAL: "긴급"};
 
 // ---------------------------------------------------------------- pure (node tests: tests/test_dash_livegate.py)
 /** Net ROE on margin at ``price``, both fees paid (paperbot/ladder.py net_roe); null when a number is missing. */
-export function netRoe(side, entry, price, lev, fee) {
+export function netRoe(side, entry, price, lev, fee) {  // (fee 0: the exchange's own ROE)
   if (![side, entry, price, lev].every(ok) || !Number(entry) || !Number(lev) || !Number(side)) return null;
   return Number(lev) * (Number(side) * (Number(price) / Number(entry) - 1) - 2 * (Number(fee) || 0));
 }
+/** The ROE the bot's ladder counts in, in words (rules.basis: gross → 거래소 ROE, else 순ROE). */
+export const roeWord = (rules) => ((rules || {}).basis === "gross" ? "거래소 ROE" : "순ROE");
+/** The fee per side the bot's ladder takes off (gross: none), for netRoe. */
+export const ladderFee = (rules, fee) => ((rules || {}).basis === "gross" ? 0 : fee);
 /** The ladder's rungs to show: [{trigger, lock, on (locked), next}], from the first up to two past the next (at least 5). */
 export function rungs(rules, lock) {
   if (!rules || ![rules.first_trigger, rules.first_lock, rules.step].every(ok) || !(Number(rules.step) > 0)) return [];
@@ -33,7 +39,7 @@ export function rungs(rules, lock) {
   const got = ok(lock) ? Math.round((Number(lock) - l0) / st) : -1;          // the rung locked (-1: none yet)
   return Array.from({length: Math.max(5, got + 3)}, (_, k) => ({trigger: t0 + k * st, lock: l0 + k * st, on: k <= got, next: k === got + 1}));
 }
-/** How far the net ROE is on the way from 0 to the next rung's trigger: 0..1 (null without both). */
+/** How far the ROE (on the bot's basis) is on the way from 0 to the next rung's trigger: 0..1 (null without both). */
 export function toward(roe, next) {
   if (!ok(roe) || !next || !ok(next.trigger) || !(Number(next.trigger) > 0)) return null;
   return Math.max(0, Math.min(1, Number(roe) / Number(next.trigger)));
@@ -61,11 +67,11 @@ export function statusOf(d) {
   if (!loop.fresh) return {tone: "warn", pill: "확인 늦음", line: `봇의 마지막 확인이 ${agoS(loop.ago_s)}예요 (${every} 확인해요) · 서버 기록을 봐 주세요`};
   return {tone: "good", pill: "지키는 중", line: `${every} 게이트 포지션을 확인해요 · 마지막 확인 ${agoS(loop.ago_s)}`};
 }
-/** A stop's basis in words: "15분봉 ATR 2 × 3" / "ATR × 3 자리 94가 청산가 너머라 청산가 안쪽으로 당김" / "계단 잠금 순ROE +10%". */
+/** A stop's basis in words: "15분봉 ATR 2 × 3" / "ATR × 3 자리 94가 청산가 너머라 청산가 안쪽으로 당김" / "계단 잠금 거래소 ROE +10%". */
 export function stopWhy(b, rules) {
   if (!b) return "";
   const r = rules || {}, tf = r.atr_tf_ko || "15분봉", n = ok(r.stop_atr) ? fmt.num(r.stop_atr, 0) : "3";
-  if (b.kind === "lock") return `계단 잠금 순ROE ${roeKo(b.lock)}`;
+  if (b.kind === "lock") return `계단 잠금 ${roeWord(r)} ${roeKo(b.lock)}`;
   if (b.kind === "liq") return `${tf} ATR × ${n} 자리 ${fmt.price(b.atr_stop)}가 청산가 너머라 청산가 안쪽으로 당김`;
   return `${tf} ATR ${fmt.price(b.atr)} × ${n}`;
 }
@@ -121,21 +127,22 @@ function startCard(d) {
     ui.note("켜면 이 화면에 친구의 게이트 포지션, 봇이 건 손절과 계단 익절, 끝난 포지션, 봇 메시지가 보여요 · 순서는 두 분이 한 단계씩 결과를 보며 진행해요"));
 }
 function ladderBlock(p, b, rules) {
-  const rs = rungs(rules, b.lock), nx = b.next || null, w = toward(b.roe_now, nx);
+  const rs = rungs(rules, b.lock), nx = b.next || null, w = toward(b.roe_now, nx), rw = roeWord(rules);
   return h("div", {class: "lgt-lad"},
     h("div", {class: "lgt-lh"}, h("span", {class: "lgt-k"}, "계단 익절"),
-      h("span", {class: "lgt-roe"}, "지금 순ROE ", h("b", {class: ["num", fmt.tone(b.roe_now)]}, roeKo(b.roe_now)),
+      h("span", {class: "lgt-roe"}, `지금 ${rw} `, h("b", {class: ["num", fmt.tone(b.roe_now)]}, roeKo(b.roe_now)),
         " · 최고 ", h("b", {class: ["num", fmt.tone(b.best_roe)]}, roeKo(b.best_roe)))),
     rs.length ? h("ol", {class: "lgt-rungs", "aria-label": "계단 (닿으면 → 잠금)"}, rs.map((x) => h("li", {class: ["lgt-rung", x.on ? "on" : "", x.next ? "next" : ""],
-      title: `순ROE ${roeKo(x.trigger)}에 닿으면 손절을 순ROE ${roeKo(x.lock)} 자리로`},
+      title: `${rw} ${roeKo(x.trigger)}에 닿으면 손절을 ${rw} ${roeKo(x.lock)} 자리로`},
       h("small", null, roeKo(x.trigger)), h("b", null, `→ ${roeKo(x.lock)}`)))) : null,
     w != null ? h("span", {class: "lgt-meter", style: {"--v": String(w)}, role: "img", "aria-label": `다음 계단까지 ${Math.round(w * 100)}%`}, h("i")) : null,
-    nx ? h("p", {class: "lgt-next"}, `다음: 순ROE ${roeKo(nx.trigger)}${ok(nx.price) ? ` (가격 ${fmt.price(nx.price)})` : ""}에 닿으면 손절을 순ROE ${roeKo(nx.lock)} 자리로 올려요`)
+    nx ? h("p", {class: "lgt-next"}, `다음: ${rw} ${roeKo(nx.trigger)}${ok(nx.price) ? ` (가격 ${fmt.price(nx.price)})` : ""}에 닿으면 손절을 ${rw} ${roeKo(nx.lock)} 자리로 올려요`)
       : h("p", {class: "lgt-next"}, "계단 규칙을 읽지 못했어요 (설정 파일)"));
 }
 function posCard(p, rules) {
   const b = p.bot || null, side = Number(p.side), ws = warnsOf(p);
-  const sr = b ? netRoe(side, p.entry, b.stop, p.lev, b.fee) : null;
+  const sr = b ? netRoe(side, p.entry, b.stop, p.lev, ladderFee(rules, b.fee)) : null;
+  const gross = (rules || {}).basis === "gross";
   return h("section", {class: ["card", "lgt-pos", side > 0 ? "long" : "short", b && b.hands_off ? "off" : ""], "aria-label": `${p.coin} ${p.side_ko}`},
     h("header", {class: "lgt-ph"}, h("b", {class: "lgt-coin"}, p.coin), ui.sideTag(side), h("span", {class: "lgt-lev num"}, fmt.lev(p.lev)),
       ui.pill(p.cross ? "교차" : "격리", "thin"), b && !b.hands_off ? ui.pill("봇이 지킴", "good") : b ? ui.pill("손 뗌", "bad") : ui.pill("아직 안 봄", "warn"),
@@ -151,7 +158,7 @@ function posCard(p, rules) {
       h("span", {class: "lgt-k"}, "봇 손절"), h("b", {class: "lgt-sp num"}, fmt.price(b.stop)),
       h("span", {class: "lgt-why"}, stopWhy(b, rules)),
       h("span", {class: "lgt-sub"}, [ok(p.to_stop) ? `지금가에서 ${fmt.pct(Math.abs(p.to_stop), 2, false)}` : null,
-        sr != null ? `닿으면 순ROE ${fmt.pct(sr, 1)} (수수료 포함 어림)` : null].filter(Boolean).join(" · "))) : null,
+        sr != null ? `닿으면 ${roeWord(rules)} ${fmt.pct(sr, 1)} (${gross ? "수수료 빼기 전" : "수수료 포함"} 어림)` : null].filter(Boolean).join(" · "))) : null,
     b ? ladderBlock(p, b, rules) : null,
     ws.length ? h("ul", {class: "lgt-warns"}, ws.map((x) => h("li", {class: x.tone}, x.text))) : null);
 }
@@ -164,7 +171,7 @@ function closedCard(d) {
       {label: "손익 (게이트)", get: (r) => h("b", {class: ["num", fmt.tone(r.pnl)]}, ok(r.pnl) ? fmt.usdt(r.pnl, true) : "모름")},
       {label: "어떻게", l: true, get: (r) => r.cause || "—"},
       {label: "평단 → 종료", get: (r) => `${fmt.price(r.entry)} → ${fmt.price(r.exit)}`},
-      {label: "최고 순ROE", get: (r) => roeKo(r.best_roe)},
+      {label: `최고 ${roeWord(d.rules)}`, get: (r) => roeKo(r.best_roe)},
       {label: "잠금", get: (r) => (ok(r.lock) ? roeKo(r.lock) : "—")},
     ], rows) : ui.empty("봇이 지키던 포지션이 끝나면 여기에 게이트 기록(손익 · 수수료)이 쌓여요"));
 }

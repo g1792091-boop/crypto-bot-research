@@ -12,6 +12,8 @@ the account's positions and, for each one, puts a stop on Gate and moves it up t
   step more per 2 % more (12 -> 10, 14 -> 12 ...): paperbot/ladder2.py ``ComboLadder`` (first_lock 0.08, trigger_gap
   0.02, step 0.02) on paperbot/ladder.py ``net_roe`` / ``roe_price``. The best price is read from Gate's 1m candles of
   the last price (what the stop triggers on), so a spike between two loops is not missed. The stop only ever tightens.
+  Since 11-03 (owners: "게이트 아이오봇 거래소 수익률 기준 10%로 2%로 마다 계단식 익절로 바꿔줘") ``ladder_basis`` "gross"
+  counts the same ladder in Gate's own ROE (the app's, before fees: ``rt`` 0) instead of the net one.
 * A lock whose price the market already passed between two loops (Gate refuses a stop on the wrong side of the last
   price) closes the position at market: what the stop would have done. The same for a first stop already crossed (a
   position the bot first sees late).
@@ -95,22 +97,32 @@ class Config:
     atr_n: int = 14
     ladder: ComboLadder = field(default_factory=lambda: ComboLadder(0.08, 0.02, 0.02))
     fee: Optional[float] = None          # taker fee per side; None = the account's own (GET fee), else DEFAULT_FEE
+    ladder_basis: str = "net"            # net: ROE after both fees · gross: Gate's own ROE (before fees, owners 11-03)
     liq_keep: float = 0.15               # a stop past the liquidation price: this share of entry -> liq kept short of it
     poll_s: float = 10.0
     coins: Optional[list] = None         # None = every position of the account; else contracts like "BTC_USDT"
     state: str = DEFAULT_STATE
     telegram: bool = True
 
+    def roe_word(self) -> str:
+        """The ROE the ladder counts in: 거래소 ROE (Gate's own, before fees) or 순ROE (both fees paid)."""
+        return "거래소 ROE" if self.ladder_basis == "gross" else "순ROE"
+
+    def rt(self, fee: float) -> float:
+        """The round-trip fee the ladder takes off the ROE: none on the exchange's own ROE, both sides on net."""
+        return 0.0 if self.ladder_basis == "gross" else 2 * fee
+
     def ladder_words(self) -> str:
         lad = self.ladder
-        return (f"순ROE {lad.first_trigger:.0%}에서 {lad.first_lock:.0%} 잠금, 이후 {lad.step:.0%}씩 "
+        return (f"{self.roe_word()} {lad.first_trigger:.0%}에서 {lad.first_lock:.0%} 잠금, 이후 {lad.step:.0%}씩 "
                 f"({lad.first_trigger + lad.step:.0%}→{lad.first_lock + lad.step:.0%}, "
                 f"{lad.first_trigger + 2 * lad.step:.0%}→{lad.first_lock + 2 * lad.step:.0%} …)")
 
     def words(self) -> str:
         return (f"손절 {TF_KO[self.atr_tf]} ATR({self.atr_n}) × {self.stop_atr:g} · 계단 익절 {self.ladder_words()} · "
-                f"수수료 {'계정 수수료' if self.fee is None else f'{self.fee:.3%}'} 양쪽 반영 · "
-                f"코인 {'전부' if not self.coins else ', '.join(coin_ko(c) for c in self.coins)}")
+                + ("수수료는 계단에 안 뺌(앱에 찍히는 ROE) · " if self.ladder_basis == "gross" else
+                   f"수수료 {'계정 수수료' if self.fee is None else f'{self.fee:.3%}'} 양쪽 반영 · ")
+                + f"코인 {'전부' if not self.coins else ', '.join(coin_ko(c) for c in self.coins)}")
 
 
 def load_config(path: str) -> Config:
@@ -121,8 +133,8 @@ def load_config(path: str) -> Config:
         raise Refused(f"설정 파일 {path}을 못 읽습니다: {e}") from None
     if not isinstance(raw, dict):
         raise Refused(f"설정 파일 {path}은 JSON 객체여야 합니다")
-    known = {"name", "mode", "stop_atr", "atr_tf", "atr_n", "ladder", "fee", "liq_keep", "poll_s", "coins", "state",
-             "telegram", "note"}
+    known = {"name", "mode", "stop_atr", "atr_tf", "atr_n", "ladder", "ladder_basis", "fee", "liq_keep", "poll_s", "coins",
+             "state", "telegram", "note"}
     extra = sorted(set(raw) - known)
     if extra:
         raise Refused(f"설정에 모르는 항목이 있습니다: {', '.join(extra)}")
@@ -138,6 +150,9 @@ def load_config(path: str) -> Config:
     except (TypeError, ValueError) as e:
         raise Refused(f"설정 숫자를 못 읽습니다: {e}") from None
     cfg.atr_tf = str(raw.get("atr_tf") or "15m")
+    cfg.ladder_basis = str(raw.get("ladder_basis") or "net")
+    if cfg.ladder_basis not in ("net", "gross"):
+        raise Refused(f"\"ladder_basis\"는 \"net\"(순ROE) 또는 \"gross\"(거래소 ROE)입니다(지금 {cfg.ladder_basis!r})")
     lad = ComboLadder.of(raw.get("ladder"))
     if lad is None:
         raise Refused("\"ladder\"에 first_lock, trigger_gap, step(0~1 비율)이 필요합니다")
@@ -480,13 +495,13 @@ class Guard:
         self.coins[c] = s
         lev = p["lev"]
         dist = abs(entry - stop) / entry
-        roe = -(dist + 2 * fee) * lev if lev > 0 else None
+        roe = -(dist * lev + self.cfg.rt(fee) * lev) if lev > 0 else None
         head = "" if old is not None else f"{coin_ko(c)} {side_ko(side)} 진입 확인: 평단 {fmt(entry)}, 수량 {p['size']:g}" \
             + (f", {lev:g}배" if lev > 0 else "") + (" (교차)" if p.get("cross") else "") + "\n"
         why = (f"{TF_KO[self.cfg.atr_tf]} ATR {fmt(atr)} × {self.cfg.stop_atr:g}" if kind == "atr" else
                f"{TF_KO[self.cfg.atr_tf]} ATR × {self.cfg.stop_atr:g} 자리 {fmt(s['atr_stop'])}가 청산가 {fmt(liq)} 너머라 "
                f"청산가 안쪽으로 당김")
-        text = (head + f"손절 {fmt(stop)} ({why}, 가격 {pct(-dist)}" + (f" · 순ROE {pct(roe)}" if roe is not None else "")
+        text = (head + f"손절 {fmt(stop)} ({why}, 가격 {pct(-dist)}" + (f" · {self.cfg.roe_word()} {pct(roe)}" if roe is not None else "")
                 + f")\n익절: {self.cfg.ladder_words()}" + ("" if lev > 0 else "\n레버리지를 못 읽어 계단은 아직 못 셉니다")
                 + (f"\n봇이 늦게 본 포지션(진입 {kst(p['open_s'])})이라 최고가는 지금부터 셉니다" if late else ""))
         s["intro"], s["intro_level"] = text, (WARN if kind == "liq" else INFO)
@@ -664,7 +679,7 @@ class Guard:
             self.say_once(f"lev:{c}", WARN, f"{coin_ko(c)} 레버리지를 못 읽어 계단 익절을 못 셉니다(손절은 걸려 있음)")
             return
         best = self._best(c, s)
-        side, entry, rt = s["side"], s["entry"], 2 * s["fee"]
+        side, entry, rt = s["side"], s["entry"], self.cfg.rt(s["fee"])
         s["best"] = best
         roe = net_roe(side, entry, best, lev, rt)
         s["best_roe"] = roe
@@ -679,7 +694,8 @@ class Guard:
             s["lock"] = want                              # the stop is already tighter than this lock
             return
         if self._set_stop(c, s, target, "lock", lock=want):
-            self.say(INFO, f"{coin_ko(c)} 잠금 순ROE +{want:.0%}: {'최고' if side > 0 else '최저'} {fmt(best)} (순ROE {pct(roe)}) "
+            rw = self.cfg.roe_word()
+            self.say(INFO, f"{coin_ko(c)} 잠금 {rw} +{want:.0%}: {'최고' if side > 0 else '최저'} {fmt(best)} ({rw} {pct(roe)}) "
                      f"→ 손절 {fmt(old)} → {fmt(target)}")
 
     def _best(self, c: str, s: dict) -> float:
@@ -726,7 +742,7 @@ class Guard:
             cause = (f"봇 시장가 종료(잠금 +{cl['lock']:.0%} 자리를 지나서)" if cl.get("lock") is not None
                      else "봇 시장가 종료(손절 자리를 지나서)")
         elif rec.get("finish_as") == "succeeded":
-            cause = (f"봇 잠금 익절(순ROE +{s['lock']:.0%} 자리 {fmt(s['stop'])})" if s.get("lock") is not None
+            cause = (f"봇 잠금 익절({self.cfg.roe_word()} +{s['lock']:.0%} 자리 {fmt(s['stop'])})" if s.get("lock") is not None
                      and s.get("kind") == "lock" else f"봇 손절({fmt(s['stop'])})")
         self.pending.append(self._closed_row(c, s, cause))
 

@@ -1,13 +1,15 @@
 """실거래 › 게이트 봇 (#/gatebot; owners 11-01 "게이트 대시보드 화면 만드는거 진행해줘야지"): the friend's own Gate positions and
 what the 게이트 봇 (paperbot/gateguard.py, docs/gate-bot-ko.md) put on them. There is no trading rule: the friend enters by
-hand, the bot puts the stop (Gate's 15m ATR(14) x 3, pulled inside the liquidation price) and the net-ROE ladder (10 % ->
-the stop at +8 %, then 2 % steps). Read-only from the bot's state file and its config; never the Gate key (the site has
+hand, the bot puts the stop (Gate's 15m ATR(14) x 3, pulled inside the liquidation price) and the ladder (10 % ->
+the stop at +8 %, then 2 % steps; since 11-03 in Gate's own ROE, before fees: rules.basis "gross", the bot's
+``ladder_basis``; "net" = both fees paid). Read-only from the bot's state file and its config; never the Gate key (the site has
 none). A bot not installed, not switched on or not run yet says so; nothing is made up.
 
     GET /api/v4/livebots/gate
 
     {now_ms, state ok | off | missing | error, ko (when not ok), unit {active, enabled, state run | fail | stop | off | unknown, ko},
-     rules {words, stop_atr, atr_tf_ko, atr_n, first_trigger, first_lock, step, trigger_gap, liq_keep, fee, coins, poll_s}
+     rules {words, stop_atr, atr_tf_ko, atr_n, first_trigger, first_lock, step, trigger_gap, basis (net | gross), roe_ko,
+            liq_keep, fee, coins, poll_s}
      (or {words None, refused_ko}),
      loop {ms, ago_s, fresh}, account {total, available, upnl, ms},
      positions [{contract, coin, side, side_ko, size, entry, lev, cross, liq, margin, upnl, mark, opened_ms, guarded,
@@ -70,7 +72,7 @@ def rules_of(path: str) -> Optional[dict]:
     lad = cfg.ladder
     return {"words": cfg.words(), "stop_atr": cfg.stop_atr, "atr_tf_ko": GG.TF_KO.get(cfg.atr_tf, cfg.atr_tf), "atr_n": cfg.atr_n,
             "first_trigger": lad.first_trigger, "first_lock": lad.first_lock, "step": lad.step, "trigger_gap": lad.trigger_gap,
-            "liq_keep": cfg.liq_keep, "fee": cfg.fee, "coins": cfg.coins, "poll_s": cfg.poll_s}
+            "basis": cfg.ladder_basis, "roe_ko": cfg.roe_word(), "liq_keep": cfg.liq_keep, "fee": cfg.fee, "coins": cfg.coins, "poll_s": cfg.poll_s}
 
 
 def unit_of(active: str, enabled: str) -> str:
@@ -86,7 +88,7 @@ def unit_of(active: str, enabled: str) -> str:
 
 
 def next_step(rules: Optional[dict], lock: Optional[float]) -> Optional[dict]:
-    """The ladder's next lock and the best net ROE that arms it (form 1: 10 -> 8, then the same step)."""
+    """The ladder's next lock and the best ROE (on the bot's basis) that arms it (form 1: 10 -> 8, then the same step)."""
     if not rules or rules.get("first_lock") is None:
         return None
     if lock is None:
@@ -106,10 +108,11 @@ def position_view(c: str, live: dict, rec: Optional[dict], rules: Optional[dict]
         lock = _f(rec.get("lock"))
         nx = next_step(rules, lock)
         fee = _f(rec.get("fee")) or 0.0
+        rt = 0.0 if (rules or {}).get("basis") == "gross" else 2 * fee   # the bot's Config.rt
         lev = _f(rec.get("lev")) or out["lev"]
         base = _f(rec.get("entry")) or entry
-        if nx and base and lev and side:                 # (the bot's own formula: paperbot/ladder.py, both fees paid)
-            nx["price"] = roe_price(side, base, lev, nx["trigger"], 2 * fee)
+        if nx and base and lev and side:                 # (the bot's own formula: paperbot/ladder.py)
+            nx["price"] = roe_price(side, base, lev, nx["trigger"], rt)
         stop = _f(rec.get("stop"))
         out["bot"] = {"stop": stop, "kind": rec.get("kind"), "kind_ko": KIND_KO.get(rec.get("kind"), rec.get("kind")),
                       "atr": _f(rec.get("atr")), "atr_stop": _f(rec.get("atr_stop")), "fee": fee, "lock": lock,
@@ -117,7 +120,7 @@ def position_view(c: str, live: dict, rec: Optional[dict], rules: Optional[dict]
                       "hands_off": bool(rec.get("hands_off")), "late": bool(rec.get("late")), "has_stop": rec.get("stop_id") is not None,
                       "seen_ms": _ms(rec.get("seen_s")), "closing": bool(rec.get("closing")), "roe_now": None}
         if mark and base and lev and side:
-            out["bot"]["roe_now"] = net_roe(side, base, mark, lev, 2 * fee)
+            out["bot"]["roe_now"] = net_roe(side, base, mark, lev, rt)
         if mark and stop:
             out["to_stop"] = side * (mark - stop) / mark
     if mark and out["liq"]:

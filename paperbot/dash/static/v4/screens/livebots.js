@@ -197,7 +197,7 @@ export const BOT_TAB = {
     head: null, only: () => [], none: "친구 15분 봇은 투비트 계정에서 거래해요 (11/03부터, WOO X Pro 2 계정은 없어짐) · 잔고는 아래 실거래 칸"},
   // owners 11-01: the 게이트 봇 has no trading rule and no 목표 연구 of its own (bot null: no foot); the friend's Gate
   // account is on the screen's status card
-  gatebot: {bot: null, sub: "게이트 봇 · 친구가 게이트에서 직접 진입하면 봇이 손절(15분봉 ATR × 3)과 계단 익절(순ROE 10%→8%, 이후 2%씩)만 걸어요 · 다른 봇은 이 화면에 없어요",
+  gatebot: {bot: null, sub: "게이트 봇 · 친구가 게이트에서 직접 진입하면 봇이 손절(15분봉 ATR × 3)과 계단 익절(거래소 ROE 10%→8%, 이후 2%씩)만 걸어요 · 다른 봇은 이 화면에 없어요",
     head: null, only: () => [], none: "게이트 봇은 진입하지 않아요 · 친구의 게이트 계정 잔고는 아래 상태 칸"},
 };
 /** The foot of a 봇별 screen: the 목표 연구 part (owners 10/26: "각 봇마다 내 목표 수익률(한 달 ×6)을 위해 필요한 분석·연구

@@ -1,7 +1,8 @@
 """게이트 봇 (owners 10-31): paperbot/gate.py and paperbot/gateguard.py against a fake Gate (HTTP level).
 
 The owners' rules: the stop at the entry -/+ 15m ATR(14) x 3 (pulled inside the liquidation price when beyond it), the
-net-ROE ladder 10 -> 8 then 2 % steps, the friend's own orders and actions first, each coin on its own, one-way mode."""
+ladder 10 -> 8 then 2 % steps (net ROE by default; Gate's own ROE, before fees, with ladder_basis gross: the repo's
+config since 11-03), the friend's own orders and actions first, each coin on its own, one-way mode."""
 
 import hashlib
 import hmac
@@ -254,13 +255,19 @@ class StartGates(unittest.TestCase):
         self.assertAlmostEqual(lad.lock_for(0.141), 0.12)
         self.assertIsNone(cfg.coins)
         self.assertEqual(cfg.mode, "mainnet")
-        self.assertIn("순ROE 10%에서 8% 잠금, 이후 2%씩", cfg.words())
+        # owners 11-03 "게이트 아이오봇 거래소 수익률 기준 10%로 2%로 마다 계단식 익절로 바꿔줘": Gate's own ROE, before fees
+        self.assertEqual(cfg.ladder_basis, "gross")
+        self.assertIn("계단 익절 거래소 ROE 10%에서 8% 잠금, 이후 2%씩 (12%→10%, 14%→12% …)", cfg.words())
+        self.assertIn("수수료는 계단에 안 뺌(앱에 찍히는 ROE)", cfg.words())
+        self.assertNotIn("순ROE", cfg.words())
+        self.assertEqual((cfg.rt(0.0005), GG.Config().rt(0.0005)), (0.0, 0.001))      # the default stays net
+        self.assertIn("순ROE 10%에서 8% 잠금, 이후 2%씩", GG.Config().words())
 
     def test_config_refusals(self):
         d = tempfile.mkdtemp()
         base = json.load(open(os.path.join(os.path.dirname(__file__), "..", "deploy", "gateguard.json")))
         for bad in ({"mode": "testnet"}, {"atr_tf": "2h"}, {"stop_atr": 50}, {"ladder": {"first_lock": 0.08}},
-                    {"coins": ["BTCUSDT"]}, {"surprise": 1}):
+                    {"coins": ["BTCUSDT"]}, {"surprise": 1}, {"ladder_basis": "fee"}):
             p = os.path.join(d, "c.json")
             json.dump({**base, **bad}, open(p, "w"))
             with self.assertRaises(GG.Refused):
@@ -681,6 +688,73 @@ class Guarding(unittest.TestCase):
         lines = g.plan_lines()
         self.assertIn("새로 걸 손절 94 (15분봉 ATR 2 × 3)", lines[0])
         self.assertFalse([c for c in fake.calls if c[0] in ("POST", "DELETE")])
+
+
+class GrossLadder(unittest.TestCase):
+    """Owners 11-03: "게이트 아이오봇 거래소 수익률 기준 10%로 2%로 마다 계단식 익절로 바꿔줘". The same ladder (10 -> 8, then
+    2 % steps) counted in Gate's own ROE (the app's, before fees): at 20x, +10 % is a 0.5 % move, the +8 % lock 0.4 %."""
+
+    def cfg(self, state=None):
+        return GG.Config(state=state or os.path.join(tempfile.mkdtemp(), "s.json"), ladder_basis="gross")
+
+    def test_ten_locks_eight_then_steps_of_two_in_gates_own_roe(self):
+        fake, g, msgs = make(cfg=self.cfg())
+        fake.open(size=10, entry=100.0, lev=20)
+        g.loop_once()
+        self.assertIn("손절 94 (15분봉 ATR 2 × 3, 가격 -6.0% · 거래소 ROE -120.0%)", msgs[-1][1])
+        self.assertIn("익절: 거래소 ROE 10%에서 8% 잠금, 이후 2%씩", msgs[-1][1])
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.49, 100.2, 100.45)                      # +9.8 %: nothing yet
+        g.loop_once()
+        self.assertEqual(fake.resting()[0]["trigger"]["price"], "94.0")
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.5, 100.42, 100.46)                      # +10 % -> the stop at +8 % = 100.4
+        g.loop_once()
+        self.assertEqual(fake.resting()[0]["trigger"]["price"], "100.4")
+        self.assertIn("잠금 거래소 ROE +8%: 최고 100.5 (거래소 ROE +10.0%) → 손절 94 → 100.4", msgs[-1][1])
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.6, 100.5, 100.55)                       # +12 % -> +10 % at 100.5
+        g.loop_once()
+        self.assertEqual(fake.resting()[0]["trigger"]["price"], "100.5")
+        self.assertAlmostEqual(g.coins["BTC_USDT"]["lock"], 0.10)
+        self.assertAlmostEqual(g.coins["BTC_USDT"]["best_roe"], 0.12)
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.55, 100.45, 100.48)
+        fake.fire()
+        g.loop_once()
+        self.assertIn("BTC 롱 종료: 봇 잠금 익절(거래소 ROE +10% 자리 100.5)", msgs[-1][1])
+
+    def test_short(self):
+        fake, g, msgs = make(cfg=self.cfg())
+        fake.open(size=-4, entry=100.0, lev=10)
+        g.loop_once()
+        fake.now += 60
+        fake.minute("BTC_USDT", 99.5, 98.95, 99.0)                           # 10x: -1.05 % -> +10.5 % -> +8 % at 99.2
+        g.loop_once()
+        self.assertEqual(fake.resting()[0]["trigger"]["price"], "99.2")
+
+    def test_a_net_lock_kept_when_the_basis_changes(self):
+        """A position the bot already locked on net ROE (100.5, net +8 %) and then restarted on Gate's own ROE: that
+        stop stays (it is tighter: gross +10 %), never loosened to the gross +8 % price 100.4."""
+        fake, g, msgs = make()
+        fake.open(size=10, entry=100.0, lev=20)
+        g.loop_once()
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.62, 100.5, 100.58)
+        g.loop_once()
+        sid = fake.resting()[0]["id"]
+        self.assertEqual(fake.resting()[0]["trigger"]["price"], "100.5")
+        _, g2, msgs2 = make(fake=fake, cfg=self.cfg(state=g.cfg.state))
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.6, 100.55, 100.58)                      # gross +12.4 %: +10 % = 100.5, the same stop
+        g2.loop_once()
+        self.assertEqual([o["id"] for o in fake.resting()], [sid])
+        self.assertAlmostEqual(g2.coins["BTC_USDT"]["lock"], 0.10)
+        fake.now += 60
+        fake.minute("BTC_USDT", 100.7, 100.6, 100.66)                       # gross +14 % -> +12 % at 100.6
+        g2.loop_once()
+        self.assertEqual(fake.resting()[0]["trigger"]["price"], "100.6")
+        self.assertIn("잠금 거래소 ROE +12%", msgs2[-1][1])
 
 
 if __name__ == "__main__":
