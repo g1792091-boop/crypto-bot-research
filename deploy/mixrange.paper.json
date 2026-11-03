@@ -18,8 +18,9 @@
  "ladder": {
   "trigger": 10,
   "lock": 8,
-  "step": 5
+  "step": 2
  },
+ "ladder_basis": "gross",
  "ladder_every_s": 60,
  "tf": "15m",
  "trend": "macd",

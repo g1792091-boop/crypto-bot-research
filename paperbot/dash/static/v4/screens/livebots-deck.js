@@ -247,7 +247,7 @@ export function cardOf(bots, mmr = 0.005) {
   return {live: !!live, bot: b.name_ko, coin: e.coin, symbol: e.symbol, side, sideKo: side > 0 ? "롱" : "숏", sideEn: side > 0 ? "LONG" : "SHORT",
     lev, ts: e.ts, agree, tm, entry: e.entry, stop: e.stop, act: e.act, step: e.step, why: whyKo(e.why), dist, stopAtr: b.stop_atr,
     rr: reward && risk ? reward / risk : null, liq,
-    target: lad ? `순ROE +${fmt.num(lad.trigger, 0)}%에 닿으면 손절을 +${fmt.num(lad.lock, 0)}%로 옮기고, 그 뒤 ${fmt.num(lad.step, 0)}%마다 한 계단씩 올려요` : "계단 설정을 못 읽었어요"};
+    target: lad ? `${lad.basis === "gross" ? "거래소 ROE" : "순ROE"} +${fmt.num(lad.trigger, 0)}%에 닿으면 손절을 +${fmt.num(lad.lock, 0)}%로 옮기고, 그 뒤 ${fmt.num(lad.step, 0)}%마다 한 계단씩 올려요` : "계단 설정을 못 읽었어요"};
 }
 
 // ---------------------------------------------------------------- drawing helpers (SVG, colours from the css classes)

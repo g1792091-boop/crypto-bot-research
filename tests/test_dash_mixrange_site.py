@@ -241,7 +241,8 @@ def test_the_positions_tab_has_the_range_bots_card(site, tmp_path):
         ("ok", True, "WOO X Pro · 레인지 봇", "레인지 봇", "WOO X Pro", "mexc", "15분")
     q = c["position"]
     assert (q["symbol"], q["side"], q["leverage"], q["entry"], q["timeframe"]) == ("SOLUSDT", -1, 40, 150.0, "15m")
-    assert q["round_trip"] == pytest.approx(2 * _cfg_range().taker_fee)
+    # (owners 11-03: the ladder on the exchange screen's ROE, before fees: no round trip in its ROE)
+    assert q["round_trip"] == pytest.approx(2 * M.ladder_fee(_cfg_range())) == 0.0
     assert q["rule_ko"] == "레인지 봇 · 15분봉 신호 · 스스로 매매 (페이퍼를 따라가지 않음)" and "레인지 봇은" in q["fast"]["ko"]
     assert q["ladder"][0]["at"] == pytest.approx(0.10) and q["ladder"][0]["lock"] == pytest.approx(0.08)
     assert "WOO X Pro 앱" in q["liq_ko"]

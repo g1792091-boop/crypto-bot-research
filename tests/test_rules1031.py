@@ -79,7 +79,7 @@ def test_the_friend_bot_runs_obv_and_ema3_on_15m(tmp_path):
     for name, mode in (("mixchop.live.json", "mainnet"), ("mixchop.paper.json", "paper")):
         d = json.loads((DEPLOY / name).read_text(encoding="utf-8"))
         d.update(name="친구 15분 봇", tf="15m", rules=["obv", "ema3"], trend="four",    # (10-31 night: trend "bar")
-                 coins={"SOLUSDT": {"leverage": 40}, "ETHUSDT": {"leverage": 40}, "XRPUSDT": {"leverage": 40}, "BCHUSDT": {"leverage": 40}, "ZECUSDT": {"leverage": 20}, "DOGEUSDT": {"leverage": 40}})                                                  # (its six coins of then)
+                 coins={"SOLUSDT": {"leverage": 40}, "ETHUSDT": {"leverage": 40}, "XRPUSDT": {"leverage": 40}, "BCHUSDT": {"leverage": 40}, "ZECUSDT": {"leverage": 20}, "DOGEUSDT": {"leverage": 40}}, ladder={"trigger": 10, "lock": 8, "step": 5}, ladder_basis="net")                                                  # (its coins and ladder of then)
         p = tmp_path / name
         p.write_text(json.dumps(d), encoding="utf-8")
         cfg = M.load_config(str(p))

@@ -33,7 +33,9 @@ Trade:
   by margin instead (equity x margin_frac as margin: qty = equity x margin_frac x leverage / price, capped by
   ``max_notional_usd``); ``ladder`` {"trigger", "lock", "step"} replaces the coins' roe_act ladder for every coin with
   one on NET ROE (WOO X Pro's taker fee ``taker_fee`` on both sides, at the coin's leverage): trigger -> lock, then one
-  step more for each further step (12 -> 10, 17 -> 15, 22 -> 20 ...); ``ladder_every_s`` > 0 follows the open position
+  step more for each further step (12 -> 10, 17 -> 15, 22 -> 20 ...); owners 11-03 ("익절을 거래소에 찍히는 10프로 부터
+  계단식 익절 2프로 뛰기로"): ``ladder_basis`` "gross" judges it on the ROE the exchange screen shows (before fees, no
+  cost term; executor.py's option of the same name), "net" (the default) as before; ``ladder_every_s`` > 0 follows the open position
   on Binance's closed 1m bars that often between the closes as well (best, the ladder, the resting stop moved; paper:
   its stop judged on the same 1m bars), and at the 30m close on 1m bars too.
 - owners 10-26 ("둘 다"): ``rules`` ["mix", "st"] adds a second entry rule, the owners' own (research/mixchop_st:
@@ -703,6 +705,20 @@ def reason_words(ev: dict, side: int, name: bool = False) -> str:
             f"{ev.get('avg_rsi_1h')} ({kst(ev['close_ms'])} 봉)")
 
 
+LADDER_BASES = ("net", "gross")                # executor.py's names (owners 11-03: "gross" for the two WOO X Pro bots)
+
+
+def ladder_fee(c: "Config") -> float:
+    """The taker fee the ladder's ROE takes off on each side: the config's (``ladder_basis`` "net"), none ("gross": the ROE
+    the exchange screen shows, owners 11-03 "거래소에 찍히는 10프로")."""
+    return 0.0 if getattr(c, "ladder_basis", "net") == "gross" else float(c.taker_fee)
+
+
+def roe_word(c: "Config") -> str:
+    """The ladder's ROE in words: "순ROE" (after fees) or "거래소 ROE" (the exchange screen's, before fees)."""
+    return "거래소 ROE" if getattr(c, "ladder_basis", "net") == "gross" else "순ROE"
+
+
 def plan_words(c: "Config", short: bool = False) -> str:
     """The size and the ladder of a config in words (the start message, the site, the checks); ``short`` for a card."""
     if c.margin_frac > 0:
@@ -712,7 +728,7 @@ def plan_words(c: "Config", short: bool = False) -> str:
     if c.ladder:
         t, lk, st = c.ladder["trigger"], c.ladder["lock"], c.ladder["step"]
         lad = (f"계단 {t:g}→{lk:g}·{t + st:g}→{lk + st:g}…" if short else
-               f"계단 순ROE +{t:g}%→+{lk:g}%, +{t + st:g}%→+{lk + st:g}%, +{t + 2 * st:g}%→+{lk + 2 * st:g}% (그 뒤 {st:g}%마다)")
+               f"계단 {roe_word(c)} +{t:g}%→+{lk:g}%, +{t + st:g}%→+{lk + st:g}%, +{t + 2 * st:g}%→+{lk + 2 * st:g}% (그 뒤 {st:g}%마다)")
     else:
         lad = "계단 코인별" if short else "계단 코인별 ROE +roe_act%→+10%"
     every = "" if short or c.ladder_every_s <= 0 else f" · 손절·계단 {c.ladder_every_s:g}초마다(1분봉)"
@@ -746,7 +762,9 @@ class Config:
     us_open_pause_min: int = 0
     macro_blackout_min: int = 0
     margin_frac: float = 0.0                    # > 0: each entry's margin = equity x this (owners 10-26); 0: risk_pct sizing
-    ladder: Optional[dict] = None               # {"trigger", "lock", "step"} net ROE %; None: the coins' roe_act ladder
+    ladder: Optional[dict] = None               # {"trigger", "lock", "step"} ROE %; None: the coins' roe_act ladder
+    ladder_basis: str = "net"                   # the ladder's ROE: "net" (after both taker fees) or "gross" (the exchange
+                                                # screen's, before fees; owners 11-03)
     ladder_every_s: float = 0.0                 # > 0: the open position on closed 1m bars this often between the closes
     rules: tuple = ("mix",)                     # the entry rules in their order (owners 10-26: ("mix", "st"))
     stop_atr: Optional[float] = None            # > 0: every coin's stop = ATR14 x this, both rules (owners 10-26: 3)
@@ -827,6 +845,10 @@ def load_config(path: str) -> Config:
         except (TypeError, KeyError, ValueError):
             raise MixError("\"ladder\"는 {\"trigger\": 12, \"lock\": 10, \"step\": 5} 꼴이어야 합니다(순ROE %)") from None
         t, lk, st = cfg.ladder["trigger"], cfg.ladder["lock"], cfg.ladder["step"]
+        cfg.ladder_basis = str(raw.get("ladder_basis", "net"))
+        if cfg.ladder_basis not in LADDER_BASES:
+            raise MixError(f"\"ladder_basis\"는 \"net\"(수수료 뺀 순ROE) 또는 \"gross\"(거래소 화면 ROE, 수수료 전)입니다(지금 "
+                           f"{cfg.ladder_basis!r})")
         if not (0 < lk < t <= 1000 and 0 < st <= 1000):
             raise MixError(f"\"ladder\" 값이 범위 밖입니다(0 < lock < trigger <= 1000, 0 < step): {cfg.ladder}")
     if not (0 <= cfg.margin_frac <= 1):
@@ -1278,12 +1300,12 @@ class Bot:
         lad = self.cfg.ladder
         if lad:
             return net_ladder_stop(p.side, p.entry, p.best, p.stop, p.leverage, lad["trigger"], lad["lock"], lad["step"],
-                                   self.cfg.taker_fee)
+                                   ladder_fee(self.cfg))
         return ladder_stop(p.side, p.entry, p.best, p.stop, p.roe_act, p.leverage)
 
     def roe_text(self, p: "Position", px: float) -> str:
         if self.cfg.ladder:
-            return f"순ROE {(p.side * (px - p.entry) / p.entry - 2 * self.cfg.taker_fee) * p.leverage * 100:+.1f}%"
+            return f"{roe_word(self.cfg)} {(p.side * (px - p.entry) / p.entry - 2 * ladder_fee(self.cfg)) * p.leverage * 100:+.1f}%"
         return f"ROE {p.roe(px):+.1f}%"
 
     # ---------------------------------------------------------------- protection (live)
@@ -1529,10 +1551,11 @@ class Bot:
         self.log("entry", **asdict(p), why=ev)
         lad = self.cfg.ladder
         if lad:
-            fee2 = 2 * self.cfg.taker_fee
+            fee2 = 2 * ladder_fee(self.cfg)
             act_px = fill * (1 + side * (lad["trigger"] / 100 / co.leverage + fee2))
             lock_px = fill * (1 + side * (lad["lock"] / 100 / co.leverage + fee2))
-            ladder_line = (f"계단: {act_px:.6g}(순ROE +{lad['trigger']:g}%) 가면 손절을 {lock_px:.6g}(순ROE +{lad['lock']:g}%)로, "
+            rw = roe_word(self.cfg)
+            ladder_line = (f"계단: {act_px:.6g}({rw} +{lad['trigger']:g}%) 가면 손절을 {lock_px:.6g}({rw} +{lad['lock']:g}%)로, "
                            f"그 뒤 {lad['step']:g}%마다 한 칸")
         else:
             lock_px = fill + side * fill * LOCK_ROE / 100 / co.leverage
@@ -1907,7 +1930,7 @@ def cmd_signals(args) -> int:
                 rows.append(ev)
                 if len(rows) >= args.n:
                     break
-        lad = (f"순ROE {cfg.ladder['trigger']:g} → {cfg.ladder['lock']:g}" if cfg.ladder else f"ROE {co.roe_act:.0f} → 10")
+        lad = (f"{roe_word(cfg)} {cfg.ladder['trigger']:g} → {cfg.ladder['lock']:g}" if cfg.ladder else f"ROE {co.roe_act:.0f} → 10")
         print(f"== {co.symbol} (여유 {co.h1_buf} · 손절 ATR × {co.sl_atr} · {lad} · {co.leverage}배"
               f"{'' if co.enabled else ' · 꺼짐'})")
         for ev in reversed(rows):
@@ -2079,7 +2102,7 @@ def cmd_check(args) -> int:
     now = int(time.time() * 1000)
     print("크기·계단: " + (f"진입마다 증거금 = 잔고의 {cfg.margin_frac:.0%} (한 번 최대 ${cfg.max_notional_usd:,.0f})"
                           if cfg.margin_frac > 0 else f"손절 1번 = 잔고의 {cfg.risk_pct}%")
-          + (f" · 계단 순ROE +{cfg.ladder['trigger']:g}%→+{cfg.ladder['lock']:g}%, 그 뒤 {cfg.ladder['step']:g}%마다"
+          + (f" · 계단 {roe_word(cfg)} +{cfg.ladder['trigger']:g}%→+{cfg.ladder['lock']:g}%, 그 뒤 {cfg.ladder['step']:g}%마다"
              if cfg.ladder else " · 계단 코인별 roe_act")
           + (f" · 손절·계단 {cfg.ladder_every_s:g}초마다(1분봉)" if cfg.ladder_every_s > 0 else ""))
     if tuple(cfg.rules) != ("mix",) or cfg.stop_atr:          # owners 10-26: the second rule, one stop multiple

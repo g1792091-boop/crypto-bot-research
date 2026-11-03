@@ -584,8 +584,8 @@ def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None, bot: s
     if pv.get("state") != "ok":
         return {**base, "state": "error", "reason_ko": pv.get("ko") or "상태 파일의 포지션을 읽지 못했어요"}
     side, entry, lev = int(pv["side"]), pv.get("entry"), pv.get("leverage")
-    fee = float(getattr(cfg, "taker_fee", X.M.Config.taker_fee)) if cfg is not None else X.M.Config.taker_fee
-    rt = 2.0 * fee                                    # the bot's own net ROE: lev x (move - 2 x fee), mixchop's ladder
+    fee = X.M.ladder_fee(cfg) if cfg is not None else X.M.Config.taker_fee     # (owners 11-03: 0 on the "gross" basis)
+    rt = 2.0 * fee                                    # the bot's own ladder ROE: lev x (move - 2 x fee), mixchop's ladder
     lad = getattr(cfg, "ladder", None) if cfg is not None else None
     spec, lock = None, None
     if lad:
@@ -598,7 +598,7 @@ def mix_card(now: int, conn, bars_state: dict, mp: Optional[dict] = None, bot: s
     best = pv.get("best_net_roe")
     nx = pv.get("next")
     nxt = {"lock": nx["stop_to_roe"], "at": nx["trigger_roe"], "price": nx["trigger"], "lock_price": nx["stop_to"], "from": "bot",
-           "screen_at": nx["trigger_roe"] + (lev or 0) * rt} if nx and nx.get("basis") == "net" else None
+           "screen_at": nx["trigger_roe"] + (lev or 0) * rt} if nx and nx.get("basis") in ("net", "gross") else None
     stop, locked = pv.get("stop"), bool(pv.get("locked"))
     secured = None
     if locked and stop and entry:

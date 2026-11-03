@@ -596,9 +596,10 @@ def ladder_next(p: M.Position) -> Optional[dict]:
     return {"step": k, "trigger": trig, "trigger_roe": roe / 100.0, "stop_to": new, "stop_to_roe": p.roe(new) / 100.0, "reached": reached}
 
 
-def ladder_next_net(p: M.Position, lad: dict, fee: float) -> Optional[dict]:
-    """ladder_next for the config's net-ROE ladder (owners 10-26: trigger -> lock, then one ``step`` more each):
-    the step after the position's own, its trigger and its stop in prices and NET ROE."""
+def ladder_next_net(p: M.Position, lad: dict, fee: float, basis: str = "net") -> Optional[dict]:
+    """ladder_next for the config's ROE ladder (owners 10-26: trigger -> lock, then one ``step`` more each): the step
+    after the position's own, its trigger and its stop in prices and in the ladder's ROE (``basis`` "net": after both
+    fees ``fee``; owners 11-03 "gross": the exchange screen's, ``fee`` 0)."""
     if not p.entry or not p.leverage:
         return None
     lev, side, e = float(p.leverage), int(p.side), float(p.entry)
@@ -607,7 +608,7 @@ def ladder_next_net(p: M.Position, lad: dict, fee: float) -> Optional[dict]:
     trig = e * (1 + side * (t_roe / 100.0 / lev + 2 * fee))
     to = e * (1 + side * (l_roe / 100.0 / lev + 2 * fee))
     return {"step": k + 1, "trigger": trig, "trigger_roe": t_roe / 100.0, "stop_to": to, "stop_to_roe": l_roe / 100.0,
-            "reached": side * (float(p.best) - trig) >= 0, "basis": "net"}
+            "reached": side * (float(p.best) - trig) >= 0, "basis": basis}
 
 
 def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict]:
@@ -619,7 +620,8 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
     lev = _i(p.leverage) or None
     loss = p.side * (p.stop - p.entry) * p.qty if e is not None and q is not None and _f(p.stop) is not None else None
     lad = getattr(cfg, "ladder", None) if cfg is not None else None
-    fee = float(getattr(cfg, "taker_fee", M.Config.taker_fee)) if cfg is not None else M.Config.taker_fee
+    fee = M.ladder_fee(cfg) if cfg is not None else M.Config.taker_fee          # (owners 11-03: 0 on the "gross" basis)
+    basis = getattr(cfg, "ladder_basis", "net") if cfg is not None else "net"
     if lad and e and lev:
         lock_px = e * (1 + p.side * (lad["lock"] / 100.0 / lev + 2 * fee))
         act_px = e * (1 + p.side * (lad["trigger"] / 100.0 / lev + 2 * fee))
@@ -627,8 +629,8 @@ def position_view(bid: str, d: dict, now: int, cfg: Any = None) -> Optional[dict
         lock_px = e + p.side * e * M.LOCK_ROE / 100.0 / lev if e and lev else None
         act_px = e + p.side * e * float(p.roe_act) / 100.0 / lev if e and lev else None
     net = {} if not lad else {
-        "ladder_basis": "net", "ladder_step": lad["step"] / 100.0, "roe_act": lad["trigger"] / 100.0, "lock_roe": lad["lock"] / 100.0,
-        "next": ladder_next_net(p, lad, fee), "every_s": float(getattr(cfg, "ladder_every_s", 0) or 0),
+        "ladder_basis": basis, "ladder_step": lad["step"] / 100.0, "roe_act": lad["trigger"] / 100.0, "lock_roe": lad["lock"] / 100.0,
+        "next": ladder_next_net(p, lad, fee, basis), "every_s": float(getattr(cfg, "ladder_every_s", 0) or 0),
         "best_net_roe": (p.side * (p.best - e) / e - 2 * fee) * lev if e and lev else None}
     return {"state": "ok", "symbol": p.symbol, "coin": coin_ko(p.symbol), "side": p.side, "side_ko": SIDE_KO.get(p.side, "?"), "qty": q,
             "entry": e, "notional": notional, "margin": notional / lev if notional is not None and lev else None, "leverage": lev,
@@ -883,6 +885,7 @@ def rules_view(conf: dict, off: Optional[set] = None) -> Optional[dict]:
             "lock_roe": M.LOCK_ROE / 100.0, "margin_frac": float(getattr(cfg, "margin_frac", 0) or 0),
             "ladder": ({k: v / 100.0 for k, v in cfg.ladder.items()} if getattr(cfg, "ladder", None) else None),
             "ladder_every_s": float(getattr(cfg, "ladder_every_s", 0) or 0), "plan_ko": M.plan_words(cfg),
+            "ladder_basis": getattr(cfg, "ladder_basis", "net"),
             "coins": [{"symbol": c.symbol, "coin": coin_ko(c.symbol), "h1_buf": c.h1_buf, "sl_atr": c.sl_atr, "roe_act": c.roe_act / 100.0,
                        "leverage": c.leverage, "enabled": c.enabled, "off_at_start": c.symbol in (off or set())} for c in cfg.coins],
             "blocks": block_rules(cfg), "server_state": conf.get("server_state"), "reason_ko": conf.get("reason_ko")}

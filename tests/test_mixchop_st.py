@@ -197,8 +197,9 @@ def test_the_live_config_runs_both_rules_with_a_3_atr_stop():
     assert cfg.rules == ("h3x",) and cfg.stop_atr == 3.0
     assert {c.sl_atr for c in cfg.coins} == {3.0}
     # owners 10-27 "친구봇 익절기준은 1 계단 10->8로 바꿔주고": 10 -> 8, 15 -> 13, 20 -> 18 ...
-    assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
-    assert "계단 순ROE +10%→+8%, +15%→+13%, +20%→+18%" in M.plan_words(cfg)
+    # (owners 11-03: the exchange screen's ROE, every 2 %: tests/test_rules1102.py)
+    assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross" and cfg.margin_frac == 0.4
+    assert "계단 거래소 ROE +10%→+8%, +12%→+10%, +14%→+12% (그 뒤 2%마다)" in M.plan_words(cfg)
 
 
 def test_the_signals_command_lists_the_crosses(tmp_path, monkeypatch, capsys):

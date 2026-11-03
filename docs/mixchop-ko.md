@@ -691,7 +691,8 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로" (보내 주신 `추세 MACD`, `3합 히스토그램` 파인 스크립트).
 11/03: 자동매매는 WOO X Pro 두 계정만이고(바이비트 봇은 끔), 3합 히스토그램은 **이 봇(WOO X Pro 2)만** 씁니다. 레인지 봇(WOO X Pro 1)은
 OBV 히스토그램 전환입니다(`docs/range-bot-ko.md` 맨 앞). 코인은 11/03부터 **BTC → XRP → BCH → ZEC → DOGE** ("woox2에 솔라나 이더만
-삭제하고 비트 추가해줘", BTC 40배, ZEC 20배).
+삭제하고 비트 추가해줘", BTC 40배, ZEC 20배). 계단 익절은 11/03부터 **거래소 ROE(수수료 전) +10%→+8%, 그 뒤 2%마다**
+(`"ladder": {"trigger": 10, "lock": 8, "step": 2}`, `"ladder_basis": "gross"`; 손절은 그대로).
 
 | 항목 | 내용 |
 |---|---|
@@ -727,7 +728,8 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 ```
 
 - (코드 받기 `git pull && sudo bash deploy/install.sh`는 `docs/mixbybit-ko.md` 13-1에서 한 번만 하면 됩니다.)
-- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"h3x"`, 코인 `SOLUSDT` · `ETHUSDT`가 빠지고 `BTCUSDT`가 들어갑니다(11/03).
+- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"h3x"`, `"step": 5` → `2`, 새 줄 `"ladder_basis": "gross"`, 코인 `SOLUSDT` ·
+  `ETHUSDT`가 빠지고 `BTCUSDT`가 들어갑니다(11/03). check의 `크기·계단` 줄: `계단 거래소 ROE +10%→+8%, 그 뒤 2%마다`.
   check의 코인 줄에 BTC가 ✔인지 봅니다.
 - check: `매매법·손절: 3합 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
 - 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.

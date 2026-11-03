@@ -378,6 +378,7 @@ sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
     예전 링크(`#/livebots/bybitbot`)로 볼 수 있어요. 다시 켜면 화면에 다시 나옵니다.
   - 텔레그램: 봇이 꺼졌으니 진입 · 청산 알림이 없고, 아침 점검 · 손실 카드 타이머(`paperbot-mixbybitcheck*`)도 같이 끕니다.
     `install.sh`는 바이비트 봇이 꺼져 있으면 이 점검을 다시 켜지 않습니다.
+- 두 봇의 계단 익절(11/03): 거래소 ROE(수수료 전) +10%→+8%, 그 뒤 2%마다. 손절은 그대로(15분봉 ATR × 3). 정리: `docs/live-bots-ko.md`.
 - `/etc/paperbot/mixbybit.json`은 **지우지 않습니다.** 이 파일이 있어야 예전 바이비트 실행기 칸이 점검과 사이트에 다시 나오지 않습니다.
 - 바이비트 계정의 돈은 그대로 있습니다(봇은 주문만 멈춤). 옮기거나 빼는 건 두 분이 앱에서 하시면 됩니다.
 

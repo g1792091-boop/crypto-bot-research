@@ -430,16 +430,18 @@ def test_the_morning_replay_counts_the_new_signals():
 def test_three_bots_on_the_trend_macd():
     # owners 11-03 ("PRO1 OBV · PRO2 3합"): the 레인지 봇 (WOO X Pro 1) on the OBV histogram's turn; its coins "이더 리플 bch
     # 삭제하고 비트 추가", the friend bot's (WOO X Pro 2) "솔라나 이더만 삭제하고 비트 추가" (the 바이비트 봇, off, as it was)
-    bots = {"bybit": ("mixbybit.live.json", "mixbybit.paper.json", ("o4h",), SIX),
-            "friend": ("mixchop.live.json", "mixchop.paper.json", ("h3x",), PRO2),
-            "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",), PRO1)}
-    for key, (live, paper, rules, coins) in bots.items():
+    # owners 11-03 ("손절은 냅두고 익절을 거래소에 찍히는 10프로 부터 계단식 익절 2프로 뛰기로"): the two WOO X Pro bots' ladder
+    # on the exchange screen's ROE (before fees), +10 % -> +8 %, then every 2 %; the 바이비트 봇 (off) as it was
+    bots = {"bybit": ("mixbybit.live.json", "mixbybit.paper.json", ("o4h",), SIX, (5.0, "net")),
+            "friend": ("mixchop.live.json", "mixchop.paper.json", ("h3x",), PRO2, (2.0, "gross")),
+            "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",), PRO1, (2.0, "gross"))}
+    for key, (live, paper, rules, coins, (step, basis)) in bots.items():
         for name, mode in ((live, "mainnet"), (paper, "paper")):
             cfg = M.load_config(str(DEPLOY / name))
             assert (cfg.mode, cfg.trend, cfg.rules, cfg.symbols) == (mode, "macd", rules, coins), name
             # "30분봉 추세 15분봉은 진입 바꾸지말고"
             assert (cfg.tf, cfg.trend_tf, cfg.trend_tf_ms) == ("15m", "30m", M.MIN30), name
-            assert cfg.stop_atr == 3.0 and cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0}
+            assert cfg.stop_atr == 3.0 and cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": step} and cfg.ladder_basis == basis
             assert cfg.margin_frac == 0.4 and cfg.equity_floor_frac == 0
             assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in coins}, "ZECUSDT": 20}
     by = M.load_config(str(DEPLOY / "mixbybit.live.json"))
@@ -455,3 +457,41 @@ def test_three_bots_on_the_trend_macd():
             M.load_config(str(p))
     finally:
         p.unlink()
+
+
+# ====================================================================== the ladder (owners 11-03)
+def test_the_ladder_on_the_exchange_screens_roe(tmp_path):
+    """Owners 11-03 ("손절은 냅두고 익절을 거래소에 찍히는 10프로 부터 계단식 익절 2프로 뛰기로 해줘"): the two WOO X Pro bots'
+    ladder on the ROE the exchange screen shows (before fees: ``ladder_basis`` "gross", executor.py's name): best at +10 %
+    -> the stop at +8 %, then one more 2 % each (+12 % -> +10 %, +14 % -> +12 % ...); the stop itself unchanged (ATR x 3)."""
+    import types
+    from paperbot.dash.more import livemix as MX
+    for name in ("mixrange.live.json", "mixrange.paper.json", "mixchop.live.json", "mixchop.paper.json"):
+        cfg = M.load_config(str(DEPLOY / name))
+        assert cfg.ladder_basis == "gross" and M.ladder_fee(cfg) == 0.0 and M.roe_word(cfg) == "거래소 ROE", name
+        assert cfg.stop_atr == 3.0 and cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0}, name
+        assert "계단 거래소 ROE +10%→+8%, +12%→+10%, +14%→+12% (그 뒤 2%마다)" in M.plan_words(cfg), name
+    lad, fee = cfg.ladder, M.ladder_fee(cfg)
+    # a 40x long at 100: ROE = 40 x the move, no fee
+    for best, stop, k in ((100.24, 99.0, 0), (100.25, 100.2, 1), (100.29, 100.2, 1), (100.30, 100.25, 2), (100.35, 100.30, 3)):
+        got = M.net_ladder_stop(1, 100.0, best, 99.0, 40, lad["trigger"], lad["lock"], lad["step"], fee)
+        assert (round(got[0], 6), got[1]) == (stop, k), best
+    # a 40x short at 100 and a 20x one (ZEC): the same ROE, twice the move
+    assert M.net_ladder_stop(-1, 100.0, 99.70, 101.0, 40, 10, 8, 2, fee)[0] == pytest.approx(99.75)
+    assert M.net_ladder_stop(1, 100.0, 100.5, 99.0, 20, 10, 8, 2, fee)[0] == pytest.approx(100.4)
+    # the messages' ROE and the old basis (the 바이비트 봇's, "net": both fees off)
+    me = types.SimpleNamespace(cfg=cfg)
+    assert M.Bot.roe_text(me, types.SimpleNamespace(side=1, entry=100.0, leverage=40, roe=lambda px: 0.0), 100.25) == "거래소 ROE +10.0%"
+    by = M.load_config(str(DEPLOY / "mixbybit.live.json"))
+    assert by.ladder_basis == "net" and M.ladder_fee(by) == by.taker_fee and M.roe_word(by) == "순ROE"
+    # the site: the next step in the exchange's ROE
+    p = types.SimpleNamespace(entry=100.0, leverage=40, side=1, step=1, best=100.26)
+    nx = MX.ladder_next_net(p, lad, fee, "gross")
+    assert nx["basis"] == "gross" and nx["trigger"] == pytest.approx(100.30) and nx["stop_to"] == pytest.approx(100.25)
+    assert (nx["step"], nx["trigger_roe"], nx["stop_to_roe"], nx["reached"]) == (2, pytest.approx(0.12), pytest.approx(0.10), False)
+    # a wrong basis is refused
+    bad = tmp_path / "bad-basis.json"
+    bad.write_text(json.dumps({**json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8")), "ladder_basis": "screen"}),
+                   encoding="utf-8")
+    with pytest.raises(M.MixError, match="ladder_basis"):
+        M.load_config(str(bad))

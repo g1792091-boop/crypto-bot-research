@@ -181,7 +181,8 @@ def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
         # owners 11-03 ("woox2에 솔라나 이더만 삭제하고 비트 추가해줘"): BTC · XRP · BCH · ZEC · DOGE
         assert {c.symbol: c.leverage for c in cfg.coins} == {"BTCUSDT": 40, "XRPUSDT": 40, "BCHUSDT": 40, "ZECUSDT": 20, "DOGEUSDT": 40}
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
-        assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 5.0} and cfg.margin_frac == 0.4
+        # owners 11-03 ("익절을 거래소에 찍히는 10프로 부터 계단식 익절 2프로 뛰기로"): the exchange screen's ROE, every 2 %
+        assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross" and cfg.margin_frac == 0.4
     base = json.loads((DEPLOY / "mixchop.live.json").read_text(encoding="utf-8"))
     bad = {"tf": ({"tf": "5m"}, "tf"), "trend": ({"trend": "two"}, "trend"),
            "mix on 15m": ({"rules": ["mix"], "tf": "15m", "coins": {s: {"leverage": 40} for s in ("SOLUSDT", "XRPUSDT")}}, "30m")}

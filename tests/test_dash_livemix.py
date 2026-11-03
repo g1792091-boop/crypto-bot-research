@@ -662,7 +662,7 @@ def test_the_positions_tab_has_the_friend_bot(w, tmp_path):
     mp = _p(w)
     with open(mp["live"]["config"], encoding="utf-8") as fh:
         raw = json.load(fh)
-    raw.update(ladder={"trigger": 10, "lock": 8, "step": 5}, ladder_every_s=60)
+    raw.update(ladder={"trigger": 10, "lock": 8, "step": 5}, ladder_every_s=60, ladder_basis="net")   # (basis: owners 11-03)
     cfgp = tmp_path / "live-net.json"
     cfgp.write_text(json.dumps(raw), encoding="utf-8")
     mp = {**mp, "live": {**mp["live"], "config": str(cfgp)}}

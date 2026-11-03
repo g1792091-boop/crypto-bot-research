@@ -268,7 +268,8 @@ def bot_view(prof: Any, now: int) -> dict:
                     "position": MX.position_view("live", d, now, cfg) if live["st"].get("state") == "ok" else None,
                     "curve": _curve(rows, eq.get("start")), "rules_since_ms": _rules_since(rows),
                     "last_close_ms": _i(d.get("last_close_ms")), "last_entry": last_entry(rows),
-                    "ladder": dict(cfg.ladder) if cfg is not None and getattr(cfg, "ladder", None) else None,
+                    "ladder": ({**cfg.ladder, "basis": getattr(cfg, "ladder_basis", "net")}    # (basis: owners 11-03)
+                               if cfg is not None and getattr(cfg, "ladder", None) else None),
                     "stop_atr": float(cfg.stop_atr) if cfg is not None and getattr(cfg, "stop_atr", None) else None,
                     "trades": [{k: t.get(k) for k in ("symbol", "coin", "side", "exit_ms", "pnl", "roe", "win", "why_ko")} for t in ts[:12]]})
     if paper["status"]["state"] != "off":

@@ -142,11 +142,15 @@ export function tfOf(b, dflt = "30분") {
   const t = b && ((b.status && b.status.tf_ko) || b.tf_ko);
   return t ? String(t) : dflt;
 }
+/** The ladder's ROE (the config's ``ladder_basis``): "net" after both fees, "gross" the exchange screen's before fees
+ *  (owners 11-03 "익절을 거래소에 찍히는 10프로 부터 계단식 익절 2프로 뛰기로"). */
+export const ROE_KO = {net: "순ROE", gross: "거래소 ROE"};
+export const LADDER_KO = {net: "순ROE, 수수료 뺀 값", gross: "거래소 화면 ROE, 수수료 빼기 전"};
 /** The next ladder step in words: "ROE +290% (107.25)에 닿으면 손절을 103.75 (ROE +150%)로" (+ 이미 닿음). */
 export function ladderKo(p) {
   const n = p && p.next;
   if (!n) return "계산할 수 없어요";
-  const w = n.basis === "net" ? "순ROE" : "ROE";
+  const w = n.basis === "net" ? "순ROE" : n.basis === "gross" ? "거래소 ROE" : "ROE";   // (gross: owners 11-03)
   const s = `${w} ${pctKo(n.trigger_roe, 0)} (${fmt.price(n.trigger)})에 닿으면 손절을 ${fmt.price(n.stop_to)} (${w} ${pctKo(n.stop_to_roe, 0)})로`;
   return n.reached ? `${s} · 이미 닿음: ${p.every_s ? "1분 안에" : `다음 ${tfOf(p)}봉 마감 때`} 옮겨요` : s;
 }
@@ -441,8 +445,8 @@ export function mixView(ctx, o = MIX_UI) {
           `${fmt.num(rk.funding.rate * 100, 4)}% · ${rk.funding.pays ? "이 포지션이 내요" : "이 포지션이 받아요"}${ok(rk.funding.usd) ? ` · 한 번 ${pnlKo(rk.funding.usd)}` : ""}${live && ok(live.next_ms) ? ` · 다음 ${fmt.hm(live.next_ms)}` : ""}`) : null,
         h("dt", null, "신호 봉"), h("dd", {class: "num"}, `${fmt.kst(p.signal_close_ms)} 마감 · 종가 ${fmt.price(p.signal_close)}`)),
       p.stop_id_missing ? h("p", {class: "lmx-warn"}, `상태 파일에 손절 주문 번호가 없어요 · 봇이 5분마다 손절을 확인해요 · ${o.exchange} 앱에서도 확인하세요`) : null,
-      h("p", {class: "lmx-sub"}, p.ladder_basis === "net"
-        ? `계단(순ROE, 수수료 뺀 값): 가장 유리했던 가격이 순ROE ${pctKo(p.roe_act, 0)} (${fmt.price(p.first_act_price)})에 닿으면 손절을 순ROE ${pctKo(p.lock_roe, 0)} (${fmt.price(p.first_lock_price)})로, 그 뒤 ${pctKo(p.ladder_step, 0)}마다 한 칸 · ${p.every_s ? `${fmt.int(p.every_s)}초마다 1분봉으로` : `${tfOf(p)}봉 마감 때`} 옮겨요`
+      h("p", {class: "lmx-sub"}, p.ladder_basis === "net" || p.ladder_basis === "gross"
+        ? `계단(${LADDER_KO[p.ladder_basis]}): 가장 유리했던 가격이 ${ROE_KO[p.ladder_basis]} ${pctKo(p.roe_act, 0)} (${fmt.price(p.first_act_price)})에 닿으면 손절을 ${ROE_KO[p.ladder_basis]} ${pctKo(p.lock_roe, 0)} (${fmt.price(p.first_lock_price)})로, 그 뒤 ${pctKo(p.ladder_step, 0)}마다 한 칸 · ${p.every_s ? `${fmt.int(p.every_s)}초마다 1분봉으로` : `${tfOf(p)}봉 마감 때`} 옮겨요`
         : `계단: 가장 유리했던 가격이 ROE ${pctKo(p.roe_act, 0)} (${fmt.price(p.first_act_price)})에 닿으면 손절을 ROE ${pctKo(p.lock_roe, 0)} (${fmt.price(p.first_lock_price)})로, 그 뒤 같은 폭씩 · ${tfOf(p)}봉 마감 때만 옮겨요`));
   }
   function botCol(b) {
@@ -668,7 +672,7 @@ export function mixperfView(ctx, o = MIX_UI) {
         h("li", null, `${r.margin_frac > 0 ? `진입마다 증거금 = 잔고의 ${rateKo(r.margin_frac, 0)}` : `손절 1번 = 잔고의 ${fmt.num(r.risk_pct, 2)}%`} · 한 번에 1포지션 (같은 봉에 겹치면 아래 코인 순서)`),
         h("li", null, `${Number(r.equity_floor_frac) > 0 ? `잔고가 시작의 ${rateKo(r.equity_floor_frac, 0)} 아래면 새 진입 멈춤` : "바닥선 없음 (잔고가 줄어도 새 진입)"} · 한 포지션 최대 ${usdKo(r.max_notional_usd)}`),
         h("li", null, r.ladder
-          ? `계단(순ROE, 모든 코인): ${rateKo(r.ladder.trigger, 0)}에 닿으면 손절을 ${rateKo(r.ladder.lock, 0)}로, 그 뒤 ${rateKo(r.ladder.step, 0)}마다 한 칸${r.ladder_every_s ? ` · ${fmt.int(r.ladder_every_s)}초마다 1분봉으로 옮김` : ""} · 반대 신호나 시간으로는 청산 안 함`
+          ? `계단(${ROE_KO[r.ladder_basis] || "순ROE"}, 모든 코인): ${rateKo(r.ladder.trigger, 0)}에 닿으면 손절을 ${rateKo(r.ladder.lock, 0)}로, 그 뒤 ${rateKo(r.ladder.step, 0)}마다 한 칸${r.ladder_every_s ? ` · ${fmt.int(r.ladder_every_s)}초마다 1분봉으로 옮김` : ""} · 반대 신호나 시간으로는 청산 안 함`
           : `계단: 시작 ROE에 닿으면 손절을 ROE ${pctKo(r.lock_roe, 0)}로, 그 뒤 같은 폭씩 · 반대 신호나 시간으로는 청산 안 함`),
         h("li", null, `진입 금지: ${(r.blocks || []).map((x) => `${x.ko} ${x.on ? "켬" : "끔"}`).join(" · ")}`),
         ok(r.start_equity) ? h("li", null, `시작 금액 ${usdKo(r.start_equity)}${r.mode === "paper" ? " (모의)" : ""}`) : null),
@@ -677,7 +681,7 @@ export function mixperfView(ctx, o = MIX_UI) {
         (r.coins || []).map((c) => h("div", {class: ["lmx-ctr", c.enabled && !c.off_at_start ? "" : "off"], role: "row"},
           h("b", {role: "rowheader"}, c.coin, !c.enabled ? " (꺼짐)" : c.off_at_start ? " (시작 때 꺼짐)" : ""),
           o.h1 ? h("span", {class: "num", role: "cell"}, fmt.num(c.h1_buf, 1)) : null, h("span", {class: "num", role: "cell"}, fmt.num(c.sl_atr, 1)),
-          h("span", {class: "num", role: "cell"}, r.ladder ? `${rateKo(r.ladder.trigger, 0)} → ${rateKo(r.ladder.lock, 0)} (순ROE)` : `${rateKo(c.roe_act, 0)} → ${rateKo(r.lock_roe, 0)}`), h("span", {class: "num", role: "cell"}, fmt.lev(c.leverage))))));
+          h("span", {class: "num", role: "cell"}, r.ladder ? `${rateKo(r.ladder.trigger, 0)} → ${rateKo(r.ladder.lock, 0)} (${ROE_KO[r.ladder_basis] || "순ROE"})` : `${rateKo(c.roe_act, 0)} → ${rateKo(r.lock_roe, 0)}`), h("span", {class: "num", role: "cell"}, fmt.lev(c.leverage))))));
   }
   function drawBand(an) {
     const b = an.band || {};
