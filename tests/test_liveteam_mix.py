@@ -65,10 +65,11 @@ def test_the_daily_meeting_its_packet_and_the_members_words(world):
     # the members' instructions: the three bots', read only, the decisions fixed, no promise, 20 trades
     for role in T.KIND_ROLES["daily"]:
         sp = T.prompt_for(role, pk)
-        assert sp == T.mix_prompt(role) and "바이비트 봇 · 친구 15분 봇 · 레인지 봇" in sp
+        # (owners 11-03: the two WOO X Pro bots, the 바이비트 봇 off)
+        assert sp == T.mix_prompt(role) and "레인지 봇 = WOO X Pro 1 · 친구 15분 봇 = WOO X Pro 2, 바이비트 봇은 꺼 둠" in sp
         assert "매매 권한이 없습니다" in sp and "약속하지 않습니다" in sp and f"{T.SMALL_N}번보다 적으면" in sp
     assert '"verdict"' in T.mix_prompt("lead") and '"luck"' in T.mix_prompt("risk")
-    assert T.kind_ko("daily", "daily:mix:2026-11-01") == "세 봇 하루 회의" and T.KIND_ROLES["daily"] == ("risk", "stats", "lead")
+    assert T.kind_ko("daily", "daily:mix:2026-11-01") == "실거래 봇 하루 회의" and T.KIND_ROLES["daily"] == ("risk", "stats", "lead")
 
 
 def test_the_loss_meeting_once_per_pair():
@@ -117,7 +118,7 @@ def test_held_with_a_fake_runner_quiet_without_trades(world, tmp_path):
     assert got["key"] not in [k for _kind, k, _f in T.due(conn, day_after)]
     quiet_day = {**src, "now": e0 + 3 * DAY + 10 * H}
     q = T.tick(conn, quiet_day, R.FakeRunner(), T.BUDGET_DEFAULT, dry=True, only="daily", mix=True)
-    assert q["state"] == "quiet" and "어제 세 봇이 닫은 거래가 없어" in q["why"]
+    assert q["state"] == "quiet" and "어제 실거래 봇들이 닫은 거래가 없어" in q["why"]
     # by hand: run daily --force (always the three bots')
     f = T.tick(conn, day_after, R.FakeRunner(), T.BUDGET_DEFAULT, dry=True, only="daily", force=True)
     assert f["key"].startswith("daily:mix:manual:") and f["state"] in ("done", "quiet")

@@ -138,7 +138,7 @@ MIX_DECISIONS = ("규칙은 고정: 숫자를 보고 바꿀지는 두 분이 정
 MIX_WORDS = ("pnl = 그 거래로 잔고가 바뀐 돈(봇 기록, 실거래는 거래소 잔고), None = 봇이 못 읽음(모름). roe = 증거금 대비. "
              "month.mult = 이번 달 시작 잔고 대비 지금 배수, vs_path = 목표 경로(매일 같은 %로 30일에 ×6)보다 앞(+)·뒤(−), "
              "need_daily = 남은 날 매일 필요한 %, pace_mult = 지금 속도면 30일 배수(가상), need_win = 지금 평균 이익·손실로 필요한 승률. "
-             "calendar = 이번 달 날마다 세 봇 손익 ÷ 그날 시작 잔고, over = 하루 필요 %를 넘은 날 수, dd = 한 봇 잔고가 이번 달 고점에서 "
+             "calendar = 이번 달 날마다 봇 합 손익 ÷ 그날 시작 잔고, over = 하루 필요 %를 넘은 날 수, dd = 한 봇 잔고가 이번 달 고점에서 "
              "가장 깊게 떨어진 비율, loss_run = 지금 이어지는 손실 거래 수. parity = 실거래 진입 중 모의 쌍둥이도 5분 안에 같은 코인·"
              "방향으로 들어간 비율.")
 VERDICTS = ("정상 범위", "지켜보기", "주의")
@@ -1078,7 +1078,7 @@ def kind_ko(kind: str, key: Optional[str] = None) -> str:
     if kind == "checkpoint" and k.startswith("checkpoint:trend"):
         return TREND_CHECK_KO
     if k.startswith(("loss:mix", "daily:mix", "weekly:mix")):
-        return "세 봇 " + KIND_KO.get(kind, kind)
+        return "실거래 봇 " + KIND_KO.get(kind, kind)          # (owners 11-03: two bots, the WOO X Pro accounts)
     if k.startswith("checkpoint:vwap-live"):
         return "VWAP 실거래 점검"
     if k.startswith(("loss:vwap", "checkpoint:vwap", "weekly:vwap:")) or (kind == "weekly" and k.endswith(":vwap")):
@@ -2091,14 +2091,14 @@ def packet_vwap(packet: Optional[dict]) -> bool:
 def mix_prompt(role: str) -> str:
     """The members' instructions in a meeting on the three live bots (owners 11-01)."""
     r = ROLES[role]
-    focus = {"risk": "세 봇의 잔고와 낙폭, 연속 손실, 열린 포지션의 손절까지 거리와 손절되면 줄어드는 돈, 실거래와 모의 쌍둥이가 같이 "
+    focus = {"risk": "실거래 봇들의 잔고와 낙폭, 연속 손실, 열린 포지션의 손절까지 거리와 손절되면 줄어드는 돈, 실거래와 모의 쌍둥이가 같이 "
                      "들어갔는지(parity)",
              "stats": f"이게 우연인지 아닌지: 거래 수({SMALL_N}번 전에는 판단하지 않음), 승률과 평균 이익·손실, 목표 ×6 경로와 비교, 모의 "
                       "쌍둥이와 비교. 다른 사람이 성급하게 결론 내면 반박하는 역할",
              "market": "어느 코인 · 롱/숏 · 한국 시간대에서 벌고 잃었는지, 봇이 적어 둔 청산 이유(exit)",
              "lead": r["focus"]}[role]
-    common = (f"당신은 두 분(코딩과 통계를 모르는 한국인 운영자)의 암호화폐 실거래 봇 셋(바이비트 봇 · 친구 15분 봇 · 레인지 봇, 계정마다 "
-              f"스스로 매매하고 옆에 모의 쌍둥이가 있음)을 지켜보는 '실거래 분석 팀'의 {r['title']} '{r['name']}'입니다. 맡은 것: {focus}.\n\n"
+    common = (f"당신은 두 분(코딩과 통계를 모르는 한국인 운영자)의 암호화폐 실거래 봇들(11/03부터 레인지 봇 = WOO X Pro 1 · 친구 15분 봇 "
+              f"= WOO X Pro 2, 바이비트 봇은 꺼 둠; 계정마다 스스로 매매하고 옆에 모의 쌍둥이가 있음)을 지켜보는 '실거래 분석 팀'의 {r['title']} '{r['name']}'입니다. 맡은 것: {focus}.\n\n"
               "지킬 것:\n"
               "1. 읽기만 합니다. 매매 권한이 없습니다. 진입·청산·크기·레버리지·코인을 바꾸라는 말은 하지 않습니다.\n"
               "2. 두 분의 결정(decisions)과 봇 규칙(rules)은 고정이라 바꾸자고 하지 않습니다. 증거금·레버리지·포지션 수를 늘리자는 말도 하지 "
@@ -2106,7 +2106,7 @@ def mix_prompt(role: str) -> str:
               "3. 패킷(JSON)에 있는 숫자만 씁니다. 없는 숫자는 '자료 없음'이라고 씁니다. 추측한 숫자를 만들지 않습니다(words가 뜻을 풀어 줌).\n"
               f"4. 한 봇의 거래가 {SMALL_N}번보다 적으면 그 봇에 결론을 내리지 말고 '아직 우연이 큰 단계'라고 분명히 씁니다.\n"
               "5. 목표(한 달 ×6)는 계산일 뿐 예측이 아닙니다. 이룰 수 있다고 약속하지 않습니다.\n"
-              "6. 모의(연습 돈)와 실거래(진짜 돈)를 섞지 않습니다. 세 봇은 계정이 달라 봇마다 따로 말합니다.\n"
+              "6. 모의(연습 돈)와 실거래(진짜 돈)를 섞지 않습니다. 실거래 봇들은 계정이 달라 봇마다 따로 말합니다.\n"
               "7. 쉬운 한국어로, 짧게. 전문용어는 풀어서.\n")
     if role == "lead":
         return common + ("8. 팀원들의 말(team)을 읽고, 숫자와 맞지 않는 말은 고칩니다. 아이디어는 '시험해 볼 가설'로만 씁니다: 모의 쌍둥이나 "
@@ -2383,7 +2383,7 @@ def tick(conn, src: dict, runner, budget: dict, notifier=None, dry: bool = False
         if kind == "weekly" and not week_has_trades(packet):
             return quiet(conn, kind, key, now, "지난주 닫힌 거래가 없어 AI 회의 없이 넘어갑니다")
         if kind == "daily" and not packet.get("trades"):
-            return quiet(conn, kind, key, now, "어제 세 봇이 닫은 거래가 없어 AI 회의 없이 넘어가요")
+            return quiet(conn, kind, key, now, "어제 실거래 봇들이 닫은 거래가 없어 AI 회의 없이 넘어가요")
         return hold(conn, kind, key, packet, runner, now, budget, notifier=notifier, dry=dry, model=model, **more)
     return None
 

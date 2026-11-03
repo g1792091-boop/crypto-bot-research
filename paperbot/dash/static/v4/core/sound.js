@@ -89,7 +89,7 @@ export const EVENTS = [["c_entry", "진입", "우리 계좌(기존 36·5분봉·
   ["c_ms", "기념일", "D+10 · D+20 · 판정 날 (한 번씩)"],
   // 실거래 (#/livebots, owners 10/19): the live bots' real records, while the 실거래 screen is open; each borrows a motif (LIVE_MOTIF)
   // (owners 11-01: the three live bots' entries and exits sound on 관제실 too: screens/livebots-deck.js liveSoundsOf)
-  ["lv_entry", "실거래 진입", "세 봇(바이비트 봇 · 친구 15분 봇 · 레인지 봇)이 새로 들어갈 때 (실거래 사이트를 열어 둔 동안)"],
+  ["lv_entry", "실거래 진입", "실거래 봇(레인지 봇 · 친구 15분 봇)이 새로 들어갈 때 (실거래 사이트를 열어 둔 동안)"],
   ["lv_tp", "실거래 익절", "실거래 화면의 계좌 하나가 잠금선에서 이익으로 닫힐 때"], ["lv_sl", "실거래 손절", "실거래 화면의 계좌 하나가 손절선에서 닫힐 때"],
   ["lv_alert", "신호등 빨강 · 멈춤", "실행기 신호등이 빨강이 되거나 실행기가 멈출 때"],
   ["layer", "바탕음", "바이낸스 실제 체결 · 딥시크·동전 봇 체결"]];
