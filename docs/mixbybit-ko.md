@@ -369,8 +369,8 @@ sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
 
 | 봇 | 계정 | 추세 (30분봉) | 진입 (15분봉) | 코인 |
 |---|---|---|---|---|
-| 레인지 봇 | WOO X Pro 1 | 추세 MACD 히스토그램 0선 위 상승 · 아래 하락 | OBV 히스토그램 0선 아래 양봉 전환 롱 · 0선 위 음봉 전환 숏 (12장의 방식, `docs/range-bot-ko.md` 맨 앞) | BTC · SOL · ZEC · DOGE |
-| 친구 15분 봇 | **투비트** (11/03, WOO X Pro 2 계정이 없어져서: `docs/mixchop-ko.md` 19장) | 같음 | 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장) | BTC · XRP · BCH · ZEC · DOGE |
+| 레인지 봇 | WOO X Pro 1 | 추세 MACD 히스토그램 0선 위 상승 · 아래 하락 | OBV 히스토그램 0선 아래 양봉 전환 롱 · 0선 위 음봉 전환 숏 (12장의 방식, `docs/range-bot-ko.md` 맨 앞) | BTC · SOL · ZEC (11/03 저녁 DOGE 뺌) |
+| 친구 15분 봇 | **투비트** (11/03, WOO X Pro 2 계정이 없어져서: `docs/mixchop-ko.md` 19장) | 같음 | 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장) | BTC · XRP · ZEC · DOGE (11/03 저녁 BCH 뺌) |
 | 바이비트 봇 | 바이비트 | — | **꺼 둠** | — |
 
 - 바이비트 봇의 두 서비스(실거래 `paperbot-mixbybit`, 모의 `paperbot-mixbybit-paper`)를 `disable --now`로 끄면:

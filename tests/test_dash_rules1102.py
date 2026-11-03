@@ -180,11 +180,45 @@ def test_a_switched_off_bot_leaves_the_bot_screens(tmp_path, monkeypatch):
 
 def test_the_deck_reads_the_two_bots_coins():
     """Owners 11-03 ("woo x pro 1 거래소는 이더 리플 bch 삭제하고 비트 추가해주고", "woox2에 솔라나 이더만 삭제하고 비트
-    추가해줘"): 관제실's coins are the two WOO X Pro bots' together, BTC first; ETH left both."""
+    추가해줘", then "레인지봇 도지 bch 이더 리플 삭제해주고 친구봇 bch 삭제해줘"): 관제실's coins are the two bots' together, BTC
+    first; ETH and BCH left both."""
     import json as _json
     from paperbot.dash.more import livedeck as D
     deploy = os.path.join(ROOT, "deploy")
     coins = {n: list(_json.load(open(os.path.join(deploy, f"{n}.live.json"), encoding="utf-8"))["coins"]) for n in ("mixrange", "mixchop")}
-    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT", "DOGEUSDT"],
-                     "mixchop": ["BTCUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]}
-    assert set(D.COINS) == set(coins["mixrange"]) | set(coins["mixchop"]) and D.COINS[0] == "BTCUSDT" and "ETHUSDT" not in D.COINS
+    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT"], "mixchop": ["BTCUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT"]}
+    assert set(D.COINS) == set(coins["mixrange"]) | set(coins["mixchop"]) and D.COINS[0] == "BTCUSDT"
+    assert "ETHUSDT" not in D.COINS and "BCHUSDT" not in D.COINS and D.COINS == ("BTCUSDT", "SOLUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT")
+    for n in ("mixrange", "mixchop"):                       # the paper twins trade the same coins
+        paper = list(_json.load(open(os.path.join(deploy, f"{n}.paper.json"), encoding="utf-8"))["coins"])
+        assert paper == coins[n], n
+
+
+def test_a_position_held_in_a_coin_taken_out_is_still_guarded(tmp_path):
+    """Owners 11-03, last: DOGE left the 레인지 봇. A DOGE position it held when the new config went in is still its own
+    after the restart: its stop put back when missing, no "unknown position" halt; only new DOGE entries stop."""
+    import json as _json
+    from paperbot import mixchop as M
+    from tests.test_mixchop import FakeWoo
+    with open(os.path.join(ROOT, "deploy", "mixrange.live.json"), encoding="utf-8") as fh:
+        d = _json.load(fh)
+    d.update(state=str(tmp_path / "s.json"), log=str(tmp_path / "l.jsonl"), kill_file=str(tmp_path / "STOP"),
+             own_stop_file=str(tmp_path / "OWN"), telegram=False)
+    (tmp_path / "c.json").write_text(_json.dumps(d), encoding="utf-8")
+    cfg = M.load_config(str(tmp_path / "c.json"))
+    assert "DOGEUSDT" not in cfg.symbols
+    fake = FakeWoo()
+    fake.pos["DOGEUSDT"], fake.entry["DOGEUSDT"] = 0.12, 100.0     # (the fake's prices: 100, its tick 0.01)
+    pos = M.Position(symbol="DOGEUSDT", side=1, qty=0.12, entry=100.0, stop_dist=1.0, stop=99.0, best=100.0, step=0,
+                     opened_ms=1, signal_close_ms=1, signal_close=100.0, last_bar_ms=1, leverage=40, equity_before=50.0)
+    M.write_state(cfg.state, {"position": M.asdict(pos), "start_equity": 50.0, "last_close_ms": 1})
+    msgs = []
+    bot = M.Bot(cfg, M.WooBroker(fake, cfg.coins), lambda s, tf, n: [], lambda: 2, notify=lambda lv, t: msgs.append(t),
+                sleep=lambda s: None)
+    bot.start()
+    assert bot.pos is not None and bot.pos.symbol == "DOGEUSDT"
+    stops = fake.open_algo_orders("DOGEUSDT")
+    assert len(stops) == 1 and stops[0]["triggerPrice"] == pytest.approx(99.0)
+    (start,) = [t for t in msgs if "▶️ 시작" in t]
+    assert "보유 중: DOGE 롱" in start and "코인 BTC · SOL · ZEC\n" in start and not any("모르는 포지션" in t for t in msgs)
+    assert any("DOGE 손절이 없거나 모자라 다시 걸었습니다" in t for t in msgs)

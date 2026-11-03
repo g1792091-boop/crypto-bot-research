@@ -2,7 +2,8 @@
 
 두 분(11/03): "자동매매봇 거래소는 총 2개 거래소를 쓸꺼야", "바이비트말고 woox pro1 거래소랑 친구봇 woox pro2 이렇게 쓸꺼야",
 "PRO1 OBV · PRO2 3합", "woo x pro 1 거래소는 이더 리플 bch 삭제하고 비트 추가해주고", "woox2에 솔라나 이더만 삭제하고 비트 추가해줘",
-"각 봇들 매매법도 최종 정리해줘", 그리고 "Woo x pro2 거래소 아이디를 실수로 탈퇴해서 woo x pro2 친구봇 거래소를 투빗으로 해줘".
+"각 봇들 매매법도 최종 정리해줘", "Woo x pro2 거래소 아이디를 실수로 탈퇴해서 woo x pro2 친구봇 거래소를 투빗으로 해줘",
+그리고 "레인지봇 도지 bch 이더 리플 삭제해주고 친구봇 bch 삭제해줘".
 
 자동매매는 **WOO X Pro 1**(레인지 봇)과 **투비트**(친구 15분 봇) 두 곳만 합니다. 바이비트 봇은 꺼 둡니다(`docs/mixbybit-ko.md` 13장). 게이트 봇은 친구가 직접 진입한
 포지션에 손절과 계단만 거는 봇이라 자동매매가 아닙니다(`docs/gate-bot-ko.md`). 게이트 봇의 계단도 11/03부터 두 봇과 같은 기준
@@ -14,7 +15,7 @@
 |---|---|---|
 | 계정 | **WOO X Pro 1** (첫 계정) | **투비트** (11/03부터, WOO X Pro 2 계정이 없어져서) |
 | 키 파일 | `/etc/paperbot/executor.env` (예전과 같음) | `/etc/paperbot/executor-toobit.env` (예전 투비트 실행기의 파일) |
-| 코인 (같은 봉이면 이 순서) | **BTC → SOL → ZEC → DOGE** | **BTC → XRP → BCH → ZEC → DOGE** |
+| 코인 (같은 봉이면 이 순서) | **BTC → SOL → ZEC** (11/03 저녁 DOGE 뺌) | **BTC → XRP → ZEC → DOGE** (11/03 저녁 BCH 뺌) |
 | 레버리지 | 40배 (ZEC만 20배) | 40배 (ZEC만 20배) |
 | 추세 | 30분봉 추세 MACD 히스토그램 | 30분봉 추세 MACD 히스토그램 |
 | 진입 신호 | 15분봉 **OBV 히스토그램 전환** | 15분봉 **3합 히스토그램 0선 돌파** |
@@ -72,9 +73,59 @@
   - 근거 줄 예(레인지 봇): `근거: OBV 히스토그램 0선 아래 양봉 전환(-2.00) · 추세 MACD 30분 히스토그램 0선 위 상승(+1.00)`
   - 근거 줄 예(친구 15분 봇): `근거: 3합 히스토그램 0선 위로 돌파(히스토그램 2.5) · 추세 MACD 30분 히스토그램 0선 위 상승(+3.21)`
 - 사이트 메뉴: 지금(관제실 · 회의실 · 친구 추세판) · 친구 15분 봇 · 레인지 봇 · 게이트 봇. 관제실 코인은 두 봇 코인을 합친
-  BTC · SOL · XRP · BCH · ZEC · DOGE입니다.
+  BTC · SOL · XRP · ZEC · DOGE입니다.
 
 ## 6. 서버 순서
 
 `docs/mixbybit-ko.md` 13-1(코드 받기 · 바이비트 봇 끄기) → `docs/mixchop-ko.md` 19-1(친구 15분 봇을 투비트로) → `docs/range-bot-ko.md` 맨 앞의
 '바꾸는 순서'(레인지 봇). 봇마다 포지션이 없을 때 하는 것을 권합니다. 다시 켜도 들고 있던 포지션은 이어받아 손절과 계단을 계속 봅니다.
+
+## 7. 11/03 저녁: 코인 줄이기
+
+두 분: "레인지봇 도지 bch 이더 리플 삭제해주고 친구봇 bch 삭제해줘".
+
+| 봇 | 전 | 지금 |
+|---|---|---|
+| 레인지 봇 (WOO X Pro 1) | BTC · SOL · ZEC · DOGE | **BTC · SOL · ZEC** (ETH · XRP · BCH는 원래 없었고, DOGE를 뺌) |
+| 친구 15분 봇 (투비트) | BTC · XRP · BCH · ZEC · DOGE | **BTC · XRP · ZEC · DOGE** |
+
+- 매매법 · 레버리지(ZEC 20배, 나머지 40배) · 손절 · 계단은 그대로입니다.
+- 뺀 코인에 포지션을 들고 있을 때 다시 켜도, 봇은 그 포지션을 끝까지 지킵니다(손절 · 계단 · 청산 알림). 그 코인에 새로 들어가지만 않습니다.
+- 모의 쌍둥이도 같은 코인으로 바뀝니다.
+
+### 서버 순서 (두 분이 직접, 한 단계씩)
+
+1. 코드 받기
+   ```
+   cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+   ```
+2. 서버 설정과 비교 (`coins`에서 뺀 코인만 다르면 3번으로)
+   ```
+   sudo diff /etc/paperbot/mixrange.json deploy/mixrange.live.json
+   sudo diff /etc/paperbot/mixchop.json deploy/mixchop.live.json
+   ```
+3. 옛 설정 보관 후 새 설정 넣기 (실거래 · 모의 둘 다)
+   ```
+   sudo cp -p /etc/paperbot/mixrange.json /etc/paperbot/mixrange.json.before-coins
+   sudo cp -p /etc/paperbot/mixrange-paper.json /etc/paperbot/mixrange-paper.json.before-coins
+   sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-coins
+   sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-coins
+   sudo install -o root -g paperbot -m 640 deploy/mixrange.live.json /etc/paperbot/mixrange.json
+   sudo install -o root -g paperbot -m 640 deploy/mixrange.paper.json /etc/paperbot/mixrange-paper.json
+   sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   ```
+4. 점검 (읽기만): 레인지 봇은 BTC · SOL · ZEC 세 줄, 친구 15분 봇은 BTC · XRP · ZEC · DOGE 네 줄이 ✔로 나와야 합니다.
+   ```
+   sudo deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixrange.json
+   sudo deploy/paperbot-exec.sh --keys toobit mixchop check --config /etc/paperbot/mixchop.json
+   ```
+5. 다시 켜기
+   ```
+   sudo systemctl restart paperbot-mixrange paperbot-mixrange-paper paperbot-mixchop paperbot-mixchop-paper
+   sudo journalctl -u paperbot-mixrange -n 4 --no-pager
+   sudo journalctl -u paperbot-mixchop -n 4 --no-pager
+   ```
+   - 시작 알림의 줄이 `코인 BTC · SOL · ZEC`(레인지 봇), `코인 BTC · XRP · ZEC · DOGE`(친구 15분 봇)여야 합니다.
+
+되돌리기: 각 `….before-coins` 파일을 원래 이름으로 `sudo cp -p` 한 뒤 5번.

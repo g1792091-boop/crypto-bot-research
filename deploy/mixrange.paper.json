@@ -38,9 +38,6 @@
   },
   "ZECUSDT": {
    "leverage": 20
-  },
-  "DOGEUSDT": {
-   "leverage": 40
   }
  }
 }

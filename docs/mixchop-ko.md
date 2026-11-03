@@ -691,7 +691,7 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로" (보내 주신 `추세 MACD`, `3합 히스토그램` 파인 스크립트).
 11/03: 자동매매는 WOO X Pro 두 계정만이고(바이비트 봇은 끔), 3합 히스토그램은 **이 봇(WOO X Pro 2)만** 씁니다. 레인지 봇(WOO X Pro 1)은
 OBV 히스토그램 전환입니다(`docs/range-bot-ko.md` 맨 앞). 코인은 11/03부터 **BTC → XRP → BCH → ZEC → DOGE** ("woox2에 솔라나 이더만
-삭제하고 비트 추가해줘", BTC 40배, ZEC 20배). 계단 익절은 11/03부터 **거래소 ROE(수수료 전) +10%→+8%, 그 뒤 2%마다**
+삭제하고 비트 추가해줘", BTC 40배, ZEC 20배), 11/03 저녁부터 **BTC → XRP → ZEC → DOGE** ("친구봇 bch 삭제해줘": `docs/live-bots-ko.md` 7장). 계단 익절은 11/03부터 **거래소 ROE(수수료 전) +10%→+8%, 그 뒤 2%마다**
 (`"ladder": {"trigger": 10, "lock": 8, "step": 2}`, `"ladder_basis": "gross"`; 손절은 그대로).
 
 | 항목 | 내용 |
@@ -748,7 +748,7 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 | 서비스 | `paperbot-mixchop`이 이 키 파일을 읽습니다. 예전 투비트 실행기(`paperbot-executor-toobit`)와는 같이 돌지 않습니다(`Conflicts=`) |
 | 수수료 | 투비트 시장가 0.06% (`"taker_fee": 0.0006`, 모의 쌍둥이 계산용). 계단은 거래소 ROE(수수료 전)라 수수료와 상관없이 +10%→+8%, 그 뒤 2%마다 |
 | 시작할 때 | 코인마다 한쪽만 있는지 확인하고(롱·숏 동시면 시작 안 함), 코인마다 격리 마진 + 레버리지(40배, ZEC 20배)를 맞춰 다시 읽어 봅니다. 못 맞춘 코인은 `(꺼짐)` |
-| 그대로 | 매매법(3합 히스토그램 0선 돌파 · 30분봉 추세 MACD), 코인(BTC → XRP → BCH → ZEC → DOGE), 증거금 40%, 손절 15분봉 ATR × 3, 계단, 1포지션, 진입 금지 시간 |
+| 그대로 | 매매법(3합 히스토그램 0선 돌파 · 30분봉 추세 MACD), 코인(BTC → XRP → BCH → ZEC → DOGE; 11/03 저녁 BCH 뺌, `docs/live-bots-ko.md` 7장), 증거금 40%, 손절 15분봉 ATR × 3, 계단, 1포지션, 진입 금지 시간 |
 | 청산가 확인 | 투비트는 유지 증거금 구간을 주지 않아서, 봇 자체 확인(손절 거리가 40배는 2.0%, 20배는 4.5% 안쪽)만 합니다 |
 
 - 사이트와 텔레그램의 이 봇 이름 옆 거래소는 "투비트"입니다(봇별 화면, 관제실, 아침 점검 · 손실 카드의 "투비트 앱에서 확인").

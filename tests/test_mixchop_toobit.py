@@ -64,7 +64,7 @@ def test_the_deploy_configs_trade_toobit():
         cfg = M.load_config(str(DEPLOY / name))
         assert (cfg.exchange, cfg.mode, cfg.name, M.EXCHANGES[cfg.exchange]) == ("toobit", mode, "친구 15분 봇", "투비트"), name
         assert cfg.taker_fee == 0.0006 and cfg.rules == ("h3x",) and cfg.trend == "macd" and cfg.tf == "15m", name
-        assert cfg.symbols == ["BTCUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"], name
+        assert cfg.symbols == ["BTCUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT"], name           # (11-03, last: BCH out)
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross", name
     unit = (DEPLOY / "paperbot-mixchop.service").read_text(encoding="utf-8")
     assert "EnvironmentFile=/etc/paperbot/executor-toobit.env\n" in unit and "executor-wooxpro2.env\n" not in unit

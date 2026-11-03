@@ -40,8 +40,9 @@ DEPLOY = ROOT / "deploy"
 T0 = 1_800_000_000_000 - 1_800_000_000_000 % M.MIN30
 MIN, HOUR = 60_000, 3_600_000
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
-PRO1 = ["BTCUSDT", "SOLUSDT", "ZECUSDT", "DOGEUSDT"]                     # owners 11-03: the 레인지 봇 (WOO X Pro 1)
-PRO2 = ["BTCUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]          # owners 11-03: the 친구 15분 봇 (WOO X Pro 2)
+# owners 11-03, last ("레인지봇 도지 bch 이더 리플 삭제해주고 친구봇 bch 삭제해줘"); before: PRO1 + DOGE, PRO2 + BCH
+PRO1 = ["BTCUSDT", "SOLUSDT", "ZECUSDT"]                                 # the 레인지 봇 (WOO X Pro 1)
+PRO2 = ["BTCUSDT", "XRPUSDT", "ZECUSDT", "DOGEUSDT"]                     # the 친구 15분 봇 (투비트 since 11-03)
 
 
 def _roc(c, n):
