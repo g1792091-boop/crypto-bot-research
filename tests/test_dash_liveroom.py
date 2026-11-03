@@ -272,7 +272,7 @@ console.log(JSON.stringify({
     ag = out["agenda"]
     assert [x["n"] for x in ag] == ["목표", "①", "②", "③", "③", "④", "⑤"]
     assert ag[0]["a"] == "예: $100로 시작하면 30일 뒤 $600 (×6, 이익 +500%)"
-    assert ag[1]["a"] == "세 봇 합 ×1.08 · 오늘 목표 경로 ×1.04 · 경로보다 +4.3%" and ag[1]["tone"] == "up"
+    assert ag[1]["a"] == "봇 합 ×1.08 · 오늘 목표 경로 ×1.04 · 경로보다 +4.3%" and ag[1]["tone"] == "up"
     assert ag[2]["a"] == "남은 29.4일 동안 매일 +6.0%씩 늘어야 ×6"
     assert ag[3] == {"n": "③", "q": "바이비트 봇", "a": "이번 달 거래가 없어요", "tone": "muted"}
     assert ag[4]["a"] == "×1.08 (경로보다 +4.3%) · 지금 속도면 30일 ×1.42 (가상) · 하루 진입 0.6번 · 승률 50% · 닫힌 거래 2번"
@@ -411,7 +411,7 @@ def test_the_live_site_takes_the_palette_of_the_owners_pictures():
 
 def test_the_tab_and_the_menu():
     routes, lb = _read(os.path.join(V4, "core", "routes.js")), _read(os.path.join(SCREENS, "livebots.js"))
-    assert '{id: "now", ko: "지금", screens: ["deck", "room"]}' in routes                  # (owners 11-01: 지금 is 관제실 and 회의실)
+    assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes      # (owners 11-01: 지금 is 관제실 and 회의실; 11-03: + 친구 추세판)
     assert re.search(r'room: \{ko: "회의실", group: "now"', routes) and "  room: () => [" in routes
     assert 'import {roomView} from "./livebots-room.js";' in lb
     assert '{id: "room", label: "회의실", make: (ctx) => roomView(ctx), own: true, bare: true}' in lb

@@ -76,7 +76,7 @@ paper_db와, 실행기가 시작할 때마다 남기는 기록(start 이벤트�
 시작 기록 설정에 ``range``가 있는지로만 알아요(``range_bot``). 그 봇이 없으면 페이퍼 하나 · 둘인 화면과 답은 예전 그대로예요.
 
 레인지 봇이 스스로 매매 (owners 10-31 밤, docs/range-bot-ko.md 0장): 레인지 봇이 첫 번째 WOO X Pro 계정을 믹스 봇
-(paperbot/mixchop.py, 11/02부터 추세 MACD 30분 + 3합 히스토그램 0선 돌파, 15분봉)으로 직접 거래해요. 그 서버 설정(PAPERBOT_MIXRANGE_CONFIG,
+(paperbot/mixchop.py, 11/03부터 추세 MACD 30분 + OBV 히스토그램 전환, 15분봉)으로 직접 거래해요. 그 서버 설정(PAPERBOT_MIXRANGE_CONFIG,
 /etc/paperbot/mixrange.json)이 있으면 "mexc" 실행기 칸은 바이비트 칸처럼 모든 화면과 답에서 빠지고(``replaced``), 옛 레인지 봇
 페이퍼(range.db)는 페이지의 페이퍼 봇이 아니에요(``range_moved``). 그 파일이 없으면 모든 답이 예전 그대로예요.
 
@@ -299,8 +299,10 @@ def replaced(p: dict) -> list:
 
 
 def replaced_out(p: dict) -> list:
-    """The summary's ``replaced``: [{id, bot, name_ko, account_ko, unit, api, tab}] (none: [])."""
-    return [{"id": ex, **{k: v for k, v in REPLACED[ex].items() if k != "key"}} for ex in replaced(p)]
+    """The summary's ``replaced``: [{id, bot, name_ko, account_ko, unit, api, tab, off}] (none: []); ``off``: that bot is
+    switched off for good (mix_off, owners 11-03: the 바이비트 봇), the real-money strip leaves it out."""
+    return [{"id": ex, **{k: v for k, v in REPLACED[ex].items() if k != "key"}, "off": mix_off(REPLACED[ex]["bot"])}
+            for ex in replaced(p)]
 
 
 def range_moved(p: dict) -> bool:
@@ -321,7 +323,24 @@ _off_cache: dict = {}
 def switched_off_slot(slot: str) -> bool:
     """Is an optional executor's unit switched off for good (disabled and not running)? Read at most every OFF_TTL_S;
     False when systemctl cannot say (a test machine) or on any error (the slot stays as before)."""
-    unit = OPTIONAL_UNITS.get(slot)
+    return unit_off(OPTIONAL_UNITS.get(slot))
+
+
+# owners 11-03 ("자동매매봇 거래소는 총 2개" · "바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): a mix bot whose two units
+# (the live bot and its paper twin) a person switched off for good (``systemctl disable --now``) leaves 관제실, 회의실, the
+# 분석팀, 친구 추세판 and the real-money strip (mix_off); its own screen and its record stay. Turned on again: it is back.
+MIX_UNITS = {"bybit": ("paperbot-mixbybit", "paperbot-mixbybit-paper"), "mix": ("paperbot-mixchop", "paperbot-mixchop-paper"),
+             "range": ("paperbot-mixrange", "paperbot-mixrange-paper")}
+
+
+def mix_off(bot: str) -> bool:
+    """Are both units of a mix bot (MIX_UNITS) switched off for good? False when systemctl cannot say (a test machine)."""
+    units = MIX_UNITS.get(bot)
+    return bool(units) and all(unit_off(u) for u in units)
+
+
+def unit_off(unit: Optional[str]) -> bool:
+    """A unit switched off for good (livecheck.switched_off), read at most every OFF_TTL_S; False on any error."""
     if not unit:
         return False
     now = time.monotonic()

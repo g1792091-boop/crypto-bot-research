@@ -11,7 +11,8 @@ MACD.pine), WOO X Pro 1 · 2: "30분봉 추세 macd가 0선 위에 있으면 상
   colour (the yellow bars too), the OBV4 MACD's AC histogram and its colour turns, the 15종 MACD's fifteen inputs and the
   3합 histogram and its 0 cross, each against the script's formulas written out again here; a read on the history up to
   a bar is the pane at that bar; 1,499 bars read what a longer history reads;
-- mixchop: trend "macd", rules "o4h" (the 바이비트 봇) and "h3x" (the 친구 15분 봇 and the 레인지 봇), the words, the board,
+- mixchop: trend "macd", rules "o4h" (the 바이비트 봇; owners 11-03: the 레인지 봇 on WOO X Pro 1, the 바이비트 봇 off) and
+  "h3x" (the 친구 15분 봇 on WOO X Pro 2), the words, the board,
   the trend of the last closed 30m bar, the bot's loop, the signals listing, the check's and the start message's words;
 - mixcheck: the replay and the morning's counts;
 - the six deploy configs."""
@@ -299,7 +300,7 @@ def test_the_real_indicators_through_the_bot_and_the_30m_trend():
 
 
 def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
-    cfg = M.load_config(str(DEPLOY / "mixrange.paper.json"))
+    cfg = M.load_config(str(DEPLOY / "mixchop.paper.json"))
     r15, r30 = _pair(3000, 82)
     b = M.bars_frame(r15, M.MIN15, T0).tail(1499).reset_index(drop=True)
     tb = M.bars_frame(r30, M.MIN30, T0).tail(1499).reset_index(drop=True)
@@ -332,17 +333,17 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     src = {"15m": r15, "30m": r30}
     monkeypatch.setattr(M, "binance_fetch", lambda base: lambda s, tf, n: [r for r in src[tf] if r[0] < T0][-n:])
     monkeypatch.setattr(M.time, "time", lambda: T0 / 1000 + 60)
-    assert M.cmd_signals(argparse.Namespace(config=str(DEPLOY / "mixrange.paper.json"), n=3)) == 0
+    assert M.cmd_signals(argparse.Namespace(config=str(DEPLOY / "mixchop.paper.json"), n=3)) == 0
     out = capsys.readouterr().out
     assert out.count("  -- 3합 히스토그램 0선 돌파 (추세 30분: 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 같음))") == 6
     # the check's rules line
     monkeypatch.setattr(M, "public_spec", lambda cfg: lambda sym: {"status": "Trading", "max_leverage": 50.0, "min_qty": 0.001,
                                                                   "qty_step": 0.001, "min_notional": 5.0, "tick": 0.01})
-    assert M.cmd_check(argparse.Namespace(config=str(DEPLOY / "mixrange.paper.json"))) == 0
+    assert M.cmd_check(argparse.Namespace(config=str(DEPLOY / "mixchop.paper.json"))) == 0
     assert ("매매법·손절: 3합 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 MACD 히스토그램"
             "(0선 위 상승 · 0선 아래 하락)") in capsys.readouterr().out.splitlines()
     # the start message says the trend
-    d = json.loads((DEPLOY / "mixrange.paper.json").read_text(encoding="utf-8"))
+    d = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
     d.update(state=str(tmp_path / "s.json"), log=str(tmp_path / "l.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"))
     p = tmp_path / "c.json"
@@ -393,8 +394,8 @@ def test_a_15m_close_in_the_loop_logs_the_turn_and_enters(tmp_path, monkeypatch)
 
 # ====================================================================== mixcheck
 def test_the_morning_replay_counts_the_new_signals():
-    for name, rule, key, words in (("mixrange.paper.json", "h3x", "h3s", "3합 히스토그램 0선 돌파"),
-                                   ("mixbybit.paper.json", "o4h", "o4s", "OBV 히스토그램 양봉·음봉 전환")):
+    for name, rule, key, words in (("mixchop.paper.json", "h3x", "h3s", "3합 히스토그램 0선 돌파"),
+                                   ("mixrange.paper.json", "o4h", "o4s", "OBV 히스토그램 양봉·음봉 전환")):
         cfg = M.load_config(str(DEPLOY / name))
         cfg.coins = cfg.coins[:1]
         r15, r30 = _pair(4000, 83)
@@ -427,7 +428,8 @@ def test_the_morning_replay_counts_the_new_signals():
 def test_three_bots_on_the_trend_macd():
     bots = {"bybit": ("mixbybit.live.json", "mixbybit.paper.json", ("o4h",)),
             "friend": ("mixchop.live.json", "mixchop.paper.json", ("h3x",)),
-            "range": ("mixrange.live.json", "mixrange.paper.json", ("h3x",))}
+            # owners 11-03 ("PRO1 OBV · PRO2 3합"): the 레인지 봇 (WOO X Pro 1) on the OBV histogram's turn
+            "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",))}
     for key, (live, paper, rules) in bots.items():
         for name, mode in ((live, "mainnet"), (paper, "paper")):
             cfg = M.load_config(str(DEPLOY / name))
@@ -439,7 +441,8 @@ def test_three_bots_on_the_trend_macd():
             assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in SIX}, "ZECUSDT": 20}
     by = M.load_config(str(DEPLOY / "mixbybit.live.json"))
     assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in M.plan_words(by)
-    assert "매매법 3합 히스토그램 0선 돌파" in M.plan_words(M.load_config(str(DEPLOY / "mixrange.live.json")))
+    assert "매매법 3합 히스토그램 0선 돌파" in M.plan_words(M.load_config(str(DEPLOY / "mixchop.live.json")))
+    assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(DEPLOY / "mixrange.live.json")))
     # a trend that is not one of the four is refused, the new one named
     p = Path(os.environ.get("TMPDIR", "/tmp")) / "bad-trend-1102.json"
     p.write_text(json.dumps({**json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8")), "trend": "macd2"}),

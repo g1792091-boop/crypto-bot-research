@@ -174,7 +174,8 @@ export function realLine(d, o = {}) {
   const ids = (o.only || execIds(d)).map((id) => ({id, ...realOf(d ? by[id] || {state: "missing"} : null)}));
   const sep = () => h("span", {class: "lb-real-s", "aria-hidden": "true"}, "·");
   // owners 10-31 night: no executor at all once mix bots took every slot: the accounts and the bots that trade them
-  const took = !o.only && d && !ids.length ? (d.replaced || []).map((r) => `${r.account_ko} · ${r.name_ko}`).join(" · ") : "";
+  // (owners 11-03: a bot switched off for good, ``off``, the 바이비트 봇, is not one of them)
+  const took = !o.only && d && !ids.length ? (d.replaced || []).filter((r) => r && !r.off).map((r) => `${r.account_ko} · ${r.name_ko}`).join(" · ") : "";
   if ((o.only && !ids.length) || took) {
     return [h("b", {class: "lb-real-k"}, "진짜 돈"), sep(), h("span", {class: "lb-real-a unk"}, took ? `${took} (스스로 매매 · 잔고는 각 봇 화면)` : o.none || "따라가는 실행기 없음"),
       sep(), h("span", {class: "lb-real-v"}, "보기만 하는 화면(주문 버튼 없음)")];

@@ -504,7 +504,20 @@ for u in paperbot-mixbybitcheck.service paperbot-mixbybitcheck.timer paperbot-mi
   install -m 644 "$APP/deploy/$u" /etc/systemd/system/$u
 done
 systemctl daemon-reload
+# owners 11-03 ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2", docs/mixbybit-ko.md 13장): once a person switched the
+# 바이비트 봇 off (both its units neither enabled nor running: systemctl disable --now paperbot-mixbybit
+# paperbot-mixbybit-paper) its checks are switched off here too, never on again by this script (no morning message about a
+# bot that is off on purpose); the bot switched on again: its checks are switched on again by the next run.
+bybit_off=1
+for u in paperbot-mixbybit.service paperbot-mixbybit-paper.service; do
+  if systemctl is-enabled --quiet "$u" 2>/dev/null || systemctl is-active --quiet "$u" 2>/dev/null; then bybit_off=0; fi
+done
 for t in paperbot-mixbybitcheck.timer paperbot-mixbybitcheck-pass.timer; do
+  if [ "$bybit_off" = 1 ]; then
+    systemctl disable --now "$t" >/dev/null 2>&1 || true
+    echo "$t: 꺼 둠 (바이비트 봇이 꺼져 있어서 · 봇을 다시 켜면 다음 install.sh에서 다시 켜져요)"
+    continue
+  fi
   systemctl enable --now "$t" >/dev/null 2>&1 || echo "$t could not be enabled: sudo systemctl enable --now $t"
   echo "$t: 자동 시작 $(systemctl is-enabled "$t" 2>/dev/null || echo 알 수 없음), 지금 $(systemctl is-active "$t" 2>/dev/null || echo 알 수 없음)"
 done

@@ -689,7 +689,8 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 두 분(11/02): "30분봉 추세 15분봉은 진입 바꾸지말고 30분봉 추세인데 추세를 macd 히스토그램으로 사용 0선 위에 있으면 상승 0선 아래에
 있으면 하락으로", "WOOX PRO 1,2 3합 히스토그램도 비슷한 방식이지만 이거는 30분봉 추세 macd가 0선 위에 있으면 상승 추세로 보고 15분봉
 3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로" (보내 주신 `추세 MACD`, `3합 히스토그램` 파인 스크립트).
-레인지 봇(WOO X Pro 첫 계정)도 같은 매매법입니다(`docs/range-bot-ko.md` 맨 앞).
+11/03: 자동매매는 WOO X Pro 두 계정만이고(바이비트 봇은 끔), 3합 히스토그램은 **이 봇(WOO X Pro 2)만** 씁니다. 레인지 봇(WOO X Pro 1)은
+OBV 히스토그램 전환입니다(`docs/range-bot-ko.md` 맨 앞).
 
 | 항목 | 내용 |
 |---|---|
@@ -724,7 +725,7 @@ sudo deploy/paperbot-exec.sh --keys wooxpro2 mixchop check --config /etc/paperbo
 sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
 ```
 
-- (코드 받기 `git pull && sudo bash deploy/install.sh`는 `docs/mixbybit-ko.md` 12-1에서 한 번만 하면 됩니다.)
+- (코드 받기 `git pull && sudo bash deploy/install.sh`는 `docs/mixbybit-ko.md` 13-1에서 한 번만 하면 됩니다.)
 - diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"h3x"` 두 줄만 나옵니다.
 - check: `매매법·손절: 3합 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
 - 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.

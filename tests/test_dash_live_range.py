@@ -531,8 +531,8 @@ def test_the_menu_button_strip_and_names(rw, tmp_path):
       names: ['paper', 'paper2', 'range'].map((id) => K.acctKo(id)), line: K.followLine(D_s.papers), isp: ['range', 'mexc'].map(K.isPaperId),
       tab: LB.BOT_TAB.rangebot.bot}}));""", s=summary)
     # (owners 11-01: the menu's first group is 지금, 관제실 · 회의실; the 레인지 봇's screen leads its own group)
-    assert out["group"] == ["deck", "room"]
-    assert out["nav"] == ["관제실", "회의실"]
+    assert out["group"] == ["deck", "room", "ftrend"]               # (owners 11-03: + 친구 추세판)
+    assert out["nav"] == ["관제실", "회의실", "친구 추세판"]
     assert out["screen"] == ["레인지 봇", "range", "livebots"] and out["icon"] > 5 and out["tab"] == "range"
     assert out["fol"] == [["bybit"], ["mexc"], ["deepcoin"]]
     assert out["names"] == ["추세판단 봇", "VWAP 개선판", "레인지 봇"] and out["isp"] == [True, False]

@@ -59,11 +59,11 @@ BOARDS = (("m30", "m30", "bybit"), ("f30", "f30", "mix"), ("r15", "rg", "range")
 STALE_30M_MS = 35 * MIN                 # the bot writes at every 30-minute close
 STALE_1H_MS = 70 * MIN                  # the 레인지 봇 reads its hour once it closed
 RULES_KO = [
-    "추세 MACD(11-02부터 세 봇 모두): 30분봉 '추세 MACD' 히스토그램이 0선 위면 상승, 0선 아래면 하락 · 노란 막대(추세 바 종합 횡보)가 "
+    "추세 MACD(11-02부터 모든 봇): 30분봉 '추세 MACD' 히스토그램이 0선 위면 상승, 0선 아래면 하락 · 노란 막대(추세 바 종합 횡보)가 "
     "나와도 0선 위 / 아래로만 봐요 · 15분봉 추세는 안 봐요",
-    "3합 히스토그램 0선 돌파(친구 15분 봇 · 레인지 봇, 11-02부터): 15분봉 3합 히스토그램(WOOX pro2 · 레인지봇 EMA RSI · 15종 MACD "
+    "3합 히스토그램 0선 돌파(친구 15분 봇 · WOO X Pro 2, 11-02부터): 15분봉 3합 히스토그램(WOOX pro2 · 레인지봇 EMA RSI · 15종 MACD "
     "평균의 MACD 히스토그램)이 0선을 위로 돌파하면 롱, 아래로 돌파하면 숏 · 추세 MACD가 같은 쪽일 때만",
-    "OBV 히스토그램 전환(바이비트 봇, 11-02부터): 15분봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 "
+    "OBV 히스토그램 전환(레인지 봇 · WOO X Pro 1, 11-03부터; 바이비트 봇은 11-02 하루 쓰고 11-03부터 꺼 둠): 15분봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 "
     "바뀌면 롱, 0선 위에서 음봉으로 바뀌면 숏 · 추세 MACD가 같은 쪽일 때만 · OBV 선은 안 봐요",
     "추세 바 종합(10-31 밤 ~ 11-02, 지난 규칙: 바이비트 봇 · 친구 15분 봇 · 레인지 봇 모두): 여섯 줄(3개 점수 · 6종 평균 · "
     "하늘·보라 선 · EMA RSI · 슈퍼트렌드 · 4종 평균) 중 상승이 2줄 이상이면 상승(초록), 하락이 2줄 이상이면 하락(빨강) · "
@@ -309,7 +309,13 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[d
     p = p or L.paths()
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     srcs, boards, coins = {}, {}, {}
+    off = {key for key, _rk, bot in BOARDS if L.mix_off(bot)}
     for key, _rk, bot in BOARDS:
+        if key in off:                  # owners 11-03: a bot switched off for good (the 바이비트 봇) leaves the board
+            from . import livemix as X
+            srcs[key], boards[key], coins[key] = {"state": "off", "ko": f"{X.PROFILES[bot].name}는 서버에서 꺼 뒀어요",
+                                                  "name_ko": X.PROFILES[bot].name, "profile": bot}, {}, []
+            continue
         try:
             srcs[key], boards[key], coins[key] = board_of(now, {"m30": mp, "f30": mpf, "r15": mpr}[key], bot=bot)
         except Exception as exc:  # noqa: BLE001  (its own failure is said, never the page's)
@@ -317,6 +323,13 @@ def build(p: Optional[dict] = None, now_ms: Optional[int] = None, mp: Optional[d
             srcs[key], boards[key], coins[key] = {"state": "error", "ko": f"{X.PROFILES[bot].name} 기록을 읽지 못했어요",
                                                   "name_ko": X.PROFILES[bot].name, "profile": bot,
                                                   "reason": f"{type(exc).__name__}: {exc}"[:300]}, {}, []
+    if "m30" in off:                    # the first board still on heads each coin's card (the 레인지 봇's, else the friend's)
+        for k in ("r15", "f30"):
+            if k not in off and srcs[k].get("state") != "off":
+                srcs["m30"], boards["m30"], coins["m30"] = srcs[k], boards[k], coins[k]
+                srcs[k], boards[k], coins[k] = {"state": "off", "ko": "위 칸에 있어요", "name_ko": srcs["m30"].get("name_ko"),
+                                                "profile": srcs["m30"].get("profile")}, {}, []
+                break
     moved = L.range_moved(p)            # owners 10-31 night: the old 레인지 봇 paper's reads leave the board
     if moved:
         s1h, b1h, coins1h, roc = None, {}, [], {}

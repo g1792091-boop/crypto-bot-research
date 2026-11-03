@@ -164,21 +164,22 @@ export const TABS = [
   // 게이트 봇 (owners 11-01: menu group "gate"): its positions, stops and ladder from its own state file
   {id: "gatebot", label: "게이트 봇", make: (ctx) => gateView(ctx), own: true},
 ];
-/** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's). */
-const GROUP_SUB = {bybit: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환) · 다른 봇은 이 화면에 없어요",
-  range: "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요"};
+/** The head line of a menu group that is one bot's own screens (owners 10-29: the 바이비트 봇's; owners 11-03: that bot is
+ *  off, the 레인지 봇 on the first WOO X Pro account enters on the OBV histogram's turn). */
+const GROUP_SUB = {range: "레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환) · 다른 봇은 이 화면에 없어요"};
 /** The menu's tabs of each live bot (owners 11-01 "봇별 화면이랑 회의실도 이렇게 멋있게 만들어야지"): they wear the 관제실's HUD
  *  finish (.lb-hud, screens/livebots-hud.css); 관제실 and 회의실 have their own. */
 export const HUD = new Set(["bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]);
 const tabOf = (arg) => (TABS.some((t) => t.id === arg) ? arg : "deck");   // (owners 11-01: 관제실, the main screen)
 const botHead = (name, ids) => `${name} 페이퍼(연습)와 ${ids.length ? `그 봇을 따라가는 ${execsKo(ids)} 실행기(진짜 돈)` : "따라가는 실행기 없음"} · 다른 봇은 이 화면에 없어요`;
 /** The 레인지 봇's head once it trades WOO X Pro by itself (owners 10-31 night, the summary's ``replaced``). */
-const RANGE_MIX_SUB = "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요";
+const RANGE_MIX_SUB = "레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환) · 다른 봇은 이 화면에 없어요";
 /** The 봇별 screens (owners 10/26): bot (the 목표 연구 part's id), the head's line, the strip's executors (that bot's only;
  *  none: what its real money is instead). */
 export const BOT_TAB = {
-  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 바이비트 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환) · 다른 봇은 이 화면에 없어요",
-    head: null, only: () => [], none: "바이비트 봇은 바이비트 계정에서 스스로 거래해요 · 잔고는 아래 실거래 칸"},
+  // owners 11-03 ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): off the menu, its record kept
+  bybitbot: {bot: "bybit", sub: "바이비트 봇 · 두 분 결정(11/03)으로 꺼 두는 봇 (자동매매는 WOO X Pro 1 · 2 두 계정만) · 지난 기록 보관용이에요",
+    head: null, only: () => [], none: "바이비트 봇은 11/03부터 꺼 뒀어요 · 지난 기록은 아래"},
   trendbot: {bot: "trend", sub: "추세판단 봇 페이퍼(연습)와 그 봇을 따라가던 실행기 · 두 분 결정(10/29)으로 꺼 두는 봇 · 지난 기록 보관용이에요",
     head: (d) => botHead("추세판단 봇", followersOf(d, "paper")), only: (d) => followersOf(d, "paper"), none: "추세판단 봇을 따라가는 실행기가 지금 없어요"},
   // owners 10-31 night: once the 레인지 봇 trades WOO X Pro by itself (rangeMoved), its own words (no executor follows a paper)
@@ -285,7 +286,8 @@ export async function mount(el, ctx) {
     setExecs(d.execs);                   // the third executor (딥코인) everywhere while the server has it (else the two)
     const two = followLine(d.papers), n = execIds(d).length, three = n > 2;
     // owners 10-29: an account a mix bot took (the summary's ``replaced``) is said after who follows which
-    const took = (d.replaced || []).map((r) => `${r.account_ko} → ${r.name_ko}(스스로 매매)`).join(" · ");
+    // (owners 11-03: a bot switched off for good, ``off``: the 바이비트 봇, is not said)
+    const took = (d.replaced || []).filter((r) => r && !r.off).map((r) => `${r.account_ko} → ${r.name_ko}(스스로 매매)`).join(" · ");
     // (owners 10-31 night: no executor left once mix bots took every slot: the accounts and their bots only)
     const head = bt ? (bt.head ? bt.head(d) : bt.sub) : gsub ? gsub : `${!n && took ? "실행기 없음 · 실거래 봇이 계정마다 스스로 매매해요"
       : two ? `실행기 ${countKo(n)} 개 · ${two}`

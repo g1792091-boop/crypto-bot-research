@@ -62,7 +62,13 @@ PX_ROUTE = "/api/v4/livebots/deck/px"
 PX_TTL_S = 5.0                                    # the price now: one fetch every 5 s, shared by every viewer
 _PX_CACHE: dict = {}
 _PX_LOCK = threading.Lock()
-BOT_ORDER = ("bybit", "mix", "range")          # the three mix bots (livemix.PROFILES), the screen's order
+BOT_ORDER = ("bybit", "mix", "range")          # the mix bots (livemix.PROFILES), the screen's order
+
+
+def bot_order() -> tuple:
+    """BOT_ORDER without a bot switched off for good (livebots.mix_off; owners 11-03: the 바이비트 봇 off, the two WOO X
+    Pro accounts trade): the bots 관제실, 회의실 and the 분석팀 read."""
+    return tuple(b for b in BOT_ORDER if not L.mix_off(b))
 COINS = ("SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT")   # the owners' six (10-31 night)
 MIN = 60_000
 MIN15, MIN30 = M.MIN15, M.MIN30
@@ -369,7 +375,7 @@ def goal_view(now: int, names: Optional[dict] = None) -> dict:
 
     s0 = s1 = 0.0
     el = []
-    for bid in BOT_ORDER:
+    for bid in bot_order():
         prof = MX.PROFILES[bid]
         row = {"id": bid, "name_ko": (names or {}).get(bid) or prof.name}
         try:
@@ -546,7 +552,7 @@ def px_view(fetch: Optional[Callable] = None, now_ms: Optional[int] = None) -> d
 def build(candles: Optional[Callable], now_ms: Optional[int] = None) -> dict:
     now = int(time.time() * 1000) if now_ms is None else int(now_ms)
     bots = []
-    for bid in BOT_ORDER:
+    for bid in bot_order():
         prof = MX.PROFILES[bid]
         try:
             bots.append(bot_view(prof, now))
@@ -578,7 +584,7 @@ def register(app, ctx) -> dict:
     @app.get("/api/v4/livebots/deck")                   # (= ROUTE: written out for tests/test_dash_v4.py's route list)
     def get_livebots_deck():
         """실거래 › 관제실: the three mix bots and the six coins in one answer (read-only, 5 s cache; the coins' bars 60 s)."""
-        key = "deck:" + json.dumps([MX.paths(bot=b) for b in BOT_ORDER], sort_keys=True)
+        key = "deck:" + json.dumps([MX.paths(bot=b) for b in bot_order()], sort_keys=True)
         return L._cached(key, lambda: json_finite(build(candles)))
 
     px = getattr(ctx, "px", None)

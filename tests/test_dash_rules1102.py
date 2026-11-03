@@ -107,11 +107,72 @@ def test_the_ftrend_words():
 
 
 def test_the_menu_words():
-    """The titles (core/routes.js) and the subs (screens/livebots.js) name the 11-02 rules, not the old trend bar's."""
+    """The titles (core/routes.js) and the subs (screens/livebots.js) name the rules, not the old trend bar's; owners 11-03
+    ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2" · "PRO1 OBV · PRO2 3합"): the 레인지 봇 (WOO X Pro 1) on the OBV
+    histogram's turn, the 친구 15분 봇 (WOO X Pro 2) on the 3합's 0 cross, the 바이비트 봇's group off the menu (its screens
+    hidden, an old link still opens them) and 친구 추세판 in 지금."""
     routes = open(os.path.join(V4, "core", "routes.js"), encoding="utf-8").read()
     tabs = open(os.path.join(SCREENS, "livebots.js"), encoding="utf-8").read()
-    for line in (l for l in routes.splitlines() if l.lstrip().startswith(("bybitbot: {", "rangebot: {", "mixbot: {", "ftrend: {"))):
+    for line in (l for l in routes.splitlines() if l.lstrip().startswith(("rangebot: {", "mixbot: {", "ftrend: {"))):
         assert "추세 MACD 30분" in line and "추세 바" not in line, line
-    assert "추세 MACD 30분 + OBV 히스토그램 전환" in routes and routes.count("추세 MACD 30분 + 3합 히스토그램 0선 돌파") == 2
-    assert tabs.count("추세 MACD 30분 + OBV 히스토그램 전환") == 2 and tabs.count("추세 MACD 30분 + 3합 히스토그램 0선 돌파") == 3
+    rb = next(l for l in routes.splitlines() if l.lstrip().startswith("rangebot: {"))
+    mb = next(l for l in routes.splitlines() if l.lstrip().startswith("mixbot: {"))
+    assert "WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환" in rb and "추세 MACD 30분 + 3합 히스토그램 0선 돌파 · WOO X Pro 2" in mb
+    assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes and '{id: "bybit"' not in routes
+    assert 'bybitbot: {ko: "바이비트 봇", group: "now", title: "바이비트 봇 (11/03부터 꺼 둠 · 지난 기록)", hidden: true}' in routes
+    assert 'bybitperf: {ko: "바이비트 성적", group: "now"' in routes and routes.count("11/03부터 꺼 둠") == 2
+    assert tabs.count("추세 MACD 30분 + OBV 히스토그램 전환") == 2 and tabs.count("추세 MACD 30분 + 3합 히스토그램 0선 돌파") == 1
+    assert "레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이" in tabs and "두 분 결정(11/03)으로 꺼 두는 봇" in tabs
     assert "OBV 진한색 + AC" not in tabs and "추세 바 30분" not in tabs
+    assert ".filter((r) => r && !r.off)" in tabs                         # the real-money line leaves a bot switched off
+
+
+def test_a_switched_off_bot_leaves_the_bot_screens(tmp_path, monkeypatch):
+    """Owners 11-03: once both units of the 바이비트 봇 are switched off for good (``systemctl disable --now``,
+    livecheck.switched_off), 관제실, 회의실 and the 분석팀 read the two WOO X Pro bots only, 친구 추세판 heads each coin
+    with the 레인지 봇's board, the summary's ``replaced`` says ``off``; systemctl unknown (a test machine): as before."""
+    from paperbot import livecheck as LC
+    from paperbot.dash.more import livebots as L
+    from paperbot.dash.more import livedeck as D
+    from paperbot.dash.more import liveftrend as F
+    states = {}
+    monkeypatch.setattr(LC, "unit_state", lambda u: states.get(u, ("", "not-found")))
+    L._off_cache.clear()
+    assert D.bot_order() == ("bybit", "mix", "range") and not L.mix_off("bybit")
+    states["paperbot-mixbybit"] = ("inactive", "disabled")          # the live bot off, its paper twin still on: kept
+    L._off_cache.clear()
+    assert not L.mix_off("bybit") and D.bot_order() == ("bybit", "mix", "range")
+    states["paperbot-mixbybit-paper"] = ("inactive", "disabled")
+    L._off_cache.clear()
+    assert L.mix_off("bybit") and not L.mix_off("range") and D.bot_order() == ("mix", "range")
+    # the deck reads the two
+    monkeypatch.setattr(D, "bot_view", lambda prof, now: {"id": prof.id, "name_ko": prof.name, "status": {"state": "ok"}})
+    for f in ("grid_view", "tape_view", "totals_view"):
+        monkeypatch.setattr(D, f, lambda bots: [b["id"] for b in bots])
+    monkeypatch.setattr(D, "flow_view", lambda bots, now: None)
+    monkeypatch.setattr(D, "goal_view", lambda now, names: {"names": names})
+    monkeypatch.setattr(D, "month_view", lambda bots, now, target: None)
+    monkeypatch.setattr(D, "coins_view", lambda candles, now: [])
+    out = D.build(None, 1_800_000_000_000)
+    assert [b["id"] for b in out["bots"]] == ["mix", "range"] and out["grid"] == ["mix", "range"]
+    from paperbot.dash.more import livemix as MX
+    assert out["goal"]["names"] == {"mix": MX.PROFILES["mix"].name, "range": MX.PROFILES["range"].name}
+    # 친구 추세판: the 바이비트 봇's board is off, the 레인지 봇's heads the cards
+    seen = []
+
+    def board_of(now, mp=None, bot="bybit"):
+        seen.append(bot)
+        name = {"mix": "친구 15분 봇", "range": "레인지 봇"}[bot]
+        return ({"state": "ok", "name_ko": name, "profile": bot, "tf_ko": "15분"}, {"SOLUSDT": {"close": 1.0}}, ["SOLUSDT"])
+    monkeypatch.setattr(F, "board_of", board_of)
+    monkeypatch.setattr(F, "m30_row", lambda row, now, tf: {"state": "ok" if row else "none"})
+    monkeypatch.setattr(L, "range_moved", lambda p: True)
+    d = F.build({}, 1_800_000_000_000)
+    assert seen == ["mix", "range"] and d["m30"]["name_ko"] == "레인지 봇" and d["m30"]["profile"] == "range"
+    assert d["r15"]["state"] == "off" and d["f30"]["name_ko"] == "친구 15분 봇" and d["coins"][0]["inrg"] is False
+    # the summary's replaced: the off flag
+    cfg = tmp_path / "mixbybit.json"
+    cfg.write_text("{}", encoding="utf-8")
+    assert L.replaced_out({"mixbybit_config": str(cfg)}) == [{"id": "bybit", "bot": "bybit", "name_ko": "바이비트 봇",
+        "account_ko": "바이비트", "unit": "paperbot-mixbybit", "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot", "off": True}]
+    L._off_cache.clear()

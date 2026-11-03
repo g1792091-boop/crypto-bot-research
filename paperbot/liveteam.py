@@ -270,7 +270,9 @@ VWAP_DECISIONS = ("10/23 두 분: 'A + CMO 1시간 37승 3패가 제일 좋은 �
                   "15분 봇과 레인지 봇은 히스토그램 0선 돌파. 레인지 봇은 WOO X Pro 첫 계정을 스스로 거래(docs/range-bot-ko.md 0장)",
                   "11/02 두 분: 세 봇의 추세는 30분봉 '추세 MACD' 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 0선 기준), 진입은 "
                   "15분봉 그대로. 바이비트 봇은 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 바뀌면 롱 · 0선 "
-                  "위에서 음봉으로 바뀌면 숏(OBV 선은 안 봄), 친구 15분 봇과 레인지 봇은 3합 히스토그램 0선 돌파")
+                  "위에서 음봉으로 바뀌면 숏(OBV 선은 안 봄), 친구 15분 봇과 레인지 봇은 3합 히스토그램 0선 돌파",
+                  "11/03 두 분: 자동매매는 WOO X Pro 두 계정만(바이비트 봇은 끔). WOO X Pro 1(레인지 봇)은 OBV 히스토그램 전환, "
+                  "WOO X Pro 2(친구 15분 봇)는 3합 히스토그램 0선 돌파, 추세는 둘 다 30분봉 추세 MACD 히스토그램")
 VWAP_WORDS = ("band = 운이냐 고장이냐: 지금 기록을 같은 규칙의 5년 페이퍼에 대 본 것. win.p_low = 5년처럼 돈다면 이만큼 이하의 승수가 "
               "나올 확률, streak.share = 5년 연패 중 이만큼 길었던 비율, dd.share = 5년의 같은 거래 수 구간 중 이만큼 깊게 빠졌던 비율. "
               "verdict: 정상 범위(5% 이상) · 드묾(1~5%) · 아주 드묾(1% 미만: 설계와 다르게 돌고 있을 수 있음). roe = 그 거래 배율 기준 "
@@ -852,7 +854,7 @@ def mix_sources(now: int) -> dict:
     from .dash.more import livedeck as D
     from .dash.more import livemix as MX
     bots = []
-    for bid in D.BOT_ORDER:
+    for bid in D.bot_order():                       # owners 11-03: a bot switched off for good is not at the table
         try:
             bots.append(D.bot_view(MX.PROFILES[bid], now))
         except Exception as exc:  # noqa: BLE001  one bot's broken file never hides the others

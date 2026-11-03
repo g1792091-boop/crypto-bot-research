@@ -4,9 +4,9 @@
 //   top      the name, each coin's last 15m close and its 24-hour change, the clock (KST · UTC); a running line of the
 //            bots' newest log rows
 //   지갑      the three bots' balance together, against their start, today's and all closed trades
-//   차트      the chosen coin's last 120 15m bars, the 3합 histogram's 0 crosses on them (▲▼: the 친구 15분 봇's and the
-//            레인지 봇's entry, owners 11-02), the OBV4 MACD histogram's turns that are the 바이비트 봇's entry (○), the 30m
-//            추세 MACD's side of 0 as a strip under them (the three bots' trend), a bot's entry and stop on that coin
+//   차트      the chosen coin's last 120 15m bars, the 3합 histogram's 0 crosses on them (▲▼: the 친구 15분 봇's entry,
+//            owners 11-02), the OBV4 MACD histogram's turns that are the 레인지 봇's entry (○, owners 11-03; the 바이비트
+//            봇's on 11-02), the 30m 추세 MACD's side of 0 as a strip under them (the bots' trend), a bot's entry and stop
 //   봇        each bot: running or not, its rules, balance, record, position, live vs paper
 //   추세 그리드 coin x bot: the trend each bot read at its last close (초록 상승 · 빨강 하락) and its signal
 //   목표 ×6   this month against the path to the owners' ×6 (the three bots together and each), the daily growth the rest
@@ -34,8 +34,9 @@ const ok = (x) => x != null && x !== "" && Number.isFinite(Number(x));
 const TONE = {1: "up", "-1": "down", 0: "flat"};
 export const toneOf = (t) => (ok(t) ? TONE[Number(t)] || "flat" : "na");
 const TREND_KO = {up: "상승", down: "하락", flat: "진입 금지", na: "—"};
-// owners 11-02: the three bots' trend is the 30m 추세 MACD histogram's side of 0 (its yellow bars too); the 친구 15분 봇
-// and the 레인지 봇 enter on the 15m 3합 histogram's 0 cross, the 바이비트 봇 on the OBV4 MACD histogram's turn
+// owners 11-02: the bots' trend is the 30m 추세 MACD histogram's side of 0 (its yellow bars too); the 친구 15분 봇 enters on
+// the 15m 3합 histogram's 0 cross, the 레인지 봇 on the OBV4 MACD histogram's turn (owners 11-03; the 바이비트 봇, which
+// had that rule on 11-02, is off: the screen shows the bots livedeck.bot_order() reads)
 const TM_KO = "추세 MACD";
 const BOT_TAB = {bybit: "bybitbot", mix: "mixbot", range: "rangebot"};   // each bot's 봇별 screen (its 목표 연구 at the foot)
 /** Each coin's own colour (dk-k0 … dk-k5, in the server's fixed coin order; never a colour that means up or down). */
@@ -721,7 +722,7 @@ export function deckView(ctx) {
   const riskBox = h("div", {class: "dk-riskbox"}), calBox = h("div", {class: "dk-calbox"}), calSub = h("span");
   const toast = h("div", {class: "dk-toast", role: "status", "aria-live": "polite", hidden: true});
   const grid = h("div", {class: "dk-g"},
-    panel("dk-a-wal", "지갑 · WALLET", "세 봇 합계 · 봇 기록 그대로", wallet),
+    panel("dk-a-wal", "지갑 · WALLET", "봇 합계 · 봇 기록 그대로", wallet),
     panel("dk-a-cht", "코인 차트 · SPOT", chartSub, coinTabs, chart),
     panel("dk-a-fee", "코인 흐름 · FEED", "여섯 코인 24시간 · 처음 대비 % · 아래는 봇 기록 원문",
       h("div", {class: "dk-feedwrap"}, h("div", {class: "dk-feedmain"}, feedBox, h("small", {class: "dk-mono"}, "WIRE · 봇 기록 원문 (최근 7)"), wire), feedStats)),
@@ -734,7 +735,7 @@ export function deckView(ctx) {
     panel("dk-a-cal", "이번 달 · CALENDAR", calSub, calBox),
     panel("dk-a-cor", "코어 · ATTRACTOR CORE", "왼쪽 선 = 여섯 코인 (색 = 30분 추세 MACD) · 흰 입자 = 방금 0선 돌파 · 주황 입자 = 포지션 · 오른쪽 선 = 최근 청산 · 흐름 모양·별·입자 색은 장식(Aizawa 흐름)",
       h("div", {class: "dk-corewrap"}, inputs, core.el, fills)),
-    panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "세 봇의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
+    panel("dk-a-tap", "실행 기록 · EXECUTION TAPE", "봇들의 신호 · 진입 · 계단 · 청산 · 건너뜀", tape),
     panel("dk-a-fwd", "포워드 테스트 · FORWARD TEST", "새 규칙 전과 후 · 시작 대비 잔고", fwd),
     panel("dk-a-his", "히스토그램 · 3합", histSub, hist),
     panel("dk-a-flo", "신호 흐름 · SIGNAL CASCADE", "48시간 · 15분마다 신호(0선 돌파 · OBV 히스토그램 전환, 아래 막대) · 2시간 합(금색) · 진입(점)", flow));
@@ -745,7 +746,7 @@ export function deckView(ctx) {
     slot,
     h("header", {class: "dk-top", style: {"--i": 0}},
       h("div", {class: "dk-brand"}, h("span", {class: "dk-logo", "aria-hidden": "true"}, "PB"),
-        h("div", null, h("small", {class: "dk-mono"}, "3 BOTS · 15M ENTRY · 30M TREND MACD · ONE POSITION EACH"),
+        h("div", null, h("small", {class: "dk-mono"}, "WOO X PRO 1 · 2 · 15M ENTRY · 30M TREND MACD · ONE POSITION EACH"),
           h("b", {class: "dk-name"}, "PAPERBOT ", h("em", null, "//"), " 관제실"),
           h("small", {class: "dk-mono"}, "바이비트 봇 · 친구 15분 봇 · 레인지 봇 — 보기만 하는 화면"))),
       prices,
@@ -830,7 +831,7 @@ export function deckView(ctx) {
     const c = coinOf(sel);
     if (!c || c.state !== "ok") { put(chart, ui.empty(c ? `${c.coin}: ${c.ko || "못 읽음"}` : "코인 값을 읽는 중")); chartSub.textContent = ""; return; }
     const t = c.tm30 || {};
-    chartSub.textContent = `${c.coin} 15분봉 · ▲▼ 3합 히스토그램 0선 돌파 · ○ OBV 히스토그램 전환(바이비트 봇) · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
+    chartSub.textContent = `${c.coin} 15분봉 · ▲▼ 3합 히스토그램 0선 돌파 · ○ OBV 히스토그램 전환(레인지 봇) · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
     put(chart, chartSvg(c, holdsOf(sel), wOf(chart)));
   }
 
@@ -929,7 +930,7 @@ export function deckView(ctx) {
           s: lastX ? `방금 0선 ${lastX > 0 ? "위로" : "아래로"} 돌파` : "이번 봉 0선 돌파 없음"},
         {k: "REGIME · 30M 추세 MACD", v: rg === "flat" ? "0선" : TREND_KO[rg], tone: rg,
           s: tm30 && ok(tm30.hist) ? `히스토그램 ${fmt.num(tm30.hist, 2, true)}${tm30.yellow ? " · 노란 막대" : ""}` : ""},
-        {k: "NEXT CLOSE · 15M", v: mmss(nc.left_ms), s: `${fmt.hm(nc.at)} 마감 · 세 봇이 판단해요`}],
+        {k: "NEXT CLOSE · 15M", v: mmss(nc.left_ms), s: `${fmt.hm(nc.at)} 마감 · 봇들이 판단해요`}],
       late.map((t) => (t.win ? "up" : t.win === false ? "down" : "na")));
     put(inputs, coins.map((c, k) => {
       const tone = c.state === "ok" && c.trend30 && c.trend30.length ? toneOf(c.trend30[c.trend30.length - 1][1]) : "na";
@@ -974,7 +975,7 @@ export function deckView(ctx) {
     const T = Number(g.target) || 6, n = Number(g.month_days) || 30, a = g.all;
     goalSub.textContent = `${g.goal_ko} · ${fmt.kst(g.from_ms)}부터 · 기록으로 한 계산이지 예측이 아니에요`;
     const head = a ? h("div", {class: "dk-ghead"},
-      h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "세 봇 합 · 이번 달"),
+      h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "봇 합 · 이번 달"),
         gMult,
         h("small", null, `오늘 목표 경로 ${multKo(a.path_now)} · 경로보다 ${pctKo(a.vs_path, 1)}`)),
       h("div", {class: "dk-gbig"}, h("small", {class: "dk-mono"}, "남은 날 하루에 필요"),
@@ -1071,7 +1072,7 @@ export function deckView(ctx) {
   function drawCal(d) {
     const m = d.month;
     if (!m || m.state === "error" || !m.days) { calSub.textContent = ""; put(calBox, ui.empty((m && m.ko) || "이번 달 기록을 읽는 중")); return; }
-    calSub.textContent = `세 봇 하루 손익 ÷ 그날 시작 잔고 · ×${fmt.num(m.target, 0)} 하려면 매일 ${pctKo(m.need, 1)} · 한국 시간`;
+    calSub.textContent = `봇 합 하루 손익 ÷ 그날 시작 잔고 · ×${fmt.num(m.target, 0)} 하려면 매일 ${pctKo(m.need, 1)} · 한국 시간`;
     const dow0 = (new Date(Number(m.from_ms) + 9 * 3600000).getUTCDay() + 6) % 7;          // Monday first
     const cells = [];
     for (let i = 0; i < dow0; i++) cells.push(h("i", {class: "dk-cd blank", "aria-hidden": "true"}));
@@ -1120,7 +1121,7 @@ export function deckView(ctx) {
     const c = coinOf(st.sel);
     if (!c || c.state !== "ok") { put(hist, ui.empty("코인 값을 읽는 중")); histSub.textContent = ""; return; }
     const last = (c.hist || []).filter(ok).slice(-1)[0];
-    histSub.textContent = `${c.coin} 15분봉 3합 히스토그램 (친구 15분 봇 · 레인지 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
+    histSub.textContent = `${c.coin} 15분봉 3합 히스토그램 (친구 15분 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
     put(hist, histSvg(c, wOf(hist)));
     put(flow, flowSvg(d.flow, wOf(flow)));
   }

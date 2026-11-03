@@ -1,42 +1,48 @@
-# 레인지 봇 (WOO X Pro를 스스로 매매 · 11/02부터 30분봉 추세 MACD 히스토그램 + 15분봉 3합 히스토그램 0선 돌파)
+# 레인지 봇 (WOO X Pro 1을 스스로 매매 · 11/03부터 30분봉 추세 MACD 히스토그램 + 15분봉 OBV 히스토그램 전환)
 
 > **10/31 밤 바뀐 것:** 레인지 봇이 페이퍼 봇 + 실행기 구조에서 **바이비트 봇·친구 봇과 같은 프로그램**(`paperbot/mixchop.py`)으로
 > 옮겨 갑니다. WOO X Pro 첫 번째 계정을 직접 거래하고, 코인은 세 봇이 모두 SOL · ETH · XRP · BCH · ZEC · DOGE입니다(0장).
 > 1장부터는 예전(10/26 ~ 10/31 낮) 레인지 봇의 기록입니다.
 
-## 11/02부터: 30분봉 '추세 MACD' 히스토그램 + 15분봉 3합 히스토그램 0선 돌파 (지금 매매법)
+## 11/03부터: 30분봉 '추세 MACD' 히스토그램 + 15분봉 OBV 히스토그램 전환 (지금 매매법, WOO X Pro 1)
 
 두 분(11/02): "30분봉 추세 15분봉은 진입 바꾸지말고 30분봉 추세인데 추세를 macd 히스토그램으로 사용 0선 위에 있으면 상승 0선 아래에
-있으면 하락으로", "WOOX PRO 1,2 3합 히스토그램도 비슷한 방식이지만 이거는 30분봉 추세 macd가 0선 위에 있으면 상승 추세로 보고 15분봉
-3합 히스토 그램이 0선을 상향 돌파 하면 롱진입 숏 진입은 반대 조건으로". 친구 15분 봇(WOO X Pro 2)과 완전히 같은 매매법이고
-자세한 내용은 `docs/mixchop-ko.md` 18장입니다. 아래 0장에서 바뀐 것만:
+있으면 하락으로", OBV 방식: "obv 선은 사용 안함 히스토그램으로 진입 할꺼임 … 15분봉 obv 히스토그램이 0선 아래에서 양봉으로 바뀌면
+롱진입 숏 진입은 반대 조건으로 … 추세 macd에서 노란 히스토 그램이 나와도 0선아래에 있으면 하락추세로 보고 0선 위에 있으면
+상승추세로 보고 진입가능". 11/03: "자동매매봇 거래소는 총 2개 거래소를 쓸꺼야", "바이비트말고 woox pro1 거래소랑 친구봇 woox pro2
+이렇게 쓸꺼야", WOO X Pro 1의 매매법은 "PRO1 OBV · PRO2 3합". 그래서 11/02에 바이비트 봇에 넣었던 OBV 히스토그램 방식이 이 봇으로
+옵니다(바이비트 봇은 끔: `docs/mixbybit-ko.md` 13장). 11/02 하루 계획이던 3합 히스토그램은 친구 15분 봇(WOO X Pro 2)만 씁니다.
 
-| 항목 | 0장(10/31 밤) | 11/02부터 |
+| 항목 | 0장(10/31 밤) | 11/03부터 |
 |---|---|---|
-| 추세 (30분봉) | 추세 바 종합 (6줄 셈, 노랑 = 진입 금지) | **추세 MACD 히스토그램**: 0선 위 = 상승, 0선 아래 = 하락. 노란 막대도 0선 기준 |
-| 진입 (15분봉) | 'ALL + OBV6 MACD' 히스토그램 0선 돌파 | **3합 히스토그램** 0선 돌파 (롱: 0선 위로, 숏: 0선 아래로) |
-| 설정 | `"trend": "bar"`, `"rules": ["h0x"]` | `"trend": "macd"`, `"rules": ["h3x"]` |
+| 추세 (30분봉) | 추세 바 종합 (6줄 셈, 노랑 = 진입 금지) | **추세 MACD 히스토그램**: 0선 위 = 상승, 0선 아래 = 하락. 노란 막대도 0선 기준. 정확히 0이면 진입 안 함 |
+| 진입 (15분봉) | 'ALL + OBV6 MACD' 히스토그램 0선 돌파 | **OBV 히스토그램이 0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로 바뀌면 숏** (OBV 선은 안 봄) |
+| 설정 | `"trend": "bar"`, `"rules": ["h0x"]` | `"trend": "macd"`, `"rules": ["o4h"]` |
 
+- OBV 히스토그램(OBV4 MACD 기본값)과 추세 MACD의 계산은 `docs/mixbybit-ko.md` 12장과 같습니다.
 - 그대로: 계정(WOO X Pro 첫 계정), 코인 6개, 40배(ZEC 20배), 증거금 40%, 손절 15분봉 ATR(14) × 3, 계단, 포지션 1개, 진입 금지 시간.
-- **백테스트는 하지 않았습니다.** 시험: `tests/test_rules1102.py`.
+- 텔레그램 근거 줄 예: `근거: OBV 히스토그램 0선 아래 양봉 전환(-2.00) · 추세 MACD 30분 히스토그램 0선 위 상승(+1.00)`.
+- 아침 점검의 '놓친 신호'는 `OBV 히스토그램 양봉·음봉 전환 N번`을 셉니다.
+- **백테스트는 하지 않았습니다.** 시험: `tests/test_rules1102.py`, `tests/test_dash_rules1102.py`.
 
 ### 바꾸는 순서 (서버에서, WOO X Pro 첫 계정에 포지션이 없을 때 권장)
 
 ```bash
 cd /opt/crypto-bot-research
-sudo cp -p /etc/paperbot/mixrange.json /etc/paperbot/mixrange.json.before-1102
-sudo cp -p /etc/paperbot/mixrange-paper.json /etc/paperbot/mixrange-paper.json.before-1102
+sudo cp -p /etc/paperbot/mixrange.json /etc/paperbot/mixrange.json.before-1103
+sudo cp -p /etc/paperbot/mixrange-paper.json /etc/paperbot/mixrange-paper.json.before-1103
 sudo install -o root -g paperbot -m 640 deploy/mixrange.live.json /etc/paperbot/mixrange.json
 sudo install -o root -g paperbot -m 640 deploy/mixrange.paper.json /etc/paperbot/mixrange-paper.json
-sudo diff /etc/paperbot/mixrange.json.before-1102 /etc/paperbot/mixrange.json
+sudo diff /etc/paperbot/mixrange.json.before-1103 /etc/paperbot/mixrange.json
 sudo deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixrange.json | tail -8
 sudo systemctl restart paperbot-mixrange paperbot-mixrange-paper
 ```
 
-- (코드 받기 `git pull && sudo bash deploy/install.sh`는 한 번만: `docs/mixbybit-ko.md` 12-1.)
-- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"h3x"` 두 줄만 나옵니다.
-- check: `매매법·손절: 3합 히스토그램 0선 돌파 · … · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
-- 되돌리기: `.before-1102` 파일을 다시 복사하고 다시 켭니다.
+- (코드 받기 `git pull && sudo bash deploy/install.sh`는 한 번만: `docs/mixbybit-ko.md` 13장.)
+- diff: `"trend": "bar"` → `"macd"`, `"h0x"` → `"o4h"` 두 줄만 나옵니다.
+- check: `매매법·손절: OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏) · … · 추세: 30분봉 추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락)`.
+- 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.
+- 되돌리기: `.before-1103` 파일을 다시 복사하고 다시 켭니다.
 
 ## 0장. 10/31 밤부터: 새 레인지 봇
 

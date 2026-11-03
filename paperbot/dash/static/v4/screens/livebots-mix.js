@@ -75,10 +75,11 @@ export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/
   exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
   wait: waitWords("15분", "30분", O4H_WAIT, "macd"),
   plan: planWords("15분"), planOf: planWords, morning: "09:07", h1: false};
-/** The 레인지 봇 (owners 10-31 night): the first WOO X Pro account, 15m bars, the friend bot's rule (screens/livebots.js). */
+/** The 레인지 봇 (owners 10-31 night): the first WOO X Pro account, 15m bars (screens/livebots.js); owners 11-03 ("PRO1 OBV ·
+ *  PRO2 3합"): it enters on the OBV histogram's turn, the 바이비트 봇's rule of 11-02 (that bot is off). */
 export const RANGE_UI = {id: "range", api: "/api/v4/livebots/mixrange", perf: "/api/v4/livebots/mixrangeperf", account: "WOO X Pro",
-  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 계정", tf: "15분", ttf: "30분", rule: H3X_WAIT, trend: "macd",
-  wait: waitWords("15분", "30분", H3X_WAIT, "macd"),
+  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 1 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
+  wait: waitWords("15분", "30분", O4H_WAIT, "macd"),
   plan: planWords("15분"), planOf: planWords, morning: "09:09", h1: false};
 /** A bot's wait line from its answer's bars (its config's ``tf`` and ``trend_tf``), else its UI's. */
 export function waitOf(o, b) {

@@ -52,7 +52,7 @@ def test_the_bybit_slot_leaves_once_its_bot_is_there(site):
     d = L.build(p, LW.NOW)
     assert [x["id"] for x in d["execs"]] == ["mexc"] and "bybit" not in [a["id"] for a in d["accts"]]
     assert d["replaced"] == [{"id": "bybit", "bot": "bybit", "name_ko": "바이비트 봇", "account_ko": "바이비트", "unit": "paperbot-mixbybit",
-                              "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot"}]
+                              "api": "/api/v4/livebots/mixbybit", "tab": "bybitbot", "off": False}]   # (off: owners 11-03)
     assert d["paths"]["mixbybit_config"] == str(site["cfg"])
     # every answer that lists the executors: the slot is gone, nothing breaks
     assert "bybit" not in L.costs(p, LW.NOW) and "bybit" not in (L.trade_rows(p, LW.NOW).get("accts") or {})
@@ -194,7 +194,8 @@ def test_the_pages(tmp_path):
     const MX = await import('file://{SCREENS}/livebots-mix.js');
     const LB = await import('file://{SCREENS}/livebots.js');
     console.log(JSON.stringify({{start: R.LIVE_START, bots: R.GROUPS[0].screens, groups: R.GROUPS.map((g) => g.id),
-      by: R.GROUPS.find((g) => g.id === 'bybit').screens, keys: R.KEYS,
+      by: (R.GROUPS.find((g) => g.id === 'bybit') || {{}}).screens || null, keys: R.KEYS,
+      hidden: ['bybitbot', 'bybitperf', 'ftrend'].map((k) => !!R.SCREENS[k].hidden),
       screens: ['bybitbot', 'bybit', 'bybitperf', 'ftrend'].map((k) => [R.SCREENS[k].ko, R.SCREENS[k].mod, R.screenIcon(k).childNodes.length > 3]),
       mixes: HQ.MIX_BOTS.map((m) => [m.slot, m.bot, m.api, m.replaces]),
       led: HQ.mixLed(null, true, {{ko: '바이비트 봇'}}).why,
@@ -206,10 +207,12 @@ def test_the_pages(tmp_path):
         F.stochCell({{k: 62.0, d: 58.0, xs: -1, cross: 'dead', cross_ko: '데드 ●', side50_ko: '50선 위'}}),
         F.ruleLines({{rules: {{obv: {{ko: 'OBV 진한색', side: 0, why: '친구 추세 진입 금지'}}, srsi: {{ko: '스톡RSI 50선', side: -1, why: ''}}}}}}),
         F.agoKo(65 * 60000)]}}));""")
-    # (owners 11-01: the first group is 지금, 관제실 · 회의실; the 바이비트 봇's 봇별 screen leads its own group, its 관제 copy hidden)
-    assert out["start"] == "deck" and out["bots"] == ["deck", "room"]
-    assert out["groups"] == ["now", "bybit", "mix", "range", "gate"] and out["by"] == ["bybitbot", "bybitperf", "ftrend"]   # (+ 게이트 봇, 11-01)
-    assert out["keys"] == ["deck", "room", "bybitbot", "bybitperf", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf"]
+    # (owners 11-01: the first group is 지금, 관제실 · 회의실; the 바이비트 봇's 봇별 screen led its own group); owners 11-03
+    # ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): that group left the menu, its two screens hidden (an old link opens
+    # them), 친구 추세판 in 지금
+    assert out["start"] == "deck" and out["bots"] == ["deck", "room", "ftrend"]
+    assert out["groups"] == ["now", "mix", "range", "gate"] and out["by"] is None and out["hidden"] == [True, True, False]
+    assert out["keys"] == ["deck", "room", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]
     # (owners 10-31 night: the friend bot is 친구 15분 봇; the 레인지 봇's card once it took the first WOO X Pro slot,

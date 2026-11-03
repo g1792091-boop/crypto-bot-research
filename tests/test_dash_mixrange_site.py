@@ -115,7 +115,7 @@ def test_the_woo_x_pro_slot_leaves_once_the_range_bot_is_there(site):
     d = L.build(p, LW.NOW)
     assert [x["id"] for x in d["execs"]] == ["bybit"] and "mexc" not in [a["id"] for a in d["accts"]]
     assert d["replaced"] == [{"id": "mexc", "bot": "range", "name_ko": "레인지 봇", "account_ko": "WOO X Pro", "unit": "paperbot-mixrange",
-                              "api": "/api/v4/livebots/mixrange", "tab": "rangebot"}]
+                              "api": "/api/v4/livebots/mixrange", "tab": "rangebot", "off": False}]   # (off: owners 11-03)
     assert d["paths"]["mixrange_config"] == str(site["cfg"])
     assert "mexc" not in L.costs(p, LW.NOW) and "mexc" not in (L.trade_rows(p, LW.NOW).get("accts") or {})
     # the same table as the live checks'
@@ -181,7 +181,7 @@ def test_the_range_bots_answers(tmp_path):
     c = X.control(mp, NOW)
     cfg = _cfg_range()
     assert (c["bot"], c["name_ko"], c["tf_ko"], c["trend_tf_ko"], c["rules"], c["rules_ko"], c["trend_mode"]) == \
-        ("range", "레인지 봇", cfg.tf_ko, cfg.trend_tf_ko, ["h3x"], ["3합 히스토그램 0선 돌파"], "macd")   # (11-02)
+        ("range", "레인지 봇", cfg.tf_ko, cfg.trend_tf_ko, ["o4h"], ["OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)"], "macd")   # (11-03)
     assert (cfg.tf_ko, cfg.trend_tf_ko) == ("15분", "30분")                 # owners 10-31, last: 15m signals, the 30m trend
     assert (c["account_ko"], c["exchange_ko"], c["stale_ms"]) == ("WOO X Pro", "WOO X Pro", 20 * MIN)
     live = c["bots"][0]
@@ -313,7 +313,7 @@ def test_the_board_shows_the_three_bots(site, tmp_path):
     e = rows["ETHUSDT"]["rg"]
     assert (e["bar"]["ko"], e["bar"]["colour_ko"], e["bar"]["no_entry"], e["h0x"]["ko"]) == ("횡보", "노랑", True, "0선 돌파 없음")
     # owners 11-02: the 추세 MACD first, the trend bar said as the rules of before
-    assert d["rules_ko"][0].startswith("추세 MACD(11-02부터 세 봇 모두)")
+    assert d["rules_ko"][0].startswith("추세 MACD(11-02부터 모든 봇)")
     assert any(x.startswith("추세 바 종합(10-31 밤 ~ 11-02, 지난 규칙:") for x in d["rules_ko"])
     assert any(x.startswith("히스토그램 0선 돌파(친구 15분 봇 · 레인지 봇") for x in d["rules_ko"])
     # after the move: the old range paper's 1-hour and ROC reads leave the board
@@ -405,9 +405,10 @@ def test_the_words(tmp_path):
     assert out["h0x"] == ["히스토그램 0선 위로 돌파 0.50", "히스토그램 0선 돌파 없음 −0.20", None] and out["rule"] == "히스토그램 0선 돌파"
     assert out["ui"] == ["/api/v4/livebots/mixrange", "/api/v4/livebots/mixrangeperf", "WOO X Pro", "15분", "15분", "15분"]
     w_mix, w_range, w_bybit = out["waits"]
-    # owners 11-02: the 30m 추세 MACD; the 3합 histogram's 0 cross, the OBV histogram's turn
+    # owners 11-02: the 30m 추세 MACD; the 3합 histogram's 0 cross (WOO X Pro 2), the OBV histogram's turn (owners 11-03:
+    # the 레인지 봇 on WOO X Pro 1, the 바이비트 봇's rule of 11-02)
     assert w_mix.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "3합 히스토그램이 0선을 그 쪽으로 돌파" in w_mix
-    assert w_range == w_mix and "노란 막대도 같음" in w_mix
+    assert w_range == w_bybit and "노란 막대도 같음" in w_mix
     assert w_bybit.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로" in w_bybit
     assert "찹존" not in w_mix + w_bybit and "AC 막대가 그 쪽" not in w_bybit
     assert out["tf"] == ["15분", "30분", "15분"]
@@ -417,7 +418,7 @@ def test_the_words(tmp_path):
     assert out["who"] == [{"name": "친구 15분 봇", "tf": "15분", "ttf": "30분"}, {"name": "친구 30분 봇", "tf": "30분", "ttf": None}]
     assert out["tab"] == "레인지 봇" and out["mixLabel"] == "친구 15분 봇"
     h = out["heads"]
-    assert h[0] == "레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파) · 다른 봇은 이 화면에 없어요"
+    assert h[0] == "레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환) · 다른 봇은 이 화면에 없어요"
     assert h[1].startswith("레인지 봇 페이퍼(연습)와 그 봇을 따라가는") and out["only"] == [[], ["mexc"]]
     assert out["none"] == ["레인지 봇은 WOO X Pro 계정에서 스스로 거래해요 · 잔고는 아래 실거래 칸", "레인지 봇을 따라가는 실행기가 아직 없어요 (페이퍼만)"]
     assert out["movedFn"] == [True, False, False] and out["parts"] == ["관제", "성적 · 모의 비교", "지난 페이퍼 기록"]
@@ -429,7 +430,7 @@ def test_the_words(tmp_path):
     assert "진짜 돈 · 바이비트 · 바이비트 봇 · WOO X Pro · 레인지 봇 (스스로 매매 · 잔고는 각 봇 화면)" in out["real"]
     assert out["ids"] == [[], []] and out["ids0"] == ["bybit", "mexc"]
     assert out["gate"] == "가능 · 15분봉 신호를 기다려요" and out["led"].startswith("20분 넘게 새 기록이 없어요")
-    assert out["screens"][0][0] == "레인지 봇" and "히스토그램 0선 돌파" in out["screens"][0][1]
+    assert out["screens"][0][0] == "레인지 봇" and "OBV 히스토그램 전환" in out["screens"][0][1]     # (owners 11-03)
     assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (15분봉 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파 · WOO X Pro 2 실거래와 모의)"]
 
 
@@ -470,8 +471,8 @@ def test_the_range_tab(site, tmp_path, monkeypatch):
     assert "레인지 봇 페이퍼(연습)와" in b["text"]
     assert "/api/v4/livebots/mixrange" in a["asked"] and "/api/v4/livebots/range" not in a["asked"]
     assert "/api/v4/livebots/goalres?bot=range" in a["asked"]
-    for w in ("레인지 봇 · WOO X Pro 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + 3합 히스토그램 0선 돌파)", "레인지 봇은 WOO X Pro 계정에서 스스로 거래해요",
-              "관제", "성적 · 모의 비교", "지난 페이퍼 기록", "실거래 · WOO X Pro", "진짜 돈 · WOO X Pro 계정", "바닥선 없음",
+    for w in ("레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이 (15분봉 진입 · 추세 MACD 30분 + OBV 히스토그램 전환)", "레인지 봇은 WOO X Pro 계정에서 스스로 거래해요",
+              "관제", "성적 · 모의 비교", "지난 페이퍼 기록", "실거래 · WOO X Pro", "진짜 돈 · WOO X Pro 1 계정", "바닥선 없음",
               "히스토그램 0선 아래로 돌파", "추세 바 30분 종합 횡보 노랑(진입 금지)", "봇은 15분봉이 끝날 때마다 기록해요",
               "15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램"):
         assert w in a["text"], w

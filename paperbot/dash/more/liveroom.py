@@ -261,7 +261,7 @@ def coins_of(candles: Optional[Callable], now: int) -> list:
 
 def build(now: int, units: Callable, started: Callable, candles: Optional[Callable] = None) -> dict:
     bots, seats, checks = [], [], []
-    for bid in D.BOT_ORDER:
+    for bid in D.bot_order():
         prof = MX.PROFILES[bid]
         try:
             b = D.bot_view(prof, now)
@@ -303,7 +303,7 @@ def register(app, ctx) -> dict:
     @app.get("/api/v4/livebots/room")                   # (= ROUTE: written out for tests/test_dash_v4.py's route list)
     def get_livebots_room():
         """실거래 › 회의실: the real programs round one table (read-only, 5 s cache)."""
-        key = "room:" + json.dumps([MX.paths(bot=b) for b in D.BOT_ORDER], sort_keys=True)
+        key = "room:" + json.dumps([MX.paths(bot=b) for b in D.bot_order()], sort_keys=True)
         return L._cached(key, lambda: json_finite(build(int(time.time() * 1000), LC.unit_state, LC.unit_started, candles)))
 
     return {"routes": [ROUTE]}

@@ -337,7 +337,8 @@ sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
 - 아침 점검의 '놓친 신호'는 15분봉으로 다시 계산해 `OBV 히스토그램 양봉·음봉 전환 N번`을 셉니다.
 - 설정: `"trend": "macd"`, `"rules": ["o4h"]` (`"tf": "15m"`, `"trend_tf": "30m"` 그대로). 시험: `tests/test_rules1102.py`,
   `tests/test_dash_rules1102.py`. **백테스트는 하지 않았습니다.**
-- 친구 15분 봇과 레인지 봇은 같은 추세(30분봉 추세 MACD) + 15분봉 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장).
+- 친구 15분 봇은 같은 추세(30분봉 추세 MACD) + 15분봉 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장).
+- **11/03: 바이비트 봇은 끄고, 이 OBV 히스토그램 방식은 레인지 봇(WOO X Pro 1)이 씁니다 (13장).** 12-1의 순서는 하지 않습니다.
 
 ### 12-1. 바꾸는 순서 (서버에서, 포지션이 없을 때 권장)
 
@@ -359,3 +360,46 @@ sudo systemctl restart paperbot-mixbybit paperbot-mixbybit-paper
 - 텔레그램 시작 메시지: `… 15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)`.
 - 다시 켜도 들고 있던 포지션은 그대로 이어받아 손절·계단을 계속 봅니다.
 - 되돌리기: `.before-1102` 파일을 다시 복사하고 다시 켭니다.
+
+
+## 13. 11/03: 바이비트 봇 끄기 (자동매매는 WOO X Pro 1 · 2만)
+
+두 분(11/03): "자동매매봇 거래소는 총 2개 거래소를 쓸꺼야", "바이비트말고 woox pro1 거래소랑 친구봇 woox pro2 이렇게 쓸꺼야",
+"PRO1 OBV · PRO2 3합".
+
+| 봇 | 계정 | 추세 (30분봉) | 진입 (15분봉) |
+|---|---|---|---|
+| 레인지 봇 | WOO X Pro 1 | 추세 MACD 히스토그램 0선 위 상승 · 아래 하락 | OBV 히스토그램 0선 아래 양봉 전환 롱 · 0선 위 음봉 전환 숏 (12장의 방식, `docs/range-bot-ko.md` 맨 앞) |
+| 친구 15분 봇 | WOO X Pro 2 | 같음 | 3합 히스토그램 0선 돌파 (`docs/mixchop-ko.md` 18장) |
+| 바이비트 봇 | 바이비트 | — | **꺼 둠** |
+
+- 바이비트 봇의 두 서비스(실거래 `paperbot-mixbybit`, 모의 `paperbot-mixbybit-paper`)를 `disable --now`로 끄면:
+  - 사이트: 관제실 · 회의실 · 분석팀 · 친구 추세판 · 진짜 돈 줄에서 빠집니다(`livebots.mix_off`). 메뉴에서도 빠지고, 지난 기록은
+    예전 링크(`#/livebots/bybitbot`)로 볼 수 있어요. 다시 켜면 화면에 다시 나옵니다.
+  - 텔레그램: 봇이 꺼졌으니 진입 · 청산 알림이 없고, 아침 점검 · 손실 카드 타이머(`paperbot-mixbybitcheck*`)도 같이 끕니다.
+    `install.sh`는 바이비트 봇이 꺼져 있으면 이 점검을 다시 켜지 않습니다.
+- `/etc/paperbot/mixbybit.json`은 **지우지 않습니다.** 이 파일이 있어야 예전 바이비트 실행기 칸이 점검과 사이트에 다시 나오지 않습니다.
+- 바이비트 계정의 돈은 그대로 있습니다(봇은 주문만 멈춤). 옮기거나 빼는 건 두 분이 앱에서 하시면 됩니다.
+
+### 13-1. 순서 (서버에서)
+
+1. 코드 받기 (봇 매매는 아직 그대로):
+   ```bash
+   cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh
+   ```
+2. 바이비트 봇에 열린 포지션이 있는지 보기:
+   ```bash
+   cd /opt/crypto-bot-research
+   sudo deploy/paperbot-exec.sh mixchop check --config /etc/paperbot/mixbybit.json | tail -8
+   ```
+   포지션이 있으면 끝날 때까지 기다리거나 바이비트 앱에서 직접 닫은 뒤에 3을 합니다. 봇을 끄면 거래소에 걸어 둔 손절은 남지만
+   계단 익절은 더 움직이지 않습니다.
+3. 끄기 (재부팅해도 안 켜지게):
+   ```bash
+   sudo systemctl disable --now paperbot-mixbybit paperbot-mixbybit-paper paperbot-mixbybitcheck.timer paperbot-mixbybitcheck-pass.timer
+   systemctl is-active paperbot-mixbybit paperbot-mixbybit-paper; systemctl is-enabled paperbot-mixbybit paperbot-mixbybit-paper
+   ```
+   네 줄 모두 `inactive` / `disabled`면 됩니다.
+4. 다른 두 봇의 설정: 친구 15분 봇은 `docs/mixchop-ko.md` 18-1, 레인지 봇은 `docs/range-bot-ko.md` 맨 앞의 '바꾸는 순서'.
+5. 되돌리기(바이비트 봇 다시 켜기): `sudo systemctl enable --now paperbot-mixbybit paperbot-mixbybit-paper` 다음 `sudo bash deploy/install.sh`
+   (점검 타이머가 다시 켜짐). 메뉴는 코드에서 다시 넣어야 합니다.

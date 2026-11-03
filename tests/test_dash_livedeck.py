@@ -569,7 +569,8 @@ def test_the_bot_screens_and_the_room_wear_the_hud():
     routes = _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js"))
     menu = re.findall(r'"(\w+)"', "".join(re.findall(r'screens: \[([^\]]*)\]', routes.split("const LIVE_GROUPS = [")[1].split("];")[0])))
     hud_set = set(re.findall(r'"(\w+)"', re.search(r"export const HUD = new Set\(\[([^\]]*)\]\)", lb).group(1)))
-    assert hud_set == set(menu) - {"deck", "room"}                     # every menu tab but the two with their own look
+    # every menu tab but the two with their own look (+ the 바이비트 봇's two, off the menu since 11-03: an old link)
+    assert hud_set - {"bybitbot", "bybitperf"} == set(menu) - {"deck", "room"}
     assert 'el.classList.add("lb-hud", "lb-boot");' in lb and 'el.classList.remove("lb-boot"), 2600)' in lb
     assert '@import url("livebots-hud.css");' in _read(os.path.join(scr, "livebots.css"))
     body = re.sub(r"/\*.*?\*/", "", hud, flags=re.S)

@@ -70,7 +70,8 @@ def test_a_world_where_deepcoin_follows_the_vwap_bot_shows_none_of_it(tmp_path):
 def test_the_screens_say_so():
     routes = (V4 / "core" / "routes.js").read_text(encoding="utf-8")
     # (owners 11-01: one group per live bot; the VWAP 개선판's screen hidden)
-    assert '{id: "bybit", ko: "바이비트 봇", screens: ["bybitbot", "bybitperf", "ftrend"]}' in routes
+    # (owners 11-03: the 바이비트 봇's group left too, its screens hidden: tests/test_dash_rules1102.py)
+    assert '{id: "bybit"' not in routes and 'bybitbot: {ko: "바이비트 봇", group: "now", title: "바이비트 봇 (11/03부터 꺼 둠 · 지난 기록)", hidden: true}' in routes
     assert "V3.9 투비트" not in routes.split("const LIVE_SCREENS")[1].split("};")[0]
     assert 'vwapbot: {ko: "VWAP 개선판", group: "now", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)", hidden: true}' in routes
     hq = (V4 / "screens" / "livebots-hq.js").read_text(encoding="utf-8")

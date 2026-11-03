@@ -665,7 +665,7 @@ def build(p: Optional[dict] = None, more: Optional[dict] = None, now_ms: Optiona
                 cards[x["id"]]["follows_ko"] = b["short_ko"]
         # the mix bots: the 친구봇 always (its card once it has a state file), the 바이비트 봇 once it took the Bybit slot,
         # the 레인지 봇 once it took the "mexc" slot (owners 10-31 night)
-        took = {L.REPLACED[ex]["bot"] for ex in L.replaced(p)}
+        took = {L.REPLACED[ex]["bot"] for ex in L.replaced(p)} - {b for b, _k in MIX_SLOTS if L.mix_off(b)}
         for bot, key in (("mix", "mix_paths"), *((b, k) for b, k in MIX_SLOTS if b in took)):
             w = MIX_CARD[bot]
             try:

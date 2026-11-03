@@ -13,7 +13,7 @@ export const ALIAS = {
 /** The 실거래 site's tabs (core/routes.js LIVE_SCREENS; the rule bot's page no longer lists 실거래: it moved to its own site). */
 export const LIVE_ALIAS = {
   // 봇별 (owners 10/26): one screen per bot
-  trendbot: "추세판단 봇 봇별 바이비트 WOO X Pro 페이퍼 trend bot", rangebot: "레인지 봇 봇별 WOO X Pro 레인지 필터 되돌림 슈퍼트렌드 추세 MACD 3합 히스토그램 0선 돌파 추세 바 종합 15분 mixrange range bot", vwapbot: "VWAP 개선판 봇별 페이퍼 vwap bot",
+  trendbot: "추세판단 봇 봇별 바이비트 WOO X Pro 페이퍼 trend bot", rangebot: "레인지 봇 봇별 WOO X Pro 레인지 필터 되돌림 슈퍼트렌드 추세 MACD OBV 히스토그램 양봉 음봉 전환 WOO X Pro 1 추세 바 종합 15분 mixrange range bot", vwapbot: "VWAP 개선판 봇별 페이퍼 vwap bot",
   mixbot: "친구 15분 봇 친구 30분 봇 믹스 봇별 WOO X Pro 2 두 번째 계정 추세 MACD 3합 히스토그램 0선 돌파 추세 바 종합 mixchop mix bot",
   trend: "관제 추세 판단 되돌림 감독 지금 control trend", tchart: "추세 차트 흐름 판단 기록 히트맵 신호 띠 heatmap trend chart", hq: "한눈에 지갑 빛 실행기 계좌", pos: "포지션 진입가 익절가 손절가 최대 position", summary: "요약 터미널 terminal", chart: "차트 선 chart",
   risk: "위험 청산 손절 risk", health: "봇 상태 살아 있나 실행기 health", trades: "거래 체결 기록 trades", replay: "다시보기 재생 replay",
@@ -27,7 +27,7 @@ export const LIVE_ALIAS = {
   mix: "친구 관제 친구 15분 봇 믹스 30분 봇 관제 WOO X Pro 2 두 번째 계정 모의 신호 계단 mixchop mix", mixperf: "친구 성적 믹스 성적 승률 거래 실거래 모의 비교 mixchop mix",
   deck: "관제실 메인 첫 화면 대시보드 지갑 차트 추세 그리드 포지션 코어 실행 기록 포워드 테스트 히스토그램 신호 흐름 목표 deck main",
   room: "회의실 팀 직원 에이전트 분석팀 프로그램 자리 상태 점검 백업 활동 맥박 봉 마감 room team office agents",
-  mixrange: "레인지 관제 레인지 봇 WOO X Pro 첫 계정 추세 MACD 3합 히스토그램 0선 돌파 추세 바 모의 신호 계단 mixrange range",
+  mixrange: "레인지 관제 레인지 봇 WOO X Pro 첫 계정 WOO X Pro 1 추세 MACD OBV 히스토그램 전환 추세 바 모의 신호 계단 mixrange range",
   mixrangeperf: "레인지 성적 레인지 봇 실거래 모의 비교 승률 거래 mixrange range",
   // the 바이비트 봇 (owners 10-29) and the friend's trend per coin
   bybitbot: "바이비트 봇 봇별 친구 추세 추세 MACD OBV 히스토그램 양봉 음봉 전환 추세 바 OBV AC 스톡RSI 실거래 모의 bybit bot", bybit: "바이비트 관제 바이비트 봇 OBV 스톡RSI 신호 계단 bybit",

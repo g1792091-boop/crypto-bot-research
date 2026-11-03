@@ -115,7 +115,7 @@ export function goalAgenda(g) {
   const pct = (r) => (ok(r) ? `${r >= 0 ? "+" : "−"}${fmt.num(Math.abs(r) * 100, 1)}%` : "—");
   const a = g.all, nDays = Number(g.month_days) || 30;
   const out = [{n: "목표", q: g.goal_ko || `한 달 ×${fmt.num(T, 0)}`, a: `예: $100로 시작하면 ${nDays}일 뒤 $${fmt.int(100 * T)} (×${fmt.num(T, 0)}, 이익 +${fmt.int((T - 1) * 100)}%)`, tone: "flat"},
-    {n: "①", q: "이번 달 어디쯤?", a: a ? `세 봇 합 ${mult(a.mult)} · 오늘 목표 경로 ${mult(a.path_now)} · 경로보다 ${pct(a.vs_path)}` : "이번 달 닫힌 거래가 아직 없어요 (첫 거래부터 계산해요)",
+    {n: "①", q: "이번 달 어디쯤?", a: a ? `봇 합 ${mult(a.mult)} · 오늘 목표 경로 ${mult(a.path_now)} · 경로보다 ${pct(a.vs_path)}` : "이번 달 닫힌 거래가 아직 없어요 (첫 거래부터 계산해요)",
       tone: a ? (a.vs_path >= 0 ? "up" : "down") : "muted"},
     {n: "②", q: "남은 날 하루에 얼마나?", a: a && ok(a.need_daily) ? `남은 ${fmt.num(Math.max(0, nDays - a.days), 1)}일 동안 매일 ${pct(a.need_daily)}씩 늘어야 ×${fmt.num(T, 0)}` : "—",
       tone: a && ok(a.need_daily) ? "flat" : "muted"}];

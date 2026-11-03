@@ -25,7 +25,7 @@
  "trend": "macd",
  "trend_tf": "30m",
  "rules": [
-  "h3x"
+  "o4h"
  ],
  "stop_atr": 3,
  "coins": {
