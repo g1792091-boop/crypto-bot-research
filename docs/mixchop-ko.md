@@ -777,6 +777,13 @@ sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper
    ```
    - diff: 새 줄 `"exchange": "toobit"`, `"taker_fee": 0.0006`(그리고 11/02 · 11/03 바꾼 것: `"trend": "macd"`, `"h3x"`, 코인, 계단).
    - check: `잔고(친구 15분 봇, 투비트)`, 코인 다섯 개가 ✔인지(✘ 코인은 거래하지 않음, 최대 레버리지가 40배보다 낮으면 그 코인은 꺼짐).
-6. 켜기: `sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper` → 텔레그램 `[친구 15분 봇] ▶️ 시작`에 코인과 매매법,
+6. 예전 계정의 기록은 이름만 바꿔 보관하고 투비트는 새로 시작합니다(그대로 두면 시작 잔고와 잔고 선이 WOO X Pro 2 계정 것과
+   섞여요; 모의 쌍둥이 기록은 그대로):
+   ```bash
+   sudo systemctl stop paperbot-mixchop
+   sudo mv /var/lib/paperbot/exec/mixchop-state.json /var/lib/paperbot/exec/mixchop-state.json.wooxpro2
+   sudo mv /var/lib/paperbot/exec/mixchop-log.jsonl /var/lib/paperbot/exec/mixchop-log.jsonl.wooxpro2
+   ```
+7. 켜기: `sudo systemctl restart paperbot-mixchop paperbot-mixchop-paper` → 텔레그램 `[친구 15분 봇] ▶️ 시작`에 코인과 매매법,
    `journalctl -u paperbot-mixchop -n 30`에 코인마다 `격리 40배`.
-7. WOO X Pro 2 계정의 예전 키 파일(`/etc/paperbot/executor-wooxpro2.env`)은 이제 아무 봇도 읽지 않습니다.
+8. WOO X Pro 2 계정의 예전 키 파일(`/etc/paperbot/executor-wooxpro2.env`)은 이제 아무 봇도 읽지 않습니다.
