@@ -44,7 +44,10 @@ ERA = Path(tempfile.mkdtemp(prefix="era1031c-"))
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
 for _f in DEPLOY.glob("mix*.json"):
     _d = json.loads(_f.read_text(encoding="utf-8"))
+    for _k in ("trend_tf2", "stop_tf", "trend_both"):   # (11-04: the 15m trend on its own bars, the 15m stop: not yet)
+        _d.pop(_k, None)
     if _f.name.split(".")[0] in ERA_RULES:       # (and the six coins of then: owners 11-03 changed the two WOO X Pro bots')
+        _d["tf"] = "15m"                         # (and its 15m signals: owners 11-04 evening moved them to 5m)
         _d.update(trend="bar", rules=ERA_RULES[_f.name.split(".")[0]],
                   coins={s: {"leverage": 20 if s == "ZECUSDT" else 40} for s in SIX},
                   ladder={"trigger": 10, "lock": 8, "step": 5}, ladder_basis="net",    # (and the ladder of then,

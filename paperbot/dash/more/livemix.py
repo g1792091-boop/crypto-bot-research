@@ -400,6 +400,15 @@ def trend_tf_ko(cfg: Any) -> Optional[str]:
         return tf_of(cfg)[1] if cfg is not None else None
 
 
+def trend2_stop_ko(cfg: Any) -> dict:
+    """Owners 11-04: the second 추세 MACD's bar ("15분": its own trend_tf2, or the signal's with trend_both; None: none)
+    and the ATR stop's bar (stop_tf, else the signal's); {} when unread (an answer without the keys: the UI's words)."""
+    try:
+        return {"trend2_ko": cfg.trend2_ko, "stop_ko": str(cfg.stop_ko)}
+    except Exception:  # noqa: BLE001  (no config, or one from before)
+        return {}
+
+
 def stale_of(cfg: Any) -> tuple:
     """(ms, the 멈춤 words): the bot saves at every close of its bar, so older than its bar + 5 minutes = 멈춤."""
     tf_ms, tf_ko = tf_of(cfg)
@@ -415,7 +424,7 @@ def status_of(bid: str, st: dict, lg: dict, now: int, prof: Optional[Profile] = 
     stale_ms, stopped_ko = stale_of(cfg)
     rows = lg.get("rows") or []
     starts = [r for r in rows if r.get("kind") == "start"]
-    base = {"unit": unit, "stale_ms": stale_ms, "tf_ko": tf_of(cfg)[1], "trend_tf_ko": trend_tf_ko(cfg),
+    base = {"unit": unit, "stale_ms": stale_ms, "tf_ko": tf_of(cfg)[1], "trend_tf_ko": trend_tf_ko(cfg), **trend2_stop_ko(cfg),
             "last_log_ms": _i(rows[-1]["ts"]) if rows else None,
             "started_ms": _i(starts[-1]["ts"]) if starts else None,
             # its first start (한눈에's DAY n): the log's first start row, unknown when the log's start was not read
@@ -958,7 +967,7 @@ def live_words(p: dict, prof: Profile) -> dict:
     rules = [str(r) for r in getattr(cfg, "rules", None) or ()]
     return {"name_ko": getattr(cfg, "name", None) or prof.name, "tf_ko": tf_of(cfg)[1], "trend_tf_ko": trend_tf_ko(cfg), "rules": rules,
             "rules_ko": [M.RULE_KO.get(r, r) for r in rules], "trend_mode": getattr(cfg, "trend", None),
-            "stale_ms": stale_of(cfg)[0]}
+            "stale_ms": stale_of(cfg)[0], **trend2_stop_ko(cfg)}
 
 
 def _who(prof: Profile) -> dict:

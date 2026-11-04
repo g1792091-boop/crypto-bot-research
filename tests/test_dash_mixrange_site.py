@@ -42,8 +42,21 @@ BAD = __import__("re").compile(r"\b(null|undefined|NaN|Infinity)\b|\[object")
 BAR = {"score": 0, "six": -1, "line": -1, "ema": -1, "st": 1, "four": -1}
 
 
+def _era(src: str) -> dict:
+    """A 레인지 봇 deploy config as this world plays it: on 15m signals with the 30m trend (owners 10-31, last ~ 11-04;
+    owners 11-04 evening moved the live bots to 5m signals with the 15m trend and stop: tests/test_rules1104b.py)."""
+    d = json.load(open(os.path.join(ROOT, "deploy", src), encoding="utf-8"))
+    for k in ("trend_tf2", "stop_tf", "trend_both"):
+        d.pop(k, None)
+    d["tf"] = "15m"
+    return d
+
+
 def _cfg_range():
-    return M.load_config(os.path.join(ROOT, "deploy", "mixrange.live.json"))
+    import tempfile
+    p = os.path.join(tempfile.mkdtemp(prefix="range15-"), "mixrange.live.json")
+    json.dump(_era("mixrange.live.json"), open(p, "w", encoding="utf-8"))
+    return M.load_config(p)
 
 
 def _write_range(folder, live_rows, paper_rows, live_state=None, paper_state=None):
@@ -51,7 +64,7 @@ def _write_range(folder, live_rows, paper_rows, live_state=None, paper_state=Non
     os.makedirs(folder, exist_ok=True)
     j = lambda n: os.path.join(folder, n)      # noqa: E731
     for mode, src in (("live", "mixrange.live.json"), ("paper", "mixrange.paper.json")):
-        d = json.load(open(os.path.join(ROOT, "deploy", src), encoding="utf-8"))
+        d = _era(src)
         d.update(state=j(f"{mode}-state.json"), log=j(f"{mode}-log.jsonl"), own_stop_file=j(f"{mode}.STOP"), kill_file=j("STOP"))
         json.dump(d, open(j(f"{mode}.json"), "w", encoding="utf-8"))
     for mode, rows, st in (("live", live_rows, live_state), ("paper", paper_rows, paper_state)):
@@ -299,7 +312,7 @@ def test_the_board_shows_the_three_bots(site, tmp_path):
     assert (d["m30"]["state"], d["m30"]["name_ko"], d["m30"]["tf_ko"]) == ("ok", "바이비트 봇", "30분")
     assert (d["r15"]["state"], d["r15"]["name_ko"], d["r15"]["tf_ko"], d["r15"]["trend_tf_ko"], d["r15"]["stale"]) == \
         ("ok", "레인지 봇", "15분", "30분", False)
-    assert d["f30"]["state"] == "off" and "15분봉이 한 번 끝나면" in d["f30"]["ko"] and d["f30"]["trend_tf_ko"] == "30분"   # off, its own bars
+    assert d["f30"]["state"] == "off" and "5분봉이 한 번 끝나면" in d["f30"]["ko"] and d["f30"]["trend_tf_ko"] == "30분"   # off, its own bars (5m since 11-04 evening)
     assert d["moved"] is False and d["h1"] is not None                                     # before the move: the old reads stay
     rows = {r["symbol"]: r for r in d["coins"]}
     b = rows["SOLUSDT"]["m30"]
@@ -369,7 +382,9 @@ def test_the_words(tmp_path):
     console.log(JSON.stringify({{
       trend: [MX.trendKo(bar), MX.trendKo({{...bar, trend: 0, bar_n: [2, 2, 2], bar_score: 0}}), MX.trendKo({{...bar, trend: 1, bar_score: 3}}),
         MX.trendKo({{...bar, tf: '15분', trend_tf: '30분'}}), MX.trendKo({{...bar, tf: '15분'}})],
-      waitOf: [MX.waitOf(MX.BYBIT_UI, {{status: {{tf_ko: '30분', trend_tf_ko: '30분'}}}}), MX.waitOf(MX.RANGE_UI, null), MX.waitOf(MX.MIX_UI, {{status: {{tf_ko: '15분', trend_tf_ko: '30분'}}}})],
+      waitOf: [MX.waitOf(MX.BYBIT_UI, {{status: {{tf_ko: '30분', trend_tf_ko: '30분'}}}}), MX.waitOf(MX.RANGE_UI, null), MX.waitOf(MX.MIX_UI, {{status: {{tf_ko: '15분', trend_tf_ko: '30분'}}}}),
+        MX.waitOf(MX.MIX_UI, {{status: {{tf_ko: '5분', trend_tf_ko: '30분', trend2_ko: '15분'}}}}),
+        MX.waitOf(MX.MIX_UI, {{status: {{tf_ko: '15분', trend_tf_ko: '30분', trend2_ko: null}}}})],
       plan: [MX.BYBIT_UI.plan, MX.BYBIT_UI.planOf('30분'), MX.MIX_UI.planOf || null],
       labels: [F.whoLabel({{name: '바이비트 봇', tf: '15분', ttf: '30분'}}, null), F.whoLabel({{name: '친구 30분 봇', tf: '30분', ttf: null}}, null),
         F.whoLabel({{name: '레인지 봇', tf: '15분', ttf: '30분'}}, {{tf: '15분', trend_tf: '15분'}}), F.barsKo({{tf: '15분', ttf: '30분'}})],
@@ -399,20 +414,23 @@ def test_the_words(tmp_path):
     wo = out["waitOf"]
     # (a bot whose trend is its own bar; owners 11-02: the 추세 MACD and the OBV histogram's turn)
     assert wo[0].startswith("30분봉이 끝날 때 추세 MACD 히스토그램(") and "0선 아래에서 양봉으로 바뀌면 롱" in wo[0]
-    assert wo[1] == out["waits"][1] and wo[2] == out["waits"][0]
+    assert wo[1] == out["waits"][1] and wo[3] == out["waits"][0]
+    # (a server still on an older config: its own bars' words; 11-04 the 15m signals with trend_both, 11-03 the 30m alone)
+    assert wo[2].startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램(") and "이 15분봉에서도 같은 쪽일 때 15분봉 OBV 히스토그램" in wo[2]
+    assert ") 쪽으로 15분봉 OBV 히스토그램" in wo[4] and "에서도" not in wo[4]
     assert out["plan"] == ["손절 = 진입 때 15분봉 ATR × 3 · 증거금 = 잔고의 40%", "손절 = 진입 때 30분봉 ATR × 3 · 증거금 = 잔고의 40%", None]
     assert out["labels"] == ["15분 신호 · 추세 30분 (바이비트 봇)", "30분 (친구 30분 봇)", "15분 (레인지 봇)", "15분 신호 · 추세 30분"]
     assert out["vals"].startswith("추세 바 종합 하락 빨강") and "히스토그램 0선 아래로 돌파 −4.08" in out["vals"] and "찹존" not in out["vals"]
     assert out["h0x"] == ["히스토그램 0선 위로 돌파 0.50", "히스토그램 0선 돌파 없음 −0.20", None] and out["rule"] == "히스토그램 0선 돌파"
-    assert out["ui"] == ["/api/v4/livebots/mixrange", "/api/v4/livebots/mixrangeperf", "WOO X Pro", "15분", "15분", "15분"]
+    assert out["ui"] == ["/api/v4/livebots/mixrange", "/api/v4/livebots/mixrangeperf", "WOO X Pro", "5분", "5분", "15분"]   # (11-04 evening)
     w_mix, w_range, w_bybit = out["waits"]
     # owners 11-02: the 30m 추세 MACD; the OBV histogram's turn (owners 11-03: the 레인지 봇 on WOO X Pro 1, the 바이비트
     # 봇's rule of 11-02; 11-03 evening "친구봇도 obv로": the 친구 15분 봇 too, its 3합 0 cross of before gone)
-    assert w_mix.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱" in w_mix
+    # (owners 11-04 evening: the two live bots on the 5m OBV turn with the 30m and the 15m 추세 MACD on its side; the
+    # 바이비트 봇, off, as it was)
+    assert w_mix.startswith("5분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱" in w_mix
     assert w_mix == w_range and "노란 막대도 같음" in w_mix and "3합" not in w_mix
-    # (owners 11-04: the two live bots want the 15m 추세 MACD on the same side too; the 바이비트 봇, off, as it was)
-    assert "이 15분봉에서도 같은 쪽일 때 15분봉 OBV 히스토그램" in w_mix and "15분봉에서도" not in w_bybit
-    assert w_bybit.replace(") 쪽으로 15분봉 OBV", ")이 15분봉에서도 같은 쪽일 때 15분봉 OBV") == w_mix
+    assert "이 15분봉에서도 같은 쪽일 때 5분봉 OBV 히스토그램" in w_mix and "15분봉에서도" not in w_bybit
     assert w_bybit.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로" in w_bybit
     assert "찹존" not in w_mix + w_bybit and "AC 막대가 그 쪽" not in w_bybit
     assert out["tf"] == ["15분", "30분", "15분"]

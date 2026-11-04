@@ -52,30 +52,36 @@ const H0X_WAIT = "'ALL + OBV6 MACD' 히스토그램이 0선을 그 쪽으로 돌
 /** Owners 11-02: the trend is the 30m 추세 MACD histogram's side of 0 (its yellow bars too); the 친구 15분 봇 and the 레인지 봇
  *  enter on the 3합 histogram's 0 cross, the 바이비트 봇 on the OBV4 MACD histogram's turn. */
 export const TM_WAIT = "추세 MACD 히스토그램(0선 위 = 상승, 0선 아래 = 하락, 노란 막대도 같음)";
-/** Owners 11-04 ("30분봉이랑 15분봉 추세macd 히스토그램이 추세가 같을때만 진입"): trend "macd2" = the 30m 추세 MACD and the
- *  signal bars' own (15m) on the same side (the config's ``trend_both``). */
-export const TM2_WAIT = "추세 MACD 히스토그램(0선 위 = 상승, 0선 아래 = 하락, 노란 막대도 같음)이 15분봉에서도 같은 쪽일 때";
+/** Owners 11-04 ("30분봉이랑 15분봉 추세macd 히스토그램이 추세가 같을때만 진입"): trend "macd2" = the 30m 추세 MACD and a
+ *  second one (``t2``: the config's ``trend_tf2``, or the signal bars' own with ``trend_both``) on the same side. */
+export const tm2Wait = (t2 = "15분") => `추세 MACD 히스토그램(0선 위 = 상승, 0선 아래 = 하락, 노란 막대도 같음)이 ${t2}봉에서도 같은 쪽일 때`;
+export const TM2_WAIT = tm2Wait("15분");
 export const H3X_WAIT = "15분봉 3합 히스토그램이 0선을 그 쪽으로 돌파하면(롱: 0선 위로, 숏: 0선 아래로) 시장가로 들어가요 (한 번에 1포지션).";
-export const O4H_WAIT = "15분봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로 " +
-  "바뀌면 숏으로 시장가로 들어가요 (한 번에 1포지션, OBV 선은 안 봐요).";
+/** The OBV histogram's turn on the signal bar ``tf`` (owners 11-04 evening: "5분봉에서 obv macd가 0선아래에서 양봉이 나오면 롱"). */
+export const o4hWait = (tf = "15분") => `${tf}봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 바뀌면 롱, ` +
+  "0선 위에서 음봉으로 바뀌면 숏으로 시장가로 들어가요 (한 번에 1포지션, OBV 선은 안 봐요).";
+export const O4H_WAIT = o4hWait("15분");
 const OBVAC_WAIT = "OBV 히스토그램이 연한색→진한색이 되고 OBV MACD의 AC 막대가 그 쪽(롱: 플러스 양봉, 숏: 마이너스 음봉)이면 시장가로 들어가요 " +
   "(한 번에 1포지션, 50선 조건 없음).";
 /** The wait line of a bot on its signal bar ``tf`` with the trend read on ``ttf`` (owners 10-31, last: "15분봉이 끝날 때
  *  30분봉의 추세 바 종합(…) 쪽으로 …"; the trend's bar left out when it is the signal's own). */
-export function waitWords(tf, ttf, rule, trend = "bar") {
-  const tw = trend === "macd2" ? TM2_WAIT : trend === "macd" ? TM_WAIT : BAR_WAIT;
-  return `${tf}봉이 끝날 때 ${ttf && ttf !== tf ? `${ttf}봉의 ` : ""}${tw}${trend === "macd2" ? "" : " 쪽으로"} ${rule}`;
+export function waitWords(tf, ttf, rule, trend = "bar", t2 = "15분") {
+  const tw = trend === "macd2" ? tm2Wait(t2) : trend === "macd" ? TM_WAIT : BAR_WAIT;
+  const rw = typeof rule === "function" ? rule(tf) : rule;             // (o4hWait: the signal bar's words)
+  return `${tf}봉이 끝날 때 ${ttf && ttf !== tf ? `${ttf}봉의 ` : ""}${tw}${trend === "macd2" ? "" : " 쪽으로"} ${rw}`;
 }
-/** The 손실 카드's plan words of a bot sized by margin with an ATR stop on its signal bar ``tf`` (the answer's ``tf_ko``). */
+/** The 손실 카드's plan words of a bot sized by margin with an ATR stop on ``tf`` (the answer's ``stop_ko``, else its
+ *  ``tf_ko``; owners 11-04 evening: the 15m ATR with 5m signals). */
 export const planWords = (tf) => `손절 = 진입 때 ${tf}봉 ATR × 3 · 증거금 = 잔고의 40%`;
 /** Each mix bot's screens: its answers, its account and the words that differ (the friend bot's: the tabs as they were);
  *  ``tf`` / ``ttf``: its signal bar and its trend's bar before the answer says (the answer's ``tf_ko`` / ``trend_tf_ko``
  *  after: waitOf). Owners 10-31, last: all three enter on 15m bars, the trend bar on the 30m bar. */
 // (owners 11-03: the friend bot trades Toobit, its WOO X Pro 2 account gone; later that day "친구봇도 obv로": it enters on
 // the OBV histogram's turn like the 레인지 봇, H3X_WAIT kept for the 3합's words)
+// (owners 11-04 evening: both live bots on the 5m OBV turn, the 30m and 15m 추세 MACD on its side, the 15m ATR stop)
 export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "투비트", exchange: "투비트", key: "",
-  kick: "진짜 돈 · 투비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd2",
-  wait: waitWords("15분", "30분", O4H_WAIT, "macd2"),
+  kick: "진짜 돈 · 투비트 계정", tf: "5분", ttf: "30분", rule: o4hWait, trend: "macd2",
+  wait: waitWords("5분", "30분", o4hWait, "macd2"),
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
   exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
@@ -84,13 +90,15 @@ export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/
 /** The 레인지 봇 (owners 10-31 night): the first WOO X Pro account, 15m bars (screens/livebots.js); owners 11-03 ("PRO1 OBV ·
  *  PRO2 3합"): it enters on the OBV histogram's turn, the 바이비트 봇's rule of 11-02 (that bot is off). */
 export const RANGE_UI = {id: "range", api: "/api/v4/livebots/mixrange", perf: "/api/v4/livebots/mixrangeperf", account: "WOO X Pro",
-  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 1 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd2",
-  wait: waitWords("15분", "30분", O4H_WAIT, "macd2"),
+  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 1 계정", tf: "5분", ttf: "30분", rule: o4hWait, trend: "macd2",
+  wait: waitWords("5분", "30분", o4hWait, "macd2"),
   plan: planWords("15분"), planOf: planWords, morning: "09:09", h1: false};
-/** A bot's wait line from its answer's bars (its config's ``tf`` and ``trend_tf``), else its UI's. */
+/** A bot's wait line from its answer's bars (its config's ``tf``, ``trend_tf`` and second trend ``trend2_ko``), else its UI's
+ *  (an answer that says it has no second trend: the 30m one alone). */
 export function waitOf(o, b) {
   const s = (b && b.status) || {};
-  return o.rule ? waitWords(s.tf_ko || o.tf || "30분", s.trend_tf_ko || o.ttf || null, o.rule, o.trend) : o.wait;
+  const tr = o.trend === "macd2" && s.tf_ko && s.trend2_ko === null ? "macd" : o.trend;
+  return o.rule ? waitWords(s.tf_ko || o.tf || "30분", s.trend_tf_ko || o.ttf || null, o.rule, tr, s.trend2_ko || "15분") : o.wait;
 }
 const botKo = (id, o = MIX_UI) => (id === "live" ? `실거래 · ${o.account}` : "모의 · 주문 없음");
 const STATUS = {running: ["돌고 있음", "good", "run"], stopped: ["멈춤", "bad", "stop"], off: ["꺼짐", "thin", "off"], error: ["못 읽음", "bad", "err"]};
@@ -233,8 +241,9 @@ export function o4Val(v) {
 export function tmKo(v) {
   const tt = v.trend_tf || v.tf, tr = Number(v.trend);
   const head = tr > 0 ? "0선 위 상승" : tr < 0 ? "0선 아래 하락" : "0선(진입 안 함)";
-  const sig = ok(v.tsig) && v.tf                     // owners 11-04: the signal bars' own 추세 MACD (trend_both)
-    ? ` · ${v.tf} ${Number(v.tsig) > 0 ? "상승" : Number(v.tsig) < 0 ? "하락" : "0선"}${ok(v.tmacd_sig) ? ` ${fmt.num(v.tmacd_sig, 2, true)}` : ""}` : "";
+  const t2 = v.trend_tf2 || v.tf;                     // owners 11-04: the second 추세 MACD (15m; trend_both: the signal's)
+  const sig = ok(v.tsig) && t2
+    ? ` · ${t2} ${Number(v.tsig) > 0 ? "상승" : Number(v.tsig) < 0 ? "하락" : "0선"}${ok(v.tmacd_sig) ? ` ${fmt.num(v.tmacd_sig, 2, true)}` : ""}` : "";
   return `추세 MACD ${tt ? `${tt} ` : ""}히스토그램 ${head}${ok(v.tmacd) ? ` ${fmt.num(v.tmacd, 2, true)}` : ""}${v.tyellow ? " · 노란 막대" : ""}${sig}`;
 }
 /** Rule "h0x" (owners 10-31 night): 'ALL + OBV6 MACD''s histogram on the bar: "히스토그램 0선 아래로 돌파 −4.08"; null
@@ -357,8 +366,9 @@ export function mixView(ctx, o = MIX_UI) {
   const cards = h("div", {class: "lmx-cards"}, botsBox,
     ui.card({title: "최근 48시간", sub: `봇 기록 그대로 · ${tf}봉 신호마다 무엇이 됐는지 · 경고는 색 줄 · 한국 시간`, cls: "lmx-feedcard"}, feedHead, feedBox));
   const main = h("div", {class: "lmx-body"}, cards);
-  const el = h("div", {class: "lmx stack"}, slot, main,
-    ui.note(`보기만 하는 화면 · 15초마다 새로 읽어요 · 남은 시간은 1초마다 줄어요 · 봇은 ${tf}봉이 끝날 때마다 기록해요 · 모의 칸의 돈은 진짜 돈이 아니에요`));
+  const noteKo = (t) => `보기만 하는 화면 · 15초마다 새로 읽어요 · 남은 시간은 1초마다 줄어요 · 봇은 ${t}봉이 끝날 때마다 기록해요 · 모의 칸의 돈은 진짜 돈이 아니에요`;
+  const noteEl = ui.note(noteKo(tf));                // (the answer's ``tf_ko`` once read: draw)
+  const el = h("div", {class: "lmx stack"}, slot, main, noteEl);
 
   // a text that follows the server's clock every second (a countdown, a hold time)
   const tick = (node, f) => { st.ticks.push({node, f}); node.textContent = f(serverNow()); return node; };
@@ -498,6 +508,7 @@ export function mixView(ctx, o = MIX_UI) {
   }
   function draw() {
     if (!st.d) return;
+    if (st.d.tf_ko) noteEl.textContent = noteKo(st.d.tf_ko);   // the bot's own bar (owners 11-04 evening: 5m signals)
     drawBots(); drawFeed();
   }
   function onTick() {
@@ -768,7 +779,7 @@ export function mixperfView(ctx, o = MIX_UI) {
     const d = st.d;
     if (!d) return;
     put(recBox, (d.bots || []).map(recCard));
-    if (o.planOf && d.tf_ko) planNode.textContent = o.planOf(d.tf_ko);
+    if (o.planOf && (d.stop_ko || d.tf_ko)) planNode.textContent = o.planOf(d.stop_ko || d.tf_ko);
     btCard.hidden = !d.backtest;                         // the 바이비트 봇 has no 5-year reference
     drawAnalysis(); drawTwin(); if (d.backtest) drawBt(); drawTrades();
     put(rulesBox, (d.bots || []).map(rulesCard));

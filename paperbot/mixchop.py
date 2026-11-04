@@ -110,10 +110,11 @@ import pandas as pd
 
 MIN30 = 30 * 60_000
 MIN15 = 15 * 60_000
+MIN5 = 5 * 60_000
 MIN1 = 60_000
-TF_MS = {"30m": MIN30, "15m": MIN15}         # the signal bar (owners 10-30: WOO X Pro 2 on 15m bars)
-TF_KO = {"30m": "30분", "15m": "15분"}
-TFKO_MS = {MIN30: "30분", MIN15: "15분"}
+TF_MS = {"30m": MIN30, "15m": MIN15, "5m": MIN5}   # the signal bar (owners 10-30: 15m; 11-04: 5m for the OBV turn)
+TF_KO = {"30m": "30분", "15m": "15분", "5m": "5분"}
+TFKO_MS = {MIN30: "30분", MIN15: "15분", MIN5: "5분"}
 TRENDS = ("four", "swing", "bar", "macd")  # the friend's trend: four votes, 2+ the same (10-29) | WOO X Pro 2's (10-30,
                                    # friendtrend 6) | the trend bar's 종합 of all three bots (10-31 night, friendtrend 9)
                                    # | the 추세 MACD histogram's side of 0 (owners 11-02, friendtrend 10)
@@ -395,7 +396,8 @@ OBV_RULES = ("obv", "obv50", "obvac")                     # the rules entering o
 
 def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_ms: int = MIN30,
                     trend: str = "four", tb: Optional[pd.DataFrame] = None, trend_tf_ms: Optional[int] = None,
-                    trend_both: bool = False) -> dict:
+                    trend_both: bool = False, tb2: Optional[pd.DataFrame] = None, trend_tf2_ms: Optional[int] = None,
+                    sb: Optional[pd.DataFrame] = None, stop_tf_ms: Optional[int] = None) -> dict:
     """Owners 10-29, on the signal bar (30m; ``tf_ms`` 15m: WOO X Pro 2, owners 10-30) closing at ``close_ms`` (b30:
     closed bars with volume): the friend's trend of that bar (paperbot/friendtrend.py: four votes; ``trend`` "swing":
     WOO X Pro 2's rule, friendtrend part 6) and the rule's entry signal on its side. ``rule`` "obv": the OBV pane's
@@ -414,8 +416,12 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
     on these bars instead (closed bars of that timeframe; the last one closed at or before this close), the signal, the
     ATR stop and the guard on the signal bars. ``trend_both`` (owners 11-04, "30분봉이랑 15분봉 추세macd 히스토그램이 추세가
     같을때만 진입", with ``trend`` "macd" and ``tb``): the 추세 MACD of the signal bars too (``tsig`` · ``tmacd_sig`` ·
-    ``tyellow_sig``), an entry only when it is on the signal's side as well. side = 1 / -1 / 0 with ``why`` when 0; stop
-    and liquidation guard as evaluate()."""
+    ``tyellow_sig``), an entry only when it is on the signal's side as well. ``tb2`` with ``trend_tf2_ms`` (owners 11-04,
+    later: "15분봉30분봉 히스토그램 추세가 같아야하고 5분봉에서 obv macd가 0선아래에서 양봉이 나오면 롱"): that second
+    추세 MACD read on these bars instead of the signal's (``trend_tf2``: the last one closed at or before this close).
+    ``sb`` with ``stop_tf_ms``: the ATR stop read on these bars (the last one closed by this close) instead of the signal's
+    (the owners' fixed 15m ATR x 3 with 5m signals). side = 1 / -1 / 0 with ``why`` when 0; stop and liquidation guard
+    as evaluate()."""
     from . import friendtrend as FT
     tf_ko = TFKO_MS.get(tf_ms, "30분")
     out = {"symbol": coin.symbol, "close_ms": int(close_ms), "side": 0, "why": "", "rule": rule}
@@ -439,6 +445,15 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
             out["why"] = f"추세 {tt_ko}봉의 지난 봉이 모자람"
             return out
         to, th, tl, tc, tv = (tb[k].to_numpy(float) for k in ("open", "high", "low", "close", "volume"))
+    for extra, ems in ((tb2, trend_tf2_ms), (sb, stop_tf_ms)):   # owners 11-04: the second trend's / the stop's bars
+        if extra is not None and ems and ems != tf_ms:
+            eko = TFKO_MS.get(ems, "30분")
+            if extra.empty or int(extra.open_ms.iloc[-1]) + ems != close_ms // ems * ems:
+                out["why"] = f"{'추세' if extra is tb2 else '손절'} {eko}봉이 아직 없음"
+                return out
+            if len(extra) < 300:
+                out["why"] = f"{'추세' if extra is tb2 else '손절'} {eko}봉의 지난 봉이 모자람"
+                return out
     if rule == "obv":
         ob = FT.obv_state(h, l, c, v)
         want = ob["turn"]
@@ -499,8 +514,13 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
         t = FT.tmacd_state(th, tl, tc, tv)
         tside = t["trend"]
         out.update({"tmacd": t["hist"], "tmacd_line": t["macd"], "tyellow": t["yellow"]})
-        if trend_both and out.get("trend_tf"):
-            t2 = FT.tmacd_state(h, l, c, v)
+        if out.get("trend_tf") and (trend_both or (tb2 is not None and trend_tf2_ms)):
+            if tb2 is not None and trend_tf2_ms and trend_tf2_ms != tf_ms:     # its own bars (owners 11-04, later)
+                t2 = FT.tmacd_state(*(tb2[k].to_numpy(float) for k in ("high", "low", "close", "volume")))
+                out["trend_tf2"] = TFKO_MS.get(trend_tf2_ms, "15분")
+            else:                                                           # the signal bars (trend_both)
+                t2 = FT.tmacd_state(h, l, c, v)
+                out["trend_tf2"] = tf_ko
             out.update({"tsig": t2["trend"], "tmacd_sig": t2["hist"], "tyellow_sig": t2["yellow"]})
     elif trend == "bar":                                # owners 10-31 night: the trend bar's 종합, no four votes
         t = FT.bar_state(th, tl, tc, tv)
@@ -512,7 +532,11 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
         out.update({"votes": {k: t[k] for k in FT.VOTES}, "ema_rsi": t["ema_rsi"], "chop_zone": t["chop_zone"]})
     if rule == "ema3":
         tside = out["e3_trend"]                         # its side was already checked against its own three trends
-    at = float(atr(h, l, c, 14)[-1])
+    if sb is not None and stop_tf_ms and stop_tf_ms != tf_ms:         # owners 11-04, later: the 15m ATR with 5m signals
+        at = float(atr(*(sb[k].to_numpy(float) for k in ("high", "low", "close")), 14)[-1])
+        out["stop_tf"] = TFKO_MS.get(stop_tf_ms, "15분")
+    else:
+        at = float(atr(h, l, c, 14)[-1])
     px = float(c[-1])
     dist = at * coin.sl_atr
     liq_ok = dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0)
@@ -537,7 +561,7 @@ def evaluate_friend(rule: str, coin: Coin, b30: pd.DataFrame, close_ms: int, tf_
             + ("" if tside == 0 else f": 신호 {'롱' if want > 0 else '숏'}와 반대")
         return out
     if t2 is not None and t2["trend"] != want:          # owners 11-04: the signal bars' 추세 MACD on the same side too
-        out["why"] = (f"추세 MACD {tf_ko} {FT.tmacd_words(t2)}: {out['trend_tf']} 추세"
+        out["why"] = (f"추세 MACD {out['trend_tf2']} {FT.tmacd_words(t2)}: {out['trend_tf']} 추세"
                       f"({'상승' if tside > 0 else '하락'})와 같은 쪽 아님")
         return out
     if not liq_ok:
@@ -552,7 +576,7 @@ BOARD_KEYS = ("close", "trend", "votes", "ema_rsi", "chop_zone", "turn", "obv_cs
               "stop_pct", "liq_ok", "obv50", "roc_turn", "roc_cs", "roc_dark", "roc", "trend_mode", "tf",
               "e3_turn", "e3_cs", "e3_dark", "ersi", "e3_trend", "e3_votes", "ac", "ac_col", "bar", "bar_n", "bar_score",
               "x0", "h6", "trend_tf", "tmacd", "tmacd_line", "tyellow", "o4", "o4_col", "o4_turn", "h3",
-              "tsig", "tmacd_sig", "tyellow_sig")                     # (owners 11-04: the signal bars' 추세 MACD)
+              "tsig", "tmacd_sig", "tyellow_sig", "trend_tf2", "stop_tf")   # (owners 11-04: the second 추세 MACD)
 
 
 def board_row(evs: list, close_ms: int) -> dict:
@@ -692,7 +716,7 @@ def friend_words(ev: dict, side: int) -> str:
     if ev.get("trend_mode") == "macd":                          # owners 11-02
         both = ""
         if ev.get("tsig") is not None:                          # owners 11-04: the signal bars' 추세 MACD too
-            both = (f" · 추세 MACD {ev.get('tf') or '15분'} " + FT.tmacd_words({"trend": ev.get("tsig"), "hist": ev.get("tmacd_sig"),
+            both = (f" · 추세 MACD {ev.get('trend_tf2') or ev.get('tf') or '15분'} " + FT.tmacd_words({"trend": ev.get("tsig"), "hist": ev.get("tmacd_sig"),
                                                                               "yellow": bool(ev.get("tyellow_sig"))}))
         return f"{what} · 추세 MACD {tf} {FT.tmacd_words(tmacd_of(ev))}{both}"
     if ev.get("trend_mode") == "bar":
@@ -796,6 +820,8 @@ class Config:
     trend: str = "four"                         # the friend rules' trend (TRENDS; owners 10-30: WOO X Pro 2 "swing")
     trend_tf: Optional[str] = None              # the trend's bar when not the signal's (owners 10-31, last: "30m" on 15m)
     trend_both: bool = False                    # owners 11-04: the 추세 MACD of the signal bars (15m) the same side too
+    trend_tf2: Optional[str] = None             # owners 11-04, later: the second 추세 MACD's own bar ("15m" with 5m signals)
+    stop_tf: Optional[str] = None               # ... and the ATR stop's bar ("15m": the fixed 15m ATR x 3), else the signal's
 
     @property
     def symbols(self) -> list:
@@ -817,6 +843,24 @@ class Config:
     @property
     def trend_tf_ko(self) -> str:
         return TF_KO[self.trend_tf or self.tf]
+
+    @property
+    def trend2_ko(self) -> Optional[str]:
+        """The second 추세 MACD's bar in words: trend_tf2's, the signal's with trend_both, else None."""
+        return TF_KO[self.trend_tf2] if self.trend_tf2 else self.tf_ko if self.trend_both else None
+
+    @property
+    def trend_tf2_ms(self) -> Optional[int]:
+        return TF_MS[self.trend_tf2] if self.trend_tf2 else None
+
+    @property
+    def stop_tf_ms(self) -> Optional[int]:
+        return TF_MS[self.stop_tf] if self.stop_tf else None
+
+    @property
+    def stop_ko(self) -> str:
+        """The ATR stop's bar in words (the signal's unless stop_tf)."""
+        return TF_KO[self.stop_tf or self.tf]
 
 
 def load_config(path: str) -> Config:
@@ -923,6 +967,27 @@ def load_config(path: str) -> Config:
     if not isinstance(tb2, bool):
         raise MixError(f"\"trend_both\"는 true 또는 false입니다(지금 {tb2!r})")
     cfg.trend_both = tb2 and cfg.trend == "macd" and bool(cfg.trend_tf)
+    # owners 11-04, later ("15분봉30분봉 히스토그램 추세가 같아야하고 5분봉에서 obv macd가 0선아래에서 양봉이 나오면 롱"): the
+    # second 추세 MACD on bars of its own (trend_tf2), and the ATR stop on its own bars (stop_tf: the fixed 15m ATR x 3)
+    for key in ("trend_tf2", "stop_tf"):
+        v = raw.get(key)
+        if v is None:
+            continue
+        if v not in TF_MS or TF_MS[v] < TF_MS[tf] or TF_MS[v] % TF_MS[tf]:
+            raise MixError(f"\"{key}\"는 {list(TF_MS)} 중 신호 봉({tf})과 같거나 그 배수인 봉입니다(지금 {v!r})")
+        if not all(r in FRIEND_RULES for r in cfg.rules):
+            continue                                     # (the friend rules only, as trend_tf)
+        if key == "trend_tf2":
+            if cfg.trend != "macd" or not cfg.trend_tf:
+                continue                                 # (ignored like trend_both)
+            if v == cfg.trend_tf:
+                raise MixError(f"\"trend_tf2\"는 \"trend_tf\"({cfg.trend_tf})와 다른 봉입니다")
+            if cfg.trend_both:
+                raise MixError("\"trend_both\"와 \"trend_tf2\"는 둘 중 하나만 씁니다(trend_both = 신호 봉의 추세 MACD)")
+            cfg.trend_tf2 = None if v == tf else v
+            cfg.trend_both = cfg.trend_both or v == tf
+        else:
+            cfg.stop_tf = None if v == tf else v
     if not cfg.state or not cfg.log:
         raise MixError("\"state\"와 \"log\" 파일 경로가 필요합니다")
     if not (0 < cfg.risk_pct <= 5):
@@ -1321,6 +1386,32 @@ class Bot:
             return b, b.iloc[0:0]                                # (no 1h bars read: the friend rules use the one frame)
         return b, bars_frame(self.fetch(symbol, "1h", BARS), H1, close_ms)
 
+    def extra_bars(self, symbol: str, close_ms: int) -> dict:
+        """Owners 11-04, later: the closed bars of the second trend (``trend_tf2``: "tb2") and of the stop (``stop_tf``:
+        "sb"), each timeframe read once; {} when the config has neither."""
+        got: dict = {}
+        out: dict = {}
+        for key, tf in (("tb2", self.cfg.trend_tf2), ("sb", self.cfg.stop_tf)):
+            if not tf:
+                continue
+            if tf not in got:
+                ms = TF_MS[tf]
+                rows = self.fetch(symbol, tf, BARS)
+                if not any(int(r[0]) >= close_ms // ms * ms for r in rows[-3:]):
+                    raise MixError(f"바이낸스에서 {'추세' if key == 'tb2' else '손절'} {TF_KO[tf]}봉 마감이 아직 없음")
+                got[tf] = bars_frame(rows, ms, close_ms)
+            out[key] = got[tf]
+        return out
+
+    def extra_kw(self, ex: dict) -> dict:
+        """judge()'s keywords for extra_bars()' frames."""
+        kw: dict = {}
+        if ex.get("tb2") is not None:
+            kw.update(tb2=ex["tb2"], trend_tf2_ms=self.cfg.trend_tf2_ms)
+        if ex.get("sb") is not None:
+            kw.update(sb=ex["sb"], stop_tf_ms=self.cfg.stop_tf_ms)
+        return kw
+
     # ---------------------------------------------------------------- start
     def start(self) -> None:
         eq = self.b.equity()
@@ -1341,7 +1432,8 @@ class Bot:
         held = f"\n보유 중: {coin_ko(self.pos.symbol)} {'롱' if self.pos.side > 0 else '숏'} 손절 {self.pos.stop:.6g}" \
             if self.pos else ""
         tw = (f" (추세는 {self.cfg.trend_tf_ko}봉{TREND_START_KO.get(self.cfg.trend, '')}"
-              + (f" + {self.cfg.tf_ko}봉도 같은 쪽일 때만" if self.cfg.trend_both else "") + ")") if self.cfg.trend_tf else ""
+              + (f" + {self.cfg.trend2_ko}봉도 같은 쪽일 때만" if self.cfg.trend2_ko else "")
+              + (f" · 손절은 {self.cfg.stop_ko}봉 ATR" if self.cfg.stop_tf else "") + ")") if self.cfg.trend_tf else ""
         self.say("INFO", f"▶️ 시작 · 잔고 ${eq:,.2f} (시작 잔고 ${self.start_equity:,.2f})\n코인 {coins}\n"
                          f"{self.plan_text()} · 한 번에 1포지션 · {self.cfg.tf_ko}봉 마감마다 판단{tw}{held}"
                  + ("".join(f"\n⚠ {t}" for t in bad)))
@@ -1482,8 +1574,9 @@ class Bot:
             for attempt in range(3):
                 try:
                     b30, b1h = self.bars(co.symbol, close_ms)
+                    kw = self.extra_kw(self.extra_bars(co.symbol, close_ms)) if (self.cfg.trend_tf2 or self.cfg.stop_tf) else {}
                     evs = [self.judge(rule, co, b30, b1h, close_ms, self.cfg.tf_ms, self.cfg.trend,
-                                      self.cfg.trend_tf_ms, self.cfg.trend_both) for rule in self.cfg.rules]
+                                      self.cfg.trend_tf_ms, self.cfg.trend_both, **kw) for rule in self.cfg.rules]
                 except Exception as e:
                     evs = [{"symbol": co.symbol, "close_ms": close_ms, "side": 0, "why": f"캔들 읽기 실패: {e}"}]
                 if not any(_not_read(ev) for ev in evs):
@@ -1519,7 +1612,7 @@ class Bot:
 
     @staticmethod
     def judge(rule: str, co: Coin, b30: pd.DataFrame, b1h: pd.DataFrame, close_ms: int, tf_ms: int = MIN30,
-              trend: str = "four", trend_tf_ms: Optional[int] = None, trend_both: bool = False) -> dict:
+              trend: str = "four", trend_tf_ms: Optional[int] = None, trend_both: bool = False, **extra) -> dict:
         """One entry rule's answer at this close (``rule``: "mix" the friend's, "st" the owners' second, "obv" / "srsi"
         the friend's trend with the OBV pane / the Stoch RSI pane, owners 10-29; "obv50" / "roc50" with the 50 lines,
         owners 10-30, on the config's bar ``tf_ms`` and trend rule). The friend rules with ``trend_tf_ms`` longer than
@@ -1527,6 +1620,7 @@ class Bot:
         if rule in FRIEND_RULES:
             if trend_tf_ms and trend_tf_ms != tf_ms:
                 more = {"trend_both": True} if trend_both else {}          # (only what applies, as the reads above)
+                more.update({k: v for k, v in extra.items() if v is not None})   # owners 11-04, later: tb2 / sb
                 return evaluate_friend(rule, co, b30, close_ms, tf_ms, trend, tb=b1h, trend_tf_ms=trend_tf_ms, **more)
             if tf_ms == MIN30 and trend == "four":
                 return evaluate_friend(rule, co, b30, close_ms)
@@ -2042,17 +2136,23 @@ def cmd_signals(args) -> int:
     trend_ko = ("하늘·보라 선 · 찹존 · 슈퍼트렌드, 선 쪽이고 찹존·슈퍼트렌드 중 하나 이상 횡보" if cfg.trend == "swing"
                 else "추세 바 종합(3개 점수 · 6종 · 하늘·보라 · EMA RSI · 슈퍼트렌드 · 4종, 노랑이면 진입 안 함)"
                 if cfg.trend == "bar" else "추세 MACD 히스토그램(0선 위 상승 · 0선 아래 하락, 노란 막대도 같음)"
-                + (f" + {cfg.tf_ko}봉 추세 MACD도 같은 쪽" if cfg.trend_both else "")
+                + (f" + {cfg.trend2_ko}봉 추세 MACD도 같은 쪽" if cfg.trend2_ko else "")
                 if cfg.trend == "macd" else "하늘·보라 선 · EMA RSI · 찹존 · 슈퍼트렌드")
     for co in cfg.coins:
         b30 = bars_frame(fetch(co.symbol, cfg.tf, BARS), cfg.tf_ms, last_close)
         if all(r in FRIEND_RULES for r in cfg.rules):     # the 바이비트 봇 / WOO X Pro 2: the friend's trend rules only
             tb = (bars_frame(fetch(co.symbol, cfg.trend_tf, BARS), cfg.trend_tf_ms, last_close) if cfg.trend_tf
                   else None)                              # owners 10-31, last: the trend on its own 30m bars
-            print(f"== {co.symbol} (손절 ATR × {co.sl_atr} · {co.leverage}배{'' if co.enabled else ' · 꺼짐'})")
+            tb2 = (bars_frame(fetch(co.symbol, cfg.trend_tf2, BARS), cfg.trend_tf2_ms, last_close) if cfg.trend_tf2
+                   else None)                             # owners 11-04, later: the second trend (15m) and the stop's bars
+            sb = (tb2 if cfg.stop_tf and cfg.stop_tf == cfg.trend_tf2 else
+                  bars_frame(fetch(co.symbol, cfg.stop_tf, BARS), cfg.stop_tf_ms, last_close) if cfg.stop_tf else None)
+            print(f"== {co.symbol} (손절 {cfg.stop_ko + '봉 ' if cfg.stop_tf else ''}ATR × {co.sl_atr} · {co.leverage}배"
+                  f"{'' if co.enabled else ' · 꺼짐'})")
             for rule in cfg.rules:
                 print(f"  -- {RULE_KO[rule]} (추세 {cfg.trend_tf_ko}: {trend_ko})")
-                for ln in friend_history(co, b30, rule, args.n, cfg.tf_ms, cfg.trend, tb, cfg.trend_tf_ms, cfg.trend_both):
+                for ln in friend_history(co, b30, rule, args.n, cfg.tf_ms, cfg.trend, tb, cfg.trend_tf_ms, cfg.trend_both,
+                                         tb2, cfg.trend_tf2_ms, sb, cfg.stop_tf_ms):
                     print("  " + ln)
             continue
         b1h = bars_frame(fetch(co.symbol, "1h", BARS), H1, last_close)
@@ -2098,7 +2198,9 @@ def cmd_signals(args) -> int:
 
 
 def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int = MIN30, trend: str = "four",
-                   tb: Optional[pd.DataFrame] = None, trend_tf_ms: Optional[int] = None, trend_both: bool = False) -> list:
+                   tb: Optional[pd.DataFrame] = None, trend_tf_ms: Optional[int] = None, trend_both: bool = False,
+                   tb2: Optional[pd.DataFrame] = None, trend_tf2_ms: Optional[int] = None,
+                   sb: Optional[pd.DataFrame] = None, stop_tf_ms: Optional[int] = None) -> list:
     """The last ``n`` signals of a friend rule ("obv" / "obv50" / "obvac": light -> dark turns, "roc50": the ROC bar's light -> dark
     turns, "srsi": golden / dead ●, "h0x": the histogram crossing 0) on the closed signal bars, each with the trend
     (``trend`` "bar": the trend bar's 종합; ``tb`` / ``trend_tf_ms``: read on the last of those bars closed by the signal's
@@ -2114,8 +2216,25 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
     V = None if trend in ("bar", "macd") else FT.votes(to, th, tl, tc, tv)
     B = FT.bar_pane(th, tl, tc, tv) if trend == "bar" else None   # owners 10-31 night: the trend bar's 종합
     TM = FT.tmacd_pane(th, tl, tc, tv) if trend == "macd" else None   # owners 11-02: the 추세 MACD histogram's side
-    # owners 11-04: the signal bars' own 추세 MACD on the same side too (trend_both)
-    TM2 = FT.tmacd_pane(h, l, c, v) if TM is not None and trend_both and own else None
+    # owners 11-04: the signal bars' own 추세 MACD on the same side too (trend_both), or (later) the 추세 MACD of the
+    # second trend's own bars (tb2 / trend_tf2_ms, 15m with 5m signals): t2ix maps each signal bar to its row
+    s_close_all = b30.open_ms.to_numpy(np.int64) + tf_ms
+    own2 = TM is not None and own and tb2 is not None and bool(trend_tf2_ms) and trend_tf2_ms != tf_ms and len(tb2) >= 300
+    if own2:
+        TM2 = FT.tmacd_pane(*(tb2[k].to_numpy(float) for k in ("high", "low", "close", "volume")))
+        t2ix = np.searchsorted(tb2.open_ms.to_numpy(np.int64) + trend_tf2_ms, s_close_all, side="right") - 1
+    else:
+        TM2 = FT.tmacd_pane(h, l, c, v) if TM is not None and trend_both and own else None
+        t2ix = np.arange(len(c))
+    t2_ko = TFKO_MS.get(trend_tf2_ms if own2 else tf_ms, "")
+    # the ATR stop's bars (stop_tf, owners 11-04 later: the 15m ATR with 5m signals): its row of each signal bar
+    owns = sb is not None and bool(stop_tf_ms) and stop_tf_ms != tf_ms and len(sb) >= 300
+    if owns:
+        at = atr(sb.high.to_numpy(float), sb.low.to_numpy(float), sb.close.to_numpy(float), 14)
+        six = np.searchsorted(sb.open_ms.to_numpy(np.int64) + stop_tf_ms, s_close_all, side="right") - 1
+    else:
+        at = atr(h, l, c, 14)
+        six = np.arange(len(c))
     # the trend's bar of each signal bar: itself, or the last trend bar closed by the signal's close (-1: none yet)
     if own:
         t_close = tb.open_ms.to_numpy(np.int64) + trend_tf_ms
@@ -2163,15 +2282,14 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
         k = P["k"]
         want = np.where(P["gold"] & (k < 50), 1, np.where(P["dead"] & (k > 50), -1, 0))
         mark = P["gold"] | P["dead"]
-    at = atr(h, l, c, 14)
     out = []
     for i in range(len(c) - 1, 300, -1):
         if not mark[i]:
             continue
         ce = int(b30.open_ms.iloc[i]) + tf_ms
         j = int(tix[i])
-        if j < 300:                                      # the trend's bars do not reach back this far
-            continue
+        if j < 300 or int(t2ix[i]) < (300 if own2 else 0) or int(six[i]) < (300 if owns else 0):
+            continue                                     # the trend's (stop's) bars do not reach back this far
         if TM is not None:
             hv = float(TM["hist"][j])
             t = {"trend": int(TM["trend"][j]), "hist": hv if math.isfinite(hv) else None, "yellow": bool(TM["yellow"][j])}
@@ -2186,7 +2304,7 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
         if e3 is not None:
             t = {"trend": int(e3["trend"][i]), "votes": {k: int(e3[k][i]) for k, _ko in FT.EMA3_VOTES}}
             tside = t["trend"]
-        dist = float(at[i]) * coin.sl_atr
+        dist = float(at[int(six[i])]) * coin.sl_atr
         px = float(c[i])
         if hx is not None:
             what = (f"{'3합 ' if rule == 'h3x' else ''}히스토그램 0선 {'위로' if turn[i] > 0 else '아래로'} 돌파"
@@ -2206,17 +2324,18 @@ def friend_history(coin: Coin, b30: pd.DataFrame, rule: str, n: int, tf_ms: int 
                 else "X (롱은 0선 아래 양봉 전환, 숏은 0선 위 음봉 전환만)" if rule == "o4h" else "X (50선 조건 안 맞음)"
         elif tside != want[i]:
             res = "X (종합 노랑, 진입 금지)" if B is not None and tside == 0 else "X (추세 다름)"
-        elif TM2 is not None and int(TM2["trend"][i]) != want[i]:
-            res = f"X ({TFKO_MS.get(tf_ms, '')} 추세 다름)"
+        elif TM2 is not None and int(TM2["trend"][int(t2ix[i])]) != want[i]:
+            res = f"X ({t2_ko} 추세 다름)"
         elif not dist < px * (1.0 / coin.leverage - MMR_PCT / 100.0):
             res = f"X (손절 폭 {dist / px * 100:.2f}%가 청산가보다 멂)"
         else:
             res = "롱 진입" if want[i] > 0 else "숏 진입"
         tt = f"{TFKO_MS.get(trend_tf_ms, '')} " if own else ""
         if TM2 is not None:
-            h2 = float(TM2["hist"][i])
-            tt2 = {"trend": int(TM2["trend"][i]), "hist": h2 if math.isfinite(h2) else None, "yellow": bool(TM2["yellow"][i])}
-            t_both = f" · {TFKO_MS.get(tf_ms, '')} {FT.tmacd_words(tt2)}"
+            i2 = int(t2ix[i])
+            h2 = float(TM2["hist"][i2])
+            tt2 = {"trend": int(TM2["trend"][i2]), "hist": h2 if math.isfinite(h2) else None, "yellow": bool(TM2["yellow"][i2])}
+            t_both = f" · {t2_ko} {FT.tmacd_words(tt2)}"
         else:
             t_both = ""
         tw = f"추세 {FT.ema3_words(t)}" if e3 is not None else f"추세 MACD {tt}{FT.tmacd_words(t)}{t_both}" if TM is not None \
@@ -2254,14 +2373,15 @@ def cmd_check(args) -> int:
     if tuple(cfg.rules) != ("mix",) or cfg.stop_atr:          # owners 10-26: the second rule, one stop multiple
         print("매매법·손절: " + " + ".join(RULE_KO[r] for r in cfg.rules)
               + (f"(같은 봉이면 {RULE_KO[cfg.rules[0]]} 먼저)" if len(cfg.rules) > 1 else "")
-              + (f" · 손절 ATR {cfg.stop_atr:g}배(모든 코인)" if cfg.stop_atr else " · 손절 코인별 ATR 배수")
+              + (f" · 손절 {cfg.stop_ko + '봉 ' if cfg.stop_tf else ''}ATR {cfg.stop_atr:g}배(모든 코인)" if cfg.stop_atr
+                 else " · 손절 코인별 ATR 배수")
               + (f" · 신호 {cfg.tf_ko}봉" + (" · 추세: 하늘·보라 선 쪽 + 찹존·슈퍼트렌드 중 하나 이상 횡보(같은 추세 2개 이상 금지)"
                                           if cfg.trend == "swing" else
                                           f" · 추세: {cfg.trend_tf_ko + '봉 ' if cfg.trend_tf else ''}추세 바 종합(6줄, 노랑이면 "
                                           "진입 안 함)" if cfg.trend == "bar"
                                           else f" · 추세: {cfg.trend_tf_ko + '봉 ' if cfg.trend_tf else ''}추세 MACD 히스토그램"
                                           "(0선 위 상승 · 0선 아래 하락)"
-                                          + (f" + {cfg.tf_ko}봉 추세 MACD도 같은 쪽일 때만" if cfg.trend_both else "")
+                                          + (f" + {cfg.trend2_ko}봉 추세 MACD도 같은 쪽일 때만" if cfg.trend2_ko else "")
                                           if cfg.trend == "macd"
                                           else " · 추세: 네 표 중 같은 쪽 2개 이상")
                  + (" (추세 3개 일치는 자기 추세 3개가 모두 같은 쪽)" if "ema3" in cfg.rules else "")
@@ -2272,7 +2392,8 @@ def cmd_check(args) -> int:
         except Exception as e:
             print(f"✘ {co.symbol}: {ex} 계약을 못 읽음 ({e})")
             continue
-        b30 = bars_frame(fetch(co.symbol, cfg.tf, 100), cfg.tf_ms, now // cfg.tf_ms * cfg.tf_ms)
+        stf, sms = (cfg.stop_tf, cfg.stop_tf_ms) if cfg.stop_tf else (cfg.tf, cfg.tf_ms)   # the stop's own bars (11-04)
+        b30 = bars_frame(fetch(co.symbol, stf, 100), sms, now // sms * sms)
         c = b30.close.to_numpy(float)
         a = float(atr(b30.high.to_numpy(float), b30.low.to_numpy(float), c, 14)[-1])
         dist = a * co.sl_atr

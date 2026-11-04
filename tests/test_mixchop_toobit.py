@@ -49,10 +49,14 @@ def _client(fake, clock):
 
 
 def _cfg(tmp_path, **over) -> M.Config:
+    """The live config on Toobit with its 15m signals of 11-03 (this file tests the exchange, not the bars: owners 11-04
+    evening moved the signals to 5m with the 15m trend and stop, tests/test_rules1104b.py)."""
     d = json.loads((DEPLOY / "mixchop.live.json").read_text(encoding="utf-8"))
+    for k in ("trend_tf2", "stop_tf", "trend_both"):
+        d.pop(k, None)
     d.update(state=str(tmp_path / "state.json"), log=str(tmp_path / "log.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"), telegram=False, no_weekend=False, us_open_pre_min=0,
-             us_open_pause_min=0, macro_blackout_min=0,
+             us_open_pause_min=0, macro_blackout_min=0, tf="15m",
              coins={BTC: {"leverage": 40}, BCH: {"leverage": 40}, DOGE: {"leverage": 40}}, **over)
     p = tmp_path / "cfg.json"
     p.write_text(json.dumps(d), encoding="utf-8")
@@ -64,7 +68,7 @@ def test_the_deploy_configs_trade_toobit():
         cfg = M.load_config(str(DEPLOY / name))
         assert (cfg.exchange, cfg.mode, cfg.name, M.EXCHANGES[cfg.exchange]) == ("toobit", mode, "친구 15분 봇", "투비트"), name
         # (owners 11-03 evening "친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만": the 레인지 봇's rule and coins)
-        assert cfg.taker_fee == 0.0006 and cfg.rules == ("o4h",) and cfg.trend == "macd" and cfg.tf == "15m", name
+        assert cfg.taker_fee == 0.0006 and cfg.rules == ("o4h",) and cfg.trend == "macd" and cfg.tf == "5m", name   # (11-04 evening)
         assert cfg.symbols == ["BTCUSDT", "SOLUSDT", "ZECUSDT"], name
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross", name
     unit = (DEPLOY / "paperbot-mixchop.service").read_text(encoding="utf-8")
@@ -139,7 +143,7 @@ def test_the_bot_enters_moves_and_exits_on_toobit(tmp_path, monkeypatch):
         return [[int(t), 100.0, 100.0, 100.0, 100.0, 1.0] for t in last - step * np.arange(400, -1, -1)]
 
     def fake_eval(r, co, bars, close_ms, tf_ms=M.MIN30, trend="four", tb=None, trend_tf_ms=None, trend_both=False):
-        assert trend_both is True                    # (the live config: the 15m 추세 MACD too, owners 11-04)
+        assert trend_both is False                   # (the 30m trend alone, as 11-03: _cfg)
         side = 1 if co.symbol == BTC else 0
         return {"symbol": co.symbol, "close_ms": close_ms, "side": side, "rule": r, "close": 100.0, "stop_dist": 1.0,
                 "stop_pct": 1.0, "trend": 1, "trend_mode": "macd", "tf": "15분", "trend_tf": "30분", "tmacd": 3.21,

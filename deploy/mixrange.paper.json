@@ -22,10 +22,11 @@
  },
  "ladder_basis": "gross",
  "ladder_every_s": 60,
- "tf": "15m",
+ "tf": "5m",
  "trend": "macd",
  "trend_tf": "30m",
- "trend_both": true,
+ "trend_tf2": "15m",
+ "stop_tf": "15m",
  "rules": [
   "o4h"
  ],

@@ -80,7 +80,12 @@ def test_without_trend_both_the_15m_is_not_read(monkeypatch):
 
 
 def _cfg(tmp_path, **over):
+    """The 레인지 봇's config as it was on 11-04 (15m signals, trend_both); since later that day the deploy configs run
+    the 5m turn with the 15m trend on its own bars (tests/test_rules1104b.py)."""
     d = json.loads((DEPLOY / "mixrange.paper.json").read_text(encoding="utf-8"))
+    for k in ("trend_tf2", "stop_tf"):
+        d.pop(k, None)
+    d.update(tf="15m", trend_both=True)
     d.update(state=str(tmp_path / "s.json"), log=str(tmp_path / "l.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN"), telegram=False, **over)
     p = tmp_path / "c.json"
@@ -89,9 +94,8 @@ def _cfg(tmp_path, **over):
 
 
 def test_the_configs(tmp_path):
-    for name in ("mixrange.live.json", "mixrange.paper.json", "mixchop.live.json", "mixchop.paper.json"):
-        cfg = M.load_config(str(DEPLOY / name))
-        assert (cfg.trend, cfg.trend_tf, cfg.trend_both, cfg.rules, cfg.tf) == ("macd", "30m", True, ("o4h",), "15m"), name
+    cfg = _cfg(tmp_path)
+    assert (cfg.trend, cfg.trend_tf, cfg.trend_both, cfg.rules, cfg.tf, cfg.trend2_ko) == ("macd", "30m", True, ("o4h",), "15m", "15분")
     assert _cfg(tmp_path, trend_both=False).trend_both is False
     with pytest.raises(M.MixError):
         _cfg(tmp_path, trend_both="yes")
@@ -156,8 +160,9 @@ def _node(body: str) -> dict:
 
 
 def test_the_site_words():
+    # (the words of 11-04's 15m signals; since that evening the live bots' are the 5m ones: tests/test_dash_mixrange_site.py)
     out = _node("""console.log(JSON.stringify({
-  w: [MX.MIX_UI.wait, MX.RANGE_UI.wait, MX.BYBIT_UI.wait],
+  w: [MX.waitWords("15분", "30분", MX.o4hWait, "macd2"), MX.waitWords("15분", "30분", MX.o4hWait, "macd2"), MX.BYBIT_UI.wait],
   tm: [MX.tmKo({trend_mode: "macd", trend: 1, tmacd: 3.21, trend_tf: "30분", tf: "15분", tsig: 1, tmacd_sig: 0.8}),
        MX.tmKo({trend_mode: "macd", trend: 1, tmacd: 3.21, trend_tf: "30분", tf: "15분"})],
 }));""")

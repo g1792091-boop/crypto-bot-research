@@ -37,6 +37,16 @@ from test_rules1031c import _ema, _pair, _sma, _six_four, _zsq  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy"
+# the two live bots' configs as they were 11-02 .. 11-04 (15m signals, the 30m trend alone): owners 11-04 evening moved
+# them to the 5m OBV turn with the 15m trend and the 15m stop (tests/test_rules1104b.py)
+ERA = Path(__import__("tempfile").mkdtemp(prefix="era1102-"))
+for _f in DEPLOY.glob("mix*.json"):
+    _d = json.loads(_f.read_text(encoding="utf-8"))
+    if _f.name.split(".")[0] in ("mixchop", "mixrange"):
+        for _k in ("trend_tf2", "stop_tf", "trend_both"):
+            _d.pop(_k, None)
+        _d["tf"] = "15m"
+    (ERA / _f.name).write_text(json.dumps(_d, ensure_ascii=False), encoding="utf-8")
 T0 = 1_800_000_000_000 - 1_800_000_000_000 % M.MIN30
 MIN, HOUR = 60_000, 3_600_000
 SIX = ["SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"]
@@ -304,7 +314,7 @@ def test_the_real_indicators_through_the_bot_and_the_30m_trend():
 
 
 def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
-    cfg = M.load_config(str(DEPLOY / "mixchop.paper.json"))
+    cfg = M.load_config(str(ERA / "mixchop.paper.json"))
     r15, r30 = _pair(3000, 82)
     b = M.bars_frame(r15, M.MIN15, T0).tail(1499).reset_index(drop=True)
     tb = M.bars_frame(r30, M.MIN30, T0).tail(1499).reset_index(drop=True)
@@ -338,7 +348,7 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M, "binance_fetch", lambda base: lambda s, tf, n: [r for r in src[tf] if r[0] < T0][-n:])
     monkeypatch.setattr(M.time, "time", lambda: T0 / 1000 + 60)
     # (the 3합's words on the friend bot's config of 11-02 ~ 11-03; since 11-03 evening it enters on the OBV turn)
-    h3 = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
+    h3 = json.loads((ERA / "mixchop.paper.json").read_text(encoding="utf-8"))
     h3["rules"], h3["trend_both"] = ["h3x"], False      # (and the 30m trend alone, as it was then)
     h3cfg = tmp_path / "h3x.json"
     h3cfg.write_text(json.dumps(h3), encoding="utf-8")
@@ -352,7 +362,7 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     assert ("매매법·손절: 3합 히스토그램 0선 돌파 · 손절 ATR 3배(모든 코인) · 신호 15분봉 · 추세: 30분봉 추세 MACD 히스토그램"
             "(0선 위 상승 · 0선 아래 하락)") in capsys.readouterr().out.splitlines()
     # the start message says the trend
-    d = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
+    d = json.loads((ERA / "mixchop.paper.json").read_text(encoding="utf-8"))
     d.update(state=str(tmp_path / "s.json"), log=str(tmp_path / "l.jsonl"), kill_file=str(tmp_path / "STOP"),
              own_stop_file=str(tmp_path / "OWN.STOP"))
     p = tmp_path / "c.json"
@@ -363,8 +373,8 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
                 notify=lambda lv, t: msgs.append(t), sleep=lambda s: None)
     bot.start()
     assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in msgs[0] and "코인 BTC · SOL · ZEC\n" in msgs[0]
-    # (since 11-04 the 15m 추세 MACD on the same side too: tests/test_rules1104.py)
-    assert "15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램 + 15분봉도 같은 쪽일 때만)" in msgs[0] and "3합" not in msgs[0]
+    # (the config of then; since 11-04 a second 추세 MACD too: tests/test_rules1104.py, tests/test_rules1104b.py)
+    assert "15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)" in msgs[0] and "3합" not in msgs[0]
 
 
 def test_a_15m_close_in_the_loop_logs_the_turn_and_enters(tmp_path, monkeypatch):
@@ -407,7 +417,7 @@ def test_a_15m_close_in_the_loop_logs_the_turn_and_enters(tmp_path, monkeypatch)
 def test_the_morning_replay_counts_the_new_signals():
     for name, rule, key, words in (("mixchop.paper.json", "h3x", "h3s", "3합 히스토그램 0선 돌파"),
                                    ("mixrange.paper.json", "o4h", "o4s", "OBV 히스토그램 양봉·음봉 전환")):
-        cfg = M.load_config(str(DEPLOY / name))
+        cfg = M.load_config(str(ERA / name))
         cfg.coins = cfg.coins[:1]
         cfg.rules = (rule,)                  # (the friend bot's 3합 of 11-02 ~ 11-03; both bots on the OBV turn since 11-03 evening)
         r15, r30 = _pair(4000, 83)
@@ -447,7 +457,7 @@ def test_three_bots_on_the_trend_macd():
             "range": ("mixrange.live.json", "mixrange.paper.json", ("o4h",), PRO1, (2.0, "gross"))}
     for key, (live, paper, rules, coins, (step, basis)) in bots.items():
         for name, mode in ((live, "mainnet"), (paper, "paper")):
-            cfg = M.load_config(str(DEPLOY / name))
+            cfg = M.load_config(str(ERA / name))
             assert (cfg.mode, cfg.trend, cfg.rules, cfg.symbols) == (mode, "macd", rules, coins), name
             # "30분봉 추세 15분봉은 진입 바꾸지말고"
             assert (cfg.tf, cfg.trend_tf, cfg.trend_tf_ms) == ("15m", "30m", M.MIN30), name
@@ -456,11 +466,11 @@ def test_three_bots_on_the_trend_macd():
             assert {c.symbol: c.leverage for c in cfg.coins} == {**{s: 40 for s in coins}, "ZECUSDT": 20}
     by = M.load_config(str(DEPLOY / "mixbybit.live.json"))
     assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in M.plan_words(by)
-    assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(DEPLOY / "mixchop.live.json")))
-    assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(DEPLOY / "mixrange.live.json")))
+    assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(ERA / "mixchop.live.json")))
+    assert "매매법 OBV 히스토그램 전환" in M.plan_words(M.load_config(str(ERA / "mixrange.live.json")))
     # a trend that is not one of the four is refused, the new one named
     p = Path(os.environ.get("TMPDIR", "/tmp")) / "bad-trend-1102.json"
-    p.write_text(json.dumps({**json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8")), "trend": "macd2"}),
+    p.write_text(json.dumps({**json.loads((ERA / "mixrange.live.json").read_text(encoding="utf-8")), "trend": "macd2"}),
                  encoding="utf-8")
     try:
         with pytest.raises(M.MixError, match="macd: 추세 MACD 히스토그램 0선 위 / 아래"):
@@ -477,7 +487,7 @@ def test_the_ladder_on_the_exchange_screens_roe(tmp_path):
     import types
     from paperbot.dash.more import livemix as MX
     for name in ("mixrange.live.json", "mixrange.paper.json", "mixchop.live.json", "mixchop.paper.json"):
-        cfg = M.load_config(str(DEPLOY / name))
+        cfg = M.load_config(str(ERA / name))
         assert cfg.ladder_basis == "gross" and M.ladder_fee(cfg) == 0.0 and M.roe_word(cfg) == "거래소 ROE", name
         assert cfg.stop_atr == 3.0 and cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0}, name
         assert "계단 거래소 ROE +10%→+8%, +12%→+10%, +14%→+12% (그 뒤 2%마다)" in M.plan_words(cfg), name
@@ -501,7 +511,7 @@ def test_the_ladder_on_the_exchange_screens_roe(tmp_path):
     assert (nx["step"], nx["trigger_roe"], nx["stop_to_roe"], nx["reached"]) == (2, pytest.approx(0.12), pytest.approx(0.10), False)
     # a wrong basis is refused
     bad = tmp_path / "bad-basis.json"
-    bad.write_text(json.dumps({**json.loads((DEPLOY / "mixrange.live.json").read_text(encoding="utf-8")), "ladder_basis": "screen"}),
+    bad.write_text(json.dumps({**json.loads((ERA / "mixrange.live.json").read_text(encoding="utf-8")), "ladder_basis": "screen"}),
                    encoding="utf-8")
     with pytest.raises(M.MixError, match="ladder_basis"):
         M.load_config(str(bad))

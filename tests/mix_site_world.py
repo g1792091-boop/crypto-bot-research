@@ -49,8 +49,8 @@ def config(folder: str, mode: str) -> str:
     # the owners' 10-26 options (margin_frac, the net-ROE ladder, 1m follow-up, the second rule, one ATR multiple) are
     # tested in tests/test_mixchop.py, test_mixchop_1026_site.py and test_mixchop_st.py; the 10-30 switch (15m bars, the
     # swing trend, the ROC / OBV 50 rules, its name) in tests/test_rules1030.py
-    for k in ("margin_frac", "ladder", "ladder_every_s", "rules", "stop_atr", "tf", "trend", "name"):
-        raw.pop(k, None)
+    for k in ("margin_frac", "ladder", "ladder_every_s", "rules", "stop_atr", "tf", "trend", "name", "trend_tf2", "stop_tf"):
+        raw.pop(k, None)                    # (11-04 evening: the 5m signals' 15m trend and stop: tests/test_rules1104b.py)
     # the design's own six coins (owners 11-03 moved the deploy config to BTC · XRP · BCH · ZEC · DOGE; the design has no
     # numbers for BTC): this world stays the one it was built as
     from paperbot import mixchop as M
