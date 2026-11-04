@@ -25,6 +25,7 @@
  "tf": "15m",
  "trend": "macd",
  "trend_tf": "30m",
+ "trend_both": true,
  "rules": [
   "o4h"
  ],

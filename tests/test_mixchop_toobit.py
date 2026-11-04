@@ -138,7 +138,8 @@ def test_the_bot_enters_moves_and_exits_on_toobit(tmp_path, monkeypatch):
         step, last = (M.MIN15, ce) if tf == "15m" else (M.MIN30, T0)
         return [[int(t), 100.0, 100.0, 100.0, 100.0, 1.0] for t in last - step * np.arange(400, -1, -1)]
 
-    def fake_eval(r, co, bars, close_ms, tf_ms=M.MIN30, trend="four", tb=None, trend_tf_ms=None):
+    def fake_eval(r, co, bars, close_ms, tf_ms=M.MIN30, trend="four", tb=None, trend_tf_ms=None, trend_both=False):
+        assert trend_both is True                    # (the live config: the 15m 추세 MACD too, owners 11-04)
         side = 1 if co.symbol == BTC else 0
         return {"symbol": co.symbol, "close_ms": close_ms, "side": side, "rule": r, "close": 100.0, "stop_dist": 1.0,
                 "stop_pct": 1.0, "trend": 1, "trend_mode": "macd", "tf": "15분", "trend_tf": "30분", "tmacd": 3.21,

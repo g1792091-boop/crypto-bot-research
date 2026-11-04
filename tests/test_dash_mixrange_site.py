@@ -409,7 +409,10 @@ def test_the_words(tmp_path):
     # owners 11-02: the 30m 추세 MACD; the OBV histogram's turn (owners 11-03: the 레인지 봇 on WOO X Pro 1, the 바이비트
     # 봇's rule of 11-02; 11-03 evening "친구봇도 obv로": the 친구 15분 봇 too, its 3합 0 cross of before gone)
     assert w_mix.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱" in w_mix
-    assert w_mix == w_range == w_bybit and "노란 막대도 같음" in w_mix and "3합" not in w_mix
+    assert w_mix == w_range and "노란 막대도 같음" in w_mix and "3합" not in w_mix
+    # (owners 11-04: the two live bots want the 15m 추세 MACD on the same side too; the 바이비트 봇, off, as it was)
+    assert "이 15분봉에서도 같은 쪽일 때 15분봉 OBV 히스토그램" in w_mix and "15분봉에서도" not in w_bybit
+    assert w_bybit.replace(") 쪽으로 15분봉 OBV", ")이 15분봉에서도 같은 쪽일 때 15분봉 OBV") == w_mix
     assert w_bybit.startswith("15분봉이 끝날 때 30분봉의 추세 MACD 히스토그램") and "0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로" in w_bybit
     assert "찹존" not in w_mix + w_bybit and "AC 막대가 그 쪽" not in w_bybit
     assert out["tf"] == ["15분", "30분", "15분"]

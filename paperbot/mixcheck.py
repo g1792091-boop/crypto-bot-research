@@ -824,7 +824,7 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
             if ttf:                                       # the second frame holds the trend's bars (Bot.bars)
                 b1h = M.bars_frame(rtr, ttf_ms, ce).tail(M.BARS - 1).reset_index(drop=True)
             for rule in rules:
-                ev = M.Bot.judge(rule, co, b30, b1h, ce, tf_ms, trend, ttf_ms)
+                ev = M.Bot.judge(rule, co, b30, b1h, ce, tf_ms, trend, ttf_ms, bool(getattr(cfg, "trend_both", False)))
                 if _moved(ev) or ev["why"].endswith("아직 없음"):
                     rep[(co.symbol, ce, rule)] = ev
     if fails and len(fails) == len(cfg.coins):

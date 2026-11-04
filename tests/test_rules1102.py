@@ -339,7 +339,7 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(M.time, "time", lambda: T0 / 1000 + 60)
     # (the 3합's words on the friend bot's config of 11-02 ~ 11-03; since 11-03 evening it enters on the OBV turn)
     h3 = json.loads((DEPLOY / "mixchop.paper.json").read_text(encoding="utf-8"))
-    h3["rules"] = ["h3x"]
+    h3["rules"], h3["trend_both"] = ["h3x"], False      # (and the 30m trend alone, as it was then)
     h3cfg = tmp_path / "h3x.json"
     h3cfg.write_text(json.dumps(h3), encoding="utf-8")
     assert M.cmd_signals(argparse.Namespace(config=str(h3cfg), n=3)) == 0
@@ -363,7 +363,8 @@ def test_the_signals_listing_check_and_start(tmp_path, monkeypatch, capsys):
                 notify=lambda lv, t: msgs.append(t), sleep=lambda s: None)
     bot.start()
     assert "매매법 OBV 히스토그램 전환(0선 아래 양봉 롱 · 0선 위 음봉 숏)" in msgs[0] and "코인 BTC · SOL · ZEC\n" in msgs[0]
-    assert "15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램)" in msgs[0] and "3합" not in msgs[0]
+    # (since 11-04 the 15m 추세 MACD on the same side too: tests/test_rules1104.py)
+    assert "15분봉 마감마다 판단 (추세는 30분봉 추세 MACD 히스토그램 + 15분봉도 같은 쪽일 때만)" in msgs[0] and "3합" not in msgs[0]
 
 
 def test_a_15m_close_in_the_loop_logs_the_turn_and_enters(tmp_path, monkeypatch):
@@ -378,8 +379,8 @@ def test_a_15m_close_in_the_loop_logs_the_turn_and_enters(tmp_path, monkeypatch)
     rows = {"15m": [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in ce - M.MIN15 * np.arange(400, -1, -1)],
             "30m": [[int(t), 1.0, 1.0, 1.0, 1.0, 1.0] for t in T0 - M.MIN30 * np.arange(400, -1, -1)]}
 
-    def fake_eval(rule, co, b, close_ms, tf_ms=M.MIN30, trend="four", tb=None, trend_tf_ms=None):
-        assert (rule, tf_ms, trend, trend_tf_ms) == ("o4h", M.MIN15, "macd", M.MIN30)
+    def fake_eval(rule, co, b, close_ms, tf_ms=M.MIN30, trend="four", tb=None, trend_tf_ms=None, trend_both=False):
+        assert (rule, tf_ms, trend, trend_tf_ms, trend_both) == ("o4h", M.MIN15, "macd", M.MIN30, False)  # (바이비트 봇: 30m only)
         turn = {"ETHUSDT": 1, "SOLUSDT": -1}.get(co.symbol, 0)
         side = 1 if co.symbol == "ETHUSDT" else 0
         return {"symbol": co.symbol, "close_ms": close_ms, "side": side, "rule": rule, "o4": -2.0 * turn or 0.3,
@@ -420,7 +421,7 @@ def test_the_morning_replay_counts_the_new_signals():
         for ce in range(day0 + M.MIN15, T0 + 1, M.MIN15):
             bb = M.bars_frame(r15, M.MIN15, ce).tail(M.BARS - 1).reset_index(drop=True)
             tb = M.bars_frame(r30, M.MIN30, ce).tail(M.BARS - 1).reset_index(drop=True)
-            ev = M.Bot.judge(rule, co, bb, tb, ce, M.MIN15, "macd", M.MIN30)
+            ev = M.Bot.judge(rule, co, bb, tb, ce, M.MIN15, "macd", M.MIN30, cfg.trend_both)
             if ev.get("x0") or ev.get("o4_turn") or ev["side"]:
                 log.append({"ts": ce + 5_000, "kind": "signal", **ev})
         assert log

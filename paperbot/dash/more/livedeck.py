@@ -248,7 +248,8 @@ def _tape_text(r: dict) -> str:
 
 
 ENTRY_WHY = ("rule", "trend", "trend_mode", "tf", "trend_tf", "bar", "bar_n", "bar_score", "x0", "h6", "turn", "ac", "ac_col", "stop_pct",
-             "ema_rsi", "close", "close_ms", "tmacd", "tmacd_line", "tyellow", "h3", "o4", "o4_col", "o4_turn")
+             "ema_rsi", "close", "close_ms", "tmacd", "tmacd_line", "tyellow", "h3", "o4", "o4_col", "o4_turn",
+             "tsig", "tmacd_sig", "tyellow_sig")
 
 
 def last_entry(rows: list) -> Optional[dict]:

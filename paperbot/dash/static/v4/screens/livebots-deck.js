@@ -208,7 +208,9 @@ export function monthLine(curve, month, nowMs) {
 export function whyKo(w) {
   if (!w) return "";
   const tr = toneOf(w.trend);
-  const bar = (w.trend_mode === "macd" ? `${TM_KO} ${w.trend_tf || w.tf || ""} ${tr === "flat" ? "0선" : TREND_KO[tr]}${ok(w.tmacd) ? ` (${fmt.num(w.tmacd, 2)})` : ""}`
+  const sig = w.trend_mode === "macd" && ok(w.tsig) && w.tf      // owners 11-04: the 15m 추세 MACD too (trend_both)
+    ? ` · ${w.tf} ${TREND_KO[toneOf(w.tsig)] === "진입 금지" ? "0선" : TREND_KO[toneOf(w.tsig)]}${ok(w.tmacd_sig) ? ` (${fmt.num(w.tmacd_sig, 2)})` : ""}` : "";
+  const bar = (w.trend_mode === "macd" ? `${TM_KO} ${w.trend_tf || w.tf || ""} ${tr === "flat" ? "0선" : TREND_KO[tr]}${ok(w.tmacd) ? ` (${fmt.num(w.tmacd, 2)})` : ""}${sig}`
     : `추세 바 ${w.trend_tf || w.tf || ""} 종합 ${TREND_KO[tr]}`).replace(/\s+/g, " ");
   if (w.rule === "h3x") return `${w.tf || ""}봉 3합 히스토그램 0선 ${Number(w.x0) > 0 ? "위로" : "아래로"} 돌파${ok(w.h3) ? ` (${fmt.num(w.h3, 2)})` : ""} · ${bar}`;
   if (w.rule === "o4h") return `${w.tf || ""}봉 OBV 히스토그램 ${Number(w.o4_turn) > 0 ? "0선 아래 양봉 전환" : "0선 위 음봉 전환"}${ok(w.o4) ? ` (${fmt.num(w.o4, 2)})` : ""} · ${bar}`;

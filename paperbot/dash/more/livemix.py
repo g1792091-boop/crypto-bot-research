@@ -660,7 +660,7 @@ VAL_KEYS = ("close", "avg_rsi_30m", "avg_rsi_1h", "stop_pct", "close_ms", "liq_o
             "bar", "bar_n", "bar_score", "x0", "h6", "trend_tf",
             # owners 11-02: the 추세 MACD (its histogram, its line, its yellow bar), the 3합 histogram's value (rule "h3x",
             # its 0 cross in "x0"), the OBV4 MACD histogram (rule "o4h": its value, colour and turn)
-            "tmacd", "tmacd_line", "tyellow", "h3", "o4", "o4_col", "o4_turn")
+            "tmacd", "tmacd_line", "tyellow", "h3", "o4", "o4_col", "o4_turn", "tsig", "tmacd_sig", "tyellow_sig")
 CROSS_KO = {"gold": "골든크로스", "dead": "데드크로스"}   # after the rule's name
 
 

@@ -52,6 +52,9 @@ const H0X_WAIT = "'ALL + OBV6 MACD' 히스토그램이 0선을 그 쪽으로 돌
 /** Owners 11-02: the trend is the 30m 추세 MACD histogram's side of 0 (its yellow bars too); the 친구 15분 봇 and the 레인지 봇
  *  enter on the 3합 histogram's 0 cross, the 바이비트 봇 on the OBV4 MACD histogram's turn. */
 export const TM_WAIT = "추세 MACD 히스토그램(0선 위 = 상승, 0선 아래 = 하락, 노란 막대도 같음)";
+/** Owners 11-04 ("30분봉이랑 15분봉 추세macd 히스토그램이 추세가 같을때만 진입"): trend "macd2" = the 30m 추세 MACD and the
+ *  signal bars' own (15m) on the same side (the config's ``trend_both``). */
+export const TM2_WAIT = "추세 MACD 히스토그램(0선 위 = 상승, 0선 아래 = 하락, 노란 막대도 같음)이 15분봉에서도 같은 쪽일 때";
 export const H3X_WAIT = "15분봉 3합 히스토그램이 0선을 그 쪽으로 돌파하면(롱: 0선 위로, 숏: 0선 아래로) 시장가로 들어가요 (한 번에 1포지션).";
 export const O4H_WAIT = "15분봉 OBV 히스토그램(OBV · AO · AC · MACD 합친 평균 MACD)이 0선 아래에서 양봉으로 바뀌면 롱, 0선 위에서 음봉으로 " +
   "바뀌면 숏으로 시장가로 들어가요 (한 번에 1포지션, OBV 선은 안 봐요).";
@@ -60,7 +63,8 @@ const OBVAC_WAIT = "OBV 히스토그램이 연한색→진한색이 되고 OBV M
 /** The wait line of a bot on its signal bar ``tf`` with the trend read on ``ttf`` (owners 10-31, last: "15분봉이 끝날 때
  *  30분봉의 추세 바 종합(…) 쪽으로 …"; the trend's bar left out when it is the signal's own). */
 export function waitWords(tf, ttf, rule, trend = "bar") {
-  return `${tf}봉이 끝날 때 ${ttf && ttf !== tf ? `${ttf}봉의 ` : ""}${trend === "macd" ? TM_WAIT : BAR_WAIT} 쪽으로 ${rule}`;
+  const tw = trend === "macd2" ? TM2_WAIT : trend === "macd" ? TM_WAIT : BAR_WAIT;
+  return `${tf}봉이 끝날 때 ${ttf && ttf !== tf ? `${ttf}봉의 ` : ""}${tw}${trend === "macd2" ? "" : " 쪽으로"} ${rule}`;
 }
 /** The 손실 카드's plan words of a bot sized by margin with an ATR stop on its signal bar ``tf`` (the answer's ``tf_ko``). */
 export const planWords = (tf) => `손절 = 진입 때 ${tf}봉 ATR × 3 · 증거금 = 잔고의 40%`;
@@ -70,8 +74,8 @@ export const planWords = (tf) => `손절 = 진입 때 ${tf}봉 ATR × 3 · 증�
 // (owners 11-03: the friend bot trades Toobit, its WOO X Pro 2 account gone; later that day "친구봇도 obv로": it enters on
 // the OBV histogram's turn like the 레인지 봇, H3X_WAIT kept for the 3합's words)
 export const MIX_UI = {id: "mix", api: API, perf: PERF_API, account: "투비트", exchange: "투비트", key: "",
-  kick: "진짜 돈 · 투비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
-  wait: waitWords("15분", "30분", O4H_WAIT, "macd"),
+  kick: "진짜 돈 · 투비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd2",
+  wait: waitWords("15분", "30분", O4H_WAIT, "macd2"),
   plan: "계획(손절 1번 = 잔고의 0.25% + 수수료)과 비교", morning: "09:05", h1: true};
 export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/api/v4/livebots/mixbybitperf", account: "바이비트",
   exchange: "바이비트", key: "-b", kick: "진짜 돈 · 바이비트 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
@@ -80,8 +84,8 @@ export const BYBIT_UI = {id: "bybit", api: "/api/v4/livebots/mixbybit", perf: "/
 /** The 레인지 봇 (owners 10-31 night): the first WOO X Pro account, 15m bars (screens/livebots.js); owners 11-03 ("PRO1 OBV ·
  *  PRO2 3합"): it enters on the OBV histogram's turn, the 바이비트 봇's rule of 11-02 (that bot is off). */
 export const RANGE_UI = {id: "range", api: "/api/v4/livebots/mixrange", perf: "/api/v4/livebots/mixrangeperf", account: "WOO X Pro",
-  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 1 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd",
-  wait: waitWords("15분", "30분", O4H_WAIT, "macd"),
+  exchange: "WOO X Pro", key: "-r", kick: "진짜 돈 · WOO X Pro 1 계정", tf: "15분", ttf: "30분", rule: O4H_WAIT, trend: "macd2",
+  wait: waitWords("15분", "30분", O4H_WAIT, "macd2"),
   plan: planWords("15분"), planOf: planWords, morning: "09:09", h1: false};
 /** A bot's wait line from its answer's bars (its config's ``tf`` and ``trend_tf``), else its UI's. */
 export function waitOf(o, b) {
@@ -229,7 +233,9 @@ export function o4Val(v) {
 export function tmKo(v) {
   const tt = v.trend_tf || v.tf, tr = Number(v.trend);
   const head = tr > 0 ? "0선 위 상승" : tr < 0 ? "0선 아래 하락" : "0선(진입 안 함)";
-  return `추세 MACD ${tt ? `${tt} ` : ""}히스토그램 ${head}${ok(v.tmacd) ? ` ${fmt.num(v.tmacd, 2, true)}` : ""}${v.tyellow ? " · 노란 막대" : ""}`;
+  const sig = ok(v.tsig) && v.tf                     // owners 11-04: the signal bars' own 추세 MACD (trend_both)
+    ? ` · ${v.tf} ${Number(v.tsig) > 0 ? "상승" : Number(v.tsig) < 0 ? "하락" : "0선"}${ok(v.tmacd_sig) ? ` ${fmt.num(v.tmacd_sig, 2, true)}` : ""}` : "";
+  return `추세 MACD ${tt ? `${tt} ` : ""}히스토그램 ${head}${ok(v.tmacd) ? ` ${fmt.num(v.tmacd, 2, true)}` : ""}${v.tyellow ? " · 노란 막대" : ""}${sig}`;
 }
 /** Rule "h0x" (owners 10-31 night): 'ALL + OBV6 MACD''s histogram on the bar: "히스토그램 0선 아래로 돌파 −4.08"; null
  *  without its value. */
