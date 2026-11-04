@@ -189,7 +189,8 @@ def test_the_deck_reads_the_two_bots_coins():
     deploy = os.path.join(ROOT, "deploy")
     coins = {n: list(_json.load(open(os.path.join(deploy, f"{n}.live.json"), encoding="utf-8"))["coins"]) for n in ("mixrange", "mixchop")}
     # (owners 11-03 evening "친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만": both bots BTC · SOL · ZEC)
-    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT"], "mixchop": ["BTCUSDT", "SOLUSDT", "ZECUSDT"]}
+    # (owners 11-04 evening: one bot on Toobit, ZEC alone; the 레인지 봇 off with its coins as they were)
+    assert coins == {"mixrange": ["BTCUSDT", "SOLUSDT", "ZECUSDT"], "mixchop": ["ZECUSDT"]}
     assert set(D.COINS) == set(coins["mixrange"]) | set(coins["mixchop"]) and D.COINS == ("BTCUSDT", "SOLUSDT", "ZECUSDT")
     for n in ("mixrange", "mixchop"):                       # the paper twins trade the same coins
         paper = list(_json.load(open(os.path.join(deploy, f"{n}.paper.json"), encoding="utf-8"))["coins"])

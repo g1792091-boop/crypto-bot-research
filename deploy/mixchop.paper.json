@@ -33,15 +33,9 @@
  ],
  "stop_atr": 3,
  "coins": {
-  "BTCUSDT": {
-   "leverage": 40
-  },
-  "SOLUSDT": {
-   "leverage": 40
-  },
   "ZECUSDT": {
-   "leverage": 20
+   "leverage": 30
   }
  },
- "start_equity": 50
+ "start_equity": 26
 }

@@ -180,7 +180,7 @@ def test_the_friend_deploy_configs_and_wrong_ones(tmp_path):
         # 11-04 evening: on 5m bars, the 30m and 15m trends, the 15m ATR stop (tests/test_rules1104b.py)
         assert (cfg.tf, cfg.trend, cfg.rules, cfg.stop_atr, cfg.stop_tf) == ("5m", "macd", ("o4h",), 3.0, "15m")
         assert cfg.tf_ms == M.MIN5 and cfg.tf_ko == "5분"
-        assert {c.symbol: c.leverage for c in cfg.coins} == {"BTCUSDT": 40, "SOLUSDT": 40, "ZECUSDT": 20}
+        assert {c.symbol: c.leverage for c in cfg.coins} == {"ZECUSDT": 30}       # (11-04 evening: one bot, ZEC 30x)
         assert all(c.sl_atr == 3.0 for c in cfg.coins)
         # owners 11-03 ("익절을 거래소에 찍히는 10프로 부터 계단식 익절 2프로 뛰기로"): the exchange screen's ROE, every 2 %
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross" and cfg.margin_frac == 0.4

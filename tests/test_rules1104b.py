@@ -80,7 +80,10 @@ def test_the_four_configs_run_the_5m_turn_with_the_30m_and_15m_trends_and_the_15
         assert (cfg.trend2_ko, cfg.stop_ko, cfg.stop_atr, cfg.margin_frac) == ("15분", "15분", 3.0, 0.4)
         # the fixed rules as they were (owners: "고정규칙은 건들지마")
         assert raw["ladder"] == {"trigger": 10, "lock": 8, "step": 2} and raw["ladder_basis"] == "gross"
-        assert raw["coins"] == {"BTCUSDT": {"leverage": 40}, "SOLUSDT": {"leverage": 40}, "ZECUSDT": {"leverage": 20}}
+        # (owners 11-04 evening: one bot, the 친구 15분 봇 on Toobit, "zec로만", "Zec 30배로", $26 to start; the 레인지 봇 off)
+        assert raw["coins"] == ({"ZECUSDT": {"leverage": 30}} if name.startswith("mixchop") else
+                                {"BTCUSDT": {"leverage": 40}, "SOLUSDT": {"leverage": 40}, "ZECUSDT": {"leverage": 20}}), name
+        assert name != "mixchop.paper.json" or raw["start_equity"] == 26
         assert "trend_both" not in raw
 
 
@@ -93,6 +96,15 @@ def test_the_config_refusals(tmp_path):
     assert M.load_config(str(_cfg_file(tmp_path, trend="bar"))).trend_tf2 is None
     same = M.load_config(str(_cfg_file(tmp_path, trend_tf2="5m", stop_tf="5m")))
     assert (same.trend_tf2, same.trend_both, same.stop_tf, same.trend2_ko) == (None, True, None, "5분")
+
+
+def test_the_one_bot_zec_30x_and_its_liquidation_room():
+    """ZEC alone at 30x: the stop must sit inside 1/30 - 0.5 % (2.83 %) of the entry, else the signal is skipped."""
+    cfg = M.load_config(str(DEPLOY / "mixchop.live.json"))
+    (co,) = cfg.coins
+    assert (co.symbol, co.leverage, co.sl_atr, cfg.exchange, cfg.margin_frac) == ("ZECUSDT", 30, 3.0, "toobit", 0.4)
+    room = 1.0 / 30 - M.MMR_PCT / 100.0
+    assert room == pytest.approx(0.028333, abs=1e-6)
 
 
 # ====================================================================== the rule

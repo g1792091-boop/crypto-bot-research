@@ -59,6 +59,8 @@ def config(folder: str, mode: str) -> str:
     raw["exchange"], raw["taker_fee"] = "wooxpro", 0.00042
     raw["max_notional_usd"] = 500
     raw["equity_floor_frac"] = 0.7          # the friend's design's floor (owners 10-31: the deploy config has none, test_rules1031b)
+    if mode != "mainnet":
+        raw["start_equity"] = 50.0          # (the paper twin's $50 of this world; owners 11-04 evening start it at $26)
     raw.update(state=os.path.join(folder, f"{tag}-state.json"), log=os.path.join(folder, f"{tag}-log.jsonl"),
                kill_file=os.path.join(folder, "STOP"), own_stop_file=os.path.join(folder, f"{tag}.STOP"), telegram=False)
     path = os.path.join(folder, f"{tag}.json")

@@ -1,0 +1,2519 @@
+{
+ "what": "5분봉 OBV 전환 백테스트: C (BTC · SOL · ZEC, $50) · C-ZEC (ZEC만, $26), 30분 · 15분 추세 MACD 같은 쪽, 손절 15분봉 ATR × 3; plan: research/obv5m/PLAN_KO.md",
+ "code": {
+  "dev": {
+   "mixchop_sha256": "50a8aac1000f7cd21ccee4b269941289cd5acf8fd566db5cc5af7bce5339f936",
+   "friendtrend_sha256": "1d7bd7ad5253e86124d1479e81d12dfd1c79f6d42bd884d1fff9ccd115f6dfda",
+   "config": "deploy/mixchop.live.json (coins set per rule)",
+   "config_sha256": "332dcdee4322736522f885af595cc1f75845cd697935db136bad5f5e20fd6476"
+  }
+ },
+ "checks": {
+  "BTCUSDT": {
+   "turns": 36657,
+   "marked": 13458,
+   "window_turn_differs_at_marked": 0,
+   "sampled_30m_against": 1000,
+   "of_them_window_enters": 0,
+   "of_them_window_30m_differs": 0,
+   "sampled_15m_against": 1000,
+   "of_them_window_enters_15": 0,
+   "of_them_window_15m_differs": 0,
+   "sampled_no_turn": 500,
+   "of_them_window_turn": 0,
+   "c_entries": 12903
+  },
+  "SOLUSDT": {
+   "turns": 36586,
+   "marked": 13423,
+   "window_turn_differs_at_marked": 0,
+   "sampled_30m_against": 1000,
+   "of_them_window_enters": 0,
+   "of_them_window_30m_differs": 0,
+   "sampled_15m_against": 1000,
+   "of_them_window_enters_15": 0,
+   "of_them_window_15m_differs": 0,
+   "sampled_no_turn": 500,
+   "of_them_window_turn": 0,
+   "c_entries": 9860
+  },
+  "ZECUSDT": {
+   "turns": 36913,
+   "marked": 13552,
+   "window_turn_differs_at_marked": 0,
+   "sampled_30m_against": 1000,
+   "of_them_window_enters": 0,
+   "of_them_window_30m_differs": 0,
+   "sampled_15m_against": 1000,
+   "of_them_window_enters_15": 0,
+   "of_them_window_15m_differs": 0,
+   "sampled_no_turn": 500,
+   "of_them_window_turn": 0,
+   "c_entries": 11943
+  }
+ },
+ "checks_leverage": {
+  "CZ30": {
+   "leverage": 30,
+   "sampled": 300,
+   "differ": 0,
+   "entries_at_decided": 11943,
+   "entries_at_lev": 8518
+  }
+ },
+ "data": {
+  "BTCUSDT": {
+   "5m": {
+    "bars": 218880,
+    "first": "2024-10-01 00:00",
+    "last": "2026-10-31 23:55",
+    "gaps": 1,
+    "missing_bars": 288
+   },
+   "15m": {
+    "bars": 75840,
+    "first": "2024-09-01 00:00",
+    "last": "2026-10-31 23:45",
+    "gaps": 1,
+    "missing_bars": 96
+   },
+   "30m": {
+    "bars": 37920,
+    "first": "2024-09-01 00:00",
+    "last": "2026-10-31 23:30",
+    "gaps": 1,
+    "missing_bars": 48
+   },
+   "1m": {
+    "bars": 1049760,
+    "first": "2024-11-01 00:00",
+    "last": "2026-10-31 23:59",
+    "gaps": 1,
+    "missing_bars": 1440
+   }
+  },
+  "SOLUSDT": {
+   "5m": {
+    "bars": 218880,
+    "first": "2024-10-01 00:00",
+    "last": "2026-10-31 23:55",
+    "gaps": 1,
+    "missing_bars": 288
+   },
+   "15m": {
+    "bars": 75840,
+    "first": "2024-09-01 00:00",
+    "last": "2026-10-31 23:45",
+    "gaps": 1,
+    "missing_bars": 96
+   },
+   "30m": {
+    "bars": 37920,
+    "first": "2024-09-01 00:00",
+    "last": "2026-10-31 23:30",
+    "gaps": 1,
+    "missing_bars": 48
+   },
+   "1m": {
+    "bars": 1049760,
+    "first": "2024-11-01 00:00",
+    "last": "2026-10-31 23:59",
+    "gaps": 1,
+    "missing_bars": 1440
+   }
+  },
+  "ZECUSDT": {
+   "5m": {
+    "bars": 218880,
+    "first": "2024-10-01 00:00",
+    "last": "2026-10-31 23:55",
+    "gaps": 1,
+    "missing_bars": 288
+   },
+   "15m": {
+    "bars": 75840,
+    "first": "2024-09-01 00:00",
+    "last": "2026-10-31 23:45",
+    "gaps": 1,
+    "missing_bars": 96
+   },
+   "30m": {
+    "bars": 37920,
+    "first": "2024-09-01 00:00",
+    "last": "2026-10-31 23:30",
+    "gaps": 1,
+    "missing_bars": 48
+   },
+   "1m": {
+    "bars": 1049760,
+    "first": "2024-11-01 00:00",
+    "last": "2026-10-31 23:59",
+    "gaps": 1,
+    "missing_bars": 1440
+   }
+  }
+ },
+ "dev": {
+  "from": "2024-11-01",
+  "to": "2026-04-30",
+  "made_utc": "2026-11-04T10:26Z",
+  "seconds": 977,
+  "rules": [
+   "CZ30",
+   "CZ",
+   "C"
+  ],
+  "runs": {
+   "CZ30_toobit": {
+    "rule": "CZ30",
+    "fee": 0.0006,
+    "start": 26.0,
+    "leverage": {
+     "ZECUSDT": 30
+    },
+    "trades": 219,
+    "wins": 184,
+    "win_rate": 0.8402,
+    "avg_win_pct": 3.067,
+    "avg_loss_pct": -23.739,
+    "exp_pct": -1.2174,
+    "median_pct": 1.795,
+    "breakeven_win_rate": 0.8856,
+    "payoff": 0.129,
+    "start_eq": 26.0,
+    "end_eq": 0.35,
+    "return_pct": -98.67,
+    "max_dd_pct": 98.82,
+    "max_losing_streak": 3,
+    "under_1usd": "2024-12-30",
+    "exits": {
+     "0": {
+      "n": 29,
+      "avg_pct": -28.518
+     },
+     "1": {
+      "n": 67,
+      "avg_pct": 1.437
+     },
+     "2": {
+      "n": 39,
+      "avg_pct": 2.089
+     },
+     "3": {
+      "n": 22,
+      "avg_pct": 3.096
+     },
+     "4": {
+      "n": 26,
+      "avg_pct": 3.744
+     },
+     "5": {
+      "n": 5,
+      "avg_pct": 4.042
+     },
+     "6": {
+      "n": 9,
+      "avg_pct": 4.962
+     },
+     "7": {
+      "n": 8,
+      "avg_pct": 4.791
+     },
+     "8": {
+      "n": 4,
+      "avg_pct": 6.322
+     },
+     "9": {
+      "n": 1,
+      "avg_pct": 8.126
+     },
+     "10": {
+      "n": 4,
+      "avg_pct": 5.221
+     },
+     "11": {
+      "n": 2,
+      "avg_pct": 9.103
+     },
+     "13": {
+      "n": 1,
+      "avg_pct": 9.07
+     },
+     "18": {
+      "n": 1,
+      "avg_pct": 13.962
+     },
+     "25": {
+      "n": 1,
+      "avg_pct": 18.511
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "ZECUSDT": {
+      "n": 219,
+      "win_rate": 0.84,
+      "exp_pct": -1.217,
+      "sum_pct": -266.61
+     }
+    },
+    "long": {
+     "n": 117,
+     "win_rate": 0.829,
+     "exp_pct": -1.179,
+     "sum_pct": -137.89
+    },
+    "short": {
+     "n": 102,
+     "win_rate": 0.853,
+     "exp_pct": -1.262,
+     "sum_pct": -128.72
+    },
+    "yellow_trend_bar": {
+     "n": 54,
+     "win_rate": 0.815,
+     "exp_pct": -1.742,
+     "sum_pct": -94.09
+    },
+    "stop_pct_median": 2.399,
+    "hold_h_median": 0.42,
+    "months": 18,
+    "neg_months": 3,
+    "month_returns_pct": [
+     -93.7,
+     -45.4,
+     -61.6,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 107,
+     "macro": 14,
+     "us_open": 167,
+     "weekend": 2042,
+     "min_order": 3720
+    },
+    "ladder_moves": 242
+   },
+   "CZ30_wooxpro": {
+    "rule": "CZ30",
+    "fee": 0.00042,
+    "start": 26.0,
+    "leverage": {
+     "ZECUSDT": 30
+    },
+    "trades": 242,
+    "wins": 206,
+    "win_rate": 0.8512,
+    "avg_win_pct": 3.406,
+    "avg_loss_pct": -25.977,
+    "exp_pct": -0.9655,
+    "median_pct": 2.193,
+    "breakeven_win_rate": 0.8841,
+    "payoff": 0.131,
+    "start_eq": 26.0,
+    "end_eq": 0.39,
+    "return_pct": -98.5,
+    "max_dd_pct": 98.69,
+    "max_losing_streak": 3,
+    "under_1usd": "2025-01-07",
+    "exits": {
+     "0": {
+      "n": 33,
+      "avg_pct": -28.279
+     },
+     "1": {
+      "n": 78,
+      "avg_pct": 1.879
+     },
+     "2": {
+      "n": 41,
+      "avg_pct": 2.513
+     },
+     "3": {
+      "n": 22,
+      "avg_pct": 3.528
+     },
+     "4": {
+      "n": 28,
+      "avg_pct": 4.206
+     },
+     "5": {
+      "n": 6,
+      "avg_pct": 4.448
+     },
+     "6": {
+      "n": 10,
+      "avg_pct": 5.196
+     },
+     "7": {
+      "n": 8,
+      "avg_pct": 5.223
+     },
+     "8": {
+      "n": 6,
+      "avg_pct": 6.842
+     },
+     "9": {
+      "n": 1,
+      "avg_pct": 8.559
+     },
+     "10": {
+      "n": 4,
+      "avg_pct": 5.654
+     },
+     "11": {
+      "n": 2,
+      "avg_pct": 9.537
+     },
+     "13": {
+      "n": 1,
+      "avg_pct": 9.504
+     },
+     "18": {
+      "n": 1,
+      "avg_pct": 14.391
+     },
+     "25": {
+      "n": 1,
+      "avg_pct": 18.947
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "ZECUSDT": {
+      "n": 242,
+      "win_rate": 0.851,
+      "exp_pct": -0.965,
+      "sum_pct": -233.64
+     }
+    },
+    "long": {
+     "n": 132,
+     "win_rate": 0.841,
+     "exp_pct": -1.088,
+     "sum_pct": -143.63
+    },
+    "short": {
+     "n": 110,
+     "win_rate": 0.864,
+     "exp_pct": -0.818,
+     "sum_pct": -90.02
+    },
+    "yellow_trend_bar": {
+     "n": 61,
+     "win_rate": 0.836,
+     "exp_pct": -1.397,
+     "sum_pct": -85.2
+    },
+    "stop_pct_median": 2.41,
+    "hold_h_median": 0.42,
+    "months": 18,
+    "neg_months": 3,
+    "month_returns_pct": [
+     -90.3,
+     -25.0,
+     -79.3,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 118,
+     "macro": 12,
+     "us_open": 166,
+     "weekend": 2042,
+     "min_order": 3689
+    },
+    "ladder_moves": 269
+   },
+   "CZ30_fee_x2": {
+    "rule": "CZ30",
+    "fee": 0.0012,
+    "start": 26.0,
+    "leverage": {
+     "ZECUSDT": 30
+    },
+    "trades": 85,
+    "wins": 60,
+    "win_rate": 0.7059,
+    "avg_win_pct": 1.916,
+    "avg_loss_pct": -18.177,
+    "exp_pct": -3.9938,
+    "median_pct": 0.324,
+    "breakeven_win_rate": 0.9046,
+    "payoff": 0.105,
+    "start_eq": 26.0,
+    "end_eq": 0.36,
+    "return_pct": -98.62,
+    "max_dd_pct": 98.68,
+    "max_losing_streak": 3,
+    "under_1usd": "2024-11-21",
+    "exits": {
+     "0": {
+      "n": 15,
+      "avg_pct": -29.498
+     },
+     "1": {
+      "n": 28,
+      "avg_pct": -0.03
+     },
+     "2": {
+      "n": 14,
+      "avg_pct": 0.651
+     },
+     "3": {
+      "n": 8,
+      "avg_pct": 1.591
+     },
+     "4": {
+      "n": 6,
+      "avg_pct": 1.672
+     },
+     "5": {
+      "n": 2,
+      "avg_pct": 3.108
+     },
+     "6": {
+      "n": 4,
+      "avg_pct": 4.041
+     },
+     "7": {
+      "n": 2,
+      "avg_pct": 4.838
+     },
+     "8": {
+      "n": 1,
+      "avg_pct": 5.909
+     },
+     "9": {
+      "n": 1,
+      "avg_pct": 6.68
+     },
+     "10": {
+      "n": 2,
+      "avg_pct": 1.308
+     },
+     "13": {
+      "n": 1,
+      "avg_pct": 7.624
+     },
+     "25": {
+      "n": 1,
+      "avg_pct": 17.059
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "ZECUSDT": {
+      "n": 85,
+      "win_rate": 0.706,
+      "exp_pct": -3.994,
+      "sum_pct": -339.47
+     }
+    },
+    "long": {
+     "n": 48,
+     "win_rate": 0.708,
+     "exp_pct": -3.858,
+     "sum_pct": -185.16
+    },
+    "short": {
+     "n": 37,
+     "win_rate": 0.703,
+     "exp_pct": -4.171,
+     "sum_pct": -154.31
+    },
+    "yellow_trend_bar": {
+     "n": 20,
+     "win_rate": 0.7,
+     "exp_pct": -4.697,
+     "sum_pct": -93.94
+    },
+    "stop_pct_median": 2.408,
+    "hold_h_median": 0.58,
+    "months": 18,
+    "neg_months": 1,
+    "month_returns_pct": [
+     -98.6,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 55,
+     "macro": 14,
+     "us_open": 169,
+     "weekend": 2042,
+     "min_order": 3904
+    },
+    "ladder_moves": 87
+   },
+   "CZ_toobit": {
+    "rule": "CZ",
+    "fee": 0.0006,
+    "start": 26.0,
+    "leverage": {
+     "ZECUSDT": 20
+    },
+    "trades": 352,
+    "wins": 295,
+    "win_rate": 0.8381,
+    "avg_win_pct": 3.469,
+    "avg_loss_pct": -21.383,
+    "exp_pct": -0.5549,
+    "median_pct": 2.242,
+    "breakeven_win_rate": 0.8604,
+    "payoff": 0.162,
+    "start_eq": 26.0,
+    "end_eq": 0.47,
+    "return_pct": -98.21,
+    "max_dd_pct": 98.21,
+    "max_losing_streak": 3,
+    "under_1usd": "2024-12-30",
+    "exits": {
+     "0": {
+      "n": 52,
+      "avg_pct": -23.414
+     },
+     "1": {
+      "n": 118,
+      "avg_pct": 1.904
+     },
+     "2": {
+      "n": 63,
+      "avg_pct": 2.781
+     },
+     "3": {
+      "n": 36,
+      "avg_pct": 3.514
+     },
+     "4": {
+      "n": 26,
+      "avg_pct": 4.147
+     },
+     "5": {
+      "n": 17,
+      "avg_pct": 4.592
+     },
+     "6": {
+      "n": 9,
+      "avg_pct": 5.558
+     },
+     "7": {
+      "n": 11,
+      "avg_pct": 6.322
+     },
+     "8": {
+      "n": 5,
+      "avg_pct": 6.808
+     },
+     "9": {
+      "n": 3,
+      "avg_pct": 7.896
+     },
+     "10": {
+      "n": 1,
+      "avg_pct": 9.308
+     },
+     "11": {
+      "n": 1,
+      "avg_pct": 7.773
+     },
+     "12": {
+      "n": 1,
+      "avg_pct": 9.02
+     },
+     "13": {
+      "n": 4,
+      "avg_pct": 10.989
+     },
+     "14": {
+      "n": 1,
+      "avg_pct": 10.867
+     },
+     "17": {
+      "n": 2,
+      "avg_pct": 11.351
+     },
+     "20": {
+      "n": 1,
+      "avg_pct": 14.954
+     },
+     "21": {
+      "n": 1,
+      "avg_pct": 14.052
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "ZECUSDT": {
+      "n": 352,
+      "win_rate": 0.838,
+      "exp_pct": -0.555,
+      "sum_pct": -195.32
+     }
+    },
+    "long": {
+     "n": 181,
+     "win_rate": 0.829,
+     "exp_pct": -0.988,
+     "sum_pct": -178.83
+    },
+    "short": {
+     "n": 171,
+     "win_rate": 0.848,
+     "exp_pct": -0.096,
+     "sum_pct": -16.48
+    },
+    "yellow_trend_bar": {
+     "n": 84,
+     "win_rate": 0.798,
+     "exp_pct": -2.499,
+     "sum_pct": -209.92
+    },
+    "stop_pct_median": 3.115,
+    "hold_h_median": 0.5,
+    "months": 18,
+    "neg_months": 2,
+    "month_returns_pct": [
+     -71.6,
+     -93.7,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 238,
+     "macro": 20,
+     "us_open": 262,
+     "weekend": 2575,
+     "min_order": 5293
+    },
+    "ladder_moves": 393
+   },
+   "CZ_wooxpro": {
+    "rule": "CZ",
+    "fee": 0.00042,
+    "start": 26.0,
+    "leverage": {
+     "ZECUSDT": 20
+    },
+    "trades": 451,
+    "wins": 381,
+    "win_rate": 0.8448,
+    "avg_win_pct": 3.617,
+    "avg_loss_pct": -21.582,
+    "exp_pct": -0.2944,
+    "median_pct": 2.529,
+    "breakeven_win_rate": 0.8565,
+    "payoff": 0.168,
+    "start_eq": 26.0,
+    "end_eq": 0.58,
+    "return_pct": -97.78,
+    "max_dd_pct": 98.35,
+    "max_losing_streak": 4,
+    "under_1usd": "2025-01-10",
+    "exits": {
+     "0": {
+      "n": 68,
+      "avg_pct": -22.214
+     },
+     "1": {
+      "n": 152,
+      "avg_pct": 2.235
+     },
+     "2": {
+      "n": 87,
+      "avg_pct": 3.092
+     },
+     "3": {
+      "n": 47,
+      "avg_pct": 3.737
+     },
+     "4": {
+      "n": 29,
+      "avg_pct": 4.405
+     },
+     "5": {
+      "n": 22,
+      "avg_pct": 4.793
+     },
+     "6": {
+      "n": 11,
+      "avg_pct": 5.583
+     },
+     "7": {
+      "n": 13,
+      "avg_pct": 6.604
+     },
+     "8": {
+      "n": 5,
+      "avg_pct": 7.096
+     },
+     "9": {
+      "n": 5,
+      "avg_pct": 8.283
+     },
+     "10": {
+      "n": 1,
+      "avg_pct": 9.594
+     },
+     "11": {
+      "n": 1,
+      "avg_pct": 8.06
+     },
+     "12": {
+      "n": 1,
+      "avg_pct": 9.306
+     },
+     "13": {
+      "n": 4,
+      "avg_pct": 11.278
+     },
+     "14": {
+      "n": 1,
+      "avg_pct": 11.153
+     },
+     "17": {
+      "n": 2,
+      "avg_pct": 11.64
+     },
+     "20": {
+      "n": 1,
+      "avg_pct": 15.239
+     },
+     "21": {
+      "n": 1,
+      "avg_pct": 14.343
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "ZECUSDT": {
+      "n": 451,
+      "win_rate": 0.845,
+      "exp_pct": -0.294,
+      "sum_pct": -132.77
+     }
+    },
+    "long": {
+     "n": 228,
+     "win_rate": 0.829,
+     "exp_pct": -0.768,
+     "sum_pct": -175.01
+    },
+    "short": {
+     "n": 223,
+     "win_rate": 0.861,
+     "exp_pct": 0.189,
+     "sum_pct": 42.25
+    },
+    "yellow_trend_bar": {
+     "n": 106,
+     "win_rate": 0.802,
+     "exp_pct": -1.924,
+     "sum_pct": -203.92
+    },
+    "stop_pct_median": 2.973,
+    "hold_h_median": 0.5,
+    "months": 18,
+    "neg_months": 3,
+    "month_returns_pct": [
+     -50.9,
+     -84.3,
+     -71.2,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 303,
+     "macro": 18,
+     "us_open": 260,
+     "weekend": 2575,
+     "min_order": 5133
+    },
+    "ladder_moves": 506
+   },
+   "CZ_fee_x2": {
+    "rule": "CZ",
+    "fee": 0.0012,
+    "start": 26.0,
+    "leverage": {
+     "ZECUSDT": 20
+    },
+    "trades": 275,
+    "wins": 226,
+    "win_rate": 0.8218,
+    "avg_win_pct": 2.676,
+    "avg_loss_pct": -17.431,
+    "exp_pct": -0.9066,
+    "median_pct": 1.284,
+    "breakeven_win_rate": 0.8669,
+    "payoff": 0.154,
+    "start_eq": 26.0,
+    "end_eq": 0.52,
+    "return_pct": -98.0,
+    "max_dd_pct": 98.0,
+    "max_losing_streak": 3,
+    "under_1usd": "2024-11-25",
+    "exits": {
+     "0": {
+      "n": 36,
+      "avg_pct": -23.506
+     },
+     "1": {
+      "n": 94,
+      "avg_pct": 0.955
+     },
+     "2": {
+      "n": 47,
+      "avg_pct": 1.784
+     },
+     "3": {
+      "n": 27,
+      "avg_pct": 2.501
+     },
+     "4": {
+      "n": 22,
+      "avg_pct": 3.274
+     },
+     "5": {
+      "n": 16,
+      "avg_pct": 3.579
+     },
+     "6": {
+      "n": 6,
+      "avg_pct": 4.493
+     },
+     "7": {
+      "n": 9,
+      "avg_pct": 5.294
+     },
+     "8": {
+      "n": 5,
+      "avg_pct": 5.847
+     },
+     "9": {
+      "n": 3,
+      "avg_pct": 6.93
+     },
+     "11": {
+      "n": 1,
+      "avg_pct": 6.819
+     },
+     "12": {
+      "n": 1,
+      "avg_pct": 8.066
+     },
+     "13": {
+      "n": 3,
+      "avg_pct": 9.746
+     },
+     "14": {
+      "n": 1,
+      "avg_pct": 9.914
+     },
+     "17": {
+      "n": 2,
+      "avg_pct": 10.391
+     },
+     "20": {
+      "n": 1,
+      "avg_pct": 14.004
+     },
+     "21": {
+      "n": 1,
+      "avg_pct": 13.083
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "win_rate": null,
+      "exp_pct": null,
+      "sum_pct": 0.0
+     },
+     "ZECUSDT": {
+      "n": 275,
+      "win_rate": 0.822,
+      "exp_pct": -0.907,
+      "sum_pct": -249.31
+     }
+    },
+    "long": {
+     "n": 146,
+     "win_rate": 0.822,
+     "exp_pct": -1.046,
+     "sum_pct": -152.67
+    },
+    "short": {
+     "n": 129,
+     "win_rate": 0.822,
+     "exp_pct": -0.749,
+     "sum_pct": -96.65
+    },
+    "yellow_trend_bar": {
+     "n": 69,
+     "win_rate": 0.841,
+     "exp_pct": -1.636,
+     "sum_pct": -112.86
+    },
+    "stop_pct_median": 3.194,
+    "hold_h_median": 0.5,
+    "months": 18,
+    "neg_months": 2,
+    "month_returns_pct": [
+     -95.5,
+     -55.7,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 191,
+     "macro": 20,
+     "us_open": 263,
+     "weekend": 2575,
+     "min_order": 5416
+    },
+    "ladder_moves": 310
+   },
+   "C_toobit": {
+    "rule": "C",
+    "fee": 0.0006,
+    "start": 50.0,
+    "leverage": {
+     "BTCUSDT": 40,
+     "SOLUSDT": 40,
+     "ZECUSDT": 20
+    },
+    "trades": 123,
+    "wins": 91,
+    "win_rate": 0.7398,
+    "avg_win_pct": 3.008,
+    "avg_loss_pct": -21.446,
+    "exp_pct": -3.3539,
+    "median_pct": 1.767,
+    "breakeven_win_rate": 0.877,
+    "payoff": 0.14,
+    "start_eq": 50.0,
+    "end_eq": 0.27,
+    "return_pct": -99.47,
+    "max_dd_pct": 99.47,
+    "max_losing_streak": 5,
+    "under_1usd": "2024-11-12",
+    "exits": {
+     "0": {
+      "n": 29,
+      "avg_pct": -23.6
+     },
+     "1": {
+      "n": 34,
+      "avg_pct": 1.294
+     },
+     "2": {
+      "n": 18,
+      "avg_pct": 2.087
+     },
+     "3": {
+      "n": 7,
+      "avg_pct": 2.594
+     },
+     "4": {
+      "n": 13,
+      "avg_pct": 3.548
+     },
+     "5": {
+      "n": 6,
+      "avg_pct": 4.408
+     },
+     "6": {
+      "n": 6,
+      "avg_pct": 5.268
+     },
+     "7": {
+      "n": 5,
+      "avg_pct": 5.068
+     },
+     "8": {
+      "n": 3,
+      "avg_pct": 6.401
+     },
+     "14": {
+      "n": 1,
+      "avg_pct": 10.867
+     },
+     "17": {
+      "n": 1,
+      "avg_pct": 12.559
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 70,
+      "win_rate": 0.786,
+      "exp_pct": -2.355,
+      "sum_pct": -164.82
+     },
+     "SOLUSDT": {
+      "n": 11,
+      "win_rate": 0.545,
+      "exp_pct": -9.292,
+      "sum_pct": -102.21
+     },
+     "ZECUSDT": {
+      "n": 42,
+      "win_rate": 0.714,
+      "exp_pct": -3.464,
+      "sum_pct": -145.5
+     }
+    },
+    "long": {
+     "n": 77,
+     "win_rate": 0.792,
+     "exp_pct": -2.252,
+     "sum_pct": -173.39
+    },
+    "short": {
+     "n": 46,
+     "win_rate": 0.652,
+     "exp_pct": -5.199,
+     "sum_pct": -239.14
+    },
+    "yellow_trend_bar": {
+     "n": 25,
+     "win_rate": 0.64,
+     "exp_pct": -7.327,
+     "sum_pct": -183.17
+    },
+    "stop_pct_median": 1.664,
+    "hold_h_median": 0.75,
+    "months": 18,
+    "neg_months": 1,
+    "month_returns_pct": [
+     -99.5,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 282,
+     "same_bar": 2066,
+     "us_open": 777,
+     "weekend": 7653,
+     "macro": 53,
+     "min_order": 14183
+    },
+    "ladder_moves": 143
+   },
+   "C_wooxpro": {
+    "rule": "C",
+    "fee": 0.00042,
+    "start": 50.0,
+    "leverage": {
+     "BTCUSDT": 40,
+     "SOLUSDT": 40,
+     "ZECUSDT": 20
+    },
+    "trades": 176,
+    "wins": 139,
+    "win_rate": 0.7898,
+    "avg_win_pct": 3.311,
+    "avg_loss_pct": -22.599,
+    "exp_pct": -2.1357,
+    "median_pct": 2.141,
+    "breakeven_win_rate": 0.8722,
+    "payoff": 0.147,
+    "start_eq": 50.0,
+    "end_eq": 0.29,
+    "return_pct": -99.43,
+    "max_dd_pct": 99.43,
+    "max_losing_streak": 5,
+    "under_1usd": "2024-11-13",
+    "exits": {
+     "0": {
+      "n": 35,
+      "avg_pct": -23.877
+     },
+     "1": {
+      "n": 58,
+      "avg_pct": 1.826
+     },
+     "2": {
+      "n": 31,
+      "avg_pct": 2.432
+     },
+     "3": {
+      "n": 9,
+      "avg_pct": 2.949
+     },
+     "4": {
+      "n": 15,
+      "avg_pct": 4.244
+     },
+     "5": {
+      "n": 8,
+      "avg_pct": 4.99
+     },
+     "6": {
+      "n": 6,
+      "avg_pct": 5.797
+     },
+     "7": {
+      "n": 5,
+      "avg_pct": 6.411
+     },
+     "8": {
+      "n": 4,
+      "avg_pct": 6.98
+     },
+     "13": {
+      "n": 1,
+      "avg_pct": 10.971
+     },
+     "14": {
+      "n": 2,
+      "avg_pct": 9.682
+     },
+     "17": {
+      "n": 2,
+      "avg_pct": 11.64
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 82,
+      "win_rate": 0.817,
+      "exp_pct": -1.601,
+      "sum_pct": -131.32
+     },
+     "SOLUSDT": {
+      "n": 18,
+      "win_rate": 0.667,
+      "exp_pct": -8.298,
+      "sum_pct": -149.36
+     },
+     "ZECUSDT": {
+      "n": 76,
+      "win_rate": 0.789,
+      "exp_pct": -1.253,
+      "sum_pct": -95.21
+     }
+    },
+    "long": {
+     "n": 105,
+     "win_rate": 0.819,
+     "exp_pct": -1.588,
+     "sum_pct": -166.72
+    },
+    "short": {
+     "n": 71,
+     "win_rate": 0.746,
+     "exp_pct": -2.946,
+     "sum_pct": -209.16
+    },
+    "yellow_trend_bar": {
+     "n": 43,
+     "win_rate": 0.744,
+     "exp_pct": -4.164,
+     "sum_pct": -179.04
+    },
+    "stop_pct_median": 1.8,
+    "hold_h_median": 0.71,
+    "months": 18,
+    "neg_months": 1,
+    "month_returns_pct": [
+     -99.4,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 405,
+     "same_bar": 2059,
+     "us_open": 770,
+     "weekend": 7653,
+     "macro": 53,
+     "min_order": 14021
+    },
+    "ladder_moves": 201
+   },
+   "C_fee_x2": {
+    "rule": "C",
+    "fee": 0.0012,
+    "start": 50.0,
+    "leverage": {
+     "BTCUSDT": 40,
+     "SOLUSDT": 40,
+     "ZECUSDT": 20
+    },
+    "trades": 77,
+    "wins": 30,
+    "win_rate": 0.3896,
+    "avg_win_pct": 2.236,
+    "avg_loss_pct": -10.772,
+    "exp_pct": -5.704,
+    "median_pct": -0.636,
+    "breakeven_win_rate": 0.8281,
+    "payoff": 0.208,
+    "start_eq": 50.0,
+    "end_eq": 0.3,
+    "return_pct": -99.41,
+    "max_dd_pct": 99.41,
+    "max_losing_streak": 7,
+    "under_1usd": "2024-11-10",
+    "exits": {
+     "0": {
+      "n": 21,
+      "avg_pct": -23.165
+     },
+     "1": {
+      "n": 25,
+      "avg_pct": -0.584
+     },
+     "2": {
+      "n": 11,
+      "avg_pct": 0.515
+     },
+     "3": {
+      "n": 1,
+      "avg_pct": 0.866
+     },
+     "4": {
+      "n": 6,
+      "avg_pct": 1.524
+     },
+     "5": {
+      "n": 5,
+      "avg_pct": 2.856
+     },
+     "6": {
+      "n": 3,
+      "avg_pct": 3.011
+     },
+     "7": {
+      "n": 2,
+      "avg_pct": 4.234
+     },
+     "8": {
+      "n": 3,
+      "avg_pct": 4.797
+     }
+    },
+    "coins": {
+     "BTCUSDT": {
+      "n": 47,
+      "win_rate": 0.34,
+      "exp_pct": -5.539,
+      "sum_pct": -260.35
+     },
+     "SOLUSDT": {
+      "n": 9,
+      "win_rate": 0.111,
+      "exp_pct": -10.251,
+      "sum_pct": -92.26
+     },
+     "ZECUSDT": {
+      "n": 21,
+      "win_rate": 0.619,
+      "exp_pct": -4.124,
+      "sum_pct": -86.6
+     }
+    },
+    "long": {
+     "n": 49,
+     "win_rate": 0.408,
+     "exp_pct": -4.54,
+     "sum_pct": -222.46
+    },
+    "short": {
+     "n": 28,
+     "win_rate": 0.357,
+     "exp_pct": -7.741,
+     "sum_pct": -216.75
+    },
+    "yellow_trend_bar": {
+     "n": 13,
+     "win_rate": 0.308,
+     "exp_pct": -8.73,
+     "sum_pct": -113.49
+    },
+    "stop_pct_median": 1.508,
+    "hold_h_median": 0.92,
+    "months": 18,
+    "neg_months": 1,
+    "month_returns_pct": [
+     -99.4,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "skips": {
+     "holding": 200,
+     "same_bar": 2069,
+     "us_open": 777,
+     "weekend": 7653,
+     "macro": 53,
+     "min_order": 14308
+    },
+    "ladder_moves": 81
+   }
+  }
+ },
+ "dev_fixed": {
+  "what": "같은 크기 보기 (계획의 '함께 내는 것', 판정에 안 씀): 개발 구간 18개월 전체를 진입마다 시작 잔고 기준 같은 크기로 (복리 없음). zero = 수수료 0, 수수료가 가져가는 몫을 보려는 분해용",
+  "runs": {
+   "CZ30_toobit": {
+    "rule": "CZ30",
+    "fee": 0.0006,
+    "trades": 2597,
+    "win_rate": 0.8275,
+    "avg_win_pct": 2.974,
+    "avg_loss_pct": -21.479,
+    "breakeven_win_rate": 0.8784,
+    "exp_pct": -1.244,
+    "sum_pct": -3230.7,
+    "max_dd_pts": 3294.9,
+    "max_losing_streak": 3,
+    "stops": 363,
+    "lock1": 787,
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "ZECUSDT": {
+      "n": 2597,
+      "exp_pct": -1.244
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 94,
+      "sum_pct": -193.3
+     },
+     "2024-12": {
+      "n": 72,
+      "sum_pct": -13.3
+     },
+     "2025-01": {
+      "n": 212,
+      "sum_pct": -355.0
+     },
+     "2025-02": {
+      "n": 123,
+      "sum_pct": -146.8
+     },
+     "2025-03": {
+      "n": 157,
+      "sum_pct": -138.3
+     },
+     "2025-04": {
+      "n": 142,
+      "sum_pct": -143.6
+     },
+     "2025-05": {
+      "n": 177,
+      "sum_pct": -243.5
+     },
+     "2025-06": {
+      "n": 204,
+      "sum_pct": -232.6
+     },
+     "2025-07": {
+      "n": 252,
+      "sum_pct": -316.4
+     },
+     "2025-08": {
+      "n": 221,
+      "sum_pct": 74.1
+     },
+     "2025-09": {
+      "n": 171,
+      "sum_pct": -357.9
+     },
+     "2025-11": {
+      "n": 6,
+      "sum_pct": -24.7
+     },
+     "2025-12": {
+      "n": 119,
+      "sum_pct": -273.5
+     },
+     "2026-01": {
+      "n": 157,
+      "sum_pct": -147.5
+     },
+     "2026-02": {
+      "n": 134,
+      "sum_pct": 6.8
+     },
+     "2026-03": {
+      "n": 177,
+      "sum_pct": -517.7
+     },
+     "2026-04": {
+      "n": 178,
+      "sum_pct": -197.0
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -10.5
+     }
+    },
+    "pos_months": 2,
+    "n_months": 18
+   },
+   "CZ30_wooxpro": {
+    "rule": "CZ30",
+    "fee": 0.00042,
+    "trades": 2597,
+    "win_rate": 0.8387,
+    "avg_win_pct": 3.364,
+    "avg_loss_pct": -22.522,
+    "breakeven_win_rate": 0.87,
+    "exp_pct": -0.8121,
+    "sum_pct": -2109.0,
+    "max_dd_pts": 2193.5,
+    "max_losing_streak": 3,
+    "stops": 363,
+    "lock1": 787,
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "ZECUSDT": {
+      "n": 2597,
+      "exp_pct": -0.812
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 94,
+      "sum_pct": -152.7
+     },
+     "2024-12": {
+      "n": 72,
+      "sum_pct": 17.8
+     },
+     "2025-01": {
+      "n": 212,
+      "sum_pct": -263.4
+     },
+     "2025-02": {
+      "n": 123,
+      "sum_pct": -93.7
+     },
+     "2025-03": {
+      "n": 157,
+      "sum_pct": -70.5
+     },
+     "2025-04": {
+      "n": 142,
+      "sum_pct": -82.2
+     },
+     "2025-05": {
+      "n": 177,
+      "sum_pct": -167.0
+     },
+     "2025-06": {
+      "n": 204,
+      "sum_pct": -144.5
+     },
+     "2025-07": {
+      "n": 252,
+      "sum_pct": -207.6
+     },
+     "2025-08": {
+      "n": 221,
+      "sum_pct": 169.6
+     },
+     "2025-09": {
+      "n": 171,
+      "sum_pct": -284.0
+     },
+     "2025-11": {
+      "n": 6,
+      "sum_pct": -22.1
+     },
+     "2025-12": {
+      "n": 119,
+      "sum_pct": -222.1
+     },
+     "2026-01": {
+      "n": 157,
+      "sum_pct": -79.7
+     },
+     "2026-02": {
+      "n": 134,
+      "sum_pct": 64.6
+     },
+     "2026-03": {
+      "n": 177,
+      "sum_pct": -441.3
+     },
+     "2026-04": {
+      "n": 178,
+      "sum_pct": -120.1
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -10.1
+     }
+    },
+    "pos_months": 3,
+    "n_months": 18
+   },
+   "CZ30_zero": {
+    "rule": "CZ30",
+    "fee": 0.0,
+    "trades": 2597,
+    "win_rate": 0.8518,
+    "avg_win_pct": 4.316,
+    "avg_loss_pct": -23.478,
+    "breakeven_win_rate": 0.8447,
+    "exp_pct": 0.1958,
+    "sum_pct": 508.5,
+    "max_dd_pts": 339.0,
+    "max_losing_streak": 3,
+    "stops": 363,
+    "lock1": 787,
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "ZECUSDT": {
+      "n": 2597,
+      "exp_pct": 0.196
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 94,
+      "sum_pct": -57.9
+     },
+     "2024-12": {
+      "n": 72,
+      "sum_pct": 90.4
+     },
+     "2025-01": {
+      "n": 212,
+      "sum_pct": -49.8
+     },
+     "2025-02": {
+      "n": 123,
+      "sum_pct": 30.3
+     },
+     "2025-03": {
+      "n": 157,
+      "sum_pct": 87.9
+     },
+     "2025-04": {
+      "n": 142,
+      "sum_pct": 60.9
+     },
+     "2025-05": {
+      "n": 177,
+      "sum_pct": 11.4
+     },
+     "2025-06": {
+      "n": 204,
+      "sum_pct": 61.0
+     },
+     "2025-07": {
+      "n": 252,
+      "sum_pct": 46.2
+     },
+     "2025-08": {
+      "n": 221,
+      "sum_pct": 392.4
+     },
+     "2025-09": {
+      "n": 171,
+      "sum_pct": -111.6
+     },
+     "2025-11": {
+      "n": 6,
+      "sum_pct": -16.1
+     },
+     "2025-12": {
+      "n": 119,
+      "sum_pct": -102.2
+     },
+     "2026-01": {
+      "n": 157,
+      "sum_pct": 78.6
+     },
+     "2026-02": {
+      "n": 134,
+      "sum_pct": 199.6
+     },
+     "2026-03": {
+      "n": 177,
+      "sum_pct": -262.9
+     },
+     "2026-04": {
+      "n": 178,
+      "sum_pct": 59.3
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -9.1
+     }
+    },
+    "pos_months": 11,
+    "n_months": 18
+   },
+   "CZ_toobit": {
+    "rule": "CZ",
+    "fee": 0.0006,
+    "trades": 3331,
+    "win_rate": 0.8301,
+    "avg_win_pct": 3.258,
+    "avg_loss_pct": -19.243,
+    "breakeven_win_rate": 0.8552,
+    "exp_pct": -0.565,
+    "sum_pct": -1881.9,
+    "max_dd_pts": 2020.5,
+    "max_losing_streak": 4,
+    "stops": 524,
+    "lock1": 1072,
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "ZECUSDT": {
+      "n": 3331,
+      "exp_pct": -0.565
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 188,
+      "sum_pct": -27.0
+     },
+     "2024-12": {
+      "n": 176,
+      "sum_pct": -127.6
+     },
+     "2025-01": {
+      "n": 242,
+      "sum_pct": -77.6
+     },
+     "2025-02": {
+      "n": 187,
+      "sum_pct": -64.1
+     },
+     "2025-03": {
+      "n": 192,
+      "sum_pct": -161.6
+     },
+     "2025-04": {
+      "n": 189,
+      "sum_pct": -111.5
+     },
+     "2025-05": {
+      "n": 220,
+      "sum_pct": -122.7
+     },
+     "2025-06": {
+      "n": 180,
+      "sum_pct": -185.8
+     },
+     "2025-07": {
+      "n": 233,
+      "sum_pct": -157.5
+     },
+     "2025-08": {
+      "n": 192,
+      "sum_pct": 47.8
+     },
+     "2025-09": {
+      "n": 182,
+      "sum_pct": -141.8
+     },
+     "2025-10": {
+      "n": 37,
+      "sum_pct": -93.7
+     },
+     "2025-11": {
+      "n": 71,
+      "sum_pct": 31.8
+     },
+     "2025-12": {
+      "n": 195,
+      "sum_pct": -212.0
+     },
+     "2026-01": {
+      "n": 198,
+      "sum_pct": -62.0
+     },
+     "2026-02": {
+      "n": 203,
+      "sum_pct": 6.8
+     },
+     "2026-03": {
+      "n": 230,
+      "sum_pct": -259.2
+     },
+     "2026-04": {
+      "n": 215,
+      "sum_pct": -157.3
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -7.0
+     }
+    },
+    "pos_months": 3,
+    "n_months": 19
+   },
+   "CZ_wooxpro": {
+    "rule": "CZ",
+    "fee": 0.00042,
+    "trades": 3331,
+    "win_rate": 0.8331,
+    "avg_win_pct": 3.534,
+    "avg_loss_pct": -19.298,
+    "breakeven_win_rate": 0.8452,
+    "exp_pct": -0.277,
+    "sum_pct": -922.6,
+    "max_dd_pts": 1145.9,
+    "max_losing_streak": 4,
+    "stops": 524,
+    "lock1": 1072,
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "ZECUSDT": {
+      "n": 3331,
+      "exp_pct": -0.277
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 188,
+      "sum_pct": 27.1
+     },
+     "2024-12": {
+      "n": 176,
+      "sum_pct": -76.9
+     },
+     "2025-01": {
+      "n": 242,
+      "sum_pct": -7.9
+     },
+     "2025-02": {
+      "n": 187,
+      "sum_pct": -10.2
+     },
+     "2025-03": {
+      "n": 192,
+      "sum_pct": -106.3
+     },
+     "2025-04": {
+      "n": 189,
+      "sum_pct": -57.1
+     },
+     "2025-05": {
+      "n": 220,
+      "sum_pct": -59.3
+     },
+     "2025-06": {
+      "n": 180,
+      "sum_pct": -133.9
+     },
+     "2025-07": {
+      "n": 233,
+      "sum_pct": -90.5
+     },
+     "2025-08": {
+      "n": 192,
+      "sum_pct": 103.1
+     },
+     "2025-09": {
+      "n": 182,
+      "sum_pct": -89.4
+     },
+     "2025-10": {
+      "n": 37,
+      "sum_pct": -83.0
+     },
+     "2025-11": {
+      "n": 71,
+      "sum_pct": 52.3
+     },
+     "2025-12": {
+      "n": 195,
+      "sum_pct": -155.8
+     },
+     "2026-01": {
+      "n": 198,
+      "sum_pct": -4.9
+     },
+     "2026-02": {
+      "n": 203,
+      "sum_pct": 65.2
+     },
+     "2026-03": {
+      "n": 230,
+      "sum_pct": -192.9
+     },
+     "2026-04": {
+      "n": 215,
+      "sum_pct": -95.4
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -6.7
+     }
+    },
+    "pos_months": 4,
+    "n_months": 19
+   },
+   "CZ_zero": {
+    "rule": "CZ",
+    "fee": 0.0,
+    "trades": 3331,
+    "win_rate": 0.837,
+    "avg_win_pct": 4.189,
+    "avg_loss_pct": -19.083,
+    "breakeven_win_rate": 0.82,
+    "exp_pct": 0.395,
+    "sum_pct": 1315.7,
+    "max_dd_pts": 190.0,
+    "max_losing_streak": 4,
+    "stops": 524,
+    "lock1": 1072,
+    "coins": {
+     "BTCUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "SOLUSDT": {
+      "n": 0,
+      "exp_pct": null
+     },
+     "ZECUSDT": {
+      "n": 3331,
+      "exp_pct": 0.395
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 188,
+      "sum_pct": 153.4
+     },
+     "2024-12": {
+      "n": 176,
+      "sum_pct": 41.3
+     },
+     "2025-01": {
+      "n": 242,
+      "sum_pct": 154.7
+     },
+     "2025-02": {
+      "n": 187,
+      "sum_pct": 115.5
+     },
+     "2025-03": {
+      "n": 192,
+      "sum_pct": 22.9
+     },
+     "2025-04": {
+      "n": 189,
+      "sum_pct": 69.9
+     },
+     "2025-05": {
+      "n": 220,
+      "sum_pct": 88.5
+     },
+     "2025-06": {
+      "n": 180,
+      "sum_pct": -13.0
+     },
+     "2025-07": {
+      "n": 233,
+      "sum_pct": 66.0
+     },
+     "2025-08": {
+      "n": 192,
+      "sum_pct": 232.1
+     },
+     "2025-09": {
+      "n": 182,
+      "sum_pct": 32.9
+     },
+     "2025-10": {
+      "n": 37,
+      "sum_pct": -58.1
+     },
+     "2025-11": {
+      "n": 71,
+      "sum_pct": 99.9
+     },
+     "2025-12": {
+      "n": 195,
+      "sum_pct": -24.7
+     },
+     "2026-01": {
+      "n": 198,
+      "sum_pct": 128.1
+     },
+     "2026-02": {
+      "n": 203,
+      "sum_pct": 201.5
+     },
+     "2026-03": {
+      "n": 230,
+      "sum_pct": -38.4
+     },
+     "2026-04": {
+      "n": 215,
+      "sum_pct": 49.1
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -6.0
+     }
+    },
+    "pos_months": 14,
+    "n_months": 19
+   },
+   "C_toobit": {
+    "rule": "C",
+    "fee": 0.0006,
+    "trades": 4401,
+    "win_rate": 0.8005,
+    "avg_win_pct": 2.673,
+    "avg_loss_pct": -17.829,
+    "breakeven_win_rate": 0.8696,
+    "exp_pct": -1.4171,
+    "sum_pct": -6236.8,
+    "max_dd_pts": 6242.0,
+    "max_losing_streak": 5,
+    "stops": 769,
+    "lock1": 1440,
+    "coins": {
+     "BTCUSDT": {
+      "n": 2227,
+      "exp_pct": -1.477
+     },
+     "SOLUSDT": {
+      "n": 727,
+      "exp_pct": -2.009
+     },
+     "ZECUSDT": {
+      "n": 1447,
+      "exp_pct": -1.028
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 233,
+      "sum_pct": -651.1
+     },
+     "2024-12": {
+      "n": 242,
+      "sum_pct": -373.5
+     },
+     "2025-01": {
+      "n": 274,
+      "sum_pct": -250.8
+     },
+     "2025-02": {
+      "n": 225,
+      "sum_pct": -122.9
+     },
+     "2025-03": {
+      "n": 246,
+      "sum_pct": -454.2
+     },
+     "2025-04": {
+      "n": 225,
+      "sum_pct": -397.9
+     },
+     "2025-05": {
+      "n": 246,
+      "sum_pct": -343.0
+     },
+     "2025-06": {
+      "n": 241,
+      "sum_pct": -232.5
+     },
+     "2025-07": {
+      "n": 249,
+      "sum_pct": -279.7
+     },
+     "2025-08": {
+      "n": 249,
+      "sum_pct": -159.7
+     },
+     "2025-09": {
+      "n": 224,
+      "sum_pct": -338.8
+     },
+     "2025-10": {
+      "n": 248,
+      "sum_pct": -160.9
+     },
+     "2025-11": {
+      "n": 245,
+      "sum_pct": -351.0
+     },
+     "2025-12": {
+      "n": 255,
+      "sum_pct": -475.0
+     },
+     "2026-01": {
+      "n": 223,
+      "sum_pct": -531.4
+     },
+     "2026-02": {
+      "n": 231,
+      "sum_pct": -221.0
+     },
+     "2026-03": {
+      "n": 291,
+      "sum_pct": -466.5
+     },
+     "2026-04": {
+      "n": 253,
+      "sum_pct": -422.3
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -4.4
+     }
+    },
+    "pos_months": 0,
+    "n_months": 19
+   },
+   "C_wooxpro": {
+    "rule": "C",
+    "fee": 0.00042,
+    "trades": 4401,
+    "win_rate": 0.8135,
+    "avg_win_pct": 3.107,
+    "avg_loss_pct": -18.565,
+    "breakeven_win_rate": 0.8566,
+    "exp_pct": -0.9358,
+    "sum_pct": -4118.6,
+    "max_dd_pts": 4125.6,
+    "max_losing_streak": 5,
+    "stops": 769,
+    "lock1": 1440,
+    "coins": {
+     "BTCUSDT": {
+      "n": 2227,
+      "exp_pct": -0.901
+     },
+     "SOLUSDT": {
+      "n": 727,
+      "exp_pct": -1.433
+     },
+     "ZECUSDT": {
+      "n": 1447,
+      "exp_pct": -0.74
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 233,
+      "sum_pct": -547.3
+     },
+     "2024-12": {
+      "n": 242,
+      "sum_pct": -252.3
+     },
+     "2025-01": {
+      "n": 274,
+      "sum_pct": -121.2
+     },
+     "2025-02": {
+      "n": 225,
+      "sum_pct": -23.0
+     },
+     "2025-03": {
+      "n": 246,
+      "sum_pct": -345.9
+     },
+     "2025-04": {
+      "n": 225,
+      "sum_pct": -294.5
+     },
+     "2025-05": {
+      "n": 246,
+      "sum_pct": -227.8
+     },
+     "2025-06": {
+      "n": 241,
+      "sum_pct": -116.8
+     },
+     "2025-07": {
+      "n": 249,
+      "sum_pct": -159.1
+     },
+     "2025-08": {
+      "n": 249,
+      "sum_pct": -40.2
+     },
+     "2025-09": {
+      "n": 224,
+      "sum_pct": -229.1
+     },
+     "2025-10": {
+      "n": 248,
+      "sum_pct": -22.9
+     },
+     "2025-11": {
+      "n": 245,
+      "sum_pct": -218.3
+     },
+     "2025-12": {
+      "n": 255,
+      "sum_pct": -349.1
+     },
+     "2026-01": {
+      "n": 223,
+      "sum_pct": -420.5
+     },
+     "2026-02": {
+      "n": 231,
+      "sum_pct": -119.1
+     },
+     "2026-03": {
+      "n": 291,
+      "sum_pct": -330.3
+     },
+     "2026-04": {
+      "n": 253,
+      "sum_pct": -297.3
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -3.8
+     }
+    },
+    "pos_months": 0,
+    "n_months": 19
+   },
+   "C_zero": {
+    "rule": "C",
+    "fee": 0.0,
+    "trades": 4401,
+    "win_rate": 0.8219,
+    "avg_win_pct": 4.192,
+    "avg_loss_pct": -18.289,
+    "breakeven_win_rate": 0.8135,
+    "exp_pct": 0.1872,
+    "sum_pct": 823.9,
+    "max_dd_pts": 351.7,
+    "max_losing_streak": 5,
+    "stops": 769,
+    "lock1": 1440,
+    "coins": {
+     "BTCUSDT": {
+      "n": 2227,
+      "exp_pct": 0.443
+     },
+     "SOLUSDT": {
+      "n": 727,
+      "exp_pct": -0.089
+     },
+     "ZECUSDT": {
+      "n": 1447,
+      "exp_pct": -0.068
+     }
+    },
+    "months": {
+     "2024-11": {
+      "n": 233,
+      "sum_pct": -305.3
+     },
+     "2024-12": {
+      "n": 242,
+      "sum_pct": 30.5
+     },
+     "2025-01": {
+      "n": 274,
+      "sum_pct": 181.3
+     },
+     "2025-02": {
+      "n": 225,
+      "sum_pct": 210.1
+     },
+     "2025-03": {
+      "n": 246,
+      "sum_pct": -93.2
+     },
+     "2025-04": {
+      "n": 225,
+      "sum_pct": -53.2
+     },
+     "2025-05": {
+      "n": 246,
+      "sum_pct": 41.0
+     },
+     "2025-06": {
+      "n": 241,
+      "sum_pct": 153.3
+     },
+     "2025-07": {
+      "n": 249,
+      "sum_pct": 122.5
+     },
+     "2025-08": {
+      "n": 249,
+      "sum_pct": 238.7
+     },
+     "2025-09": {
+      "n": 224,
+      "sum_pct": 27.0
+     },
+     "2025-10": {
+      "n": 248,
+      "sum_pct": 298.9
+     },
+     "2025-11": {
+      "n": 245,
+      "sum_pct": 91.4
+     },
+     "2025-12": {
+      "n": 255,
+      "sum_pct": -55.4
+     },
+     "2026-01": {
+      "n": 223,
+      "sum_pct": -161.8
+     },
+     "2026-02": {
+      "n": 231,
+      "sum_pct": 118.6
+     },
+     "2026-03": {
+      "n": 291,
+      "sum_pct": -12.4
+     },
+     "2026-04": {
+      "n": 253,
+      "sum_pct": -5.6
+     },
+     "2026-05": {
+      "n": 1,
+      "sum_pct": -2.5
+     }
+    },
+    "pos_months": 11,
+    "n_months": 19
+   }
+  }
+ }
+}

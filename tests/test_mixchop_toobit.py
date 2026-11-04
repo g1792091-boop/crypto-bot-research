@@ -69,7 +69,7 @@ def test_the_deploy_configs_trade_toobit():
         assert (cfg.exchange, cfg.mode, cfg.name, M.EXCHANGES[cfg.exchange]) == ("toobit", mode, "친구 15분 봇", "투비트"), name
         # (owners 11-03 evening "친구봇도 obv로 하고 여기에는 종목을 비트 솔라나 zec만": the 레인지 봇's rule and coins)
         assert cfg.taker_fee == 0.0006 and cfg.rules == ("o4h",) and cfg.trend == "macd" and cfg.tf == "5m", name   # (11-04 evening)
-        assert cfg.symbols == ["BTCUSDT", "SOLUSDT", "ZECUSDT"], name
+        assert cfg.symbols == ["ZECUSDT"] and cfg.coins[0].leverage == 30, name     # (owners 11-04 evening: "zec로만", "Zec 30배로")
         assert cfg.ladder == {"trigger": 10.0, "lock": 8.0, "step": 2.0} and cfg.ladder_basis == "gross", name
     unit = (DEPLOY / "paperbot-mixchop.service").read_text(encoding="utf-8")
     assert "EnvironmentFile=/etc/paperbot/executor-toobit.env\n" in unit and "executor-wooxpro2.env\n" not in unit

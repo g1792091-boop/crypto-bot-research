@@ -46,6 +46,7 @@ for _f in DEPLOY.glob("mix*.json"):
         for _k in ("trend_tf2", "stop_tf", "trend_both"):
             _d.pop(_k, None)
         _d["tf"] = "15m"
+        _d["coins"] = {"BTCUSDT": {"leverage": 40}, "SOLUSDT": {"leverage": 40}, "ZECUSDT": {"leverage": 20}}   # (and its coins)
     (ERA / _f.name).write_text(json.dumps(_d, ensure_ascii=False), encoding="utf-8")
 T0 = 1_800_000_000_000 - 1_800_000_000_000 % M.MIN30
 MIN, HOUR = 60_000, 3_600_000

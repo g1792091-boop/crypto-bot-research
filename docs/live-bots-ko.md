@@ -242,3 +242,47 @@
 
 **두 봇은 꺼져 있습니다.** 이 규칙도 먼저 백테스트합니다(`research/obv5m/PLAN_KO.md`, 결과 보기 전에 커밋한 기준). 켤 때의 서버 순서는 8장과 같고,
 2번 비교에서 `"tf": "5m"` · `"trend_tf2": "15m"` · `"stop_tf": "15m"`이 보이면 맞습니다.
+
+### 백테스트 결과 (11/04 저녁, `research/obv5m/REPORT_KO.md`)
+
+기준은 결과 보기 전에 커밋했습니다(`research/obv5m/PLAN_KO.md`, ZEC만 · 30배도 결과 보기 전에 추가). 2024-11 ~ 2026-04(18개월), 봇의 실제 코드.
+
+| 투비트 수수료 | 거래 | 승률 | 평균 이익 | 평균 손실 | 본전 승률 | 거래당 기대값 | 잔고 |
+|---|---:|---:|---:|---:|---:|---:|---|
+| ZEC만 30배, $26 | 219 | 84% | +3.1% | −23.7% | 88.6% | −1.22% | 2024-12-30에 $1 아래 |
+| ZEC만 20배, $26 | 352 | 84% | +3.5% | −21.4% | 86.0% | −0.55% | 2024-12-30에 $1 아래 |
+| BTC · SOL · ZEC, $50 | 123 | 74% | +3.0% | −21.5% | 87.7% | −3.35% | 2024-11-12에 $1 아래 |
+
+- **세 가지 모두 불합격.** 같은 크기로 18개월 전체를 보면 ZEC 30배는 거래당 −1.24%, 18달 중 번 달 2달. 수수료를 빼기 전에는 +0.20%라, 이번에도 수수료가 신호보다 큽니다.
+- 30배에서는 손절(15분봉 ATR × 3, ZEC 중간값 2.4%)이 청산 여유(1/30 − 0.5% = 2.83%)보다 먼 신호가 많아, 20배 때 진입 자리의 약 29%를 건너뜁니다.
+- 봉인 구간(2026-05 ~ 10)은 이번에도 열지 않았습니다.
+
+## 11. 11/04 저녁: 봇 1개 — 투비트 · ZEC만 · 30배 · $26
+
+두 분: "봇 이제 1개로 돌릴꺼고 … zec로만 해서 봇을 만들어서 돌릴 예정이야 거래소는 투빗 거래소를 사용 할꺼고 시드 시작은 26달러", "Zec 30배로".
+
+- 쓰는 봇: **친구 15분 봇**(`paperbot-mixchop`, 투비트 키 `/etc/paperbot/executor-toobit.env`). 이름은 그대로 두었습니다(규칙은 10장의 5분봉).
+- 코인: **ZEC만, 30배**(`deploy/mixchop.live.json` · `deploy/mixchop.paper.json`). 모의 쌍둥이는 $26에서 시작.
+- 실거래 봇은 **투비트 선물 잔고 전체**를 잔고로 봅니다(증거금 = 그 40%). $26으로 시작하려면 투비트 선물 계정에 $26만 두세요.
+- 레인지 봇(WOO X Pro)은 꺼 둡니다. 설정은 그대로(세 코인).
+- 투비트의 ZEC 최대 레버리지가 30배보다 낮으면 점검(4번)에 ✘가 나오고, 봇은 ZEC를 끄고 아무것도 거래하지 않습니다.
+
+### 서버 순서 (두 분이 직접, 한 단계씩, tmux 안에서)
+
+1. 코드 받기: `cd /root/crypto-bot-research && git pull && sudo bash deploy/install.sh`
+2. 서버 설정과 비교: `sudo diff /etc/paperbot/mixchop.json deploy/mixchop.live.json` — `"tf": "5m"`, `"trend_tf2": "15m"`, `"stop_tf": "15m"`,
+   코인 줄(ZEC 30)이 달라야 맞습니다.
+3. 옛 설정 보관 후 새 설정:
+   ```
+   sudo cp -p /etc/paperbot/mixchop.json /etc/paperbot/mixchop.json.before-zec
+   sudo cp -p /etc/paperbot/mixchop-paper.json /etc/paperbot/mixchop-paper.json.before-zec
+   sudo install -o root -g paperbot -m 640 deploy/mixchop.live.json /etc/paperbot/mixchop.json
+   sudo install -o root -g paperbot -m 640 deploy/mixchop.paper.json /etc/paperbot/mixchop-paper.json
+   ```
+4. 점검(읽기만): `sudo deploy/paperbot-exec.sh --keys toobit mixchop check --config /etc/paperbot/mixchop.json` — `ZECUSDT` 줄이 ✔이고 최대 30배 이상인지,
+   `신호 5분봉 · 추세: 30분봉 … + 15분봉 …`, `손절 15분봉 ATR 3배`가 보이는지.
+5. 켜기: 모의만 먼저 — `sudo systemctl enable --now paperbot-mixchop-paper`. 실거래까지 — `sudo systemctl enable --now paperbot-mixchop paperbot-mixchop-paper`.
+6. 레인지 봇이 꺼져 있는지: `systemctl is-active paperbot-mixrange paperbot-mixrange-paper` (둘 다 inactive). install.sh가 레인지 봇의
+   아침 점검 타이머를 다시 켜므로 다시 끕니다: `sudo systemctl disable --now paperbot-mixrangecheck.timer paperbot-mixrangecheck-pass.timer`
+
+되돌리기: `….before-zec` 두 파일을 원래 이름으로 `sudo cp -p` 한 뒤 봇을 다시 시작.
