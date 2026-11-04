@@ -220,4 +220,4 @@ def test_the_words_say_toobit():
     js = (ROOT / "paperbot" / "dash" / "static" / "v4" / "screens" / "livebots-mix.js").read_text(encoding="utf-8")
     assert 'account: "투비트", exchange: "투비트", key: "",\n  kick: "진짜 돈 · 투비트 계정"' in js
     routes = (ROOT / "paperbot" / "dash" / "static" / "v4" / "core" / "routes.js").read_text(encoding="utf-8")
-    assert "OBV 히스토그램 전환 · 투비트 실거래와 모의" in routes and "WOO X Pro 2 실거래" not in routes
+    assert "추세 MACD 30분 + 15분 · 투비트 실거래와 모의" in routes and "WOO X Pro 2 실거래" not in routes

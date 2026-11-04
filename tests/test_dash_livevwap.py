@@ -661,8 +661,8 @@ def test_the_menu_group_and_the_tabs():
     # (the 바이비트 봇's group last since 10-29)
     # (+ 레인지 봇's group last since 10-31 night: tests/test_dash_mixrange_site.py; 관제실 first of 지금 since 11-01)
     # owners 11-01 ("vwap봇 안쓰는데 화면 필요없을꺼 같고"): the group left the menu; its tabs stay hidden (an old link opens them)
-    assert "vwap" not in [g[0] for g in d["groups"]] and "VWAP 봇" not in d["nav"] and len(d["groups"]) == 4   # (+ 게이트 봇, 11-01; − 바이비트 봇, 11-03)
-    assert d["keys"] == ["deck", "room", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]
+    assert "vwap" not in [g[0] for g in d["groups"]] and "VWAP 봇" not in d["nav"] and len(d["groups"]) == 3   # (+ 게이트 봇, 11-01; − 바이비트 봇, 11-03; − 레인지 봇, 11-04)
+    assert d["keys"] == ["deck", "room", "mixbot", "mixperf", "gatebot"]
     assert d["screens"] == [["VWAP 관제", "now", "livebots"], ["VWAP 성적", "now", "livebots"], ["VWAP 막은 신호", "now", "livebots"]]
     assert d["parse"]["name"] == "vwperf" and d["href"] == "#/vwblock"
     lb = FW._read(SCREENS, "livebots.js")

@@ -34,7 +34,8 @@ export function agoKo(now, ts) {
   return m < 1 ? "방금" : m < 60 ? `${m}분 전` : m < 1440 ? `${Math.floor(m / 60)}시간 전` : `${Math.floor(m / 1440)}일 전`;
 }
 /** Binance's bar closes after ``now`` (UTC-aligned: the 4h and the day close at 09:00 KST and every 4 h from it). */
-export const CLOSES = [["15분", 15 * MIN], ["30분", 30 * MIN], ["1시간", 60 * MIN], ["4시간", 240 * MIN], ["1일", 1440 * MIN]];
+// (owners 11-04 evening: the bot judges every 5m close: its close first)
+export const CLOSES = [["5분", 5 * MIN], ["15분", 15 * MIN], ["30분", 30 * MIN], ["1시간", 60 * MIN], ["4시간", 240 * MIN], ["1일", 1440 * MIN]];
 export function nextCloses(now) {
   return CLOSES.map(([ko, ms]) => { const at = Math.floor(now / ms) * ms + ms; return {ko, at, left: at - now}; });
 }
@@ -91,7 +92,7 @@ export function panelSpecs(d, now) {
   });
   const hk = coins.some((c) => c.hist_rule === "o4h") ? "OBV 히스토그램" : "3합 히스토그램";   // (owners 11-03 last: both bots on OBV)
   return [
-    {title: "COINS · 코인", sub: `바이낸스 봉 · 30분 추세 MACD · 15분 ${hk} (봇의 계산 그대로)`, px: [1024, 420],
+    {title: "COINS · 코인", sub: `바이낸스 봉 · 30분 추세 MACD · ${(coins.find((c) => c.tf_ko) || {}).tf_ko || "15분"} ${hk} (봇의 계산 그대로)`, px: [1024, 420],
       pose: {off: 0, y: 1.62, w: 3.1, h: 1.27, r: 3.45},
       table: {cols: ["코인", "가격", "24시간", "30분 추세", hk], x: [22, 150, 390, 590, 790], rows: cRows.length ? cRows : [[{t: "코인 값을 기다리는 중", tone: "muted"}]]}},
     {title: "TOP 6 · 코인 카드", sub: "24시간 줄", px: [720, 460], pose: {off: -0.98, y: 1.42, w: 1.85, h: 1.18, r: 3.35},

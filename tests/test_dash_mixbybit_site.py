@@ -210,9 +210,9 @@ def test_the_pages(tmp_path):
     # (owners 11-01: the first group is 지금, 관제실 · 회의실; the 바이비트 봇's 봇별 screen led its own group); owners 11-03
     # ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): that group left the menu, its two screens hidden (an old link opens
     # them), 친구 추세판 in 지금
-    assert out["start"] == "deck" and out["bots"] == ["deck", "room", "ftrend"]
-    assert out["groups"] == ["now", "mix", "range", "gate"] and out["by"] is None and out["hidden"] == [True, True, False]
-    assert out["keys"] == ["deck", "room", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]
+    assert out["start"] == "deck" and out["bots"] == ["deck", "room"]  # (owners 11-04 night: one bot; the 레인지 봇's group and 친구 추세판 off the menu)
+    assert out["groups"] == ["now", "mix", "gate"] and out["by"] is None and out["hidden"] == [True, True, True]
+    assert out["keys"] == ["deck", "room", "mixbot", "mixperf", "gatebot"]
     assert out["screens"] == [["바이비트 봇", "livebots", True], ["바이비트 관제", "livebots", True], ["바이비트 성적", "livebots", True],
                               ["친구 추세판", "livebots", True]]
     # (owners 10-31 night: the friend bot is 친구 15분 봇; the 레인지 봇's card once it took the first WOO X Pro slot,

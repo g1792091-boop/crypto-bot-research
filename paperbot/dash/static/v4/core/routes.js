@@ -317,11 +317,12 @@ const LIVE_GROUPS = [
   // owners 11-03 ("자동매매봇 거래소는 총 2개" · "바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): the 바이비트 봇 is
   // switched off, its group leaves the menu (its two screens `hidden`: an old link still opens its record); 친구 추세판
   // moves to 지금
-  {id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]},
+  // owners 11-04 night ("봇 이제 1개로 돌릴꺼고 … zec로만", then "대시보드 필요없는 부분들 다 제외한거지?"): one bot, the 친구
+  // 15분 봇 on Toobit (ZEC, 5m bars); the 레인지 봇's group and 친구 추세판 (two bots' 15m board) leave the menu (`hidden`
+  // below: an old link still opens their record)
+  {id: "now", ko: "지금", screens: ["deck", "room"]},
   // (owners 10-31 night: the friend bot is the 친구 15분 봇; the group keeps its id and links)
   {id: "mix", ko: "친구 15분 봇", screens: ["mixbot", "mixperf"]},
-  // the 레인지 봇 (owners 10-31 night, docs/range-bot-ko.md 0장: the first WOO X Pro account, real money, and its paper twin)
-  {id: "range", ko: "레인지 봇", screens: ["rangebot", "mixrangeperf"]},
   // the 게이트 봇 (owners 10-31 / 11-01, docs/gate-bot-ko.md: the friend enters by hand on Gate, the bot only puts the stop
   // and the ladder; dash/more/livegate.py)
   {id: "gate", ko: "게이트 봇", screens: ["gatebot"]},
@@ -331,12 +332,12 @@ const LIVE_SCREENS = {
   gatebot: {ko: "게이트 봇", group: "gate", title: "게이트 봇 (친구가 직접 진입 · 봇은 손절 15분봉 ATR × 3과 계단 익절만)"},
   trendbot: {ko: "추세판단 봇", group: "now", title: "추세판단 봇 (10/29부터 꺼 둠 · 지난 기록)", hidden: true},
   // owners 10-31 night: the 레인지 봇 trades WOO X Pro by itself once its config is there (screens/livebots-range.js rangeBotView)
-  rangebot: {ko: "레인지 봇", group: "range", title: "레인지 봇 (WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환 · 지난 페이퍼 기록)"},
+  rangebot: {ko: "레인지 봇", group: "now", title: "레인지 봇 (WOO X Pro 1 · 11/04부터 꺼 둠 · 지난 기록)", hidden: true},
   vwapbot: {ko: "VWAP 개선판", group: "now", title: "VWAP 개선판 (페이퍼 · 따라가는 실거래 없음)", hidden: true},
-  mixbot: {ko: "친구 15분 봇", group: "mix", title: "친구 15분 봇 (15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환 · 투비트 실거래와 모의)"},
+  mixbot: {ko: "친구 15분 봇", group: "mix", title: "친구 15분 봇 (5분봉 OBV 히스토그램 전환 · 추세 MACD 30분 + 15분 · 투비트 실거래와 모의)"},
   trend: {ko: "관제", group: "now", title: "관제 (추세판단 봇 · 10/29부터 꺼 둠)", hidden: true},
   tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)", hidden: true},
-  deck: {ko: "관제실", group: "now", title: "관제실 (실거래 봇 · 여섯 코인 · 봇 기록과 바이낸스 봉)"},
+  deck: {ko: "관제실", group: "now", title: "관제실 (실거래 봇 · 그 봇의 코인 · 봇 기록과 바이낸스 봉)"},
   hq: {ko: "한눈에", group: "now", title: "한눈에 (실거래 계좌 모두)", hidden: true},
   pos: {ko: "포지션", group: "now", title: "포지션", hidden: true},
   room: {ko: "회의실", group: "now", title: "회의실 (서버의 실제 프로그램들 · 그 기록과 systemd)"},
@@ -369,9 +370,9 @@ const LIVE_SCREENS = {
   mixperf: {ko: "친구 성적", group: "mix", title: "친구 성적 (친구 15분 봇 · 실거래 vs 모의)"},
   bybit: {ko: "바이비트 관제", group: "bybit", title: "바이비트 관제 (바이비트 봇 · 실거래와 모의)", hidden: true},
   bybitperf: {ko: "바이비트 성적", group: "now", title: "바이비트 성적 (11/03부터 꺼 둠 · 실거래 vs 모의 지난 기록)", hidden: true},
-  ftrend: {ko: "친구 추세판", group: "now", title: "친구 추세판 (코인별 추세 MACD 30분 · 레인지 봇 · 친구 15분 봇 15분봉 신호)"},
-  mixrange: {ko: "레인지 관제", group: "range", title: "레인지 관제 (레인지 봇 · WOO X Pro 실거래와 모의)", hidden: true},
-  mixrangeperf: {ko: "레인지 성적", group: "range", title: "레인지 성적 (레인지 봇 · 실거래 vs 모의)"},
+  ftrend: {ko: "친구 추세판", group: "now", title: "친구 추세판 (11/04부터 메뉴에서 뺌 · 관제실에 같은 추세)", hidden: true},
+  mixrange: {ko: "레인지 관제", group: "now", title: "레인지 관제 (레인지 봇 · WOO X Pro 실거래와 모의)", hidden: true},
+  mixrangeperf: {ko: "레인지 성적", group: "now", title: "레인지 성적 (레인지 봇 · 11/04부터 꺼 둠 · 지난 기록)", hidden: true},
 };
 if (LIVE) {
   // put in place (the same objects every module already imported): the menu, the screens, the strip's groups

@@ -251,8 +251,8 @@ console.log(JSON.stringify({
 }));""")
     assert out["ago"] == ["방금", "12분 전", "3시간 전", "2일 전", "기록 없음"]
     now = out["now"]
-    assert [c["ko"] for c in out["closes"]] == ["15분", "30분", "1시간", "4시간", "1일"]
-    assert [c["left"] for c in out["closes"]] == [8 * 60000 + 13000, 23 * 60000 + 13000, 53 * 60000 + 13000, 3 * 3600000 + 53 * 60000 + 13000,
+    assert [c["ko"] for c in out["closes"]] == ["5분", "15분", "30분", "1시간", "4시간", "1일"]     # (11-04 evening: the 5m close first)
+    assert [c["left"] for c in out["closes"]] == [3 * 60000 + 13000, 8 * 60000 + 13000, 23 * 60000 + 13000, 53 * 60000 + 13000, 3 * 3600000 + 53 * 60000 + 13000,
                                                    19 * 3600000 + 53 * 60000 + 13000]
     assert all(c["at"] - c["left"] == now for c in out["closes"])
     assert out["clock"] == ["6:13", "36:13", "2:36:13", "0:00"]
@@ -420,7 +420,7 @@ def test_the_live_site_takes_the_palette_of_the_owners_pictures():
 
 def test_the_tab_and_the_menu():
     routes, lb = _read(os.path.join(V4, "core", "routes.js")), _read(os.path.join(SCREENS, "livebots.js"))
-    assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes      # (owners 11-01: 지금 is 관제실 and 회의실; 11-03: + 친구 추세판)
+    assert '{id: "now", ko: "지금", screens: ["deck", "room"]}' in routes      # (owners 11-01: 지금 is 관제실 and 회의실; 11-04 night: 친구 추세판 out)
     assert re.search(r'room: \{ko: "회의실", group: "now"', routes) and "  room: () => [" in routes
     assert 'import {roomView} from "./livebots-room.js";' in lb
     assert '{id: "room", label: "회의실", make: (ctx) => roomView(ctx), own: true, bare: true}' in lb

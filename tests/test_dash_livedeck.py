@@ -536,7 +536,7 @@ console.log(JSON.stringify({ok: ok.text, cls: ok.classes.join(" "), bad: bad.tex
     for w in ("관제실", "바이비트 봇", "친구 15분 봇", "레인지 봇", "지갑", "추세 그리드", "진입 카드", "포지션 진행", "실행 기록",
               "포워드 테스트", "히스토그램", "신호 흐름", "숏", "SHORT", "106.692", "장식", "목표 ×6", "경로보다", "남은 날 하루에 필요",
               "목표 연구 →", "코인 흐름", "FEED", "WIRE", "목표별 하루 필요", "×50", "$5,000", "하루 +13.9%", "SIGNAL CASCADE",
-              "신호 · 48H", "다음 15분 마감", "30M TREND MACD", "3합 히스토그램", "추세 MACD 30분", "돌고 있음", "위험", "RISK", "청산가까지", "손절가에 닿으면",
+              "신호 · 48H", "다음 15분 마감", "15분봉 진입 · 추세 MACD 30분 · 한 번에 1포지션", "3합 히스토그램", "추세 MACD 30분", "돌고 있음", "위험", "RISK", "청산가까지", "손절가에 닿으면",
               "펀딩 (바이낸스)", "이번 달 가장 깊은 낙폭", "연속 손실", "CALENDAR", "목표 넘은 날", "가장 좋은 날", "미실현 · 수수료 전",
               "지금", "ROE", "(수수료 전)"):
         assert w in t, w
@@ -587,8 +587,9 @@ def test_the_bot_screens_and_the_room_wear_the_hud():
     routes = _read(os.path.join(ROOT, "paperbot", "dash", "static", "v4", "core", "routes.js"))
     menu = re.findall(r'"(\w+)"', "".join(re.findall(r'screens: \[([^\]]*)\]', routes.split("const LIVE_GROUPS = [")[1].split("];")[0])))
     hud_set = set(re.findall(r'"(\w+)"', re.search(r"export const HUD = new Set\(\[([^\]]*)\]\)", lb).group(1)))
-    # every menu tab but the two with their own look (+ the 바이비트 봇's two, off the menu since 11-03: an old link)
-    assert hud_set - {"bybitbot", "bybitperf"} == set(menu) - {"deck", "room"}
+    # every menu tab but the two with their own look (+ the 바이비트 봇's two, off the menu since 11-03, and the 레인지 봇's
+    # two and 친구 추세판, off since 11-04 night: an old link)
+    assert hud_set - {"bybitbot", "bybitperf", "rangebot", "mixrangeperf", "ftrend"} == set(menu) - {"deck", "room"}
     assert 'el.classList.add("lb-hud", "lb-boot");' in lb and 'el.classList.remove("lb-boot"), 2600)' in lb
     assert '@import url("livebots-hud.css");' in _read(os.path.join(scr, "livebots.css"))
     body = re.sub(r"/\*.*?\*/", "", hud, flags=re.S)

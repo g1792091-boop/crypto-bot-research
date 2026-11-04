@@ -113,17 +113,20 @@ def test_the_menu_words():
     hidden, an old link still opens them) and 친구 추세판 in 지금."""
     routes = open(os.path.join(V4, "core", "routes.js"), encoding="utf-8").read()
     tabs = open(os.path.join(SCREENS, "livebots.js"), encoding="utf-8").read()
-    for line in (l for l in routes.splitlines() if l.lstrip().startswith(("rangebot: {", "mixbot: {", "ftrend: {"))):
+    for line in (l for l in routes.splitlines() if l.lstrip().startswith(("mixbot: {",))):
         assert "추세 MACD 30분" in line and "추세 바" not in line, line
+    # (owners 11-04 night: one bot; the 레인지 봇 and 친구 추세판 off the menu, their titles say so)
+    assert all("hidden: true" in l for l in routes.splitlines() if l.lstrip().startswith(("rangebot: {", "ftrend: {")))
     rb = next(l for l in routes.splitlines() if l.lstrip().startswith("rangebot: {"))
     mb = next(l for l in routes.splitlines() if l.lstrip().startswith("mixbot: {"))
     # (owners 11-03 evening "친구봇도 obv로": the friend bot on the OBV histogram's turn too)
-    assert "WOO X Pro 1 · 15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환" in rb and "추세 MACD 30분 + OBV 히스토그램 전환 · 투비트" in mb
+    assert "11/04부터 꺼 둠" in rb and "5분봉 OBV 히스토그램 전환 · 추세 MACD 30분 + 15분 · 투비트" in mb
     assert "3합" not in mb
-    assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes and '{id: "bybit"' not in routes
+    assert '{id: "now", ko: "지금", screens: ["deck", "room"]}' in routes and '{id: "bybit"' not in routes
     assert 'bybitbot: {ko: "바이비트 봇", group: "now", title: "바이비트 봇 (11/03부터 꺼 둠 · 지난 기록)", hidden: true}' in routes
     assert 'bybitperf: {ko: "바이비트 성적", group: "now"' in routes and routes.count("11/03부터 꺼 둠") == 2
-    assert tabs.count("추세 MACD 30분 + OBV 히스토그램 전환") == 3 and "3합" not in tabs     # (11-03 evening: the friend bot too)
+    assert tabs.count("추세 MACD 30분 + OBV 히스토그램 전환") == 2 and "3합" not in tabs     # (the 레인지 봇's two; 11-04: the friend bot's 5m words)
+    assert "5분봉 OBV 히스토그램 전환 · 추세 MACD 30분 + 15분 같은 쪽" in tabs
     assert "레인지 봇 · WOO X Pro 1 계정 실거래와 모의 쌍둥이" in tabs and "두 분 결정(11/03)으로 꺼 두는 봇" in tabs
     assert "OBV 진한색 + AC" not in tabs and "추세 바 30분" not in tabs
     assert ".filter((r) => r && !r.off)" in tabs                         # the real-money line leaves a bot switched off

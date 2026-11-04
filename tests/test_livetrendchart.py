@@ -318,7 +318,7 @@ def test_the_route_and_the_tab_are_wired():
     assert '{id: "tchart", label: "추세 차트", make: (ctx, hub) => tchartView(ctx, hub), own: true}' in js
     assert js.index('{id: "trend", label: "관제"') < js.index('{id: "tchart"') < js.index('{id: "hq", label: "한눈에"')
     routes = _read(os.path.join(V4, "core", "routes.js"))
-    assert '{id: "now", ko: "지금", screens: ["deck", "room", "ftrend"]}' in routes      # (11-01: the menu is 지금 · one group per live bot; this tab hidden, an old link opens it)
+    assert '{id: "now", ko: "지금", screens: ["deck", "room"]}' in routes      # (11-01: the menu is 지금 · one group per live bot; this tab hidden, an old link opens it)
     assert 'tchart: {ko: "추세 차트", group: "now", title: "추세 차트 (판단 기록과 신호)", hidden: true}' in routes and "  tchart: () => [" in routes
     assert "tchart:" in _read(os.path.join(V4, "core", "search.js")).split("export const LIVE_ALIAS")[1]
     assert '@import url("livebots-tchart.css");' in _read(os.path.join(SCREENS, "livebots.css"))

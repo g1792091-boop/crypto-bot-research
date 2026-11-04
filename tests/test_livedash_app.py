@@ -239,8 +239,8 @@ def test_the_menus_of_both_sites_in_node():
     # owners 11-01 ("필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, nine screens; the
     # other tabs read the retired paper-bot / executor records and are hidden (an old link still opens them)
     # owners 11-03 ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): the 바이비트 봇's group left, 친구 추세판 in 지금
-    assert live["groups"] == ["지금", "친구 15분 봇", "레인지 봇", "게이트 봇"] and live["land"] == "deck" and live["tag"]["text"] == "실거래"
-    assert live["items"] == ["deck", "room", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]
+    assert live["groups"] == ["지금", "친구 15분 봇", "게이트 봇"] and live["land"] == "deck" and live["tag"]["text"] == "실거래"  # (owners 11-04 night: one bot; the 레인지 봇's group and 친구 추세판 off the menu)
+    assert live["items"] == ["deck", "room", "mixbot", "mixperf", "gatebot"]
     assert live["keys"] == live["items"][:9] and live["mod"] == "livebots"
     assert live["parse"] == {"name": "trades", "arg": None, "query": {"acct": "mexc"}} and live["href"] == "#/replay?id=7"
     # every menu item of the live site is a tab of screens/livebots.js (part B's tabs once their files are there)

@@ -571,10 +571,10 @@ def test_the_menu_group_and_the_tabs():
     # (owners 11-01: four groups; the friend bot's 봇별 screen leads its group, its 관제 copy is hidden; later on 11-01 a
     # fifth, the 게이트 봇's, tests/test_dash_livegate.py)
     # (owners 11-03: the 바이비트 봇's group left the menu, its screens hidden)
-    assert d["groups"][1] == ["mix", "친구 15분 봇", ["mixbot", "mixperf"]] and d["nav"][1] == "친구 15분 봇" and len(d["groups"]) == 4
-    assert d["groups"][0][0] == "now" and d["groups"][2][0] == "range" and d["groups"][-1][0] == "gate"
+    assert d["groups"][1] == ["mix", "친구 15분 봇", ["mixbot", "mixperf"]] and d["nav"][1] == "친구 15분 봇" and len(d["groups"]) == 3
+    assert d["groups"][0][0] == "now" and d["groups"][-1][0] == "gate"  # (owners 11-04 night: one bot; the 레인지 봇's group and 친구 추세판 off the menu)
     # 봇별 first (owners 10/26, tests/test_dash_livev39.py): its five screens take the first number keys (레인지 봇 second)
-    assert d["keys"] == ["deck", "room", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"]   # (11-03: the menu's eight)
+    assert d["keys"] == ["deck", "room", "mixbot", "mixperf", "gatebot"]   # (11-04 night: the menu's five)
     assert d["screens"] == [["친구 관제", "mix", "livebots"], ["친구 성적", "mix", "livebots"]]
     assert d["parse"]["name"] == "mixperf" and d["href"] == "#/mix" and d["icons"][0] > 5
     lb = FW._read(SCREENS, "livebots.js")

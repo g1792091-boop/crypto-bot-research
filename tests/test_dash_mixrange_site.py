@@ -452,9 +452,9 @@ def test_the_words(tmp_path):
     assert "진짜 돈 · 바이비트 · 바이비트 봇 · WOO X Pro · 레인지 봇 (스스로 매매 · 잔고는 각 봇 화면)" in out["real"]
     assert out["ids"] == [[], []] and out["ids0"] == ["bybit", "mexc"]
     assert out["gate"] == "가능 · 15분봉 신호를 기다려요" and out["led"].startswith("20분 넘게 새 기록이 없어요")
-    assert out["screens"][0][0] == "레인지 봇" and "OBV 히스토그램 전환" in out["screens"][0][1]     # (owners 11-03)
+    assert out["screens"][0][0] == "레인지 봇" and "11/04부터 꺼 둠" in out["screens"][0][1]     # (owners 11-04 night: off the menu)
     # (owners 11-03 evening "친구봇도 obv로": the friend bot on the OBV histogram's turn too)
-    assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (15분봉 · 추세 MACD 30분 + OBV 히스토그램 전환 · 투비트 실거래와 모의)"]
+    assert out["screens"][1] == ["친구 15분 봇", "친구 15분 봇 (5분봉 OBV 히스토그램 전환 · 추세 MACD 30분 + 15분 · 투비트 실거래와 모의)"]
 
 
 TAB_JS = """

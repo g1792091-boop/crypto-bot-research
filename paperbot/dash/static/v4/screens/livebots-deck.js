@@ -132,6 +132,14 @@ export function nextClose(now, tfMs = MIN15) {
   const at = Math.floor(now / tfMs) * tfMs + tfMs;
   return {at, left_ms: at - now};
 }
+/** The 관제실 head's rule line from the answer: the bots' accounts, the coins' bar, the trends (owners 11-04 night: "투비트 ·
+ *  ZEC · 5분봉 진입 · 추세 MACD 30분 + 15분 · 한 번에 1포지션"). */
+export function headRuleOf(d) {
+  const ex = [...new Set(((d && d.bots) || []).map((b) => b.exchange_ko || b.account_ko).filter(Boolean))].join(" · ");
+  const coins = ((d && d.coins) || []).map((c) => c.coin).filter(Boolean).join(" · ");
+  const two = ((d && d.coins) || []).some((c) => c && c.tm15);
+  return [ex, coins, `${barOf(d).ko}봉 진입`, `추세 MACD 30분${two ? " + 15분" : ""}`, "한 번에 1포지션"].filter(Boolean).join(" · ");
+}
 /** The bots' signal bar the answer's coins are drawn on: {ms, ko} (15m when the answer does not say). */
 export function barOf(d) {
   const c = ((d && d.coins) || []).find((x) => x && x.state === "ok" && ok(x.tf_ms));
@@ -389,7 +397,7 @@ function feedSvg(coins, W = 600) {
   if (over > 0) for (const t of tags) t.ty = Math.max(8, t.ty - over);
   for (const {o, ty} of tags) kids.push(s("text", {class: ["dk-feedt", CID(o.k)], x: W - Rm + 6, y: ty + 3}, `${o.coin} ${pctKo(o.last, 1)}`));
   kids.push(s("text", {class: "dk-axis", x: L, y: H - 4}, "24시간 전"), s("text", {class: "dk-axis", x: W - Rm, y: H - 4, "text-anchor": "end"}, "지금"));
-  return s("svg", {class: "dk-feed", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "여섯 코인 24시간 흐름 (처음 대비 %)"}, kids);
+  return s("svg", {class: "dk-feed", viewBox: VB(W, H), width: W, height: H, role: "img", "aria-label": "코인 24시간 흐름 (처음 대비 %)"}, kids);
 }
 
 /** 포워드 테스트: each bot's balance in % from its start, the line where the new rules began. */
@@ -736,12 +744,14 @@ export function deckView(ctx) {
   // owners 11-01 "다 해줘": the price now (the card's 지금 row, the source line under the clock), 위험, 이번 달, the alerts
   const cardNow = h("div", {class: "dk-crow now"});
   const pxSrc = h("small", {class: "dk-clku dk-pxsrc"}, "가격 · 끝난 봉");
+  // the head's two lines from the answer (owners 11-04 night: one bot, ZEC on 5m bars): its accounts and bar, its bots
+  const headRule = h("small", {class: "dk-mono"}, "실거래 봇 · 한 번에 1포지션"), headWho = h("small", {class: "dk-mono"}, "보기만 하는 화면");
   const riskBox = h("div", {class: "dk-riskbox"}), calBox = h("div", {class: "dk-calbox"}), calSub = h("span");
   const toast = h("div", {class: "dk-toast", role: "status", "aria-live": "polite", hidden: true});
   const grid = h("div", {class: "dk-g"},
     panel("dk-a-wal", "지갑 · WALLET", "봇 합계 · 봇 기록 그대로", wallet),
     panel("dk-a-cht", "코인 차트 · SPOT", chartSub, coinTabs, chart),
-    panel("dk-a-fee", "코인 흐름 · FEED", "여섯 코인 24시간 · 처음 대비 % · 아래는 봇 기록 원문",
+    panel("dk-a-fee", "코인 흐름 · FEED", "코인 24시간 · 처음 대비 % · 아래는 봇 기록 원문",
       h("div", {class: "dk-feedwrap"}, h("div", {class: "dk-feedmain"}, feedBox, h("small", {class: "dk-mono"}, "WIRE · 봇 기록 원문 (최근 7)"), wire), feedStats)),
     panel("dk-a-grd", "추세 그리드 · TREND GRID", "봇 × 코인 · 마지막 마감에 본 30분 추세 MACD와 신호", gridBox),
     panel("dk-a-lif", "포지션 진행 · LIFECYCLE", "손절 → 진입 → 다음 계단 · 지금 가격", lifeBox),
@@ -763,9 +773,9 @@ export function deckView(ctx) {
     slot,
     h("header", {class: "dk-top", style: {"--i": 0}},
       h("div", {class: "dk-brand"}, h("span", {class: "dk-logo", "aria-hidden": "true"}, "PB"),
-        h("div", null, h("small", {class: "dk-mono"}, "WOO X PRO 1 · 2 · 15M ENTRY · 30M TREND MACD · ONE POSITION EACH"),
+        h("div", null, headRule,
           h("b", {class: "dk-name"}, "PAPERBOT ", h("em", null, "//"), " 관제실"),
-          h("small", {class: "dk-mono"}, "바이비트 봇 · 친구 15분 봇 · 레인지 봇 — 보기만 하는 화면"))),
+          headWho)),
       prices,
       h("div", {class: "dk-clock"}, h("div", null, clockK, h("span", {class: "dk-live"}, "LIVE")), h("small", {class: "dk-mono"}, "KST · 한국 시간"), clockU, pxSrc)),
     h("div", {class: "dk-tick", "aria-label": "봇 기록 흐름", style: {"--i": 1}}, tickIn),
@@ -790,6 +800,8 @@ export function deckView(ctx) {
     .map((b) => ({bot: b.name_ko, entry: b.position.entry, stop: b.position.stop}));
 
   function drawTop(d) {
+    headRule.textContent = headRuleOf(d);
+    headWho.textContent = `${(d.bots || []).map((b) => b.name_ko).filter(Boolean).join(" · ") || "실거래 봇"} — 보기만 하는 화면`;
     const was = st.pxWas || {}, now = {};
     for (const c of d.coins || []) { const q = pn(c); if (q) now[c.symbol] = q; }
     st.pxWas = Object.fromEntries(Object.entries(now).map(([k, q]) => [k, q.px]));
@@ -832,7 +844,7 @@ export function deckView(ctx) {
         tile("오늘 손익", ok(T.today_pnl) ? `${T.today_pnl >= 0 ? "+" : ""}${fmt.usd(T.today_pnl)}` : "—", ok(T.today_pnl) ? (T.today_pnl >= 0 ? "up" : "down") : ""),
         tile("닫힌 거래", `${fmt.int(T.n || 0)}번`),
         tile("승률", ok(T.win_rate) ? pctKo(T.win_rate, 1).replace("+", "") : "—"),
-        tile("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
+        tile("열린 포지션", `${fmt.int(T.open || 0)} / ${fmt.int((d.bots || []).length || 1)}`, T.open ? "warn" : ""),
         (() => { const u = risksOf(d).map((x) => x.r && x.r.pnl).filter(ok);
           const sum = u.length ? u.reduce((a, v) => a + v, 0) : null;
           return tile("미실현 · 수수료 전", sum == null ? (T.open ? "—" : "$0.00") : usdKo(sum), ok(sum) && sum !== 0 ? (sum > 0 ? "up" : "down") : ""); })()),
@@ -1133,7 +1145,7 @@ export function deckView(ctx) {
     const T = d.totals || {}, cnt = (t) => tr.filter((x) => x === t).length;
     const stat = (k, v, cls) => h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, k), h("b", {class: ["num", cls || ""]}, v));
     put(feedStats, stat("신호 · 48H", `${fmt.int(sig)}번`), stat("진입 · 48H", `${fmt.int(ent)}번`, ent ? "up" : ""),
-      stat("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
+      stat("열린 포지션", `${fmt.int(T.open || 0)} / ${fmt.int((d.bots || []).length || 1)}`, T.open ? "warn" : ""),
       stat(`30분 ${TM_KO}`, `▲${cnt("up")} ▼${cnt("down")}${cnt("flat") ? ` ■${cnt("flat")}` : ""}`),
       h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, `다음 ${barOf(d).ko} 마감`), h("b", {class: "num", "data-wait": "1"}, mmss(nextClose(serverNow(), barOf(d).ms).left_ms))));
   }

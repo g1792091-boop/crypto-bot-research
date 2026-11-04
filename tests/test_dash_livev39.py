@@ -276,15 +276,15 @@ def test_the_menu_puts_the_four_bots_first(tmp_path):
     # owners 11-01 ("필요없는 대시보드 화면들 있으면 싹 다 없애줘 · 너무 많으면 또 복잡하잖아"): four groups, each live bot's 봇별
     # screen leading its own group; the 추세판단 봇's and the VWAP 개선판's screens hidden (an old link still opens them)
     # owners 11-03 ("바이비트말고 woox pro1 거래소랑 친구봇 woox pro2"): the 바이비트 봇's group left, 친구 추세판 is in 지금
-    assert out["groups"] == [["now", "지금", ["deck", "room", "ftrend"]],
-                             ["mix", "친구 15분 봇", ["mixbot", "mixperf"]], ["range", "레인지 봇", ["rangebot", "mixrangeperf"]],
+    assert out["groups"] == [["now", "지금", ["deck", "room"]],  # (owners 11-04 night: one bot; the 레인지 봇's group and 친구 추세판 off the menu)
+                             ["mix", "친구 15분 봇", ["mixbot", "mixperf"]],
                              ["gate", "게이트 봇", ["gatebot"]]]                  # (later on 11-01: the 게이트 봇's screen)
     # (owners 10-31 night: the friend bot is 친구 15분 봇, its config's name)
-    assert out["nav"][0] == ["지금", ["관제실", "회의실", "친구 추세판"]] and out["nav"][1] == ["친구 15분 봇", ["친구 15분 봇", "친구 성적"]]
-    assert out["screens"] == [["추세판단 봇", "now", "livebots"], ["레인지 봇", "range", "livebots"], ["VWAP 개선판", "now", "livebots"], ["친구 15분 봇", "mix", "livebots"]]
-    assert out["hidden"] == [True, False, True, False]
+    assert out["nav"][0] == ["지금", ["관제실", "회의실"]] and out["nav"][1] == ["친구 15분 봇", ["친구 15분 봇", "친구 성적"]]
+    assert out["screens"] == [["추세판단 봇", "now", "livebots"], ["레인지 봇", "now", "livebots"], ["VWAP 개선판", "now", "livebots"], ["친구 15분 봇", "mix", "livebots"]]
+    assert out["hidden"] == [True, True, True, False]       # (11-04 night: the 레인지 봇 hidden too)
     assert out["v39"] is None and "v39" not in out["keys"]
-    assert out["keys"] == ["deck", "room", "ftrend", "mixbot", "mixperf", "rangebot", "mixrangeperf", "gatebot"] and out["land"] == "deck"   # (11-03)
+    assert out["keys"] == ["deck", "room", "mixbot", "mixperf", "gatebot"] and out["land"] == "deck"   # (11-04 night: one bot)
     assert out["href"] == "#/mixbot" and out["icon"] > 20
     lb = FW._read(SCREENS, "livebots.js")
     for t, label in (("trendbot", "추세판단 봇"), ("vwapbot", "VWAP 개선판"), ("mixbot", "친구 15분 봇")):
