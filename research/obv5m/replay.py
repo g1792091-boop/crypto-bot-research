@@ -67,8 +67,61 @@ START_EQ = P.START_EQ
 FEES = P.FEES
 DECISIONS_V = "1"
 # the rules tried (PLAN_KO.md): C the three coins from $50; C-ZEC (added before any result, owners 11-04 evening: one bot,
-# ZEC only, Toobit, $26) -> {key: (coins or None for the config's, start equity, words)}
-VARIANTS = {"C": (None, 50.0, "C (BTC · SOL · ZEC, $50)"), "CZ": (["ZECUSDT"], 26.0, "C-ZEC (ZEC만, $26)")}
+# ZEC only, Toobit, $26); C-ZEC30 (added before any result: "Zec 30배로") -> {key: ({coin: leverage}, start equity, words)}
+VARIANTS = {"CZ30": ({"ZECUSDT": 30}, 26.0, "C-ZEC30 (ZEC만 30배, $26)"), "CZ": ({"ZECUSDT": 20}, 26.0, "C-ZEC (ZEC만 20배, $26)"),
+            "C": ({"BTCUSDT": 40, "SOLUSDT": 40, "ZECUSDT": 20}, 50.0, "C (BTC · SOL · ZEC, $50)")}
+DECIDED_LEV = {"BTCUSDT": 40, "SOLUSDT": 40, "ZECUSDT": 20}     # the leverage the decisions were made at (the configs of then)
+
+
+def at_leverage(dec: dict, sym: str, lev: int) -> dict:
+    """The decisions of ``sym`` at another leverage: evaluate_friend's last check (the stop inside the liquidation price:
+    stop_dist < close x (1 / lev - MMR_PCT %), its words) applied again; every check before it does not read the leverage.
+    Checked against the bot's own evaluate_friend at that leverage on a sample (recheck)."""
+    if lev == DECIDED_LEV[sym]:
+        return dec[sym]
+    out = {}
+    for ce, ev in dec[sym]["C"].items():
+        ev = dict(ev)
+        if ev["side"] or str(ev.get("why", "")).startswith("손절 폭"):
+            ok = float(ev["stop_dist"]) < float(ev["close"]) * (1.0 / lev - M.MMR_PCT / 100.0)
+            ev["liq_ok"] = bool(ok)
+            if ok:
+                ev["side"] = P.o4_want(ev)
+                ev["why"] = ""
+            else:
+                ev["side"] = 0
+                ev["why"] = f"손절 폭 {float(ev['stop_dist']) / float(ev['close']) * 100:.2f}%가 {lev}배 청산가보다 멂"
+        out[ce] = ev
+    return {"C": out, "checks": dec[sym]["checks"]}
+
+
+def recheck(data: str, sym: str, lev: int, dec: dict, n: int = 300, seed: int = 17) -> dict:
+    """The bot's own evaluate_friend at ``lev`` on ``n`` of the marked closes where the leverage can matter (an entry, or a
+    refusal for the liquidation room), against at_leverage."""
+    co = M.Coin(sym, 0.0, 3.0, 100.0, lev)
+    a5, a15, a30 = (read_klines(data, sym, tf) for tf in ("5m", "15m", "30m"))
+    ce5 = a5[:, 0].astype(np.int64) + M.MIN5
+    close15 = a15[:, 0].astype(np.int64) + M.MIN15
+    close30 = a30[:, 0].astype(np.int64) + M.MIN30
+    mine = at_leverage(dec, sym, lev)["C"]
+    pool = sorted(ce for ce, ev in dec[sym]["C"].items() if ev["side"] or str(ev.get("why", "")).startswith("손절 폭"))
+    rng = np.random.default_rng(seed)
+    pick = [int(x) for x in rng.choice(np.array(pool, dtype=np.int64), size=min(n, len(pool)), replace=False)]
+    differ = 0
+    for ce in pick:
+        i = int(np.searchsorted(ce5, ce))
+        j30 = int(np.searchsorted(close30, ce, side="right")) - 1
+        j15 = int(np.searchsorted(close15, ce, side="right")) - 1
+        b = M.bars_frame(a5[i - HIST + 1:i + 2].tolist(), M.MIN5, ce)
+        tb = M.bars_frame(a30[j30 - HIST + 1:j30 + 2].tolist(), M.MIN30, ce)
+        t15 = M.bars_frame(a15[j15 - HIST + 1:j15 + 2].tolist(), M.MIN15, ce)
+        ev = M.evaluate_friend("o4h", co, b, ce, M.MIN5, "macd", tb=tb, trend_tf_ms=M.MIN30, tb2=t15, trend_tf2_ms=M.MIN15,
+                               sb=t15, stop_tf_ms=M.MIN15)
+        if (ev["side"], ev["why"]) != (mine[ce]["side"], mine[ce]["why"]):
+            differ += 1
+    return {"leverage": lev, "sampled": len(pick), "differ": differ,
+            "entries_at_decided": sum(1 for ev in dec[sym]["C"].values() if ev["side"]),
+            "entries_at_lev": sum(1 for ev in mine.values() if ev["side"])}
 
 
 def months(tf: str):
@@ -236,9 +289,9 @@ def make_cfg(fee: float, tmp: str, coins=None, start: float = START_EQ) -> "M.Co
     d.update(mode="paper", state=os.path.join(tmp, "none", "state.json"), log=os.path.join(tmp, "none", "log.jsonl"),
              kill_file=os.path.join(tmp, "none", "STOP"), own_stop_file=os.path.join(tmp, "none", "OWN"), telegram=False,
              taker_fee=fee, start_equity=start)
-    # the plan's coins: BTC 40x · SOL 40x · ZEC 20x (the live configs of then), or ZEC alone (C-ZEC)
-    lev = {"BTCUSDT": 40, "SOLUSDT": 40, "ZECUSDT": 20}
-    d["coins"] = {s: {"leverage": lev[s]} for s in (coins or SYMS)}
+    # the rule's coins and leverage (VARIANTS): BTC 40x · SOL 40x · ZEC 20x (the live configs of then), or ZEC alone
+    coins = coins or DECIDED_LEV
+    d["coins"] = {s: {"leverage": int(v)} for s, v in coins.items()}
     p = os.path.join(tmp, f"cfg5m-{fee}-{len(d['coins'])}.json")
     with open(p, "w", encoding="utf-8") as fh:
         json.dump(d, fh)
@@ -262,6 +315,7 @@ def run_bot(fee: float, period: str, dec: dict, bars: dict, tmp: str, fixed: boo
             start: float = START_EQ) -> dict:
     t_from, t_to = PERIODS[period]
     cfg = make_cfg(fee, tmp, coins, start)
+    dec = {s: at_leverage(dec, s, co.leverage) for s, co in ((c.symbol, c) for c in cfg.coins)}
     clock = P.Clock()
     opens = {s: {tf: a[:, 0].astype(np.int64) for tf, a in d.items()} for s, d in bars.items()}
 
@@ -334,7 +388,7 @@ def cmd_period(args, period: str) -> int:
             for fk in ("toobit", "wooxpro", "fee_x2"):
                 r = run_bot(FEES[fk], period, dec, bars, tmp, coins=coins, start=start)
                 ts = P.trades(r["rows"], FEES[fk])
-                res[f"{key}_{fk}"] = {"rule": key, "fee": FEES[fk], "start": start, "coins": coins or list(SYMS),
+                res[f"{key}_{fk}"] = {"rule": key, "fee": FEES[fk], "start": start, "leverage": coins,
                                       **P.summarize(ts, r["end_eq"], r["month_eq"]), "skips": P.skip_counts(r["rows"]),
                                       "ladder_moves": sum(1 for x in r["rows"] if x["kind"] == "ladder")}
                 x = res[f"{key}_{fk}"]
@@ -357,6 +411,10 @@ def cmd_period(args, period: str) -> int:
                                               "config": "deploy/mixchop.live.json (coins set per rule)",
                                               "config_sha256": P.file_sha(CONFIG)}
     summary["checks"] = {s: dec[s]["checks"] for s in SYMS}
+    if period == "dev":                                   # (C-ZEC30: the decisions at 30x against the bot's own code)
+        summary["checks_leverage"] = {k: recheck(args.data, s, int(lev), dec) for k, (cs, _st, _ko) in VARIANTS.items()
+                                      for s, lev in cs.items() if int(lev) != DECIDED_LEV[s]}
+        print(f"leverage recheck: {summary['checks_leverage']}", flush=True)
     summary["data"] = {s: {**{tf: P.gaps(read_klines(args.data, s, tf), TF_MS[tf]) for tf in ("5m", "15m", "30m")},
                            "1m": P.gaps(bars[s]["1m"], M.MIN1)} for s in SYMS}
     summary[period] = {"from": time.strftime("%Y-%m-%d", time.gmtime(PERIODS[period][0] / 1000)),
@@ -383,23 +441,24 @@ def cmd_report(args) -> int:
          "계획과 합격 기준: `research/obv5m/PLAN_KO.md` (결과 보기 전에 커밋, C-ZEC도 결과 보기 전에 추가). 숫자: "
          "`research/obv5m/summary.json`. 프로그램: `research/obv5m/replay.py` (봇의 실제 코드로 판단 · 매매). "
          "이 파일은 `replay.py report`가 만듭니다.", "",
-         "- **C-ZEC**: ZEC만(20배), 투비트, 잔고 $26에서 시작 — 두 분이 실제로 켤 봇", "- **C**: BTC · SOL · ZEC(40 · 40 · 20배), $50에서 시작", ""]
+         "- **C-ZEC30**: ZEC만 **30배**, 투비트, 잔고 $26에서 시작 — 두 분이 실제로 켤 봇",
+         "- **C-ZEC**: ZEC만 20배, $26", "- **C**: BTC · SOL · ZEC(40 · 40 · 20배), $50에서 시작", ""]
     head = ["| 규칙 · 수수료 | 거래 | 승률 | 평균 이익 | 평균 손실 | 본전 승률 | 거래당 기대값 | 복리 수익 | 최대 낙폭 | 최장 연속 손실 | 손절 · 1칸 · 2칸↑ |",
             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     fko = {"toobit": "투비트 0.06%", "wooxpro": "WOO X Pro 0.042%", "fee_x2": "2배 0.12%", "zero": "수수료 0 (분해용, 실제 아님)"}
-    name = {"CZ": "C-ZEC", "C": "C"}
+    name = {"CZ30": "C-ZEC30", "CZ": "C-ZEC", "C": "C"}
     for period, ko in (("dev", "개발 구간"), ("sealed", "봉인 구간")):
         if period not in sm:
             continue
         S = sm[period]
         L += [f"## {ko} ({S['from']} ~ {S['to']}, 복리)", "", "금액은 모두 진입 때 잔고 대비 %(수수료 뺀 것).", ""] + head
-        for key in ("CZ", "C"):
+        for key in ("CZ30", "CZ", "C"):
             for fk in ("toobit", "wooxpro", "fee_x2"):
                 x = S["runs"].get(f"{key}_{fk}")
                 if x:
                     L.append(f"| {name[key]} · {fko[fk]} " + P.fmt_run(x))
         L.append("")
-        for key in ("CZ", "C"):
+        for key in ("CZ30", "CZ", "C"):
             x = S["runs"].get(f"{key}_toobit")
             if not x:
                 continue
@@ -414,13 +473,13 @@ def cmd_report(args) -> int:
                       f"{'손절' if k == '0' else '구간 끝' if k == 'end' else k + '칸'} {v['n']}번 평균 {v['avg_pct']:+.2f}%"
                       for k, v in x["exits"].items()), ""]
     L += ["## 미리 정한 기준으로 판정 (투비트 수수료)", ""]
-    for key in ("CZ", "C"):
+    for key in ("CZ30", "CZ", "C"):
         v = P.verdict(sm, key)
         ok = all(p for _, p, _ in v) and len(v) == 5
         L += [f"**{name[key]}**: " + ("합격 (다시 켜도 되는 후보)" if ok else "불합격" if any(p is False for _, p, _ in v) else "판정 전"), ""]
         L += [f"- {'✔' if p else '✘' if p is False else '…'} {w}: {n}" for w, p, n in v] + [""]
-    if "sealed" not in sm and all(any(p is False for _, p, _ in P.verdict(sm, k)) for k in ("CZ", "C")):
-        L += ["봉인 구간(2026-05 ~ 10)은 **열지 않았습니다**: 두 규칙 모두 개발 구간에서 이미 불합격이라 판정이 바뀌지 않습니다. "
+    if "sealed" not in sm and all(any(p is False for _, p, _ in P.verdict(sm, k)) for k in ("CZ30", "CZ", "C")):
+        L += ["봉인 구간(2026-05 ~ 10)은 **열지 않았습니다**: 세 규칙 모두 개발 구간에서 이미 불합격이라 판정이 바뀌지 않습니다. "
               "다음 시도를 위해 남깁니다.", ""]
     fx = sm.get("dev_fixed")
     pf = prev.get("dev_fixed", {}).get("runs", {})
@@ -429,13 +488,19 @@ def cmd_report(args) -> int:
               "| 규칙 · 수수료 | 거래 | 승률 | 평균 이익 | 평균 손실 | 본전 승률 | 거래당 기대값 | 합계(시작 잔고 대비) | 번 달 | 손절 · 1칸 |",
               "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
         for fk in ("toobit", "wooxpro", "zero"):
-            for tag, x in (("C-ZEC 5분봉", fx["runs"].get(f"CZ_{fk}")), ("C 5분봉", fx["runs"].get(f"C_{fk}")),
+            for tag, x in (("C-ZEC30 5분봉", fx["runs"].get(f"CZ30_{fk}")), ("C-ZEC 5분봉", fx["runs"].get(f"CZ_{fk}")),
+                           ("C 5분봉", fx["runs"].get(f"C_{fk}")),
                            ("B 15분봉", pf.get(f"B_{fk}"))):
                 if x:
                     L.append(f"| {tag} · {fko[fk]} | {x['trades']} | {x['win_rate'] * 100:.1f}% | {x['avg_win_pct']:+.2f}% | "
                              f"{x['avg_loss_pct']:+.2f}% | {(x['breakeven_win_rate'] or 0) * 100:.1f}% | **{x['exp_pct']:+.2f}%** | "
                              f"{x['sum_pct']:+.0f}% | {x['pos_months']}/{x['n_months']} | {x['stops']} · {x['lock1']} |")
         L.append("")
+    lv = sm.get("checks_leverage", {})
+    if lv:
+        L += ["30배 판단 확인: " + ", ".join(f"{k} {v['leverage']}배 표본 {v['sampled']}곳 중 봇 코드와 다른 곳 {v['differ']} "
+                                           f"(진입 자리 20배 {v['entries_at_decided']} → {v['leverage']}배 {v['entries_at_lev']})"
+                                           for k, v in lv.items()), ""]
     ck = sm.get("checks", {})
     if ck:
         L += ["## 검사 (봇이 그 시각에 읽는 봉으로 다시 본 것)", ""]
