@@ -10,6 +10,7 @@ deploy/mixrange.live.json is the same rule, coins and sizes; only the exchange a
     python3 -I research/obv15both/replay.py decide       # the bot's evaluate_friend at the OBV turns (cached in --data)
     python3 -I research/obv15both/replay.py dev          # the development period -> summary.json "dev"
     python3 -I research/obv15both/replay.py sealed       # the sealed period, ONCE, after dev is written -> "sealed"
+    python3 -I research/obv15both/replay.py fixed        # (added, not in the plan) dev with every entry sized from $50
     python3 -I research/obv15both/replay.py report       # REPORT_KO.md from summary.json (the plan's verdict)
 
 Source: https://data.binance.vision/data/futures/um/monthly/klines/<SYMBOL>/<15m|30m|1m>/<SYMBOL>-<tf>-<YYYY-MM>.zip
@@ -79,7 +80,7 @@ PERIODS = {"dev": (T0, TS), "sealed": (TS, T1)}
 HIST = 1499                                    # closed bars in the bot's 1,500-row read
 JUDGE_MS = 5_000
 START_EQ = 50.0
-FEES = {"toobit": 0.0006, "wooxpro": 0.00042, "fee_x2": 0.0012}
+FEES = {"toobit": 0.0006, "wooxpro": 0.00042, "fee_x2": 0.0012, "zero": 0.0}      # (zero: the fixed view's split only)
 MIN_ORDER = 5.0
 DECISIONS_V = "1"
 
@@ -308,7 +309,15 @@ def make_cfg(both: bool, fee: float, tmp: str) -> "M.Config":
     return cfg
 
 
-def run_bot(rule: str, fee: float, period: str, dec: dict, bars: dict, tmp: str) -> dict:
+class FixedBroker(M.PaperBroker):
+    """The added fixed-size view (not in the plan): every entry sized from $50 whatever the trades before made, so the
+    whole period is traded (the P&L of each trade: trades(), from its exit leg and its entry fee)."""
+
+    def equity(self) -> float:
+        return START_EQ
+
+
+def run_bot(rule: str, fee: float, period: str, dec: dict, bars: dict, tmp: str, fixed: bool = False) -> dict:
     t_from, t_to = PERIODS[period]
     cfg = make_cfg(rule == "B", fee, tmp)
     clock = Clock()
@@ -325,7 +334,8 @@ def run_bot(rule: str, fee: float, period: str, dec: dict, bars: dict, tmp: str)
         return dict(ev) if ev else {"symbol": co.symbol, "close_ms": close_ms, "side": 0, "rule": "o4h",
                                     "why": "OBV 히스토그램 양봉·음봉 전환 없음"}
 
-    broker = M.PaperBroker(START_EQ, fee, lambda s: {"qty_step": 0.0, "min_qty": 0.0, "tick": 0.0, "min_notional": MIN_ORDER})
+    broker = (FixedBroker if fixed else M.PaperBroker)(START_EQ, fee, lambda s: {"qty_step": 0.0, "min_qty": 0.0, "tick": 0.0,
+                                                                              "min_notional": MIN_ORDER})
     keep = M.evaluate_friend
     M.evaluate_friend = lookup
     try:
@@ -351,7 +361,9 @@ def run_bot(rule: str, fee: float, period: str, dec: dict, bars: dict, tmp: str)
 
 
 # ====================================================================== numbers
-def trades(rows: list) -> list:
+def trades(rows: list, fee: float) -> list:
+    """Closed trades: P&L = the exit leg (PaperBroker.paper_exit, its fee in) minus the entry fee (PaperBroker.open), as
+    % of the equity the entry was sized from."""
     opens = {(r["symbol"], r["opened_ms"]): r for r in rows if r["kind"] == "entry"}
     out = []
     for r in rows:
@@ -359,9 +371,9 @@ def trades(rows: list) -> list:
             continue
         en = opens[(r["symbol"], r["opened_ms"])]
         eb = float(en["equity_before"])
-        ea = float(r["equity"])
+        pnl = float(r["pnl"]) - float(en["qty"]) * float(en["entry"]) * fee
         out.append({"symbol": r["symbol"], "side": int(r["side"]), "opened_ms": int(r["opened_ms"]), "exit_ms": int(r["ts"]),
-                    "ret": (ea / eb - 1) * 100.0, "pnl": ea - eb, "step": int(r.get("step") or 0), "why": r["why"],
+                    "ret": pnl / eb * 100.0, "pnl": pnl, "step": int(r.get("step") or 0), "why": r["why"],
                     "stop_pct": float(en["stop_dist"]) / float(en["entry"]) * 100.0,
                     "tyellow": bool((en.get("why") or {}).get("tyellow"))})
     return out
@@ -379,11 +391,13 @@ def summarize(ts: list, end_eq: float, month_eq: list) -> dict:
     rs = [t["ret"] for t in ts]
     w = [r for r in rs if r > 0]
     lo = [r for r in rs if r <= 0]
-    eq, peak, mdd = START_EQ, START_EQ, 0.0
+    eq, peak, mdd, ruined = START_EQ, START_EQ, 0.0, None
     for t in ts:
         eq += t["pnl"]
         peak = max(peak, eq)
         mdd = max(mdd, 1 - eq / peak)
+        if ruined is None and eq < 1.0:                    # under $1: the next entries are under the $5 minimum order
+            ruined = time.strftime("%Y-%m-%d", time.gmtime(t["exit_ms"] / 1000))
     aw = float(np.mean(w)) if w else 0.0
     al = float(np.mean(lo)) if lo else 0.0
     steps: dict = {}
@@ -406,7 +420,7 @@ def summarize(ts: list, end_eq: float, month_eq: list) -> dict:
         "breakeven_win_rate": round(-al / (aw - al), 4) if w and lo else None,
         "payoff": round(aw / -al, 3) if w and lo else None,
         "start_eq": START_EQ, "end_eq": round(float(end_eq), 2), "return_pct": round((end_eq / START_EQ - 1) * 100, 2),
-        "max_dd_pct": round(mdd * 100, 2), "max_losing_streak": runs_of_losses(rs),
+        "max_dd_pct": round(mdd * 100, 2), "max_losing_streak": runs_of_losses(rs), "under_1usd": ruined,
         "exits": {k: {"n": v["n"], "avg_pct": round(v["ret_sum"] / v["n"], 3)}
                   for k, v in sorted(steps.items(), key=lambda kv: (kv[0] == "end", int(kv[0]) if kv[0] != "end" else 0))},
         "coins": {s: part(lambda t, s=s: t["symbol"] == s) for s in SYMS},
@@ -476,7 +490,7 @@ def cmd_period(args, period: str) -> int:
         for rule in ("A", "B"):
             for fk in fees:
                 r = run_bot(rule, FEES[fk], period, dec, bars, tmp)
-                ts = trades(r["rows"])
+                ts = trades(r["rows"], FEES[fk])
                 res[f"{rule}_{fk}"] = {"rule": rule, "fee": FEES[fk], **summarize(ts, r["end_eq"], r["month_eq"]),
                                        "skips": skip_counts(r["rows"]),
                                        "ladder_moves": sum(1 for x in r["rows"] if x["kind"] == "ladder")}
@@ -504,6 +518,77 @@ def cmd_period(args, period: str) -> int:
         fh.write("\n")
     os.replace(args.out + ".part", args.out)
     print(f"wrote {args.out} ({period}) in {time.time() - t:.0f} s")
+    return 0
+
+
+# ====================================================================== the added fixed-size view (not in the plan)
+def summarize_fixed(ts: list) -> dict:
+    """Each trade as % of $50 (no compounding): the per-trade numbers over the whole period, the running sum and its
+    largest fall from a peak (percentage points of $50), by month."""
+    rs = [t["ret"] for t in ts]
+    w = [r for r in rs if r > 0]
+    lo = [r for r in rs if r <= 0]
+    cum = peak = dd = 0.0
+    for r in rs:
+        cum += r
+        peak = max(peak, cum)
+        dd = max(dd, peak - cum)
+    aw = float(np.mean(w)) if w else 0.0
+    al = float(np.mean(lo)) if lo else 0.0
+    months: dict = {}
+    for t in ts:
+        m = months.setdefault(time.strftime("%Y-%m", time.gmtime(t["exit_ms"] / 1000)), [0, 0.0])
+        m[0] += 1
+        m[1] += t["ret"]
+    steps: dict = {}
+    for t in ts:
+        k = "end" if t["why"] == "end" else str(t["step"])
+        steps[k] = steps.get(k, 0) + 1
+    return {"trades": len(rs), "win_rate": round(len(w) / len(rs), 4) if rs else None, "avg_win_pct": round(aw, 3),
+            "avg_loss_pct": round(al, 3), "breakeven_win_rate": round(-al / (aw - al), 4) if w and lo else None,
+            "exp_pct": round(float(np.mean(rs)), 4) if rs else None, "sum_pct": round(float(sum(rs)), 1),
+            "max_dd_pts": round(dd, 1), "max_losing_streak": runs_of_losses(rs),
+            "stops": steps.get("0", 0), "lock1": steps.get("1", 0),
+            "coins": {s: {"n": sum(1 for t in ts if t["symbol"] == s),
+                          "exp_pct": round(float(np.mean([t["ret"] for t in ts if t["symbol"] == s])), 3)
+                          if any(t["symbol"] == s for t in ts) else None} for s in SYMS},
+            "months": {k: {"n": v[0], "sum_pct": round(v[1], 1)} for k, v in sorted(months.items())},
+            "pos_months": sum(1 for v in months.values() if v[1] > 0), "n_months": len(months)}
+
+
+def cmd_fixed(args) -> int:
+    """The dev period with every entry sized from $50 (FixedBroker): A and B over all 18 months. Added after the dev
+    run, because there the equity was gone in the first months and the rest of the period was not traded."""
+    summary = json.load(open(args.out, encoding="utf-8"))
+    if "dev" not in summary:
+        raise SystemExit("dev first")
+    t = time.time()
+    dec = load_decisions(args.data)
+    bars = {s: {"1m": read_klines(args.data, s, "1m")} for s in SYMS}
+    tmp = tempfile.mkdtemp(prefix="obv15both-")
+    keep_path = EV.PATH
+    res: dict = {}
+    try:
+        EV.PATH = macro_history(tmp)
+        EV.reset()
+        for rule in ("A", "B"):
+            for fk in ("toobit", "wooxpro", "zero"):          # (zero: what the fees take, not a fee anyone pays)
+                r = run_bot(rule, FEES[fk], "dev", dec, bars, tmp, fixed=True)
+                res[f"{rule}_{fk}"] = {"rule": rule, "fee": FEES[fk], **summarize_fixed(trades(r["rows"], FEES[fk]))}
+                x = res[f"{rule}_{fk}"]
+                print(f"fixed {rule} {fk}: {x['trades']} trades, win {x['win_rate']}, exp {x['exp_pct']}%, sum {x['sum_pct']}%, "
+                      f"months up {x['pos_months']}/{x['n_months']}", flush=True)
+    finally:
+        EV.PATH = keep_path
+        EV.reset()
+    summary["dev_fixed"] = {"what": "추가 분석 (계획에 없음): 개발 구간 18개월 전체를, 진입마다 $50 기준 같은 크기로 (복리 없음). "
+                                    "복리 실행에서는 잔고가 초반 1~4개월에 사라져 나머지 기간을 거래하지 못했기 때문. 판정에는 쓰지 않음.",
+                            "made_utc": time.strftime("%Y-%m-%dT%H:%MZ", time.gmtime()), "runs": res}
+    with open(args.out + ".part", "w", encoding="utf-8") as fh:
+        json.dump(summary, fh, ensure_ascii=False, indent=1)
+        fh.write("\n")
+    os.replace(args.out + ".part", args.out)
+    print(f"wrote {args.out} (dev_fixed) in {time.time() - t:.0f} s")
     return 0
 
 
@@ -569,7 +654,8 @@ def cmd_report(args) -> int:
                                                     f"기대값 {(v['exp_pct'] or 0):+.2f}%" for s, v in x["coins"].items())
                   + f" · 롱 {x['long']['n']}번 {(x['long']['exp_pct'] or 0):+.2f}% · 숏 {x['short']['n']}번 {(x['short']['exp_pct'] or 0):+.2f}%"
                   + f" · 손절 폭 중간값 {x['stop_pct_median']}% · 보유 시간 중간값 {x['hold_h_median']}시간"
-                  + f" · 손해 본 달 {x['neg_months']}/{x['months']}", ""]
+                  + (f" · **잔고가 $1 아래로 떨어진 날 {x['under_1usd']}** (그 뒤로는 최소 주문 $5보다 작아 거래 못 함)"
+                     if x.get("under_1usd") else f" · 손해 본 달 {x['neg_months']}/{x['months']}"), ""]
             L += [f"{rule} (투비트) 청산 단계: " + ", ".join(
                 f"{'손절' if k == '0' else '구간 끝' if k == 'end' else k + '칸'} {v['n']}번 평균 {v['avg_pct']:+.2f}%" for k, v in x["exits"].items()), ""]
     L += ["## 미리 정한 기준으로 판정 (투비트 수수료)", ""]
@@ -582,8 +668,29 @@ def cmd_report(args) -> int:
     if "A_toobit" in dev and "B_toobit" in dev:
         b_dev = dev["B_toobit"]["exp_pct"] > dev["A_toobit"]["exp_pct"]
         b_sea = (sea["B_toobit"]["exp_pct"] >= sea["A_toobit"]["exp_pct"]) if "A_toobit" in sea and "B_toobit" in sea else None
+        both_fail = all(any(p is False for _, p, _ in verdict(sm, r)) for r in ("A", "B"))
         L += ["B가 A보다 나은가 (개발 구간 기대값이 더 높고, 봉인 구간에서 나빠지지 않음): "
-              + ("예" if b_dev and b_sea else "아니오" if (not b_dev or b_sea is False) else "봉인 구간 전") , ""]
+              + ("말할 수 없음: 둘 다 불합격. 복리 실행의 기대값 차이는 잔고가 사라지기 전 서로 다른 기간(몇 주 ~ 몇 달)만 본 것이라 "
+                 "비교가 안 됩니다. 18개월 전체를 같은 크기로 보면 아래 추가 분석처럼 거래당 기대값이 사실상 같습니다." if both_fail
+                 else "예" if b_dev and b_sea else "아니오" if (not b_dev or b_sea is False) else "봉인 구간 전"), ""]
+    if "sealed" not in sm:
+        L += ["봉인 구간(2026-05 ~ 10)은 **열지 않았습니다**: 두 규칙 모두 개발 구간에서 이미 불합격이라 판정이 바뀌지 않습니다. "
+              "다음 후보 규칙을 시험할 때 쓰려고 아껴 둡니다.", ""]
+    fx = sm.get("dev_fixed")
+    if fx:
+        L += ["## 추가 분석 (계획에 없던 것, 판정에 안 씀): 18개월 전체를 매번 $50 기준 같은 크기로", "",
+              fx["what"], "", "| 규칙 · 수수료 | 거래 | 승률 | 평균 이익 | 평균 손실 | 본전 승률 | 거래당 기대값 | 합계($50 대비) | "
+              "번 달 | 손절 · 1칸 |", "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+        fko = {"toobit": "투비트 0.06%", "wooxpro": "WOO X Pro 0.042%", "zero": "수수료 0 (분해용, 실제 아님)"}
+        for rule in ("A", "B"):
+            for fk in ("toobit", "wooxpro", "zero"):
+                x = fx["runs"].get(f"{rule}_{fk}")
+                if x:
+                    L.append(f"| {rule} · {fko[fk]} | {x['trades']} | {x['win_rate'] * 100:.1f}% | {x['avg_win_pct']:+.2f}% | "
+                             f"{x['avg_loss_pct']:+.2f}% | {(x['breakeven_win_rate'] or 0) * 100:.1f}% | **{x['exp_pct']:+.2f}%** | "
+                             f"{x['sum_pct']:+.0f}% | {x['pos_months']}/{x['n_months']} | {x['stops']} · {x['lock1']} |")
+        L.append("")
+    L += ["승률의 '이긴 거래' = 수수료까지 뺀 손익이 0보다 큰 거래. 수수료가 커지면 계단 1칸 청산 일부가 지는 거래로 바뀝니다.", ""]
     L += ["## 모델에 없는 것", "", "시장가 미끄러짐(수수료 2배로 대신 봄), 펀딩비, 거래소별 가격 차이(바이낸스 봉), 2026년 전 CPI · PCE 발표, "
           "2026년 전 미국 증시 휴장일, 계약 단위(최소 $5 주문만).", ""]
     path = os.path.join(os.path.dirname(os.path.abspath(args.out)), "REPORT_KO.md")
@@ -595,7 +702,7 @@ def cmd_report(args) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="replay.py", description=__doc__.split("\n\n")[0])
-    ap.add_argument("cmd", choices=("download", "decide", "dev", "sealed", "report"))
+    ap.add_argument("cmd", choices=("download", "decide", "dev", "sealed", "fixed", "report"))
     ap.add_argument("--data", default=DATA)
     ap.add_argument("--out", default=OUT)
     ap.add_argument("--again", action="store_true", help="(never for the verdict) reopen the sealed period")
@@ -606,6 +713,8 @@ def main(argv=None) -> int:
         return cmd_decide(args)
     if args.cmd == "report":
         return cmd_report(args)
+    if args.cmd == "fixed":
+        return cmd_fixed(args)
     return cmd_period(args, args.cmd)
 
 
