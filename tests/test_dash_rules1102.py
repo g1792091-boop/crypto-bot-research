@@ -255,6 +255,6 @@ def test_the_histogram_follows_the_bots_entry_rule(monkeypatch):
     assert out["k"] == ["OBV 히스토그램", "3합 히스토그램", "3합 히스토그램"]
     assert out["m"] == ["0선 아래 양봉 전환", "0선 위 음봉 전환", "0선 위로 돌파", ""]
     js = open(os.path.join(SCREENS, "livebots-deck.js"), encoding="utf-8").read()
-    assert "OBV 히스토그램 (레인지 봇 · 친구 15분 봇 진입)" in js and '"히스토그램 · HISTOGRAM"' in js
+    assert "OBV 히스토그램 (봇 진입 신호)" in js and '"히스토그램 · HISTOGRAM"' in js      # (11-04 evening: one bot)
     room = open(os.path.join(SCREENS, "livebots-room.js"), encoding="utf-8").read()
     assert 'cols: ["코인", "가격", "24시간", "30분 추세", hk]' in room and '"OBV 히스토그램" : "3합 히스토그램"' in room

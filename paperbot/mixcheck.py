@@ -111,7 +111,7 @@ BERNOULLI_P = sum(DESIGN_WIN.values()) / len(DESIGN_WIN)
 STOP_KINDS = ("stop_failed", "protect_failed", "protect_close_failed", "reconcile_failed", "stop_replaced")
 READ_KINDS = ("read_failed", "poll_failed", "bars_failed", "bars_missing", "close_failed", "cancel_failed")
 READ_KO = {"read_failed": "거래소 읽기", "poll_failed": "점검 중 거래소 읽기", "bars_failed": "계단용 바이낸스 봉", "bars_missing": "신호용 바이낸스 봉",
-           "close_failed": "30분봉 처리", "cancel_failed": "남은 손절 취소"}
+           "close_failed": "봉 마감 처리", "cancel_failed": "남은 손절 취소"}
 ODD_EXITS = {"protect": "손절을 못 걸어 시장가로 닫았어요", "closed_while_down": "봇이 꺼진 사이에 닫혔어요",
              "manual": "직접 닫았어요", "wrong_side": "방향이 기록과 달라 닫았어요"}
 WEEK_KO = "월화수목금토일"
@@ -745,15 +745,16 @@ def bars_range(klines: Callable, symbol: str, tf: str, start_ms: int, end_ms: in
     return out
 
 
-def handled_closes(rows: list, obs: list, st_last: Optional[int]) -> set:
-    """The 30-minute closes the bot is known to have handled: the ones its state file showed at a pass, its signal /
-    bars_missing rows' ``close_ms``, the closes of its skip / entry rows, the state's last one."""
+def handled_closes(rows: list, obs: list, st_last: Optional[int], tf_ms: int = M.MIN30) -> set:
+    """The closes of its bar (``tf_ms``: 30m, 15m, 5m since 11-04 evening) the bot is known to have handled: the ones its
+    state file showed at a pass, its signal / bars_missing rows' ``close_ms``, the closes of its skip / entry rows, the
+    state's last one."""
     out = {int(o[1]) for o in obs if len(o) > 1 and o[1]}
     for r in rows:
         if r.get("kind") in ("signal", "bars_missing") and _i(r.get("close_ms")):
             out.add(int(r["close_ms"]))
         elif r.get("kind") in ("skip", "entry", "adopted") and _i(r.get("ts")):
-            out.add(int(r["ts"]) // M.MIN30 * M.MIN30)
+            out.add(int(r["ts"]) // tf_ms * tf_ms)
     if st_last:
         out.add(int(st_last))
     return out
@@ -843,7 +844,7 @@ def signal_replay(cfg: Any, w0: int, w1: int, rows: list, klines: Callable, obs:
     sig = {(r.get("symbol"), _i(r.get("close_ms")), _rule(r)): r for r in day if r.get("kind") == "signal"}
     late = {(r.get("symbol"), _i(r.get("close_ms"))) for r in day if r.get("kind") == "bars_missing"}
     failed = {_i(r.get("close_ms")) for r in day if r.get("kind") == "close_failed"}
-    handled = handled_closes(day, obs, st_last)
+    handled = handled_closes(day, obs, st_last, tf_ms)
     missed, different, unexplained, unsure = [], [], [], []
     for (sym, ce, rule), ev in sorted(rep.items(), key=lambda kv: (kv[0][1], kv[0][0], rules.index(kv[0][2]))):
         if ev["why"].endswith("아직 없음"):
@@ -1030,6 +1031,8 @@ def live_vs_paper(lrows: list, prows: list, lall: list, pall: list, w0: int, w1:
                   lcfg: Any = None, pcfg: Any = None) -> dict:
     """The day's entries of both bots by (coin, side, signal bar), and the exits of the trades both made: each difference
     with what the other bot logged at that close (its own reason), else unexplained."""
+    tfw = M.TF_MS.get(getattr(lcfg or pcfg, "tf", "30m"), M.MIN30)   # the bots' bar: a skip of that close only
+
     def ent(rows):
         return {(r.get("symbol"), _i(r.get("side")), _i(r.get("signal_close_ms"))): r for r in rows if r.get("kind") in ("entry", "adopted")}
     le, pe = ent(lrows), ent(prows)
@@ -1039,7 +1042,7 @@ def live_vs_paper(lrows: list, prows: list, lall: list, pall: list, w0: int, w1:
         sym, side, sc = key
         for r in rows_all:
             t = _i(r.get("ts")) or 0
-            if sc is not None and sc <= t < sc + M.MIN30 and r.get("symbol") == sym and r.get("kind") in ("skip", "entry_failed", "entry_none"):
+            if sc is not None and sc <= t < sc + tfw and r.get("symbol") == sym and r.get("kind") in ("skip", "entry_failed", "entry_none"):
                 return str(r.get("why") or r.get("error") or r.get("kind"))
         return None
     if not paper_on:
@@ -1233,7 +1236,8 @@ def morning(data: dict, w0: int, *, klines: Optional[Callable] = None, obs: Opti
         lines.append(f"  ({bd['model_ko']})")
     nxt = []
     if rp and rp.get("state") == "ok" and (rp["missed"] or rp["different"]):
-        nxt.append("트레이딩뷰 30분 차트에서 그 봉을 직접 확인해 주세요 (python -m paperbot.mixchop signals)")
+        nxt.append(f"트레이딩뷰 {M.TF_KO.get(getattr(cfg, 'tf', '30m'), '30분')} 차트에서 그 봉을 직접 확인해 주세요 "
+                   "(python -m paperbot.mixchop signals)")
     if bad_cards:
         nxt.append(f"{wd['ex']} 앱의 체결 내역에서 그 거래의 청산 가격을 확인해 주세요")
     if st["state"] in ("stopped", "error"):

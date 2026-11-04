@@ -62,6 +62,8 @@ def _touch(path, ms):
 def _world_coins(monkeypatch):
     from tests.test_dash_livedeck import WORLD_COINS
     monkeypatch.setattr(D, "COINS", WORLD_COINS)
+    monkeypatch.setattr(D, "deck_coins", lambda: D.COINS)          # (this world's coins and 15m bars: tests/test_rules1104d.py)
+    monkeypatch.setattr(D, "deck_tf", lambda: "15m")
     monkeypatch.setattr(D, "hist_rule", lambda: "h3x")          # (this world's histogram: the 3합 of then)
 
 

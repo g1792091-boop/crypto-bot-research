@@ -80,6 +80,10 @@ WORLD_COINS = ("SOLUSDT", "ETHUSDT", "XRPUSDT", "BCHUSDT", "ZECUSDT", "DOGEUSDT"
 @pytest.fixture(autouse=True)
 def _world_coins(monkeypatch):
     monkeypatch.setattr(D, "COINS", WORLD_COINS)
+    # (its coins and its 15m bars: owners 11-04 evening moved 관제실 to the running bot's coins and bars, deck_coins /
+    # deck_tf: tests/test_rules1104d.py)
+    monkeypatch.setattr(D, "deck_coins", lambda: D.COINS)
+    monkeypatch.setattr(D, "deck_tf", lambda: "15m")
     # (and its histogram: the 3합 of the friend bot of then; owners 11-03 evening moved both bots to the OBV histogram's
     # turn, livedeck.hist_rule "o4h": test_the_histogram_follows_the_bots_entry_rule)
     monkeypatch.setattr(D, "hist_rule", lambda: "h3x")

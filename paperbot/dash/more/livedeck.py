@@ -115,6 +115,41 @@ def _frame(rows: list) -> tuple:
     return (t, *cols, v)
 
 
+def _cfg_of(bid: str) -> Any:
+    """A mix bot's live config (the server's, else the repo's); None when it cannot be read."""
+    try:
+        bp = MX.paths(bot=bid)["live"]
+        return MX.read_config(bp["config"], bp["repo_config"], MX.PROFILES[bid]).get("cfg")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def deck_bots() -> list:
+    """The two accounts' bots (the 친구 15분 봇 first, then the 레인지 봇) not switched off for good (bot_order)."""
+    return [b for b in ("mix", "range") if b in bot_order()]
+
+
+def deck_coins() -> tuple:
+    """The coins 관제실 shows: those the running bots trade (owners 11-04 evening: one bot, ZEC only), in COINS' order
+    first; COINS when no config can be read."""
+    seen: list = []
+    for bid in deck_bots():
+        for sym in getattr(_cfg_of(bid), "symbols", None) or []:
+            if sym not in seen:
+                seen.append(sym)
+    order = {s: i for i, s in enumerate(COINS)}
+    return tuple(sorted(seen, key=lambda s: (order.get(s, len(order)), s))) or COINS
+
+
+def deck_tf() -> str:
+    """The signal bar 관제실 draws: the first running bot's (owners 11-04 evening: "5m"), else "15m"."""
+    for bid in deck_bots():
+        tf = getattr(_cfg_of(bid), "tf", None)
+        if tf in M.TF_MS:
+            return tf
+    return "15m"
+
+
 def hist_rule() -> str:
     """The entry rule the coins' histogram shows: "h3x" (the 3합 histogram's 0 cross) while a live bot enters on it, "o4h"
     (the OBV4 MACD histogram's turn) once the live bots enter on that and none on the 3합 (owners 11-03, last: "친구봇도
@@ -130,30 +165,42 @@ def hist_rule() -> str:
     return "o4h" if "o4h" in rules and "h3x" not in rules else "h3x"
 
 
-def coin_view(symbol: str, candles: Callable, now: int, rule: str = "h3x") -> dict:
-    """One coin's panels: its 15m bars (the last one still open is left out), the entry histogram (``rule``: the 3합 and
-    its 0 crosses, or the OBV4 MACD histogram and its turns) and the OBV histogram's turns on them, and the 추세 MACD
-    histogram's side of 0 on the closed 30m bars (owners 11-02: the bots' trend)."""
+def coin_view(symbol: str, candles: Callable, now: int, rule: str = "h3x", tf: str = "15m") -> dict:
+    """One coin's panels: its bars of the bots' signal bar ``tf`` (15m; owners 11-04 evening 5m; the last one still open
+    is left out), the entry histogram (``rule``: the 3합 and its 0 crosses, or the OBV4 MACD histogram and its turns) and
+    the OBV histogram's turns on them, and the 추세 MACD histogram's side of 0 on the closed 30m bars (owners 11-02: the
+    bots' trend) and, with 5m signals, on the closed 15m bars too (``tm15``: the second trend)."""
     out: dict = {"symbol": symbol, "coin": MX.coin_ko(symbol), "state": "ok"}
+    tf = tf if tf in M.TF_MS else "15m"
+    tf_ms = M.TF_MS[tf]
     try:
-        r15 = candles(symbol, "15m", HIST_BARS)
+        r15 = candles(symbol, tf, HIST_BARS)
         r30 = candles(symbol, "30m", HIST_BARS)
+        r2 = candles(symbol, "15m", HIST_BARS) if tf != "15m" else None
     except Exception as exc:  # noqa: BLE001  Binance unreachable: said, never guessed
         return {**out, "state": "error", "ko": "바이낸스 봉을 못 읽었어요", "reason": f"{type(exc).__name__}: {exc}"[:200]}
-    t15, o15, h15, l15, c15, v15 = _frame([r for r in r15 if int(r["time"]) * 1000 + MIN15 <= now])
+    t15, o15, h15, l15, c15, v15 = _frame([r for r in r15 if int(r["time"]) * 1000 + tf_ms <= now])
     t30, _o30, h30, l30, c30, v30 = _frame([r for r in r30 if int(r["time"]) * 1000 + MIN30 <= now])
     if len(c15) < 300 or len(c30) < 300:
         return {**out, "state": "short", "ko": "지난 봉이 모자라요"}
+    tm15 = None
+    if r2 is not None:
+        _t2, _o2, h2, l2, c2, v2 = _frame([r for r in r2 if int(r["time"]) * 1000 + MIN15 <= now])
+        if len(c2) >= 300:
+            T2 = FT.tmacd_pane(h2, l2, c2, v2)
+            tm15 = {"trend": int(T2["trend"][-1]), "hist": _r(T2["hist"][-1], 3), "yellow": bool(T2["yellow"][-1])}
+    spark_n = int(DAY // tf_ms) if tf != "15m" else SPARK_N
     H = FT.h3_pane(o15, h15, l15, c15, v15)
     O = FT.o4_pane(h15, l15, c15, v15)
     T = FT.tmacd_pane(h30, l30, c30, v30)
     k = slice(len(c15) - CHART_N, len(c15))
     last = float(c15[-1])
-    base = float(c15[-SPARK_N - 1]) if len(c15) > SPARK_N else None
+    base = float(c15[-spark_n - 1]) if len(c15) > spark_n else None
     hv, xv = (O["ac"], O["side"]) if rule == "o4h" else (H["hist"], H["cross"])
     hist = [None if not np.isfinite(x) else round(float(x), 3) for x in hv[k]]
-    out.update({"hist_rule": "o4h" if rule == "o4h" else "h3x","last": last, "last_ms": int(t15[-1]) + MIN15, "chg24": (last / base - 1) if base else None,
-                "spark": [round(float(x), 8) for x in c15[-SPARK_N:]],
+    out.update({"hist_rule": "o4h" if rule == "o4h" else "h3x","last": last, "last_ms": int(t15[-1]) + tf_ms, "chg24": (last / base - 1) if base else None,
+                "tf": tf, "tf_ko": M.TF_KO[tf], "tf_ms": tf_ms, **({"tm15": tm15} if tm15 else {}),
+                "spark": [round(float(x), 8) for x in c15[-spark_n:]],
                 "bars": [[int(t15[i]), float(o15[i]), float(h15[i]), float(l15[i]), float(c15[i])] for i in range(k.start, k.stop)],
                 "hist": hist, "cross": [int(x) for x in xv[k]], "o4side": [int(x) for x in O["side"][k]],
                 "o4": _r(O["ac"][-1], 3),
@@ -169,15 +216,16 @@ def _r(x: Any, n: int) -> Optional[float]:
 
 def coins_view(candles: Optional[Callable], now: int) -> list:
     """The six coins, cached COIN_TTL_S (one Binance read a minute for every viewer)."""
+    coins, tf = deck_coins(), deck_tf()                 # (owners 11-04 evening: the one ZEC bot's 5m bars)
     if candles is None:
-        return [{"symbol": s, "coin": MX.coin_ko(s), "state": "error", "ko": "가격 읽기가 없는 서버예요"} for s in COINS]
-    key = (id(candles), now // int(COIN_TTL_S * 1000))
+        return [{"symbol": s, "coin": MX.coin_ko(s), "state": "error", "ko": "가격 읽기가 없는 서버예요"} for s in coins]
+    key = (id(candles), now // int(COIN_TTL_S * 1000), coins, tf)
     with _coin_lock:
         hit = _coin_cache.get("coins")
         if hit is not None and hit[0] == key:
             return hit[1]
     rule = hist_rule()
-    out = [coin_view(s, candles, now, rule) for s in COINS]
+    out = [coin_view(s, candles, now, rule, tf) for s in coins]
     with _coin_lock:
         _coin_cache["coins"] = (key, out)
     return out
@@ -311,7 +359,7 @@ def bot_view(prof: Any, now: int) -> dict:
 def grid_view(bots: list) -> list:
     """Each coin, each bot's own board row at its last close (the trend it read, the signal it saw)."""
     out = []
-    for s in COINS:
+    for s in deck_coins():
         cell = {}
         for b in bots:
             r = (b.get("_board") or {}).get(s)
@@ -552,20 +600,21 @@ def px_view(fetch: Optional[Callable] = None, now_ms: Optional[int] = None) -> d
             return hit[1]
         now = int(time.time() * 1000) if now_ms is None else int(now_ms)
         try:
-            got = (fetch or fetch_px)(COINS) or {}
+            coins_now = deck_coins()
+            got = (fetch or fetch_px)(coins_now) or {}
             err = None
         except Exception as exc:  # noqa: BLE001
             got, err = {}, f"{type(exc).__name__}: {exc}"[:200]
         coins = {}
-        for sym in COINS:
+        for sym in coins_now:
             row = got.get(sym) or {}
             keep = {k: (int(v) if k == "next_ms" else float(v)) for k, v in row.items()
                     if k in ("last", "mark", "funding", "next_ms") and v is not None and np.isfinite(float(v))}
             if keep.get("last") or keep.get("mark"):
                 coins[sym] = keep
-        out = {"now_ms": now, "state": "ok" if coins else "error", "coins": coins, "missing": [x for x in COINS if x not in coins]}
+        out = {"now_ms": now, "state": "ok" if coins else "error", "coins": coins, "missing": [x for x in coins_now if x not in coins]}
         if not coins:
-            out["ko"] = "바이낸스 지금 가격을 못 받았어요 (끝난 15분봉 값으로 보여요)"
+            out["ko"] = f"바이낸스 지금 가격을 못 받았어요 (끝난 {M.TF_KO.get(deck_tf(), '15분')}봉 값으로 보여요)"
             if err:
                 out["reason"] = err
         _PX_CACHE["px"] = (time.time(), out)
@@ -596,7 +645,7 @@ def build(candles: Optional[Callable], now_ms: Optional[int] = None) -> dict:
         out["coins"] = coins_view(candles, now)
     except Exception as exc:  # noqa: BLE001
         out["coins"] = [{"symbol": s, "coin": MX.coin_ko(s), "state": "error", "ko": "코인 값을 만들지 못했어요",
-                         "reason": f"{type(exc).__name__}: {exc}"[:200]} for s in COINS]
+                         "reason": f"{type(exc).__name__}: {exc}"[:200]} for s in deck_coins()]
     return out
 
 

@@ -64,7 +64,7 @@ export function priceNow(live, liveAt, coin, nowMs) {
     return {px: Number(ok(r.mark) ? r.mark : r.last), src: "live", funding: ok(r.funding) ? Number(r.funding) : null,
       next_ms: ok(r.next_ms) ? Number(r.next_ms) : null};
   }
-  return coin && coin.state === "ok" && ok(coin.last) ? {px: Number(coin.last), src: "15m", funding: null, next_ms: null} : null;
+  return coin && coin.state === "ok" && ok(coin.last) ? {px: Number(coin.last), src: coin.tf || "15m", funding: null, next_ms: null} : null;
 }
 /** 위험 한눈에 for one open position at price `px` (owners 11-01): pnl ($) and roe (of the margin) now, before fees; the
  *  liquidation price (isolated: entry × (1 − side × (1/lev − mmr)), the card's rough figure) and how far the price is from
@@ -127,20 +127,28 @@ export function wireOf(tape, n = 7) {
 export const pctKo = (r, dec = 2) => (ok(r) ? `${Number(r) > 0 ? "+" : ""}${fmt.num(Number(r) * 100, dec)}%` : "—");
 /** A price with its own digits (6 significant, no trailing zeros). */
 export const pxKo = (x) => (ok(x) ? String(Number(Number(x).toPrecision(6))) : "—");
-/** The next 15m close after ``now`` and how far it is: {at, left_ms}. */
-export function nextClose(now) {
-  const at = Math.floor(now / MIN15) * MIN15 + MIN15;
+/** The next close of the bots' bar (``tfMs``: 15m; 5m since owners 11-04 evening) after ``now`` and how far it is: {at, left_ms}. */
+export function nextClose(now, tfMs = MIN15) {
+  const at = Math.floor(now / tfMs) * tfMs + tfMs;
   return {at, left_ms: at - now};
+}
+/** The bots' signal bar the answer's coins are drawn on: {ms, ko} (15m when the answer does not say). */
+export function barOf(d) {
+  const c = ((d && d.coins) || []).find((x) => x && x.state === "ok" && ok(x.tf_ms));
+  return c ? {ms: Number(c.tf_ms), ko: c.tf_ko || "15분"} : {ms: MIN15, ko: "15분"};
 }
 /** "mm:ss" of ms. */
 export const mmss = (ms) => {
   const t = Math.max(0, Math.round(ms / 1000));
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 };
-/** A coin's 30m 추세 MACD now in words (owners 11-02): "상승 +3.21" / "하락 −1.40" / "0선". */
+/** A coin's 30m 추세 MACD now in words (owners 11-02): "상승 +3.21" / "하락 −1.40" / "0선"; with the 15m one too when the
+ *  bots read it (owners 11-04 evening: ``tm15``): "상승 +3.21 · 15분 상승 +0.80". */
 export function tmKo(c) {
   const tr = c && c.trend30 && c.trend30.length ? toneOf(c.trend30[c.trend30.length - 1][1]) : "na", t = (c && c.tm30) || {};
-  return `${tr === "flat" ? "0선" : TREND_KO[tr]}${ok(t.hist) ? ` ${fmt.num(t.hist, 2, true)}` : ""}`;
+  const t2 = c && c.tm15, tr2 = t2 ? toneOf(t2.trend) : null;
+  const two = t2 ? ` · 15분 ${tr2 === "flat" ? "0선" : TREND_KO[tr2]}${ok(t2.hist) ? ` ${fmt.num(t2.hist, 2, true)}` : ""}` : "";
+  return `${tr === "flat" ? "0선" : TREND_KO[tr]}${ok(t.hist) ? ` ${fmt.num(t.hist, 2, true)}` : ""}${two}`;
 }
 /** A grid cell of one coin and one bot: {tone, big, sub, sig} from the bot's board row (livedeck.grid_view). */
 export function cellOf(c) {
@@ -309,8 +317,8 @@ function chartSvg(c, holds, W = 600) {
         s("text", {class: ["dk-hlt", cls], x: 4, y: y(Number(v)) - 3}, `${ko} ${pxKo(v)}`));
     }
   }
-  // the 30m trend strip: each 30m bar over the 15m bars it covers
-  const t0 = bars[0][0], t1 = bars[n - 1][0] + MIN15;
+  // the 30m trend strip: each 30m bar over the signal bars it covers (15m; 5m since owners 11-04 evening)
+  const t0 = bars[0][0], t1 = bars[n - 1][0] + (ok(c.tf_ms) ? Number(c.tf_ms) : MIN15);
   for (const [t, tr] of c.trend30 || []) {
     if (t + 30 * MIN <= t0 || t >= t1) continue;
     const xa = Math.max(0, ((t - t0) / (t1 - t0)) * W), xb = Math.min(W, ((t + 30 * MIN - t0) / (t1 - t0)) * W);
@@ -319,7 +327,7 @@ function chartSvg(c, holds, W = 600) {
   kids.push(s("text", {class: "dk-axis", x: 2, y: strip - 4}, `${TM_KO} 30분 (0선 위 초록 · 아래 빨강)`),
     s("text", {class: "dk-axis", x: 2, y: H - 4}, fmt.kst(t0)), s("text", {class: "dk-axis", x: W - 2, y: H - 4, "text-anchor": "end"}, fmt.kst(t1)));
   return s("svg", {class: "dk-chart", viewBox: VB(W, H), width: W, height: H, role: "img",
-    "aria-label": `${c.coin} 15분봉 ${n}개와 30분 ${TM_KO}`}, kids);
+    "aria-label": `${c.coin} ${c.tf_ko || "15분"}봉 ${n}개와 30분 ${TM_KO}`}, kids);
 }
 
 /** The chosen coin's histogram on its 15m bars (green above 0, red below, the crosses marked). */
@@ -727,7 +735,7 @@ export function deckView(ctx) {
   const eqLed = h("div", {class: "dk-led num"}, "—"), gMult = h("b", {class: "num"}, "—"), gNeed = h("b", {class: "num"}, "—");
   // owners 11-01 "다 해줘": the price now (the card's 지금 row, the source line under the clock), 위험, 이번 달, the alerts
   const cardNow = h("div", {class: "dk-crow now"});
-  const pxSrc = h("small", {class: "dk-clku dk-pxsrc"}, "가격 · 끝난 15분봉");
+  const pxSrc = h("small", {class: "dk-clku dk-pxsrc"}, "가격 · 끝난 봉");
   const riskBox = h("div", {class: "dk-riskbox"}), calBox = h("div", {class: "dk-calbox"}), calSub = h("span");
   const toast = h("div", {class: "dk-toast", role: "status", "aria-live": "polite", hidden: true});
   const grid = h("div", {class: "dk-g"},
@@ -771,8 +779,9 @@ export function deckView(ctx) {
     const k = new Date(now + 9 * 3600 * 1000), u = new Date(now);
     const two = (x) => String(x).padStart(2, "0");
     clockK.textContent = `${two(k.getUTCHours())}:${two(k.getUTCMinutes())}:${two(k.getUTCSeconds())}`;
-    clockU.textContent = `${two(u.getUTCHours())}:${two(u.getUTCMinutes())} UTC · 다음 15분 마감 ${mmss(nextClose(now).left_ms)}`;
-    for (const box of [lifeBox, feedStats]) for (const x of box.querySelectorAll("[data-wait]")) x.textContent = mmss(nextClose(now).left_ms);
+    const bar = barOf(st.d);
+    clockU.textContent = `${two(u.getUTCHours())}:${two(u.getUTCMinutes())} UTC · 다음 ${bar.ko} 마감 ${mmss(nextClose(now, bar.ms).left_ms)}`;
+    for (const box of [lifeBox, feedStats]) for (const x of box.querySelectorAll("[data-wait]")) x.textContent = mmss(nextClose(now, bar.ms).left_ms);
   }
   /** A panel's width in px (the charts are drawn 1:1 so their words keep their size on a phone). */
   const wOf = (box) => Math.max(260, Math.round((box.getBoundingClientRect ? box.getBoundingClientRect().width : 0) || 600));
@@ -788,9 +797,9 @@ export function deckView(ctx) {
     // the 24-hour change against the close 96 bars ago (the server's chg24 is of the last close)
     const chg = (c) => (now[c.symbol] && ok(c.chg24) && ok(c.last) ? now[c.symbol].px / (Number(c.last) / (1 + Number(c.chg24))) - 1 : c.chg24);
     const live = Object.values(now).some((q) => q.src === "live");
-    pxSrc.textContent = live ? "가격 · 바이낸스 마크 · 5초마다" : "가격 · 끝난 15분봉 (지금 가격 못 받음)";
+    pxSrc.textContent = live ? "가격 · 바이낸스 마크 · 5초마다" : `가격 · 끝난 ${barOf(d).ko}봉 (지금 가격 못 받음)`;
     put(prices, (d.coins || []).map((c) => h("button", {type: "button", class: ["dk-pr", st.sel === c.symbol ? "on" : "", fl(c)],
-      title: now[c.symbol] && now[c.symbol].src === "live" ? "지금 가격 (바이낸스 마크)" : c.ko || "끝난 15분봉 종가",
+      title: now[c.symbol] && now[c.symbol].src === "live" ? "지금 가격 (바이낸스 마크)" : c.ko || `끝난 ${c.tf_ko || "15분"}봉 종가`,
       onclick: () => { st.sel = c.symbol; st.wipe = true; draw(); }},
       h("small", {class: "dk-mono"}, c.coin), h("b", {class: "num"}, now[c.symbol] ? pxKo(now[c.symbol].px) : "—"),
       h("small", {class: ["num", ok(chg(c)) ? (chg(c) >= 0 ? "up" : "down") : ""]}, c.state === "ok" ? pctKo(chg(c)) : c.ko || "못 읽음"))));
@@ -840,9 +849,9 @@ export function deckView(ctx) {
     const c = coinOf(sel);
     if (!c || c.state !== "ok") { put(chart, ui.empty(c ? `${c.coin}: ${c.ko || "못 읽음"}` : "코인 값을 읽는 중")); chartSub.textContent = ""; return; }
     const t = c.tm30 || {};
-    const marks = c.hist_rule === "o4h" ? "▲▼ OBV 히스토그램 전환(▲ 0선 아래 양봉 · ▼ 0선 위 음봉, 두 봇 진입)"
+    const marks = c.hist_rule === "o4h" ? "▲▼ OBV 히스토그램 전환(▲ 0선 아래 양봉 · ▼ 0선 위 음봉, 봇 진입 신호)"
       : "▲▼ 3합 히스토그램 0선 돌파 · ○ OBV 히스토그램 전환";
-    chartSub.textContent = `${c.coin} 15분봉 · ${marks} · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
+    chartSub.textContent = `${c.coin} ${c.tf_ko || "15분"}봉 · ${marks} · 아래 띠 = 30분 ${TM_KO} (지금 ${tmKo(c)}${t.yellow ? " · 노란 막대" : ""})`;
     put(chart, chartSvg(c, holdsOf(sel), wOf(chart)));
   }
 
@@ -930,7 +939,7 @@ export function deckView(ctx) {
     const sc = coinOf(st.sel);
     const lastH = sc ? (sc.hist || []).filter(ok).slice(-1)[0] : null, lastX = sc ? (sc.cross || []).slice(-1)[0] : 0;
     const tm30 = (sc && sc.tm30) || null, rg = sc && sc.trend30 && sc.trend30.length ? toneOf(sc.trend30[sc.trend30.length - 1][1]) : "na";
-    const nc = nextClose(serverNow());
+    const nc = nextClose(serverNow(), barOf(d).ms);
     const tr = [];
     for (const b of d.bots || []) for (const t of b.trades || []) tr.push({...t, bot: b.name_ko});
     tr.sort((a, b) => (b.exit_ms || 0) - (a.exit_ms || 0));
@@ -1051,7 +1060,7 @@ export function deckView(ctx) {
     if (!x || !x.r) { cardNow.className = "dk-crow now"; put(cardNow, h("b", null, "지금"), h("p", null, "지금 가격을 아직 못 받았어요")); return; }
     cardNow.className = ["dk-crow", "now", ok(x.r.pnl) ? (x.r.pnl >= 0 ? "up" : "down") : ""].filter(Boolean).join(" ");
     put(cardNow, h("b", null, "지금"), h("p", {class: "num"}, `${pxKo(x.r.px)} · ROE ${pctKo(x.r.roe, 1)} · ${usdKo(x.r.pnl)} (수수료 전)`,
-      x.q.src === "live" ? "" : " · 끝난 15분봉 값"));
+      x.q.src === "live" ? "" : ` · 끝난 ${barOf(d).ko}봉 값`));
   }
   function drawRisk(d) {
     const pos = risksOf(d).filter((x) => x.r).map(({b, q, r}) => {
@@ -1059,7 +1068,7 @@ export function deckView(ctx) {
       const mk = (v, cls, ko) => (v == null ? null : h("i", {class: ["dk-rmk", cls], style: {left: `${(v * 100).toFixed(1)}%`}, title: ko}));
       return h("article", {class: ["dk-rk", Number(p.side) > 0 ? "long" : "short", ok(r.toLiq) && r.toLiq < 0.03 ? "hot" : ""]},
         h("div", {class: "dk-rk1"}, h("b", null, `${b.name_ko} · ${p.coin} ${p.side_ko}`),
-          h("small", {class: "dk-mono"}, `${p.leverage ? `${p.leverage}배 · ` : ""}지금 ${pxKo(r.px)}${q.src === "live" ? "" : " (15분봉)"}`)),
+          h("small", {class: "dk-mono"}, `${p.leverage ? `${p.leverage}배 · ` : ""}지금 ${pxKo(r.px)}${q.src === "live" ? "" : ` (${barOf(d).ko}봉)`}`)),
         bar ? h("div", {class: "dk-rbar", role: "img", "aria-label": "청산가 · 손절 · 진입 · 지금 가격"}, h("span", {class: "dk-rfill", style: {width: `${((bar.now || 0) * 100).toFixed(1)}%`}}),
           mk(bar.liq, "liq", `청산가 ${pxKo(r.liq)}`), mk(bar.stop, "stop", `손절 ${pxKo(p.stop)}`), mk(bar.entry, "entry", `진입 ${pxKo(p.entry)}`), mk(bar.now, "now", `지금 ${pxKo(r.px)}`)) : null,
         h("dl", {class: "dk-kv dk-kv3"},
@@ -1126,14 +1135,14 @@ export function deckView(ctx) {
     put(feedStats, stat("신호 · 48H", `${fmt.int(sig)}번`), stat("진입 · 48H", `${fmt.int(ent)}번`, ent ? "up" : ""),
       stat("열린 포지션", `${fmt.int(T.open || 0)} / 3`, T.open ? "warn" : ""),
       stat(`30분 ${TM_KO}`, `▲${cnt("up")} ▼${cnt("down")}${cnt("flat") ? ` ■${cnt("flat")}` : ""}`),
-      h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, "다음 15분 마감"), h("b", {class: "num", "data-wait": "1"}, mmss(nextClose(serverNow()).left_ms))));
+      h("div", {class: "dk-fs"}, h("small", {class: "dk-mono"}, `다음 ${barOf(d).ko} 마감`), h("b", {class: "num", "data-wait": "1"}, mmss(nextClose(serverNow(), barOf(d).ms).left_ms))));
   }
   function drawHist(d) {
     const c = coinOf(st.sel);
     if (!c || c.state !== "ok") { put(hist, ui.empty("코인 값을 읽는 중")); histSub.textContent = ""; return; }
     const last = (c.hist || []).filter(ok).slice(-1)[0];
     histSub.textContent = c.hist_rule === "o4h"
-      ? `${c.coin} 15분봉 OBV 히스토그램 (레인지 봇 · 친구 15분 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 전환(0선 아래 양봉 · 0선 위 음봉) · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`
+      ? `${c.coin} ${c.tf_ko || "15분"}봉 OBV 히스토그램 (봇 진입 신호) · 0 위 초록 · 0 아래 빨강 · 점 = 전환(0선 아래 양봉 · 0선 위 음봉) · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`
       : `${c.coin} 15분봉 3합 히스토그램 (친구 15분 봇 진입) · 0 위 초록 · 0 아래 빨강 · 점 = 0선 돌파 · 지금 ${ok(last) ? fmt.num(last, 2) : "—"}`;
     put(hist, histSvg(c, wOf(hist)));
     put(flow, flowSvg(d.flow, wOf(flow)));
